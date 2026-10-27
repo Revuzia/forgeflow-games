@@ -19,14 +19,14 @@ ART 2.0 (the Marund method):
     with their own vertices so the creases stay crisp). Serenade: the concept's wide arch in a THICK dark felt
     roll (5.4 cm, 4 cm proud) whose ends sink into the rolled collar (the collar's front is the sill). Everything
     inside the void is ink, matte and fully occluded in the ORM.
-    THE HOOD LIGHT (rule 0.2, HoodGlow; review 2026-10-27 item 1): ONE wide soft ellipsoid of lamplight (a dome
-    mesh) lying in the bottom of the hollow, wider than tall, its front ~2 cm behind the opening, its sides sunk
-    well into the walls (Serenade: sitting ON the collar roll that fills the hollow's bottom). The 52 deg camera
-    sees the whole hollow floor, so the light fills the opening from wall to wall with only a dark crescent under
-    the brow: no dark ring round a centred light (an iris), no pale dish or flame (a pupil), never two points.
-    Its glow on the walls above it is team-neutral paint (spill). Tried and dropped over the passes: a floor pool
-    / small ellipsoid (an iris), a flame on a chalk dish (a cyclops eye: rim = eye white, dish + flame = pupil), a
-    lit lining (a flat screen), an emissive ramp (the shared load test requires a factor-only accent).
+    THE HOOD LIGHT (rule 0.2, HoodCore; fix round 4, shared with every kind): ONE soft core, the front of a 16-round
+    ellipsoid wider than tall, ~3 cm behind the opening, centred between the sill (the Serenade collar roll) and the
+    arch top, and its HALO (wick_common.halo_mesh: an alpha-blended accent cap 2 x the core whose vertex alpha falls
+    from 0.85 at the core's outline to 0 at its rim, written into the GLB by wick_common.inject_halo), dark hollow
+    all round; its light on the walls round it is team-neutral paint (spill). The wide dome lying on the sill of the
+    passes before (HoodGlow, kept for reference) read as a tongue in an open mouth at eye level and a lit visor
+    crescent from the 52 deg camera (review r3 blocker). Also tried and dropped: a floor pool / small ellipsoid (an
+    iris), a flame on a chalk dish (a cyclops eye), a lit lining (a flat screen).
   * PROPS share one layout in both cultures (the caster read: one tall vertical line with a lamp off its top):
     pole 4.5-5.2 cm, foot by the right boot, tip 1.32 m; a crook at 1.20 m reaching 0.20 m out to the side and
     forward; the lamp (the biggest light) hangs on a short cord with its centre at 1.06 m. Thin props are clean
@@ -700,7 +700,7 @@ class HoodCore:
     an alpha-blended cap 1.6 x the core, its vertex alpha falling to 0 at the rim). The light it throws on the hollow's
     walls round it is PAINT (team-neutral, dim, radial: spill(P))."""
 
-    def __init__(self, A: Arch, pocket, front=0.035, rx=0.046, ry=0.022, rz=0.029, solid=None, h=0.5, reach=0.9):
+    def __init__(self, A: Arch, pocket, front=0.032, rx=0.038, ry=0.020, rz=0.024, solid=None, h=0.47, reach=1.4):
         self.A, self.pocket, self.reach = A, pocket, reach
         # the sill: straight down the opening's centre line just behind its plane, the first solid (the pocket's
         # floor or the solid filling the hollow's bottom)
@@ -1165,7 +1165,7 @@ def aubade_parts() -> list:
         V = np.vstack([V, V2])
     part(out, "seam", seam, "accent", "bone:head", len(F), vs=0.5, paint="accent", prim=("mesh", V, F))
     # THE HOOD LIGHT (fix round 4): one soft core centred in the opening, set back 3.5 cm, and its halo
-    light = HoodCore(A, pocket, front=0.035)
+    light = HoodCore(A, pocket)
     light.add(out)
     # CLOAK: a bell from the shoulders, long straight folds, a hem cut into shallow points, a front slit
     cloak = Sculpt("cloak")
@@ -1429,7 +1429,7 @@ def serenade_parts() -> list:
     bv, bf = ribbon(bp, bn, S_BAND_HALF, closed=True, lift=(0.0042, 0.0072))
     part(out, "band", band, "accent", "bone:head", len(bf), vs=0.6, paint="accent", prim=("mesh", bv, bf))
     # THE HOOD LIGHT (fix round 4): one soft core centred between the collar roll (the sill) and the arch top
-    light = HoodCore(A, pocket, front=0.035, rx=0.050, rz=0.030, solid=roll_d)
+    light = HoodCore(A, pocket, front=0.030, rx=0.041, rz=0.025, solid=roll_d, h=0.45)
     light.add(out)
     # MANTLE: the concept's wide sand-felt capelet: a 1.6 cm felt layer over a bell that drapes over the shoulders
     # AND the upper arms (arm covers smooth-unioned in; their outer part follows the arms: _bind_mantle), the

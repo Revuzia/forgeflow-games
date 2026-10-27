@@ -721,6 +721,7 @@ class Greatwick(wc.Wick):
         self.PROJECTION["gw_halo"].clear()
         _halo_materials(ctx)
         wc.halo_material(ctx)
+        wc.halo_material(ctx, wc.HALO_LAMP_MAT)
         wc.install_halo_export()
         _matte_materials(ctx)
         for sp in self.parts():
@@ -1297,7 +1298,7 @@ def aubade_parts(L: dict) -> list:
     # on the sill) read as a tongue in an open mouth; the hard 13 x 8 cm oval before it as a pupil.
     # (fix round 4) centred: 0.5 of the opening from the sill at eye level (the plane leans back 14 deg: deeper reads
     # lower), its front 3 cm behind the opening; a soft halo round it (hood_light)
-    hood_light(A.at(0.0, 0.024, 0.062), out, to_model=hood_tf, radii=(0.050, 0.030, 0.030), axes=A.ax)
+    hood_light(A.at(0.0, 0.024, 0.060), out, to_model=hood_tf, radii=(0.042, 0.025, 0.026), axes=A.ax)
 
     # ── BODY: a straight-folded cloak bell to the shins, a pointed hem, chalk stoles, a dawnglass clasp ──────
     cloak = Sculpt("cloak")
@@ -1486,14 +1487,15 @@ def lantern_aubade(L, out, back=None):
     for py in (-1, 1):                             # front / back faces (normal -Y / +Y)
         cax = np.array([[1.0, 0, 0], [0, py * 1.0, 0], [0, 0, 1.0]])
         c_ = np.array([0.0, yl + py * (hd - 0.015 + 0.002), zm])
-        # (fix round 4: 25 % less area, the accent gate 5-6 %: 7.3 % with the roof disc and the hood lining)
-        a_, b_ = (hw - 2 * po) * 0.44 * 0.866, hz * 0.62 * 0.866
+        # (fix round 4: a smaller core in a soft glow, the accent gate 5-6 %: 7.3 % with the roof disc, the hood lining
+        # and a hard 'sticker' oval ringed by a flat halo)
+        a_, b_ = (hw - 2 * po) * 0.44 * 0.72, hz * 0.62 * 0.72
         cores.append(dome_oval(c_, cax, a_, b_, 0.024, 16))
         ovals.append((tuple(c_), cax.tolist(), a_, b_))
     for px in (-1, 1):                             # the side panes
         cax = np.array([[0, 1.0, 0], [px * 1.0, 0, 0], [0, 0, 1.0]])
         c_ = np.array([px * (hw - 0.015 + 0.002), yl, zm])
-        a_, b_ = (hd - 2 * po) * 0.74 * 0.866, hz * 0.68 * 0.866
+        a_, b_ = (hd - 2 * po) * 0.74 * 0.72, hz * 0.68 * 0.72
         cores.append(dome_oval(c_, cax, a_, b_, 0.018, 12))
         ovals.append((tuple(c_), cax.tolist(), a_, b_))
     # (fix round 4) no light well in the roof: its disc was accent the 5-6 % gate could not afford, and a pale lit
@@ -1510,8 +1512,19 @@ def lantern_aubade(L, out, back=None):
                   meta={"smooth": True, "low_mesh": (np.array(V_), np.vstack(F_))}))
     # (fix round 3) the glow round each core: two see-through accent fans on the glass (the hood lining's material), so
     # the team light spreads into the dawnglass and falls off to the frame instead of stopping at a hard oval
-    out.append(_glow_fans("lantern_halo", [(np.asarray(c_, float) + np.asarray(cax_, float)[1] * 0.002, np.asarray(cax_, float), a_, b_)
-                                            for c_, cax_, a_, b_ in ovals], (1.22,), (12, 12, 10, 10)))
+    # (fix round 4) the glow round each core is the shared soft halo (wick_common: vertex alpha 0.85 at the core's
+    # outline -> 0 at 1.6 x), not a flat see-through ring (it read as a sticker in a ring)
+    V_, F_ = [], []
+    for c_, cax_, a_, b_ in ovals:
+        cax_ = np.asarray(cax_, float)
+        v_, f_ = wc.halo_mesh(np.asarray(c_, float), cax_[0], cax_[1], cax_[2], a_, 0.004, b_, seg=10,
+                              depth=1.0, rings=(0.0, 1.0 / wc.HALO_LAMP_SCALE, 1.0), scale=wc.HALO_LAMP_SCALE)
+        F_.append(f_ + len(V_))
+        V_ += list(v_)
+    S_ = Sculpt("lantern_halo")
+    S_.add(HullField(cores), k=0.0)
+    out.append(SP("lantern_halo", S_, wc.HALO_LAMP_MAT, "bone:chest", len(np.vstack(F_)), 0.6,
+                  meta={"smooth": True, "low_mesh": (np.array(V_), np.vstack(F_))}))
     _AUB_OVALS[:] = ovals
     # the roof: an eave course + a low four-sided top (ridge flat at the light well), a 3 cm overhang only
     roof = Sculpt("lantern_roof")
@@ -1716,7 +1729,7 @@ def serenade_parts(L: dict) -> list:
                   meta={"low_mesh": (fp, np.array(fq, np.int64))}))
     # (fix round 4) centred between the hollow's floor and the arch top at eye level, 3 cm back, a little smaller
     # (14 x 8 cm read as one big pupil), in its halo
-    hood_light(A.at(0.0, 0.040, 0.062), out, to_model=hood_tf, radii=(0.058, 0.034, 0.032), axes=A.ax)
+    hood_light(A.at(0.0, 0.040, 0.060), out, to_model=hood_tf, radii=(0.048, 0.028, 0.028), axes=A.ax)
 
     # ── BODY: wide umber bell, two dark hem bands, a belt, the sand mantle with pointed lapels ───────────────
     tunic = Sculpt("cloak")
@@ -1738,7 +1751,7 @@ def serenade_parts(L: dict) -> list:
     # (fix round 3) and 2.5 cm clear of its walls: cut flush with the hollow, the decimated tunic poked through its
     # back corners (a tan sliver low in the dark)
     tunic.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0.0, 0.0]), 0.06), k=0.01)
-    out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 428, to_model=body))
+    out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 400, to_model=body))       # (fix round 4: headroom)
     mantle = Sculpt("mantle")
     # a thick felt capelet (8 cm: a thin shell decimates into a zigzag rim) with ROUNDED shoulders (a convex
     # profile: a straight cone read as a lampshade), soft folds
@@ -1778,7 +1791,7 @@ def serenade_parts(L: dict) -> list:
     # corner: a tan sliver in the dark)
     mantle.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.03), k=0.01)
     mantle_tf = compose(shift(dx=0.03), body)
-    out.append(SP("mantle", mantle, "cloth2", "auto", 262, to_model=mantle_tf))
+    out.append(SP("mantle", mantle, "cloth2", "auto", 250, to_model=mantle_tf))
     # (no over-the-shoulder straps: their ends stopped dead on the felt; the A-frame is lashed at the belt, paint)
 
     # ── ARMS, FISTS, LEGS, BOOTS ───────────────────────────────────────────────────────────────────────
@@ -2002,7 +2015,7 @@ def lantern_serenade(L, out, back):
     for w in wins:
         ax_w = np.stack([w["T"], w["N"], np.array([0.0, 0.0, 1.0])])
         cc = w["F"] + w["N"] * 0.0015 + np.array([0.0, 0.0, zc_w + 0.004])
-        a_, b_ = w["hw"] * 0.82, hz_w * 0.72
+        a_, b_ = w["hw"] * 0.82 * 1.06, hz_w * 0.72 * 1.06            # (fix round 4: the 5 % accent floor)
         v_, f_ = _dome_fan(cc, ax_w, a_, b_, 0.012, 10)
         F.append(f_ + len(V))
         V += list(v_)

@@ -242,18 +242,21 @@ def legacy_pole_lamp(spec: Wick, ctx, part, rise: float) -> None:
 # runs from HALO_ALPHA0 over the core's outline to 0 at its rim. Built with the kept material HALO_MAT (`glow_`:
 # never baked, split into the accent mesh), the export hook (install_halo_export) renames it `accent` (the renderer
 # and the crowd path tint every material of that name per viewer), sets it BLEND and writes the vertex alpha.
-HALO_MAT = "glow_halo"
-HALO_SCALE = 1.6                 # the halo's rim, in core radii (across and up)
+HALO_MAT = "glow_halo"           # the hood light's halo: HALO_SCALE x its core
+HALO_LAMP_MAT = "glow_halo_lamp" # a carried lamp's pane glow: HALO_LAMP_SCALE x its core (a tighter glow, less area)
+HALO_SCALE = 2.0                 # the halo's rim, in core radii (across and up): a small core in a wide soft glow
+HALO_LAMP_SCALE = 1.6
+HALO_SCALES = {HALO_MAT: HALO_SCALE, HALO_LAMP_MAT: HALO_LAMP_SCALE}
 HALO_ALPHA0 = 0.85               # vertex alpha over the core's outline (0 at the rim): the light fades from the core's
 HALO_ALPHA_IN = 0.90             # own value instead of stepping down at its edge; at the apex (over the core) 0.9
-HALO_FALL = 1.6                  # the fall's exponent (alpha0 * (1 - s) ** HALO_FALL, s = 0 at the core .. 1 at the rim)
-HALO_RINGS = (0.0, 1.0 / HALO_SCALE, 0.70, 0.78, 0.87, 1.0)
+HALO_FALL = 1.5                  # the fall's exponent (alpha0 * (1 - s) ** HALO_FALL, s = 0 at the core .. 1 at the rim)
+HALO_RINGS = (0.0, 1.0 / HALO_SCALE, 0.66, 0.82, 1.0)
 
 
-def halo_alpha(rho):
-    """vertex alpha of the halo at normalized lateral radius rho (0 apex, 1 rim)"""
+def halo_alpha(rho, scale: float = HALO_SCALE):
+    """vertex alpha of a halo `scale` x its core at normalized lateral radius rho (0 apex, 1 rim)"""
     rho = np.clip(np.asarray(rho, dtype=np.float64), 0.0, 1.0)
-    r0 = 1.0 / HALO_SCALE
+    r0 = 1.0 / scale
     inside = HALO_ALPHA0 + (HALO_ALPHA_IN - HALO_ALPHA0) * (1.0 - rho / r0) ** 2
     s = np.clip((rho - r0) / (1.0 - r0), 0.0, 1.0)
     return np.where(rho <= r0, inside, HALO_ALPHA0 * (1.0 - s) ** HALO_FALL)
@@ -282,21 +285,25 @@ def cap_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 16, polar_deg=(0.0, 50.0, 100.0)
     return V, orient_out(V, _cap_faces(seg, len(polar_deg) - 1), c)
 
 
-def halo_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 10, depth: float = 1.15):
+def halo_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 14, depth: float = 0.3, rings=None, scale: float = HALO_SCALE):
     """The HALO round a core of half sizes (rx, ry, rz) at c (frame as cap_mesh): the front cap of an ellipsoid
-    HALO_SCALE x the core across and up, `depth` x its depth (the apex just in front of the core's), rings at
-    HALO_RINGS of the lateral radius (the vertex alpha's stations). Returns (V, F), faces outward (toward Y)."""
+    HALO_SCALE x the core across and up, `depth` x its depth: a shallow dome through the core's middle (its outline
+    meets the core's from any angle; a deep cap in front of the core slid off it by parallax in 3/4 and leaned views,
+    leaving a hard core edge on one side), rings at
+    HALO_RINGS (or `rings`, always including 1 / HALO_SCALE) of the lateral radius (the vertex alpha's stations).
+    Returns (V, F), faces outward (toward Y)."""
     c = np.asarray(c, dtype=np.float64)
     ax = _frame(X, Y, Z)
-    Rx, Rz, D = rx * HALO_SCALE, rz * HALO_SCALE, ry * depth
+    Rx, Rz, D = rx * scale, rz * scale, ry * depth
+    rings = HALO_RINGS if rings is None else tuple(rings)
     V = [c + D * ax[1]]
-    for rho in HALO_RINGS[1:]:
+    for rho in rings[1:]:
         dep = D * math.sqrt(max(0.0, 1.0 - rho * rho))
         for i in range(seg):
             a = 2.0 * math.pi * i / seg
             V.append(c + rho * math.cos(a) * Rx * ax[0] + dep * ax[1] + rho * math.sin(a) * Rz * ax[2])
     V = np.asarray(V)
-    return V, orient_out(V, _cap_faces(seg, len(HALO_RINGS) - 1), c)
+    return V, orient_out(V, _cap_faces(seg, len(rings) - 1), c)
 
 
 def _cap_faces(seg: int, rings: int) -> np.ndarray:
@@ -322,14 +329,14 @@ def orient_out(V, F, c):
     return F
 
 
-def halo_material(ctx):
-    """ctx.mats[HALO_MAT]: a copy of the accent (factor-only), alpha-blended; its emission a hair lower and its alpha
+def halo_material(ctx, name: str = HALO_MAT):
+    """ctx.mats[name]: a copy of the accent (factor-only), alpha-blended; its emission a hair lower and its alpha
     below 1 so the optimizer's dedup can never merge it with the core (the export hook rewrites it anyway)."""
-    if HALO_MAT in ctx.mats:
-        return ctx.mats[HALO_MAT]
+    if name in ctx.mats:
+        return ctx.mats[name]
     acc = ctx.mats["accent"]
     m = acc.copy()
-    m.name = HALO_MAT
+    m.name = name
     b = m.node_tree.nodes.get("BSDF") if m.use_nodes else None
     if b is not None:
         b.inputs["Alpha"].default_value = HALO_ALPHA0
@@ -340,7 +347,7 @@ def halo_material(ctx):
             setattr(m, attr, val)
         except (AttributeError, TypeError):
             pass
-    ctx.mats[HALO_MAT] = m
+    ctx.mats[name] = m
     return m
 
 
@@ -423,7 +430,7 @@ def _halo_rho(P, F):
 
 
 def inject_halo(path: str) -> int:
-    """GLB post-export (before the optimizer): every material named HALO_MAT becomes a BLEND copy of the core
+    """GLB post-export (before the optimizer): every material named in HALO_SCALES becomes a BLEND copy of the core
     `accent` (same factors and extensions, name `accent`), and every primitive drawn with it gets a COLOR_0 (white,
     alpha = halo_alpha(rho)). Returns the primitives patched."""
     import json
@@ -432,7 +439,7 @@ def inject_halo(path: str) -> int:
         return 0
     ver, js, bin_ = got
     mats = js.get("materials", [])
-    halo = {i for i, m in enumerate(mats) if m.get("name") == HALO_MAT}
+    halo = {i: HALO_SCALES[m.get("name")] for i, m in enumerate(mats) if m.get("name") in HALO_SCALES}
     if not halo:
         return 0
     core = next((m for m in mats if m.get("name") == "accent"), None)
@@ -460,7 +467,7 @@ def inject_halo(path: str) -> int:
                 F = _accessor_array(js, bin_, prim["indices"])
             else:
                 F = np.arange(len(P))
-            a = halo_alpha(_halo_rho(P, F))
+            a = halo_alpha(_halo_rho(P, F), halo[prim["material"]])
             col = np.ones((len(P), 4), dtype=np.float32)
             col[:, 3] = a.astype(np.float32)
             pad = (4 - len(bin_) % 4) % 4

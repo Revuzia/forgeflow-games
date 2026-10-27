@@ -947,7 +947,7 @@ AU_THROAT_CAP = 0.122
 # tall): 10 x 6.2 cm face-on (1.6 : 1; at 2.15 : 1 it shrank to a horizontal dash at the game camera - a slot), its
 # front 3.7 cm behind the opening plane
 AU_LIGHT = (0.0, 0.0, 0.058)
-AU_LIGHT_R = (0.050, 0.021, 0.031)
+AU_LIGHT_R = (0.039, 0.019, 0.024)              # (fix round 4: a smaller core in a 2 x soft halo)
 
 
 def light_falloff(uvw, c, r, reach: float = 0.90):
@@ -1077,7 +1077,7 @@ def parts_aubade(F) -> list:
     for phi in np.radians(np.linspace(8, 172, 12)):
         trim.append(surface_point(outer, hem_c, (math.cos(phi), math.sin(phi), -0.07), 0.05, 0.4))
     trim = np.asarray(trim)
-    seam = seam + ribbon(trim, sdf_normals(outer, trim), 0.0225, SEAM_BAND)
+    seam = seam + ribbon(trim, sdf_normals(outer, trim), 0.0175, SEAM_BAND)      # (r4: 4.5 -> 3.5 cm, the accent gate)
     out.append(("hood_seam", seam, 1.0, "accent", "bone:head", None))
     # the knob: the concept's round chalk knob (a broad base disc, a ball, a small round top), 6.4 cm over the dome,
     # standing ON the seam at the crown: its base disc (3.5 cm radius) covers the seam's crossing and sinks 4 mm into
@@ -1227,7 +1227,7 @@ SE_RIM = (0.015, 0.019)                           # the rolled rim: centre line 
 # top), set back ~3 cm behind the brow roll, 10 x 6.2 cm face-on; the throat rings (inset inside
 # the door outline, extra depth behind the dome's front surface there); the rolled rim's centre line 1.5 cm outside
 SE_LIGHT = (0.0, 0.034, 0.048)                    # (u, v, w) on SE_ARCH (the brow roll hid more of it at 52 deg)
-SE_LIGHT_R = (0.050, 0.021, 0.031)
+SE_LIGHT_R = (0.039, 0.019, 0.024)
 SE_THROAT = [(-0.001, 0.016), (0.012, 0.034), (0.032, 0.075), (0.052, 0.130)]
 SE_THROAT_CAP = 0.230
 
@@ -1439,10 +1439,11 @@ def parts_serenade(F) -> list:
     # the accent crown band (the Serenade hood mark): a broad band circling the dome horizontally at z 1.03, its lower
     # edge just over the rolled rim's top, an inlaid profile (edges sunk into the felt), snapped onto the dome's game mesh
     zb = 1.030
-    pb = np.linspace(-np.pi, np.pi, 19)[:-1]
+    # (fix round 4: 3.2 cm, 16 stations - the accent gate with the hood light's halo, and the tri budget)
+    pb = np.linspace(-np.pi, np.pi, 17)[:-1]
     band_c = np.array([surface_point(outer, (0.0, hc[1], zb), (math.cos(a_), math.sin(a_), 0.0), 0.05, 0.4) for a_ in pb])
     band_n = sdf_normals(outer, band_c)
-    band = ribbon(band_c, band_n, 0.0185, SEAM_BAND, closed=True)
+    band = ribbon(band_c, band_n, 0.0160, SEAM_BAND, closed=True)
     out.append(("crown_band", band, 1.0, "accent", "bone:head", None))
     # THE THROAT: one clean inked tube from just behind the rim's inner curl (its floor on the collar's sill) back to a
     # round cap deep in the dome

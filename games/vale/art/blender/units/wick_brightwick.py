@@ -115,7 +115,7 @@ FORM = {
         # mouth. The soft falloff is the painted spill on the hollow's walls BEHIND and beside it (`ink_hollow`:
         # the front of the hollow, the sill and the cheeks stay ink). Matte. Centre, radii (local X, depth, up),
         # tilt (deg, top back)
-        "hood_light": ((0.0, -0.118, 1.405), (0.055, 0.028, 0.035), 8.0),
+        "hood_light": ((0.0, -0.118, 1.413), (0.042, 0.023, 0.027), 8.0),      # (r4: ~0.5 of the opening; 2 x halo)
         "shoulder": 0.205,
         # A-line cape: +-0.33 under the pauldrons -> +-0.43 at the hem, deeper toward the hem (side view flares too)
         "cloak_rx": [(0.04, 0.432), (0.25, 0.418), (0.50, 0.400), (0.75, 0.380), (0.95, 0.362), (1.10, 0.338),
@@ -143,7 +143,7 @@ FORM = {
         # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
         "tomb": ((0.114, 1.370, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
         # one soft core floating in the hollow (see the Aubade note): 12 x 7 cm, front ~3.5 cm behind the opening
-        "hood_light": ((0.0, -0.124, 1.432), (0.059, 0.028, 0.036), 8.0),
+        "hood_light": ((0.0, -0.124, 1.445), (0.048, 0.024, 0.030), 8.0),      # (r4: ~0.5 of the opening; 2 x halo)
         "shoulder": 0.215,
         "cloak_rx": [(0.13, 0.398), (0.20, 0.405), (0.30, 0.398), (0.45, 0.378), (0.62, 0.350), (0.80, 0.326),
                      (0.98, 0.308), (1.10, 0.288), (1.18, 0.245), (1.24, 0.18)],
@@ -1285,7 +1285,7 @@ def crown_aubade(F, part, hood):
     part("seam", ("mesh", v, q), "accent", "bone:head", None, 0.5)
 
 
-SEAM_W = 0.036              # the Aubade hood seam's width down the back of the cowl (m)
+SEAM_W = 0.032              # the Aubade hood seam's width down the back of the cowl (m; r4: 3.6 -> 3.2, the 7 % accent cap)
 # the seam's span (deg on the hood's meridian from the crown, - = front): from the brow over the cap and down the back
 # of the cowl to the nape (the brief's hood mark); over the cap it is a fine lit seam (3 cm), never a crest stripe
 SEAM_A = (-50.0, 130.0)
@@ -1300,9 +1300,9 @@ BEZEL = 0.015               # the thin slate bezel painted round each Aubade bod
 # ironstone ring standing off the dome from its foot (z 1.628) to the brief's 1.70, the felt cap inside it flattened low
 # (CROWN_TOP_S), so from above it reads as a ring round a small felt cap, never a horizontal slit; its value lifted to
 # the ironstone / felt mid (no dark slot)
-CAP_Z = (1.626, 1.642)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
-CROWN_S = (1.628, 1.700)            # the Serenade crown circlet (z): its foot on the dome, its top at the brief's 1.70
-CROWN_TOP_S = 1.684                 # the felt cap inside the circlet is flattened here (it rose 1.5 cm over the ring)
+CAP_Z = (1.650, 1.660)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
+CROWN_S = (1.652, 1.712)            # the Serenade crown circlet (z): its foot high on the dome's shoulder, top ~ the crown
+CROWN_TOP_S = 1.700                 # the felt cap inside the circlet is flattened here (kept under the ring's top edge)
 WINDOWS = [360.0 * k / 12 for k in range(12)]       # 12 even, spaced (the concept: round windows with iron between,
 # never a string of touching beads): six across the front, one over the arch's crown
 
@@ -1317,10 +1317,11 @@ def crown_serenade(F, part):
     r0 = hood_radius(F, z0)
 
     def rad(z):
-        # the circlet stands off the dome: its radius is the dome's at the foot, leaning in 9 mm over its height
-        k = 0.125 * (z - z0)
-        return (r0[0] - k, r0[1] - k)
-    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.014, 0.012, 18)
+        # the circlet stands off the dome's shoulder: its radius is the dome's at the foot, flaring out 5 mm over its
+        # height (a coronet sitting on the head, never a can: a ring foot low on the dome's side read as a tall drum)
+        k = 0.085 * (z - z0)
+        return (r0[0] + k, r0[1] + k)
+    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.020, 0.011, 18)
     zc = 0.5 * (z0 + z1) + 0.002
     part("crown", ("mesh", v, f), "ironstone", "bone:head", None, 0.7)
     discs = [disc_on(surf, a, zc, 0.0215, nseg=10, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
@@ -2163,12 +2164,17 @@ def _mantle_serenade(spec, p, g, col):
     a = ang(p)
     hem = mantle_hem(a)
     fall = smooth(1.30, 1.06, z)
-    f1 = np.abs(np.sin(a * 7.0 + 0.6 * PNOISE(p, 3.0) + 0.9)) ** 2.2
-    col = col * (1 - 0.16 * f1 * fall)[:, None]
-    edge = 1 - smooth(0.010, 0.026, z - hem)
-    col = col * (1 - 0.20 * edge)[:, None]
+    # (fix round 4, review r3: still "a smooth cream slab") the folds deeper and wider apart, each with a lit crest
+    # beside its shadowed valley, the felt's nap mottling the broad planes
+    ph = a * 6.0 + 0.7 * PNOISE(p, 3.0) + 0.9
+    f1 = np.abs(np.sin(ph)) ** 2.0
+    crest = np.clip(np.cos(ph), 0.0, 1.0) ** 6
+    col = col * (1 - 0.30 * f1 * fall + 0.10 * crest * fall)[:, None]
+    col = col * (1 + 0.06 * PNOISE(p, 16.0, (0.3, 1.2, 2.1)))[:, None]
+    edge = 1 - smooth(0.010, 0.030, z - hem)
+    col = col * (1 - 0.28 * edge)[:, None]
     top = smooth(0.55, 0.95, g[:, 2]) * smooth(1.18, 1.30, z)
-    return col * (1 + 0.10 * top)[:, None]
+    return col * (1 + 0.08 * top)[:, None]
 
 
 def _cloak_aubade(spec, p, g, col):

@@ -30,8 +30,8 @@
     "tris_hood_rim": 200,
     "tris_knob": 50,
     "tris_seam": 72,
-    "tris_hoodlight": 96,
-    "tris_hoodglow1": 84,
+    "tris_hoodlight": 48,
+    "tris_hoodhalo": 98,
     "tris_cloak": 560,
     "tris_stole": 110,
     "tris_clasp": 84,
@@ -50,26 +50,26 @@
     "tris_lantern_bars": 112,
     "tris_lantern_slabs": 56,
     "tris_lantern_glass": 62,
-    "tris_lantern_glow": 68,
-    "tris_lantern_halo": 44,
+    "tris_lantern_glow": 56,
+    "tris_lantern_halo": 120,
     "tris_lantern_roof": 120,
     "tris_spires": 88,
     "tris_shelf": 40,
     "tris_frame_posts": 150,
     "validate_greatwick_aubade": "3030->3029"
   },
-  "uv_coverage": 0.712,
+  "uv_coverage": 0.713,
   "bake": {
-    "base": 12.43,
-    "rough_metal": 4.68,
-    "normal": 3.01,
-    "ao": 2.76,
-    "normal_fixed_px": 10603,
-    "projection": 10.29,
-    "pack_save": 11.11,
-    "total": 34.41
+    "base": 2.5,
+    "rough_metal": 1.52,
+    "normal": 0.92,
+    "ao": 1.04,
+    "normal_fixed_px": 11148,
+    "projection": 2.94,
+    "pack_save": 2.99,
+    "total": 9.14
   },
-  "tris": 3429,
+  "tris": 3459,
   "mesh_top_m": 1.625,
   "clips": {
     "idle": {
@@ -166,24 +166,24 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1344508,
+  "glb_bytes_raw": 1331620,
   "optimize": {
     "ok": true,
-    "before": 1344508,
-    "after": 471604,
-    "metallic_zero": 3
+    "before": 1334168,
+    "after": 465672,
+    "metallic_zero": 2
   },
-  "glb_bytes": 471644,
+  "glb_bytes": 465732,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_aubade.glb (461 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: greatwick_aubade_base 1024x1024 87K, greatwick_aubade_normal 512x512 47K, greatwick_aubade_orm 256x256 17K",
-      "  skinned meshes: greatwick_aubade(4354v), greatwick_aubade_accent_1(181v), greatwick_aubade_accent_2(97v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_aubade.glb (455 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: greatwick_aubade_base 1024x1024 78K, greatwick_aubade_normal 512x512 48K, greatwick_aubade_orm 256x256 16K",
+      "  skinned meshes: greatwick_aubade(4334v), greatwick_aubade_accent_1(151v), greatwick_aubade_accent_2(57v), greatwick_aubade_accent_3(84v)",
       "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/19tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.400s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
       "  tracks checked: 303; materials: body, accent; textures: body.map=1024x1024, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3429; bind-pose bounds (three units, Y up): 1.11 x 1.63 x 1.11; facing (-0.00, 1.00); head bone y 0.88; runRefSpeed 3.2",
+      "  tris: 3459; bind-pose bounds (three units, Y up): 1.11 x 1.63 x 1.11; facing (-0.00, 1.00); head bone y 0.88; runRefSpeed 3.2",
       "  run: 12 f, planted samples 4, max foot-speed error 4.5%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -195,7 +195,7 @@
       [
         -0.563,
         0,
-        -0.661
+        -0.662
       ],
       [
         0.551,
@@ -208,8 +208,8 @@
       1
     ],
     "headY": 0.878,
-    "accentPct": 7.31,
-    "accentTopHalfPct": 69.4,
+    "accentPct": 5.48,
+    "accentTopHalfPct": 67.9,
     "heightPx1080": 86,
     "size": [
       2400,
@@ -217,26 +217,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_aubade.png",
-    "seconds": 26.9,
+    "seconds": 11.8,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_greatwick_aubade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.3,
-      "model": 26.39,
-      "lows_bind": 0.22,
-      "uv": 11.93,
-      "bake": 34.42,
-      "clips": 56.68,
-      "export": 1.81,
-      "optimize": 0.68,
-      "load_test": 0.23,
-      "three_qa": 58.53,
-      "cache": 0.16
+      "rig": 0.0,
+      "materials": 0.16,
+      "model": 6.25,
+      "lows_bind": 0.03,
+      "uv": 2.89,
+      "bake": 9.14,
+      "clips": 19.36,
+      "export": 1.14,
+      "optimize": 0.59,
+      "load_test": 0.17,
+      "three_qa": 25.92,
+      "cache": 0.05
     },
-    "total_s": 191.46
+    "total_s": 65.72
   },
   "run_ref_speed": 3.2,
   "height_m": 1.1700000000000002

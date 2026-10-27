@@ -50,11 +50,12 @@
     },
     "tris_trousers": 24,
     "tris_dome": 380,
-    "tris_roll": 330,
+    "tris_roll": 298,
     "tris_band": 144,
-    "tris_hoodlight": 70,
+    "tris_hoodlight": 48,
+    "tris_hoodhalo": 98,
     "tris_mantle_band": 116,
-    "tris_mantle": 274,
+    "tris_mantle": 250,
     "tris_cloak": 420,
     "tris_mitt_R": 86,
     "tris_mitt_L": 90,
@@ -63,7 +64,7 @@
     "tris_pole": 48,
     "tris_bind0": 16,
     "tris_bind1": 16,
-    "tris_knob": 112,
+    "tris_knob": 98,
     "tris_crook": 42,
     "tris_crook_end": 24,
     "tris_ring": 32,
@@ -73,20 +74,20 @@
     "tris_lamp_lid": 84,
     "tris_lamp_drop": 36,
     "tris_cord": 36,
-    "validate_glimwick_serenade": "2594->2590"
+    "validate_glimwick_serenade": "2524->2520"
   },
-  "uv_coverage": 0.738,
+  "uv_coverage": 0.747,
   "bake": {
-    "base": 2.6,
-    "rough_metal": 2.61,
-    "normal": 1.28,
-    "ao": 1.55,
-    "normal_fixed_px": 4441,
-    "projection": 75.43,
-    "pack_save": 75.54,
-    "total": 83.83
+    "base": 0.97,
+    "rough_metal": 0.78,
+    "normal": 0.54,
+    "ao": 0.77,
+    "normal_fixed_px": 4868,
+    "projection": 16.59,
+    "pack_save": 16.62,
+    "total": 19.78
   },
-  "tris": 2992,
+  "tris": 2998,
   "mesh_top_m": 1.333,
   "clips": {
     "idle": {
@@ -183,23 +184,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1061416,
+  "glb_bytes_raw": 1077036,
   "optimize": {
     "ok": true,
-    "before": 1061416,
-    "after": 318588
+    "before": 1078096,
+    "after": 325156
   },
-  "glb_bytes": 318588,
+  "glb_bytes": 325156,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (311 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: glimwick_serenade_base 1024x1024 72K, glimwick_serenade_normal 512x512 35K, glimwick_serenade_orm 256x256 15K",
-      "  skinned meshes: glimwick_serenade(3023v), glimwick_serenade_accent(289v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (318 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: glimwick_serenade_base 1024x1024 73K, glimwick_serenade_normal 512x512 38K, glimwick_serenade_orm 256x256 15K",
+      "  skinned meshes: glimwick_serenade(3044v), glimwick_serenade_accent_1(279v), glimwick_serenade_accent_2(57v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b x_skirt_f x_skirt_l x_skirt_r)",
       "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/23tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
       "  tracks checked: 325; materials: body, accent; textures: body.map=1024x1024, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 2992; bind-pose bounds (three units, Y up): 0.84 x 1.33 x 0.57; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
+      "  tris: 2998; bind-pose bounds (three units, Y up): 0.84 x 1.33 x 0.57; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
       "  run: 10 f, planted samples 2, max foot-speed error 2.2%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -224,8 +225,8 @@
       1
     ],
     "headY": 0.66,
-    "accentPct": 8.57,
-    "accentTopHalfPct": 61,
+    "accentPct": 7.99,
+    "accentTopHalfPct": 61.8,
     "heightPx1080": 70,
     "size": [
       2400,
@@ -233,26 +234,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_glimwick_serenade.png",
-    "seconds": 10.1,
+    "seconds": 6.1,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_glimwick_serenade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.11,
-      "model": 31.23,
-      "lows_bind": 0.03,
-      "uv": 24.31,
-      "bake": 83.89,
-      "clips": 0.36,
-      "export": 1.05,
-      "optimize": 0.6,
-      "load_test": 0.18,
-      "three_qa": 34.67,
-      "cache": 0.09
+      "materials": 0.14,
+      "model": 21.07,
+      "lows_bind": 0.02,
+      "uv": 15.0,
+      "bake": 19.81,
+      "clips": 0.18,
+      "export": 0.51,
+      "optimize": 0.29,
+      "load_test": 0.09,
+      "three_qa": 13.63,
+      "cache": 0.03
     },
-    "total_s": 176.56
+    "total_s": 70.84
   },
   "run_ref_speed": 3.25,
   "height_m": 0.93
