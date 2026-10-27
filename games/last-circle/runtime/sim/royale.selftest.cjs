@@ -1213,7 +1213,7 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   let mono = true;
   for (let h = 0; h < 40; h += 0.25) if (R.fallDamage(v(h + 0.25)) < R.fallDamage(v(h))) mono = false;
   const lh = R.fallLethalHeight(100);
-  ok(mono && lh > 18 && lh <= 20 && R.FALL_EXP === 1.5 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
+  ok(mono && lh >= 19 && lh < 20 && R.FALL_EXP === 1.33 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
   ok(R.LAND_STAGGER_S === 0.4 && R.weaponName("fall") === "a fall", "C-FALL: 0.4 s landing stagger; the kill feed names the fall");
 }
 
