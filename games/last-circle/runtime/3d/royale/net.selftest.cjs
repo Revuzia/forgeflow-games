@@ -686,7 +686,10 @@ function suiteP23(M, SIM, count) {
       "LC-49: onMsg orders every state packet before it touches a body: duplicates dropped, a late packet applies only its events (no positions, no clock)");
     ok(/S\.txSeq = \(S\.txSeq \| 0\) \+ 1;\s*\r?\n\s*const st = pack\(W\.player, \{ q: S\.txSeq, t: \+W\.t\.toFixed\(2\) \}\);/.test(src) && /if \(stamp\) \{ st\.q = stamp\.q; st\.t = stamp\.t; \}/.test(src),
       "LC-49: pack() stamps every sender's state packet with q (its counter) and t (its match clock = the host's: the server-time stamp)");
-    ok(/\(a\.downed \? F_DOWNED : 0\)/.test(src) && /if \(a\.downed\) st\.dh = /.test(src) && /const dn = !!\(f & F_DOWNED\);/.test(src), "C-DBNO: the downed bit (and the bleed pool while downed) rides the state packet and is applied to remotes");
+    const packSrc = sl("function pack(a, stamp) {", "return st;");
+    ok(/\(a\.downed \? F_DOWNED : 0\)/.test(packSrc) && /hp: Math\.round\(a\.downed \? Math\.max\(0, a\.downedHp \|\| 0\) : a\.hp\)/.test(packSrc) && !/dh/.test(packSrc) &&
+      /const dn = !!\(f & F_DOWNED\);/.test(src) && /if \(dn\) \{ a\.downedHp = typeof d\.hp === "number" && Number\.isFinite\(d\.hp\) \? Math\.max\(0, d\.hp\) : a\.downedHp; a\.hp = 0; \}/.test(src),
+      "C-DBNO: the downed bit rides the stance byte and, while it is set, the hp field carries the bleed pool (no extra key: per-tick bytes unchanged); remotes get downedHp = hp, hp = 0");
     ok(/revive: 1, smoke: 1, rejoin: 1, room: 1/.test(src) && !/qsend\("revive"/.test(src) && /send\("revive", \{ k: "done"/.test(src) && /send\("smoke"/.test(src),
       "P23: revive / smoke / rejoin / room are CRITICAL and sent at once (never batched, never shed)");
     ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}\); \}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),

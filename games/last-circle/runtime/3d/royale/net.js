@@ -2202,7 +2202,9 @@ function applyRemoteState(W, a, d) {
   const dn = !!(f & F_DOWNED);
   if (dn && !a.downed) a.downedT = W.t;
   a.downed = dn;
-  a.downedHp = dn && typeof d.dh === "number" ? d.dh : dn ? a.downedHp : 0;
+  // (pack: while downed the hp field IS the bleed pool; a downed actor's own hp is 0)
+  if (dn) { a.downedHp = typeof d.hp === "number" && Number.isFinite(d.hp) ? Math.max(0, d.hp) : a.downedHp; a.hp = 0; }
+  else a.downedHp = 0;
   // LC-49: the packet's sequence number and the sender's match-clock stamp (player.js may interpolate on them; net.js orders by q)
   if (typeof d.q === "number") a.netQ = d.q;
   if (typeof d.t === "number") a.netT = d.t;
@@ -2589,7 +2591,9 @@ function pack(a, stamp) {
     id: a.id,
     x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2),
     yw: +a.yaw.toFixed(3), pt: +a.pitch.toFixed(2),
-    hp: Math.round(a.hp), sh: Math.round(a.shield),
+    // C-DBNO: while the downed bit is set, `hp` carries the BLEED POOL (a downed actor's hp is 0 by rule, player.js knockActor), so the
+    // packet keeps the same keys downed or up - no extra field, per-tick bytes unchanged (plan P3 "one spare flag bit")
+    hp: Math.round(a.downed ? Math.max(0, a.downedHp || 0) : a.hp), sh: Math.round(a.shield),
     gl: a.gliding ? 1 : 0, wp: a.weapon ? a.weapon.id : null,
     // bits 32/64: mantle + hit-react — transient states, but 0.25-0.5 s spans
     // 2-6 packets at 5-12 Hz so remotes catch them; older peers ignore
@@ -2602,10 +2606,9 @@ function pack(a, stamp) {
        // radius off a.sprinting, which a remote actor never had - every remote enemy fell to the walk row. Older peers ignore the bit.
        (a.sprinting ? 128 : 0) |
        // bit 256: DOWNED (C-DBNO). The stance byte was at most 255 (3 digits) and is at most 511 now (3 digits): a normal packet is
-       // byte-identical, and `dh` below is only there while the actor bleeds out.
+       // byte-identical, and while the bit is set `hp` above is the bleed pool (applyRemoteState: downedHp = hp, hp = 0).
        (a.downed ? F_DOWNED : 0),
   };
-  if (a.downed) st.dh = Math.max(0, Math.round(a.downedHp || 0));
   // LC-49: the envelope's own packet (not each bot in it) carries q = the sender's packet counter and t = its match clock - the host's clock,
   // which every guest slews to, i.e. the server-time stamp (on the host's packet it is also the clock guests slew from, as before)
   if (stamp) { st.q = stamp.q; st.t = stamp.t; }
