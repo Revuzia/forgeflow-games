@@ -1,6 +1,7 @@
 """Fallen hour-tick stones (RIFT §6), needle fragments (BRIDGE §5) and basalt chips (FRAY): chiselled,
 flat-faceted dial-stone pieces with chamfered (chalk-lit) edges, carved grooves and bands, and soft
-moss cushions draped over their tops.
+moss cushions draped over their tops. Painted, never flat grey facets (r12 M11): the value rolls from a warm lit
+top to a cool occluded foot, facets only nudge it, and the lit convex edges carry a chalk rim.
 
 A piece is cut from a box (or a drum sector) by planar chisel cuts — corner chips, and a cluster of deep
 cuts on one end for the broken face — then optional loop cuts (an engraved tick groove along the top, or a
@@ -52,13 +53,17 @@ class StoneSpec:
 
 PALETTES = {
     # RIFT dial-stone: warm grey, lit faces land L* 40-55 on screen (below the pale roads), worn lit edges
-    "dial": dict(stops=[(0.0, "#262421"), (0.25, "#3B3732"), (0.5, "#514C44"), (0.75, "#6A645A"), (1.0, "#837B6D")],
-                 chalk="#B3AA94", groove="#B0A891", broken="#8A8173", moss="#3E4A32", moss_hi="#66703F", warm=0.07, keep=0.8),
+    # (r12 M11: painted, never flat — facets only nudge the value, deeper occlusion in the creases and at the
+    # foot, warmer lit tops / cooler shade, a chalk rim on the lit convex edges over the chamfers)
+    "dial": dict(stops=[(0.0, "#1F1D1B"), (0.25, "#37322C"), (0.5, "#514A40"), (0.75, "#6E6656"), (1.0, "#8C826E")],
+                 chalk="#BDB194", groove="#B0A891", broken="#8A8173", moss="#3E4A32", moss_hi="#66703F", warm=0.13, keep=0.9,
+                 facet=0.035, ao=0.68, rim=0.38),
     # BRIDGE needle stone: pale chalk-grey, cooler; fracture faces paler still (brief: L* 72 raw face)
     # BRIDGE needle stone: pale chalk-grey and COOL against the warm deck (#A59B86) and terraces; fracture faces
     # paler still (brief: L* 72 raw face); its carved groove and hour-band hold chalk inlay like the deck's script
     "needle": dict(stops=[(0.0, "#2A2D33"), (0.25, "#474B52"), (0.5, "#6A6E72"), (0.75, "#90938F"), (1.0, "#B2B2AA")],
-                   chalk="#D3D0C2", groove="#CFC8B4", broken="#BDB7A8", moss="#55663F", moss_hi="#7D8A52", band=0.84),
+                   chalk="#D3D0C2", groove="#CFC8B4", broken="#BDB7A8", moss="#55663F", moss_hi="#7D8A52", band=0.84,
+                   facet=0.05, ao=0.62, rim=0.25),
     # FRAY basalt: the one dark stone, chalk lips
     "basalt": dict(stops=[(0.0, "#1A1B1F"), (0.25, "#2A2B30"), (0.5, "#3A3B40"), (0.75, "#4C4D52"), (1.0, "#5F5F62")],
                    chalk="#8E897C", groove="#A49E8E", broken="#3D3E42", moss="#3F4D35", moss_hi="#5E6B45"),
@@ -436,9 +441,13 @@ def paint_stone(st: Part, palette: str, seed: int) -> np.ndarray:
     up = N[:, 2]
     z = P[:, 2]
     zr = smooth(-0.02, 0.45 * max(z.max(), 0.1), z)
-    fj = hash01(facet + seed * 13.0, facet * 0.37)                 # each chisel facet its own value
-    v = 0.18 + 0.38 * sky + 0.22 * smooth(-0.4, 0.95, up) + 0.09 * (fj - 0.5) + 0.06 * fbm3(P, 5.0, 2, seed)
-    v *= 0.45 + 0.55 * ao
+    # each chisel facet its own value, but only a nudge (r12 M11: a facet must never read as a flat grey tile —
+    # the light rolls over the stone from its lit top to its shaded foot, the edges catch it, the creases keep it)
+    fj = hash01(facet + seed * 13.0, facet * 0.37)
+    fw = pal.get("facet", 0.09)
+    v = 0.18 + 0.38 * sky + 0.22 * smooth(-0.4, 0.95, up) + fw * (fj - 0.5) + 0.06 * fbm3(P, 5.0, 2, seed)
+    ak = pal.get("ao", 0.55)
+    v *= (1 - ak) + ak * ao
     v *= 0.62 + 0.38 * zr                                         # contact darkening at the foot
     v += 0.10 * (fbm3(P, 7.0 / span, 3, seed + 2) - 0.5)                 # weathering mottle
     v = posterize(np.clip(v, 0, 1), 5, keep=pal.get("keep", 0.65))
@@ -447,6 +456,19 @@ def paint_stone(st: Part, palette: str, seed: int) -> np.ndarray:
     wk = pal.get("warm", 0.0)
     if wk:
         c = c * (1 + wk * (smooth(-0.3, 0.9, up) - 0.45)[:, None] * np.array([1.0, 0.35, -0.9]))
+    # painted edge light on the convex silhouette (r12 M11): every corner where this facet's normal turns from
+    # its neighbours' (the welded normal) takes chalk where the light falls — a brushed rim, never a drawn line
+    rim_k = pal.get("rim", 0.0)
+    if rim_k:
+        key = np.round(P / 1e-4).astype(np.int64)
+        _, inv = np.unique(key, axis=0, return_inverse=True)
+        inv = inv.reshape(-1)
+        acc = np.zeros((inv.max() + 1, 3))
+        np.add.at(acc, inv, N)
+        nw = acc[inv] / np.maximum(np.linalg.norm(acc[inv], axis=1, keepdims=True), 1e-9)
+        turn = 1.0 - np.einsum("ij,ij->i", nw, N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9))
+        edge = smooth(0.02, 0.22, turn) * smooth(-0.1, 0.7, nw[:, 2]) * smooth(0.2, 0.7, sky) * (kind == 5)
+        c = c + (hexc(pal["chalk"]) - c) * (rim_k * edge)[:, None]
     lit = smooth(0.15, 0.6, sky) * smooth(0.3, 0.8, ao)
     brk = (flag & FLAG_BREAK) > 0
     c = np.where(brk[:, None], c * 0.55 + hexc(pal["broken"]) * 0.45 * (0.5 + 0.5 * lit[:, None]), c)

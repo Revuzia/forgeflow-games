@@ -206,3 +206,18 @@
   ground); death ends with one arm folded over the body and one flung up bent (no T); the splash's raised knife
   replaced by a trailing reverse grip. Chalkline's coat / apron / sleeves / chest a step lighter, its scarf #A7AEB3.
   Portrait box 15 cm tighter (render wrapper).
+- 2026-10-27 14:55 CDT: FIX PASS 5 builds 1-2 checked. Build 1: accent 0.89 % (three QA) with only the ridge and a thin
+  seam -> the accent is now the ridge fin along the visor's whole top edge (thicker), a seam along the crest's foot
+  either side, a thin glowing inlay along the crest's crown edge and a line down the back keel (all seen from above;
+  never on the crest's panes, which are pale dawnglass in the stone frame; a trial rim along the visor's lower edge
+  was dropped: the outlined beak read as the review's down-arrow). proto/rishal_accent.py estimates the share from
+  the SDF in a minute (8 facings at 52 deg; the build's three QA reads ~0.6 x the estimate: the idle's wide knives).
+  Build 2: three load OK, 19893 tris, 1123 KiB, accent 1.67 %, facing +Z; lineup (rishal_fp5_b2) top band 72 / 69 /
+  58 / 67, mid 47 / 38 / 36 / 36 -> the coat painted with less baked key (k 0.5) and a lighter back #8A959D, lighter
+  sleeves, the helm's back plates lighter, AO_INTO_BASE 0.10 (the skirt's occlusion), trousers' fold streaks
+  narrower and weaker (the first try's 3 cm patches read as blotches), the hood smaller, the cowl front #8DA6B8 (it
+  went near white in the hero light); the visor's see-through glass deeper (k 0.56: it went pale grey in the QA
+  light); cast_a1's blades straight down-back (tips 0.46-0.49 m, were 0.67-0.85); attack2's impact tip 22 deg left of
+  the line (was 55-60), attack1's 13 deg, chest yaw ~20 at both; death's arms lowered (no T). Pauldron lames a third
+  thicker with blunt edges and three hooked teeth on the spike's lower edge (the concept's notched spike). Build 3
+  (base) and the skins running in parallel.

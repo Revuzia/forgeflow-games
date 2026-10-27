@@ -7,7 +7,8 @@ Measured on the concept (front plate, mask crown 2.15 m, 10 cm grid; the run pro
 every 4 cm, + the 9 px the cut erodes): the blade 1.43 m from the guard to the tip, 0.22-0.26 m wide,
 the heel (ironstone) a broad crenellated spine band from the guard to u 0.60, a short wrapped haft (0.35 m
 painted) and a diamond pommel. The heel's spine carries five scalloped notches (round bites 7.4 cm across,
-4.6 cm deep: tallies) with one accent diamond inlaid below each (brief section 4/7). No accent on the pommel.
+4.6 cm deep: tallies) with one accent diamond inlaid below each (brief section 4/7), and the concept's blue gem in
+the pommel (fix pass 6).
 
 PROP SPACE (rig.prop_matrix): grip at the origin, +Z along the cleaver (u), +Y the spine (v; so the
 edge faces -Y, the rig convention), +X = w. The game haft is longer than the painted one (0.62 m to the
@@ -138,21 +139,32 @@ def notch_floors(proud: float = 0.005, into: float = 0.010, n: int = 18) -> list
     return out
 
 
-GEM_INSET_A, GEM_INSET_B = 0.037, 0.056   # fix pass 6: the inlay diamonds' half-diagonals (along u, across v)
-GEM_GAP = 0.013                           # the dark stone left between a bite's floor and its inlay's top point
+GEM_INSET_A, GEM_INSET_B = 0.040, 0.068   # fix pass 8: the inlay diamonds' half-diagonals (along u, across v): the
+                                          # bite-floor linings are gone (the review: lining + diamond = a 10-mark
+                                          # two-row checker), so the five diamonds carry the accent alone, a size up
+                                          # (8 x 13.6 cm, 2.8 cm of ironstone between them)
+GEM_GAP = 0.010                           # the dark stone left between a bite's floor and its inlay's top point
+GEM_EDGE = 0.016                          # ... and between an inlay's bottom point and the band's lower edge
 POMMEL_GEM = (0.052, 0.046)               # the pommel's blue diamond (the concept's gem pommel), half-diagonals
 
 
+def heel_low(u):
+    """the heel band's lower edge (v) at u"""
+    h = np.array(HEEL[:13])
+    return np.interp(u, h[2:12, 0], h[2:12, 1])
+
+
 def gem_polys() -> list:
-    """fix pass 6: ONE small diamond inlay under each notch (u, v polygons), set IN the dark band with stone all
-    round it: its top point GEM_GAP under the bite's floor (the review read the pass-5 spades, their tops in the
-    bites, as saw teeth / a zipper / white teeth in the player tint), 7 x 11 cm"""
+    """ONE diamond inlay under each notch (u, v polygons), set IN the dark band with stone all round it: its top
+    point GEM_GAP under the bite's floor, its bottom point at least GEM_EDGE above the band's lower edge (the last
+    notch, where the band narrows toward the tip, takes a shorter diamond)"""
     out = []
     for nu in NOTCHES:
         cu, cv, r = notch_circle(nu)
-        vb = cv - r
-        vc = vb - GEM_GAP - GEM_INSET_B
-        out.append([(nu, vc + GEM_INSET_B), (nu - GEM_INSET_A, vc), (nu, vc - GEM_INSET_B), (nu + GEM_INSET_A, vc)])
+        top = cv - r - GEM_GAP
+        b = min(GEM_INSET_B, 0.5 * (top - (heel_low(nu) + GEM_EDGE)))
+        vc = top - b
+        out.append([(nu, vc + b), (nu - GEM_INSET_A, vc), (nu, vc - b), (nu + GEM_INSET_A, vc)])
     return out
 
 

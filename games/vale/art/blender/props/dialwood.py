@@ -17,16 +17,20 @@ Variety lives in the pad layout: a tiered stack, an umbrella, a trunkless mound,
 stepping lean; pads differ in size, squash, turn and droop, so are their leaves.
 
 Shading normals: the pad's dome, blended toward the whole crown's form and a good share of the leaf's own
-facet, plus a rib/valley tilt along every pleat: the crown shades as soft painted masses, while the
-lacquer highlight (COLOR_0.a: leaves glossy, cushions a little, bark matte) breaks leaf by leaf and rib by
-rib.
+facet, plus a rib/valley tilt along every pleat: the crown shades as soft painted masses, broken leaf by leaf
+and rib by rib by the paint, never by a highlight. The plates are MATTE (r12 M11: COLOR_0.a, the gloss mask,
+is 0 everywhere, so the renderer keeps roughness ≥ 0.75 and the sun's specular peak stays under L* 48: the
+old lacquer lobe made one wet hot spot per clump).
 
 Painting (vertex colour, sRGB ramps, rotation-invariant: terrain spins every instance): a value FIELD over
 the crown (up-facing, open sky and occlusion cast against the cushions and wood only, height), blurred, then
 each leaf's brushwork on top — dark at the stem where it tucks under the ring above, light toward its tip,
 light ribs and darker valleys like a fan brushed in three strokes, a warm lit rim on the ribs — and hue
-drift per pad, per leaf and per variant. Value stays under the roads: lit crowns ~L* 55–60 on screen, the
-cool undersides ~L* 15–20, never black.
+drift per pad, per leaf and per variant. Over all of it a baked value GRADIENT (r12 M11): × 0.45 (linear) at
+the crown's bottom and in its occluded interior, rising to × 1.0 on the open top, so a crown reads as one lit
+mass over its own shade. Every crown carries ≥ 20 plates, each scaled ±15 % and turned ±10° (roll and pitch)
+off the shingle. Value stays in the environment's dark band (tokens grade.maps.rift.valueLstar, r12 B5):
+canopy luma p50 45–60, p99 ≤ 115 at the gameplay camera.
 """
 from __future__ import annotations
 
@@ -36,7 +40,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from kit import Part, ellipsoid, fan_plate, frame, merge, smooth_normals, tube
-from paint import Occluder, fbm3, hash01, hexc, ramp, smooth
+from paint import Occluder, fbm3, hash01, hexc, ramp, smooth, srgb2lin
 
 
 @dataclass
@@ -87,6 +91,10 @@ STEM = 0.12                    # value: stem → tip ramp on every leaf
 STROKE = 0.035                 # value: rib light / valley dark
 PAD_TONE = 0.06                # value step between pads
 BLUR = 0.10                    # the value field's softness (m)
+PLATE_SCALE = 0.15             # every plate scaled ±15 % (r12 M11)
+PLATE_TURN = math.radians(10)  # and turned ±10° (roll, pitch) off the shingle
+PITCH_MAX = 0.62               # no plate descends steeper than this (rad below level)
+GRAD_LO = 0.45                 # the baked value gradient (linear ×): crown bottom and interior → 1.0 on the open top
 
 
 def _rot(axis: np.ndarray, ang: float) -> np.ndarray:
@@ -158,7 +166,7 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator)
         # long enough to reach past the rim where it points out, never a stub
         ad = float(np.dot(a_xy, d2))
         t = -ad + math.sqrt(max(ad * ad - float(np.dot(a_xy, a_xy)) + (1.04 * r) ** 2, 0.0))
-        L = float(np.clip(max(t, 0.55 * r) * rng.uniform(0.9, 1.1), 0.45 * r, 0.80 * r)) * pad.leaf
+        L = float(np.clip(max(t, 0.55 * r), 0.45 * r, 0.80 * r)) * rng.uniform(1 - PLATE_SCALE, 1 + PLATE_SCALE) * pad.leaf
         spread = float(np.clip(1.5 * lo_ / (0.5 * L), 1.7, 2.5))
         key = float(np.dot(a_xy - axis_xy, d2))           # downstream: lower
         leaves.append((key, a_xy, d2, L, spread))
@@ -175,8 +183,18 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator)
         nz /= np.linalg.norm(nz)
         lift = LAYER * k + rng.uniform(-0.003, 0.003)
         apex = np.array([a_xy[0], a_xy[1], z0 - kappa * float(np.dot(a_xy, a_xy)) + lift])
-        roll = rng.uniform(-0.10, 0.10)
-        nz = nz + roll * np.cross(ax, nz)
+        # ±10° off the shingle: roll about the leaf's axis, pitch about its side (never steeper than PITCH_MAX
+        # below level, so no plate turns edge-on to the 52° camera)
+        roll = rng.uniform(-PLATE_TURN, PLATE_TURN)
+        nz = nz + math.tan(roll) * np.cross(ax, nz)
+        nz /= np.linalg.norm(nz)
+        p = rng.uniform(-PLATE_TURN, PLATE_TURN)
+        ax2 = ax * math.cos(p) + nz * math.sin(p)
+        if ax2[2] < -math.sin(PITCH_MAX):
+            p = abs(p)
+            ax2 = ax * math.cos(p) + nz * math.sin(p)
+        nz = nz * math.cos(p) - ax * math.sin(p)
+        ax = ax2 / np.linalg.norm(ax2)
         leaf = fan_plate(L, spread * rng.uniform(0.94, 1.06), K=K_LEAF, crimp=rng.uniform(0.10, 0.16),
                          pleat=rng.uniform(0.012, 0.018), droop=kappa * L, curl=kappa * L * 0.5,
                          round_=rng.uniform(0.22, 0.32))
@@ -289,6 +307,11 @@ def build_tree(spec: TreeSpec) -> Part:
     return t
 
 
+def _lin2srgb(c: np.ndarray) -> np.ndarray:
+    c = np.clip(np.asarray(c, float), 0, 1)
+    return np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1 / 2.4) - 0.055)
+
+
 def _lum(c: np.ndarray) -> np.ndarray:
     return (c @ np.array([0.2126, 0.7152, 0.0722]))[:, None]
 
@@ -307,7 +330,7 @@ def _blur(P: np.ndarray, x: np.ndarray, sigma: float) -> np.ndarray:
 
 
 def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, np.ndarray]:
-    """→ sRGB colours (n,3) and the GLOSS mask (n,) for COLOR_0.a (1 lacquered leaf, 0 bark)."""
+    """→ sRGB colours (n,3) and the GLOSS mask (n,) for COLOR_0.a (0 everywhere since r12 M11: matte plates)."""
     P, N, A = t.P, t.N, t.A
     kind = A["kind"]
     leaf = kind == 1
@@ -359,11 +382,15 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     c = _keep_lum(c * (1 + TINT_W * (tv - 0.5)), c)
     rim = smooth(0.4, 0.9, lit) * u * (lobe > 0) * leaf * smooth(0.3, 0.8, ao)
     c = c + (RIM - c) * (0.20 * rim)[:, None]                       # warm lit rib tips (the lacquer's bevel)
+    # the baked value gradient (r12 M11): × GRAD_LO (linear) at the crown's bottom and in its occluded interior,
+    # × 1 on the open top — height over the foliage, openness (occlusion) and the open sky
+    open_ = smooth(0.25, 0.9, ao)
+    w = np.clip(0.58 * hgt + 0.24 * open_ + 0.18 * smooth(0.15, 0.8, sky), 0, 1)
+    w = np.where(core, 0.6 * w, w)
+    g = GRAD_LO + (1 - GRAD_LO) * smooth(0.0, 1.0, w)
+    c = _lin2srgb(srgb2lin(np.clip(c, 0, 1)) * g[:, None])
     col[leafy] = c[leafy]
-    # lacquer: glossiest along the ribs and toward the tip, each leaf its own; the cushions a little; bark none
-    gl = A.get("gl", np.ones(len(P)))
-    gloss[leaf] = ((0.50 + 0.28 * u + 0.22 * (lobe > 0)) * (0.80 + 0.20 * gl))[leaf]
-    gloss[core] = 0.25
+    # no lacquer (r12 M11): the gloss mask stays 0 on plates, cushions and bark alike — matte paint only
     # ── bark ──
     bark = kind == 3
     s = A.get("s", np.zeros(len(P)))

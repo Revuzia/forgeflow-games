@@ -118,11 +118,14 @@ HAT_UP = HAT_R[:, 2]
 BRIM_R = 0.395            # the cone's outer radius at the brim
 CONE_H = 0.165            # brim plane -> apex (outer surface)
 CONE_T = 0.013            # lacquer shell thickness
-RIM_N = 6                 # accent inlays round the rim (brief: six glass inlays; the concept's studs)
-# the inlays' angles (0 = the front, -Y): none in the front 100 degrees (seen from the 52 degree camera the front of the
-# brim drops below the figure's middle row: lineup_qa wants the accent in the top half), three pairs round the sides
-# and back, so four read from any facing (lineup_qa: >= 1 % of the silhouette from behind as well)
-RIM_ANGLES = (50.0, 100.0, 150.0, -150.0, -100.0, -50.0)
+# fix pass 5 (review: 'six 12.6 x 6.2 cm inlays, 3x the brief, glossy blue buttons / a tambourine'): the concept's
+# MANY SMALL studs, 22 glass studs (6 x 3.8 cm) in small iron collars round the rim, spaced 18 deg at the sides
+# opening to 12 deg at the back. Their size is the floor lineup_qa leaves (>= 1 % of the silhouette from behind,
+# the bible's accent rule; the brief's 4 x 1.5 cm x 6 is 0.4 %); the front 60 deg stays bare (the idle's front brim
+# drops toward the figure's middle row: the accent's top-half share)
+_RA = (36.0, 54.0, 71.0, 87.0, 102.0, 116.0, 129.0, 141.0, 152.0, 163.0, 174.0)
+RIM_ANGLES = tuple(a for a in _RA) + tuple(-a for a in _RA)
+RIM_N = len(RIM_ANGLES)
 
 
 def hat_w(p):
@@ -264,7 +267,7 @@ class CapeShell(sdf.Prim):
         """the U section: an ellipse (half-width a by side, half-depth b) round the axis"""
         s = self.s_of(z)
         a = np.where(th >= 0, np.interp(z, *self.AL), np.interp(z, *self.AR))
-        b = 0.095 + 0.16 * s
+        b = 0.095 + 0.13 * s          # fix pass 5: 0.16 -> 0.13 (a flatter felt: the lunges' rounded sack)
         r = a * b / np.sqrt((b * np.sin(th)) ** 2 + (a * np.cos(th)) ** 2)
         r = r + (0.005 + 0.016 * s) * np.sin(th * 7.0 + 1.3 + 0.8 * np.sin(z * 5.0)) * (0.3 + 0.7 * s)
         return r
@@ -471,9 +474,8 @@ def sculpts() -> list:
     rim = Sculpt("hat_rim")
     rim.add(Lathe(HAT_C, rim_prof, BRIM_R + 0.03, -0.04, 0.03, axes=HAT_AX).displaced(chips(0.003, 30.0), 0.003), k=0.0)
     glass = Sculpt("hat_inlays")
-    # six oval glass inlays, each in a raised iron setting that swells the rim (12.6 x 6.6 cm), the glass 10 x 4.8 cm on the
-    # rim's upper-outer bevel (the colour reads from any angle, from above most): six separate marks with long dark
-    # iron gaps between, never a dashed ring
+    # 22 small oval glass studs, each in a raised iron collar that swells the rim (7.2 x 4.8 cm), the glass 6 x 3.8 cm
+    # on the rim's upper-outer bevel (the colour reads from any angle, from above most): the concept's stud row
     for i, phi in enumerate(RIM_ANGLES):
         rd = rim_angle_dir(phi)
         tg = np.cross(V3([0, 0, 1.0]), rd)
@@ -482,11 +484,11 @@ def sculpts() -> list:
         b_w = np.cross(n_w, t_w)
         ax = np.stack([unit(t_w), unit(b_w), unit(n_w)])
         c_w = hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004]))
-        rim.add(Ellipsoid(c_w - n_w * 0.006, (0.076, 0.040, 0.0150), axes=ax), k=0.012)         # the setting
-        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0665, 0.0335, 0.0088), axes=ax), k=0.003)       # its seat
-        glass.add(Ellipsoid(c_w + n_w * 0.0005, (0.063, 0.031, 0.0088), axes=ax), k=0.0)
-    part("hat_rim", rim, "ironstone", "bone:x_hat", 1100, 0.6)
-    part("hat_inlays", glass, "accent", "bone:x_hat", 480, 0.5)
+        rim.add(Ellipsoid(c_w - n_w * 0.005, (0.036, 0.024, 0.0120), axes=ax), k=0.008)         # the collar
+        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0315, 0.0205, 0.0070), axes=ax), k=0.002)       # its seat
+        glass.add(Ellipsoid(c_w + n_w * 0.0008, (0.030, 0.019, 0.0075), axes=ax), k=0.0)
+    part("hat_rim", rim, "ironstone", "bone:x_hat", 1250, 0.5)
+    part("hat_inlays", glass, "accent", "bone:x_hat", 720, 0.35)
 
     def disc_prof(r, z):
         zc, hz, hr, cr = CONE_H - 0.004, 0.011, 0.037, 0.007
@@ -729,29 +731,30 @@ def sculpts() -> list:
     F = hand_frame("R")
     fist = Sculpt("hand_R")
     pc = WR["R"] + FD["R"] * 0.048 + F[2] * 0.006
-    fist.add(RoundBox(pc, (0.047, 0.046, 0.028), 0.02, axes=F), k=0.0)
+    fist.add(RoundBox(pc, (0.051, 0.049, 0.031), 0.021, axes=F), k=0.0)
     gax = GRIP_AX
     for i, s_ in enumerate((-0.033, -0.011, 0.011, 0.033)):
         cc = FIST_R + gax * s_ + F[2] * 0.005
-        fist.add(Torus(cc, 0.031 - 0.002 * abs(i - 1.5), 0.0135, axes=sdf.frame(gax)), k=0.006)
+        fist.add(Torus(cc, 0.032 - 0.002 * abs(i - 1.5), 0.0155, axes=sdf.frame(gax)), k=0.006)
     th0 = hl("R", (0.04, 0.03, -0.012))
     side_ = unit(F[0] - gax * float(F[0] @ gax))
     th1 = FIST_R + gax * 0.04 + side_ * 0.028
-    fist.add(Tube([th0, (th0 + th1) / 2 + F[0] * 0.007, th1], [0.019, 0.015, 0.013], k=0.006), k=0.012)
+    fist.add(Tube([th0, (th0 + th1) / 2 + F[0] * 0.007, th1], [0.021, 0.0175, 0.015], k=0.006), k=0.012)
     fist.sub(Capsule(FIST_R - gax * 0.07, FIST_R + gax * 0.07, 0.0165), k=0.002)            # the grip's channel
     part("hand_R", fist, "hand_wood", "bone:hand.R", 650, 0.55)
 
     # the open left hand (the lull hand): palm, four jointed fingers loosely curled, the thumb out
     hand = Sculpt("hand_L")
     FL = hand_frame("L", HD_L)
-    HS = 1.18                       # the lull hand: stylised big (brief: hands x1.45 of a human's)
+    HS = 1.30                       # the lull hand: stylised big (brief: hands x1.45 of a human's); fix pass 5: 1.18 ->
+    #                                 1.30 and the fingers x1.25 thicker (review: 'thin and spidery, a claw')
     hand.add(RoundBox(hl("L", (0.0, 0.052 * HS, 0.0), y=HD_L), (0.042 * HS, 0.050 * HS, 0.016 * HS), 0.014, axes=FL), k=0.0)
     hand.add(Ellipsoid(hl("L", (0.008, 0.014, -0.004), y=HD_L), (0.038 * HS, 0.03 * HS, 0.022 * HS), axes=FL), k=0.02)
-    for fi, (x0, spread, l0, curl) in enumerate(((0.026, 9.0, 0.046, 14.0), (0.009, 2.0, 0.050, 19.0),
-                                                  (-0.009, -5.0, 0.047, 25.0), (-0.026, -12.0, 0.038, 33.0))):
+    for fi, (x0, spread, l0, curl) in enumerate(((0.026, 11.0, 0.044, 14.0), (0.009, 3.0, 0.048, 19.0),
+                                                  (-0.009, -6.0, 0.045, 25.0), (-0.026, -14.0, 0.036, 33.0))):
         p = hl("L", (x0 * HS, 0.100 * HS, 0.002), y=HD_L)
         d = unit(FL[1] * math.cos(math.radians(spread)) + FL[0] * math.sin(math.radians(spread)))
-        pts, rad = [p], [0.0125]
+        pts, rad = [p], [0.0157]
         segs = (l0 * HS, l0 * 0.72 * HS, l0 * 0.55 * HS)
         ang = 0.0
         for k_, L in enumerate(segs):
@@ -759,14 +762,14 @@ def sculpts() -> list:
             dd = unit(d * math.cos(ang) - FL[2] * math.sin(ang))
             p = p + dd * L
             pts.append(p)
-            rad.append(0.0115 - 0.0019 * (k_ + 1))
-        hand.add(Tube(pts, rad, k=0.004), k=0.008)
+            rad.append(0.0145 - 0.0021 * (k_ + 1))
+        hand.add(Tube(pts, rad, k=0.004), k=0.006)
         for q in pts[1:-1]:
             hand.add(Sphere(q, rad[1] * 1.06), k=0.003)                                     # the carved joints
     tb0 = hl("L", (0.040, 0.024, -0.008), y=HD_L)
     tb1 = tb0 + unit(FL[0] * 0.75 + FL[1] * 0.55 - FL[2] * 0.35) * 0.052
     tb2 = tb1 + unit(FL[0] * 0.35 + FL[1] * 0.85 - FL[2] * 0.4) * 0.04
-    hand.add(Tube([tb0, tb1, tb2], [0.017, 0.013, 0.010], k=0.005), k=0.01)
+    hand.add(Tube([tb0, tb1, tb2], [0.020, 0.0165, 0.0128], k=0.005), k=0.01)
     part("hand_L", hand, "hand_wood", "bone:hand.L", 850, 0.5)
 
     # ── LEGS ──
@@ -808,8 +811,11 @@ def sculpts() -> list:
         # the low wedge heel under the heel cup (2.8 cm at the back, tapering into the sole under the arch)
         boots.add(RoundBox(A0 - fwd * 0.058 + up * 0.016, (0.045, 0.040, 0.016), 0.007,
                            axes=np.stack([ax[0], unit(fwd + up * 0.18), unit(up - fwd * 0.18)])), k=0.004)
+        # the soft shaft: hugging the ankle, slouching wider at the top in a few wrinkles (fix pass 5: the straight
+        # tube read shapeless in the splash)
         boots.add(FlatCapsule(V3([ANK[s][0], ANK[s][1], 0.08]), V3([ANK[s][0], ANK[s][1] - 0.004, 0.215]),
-                              0.064, 0.068, 0.062, 0.066, side=(1, 0, 0)), k=0.04)
+                              0.055, 0.060, 0.069, 0.072, side=(1, 0, 0))
+                  .displaced(folds(0.0035, 75.0, axis=2, phase=sx * 0.8), 0.004), k=0.04)
         boots.add(Torus(V3([ANK[s][0], ANK[s][1] - 0.004, 0.205]), 0.064, 0.012, axes=np.diag([1, 1.06, 1]))
                   .displaced(chips(0.004, 40.0), 0.004), k=0.008)                          # the turned cuff
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
@@ -927,7 +933,7 @@ def rig_extras(ctx) -> None:
     _add_hat_bone(ctx)
     front = hat_w(rim_angle_dir(0.0) * (BRIM_R + 0.01))
     rig.add_socket(info, "x_hat_rim", "x_hat", tuple(front), tuple(HAT_UP * 0.08), z_hint=(0, -1, 0))
-    tip = hl("L", (0.0, 0.215, -0.02), y=HD_L)
+    tip = hl("L", (0.0, 0.237, -0.022), y=HD_L)
     rig.add_socket(info, "x_dart_hand", "hand.L", tuple(tip), tuple(HD_L * 0.06), z_hint=(0, -1, 0))
     rig.add_socket(info, "x_blade_tip", "prop.R", tuple(BLADE_TIP), tuple(BLADE_DIR * 0.06), z_hint=(0, 0, 1))
 
@@ -1072,8 +1078,10 @@ def chain_config(ctx) -> list:
     def tabard_drive(pose):
         fl = max(pose.get("thigh.L", (0.0,))[0], pose.get("thigh.R", (0.0,))[0], 0.0)
         return 0.85 * fl
-    out = [anim.ChainCfg(ctx.chains["cape"], gravity=0.7, stiffness=140.0, damping=23.0, inertia=0.18,
-                         drive=cape_drive, limit=(-40.0, 30.0), floor=0.03),
+    # fix pass 5: gravity 0.7 -> 0.5 (in the lunges the gravity-led lower bone hung the U-shaped felt straight down
+    # round her legs: a rounded sack from behind; now it streams back off the pitched torso)
+    out = [anim.ChainCfg(ctx.chains["cape"], gravity=0.5, stiffness=140.0, damping=23.0, inertia=0.18,
+                         drive=cape_drive, limit=(-44.0, 30.0), floor=0.03),
            anim.ChainCfg(ctx.chains["tabard"], gravity=0.85, stiffness=150.0, damping=16.0, inertia=0.6,
                          drive=tabard_drive, limit=(-8.0, 80.0), floor=0.03)]
     return out
@@ -1122,7 +1130,9 @@ SIDE_INSET = 0.04
 # fix pass 3: the ramp walks the concept's own hues (warm ochre 37 in the shade, gold 44-45 in the light: the
 # concept's #DFC37B / #FCDF8C) with EVERY step at the 40 % cap (the lit steps were 32-37 %, which the game's tone
 # map drained to cream); L* 52-84, the baked shading compressed (the game lights it)
-HAT_COLS = {"deep": "#8F7956", "shade": "#AD9568", "mid": "#C9B179", "lit": "#DEC686", "hi": "#E7D18F",
+# fix pass 5: the ramp a step deeper (hue 31 -> 46, every step at the cap: L* 43-86; the lit gold kept for the top band)
+#   and walked by the brushwork (_lacquer): the flat 0.46 + 0.48 t fill read as a cream plastic lampshade
+HAT_COLS = {"deep": "#786148", "shade": "#9E835F", "mid": "#C2A574", "lit": "#DEC585", "hi": "#EAD694",
             "under": "#8F6F56", "under_deep": "#47382C"}    # the underside: the concept's warm ochre-brown lacquer
 #                                                        (its back view, L* 36-53), darker toward the crown
 IRON = {"base": "#3D373E", "shade": "#242026", "lit": "#5F5862", "chip": "#8A818C"}
@@ -1133,7 +1143,8 @@ BLADE_OWNER = "blade"
 DESPECKLE = {"cape": ((0.66, 0.34), (0.45, 1.0)), "cowl": ((0.55, 0.36), (0.5, 1.0)), "trousers": ((0.5, 0.6), (0.5, 0.6))}
 # the felt and the legs lighter than the concept's back view (the bible's middle and feet bands; lineup_qa build 16:
 # top 68.3 / mid 48.5 / feet 17.1 -> the hat ramp +3 L*, the wraps and boots x1.5-1.7 in linear light, umber)
-TONE = {"cape": 2.7, "cowl": 1.6, "tabard": 1.3, "sleeves": 1.15}
+TONE = {"cape": 3.0, "cowl": 1.6, "sleeves": 1.15}      # fix pass 5: cape 2.7 -> 3.0 (the side / back facings' middle
+#                                                          band); the tabard takes LEG_TARGET (it read pale beige)
 UMBER: dict = {}          # (fix pass 3: the legs take LEG_TARGET, the boots are painted)
 #                                                                                                    (luminance kept)
 _PAINT0 = {}
@@ -1158,68 +1169,30 @@ def _lum(c):
     return c @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 
-# the skins' lacquer (brief §9; no large area lighter than L* 86): Noon Fair's pale chalky ochre ground, Shadeprint's
-# pale printed cone (its ink is the brim band, the slat lines and the underside)
-HAT_SKIN = {"nurrow_noon_fair": {"deep": "#9D8B74", "shade": "#B9A88C", "mid": "#D0C1A6", "lit": "#E0D2BA", "hi": "#E0D4BF",
+# the skins' lacquer (brief §9; no large area lighter than L* 86): Noon Fair's pale chalky ochre ground; Shadeprint's
+# pale lavender-chalk paper ground under its ink crown (fix pass 5)
+HAT_SKIN = {"nurrow_noon_fair": {"deep": "#988670", "shade": "#B3A287", "mid": "#CABBA0", "lit": "#DCCEB6", "hi": "#E2D6C2",
                                  "under": "#8F7F6D", "under_deep": "#4A4138"},
-            "nurrow_shadeprint": {"deep": "#A39FAF", "shade": "#B4B0C0", "mid": "#C3C0CD", "lit": "#D0CDD8", "hi": "#D7D4DE",
+            "nurrow_shadeprint": {"deep": "#9E9AAD", "shade": "#AFABBE", "mid": "#C0BCCC", "lit": "#CFCCD9", "hi": "#D8D5DE",
                                   "under": "#2B2A33", "under_deep": "#1A191F"}}
 MOTH = ("#B48AA6", "#8A6680", "#E2D6C3")       # Noon Fair's lacquer moths: rose-lilac, its dark vein, a chalk dot
 INK = "#2B2A33"
 
-
-MOTH_ROT = (-28.0, 14.0, 36.0, -12.0, 22.0, -34.0, 6.0, 30.0, -20.0, 12.0)       # each moth turned in its own flight
-MOTH_SCALE = (1.0, 0.86, 1.12, 0.92, 1.05, 0.88, 1.15, 0.95, 1.0, 0.9)
-
-
-def _moths(phi, r):
-    """Noon Fair: ten lacquer moths in a ring round the cone, each turned and sized on its own, the wings in flight
-    (the far pair foreshortened). Returns the wing mask, the dark outline, the chalk dot, the wing's root -> edge
-    gradient (the lacquer's depth) and its gloss highlight"""
-    wing = np.zeros_like(r)
-    vein = np.zeros_like(r)
-    dot = np.zeros_like(r)
-    grad = np.zeros_like(r)
-    gloss = np.zeros_like(r)
-    for i in range(10):
-        pc = math.radians(8.0 + 36.0 * i)
-        rc = 0.50 if i % 2 == 0 else 0.68
-        sc = MOTH_SCALE[i] * 1.2
-        dph = (phi - pc + math.pi) % (2 * math.pi) - math.pi
-        u0 = dph * r * BRIM_R / sc                # across (arc), in the moth's first-size units
-        w0 = (r - rc) * BRIM_R / sc               # along the slope (+ toward the brim)
-        ca, sa = math.cos(math.radians(MOTH_ROT[i])), math.sin(math.radians(MOTH_ROT[i]))
-        u = u0 * ca + w0 * sa
-        w = -u0 * sa + w0 * ca
-        w = w * (1 if i % 3 else -1)              # a few face the other way
-        for sx in (-1, 1):
-            fs = 1.0 if sx * (1 if i % 2 else -1) > 0 else 0.82      # the far wings foreshortened (in flight)
-            for (cx, cy, ax, ay, rot) in ((0.026, 0.010, 0.030, 0.017, 28.0), (0.018, -0.016, 0.019, 0.013, -32.0)):
-                a = math.radians(rot * sx)
-                uu, ww = u - sx * cx * fs, w - cy
-                x1 = uu * math.cos(a) + ww * math.sin(a)
-                y1 = -uu * math.sin(a) + ww * math.cos(a)
-                e = (x1 / (ax * fs)) ** 2 + (y1 / ay) ** 2
-                m = _ss(1.05, 0.85, e)
-                wing = np.maximum(wing, m)
-                vein = np.maximum(vein, _ss(1.25, 1.02, e) * (1 - _ss(1.02, 0.9, e)))
-                g = np.clip(np.abs(u) / (0.05 * fs), 0, 1)                         # root (dark) -> edge (light)
-                grad = np.where(m > 0.01, np.maximum(grad, g * m), grad)
-                hl = np.exp(-((x1 / (ax * fs) - 0.15 * sx) ** 2 / 0.10 + (y1 / ay - 0.42) ** 2 / 0.025))
-                gloss = np.maximum(gloss, hl * m)
-                if ax > 0.025:                                                       # the forewing's chalk tip band
-                    tipd = (x1 * sx) / (ax * fs)
-                    dot = np.maximum(dot, m * _ss(0.55, 0.62, tipd) * (1 - _ss(0.74, 0.80, tipd)))
-        body = (u / 0.0045) ** 2 + (w / 0.022) ** 2
-        wing = np.maximum(wing, _ss(1.1, 0.8, body))
-        vein = np.maximum(vein, _ss(1.1, 0.8, body) * 0.8)
-    return wing, vein, dot, grad, gloss
-
-
-SHADE_STEMS = (                                   # Shadeprint's printed branch shadows (top-down, hat-local, metres):
-    ((0.362, 0.032), (0.260, -0.095), (0.147, -0.176), (0.020, -0.224), (-0.130, -0.226), (-0.252, -0.177)),
-    ((-0.329, 0.154), (-0.2645, 0.047), (-0.196, -0.028)),            # her left brim over the front, a right sprig
-)
+# ── the lacquer's brushwork (fix pass 5; review: 'an unpainted flat fill: a cream plastic lampshade'). The concept's
+#    hat is a lit-to-shadow ochre gradient over faint radial gores and radial lacquer strokes, a fine painted line
+#    near the rim; here, on every skin's ground: 16 irregular gores (each its own value, faceted toward the light, a
+#    dark seam with a lit lip), long radial brush strokes (broad + hair, starting and stopping), the painted line at
+#    r 0.875, a smoky crown round the knob (the snuffer's soot, streaking down the slope), worn chips along the brim,
+#    a few pale scratches and patches of hairline crackle (as Marund's painted stone) ──
+HAT_NP = 16
+_HR = np.random.RandomState(29)
+HAT_EDGES = np.sort((np.arange(HAT_NP) + _HR.uniform(-0.28, 0.28, HAT_NP)) * 2 * math.pi / HAT_NP - math.pi)
+HAT_OFF = _HR.uniform(-1.0, 1.0, HAT_NP)
+HAT_OFF2 = _HR.uniform(-1.0, 1.0, HAT_NP)
+# scratches: (r0, phi0 deg, length m, heading deg relative to the radial, bend)
+HAT_SCRATCH = ((0.62, -128.0, 0.07, 64.0, 0.4), (0.80, -64.0, 0.05, -50.0, -0.6), (0.71, 22.0, 0.06, 80.0, 0.3),
+               (0.88, 104.0, 0.045, -70.0, 0.5), (0.55, 158.0, 0.05, 40.0, -0.4), (0.84, -170.0, 0.04, 88.0, 0.2),
+               (0.47, 72.0, 0.035, -30.0, 0.5))
 
 
 def _polyline_dist(X, pts):
@@ -1243,103 +1216,310 @@ def _polyline_dist(X, pts):
     return best, par, tan, cum[-1]
 
 
-def _shade_print(q):
-    """Shadeprint: the shadow of a leafy branch printed across the pale cone in ink (one long branch sweeping from
-    the back-left brim over her left side to the front, a short sprig on the right-back), every leaf a crisp ink
-    lens with a fine light midrib (the brief's light-rimmed ink lines); a deliberate, asymmetric print, never stains,
-    rays or rings. Returns the ink mask and the light midrib mask"""
+def _hat_frame(p):
+    """upright-cone local point q, normalised radius r (1 = the brim), angle phi (0 = the front, + her left)"""
+    q = hat_unshear(hat_local(p))
+    r = np.hypot(q[:, 0], q[:, 1]) / BRIM_R
+    phi = np.arctan2(q[:, 0], -q[:, 1])
+    return q, r, phi
+
+
+def _streaks(phi, r, a, b, off=0.0):
+    """noise constant along the slope (radial brush strokes), varying round the cone"""
+    return NOISE(np.stack([np.cos(phi) * a + off, np.sin(phi) * a, r * b], 1), 1.0)
+
+
+def _lacquer(p, n, q, r, phi):
+    """the shared brushwork: v (0..1, the ramp index) plus the masks a skin reuses (seam, line, soot, chip, crack,
+    scratch, the stroke field)"""
+    lam = np.clip(n @ KEY, 0.0, 1.0)
+    t = np.clip((lam - 0.25) / 0.62, 0.0, 1.0)
+    E = np.concatenate([HAT_EDGES, [HAT_EDGES[0] + 2 * math.pi]])
+    ph = np.where(phi < HAT_EDGES[0], phi + 2 * math.pi, phi)
+    k = np.clip(np.searchsorted(E, ph, side="right") - 1, 0, HAT_NP - 1)
+    wd = E[k + 1] - E[k]
+    u = (ph - E[k]) / wd
+    arc = np.minimum(u, 1 - u) * wd * np.maximum(r, 1e-3) * BRIM_R          # metres to the nearest seam
+    fade = _ss(0.10, 0.26, r)
+    seam = _ss(0.0024, 0.0008, arc) * fade
+    lip = _ss(0.0045, 0.0028, u * wd * r * BRIM_R) * (1 - _ss(0.0028, 0.0018, u * wd * r * BRIM_R)) * fade
+    broad = _streaks(phi, r, 17.0, 3.2) * (0.55 + 0.45 * _streaks(phi, r, 7.0, 7.0, 31.0))
+    hair = _streaks(phi, r, 58.0, 2.0, 11.0)
+    mott = NOISE.fbm(p, 7.0, 3)
+    v = 0.40 + 0.47 * t
+    v = v + 0.040 * HAT_OFF[k] + 0.045 * (u - 0.5) * fade
+    v = v + 0.095 * broad + 0.05 * hair + 0.03 * mott
+    v = v + 0.04 * _ss(0.0, 0.3, r) * (1 - _ss(0.3, 0.55, r))
+    v = v - 0.12 * seam + 0.06 * lip
+    rl = r + 0.004 * _streaks(phi, r, 9.0, 1.0, 5.0)
+    line = _ss(0.0042, 0.0016, np.abs(rl - 0.875) * BRIM_R)
+    line_lit = _ss(0.0035, 0.0012, np.abs(rl - 0.887) * BRIM_R)
+    v = v - 0.20 * line + 0.06 * line_lit
+    v = v - 0.10 * _ss(0.89, 1.0, r)                                        # the brim's lower band in its shade
+    soot = _ss(0.30, 0.07, r + 0.06 * (0.5 + _streaks(phi, r, 6.0, 2.0, 3.0)) * _ss(0.05, 0.25, r))
+    v = v - 0.16 * soot
+    crack_patch = _ss(0.12, 0.32, NOISE.fbm(p, 4.5, 2, offset=(3.0, 1.0, 7.0)))
+    crack = np.clip((NOISE.ridged(p, 55.0, 2) - 0.86) / 0.10, 0, 1) * crack_patch * _ss(0.2, 0.35, r)
+    v = v - 0.13 * crack
+    chip = np.clip((NOISE(p, 85.0, (5.0, 2.0, 1.0)) - 0.30) / 0.12, 0, 1) * _ss(0.905, 0.94, r) \
+        * _ss(0.0, 0.25, NOISE(p, 12.0, (1.0, 9.0, 2.0)))
     X = q[:, :2]
-    ink = np.zeros(len(q))
-    rib = np.zeros(len(q))
-    for bi, pts in enumerate(SHADE_STEMS):
+    scr = np.zeros(len(p))
+    for (r0, ph0, L, hd, bend) in HAT_SCRATCH:
+        a0 = math.radians(ph0)
+        c0 = np.array([math.sin(a0), -math.cos(a0)]) * r0 * BRIM_R
+        rad = np.array([math.sin(a0), -math.cos(a0)])
+        tg = np.array([math.cos(a0), math.sin(a0)])
+        h = math.radians(hd)
+        d0 = rad * math.cos(h) + tg * math.sin(h)
+        nn = np.array([-d0[1], d0[0]])
+        pts = [c0 + d0 * L * s_ + nn * bend * L * 0.25 * math.sin(math.pi * s_) for s_ in np.linspace(0, 1, 6)]
+        near = np.linalg.norm(X - c0 - d0 * L * 0.5, axis=1) < L
+        if near.any():
+            dist, par, _, _ = _polyline_dist(X[near], pts)
+            scr[near] = np.maximum(scr[near], _ss(0.0013, 0.0004, dist) * np.sin(math.pi * par) ** 0.5)
+    v = v + 0.10 * scr
+    return np.clip(v, 0.0, 1.0), dict(t=t, seam=seam, line=line, soot=soot, chip=chip, crack=crack, scr=scr,
+                                      broad=broad, k=k, u=u)
+
+
+def _ramp(C, v):
+    return np.where((v < 0.25)[:, None], _mix(C["deep"], C["shade"], v / 0.25),
+           np.where((v < 0.5)[:, None], _mix(C["shade"], C["mid"], (v - 0.25) / 0.25),
+           np.where((v < 0.78)[:, None], _mix(C["mid"], C["lit"], (v - 0.5) / 0.28),
+                    _mix(C["lit"], C["hi"], (v - 0.78) / 0.22))))
+
+
+def _sat_cap(col, cap=0.40):
+    """HSV saturation held at the cap (hue and value kept): the marigold band's 40 % rule on the lacquer"""
+    mx = col.max(1, keepdims=True)
+    mn = col.min(1, keepdims=True)
+    s = (mx - mn) / np.maximum(mx, 1e-4)
+    k = np.where(s > cap, cap / np.maximum(s, 1e-4), 1.0)
+    return mx - (mx - col) * k
+
+
+# ── Noon Fair: painted lacquer moths (fix pass 5; review: 'flat clip-art butterfly stickers'): brushed wings with a
+#    deep root, a rose-lilac field, a darker margin band dotted with chalk, a chalk eyespot on each forewing, veins
+#    from the root, a plum body with feelers; the edges broken by the brush; three hues; ten moths of four sizes
+#    fluttering up the cone in a loose spiral, a trail of chalk wing-dust between them, and small far moths ──
+MOTHS = ((14.0, 0.50, 1.15, -24.0, 0), (52.0, 0.70, 0.80, 18.0, 1), (95.0, 0.44, 1.00, 38.0, 2),
+         (133.0, 0.66, 1.25, -10.0, 0), (172.0, 0.52, 0.75, 26.0, 1), (-150.0, 0.72, 1.05, -32.0, 2),
+         (-112.0, 0.46, 0.85, 8.0, 0), (-74.0, 0.68, 1.20, 30.0, 1), (-36.0, 0.56, 0.70, -18.0, 2),
+         (-4.0, 0.80, 0.62, 12.0, 0))
+MOTH_FAR = ((34.0, 0.33, 0.42), (118.0, 0.31, 0.38), (-130.0, 0.36, 0.45), (-58.0, 0.30, 0.36), (70.0, 0.85, 0.40),
+            (-95.0, 0.86, 0.38), (150.0, 0.84, 0.44), (-20.0, 0.34, 0.40))
+MOTH_HUES = (("#7A5470", "#B48AA6", "#7E5A74"), ("#6E5470", "#A48AB0", "#735A7C"), ("#80576A", "#BC8E9E", "#875E70"))
+
+
+def _moth(X, c, sc, rot, hue, n_off):
+    """one painted moth on the unrolled cone (X: (n, 2) local metres, + toward the brim): colour, alpha"""
+    ca, sa = math.cos(math.radians(rot)), math.sin(math.radians(rot))
+    d = X - c
+    u = (d[:, 0] * ca + d[:, 1] * sa) / sc          # across (wingspan)
+    w = (-d[:, 0] * sa + d[:, 1] * ca) / sc         # along the body (+ the head)
+    root_c, field_c, edge_c = (_hexs(h) for h in MOTH_HUES[hue])
+    chalk = _hexs(MOTH[2])
+    col = np.zeros((len(X), 3), np.float32)
+    alpha = np.zeros(len(X))
+    P3 = np.stack([u, w, np.zeros_like(u) + n_off], 1)
+    brush = NOISE(P3, 90.0)
+    for sx in (-1.0, 1.0):
+        for (cx, cy, ax, ay, tilt, fore) in ((0.031, 0.004, 0.036, 0.0150, 24.0, True),
+                                              (0.019, -0.016, 0.020, 0.0150, -30.0, False)):
+            a = math.radians(tilt * sx)
+            uu, ww = u - sx * cx, w - cy
+            x1 = uu * math.cos(a) + ww * math.sin(a)
+            y1 = -uu * math.sin(a) + ww * math.cos(a)
+            e = np.sqrt((x1 / ax) ** 2 + (y1 / ay) ** 2)
+            e = e + 0.10 * brush + 0.05 * np.sin(np.arctan2(y1, x1 * sx) * 5.0)        # the brush-broken scalloped edge
+            m = _ss(1.02, 0.90, e)
+            if not (m > 0).any():
+                continue
+            rr = np.clip(np.hypot(u, w) / (0.05 if fore else 0.036), 0, 1)              # root -> tip
+            stroke = 0.5 + 0.5 * NOISE(np.stack([np.arctan2(w, u * sx) * 6.0, rr * 1.5, np.zeros_like(u) + n_off], 1), 1.0)
+            wc = _mix(root_c, field_c, _ss(0.15, 0.6, rr) * (0.75 + 0.35 * stroke))
+            wc = _mix(wc, edge_c, _ss(0.66, 0.84, e))                                     # the margin band
+            ang = np.arctan2(ww, uu * sx)
+            vein = np.zeros_like(u)
+            for va in (-0.5, 0.05, 0.6):
+                vein = np.maximum(vein, _ss(0.10, 0.03, np.abs(np.sin(ang - va))) * _ss(0.2, 0.45, e) * (1 - _ss(0.7, 0.85, e)))
+            wc = _mix(wc, edge_c * 0.85, 0.55 * vein)
+            if fore:                                                      # a chalk bar across the forewing's tip
+                tb = np.abs(x1 / ax - 0.62 - 0.15 * y1 / ay)
+                wc = _mix(wc, chalk, 0.75 * _ss(0.09, 0.05, tb) * _ss(0.95, 0.75, e))
+                de = np.hypot(x1 - 0.20 * ax, y1 + 0.10 * ay)                  # a small dark spot
+                wc = _mix(wc, root_c * 0.85, 0.7 * _ss(0.0035, 0.0022, de))
+            gl = np.exp(-((x1 / ax - 0.1) ** 2 / 0.12 + (y1 / ay - 0.45) ** 2 / 0.03))   # the lacquer's gloss
+            wc = _mix(wc, _hexs("#DCC8D4"), 0.30 * gl)
+            upd = m > alpha
+            col[upd] = wc[upd]
+            alpha = np.maximum(alpha, m)
+    body = np.sqrt((u / 0.0055) ** 2 + (w / 0.026) ** 2) + 0.05 * brush
+    mb = _ss(1.05, 0.85, body)
+    col = np.where((mb > 0.01)[:, None], _mix(col, _hexs("#5A3E52"), mb), col)
+    alpha = np.maximum(alpha, mb)
+    for sx in (-1.0, 1.0):                                                                # the feelers
+        pts = [(sx * 0.002, 0.022), (sx * 0.008, 0.034), (sx * 0.016, 0.041)]
+        dist, par, _, _ = _polyline_dist(np.stack([u, w], 1), pts)
+        fm = _ss(0.0016, 0.0007, dist)
+        col = np.where((fm > alpha)[:, None], _hexs("#5A3E52"), col)
+        alpha = np.maximum(alpha, fm)
+    return col, alpha
+
+
+def _noon_moths(q, r, phi, ground):
+    """Noon Fair's painted moths over the lacquer ground"""
+    col = ground.copy()
+    s = phi * r * BRIM_R
+    Xr = np.stack([s, r * BRIM_R], 1)
+    for i, (pd, rc, sc, rot, hue) in enumerate(MOTHS):
+        pc = math.radians(pd)
+        dph = (phi - pc + math.pi) % (2 * math.pi) - math.pi
+        X = np.stack([dph * r * BRIM_R, (r - rc) * BRIM_R], 1)
+        near = np.hypot(X[:, 0], X[:, 1]) < 0.075 * sc
+        if not near.any():
+            continue
+        mc, ma = _moth(X[near], np.zeros(2), sc, rot, hue, 7.0 * i)
+        col[near] = _mix(col[near], mc, 0.95 * ma)
+    for j, (pd, rc, sc) in enumerate(MOTH_FAR):                    # far moths: small dark-rose silhouettes
+        pc = math.radians(pd)
+        dph = (phi - pc + math.pi) % (2 * math.pi) - math.pi
+        X = np.stack([dph * r * BRIM_R, (r - rc) * BRIM_R], 1)
+        near = np.hypot(X[:, 0], X[:, 1]) < 0.03
+        if not near.any():
+            continue
+        mc, ma = _moth(X[near], np.zeros(2), sc, 20.0 * (j % 3 - 1), j % 3, 50.0 + 3 * j)
+        col[near] = _mix(col[near], _mix(mc, _hexs(MOTH[1]), 0.5), 0.85 * ma)
+    # chalk wing-dust: tiny dots trailing up the spiral
+    dust = np.zeros(len(r))
+    for i in range(46):
+        a = math.radians(14.0 + 7.9 * i * 2.0 + 9.0 * math.sin(i * 1.7))
+        rc = 0.45 + 0.30 * (0.5 + 0.5 * math.sin(i * 0.61)) + 0.05 * math.sin(i * 2.3)
+        dph = (phi - a + math.pi) % (2 * math.pi) - math.pi
+        dd = np.hypot(dph * r * BRIM_R, (r - rc) * BRIM_R)
+        dust = np.maximum(dust, _ss(0.0032 + 0.001 * (i % 3), 0.0012, dd))
+    col = _mix(col, _hexs(MOTH[2]), 0.8 * dust)
+    return col
+
+
+# ── Shadeprint (fix pass 5; review: 'the store says an ink hat with a light rim; the model is a white cone with a
+#    grey leaf print; at game zoom it and Noon Fair are both pale discs'): the snuffer DIPPED IN INK. The crown is
+#    the named ink #2B2A33, its wash running down the slope in ragged radial brush strokes through a violet-grey
+#    (the skin's violet shadows) into the pale lavender-chalk paper, which keeps the top band's L* 70 floor; a
+#    leafy branch printed in LIGHT across the ink crown, small ink sprigs printed on the pale; the light rim. From
+#    the game camera: a dark ink cap (round the forward apex) ringed by pale paper and a light rim ──
+SHADE_STEMS = (                                   # printed branches (hat-local, upright, metres): light on the ink crown
+    ((0.110, 0.030), (0.060, -0.040), (-0.010, -0.075), (-0.085, -0.070), (-0.125, -0.020)),
+    ((-0.03, 0.115), (0.03, 0.090), (0.075, 0.105)),
+)
+SHADE_SPRIGS = (                                  # ink sprigs on the pale paper
+    ((0.225, -0.170), (0.255, -0.215), (0.300, -0.235)),
+    ((-0.250, 0.150), (-0.290, 0.175), (-0.318, 0.215)),
+    ((-0.215, -0.215), (-0.250, -0.255), (-0.262, -0.300)),
+    ((0.270, 0.180), (0.310, 0.170), (0.335, 0.130)),
+)
+SHADE_CROWN = 0.33                                # the ink crown's radius (normalised; its wash runs to ~0.55)
+
+
+def _leaf_print(X, stems, n_leaf, lf, rib_w=0.0011):
+    """a printed leafy branch: stem + leaves (crisp lens shapes), the midrib mask"""
+    ink = np.zeros(len(X))
+    rib = np.zeros(len(X))
+    for bi, pts in enumerate(stems):
         dist, par, tan, total = _polyline_dist(X, pts)
-        wst = 0.0065 - 0.0035 * par                          # the stem tapers
-        ink = np.maximum(ink, _ss(wst + 0.0012, wst - 0.0004, dist))
-        n_leaf = 9 if bi == 0 else 4
-        for k in range(n_leaf):
-            tk = (k + 0.6) / (n_leaf + 0.3)
-            # the stem point and tangent at tk
-            pts_ = np.asarray(pts)
-            seg = pts_[1:] - pts_[:-1]
-            Ls = np.linalg.norm(seg, axis=1)
-            cum = np.concatenate([[0.0], np.cumsum(Ls)])
+        wst = 0.0040 - 0.0018 * par
+        ink = np.maximum(ink, _ss(wst + 0.0010, wst - 0.0004, dist))
+        pts_ = np.asarray(pts)
+        seg = pts_[1:] - pts_[:-1]
+        Ls = np.linalg.norm(seg, axis=1)
+        cum = np.concatenate([[0.0], np.cumsum(Ls)])
+        nl = n_leaf[bi] if isinstance(n_leaf, (list, tuple)) else n_leaf
+        for k in range(nl):
+            tk = (k + 0.6) / (nl + 0.3)
             a_ = tk * cum[-1]
             j = int(np.clip(np.searchsorted(cum, a_) - 1, 0, len(seg) - 1))
             B = pts_[j] + seg[j] * (a_ - cum[j]) / Ls[j]
             T = seg[j] / Ls[j]
             side = 1 if k % 2 == 0 else -1
-            ang = math.radians(side * (38.0 + 10.0 * math.sin(k * 1.7)))
+            ang = math.radians(side * (40.0 + 10.0 * math.sin(k * 1.7)))
             D = np.array([T[0] * math.cos(ang) - T[1] * math.sin(ang), T[0] * math.sin(ang) + T[1] * math.cos(ang)])
             Nn = np.array([-D[1], D[0]])
-            Lf = (0.150 - 0.050 * tk) * (1.0 if bi == 0 else 0.75) * (0.9 + 0.2 * abs(math.sin(k * 2.3)))
-            Wf = 0.17 * Lf
+            Lf = lf * (1.0 - 0.3 * tk) * (0.9 + 0.2 * abs(math.sin(k * 2.3)))
+            Wf = 0.19 * Lf
             d = X - B
             a = d @ D
-            b = d @ Nn - side * 0.12 * (a ** 2) / Lf                     # the leaf bends back toward the tip
+            b = d @ Nn - side * 0.12 * (a ** 2) / Lf
             s_ = np.clip(a / Lf, 0.0, 1.0)
             half = Wf * np.sin(math.pi * s_) ** 0.75
             inside = (a > 0) & (a < Lf)
-            leaf = np.where(inside, _ss(half + 0.0012, half - 0.0006, np.abs(b)), 0.0)
+            leaf = np.where(inside, _ss(half + 0.0010, half - 0.0005, np.abs(b)), 0.0)
             ink = np.maximum(ink, leaf)
-            mr = np.where(inside & (s_ > 0.08) & (s_ < 0.86), _ss(0.0024, 0.0011, np.abs(b)), 0.0)
+            mr = np.where(inside & (s_ > 0.08) & (s_ < 0.86), _ss(rib_w * 2.0, rib_w, np.abs(b)), 0.0)
             rib = np.maximum(rib, mr * leaf)
     return ink, rib
 
 
+def _shade_ink(q, r, phi, L):
+    """Shadeprint's ink: the crown wash (1 = ink), ragged radial strokes down the slope"""
+    s1 = _streaks(phi, r, 7.0, 2.0, 41.0)
+    s2 = _streaks(phi, r, 24.0, 1.2, 17.0)
+    edge = SHADE_CROWN + 0.08 * (0.5 + s1) + 0.025 * s2 + 0.03 * np.sin(phi * 3.0 + 0.7)
+    drip = np.clip((s2 - 0.30) / 0.25, 0, 1) * np.clip((s1 + 0.05) / 0.4, 0, 1)           # a few strokes run longer
+    edge = edge + 0.08 * drip
+    wash = _ss(edge + 0.09, edge - 0.06, r) * (0.9 + 0.1 * (0.5 + 0.5 * s2))
+    return np.clip(wash, 0.0, 1.0)
+
+
 def paint_hat(p, n):
-    """the lacquered cone, painted: hat-local radius / angle, the key light on the true normal, radial strokes"""
+    """the lacquered cone, painted: the shared brushwork (_lacquer) on the skin's ground, then the skin's paint"""
     sid = _SKIN.get("id")
     C = {k: _hexs(v) for k, v in HAT_SKIN.get(sid, HAT_COLS).items()}
-    q = hat_unshear(hat_local(p))
+    q, r, phi = _hat_frame(p)
     nl = n @ HAT_R
-    r = np.hypot(q[:, 0], q[:, 1]) / BRIM_R
-    phi = np.arctan2(q[:, 0], -q[:, 1])
-    lam = np.clip(n @ KEY, 0.0, 1.0)
-    t = np.clip((lam - 0.25) / 0.62, 0.0, 1.0)
-    # brushed lacquer: streaks along the slope (constant phi), a slow mottle, slat lines
-    pts = np.stack([np.cos(phi) * 9.0, np.sin(phi) * 9.0, r * 0.8], 1)
-    streak = NOISE(pts, 3.0) * 0.6 + NOISE(pts, 7.0) * 0.4
-    mottle = NOISE.fbm(p, 6.0, 3)
-    slat = np.clip((np.abs(np.sin(phi * 18.0 + 0.15 * NOISE(p, 9.0))) - 0.965) / 0.035, 0, 1)
-    # the key light's painted shading compressed (the game lights the cone too: the shade side seen from behind
-    # read dark, lineup top band 61 at facing 180)
-    v = 0.46 + 0.48 * t + 0.05 * streak + 0.035 * mottle + 0.05 * _ss(0.0, 0.35, r) * (1 - _ss(0.35, 0.6, r))
-    v = v - 0.08 * _ss(0.86, 1.0, r) - 0.035 * slat
-    v = np.clip(v, 0.0, 1.0)
-    col = np.where((v < 0.25)[:, None], _mix(C["deep"], C["shade"], v / 0.25),
-          np.where((v < 0.5)[:, None], _mix(C["shade"], C["mid"], (v - 0.25) / 0.25),
-          np.where((v < 0.78)[:, None], _mix(C["mid"], C["lit"], (v - 0.5) / 0.28),
-                   _mix(C["lit"], C["hi"], (v - 0.78) / 0.22))))
-    if sid == "nurrow_noon_fair":
-        wing, vein, dot, grad, gloss = _moths(phi, r)
-        # lacquer: deep rose at the wing root, lighter toward the edge, a soft gloss streak, the lit side lifted
-        deep_, light_ = _hexs(MOTH[1]), _hexs("#C9A6BE")
-        mc = _mix(deep_, light_, np.clip(0.15 + 0.85 * grad, 0, 1)) * (0.9 + 0.16 * t)[:, None]
-        mc = _mix(mc, _hexs("#DCC8D4"), 0.35 * gloss)
-        band = _ss(0.835, 0.85, r) * (1 - _ss(0.93, 0.945, r))           # a rose-lilac lacquer band inside the rim
-        col = _mix(col, _hexs(MOTH[0]) * (0.86 + 0.12 * t)[:, None], band)
-        col = _mix(col, mc, wing)
-        col = _mix(col, _hexs("#6E4E66"), 0.65 * vein * wing)
-        col = _mix(col, _hexs(MOTH[2]), 0.85 * dot)
+    v, L = _lacquer(p, n, q, r, phi)
+    t = L["t"]
+    if sid == "nurrow_shadeprint":
+        v = 0.5 + 0.55 * (v - 0.5)                         # paper: the lacquer's brushwork softer
+    col = _ramp(C, v)
+    if sid is None:
+        # the gores' glaze: each a touch warmer or more golden (hue only; the cap holds the chroma)
+        warm = (0.035 * HAT_OFF2[L["k"]] * _ss(0.1, 0.3, r))[:, None] * np.array([1.0, 0.0, -1.2], np.float32)
+        col = col * (1.0 + warm)
+        col = _mix(col, _hexs("#665747"), 0.40 * L["soot"])                     # the snuffer's soot
+        col = _mix(col, _hexs("#6B5640") * (0.9 + 0.2 * t)[:, None], 0.85 * L["chip"])    # worn to the wood
+        col = _mix(col, _hexs("#EAD9A6"), 0.55 * L["scr"])
+        col = _sat_cap(col, 0.40)
+    elif sid == "nurrow_noon_fair":
+        col = _mix(col, _hexs("#7F7060"), 0.25 * L["soot"])
+        col = _mix(col, _hexs("#8C7A66"), 0.7 * L["chip"])
+        band = _ss(0.905, 0.915, r) * (1 - _ss(0.935, 0.945, r))                 # a thin rose-lilac band inside the rim
+        col = _mix(col, _hexs(MOTH[0]) * (0.86 + 0.12 * t)[:, None], 0.9 * band)
+        col = _noon_moths(q, r, phi, col)
     elif sid == "nurrow_shadeprint":
-        # the pale printed cone (brief §9: ink on the brim band and the underside, the cone printed pale with
-        # light-rimmed ink lines; a mostly-ink hat fails the top band's L* 70 floor): the shadow of a leafy branch
-        # printed in ink across it (_shade_print), a crisp ink brim band with a fine light line along its top
-        ink, rib = _shade_print(q)
-        inkc = _mix(_hexs("#3A3844"), _hexs(INK), 0.6) * (0.92 + 0.14 * t)[:, None]
-        col = _mix(col, inkc, 0.96 * ink)
-        col = _mix(col, _hexs("#CAC6D3"), 0.85 * rib)
-        # fix pass 4: the ink brim band is a band (r 0.865 -> the rim, 3 cm; was a 4 mm line) under the chalk
-        # rim: an ink-brimmed hat with a light rim, its crown printed pale. (r 0.79 + a second ring cost the
-        # top band 12.6 L*: lineup facing 0 top 65.4 < 70; the game camera sees the front brim broad-on)
-        e0 = 0.865
-        col = _mix(col, inkc, _ss(e0 - 0.004, e0 + 0.004, r))
+        wash = _shade_ink(q, r, phi, L)
+        ink = _hexs(INK) * (0.94 + 0.12 * t + 0.08 * L["broad"])[:, None]
+        violet = _hexs("#5E5478") * (0.9 + 0.2 * t)[:, None]
+        mid_ = _ss(0.0, 0.5, wash) * (1 - _ss(0.55, 1.0, wash))                   # the wash's violet half-tone
+        col = _mix(col, violet, 0.85 * mid_)
+        col = _mix(col, ink, _ss(0.45, 0.95, wash))
+        X = q[:, :2]
+        lt, lrib = _leaf_print(X, SHADE_STEMS, [6, 3], 0.060)
+        light = _mix(_hexs("#B9B5C6"), _hexs("#D2CFDB"), np.clip(0.3 + 0.6 * t, 0, 1))
+        col = _mix(col, light, 0.92 * lt * _ss(0.3, 0.7, wash))                  # printed in light on the ink
+        col = _mix(col, ink, 0.8 * lrib * _ss(0.3, 0.7, wash))
+        sp, srib = _leaf_print(X, SHADE_SPRIGS, 3, 0.042)
+        col = _mix(col, ink, 0.9 * sp * (1 - _ss(0.2, 0.6, wash)))               # ink sprigs on the paper
+        col = _mix(col, _hexs("#C9C6D3"), 0.8 * srib * (1 - _ss(0.2, 0.6, wash)))
+        col = _mix(col, _hexs("#9A95AA"), 0.35 * L["chip"])
+        e0 = 0.925                                                                  # a fine ink line inside the light rim
+        col = _mix(col, ink, _ss(e0 - 0.004, e0 + 0.003, r) * (1 - _ss(0.94, 0.946, r)))
     # the cone's buried brim edge (inside the iron rim) takes the rim's iron: never a lacquer fringe past the rim
     col = _mix(col, _hexs(RIM_IRON["base"]) if sid != "nurrow_shadeprint" else _hexs(INK), _ss(0.945, 0.96, r))
     # the underside: dark lacquer, darker toward the crown, a warm bounce near the brim
     under = _mix(C["under_deep"], C["under"], _ss(0.2, 0.95, r))
     col = np.where((nl[:, 2] < -0.2)[:, None], under, col)
-    return col.astype(np.float32)
+    return np.clip(col, 0.0, 1.0).astype(np.float32)
 
 
 def _lin(c):
@@ -1480,9 +1660,11 @@ def paint_blade(p, n):
     lam = np.clip(n @ KEY, 0.0, 1.0)
     mott = NOISE.fbm(p, 30.0, 3)
     crack = np.clip((NOISE.ridged(p, 22.0, 3) - 0.86) / 0.14, 0, 1)
-    col = _mix(_hexs("#26232A"), _hexs("#3B3740"), np.clip(0.5 + 0.6 * mott + 0.25 * lam, 0, 1))
+    # fix pass 5: the flat a step lighter (the brief's ironstone L* 28) and the pale bevel 2.6 cm (was 1.6): the
+    # blade read nowhere from the game camera on the dark lane stone
+    col = _mix(_hexs("#2C2930"), _hexs("#48444E"), np.clip(0.5 + 0.6 * mott + 0.25 * lam, 0, 1))
     col = _mix(col, _hexs("#5B5762"), 0.55 * crack)
-    bev = _ss(0.020, 0.012, d_edge) * np.clip(u / 0.03, 0, 1)
+    bev = _ss(0.028, 0.019, d_edge) * np.clip(u / 0.03, 0, 1)
     bc = _mix(_hexs("#77737E"), _hexs("#A19DA7"), np.clip(0.4 + 0.5 * lam + 0.3 * NOISE(p, 40.0), 0, 1))
     col = _mix(col, bc, bev)
     col = _mix(col, _hexs("#4C4853"), 0.6 * _ss(0.006, 0.0, d_spine))
@@ -1541,8 +1723,9 @@ PAUL_COLS = ("#2B1B13", "#4B3022", "#6A4631", "#875D42", "#A06F50")      # dark 
 
 
 # ── the boots: painted, not projected (the concept's re-posed feet stretched into pink-tan clay with no sole) ──
-BOOT_COLS = {"shade": "#322625", "base": "#503D3A", "lit": "#765D59", "scuff": "#846C67", "sole": "#221A1A",
-             "welt": "#4E3D3A"}          # fix pass 4: the concept's plum-umber (hue 5-11, 22-28 %: was 18-24 / 35 %;
+BOOT_COLS = {"shade": "#312625", "base": "#4C3C3A", "lit": "#735B58", "scuff": "#876A66", "sole": "#211A19",
+             "welt": "#4E3D3A"}          # fix pass 5: the side planes' baked key softened (0.32 -> 0.20 lam; the tops
+#                                          +0.08: the facing-0 feet band): the splash's rose-tan sides          # fix pass 4: the concept's plum-umber (hue 5-11, 22-28 %: was 18-24 / 35 %;
 #                                          +1.5 L* over the first try: the facing-0 feet band fell to 20.3)          # dark umber waxed leather (hue 18-24, L* 14-38): darker than the trousers
 #                                          in the splash, the feet band (lineup facing 0, L* >= 20) held by the boots
 
@@ -1566,7 +1749,7 @@ def paint_boots(p, n):
     along, z = _boot_frame(p)
     lam = np.clip(n @ KEY, 0.0, 1.0)
     up = np.clip(n[:, 2], 0.0, 1.0)
-    v = 0.36 + 0.32 * lam + 0.30 * up + 0.06 * NOISE.fbm(p, 18.0, 3)     # the waxed tops (toe cap, instep) catch
+    v = 0.33 + 0.20 * lam + 0.38 * up + 0.06 * NOISE.fbm(p, 18.0, 3)     # the waxed tops (toe cap, instep) catch
 #        the sky (the feet band seen from the game camera); the key's baked shading kept soft (the side facings)
     crease = np.abs(np.sin(z * 150.0 + 2.0 * NOISE(p, 8.0))) ** 6 * _ss(0.07, 0.10, z) * (1 - _ss(0.15, 0.18, z))
     v = v - 0.14 * crease
@@ -1588,7 +1771,12 @@ def paint_boots(p, n):
 # the trousers and leg wraps: the projected paint's light and fold pattern kept, its colour set to the concept's
 # (the lifted mauve read pink-tan clay in the splash): dark plum trousers, grey-mauve wraps a step lighter, both
 # darker-to-the-ground than the umber boots are light (the feet band, L* 20-35)
-LEG_TARGET = {"trousers": ("#5E484B", 0.85, (0.45, 1.8)), "legwraps": ("#4F4344", 0.65, (0.6, 1.45))}
+LEG_TARGET = {"trousers": ("#5B4A45", 0.85, (0.45, 1.8)), "legwraps": ("#4E4645", 0.80, (0.55, 1.5)),
+              "tabard": ("#594139", 0.95, (0.40, 2.2))}
+#            fix pass 5 (review: 'the trousers read mauve-pink, the wraps grey-pink, the tabard a pale beige-grey panel;
+#            the concept: dark plum-brown trousers (hue 15), a dark brown tabard with carved trim'): the same L* (the
+#            facing-0 feet band), the hues moved to the concept's brown (the splash's blue sky fill pinked hue 352),
+#            the wrap grooves kept stronger; the tabard the concept's dark brown (L* 30; its painted trim lighter)
 #            target median colour (plum-brown L* 33: their gathered cuffs fill the top of the feet band; the wraps
 #            a muted grey-mauve L* 29 as the concept's, chroma 15 %, never pink-tan: the splash's key and ground
 #            bounce light the shins hardest), pattern gain, clip
@@ -2011,6 +2199,25 @@ def nurrow_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
         sub = _mix(sub, _hexs(MOTH[1]), 0.8 * line)
         sub = _mix(sub, _hexs(MOTH[2]), 0.7 * hi)
         out[m] = sub
+    # fix pass 5 (review: 'both skins leave the whole body under the cowl identical to the base: the orange pauldron,
+    # the red belt, the arm wraps, the legs and the boots'): each skin dresses the body in its own colours, part by
+    # part, from the BASE painting's light and pattern (luminance ratio to the part's median, as LEG_TARGET); the legs
+    # and boots keep the base's median L* (the facing-0 feet band) and change hue only
+    for nm, (hexc, gain_, (rlo, rhi), keep_l) in (SKIN_PARTS.get(sid) or {}).items():
+        if nm not in names:
+            continue
+        m = part == names.index(nm)
+        if m.sum() < 10:
+            continue
+        lin0 = _lin(img[m])
+        Y = lin0 @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+        med = max(float(np.median(Y)), 1e-5)
+        ratio = np.clip(Y / med, rlo, rhi) ** gain_
+        tgt = _lin(_hexs(hexc))
+        if keep_l:
+            tgt = tgt * (med / max(float(tgt @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)), 1e-5))
+        out[m] = _srgb(tgt[None, :] * ratio[:, None]).astype(np.float32)
+        log(f"  skin part {nm}: median -> {hexc}{' (base L*)' if keep_l else ''}")
     # the skin's felt held to its value band (brief §9: Shadeprint's cloth #847C8E, L* 53; the shared re-colour of the
     # lifted base felt came out near-white, L* 88, over a darker hat: the value gradient inverted)
     for nm, (Lt, outer_only) in (SKIN_VALUE.get(sid) or {}).items():
@@ -2057,6 +2264,30 @@ def nurrow_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
     return out
 
 
+# per skin: part -> (target median colour, pattern gain, ratio clip, keep the base's median luminance)
+SKIN_PARTS = {
+    # Noon Fair (the Shadowless Noon fair): rose-lilac lacquered wood, plum leathers, a chalk-lilac sash, chalk-rose
+    # linen wraps, plum legs and boots (hue 318-330: outside every reserved band)
+    "nurrow_noon_fair": {"pauldron": ("#7A5872", 0.9, (0.35, 2.4), False), "tassets": ("#6E5068", 0.9, (0.35, 2.4), False),
+                         "brooch": ("#6E5068", 0.9, (0.35, 2.4), False), "head": ("#5E4656", 0.9, (0.35, 2.4), False),
+                         "belt_strap": ("#B39AAE", 0.8, (0.4, 1.8), False), "belt": ("#4E3A4C", 0.9, (0.4, 2.2), False),
+                         "torso": ("#46384A", 0.9, (0.4, 2.2), False), "straps": ("#4E3A4C", 0.9, (0.4, 2.2), False),
+                         "forearm_wraps": ("#BFB0AE", 0.8, (0.45, 1.6), False), "sleeves": ("#5A4458", 0.9, (0.4, 2.0), False),
+                         "tabard": ("#7D6474", 0.95, (0.4, 2.2), False), "hat_band": ("#4E3A4C", 0.9, (0.4, 2.2), False),
+                         "trousers": ("#5C4856", 0.85, (0.45, 1.8), True), "legwraps": ("#4F454A", 0.8, (0.55, 1.5), True),
+                         "boots": ("#4D3B45", 1.0, (0.2, 3.0), True)},
+    # Shadeprint (ink and light): ink-lacquered wood, ink leathers, a violet sash (#6A5C96, its sleep's violet), pale
+    # chalk linen wraps, ink-violet legs, ink boots, grey-violet carved hands under the pale mask
+    "nurrow_shadeprint": {"pauldron": ("#3A3646", 0.9, (0.35, 2.6), False), "tassets": ("#3A3646", 0.9, (0.35, 2.6), False),
+                          "brooch": ("#3A3646", 0.9, (0.35, 2.6), False), "head": ("#3A3646", 0.9, (0.35, 2.4), False),
+                          "belt_strap": ("#6A5C96", 0.8, (0.4, 1.8), False), "belt": ("#2E2C36", 0.9, (0.4, 2.4), False),
+                          "torso": ("#38343F", 0.9, (0.4, 2.4), False), "straps": ("#2E2C36", 0.9, (0.4, 2.4), False),
+                          "forearm_wraps": ("#C9C6D2", 0.8, (0.45, 1.5), False), "sleeves": ("#46414F", 0.9, (0.4, 2.0), False),
+                          "tabard": ("#33303C", 0.95, (0.4, 2.6), False), "hat_band": ("#2E2C36", 0.9, (0.4, 2.2), False),
+                          "hand_L": ("#6E687A", 0.9, (0.4, 2.0), False), "hand_R": ("#6E687A", 0.9, (0.4, 2.0), False),
+                          "trousers": ("#504C59", 0.85, (0.45, 1.8), True), "legwraps": ("#48474E", 0.8, (0.55, 1.5), True),
+                          "boots": ("#413E49", 1.0, (0.2, 3.0), True)},
+}
 # per skin: part -> (target median L* of its outer face, outer face only)
 SKIN_VALUE = {"nurrow_shadeprint": {"cape": (47.0, True), "cowl": (51.0, False)}}      # (fix pass 3: 54 / 58 read
 #                                                       white under the game light: 'a white disc over a white cape')
@@ -2100,17 +2331,21 @@ def _install_paint() -> None:
 # runs along them, +Z out of the back of the hand). Feet are IK offsets from the symmetric rest stance.
 MOTION = anim.motion_profile(weight="light", weapon="one_hand", stance="low", run_ref_speed=3.55)
 RUN_REF = 3.55
-STANCE = dict(l=(-0.03, -0.10, 0.0), r=(-0.08, 0.10, 0.0), yl=6.0, yr=-16.0)     # the concept's wide stalker stance
+STANCE = dict(l=(0.01, -0.12, 0.0), r=(-0.12, 0.10, 0.0), yl=6.0, yr=-18.0)     # the concept's wide stalker stance
+#   (fix pass 5: 0.51 -> 0.59 m between the ankles, hips 2 cm lower: 'stockier and more upright than the concept')
 TORSO_G = dict(hips=(8, -8, 0), spine=(3, 3, 0), chest=(2, 3, 0), neck=(1, 2, 0), head=(3, 3, 0))    # 12.5 deg lean (hips ->
 #                                                    neck, measured on the rig; brief 12), the hat pointing a little down
-G_HIPS = (0.0, 0.015, -0.06)
-GR = ((-0.27, 0.02, -0.92), (-0.85, 0.40, -0.30))       # the blade hand low at the right hip
-GAIM = (-0.30, 0.42, -0.86)                             # the blade held low BEHIND the right hip (brief §8), down-back
+G_HIPS = (0.0, 0.02, -0.08)
+GR = ((-0.36, 0.06, -0.88), (-0.85, 0.40, -0.30))       # the blade hand low at the right hip, a little out
+GAIM = (-0.52, 0.48, -0.70)                             # the blade held low BEHIND the right hip (brief §8), down-back
+#   and OUT (fix pass 5; review: 'the blade is invisible in idle and run'): its tip ~0.7 m out from her centre line,
+#   past the hat's brim, a hooked spike on her right-back from the game camera
 GL = ((0.10, -0.74, -0.14), (0.85, 0.30, -0.45))        # the lull hand open at chest height, forward
 GLAIM = (-0.12, -0.84, -0.53)                           # its fingers forward-down, loosely open
 LUNGE_FT = dict(dl=(0.04, -0.34, 0.0), dr=(0.02, 0.40, 0.05))
 
 
+LIP_CORNER = (0.098, -0.150, 1.503)    # the smile's left corner, a little proud of the mask (victory's hold)
 LIP_POINT = (0.03, -0.205, 1.515)      # rest head space: just before the lips, under the beak's tip (the keel ends
 _LIPS: dict = {}                       # at y -0.176, z 1.533)
 
@@ -2287,7 +2522,7 @@ def clip_overrides(ctx) -> dict:
             rel = _LIPS[key]
         else:
             from mathutils import Vector
-            tip_r = Vector(tuple(hl("L", (0.0, 0.215, -0.02), y=HD_L)))
+            tip_r = Vector(tuple(hl("L", (0.0, 0.237, -0.022), y=HD_L)))
             lip_r = Vector(tuple(lip))
             hinv, dinv = skel.rest["hand.L"].inverted(), skel.rest["head"].inverted()
             pole = p["ik"]["hand.L"].pole
@@ -2376,8 +2611,9 @@ def clip_overrides(ctx) -> dict:
             hips=(9.5, yaw, roll), spine=(4.5, -yaw * 0.6, -roll * 0.6), chest=(3.0 + 1.2 * math.cos(4 * math.pi * q), -yaw * 0.5, -roll * 0.3),
             neck=(-3.0, yaw * 0.3, 0), head=(0.0, yaw * 0.25, 0)))
         ik = {"foot.L": FT((0.0 + fl[0], fl[1] - 0.02, fl[2]), pl, -4.0), "foot.R": FT((-0.0 + fr[0], fr[1] - 0.02, fr[2]), pr, 4.0)}
-        ik["hand.R"] = HT(rel=(-0.20, -0.10 - 0.12 * sw, -0.90), pole=(-0.85, 0.45, -0.2))
-        ik["aim.R"] = AIM((0.12, -0.55, -0.82))
+        ik["hand.R"] = HT(rel=(-0.30, -0.06 - 0.12 * sw, -0.88), pole=(-0.85, 0.45, -0.2))
+        ik["aim.R"] = AIM((-0.45, 0.50, -0.74))          # fix pass 5: the blade trailing out-back (it pointed in under
+        #                                                  the hat: invisible from the game camera)
         ik["hand.L"] = HT(rel=(0.20, 0.18 + 0.22 * sw, -0.82 + 0.06 * max(0.0, -sw)), pole=(0.85, 0.35, -0.3))
         ik["aim.L"] = AIM((0.10, 0.55, -0.83))
         p["ik"] = ik
@@ -2421,11 +2657,11 @@ def clip_overrides(ctx) -> dict:
     lunge = pose(dict(hips=(34, 4, 0), spine=(12, 2, 0), chest=(6, 0, 0), neck=(-20, 0, 0), head=(-14, 0, 0)),
                  (0, -0.20, -0.20), R=((0.12, -0.96, -0.28), (-0.85, 0.3, -0.3)), aim=(0.08, -0.94, -0.33),
                  L=((0.30, 0.62, -0.58), (0.8, 0.4, 0.0)), laim=(0.2, 0.75, -0.62),
-                 ft=feet(dl=LUNGE_FT["dl"], dr=LUNGE_FT["dr"], pr=-48.0), cape=-20.0)
+                 ft=feet(dl=LUNGE_FT["dl"], dr=LUNGE_FT["dr"], pr=-48.0), cape=-32.0)
     lunge2 = pose(dict(hips=(36, 4, 0), spine=(13, 2, 0), chest=(7, 0, 0), neck=(-21, 0, 0), head=(-15, 0, 0)),
                   (0, -0.21, -0.215), R=((0.14, -0.97, -0.25), (-0.85, 0.3, -0.3)), aim=(0.08, -0.95, -0.30),
                   L=((0.32, 0.64, -0.55), (0.8, 0.4, 0.0)), laim=(0.2, 0.75, -0.62),
-                  ft=feet(dl=LUNGE_FT["dl"], dr=(0.02, 0.44, 0.06), pr=-52.0), cape=-24.0)
+                  ft=feet(dl=LUNGE_FT["dl"], dr=(0.02, 0.44, 0.06), pr=-52.0), cape=-36.0)
 
     # ── cast_a1 Felt Step (castTime 0.1): 2-frame crouch, the step-lunge at f6, held (hands off to dash) ──
     crouch = pose(dict(hips=(12, -4, 0), spine=(4, 0, 0), chest=(2, 0, 0), neck=(-6, 0, 0)), (0, 0.03, -0.05),
@@ -2441,7 +2677,7 @@ def clip_overrides(ctx) -> dict:
                          head=(-15, -2 * sw, 0)), (0, -0.21, -0.20 + 0.02 * abs(sw)),
                     R=((0.14, -0.97, -0.25), (-0.85, 0.3, -0.3)), aim=(0.08, -0.95, -0.30),
                     L=((0.30, 0.62 - 0.45 * sw, -0.58 + 0.10 * sw), (0.8, 0.4, 0.0)), laim=(0.2, 0.75 - 0.9 * sw, -0.62),
-                    ft=feet(dl=(0.04, lf, lz), dr=(0.02, rf, rz), pl=lp, pr=rp), cape=-26.0)
+                    ft=feet(dl=(0.04, lf, lz), dr=(0.02, rf, rz), pl=lp, pr=rp), cape=-36.0)
     d0 = dash_pose(-0.34, 0.44, 0.0, 0.06, 0.0, -52.0, 0.0)
     d1 = dash_pose(0.02, -0.04, 0.0, 0.20, -10.0, -30.0, -0.6)
     d2 = dash_pose(0.40, -0.34, 0.06, 0.0, -48.0, 0.0, 1.0)
@@ -2495,7 +2731,7 @@ def clip_overrides(ctx) -> dict:
     spear = pose(dict(hips=(40, 0, 0), spine=(14, 0, 0), chest=(8, 0, 0), neck=(-26, 0, 0), head=(-18, 0, 0)),
                  (0, -0.25, -0.24), R=((0.02, -0.99, -0.06), (-0.85, 0.3, -0.3)), aim=(0.0, -0.99, -0.12),
                  L=((0.70, 0.62, -0.22), (0.3, 0.6, 0.6)), laim=(0.62, 0.40, -0.67),      # (chest frame, pitched 62)
-                 ft=feet(dl=(0.05, -0.40, 0.0), dr=(0.02, 0.48, 0.06), pr=-55.0), cape=-26.0)
+                 ft=feet(dl=(0.05, -0.40, 0.0), dr=(0.02, 0.48, 0.06), pr=-55.0), cape=-38.0)
     # the landing beside the target: a low crouch, the blade arm swept back low behind the right hip (done), the lull
     #    hand lowered in front of her PALM-DOWN (PalmAim: the back of the hand up), the head bowed toward it: the room
     #    falls quiet. Held f16-f30, then she straightens
@@ -2610,10 +2846,13 @@ def clip_overrides(ctx) -> dict:
                    R=BELT_R, aim=BELT_AIM, L=((-0.05, -0.92, 0.08), (0.6, 0.3, -0.7)), laim=(0.25, -0.90, -0.36))
     smooth1 = pose(dict(hips=(-1, 14, 0), spine=(-3, 8, 0), chest=(-5, 10, 0), neck=(-8, 0, 0), head=(-10, 6, 0)), (0, 0.0, 0.0),
                    R=BELT_R, aim=BELT_AIM, L=((0.80, -0.52, 0.08), (0.6, 0.3, -0.7)), laim=(0.65, -0.70, -0.30))
-    final = pose(dict(hips=(3, 20, 0), spine=(2, 6, 0), chest=(1, 6, 0), neck=(-2, -4, 0), head=(-3, -6, 3)), (0, 0.0, -0.025),
-                 R=BELT_R, aim=BELT_AIM, L=((-0.42, -0.52, -0.16), (0.9, 0.1, -0.4)), laim=(-0.12, -0.25, 0.96),
+    # fix pass 5 (review: 'the brim hides the lids and the hand covers the mouth: the sleeping face is unreadable in
+    # the splash'): the head lifted 6 deg (the lids clear the brim), one fingertip at the LEFT CORNER of the smile, the
+    # hand turned in under the jaw (the carved smile and both lids read)
+    final = pose(dict(hips=(3, 20, 0), spine=(2, 6, 0), chest=(1, 6, 0), neck=(-5, -4, 0), head=(-9, -6, 3)), (0, 0.0, -0.025),
+                 R=BELT_R, aim=BELT_AIM, L=((-0.36, -0.52, -0.22), (0.9, 0.1, -0.4)), laim=(-0.40, -0.28, 0.87),
                  ft=feet(dl=(0.03, -0.04, 0), dr=(0.0, 0.06, 0)), cape=-4.0)
-    final = to_lips(final, "victory")
+    final = to_lips(final, "victory", lip=LIP_CORNER)
 
     def vic(t):
         p = anim.keyed([(0.0, g, "linear"), (0.20, sheath, "inout"), (0.36, tiphat, "inout"), (0.50, smooth0, "inout"),

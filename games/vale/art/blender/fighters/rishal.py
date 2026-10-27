@@ -83,7 +83,7 @@ TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
 ARMOUR_CONFORM = False
-AO_INTO_BASE = 0.15          # (fix pass 4: the skirt's occlusion read as dark camouflage blotches on the thighs)
+AO_INTO_BASE = 0.10          # (fix pass 4 / 5: the skirt's occlusion read as dark camouflage blotches on the thighs)
 # ART 2.0 skins re-colour the projected painting role by role (each role's painted mean lands on the skin's colour,
 # the painted detail kept: rishal_recolour), plus skin-only paint and extras. Palettes: _design/fighters/rishal.md §9.
 SKINS: list = [
@@ -564,7 +564,7 @@ def _visor_low_edge(xs):
 # lower edge (an outlined beak read as the review's blue down-arrow); three QA accent ~2 % at the game camera
 # the line down the back keel from under the crest's tail to the nape (seen from behind at the game camera)
 KEEL_PTS = [(0.0, 0.062, 1.792), (0.0, 0.103, 1.750), (0.0, 0.120, 1.690), (0.0, 0.113, 1.640)]
-KEEL_R = [0.0055, 0.0065, 0.0065, 0.0050]
+KEEL_R = [0.0070, 0.0085, 0.0085, 0.0065]
 # the crest: a stone crescent from the brow (its root on the ridge), over the crown and back, its tail lifting off the
 # dome (u = back, v = up). Lower and longer than fix pass 2's (from the game camera the tall arc read as an ear)
 CREST_POLY = smooth_poly([(-0.112, 1.712), (-0.136, 1.746), (-0.122, 1.782), (-0.070, 1.822), (0.000, 1.850),
@@ -590,7 +590,7 @@ def crest_pane_poly(grow=0.0):
 CREST_RIBS = ((-0.112, 1.770, -0.078, 1.738), (-0.012, 1.840, 0.000, 1.788), (0.110, 1.866, 0.104, 1.818))
 # the accent seam where the crest roots on the dome: CREST_POLY's inner chain from the brow to the crown's back,
 # a band +-ROOT_H about it, ROOT_W wide (its sides stand out ~1.3 cm either side of the crest's stone)
-ROOT_H, ROOT_W = (0.004, 0.015), 0.066
+ROOT_H, ROOT_W = (0.004, 0.015), 0.078
 
 
 def crest_root_poly():
@@ -921,7 +921,7 @@ def sculpts() -> list:
             (-0.036, -0.117, 1.352), (-0.076, -0.094, 1.386), (-0.100, -0.048, 1.432)]
     cowl.add(Tube(loop, [0.022, 0.025, 0.027, 0.028, 0.027, 0.025, 0.022], k=0.01).displaced(
         folds(0.004, 70.0, dirv=(1.0, 0.0, 0.0)), 0.004), k=0.02)
-    cowl.add(Ellipsoid((0.0, 0.078, 1.395), (0.125, 0.048, 0.078), axes=sdf.rot_x(14)).displaced(folds(0.0045, 26.0, dirv=(1, 0, 0.3)), 0.0045), k=0.04)
+    cowl.add(Ellipsoid((0.0, 0.076, 1.400), (0.112, 0.044, 0.068), axes=sdf.rot_x(14)).displaced(folds(0.0045, 26.0, dirv=(1, 0, 0.3)), 0.0045), k=0.04)
     for sx in (-1, 1):
         cowl.add(Ellipsoid((sx * 0.102, 0.012, 1.424), (0.070, 0.070, 0.026), axes=sdf.rot_y(sx * 24)), k=0.035)
     part("cowl", cowl, "cloth2", ("auto_only", "chest", "neck"), 1000)
@@ -1368,7 +1368,7 @@ HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97
             "keel": "#ECE9E4"}
 # the warm carved plates of the helm's back and the nape (the painting's back of the head: warm taupe carved stone
 # with dark seams and lit lips)
-NAPE_COL = {"lit": "#BDAE9D", "mid": "#998A7B", "shade": "#6E6157", "ink": "#3F352E", "lip": "#D2C6B8"}
+NAPE_COL = {"lit": "#C8BBAB", "mid": "#A99A8B", "shade": "#7C6F64", "ink": "#463B33", "lip": "#DACFC2"}
 # the visor (fix pass 5): ice-blue glass (the fix pass 4 lavender washed out pale lavender in the three QA light),
 # the mask seen through it; the pale cyan rim #C1E9F5 with a dark outline (the concept's)
 VISOR_COL = {"top": "#7FA2C8", "core": "#5E86AE", "low": "#567C9E", "streak": "#D6E8F4", "sheen": "#AECBE2",
@@ -2090,10 +2090,10 @@ def wrap_paint(p, n):
 # sleeves are painted, not projected, in the concept's material colours: painterly key light with cool shadows,
 # strokes along the drape, fold shadows, the coat's hem trim and its darker lining
 TROUSER_COL = {"base": "#5A6A78", "fold": "#3B4652", "lit": "#71818E"}
-COAT_COL = {"front": "#97A6AD", "back": "#7A858E", "lining": "#4E5861", "trim": "#5F6B74", "trim_lit": "#B3BFC4",
+COAT_COL = {"front": "#97A6AD", "back": "#8A959D", "lining": "#69747D", "trim": "#5F6B74", "trim_lit": "#B3BFC4",
             "ink": "#3A434B"}
-COWL_COL = {"front": "#98B0C1", "back": "#8599A9", "fold": "#5E7486", "lit": "#B5CAD7"}
-SLEEVE_COL = {"base": "#8899A6", "fold": "#5F6F7C"}
+COWL_COL = {"front": "#8DA6B8", "back": "#91A4B2", "fold": "#5E7486", "lit": "#AFC4D2"}
+SLEEVE_COL = {"base": "#8E9FAC", "fold": "#64747F"}
 
 
 def _folds(p, axis, f_across, f_along, seed):
@@ -2104,10 +2104,10 @@ def _folds(p, axis, f_across, f_along, seed):
 
 def trouser_paint(p, n):
     C = {k: _hexrgb(h) for k, h in TROUSER_COL.items()}
-    col = painted(C["base"], n, p, 0.80, (0, 0, 1), 0.06, 110.0, 20.0, seed=12.0)
+    col = painted(C["base"], n, p, 0.60, (0, 0, 1), 0.06, 110.0, 20.0, seed=12.0)
     # fold streaks (long and narrow down the leg, never blotches: the first try's 3 cm patches read as camouflage)
     f = _folds(p, (0.10, 0, 1), 70.0, 5.0, 13.0)
-    col = _mix(col, C["fold"][None], (1 - f) * 0.20)
+    col = _mix(col, C["fold"][None], (1 - f) * 0.13)
     col = _mix(col, C["lit"][None], _ss((f - 0.75) / 0.2) * _ss(n @ KEY) * 0.18)
     # the gathered cloth over the boot tops and under the knee: crumpled horizontal creases
     cr = _ss((0.30 - p[:, 2]) / 0.08) * (1 - _folds(p, (1, 0, 0), 160.0, 30.0, 14.0))
@@ -2119,9 +2119,9 @@ def coat_paint(p, n):
     """the coat skirt: the pale linen front panels and the mid-grey back, the darker lining inside, a trim along the
     hem with an inked edge, fold shadows down the drape"""
     C = {k: _hexrgb(h) for k, h in COAT_COL.items()}
-    fb = _ss((p[:, 1] + 0.02) / 0.08)                                 # 0 front .. 1 back
+    fb = _ss((p[:, 1] - 0.025) / 0.06)                                # 0 front .. 1 back (behind the side slits)
     base = _mix(C["front"][None].repeat(len(p), 0), C["back"][None], fb)
-    col = painted(base, n, p, 0.75, (0, 0, 1), 0.07, 100.0, 18.0, seed=15.0)
+    col = painted(base, n, p, 0.50, (0, 0, 1), 0.07, 100.0, 18.0, seed=15.0)
     f = _folds(p, (0, 0, 1), 34.0, 6.0, 16.0)
     col = col * (0.84 + 0.22 * f)[:, None]
     # the lining: the faces turned in toward the legs
@@ -2156,7 +2156,7 @@ def cowl_paint(p, n):
 def sleeve_paint(p, n):
     """the sleeves: the pale blue-grey linen, folds round the arm, painterly"""
     C = {k: _hexrgb(h) for k, h in SLEEVE_COL.items()}
-    col = painted(C["base"], n, p, 0.80, (0.25, 0, -1), 0.07, 110.0, 25.0, seed=21.0)
+    col = painted(C["base"], n, p, 0.55, (0.25, 0, -1), 0.07, 110.0, 25.0, seed=21.0)
     f = _folds(p, (1, 0, 0.3), 60.0, 14.0, 22.0)
     return _mix(col, C["fold"][None], (1 - f) * 0.30)
 
@@ -3123,8 +3123,8 @@ def _death(g, skel) -> anim.Clip:
     down = anim.merge(anim.arms_relaxed(), anim.P(hips=(-86, 160, 0), spine=(-4, 0, 0), chest=(-4, 0, 0), neck=(8, 0, 0),
                                                   head=(10, -16, 0), thigh_L=(30, 0, -18), shin_L=(-60, 0, 0),
                                                   thigh_R=(10, 0, 12), shin_R=(-12, 0, 0), foot_R=(20, 0, 0),
-                                                  upper_arm_R=(16, -10, -6), forearm_R=(75, 0, 0),
-                                                  upper_arm_L=(-12, 0, 52), forearm_L=(55, 0, 0)))
+                                                  upper_arm_R=(4, -14, -12), forearm_R=(58, 0, 0),
+                                                  upper_arm_L=(-20, 0, 52), forearm_L=(32, 0, 0)))
     # (fix pass 5, review: a stiff spread-eagle, both arms rigid and horizontal): the right arm folded across his
     # body with its knife over the hip, the left flung up past the head with the elbow bent, the knife loose
     down["hips_loc"] = (0.04, 0.40, -hip_h + 0.12)

@@ -35,17 +35,20 @@ painting projected onto the game mesh in the concept's pose, normals + AO baked 
     strokes (luminance against a 1.8 cm 3D low-pass), its painted fold light (1.8 against 7.5 cm) and its local
     colour breakup. The palette and the geometry drive colour and placement (a misregistered plate cannot move a
     band, double a rim or ghost a boss onto the mantle: that is why the other parts take the swatches only).
-  * THE TEAM READ (fix pass 5): the accent tint is the only ally/enemy cue (the renderer draws the ally azure as
-    a pale L* ~70 / C* ~27 glow at the 52 deg camera). Fix pass 4 set every Aubade light in dark slate (cap,
-    circlet, lantern frame, channels): it read as a black helmet and broke the light-top law, so the Aubade is
-    back on its concept (blue-grey hood, chalk circlet, chalk lantern, chalk stole) and the dark lives only on THIN
-    BEZELS (1.5 cm painted, slim slate lamp cups, two slate rings at the lantern panes). The read comes from MORE
-    light, placed for every facing: the hood light seen from 52 deg, the crown lamps, the seam, a dawnglass inlay
-    on each pauldron, the stole light, the back stripe and a lit hem piping (Aubade); the crown windows, a
-    lampresin strip on each dome, the sash, the tabard bands + chevron and the lantern (Serenade). Lane harness
-    (three.js, road, 1080p, 8 facings): accent Aubade 4.5-8.6 % (mean 6.7), Serenade 5.1-9.1 % (6.9); ally dE
-    Aubade ~22 (the other Aubade wicks 18-21: the palette's azure-on-blue-grey), Serenade ~39. The accent
-    material is matte (`matte_accent`: the authored 0.25 roughness put a hotspot on every lamp).
+  * THE TEAM READ: the accent tint is the only ally/enemy cue. Every light keeps a dark setting on a THIN BEZEL
+    (1.5 cm painted, slim slate lamp cups, slate rings at the lantern panes); the lights are placed for every
+    facing: the hood core, the crown lamps, the seam, a dawnglass inlay on each pauldron, the stole light and the
+    back stripe (Aubade); the crown windows, a lampresin strip on each dome, the sash, the tabard bands + chevron
+    and the lantern (Serenade). The accent material is matte (`matte_accent`: 0.25 roughness put a hotspot on
+    every lamp).
+  * FIX ROUND 3 (values + the hood): the hoods sit at L* <= 65 in game and under the fighters (B5): the part colours
+    (PART_HEX) and the top of the RAMP come down, the shared FACTION_PALETTES are untouched; the hood light is ONE
+    soft core floating in the dark hollow (FORM "hood_light"), everything seen through the arch is ink (`ink_hollow`,
+    the ORM makes it matte + occluded), the Aubade rim a flat carved band (`rim_band`), the Serenade dome cap its
+    own clean low (`hood_cap`); paint: `cavity` edge light / seam shadow on every part, firmer folds, felt nap,
+    the mantle's draped dip + cast shadow, the rolled collar's twist, the ash staff's grain, knots and ferrule.
+    Measured IN GAME (render_bench, both seats; scratch harness ig_bw.mjs): accent-vs-surround Lab dE Aubade ally
+    47 (min 35), enemy 62; Serenade ally 61, enemy 71 (min 42); hood L* p90 61-64.
   * Pauldrons ride the shoulder bone RIGIDLY (blended into the upper arm they crumpled in the guard pose).
   * Same job silhouette in both cultures: the same rig, staff layout (right grip 0.40 m from the foot, left grip
     0.72 m above it, lantern at the upper left) and the same clips; hood, crown, pauldrons, trims, lamp differ.

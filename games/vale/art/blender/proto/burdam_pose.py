@@ -39,6 +39,10 @@ def args():
     p.add_argument("--tex", default="", help="swap the cached base colour for this image (post-paint work)")
     p.add_argument("--lit", action="store_true", help="studio lighting instead of flat (reads values)")
     p.add_argument("--carry", default="", help="override CARRY: 'rx,ry,rz;dx,dy,dz;ux,uy,uz' (fix pass 6 search)")
+    p.add_argument("--lens", type=float, default=0.0, help="eye-level views: this lens instead of 80 (fix pass 8: the "
+                   "lobby carry's tip rises ~0.75 m over the crown)")
+    p.add_argument("--lobby", default="", help="override the lobby carry: 'wx,wy,wz,heading,elev,roll' (fix pass 8)")
+    p.add_argument("--tz", type=float, default=1.15, help="eye-level views: the look-at height")
     p.add_argument("--bar", type=float, default=0.0, help="game views: draw the health bar for this art height")
     return p.parse_args(scene.script_args())
 
@@ -59,6 +63,19 @@ def main():
     if a.carry:
         rr, dd, uu = ([float(c) for c in part.split(",")] for part in a.carry.split(";"))
         F.CARRY = dict(F.CARRY, rel=tuple(rr), d=tuple(dd), up=tuple(uu))
+    if a.lobby:
+        wx, wy, wz, hd, el, rl = (float(c) for c in a.lobby.split(","))
+        h, e = math.radians(hd), math.radians(el)
+        d = np.array([math.cos(e) * math.cos(h), math.cos(e) * math.sin(h), math.sin(e)])
+        sv = np.cross([0.0, 0.0, 1.0], d)
+        sv /= np.linalg.norm(sv)
+        if sv[1] < 0:
+            sv = -sv
+        up = np.cross(sv, d)
+        r = math.radians(rl)
+        up = up * math.cos(r) + np.cross(d, up) * math.sin(r)
+        F.LOBBY_W, F.LOBBY_D, F.LOBBY_UP = (wx, wy, wz), tuple(float(c) for c in d), tuple(float(c) for c in up)
+        print(f"lobby carry: W {F.LOBBY_W} D {np.round(d, 3).tolist()} UP {np.round(up, 3).tolist()}")
     clips = anim.standard_clips(skel, F.MOTION, F.clip_overrides(ctx) if hasattr(F, "clip_overrides") else {})
     sc = bpy.context.scene
     sc.render.engine = "BLENDER_WORKBENCH"
@@ -115,7 +132,8 @@ def main():
                    "gameSSE": -22.5}[view]
             tgt = Vector((0, 0, 1.0))
         elif not view.startswith("lhand"):
-            cam_data.lens = 80
+            cam_data.lens = a.lens or 80
+            tgt = Vector((0, 0, a.tz))
             pitch, dist = 8.0, 6.6
             yaw = {"3q": -35.0, "3qL": 35.0, "front": 0.0, "side": 90.0, "sideR": -90.0, "back": 180.0, "3qb": 145.0}[view]
         p, y = math.radians(pitch), math.radians(yaw)

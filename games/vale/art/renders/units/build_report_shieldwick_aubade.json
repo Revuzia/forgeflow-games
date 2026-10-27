@@ -34,14 +34,14 @@
   },
   "uv_coverage": 0.748,
   "bake": {
-    "base": 5.2,
-    "rough_metal": 3.24,
-    "normal": 1.35,
-    "ao": 2.23,
+    "base": 2.3,
+    "rough_metal": 4.3,
+    "normal": 1.95,
+    "ao": 2.42,
     "normal_fixed_px": 6891,
-    "projection": 108.58,
-    "pack_save": 109.22,
-    "total": 122.7
+    "projection": 93.26,
+    "pack_save": 93.58,
+    "total": 104.79
   },
   "tris": 2931,
   "mesh_top_m": 1.08,
@@ -140,13 +140,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1114424,
+  "glb_bytes_raw": 1113904,
   "optimize": {
     "ok": true,
-    "before": 1114424,
-    "after": 364744
+    "before": 1113904,
+    "after": 365032
   },
-  "glb_bytes": 364744,
+  "glb_bytes": 365032,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -181,7 +181,7 @@
       1
     ],
     "headY": 0.716,
-    "accentPct": 5.75,
+    "accentPct": 5.74,
     "accentTopHalfPct": 73.2,
     "heightPx1080": 56,
     "size": [
@@ -190,25 +190,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_shieldwick_aubade.png",
-    "seconds": 70.5,
-    "exit": 0
+    "seconds": 26.2,
+    "exit": 0,
+    "clip_sheet": "art/renders/units/three_clips_shieldwick_aubade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.11,
-      "model": 11.1,
-      "lows_bind": 0.02,
-      "uv": 23.44,
-      "bake": 122.7,
-      "clips": 0.51,
-      "export": 3.74,
-      "optimize": 0.82,
-      "load_test": 0.25,
-      "three_qa": 70.88,
-      "cache": 0.22
+      "rig": 0.01,
+      "materials": 1.59,
+      "model": 134.24,
+      "lows_bind": 0.06,
+      "uv": 31.69,
+      "bake": 104.79,
+      "clips": 0.44,
+      "export": 2.75,
+      "optimize": 1.35,
+      "load_test": 0.3,
+      "three_qa": 85.89,
+      "cache": 0.16
     },
-    "total_s": 233.83
+    "total_s": 363.48
   },
   "run_ref_speed": 3.25,
   "height_m": 1.0

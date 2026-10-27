@@ -14,7 +14,8 @@ pass) against a ≤ 700k-triangle scene (CONTRACT §12, RIFT brief §6), so a tr
 
   Dialwood   (RIFT §6, WORLD §maps "lacquered fan-leaved plates, bevelled, instanced") — five variants
              (tall, broad, squat, young, leaning): crowns of clumps shingled with single-sided fan leaves over
-             closed cores, shaded by clump normals; a faceted trunk with a root flare and limbs. ≤ 750
+             closed cores, shaded by clump normals; a faceted trunk with a root flare and limbs. Matte painted
+             plates (r12 M11: gloss mask 0, a baked bottom/interior → top value gradient, ≥ 20 plates). ≤ 750
              triangles; ≤ 3.4 m tall in game (the brief's cap south of play), crowns ≤ 1.6 m from the trunk,
              so a crown on a block edge keeps the units on the road beside it in view.
   boulders   RIFT rock role: fallen hour-tick stones at the cliff feet — they stand on walkable floor, so
@@ -59,27 +60,28 @@ OUT = os.path.join(scene.OUT_DIR, "props")
 RENDERS = os.path.join(scene.RENDERS_DIR, "props")
 
 BUDGET = {"tree": 750, "rock": 600, "stone": 300}
+HULL_BEVEL = 0.018                # RIFT lumps: a narrow chamfer on every hard edge, where the chalk edge light lands (r12 M11)
 ROCK_MAX_H = 0.33                 # RIFT rock role, authored: ×1.1·s (s ≤ 1.1) − 4 cm sunk → ≤ 0.36 m in game
 
 STONES: dict[str, tuple[str, StoneSpec]] = {
     # RIFT rock role: fallen hour-tick stones at the cliff feet, on walkable floor, so ≤ 0.4 m in game (brief
     # §6, checklist §8): authored ≤ 0.33 m tall (terrain ×1.1·s vertically, s ≤ 1.1, sunk 4 cm). Low, broken,
     # half-sunk carved pieces that read as floor dressing, never as walls.
-    "boulder_block": ("rock", StoneSpec(seed=5, size=(0.92, 0.70, 0.27), shape="hull", chips=3, broken=True, bevel=0.0,
+    "boulder_block": ("rock", StoneSpec(seed=5, size=(0.92, 0.70, 0.27), shape="hull", chips=3, broken=True, bevel=HULL_BEVEL,
                                         soft=1.0, taper=0.12, moss=[(-0.12, 0.06, 0.24)], tilt=(0.05, -0.04), sink=0.05,
                                         palette="dial")),
-    "boulder_tick": ("rock", StoneSpec(seed=17, size=(1.12, 0.42, 0.27), shape="hull", chips=3, broken=True, bevel=0.0, soft=1.0,
+    "boulder_tick": ("rock", StoneSpec(seed=17, size=(1.12, 0.42, 0.27), shape="hull", chips=3, broken=True, bevel=HULL_BEVEL, soft=1.0,
                                        groove=0.075, taper=0.1, tilt=(0.0, 0.05), yaw=0.25, sink=0.05, palette="dial")),
-    "boulder_pair": ("rock", StoneSpec(seed=29, size=(0.74, 0.58, 0.26), shape="hull", chips=3, broken=True, bevel=0.0, soft=1.0,
+    "boulder_pair": ("rock", StoneSpec(seed=29, size=(0.74, 0.58, 0.26), shape="hull", chips=3, broken=True, bevel=HULL_BEVEL, soft=1.0,
                                        taper=0.1, moss=[(-0.04, 0.04, 0.15)], tilt=(-0.05, 0.06), offset=(-0.16, 0.10, 0.0),
                                        sink=0.05, palette="dial",
                                        extra=[StoneSpec(seed=31, size=(0.42, 0.34, 0.20), shape="hull", chips=2, broken=True,
-                                                        bevel=0.0, soft=1.0, tilt=(0.18, 0.2), offset=(0.38, -0.30, 0.0),
+                                                        bevel=HULL_BEVEL, soft=1.0, tilt=(0.18, 0.2), offset=(0.38, -0.30, 0.0),
                                                         yaw=0.7, palette="dial")])),
     # RIFT stones (terrain scale 0.10–0.46): fallen hour-tick fragments
-    "stone_tick": ("stone", StoneSpec(seed=41, size=(0.86, 0.34, 0.25), shape="hull", chips=2, broken=True, bevel=0.0, soft=1.0,
+    "stone_tick": ("stone", StoneSpec(seed=41, size=(0.86, 0.34, 0.25), shape="hull", chips=2, broken=True, bevel=HULL_BEVEL, soft=1.0,
                                       groove=0.07, taper=0.1, tilt=(0.06, 0.0), palette="dial")),
-    "stone_chip": ("stone", StoneSpec(seed=47, size=(0.64, 0.54, 0.32), shape="hull", chips=3, broken=True, bevel=0.0, soft=1.0,
+    "stone_chip": ("stone", StoneSpec(seed=47, size=(0.64, 0.54, 0.32), shape="hull", chips=3, broken=True, bevel=HULL_BEVEL, soft=1.0,
                                       taper=0.1, tilt=(0.12, -0.08), palette="dial")),
     # BRIDGE (brief §5: needle fragments ≤ 0.8 m on the stubs, broken edges and gorge lip, never on the deck):
     # built for that placement; the terrain places no rock on the span today, so the map does not list them
@@ -403,6 +405,9 @@ def main():
         report[n] = dict(role=role, tris=int(part.tris), verts=int(len(part.P)), kb=round(size / 1024, 1),
                          size_m=[round(float(x), 2) for x in ext], budget=BUDGET[role],
                          gloss=dict(mean=round(float(gloss.mean()), 3), glossy_verts=int((gloss > 0.5).sum())))
+        if role == "tree":                                   # r12 M11: ≥ 20 fan plates per crown
+            kf = part.A["kind"][part.F[:, 0]]
+            report[n]["plates"] = int(round((kf == 1).sum() / dialwood.K_LEAF))
         flag = "" if part.tris <= BUDGET[role] else "  OVER BUDGET"
         if role == "rock" and STONES[n][1].palette == "dial" and part.P[:, 2].max() > ROCK_MAX_H:
             flag += f"  TOO TALL (> {ROCK_MAX_H} m authored)"

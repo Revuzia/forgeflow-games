@@ -61,7 +61,10 @@ VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 BLOCKS: dict = {}
 MOTION = anim.motion_profile(weight="heavy", weapon="two_hand", stance="wide", run_ref_speed=3.45, blocks=BLOCKS)
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_blade_tip", "notch": "x_notch_mid"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
+          # fix pass 8 (the review: the splash mask read two-hued, a lemon face plate on a peach cranium): the warm lamp
+          # rim on screen-right washed the cranium's side to L* 83 / b* +27 against the face's 68 / +43; half strength
+          "rim_warm": 0.5}
 TEXTURE_SIZE = 2048      # the painted base colour; normal + ORM at 512 (CONTRACT §12 Materials)
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -84,7 +87,10 @@ SKINS: list = [
      # fix pass 5: the tunic and the cowl two more steps down (the splash measured the tunic L* 66-68 against the
      # brief's 51: tunic, cowl and pauldrons merged into one teal-grey wash); the cowl the darkest of the three so
      # the mask pops, the pauldron tops the lightest (the brief: they step lighter to hold the top band)
-     "parts": {"boots": "#30271F", "trousers": "#343E40"},
+     # fix pass 8 (the review: Stillwater kept the base's saturated gold mask, not the brief's paler #D4C9A9): the mask
+     # a pale, less saturated ochre (b* ~+20 against the base's ~+42), a step under the brief's hex (pale ochre reads
+     # bone-white in three.js and the splash's sun)
+     "parts": {"boots": "#30271F", "trousers": "#343E40", "mask": "#C4B592"},
      "palette": {"sandstone": "#D4C9A9", "cloth2": "#363D3A", "rust": "#6F7B7A", "stone": "#C4C8C4",
                  "ironstone": "#3E4A4C", "leather": "#554A3E", "cloth": "#45504E", "under": "#343B3D",
                  "reed": "#7D8460", "dawnglass": "#8FB3A8"}},
@@ -95,7 +101,8 @@ SKINS: list = [
      # 5: the tunic two more steps down (#6B6256 measured L* 70-72 in the splash against the mid band's 45-65, brief
      # 52: the top and middle bands merged)
      "palette": {"cloth2": "#C6B9A5", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
-                 "cloth": "#58503F", "parchment": "#A3987F", "walnut": "#5A4639"}},
+                 # fix pass 8: the tunic the brief's WARM grey (#58503F read olive-khaki), at the same value
+                 "cloth": "#5D534A", "parchment": "#A3987F", "walnut": "#5A4639"}},
 ]
 ALMANAC_C = (-0.282, -0.212, 0.950)       # the board's centre (right hip), its yaw and half-size (m)
 ALMANAC_RZ = -38.0
@@ -106,7 +113,6 @@ SKIN_FLAT = {"reed_plates_R": "reed", "reed_plates_L": "reed", "river_glass_tier
              "river_bezel_tier2": "ironstone", "river_bezel_tier3": "ironstone", "almanac_wood": "walnut",
              "almanac_face": "parchment", "almanac_tabs": "parchment"}
 
-LINING_HALF_W = 0.018     # the bite-floor accent lining's half-width through the heel (the heel's faces at 0.030)
 HEIGHT = 2.56             # the cleaver tip in the concept (the projection plates' scale; mask crown 2.15)
 PROJECTION = {"concept": "burdam", "height": HEIGHT}
 NOISE = sdf.Noise(11)
@@ -652,14 +658,9 @@ def sculpts() -> list:
     for poly in cl.gem_polys():                                        # one diamond per notch, under its bite
         gems.add(Plate(poly, 0.0350, r=0.004), k=0.0)                      # proud of the setting (decimation-safe)
     gems.add(Plate(_diamond(cl.POMMEL_U, 0.0, *cl.POMMEL_GEM), 0.040, r=0.004), k=0.0)
-    # the brief's "accent sits in the notches": a thin lit lining in each bite's floor (from the game camera the
-    # five notches glow along the spine). Set a hair INSIDE the heel's faces, so from the blade's face the bite
-    # reads as a dark cut with the glow inside it, not a blue arc over a blue diamond (a chain)
-    # fix pass 7: the lining a groove down the MIDDLE of each bite's floor (half-width 1.8 cm of the heel's 3 cm),
-    # with ironstone lips either side: from above the notches still glow along the spine, but from the blade's
-    # face (splash, icon) the bites read as dark cuts instead of five blue arcs alternating with the diamonds
-    for poly in cl.notch_floors(proud=0.004, into=0.008):
-        gems.add(Plate(poly, LINING_HALF_W, r=0.002), k=0.0)
+    # fix pass 8: no lit linings in the bites' floors any more (passes 6-7 lined each bite: with the diamond under it
+    # that made two staggered rows, ten lit marks plus the pommel gem, a white piano-key strip in the player tint);
+    # the bites are dark cuts and the five diamonds (a size up) carry the accent alone, the concept's read
     part("gems", gems, "accent", "bone:prop.R", 640, 0.6, "prop")
     haft = Sculpt("haft")
     hf = Capsule(_uvw(cl.HAFT_U0, 0.0), _uvw(0.01, 0.0), 0.037)
@@ -1007,7 +1008,16 @@ FT = anim.FootTarget
 # the concept's yoke behind the head, ~17 degrees in the front view), 10 up, roll 25, the fist 6 cm further back:
 # facing W / WSW the blade now falls away under the bar (-39 / -24 degrees on screen), facing E a long diagonal
 # past the bar's left end, the crossing facing moved to the one walking straight at the camera (a steep crossing).
-CARRY = dict(rel=(-0.068, 0.367, 0.411), pole=(-1.0, 0.25, -0.3), d=(0.797, 0.579, 0.174), up=(-0.121, 0.434, -0.893))
+# fix pass 8 (the review: from the front, the lobby and the select screen the yoke read as a nearly flat bar at mask
+# height coming out of the back of the head, the heel hidden behind it, the haft under the fist; in game acceptable):
+# the idle steepened as far as the bar allows (proto/burdam_carry6.py --pick around the yoke): the wrist 7 cm further
+# out and back and 4 cm lower, heading 48, 18 degrees up, roll 25: the eye-level front angle 17 -> 32 degrees, the
+# blade's share in view from the front 0.49 -> 0.76, the heel's 0.20 -> 0.70, no cleaver point inside the mask / cowl
+# (the yoke: 92 with the guard pose), and in game the lane read 1338 -> 1451 px^2, the worst facing 1018 -> 1014, one
+# pointer facing instead of three; facing W the blade still falls away under the bar's right end (-21 degrees on
+# screen). The run keeps the yoke's grip (RUN_REL0, tuned in game). The lobby has no bar: LOBBY_* below.
+CARRY = dict(rel=(-0.182, 0.466, 0.321), pole=(-1.0, 0.25, -0.3), d=(0.636, 0.707, 0.309), up=(-0.127, 0.491, -0.862))
+RUN_REL0 = (-0.068, 0.367, 0.411)      # the run's fist (the pass-6 yoke's)
 BELT_L = (0.10, -0.16, -0.94)          # the free left fist at the belt
 
 
@@ -1328,7 +1338,7 @@ def gen_run_carry() -> anim.Clip:
     """the shared run cycle (3.45 m/s, heavy) with the cleaver kept on the shoulder: the right arm swings
     short around the carry, the left fist pumps (forward to the chest, back past the hip: brief section 8)"""
     c = CARRY
-    r0 = c["rel"]
+    r0 = RUN_REL0
     d = c["d"]
     # (the run's head bob met the blade's flat behind the mask: the run carries it 4 cm higher, heading 6 degrees
     # further back)
@@ -1552,13 +1562,20 @@ def clip_overrides(ctx) -> dict:
                            left=ULT_REACH, lpole=(0.4, 0.5, -0.8)), **step(G, dl=(0.10, -0.12, 0), pl=-4, yl=24, pr=-8)))
     # the open left hand: aim.L turns the hand so the fingers run on out along the arm and the palm (prop.L +X)
     # faces the enemies (forward and down: a hand reaching to grab)
-    reach = with_hand(reach, OPEN)
-    reach["ik"] = dict(reach["ik"], **{"aim.L": palm_aim((0.25, -0.88, -0.40), (0.74, -0.56, 0.30))})
-    reach2 = anim.add(reach, _P(chest=(2, -2, 0), shoulder_L=(0, 0, 3)))
+    # fix pass 8 (the review: the wind-up read as a bent-elbow 'halt' palm raised beside the head): the arm straight
+    # out at shoulder height (ULT_REACH, ~77 degrees left of the facing: a long bar from the game camera and from the
+    # front-left clip camera), the hand open and reaching to grab: the fingers run on out along the arm, the palm
+    # turned forward and down, the fingers a little curled (a claw about to close), never a palm shown to the camera
+    reach = with_hand(reach, ULT_CLAW)
+    reach["ik"] = dict(reach["ik"], **{"aim.L": palm_aim((0.05, -0.62, -0.78), (0.96, -0.20, -0.06))})
+    reach2 = anim.add(reach, _P(chest=(2, -2, 0), shoulder_L=(0, 0, 2)))
+    # the stamp (fix pass 8: the review read the edge-on blade at the impact as the cleaver lowered at his right
+    # side): the cleaver slammed down in FRONT of his centre, its broad flat to the front (the slab and the five
+    # inlays face the enemies and the clip camera), the left fist yanked in to the chest beside the right one
     stamp = _pose(G, _P(hips=(-8, 8, 0), spine=(-8, 4, 0), chest=(-10, 6, 0), neck=(6, 0, 0), head=(8, -4, 0),
                         shoulder_L=(0, 0, 6)), (0, 0.10, -0.10),
-                  dict(one((0.20, -0.80, -0.40), (0.02, -0.40, -0.92), EDGE_DOWN, pole=(-0.9, 0.2, -0.3),
-                           left=(-0.12, -0.66, -0.12), lpole=(0.9, 0.2, -0.5)),
+                  dict(one((0.30, -0.80, -0.38), (0.02, -0.40, -0.92), (-0.009, -0.916, 0.401), pole=(-0.9, 0.2, -0.3),
+                           left=(-0.06, -0.66, -0.10), lpole=(0.9, 0.2, -0.5)),
                        **step(G, dl=(0.04, -0.16, 0), dr=(0.0, 0.10, 0), pl=-6)))
     stamp = R.tip_to(with_hand(stamp, FIST_CURL))
     drop = anim.lerp_pose(reach2, stamp, 0.55)               # the swing down, its tip held off the ground
@@ -1602,6 +1619,11 @@ POST_W = (-0.08, -0.66, 1.34)               # the right wrist: the fists on the 
 POST_D = (0.0, -0.44, -0.90)                # grip -> tip: down and ahead (the tip ~1.2 m in front of him)
 POST_ALONG = cl.OFF_GRIP                    # the left fist stacked over the right one on the haft
 POST_FOLD = -2.0                            # the hips folded a little less (the fists low enough to clear the mask)
+POST_TIP_Z = -0.18                          # fix pass 8 (the review: from the side the post leaned ~45 degrees, a man
+                                            # leaning on a sword): the tip DRIVEN 18 cm into the ground, so the post
+                                            # stands ~20 degrees off vertical under the fists at the chest (the
+                                            # cleaver is as long as he is tall: hands at the chest and the tip on the
+                                            # surface cannot stand it steeper)
 
 
 def out_right(G, left=None, k: float = 1.0) -> dict:
@@ -1665,26 +1687,29 @@ A3_HIT_D = (0.80, -0.58, -0.10)
 
 
 def _stubborn(R, G) -> anim.Clip:
-    """off the shoulder (f0-1), the cleaver raised upright at his right front (f4), pitched forward and down at the
-    right front (f7) and brought in to the post as both fists stack on the haft and the weight drops (f10); the
-    stance locked at f12, head bowed over the hands; two breaths; the chest lifts at the end"""
-    setp = R.tip_to(_plant_two(R, 1.3, head=16.0, wrist=POST_W, d=POST_D, fold=POST_FOLD))
-    # fix pass 7: the cleaver turns over in the sagittal plane at his right side (up, forward, down), never laid out
-    # to the side (the pass-6 route still opened with the blade out to his right, a sweep that read as an attack)
-    upr = _pose(G, _P(hips=(2, -2, 0), spine=(2, -2, 0), chest=(0, -4, 0), head=(4, 2, 0)), (0, -0.01, -0.02),
-                one((-0.60, -0.42, -0.08), (-0.16, -0.36, 0.92), (0.0, -0.93, -0.36), pole=(-0.9, 0.4, -0.3),
-                    left=(0.10, -0.40, -0.55)))
-    fore = _pose(G, _P(hips=(6, -2, 0), spine=(3, -2, 0), chest=(-2, -2, 0), head=(8, 0, 0)), (0, 0.0, -0.03),
-                 one((-0.56, -0.66, -0.40), (-0.22, -0.74, -0.64), (0.0, -0.66, 0.75), pole=(-0.9, 0.3, -0.4),
+    """off the shoulder (f0-1), the cleaver let swing down BEHIND his right hip (f4: the tip passes back and down,
+    hidden by the body from the front), hanging tip-down at his right side (f6), brought in to the post as both
+    fists stack on the haft and the weight drops (f10, the tip driven into the ground); the stance locked at f12,
+    head bowed over the hands; two breaths; the chest lifts at the end"""
+    setp = R.tip_to(_plant_two(R, 1.3, head=16.0, wrist=POST_W, d=POST_D, fold=POST_FOLD), POST_TIP_Z)
+    # fix pass 8 (the review: around f8 a low near-horizontal blade still passed in front before the plant): the
+    # blade never turns over in front; it swings down like a pendulum at his right side, the tip going back and
+    # down (the flat to the side, edge-on from the front), then comes forward hanging and is set in front
+    back = _pose(G, _P(hips=(2, -4, 0), spine=(2, -4, 0), chest=(0, -6, 0), head=(4, 4, 0)), (0, 0.0, -0.02),
+                 one((-0.74, 0.10, -0.30), (-0.22, 0.72, -0.66), (1.0, 0.0, 0.0), pole=(-0.9, 0.4, -0.3),
+                     left=(0.10, -0.40, -0.55)))
+    back = R.tip_to(back, 0.20, only_below=True)
+    hang = _pose(G, _P(hips=(4, -2, 0), spine=(3, -2, 0), chest=(0, -2, 0), head=(8, 0, 0)), (0, -0.01, -0.03),
+                 one((-0.70, -0.32, -0.10), (-0.08, -0.26, -0.96), (1.0, 0.0, 0.0), pole=(-0.9, 0.3, -0.4),
                      left=(0.25, -0.70, -0.40)))
-    fore = R.tip_to(fore, 0.14, only_below=True)
-    swing = R.tip_to(anim.lerp_pose(fore, setp, 0.5), 0.10, only_below=True)
+    hang = R.tip_to(hang, 0.06, only_below=True)          # (the fist lifted to the chest: the blade near upright)
+    swing = R.tip_to(anim.lerp_pose(hang, setp, 0.55), -0.06, only_below=True)
     over = anim._with_hips(setp, (0, 0, -0.024))
     breath = anim.add(setp, _P(chest=(-2.5, 0, 0), head=(-3, 0, 0)))
     out_ = anim._with_hips(anim.add(setp, _P(chest=(-3, 0, 0), spine=(-1, 0, 0), head=(-4, 0, 0))), (0, 0, 0.006))
     I = anim.IMPACT
     return clip("cast_a2", 30, [(0.0, G, "linear"), (0.04, unsling(G, left=(0.10, -0.40, -0.55)), "out"),
-                                (0.13, upr, "inout"), (0.23, fore, "inout"),
+                                (0.13, back, "inout"), (0.21, hang, "inout"),
                                 (0.29, swing, "in"), (0.34, over, "accel"), (I, setp, "settle"), (0.62, breath, "sine"),
                                 (0.80, setp, "sine"), (1.0, out_, "inout")], impact=I)
 
@@ -1782,13 +1807,23 @@ def _gen_rest_clips(R, G) -> dict:
     out["recall"] = anim.Clip("recall", RECALL_FRAMES, True,
                               anim.drag(recall, RECALL_FRAMES, {"head": 2.0, "neck": 1.0, "hand.L": 1.0}, loop=True))
 
-    # idle_lobby (120 f loop): he takes the cleaver off the shoulder and holds it upright in front of him,
-    # runs his left thumb along the notches in its back as if counting, tilts his head 5 degrees and nods at
-    # something only he remembers; then he sets it down, tip planted at his right foot, rests his weight a
-    # while, and shoulders it again by way of his right side. (The brief's swap to the LEFT shoulder is not
-    # reachable: his right fist cannot reach past his face, so the blade would cross the mask.) The cleaver
-    # travels upright in front of him or out on his right, never through the head.
-    lob = anim.merge(stance_b(0.6), anim.arms_relaxed(), {"ik": carry_ik()}, _P(prop_L=FIST_CURL))
+    # idle_lobby (120 f loop): the cleaver across his back, he breathes, tilts his head 5 degrees and nods at
+    # something only he remembers; then he takes the cleaver off the shoulder, holds it upright in front of him and
+    # runs his left thumb along the notches in its back as if counting, and shoulders it again by way of his right
+    # side. (The brief's swap to the LEFT shoulder is not reachable: his right fist cannot reach past his face, so
+    # the blade would cross the mask.) The cleaver travels upright in front of him or out on his right, never through
+    # the head.
+    # fix pass 8 (the review: the lobby / select screen / portrait showed the in-game yoke, a flat bar at mask height
+    # coming out of the back of the head, the haft and pommel hidden, the heel behind the head): the lobby has no
+    # health bar, so it rests in the CONCEPT's carry (lobby_carry): the cleaver laid diagonally across his back at
+    # ~40 degrees in the front view, the right fist on the haft beside the jaw outside the plate, the wrapped haft and
+    # the pommel's gem low at his right, the dark crenellated heel beside the mask, the blade rising behind and above
+    # the head to his upper left (the tip ~0.75 m over the crown: the brief's hook). The loop holds it for most of the
+    # 4 s (breathing, the head tilt and the nod at f20-f40); the notch count is the beat in front (f48-f90).
+    lob = lobby_carry(R, anim.merge(stance_b(0.6), anim.arms_relaxed(), {"ik": carry_ik()}, _P(prop_L=FIST_CURL)))
+    breath = anim.add(lob, _P(chest=(1.5, 0, 0), head=(-1.5, 0, 0)))
+    tilt = anim.add(lob, _P(neck=(2, -3, 0), head=(4, -6, -5)))
+    nod = anim.add(lob, _P(neck=(4, -3, 0), head=(14, -6, -5)))
     lower = _pose(lob, _P(chest=(0, 4, 0), head=(2, -4, 0)), (0, 0, 0),
                   one((-0.30, -0.62, 0.10), (0.06, -0.22, 0.97), (0.0, -0.97, 0.22), pole=(-0.9, 0.2, -0.4), left=BELT_L))
     present = _pose(lob, _P(chest=(2, 8, 0), spine=(0, 4, 0), head=(10, -6, 0), neck=(4, 0, 0)), (0, 0, -0.01),
@@ -1798,17 +1833,13 @@ def _gen_rest_clips(R, G) -> dict:
     count1 = dict(present)
     count1["ik"] = dict(present["ik"], **{"hand.L": HT(rel=R.left_rel(present, 0.44), pole=(0.8, -0.4, -0.5))})
     count1 = anim.add(count1, _P(head=(4, -2, 0)))
-    nod = anim.add(count1, _P(head=(12, -6, -5)))
-    rest = anim.merge(stance_b(0.7), anim.arms_relaxed(),
-                      {"ik": one(VIC_REL, (-0.10, -0.42, -0.90), (0.30, -0.90, -0.42), pole=(-0.9, 0.3, -0.3),
-                                 left=(0.16, -0.10, -0.92), lpole=(0.9, 0.3, -0.3))}, _P(prop_L=FIST_CURL))
-    rest = R.tip_to(anim.add(rest, _P(hips=(0, 0, -3), chest=(-2, -4, 0), head=(-2, 6, 2))))
-    rest2 = R.tip_to(anim._with_hips(anim.add(rest, _P(chest=(1.5, 0, 0), head=(3, 0, 0))), (0.01, 0, -0.008)))
-    keys = [(0.0, lob, "linear"), (0.04, unsling(lob), "inout"), (0.09, lower, "inout"), (0.15, count0, "inout"),
-            (0.24, count1, "inout"),
-            (0.31, nod, "inout"), (0.37, count1, "inout"), (0.44, present, "inout"), (0.50, out_right(lob), "inout"),
-            (0.58, rest, "inout"), (0.70, rest2, "sine"), (0.80, rest, "sine"), (0.88, out_right(lob), "inout"),
-            (0.95, unsling(lob), "inout"), (1.0, lob, "inout")]
+    nod1 = anim.add(count1, _P(head=(10, -4, -4)))
+    unl = unsling(lob)
+    keys = [(0.0, lob, "linear"), (0.09, breath, "sine"), (0.17, tilt, "inout"), (0.24, nod, "inout"),
+            (0.30, tilt, "inout"), (0.36, lob, "inout"), (0.41, unl, "inout"), (0.47, lower, "inout"),
+            (0.53, count0, "inout"), (0.61, count1, "inout"), (0.66, nod1, "inout"), (0.71, count1, "inout"),
+            (0.76, present, "inout"), (0.82, lower, "inout"), (0.87, unl, "inout"), (0.94, lob, "inout"),
+            (1.0, lob, "linear")]
     base = anim.keyed(keys)
 
     def lobby(t):
@@ -1872,7 +1903,7 @@ def _gen_rest_clips(R, G) -> dict:
     # channel: the cleaver planted in front, both hands on the pommel, breathing deep, the weight rolling
     # fix pass 7: the same post as Stubborn's set (the pass-4 plant put the pommel and fists in the cowl: 66 / 73 hits)
     chan = _plant_two(R, 1.1, head=16.0, wrist=POST_W, d=POST_D, fold=POST_FOLD)
-    chan = R.tip_to(anim.add(chan, _P(neck=(4, 0, 0), head=(6, 0, 0))))
+    chan = R.tip_to(anim.add(chan, _P(neck=(4, 0, 0), head=(6, 0, 0))), POST_TIP_Z)
 
     def channel(t):
         b, s = anim.osc(t, 2), anim.osc(t, 1, 0.2)
@@ -1889,13 +1920,27 @@ DEATH_PLANT_REL = (-0.24, -0.82, -0.30)
 REC_REL = (-0.22, -0.40, -0.17)
 VIC_REL = (-0.22, -0.42, -0.16)
 RECALL_FRAMES = 180                    # 6 s at 30 fps (three_load_test: loops at most 6 s, closed)
-ULT_REACH = (0.86, -0.36, 0.22)        # the Settled Account reach (chest frame, arm lengths): out to the left
+ULT_REACH = (0.95, -0.22, 0.02)        # the Settled Account reach (chest frame, arm lengths): out to the left, the
+                                       # arm straight at shoulder height (fix pass 8: was (0.86, -0.36, 0.22), the
+                                       # hand by the ear)
+ULT_CLAW = (0.0, -28.0, 0.0)           # prop.L: the reaching fingers a little curled
 VIC_HOST = (0.36, -0.68, -0.60)        # the left hand held out to his front-left at the waist, arm long; fix pass 5:
                                        # more forward and lower (out to the side the tiers on the upper arm swung out
                                        # with it and met the vambrace: one pale sleeve from shoulder to wrist)
-LOBBY_REL = (0.70, -0.66, 0.22)        # the left-shoulder carry: the fist high in front of the left chest,
-LOBBY_D = (0.30, 0.55, 0.78)           # the blade laid back over the stacked pauldron
-LOBBY_UP = (-0.20, -0.78, 0.59)
+# fix pass 8: the lobby's CONCEPT carry (proto/burdam_carry6.py --lobby 40: the eye-level front angle ~40 degrees, the
+# blade, the heel and the haft + pommel all in view from the front and the portrait's three-quarter, no hits): the
+# right wrist beside the jaw outside the plate (armature space), the cleaver heading 10 degrees back from straight
+# left at 38 degrees up (behind the head), its flat facing the viewer (roll 60: the front face turned a little up to
+# the sky), the notched spine up and out
+LOBBY_W = (-0.56, -0.03, 1.86)
+LOBBY_D = (0.776, 0.137, 0.616)
+LOBBY_UP = (0.153, 0.906, -0.394)
+LOBBY_POLE = (-1.0, 0.1, -0.6)
+
+
+def lobby_carry(R, base: dict) -> dict:
+    """base with the right hand in the lobby's concept carry (the left fist stays at the belt)"""
+    return R.place(base, LOBBY_W, LOBBY_D, LOBBY_UP, pole=LOBBY_POLE)
 
 
 # ── the paint pose (project.paint_object wrapper) ─────────────────────────────────────────────────
@@ -2183,10 +2228,12 @@ BLADE_GAIN = 0.62         # the blade's painted value two steps down (linear; L*
 MASK_FACE = "#C6A55E"         # the lit face's mean: the concept's ochre-gold lacquer, L* ~68 (fix pass 5: #CDAE6C still read pale in three.js; pale ochre rendered
                               # bone-white in game and the crown read as a bald skull from the top-down camera)
 CROWN_DARK = 0.20             # the crown's lacquer a step darker toward the back (the concept's back of the head)
-COWL_MEAN = "#4F4943"         # the concept's dark felt (L* ~31): the mask pops out of it in any light
+COWL_MEAN = "#6A5845"         # fix pass 8: the concept's WARM taupe felt (L* ~39, b* ~+14; the review: #4F4943 rendered a
+                              # cool charcoal, L* 36-40 / b* +3 in the splash, near black round the mask in the portrait)
 RUST_MEAN = "#8E8A84"         # neutral grey oxidised stone (L* ~57; lit from above it reads near 70)
 RUST_PART_MEAN = {"shoulder_plate": "#77736D"}    # the right shoulder's carved plate faces the key: a step down
-TROUSER_MEAN = "#4C3A2E"      # dark brown trousers (feet band)
+TROUSER_MEAN = "#4E4239"      # dark trousers (feet band); fix pass 8 a greyer taupe (the brief's `under` family), so the
+                              # warm leather boots and their wraps separate from them (the review: one brown mass)
 BOOT_MEAN = "#3F2D20"         # dark waxed-leather boots (warm brown: cooler browns read mauve outdoors; fix pass 4
                               # a step darker: the splash lit them tan)
 INK_TALLY = "#3A2915"         # the cut tallies' ink
@@ -2355,8 +2402,10 @@ def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarra
     fr = nym < -0.3
     bk = nym > 0.3
     cr = nzm > 0.55
-    cov[fr] = tally_ink(xm[fr], zm[fr], TALLY_FRONT, half_len=0.0135, gap=0.0068, width=0.0019, seed=1)
-    cov[fr] = np.maximum(cov[fr], tally_ink(xm[fr], zm[fr], TALLY_CHIN, half_len=0.0105, gap=0.0058, width=0.0017,
+    # fix pass 8 (the review: the lower-face tallies and the frown blurred in the splash): the chin groups and the
+    # frown cut bolder
+    cov[fr] = tally_ink(xm[fr], zm[fr], TALLY_FRONT, half_len=0.0135, gap=0.0068, width=0.0021, seed=1)
+    cov[fr] = np.maximum(cov[fr], tally_ink(xm[fr], zm[fr], TALLY_CHIN, half_len=0.0120, gap=0.0064, width=0.0024,
                                             seed=4))
     cov[bk] = np.maximum(cov[bk], tally_ink(-xm[bk], zm[bk], TALLY_BACK, half_len=0.019, gap=0.0085, width=0.0023,
                                             seed=2))
@@ -2371,8 +2420,8 @@ def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarra
     path = [(-0.083, 1.853), (-0.045, 1.874), (0.025, 1.874), (0.062, 1.853)]
     for (x0, z0), (x1, z1) in zip(path[:-1], path[1:]):
         fz = np.minimum(fz, _seg_d(xm, zm, x0, z0, x1, z1))
-    frown = np.clip(1.0 - (fz - 0.0035) / 0.003, 0.0, 1.0) * (nym < -0.3)
-    c = c * (1 - 0.6 * frown[:, None]) + ink * 0.6 * frown[:, None]
+    frown = np.clip(1.0 - (fz - 0.0045) / 0.003, 0.0, 1.0) * (nym < -0.3)
+    c = c * (1 - 0.72 * frown[:, None]) + ink * 0.72 * frown[:, None]
     # 5. the ink eye recesses: the almond (lens) cuts of the sculpt, inked where the texel lies on their surface
     eye = np.zeros(m.sum(), dtype=bool)
     Pm = np.stack([xm, ym, zm], axis=1)
@@ -2575,9 +2624,9 @@ def tally_paint(c: np.ndarray, P: np.ndarray, N: np.ndarray) -> np.ndarray:
 # one above and along every concave crease; the projected painting rides on top as texture only (a third of its
 # value variation). Means a step under the brief's rust (L* 69): lit from above the tops land near the concept's
 # L* 56-62 and the mask stays the brightest value on the figure.
-STONE_TOP = "#8A7B68"          # warm grey top faces (L* ~52, b* ~+10: three.js's sky light cools a neutral grey)
-STONE_CHALK = "#B1A189"        # chalked convex bevels (L* ~66)
-STONE_SIDE = "#615447"         # the 8 cm side bands (L* ~37)
+STONE_TOP = "#9E9282"          # warm grey top faces (L* ~61, b* ~+9: three.js's sky light cools a neutral grey); fix pass 8
+STONE_CHALK = "#C3B6A2"        # a step lighter (the review: the stack's splash median L* 47 against the concept's 65)
+STONE_SIDE = "#776A5C"         # the 8 cm side bands (L* ~45); chalked convex bevels (L* ~74)
 STONE_RECESS = "#3E2D21"       # rust-brown recesses and creases (L* ~20)
 STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78, "shoulder_plate": 0.88}   # forearm plates a step down: the
                                # vambrace never merges with the pauldron into one pale sleeve
@@ -2636,34 +2685,40 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
     return col * STONE_DARKER.get(nm, 1.0)
 
 
-BOOT_CAP = "#2A2420"           # fix pass 5: the brief's dark ironstone toe caps (the review: shapeless boot lumps;
-BOOT_CAP_RIM = "#4E453E"       # a mid-grey cap read as a pale block under the splash's sky), a faint chalked rim
 BOOT_WELT = "#1A1410"          # the welt line over the sole
+BOOT_WRAP_DARK = 0.55          # fix pass 8: the wrap grooves on the boot shafts (the sculpt's wraps() ridges) darkened
+BOOT_TOP = "#24190F"           # ... and a dark binding strap round each boot top, under the trousers' cuff roll
+BOOT_TOP_Z = (0.372, 0.418)
 
 
 def boot_caps(c: np.ndarray, P: np.ndarray) -> np.ndarray:
-    """ironstone toe caps over the front of each boot's toe box (a rim chalked along their back edge) and a dark
-    welt line where the upper meets the sole: the boot reads as a made thing (upper, cap, sole) at the splash's
-    low camera. Boot texels (linear) at rest-pose points P; each boot's frame as sculpted (rz 12 degrees out)"""
+    """the boots read as made things at the splash's low camera: a dark welt line where the upper meets the sole, the
+    shaft's wrap grooves darkened along the sculpted ridges and a dark binding strap round the top of each shaft.
+    fix pass 8: no toe caps (the review: the ironstone caps read as grey slate bricks stuck on the boot fronts; the
+    concept's boots are plain dark wrapped leather). Boot texels (linear) at rest-pose points P; each boot's frame as
+    sculpted (rz 12 degrees out)"""
     out = c.copy()
     for sx in (-1.0, 1.0):
         sel = np.sign(P[:, 0]) == sx
         if not sel.any():
             continue
         R = rot(rz=sx * 12.0)
-        loc = (P[sel] - np.array([sx * 0.255, -0.06, 0.0])) @ R.T          # = R @ (P - c0): the sculpt's at() inverse
-        lx, ly, lz = loc[:, 0], loc[:, 1], loc[:, 2]
-        edge = ly + 0.105 + 3.2 * lx ** 2                                     # < 0 in front of the cap's curved back edge
-        on = (lz > 0.030) & (lz < 0.125)
-        cap = np.clip(-edge / 0.006, 0.0, 1.0) * on
-        rim = np.clip(1.0 - np.abs(edge + 0.004) / 0.005, 0.0, 1.0) * on
+        Ps = P[sel]
+        loc = (Ps - np.array([sx * 0.255, -0.06, 0.0])) @ R.T          # = R @ (P - c0): the sculpt's at() inverse
+        lz = loc[:, 2]
         cc = out[sel]
-        Y = _lum(cc)
-        det = np.clip(1.0 + (Y / max(float(Y.mean()), 1e-6) - 1.0) * 0.4, 0.6, 1.4)[:, None]
-        cc = cc * (1 - cap[:, None]) + _hexlin(BOOT_CAP)[None] * det * cap[:, None]
-        cc = cc * (1 - 0.7 * rim[:, None]) + _hexlin(BOOT_CAP_RIM)[None] * 0.7 * rim[:, None]
         welt = np.clip(1.0 - np.abs(lz - 0.031) / 0.004, 0.0, 1.0)
         cc = cc * (1 - 0.8 * welt[:, None]) + _hexlin(BOOT_WELT)[None] * 0.8 * welt[:, None]
+        z = Ps[:, 2]
+        shaft = np.clip((z - 0.15) / 0.03, 0.0, 1.0)
+        ph = np.sin(z * 55.0 + 9.0 * (Ps[:, 0] + Ps[:, 1]))                # the wraps() ridges: -1 in the grooves
+        groove = np.clip((-ph - 0.35) / 0.45, 0.0, 1.0) * shaft
+        cc = cc * (1.0 - (1.0 - BOOT_WRAP_DARK) * groove)[:, None]
+        z0, z1 = BOOT_TOP_Z
+        band = np.clip(1.0 - np.maximum(z0 - z, z - z1) / 0.004, 0.0, 1.0)
+        Y = _lum(cc)
+        det = np.clip(1.0 + (Y / max(float(Y.mean()), 1e-6) - 1.0) * 0.3, 0.7, 1.3)[:, None]
+        cc = cc * (1 - band[:, None]) + _hexlin(BOOT_TOP)[None] * det * band[:, None]
         out[sel] = cc
     return out
 

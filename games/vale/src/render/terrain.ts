@@ -66,6 +66,7 @@ import {
 import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep, WallMesh, WK } from './terrain_walls.ts';
 import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
 import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
+import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, motionDepthMaterial, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
 
 type V2 = readonly [number, number];
 type Poly = readonly V2[];
@@ -233,7 +234,8 @@ function shapeOf(poly: Poly): Shape {
 }
 
 /** instanced scatter split into CHUNK-sized cells so each cell frustum-culls on its own */
-function chunked(geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true): Group {
+function chunked(geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true,
+  depth?: Material, renderOrder = 0): Group {
   const g = new Group();
   g.name = name;
   const buckets = new Map<string, { m: Matrix4; c?: Color }[]>();
@@ -247,6 +249,8 @@ function chunked(geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Co
     const im = new InstancedMesh(geo, mat, list.length);
     list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (it.c) im.setColorAt(i, it.c); });
     im.castShadow = shadows; im.receiveShadow = true;
+    if (depth) im.customDepthMaterial = depth;
+    im.renderOrder = renderOrder;
     im.computeBoundingSphere();
     g.add(im);
   }
@@ -330,6 +334,9 @@ export interface TerrainBuild {
   /** heights of every wall polygon (0 for chasm walls) */
   wallHeights: number[];
   setScatter(level: 0 | 1 | 2): void;
+  /** the Needlegrass's unit field (r12 M11, terrain_brush.ts): the renderer feeds it the units the viewer sees
+   *  every frame; null when the map has no thickets */
+  brush: BrushField | null;
   /** painted tiling textures by role (map.art.terrain.textures): litter, grain, moss */
   setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void;
   /** authored scatter props (map.art.terrain.props: tree / rock / stone → GLB variants), vertex-coloured,
@@ -399,25 +406,29 @@ export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Prom
   return any ? out : null;
 }
 
-/** the one material every scatter prop draws with (instanced, vertex-coloured). Roughness 0.86 (bark, stone),
- *  except where COLOR_0's alpha carries the gloss mask: there it falls to 0.42 (the lacquered fan leaves) and
- *  a soft clearcoat-like lobe rides on top (strength 0.4 × gloss, its own roughness 0.48: a lacquer sheen across the
- *  plates, not one wet hot-spot per clump on the smooth crown normals). A geometry without
- *  vertex alpha compiles without USE_COLOR_ALPHA and stays exactly as before. One program, no extra draws. */
-function propMaterial(): MeshPhysicalMaterial {
-  const m = new MeshPhysicalMaterial({ vertexColors: true, roughness: 0.86, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.48 });
+/** the material every scatter prop draws with (instanced, vertex-coloured), MATTE (r12 M11): roughness 0.86 (bark,
+ *  stone, fan plates alike). COLOR_0's alpha is still read as the gloss mask (the props lane's interface), but a
+ *  masked vertex only goes down to roughness 0.75 and there is no clearcoat lobe any more: the old lacquer
+ *  (0.42 + a clearcoat) made one wet hot spot per crown. The Dialwood props carry a mask of 0 since M11.
+ *  `sway`: the Dialwood's crowns move (terrain_brush.ts TREE_SWAY_MAIN: tip ≤ 4 cm at 0.2–0.4 Hz, per-tree
+ *  phase, weighted by height); rocks and stones never do. One program per kind, no extra draws. */
+function propMaterial(sway = false): MeshStandardMaterial {
+  const m = new MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
+  const u = { uSwayT: worldUniforms.valeTime };
   m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 #ifdef USE_COLOR_ALPHA
-  float valeGloss = clamp( vColor.a, 0.0, 1.0 );
-#else
-  float valeGloss = 0.0;
-#endif
-  roughnessFactor = mix( roughnessFactor, 0.42, valeGloss );`)
-      .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.clearcoat = 0.4 * valeGloss;');
+  roughnessFactor = mix( roughnessFactor, 0.75, clamp( vColor.a, 0.0, 1.0 ) );
+#endif`);
+    if (sway) {
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>\n${TREE_SWAY_PARS}`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>\n${TREE_SWAY_MAIN}`);
+    }
   };
-  m.customProgramCacheKey = () => 'vale_prop_gloss_v2';
+  m.customProgramCacheKey = () => (sway ? 'vale_prop_matte_sway_v3' : 'vale_prop_matte_v3');
   return m;
 }
 
@@ -1116,30 +1127,34 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   }
 
   // ── Needlegrass (brush) ────────────────────────────────────────────────────────────────────────
+  // r12 M11: the blades lean away from every unit the viewer sees within 0.8 m and fade to 35 % round your own
+  // and allied fighters (terrain_brush.ts; the renderer feeds the field). The material is TRANSPARENT so a faded
+  // blade shows the fighter behind it: it still writes depth (blades occlude each other as before), draws in one
+  // pass for both faces, and after the units' rest outlines (renderOrder 2), so a faded blade lets the outline
+  // through too. One instanced draw per 24 m chunk, as before; the shadow depth material runs the same motion.
   const clump = needlegrassClump(lin(colors.grassRoot), lin(colors.grassTip));
-  const grassMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0, side: DoubleSide });
-  const grassU = { uWindT: worldUniforms.valeTime };
+  const brush = thickets.length ? new BrushField((x, y, reach) => {
+    for (let k = 0; k < thickets.length; k++) {
+      if (boxDist(x, y, thicketBoxes[k]) > reach) continue;
+      if (pointInPolygon(x, y, thickets[k]) || polyEdgeDist(x, y, thickets[k]) <= reach) return true;
+    }
+    return false;
+  }) : null;
+  const grassMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0, side: DoubleSide, transparent: true, depthWrite: true });
+  grassMat.forceSinglePass = true;
+  const grassU = { uWindT: worldUniforms.valeTime, ...(brush ? brush.uniforms : { uBrush: { value: [] }, uBrushFade: { value: [] }, uBrushN: { value: 0 } }) };
   grassMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, grassU);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uWindT;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
-{
-  #ifdef USE_INSTANCING
-  vec2 base = vec2( instanceMatrix[3][0], instanceMatrix[3][2] );
-  #else
-  vec2 base = vec2( 0.0 );
-  #endif
-  float hf = clamp( position.y / 1.25, 0.0, 1.0 );
-  float ph = base.x * 0.37 + base.y * 0.53;
-  // T0 ambient: slow sway, at most 0.5 Hz
-  float sway = sin( uWindT * 2.2 + ph ) * 0.05 + sin( uWindT * 1.3 + ph * 1.7 ) * 0.03;
-  transformed.x += sway * hf * hf;
-  transformed.z += sway * 0.6 * hf * hf;
-}`);
+      .replace('#include <common>', `#include <common>\n${GRASS_VERT_PARS}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${GRASS_VERT_MAIN}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBrushA;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vBrushA;');
   };
-  grassMat.customProgramCacheKey = () => 'vale_grass_v2';
+  grassMat.customProgramCacheKey = () => 'vale_grass_v3';
   patchWorldMaterial(grassMat);
+  const grassDepth = motionDepthMaterial(GRASS_VERT_PARS, GRASS_VERT_MAIN, grassU, 'vale_grass_depth_v1');
   const grassItems: { m: Matrix4; c: Color }[] = [];
   {
     const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
@@ -1163,8 +1178,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       }
     });
   }
-  if (grassItems.length) group.add(chunked(clump, grassMat, grassItems, 'vale_needlegrass'));
-  disposables.push(clump, grassMat);
+  if (grassItems.length) group.add(chunked(clump, grassMat, grassItems, 'vale_needlegrass', true, grassDepth, 2));
+  disposables.push(clump, grassMat, grassDepth);
 
   // ── Standing Shadow + Fallen Shaft (terrain marks from the map's terrain block) ────────────────
   // the shadow's frame: from its tip toward the needle that casts it (the Seat), the core wedge's length and
@@ -1493,14 +1508,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   let scatterLevel: 0 | 1 | 2 = 2;
   const propMat = propMaterial();
   patchWorldMaterial(propMat);
-  disposables.push(propMat);
+  // the Dialwood sway (r12 M11): its own program, and a shadow depth material running the same motion
+  const treeMat = propMaterial(true);
+  patchWorldMaterial(treeMat);
+  const treeDepth = motionDepthMaterial(TREE_SWAY_PARS, TREE_SWAY_MAIN, { uSwayT: worldUniforms.valeTime }, 'vale_tree_sway_depth_v1');
+  disposables.push(propMat, treeMat, treeDepth);
   /** a spot's variant is a hash of its position: stable across quality changes */
   const variantOf = (x: number, y: number, n: number): number => Math.floor(hash2(x * 1.7, y * 2.3) * n) % n;
   /** instanced props by variant */
-  const propParts = (geos: BufferGeometry[], items: { x: number; y: number; m: Matrix4; c?: Color }[], name: string, shadows = true): Group[] => {
+  const propParts = (geos: BufferGeometry[], items: { x: number; y: number; m: Matrix4; c?: Color }[], name: string, shadows = true, sway = false): Group[] => {
     const by: { m: Matrix4; c?: Color }[][] = geos.map(() => []);
     for (const it of items) by[variantOf(it.x, it.y, geos.length)].push(it);
-    return geos.map((g, i) => chunked(g, propMat, by[i], `${name}_${i}`, shadows)).filter((g) => g.children.length > 0);
+    return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined)).filter((g) => g.children.length > 0);
   };
   /** real height and horizontal crown reach of a prop (origin at its ground contact) */
   const dimsOf = (g: BufferGeometry): { H: number; R: number } => {
@@ -1536,7 +1555,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         const k = 1 - 0.1 * deep;
         items.push({ x: t.x, y: t.y, m: new Matrix4().compose(pos, q, s), c: new Color((0.86 + t.tint * 0.22) * k, (0.9 + t.tint * 0.14) * k, (0.86 + t.tint * 0.12) * (k + 0.04 * deep)).multiplyScalar(pv.tree) });
       }
-      scatterParts.push(...propParts(geos, items, 'vale_trees'));
+      scatterParts.push(...propParts(geos, items, 'vale_trees', true, true));
     } else if (trees.length) {
       const trunks: { m: Matrix4; c?: Color }[] = [], canopies: { m: Matrix4; c: Color }[] = [];
       for (const t of trees) {
@@ -1636,6 +1655,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     group,
     wallHeights,
     setScatter,
+    brush,
     setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void {
       for (const r of TERRAIN_TEX_ROLES) { const x = t[r]; if (x) tex[r].value = x; }
     },
@@ -1661,7 +1681,10 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
 }
 
-/** a clump of 7 solid, V-folded, tapered blades (no alpha), root dark → tip light */
+/** a clump of 7 solid, V-folded, tapered blades (no alpha), painted dark-to-light (r12 M11): a deep occluded foot
+ *  (× 0.55 of the root colour), a dark body, a lit, slightly warm tip that stays under the canopy's top values; the
+ *  clump's middle blade and the inner ones a shade deeper than the outer (baked occlusion, so Low without AO keeps
+ *  the brush in the dark band) */
 function needlegrassClump(root: Color, tip: Color): BufferGeometry {
   const pos: number[] = [], col: number[] = [], nor: number[] = [];
   const rand = mulberry(77);
@@ -1675,6 +1698,10 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
     const w = 0.06 + rand() * 0.03;
     const dirx = Math.cos(a + 0.3), dirz = Math.sin(a + 0.3);
     const px = -dirz, pz = dirx;
+    const inner = b === 0 ? 0.82 : 0.9 + (r0 / 0.17) * 0.1 + (rand() - 0.5) * 0.08;
+    const foot = root.clone().multiplyScalar(0.55 * inner), body = root.clone().lerp(tip, 0.3).multiplyScalar(inner);
+    const lit = tip.clone().multiplyScalar(0.9 * (0.94 + 0.06 * inner));
+    lit.r *= 1.05; lit.b *= 0.86;
     const ring: [number, number, number][][] = [];
     for (let k = 0; k <= SEG; k++) {
       const t = k / SEG;
@@ -1690,7 +1717,7 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
         const ts = [t0, t0, t1, t0, t1, t1];
         for (let v = 0; v < 6; v++) {
           pos.push(...tris[v]);
-          const c = root.clone().lerp(tip, Math.pow(ts[v], 0.8));
+          const c = ts[v] <= 0.5 ? foot.clone().lerp(body, ts[v] * 2) : body.clone().lerp(lit, (ts[v] - 0.5) * 2);
           col.push(c.r, c.g, c.b);
           nor.push(dirx * 0.35 * (side ? 1 : -1) + px * 0.2, 0.9, dirz * 0.35 + pz * 0.2);
         }

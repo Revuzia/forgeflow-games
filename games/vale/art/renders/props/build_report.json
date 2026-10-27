@@ -5,15 +5,15 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 10.1,
+  "kb": 20.4,
   "role": "rock",
   "size_m": [
    0.73,
    0.64,
    0.32
   ],
-  "tris": 198,
-  "verts": 249
+  "tris": 344,
+  "verts": 551
  },
  "boulder_pair": {
   "budget": 600,
@@ -21,15 +21,15 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 14.4,
+  "kb": 34.1,
   "role": "rock",
   "size_m": [
-   1.08,
+   1.07,
    0.85,
    0.29
   ],
-  "tris": 264,
-  "verts": 375
+  "tris": 542,
+  "verts": 953
  },
  "boulder_tick": {
   "budget": 600,
@@ -37,28 +37,29 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 9.6,
+  "kb": 21.4,
   "role": "rock",
   "size_m": [
    0.94,
    0.5,
    0.29
   ],
-  "tris": 134,
-  "verts": 246
+  "tris": 308,
+  "verts": 590
  },
  "dialwood_broad": {
   "budget": 750,
   "gloss": {
-   "glossy_verts": 378,
-   "mean": 0.573
+   "glossy_verts": 0,
+   "mean": 0.0
   },
   "kb": 23.2,
+  "plates": 54,
   "role": "tree",
   "size_m": [
-   2.18,
-   3.09,
-   2.54
+   2.19,
+   3.11,
+   2.55
   ],
   "tris": 584,
   "verts": 596
@@ -66,14 +67,15 @@
  "dialwood_lean": {
   "budget": 750,
   "gloss": {
-   "glossy_verts": 336,
-   "mean": 0.572
+   "glossy_verts": 0,
+   "mean": 0.0
   },
   "kb": 21.2,
+  "plates": 48,
   "role": "tree",
   "size_m": [
-   2.59,
-   2.27,
+   2.64,
+   2.31,
    3.07
   ],
   "tris": 540,
@@ -82,15 +84,16 @@
  "dialwood_squat": {
   "budget": 750,
   "gloss": {
-   "glossy_verts": 364,
-   "mean": 0.585
+   "glossy_verts": 0,
+   "mean": 0.0
   },
   "kb": 22.1,
+  "plates": 52,
   "role": "tree",
   "size_m": [
-   2.93,
+   2.76,
    2.72,
-   2.4
+   2.43
   ],
   "tris": 552,
   "verts": 565
@@ -98,15 +101,16 @@
  "dialwood_tall": {
   "budget": 750,
   "gloss": {
-   "glossy_verts": 427,
-   "mean": 0.576
+   "glossy_verts": 0,
+   "mean": 0.0
   },
   "kb": 26.3,
+  "plates": 61,
   "role": "tree",
   "size_m": [
-   2.38,
-   2.16,
-   3.05
+   2.37,
+   2.05,
+   3.02
   ],
   "tris": 674,
   "verts": 678
@@ -114,14 +118,15 @@
  "dialwood_young": {
   "budget": 750,
   "gloss": {
-   "glossy_verts": 203,
-   "mean": 0.557
+   "glossy_verts": 0,
+   "mean": 0.0
   },
   "kb": 13.7,
+  "plates": 29,
   "role": "tree",
   "size_m": [
-   1.95,
-   1.68,
+   1.98,
+   1.59,
    3.01
   ],
   "tris": 350,
@@ -197,15 +202,15 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 7.1,
+  "kb": 16.4,
   "role": "stone",
   "size_m": [
-   0.59,
+   0.58,
    0.49,
-   0.38
+   0.37
   ],
-  "tris": 92,
-  "verts": 174
+  "tris": 226,
+  "verts": 446
  },
  "stone_tick": {
   "budget": 300,
@@ -213,14 +218,14 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 8.9,
+  "kb": 19.0,
   "role": "stone",
   "size_m": [
    0.63,
    0.31,
    0.27
   ],
-  "tris": 124,
-  "verts": 226
+  "tris": 266,
+  "verts": 522
  }
 }

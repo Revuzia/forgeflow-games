@@ -33,14 +33,14 @@
   },
   "uv_coverage": 0.755,
   "bake": {
-    "base": 2.73,
-    "rough_metal": 3.13,
-    "normal": 1.92,
-    "ao": 1.99,
+    "base": 4.34,
+    "rough_metal": 2.08,
+    "normal": 1.22,
+    "ao": 1.93,
     "normal_fixed_px": 3233,
-    "projection": 131.55,
-    "pack_save": 132.1,
-    "total": 143.45
+    "projection": 98.53,
+    "pack_save": 98.69,
+    "total": 108.89
   },
   "tris": 2995,
   "mesh_top_m": 1.086,
@@ -139,13 +139,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1062940,
+  "glb_bytes_raw": 1063084,
   "optimize": {
     "ok": true,
-    "before": 1062940,
-    "after": 342944
+    "before": 1063084,
+    "after": 342904
   },
-  "glb_bytes": 342944,
+  "glb_bytes": 342904,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -180,8 +180,8 @@
       1
     ],
     "headY": 0.716,
-    "accentPct": 5.92,
-    "accentTopHalfPct": 86.6,
+    "accentPct": 5.95,
+    "accentTopHalfPct": 86.7,
     "heightPx1080": 57,
     "size": [
       2400,
@@ -189,25 +189,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_shieldwick_serenade.png",
-    "seconds": 82.8,
-    "exit": 0
+    "seconds": 17.8,
+    "exit": 0,
+    "clip_sheet": "art/renders/units/three_clips_shieldwick_serenade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.11,
-      "model": 23.73,
-      "lows_bind": 0.03,
-      "uv": 23.02,
-      "bake": 143.45,
-      "clips": 0.7,
-      "export": 3.62,
-      "optimize": 1.66,
-      "load_test": 0.41,
-      "three_qa": 83.36,
-      "cache": 0.12
+      "rig": 0.01,
+      "materials": 1.55,
+      "model": 152.2,
+      "lows_bind": 0.04,
+      "uv": 20.48,
+      "bake": 108.89,
+      "clips": 0.72,
+      "export": 4.12,
+      "optimize": 1.45,
+      "load_test": 0.51,
+      "three_qa": 75.12,
+      "cache": 0.15
     },
-    "total_s": 280.26
+    "total_s": 365.41
   },
   "run_ref_speed": 3.25,
   "height_m": 1.0

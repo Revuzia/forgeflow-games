@@ -60,14 +60,14 @@
   },
   "uv_coverage": 0.712,
   "bake": {
-    "base": 6.46,
-    "rough_metal": 11.18,
-    "normal": 3.18,
-    "ao": 2.8,
+    "base": 7.17,
+    "rough_metal": 6.72,
+    "normal": 5.0,
+    "ao": 3.45,
     "normal_fixed_px": 10603,
-    "projection": 24.19,
-    "pack_save": 24.62,
-    "total": 48.74
+    "projection": 35.64,
+    "pack_save": 37.16,
+    "total": 60.42
   },
   "tris": 3429,
   "mesh_top_m": 1.625,
@@ -166,14 +166,14 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1346056,
+  "glb_bytes_raw": 1346080,
   "optimize": {
     "ok": true,
-    "before": 1346056,
-    "after": 471388,
+    "before": 1346080,
+    "after": 471436,
     "metallic_zero": 3
   },
-  "glb_bytes": 471428,
+  "glb_bytes": 471476,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -208,7 +208,7 @@
       1
     ],
     "headY": 0.878,
-    "accentPct": 8.11,
+    "accentPct": 7.31,
     "accentTopHalfPct": 69.4,
     "heightPx1080": 86,
     "size": [
@@ -217,26 +217,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_aubade.png",
-    "seconds": 51.5,
+    "seconds": 37.6,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_greatwick_aubade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.87,
-      "model": 38.37,
-      "lows_bind": 0.1,
-      "uv": 9.31,
-      "bake": 48.74,
-      "clips": 78.46,
-      "export": 4.33,
-      "optimize": 1.02,
-      "load_test": 0.28,
-      "three_qa": 120.0,
-      "cache": 0.21
+      "materials": 0.27,
+      "model": 47.33,
+      "lows_bind": 0.12,
+      "uv": 17.83,
+      "bake": 60.42,
+      "clips": 93.14,
+      "export": 4.38,
+      "optimize": 1.09,
+      "load_test": 0.25,
+      "three_qa": 94.1,
+      "cache": 0.57
     },
-    "total_s": 301.95
+    "total_s": 319.59
   },
   "run_ref_speed": 3.2,
   "height_m": 1.1700000000000002

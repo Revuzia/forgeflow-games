@@ -939,7 +939,7 @@ AU_LIGHT = (0.0, 0.0, 0.058)
 AU_LIGHT_R = (0.050, 0.021, 0.031)
 
 
-def light_falloff(uvw, c, r, reach: float = 0.80):
+def light_falloff(uvw, c, r, reach: float = 0.90):
     """0..1 lamplight round a hood light core (c = (u, v, w) centre, r = half sizes across / deep / tall) at points given
     in the opening's (u, v, w): 1 at the core's outline, falling off fastest right there (an exponential over `reach`
     core radii: a glow, never a plateau - a flat-topped halo read as the white of an eye) - the painted half of the
@@ -1614,9 +1614,9 @@ AUBADE_CHALK = ("#CBC7BD", 0.9)                  # chalk #D6D3CA, a step down
 # band's 40 % limit).
 PALETTE_FIT = {
     # fix round 3 (the team read for every viewer + the B5 value rebase: hoods at L* <= 65, under the fighters): the
-    # linen a quieter, darker blue-grey (#7E8995: L* 56, 15 % sat; the palette's cloth2 is 208 deg / 6 %), so the
+    # linen a quieter, darker cool grey (#727880: L* 50, 11 % sat - toward the palette's cloth2, 208 deg / 6 %), so the
     # viewer-tinted accent stands off it by value AND chroma under the ally azure; the wool a step less saturated
-    "aubade": {"hood": ("#707B87", 0.95), "scarf": ("#5E6976", 0.85),
+    "aubade": {"hood": ("#727880", 0.95), "scarf": ("#5F6670", 0.85),
                "cloak": ("#4A5562", 0.95)},
     # the Serenade dome (review 2026-10-21b item 5: on screen bone #D0C5B1, 15 % sat - the old fit's median included
     # the dark carved hollow, so the dome itself was lifted far over the target): fitted on its OUTER felt only
@@ -1639,12 +1639,12 @@ PROC = {
                "lantern": (_ACH, 0.55, 0.05), "lantern_mullion": (_ACH, 0.55, 0.04), "knob": ("#ABA79D", 0.6, 0.04), "wraps_R": ("#BCB7AD", 0.5, 0.06),
                "wraps_L": ("#BCB7AD", 0.5, 0.06), "haft": ("#B2A48C", 0.5, 0.07),
                "sleeve_R": ("#4D5866", 0.5, 0.06), "sleeve_L": ("#4D5866", 0.5, 0.06),
-               "mitt_R": ("#56616E", 0.55, 0.07), "mitt_L": ("#56616E", 0.55, 0.07),
+               "mitt_R": ("#66727F", 0.55, 0.07), "mitt_L": ("#66727F", 0.55, 0.07),
                "boot_R": ("#2F3034", 0.5, 0.06), "boot_L": ("#2F3034", 0.5, 0.06)},
     "serenade": {"mantle": ("#9A866F", 0.45, 0.07), "collar": ("#54453A", 0.55, 0.12),
                  "sleeve_R": ("#6E5A4C", 0.5, 0.08), "sleeve_L": ("#6E5A4C", 0.5, 0.08),
                  "cuff_R": ("#3F3530", 0.5, 0.08), "cuff_L": ("#3F3530", 0.5, 0.08),
-                 "mitt_R": ("#5C4838", 0.55, 0.10), "mitt_L": ("#5C4838", 0.55, 0.10), "hood_rim": ("#5A4A3D", 0.55, 0.10),
+                 "mitt_R": ("#6A5546", 0.55, 0.10), "mitt_L": ("#6A5546", 0.55, 0.10), "hood_rim": ("#5A4A3D", 0.55, 0.10),
                  "boot_R": ("#3D3028", 0.5, 0.08), "boot_L": ("#3D3028", 0.5, 0.08),
                  "shield": ("#504439", 0.5, 0.12), "haft": ("#5A4436", 0.5, 0.08),
                  "lantern": ("#4B4039", 0.5, 0.08), "lantern_lid": ("#4E4239", 0.55, 0.08)},
@@ -2471,8 +2471,8 @@ def hollow_ink(img, maps, names, spec: dict, geo: dict, log=print):
 # is a dim neutral that only lifts the ink next to the core)
 # (build 2: a halo DISH behind the core, lit by the room and floored in AO, still read as a grey ring round an iris; the
 # dish is gone - the falloff lies on the throat's own walls and back, broad and dim, the spill of a lamp in a hood)
-LIGHT_PAINT = {"aubade": {"lamp": "#66635E", "walls": 0.62, "lip": ("#4A525D", (-0.006, 0.010))},
-               "serenade": {"lamp": "#68625A", "walls": 0.62, "lip": ("#433730", (-0.003, 0.008))}}
+LIGHT_PAINT = {"aubade": {"lamp": "#8A867F", "walls": 0.75, "lip": ("#4A525D", (-0.006, 0.010))},
+               "serenade": {"lamp": "#8B857C", "walls": 0.75, "lip": ("#433730", (-0.003, 0.008))}}
 
 
 def hood_light_paint(img, maps, names, geo: dict, fac: str, log=print):

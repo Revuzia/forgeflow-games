@@ -1697,6 +1697,19 @@ def serenade_parts(L: dict) -> list:
                         "low_mesh": band_ribbon(F_out, hc[0], hc[1], _ser_band_z, _ser_band_hw, 30, lift=0.005)}))
     # the light: one soft core in the middle of the hollow, 8 cm behind the rim's plane, 12 x 7 cm, in its see-through
     # shells (rule 0.2; fix round 3: the wide low lens on the sill read as a tongue)
+    # (fix round 3) an ink floor plate over the hollow's deep floor, 3 mm up: the decimated mantle's collar bridged the
+    # clearance carve and rose through the hood's floor in the back corner (a tan / grey sliver in the dark)
+    zf = A.zf + 0.003
+    fp = np.array([[x_, A.at(0.0, 0.0, w_)[1], zf] for w_ in (0.035, 0.115, 0.195) for x_ in (A.o[0] - 0.165, A.o[0], A.o[0] + 0.165)])
+    fq = []
+    for r_ in range(2):
+        for c_ in range(2):
+            a_, b_ = r_ * 3 + c_, r_ * 3 + c_ + 1
+            fq += [(a_, b_, b_ + 3), (a_, b_ + 3, a_ + 3)]          # (wound to face up)
+    fpS = Sculpt("hollow_floor")
+    fpS.add(RoundBox(tuple(fp.mean(0)), (0.16, 0.07, 0.003), 0.001), k=0.0)
+    out.append(SP("hollow_floor", fpS, "under", "bone:head", 8, 0.6, to_model=hood_tf,
+                  meta={"low_mesh": (fp, np.array(fq, np.int64))}))
     hood_light(A.at(0.0, 0.012, 0.080), out, to_model=hood_tf, radii=(0.070, 0.041, 0.040), axes=A.ax,
                lining=(field_of(hood), A, 0.031, (0.092, 0.118, 0.144, 0.170)))
 
@@ -2193,6 +2206,7 @@ PAINT = {
             "hood": {"kind": "cowl", "hex": "#A58C69", "light": (0.70, 1.10), "key": 0.14, "brush": 0.05, "felt": True,
                      "centre": (-0.035, 0.03, 1.07), "folds": 5, "fold": 0.10},
             "hood_rim": {"kind": "felt", "hex": "#45392F", "light": (0.80, 1.40), "nap": 0.06},
+            "hollow_floor": {"kind": "flat", "hex": "#17150F", "light": (1.0, 1.0), "noise": 0.03},
             "collar": {"kind": "felt", "hex": "#45392F", "light": (0.80, 1.40), "nap": 0.06},
             # (fix 5: cuff only: the three wraps read as chevron stripes on the bent sleeves)
             "sleeve_L": dict(_SER_CLOTH, cuff="#3B2E25", felt=True),
@@ -2239,8 +2253,11 @@ PAINT = {
                     "hex": "#17150F", "pad": 0.014},
                    # (fix round 3) the tunic's top rises through the hollow's floor (side-facing slivers, umber / sand, at
                    # the lower corners: the 'tan sliver'): every tunic texel inside the carve itself, whatever its facing
-                   {"part": "cloak", "carve": DomainWarp(SER_ARCH, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.04),
-                    "hex": "#17150F", "pad": 0.010}],
+                   {"part": "cloak", "carve": DomainWarp(SER_ARCH_DEEP, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
+                    "hex": "#17150F", "pad": 0.012},
+                   # (the faces the clearance carve leaves round the hollow's deep part, seen through the hood's floor)
+                   {"part": "mantle", "carve": DomainWarp(SER_ARCH_DEEP, lambda P: _arr(P) + np.array([-0.005, 0, 0]), 0.03),
+                    "hex": "#17150F", "pad": 0.012}],
         "gw_under": {"cloak": "#33291F"},
         "gw_inner": {"mantle": ((-0.03, 0.02), 0.62)},
         "gw_ramp": [],

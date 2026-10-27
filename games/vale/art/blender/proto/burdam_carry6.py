@@ -220,6 +220,10 @@ def main():
         Mp = np.array(M["prop.R"])
         P = loc_cl @ Mp[:3, :3].T + Mp[:3, 3]
         d = Mp[:3, 1] / np.linalg.norm(Mp[:3, 1])
+        if not getattr(pose_clip, "_said", False):
+            pose_clip._said = True
+            print(f"clip pose: wrist {np.round(np.array(M['hand.R'].translation), 3).tolist()} d {np.round(d, 3).tolist()} "
+                  f"up {np.round(Mp[:3, 0] / np.linalg.norm(Mp[:3, 0]), 3).tolist()}")
         return P, d, Mp[:3, 0], True
 
     def pose_cleaver(wx, wy, wz, hd, el, rl):

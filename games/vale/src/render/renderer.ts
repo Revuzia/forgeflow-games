@@ -553,6 +553,23 @@ class ValeRenderer implements Renderer {
     } catch { return true; }
   }
 
+  /** r12 M11: the thickets react to the units the VIEWER SEES (a.visible: the sim's visibleMask, so vision, brush
+   *  and invisibility already applied): the grass never moves for a unit the viewer could not see. Your fighter
+   *  and allied fighters also fade the blades round them (terrain_brush.ts). */
+  private feedBrush(d: number): void {
+    const b = this.terrain?.brush;
+    if (!b) return;
+    b.begin();
+    for (const a of this.actors.values()) {
+      const v = a.view;
+      if (!v || !a.visible || !v.alive || a.leaving >= 0) continue;
+      if (v.kind !== 'fighter' && v.kind !== 'minion' && v.kind !== 'monster' && v.kind !== 'summon') continue;
+      const rel = v.kind === 'fighter' ? this.palette.relation(v.team, v.owner, true) : 'neutral';
+      b.push(a.id, a.x, a.y, v.radius, rel === 'self' ? 2 : rel === 'ally' ? 1 : 0);
+    }
+    b.end(d);
+  }
+
   private entityVisible(e: EntityView): boolean {
     const team = this.palette.viewer.team;
     if (team < 0) return true;
@@ -865,6 +882,7 @@ class ValeRenderer implements Renderer {
     // fog of war
     this.fog.update(view, this.palette.viewer.team, d);
     this.sun.fit(this.rig.camera);
+    this.feedBrush(d);
     this.terrain?.update(this.time);
     this.vfx.update(d);
     this.buildOverlay(view);
