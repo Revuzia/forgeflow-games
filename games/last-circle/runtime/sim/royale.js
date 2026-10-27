@@ -313,21 +313,22 @@
   // Applied by player.js on touchdown from the vertical impact speed v (m/s), NOT while gliding / under canopy, NOT
   // on a mantle, NOT into water; armour does not absorb it (PUBG). The curve is set by HEIGHTS, then converted with
   // THIS game's gravity (MOVE.gravity -22 m/s^2, the value player.js integrates), so it stays right if gravity is
-  // retuned: a drop of FALL_SAFE_H (4 m, a storey: ledges, stairs, a jump off a container) is free; 10 m costs 36.5;
-  // 15 m 75; lethal from full health (>= 100) from 18.3 m; 20 m 113 (integrator D2, FIX ROUND: 10 m 35-40, 15 m 60-75,
-  // lethal at about 20 m - the first curve, 42 at 10 m, killed from 16.6 m). FALL_EXP stays 1.5 because player.js
-  // fallHurt computes K.FALL_DMG_PER_V x (v - K.FALL_SAFE_V)^1.5 itself (a literal 1.5, not K.FALL_EXP): with that
-  // exponent the 4 m safe point fixes dmg(20 m) / dmg(10 m) = 3.1, so the lethal height moves out only as far as the
-  // 10 m cost comes down; 36.5 keeps the in-game 10 m drop (the frame-stepped impact lands ~1.5 % under v(10 m):
-  // p23_fall measured 41.38 for 42) inside the gate's 35-50 band. A lethal height of 19.8 m needs FALL_EXP 1.3 / 38 at 10 m, which is safe only
-  // once every consumer calls K.fallDamage(v) (bots.js does; player.js must). (The contract's "4 m ~ 8.9 m/s" assumed
-  // 9.8 m/s^2; here a 4 m drop lands at 13.3 m/s.) dmg = FALL_DMG_PER_V x (v - FALL_SAFE_V)^FALL_EXP, rounded.
+  // retuned: a drop of FALL_SAFE_H (4 m, a storey: ledges, stairs, a jump off a container) is free; 10 m costs 38;
+  // 15 m 72; lethal from full health (>= 100) from 19.4 m; 20 m 104 (integrator D2: 10 m 35-40, 15 m about 60-75,
+  // lethal at about 20 m - the first curve, 42 at 10 m on ^1.5, killed from 16.6 m). With the 4 m safe point fixed, the
+  // exponent sets dmg(20 m) / dmg(10 m): ^1.5 gives 3.1, so 10 m 35-40 could only reach lethal 18.3-18.9 m; ^1.33
+  // gives 2.75, so 38 at 10 m is lethal at 19.4 m and a frame-stepped 20 m drop (the impact lands ~1 % under v(20 m))
+  // still kills with margin (~102). SECOND FIX PASS: the exponent moved off 1.5 now that every consumer calls
+  // K.fallDamage(v) - bots.js always did, player.js fallHurt does from lane player 14233948 (D2 / D3: sim's K is the
+  // single source; the f367520c player.js still hardcoded ^1.5 on K.FALL_DMG_PER_V and would deal 54 at 10 m with this
+  // curve - it ships only with that player.js). (The contract's "4 m ~ 8.9 m/s" assumed 9.8 m/s^2; here a 4 m drop
+  // lands at 13.3 m/s.) dmg = FALL_DMG_PER_V x (v - FALL_SAFE_V)^FALL_EXP, rounded.
   // A hard landing (v > LAND_STAGGER_V, the same 4 m) also staggers for LAND_STAGGER_S (LC-61).
-  var FALL_SAFE_H = 4, FALL_EXP = 1.5, LAND_STAGGER_S = 0.4;
+  var FALL_SAFE_H = 4, FALL_EXP = 1.33, LAND_STAGGER_S = 0.4;
   function fallSpeedForHeight(h) { return Math.sqrt(2 * Math.abs(MOVE.gravity) * Math.max(0, h)); }
   var FALL_SAFE_V = fallSpeedForHeight(FALL_SAFE_H);
-  // calibrated so a 10 m drop costs FALL_REF_DMG (D2: 35-40 at 10 m; the low end moves the lethal height furthest out)
-  var FALL_REF_H = 10, FALL_REF_DMG = 36.5;
+  // calibrated so a 10 m drop costs FALL_REF_DMG (D2: 35-40 at 10 m; the in-game impact lands ~1 % under v(10 m))
+  var FALL_REF_H = 10, FALL_REF_DMG = 38;
   var FALL_DMG_PER_V = FALL_REF_DMG / Math.pow(fallSpeedForHeight(FALL_REF_H) - FALL_SAFE_V, FALL_EXP);
   var LAND_STAGGER_V = FALL_SAFE_V;
   /** HP lost to a landing at vertical impact speed v (m/s, positive down). 0 for v <= FALL_SAFE_V. Pure. */
