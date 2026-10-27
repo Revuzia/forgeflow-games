@@ -327,9 +327,9 @@ def part_human2(args, v):
         # slack run on the wall clock: a starved page fails the revive rows by itself - gateA 10-27 01:55, 4 other Chromes: 'guest: null')
         ok_s, sess = L.pair_session(hpg, gpg, ids["host"]["me"], g_id)
         hpg.bring_to_front()
-        rates = L.sim_rates(hpg, gpg)
-        v.info("human2: pair session + sim rates (match-clock s per wall s, host / guest)", {"session": sess, "rates": rates})
-        if not ok_s or min(rates) < L.SIM_RATE_MIN:
+        rates = L.pair_rates(hpg, gpg)
+        v.info("human2: pair session + rates (host match clock x real time, host / guest fps)", {"session": sess, "rates": rates})
+        if not ok_s or not rates["ok"]:
             v.cnj("human2: the two-page rows", "SETUP missed: %s" % ("the pair is not one squad session: %s" % sess if not ok_s else "the box is starved - sim rates %s" % rates))
             return
         # both bodies together on open ground (host page moves its own body; guest its own)

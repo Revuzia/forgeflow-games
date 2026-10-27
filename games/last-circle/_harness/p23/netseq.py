@@ -97,6 +97,17 @@ def rejoin_setup_miss(trace):
     return None
 
 
+SETTLE_JS = r"""([id, ms]) => new Promise((res) => { const W = window.__LC__.W; const t0 = performance.now(); let last = null, still = 0;
+  const iv = setInterval(() => { const a = W.actorById.get(id); const p = a ? [a.pos.x, a.pos.z] : null;
+    if (p && last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 0.02) still++; else still = 0; last = p;
+    if (still >= 3 || performance.now() - t0 > ms) { clearInterval(iv); res({ settled: still >= 3, ms: Math.round(performance.now() - t0) }); } }, 100); })"""
+
+
+def settle(gpg, h_id, ms=6000):
+    """wait until the guest's copy of the host stands still (3 x 100 ms within 2 cm), up to ms"""
+    return gpg.evaluate(SETTLE_JS, [h_id, ms])
+
+
 def walk_and_track(hpg, gpg, h_id, ms=3000):
     yaw = hpg.evaluate("() => window.__LC__.W.player.input.yaw")
     import math
@@ -135,10 +146,10 @@ def main():
             # (netseq_4 10-26 23:20, 100 % CPU: the host's clock ran at ~0.03 x real time, its watchdog gave s1 to a bot and the guest's rejoin
             # record went stale - 'busy' on the new page)
             hpg.bring_to_front()
-            rates = L.sim_rates(hpg, gpg)
-            v.info("sim rate (match-clock s per wall s) host / guest", rates)
-            if min(rates) < L.SIM_RATE_MIN:
-                v.cnj("pair (both pages' match clocks at >= %.1f x real time)" % L.SIM_RATE_MIN, "SETUP missed: the box is starved - sim rates %s" % rates)
+            rates = L.pair_rates(hpg, gpg)
+            v.info("pair rates (host match clock x real time, host / guest rendered fps)", rates)
+            if not rates["ok"]:
+                v.cnj("pair (the host's match clock >= %.1f x real time, the guest >= %d fps)" % (L.SIM_RATE_MIN, L.PAIR_FPS_MIN), "SETUP missed: the box is starved - %s" % rates)
                 return
             if args.plant:
                 gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])
@@ -157,12 +168,16 @@ def main():
             hpg.bring_to_front()          # the walker's page must tick (a hidden tab gets no rAF)
             hpg.wait_for_timeout(1500)
             v.info("page visibility during the walks", {k: pg.evaluate("() => document.visibilityState") for k, pg in (("host", hpg), ("guest", gpg))})
+            v.data["settle1"] = settle(gpg, h_id)
             b = walk_and_track(hpg, gpg, h_id)
             v.check("baseline (reorder off: the guest's copy of the host moves forward only)", b["progress"] is not None and b["progress"] > 5 and (b["maxBackM"] or 0) <= 0.05,
                     b, "> 5 m, never back > 0.05 m")
             hpg.evaluate("() => { const p = window.__LC__.W.player; p.input.yaw += Math.PI; }")
+            # SETUP: the guest's copy of the host must have come to REST before the reversed walk is tracked (gateA 10-27 02:53: 800 ms was not
+            # enough - the copy was still finishing the baseline walk, 5.4 m 'backwards' along the new direction at samples 1-4)
+            v.data["settle2"] = settle(gpg, h_id)
             gpg.evaluate("() => { window.__SQ_REORDER__ = { every: 3, holdMs: 250 }; }")
-            hpg.wait_for_timeout(800)
+            hpg.wait_for_timeout(300)
             r = walk_and_track(hpg, gpg, h_id, 4000)
             held = gpg.evaluate("() => (window.__SQ_REORDER__ || {}).held || 0")
             gpg.evaluate("() => { window.__SQ_REORDER__ = null; }")
