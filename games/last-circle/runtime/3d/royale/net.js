@@ -64,7 +64,7 @@
  *            teamMode next to the pace (`mode`, unchanged) and every roster entry carries its human's teamId. A "room" message tells the
  *            guests the host's pick while they wait. The boot builds the teams and the bot teammates from teamMode (resolveTeamMode is the
  *            same rule on both sides).
- *   C-DBNO   bit 256 of the stance byte = downed (+ `dh`, the bleed pool, only while downed - a normal packet is byte-identical); a "revive"
+ *   C-DBNO   bit 256 of the stance byte = downed (while downed, hp carries the bleed pool: no extra key, a normal packet is byte-identical); a "revive"
  *            message { k: down | start | cancel | done, id, by }. The downed actor's OWNER revives it (it is the authority over its life, like
  *            over its HP): a "done" is accepted only after that owner saw the reviver's "start" at least K.REVIVE_S earlier.
  *   LC-49    every state packet carries q (a per-sender sequence number) and t (the sender's match clock = the host's, which guests slew to:
@@ -590,6 +590,13 @@ export function reviveDoneOk(rec, by, nowMs, reviveMs) {
   const need = (reviveMs > 0 ? reviveMs : 5000) - 750;
   return nowMs - rec.at >= need;
 }
+/** OWNER: how far (m) the reviver's last packet may be from the downed body for a "done": K.REVIVE_RANGE (sim's single source, D3;
+ *  2 m when sim has none) + REVIVE_LAG_SLACK_M for the reviver's packet age. */
+export const REVIVE_LAG_SLACK_M = 3;
+export function reviveDoneRange(K) {
+  const r = K && typeof K.REVIVE_RANGE === "number" && K.REVIVE_RANGE > 0 && K.REVIVE_RANGE < 50 ? K.REVIVE_RANGE : 2;
+  return r + REVIVE_LAG_SLACK_M;
+}
 
 // ── LC-14: smoke relay ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** A smoke cloud as it travels ({ x, y, z, r, rMax, t0, t1 } in match time, C-SMOKE / D1): r = the LIVE radius when it was sent, rMax = the
@@ -651,17 +658,37 @@ export function applyLootSync(loot, open, take) {
 /** Takes kept for chests that are not open on this client yet: at most this many (oldest dropped). */
 export const LOOT_DEFER_MAX = 512;
 
+/** A live tab rewrites its rejoin record every 2 s, so another tab's record younger than this belongs to a tab that is still playing. */
+export const REJOIN_LIVE_TAB_MS = 3000;
 /** The rejoin candidates a page asks with for `room` (newest first, at most 3): this tab's own record (sessionStorage `own`) when it is for
- *  this room and fresh, then records other tabs of this browser left in localStorage (`list`) that STOPPED updating (a live tab rewrites
- *  its record every 2 s, so a record younger than 3 s belongs to a tab that is still playing). */
+ *  this room and fresh, then records other tabs of this browser left in localStorage (`list`) that STOPPED updating (younger than
+ *  REJOIN_LIVE_TAB_MS = a tab still playing) - or that their tab marked `closed` as it went away (pagehide): such a record is a candidate at
+ *  once, so the invite link opened in a new tab the moment the old one closed still gets its slot back. */
 export function rejoinCandidates(room, own, list, nowMs) {
   const out = [];
   const fresh = (r) => r && r.room === room && Number.isInteger(r.slot) && typeof r.key === "string" && typeof r.at === "number" && nowMs - r.at <= REJOIN_MS + 15000;
   if (fresh(own)) out.push(own);
-  const rest = (Array.isArray(list) ? list : []).filter((r) => fresh(r) && nowMs - r.at >= 3000 && !out.some((o) => o.slot === r.slot)).sort((a, b) => b.at - a.at);
+  const rest = (Array.isArray(list) ? list : []).filter((r) => fresh(r) && (r.closed === 1 || nowMs - r.at >= REJOIN_LIVE_TAB_MS) && !out.some((o) => o.slot === r.slot)).sort((a, b) => b.at - a.at);
   for (const r of rest) if (out.length < 3) out.push(r);
   return out;
 }
+/** The returning page re-reads the records: ms until the youngest record that is not a candidate YET (another tab's, fresh, not closed,
+ *  younger than REJOIN_LIVE_TAB_MS - a tab killed without a pagehide, or one still closing) becomes one; -1 when there is none to wait for.
+ *  A tab that really is still playing keeps its record young, so the caller caps how often it re-reads (REJOIN_RESCANS). */
+export function rejoinRescanMs(room, own, list, nowMs) {
+  const have = rejoinCandidates(room, own, list, nowMs);
+  let best = -1;
+  for (const r of Array.isArray(list) ? list : []) {
+    if (!r || r.room !== room || !Number.isInteger(r.slot) || typeof r.key !== "string" || typeof r.at !== "number" || r.closed === 1) continue;
+    const age = nowMs - r.at;
+    if (age < 0 || age >= REJOIN_LIVE_TAB_MS || have.some((o) => o.slot === r.slot)) continue;
+    const ms = REJOIN_LIVE_TAB_MS - age + 50;
+    if (best < 0 || ms < best) best = ms;
+  }
+  return best;
+}
+/** How many times the returning page re-reads the records while it has no candidate (each wait <= REJOIN_LIVE_TAB_MS). */
+export const REJOIN_RESCANS = 3;
 
 let _localGv = null, _localGvP = null;
 /** This page's MAP_GEN_VERSION: the export of maps.js, read through the already-loaded module (same ?v= as the boot, so no fetch). A
@@ -702,13 +729,15 @@ export function init(W) {
   // LC-49: the rejoin record is refreshed from update() every 2 s - which a hidden tab does not run (no rAF). A tab that is hidden and then
   // closed (or killed) writes its record (time + kit) the moment it is hidden / unloaded, so the page that comes back asks with a fresh one.
   if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined") {
-    const flushRejoin = () => {
+    // pagehide marks the record `closed`: the tab is going away, so a new tab need not wait REJOIN_LIVE_TAB_MS before it asks with it (a
+    // tab that comes back from the back/forward cache rewrites it from update() within 2 s, unmarked). Only hidden = maybe still playing.
+    const flushRejoin = (closed) => {
       try {
-        if (S && S.started && S.net && !S.net.isHost() && !S.rejoin && W.player && W.player.alive && (W.phase === "match" || W.phase === "drop")) { S.rjSavedAt = performance.now(); saveRejoin(W); }
+        if (S && S.started && S.net && !S.net.isHost() && !S.rejoin && W.player && W.player.alive && (W.phase === "match" || W.phase === "drop")) { S.rjSavedAt = performance.now(); saveRejoin(W, closed); }
       } catch (e) {}
     };
-    window.addEventListener("pagehide", flushRejoin);
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushRejoin(); });
+    window.addEventListener("pagehide", () => flushRejoin(true));
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushRejoin(false); });
   }
   // a chest / supply crate that opened HERE after another client took items out of it (late join, a crate that landed late here, a take
   // that beat the chest's own open message): those items go at once - never a ghost item that cannot be picked up anywhere else
@@ -1294,24 +1323,52 @@ function openLobby(W, sel) {
     // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every REJOIN_ASK_EVERY_MS while the
     // host has not yet seen the old page leave (a reload can beat its own presence-leave), for the whole rejoin window (REJOIN_ASK_TRIES; it
     // was 6 tries = 15 s, which a host that only learns of a crashed tab from its 12 s silence watchdog could miss on a loaded box).
-    const cands = asHost ? [] : rejoinCandidates(net.room, rjRead(rjSS(), RJ_SS), rjRead(rjLS(), RJ_LS + net.room), Date.now());
+    // The records are read again on every ask (second fix pass): a tab closed a moment ago left a record only ms old - marked `closed` on
+    // pagehide, but a killed tab's is unmarked and younger than REJOIN_LIVE_TAB_MS - so a page with no candidate yet re-reads the records
+    // when the youngest one comes of age (rejoinRescanMs, at most REJOIN_RESCANS times) and starts asking then; until it has given up, the
+    // host's "busy" (that first hello carried no rj) is held back (S.rjBusy), not shown.
+    const readCands = () => (asHost ? [] : rejoinCandidates(net.room, rjRead(rjSS(), RJ_SS), rjRead(rjLS(), RJ_LS + net.room), Date.now()));
+    const mergeCands = (old, now) => { const out = now.slice(0, 3); for (const c of old || []) if (out.length < 3 && !out.some((o) => o.slot === c.slot)) out.push(c); return out; };
+    const asking = () => {
+      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — rejoining your match…<br>Waiting for the host to start…`;
+      status.setAttribute("data-net-rejoin", "asking");
+    };
+    const ask = () => {
+      if (S !== sess || !S.rejoinAsk || S.started) return;
+      if (S.rejoinAsk.tries >= REJOIN_ASK_TRIES) {
+        S.rejoinAsk = null;
+        status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — could not get your place back.<br>Waiting for the host to start…`;
+        status.setAttribute("data-net-rejoin", "gave-up");
+        return;
+      }
+      S.rejoinAsk.tries++;
+      S.rejoinAsk.cands = mergeCands(S.rejoinAsk.cands, readCands());
+      send("hello", Object.assign(myHello(), { rj: S.rejoinAsk.cands.map((c) => ({ slot: c.slot, key: c.key })) }));
+      setTimeout(ask, REJOIN_ASK_EVERY_MS);
+    };
+    const startAsk = (cands, first) => {
+      S.rejoinAsk = { cands, tries: 1, at: performance.now() };
+      S.rjBusy = null;
+      if (!first) { send("hello", Object.assign(myHello(), { rj: cands.map((c) => ({ slot: c.slot, key: c.key })) })); asking(); }
+      setTimeout(ask, REJOIN_ASK_EVERY_MS);
+    };
+    const cands = readCands();
     const hello = myHello();
     if (cands.length) {
       hello.rj = cands.map((c) => ({ slot: c.slot, key: c.key }));
-      S.rejoinAsk = { cands, tries: 1, at: performance.now() };
-      const ask = () => {
-        if (S !== sess || !S.rejoinAsk || S.started) return;
-        if (S.rejoinAsk.tries >= REJOIN_ASK_TRIES) {
-          S.rejoinAsk = null;
-          status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — could not get your place back.<br>Waiting for the host to start…`;
-          status.setAttribute("data-net-rejoin", "gave-up");
-          return;
-        }
-        S.rejoinAsk.tries++;
-        send("hello", Object.assign(myHello(), { rj: S.rejoinAsk.cands.map((c) => ({ slot: c.slot, key: c.key })) }));
-        setTimeout(ask, REJOIN_ASK_EVERY_MS);
+      startAsk(cands, true);
+    } else if (!asHost) {
+      const rescan = (n) => {
+        if (S !== sess || S.started || S.rejoinAsk) return;
+        const c2 = readCands();
+        if (c2.length) { S.rjRescan = 0; startAsk(c2, false); return; }
+        const ms = n < REJOIN_RESCANS ? rejoinRescanMs(net.room, rjRead(rjSS(), RJ_SS), rjRead(rjLS(), RJ_LS + net.room), Date.now()) : -1;
+        if (ms >= 0) { S.rjRescan = 1; setTimeout(() => rescan(n + 1), ms); return; }
+        S.rjRescan = 0;
+        if (S.rjBusy) { const b = S.rjBusy; S.rjBusy = null; onRejoinAnswer(W, b.from, b.d); }   // the host's held-back "busy"
       };
-      setTimeout(ask, REJOIN_ASK_EVERY_MS);
+      const ms0 = rejoinRescanMs(net.room, rjRead(rjSS(), RJ_SS), rjRead(rjLS(), RJ_LS + net.room), Date.now());
+      if (ms0 >= 0) { S.rjRescan = 1; setTimeout(() => rescan(1), ms0); }
     }
     send("hello", hello);
     status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ` + (cands.length ? "rejoining your match…" : "share this code.") +
@@ -1391,13 +1448,14 @@ function rjSS() { try { return typeof window !== "undefined" ? window.sessionSto
 function rjLS() { try { return typeof window !== "undefined" ? window.localStorage : null; } catch (e) { return null; } }
 function rjRead(store, key) { try { const s = store && store.getItem(key); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function rjWrite(store, key, v) { try { if (!store) return; if (v == null) store.removeItem(key); else store.setItem(key, JSON.stringify(v)); } catch (e) {} }
-/** GUEST: write this tab's rejoin record (room, slot, secret, kit). */
-function saveRejoin(W) {
+/** GUEST: write this tab's rejoin record (room, slot, secret, kit; `closed` = written on pagehide, the tab is going away). */
+function saveRejoin(W, closed) {
   if (!S || !S.started || S.net.isHost() || S.mySlot == null || !(S.mySlot > 0) || !S.rjSecret || !S.net.room) return;
   const p = W.player;
   let inv = null;
   try { if (p && p.inventory) inv = JSON.parse(JSON.stringify({ slots: p.inventory.slots, active: p.inventory.active, ammo: p.inventory.ammo })); } catch (e) {}
   const rec = { room: S.net.room, slot: S.mySlot, key: S.rjSecret, name: S.myName, gv: S.gv, seed: S.cfg ? S.cfg.seed : null, at: Date.now(), inv };
+  if (closed) rec.closed = 1;
   rjWrite(rjSS(), RJ_SS, rec);
   const now = Date.now();
   const list = (rjRead(rjLS(), RJ_LS + rec.room) || []).filter((x) => x && x.slot !== rec.slot && now - (x.at || 0) < REJOIN_MS + 15000);
@@ -1461,13 +1519,13 @@ function onRevive(W, from, d) {
     return;
   }
   // done: only the owner applies it, only for a downed actor, only after this owner saw that reviver's start a full channel ago, and only
-  // when the reviver is near (its last packet within 2 m + 3 m of lag slack)
+  // when the reviver is near (its last packet within K.REVIVE_RANGE (2 m) + REVIVE_LAG_SLACK_M of lag slack: reviveDoneRange)
   if (!ownsActor(W, a) || !a.downed) return;
   const rec = S.reviveIn && S.reviveIn[a.id];
   const reviveMs = (K.REVIVE_S > 0 ? K.REVIVE_S : 5) * 1000;
   if (!reviveDoneOk(rec, by.id, performance.now(), reviveMs)) { reject("revive", from, "revive done without a full channel"); return; }
   const bp = by.netTarget ? by.netTarget.pos : by.pos;
-  if (bp && a.pos && bp.distanceTo(a.pos) > 5) { reject("revive", from, "reviver too far"); return; }
+  if (bp && a.pos && bp.distanceTo(a.pos) > reviveDoneRange(K)) { reject("revive", from, "reviver too far"); return; }
   delete S.reviveIn[a.id];
   if (typeof W.reviveActor === "function") W.reviveActor(a, by);
   else {
@@ -1542,6 +1600,7 @@ function onRejoinAnswer(W, from, d) {
   const st = S.status;
   if (d.k === "no") {
     if (d.code === "retry" && S.rejoinAsk) return;            // the old page has not been seen leaving yet: the next try (3 s) asks again
+    if (d.code === "busy" && S.rjRescan && !S.rejoinAsk) { S.rjBusy = { from, d }; return; }   // a closed tab's record may still come of age
     if (S.rejoinAsk || d.code === "busy") {
       S.rejoinAsk = null;
       if (d.code !== "busy") clearRejoin();
