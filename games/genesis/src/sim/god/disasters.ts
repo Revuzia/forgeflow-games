@@ -705,7 +705,10 @@ function lift(u: Universe, p: Planet, d: DisasterState, R: number, chance: numbe
     const out = norm(tangent(pt, [pt[0] - d.pos[0], pt[1] - d.pos[1], pt[2] - d.pos[2]]));
     const sp = 8 + 14 * hashFloat(A.id[s], u.tick, 0x11f8);
     const up = 10 + 16 * hashFloat(A.id[s], u.tick, 0x11f9) * (d.kind === 'gravity-slip' ? 2 : 1);
-    launch(u, p, { kind: 'agent', id: A.id[s] }, [pt[0], pt[1], pt[2]], 1.5, [out[0] * sp + pt[0] * up, out[1] * sp + pt[1] * up, out[2] * sp + pt[2] * up], Math.max(0, d.god));
+    // (thrown by nature's storm the throw is nature's, god −1: LIVING integration 2026-10-21 — launched as the player's
+    // (god 0), a person a natural funnel threw died of "the god" and the landing was the player's act once the storm had
+    // passed; a 50-year world with a silent god recorded such a death, _harness/scratch/living/integrate/r5)
+    launch(u, p, { kind: 'agent', id: A.id[s] }, [pt[0], pt[1], pt[2]], 1.5, [out[0] * sp + pt[0] * up, out[1] * sp + pt[1] * up, out[2] * sp + pt[2] * up], d.god >= 0 && d.cause !== 'nature' ? d.god : -1);
   }
 }
 
@@ -739,7 +742,10 @@ function spread(u: Universe, p: Planet, d: DisasterState, e: EffectorDef): void 
     for (const st of x.ps.settlements) {
       if (st.fallen >= 0 || distM(p, st.pos, d.pos) > d.st.reach + st.territory || shielded(u, p, st.pos)) continue;
       // (LIVING §3.7: a god-sent plague seeds L(w) of its cases a round)
-      const n = seedDisease(x, st, dis, Math.max(1, Math.round(num(e, 'strength', 2) * I * harmScale().L)), d.god > 0 ? 'a rival god' : d.cause === 'nature' ? null : 'the god');
+      const L = harmScale().L;
+      const n = seedDisease(x, st, dis, Math.max(1, Math.round(num(e, 'strength', 2) * I * L)), d.god > 0 ? 'a rival god' : d.cause === 'nature' ? null : 'the god');
+      // (LIVING integration 2026-10-21: and its cases there turn grave by the wrath too — life/disease.ts sentLethality)
+      if (L < 1) { st.recent.sentPlague = dis + 1; st.recent.sentPlagueL = Math.round(L * 1000); st.recent.sentPlagueT = x.tick; }
       if (n > 0) accident(x, st, 'plague', st.cell);
     }
     return;

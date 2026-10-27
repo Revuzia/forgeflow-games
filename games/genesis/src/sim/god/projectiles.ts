@@ -130,13 +130,14 @@ function lost(u: Universe, p: Planet, pr: ProjectileState): void {
     const s = x.A.slotOf(pl.id);
     if (s >= 0) {
       what = agentName(x, s);
-      die(x, s, DEATH.god);
-      u.chronicleAdd(p, 'god', `${what} was hurled into the sky by the god and never came down.`, 2);
+      // (nature's throw, god −1 — a storm's funnel: LIVING integration 2026-10-21 — is no act of the god's)
+      die(x, s, pr.god >= 0 ? DEATH.god : DEATH.disaster);
+      u.chronicleAdd(p, pr.god >= 0 ? 'god' : 'disaster', pr.god >= 0 ? `${what} was hurled into the sky by the god and never came down.` : `${what} was swept into the sky by the storm and never came down.`, 2);
     }
   } else if (pl.kind === 'building' && p.people) {
     u.chronicleAdd(p, 'god', `A ${u.content.buildings.list[pl.b.type]?.name.toLowerCase() ?? 'building'} was flung from the world into the stars.`, 1);
   }
-  godAct(u, p, pr.from, 2000, { wonder: 0.4 }, Math.max(0, pr.god));
+  if (pr.god >= 0) godAct(u, p, pr.from, 2000, { wonder: 0.4 }, pr.god);
   u.emit({ t: 'lost', planet: p.id, pos: [...pr.pos], b: pr.alt, text: 'flung off the world', data: { id: pr.id, payload: pl.kind } });
 }
 

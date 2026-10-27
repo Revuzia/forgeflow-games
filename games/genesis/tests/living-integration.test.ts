@@ -503,3 +503,66 @@ test('integration: a fire season strikes a cell as often on a small world as on 
   const ratio = small.rate / large.rate;
   assert.ok(ratio > 0.6 && ratio < 1.6, `a cell of the n = 16 world is struck ${ratio.toFixed(2)} times as often as one of the n = 32 world`);
 });
+
+test('integration: a plague the god sends kills by its wrath — fewer at the default than at full wrath, and no more than a quarter of the town', async () => {
+  // (2026-10-21, the fifth integration: the god's plague seeded L(w) of its cases, but in a town everyone catches it from
+  // everyone, so the toll was the disease's own at every wrath — 33 % of the 30 on all four lethality worlds against
+  // §3.7's ≤ 25 %. Its cases now turn grave with the case fatality × L(w)², life/disease.ts sentLethality: 20 % on the
+  // four worlds, wrath 1 unchanged at 33 % — _harness/scratch/living/integrate/r5/out/plague-after*.log)
+  const { sentLethality } = await import('../src/sim/life/disease.ts');
+  const { lethality } = await import('../src/sim/god/wrath.ts');
+  const run = (wrath?: number) => {
+    const { sim, st } = town();
+    const p = sim.u.planets[0], ps = p.people, A = ps.agents;
+    const ids = (ps.members.get(st.id) ?? []).map((s) => A.id[s]);
+    must(sim, { k: 'disaster.spawn', kind: 'plague', pos: st.pos, ...(wrath === undefined ? {} : { wrath }) });
+    const dis = sim.u.content.diseases.idx('plague');
+    let L = -1;
+    for (let h = 0; h < 6 * 24; h++) {
+      sim.step(60);
+      if (h === 36) L = sentLethality(makeCtx(sim.u, p), st, dis);
+    }
+    must(sim, { k: 'time.scale', scale: 1000 });
+    sim.step(4 * 1440);
+    const dead = ids.filter((id) => A.slotOf(id) < 0);
+    // past the illness's course after the plague's last round, the stamp no longer softens anything (a natural epidemic
+    // later is the disease's own)
+    sim.step(4 * 1440);
+    return { dead, n: ids.length, L, after: sentLethality(makeCtx(sim.u, p), st, dis) };
+  };
+  const law = run(), full = run(1);
+  assert.equal(law.L, Math.round(lethality(0.3) * 1000) ** 2 / 1e6, `the town's cases soften by L(0.3)² while the plague lasts (${law.L})`);
+  assert.equal(full.L, 1, 'at wrath 1 the plague is the disease\'s own');
+  assert.equal(law.after, 1, 'and the softening ends with the plague\'s course');
+  assert.ok(law.dead.length / law.n <= 0.25, `at the default wrath ${law.dead.length} of ${law.n} died`);
+  assert.ok(full.dead.length > law.dead.length, `full wrath kills more: ${full.dead.length} against ${law.dead.length}`);
+});
+
+test('integration: a person a natural storm throws is thrown by nature — if the fall kills, they died of the disaster, not of the god', async () => {
+  // (2026-10-21, the fifth integration: the funnel launched everyone it lifted as the player's (god 0, disasters.ts
+  // lift), so in a 50-year world with a silent god a natural tornado's victim died of "the god" — and once the storm had
+  // passed, the landing was the player's act. Nature's throws are god −1 now; the god's own storm's are still the god's)
+  const { spawnDisaster } = await import('../src/sim/god/disasters.ts');
+  const throwOne = (natural: boolean) => {
+    const { sim, st } = town();
+    const p = sim.u.planets[0], A = p.people.agents;
+    if (natural) {
+      const d = spawnDisaster(sim.u, p, 'tornado', { pos: [st.pos[0], st.pos[1], st.pos[2]], god: -1, cause: 'nature' });
+      assert.ok(typeof d !== 'string', `a natural tornado (${String(d)})`);
+    } else must(sim, { k: 'disaster.spawn', kind: 'tornado', pos: st.pos, wrath: 1 });
+    // until the funnel lifts someone: then that one is frail, so the fall kills
+    let pr: (typeof sim.u.god.projectiles)[number] | undefined;
+    for (let t = 0; t < 600 && !pr; t++) { sim.step(1); pr = sim.u.god.projectiles.find((q) => q.payload.kind === 'agent'); }
+    assert.ok(pr, 'the funnel lifted someone');
+    const id = (pr!.payload as { id: number }).id;
+    A.health[A.slotOf(id)] = 0.001;
+    const deaths: string[] = [];
+    for (let t = 0; t < 120 && A.slotOf(id) >= 0; t++) { sim.step(1); for (const e of sim.drainEvents()) if (e.t === 'death' && e.ref?.id === id) deaths.push(String(e.data?.cause)); }
+    return { god: pr!.god, deaths };
+  };
+  const nature = throwOne(true), god = throwOne(false);
+  assert.equal(nature.god, -1, 'nature\'s throw belongs to no god');
+  assert.deepEqual(nature.deaths, ['disaster'], `the fall killed them, and the disaster is named: ${nature.deaths}`);
+  assert.equal(god.god, 0, 'the god\'s own storm throws as the god');
+  assert.deepEqual(god.deaths, ['the god'], `a fall from the god's storm is the god's doing: ${god.deaths}`);
+});

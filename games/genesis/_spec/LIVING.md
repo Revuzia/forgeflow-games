@@ -586,6 +586,93 @@ both; the guarded iron monopoly held on 4 of 12 before (1, 2, 4, 7) and on 2 now
 clean, 403 tests, 398 pass, 2 TODO (UI hooks), 2 perf floors skipped as an overloaded machine, 1 fail — the worker's
 500 ms field throttle at load 21 (`worker.test.ts`, a 16-cell world with no people; it passed in the runs before).
 
+### 2.14 Round 5 (LAND lane, 2026-10-21; probes and logs in `_harness/scratch/living/land/r5/`)
+
+The lane ran again on the integrated tree (the 2026-10-20 integration) to close what §2.13 and the integrated acceptance
+(`_harness/scratch/living/acceptance.json`) left open. Each change was found with a probe on that tree first (in-memory
+hooks, no file changed: `r5/hhooks.mjs`), and each new test fails with its change taken out again in memory
+(`r5/rv/*.json`: `REVERT=<json> node --import r5/revert.mjs --test --test-name-pattern=<test> tests/living-land.test.ts`).
+
+- **Hunting parties** (`hunt.ts`). A party traced at level 0 (`r5/tprobe.ts`, seed 1234, two hunters after boar
+  780 m out): one set out while the other finished a foraging session 850 m away, then walked home to eat; the lone
+  stalker (a 9 % chance an encounter) took 80 hours for one boar. Per party (`r5/pprobe.ts`, seeds 7 and 1234, five
+  years of hunting each): 2.6–2.7 hunters, 52–72 hours out, 30–50 hours to the first encounter, 0.54–0.96 kills; the
+  parties were out most of the year and the other hunters gathered.
+  Now: a party musters at home (`MUSTER_M` 250 m) and takes `PARTY_FOOD_DAYS` 2 of food from the store; up to
+  `PARTIES_MAX` 2 parties are out at once, each after its own herd (with hunters enough at home and none out, two
+  parties of 2–3 rather than one of six; with only dangerous game near, the four go together); a band gives
+  `HUNTERS_BAND` 0.3 of its food workers to hunting (the top of §2.1's 15–30 %, so that two parties can go); and the rest
+  of a big kill — over `CACHE_MIN_KG` 15 kg more than the hunters there could carry (a wild horse's 150 kg against a
+  party's 60–90) — is left by it (`HuntParty.cache`, by item id) and fetched in relays while it keeps (`CACHE_DAYS` 1.5;
+  `TASK.hunt` with `data2` 2), then it is the scavengers'. Saved: `LandState.more` (the parties beyond the first) and
+  `HuntParty.cache` are optional JSON, absent in older saves and whenever unused.
+- **Crops where there are no seasons** (`crops.ts farmTask`). Seed 7's town knew agriculture, kept 170–240 units of
+  seed, named five farmers and sowed nothing (§2.13 "seed 7 never farmed"; the integrated run: no farm food in 46
+  years). A new field's sowing window was read at the town's own cell, and where there are no seasons sowing follows
+  the soil's wetness: the dry ground a town stands on never grew wet enough for rice (moisture ≥ 0.8), while seven cells
+  around it suited rice (`r5/fprobe.ts`). The window is read at the new field's own cell.
+- **Roofs before repairs** (`land.ts roofless`, a two-line hook in `decide.ts planBuild`). Seed 5's band lost its nine
+  huts to a rift's fire at year 5.9 and rebuilt none in a year (`r5/hsprobe.ts`): its six builders mended store pits —
+  30 of them at 0.5–0.9 damage, dug as the store swelled with 800 flint, 900 wood and 850 sticks (`r5/hsdump.ts`) —
+  while two hut sites waited with their wood and reeds in store and forty people slept out. A town with standing beds
+  for fewer than half its people and a dwelling begun now mends only dwellings until the roofs are up. (Capping the
+  stores at 2 + ⌈people / 8⌉ was tried and taken out again: with fewer pits a store swollen with sticks reads full
+  — `perf/pace.ts storeFull` — and the fishers stop: seed 7's band caught no fish in year 1 against 68 sessions.)
+- **News** (`outlets.ts talkOutlet / newsFrom`). Talk fed curiosity only when someone knew a craft the listener did not;
+  where everyone has long known the same crafts the talk was empty (integrated 50-year runs: up to 29 % of adults
+  without curiosity at a year's end). A talk now also tells the day's news: something the other lived through in the
+  last day (a hunt, a birth, a death, a find, a couple, a building raised, a sign, a wound, a trade, a voyage, a fight,
+  a move, a prophecy come true, a pilgrimage, a healing, a gift) that the listener has no memory of: `NEWS_GAIN` 0.08.
+- **A people without fire feasts without one** (`gatherings.ts fireless`; `events.json festival.*.nofire`): §9.1's note
+  for LAND — a town sworn off fire, or not yet keeping it, no longer "gathered by the fire" or "kept the fire high".
+
+**UI hooks** (new; nothing here edits the UI team's files): `TASK.hunt` with `tData2` 2 is a hunter walking back to a
+kill for the rest of it (draw them going out empty-handed and coming home with `AnimState.carryGame`); up to two hunting
+parties may be out at once (`flags2.hunter` as before); the festival lines of a fireless people come from
+`festival.harvest.nofire | midwinter.nofire | rains.nofire`.
+
+**Demography, not changed (measured).** The integrated 50-year runs (`integrate/out/alone-live-*.json`) put the under-15
+share at 0.46 (0.437–0.485) over years 10–30 with growth 1.84 %/year; the cohort model of these rules
+(`r5/demomodel3.mjs`, 300 runs) gives the same, 0.458 at 1.74 %. In it the share falls under 0.45 only with growth
+at or below 1.5 %: fertility × 0.85 → 0.447 at 1.50 %, × 0.75 → 0.440 at 1.37 %, birth gaps of 2.5–3.5 years → 0.447 at
+1.45 %, 3–4 years → 0.425 at 0.90 %. With 15–22 % of births dying before 15 and adults living to ~55–60, §2.8's two
+targets meet only at the corner (u15 0.45 with growth 1.5 %), as §2.13 found — real peoples growing at 2–2.7 % a year are
+45–50 % children. Nothing was tuned: a fertility cut would move every era date HISTORY calibrated (§5.2).
+
+**Measured** (the census of §2.13, `r5/census.ts` reading the ledger: a band of 30 left alone on the n = 64 sandbox,
+natural disasters on, legacy 1000x = level 2; 8 seeds × 8 years, two at a time; before = this round's base copy
+`r5/base/` (the integrated tree as it stood when the lane began, 2026-10-21 00:10), after = the tree with this round's
+changes and the other lanes' as they stood when each seed began; summaries `r5/out/summary-before.txt` / `summary-after-final.txt`,
+`hsum-before.txt` / `hsum-after-final.txt`, `curio-before.txt` / `curio-after-final.txt`, `table-final.txt`; the after
+runs finished at 01:10, before CONTENT's and HISTORY's second passes touched the tree):
+
+| metric (target) | before | after |
+|---|---|---|
+| kills per 100 people a year, hunting known (≥ 20) | 9.61 pooled, median 10.61 [3.18–16.93] (163 kills, 173 parties) | 10.61 pooled, median 10.94 [5.67–14.21] (176 kills, 192 parties) |
+| hunted share of food (0.15–0.35) | 0.137 pooled, median 0.142 [0.009–0.231] | **0.166** pooled, median **0.161** [0.031–0.352] |
+| food by source, pooled: forage / hunt / fish / farm / herd | 0.427 / 0.137 / 0.347 / 0.056 / 0.033 | 0.396 / 0.166 / 0.324 / 0.046 / 0.068 |
+| food per head-year · hunger / thirst deaths | 12.07 · 0 / 1 | 12.08 · 0 / 0 |
+| tames · herd share where kept (0.05–0.20) | 9 · 0.033 | 13 · 0.068 |
+| harvests per sowing (≥ 0.8) · farm share 3+ years after agriculture (0.30–0.60) | 0.80 (129 / 161) · 0.28 | 0.76 (111 / 147) · 0.31 — seed 7 now sows (2 / 2; none in 8 years before) |
+| houses: beds ≥ 0.9 × people and ≥ 90 % housed every year end (≥ 7 of 8) | 5 of 8 (59 / 64 seed-years) | 4 of 8 (58 / 64) |
+| kinds gathered per settlement-year at year 8 (≥ 10) | median 9.5 [7–12] | median 9.5 [7–13] |
+| infant deaths (5–12 %) · under-15 deaths (12–25 %) of births · birth interval (2–3.5 y) | 4.6 % · 19.4 % · 3.27 | 1.9 % · 23.1 % · 3.33 (108 births each: 5 and 2 infants) |
+| growth (1.5–3 %/y) · under-15 share at year 8 | 1.95 · 0.43 [0.40–0.51] | 2.31 · 0.44 [0.38–0.51] |
+| adults with curiosity < 0.02 at a year end (≤ 20 %): seeds above · worst · mean of the seed means | 2 of 8 · 0.357 · 0.058 | 3 of 8 · 0.40 · 0.059 |
+| adults with status < 0.02 (≤ 20 %): worst | 0.045 | 0.043 |
+| festivals a settlement-year · weddings / couples · funerals / deaths at home | 2 · — | 2 · 30 / 36 · 76 / 79 |
+
+**Read.** Hunting rose by a tenth in kills and a fifth in share (the hunted share is now inside 0.15–0.35 pooled and by
+median), and herds doubled their share; food per head is unchanged and nobody went hungry. Kills stay half of the
+≥ 20 target for the reason §2.13 gave and this round traced (a hunt is a 2–3 day trip at the walking scale; on seed 1234
+most of the hunt calls rejected were 'dark' (40) or 'hunters < 2' (16), `r5/hprobe.ts`). The houses row moved by one
+seed-year (seed 2 ended with 20 beds for 35 people: its fifth household unhoused) and the curiosity row by noise of
+the same size: the news outlet (above) shows in the 50-year integrated runs, where curiosity starves (§10), not over
+eight years. The demography rows differ by a handful of deaths in 108 births on each side (infant deaths 5 → 2); LAND
+changed nothing there. Each of the six changes has a test in `tests/living-land.test.ts` that fails with that change
+taken out in memory (`r5/rv/*.json`). (§2.14's tables were completed by the integrator from the lane's finished after
+runs: `node table.ts base/out-before out-after`, `node hsum.ts`, `node curio.ts`, `node summarize.ts` in `r5/`.)
+
 ---
 
 ## 3. RELATIONSHIP — the people and their god
@@ -1353,6 +1440,43 @@ invent-material and invent-plant dialogs (`content.material`, `content.plant`); 
 `content.plant`; a glowing building material (`MaterialDef.light`) lights its settlement's night
 (`SettlementView.nightLight`). The snapshot is unchanged.
 
+### 4.8 Second pass (CONTENT lane, 2026-10-21, cut off; finished by the integrator — probes in `_harness/scratch/living/content/r2/`)
+The integrated 50-year runs of 2026-10-20 made 0.67 new kinds a world-year, and by year 50 the real kinds were gone: every
+isolated herd of a kind anywhere counted as one group by its iso count alone, the last herds of a kind counted as "cut
+off", forms split into forms of forms ("Great little crag hare", depth 4), and the land's herd cap kept the hunters out
+(185 herds of game and 3 of hunters at year 50, most biomes with none). The lane's base runs (`r2/out/spec-base-*.json`:
+8 seeds × 30 years, no people, the tree as it stood at 01:10) measured it: 10–34 speciations a world (0.33–1.13 a
+world-year), lineages 2–3 deep, the real kinds alive 21–24 → 11–16, 1–5 herds of hunters at year 30, 8–11 biomes whose
+guild had game and no hunter. The lane was cut off after its code and tests and before its after-runs (2 seeds had
+reached year 8). The integrator audited every hunk, kept them all, and ran the after-measurement (below).
+
+**Changes** (`life/ecology.ts`, `life/herds.ts`, `god/inventions.ts`, `people/state.ts`, `people/query.ts`, `events.json`):
+- **Cut off from a kind that lives on.** A herd is isolated only while its kind lives elsewhere on the world (`rest`):
+  the last herds of a kind are the kind itself. A new kind takes only the herds about it (`meets`, within
+  `ISO_RANGE_M`; fliers five times as far; one open sea is one population for water kinds), not every herd that
+  happened to be cut off as long anywhere.
+- **Pace.** A real kind gives rise to at most one new form in `LINEAGE_YEARS` 25, a world to at most one new kind in
+  `FORM_GAP_YEARS` 4 (`lineageRested`, stateless: read from the forms' births). Forms born here, swarms, insects, kept
+  animals and shellfish beds never diverge (`mayDiverge`): every animal is a real one or a local form of one.
+- **Names a naturalist would give** (`formName`): the form's climate ("Arctic hare", "Desert wolf"; "Woolly" only for a
+  furred body) or country ("Highland deer", "Marsh boar", "Island fox"), then its half of the world ("Northern"), then
+  its size ("Lesser"); the real kind's name with "Wild", "Golden", "Harbour", "Desert", "Red" dropped; never stacked
+  words; no new kind when every word is taken. The chronicle line says the herd was cut off "from the rest of their kind".
+- **Kinds born here stay where they arose** (`herds.ts immigrant`): only real kinds and those the god brought drift in.
+  A land full of game still lets in the hunters its guilds lack (the herd cap applies to game).
+- **A kind the god brings is a real kind** (`content.animal` marks `DerivedAnimal.god = 1`): its coming is no birth (the
+  `ecology` query shows `brought: { tick }` for it instead of `bornHere`), it may form local forms of its own name
+  ("Highland zebra"), and its coming does not hold back other lineages.
+- Saves: `DerivedAnimal.god` is optional (absent = born here), no bump. A god-made kind in a save written before this
+  pass reads as born here (it then neither drifts in nor diverges) — no shipped save holds one.
+
+**Tests** (`tests/living-content.test.ts`, 7 `ecology r2` tests; `tests/ecology.test.ts`'s speciation test now keeps
+the rest of the deer in their own country, as the rule asks). All 7 fail on the lane's base copy with the new imports
+made optional (`r2/basetest.sh`, `r2/out/basetest-r2{a,b,c,d}.log`) and pass on the integrated tree.
+
+**Measured** (`r2/spec.ts`: n = 64 sandbox, no people, natural disasters on, 3000x, 30 years; before = `spec-base`, the
+lane's 8 seeds; after = `spec-live-i5`, the integrated tree): *(integrator's runs in progress — results pending)*
+
 ---
 
 ## 5. HISTORY and free text
@@ -1510,6 +1634,59 @@ can be: the unit tests (aid in the famine −0.15 and no famine grievance; unrel
 Reproduce (in `_harness/scratch/living/history/`, two at a time): `node kin.ts <seed> 20 v7` and `env CONTROL=1 node
 kin.ts <seed> 20 v7c` (`HROOT=base` for the old tree), `node census.ts <seed> <years> live 3000`, `node summarize.ts kin
 base v7 v7c`, `node summarize.ts census live l230`, `node freeform.ts`; the logs and JSON are in `out/`.
+
+### 5.6 Second pass (HISTORY lane, 2026-10-21, cut off; finished by the integrator — probes in `_harness/scratch/living/history/`)
+What §5.5 and the integrated acceptance left: the kin fixture short on three of four rows (secession 4 / 8, raid or war
+1 / 8, the control 4 / 8 — the control was the same world as the normal run wherever no famine came, and the grievance of
+the everyday alone carried far daughters over 0.6), no bronze by year 50 in any of the integration's four worlds, iron at
+48.8 in one, the medieval era at 177 in the one 230-year run, and a 230-year run short of the two §6.6 asks for.
+
+**Before** is `base2/`, the live tree when this pass began (02:24), run with the same probes; the trial and the final
+fixture code are frozen copies (`v8/`, `v10/`), the census code `v9/` (= `v10/` but for the two politics weights below).
+
+**Changes**
+- **Hard times are not only hunger** (`politics.ts`). A daughter is in a hard time when it is hungry (under a day of food
+  a head, or a death of hunger: as before), when a live disaster lies over it (`disasterOn`: any but the signs in the
+  sky), or after a day of calamity — 2 deaths by fire, flood, storm, cold, heat or the god's blows in a day (the days
+  before counting by half), or an epidemic (sickness deaths, fading by 0.3 a day, reaching 3: one most days is an
+  epidemic) from the LAND ledger (`calamityToday`). A disaster or calamity the capital, with food to spare, did not relieve
+  within 2 days is NEGLECT, +0.35 ("Lune buried its dead alone: no help came from Aru"); the capital's own help is the
+  famine rule's (daily 0.2 × its chief's generosity), told as relief ("After the disaster Aru sent grain to Lune"),
+  event `aid { why: 'disaster' }`. A hard time is judged when its two days are up, whether or not it is over (a day of
+  burning is a hard time too: the first pass judged only while the hunger lasted).
+- **The everyday makes a town restless, no more.** Tribute, distance, a drifting tongue, a daughter outgrowing its
+  mother and quarrels over fields add up to `ambientCap` 0.45 together, then stop; a town breaks away over a wrong done
+  to it on top: neglect, hunger, raids, a feud. So a capital that stands by its daughters keeps them, and the control —
+  a capital that relieves every hard time — is no longer the same world as the normal run.
+- **The capital's answer.** A daughter that parts in peace may not be let go: if its old capital's towns outnumber it
+  1.2 to 1, war (the capital the aggressor, cause 'revolt', chronicle `secession.refused`: "Aru would not let Lune go,
+  and sent its warriors") with the chance 0.35 + (the chief's aggression − 0.3) × 1.2 + hawks − ½ doves, 0 .. 0.8 (few
+  rulers have let a province go; a calm chief with a peace party does). Otherwise the pact of open roads, as before.
+- **Ideas two crafts deep** (`knowledge.ts inputsSeen`). An experiment's input counts as seen when it is in the store,
+  in hand or in reach — or made by a recipe the town knows from such things, two crafts deep. The year-50 worlds of the
+  integration (`libdiag.ts`, `out/libdiag-y50-*.txt`) showed bronze waiting on copper in the store: the town knew copper
+  and tin smelting, held the ores, and made no copper because nothing asked for it but bronze — and every bronze-age
+  craft after it (bronze tools → carpentry, masonry → the wheel, boats, temples → the classical arch, mills, ships …)
+  waited with it.
+- **The bronze era's pace** (`eras.ts`): its dwell 26 → 28 years (iron smelting opens at copper + ~28: in band from 50),
+  its practice 3 → 5 years (copper → tin → bronze now waits on the smiths' practice, not on the store).
+
+The lane was cut off after its code and tests, during its measurement (the before had run on 2 of 8 kin seeds, the
+after on 1, the census on 1 seed to year 48). The integrator audited every hunk (`politics.ts`, `knowledge.ts`,
+`eras.ts`, four chronicle templates in `events.json`: `grievance.neglect`, `secession.neglect`, `secession.refused`,
+`gift.kin.relief`), kept them all, and ran the measurement on the integrated tree. **Tests** (`tests/living-history.test.ts`,
+four new): all four fail on a copy of the integrated tree with only `politics.ts`, `knowledge.ts` and `eras.ts` put back
+as they were before this pass (`_harness/scratch/living/integrate/r5/hbase/`, `inputsSeen` stubbed in the copy's test)
+and pass on the tree. **UI hooks** (new): `grievanceView(...).hard = { kind: 'famine' | 'disaster', since, relieved,
+judged }` in the settlement inspector's history (`query('settlement', { id }).history.grievance.hard`) while a hard
+time lasts (`query('polities')` keeps `grievance` and `why` only); `aid` events carry
+`why: 'disaster'`; chronicle keys above. Saves: the new `HistState` fields (`hard`, `calam`, `sick`, `cp`, `ep`) are
+optional, no bump.
+
+**Measured** (the kin fixture, `kin.ts`: a capital of 60 and two daughters of 40, bronze-age plains folk 1–3 km apart,
+natural disasters on, 3000x, 20 years, 8 seeds, and its control — the capital relieves every hard time; before = §5.5's
+`v7` runs (the tree of 2026-10-14) and `b2` (the tree of 2026-10-21 02:24, 2 seeds); after = `i5` / `i5c`, the
+integrated tree): *(integrator's runs in progress — results pending)*
 
 ---
 
@@ -1817,3 +1994,96 @@ the fix.
 The mechanism holds as often as on the base copy. Which seeds hold moved: on seed 2, variety trade now also links the
 monopoly holder and the have-nots, so they do not go to war; seed 9 now holds. `tests/society.test.ts` (seed 10)
 passes before and after. Trade suites (boats, contact, plague, society, worlds): 24/24.
+
+---
+
+## 10. Integrated acceptance (sim integrator, 2026-10-21; probes and logs in `_harness/scratch/living/integrate/`, this pass in `r5/`)
+
+Five integrators worked this tree; the first four (2026-10-14/15 and 2026-10-20, commits `58a1c495` … `fc35ab48`) were
+cut off before they wrote this section, and on 2026-10-21 (00:00–03:30) the four lanes ran a second time over their
+finished work. This pass audited all of it, finished what was half-done, fixed what the integrated runs showed, ran the
+acceptance suite over 8 seeds and wrote `_harness/scratch/living/acceptance.json` (every metric, per seed).
+
+### 10.1 What the integrated tree holds (audit)
+- **LAND, round 5** (§2.14): kept whole. Its 8-seed after-census had finished at 01:10 (before the other lanes' second
+  passes touched the tree); the integrator ran the tables and inserted §2.14 from the lane's draft.
+- **RELATIONSHIP, second pass** (§3.10): kept whole (the air burst below wrath 0.5, the blast on those caught on the road,
+  the 36-minute streak). It had adapted one integration test (the crater bowl is now dug with `terrain.lower`): kept.
+- **CONTENT, second pass** (cut off; §4.8): every hunk kept — the code was complete (each function wired and used), its 7
+  tests pass here and fail on the lane's base copy. Its after-measurement was run by the integrator.
+- **HISTORY, second pass** (cut off; §5.6): every hunk kept — `politics.ts` (hard times beyond hunger, the everyday
+  capped at 0.45, a capital that refuses a parting), `knowledge.ts` (`inputsSeen` two crafts deep), `eras.ts` (the bronze
+  era's dwell 28 and practice 5), four chronicle templates; its 4 tests fail with those three files reverted. Its kin
+  fixture and timeline were run by the integrator.
+- **The earlier integrators' fixes** (each with its test in `tests/living-integration.test.ts`, all kept): infants
+  neither pray nor wander and keep by home in a heatwave (`relationship.ts PRAY_AGE`, `land.ts`, `decide.ts infantOf`);
+  evening worship once an evening each over the whole dusk window (`relationship.ts` vespers, `SettlementRel.vespers`);
+  the Signs power's omen fulfils a foretold sign (`omens.ts`); an invented material's vein within the town's work reach
+  (`materials.ts`); villagers walk home to bed inside their own village (`perf/pace.ts`); faith and trust taper near 1
+  (`regard.ts rise`: no pinned meter); an omen feeds curiosity and a fulfilled prophecy the prophet's standing (LAND's
+  outlets wired to RELATIONSHIP's acts); a flooded town's heart moves to dry ground (`settlement.ts moveHeart`, chronicle
+  `heart.flood`, the abandonment timer on its own key `floodSince`); a fished-out water is passed over and a grown pond
+  is looked at again (`fishing.ts rebody`); only homes have beds (`planConstruction`); a site under water is given up and
+  an unstarted site takes a material the store can pay for (`buildings.ts reviseSite`); the fire season's strike rate is
+  per cell (`weather.ts HEAT_CELLS`); 1.4 leviathans become rogue waves on load (`fauna.ts`); the restyle's last "hand"
+  strings say "the Touch" (`civic.ts`, `hand.ts`, `freeform.ts`, `powers.json`). The sowing gate the second attempt tried is not in the tree (it had reverted it itself).
+- **The owner-session fixes of §9** are in place: smoulder vs flame (`danger.ts FIRE_BURN` in flight, the fire step,
+  drinking and routing; `tests/fire-flee.test.ts` "a town whose core smoulders still eats and drinks there") and the
+  varied table (`economy.ts VARIETY`; `tests/society.test.ts` "well-fed neighbours still trade").
+- **The UI team's API**: every command, snapshot field and query used by `src/ui/living.ts`, `invent.ts`, `title.ts`,
+  `hud.ts` and `inspector.ts` is unchanged (`prayer.answer`, `god.omen`, `prophet.call | abandon | foretell`,
+  `settlement.sacred`, `content.material`, `content.plant`, `set`, `disaster.*`, `hand.*`; queries `omens`, `sacred`,
+  `prophets`, `settlement`, `agent`, …); `tests/ui-living.test.ts`, `ui-defaults.test.ts`, `ui-embed.test.ts` run in the gate.
+
+### 10.2 Fixed in this pass
+- **A plague the god sends kills by its wrath** (`life/disease.ts sentLethality`, `god/disasters.ts` spread). The god's
+  plague seeded L(w) of its cases a round, but in a town everyone catches it from everyone (all 30 of each lethality
+  town: `r5/plaguetrace.ts`), so its toll was the disease's own at every wrath: **33.3 % of the 30 on all four
+  lethality worlds** at the default (§3.10's open row; `r5/out/plague-before.log`). The settlements it seeds are now
+  stamped (`recent.sentPlague`, `sentPlagueL` = L(w) × 1000, `sentPlagueT`), and a case of that disease there, until an
+  illness's course after the last round, turns grave with the case fatality × L(w)² (the wrath acting on how many it
+  strikes and on how many of those die, both on the outcome). Natural epidemics and a plague at wrath 1 are unchanged.
+  Measured (`rel2.ts lethality`, REL_ONLY=plague, the same four towns): killed by day 10 at the default wrath **33.3 % →
+  20.0 % on all four** (target ≤ 25 %); at wrath 1 33.3 % before and after (`r5/out/plague-after.log`,
+  `plague-after-w1.log`, seeds 20261008 and 7); × L alone left 26.7 %. With L(0.3) = 0.6 the default plague's case
+  fatality is 0.45 × 0.36 = 16 %; the four towns share their people's ids, so the same 6 of 30 die on each (the frailty draw is the person's own, `disease.ts grave` — not salted with the world, so as not to move every natural
+  epidemic and the seed-bound plague test). Test: `tests/living-integration.test.ts` "a plague the god sends kills by its
+  wrath …" (fails with `sentLethality` returning 1). Saves: three optional keys in `Settlement.recent`, no bump.
+- **Nature's storm throws as nature** (`god/disasters.ts lift`, `god/projectiles.ts lost`). A funnel (tornado, gravity
+  slip) launched everyone it lifted as the player's (`Math.max(0, d.god)` = god 0), so a person a *natural* tornado threw
+  and the fall killed died of "the god" (`DEATH.god`), and once the storm had passed (no disaster left to read the act
+  as nature's) the landing was the player's act (`godAct` harm and wonder). The 50-year world of seed 20261008, with a
+  silent god, recorded one such death in year 39 (`r5/out/alone-live-20261008.json`; §3.7: "a natural-disaster death
+  can be blamed on the god" was to end). Nature's throws are god −1 now: the fall's death is `DEATH.disaster`, the
+  landing no god's act, one flung off the world "was swept into the sky by the storm". The god's own storm throws as
+  before. Test: `tests/living-integration.test.ts` "a person a natural storm throws is thrown by nature …" (fails with
+  the old launch). The 50-year worlds of seeds 20261008 and 7 (and 1234, 1) loaded the tree before this fix: seed 7
+  saw no natural throw in 50 years (its run is the fixed tree's), seed 20261008 two in year 39 (the same world until
+  then); §10.4 lists the throws of every seed.
+
+### 10.3 The acceptance suite (how it ran)
+All on the integrated tree, two processes at a time on the shared 4-core machine (`r5/jobs-a.txt`, `r5/jobs-b.txt`,
+run by `queue.sh`; logs in `r5/out/`). `r5/summarize5.ts` checks every target below and writes
+`_harness/scratch/living/acceptance.json` (each metric with its target, value, met, and per seed).
+- **A world left alone, 50 game years** (`alone.ts <seed> 50 3000`, the 8 census seeds `20261008 7 1234 1 2 3 4 5`): 30
+  stone-age plains folk as a band on the n = 64 sandbox, natural disasters on, the god silent, at 3000x (level 2). Each
+  year: people and demography from the ledger, food by source, hunts, herds, crops, fishing, houses, needs, gatherings,
+  the four values and the god's counters (prayers, risen prophets, omens), the §1.5 firsts, era labels against what the
+  town can do, grievances, events by kind. At years 1, 5, 10, 20, 30, 40, 50 a day at 1x on a save → load copy (walking,
+  dusk, dark, food per adult-day, camps, children's time — and the copy's hash against the original's).
+- **The god's sessions** (`god.ts`, seeds 1–8): a 30-person bronze town (Aru) on the n = 64 world, natural disasters
+  off, warmed a day; each session from the same save at 1x: nothing (the control, 6 days); a thunderstorm painted over
+  the town; the default meteor on the town; a drought with every prayer answered vs left to lapse; a prophet with three
+  prophecies made true vs left false; a comet read by the prophet with its meaning made true vs contradicted;
+  "introduce mithril" (`content.material`, 20 days); an iron vein laid within the town's work reach (`terrain.seed-ore`,
+  then iron smelting taught at day 10); a new crop (`content.plant` + `settlement.introduce`, two game years). Each
+  records the four values at the start, after a day and at the end, the original townsfolk killed, what the town did
+  (task shares, events) and what it holds. The same sessions ran on the biggest town of each year-50 world
+  (`FROM=y50`, natural disasters on, the town's own risen prophet where it has one).
+- **The kin fixture** (`history/kin.ts`, seeds 1–8, 20 years, and its control), **speciation without people**
+  (`content/r2/spec.ts`, 4 seeds × 30 years), **the fire and day probes** (`pace/live/pace.ts fire` 4 seeds × 2 years
+  without people, `daily` 6 seeds), the **plague** at the default wrath (`relationship/rel2.ts lethality`, 4 seeds), and
+  LAND's round-5 census (§2.14, 8 seeds × 8 years).
+
+### 10.4 Results
+*(integrator's runs in progress — results pending)*

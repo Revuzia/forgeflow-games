@@ -35,6 +35,27 @@ export function relief(x: PCtx, st: Settlement | undefined): number {
   return libraryEffect(x, st, 'mortality');
 }
 
+/**
+ * LIVING integration (2026-10-21, §3.7 "survivable by default"): a plague the GOD sent kills by the wrath it was sent
+ * with. The plague disaster (god/disasters.ts spread) stamps each settlement it seeds — `recent.sentPlague` (the disease
+ * + 1), `sentPlagueL` (its lethality L(w) × 1000) and `sentPlagueT` (the round) — and a case of that disease there, until
+ * an illness's course after the last round, turns grave with the case fatality × L². The wrath was meant to act twice:
+ * on how many the plague strikes (it seeds L of its cases) and on how many of those die. The first does nothing in a
+ * town, where everyone catches it from everyone (all 30 of the lethality towns, `_harness/scratch/living/integrate/r5/
+ * plaguetrace.ts`), so both act on the outcome. Before, the toll was the disease's own whatever the wrath: 33 % at the
+ * default on every world (target ≤ 25 %, LIVING §3.10); × L alone left 27 %. Natural epidemics and a plague at wrath 1
+ * (L = 1) are as before.
+ */
+export function sentLethality(x: PCtx, st: Settlement | undefined, d: number): number {
+  if (!st) return 1;
+  const r = st.recent;
+  if (r.sentPlague !== d + 1 || r.sentPlagueL === undefined) return 1;
+  const def = x.c.diseases.list[d];
+  if (x.tick - (r.sentPlagueT ?? 0) > ((def?.incubation ?? 1) + (def?.duration ?? 5) + 1) * x.day) return 1;
+  const L = Math.max(0, Math.min(1, r.sentPlagueL / 1000));
+  return L * L;
+}
+
 /** how much quarantine and hygiene cut contagion (recipe effect 'contagion') */
 function guard(x: PCtx, st: Settlement): number {
   return libraryEffect(x, st, 'contagion');
@@ -53,7 +74,8 @@ export function grave(x: PCtx, s: number): boolean {
   const st = x.ps.settlement(A.settlement[s]);
   // (the draw is the person's own frailty to this disease — the same each time they catch it — so what a town knows
   // decides who of its frail it saves, case for case)
-  return hashFloat(A.id[s], d, 0x9a7e) < caseFatality(x, d) * relief(x, st);
+  // (× the wrath of a plague the god sent: sentLethality, LIVING integration 2026-10-21)
+  return hashFloat(A.id[s], d, 0x9a7e) < caseFatality(x, d) * relief(x, st) * sentLethality(x, st, d);
 }
 
 /** health lost per day by a sick agent (needs.ts): grave cases waste away within the illness, mild ones barely */
@@ -261,7 +283,7 @@ function cohortSeir(x: PCtx, st: Settlement, d: number, lambda: number): void {
   s.i = round(s.i + newI - out);
   // of those leaving sickness, the grave cases die; the rest recover, most of them immune
   const total = co.n[0] + co.n[1] + co.n[2];
-  const dead = out * caseFatality(x, d) * relief(x, st) * total;
+  const dead = out * caseFatality(x, d) * relief(x, st) * sentLethality(x, st, d) * total;
   s.r = round(Math.min(1, s.r + out * def.immunity));
   if (dead > 0) {
     // children and elders are hit hardest

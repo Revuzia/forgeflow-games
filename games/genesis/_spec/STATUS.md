@@ -6,6 +6,38 @@ farm, keep fire, discover, forget, trade, fight, split and fall; herds graze, fl
 it all with procedural bodies, buildings, roads, crops, night lights, fire, toasts and an inspector.
 **Not built yet (phases 3–5):** the god hand and creature, command palette / radial / freeform field / chronicle panel,
 audio, the opening, ships between worlds, saves and settings UI, README / CONTROLS.
+*(That line is phase 2's; phases 3–5 have since been built. The sim's current status is the section below.)*
+
+## Sim — the living world (integrated 2026-10-21; `_spec/LIVING.md` is the binding spec, §10 the integration)
+
+The living-world program (LIVING.md) is integrated in the sim: the people live their own lives at a realistic pace and
+the god's acts land on a society that answers them. What is in the sim now:
+- **Pace** (§1): 1x = 1 game minute per real second (a day = 24 min), presets 1x … 3000x (`SPEED_PRESETS`), 1x–300x
+  the full sim, 1000x / 3000x the time-lapse levels; `Snapshot.lapseLevel`, query `pace`; walking 2 m a minute, day
+  trips and camps, the dusk rule; lightning and fire seasons can light fires; a fire seen is a fire learned.
+- **Living off the land** (§2): hunting parties (two out at once, mustered at home, caches of big kills), taming and
+  herds, fish stocks that can be fished out, nine crops on a seasonal clock, houses before workplaces, wants that follow
+  the recipes, drought flight, birth spacing and childhood hazards, needs that can be met (status, curiosity, the day's
+  news), children's play and chores, festivals / weddings / funerals, a ledger per settlement-year (`query('ledger')`).
+- **The relationship** (§3): faith, fear, trust and loyalty per person per god; prayers as requests
+  (`prayer.answer`); prophets and signs in place of the creature (`prophet.call | abandon | foretell`, `god.omen`, ten
+  real omens), sacred places and real sacred animals; wrath as a law (`set god.wrath`, default 0.3, survivable by
+  default — the default meteor bursts in the air, a god-sent plague kills by its wrath); warnings, evacuation and
+  shelter; the Touch, sigils, the Called and rival epithets (restyle only). **No creature**: `Snapshot.creatures` is
+  optional and never sent (hook H6 for the client).
+- **Content** (§4): 42 real animals (no fantasy kinds; fantasy words map to the nearest real animal), invented
+  materials with deposits and uses (`content.material`, `terrain.seed-ore`), invented plants and crops
+  (`content.plant`), fruit trees; speciation paced to real local forms ("Highland deer").
+- **History** (§5): grievances, secession, kin raids and parting pacts; era labels from what a town can do; eras paced
+  to §1.5 (bronze no longer waits on copper in the store); 62 / 62 free-text phrases.
+- **Saves**: 1.5; real 1.4 saves load (`tests/living-migration.test.ts` on two saves written by the 1.4 build).
+
+**Gate** (2026-10-21): `npm run check` — detban 145 sim files clean, tsc clean, all tests pass (counts in LIVING §10.7).
+**Acceptance** (LIVING §10.3–10.6, every metric per seed in `_harness/scratch/living/acceptance.json`): 8 census seeds left
+alone for 50 game years at 3000x, scripted god sessions on 8 seeds (storm, default meteor, drought answered vs ignored,
+prophet fulfilled vs failed, omen fulfilled vs contradicted, a new material, an iron vein, a new crop) and on each
+year-50 town, the kin fixture (8 seeds and its control), the fire and day probes, and speciation over 30 years.
+**Known misses** (measured, with causes, LIVING §10.6): STATUS_MISSES
 
 ## How to run
 
