@@ -124,7 +124,9 @@ function lethalDrop(a) { return LETHAL_H ? LETHAL_H[fallHp(a)] : Infinity; }
 function walkDrop(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
 // (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
 const reviving = new Map();
-const REVIVE_R = 1.6;             // m: a bot channels from this close (the contract's reach is 2 m)
+// (integrator D3) sim's K is the single source of the DBNO tunables (K.REVIVE_RANGE / REVIVE_S / REVIVE_HP): nothing below hardcodes one.
+// A bot walks in to 80 % of the reach before it holds E (it stops short of the line, not on it: player.js canRevive refuses past K.REVIVE_RANGE).
+const reviveR = () => K.REVIVE_RANGE * 0.8;
 const REVIVE_SEEK_M = 80;         // a downed squadmate within this range is worth going to
 /** player.js runs the revive channel itself (lane player: W.canRevive + reviveStep on every up actor's interactDown) - the bots then only hold E. */
 const PLAYER_REVIVE = (W) => typeof W.canRevive === "function";
@@ -132,7 +134,7 @@ const PLAYER_REVIVE = (W) => typeof W.canRevive === "function";
 function finishRevive(W, t, by) {
   if (typeof W.reviveActor === "function") { W.reviveActor(t, by); return; }
   t.downed = false; t.downedHp = 0;
-  t.hp = (K.REVIVE_HP > 0 ? K.REVIVE_HP : 30);
+  t.hp = K.REVIVE_HP;
   W.events.emit("actorRevived", t, by);
 }
 // Math.hypot allocates in V8 (it is a rest-args builtin): 60 KB/frame of garbage
@@ -4395,7 +4397,7 @@ function actDowned(W, b, dt) {
     if (d < bd) { bd = d; best = t; }
   }
   if (best) {
-    if (bd > 1.5) { MTQ[0] = best.pos.x; MTQ[1] = best.pos.z; moveTowardQ(W, b, dt, false, best.pos.y); }
+    if (bd > K.REVIVE_RANGE * 0.75) { MTQ[0] = best.pos.x; MTQ[1] = best.pos.z; moveTowardQ(W, b, dt, false, best.pos.y); }   // (D3) inside his reach
     inp.sprint = false;
     return;
   }
@@ -4409,7 +4411,7 @@ function actDowned(W, b, dt) {
   }
   inp.sprint = false;
 }
-/** (C-DBNO) the revive channel, the chest channel's rules: walk to the squadmate, stand within REVIVE_R, hold K.REVIVE_S (5 s). A bot breaks it
+/** (C-DBNO) the revive channel, the chest channel's rules: walk to the squadmate, stand within reviveR() (0.8 x K.REVIVE_RANGE), hold K.REVIVE_S. A bot breaks it
  *  off when it is being shot hard (its own bar under 60 after a hit during the channel) - it answers the shooter and comes back. */
 function actRevive(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
@@ -4423,7 +4425,7 @@ function actRevive(W, b, dt) {
   if (by && by !== a.id) { bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return; }       // someone else got there first
   const d = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
   if (!bb.reviveStarted) {
-    if (d > REVIVE_R || Math.abs(t.pos.y - a.pos.y) > 1.5) {
+    if (d > reviveR() || Math.abs(t.pos.y - a.pos.y) > 1.5) {
       // (C-SMOKE) cover the pick-up: a threat seen in the last 8 s within 90 m, a smoke in the bag -> smoke the downed mate first
       if (d < 14 && !bb.nadeS && !bb.smokeWant && bb.targetPos && W.t - bb.targetSeenT < 8 && W.t >= bb.nadeNextT) {
         const tx = bb.targetPos.x - t.pos.x, tz = bb.targetPos.z - t.pos.z, td = hyp(tx, tz);
@@ -4440,7 +4442,7 @@ function actRevive(W, b, dt) {
   }
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.crouch = true;
   steerYaw(a, Math.atan2(-(t.pos.x - a.pos.x), -(t.pos.z - a.pos.z)), dt, 6);
-  if (d > REVIVE_R + 0.6) { cancelRevive(W, b); return; }               // he crawled off / was pushed: walk up again
+  if (d > K.REVIVE_RANGE) { cancelRevive(W, b); return; }               // he crawled off / was pushed past the reach: walk up again
   if ((a.lastDamageT || -99) > bb.reviveHurtT && a.hp + a.shield < 60) {   // shot hard mid-channel: fight first
     cancelRevive(W, b);
     b.state = "ENGAGE"; b.nextThink = 0;
@@ -4454,7 +4456,7 @@ function actRevive(W, b, dt) {
     return;
   }
   bb.reviveT += dt;
-  if (bb.reviveT >= (K.REVIVE_S > 0 ? K.REVIVE_S : 5)) {
+  if (bb.reviveT >= K.REVIVE_S) {
     bb.reviveStarted = false; bb.reviveT = 0; bb.reviveId = null;
     reviving.delete(t.id);
     finishRevive(W, t, a);
