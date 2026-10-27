@@ -1299,6 +1299,7 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     for (let i = 0; i < NJ; i++) toW(J[i * 3], J[i * 3 + 1], J[i * 3 + 2], i * 3);
     toW(J[NJ * 3], J[NJ * 3 + 1], J[NJ * 3 + 2], 45);
     toW(J[11 * 3], 0.03, J[11 * 3 + 2] + 0.12, 48); toW(J[14 * 3], 0.03, J[14 * 3 + 2] + 0.12, 51);
+    const pad0 = Object.assign({}, R.HV_LIVE_PAD); R.HV_LIVE_PAD.body = 0; R.HV_LIVE_PAD.head = 0;   // the consistency check runs unpadded
     let same = true, n = 0, hits = 0;
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let k = 0; k < 400; k++) {
@@ -1310,6 +1311,8 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
       if (!R.HITVOL_HIT.live || (tt >= 0) !== (tl >= 0) || Math.abs(tt - tl) > 1e-9 || (tl >= 0 && th !== R.HITVOL_HIT.head)) same = false;
       n++; if (tl >= 0) hits++;
     }
+    Object.assign(R.HV_LIVE_PAD, pad0);
+    ok(R.HV_LIVE_PAD.body === 0.015 && R.HV_LIVE_PAD.head === 0.01, "LC-22: live pads body 0.015 / head 0.01 m (inside the 0.06 m bar: the radii fit <= 0.045)");
     ok(same && hits > 40 && R.HITVOL_LIVE_N === 58 && R.hitVolHeadR("soldier") > 0.05 && R.hitVolHeadR("soldier") < 0.2,
        "LC-22: live bones = the table's own joints give the same verdict + entry + headshot on " + n + " rays (" + hits + " hits)");
     const far = new Float64Array(live); for (let i = 0; i < 57; i += 3) far[i] += 1.5;   // the drawn body 1.5 m to +x

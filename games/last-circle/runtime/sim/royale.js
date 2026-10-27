@@ -658,8 +658,12 @@
   // ARE the drawn ones), plus a foot capsule Foot -> ToeBase. Everything else (a mixer the view policy skips: beyond
   // 250 m or off screen without a shadow; no rig yet; the headless sim) keeps the deterministic table. HITVOL_LIVE_N = the length of `live`.
   var HITVOL_LIVE_N = 58, HV_FOOT_R = 0.055;
-  // live-mode radius pads (m): body capsules / head sphere (tuned on p23_hitbox's deep-line coverage, see below)
-  var HV_LIVE_PAD = { body: 0, head: 0 };
+  // live-mode radius pads (m) on the measured radii: body capsules / head capsule. The skin radii were fitted <= 0.045 m
+  // outside the drawn triangles (bar 0.06), so 0.015 more keeps the bar and closes the seams between capsules. Measured
+  // (fix/probes/probe_pad.py, p23_hitbox's own lines - 3 cm raster, 8 x 0.06 m offsets - 5 skins x 4 views on the idle
+  // player + the range dummy): pad 0 -> deep-line coverage 0.914-1.0, 0 outside; 0.015 / 0.01 -> 0.957-1.0, 0 outside,
+  // head-top + 0.1 m 0 hits; 0.02 / 0.02 -> 1 outside line on athlete and viper (side view).
+  var HV_LIVE_PAD = { body: 0.015, head: 0.01 };
   var HV_HEAD_R = {};
   function hitVolHeadR(sk) {
     if (HV_HEAD_R[sk] != null) return HV_HEAD_R[sk];
