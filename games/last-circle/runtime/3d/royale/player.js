@@ -105,7 +105,7 @@ const ACTOR_DOUBLES = ["yaw", "pitch", "hp", "shield", "downedAt", "aimErr", "la
   "_tiltX", "_tiltZ", "_eyeY", "_armW", "_animTS", "_adsT", "_stepAcc", "hitReactT", "_hitReactAt", "_portalT", "_sinkT", "_sinkHold", "_sinkY0", "_sinkVy",
   "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw",
   // P23/player (parity P2-A + P3): DBNO, air / landing, slide, locomotion warp, turn-in-place, throw overlay
-  "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd",
+  "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd", "_slideTs",
   "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV"];
 export function createActor(W, opts) {
   const a = {
@@ -180,6 +180,8 @@ export function createActor(W, opts) {
     _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0,
     // slide (LC-21): seconds into the slide (-1 = none), speed, direction, cooldown clock
     _slideT: -1, _slideV: 0, _slideDx: 0, _slideDz: 0, _slideCd: 0, _crouchPrev: false,
+    // slide clip (LC-21): its play rate for this slide, the slide count and the slide the clip was started for
+    _slideTs: 1, _slideN: 0, _slideClipN: -1,
     // directional locomotion (LC-10): quadrant 0 fwd / 1 left / 2 back / 3 right, the orientation warp, the move angle
     _locoQ: 0, _warp: 0, _locoAng: 0, _locoRun: false, _locoCombat: false, _locoKey: null, _dbnoHid: false,
     // turn-in-place (LC-64): clock (-1 = none), body yaw at the start, the turn it covers (rad, signed), the clip
@@ -460,6 +462,8 @@ const EXT_CLIPS = [
   "rifle_crouch_left", "rifle_crouch_right", "rifle_crouch_back", "pistol_strafe_left", "pistol_strafe_right",
   "jump_up", "jump_loop", "jump_down", "fall_idle", "land_hard", "toss_grenade",
   "dbno_crawl_fast", "turn_left_90", "turn_right_90", "rifle_sprint_left", "rifle_sprint_right",
+  // (P23-fix, LC-21) the slide: Mixamo "soccer tackle (2)" (a sliding tackle) legs / hips / spine + the rifle crouch arms
+  "slide",
 ];
 // (P23, download budget) not requested: P1-F's slow `dbno_crawl` (80 KB; the running crawl dbno_crawl_fast covers every downed
 // move) and `injured_idle` (46 KB; a still downed body holds its crawl pose), and the four Mixamo rifle clips the P23 feet-down
@@ -1318,9 +1322,9 @@ function installHumanInput(W) {
     // room. A/D (or the arrows) now step through the survivors.
     if (!W.player.alive && (e.code === "KeyA" || e.code === "KeyD" || ev.code === "ArrowLeft" || ev.code === "ArrowRight")) {
       // (P23, LC-18) squadmates first in the cycle, then everyone else (stable order otherwise)
-      const tm = W.player.teamId;
-      const alive = W.actors.filter((x) => x.alive && !x.isDummy && tm && x.teamId === tm)
-        .concat(W.actors.filter((x) => x.alive && !x.isDummy && !(tm && x.teamId === tm)));
+      const me = W.player;
+      const alive = W.actors.filter((x) => x.alive && !x.isDummy && sameTeam(x, me))
+        .concat(W.actors.filter((x) => x.alive && !x.isDummy && !sameTeam(x, me)));
       if (alive.length) {
         const dir = (e.code === "KeyD" || ev.code === "ArrowRight") ? 1 : -1;
         const cur = alive.findIndex((x) => x.id === W.player.spectating);
@@ -1450,7 +1454,10 @@ function installHumanInput(W) {
 
   // safety: a mouseup outside the window would otherwise leave fire/ADS stuck
   // (stuck ADS = permanent 3.4 m/s — feels like the game is broken-slow)
-  const clearButtons = () => { W._lmbDown = false; W._rmbDown = false; if (W.player) { W.player.input.fire = false; W.player.input.ads = false; } rmbDrag = false; };
+  // (P23-fix, LC-31) blur / mouse-leave also ends FREE-LOOK (W._freeLook, W._flYaw, W._flPitch): after Alt+Tab the AltLeft keyup
+  // goes to the other window, so the camera would stay off the aim until the next Alt / click / ADS.
+  const clearButtons = () => { W._lmbDown = false; W._rmbDown = false; if (W.player) { W.player.input.fire = false; W.player.input.ads = false; } rmbDrag = false;
+    W._freeLook = false; W._flYaw = 0; W._flPitch = 0; W._flHoldFire = false; };
   window.addEventListener("blur", clearButtons);
   document.addEventListener("mouseleave", clearButtons);
   dom.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -1649,7 +1656,7 @@ function aimAssistStep(W, inp, firing, moving, dt) {
   for (let i = 0; i < W.actors.length; i++) {
     const a = W.actors[i];
     if (a === me || !a.alive) continue;
-    if (me.teamId && a.teamId === me.teamId) continue;
+    if (sameTeam(a, me)) continue;
     const x = a.pos.x, y = a.pos.y + 1.2, z = a.pos.z;
     const dx = x - eye.x, dy = y - eye.y, dz = z - eye.z, d2 = dx * dx + dy * dy + dz * dz;
     if (d2 > range * range || d2 < 1e-4) continue;
@@ -2081,7 +2088,7 @@ function actorView(W, a, focus, fovK, slot, dt) {
   // RIM (P1.8 / D12): everyone wears the faint cool edge; a SQUAD UP teammate wears
   // the green one. teamId is set by net.js (null offline), so every offline match
   // and every bot keeps mode 1 by construction. Two integer compares per actor.
-  const rimWant = (a.teamId && W.player && a !== W.player && a.teamId === W.player.teamId) ? 2 : 1;
+  const rimWant = (W.player && a !== W.player && sameTeam(a, W.player)) ? 2 : 1;
   if (a._rimMode !== rimWant) applyRim(a, rimWant);
   // ON SCREEN: a sphere round the whole actor (canopy included while it is up)
   _vSph.center.copy(p);
@@ -2941,6 +2948,18 @@ function addTwistY(b, v) {
   b.rotation.y += v;
   ud._twA = v; ud._twY = b.rotation.y;
 }
+/** (P23-fix, LC-22 with lane sim) the Mixamo AIM LEAN (x) + TWIST (y) on a spine bone, WITHOUT compounding. three's
+ *  PropertyMixer only writes a bone when the clip value CHANGED since its last write, so a FROZEN clip (rifle_crouch_g at
+ *  timeScale 0 when crouched still, the dbno crawl at rest, a clamped one-shot) never re-keys the spine, and the old
+ *  `rotation.x += lean` folded the crouched torso a little further every frame (lane sim: head 0.89 m at pitch -0.1 and
+ *  arms overhead at +0.1). Same rule as addTwistY: when the bone still holds exactly what this wrote last frame (bit for
+ *  bit: nothing re-keyed it), last frame's addition is taken back first; a re-keyed bone just gets the new one. */
+function addLeanTwist(b, dx, dy) {
+  const ud = b.userData, r = b.rotation;
+  if (ud._ltX !== undefined && r.x === ud._ltX && r.y === ud._ltY && r.z === ud._ltZ) { r.x -= ud._ltDX; r.y -= ud._ltDY; }
+  r.x += dx; r.y += dy;
+  ud._ltDX = dx; ud._ltDY = dy; ud._ltX = r.x; ud._ltY = r.y; ud._ltZ = r.z;
+}
 const TURN_START = 0.9, TURN_START_COMBAT = 0.3, TURN_MAX = 1.9, TURN_RATE = 1.35, TURN_RATE_COMBAT = 2.0;
 function turnInPlace(W, a, combat, dt) {
   const C = a.clips;
@@ -3041,8 +3060,8 @@ function syncObj(W, a, dt) {
   } else if (a.gliding && a.chute) {
     wantTiltX = -0.12 - Math.sin(W.t * 1.7) * 0.06;          // sway under canopy (reclined in the harness)
     wantTiltZ = -a.input.mx * 0.18 + Math.cos(W.t * 1.3) * 0.04;
-  } else if (a._slideT >= 0) {
-    // (P23, LC-21) no Mixamo slide clip exists locally: the crouch pose leans BACK into the slide (plus the leg layer, animate)
+  } else if (a._slideT >= 0 && !(a.clips && a.clips.slide)) {
+    // (P23, LC-21) a build without the slide clip: the crouch pose leans BACK into the slide (plus the leg layer, animate)
     wantTiltX = -0.32;
   }
   a._tiltX = (a._tiltX || 0) + (wantTiltX - (a._tiltX || 0)) * Math.min(1, dt * 4);
@@ -3149,9 +3168,10 @@ function animate(W, a, dt) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
         const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
-        if (a.armBones.spine1) { a.armBones.spine1.rotation.x += lean * 0.5; a.armBones.spine1.rotation.y += twist * 0.5; }
-        if (a.armBones.spine2) { a.armBones.spine2.rotation.x += lean * 0.5; a.armBones.spine2.rotation.y += twist * 0.5; }
-        else if (a.armBones.spine && !a.armBones.spine1) { a.armBones.spine.rotation.x += lean; a.armBones.spine.rotation.y += twist; }
+        // (P23-fix) non-compounding on a frozen clip (addLeanTwist): one lean + twist on the clip pose, every frame
+        if (a.armBones.spine1) addLeanTwist(a.armBones.spine1, lean * 0.5, twist * 0.5);
+        if (a.armBones.spine2) addLeanTwist(a.armBones.spine2, lean * 0.5, twist * 0.5);
+        else if (a.armBones.spine && !a.armBones.spine1) addLeanTwist(a.armBones.spine, lean, twist);
       }
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
       // spine, so upright must happen first) — skip mid-air/emote where the
@@ -3161,7 +3181,7 @@ function animate(W, a, dt) {
       if (layers && a.armBones && a.alive && !a.downed) {
         let lw = 0, lm = null;
         if (a.mantleT != null) { lm = "mantle"; lw = Math.sin(Math.PI * K.clamp(1 - a.mantleT / 0.45, 0, 1)); }
-        else if (a._slideT >= 0) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
+        else if (a._slideT >= 0 && !(a.clips && a.clips.slide)) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
         if (lm && lw > 0.01) applyLegPose(a.obj, a.armBones, lm, lw);
       }
       const wantW = mode ? 1 : 0;
@@ -3254,8 +3274,18 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
     _paOnceTs.timeScale = reloadTs(a, C.rifle_reload);
     playAnim(a, "rifle_reload", _paOnceTs);
   }
+  else if (a._slideT >= 0 && C.slide) {
+    // (P23-fix, LC-21) slide: the baked Mixamo slide (pelvis drops to ~0.25 m, the lead right leg out, chest curled over the
+    // rifle), started once per slide and played so its get-up ends with the slide (a._slideTs, slideStart); clamped at its end
+    if (a.anim !== "slide" || a._slideClipN !== a._slideN) {
+      a._slideClipN = a._slideN;
+      _paSlide.timeScale = a._slideTs;
+      playAnim(a, "slide", _paSlide);
+    }
+  }
   else if (a._slideT >= 0 && (C.rifle_crouch_g || C.rifle_crouch || C.crouch)) {
-    // (P23, LC-21) slide: a held crouch frame under the procedural slide legs (animate) and the lean-back (syncObj)
+    // (P23, LC-21) a build without the slide clip: a held crouch frame under the procedural slide legs (animate) and the
+    // lean-back (syncObj)
     playAnim(a, C.rifle_crouch_g ? "rifle_crouch_g" : C.rifle_crouch ? "rifle_crouch" : "crouch", PA_FREEZE);
   }
   else if (a.crouching && (C.rifle_crouch_g || (useMixamoGun && fam === "rifle" && C.rifle_crouch))) {
@@ -3327,6 +3357,7 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
 // (P23) shared option objects (playAnim and the kernel's play() only read them)
 const _paOnceTs = { once: true, timeScale: 1 }, _paTurn = { once: true, timeScale: 1, force: false };
 const _paJumpUp = { once: true, startAt: 0 }, _paLand = { once: true, timeScale: 1, startAt: 0, force: true };
+const _paSlide = { once: true, timeScale: 1, startAt: 0, force: true, fade: 0.12 };
 const AIR_CLIP_MIN_S = 0.16;          // unsupported for less than this (a stair, a kerb) keeps the ground clip
 // walk <-> run clip hysteresis (m/s). The ADS pace (3.8 m/s) stays on the WALK set (at ~2x): in game its strafes skate 0.91-1.16x
 // its forward, against 1.3-2.2x for the run strafes at 0.85x (F:/lc_p23/player/reports/calib2.log, calib3.log)
@@ -4028,12 +4059,21 @@ function underwaterFx(W, cam, wy, dt) {
 // Lane sim owns the K.* tunables of the shared contracts (C-DBNO, C-FALL); until they exist the defaults below apply, so this
 // file runs on its own and reads the sim's value the moment it is there.
 const kNum = (name, d) => (K && typeof K[name] === "number" && isFinite(K[name]) ? K[name] : d);
-// C-DBNO: 100 hp bleed pool, ~45 s on the first knock (+50 % drain per further knock this match), 1.4 m/s crawl, a 5 s revive
-// to 30 hp from <= 2 m. DOWNED_EYE_Y: the camera eye of a downed actor (on the ground with it).
-const DBNO_HP_DEF = 100, DBNO_BLEED_DEF = 100 / 45, DBNO_CRAWL_DEF = 1.4, REVIVE_S_DEF = 5, REVIVE_HP = 30, REVIVE_R = 2.0;
+// C-DBNO (integrator D3): sim's K is the single source - K.DBNO_HP, K.DBNO_BLEED_HPS, K.DBNO_KNOCK_MULT, K.DBNO_CRAWL, K.REVIVE_S,
+// K.REVIVE_HP, K.REVIVE_RANGE are read live on every use. The *_DEF values are only a stand-in for a build without the sim
+// constants (a stubbed probe page) and equal sim's: a 100 hp bleed pool drained in 60 s on the first knock (+50 % per further
+// knock this match), a 1.4 m/s crawl, a 5 s revive to 30 hp from <= 2.0 m. DOWNED_EYE_Y: the camera eye of a downed actor.
+const DBNO_HP_DEF = 100, DBNO_BLEED_DEF = 100 / 60, DBNO_KNOCK_MULT_DEF = 0.5, DBNO_CRAWL_DEF = 1.4;
+const REVIVE_S_DEF = 5, REVIVE_HP_DEF = 30, REVIVE_RANGE_DEF = 2.0;
 const DOWNED_EYE_Y = 0.5;
 const REVIVE_S = () => kNum("REVIVE_S", REVIVE_S_DEF);
-function dbnoBleed(a) { return kNum("DBNO_BLEED_HPS", DBNO_BLEED_DEF) * (1 + 0.5 * Math.max(0, (a.knocks || 1) - 1)); }
+const REVIVE_HP = () => kNum("REVIVE_HP", REVIVE_HP_DEF);
+const REVIVE_RANGE = () => kNum("REVIVE_RANGE", REVIVE_RANGE_DEF);
+/** bleed hp/s of a downed actor: sim's K.dbnoBleedRate(knocks) when it is there, else the same rule on the K numbers. */
+function dbnoBleed(a) {
+  if (K && typeof K.dbnoBleedRate === "function") { const r = K.dbnoBleedRate(a.knocks || 1); if (r > 0) return r; }
+  return kNum("DBNO_BLEED_HPS", DBNO_BLEED_DEF) * (1 + kNum("DBNO_KNOCK_MULT", DBNO_KNOCK_MULT_DEF) * Math.max(0, (a.knocks || 1) - 1));
+}
 // C-FALL defaults, in THIS game's gravity (22 m/s^2): a 4.2 m drop lands at 13.6 m/s (no damage), 10 m at 21.0 m/s (~42 hp),
 // 15 m at 25.7 m/s (~88 hp), 20 m at 29.7 m/s (~135 hp: lethal through any hp). Shield never absorbs it (PUBG).
 const FALL_SAFE_V_DEF = 13.6, FALL_PER_V_DEF = 2.1, LAND_STAGGER_DEF = 0.4, LAND_STAGGER_SPEED = 0.35, HARD_LAND_V = 16;
@@ -4074,24 +4114,25 @@ function finishHeal(W, a) {
 
 // ── C-DBNO (LC-15, owner OD-3: knock-and-revive in TEAM modes only) ──────────────────────────────────────────────────────
 const TEAM_MODES = { duo: true, trio: true, squad: true };
-/** Team mode: W.match.mode duo / trio / squad (C-MODE). "solo" never. Until lane boot sets the C-MODE value (today W.match.mode
- *  carries the pace: quick / standard / practice) a side is a team when two actors share a non-null teamId (the friends' SQUAD UP). */
+/** Team mode (C-MODE, integrator D4): exactly W.match.mode in { duo, trio, squad }. Anything else (solo, unset) is not. */
 function teamModeOn(W) {
-  if (W.mode === "practice") return false;
-  const m = W.match && W.match.mode;
-  if (m === "solo") return false;
-  if (TEAM_MODES[m]) return true;
-  return m !== "practice";
+  const m = W && W.match && W.match.mode;
+  return typeof m === "string" && TEAM_MODES[m] === true;
+}
+/** Same team (D4: the one rule player.js canRevive and bots.js sameTeam share): a non-empty teamId string, equal on both. */
+function sameTeam(a, b) {
+  return !!a && !!b && typeof a.teamId === "string" && a.teamId !== "" && a.teamId === b.teamId;
 }
 /** Does a lethal hit on `v` knock instead of kill: team mode, `v` has a team, and another member is alive and not downed.
- *  Never while gliding / swimming / already downed, never a practice dummy, never after the match. */
+ *  Never already downed, never a practice dummy, never after the match. D3 exceptions (documented): a victim who is GLIDING
+ *  (freefall or canopy) dies - no knock mid-air - and a SWIMMING victim dies too (a downed body cannot crawl in water). */
 function dbnoApplies(W, v) {
-  if (!v || !v.alive || v.downed || v.isDummy || !v.teamId || v.gliding || v.swimming || W.phase === "over") return false;
-  if (!teamModeOn(W)) return false;
+  if (!v || !v.alive || v.downed || v.isDummy || v.gliding || v.swimming || W.phase === "over") return false;
+  if (!teamModeOn(W) || !sameTeam(v, v)) return false;
   const A = W.actors;
   for (let i = 0; i < A.length; i++) {
     const b = A[i];
-    if (b !== v && b.alive && !b.downed && b.teamId === v.teamId && !b.isDummy) return true;
+    if (b !== v && b.alive && !b.downed && sameTeam(b, v) && !b.isDummy) return true;
   }
   return false;
 }
@@ -4125,7 +4166,7 @@ function finishDowned(W, v, killerId, weaponId) {
 /** TEAM ELIMINATION: when every member of `teamId` is downed or dead, the downed ones die (credited to whoever knocked each). */
 let _elimBusy = false;
 function teamElimCheck(W, teamId) {
-  if (!teamId || _elimBusy) return false;
+  if (typeof teamId !== "string" || teamId === "" || _elimBusy) return false;
   const A = W.actors;
   let up = 0, downed = 0;
   for (let i = 0; i < A.length; i++) {
@@ -4144,13 +4185,15 @@ function teamElimCheck(W, teamId) {
   W.events.emit("teamEliminated", teamId);
   return true;
 }
-/** Can `by` revive `t` right now: teammates, `by` up, `t` downed, within REVIVE_R (and 1.5 m of height), nobody else on it. */
+/** Can `by` revive `t` right now: teammates (sameTeam), `by` up, `t` downed, within K.REVIVE_RANGE (and 1.5 m of height),
+ *  nobody else on it. */
 function canRevive(W, by, t) {
   if (!by || !t || by === t || !by.alive || by.downed || !t.alive || !t.downed) return false;
-  if (!by.teamId || by.teamId !== t.teamId || by.gliding || by.swimming) return false;
+  if (!sameTeam(by, t) || by.gliding || by.swimming) return false;
   if (t._revivedBy && t._revivedBy !== by.id) { const o = W.actorById.get(t._revivedBy); if (o && o.alive && o._reviveOf === t.id) return false; }
   const dx = t.pos.x - by.pos.x, dz = t.pos.z - by.pos.z, dy = t.pos.y - by.pos.y;
-  return dx * dx + dz * dz <= REVIVE_R * REVIVE_R && dy > -1.5 && dy < 1.5;
+  const R = REVIVE_RANGE();
+  return dx * dx + dz * dz <= R * R && dy > -1.5 && dy < 1.5;
 }
 /** The reviver's side of the channel (copied from loot.js's chest channel: HOLD E, progress while held, reset on release).
  *  Runs for every up actor (human: E; bot: its brain's interactDown). true = channelling this tick (the reviver holds still). */
@@ -4162,12 +4205,12 @@ function reviveStep(W, a, inp, dt) {
     if (a._reviveT >= REVIVE_S()) { completeRevive(W, a, t); return false; }
     return true;
   }
-  if (!inp.interactDown || !a.teamId || a.healing) return false;
+  if (!inp.interactDown || !sameTeam(a, a) || a.healing) return false;
   const A = W.actors;
   let best = null, bd = 1e9;
   for (let i = 0; i < A.length; i++) {
     const t = A[i];
-    if (!t.downed || t.teamId !== a.teamId || !canRevive(W, a, t)) continue;
+    if (!t.downed || !sameTeam(t, a) || !canRevive(W, a, t)) continue;
     const d = (t.pos.x - a.pos.x) ** 2 + (t.pos.z - a.pos.z) ** 2;
     if (d < bd) { bd = d; best = t; }
   }
@@ -4186,7 +4229,7 @@ function completeRevive(W, a, t) {
   a._reviveOf = null; a._reviveT = 0;
   t._revivedBy = null;
   t.downed = false; t.downedHp = 0;
-  t.hp = REVIVE_HP; t.shield = 0;
+  t.hp = REVIVE_HP(); t.shield = 0;
   t.lastDamageT = W.t;
   t._turnT = -1; t._landKind = 0;
   W.events.emit("actorRevived", t, a);
@@ -4206,13 +4249,19 @@ function landed(W, a, v, wet) {
     if (a._slideT >= 0) slideEnd(W, a, false);
   } else if (v > 6) { a._landKind = 1; a._landUntil = W.t + 0.28; }
 }
-/** C-FALL damage for an impact at v: K.FALL_DMG_PER_V * (v - K.FALL_SAFE_V)^1.5 straight off hp (shield / armour never take
- *  it), the same lethal rule as any hit (a knock in a team mode). Events 'fallDamage'(a, dmg, v) and an 'actorHurt' with no
- *  attacker (hud's damage log reads that as "FALL / BLAST"). Returns the damage dealt. */
-function fallHurt(W, a, v) {
+/** C-FALL damage for an impact at v (integrator D2 / D3: sim's K is the single source): K.fallDamage(v) when sim exports it
+ *  (its D2 curve), else K.FALL_DMG_PER_V * (v - K.FALL_SAFE_V)^K.FALL_EXP. */
+function fallDmgAt(v) {
+  if (K && typeof K.fallDamage === "function") { const d = +K.fallDamage(v); return d > 0 ? d : 0; }
   const safe = kNum("FALL_SAFE_V", FALL_SAFE_V_DEF), per = kNum("FALL_DMG_PER_V", FALL_PER_V_DEF);
-  if (!(v > safe) || W.phase === "over") return 0;
-  const dmg = per * Math.pow(v - safe, 1.5);
+  return v > safe ? per * Math.pow(v - safe, kNum("FALL_EXP", 1.5)) : 0;
+}
+/** C-FALL: the fall damage straight off hp (shield / armour never take it), the same lethal rule as any hit (a knock in a team
+ *  mode). Events 'fallDamage'(a, dmg, v) and an 'actorHurt' with no attacker (hud's damage log reads that as "FALL / BLAST").
+ *  Returns the damage dealt. */
+function fallHurt(W, a, v) {
+  if (W.phase === "over") return 0;
+  const dmg = fallDmgAt(v);
   if (!(dmg > 0.05)) return 0;
   a.lastDamageT = W.t;
   W.events.emit("fallDamage", a, dmg, v);
@@ -4240,6 +4289,13 @@ function slideStart(W, a) {
   a._slideDx = a.vel.x / sp; a._slideDz = a.vel.z / sp;
   a._slideV = Math.max(SLIDE_PEAK, sp);
   a._slideT = 0;
+  // (P23-fix, LC-21) the slide clip's rate: its whole drop / hold / get-up over the time this slide's friction takes to reach
+  // the crouch-walk speed (9.5 m/s entry: 0.82 s -> ~1.7x), so the body is back up when the slide hands over to the crouch
+  a._slideN++;
+  const act = a.clips && a.clips.slide && a.rig && a.rig.actions ? a.rig.actions[a.clips.slide] : null;
+  const dur = act ? act.getClip().duration : 0;
+  const tEnd = Math.min(SLIDE_MAX_S, SLIDE_TAU * Math.log(a._slideV / SLIDE_END_V));
+  a._slideTs = dur > 0 && tEnd > 0.2 ? K.clamp(dur / tEnd, 1.1, 2.4) : 1;
   // the run ends in the slide: you come out of it crouched (C held / toggled) or walking, never back into a sprint by itself
   if (a === W.player) W._sprintLatch = false;
   W.events.emit("slideStart", a);
@@ -4350,8 +4406,8 @@ function squadDropTarget(W, teamId) {
 }
 /** Does `a` have a teammate in this match (another actor with its non-null teamId)? */
 function hasTeammate(W, a) {
-  if (!a || !a.teamId) return false;
-  for (const b of W.actors) if (b !== a && b.teamId === a.teamId && !b.isDummy) return true;
+  if (!sameTeam(a, a)) return false;
+  for (const b of W.actors) if (b !== a && sameTeam(b, a) && !b.isDummy) return true;
   return false;
 }
 /** OD-7: the local player's optional landing waypoint (null = none, the auto landing zone stays). Only while still in the air
@@ -4403,7 +4459,7 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   // calls this function. `att !== victim` preserves self-splash, and storm
   // damage passes a null attackerId so it is untouched.
   const att = attackerId ? W.actorById.get(attackerId) : null;
-  if (att && att !== victim && att.teamId && att.teamId === victim.teamId) return;
+  if (att && att !== victim && sameTeam(att, victim)) return;
   // (P23, C-DBNO) a DOWNED actor takes damage on its bleed pool (no shield, no flinch); at 0 it is finished
   if (victim.downed) return hurtDowned(W, victim, dmg, attackerId, weaponId, isHead, att);
   const res = K.applyDamage(victim.shield, victim.hp, dmg);
@@ -4671,7 +4727,7 @@ export function killActor(W, victim, killerId, weaponId) {
     // genre pinned the camera to your own corpse for the rest of the match.
     // Fall back to any survivor so the handover always happens.
     // (P23, LC-18) a SQUADMATE still in the match comes first (an up one before a downed one), then the killer, then anyone
-    const mates = victim.teamId ? W.actors.filter((x) => x.alive && x !== victim && !x.isDummy && x.teamId === victim.teamId) : [];
+    const mates = W.actors.filter((x) => x.alive && x !== victim && !x.isDummy && sameTeam(x, victim));
     const mate = mates.find((x) => !x.downed) || mates[0] || null;
     victim.spectating = (mate && mate.id) || killerId
       || (W.actors.find((x) => x.alive && x !== victim && !x.isDummy) || {}).id
