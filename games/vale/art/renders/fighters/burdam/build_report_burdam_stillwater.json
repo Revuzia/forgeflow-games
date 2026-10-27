@@ -40,29 +40,29 @@
   },
   "uv_coverage": 0.596,
   "bake": {
-    "base": 2.14,
-    "rough_metal": 1.73,
-    "normal": 1.25,
-    "ao": 1.96,
+    "base": 4.5,
+    "rough_metal": 3.78,
+    "normal": 6.59,
+    "ao": 8.79,
     "normal_fixed_px": 39959,
-    "projection": 89.4,
-    "pack_save": 89.53,
-    "total": 96.79
+    "projection": 116.51,
+    "pack_save": 116.68,
+    "total": 140.58
   },
   "tris": 22551,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2843328,
+  "glb_bytes_raw": 2841088,
   "optimize": {
     "ok": true,
-    "before": 2843328,
-    "after": 1139508
+    "before": 2841088,
+    "after": 1138492
   },
-  "glb_bytes": 1139508,
+  "glb_bytes": 1138492,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_stillwater.glb (1113 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_stillwater_base 2048x2048 238K, burdam_stillwater_normal 512x512 51K, burdam_stillwater_orm 512x512 79K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_stillwater.glb (1112 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_stillwater_base 2048x2048 237K, burdam_stillwater_normal 512x512 51K, burdam_stillwater_orm 512x512 79K",
       "  skinned meshes: burdam_accent(332v), burdam_stillwater(21675v)",
       "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -77,8 +77,8 @@
       "portrait": "art/out/fighters/burdam/burdam_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 7.23,
-      "portrait": 2.72
+      "splash": 5.6,
+      "portrait": 2.41
     }
   },
   "three_qa": {
@@ -110,24 +110,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_stillwater.png",
-    "seconds": 7.8,
+    "seconds": 6.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.18,
-      "model": 38.67,
-      "lows_bind": 3.72,
-      "uv": 2.99,
-      "bake": 96.79,
-      "export": 0.1,
+      "materials": 0.17,
+      "model": 37.6,
+      "lows_bind": 4.5,
+      "uv": 3.39,
+      "bake": 140.58,
+      "export": 0.12,
       "optimize": 0.43,
-      "load_test": 0.1,
-      "render": 9.99,
-      "three_qa": 7.95
+      "load_test": 0.09,
+      "render": 8.05,
+      "three_qa": 6.29
     },
-    "total_s": 160.96
+    "total_s": 201.28
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

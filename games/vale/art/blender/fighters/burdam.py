@@ -90,8 +90,9 @@ SKINS: list = [
      # fix pass 8 (the review: Stillwater kept the base's saturated gold mask, not the brief's paler #D4C9A9): the mask
      # a pale, less saturated ochre (b* ~+20 against the base's ~+42). The hex is the WHOLE mask's painted mean (the
      # inked eyes, tallies and the felt shadow under the chin included), so it sits well under the brief's lit-face
-     # hex: #C4B592 put the lit face at L* 92-96 in the splash (bone-white, past the bible's 86)
-     "parts": {"boots": "#30271F", "trousers": "#343E40", "mask": "#A29678"},
+     # hex: #C4B592 put the lit face at L* 92-96 in the splash (bone-white, past the bible's 86), #A29678 the sunlit
+     # crown at 91; #978B6F: the lit face L* 75 / b* +17 (the base's 67 / +41), the sunlit crown cap 88
+     "parts": {"boots": "#30271F", "trousers": "#343E40", "mask": "#978B6F"},
      "palette": {"sandstone": "#D4C9A9", "cloth2": "#363D3A", "rust": "#6F7B7A", "stone": "#C4C8C4",
                  "ironstone": "#3E4A4C", "leather": "#554A3E", "cloth": "#45504E", "under": "#343B3D",
                  "reed": "#7D8460", "dawnglass": "#8FB3A8"}},
