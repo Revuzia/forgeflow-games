@@ -1130,7 +1130,7 @@ def aubade_parts() -> list:
     hood.add(Ellipsoid((0.0, -0.118, 0.668), (0.135, 0.075, 0.052)), k=0.045)        # the chin of the cowl
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in hood.ops])                    # uncarved: rim + seam hug it
     hood.sub(pocket, k=0.012)
-    part(out, "hood", hood, "cloth2", "bone:head", 520, vs=0.8, uv=1.9, tint="#727A84", light=0.30, detail=0.6,
+    part(out, "hood", hood, "cloth2", "bone:head", 520, vs=0.8, uv=1.9, tint="#6C7279", light=0.30, detail=0.6,
          grad=(0.66, 0.95, 0.10), cav=0.16)
     # the carved chalk rim: 3.4 cm, 1.6 cm proud, crisp chamfered edges (a clean mesh on the cowl; the block joints
     # and scroll relief are painted)
@@ -1178,9 +1178,9 @@ def aubade_parts() -> list:
     for xc in (-A_STOLE_X, A_STOLE_X):
         cloak.add(shell((0.0, 0.0), Rc, 0.17, 0.645, 0.0075, 0.006, sy=A_CLOAK_SY,
                         extra=lambda P, xc=xc: a_stole_strip(P, xc)), k=0.0)
-    part(out, "cloak", cloak, "cloth", CLOAK_BIND, 720, vs=1.0, uv=1.35, tint="#4C5765", light=0.26, detail=0.75,
+    part(out, "cloak", cloak, "cloth", CLOAK_BIND, 720, vs=1.0, uv=1.35, tint="#4A525C", light=0.26, detail=0.75,
          grad=(0.15, 0.62, 0.22), cav=0.16, hang=1.0)
-    _sleeves(out, "cloth", 0.056, wraps=True, tint="#535E6B")
+    _sleeves(out, "cloth", 0.056, wraps=True, tint="#4F5761")
     _mitts(out, "cloth")
     _legs(out, felt=False)
     # PROPS: pale ash pole, chalk spire finial, angled chalk crook, hexagonal dawn lantern
@@ -1258,8 +1258,10 @@ def _aubade_lamp(out):
     glass = Sculpt("lamp_glass")
     glass.add(HexPrism(c, ap + 0.002, hh, 0.001), k=0.0)
     glass.sub(HexPrism(c, ap - 0.004, hh - 0.015, 0.001), k=0.0)
-    part(out, "lamp_glass", glass, "dawnglass", "bone:x_lamp_1", len(GF), vs=0.3, paint="proc", uv=0.30,
-         prim=("mesh", GV, GF))
+    # (fix round 4) a deeper smoked dawnglass round the core: the pale blue pane borders sat on the ally azure's hue and
+    # value (the lamp is the caster's biggest accent; its surround set the weak west-viewer read)
+    part(out, "lamp_glass", glass, "dawnglass", "bone:x_lamp_1", len(GF), vs=0.3, paint="proj", uv=0.30,
+         tint="#56677A", light=0.20, detail=0.0, cav=0.0, prim=("mesh", GV, GF))
     # slim chalk corner posts (4-sided, crisp) at the hexagon's corners
     PV, PF = [], []
     for k in range(6):
@@ -1401,8 +1403,8 @@ def serenade_parts() -> list:
     dome.add(lat, k=0.0)
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in dome.ops])
     dome.sub(pocket, k=0.012)
-    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#B0956F", light=0.26, detail=0.6,
-         grad=(0.70, 0.96, 0.10), cav=0.08)
+    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#978165", light=0.12, detail=0.6,
+         grad=(0.70, 0.96, 0.03), cav=0.08)      # (r4: a softer top light: the crown read L* 70 in game, cap 65)
     # ROLLED COLLAR (lower at the front) + the THICK dark felt roll round the opening (concept: 5.4 cm, 4 cm proud,
     # round), one felt mesh; the roll's ends sink into the collar, whose front is the sill
     roll = Sculpt("roll")
@@ -1468,16 +1470,16 @@ def serenade_parts() -> list:
     trim.add(Sphere(np.array([0.0, 0.0, 0.5]), 0.01), k=0.0)            # stand-in high (accent: never baked)
     mv, mf = ribbon(np.array(tp), np.array(tn), S_TRIM_HALF, lift=(0.0040, 0.0075))
     part(out, "mantle_band", trim, "accent", ("glim_mantle",), len(mf), vs=0.6, paint="accent", prim=("mesh", mv, mf))
-    part(out, "mantle", mantle, "cloth2", ("glim_mantle",), 250, vs=0.6, uv=1.3, tint="#B08F64", light=0.28,
+    part(out, "mantle", mantle, "cloth2", ("glim_mantle",), 250, vs=0.6, uv=1.3, tint="#9C8466", light=0.18,
          detail=0.6, grad=(0.47, 0.65, 0.12), cav=0.14, sym=False)      # (X-symmetric collapse creased the back)
     # CLOAK: a wide bell of warm umber felt (the concept's main value idea: light mantle over a dark cloak), soft
     # felt folds, the hem lifted so the boots show; the two ironstone hem bands are crisp paint
     cloak = Sculpt("cloak")
     clat, ccur = solid_lathe((0.0, 0.0, 0.0), S_CLOAK_OUT, sy=S_CLOAK_SY)
     cloak.add(clat.displaced(S_FOLDS, 0.015), k=0.0)
-    part(out, "cloak", cloak, "cloth", CLOAK_BIND, 420, vs=1.1, uv=1.25, tint="#79533A", light=0.26, detail=0.7,
+    part(out, "cloak", cloak, "cloth", CLOAK_BIND, 420, vs=1.1, uv=1.25, tint="#715444", light=0.26, detail=0.7,
          grad=(0.14, 0.60, 0.20), cav=0.16, hang=1.0)
-    _sleeves(out, "cloth", 0.054, wraps=False, tint="#7C553D")
+    _sleeves(out, "cloth", 0.054, wraps=False, tint="#735645")
     _mitts(out, "leather")
     _legs(out, felt=True)
     # PROPS: a thicker walnut pole with two sand-felt bindings (it vanished on dark ground at 3-4 px), round
@@ -1726,7 +1728,8 @@ def _cavity(P, N, keep=None, cell=0.025):
 # the hand-painted finish per culture: lit planes warm, shade cool (a painter's temperature shift, never grey);
 # Aubade linen / wool takes long vertical brush streaks, Serenade felt a soft mottle and fibre speckle
 PAINT_STYLE = {
-    "aubade": {"warm": (1.045, 1.0, 0.94), "cool": (0.90, 0.97, 1.10), "streak": 0.075, "mottle": 0.035, "fibre": 0.02},
+    # (fix round 4: a quieter cool shade - the blue-shaded linen sat on the ally azure's hue, dE 32-34 in game)
+    "aubade": {"warm": (1.045, 1.0, 0.94), "cool": (0.95, 0.985, 1.05), "streak": 0.075, "mottle": 0.035, "fibre": 0.02},
     # dusk felt: the shade stays warm (a blue-cool shade turned the umber cloak mauve: review 2026-10-27 item 4)
     "serenade": {"warm": (1.05, 1.0, 0.92), "cool": (0.97, 0.955, 0.955), "streak": 0.035, "mottle": 0.075, "fibre": 0.055},
 }

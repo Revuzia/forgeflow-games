@@ -1,0 +1,406 @@
+{
+  "id": "ulkro",
+  "fighter": "ulkro",
+  "skin": false,
+  "parts": {
+    "bind_torso": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "forearm.L",
+        "hand.L",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_torso": 1300,
+    "bind_straps": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "head",
+        "hand.L",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_straps": 518,
+    "bind_sash": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "shoulder.L",
+        "hand.L",
+        "shoulder.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_sash": 650,
+    "bind_sleeves": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_sleeves": 1300,
+    "bind_bracers": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_bracers": 620,
+    "bind_legs": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "foot.L",
+        "toe.L",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_legs": 800,
+    "bind_wraps": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "toe.L",
+        "toe.R"
+      ]
+    },
+    "tris_wraps": 800,
+    "bind_boots": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "thigh.R"
+      ]
+    },
+    "tris_boots": 718,
+    "tris_hood": 1750,
+    "tris_hood_tail": 376,
+    "tris_head": 750,
+    "tris_eyeband": 600,
+    "tris_cowl": 1050,
+    "tris_plate_R1": 520,
+    "tris_plate_R2": 360,
+    "tris_plate_L1": 520,
+    "tris_plate_L2": 360,
+    "tris_hand_R": 700,
+    "tris_hand_L": 650,
+    "tris_skirt": 1700,
+    "tris_quiver": 650,
+    "tris_quiver_bands": 360,
+    "tris_crest_shafts": 662,
+    "tris_crest_heads": 700,
+    "tris_crest_inlays": 420,
+    "tris_thrower": 660,
+    "tris_dart_head": 160,
+    "tris_dart_inlay": 90,
+    "validate_ulkro": "19234->19230",
+    "validate_ulkro_accent": "510->509"
+  },
+  "uv_coverage": 0.582,
+  "bake": {
+    "base": 2.65,
+    "rough_metal": 1.63,
+    "normal": 1.7,
+    "ao": 2.53,
+    "normal_fixed_px": 58691,
+    "projection": 32.13,
+    "pack_save": 32.27,
+    "total": 40.91
+  },
+  "tris": 19739,
+  "mesh_top_m": 2.019,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 22,
+      "duration_s": 0.7333,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.5,
+      "stride_m": 1.283,
+      "cycle_s": 0.733
+    },
+    "attack1": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "taunt": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 2813472,
+  "optimize": {
+    "ok": true,
+    "before": 2813472,
+    "after": 1142144,
+    "q_base": 70
+  },
+  "glb_bytes": 1142144,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro.glb (1115 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_base 2048x2048 236K, ulkro_normal 512x512 46K, ulkro_orm 256x256 27K",
+      "  skinned meshes: ulkro(19186v), ulkro_accent(255v)",
+      "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart_tip x_quiver thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.667s/20tr, attack2:0.667s/20tr, cast_a1:1.000s/22tr, cast_a2:0.500s/22tr, cast_a3:0.667s/20tr, cast_ult:0.833s/22tr, channel:1.333s/20tr, dash:0.500s/21tr, death:1.500s/22tr, idle:2.400s/20tr, idle_lobby:3.000s/22tr, recall:3.000s/20tr, run:0.733s/22tr, stunned:1.333s/20tr, taunt:2.000s/20tr, victory:1.500s/20tr",
+      "  tracks checked: 333; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 19739; bind-pose bounds (three units, Y up): 1.30 x 2.02 x 0.64; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
+      "  run: 22 f, planted samples 4, max foot-speed error 1.1%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ulkro/splash.png",
+      "portrait": "art/out/fighters/ulkro/portrait.png",
+      "icon": "art/out/fighters/ulkro/icon.png",
+      "turntable": "art/renders/fighters/ulkro/turntable.png"
+    },
+    "seconds": {
+      "splash": 7.46,
+      "portrait": 3.98,
+      "icon": 0.92,
+      "turntable": 3.73
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.591,
+        0,
+        -0.341
+      ],
+      [
+        0.707,
+        2.019,
+        0.303
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.606,
+    "accentPct": 1.84,
+    "accentTopHalfPct": 82.7,
+    "heightPx1080": 108,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 16,
+    "out": "art/renders/fighters/ulkro/three_ulkro.png",
+    "seconds": 12.8,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/ulkro/three_clips_ulkro.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.16,
+      "model": 1.72,
+      "lows_bind": 1.74,
+      "uv": 4.84,
+      "bake": 40.91,
+      "clips": 0.09,
+      "export": 0.75,
+      "optimize": 0.55,
+      "load_test": 0.12,
+      "render": 16.14,
+      "three_qa": 26.74,
+      "cache": 0.09
+    },
+    "total_s": 93.88
+  },
+  "run_ref_speed": 3.5,
+  "height_m": 1.83
+}

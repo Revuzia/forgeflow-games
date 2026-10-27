@@ -283,6 +283,13 @@ function install() {
       if (m.lanes.length >= 3) s.jungle = [W * 0.33, H * 0.28];
       s.centre = [W / 2, H / 2];
       if (!m.lanes.length) s.north = [W / 2, H * 0.3];
+      // FRAY: a ring of seat spots (r 26, every 36°: each seat's spawn and respawn view, which sees the rim, the rim
+      // wall and the fair's court beyond it)
+      const pl = m.art?.terrain?.plate;
+      if (pl && Array.isArray(pl.at)) {
+        const RN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+        for (let k = 0; k < 10; k++) { const a = (k * 36 * Math.PI) / 180; s[`seat${RN[k]}`] = [pl.at[0] + Math.sin(a) * 26, pl.at[1] - Math.cos(a) * 26]; }
+      }
       const f = b.fight();
       if (f) s.fight = [f.x, f.y];
       return s;

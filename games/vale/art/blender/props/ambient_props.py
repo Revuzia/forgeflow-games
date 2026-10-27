@@ -12,7 +12,8 @@ effects in content/vfx.json add the flames and the lantern glow at their `fx` po
   resin_lamp       a walnut post on an ironstone block with an open lampresin dish under an iron cap on three
                    rods (the flame is the amb_*_resin_flame effect at `fx`, 1.74 m up).
   bunting          a fair garland: two posts 8 m apart, a sagging cord and fourteen muted cloth pennants (linen,
-                   rose-lilac lacquer, sage, ochre, slate; never a seat colour, saturation <= 0.3).
+                   rose-lilac lacquer, grey sage, ochre, undyed grey; never a seat colour, muted; the map's
+                   `fill` lifts them under the Noonplate's overhead sun).
   fair_lantern     a shepherd's-crook post with a round ribbed paper lantern (the glow is amb_fray_lantern_glow).
   shallows_pads    a raft of dial-lilies for the Fallen Shaft's shallows: four round floating leaves, each notched to
                    its centre like a dial and its gnomon slot, and one closed pale bud (they bob on the water).
@@ -277,7 +278,10 @@ def resin_lamp() -> Prop:
     return pr
 
 
-FAIR = ["#A69D8A", "#7E6474", "#66705A", "#8C6E42", "#59616B"]
+# the fair's cloths: linen, a pale rose-lilac lacquer, grey sage, ochre and a warm undyed grey (no blue slate: a dark
+# cool pennant reads as the Indigo or Blue seat in play). All but the ochre stay at HSV saturation <= 0.17; the ochre (0.53 at
+# mid value) is the one warm accent, and no seat is ochre. None is a seat colour
+FAIR = ["#A69D8A", "#8E7A80", "#7C8270", "#8C6E42", "#77716A"]
 
 
 def bunting() -> Prop:

@@ -348,7 +348,13 @@
    "props": { "$comment": "none (brief \u00a74: the Noonplate is a clean stone stage; no foliage beyond the rim, where the fair's stands are landmarks)", "tree": [], "rock": [], "stone": [] },
    "propValue": {"$comment": "r12 B5 value rebase: linear multipliers on the authored props' colours so they land in tokens grade.maps.fray.valueLstar (render/terrain.ts propValue)", "landmark": 0.46},
    "$comment": "the Noonplate at the Shadowless Noon: honed pale dial-stone, luminous under the overhead sun (lane), the ten hour-lines and numerals inlaid dark basalt (inscription), the cart ring a mid inlay (midInlay), a carved hour-ring round the marks; hour-stones and rim stay basalt",
-   "colors": {"lane": "#544832", "jungle": "#343230", "clearing": "#3D3B36", "inscription": "#353330", "midInlay": "#45433D", "cliffFace": "#3E3D40", "cliffLip": "#45433E", "edgeLight": "#53504A", "cliffTop": "#C1BCB3", "moss": "#34402F", "grassRoot": "#2A342B", "grassTip": "#8B946C"},
+   "colors": {"lane": "#544832", "jungle": "#343230", "clearing": "#3D3B36", "inscription": "#353330", "midInlay": "#45433D", "cliffFace": "#3E3D40", "cliffLip": "#45433E", "edgeLight": "#53504A", "cliffTop": "#75726C", "moss": "#34402F", "grassRoot": "#2A342B", "grassTip": "#8B946C"},
+   "edgeFog": {
+    "$comment": "r12 B5: past the bounds the fair's court hazes to its own mid-tone (cliffTop, L* <= 52 on screen), never the old white glare",
+    "color": "#7A7770",
+    "startOutsideM": 4,
+    "fullOutsideM": 18
+   },
    "hourMarks": "spawns[] in seat order I-X, clockwise from 12",
    "wallHeights": {
     "hourStones": 1.2,
@@ -569,7 +575,7 @@
    ]
   },
   "ambient": {
-   "$comment": "r12 M14 ambient life (see map_rift): the Shadowless Noon fair off the plate (bunting and paper lanterns on the rim by the stands, resin lamps, petals over the stands, the glare's haze along the rim) and dialwrens on the plate's outer ring between the hour-marks. No motes of light: those are Sunmotes.",
+   "$comment": "r12 M14 ambient life (see map_rift): the Shadowless Noon fair off the plate (bunting and paper lanterns on the rim by the stands, resin lamps, petals over the stands, the glare's haze along the rim) and dialwrens on the fair's court just past the rim wall, between the hour-marks (never on the plate: the whole stage is the fight). No motes of light: those are Sunmotes.",
    "seed": 3301,
    "effects": [
     {
@@ -672,53 +678,53 @@
      "scale": 1.5,
      "spots": [
       [
-       40.6,
-       5.5,
+       42.1,
+       0.8,
        1.2
       ],
       [
-       54.6,
-       15.6,
+       58.5,
+       12.7,
        1.2
       ],
       [
-       59.9,
+       64.8,
        32.0,
        1.2
       ],
       [
-       54.6,
-       48.4,
-       1.2
-      ],
-      [
-       40.6,
        58.5,
+       51.3,
        1.2
       ],
       [
-       23.4,
-       58.5,
+       42.1,
+       63.2,
        1.2
       ],
       [
-       9.4,
-       48.4,
+       21.9,
+       63.2,
        1.2
       ],
       [
-       4.1,
+       5.5,
+       51.3,
+       1.2
+      ],
+      [
+       -0.8,
        32.0,
        1.2
       ],
       [
-       9.4,
-       15.6,
+       5.5,
+       12.7,
        1.2
       ],
       [
-       23.4,
-       5.5,
+       21.9,
+       0.8,
        1.2
       ]
      ]
@@ -770,7 +776,8 @@
       ]
      ],
      "scale": 1.0,
-     "sway": 0.07
+     "sway": 0.07,
+     "fill": 0.35
     },
     {
      "model": "assets/props/ambient/fair_lantern.glb",
@@ -870,7 +877,7 @@
    "sunColor": "#FFF3E6",
    "sunIntensity": 3.0,
    "ambient": 0.55,
-   "fogColor": "#E6E1D6",
+   "fogColor": "#75726C",
    "fogDensity": 0.0,
    "exposure": 1.0
   },

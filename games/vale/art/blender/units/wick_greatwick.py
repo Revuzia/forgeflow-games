@@ -2120,7 +2120,7 @@ _AL = AUB_LANT
 # cracks, stone courses and wood grain, they stay crisp at any distance.
 _CHALK = {"kind": "stone", "hex": "#D6D3CA", "light": (0.80, 1.07), "cracks": 0.07, "crack_t": 0.72, "freq": 6.0,
           "mottle": 0.05, "edge": 0.16, "cavity": 0.40, "edge_w": 0.012}
-_CHALK_LANT = dict(_CHALK, hex="#ABA89F", light=(0.78, 1.0), edge=0.22, cavity=0.48)
+_CHALK_LANT = dict(_CHALK, hex="#9A978F", light=(0.78, 1.0), edge=0.22, cavity=0.48)
 _ASH = {"kind": "wood", "hex": "#B5A68C", "light": (0.80, 1.08), "edge": 0.12, "cavity": 0.30, "edge_w": 0.008}
 _IRON = {"kind": "iron", "hex": "#4B4039", "edge": 0.38, "cavity": 0.40, "edge_w": 0.012}   # painted, not granite
 _WALNUT = {"kind": "wood", "hex": "#5A4436", "light": (0.82, 1.18), "edge": 0.22, "cavity": 0.30, "edge_w": 0.008}
@@ -2151,12 +2151,12 @@ PAINT = {
             # by the key (lit crown and front-left, the nape and the drape in shade)
             # (fix round 3) L* <= 65 at the game camera (r12 B5 / M8: the hoods sat at 70-80 in game) and PAINTED: soft
             # cowl folds running back from the rim, a nape crease, wool brushwork, a lit crown (it read as smooth plastic)
-            "hood": {"kind": "cowl", "hex": "#7E8A97", "light": (0.70, 1.12), "key": 0.12, "brush": 0.06,
+            "hood": {"kind": "cowl", "hex": "#77828E", "light": (0.70, 1.10), "key": 0.12, "brush": 0.06,
                      "centre": (-0.022, 0.02, 0.93), "folds": 7, "fold": 0.16},
             "hood_rim": dict(_CHALK, hex="#B8B4AA", light=(0.80, 1.05), cracks=0.05, edge=0.20,
                              arch=(AUB_ARCH, AUB_RIM_JOINTS, -0.03)),
             # (fix round 3) the knob and the clasp ring a shade under the chalk (in game the hood's top read L* 78 at p80)
-            "knob": dict(_CHALK, hex="#BDB9AF"), "clasp": dict(_CHALK, hex="#B3AFA5", edge=0.22), "pommel": _CHALK,
+            "knob": dict(_CHALK, hex="#A8A49B"), "clasp": dict(_CHALK, hex="#B3AFA5", edge=0.22), "pommel": _CHALK,
             "stole": {"kind": "linen", "hex": "#D9D5CB"},
             "sleeve_L": dict(_AUB_CLOTH, cuff="#55606C"), "sleeve_R": dict(_AUB_CLOTH, cuff="#55606C"),
             "mitt_L": {"kind": "mitt", "hex": "#525C68"}, "mitt_R": {"kind": "mitt", "hex": "#525C68"},
@@ -2174,9 +2174,9 @@ PAINT = {
             "haft": _ASH, "shelf": _ASH,
             # (fix round 4) the lantern's chalk a step down (in game its roof and frame were the brightest non-accent
             # thing in a wave, p95 L* 71-74 over the fighters' 42-66): weathered chalk, the read from cavity and lit edges
-            "frame_posts": dict(_ASH, hex="#A2957E", segs="frame"),
+            "frame_posts": dict(_ASH, hex="#958972", segs="frame"),
             "lantern_bars": _CHALK_LANT, "lantern_slabs": _CHALK_LANT, "spires": dict(_CHALK_LANT, cracks=0.05),
-            "lantern_roof": dict(_CHALK_LANT, hex="#A19E95"),
+            "lantern_roof": dict(_CHALK_LANT, hex="#929088"),
             # (fix round 3) a deeper dawnglass with a dim frost (the core is the light: a near-white bloom out-valued the
             # ally azure, so the west viewer saw a blue hole in white glass)
             "lantern_glass": {"kind": "glass", "hex": "#7F8D9A", "frost": "#98A5B1", "bloom": 0.40,
@@ -2184,7 +2184,7 @@ PAINT = {
         },
         "gw_top": {
             "lantern_roof": {"kind": "roof", "box": (_A_LANT[0], _A_LANT[1], _AL["hw"] + _AL["eave"], _AL["hd"] + _AL["eave"]),
-                             "from": 0.5, "hex": "#A19E95"},
+                             "from": 0.5, "hex": "#929088"},
         },
         # ghost paint the projected cloak must not take (CIE L*a*b* tests on the plate): the sheet's warm ash haft
         # and frame (b* > 3), its chalk stoles / hammer (L* > 80), the black gap of its open robe (L* < 20)
@@ -2227,8 +2227,8 @@ PAINT = {
             # soot blotches by the hood)
             # sand / ochre felt (fix 4: #D2B994 / #D4BE99 read near-white cream under the game light; the sheet's
             # felt is ochre): 39-40 % saturation (the reserved-band cap), lower value, modelled by the key
-            "mantle": {"kind": "cloth", "hex": "#A88B66", "light": (0.68, 1.08), "key": 0.14, "brush": 0.06, "felt": True},
-            "hood": {"kind": "cowl", "hex": "#9D8565", "light": (0.70, 1.06), "key": 0.14, "brush": 0.05, "felt": True,
+            "mantle": {"kind": "cloth", "hex": "#A08562", "light": (0.68, 1.02), "key": 0.14, "brush": 0.06, "felt": True},
+            "hood": {"kind": "cowl", "hex": "#958061", "light": (0.68, 0.98), "key": 0.14, "brush": 0.05, "felt": True,
                      "centre": (-0.035, 0.03, 1.07), "folds": 5, "fold": 0.10},
             "hood_rim": {"kind": "felt", "hex": "#45392F", "light": (0.80, 1.40), "nap": 0.06},
             "hollow_floor": {"kind": "flat", "hex": "#17150F", "light": (1.0, 1.0), "noise": 0.03},
@@ -2258,7 +2258,7 @@ PAINT = {
             "drum_panes": {"kind": "resin", "hex": "#8A6640", "deep": "#523822"},
             # (fix round 4) the lid a step darker than the hood, low, framed by an ironstone rim (no crossed straps:
             # the pale 'hot-cross bun' over the hood): the lit window band is the brightest read on the back
-            "drum_lid": {"kind": "lid", "hex": "#857055", "rib": "#3A2E26", "edge": 0.18, "cavity": 0.35, "edge_w": 0.008},
+            "drum_lid": {"kind": "lid", "hex": "#7E6A51", "rib": "#3A2E26", "edge": 0.18, "cavity": 0.35, "edge_w": 0.008},
             "frame_posts": dict(_WALNUT, segs="posts"),
             "pack": {"kind": "pack", "hex": "#6E5848", "light": (0.70, 1.12), "key": 0.12, "nap": 0.04,
                      "strap": "#45362C", "edge": 0.20, "cavity": 0.35, "edge_w": 0.010},

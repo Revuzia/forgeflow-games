@@ -420,3 +420,30 @@ art/out/units/shieldwick_{aubade,serenade}.glb, art/renders/units/*shieldwick*.
   edge / cavity layers, richer than round 2 but not a full hand-painted texture (the Serenade dome reads a little
   plaster-like up close); Serenade-under-ally-azure contrast dipped 38 -> 35 dE2000 (still high); common/anim
   _solve_foot's pitch sign (worked around in Shieldwick._ft).
+
+## Fix round 4 (wicks fix round 3 review, 2026-10-27; all four kinds in one pass)
+- SHARED HOOD LIGHT (wick_common: cap_mesh / halo_mesh / inject_halo / install_halo_export): the core is the front of a
+  16-round ellipsoid, wider than tall, ~3 cm behind the opening and centred between the sill and the arch top; round it a
+  HALO cap 2.0 x the core (a shallow dome through the core's middle: no parallax slide in 3/4 or leaned views), drawn with
+  the kept material `glow_halo`. The export hook (before the optimizer) renames it `accent` (BLEND; the renderer and the
+  crowd path tint every material of that name per viewer) and writes COLOR_0 with vertex alpha 0.85 over the core's
+  outline falling as (1 - s)^1.5 to 0 at the rim (per cap, from its own geometry: PCA of the welded vertices). The accent
+  stays factor-only (load test green). Lamp panes can use `glow_halo_lamp` (1.6 x, used on the greatwick Aubade lantern).
+- Measured (three.js, the review's rv.mjs close-ups, 3/4 eye level, ally tint), L* every 3 px out from the core's edge:
+  before 60 -> 16 (shieldwick) / 60 -> 3 (brightwick) in one step; now e.g. shieldwick Aubade 61 55 49 45 40 36 32 28 25 22
+  19 17, above 51 49 44 39 34 30 26 21 17 14 12 10 8; the same soft fall on all eight (scratchpad wick_r4/close,
+  hood_sheet_r4.png). Core centre in the opening (eye level, 3/4): shieldwick A 0.47, greatwick A 0.51, brightwick A 0.50,
+  glimwick A 0.46 / S 0.52 (was 0.16 on the sill).
+- In game (Rift seed 7, t 74 / 84, zoom 28.5, High 1080p and Low 720p, seats 0 and 5; review tools ig.mjs + analyze.py,
+  working-tree GLBs served in every wick slot): see the per-kind lines below. Fighters' top quarter in the same frames
+  L* 42-66.
+- shieldwick: core 7.8 x 4.8 cm (was 10 x 6.2, 10-gon) + halo; the throat's painted lamplight wider (reach 1.5 core radii,
+  0.85). Aubade: the drawn volutes on the chalk frame replaced by one continuous carved scroll relief (soft groove, lit /
+  shaded lips, rounded lobes); all cloth matte (roughness 0.90-0.95 in the ORM: the satin sheen on the cloak's back is
+  gone). Serenade: a dome-crown value ramp (x0.85 at the crown), the crown band 3.7 -> 3.2 cm, the hood-hem band 4.5 ->
+  3.5 cm (the accent gate with the halo), shield pads 12 -> 10 segments, the lid one ring less, the shield mitt 10 segments.
+  Gates: A 2997 tris / 358 KiB / accent 5.94 % (top half 74 %), S 2993 / 337 KiB / 5.66 % (86 %); top 1.080 / 1.086 m;
+  load test OK, idle / run / attack1 / death present.
+  In game: Aubade under the ally azure dE76 45.4-48.5 (dL 18-20), under marigold 81-91; Serenade under azure 60.7-66.1;
+  hood top quarter A 60-62, S 63-64 (was 67-69); body p95 60-64; reserved bands: azure 0 %, marigold 0.9-3.5 %.
+  Open: the arms are still faceted tubes (no tri headroom: 2997 / 2993 of 3000); paint is richer but not Marund-level.

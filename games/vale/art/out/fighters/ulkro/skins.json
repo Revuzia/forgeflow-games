@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ulkro_highrim",
+    "fighter": "ulkro",
+    "model": "assets/fighters/ulkro/ulkro_highrim.glb",
+    "portrait": "assets/fighters/ulkro/ulkro_highrim_portrait.png",
+    "splash": "assets/fighters/ulkro/ulkro_highrim_splash.png"
+  },
+  {
+    "id": "ulkro_long_evening",
+    "fighter": "ulkro",
+    "model": "assets/fighters/ulkro/ulkro_long_evening.glb",
+    "portrait": "assets/fighters/ulkro/ulkro_long_evening_portrait.png",
+    "splash": "assets/fighters/ulkro/ulkro_long_evening_splash.png"
+  }
+]

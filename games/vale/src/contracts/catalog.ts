@@ -489,9 +489,11 @@ export const AmbientArt = z.object({
   critters: z.array(z.object({ id: Id, model: AssetRef, kind: z.enum(['flier', 'runner', 'circler']), count: z.number().int().positive(),
     scale: z.number().positive().optional(), flee: z.number().positive().optional(), height: z.number().optional(),
     spots: z.array(z.tuple([z.number(), z.number(), z.number().positive()])).min(1) }).strict()).default([]),
-  /** static swaying props (banners, lamps, bunting): `sway` = metres at the cloth's free edge; `fx` an effect on each */
+  /** static swaying props (banners, lamps, bunting): `sway` = metres at the cloth's free edge; `fill` an emissive floor
+   *  (0-0.6 of the cloth's albedo) for cloth hung vertically under a high sun; `fx` an effect on each */
   props: z.array(z.object({ model: AssetRef, at: z.array(z.tuple([z.number(), z.number(), z.number()])).min(1),
     scale: z.number().positive().optional(), value: z.number().positive().optional(), sway: z.number().nonnegative().optional(),
+    fill: z.number().min(0).max(0.6).optional(),
     fx: z.object({ vfx: Id, offset: z.tuple([z.number(), z.number(), z.number()]) }).strict().optional() }).strict()).default([]),
 }).strict();
 

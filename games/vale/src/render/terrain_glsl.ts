@@ -215,7 +215,22 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float fh, jw, fv, jv, fr, jr;
     // road: honed pale flags, polished toward the centre line, moss only in the outer joints
     vec3 roadBand = uLane * ( 1.0 + 0.05 * ( 1.0 - smoothstep( 0.0, uLaneHalf, laneD ) ) + 0.07 * ( nMid - 0.5 ) + 0.04 * ( nBig - 0.5 ) );
-    vec3 roadC = valeFlag( roadBand, fl, grainN, chip, 0.04, uGrout, 0.12, fh, jw );
+    // painted wear at the scale of a fight (r12 B5): broad drifts of pale dial-dust where few feet go, a polished
+    // walked track down the middle, flags chipped and broken toward the verges. Value-neutral (the dust keeps the
+    // stone's luminance, ±3 % at most), so the walked stone stays one quiet band (walkable p95 - p5 <= 45)
+    float wearN = valeFbm( p * 0.07 + 17.3 );
+    float dustP = smoothstep( 0.5, 0.72, wearN + ( nMid - 0.5 ) * 0.35 ) * smoothstep( 0.6, uLaneHalf - 0.4, laneD + ( n2 - 0.5 ) * 0.8 );
+    float trackP = 1.0 - smoothstep( 0.4, 1.6, laneD + ( nMid - 0.5 ) * 0.9 );
+    vec3 dustTone = mix( uLane, uClearing * ( dot( uLane, vec3( 0.2126, 0.7152, 0.0722 ) ) / max( dot( uClearing, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ) ), 0.6 );
+    roadBand = mix( roadBand, dustTone * ( 1.0 + 0.03 * ( n2 - 0.5 ) ), dustP * 0.75 );
+    roadBand *= 1.0 + 0.025 * trackP;
+    vec3 grainR = mix( grainN, vec3( 1.0 ), max( dustP * 0.55, trackP * 0.35 ) );
+    float chipR = chip * ( 1.0 + 2.2 * smoothstep( uLaneHalf - 2.0, uLaneHalf - 0.3, laneD + wob * 0.5 ) );
+    vec3 roadC = valeFlag( roadBand, fl, grainR, chipR, 0.04, uGrout, 0.12, fh, jw );
+    // the dust drifts into the joints and softens the bevels: under a drift the flag pattern fades (painted, not stamped)
+    float dustJ = smoothstep( 0.2, 0.8, dustP + ( valeNoise( p * 1.7 ) - 0.5 ) * 0.5 );
+    roadC = mix( roadC, dustTone * 0.94 * mix( vec3( 1.0 ), grainN, 0.3 ), jw * dustJ * 0.85 );
+    fh *= 1.0 - 0.75 * dustJ;
     float edgeMoss = smoothstep( uLaneHalf - 1.6, uLaneHalf - 0.3, laneD + wob * 0.6 );
     roadC = mix( roadC, mossC * 0.8, jw * edgeMoss * 0.85 );
     // the inscription band (0.3 m) on each outer edge, a carved strip with chalk hour-ticks
@@ -323,11 +338,12 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   col *= 1.0 + 0.05 * czL * ( 1.0 - bandS );
   col = mix( col, bandC, bandS ); h = mix( h, -cz * 0.006, bandS ); h -= cz * 0.006 * ( 1.0 - bandS );
   rough = mix( rough, 0.75, bandS );
-  // the fracture: dark broken lips, a lit seam deep inside
+  // the fracture: dark broken lips, a lit seam deep inside. Its core is capped at ~luma 160 (L* 65, r12 B5): the
+  // fracture reads by contrast against its dark lips, never as a near-white line where telegraphs and skill shots draw
   col = mix( col, col * 0.45, litE );
-  col = mix( col, uLitC * 0.55, lit );
+  col = mix( col, uLitC * 0.24, lit );
   col = mix( col, col * 1.1, litGlow * ( 1.0 - lit - litE ) );
-  emit = uLitC * ( lit * 0.75 + litGlow * 0.05 * ( 1.0 - litE ) );
+  emit = uLitC * ( lit * 0.13 + litGlow * 0.04 * ( 1.0 - litE ) );
   h -= lit * 0.012 + litE * 0.01;
 #endif
 #ifdef VALE_STYLE_PLATE
@@ -363,7 +379,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   // carved grooves (the hour-ring, the half-hour ticks): a dark channel, its far wall catching the sun
   float cg = 1.0 - smoothstep( -aa, aa, inl.g );
   float cgL = ( 1.0 - smoothstep( -aa, aa, inl.g - 0.035 ) ) - cg;
-  col = mix( col, col * 0.42, cg );
+  col = mix( col, col * 0.52, cg );
   col *= 1.0 + 0.1 * cgL;
   h -= cg * 0.012;
   gSheen *= 1.0 - cg;
@@ -516,6 +532,8 @@ uniform sampler2D uTexGrain, uTexMoss, uTexLitter;
 uniform sampler2D uSplat2; uniform vec2 uSplatScale;
 uniform vec3 uTempW, uTempE; uniform float uTempK; uniform vec2 uMapSize;
 uniform float uStoneTop;   // 1: a clean stone stage (no moss, pale glare tops); 2: the gorge's bare rim plateau
+uniform vec3 uPlateW;      // the Noonplate's centre (x, z) and radius: the fair's court beyond its rim
+uniform vec3 uGlareNear;   // the court's stone by the rim wall (the plate's own value); it hazes out to uTop
 float cH; float cRough;
 `;
 
@@ -609,12 +627,26 @@ export const WALL_MAIN_GLSL = /* glsl */`
       // a low carved block (an hour-stone): basalt cap, chalk-lit by the lip around it
       c = uLip * 0.62 * mix( vec3( 1.0 ), tq.rgb / valeTexMean( uTexGrain ), 0.6 );
       h = ( tq.a - 0.6 ) * 0.03;
+      rough = 0.7;
     } else {
-      // beyond the rim: the noon glare, pale and featureless
-      c = uTop * ( 0.99 + 0.02 * valeNoise( q * 0.08 ) );
-      h = 0.0;
+      // beyond the rim: the fair's court at the Shadowless Noon (r12 B5). Worn chalk-stone setts (cobbled, never the
+      // plate's honed rings) start at the plate's own value by the rim wall (uGlareNear) and dissolve outward into the
+      // noon haze (uTop, a hazier mid-tone, L* <= 52 on screen): still the bright boundary the plate sits in, never
+      // the top of the value range (tokens grade.maps.fray.fog.rimGlare)
+      vec2 pq = P.xz;
+      float dr = length( pq - uPlateW.xy ) - uPlateW.z;
+      float hz = smoothstep( 0.8, 9.0, dr + ( valeNoise( pq * 0.07 ) - 0.5 ) * 3.0 );
+      vec4 rf = valePavers( pq + vec2( valeNoise( pq * 0.3 ), valeNoise( pq * 0.3 + 5.0 ) ) * 0.5, 1.7 );
+      vec3 gN = mix( vec3( 1.0 ), tq.rgb / valeTexMean( uTexGrain ), 0.45 );
+      float fh, fj;
+      vec3 court = valeFlag( uGlareNear * ( 0.92 + 0.14 * valeNoise( pq * 0.11 + 3.0 ) ), rf, gN, chip * 0.6, 0.04, mix( uGlareNear * 0.76, uTop * 0.85, hz ), 0.14, fh, fj );
+      // chalk dust drifted over the joints and the worn slabs, thicker further out
+      float dust = smoothstep( 0.45, 0.8, valeNoise( pq * 0.21 + 7.0 ) * 0.75 + hz * 0.45 );
+      court = mix( court, uTop * 0.82 * gN, dust * 0.45 );
+      c = mix( court, uTop * ( 0.95 + 0.1 * valeNoise( pq * 0.05 ) ) * mix( vec3( 1.0 ), gN, 0.25 ), hz );
+      h = fh * ( 1.0 - hz ) * 0.8;
+      rough = 0.86;
     }
-    rough = 0.7;
   } else if ( kind == 6 ) {
     // the block's top: the Dialwood's own floor in the shade of its canopy — dark moss and drifts of fallen fan
     // leaves, a step DARKER than the walkable Dialwood floor below (dark wall, light floor: the value law), so a

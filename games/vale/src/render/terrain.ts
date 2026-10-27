@@ -921,6 +921,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
 
   // ── the gorge (wallStyle "gorge"): the deck's flank, raw rock, far walls, carved bands, spires ──────
   const stackPos: number[] = [], stackIdx: number[] = [];
+  /** the carved hour-bands' notches (groundAt: a critter perched on a band stands on its crown, bandH) */
+  const bandNotches: V2[][] = [];
   /** the gorge's own triangles in the wall mesh (flank, far walls, bands): the mist banks fade where they cut them */
   const gorgeV0 = wm.pos.length;
   let gorgeV1 = gorgeV0;
@@ -992,6 +994,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       // a crown rising to bandH at the edge, rolling over it and down the flank, proud of it; both ends cut
       // square (planar caps, so the gorge never shows through), rounded shoulders in the normals
       notches.forEach((notch, m) => {
+        bandNotches.push(notch);
         const a = notch[0], b = notch[notch.length - 1];
         const dx = b[0] - a[0], dy = b[1] - a[1], cl = Math.hypot(dx, dy) || 1;
         const tx = dx / cl, ty = dy / cl;
@@ -1034,6 +1037,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     uMistHi: { value: lin(colors.mist).multiplyScalar(0.5) }, uMistLo: { value: lin(colors.mist).multiplyScalar(0.17) },
     uMistK: { value: gorge ? 0.06 : 0 }, uEarthC: { value: lin(colors.earth) },
     uStoneTop: { value: surface === 'plate' ? 1 : gorge ? 2 : 0 }, uCanopy: { value: lin(colors.canopy) },
+    // the Noonplate's fair court beyond the rim: it starts at the plate's own stone by the rim wall and hazes out to
+    // uTop (r12 B5: the bright boundary in the environment band, never the top of the value range)
+    uPlateW: { value: new Vector3(plateAt[0], plateAt[1], plateR) }, uGlareNear: { value: ((c: Color) => c.lerp(new Color(lum(c), lum(c), lum(c)), 0.5).multiplyScalar(0.98))(lin(colors.lane)) },
     uSplat2: { value: splat2Tex }, uSplatScale: gu.uSplatScale,
     uTexGrain: tex.grain, uTexMoss: tex.moss, uTexLitter: tex.litter,
   };
@@ -1710,6 +1716,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) continue;
         if (pointInPolygon(x, y, walls[i])) return wallHeights[i];
       }
+      for (const nq of bandNotches) if (pointInPolygon(x, y, nq)) return bandH;
       const out = gorge ? x < 0 || x > SX : x < 0 || x > SX || y < 0 || y > SY;
       return out ? RH : 0;                                                   // the carved rim round the plate
     },

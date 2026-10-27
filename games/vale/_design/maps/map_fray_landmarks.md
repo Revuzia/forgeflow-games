@@ -30,7 +30,7 @@ The sun is at 86° elevation, so shadows pool straight under everything. Height 
 | **Inner ring** (r 15) | Sunmote dishes: shallow flush bowls where the motes fall. Mending at 18°, 90°, 162°, 234° and 306°; Quick at 54°, 126°, 198°, 270° and 342°. Gleam at r 7, east and west of the cart | `pickups[]` | flush | basalt-rimmed bowls inlaid in the pale stone. The motes themselves are units with their own GLBs |
 | **Stone ring** (r 19.5) | Ten **hour-stones**: low carved blocks, 4.6 × 1.8 m, set tangentially in each gap between marks | the ten small `walls[]` | **1.2 m** (low: fighters behind them stay visible) | dark basalt (the frame stone, never the plate's pale stone) with a chalk top edge. Each face carries the half-hour tick |
 | **Rim** (r 26–30) | The ten **hour-marks**: carved numerals I–X inlaid flush at each seat's spawn. Each is lit in its **seat colour** (bible FRAY seats: Crimson, Olive, Lime, Green, Cyan, Blue, Indigo, Violet, Plum, Rose) and is the respawn mark | `spawns[k]`: I (32, 6), II (47.3, 11), III (56.7, 24), IV (56.7, 40), V (47.3, 53), VI (32, 58), VII (16.7, 53), VIII (7.3, 40), IX (7.3, 24), X (16.7, 11) | 2.4 m numerals · flush | dark basalt inlay in the pale stone. The seat-colour light sits in a groove round the numeral, emissive ≤ 0.8 (it blooms only on that seat's respawn) |
-| **Beyond the rim** (the four corner walls) | A low carved **rim wall** (2.4 m) closes the plate. Past it the world **whites out** into noon glare `#E6E1D6`: a bright boundary, not dark fog. The **fair's stands** (stepped stone terraces of the Shadowless Noon, low and empty of detail) sit in the four corners, below the glare | corner walls · stands 6 × 6 m centred at (4, 4), (60, 4), (4, 60) and (60, 60) | rim 2.4 m · north stands 3 m, south stands 1 m (they are south of the plate) | basalt rim with chalk lip. The stands are pale, low-contrast, part of the glare |
+| **Beyond the rim** (the four corner walls) | A low carved **rim wall** (2.4 m) closes the plate. Past it lies the **fair's court**: cobbled chalk setts that start at the plate's own value by the rim wall and haze within ~9 m into the noon glare, a hazier mid-tone `#75726C` (L* ≤ 52 on screen). It is a bright boundary, not dark fog, and never the top of the value range (r12 B5). The **fair's stands** (stepped stone terraces of the Shadowless Noon, low and empty of detail) sit in the four corners, below the glare | corner walls · stands 6 × 6 m centred at (4, 4), (60, 4), (4, 60) and (60, 60) | rim 2.4 m · north stands 3 m, south stands 1 m (they are south of the plate) | basalt rim with chalk lip. The stands are pale, low-contrast, part of the glare |
 
 ## 3. Floor and values
 
@@ -41,12 +41,14 @@ The sun is at 86° elevation, so shadows pool straight under everything. Height 
 | Hour-ring | a carved chapter ring round the marks: a double groove inside them, one outside, a half-hour tick between every two marks, quarter ticks on the outer band | grooves below the plate |
 | Shop ring | flush mid inlay at r 4 | ≈ 28 |
 | Hour-stones, cart and rim | dark basalt with a chalk lip (the obstacles read dark on the stage) | lit top 20–28 (edge light ≤ 48), faces 12–18 |
+| The fair's court (beyond the rim, not walkable) | cobbled chalk setts (never the plate's honed rings, so it never reads as more stage), chalk dust drifted over them, hazing out to the noon glare | plate value (34–40) at the rim wall → ≤ 52 by ~9 m out; nothing above luma 180 |
 
 (2026-10-20, terrain polish: the plate moved from polished basalt, L* 28–36, to pale dial-stone at the noon; the obstacles kept the basalt. Render: `src/render/terrain_glsl.ts` VALE_STYLE_PLATE.)
 (2026-10-27, r12 B5 value rebase: plate 66–72 → 34–40 so fighters, effects and UI own the top of the value range; the plate fills ~86 % of a FRAY frame, so the frame median follows the plate. On-screen L* after the grade, `_harness/value_probe.mjs`.)
+(2026-10-27, r12 B5 fix round 1: the glare beyond the rim was `#E6E1D6` at luma 209 over 31 % of every seat's spawn view, brighter than any fighter; it is now the fair's court above. `_harness/value_probe.mjs` measures a ring of seat spots (r 26, every 36°) so the rim views are always in the numbers. Open for the spec owner: r12 §B5.4's frame p50 55–75 cannot hold on FRAY while the plate band is L* 34–40 (luma 80–95) and the plate fills most of every frame; the frame median follows the plate, ≈ 85.)
 
 - **Light.** Sun 86° elevation, bearing 200° (`#FFF3E6`, 3.0). sunDir (−0.0239, 0.9976, 0.0655). Ambient 0.55.
-- **Fog.** There is no fog in the arena; the glare is beyond the rim.
+- **Fog.** There is no fog in the arena; the glare is beyond the rim (the court's haze; past the map bounds the edge haze is the same mid-tone, `art.terrain.edgeFog`).
 - **Walkable roughness** is ≥ 0.5. Polished means a satin sheen, not a mirror.
 
 ## 4. Scatter

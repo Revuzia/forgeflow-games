@@ -25,7 +25,8 @@
 //             lanterns), instanced per model, double-sided, drawn with a slow cloth sway in the vertex shader
 //             (the `_SWAY` vertex weight × `sway` metres: ≤ 0.41 Hz partials and a ripple that runs down the
 //             cloth; the shadow pass runs the same motion). A prop's `fx` puts an effect at an offset on every
-//             placement (a lamp's flame).
+//             placement (a lamp's flame); its `fill` (0–0.6) is an emissive floor, a share of the cloth's own albedo,
+//             for cloth hung vertically under a high sun (the Noonplate's bunting would otherwise read near black).
 //
 // Determinism: every choice (critter spots, idle timers, flee directions) comes from a seeded PRNG (map seed +
 // index) and the frame's dt, every particle from its seed and the clock: captures repeat. The `ambientEffects`
@@ -55,7 +56,7 @@ const FLEE_M = 3;
 // ── content (defensive: art is data) ─────────────────────────────────────────────────────────────
 interface EffectSpec { vfx: string; at: [number, number, number][]; scale: number }
 interface CritterSpec { id: string; model: string; kind: 'flier' | 'runner' | 'circler'; scale: number; count: number; flee: number; height: number; spots: [number, number, number][] }
-interface PropSpec { model: string; at: [number, number, number][]; scale: number; value: number; sway: number; fx: { vfx: string; offset: [number, number, number] } | null }
+interface PropSpec { model: string; at: [number, number, number][]; scale: number; value: number; sway: number; fill: number; fx: { vfx: string; offset: [number, number, number] } | null }
 interface AmbientSpec { seed: number; effects: EffectSpec[]; critters: CritterSpec[]; props: PropSpec[] }
 
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -76,6 +77,7 @@ export function ambientSpec(map: MapDefT): AmbientSpec {
       const off = fx ? pts([fx.offset], 3)[0] : null;
       return {
         model: p.model as string, at: pts(p.at, 3) as [number, number, number][], scale: num(p.scale, 1), value: num(p.value, 1), sway: num(p.sway, 0),
+        fill: Math.min(0.6, Math.max(0, num(p.fill, 0))),
         fx: fx && typeof fx.vfx === 'string' && off ? { vfx: fx.vfx, offset: off as [number, number, number] } : null,
       };
     }),
@@ -484,9 +486,17 @@ class Critter {
       if (!this.spec.spots.some((s) => Math.hypot(x - s[0], y - s[1]) < s[2] * 1.6 + 1)) continue;
       pick = [x, y];
     }
-    if (!pick) pick = [this.x + Math.cos(away) * 1.5, this.y + Math.sin(away) * 1.5];
+    // cornered on a small perch (a stub, a band): a shorter dash on the same level, else it startles in place and
+    // turns its back; it never steps off the edge into the air
+    for (const d of [1.5, 1.0, 0.6]) {
+      if (pick) break;
+      const x = this.x + Math.cos(away) * d, y = this.y + Math.sin(away) * d;
+      if (Math.abs(this.groundAt(x, y) - h0) <= 0.05) pick = [x, y];
+    }
+    if (!pick) pick = [this.x, this.y];
     const d = Math.hypot(pick[0] - this.x, pick[1] - this.y);
-    this.mv = { x0: this.x, y0: this.y, h0, x1: pick[0], y1: pick[1], h1: h0, arc: 0, t: 0, dur: Math.max(0.45, d / 3.4), kind: 'run', yaw0: this.heading, yaw1: Math.atan2(pick[0] - this.x, pick[1] - this.y) };
+    const yaw1 = d > 0.01 ? Math.atan2(pick[0] - this.x, pick[1] - this.y) : Math.atan2(Math.cos(away), Math.sin(away));
+    this.mv = { x0: this.x, y0: this.y, h0, x1: pick[0], y1: pick[1], h1: h0, arc: 0, t: 0, dur: Math.max(0.45, d / 3.4), kind: 'run', yaw0: this.heading, yaw1 };
     this.state = 'flee';
     this.flights++;
     this.play('flee', 0.06);
@@ -582,18 +592,27 @@ const CLOTH_MAIN = /* glsl */`
 }
 #endif`;
 
-function clothMaterial(amp: number, value: number): { mat: MeshStandardMaterial; depth: Material | null } {
+/** `fill`: an emissive floor (a share of the cloth's own albedo) standing in for the sky and ground bounce a hung cloth
+ *  takes: under the Noonplate's 86° sun a vertical pennant gets almost no direct light and would read near black */
+function clothMaterial(amp: number, value: number, fill = 0): { mat: MeshStandardMaterial; depth: Material | null } {
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: DoubleSide });
   mat.color.setScalar(value);
-  const u = { uAmbT: worldUniforms.valeTime, uSwayAmp: { value: amp } };
-  if (amp > 0) {
+  const u = { uAmbT: worldUniforms.valeTime, uSwayAmp: { value: amp }, uClothFill: { value: fill } };
+  if (amp > 0 || fill > 0) {
     mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
       Object.assign(shader.uniforms, u);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\n${CLOTH_PARS}`)
-        .replace('#include <begin_vertex>', `#include <begin_vertex>\n${CLOTH_MAIN}`);
+      if (amp > 0) {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>\n${CLOTH_PARS}`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>\n${CLOTH_MAIN}`);
+      }
+      if (fill > 0) {
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uClothFill;')
+          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uClothFill;');
+      }
     };
-    mat.customProgramCacheKey = () => 'vale_amb_cloth_v1';
+    mat.customProgramCacheKey = () => `vale_amb_cloth_v2_${amp > 0 ? 's' : ''}${fill > 0 ? 'f' : ''}`;
   }
   patchWorldMaterial(mat);
   return { mat, depth: amp > 0 ? motionDepthMaterial(CLOTH_PARS, CLOTH_MAIN, u, 'vale_amb_cloth_depth_v1') : null };
@@ -710,7 +729,7 @@ export class AmbientLayer {
       if (!geo) continue;
       const g = geo as BufferGeometry;
       if (!g.getAttribute('_sway')) g.setAttribute('_sway', new BufferAttribute(new Float32Array(g.getAttribute('position').count), 1));
-      const { mat, depth } = clothMaterial(p.sway, p.value);
+      const { mat, depth } = clothMaterial(p.sway, p.value, p.fill);
       this.propMats.push(mat);
       if (depth) this.propMats.push(depth);
       const im = new InstancedMesh(g, mat, p.at.length);

@@ -920,9 +920,12 @@ function checkAmbientDef(v: CatalogT['vfx'][number], i: number, dg: Diagnostics)
   });
 }
 
-/** r12 M14: map.art.ambient refs resolve to amb_* defs, and nothing ambient sits on a lane, a camp, a base or a shop */
+/** r12 M14: map.art.ambient refs resolve to amb_* defs, and nothing ambient sits on a lane, a camp, an objective's pit,
+ *  a base, a shop or a stage map's plate */
 const AMB_LANE_CLEAR_M = 3.6 + 1.0;      // render/terrain.ts LANE_HALF + 1 m
 const AMB_CAMP_CLEAR_M = 4.0;
+/** an objective camp's whole pit is its fight zone (RIFT: Sunsplinter's r 8.5, Longshade's r 9) + 1 m */
+const AMB_OBJECTIVE_CLEAR_M = 10.0;
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
   const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
@@ -934,11 +937,16 @@ function checkAmbientMaps(c: CatalogT, dg: Diagnostics): void {
     const a = m.art.ambient;
     if (!a) return;
     const p: Seg[] = ['maps', i, 'art', 'ambient'];
+    // a stage map (FRAY's Noonplate): every metre of the plate is a gameplay zone
+    const pl = ((m.art.terrain ?? {}) as Record<string, unknown>).plate as { at?: unknown; radius?: unknown } | undefined;
+    const plate = pl && Array.isArray(pl.at) && typeof pl.at[0] === 'number' && typeof pl.at[1] === 'number' && typeof pl.radius === 'number'
+      ? { at: [pl.at[0], pl.at[1]] as [number, number], r: pl.radius } : null;
     const zoneOf = (x: number, y: number, pad: number): string | null => {
       for (const l of m.lanes) for (let k = 1; k < l.path.length; k++) {
         if (segDist(x, y, l.path[k - 1][0], l.path[k - 1][1], l.path[k][0], l.path[k][1]) < AMB_LANE_CLEAR_M + pad) return `lane "${l.id}"`;
       }
-      for (const cp of m.camps) for (const u of cp.units) if (Math.hypot(x - u.at[0], y - u.at[1]) < AMB_CAMP_CLEAR_M + pad) return `camp "${cp.id}"`;
+      for (const cp of m.camps) for (const u of cp.units) if (Math.hypot(x - u.at[0], y - u.at[1]) < (cp.objective ? AMB_OBJECTIVE_CLEAR_M : AMB_CAMP_CLEAR_M) + pad) return cp.objective ? `objective "${cp.id}"'s pit` : `camp "${cp.id}"`;
+      if (plate && Math.hypot(x - plate.at[0], y - plate.at[1]) < plate.r + pad) return 'the plate (the whole stage is the fight)';
       for (const b of m.bases) {
         if (Math.hypot(x - b.fountain.at[0], y - b.fountain.at[1]) < b.fountain.radius + pad) return 'a fountain';
       }

@@ -143,7 +143,7 @@ FORM = {
         # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
         "tomb": ((0.114, 1.370, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
         # one soft core floating in the hollow (see the Aubade note): 12 x 7 cm, front ~3.5 cm behind the opening
-        "hood_light": ((0.0, -0.124, 1.445), (0.048, 0.024, 0.030), 8.0),      # (r4: ~0.5 of the opening; 2 x halo)
+        "hood_light": ((0.0, -0.124, 1.445), (0.051, 0.024, 0.032), 8.0),      # (r4: ~0.5 of the opening; 2 x halo)
         "shoulder": 0.215,
         "cloak_rx": [(0.13, 0.398), (0.20, 0.405), (0.30, 0.398), (0.45, 0.378), (0.62, 0.350), (0.80, 0.326),
                      (0.98, 0.308), (1.10, 0.288), (1.18, 0.245), (1.24, 0.18)],
@@ -361,8 +361,6 @@ def hood_outer(F) -> sdf.Blend:
     if "hood_bell" in F:
         bell = F["hood_bell"]
         ops.append(("add", Bell(bell, [(0.0, 1.0), (2.0, 1.0)], bell[0][0], bell[-1][0], cy=hc[1]), 0.03))
-        # (fix round 4) the felt cap inside the raised circlet: flattened low (a small cap, not a bald dome over it)
-        ops.append(("inter", HalfSpace((0.0, hc[1], CROWN_TOP_S), (0.0, 0.0, 1.0), 0.5), 0.03))
     else:
         # swept back at the nape (the cowl falls back and down, never up), the lower hood flares onto the cowl
         ops += [("add", RoundCone((0, 0.06, 1.47), (0, 0.13, 1.33), 0.150, 0.135), 0.06),
@@ -1296,14 +1294,14 @@ BEZEL = 0.015               # the thin slate bezel painted round each Aubade bod
 
 
 # (fix round 4, review r3: from the 52 deg camera the flush dark band of lit windows under a bald pale dome read as a
-# helmet with a lit visor slot / a row of teeth) the lamp ring is a RAISED CIRCLET sitting on the crown: a near-vertical
-# ironstone ring standing off the dome from its foot (z 1.628) to the brief's 1.70, the felt cap inside it flattened low
-# (CROWN_TOP_S), so from above it reads as a ring round a small felt cap, never a horizontal slit; its value lifted to
-# the ironstone / felt mid (no dark slot)
-CAP_Z = (1.650, 1.660)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
-CROWN_S = (1.652, 1.712)            # the Serenade crown circlet (z): its foot high on the dome's shoulder, top ~ the crown
-CROWN_TOP_S = 1.700                 # the felt cap inside the circlet is flattened here (kept under the ring's top edge)
-WINDOWS = [360.0 * k / 12 for k in range(12)]       # 12 even, spaced (the concept: round windows with iron between,
+# helmet with a lit visor slot / a row of teeth) the lamp ring is a RAISED CIRCLET sitting HIGH ON THE CROWN: a band
+# standing 1.2 cm proud of the dome's upper slope (z 1.637-1.69, where the dome turns toward the sky), so the 52 deg
+# camera sees it face-on as a ring of lamps round a small felt cap, never a horizontal slit over the opening; its value
+# lifted to the ironstone / felt mid (no dark slot). (Tried: a vertical ring lower on the dome read as a tin can, a
+# flared coronet round the top as the mouth of a jar.)
+CAP_Z = (1.640, 1.652)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
+CROWN_S = (1.637, 1.690)            # the Serenade crown circlet (z) on the dome's upper slope
+WINDOWS = [360.0 * k / 10 for k in range(10)]       # (r4: 10 on the smaller upper ring: spaced, one over the arch)       # 12 even, spaced (the concept: round windows with iron between,
 # never a string of touching beads): six across the front, one over the arch's crown
 
 
@@ -1314,17 +1312,14 @@ def crown_serenade(F, part):
     hollow: brief §0.2)"""
     hc, hr = F["hood"]
     z0, z1 = CROWN_S
-    r0 = hood_radius(F, z0)
 
     def rad(z):
-        # the circlet stands off the dome's shoulder: its radius is the dome's at the foot, flaring out 5 mm over its
-        # height (a coronet sitting on the head, never a can: a ring foot low on the dome's side read as a tall drum)
-        k = 0.085 * (z - z0)
-        return (r0[0] + k, r0[1] + k)
-    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.020, 0.011, 18)
-    zc = 0.5 * (z0 + z1) + 0.002
+        return hood_radius(F, z)
+    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.006, 0.012, 18)
+    zc = 0.5 * (z0 + z1)
     part("crown", ("mesh", v, f), "ironstone", "bone:head", None, 0.7)
-    discs = [disc_on(surf, a, zc, 0.0215, nseg=10, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
+    # the windows follow the band's slope (dz_per_m < 1: the slanted face is ~1.4 x its height)
+    discs = [disc_on(surf, a, zc, 0.0225, nseg=10, rad_fn=rad, dz_per_m=0.72, lift=0.002) for a in WINDOWS]
     v, f = merge_meshes(discs)
     part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.5)
 
@@ -2031,9 +2026,9 @@ PART_HEX = {
     # Serenade: ochre / umber. Fix round 3: the felt down to L* ~57-60 and ~31 % saturation (was L* 71-72 at 39.7 %,
     # on the 40 % cap of the reserved marigold band: the enemy tint sat on a near-amber body, and the pale cream
     # dome out-valued the fighters); the umber cloak stays at 23 deg (under the band)
-    "serenade": {"hood": "#9A846A", "hood_cap": "#93806A", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
-                 "crown": "#6E5E50",
-                 "collar": "#523D30", "bib": "#9E876B", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
+    "serenade": {"hood": "#9A846A", "hood_cap": "#93806A", "hood_rim": "#563F31", "pauldron_L": "#5E5047", "pauldron_R": "#5E5047",
+                 "crown": "#7A6A5A",
+                 "collar": "#664E3E", "bib": "#9E876B", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
                  "cloak": "#7B5842", "sleeves": "#7B5842", "mantle": "#A48B6E", "tabard": "#9E876B"},
 }
 CLOTH_ROLES = ("cloth", "cloth2", "under")
@@ -2042,7 +2037,8 @@ ROUGH = {"cloth": 0.93, "cloth2": 0.92, "under": 0.92, "chalk": 0.86, "stone": 0
 RAMP = {   # value (linear multiplier) by height: light top, dark feet (bible §2.4)
     # (fix round 3: the top lifts trimmed, 1.18 -> 1.09 / 1.26 -> 1.14: the hoods stay under L* 65 in game)
     "aubade": [(0.0, 0.45), (0.20, 0.55), (0.45, 0.75), (0.80, 0.93), (1.05, 1.0), (1.28, 1.05), (1.80, 1.09)],
-    "serenade": [(0.0, 0.60), (0.20, 0.70), (0.45, 0.84), (0.80, 0.95), (1.05, 1.02), (1.35, 1.08), (1.80, 1.14)],
+    # (fix round 4: in game the Serenade feet read lighter than its top, 30-35 against 26-28) the feet a step darker
+    "serenade": [(0.0, 0.36), (0.20, 0.46), (0.45, 0.70), (0.80, 0.92), (1.05, 1.02), (1.35, 1.10), (1.80, 1.16)],
 }
 SHADOW_TINT = {"aubade": (-0.10, -0.03, 0.14), "serenade": (0.10, -0.02, -0.14)}
 KEY = np.array((-0.35, -0.60, 0.72)) / np.linalg.norm((-0.35, -0.60, 0.72))   # painted key: front, upper right

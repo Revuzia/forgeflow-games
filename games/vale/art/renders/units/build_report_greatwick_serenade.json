@@ -75,14 +75,14 @@
   },
   "uv_coverage": 0.679,
   "bake": {
-    "base": 2.91,
-    "rough_metal": 2.35,
-    "normal": 0.9,
-    "ao": 1.19,
+    "base": 1.66,
+    "rough_metal": 1.82,
+    "normal": 0.71,
+    "ao": 0.83,
     "normal_fixed_px": 34769,
-    "projection": 7.41,
-    "pack_save": 7.51,
-    "total": 15.15
+    "projection": 4.55,
+    "pack_save": 4.6,
+    "total": 9.94
   },
   "tris": 3451,
   "mesh_top_m": 1.486,
@@ -181,19 +181,19 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1396820,
+  "glb_bytes_raw": 1394060,
   "optimize": {
     "ok": true,
-    "before": 1397880,
-    "after": 501264,
+    "before": 1395120,
+    "after": 499520,
     "metallic_zero": 3
   },
-  "glb_bytes": 501304,
+  "glb_bytes": 499560,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_serenade.glb (490 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: greatwick_serenade_base 1024x1024 77K, greatwick_serenade_normal 512x512 58K, greatwick_serenade_orm 256x256 21K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_serenade.glb (488 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: greatwick_serenade_base 1024x1024 75K, greatwick_serenade_normal 512x512 58K, greatwick_serenade_orm 256x256 21K",
       "  skinned meshes: greatwick_serenade(5050v), greatwick_serenade_accent_1(241v), greatwick_serenade_accent_2(57v), greatwick_serenade_accent_3(88v)",
       "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/19tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.400s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
@@ -232,26 +232,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_serenade.png",
-    "seconds": 6.6,
+    "seconds": 8.3,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_greatwick_serenade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.23,
-      "model": 14.28,
-      "lows_bind": 0.07,
-      "uv": 4.83,
-      "bake": 15.16,
-      "clips": 13.74,
-      "export": 0.62,
-      "optimize": 0.31,
-      "load_test": 0.15,
-      "three_qa": 18.56,
-      "cache": 0.05
+      "materials": 0.11,
+      "model": 7.9,
+      "lows_bind": 0.03,
+      "uv": 2.73,
+      "bake": 9.94,
+      "clips": 14.71,
+      "export": 0.86,
+      "optimize": 0.36,
+      "load_test": 0.12,
+      "three_qa": 16.87,
+      "cache": 0.03
     },
-    "total_s": 68.06
+    "total_s": 53.69
   },
   "run_ref_speed": 3.2,
   "height_m": 1.215
