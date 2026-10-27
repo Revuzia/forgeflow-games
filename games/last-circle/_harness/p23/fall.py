@@ -124,7 +124,6 @@ def part_human(s, v, args):
     rows["10s"] = drop(s, spot, 10, 100, 100)
     rows["10n"] = drop(s, spot, 10, 100, 0)
     rows[15] = drop(s, spot, 15)
-    rows[LIVE_H] = drop(s, spot, LIVE_H)
     # 10 REAL jumps
     s.guard_player(False)
     s.js("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); p.hp = 100; p.shield = 100; p.onGround = true; window.__P23J__ = []; window.__P23JN__ = 0; W.events.on('fallDamage', (a) => { if (a === p) window.__P23J__.push(W.t); }); W.events.on('jump', (a) => { if (a === p) window.__P23JN__++; }); }",
@@ -140,6 +139,14 @@ def part_human(s, v, args):
     s.page.keyboard.up("KeyW")
     wspot = s.js(SPOT_JS, [True])
     rows["water20"] = drop(s, wspot, 20) if wspot else None
+    # the two lethal-threshold drops LAST (fix round: a 17 m drop that kills - the pre-D2 curve - left the jumps / stagger / water rows a dead
+    # body to measure). 17 m first; if it killed, a fresh practice page for the 22 m drop (else that row would judge a body already dead)
+    rows[LIVE_H] = drop(s, spot, LIVE_H)
+    if not rows[LIVE_H]["after"]["alive"]:
+        R["repractice"] = L.practice(s, 4242, "isla_viva")
+        if args.plant:
+            L.plant_js(s, PLANTS[args.plant])
+        spot = s.js(SPOT_JS, [False]) or spot
     rows[DEAD_H] = drop(s, spot, DEAD_H)
     R["rows"] = {str(k): {kk: vv for kk, vv in r.items() if kk != "trace"} if r else None for k, r in rows.items()}
     lost = {k: (r["lost"] if r else None) for k, r in rows.items()}
