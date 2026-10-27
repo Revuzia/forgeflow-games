@@ -565,6 +565,9 @@ export class Renderer {
         orbitNight = (1 - smoothstepN(-0.35, 0.05, sub)) * smoothstepN(primaryVis.atmo.thickness * 1.5, primaryVis.atmo.thickness * 3, primaryVis.altitude);
         // (0.05 still metered a lamp-lit city up into AgX's cream: its streets and houses read white, not lamplight)
         key += (0.022 - key) * orbitNight;
+        // ... and over the night side itself the starlit land is metered too (below): a key a little lower again, so the
+        // land reads as a dim world while the towns' lights keep their colour
+        key += (0.014 - key) * this.nightView;
       } else if (primaryVis && !primaryVis.atmo.has) {
         // an airless world from orbit over its night side (the starlit floor fills the view): a night key too, or the
         // auto exposure lifts the starlit regolith to a flat grey day (it has no sun elevation to go by)
@@ -577,7 +580,10 @@ export class Renderer {
       // every game day unreadable; now its huts and the land read as silhouettes in a deep blue while hearths, windows
       // and lamps still lead)
       const ceil = Math.exp(Math.log(6) + (Math.log(8.5) - Math.log(6)) * night);
-      post.setMetering(0.02, ceil + (10 - ceil) * orbitNight, Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
+      // (the metering floor opens at night — and over the night side from orbit, where the camera's sun elevation reads
+      // 1: with the day floor there the starlit land, ~0.002–0.006, sat on or under it and was left out, so the exposure
+      // was set by the clouds, the snow, the lit limb and the moon alone — 0.35 — and the land and the sea were black)
+      post.setMetering(0.02, ceil + (10 - ceil) * orbitNight, Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * Math.max(night, this.nightView)));
       this.incidentMeter(view, primaryVis, starCol);
     }
     // bloom: half by day (a veil), full at dusk and night where lamps, windows and fire should glow
@@ -787,11 +793,17 @@ export class Renderer {
     const farK = smoothstepN(Math.max(vis.atmo.thickness, 200) * 2, Math.max(vis.atmo.thickness, 200) * 6, vis.altitude);
     const subSolar = _v3.copy(vis.camBody).normalize().dot(u.uSunDirBody.value as Vector3);
     const lift = farK * (1 - smoothstepN(-0.35, 0.05, subSolar));
+    // (with air the floor lifts only once the camera is well over the night side — the sub-solar cosine past about
+    // −0.3, the view mostly night: from the dusk limb, with the sun still lighting a third of the disc, a lift on the
+    // −0.35 … 0.05 ramp of the airless case lit the night half's clouds and sea ice pale blue at ~40 % of the day side's
+    // white — a second day side beside the terminator)
+    const liftAir = farK * (1 - smoothstepN(-0.6, -0.2, subSolar));
     this.airlessNight = vis.atmo.has ? 0 : lift;
+    this.nightView = vis.atmo.has ? liftAir : 0;
     const nf = this.nightFloor;
     // (×7 over a night side seen from orbit: at ×5 most of the night disc was black — the coasts and snowfields only
     // where the snow caught the starlight)
-    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar(1 + 6 * lift);
+    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar(1 + 6 * liftAir);
     // (airless: starlight alone, as a share of the star's light so a dim or a bright star keeps the same look — ~1/1700
     // of the sun at the ground, black-shadowed by day; from orbit the night half of the disc is a dim charcoal world
     // ~4–5 EV under the sunlit crescent beside it (at 1/150, under the crescent's exposure, it was pure black against
@@ -803,11 +815,13 @@ export class Renderer {
     // by the sunlit side, under which real starlight is black) the night half's silhouette keeps a faint grey outline
     // against space, ~3 % of the sun right at the edge on an airless world (with air the airglow band draws it too);
     // it gives way as the night side fills the view and the night floor itself is lifted
-    if (u.uNightEdge) u.uNightEdge.value = farK * E * (vis.atmo.has ? 0.006 : 0.03) * (1 - lift);
+    if (u.uNightEdge) u.uNightEdge.value = farK * E * (vis.atmo.has ? 0.006 : 0.03) * (1 - (vis.atmo.has ? liftAir : lift));
     return on;
   }
   /** 0..1: the view of an airless primary is its night side seen from afar (the exposure key follows it) */
   private airlessNight = 0;
+  /** 0..1: the view of a primary with air is its night side seen from afar (the metering counts its starlit ground) */
+  private nightView = 0;
   /** this frame's night floor on the primary planet (starlight / airglow irradiance), shared with its clouds */
   readonly nightFloor = new Vector3();
   private wb = new Vector3(1, 1, 1);

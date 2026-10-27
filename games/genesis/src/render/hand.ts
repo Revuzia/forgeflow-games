@@ -26,7 +26,8 @@
 //   * what it holds is DRAWN in proportion to it (present.ts: at least 0.35 × its size), people are drawn by the crowds
 //     where `pinch` says; a light trail follows a fast motion (a throw); while carrying, the arc a throw toward the
 //     cursor would fly, with a reticle where it lands; on the ground a pool of its light under it, and its cloud's
-//     shadow cast by the sun (dark under a feared god's storm).
+//     shadow cast by the sun (dark under a feared god's storm) — and round a feared god a broad gloom, its storm deck's
+//     shade over the land, so feared reads from the god's height where the column itself is small.
 // Everything is drawn over the composited image (FX layer) and soft-tested against the scene's depth; the held props are
 // lit, shadowed scene meshes.
 
@@ -644,19 +645,21 @@ void main() {
   float vis = fxSoft(vZ, 0.5);
   if (vis <= 0.0) discard;
   float x = abs(vSide);
-  float core = exp(-x * x * 6.0), halo = exp(-x * x * 1.8) * (1.0 - smoothstep(0.8, 1.0, x));
+  // (a filament of light in its own glow: a broad bright core over most of the strip read as a lit white tube — at
+  // night the fork's three strokes were three plastic bars)
+  float core = exp(-x * x * 18.0), halo = exp(-x * x * 3.2) * (1.0 - smoothstep(0.7, 1.0, x));
   float drawn = 1.0 - smoothstep(uTrace - 0.004, uTrace + 0.004, vT);
   float head = exp(-pow((vT - uTrace) / 0.025, 2.0)) * (1.0 - step(0.999, uTrace));
   // (below the tone curve's shoulder, its colour deepened at the line's heart: brighter, the regard's gold — or a feared
   // god's cold blue — burned to a white thread)
   // (and nearly display-referred: drawn as physical light it blazed into a white bar at dusk, when the view's exposure
   // opens up, while it read right by day)
-  float k = (core * 0.66 + halo * 0.26) * drawn + head * (core * 1.95 + halo * 0.57);
+  float k = (core * 0.78 + halo * 0.2) * drawn + head * (core * 1.95 + halo * 0.5);
   vec3 col = mix(uCol, uRim, uDark * 0.75);
   col = mix(col, col * col, 0.35 * core) + vec3(0.3) * head * core;
   // (the air behind the line a little veiled: against a bright sky light added alone summed to a white thread and the
   // glyph's shape and colour were lost; over the night it changes nothing)
-  float veil = clamp(halo * 0.28 + core * 0.18, 0.0, 0.4) * max(drawn, head) * uGlyphK * uPres * vis;
+  float veil = clamp(halo * 0.22 + core * 0.2, 0.0, 0.38) * max(drawn, head) * uGlyphK * uPres * vis;
   gl_FragColor = vec4(col * k * uGlyphK * uPres * vis * fxDisplay(0.92), veil);
 }
 `;
@@ -1321,8 +1324,22 @@ export class HandVisual {
    * at night and on a world with no air (no cloud)
    */
   private cloudShadow(f: HandFrame, up: Vector3, gR: number, L: number, feared: number, grasp: number, air: boolean): void {
+    if (!air) return;
+    // a feared god brings its storm with it: the land round the Touch lies under a gloom — a broad soft shade, the
+    // storm deck's over it (diffuse: the sky's light is cut as well as the sun's, so it sits under the Touch, not
+    // thrown by the sun) — so feared reads at a glance from the god's height, where the column itself is small
+    if (feared > 0.02) {
+      const R = Math.min(L * 6.5, 520);
+      const gl = decal(DECAL.shadow, [up.x * gR, up.y * gR, up.z * gR], R * 1.05 + 2);
+      gl.ax = this.fwd.x; gl.ay = this.fwd.y; gl.az = this.fwd.z;
+      gl.p0 = R; gl.p1 = R; gl.p2 = 1;
+      gl.ca = 0.3 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
+      // (a deep slab: on a hillside the gloom lies over the slope above and below the Touch's foot)
+      gl.q0 = Math.max(4, R * 0.45);
+      f.decals.add(gl);
+    }
     const sunD = f.shared.uSunDirBody?.value as Vector3 | undefined;
-    if (!sunD || !air) return;
+    if (!sunD) return;
     const el = sunD.dot(up);
     if (el < 0.04) return;
     const centre = _s.copy(this.grasp > 0.5 ? this.cradle : this.pos);
@@ -1495,8 +1512,9 @@ export class HandVisual {
       const tl = Math.hypot(tx, ty) || 1;
       const sx = -ty / tl, sy = tx / tl;
       const d = Math.hypot(cam.x - px, cam.y - py, cam.z - pz);
-      // (the line itself three or four pixels wide at any distance: at 2.5 px of strip it was a one-pixel thread)
-      const w = Math.max(L * 0.04, d * wpx * 3.8);
+      // (the line's core two or three pixels wide at any distance, its glow round it: at 2.5 px of strip it was a
+      // one-pixel thread)
+      const w = Math.max(L * 0.05, d * wpx * 5.5);
       const ox = (right.x * sx + up.x * sy) * w, oy = (right.y * sx + up.y * sy) * w, oz = (right.z * sx + up.z * sy) * w;
       pos.setXYZ(i * 2, px + ox, py + oy, pz + oz);
       pos.setXYZ(i * 2 + 1, px - ox, py - oy, pz - oz);

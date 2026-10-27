@@ -8,7 +8,8 @@
 //   * the Touch at work (render/hand.ts HandVisual, driven frame by frame as the renderer drives it): it appears where
 //     the cursor is and goes when nothing calls it; it lifts a person (the cradle gathers round them, below the grip)
 //     and lets go; hurled fast it leaves a trail; a rebuke is a downdraft that throws dust and a cold flash; casting, it
-//     traces the miracle's sigil; feared it crackles (an arc struck at the moment nextCrackle names), trusted never;
+//     traces the miracle's sigil; feared it crackles (an arc struck at the moment nextCrackle names) under a gloom of
+//     its storm on the land round it, by day and night, trusted never;
 //     its shadow and its pool of light lie on the ground; a person it hurls is drawn flying by their own id (the
 //     sim's 'thrown' event names the projectile, a different id sequence), never a stranger
 //   * the creature is gone from the renderer: no creature layer or generator module ships
@@ -281,6 +282,16 @@ test('feared, the Touch is storm-dark and crackles; trusted, it is warm light an
   const d = S.run(h, 1, () => ({ hand: S.hand({ pose: 'point', regard: -1 }) }));
   assert.ok(h.crackling >= 1, 'an arc struck at the moment nextCrackle named');
   assert.ok(d.some((x) => x.type === 10 && x.cb > x.cr && x.p1 > 0), 'its cold light on the ground under the arc');
+  // its storm's gloom: a broad soft shade on the land round it (not thrown by the sun: under it, by night as well)
+  const under = (x: Decal) => new Vector3(x.x, x.y, x.z).normalize().angleTo(h.pos.clone().normalize()) * S.R;
+  const gloom = (ds: Decal[]) => ds.find((x) => x.type === 0 && x.p0 >= h.scale * 4 && x.p1 >= h.scale * 4 && under(x) < 1);
+  const gl = gloom(d);
+  assert.ok(gl && gl.ca > 0.2, `a gloom round it (${gl ? `${gl.p0.toFixed(0)} m, ${gl.ca.toFixed(2)}` : 'none'})`);
+  const N = touchStage(false);
+  const hn = new HandVisual();
+  const dn = N.run(hn, 80, () => ({ hand: N.hand({ pose: 'point', regard: -1 }) }));
+  assert.ok(dn.some((x) => x.type === 0 && x.p0 >= hn.scale * 4), 'the gloom by night too');
+  hn.dispose();
   h.hold = null;
   const g = new HandVisual();
   assert.equal(g.nextCrackle(100, 1), null);
@@ -289,6 +300,8 @@ test('feared, the Touch is storm-dark and crackles; trusted, it is warm light an
   for (let i = 0; i < 40; i++) { S.run(g, 1, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) })); arcs += g.crackling; }
   assert.equal(arcs, 0, 'a trusted god never crackles');
   assert.ok(inner(g).u.uDark.value === 0 && g.light.r > g.light.b + 0.3, 'warm light, no storm');
+  const dg = S.run(g, 1, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) }));
+  assert.ok(!dg.some((x) => x.type === 0 && x.p0 >= g.scale * 4), 'no gloom round a trusted god');
 });
 
 test('trusted, the Touch is warm light more than weather; holding, its cradle still shows what it holds', () => {

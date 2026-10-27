@@ -2172,3 +2172,13 @@ integration's runs in progress — `r6/out/`; results pending)*
   "unwatched worlds …": Verdance's plant cover −5.8 % against 1x, `out/r4/check-superseded-cure053.log`). The fix belongs to the world's spin-up (built at
   its own equilibrium: CONTENT's open-grassland ≥ 3 % and tree-mix drift targets, §4.7, are unmet for the same reason),
   not to the fire's thresholds. People do not wait on it: fire-keeping comes by other roads (§10.4, the 50-year worlds).
+
+### 10.7 The gate (seventh pass, 2026-10-27)
+`npm run check` on the final integrated tree (HEAD `ccfcb5c3`; the sim unchanged since the sixth pass's `work.ts` fix at
+13:59), run 18:39–19:23 UTC while the acceptance runs used two of the four cores (`integrate/r6/out/check-7.log`):
+detban **145 sim files clean**; `tsc --noEmit` clean; **509 tests, 507 pass, 0 fail, 2 skipped** — the two throughput
+floors (`perf.test.ts`), which skip themselves on an overloaded machine ("wall/CPU 4–7"). Among them the migration tests
+on the 1.4 saves and the previous 1.5 build's save (`tests/living-migration.test.ts`, 6 tests), every integration fix's
+test (`tests/living-integration.test.ts`), the §9 owner fixes (`fire-flee`, `society`) and the UI team's
+`ui-living`, `ui-defaults`, `ui-embed` (also run alone: 11 / 11 pass). (The sixth pass's gate, `r6/out/check-0.log`,
+502 / 504 pass, had started at 13:52, before its last fix.)
