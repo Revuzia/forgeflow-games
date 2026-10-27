@@ -405,6 +405,14 @@ function suiteP23(M, SIM, count) {
     row(!J({ slot: 1, key: s1 }, null, { live: false }).ok && !J({ slot: 1, key: s1 }, null, { gvOk: false }).ok && !J({ slot: 0, key: s1 }).ok && !J({ slot: 7, key: s1 }).ok && !J({ slot: 1, key: s1 }, "g_old").ok,
       "LC-49 rejoin: refused with no match running, on another game version, for the host's slot, a slot not in the match, or the peer that already has it");
     row(M.REJOIN_MS === 60000, "LC-49: the rejoin window is 60 s (plan: rejoin within 60 s on ?room=)");
+    // fix round: a crashed / killed tab sends no bye - the right secret for a slot that has been SILENT REJOIN_SILENT_MS is its leave
+    row(!J({ slot: 2, key: s2 }, null, { silentMs: 900 }).ok && J({ slot: 2, key: s2 }, null, { silentMs: 900 }).retry === true && J({ slot: 2, key: s2 }, null, { silentMs: M.REJOIN_SILENT_MS + 1 }).ok === true,
+      "LC-49 rejoin: a slot still sending (silent 0.9 s) is refused with retry; silent past REJOIN_SILENT_MS it is given back without waiting for the 12 s watchdog");
+    row(!J({ slot: 2, key: s1 }, null, { silentMs: 30000 }).ok && !J({ slot: 2, key: s2 }, null, { silentMs: M.REJOIN_MS + 1 }).ok && !J({ slot: 2, key: s2 }, null, { silentMs: NaN }).ok &&
+        M.REJOIN_SILENT_MS >= 3000 && M.REJOIN_SILENT_MS < 12000,
+      "LC-49 rejoin: silence never excuses a wrong secret; the window still closes REJOIN_MS after the last packet; the silence bar is 3..12 s");
+    row(M.REJOIN_ASK_TRIES * M.REJOIN_ASK_EVERY_MS >= M.REJOIN_MS && M.REJOIN_ASK_EVERY_MS <= 3000,
+      "LC-49 rejoin: the returning page keeps asking for the whole window (it gave up after 15 s while the host's watchdog needs 12 s + a loaded box)");
     const now = 1e6;
     const own = { room: "ABCD", slot: 1, key: s1, at: now - 5000 };
     const list = [{ room: "ABCD", slot: 2, key: s2, at: now - 20000 }, { room: "ABCD", slot: 3, key: s2, at: now - 1000 }, { room: "ZZZZ", slot: 2, key: s2, at: now - 9000 },
@@ -656,7 +664,8 @@ function suiteP23(M, SIM, count) {
     ["a gate that applies duplicates (chat shown twice)", { SeqGate: class extends M.SeqGate { accept(k, q) { const r = super.accept(k, q); return r === "dup" ? "old" : r; } } }],
     ["a rejoin judge with no key check", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { keys: new Map([[req && req.slot, M.rejoinHash(req && req.key)]]) })) }],
     ["a rejoin judge that hands out a live player's slot", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { goneAt: { ["s" + (req && req.slot)]: c.nowMs } })) }],
-    ["a rejoin judge with no time window", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { nowMs: Math.min(c.nowMs, ((c.goneAt || {})["s" + (req && req.slot)] || 0) + 1) })) }],
+    ["a rejoin judge that takes any silence as the leave", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, typeof c.silentMs === "number" ? { silentMs: Math.max(c.silentMs, M.REJOIN_SILENT_MS) } : {})) }],
+    ["a rejoin judge with no time window",{ judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { nowMs: Math.min(c.nowMs, ((c.goneAt || {})["s" + (req && req.slot)] || 0) + 1) })) }],
     ["a revive owner that takes any done", { reviveDoneOk: () => true }],
     ["a sender check that trusts the reviver named in the body", { senderMay: (t, d, from, c) => (t === "revive" ? null : M.senderMay(t, d, from, c)) }],
     ["a rejoin 'ok' accepted from anyone", { senderMay: (t, d, from, c) => (t === "rejoin" ? null : M.senderMay(t, d, from, c)) }],
@@ -708,6 +717,10 @@ function suiteP23(M, SIM, count) {
     ok(/let teamWant = normTeamMode\(sel && \(sel\.teamMode \|\| sel\.team\)\) \|\| normTeamMode\(W\.settings && W\.settings\.teamMode\);/.test(src) &&
       /const want = rematchTeamWant\(S\.cfg, opts\.teamMode\);\s*\r?\n\s*const teamMode = resolveTeamMode\(want === "solo" \? null : want/.test(src) && /mode: pace, teamMode, teamWant: teamWant \|\| "auto", roster/.test(src),
       "D5: the room starts from the menu's team pick (W.settings.teamMode), START carries teamMode + teamWant, run it back re-resolves the room's pick");
+    ok(/if \(S\.rejoinAsk\.tries >= REJOIN_ASK_TRIES\)/.test(src) && /setTimeout\(ask, REJOIN_ASK_EVERY_MS\);/.test(src) && !/tries >= 6/.test(src) &&
+      /silentMs: typeof seen === "number" \? now - seen : null/.test(src) && /if \(S\.goneAt\) delete S\.goneAt\[id\];\s+\/\/ \(null when/.test(src) && /if \(S\.lastSeen\) delete S\.lastSeen\[id\];/.test(src) &&
+      /window\.addEventListener\("pagehide", flushRejoin\)/.test(src),
+      "LC-49 rejoin: the page asks for the whole window, the host judges the slot's silence, a rejoin by silence alone cannot throw on a null goneAt, and a hidden / closing tab writes its record");
     ok(/const full = smokeRelayRoom\(W\.smokes, d\.by, W\.t\);\s*if \(full\) \{ reject\(t, from, full\); return; \}/.test(src) && !/x\._net === from/.test(src),
       "D12: the smoke relay's cap is applied per thrower (d.by) on receive, never per sending peer");
     const syncSrc = sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState");

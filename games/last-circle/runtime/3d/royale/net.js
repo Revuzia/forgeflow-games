@@ -497,6 +497,12 @@ export class SeqGate {
 // ── LC-49: rejoin within REJOIN_MS on ?room= ──────────────────────────────────────────────────────────────────────────────────────────
 /** A guest whose page reloads (or who opens the invite link again) inside this window gets ITS OWN slot back, body and all. */
 export const REJOIN_MS = 60000;
+/** A rostered guest slot whose state has been silent this long, asked for with its right rejoin secret, has left (judgeRejoin). A live page
+ *  sends state at 12 Hz; a hidden tab of the same browser goes quiet too - and then the page asking with that tab's secret IS its player. */
+export const REJOIN_SILENT_MS = 4000;
+/** The returning page asks every REJOIN_ASK_EVERY_MS while the host answers "retry" (its old page not seen leaving yet), for up to REJOIN_MS. */
+export const REJOIN_ASK_EVERY_MS = 3000;
+export const REJOIN_ASK_TRIES = Math.ceil(REJOIN_MS / REJOIN_ASK_EVERY_MS) + 1;
 /** 53-bit string hash (cyrb53). The rejoin key is a commitment: a guest's hello carries rejoinHash(secret) (every peer of the room reads it,
  *  all messages are broadcasts), the secret stays in that tab's storage and is shown only when it asks for its slot back. Not cryptographic:
  *  it stops a squad-mate's console from claiming someone else's slot; a client that also forges `from` needs a server (OD-10). */
@@ -542,7 +548,11 @@ export function judgeRejoin(req, from, ctx) {
   if (r.peerId === from) return { ok: false, why: "already this peer's slot" };
   const want = ctx.keys && ctx.keys.get ? ctx.keys.get(req.slot) : null;
   if (!want || rejoinHash(req.key) !== want) return { ok: false, why: "wrong rejoin key" };
-  const gone = ctx.goneAt ? ctx.goneAt["s" + req.slot] : null;
+  let gone = ctx.goneAt ? ctx.goneAt["s" + req.slot] : null;
+  // fix round (the intermittent ?room= rejoin): a page that closed without a bye (a crash, a killed tab) was only seen leaving by the host's
+  // 12 s silence watchdog, and the asking page gave up after ~15 s of retries - on a loaded box the two raced. The right secret for the slot
+  // AND a slot that has been silent for REJOIN_SILENT_MS is the leave: the window opens from the slot's last packet.
+  if (gone == null && typeof ctx.silentMs === "number" && Number.isFinite(ctx.silentMs) && ctx.silentMs >= REJOIN_SILENT_MS) gone = ctx.nowMs - ctx.silentMs;
   if (gone == null) return { ok: false, why: "the slot's player has not left", retry: true };
   if (ctx.nowMs - gone > REJOIN_MS) return { ok: false, why: "rejoin window over" };
   return { ok: true, slot: req.slot };
@@ -689,6 +699,17 @@ export function init(W) {
   // chests interactable (loot beam + re-open) and the shared world diverged.
   // Replayed opens (loot.js netOpenChest) pass a=null → filtered by the `a &&` guard.
   W.events.on("chestOpened", (a, c) => { if (S && a && !a.netRemote) qsend("chest", { id: c.id }); });
+  // LC-49: the rejoin record is refreshed from update() every 2 s - which a hidden tab does not run (no rAF). A tab that is hidden and then
+  // closed (or killed) writes its record (time + kit) the moment it is hidden / unloaded, so the page that comes back asks with a fresh one.
+  if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined") {
+    const flushRejoin = () => {
+      try {
+        if (S && S.started && S.net && !S.net.isHost() && !S.rejoin && W.player && W.player.alive && (W.phase === "match" || W.phase === "drop")) { S.rjSavedAt = performance.now(); saveRejoin(W); }
+      } catch (e) {}
+    };
+    window.addEventListener("pagehide", flushRejoin);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushRejoin(); });
+  }
   // a chest / supply crate that opened HERE after another client took items out of it (late join, a crate that landed late here, a take
   // that beat the chest's own open message): those items go at once - never a ghost item that cannot be picked up anywhere else
   W.events.on("chestOpened", (a, c) => {
@@ -1270,8 +1291,9 @@ function openLobby(W, sel) {
     }
     if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
     // LC-49 REJOIN: a page that played in this room a moment ago (this tab's record, or one a closed tab of this browser left) asks for its
-    // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every 3 s while the host has not yet
-    // seen the old page leave (a reload can beat its own presence-leave), at most 6 times.
+    // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every REJOIN_ASK_EVERY_MS while the
+    // host has not yet seen the old page leave (a reload can beat its own presence-leave), for the whole rejoin window (REJOIN_ASK_TRIES; it
+    // was 6 tries = 15 s, which a host that only learns of a crashed tab from its 12 s silence watchdog could miss on a loaded box).
     const cands = asHost ? [] : rejoinCandidates(net.room, rjRead(rjSS(), RJ_SS), rjRead(rjLS(), RJ_LS + net.room), Date.now());
     const hello = myHello();
     if (cands.length) {
@@ -1279,12 +1301,17 @@ function openLobby(W, sel) {
       S.rejoinAsk = { cands, tries: 1, at: performance.now() };
       const ask = () => {
         if (S !== sess || !S.rejoinAsk || S.started) return;
-        if (S.rejoinAsk.tries >= 6) { S.rejoinAsk = null; status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — could not get your place back.<br>Waiting for the host to start…`; return; }
+        if (S.rejoinAsk.tries >= REJOIN_ASK_TRIES) {
+          S.rejoinAsk = null;
+          status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — could not get your place back.<br>Waiting for the host to start…`;
+          status.setAttribute("data-net-rejoin", "gave-up");
+          return;
+        }
         S.rejoinAsk.tries++;
         send("hello", Object.assign(myHello(), { rj: S.rejoinAsk.cands.map((c) => ({ slot: c.slot, key: c.key })) }));
-        setTimeout(ask, 3000);
+        setTimeout(ask, REJOIN_ASK_EVERY_MS);
       };
-      setTimeout(ask, 3000);
+      setTimeout(ask, REJOIN_ASK_EVERY_MS);
     }
     send("hello", hello);
     status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ` + (cands.length ? "rejoining your match…" : "share this code.") +
@@ -1480,7 +1507,9 @@ function hostRejoinHello(W, from, d, hr) {
   if (!reqs.length) { if (hr.first) send("rejoin", { k: "no", to: from, code: "busy", why: "a match is in progress in this room" }); return; }
   let last = null;
   for (const req of reqs) {
-    const j = judgeRejoin(req, from, { roster: S.cfg && S.cfg.roster, keys: S.slotKeys, goneAt: S.goneAt, nowMs: performance.now(), live, gvOk: !hr.mismatch });
+    const now = performance.now(), seen = S.lastSeen ? S.lastSeen["s" + req.slot] : null;
+    const j = judgeRejoin(req, from, { roster: S.cfg && S.cfg.roster, keys: S.slotKeys, goneAt: S.goneAt, nowMs: now, live, gvOk: !hr.mismatch,
+      silentMs: typeof seen === "number" ? now - seen : null });
     if (j.ok) { acceptRejoin(W, from, j.slot, hr); return; }
     last = j;
   }
@@ -1496,7 +1525,9 @@ function acceptRejoin(W, from, slot, hr) {
   const roster = S.cfg.roster.map((r) => (r.slot === slot ? Object.assign({}, r, { peerId: from }) : r));
   S.cfg = Object.assign({}, S.cfg, { roster });
   if (hr && hr.rec && hr.rec.rk) S.slotKeys.set(slot, hr.rec.rk);        // the new tab's commitment: a second reload can come back too
-  delete S.goneAt[id];
+  if (S.goneAt) delete S.goneAt[id];          // (null when the slot was judged gone by its silence alone)
+  // the old page's last packet must not trip the silence watchdog while the new page loads (its "ready" starts the slot's clock again)
+  if (S.lastSeen) delete S.lastSeen[id];
   (S.rejoined = S.rejoined || {})[id] = { peer: from, at: performance.now(), ready: false };
   try { if (old && S.rtc) S.rtc.removePeer(old.peerId); } catch (e) {}
   const a = W.actorById && W.actorById.get(id);
