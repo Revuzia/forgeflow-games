@@ -428,7 +428,7 @@ export function attachBrain(W, actor, nBots) {
       // (P23) graceMul: the new-player grace of the target at its acquisition (0 = none); assist / ping: a squadmate's fight / ping (C-MODE, C-PING);
       // danger*: a live grenade's predicted blast (LC-14); nade*: the throw machine (nadeS 0 idle / 1 drawing / 2 aiming, nadeKind 1 frag / 2 smoke);
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
-      graceMul: 0, assist: null, ping: null, pingRec: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
+      graceMul: 0, assist: null, ping: null, pingRec: null, pingGoT: -1, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
       reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, followBack: false, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
       wantShield: false, shieldScanT: 0, shieldNear: false, shieldGo: null, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, fdA: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
@@ -1058,15 +1058,19 @@ function think(W, b) {
   }
 }
 
-/** (C-PING, fix round) this bot's part in its squad's ping record (see the pingPlaced listener): "going" when the state it just chose is the
- *  ping's (PING for a spot / pin, ASSIST for an enemy mark), "busy" once 1 s has passed with no mate going. Both at most once per ping. */
-const PING_BUSY_S = 1.0, PING_LIFE_S = 30;
+/** (C-PING, fix round) this bot's part in its squad's ping record (see the pingPlaced listener): "going" when the state it chooses is the
+ *  ping's (PING for a spot / pin, ASSIST for an enemy mark) for PING_GO_S running, "busy" once 1 s has passed with no mate going. Both at most once per ping. */
+const PING_BUSY_S = 1.0, PING_LIFE_S = 30, PING_GO_S = 1.0;
 function pingAckStep(W, b, best) {
   const r = b.bb.pingRec;
   if (r.acked || W.t - r.t > PING_LIFE_S) { b.bb.pingRec = null; return; }
-  const going = best === (r.kind === "enemy" ? "ASSIST" : "PING");
-  if (!going && (r.busy || W.t - r.t < PING_BUSY_S)) return;
-  if (going) { r.acked = true; b.bb.pingRec = null; } else r.busy = true;
+  // "going" = the ping's state held PING_GO_S running (pingchk, mid-fight: one think chose PING between two sightings, then the fight took the
+  // bot back - an instant "going" ack for a mate that never went)
+  const take = best === (r.kind === "enemy" ? "ASSIST" : "PING");
+  if (!take) b.bb.pingGoT = -1; else if (!(b.bb.pingGoT >= 0)) b.bb.pingGoT = W.t;
+  const going = take && W.t - b.bb.pingGoT >= PING_GO_S;
+  if (!going && (take || r.busy || W.t - r.t < PING_BUSY_S)) return;     // (on its way, not 1 s yet: neither ack)
+  if (going) { r.acked = true; b.bb.pingRec = null; b.bb.pingGoT = -1; } else r.busy = true;
   W.events.emit("pingAck", { by: b.actor.id, owner: r.owner, kind: r.kind, x: r.x, z: r.z, busy: !going });
 }
 const GRAB_R = 8, GRAB_CLOSE_M = 8;
