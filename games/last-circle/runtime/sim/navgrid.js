@@ -1039,21 +1039,31 @@
    *  megamorphic load, and a megamorphic load of a double field (minX, inv, cell, deepY ...) hands back a FRESH heap number: hopQ made 49 B of garbage
    *  per replayed 10 cm step in TurboFan (Node probe, Deepwood seed 7: 5,842 B a 12 m hop; ~465 B a step before it is optimized), and each new class
    *  a hot function met deoptimized it ("wrong map", Chrome's V8 log of a framecheck run). Now: one literal with every field, in one order, with a value
-   *  of the field's final kind; the later stages assign in place. Same values, read the same way: no tile, edge or route changes (world hash). */
+   *  of the field's final kind; the later stages assign in place. The integer fields are stored as small integers (| 0): a payload's numbers come out of a
+   *  double array (pbAssemble's s[]) as heap numbers, and ONE heap number in a small-integer field re-classes every tile (Chrome's log: tileShell 'not a
+   *  Smi', then 'wrong map' in hopQ / supBlockQ / supportTQ / hfQ, right before the drop). Same values, read the same way: no tile, edge or route
+   *  changes (world hash). */
   function tileShell(key, minX, minZ, maxX, maxZ, cell, nx, nz, inv, hf, deepY, wetY, cs) {
-    return {
-      isTile: true, grp: null, island: null, key: key, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf, hl: latFor(hf),
-      deepY: deepY, wetY: wetY,
-      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
-      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
+    // the literal holds CONSTANTS of each field's kind (0.5 = a double field, 0 = a small-integer one, null = an object), so its boilerplate is born with
+    // the final representations; a computed integral double (a coarse tile's minX -544) would otherwise make minX a small-integer field (V8 log: 'not a Smi')
+    var T = {
+      isTile: true, grp: null, island: null, key: 0, minX: 0.5, minZ: 0.5, maxX: 0.5, maxZ: 0.5, cell: 0.5, nx: 0, nz: 0, inv: 0.5, hf: null, hl: null,
+      deepY: 0.5, wetY: 0.5,
+      m: 0, lx0: null, lx1: null, ly0: null, ly1: null,
+      lz0: null, lz1: null, lk: null, ld: null,
       nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
       // set by the bake (bakeTileGen) / the payload (pbAssemble)
-      dOrth: cell, dDiag: cell * Math.SQRT2, n: 0, x: null, y: null, z: null, flag: null, bord: null, adj: null, cellStart: null,
+      dOrth: 0.5, dDiag: 0.5, n: 0, x: null, y: null, z: null, flag: null, bord: null, adj: null, cellStart: null,
       edgeStart: null, edgeTo: null, edgeCost: null, edgeKind: null, bordCount: 0, holes: null,
       extStart: null, extTo: null, extCost: null, extKind: null, pend: null, linked: null, stats: null, hash: "",
       // set by the install (bakeCoarse / bakeFine / stepJob / pbHostAdd), the stitch (stepJob, linkTileGen) and the settle (resolveGroup)
       kind: "", tx: 0, tz: 0, rectRef: null, linking: false, linkedAt: -1, rch: null,
     };
+    T.key = key | 0; T.minX = minX; T.minZ = minZ; T.maxX = maxX; T.maxZ = maxZ; T.cell = cell; T.nx = nx | 0; T.nz = nz | 0; T.inv = inv; T.hf = hf; T.hl = latFor(hf);
+    T.deepY = deepY; T.wetY = wetY;
+    T.m = cs.n; T.lx0 = cs.minX; T.lx1 = cs.maxX; T.ly0 = cs.minY; T.ly1 = cs.maxY; T.lz0 = cs.minZ; T.lz1 = cs.maxZ; T.lk = cs.kind; T.ld = cs.dir;
+    T.dOrth = cell; T.dDiag = cell * Math.SQRT2;
+    return T;
   }
   /** Drive every field of the tile class through the kinds of value it will ever hold, once, when the module loads: a field's representation (small
    *  integer -> double), its type (null -> an array) and its constness (written once -> written again) only ever GENERALIZE, and each generalization
@@ -1764,9 +1774,9 @@
     var T = tileShell(P.key, s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], hf, s[8], s[9], cs);      // (final/nav) the one tile class, see tileShell
     T.nearStart = a.nearStart; T.nearItems = a.nearItems;
     T.dOrth = s[11]; T.dDiag = s[12];
-    T.n = s[10]; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
+    T.n = s[10] | 0; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
     T.edgeStart = a.edgeStart; T.edgeTo = a.edgeTo; T.edgeCost = a.edgeCost; T.edgeKind = a.edgeKind;
-    T.bordCount = s[13]; T.holes = holes || [];
+    T.bordCount = s[13] | 0; T.holes = holes || [];
     T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null; T.pend = null; T.linked = [];
     T.stats = P.stats;
     T.hash = P.hash;
@@ -2081,7 +2091,7 @@
     var M = H.M;
     if (pbHas(M, P.key)) return;
     var T = pbAssemble(M, P);
-    if (P.kind === 0) { T.kind = "coarse"; T.tx = Math.floor(P.key / 8192) - 4096; T.tz = P.key % 8192 - 4096; M.coarse.set(P.key, T); }
+    if (P.kind === 0) { T.kind = "coarse"; T.tx = (Math.floor(P.key / 8192) - 4096) | 0; T.tz = (P.key % 8192 - 4096) | 0; M.coarse.set(P.key, T); }
     else { var r = M.fine[P.key - 100000000]; T.kind = "fine"; T.rectRef = r; r.tile = T; }
     T.slot = M.slots.length; T.base = T.slot * STRIDE; M.slots.push(T);
     if (H.jobs.has(P.key)) H.arrived++;
