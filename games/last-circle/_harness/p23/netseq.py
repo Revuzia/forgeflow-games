@@ -115,6 +115,12 @@ def main():
             ctx, hpg, hrec, gpg, grec, code = L.squad_pair(rig, SQ, args, "netseq")
             h_id = hpg.evaluate("() => window.__LC__.W.player.id")
             g_id = gpg.evaluate("() => window.__LC__.W.player.id")
+            # SETUP (D16): the pair must still be ONE squad session before anything is judged
+            ok_s, sess = L.pair_session(hpg, gpg, h_id, g_id)
+            v.info("pair session after the landing", sess)
+            if not ok_s:
+                v.cnj("session (both pages in the squad session, the host drives the guest's body)", "SETUP missed: %s" % sess)
+                return
             if args.plant:
                 gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])
                 gpg.evaluate("(id) => { window.__P23PB__.id = id; }", h_id)
