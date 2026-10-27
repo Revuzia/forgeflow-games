@@ -1674,6 +1674,15 @@
   // tile arrived in time or not - a missing one is simply baked as before - and a replay of a seed is identical with or without workers.
   // Only the wall clock differs: the drop's bots section loses the bake (89 % of its nav cost, split.mjs). Workers start when a lazy world is created
   // (bots.js startNav, right after buildMap: the model loading and the lobby are their time) and stop when every tile of the world's rects is done.
+  // (P23 fix round) THAT IS MAP-BUILD TIME: the world needs the map's final collider set, which exists when buildMap resolves, and startNav runs from the
+  // first attachBrain right after it (measured: bakeTown 0.08-0.13 s, before the first idle moment after W.map is set). The window to Enter is then only the
+  // actor-model load, the shader warm-up and the lobby - 6-14 s on the shared box when Enter is pressed at once (the default flow). So the queue puts the
+  // BUILDINGS first (the only tiles the drop's schedule bakes: the outdoor ones are bots.js's own loading pump + barrier) and a desktop runs up to 6 bake
+  // workers. Measured (ashgrid seed 7, Enter at once): at Enter 525 of 711 buildings in (was ~30), drop bots section p95 2.3 ms real rAF (base 4.6) and
+  // 1.9 ms per paced tick (base 3.8), first 5 s p95 1.1 ms (base 15.9), every state hash equal to the base build's.
+  // The schedule itself is NOT paced by the wall clock while results are pending: which tile is in at which tick is sim state, so a wall-clock pace would
+  // make a seed play differently with and without workers (and on a fast and a slow machine). A deterministic pace (a smaller NAV_STEPS_TICK_DROP while
+  // nobody has landed) would be bots.js's schedule, as is prebakeHint(world, landing spots) - the exact drop order - which assignDrops could pass.
   // Off when: no Worker / Blob (Node, old browsers), the height function carries no validated lattice (a worker could not read the same ground), the
   // page URL has ngworker=0 (A/B), opts.prebake === false, or anything throws (the bake then runs on the main thread exactly as before).
   var _rec = null, _recB0 = 0, _recB1 = 0;
