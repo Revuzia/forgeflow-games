@@ -472,14 +472,31 @@ SESSION_JS = r"""(other) => { const W = window.__LC__ && window.__LC__.W, S = W 
 SIM_RATE_MIN = 0.6      # match-clock seconds per wall second below which a two-page row measures the box, not net.js (lane net's live probe rule)
 
 
+PAIR_FPS_MIN = 15       # rendered frames per wall second a GUEST page needs (its match clock is slewed to the host's, so W.t is no rate for it)
+
+
 def sim_rates(*pgs, secs=3.0):
     """match-clock seconds per wall second on each page over ~secs (1.0 = real time). net.js's watchdogs and rejoin-record freshness run on
     the WALL clock (8 s host silence, 12 s guest silence, a record refreshed every 2 s and fresh for 75 s): a page starved below SIM_RATE_MIN
-    trips them by itself"""
+    trips them by itself. Only the HOST's clock is its own: a guest slews W.t to the host's (gateA 10-27: a guest read -0.023) - use
+    frame_rates() for a guest"""
     t0 = [(time.time(), p.evaluate("() => window.__LC__.W.t")) for p in pgs]
     pgs[0].wait_for_timeout(int(secs * 1000))
     t1 = [(time.time(), p.evaluate("() => window.__LC__.W.t")) for p in pgs]
     return [round((b[1] - a[1]) / max(0.001, b[0] - a[0]), 3) for a, b in zip(t0, t1)]
+
+
+def pair_rates(hpg, gpg, secs=3.0):
+    """(host match-clock rate, guest rendered fps) over ~secs, and whether both are fit to judge a two-page row"""
+    js = "() => [window.__LC__.W.t, window.__LC__.W.kernel.frameNo]"
+    a = (time.time(), hpg.evaluate(js), gpg.evaluate(js))
+    hpg.wait_for_timeout(int(secs * 1000))
+    b = (time.time(), hpg.evaluate(js), gpg.evaluate(js))
+    dt = max(0.001, b[0] - a[0])
+    out = {"hostRate": round((b[1][0] - a[1][0]) / dt, 3), "hostFps": round((b[1][1] - a[1][1]) / dt, 1), "guestFps": round((b[2][1] - a[2][1]) / dt, 1),
+           "guestClockRate": round((b[2][0] - a[2][0]) / dt, 3)}
+    out["ok"] = out["hostRate"] >= SIM_RATE_MIN and out["guestFps"] >= PAIR_FPS_MIN
+    return out
 
 
 def pair_session(hpg, gpg, h_id, g_id, wait_s=20):
