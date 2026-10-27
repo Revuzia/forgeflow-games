@@ -12,6 +12,11 @@
  *   NavGrid.findPath(world, sx, sy, sz, tx, ty, tz [, { pad, maxExpand, noPull, maxDrop }])  -> [{ x, y, z, k }, ...] | null
  *       (P2-E) opts.maxDrop (m): drop edges taller than this are left out (default: all, up to DROP_MAX 6 m). For C-FALL (a 4 m drop is safe, a
  *       taller one hurts) and C-DBNO crawlers. A downed actor (0.6 m capsule, same radius) needs no grid of its own: every standing edge fits it.
+ *       maxDrop is a HEIGHT; C-FALL gives the safe landing as a SPEED (K.FALL_SAFE_V, m/s): convert it with h = v^2 / (2 g) at THIS game's gravity,
+ *       g = 22 m/s^2 (sim MOVE.gravity; not 9.8): NavGrid.dropHeight(K.FALL_SAFE_V) = 4.0 m (= K.FALL_SAFE_H; a fall-damage budget of b hp: the height
+ *       whose fallDamage is b). A NULL route is a valid answer, not an error: with a budget it is "no-path" whenever every way needs a taller drop
+ *       (a downed crawler on a deck whose only exits are drops, a walled yard only a drop leads into) - the caller keeps its own plan (stays, or
+ *       uses its fallback planner) and may ask again; world.lastFail says why.
  *       k = the kind of the leg that ARRIVES at the waypoint (0 walk, 1 drop, 2 ramp); the array also carries .cost .expanded
  *       .nodes; world.lastFail names why a query returned null: "no-goal" (no floor near the goal), "no-start", "start-blocked"
  *       (the walker cannot walk to any node near it), "no-path", "limit" (maxExpand reached, or the search table is full)
@@ -3090,6 +3095,11 @@
     return o;
   }
 
+  /** The height (m) of a free fall that lands at vertical speed v (m/s): h = v^2 / (2 g), g = |GRAVITY| (22 m/s^2, the sim's MOVE.gravity, the value player.js
+   *  integrates). C-FALL states its safe landing as a SPEED (K.FALL_SAFE_V, 13.3 m/s here); findPath's opts.maxDrop wants the HEIGHT: dropHeight(K.FALL_SAFE_V)
+   *  = 4.0 m = K.FALL_SAFE_H. 0 for v <= 0. */
+  function dropHeight(v) { v = +v; return v > 0 ? v * v / (2 * Math.abs(GRAVITY)) : 0; }
+
   var api = {
     bakeTile: bakeTile, createWorld: createWorld, findPath: findPath, walkSegment: walkSegment, tileFor: tileFor, prewarm: prewarm,
     VERSION: VERSION, bakeTown: bakeTown, rectOfLayout: rectOfLayout, edgesOf: edgesOf, linkTile: linkTile,
@@ -3107,6 +3117,8 @@
       return ok ? { y: _hr[0], gap: _hr[1], ramp: _hr[2] === 1, yMin: _hr[3] } : null;
     },
     counters: function () { return { hops: _cnt[0], steps: _cnt[1] }; }, resetCounters: function () { _cnt[0] = 0; _cnt[1] = 0; },
+    // (P23 fix round) the drop height a landing speed stands for, at this grid's gravity (= sim MOVE.gravity): findPath's opts.maxDrop is a HEIGHT
+    dropHeight: dropHeight,
     // (P2-E, LC-88) the prebake: workers bake a lazy world's tiles ahead (see PREBAKE); the sim is the same with or without them
     prebakeStats: prebakeStats, prebakeHint: prebakeHint, prebakeStop: pbStop, prebakeInline: prebakeInline,
     EDGE_WALK: EDGE_WALK, EDGE_DROP: EDGE_DROP, EDGE_RAMP: EDGE_RAMP,
