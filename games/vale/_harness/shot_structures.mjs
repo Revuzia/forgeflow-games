@@ -1,9 +1,14 @@
 // VALE harness — r12 M9 structures in the real client at the gameplay camera: screen height against a fighter,
 // the occlusion fade, both damage thresholds, the collapse and the ruin, the protected shell.
-//   node _harness/shot_structures.mjs [rift|bridge|fray] [--q high] [--name structures] [--states all|scale,occlusion,damage,collapse,shell,respawn]
+//   node _harness/shot_structures.mjs [rift|bridge|fray] [--q high] [--w 1920 --h 1080] [--name structures]
+//        [--states all|scale,occlusion,sweep,damage,collapse,shell,respawn]
 // Damage comes from a harness hook only: the bench's own sim takes the real dealDamage (src/sim/combat.ts) or an hp
 // write on the entity; no sim code changes. Writes _harness/_shots/<name>_<state>.png and
 // _harness/_reports/structures_<map>.json (px heights, ratios, fade/shell/stage states over time).
+// sweep (r12 M9 occlusion gate): your fighter on every walkable spot behind each structure kind of both sides
+// (collision radius + 0.65 / 1.0 / 1.6 / 2.4 m, every 15° from −165° to −15°), the camera on the structure; the
+// fighter's visibility = |frame − frame without the fighter| / the same with the structure hidden, over the fighter's
+// screen box. FAILS (exit 1) if any spot leaves the fighter < 0.5 visible while the structure's fade is off.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,9 +19,10 @@ const args = process.argv.slice(2);
 const mode = args.find((a) => !a.startsWith('--')) ?? 'rift';
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const name = opt('name', 'structures');
-const states = new Set((opt('states', 'all') === 'all' ? 'scale,occlusion,damage,collapse,shell,respawn' : opt('states', '')).split(','));
+const states = new Set((opt('states', 'all') === 'all' ? 'scale,occlusion,sweep,damage,collapse,shell,respawn' : opt('states', '')).split(','));
 const tag = mode === 'rift' ? '' : `_${mode}`;
-const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${mode}&q=${opt('q', 'high')}&t=${opt('t', 12)}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${mode}&q=${opt('q', 'high')}&t=${opt('t', 12)}&dev=1&hud=0&manual=1`,
+  { wait: false, hmr: false, width: +opt('w', 1920), height: +opt('h', 1080) });
 await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 180000 });
 const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
 const err = await B((b) => b.error ?? null);
@@ -32,8 +38,9 @@ await B((b) => {
   b.$ = {
     still: (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) R.render(dt); },
     actor: (id) => R.actors.get(id),
-    /** screen box (CSS px) of an actor's visible meshes, from every (skinned) vertex: the silhouette's extent */
-    box: (id) => {
+    /** screen box (CSS px) of an actor's visible meshes, from every (skinned) vertex: the silhouette's extent
+     *  (`shell`: with a structure's protected shell, its glaze pushed out as the shader does) */
+    box: (id, shell = false) => {
       const a = R.actors.get(id);
       if (!a || !a.model) return null;
       const cam = R.rig.camera;
@@ -41,12 +48,19 @@ await B((b) => {
       a.root.updateMatrixWorld(true);
       let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
       const v = new cam.position.constructor();
-      a.model.traverseVisible((o) => {
-        if (!o.isMesh || o.userData.valeOutline) return;
+      const nv = new cam.position.constructor();
+      (shell ? a.root : a.model).traverseVisible((o) => {
+        const sh = shell && /^vale_struct_s(hell|kin)$/.test(o.name);
+        if (!o.isMesh || (o.userData.valeOutline && !sh)) return;
+        if (o.material && o.material.visible === false) return;
         const n = o.geometry.getAttribute('position').count;
+        const infl = o.name === 'vale_struct_skin' ? o.material.uniforms.uInflate.value : 0;
+        const sm = infl ? o.geometry.getAttribute('aSmooth') : null;
         for (let i = 0; i < n; i++) {
           o.getVertexPosition(i, v);
-          v.applyMatrix4(o.matrixWorld).project(cam);
+          v.applyMatrix4(o.matrixWorld);
+          if (sm) v.addScaledVector(nv.fromBufferAttribute(sm, i).transformDirection(o.matrixWorld), infl);
+          v.project(cam);
           const sx = (v.x * 0.5 + 0.5) * R.cssW, sy = (-v.y * 0.5 + 0.5) * R.cssH;
           x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
         }
@@ -79,6 +93,38 @@ await B((b) => {
     /** put a unit there, let vision rebuild around it (a few ticks), put it back exactly */
     settle: (id, x, y) => { b.$.place(id, x, y); for (let i = 0; i < 7; i++) { b.host.pump(1 / 30); b.$.place(id, x, y); } b.host.pump(1 / 30); },
     info: () => R.structs.info(),
+    walk: (x, y) => b.host.view.nav.walkable(x, y),
+    at: (id) => { const e = b.$.ent(id); return { x: e.x, y: e.y, alive: e.alive }; },
+    /** the canvas pixels (rgba) of a CSS-px rect */
+    grab: (r) => {
+      const canvas = R.gl.domElement;
+      const sx = canvas.width / R.cssW, sy = canvas.height / R.cssH;
+      const t = document.createElement('canvas');
+      t.width = Math.max(1, Math.round(r.w * sx)); t.height = Math.max(1, Math.round(r.h * sy));
+      const g = t.getContext('2d');
+      g.drawImage(canvas, r.x0 * sx, r.y0 * sy, r.w * sx, r.h * sy, 0, 0, t.width, t.height);
+      return g.getImageData(0, 0, t.width, t.height).data;
+    },
+    /** how much of unit `u` shows past structure `s`: |N − N without u| / |S − S without u| over u's screen box,
+     *  S = the frame with the structure (and its shell) hidden; plus the structure's fade and the rays' blocked share */
+    visibility: (s, u) => {
+      const A = R.actors.get(s), U = R.actors.get(u);
+      const r0 = b.$.box(u);
+      if (!A || !U || !r0 || r0.w < 2 || r0.h < 2) return null;
+      const r = { x0: Math.max(0, r0.x0), y0: Math.max(0, r0.y0), w: Math.min(r0.w, R.cssW - Math.max(0, r0.x0)), h: Math.min(r0.h, R.cssH - Math.max(0, r0.y0)) };
+      const shells = [];
+      A.root.traverse((o) => { if (o.isMesh && /^vale_struct_s(hell|kin)$/.test(o.name)) shells.push(o.material); });
+      const g = () => { R.render(0.0001); return b.$.grab(r); };
+      const N = g(); U.model.visible = false; const NF = g(); U.model.visible = true;
+      A.model.visible = false; for (const m of shells) m.visible = false;
+      const S = g(); U.model.visible = false; const SF = g(); U.model.visible = true;
+      A.model.visible = true; for (const m of shells) m.visible = true;
+      let a = 0, c = 0;
+      for (let i = 0; i < N.length; i += 4) for (let k = 0; k < 3; k++) { a += Math.abs(N[i + k] - NF[i + k]); c += Math.abs(S[i + k] - SF[i + k]); }
+      R.render(0.0001);
+      const st = R.structs.info().find((x) => x.id === s);
+      return { vis: +(a / Math.max(1, c)).toFixed(3), fade: st?.fade ?? 0, share: +R.structs.blockedShare(s, U, R.rig.camera).toFixed(3) };
+    },
     structs: () => b.host.view.entities.filter((e) => e.kind === 'structure').map((e) => ({ id: e.id, def: e.def, team: e.team, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: e.alive, targetable: e.targetable })),
   };
   void THREE_V;
@@ -146,6 +192,39 @@ if (states.has('occlusion') && occ) {
   report.occlusion.behindState = on; report.occlusion.besideState = off;
 }
 
+if (states.has('sweep') && S.length) {
+  report.sweep = { rows: [], failures: [], n: 0 };
+  const kinds = [...new Set(S.map((s) => `${s.def}:${s.team}`))];
+  for (const k of kinds) {
+    const s = S.find((x) => `${x.def}:${x.team}` === k);
+    const R0 = await B((b, id) => b.$.ent(id).radius, s.id);
+    for (const dr of [0.65, 1.0, 1.6, 2.4]) for (let ang = -165; ang <= -15; ang += 15) {
+      const r = R0 + dr, t = (ang * Math.PI) / 180;
+      const x = s.x + Math.cos(t) * r, y = s.y + Math.sin(t) * r;
+      if (!(await B((b, p) => b.$.walk(p[0], p[1]), [x, y]))) continue;
+      await B((b, p) => { b.$.settle(p.you, p.x, p.y); const e = b.$.ent(p.you); if (e.alive) e.hp = e.maxHp; }, { you: you.id, x, y });
+      const at = await B((b, id) => b.$.at(id), you.id);
+      if (!at.alive || Math.hypot(at.x - x, at.y - y) > 0.15) continue;            // pushed off the spot: not standable
+      await B((b, p) => { b.focus(p[0], p[1]); b.zoom(28.5); b.$.still(14); }, [s.x, s.y]);
+      const v = await B((b, p) => b.$.visibility(p.s, p.u), { s: s.id, u: you.id });
+      if (!v) continue;
+      const row = { def: s.def, team: s.team, dr, ang, r: +r.toFixed(2), ...v };
+      report.sweep.rows.push(row);
+      report.sweep.n++;
+      if (v.vis < 0.5 && v.fade < 0.5) report.sweep.failures.push(row);
+    }
+    const mine = report.sweep.rows.filter((w) => w.def === s.def && w.team === s.team);
+    const worst = mine.filter((w) => w.fade < 0.5).sort((p, q) => p.vis - q.vis)[0];
+    console.log(`sweep ${s.def}:${s.team} spots ${mine.length} hidden-without-fade ${mine.filter((w) => w.vis < 0.5 && w.fade < 0.5).length}` +
+      ` faded ${mine.filter((w) => w.fade >= 0.5).length} worst-unfaded vis ${worst ? worst.vis : '-'} min-faded vis ${Math.min(...mine.filter((w) => w.fade >= 0.5).map((w) => w.vis)).toFixed?.(3) ?? '-'}`);
+  }
+  if (report.sweep.failures.length) {
+    console.log(`SWEEP FAIL: ${report.sweep.failures.length} of ${report.sweep.n} spots leave the fighter < 50 % visible with no fade`);
+    for (const f of report.sweep.failures.slice(0, 12)) console.log('  ', JSON.stringify(f));
+    process.exitCode = 1;
+  } else console.log(`SWEEP OK: ${report.sweep.n} spots, none leaves the fighter < 50 % visible without the fade`);
+}
+
 if (states.has('shell')) {
   const prot = S.find((s) => !s.targetable && s.def === 'needle_inner') ?? S.find((s) => !s.targetable);
   if (prot) {
@@ -153,6 +232,15 @@ if (states.has('shell')) {
     await focusOn(prot.x, prot.y);
     report.shell.protected = await B((b, id) => b.$.info().find((s) => s.id === id), prot.id);
     await shot(page, `${name}${tag}_shell`);
+  }
+  // r12 M9: the shell must not grow the protected silhouette (≤ +10 % of the bare tower's screen box)
+  report.shell.growth = [];
+  for (const s of S.filter((x) => !x.targetable)) {
+    if (report.shell.growth.some((g) => g.def === s.def && g.team === s.team)) continue;
+    await B((b, p) => { b.$.settle(p.you, p.x + 4.5, p.y + 1.5); }, { you: you.id, x: s.x, y: s.y });
+    await focusOn(s.x, s.y);
+    const m = await B((b, id) => ({ body: b.$.box(id), shell: b.$.box(id, true), info: b.$.info().find((x) => x.id === id) }), s.id);
+    if (m.body && m.shell) report.shell.growth.push({ def: s.def, team: s.team, shellK: m.info?.shell, bodyPx: m.body, shellPx: m.shell, growthH: +(m.shell.h / m.body.h).toFixed(3), growthW: +(m.shell.w / m.body.w).toFixed(3) });
   }
 }
 

@@ -49,29 +49,29 @@
   },
   "uv_coverage": 0.595,
   "bake": {
-    "base": 6.49,
-    "rough_metal": 4.25,
-    "normal": 4.33,
-    "ao": 7.54,
+    "base": 6.11,
+    "rough_metal": 6.2,
+    "normal": 3.37,
+    "ao": 4.16,
     "normal_fixed_px": 107910,
-    "projection": 221.54,
-    "pack_save": 223.91,
-    "total": 246.82
+    "projection": 177.42,
+    "pack_save": 177.85,
+    "total": 198.3
   },
   "tris": 19810,
   "mesh_top_m": 1.881,
-  "glb_bytes_raw": 2390988,
+  "glb_bytes_raw": 2394664,
   "optimize": {
     "ok": true,
-    "before": 2390988,
-    "after": 996644
+    "before": 2394664,
+    "after": 997908
   },
-  "glb_bytes": 996644,
+  "glb_bytes": 997908,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (973 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: rishal_chalkline_base 2048x2048 240K, rishal_chalkline_normal 512x512 40K, rishal_chalkline_orm 512x512 69K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (975 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: rishal_chalkline_base 2048x2048 241K, rishal_chalkline_normal 512x512 40K, rishal_chalkline_orm 512x512 69K",
       "  skinned meshes: rishal_accent(143v), rishal_chalkline(18035v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -86,8 +86,8 @@
       "portrait": "art/out/fighters/rishal/rishal_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 57.68,
-      "portrait": 18.72
+      "splash": 19.79,
+      "portrait": 8.73
     }
   },
   "three_qa": {
@@ -119,24 +119,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/rishal/three_rishal_chalkline.png",
-    "seconds": 28,
+    "seconds": 25.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.85,
-      "model": 37.93,
-      "lows_bind": 5.28,
-      "uv": 6.68,
-      "bake": 246.82,
-      "export": 1.49,
-      "optimize": 5.66,
-      "load_test": 4.24,
-      "render": 76.61,
-      "three_qa": 28.5
+      "materials": 0.38,
+      "model": 167.54,
+      "lows_bind": 3.76,
+      "uv": 6.87,
+      "bake": 198.3,
+      "export": 0.29,
+      "optimize": 1.33,
+      "load_test": 0.23,
+      "render": 28.57,
+      "three_qa": 25.75
     },
-    "total_s": 414.3
+    "total_s": 433.11
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

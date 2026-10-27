@@ -916,9 +916,11 @@ def make_ruin(body, B: Build, groups: dict, rng: random.Random, name: str, col, 
 
 
 def cracks(targets, B: Build, rng: random.Random, n: int, z0: float, z1: float, width: float, name: str, col,
-           crack_mat, accent_mat, seed_pts: int = 10):
+           crack_mat, accent_mat, seed_pts: int = 10, tilt: float = 0.0, steps=(6, 11)):
     """Crack ribbons walking over the upper's surface (rays toward the axis): a dark ink ribbon with a
-    thin live accent seam inside (the light shows through the broken stone)."""
+    thin live accent seam inside (the light shows through the broken stone). `tilt` > 0 casts the rays down
+    toward the axis (slope tilt), so cracks also land on the upward faces a dome shows the gameplay camera;
+    `steps`: the walk's length range (each step 0.08-0.17 m)."""
     from mathutils.bvhtree import BVHTree
     bm_all = bmesh.new()
     for o in targets:
@@ -929,9 +931,9 @@ def cracks(targets, B: Build, rng: random.Random, n: int, z0: float, z1: float, 
     bm_all.free()
 
     def cast(th, z):
-        o = Vector((R * math.cos(th), R * math.sin(th), z))
-        d = Vector((-math.cos(th), -math.sin(th), 0.0))
-        hit = bvh.ray_cast(o, d, 2 * R)
+        o = Vector((R * math.cos(th), R * math.sin(th), z + tilt * R))
+        d = Vector((-math.cos(th), -math.sin(th), -tilt)).normalized()
+        hit = bvh.ray_cast(o, d, 2 * R * math.sqrt(1 + tilt * tilt))
         if hit[0] is None or hit[1].dot(d) > -0.25:
             return None
         return hit[0], hit[1]
@@ -949,8 +951,7 @@ def cracks(targets, B: Build, rng: random.Random, n: int, z0: float, z1: float, 
         sgn = rng.choice((-1.0, 1.0))
         pts = [h]
         th0, zz = th, z
-        steps = rng.randint(6, 11)
-        for _s in range(steps):
+        for _s in range(rng.randint(*steps)):
             r = max(0.25, Vector((pts[-1][0].x, pts[-1][0].y)).length)
             th0 += rng.uniform(-0.16, 0.16) / r
             zz += sgn * rng.uniform(0.08, 0.17)

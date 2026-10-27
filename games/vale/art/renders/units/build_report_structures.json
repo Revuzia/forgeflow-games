@@ -38,7 +38,7 @@
   "needle_outer_serenade": {
     "unit": "needle_outer",
     "culture": "serenade",
-    "tris": 12640,
+    "tris": 12600,
     "height": 4.59,
     "scale": 0.69,
     "plinth_top": 0.29,
@@ -61,8 +61,8 @@
       "ruin",
       "upper"
     ],
-    "kb_raw": 882,
-    "kb": 540,
+    "kb_raw": 880,
+    "kb": 538,
     "texture": 1024,
     "buried_faces_dropped": 1474,
     "clips": [
@@ -110,7 +110,7 @@
   "needle_inner_serenade": {
     "unit": "needle_inner",
     "culture": "serenade",
-    "tris": 15042,
+    "tris": 15114,
     "height": 4.69,
     "scale": 0.67,
     "plinth_top": 0.281,
@@ -133,8 +133,8 @@
       "ruin",
       "upper"
     ],
-    "kb_raw": 1024,
-    "kb": 635,
+    "kb_raw": 1027,
+    "kb": 637,
     "texture": 1024,
     "buried_faces_dropped": 1635,
     "clips": [
@@ -182,7 +182,7 @@
   "needle_bell_serenade": {
     "unit": "needle_bell",
     "culture": "serenade",
-    "tris": 13094,
+    "tris": 13218,
     "height": 4.59,
     "scale": 0.75,
     "plinth_top": 0.315,
@@ -205,8 +205,8 @@
       "ruin",
       "upper"
     ],
-    "kb_raw": 910,
-    "kb": 556,
+    "kb_raw": 917,
+    "kb": 561,
     "texture": 1024,
     "buried_faces_dropped": 1524,
     "clips": [
@@ -254,16 +254,16 @@
   "lantern_serenade": {
     "unit": "lantern",
     "culture": "serenade",
-    "tris": 11164,
-    "height": 4.64,
-    "scale": 1.15,
-    "plinth_top": 0.483,
-    "plinth_r": 2.6,
-    "ruin_height": 1.28,
-    "ruin_tris": 2024,
+    "tris": 13512,
+    "height": 4.69,
+    "scale": 1.0,
+    "plinth_top": 0.42,
+    "plinth_r": 2.02,
+    "ruin_height": 1.36,
+    "ruin_tris": 2989,
     "chips": [
-      3,
-      2
+      6,
+      5
     ],
     "nodes": [
       "base",
@@ -277,10 +277,10 @@
       "ruin",
       "upper"
     ],
-    "kb_raw": 750,
-    "kb": 449,
+    "kb_raw": 864,
+    "kb": 526,
     "texture": 1024,
-    "buried_faces_dropped": 990,
+    "buried_faces_dropped": 1042,
     "clips": [
       "idle",
       "attack1",
@@ -326,7 +326,7 @@
   "hourbell_serenade": {
     "unit": "hourbell",
     "culture": "serenade",
-    "tris": 16918,
+    "tris": 16950,
     "height": 5.28,
     "scale": 0.76,
     "plinth_top": 0.502,
@@ -349,8 +349,8 @@
       "ruin",
       "upper"
     ],
-    "kb_raw": 1648,
-    "kb": 855,
+    "kb_raw": 1660,
+    "kb": 859,
     "texture": 2048,
     "buried_faces_dropped": 1724,
     "clips": [

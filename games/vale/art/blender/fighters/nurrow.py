@@ -17,8 +17,8 @@ brim centre (an oblique cone: from the game camera the knob leans the way she fa
 accent, on its own bone (x_hat: it rolls off in `death`); the
 mantle is the concept's long felt cape with ragged points (one x_ chain, 2 sway bones) and a felt cowl with a
 hood lying on the upper back; both hands are carved wood. The brief wins on what is banned and on the accent: the
-concept's blue rim studs (gems) become six accent-glass inlays in raised iron settings on the rim's upper bevel (the
-brief's six inlays: the colour reads from any angle, including from above; the only emissive), the brooch's stone a
+concept's blue rim studs (gems) become 21 small accent-glass studs in iron collars on the rim's upper bevel (the
+concept's stud row; the colour reads from any angle, including from above; the only emissive), the brooch's stone a
 matte slate stone; the hat's lacquer keeps the concept's ochre hue but its chroma is held at the bible's 40 % cap
 for the marigold band (art/README: team hues stay out of large albedo areas above 40 %).
 
@@ -27,7 +27,10 @@ stance (every clip and the run work from one rest pose) and the plates re-pose t
 
 Not in the shared pipeline, implemented here (module-level wrappers installed for this build only; common/ is
 untouched): part binding restricted to named bones ("auto_only"), the projection paint (the painted blade taken off
-the plate and every part behind it filled from its own paint; procedural lacquer on the hat (its underside the
+the plate and every part behind it filled from its own paint; the hat's lacquer PAINTED by hand-placed brushwork
+(_lacquer: gores, radial strokes, the painted line, soot, chips, scratches, crackle; each skin's own paint on it:
+Noon Fair's moths, Shadeprint's ink crown); the hat's top and underside are two parts (their own texel weights)
+(its underside the
 concept's warm ochre-brown, not the brief's ink), a clean dark iron rim / knob, the blade with its pale bevel, the
 grip, the brown head wrap, the red-brown belt, the carved pauldron lames, the umber boots with their sole and welt;
 the trousers and leg wraps re-coloured to the concept's plum / grey-mauve; side planes of the cape, cowl and legs; a
@@ -484,9 +487,11 @@ def sculpts() -> list:
         b_w = np.cross(n_w, t_w)
         ax = np.stack([unit(t_w), unit(b_w), unit(n_w)])
         c_w = hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004]))
-        rim.add(Ellipsoid(c_w - n_w * 0.005, (0.038, 0.026, 0.0120), axes=ax), k=0.008)         # the collar
-        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0335, 0.0215, 0.0070), axes=ax), k=0.002)       # its seat
-        glass.add(Ellipsoid(c_w + n_w * 0.0008, (0.032, 0.0205, 0.0075), axes=ax), k=0.0)
+        g = 1.0 if abs(phi) < 95.0 else 1.10                  # the back half's studs a step bigger (seen from behind
+        #                                                       the rim's back half carries the accent: >= 1 %)
+        rim.add(Ellipsoid(c_w - n_w * 0.005, (0.038 * g, 0.026 * g, 0.0120), axes=ax), k=0.008)         # the collar
+        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0335 * g, 0.0215 * g, 0.0070), axes=ax), k=0.002)       # its seat
+        glass.add(Ellipsoid(c_w + n_w * 0.0008, (0.032 * g, 0.0205 * g, 0.0075), axes=ax), k=0.0)
     part("hat_rim", rim, "ironstone", "bone:x_hat", 1250, 0.5)
     part("hat_inlays", glass, "accent", "bone:x_hat", 720, 0.35)
 
@@ -1142,9 +1147,10 @@ SIDE_INSET = 0.04
 # fix pass 3: the ramp walks the concept's own hues (warm ochre 37 in the shade, gold 44-45 in the light: the
 # concept's #DFC37B / #FCDF8C) with EVERY step at the 40 % cap (the lit steps were 32-37 %, which the game's tone
 # map drained to cream); L* 52-84, the baked shading compressed (the game lights it)
-# fix pass 5: the ramp a step deeper (hue 31 -> 46, every step at the cap: L* 43-86; the lit gold kept for the top band)
+# fix pass 5: the ramp a step deeper (hue 30 -> 46, every step at the cap: L* 40-83; the splash's sky light took the
+#   L* 84-86 lit steps to a cream L* 92 with no structure left; lineup f0 top 75.8 -> the room for it)
 #   and walked by the brushwork (_lacquer): the flat 0.46 + 0.48 t fill read as a cream plastic lampshade
-HAT_COLS = {"deep": "#786148", "shade": "#9E835F", "mid": "#C2A574", "lit": "#DEC585", "hi": "#EAD694",
+HAT_COLS = {"deep": "#705A43", "shade": "#967C5A", "mid": "#BA9F70", "lit": "#D6BE81", "hi": "#E3CF8D",
             "under": "#8F6F56", "under_deep": "#47382C"}    # the underside: the concept's warm ochre-brown lacquer
 #                                                        (its back view, L* 36-53), darker toward the crown
 IRON = {"base": "#3D373E", "shade": "#242026", "lit": "#5F5862", "chip": "#8A818C"}
@@ -1254,16 +1260,18 @@ def _lacquer(p, n, q, r, phi):
     arc = np.minimum(u, 1 - u) * wd * np.maximum(r, 1e-3) * BRIM_R          # metres to the nearest seam
     fade = _ss(0.10, 0.26, r)
     seam = _ss(0.0024, 0.0008, arc) * fade
+    pool = _ss(0.012, 0.002, arc) * fade                                   # the lacquer pooled along each seam
     lip = _ss(0.0045, 0.0028, u * wd * r * BRIM_R) * (1 - _ss(0.0028, 0.0018, u * wd * r * BRIM_R)) * fade
-    broad = _streaks(phi, r, 11.0, 2.6) * (0.55 + 0.45 * _streaks(phi, r, 6.0, 6.0, 31.0))
+    broad = _streaks(phi, r, 7.5, 2.2) * (0.5 + 0.5 * _streaks(phi, r, 4.0, 5.0, 31.0)) \
+        + 0.5 * _streaks(phi, r, 16.0, 3.0, 7.0) * np.clip(0.3 + _streaks(phi, r, 5.0, 6.0, 13.0), 0, 1)
     hair = _streaks(phi, r, 58.0, 2.0, 11.0)
     mott = NOISE.fbm(p, 7.0, 3)
     # (f5-2: bolder: the f5-1 strokes vanished in the splash's sky light and the 2 mm texels)
-    v = 0.34 + 0.56 * t
-    v = v + 0.065 * HAT_OFF[k] + 0.06 * (u - 0.5) * fade
-    v = v + 0.13 * broad + 0.05 * hair + 0.04 * mott + 0.05 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
+    v = 0.36 + 0.56 * t
+    v = v + 0.08 * HAT_OFF[k] + 0.07 * (u - 0.5) * fade
+    v = v + 0.17 * broad + 0.05 * hair + 0.04 * mott + 0.06 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
     v = v + 0.04 * _ss(0.0, 0.3, r) * (1 - _ss(0.3, 0.55, r))
-    v = v - 0.12 * seam + 0.06 * lip
+    v = v - 0.12 * seam + 0.06 * lip - 0.06 * pool
     rl = r + 0.004 * _streaks(phi, r, 9.0, 1.0, 5.0)
     line = _ss(0.0050, 0.0020, np.abs(rl - 0.875) * BRIM_R)
     line_lit = _ss(0.0035, 0.0012, np.abs(rl - 0.887) * BRIM_R)
@@ -1432,7 +1440,8 @@ SHADE_SPRIGS = (                                  # ink sprigs on the pale paper
     ((-0.215, -0.215), (-0.250, -0.255), (-0.262, -0.300)),
     ((0.270, 0.180), (0.310, 0.170), (0.335, 0.130)),
 )
-SHADE_CROWN = 0.33                                # the ink crown's radius (normalised; its wash runs to ~0.55)
+SHADE_CROWN = 0.39                                # the ink crown's radius (normalised; its wash runs to ~0.6; f5-2
+#                                                   lineup f0 top 75.1 with 0.33: the room for more ink)
 
 
 def _leaf_print(X, stems, n_leaf, lf, rib_w=0.0011):
@@ -2233,8 +2242,9 @@ def nurrow_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
         med = max(float(np.median(Y)), 1e-5)
         ratio = np.clip(Y / med, rlo, rhi) ** gain_
         tgt = _lin(_hexs(hexc))
-        if keep_l:
-            tgt = tgt * (med / max(float(tgt @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)), 1e-5))
+        if keep_l:                                           # (a number: x that in linear light)
+            tgt = tgt * (med / max(float(tgt @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)), 1e-5)) \
+                * (1.0 if keep_l is True else float(keep_l))
         out[m] = _srgb(tgt[None, :] * ratio[:, None]).astype(np.float32)
         log(f"  skin part {nm}: median -> {hexc}{' (base L*)' if keep_l else ''}")
     # the skin's felt held to its value band (brief §9: Shadeprint's cloth #847C8E, L* 53; the shared re-colour of the
@@ -2287,11 +2297,11 @@ def nurrow_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
 SKIN_PARTS = {
     # Noon Fair (the Shadowless Noon fair): rose-lilac lacquered wood, plum leathers, a chalk-lilac sash, chalk-rose
     # linen wraps, plum legs and boots (hue 318-330: outside every reserved band)
-    "nurrow_noon_fair": {"pauldron": ("#7A5872", 0.9, (0.35, 2.4), False), "tassets": ("#6E5068", 0.9, (0.35, 2.4), False),
+    "nurrow_noon_fair": {"pauldron": ("#6E566A", 0.9, (0.35, 2.4), False), "tassets": ("#665064", 0.9, (0.35, 2.4), False),
                          "brooch": ("#6E5068", 0.9, (0.35, 2.4), False), "head": ("#5E4656", 0.9, (0.35, 2.4), False),
                          "belt_strap": ("#B39AAE", 0.8, (0.4, 1.8), False), "belt": ("#4E3A4C", 0.9, (0.4, 2.2), False),
                          "torso": ("#46384A", 0.9, (0.4, 2.2), False), "straps": ("#4E3A4C", 0.9, (0.4, 2.2), False),
-                         "forearm_wraps": ("#BFB0AE", 0.8, (0.45, 1.6), False), "sleeves": ("#5A4458", 0.9, (0.4, 2.0), False),
+                         "forearm_wraps": ("#B4A6A6", 0.8, (0.45, 1.6), False), "sleeves": ("#5A4458", 0.9, (0.4, 2.0), False),
                          "tabard": ("#7D6474", 0.95, (0.4, 2.2), False), "hat_band": ("#4E3A4C", 0.9, (0.4, 2.2), False),
                          "trousers": ("#5C4856", 0.85, (0.45, 1.8), True), "legwraps": ("#4F454A", 0.8, (0.55, 1.5), True),
                          "boots": ("#4D3B45", 1.0, (0.2, 3.0), True)},
@@ -2304,8 +2314,10 @@ SKIN_PARTS = {
                           "forearm_wraps": ("#C9C6D2", 0.8, (0.45, 1.5), False), "sleeves": ("#46414F", 0.9, (0.4, 2.0), False),
                           "tabard": ("#33303C", 0.95, (0.4, 2.6), False), "hat_band": ("#2E2C36", 0.9, (0.4, 2.2), False),
                           "hand_L": ("#6E687A", 0.9, (0.4, 2.0), False), "hand_R": ("#6E687A", 0.9, (0.4, 2.0), False),
-                          "trousers": ("#504C59", 0.85, (0.45, 1.8), True), "legwraps": ("#48474E", 0.8, (0.55, 1.5), True),
-                          "boots": ("#413E49", 1.0, (0.2, 3.0), True)},
+                          "trousers": ("#504C59", 0.85, (0.45, 1.8), 1.3), "legwraps": ("#48474E", 0.8, (0.55, 1.5), 1.3),
+                          "boots": ("#413E49", 1.0, (0.2, 3.0), 1.3)},
+    #   (the cool violet-greys read darker than the base's warm browns under the game's warm key: lineup f0 feet 18.9
+    #   at the base's luminance -> x1.3)
 }
 # per skin: part -> (target median L* of its outer face, outer face only)
 SKIN_VALUE = {"nurrow_shadeprint": {"cape": (47.0, True), "cowl": (51.0, False)}}      # (fix pass 3: 54 / 58 read

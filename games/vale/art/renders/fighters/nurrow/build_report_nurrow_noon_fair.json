@@ -31,38 +31,38 @@
     "tris_cape": 1650,
     "tris_grip": 260,
     "tris_blade": 526,
-    "validate_nurrow": "19670->19659"
+    "validate_nurrow": "19670->19662"
   },
-  "uv_coverage": 0.596,
+  "uv_coverage": 0.609,
   "bake": {
-    "base": 51.44,
-    "rough_metal": 24.32,
-    "normal": 8.85,
-    "ao": 14.79,
-    "normal_fixed_px": 34186,
-    "projection": 889.2,
-    "pack_save": 892.83,
-    "total": 994.66
+    "base": 12.57,
+    "rough_metal": 6.76,
+    "normal": 4.86,
+    "ao": 7.19,
+    "normal_fixed_px": 37682,
+    "projection": 111.91,
+    "pack_save": 112.18,
+    "total": 144.51
   },
-  "tris": 21147,
+  "tris": 21150,
   "mesh_top_m": 1.967,
-  "glb_bytes_raw": 2246636,
+  "glb_bytes_raw": 2252740,
   "optimize": {
     "ok": true,
-    "before": 2246636,
-    "after": 1043060
+    "before": 2252740,
+    "after": 1042436
   },
-  "glb_bytes": 1043060,
+  "glb_bytes": 1042436,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_noon_fair.glb (1019 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: nurrow_noon_fair_base 2048x2048 304K, nurrow_noon_fair_normal 512x512 16K, nurrow_noon_fair_orm 256x256 14K",
-      "  skinned meshes: nurrow_accent(398v), nurrow_noon_fair(19690v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_noon_fair.glb (1018 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: nurrow_noon_fair_base 2048x2048 305K, nurrow_noon_fair_normal 512x512 16K, nurrow_noon_fair_orm 256x256 14K",
+      "  skinned meshes: nurrow_accent(397v), nurrow_noon_fair(19615v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 21147; bind-pose bounds (three units, Y up): 1.17 x 1.97 x 0.82; facing (0.00, 1.00); head bone y 1.50; runRefSpeed 3.55",
+      "  tris: 21150; bind-pose bounds (three units, Y up): 1.17 x 1.97 x 0.82; facing (0.00, 1.00); head bone y 1.50; runRefSpeed 3.55",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -72,8 +72,8 @@
       "portrait": "art/out/fighters/nurrow/nurrow_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 47.52,
-      "portrait": 17.3
+      "splash": 13.62,
+      "portrait": 10.35
     }
   },
   "three_qa": {
@@ -83,7 +83,7 @@
       [
         -0.625,
         0,
-        -0.419
+        -0.421
       ],
       [
         0.544,
@@ -96,7 +96,7 @@
       1
     ],
     "headY": 1.5,
-    "accentPct": 3.18,
+    "accentPct": 3.57,
     "accentTopHalfPct": 100,
     "heightPx1080": 105,
     "size": [
@@ -105,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/nurrow/three_nurrow_noon_fair.png",
-    "seconds": 42.2,
+    "seconds": 43.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.14,
-      "materials": 0.42,
-      "model": 64.7,
-      "lows_bind": 79.15,
-      "uv": 61.17,
-      "bake": 994.67,
-      "export": 4.72,
-      "optimize": 10.74,
-      "load_test": 2.43,
-      "render": 64.99,
-      "three_qa": 43.03
+      "rig": 0.22,
+      "materials": 1.44,
+      "model": 140.83,
+      "lows_bind": 19.61,
+      "uv": 12.42,
+      "bake": 144.52,
+      "export": 0.17,
+      "optimize": 1.0,
+      "load_test": 0.29,
+      "render": 24.08,
+      "three_qa": 44.81
     },
-    "total_s": 1326.4
+    "total_s": 389.57
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78

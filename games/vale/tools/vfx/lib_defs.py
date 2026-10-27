@@ -367,12 +367,14 @@ def defs() -> list:
     # r12 M9 structure states (src/render/structures.ts; ids from UnitDef.art.damage / art.ruin): origin = the
     # tower's flank at the break / crack height, ground = its foot; the camera never shakes for these
     D.append(vfx("lib_structure_crack", 1.1,
-                 flash(1, at="origin", scale=1.2, color="team"),
-                 sparks("origin", 8, color=["team", DAWNGLASS], speed=(2.5, 5.5), life=(0.12, 0.3), emissive=2.6, gravity=4, spread=120, dir_="out"),
-                 chips("origin", 16, color=(CHALK, CHALK_DK), speed=(1.2, 3.2), life=(0.8, 1.1), size=0.16, spread=110, gravity=12, delay=0.02),
+                 flash(2, at="origin", scale=1.3, color="team"),
+                 sparks("origin", 10, color=["team", DAWNGLASS], speed=(2.5, 5.5), life=(0.12, 0.3), emissive=2.6, gravity=4, spread=120, dir_="out"),
+                 # r12 M9 fix: chips that read at the gameplay camera (0.32 m ≈ 12-18 px at 1080p), beside the real
+                 # broken-off stones the renderer drops (structures.ts dropChip)
+                 chips("origin", 24, color=(CHALK, CHALK_DK), speed=(1.4, 3.6), life=(0.8, 1.1), size=0.32, spread=110, gravity=12, delay=0.02),
                  dust("origin", 5, size=1.1, speed=(0.5, 1.4), radius=0.4, life=(0.6, 1.0), delay=0.05, shape="sphere"),
                  dust("ground", 4, size=1.2, speed=(0.6, 1.6), radius=0.9, life=(0.7, 1.0), delay=0.35),
-                 comment="T2 · impact · a structure passes a damage threshold: its light flares through the new cracks, chips rain off the flank"))
+                 comment="T2 · impact · a structure passes a damage threshold: its light flares through the new cracks, heavy chips rain off where it broke"))
     D.append(vfx("lib_structure_break", 1.3,
                  flash(3, at="origin", scale=1.4, color="team"),
                  sparks("origin", 18, color=["team", DAWNGLASS], speed=(4, 9), life=(0.15, 0.4), emissive=4.0, gravity=6, spread=170, dir_="out"),

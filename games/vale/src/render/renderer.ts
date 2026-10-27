@@ -37,7 +37,7 @@ import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
 import { FogOfWar } from './fog.ts';
 import { Sun } from './lighting.ts';
 import { MenuWorld } from './menu.ts';
-import { BAR_KIND, BarLayer, GLYPH, SHAPE } from './overlay/bars.ts';
+import { BAR_KIND, BarLayer, type BarSpec, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms, MASK_FRAG, RIM_FRAG } from './overlay/hover.ts';
 import { CrowdLayer } from './crowd.ts';
@@ -144,6 +144,8 @@ const _frustum = new Frustum();
 const _m4 = new Matrix4();
 const _sphere = new Sphere();
 const _rest = { self: new Color(), ally: new Color(), enemy: new Color(), neutral: new Color() };
+/** a deferred fighter bar's resource colour when it shows none (the loop's temp colour is reused) */
+const BLACK = new Color(0, 0, 0);
 /** kinds that always carry the thin ink outline (M10); the rest outline on hover only */
 const OUTLINED = new Set(['fighter', 'minion', 'monster', 'summon']);
 
@@ -685,6 +687,10 @@ class ValeRenderer implements Renderer {
     const players = new Map(view.players.map((pl) => [pl.player, pl]));
     const meEntity = you >= 0 ? players.get(you)?.entity : undefined;
     const me = meEntity !== undefined ? view.entity(meEntity) : undefined;
+    // r12 M9: fighter bars draw after every structure / unit bar (one instanced draw, in push order), your own last,
+    // so a fighter behind a structure keeps its bar on top of the structure's
+    const lateBars: BarSpec[] = [];
+    let myBar: BarSpec | null = null;
     for (const a of this.actors.values()) {
       const v = a.view;
       if (!v || !a.visible || a.leaving >= 0) continue;
@@ -754,7 +760,7 @@ class ValeRenderer implements Renderer {
       }
       let cc = 0;
       for (const s of v.statuses) if (HARD_CC.has(s.kind) && s.duration > 0) cc = Math.max(cc, s.remaining / s.duration);
-      bars.push({
+      const spec: BarSpec = {
         x: a.x, y: a.h + a.barHeight, z: a.y, kind, shape,
         hp: hpF, trail: a.trail, shieldEnd: Math.min(1, (Math.max(0, v.hp) + v.shield) / total), total: this.ticks ? total : 1e9,
         res: v.maxRes > 0 ? v.res / v.maxRes : 0, showRes, resHatch: hatch, cc,
@@ -762,8 +768,15 @@ class ValeRenderer implements Renderer {
         keyline, seatLine, alpha: 1, nameSlot, level,
         // lost HP flashes for ~4 frames before the trail's 150 ms hold (trailHoldUntil = hit + 0.15)
         flash: a.trailHoldUntil > 0 ? Math.max(0, 1 - (this.time - (a.trailHoldUntil - 0.15)) / 0.066) : 0,
-      });
+      };
+      if (!isF) bars.push(spec);
+      else {
+        if (spec.resColor === this.tmpColor) spec.resColor = BLACK;
+        if (rel === 'self') myBar = spec; else lateBars.push(spec);
+      }
     }
+    for (const b of lateBars) bars.push(b);
+    if (myBar) bars.push(myBar);
     bars.end();
     rings.end();
     this.buildTelegraphs();

@@ -7775,7 +7775,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · a structure passes a damage threshold: its light flares through the new cracks, chips rain off the flank",
+    "$comment": "T2 · impact · a structure passes a damage threshold: its light flares through the new cracks, heavy chips rain off where it broke",
     "id": "lib_structure_crack",
     "duration": 1.1,
     "teamTint": true,
@@ -7783,15 +7783,15 @@
       {
         "type": "flash",
         "at": "origin",
-        "radius": 0.54,
+        "radius": 0.975,
         "life": 0.05,
         "color": "team",
-        "intensity": 2.0
+        "intensity": 3.0
       },
       {
         "type": "emitter",
         "at": "origin",
-        "count": 8,
+        "count": 10,
         "dir": "out",
         "spreadDeg": 120,
         "speed": [
@@ -7825,21 +7825,21 @@
       {
         "type": "emitter",
         "at": "origin",
-        "count": 16,
+        "count": 24,
         "dir": "up",
         "spreadDeg": 110,
         "speed": [
-          1.2,
-          3.2
+          1.4,
+          3.6
         ],
         "life": [
           0.8,
           1.1
         ],
         "size": [
-          0.16,
-          0.16,
-          0.096
+          0.32,
+          0.32,
+          0.192
         ],
         "sizeVar": [
           0.6,

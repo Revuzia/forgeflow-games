@@ -846,30 +846,34 @@ def serenade_needle(B, R=1.22, zd=2.62, n_win=4, dome_b=1.05, cup_r=0.6, cup_h=0
 
 
 def serenade_lantern(B):
-    """The lane gate: two squat banded piers capped by small ribbed domes under a heavy round arch with an
-    ironstone keystone; an iron-strapped lamp-pot (lampresin bowl, accent core) hangs in the arch."""
-    dial_plinth(B, [(2.26, 0.0, 0.2), (1.94, 0.2, 0.42)], 1.72, "iron")
+    """The lane gate: two banded piers capped by small ribbed domes under a heavy round arch with an ironstone
+    keystone crowned by a little ribbed lamp-dome; an iron-strapped lamp-pot (lampresin bowl, accent core) hangs
+    in the arch. Built at 1.0 (r12 M9): the piers stand in so their caps end within the gate's 1.5 m collision
+    disc + 0.1 m; the height (~4.6 m, the lane structures' 2.4-2.6x a fighter) comes from the piers and the crown,
+    not from width."""
+    dial_plinth(B, [(2.02, 0.0, 0.2), (1.74, 0.2, 0.42)], 1.52, "iron")
     z0 = 0.42
-    py = 1.24
-    zp = 2.75
+    py = 1.0
+    q = 0.42 / 0.47                     # the piers' radius against the first design's
+    zp = 3.0
     for sgn in (-1, 1):
         c = np.array([0.0, sgn * py, 0.0])
-        zt = s_foot(B, z0, 0.44, 0.3, c=c)
-        prof = [(0, zt), (0.47, zt), (0.44, zp), (0, zp)]
+        zt = s_foot(B, z0, 0.44 * q, 0.3, c=c)
+        prof = [(0, zt), (0.47 * q, zt), (0.44 * q, zp), (0, zp)]
         v, f = K.lathe(prof, 32)
         B.add("sandstone", (K.move(v, c), f))
-        for zz in (1.25, zp - 0.12):
-            v, f = ring(0.42, 0.52, zz - 0.07, zz + 0.07, 0.015, 32)
+        for zz in (1.3, 2.18, zp - 0.12):
+            v, f = ring(0.42 * q, 0.52 * q, zz - 0.07, zz + 0.07, 0.015, 32)
             B.add("ironstone", (K.move(v, c), f))
-        v, f = K.lathe(K.chamfer_profile([(0, zp), (0.58, zp), (0.58, zp + 0.14), (0.5, zp + 0.2), (0, zp + 0.2)], 0.02), 32)
+        v, f = K.lathe(K.chamfer_profile([(0, zp), (0.58 * q, zp), (0.58 * q, zp + 0.14), (0.5 * q, zp + 0.2), (0, zp + 0.2)], 0.02), 32)
         B.add("ironstone", (K.move(v, c), f))
         # a small dome with glowing seams on each pier
-        pts = ellipse_pts(0.48, 0.42, zp + 0.2, 0.0, math.acos(0.12 / 0.48), 8)
-        inner = ellipse_pts(0.42, 0.36, zp + 0.2, 0.0, math.acos(0.1 / 0.42), 8)
+        pts = ellipse_pts(0.48 * q, 0.42 * q, zp + 0.2, 0.0, math.acos(0.12 / (0.48 * q)), 8)
+        inner = ellipse_pts(0.42 * q, 0.36 * q, zp + 0.2, 0.0, math.acos(0.1 / (0.42 * q)), 8)
         v, f = K.lathe([(0, zp + 0.2)] + [(r - 0.01, z) for r, z in inner] + [(0, inner[-1][1])], 24)
         B.add("accent", (K.move(v, c), f))
         for k in range(6):
-            g = 0.055 / 0.48
+            g = 0.055 / (0.48 * q)
             v, f = K.lathe(pts + [(r, z) for r, z in inner[::-1]], 4, a0=k * K.TAU / 6 + g, a1=(k + 1) * K.TAU / 6 - g, closed=True)
             B.add("ironstone", (K.move(v, c), f))
             B.pieces[-1]["nochip"] = True
@@ -877,13 +881,14 @@ def serenade_lantern(B):
         B.add("sandstone", (K.move(v, c), f))
         # an arched lampresin window on each pier's camera face
         o = np.array([-1.0, 0.0, 0.0])
-        pane = K.arch_outline(0.26, 0.42, "round", 8)
-        B.add("lampresin", K.prism(pane, origin=tuple(c + o * 0.45 + (0, 0, 1.5)), u=(0, -1, 0), v=(0, 0, 1), depth=0.06))
-        path = K.arch_path(0.32, 0.42, "round", 10)
-        p3 = K.in_plane(path, tuple(c + o * 0.46 + (0, 0, 1.5)), (0, -1, 0), (0, 0, 1))
+        zw = 1.62
+        pane = K.arch_outline(0.24, 0.42, "round", 8)
+        B.add("lampresin", K.prism(pane, origin=tuple(c + o * 0.41 + (0, 0, zw)), u=(0, -1, 0), v=(0, 0, 1), depth=0.06))
+        path = K.arch_path(0.3, 0.42, "round", 10)
+        p3 = K.in_plane(path, tuple(c + o * 0.42 + (0, 0, zw)), (0, -1, 0), (0, 0, 1))
         B.add("ironstone", K.sweep(p3, 0.06, 0.06, out_fn=lambda p: (-1, 0, 0), sink=0.04))
     # the heavy round arch: sandstone voussoirs (each its own stone), an ironstone keystone
-    span = 2 * py - 0.88
+    span = 2 * py - 0.88 * q
     spring = zp - 0.1
     R = span / 2 + 0.17
     nv = 9
@@ -896,6 +901,17 @@ def serenade_lantern(B):
                [(math.cos(a) * ro, math.sin(a) * ro) for a in np.linspace(a1, a0, 3)]
         B.add(mat, K.prism(poly, origin=(0, 0, spring), u=(0, 1, 0), v=(0, 0, 1), depth=0.4 if mat == "sandstone" else 0.48, chamfer=0.02))
     apex = spring + R + 0.42
+    # the keystone's crown: a sandstone drum, a little ribbed ironstone lamp-dome with accent seams, a finial
+    B.add("sandstone", K.lathe(K.chamfer_profile([(0, apex - 0.04), (0.2, apex - 0.04), (0.2, apex + 0.1), (0, apex + 0.1)], 0.015), 20))
+    zc0 = apex + 0.1
+    pts = ellipse_pts(0.22, 0.24, zc0, 0.0, math.acos(0.06 / 0.22), 8)
+    inner = ellipse_pts(0.18, 0.2, zc0, 0.0, math.acos(0.05 / 0.18), 8)
+    B.add("accent", K.lathe([(0, zc0)] + [(r - 0.01, z) for r, z in inner] + [(0, inner[-1][1])], 20))
+    for k in range(6):
+        g = 0.04 / 0.22
+        B.add("ironstone", K.lathe(pts + [(r, z) for r, z in inner[::-1]], 4, a0=k * K.TAU / 6 + g, a1=(k + 1) * K.TAU / 6 - g, closed=True))
+    zf = pts[-1][1]
+    B.add("sandstone", K.lathe([(0, zf - 0.02), (0.08, zf - 0.02), (0.08, zf + 0.05), (0.035, zf + 0.18), (0, zf + 0.26)], 12))
     # the lamp-pot: an iron cap, six iron straps around the accent core, a lampresin bowl
     zl1 = spring + R - 0.32
     zl0 = zl1 - 0.95
@@ -999,7 +1015,8 @@ def serenade_hourbell(B):
 # needle reads 2.5x a 2.05 m fighter, the median of the roster). The designs are built at their authored size, their shafts / belfry
 # shortened where a plain scale would have left them miniatures, then scaled uniformly (the identity of
 # each culture keeps its proportions). The plinth still covers the sim's collision disc (needles 1.1 m,
-# lanterns 1.5 m, Hourbell 2.6 m).
+# lanterns 1.5 m, Hourbell 2.6 m). Nothing is scaled up: the Serenade lantern is built at 1.0 with its piers drawn
+# in, so its columns end within its collision disc + 0.1 m (it was 1.15x, 2.6 m wide, cutting into fighters).
 DESIGNS = {
     ("needle_outer", "aubade"): (lambda B: aubade_needle(B, 6.28, 3.13, r0=0.7, r1=0.56), 1024, 0.72),
     ("needle_inner", "aubade"): (lambda B: aubade_needle(B, 6.4, 3.1, r0=0.74, r1=0.6, fins=8, bands=2, pinnacles=True), 1024, 0.72),
@@ -1009,7 +1026,7 @@ DESIGNS = {
     ("needle_outer", "serenade"): (lambda B: serenade_needle(B), 1024, 0.69),
     ("needle_inner", "serenade"): (lambda B: serenade_needle(B, R=1.26, zd=2.85, n_win=6, dome_b=1.15, cup_r=0.56, cup_h=0.76, gnomon=1.5, lamps=True), 1024, 0.67),
     ("needle_bell", "serenade"): (lambda B: serenade_needle(B, R=1.1, zd=2.4, n_win=4, dome_b=0.95, cup_r=0.5, cup_h=0.86, gnomon=1.15, bell=True), 1024, 0.75),
-    ("lantern", "serenade"): (serenade_lantern, 1024, 1.15),
+    ("lantern", "serenade"): (serenade_lantern, 1024, 1.0),
     ("hourbell", "serenade"): (serenade_hourbell, 2048, 0.76),
 }
 UNITS = ["needle_outer", "needle_inner", "needle_bell", "lantern", "hourbell"]
@@ -1020,6 +1037,8 @@ RUIN = {"needle_outer": (1.12, 9), "needle_inner": (1.12, 10), "needle_bell": (1
 # damage cracks per threshold (count, width m)
 CRACKS = {"needle_outer": ((7, 0.12), (10, 0.16)), "needle_inner": ((7, 0.12), (10, 0.16)), "needle_bell": ((7, 0.12), (10, 0.16)),
           "lantern": ((7, 0.11), (10, 0.15)), "hourbell": ((10, 0.13), (15, 0.17))}
+# the Serenade domes' first stage: extra cracks, width factor, downward ray slope, walk length (structure_kit.cracks)
+SERENADE_CRACK1 = (4, 1.45, 0.65, (8, 14))
 RUIN_CORE = {"aubade": "#5F5A52", "serenade": "#5A4735"}       # the broken stone's raw inside (darker than the faces)
 CRACK_INK = "#1F1B18"
 
@@ -1082,7 +1101,13 @@ def build_one(uid: str, culture: str, fast: bool = False) -> dict:
     zt = B.plinth_top
     tgt = [parts["upper"]]
     for i, (n, w) in enumerate(CRACKS[uid]):
-        o = K.cracks(tgt, B, rng, n, zt + 0.35, zt + (zmax - zt) * (0.62 if i == 0 else 0.8), w, f"{name}_dmg{i + 1}", col, crack_mat, mats["accent"])
+        tilt, steps = 0.0, (6, 11)
+        if culture == "serenade" and i == 0:
+            # r12 M9 fix: a dome shows the gameplay camera its top, so the first stage also cracks the upward faces
+            # (rays cast down toward the axis), wider and longer than the spires' (which show their walls)
+            n, w, tilt, steps = n + SERENADE_CRACK1[0], w * SERENADE_CRACK1[1], SERENADE_CRACK1[2], SERENADE_CRACK1[3]
+        o = K.cracks(tgt, B, rng, n, zt + 0.35, zt + (zmax - zt) * (0.62 if i == 0 else 0.8), w, f"{name}_dmg{i + 1}", col, crack_mat,
+                     mats["accent"], tilt=tilt, steps=steps)
         if o is not None:
             parts[f"dmg{i + 1}"] = o
     for n, o in list(objs.items()):

@@ -221,3 +221,27 @@
   the line (was 55-60), attack1's 13 deg, chest yaw ~20 at both; death's arms lowered (no T). Pauldron lames a third
   thicker with blunt edges and three hooked teeth on the spike's lower edge (the concept's notched spike). Build 3
   (base) and the skins running in parallel.
+- 2026-10-27 15:46 CDT: FIX PASS 5 DONE. Base (build 4): three load OK, 19810 tris, 1114 KiB, accent 2.18 % (100 %
+  top half; was 4.02 with the glass mohawk), facing +Z, 17 clips, impacts 0.4, run foot error 1.6 %, art.height 1.88
+  (art.json unchanged: content art block == art.json). Skins: chalkline 19810 tris 974 KiB accent 2.27 %, lamplit
+  20223 tris 983 KiB accent 2.16 % (three load OK). Atlas L*: base p99 79 (0 % > 86), chalkline p99 79 (0.06 %: the
+  exempt chalk lines), lamplit p99 81 (0.01 %). lineup (_fit/lineup_fp5.json, game camera, idle f0, facings 0 / 90 /
+  180 / 270): top 71 / 69 / 60 / 67 (was 66 / 68 / 58 / 64), mid 48 / 40 / 41 / 38, feet 30 / 28 / 22 / 26, accent
+  1.66 / 0.84 / 0.44 / 1.11 % (thin trims are sub-pixel at 125 px: the three QA average is the gate), IoU64 vs
+  Marund 0.25, Kemdo 0.56, Nurrow 0.46, Burdam 0.37; skins (_fit/lineup_fp5_skins.json): Chalkline mid 43 / 37 / 39 /
+  36 (was 40 / 34 / 33 / 31; its coat now the brief's own tabard #7B8390, apron #747C88), feet 28 / 21 / 17 / 21 (the
+  brief's leggings #2E3238), Lamplit mid 48 / 42 / 43 / 38. FK (rishal.glb): idle knife tips (+-0.60, 0.59, ~0) wide
+  of the hips (were stubs at the hip); attack1 impact chest yaw +19, tip (0.21, 0.74, 0.91) on the line; attack2
+  chest +21, tip (0.36, 0.77, 0.89) (was 0.82, 0.85, 0.50); cast_a1 tips 0.46-0.49 m (were 0.67-0.85); death ends
+  with one arm folded over him and one out bent (no T). Hero renders: SPLASH sun 1.9, HERO_FILL 0.5, the portrait's
+  box 15 cm tighter (render wrapper), icon_yaw 28 (re-rendered from the build-4 cache with rishal_hero.py --only icon
+  --scale 1: from the front the crest stood edge-on over the visor, the down-arrow). build_content --check
+  --allow-missing-assets OK, strict --check lists nothing for rishal; probe_kits_A 525/0, probe_kits_B 733/0. In game
+  (art2_rishal_*, --t 65: at t 40 he stood in the minion line): a clear view under the bar, the pale crest frame and
+  the fins, the knives at the hips. _fit/look.png and look_head.png re-rendered from the final cache.
+  Open: the hero renders still read pale overall (his palette is chalk / linen / ice glass and the hero sky light
+  lifts the slate trousers toward grey-white; the painterly finish shows best in the portrait and three QA); the visor
+  is painted see-through (the shared pipeline bakes one opaque atlas, no glass transparency); the back facing's top
+  band stays ~60 (the warm carved plates of the helm's back are the concept's); the side facings' mid band 38-41
+  (the dark slate trousers sit in the middle half); cast_a1's tips stop at knee height (a 0.40 m blade from a fist
+  ~0.85 m up cannot reach the floor without a deeper crouch than the dash allows).
