@@ -515,7 +515,7 @@
   // gs > HV_RUN_GS (4.4) and not backing up -> the run clip ("|run"), gs > HV_WALK_GS (0.7) -> the walk clip ("|walk"),
   // else idle (no suffix). The clip's PHASE is not sim state, so those rows are the mean over sampled phases with
   // radii that hold every phase (probe_bones9.py). Airborne, crouched, reloading and hit-react clips use the idle rows.
-  var COMBAT_POSE_S = 1.5, HV_RUN_GS = 4.4, HV_WALK_GS = 0.7, HV_FACE_GS = 1.2;
+  var COMBAT_POSE_S = 1.5, HV_RUN_GS = 4.4, HV_WALK_GS = 0.7, HV_FACE_GS = 1.2, HV_TWIST_MAX = 0.95;
   var HV_KEYS = {};
   ["rifle", "pistol", "pistolAds"].forEach(function (h) {
     HV_KEYS[h] = { crouch: h + "|crouch", stand: h + "|stand", walk: h + "|stand|walk", run: h + "|stand|run" };
@@ -525,7 +525,12 @@
   }
   /** The body's facing (sim yaw convention: forward = (-sin, -cos)): player.js syncObj turns the body toward its
    *  VELOCITY when out of combat and moving faster than 1.2 m/s (on foot), else squares it to the aim (a.yaw). */
+  // FIX ROUND (int-p23): the integrated player.js draws the body on its own facing state a._bodyYaw (model yaw = facing +
+  // PI) - a still body stays PLANTED while the aim turns (LC-64 turn-in-place, the chest twists up to 0.95 rad), a combat
+  // strafer's body is warped onto its cardinal clip (LC-10). syncObj writes it for every live actor every frame (not
+  // camera-gated), so the table path faces the DRAWN lower body whenever that state exists, else the old rule below.
   function hitVolFacing(a, now) {
+    if (a && a._hasBodyYaw && a._bodyYaw === a._bodyYaw && typeof a._bodyYaw === "number") return a._bodyYaw - Math.PI;
     var vx = (a.vel && a.vel.x) || 0, vz = (a.vel && a.vel.z) || 0;
     if (!a.gliding && !a.swimming && !hvCombat(a, now) && vx * vx + vz * vz > HV_FACE_GS * HV_FACE_GS) return Math.atan2(-vx, -vz);
     return a.yaw || 0;
@@ -541,7 +546,7 @@
     var back = vx * -Math.sin(f) + vz * -Math.cos(f) < -0.5;
     return gs > HV_RUN_GS && !back ? K3.run : K3.walk;
   }
-  var _hvJ = new Float64Array(72);
+  var _hvJ = new Float64Array(80);
   /** Fill _hvJ with the actor's interpolated joints + head (local frame). Returns the radius table or null (no data). */
   function hitVolJoints(a, now) {
     if (!HITVOL.ok) return null;
@@ -564,11 +569,14 @@
     // the camera by aimDelta = aim yaw - body yaw clamped to +-0.6 (half on spine1, half on spine2). Nonzero for a rifle
     // carrier moving off its aim axis out of combat (its body faces the velocity). Rotate about the hips' vertical:
     // Spine2 by half, neck / arms / head by the whole twist (local frame: x' = x cos - z sin, z' = x sin + z cos).
-    if (key.charCodeAt(0) === 114 /* r: rifle */ && a.onGround !== false && !a.swimming && !a.gliding) {
+    // (int-p23) player.js twists by up to TWIST_MAX 0.95 rad (rifle always; a pistol only in combat or mid-turn), the old 0.6
+    // was the pre-P23 clamp
+    var pistolCombat = key.charCodeAt(0) === 112 /* p */ && key.charCodeAt(6) === 65 /* pistolAds */;
+    if ((key.charCodeAt(0) === 114 /* r: rifle */ || pistolCombat) && a.onGround !== false && !a.swimming && !a.gliding) {
       var tw = (a.yaw || 0) - hitVolFacing(a, now);
       while (tw > Math.PI) tw -= Math.PI * 2;
       while (tw < -Math.PI) tw += Math.PI * 2;
-      tw = clamp(tw, -0.6, 0.6);
+      tw = clamp(tw, -HV_TWIST_MAX, HV_TWIST_MAX);
       if (tw > 1e-4 || tw < -1e-4) {
         // the spine's own axis (Hips -> Neck of this row: a runner leans ~25 deg forward), not the world vertical
         var ux = _hvJ[6] - _hvJ[0], uy = _hvJ[7] - _hvJ[1], uz = _hvJ[8] - _hvJ[2], ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
@@ -631,9 +639,60 @@
   /** LC-22: does the WORLD segment (ax..bz) hit actor t's body? Returns the entry parameter in [0, 1] or -1, and sets
    *  HITVOL_HIT.head (head sphere) / .part (segment index, -1 head). Swimming / downed / no data: the legacy cylinder
    *  rule (callers keep their own broad phase). Pure: no allocation. */
-  var HITVOL_HIT = { head: false, part: -1, legacy: false };
-  function hitVolSegment(t, ax, ay, az, bx, by, bz, now) {
-    HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false;
+  var HITVOL_HIT = { head: false, part: -1, legacy: false, live: false };
+  // LIVE BONES (FIX ROUND, int-p23). The integrated player.js draws far more than the table can key on (turn-in-place
+  // planted feet + chest twist, the combat-strafe orientation warp on four cardinal clips, the re-baked "_g" clip set, a
+  // crouched-still rifle lean that accumulates): measured on the integrated build the table path put a pistol dummy's arm
+  // 0.28 m BEHIND its drawn body in the side view. So an actor whose drawn pose is FRESH (weapons.js liveJoints: the camera
+  // focus, or on screen with its mixer at the full rate - the pose the shooter is looking at) is tested against its LIVE
+  // bones: the caller passes `live` = the world positions of the 15 JOINTS (0-44), the head-sphere centre (45-47, the
+  // Head-weighted vertex centroid carried in the Head bone's frame) and the two ToeBase joints (48-53). Same capsules, the
+  // skin's measured RADII (the idle fit, <= 0.045 m outside the drawn triangles; no phase shrink is needed when the joints
+  // ARE the drawn ones), plus a foot capsule Foot -> ToeBase. Everything else (far, off screen, half-rate mixers, the
+  // headless sim) keeps the deterministic table. HITVOL_LIVE_N = the length of `live`.
+  var HITVOL_LIVE_N = 54, HV_FOOT_R = 0.055;
+  var HV_HEAD_R = {};
+  function hitVolHeadR(sk) {
+    if (HV_HEAD_R[sk] != null) return HV_HEAD_R[sk];
+    var tab = HITVOL.T[sk] || HITVOL.T.soldier, v = tab && (tab["rifle|stand"] || tab["pistol|stand"]);
+    var k0 = Math.max(0, HITVOL.PITCH.indexOf(0));
+    var r = v ? v[k0 * HITVOL.NV + HITVOL.JOINTS.length * 3 + 3] : 0.1;
+    HV_HEAD_R[sk] = r;
+    return r;
+  }
+  function hitVolLive(t, live, ax, ay, az, bx, by, bz) {
+    var sk = HITVOL.T[t.skin] ? t.skin : "soldier";
+    var R = HITVOL.RADII[sk] || HITVOL.RADII.soldier;
+    if (!R) return -2;
+    var J = _hvJ, i;
+    for (i = 0; i < 48; i++) J[i] = live[i];
+    J[48] = hitVolHeadR(sk);
+    for (i = 0; i < 6; i++) J[HITVOL.DOFF + 18 + i] = live[48 + i];   // points 21, 22 = LeftToeBase, RightToeBase
+    hvSide(0, 9, 12, R[7], 15); hvSide(1, 3, 6, R[8], 17); hvSide(2, 3, 6, R[9], 19);
+    var dx = bx - ax, dy = by - ay, dz = bz - az;
+    if (dx * dx + dy * dy + dz * dz < 1e-12) return -1;
+    var best = 2, part = -1, head = false, S = HITVOL.SEGS;
+    for (i = 0; i < S.length + 2; i++) {
+      var a3, b3, rr;
+      if (i < S.length) { var g = S[i]; rr = R[g[2]]; a3 = hvOff(g[0]); b3 = hvOff(g[1]); }
+      else { rr = Math.min(R[5], HV_FOOT_R); a3 = hvOff(i === S.length ? 11 : 14); b3 = hvOff(i === S.length ? 21 : 22); }
+      if (!(rr > 0)) continue;
+      var e = segCapsule(ax, ay, az, dx, dy, dz, J[a3], J[a3 + 1], J[a3 + 2], J[b3], J[b3 + 1], J[b3 + 2], rr);
+      if (e >= 0 && e < best) { best = e; part = i; }
+    }
+    var eh = segCapsule(ax, ay, az, dx, dy, dz, J[45], J[46], J[47], J[45], J[46], J[47], J[48]);
+    if (eh >= 0 && eh <= best) { best = eh; part = -1; head = true; }
+    HITVOL_HIT.live = true;
+    if (best > 1) return -1;
+    HITVOL_HIT.head = head; HITVOL_HIT.part = part;
+    return best;
+  }
+  function hitVolSegment(t, ax, ay, az, bx, by, bz, now, live) {
+    HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false; HITVOL_HIT.live = false;
+    if (live && t && !t.swimming && !t.downed && HITVOL.ok) {
+      var lv = hitVolLive(t, live, ax, ay, az, bx, by, bz);
+      if (lv !== -2) return lv;
+    }
     var R = (t && !t.swimming && !t.downed) ? hitVolJoints(t, now) : null;
     if (!R) { HITVOL_HIT.legacy = true; return -2; }
     var fy = hitVolFacing(t, now), s = Math.sin(fy), c = Math.cos(fy);
@@ -1794,7 +1853,7 @@
     FALL: FALL, FALL_SAFE_H: FALL_SAFE_H, FALL_SAFE_V: FALL_SAFE_V, FALL_DMG_PER_V: FALL_DMG_PER_V, FALL_EXP: FALL_EXP,
     LAND_STAGGER_S: LAND_STAGGER_S, LAND_STAGGER_V: LAND_STAGGER_V, fallDamage: fallDamage, fallSpeedForHeight: fallSpeedForHeight,
     fallSafeHeight: fallSafeHeight, fallLethalHeight: fallLethalHeight,
-    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
+    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, HITVOL_LIVE_N: HITVOL_LIVE_N, hitVolHeadR: hitVolHeadR, HV_TWIST_MAX: HV_TWIST_MAX, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};

@@ -1309,6 +1309,43 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(R.hitVolSegment(runner, 10 - 3, 2 + knee, -5, 10 + 3, 2 + knee, -5) < 0 && R.hitVolSegment(runner, 10 - 3, 2 + 1.2, -5, 10 + 3, 2 + 1.2, -5) >= 0,
        "LC-22: a runner's chest still hits; the swinging knee does not (no stride phase in the sim)");
   }
+  // FIX ROUND (int-p23): the drawn lower-body yaw (player.js a._bodyYaw = facing + PI) wins over the velocity rule when it exists
+  ok(Math.abs(R.hitVolFacing(actor({ _hasBodyYaw: true, _bodyYaw: Math.PI + 0.4, yaw: 1.2, vel: { x: 6, y: 0, z: 0 } })) - 0.4) < 1e-12 &&
+     Math.abs(R.hitVolFacing(actor({ yaw: 1.2 })) - 1.2) < 1e-12,
+     "LC-22: the table faces the DRAWN body (player.js _bodyYaw: turn-in-place / strafe warp) when it exists, else the sim rule");
+  // LIVE BONES: the caller's world joints replace the table. Consistency: the table's own joints handed in as a live set give
+  // the same verdict and entry on every ray above the feet (the live path adds only the Foot -> ToeBase capsules)
+  {
+    const b = actor({ yaw: 0.7 }), NJ = H.JOINTS.length, live = new Float64Array(R.HITVOL_LIVE_N);
+    R.hitVolJoints(b, 0);
+    const J = R.HITVOL_J, s = Math.sin(0.7), c = Math.cos(0.7);
+    const toW = (x, y, z, o) => { live[o] = b.pos.x + x * c - z * s; live[o + 1] = b.pos.y + y; live[o + 2] = b.pos.z - x * s - z * c; };
+    for (let i = 0; i < NJ; i++) toW(J[i * 3], J[i * 3 + 1], J[i * 3 + 2], i * 3);
+    toW(J[NJ * 3], J[NJ * 3 + 1], J[NJ * 3 + 2], 45);
+    toW(J[11 * 3], 0.03, J[11 * 3 + 2] + 0.12, 48); toW(J[14 * 3], 0.03, J[14 * 3 + 2] + 0.12, 51);
+    let same = true, n = 0, hits = 0;
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let k = 0; k < 400; k++) {
+      const y = 0.35 + rnd() * 1.6, ang = rnd() * Math.PI * 2, off = (rnd() - 0.5) * 1.0;
+      const dx = Math.cos(ang), dz = Math.sin(ang), ox = b.pos.x - dx * 6 - dz * off, oz = b.pos.z - dz * 6 + dx * off;
+      const tt = R.hitVolSegment(b, ox, b.pos.y + y, oz, ox + dx * 12, b.pos.y + y, oz + dz * 12, 0);
+      const th = R.HITVOL_HIT.head;
+      const tl = R.hitVolSegment(b, ox, b.pos.y + y, oz, ox + dx * 12, b.pos.y + y, oz + dz * 12, 0, live);
+      if (!R.HITVOL_HIT.live || (tt >= 0) !== (tl >= 0) || Math.abs(tt - tl) > 1e-9 || (tl >= 0 && th !== R.HITVOL_HIT.head)) same = false;
+      n++; if (tl >= 0) hits++;
+    }
+    ok(same && hits > 40 && R.HITVOL_LIVE_N === 54 && R.hitVolHeadR("soldier") > 0.05 && R.hitVolHeadR("soldier") < 0.2,
+       "LC-22: live bones = the table's own joints give the same verdict + entry + headshot on " + n + " rays (" + hits + " hits)");
+    const far = new Float64Array(live); for (let i = 0; i < far.length; i += 3) far[i] += 1.5;   // the drawn body 1.5 m to +x
+    ok(R.hitVolSegment(b, b.pos.x - 5, b.pos.y + 1.2, b.pos.z, b.pos.x + 5, b.pos.y + 1.2, b.pos.z, 0, far) > 0.6 &&
+       R.hitVolSegment(b, b.pos.x, b.pos.y - 3, b.pos.z, b.pos.x, b.pos.y + 3, b.pos.z, 0, far) < 0 &&
+       R.hitVolSegment(b, b.pos.x, b.pos.y - 3, b.pos.z, b.pos.x, b.pos.y + 3, b.pos.z, 0) >= 0,
+       "LC-22: a live set is what is tested (a body drawn 1.5 m off is hit there, not at the sim position)");
+    const foot = R.hitVolSegment(b, live[48] - 3, live[49], live[50], live[48] + 3, live[49], live[50], 0, live);
+    ok(foot >= 0 && R.hitVolSegment(b, live[48] - 3, live[49] - 0.12, live[50], live[48] + 3, live[49] - 0.12, live[50], 0, live) < 0,
+       "LC-22: live feet carry a Foot -> ToeBase capsule (r <= " + 0.055 + " m)");
+    ok(R.hitVolSegment(actor({ downed: true }), 0, 2.3, -5, 20, 2.3, -5, 0, live) === -2, "LC-22: a downed actor keeps the legacy cylinder even with live bones");
+  }
   ok(H.reach > 0.5 && H.reach < 1.0, "LC-22: broad-phase reach " + H.reach.toFixed(2) + " m covers every measured joint");
 }
 
@@ -1321,7 +1358,7 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(/p\.bounce = !!def\.arc && !def\.impact;/.test(wj) && R.WEAPONS.glauncher.impact === true, "P2-D: launcher shells are impact-fused (no bounce), frags still bounce");
     ok(/else if \(p\.weaponId === "smoke"\) deploySmoke\(W, p\.x, p\.y, p\.z, p\.ownerId\);/.test(wj) && /W\.smokes\.length = 0;/.test(wj), "C-SMOKE: the fuse pops a cloud onto W.smokes; reset clears it in place");
     ok(/if \(a\.downed\) \{\s*\n\s*inp\.slot = -1; inp\.reload = false;/.test(wj), "C-DBNO: stepWeapon's first gate - a downed actor cannot switch, reload, fire, throw or heal");
-    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t\)/.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume and its head sphere");
+    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t, liveJoints\(W, t\)\)/.test(wj) && /W\.hitVolRay = \(t, ox, oy, oz, dx, dy, dz, maxT\) => hitVolRay\(W, /.test(wj) && /^function hitVolRay\(W, t,/m.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume (live bones where fresh) and its head sphere; W.hitVolRay is defined");
   } else console.log("  INFO  weapons.js not found next to this file: P2-D source pins skipped");
 }
 
