@@ -1020,17 +1020,20 @@ function tickSmokes(W) {
 // camera's frustum at rate 2, so it kept the table - whose facing is 180 deg off a dummy's drawn body.) The joints are
 // the bones' world positions as last posed (the tick runs after the frame that drew them: the body the shooter saw);
 // matrices are refreshed from the bones' local transforms here because a frame can be stepped without a render.
-// Per actor, once per sim time W.t: one Float64Array(54) + the 18-bone list, built once per rig (no per-frame garbage).
+// Per actor, once per sim time W.t: one Float64Array(58) + the 18-bone list, built once per rig (no per-frame garbage).
 const HV_LIVE_BONES = ["Hips", "Spine2", "Neck", "LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm", "RightHand",
   "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot", "Head", "LeftToeBase", "RightToeBase"];
 const _hvV = new THREE.Vector3(), _hvM = new THREE.Matrix4();
-/** the head-sphere centre in the Head bone's own frame: the centroid of the body meshes' Head-dominant vertices in bind
- *  pose (skinned world = bone.matrixWorld x boneInverse x bindMatrix x v, three's attached bind mode). Once per skin. */
+/** The HEAD volume in the Head bone's own frame, from the body meshes' Head-dominant vertices in bind pose (skinned
+ *  world = bone.matrixWorld x boneInverse x bindMatrix x v, three's attached bind mode): a CAPSULE along the local axis
+ *  with the widest p10-p90 spread (a hood, hair or a helmet makes some heads far wider than deep: the athlete's head
+ *  cloud is 0.36 m ear to ear and 0.19 m front to back), its tips at the p10 / p90 extents less the radius, the radius
+ *  the p80 distance of the cloud from that axis. Local units (the bone frame carries the rig's scale); once per skin. */
 const _hvHeadBySkin = new Map();
 function headLocal(t, headBone) {
   const key = t.skin || "?";
   if (_hvHeadBySkin.has(key)) return _hvHeadBySkin.get(key);
-  let n = 0, sx = 0, sy = 0, sz = 0;
+  const P3 = [];
   for (const mesh of t._bodies) {
     const g = mesh.geometry, sk = mesh.skeleton;
     if (!g || !sk || !g.attributes.skinIndex || !g.attributes.skinWeight) continue;
@@ -1043,10 +1046,23 @@ function headLocal(t, headBone) {
       for (let k = 0; k < 4; k++) { const w = SW.getComponent(i, k); if (w > bw) { bw = w; bi = SI.getComponent(i, k); } }
       if (bi !== hi) continue;
       _hvV.fromBufferAttribute(P, i).applyMatrix4(_hvM);
-      sx += _hvV.x; sy += _hvV.y; sz += _hvV.z; n++;
+      P3.push(_hvV.x, _hvV.y, _hvV.z);
     }
   }
-  const out = n > 20 ? { x: sx / n, y: sy / n, z: sz / n } : null;
+  const n = P3.length / 3;
+  let out = null;
+  if (n > 20) {
+    const q = (arr, f) => { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(f * a.length))]; };
+    const ax = [0, 1, 2].map((k) => { const v = []; for (let i = 0; i < n; i++) v.push(P3[i * 3 + k]); return { lo: q(v, 0.1), hi: q(v, 0.9), mid: q(v, 0.5) }; });
+    let k0 = 0;
+    for (let k = 1; k < 3; k++) if (ax[k].hi - ax[k].lo > ax[k0].hi - ax[k0].lo) k0 = k;
+    const c = [0, 1, 2].map((k) => (ax[k].lo + ax[k].hi) / 2);
+    const dist = [];
+    for (let i = 0; i < n; i++) { let d2 = 0; for (let k = 0; k < 3; k++) if (k !== k0) { const e = P3[i * 3 + k] - c[k]; d2 += e * e; } dist.push(Math.sqrt(d2)); }
+    const r = q(dist, 0.8), half = Math.max(0, (ax[k0].hi - ax[k0].lo) / 2 - r);
+    const A = c.slice(), B = c.slice(); A[k0] -= half; B[k0] += half;
+    out = { a: { x: A[0], y: A[1], z: A[2] }, b: { x: B[0], y: B[1], z: B[2] }, r };
+  }
   _hvHeadBySkin.set(key, out);
   return out;
 }
@@ -1061,7 +1077,7 @@ function liveRig(t) {
   if (bones.some((b) => !b)) return null;
   const hl = headLocal(t, bones[15]);
   if (!hl) return null;
-  t._hvLB = { bones, head: hl, J: new Float64Array(K.HITVOL_LIVE_N || 54), t: -1 };
+  t._hvLB = { bones, head: hl, J: new Float64Array(K.HITVOL_LIVE_N || 58), t: -1 };
   return t._hvLB;
 }
 /** the live joints of t (world, the sim's HITVOL_LIVE layout) or null = use the table */
@@ -1075,8 +1091,10 @@ function liveJoints(W, t) {
   const B = L.bones, J = L.J;
   B[0].updateWorldMatrix(true, true);            // the obj chain down to the hips, then the whole skeleton under it
   for (let i = 0; i < 15; i++) { const e = B[i].matrixWorld.elements; J[i * 3] = e[12]; J[i * 3 + 1] = e[13]; J[i * 3 + 2] = e[14]; }
-  _hvV.set(L.head.x, L.head.y, L.head.z).applyMatrix4(B[15].matrixWorld);
-  J[45] = _hvV.x; J[46] = _hvV.y; J[47] = _hvV.z;
+  const hm = B[15].matrixWorld, he = hm.elements, H = L.head;
+  _hvV.set(H.a.x, H.a.y, H.a.z).applyMatrix4(hm); J[45] = _hvV.x; J[46] = _hvV.y; J[47] = _hvV.z;
+  _hvV.set(H.b.x, H.b.y, H.b.z).applyMatrix4(hm); J[54] = _hvV.x; J[55] = _hvV.y; J[56] = _hvV.z;
+  J[57] = H.r * Math.sqrt(he[0] * he[0] + he[1] * he[1] + he[2] * he[2]);    // local units -> metres (the bone frame's scale)
   for (let i = 0; i < 2; i++) { const e = B[16 + i].matrixWorld.elements; J[48 + i * 3] = e[12]; J[49 + i * 3] = e[13]; J[50 + i * 3] = e[14]; }
   L.t = W.t;
   return J;

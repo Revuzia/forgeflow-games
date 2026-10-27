@@ -651,12 +651,19 @@
   // crouched-still rifle lean that accumulates): measured on the integrated build the table path put a pistol dummy's arm
   // 0.28 m BEHIND its drawn body in the side view. So an actor whose pose is LIVE (weapons.js liveJoints: the camera
   // focus, or any actor whose mixer the view policy still steps - the pose it is drawn in) is tested against its LIVE
-  // bones: the caller passes `live` = the world positions of the 15 JOINTS (0-44), the head-sphere centre (45-47, the
-  // Head-weighted vertex centroid carried in the Head bone's frame) and the two ToeBase joints (48-53). Same capsules, the
+  // bones: the caller passes `live` = the world positions of the 15 JOINTS (0-44), head point A (45-47), the two ToeBase
+  // joints (48-53), head point B (54-56) and the head radius in metres (57): a head CAPSULE A-B fitted to the Head-weighted
+  // vertices in the Head bone's frame (weapons.js headLocal); r <= 0 = a sphere at A with the table's head radius. Same capsules, the
   // skin's measured RADII (the idle fit, <= 0.045 m outside the drawn triangles; no phase shrink is needed when the joints
   // ARE the drawn ones), plus a foot capsule Foot -> ToeBase. Everything else (a mixer the view policy skips: beyond
   // 250 m or off screen without a shadow; no rig yet; the headless sim) keeps the deterministic table. HITVOL_LIVE_N = the length of `live`.
-  var HITVOL_LIVE_N = 54, HV_FOOT_R = 0.055;
+  var HITVOL_LIVE_N = 58, HV_FOOT_R = 0.055;
+  // live-mode radius pads (m) on the measured radii: body capsules / head capsule. The skin radii were fitted <= 0.045 m
+  // outside the drawn triangles (bar 0.06), so 0.015 more keeps the bar and closes the seams between capsules. Measured
+  // (fix/probes/probe_pad.py, p23_hitbox's own lines - 3 cm raster, 8 x 0.06 m offsets - 5 skins x 4 views on the idle
+  // player + the range dummy): pad 0 -> deep-line coverage 0.914-1.0, 0 outside; 0.015 / 0.01 -> 0.957-1.0, 0 outside,
+  // head-top + 0.1 m 0 hits; 0.02 / 0.02 -> 1 outside line on athlete and viper (side view).
+  var HV_LIVE_PAD = { body: 0.015, head: 0.01 };
   var HV_HEAD_R = {};
   function hitVolHeadR(sk) {
     if (HV_HEAD_R[sk] != null) return HV_HEAD_R[sk];
@@ -672,7 +679,7 @@
     if (!R) return -2;
     var J = _hvJ, i;
     for (i = 0; i < 48; i++) J[i] = live[i];
-    J[48] = hitVolHeadR(sk);
+    J[48] = hitVolHeadR(sk) + HV_LIVE_PAD.head;
     for (i = 0; i < 6; i++) J[HITVOL.DOFF + 18 + i] = live[48 + i];   // points 21, 22 = LeftToeBase, RightToeBase
     hvSide(0, 9, 12, R[7], 15); hvSide(1, 3, 6, R[8], 17); hvSide(2, 3, 6, R[9], 19);
     var dx = bx - ax, dy = by - ay, dz = bz - az;
@@ -680,13 +687,15 @@
     var best = 2, part = -1, head = false, S = HITVOL.SEGS;
     for (i = 0; i < S.length + 2; i++) {
       var a3, b3, rr;
-      if (i < S.length) { var g = S[i]; rr = R[g[2]]; a3 = hvOff(g[0]); b3 = hvOff(g[1]); }
+      if (i < S.length) { var g = S[i]; rr = R[g[2]] > 0 ? R[g[2]] + HV_LIVE_PAD.body : 0; a3 = hvOff(g[0]); b3 = hvOff(g[1]); }
       else { rr = Math.min(R[5], HV_FOOT_R); a3 = hvOff(i === S.length ? 11 : 14); b3 = hvOff(i === S.length ? 21 : 22); }
       if (!(rr > 0)) continue;
       var e = segCapsule(ax, ay, az, dx, dy, dz, J[a3], J[a3 + 1], J[a3 + 2], J[b3], J[b3 + 1], J[b3 + 2], rr);
       if (e >= 0 && e < best) { best = e; part = i; }
     }
-    var eh = segCapsule(ax, ay, az, dx, dy, dz, J[45], J[46], J[47], J[45], J[46], J[47], J[48]);
+    var hb = live[57] > 0, hr = hb ? live[57] + HV_LIVE_PAD.head : J[48];
+    var eh = hb ? segCapsule(ax, ay, az, dx, dy, dz, J[45], J[46], J[47], live[54], live[55], live[56], hr)
+                : segCapsule(ax, ay, az, dx, dy, dz, J[45], J[46], J[47], J[45], J[46], J[47], hr);
     if (eh >= 0 && eh <= best) { best = eh; part = -1; head = true; }
     HITVOL_HIT.live = true;
     if (best > 1) return -1;
@@ -1849,7 +1858,7 @@
     FALL: FALL, FALL_SAFE_H: FALL_SAFE_H, FALL_SAFE_V: FALL_SAFE_V, FALL_DMG_PER_V: FALL_DMG_PER_V, FALL_EXP: FALL_EXP,
     LAND_STAGGER_S: LAND_STAGGER_S, LAND_STAGGER_V: LAND_STAGGER_V, fallDamage: fallDamage, fallSpeedForHeight: fallSpeedForHeight,
     fallSafeHeight: fallSafeHeight, fallLethalHeight: fallLethalHeight,
-    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, HITVOL_LIVE_N: HITVOL_LIVE_N, hitVolHeadR: hitVolHeadR, HV_TWIST_MAX: HV_TWIST_MAX, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
+    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, HITVOL_LIVE_N: HITVOL_LIVE_N, HV_LIVE_PAD: HV_LIVE_PAD, hitVolHeadR: hitVolHeadR, HV_TWIST_MAX: HV_TWIST_MAX, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};
