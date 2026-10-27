@@ -69,6 +69,9 @@ const DEV_MANNEQUIN_HEIGHT = 1.95;
 /** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
 const CROWD_MAX_ROWS = 4096;
 const IMPACT_AT = 0.4;
+/** an instant cast's clip: played at the pace of a cast this long (s) …, reaching its impact this long after the event */
+const INSTANT_PACE_S = 0.25;
+const INSTANT_LEAD_S = 0.12;
 const ACCENT_REST = 0.8;
 /** veils (r12 M2): body coverage of an invisible unit its allies see, of an untargetable one; the glass rim */
 const VEIL_GHOST = 0.35;
@@ -857,8 +860,20 @@ export class Actor implements CrowdActor {
 
   /** unit cast role -> its delayed area's delay (s) */
   private readonly castHold = new Map<string, number>();
-  /** a held cast clip playing on after its cast state: role, seconds since the cast began, impact time */
-  private hold: { role: string; t: number; impact: number } | null = null;
+  /** a held cast clip playing on after its cast state: role, seconds since the cast began, impact time;
+   *  `still`: only while the unit stands (a step cancels it into the run) — follow-throughs and instant casts */
+  private hold: { role: string; t: number; impact: number; still?: boolean } | null = null;
+  /** the cast clip of the current cast state (its follow-through continues when the cast releases) */
+  private castTrack: { role: string; t: number; impact: number } | null = null;
+
+  /** an instant cast (castTime 0: the sim releases it in the tick it starts, so the unit never shows a
+   *  'cast' state): play the slot's cast clip at the pace of a short cast, entered part-way through its
+   *  wind-up so the impact frame lands INSTANT_LEAD_S after the event, then follow through */
+  instantCast(role: string): void {
+    if (!this.mixer || !this.action(role)) return;
+    this.hold = { role, t: INSTANT_PACE_S - INSTANT_LEAD_S, impact: INSTANT_PACE_S, still: true };
+    this.castTrack = null;
+  }
 
   /** drive the clip for one frame */
   private animate(v: EntityView, dt: number, alpha: number): void {
@@ -869,12 +884,23 @@ export class Actor implements CrowdActor {
       if (!this.hold || this.hold.role !== role || v.stateTime < this.hold.t - 0.25) {
         this.hold = { role, t: v.stateTime, impact: Math.max(0.05, v.stateDuration) + delay };
       } else this.hold.t = v.stateTime;
-    } else if (this.hold) {
-      this.hold.t += dt;
-      const clip = this.action(this.hold.role)?.getClip();
-      const end = this.hold.impact / IMPACT_AT * (clip ? 1 : 0);
-      if ((v.state === 'idle' || v.state === 'move') && this.hold.t < end) role = this.hold.role;
-      else this.hold = null;
+      this.castTrack = null;
+    } else if (v.state === 'cast' && role.startsWith('cast_')) {
+      // remember where the cast clip is, so its follow-through can continue past the release
+      this.castTrack = { role, t: v.stateTime, impact: v.stateDuration > 0.02 ? v.stateDuration : 0.25 };
+      this.hold = null;
+    } else {
+      // the cast just released into a stand: keep its follow-through (60 % of the clip after the impact)
+      if (this.castTrack && !this.hold && v.state === 'idle') this.hold = { ...this.castTrack, still: true };
+      this.castTrack = null;
+      if (this.hold) {
+        this.hold.t += dt;
+        const clip = this.action(this.hold.role)?.getClip();
+        const end = this.hold.impact / IMPACT_AT * (clip ? 1 : 0);
+        const standing = v.state === 'idle' || (!this.hold.still && v.state === 'move');
+        if (standing && this.hold.t < end) role = this.hold.role;
+        else this.hold = null;
+      }
     }
     const restarted = v.stateTime + 1e-6 < this.lastStateTime;
     this.lastStateTime = v.stateTime;
@@ -1299,16 +1325,25 @@ export class HitReactions {
   /** recent victims: actor id → presentation time and look of its last hit (feel layers resolve against these) */
   private readonly struck = new Map<number, { t: number; color: Color; rim: Color | null }>();
   private now = 0;
+  /** ability id → the cast clip an INSTANT cast plays (castTime 0; its present.anim when that is a cast clip,
+   *  else its slot's); abilities whose present names another clip (a dash) are driven by their own state */
+  private readonly instantRole = new Map<string, string>();
 
   constructor(catalog: CatalogT) {
     for (const f of catalog.fighters) {
       const kits = [f.kit, ...Object.values(f.kit.passive.forms ?? {}).map((fm) => fm.kit ?? {})] as Record<string, unknown>[];
       for (const kit of kits) for (const slot of ['a1', 'a2', 'a3', 'ult'] as const) {
-        const a = kit[slot] as { id: string; recast?: { ability: { id: string } } } | undefined;
+        const a = kit[slot] as { id: string; castTime?: number; present?: { anim?: string }; recast?: { ability: { id: string; castTime?: number; present?: { anim?: string } } } } | undefined;
         if (!a) continue;
         const t = slot === 'ult' ? 4 : 2;
         this.tier.set(a.id, t);
         if (a.recast) this.tier.set(a.recast.ability.id, t);
+        const slotRole = slot === 'ult' ? 'cast_ult' : `cast_${slot}`;
+        for (const ab of a.recast ? [a, a.recast.ability] : [a]) {
+          if ((ab.castTime ?? 0) > 0.02) continue;
+          const anim = ab.present?.anim;
+          if (!anim || anim.startsWith('cast_')) this.instantRole.set(ab.id, anim ?? slotRole);
+        }
       }
       this.tier.set(f.kit.passive.id, 1);
     }
@@ -1320,6 +1355,12 @@ export class HitReactions {
     const hits = this.hits;
     hits.clear();
     for (const ev of events) {
+      if (ev.e === 'cast' && ev.castTime <= 0.02) {
+        const role = this.instantRole.get(ev.ability);
+        const a = role ? actors.get(ev.src) : undefined;
+        if (a && role && a.visible && a.leaving < 0) a.instantCast(role);
+        continue;
+      }
       if (ev.e !== 'damage') continue;
       const dst = actors.get(ev.dst);
       if (!dst || !dst.visible || dst.leaving >= 0 || !dst.model) continue;
