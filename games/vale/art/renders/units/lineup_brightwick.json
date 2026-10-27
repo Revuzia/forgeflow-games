@@ -1,0 +1,1017 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "shieldwick_aubade": {
+      "glb": "art/out/units/shieldwick_aubade.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 67,
+          "valueBands": {
+            "top": 54.0,
+            "mid": 43.6,
+            "bottom": 41.4
+          },
+          "accentPct": 3.43,
+          "accentTopHalfShare": 0.602,
+          "accentTopHalfPctOfFighter": 2.06
+        },
+        "90": {
+          "heightPx": 69,
+          "valueBands": {
+            "top": 51.9,
+            "mid": 43.9,
+            "bottom": 23.2
+          },
+          "accentPct": 2.88,
+          "accentTopHalfShare": 0.973,
+          "accentTopHalfPctOfFighter": 2.8
+        },
+        "180": {
+          "heightPx": 72,
+          "valueBands": {
+            "top": 50.8,
+            "mid": 37.8,
+            "bottom": 16.1
+          },
+          "accentPct": 3.37,
+          "accentTopHalfShare": 0.849,
+          "accentTopHalfPctOfFighter": 2.86
+        },
+        "270": {
+          "heightPx": 81,
+          "valueBands": {
+            "top": 56.9,
+            "mid": 43.4,
+            "bottom": 33.1
+          },
+          "accentPct": 3.52,
+          "accentTopHalfShare": 0.615,
+          "accentTopHalfPctOfFighter": 2.17
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 3.52,
+      "accentOk": false
+    },
+    "glimwick_aubade": {
+      "glb": "art/out/units/glimwick_aubade.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 68,
+          "valueBands": {
+            "top": 66.6,
+            "mid": 55.5,
+            "bottom": 41.6
+          },
+          "accentPct": 7.93,
+          "accentTopHalfShare": 0.866,
+          "accentTopHalfPctOfFighter": 6.87
+        },
+        "90": {
+          "heightPx": 73,
+          "valueBands": {
+            "top": 70.3,
+            "mid": 55.0,
+            "bottom": 30.6
+          },
+          "accentPct": 5.19,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 5.19
+        },
+        "180": {
+          "heightPx": 93,
+          "valueBands": {
+            "top": 72.8,
+            "mid": 57.2,
+            "bottom": 30.8
+          },
+          "accentPct": 4.61,
+          "accentTopHalfShare": 0.643,
+          "accentTopHalfPctOfFighter": 2.97
+        },
+        "270": {
+          "heightPx": 107,
+          "valueBands": {
+            "top": 77.3,
+            "mid": 61.5,
+            "bottom": 35.3
+          },
+          "accentPct": 5.18,
+          "accentTopHalfShare": 0.701,
+          "accentTopHalfPctOfFighter": 3.63
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 7.93,
+      "accentOk": false
+    },
+    "greatwick_aubade": {
+      "glb": "art/out/units/greatwick_aubade.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 135,
+          "valueBands": {
+            "top": 76.7,
+            "mid": 48.6,
+            "bottom": 45.7
+          },
+          "accentPct": 6.47,
+          "accentTopHalfShare": 0.686,
+          "accentTopHalfPctOfFighter": 4.44
+        },
+        "90": {
+          "heightPx": 121,
+          "valueBands": {
+            "top": 73.7,
+            "mid": 52.3,
+            "bottom": 34.3
+          },
+          "accentPct": 4.66,
+          "accentTopHalfShare": 0.799,
+          "accentTopHalfPctOfFighter": 3.73
+        },
+        "180": {
+          "heightPx": 90,
+          "valueBands": {
+            "top": 72.9,
+            "mid": 56.2,
+            "bottom": 29.7
+          },
+          "accentPct": 7.16,
+          "accentTopHalfShare": 0.446,
+          "accentTopHalfPctOfFighter": 3.19
+        },
+        "270": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 76.5,
+            "mid": 52.4,
+            "bottom": 34.5
+          },
+          "accentPct": 5.12,
+          "accentTopHalfShare": 0.866,
+          "accentTopHalfPctOfFighter": 4.43
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 7.16,
+      "accentOk": false
+    },
+    "brightwick_aubade": {
+      "glb": "art/out/units/brightwick_aubade.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 114,
+          "valueBands": {
+            "top": 49.8,
+            "mid": 41.6,
+            "bottom": 29.7
+          },
+          "accentPct": 4.34,
+          "accentTopHalfShare": 0.742,
+          "accentTopHalfPctOfFighter": 3.22
+        },
+        "90": {
+          "heightPx": 157,
+          "valueBands": {
+            "top": 54.8,
+            "mid": 43.1,
+            "bottom": 31.6
+          },
+          "accentPct": 4.27,
+          "accentTopHalfShare": 0.776,
+          "accentTopHalfPctOfFighter": 3.32
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 52.8,
+            "mid": 37.7,
+            "bottom": 27.8
+          },
+          "accentPct": 5.08,
+          "accentTopHalfShare": 0.655,
+          "accentTopHalfPctOfFighter": 3.33
+        },
+        "270": {
+          "heightPx": 120,
+          "valueBands": {
+            "top": 51.0,
+            "mid": 36.3,
+            "bottom": 27.5
+          },
+          "accentPct": 3.1,
+          "accentTopHalfShare": 0.907,
+          "accentTopHalfPctOfFighter": 2.81
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 5.08,
+      "accentOk": false
+    },
+    "shieldwick_serenade": {
+      "glb": "art/out/units/shieldwick_serenade.glb",
+      "idleAction": "idle.004",
+      "facings": {
+        "0": {
+          "heightPx": 69,
+          "valueBands": {
+            "top": 54.4,
+            "mid": 30.3,
+            "bottom": 29.6
+          },
+          "accentPct": 4.24,
+          "accentTopHalfShare": 0.681,
+          "accentTopHalfPctOfFighter": 2.89
+        },
+        "90": {
+          "heightPx": 77,
+          "valueBands": {
+            "top": 50.2,
+            "mid": 35.6,
+            "bottom": 20.7
+          },
+          "accentPct": 3.03,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 3.03
+        },
+        "180": {
+          "heightPx": 75,
+          "valueBands": {
+            "top": 51.4,
+            "mid": 33.6,
+            "bottom": 19.4
+          },
+          "accentPct": 2.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.48
+        },
+        "270": {
+          "heightPx": 80,
+          "valueBands": {
+            "top": 52.4,
+            "mid": 34.8,
+            "bottom": 23.5
+          },
+          "accentPct": 3.67,
+          "accentTopHalfShare": 0.718,
+          "accentTopHalfPctOfFighter": 2.64
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 4.24,
+      "accentOk": false
+    },
+    "glimwick_serenade": {
+      "glb": "art/out/units/glimwick_serenade.glb",
+      "idleAction": "idle.005",
+      "facings": {
+        "0": {
+          "heightPx": 75,
+          "valueBands": {
+            "top": 57.8,
+            "mid": 40.7,
+            "bottom": 26.5
+          },
+          "accentPct": 7.59,
+          "accentTopHalfShare": 0.9,
+          "accentTopHalfPctOfFighter": 6.83
+        },
+        "90": {
+          "heightPx": 73,
+          "valueBands": {
+            "top": 64.2,
+            "mid": 41.6,
+            "bottom": 23.4
+          },
+          "accentPct": 3.51,
+          "accentTopHalfShare": 0.922,
+          "accentTopHalfPctOfFighter": 3.24
+        },
+        "180": {
+          "heightPx": 93,
+          "valueBands": {
+            "top": 33.7,
+            "mid": 55.2,
+            "bottom": 31.1
+          },
+          "accentPct": 3.6,
+          "accentTopHalfShare": 0.6,
+          "accentTopHalfPctOfFighter": 2.16
+        },
+        "270": {
+          "heightPx": 107,
+          "valueBands": {
+            "top": 38.4,
+            "mid": 54.4,
+            "bottom": 30.9
+          },
+          "accentPct": 4.67,
+          "accentTopHalfShare": 0.667,
+          "accentTopHalfPctOfFighter": 3.11
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 7.59,
+      "accentOk": false
+    },
+    "greatwick_serenade": {
+      "glb": "art/out/units/greatwick_serenade.glb",
+      "idleAction": "idle.006",
+      "facings": {
+        "0": {
+          "heightPx": 135,
+          "valueBands": {
+            "top": 54.4,
+            "mid": 38.7,
+            "bottom": 26.2
+          },
+          "accentPct": 5.02,
+          "accentTopHalfShare": 0.538,
+          "accentTopHalfPctOfFighter": 2.7
+        },
+        "90": {
+          "heightPx": 119,
+          "valueBands": {
+            "top": 53.3,
+            "mid": 37.4,
+            "bottom": 28.2
+          },
+          "accentPct": 2.77,
+          "accentTopHalfShare": 0.981,
+          "accentTopHalfPctOfFighter": 2.72
+        },
+        "180": {
+          "heightPx": 90,
+          "valueBands": {
+            "top": 46.9,
+            "mid": 36.3,
+            "bottom": 20.8
+          },
+          "accentPct": 4.92,
+          "accentTopHalfShare": 0.192,
+          "accentTopHalfPctOfFighter": 0.94
+        },
+        "270": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 58.1,
+            "mid": 37.3,
+            "bottom": 22.2
+          },
+          "accentPct": 2.99,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.99
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 5.02,
+      "accentOk": false
+    },
+    "brightwick_serenade": {
+      "glb": "art/out/units/brightwick_serenade.glb",
+      "idleAction": "idle.007",
+      "facings": {
+        "0": {
+          "heightPx": 105,
+          "valueBands": {
+            "top": 38.2,
+            "mid": 34.4,
+            "bottom": 32.3
+          },
+          "accentPct": 4.08,
+          "accentTopHalfShare": 0.874,
+          "accentTopHalfPctOfFighter": 3.57
+        },
+        "90": {
+          "heightPx": 147,
+          "valueBands": {
+            "top": 36.1,
+            "mid": 36.0,
+            "bottom": 29.3
+          },
+          "accentPct": 4.21,
+          "accentTopHalfShare": 0.659,
+          "accentTopHalfPctOfFighter": 2.77
+        },
+        "180": {
+          "heightPx": 118,
+          "valueBands": {
+            "top": 36.9,
+            "mid": 37.9,
+            "bottom": 25.7
+          },
+          "accentPct": 4.83,
+          "accentTopHalfShare": 0.642,
+          "accentTopHalfPctOfFighter": 3.1
+        },
+        "270": {
+          "heightPx": 115,
+          "valueBands": {
+            "top": 38.9,
+            "mid": 29.8,
+            "bottom": 27.4
+          },
+          "accentPct": 4.11,
+          "accentTopHalfShare": 0.615,
+          "accentTopHalfPctOfFighter": 2.53
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 4.83,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "shieldwick_aubade",
+      "b": "glimwick_aubade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.684,
+        "90": 0.768,
+        "180": 0.577,
+        "270": 0.598
+      },
+      "iou64Max": 0.768,
+      "iou64_norm": {
+        "0": 0.667,
+        "90": 0.707,
+        "180": 0.405,
+        "270": 0.385
+      },
+      "iou64NormMax": 0.707,
+      "ok": true
+    },
+    {
+      "a": "shieldwick_aubade",
+      "b": "greatwick_aubade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.375,
+        "90": 0.36,
+        "180": 0.571,
+        "270": 0.408
+      },
+      "iou64Max": 0.571,
+      "iou64_norm": {
+        "0": 0.583,
+        "90": 0.579,
+        "180": 0.788,
+        "270": 0.614
+      },
+      "iou64NormMax": 0.788,
+      "ok": true
+    },
+    {
+      "a": "shieldwick_aubade",
+      "b": "brightwick_aubade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.405,
+        "90": 0.407,
+        "180": 0.419,
+        "270": 0.515
+      },
+      "iou64Max": 0.515,
+      "iou64_norm": {
+        "0": 0.555,
+        "90": 0.416,
+        "180": 0.547,
+        "270": 0.789
+      },
+      "iou64NormMax": 0.789,
+      "ok": true
+    },
+    {
+      "a": "shieldwick_aubade",
+      "b": "shieldwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.86,
+        "90": 0.89,
+        "180": 0.862,
+        "270": 0.928
+      },
+      "iou64Max": 0.928,
+      "iou64_norm": {
+        "0": 0.846,
+        "90": 0.843,
+        "180": 0.823,
+        "270": 0.883
+      },
+      "iou64NormMax": 0.883,
+      "ok": false
+    },
+    {
+      "a": "shieldwick_aubade",
+      "b": "glimwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.728,
+        "90": 0.811,
+        "180": 0.633,
+        "270": 0.636
+      },
+      "iou64Max": 0.811,
+      "iou64_norm": {
+        "0": 0.675,
+        "90": 0.817,
+        "180": 0.47,
+        "270": 0.455
+      },
+      "iou64NormMax": 0.817,
+      "ok": false
+    },
+    {
+      "a": "shieldwick_aubade",
+      "b": "greatwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.349,
+        "90": 0.334,
+        "180": 0.521,
+        "270": 0.382
+      },
+      "iou64Max": 0.521,
+      "iou64_norm": {
+        "0": 0.617,
+        "90": 0.601,
+        "180": 0.75,
+        "270": 0.611
+      },
+      "iou64NormMax": 0.75,
+      "ok": true
+    },
+    {
+      "a": "shieldwick_aubade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.396,
+        "90": 0.413,
+        "180": 0.412,
+        "270": 0.515
+      },
+      "iou64Max": 0.515,
+      "iou64_norm": {
+        "0": 0.608,
+        "90": 0.481,
+        "180": 0.593,
+        "270": 0.821
+      },
+      "iou64NormMax": 0.821,
+      "ok": true
+    },
+    {
+      "a": "glimwick_aubade",
+      "b": "greatwick_aubade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.288,
+        "90": 0.3,
+        "180": 0.402,
+        "270": 0.271
+      },
+      "iou64Max": 0.402,
+      "iou64_norm": {
+        "0": 0.477,
+        "90": 0.568,
+        "180": 0.41,
+        "270": 0.296
+      },
+      "iou64NormMax": 0.568,
+      "ok": true
+    },
+    {
+      "a": "glimwick_aubade",
+      "b": "brightwick_aubade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.322,
+        "90": 0.356,
+        "180": 0.311,
+        "270": 0.375
+      },
+      "iou64Max": 0.375,
+      "iou64_norm": {
+        "0": 0.459,
+        "90": 0.452,
+        "180": 0.347,
+        "270": 0.447
+      },
+      "iou64NormMax": 0.459,
+      "ok": true
+    },
+    {
+      "a": "glimwick_aubade",
+      "b": "shieldwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.62,
+        "90": 0.706,
+        "180": 0.55,
+        "270": 0.593
+      },
+      "iou64Max": 0.706,
+      "iou64_norm": {
+        "0": 0.669,
+        "90": 0.778,
+        "180": 0.411,
+        "270": 0.366
+      },
+      "iou64NormMax": 0.778,
+      "ok": true
+    },
+    {
+      "a": "glimwick_aubade",
+      "b": "glimwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.821,
+        "90": 0.802,
+        "180": 0.835,
+        "270": 0.795
+      },
+      "iou64Max": 0.835,
+      "iou64_norm": {
+        "0": 0.821,
+        "90": 0.812,
+        "180": 0.76,
+        "270": 0.774
+      },
+      "iou64NormMax": 0.821,
+      "ok": false
+    },
+    {
+      "a": "glimwick_aubade",
+      "b": "greatwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.268,
+        "90": 0.28,
+        "180": 0.359,
+        "270": 0.248
+      },
+      "iou64Max": 0.359,
+      "iou64_norm": {
+        "0": 0.513,
+        "90": 0.55,
+        "180": 0.406,
+        "270": 0.288
+      },
+      "iou64NormMax": 0.55,
+      "ok": true
+    },
+    {
+      "a": "glimwick_aubade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.325,
+        "90": 0.358,
+        "180": 0.337,
+        "270": 0.38
+      },
+      "iou64Max": 0.38,
+      "iou64_norm": {
+        "0": 0.505,
+        "90": 0.507,
+        "180": 0.333,
+        "270": 0.417
+      },
+      "iou64NormMax": 0.507,
+      "ok": true
+    },
+    {
+      "a": "greatwick_aubade",
+      "b": "brightwick_aubade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.554,
+        "90": 0.48,
+        "180": 0.632,
+        "270": 0.507
+      },
+      "iou64Max": 0.632,
+      "iou64_norm": {
+        "0": 0.536,
+        "90": 0.378,
+        "180": 0.621,
+        "270": 0.524
+      },
+      "iou64NormMax": 0.621,
+      "ok": true
+    },
+    {
+      "a": "greatwick_aubade",
+      "b": "shieldwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.411,
+        "90": 0.379,
+        "180": 0.584,
+        "270": 0.409
+      },
+      "iou64Max": 0.584,
+      "iou64_norm": {
+        "0": 0.543,
+        "90": 0.551,
+        "180": 0.73,
+        "270": 0.622
+      },
+      "iou64NormMax": 0.73,
+      "ok": true
+    },
+    {
+      "a": "greatwick_aubade",
+      "b": "glimwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.345,
+        "90": 0.365,
+        "180": 0.474,
+        "270": 0.331
+      },
+      "iou64Max": 0.474,
+      "iou64_norm": {
+        "0": 0.535,
+        "90": 0.629,
+        "180": 0.447,
+        "270": 0.345
+      },
+      "iou64NormMax": 0.629,
+      "ok": true
+    },
+    {
+      "a": "greatwick_aubade",
+      "b": "greatwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.841,
+        "90": 0.855,
+        "180": 0.815,
+        "270": 0.845
+      },
+      "iou64Max": 0.855,
+      "iou64_norm": {
+        "0": 0.828,
+        "90": 0.831,
+        "180": 0.846,
+        "270": 0.841
+      },
+      "iou64NormMax": 0.846,
+      "ok": false
+    },
+    {
+      "a": "greatwick_aubade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.543,
+        "90": 0.483,
+        "180": 0.623,
+        "270": 0.516
+      },
+      "iou64Max": 0.623,
+      "iou64_norm": {
+        "0": 0.496,
+        "90": 0.399,
+        "180": 0.652,
+        "270": 0.55
+      },
+      "iou64NormMax": 0.652,
+      "ok": true
+    },
+    {
+      "a": "brightwick_aubade",
+      "b": "shieldwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.44,
+        "90": 0.426,
+        "180": 0.436,
+        "270": 0.514
+      },
+      "iou64Max": 0.514,
+      "iou64_norm": {
+        "0": 0.521,
+        "90": 0.42,
+        "180": 0.501,
+        "270": 0.762
+      },
+      "iou64NormMax": 0.762,
+      "ok": true
+    },
+    {
+      "a": "brightwick_aubade",
+      "b": "glimwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.385,
+        "90": 0.43,
+        "180": 0.369,
+        "270": 0.457
+      },
+      "iou64Max": 0.457,
+      "iou64_norm": {
+        "0": 0.492,
+        "90": 0.441,
+        "180": 0.368,
+        "270": 0.545
+      },
+      "iou64NormMax": 0.545,
+      "ok": true
+    },
+    {
+      "a": "brightwick_aubade",
+      "b": "greatwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.584,
+        "90": 0.491,
+        "180": 0.659,
+        "270": 0.509
+      },
+      "iou64Max": 0.659,
+      "iou64_norm": {
+        "0": 0.545,
+        "90": 0.386,
+        "180": 0.63,
+        "270": 0.505
+      },
+      "iou64NormMax": 0.63,
+      "ok": true
+    },
+    {
+      "a": "brightwick_aubade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.837,
+        "90": 0.857,
+        "180": 0.838,
+        "270": 0.861
+      },
+      "iou64Max": 0.861,
+      "iou64_norm": {
+        "0": 0.825,
+        "90": 0.841,
+        "180": 0.852,
+        "270": 0.888
+      },
+      "iou64NormMax": 0.888,
+      "ok": false
+    },
+    {
+      "a": "shieldwick_serenade",
+      "b": "glimwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.677,
+        "90": 0.761,
+        "180": 0.63,
+        "270": 0.657
+      },
+      "iou64Max": 0.761,
+      "iou64_norm": {
+        "0": 0.683,
+        "90": 0.843,
+        "180": 0.488,
+        "270": 0.43
+      },
+      "iou64NormMax": 0.843,
+      "ok": true
+    },
+    {
+      "a": "shieldwick_serenade",
+      "b": "greatwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.383,
+        "90": 0.35,
+        "180": 0.54,
+        "270": 0.383
+      },
+      "iou64Max": 0.54,
+      "iou64_norm": {
+        "0": 0.574,
+        "90": 0.538,
+        "180": 0.733,
+        "270": 0.605
+      },
+      "iou64NormMax": 0.733,
+      "ok": true
+    },
+    {
+      "a": "shieldwick_serenade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.429,
+        "90": 0.433,
+        "180": 0.43,
+        "270": 0.514
+      },
+      "iou64Max": 0.514,
+      "iou64_norm": {
+        "0": 0.55,
+        "90": 0.487,
+        "180": 0.528,
+        "270": 0.813
+      },
+      "iou64NormMax": 0.813,
+      "ok": true
+    },
+    {
+      "a": "glimwick_serenade",
+      "b": "greatwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.321,
+        "90": 0.341,
+        "180": 0.424,
+        "270": 0.302
+      },
+      "iou64Max": 0.424,
+      "iou64_norm": {
+        "0": 0.556,
+        "90": 0.607,
+        "180": 0.46,
+        "270": 0.337
+      },
+      "iou64NormMax": 0.607,
+      "ok": true
+    },
+    {
+      "a": "glimwick_serenade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.389,
+        "90": 0.434,
+        "180": 0.397,
+        "270": 0.461
+      },
+      "iou64Max": 0.461,
+      "iou64_norm": {
+        "0": 0.525,
+        "90": 0.494,
+        "180": 0.354,
+        "270": 0.509
+      },
+      "iou64NormMax": 0.525,
+      "ok": true
+    },
+    {
+      "a": "greatwick_serenade",
+      "b": "brightwick_serenade",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.541,
+        "90": 0.466,
+        "180": 0.577,
+        "270": 0.485
+      },
+      "iou64Max": 0.577,
+      "iou64_norm": {
+        "0": 0.512,
+        "90": 0.406,
+        "180": 0.637,
+        "270": 0.534
+      },
+      "iou64NormMax": 0.637,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": false,
+  "sheet": "art/renders/lineup/_bw_lineup_r3.png",
+  "seconds": 94.1
+}

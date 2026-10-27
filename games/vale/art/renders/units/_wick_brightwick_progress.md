@@ -338,3 +338,69 @@ renders `art/renders/units/*brightwick*`.
   lying coat shows its (lining-coloured) underside; QA-camera accent 8.9-9.4 % sits over the brief's 5-7 % (the lane
   mean is 6.8-7.0 %); small paint defects left: a dotted texel seam on the inside of the Aubade rim, two dark slits
   where the cowl's V meets the stole, a notch where the belt crosses the stole light (sub-pixel at 92 px).
+
+## Fix round 3 (wiring review + in-game notes: 2 major for brightwick, shared targets for all kinds)
+- 2026-10-27 13:40 start. Open majors: (1) the hood reads as a face: the 24 x 12 cm tilted slab on the sill = a
+  tongue in an open mouth, the round white Aubade rim tube = lips, the pale cowl under it = a beard, the Serenade
+  bare cream dome + dotted band + opening = a bald head with a headband and a mouth, a visor slot from 52 deg;
+  (2) paint / material below the fighter bar (same matte clay everywhere, no edge light or cavity, few painted
+  folds; the Serenade mantle a smooth bulb / flat slab with a squared hem, the collar a plain torus, the Aubade
+  staff a near-white tube with a bone foot, the faceted dome top). In-game notes: Aubade blue-grey under the ally
+  tint, Serenade tan/amber near the enemy hue, the hood light small from above, flat / plastic surfaces. Shared
+  targets: one soft core, Art 2.0 paint, the team read from both seats, hoods L* <= 65 (B5), gates.
+- Measuring IN GAME (scratch wick_brightwick/ig_bw.mjs + ig_measure.py): render_bench rift, q high, 1080p 1:1,
+  zoom 28.5, seat 0 and seat 5 (team 1); every shieldwick model is served as the brightwick of its faction so
+  the first clashes are brightwick crowds; per clash a beauty frame + an accent-mask frame + a body-mask frame
+  re-rendered from the same state (post.render(0)); per figure: accent share, Lab dE of the accent against the
+  1-4 px ring of body px round it, hood L* (median / p90 of the body px over 1.45 m), value bands. Baseline
+  (the 12:21 GLBs): dE Aubade ally 43.7 (min 25.4) / enemy 58.7, Serenade ally 63.9 / enemy 67.4; hood L* p90
+  Aubade 74, Serenade 69-75 (over the B5 65).
+- HOOD LIGHT: the slab is gone. ONE soft CORE floating in the head space: an ellipsoid 11 x 7 x 5.6 cm (Aubade) /
+  12 x 7.2 x 5.6 (Serenade), 16 x 5 rings, front 2.5-3.5 cm behind the opening, at a third of the arch's height
+  (eye level: under the middle; 52 deg: over the middle) with dark hollow above, below and both sides from eye
+  level, 3/4 and the game camera. Soft falloff: a dim neutral spill painted on the walls that face the core,
+  1 / (1 + (d / 7 cm)^2), only at and behind its depth (the floor in front of it stays ink: no tongue, no pale
+  ring = no sclera). A soft gradient IN the accent is not possible: the shared load test fails any accent with a
+  map (the renderer tints it), and a second emissive shell would need a second team-tinted material. The hollow:
+  everything seen through the arch's outline is ink (hood, rim inner wall, cowl / collar cut faces, and the
+  Aubade coat's top cap, which sat inside the hood at z 1.356 and showed as a lit shelf), never past the head
+  space's back; the ORM makes the ink matte (roughness 1) and occluded (0.05): the sky light + specular had
+  greyed the up-facing floor into a shelf. Aubade rim: a FLAT CARVED band (`rim_band`: inner wall into the
+  hollow, chamfers, a flat face 1.1 cm proud, a fall) instead of the round tube. Serenade dome: the cap above the
+  crown band is its own clean low (`hood_cap`, rings of rays from the dome centre; the decimated top had a flat
+  triangle and a polygonal silhouette); radial seams tried and dropped (a pie from 52 deg, as on the greatwick).
+- VALUES (B5): part colours down, the shared FACTION_PALETTES untouched (wick_common.py not edited): Aubade hood
+  #A2B4C4 -> #7E878F, chalk #D9D6CD -> #98948A / #9C988E, stole #E0DDD4 -> #A8A49A, cowl #646E79, cloak + sleeves
+  #6A727B (chroma 8 -> 5.5, same blue-grey family), ash staff #9A8C76; Serenade dome #CCA97B -> #9A846A, mantle
+  #A48B6E, tabard / bib #9E876B (L* 71-72 at 39.7 % sat -> ~57-60 at ~31 %), sandstone #A88F70; the RAMP's top
+  lifts 1.18 -> 1.09 (A), 1.26 -> 1.14 (S). In game: hood L* p90 61.4 / 63.8 (Aubade ally / enemy seat), 64.0 /
+  62.6 (Serenade), medians 34-45; bands top / mid / bottom Aubade 43 / 31 / 24, Serenade 35 / 30 / 26 (light top,
+  dark feet).
+- PAINT: a `cavity` term on every part (texel surface vs its 2.2 cm 3D low-pass along the normal): carved edges
+  and crests take a warm worn edge light from above, seams and creases sink; firmer painted folds / occlusion /
+  sky light / key; the concept swatch strokes 0.45 -> 0.75, chalk KCON 0.35 -> 0.60, contact shadow floor 0.30 ->
+  0.22; felt nap + fibre speckle; Serenade mantle: the hem dips to a soft point at the centre back (0.962), deeper
+  drape sags over the arms and back and beside the lapels, painted felt folds, a darker turned edge and its cast
+  shadow on the coat; the rolled collar a slow spiral twist (displaced SDF -> normal map + fold paint); Aubade
+  staff: long dark grain streaks, two knots, carved double rings above the grips, a slate ferrule instead of the
+  split root foot.
+- ACCENT to the brief's 5-7 %: the Aubade hem piping removed (a light at the feet), back stripe 5.6 -> 4.2 cm and
+  from z 0.36, stole light 4.6 -> 3.8, seam 4.4 -> 3.6, pauldron inlays 3.2 -> 2.6, crown drops 6.4 -> 5.7 cm,
+  lantern glass r 5.4-8.6 -> 5.0-7.9 x 18.8 cm; Serenade sash 9.2 -> 7.0, tabard bands 7.4 -> 6.0, chevron 6 -> 5,
+  dome strips 3.0 -> 2.6, crown windows r 3.1 -> 2.9, lantern core r 11.6 -> 10.6.
+- 14:39 FINAL builds (both, clip sheets): Aubade 3965 tris / 328 KiB, Serenade 3987 tris / 319 KiB; three load
+  test OK, facing +Z, 92 / 91 px at 1080p; QA accent 6.94 % (top half 72.8 %) / 6.85 % (71.6 %); attack1 + death
+  ground-solved (body min z 0.000, prop min z >= -0.000 / +0.003). Clips idle / run / attack1 / death unchanged.
+  In game (both seats): accent-vs-surround dE Aubade ally 47.0 (min 35.5; was 43.7 / 25.4), enemy 62.0 (min 39.9);
+  Serenade ally 61.3 (min 42.2), enemy 70.8 (min 42.6). Lineup (game chain, 8 faction wicks): brightwick A vs S
+  IoU 0.861 (>= 0.70), vs every other kind <= 0.659 (<= 0.80); value bands Aubade 49.8 / 41.6 / 29.7, Serenade
+  38.2 / 34.4 / 32.3. Fit (paint pose over the plates): IoU Aubade 0.811 / 0.814, Serenade 0.848 / 0.853.
+  Evidence: three_brightwick_*.png, three_clips_brightwick_*.png, review_brightwick.jpg, hood_brightwick.jpg (new:
+  eye level ally / enemy, 52 deg pitch), lane_brightwick.jpg (in game, real late-match brightwicks, seat 0 and
+  seat 5, 1:1 + x3), death_brightwick.jpg, lineup_brightwick.png/json, fit_brightwick_*.png; the scratch review
+  set (eye-level close-ups, true-size game camera, in-game measurements) in the session scratchpad wick_brightwick/.
+  Open: the core is a uniform matte azure / marigold (factor-only accent: the falloff lives in the dim painted
+  spill, subtle under the in-game light); the Serenade top value band (38 in the lineup) sits under the bible's
+  70-85 by design now (B5 caps the hoods at 65 and the concept's dark collar / iron domes own the top quarter);
+  the paint is richer (cavity, edge light, folds, nap) but still procedural + the concept's swatch strokes, not
+  Marund's full projected painting; a 2 mm sliver at the lower right inside the Serenade rim at close range.

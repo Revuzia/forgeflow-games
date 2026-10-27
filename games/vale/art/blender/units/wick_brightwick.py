@@ -1997,17 +1997,18 @@ def band_ring(c, axes, r_in, r_out, hw, nu):
 # part colours beyond the role palette (the concepts' colour placement)
 PART_HEX = {
     # fix round 3 (B5 value law: the hoods at L* <= 65 in game and under the fighters; the team read for both
-    # viewers): the linen hood #A2B4C4 -> #8A939B (L* 72 -> 60, chroma 10.6 -> 5.6: the ally azure stood weakly
-    # on the blue linen), every chalk piece #D9D6CD -> #A39F95 (L* 86 -> 65: weathered chalk, still the lightest
-    # stone on the wick), the stole #E0DDD4 -> #ACA89E (L* 69), the wool cloak a little greyer (#6E7A86 -> #6A727B,
-    # chroma 8 -> 5.5; same blue-grey family as the other Aubade wicks), the ash staff #C4BBA9 -> #9E907A (L* 60:
-    # the near-white tube read as bone)
+    # viewers): the linen hood #A2B4C4 -> #7E878F (L* 72 -> 56, chroma 10.6 -> 5.5: the ally azure stood weakly
+    # on the blue linen), the chalk #D9D6CD -> #98948A on the hood / #9C988E on the pauldrons (L* 86 -> 61-63:
+    # weathered chalk, still the lightest stone on the wick), the stole #E0DDD4 -> #A8A49A (L* 67), the wool cloak
+    # a little greyer (#6E7A86 -> #6A727B, chroma 8 -> 5.5; same blue-grey family as the other Aubade wicks), the
+    # ash staff #C4BBA9 -> #9A8C76 (L* 59: the near-white tube read as bone). In game (both seats) the hood p90 is
+    # L* 61-64
     "aubade": {"hood": "#7E878F", "cowl": "#646E79", "forearms": "#A29E94", "belt": "#9A968C", "tabard": "#A8A49A",
                "crown_cups": "#30353C", "lantern_bezel": "#30353C", "lantern": "#A29E94",
                "mitt_L": "#68727C", "mitt_R": "#68727C", "staff": "#9A8C76", "hood_rim": "#98948A",
                "pauldron_L": "#9C988E", "pauldron_R": "#9C988E", "crown": "#98948A",
                "lantern_roof": "#A29E94", "staff_cap": "#3A3F46", "cloak": "#6A727B", "sleeves": "#6A727B"},
-    # Serenade: ochre / umber. Fix round 3: the felt down to L* ~60 and ~31 % saturation (was L* 71-72 at 39.7 %,
+    # Serenade: ochre / umber. Fix round 3: the felt down to L* ~57-60 and ~31 % saturation (was L* 71-72 at 39.7 %,
     # on the 40 % cap of the reserved marigold band: the enemy tint sat on a near-amber body, and the pale cream
     # dome out-valued the fighters); the umber cloak stays at 23 deg (under the band)
     "serenade": {"hood": "#9A846A", "hood_cap": "#9A846A", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
