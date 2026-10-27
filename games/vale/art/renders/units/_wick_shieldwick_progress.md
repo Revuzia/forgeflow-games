@@ -73,3 +73,267 @@ art/out/units/shieldwick_{aubade,serenade}.glb, art/renders/units/*shieldwick*.
 - Minors: ink grooves under accents (team-0 contrast), job silhouette (disc outline, mace), crisp hems, faceting
   on accent shapes + Aubade hood-back value step, stiffer clips (waddle, attack readability), tris <= 3.0k,
   Serenade accent 7.4 % -> spread, metallicFactor 0.
+
+## 2026-10-21 00:10 FIX PASS 2 start (independent review, 13 items)
+- Note: the 15:47 pass was rebuilt at 16:21 / 16:35 without a completion entry; its review sheets (beauty / review /
+  clips, 15:18-15:20) predate those builds. Its "load test OK" (15:20) was stale: the 16:21/16:35 run clip FAILED
+  the planted-foot gate (planted samples 0).
+- Majors: (1) run gate, (2) Aubade accent 3.7 % and nearly gone from side/back, (3) Aubade value flat (bottom 54-73
+  on screen), (4) Serenade collar front inked into a black slab, (5) Serenade shield pad ghosts, (6) Serenade crown
+  band tilted / wavy. Minors: Aubade hollow (wedges, octagon lip, lens-like dot), arm/cuff/haft ghosts and side
+  streaks, cone knob + needle rib, attack1 not an overhead chop, ground penetration (death / run hem), Serenade
+  cream top + faceted lantern / mitts, stale docs and sheets.
+- Tools: scratchpad review harness (the reviewer's three r186 + headless Chrome page: game camera 52 deg, AgX, sun
+  2.6), value / accent analysis per facing (silhouette bands top 25 % / middle 50 % / bottom 25 %, mask accent %),
+  proto/wick_shieldwick_motion.py (rig + clips solved in Blender in seconds: ankle / ball per run frame, the lantern
+  core over attack1, hem + shield lowest point over death).
+
+## 2026-10-21 00:40 run gate root cause + clips
+- anim._solve_foot turns a positive `pitch` toes DOWN on this rig (it rotates about the foot's local X) while it still
+  pivots a positive pitch about the heel: the stance foot's +6 "heel strike" sank the ball 13 mm, the -13 toe-off
+  dropped the ankle 2 cm, so no frame was level. Shieldwick._ft() now takes a PHYSICAL roll (+ toes up about the
+  heel, - heel up about the ball), picks the solver sign that turns the toes the asked way and corrects the ankle
+  offset for the pivot the solver uses (off' = off + (I - R)(pivot_want - pivot_solver)); not a common-code change.
+- run: contact 23 % (3 sampled frames flat: ankle 0.056 / 0.055 / 0.055, ball 0.011-0.012), heel lift only in the
+  contact's last quarter; the waddle moved from the hips (roll 9 -> 4, pitch 7 -> 2) into spine / chest sway with
+  the hood counter-rolled, crouch 2.4-4.4 cm (the rigid bell hem dipped 6 cm into the ground on the Serenade).
+- attack1: shove -> the mace hauled overhead (arm at full reach over the shoulder, heels up 14 deg, the lantern core
+  0.94 m, its cap over the hood crown) -> chop down and forward, impact at 40 % with the core 0.32 m in front at
+  0.47 m -> follow-through 0.37 m -> recoil; the forward pitch is in the spine / chest (the hips pitch dipped the hem).
+- death: DEATH_LIFT raises the sit / tip / lying keys (A 9 / 17.5 / 11 cm, S 15 / 25 / 16 cm) so the cloak and
+  shield rest on the ground.
+
+## 2026-10-21 01:00 Aubade: accent, hollow, knob, rib, values
+- Accent: a hood-hem trim (accent piping round the cowl's lower edge from one chin corner round the back) + the
+  seam beads raised 7.5 mm; the shield's inlay ring became dawnglass (with the trim the accent ran to 6.4-7 %).
+- Hollow: an ink cup (MeshPart) from just inside the chalk rim back into the hood hides every carved inner surface
+  (wedges, octagon lip); the rim's inner wall shortened to 1.6 cm. The hood light is ONE low dome of lamplight,
+  16 x 6 cm, rising from behind the chin (crest 3.4 cm behind the opening) - not an oval floating mid-hollow (an
+  isolated oval still read as one pupil from 52 deg).
+- Knob: a smooth 12-segment lathe of the concept's knob (disc, ball, small round top; 8.6 cm over the dome). Rib: a
+  flat blade 5.6 cm wide, 4.5 cm where it crosses the rim, rising to a blunt spire 6 cm over the rim.
+- Guard: the shield 4.5 cm further out (its spire tip crossed the hood opening at the 52 deg camera: the "pale
+  triangular shard" inside the hollow).
+- Values: wool #4E5D70 -> #485769 + a RAMP by height (cloak x0.30 at the hem -> 1.0 at the shoulders, stole, shield,
+  hood x0.52 at the flare -> 1.0 at the crown, rim), hem band #252A30.
+
+## 2026-10-21 01:15 Serenade: face, band, shield, lantern, felt
+- The collar is no longer inked by the carve (the black slab); the collar front is continuous felt.
+- Crown band: a horizontal ring at z 1.00 (36 stations on the sculpted dome); the opening lowered 1.5 cm so the
+  band's lower edge sits on the lip's top (the concept's straight glowing slit at brow height).
+- Shield: the dome's ochre (projected pad) texels refilled from its own ironstone paint; the pads are smooth oval
+  lathe discs following the dome slope, painted on their own geometry (sandstone, groove loop, bevelled edge).
+- Lantern: smooth lathe globe (15.6 cm) and domed lid, cage hoops outside the globe. Felt #94795A / #9F8561 (39 %).
+
+## 2026-10-21 01:25 both: ghosts and streaks
+- CLEAN: texels far from their part's median (value or colour) are refilled with the part's paint-by-height field
+  (a nearest-texel UV fill had left angular patches on the dome), SIDES: side-facing texels get that field too, and
+  ZONES: the cloak's flanks where the concept paints arms / fists / cuffs / haft (both plates) get it whole.
+- Mitts: smooth lathe mittens with a thumb lobe; Aubade wraps / Serenade cuffs: smooth ribbon rings.
+
+## 2026-10-21 01:38 builds (both factions, --clip-sheet)
+- Gates: three.js load test OK both (run: planted samples 2, foot-speed error 0.1 %), facing +Z, mesh top
+  1.090 / 1.087 m (content 1.1).
+- Aubade 3012 tris / 353 KiB / accent 5.73 % (top half 76 %); Serenade 3066 tris / 344 KiB / accent 4.72 % (85 %).
+- Accent per facing (game camera, 3x): A 4.7-7.9 % (side / back 4.7-5.9; was 2.0-3.5), S 3.8-6.8 %.
+- On-screen L* (top / middle / bottom, median of 8 facings): A 70 / 63 / 38 (was 71 / 69 / 59), S 75 / 52 / 36
+  (was 80 / 55 / 51). Aubade facing 315 deg bottom = 62: there the bottom quarter is the shield face (the job read;
+  its paint is ramped to x0.42 at the bottom edge but stays chalk).
+- Ground: skinned-vertex minimum >= -1.3 cm in run / attack1 / death (was -6 / - / -22 cm).
+
+## 2026-10-21 01:46 FIX PASS 2 done
+- 64 px IoU (front / game camera): shieldwick A vs S 0.81 / 0.88 (>= 0.70); vs the other kinds of the same faction
+  max 0.69 front / 0.76 game (<= 0.80).
+- Fit overlays re-rendered (shieldwick_fit_{aubade,serenade}.png); review sheets regenerated from the final GLBs with
+  whole-wick framing: shieldwick_beauty.png (close orbit + details, both factions), shieldwick_review.png (game
+  camera 8 facings x ally / enemy tint + lane crowd 1:1 and 2x), shieldwick_clips.png (run / attack1 / death / idle
+  strips + a larger attack1 strip). three_shieldwick_*.png / three_clips_shieldwick_*.png are the pipeline QA (its
+  close row uses the fighter framing - common code, not changed here).
+- Open / accepted: the Aubade hood light deviates from the concept's teardrop (brief §0.2 wins); at the 315-degree
+  facing the Aubade bottom quarter is the chalk shield face (on-screen L* 62); tris 3012 / 3066 sit a little over
+  the brief's 3.0k target (CONTRACT 1.5-4k); common/anim._solve_foot's pitch sign is inverted on the VALE minion rig
+  (worked around in Shieldwick._ft, the shared code is untouched).
+
+## 2026-10-27 08:50 resumed (session break) - FIX PASS 3 (review 2026-10-21b, 11 items) was in progress, unlogged
+- Found in the module (02:58 Oct 21, after the last builds at 02:53): item 1 Serenade opening cut flush into the dome
+  (no stand-off felt visor), 2 hood lights (Aubade: the concept's chalk dish + teardrop flame + painted spill, flat
+  rounded-trapezoid opening; Serenade: glow welling up from the bottom of the arch), 3 the guard carried in front
+  of the left chest (25 cm forward, face 45 deg out, rim clears the outline from the off side / back), 4 + 11 cloak hem
+  follows the thighs (run / death), Serenade attack raise to full reach, 5 Serenade dome fitted on its outer felt,
+  6 paint v2 (painted folds from the sculpt normals, strokes, procedural small hard parts), 7 Aubade flat front plane
+  (no porthole brim), 8 round knob (no point on the hood), 9 lamp panes = culture glass with an accent core,
+  10 turned / lathed game meshes for round outlines.
+- The 02:53 GLBs (A 3166 tris / 350 KiB / accent 5.09 %, S 3122 / 323 KiB) predate the last module edit: rebuild.
+
+## 2026-10-27 09:25 FIX PASS 3 finished (both factions rebuilt, --clip-sheet)
+- Review harness rebuilt (the scratchpad copy was wiped): art/.cache/shieldwick_review/review.mjs (three r186, the
+  three_snapshot renderer settings; modes review / beauty / clips / metrics / sil). Rebuild of the 02:58 module first:
+  A 3262 tris / accent 5.05 %, S 3138 / 4.97 %; Aubade front 4.3 %, Serenade back facings 3.3-3.8 %.
+- Aubade opening: the rounded trapezoid's top widened (r2 3.0 -> 5.2 cm): a broad round-topped arch, no peaked
+  opening in the pale hood (rule 0.1, brief §2.1 "a rounded arch"). Flame kept as the concept's teardrop on its dish,
+  shortened to 5.6 x 8.5 cm (a squat bud was tried: from the 52 deg camera it read as a round pupil).
+- Accent: Aubade seams 2.3 -> 2.8 cm (sides 2.3, hem piping 2.4), the shield's inlay ring back to accent and lifted
+  onto the GAME disc's face (it sat on the sculpt's face, buried under the lathe disc - that is why it never showed);
+  Serenade crown band 2.6 -> 3.3 cm and a new accent cord along the mantle hem (front flaps round the back).
+- Ribbons buried in the host's creases (the Aubade brow seam had a gap and a stray triangle): MeshPart.snapped moves
+  each station onto the host's decimated game mesh (SNAP: hood_seam/crown_band -> hood, mantle_trim -> mantle);
+  the brow seam needed denser stations too (27 / 18), the chords cut the flat front's edge. Mantle 150 -> 190 tris.
+- Lathe trims: flame / dish 8 seg, Aubade boss 12, Serenade lid / globe / core 10.
+- Gates: three.js load test OK both (run planted samples 2, foot-speed error 0.1 %), facing +Z, mesh top
+  1.075 / 1.087 m (content 1.1). Aubade 3296 tris / 346 KiB / accent 6.07 % (top half 67 %); Serenade 3246 tris /
+  328 KiB / accent 6.40 % (68 %). Pipeline warns above 6 % (bible 2-6); the task's minion aim is 6-12 %.
+  Per facing (3x game camera): A 4.8-8.3 %, S 5.1-8.4 %. On-screen L* top / middle / bottom (median of 8 facings):
+  A 71 / 63 / 37, S 73 / 50 / 40.
+- 64 px IoU (front / game): shieldwick A vs S 0.79 / 0.85 (>= 0.70); vs the other kinds of the same faction
+  max 0.68 front / 0.70 game (<= 0.80; their GLBs were being rebuilt by their owners at the same time).
+- proto/wick_shieldwick_fit.py takes the (sculpt, game mesh) tuple parts (it crashed on them); fit overlays
+  re-rendered. Sheets regenerated: shieldwick_review.png, shieldwick_beauty.png, shieldwick_clips.png,
+  shieldwick_fit_{aubade,serenade}.png, three_shieldwick_*.png, three_clips_shieldwick_*.png.
+- Open: tris 3296 / 3246 over the brief's 3.0k target (CONTRACT 1.5-4k); the cloak game mesh is a little faceted
+  at close range (fine at the game camera); common/anim._solve_foot's pitch sign (worked around in Shieldwick._ft).
+
+## 2026-10-27 09:40 FIX PASS 4 start (independent review 2026-10-27, 14 items)
+- Majors: (1) Serenade lantern-mace broken (decimated cage = crumpled flaps + shard, globe hidden, core a strap round
+  the outside), (2) paint = untextured clay (flat fills, chopped atlas, no linen / felt / chalk / iron, no painted folds),
+  (3) accent built from 2.3-3.3 cm hairlines (< 1 px at 720p), hood light 2-3 px front-only, (4) Serenade hood light =
+  hard lozenge on the lower lip (tongue / mouth read). Minors: (5) Aubade panes = inset gems, (6) rib tilted 30 deg +
+  past the rim (propeller) + bullseye inlay, (7) thin frame with a net / zig-zag scroll, (8) sleeve shards, stole smudge /
+  torn ends, (9) ragged Serenade mantle cord / crown band, (10) bone-cream Serenade dome, (11) faceted boots / mitts /
+  hood, (12) floaty run, (13) shield sinks 5-6 cm in death, (14) tris over 3.0k, QA close row unusable.
+- Harness: the reviewer's rv.mjs adopted as art/.cache/shieldwick_review/review.mjs (+ modes hero, close, --src preview,
+  --dbg rough|albedo; feet now reports the body minimum without the shield hand); proto/wick_shieldwick_preview.py snaps
+  ribbons like the build.
+
+## 2026-10-27 10:31 FIX PASS 4 done (both factions rebuilt, --clip-sheet)
+- (1) Serenade lantern rebuilt from turned / swept game meshes: ironstone base cup, LAMPRESIN bowl, the globe itself the
+  ACCENT light (14 cm, the brightest thing on the figure as in the concept), four ironstone cage bars (4-sided tubes),
+  domed lid with a round knob. Reads as a caged lantern at close range and as a lit globe at the game camera.
+- (3)+(4) Hood lights: a LIT INNER RIM on both (a closed loop of even width round the opening: Aubade 3.6 cm accent band
+  between the chalk frame and the hollow; Serenade a 3.4 cm accent half-tube along the arch's rolled edge, collar to
+  collar) - visible on the 0 / 45 / 315 facings of the 52 deg camera; the Serenade floor lozenge is gone (the sill is
+  inked dark from the opening), the Aubade flame grew to 7 x 11 cm. Bands >= 4.6 cm, flat-topped: Aubade crown seam 5.0
+  (side seams dropped), hood-hem band 5.1; Serenade crown band 5.3, mantle band 4.6 (sides and back only); boss 12.8 cm.
+  Ribbons snap onto their host with SMOOTHED offsets (+-2..4 stations, 2.5 mm lift); the Serenade mantle is a game mesh
+  sampled on the sculpt (no ripple in the back hem), the band laid on the felt-free mantle field.
+- (5) Aubade lantern: two tall lit panes per face (accent block, chalk mullion) in dawnglass. (6) AimUp (anim._solve_aim
+  wrapped for AimUp only): the shield's rib held upright (front-view tilt -7 deg = the 10 deg face tip; was ~30), rib
+  ends at the rim, the inlay ring removed, boss 12.8 cm in a dawnglass ring. (7) Frame 4.2 / 5.6 / 3.6 cm with a broad
+  running scroll (15 cm waves, lit lip, raised bosses), border fillets, block joints. (8) Wraps / cuffs are turned bands
+  on the sleeve radius; the stole is two hand-built strips with clean points; the cowl's front under the frame takes the
+  linen field (the concept's scarf / stole tops had smeared onto it); scarf procedural.
+- (2) Paint v3: form light, sculpt-curvature edges / cavities (SDF Laplacian), material textures (linen threads, wool,
+  felt fuzz + fibre flecks, chalk grain + pits, iron pitting, sand, wood grain, leather, glass sheen), warm-light /
+  cool-shadow temperature, stronger painted folds and brush strokes, painted running stitches (hood seams, hem bands,
+  stole edges, crown / mantle bands), the Serenade shield laid in stone plates with lit rivets, boot welts / toe caps.
+  Texel weights per part (hood 2.2, shield 1.6, cloak 1.5 ... lining 0.08) and the hood's hidden interior / underside
+  faces culled (127 A / 108 S): the readable parts own the atlas. Normal map 512 (brief §1 allows it), AO into base 0.42.
+- (10) Serenade felt fitted hue-preserving ("tone": the texel takes the target colour at its own luminance; the old
+  per-channel gain multiplied the felt's blue x2.2 and turned every lit plane bone-cream): dome #A6825E (caramel at the
+  marigold band's 40 % limit; concept median #B88957), mantle #9C7853.
+- (11) Boots: turned loaf + shaft (10 seg, flat sole), mitts 10 seg, Aubade hood 420 tris. (12) Run: hips bob 3.1 cm
+  (lowest at mid-stance), ankle apex 6.3 cm (was 13 cm lift / 2 cm bob); contact stays 23 % (a 0.31 m leg at 3.25 m/s is
+  a sprint: Froude 3.5, the planted stride is at the leg's reach). The 1.3 cm mid-contact ankle dip at 24 samples is
+  three.js slerp between 30 fps keys (10.8 cm of foot travel per key) - inherent to the export rate, noted.
+- (13) Death: the shield hand drawn 6 cm toward the chest in the lying keys; three.js skinned minimum at t=1: A -0.3 cm,
+  S 0.0 cm (was -4.7 / -5.9), worst frame -2.1 cm with 2-3 vertices under -2 cm (was 68 / 182). attack1 >= -0.6 cm.
+- (14) Tris A 2923 / S 2908 (brief <= 3.0k). three_<id>.png's close row is the common QA framing (not changed);
+  close review sheets added instead: shieldwick_hero.png (3/4 front + back at 1100 px), shieldwick_close.png (frame,
+  lantern, shield, boots, back), shieldwick_true1x.png (1:1 1080p crops, nearest x3).
+- Gates: three.js load test OK both (run 12 f, planted samples 2, foot-speed error 0 %), facing +Z, mesh top 1.075 /
+  1.087 m (content 1.1), GLB 356 / 333 KiB. Accent (pipeline QA) A 8.03 % (top half 65 %), S 11.62 % (74 %); per facing
+  at the game camera A 6.0-11.3 (mean 8.0), S 10.5-13.3 (mean 11.7) - inside the task's 6-12 % minion aim (the pipeline
+  warns above 6 %, the brief's 4.5-6 %). On-screen L* top / mid / bottom (median of 8): A 74 / 66 / 37, S 75 / 48 / 39.
+  64 px IoU front / game: A vs S 0.82 / 0.84 (>= 0.70); vs the other kinds of the faction max 0.63 / 0.70 (<= 0.80).
+- Sheets: shieldwick_review.png, shieldwick_beauty.png, shieldwick_clips.png, shieldwick_hero.png, shieldwick_close.png,
+  shieldwick_true1x.png, shieldwick_fit_{aubade,serenade}.png, three_shieldwick_*.png, three_clips_shieldwick_*.png.
+- Open: the Serenade front (52 deg, facing 0) reads as a dark doorway under a lit arch - watch for a mouth read in review;
+  the atlas is still the pipeline's smart-project layout (weighted, not re-cut); the paint is a clean painted-stylised
+  read rather than the concept's dense brushwork; common/anim._solve_foot's pitch sign (worked around in Shieldwick._ft).
+
+## 2026-10-27 10:43 FIX PASS 5 start (independent review 2026-10-27b, 10 items)
+- Majors: (1) Serenade opening = squat slot (1.4:1) under a lit "upper lip", black boxy hollow, glossy bronze sill ->
+  mouth read; no lamplight inside; (2) Serenade mantle = short flat shelf (stacked-burger back), jagged front edge by
+  the shield arm, blue mantle-band shards poke through; (3) Aubade accent ribbons broken (hem-band ends stick out as
+  blades at the chin corners, black shards where band meets hood, crown seam = a detached tab beside the knob).
+- Minors: (4) Aubade hood light = faceted glossy gem, (5) faceting (hem, collar, pads, wraps, mitts, inner planes),
+  (6) paint short of premium (faint rim scroll, notched stole tops, ghost line on the S chest), (7) attack1 head stays
+  inside the hood outline in the raise, (8) run = bounding sprint (60 % flight), (9) Serenade pads small buttons, lantern
+  globe two-tone, (10) accent 8.0 / 11.6 % vs brief 4.5-6 %.
+- Module backed up: art/.cache/shieldwick_review/wick_shieldwick_1027_pass5_start.py
+
+## 2026-10-27 11:05 fix pass 5 - geometry + motion changes (preview-checked), first builds running
+- Serenade hood: SE_ARCH a tall round-topped door (hw 0.118, top a superellipse n 2.5 15 cm tall to z 0.972, sill
+  0.75: ~1.07 : 1 face-on, was 1.4 : 1); a sculpted rolled felt rim (tube 1.9 cm along the arch, blended into the dome,
+  inner edge carved; painted a step darker + groove: se_rim_paint) reaching the crown band, now at z 1.03; the accent
+  half-tube on the arch REMOVED (the lit "upper lip"); the hood light is one soft glow mound on the hollow floor 8.5 cm
+  behind the opening, 14.4 x 10.8 cm, 4.4 cm tall (12-seg smooth lathe), spill painted round it on the lining
+  (#8A8379 x 0.42); cavity enlarged so the opening's lower corners carve through; hood 520 tris (was 380).
+- Serenade collar: 14 cm roll (rz 0.069, was 0.084) tipped 6 deg (was 11: its back rose to 0.85 and hid the mantle),
+  front dip to the 0.75 sill; role cloth (felt, was ironstone - the glossy sill), game mesh sampled round the roll
+  (24 x 7, the hidden inner side left out) instead of the lumpy decimated 140-tri torus.
+- Serenade mantle: draped cape - hem 0.552 at the back centre rising (cos^2.2) to rounded corners 0.62 over the arms,
+  front lapels 0.556 with a V to 0.66, rolled hem edge, 5 broad drape folds; 30 stations; mantle accent band REMOVED
+  (it poked through; brief accent list does not have it); a painted running stitch along the hem; colour #A8875F.
+- Serenade shield pads: four rounded rectangles 9.6 x 13.2 cm (superellipse n 3) whose vertices lie ON the dome face
+  (pad_mesh), was 9.6 x 8 cm ovals; pad paint uses the same metric. Lantern bowl cut to a small amber foot (the
+  globe no longer reads two-tone).
+- Aubade seam starts AT the frame's top edge (no taper there), 26 stations by arc length, passes under the knob;
+  hem band from the sides round the back only (phi -14..194, 21 stations), its ends tapered into the linen; SNAP_BIAS
+  4 mm (seam/band) so the decimated cowl does not poke through as dark shards; hood 480 tris.
+- Aubade flame: rounder soft-tipped bud, 10 sides; accent roughness 0.9 (was 0.25: glossy gem highlights).
+- Faceting: cloak game meshes 32 (A, 4 per hem point) / 30 (S) stations; wraps 10, cuffs 12, mitts 12 + thumb 8.
+- Matte: ROUGH overrides in the roughness bake (lining 1.0, carved hood 1.0, S collar 0.97); AO floor 0.8 on the stole
+  (the scarf's occlusion notched its tops). Frame scroll groove broader / deeper, lit lip brighter.
+- run: 8 frames (7.5 steps/s), contact 34 % (3 planted samples), swing apex 4 cm, crouch 3.2 cm + 2.2 cm bob (the
+  leg reaches the landing foot); motion proto: f0-f2 ankle 0.055 / ball 0.011, both feet up only ~32 %.
+- attack1 wind-up: wrist out and back at full reach, haft tipped out (-0.40, 0.42, 0.81): lantern core A x -0.40 /
+  z 0.89 (top 1.03), S x -0.35 / z 0.94 (top 1.04) - outboard of the hood (its edge x -0.18), was x -0.20 over the head.
+- Preview tris (before hood cull): A 3422, S 3458.
+
+## 2026-10-27 11:50 fix pass 5 - build iterations (both factions)
+- Build 1 looked at close range (scratchpad head / hood orbits + albedo / roughness debug renders):
+  * Serenade: the painted spill lit the lining's big flat facets grey (the "low-poly box") and the lining's front floor
+    strip pale (the "bronze sill"); the carve ink started behind the new rolled rim, leaving the rim's inner roll and
+    the arch walls pale felt -> spill now only a floor halo round the mound (never walls, never the front strip), and
+    an "open" ink pass in hollow_ink: every hood / collar texel inside the arch outline, behind the front and in the
+    cavity takes the carve ink (the collar's front crest stays felt: the matte dark-felt sill); se_rim_paint's groove
+    only on the dome side of the roll.
+  * The mantle's shoulder ellipsoid made a ridge under the collar (a second roll from the back) -> removed; later the
+    hood skirt's round foot showed under the slimmer collar the same way -> hood cut level at z 0.70 (inside the collar).
+  * Pale slivers in the albedo debug = HOLES: cull_hidden removed the carved walls from 3 cm deep, the lining started
+    behind them and the background showed through -> lining origin moved to the opening (S y -0.188, A w 0.014), rays
+    to +-88/89 deg; the Serenade keeps its tunnel walls (cull from 20 cm), the Aubade from 5 cm. Aubade gets the same
+    "open" ink (its top-corner specks).
+  * Glow mound from the 52 deg camera read as a round disc -> 13.2 x 6.8 cm, 3.2 cm tall, 9.6 cm behind the opening,
+    16-sided (about 1.7 : 1 on screen).
+  * Aubade hem band: its side ends flared past the cowl as blades in the back view -> back half only (phi 8..172), set
+    1 cm higher; its ink groove narrower (6 mm). Lit inner rim 3.2 cm (was 3.6).
+- Builds (--clip-sheet): three.js load test OK both (run 8 f, planted samples 2, foot-speed error 0 %), facing +Z,
+  mesh top 1.075 (A) / 1.085 (S) m (content 1.1).
+  Aubade 3291 tris / 367 KiB / accent 8.53 % (top half 71 %); Serenade 3374 tris / 346 KiB / accent 8.72 % (90 %).
+  Per facing at the game camera: A 6.8-11.7 (mean 8.4), S 7.0-11.4 (mean 8.6) - Serenade down from 11.6; both inside
+  the task's 6-12 % minion aim, over the brief's 4.5-6 (and the pipeline's 6 % warning).
+  On-screen L* top / mid / bottom (median of 8 facings): A 73 / 65 / 37, S 70 / 50 / 39.
+  64 px IoU front / game: shieldwick A vs S 0.82 / 0.86 (>= 0.70); vs the other kinds of the faction max 0.61 / 0.69.
+  three.js run (24 samples / 0.267 s): a foot on the ground in 14 / 24 samples, both ankles over 7 cm in 2 / 24 (was
+  stance ~20 %, flight ~60 %); stance ankle dips 1.1 cm between the 30 fps keys (boot sole -1.1 cm, as before).
+  attack1 / death skinned minimum -0.6 / -2.1 cm (2 vertices under -2 cm in death).
+
+## 2026-10-27 11:56 FIX PASS 5 done (final builds: Aubade 11:42, Serenade 11:53, both --clip-sheet)
+- Last Serenade change: the floor halo round the glow mound toned down (#7A7268 x 0.32: at 0.55 a lit floor facet read
+  as a pale wedge in close-ups). Numbers as in the 11:50 entry (Serenade 3374 tris / 346 KiB / accent 8.72 %).
+- Review items: (1) S opening: tall round-topped arch ~1.07 : 1 + rolled dark-felt rim to the crown band, no accent on
+  the rim, one soft low glow mound set back in an inked, matte hollow, matte felt sill; (2) S mantle: draped cape
+  (curved hem, rounded corners, lapels), no band, no shards; (3) A seam from the frame's brow under the knob, hem band
+  on the back half with sunk ends, 4 mm lift; (4) A flame: rounder soft bud, matte accent (roughness 0.9 on every
+  accent); (5) faceting: clean sampled collar (24 x 7), cloak 32 / 30 stations, conforming 14-sided pads, 10-12-sided
+  wraps / cuffs / mitts, hood 470-480 tris, hollows inked + roughness 1; (6) paint: broader frame scroll, stole AO floor,
+  no chest ghost line seen under the new mantle; the paint is still the procedural v3 layer, not the concept's brushwork
+  (open); (7) attack1 wind-up outboard of the hood (core x -0.40 / -0.35, top 1.03-1.04); from the side-on game camera
+  with the mace toward the camera it shows beside / below the hood, not above it (an arm 0.19-0.22 m long cannot lift a
+  0.16 m head clear over a 0.33 m hood); (8) run 8 f / 34 % contact; (9) big pads, single-tone lit globe on a small amber
+  foot; (10) accent S 11.6 -> 8.7 %, A 8.0 -> 8.5 % (task aim 6-12, brief 4.5-6).
+- Open: accent above the brief's 4.5-6 % (inside the task's 6-12 % minion aim); tris 3.29k / 3.37k over the brief's 3.0k
+  target (CONTRACT 1.5-4k; the review asked for 400-800 more tris on the silhouettes); stance ankle dip 1.1 cm between
+  30 fps keys; tiny background specks may remain at the Serenade hollow's floor corners in extreme close-ups;
+  common/anim._solve_foot's pitch sign (worked around in Shieldwick._ft).

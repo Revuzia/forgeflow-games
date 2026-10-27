@@ -13,7 +13,9 @@
       "bounty": { "gold": 21, "xp": 56 },
       "behavior": { "aggroRange": 7, "chaseRange": 10, "callForHelpRange": 9 },
       "sightRange": 9,
-      "art": { "model": "assets/units/shieldwick.glb", "height": 1.1, "instanced": true,
+      "art": { "model": "assets/units/shieldwick_aubade.glb",
+        "teamModels": ["assets/units/shieldwick_aubade.glb", "assets/units/shieldwick_serenade.glb"],
+        "height": 1.1, "instanced": true,
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
     },
     {
@@ -28,7 +30,9 @@
       "bounty": { "gold": 15, "xp": 30 },
       "behavior": { "aggroRange": 8, "chaseRange": 11, "callForHelpRange": 9 },
       "sightRange": 9,
-      "art": { "model": "assets/units/glimwick.glb", "height": 1.0, "instanced": true,
+      "art": { "model": "assets/units/glimwick_aubade.glb",
+        "teamModels": ["assets/units/glimwick_aubade.glb", "assets/units/glimwick_serenade.glb"],
+        "height": 1.0, "instanced": true,
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
     },
     {
@@ -47,7 +51,9 @@
         "damageMult": { "structure": 2 }
       },
       "sightRange": 10,
-      "art": { "model": "assets/units/greatwick.glb", "height": 1.5, "instanced": true,
+      "art": { "model": "assets/units/greatwick_aubade.glb",
+        "teamModels": ["assets/units/greatwick_aubade.glb", "assets/units/greatwick_serenade.glb"],
+        "height": 1.5, "instanced": true,
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
     },
     {
@@ -62,7 +68,9 @@
       "bounty": { "gold": 70, "xp": 110 },
       "behavior": { "aggroRange": 7, "chaseRange": 10, "callForHelpRange": 10, "damageMult": { "structure": 1.5, "minion": 1.25 } },
       "sightRange": 10,
-      "art": { "model": "assets/units/brightwick.glb", "height": 1.7, "instanced": true,
+      "art": { "model": "assets/units/brightwick_aubade.glb",
+        "teamModels": ["assets/units/brightwick_aubade.glb", "assets/units/brightwick_serenade.glb"],
+        "height": 1.7, "instanced": true,
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
     },
 

@@ -87,6 +87,8 @@ def fit(faction, a):
     objs = []
     items = sw.parts_aubade(F) if faction == "aubade" else sw.parts_serenade(F)
     for i, (name, S, vs, role, bind, tris) in enumerate(items):
+        if isinstance(S, tuple):                      # (sculpt, hand-built game mesh): fit the game mesh
+            S = S[1]
         v, q = S.mesh(a.voxel * min(1.0, vs * 1.3))
         ob = sdf.to_object(name, v, q, col)
         rgb = colorsys.hsv_to_rgb((i * 0.618) % 1.0, 0.7, 0.95)

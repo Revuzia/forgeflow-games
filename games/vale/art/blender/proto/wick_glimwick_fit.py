@@ -30,7 +30,7 @@ CACHE = os.path.join(scene.CACHE_DIR, "concept")
 OUT = gw.FIT_DIR
 WIN = (-0.62, 0.62, -0.02, 1.40)
 PROPS = {"pole", "finial", "crook", "lamp_panes", "lamp_frame", "lamp_bars", "lamp_caps", "cord", "knob_pole", "ring", "lamp_globe", "lamp_cage",
-         "lamp_resin"}
+         "lamp_resin", "brace", "lamp_core", "lamp_glass", "lamp_posts", "bind0", "bind1", "crook_end", "lamp_lid", "lamp_drop"}
 
 
 def args():

@@ -28,9 +28,11 @@ from common import anim, fighter, materials, pipeline, rig, scene  # noqa: E402
 
 import wick_brightwick as bw  # noqa: E402
 
-FRAMES = {"idle": [0, 20, 40, 60], "run": [0, 2, 4, 6, 8, 10, 12], "attack1": [0, 6, 9, 11, 12, 14, 18, 24],
-          "death": [0, 8, 16, 22, 28, 36, 44, 50, 56, 60]}
-VIEWS = {"run": [(35, 12), (90, 10)], "attack1": [(70, 12)], "death": [(40, 30), (-60, 20)], "idle": [(30, 15)]}
+FRAMES = {"idle": [0, 22, 45, 67], "run": [0, 3, 6, 9, 12, 15], "attack1": [0, 4, 8, 10, 12, 14, 18, 24],
+          "death": [0, 5, 10, 15, 22, 28, 32, 37, 42, 48]}
+VIEWS = {"run": [(35, 12), (90, 10)], "attack1": [(70, 12), (20, 40)],
+         "death": [(40, 30), (-60, 20), (0, 52), (90, 52), (1, 6)],
+         "idle": [(30, 15)]}
 
 
 def args():
@@ -49,6 +51,8 @@ def build(fac: str):
     ctx = fighter.Context(spec=spec, col=col, skin=None, args=None, timer=scene.Timer(spec.ID))
     ctx.palette = dict(spec.PALETTE)
     ctx.info = rig.build_rig(spec.PROPORTIONS, name=f"{spec.ID}_rig", col=col)
+    if hasattr(spec, "rig_extras"):
+        spec.rig_extras(ctx)
     ctx.gradient = pipeline._gradient(spec)
     ctx.mats = materials.bible_set(ctx.palette, ctx.gradient)
     parts = spec.model(ctx)
@@ -154,6 +158,10 @@ def main():
                     if f > c.frames:
                         continue
                     anim.apply_pose(arm, anim.resolve(skel, c.sample(f / c.frames)))
+                    if name == "death":            # follow the falling body (it lies down to the side)
+                        co = world_co(body)
+                        cen = 0.5 * (co.min(0) + co.max(0))
+                        aim_cam(cam, yaw, pitch, tgt=(float(cen[0]), float(cen[1]), max(0.45, float(cen[2]))))
                     p = os.path.join(a.out, f"_t_{fac}_{name}_{yaw}_{f:02d}.png")
                     bpy.context.scene.render.filepath = p
                     bpy.ops.render.render(write_still=True)

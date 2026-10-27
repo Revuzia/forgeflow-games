@@ -3,6 +3,7 @@
     ~/Developer/forgeflow-games/.venv/bin/python3 art/blender/proto/wick_brightwick_plates.py        # plates (both)
     Blender -b --factory-startup --python art/blender/proto/wick_brightwick_fit.py -- [--faction aubade]
     Blender -b --factory-startup --python art/blender/proto/wick_brightwick_pose.py -- [--faction aubade]
+    Blender -b --factory-startup --python art/blender/proto/wick_brightwick_hoodlight.py -- [--sweep=...]  # hood light
     Blender -b --factory-startup --python-exit-code 1 --python art/blender/units/wick_brightwick.py -- \
         [--faction aubade|serenade|both|legacy] [--fast] [--clip-sheet]
 
@@ -12,35 +13,52 @@ _design/units/wicks.md §3.4 (law). Concepts: _design/concept/wicks/brightwick_{
 Progress log: art/renders/units/_wick_brightwick_progress.md.
 
 ART 2.0 (HANDOFF "Art 2.0 method", reference fighters/marund.py): numpy SDF volumes fitted to each concept on a
-10 cm grid (proto/wick_brightwick_fit.py), normals + AO from the sculpt.
+10 cm grid (measured from the plates' masks: cloak, mantle and pauldron widths per height), the concept
+painting projected onto the game mesh in the concept's pose, normals + AO baked from the sculpt.
 
-  * Concepts vs brief: the concepts' proportions win (approved look: Aubade's rounded cowl rises a little above its
-    crown points, 1.73 m; Serenade's pauldrons are broader); the brief's RULES win: no face (one soft hood light,
-    set back at mid-height of the hollow), rounded hoods only (crown points <= 9 cm, pauldron points <= 10 cm),
-    every glow is `accent` geometry (clean explicit meshes: the decimated SDF lamps went gem-cut), palette per
-    §2.3-2.4.
-  * PAINT (fix pass): the concept projection (graded plates, paint pose) misregistered at minion scale (blotchy
-    banded felt, a doubled chalk rim, smears across the Serenade dome) and the concepts paint their own light, so
-    the base colour is now PAINTED FROM THE SCULPT (`paint_procedural`): the palette per part and region (hem
-    bands, pauldron stripes, robe floor, wood grain, felt grain), fold light and valley shadow read from each
-    part's SDF (Laplacian + SDF occlusion), a soft top light, hue-shifted shadows and the bible's light-top /
-    dark-feet ramp. The concepts drive form, layout and colour placement; the colours are the palette.
+  * Concepts vs brief: the concepts' proportions win (Aubade's rounded cowl rises a little above its crown
+    posts, 1.73 m; Serenade's dome pauldrons and wide sand mantle are the widest point, 0.98 m); the brief's
+    RULES win: no face (one small soft hood light, deep and low in a dark hollow), rounded hoods only (crown
+    posts + flames <= 11 cm, blunt), every glow is `accent` geometry, palette per §2.3-2.4.
+  * GAME LOWS: the decimated SDF went ragged on hems and thin plates (cowl teeth, sawtooth mantle, crumpled
+    plates), so the big forms get CLEAN lows made here: parametric grids PROJECTED onto each part's SDF
+    (`lathe_low`: cloak, mantle, cowl, with a row on every hem / opening edge; `central_low` / `box_low`: the
+    pauldron domes and chalk plates), and explicit meshes for bands, rings, posts, panels and lamps. Organic
+    parts (hood, rim, sleeves, mitts, boots, staff) keep the decimated sculpt. The SDF stays the bake source.
+  * PAINT (`paint_hybrid`): the palette base painted from the sculpt (fold light + valley shadow from the SDF,
+    edge wear, mottle, grain, felt nap, the bible's light-top / dark-feet ramp) x a CONTACT SHADOW between parts
+    (`contact_ao` on the assembled rest mesh: the bake explodes the parts, so the mantle never shadowed the coat)
+    CARRYING THE CONCEPT: (a) its brushwork per material, cut from the graded plates as seamless swatches
+    (`SWATCH`, 1:1 in metres, on every texel: sides and backs too); (b) the graded plates projected in the
+    concept's pose (`paint_pose`, posed + yawed mesh, own-part visibility, the concept's figure mask, a
+    consistency gate) on the parts where that registers (`PROJ_PARTS`: cloak, tabard): per texel the concept's
+    strokes (luminance against a 1.8 cm 3D low-pass), its painted fold light (1.8 against 7.5 cm) and its local
+    colour breakup. The palette and the geometry drive colour and placement (a misregistered plate cannot move a
+    band, double a rim or ghost a boss onto the mantle: that is why the other parts take the swatches only).
+  * THE TEAM READ (fix pass 5): the accent tint is the only ally/enemy cue (the renderer draws the ally azure as
+    a pale L* ~70 / C* ~27 glow at the 52 deg camera). Fix pass 4 set every Aubade light in dark slate (cap,
+    circlet, lantern frame, channels): it read as a black helmet and broke the light-top law, so the Aubade is
+    back on its concept (blue-grey hood, chalk circlet, chalk lantern, chalk stole) and the dark lives only on THIN
+    BEZELS (1.5 cm painted, slim slate lamp cups, two slate rings at the lantern panes). The read comes from MORE
+    light, placed for every facing: the hood light seen from 52 deg, the crown lamps, the seam, a dawnglass inlay
+    on each pauldron, the stole light, the back stripe and a lit hem piping (Aubade); the crown windows, a
+    lampresin strip on each dome, the sash, the tabard bands + chevron and the lantern (Serenade). Lane harness
+    (three.js, road, 1080p, 8 facings): accent Aubade 4.5-8.6 % (mean 6.7), Serenade 5.1-9.1 % (6.9); ally dE
+    Aubade ~22 (the other Aubade wicks 18-21: the palette's azure-on-blue-grey), Serenade ~39. The accent
+    material is matte (`matte_accent`: the authored 0.25 roughness put a hotspot on every lamp).
+  * Pauldrons ride the shoulder bone RIGIDLY (blended into the upper arm they crumpled in the guard pose).
   * Same job silhouette in both cultures: the same rig, staff layout (right grip 0.40 m from the foot, left grip
     0.72 m above it, lantern at the upper left) and the same clips; hood, crown, pauldrons, trims, lamp differ.
-  * REST = A-pose (CONTRACT §12). The staff rides prop.R; prop.R keeps its rest frame (+Y forward through the right
-    fist) and the staff is modelled along it, so `aim.R` = the staff direction and the left hand grips
-    `to_prop=("prop.R", GRIP_L)`. The PAINT POSE (`paint_pose`: the concept's hold) now only orients the Aubade
-    staff head and the fit check.
-  * The cloak is a rigid bell on the hips (thighs <= 22 %, averaged at the centre front: no shear, no tear in the
-    run); the death clip is ground-solved on the skinned mesh frame by frame (`ground_solve`: nothing below z 0).
+  * REST = A-pose (CONTRACT §12). The staff rides prop.R (+Y forward through the right fist), modelled along it,
+    so `aim.R` = the staff direction and the left hand grips `to_prop=("prop.R", GRIP_L)`.
+  * The cloak is a bell on the hips with a little hem swing from each thigh (`bind_cloak`); the death clip is
+    ground-solved on the skinned mesh frame by frame (`ground_solve`: nothing below z 0).
 
-Pipeline additions kept in this module (common/ and wick_common.py untouched): the procedural paint
-(`_paint_object`, wraps project.paint_object for `wicks/brightwick*` ids only), the binds `("bw_auto", exclude)`
-(bone heat over a bone subset), `("bw_transfer", part)` and `("bw_cloak",)` (wraps pipeline.bind_part for those
-tuples only), a deeper bake cage (`_bake_asset`), the ORM's empty texels filled + per-material roughness before
-its 256 scale (`_set_image_array`) and a non-metallic baked material (`_gltf_material`: metallic through a x0
-multiply, so the GLB carries metallicFactor 0 and the ORM's B channel is 0); the last three touch brightwick
-faction textures only.
+Pipeline additions kept in this module (common/ and wick_common.py untouched): the hybrid paint
+(`_paint_object`, wraps project.paint_object for `wicks/brightwick*` ids only), the binds `("bw_auto", exclude)`,
+`("bw_transfer", part)` and `("bw_cloak",)` (wraps pipeline.bind_part for those tuples only), a deeper bake cage
+(`_bake_asset`), the ORM's empty texels filled + per-material roughness before its 256 scale (`_set_image_array`)
+and a non-metallic baked material (`_gltf_material`); the last three touch brightwick faction textures only.
 """
 from __future__ import annotations
 
@@ -64,26 +82,47 @@ V3 = np.array
 NOISE = sdf.Noise(29)
 PNOISE = sdf.Noise(71)        # paint noise
 VOXEL = 0.0065
-RECESS = 0.06                 # the cloak's front opening: the robe floor sits this far in (local radius)
+RECESS = 0.05                 # the cloak's front opening: the robe floor sits this far in (local radius)
 GRIP_L = 0.72                 # left fist along the staff from the right fist (m)
 STAFF_BACK = 0.40             # staff foot behind the right fist (m)
 ARM_BONES = tuple(f"{b}.{s}" for s in "LR" for b in ("shoulder", "upper_arm", "forearm", "hand", "prop"))
 LEG_BONES = tuple(f"{b}.{s}" for s in "LR" for b in ("thigh", "shin", "foot", "toe"))
-BODY_EXCLUDE = ("root", "neck", "head") + ARM_BONES
-SLEEVE_EXCLUDE = ("root", "hips", "spine", "neck", "head", "prop.L", "prop.R") + LEG_BONES
+BODY_EXCLUDE = ("root", "neck", "head", "x_hem_1") + ARM_BONES
+SLEEVE_EXCLUDE = ("root", "hips", "spine", "neck", "head", "prop.L", "prop.R", "x_hem_1") + LEG_BONES
 
 # ── per-culture forms (metres; Z up, the wick faces -Y, soles at 0, its right hand at -X) ─────────────────
-# measured on the concepts (Aubade 709.3 px/m, Serenade 744 px/m; proto/wick_brightwick_plates.py)
+# measured on the concepts (Aubade 709.3 px/m, Serenade 744 px/m; the plates' masks, widths per height):
+#   Aubade   cloak +-0.37 at the chest .. +-0.42 at the hem, pauldrons +-0.17..0.36, hem points at 0.07
+#   Serenade coat +-0.31 under the arms .. +-0.40 at z 0.3 (hem 0.16), mantle +-0.44 at its hem (z 0.99),
+#            dome pauldrons +-0.25..0.49 at z 1.18-1.36, crown band z 1.58-1.64 just over the opening
 FORM = {
     "aubade": {
-        "hood": ((0.0, 0.015, 1.505), (0.184, 0.21, 0.222)),      # rounded cowl (helmet-round), top 1.727
-        "hollow": ((0.0, -0.165, 1.455), (0.098, 0.165, 0.150)),  # opening x +-0.098, z 1.31-1.60
-        "hood_light": ((0.0, -0.128, 1.448), (0.072, 0.016, 0.058)),   # a soft lens at mid-height, 5 cm behind the opening
+        # a rounded cowl (the concept: x +-0.17 under the circlet), its dome tapering into a round cap over the
+        # circlet (a soft cowl, never a straight-sided helm): x +-0.19 at 1.48, +-0.167 at 1.60, top 1.723
+        "hood": ((0.0, 0.02, 1.480), (0.181, 0.201, 0.243)),
+        # the opening: the concept's TOMBSTONE arch (x +-0.099, z 1.330-1.560: about the concept's 16 x 18 cm dark
+        # hollow inside the chalk rim; a bigger one was a big dark mouth from the 52 deg camera), a
+        # rounded head space behind it (`Tomb`): (half width, bottom, arch top, corner radius), back ellipsoid
+        "tomb": ((0.099, 1.330, 1.560, 0.036), ((0.0, -0.10, 1.445), (0.130, 0.190, 0.150))),
+        # ONE soft lamp glow in the head space (brief §0.2): a broad low volume, wider than tall (25 x 8 cm), low
+        # in the hollow, its front 3 cm behind the opening, its sides tucked behind the opening's walls (the arch
+        # frames the light: never a closed oval badge / an eye in the dark), tilted 35 deg so the 52 deg camera
+        # sees its top over the sill (136 cm2 at 52 deg, 172 at eye level; the deep 10 x 7 cm one was hidden by the
+        # brow: 5 cm2). A painted spill on the hollow's
+        # walls round it (`ink_hollow`) gives the soft falloff. Matte. Centre, radii (local X, Y, Z), tilt (deg)
+        "hood_light": ((0.0, -0.070, 1.368), (0.124, 0.098, 0.038), 35.0),
         "shoulder": 0.205,
-        "cloak_rx": [(0.08, 0.425), (0.40, 0.415), (0.80, 0.395), (1.05, 0.375), (1.20, 0.33), (1.30, 0.25), (1.36, 0.17)],
-        "cloak_ry": 0.70, "cloak_open": 0.155, "hem": (0.105, 0.035, 5),
-        "folds": (0.030, 7.0, 0.10),                                # long straight vertical folds (14 around)
-        "tabard": (0.088, 1.17, 0.20, 0.31),                        # half width, top, tip, where the V starts
+        # A-line cape: +-0.33 under the pauldrons -> +-0.43 at the hem, deeper toward the hem (side view flares too)
+        "cloak_rx": [(0.04, 0.432), (0.25, 0.418), (0.50, 0.400), (0.75, 0.380), (0.95, 0.362), (1.10, 0.338),
+                     (1.22, 0.295), (1.30, 0.24), (1.36, 0.17)],
+        "cloak_ry": [(0.04, 0.80), (0.50, 0.75), (0.95, 0.68), (1.36, 0.72)],
+        # the front opening: half width by height (it widens toward the hem: the coat's edges diverge, the
+        # concept), its top under the cowl's V (no dark step above the tabard)
+        "open": ([(0.0, 0.232), (0.45, 0.182), (0.90, 0.138), (1.13, 0.124)], 1.13),
+        "hem": (0.075, 0.032, 5),                                  # shallow points (lowest z, rise, count)
+        "folds": (0.018, 7.0, 0.10),                               # long straight vertical folds (14 around)
+        # the concept's WIDE chalk-white stole (20 cm): half width, top, tip, where the V starts
+        "tabard": (0.116, 1.215, 0.20, 0.31),
         "pauldron_x": 0.255, "boot": (0.062, 0.105, 0.06),
         "staff_r": 0.024,
         # paint pose (the concept's hold): right wrist, staff direction, front-view yaw (deg)
@@ -91,24 +130,39 @@ FORM = {
                   "pole_R": (-0.9, 0.3, -0.4), "pole_L": (0.9, 0.2, -0.5)},
     },
     "serenade": {
-        "hood": ((0.0, 0.02, 1.47), (0.19, 0.21, 0.23)),          # felt dome, top 1.70
-        "hood_cone": ((0.02, 1.36, 0.198), (1.52, 0.182)),          # straight felt sides below the dome
-        "hollow": ((0.0, -0.175, 1.44), (0.118, 0.17, 0.125)),    # opening x +-0.118, z 1.315-1.565
-        "hood_light": ((0.0, -0.132, 1.436), (0.080, 0.016, 0.056)),
+        # a broad felt DOME seated IN the thick dark rolled collar (the concept): the round cap to 1.715 over the
+        # crown band, the felt widening to 0.214 m at 1.40-1.46 and tucking into the collar at 1.34 (the dark roll
+        # shows all round it, the front too: never one pale bell flaring into the mantle)
+        "hood": ((0.0, 0.02, 1.545), (0.170, 0.178, 0.170)),
+        "hood_bell": [(1.34, 0.200), (1.40, 0.214), (1.46, 0.214), (1.51, 0.204), (1.56, 0.186), (1.60, 0.164)],
+        # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
+        "tomb": ((0.114, 1.370, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
+        "hood_light": ((0.0, -0.075, 1.392), (0.136, 0.100, 0.040), 35.0),  # the concept's warm pool low in the hollow
         "shoulder": 0.215,
-        "cloak_rx": [(0.15, 0.425), (0.40, 0.410), (0.75, 0.385), (0.95, 0.37), (1.08, 0.35), (1.16, 0.28), (1.22, 0.20)],
-        "cloak_ry": 0.74, "cloak_open": 0.13, "hem": (0.165, 0.0, 1),
-        "folds": (0.020, 6.0, 0.35),                                # soft heavy felt folds (12 around)
-        "tabard": (0.11, 1.03, 0.37, 0.43),
-        "pauldron_x": 0.30, "boot": (0.072, 0.11, 0.065),
+        "cloak_rx": [(0.13, 0.398), (0.20, 0.405), (0.30, 0.398), (0.45, 0.378), (0.62, 0.350), (0.80, 0.326),
+                     (0.98, 0.308), (1.10, 0.288), (1.18, 0.245), (1.24, 0.18)],
+        "cloak_ry": [(0.13, 0.80), (0.60, 0.75), (1.00, 0.70), (1.24, 0.72)],
+        "open": ([(0.0, 0.190), (0.60, 0.140), (0.95, 0.105), (1.10, 0.080), (1.22, 0.065)], 1.22),
+        "hem": (0.155, 0.0, 1),
+        "folds": (0.016, 4.5, 0.6),                                # nine soft felt folds
+        "tabard": (0.105, 1.20, 0.37, 0.43),
+        "pauldron_x": 0.352, "boot": (0.072, 0.11, 0.065),
         "staff_r": 0.027,
         "paint": {"wrist_R": (-0.29, -0.22, 0.82), "staff": (0.88, -0.05, 0.40), "yaw": 0.0,
                   "pole_R": (-0.9, 0.3, -0.4), "pole_L": (0.9, 0.2, -0.5)},
     },
 }
+MANTLE = {"rx": [(0.95, 0.448), (0.99, 0.447), (1.06, 0.438), (1.13, 0.410), (1.19, 0.365), (1.25, 0.300),
+                 (1.30, 0.240), (1.335, 0.20)],
+          "ry": [(0.95, 0.64), (1.20, 0.74), (1.335, 0.86)], "hem": 0.99, "notch": (8.5, 12.0, 1.21)}
 
 
 # ── small SDF helpers ────────────────────────────────────────────────────────────────────────────────
+def ang(P):
+    """world angle around Z: 0 = front (-Y), +90 deg = the wick's left (+X)"""
+    return np.arctan2(P[:, 0], -P[:, 1])
+
+
 class HemCut(sdf.Prim):
     """Inside above a hem line whose height varies around the Z axis: z > z0 + amp * points(angle)."""
 
@@ -122,16 +176,23 @@ class HemCut(sdf.Prim):
         return hem_line(self.z0, self.amp, self.n, P) - P[:, 2]
 
 
+class FnCut(sdf.Prim):
+    """Inside above z = fn(angle) (a hem drawn as a function of the world angle)."""
+
+    def __init__(self, fn, extent: float = 1.0, zlo: float = 0.0):
+        self.fn, self.e, self.zlo = fn, float(extent), float(zlo)
+
+    def bounds(self):
+        return np.array([-self.e, -self.e, self.zlo]), np.array([self.e, self.e, self.zlo + 2.5])
+
+    def d(self, P):
+        return self.fn(ang(P)) - P[:, 2]
+
+
 def hem_line(z0, amp, n, P):
-    a = np.arctan2(P[:, 0], -P[:, 1])                          # 0 = front
+    a = ang(P)
     tri = 1.0 - np.abs(((a * n / math.pi) % 2.0) - 1.0)        # 0..1 sawtooth: shallow points
     return z0 + amp * tri
-
-
-def _smooth_bell(F):
-    """the cloak's bell without folds (a guide surface for the inlaid back stripe)"""
-    tab = F["cloak_rx"]
-    return bell(tab, F["cloak_ry"], tab[0][0] - 0.04, tab[-1][0])
 
 
 def interp(table, z):
@@ -139,26 +200,40 @@ def interp(table, z):
     return np.interp(z, zs, rs)
 
 
-def bell(table, ry_ratio, z0, z1, inset=0.0):
-    """A lathe bell with radius from `table` (z -> rx), squashed to ry = ratio * rx (approximate SDF)."""
-    zs = [t[0] for t in table]
-    rmax = max(t[1] for t in table) + 0.05
+class Bell(sdf.Prim):
+    """A lathe bell about the Z axis through (0, cy): radius rx(z) from `rtab`, depth ratio ry(z) from `rytab`
+    (the side view flares too), between z0 and z1, `inset` in from its surface (approximate SDF: the radial
+    distance along the elliptical ray)."""
 
-    def prof(r, z):
-        R = np.interp(z, zs, [t[1] for t in table]) - inset
-        return np.maximum(np.maximum(r - R, z - z1), z0 - z)
-    return Lathe((0, 0, 0), prof, rmax, z0 - 0.02, z1 + 0.02, axes=np.diag([1.0, 1.0 / ry_ratio, 1.0]))
+    def __init__(self, rtab, rytab, z0, z1, inset=0.0, cy=0.0):
+        self.rt, self.yt, self.z0, self.z1, self.inset, self.cy = rtab, rytab, float(z0), float(z1), float(inset), float(cy)
+        self.rmax = max(r for _, r in rtab) + 0.06
+
+    def bounds(self):
+        return (np.array([-self.rmax, self.cy - self.rmax, self.z0 - 0.03]),
+                np.array([self.rmax, self.cy + self.rmax, self.z1 + 0.03]))
+
+    def d(self, P):
+        z = P[:, 2]
+        R = interp(self.rt, z) - self.inset
+        ry = interp(self.yt, z)
+        x, y = P[:, 0], P[:, 1] - self.cy
+        re = np.sqrt(x * x + (y / ry) ** 2) + 1e-9
+        side = (re - R) * np.sqrt(x * x + y * y + 1e-12) / re
+        return np.maximum(np.maximum(side, z - self.z1), self.z0 - z)
 
 
-def folds(amp, freq, wobble=0.5, phase=0.0):
-    """vertical cloth folds around the Z axis: rounded crests, sharp valleys (|sin|); faded out near the axis
-    (the bell's top and bottom caps: the angle is singular there and the creases met in non-manifold knots
-    that stalled the decimation)"""
+def folds(amp, freq, wobble=0.5, phase=0.0, ztab=None, sharp=1.6):
+    """vertical cloth folds around the Z axis: rounded crests, valleys as sharp as `sharp` (1 = a crease cusp,
+    2 = a soft felt trough); faded out near the axis; `ztab` scales the amplitude by height (the cloth hangs in
+    folds that open toward the hem)"""
     def fn(P):
-        a = np.arctan2(P[:, 0], -P[:, 1])
-        u = a * freq + phase + wobble * NOISE(P, 3.0)
+        u = ang(P) * freq + phase + wobble * NOISE(P, 3.0)
         r = np.hypot(P[:, 0], P[:, 1])
-        return amp * smooth(0.10, 0.22, r) * (np.abs(np.sin(u)) * 2.0 - 1.0) * -0.5
+        a = amp * smooth(0.10, 0.22, r)
+        if ztab is not None:
+            a = a * interp(ztab, P[:, 2])
+        return a * (np.abs(np.sin(u)) ** sharp * 2.0 - 1.0) * -0.5
     return fn
 
 
@@ -173,6 +248,11 @@ def wraps(a, b, amp=0.004, pitch=0.022):
     return fn
 
 
+def chips(amp=0.004, freq=16.0):
+    """carved chalk: shallow chipped facets"""
+    return lambda P: amp * np.clip(NOISE.ridged(P, freq, 2), 0, 1) - amp * 0.4
+
+
 def ell_surface_y(c, r, x, z, front=True):
     """y on an ellipsoid's front (-Y) or back surface at (x, z); nan outside."""
     q = 1.0 - ((x - c[0]) / r[0]) ** 2 - ((z - c[2]) / r[2]) ** 2
@@ -180,46 +260,135 @@ def ell_surface_y(c, r, x, z, front=True):
     return np.where(q >= 0, c[1] - y if front else c[1] + y, np.nan)
 
 
-def hood_front_y(F, x, z):
-    """y of the hood's outer front surface at (x, z): the ellipsoid, or the straight-sided cone below it."""
-    hc, hr = F["hood"]
-    y = ell_surface_y(hc, hr, np.asarray(x, float), np.asarray(z, float))
-    cone = F.get("hood_cone")
-    if cone:
-        (y0, z0, r0), (z1, r1) = cone[0], cone[1]
-        t = np.clip((np.asarray(z, float) - z0) / (z1 - z0), 0, 1)
-        r = r0 + (r1 - r0) * t
-        q = r * r - np.asarray(x, float) ** 2
-        yc = np.where((q > 0) & (np.asarray(z, float) >= z0) & (np.asarray(z, float) <= z1), y0 - np.sqrt(np.maximum(q, 0)), np.nan)
-        y = np.fmin(y, yc)
-    return y
+class Tomb(sdf.Prim):
+    """The hood's hollow: a TOMBSTONE outline in the XZ plane (an arch of radius w over straight sides, rounded
+    bottom corners rc: the concepts' broad opening), extruded along +Y from y0 (in front of the hood) and
+    closed at the back by an ellipsoid (a rounded head space): the opening keeps a crisp arch."""
 
+    def __init__(self, w, zb, zt, rc, y0, c, r):
+        self.w, self.zb, self.zt, self.rc, self.y0 = float(w), float(zb), float(zt), float(rc), float(y0)
+        self.zc = self.zt - self.w
+        self.E = Ellipsoid(c, r)
 
-def opening_loop(F, n=28, lift=0.004):
-    """Points around the hood opening on the hood's front surface (the rim path)."""
-    oc, orr = F["hollow"]
-    pts = []
-    for i in range(n):
-        phi = 2 * math.pi * i / n
-        dx, dz = math.sin(phi), math.cos(phi)
-        rho_lo, rho_hi = 0.0, 0.3
-        for _ in range(30):
-            rho = 0.5 * (rho_lo + rho_hi)
-            x, z = oc[0] + dx * rho, oc[2] + dz * rho
-            y = float(hood_front_y(F, x, z))
-            inside = (((x - oc[0]) / orr[0]) ** 2 + ((y - oc[1]) / orr[1]) ** 2 + ((z - oc[2]) / orr[2]) ** 2) < 1.0
-            if inside:
-                rho_lo = rho
+    def bounds(self):
+        lo, hi = self.E.bounds()
+        return (np.array([-self.w - 0.03, self.y0 - 0.02, self.zb - 0.03]),
+                np.array([self.w + 0.03, hi[1] + 0.02, self.zt + 0.03]))
+
+    def outline(self, x, z):
+        """the 2D signed distance of the tombstone (x, z)"""
+        x = np.abs(x)
+        hz, cz = 0.5 * (self.zc - self.zb), 0.5 * (self.zc + self.zb)
+        qx, qz = x - (self.w - self.rc), np.abs(z - cz) - (hz - self.rc)
+        box = np.hypot(np.maximum(qx, 0), np.maximum(qz, 0)) + np.minimum(np.maximum(qx, qz), 0) - self.rc
+        return np.minimum(box, np.where(z >= self.zc, np.hypot(x, z - self.zc) - self.w, 1.0))
+
+    def d(self, P):
+        d2 = self.outline(P[:, 0], P[:, 2])
+        return np.maximum(np.maximum(d2, self.y0 - P[:, 1]), self.E.d(P))
+
+    def arch(self, n=24):
+        """points (x, z) up the left side, over the arch and down the right side, to the bottom corners (the rim:
+        the sill below is the scarf / the gorget, never a lower lip)"""
+        z0 = self.zb + self.rc * 0.6
+        L_side = self.zc - z0
+        tot = 2 * L_side + math.pi * self.w
+        pts = []
+        for i in range(n + 1):
+            s = tot * i / n
+            if s <= L_side:
+                pts.append((-self.w, z0 + s))
+            elif s <= L_side + math.pi * self.w:
+                a = (s - L_side) / self.w
+                pts.append((-self.w * math.cos(a), self.zc + self.w * math.sin(a)))
             else:
-                rho_hi = rho
-        x, z = oc[0] + dx * rho_lo, oc[2] + dz * rho_lo
-        y = float(hood_front_y(F, x, z)) - lift
-        pts.append((x, y, z))
-    return pts
+                pts.append((self.w, self.zc - (s - L_side - math.pi * self.w)))
+        return pts
+
+    def loop(self, n=30):
+        """points (x, z) around the outline, starting at the arch top, clockwise seen from the front"""
+        pts = []
+        L_arc = math.pi * self.w
+        L_side = self.zc - (self.zb + self.rc)
+        L_corner = 0.5 * math.pi * self.rc
+        L_bot = 2 * (self.w - self.rc)
+        segs = [L_arc / 2, L_side, L_corner, L_bot, L_corner, L_side, L_arc / 2]
+        tot = sum(segs)
+        for i in range(n):
+            s = tot * i / n
+            k = 0
+            while s > segs[k] and k < len(segs) - 1:
+                s -= segs[k]
+                k += 1
+            if k == 0:                                         # arch, top -> right (x > 0)
+                a = s / self.w
+                pts.append((self.w * math.sin(a), self.zc + self.w * math.cos(a)))
+            elif k == 1:
+                pts.append((self.w, self.zc - s))
+            elif k == 2:
+                a = s / self.rc
+                cx, cz = self.w - self.rc, self.zb + self.rc
+                pts.append((cx + self.rc * math.cos(a), cz - self.rc * math.sin(a)))
+            elif k == 3:
+                pts.append((self.w - self.rc - s, self.zb))
+            elif k == 4:
+                a = s / self.rc
+                cx, cz = -(self.w - self.rc), self.zb + self.rc
+                pts.append((cx - self.rc * math.sin(a), cz - self.rc * math.cos(a)))
+            elif k == 5:
+                pts.append((-self.w, self.zb + self.rc + s))
+            else:
+                a = s / self.w
+                pts.append((-self.w * math.cos(a), self.zc + self.w * math.sin(a)))
+        return pts
 
 
-def loop_tube(S, pts, r, k=0.006):
-    for i in range(len(pts)):
+def tomb_of(F) -> Tomb:
+    (w, zb, zt, rc), (ec, er) = F["tomb"]
+    return Tomb(w, zb, zt, rc, -0.6, ec, er)
+
+
+def hood_outer(F) -> sdf.Blend:
+    """the hood's outer form without its opening (the band, the rim and the radius queries sit on it)"""
+    hc, hr = F["hood"]
+    ops = [("add", Ellipsoid(hc, hr), 0.0)]
+    if "hood_bell" in F:
+        bell = F["hood_bell"]
+        ops.append(("add", Bell(bell, [(0.0, 1.0), (2.0, 1.0)], bell[0][0], bell[-1][0], cy=hc[1]), 0.03))
+    else:
+        # swept back at the nape (the cowl falls back and down, never up), the lower hood flares onto the cowl
+        ops += [("add", RoundCone((0, 0.06, 1.47), (0, 0.13, 1.33), 0.150, 0.135), 0.06),
+                ("add", Ellipsoid((0, 0.02, 1.36), (0.225, 0.215, 0.085)), 0.05)]
+    return sdf.Blend(ops)
+
+
+_HOOD_R: dict = {}
+
+
+def hood_radius(F, z):
+    """(rx, ry) of the hood's outer surface at height z: rays from the hood axis to the side and the front"""
+    key = (id(F), round(float(z), 4))
+    if key not in _HOOD_R:
+        D = hood_outer(F)
+        cy = F["hood"][0][1]
+        t = march_in(D, np.array([(0.0, cy, z)] * 2), np.array([(1.0, 0.0, 0.0), (0.0, -1.0, 0.0)]), 0.45, steps=90)
+        _HOOD_R[key] = (float(t[0]), float(t[1]))
+    return _HOOD_R[key]
+
+
+def opening_loop(F, n=24, lift=0.0):
+    """the rim path: the tombstone's sides and arch laid on the hood's outer front surface (rays along +Y)"""
+    T = tomb_of(F)
+    D = hood_outer(F)
+    xz = T.arch(n)
+    # march_in finds the outermost crossing coming in from t = rmax: rays from the hood's mid plane toward -Y
+    O = np.array([(x, 0.0, z) for x, z in xz])
+    t = march_in(D, O, np.tile((0.0, -1.0, 0.0), (len(O), 1)), 0.6, steps=120)
+    return [(x, (-float(b) if np.isfinite(b) else -0.2) - lift, z) for (x, z), b in zip(xz, t)]
+
+
+def loop_tube(S, pts, r, k=0.006, closed=True):
+    for i in range(len(pts) if closed else len(pts) - 1):
         S.add(Capsule(pts[i], pts[(i + 1) % len(pts)], r), k=k)
 
 
@@ -247,10 +416,36 @@ def onto_surface(D, P, n, reach=0.08, lift=0.0):
     return S + g * lift, g
 
 
-# ── explicit low meshes (accent lamps and lenses: clean, smooth, never gem-cut) ───────────────────────────
+def march_in(D, O, d, rmax, steps=64):
+    """t of the OUTERMOST zero crossing of D on each ray O + t d, marching in from t = rmax (nan: never inside)"""
+    O, d = np.asarray(O, float), np.asarray(d, float)
+    n = len(O)
+    t_in, t_out = np.full(n, np.nan), np.full(n, np.nan)
+    prev = np.full(n, float(rmax))
+    for t in np.linspace(rmax, 0.0, steps)[1:]:
+        idx = np.nonzero(np.isnan(t_in))[0]
+        if not len(idx):
+            break
+        hit = D.d(O[idx] + d[idx] * t) < 0
+        t_in[idx[hit]] = t
+        t_out[idx[hit]] = prev[idx[hit]]
+        prev[idx[~hit]] = t
+    ok = ~np.isnan(t_in)
+    lo, hi = t_in[ok], t_out[ok]
+    Oo, do = O[ok], d[ok]
+    for _ in range(26):
+        mid = 0.5 * (lo + hi)
+        inside = D.d(Oo + do * mid[:, None]) < 0
+        lo = np.where(inside, mid, lo)
+        hi = np.where(inside, hi, mid)
+    t = np.full(n, np.nan)
+    t[ok] = 0.5 * (lo + hi)
+    return t
+
+
+# ── explicit low meshes (clean, smooth, never gem-cut) ─────────────────────────────────────────────────
 def orient(V, F, outward):
-    """flip triangles whose normal points against `outward` (a point inside, or a (3,) direction if
-    `outward` is ('dir', d))"""
+    """flip triangles whose normal points against `outward` (a point inside, or ('dir', d))"""
     a, b, c = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
     n = np.cross(b - a, c - a)
     if isinstance(outward, tuple) and outward and outward[0] == "dir":
@@ -261,6 +456,25 @@ def orient(V, F, outward):
     F = F.copy()
     F[flip] = F[flip][:, ::-1]
     return F
+
+
+def wind_like(V, F, i_test, outward_dir):
+    """flip ALL of F when triangle i_test faces against outward_dir (consistent grid winding kept)"""
+    a, b, c = V[F[i_test, 0]], V[F[i_test, 1]], V[F[i_test, 2]]
+    if np.dot(np.cross(b - a, c - a), outward_dir) < 0:
+        return F[:, ::-1].copy()
+    return F
+
+
+def grid_faces(nu, nv, closed=True, off=0):
+    """two triangles per cell of an (nu columns x nv rows) vertex grid, column-major (i * nv + j)"""
+    F = []
+    for i in range(nu if closed else nu - 1):
+        i2 = (i + 1) % nu
+        for j in range(nv - 1):
+            a, b, c, d = off + i * nv + j, off + i2 * nv + j, off + i2 * nv + j + 1, off + i * nv + j + 1
+            F += [(a, b, c), (a, c, d)]
+    return np.array(F, dtype=np.int64)
 
 
 def lathe_mesh(c, axes, prof, nu, aspect=(1.0, 1.0)):
@@ -291,15 +505,43 @@ def lathe_mesh(c, axes, prof, nu, aspect=(1.0, 1.0)):
                 F += [(A[i], A[j], B[j]), (A[i], B[j], B[i])]
     V = np.array(V)
     F = np.array(F, dtype=np.int64)
-    zs = [z for z, _ in prof]
-    mid = c + ax[2] * (0.5 * (min(zs) + max(zs)))
-    return V, orient(V, F, mid)
+    # wind outward: per triangle against the axis point at its own height
+    cen = V[F].mean(1)
+    zc = (cen - c) @ ax[2]
+    ref = c[None] + ax[2][None] * zc[:, None]
+    a, b, cc = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    n = np.cross(b - a, cc - a)
+    o = cen - ref
+    along = np.abs(o).sum(1) < 1e-6
+    o[along] = ax[2] * np.sign(zc[along] - np.mean([z for z, _ in prof]))[:, None]
+    flip = (n * o).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
 
 
 def ellipsoid_mesh(c, r, nu=10, nv=6, axes=None):
     ax = np.eye(3) if axes is None else np.asarray(axes, float)
     prof = [(r[2] * math.cos(math.pi * j / nv), math.sin(math.pi * j / nv)) for j in range(nv, -1, -1)]
     return lathe_mesh(c, ax, prof, nu, aspect=(r[0], r[1]))
+
+
+def taubin(v, q, iters=4, lam=0.5, mu=-0.53):
+    """Taubin smoothing (no shrink) of a surface-nets mesh: the voxel layers left faint terraces on smooth
+    domes that the normal bake turned into horizontal strata (the Serenade felt dome and mantle)"""
+    v = np.asarray(v, dtype=np.float64).copy()
+    q = np.asarray(q, dtype=np.int64)
+    e = np.concatenate([q[:, [k, (k + 1) % q.shape[1]]] for k in range(q.shape[1])])
+    e = np.concatenate([e, e[:, ::-1]])
+    deg = np.bincount(e[:, 0], minlength=len(v)).astype(np.float64)
+    ok = deg > 0
+    for _ in range(iters):
+        for f in (lam, mu):
+            acc = np.zeros_like(v)
+            np.add.at(acc, e[:, 0], v[e[:, 1]])
+            lap = np.zeros_like(v)
+            lap[ok] = acc[ok] / deg[ok][:, None] - v[ok]
+            v = v + f * lap
+    return v
 
 
 def merge_meshes(meshes):
@@ -309,21 +551,6 @@ def merge_meshes(meshes):
         F.append(f + o)
         o += len(v)
     return np.concatenate(V), np.concatenate(F)
-
-
-def cap_patches(D, centers, normals, r, nseg=10, lift=0.0015):
-    """round glazing caps that FOLLOW a curved surface (D): a centre + a ring of `nseg` points laid onto the
-    surface along each normal, lifted `lift` (a flat card would stand off the curve and show edge-on)"""
-    out = []
-    for c, nn in zip(np.asarray(centers, float), np.asarray(normals, float)):
-        nn = nn / np.linalg.norm(nn)
-        fr = sdf.frame(nn)
-        pts = [c] + [c + fr[0] * math.cos(2 * math.pi * i / nseg) * r + fr[1] * math.sin(2 * math.pi * i / nseg) * r
-                     for i in range(nseg)]
-        S, _ = onto_surface(D, np.array(pts), np.tile(nn, (len(pts), 1)), reach=0.03, lift=lift)
-        F = np.array([(0, 1 + i, 1 + (i + 1) % nseg) for i in range(nseg)], dtype=np.int64)
-        out.append((S, orient(S, F, ("dir", nn))))
-    return merge_meshes(out)
 
 
 def ribbon(pts, nrm, width, thick, sink=0.006):
@@ -350,7 +577,345 @@ def ribbon(pts, nrm, width, thick, sink=0.006):
     F.append((3, 2, 1, 0))
     e = 4 * (n - 1)
     F.append((e + 0, e + 1, e + 2, e + 3))
-    return np.array(V), np.array(F)
+    F = np.array(F)
+    tri = np.concatenate([F[:, [0, 1, 2]], F[:, [0, 2, 3]]])
+    V = np.array(V)
+    # wind outward from the strip's core (the middle of its section)
+    cen = V[tri].mean(1)
+    d2 = ((cen[:, None, :] - pts[None]) ** 2).sum(2)
+    near = np.argmin(d2, axis=1)
+    ref = pts[near] + up[near] * (thick - sink) * 0.5
+    a, b, c = V[tri[:, 0]], V[tri[:, 1]], V[tri[:, 2]]
+    nn = np.cross(b - a, c - a)
+    flip = (nn * (cen - ref)).sum(1) < 0
+    tri[flip] = tri[flip][:, ::-1]
+    return V, tri
+
+
+def flat_strip(pts, nrm, width, lift=0.0015):
+    """a flat strip (2 triangles per segment, no side walls) lying `lift` over a surface: for long inlays where
+    a boxed ribbon would cost 3x the triangles"""
+    pts, nrm = np.asarray(pts, float), np.asarray(nrm, float)
+    tan = np.gradient(pts, axis=0)
+    tan /= np.linalg.norm(tan, axis=1, keepdims=True)
+    side = np.cross(tan, nrm)
+    side /= np.linalg.norm(side, axis=1, keepdims=True)
+    V = []
+    for i in range(len(pts)):
+        for sx in (-1.0, 1.0):
+            V.append(pts[i] + nrm[i] * lift + side[i] * sx * width / 2)
+    V = np.array(V)
+    F = []
+    for i in range(len(pts) - 1):
+        a, b, c, d = 2 * i, 2 * i + 1, 2 * i + 3, 2 * i + 2
+        F += [(a, b, c), (a, c, d)]
+    F = np.array(F, dtype=np.int64)
+    cen = V[F].mean(1)
+    near = np.argmin(((cen[:, None, :] - pts[None]) ** 2).sum(2), axis=1)
+    nn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    flip = (nn * nrm[near]).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
+
+
+def lathe_low(D, angles_deg, zrows, cy=0.0, rmax=0.75, lip=None, bottom_cap=False, top_cap=False):
+    """A clean game low for a bell-like part: a grid of columns (world angles, deg; 0 = front) x rows (zrows(a)
+    -> heights, top first), every vertex the OUTERMOST point of the sculpt D on the horizontal ray from the axis
+    (0, cy, z). Hems and openings get their own rows / columns, so edges are straight and clean (no decimation
+    teeth). lip: [(dr, dz), ...] extra rows under the bottom row, (radius - dr, z_hem + dz): a thick turned hem.
+    Returns (V, F) triangles, wound outward."""
+    # a column is an angle (deg) or a function of z -> angle (a column that follows a wall down); columns are
+    # ordered by their angle at mid height
+    fns = [(c if callable(c) else (lambda z, c=c: c)) for c in angles_deg]
+    fns.sort(key=lambda f: f(0.7))
+    A0 = [math.radians(f(0.7)) for f in fns]
+    rows = [np.asarray(zrows(a), float) for a in A0]
+    nu, nv = len(fns), len(rows[0])
+    O = np.array([(0.0, cy, z) for zs in rows for z in zs])
+    ang_ = [math.radians(f(z)) for f, zs in zip(fns, rows) for z in zs]
+    d = np.array([(math.sin(a), -math.cos(a), 0.0) for a in ang_])
+    t = march_in(D, O, d, rmax).reshape(nu, nv)
+    for i in range(nu):                                       # a ray that missed: its column neighbour
+        bad = np.isnan(t[i])
+        if bad.any():
+            good = np.nonzero(~bad)[0]
+            t[i, bad] = np.interp(np.nonzero(bad)[0], good, t[i, good]) if len(good) else 0.05
+    V = (O + d * t.reshape(-1)[:, None]).reshape(nu, nv, 3)
+    if lip:
+        ext = []
+        for dr, dz in lip:
+            e = V[:, -1].copy()
+            dd = d.reshape(nu, nv, 3)[:, -1]
+            e = e - dd * dr
+            e[:, 2] += dz
+            ext.append(e)
+        V = np.concatenate([V, np.stack(ext, 1)], 1)
+    nv2 = V.shape[1]
+    Vf = V.reshape(-1, 3)
+    F = grid_faces(nu, nv2)
+    F = wind_like(Vf, F, 0, Vf[F[0]].mean(0) - np.array((0.0, cy, Vf[F[0]].mean(0)[2])))
+    extra_V, extra_F = [Vf], [F]
+    o = len(Vf)
+    if bottom_cap:
+        last = V[:, nv - 1]
+        c = np.array((0.0, cy, last[:, 2].mean() + 0.03))
+        Fc = np.array([(i * nv2 + nv - 1, ((i + 1) % nu) * nv2 + nv - 1, o) for i in range(nu)], dtype=np.int64)
+        extra_V.append(c[None])
+        extra_F.append(orient(np.concatenate(extra_V), Fc, ("dir", (0.0, 0.0, -1.0))))
+        o += 1
+    if top_cap:
+        first = V[:, 0]
+        c = np.array((0.0, cy, first[:, 2].mean()))
+        Fc = np.array([(i * nv2, ((i + 1) % nu) * nv2, o) for i in range(nu)], dtype=np.int64)
+        extra_V.append(c[None])
+        extra_F.append(orient(np.concatenate(extra_V), Fc, ("dir", (0.0, 0.0, 1.0))))
+        o += 1
+    return np.concatenate(extra_V), np.concatenate(extra_F)
+
+
+def central_low(D, c, axes, nu, thetas_deg, rmax=0.4):
+    """A clean low for a dome / convex part: rings of rays from a centre `c` (local frame `axes`, rows = local
+    X, Y, Z; theta from local +Z), every vertex the outermost point of D on its ray. Poles at theta 0 / 180."""
+    c, ax = np.asarray(c, float), np.asarray(axes, float)
+    dirs, rings = [], []
+    for th in thetas_deg:
+        t = math.radians(th)
+        if th <= 1e-6 or th >= 180 - 1e-6:
+            rings.append([len(dirs)])
+            dirs.append(ax[2] * math.cos(t))
+            continue
+        idx = []
+        for i in range(nu):
+            p = 2 * math.pi * (i + 0.5) / nu
+            idx.append(len(dirs))
+            dirs.append(ax[0] * math.sin(t) * math.cos(p) + ax[1] * math.sin(t) * math.sin(p) + ax[2] * math.cos(t))
+        rings.append(idx)
+    dirs = np.array(dirs)
+    t = march_in(D, np.tile(c, (len(dirs), 1)), dirs, rmax)
+    t = np.where(np.isnan(t), np.nanmin(t), t)
+    V = c[None] + dirs * t[:, None]
+    F = []
+    for A, B in zip(rings[:-1], rings[1:]):
+        if len(A) == 1:
+            F += [(A[0], B[(i + 1) % nu], B[i]) for i in range(nu)]
+        elif len(B) == 1:
+            F += [(A[i], A[(i + 1) % nu], B[0]) for i in range(nu)]
+        else:
+            for i in range(nu):
+                j = (i + 1) % nu
+                F += [(A[i], A[j], B[j]), (A[i], B[j], B[i])]
+    F = np.array(F, dtype=np.int64)
+    return V, orient(V, F, c)
+
+
+def cube_grid(n):
+    """points on the surface of the cube [-1, 1]^3 (an n x n grid per face, shared edges merged) + triangles"""
+    P, F, key = [], [], {}
+
+    def vid(p):
+        k = tuple(np.round(p, 6))
+        if k not in key:
+            key[k] = len(P)
+            P.append(p)
+        return key[k]
+    for ax_ in range(3):
+        for sgn in (-1.0, 1.0):
+            u_ax, v_ax = [a for a in range(3) if a != ax_]
+            ids = np.zeros((n + 1, n + 1), dtype=np.int64)
+            for i in range(n + 1):
+                for j in range(n + 1):
+                    p = np.zeros(3)
+                    p[ax_] = sgn
+                    p[u_ax] = -1 + 2 * i / n
+                    p[v_ax] = -1 + 2 * j / n
+                    ids[i, j] = vid(p)
+            for i in range(n):
+                for j in range(n):
+                    F += [(ids[i, j], ids[i + 1, j], ids[i + 1, j + 1]), (ids[i, j], ids[i + 1, j + 1], ids[i, j + 1])]
+    return np.array(P), np.array(F, dtype=np.int64)
+
+
+def box_low(box: RoundBox, n=2):
+    """a clean low for a rounded slab: a cube grid scaled to the box, each vertex projected from the box centre
+    onto the box's own SDF (so stacked plates keep their own clean shells)"""
+    Q, F = cube_grid(n)
+    loc = Q * box.h[None]
+    dirs = loc @ box.ax                                           # local -> world (rows of ax are the local axes)
+    rmax = np.linalg.norm(loc, axis=1) * 1.2 + 0.03
+    dirs = dirs / np.linalg.norm(dirs, axis=1, keepdims=True)
+    t = np.array([march_in(box, box.c[None], dirs[i:i + 1], rmax[i], steps=24)[0] for i in range(len(dirs))])
+    V = box.c[None] + dirs * t[:, None]
+    return V, orient(V, F, box.c)
+
+
+def band_mesh(cy, z0, z1, rad_fn, t_in, t_out, nu, a_range=None):
+    """a band with a rectangular section around the Z axis through (0, cy): inner face rad_fn(z) + t_in, outer
+    rad_fn(z) + t_out (rad_fn(z) -> (rx, ry) of the surface it sits on), between z0 and z1. Closed ring, or a C
+    from a_range = (a0, a1) deg with end caps. Returns (V, F, surf(a_deg, z) -> outer face point)."""
+    closed = a_range is None
+    A = (np.radians((np.arange(nu) + 0.5) * 360.0 / nu) if closed
+         else np.radians(np.linspace(a_range[0], a_range[1], nu)))
+    sec = [(z0, t_in), (z0, t_out), (z1, t_out), (z1, t_in)]
+
+    def pt(a, z, t):
+        rx, ry = rad_fn(z)
+        return np.array((math.sin(a) * (rx + t), cy - math.cos(a) * (ry + t), z))
+    V = np.array([pt(a, z, t) for a in A for z, t in sec])
+    F = []
+    n_ = len(A)
+    for i in range(n_ if closed else n_ - 1):
+        i2 = (i + 1) % n_
+        for k in range(4):
+            k2 = (k + 1) % 4
+            a, b, c, d = i * 4 + k, i2 * 4 + k, i2 * 4 + k2, i * 4 + k2
+            F += [(a, b, c), (a, c, d)]
+    if not closed:
+        for i in (0, n_ - 1):
+            F += [(i * 4, i * 4 + 1, i * 4 + 2), (i * 4, i * 4 + 2, i * 4 + 3)]
+    F = np.array(F, dtype=np.int64)
+    zm = 0.5 * (z0 + z1)
+    tm = 0.5 * (t_in + t_out)
+    cen = V[F].mean(1)
+    a_c = np.arctan2(cen[:, 0], -(cen[:, 1] - cy))
+    ref = np.array([pt(a, zm, tm) for a in a_c])
+    a_, b_, c_ = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    nn = np.cross(b_ - a_, c_ - a_)
+    flip = (nn * (cen - ref)).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+
+    def surf(a_deg, z, lift=0.0):
+        return pt(math.radians(a_deg), z, t_out + lift)
+    return V, F, surf
+
+
+def disc_on(surf, a_deg, z, r, nseg=8, lift=0.0016, dz_per_m=1.0, rad_fn=None):
+    """a round glazing disc on a band face that FOLLOWS its curve: centre + ring points mapped through
+    surf(angle, z) (the band's outer face), so nothing stands proud edge-on"""
+    c = surf(a_deg, z, lift)
+    rx, _ = rad_fn(z) if rad_fn else (0.2, 0.2)
+    V = [c]
+    for i in range(nseg):
+        ph = 2 * math.pi * i / nseg
+        da = math.degrees(r * math.cos(ph) / max(rx, 0.05))
+        V.append(surf(a_deg + da, z + r * math.sin(ph) * dz_per_m, lift))
+    V = np.array(V)
+    F = np.array([(0, 1 + i, 1 + (i + 1) % nseg) for i in range(nseg)], dtype=np.int64)
+    out = c - np.array((0.0, 0.0, c[2]))
+    out[2] = 0.0
+    return V, orient(V, F, ("dir", out))
+
+
+def torus_mesh(c, axes, R, r, nu=16, nv=6, rz=None, ry_scale=1.0):
+    """an explicit torus (tube radius r, squashed to rz along the local Z), ring scaled by ry_scale on local Y"""
+    c, ax = np.asarray(c, float), np.asarray(axes, float)
+    rz = r if rz is None else rz
+    V = []
+    for i in range(nu):
+        a = 2 * math.pi * (i + 0.5) / nu
+        ca, sa = math.cos(a), math.sin(a)
+        for j in range(nv):
+            b = 2 * math.pi * j / nv
+            rr = R + r * math.cos(b)
+            V.append(c + ax[0] * ca * rr + ax[1] * sa * rr * ry_scale + ax[2] * rz * math.sin(b))
+    V = np.array(V)
+    F = []
+    for i in range(nu):
+        i2 = (i + 1) % nu
+        for j in range(nv):
+            j2 = (j + 1) % nv
+            a_, b_, c_, d_ = i * nv + j, i2 * nv + j, i2 * nv + j2, i * nv + j2
+            F += [(a_, b_, c_), (a_, c_, d_)]
+    F = np.array(F, dtype=np.int64)
+    cen = V[F].mean(1)
+    loc = (cen - c) @ ax.T
+    aa = np.arctan2(loc[:, 1] / ry_scale, loc[:, 0])
+    core = c[None] + ax[0][None] * (np.cos(aa) * R)[:, None] + ax[1][None] * (np.sin(aa) * R * ry_scale)[:, None]
+    a_, b_, c_ = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    nn = np.cross(b_ - a_, c_ - a_)
+    flip = (nn * (cen - core)).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
+
+
+def shell_mesh(O, ax, r, th, ph, thick, n_th, n_ph, closed=False, edge_fn=None):
+    """A curved PLATE: the band theta in `th` (deg from the frame's +Z) x phi in `ph` (deg about +Z from +X; or
+    the full ring when `closed`) of the ellipsoid (centre O, frame rows `ax`, radii r), `thick` deep: the outer
+    and inner sheets and their edges (clean, closed, wound outward). th[0] == 0 makes a pole (a cap).
+    edge_fn(phi_deg) -> extra theta (deg) on the LOWER edge (a pointed lame)."""
+    O, ax, r = np.asarray(O, float), np.asarray(ax, float), np.asarray(r, float)
+    ri = r - thick
+    rm = r - thick * 0.5
+    nT, nP = n_th, n_ph
+    pole = th[0] <= 1e-6
+    phs = (np.arange(nP) * 360.0 / nP) if closed else np.linspace(ph[0], ph[1], nP)
+
+    def tdeg(i, j):
+        t = th[0] + (th[1] - th[0]) * i / (nT - 1)
+        if edge_fn is not None and i == nT - 1:
+            t += float(edge_fn(phs[j]))
+        return t
+
+    def pt(t, p, rr):
+        t, p = math.radians(t), math.radians(p)
+        return (O + ax[0] * rr[0] * math.cos(p) * math.sin(t) + ax[1] * rr[1] * math.sin(p) * math.sin(t)
+                + ax[2] * rr[2] * math.cos(t))
+    V, idx = [], {}
+    for s, rr in (("o", r), ("i", ri)):
+        for i in range(nT):
+            for j in range(nP):
+                if pole and i == 0 and j > 0:
+                    idx[(s, i, j)] = idx[(s, 0, 0)]
+                    continue
+                idx[(s, i, j)] = len(V)
+                V.append(pt(tdeg(i, j), phs[j], rr))
+    V = np.array(V)
+    tris, refs = [], []
+
+    def quad(a, b, c, d, ref):
+        for t in ((a, b, c), (a, c, d)):
+            if len(set(t)) == 3:
+                tris.append(t)
+                refs.append(ref)
+    jr = range(nP) if closed else range(nP - 1)
+    for s in ("o", "i"):
+        for i in range(nT - 1):
+            for j in jr:
+                j2 = (j + 1) % nP
+                a, b, c, d = idx[(s, i, j)], idx[(s, i, j2)], idx[(s, i + 1, j2)], idx[(s, i + 1, j)]
+                mid = pt(0.5 * (tdeg(i, j) + tdeg(i + 1, j)), phs[j], rm)
+                # outer sheet faces away from the mid-surface, inner sheet toward O (away from the mid-surface too)
+                quad(a, b, c, d, ("away", mid, s))
+    for i_edge, inward in (((nT - 1), -1),) + ((((0), 1),) if not pole else ()):
+        for j in jr:
+            j2 = (j + 1) % nP
+            ref = pt(tdeg(i_edge, j) + inward * 4.0, 0.5 * (phs[j] + phs[j2]) if not (closed and j2 == 0) else phs[j],
+                     rm)
+            quad(idx[("o", i_edge, j)], idx[("o", i_edge, j2)], idx[("i", i_edge, j2)], idx[("i", i_edge, j)],
+                 ("from", ref))
+    if not closed:
+        for j_edge, inward in ((0, 1), (nP - 1, -1)):
+            for i in range(nT - 1):
+                ref = pt(0.5 * (tdeg(i, j_edge) + tdeg(i + 1, j_edge)), phs[j_edge] + inward * 4.0, rm)
+                quad(idx[("o", i, j_edge)], idx[("o", i + 1, j_edge)], idx[("i", i + 1, j_edge)],
+                     idx[("i", i, j_edge)], ("from", ref))
+    F = np.array(tris, dtype=np.int64)
+    a_, b_, c_ = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    n = np.cross(b_ - a_, c_ - a_)
+    cen = (a_ + b_ + c_) / 3.0
+    want = np.zeros_like(n)
+    for k, ref in enumerate(refs):
+        if ref[0] == "away":
+            o = cen[k] - ref[1]
+            want[k] = o if ref[2] == "o" else -o
+            # the mid-surface point is on the same ray: use the ellipsoid normal direction instead (robust)
+            g = (cen[k] - O) @ ax.T / (rm * rm)
+            g = g @ ax
+            want[k] = g if ref[2] == "o" else -g
+        else:
+            want[k] = cen[k] - ref[1]
+    flip = (n * want).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
 
 
 # ── the spec ───────────────────────────────────────────────────────────────────────────────────────
@@ -372,9 +937,9 @@ class Brightwick(wc.Wick):
                                            spine_curve=0.0, a_pose_deg=64.0, arm_forward_deg=12.0, elbow_bend_deg=22.0,
                                            shoulder_drop=0.04)
         self.MOTION = anim.motion_profile(weight="heavy", weapon="two_hand", stance="wide", run_ref_speed=3.3)
-        self.AO_INTO_BASE = 0.3
-        # the pipeline paints the base colour through project.paint_object when PROJECTION is set; this id
-        # routes it to `paint_procedural` (no concept plates are projected)
+        self.AO_INTO_BASE = 0.18             # the paint carries the contact shadow (contact_ao) itself
+        # the pipeline paints the base colour through project.paint_object when PROJECTION is set; this id routes
+        # it to `paint_hybrid` (the graded plates projected in the paint pose, laid over the painted base)
         self.PROJECTION = {"concept": f"wicks/brightwick_{faction}_bw", "height": 1.70}
         self.parts_info: dict = {}            # part -> (material role, (SDF grid, lo, voxel) or None)
         PAINT[self.PROJECTION["concept"]] = self
@@ -386,7 +951,8 @@ class Brightwick(wc.Wick):
             return self.legacy_model(ctx)
         P = []
         self.parts_info = {}
-        for name, S, vs, role, bind, tris, uvw in self.sculpts(ctx):
+        matte_accent(ctx.mats.get("accent"))
+        for name, S, vs, role, bind, tris, uvw, low in self.sculpts(ctx):
             if isinstance(S, tuple):                       # ("mesh", verts, faces): explicit low geometry
                 ob = sdf.to_object(f"{name}_low", S[1], S[2], ctx.col)
                 ob.data.materials.append(ctx.mats[role])
@@ -396,25 +962,33 @@ class Brightwick(wc.Wick):
             vox = VOXEL * vs
             D, lo = S.evaluate(vox)
             v, q = sdf.surface_nets(D, lo, vox)
+            v = taubin(v, q)             # (fix pass 5) no voxel terraces: they baked into the normal map as strata
             self.parts_info[name] = (role, (np.clip(D, -0.1, 0.1).astype(np.float32), np.asarray(lo, float), vox))
             ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
             ob.data.materials.append(ctx.mats[role])
-            # the game mesh: the pipeline's symmetric collapse stalls on some parts (thin slabs, the robe: 4-7x
-            # over budget), so the low is made here, symmetric first, plain collapse when that stalls
-            low = mesh.duplicate(ob, f"{name}_low", ctx.col)
-            if mesh.decimate_to(low, tris) > tris * 1.25:
-                bpy.data.objects.remove(low)
-                low = mesh.duplicate(ob, f"{name}_low", ctx.col)
-                mesh.decimate_to(low, tris, symmetric=False)
-            P.append(fighter.Part(name, high=ob, low=low, tris=tris, bind=bind, uv_weight=uvw))
+            if low is not None:
+                # a clean projected low (see lathe_low / central_low / box_low): the sculpt is only the bake source
+                lv, lf = low(sdf_of(S))
+                lo_ob = sdf.to_object(f"{name}_low", lv, lf, ctx.col)
+                lo_ob.data.materials.append(ctx.mats[role])
+                P.append(fighter.Part(name, high=ob, low=lo_ob, bind=bind, uv_weight=uvw))
+                continue
+            # the game mesh: the pipeline's symmetric collapse stalls on some parts, so the low is made here,
+            # symmetric first, plain collapse when that stalls
+            lo_ob = mesh.duplicate(ob, f"{name}_low", ctx.col)
+            if mesh.decimate_to(lo_ob, tris) > tris * 1.25:
+                bpy.data.objects.remove(lo_ob)
+                lo_ob = mesh.duplicate(ob, f"{name}_low", ctx.col)
+                mesh.decimate_to(lo_ob, tris, symmetric=False)
+            P.append(fighter.Part(name, high=ob, low=lo_ob, tris=tris, bind=bind, uv_weight=uvw))
         return P
 
     def sculpts(self, ctx) -> list:
         out = []
         budget = TRIS[self.faction]
 
-        def part(name, S, role, bind, tris, vs=1.0, uvw=1.0):
-            out.append((name, S, vs, role, bind, budget.get(name, tris), uvw))
+        def part(name, S, role, bind, tris, vs=1.0, uvw=1.0, low=None):
+            out.append((name, S, vs, role, bind, budget.get(name, tris), uvw, low))
         info = ctx.info
         F = self.F
         aub = self.faction == "aubade"
@@ -423,6 +997,19 @@ class Brightwick(wc.Wick):
         arm_parts(F, aub, info, part)
         staff_parts(self, F, aub, info, part)
         return out
+
+    # ── rig ──
+    def rig_extras(self, ctx) -> None:
+        """ONE extra deform bone, x_hem_1 (CONTRACT §12: extra bones `x_`): a root child at the hem's centre that
+        the lower bell rides. The hem stays on the ground while the hips drop (the death: the cloak PILES under
+        the falling body instead of toppling as a rigid tube); every clip keys it (it follows the hips' turn and
+        lean in the run, the strike and the idle). Not a sway chain: chain_config() returns none."""
+        if self.faction == wc.LEGACY:
+            return
+        rig.add_chain(ctx.info, "hem", "root", [(0.0, 0.0, 0.02), (0.0, 0.0, 0.30)], z_hint=(0.0, -1.0, 0.0))
+
+    def chain_config(self, ctx) -> list:
+        return []
 
     # ── clips ──
     def clip_overrides(self, ctx) -> dict:
@@ -447,272 +1034,433 @@ class Brightwick(wc.Wick):
         part("crown", ring, "accent", "bone:head", 120)
 
 
-# triangle budget per part (brief §1: brightwick <= 4.0k; the decimation lands a little under these). Explicit
-# meshes (hood light, crown lamps/windows, boss lenses, lantern glass, seam, stripe) count their own triangles.
+ACCENT_ROUGH = 0.78         # the accent's roughness on these builds (materials.accent authors 0.25: a glossy
+# hotspot on every lamp made the hood light an egg and the crown windows buttons / cabochons; the bible bans gems)
+
+
+def matte_accent(mat) -> None:
+    """a matte accent: the emissive glow carries the read, no specular hotspot (exported as roughnessFactor)"""
+    if mat is None or not mat.use_nodes:
+        return
+    for n in mat.node_tree.nodes:
+        if n.type == "BSDF_PRINCIPLED":
+            for ln in list(n.inputs["Roughness"].links):
+                mat.node_tree.links.remove(ln)
+            n.inputs["Roughness"].default_value = ACCENT_ROUGH
+
+
+# triangle budget per decimated part (brief §1: brightwick <= 4.0k). Projected and explicit lows count their own
+# triangles (their grids are sized in the part functions).
 TRIS = {
-    "aubade": {"hood": 400, "hood_rim": 130, "hood_in": 60, "crown": 230,
-               "seam": 60, "cowl": 150, "pauldron_R": 170, "pauldron_L": 170, "cloak": 600, "back_stripe": 50,
-               "belt": 50, "tabard": 70, "tabard_light": 90, "legs": 70, "boot_L": 90, "boot_R": 90, "sleeves": 200,
-               "forearms": 150, "mitt_L": 100, "mitt_R": 100, "staff": 110, "staff_cap": 60, "lantern": 170,
-               "lantern_light": 60},
-    "serenade": {"hood": 350, "hood_rim": 130, "hood_in": 60, "crown": 160,
-                 "collar": 130, "gorget": 110, "mantle": 210, "pauldron_R": 170, "pauldron_L": 170, "cloak": 600,
-                 "tabard": 70, "tabard_light": 90, "legs": 70, "boot_L": 90, "boot_R": 90, "sleeves": 180,
-                 "cuffs": 70, "forearms": 100, "mitt_L": 100, "mitt_R": 100, "staff": 110, "staff_cap": 50,
-                 "lantern_collar": 60, "lantern": 160},
+    "aubade": {"hood": 440, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
+               "sleeves": 150, "forearms": 96, "mitt_L": 80, "mitt_R": 80, "staff": 130},
+    "serenade": {"hood": 372, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
+                 "sleeves": 138, "cuffs": 48, "forearms": 76, "mitt_L": 80, "mitt_R": 80, "staff": 110},
 }
-PAINT: dict = {}            # paint id -> spec (the procedural paint looks its spec up here)
+PAINT: dict = {}            # paint id -> spec (the hybrid paint looks its spec up here)
 SPECS: dict = {}            # build id -> spec (the ORM hook)
 
 
 # ── hood, crown ──────────────────────────────────────────────────────────────────────────────────────
 def hood_parts(F, aub, part):
-    hc, hr = F["hood"]
-    oc, orr = F["hollow"]
     hood = Sculpt("hood")
-    hood.add(Ellipsoid(hc, hr), k=0.0)
     if aub:
-        # swept back at the nape (the cowl falls back and down, never up), the lower hood flares onto the cowl
-        hood.add(RoundCone((0, 0.06, 1.47), (0, 0.13, 1.33), 0.150, 0.135), k=0.06)
-        hood.add(Ellipsoid((0, 0.02, 1.36), (0.20, 0.20, 0.08)), k=0.05)
+        # a soft linen COWL, not a helm: shallow folds sweep from under the circlet down and back to the nape
+        # (the cloth hangs from the crown), fading out over the dome (the circlet and the seam sit on a smooth top)
+        hc = F["hood"][0]
+
+        def drape(P):
+            # mirror-symmetric (|angle|: no crease down the back), smooth under the seam (|x| < 4 cm)
+            a = np.abs(np.arctan2(P[:, 0], -(P[:, 1] - hc[1])))
+            back = smooth(40.0, 120.0, np.degrees(a))
+            low = 1.0 - smooth(1.50, 1.60, P[:, 2])
+            seam = smooth(0.025, 0.055, np.abs(P[:, 0]))
+            u = a * 3.5 + (P[:, 2] - 1.45) * 7.0 + 0.5 * NOISE(P, 4.0)
+            return -0.010 * (0.35 + 0.65 * back) * low * seam * np.abs(np.sin(u)) ** 1.5
+        hood.add(hood_outer(F).displaced(drape, 0.011), k=0.0)
     else:
-        # the felt dome is a bullet: straight sides, a round top, sitting in the rolled collar
-        (cy, cz0, cr0), (cz1, cr1) = F["hood_cone"]
-        hood.add(RoundCone((0, cy, cz0), (0, cy, cz1), cr0, cr1), k=0.05)
-    hood.sub(Ellipsoid(oc, orr), k=0.012)
+        hood.add(hood_outer(F), k=0.0)
+    # the broad tombstone opening into a rounded head space; its walls are painted ink (no separate lining:
+    # a second shell inside read as a lip / tongue)
+    hood.sub(tomb_of(F), k=0.010)
     part("hood", hood, "cloth2", "bone:head", 620, 1.0, 1.4)
-    # the rim around the opening: chalk lip (Aubade) / rolled dark felt (Serenade)
+    # the rim all round the opening: a carved chalk lip (Aubade) / a rolled dark felt edge (Serenade). The game
+    # low is a clean swept tube (the decimated capsule chain went lumpy); the capsule chain stays the bake source
     rim = Sculpt("hood_rim")
-    loop_tube(rim, opening_loop(F, lift=0.002 if aub else 0.0), 0.019 if aub else 0.024)
-    part("hood_rim", rim, "chalk" if aub else "cloth", "bone:head", 220, 0.7, 1.4)
-    # the lining: a dark shell set just inside the hollow, so the visible inside is flat ink
-    lin = Sculpt("hood_in")
-    lin.add(Ellipsoid(oc, tuple(r - 0.006 for r in orr)), k=0.0)
-    lin.sub(Ellipsoid(oc, tuple(r - 0.030 for r in orr)), k=0.0)
-    lin.inter(HalfSpace((0, oc[1] + 0.045, 0), (0, -1, 0), 2.0), k=0.0)
-    part("hood_in", lin, "ink", "bone:head", 120, 0.8, 0.4)
-    # the hood light: ONE soft volume, wider than tall, at mid-height of the hollow and set back behind the
-    # opening (brief §0.2 / §4): a smooth explicit ellipsoid (the decimated SDF one went faceted)
-    lc, lr = F["hood_light"]
-    v, f = ellipsoid_mesh(lc, lr, nu=12, nv=6)
-    part("hood_light", ("mesh", v, f), "accent", "bone:head", None, 0.6)
+    rr = 0.017 if aub else 0.018
+    loop = opening_loop(F, n=24, lift=0.004)
+    loop_tube(rim, loop, rr, closed=False)
+    tv, tf = sweep_tube(opening_loop(F, n=13, lift=0.004), rr * 1.04, 5)
+    part("hood_rim", rim, "chalk" if aub else "cloth", "bone:head", 0, 0.7, 1.4, low=lambda D, v=tv, f=tf: (v, f))
+    # the hood light (brief §0.2 / §4): ONE soft volume, wider than tall, set deep in the head space at the
+    # middle of the arch, with ink all round it: a lamp glowing inside the hood. (A broad tilted lens that filled
+    # the opening read as a lit visor / face plate at eye level; a lens low on the sill read as a tongue / egg.)
+    lc, lr, tilt = F["hood_light"]
+    t = math.radians(tilt)
+    # its pole axis runs front to back: the outline seen through the arch is the smooth 16-segment equator
+    # (never a faceted disc)
+    axes = np.array([(1.0, 0.0, 0.0), (0.0, math.sin(t), math.cos(t)), (0.0, -math.cos(t), math.sin(t))])
+    v, f = ellipsoid_mesh(lc, (lr[0], lr[2], lr[1]), nu=16, nv=4, axes=axes)
+    part("hood_light", ("mesh", v, f), "accent", "bone:head", None, 0.5)
     if aub:
         crown_aubade(F, part, hood)
     else:
         crown_serenade(F, part)
 
 
-def hood_radius(F, z):
-    """(rx, ry) of the hood's outer surface at height z (the ellipsoid; the cone below for Serenade)."""
-    hc, hr = F["hood"]
-    q = max(0.0, 1.0 - ((z - hc[2]) / hr[2]) ** 2)
-    return hr[0] * math.sqrt(q), hr[1] * math.sqrt(q)
+def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0)):
+    """a round tube (nseg sides) swept along an open polyline, its frame from `out` (the side it faces); the
+    ends are left open (they tuck into the cowl / the collar)"""
+    P = np.asarray(pts, float)
+    T = np.gradient(P, axis=0)
+    T /= np.linalg.norm(T, axis=1, keepdims=True)
+    o = np.asarray(out, float)
+    N = o[None] - T * (T @ o)[:, None]
+    N /= np.linalg.norm(N, axis=1, keepdims=True)
+    B = np.cross(T, N)
+    V = []
+    for i in range(len(P)):
+        for k in range(nseg):
+            a = 2 * math.pi * (k + 0.5) / nseg
+            V.append(P[i] + (N[i] * math.cos(a) + B[i] * math.sin(a)) * r)
+    V = np.array(V)
+    F_ = grid_faces(len(P), nseg, closed=False)
+    # grid_faces is column-major (i * nv + j) with i the path index and j the ring index: rings are closed, so
+    # add the seam quads between ring vertex nseg-1 and 0
+    extra = []
+    for i in range(len(P) - 1):
+        a, b, c, d = i * nseg + nseg - 1, (i + 1) * nseg + nseg - 1, (i + 1) * nseg, i * nseg
+        extra += [(a, b, c), (a, c, d)]
+    F_ = np.concatenate([F_, np.array(extra, dtype=np.int64)])
+    cen = V[F_].mean(1)
+    near = np.argmin(((cen[:, None, :] - P[None]) ** 2).sum(2), axis=1)
+    ab = np.cross(V[F_[:, 1]] - V[F_[:, 0]], V[F_[:, 2]] - V[F_[:, 0]])
+    flip = (ab * (cen - P[near])).sum(1) < 0
+    F_[flip] = F_[flip][:, ::-1]
+    return V, F_
 
 
-FLAME = [(0.0, 0.0), (0.010, 0.0190), (0.026, 0.0180), (0.044, 0.0085), (0.060, 0.0)]   # a small flame drop
+FLAME = [(0.0, 0.0), (0.012, 0.032), (0.038, 0.030), (0.064, 0.0)]   # a crown lamp: a round-shouldered drop, 6.4 cm
+CROWN_A = (1.584, 1.614)            # the Aubade circlet (z): just over the opening's arch, under the round cap
 
 
 def crown_aubade(F, part, hood):
-    """low chalk circlet with six short chalk points (<= 9 cm), each with a small chalk cup holding a flame drop
-    (accent, smooth: small lamps on the points, never gems); the accent seam over the dome from the brow to the
-    nape (the Aubade hood mark)"""
+    """a low CHALK circlet on the cowl (the concept) with six little chalk SPIRE TOWERS and, between them, six
+    dawnglass LAMPS (accent drops), each seated in a thin dark slate BEZEL cup on the band (the only dark on the
+    crown: the light's edge, so the ally azure stands off the chalk). Lamps sit low, the towers rise past them (a
+    crown that holds its lamps, never candles on posts). One lamp sits over the arch's crown (a single light above
+    the hollow, never a pair). Then the accent seam (the Aubade hood mark): a fine lit line over the cap from the
+    brow, full width down the back of the cowl to the nape, a thin painted bezel either side."""
     hc, hr = F["hood"]
-    zb = 1.606
-    rx, ry = hood_radius(F, zb)
-    rx, ry = rx + 0.014, ry + 0.014
-    ring = Sculpt("crown")
-    ring.add(Torus((0, hc[1], zb), rx, 0.017, axes=np.diag([1.0, rx / ry, 1.0]), rz=0.025), k=0.0)
-    drops = []
+    z0, z1 = CROWN_A
+
+    def rad(z):
+        return hood_radius(F, z)
+    band = band_mesh(hc[1], z0, z1, rad, -0.004, 0.018, 16)
+    surf = band[2]
+    meshes, cups, lamps = [band[:2]], [], []
+
+    def frame_at(a, z, lean):
+        base = surf(a, z, -0.006)
+        out = base - np.array((0.0, hc[1], base[2]))
+        out[2] = 0.0
+        out /= np.linalg.norm(out)
+        return base, out, sdf.frame(out * lean + np.array((0.0, 0.0, 1.0)), out)
     for i in range(6):
-        a = math.radians(60 * i)
-        sx, sy = math.sin(a), -math.cos(a)
-        out = V3((sx, sy, 0.0))
-        base = V3((sx * (rx + 0.002), hc[1] + sy * (ry + 0.002), zb + 0.016))
-        # the point rises behind the lamp, leaning a little outward (chalk spire motif, short)
-        pb = base - out * 0.004
-        ring.add(RoundCone(pb, pb + out * 0.010 + V3((0, 0, 0.078)), 0.017, 0.0045), k=0.008)
-        # the cup on the point's outer face, the flame drop standing in it
-        cup = base + out * 0.020 + V3((0, 0, 0.006))
-        ring.add(Ellipsoid(cup, (0.021, 0.021, 0.011)), k=0.008)
-        drops.append(lathe_mesh(cup + V3((0, 0, 0.004)), np.eye(3), FLAME, 6))
-    part("crown", ring, "chalk", "bone:head", 420, 0.55, 1.2)
-    v, f = merge_meshes(drops)
-    part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.55)
-    # the seam: a 5.6 cm inlaid strip on the meridian, brow -> crown -> nape, laid on the hood's real surface
-    aa = np.radians(np.linspace(-60, 132, 14))
+        # spires between the lamps: little four-sided chalk SPIRE TOWERS (a square shaft, a drip ledge and a short
+        # pyramid roof: the Aubade spire architecture in miniature, never teeth), 7 cm over the band's foot
+        base, out, ax = frame_at(60.0 * i + 30.0, z1 - 0.012, 0.10)
+        meshes.append(lathe_mesh(base - ax[2] * 0.008, ax, [(0.0, 0.017), (0.032, 0.016), (0.036, 0.021),
+                                                            (0.042, 0.016), (0.070, 0.0)], 4, aspect=(1.0, 1.0)))
+        # the lamp: a slim slate bezel cup on the band's top-outer edge (5 mm past the drop) and the drop in it
+        base, out, ax = frame_at(60.0 * i, z1 - 0.004, 0.22)
+        c0 = base - out * 0.008                  # seated on the band's top
+        cups.append(lathe_mesh(c0, ax, [(-0.006, 0.0), (0.002, 0.031), (0.013, 0.037)], 6))
+        lamps.append(lathe_mesh(c0 + ax[2] * 0.004, ax, FLAME, 8))
+    v, f = merge_meshes(meshes)
+    part("crown", ("mesh", v, f), "chalk", "bone:head", None, 0.6)
+    v, f = merge_meshes(cups)
+    part("crown_cups", ("mesh", v, f), "ironstone", "bone:head", None, 0.6)
+    v, f = merge_meshes(lamps)
+    part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.5)
+    # the seam: a flush inlaid strip on the meridian, brow -> over the cap -> nape, laid on the hood's real
+    # surface (5 cm: a solid light, not a hairline), its slate channel painted round it (`_hood_aubade`)
+    aa = np.radians(np.linspace(SEAM_A[0], SEAM_A[1], 14))
     P0 = np.stack([np.zeros_like(aa), hc[1] + hr[1] * np.sin(aa), hc[2] + hr[2] * np.cos(aa)], 1)
     N0 = np.stack([np.zeros_like(aa), np.sin(aa) / hr[1], np.cos(aa) / hr[2]], 1)
     S0, G0 = onto_surface(sdf_of(hood), P0, N0, reach=0.09)
-    v, q = ribbon(S0, G0, 0.074, 0.007)
-    part("seam", ("mesh", v, q), "accent", "bone:head", None, 0.6)
+    v, q = ribbon(S0, G0, np.interp(np.degrees(aa), [-50, -40, 50, 62, 120, 130],
+                                    [0.022, SEAM_CAP, SEAM_CAP, SEAM_W, SEAM_W, 0.036]), 0.006, sink=0.010)
+    part("seam", ("mesh", v, q), "accent", "bone:head", None, 0.5)
+
+
+SEAM_W = 0.044              # the Aubade hood seam's width down the back of the cowl (m)
+# the seam's span (deg on the hood's meridian from the crown, - = front): from the brow over the cap and down the back
+# of the cowl to the nape (the brief's hood mark); over the cap it is a fine lit seam (3 cm), never a crest stripe
+SEAM_A = (-50.0, 130.0)
+SEAM_CAP = 0.030            # its width over the cap (a fine lit seam, never a crest stripe)
+CHANNEL = 0.045
+BEZEL = 0.015               # the thin slate bezel painted round each Aubade body light (fix pass 5: the lights keep a
+# dark edge for the ally azure, the chalk and the blue-grey stay chalk and blue-grey)
+
+
+CROWN_S = (1.582, 1.670)            # the Serenade crown band (z, 9 cm: the brief): over the short arch, under the cap
+WINDOWS = [360.0 * k / 12 for k in range(12)]       # 12 even, spaced (the concept: round windows with iron between,
+# never a string of touching beads): six across the front, one over the arch's crown
 
 
 def crown_serenade(F, part):
-    """a flush ironstone band 10 cm tall on the felt dome with round lampresin windows (accent glazing that follows
-    the band's curve, so nothing stands proud of the band edge-on)"""
+    """a flush ironstone band on the felt dome just over the opening (the concept: z 1.57-1.65) with twelve
+    ROUND lampresin windows evenly round it (accent discs that follow the band's curve): seven across the front,
+    one over the arch's crown, a ring of lights from every side (an even ring never makes a lit PAIR over the
+    hollow: brief §0.2)"""
     hc, hr = F["hood"]
-    zb = 1.592
-    rx, ry = hood_radius(F, zb)
-    band = Sculpt("crown")
-    R0, hw, hh, rr = rx + 0.010, 0.014, 0.050, 0.010          # a rounded-rectangle band section, 10 cm tall
+    z0, z1 = CROWN_S
 
-    def prof(r, z):
-        qx, qz = np.abs(r - R0) - (hw - rr), np.abs(z) - (hh - rr)
-        return np.hypot(np.maximum(qx, 0), np.maximum(qz, 0)) + np.minimum(np.maximum(qx, qz), 0) - rr
-    band.add(Lathe((0, hc[1], zb), prof, R0 + hw + 0.01, -hh - 0.01, hh + 0.01, axes=np.diag([1.0, rx / ry, 1.0])), k=0.0)
-    # twelve round windows (seven face the front)
-    aa = np.radians(np.arange(12) * 30.0)
-    P0 = np.stack([np.sin(aa) * (rx + 0.04), hc[1] - np.cos(aa) * (ry + 0.04), np.full(12, zb)], 1)
-    N0 = np.stack([np.sin(aa) / rx, -np.cos(aa) / ry, np.zeros(12)], 1)
-    D = sdf_of(band)
-    S0, G0 = onto_surface(D, P0, N0, reach=0.06)
-    v, f = cap_patches(D, S0, G0, 0.040, nseg=10, lift=0.0018)
-    part("crown", band, "ironstone", "bone:head", 520, 0.6, 1.2)
-    part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.6)
+    def rad(z):
+        return hood_radius(F, z)
+    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.006, 0.016, 18)
+    zc = 0.5 * (z0 + z1)
+    part("crown", ("mesh", v, f), "ironstone", "bone:head", None, 0.7)
+    discs = [disc_on(surf, a, zc, 0.031, nseg=11, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
+    v, f = merge_meshes(discs)
+    part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.5)
 
 
-# ── cowl/collar, pauldrons, cloak, robe, tabard, legs, boots ──────────────────────────────────────────────
-def body_parts(F, aub, info, part):
-    sh = F["shoulder"]
-    # COWL (Aubade: blue scarf with a V front and back) / ROLLED COLLAR + iron gorget + sand MANTLE (Serenade)
-    if aub:
-        cowl = Sculpt("cowl")
-        cowl.add(Torus((0, 0.01, 1.285), 0.165, 0.055, axes=np.diag([1.0, 1.0 / 0.92, 1.0]), rz=0.05), k=0.0)
-        cowl.add(Ellipsoid((0, -0.13, 1.225), (0.13, 0.07, 0.075), axes=sdf.rot_x(-18)), k=0.04)
-        cowl.add(RoundCone((0, -0.17, 1.22), (0, -0.19, 1.165), 0.04, 0.012), k=0.04)            # the V point
-        cowl.add(Ellipsoid((0, 0.14, 1.24), (0.20, 0.09, 0.10), axes=sdf.rot_x(14)), k=0.05)
-        cowl.add(RoundCone((0, 0.20, 1.22), (0, 0.22, 1.17), 0.05, 0.012), k=0.04)
-        part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.24, 1.34), 300, 1.0, 1.1)
-    else:
-        col = Sculpt("collar")
-        col.add(Torus((0, 0.045, 1.335), 0.195, 0.068, axes=sdf.frame((0, -0.32, 0.95))), k=0.0)
-        part("collar", col, "cloth", ("zblend", "chest", "neck", 1.28, 1.40), 300, 1.0, 1.1)
-        gor = Sculpt("gorget")
-        gor.add(Torus((0, -0.01, 1.225), 0.225, 0.042, axes=np.diag([1.0, 1.0 / 0.82, 1.0]), rz=0.052).displaced(
-            lambda P: 0.006 * np.clip(NOISE.ridged(P, 11.0, 2), 0, 1) - 0.002, 0.006), k=0.0)
-        gor.inter(HalfSpace((0, 0.06, 0), (0, 1, 0), 2.0), k=0.02)
-        part("gorget", gor, "ironstone", "bone:chest", 260, 0.8, 1.1)
-        man = Sculpt("mantle")
-        tab = [(0.98, 0.40), (1.10, 0.39), (1.20, 0.34), (1.28, 0.26), (1.33, 0.19)]
-        man.add(bell(tab, 0.80, 0.99, 1.33), k=0.0)
-        # the front opening between the two rounded lapels
-        man.sub(RoundBox((0, -0.36, 0.95), (0.105, 0.2, 0.17), 0.05), k=0.02)
-        man.inter(HemCut(1.0, 0.03, 2, 0.6), k=0.01)
-        part("mantle", man, "cloth2", ("zblend", "spine", "chest", 0.98, 1.12), 420, 1.0, 1.1)
-    # PAULDRONS
-    for s, sx in (("R", -1.0), ("L", 1.0)):
-        pa = Sculpt(f"pauldron_{s}")
-        px = F["pauldron_x"] * sx
-        bind = ("dblend", f"shoulder.{s}", f"upper_arm.{s}", (sx * sh, 0.0, 1.30), (sx * 0.55, 0.0, -0.83), 0.06, 0.16)
-        if aub:
-            # three massive stepped chalk plates (8-10 cm thick, the widest point of the figure: 0.74 m across),
-            # the top plate rising into two short upward points (<= 10 cm)
-            pa.add(RoundBox((px, 0.0, 1.345), (0.125, 0.150, 0.046), 0.034, axes=sdf.rot_y(sx * 16)), k=0.0)
-            pa.add(RoundBox((px + sx * 0.045, 0.0, 1.262), (0.112, 0.150, 0.044), 0.032, axes=sdf.rot_y(sx * 28)), k=0.010)
-            pa.add(RoundBox((px + sx * 0.085, 0.0, 1.183), (0.088, 0.138, 0.040), 0.028, axes=sdf.rot_y(sx * 42)), k=0.010)
-            pa.add(RoundCone((px + sx * 0.075, 0.005, 1.37), (px + sx * 0.105, 0.005, 1.47), 0.036, 0.007), k=0.012)
-            pa.add(RoundCone((px - sx * 0.050, 0.015, 1.38), (px - sx * 0.058, 0.020, 1.465), 0.040, 0.008), k=0.014)
-            part(f"pauldron_{s}", pa, "chalk", bind, 300, 0.7, 1.2)
-            continue
-        # rounded ironstone domes, a lip at the lower edge, a round boss at the front with a lampresin lens
-        dome = Ellipsoid((px, 0.01, 1.245), (0.155, 0.172, 0.125), axes=sdf.rot_y(sx * 24))
-        pa.add(dome, k=0.0)
-        pa.inter(HalfSpace((px, 0, 1.145), (-sx * 0.42, 0, -0.91), 2.0), k=0.02)
-        pa.add(Torus((px + sx * 0.035, 0.01, 1.165), 0.135, 0.016, axes=sdf.frame((-sx * 0.42, 0, 0.91)) @ np.diag([1, 1 / 1.12, 1]), rz=0.016), k=0.01)
-        bn = V3((-sx * 0.45, -0.85, 0.20))           # the boss lens reads from the front and the side
-        bn /= np.linalg.norm(bn)
-        bc0 = V3((px - sx * 0.10, -0.135, 1.215))
-        Sb, Gb = onto_surface(sdf_of(pa), bc0[None], bn[None], reach=0.08)
-        bc, bn2 = Sb[0], Gb[0]
-        pa.add(Torus(tuple(bc + bn2 * 0.004), 0.052, 0.014, axes=sdf.frame(bn2)), k=0.006)            # the boss ring
-        part(f"pauldron_{s}", pa, "ironstone", bind, 280, 0.7, 1.2)
-        v, f = lathe_mesh(bc + bn2 * 0.002, sdf.frame(bn2), [(0.0, 0.041), (0.011, 0.035), (0.019, 0.020), (0.023, 0.0)], 10)
-        part(f"boss_light_{s}", ("mesh", v, f), "accent", bind, None, 0.6)
-    # CLOAK: a SOLID bell (no inner shell: half the triangles of a shell for the same form), deep vertical folds,
-    # open in front over the tabard: the opening is a recess down to the robe's surface
-    tab = F["cloak_rx"]
+# ── cowl/collar, pauldrons, mantle, cloak, robe, tabard, legs, boots ──────────────────────────────────────
+class OpenCut(sdf.Prim):
+    """the cloak's front opening: |x| < half width(z) in front of y_lim, below the top (a rounded top edge)"""
+
+    def __init__(self, wtab, ztop, y_lim=-0.05):
+        self.w, self.ztop, self.y = wtab, float(ztop), float(y_lim)
+
+    def bounds(self):
+        return np.array([-0.4, -0.8, -0.1]), np.array([0.4, self.y + 0.02, self.ztop + 0.05])
+
+    def d(self, P):
+        return np.maximum(np.maximum(np.abs(P[:, 0]) - interp(self.w, P[:, 2]), P[:, 1] - self.y), P[:, 2] - self.ztop)
+
+
+def open_hw(F, z):
+    return float(interp(F["open"][0], z))
+
+
+def cloak_open_wedge(F):
+    return OpenCut(F["open"][0], F["open"][1])
+
+
+def wall_angle(F, z, side, recess):
+    """world angle (deg) of the ray from the cloak axis that meets the opening's wall at height z, just outside
+    (recess 0: on the coat) or just inside (recess RECESS: on the robe floor), on side +-1"""
+    tab, ytab = F["cloak_rx"], F["cloak_ry"]
+    R = float(interp(tab, z)) - recess
+    Ry = R * float(interp(ytab, z))
+    x = open_hw(F, z) + (0.010 if recess == 0 else -0.010)
+    s2 = (x * x / (Ry * Ry)) / (1.0 - x * x / (R * R) + x * x / (Ry * Ry))
+    return side * math.degrees(math.asin(math.sqrt(min(max(s2, 0.0), 0.99))))
+
+
+def cloak_sculpt(F, aub):
+    tab, ytab = F["cloak_rx"], F["cloak_ry"]
     z0, z1 = tab[0][0], tab[-1][0]
     famp, ffreq, fwob = F["folds"]
     cl = Sculpt("cloak")
-    cl.add(bell(tab, F["cloak_ry"], z0 - 0.04, z1).displaced(folds(famp, ffreq, fwob), famp), k=0.0)
-    if not aub:
-        # the upper ironstone hem band: a raised ring (the paint colours both bands)
-        cl.add(bell([(0.26, 0.432), (0.34, 0.424)], F["cloak_ry"], 0.268, 0.332, inset=-0.008), k=0.006)
+    fz = [(0.0, 1.0), (0.6, 0.85), (1.05, 0.45), (1.3, 0.15)]
+    cl.add(Bell(tab, ytab, z0 - 0.04, z1).displaced(folds(famp, ffreq, fwob, ztab=fz, sharp=1.5 if aub else 2.0), famp),
+           k=0.0)
     hz0, hamp, hn = F["hem"]
     cl.inter(HemCut(hz0, hamp, hn, 0.8), k=0.006)
-    op = F["cloak_open"]
-    robe = bell(tab, F["cloak_ry"], 0.0, z1, inset=RECESS)          # the floor: RECESS in from the cloak
-    cl.sub(sdf.Blend([("add", RoundBox((0, -0.45, 0.5), (op, 0.25, 0.62), 0.03), 0.0), ("sub", robe, 0.0)]), k=0.02)
-    part("cloak", cl, "cloth", ("bw_cloak",), 900 if aub else 860, 1.0, 1.0)
-    if aub:
-        # the back stripe (accent) down the cloak's spine, below the cowl's V
-        # laid on the SMOOTH bell just over the fold crests (on the folded surface its normal twisted with every
-        # fold and the strip zigzagged), tapering toward the hem: most of its light sits in the top half
-        zz = np.linspace(0.15, 1.17, 10)
-        P0 = np.stack([np.zeros_like(zz), interp(tab, zz) * F["cloak_ry"], zz], 1)
-        S0, G0 = onto_surface(_smooth_bell(F), P0,
-                              np.tile((0.0, 1.0, 0.0), (len(zz), 1)), reach=0.06, lift=famp * 0.5)
-        v, q = ribbon(S0, G0, np.interp(zz, [0.15, 0.85, 1.17], [0.030, 0.050, 0.080]), 0.007)
-        part("back_stripe", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.7)
-        # the chalk bandage belt wrapped over the robe and tabard
-        belt = Sculpt("belt")
-        rb = float(interp(tab, 0.965)) - RECESS + 0.004
-        belt.add(Torus((0, 0.0, 0.965), rb, 0.03, axes=np.diag([1.0, 1.0 / F["cloak_ry"], 1.0]), rz=0.04).displaced(
-            wraps((0, 0, 0.9), (0, 0, 1.03), 0.004, 0.03), 0.004), k=0.0)
-        belt.inter(HalfSpace((0, -0.16, 0), (0, 1, 0), 2.0), k=0.01)            # only the front shows
-        part("belt", belt, "cloth2", ("bw_transfer", "cloak"), 60, 0.8, 1.0)
-    else:
-        # the sash wraps on round the waist under the mantle's edge (accent: the back and sides read too)
-        aa = np.radians(np.linspace(42.0, 318.0, 24))
-        zs_ = 0.905
-        rr_ = float(interp(tab, zs_))
-        P0 = np.stack([np.sin(aa) * rr_, -np.cos(aa) * rr_ * F["cloak_ry"], np.full(len(aa), zs_)], 1)
-        N0 = np.stack([np.sin(aa) / rr_, -np.cos(aa) / (rr_ * F["cloak_ry"]), np.zeros(len(aa))], 1)
-        S0, G0 = onto_surface(_smooth_bell(F), P0, N0, reach=0.06, lift=famp * 0.5 + 0.002)
-        v, q = ribbon(S0, G0, 0.056, 0.006)
-        part("sash", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.7)
-    # TABARD on the front (chalk-white, Aubade / sand felt, Serenade), pointed at the hem
-    hw, ztop, ztip, zv = F["tabard"]
-    y_top = -(float(interp(tab, ztop)) - RECESS) * F["cloak_ry"] - 0.012
-    y_bot = -(float(interp(tab, ztip)) - RECESS) * F["cloak_ry"] - 0.016
+    robe = Bell(tab, ytab, 0.0, z1, inset=RECESS)          # the floor: RECESS in from the cloak
+    cl.sub(sdf.Blend([("add", cloak_open_wedge(F), 0.0), ("sub", robe, 0.0)]), k=0.015)
+    return cl
 
-    def ytab(z):
-        return y_bot + (z - ztip) * (y_top - y_bot) / (ztop - ztip)
-    tb = Sculpt("tabard")
-    zax = V3((0.0, y_top - y_bot, ztop - ztip))
-    tb.add(RoundBox((0, ytab((ztop + ztip) / 2), (ztop + ztip) / 2), (hw, 0.012, (ztop - ztip) / 2), 0.008,
-                    axes=sdf.frame(zax, (1, 0, 0))), k=0.0)
-    slope = (zv - ztip) / hw
-    for sx in (-1.0, 1.0):
-        n = V3((sx * slope, 0, -1.0))
-        tb.inter(HalfSpace((0, 0, ztip), n / np.linalg.norm(n), 2.0), k=0.004)
-    part("tabard", tb, "cloth2", ("bw_transfer", "cloak"), 160, 0.7, 1.3)
-    # accent on the tabard: Aubade two edge stripes + the chevron; Serenade the double sash + the hem chevron
-    acc = Sculpt("tabard_light")
 
-    def yf(z):
-        return ytab(z) - 0.012
+def cloak_low(F, aub):
+    """the cloak's game low: columns on every hem point / notch and on both sides of both opening walls (those
+    follow the wall down: the opening widens toward the hem), rows top -> hem"""
+    hz0, hamp, hn = F["hem"]
+    ztop = F["open"][1]
+    fixed = [0, 11, 37, 54, 72, 90, 108, 126, 144, 162, 180] if aub else [0, 11, 41, 60, 80, 100, 120, 140, 160, 180]
+    cols = sorted(set([-c for c in fixed if 0 < c < 180] + fixed))
+    walls = []
+    for side in (1.0, -1.0):
+        for rec in (RECESS, 0.0):
+            walls.append(lambda z, side=side, rec=rec: wall_angle(F, min(z, ztop), side, rec))
+    cols = cols + walls
+    top = F["cloak_rx"][-1][0] - 0.004
+
+    def zrows(a):
+        hz = float(hem_line(hz0, hamp, hn, np.array([[math.sin(a), -math.cos(a), 0.0]]))[0]) + 0.004
+        # a row just over and just under the opening's top: the step into the recess stays inside 2 cm
+        mids = [top - 0.07, ztop + 0.010, ztop - 0.012, 0.98, 0.78, 0.58, 0.40, 0.25] if aub else \
+               [ztop + 0.006, ztop - 0.012, 1.04, 0.84, 0.62, 0.42, 0.26]
+        return [top] + [z for z in mids if z > hz + 0.03] + [hz]
+
+    nrow = len(zrows(0.0))
+
+    def zr(a):
+        z = zrows(a)
+        while len(z) < nrow:                                  # keep every column the same length
+            i = int(np.argmax(np.diff(-np.array(z))))
+            z.insert(i + 1, 0.5 * (z[i] + z[i + 1]))
+        return z[:nrow]
+    return lambda D: lathe_low(D, cols, zr, rmax=0.70, bottom_cap=True, top_cap=True)
+
+
+def body_parts(F, aub, info, part):
+    sh = F["shoulder"]
     if aub:
-        # the two edge stripes taper toward the hem (4 cm at the belt, 2.6 cm at the chevron): the light leans up
-        ins = 0.022
-        path = [(-hw + ins, ztop - 0.04, 0.020), (-hw + ins, zv + 0.012, 0.013), (0.0, ztip + 0.034, 0.013),
-                (hw - ins, zv + 0.012, 0.013), (hw - ins, ztop - 0.04, 0.020)]
-        path = [((x, yf(z), z), r) for x, z, r in path]
-        for i in range(len(path) - 1):
-            acc.add(RoundCone(path[i][0], path[i + 1][0], path[i][1], path[i + 1][1]), k=0.003)
+        # COWL: the blue scarf hood-collar: a thick drape round the neck, a V in front and a long V at the back
+        cowl = Sculpt("cowl")
+        # the scarf lies OVER the coat round the neck (bigger than the coat from 1.26 up, and down the V in front)
+        ctab = [(1.08, 0.262), (1.18, 0.266), (1.26, 0.285), (1.32, 0.258), (1.37, 0.215), (1.41, 0.15)]
+
+        def chem(a):
+            # a deep V in front under the opening (it hides the robe's top), a shorter V at the back
+            return np.interp(np.abs(np.degrees(a)), [0, 24, 60, 112, 180], [1.135, 1.170, 1.272, 1.258, 1.170])
+
+        def roll(P):
+            # the scarf's upper roll (the concept's layered cowl): a soft ridge round the neck at 1.27
+            return -0.011 * np.exp(-((P[:, 2] - 1.272) / 0.022) ** 2)
+        cowl.add(Bell(ctab, [(1.0, 0.92), (1.5, 0.92)], 1.06, 1.41, cy=0.01).displaced(
+            lambda P: folds(0.006, 3.0, 0.6, phase=0.4)(P) + roll(P), 0.017), k=0.0)
+        cowl.inter(FnCut(chem, 0.6, 1.0), k=0.012)
+        cowl.sub(tomb_of(F), k=0.01)                 # nothing of the scarf inside the hood's opening
+        cols = [0, 14, 28, 44, 60, 86, 112, 136, 158, 180]
+        cols = sorted(set([-c for c in cols if 0 < c < 180] + cols))
+
+        def zr(a):
+            hz = float(chem(np.array([a])))
+            # below the opening's sill in front, up inside the hood at the sides and the back
+            top = float(np.interp(abs(math.degrees(a)), [0, 30, 50], [1.292, 1.300, 1.405]))
+            mids = (1.300, 1.272, 1.245, 0.5 * (1.245 + hz) + 0.004)
+            rows = [top] + [r for r in mids if hz + 0.015 < r < top - 0.010] + [hz + 0.004]
+            while len(rows) < 6:                         # same row count in every column
+                i = int(np.argmax(-np.diff(rows)))
+                rows.insert(i + 1, 0.5 * (rows[i] + rows[i + 1]))
+            return rows
+        part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.24, 1.34), 0, 1.0, 1.1,
+             low=lambda D: lathe_low(D, cols, zr, cy=0.01, rmax=0.45, lip=[(0.028, 0.012)]))
     else:
-        for zc in (0.925, 0.992):
-            acc.add(RoundBox((0, yf(zc) + 0.004, zc), (hw + 0.016, 0.010, 0.030), 0.007), k=0.0)
-        for sx in (-1.0, 1.0):
-            acc.add(Capsule((sx * (hw - 0.012), yf(zv + 0.03), zv + 0.03), (0.0, yf(ztip + 0.03), ztip + 0.03), 0.022), k=0.004)
-    part("tabard_light", acc, "accent", ("bw_transfer", "cloak"), 140, 0.6)
+        # the thick ROLLED COLLAR (dark felt) the felt dome sits in (the concept): all round the hood's base, high
+        # at the back (1.42), its front roll the short arch's dark sill (1.32 +- 0.06), standing out 7 cm past the
+        # dome at the sides; then the iron GORGET across the chest under it and the sand MANTLE
+        cax = sdf.frame((0, -0.22, 0.976))
+        cc, cR, cr, crz = (0, 0.030, 1.372), 0.222, 0.074, 0.066
+        v, f = torus_mesh(cc, cax, cR, cr, nu=15, nv=5, rz=crz, ry_scale=1.04)
+        col = Sculpt("collar")
+        col.add(Torus(cc, cR, cr, axes=cax, rz=crz), k=0.0)
+        part("collar", col, "cloth", ("zblend", "chest", "neck", 1.30, 1.44), 0, 1.0, 1.1,
+             low=lambda D, v=v, f=f: (v, f))
+
+        # (fix pass 5: the iron gorget band under the mantle is gone: the mantle and the bib cover it everywhere,
+        # and its top edge poked through the mantle under the collar as dark dashes)
+        mantle = Sculpt("mantle")
+        nl, nh, nz = MANTLE["notch"]
+
+        def mhem(a):
+            # rounded lapels in front (their bottoms at 0.975, rounded corners into the notch), the hem rising
+            # over the arms and a soft U across the back (the concept: 1.05 at the spine, 1.08-1.12 at the sides)
+            d = np.abs(np.degrees(a))
+            notch = 1.0 - smooth(nl, nh, d)
+            base = np.interp(d, [0, 16, 46, 70, 92, 120, 150, 180], [0.985, 0.976, 0.978, 1.020, 1.080, 1.074, 1.058, 1.050])
+            return base + notch * (nz - base)
+
+        def drape(P):
+            # broad soft sags across the back (felt hanging off the shoulders), none on the lapels
+            a = ang(P)
+            back = smooth(60.0, 120.0, np.degrees(np.abs(a)))
+            low = 1.0 - smooth(1.06, 1.30, P[:, 2])
+            return -0.010 * back * low * np.abs(np.sin(a * 3.0 + 0.4 * NOISE(P, 2.5)))
+        mantle.add(Bell(MANTLE["rx"], MANTLE["ry"], 0.95, 1.335).displaced(
+            lambda P: folds(0.006, 3.0, 0.7, phase=1.1, sharp=2.0)(P) + drape(P), 0.016), k=0.0)
+        mantle.inter(FnCut(mhem, 0.7, 0.9), k=0.02)
+        cols = [0, 4, nl, nh, 16, 30, 46, 58, 70, 81, 92, 106, 120, 135, 150, 165, 180]
+        cols = sorted(set([-c for c in cols if 0 < c < 180] + cols))
+
+        def zr(a):
+            hz = float(mhem(np.array([a])))
+            return list(np.linspace(1.330, hz + 0.004, 5))
+        part("mantle", mantle, "cloth2", ("zblend", "spine", "chest", 0.98, 1.12), 0, 1.0, 1.1,
+             low=lambda D: lathe_low(D, cols, zr, rmax=0.62, lip=[(0.026, 0.008), (0.052, 0.044)]))
+        # the sand robe between the lapels, just behind them (the concept): the notch showed a deep dark cavity
+        zz = np.linspace(0.982, 1.235, 4)
+        xs = np.array((-0.088, 0.0, 0.088))
+        V = np.array([(x, -float(interp(MANTLE["rx"], z)) * float(interp(MANTLE["ry"], z)) * math.cos(x * 2.0) + 0.016, z)
+                      for z in zz for x in xs])
+        Fb = grid_faces(len(zz), len(xs), closed=False)
+        Fb = wind_like(V, Fb, 0, np.array((0.0, -1.0, 0.0)))
+        part("bib", ("mesh", V, Fb), "cloth2", ("zblend", "spine", "chest", 0.98, 1.12), None, 0.5)
+    # PAULDRONS
+    for s, sx in (("R", -1.0), ("L", 1.0)):
+        px = F["pauldron_x"] * sx
+        # RIGID on the shoulder bone: blended into the upper arm, the plates crumpled into shards whenever the arms
+        # came forward to hold the staff (the guard pose every clip starts from)
+        bind = f"bone:shoulder.{s}"
+        if aub:
+            aubade_pauldron(part, s, sx, px, bind)
+        else:
+            serenade_pauldron(part, s, sx, px, bind)
+    # CLOAK: a SOLID bell, open in front over the tabard (the opening a recess down to the robe floor)
+    tab, ytab = F["cloak_rx"], F["cloak_ry"]
+    cl_sc = cloak_sculpt(F, aub)
+    part("cloak", cl_sc, "cloth", ("bw_cloak",), 0, 1.0, 1.0, low=cloak_low(F, aub))
+    cl_d = sdf_of(cl_sc)
+    if aub:
+        # the back stripe (accent) down the cloak's spine, below the cowl's V: one SOLID 5.6 cm light with a thin
+        # painted slate bezel (`_cloak_aubade`), laid ON the folded coat (it floated off the profile on the smooth bell)
+        zz = np.linspace(0.15, 1.12, 12)
+        P0 = np.stack([np.zeros_like(zz), interp(tab, zz) * interp(ytab, zz), zz], 1)
+        S0, G0 = onto_surface(cl_d, P0, np.tile((0.0, 1.0, 0.0), (len(zz), 1)), reach=0.07, lift=0.0015)
+        v, q = ribbon(S0, G0, BACK_W, 0.004, sink=0.008)
+        part("back_stripe", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.6)
+        # the HEM PIPING (accent): a lit line over the ironstone hem band, following the pointed hem round the
+        # back and sides between the coat's front edges (the dawn points picked out in light; the side facings
+        # read the team from it). A flat inlay (2 tris a segment)
+        hz0, hamp, hn = F["hem"]
+        aw = abs(wall_angle(F, 0.10, 1.0, 0.0)) + 3.0
+        aa = np.radians(np.linspace(aw, 360.0 - aw, 31))
+        R_ = interp(tab, 0.10)
+        ry_ = interp(ytab, 0.10)
+        P0 = np.stack([np.sin(aa) * R_, -np.cos(aa) * R_ * ry_, np.zeros(len(aa))], 1)
+        P0[:, 2] = hem_line(hz0, hamp, hn, P0) + HEM_PIPE[0]
+        N0 = np.stack([np.sin(aa) * ry_, -np.cos(aa), np.zeros(len(aa))], 1)
+        S0, G0 = onto_surface(cl_d, P0, N0, reach=0.07)
+        v, q = flat_strip(S0, G0, HEM_PIPE[1], lift=0.0025)
+        part("hem_light", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.5)
+        # the chalk bandage belt across the robe floor between the cloak's front edges
+        oa = abs(wall_angle(F, 0.965, 1.0, RECESS)) + 2.5
+        aa = np.radians(np.linspace(-oa, oa, 9))
+        zb_ = 0.965
+        Rb = float(interp(tab, zb_)) - RECESS + 0.004
+        ry_ = float(interp(ytab, zb_))
+        P0 = np.stack([np.sin(aa) * Rb, -np.cos(aa) * Rb * ry_, np.full(len(aa), zb_)], 1)
+        N0 = np.stack([np.sin(aa) * ry_, -np.cos(aa), np.zeros(len(aa))], 1)
+        N0 /= np.linalg.norm(N0, axis=1, keepdims=True)
+        v, q = ribbon(P0, N0, 0.060, 0.022, sink=0.004)
+        part("belt", ("mesh", v, q), "cloth2", ("bw_transfer", "cloak"), None, 0.8)      # chalk-linen wraps (the concept)
+    else:
+        # the SASH (accent) round the waist below the mantle (sides and back: the team read from behind), laid on
+        # the felt; in front the tabard's own bands carry it across the opening
+        zs_ = SASH_Z
+        a_w = abs(wall_angle(F, zs_, 1.0, 0.0)) + 1.0
+        aa = np.radians(np.linspace(a_w, 360.0 - a_w, 13))
+        R_ = float(interp(tab, zs_))
+        ry_ = float(interp(ytab, zs_))
+        P0 = np.stack([np.sin(aa) * R_, -np.cos(aa) * R_ * ry_, np.full(len(aa), zs_)], 1)
+        N0 = np.stack([np.sin(aa) * ry_, -np.cos(aa), np.zeros(len(aa))], 1)
+        S0, G0 = onto_surface(cl_d, P0, N0, reach=0.06, lift=0.0015)
+        v, q = ribbon(S0, G0, SASH_W, 0.005, sink=0.008)
+        part("sash", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.6)
+    tabard_parts(F, aub, part)
     # LEGS (dark trousers, slim: they live under the bell) and BOOTS
     legs = Sculpt("legs")
     for s in ("L", "R"):
         hp, kn, an = info.side("hip", s), info.side("knee", s), info.side("ankle", s)
         legs.add(RoundCone(tuple(hp), tuple(kn), 0.062, 0.052), k=0.0)
         legs.add(RoundCone(tuple(kn), (an.x, an.y, an.z + 0.03), 0.052, 0.046), k=0.03)
-    part("legs", legs, "under", ("bw_auto", ("root", "spine", "chest", "neck", "head") + ARM_BONES), 220, 1.0, 0.5)
+    part("legs", legs, "under", ("bw_auto", ("root", "spine", "chest", "neck", "head", "x_hem_1") + ARM_BONES), 220, 1.0,
+         0.5)
     bw, bl, bh = F["boot"]
     for s in ("L", "R"):
         an = info.side("ankle", s)
@@ -720,11 +1468,207 @@ def body_parts(F, aub, info, part):
         b.add(RoundBox((an.x, an.y - 0.035, bh * 0.75), (bw, bl, bh * 0.75), 0.045), k=0.0)
         b.add(RoundCone((an.x, an.y + 0.005, 0.07), (an.x, an.y + 0.01, 0.145), bw * 0.95, bw * 0.9), k=0.03)
         if aub:
-            b.add(RoundCone((an.x, an.y - 0.10, 0.04), (an.x, an.y - 0.165, 0.055), 0.04, 0.016), k=0.03)
+            b.add(RoundCone((an.x, an.y - 0.10, 0.045), (an.x, an.y - 0.150, 0.058), 0.042, 0.024), k=0.03)
         else:
             b.add(Torus((an.x, an.y + 0.005, 0.135), bw * 0.92, 0.016), k=0.01)
         b.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
         part(f"boot_{s}", b, "leather", ("zblend", f"foot.{s}", f"shin.{s}", 0.08, 0.14), 150, 1.0, 0.7)
+
+
+PAULDRON_A = {"O": (0.282, 0.0, 1.268), "tilt": 22.0, "cap": (0.150, 0.156, 0.124)}
+PLATES: dict = {}           # side -> (centre, frame, plates): the paint's carved edges on the Aubade pauldrons
+
+
+def aubade_frame(sx):
+    """the Aubade pauldron's frame: +Z tilted out over the shoulder, +X outward-down, phi -90*sx = the front"""
+    t = math.radians(PAULDRON_A["tilt"])
+    az = np.array((sx * math.sin(t), 0.0, math.cos(t)))
+    return sdf.frame(az, (sx * math.cos(t), 0.0, -math.sin(t)))
+
+
+def aubade_pauldron(part, s, sx, px, bind):
+    """the concept's layered chalk shoulder: a curved CAP over the shoulder and two curved LAMES stepping down
+    the arm (each a clean shell plate that sweeps over the shoulder, the lames with a shallow point at the front
+    of their lower edge), and two short swept-up BLUNT points on the cap (<= 9 cm): carved chalk"""
+    O = np.array(PAULDRON_A["O"]) * np.array((sx, 1.0, 1.0))
+    ax = aubade_frame(sx)
+    rc = np.array(PAULDRON_A["cap"])
+    fr = -90.0 * sx                                            # the front, in phi
+
+    # three crisp STEPPED plates (a cap and two lames, each a clean shell with a straight lower edge: the
+    # notched V edges read as a cog from the side)
+    plates = [  # (radii, theta, phi, thick, n_th, n_ph, edge)
+        (rc, (0.0, 62.0), (-124.0, 124.0), 0.032, 3, 8, None),
+        (rc * 1.085, (54.0, 79.0), (-118.0, 118.0), 0.028, 2, 7, None),
+        (rc * 1.170, (71.0, 96.0), (-110.0, 110.0), 0.026, 2, 7, None),
+    ]
+    meshes = []
+    for i, (rr, th, ph, tk, nt, npp, ef) in enumerate(plates):
+        meshes.append(shell_mesh(O, ax, rr, th, ph, tk, nt, npp, edge_fn=ef))
+    # the two points (the concept's chalk horns): broad flat BLADES swept up from the cap (outer-front and
+    # inner-back), four-sided and blunt-tipped, <= 10 cm
+    for th_, ph_, h in ((42.0, -0.38 * 90.0 * sx, 0.094), (30.0, 1.25 * 90.0 * sx, 0.100)):
+        t_, p_ = math.radians(th_), math.radians(ph_)
+        base = (O + ax[0] * rc[0] * math.cos(p_) * math.sin(t_) + ax[1] * rc[1] * math.sin(p_) * math.sin(t_)
+                + ax[2] * rc[2] * math.cos(t_)) - ax[2] * 0.014
+        d = np.array((sx * 0.20, 0.14, 1.0))
+        d /= np.linalg.norm(d)
+        fr_h = sdf.frame(d, (1.0, 0.0, 0.0))                 # broad seen from the front (the concept)
+        meshes.append(lathe_mesh(base - d * 0.012, fr_h, [(0.0, 0.036), (0.45 * h, 0.025), (0.85 * h, 0.008),
+                                                           (h, 0.0)], 4, aspect=(1.0, 0.42)))
+    v, f = merge_meshes(meshes)
+    PLATES[s] = (O, ax, plates)
+    part(f"pauldron_{s}", ("mesh", v, f), "chalk", bind, None, 1.2)
+    # a DAWNGLASS INLAY (accent) along the middle lame, front -> over the outside -> back: the team read from the
+    # side (the pauldrons are the widest point, and the side facings carried the least accent), a lamp line
+    # in the chalk, never a gem; its thin slate bezel is painted (`_pauldron_aubade`)
+    r1 = rc * 1.085
+    phs = np.radians(np.linspace(-INLAY_PH, INLAY_PH, 8))
+    th = math.radians(INLAY_TH)
+    pts = np.array([O + ax[0] * r1[0] * math.cos(p_) * math.sin(th) + ax[1] * r1[1] * math.sin(p_) * math.sin(th)
+                    + ax[2] * r1[2] * math.cos(th) for p_ in phs])
+    nrm = ((pts - O) @ ax.T / (r1 * r1)[None]) @ ax
+    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)
+    v, f = ribbon(pts + nrm * 0.001, nrm, INLAY_W, 0.003, sink=0.005)
+    part(f"pauldron_light_{s}", ("mesh", v, f), "accent", bind, None, 0.4)
+
+
+INLAY_TH, INLAY_PH, INLAY_W = 63.0, 110.0, 0.032     # the pauldron inlay: theta on the middle lame, phi span, width
+
+
+PAULDRON_S_Z = 1.226
+
+
+def serenade_pauldron(part, s, sx, px, bind):
+    """a big rounded ironstone dome (the widest point of the figure), a heavy lip at its lower edge, and a round
+    sandstone boss at its front with a lampresin lens (accent)"""
+    ax = sdf.rot_y(sx * 26)                      # rows = local axes: the dome leans out over the arm
+    c = np.array((px, 0.0, PAULDRON_S_Z))        # on the shoulder line, under the arch's sill (never ear-muffs)
+    rad = (0.182, 0.208, 0.144)                  # (fix pass 5: bigger: the concept's massive iron domes)
+    up = ax[2]
+    dome = Sculpt(f"pauldron_{s}")
+    dome.add(Ellipsoid(c, rad, axes=ax), k=0.0)
+    dome.inter(HalfSpace(c - up * 0.064, -up, 2.0), k=0.015)
+    dome.add(Torus(tuple(c - up * 0.056), 0.163, 0.019, axes=ax, rz=0.017), k=0.012)
+    D = sdf_of(dome)
+    low = central_low(D, c - up * 0.02, ax, 12, [0, 24, 46, 66, 82, 96, 112, 180], rmax=0.32)
+    # the boss: a sandstone ring with a lens, at the dome's front-inner shoulder (reads from the front and side)
+    bn = V3((-sx * 0.40, -0.74, 0.54))          # the front-inner shoulder, toward the collar (the concept)
+    bn /= np.linalg.norm(bn)
+    Sb, Gb = onto_surface(D, (c + bn * 0.13)[None], bn[None], reach=0.10)
+    bc, bn2 = Sb[0], Gb[0]
+    BOSS[("serenade", s)] = (bc, bn2)
+    # a FLAT round boss (a low convex disc: the concept's carved sandstone face in an iron rim; the old recessed
+    # centre read as a cup / pipe mouth)
+    ring = lathe_mesh(bc - bn2 * 0.004, sdf.frame(bn2), [(0.0, 0.066), (0.014, 0.065), (0.021, 0.058),
+                                                          (0.025, 0.040), (0.027, 0.0)], 8)
+    dome.add(Torus(tuple(bc + bn2 * 0.006), 0.055, 0.012, axes=sdf.frame(bn2)), k=0.006)
+    v, f = merge_meshes([low, ring])
+    # the boss is the concept's carved SANDSTONE disc in an iron ring (painted; not a light: lit discs on the
+    # shoulders read as a face's ears / cheeks from the game camera)
+    part(f"pauldron_{s}", dome, "ironstone", bind, 0, 0.7, 1.2, low=lambda D_, v=v, f=f: (v, f))
+    # a LAMPRESIN STRIP (accent) set in the iron along the dome's flank, from the back over the outside to the
+    # front (stopping short of the boss): the team read from the side (the domes own the side view), a band of
+    # light in the banded Serenade manner, never a disc (no ear / cheek lights); iron all round it
+    o_l = ax @ np.array((sx, 0.0, 0.0))
+    o_l = np.array((o_l[0], o_l[1], 0.0)) / np.hypot(o_l[0], o_l[1])
+    f_l = ax @ np.array((0.0, -1.0, 0.0))
+    f_l = np.array((f_l[0], f_l[1], 0.0))
+    f_l = f_l - o_l * (f_l @ o_l)
+    f_l /= np.linalg.norm(f_l)
+    r_ = np.asarray(rad)
+    th = math.radians(STRIP_S[0])
+    P0, N0 = [], []
+    for ph in np.radians(np.linspace(STRIP_S[1], STRIP_S[2], 9)):
+        dl = (o_l * math.cos(ph) + f_l * math.sin(ph)) * math.sin(th) + np.array((0.0, 0.0, math.cos(th)))
+        q = dl * r_
+        P0.append(c + q @ ax)
+        N0.append((q / (r_ * r_)) @ ax)
+    S0, G0 = onto_surface(D, np.array(P0), np.array(N0), reach=0.05)
+    sv, sf = ribbon(S0 + G0 * 0.001, G0, STRIP_S[3], 0.003, sink=0.006)
+    STRIPS[s] = (S0, STRIP_S[3])
+    part(f"pauldron_light_{s}", ("mesh", sv, sf), "accent", bind, None, 0.4)
+
+
+STRIP_S = (52.0, -100.0, 78.0, 0.030)      # the Serenade dome strip: theta from the dome's top, phi back -> front, width
+STRIPS: dict = {}                          # side -> (strip points, width): its iron bezel is painted
+
+
+BACK_W = 0.056              # the Aubade back stripe's width (m)
+HEM_PIPE = (0.074, 0.024)   # the Aubade hem piping: height over the hem line, width (m)
+TAB_W = 0.046               # the Aubade stole's centre light (m); it ends square at TAB_END, above the stole's V
+TAB_END = 0.355             # (a pointed end over the dark belt read as a sword: blade, crossguard, pommel)
+SASH_Z, SASH_W = 0.912, 0.092   # the Serenade sash: height, width (m); ironstone borders painted round it
+TAB_BANDS = (0.912, 1.004)      # the Serenade tabard's two glowing bands (the lower one continues the sash)
+TAB_TOP = 1.115             # its top: just under the cowl's V (its light never runs under the blue-grey scarf)
+CHANNEL_HEX = "#171A1E"     # the painted slate channel round every Aubade body light (L* 9): the lights sit in
+# dark slate settings, so the ally azure stands off the pale chalk / blue-grey wool (Lab dE >= 35 at the 52 deg
+# camera; on bare blue-grey cloth the azure melted into it: dE 19-21)
+
+
+def tabard_parts(F, aub, part):
+    """the TABARD on the robe floor (chalk stole, Aubade / sand felt, Serenade), pointed at the hem: an explicit
+    panel (clean edges, a crisp V) + its accent inlays as ribbons on its face"""
+    tab, ytab = F["cloak_rx"], F["cloak_ry"]
+    hw, ztop, ztip, zv = F["tabard"]
+    th = 0.014
+
+    zo = F["open"][1]
+
+    def floor_y(x, z):
+        # on the robe floor inside the opening, up onto the coat above the opening's top (the cowl covers it)
+        R = float(interp(tab, z)) - RECESS * (1.0 - float(smooth(zo - 0.03, zo + 0.025, z)))
+        return -math.sqrt(max(R * R - x * x, 1e-6)) * float(interp(ytab, z)) - 0.008
+
+    zs = list(np.linspace(ztop, zv, 6)) + list(np.linspace(zv, ztip, 4))[1:]
+    rows = []
+    for z in zs:
+        w = hw if z >= zv else hw * (z - ztip) / (zv - ztip)
+        xs = [-w, 0.0, w] if w > 1e-4 else [0.0] * 3
+        rows.append([(x, floor_y(x, z) - th, z) for x in xs] + [(x, floor_y(x, z), z) for x in (xs[2], xs[0])])
+    V = np.array([p for r in rows for p in r])
+    m = 5
+    Fc = []
+    for j in range(len(rows) - 1):
+        for i in range(m):
+            i2 = (i + 1) % m
+            a, b, c, d = j * m + i, j * m + i2, (j + 1) * m + i2, (j + 1) * m + i
+            Fc += [(a, b, c), (a, c, d)]
+    Fc += [(0, 1, 2), (0, 2, 3), (0, 3, 4)]                # the top edge cap
+    Fc = np.array(Fc, dtype=np.int64)
+    cen = V[Fc].mean(1)
+    zc = cen[:, 2]
+    ref = np.stack([np.zeros_like(zc), np.array([floor_y(0.0, z) - th * 0.5 for z in zc]), zc], 1)
+    a_, b_, c_ = V[Fc[:, 0]], V[Fc[:, 1]], V[Fc[:, 2]]
+    nn = np.cross(b_ - a_, c_ - a_)
+    o = cen - ref
+    o[:, 0] *= 0.3
+    flip = (nn * o).sum(1) < 0
+    Fc[flip] = Fc[flip][:, ::-1]
+    # drop the degenerate tip triangles
+    area = np.linalg.norm(np.cross(V[Fc[:, 1]] - V[Fc[:, 0]], V[Fc[:, 2]] - V[Fc[:, 0]]), axis=1)
+    Fc = Fc[area > 1e-9]
+    part("tabard", ("mesh", V, Fc), "cloth2" if not aub else "chalk", ("bw_transfer", "cloak"), None, 1.3)
+
+    def front(x, z):
+        return np.array((x, floor_y(x, z) - th, z))
+    nrm = (0.0, -1.0, 0.0)
+    meshes = []
+    if aub:
+        # ONE solid light down the chalk stole's centre (the brief's accent vertical stripe), ending square above
+        # the stole's V; a thin slate bezel is painted round it (`_tabard_aubade`), the stole stays chalk-white
+        zz = list(np.linspace(TAB_TOP, TAB_END, 8))
+        pts = [front(0.0, z) for z in zz]
+        meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), TAB_W, 0.004, sink=0.004))
+    else:
+        for zc_ in TAB_BANDS:
+            pts = [front(x, zc_) + np.array((0, -0.002, 0)) for x in np.linspace(-hw - 0.012, hw + 0.012, 4)]
+            meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), 0.074, 0.006, sink=0.006))
+        pts = [front(-hw + 0.016, zv + 0.026), front(0.0, ztip + 0.034), front(hw - 0.016, zv + 0.026)]
+        pts = [pts[0], 0.5 * (pts[0] + pts[1]), pts[1], 0.5 * (pts[1] + pts[2]), pts[2]]
+        meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), 0.060, 0.006, sink=0.004))
+    v, q = merge_meshes(meshes)
+    part("tabard_light", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.5)
 
 
 # ── arms: sleeves, wraps/cuffs, mitts ────────────────────────────────────────────────────────────────
@@ -800,7 +1744,39 @@ def rodrigues(k, a):
     return np.eye(3) + math.sin(a) * K + (1 - math.cos(a)) * K @ K
 
 
-BEND_S, BEND_DEG = 0.80, 22.0       # Aubade: the staff head bends up 22 deg above the left fist
+STAFF_HEAD: dict = {}       # faction -> the lantern socket's rest position (the staff's dark binding is painted below it)
+BEND_S, BEND_DEG = 0.80, 14.0       # Aubade: the staff head bends up 14 deg above the left fist (the lantern
+# leans out along the diagonal a little: from behind it never stands as an upright pale column over the hood)
+LANTERN_A = {"len": 0.200, "r": (0.054, 0.086)}     # the Aubade lantern's glass: length, foot / eave radius (m)
+
+
+def ring_mesh(c, axes, r_in, r_out, hw, nu):
+    """a flat band ring (rectangular section: r_in..r_out radially, +-hw along the axis) round axes[2]"""
+    c, ax = np.asarray(c, float), np.asarray(axes, float)
+    sec = [(r_in, -hw), (r_out, -hw), (r_out, hw), (r_in, hw)]
+    V = []
+    for i in range(nu):
+        a = 2 * math.pi * (i + 0.5) / nu
+        for r, h in sec:
+            V.append(c + (ax[0] * math.cos(a) + ax[1] * math.sin(a)) * r + ax[2] * h)
+    V = np.array(V)
+    F = []
+    for i in range(nu):
+        i2 = (i + 1) % nu
+        for k in range(4):
+            k2 = (k + 1) % 4
+            a_, b_, c_, d_ = i * 4 + k, i2 * 4 + k, i2 * 4 + k2, i * 4 + k2
+            F += [(a_, b_, c_), (a_, c_, d_)]
+    F = np.array(F, dtype=np.int64)
+    cen = V[F].mean(1)
+    loc = (cen - c) @ ax.T
+    aa = np.arctan2(loc[:, 1], loc[:, 0])
+    rm = 0.5 * (r_in + r_out)
+    core = c[None] + (ax[0][None] * np.cos(aa)[:, None] + ax[1][None] * np.sin(aa)[:, None]) * rm
+    nn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    flip = (nn * (cen - core)).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
 
 
 def staff_parts(spec, F, aub, info, part):
@@ -820,76 +1796,145 @@ def staff_parts(spec, F, aub, info, part):
 
         def hat(s, dv=0.0, dw=0.0):
             return tuple(O + u2 * (s - BEND_S) + v2 * dv + w2 * dw)
-        shaft.add(Capsule(at(-STAFF_BACK + 0.06), at(BEND_S), r).displaced(
-            lambda Q: 0.0035 * NOISE(Q, 14.0) - 0.002 * np.abs(np.sin(np.arctan2((Q - P) @ w, (Q - P) @ v) * 3)), 0.0035), k=0.0)
-        shaft.add(RoundCone(at(-STAFF_BACK + 0.07), at(-STAFF_BACK - 0.03), r * 1.05, 0.006), k=0.01)   # the pointed foot
+        # gnarled pale ash: the shaft wanders a little, knots swell it, and it ends in a split ROOT FOOT (two
+        # blunt prongs + a nub), never a point; the head bends up into the lantern
+        ss = np.linspace(-STAFF_BACK + 0.11, BEND_S, 9)
+        pts = [at(s_, 0.008 * math.sin(s_ * 8.5 + 0.6), 0.006 * math.cos(s_ * 6.0 + 0.3)) for s_ in ss]
+        rad = [r * (1.0 + 0.10 * math.sin(s_ * 13.0) + (0.26 if abs(s_ - 0.18) < 0.05 or abs(s_ + 0.12) < 0.04 else 0.0))
+               for s_ in ss]
+        shaft.add(sdf.Tube(pts, rad, k=0.012).displaced(
+            lambda Q: 0.0035 * NOISE(Q, 14.0) - 0.002 * np.abs(np.sin(np.arctan2((Q - P) @ w, (Q - P) @ v) * 3)), 0.0035),
+            k=0.0)
+        root = at(-STAFF_BACK + 0.12)
+        shaft.add(Ellipsoid(root, (r * 1.45, r * 1.6, r * 1.45)), k=0.015)                       # the root knot
+        for dv_, dw_, rr in ((0.068, -0.012, 0.019), (-0.062, 0.014, 0.018), (0.008, -0.060, 0.015)):
+            shaft.add(RoundCone(root, at(-STAFF_BACK + 0.020 + abs(dw_) * 0.4, dv_, dw_), r * 0.95, rr), k=0.018)
         shaft.add(RoundCone(hat(BEND_S), hat(0.88), r * 1.05, r * 1.6), k=0.03)                       # bends up, flares
         part("staff", shaft, "wood", "bone:prop.R", 180, 0.7, 0.8)
-        cap, lan, glass = Sculpt("staff_cap"), Sculpt("lantern"), Sculpt("lantern_light")
         fr2 = sdf.frame(u2, v2)
-        # tall pointed four-sided dawnglass lantern in a chalk frame with a slender spire cap
-        cap.add(Lathe(tuple(O), lambda rr, z: np.maximum(rr - (0.03 + 0.05 * np.clip((z - 0.06) / 0.05, 0, 1)),
-                                                          np.maximum(0.05 - z, z - 0.115)), 0.09, 0.04, 0.13, axes=fr2), k=0.0)
-        part("staff_cap", cap, "chalk", "bone:prop.R", 120, 0.6, 0.6)
-        s0, s1, s2 = 0.900, 1.010, 1.135
-        for cv, cw in [(1, 1), (1, -1), (-1, -1), (-1, 1)]:
-            lan.add(Capsule(hat(s0, cv * 0.046, cw * 0.046), hat(s1, cv * 0.075, cw * 0.075), 0.0135), k=0.0)
-            lan.add(Capsule(hat(s1, cv * 0.075, cw * 0.075), hat(s2, cv * 0.040, cw * 0.040), 0.0135), k=0.008)
-        lan.add(RoundCone(hat(s2 - 0.01), hat(s2 + 0.06), 0.072, 0.022), k=0.012)                # pointed roof
-        lan.add(RoundCone(hat(s2 + 0.05), hat(s2 + 0.19), 0.02, 0.004), k=0.01)                  # the spire
-        lan.add(Sphere(hat(s2 + 0.085), 0.02), k=0.008)
-        lan.add(Lathe(tuple(O), lambda rr, z: np.maximum(rr - 0.058, np.abs(z - (s0 - BEND_S)) - 0.012), 0.07,
-                      s0 - BEND_S - 0.02, s0 - BEND_S + 0.02, axes=fr2), k=0.006)
-        glass.add(RoundBox(hat(s1 - 0.003), (0.074, 0.074, 0.118), 0.040, axes=np.stack([v2, w2, u2])), k=0.0)
-        glass.inter(RoundCone(hat(s0 - 0.01), hat(s2 + 0.02), 0.092, 0.060), k=0.01)
-        part("lantern", lan, "chalk", "bone:prop.R", 360, 0.55, 0.6)
-        part("lantern_light", glass, "accent", "bone:prop.R", 120, 0.6)
+        # the concept's HEXAGONAL dawnglass lantern: a fluted chalk socket, six big glowing panes (the job lamp:
+        # the widest light on the wick) between six slim chalk corner posts, a framing ring, a low six-sided roof
+        # with a small eave (from the 52 deg camera the roof never hides the panes), a knob and a SHORT blunt
+        # spire (explicit, crisp: never a claw on a gem, never a tall pale point)
+        s0, Lb = 0.905, LANTERN_A["len"]
+        r0, r1 = LANTERN_A["r"]
+        frame_m = [lathe_mesh(hat(s0 - 0.058), fr2, [(0.0, 0.028), (0.024, 0.034), (0.046, 0.060), (0.060, 0.056)], 6)]
+        # the panes' thin dark slate BEZELS (the foot ring and a band under the eave): the light's edge; the
+        # frame, posts, eave and roof are chalk (the concept's chalk-framed lantern)
+        bez = [lathe_mesh(hat(s0 - 0.004), fr2, [(0.0, r0 - 0.006), (0.0, r0 + 0.010), (0.014, r0 + 0.010),
+                                                 (0.014, r0 - 0.002)], 6),
+               lathe_mesh(hat(s0 + Lb - 0.020), fr2, [(0.0, r1 - 0.004), (0.0, r1 + 0.007), (0.011, r1 + 0.009),
+                                                      (0.011, r1 - 0.004)], 6)]
+        for k in range(6):
+            a = 2 * math.pi * (k + 0.5) / 6
+            dirv = fr2[0] * math.cos(a) + fr2[1] * math.sin(a)
+            p0 = np.array(hat(s0 + 0.010)) + dirv * (r0 + 0.004)
+            p1 = np.array(hat(s0 + Lb - 0.004)) + dirv * (r1 + 0.004)
+            frame_m.append(lathe_mesh(p0, sdf.frame(p1 - p0, dirv), [(0.0, 0.0085), (float(np.linalg.norm(p1 - p0)), 0.0085)],
+                                      4))
+        e = r1 + 0.016
+        frame_m.append(lathe_mesh(hat(s0 + Lb - 0.012), fr2,
+                                  [(0.0, r1 - 0.008), (0.008, e - 0.010), (0.016, e), (0.024, e - 0.006),
+                                   (0.046, 0.054), (0.066, 0.028), (0.072, 0.0)], 6))
+        roof = lathe_mesh(hat(s0 + Lb - 0.012), fr2,
+                          [(0.064, 0.0), (0.068, 0.026), (0.074, 0.024), (0.080, 0.030), (0.098, 0.030),
+                           (0.106, 0.018), (0.148, 0.0045), (0.152, 0.0)], 6)
+        STAFF_HEAD["aubade"] = np.array(hat(s0 - 0.058))
+        v_, f_ = merge_meshes(frame_m)
+        part("lantern", ("mesh", v_, f_), "chalk", "bone:prop.R", None, 0.6)
+        v_, f_ = merge_meshes(bez)
+        part("lantern_bezel", ("mesh", v_, f_), "ironstone", "bone:prop.R", None, 0.4)
+        part("lantern_roof", ("mesh", roof[0], roof[1]), "chalk", "bone:prop.R", None, 0.5)
+        v_, f_ = lathe_mesh(hat(s0 + 0.004), fr2, [(0.0, 0.0), (0.0, r0), (Lb - 0.012, r1), (Lb - 0.004, 0.0)], 6)
+        part("lantern_light", ("mesh", v_, f_), "accent", "bone:prop.R", None, 0.6)
         return
-    shaft.add(Capsule(at(-STAFF_BACK + 0.06), at(0.84), r).displaced(lambda Q: 0.004 * NOISE(Q, 10.0), 0.004), k=0.0)
+    # SERENADE: a walnut staff, an ironstone foot cap, and the concept's heavy CAGED lampresin lantern: a glowing
+    # ball inside three thick ironstone bands (a cross plus a ring from the front: many recessed panes), a heavy
+    # double collar where the staff enters and a collar + bolt knob on the far side
+    shaft.add(Capsule(at(-STAFF_BACK + 0.06), at(0.82), r).displaced(lambda Q: 0.004 * NOISE(Q, 10.0), 0.004), k=0.0)
     part("staff", shaft, "wood_dark", "bone:prop.R", 170, 0.7, 0.8)
-    cap = Sculpt("staff_cap")
-    lan = Sculpt("lantern")
-    # the foot cap (ironstone), two collar rings, a round caged lampresin lantern, an iron cap + knob
-    cap.add(Capsule(at(-STAFF_BACK + 0.0), at(-STAFF_BACK + 0.07), r * 1.55), k=0.0)
-    cap.add(Capsule(at(-STAFF_BACK - 0.02), at(-STAFF_BACK + 0.0), r * 1.2), k=0.01)
-    part("staff_cap", cap, "ironstone", "bone:prop.R", 80, 0.7, 0.5)
-    col = Sculpt("lantern_collar")
-    for s_, rr in ((0.78, 0.040), (0.835, 0.046)):
-        col.add(Capsule(at(s_ - 0.016), at(s_ + 0.016), rr), k=0.004)
-    part("lantern_collar", col, "ironstone", "bone:prop.R", 120, 0.6, 0.5)
-    c = 0.975
-    R = 0.120
-    # the cage reads as a "+" in the guard pose (as on the sheet): one band in the world's vertical plane through
-    # the view axis, one horizontal; both in prop.R's rest frame
-    Rg = prop_rotation(info, guard_pose())
-    nA, nB = Rg.T @ np.array((1.0, 0.0, 0.0)), Rg.T @ np.array((0.0, 0.0, 1.0))
-    lan.add(Torus(at(c), R, 0.0115, axes=sdf.frame(nA)), k=0.0)
-    lan.add(Torus(at(c), R, 0.0115, axes=sdf.frame(nB)), k=0.006)
-    lan.add(Capsule(at(c - R - 0.03), at(c - R + 0.012), 0.042), k=0.01)    # throat into the collar
-    lan.add(Capsule(at(c + R - 0.008), at(c + R + 0.05), 0.040), k=0.01)    # iron cap
-    lan.add(Sphere(at(c + R + 0.078), 0.031), k=0.012)                      # knob
-    part("lantern", lan, "ironstone", "bone:prop.R", 380, 0.6, 0.6)
-    # the lampresin ball (accent), a smooth sphere just inside the bands so the cage stands proud
-    v_, f_ = ellipsoid_mesh(at(c), (R - 0.006,) * 3, nu=12, nv=8)
-    part("lantern_light", ("mesh", v_, f_), "accent", "bone:prop.R", None, 0.7)
+    fu = sdf.frame(u)
+    foot = lathe_mesh(at(-STAFF_BACK - 0.028), fu, [(0.0, 0.0), (0.004, r * 1.30), (0.060, r * 1.48), (0.078, r * 1.32),
+                                                    (0.090, r * 1.05), (0.100, 0.0)], 6)
+    part("staff_cap", ("mesh", foot[0], foot[1]), "ironstone", "bone:prop.R", None, 0.5)
+    c, Rg_ = 0.985, 0.116
+    Rgp = prop_rotation(info, guard_pose())
+    nX, nY, nZ = (Rgp.T @ np.array(e) for e in ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)))
+    iron = [band_ring(at(c), sdf.frame(n_), Rg_ - 0.006, Rg_ + 0.020, 0.015, 9) for n_ in (nX, nY, nZ)]
+    iron.append(lathe_mesh(at(c - Rg_ - 0.080), fu, [(0.0, 0.0), (0.0, 0.034), (0.012, 0.052), (0.036, 0.050),
+                                                     (0.044, 0.060), (0.084, 0.052)], 8))
+    iron.append(lathe_mesh(at(c + Rg_ - 0.006), fu, [(0.0, 0.058), (0.026, 0.060), (0.036, 0.048), (0.044, 0.031),
+                                                     (0.086, 0.026), (0.094, 0.0)], 8))
+    v_, f_ = merge_meshes(iron)
+    part("lantern", ("mesh", v_, f_), "ironstone", "bone:prop.R", None, 0.6)
+    # the amber LAMPRESIN rims: the resin panes' edges showing either side of each iron band (the Serenade lamp
+    # material; the core's light is the accent, so without them the amber never showed)
+    Rr, hwr = Rg_ + 0.004, 0.027
+    rr_ = math.sqrt(Rr * Rr - hwr * hwr)
+    resin = [lathe_mesh(at(c), sdf.frame(n_), [(-hwr, rr_), (0.0, Rr), (hwr, rr_)], 8) for n_ in (nX, nY, nZ)]
+    v_, f_ = merge_meshes(resin)
+    part("lantern_resin", ("mesh", v_, f_), "lampresin", "bone:prop.R", None, 0.4)
+    v_, f_ = ellipsoid_mesh(at(c), (Rg_,) * 3, nu=10, nv=6)
+    part("lantern_light", ("mesh", v_, f_), "accent", "bone:prop.R", None, 0.6)
 
 
-# ── paint: the base colour painted from the sculpt ───────────────────────────────────────────────────
+def band_ring(c, axes, r_in, r_out, hw, nu):
+    """an open-section band round axes[2] (its two sides and its outer face; the inner face lies on the glass)"""
+    c, ax = np.asarray(c, float), np.asarray(axes, float)
+    sec = [(r_in, -hw), (r_out, -hw), (r_out, hw), (r_in, hw)]
+    V = []
+    for i in range(nu):
+        a = 2 * math.pi * (i + 0.5) / nu
+        for r_, h in sec:
+            V.append(c + (ax[0] * math.cos(a) + ax[1] * math.sin(a)) * r_ + ax[2] * h)
+    V = np.array(V)
+    F = []
+    for i in range(nu):
+        i2 = (i + 1) % nu
+        for k in range(3):
+            a_, b_, c_, d_ = i * 4 + k, i2 * 4 + k, i2 * 4 + k + 1, i * 4 + k + 1
+            F += [(a_, b_, c_), (a_, c_, d_)]
+    F = np.array(F, dtype=np.int64)
+    cen = V[F].mean(1)
+    loc = (cen - c) @ ax.T
+    aa = np.arctan2(loc[:, 1], loc[:, 0])
+    core = c[None] + (ax[0][None] * np.cos(aa)[:, None] + ax[1][None] * np.sin(aa)[:, None]) * (r_in - 0.002)
+    nn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    flip = (nn * (cen - core)).sum(1) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
+
+
+# ── paint: the palette base painted from the sculpt, carrying the concept's strokes ────────────────────────
 # part colours beyond the role palette (the concepts' colour placement)
 PART_HEX = {
-    "aubade": {"cowl": "#A5B1BD", "forearms": "#CCC8BD", "belt": "#CCC8BD", "tabard": "#D6D3CA",
-               "mitt_L": "#6E7A86", "mitt_R": "#6E7A86", "hood_in": "#15171B"},
-    "serenade": {"hood_rim": "#5A4436", "collar": "#584437", "forearms": "#45362C", "hood_in": "#17150F"},
+    "aubade": {"hood": "#A2B4C4", "cowl": "#74889C", "forearms": "#CFCBC0", "belt": "#C2BEB3", "tabard": "#E0DDD4",
+               "crown_cups": "#30353C", "lantern_bezel": "#30353C", "lantern": "#D9D6CD",
+               "mitt_L": "#76838F", "mitt_R": "#76838F", "staff": "#C4BBA9", "hood_rim": "#D9D6CD",
+               "pauldron_L": "#D9D6CD", "pauldron_R": "#D9D6CD", "crown": "#D9D6CD"},
+    # Serenade: ochre / umber, as warm as the reserved-marigold cap allows (<= 40 % saturation at hue 25-50; the
+    # umber cloak sits at 23 deg, under the band): lit by the cool lane sky the old #CDB087 mantle read greige
+    # fix pass 5: the felt richer ochre (the concept's dome, never pale cream), the domes darker iron, the mitts
+    # dark iron (were mauve-brown): all still <= 40 % saturation
+    "serenade": {"hood": "#CCA97B", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
+                 "collar": "#523D30", "bib": "#C6A378", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
+                 "cloak": "#7B5842", "sleeves": "#7B5842", "mantle": "#CEAB7D", "tabard": "#CAA77A"},
 }
 CLOTH_ROLES = ("cloth", "cloth2", "under")
-ROUGH = {"cloth": 0.93, "cloth2": 0.92, "under": 0.92, "chalk": 0.86, "stone": 0.82, "ironstone": 0.80,
+ROUGH = {"cloth": 0.93, "cloth2": 0.92, "under": 0.92, "chalk": 0.86, "stone": 0.82, "ironstone": 0.80, "lampresin": 0.5,
          "leather": 0.66, "wood": 0.76, "wood_dark": 0.74, "ink": 0.95}
 RAMP = {   # value (linear multiplier) by height: light top, dark feet (bible §2.4)
-    "aubade": [(0.0, 0.50), (0.20, 0.58), (0.45, 0.76), (0.80, 0.93), (1.05, 1.0), (1.28, 1.10), (1.80, 1.16)],
-    "serenade": [(0.0, 0.62), (0.20, 0.72), (0.45, 0.85), (0.80, 0.95), (1.05, 1.0), (1.30, 1.12), (1.80, 1.18)],
+    "aubade": [(0.0, 0.45), (0.20, 0.55), (0.45, 0.75), (0.80, 0.93), (1.05, 1.0), (1.28, 1.10), (1.80, 1.18)],
+    "serenade": [(0.0, 0.60), (0.20, 0.70), (0.45, 0.84), (0.80, 0.95), (1.05, 1.02), (1.35, 1.16), (1.80, 1.26)],
 }
 SHADOW_TINT = {"aubade": (-0.10, -0.03, 0.14), "serenade": (0.10, -0.02, -0.14)}
 KEY = np.array((-0.35, -0.60, 0.72)) / np.linalg.norm((-0.35, -0.60, 0.72))   # painted key: front, upper right
+LUMA = np.array([0.2126, 0.7152, 0.0722])
+# how much of the concept a role carries: (its strokes, its painted fold light, its colour breakup)
+KCON = {"cloth": (0.95, 0.80, 0.55), "cloth2": (0.95, 0.80, 0.55), "under": (0.6, 0.5, 0.3),
+        "chalk": (0.35, 0.35, 0.2), "stone": (0.8, 0.6, 0.3), "ironstone": (0.9, 0.65, 0.35),
+        "leather": (0.75, 0.55, 0.3), "wood": (0.75, 0.5, 0.3), "wood_dark": (0.75, 0.5, 0.3)}
+BOSS: dict = {}             # (faction, side) -> (boss centre, normal): the Serenade boss paints sandstone
 
 
 def lin(h) -> np.ndarray:
@@ -956,35 +2001,83 @@ def surface_fields(grid, P, N):
 
 
 # region painters (linear colour in, linear colour out)
+def channel(col, d, w=CHANNEL, soft=0.005):
+    """the slate channel round a light: d = the texel's distance outside the light's edge (m), w its width"""
+    t = np.clip((d - (w - soft)) / soft, 0.0, 1.0)
+    m = 1.0 - t * t * (3 - 2 * t)
+    return mix(col, CHANNEL_HEX, m)
+
+
+def _hood_aubade(spec, p, g, col):
+    """the concept's light blue-grey linen cowl all over (#A2B4C4, L* 72: the concept's hood measures L* 71-85,
+    bluer than the palette's cloth2; lifted by the paint's top light it renders L* ~78; never white) under a CHALK circlet: a
+    soft contact shadow under the circlet and a thin slate BEZEL (1 cm) either side of the lit seam (the seam's
+    setting: the only dark on the hood; fix pass 5 dropped the dark slate cap: it read as a black helmet and
+    broke the light-top value law)"""
+    hc, hr = spec.F["hood"]
+    z = p[:, 2]
+    a = np.degrees(np.arctan2(p[:, 1] - hc[1], z - hc[2]))
+    along = smooth(SEAM_A[0] - 4.0, SEAM_A[0], a) * (1 - smooth(SEAM_A[1], SEAM_A[1] + 4.0, a))
+    under = smooth(CROWN_A[0] - 0.045, CROWN_A[0] - 0.004, z) * (1 - smooth(CROWN_A[0] - 0.004, CROWN_A[0], z))
+    col = col * (1.0 - 0.22 * under)[:, None]
+    above = smooth(CROWN_A[1], CROWN_A[1] + 0.03, z)                       # the band's shadow on the cap
+    col = col * (1.0 - 0.14 * above * (1 - smooth(CROWN_A[1] + 0.01, CROWN_A[1] + 0.05, z)))[:, None]
+    half = np.interp(a, [-50, -40, 50, 62, 120, 130], [0.011, SEAM_CAP / 2, SEAM_CAP / 2, SEAM_W / 2, SEAM_W / 2, 0.018])
+    col = channel(col, np.abs(p[:, 0]) - half + (1 - along) * 1.0, w=BEZEL)
+    return col
+
+
 def _cloak_aubade(spec, p, g, col):
     F = spec.F
     hz0, hamp, hn = F["hem"]
     hem = hem_line(hz0, hamp, hn, p)
-    col = _robe_floor(spec, p, col, "#C3C8CB", "#56616C", low="#7D8893")
-    # the 6.5 cm ironstone hem band follows the pointed hem (bible §2.4: dark feet)
-    band = 1.0 - smooth(hem + 0.060, hem + 0.068, p[:, 2])
-    return mix(col, "#3E434A", band)
+    # the slate UNDER-ROBE in the front opening (palette `under`): the chalk stole stands on it
+    col = _robe_floor(spec, p, col, "#454C56", "#30363E", low="#373D45")
+    # the back stripe's thin slate bezel (the light is the `back_stripe` ribbon down the spine, z 0.15 - 1.12)
+    z = p[:, 2]
+    span = smooth(0.12, 0.14, z) * (1 - smooth(1.13, 1.15, z)) * (p[:, 1] > 0.05)
+    col = channel(col, np.abs(p[:, 0]) - BACK_W / 2 + (1 - span) * 1.0, w=BEZEL)
+    # the 6.5 cm ironstone hem band follows the pointed hem (bible §2.4: dark feet), a pale chalk piping above it
+    band = 1.0 - smooth(hem + 0.062, hem + 0.068, p[:, 2])
+    col = mix(col, "#3E434A", band)
+    # the hem piping's slate bezel above it (the light is the `hem_light` strip; the hem band is its dark below)
+    top = hem + HEM_PIPE[0] + HEM_PIPE[1] / 2
+    bz = smooth(top - 0.004, top, p[:, 2]) * (1 - smooth(top + BEZEL - 0.004, top + BEZEL, p[:, 2]))
+    col = mix(col, CHANNEL_HEX, bz * (np.abs(np.degrees(ang(p))) > 40.0))
+    # the bell's underside (its hem cap) is the coat's dark INSIDE: seen when the wick lies on its side, it
+    # reads as the opening of the robe, never a flat lid
+    return mix(col, "#2F353D", 0.92 * smooth(-0.55, -0.80, g[:, 2]))
 
 
 def _cloak_serenade(spec, p, g, col):
-    col = _robe_floor(spec, p, col, "#9A7A5B", "#5E4A3D", low="#6A5444")
+    col = _robe_floor(spec, p, col, "#A88C6B", "#5A473B", low="#7A6250")
     z = p[:, 2]
-    b1 = smooth(0.176, 0.181, z) * (1 - smooth(0.212, 0.217, z))
-    b2 = smooth(0.266, 0.271, z) * (1 - smooth(0.330, 0.335, z))
-    return mix(col, "#4B4039", np.maximum(b1, b2))
+    # the concept's bands: an ironstone band at 0.245-0.29 and the dark rolled hem edge
+    b1 = smooth(0.150, 0.152, z) * (1 - smooth(0.183, 0.187, z))
+    b2 = smooth(0.243, 0.247, z) * (1 - smooth(0.288, 0.292, z))
+    col = mix(col, "#4B4039", np.maximum(b1 * 0.85, b2))
+    # the sash's ironstone borders (the light sits in a dark setting: marigold on bare umber felt melts)
+    sb = 1 - smooth(SASH_W / 2 + 0.036, SASH_W / 2 + 0.042, np.abs(z - SASH_Z))
+    col = mix(col, "#3A302A", sb * 0.95)
+    # a stitched seam line just above each band
+    st = (np.abs(z - 0.297) < 0.0025) * (np.sin(ang(p) * 260.0) > 0.2)
+    col = mix(col, "#4F3C30", st * 0.5)
+    return mix(col, "#3A2E26", 0.92 * smooth(-0.55, -0.80, g[:, 2]))          # the coat's dark inside
 
 
 def _robe_floor(spec, p, col, robe, lining, low=None):
     """the front opening: the robe floor (RECESS in) and the cloak's inner edge walls (the lining); the robe
     darkens toward the hem (`low`) so the feet stay in the bible's dark band"""
     F = spec.F
-    tab = F["cloak_rx"]
-    R = np.interp(p[:, 2], [t[0] for t in tab], [t[1] for t in tab])
-    re = np.sqrt(p[:, 0] ** 2 + (p[:, 1] / F["cloak_ry"]) ** 2)
-    front = (p[:, 1] < 0) & (np.abs(p[:, 0]) < F["cloak_open"] + 0.05)
+    tab, ytab = F["cloak_rx"], F["cloak_ry"]
+    R = interp(tab, p[:, 2])
+    ry = interp(ytab, p[:, 2])
+    re = np.sqrt(p[:, 0] ** 2 + (p[:, 1] / ry) ** 2)
+    a = np.degrees(np.abs(ang(p)))
+    front = (p[:, 1] < 0) & (np.abs(p[:, 0]) < interp(F["open"][0], p[:, 2]) + 0.03) & (p[:, 2] < F["open"][1] + 0.02)
     depth = np.clip((R - re) / RECESS, 0.0, 1.5) * front
-    col = mix(col, lining, smooth(0.25, 0.45, depth))
-    m = smooth(0.70, 0.88, depth)
+    col = mix(col, lining, smooth(0.20, 0.45, depth))
+    m = smooth(0.65, 0.88, depth)
     col = mix(col, robe, m)
     if low is not None:
         col = mix(col, low, m * (1 - smooth(0.25, 0.65, p[:, 2])))
@@ -992,41 +2085,152 @@ def _robe_floor(spec, p, col, robe, lining, low=None):
 
 
 def _pauldron_serenade(spec, p, g, col, sx):
-    """two ochre sandstone bands running down the shoulder slope (the sheet's stripes)"""
+    """two ochre sandstone bands running down the dome's slope (the concept's stripes) and the sandstone boss"""
     px = spec.F["pauldron_x"] * sx
-    c = np.array((px, 0.01, 1.245))
-    nrm = np.array((sx * 0.50, 0.0, 0.866))
-    s = (p - c) @ nrm
-    b1 = smooth(0.012, 0.016, s) * (1 - smooth(0.046, 0.050, s))
-    b2 = smooth(-0.050, -0.046, s) * (1 - smooth(-0.020, -0.016, s))
-    # the round boss and its ring stay iron; the lower lip too
-    lip = smooth(1.18, 1.17, p[:, 2])
+    c = np.array((px, 0.0, PAULDRON_S_Z - 0.005))
+    nrm = np.array((sx * 0.55, 0.0, 0.835))
+    s = (p - c) @ nrm + 0.005 * PNOISE(p, 30.0)
+    # (broad: the concept's two ochre bands cover ~40 % of each dome; they lift the top value band)
+    b1 = smooth(0.022, 0.026, s) * (1 - smooth(0.084, 0.088, s))
+    b2 = smooth(-0.064, -0.060, s) * (1 - smooth(-0.004, 0.000, s))
+    lip = smooth(PAULDRON_S_Z - 0.105, PAULDRON_S_Z - 0.115, p[:, 2])
     m = np.maximum(b1, b2) * (1 - lip)
-    return mix(col, "#C3A47A", m)
+    st = STRIPS.get("L" if sx > 0 else "R")
+    if st is not None:                       # the lit strip's dark iron setting (no ochre band runs under it)
+        pts = st[0]
+        dense = np.concatenate([pts[i] + (pts[i + 1] - pts[i]) * np.linspace(0, 1, 8)[:, None]
+                                for i in range(len(pts) - 1)])
+        dd = np.concatenate([np.sqrt(((p[k:k + 4096, None, :] - dense[None]) ** 2).sum(2)).min(1)
+                             for k in range(0, len(p), 4096)])
+        m = m * smooth(st[1] / 2 + 0.008, st[1] / 2 + 0.016, dd)
+    col = mix(col, "#C3A47A", m)
+    # the bands' cracks (the concept's carved lines)
+    cr = np.clip(NOISE.ridged(p, 26.0, 2), 0, 1)
+    col = col * (1 - 0.40 * m * smooth(0.72, 0.9, cr))[:, None]
+    bc = BOSS.get(("serenade", "L" if sx > 0 else "R"))
+    if bc is not None:
+        o = p - bc[0]
+        h = o @ bc[1]
+        d = np.linalg.norm(o - h[:, None] * bc[1][None], axis=1)            # across the boss face
+        face = (1 - smooth(0.040, 0.045, d)) * smooth(0.004, 0.012, h)        # on the raised face, not the dome
+        col = mix(col, "#C3A47A", face)                                       # the carved sandstone disc
+        cr2 = np.clip(NOISE.ridged(p, 60.0, 2), 0, 1)
+        col = col * (1 - 0.30 * face * smooth(0.80, 0.95, cr2))[:, None]
+        rim = (1 - smooth(0.004, 0.008, np.abs(d - 0.040))) * smooth(0.0, 0.008, h)
+        col = col * (1 - 0.35 * rim)[:, None]                                 # the carved ring line
+    return col
 
 
-def _grain(spec, p, g, col, k=0.12):
+def _pauldron_aubade(spec, p, g, col, side):
+    """carved chalk plates: each texel finds its plate (the shell whose radius it sits on), then paints a worn
+    bright edge along the plate's borders, a soft shadow where a lame tucks under the plate above it, and a
+    carved line round the cap (the concept's relief)"""
+    if side not in PLATES:
+        return col
+    O, ax, plates = PLATES[side]
+    q = (p - O) @ ax.T
+    best = np.full(len(p), 9.0)
+    edge = np.full(len(p), 1.0)
+    tuck = np.zeros(len(p))
+    groove = np.zeros(len(p))
+    for i, (rr, th, ph, tk, nt, npp, ef) in enumerate(plates):
+        rr = np.asarray(rr, float)
+        s_ = q / (rr - tk * 0.5)
+        rho = np.linalg.norm(s_, axis=1) + 1e-9
+        err = np.abs(rho - 1.0) * float(rr.mean())
+        thd = np.degrees(np.arccos(np.clip(s_[:, 2] / rho, -1, 1)))
+        phd = np.degrees(np.arctan2(s_[:, 1], s_[:, 0]))
+        t1 = th[1] + (ef(phd) if ef is not None else 0.0)
+        k = math.pi / 180.0 * float(rr.mean())
+        e = np.minimum((t1 - thd) * k, np.minimum(ph[1] - phd, phd - ph[0]) * k * np.maximum(np.sin(np.radians(thd)), 0.3))
+        if th[0] > 1e-6:
+            e = np.minimum(e, (thd - th[0]) * k)
+        sel = err < best
+        best = np.where(sel, err, best)
+        edge = np.where(sel, e, edge)
+        tuck = np.where(sel, (1 - smooth(0.0, 0.035, (thd - th[0]) * k)) if th[0] > 1e-6 else 0.0, tuck)
+        if i == 0:
+            groove = np.where(sel, 1 - smooth(0.003, 0.007, np.abs(thd - 40.0) * k), groove)
+    col = col * (1.0 + 0.22 * (1 - smooth(0.004, 0.020, edge)))[:, None]
+    col = col * (1.0 - 0.38 * tuck)[:, None]
+    col = col * (1.0 - 0.22 * groove)[:, None]
+    # the inlay's thin slate bezel (the light is the `pauldron_light_*` ribbon on the middle lame)
+    r1 = np.asarray(plates[1][0], float)
+    s1 = q / r1
+    rho = np.linalg.norm(s1, axis=1) + 1e-9
+    thd = np.degrees(np.arccos(np.clip(s1[:, 2] / rho, -1, 1)))
+    phd = np.abs(np.degrees(np.arctan2(s1[:, 1], s1[:, 0])))
+    on1 = np.abs(rho - 1.0) * float(r1.mean()) < 0.012
+    d = np.abs(thd - INLAY_TH) * math.pi / 180.0 * float(r1.mean()) - INLAY_W / 2
+    d = d + np.maximum(phd - INLAY_PH, 0.0) * math.pi / 180.0 * float(r1.mean())
+    return channel(col, np.where(on1, d, 1.0), w=BEZEL)
+
+
+def _grain(spec, p, g, col, k=0.14):
     """wood grain along the staff (rest frame: the staff runs along -Y from the right fist)"""
     n = PNOISE(p * np.array((22.0, 1.4, 22.0)), 1.0) + 0.5 * PNOISE(p * np.array((60.0, 3.0, 60.0)), 1.0, (3.1, 0, 0))
-    return col * (1 + k * n)[:, None]
+    col = col * (1 + k * n)[:, None]
+    head = STAFF_HEAD.get(spec.faction)
+    if head is not None:
+        # a dark leather BINDING wound round the head under the lantern socket (the lamp's light stands off it)
+        d = np.linalg.norm(p - head[None], axis=1)
+        wr = 0.5 + 0.5 * np.sign(np.sin(d * math.pi / 0.014))
+        col = mix(col, "#3A3B40", (1 - smooth(0.105, 0.115, d)) * (0.88 + 0.12 * wr))
+    return col
 
 
-def _gorget(spec, p, g, col):
-    cr = np.clip(NOISE.ridged(p, 11.0, 2), 0, 1)
-    return col * (1 - 0.35 * smooth(0.55, 0.85, cr))[:, None]
+def _iron(spec, p, g, col):
+    cr = np.clip(NOISE.ridged(p, 14.0, 2), 0, 1)
+    return col * (1 - 0.30 * smooth(0.62, 0.85, cr))[:, None]
+
+
+def _tabard_serenade(spec, p, g, col):
+    """sand felt with a darker hem fold above the chevron, and dark umber borders round the glowing bands and the
+    chevron (the team colour must stand off the sand in BOTH tints: marigold melts into bare sand)"""
+    hw, ztop, ztip, zv = spec.F["tabard"]
+    z, x = p[:, 2], np.abs(p[:, 0])
+    col = mix(col, "#A88C68", 0.35 * (1 - smooth(zv + 0.02, zv + 0.10, z)))
+    band = np.zeros(len(p))
+    for zc in TAB_BANDS:
+        band = np.maximum(band, 1 - smooth(0.046, 0.053, np.abs(z - zc)))
+    # the chevron's border: a V from (+-hw, zv + 0.026) to (0, ztip + 0.034)
+    zv_line = (ztip + 0.034) + (zv + 0.026 - ztip - 0.034) * np.clip(x / max(hw - 0.016, 1e-3), 0, 1)
+    band = np.maximum(band, (1 - smooth(0.042, 0.050, np.abs(z - zv_line))) * (x < hw))
+    return mix(col, "#3E3029", band * 0.94)
+
+
+def _tabard_aubade(spec, p, g, col):
+    """the chalk-white stole (the concept): a thin slate bezel round the centre light (the light is the
+    `tabard_light` ribbon, TAB_W wide, TAB_TOP .. TAB_END) and a carved border line just inside the stole's edge"""
+    hw, ztop, ztip, zv = spec.F["tabard"]
+    z, x = p[:, 2], np.abs(p[:, 0])
+    dx = x - TAB_W / 2
+    d = np.where(z < TAB_END, np.hypot(np.maximum(dx, 0.0), TAB_END - z), dx)       # the square end, rounded off
+    d = np.where(z > TAB_TOP, d + (z - TAB_TOP) * 3.0, d)
+    col = channel(col, d, w=BEZEL)
+    # the stole's carved border (a soft grey line 1.6 cm in from its edge, down the sides and round the V)
+    edge = np.where(z >= zv, hw - x, (hw * (z - ztip) / (zv - ztip) - x) * 0.85)
+    line = (1 - smooth(0.004, 0.007, np.abs(edge - 0.016))) * (z < ztop - 0.03)
+    return col * (1 - 0.16 * line)[:, None]
 
 
 REGIONS = {
-    "aubade": {"cloak": _cloak_aubade, "staff": _grain},
-    "serenade": {"cloak": _cloak_serenade, "staff": _grain, "gorget": _gorget,
+    "aubade": {"cloak": _cloak_aubade, "staff": _grain, "tabard": _tabard_aubade, "hood": _hood_aubade,
+               "pauldron_R": lambda s, p, g, c: _pauldron_aubade(s, p, g, c, "R"),
+               "pauldron_L": lambda s, p, g, c: _pauldron_aubade(s, p, g, c, "L")},
+    "serenade": {"cloak": _cloak_serenade, "staff": _grain, "gorget": _iron, "lantern": _iron,
+                 "tabard": _tabard_serenade,
                  "pauldron_R": lambda s, p, g, c: _pauldron_serenade(s, p, g, c, -1.0),
                  "pauldron_L": lambda s, p, g, c: _pauldron_serenade(s, p, g, c, 1.0)},
 }
 
 
 def paint_part(spec, name, role, p, g, lap, occ) -> np.ndarray:
+    """the painted base of one part (linear): palette + regions, the sculpt's fold light and occlusion, a soft
+    top light and key, the light-top / dark-feet ramp, hue-shifted shadows and the material's own SMOOTH
+    painterly breakup (brush-scale noise only: no pixel-scale flecks)"""
     fac = spec.faction
-    col = np.tile(lin(PART_HEX[fac].get(name) or spec.PALETTE.get(role, "#808080")), (len(p), 1))
+    col = np.tile(lin(PART_HEX[fac].get(name) or spec.PALETTE.get(role, "#808080")), (len(p), 1)).astype(np.float64)
     fn = REGIONS[fac].get(name)
     if fn is not None:
         col = fn(spec, p, g, col)
@@ -1034,43 +2238,473 @@ def paint_part(spec, name, role, p, g, lap, occ) -> np.ndarray:
         return col
     cloth = role in CLOTH_ROLES
     crest = np.clip(lap / 40.0, -1.0, 1.0)
-    shade = 1.0 - (0.55 if cloth else 0.36) * occ
-    shade *= 1.0 + (0.16 if cloth else 0.18) * crest
-    shade *= 0.80 + 0.28 * (0.5 + 0.5 * g[:, 2])                         # soft sky light (painted)
-    shade *= 1.0 + 0.07 * np.clip(g @ KEY, -1.0, 1.0)                    # the painted key
-    shade *= np.interp(p[:, 2], *zip(*RAMP[fac]))                        # light top, dark feet
-    nz = 0.030 * PNOISE(p, 7.0) + 0.016 * PNOISE(p, 23.0, (1.7, 0.3, 0.9))
-    if fac == "serenade" and cloth:
-        nz = nz + 0.022 * PNOISE(p, 140.0, (0.4, 2.2, 1.3))              # felt grain
-    shade *= 1.0 + nz
+    # (fix pass 5: a stronger painted form - deeper folds, a firmer top light and key - the flat value fields
+    # read as untextured at the game camera)
+    shade = 1.0 - (0.58 if cloth else 0.40) * occ
+    shade = shade * (1.0 + np.where(crest > 0, 0.40, 0.42) * crest)    # crests catch light, valleys go dark
+    shade = shade * (0.56 + 0.54 * (0.5 + 0.5 * g[:, 2]))               # soft sky light (painted)
+    shade = shade * (1.0 + 0.22 * np.clip(g @ KEY, -1.0, 1.0))          # the painted key
+    ramp = np.interp(p[:, 2], *zip(*RAMP[fac]))                         # light top, dark feet
+    if fac == "aubade" and name in ("tabard", "hood"):
+        ramp = ramp ** (0.35 if name == "tabard" else 0.4)    # the chalk stole stays white; the linen hood stays linen
+    elif fac == "serenade" and name in ("hood", "mantle"):
+        ramp = ramp ** 0.75                                   # the ochre felt stays ochre (lifted, it read cream)
+    shade = shade * ramp
+    nz = 0.034 * PNOISE(p, 6.0) + 0.016 * PNOISE(p, 17.0, (1.7, 0.3, 0.9))
+    if cloth and fac == "aubade":
+        # long vertical brush strokes down the wool (the concept's straight folds), soft
+        nz = nz + 0.040 * PNOISE(p * np.array((24.0, 24.0, 2.2)), 1.0, (0.2, 1.1, 0.0))
+        nz = nz + 0.016 * PNOISE(p * np.array((60.0, 60.0, 6.0)), 1.0, (2.0, 0.5, 0.0))
+    elif cloth:
+        # felt: a soft mottle and a fine nap (never banded)
+        nz = nz + 0.030 * PNOISE(p, 11.0, (5.0, 1.0, 2.0)) + 0.016 * PNOISE(p, 34.0, (0.4, 2.2, 1.3))
+    elif role in ("chalk", "stone"):
+        nz = nz + 0.030 * PNOISE(p, 12.0, (2.0, 0.0, 1.0)) - 0.035 * smooth(0.80, 0.97, np.clip(NOISE.ridged(p, 20.0, 2), 0, 1))
+        shade = shade * (1.0 + 0.20 * smooth(0.20, 0.75, crest))                                  # worn bright edges
+    elif role in ("ironstone", "leather"):
+        nz = nz + 0.060 * PNOISE(p, 12.0, (0.5, 3.0, 1.0)) + 0.025 * PNOISE(p, 40.0)
+        shade = shade * (1.0 + 0.26 * smooth(0.20, 0.75, crest))
+        if role == "ironstone":                                              # a cool sheen on the iron tops
+            # (the dome pauldrons too: the concept's pale crowns on the domes, the top value band from the
+            # 52 deg camera, which looks down on them)
+            k_ = 0.10 if name.startswith("pauldron") else 0.20     # the domes stay dark iron (their stripes read)
+            shade = shade * (1.0 + k_ * smooth(0.40, 0.95, g[:, 2]))
+    shade = shade * (1.0 + nz)
+    if cloth:                                                                # dust on the hem
+        dirt = 0.20 * (1 - smooth(0.06, 0.34, p[:, 2]))
+        col = col * (1 - dirt)[:, None] + (col @ LUMA)[:, None] * dirt[:, None] * 0.9
     t = np.asarray(SHADOW_TINT[fac])
     dark = np.clip(1.0 - shade, 0.0, 0.6)[:, None]
     col = col * (1.0 + dark * t[None])
-    return col * shade[:, None]
+    col = col * shade[:, None]
+    return col
 
 
-def paint_procedural(spec, obj, size, names, part_attr="vale_part", log=print):
+def ink_hollow(spec, P, N, col):
+    """the head space is INK (no lining shell): every texel of the hood that lies on the tombstone hollow's walls
+    (raster position, and a normal facing INTO the hollow: the decimated cheek beside the opening never takes
+    ink), with a faint lift where the felt turns in at the opening"""
+    T = tomb_of(spec.F)
+    d = T.d(P)
+    zc = 0.5 * (T.zb + T.zt)
+    axis = np.stack([np.zeros(len(P)), P[:, 1], np.full(len(P), zc)], 1)
+    facing = ((axis - P) * N).sum(1) / (np.linalg.norm(axis - P, axis=1) + 1e-9)
+    # every texel well behind the opening's plane is ink whatever its normal (the decimated walls' odd
+    # normals left lit streaks in the hollow); near the plane the facing test keeps the cheeks clean
+    hc, hr = spec.F["hood"]
+    y_open = hc[1] - hr[1]
+    behind = smooth(y_open + 0.030, y_open + 0.060, P[:, 1])
+    inside = (1.0 - smooth(0.006, 0.020, d)) * np.maximum(smooth(-0.05, 0.25, facing), behind)
+    deep = smooth(0.0, 0.06, P[:, 1] + 0.20)
+    ink = np.tile(lin(spec.PALETTE.get("ink", "#15171B")), (len(P), 1)) * (1.0 + 1.8 * (1 - deep))[:, None]
+    # the lamp's SPILL on the hollow's walls: a soft neutral falloff round the glow (its light on the felt, never
+    # a team colour: grey-warm / grey-cool), strongest right at the glow's edge, gone 7 cm out
+    lc, lr, tilt = spec.F["hood_light"]
+    t = math.radians(tilt)
+    ax = np.array([(1.0, 0.0, 0.0), (0.0, math.cos(t), -math.sin(t)), (0.0, math.sin(t), math.cos(t))])
+    q = ((P - np.asarray(lc)[None]) @ ax.T) / np.asarray(lr)[None]
+    dist = (np.linalg.norm(q, axis=1) - 1.0) * float(min(lr))
+    spill = (1.0 - smooth(0.0, 0.07, dist)) ** 1.6 * 0.85
+    warm = spec.faction == "serenade"
+    ink = mix(ink, "#6B645C" if warm else "#5E646C", spill)
+    return col * (1 - inside[:, None]) + ink * inside[:, None]
+
+
+def lowpass3d(P, v, cell, keep=None, passes=1):
+    """3D low-pass of per-texel values over their surface points: trilinear splat onto a `cell` grid, [1 2 1]
+    blurs, trilinear gather (normalised by the kept weight: hidden texels never pull the mean)"""
+    P = np.asarray(P, dtype=np.float64)
+    v = np.asarray(v, dtype=np.float64)
+    wt = np.ones(len(P)) if keep is None else keep.astype(np.float64)
+    lo = P.min(axis=0) - 2 * cell
+    g = (P - lo) / cell
+    i0 = np.floor(g).astype(np.int64)
+    f = g - i0
+    n = i0.max(axis=0) + 4
+    size = int(np.prod(n))
+    S, W = np.zeros(size), np.zeros(size)
+    corners = []
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                w_ = ((f[:, 0] if dx else 1 - f[:, 0]) * (f[:, 1] if dy else 1 - f[:, 1])
+                      * (f[:, 2] if dz else 1 - f[:, 2]))
+                idx = ((i0[:, 0] + dx) * n[1] + (i0[:, 1] + dy)) * n[2] + (i0[:, 2] + dz)
+                S += np.bincount(idx, weights=w_ * wt * v, minlength=size)
+                W += np.bincount(idx, weights=w_ * wt, minlength=size)
+                corners.append((idx, w_))
+    S, W = S.reshape(tuple(n)), W.reshape(tuple(n))
+    for _ in range(passes):
+        for ax in range(3):
+            S = 0.25 * (np.roll(S, 1, ax) + 2 * S + np.roll(S, -1, ax))
+            W = 0.25 * (np.roll(W, 1, ax) + 2 * W + np.roll(W, -1, ax))
+    M = (S / np.maximum(W, 1e-12)).ravel()
+    return sum(M[idx] * w_ for idx, w_ in corners)
+
+
+# the concept's brushwork per material, cut from the graded plates (side, x0, x1, z0, z1 in model metres): laid
+# on EVERY texel of the parts that wear that material (registration-free: sides, tops and backs carry the
+# concept's own strokes and painted folds too, never a misplaced feature)
+SWATCH = {
+    "serenade": {"cloak": ("back", -0.24, 0.24, 0.40, 0.90), "mantle": ("back", -0.24, 0.24, 1.04, 1.20),
+                 "collar": ("back", -0.16, 0.16, 1.33, 1.41),
+                 "tabard": ("front", -0.06, 0.06, 0.48, 0.86), "dome": ("back", 0.30, 0.43, 1.27, 1.33),
+                 "boot": ("front", 0.12, 0.22, 0.03, 0.10)},
+    "aubade": {"cloak": ("back", -0.30, -0.05, 0.35, 0.90), "hood": ("back", -0.13, -0.03, 1.42, 1.58),
+               "cowl": ("back", -0.26, -0.05, 1.14, 1.24), "tabard": ("front", 0.0, 0.06, 0.40, 0.85),
+               "chalk": ("back", 0.24, 0.33, 1.22, 1.30), "boot": ("front", 0.18, 0.30, 0.03, 0.09)},
+}
+SWATCH_OF = {
+    # (fix pass 5: the felt dome and the mantle carry the procedural felt only: the plate's mantle / dome swatches
+    # carried horizontal edges that tiled into strata bands, the tabard's pitted into a biscuit)
+    "serenade": {"cloak": "cloak", "sleeves": "cloak", "legs": "cloak",
+                 "hood_rim": "collar", "collar": "collar", "tabard": "tabard", "bib": "tabard", "pauldron_R": "dome",
+                 "pauldron_L": "dome", "gorget": "dome", "crown": "dome", "cuffs": "dome", "lantern": "dome",
+                 "staff_cap": "dome", "boot_L": "boot", "boot_R": "boot", "mitt_L": "boot", "mitt_R": "boot",
+                 "forearms": "boot"},
+    "aubade": {"cloak": "cloak", "sleeves": "cloak", "mitt_L": "cloak", "mitt_R": "cloak", "legs": "cloak",
+               "hood": "hood", "cowl": "cowl", "tabard": "tabard", "belt": "tabard", "forearms": "tabard",
+               "pauldron_R": "chalk", "pauldron_L": "chalk", "crown": "chalk", "hood_rim": "chalk",
+               "lantern_roof": "chalk", "lantern": "chalk", "staff_cap": "chalk", "boot_L": "boot", "boot_R": "boot"},
+}
+CYL = {"cloak": 0.36, "mantle": 0.40, "hood": 0.19, "collar": 0.21, "cowl": 0.21, "legs": 0.07}   # cylindrical maps
+
+
+def _blur2(img, s):
+    return project.blur(img[..., None].astype(np.float32), s)[..., 0] if img.ndim == 2 else project.blur(img, s)
+
+
+def load_swatches(spec, cfg):
+    """per material: (fine strokes, painted brush/fold light) luminance ratios of the concept's paint, and px/m"""
+    cache = os.path.join(scene.CACHE_DIR, "concept")
+    plates = project.Plates(cache, cfg["concept"], cfg["height"])
+    out = {}
+    for key, (side, x0, x1, z0, z1) in SWATCH[spec.faction].items():
+        xs, ys = plates.to_px(side, np.array([x0, x1]), np.array([z1, z0]))
+        c0, c1 = int(min(xs)), int(max(xs))
+        r0, r1 = int(ys[0]), int(ys[1])
+        img = plates.img[side][r0:r1, c0:c1]
+        L = project._lin(np.clip(img, 0, 1)) @ LUMA + 2e-3
+        b1, b3, b6, b14 = (_blur2(L, s) for s in (1.0, 3.0, 6.0, 14.0))
+        fine = seamless(np.clip(b1 / b6, 0.70, 1.36))
+        brush = seamless(np.clip(b3 / b14, 0.78, 1.26))
+        out[key] = (fine / np.median(fine), brush / np.median(brush), plates.ppm(side))
+    return out
+
+
+def seamless(a):
+    """a swatch made tileable: blended with its half-shifted copy under a window that fades to the edges"""
+    H, W = a.shape
+    w = (np.sin(np.pi * (np.arange(H) + 0.5) / H)[:, None] * np.sin(np.pi * (np.arange(W) + 0.5) / W)[None]) ** 2
+    b = np.roll(np.roll(a, H // 2, 0), W // 2, 1)
+    wb = np.roll(np.roll(w, H // 2, 0), W // 2, 1)
+    return (a * w + b * wb) / (w + wb + 1e-6)
+
+
+def swatch_detail(sw, name, p, n):
+    """(fine, brush) per texel from the part's swatch: cylindrical about Z for bell / drum parts, triplanar
+    (by the dominant normal axis) for the rest; seamless wrap tiling, 1:1 in metres"""
+    fine, brush, ppm = sw
+    H, W = fine.shape
+
+    def look(u, v):
+        x = np.mod(np.round(u * ppm).astype(np.int64), W)
+        y = np.mod(np.round(-v * ppm).astype(np.int64), H)
+        return fine[y, x], brush[y, x]
+    if name in CYL:
+        return look(ang(p) * CYL[name], p[:, 2])
+    w = np.abs(n) ** 4
+    w = w / np.maximum(w.sum(1, keepdims=True), 1e-9)
+    fx, bx = look(p[:, 1], p[:, 2])
+    fy, by = look(p[:, 0], p[:, 2])
+    fz, bz = look(p[:, 0], p[:, 1])
+    return fx * w[:, 0] + fy * w[:, 1] + fz * w[:, 2], bx * w[:, 0] + by * w[:, 1] + bz * w[:, 2]
+
+
+PROJ_PARTS = ("cloak", "tabard")     # the front/back projection registers on these (big, plain areas); elsewhere
+# it landed neighbouring features (ghost bosses and band stripes on the mantle, the rim's shadow blotching the
+# hood): swatch brushwork only
+AO_SKIP = ("sleeves", "forearms", "cuffs", "mitt_L", "mitt_R", "staff", "staff_cap", "lantern", "lantern_collar",
+           "lantern_roof", "lantern_resin", "lantern_bezel",
+           "hood_in")
+
+
+def contact_ao(obj, P, N, part, names, cell=0.016, nray=28, dist=0.30, log=print):
+    """occlusion BETWEEN parts on the assembled rest mesh (the bake explodes the parts apart, so a mantle never
+    shadowed the coat under it): rays from every 1.6 cm surface cell, the arms and the staff left out (they move);
+    up-facing rays weigh more (a painted top light). Returns (size, size) 0..1 (1 = open)."""
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    me = obj.data
+    pop = project.poly_parts(me, "vale_part")
+    skip = {i for i, nm in enumerate(names) if nm in AO_SKIP}
+    polys = [tuple(pp.vertices) for i, pp in enumerate(me.polygons) if int(pop[i]) not in skip]
+    bvh = BVHTree.FromPolygons([v.co.copy() for v in me.vertices], polys)
+    have = part >= 0
+    p, nn = P[have], N[have]
+    key = np.floor(p / cell).astype(np.int64)
+    key = (key[:, 0] + 512) * 1048576 + (key[:, 1] + 512) * 1024 + (key[:, 2] + 512)
+    uq, inv = np.unique(key, return_inverse=True)
+    cnt = np.bincount(inv)
+    Pm = np.stack([np.bincount(inv, p[:, i]) for i in range(3)], 1) / cnt[:, None]
+    Nm = np.stack([np.bincount(inv, nn[:, i]) for i in range(3)], 1)
+    Nm /= np.maximum(np.linalg.norm(Nm, axis=1, keepdims=True), 1e-9)
+    k = np.arange(nray) + 0.5
+    r = np.sqrt(k / nray)
+    th = math.pi * (1 + 5 ** 0.5) * k
+    loc = np.stack([r * np.cos(th), r * np.sin(th), np.sqrt(1 - r * r)], 1)       # cosine-weighted hemisphere
+    ao = np.ones(len(uq))
+    for i in range(len(uq)):
+        fr = sdf.frame(Nm[i])
+        D = loc @ fr
+        o = Vector(Pm[i] + Nm[i] * 0.008)
+        occ = tot = 0.0
+        for d in D:
+            w = 0.55 + 0.45 * max(d[2], 0.0)
+            tot += w
+            hit = bvh.ray_cast(o, Vector(d), dist)
+            if hit[0] is not None:
+                occ += w * (1.0 - hit[3] / dist) ** 0.6
+        ao[i] = 1.0 - occ / tot
+    # a soft painted shadow, never speckle: a 3D low-pass over the cells (the 28-ray estimate is noisy per cell)
+    ao = np.clip(lowpass3d(Pm, ao, 0.028, passes=1), 0.0, 1.0)
+    out = np.ones(part.shape)
+    out[have] = ao[inv]
+    log(f"brightwick: contact AO on {len(uq)} cells")
+    return out
+
+
+def apply_concept(col, pc, w, P, role, sw=None):
+    """lay the concept over the painted base: its brush strokes (luminance against a 1.8 cm 3D low-pass), its
+    painted fold light (1.8 cm against 7.5 cm) and its local colour breakup, where the plate sees the texel"""
+    k1, k2, k3 = KCON.get(role, (0.6, 0.4, 0.3))
+    if sw is not None:                       # the swatch's brushwork, gentle (its pixel grain is not paint)
+        sw = (1.0 + 0.45 * (sw[0] - 1.0), sw[1])
+    ww = smooth(0.30, 0.75, w)
+    if (ww > 0.01).any():                    # soft projection edges: never a stair-stepped seam
+        ww = np.clip(lowpass3d(P, ww, 0.016, passes=1), 0.0, 1.0)
+    keep = ww > 0.5
+    if keep.sum() < 40:
+        if sw is not None:                                     # the concept's brushwork from its swatch only
+            fine, brush = sw
+            col = col * ((1 + k1 * (fine - 1)) * (1 + 0.9 * k2 * (brush - 1)))[:, None]
+        return col, 0.0
+    Lp = pc @ LUMA + 2e-3
+    LPs = lowpass3d(P, Lp, 0.018, keep)
+    # consistency: where the plate paints a value or hue far from this part's own typical paint, the plate shows
+    # ANOTHER material there (a misregistered neighbour: an iron dome over the mantle, a glow): drop it
+    med = float(np.median(LPs[keep]))
+    chs = pc / Lp[:, None]
+    chm = np.median(chs[keep], axis=0)
+    off = np.abs(np.log(np.maximum(LPs, 1e-4) / max(med, 1e-4))) + 1.5 * np.abs(chs - chm[None]).max(1)
+    ww = ww * smooth(0.75, 0.45, off)
+    keep = ww > 0.5
+    if keep.sum() < 40:
+        if sw is not None:
+            fine, brush = sw
+            col = col * ((1 + k1 * (fine - 1)) * (1 + 0.9 * k2 * (brush - 1)))[:, None]
+        return col, 0.0
+    LPs = lowpass3d(P, Lp, 0.018, keep)
+    LPl = lowpass3d(P, Lp, 0.075, keep, passes=2)
+    strokes = np.clip(Lp / np.maximum(LPs, 1e-4), 0.70, 1.36)
+    light = np.clip(LPs / np.maximum(LPl, 1e-4), 0.78, 1.28)
+    ch = pc / Lp[:, None]
+    chl = np.stack([lowpass3d(P, ch[:, i], 0.05, keep) for i in range(3)], 1)
+    dch = np.clip(ch / np.maximum(chl, 1e-4), 0.85, 1.18)
+    if sw is not None:                                         # unseen texels: the swatch's brushwork
+        fine, brush = sw
+        strokes = strokes * ww + fine * (1 - ww)
+        light = light * ww + (1 + 0.9 * (brush - 1)) * (1 - ww)
+        ww = np.ones_like(ww)
+    f = (1 + ww * k1 * (strokes - 1)) * (1 + ww * k2 * (light - 1))
+    col = col * f[:, None] * (1 + smooth(0.30, 0.75, w)[:, None] * k3 * (dch - 1))
+    return col, float(keep.mean())
+
+
+def _armature_of(obj):
+    for m in obj.modifiers:
+        if m.type == "ARMATURE" and m.object is not None:
+            return m.object
+    return obj.parent if obj.parent and obj.parent.type == "ARMATURE" else None
+
+
+def posed_coords(obj, pose: dict) -> np.ndarray:
+    """vertex positions of the skinned `obj` with its armature in `pose` (the armature is reset after)"""
+    arm = _armature_of(obj)
+    anim.apply_pose(arm, pose)
+    dg = bpy.context.evaluated_depsgraph_get()
+    eo = obj.evaluated_get(dg)
+    me = eo.to_mesh()
+    co = np.empty(len(me.vertices) * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", co)
+    mw = np.array(obj.matrix_world)
+    eo.to_mesh_clear()
+    anim.apply_pose(arm, {})
+    co = co.reshape(-1, 3)
+    return co @ mw[:3, :3].T + mw[:3, 3]
+
+
+def yawed(co: np.ndarray, deg: float) -> np.ndarray:
+    a = math.radians(deg)
+    R = np.array([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]])
+    return co @ R.T
+
+
+def vis_side(obj, plates, side, step=2, part_attr="vale_part"):
+    """first-hit depth (y) and part id per `step`-th plate pixel, ray-cast along +Y (front) / -Y (back) against
+    the mesh as it is now (posed)"""
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    me = obj.data
+    verts = [v.co.copy() for v in me.vertices]
+    bvh = BVHTree.FromPolygons(verts, [tuple(p.vertices) for p in me.polygons])
+    pop = project.poly_parts(me, part_attr)
+    co = np.array([v[:] for v in verts])
+    W, H = plates.size
+    y0, d = (-50.0, Vector((0, 1, 0))) if side == "front" else (50.0, Vector((0, -1, 0)))
+    gx = np.arange(0, W, step) + step * 0.5
+    gy = np.arange(0, H, step) + step * 0.5
+    dep = np.full((len(gy), len(gx)), np.nan, dtype=np.float32)
+    pid = np.full((len(gy), len(gx)), -1, dtype=np.int16)
+    x, _ = plates.to_world(side, gx, np.zeros_like(gx))
+    xs = np.nonzero((x > co[:, 0].min() - 0.02) & (x < co[:, 0].max() + 0.02))[0]
+    _, zz = plates.to_world(side, np.zeros_like(gy), gy)
+    zs = np.nonzero((zz > co[:, 2].min() - 0.02) & (zz < co[:, 2].max() + 0.02))[0]
+    for j in zs:
+        zj = float(zz[j])
+        for i in xs:
+            hit = bvh.ray_cast(Vector((float(x[i]), y0, zj)), d)
+            if hit[0] is not None:
+                dep[j, i] = hit[0].y
+                pid[j, i] = pop[hit[2]]
+    return dep, pid
+
+
+PROJ_SIDE = {"front": ("tabard",), "back": ("cloak",)}   # where each plate registers cleanly
+PROJ_XMAX = {"front": 0.30, "back": 0.30}   # |x| window: outside it the concept paints arms, hands, the staff
+
+
+def posed_projection(spec, obj, size, part_attr, cfg, log=print, names=None):
+    """The graded concept plates projected onto the mesh in the concept's pose (paint pose; the front view
+    turned by the concept's yaw): per texel the plate colour (linear) and a weight = it faces that plate x the
+    plate sees it first x the plate pixels around it belong to the same part x inside the concept's figure."""
+    cache = os.path.join(scene.CACHE_DIR, "concept")
+    plates = project.Plates(cache, cfg["concept"], cfg["height"])
+    mask = project.load_rgb(os.path.join(cache, f"{cfg['concept']}_mask.png"))[..., 0] > 0.5
+    for _ in range(4):                                       # erode: the figure's edge pixels are anti-aliased
+        mask = mask & np.roll(mask, 1, 0) & np.roll(mask, -1, 0) & np.roll(mask, 1, 1) & np.roll(mask, -1, 1)
+    me = obj.data
+    rest = np.empty(len(me.vertices) * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", rest)
+    posed = posed_coords(obj, paint_pose(spec))
+    mwi = np.linalg.inv(np.array(obj.matrix_world))
+
+    def set_co(world):
+        loc = world @ mwi[:3, :3].T + mwi[:3, 3]
+        me.vertices.foreach_set("co", loc.astype(np.float32).ravel())
+        me.update()
+    acc = np.zeros((size, size, 3))
+    wsum = np.zeros((size, size))
+    wmax = np.zeros((size, size))
+    yaw = spec.F["paint"]["yaw"]
+    try:
+        for side, co in (("front", yawed(posed, yaw)), ("back", posed)):
+            set_co(co)
+            mp = project.rasterize(obj, size, part_attr)
+            dep, pid = vis_side(obj, plates, side, 2, part_attr)
+            have = mp["part"] >= 0
+            p = mp["P"][have].astype(np.float64)
+            nn = mp["N"][have].astype(np.float64)
+            k = mp["part"][have].astype(np.int64)
+            px, py = plates.to_px(side, p[:, 0], p[:, 2])
+            c = project.bilinear(plates.img[side], px, py)
+            hh, wd = dep.shape
+            j = np.clip((py / 2).astype(np.int64), 0, hh - 1)
+            i = np.clip((px / 2).astype(np.int64), 0, wd - 1)
+            d = dep[j, i]
+            if side == "front":
+                vis = p[:, 1] <= np.nan_to_num(d, nan=1e9) + 0.015
+                face = -nn[:, 1]
+            else:
+                vis = p[:, 1] >= np.nan_to_num(d, nan=-1e9) - 0.015
+                face = nn[:, 1]
+            same = pid[j, i] == k
+            for dj, di in ((4, 0), (-4, 0), (0, 4), (0, -4)):
+                same &= pid[np.clip(j + dj, 0, hh - 1), np.clip(i + di, 0, wd - 1)] == k
+            Hm, Wm = mask.shape
+            inside = mask[np.clip(py.astype(np.int64), 0, Hm - 1), np.clip(px.astype(np.int64), 0, Wm - 1)]
+            w = smooth(0.12, 0.50, face) * vis * same * inside
+            if names is not None:
+                ok_part = np.isin(np.array(names, dtype=object)[np.clip(k, 0, len(names) - 1)], PROJ_SIDE[side])
+                w = w * ok_part * smooth(PROJ_XMAX[side], PROJ_XMAX[side] - 0.04, np.abs(p[:, 0]))
+            acc[have] += project._lin(np.clip(c, 0, 1)) * w[:, None]
+            wsum[have] += w
+            wmax[have] = np.maximum(wmax[have], w)
+            log(f"brightwick: {side} plate covers {100.0 * (w > 0.5).mean():.0f} % of the texels")
+    finally:
+        me.vertices.foreach_set("co", rest)
+        me.update()
+    proj = acc / np.maximum(wsum, 1e-6)[..., None]
+    dbg = os.path.join(scene.CACHE_DIR, "brightwick_paint")              # review maps (not shipped)
+    os.makedirs(dbg, exist_ok=True)
+    project.save_rgb(np.clip(project._srgb(proj), 0, 1) * wmax[..., None], os.path.join(dbg, f"{spec.ID}_proj.png"))
+    return proj, wmax
+
+
+def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=None):
     maps = project.rasterize(obj, size, part_attr)
     P, N, part = maps["P"].astype(np.float64), maps["N"].astype(np.float64), maps["part"]
     mw = np.array(obj.matrix_world)
     if not np.allclose(mw, np.eye(4), atol=1e-6):
         P = P @ mw[:3, :3].T + mw[:3, 3]
         N = N @ np.linalg.inv(mw[:3, :3])
+    proj = wproj = None
+    sws = {}
+    if cfg is not None:
+        try:
+            proj, wproj = posed_projection(spec, obj, size, part_attr, cfg, log, names=names)
+            sws = load_swatches(spec, cfg)
+        except Exception as e:                    # never ship a crash for a paint layer: log it loudly
+            log(f"WARNING brightwick: concept projection failed ({e!r}); painted base only")
+    cao = contact_ao(obj, P, N, part, names, log=log)
     out = np.zeros((size, size, 3), dtype=np.float32)
+    shares = {}
     for k in np.unique(part[part >= 0]):
         name = names[int(k)]
         role, grid = spec.parts_info.get(name, ("cloth", None))
         sel = part == k
         p, n = P[sel], N[sel]
         if grid is not None:
-            p, g, lap, occ = surface_fields(grid, p, n)
+            p2, g, lap, occ = surface_fields(grid, p, n)
+            # (fix pass 5) the finite-difference Laplacian of the trilinear SDF grid steps at every voxel layer:
+            # on the smooth felt dome / mantle the fold paint drew those layers as horizontal strata. Low-pass it
+            lap = lowpass3d(p2, lap, 0.014, passes=2)
+            occ = lowpass3d(p2, occ, 0.010, passes=1)
         else:
-            g, lap, occ = n, np.zeros(len(p)), np.zeros(len(p))
-        out[sel] = paint_part(spec, name, role, p, g, lap, occ)
+            p2, g, lap, occ = p, n, np.zeros(len(p)), np.zeros(len(p))
+        col = paint_part(spec, name, role, p2, g, lap, occ)
+        if name == "hood":
+            col = ink_hollow(spec, p, n, col)
+        if role != "ink":                                                    # contact shadow between parts
+            lo_ = 0.62 if name == "hood" else 0.30        # (the hood's decimated low dips into the collar: no dark slivers)
+            col = col * (lo_ + (1 - lo_) * cao[sel] ** 1.6)[:, None]
+        if proj is not None and role != "ink":
+            key = SWATCH_OF[spec.faction].get(name)     # the concept's brushwork on every painted part
+            sw = swatch_detail(sws[key], name, p, n) if key in sws else None
+            wp = wproj[sel] if name in PROJ_PARTS else np.zeros(int(sel.sum()))
+            if name == "tabard":           # the concept's cowl / mantle edge sits over the stole's top: no squiggles
+                wp = wp * (1 - smooth(1.02, 1.07, p[:, 2]))
+            col, sh = apply_concept(col, proj[sel], wp, p, role, sw)
+            shares[name] = round(sh, 2)
+        out[sel] = col
+    if proj is not None:
+        dbg = os.path.join(scene.CACHE_DIR, "brightwick_paint")
+        project.save_rgb(np.clip(project._srgb(np.clip(out, 0, 1)), 0, 1), os.path.join(dbg, f"{spec.ID}_paint.png"))
     iy, ix = project.nearest_index(part >= 0)
     out = out[iy, ix]
-    log(f"brightwick: painted from the sculpt ({len(np.unique(part[part >= 0]))} parts)")
-    return project._srgb(out).astype(np.float32), maps
+    log(f"brightwick: painted from the sculpt + the concept ({len(shares)} parts; concept share {shares})")
+    spec.paint_shares = shares
+    return project._srgb(np.clip(out, 0, 1)).astype(np.float32), maps
 
 
 # ── motion ───────────────────────────────────────────────────────────────────────────────────────────
@@ -1087,7 +2721,8 @@ def stance_feet(kx=0.03):
 
 
 GUARD_R = (0.06, -0.50, -0.72)          # right wrist: low in front of the right hip
-GUARD_STAFF = (0.78, -0.14, 0.60)       # staff diagonal: lantern up on the wick's left, slightly forward
+GUARD_STAFF = (0.82, -0.08, 0.57)       # staff diagonal: lantern up on the wick's left, a little forward and well
+# out to the side (seen from a back three-quarter it stands clear of the hood, never on its axis)
 
 
 def guard_pose() -> dict:
@@ -1107,80 +2742,114 @@ def paint_pose(spec) -> dict:
     return p
 
 
-def attack_poses() -> tuple:
-    """the slam's blocked poses (wind, hit, follow): the staff swings up over the hood, then the lantern comes
-    down IN FRONT, the staff ~35 deg below level reaching for a target 1.8 m out, the hood still facing it"""
-    wind = anim.merge(anim.P(hips=(-5, 6, 0), spine=(-7, 8, 0), chest=(-9, 8, 0), neck=(5, -5, 0), head=(7, -7, 0)),
-                      {"hips_loc": (0.0, 0.035, -0.02), "ik": stance_feet()},
-                      hold((0.18, -0.42, -0.42), (0.18, 0.34, 0.92), pole_r=(-0.9, 0.2, -0.4), pole_l=(0.9, 0.1, -0.2),
-                           grip=0.50))
-    hit = anim.merge(anim.P(hips=(12, -6, 0), spine=(9, -6, 0), chest=(7, -6, 0), neck=(-9, 4, 0), head=(-13, 5, 0)),
-                     {"hips_loc": (0.0, -0.07, -0.075)},
-                     hold((0.30, -0.80, -0.30), (0.20, -0.82, -0.54), pole_r=(-0.8, 0.3, -0.5), pole_l=(0.9, 0.3, -0.4),
-                          grip=0.42))
-    hit["ik"].update(anim.feet(l=(0.03, -0.14, 0.0), r=(-0.03, 0.05, 0.0), yl=6, yr=-8))
-    fol = anim.merge(hit, anim.P(hips=(14, -6, 0), spine=(10, -6, 0), chest=(8, -6, 0)),
-                     {"hips_loc": (0.0, -0.08, -0.085)},
-                     hold((0.30, -0.80, -0.36), (0.20, -0.80, -0.58), pole_r=(-0.8, 0.3, -0.5), pole_l=(0.9, 0.3, -0.4),
-                          grip=0.42))
-    return wind, hit, fol
+def hemmed(pose: dict, k: float = 0.7, extra=(0.0, 0.0, 0.0)) -> dict:
+    """key x_hem_1 (the lower bell) to follow the hips' turn and lean (k of the hips' euler) + `extra` (deg)"""
+    p = dict(pose)
+    h = p.get("hips", (0.0, 0.0, 0.0))
+    p[HEM] = tuple(k * c + e for c, e in zip(h, extra))
+    return p
+
+
+def hem_clip(fn, k=0.7):
+    return lambda t: hemmed(fn(t), k)
 
 
 def clips(spec, skel, ctx=None) -> dict:
     out = {}
     g = guard_pose()
 
-    # IDLE (80 f): slow heave, the staff steady on the diagonal, crown level, a half-step settle per loop
-    N = 80
+    # IDLE (90 f): a slow heavy breath (chest and shoulders rise, the hips settle), the staff swaying a little on
+    # its diagonal, the hood turning to scan the lane once, the crown level, and a half-step settle per loop
+    N = 90
 
     def idle(t):
-        b = anim.osc(t, 2)
+        b = anim.osc(t, 2)                                   # breath, twice per loop
         s = anim.osc(t, 1, 0.1)
-        d = anim.P(chest=(1.4 * b, 0, 0), spine=(0.6 * b, 0, 0.5 * s), neck=(-1.0 * b, 0, 0), head=(-0.5 * b, 0, 0),
-                   hips=(0, 0, -0.8 * s))
+        scan = math.sin(2 * math.pi * (t - 0.15)) * smooth(0.0, 0.25, math.sin(math.pi * t) ** 2)
+        d = anim.P(chest=(2.6 * b, 0, 0), spine=(1.2 * b, 1.5 * s, 0.6 * s), neck=(-1.8 * b, 3.0 * scan, 0),
+                   head=(-1.0 * b, 9.0 * scan, 0), hips=(0.4 * b, -1.0 * s, -0.8 * s),
+                   shoulder_L=(0, 0, 1.6 * b), shoulder_R=(0, 0, -1.6 * b))
         p = anim.add(g, d)
-        # half-step: the right foot lifts and resettles 3 cm wider in the first half, back in the second
         u = max(0.0, math.sin(2 * math.pi * t))
-        lift = 0.03 * max(0.0, math.sin(4 * math.pi * t)) if t < 0.5 else 0.0
+        lift = 0.035 * max(0.0, math.sin(4 * math.pi * t)) if t < 0.5 else 0.0
         ik = dict(p["ik"])
-        ik["foot.R"] = FootTarget((-0.03 - 0.025 * u, 0.03, lift), 0.0, -8 - 4 * u)
-        ik["hand.R"] = HandTarget(rel=(GUARD_R[0], GUARD_R[1], GUARD_R[2] + 0.012 * b), pole=(-0.9, 0.3, -0.4))
+        ik["foot.R"] = FootTarget((-0.03 - 0.03 * u, 0.03, lift), 0.0, -8 - 5 * u)
+        ik["hand.R"] = HandTarget(rel=(GUARD_R[0], GUARD_R[1], GUARD_R[2] + 0.02 * b), pole=(-0.9, 0.3, -0.4))
+        sw = 0.05 * anim.osc(t, 1, 0.3)
+        ik["aim.R"] = Aim((GUARD_STAFF[0] - sw, GUARD_STAFF[1] - 0.6 * sw, GUARD_STAFF[2] + 0.4 * sw))
         p["ik"] = ik
-        return anim._with_hips(p, (0.006 * s, 0.0, -0.006 * (0.5 + 0.5 * b)))
-    out["idle"] = anim.Clip("idle", N, True, anim.drag(idle, N, {"head": 2.0, "neck": 1.0}, loop=True))
+        return hemmed(anim._with_hips(p, (0.008 * s, 0.0, -0.014 * (0.5 + 0.5 * b))), 0.6)
+    out["idle"] = anim.Clip("idle", N, True, anim.drag(idle, N, {"head": 2.5, "neck": 1.5}, loop=True))
 
-    # RUN: a heavy rolling stride at 3.3 m/s under the bell (planted foot exact), the staff steady on the diagonal
+    # RUN: a long, heavy rolling stride at 3.3 m/s (planted foot exact), the staff steady on the diagonal
     out["run"] = run_clip(spec, skel, g)
 
-    # ATTACK1 (30 f, impact at 40 % = 0.4 s windup): the staff swings up over the hood, then the lantern slams
-    # down in front (forward of the boots, toward a target 1.8 m out), then recovers to the diagonal
-    wind, hit, fol = attack_poses()
-    keys = anim.strike_keys(spec.MOTION, anim.merge(g, wind), anim.merge(g, hit), anim.merge(g, fol), guard_pose=g)
-    over = (0.30, -0.30, 0.90)                     # the lantern goes over the top, not round the side
-    keys = [(t, _with_aim(p, over) if abs(t - 0.34) < 1e-6 else p, e) for t, p, e in keys]
-    fn = anim.keyed(keys)
-    out["attack1"] = anim.Clip("attack1", 30, False, anim.drag(fn, 30, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+    # ATTACK1 (30 f, impact at 40 % = the 0.4 s windup): a crouch with the hood dipping, the staff swung up over
+    # the LEFT shoulder (the lantern high and well off the hood's axis), then slammed down in front (the lantern on
+    # the ground ~1.2 m out, the body bent over it), an impact hold, a lift and a recovery to the diagonal by way of
+    # a raised staff (never swung out level)
+    fn = anim.keyed(attack_keys(g))
     objs = []
+    out["attack1"] = anim.Clip("attack1", 30, False, hem_clip(anim.drag(fn, 30, {"head": 1.5, "neck": 1.0}), 0.75),
+                               impact=anim.IMPACT)
     if ctx is not None:
         objs = [o for o in (bpy.data.objects.get(spec.ID), bpy.data.objects.get(f"{spec.ID}_accent")) if o is not None]
         # the lantern lands ON the ground at the impact, never through it (the staff turns up about the fists)
         out["attack1"] = ground_solve(out["attack1"], ctx.info.armature, objs, body=False)
 
-    # DEATH (60 f): recoil -> sinks onto the right knee, leaning on the staff planted foot-down beside it (lantern
-    # up) -> holds -> slides sideways off the staff into a curled heap, the staff and its lantern on the ground
-    # beside it; ground-solved on the skinned mesh (nothing below z 0)
+    # DEATH (48 f): recoil -> down on the right knee, leaning on the staff planted out to the side -> holds ->
+    # the staff slides away and the wick folds forward onto its knees and down, the hood bowed to the ground, the
+    # cloak PILED under it (x_hem_1 keeps the hem on the ground), the staff lying beside it; ground-solved
     death = death_clip(spec, skel, g)
     if objs:
         death = ground_solve(death, ctx.info.armature, objs)
     out["death"] = death
-    # the rest of the required set (CONTRACT §12) the renderer never plays for a minion: short stand-ins
-    # (the strike reused at 10 frames, the run, a breathing loop) instead of ~50 KB of GLB for unused clips
+    # the rest of the required set (CONTRACT §12) the renderer never plays for a minion (the crowd plays idle,
+    # run, attack1 and death): STATIC guard-pose stand-ins at the shortest legal length (0.2 s; strikes 10 frames
+    # for the 40 % impact rule) - constant channels collapse to two keys in the optimizer (fix pass 5: the old
+    # moving stand-ins cost ~60 KB of the GLB for clips nobody sees)
+    still = hemmed(g)
     for name in ("attack2", "cast_a1", "cast_a2", "cast_a3", "cast_ult"):
-        out[name] = anim.Clip(name, 10, False, out["attack1"].sample, impact=anim.IMPACT)
-    for name in ("recall", "idle_lobby", "channel", "stunned", "victory"):
-        out[name] = anim.Clip(name, 30, True, lambda t: anim.add(g, anim.P(chest=(1.2 * anim.osc(t, 1), 0, 0))))
-    out["dash"] = anim.Clip("dash", 16, False, out["run"].sample)
+        out[name] = anim.Clip(name, 10, False, lambda t: still, impact=anim.IMPACT)
+    for name in ("recall", "idle_lobby", "channel", "stunned", "victory", "dash"):
+        out[name] = anim.Clip(name, 6, name != "victory" and name != "dash", lambda t: still)
     return out
+
+
+def attack_keys(g) -> list:
+    dip = anim.merge(g, anim.P(hips=(7, 0, 0), spine=(5, 0, 0), chest=(5, 0, 0), neck=(4, 0, 0), head=(12, 0, 0)),
+                     {"hips_loc": (0.0, 0.0, -0.05)},
+                     hold((GUARD_R[0], GUARD_R[1] + 0.04, GUARD_R[2] - 0.02), (0.74, -0.30, 0.60)))
+    wind = anim.merge(g, anim.P(hips=(-6, 10, 0), spine=(-8, 8, 0), chest=(-10, 6, 0), neck=(4, -4, 0),
+                                head=(6, -6, 0)),
+                      {"hips_loc": (0.0, 0.045, 0.0)},
+                      hold((0.30, -0.24, 0.26), (0.80, 0.22, 0.56), pole_r=(-0.9, 0.1, -0.2), pole_l=(0.9, 0.1, -0.1),
+                           grip=0.48))
+    coil = anim.merge(wind, anim.P(hips=(-7, 12, 0), spine=(-10, 9, 0), chest=(-12, 7, 0)),
+                      hold((0.31, -0.20, 0.30), (0.78, 0.30, 0.55), pole_r=(-0.9, 0.1, -0.2), pole_l=(0.9, 0.1, -0.1),
+                           grip=0.48))
+    hit = anim.merge(g, anim.P(hips=(16, -4, 0), spine=(13, -4, 0), chest=(11, -4, 0), neck=(-8, 2, 0),
+                               head=(-12, 2, 0)),
+                     {"hips_loc": (0.0, -0.09, -0.085)},
+                     hold((0.20, -0.86, -0.32), (0.16, -0.86, -0.48), pole_r=(-0.8, 0.3, -0.5), pole_l=(0.9, 0.3, -0.4),
+                          grip=0.42))
+    hit["ik"].update(anim.feet(l=(0.03, -0.17, 0.0), r=(-0.03, 0.06, 0.0), yl=6, yr=-8))
+    drive = anim.lerp_pose_w(coil, hit, 0.35, {"hips": 0.7, "spine": 0.55, "chest": 0.4, "hips_loc": 0.6})
+    hold_ = anim._with_hips(anim.merge(hit, hold((0.21, -0.86, -0.36), (0.16, -0.86, -0.52), pole_r=(-0.8, 0.3, -0.5),
+                                                 pole_l=(0.9, 0.3, -0.4), grip=0.42)), (0.0, 0.0, -0.012))
+    lift = anim.merge(hit, anim.P(hips=(10, -3, 0), spine=(8, -3, 0), chest=(6, -3, 0), head=(-6, 1, 0)),
+                      {"hips_loc": (0.0, -0.06, -0.06)},
+                      hold((0.18, -0.80, -0.20), (0.24, -0.84, -0.30), pole_r=(-0.8, 0.3, -0.5), pole_l=(0.9, 0.3, -0.4),
+                           grip=0.45))
+    # the recovery swings the lantern UP out of the ground (never out level like a spear thrust), then settles
+    rise = anim.merge(g, anim.P(hips=(6, -2, 0), spine=(4, -1, 0), chest=(2, 0, 0), head=(-3, 0, 0)),
+                      {"hips_loc": (0.0, -0.04, -0.05)},
+                      hold((0.12, -0.70, -0.42), (0.50, -0.56, 0.66), grip=0.52))
+    rec = anim.merge(g, anim.P(hips=(4, -1, 0), spine=(3, 0, 0), chest=(3, 0, 0)), {"hips_loc": (0.0, -0.02, -0.04)},
+                     hold((0.10, -0.62, -0.52), (0.62, -0.40, 0.68), grip=GRIP_L))
+    return [(0.0, g, "linear"), (0.12, dip, "inout"), (0.27, wind, "inout"), (0.33, coil, "out"), (0.365, drive, "in"),
+            (anim.IMPACT, hit, "accel"), (0.47, hold_, "out"), (0.58, lift, "inout"), (0.68, rise, "out"),
+            (0.82, rec, "inout"), (1.0, g, "settle")]
 
 
 def _with_aim(pose: dict, d) -> dict:
@@ -1190,20 +2859,20 @@ def _with_aim(pose: dict, d) -> dict:
     return p
 
 
-RUN_FRAMES, RUN_CONTACT = 14, 0.34      # 0.47 s cycle: a 0.52 m stride stays under the hem
+RUN_FRAMES, RUN_CONTACT = 18, 0.30      # 0.6 s cycle: 3.3 steps/s of 0.99 m (a long heavy stride, not a scurry)
 
 
 def run_clip(spec, skel, g) -> anim.Clip:
     prof = spec.MOTION
     v = prof["run_ref_speed"]
     leg = spec.PROPORTIONS["leg"]
-    ks = leg / 0.86 * 0.80                                     # gen_run's swing (0.86 m leg), kept low under the bell
+    ks = leg / 0.86 * 0.85                                     # gen_run's swing (0.86 m leg), kept low under the bell
     c = RUN_CONTACT
     N = RUN_FRAMES
     T = N / anim.FPS
     Ls = v * c * T
-    swing = [(0.00, Ls / 2, 0.0, -20.0), (0.18, Ls / 2 + 0.04 * ks, 0.13 * ks, -36.0), (0.42, 0.04 * ks, 0.20 * ks, -22.0),
-             (0.66, -Ls / 2 - 0.04 * ks, 0.13 * ks, -4.0), (0.86, -Ls / 2 - 0.015 * ks, 0.05 * ks, 7.0), (1.00, -Ls / 2, 0.0, 6.0)]
+    swing = [(0.00, Ls / 2, 0.0, -24.0), (0.18, Ls / 2 + 0.05 * ks, 0.15 * ks, -40.0), (0.42, 0.04 * ks, 0.22 * ks, -22.0),
+             (0.66, -Ls / 2 - 0.05 * ks, 0.14 * ks, -2.0), (0.86, -Ls / 2 - 0.02 * ks, 0.05 * ks, 8.0), (1.00, -Ls / 2, 0.0, 6.0)]
 
     def swing_at(s):
         for i in range(1, len(swing)):
@@ -1218,69 +2887,139 @@ def run_clip(spec, skel, g) -> anim.Clip:
         if q < c:
             uu = q / c
             y = -Ls / 2 + Ls * uu
-            pitch = 6.0 * (1 - anim.sine(min(1.0, uu / 0.25))) - 20.0 * max(0.0, (uu - 0.62) / 0.38) ** 1.6
+            pitch = 5.0 * (1 - anim.sine(min(1.0, uu / 0.25))) - 14.0 * max(0.0, (uu - 0.82) / 0.18) ** 1.6
             return (0.0, y, 0.0), pitch
         dy, dz, pitch = swing_at((q - c) / (1 - c))
         return (0.0, dy, dz), pitch
 
-    # heavy: a deep double bob (the weight drops on each contact), a rolling side-to-side sway, a forward lean
-    bob, drop, lean = 0.034, 0.05, 11.0
+    # heavy: the weight drops hard on each contact (a deep double bob), a rolling side-to-side sway and turn, a
+    # forward lean; the hood stays level (the neck counters the lean and the roll)
+    bob, drop, lean = 0.045, 0.085, 12.0
 
     def sample(t):
         q = t % 1.0
         fl, pl = foot_at(q)
         fr, pr = foot_at(q + 0.5)
         z = -drop - bob * math.cos(2 * math.pi * (2 * q - c)) * 0.5 - bob * 0.5
-        x = 0.022 * math.cos(2 * math.pi * (q - c / 2))
-        yaw = -7.0 * math.cos(2 * math.pi * q)
-        roll = 6.0 * math.sin(2 * math.pi * (q - c / 2))
+        x = 0.028 * math.cos(2 * math.pi * (q - c / 2))
+        yaw = -10.0 * math.cos(2 * math.pi * q)
+        roll = 7.0 * math.sin(2 * math.pi * (q - c / 2))
         p = anim.merge(anim.arms_relaxed(), anim.P(
             hips=(lean * 0.5, yaw, roll), spine=(lean * 0.3, -yaw * 0.5, -roll * 0.6),
-            chest=(lean * 0.2 + 2.0 * math.cos(4 * math.pi * q), -yaw * 0.4, -roll * 0.3),
+            chest=(lean * 0.2 + 2.5 * math.cos(4 * math.pi * q), -yaw * 0.4, -roll * 0.3),
             neck=(-lean * 0.5, 0, 0), head=(-lean * 0.45, 0, -roll * 0.3)))
-        bz = 0.018 * math.cos(4 * math.pi * (q - 0.08))
-        p = anim.merge(p, hold((GUARD_R[0], GUARD_R[1] - 0.04, GUARD_R[2] + bz), (0.72, -0.20, 0.66)))
+        bz = 0.022 * math.cos(4 * math.pi * (q - 0.08))
+        p = anim.merge(p, hold((GUARD_R[0], GUARD_R[1] - 0.04, GUARD_R[2] + bz), (0.77, -0.13, 0.63)))
         p["ik"]["foot.L"] = FootTarget((0.012 + fl[0], fl[1] - 0.02, fl[2]), pl, -3, 0, 0)
         p["ik"]["foot.R"] = FootTarget((-0.012 + fr[0], fr[1] - 0.02, fr[2]), pr, 3, 0, 0)
         p["hips_loc"] = (x, 0.02, z)
-        return p
+        return hemmed(p, 0.75)
     return anim.Clip("run", N, True, sample, meta={"run_ref_speed": v, "stride_m": round(v * T / 2, 3),
                                                      "cycle_s": round(T, 3)})
 
 
+DEATH_ROLL = -1.0           # sign of the hips' third Euler that tips the wick toward its LEFT (pose proto)
+HEM_LOC = "hem_loc"         # pose key: x_hem_1's offset (armature metres; keyed by this module's write_action wrap)
+
+
 def death_clip(spec, skel, g) -> anim.Clip:
-    N = 60
+    """recoil -> down on the right knee, leaning on the staff planted OUT TO THE SIDE and forward (the lantern
+    far from the head axis in every view: never a spire over the hood) -> holds -> the staff slips out to the
+    right and the wick SLIDES SIDEWAYS OFF IT (brief §3.4) and falls onto its LEFT SIDE: it ends lying on its
+    side, knees drawn a little, the left arm out on the ground ahead, the right arm thrown over with its fist
+    on the ground and the staff lying flat ahead, the hood and crown resting sideways on the ground (fix pass 5:
+    the old end knelt with the hood bowed to the ground, a prostration, never a death). The lower bell rides
+    x_hem_1, keyed to roll part way and shift with the body (`hem_loc`), so the coat folds at the waist and its
+    hem settles on the ground instead of a rigid tube lying on its side."""
+    N = 48
     hip_h = skel.rest_point("hips").z
     fk_arms = anim.arms_relaxed()
-    recoil = anim.merge(g, anim.P(hips=(-6, 0, 4), spine=(-8, 0, 0), chest=(-12, 4, 0), neck=(-8, 0, 0), head=(-12, 0, 0)),
+    rs = DEATH_ROLL
+    recoil = anim.merge(g, anim.P(hips=(-5, 0, 4), spine=(-6, 0, 0), chest=(-8, 4, 0), neck=(-4, 0, 0), head=(-8, 0, 0)),
                         {"hips_loc": (0.0, 0.05, -0.02)})
-    # down on the right knee inside the bell, leaning right onto the staff planted foot-down beside the right
-    # boot, the lantern up by the hood (the light stays high and visible)
-    kneel = anim.merge(fk_arms, anim.P(hips=(8, 0, 6), spine=(8, 0, 4), chest=(6, 0, 2), neck=(4, 0, 0), head=(12, 0, -4),
-                                       thigh_R=(18, 0, 4), shin_R=(-100, 0, 0), foot_R=(-10, 0, 0),
-                                       thigh_L=(78, 0, -4), shin_L=(-80, 0, 0), foot_L=(0, 0, 0)),
-                       {"ik": {"hand.R": HandTarget(rel=(-0.10, -0.30, -0.95), pole=(-0.9, 0.2, -0.3)),
-                               "aim.R": Aim((0.10, -0.22, 0.97)),
-                               "hand.L": HandTarget(to_prop=("prop.R", 0.62), pole=(0.9, 0.2, -0.5))}})
-    kneel["hips_loc"] = (-0.02, 0.0, -hip_h * 0.30)
-    sag = anim.add(kneel, anim.P(spine=(5, 0, 2), chest=(5, 0, 0), head=(8, 0, 0)))
-    sag["hips_loc"] = (-0.02, 0.0, -hip_h * 0.32)
-    # the slide: off the staff, sideways and forward to its left, into a kneeling heap: the knees stay under it
-    # (the bell folds at the hips, never a rigid slab on the ground), the torso and hood come down onto the
-    # ground ahead-left, the staff slips out ahead-right and lies on the ground with its lantern still lit
-    down = anim.merge(fk_arms, anim.P(hips=(52, 10, -22), spine=(16, 0, -6), chest=(14, 0, -4), neck=(6, 0, 4),
-                                      head=(10, 0, 10),
-                                      thigh_R=(70, 0, 6), shin_R=(-112, 0, 0), foot_R=(-30, 0, 0),
-                                      thigh_L=(78, 0, -4), shin_L=(-108, 0, 0), foot_L=(-30, 0, 0),
-                                      upper_arm_L=(64, 0, -6), forearm_L=(24, 0, 0)))
-    down["hips_loc"] = (0.10, -0.10, -hip_h * 0.5)
-    down["ik"] = {"hand.R": HandTarget(rel=(-0.10, -0.95, -0.05), pole=(-0.8, 0.2, -0.6)),
-                  "aim.R": Aim((-0.42, -0.90, -0.10))}
-    bounce = anim.add(down, anim.P(hips=(-4, 0, 3), spine=(-3, 0, 0), head=(-5, 0, 0)))
-    rest = anim.add(down, anim.P(head=(3, 0, 3), hips=(2, 0, 0)))
-    keys = [(0.0, g, "linear"), (0.12, recoil, "snap"), (0.34, kneel, "inout"), (0.52, sag, "inout"),
-            (0.78, down, "in"), (0.85, bounce, "out"), (0.93, rest, "inout"), (1.0, rest, "linear")]
-    return anim.Clip("death", N, False, anim.keyed(keys), meta={"settle": 0.80})
+    kneel = anim.merge(fk_arms, anim.P(hips=(5, 0, -5 * rs), spine=(6, 0, -5 * rs), chest=(6, 0, -3 * rs), neck=(4, 0, 0),
+                                       head=(8, 0, 2 * rs),
+                                       thigh_R=(14, 0, 4), shin_R=(-100, 0, 0), foot_R=(-10, 0, 0),
+                                       thigh_L=(62, 0, -4), shin_L=(-72, 0, 0), foot_L=(0, 0, 0),
+                                       upper_arm_L=(34, 0, -8), forearm_L=(34, 0, 0)),
+                       {"ik": {"hand.R": HandTarget(rel=(-0.42, -0.28, -0.86), pole=(-0.9, 0.2, -0.3)),
+                               "aim.R": Aim((-0.48, -0.46, 0.75))}})
+    kneel["hips_loc"] = (-0.04, 0.0, -hip_h * 0.31)
+    sag = anim.add(kneel, anim.P(spine=(6, 0, 0), chest=(6, 0, 0), head=(10, 0, 0)))
+    sag["hips_loc"] = (-0.04, 0.0, -hip_h * 0.34)
+    # the slip: the staff goes out from under it to the right, the body tips off it to its LEFT
+    slip = anim.merge(fk_arms, anim.P(hips=(8, 0, 38 * rs), spine=(4, 0, 8 * rs), chest=(2, 0, 6 * rs),
+                                      neck=(0, 0, 6 * rs), head=(2, 0, 8 * rs),
+                                      thigh_R=(36, 0, 8), shin_R=(-104, 0, 0), foot_R=(-10, 0, 0),
+                                      thigh_L=(50, 0, -8), shin_L=(-96, 0, 0), foot_L=(-10, 0, 0),
+                                      upper_arm_L=(64, 0, -24), forearm_L=(30, 0, 0)),
+                      {"ik": {"hand.R": HandTarget(rel=(-0.60, -0.40, -0.45), pole=(-0.9, 0.2, -0.4)),
+                              "aim.R": Aim((-0.86, -0.36, 0.20))}})
+    slip["hips_loc"] = (0.08, 0.0, -hip_h * 0.50)
+    # down: lying on its left side
+    fx, fy = DEATH_FIST
+    down = anim.merge(fk_arms, anim.P(hips=(DEATH_PITCH, 0, DEATH_ROLL_DEG * rs), spine=(4, 0, 4 * rs),
+                                      chest=(2, 0, 2 * rs), neck=(-4, 0, DEATH_HEAD * 0.45 * rs),
+                                      head=(-6, 0, DEATH_HEAD * 0.55 * rs),
+                                      thigh_R=(52, 0, 6), shin_R=(-74, 0, 0), foot_R=(-10, 0, 0),
+                                      thigh_L=(40, 0, -6), shin_L=(-62, 0, 0), foot_L=(-10, 0, 0)),
+                      {"ik": {"hand.R": HandTarget(pos=(fx, fy, 0.07), pole=(0.2, -0.3, 1.0)),
+                              "aim.R": Aim(DEATH_STAFF),
+                              "hand.L": HandTarget(pos=DEATH_LFIST, pole=(0.3, 0.4, -1.0))}})
+    down["hips_loc"] = (DEATH_HIPS[0], DEATH_HIPS[1], -(hip_h - DEATH_HIPS[2]))
+    hem_rot, hem_loc = hem_lying(skel, (DEATH_HIPS[0], DEATH_HIPS[1], DEATH_HIPS[2]))
+    down[HEM], down[HEM_LOC], down[HEM_SQ] = hem_rot, hem_loc, DEATH_SQ
+    slip[HEM] = tuple(0.35 * a for a in hem_rot)
+    slip[HEM_LOC] = tuple(0.35 * a for a in hem_loc)
+    slip[HEM_SQ] = tuple(0.35 * a for a in DEATH_SQ)
+    bounce = anim.add(down, anim.P(hips=(0, 0, -4 * rs), spine=(0, 0, -3 * rs), head=(0, 0, -6 * rs)))
+    bounce["hips_loc"] = (DEATH_HIPS[0], DEATH_HIPS[1], -(hip_h - DEATH_HIPS[2]) + 0.03)
+    rest = anim.add(down, anim.P(head=(2, 0, 2 * rs)))
+    keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.30, kneel, "inout"), (0.46, sag, "inout"),
+            (0.62, slip, "in"), (0.78, down, "in"), (0.85, bounce, "out"), (0.93, rest, "inout"), (1.0, rest, "linear")]
+    fn = anim.keyed(keys)
+    return anim.Clip("death", N, False, fn, meta={"settle": 0.78})
+
+
+def hem_lying(skel, hips):
+    """x_hem_1's rotation (bone euler, deg) and offset (armature m) that lay the lower bell along the drawn-up
+    thighs of the wick lying on its LEFT side: the bone's +Y (rest: up the bell) points from the hem's centre to
+    the hips, its +X (rest: the wick's left) points down into the ground"""
+    from mathutils import Matrix
+    hx, hy, hz = hips
+    d = np.array((DEATH_LEG[0], DEATH_LEG[1], 0.0))
+    d /= np.linalg.norm(d)
+    c = np.array((hx, hy, 0.0)) + d * DEATH_LEG[2]
+    c[2] = DEATH_LEG[3]
+    Y = np.array((hx, hy, hz)) - c
+    Y /= np.linalg.norm(Y)
+    X = np.array((0.0, 0.0, -1.0))
+    X = X - Y * (X @ Y)
+    X /= np.linalg.norm(X)
+    Z = np.cross(X, Y)
+    Mw = np.stack([X, Y, Z], 1)
+    R0 = np.array(skel.rest[HEM].to_3x3())
+    B = R0.T @ Mw
+    e = Matrix([list(r) for r in B]).to_euler("XYZ")
+    head = np.array(skel.rest[HEM].translation)
+    return tuple(math.degrees(a) for a in e), tuple(float(v) for v in (c - head))
+
+
+# the death's end pose (tuned with the pose proto): hips pitch / roll (deg), extra head roll toward the ground,
+# hips offset (x, y, final height), x_hem_1 roll (deg) + offset, right fist (x, y) on the ground, staff direction,
+# left fist on the ground ahead
+DEATH_PITCH, DEATH_ROLL_DEG, DEATH_HEAD = 14.0, 82.0, 26.0
+DEATH_HIPS = (0.22, 0.02, 0.40)
+# the lower bell lying: it follows the drawn-up thighs (from the hips toward the feet: forward and back toward the
+# right), its hem's centre DEATH_LEG[2] m from the hips and DEATH_LEG[3] m high, FLATTENED (x_hem_1 scale: its
+# local X, which lying on the left side points down, x (1 + DEATH_SQ[0]); spread front-back x (1 + DEATH_SQ[2])):
+# the coat lies flat over the legs, never a barrel on its side
+DEATH_LEG = (-0.74, -0.62, 0.38, 0.20)
+DEATH_SQ = (-0.30, 0.0, 0.12)
+HEM_SQ = "hem_sq"           # pose key: x_hem_1's scale - 1 (bone axes; 0 = rest)
+DEATH_FIST = (0.62, -0.50)
+DEATH_STAFF = (-0.40, -0.92, 0.0)
+DEATH_LFIST = (1.02, -0.42, 0.06)
 
 
 def ground_solve(clip: anim.Clip, arm, objs, exclude=("prop.R",), floor=0.0, log=print, body=True) -> anim.Clip:
@@ -1324,6 +3063,9 @@ def ground_solve(clip: anim.Clip, arm, objs, exclude=("prop.R",), floor=0.0, log
         q = dict(pose)
         hx, hy, hz = q.get("hips_loc", (0.0, 0.0, 0.0))
         q["hips_loc"] = (hx, hy, hz + float(d))
+        if HEM_LOC in q:                          # the lower bell moves with the body (the death's lying pose)
+            ex, ey, ez = q[HEM_LOC]
+            q[HEM_LOC] = (ex, ey, ez + float(d))
         out.append(q)
     settle = (clip.meta or {}).get("settle")
     settle_prop(skel, out, objs, int(round(settle * N)) if settle is not None else 10 * N, floor, log)
@@ -1404,7 +3146,7 @@ def _paint_object(obj, size, cfg, names, part_attr="vale_part", log=print, retur
     spec = PAINT.get(cfg.get("concept"))
     if spec is None:
         return _orig_paint_object(obj, size, cfg, names, part_attr=part_attr, log=log, return_maps=return_maps)
-    img, maps = paint_procedural(spec, obj, size, names, part_attr=part_attr, log=log)
+    img, maps = paint_hybrid(spec, obj, size, names, part_attr=part_attr, log=log, cfg=cfg)
     spec.paint_maps = (maps, list(names))
     return (img, maps) if return_maps else img
 
@@ -1413,22 +3155,29 @@ project.paint_object = _paint_object
 _orig_bind_part = pipeline.bind_part
 
 
-def bind_cloak(obj, arm, th_max=0.5):
-    """the bell rides the hips (spine, chest above the waist); the lower cloak follows the AVERAGE of the two
-    thighs (both sides alike, up to th_max at the hem): in the run the thighs swing opposite ways, so the hem
-    neither shears into a parallelogram nor tears open between the legs; when both thighs flex (kneeling, the
-    curled death) the bell folds at the hips instead of lying as a rigid slab"""
+HEM = "x_hem_1"
+
+
+def bind_cloak(obj, arm, th_max=0.40):
+    """The bell: the top rides the chest / spine / hips; the lower bell rides x_hem_1 (a root child keyed to
+    follow the hips' turn and lean), blending into the hips by height, so when the hips DROP the bell
+    compresses into a pile on the ground (the death, the kneel) instead of sinking through it or toppling as a
+    rigid tube. The FRONT of the lower bell leans on its own side's thigh (up to th_max at the hem, none at the
+    back): the striding knee never pokes through the coat, and kneeling the coat drapes forward over the knees."""
     obj.vertex_groups.clear()
-    G = {n: obj.vertex_groups.new(name=n) for n in ("hips", "spine", "chest", "thigh.L", "thigh.R")}
+    G = {n: obj.vertex_groups.new(name=n) for n in ("hips", "spine", "chest", "thigh.L", "thigh.R", HEM)}
     co = np.array([obj.matrix_world @ v.co for v in obj.data.vertices])
     z = co[:, 2]
     up1 = smooth(0.92, 1.10, z)
     up2 = smooth(1.10, 1.26, z)
-    th = th_max * (1.0 - smooth(0.15, 0.70, z))
-    sl = np.full(len(z), 0.5)
+    a = np.degrees(np.abs(np.arctan2(co[:, 0], -co[:, 1])))
+    front = 1.0 - smooth(40.0, 110.0, a)
+    th = th_max * front * (1.0 - smooth(0.12, 0.70, z))
+    sl = 0.5 + 0.5 * np.clip(co[:, 0] / 0.16, -1.0, 1.0)              # +X (its left) leans on thigh.L
+    hem = 1.0 - smooth(0.05, 0.62, z)
     rest = 1.0 - th
-    W = {"hips": rest * (1 - up1), "spine": rest * up1 * (1 - up2), "chest": rest * up1 * up2,
-         "thigh.L": th * sl, "thigh.R": th * (1 - sl)}
+    W = {HEM: rest * hem, "hips": rest * (1 - hem) * (1 - up1), "spine": rest * (1 - hem) * up1 * (1 - up2),
+         "chest": rest * (1 - hem) * up1 * up2, "thigh.L": th * sl, "thigh.R": th * (1 - sl)}
     for n, w in W.items():
         for i in np.nonzero(w > 1e-3)[0]:
             G[n].add([int(i)], float(w[i]), "REPLACE")
@@ -1553,6 +3302,52 @@ def _set_image_array(img, arr):
 bake.bake_asset = _bake_asset
 bake.gltf_material = _gltf_material
 bake.set_image_array = _set_image_array
+
+# x_hem_1's LOCATION (the death's lying pose): poses may carry `hem_loc` (armature metres, like hips_loc); the
+# common writer keys rotations + the hips' location only, so these wraps add the hem bone's location channel to
+# the action and to posed previews. Poses without the key (every other clip, every other build) are untouched.
+_orig_write_action = anim.write_action
+_orig_apply_pose = anim.apply_pose
+
+
+def _hem_locs(arm, poses):
+    if not any(HEM_LOC in p for p in poses) or HEM not in arm.data.bones:
+        return None
+    from mathutils import Vector
+    rest = arm.data.bones[HEM].matrix_local.to_3x3().transposed()
+    return ([rest @ Vector(p.get(HEM_LOC, (0.0, 0.0, 0.0))) for p in poses],
+            [tuple(1.0 + c for c in p.get(HEM_SQ, (0.0, 0.0, 0.0))) for p in poses])
+
+
+def _write_action(arm, name, poses, bones=None):
+    act = _orig_write_action(arm, name, poses, bones)
+    hl = _hem_locs(arm, poses)
+    if hl is not None:
+        cb = act.layers[0].strips[0].channelbag(act.slots[0], ensure=True)
+        n = len(poses)
+        for prop, vals in (("location", hl[0]), ("scale", hl[1])):
+            for i in range(3):
+                fc = anim._new_fcurve(cb, f'pose.bones["{HEM}"].{prop}', i, HEM)
+                fc.keyframe_points.add(n)
+                fc.keyframe_points.foreach_set("co", [c for f, l in zip(range(n), vals) for c in (f, l[i])])
+                fc.keyframe_points.foreach_set("interpolation", [1] * n)
+                fc.update()
+    return act
+
+
+def _apply_pose(arm, pose):
+    _orig_apply_pose(arm, pose)
+    if HEM in arm.pose.bones:
+        arm.pose.bones[HEM].scale = (1.0, 1.0, 1.0)
+    hl = _hem_locs(arm, [pose])
+    if hl is not None:
+        arm.pose.bones[HEM].location = hl[0][0]
+        arm.pose.bones[HEM].scale = hl[1][0]
+        bpy.context.view_layer.update()
+
+
+anim.write_action = _write_action
+anim.apply_pose = _apply_pose
 
 KINDS = [Brightwick]
 

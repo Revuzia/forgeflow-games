@@ -105,3 +105,236 @@ renders `art/renders/units/*brightwick*`.
 - 2026-10-20 16:20 lineup (game look): Aubade accent 5.7/6.4/7.3/6.1 %, Serenade 5.1/3.7/3.1/3.5 % (sides/back low);
   IoU A vs S 0.90 (>= 0.70), vs other kinds <= 0.62. Fixes: Serenade sash wraps round the waist (back + sides),
   windows 4 cm, boss lenses turned outward; Aubade bottom ramp darker + robe floor darkens to the hem (bottom 41).
+- 2026-10-20 16:41 builds (fix pass): Aubade 3778 tris / 347 KiB / accent 4.63 % (top 59.4 %); Serenade 4211 tris /
+  370 KiB / accent 5.94 % (top 63.3 %). Clip sheets / lineup / review sheet NOT regenerated (stale, 14:5x).
+
+## Fix pass 2 (second independent review: 8 major, 7 minor)
+- 2026-10-21 00:10 start. Review: (1) paint = flat procedural fill, not the concept projection; (2) Serenade cloak a
+  straight barrel with 12 staves + a sash hoop; (3) hood light a big flat disc (porthole / mouth); (4) Serenade
+  pauldrons small dark shards + a flat sawtooth mantle (not the concept's big domes + thick rounded mantle);
+  (5) decimation damage (cowl teeth, crumpled plates, ragged band, overhanging window caps, card collar);
+  (6) Serenade 4211 tris > 4.0k; (7) Aubade accent 4.63 % < 5 %; (8) death: the staff planted vertically behind
+  the pale hood (spire + hood line up); minors: stale evidence, paint smears, Aubade hood near-white + frost-lich
+  spikes, spear-like Aubade staff / orb-on-a-stick Serenade lantern, tabard spikes, drum cloaks, stiff clips.
+  Plan: A-line bells; game lows made by PROJECTING clean parametric grids onto each part's SDF (cloak, mantle,
+  crown band, pauldron domes: clean rows at every hem/edge, no decimation teeth); small deep hood glows;
+  Serenade dome pauldrons + thick mantle + caged four-pane lantern; Aubade blue-grey hood, blunt chalk points,
+  gnarled ash staff with a split root foot; paint = palette-anchored concept projection in the paint pose (the
+  concept's strokes and painted fold light kept, its mean colour moved to the palette) over a painterly
+  procedural base (fold light, edge wear, mottle, grain); death staff planted out to the side, leaning away.
+- 2026-10-21 00:30 geometry rebuilt: A-line `Bell` (radius AND depth ratio per height: the side view flares too;
+  Aubade +-0.33 -> +-0.43, Serenade +-0.29 -> +-0.40, measured on the plate masks), the front opening a wedge
+  (widens toward the hem); CLEAN LOWS projected onto the SDF instead of decimated (`lathe_low`: cloak, mantle,
+  cowl with a row on every hem point / opening wall / notch; `central_low`: the Serenade domes; `box_low`: each
+  Aubade chalk plate its own clean slab), explicit bands (crowns, gorget), torus collar, explicit tabard panel +
+  ribbon inlays. Serenade: bullet hood (capped frustum: the RoundCone's end sphere had lifted the crown to
+  1.76), big ironstone dome pauldrons (0.98 m across: the widest point), thick sand mantle with lapels + a
+  notch, caged lantern (two 4.2 cm iron bands = four panes, heavy collars, cap + knob). Aubade: blunt chalk
+  lamp-posts with flame drops (crown <= 11 cm), blunt plate horns, gnarled ash staff with a split root foot,
+  blue-grey hood. Hood lights small (6-7 x 4 cm), deep (12 cm behind the opening), mid-height; the rims are
+  arches (the sill is the cowl / collar), Serenade opening a tall arch. Fit (paint pose over the plates): IoU
+  Aubade 0.82 / 0.83, Serenade 0.83 / 0.84. Tris 3685 / 3755.
+- 2026-10-21 00:45 PAINT (`paint_hybrid`): palette base painted from the sculpt (fold light, edge wear, mottle,
+  grain, felt nap, top light, ramp) x CONTACT AO between parts (`contact_ao`, ray-cast on the assembled rest mesh,
+  arms/staff excluded: the shadow under the mantle / domes / collar the exploded bake never had) x the CONCEPT:
+  (a) its brushwork per material from swatches cut out of the graded plates (seamless, 1:1 in metres, every
+  texel), (b) the registered front/back projection in the paint pose on the cloak and tabard (own-part
+  visibility, figure mask, a consistency gate). Tried the registered projection on every part: at minion scale
+  it landed neighbouring features (the concept's bosses and dome stripes as ghosts on the mantle, the rim
+  shadow as blotches on the hood), so those parts carry the swatch brushwork only.
+- 2026-10-21 00:50 pauldrons bound RIGID to shoulder.L/R: the old shoulder/upper-arm blend crumpled them into
+  shards in the guard pose (the reviewer's "crumpled pointed dark shards" were the skin, not the sculpt).
+  Death: the staff planted out to the right side and forward (lantern at x -0.79, y -0.52, z 1.35 while the hood
+  is at x -0.25, z 1.43: never above / behind the hood), slides sideways onto its left side (hips roll 78 deg),
+  the staff toppling outward to lie on the ground (lantern z 0.21). Run: hip yaw 9 / roll 7 + a per-side thigh
+  lean in the cloak bind (lateral 0.55) so the hem swings.
+- 2026-10-21 00:58 builds 7 (both, --clip-sheet): Aubade 3685 tris / 377 KiB / accent 6.99 % (top half 64.4 %),
+  Serenade 3755 tris / 337 KiB / accent 5.27 % (top half 81.2 %); load test OK, facing +Z, mesh top 1.735 / 1.700,
+  92 / 90 px at 1080p; death body min z 0.000, prop min z +0.006.
+- 2026-10-21 01:10 hood lights moved to where the 52 deg camera looks in (low, ~10 cm behind the opening): deep
+  at mid-height the hood's brow hid them completely (accent unchanged by any size). Serenade: a sand robe "bib"
+  between the mantle lapels (the notch showed a 9 cm deep dark cavity: a keyhole slot), iron tops get the
+  concept's pale sheen and the dome bands widen (top value band), hood contact shadow floored (a decimated hood
+  triangle dipping into the collar painted a dark spike). Death: the planted staff leans further out (lantern
+  clear of the hood in every clip-sheet view); lying on its left side the right fist rests on the ground and the
+  staff lies flat ahead-right (it stood on its lantern).
+- 2026-10-21 01:41 FINAL builds (both, --clip-sheet): Aubade 3685 tris / 361 KiB / accent 6.97 % (top half 65.2 %);
+  Serenade 3854 tris / 348 KiB / accent 5.24 % (top half 82.1 %). three load test OK, facing +Z, mesh top
+  1.735 / 1.700 m (content 1.7), 92 / 90 px at 1080p; base textures 122 / 97 KB WebP (were 88 / 78).
+  Death ground solve: body min z 0.000, prop min z +0.003 / +0.006; attack1 Aubade boot toe -0.009 at the lunge.
+  Fit (paint pose over the plates): IoU Aubade 0.821 / 0.827, Serenade 0.842 / 0.846.
+  Lineup (lineup_qa, Cycles game look, 64 px): brightwick A vs S IoU 0.857 (same job >= 0.70), vs every other
+  kind <= 0.62 (<= 0.80); value bands Aubade 70/61/39 (front), Serenade 52/43/34 (front; side 40/46/30: the
+  big iron domes own the top quarter from the side); lineup accent max 5.5 % / 4.8 %.
+  Evidence (all from these GLBs): three_brightwick_*.png, three_clips_brightwick_*.png, review_brightwick.jpg
+  (concept | three.js front, 3/4, back | UNLIT paint front, back | game camera), lineup_brightwick.png/json,
+  fit_brightwick_*.png. Debug maps (not shipped): art/.cache/brightwick_paint/.
+  Open: in three.js the Serenade reads greyer than the concept's orange (the palette caps warm saturation at
+  40 %, and the QA light is cool; the unlit paint is warm umber / sand); the registered projection only lands on
+  the cloak and tabard; the death ends as a toppled bell on its side (the cloak is rigid drapery by the brief,
+  no cloth bones); the hood light from eye level sits at the bottom of the arch (seen from the game camera it is
+  a pool of light inside the hood).
+
+## Fix pass 3 (third independent review: 8 major, 4 minor)
+- 2026-10-21 start. Review: (1) faces in the hoods (Serenade band windows over the low hood light = eyes + mouth,
+  tall narrow arches + a lens at the bottom = mouth + tongue, Aubade's crumpled pale cowl = beard); (2) death end
+  = a bent tube / log with a flat hem cap; (3) Aubade pauldrons = stacked slabs (fingers / fists); (4) Aubade
+  lantern = claw + gem; (5) Serenade lantern = orb / bauble; (6) Serenade upper body = primitives (tin-can hood,
+  cardboard mantle, small grey pauldrons, agate bands); (7) paint / geometry defects (ghost arm, chest hole,
+  flecks, dome slit, window slivers, AO bar); (8) Serenade accent 3-4.8 % per facing, top value L* 40-52;
+  minors: scurry run + shin poke, weak slam, Aubade helm hood / floating back ribbon, 12 octagon windows,
+  static idle, lineup same-kind gate.
+- 2026-10-27 08:50 resumed (after a long break). State found: fix pass 3 mostly in the module (tombstone hood opening,
+  Serenade felt dome flaring into the collar, 14 round crown windows, shell-plate Aubade pauldrons, hexagonal Aubade
+  lantern, three-band caged Serenade lantern, x_hem_1 hem bone + piled death, 18 f run, idle scan); last builds
+  02:55 / 02:57 on 10-21 (3755 / 3941 tris, 332 / 325 KiB, accent 5.85 / 5.54 %), module touched after them.
+  Rebuilding both with clip sheets to re-baseline.
+- 2026-10-27 08:50 re-baseline builds (both, clip sheets): Aubade 3755 tris / 332 KiB / accent 5.85 %, Serenade 3921 /
+  324 KiB / 5.75 %; load test OK. Review of the evidence: the hood light (a broad lens tilted 40 deg, 0.20 x 0.21 m in a
+  0.24 m opening) filled the arch at eye level: a lit visor / face plate in every close-up.
+- 2026-10-27 09:05 hood light reworked with a new numpy check, `proto/wick_brightwick_hoodlight.py` (sphere-traces the hood
+  sculpt + crown band shell and the light from eye level and the 52 deg pitch; `--sweep` renders candidates side by
+  side). Tried: small deep ellipsoid (brow hides it at 52 deg: a dark slot with a lit lip = mouth + tongue), 45 deg
+  tilted disc (a band at the slot's bottom), pooled on the sill (egg on the sill at eye level). Chosen: ONE deep
+  rounded volume, wider than tall (17 x 10 cm, 17 cm front to back), centred at 33 % of the arch height with ink
+  all round it at eye level, deep enough that the 52 deg camera sees it fill most of what the brow leaves visible
+  (128 / 124 cm2 visible at 52 deg vs 65 for the small one). Same read as the sibling kinds (glow low in the
+  hollow). 16 x 6 mesh (smooth outline; the 14 x 5 one read almond / eye-shaped in close-up).
+  Serenade: 14 crown windows r 3.0 -> 3.4 cm, 12-gons (were octagon-looking 10-gons); hood felt #DAC09A -> #D8BA8E
+  (a little warmer, still the top band); hood decimation 370 -> 350 tris (budget).
+- 2026-10-27 09:12 builds: Aubade 3803 tris / 333 KiB / accent 6.31 % (top half 61.3 %), Serenade 3977 / 326 KiB /
+  6.00 % (66.8 %); load test OK, facing +Z. Lineup (game chain, 8 wicks): A vs S IoU 0.866 (>= 0.70), vs every other
+  kind <= 0.63 (<= 0.80).
+- 2026-10-27 09:25 Serenade dome pauldrons #3F362F -> ironstone #4B4039 with the iron top sheen (+30 %) the other iron
+  parts had (the concept's pale dome crowns; the top value band looks down on them). attack1: a `rise` key at 0.68
+  (the lantern swings UP out of the ground, grip 0.52) before the settle: the 0.70 frame showed the staff out level
+  like a spear thrust.
+- 2026-10-27 09:30 FINAL (fix pass 3 closed): Aubade 3803 tris / 332 KiB / three QA accent 6.31 % (top half 61.3 %);
+  Serenade 3977 tris / 325 KiB / 6.00 % (top half 66.8 %). three load test OK, facing +Z, mesh top 1.735 / 1.715 m
+  (content 1.7), 92 / 91 px at 1080p; attack1 / death ground solve: body min z 0.000, prop min z >= 0.
+  Fit (paint pose over the plates): IoU Aubade 0.816 / 0.818, Serenade 0.845 / 0.849.
+  Lineup (game chain, all 8 faction wicks, `lineup_brightwick.png/json`): A vs S IoU 0.866 (>= 0.70), vs every other
+  kind <= 0.634 (<= 0.80); value bands Aubade 66.5 / 54.1 / 35.6, Serenade 55.2 / 41.8 / 34.0 (front); lineup
+  accent per facing Aubade 5.1 / 3.9 / 4.3 / 3.3 %, Serenade 3.8 / 3.8 / 5.5 / 3.7 %.
+  Evidence (all from these GLBs): three_brightwick_*.png, three_clips_brightwick_*.png, review_brightwick.jpg,
+  lineup_brightwick.png/json, fit_brightwick_*.png; debug: art/.cache/brightwick_paint/, art/.cache/brightwick_look/.
+  Fix-pass-3 items: (1) faces: even 14-window ring (no lit pair), one rounded glow low-middle in the arch with ink
+  all round; (2) death: kneel on the planted staff -> slide off -> heap, hem piled by x_hem_1, ground-solved;
+  (3) Aubade pauldrons: curved shell lames + cap; (4) Aubade lantern: hexagonal dawnglass, chalk roof + spire;
+  (5) Serenade lantern: ball in a three-band iron cage + collars; (6) Serenade dome hood flaring into the collar,
+  thick mantle with lapels + bib, 0.98 m dome pauldrons; (8) accent 6.0 % at the QA camera.
+  Open: Serenade top value band (55 front, 31 side: the iron domes and the crown band own the top) stays under the
+  bible's 70-85 (the concept's dark domes; lifting them more loses the culture read); Serenade reads greyer/paler
+  than the concept's orange (palette cap: <= 40 % saturation in the marigold band); from the 52 deg camera every
+  wick's hood shows a dark slot with the glow at its lower half (family-wide, as on the sibling kinds).
+
+## Fix pass 4 (fourth independent review: 1 major, 7 minor)
+- 2026-10-27 09:30 start. Review: (1, major) Aubade ALLY read: azure accent on blue-grey/pale bodies, Lab dE 18.6-21.4
+  against the pixels round it (the other three states 35-45); thin 1-2 px lines, tiny crown drops, a 24-tri lantern
+  core; hood bluer than cloth2; the chalk tabard a narrow grey strip. Minors: (2) glossy egg hood light, (3) Serenade
+  greige, no amber, top band low, (4) Serenade collar missing in front + ear-muff pauldrons, (5) Aubade helm-hood +
+  crest seam + cog pauldrons, (6) paint richness / lumpy rim / lit hollow streaks / Serenade pinched tip, (7) candle
+  crown + button windows (0.25 accent roughness), (8) Aubade lantern stacked over the hood from a back 3/4.
+- 09:40 measuring harness (scratchpad bw5/: the reviewer's lane render + an id-mask pass, per-figure accent share and
+  dE of the mean accent Lab against the 2-4 px ring of body pixels round it; reproduces the review's 18-21 / 39-45 /
+  36-38 / 33-40 on the old GLBs). Finding: the renderer draws the ally accent at L* ~70, C* ~27 (the 0.3 x colour
+  diffuse + 0.8 emissive through AgX), so a PALE or chalk ring only reaches dE ~20-27; dE >= 35 needs a ring at
+  L* <= ~42: every Aubade light needs a dark setting.
+- 10:00-10:55 Aubade (11 builds, dE / lineup checked each time): hood back to cloth2 (#BFC6CC) with soft drape folds
+  (mirror-symmetric: an asymmetric fold term had creased the back meridian and zig-zagged the seam), narrower and
+  domed (x +-0.18, top 1.72), opening reduced to the concept's dark hollow (x +-0.099, z 1.33-1.56); a dark slate-felt
+  CAP inside the circlet; slate circlet + slate lamp cups + six round dawnglass lamp drops (6.4 cm) + six little chalk
+  spire TOWERS between them (were candle posts / then teeth); the seam a fine 3 cm lit line over the cap, 5 cm down the
+  back of the cowl in a slate channel; the stole wider (23 cm) chalk-white with ONE 6.2 cm centre light pointed above
+  its V in a painted slate channel (`channel`), a dark belt, a slate under-robe in the front opening; back stripe
+  6.2 cm in a 5.5 cm slate channel; lantern glass r 5.4-8.6 cm x 20 cm in a slate frame + roof (chalk knob + short
+  spire), staff head bound in dark leather; pauldrons: three stepped plates with straight edges (no notched V: cog)
+  wrapping less, two broad blade horns; staff guard more lateral (0.82, -0.08, 0.57), head bend 22 -> 14 deg.
+  Variants measured and rejected: pale cap (dE 26.5-29.5 / top 58-60), dark ring + pale crown (30.7 / 53), chalk
+  circlet (32.5 / 41).
+- Serenade: felt dome SEATED IN a thick dark rolled collar (r 7.4 cm, its front roll the arch's sill), a short arch
+  (1.37-1.575, was 1.29-1.55), pauldrons lowered to the shoulder line (z 1.226) with the bosses on the front-inner
+  top, broad sandstone bands on the domes, warmer palette (hood #DBB988, mantle #D3AF7F, tabard #CFAB7D, all <= 40 %
+  sat; umber cloak #7B5842 at 23 deg), amber LAMPRESIN rims either side of the lantern's iron bands, 9 cm crown band,
+  sash 8 cm + tabard bands 6.8 cm with ironstone borders.
+- Both: accent material matte (`matte_accent`, roughnessFactor 0.78: no hotspot eggs / buttons / gems), hood light
+  small + deep + centred in the arch (10 x 7 cm Aubade, 11 x 8 cm Serenade: visible at eye level 56 / 66 cm2, hidden
+  from 52 deg by design), clean swept-tube rim lows, ink on every texel behind the opening plane, the concept swatch brushwork on every
+  painted part (was cloak + sleeves only), hood lows 440 / 410 tris (the decimated pole read as a pinched point).
+- 11:15 FINAL builds (both, clip sheets): Aubade 3910 tris / 341 KiB, Serenade 3999 tris / 344 KiB; three load test OK,
+  facing +Z, 92 / 91 px at 1080p, QA accent 7.44 % (top half 64.6 %) / 6.61 % (64.3 %), attack1 + death ground-solved
+  (body min z 0.000, prop min z >= 0.001), accent roughnessFactor 0.78, metallicFactor 0.
+  Lane harness (52 deg, 1080p 1:1, map_rift sky, ally #3F9CFF / enemy #FF9A1F, idle + run, 8 facings):
+  Aubade ally dE 31.1-41.4 (mean 35.0; was 18.1-21.0), enemy 50.3-57.6; Serenade ally 37.8-38.9, enemy 35.0-40.4;
+  accent share per facing Aubade 2.8-7.9 % (mean 5.6), Serenade 3.8-7.2 % (mean 5.1).
+  Fit (paint pose over the plates): IoU Aubade 0.812 / 0.817, Serenade 0.848 / 0.853.
+  Lineup (game chain, all 8 faction wicks): A vs S IoU 0.866 (>= 0.70), vs every other kind <= 0.604 (<= 0.80);
+  value bands top / mid / bottom Aubade 37 / 49 / 31 (front), Serenade 49 / 38 / 34.
+  Evidence: three_brightwick_*.png, three_clips_brightwick_*.png, review_brightwick.jpg, lineup_brightwick.png/json,
+  fit_brightwick_*.png; lane/close renders and the harness in the session scratchpad (bw5/).
+  Open / trade-off: the Aubade TOP value band fell 66.5 -> 37 (front, 52 deg): from the game camera the top quarter is
+  the cap, and the cap is the crown lamps' + seam's dark setting; every pale-cap variant left the ally read at dE
+  26-31. The bible's light-top ramp and the ally read conflict for lights placed on the hood top; this build favours
+  the ally read (the review's major). The pale linen hood still makes the top at eye level. Serenade top band 49
+  (dark collar + iron domes, the concept's design). The stole reads chalk-edged (3.8 cm each side) round a slate
+  centre panel, not all-white. The Aubade side facings (90 / 270 deg) carry the least accent (2.8-5 %).
+
+## Fix pass 5 (fifth independent review: 3 major, 5 minor)
+- 2026-10-27 11:40 start. Review: (1) death ends in a kneeling forehead-to-ground bow (a prostration, not a death;
+  the brief says it slides sideways off the staff); (2) Aubade drifted from its concept: the slate cap / circlet /
+  cups / lantern frame / tabard channel read as a black spiked helmet over a white visor and a blue sword, top
+  value L* 37 against the 70-85 law; (3) accent adequate but not generous at the real camera: the hood light is
+  invisible from 52 deg, side facings 2.8-4.6 %; minors: flat paint + small defects, the hood light a hard oval
+  badge, Serenade a loose match (small taupe ribbed domes, cup bosses, cream strata dome, 14 beads, mauve mitts),
+  budgets full (3999 tris).
+- 11:45-12:05 changes: DEATH ends LYING ON ITS LEFT SIDE off the staff (slip -> fall; knees drawn, right fist + staff
+  on the ground ahead, hood and crown resting sideways); the lower bell rides x_hem_1 with a keyed LOCATION + SCALE
+  (`hem_loc`, `hem_sq`: this module wraps anim.write_action / apply_pose to key them) along the drawn-up thighs,
+  flattened (scale 0.58 across): the coat folds at the waist and lies over the legs (never a barrel); its underside
+  is painted as the coat's dark inside. AUBADE back to its concept: pale linen hood all over (no slate cap), CHALK
+  circlet + spire towers, slim slate bezel cups round each lamp, CHALK lantern frame / posts / roof with two thin
+  slate bezel rings at the panes, chalk-white stole with a narrower (4.6 cm) square-ended light and a 1 cm painted
+  bezel (no channel, no point: no sword), chalk-linen belt (was dark), back stripe 5.6 cm with a 1 cm bezel.
+  ACCENT: the hood light is now a broad low volume (24 x 12 cm, 13 cm in, sides tucked behind the opening's walls,
+  top leaning back) that the 52 deg camera sees over the sill (Aubade 115 cm2, Serenade 135 cm2 visible; was 5 / 0),
+  smooth 18-segment outline, a painted neutral spill on the hollow's walls round it (the falloff); Aubade
+  pauldrons get a dawnglass INLAY along the middle lame (front -> outside -> back: the side read); Serenade sash
+  9.2 cm, tabard bands 7.4 cm, lantern core r 11.6 cm with slimmer bands. SERENADE: 12 spaced windows (r 2.9 cm,
+  11-gons), flat convex sandstone bosses (no cup), darker iron domes #3F3530, dark iron mitts, richer ochre felt
+  (#D0AD7E, ramp ^0.5 on the dome / mantle), the dome's swatch from the mantle (the old one caught the collar edge:
+  horizontal strata). Concept projection faded at the stole's top (the squiggles under the cowl).
+- 12:05-12:20 iterations (lane harness = the reviewer's: three.js, road, 1080p 1:1, 52 deg, 8 facings): Aubade side
+  facing (270) 3.6 -> 4.5 %: a lit HEM PIPING over the ironstone hem band, following the pointed hem round the back and
+  sides (a flat inlay, 2 tris a segment; `flat_strip`), pauldron inlay 3.2 cm; Serenade sides 3.1 -> 5.2 %: a
+  LAMPRESIN STRIP set in each iron dome (back -> outside -> front, short of the boss: a band, never a disc), 12
+  windows r 3.1 cm. Hood lights re-placed with the hoodlight proto: tilted 35 deg, front 3 cm behind the opening
+  (52 deg sees 136 / 145 cm2, eye level 172 / 168). Aubade hood bluer (#A2B4C4: the concept measures L* 71-85, blue);
+  Serenade felt / mantle lighter ochre with ramp^0.75, domes #433934, bigger (0.182 x 0.208 x 0.144). The Serenade
+  felt's horizontal STRATA were the paint's fold term: the finite-difference Laplacian of the trilinear SDF grid steps
+  at every voxel layer -> low-passed (`lowpass3d`, 1.4 cm) before painting; the felt dome / mantle carry the
+  procedural felt only (the plate swatches tiled into bands / a pitted biscuit). SDF highs Taubin-smoothed (voxel
+  terraces). Iron gorget removed (hidden under the mantle; its edge poked through as dark dashes under the collar).
+  Death end tuned: the lower bell lies along the drawn-up thighs, 0.38 m from the hips, flattened x0.70 (a compact
+  curled heap on its side, not a barrel); the coat's underside painted as lining (#2F353D / #3A2E26), not black.
+  Stand-in clips (attack2, cast_*, recall, idle_lobby, channel, stunned, victory, dash): static guard pose at the
+  shortest legal length. Tri trims: hood lights 16 x 4, crown cups 3-ring, inlays 8 points, lantern socket, Serenade
+  lantern collars / core, boss nu 8, sash 13 points, band 18, staff cap, sleeves / forearms / staff / hood budgets.
+- 12:21 FINAL builds (both, clip sheets): Aubade 3937 tris / 336 KiB, Serenade 3822 tris / 321 KiB (texture 1024 base,
+  256 normal / ORM); three load test OK, facing +Z, mesh top 1.728 / 1.714 m (content 1.7), 92 / 91 px at 1080p;
+  QA accent 9.39 % (top half 62.4 %) / 8.89 % (64.7 %); attack1 + death ground-solved (body min z 0.000, prop min z
+  >= +0.001; death hips dz up to +0.18 m).
+  Lane harness per facing (0..315 deg): Aubade 6.4 6.3 6.4 8.6 8.3 7.6 4.5 5.9 % (mean 6.8; was 2.8-7.9), Serenade
+  5.9 6.3 5.9 9.1 8.3 8.7 5.2 6.4 % (mean 7.0; was 3.8-7.2). Ally dE Aubade 21.3-22.6 (the price of the concept's pale
+  setting; the other Aubade wicks measure 17.7-20.6 in the same lane scene), enemy 40-46; Serenade ally 38-39, enemy
+  37-42. Lineup (game chain, 8 faction wicks): A vs S IoU 0.862 (same job), vs every other kind <= 0.655; value bands
+  (front) Aubade 63 / 53 / 35 (was 37 / 49 / 31), Serenade 46 / 40 / 34. Fit (paint pose over the plates): IoU
+  Aubade 0.812 / 0.815, Serenade 0.848 / 0.853.
+  Evidence: three_brightwick_*.png, three_clips_brightwick_*.png (row 9 = death), death_brightwick.jpg (three.js:
+  mid-fall kneel on the staff | end at eye level | end at 52 deg), lane_brightwick.jpg (lane crowd, both viewers),
+  review_brightwick.jpg, lineup_brightwick.png/json, fit_brightwick_*.png.
+  Open: the Serenade top value band (46) stays under the 70-85 law: the concept's big dark iron domes and dark
+  collar own the top quarter from 52 deg (the review asked for them darker and bigger); the hood light at eye
+  level is a broad glow over the sill (the price of seeing it from 52 deg); seen from the feet end at eye level the
+  lying coat shows its (lining-coloured) underside; QA-camera accent 8.9-9.4 % sits over the brief's 5-7 % (the lane
+  mean is 6.8-7.0 %); small paint defects left: a dotted texel seam on the inside of the Aubade rim, two dark slits
+  where the cowl's V meets the stole, a notch where the belt crosses the stole light (sub-pixel at 92 px).

@@ -122,3 +122,6 @@ games/vale/audio/**/__pycache__/
 games/vale/art/_cache/
 games/vale/audio/_cache/
 games/vale/tools/imagegen/raw/
+
+# Python bytecode caches (tools, blender scripts)
+__pycache__/

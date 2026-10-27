@@ -48,12 +48,13 @@ def build_mesh(fac: str):
     ctx = fighter.Context(spec=spec, col=col, skin=None, args=None, timer=scene.Timer(spec.ID))
     ctx.palette = dict(spec.PALETTE)
     ctx.info = rig.build_rig(spec.PROPORTIONS, name=f"{spec.ID}_rig", col=col)
-    spec.rig_extras(ctx)
+    if hasattr(spec, "rig_extras"):
+        spec.rig_extras(ctx)
     ctx.gradient = pipeline._gradient(spec)
     ctx.mats = materials.bible_set(ctx.palette, ctx.gradient)
     parts = spec.model(ctx)
     body, accent, highs, src, st = pipeline.prepare_lows(ctx, parts)
-    return spec, ctx, parts, body, accent
+    return spec, ctx, parts, body, accent, st
 
 
 def tris_of(obj, co):
@@ -150,7 +151,9 @@ def main():
     facs = ("aubade", "serenade") if a.faction == "both" else (a.faction,)
     rep = {}
     for fac in facs:
-        spec, ctx, parts, body, accent = build_mesh(fac)
+        spec, ctx, parts, body, accent, st = build_mesh(fac)
+        print(f"[fit] {fac} tris total {sum(v for n, v in st.items() if n.startswith('tris_'))}: "
+              + ", ".join(f"{n[5:]}={v}" for n, v in st.items() if n.startswith("tris_")))
         names = [p.name for p in parts]
         objs = [o for o in (body, accent) if o is not None]
         pose = bw.paint_pose(spec) if a.pose == "paint" else bw.guard_pose() if a.pose == "guard" else {}
@@ -169,8 +172,9 @@ def main():
         path = os.path.join(OUT, f"fit_brightwick_{fac}{'' if a.pose == 'paint' else '_' + a.pose}.png")
         project.save_rgb(np.clip(sheet, 0, 1), path)
         legend = {n: [round(float(x), 2) for x in colour(i)] for i, n in enumerate(names)}
-        rep[fac] = {"front_iou": round(fiou, 3), "back_iou": round(biou, 3), "out": path, "parts": legend}
-    print("[fit] " + json.dumps({k: {kk: vv for kk, vv in v.items() if kk != "parts"} for k, v in rep.items()}))
+        rep[fac] = {"front_iou": round(fiou, 3), "back_iou": round(biou, 3), "out": path, "parts": legend,
+                    "tris": {n: v for n, v in st.items() if n.startswith("tris_")}}
+    print("[fit] " + json.dumps({k: {kk: vv for kk, vv in v.items() if kk not in ("parts", "tris")} for k, v in rep.items()}))
     for k, v in rep.items():
         print(f"[fit] {k} part colours: " + ", ".join(f"{n}={c}" for n, c in v["parts"].items()))
 

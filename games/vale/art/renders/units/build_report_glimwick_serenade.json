@@ -13,6 +13,8 @@
         "chest",
         "neck",
         "head",
+        "hand.L",
+        "hand.R",
         "thigh.L",
         "shin.L",
         "foot.L",
@@ -23,7 +25,7 @@
         "toe.R"
       ]
     },
-    "tris_sleeves": 194,
+    "tris_sleeves": 196,
     "bind_trousers": {
       "heat_ok": true,
       "unweighted": 0,
@@ -46,40 +48,45 @@
         "toe.R"
       ]
     },
-    "tris_trousers": 56,
-    "tris_dome": 438,
-    "tris_roll": 400,
-    "tris_band": 148,
-    "tris_hoodlight": 128,
-    "tris_mantle": 188,
-    "tris_cloak": 520,
-    "tris_mitt_R": 92,
-    "tris_mitt_L": 106,
-    "tris_boot_L": 72,
-    "tris_boot_R": 72,
-    "tris_pole": 72,
-    "tris_knob": 110,
-    "tris_crook": 60,
-    "tris_ring": 36,
-    "tris_lamp_globe": 84,
-    "tris_lamp_cage": 160,
-    "tris_lamp_resin": 56,
-    "tris_cord": 40,
-    "validate_glimwick_serenade": "2672->2669",
-    "validate_glimwick_serenade_accent": "360->359"
+    "tris_trousers": 24,
+    "tris_dome": 380,
+    "tris_roll": 330,
+    "tris_band": 144,
+    "tris_hoodlight": 70,
+    "tris_mantle_band": 116,
+    "tris_mantle": 274,
+    "tris_cloak": 420,
+    "tris_mitt_R": 86,
+    "tris_mitt_L": 90,
+    "tris_boot_L": 66,
+    "tris_boot_R": 66,
+    "tris_pole": 48,
+    "tris_bind0": 16,
+    "tris_bind1": 16,
+    "tris_knob": 112,
+    "tris_crook": 42,
+    "tris_crook_end": 24,
+    "tris_ring": 32,
+    "tris_lamp_core": 72,
+    "tris_lamp_resin": 72,
+    "tris_lamp_cage": 144,
+    "tris_lamp_lid": 84,
+    "tris_lamp_drop": 36,
+    "tris_cord": 36,
+    "validate_glimwick_serenade": "2594->2590"
   },
-  "uv_coverage": 0.728,
+  "uv_coverage": 0.738,
   "bake": {
-    "base": 4.95,
-    "rough_metal": 4.32,
-    "normal": 2.69,
-    "ao": 2.92,
-    "normal_fixed_px": 19574,
-    "projection": 212.72,
-    "pack_save": 213.28,
-    "total": 228.87
+    "base": 2.6,
+    "rough_metal": 2.61,
+    "normal": 1.28,
+    "ao": 1.55,
+    "normal_fixed_px": 4441,
+    "projection": 75.43,
+    "pack_save": 75.54,
+    "total": 83.83
   },
-  "tris": 3028,
+  "tris": 2992,
   "mesh_top_m": 1.333,
   "clips": {
     "idle": {
@@ -176,24 +183,24 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 885624,
+  "glb_bytes_raw": 1061416,
   "optimize": {
     "ok": true,
-    "before": 885624,
-    "after": 332832
+    "before": 1061416,
+    "after": 318588
   },
-  "glb_bytes": 332832,
+  "glb_bytes": 318588,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (325 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: glimwick_serenade_base 1024x1024 90K, glimwick_serenade_normal 256x256 16K, glimwick_serenade_orm 256x256 19K",
-      "  skinned meshes: glimwick_serenade(3571v), glimwick_serenade_accent(178v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (311 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: glimwick_serenade_base 1024x1024 72K, glimwick_serenade_normal 512x512 35K, glimwick_serenade_orm 256x256 15K",
+      "  skinned meshes: glimwick_serenade(3023v), glimwick_serenade_accent(289v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b x_skirt_f x_skirt_l x_skirt_r)",
-      "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/22tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
-      "  tracks checked: 324; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3028; bind-pose bounds (three units, Y up): 0.80 x 1.33 x 0.60; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
-      "  run: 10 f, planted samples 4, max foot-speed error 1.1%",
+      "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/23tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
+      "  tracks checked: 325; materials: body, accent; textures: body.map=1024x1024, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 2992; bind-pose bounds (three units, Y up): 0.84 x 1.33 x 0.57; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
+      "  run: 10 f, planted samples 2, max foot-speed error 2.2%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -202,14 +209,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.473,
+        -0.511,
         -0.001,
-        -0.252
+        -0.251
       ],
       [
-        0.324,
+        0.325,
         1.333,
-        0.347
+        0.324
       ]
     ],
     "facing": [
@@ -217,8 +224,8 @@
       1
     ],
     "headY": 0.66,
-    "accentPct": 5.78,
-    "accentTopHalfPct": 80.3,
+    "accentPct": 8.57,
+    "accentTopHalfPct": 61,
     "heightPx1080": 70,
     "size": [
       2400,
@@ -226,25 +233,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_glimwick_serenade.png",
-    "seconds": 42.7,
-    "exit": 0
+    "seconds": 10.1,
+    "exit": 0,
+    "clip_sheet": "art/renders/units/three_clips_glimwick_serenade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.39,
-      "model": 60.19,
-      "lows_bind": 0.08,
-      "uv": 61.33,
-      "bake": 229.08,
-      "clips": 1.21,
-      "export": 3.41,
-      "optimize": 0.76,
-      "load_test": 0.25,
-      "three_qa": 43.04,
-      "cache": 0.14
+      "rig": 0.0,
+      "materials": 0.11,
+      "model": 31.23,
+      "lows_bind": 0.03,
+      "uv": 24.31,
+      "bake": 83.89,
+      "clips": 0.36,
+      "export": 1.05,
+      "optimize": 0.6,
+      "load_test": 0.18,
+      "three_qa": 34.67,
+      "cache": 0.09
     },
-    "total_s": 400.01
+    "total_s": 176.56
   },
   "run_ref_speed": 3.25,
   "height_m": 0.93

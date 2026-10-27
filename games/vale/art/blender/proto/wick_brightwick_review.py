@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Brightwick review sheet: each faction's concept (front, back) beside the three.js QA close-ups (front, 3/4,
-back) and the gameplay-camera facings, both factions stacked, so the cultures read side by side.
+back), the UNLIT painted base colour (front, back: the paint itself, no lighting; render it first with
+proto/wick_brightwick_paintview.py into art/.cache/brightwick_paint/paintview_<f>.png) and the gameplay-camera
+facings, both factions stacked, so the cultures read side by side.
 
     ~/Developer/forgeflow-games/.venv/bin/python3 art/blender/proto/wick_brightwick_review.py
 
@@ -31,6 +33,11 @@ def row(fac: str) -> Image.Image:
     cw = con.width // 2
     tiles = [fit_h(con.crop((0, 0, cw, con.height)), H), fit_h(con.crop((cw, 0, con.width, con.height)), H)]
     tiles += [fit_h(t, H) for t in close]
+    pv = GAME / "art" / ".cache" / "brightwick_paint" / f"paintview_{fac}.png"
+    if pv.exists():                      # the unlit paint: 6 tiles of 500 x 640 (front, 3/4, side, back, top views)
+        im = Image.open(pv).convert("RGB")
+        for i in (0, 3):
+            tiles.append(fit_h(im.crop((i * 500 + 70, 30, i * 500 + 430, 610)), H))
     g = Image.new("RGB", (H // 2, H), (40, 42, 46))
     for k, t in enumerate(games[:2]):
         g.paste(fit_h(t, H // 2), (0, k * H // 2))
