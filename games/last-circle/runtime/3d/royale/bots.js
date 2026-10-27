@@ -806,8 +806,20 @@ function think(W, b) {
 
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null;
   const inStorm = st && st.dps > 0 && hyp(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius;
-  const outsideNext = st && st.nextRadius != null &&
-    hyp(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) > st.nextRadius * 0.9;
+  // (fix pass 2, probe_match stuck rows) HYSTERESIS ON THE ROTATION LINE. outsideNext flipped at exactly 0.9 x the next radius, and a loot goal just
+  // beyond that line pulled the bot back over it every think: LOOT walked it out, ROTATE (40) walked it in, 0.5 s each (probe_match deepwood seed 23:
+  // s36 paced a 5 m box beside a chest at the line from 165 s to 245 s in the storm, 7 stuck episodes). Once outside, a bot is back inside only past
+  // 0.82 x the radius, and the loot goal it was walking to beyond the line is parked (a player leaves the chest the storm is taking).
+  const nextD = st && st.nextRadius != null ? hyp(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) : 0;
+  const outsideNext = st && st.nextRadius != null && nextD > st.nextRadius * (bb.rotLatch ? ROT_IN_K : 0.9);
+  if (outsideNext && !bb.rotLatch && bb.lootId && bb.moveTo && st) {
+    const ncx = st.nextCenter ? st.nextCenter.x : st.center.x, ncz = st.nextCenter ? st.nextCenter.z : st.center.z;
+    if (hyp(bb.moveTo.x - ncx, bb.moveTo.z - ncz) > st.nextRadius * 0.9) {
+      if (!bb.badLoot) bb.badLoot = {};
+      bb.badLoot[bb.lootId] = W.t + 30; bb.lootId = null;
+    }
+  }
+  bb.rotLatch = !!outsideNext;
   const alive = W.match.aliveCount();
   // BOT_PACE.endgamePhase: "endgame" (<= 10 alive: campers stop camping, everyone hunts, +20 to ENGAGE) only counts
   // once the storm has reached this circle. With the first-minutes brawls gone, ten left alive happens in circle 2 and
@@ -1082,6 +1094,7 @@ function pingAckStep(W, b, best) {
   W.events.emit("pingAck", { by: b.actor.id, owner: r.owner, kind: r.kind, x: r.x, z: r.z, busy: !going });
 }
 const GRAB_R = 8, GRAB_CLOSE_M = 8;
+const ROT_IN_K = 0.82;            // (fix pass 2) a bot that is outside the next circle's 0.9 line is back inside it only past this fraction of the radius
 /** Nearest ground gun that is a real upgrade over the starter pistol (a primary:
  *  isUpgraded's definition, so a pistol of any rarity is not one) and that the
  *  inventory would take (same predicate give() enforces). */
