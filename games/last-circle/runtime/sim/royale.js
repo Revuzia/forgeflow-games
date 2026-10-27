@@ -1668,10 +1668,12 @@
    *  trackM (a LINEAR miss at the target in metres that does not shrink with range:
    *  a turret that lags a strafing target by a fixed time misses it by
    *  lateral speed x lag wherever it stands; omit = 0)} */
+  var GV_NO_OPTS = {};
+  var _gvSt = { ads: false, speed: 0, airborne: false, crouching: false, sinceLastShotS: 0, heat: null };
   function gunValueAt(id, rarity, distM, opts) {
     var d = WEAPONS[id];
     if (!d) return 0;
-    opts = opts || {};
+    opts = opts || GV_NO_OPTS;
     var dist = Math.max(0.5, distM || 0);
     if (d.arc && dist > LAUNCHER_MAX_M) return 0;             // shell cannot reach
     var ehp = Math.max(1, opts.ehp != null ? opts.ehp : 150);
@@ -1679,9 +1681,11 @@
     var loaded = opts.mag != null ? opts.mag : d.mag;
     var reserve = opts.reserve != null ? opts.reserve : Infinity;
     if (loaded + reserve <= 0) return 0;                        // dry: worth nothing
-    var spread = effectiveSpread(id, rarity || 0, {
-      ads: dist > 25, speed: opts.speed || 0, airborne: false, crouching: false, sinceLastShotS: interval, heat: null,
-    });
+    // one reused stance record (bots call this per gun per candidate every think: the literal was framecheck's top
+    // royale.js allocation site, gunValueAt ~1 MB per 600 match frames); effectiveSpread only reads it
+    var st = _gvSt;
+    st.ads = dist > 25; st.speed = opts.speed || 0; st.sinceLastShotS = interval;
+    var spread = effectiveSpread(id, rarity || 0, st);
     var aim = opts.aimDeg != null ? opts.aimDeg : VALUE_AIM_DEG;   // the shooter's own aim error, when known
     var ang = Math.sqrt(spread * spread + aim * aim) * Math.PI / 180;
     var flight = d.speed ? dist / d.speed : 0;
