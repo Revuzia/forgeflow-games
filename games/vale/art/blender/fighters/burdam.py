@@ -1011,13 +1011,15 @@ FT = anim.FootTarget
 # past the bar's left end, the crossing facing moved to the one walking straight at the camera (a steep crossing).
 # fix pass 8 (the review: from the front, the lobby and the select screen the yoke read as a nearly flat bar at mask
 # height coming out of the back of the head, the heel hidden behind it, the haft under the fist; in game acceptable):
-# the idle steepened as far as the bar allows (proto/burdam_carry6.py --pick around the yoke): the wrist 7 cm further
-# out and back and 4 cm lower, heading 48, 18 degrees up, roll 25: the eye-level front angle 17 -> 32 degrees, the
-# blade's share in view from the front 0.49 -> 0.76, the heel's 0.20 -> 0.70, no cleaver point inside the mask / cowl
-# (the yoke: 92 with the guard pose), and in game the lane read 1338 -> 1451 px^2, the worst facing 1018 -> 1014, one
-# pointer facing instead of three; facing W the blade still falls away under the bar's right end (-21 degrees on
-# screen). The run keeps the yoke's grip (RUN_REL0, tuned in game). The lobby has no bar: LOBBY_* below.
-CARRY = dict(rel=(-0.182, 0.466, 0.321), pole=(-1.0, 0.25, -0.3), d=(0.636, 0.707, 0.309), up=(-0.127, 0.491, -0.862))
+# the idle steepened as far as the bar allows (proto/burdam_carry6.py --pick around the yoke, --max-angw): every
+# step up in the front view raises the blade toward the bar in the lane facing W (screen angle there: yoke -39, this
+# carry -28, a 32 degree front view -21 = flat under the bar's end, the pointer again). Kept: the wrist 5 cm further
+# out and 7 cm further back, heading 44, 14 degrees up, roll 25: the eye-level front angle 17 -> 25 degrees, the
+# blade's share in view from the front 0.49 -> 0.73, the heel's 0.20 -> 0.65 (it no longer comes out of the back of
+# the head: no cleaver point inside the mask / cowl, the yoke 92 with the guard pose), and in game the lane read 1338
+# -> 1431 px^2, the worst facing 1018 -> 980, one pointer facing instead of three. The run keeps the yoke's grip
+# (RUN_REL0, tuned in game). The lobby has no bar: it rests in the concept's steep carry (LOBBY_* below).
+CARRY = dict(rel=(-0.146, 0.482, 0.432), pole=(-1.0, 0.25, -0.3), d=(0.698, 0.674, 0.242), up=(-0.136, 0.456, -0.879))
 RUN_REL0 = (-0.068, 0.367, 0.411)      # the run's fist (the pass-6 yoke's)
 BELT_L = (0.10, -0.16, -0.94)          # the free left fist at the belt
 
@@ -1582,11 +1584,15 @@ def clip_overrides(ctx) -> dict:
     drop = anim.lerp_pose(reach2, stamp, 0.55)               # the swing down, its tip held off the ground
     drop = R.tip_to(drop, 0.25, only_below=True)
     hold = anim.add(stamp, _P(chest=(-1, 0, 0)))
+    # the way back: the attack1 chop's recovery (pulled out of the ground and swung up to upright in the right fist
+    # at the front of the right hip, the forearm level, the haft clear of it), then unslung onto the shoulder: the
+    # stamped slab never sweeps back through the coat (the pass-7 hold -> out_right route met it)
+    ult_rec = chop_poses(R, G, 0.0)[3]
     out["cast_ult"] = clip("cast_ult", 45, [(0.0, G, "linear"), (0.04, anim.lerp_pose(G, reach, -0.06), "inout"),
                                             (0.13, reach, "out"), (0.29, reach2, "inout"), (0.36, drop, "in"),
                                             (I, stamp, "accel"),
                                             (0.47, anim._with_hips(stamp, (0, 0.01, -0.012)), "out"),
-                                            (0.67, hold, "linear"), (0.80, out_right(G), "inout"),
+                                            (0.67, hold, "linear"), (0.78, ult_rec, "inout"),
                                             (0.90, unsling(G), "inout"), (1.0, G, "settle")], impact=I)
 
     out.update(_gen_rest_clips(R, G))
@@ -1834,7 +1840,7 @@ def _gen_rest_clips(R, G) -> dict:
     count1 = dict(present)
     count1["ik"] = dict(present["ik"], **{"hand.L": HT(rel=R.left_rel(present, 0.44), pole=(0.8, -0.4, -0.5))})
     count1 = anim.add(count1, _P(head=(4, -2, 0)))
-    nod1 = anim.add(count1, _P(head=(10, -4, -4)))
+    nod1 = anim.add(count1, _P(head=(4, -4, -5)))           # (a tilt more than a nod: the bowed mask met the hand)
     unl = unsling(lob)
     keys = [(0.0, lob, "linear"), (0.09, breath, "sine"), (0.17, tilt, "inout"), (0.24, nod, "inout"),
             (0.30, tilt, "inout"), (0.36, lob, "inout"), (0.41, unl, "inout"), (0.47, lower, "inout"),

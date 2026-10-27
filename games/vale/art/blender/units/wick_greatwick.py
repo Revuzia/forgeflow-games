@@ -2232,7 +2232,9 @@ PAINT = {
             "drum_bands": dict(_IRON, kind="blocks", hex="#5E5249", edge=0.50, cavity=0.45, edge_w=0.010),
             "drum_floor": dict(_IRON, kind="iron", hex="#4B4039"),
             "drum_posts": dict(_IRON, kind="iron", hex="#544840", edge=0.40, edge_w=0.008),
-            "drum_panes": {"kind": "resin", "hex": "#A57A47", "deep": "#5E4126"},
+            # (deep smoky resin: an amber bloom round the cores sat in the enemy marigold's own hue and value; in game the
+            # east viewer's ring contrast was dE 38)
+            "drum_panes": {"kind": "resin", "hex": "#8A6640", "deep": "#523822"},
             "drum_lid": {"kind": "lid", "hex": "#A88C64", "rib": "#3F2F25", "edge": 0.18, "cavity": 0.35, "edge_w": 0.008},
             "frame_posts": dict(_WALNUT, segs="posts"),
             "pack": {"kind": "pack", "hex": "#6E5848", "light": (0.70, 1.12), "key": 0.12, "nap": 0.04,

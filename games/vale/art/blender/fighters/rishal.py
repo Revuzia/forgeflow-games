@@ -102,8 +102,8 @@ SKINS: list = [
      "absolute": ("cloth", "ironstone", "under", "leather"),
      # (fix pass 5, review: the mid band read L* 31-40 against the brief's 45-65, the scarf a near-white bib): the
      # coat, apron, sleeves and chest a step lighter mid ink-grey, the scarf a chalky grey a step under the crest
-     "parts": {"apron": "#6C7480", "sleeves": "#7E8792", "chest_plate": "#8E959F", "cowl": "#959CA3",
-               "skirt_L": "#707884", "skirt_R": "#707884",
+     "parts": {"apron": "#747C88", "sleeves": "#808994", "chest_plate": "#8E959F", "cowl": "#959CA3",
+               "skirt_L": "#7B8390", "skirt_R": "#7B8390",       # (the brief's own tabard mid ink-grey)
                "pauldron_L": "#98A0AA", "lames_L": "#98A0AA", "pauldron_R": "#98A0AA",
                "helm": "#959BA3", "nape": "#5F6670", "visor": "#A2A8B0", "fins": "#B2B7BD"},
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
