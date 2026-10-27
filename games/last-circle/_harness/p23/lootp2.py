@@ -117,7 +117,7 @@ def open_drop(s, sp):
     s.step_frames(30, 1 / 60)
     held = s.js("""(id) => { const W = window.__LC__.W, p = W.player; const h = W.interactHint; const nb = []; const nn = W.nearbyChests ? W.nearbyChests(p.pos, 3, nb) : null; const near = W.nearbyChests ? nb.slice(0, typeof nn === 'number' ? nn : nb.length) : null;
         return { alive: p.alive, downed: !!p.downed, phase: W.phase, t: +W.t.toFixed(1), pos: [p.pos.x, p.pos.y, p.pos.z].map((x) => +x.toFixed(2)), interactDown: !!p.input.interactDown,
-                 hint: h ? { type: h.type, id: h.id, progress: h.progress != null ? +(+h.progress).toFixed(2) : null } : null, near: near ? near.slice(0, 4).map((c) => c && (c.id || (c.c && c.c.id) || JSON.stringify(c).slice(0, 60))) : null }; }""", tgt["id"])
+                 hint: h ? { type: h.type, id: h.id, progress: h.progress != null ? +(+h.progress).toFixed(2) : null } : null, near: near ? near.slice(0, 4).map((c) => c && (c.id || (c.c && c.c.id) || Object.keys(c).slice(0, 6).join(","))) : null }; }""", tgt["id"])
     s.step_frames(5 * 60 - 30, 1 / 60)
     s.page.keyboard.up("KeyE")
     s.step_frames(30, 1 / 60)
