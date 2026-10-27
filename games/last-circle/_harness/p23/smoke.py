@@ -60,8 +60,14 @@ ISO_JS = r"""() => { const W = window.__LC__.W, M = W.map, p = W.player; const o
 # the cloud HIDES what it blocks: losBlocked cuts the bots' sight, so a human must not see through it either (and the reverse). One page task,
 # four renders at dt 1e-5 (the cloud at full size: t0 = now - 5 s): A smoke on + the bot 7 m behind its centre, B smoke on + the bot gone,
 # C smoke off + bot, D smoke off + no bot. visibility = mean |A - B| / mean |C - D| over the bot's projected box (1 = the cloud hides nothing)
-HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W, K = W.SIM, k = W.kernel, gl = k.renderer.getContext(), cam = W.camera, b = W.actorById.get(bid);
-  if (!b) return null; const V = cam.position.constructor; const by = W.map.heightAt(bx, bz);
+HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W, K = W.SIM, k = W.kernel, gl = k.renderer.getContext(), cam = W.camera;
+  // the subject: the pinned bot if it still lives (and is drawn), else the nearest live, drawn bot (pl_smoke_nocloud 10-26: open diff 0.03 - the
+  // pinned bot no longer drawn)
+  const drawn = (a) => a && a.alive && a.obj && a.obj.parent && !a.downed;
+  let b = W.actorById.get(bid); const was = b ? { alive: b.alive, obj: !!(b.obj && b.obj.parent), visible: !!(b.obj && b.obj.visible) } : null;
+  if (!drawn(b)) b = W.actors.filter((a) => a.isBot && drawn(a)).sort((p, q) => Math.hypot(p.pos.x - bx, p.pos.z - bz) - Math.hypot(q.pos.x - bx, q.pos.z - bz))[0];
+  if (!b) return { error: 'no live drawn bot', was };
+  if (b.obj) b.obj.visible = true; const V = cam.position.constructor; const by = W.map.heightAt(bx, bz);
   const place = (on) => { const x = on ? bx : bx + 400; b.pos.set(x, W.map.heightAt(x, bz), bz); b.vel.set(0, 0, 0); b.alive = true; b.hp = 100; if (b.obj) b.obj.position.copy(b.pos); };
   const smoke = (on) => { W.smokes = W.smokes || []; W.smokes.length = 0; if (on) W.smokes.push({ x: cx, y: cy, z: cz, r: K.SMOKE.r, rMax: K.SMOKE.r, t0: W.t - 5, t1: W.t + 30 }); };
   const read = () => { C.stepFrames(2, 1e-5, true); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const px = new Uint8Array(4 * w * h); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, w, h }; };
@@ -72,11 +78,13 @@ HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W,
   x0 = Math.max(0, Math.floor(x0)); x1 = Math.min(w - 1, Math.ceil(x1)); y0 = Math.max(0, Math.floor(y0)); y1 = Math.min(h - 1, Math.ceil(y1));
   if (x1 - x0 < 3 || y1 - y0 < 6) return { error: 'the bot projects off screen', box: [x0, y0, x1, y1] };
   const diff = (a, c) => { let s = 0, n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = 4 * (y * w + x); s += Math.abs(a.px[i] - c.px[i]) + Math.abs(a.px[i + 1] - c.px[i + 1]) + Math.abs(a.px[i + 2] - c.px[i + 2]); n += 3; } return s / n; };
-  smoke(true); place(true); const A = read(); place(false); const B = read();
+  // the OPEN pair first: a cloud taken out of W.smokes fades out on fx time, which dt 1e-5 never advances (smoke_all8 10-26: the cost
+  // section's three clouds still stood in front of the bot at the first tier - open diff 0.64 / 255)
   smoke(false); place(true); const Cc = read(); place(false); const D = read();
-  smoke(false); place(true); C.stepFrames(1, 1e-5, true);
+  smoke(true); place(true); const A = read(); place(false); const B = read();
+  smoke(false); place(true); C.stepFrames(180, 1 / 60, true);
   const dAB = diff(A, B), dCD = diff(Cc, D);
-  return { visibility: dCD > 0 ? +(dAB / dCD).toFixed(3) : null, smokedDiff: +dAB.toFixed(2), openDiff: +dCD.toFixed(2), boxPx: [x0, y0, x1, y1], tier: W.gfxTier,
+  return { visibility: dCD > 0 ? +(dAB / dCD).toFixed(3) : null, smokedDiff: +dAB.toFixed(2), openDiff: +dCD.toFixed(2), boxPx: [x0, y0, x1, y1], tier: W.gfxTier, subject: b.id, pinnedWas: was,
          }; }"""
 SNAP_JS = r"""() => { const W = window.__LC__.W; return (W.smokes || []).map((q) => ({ x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), r: +(q.r || 0).toFixed(2), t0: +(q.t0 || 0).toFixed(2), t1: +(q.t1 || 0).toFixed(2) })); }"""
 
@@ -253,7 +261,8 @@ def main():
                 except Exception as ex_:
                     hide[tier] = {"error": str(ex_).splitlines()[0][:120]}
                     continue
-                s.step_frames(30, 1 / 60, render=True)
+                s.js("() => { const W = window.__LC__.W; if (W.smokes) W.smokes.length = 0; }")
+                s.step_frames(180, 1 / 60, render=True)       # 3 s of fx time: every earlier cloud has faded out
                 hide[tier] = s.js(HIDE_JS, [e, iso["x"], iso["y"] + K_YOFF(s), iso["z"] - 14, iso["x"], iso["z"] - 21])
             try:
                 s.js("(t) => window.__LC__.W.setGfx('tier', t)", tier0)
