@@ -439,6 +439,14 @@ export function resolveTeamMode(want, nHumans, pace, K) {
   for (const k of order) if (T[k] >= n) return k;
   return order[order.length - 1];
 }
+/** D5, run it back: the team-mode PICK of the next match in the room. `cfg` = the start of the match that ended (its teamWant: a mode or
+ *  "auto"), `asked` = the caller's mode (the boot passes the mode the last match resolved to). The room's own pick wins; AUTO stays AUTO
+ *  (null); only a start that carried no teamWant falls back to `asked`. "solo" in a room = AUTO. */
+export function rematchTeamWant(cfg, asked) {
+  const tw = cfg && typeof cfg.teamWant === "string" ? cfg.teamWant : null;
+  const w = tw === "auto" ? null : tw != null ? normTeamMode(tw) : normTeamMode(asked);
+  return w === "solo" ? null : w;
+}
 /** The teamId of the human in roster slot `slot` for `teamMode`: solo = the actor's own id ("s" + slot, what Match.teamOf falls back to), a
  *  team mode = "t0" (the humans' team; the boot fills its other seats with bot teammates and numbers the bot teams t1, t2, ...). */
 export function humanTeamId(slot, teamMode, K) {
@@ -489,6 +497,12 @@ export class SeqGate {
 // ── LC-49: rejoin within REJOIN_MS on ?room= ──────────────────────────────────────────────────────────────────────────────────────────
 /** A guest whose page reloads (or who opens the invite link again) inside this window gets ITS OWN slot back, body and all. */
 export const REJOIN_MS = 60000;
+/** A rostered guest slot whose state has been silent this long, asked for with its right rejoin secret, has left (judgeRejoin). A live page
+ *  sends state at 12 Hz; a hidden tab of the same browser goes quiet too - and then the page asking with that tab's secret IS its player. */
+export const REJOIN_SILENT_MS = 4000;
+/** The returning page asks every REJOIN_ASK_EVERY_MS while the host answers "retry" (its old page not seen leaving yet), for up to REJOIN_MS. */
+export const REJOIN_ASK_EVERY_MS = 3000;
+export const REJOIN_ASK_TRIES = Math.ceil(REJOIN_MS / REJOIN_ASK_EVERY_MS) + 1;
 /** 53-bit string hash (cyrb53). The rejoin key is a commitment: a guest's hello carries rejoinHash(secret) (every peer of the room reads it,
  *  all messages are broadcasts), the secret stays in that tab's storage and is shown only when it asks for its slot back. Not cryptographic:
  *  it stops a squad-mate's console from claiming someone else's slot; a client that also forges `from` needs a server (OD-10). */
@@ -534,7 +548,11 @@ export function judgeRejoin(req, from, ctx) {
   if (r.peerId === from) return { ok: false, why: "already this peer's slot" };
   const want = ctx.keys && ctx.keys.get ? ctx.keys.get(req.slot) : null;
   if (!want || rejoinHash(req.key) !== want) return { ok: false, why: "wrong rejoin key" };
-  const gone = ctx.goneAt ? ctx.goneAt["s" + req.slot] : null;
+  let gone = ctx.goneAt ? ctx.goneAt["s" + req.slot] : null;
+  // fix round (the intermittent ?room= rejoin): a page that closed without a bye (a crash, a killed tab) was only seen leaving by the host's
+  // 12 s silence watchdog, and the asking page gave up after ~15 s of retries - on a loaded box the two raced. The right secret for the slot
+  // AND a slot that has been silent for REJOIN_SILENT_MS is the leave: the window opens from the slot's last packet.
+  if (gone == null && typeof ctx.silentMs === "number" && Number.isFinite(ctx.silentMs) && ctx.silentMs >= REJOIN_SILENT_MS) gone = ctx.nowMs - ctx.silentMs;
   if (gone == null) return { ok: false, why: "the slot's player has not left", retry: true };
   if (ctx.nowMs - gone > REJOIN_MS) return { ok: false, why: "rejoin window over" };
   return { ok: true, slot: req.slot };
@@ -574,19 +592,64 @@ export function reviveDoneOk(rec, by, nowMs, reviveMs) {
 }
 
 // ── LC-14: smoke relay ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** A smoke cloud as it travels ({ x, y, z, r, t0, t1 } in match time, C-SMOKE). Finite, on the map (+-half), radius 0.5..15 m, a life of at
- *  most 60 s. null = drop. */
+/** A smoke cloud as it travels ({ x, y, z, r, rMax, t0, t1 } in match time, C-SMOKE / D1): r = the LIVE radius when it was sent, rMax = the
+ *  full radius it grows to (weapons.js tickSmokes rewrites r from t0 + rMax on every client, so a relayed cloud grows exactly like the
+ *  thrower's - without rMax it fell back to the send-time r and stayed at 35 % of its size on every other screen). A sender without rMax
+ *  (r is then the full radius) is read as rMax = r. Finite, on the map (+-half), rMax 0.5..15 m with 0 <= r <= rMax, a life of at most 60 s.
+ *  null = drop. */
 export function normSmoke(d, half) {
   if (!d || typeof d !== "object") return null;
   const H = half > 0 ? half : 2000;
   const fin = (v, lim) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= lim;
-  if (!fin(d.x, H) || !fin(d.z, H) || !fin(d.y, 5000) || !fin(d.t0, 1e6) || !fin(d.t1, 1e6)) return null;
-  if (!(d.r >= 0.5 && d.r <= 15) || !(d.t1 > d.t0) || d.t1 - d.t0 > 60) return null;
+  if (!fin(d.x, H) || !fin(d.z, H) || !fin(d.y, 5000) || !fin(d.t0, 1e6) || !fin(d.t1, 1e6) || !fin(d.r, 15)) return null;
+  const rMax = d.rMax == null ? d.r : d.rMax;
+  if (!(rMax >= 0.5 && rMax <= 15) || !(d.r >= 0 && d.r <= rMax) || !(d.t1 > d.t0) || d.t1 - d.t0 > 60) return null;
   const r2 = (v) => +(+v).toFixed(2);
-  return { x: r2(d.x), y: r2(d.y), z: r2(d.z), r: r2(d.r), t0: r2(d.t0), t1: r2(d.t1) };
+  return { x: r2(d.x), y: r2(d.y), z: r2(d.z), r: r2(d.r), rMax: r2(rMax), t0: r2(d.t0), t1: r2(d.t1) };
 }
-/** At most this many relayed smokes alive per sender at once (a client that floods smokes cannot blind every bot on the host). */
-export const SMOKE_MAX_PER_SENDER = 6;
+/** At most this many relayed smokes alive per THROWER at once (D12: counted per `by`, not per sending peer - the host relays the smokes of
+ *  every bot it simulates, and a cap per peer let a 7th host-side smoke vanish on the guests while it still blinded the host's bots). A guest
+ *  can only name its own actor (senderMay), so for a guest this is still its own cap. */
+export const SMOKE_MAX_PER_THROWER = 6;
+/** (the old name: the cap is per thrower now) */
+export const SMOKE_MAX_PER_SENDER = SMOKE_MAX_PER_THROWER;
+/** Relayed smokes alive at once from every thrower together (a bound on the sight-line cost, far above play: 12 per client's own weapons.js). */
+export const SMOKE_MAX_RELAYED = 48;
+/** May a relayed smoke by `by` join `list` (W.smokes) at match time t? null = yes, else the reason it is refused. */
+export function smokeRelayRoom(list, by, t) {
+  let mine = 0, all = 0;
+  for (const x of Array.isArray(list) ? list : []) {
+    if (!x || !x._net || x.t1 < t) continue;
+    all++;
+    if (x.by === by) mine++;
+  }
+  if (mine >= SMOKE_MAX_PER_THROWER) return "smoke flood (thrower)";
+  if (all >= SMOKE_MAX_RELAYED) return "smoke flood (all)";
+  return null;
+}
+
+// ── late-join loot sync (P23 fix round) ──────────────────────────────────────────────────────────────────────────────────────────────
+/** The id prefix of the items a chest bursts into (loot.js openChest: "cb:<chest id>:<i>", a supply crate "sd:<n>:<i>"). */
+export function chestItemPrefix(c) {
+  if (!c || typeof c !== "object") return null;
+  return c.supply ? "sd:" + c.n + ":" : typeof c.id === "string" ? "cb:" + c.id + ":" : null;
+}
+/** Is `id` an item a chest / supply crate bursts into (its take can arrive before that chest is open on this client)? */
+export function isChestItem(id) { return typeof id === "string" && /^(cb|sd):/.test(id); }
+/** Apply a host's late-join / rejoin loot sync ({ taken: [item ids], opened: [chest ids] }): the OPENED list first - an item a chest bursts
+ *  into exists on this client only once that chest is open, so a take applied before the open was a no-op and the item came back as a ghost
+ *  the moment the chest opened here - then the TAKEN list. Returns the chest items it took, which the caller keeps until their chest opens here
+ *  (a supply crate that has not landed on this client yet opens later: loot.js pendingOpen). open(id) / take(id) are W.netOpenChest /
+ *  W.netTakeItem. */
+export function applyLootSync(loot, open, take) {
+  const out = [];
+  if (!loot || typeof loot !== "object") return out;
+  for (const id of Array.isArray(loot.opened) ? loot.opened : []) if (typeof id === "string") open(id);
+  for (const id of Array.isArray(loot.taken) ? loot.taken : []) { if (typeof id !== "string") continue; take(id); if (isChestItem(id)) out.push(id); }
+  return out;
+}
+/** Takes kept for chests that are not open on this client yet: at most this many (oldest dropped). */
+export const LOOT_DEFER_MAX = 512;
 
 /** The rejoin candidates a page asks with for `room` (newest first, at most 3): this tab's own record (sessionStorage `own`) when it is for
  *  this room and fresh, then records other tabs of this browser left in localStorage (`list`) that STOPPED updating (a live tab rewrites
@@ -636,6 +699,25 @@ export function init(W) {
   // chests interactable (loot beam + re-open) and the shared world diverged.
   // Replayed opens (loot.js netOpenChest) pass a=null → filtered by the `a &&` guard.
   W.events.on("chestOpened", (a, c) => { if (S && a && !a.netRemote) qsend("chest", { id: c.id }); });
+  // LC-49: the rejoin record is refreshed from update() every 2 s - which a hidden tab does not run (no rAF). A tab that is hidden and then
+  // closed (or killed) writes its record (time + kit) the moment it is hidden / unloaded, so the page that comes back asks with a fresh one.
+  if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined") {
+    const flushRejoin = () => {
+      try {
+        if (S && S.started && S.net && !S.net.isHost() && !S.rejoin && W.player && W.player.alive && (W.phase === "match" || W.phase === "drop")) { S.rjSavedAt = performance.now(); saveRejoin(W); }
+      } catch (e) {}
+    };
+    window.addEventListener("pagehide", flushRejoin);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushRejoin(); });
+  }
+  // a chest / supply crate that opened HERE after another client took items out of it (late join, a crate that landed late here, a take
+  // that beat the chest's own open message): those items go at once - never a ghost item that cannot be picked up anywhere else
+  W.events.on("chestOpened", (a, c) => {
+    if (!S || !S.lootDefer || !S.lootDefer.size || !W.netTakeItem) return;
+    const pre = chestItemPrefix(c);
+    if (!pre) return;
+    for (const id of [...S.lootDefer]) if (id.startsWith(pre)) { S.lootDefer.delete(id); W.netTakeItem(id); }
+  });
   // pickups by anything simulated locally (own player + host's bots) despawn everywhere
   W.events.on("pickedUp", (a, data, id) => { if (S && a && !a.netRemote) qsend("take", { id }); });
   // relay OUR gunfire so guests see remote muzzle flash + tracers and HEAR the shot
@@ -1046,7 +1128,9 @@ function openLobby(W, sel) {
   // small for the room is played as the smallest that holds it - resolveTeamMode); the guests read the host's pick ("room" message). Every human
   // in the room is one team; the boot fills the team's other seats with bot teammates. Placed AFTER the START button so the box keeps the
   // child order squadguard_live.py reads (title, status, buttons row, roster, notices, START).
-  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team));
+  // D5: the menu's team pick comes along - the SQUAD UP button sends only { mode } (hud.js), and the pick lives in W.settings.teamMode (the
+  // mode card writes it), so a menu pick of SQUADS is the room's starting pick instead of AUTO.
+  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team)) || normTeamMode(W.settings && W.settings.teamMode);
   if (teamWant === "solo") teamWant = null;           // a room is for playing together: solo in a room = AUTO
   const modeRow = document.createElement("div");
   modeRow.className = "lcn-row";
@@ -1207,8 +1291,9 @@ function openLobby(W, sel) {
     }
     if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
     // LC-49 REJOIN: a page that played in this room a moment ago (this tab's record, or one a closed tab of this browser left) asks for its
-    // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every 3 s while the host has not yet
-    // seen the old page leave (a reload can beat its own presence-leave), at most 6 times.
+    // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every REJOIN_ASK_EVERY_MS while the
+    // host has not yet seen the old page leave (a reload can beat its own presence-leave), for the whole rejoin window (REJOIN_ASK_TRIES; it
+    // was 6 tries = 15 s, which a host that only learns of a crashed tab from its 12 s silence watchdog could miss on a loaded box).
     const cands = asHost ? [] : rejoinCandidates(net.room, rjRead(rjSS(), RJ_SS), rjRead(rjLS(), RJ_LS + net.room), Date.now());
     const hello = myHello();
     if (cands.length) {
@@ -1216,12 +1301,17 @@ function openLobby(W, sel) {
       S.rejoinAsk = { cands, tries: 1, at: performance.now() };
       const ask = () => {
         if (S !== sess || !S.rejoinAsk || S.started) return;
-        if (S.rejoinAsk.tries >= 6) { S.rejoinAsk = null; status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — could not get your place back.<br>Waiting for the host to start…`; return; }
+        if (S.rejoinAsk.tries >= REJOIN_ASK_TRIES) {
+          S.rejoinAsk = null;
+          status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — could not get your place back.<br>Waiting for the host to start…`;
+          status.setAttribute("data-net-rejoin", "gave-up");
+          return;
+        }
         S.rejoinAsk.tries++;
         send("hello", Object.assign(myHello(), { rj: S.rejoinAsk.cands.map((c) => ({ slot: c.slot, key: c.key })) }));
-        setTimeout(ask, 3000);
+        setTimeout(ask, REJOIN_ASK_EVERY_MS);
       };
-      setTimeout(ask, 3000);
+      setTimeout(ask, REJOIN_ASK_EVERY_MS);
     }
     send("hello", hello);
     status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ` + (cands.length ? "rejoining your match…" : "share this code.") +
@@ -1417,7 +1507,9 @@ function hostRejoinHello(W, from, d, hr) {
   if (!reqs.length) { if (hr.first) send("rejoin", { k: "no", to: from, code: "busy", why: "a match is in progress in this room" }); return; }
   let last = null;
   for (const req of reqs) {
-    const j = judgeRejoin(req, from, { roster: S.cfg && S.cfg.roster, keys: S.slotKeys, goneAt: S.goneAt, nowMs: performance.now(), live, gvOk: !hr.mismatch });
+    const now = performance.now(), seen = S.lastSeen ? S.lastSeen["s" + req.slot] : null;
+    const j = judgeRejoin(req, from, { roster: S.cfg && S.cfg.roster, keys: S.slotKeys, goneAt: S.goneAt, nowMs: now, live, gvOk: !hr.mismatch,
+      silentMs: typeof seen === "number" ? now - seen : null });
     if (j.ok) { acceptRejoin(W, from, j.slot, hr); return; }
     last = j;
   }
@@ -1433,7 +1525,9 @@ function acceptRejoin(W, from, slot, hr) {
   const roster = S.cfg.roster.map((r) => (r.slot === slot ? Object.assign({}, r, { peerId: from }) : r));
   S.cfg = Object.assign({}, S.cfg, { roster });
   if (hr && hr.rec && hr.rec.rk) S.slotKeys.set(slot, hr.rec.rk);        // the new tab's commitment: a second reload can come back too
-  delete S.goneAt[id];
+  if (S.goneAt) delete S.goneAt[id];          // (null when the slot was judged gone by its silence alone)
+  // the old page's last packet must not trip the silence watchdog while the new page loads (its "ready" starts the slot's clock again)
+  if (S.lastSeen) delete S.lastSeen[id];
   (S.rejoined = S.rejoined || {})[id] = { peer: from, at: performance.now(), ready: false };
   try { if (old && S.rtc) S.rtc.removePeer(old.peerId); } catch (e) {}
   const a = W.actorById && W.actorById.get(id);
@@ -2044,12 +2138,12 @@ function onMsg(W, { from, t, d }) {
   if (t === "revive") { onRevive(W, from, d); return; }
   if (t === "smoke") {
     // LC-14 / C-SMOKE: a smoke cloud thrown on another client joins W.smokes here, so fx.js draws it and maps.js losBlocked (the host's bots)
-    // respects it; marked _net so it is never relayed back. At most SMOKE_MAX_PER_SENDER alive per sender.
+    // respects it; marked _net so it is never relayed back. At most SMOKE_MAX_PER_THROWER alive per thrower (`by`, D12), SMOKE_MAX_RELAYED in all.
     const s = normSmoke(d, W.map && W.map.size ? W.map.size / 2 + 50 : 2000);
     if (!s) { reject(t, from, "malformed smoke"); return; }
     if (!Array.isArray(W.smokes)) W.smokes = [];
-    const live = W.smokes.filter((x) => x && x._net === from && !(x.t1 < W.t)).length;
-    if (live >= SMOKE_MAX_PER_SENDER) { reject(t, from, "smoke flood"); return; }
+    const full = smokeRelayRoom(W.smokes, d.by, W.t);
+    if (full) { reject(t, from, full); return; }
     W.smokes.push(Object.assign(s, { _net: from, by: d.by }));
     W.events.emit("smokeNet", s);
     (S.relayIn = S.relayIn || {}).smoke = ((S.relayIn && S.relayIn.smoke) || 0) + 1;
@@ -2068,7 +2162,7 @@ function onMsg(W, { from, t, d }) {
   if (t === "rejoin") { onRejoinInMatch(W, from, d); return; }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
   if (t === "chest") { W.netOpenChest(d.id); return; }
-  if (t === "take") { W.netTakeItem(d.id); return; }
+  if (t === "take") { W.netTakeItem(d.id); if (isChestItem(d.id)) deferTakes([d.id]); return; }   // (its chest may not be open here yet)
   if (t === "died") {
     const a = W.actorById.get(d.slot);
     if (a && a.alive) { a.hp = 0; a.shield = 0; W.killActor(a, d.killer, d.weapon); }
@@ -2097,8 +2191,8 @@ function onMsg(W, { from, t, d }) {
     // late-join / drift correction from host. (LC-49) A sync addressed to a rejoining peer (`to`) is for that peer only.
     if (d.to && d.to !== S.net.id) return;
     if (typeof d.t === "number" && Number.isFinite(d.t)) W.t = d.t;
-    for (const id of (d.loot && d.loot.taken) || []) W.netTakeItem(id);
-    for (const id of (d.loot && d.loot.opened) || []) W.netOpenChest(id);
+    // opened BEFORE taken (applyLootSync): items taken from a chest never come back as ghosts when it opens here
+    deferTakes(applyLootSync(d.loot, W.netOpenChest, W.netTakeItem));
     // LC-49: the actors that died before this page (re)joined fall quietly - the right alive count, no kill-feed flood, no body in the sky
     if (Array.isArray(d.dead)) for (const row of d.dead.slice(0, 64)) quietDeath(W, Array.isArray(row) ? row[0] : row, Array.isArray(row) ? row[1] : null);
     return;
@@ -2139,7 +2233,9 @@ function applyRemoteState(W, a, d) {
   const dn = !!(f & F_DOWNED);
   if (dn && !a.downed) a.downedT = W.t;
   a.downed = dn;
-  a.downedHp = dn && typeof d.dh === "number" ? d.dh : dn ? a.downedHp : 0;
+  // (pack: while downed the hp field IS the bleed pool; a downed actor's own hp is 0)
+  if (dn) { a.downedHp = typeof d.hp === "number" && Number.isFinite(d.hp) ? Math.max(0, d.hp) : a.downedHp; a.hp = 0; }
+  else a.downedHp = 0;
   // LC-49: the packet's sequence number and the sender's match-clock stamp (player.js may interpolate on them; net.js orders by q)
   if (typeof d.q === "number") a.netQ = d.q;
   if (typeof d.t === "number") a.netT = d.t;
@@ -2223,7 +2319,14 @@ function resetMatchState() {
   S.pingIn = null; S.pingOut = null;
   // P23: the receive order gate, the revive book, the rejoin book and the relayed smokes belong to the match that ended (txSeq keeps counting)
   S.rxGate = null; S.reviveIn = null; S.reviveOut = null; S.goneAt = null; S.rejoined = null; S.rejoin = null; S.slotKeys = null;
-  S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null;
+  S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null; S.lootDefer = null;
+}
+/** Keep chest-item takes until their chest opens on this client (the chestOpened listener in init applies them). */
+function deferTakes(ids) {
+  if (!S || !ids || !ids.length) return;
+  const set = S.lootDefer = S.lootDefer || new Set();
+  for (const id of ids) { set.delete(id); set.add(id); }
+  while (set.size > LOOT_DEFER_MAX) set.delete(set.values().next().value);
 }
 
 let _waitCard = null;
@@ -2281,8 +2384,9 @@ export function rematch(W, opts) {
     S.rematchN = (S.rematchN | 0) + 1;
     const mode = opts.mode || (S.cfg && S.cfg.mode) || "standard";
     const pace = mode === "practice" ? "standard" : mode;
-    // C-MODE: the room keeps its team-mode pick (re-resolved for who is still here)
-    const want = normTeamMode(opts.teamMode) || (S.cfg && S.cfg.teamWant !== "auto" ? normTeamMode(S.cfg.teamWant) : null);
+    // C-MODE / D5: the room keeps its team-mode PICK (re-resolved for who is still here): a pick of SQUADS stays SQUADS, AUTO stays AUTO (the
+    // boot passes the mode the last match RESOLVED to, which for an AUTO room is not a pick); a start without teamWant (older host) -> opts
+    const want = rematchTeamWant(S.cfg, opts.teamMode);
     const teamMode = resolveTeamMode(want === "solo" ? null : want, plan.roster.length, pace, W.SIM);
     const cfg = S.hs.startMsg({
       seed: (Math.random() * 0xffffffff) >>> 0,
@@ -2518,7 +2622,9 @@ function pack(a, stamp) {
     id: a.id,
     x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2),
     yw: +a.yaw.toFixed(3), pt: +a.pitch.toFixed(2),
-    hp: Math.round(a.hp), sh: Math.round(a.shield),
+    // C-DBNO: while the downed bit is set, `hp` carries the BLEED POOL (a downed actor's hp is 0 by rule, player.js knockActor), so the
+    // packet keeps the same keys downed or up - no extra field, per-tick bytes unchanged (plan P3 "one spare flag bit")
+    hp: Math.round(a.downed ? Math.max(0, a.downedHp || 0) : a.hp), sh: Math.round(a.shield),
     gl: a.gliding ? 1 : 0, wp: a.weapon ? a.weapon.id : null,
     // bits 32/64: mantle + hit-react — transient states, but 0.25-0.5 s spans
     // 2-6 packets at 5-12 Hz so remotes catch them; older peers ignore
@@ -2531,10 +2637,9 @@ function pack(a, stamp) {
        // radius off a.sprinting, which a remote actor never had - every remote enemy fell to the walk row. Older peers ignore the bit.
        (a.sprinting ? 128 : 0) |
        // bit 256: DOWNED (C-DBNO). The stance byte was at most 255 (3 digits) and is at most 511 now (3 digits): a normal packet is
-       // byte-identical, and `dh` below is only there while the actor bleeds out.
+       // byte-identical, and while the bit is set `hp` above is the bleed pool (applyRemoteState: downedHp = hp, hp = 0).
        (a.downed ? F_DOWNED : 0),
   };
-  if (a.downed) st.dh = Math.max(0, Math.round(a.downedHp || 0));
   // LC-49: the envelope's own packet (not each bot in it) carries q = the sender's packet counter and t = its match clock - the host's clock,
   // which every guest slews to, i.e. the server-time stamp (on the host's packet it is also the clock guests slew from, as before)
   if (stamp) { st.q = stamp.q; st.t = stamp.t; }
