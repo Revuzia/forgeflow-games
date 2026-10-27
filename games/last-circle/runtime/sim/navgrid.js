@@ -410,7 +410,7 @@
   function latRead(G) {
     var L = G.L, C = G.c, N = G.n;
     var fx = (_hq[0] + G.h) * G.k, fz = (_hq[1] + G.h) * G.k;
-    fx = fx < 0 ? 0 : fx > C ? C : fx; fz = fz < 0 ? 0 : fz > C ? C : fz;
+    fx = Math.min(Math.max(fx, 0), C); fz = Math.min(Math.max(fz, 0), C);      // (final/nav) not the nested ?: (boxed by Maglev, see supBlockQ); equal up to the sign of a zero
     var ix = fx | 0, iz = fz | 0;
     if (ix >= C) ix = C - 1;
     if (iz >= C) iz = C - 1;
@@ -437,7 +437,10 @@
     for (var k = a; k < b; k++) {
       var i = items[k];
       var x0 = lx0[i], x1 = lx1[i], z0 = lz0[i], z1 = lz1[i];
-      var ex = x - (x < x0 ? x0 : x > x1 ? x1 : x), ez = z - (z < z0 ? z0 : z > z1 ? z1 : z);
+      // (final/nav) the clamp as Math.min / Math.max: the nested ?: form is a phi of a phi, which V8's mid tier (Maglev) keeps boxed - a fresh heap number per
+      // collider per step while the replay runs there (VS Code's V8 14.8 under --no-turbofan: supBlockQ 29.9 -> 3.9 B a step). Equal for every box with
+      // minX <= maxX (every collider of 15 builds, 3 maps x 5 seeds) up to the sign of a zero, and ex is only squared.
+      var ex = x - Math.min(Math.max(x, x0), x1), ez = z - Math.min(Math.max(z, z0), z1);
       if (!(ex * ex + ez * ez < r2)) continue;
       if (nn < 48) _sbN[nn++] = i; else over = true;
       var kd = lk[i];
@@ -1660,7 +1663,9 @@
   /** The module scratch a replay uses (bakeTile saves and restores it around a whole bake; an incremental bake does the same around every slice). */
   var _scr = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];       // (reused: stepJob is not re-entrant, and a fresh array per slice was 10 MB of garbage per city)
   function saveScratch() { var s = _scr; s[0] = _hr[0]; s[1] = _hr[1]; s[2] = _hr[2]; s[3] = _hr[3]; s[4] = _hr[4]; s[5] = _hr[5]; s[6] = _marginUse; s[7] = _ec[0]; s[8] = _strictRamp; s[9] = _supRamp; s[10] = _rest; s[11] = _wsRamp; return s; }
-  function loadScratch(s) { _hr[0] = s[0]; _hr[1] = s[1]; _hr[2] = s[2]; _hr[3] = s[3]; _hr[4] = s[4]; _hr[5] = s[5]; _marginUse = s[6]; _ec[0] = s[7]; _strictRamp = s[8]; _supRamp = s[9]; _rest = s[10]; _wsRamp = s[11]; }
+  // (final/nav) the flags come back as small integers (| 0, they are 0 / 1; _wsRamp is a boolean): _scr holds doubles too (_hr), so its reads are heap numbers, and a heap number in
+  // _supRamp / _rest / ... deoptimized every function that compares them ('not a Smi' in hopQ, Chrome's V8 log, at the first stepJob of the match)
+  function loadScratch(s) { _hr[0] = s[0]; _hr[1] = s[1]; _hr[2] = s[2]; _hr[3] = s[3]; _hr[4] = s[4]; _hr[5] = s[5]; _marginUse = s[6] | 0; _ec[0] = s[7]; _strictRamp = s[8] | 0; _supRamp = s[9] | 0; _rest = s[10] | 0; _wsRamp = s[11] === true; }
 
   /**
    * AN INCREMENTAL JOB (lane 7B2): bake one tile of a lazy world (a { kind, key, tx, tz, rect } from collectJobs / takeWanted), stitch it to the baked
