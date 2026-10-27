@@ -1706,7 +1706,7 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
     const dirx = Math.cos(a + 0.3), dirz = Math.sin(a + 0.3);
     const px = -dirz, pz = dirx;
     const inner = b === 0 ? 0.82 : 0.9 + (r0 / 0.17) * 0.1 + (rand() - 0.5) * 0.08;
-    const foot = root.clone().multiplyScalar(0.6 * inner), body = root.clone().lerp(tip, 0.5).multiplyScalar(inner);
+    const foot = root.clone().multiplyScalar(0.6 * inner), body = root.clone().lerp(tip, 0.58).multiplyScalar(inner);
     const lit = tip.clone().multiplyScalar(0.64 * (0.94 + 0.06 * inner));
     lit.r *= 1.05; lit.b *= 0.86;
     const ring: [number, number, number][][] = [];

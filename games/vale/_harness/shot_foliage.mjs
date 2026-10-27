@@ -78,6 +78,10 @@ function install(thIdx) {
   const pip = (x, y, poly) => { let ins = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins; } return ins; };
   const th = m.thickets ?? [];
   const cen = (p) => [p.reduce((s, q) => s + q[0], 0) / p.length, p.reduce((s, q) => s + q[1], 0) / p.length];
+  // the default thicket: RIFT's north-lane bank (open to the camera, long enough for three fighters), else the
+  // map's largest
+  const DEFAULT = { map_rift: 2 };
+  if (!(Number.isFinite(thIdx) && thIdx >= 0) && DEFAULT[m.id] !== undefined && th[DEFAULT[m.id]]) thIdx = DEFAULT[m.id];
   let k = Number.isFinite(thIdx) && thIdx >= 0 ? thIdx : 0;
   if (!(Number.isFinite(thIdx) && thIdx >= 0) && th.length) {
     // the largest thicket (room for three fighters)
