@@ -140,33 +140,18 @@ def settle(gpg, h_id, ms=6000):
     return gpg.evaluate(SETTLE_JS, [h_id, ms])
 
 
-# which page is in FRONT during a tracked walk. Fix round 2: with the walker (host) in front, the observing guest ran at its background rate and
-# its copy of the host trailed the newest target by metres (base: 8.75-9.37 m of progress on the copy in 4 s while the host walked ~18 m), so
-# a stale target still lay AHEAD of the drawn copy and no injection could pull it back (0.0 m on the base at 600 ms and after-2-newer).
-# The OBSERVER in front draws every target it applies; the walker keeps walking at its background rate (keys reach a background page).
-OBSERVER_FRONT = True
-
-
 def walk_and_track(hpg, gpg, h_id, ms=3000):
     yaw = hpg.evaluate("() => window.__LC__.W.player.input.yaw")
     import math
     dx, dz = -math.sin(yaw), -math.cos(yaw)
-    fjs = "() => window.__LC__.W.kernel.frameNo"
-    (gpg if OBSERVER_FRONT else hpg).bring_to_front()
-    f0 = (time.time(), hpg.evaluate(fjs), gpg.evaluate(fjs))
     hpg.keyboard.down("KeyW")
     tr = gpg.evaluate(TRACK_JS, [h_id, ms, dx, dz])
     hpg.keyboard.up("KeyW")
-    f1 = (time.time(), hpg.evaluate(fjs), gpg.evaluate(fjs))
-    own = hpg.evaluate("([dx, dz]) => { const p = window.__LC__.W.player.pos; return p.x * dx + p.z * dz; }", [dx, dz])
-    dt = max(0.001, f1[0] - f0[0])
     steps = [tr[i - 1] - tr[i] for i in range(1, len(tr))]
     back = max(steps, default=None)
     at = steps.index(back) + 1 if steps else None
     return {"samples": len(tr), "progress": round(tr[-1] - tr[0], 2) if tr else None, "maxBackM": round(back, 3) if back is not None else None,
-            "backSteps>0.05": sum(1 for x in steps if x > 0.05), "atSample": at, "around": tr[max(0, (at or 0) - 4):(at or 0) + 3] if at else None,
-            "front": "guest" if OBSERVER_FRONT else "host", "hostFps": round((f1[1] - f0[1]) / dt, 1), "guestFps": round((f1[2] - f0[2]) / dt, 1),
-            "copyLagM": round(own - tr[-1], 2) if tr else None}
+            "backSteps>0.05": sum(1 for x in steps if x > 0.05), "atSample": at, "around": tr[max(0, (at or 0) - 4):(at or 0) + 3] if at else None}
 
 
 def main():
