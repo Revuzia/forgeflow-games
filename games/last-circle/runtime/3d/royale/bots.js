@@ -1309,6 +1309,15 @@ function onEnter(W, b, state) {
         const c = st.nextCenter || st.center;
         fx = fx * 0.55 + c.x * 0.45;
         fz = fz * 0.55 + c.z * 0.45;
+        // (fix pass 2, probe_match stuck rows) THE BLEND CAN CANCEL OUT. With the circle's centre ~73 m behind the enemy (0.55 x 60 m away = 0.45 x the
+        // centre's pull) the escape point lands on the bot: it "arrived" at once, re-planned the same point, and circled a 2-3 m patch in FLEE (probe_match
+        // deepwood seed 13: s11, goal 0.2-0.5 m away in 6 stuck episodes over 90 s). A blend that leaves under 20 m to run goes ACROSS the enemy's line
+        // instead, 45 m to the side the centre is on (and 15 m back), so the bot both opens the distance and keeps to the safe side.
+        if (hyp(fx - a.pos.x, fz - a.pos.z) < 20) {
+          const ux = dx / d, uz = dz / d, sx = -uz, sz = ux;
+          const side = (c.x - a.pos.x) * sx + (c.z - a.pos.z) * sz >= 0 ? 1 : -1;
+          fx = a.pos.x + sx * side * 45 + ux * 15; fz = a.pos.z + sz * side * 45 + uz * 15;
+        }
       }
       bb.moveTo = { x: fx, z: fz };
     } else bb.moveTo = randNear(W, a, 50, rng);
