@@ -3584,10 +3584,12 @@ export async function buildMap(W, mapId) {
     C.y0 = Math.min(C.y0, H.aabb.min[1]); C.y1 = Math.max(C.y1, H.aabb.max[1]);
     const toChunk = (a, k, tki, inside) => { if (a.idx.length) (inside ? C.inside : C.parts).push(a, k, tki); };   // (copied once into the chunk's typed arrays, see buildHouseFurniture; K1: the insides and the furniture apart)
     // structure: the outside -> the district sink, the inside -> the chunk
-    const md = HG.meshData(H, hgCol, { interior: true });
+    // (K1 re-run: ns - a ruin's wreckage comes keyed "<mat>#ns" and goes to the district's no-shadow twin, "vcn|<kind>", see mergeBatchSet)
+    const md = HG.meshData(H, hgCol, { interior: true, ns: true });
     for (const [key, a] of md.groups.walls) {
       if (!a.idx.length) continue;
-      const bar = key.indexOf("|"), mat = bar < 0 ? key : key.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
+      const nsK = key.endsWith("#ns"), key0 = nsK ? key.slice(0, -3) : key;
+      const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
       if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
@@ -3595,7 +3597,7 @@ export async function buildMap(W, mapId) {
       geo.setAttribute("uv", new THREE.Float32BufferAttribute(a.uv, 2));
       geo.setAttribute("color", new THREE.Float32BufferAttribute(a.col, 3));
       geo.setIndex(a.idx);
-      pushGeo("vc|" + kind, geo);
+      pushGeo((nsK ? "vcn|" : "vc|") + kind, geo);
     }
     for (const [, a] of md.groups.glass) {
       const base = hgGlass.pos.length / 3;
@@ -4299,7 +4301,7 @@ export async function buildMap(W, mapId) {
         const P = m.userData.parts;
         let ds = d;
         if (P) { ds = Infinity; for (const p of P) { const e = Math.hypot(p[0] - cam.position.x, p[1] - cam.position.z) - p[2]; if (e < ds) ds = e; } }
-        m.castShadow = ds < 170;
+        m.castShadow = !m.userData.noCast && ds < 170;          // (K1 re-run: a district's no-shadow twin never casts)
       }
     });
   }
@@ -5264,6 +5266,7 @@ export async function buildMap(W, mapId) {
   /** Merge one batch set (colour|kind -> geometries) into one mesh per texture kind plus one per emissive colour. `tag` = "" for the map-wide set, else the district id. */
   function mergeBatchSet(bset, tag) {
     const kindGroups = {};                        // tkind -> [geometry with a color attribute]
+    const nsGroups = {};                          // (K1 re-run) tkind -> pre-coloured house geometry that casts no shadow (a ruin's wreckage, "vcn|<kind>")
     for (const bkey in bset) {
       const bar = bkey.lastIndexOf("|");
       const color = bkey.slice(0, bar);
@@ -5273,6 +5276,7 @@ export async function buildMap(W, mapId) {
       const bk = bkey.slice(bar + 1);
       const tkind = (tag || city) && (bk === "block" || bk === "shingle") ? "s" : bk;
       if (EMIT[color]) continue;                    // built below, one mesh per colour
+      if (color === "vcn") { const l = nsGroups[bk] || (nsGroups[bk] = []); for (const geo of bset[bkey]) l.push(geo); continue; }
       const list = kindGroups[tkind] || (kindGroups[tkind] = []);
       if (color === "vc") { for (const geo of bset[bkey]) list.push(geo); continue; }        // (WAVE 8: a housegen house's faces carry their own vertex colours)
       _vc.set(color);
@@ -5307,6 +5311,20 @@ export async function buildMap(W, mapId) {
       mesh.userData.lcPart = "structure";                                         // (WAVE 8: what the mesh IS, for the gates: a town called "yard" is not a yard decal)
       if (tag) { mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
       g.add(mesh);
+    }
+    // (K1 re-run) the district's NO-SHADOW twin: a ruin's wreckage (housegen ns boxes: rubble, remnants, scorch, burnt roof plates), the mix material and program,
+    // receives shadow, never casts (installCityCull leaves it alone: userData.noCast) - the depth pass no longer re-draws ~375 triangles per ruin house
+    const nsGeos = [];
+    for (const [k, v] of DUAL) for (const geo of (nsGroups[k] || [])) { geo.setAttribute("tki", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(v), 1)); nsGeos.push(geo); }
+    if (nsGeos.length) {
+      const mergedN = BufferGeometryUtils.mergeGeometries(nsGeos, false);
+      if (mergedN) {
+        const mesh = new THREE.Mesh(mergedN, dualStructMaterial());
+        mesh.castShadow = false; mesh.receiveShadow = true;
+        mesh.name = "structures:mixns" + (tag ? "@" + tag : ""); mesh.userData.lcPart = "structure"; mesh.userData.noCast = true;
+        if (tag) { mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
+        g.add(mesh);
+      }
     }
     for (const bkey in bset) {
       const color = bkey.slice(0, bkey.lastIndexOf("|"));

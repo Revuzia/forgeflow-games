@@ -1638,9 +1638,12 @@ function blockedHoriz(W, x, z, y, h) {
  *  path instead of a terrain-only shortcut. The list is this module's own
  *  array (the map's shared scratch array is valid only until the next query). */
 const _moveCols = [];
-function moveCols(W, x, z, reach) {
+function moveCols(W, x, z, reach, y0, y1) {
   // + one more radius: a cornerSlide result lies up to a radius past the move
-  return W.map.queryColliders(x, z, Math.max(K.PLAYERK.radius + 0.4, 0.6) + K.PLAYERK.radius + reach, _moveCols);
+  // (Wave 8 fix round, lane K1 -> K2) y0 / y1: the tick's vertical band (maps.js queryColliders' optional band; an older map ignores it): a furnished house's
+  // other storeys, attic and roof are not this tick's business - houseload collider-load-frame. Every test that reads the list (blockedF, cornerSlide,
+  // supportF, sweepSupport) only looks at boxes inside the band, so the answers are unchanged.
+  return W.map.queryColliders(x, z, Math.max(K.PLAYERK.radius + 0.4, 0.6) + K.PLAYERK.radius + reach, _moveCols, y0, y1);
 }
 const _mb = { fx: 0, fz: 0, rx: 0, rz: 0 };   // K.moveBasis out-param (no per-frame object)
 
@@ -2010,7 +2013,10 @@ function stepActor(W, a, dt) {
     // only: through walls, under roofs). One collider query covers all three.
     const h = K.PLAYERK.height;
     const mvx = a.vel.x * dt, mvz = a.vel.z * dt;
-    const cols = moveCols(W, a.pos.x, a.pos.z, Math.abs(mvx) + Math.abs(mvz));
+    // the band: the feet before and after this tick's fall (or rise), 1 m below, the body + 1 m above (supportF / sweepSupport read tops between the two feet
+    // heights, blockedF the capsule from the step height up: nothing outside it decides anything this tick)
+    const dyT = a.vel.y * dt, yLo = (dyT < 0 ? a.pos.y + dyT : a.pos.y) - 1.0, yHi = (dyT > 0 ? a.pos.y + dyT : a.pos.y) + h + 1.0;
+    const cols = moveCols(W, a.pos.x, a.pos.z, Math.abs(mvx) + Math.abs(mvz), yLo, yHi);
     {
       let hitWall = false;
       const nx = a.pos.x + mvx;
@@ -3057,9 +3063,13 @@ function camRayHit(cols, ox, oy, oz, dx, dy, dz, r, best) {
       const ex = ox < c.minX ? c.minX - ox : ox > c.maxX ? ox - c.maxX : 0;
       const ey = oy < c.minY ? c.minY - oy : oy > c.maxY ? oy - c.maxY : 0;
       const ez = oz < c.minZ ? c.minZ - oz : oz > c.maxZ ? oz - c.maxZ : 0;
-      const dd = Math.sqrt(ex * ex + ey * ey + ez * ez);
+      // (Wave 8 fix round, lane K1 -> K2) the box is grown with SQUARE corners, so the eye is inside it whenever its largest per-axis gap is under r - also
+      // when its true distance is over r (the corner region). The retest radius is that largest gap less 1.5 cm, never more than r: the Euclidean distance
+      // (0.38 m at verify_b's Deepwood shop gondola: eye 0.27 m over its top and 0.27 m off its end) GREW the radius to 0.365, the eye stayed inside, the box
+      // was ignored and the lens dipped 0.06-0.16 m into the shelf top (player_camwall 2 of 1488 frames)
+      const dd = ex > ey ? (ex > ez ? ex : ez) : (ey > ez ? ey : ez);
       if (dd <= 0.03) break;                                // the eye is in the box itself
-      rr = dd - 0.015;                                      // retest with the radius the eye really has
+      rr = Math.min(r, dd - 0.015);                         // retest with the radius the eye really has
     }
   }
   return best;

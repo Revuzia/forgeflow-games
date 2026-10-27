@@ -1649,6 +1649,7 @@ export function generate(parcel, opts) {
     // foot of the walls and on the roof (drawn only: skins on a collider face, or deco tufts outside every opening's approach), broken panes (no glass in most
     // windows). Openings stay clear: nothing within 0.6 m of a doorway's sides or in front of it, nothing in a window's aperture.
     if (TH.ruined) {
+      const nbRuin = boxes.length;                        // (K1 re-run: every box of the wreckage below is flagged ns - drawn, never in the shadow pass; see the end of this block)
       const rr = rr5, P_SOOT = pal(fMat, 0x3a332c), P_SOOT2 = pal(fMat, 0x5e554a), P_MOSS = pal("fabric", 0x5f6c47), P_WEED = pal("fabric", 0x5d7036), P_WEED2 = pal("fabric", 0x7c8546);
       const P_RUB = pal("stone", 0xa39a88), P_RUB2 = pal("stone", 0x857d70), P_BEAM = pal("wood", 0x2f2620), P_CRACK = pal(fMat, 0x3a342e);
       const top = s[S] + (parapetRoof ? PARAPET : 0), rf = s[S];
@@ -1861,6 +1862,45 @@ export function generate(parcel, opts) {
         const u = rr() < 0.5 ? rU0 + rr() * 0.4 : rU1 - rr() * 0.4, v = rV0 + rr() * Math.max(0, rV1 - rV0), w = 0.1 + rr() * 0.12;
         if (onRoof(u - w, u + w, v - w, v + w)) deco(u - w, u + w, rf, rf + 0.12 + rr() * 0.2, v - w, v + w, rr() < 0.5 ? P_WEED : P_WEED2);
       }
+      // (7) (K1 re-run) A BURNT-THROUGH ROOF, as the drop sees it: from the air the rim village still read as whole flat roofs (crater_after7_air0: dusty roofs,
+      // jagged parapets, no holes). A real hole would leave a room with no drawn ceiling (interiorcheck ceiling) and open the storey to the sky, so the roof
+      // keeps its slab and the hole is PAINTED on it: a charred ring, a near-black core of three overlapping lobes and burnt rafters across it - plates
+      // (skins <= 1.5 cm, top face only, each lying on the roof slab's top: drawn with the walls, so the drop sees them - a 'deco' box is furniture, hidden
+      // past 60 m), materials the ruin already uses (no new material / program / draw call). Last in this stream (rr5): every earlier ruin draw is unchanged.
+      if (parapetRoof) {
+        // (a plate lies flat on collider tops only: the roof slab's, the slab boxes whose top is the roof surface - never over a roof opening)
+        const tops = boxes.filter((b) => b.c && b.p !== "skin" && Math.abs(b.y1 - rf) < 1e-6);
+        const onTops = (u0, u1, v0, v1) => {
+          for (let qu = 0; qu <= 12; qu++) for (let qv = 0; qv <= 12; qv++) {
+            const u = u0 + (u1 - u0) * (qu === 0 ? 0.001 : qu === 12 ? 0.999 : qu / 12), v = v0 + (v1 - v0) * (qv === 0 ? 0.001 : qv === 12 ? 0.999 : qv / 12);
+            if (!tops.some((b) => u >= b.u0 && u <= b.u1 && v >= b.v0 && v <= b.v1)) return false;
+          }
+          return true;
+        };
+        const plate = (u0, u1, t, v0, v1, pi) => { if (!onTops(u0, u1, v0, v1)) return -1; const bi = addBox("skin", u0, u1, rf, rf + t, v0, v1, [pi, pi, pi, pi, pi, pi], 0, S - 1); if (bi >= 0) boxes[bi].hp = 63 & ~4; return bi; };
+        const P_CHAR = pal(fMat, 0x2e2924), P_HOLE = pal("fabric", 0x16130f), P_RAFT = pal("wood", 0x3b2f25);
+        const area = (rU1 - rU0) * (rV1 - rV0);
+        for (let k = 0, nh = (rr() < 0.85 ? 1 : 0) + (area > 60 && rr() < 0.4 ? 1 : 0); k < nh; k++) {
+          const a = Math.min(1.0 + rr() * 0.8, Math.min(rU1 - rU0, rV1 - rV0) / 2.7), uc = rU0 + a * 1.3 + rr() * Math.max(0, rU1 - rU0 - a * 2.6), vc = rV0 + a * 1.3 + rr() * Math.max(0, rV1 - rV0 - a * 2.6);
+          const lob = (fu0, fu1, fv0, fv1) => [uc - a * fu0, uc + a * fu1, vc - a * fv0, vc + a * fv1];
+          const ring = [lob(1.25, 1.1, 0.75, 0.9), lob(0.8, 0.95, 1.2, 1.05)];
+          const core = [lob(1.0, 0.75, 0.5, 0.6), lob(0.5, 0.6, 0.95, 0.8), lob(0.25, 0.95, 0.3, 0.45)].map((q) => q.map((x, i) => x + (rr() - 0.5) * 0.12 * a));
+          if (!ring.concat(core).every((q) => onRoof(q[0], q[1], q[2], q[3]) && onTops(q[0], q[1], q[2], q[3]))) continue;
+          for (const q of ring) plate(q[0], q[1], 0.005, q[2], q[3], P_CHAR);
+          for (const q of core) plate(q[0], q[1], 0.01, q[2], q[3], P_HOLE);
+          const alongU = rr() < 0.5, nR = 2 + (rr() < 0.5 ? 1 : 0);
+          for (let r = 0; r < nR; r++) {
+            const off = (r - (nR - 1) / 2) * (0.45 + rr() * 0.2) * a, len0 = a * (0.9 + rr() * 0.4), len1 = a * (0.7 + rr() * 0.5), w = 0.1;
+            const q = alongU ? [uc - len0, uc + len1, vc + off - w / 2, vc + off + w / 2] : [uc + off - w / 2, uc + off + w / 2, vc - len0, vc + len1];
+            if (onRoof(q[0], q[1], q[2], q[3])) plate(q[0], q[1], 0.015, q[2], q[3], P_RAFT);
+          }
+        }
+      }
+      // (K1 re-run) THE WRECKAGE CASTS NO SHADOW: a ruin district's mesh is drawn twice whenever it casts (the main pass and the sun's depth pass, the whole merged
+      // mesh once its sphere meets the shadow box), and the dressing above is ~375 triangles a house - perf_district Isla Viva s1234's endgame view over the crater
+      // read x1.271 of the live build's triangles (x1.191 without the dressing; bar x1.25). meshData(..., { ns: true }) keys these faces "<mat>#ns" and maps.js
+      // draws them in the district's no-shadow twin mesh (same material and program, receives shadow). Drawing and colliders are unchanged; 'deco' tufts are furniture.
+      for (let q = nbRuin; q < boxes.length; q++) if (boxes[q].p !== "deco") boxes[q].ns = 1;
     }
   }
 
@@ -3268,7 +3308,9 @@ export function generate(parcel, opts) {
   const outBoxes = boxes.map((b) => {
     const wb = wbox(b.u0, b.u1, b.y0, b.y1, b.v0, b.v1);
     let hw = 0; for (let w = 0; w < 6; w++) if (b.h & (1 << faceMap[w])) hw |= 1 << w;
-    return { p: b.p, min: wb.min, max: wb.max, f: faceMap.map((li) => b.f[li]), h: hw, c: b.c, fl: b.fl };
+    const ob = { p: b.p, min: wb.min, max: wb.max, f: faceMap.map((li) => b.f[li]), h: hw, c: b.c, fl: b.fl };
+    if (b.ns) ob.ns = 1;                                  // (K1 re-run: a ruin's wreckage - drawn without a shadow; absent on every other box)
+    return ob;
   });
   // furniture: kit entries and authored boxes
   const furniture = [];
@@ -3697,7 +3739,9 @@ export function meshData(H, colOf, opts) {
   };
   const groups = { walls: new Map(), furniture: new Map(), glass: new Map() };      // mat -> { pos, nor, uv, col, idx, boxes }
   const boxRanges = new Array(H.boxes.length);
-  const acc = (grp, mat, inn) => { const key = inn ? mat + "|in" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
+  // (K1 re-run) opts.ns: an OUTSIDE face of a box flagged ns (a ruin's wreckage) is keyed "<mat>#ns" (maps.js: the no-shadow twin mesh); without opts.ns nothing changes
+  const nsSplit = !!opts.ns;
+  const acc = (grp, mat, inn, ns) => { const key = inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
   // a box -> faces grouped by material (one box can span two materials: brick outside, plaster inside)
   const FACES = [                                    // [normal, 4 corners as (x, y, z) picks 0 = min 1 = max], uv axes
     [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], [2, 1]],
@@ -3713,7 +3757,7 @@ export function meshData(H, colOf, opts) {
     let first = null;
     for (let fi = 0; fi < 6; fi++) {
       if (b.h & (1 << fi)) continue;
-      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi)), base = a.pos.length / 3;
+      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi), nsSplit && grp === "walls" && b.ns === 1), base = a.pos.length / 3;
       if (!first) first = [grp, pe.mat, base];
       const [n, cs, ax] = FACES[fi], tile = TILE[pe.mat] || 2, rgb = colOf(pe.color);
       for (const cr of cs) {
