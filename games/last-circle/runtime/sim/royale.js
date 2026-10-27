@@ -101,15 +101,14 @@
     // body, the way every reference launcher does; the 2 s fuse is the air-burst for a round that touches nothing.
     // (It used to bounce off walls like a hand grenade and roll back toward the shooter.)
     glauncher:{ cls: "launcher", fire: "semi", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, impact: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45, adsTimeS: 0.30 },
-    // FRAG GRENADE (parity P1-A, LC-14; BUILT DARK). The blast definition explode() and hitDamage() read by
+    // FRAG GRENADE (parity P1-A, LC-14; built dark until the FIX ROUND, loot weight live since D8). The blast definition explode() and hitDamage() read by
     // id - it is NOT a gun: it is deliberately absent from WEAPON_IDS (loot, bot weapon choice and every
     // per-gun selftest loop iterate that list), it has no magazine or ammo, and nothing ever equips "frag"
     // as a.weapon.id. The carried item is CONSUMABLES.frag (kind "consumable", thrown by its own branch in
     // weapons.js stepWeapon, never through useConsumable / applyHeal). Apex's frag deals 100 with falloff;
     // splashScale here runs linearly to 25 % at splashR + 0.8 (the launcher's convention), fuse from the throw.
     frag:     { cls: "throwable", damage: 100, headMult: 1.0, rpm: 60, speed: 20, arc: true, fuseS: 3.0, splashR: 4.5, spreadDeg: 0 },
-    // SMOKE GRENADE (contract C-SMOKE, LC-14 round 2; BUILT DARK like the frag: loot weight 0 until the integrator
-    // turns it on with the frag). Thrown by the same branch, bounces like the frag, and on its fuse it does NO damage:
+    // SMOKE GRENADE (contract C-SMOKE, LC-14 round 2; built dark like the frag until the FIX ROUND turned both on, D8). Thrown by the same branch, bounces like the frag, and on its fuse it does NO damage:
     // weapons.js pushes a sphere {x,y,z,r,t0,t1} onto W.smokes (sizes in SMOKE below) that maps.js losBlocked treats as
     // solid for sight, fx.js draws and bots.js reads. Not in WEAPON_IDS; damage 0 and no splashR, so explode() is
     // never called for it.
@@ -171,9 +170,9 @@
     big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 5, stack: 3 },
     // LC-14 frag, BUILT DARK: no `heals` key, so every heal path refuses it (player.js useConsumable/applyHeal,
     // bots.js usable(): `c.heals === "hp" ? ... : a.shield < c.cap` reads cap undefined -> false). `throws`
-    // names the WEAPONS entry the blast uses. Loot weight 0 until P2-D turns it on with bot throws (P2-B).
+    // names the WEAPONS entry the blast uses. Loot weight live since the FIX ROUND (D8: bots throw it).
     frag:        { throws: "frag", useS: 0, stack: 3 },
-    // C-SMOKE: the same shape as the frag (no heal fields, so every heal path refuses it), built dark at loot weight 0
+    // C-SMOKE: the same shape as the frag (no heal fields, so every heal path refuses it); loot weight live since D8
     smoke:       { throws: "smoke", useS: 0, stack: 3 },
   };
 
@@ -1174,23 +1173,10 @@
     // spread over the other tiers in proportion.
     chest: [0, 35, 35, 21, 9],
     supply: [0, 0, 10, 35, 55],
-    // LC-29 POI LOOT TIERS (parity P2-D tables; loot.js P2-H picks the tier per POI and the hot zone). "floor" IS
-    // the basic tier (unchanged, so a basic POI rolls exactly what every point rolled before). Rare share
-    // (index 2): basic 18 %, mid 23 %, high 28 % (1.56x basic: the >= 1.5x gate), hot 32 % (1.78x); rare+ share
-    // 30 / 38 / 52 / 64 %.
-    floor_mid:  [32, 31, 23, 11, 3],
-    floor_high: [20, 28, 28, 18, 6],
-    floor_hot:  [10, 26, 32, 22, 10],
+    // LC-29 POI loot tiers: ONE source (integrator D7) = loot.js's per-POI rarity UPLIFT on top of these tables.
+    // The sim's own tier tables (floor_mid / floor_high / floor_hot + LOOT_TIERS / lootTier, never called by loot.js)
+    // were removed in the FIX ROUND so no second tier table can stack on the uplift.
   };
-  /** POI loot tiers (LC-29): the rarity table and the floor-roll multiplier (into floorRollCount's lootMult) per tier.
-   *  basic = today's table and today's roll count, so an untiered point is unchanged. */
-  var LOOT_TIERS = {
-    basic: { table: "floor",      rollMult: 1.0 },
-    mid:   { table: "floor_mid",  rollMult: 1.15 },
-    high:  { table: "floor_high", rollMult: 1.35 },
-    hot:   { table: "floor_hot",  rollMult: 1.6 },
-  };
-  function lootTier(tier) { return LOOT_TIERS[tier] || LOOT_TIERS.basic; }
 
   // AI skill tiers (1-indexed by tier-1) — wide spread so the lobby reads as
   // real players: beginners whiff constantly, experts are genuinely scary.
@@ -1595,24 +1581,25 @@
   var FLOOR_AMMO_WEIGHTS = [25, 41, 16, 11, 7];
   // a chest's spare-ammo extra [light, medium, shells] (was [34, 34, 32]: the same medium shortfall)
   var CHEST_AMMO_WEIGHTS = [28, 46, 26];
-  // consumable rolls; the trailing "frag" and "smoke" entries are weight 0 (LC-14 built dark: the integrator raises
-  // them together once bots throw, with a MAP_GEN_VERSION bump). Trailing zeros never roll (see rollFloorItem).
+  // consumable rolls. The trailing "frag" and "smoke" entries went LIVE together in the FIX ROUND (integrator D8: bots
+  // throw both now, hud ships both icons): about 1 consumable roll in 9 is a frag and 1 in 15 a smoke on the floor,
+  // a little more in chests. Every floor / chest consumable roll changes with this (world_or_loot_output_changed; the
+  // integrator bumps MAP_GEN_VERSION).
   var FLOOR_CON_IDS = ["bandage", "mini_shield", "medkit", "big_shield", "frag", "smoke"];
-  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 0, 0];
+  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 13, 8];
   var CHEST_CON_IDS = ["mini_shield", "big_shield", "medkit", "bandage", "frag", "smoke"];
-  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 0, 0];
+  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 15, 10];
   function conCount(cid) { return cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : (cid === "frag" || cid === "smoke") ? 2 : 1; }
 
   /** One floor-spawn item. kind: weapon|ammo|consumable.
    *  A weapon carries `companions`: its own ammo, 1-2 boxes' worth, as ONE item
    *  (one pickup, one mesh — a box per box would double the loot draw calls).
-   *  `tier` (LC-29, optional): "basic" | "mid" | "high" | "hot" picks the rarity table (lootTier); omitted =
-   *  basic = exactly the old draw sequence. A big-magazine gun brings proportionally more boxes (the LMG: 3-4). */
-  function rollFloorItem(rng, tier) {
+   *  POI tiers (LC-29) are loot.js's rarity uplift, applied after this roll (D7: one source). A big-magazine gun brings proportionally more boxes (the LMG: 3-4). */
+  function rollFloorItem(rng) {
     var r = rng();
     if (r < FLOOR_GUN_SHARE) {
       var wid = WEAPON_IDS[weightedIndex(rng, FLOOR_GUN_WEIGHTS)];
-      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, lootTier(tier).table) };
+      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, "floor") };
       var am = WEAPONS[wid].ammo;
       if (am && AMMO[am]) {
         var boxes = rng() < 0.5 ? 1 : 2;
@@ -1624,9 +1611,7 @@
       var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, FLOOR_AMMO_WEIGHTS)];
       return { kind: "ammo", id: aid, count: AMMO[aid].box };
     }
-    // "frag" rides LAST at weight 0 (LC-14, built dark): weightedIndex never lands on a trailing zero-weight
-    // entry (the running roll is already <= 0 at the last positive weight) and the total is unchanged, so
-    // every seed rolls exactly what it rolled before. P2-D raises the weight with MAP_GEN_VERSION.
+    // frag + smoke ride last (live since the FIX ROUND, D8)
     var cid = FLOOR_CON_IDS[weightedIndex(rng, FLOOR_CON_WEIGHTS)];
     return { kind: "consumable", id: cid, count: conCount(cid) };
   }
@@ -1635,9 +1620,9 @@
   function ammoBoxMult(wid) { var d = WEAPONS[wid]; return Math.max(1, Math.round(((d && d.mag) || 0) / 30)); }
 
   /** Flat list for one floor roll: [item, ...its companions], companions stripped
-   *  off the item so they never ride along into an inventory slot. `tier`: see rollFloorItem. */
-  function rollFloorSpawn(rng, tier) {
-    var it = rollFloorItem(rng, tier);
+   *  off the item so they never ride along into an inventory slot. */
+  function rollFloorSpawn(rng) {
+    var it = rollFloorItem(rng);
     var out = [it];
     if (it.companions) {
       for (var i = 0; i < it.companions.length; i++) out.push(it.companions[i]);
@@ -1649,8 +1634,8 @@
   /** How many floor rolls a loot point gets. First roll almost always, a second
    *  one sometimes — a pile, not a single item. `lootMult` is MODE[mode].lootMult. */
   var FLOOR_ROLL_P = [0.85, 0.25];
-  function floorRollCount(rng, lootMult, tier) {
-    var m = (lootMult || 1) * (tier ? lootTier(tier).rollMult : 1);
+  function floorRollCount(rng, lootMult) {
+    var m = lootMult || 1;
     var n = 0;
     if (rng() < Math.min(0.97, FLOOR_ROLL_P[0] * Math.sqrt(m))) n++;
     if (rng() < Math.min(0.9, FLOOR_ROLL_P[1] * m)) n++;
@@ -1742,7 +1727,7 @@
     if (w.ammo) items.push({ kind: "ammo", id: w.ammo, count: AMMO[w.ammo].box * 2 * ammoBoxMult(wid) });
     var r = rng();
     if (r < 0.55) {
-      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag + smoke last at weight 0 (see rollFloorItem)
+      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag + smoke last (D8: live)
       items.push({ kind: "consumable", id: cid, count: conCount(cid) });
     } else {
       items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, CHEST_AMMO_WEIGHTS)], count: 20 });
@@ -1850,7 +1835,7 @@
     FLOOR_CON_IDS: FLOOR_CON_IDS, FLOOR_CON_WEIGHTS: FLOOR_CON_WEIGHTS, CHEST_CON_IDS: CHEST_CON_IDS, CHEST_CON_WEIGHTS: CHEST_CON_WEIGHTS,
     // parity P2-D / P3 (lane sim)
     fireInterval: fireInterval, fireMode: fireMode, ammoBoxMult: ammoBoxMult, conCount: conCount,
-    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, FLOOR_AMMO_WEIGHTS: FLOOR_AMMO_WEIGHTS, CHEST_AMMO_WEIGHTS: CHEST_AMMO_WEIGHTS, LOOT_TIERS: LOOT_TIERS, lootTier: lootTier,
+    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, FLOOR_AMMO_WEIGHTS: FLOOR_AMMO_WEIGHTS, CHEST_AMMO_WEIGHTS: CHEST_AMMO_WEIGHTS,
     STORM_PLACE: STORM_PLACE, placeCircle: placeCircle,
     SMOKE: SMOKE, smokeRadiusAt: smokeRadiusAt, segmentSmoked: segmentSmoked,
     TEAM_SIZE: TEAM_SIZE, TEAM_MODES: TEAM_MODES, teamSize: teamSize, dbnoOn: dbnoOn, teamCount: teamCount,

@@ -1067,29 +1067,20 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const wall = { kind: "box", minX: -2, maxX: 2, minY: 0, maxY: 4, minZ: -8.3, maxZ: -8 };
   const pw = R.predictArc(0, 1.6, 0, lv.vx, lv.vy, lv.vz, g, 5, flat, () => [wall], []);
   ok(pw.kind === "collider" && approx(pw.z, -8, 1e-6) && pw.nz === 1, "frag: predictArc stops on a wall face with its normal (z " + pw.z.toFixed(3) + ")");
-  // LOOT: the frag rides at weight 0, so every roll is what it was. Replay the PRE-P1 literals against the tables.
-  const oldFloorCon = (rng) => ["bandage", "mini_shield", "medkit", "big_shield"][R.weightedIndex(rng, [32, 34, 18, 16])];
-  const oldChestCon = (rng) => ["mini_shield", "big_shield", "medkit", "bandage"][R.weightedIndex(rng, [34, 26, 20, 20])];
-  let same = 0, n = 0;
-  for (let sd = 1; sd <= 20000; sd++) {
-    const a = R.mulberry32(sd), b = R.mulberry32(sd);
-    if (R.FLOOR_CON_IDS[R.weightedIndex(a, R.FLOOR_CON_WEIGHTS)] === oldFloorCon(b) && a() === b()) same++;
-    const c = R.mulberry32(sd ^ 0x55), d = R.mulberry32(sd ^ 0x55);
-    if (R.CHEST_CON_IDS[R.weightedIndex(c, R.CHEST_CON_WEIGHTS)] === oldChestCon(d) && c() === d()) same++;
-    n += 2;
-  }
-  ok(same === n, "frag: loot rolls at weight 0 are identical to the pre-P1 tables on " + same + " / " + n + " seeded rolls (and the stream stays in step)");
-  // the edges of weightedIndex: a roll of 0 and the largest double below 1 never land on the trailing zero
-  ok(R.weightedIndex(() => 0, R.FLOOR_CON_WEIGHTS) === 0 && R.weightedIndex(() => 1 - Math.pow(2, -53), R.FLOOR_CON_WEIGHTS) === 3 &&
-     R.weightedIndex(() => 1 - Math.pow(2, -53), R.CHEST_CON_WEIGHTS) === 3, "frag: weightedIndex never returns the trailing weight-0 frag (rng 0 and 1 - 2^-53)");
-  let floorFrag = 0, chestFrag = 0;
+  // LOOT (FIX ROUND, D8): frag + smoke are LIVE in every consumable list; the four heal / shield items keep their
+  // relative weights (the old totals are the prefix of the new ones)
+  ok(R.FLOOR_CON_IDS.slice(0, 4).join() === "bandage,mini_shield,medkit,big_shield" && R.FLOOR_CON_WEIGHTS.slice(0, 4).join() === "32,34,18,16" &&
+     R.CHEST_CON_IDS.slice(0, 4).join() === "mini_shield,big_shield,medkit,bandage" && R.CHEST_CON_WEIGHTS.slice(0, 4).join() === "34,26,20,20",
+     "frag: the heal / shield consumables keep their pre-P1 weights ahead of frag + smoke");
+  let floorFrag = 0, chestFrag = 0, floorCon = 0, supplyFrag = 0;
   const lr = R.mulberry32(777);
   for (let i = 0; i < 50000; i++) {
-    for (const it of R.rollFloorSpawn(lr)) if (it.id === "frag") floorFrag++;
+    for (const it of R.rollFloorSpawn(lr)) { if (it.kind === "consumable") floorCon++; if (it.id === "frag") floorFrag++; }
     for (const it of R.rollChest(lr)) if (it.id === "frag") chestFrag++;
-    for (const it of R.rollSupplyDrop(lr)) if (it.id === "frag") chestFrag++;
+    for (const it of R.rollSupplyDrop(lr)) if (it.id === "frag") supplyFrag++;
   }
-  ok(floorFrag === 0 && chestFrag === 0, "frag: 0 frags in 50,000 floor spawns, chests and supply drops (built dark)");
+  ok(floorFrag / floorCon > 0.09 && floorFrag / floorCon < 0.14 && chestFrag > 2000 && supplyFrag === 0 && R.conCount("frag") === 2,
+     "frag (D8): live - " + (100 * floorFrag / floorCon).toFixed(1) + " % of floor consumable rolls, " + chestFrag + " in 50,000 chests (2 a stack; supply drops carry none)");
 
   // source pins: the browser halves of the contract (weapons.js; read-only check, skipped outside the repo)
   let wj = null;
@@ -1151,25 +1142,10 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const cr = R.mulberry32(4711);
   for (let i = 0; i < 20000; i++) for (const it of R.rollChest(cr)) if (it.kind === "weapon") { chestN++; if (it.rarity === 0) chestCommon++; }
   ok(chestN === 20000 && chestCommon === 0 && R.LOOT_WEIGHTS.chest[0] === 0, "LC-77: 0 common guns in " + chestN + " chest rolls");
-  // LC-29 tier tables
-  const share = (tab, i) => R.LOOT_WEIGHTS[tab][i] / R.LOOT_WEIGHTS[tab].reduce((a, b) => a + b, 0);
-  ok(share("floor_high", 2) >= 1.5 * share("floor", 2) && share("floor_hot", 2) >= share("floor_high", 2) && share("floor_mid", 2) > share("floor", 2),
-     "LC-29: rare share basic " + (100 * share("floor", 2)).toFixed(0) + "% < mid " + (100 * share("floor_mid", 2)).toFixed(0) + "% < high " + (100 * share("floor_high", 2)).toFixed(0) + "% (>= 1.5x) <= hot " + (100 * share("floor_hot", 2)).toFixed(0) + "%");
-  const ta = R.mulberry32(31337), tb = R.mulberry32(31337);
-  let tierSame = true;
-  for (let i = 0; i < 5000 && tierSame; i++) {
-    if (JSON.stringify(R.rollFloorSpawn(ta)) !== JSON.stringify(R.rollFloorSpawn(tb, "basic"))) tierSame = false;
-    if (R.floorRollCount(ta, 1) !== R.floorRollCount(tb, 1, "basic")) tierSame = false;
-  }
-  ok(tierSame && R.lootTier("nope") === R.LOOT_TIERS.basic, "LC-29: an untiered point (or tier 'basic') rolls exactly the old floor draw sequence and roll count");
-  let rareB = 0, rareH = 0, gB = 0, gH = 0;
-  const rb = R.mulberry32(77), rh = R.mulberry32(77);
-  for (let i = 0; i < 40000; i++) {
-    const a1 = R.rollFloorItem(rb), a2 = R.rollFloorItem(rh, "high");
-    if (a1.kind === "weapon") { gB++; if (a1.rarity >= 2) rareB++; }
-    if (a2.kind === "weapon") { gH++; if (a2.rarity >= 2) rareH++; }
-  }
-  ok(rareH / gH >= 1.5 * (rareB / gB), "LC-29: rolled rare+ share high " + (100 * rareH / gH).toFixed(1) + "% vs basic " + (100 * rareB / gB).toFixed(1) + "% (>= 1.5x)");
+  // D7: ONE tier source = loot.js's rarity uplift; the sim carries no tier tables and its floor rolls take no tier
+  ok(!R.LOOT_TIERS && !R.lootTier && !R.LOOT_WEIGHTS.floor_mid && !R.LOOT_WEIGHTS.floor_high && !R.LOOT_WEIGHTS.floor_hot &&
+     R.rollFloorItem.length === 1 && R.floorRollCount.length === 2,
+     "LC-29 (D7): no sim tier tables (loot.js's uplift is the one tier source)");
 }
 
 // LC-13 storm placement (owner OD-1 at F = 1.0, STANDARD only)
@@ -1216,8 +1192,8 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   let n = 0;
   const lr = R.mulberry32(5150);
   for (let i = 0; i < 30000; i++) { for (const it of R.rollFloorSpawn(lr)) if (it.id === "smoke") n++; for (const it of R.rollChest(lr)) if (it.id === "smoke") n++; }
-  ok(n === 0 && R.FLOOR_CON_WEIGHTS[R.FLOOR_CON_IDS.indexOf("smoke")] === 0 && R.CHEST_CON_WEIGHTS[R.CHEST_CON_IDS.indexOf("smoke")] === 0,
-     "C-SMOKE: built dark - loot weight 0, 0 smokes in 30,000 floor + chest rolls");
+  ok(n > 1000 && R.FLOOR_CON_WEIGHTS[R.FLOOR_CON_IDS.indexOf("smoke")] > 0 && R.CHEST_CON_WEIGHTS[R.CHEST_CON_IDS.indexOf("smoke")] > 0,
+     "C-SMOKE (D8): live - " + n + " smokes in 30,000 floor + chest rolls");
 }
 
 // C-MODE, C-DBNO, C-FALL
