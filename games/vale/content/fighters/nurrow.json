@@ -432,7 +432,7 @@
     "portrait": "assets/fighters/nurrow/portrait.png",
     "splash": "assets/fighters/nurrow/splash.png",
     "icon": "assets/fighters/nurrow/icon.png",
-    "height": 2.0,
+    "height": 1.97,
     "scale": 1,
     "runRefSpeed": 3.55,
     "clips": {
