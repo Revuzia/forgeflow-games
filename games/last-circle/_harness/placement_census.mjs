@@ -967,7 +967,8 @@ async function towngenMode() {
     // endgame
     let endgame = null;
     if (SIM && typeof SIM.Storm === "function") {
-      const St = new SIM.Storm({ seed, mode: "standard", half: M.half });
+      // P2-F: OD-1's land predicate, the rule storm.js passes (terrain > waterY + 0.5 m): without it the census judged other circles than the match's
+      const St = new SIM.Storm({ seed, mode: "standard", half: M.half, landAt: ((g, wy) => (g ? (x, z) => g(x, z) > wy + 0.5 : undefined))(M.groundAt || M.heightAt, typeof M.waterY === "number" ? M.waterY : 0) });
       const cs = St.circles, idx = [cs.length - 3, cs.length - 2, cs.length - 1];
       const cols2 = M.colliders.filter((c) => !c.prop && !c.dead && c.kind !== "ramp");
       endgame = {};

@@ -67,6 +67,10 @@ export const LCOutputShader = {
     cbAmt: { value: 0 },
     cbSim: { value: new Matrix3() },        // linear RGB -> the same colour as seen with the deficiency
     cbShift: { value: new Matrix3() },      // where the lost (error) signal is moved to
+    // folded bloom composite (C-GFX perf): UnrealBloomPass's half-res result, added before tone mapping exactly where
+    // three's own additive blend pass put it. 0 = no bloom this frame (skipped: bit-identical to the stock pass)
+    bloomOn: { value: 0 },
+    tBloom: { value: null },
   },
 
   vertexShader: /* glsl */`
@@ -101,6 +105,8 @@ export const LCOutputShader = {
     uniform mat3 cbShift;
     uniform float aaOn;
     uniform vec2 aaTexel;
+    uniform float bloomOn;
+    uniform sampler2D tBloom;
 
     #include <tonemapping_pars_fragment>
     #include <colorspace_pars_fragment>
@@ -126,6 +132,14 @@ export const LCOutputShader = {
       #endif
     }
 
+    // the HDR input at uv: the scene plus, when the bloom composite is folded in, the bloom exactly as three's additive
+    // blend pass laid it over the scene (blendFunc SRC_ALPHA, ONE: rgb += bloom.rgb * bloom.a)
+    vec3 lcSrc( vec2 uv ) {
+      vec3 c = texture2D( tDiffuse, uv ).rgb;
+      if ( bloomOn > 0.5 ) { vec4 b = texture2D( tBloom, uv ); c += b.rgb * b.a; }
+      return c;
+    }
+
     // perceptual luma of an HDR input sample: exposure-scaled, clipped at display white, gamma ~2
     float lcLumaIn( vec3 c ) {
       float l = dot( c, vec3( 0.299, 0.587, 0.114 ) ) * toneMappingExposure;
@@ -136,10 +150,10 @@ export const LCOutputShader = {
     // anti-aliased tone-mapped colour; flat pixels return mT untouched after 4 extra taps.
     vec3 lcFxaa( vec3 mIn, vec3 mT ) {
       vec2 px = aaTexel;
-      float lNW = lcLumaIn( texture2D( tDiffuse, vUv + vec2( -1.0, -1.0 ) * px ).rgb );
-      float lNE = lcLumaIn( texture2D( tDiffuse, vUv + vec2( 1.0, -1.0 ) * px ).rgb );
-      float lSW = lcLumaIn( texture2D( tDiffuse, vUv + vec2( -1.0, 1.0 ) * px ).rgb );
-      float lSE = lcLumaIn( texture2D( tDiffuse, vUv + vec2( 1.0, 1.0 ) * px ).rgb );
+      float lNW = lcLumaIn( lcSrc( vUv + vec2( -1.0, -1.0 ) * px ) );
+      float lNE = lcLumaIn( lcSrc( vUv + vec2( 1.0, -1.0 ) * px ) );
+      float lSW = lcLumaIn( lcSrc( vUv + vec2( -1.0, 1.0 ) * px ) );
+      float lSE = lcLumaIn( lcSrc( vUv + vec2( 1.0, 1.0 ) * px ) );
       float lM = lcLumaIn( mIn );
       float lMin = min( lM, min( min( lNW, lNE ), min( lSW, lSE ) ) );
       float lMax = max( lM, max( max( lNW, lNE ), max( lSW, lSE ) ) );
@@ -154,10 +168,10 @@ export const LCOutputShader = {
       float dirReduce = max( ( lNW + lNE + lSW + lSE ) * 0.03125, 0.0078125 );   // REDUCE_MUL 1/8, REDUCE_MIN 1/128
       float rcpDirMin = 1.0 / ( min( abs( dir.x ), abs( dir.y ) ) + dirReduce );
       dir = clamp( dir * rcpDirMin, vec2( -8.0 ), vec2( 8.0 ) ) * px;               // SPAN_MAX 8
-      vec3 a = 0.5 * ( lcToneMap( texture2D( tDiffuse, vUv + dir * ( 1.0 / 3.0 - 0.5 ) ).rgb ) +
-                       lcToneMap( texture2D( tDiffuse, vUv + dir * ( 2.0 / 3.0 - 0.5 ) ).rgb ) );
-      vec3 b = a * 0.5 + 0.25 * ( lcToneMap( texture2D( tDiffuse, vUv - dir * 0.5 ).rgb ) +
-                                  lcToneMap( texture2D( tDiffuse, vUv + dir * 0.5 ).rgb ) );
+      vec3 a = 0.5 * ( lcToneMap( lcSrc( vUv + dir * ( 1.0 / 3.0 - 0.5 ) ) ) +
+                       lcToneMap( lcSrc( vUv + dir * ( 2.0 / 3.0 - 0.5 ) ) ) );
+      vec3 b = a * 0.5 + 0.25 * ( lcToneMap( lcSrc( vUv - dir * 0.5 ) ) +
+                                  lcToneMap( lcSrc( vUv + dir * 0.5 ) ) );
       float lB = sqrt( clamp( dot( b, vec3( 0.299, 0.587, 0.114 ) ), 0.0, 1.0 ) );
       float wB = 1.0 - smoothstep( 0.0, 0.03, max( lMin - lB, lB - lMax ) );   // b outside the local range -> a
       return mix( mT, mix( a, b, wB ), edge );
@@ -166,6 +180,8 @@ export const LCOutputShader = {
     void main() {
 
       gl_FragColor = texture2D( tDiffuse, vUv );
+      // folded bloom composite (uniform-coherent; off = skipped)
+      if ( bloomOn > 0.5 ) { vec4 lcB = texture2D( tBloom, vUv ); gl_FragColor.rgb += lcB.rgb * lcB.a; }
       vec3 lcIn = gl_FragColor.rgb;
 
       // tone mapping
@@ -280,6 +296,14 @@ export class LCOutputPass extends Pass {
 
   get fxaa() { return this.uniforms.aaOn.value > 0.5; }
 
+  /** The bloom pass's composite texture for THIS frame (the kernel's folded UnrealBloomPass calls it right before this
+   *  pass renders); null = none. Consumed by the next render(). */
+  setBloomTexture(tex) {
+
+    this._bloomTex = tex || null;
+
+  }
+
   /** Colour-vision correction: mode 0 off | 1 protan | 2 deutan | 3 tritan (or the names), amt 0..1
    *  (default 1). Simulation matrices: Machado, Oliveira & Fernandes 2009, severity 1.0, linear RGB;
    *  error shift: the classic daltonize redistribution (Fidaner, Lin & Ozguven 2005). Returns
@@ -303,6 +327,12 @@ export class LCOutputPass extends Pass {
   render(renderer, writeBuffer, readBuffer /*, deltaTime, maskActive */) {
 
     this.uniforms["tDiffuse"].value = readBuffer.texture;
+    // the folded bloom composite: only on a frame whose bloom pass handed its texture over (setBloomTexture); a frame
+    // without one (bloom disabled, the pass skipped) adds nothing
+    const bt = this._bloomTex;
+    this._bloomTex = null;
+    this.uniforms.bloomOn.value = bt ? 1 : 0;
+    this.uniforms.tBloom.value = bt || null;
     this.uniforms["toneMappingExposure"].value = renderer.toneMappingExposure;
     this.uniforms.aaTexel.value.set(1 / Math.max(1, readBuffer.width), 1 / Math.max(1, readBuffer.height));
 

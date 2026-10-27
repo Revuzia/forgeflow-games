@@ -313,6 +313,7 @@ export class Kernel3D {
     this._tierDpr = 1.5;
     this._devDpr = 0;
     this._dprCap = Infinity;          // a game's own ceiling under the tier (LC-06 quality ladder); Infinity = none
+    this._dprMax = BUDGET.dprMax;     // the budget ceiling; a game lifts it for its best tier only (setDprMax, Last Circle ULTRA)
     this._rawSetPixelRatio = this.renderer.setPixelRatio;
     this.renderer.setPixelRatio = (v) => { this.setDpr(v); };
     // QUALITY preset (shell settings → ffg_settings.quality): low = 1.0 DPR +
@@ -555,7 +556,7 @@ export class Kernel3D {
     const dev = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
     this._tierDpr = req;
     this._devDpr = dev;
-    const eff = Math.max(0.5, Math.min(dev, req, BUDGET.dprMax, this._dprCap));
+    const eff = Math.max(0.5, Math.min(dev, req, this._dprMax, this._dprCap));
     if (eff !== this.dpr) {
       this._rawSetPixelRatio.call(this.renderer, eff);
       if (this.composer && this.composer.setPixelRatio) this.composer.setPixelRatio(eff);
@@ -576,7 +577,31 @@ export class Kernel3D {
   /** The effective DPR the current tier would get WITHOUT the cap (to tell whether a cap step changes anything). */
   dprUncapped() {
     const dev = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
-    return Math.max(0.5, Math.min(dev, this._tierDpr, BUDGET.dprMax));
+    return Math.max(0.5, Math.min(dev, this._tierDpr, this._dprMax));
+  }
+
+  /** The DPR budget ceiling (default BUDGET.dprMax 1.5). Last Circle's ULTRA tier lifts it to 2 ("full DPR, cap 2");
+   *  every other tier keeps 1.5. Clamped to [1, 2]. Re-applies the current tier at once. Returns the effective ratio. */
+  setDprMax(v) {
+    const m = Number.isFinite(+v) && +v > 0 ? Math.max(1, Math.min(2, +v)) : BUDGET.dprMax;
+    if (m === this._dprMax) return this.dpr;
+    this._dprMax = m;
+    return this.setDpr(this._tierDpr);
+  }
+
+  /** Bloom work resolution as a factor of what the composer hands the pass (UnrealBloomPass itself already blurs at half
+   *  of that): 1 = three's default, 0.5 = a quarter of the frame's pixels per axis. The bright pass and every mip shrink
+   *  with it (render targets only: no program changes), and the composite samples them bilinearly. Returns the factor. */
+  setBloomScale(f) {
+    const v = Number.isFinite(+f) && +f > 0 ? Math.max(0.25, Math.min(1, +f)) : 1;
+    const b = this.bloom;
+    this._bloomScale = v;
+    if (b && b._lcScale !== v) {
+      b._lcScale = v;
+      const c = this.composer;
+      if (c && b._lcSize) b.setSize(b._lcSize[0], b._lcSize[1]);
+    }
+    return v;
   }
 
   /** Re-derive the camera's VERTICAL fov for the CURRENT aspect from the
@@ -651,11 +676,75 @@ export class Kernel3D {
       opts.radius != null ? opts.radius : 0.5,
       opts.threshold != null ? opts.threshold : 0.85);
     composer.addPass(bloom);
+    // setBloomScale: the composer sizes every pass to its own (DPR-scaled) buffer; the bloom pass gets that times _lcScale
+    bloom._lcScale = this._bloomScale || 1;
+    {
+      const set0 = bloom.setSize.bind(bloom);
+      bloom.setSize = (w, h) => { bloom._lcSize = [w, h]; const k = bloom._lcScale || 1; set0(Math.max(2, Math.round(w * k)), Math.max(2, Math.round(h * k))); };
+      // addPass already sized it (unscaled): register the composer's size through the wrapper
+      bloom.setSize((composer._width || w) * (composer._pixelRatio || 1), (composer._height || h) * (composer._pixelRatio || 1));
+    }
     // The storm-grade copy of OutputPass when it loaded (see _LCOutputPass above); neutral
     // (stormAmt 0) it is bit-identical to the stock pass.
     const out = _LCOutputPass ? new _LCOutputPass() : new OutputPass();
     composer.addPass(out);
     this.outputPass = out;
+    // BLOOM COMPOSITE FOLDED into the output pass (C-GFX perf): UnrealBloomPass ends with a full-resolution additive
+    // draw of its half-res result over the composer's read buffer (a read-modify-write of the whole half-float frame)
+    // that the output pass reads straight back. With the LC output pass the bloom texture is handed to it instead and
+    // added in the shader it already runs (same sum, before tone mapping): one full-frame pass fewer, no new target, no
+    // extra program (a uniform branch). ?bloomfold=0 restores three's own blend (A/B and rollback).
+    this.bloomFold = false;
+    if (out && typeof out.setBloomTexture === "function") {
+      let fold = true;
+      try { fold = new URLSearchParams(location.search).get("bloomfold") !== "0"; } catch (e) { /* default on */ }
+      this.bloomFold = fold;
+      const k3 = this;
+      const render0 = bloom.render.bind(bloom);
+      // r172 UnrealBloomPass.render (MIT, three.js authors) minus the final blend, which LCOutputPass does
+      bloom.render = function (renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+        if (!k3.bloomFold || this.renderToScreen) { out.setBloomTexture(null); return render0(renderer, writeBuffer, readBuffer, deltaTime, maskActive); }
+        renderer.getClearColor(this._oldClearColor);
+        this.oldClearAlpha = renderer.getClearAlpha();
+        const oldAutoClear = renderer.autoClear;
+        renderer.autoClear = false;
+        renderer.setClearColor(this.clearColor, 0);
+        if (maskActive) renderer.state.buffers.stencil.setTest(false);
+        this.highPassUniforms.tDiffuse.value = readBuffer.texture;
+        this.highPassUniforms.luminosityThreshold.value = this.threshold;
+        this.fsQuad.material = this.materialHighPassFilter;
+        renderer.setRenderTarget(this.renderTargetBright);
+        renderer.clear();
+        this.fsQuad.render(renderer);
+        let input = this.renderTargetBright;
+        for (let i = 0; i < this.nMips; i++) {
+          const m = this.separableBlurMaterials[i];
+          this.fsQuad.material = m;
+          m.uniforms.colorTexture.value = input.texture;
+          m.uniforms.direction.value = UnrealBloomPass.BlurDirectionX;
+          renderer.setRenderTarget(this.renderTargetsHorizontal[i]);
+          renderer.clear();
+          this.fsQuad.render(renderer);
+          m.uniforms.colorTexture.value = this.renderTargetsHorizontal[i].texture;
+          m.uniforms.direction.value = UnrealBloomPass.BlurDirectionY;
+          renderer.setRenderTarget(this.renderTargetsVertical[i]);
+          renderer.clear();
+          this.fsQuad.render(renderer);
+          input = this.renderTargetsVertical[i];
+        }
+        this.fsQuad.material = this.compositeMaterial;
+        this.compositeMaterial.uniforms.bloomStrength.value = this.strength;
+        this.compositeMaterial.uniforms.bloomRadius.value = this.radius;
+        this.compositeMaterial.uniforms.bloomTintColors.value = this.bloomTintColors;
+        renderer.setRenderTarget(this.renderTargetsHorizontal[0]);
+        renderer.clear();
+        this.fsQuad.render(renderer);
+        if (maskActive) renderer.state.buffers.stencil.setTest(true);
+        out.setBloomTexture(this.renderTargetsHorizontal[0].texture);   // consumed (and cleared) by this frame's output pass
+        renderer.setClearColor(this._oldClearColor, this.oldClearAlpha);
+        renderer.autoClear = oldAutoClear;
+      };
+    }
     this.composer = composer;
     this.bloom = bloom;
     this.setAA(this._aaWant);          // post AA after the output pass (LC-03): whatever was asked before the composer existed

@@ -591,7 +591,7 @@ function suiteP23(M, SIM, count) {
     {
       const hud = fs.readFileSync(path.join(__dirname, "hud.js"), "utf8");
       ok(!/q\.kind !== "pin" && W\.t - q\.born > PING_LIFE_S/.test(hud) && /if \(W\.t - q\.born > PING_LIFE_S\) continue;/.test(hud), "LC-07: map pins time out at 30 s like every ping (hud.js stepPings)");
-      ok(/R\.bigmap\.remove\(\); R\.bigmap = null; regrabCursor\(W\); return;/.test(hud) && /if \(ok\) W\._suppressNextShot = false;/.test(hud),
+      ok(/R\.bigmap\.remove\(\); R\.bigmap = null;[^\n]*? regrabCursor\(W\); return;/.test(hud) && /if \(ok\) W\._suppressNextShot = false;/.test(hud),
         "closing the big map re-acquires pointer lock (and a successful re-lock does not eat the next shot)");
     }
     ok(/\(a\.sprinting \? 128 : 0\)/.test(src) && /a\.sprinting = !!\(f & 128\)/.test(src), "LC-09: the sprint bit rides the state packet and is applied to remote actors");
