@@ -7,6 +7,7 @@ bot line of sight to 0 for its lifetime, at +0.3 ms or less with 3 smokes on the
     python _harness/p23/smoke.py --rev 9aa2b746                 # control: the P2 base (no smoke) - MUST FAIL
     python _harness/p23/smoke.py --disk --plant los-ignores     # losBlocked called with W.smokes emptied - MUST FAIL (bot sight row)
     python _harness/p23/smoke.py --disk --plant short-life      # every smoke ends 2 s after it starts - MUST FAIL (lifetime row)
+    python _harness/p23/smoke.py --disk --plant no-cloud        # the clouds never drawn (sim + LOS untouched) - MUST FAIL (hides row)
     python _harness/p23/smoke.py --lanes all                    # validation: every lane's work served over the base
 
 STANDARD solo match (Savanna seed 7), landed under the guard, the human moved to an isolated flat spot, loop frozen, frames stepped at 60 Hz:
@@ -17,6 +18,9 @@ STANDARD solo match (Savanna seed 7), landed under the guard, the human moved to
   bot-sight      an enemy bot pinned 26 m away facing the human, provoked by him (positive control first: >= 5 rounds at him in the open in
                  6 s); the smoke between them: 0 rounds from t0 + 3 s and 0 hits from t0 + 2 s, to t1 - 1 s (LOS cut = it stops shooting)
   programs       the first cloud links no shader program after the first rendered frame of it (fx warmed)
+  hides          the cloud at full size HIDES a body 7 m behind its centre on screen (what losBlocked cuts for bots, the human must not
+                 see either): visibility = mean |smoke+bot - smoke| / mean |bot - nothing| over the bot's projected box <= 0.15, at the
+                 tier in use and at LOW (one page task, four renders at dt 1e-5)
   cost           GPU frame time with 3 live smokes in view minus none, ABAB x 4 at 60 rendered frames: median <= +0.3 ms (the iGPU: --gpu d3d11);
                  COUNTED on a quiet box (no other automated Chrome), else information (the shared GPU's timer counts the others' work)
   errors
@@ -34,6 +38,9 @@ C = L.C
 
 PLANTS = {
     "los-ignores": "const f0 = W.map.losBlocked; W.map.losBlocked = function () { const s0 = W.smokes; W.smokes = []; try { return f0.apply(this, arguments); } finally { W.smokes = s0; } }",
+    # the clouds never drawn (a fx that hides nothing): the 'smoke' group made invisible before every render; the sim's W.smokes / losBlocked
+    # untouched - MUST FAIL (hides row)
+    "no-cloud": "const fr = W.kernel.renderer, r0 = fr.render.bind(fr); fr.render = function () { try { const g = W.group && W.group('smoke'); if (g) g.visible = false; } catch (e) {} return r0.apply(null, arguments); }",
     "short-life": "W.kernel._updaters.push(() => { for (const q of (W.smokes || [])) if (q.t1 > q.t0 + 2) q.t1 = q.t0 + 2; })",
 }
 
@@ -50,6 +57,27 @@ ISO_JS = r"""() => { const W = window.__LC__.W, M = W.map, p = W.player; const o
     const d = others.reduce((m, a) => Math.min(m, Math.hypot(a.pos.x - x, a.pos.z - z)), 1e9); if (best && d <= best.d) continue; if (!flat(x, z)) continue;
     best = { x, z, d: +d.toFixed(1), y: M.heightAt(x, z) }; }
   return best && best.d >= 40 ? best : null; }"""
+# the cloud HIDES what it blocks: losBlocked cuts the bots' sight, so a human must not see through it either (and the reverse). One page task,
+# four renders at dt 1e-5 (the cloud at full size: t0 = now - 5 s): A smoke on + the bot 7 m behind its centre, B smoke on + the bot gone,
+# C smoke off + bot, D smoke off + no bot. visibility = mean |A - B| / mean |C - D| over the bot's projected box (1 = the cloud hides nothing)
+HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W, K = W.SIM, k = W.kernel, gl = k.renderer.getContext(), cam = W.camera, b = W.actorById.get(bid);
+  if (!b) return null; const V = cam.position.constructor; const by = W.map.heightAt(bx, bz);
+  const place = (on) => { const x = on ? bx : bx + 400; b.pos.set(x, W.map.heightAt(x, bz), bz); b.vel.set(0, 0, 0); b.alive = true; b.hp = 100; if (b.obj) b.obj.position.copy(b.pos); };
+  const smoke = (on) => { W.smokes = W.smokes || []; W.smokes.length = 0; if (on) W.smokes.push({ x: cx, y: cy, z: cz, r: K.SMOKE.r, rMax: K.SMOKE.r, t0: W.t - 5, t1: W.t + 30 }); };
+  const read = () => { C.stepFrames(2, 1e-5, true); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const px = new Uint8Array(4 * w * h); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, w, h }; };
+  place(true); smoke(false); C.stepFrames(2, 1e-5, true); cam.updateMatrixWorld(true);
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  for (const dx of [-0.45, 0.45]) for (const dz of [-0.45, 0.45]) for (const dy of [0.05, 1.85]) { const q = new V(bx + dx, by + dy, bz + dz).project(cam);
+    const sx = (q.x + 1) / 2 * w, sy = (q.y + 1) / 2 * h; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+  x0 = Math.max(0, Math.floor(x0)); x1 = Math.min(w - 1, Math.ceil(x1)); y0 = Math.max(0, Math.floor(y0)); y1 = Math.min(h - 1, Math.ceil(y1));
+  if (x1 - x0 < 3 || y1 - y0 < 6) return { error: 'the bot projects off screen', box: [x0, y0, x1, y1] };
+  const diff = (a, c) => { let s = 0, n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = 4 * (y * w + x); s += Math.abs(a.px[i] - c.px[i]) + Math.abs(a.px[i + 1] - c.px[i + 1]) + Math.abs(a.px[i + 2] - c.px[i + 2]); n += 3; } return s / n; };
+  smoke(true); place(true); const A = read(); place(false); const B = read();
+  smoke(false); place(true); const Cc = read(); place(false); const D = read();
+  smoke(false); place(true); C.stepFrames(1, 1e-5, true);
+  const dAB = diff(A, B), dCD = diff(Cc, D);
+  return { visibility: dCD > 0 ? +(dAB / dCD).toFixed(3) : null, smokedDiff: +dAB.toFixed(2), openDiff: +dCD.toFixed(2), boxPx: [x0, y0, x1, y1], tier: W.gfxTier,
+         }; }"""
 SNAP_JS = r"""() => { const W = window.__LC__.W; return (W.smokes || []).map((q) => ({ x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), r: +(q.r || 0).toFixed(2), t0: +(q.t0 || 0).toFixed(2), t1: +(q.t1 || 0).toFixed(2) })); }"""
 
 
@@ -215,8 +243,38 @@ def main():
                     v.check("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms, quiet box)", d <= 0.3, det, "<= 0.3 ms")
                 else:
                     v.info("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms) would %s - the box is SHARED: not judged" % ("PASS" if d <= 0.3 else "FAIL"), det)
+            # hides: the cloud hides a body 7 m behind its centre on screen, at the tier in use and at LOW (fx: every tier hides)
+            hide = {}
+            tier0 = s.js("() => window.__LC__.W.gfxTier")
+            s.js("() => { const W = window.__LC__.W, p = W.player; p.input.yaw = 0; p.input.pitch = 0.05; }")
+            for tier in [tier0, "low"] if tier0 != "low" else ["low"]:
+                try:
+                    s.js("(t) => window.__LC__.W.setGfx('tier', t)", tier)
+                except Exception as ex_:
+                    hide[tier] = {"error": str(ex_).splitlines()[0][:120]}
+                    continue
+                s.step_frames(30, 1 / 60, render=True)
+                hide[tier] = s.js(HIDE_JS, [e, iso["x"], iso["y"] + K_YOFF(s), iso["z"] - 14, iso["x"], iso["z"] - 21])
+            try:
+                s.js("(t) => window.__LC__.W.setGfx('tier', t)", tier0)
+            except Exception:
+                pass
+            vis = {t: (r or {}).get("visibility") for t, r in hide.items()}
+            opened = all((r or {}).get("openDiff", 0) >= 6 for r in hide.values())
+            if not opened:
+                v.cnj("hides (a body 7 m behind the cloud's centre: visibility <= 0.15 of the open view, the tier in use and LOW)", "the open view of the bot changed < 6/255 (not on screen?): %s" % hide)
+            else:
+                v.check("hides (a body 7 m behind the cloud's centre: visibility <= 0.15 of the open view, the tier in use and LOW)",
+                        all(x is not None and x <= 0.15 for x in vis.values()), hide, "<= 0.15 each")
+            s.screenshot(os.path.join(shots, "smoke_hides.png"))
             L.errors_row(v, s)
     return C.run_gate("p23_smoke", body, args)
+
+
+def K_YOFF(s):
+    """the cloud's centre height above the ground (K.SMOKE.yOff, 1.2 m when the lane has no such key)"""
+    y = s.safe_js("() => (window.__LC__.W.SIM.SMOKE || {}).yOff", default=None)
+    return y if isinstance(y, (int, float)) else 1.2
 
 
 if __name__ == "__main__":
