@@ -456,15 +456,21 @@ vec3 sandDetail(vec3 P, vec3 up, float fw) {
 // density — looking along the ground the eye sees a mat of tips (fuller, lighter, yellower), looking straight down it
 // sees into the gaps. Every term fades to its mean by the footprint. x = value factor, y = tip yellowing 0..1,
 // z = bump (m), w = gap occlusion 0..1. NdV: the ground's up · the direction to the eye.
+// The sward keeps its pattern down to ~2 pixels (sw_aa): seen from a god's 30–60 m a meadow IS that fine, broken
+// speckle — lit tips, shaded gaps, combed streaks a few pixels across. Faded by the terrain's own rule (gone once a
+// feature spans fewer than ~8 px, ff_aa) every layer finer than the tussocks had already left at 30–60 m, and the
+// meadow there was its mean: a smooth felt. All of it is band-limited noise anchored to the ground, so a feature of
+// 2–4 px holds still as the camera moves (never a per-pixel hash, which would crawl).
+float sw_aa(float fw, float feature) { return 1.0 - smoothstep(0.22, 0.55, fw / feature); }
 vec4 swardDetail(vec3 P, float fw, float NdV) {
   float val = 1.0, tip = 0.0, bump = 0.0, gap = 0.0;
   // tussocks (~0.5–1 m): irregular mounds of sward (warped noise, not a lattice of cells — cells read as scales) with
   // a lit crown and a shaded hollow round each: the mottle that still reads from a god's 30–60 m
-  float a2 = ff_aa(fw, 0.6);
+  float a2 = sw_aa(fw, 0.6);
   if (a2 > 0.0) {
     vec3 q = P * 1.7 + vec3(snoise(P * 0.5 + 2.0), snoise(P * 0.5 + 6.0), snoise(P * 0.5 + 9.0)) * 0.9;
     float tus = smoothstep(-0.45, 0.65, snoise(q) * 0.75 + snoise(q * 2.3 + 4.0) * 0.25);
-    val *= 1.0 + 0.2 * (tus - 0.5) * a2;
+    val *= 1.0 + 0.24 * (tus - 0.5) * a2;
     bump += (tus - 0.5) * 0.04 * a2;
     gap += (1.0 - tus) * 0.5 * a2;
     tip += tus * 0.2 * a2;
@@ -473,30 +479,45 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
   // ~10 m patches — two combings along FIXED directions, cross-faded by the lean (each a 3D noise stretched along its
   // own frame, so it needs no tangent frame). (One frame turned by the lean itself made its coordinate P·D(P) race by
   // hundreds of cycles per metre on a 3 km world: no streaks at all, a shimmering pixel noise over every meadow.)
-  // The streaks come in two sizes: fine (~0.15 × 0.8 m) up close, and drifts (~0.6 × 3 m) that still read from a
-  // god's 30–60 m — lighter where the tips catch the light, darker where the sward lies open
-  float a3 = ff_aa(fw, 0.2), a3b = ff_aa(fw, 0.9);
+  // The streaks come in three sizes: fine (~0.15 × 0.8 m) up close, CLUMPS of blades (~0.28 × 0.9 m) that make the
+  // grain from 30–60 m, and drifts (~0.6 × 3 m) — lighter where the tips catch the light, darker where it lies open
+  float a3b = sw_aa(fw, 0.9);
   if (a3b > 0.0) {
     float lean = 0.5 + 0.5 * snoise(P * 0.06 + 31.0);
+    float lk = smoothstep(0.3, 0.7, lean);
     const vec3 L1 = vec3(0.71, 0.25, 0.66), S1 = vec3(0.4, -0.91, 0.08), T1 = vec3(-0.58, -0.33, 0.74);
     const vec3 L2 = vec3(-0.42, 0.88, 0.22), S2 = vec3(0.73, 0.45, -0.52), T2 = vec3(0.54, 0.16, 0.83);
-    float cA = snoise(vec3(dot(P, S1) * 1.6, dot(P, L1) * 0.33, dot(P, T1) * 1.6) + 41.0);
-    float cB = snoise(vec3(dot(P, S2) * 1.6, dot(P, L2) * 0.33, dot(P, T2) * 1.6) + 57.0);
-    float drift = mix(cA, cB, smoothstep(0.3, 0.7, lean));
+    vec3 PA = vec3(dot(P, S1), dot(P, L1), dot(P, T1)), PB = vec3(dot(P, S2), dot(P, L2), dot(P, T2));
+    float cA = snoise(PA * vec3(1.6, 0.33, 1.6) + 41.0);
+    float cB = snoise(PB * vec3(1.6, 0.33, 1.6) + 57.0);
+    float drift = mix(cA, cB, lk);
     // (in the colour, not the relief — so a low sun cannot rake it into dimples: ±16 % in value and the tips' yellow;
     // at ±9 % a meadow from 30–60 m was a smooth suede)
     val *= 1.0 + 0.16 * drift * a3b;
     tip += max(drift, 0.0) * 0.32 * a3b;
     gap += max(-drift, 0.0) * 0.3 * a3b;
+    // clumps of blades: a ridged noise along the combing (thin bright bundles of tips over darker partings), broken up
+    // along their length — the fibrous grain of a sward at 2–6 pixels from a god's height
+    float aC = sw_aa(fw, 0.28);
+    if (aC > 0.0) {
+      float kA = 1.0 - abs(snoise(PA * vec3(3.6, 1.1, 3.6) + 71.0));
+      float kB = 1.0 - abs(snoise(PB * vec3(3.6, 1.1, 3.6) + 83.0));
+      float brk = snoise(P * 2.2 + 5.0);
+      float clump = mix(kA, kB, lk) * (0.75 + 0.25 * brk) - 0.5;
+      val *= 1.0 + 0.36 * clump * aC;
+      tip += max(clump, 0.0) * 0.5 * aC;
+      gap += max(-clump, 0.0) * 0.55 * aC;
+    }
+    float a3 = sw_aa(fw, 0.2);
     if (a3 > 0.0) {
-      float fA = snoise(vec3(dot(P, S1) * 7.0, dot(P, L1) * 1.3, dot(P, T1) * 7.0) + 13.0);
-      float fB = snoise(vec3(dot(P, S2) * 7.0, dot(P, L2) * 1.3, dot(P, T2) * 7.0) + 23.0);
-      float comb = mix(fA, fB, smoothstep(0.3, 0.7, lean));
-      val *= 1.0 + 0.1 * comb * a3;
+      float fA = snoise(PA * vec3(7.0, 1.3, 7.0) + 13.0);
+      float fB = snoise(PB * vec3(7.0, 1.3, 7.0) + 23.0);
+      float comb = mix(fA, fB, lk);
+      val *= 1.0 + 0.12 * comb * a3;
       tip += max(comb, 0.0) * 0.25 * a3;
     }
   }
-  float a1 = ff_aa(fw, 0.14);
+  float a1 = sw_aa(fw, 0.14);
   if (a1 > 0.0) {
     vec3 fp; float f1, id;
     ff_cells(P * 7.0 + vec3(snoise(P * 1.3 + 4.0), snoise(P * 1.3 + 8.0), snoise(P * 1.3 + 12.0)) * 0.45, fp, f1, id);
@@ -506,13 +527,13 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
     bump += (tuft - 0.4) * 0.03 * a1;
     gap = max(gap, (1.0 - tuft) * a1);
   }
-  float a0 = ff_aa(fw, 0.05);
+  float a0 = sw_aa(fw, 0.05);
   if (a0 > 0.0) val *= 1.0 + 0.16 * snoise(P * vec3(22.0, 9.0, 22.0)) * a0;
   float graze = 1.0 - clamp(NdV, 0.0, 1.0);
   graze *= graze;
   val *= mix(0.94, 1.07, graze);
   tip = clamp(tip * (1.0 - 0.3 * graze) + 0.35 * graze, 0.0, 1.0);
-  gap *= 1.0 - 0.7 * graze;
+  gap = clamp(gap, 0.0, 1.0) * (1.0 - 0.7 * graze);
   return vec4(val, tip, bump, gap);
 }
 
