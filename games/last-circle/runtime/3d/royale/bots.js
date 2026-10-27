@@ -42,8 +42,10 @@ function isQuick(W) { return !!W && (W.mode === "quick" || !!(W.match && W.match
 // ── PARITY P2+P3, lane bots (C-MODE / C-DBNO / C-SMOKE / C-FALL / C-PING) ─────────────────────────────────────────────────────────────────
 // Everything below keys on DATA the other lanes write (a.teamId, a.downed, W.smokes, K.FALL_*, W.map.concealAt, "pingPlaced") and is a no-op
 // until it exists: a solo match with no teamId, no downed actor, no smoke and no fall constants takes exactly the code paths it took before.
-/** Same squad: both carry the same non-null teamId (solo: every actor's own, or none). */
-const sameTeam = (a, t) => a.teamId != null && a.teamId === t.teamId;
+/** Same squad (integrator D4): both carry the same NON-EMPTY teamId - player.js canRevive's rule (`by.teamId && by.teamId === t.teamId`), so a
+ *  bot and a human agree on who is a mate (a falsy id - null, "", 0 - is nobody's team). hasTeam: the same test on one actor. */
+const hasTeam = (a) => !!(a && a.teamId);
+const sameTeam = (a, t) => !!a.teamId && a.teamId === t.teamId;
 const slotOf = (a) => parseInt(String(a.id).slice(1), 10) || 0;
 // (LC-15) finish a downed enemy, by tier: the share of bots that keep shooting a knocked man when nobody standing is in sight (the rest let him
 // bleed and go on). A stable per-slot draw (never the rng stream: a draw there would reshuffle every other decision of every bot).
@@ -203,7 +205,7 @@ export function init(W) {
   W.events.on("landed", (a2) => { if (a2 && !a2.isBot && !humanLandT.has(a2.id)) humanLandT.set(a2.id, W.t); });
   // (P23, C-MODE) a squadmate is hit: his squad's bots learn where from (the attacker's position: a teammate calls it out) and come to help
   W.events.on("actorHurt", (v, info) => {
-    if (!v || v.teamId == null || !info || !info.attackerId) return;
+    if (!v || !hasTeam(v) || !info || !info.attackerId) return;
     const att = W.actorById.get(info.attackerId);
     if (!att || sameTeam(v, att)) return;
     for (const b of brains) {
@@ -239,7 +241,7 @@ export function init(W) {
   W.events.on("pingPlaced", (pg) => {
     if (!pg || !Number.isFinite(pg.x) || !Number.isFinite(pg.z)) return;
     const owner = W.actorById.get(pg.owner);
-    if (!owner || owner.isBot || owner.teamId == null) return;
+    if (!owner || owner.isBot || !hasTeam(owner)) return;
     let acked = false;
     for (const b of brains) {
       const a2 = b.actor;
@@ -682,7 +684,7 @@ function squadDrops(W) {
   squadSnapped = false;
   const teams = new Map();
   for (const a of W.actors) {
-    if (a.teamId == null) continue;
+    if (!hasTeam(a)) continue;
     let l = teams.get(a.teamId);
     if (!l) teams.set(a.teamId, (l = []));
     l.push(a);
@@ -710,7 +712,7 @@ function squadDrops(W) {
  *  not this bot; null = solo, or this bot leads. Cached for 1 s (think cadence). */
 function leaderOf(W, b) {
   const a = b.actor, bb = b.bb;
-  if (a.teamId == null) return null;
+  if (!hasTeam(a)) return null;
   if (W.t - bb.leaderT < 1 && W.t >= bb.leaderT) {
     const c = bb.leaderId ? W.actorById.get(bb.leaderId) : null;
     if (!bb.leaderId || (c && c.alive && !c.downed)) return c || null;
@@ -728,7 +730,7 @@ function leaderOf(W, b) {
 }
 /** This bot's formation index in its squad (1..3; 0 = the leader / solo), from the slot order: stable for the match. */
 function formIndex(W, a) {
-  if (a.teamId == null) return 0;
+  if (!hasTeam(a)) return 0;
   let k = 0;
   for (const t of W.actors) if (t !== a && sameTeam(a, t) && t.isBot && slotOf(t) < slotOf(a)) k++;
   return k + 1;
@@ -983,7 +985,7 @@ function think(W, b) {
   s.CLOSEIN = bb.closeInUntil > W.t && tAct && tAct.alive ? 99 : 0;
 
   // ── (P23) SQUAD PLAY: revive, follow, pings, help (all zero without a squad) ──
-  if (a.teamId != null) {
+  if (hasTeam(a)) {
     // REVIVE (C-DBNO): a downed squadmate nobody is reviving, within REVIVE_SEEK_M. Over every calm state; under a close live fight (88+):
     // the man shooting at you is dealt with first, then the knock is picked up. A fight at range does not stop a revive.
     const mate = downedMate(W, b);
@@ -2780,7 +2782,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });, furnEsc: 0, furnDwell: 0
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
