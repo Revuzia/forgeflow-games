@@ -17,6 +17,11 @@ Rows:
   rejoin          the guest's page closed; a NEW page in the same context opens ?room=<code>: within 60 s it is back in the RUNNING match as the
                   same actor (slot id), alive, and the host sees that body move again
   errors          both pages
+SETUP (D16, could-not-judge, never FAIL): the pair is ONE squad session after the landing (both pages' W.net, the host drives the guest's body
+from its packets) and both match clocks run at >= 0.6 x real time (a starved page trips net.js's wall-clock watchdogs by itself); during the
+rejoin wait the host's clock must keep >= 0.6 x real time. Fix-round finding: every rejoin miss traced on 10-26 was this - the host's watchdog
+took s1 (12 s of wall-clock silence) and the guest's rejoin record went stale (refreshed every 2 s by its game loop, fresh 75 s), so the new
+page asked nothing and the host said 'busy'.
 """
 from __future__ import annotations
 
@@ -74,13 +79,18 @@ def compress_trace(trace):
     return out[:14]
 
 
+SIM_RATE_MIN_HOST = 0.6
+
+
 def rejoin_setup_miss(trace):
     """a rejoin that missed because the HARNESS never let the host run (D16): the host page's sim clock stood still across the wait (a hidden /
     throttled tab runs no frames, so its watchdog can never see the old page leave). None = the setup was sound: the miss is a verdict."""
     hs = [r.get("host") or {} for r in trace]
-    ts = [h.get("simT") for h in hs if isinstance(h.get("simT"), (int, float))]
-    if len(ts) >= 3 and max(ts) - min(ts) < 1.0:
-        return "the host's sim clock advanced %.2f s over %d polls: its page was not ticking" % (max(ts) - min(ts), len(ts))
+    ts = [(r["t"], h.get("simT")) for r, h in zip(trace, hs) if isinstance(h.get("simT"), (int, float))]
+    if len(ts) >= 3:
+        rate = (ts[-1][1] - ts[0][1]) / max(0.001, ts[-1][0] - ts[0][0])
+        if rate < SIM_RATE_MIN_HOST:
+            return "the host's match clock ran at %.3f x real time over the wait (%d polls): a starved / stalled page" % (rate, len(ts))
     g = [r.get("guest") or {} for r in trace]
     if g and all(not x.get("booted", True) for x in g):
         return "the rejoining page never booted"
@@ -120,6 +130,15 @@ def main():
             v.info("pair session after the landing", sess)
             if not ok_s:
                 v.cnj("session (both pages in the squad session, the host drives the guest's body)", "SETUP missed: %s" % sess)
+                return
+            # a starved box (D16): both pages must run their match clock at >= SIM_RATE_MIN of real time, else every row measures the box
+            # (netseq_4 10-26 23:20, 100 % CPU: the host's clock ran at ~0.03 x real time, its watchdog gave s1 to a bot and the guest's rejoin
+            # record went stale - 'busy' on the new page)
+            hpg.bring_to_front()
+            rates = L.sim_rates(hpg, gpg)
+            v.info("sim rate (match-clock s per wall s) host / guest", rates)
+            if min(rates) < L.SIM_RATE_MIN:
+                v.cnj("pair (both pages' match clocks at >= %.1f x real time)" % L.SIM_RATE_MIN, "SETUP missed: the box is starved - sim rates %s" % rates)
                 return
             if args.plant:
                 gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])

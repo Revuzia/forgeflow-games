@@ -147,7 +147,9 @@ FACING_JS = r"""([plant]) => {
   // --plant rig-turned: every model turned 90 deg inside its actor (a wrong model-forward axis) - the row must FAIL
   if (plant === 'rig-turned') for (const a of W.actors) if (a.rig && a.rig.scene && !a.rig.scene.__p23turn) { a.rig.scene.rotation.y += Math.PI / 2; a.rig.scene.__p23turn = 1; }
   Cn.stepFrames(4, 1 / 60, false);
-  const bots = W.actors.filter((a) => a.alive && !a.isDummy && a.rig && a.onGround).slice(0, 8);
+  // movers first (run / sprint / strafe / walk clips: the ones whose feet turn toward travel), then the rest
+  const mv = (a) => /run|sprint|strafe|walk/i.test(a.anim || '') ? 0 : 1;
+  const bots = W.actors.filter((a) => a.alive && !a.isDummy && a.rig && a.onGround).sort((p, q) => mv(p) - mv(q)).slice(0, 8);
   const out = []; const v1 = new W.camera.position.constructor(), v2 = new W.camera.position.constructor();
   const bone = (a, re) => { let r = null; a.rig.scene.traverse((o) => { if (!r && o.isBone && re.test(o.name)) r = o; }); return r; };
   for (const a of bots) {
@@ -164,7 +166,7 @@ FACING_JS = r"""([plant]) => {
     // the VISIBLE facing: the torso's forward = up x (right shoulder - left shoulder), level, unit length (fix round: the P2 sprint-strafe and run
     // clips turn the FEET toward the direction of travel - rifle_sprint_right 19 of 82 frames toes-not-forward - while the body faces the aim)
     shR.getWorldPosition(v1); shL.getWorldPosition(v2);
-    const sx = v1.x - v2.x, sz = v1.z - v2.z, tfx = -sz, tfz = sx, tn = Math.hypot(tfx, tfz) || 1;
+    const sx = v1.x - v2.x, sz = v1.z - v2.z, tfx = sz, tfz = -sx, tn = Math.hypot(tfx, tfz) || 1;
     const torso = (tfx / tn) * fx + (tfz / tn) * fz;
     out.push({ id: a.id, skin: a.skin, clip: a.anim || null, torsoForward: +torso.toFixed(3), toeForward: +toeDot.toFixed(3), handRight: +rightDot.toFixed(3) });
     if (out.length >= 6) break;

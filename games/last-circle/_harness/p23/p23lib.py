@@ -469,6 +469,19 @@ SESSION_JS = r"""(other) => { const W = window.__LC__ && window.__LC__.W, S = W 
            other: a ? { netRemote: !!a.netRemote, isBot: !!a.isBot, alive: !!a.alive } : null, tookOver: (S && S.tookOver) || null, silentTake: S && S.silentTake ? Object.keys(S.silentTake) : null }; }"""
 
 
+SIM_RATE_MIN = 0.6      # match-clock seconds per wall second below which a two-page row measures the box, not net.js (lane net's live probe rule)
+
+
+def sim_rates(*pgs, secs=3.0):
+    """match-clock seconds per wall second on each page over ~secs (1.0 = real time). net.js's watchdogs and rejoin-record freshness run on
+    the WALL clock (8 s host silence, 12 s guest silence, a record refreshed every 2 s and fresh for 75 s): a page starved below SIM_RATE_MIN
+    trips them by itself"""
+    t0 = [(time.time(), p.evaluate("() => window.__LC__.W.t")) for p in pgs]
+    pgs[0].wait_for_timeout(int(secs * 1000))
+    t1 = [(time.time(), p.evaluate("() => window.__LC__.W.t")) for p in pgs]
+    return [round((b[1] - a[1]) / max(0.001, b[0] - a[0]), 3) for a, b in zip(t0, t1)]
+
+
 def pair_session(hpg, gpg, h_id, g_id, wait_s=20):
     """SETUP check of a squad pair (D16): both pages still in the squad session and the host driving the guest's body from its packets (netRemote,
     not a bot). Returns (ok, detail); waits up to wait_s for a reclaim (net.js hands a silenced body back when its peer speaks again)."""
