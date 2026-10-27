@@ -663,7 +663,10 @@
   // (fix/probes/probe_pad.py, p23_hitbox's own lines - 3 cm raster, 8 x 0.06 m offsets - 5 skins x 4 views on the idle
   // player + the range dummy): pad 0 -> deep-line coverage 0.914-1.0, 0 outside; 0.015 / 0.01 -> 0.957-1.0, 0 outside,
   // head-top + 0.1 m 0 hits; 0.02 / 0.02 -> 1 outside line on athlete and viper (side view).
-  var HV_LIVE_PAD = { body: 0.015, head: 0.01 };
+  // The swinging forearms and shins of a walking rig deform thinner than their idle fit (probe_hitbox_live, 5 skins x
+  // 7 gaits: 28 of 2.69 M body-hit cells at 0.061-0.067 m with 0.015 on every slot, all on the forearm / upper-arm /
+  // shin capsules), so those slots (2, 3, 5) take `limb` instead.
+  var HV_LIVE_PAD = { body: 0.015, limb: 0.005, head: 0.01 };
   var HV_HEAD_R = {};
   function hitVolHeadR(sk) {
     if (HV_HEAD_R[sk] != null) return HV_HEAD_R[sk];
@@ -687,7 +690,7 @@
     var best = 2, part = -1, head = false, S = HITVOL.SEGS;
     for (i = 0; i < S.length + 2; i++) {
       var a3, b3, rr;
-      if (i < S.length) { var g = S[i]; rr = R[g[2]] > 0 ? R[g[2]] + HV_LIVE_PAD.body : 0; a3 = hvOff(g[0]); b3 = hvOff(g[1]); }
+      if (i < S.length) { var g = S[i], sl = g[2]; rr = R[sl] > 0 ? R[sl] + (sl === 2 || sl === 3 || sl === 5 ? HV_LIVE_PAD.limb : HV_LIVE_PAD.body) : 0; a3 = hvOff(g[0]); b3 = hvOff(g[1]); }
       else { rr = Math.min(R[5], HV_FOOT_R); a3 = hvOff(i === S.length ? 11 : 14); b3 = hvOff(i === S.length ? 21 : 22); }
       if (!(rr > 0)) continue;
       var e = segCapsule(ax, ay, az, dx, dy, dz, J[a3], J[a3 + 1], J[a3 + 2], J[b3], J[b3 + 1], J[b3 + 2], rr);
