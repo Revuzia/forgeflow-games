@@ -34,7 +34,34 @@
 .home__featureart { aspect-ratio: 16 / 9; height: 100%; }
 .home__featuretext { display: flex; flex-direction: column; gap: var(--u); padding: calc(3 * var(--u)); justify-content: center; }
 .home__featuremode { color: var(--text-3); }
+.home__featureart--card img { object-position: 50% 32%; }
 .home__tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(2 * var(--u)); }
+/* the progress band (client F7): level ring · first-win candle · last match with Play again */
+.hband { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 1.4fr); }
+.hband__cell { display: flex; align-items: center; gap: calc(1.25 * var(--u)); padding: calc(1.25 * var(--u)) calc(1.5 * var(--u)); min-width: 0; }
+.hband__cell + .hband__cell { box-shadow: inset 1px 0 0 var(--line-1); }
+.hband__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.hband__k { color: var(--text-2); }
+.hband__v { color: var(--text-1); }
+.hband__s { line-height: 1.3; }
+.hband__k, .hband__v, .hband__s { overflow-wrap: anywhere; }
+.hband__go { flex: none; }
+.hband__face { flex: none; }
+.hband__last.is-win .hband__res, .hband__last.is-place .hband__res { color: var(--chalk-hi); }
+.hband__last.is-loss .hband__res { color: var(--text-2); }
+.lvring { position: relative; flex: none; width: calc(6 * var(--u)); height: calc(6 * var(--u)); min-width: 44px; min-height: 44px; }
+.lvring svg { width: 100%; height: 100%; display: block; }
+.lvring__track { fill: none; stroke: var(--line-2); stroke-width: 3.5; }
+.lvring__fill { fill: none; stroke: var(--brand-gloam); stroke-width: 3.5; stroke-linecap: round; transition: stroke-dasharray var(--dur-base) var(--ease-dawn); }
+.lvring__n { position: absolute; inset: 0; display: grid; place-items: center; color: var(--chalk-hi); font-weight: 700; font-size: max(15px, calc(2.1 * var(--u))); }
+.fwcandle { flex: none; width: calc(4 * var(--u)); height: calc(5 * var(--u)); min-width: 28px; min-height: 35px; }
+.fwcandle__body { fill: var(--chalk); }
+.fwcandle__wick { fill: none; stroke: var(--ink-0); stroke-width: 1.6; stroke-linecap: round; }
+.fwcandle__flame { fill: var(--warn); filter: drop-shadow(0 0 5px rgba(246, 208, 77, 0.6)); }
+.fwcandle__smoke { fill: none; stroke: var(--text-3); stroke-width: 1.4; stroke-linecap: round; }
+.fwcandle__foot { fill: none; stroke: var(--line-2); stroke-width: 2; stroke-linecap: round; }
+.hband__win.is-spent .fwcandle__body { fill: var(--text-3); }
+.hband__win.is-lit .hband__v { color: var(--chalk-hi); }
 .tile { display: flex; flex-direction: column; overflow: hidden; text-align: left; transition: background-color 100ms var(--ease-std), transform 60ms linear; }
 .tile:hover, .tile:focus-visible { background: var(--plate-bg-raised); box-shadow: var(--ring); }
 .tile:active { transform: translateY(1px); }
@@ -614,6 +641,12 @@
 
 /* ── 720p token set (client F9): the default 1280 x 720 window shows every screen's content without scrolling ── */
 @media (max-height: 820px) {
+  /* Home: the flavour line goes so the progress band fits; the feature and tiles stay above the footer */
+  .home__sub { display: none; }
+  .home { gap: calc(1.25 * var(--u)); }
+  .hband__cell { padding: var(--u) calc(1.25 * var(--u)); }
+  .hband__win.is-lit .hband__s { display: none; }
+  .tile__art { aspect-ratio: 16 / 7; }
   /* Play: the dial a little lower, the queues as compact rows (the stage caption carries the description) */
   .dial { max-height: min(calc(36 * var(--u)), 30vh); }
   .qcards { grid-template-columns: minmax(0, 1fr); gap: calc(0.75 * var(--u)); }

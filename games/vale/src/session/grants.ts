@@ -38,6 +38,22 @@ export function addAccountXp(level: number, xp: number, gained: number): { level
 /** queue kinds that never grant */
 export function grantsDisabled(queue: QueueDefT): boolean { return queue.kind === 'practice' || queue.kind === 'custom'; }
 
+/** the first-win-of-the-day bonus is still to be had at `wall` (epoch ms): no first win yet on this UTC day. The one
+ *  rule applyGrants pays by and Home shows (client F7). */
+export function firstWinAvailable(p: Pick<Profile, 'firstWinAt'>, wall: number): boolean {
+  return !p.firstWinAt || utcDay(Date.parse(p.firstWinAt)) !== utcDay(wall);
+}
+/** what the first win of the day pays on this queue, on top of the match grant (0 / 0 where the queue grants nothing) */
+export function firstWinBonus(queue: QueueDefT): { currency: number; xp: number } {
+  if (grantsDisabled(queue)) return { currency: 0, xp: 0 };
+  return { currency: Math.max(0, Math.round(FIRST_WIN_MULT * queue.grants.win)), xp: Math.max(0, queue.grants.xpWin) };
+}
+/** milliseconds from `wall` to the next UTC midnight (when a spent first-win bonus comes back) */
+export function msToUtcReset(wall: number): number {
+  const d = new Date(wall);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - wall;
+}
+
 export interface GrantInput {
   catalog: CatalogT;
   queue: QueueDefT;
@@ -80,8 +96,7 @@ export function applyGrants(p: Profile, ctx: LedgerCtx, inp: GrantInput): GrantS
   let xp = won ? g.xpWin : g.xpLoss;
   summary.lines.push({ label: 'account_xp', amount: xp });
   // first win of the day (UTC)
-  const today = utcDay(inp.wall);
-  if (won && (!p.firstWinAt || utcDay(Date.parse(p.firstWinAt)) !== today) && (g.win > 0 || g.xpWin > 0)) {
+  if (won && firstWinAvailable(p, inp.wall) && (g.win > 0 || g.xpWin > 0)) {
     summary.firstWin = true;
     p.firstWinAt = new Date(inp.wall).toISOString();
     const bonus = Math.round(FIRST_WIN_MULT * g.win);

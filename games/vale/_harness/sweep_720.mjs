@@ -2,7 +2,7 @@
 // size) and 1920x1080, real Chrome, the renderer on. Fails on a clipped label, on must-see content below the fold
 // or under the footer, and on any text under the portal control bar (bottom-left).
 //
-//   node _harness/sweep_720.mjs [fast|flow] [--sizes 1280x720,1920x1080] [--only play,skins,postgame,draft,loading]
+//   node _harness/sweep_720.mjs [fast|flow] [--sizes 1280x720,1920x1080] [--only home,play,skins,postgame,draft,loading]
 //                               [--out <report.json>] [--prefix fw_W2_sweep]
 //
 //   fast (default)  no queue: Play (every live mode), Collection Skins, the draft (a team pick, your hover, your lock,
@@ -10,7 +10,9 @@
 //   flow            the draft, finalize and loading come from a REAL Co-op queue (Find match → Ready → pick a card →
 //                   Lock in → the finalize timer → loading); Play, Collection and post-game as in `fast`.
 //
-// Per screen and size the report holds: clipped (text cut by its own box or an overflow ancestor; line-clamped
+// home (client F7): the progress band on a fresh profile and after a won match (level ring with XP to next, the
+// first-win candle lit / spent with the reset time, Play again enabled), then one click on Play again must start the
+// search. Per screen and size the report holds: clipped (text cut by its own box or an overflow ancestor; line-clamped
 // descriptions are listed apart as `clamped`), fold (must-see elements not fully inside their scroll box or under
 // the footer), portal (text under the control bar), and the screen's own metrics (Play: selected queue card and
 // Find match boxes, gnomon / title overlap, the mode art; draft: the showcase box and the lock-in cue; skins: tiles
@@ -104,6 +106,8 @@ function measure(o) {
 }
 
 const MUST = {
+  home: [{ name: 'level ring', sel: '.lvring' }, { name: 'first win', sel: '.hband__win' }, { name: 'last match', sel: '.hband__last' }, { name: 'band action', sel: '.hband__go' },
+    { name: 'feature', sel: '.home__feature' }, { name: 'tiles', sel: '.home__tiles .tile', all: true }, { name: 'feature CTA', sel: '.scr__foot .btn--chalk' }],
   play: [{ name: 'selected queue', sel: '.qcard.is-selected' }, { name: 'find match', sel: '.scr__foot .btn--chalk' }, { name: 'mode title', sel: '.play__mode h2' }, { name: 'mode art', sel: '.playart' }],
   skins: [{ name: 'first skin tile', sel: '.skin' }],
   draft: [{ name: 'fighter cards', sel: '.draft__grid .fcard', all: true }, { name: 'showcase', sel: '.dshow' }, { name: 'phase title', sel: '.phase__title' }, { name: 'seats', sel: '.dteam .seat', all: true }],
@@ -134,6 +138,51 @@ const each = async (fn) => { for (const [w, h] of SIZES) { await vp(w, h); await
 async function step(name, fn) { try { await fn(); } catch (e) { R.errors.push({ name, err: String(e?.message ?? e).slice(0, 400) }); console.log(`  ✗ ${name}: ${String(e?.message ?? e).split('\n')[0]}`); await shot(page, `${PREFIX}_FAIL_${name}`).catch(() => {}); } save(); }
 await page.waitForSelector('.home__headline, .scr--home', { timeout: 60000 }).catch(() => {});
 await W(1500);
+
+// ── Home (client F7): the progress band on a fresh profile and after a won match today; one click on Play again ──
+if (want('home')) await step('home', async () => {
+  const extra = () => page.evaluate(() => {
+    const b = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)]; };
+    const t = (s) => document.querySelector(s)?.innerText?.replace(/\s+/g, ' ').trim() ?? null;
+    const go = document.querySelector('.hband__go');
+    return { band: b('.hband'), tiles: b('.home__tiles'), level: t('.hband__level'), ring: document.querySelector('.lvring__fill')?.style.strokeDasharray ?? null,
+      firstWin: t('.hband__win'), firstWinLit: !!document.querySelector('.hband__win.is-lit'), last: t('.hband__last'), action: t('.hband__go'),
+      actionDisabled: !!go && (go.disabled || go.getAttribute('aria-disabled') === 'true'), feature: t('.home__featuretext h2'), cta: t('.scr__foot .btn--chalk') };
+  });
+  // 1. a fresh profile: level 1, no history, today's first win still to be had
+  await vale(page, (v) => { v.__homeSaved = v.state.profile.value; v.state.profile.value = { ...v.state.profile.value, level: 1, xp: 0, history: [], firstWinAt: undefined }; v.router.reset('home', {}); });
+  await W(1200);
+  await each(async (w) => {
+    const row = await check(page, 'home', `${w}_fresh`, await extra());
+    if (!row.firstWinLit) fail('home', `${w}_fresh`, 'first-win candle is not lit on a fresh profile', { firstWin: row.firstWin });
+    if (!/XP to level 2/.test(row.level ?? '')) fail('home', `${w}_fresh`, 'level ring has no XP to the next level', { level: row.level });
+    await shot(page, `${PREFIX}_${w}_home_fresh`);
+  });
+  // 2. after a won match today: level 4 with 60 XP, the first win spent, a last match to repeat
+  await vale(page, (v) => {
+    const cv = v.cv; const f = cv.playable()[0]; const q = cv.queuesOf('rift').find((x) => x.kind === 'coop') ?? cv.c.queues[0]; const now = new Date().toISOString();
+    v.state.profile.value = { ...v.__homeSaved, level: 4, xp: 60, firstWinAt: now, history: [{ matchId: 'fixture_home', at: now, queue: q.id, mode: q.mode, fighter: f.id, skin: cv.baseSkin(f.id)?.id ?? '', won: true,
+      placement: 1, kills: 7, deaths: 2, assists: 9, cs: 120, duration: 1453, grants: { currency: {}, xp: 0, levelBefore: 4, levelAfter: 4, firstWin: true, lines: [] } }, ...v.__homeSaved.history] };
+    v.router.reset('home', {});
+  });
+  await W(1200);
+  await each(async (w) => {
+    const row = await check(page, 'home', `${w}_after_win`, await extra());
+    if (row.firstWinLit || !/Back in \d/.test(row.firstWin ?? '')) fail('home', `${w}_after_win`, 'first-win candle is not spent with the time to the reset', { firstWin: row.firstWin });
+    if (!row.ring || parseFloat(row.ring) <= 0) fail('home', `${w}_after_win`, 'level ring shows no XP', { ring: row.ring });
+    if (!/play again/i.test(row.action ?? '') || row.actionDisabled) fail('home', `${w}_after_win`, 'no enabled Play again', { action: row.action, disabled: row.actionDisabled });
+    await shot(page, `${PREFIX}_${w}_home_after_win`);
+  });
+  // 3. one click on Play again starts the search for the last match's queue
+  await page.locator('.scr:not(.is-leaving) .hband__go').first().click();
+  await W(1500);
+  const went = await vale(page, (v) => ({ route: v.router.route.value.screen, queue: v.state.queue.value?.state ?? null, req: v.state.lastRequest.value?.queue ?? null }));
+  (R.screens.home ??= {}).play_again = went;
+  if (went.route !== 'queue' || went.queue !== 'searching') fail('home', 'play_again', 'Play again did not start the search', went);
+  else console.log(`  ✓ home: Play again → ${went.route} (${went.queue}, ${went.req})`);
+  await vale(page, (v) => { try { v.session.cancelQueue(); } catch { /* not searching */ } v.state.profile.value = v.__homeSaved; v.router.reset('home', {}); });
+  await W(1000);
+});
 
 // ── Play: every live mode, the default (first-visit) queue ──────────────────────────────────────────────────
 if (want('play')) await step('play', async () => {
