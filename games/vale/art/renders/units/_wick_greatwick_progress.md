@@ -423,3 +423,50 @@ inner lip, Art 2.0 paint, team read from both seats, hoods L* <= 65, gates.
   S 57-64 (was 68-69); body p95 A 62-65 (was 71-74), S 60-63 (was 70-71); azure band 2-3 % (A), marigold 3-17 % (S).
   Open: drum band faceting (8 flat blocks per course) and the pane / drum paint are still procedural, not Art 2.0
   projected painting.
+
+## Fix round 6 (review:wick:2, score 6.5: the greatwick major + the minors that touch it) — 2026-10-27
+Scope: art/blender/units/wick_greatwick.py only (wick_common.py unchanged: its round-5 core alpha falloff, 2.3 x hood
+halo and black-diffuse lamp halo are picked up by the rebuild). Both factions rebuilt one after the other.
+- FORMS (major): every Serenade part that broke into shards is an exact game mesh now (meta low_mesh, smooth shaded):
+  the mantle an OPEN radial strip round the back from one side of the V notch to the other, each column's top the
+  highest row whose ray still finds felt (radial_low's closed grid filled the carved collar's rays 5 cm off the axis:
+  lit slabs in the hollow; dropping those faces left ragged holes), 192 tris; the collar a 6-sided tube; the A-frame two
+  5-sided struts + two yoke bars; the pack a rounded block + two strap bands; the hammer head a 10-round lathe (flanges
+  and the two sandstone bands as clean rings, 280 tris); the drum's two courses ROUND chamfered oval lathes (20 round,
+  the 8 flat hull blocks per course faceted the drum into an octagon; the blocks, 7 mm joints, a lit arris and broken
+  top corners are painted); the lid a 16-round lathe (rim roll, felt dome, knob): the decimated lid's crease baked into
+  a dark caret on every lid.
+- PAINT (major): `_finish` / gw_finish, the glimwick's paint means over the procedural and hybrid paint of both
+  factions: the concept's own strokes as gains (wick_common.detail_ratio, 0.40-0.65; own-region texels seen square on,
+  the hood openings excluded), felt / wool nap (wick_common.nap), lit convex edges and dark seams from each part's own
+  SDF (the folds, rolls and band seams, never the game mesh's facets); painted crease + crest on the Serenade felt
+  folds (fold light 1.1 -> 1.3); hammer bands with worn lips, chips and scuffs (#B09370, a step under the palette: the
+  clean rings read near-white at hip height); the V under the Serenade chin painted as a shadowed dark felt collar
+  (#3A2D24), not ink (a black wedge there was the 'spike under the chin').
+- Aubade lantern (minor, halo ring): SMOKED dawnglass (#4A535D, no pale bloom) + the shared black-diffuse lamp halo.
+  In game (zoom 11, ally tint) a pane row through a core now runs pane 19-20 -> 34 -> 51 -> 62 (core) -> 51 -> 34 ->
+  20 (was 48 -> 39 -> 70 -> 39 -> 48: a dark ring round each glow).
+- Serenade drum windows (minor): cores 25 % smaller (0.66 x the half window, was 0.87), each in the shared soft lamp
+  glow (a flat annulus, glow_halo_lamp, 1.6 x) over a visible SMOKY lampresin pane (#5C4127 by the core, #3E2B1C at the
+  frame: the glow only adds light, and keeps a value step under the marigold tint); the hammer window is an accent lens
+  framed in dark iron (no amber resin ring on ally-blue wicks).
+- Reserved marigold band (minor): gw_reserved clamps the Serenade paint to HSV sat 0.37 in hue 25-50 (0.30 for
+  near-black texels; the lampresin panes kept). Authored GLB texels (review glbtex.py): marigold > 40 % 10.4 % of
+  used texels, 0.3 % above V 0.35 (was 18.9 / 2.2 %); the rest are near-black (V < 0.25: ink, resin margin).
+- Budget: Serenade 3525 tris (3451; the round drum and the lathes paid by a trimmed crown band 180 -> 144, hood rim
+  112 -> 104, drum cores / halos 8 round), GLB 440,588 B (was 499,560: the flat-shaded hull blocks' split vertices
+  gone); Aubade 3459 tris, 464,800 B.
+- Gates (final builds, --clip-sheet): three.js load test OK both, facing +Z, clips idle/run/attack1/death present;
+  pipeline accentPct A 5.50 % (top half 67.8 %), S 5.36 % (64 %); mesh top A 1.625, S 1.486.
+- In game (review tools ig.mjs + analyze.py, Rift seed 7, t 74/84/99, zoom 28.5, High 1080p and Low 720p, seats 0
+  and 5, the glimwick slot served as a greatwick too; working-tree GLBs):
+  hood top-quarter L* A 60.0 / 61.6 (ally H/L), 63.3 / 64.7 (enemy); S 56.9 / 58.9 (ally), 61.8 / 63.4 (enemy): all <= 65.
+  dE76 accent vs ring: A ally 47.3 / 48.0 (dL 19-21), enemy 74.8 / 77.4; S ally 65.5 / 61.7, enemy 76.5 / 67.4.
+  top / mid / bottom L*: A 44-48 / 38-44 / 28-37, S 46-53 / 30-36 / 16-25. Accent area A 5.6-6.9 %, S 5.2-5.6 %.
+  Serenade body in the marigold HSV band: ally tint 1.6-5.0 % (0.2-0.6 % above V 0.35); under the enemy tint 15.7-19.8 %
+  (8.4-8.5 % above V 0.35) = the marigold team light on the lamp panes and its bloom, not the paint.
+- Review sheet: review_greatwick_r6.jpg (rows: three.js close-ups Serenade / Aubade at eye level and 3/4; in-game
+  greatwicks at 52 deg x 3 from seat 0 and seat 5). paint_greatwick_*.png regenerated.
+  Open: the concept-detail coverage is modest (5-24 % of a part's texels see their own paint square on); the
+  Aubade enemy-Low hood top quarter sits at 64.7 (p90 66.2), 0.3 under the cap; compare_greatwick.jpg and
+  lineup_greatwick.png are from round 4 (not regenerated).
