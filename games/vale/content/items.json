@@ -167,7 +167,7 @@
     {
       "id": "grove_sickle",
       "name": "Grove Sickle",
-      "desc": "For the Dialwood. Basic attacks on monsters deal 20 + 3 per level bonus magic damage and heal you for 6 + 1 per level. Folds into your first Gloam core: carry it when you buy one and its full price counts toward it.",
+      "desc": "For the Dialwood. Basic attacks on monsters deal 30 + 4 per level bonus magic damage and heal you for 12 + 1.5 per level. Folds into your first Gloam core: carry it when you buy one and its full price counts toward it.",
       "icon": "assets/ui/icons/items/grove_sickle.webp",
       "tier": "starter",
       "cost": 300,
@@ -178,7 +178,7 @@
         {
           "id": "grove_sickle_grove_work",
           "name": "Grove Work",
-          "desc": "Basic attacks on monsters deal 20 + 3 per level bonus magic damage and heal you for 6 + 1 per level.",
+          "desc": "Basic attacks on monsters deal 30 + 4 per level bonus magic damage and heal you for 12 + 1.5 per level.",
           "icon": "assets/ui/icons/items/grove_sickle.webp",
           "triggers": [
             {
@@ -194,8 +194,8 @@
                 {
                   "op": "damage",
                   "amount": {
-                    "base": 20,
-                    "level": 3
+                    "base": 30,
+                    "level": 4
                   },
                   "type": "magic",
                   "to": "hit"
@@ -203,8 +203,8 @@
                 {
                   "op": "heal",
                   "amount": {
-                    "base": 6,
-                    "level": 1
+                    "base": 12,
+                    "level": 1.5
                   },
                   "to": "self"
                 }

@@ -263,8 +263,8 @@ function Access(p: { s: Settings; set: SetFn }): JSX.Element {
   const [mlo, mhi] = TOKENS.hud.scale.minimap;
   return (
     <div class="srows">
-      <Row id="x-cvd" label={L('colorblind', 'Colourblind mode')} desc={D('colorblind')} wide>
-        <div class="cvd" role="radiogroup" aria-label={L('colorblind', 'Colourblind mode')} data-arrownav="grid">
+      <Row id="x-cvd" label={L('colorblind', 'Colorblind mode')} desc={D('colorblind')} wide>
+        <div class="cvd" role="radiogroup" aria-label={L('colorblind', 'Colorblind mode')} data-arrownav="grid">
           {modes.map((m) => (
             <button type="button" role="radio" aria-checked={x.colorblind === m} data-nav="" class={`cvd__opt plate ${x.colorblind === m ? 'is-selected plate--lit' : ''}`}
               onClick={() => p.set('access', { colorblind: m })}>
@@ -276,12 +276,12 @@ function Access(p: { s: Settings; set: SetFn }): JSX.Element {
           ))}
         </div>
       </Row>
-      <Row id="x-fray" label={L('fray', 'FRAY seat colours')} desc={D('fray')} wide>
+      <Row id="x-fray" label={L('fray', 'FRAY seat colors')} desc={D('fray')} wide>
         <div class="stack stack--s">
-          <Segmented label={L('fray', 'FRAY seat colours')} value={fray} onChange={(v) => state.setPrefs({ frayColors: v as FrayColors | 'auto' })}
+          <Segmented label={L('fray', 'FRAY seat colors')} value={fray} onChange={(v) => state.setPrefs({ frayColors: v as FrayColors | 'auto' })}
             options={(['auto', 'standard', 'stamp', 'simple'] as const).map((v) => ({ value: v, label: cv.t(`settings.access.fray.opt.${v}`, v), desc: cv.t(`settings.access.fray.opt_desc.${v}`, '') }))} />
           <span class="t-caption muted">{cv.t(`settings.access.fray.opt_desc.${fray}`, '')}</span>
-          <div class="seatpreview" aria-label={L('fray', 'FRAY seat colours')}>
+          <div class="seatpreview" aria-label={L('fray', 'FRAY seat colors')}>
             {TOKENS.fray.map((s, i) => <SeatMark seat={s.seat} you={i === 3} size={20} />)}
           </div>
         </div>

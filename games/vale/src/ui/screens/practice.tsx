@@ -51,7 +51,7 @@ export function PracticeScreen(): JSX.Element {
         <div class="srow2 stg"><div class="srow2__text"><span class="t-body">{cv.t('practice.start_level', 'Starting level')}</span></div>
           <div class="srow2__ctl"><Slider label={cv.t('practice.start_level', 'Starting level')} value={level} min={1} max={rules.maxLevel} step={1} onChange={setLevel} /></div></div>
       </div>
-      <Section title={cv.t('play.preset.fighter', 'Fighter')} hint={f ? f.name : cv.t('draft.pick.random', 'A random fighter will be locked in if time runs out.')}>
+      <Section title={cv.t('play.preset.fighter', 'Fighter')} hint={f ? f.name : cv.t('practice.fighter_hint', 'Optional. Leave it empty and you pick on the next screen.')}>
         <FighterGrid label={cv.t('play.preset.pick_fighter', 'Pick a fighter')} size="s" cols={6} compactFilters
           card={(x) => ({ selected: x.id === fighter, skin: state.profile.value.equipped[x.id], onPress: () => setFighter(x.id === fighter ? undefined : x.id) })} />
       </Section>

@@ -36,7 +36,7 @@
       {
         "id": "practice_tool",
         "title": "Sparring practice",
-        "body": "Any fighter, the full map, alone. Add gold and levels, reset cooldowns.",
+        "body": "Any fighter, the full map, alone. Add Gleam and levels, reset cooldowns.",
         "art": "assets/ui/home/practice_tool.webp",
         "screen": "practice",
         "params": {}
@@ -83,6 +83,6 @@
     "Your first win of each day pays a bonus on top of the usual Candles.",
     "Ranked opens at account level 20. Until then, Quick and Draft are the places to learn.",
     "Quick cast fires an ability the moment you press its key. Turn it on under Settings, Controls.",
-    "Colourblind modes change the ally and enemy colours and add a shape to each. Find them under Settings, Accessibility."
+    "Colorblind modes change the ally and enemy colors and add a shape to each. Find them under Settings, Accessibility."
   ]
 }

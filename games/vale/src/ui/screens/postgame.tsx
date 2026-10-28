@@ -67,7 +67,7 @@ export function PostgameScreen(p: { params: Record<string, string> }): JSX.Eleme
         <Tabs label={cv.t('postgame.title', 'Match summary')} value={tab} onChange={(id) => router.setParams({ tab: id })} items={[
           { id: 'summary', label: cv.t('postgame.tab.summary', 'Summary') },
           { id: 'scoreboard', label: ffa ? cv.t('hourboard.title', 'Hour Board') : cv.t('postgame.tab.scoreboard', 'Scoreboard') },
-          { id: 'graph', label: cv.t('postgame.tab.graph', 'Gleam lead'), disabled: res.goldGraph.length < 2 ? cv.t('state.empty.recap', 'No damage was recorded.') : undefined },
+          { id: 'graph', label: cv.t('postgame.tab.graph', 'Gleam lead'), disabled: res.goldGraph.length < 2 ? cv.t('postgame.graph.empty', 'The match ended too soon to chart the Gleam lead.') : undefined },
         ]} />
         <div class="pg__body">
           {tab === 'summary' ? <Summary res={res} grants={pg.grants} me={me} /> : null}
@@ -189,7 +189,7 @@ function LevelBar(p: { g: GrantSummary }): JSX.Element {
     <div class="levelbar">
       <div class="row row--nowrap levelbar__head">
         <span class="t-label">{leveled ? cv.t('postgame.level.range', 'Level {a} to level {b}', { a: g.levelBefore, b: g.levelAfter }) : cv.t('postgame.level.up', 'Level {n}', { n: profile.level })}</span>
-        <span class="num t-caption muted">{cv.t('postgame.level.progress', '{xp} / {next} XP', { xp: fmtInt(profile.xp), next: fmtInt(xpToNext(profile.level)) })}</span>
+        <span class="fig t-caption muted">{cv.t('postgame.level.progress', '{xp} / {next} XP', { xp: fmtInt(profile.xp), next: fmtInt(xpToNext(profile.level)) })}</span>
       </div>
       <div class={`bar-line bar-line--gloam ${leveled ? 'is-up' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(after * 100)}>
         <span class="bar-line__fill" style={{ width: `${(v * 100).toFixed(2)}%`, transition: 'none' }} />

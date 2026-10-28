@@ -15,7 +15,10 @@
 // Between slots every effect of the last cast ends (3.5 s, statuses cleared, VFX cleared), so a lingering zone of a1
 // never counts for a2. The status looks (client.vfxStatus → lib_status_*: a unit's state drawn in THAT unit's
 // relationship colour, the same for every kit that applies it) are off by default: they are not the kit's light
-// (--status counts them too).
+// (--status counts them too). From the cast to the last sample only the slot's own effects spawn: the VFX the slot
+// names (its present / effect vfx ids: cast, wind-up, zone, projectile, hit) with the caster as their source. A unit
+// reacting to the hit (the victim's passive), an item or boon proc, a bystander is dropped, so the light measured is
+// the kit's.
 //
 //   node _harness/probe_kit_hue.mjs [--kits a,b,c] [--out <json>] [--shots <prefix>] [--gate 0.5] [--live] [--status]
 //   --live   content/vfx.json as it stands on disk replaces the catalog's defs in the page (tuning without a rebuild)
@@ -51,6 +54,11 @@ if (liveDefs) {
 await B((b, status) => {
   const R = b.renderer;
   if (!status) R.director.statusVfx = {};
+  // the caster-only window (b.__only = the caster's entity id; -1 = everything spawns)
+  b.__only = -1;
+  const spawn0 = R.vfx.spawnHandle.bind(R.vfx);
+  b.__ids = new Set();
+  R.vfx.spawnHandle = (id, o) => (b.__only >= 0 && (o?.sourceId !== b.__only || !b.__ids.has(id)) ? 0 : spawn0(id, o));
   b.__step = (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) { b.__H.pump(dt); R.render(dt); } };
   b.__grab = () => { R.render(0); const gl = R.gl.getContext(); const Wd = gl.drawingBufferWidth, Hd = gl.drawingBufferHeight; const px = new Uint8Array(Wd * Hd * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, Wd, Hd, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, Wd, Hd }; };
   b.__vfxHue = (box, sigH) => {
@@ -145,6 +153,11 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
         const dist = rg > 0 ? Math.max(1.5, Math.min(4.5, rg - 0.4)) : 4.5;
         const st = await B((b, a) => {
           const W = b.__W;
+          // from the staging on, only this slot's own VFX from this caster spawn (an item or boon proc while the
+          // pair is set up would linger into the samples)
+          const f = b.catalog.fighters.find((x) => x.id === a.fid);
+          b.__ids = new Set([...JSON.stringify(f.kit[a.slot]).matchAll(/"[a-zA-Z]*[vV]fx":"([^"]+)"/g)].map((m) => m[1]));
+          b.__only = W.players[a.cp].entity;
           const stage = () => {
             const pc = W.players[a.cp].entity, pv = W.players[a.vp].entity;
             b.__prep(pc, a.x - a.d / 2, a.y, 0); b.__prep(pv, a.x + a.d / 2, a.y, Math.PI);
@@ -152,8 +165,9 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
             return { pc, pv };
           };
           b.__clear(); stage(); b.__step(30); b.__clear(); const r = stage(); b.__step(2); return r;
-        }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist });
-        await B((b, a) => { const me = b.__H.view.entity(a.pv); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, cp, slot });
+        }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist, fid, slot });
+        await B((b, a) => {
+          b.renderer.vfx.clear(); const me = b.__H.view.entity(a.pv); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, cp, slot, fid });
         const rel = Math.max(1, Math.round(info.ct[slot] * 30));
         const best = { n: -1 };
         for (let f = 1; f <= rel + 12; f++) {
@@ -174,7 +188,7 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
         rows.push(row);
         console.log(`${row.pass ? 'PASS' : 'FAIL'} ${fid.padEnd(8)} ${slot} sigH ${String(row.sigHue).padStart(3)} sig ${row.sig} harm ${row.harm} white ${row.white} n ${row.n} sat ${row.sat} bins ${row.bins30?.join(' ')}`);
         // every effect of this cast ends before the next one: zones run out, statuses go, the VFX are cleared
-        await B((b, a) => { b.__step(105); for (const id of [a.pc, a.pv]) { const e = b.__W.entity(id); if (e) e.statuses.length = 0; } b.renderer.vfx.clear(); b.__step(3); }, st);
+        await B((b, a) => { b.__only = -1; b.__step(105); for (const id of [a.pc, a.pv]) { const e = b.__W.entity(id); if (e) e.statuses.length = 0; } b.renderer.vfx.clear(); b.__step(3); }, st);
       }
       await B((b, p) => b.__park(p), cp);
     }

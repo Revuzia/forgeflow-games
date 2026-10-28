@@ -1,5 +1,6 @@
 // VALE UI — currency amount: glyph + Mono tabular number. When the amount changes it ticks up (or
-// down) over the reward duration (1200 ms, ease-out) with a rate-limited ui_currency_tick.
+// down) over the reward duration (1200 ms, ease-out) with a rate-limited ui_currency_tick. A static amount
+// (tick={false}: a price, a queue's reward) is prose and uses the body face's figures (client F14).
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -39,7 +40,7 @@ export function Currency(p: { id: string; amount: number; tick?: boolean; size?:
   return (
     <span class={`cur cur--${p.size ?? 'm'} ${p.class ?? ''}`} aria-label={`${fmtInt(p.amount)} ${name}`}>
       <CurrencyGlyph id={p.id} size={glyph} />
-      <span class="cur__n num" aria-hidden="true">{p.signed && shown > 0 ? '+' : ''}{fmtInt(shown)}</span>
+      <span class={`cur__n ${p.tick === false ? 'cur__n--fig fig' : 'num'}`} aria-hidden="true">{p.signed && shown > 0 ? '+' : ''}{fmtInt(shown)}</span>
       {p.showName ? <span class="cur__name t-caption" aria-hidden="true">{name}</span> : null}
     </span>
   );

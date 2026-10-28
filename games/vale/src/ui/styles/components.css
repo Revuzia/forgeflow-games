@@ -29,7 +29,7 @@
 .btn--secondary:hover:not([aria-disabled='true']) { background: var(--ink-4); }
 .btn--secondary:active:not([aria-disabled='true']) { background: var(--ink-4); }
 .btn--secondary.is-selected { background: var(--ink-4); }
-.btn--secondary.is-selected::before { content: ''; position: absolute; left: calc(1.5 * var(--u)); top: 0; width: 2px; height: var(--u); background: var(--chalk); }
+.btn--secondary.is-selected::before { content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: calc(0.5 * var(--u)); background: var(--chalk); transform: translateX(-50%); }
 
 .btn--quiet { color: var(--text-2); padding-left: var(--u); padding-right: var(--u); }
 .btn--danger { color: var(--danger); border-color: var(--danger); }
@@ -51,6 +51,8 @@
 .cur__glyph--earned { color: #E8C27A; }
 .cur__glyph--premium { color: var(--brand-gloam); }
 .cur__n { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; font-weight: 700; }
+/* a static amount (a price, a queue's reward: Currency tick={false}) is prose, not a readout (client F14) */
+.cur__n--fig { font-family: var(--font-body); }
 .cur--s .cur__n { font-size: max(12px, calc(14px * var(--k))); }
 .cur--m .cur__n { font-size: max(12px, calc(18px * var(--k))); }
 .cur--l .cur__n { font-size: max(12px, calc(26px * var(--k))); }
@@ -207,7 +209,9 @@
 .seg__opt:hover, .seg__opt:focus-visible { color: var(--text-1); background: var(--ink-3); }
 .seg__opt:focus-visible { box-shadow: var(--ring); z-index: 1; }
 .seg__opt.is-selected { background: var(--ink-4); color: var(--text-1); }
-.seg__opt.is-selected::after { content: ''; position: absolute; left: calc(1.25 * var(--u)); top: 0; width: 2px; height: var(--u); background: var(--chalk); }
+/* client F13: the selected noon tick stands at the top centre (as the nav's does), 0.5u tall: it ends above every label's
+   cap height, so it never cuts a first glyph ('|MEDIUM') */
+.seg__opt.is-selected::after { content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: calc(0.5 * var(--u)); background: var(--chalk); transform: translateX(-50%); }
 .seg__opt[aria-disabled='true'] { color: var(--text-disabled); cursor: not-allowed; }
 .seg__adorn { display: inline-flex; }
 
@@ -240,7 +244,7 @@
 .tab:focus-visible { box-shadow: var(--ring); z-index: 1; }
 .tab.is-selected { color: var(--text-1); }
 .tab.is-selected::after { content: ''; position: absolute; left: calc(2 * var(--u)); right: calc(2 * var(--u)); bottom: -1px; height: 2px; background: var(--chalk); }
-.tab.is-selected::before { content: ''; position: absolute; left: calc(2 * var(--u)); top: 0; width: 2px; height: var(--u); background: var(--chalk); }
+.tab.is-selected::before { content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: calc(0.75 * var(--u)); background: var(--chalk); transform: translateX(-50%); }
 .tab__badge { color: var(--text-3); font-size: max(12px, calc(12px * var(--k))); }
 
 /* ── toasts ─────────────────────────────────────────────────────────────────────────────────── */

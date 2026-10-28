@@ -43,7 +43,11 @@ report: art/renders/maps/build_report_landmarks_art2.json; looks: art/renders/ma
   shadow_slab  RIFT, Longshade's north choke (79.4 / 90.6, 19.6; the east one turned 180), 2 x 3 m, 4 m: dressed
                dark basalt in three courses leaning 9 deg toward the Noonline, a saddle-backed chalk coping (the
                lit top edge), chalk-beaded arrises, the shadow's hour-line and a stud inlaid in steel on both faces.
-The SDF landmarks that remain (numerals, VI slab, the stalls, FRAY's cart, stones and stands) stay in landmarks.py;
+  hour_stone   FRAY, the stone ring (ten at r 19.5, walls of 4.6 x 1.8 m, 1.2 m; final parity env F2): dark basalt,
+               a proud footing, an octagonal monolith, a cap stone with a chalked chamfer and a chalk lip, the
+               half-hour tick inlaid in chalk down each broad face and across the top. Exported sunk by 1.2 m: the
+               renderer stands it on its own wall block's top, which it encloses.
+The SDF landmarks that remain (numerals, VI slab, the stalls, FRAY's cart and stands) stay in landmarks.py;
 the skirts beyond the map bounds are art/blender/maps/skirts.py.
 """
 from __future__ import annotations
@@ -924,6 +928,55 @@ def shadow_slab(B, rng):
         chunk(B, "basalt", c, h, rng)
 
 
+# ── FRAY's hour-stone (ten at r 19.5, one per gap between the hour-marks; walls of 4.6 x 1.8 m, 1.2 m) ─────
+HOUR_H = 1.2             # the wall block's height (map_fray art.terrain.wallHeights.hourStones)
+HOUR_HALF = (2.3, 0.9)   # the wall polygon's half extents (map_gen.py build_fray: rect 4.6 x 1.8, tangential)
+
+
+def hour_stone(B, rng):
+    """FRAY's hour-stone (brief map_fray_landmarks.md §2 stone ring, §3): a low carved block of dark basalt, the
+    frame stone, never the plate's pale stone. A proud footing course, a monolith with its four plan corners cut
+    back, a cap stone whose chamfered top edge is chalked (the chalk top edge / lip), and the half-hour tick inlaid
+    in chalk down the middle of each broad face and across the top (radial: the tick the hour-ring carries between
+    two marks). Blender +Y faces the plate's centre (content `rot`), X runs along the rim.
+    The renderer stands a landmark on groundAt(), which inside its own (not replaced) wall block is the block's top;
+    the stone is built from z 0 and sunk by HOUR_H at export (SINK), so it encloses the block and stands 1.25 m
+    on the plate. Every face clears the block's battered courses and organic outline (<= 0.13 m out) by >= 0.15 m."""
+    hx, hy = HOUR_HALF
+    m = 0.17
+    # the footing course: proud on every side
+    B.add("hourbasalt", K.box((0, 0, 0.13), (hx + m + 0.06, hy + m + 0.06, 0.15), 0.05))
+    # the monolith: an octagon in plan (corners cut 0.32 m), 0.26 -> 1.08
+    ax, ay = hx + m, hy + m
+    c = 0.32
+    plan = [(-ax + c, -ay), (ax - c, -ay), (ax, -ay + c), (ax, ay - c), (ax - c, ay), (-ax + c, ay), (-ax, ay - c), (-ax, -ay + c)]
+    v, f = K.prism(plan, origin=(0, 0, 0.27), u=(1, 0, 0), v=(0, 1, 0), depth=0.82, chamfer=0.035, center=False)
+    B.add("hourbasalt", (v, f))
+    # the cap stone: proud 4 cm, a 7 cm chamfer all round its top edge (the chalked lip catches the noon sun)
+    cx, cy, cc = ax + 0.04, ay + 0.04, c + 0.03
+    cap = [(-cx + cc, -cy), (cx - cc, -cy), (cx, -cy + cc), (cx, cy - cc), (cx - cc, cy), (-cx + cc, cy), (-cx, cy - cc), (-cx, -cy + cc)]
+    v, f = K.prism(cap, origin=(0, 0, 1.08), u=(1, 0, 0), v=(0, 1, 0), depth=0.17, chamfer=0.07, center=False)
+    B.add("hourbasalt", (v, f))
+    # the chalk lip: a slim chalk fillet along both long top arrises (what reads as the lit edge from 28 m)
+    for sy in (-1, 1):
+        B.add("hourchalk", K.box((0, sy * (cy - 0.035), 1.235), (cx - cc - 0.05, 0.05, 0.025), 0.012))
+    # the half-hour tick: chalk inlaid down each broad face and across the top (radial, toward the plate's centre)
+    for sy in (-1, 1):
+        B.add("hourchalk", K.box((0, sy * (ay + 0.008), 0.68), (0.055, 0.02, 0.33), 0.008))
+        B.add("hourchalk", K.box((0, sy * (ay + 0.008), 0.33), (0.2, 0.02, 0.03), 0.006))     # its foot bar
+    B.add("hourchalk", K.box((0, 0, 1.252), (0.055, cy - 0.2, 0.012), 0.006))
+    # spalled chips at the foot (the camera side and one end)
+    for cc_, h in (((1.4, -(hy + m + 0.32), 0.07), (0.12, 0.1, 0.07)), ((-(hx + m + 0.3), 0.4, 0.06), (0.1, 0.13, 0.06))):
+        chunk(B, "hourbasalt", cc_, h, rng)
+
+
+HOUR_MATS = {
+    "hourbasalt": dict(hex="#48454E", chisel=0.9, var=0.07, streaks=0.25, chips=0.55, speckle=0.35, scale=0.5, rough=0.64,
+                       edge_light=(0.06, 0.9, 0.65, 0.1)),
+    "hourchalk": dict(CHALK, hex="#9E998E", streaks=0.2, chips=0.3, edge_light=(0.02, 0.3, 0.4, 0.05)),
+}
+
+
 SLAB_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"],
              "basalt": dict(hex="#4C4854", chisel=0.9, var=0.09, streaks=0.3, chips=0.6, speckle=0.35, scale=0.55, rough=0.62,
                             edge_light=(0.04, 0.55, 0.6, 0.1))}
@@ -951,7 +1004,9 @@ DESIGNS = {
     "lamp_dome": (lamp_dome, DOME_MATS, 2048, 1.2),
     "noon_stone": (noon_stone, NOON_MATS, 1024, 0.6),
     "shadow_slab": (shadow_slab, SLAB_MATS, 1024, 0.5),
+    "hour_stone": (hour_stone, HOUR_MATS, 1024, 0.4),
 }
+SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}
 AFTER = {"lamp_dome": dome_court}            # built after the scale (full-size pieces)
 
@@ -990,6 +1045,10 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
     hi = np.max([np.array(o.bound_box).max(0) for o in objs.values()], 0)
     if preview:
         look(name, list(objs.values()), lo, hi, fast)
+    if name in SINK:
+        from mathutils import Matrix
+        for o in objs.values():
+            o.data.transform(Matrix.Translation((0.0, 0.0, -SINK[name])))
     path = os.path.join(OUT, f"{name}.glb")
     K.export_glb(root, path)
     raw = os.path.getsize(path)
@@ -1005,7 +1064,8 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 # where the gameplay camera stands relative to each landmark (it looks north, 52 deg down): the base-end
 # landmarks stand beyond the map's edge, so the camera sees the Dawn Arch from the east and the Lamp Gate from the west
 LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
-        "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0)}
+        "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0),
+        "hour_stone": (0.0, 0.0, 12.0)}
 
 
 def look(name, objs, lo, hi, fast):

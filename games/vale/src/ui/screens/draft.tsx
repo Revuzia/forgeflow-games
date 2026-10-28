@@ -379,7 +379,7 @@ function LotView(p: { d: DraftState; onLeave: () => void }): JSX.Element {
             </div>
           </section>
           <section class="lot__bench stg" aria-label={cv.t('lot.team_lot', "Your team's Lot")}>
-            <h2 class="t-h2">{cv.t('lot.team_lot', "Your team's Lot")} <span class="t-caption muted num">{bench.length}/{queue.bench?.size ?? bench.length}</span></h2>
+            <h2 class="t-h2">{cv.t('lot.team_lot', "Your team's Lot")} <span class="t-caption muted fig">{bench.length}/{queue.bench?.size ?? bench.length}</span></h2>
             {bench.length ? (
               <div class="lot__cards" data-arrownav="grid">
                 {bench.map((id) => {
@@ -429,7 +429,7 @@ function FrayPick(p: { d: DraftState; onLeave: () => void }): JSX.Element {
       <div class="draft draft--ffa">
         <header class="draft__top draft__top--ffa stg">
           <PhaseHead d={d} title={cv.t('fray.pick.title', 'Pick your fighter')} prompt={cv.t('fray.pick.prompt', 'Pick any fighter nobody else has locked.')}
-            sub={cv.t('fray.seat.you', 'You hold Seat {roman} · {colour}.', { roman: roman(mySeat), colour })} />
+            sub={cv.t('fray.seat.you', 'You hold Seat {roman} · {color}.', { roman: roman(mySeat), color: colour })} />
           <div class="fseats" aria-label={cv.t('hourboard.title', 'Hour Board')}>
             {d.seats.map((s) => {
               const f = cv.fighter(s.locked);

@@ -242,9 +242,11 @@ def map_lighting(map_id: str) -> dict:
             "sky": os.path.join(scene.OUT_DIR, "maps", map_id, "sky.hdr")}
 
 
-def sky_world(hdr: str, strength: float = 0.65, rot_z_deg: float = 0.0, camera_strength: float | None = None):
+def sky_world(hdr: str, strength: float = 0.65, rot_z_deg: float = 0.0, camera_strength: float | None = None,
+              tint=None):
     """World = the map's baked sky HDR (mean radiance 1.0, sun disc off). `camera_strength` makes
-    the sky the camera sees brighter/darker than the light it casts (backdrop plates)."""
+    the sky the camera sees brighter/darker than the light it casts (backdrop plates). `tint` (linear
+    RGB, optional) multiplies the sky's colour (the dusk fill of the painted plates, common/plates.py)."""
     sc = bpy.context.scene
     w = bpy.data.worlds.get("vale_sky_world") or bpy.data.worlds.new("vale_sky_world")
     sc.world = w
@@ -260,15 +262,25 @@ def sky_world(hdr: str, strength: float = 0.65, rot_z_deg: float = 0.0, camera_s
     if os.path.isfile(hdr):
         env.image = bpy.data.images.load(hdr, check_existing=True)
     nt.links.new(mp.outputs["Vector"], env.inputs["Vector"])
+    col_out = env.outputs["Color"]
+    if tint is not None:
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs[0].default_value = 1.0
+        ca, cb = [i for i in mix.inputs if i.type == "RGBA"][:2]
+        nt.links.new(env.outputs["Color"], ca)
+        cb.default_value = (float(tint[0]), float(tint[1]), float(tint[2]), 1.0)
+        col_out = next(o for o in mix.outputs if o.type == "RGBA")
     bg = nt.nodes.new("ShaderNodeBackground")
     bg.inputs["Strength"].default_value = strength
-    nt.links.new(env.outputs["Color"], bg.inputs["Color"])
+    nt.links.new(col_out, bg.inputs["Color"])
     if camera_strength is None:
         nt.links.new(bg.outputs["Background"], out.inputs["Surface"])
     else:
         bg2 = nt.nodes.new("ShaderNodeBackground")
         bg2.inputs["Strength"].default_value = camera_strength
-        nt.links.new(env.outputs["Color"], bg2.inputs["Color"])
+        nt.links.new(col_out, bg2.inputs["Color"])
         lp = nt.nodes.new("ShaderNodeLightPath")
         mx = nt.nodes.new("ShaderNodeMixShader")
         nt.links.new(lp.outputs["Is Camera Ray"], mx.inputs[0])
@@ -709,6 +721,12 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     cfg = _splash_cfg(spec, skin)
     light = map_lighting(cfg["map"])
     pre = f"{skin['id']}_" if skin else ""
+    # painted dusk plates (client F3, common/plates.py): a fighter listed in art/blender/fighters/plates.json renders
+    # its splash / portrait over a painted plate graded to its origin's dusk and is lit to match (cfg_a / light_a);
+    # anything else (pl None) keeps the map backdrop plate and cfg_a / light_a are cfg / light themselves
+    from . import plates
+    pl = plates.params(getattr(spec, "ID", ""), skin, getattr(spec, "ORIGIN", None))
+    cfg_a, light_a = plates.art_light(cfg, light, pl) if pl else (cfg, light)
     chains = spec.chain_config(ctx) if hasattr(spec, "chain_config") else [anim.ChainCfg(b) for b in ctx.chains.values()]
     for o in bpy.context.scene.objects:
         if o.type == "MESH" and o not in objs:
@@ -725,7 +743,7 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     clips = fighter_clips(ctx)
     out, T = {}, {}
     cam = camera(lens=50)
-    sky_world(light["sky"], light["ambient"], camera_strength=1.0)
+    sky_world(light_a["sky"], light_a["ambient"], camera_strength=1.0, tint=light_a.get("tint"))
 
     # ── splash 1600x900 ──
     if want("splash"):
@@ -733,19 +751,24 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         lo, hi = posed_bounds(objs)
         lo.z = min(lo.z, 0.0)
         _fit_camera(cam, lo, hi, cfg["yaw"], cfg["pitch"], cfg["lens"], cfg["fill"], 16 / 9, cfg["x"])
-        bible_lights(cam, cfg, light, rim=1.0, scale=1.6, pair=True, target=(lo + hi) * 0.5)
+        bible_lights(cam, cfg_a, light_a, rim=1.0, scale=1.6, pair=True, target=(lo + hi) * 0.5)
         t0 = time.perf_counter()
         W, H = int(round(1600 * scale)), int(round(900 * scale))
-        plate = backdrop_plate(cam, cfg, light, W, H, os.path.join(P["renders"], f"{pre}_plate.png"), fast,
-                               paint_r=max(1, int(round(cfg.get("paint_r", 3) * scale))))
+        plate = None if pl else backdrop_plate(cam, cfg, light, W, H, os.path.join(P["renders"], f"{pre}_plate.png"),
+                                               fast, paint_r=max(1, int(round(cfg.get("paint_r", 3) * scale))))
         g = ground(catcher=True, size=60.0)
         setup(W, H, max(16, 64 // S), view="Khronos PBR Neutral")
         raw_s = os.path.join(P["renders"], f"{pre}splash_raw.png")
         render(raw_s)
         imageops.denoise(raw_s, 2.0)
         fg = imageops.load(raw_s)
-        comp = splash_post(fg, plate, 1.0 if cfg.get("post", True) else 0.0)
-        out["splash"] = imageops.save(imageops.grade(comp), dest("splash"), alpha=False)
+        if pl:
+            plates.keep_raw(raw_s, pl["sid"], "splash", preview)
+            out["splash"] = imageops.save(plates.finish(fg, pl, "splash", 1.0 if cfg.get("post", True) else 0.0),
+                                          dest("splash"), alpha=False)
+        else:
+            comp = splash_post(fg, plate, 1.0 if cfg.get("post", True) else 0.0)
+            out["splash"] = imageops.save(imageops.grade(comp), dest("splash"), alpha=False)
         g.hide_render = True
         T["splash"] = round(time.perf_counter() - t0, 2)
 
@@ -760,13 +783,13 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     plo = V((head.x - 0.3, head.y - 0.3, neck.z - 0.30 * H / 1.9))
     phi = V((head.x + 0.3, head.y + 0.3, min(top, head.z + 0.36 * H / 1.9) + 0.03))
     _fit_camera(cam, plo, phi, cfg["portrait_yaw"], 6.0, 85.0, 0.92, 1.0, 0.5)
-    bible_lights(cam, cfg, light, rim=0.8, scale=0.8, pair=True, target=(plo + phi) * 0.5)
+    bible_lights(cam, cfg_a, light_a, rim=0.8, scale=0.8, pair=True, target=(plo + phi) * 0.5)
     # HUD face chip (facechip.py): fighters listed in art/blender/fighters/face_chips.json render their icon as a
     # head-and-shoulders chip on an ink ground; everything else keeps the head close-up below
     from . import facechip
     chip = (not skin) and want("icon") and facechip.params(spec.ID) is not None
-    if want("portrait") or (want("icon") and not chip):
-        PW = max(64, int(round(512 * scale)))
+    PW = max(64, int(round(512 * scale)))
+    if (want("portrait") and not pl) or (want("icon") and not chip):
         pplate = backdrop_plate(cam, cfg, light, PW, PW, os.path.join(P["renders"], f"{pre}_pplate.png"), fast,
                                 paint_r=2)
     if want("portrait"):
@@ -775,8 +798,13 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         render(raw)
         imageops.denoise(raw)
         fg = imageops.premul_resize(imageops.load(raw), PW, PW)
-        out["portrait"] = imageops.save(imageops.grade(splash_post(fg, pplate, 0.6 if cfg.get("post", True) else 0.0)),
-                                        dest("portrait"), alpha=False)
+        if pl:
+            plates.keep_raw(raw, pl["sid"], "portrait", preview)
+            out["portrait"] = imageops.save(plates.finish(fg, pl, "portrait", 1.0 if cfg.get("post", True) else 0.0),
+                                            dest("portrait"), alpha=False)
+        else:
+            out["portrait"] = imageops.save(imageops.grade(splash_post(fg, pplate, 0.6 if cfg.get("post", True)
+                                                                       else 0.0)), dest("portrait"), alpha=False)
         T["portrait"] = round(time.perf_counter() - t0, 2)
 
     # ── icon 128² (head close-up: the mask and crown read at a glance) ──

@@ -137,7 +137,7 @@ function LevelCell(): JSX.Element {
       </span>
       <span class="hband__text">
         <span class="t-label hband__k">{cv.t('home.level.title', 'Level {level}', { level: p.level })}</span>
-        <span class="t-body-s hband__v"><span class="num">{fmtInt(need - p.xp)}</span> {cv.t('home.level.to_next', 'XP to level {level}', { level: p.level + 1 })}</span>
+        <span class="t-body-s hband__v"><span class="fig">{fmtInt(need - p.xp)}</span> {cv.t('home.level.to_next', 'XP to level {level}', { level: p.level + 1 })}</span>
         <span class="t-caption muted hband__s">{next ? cv.t('home.level.unlock', 'Level {level} opens {queue}', { level: next.unlockLevel, queue: next.name }) : cv.t('home.level.no_unlock', 'Every match adds XP.')}</span>
       </span>
     </div>
@@ -226,7 +226,7 @@ function LastMatchCell(): JSX.Element {
       <span class="hband__text" title={q ? `${mode?.name ?? ''} · ${q.name}` : undefined}>
         <span class="t-label hband__k">{cv.t('home.last.title', 'Last match')}</span>
         <span class="t-body-s hband__v"><span class="hband__res">{res}</span> · {f?.name ?? last.fighter}</span>
-        <span class="t-caption muted hband__s">{mode?.name} · <span class="num">{last.kills}/{last.deaths}/{last.assists}</span> · <span class="num">{fmtClock(last.duration)}</span></span>
+        <span class="t-caption muted hband__s">{mode?.name} · <span class="fig">{last.kills}/{last.deaths}/{last.assists}</span> · <span class="fig">{fmtClock(last.duration)}</span></span>
       </span>
       <Button size="s" class="hband__go" disabled={!!reason} reason={reason ?? undefined} cue="confirm" onPress={again}>{cv.t('btn.play_again', 'Play again')}</Button>
     </div>

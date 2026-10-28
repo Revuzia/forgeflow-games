@@ -193,5 +193,29 @@
     "nodes": [
       "body"
     ]
+  },
+  "hour_stone": {
+    "id": "hour_stone",
+    "tris": 590,
+    "size_m": [
+      5.42,
+      2.66
+    ],
+    "height": 1.26,
+    "x": [
+      -2.89,
+      2.53
+    ],
+    "y": [
+      -1.53,
+      1.13
+    ],
+    "kb_raw": 69,
+    "kb": 32,
+    "texture": 512,
+    "buried_faces_dropped": 13,
+    "nodes": [
+      "body"
+    ]
   }
 }

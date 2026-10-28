@@ -264,6 +264,9 @@ export interface CampInfo {
   readonly id: string; readonly index: number; readonly x: number; readonly y: number;
   readonly objective: boolean; readonly firstSpawn: number; readonly respawn: number;
   readonly units: readonly string[];
+  /** the team whose half the camp lies in (its base spawn is clearly the nearer one); -1 on the
+   *  middle line (objectives) or on maps without two bases */
+  readonly side: number;
 }
 export interface PickupInfo { readonly id: string; readonly unit: string; readonly x: number; readonly y: number; readonly firstSpawn: number; readonly respawn: number }
 export interface BaseInfo { readonly team: number; readonly spawnX: number; readonly spawnY: number; readonly fx: number; readonly fy: number; readonly fr: number; readonly sx: number; readonly sy: number; readonly sr: number }
@@ -705,17 +708,24 @@ export function buildKnowledge(catalog: CatalogT, setup: MatchSetup, idx?: Catal
       });
     }
   }
-  const camps: CampInfo[] = rules.jungle ? map.camps.map((c, index) => {
-    let x = 0, y = 0;
-    for (const u of c.units) { x += u.at[0]; y += u.at[1]; }
-    const n = Math.max(1, c.units.length);
-    return { id: c.id, index, x: x / n, y: y / n, objective: c.objective, firstSpawn: c.firstSpawn, respawn: c.respawn, units: c.units.map((u) => u.unit) };
-  }) : [];
-  const pickups: PickupInfo[] = map.pickups.map((p) => ({ id: p.id, unit: p.unit, x: p.at[0], y: p.at[1], firstSpawn: p.firstSpawn, respawn: p.respawn }));
   const bases: BaseInfo[] = map.bases.map((b) => ({
     team: b.team, spawnX: b.spawn[0], spawnY: b.spawn[1], fx: b.fountain.at[0], fy: b.fountain.at[1], fr: b.fountain.radius,
     sx: b.shop.at[0], sy: b.shop.at[1], sr: b.shop.radius,
   }));
+  const campSide = (x: number, y: number): number => {
+    if (bases.length !== 2) return -1;
+    const d0 = dhypot(bases[0].spawnX - x, bases[0].spawnY - y), d1 = dhypot(bases[1].spawnX - x, bases[1].spawnY - y);
+    if (Math.abs(d0 - d1) < 0.08 * Math.max(d0, d1)) return -1;
+    return d0 < d1 ? bases[0].team : bases[1].team;
+  };
+  const camps: CampInfo[] = rules.jungle ? map.camps.map((c, index) => {
+    let x = 0, y = 0;
+    for (const u of c.units) { x += u.at[0]; y += u.at[1]; }
+    const n = Math.max(1, c.units.length);
+    return { id: c.id, index, x: x / n, y: y / n, objective: c.objective, firstSpawn: c.firstSpawn, respawn: c.respawn, units: c.units.map((u) => u.unit),
+      side: c.objective ? -1 : campSide(x / n, y / n) };
+  }) : [];
+  const pickups: PickupInfo[] = map.pickups.map((p) => ({ id: p.id, unit: p.unit, x: p.at[0], y: p.at[1], firstSpawn: p.firstSpawn, respawn: p.respawn }));
   const shops = map.shops.map((s) => ({ x: s.at[0], y: s.at[1], r: s.radius }));
   const profiles = new Map<string, FighterProfile>();
   for (const f of catalog.fighters) profiles.set(f.id, fighterProfile(f));

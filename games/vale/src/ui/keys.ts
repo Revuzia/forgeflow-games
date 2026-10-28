@@ -29,7 +29,7 @@ export function keyShort(code: string | undefined): string {
 
 /** action → display name for Settings › Controls (session/settings.ts action vocabulary) */
 export const ACTION_LABELS: Record<string, string> = {
-  a1: 'Ability 1', a2: 'Ability 2', a3: 'Ability 3', ult: 'Ultimate', spell1: 'Battle spell 1', spell2: 'Battle spell 2',
+  a1: 'Ability 1', a2: 'Ability 2', a3: 'Ability 3', ult: 'Ultimate', spell1: 'Hour spell 1', spell2: 'Hour spell 2',
   item1: 'Item slot 1', item2: 'Item slot 2', item3: 'Item slot 3', item4: 'Item slot 4', item5: 'Item slot 5', item6: 'Item slot 6',
   recall: 'Recall', shop: 'Open shop', scoreboard: 'Scoreboard (hold)', ping: 'Ping', attackMove: 'Attack-move', stop: 'Stop',
   cameraLock: 'Camera lock', centerCamera: 'Centre camera (hold)', selfCastMod: 'Self-cast modifier',

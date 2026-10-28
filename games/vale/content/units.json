@@ -166,16 +166,16 @@
       "id": "glasshorn",
       "name": "Glasshorn",
       "kind": "monster",
-      "base": { "hp": 1700, "ad": 55, "armor": 15, "resist": 20, "attackSpeed": 0.6, "moveSpeed": 3.4 },
+      "base": { "hp": 1250, "ad": 30, "armor": 10, "resist": 15, "attackSpeed": 0.6, "moveSpeed": 3.4 },
       "attack": { "range": 2.2, "windup": 0.4, "damageType": "phys",
         "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
       "collisionRadius": 0.9,
-      "bounty": { "gold": 90, "xp": 150 },
+      "bounty": { "gold": 90, "xp": 210 },
       "abilities": [
         {
           "id": "glasshorn_bellow",
           "name": "Glass Bellow",
-          "desc": "The Glasshorn lowers its antlers and bellows in a cone: 45 magic damage and a 25% slow for 1.5 s.",
+          "desc": "The Glasshorn lowers its antlers and bellows in a cone: 30 magic damage and a 25% slow for 1.5 s.",
           "icon": "assets/ui/icons/abilities/glasshorn_bellow.webp",
           "maxRank": 1,
           "cooldown": 8,
@@ -184,7 +184,7 @@
           "effects": [
             { "op": "area", "shape": { "kind": "cone", "radius": 5, "angleDeg": 70 }, "at": "self", "delay": 0.6,
               "onHit": [
-                { "op": "damage", "amount": 45, "type": "magic", "to": "hit" },
+                { "op": "damage", "amount": 30, "type": "magic", "to": "hit" },
                 { "op": "status", "status": "slow", "duration": 1.5, "power": 0.25, "to": "hit" }
               ],
               "present": { "vfx": "lib_cone_sweep", "sfx": "c_monster_roar", "telegraph": "everyone" } }
@@ -203,16 +203,16 @@
       "id": "resinback",
       "name": "Resinback",
       "kind": "monster",
-      "base": { "hp": 1800, "ad": 62, "armor": 20, "resist": 10, "attackSpeed": 0.6, "moveSpeed": 3.3 },
+      "base": { "hp": 1300, "ad": 32, "armor": 12, "resist": 10, "attackSpeed": 0.6, "moveSpeed": 3.3 },
       "attack": { "range": 2, "windup": 0.4, "damageType": "phys",
         "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
       "collisionRadius": 1.0,
-      "bounty": { "gold": 90, "xp": 150 },
+      "bounty": { "gold": 90, "xp": 210 },
       "abilities": [
         {
           "id": "resinback_spit",
           "name": "Resin Spit",
-          "desc": "Spits a pool of burning resin that lands after 0.5 s and burns for 3 s: 12 magic damage every 0.5 s to anyone inside.",
+          "desc": "Spits a pool of burning resin that lands after 0.5 s and burns for 3 s: 8 magic damage every 0.5 s to anyone inside.",
           "icon": "assets/ui/icons/abilities/resinback_spit.webp",
           "maxRank": 1,
           "cooldown": 9,
@@ -221,7 +221,7 @@
           "effects": [
             { "op": "zone", "id": "resinback_pool", "shape": { "kind": "circle", "radius": 2 }, "at": "point",
               "duration": 3, "interval": 0.5, "delay": 0.5,
-              "onTick": [ { "op": "damage", "amount": 12, "type": "magic", "to": "hit" } ],
+              "onTick": [ { "op": "damage", "amount": 8, "type": "magic", "to": "hit" } ],
               "present": { "vfx": "lib_zone_ember", "sfx": "c_zone_loop", "telegraph": "everyone" } }
           ],
           "ai": { "use": ["damage", "zone"] },
@@ -238,11 +238,11 @@
       "id": "gloamoth",
       "name": "Gloamoth",
       "kind": "monster",
-      "base": { "hp": 900, "ad": 32, "armor": 0, "resist": 10, "attackSpeed": 0.75, "moveSpeed": 3.4 },
+      "base": { "hp": 650, "ad": 18, "armor": 0, "resist": 10, "attackSpeed": 0.75, "moveSpeed": 3.4 },
       "attack": { "range": 4.5, "windup": 0.3, "damageType": "magic", "projectileSpeed": 12,
         "present": { "anim": "attack1", "vfx": "lib_orb_lumen", "sfx": "c_shot_bolt_lumen", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
       "collisionRadius": 0.6,
-      "bounty": { "gold": 45, "xp": 70 },
+      "bounty": { "gold": 45, "xp": 100 },
       "behavior": { "leash": 8, "resetRegen": 0.3 },
       "sightRange": 8,
       "art": { "model": "assets/units/gloamoth.glb", "height": 1.6,
@@ -252,11 +252,11 @@
       "id": "gloamoth_little",
       "name": "Little Gloamoth",
       "kind": "monster",
-      "base": { "hp": 300, "ad": 14, "armor": 0, "resist": 5, "attackSpeed": 0.8, "moveSpeed": 3.6 },
+      "base": { "hp": 200, "ad": 8, "armor": 0, "resist": 5, "attackSpeed": 0.8, "moveSpeed": 3.6 },
       "attack": { "range": 1.2, "windup": 0.25, "damageType": "magic",
         "present": { "anim": "attack1", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
       "collisionRadius": 0.35,
-      "bounty": { "gold": 12, "xp": 22 },
+      "bounty": { "gold": 12, "xp": 32 },
       "behavior": { "leash": 8, "resetRegen": 0.3 },
       "sightRange": 6,
       "art": { "model": "assets/units/gloamoth_little.glb", "height": 0.8, "instanced": true,
@@ -266,16 +266,16 @@
       "id": "stilltusk",
       "name": "Stilltusk",
       "kind": "monster",
-      "base": { "hp": 1300, "ad": 48, "armor": 20, "resist": 10, "attackSpeed": 0.65, "moveSpeed": 3.4 },
+      "base": { "hp": 900, "ad": 24, "armor": 12, "resist": 8, "attackSpeed": 0.65, "moveSpeed": 3.4 },
       "attack": { "range": 1.6, "windup": 0.35, "damageType": "phys",
         "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
       "collisionRadius": 0.8,
-      "bounty": { "gold": 60, "xp": 90 },
+      "bounty": { "gold": 60, "xp": 125 },
       "abilities": [
         {
           "id": "stilltusk_stamp",
           "name": "Still Stamp",
-          "desc": "Rears and stamps after 0.7 s: 40 physical damage and a 30% slow for 1 s around it.",
+          "desc": "Rears and stamps after 0.7 s: 28 physical damage and a 30% slow for 1 s around it.",
           "icon": "assets/ui/icons/abilities/stilltusk_stamp.webp",
           "maxRank": 1,
           "cooldown": 10,
@@ -284,7 +284,7 @@
           "effects": [
             { "op": "area", "shape": { "kind": "circle", "radius": 2.5 }, "at": "self", "delay": 0.7,
               "onHit": [
-                { "op": "damage", "amount": 40, "type": "phys", "to": "hit" },
+                { "op": "damage", "amount": 28, "type": "phys", "to": "hit" },
                 { "op": "status", "status": "slow", "duration": 1, "power": 0.3, "to": "hit" }
               ],
               "present": { "vfx": "lib_slam_ground", "sfx": "c_slam", "telegraph": "everyone" } }
@@ -302,11 +302,11 @@
       "id": "stilltusk_young",
       "name": "Young Stilltusk",
       "kind": "monster",
-      "base": { "hp": 480, "ad": 20, "armor": 10, "resist": 5, "attackSpeed": 0.75, "moveSpeed": 3.5 },
+      "base": { "hp": 320, "ad": 9, "armor": 6, "resist": 4, "attackSpeed": 0.75, "moveSpeed": 3.5 },
       "attack": { "range": 1.3, "windup": 0.3, "damageType": "phys",
         "present": { "anim": "attack1", "hitVfx": "lib_hit_phys_light", "hitSfx": "c_hit_phys_light" } },
       "collisionRadius": 0.5,
-      "bounty": { "gold": 18, "xp": 30 },
+      "bounty": { "gold": 18, "xp": 42 },
       "behavior": { "leash": 8, "resetRegen": 0.3 },
       "sightRange": 6,
       "art": { "model": "assets/units/stilltusk_young.glb", "height": 0.9, "instanced": true,
@@ -316,16 +316,16 @@
       "id": "stray_numeral",
       "name": "Stray Numeral",
       "kind": "monster",
-      "base": { "hp": 1500, "ad": 42, "armor": 35, "resist": 35, "attackSpeed": 0.55, "moveSpeed": 3.0 },
+      "base": { "hp": 950, "ad": 22, "armor": 18, "resist": 18, "attackSpeed": 0.55, "moveSpeed": 3.0 },
       "attack": { "range": 1.8, "windup": 0.45, "damageType": "phys",
         "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
       "collisionRadius": 0.9,
-      "bounty": { "gold": 70, "xp": 100 },
+      "bounty": { "gold": 70, "xp": 135 },
       "abilities": [
         {
           "id": "stray_topple",
           "name": "Topple",
-          "desc": "The numeral tips over toward its target after 0.9 s: 70 physical damage and a 0.5 s stun in a 4 m line.",
+          "desc": "The numeral tips over toward its target after 0.9 s: 45 physical damage and a 0.5 s stun in a 4 m line.",
           "icon": "assets/ui/icons/abilities/stray_topple.webp",
           "maxRank": 1,
           "cooldown": 11,
@@ -334,7 +334,7 @@
           "effects": [
             { "op": "area", "shape": { "kind": "rect", "length": 4, "width": 2 }, "at": "self", "delay": 0.9,
               "onHit": [
-                { "op": "damage", "amount": 70, "type": "phys", "to": "hit" },
+                { "op": "damage", "amount": 45, "type": "phys", "to": "hit" },
                 { "op": "status", "status": "stun", "duration": 0.5, "to": "hit" }
               ],
               "present": { "vfx": "lib_line_cleave", "sfx": "c_slam", "telegraph": "everyone" } }
@@ -352,11 +352,11 @@
       "id": "stray_tick",
       "name": "Stray Tick",
       "kind": "monster",
-      "base": { "hp": 380, "ad": 18, "armor": 15, "resist": 15, "attackSpeed": 0.8, "moveSpeed": 3.5 },
+      "base": { "hp": 260, "ad": 10, "armor": 8, "resist": 8, "attackSpeed": 0.8, "moveSpeed": 3.5 },
       "attack": { "range": 1.2, "windup": 0.3, "damageType": "phys",
         "present": { "anim": "attack1", "hitVfx": "lib_hit_phys_light", "hitSfx": "c_hit_phys_light" } },
       "collisionRadius": 0.4,
-      "bounty": { "gold": 15, "xp": 25 },
+      "bounty": { "gold": 15, "xp": 36 },
       "behavior": { "leash": 8, "resetRegen": 0.3 },
       "sightRange": 6,
       "art": { "model": "assets/units/stray_tick.glb", "height": 1.0, "instanced": true,

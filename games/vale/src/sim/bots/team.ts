@@ -160,7 +160,8 @@ export class TeamBrain {
       if (!alive) { if (s.team === this.team) ownLost++; else enemyLost++; }
     }
     const avgLv = lvA / Math.max(1, k.setup.seats.filter((s) => s.team === this.team).length);
-    this.phase = now >= 1200 || avgLv >= 12 ? 'late' : now >= 600 || ownLost + enemyLost > 0 ? 'mid' : 'early';
+    // (one fallen Needle is a lane lost, not the end of laning: 'mid' from 10:00 or the second)
+    this.phase = now >= 1200 || avgLv >= 12 ? 'late' : now >= 600 || ownLost + enemyLost >= 2 ? 'mid' : 'early';
     this.thinkDefend(w);
     this.thinkSiege(w, aa - ae, lvA - lvE, enemyLost);
     this.thinkObjective(w, aa, ae);

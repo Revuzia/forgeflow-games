@@ -128,7 +128,7 @@ function PlayerCard(p: { s: SeatSetup; ffa: boolean; you: boolean; ready: boolea
         <span class="pcard__fighter t-label">{f?.name}</span>
         <span class="pcard__name t-body-s" title={p.s.name}><span class="pcard__pname">{p.you ? cv.t('common.you', 'You') : p.s.name}</span></span>
         <span class="pcard__role t-caption">
-          {p.ffa ? <><SeatMark seat={seat} you={p.you} size={14} showNumeral={false} /><span class="pcard__seat" title={cv.t('fray.seat.label', 'Seat {roman} · {colour}', { roman: roman(seat), colour: cv.t(`fray.seat.${seat}`, '') })}>{cv.t('fray.seat.short', 'Seat {roman}', { roman: roman(seat) })}<span class="pcard__seatcol"> · {cv.t(`fray.seat.${seat}`, '')}</span></span></>
+          {p.ffa ? <><SeatMark seat={seat} you={p.you} size={14} showNumeral={false} /><span class="pcard__seat" title={cv.t('fray.seat.label', 'Seat {roman} · {color}', { roman: roman(seat), color: cv.t(`fray.seat.${seat}`, '') })}>{cv.t('fray.seat.short', 'Seat {roman}', { roman: roman(seat) })}<span class="pcard__seatcol"> · {cv.t(`fray.seat.${seat}`, '')}</span></span></>
             : role ? <><span class="roledot" style={{ background: role.color }} />{role.name}</> : null}
         </span>
       </div>

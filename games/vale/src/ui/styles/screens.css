@@ -140,7 +140,7 @@
   background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-1); color: var(--text-2); }
 .rolechip:hover, .rolechip:focus-visible { color: var(--text-1); background: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line-1), var(--ring); }
 .rolechip.is-selected { color: var(--text-1); background: var(--ink-4); box-shadow: inset 0 0 0 2px var(--chalk); }
-.rolechip.is-selected::after { content: ''; position: absolute; left: calc(1.25 * var(--u)); top: 0; width: 2px; height: var(--u); background: var(--chalk); }
+.rolechip.is-selected::after { content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: calc(0.5 * var(--u)); background: var(--chalk); transform: translateX(-50%); }
 .rolechip[aria-disabled='true'] { color: var(--text-disabled); cursor: not-allowed; }
 .party { display: flex; flex-wrap: wrap; gap: var(--u); align-items: center; }
 .party__m { display: inline-flex; align-items: center; gap: var(--u); height: calc(5 * var(--u)); padding: 0 calc(1.5 * var(--u)); border-radius: var(--radius); background: var(--ink-2); box-shadow: inset 1px 1px 0 var(--catch-light); }
@@ -164,7 +164,7 @@
 .fchip:hover, .fchip:focus-visible { color: var(--text-1); background: var(--ink-3); }
 .fchip:focus-visible { box-shadow: var(--ring); z-index: 1; }
 .fchip.is-selected { color: var(--text-1); background: var(--ink-4); }
-.fchip.is-selected::after { content: ''; position: absolute; left: var(--u); top: 0; width: 2px; height: calc(0.75 * var(--u)); background: var(--chalk); }
+.fchip.is-selected::after { content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: calc(0.5 * var(--u)); background: var(--chalk); transform: translateX(-50%); }
 .filters__more { display: flex; gap: var(--u); align-items: center; min-width: 0; }
 .filters__select { min-width: calc(17 * var(--u)); flex: none; }
 .filters--compact { flex-direction: row; flex-wrap: wrap; align-items: center; }

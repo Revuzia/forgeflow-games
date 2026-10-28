@@ -147,7 +147,7 @@ function Shelf(p: { shelf: ShelfT; selected?: string; owned: (o: OfferT) => bool
   const offers = p.shelf.skus.map((s) => cv.offer(s)).filter((o): o is OfferT => !!o && cv.offerAvailable(o) && cv.skinOnSale(o.ref));
   return (
     <section class={`shelf shelf--${p.shelf.layout} stg`} aria-label={p.shelf.name}>
-      <h2 class="t-h2 shelf__title">{p.shelf.name}<span class="t-caption muted num">{offers.length}</span></h2>
+      <h2 class="t-h2 shelf__title">{p.shelf.name}<span class="t-caption muted fig">{offers.length}</span></h2>
       {offers.length === 0 ? <EmptyState compact text={cv.t('state.empty.shelf', 'Nothing on this shelf yet.')} /> : (
         <div class="shelf__cards" data-arrownav="grid">
           {offers.map((o, i) => <OfferCard o={o} hero={p.shelf.layout === 'hero' && i === 0} selected={p.selected === o.sku} owned={p.owned(o)} equipped={p.equipped(o)} onPick={() => p.onPick(o)} />)}

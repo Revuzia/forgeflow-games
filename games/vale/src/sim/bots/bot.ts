@@ -34,7 +34,7 @@ import type { World } from '../world.ts';
 import type { DifficultyProfile } from './difficulty.ts';
 import { Economy } from './economy.ts';
 import type { AbilityCoreT } from '../catalog_index.ts';
-import { abilityInfo, estimateDamage, fromProgress, lanePoint, laneProject, progress, proj, type BuildPlan, type FighterProfile } from './knowledge.ts';
+import { abilityInfo, estimateDamage, fromProgress, lanePoint, laneProject, progress, proj, type BuildPlan, type CampInfo, type FighterProfile } from './knowledge.ts';
 import type { BotMatch } from './match.ts';
 import { BotBase, gauss, type Mode } from './micro.ts';
 import { memoryWeight } from './perception.ts';
@@ -47,6 +47,10 @@ const MIN_MODE_TIME = 1.5;
 const LANE_PHASE_END = 840;
 /** during the laning phase a laner only leaves its lane for an objective camp this close to its lane (m) */
 const LANE_OBJECTIVE_REACH = 40;
+/** seconds of extra cost a jungler's clear puts on a camp in the enemy half of the Dialwood */
+const JUNGLE_INVADE_COST = 25;
+/** a jungler leaves its clear for an objective only from this time (s): its first clears come first */
+const JUNGLE_OBJECTIVE_FROM = 360;
 /** Wicks within this distance of an enemy fighter turn on whoever hits that fighter (call for help) */
 const WAVE_AGGRO_R = 9;
 /** how far from the nearest enemy Wick a fighter stands to stay out of its reach when no Wick of mine
@@ -266,8 +270,9 @@ export class Bot extends BotBase implements BotController {
       for (const a of this.perc.allyFighters) if (a.alive && this.dist2(a, m.x, m.y) <= 10 * 10) dps += this.dpsOn(a, m);
       ttk = Math.min(ttk, (m.hp + m.shield) / Math.max(1, dps));
     }
-    // (nearly dead, only a monster that is about to fall is worth the last swing)
-    if (ttk < (this.hpF < 0.3 ? Math.min(ttd * 0.6, 2) : ttd * 0.6)) return 0;
+    // (nearly dead, only a monster that is about to fall is worth the last swing; a jungler on its
+    // own camp finishes one that falls well before it would)
+    if (ttk < (this.hpF < 0.3 ? Math.min(ttd * 0.6, 2) : ttd * (this.jungle ? 0.8 : 0.6))) return 0;
     return ttd < 3 ? 0.9 : 0.82;
   }
 
@@ -309,9 +314,13 @@ export class Bot extends BotBase implements BotController {
     if (kind !== 'fray') {
       if (base) {
         // without a recall the walk home is the cost: only go when nearly out (attrition modes)
-        const lowAt = (k.rules.recall ? (lp ? 0.3 : 0.36) : 0.22) + this.diff.recallBias;
+        // (a jungler with a camp to take now finishes it first: no shopping trip, and home on low
+        // health only once the camp would take more than it has left)
+        const camp = this.jungle && kind === 'rift' && this.campAtHand(14);
+        const lowAt = (k.rules.recall ? (lp ? 0.3 : camp ? 0.22 : 0.36) : 0.22) + this.diff.recallBias;
         if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
         else if (hpF < lowAt && this.nearE === 0) recall = 0.74;
+        else if (camp) recall = 0;
         else if (k.rules.recall && lp) {
           // laning: shop on a real purchase, and not while a wave is there to farm
           const farm = this.wicksNear(e.x, e.y, 12) >= 3 && hpF > 0.35;
@@ -326,6 +335,11 @@ export class Bot extends BotBase implements BotController {
         else if (k.rules.recall && resF < 0.12 && this.nearE === 0) recall = 0.5;
       }
     } else if (k.shops.length > 0 && this.nearE === 0 && this.p.gold >= nextPrice && nextPrice < Infinity) recall = 0.52;
+    // a jungler whose next camp is up but too much for its health goes home first, not in and out
+    if (this.jungle && kind === 'rift' && this.nearE === 0 && hpF < 0.6 && this.mode === 'farm' && this.campTarget >= 0) {
+      const c = k.camps[this.campTarget];
+      if (c && this.campUp(c.x, c.y) && this.dist2(e, c.x, c.y) < 16 * 16 && !this.campOdds(c.x, c.y)) recall = Math.max(recall, 0.6);
+    }
     consider('recall', recall);
     // lane / return
     const laner = (kind === 'rift' && !this.jungle && this.lane >= 0) || kind === 'bridge';
@@ -393,11 +407,12 @@ export class Bot extends BotBase implements BotController {
       const opening = !!b.objective && b.objective.desire >= 0.75;
       const jungleLaning = this.jungle && kind === 'rift' && now < LANE_PHASE_END && b.phase !== 'late';
       if (b.objective && oc && follow && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
-        : !jungleLaning || opening)) {
+        : (!jungleLaning || opening) && (!this.jungle || now >= JUNGLE_OBJECTIVE_FROM))) {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }
-      if (b.gank && !lp && (this.jungle ? e.level >= 3 : this.prof.style === 'burst' || this.prof.style === 'diver') && hpF > 0.6 &&
-        this.dist2(e, b.gank.x, b.gank.y) < 50 * 50 && b.gank.alive) consider('roam', this.jungle ? 0.53 : 0.44);
+      // (a jungler ganks between its camps: not with one up at hand, and only a lane close by)
+      if (b.gank && !lp && (this.jungle ? e.level >= 3 && !this.campAtHand(25) : this.prof.style === 'burst' || this.prof.style === 'diver') && hpF > 0.6 &&
+        this.dist2(e, b.gank.x, b.gank.y) < sq(this.jungle ? 40 : 50) && b.gank.alive) consider('roam', this.jungle ? 0.53 : 0.44);
     }
     // Fray hunting
     if (kind === 'fray' || kind === 'brawl') {
@@ -829,26 +844,22 @@ export class Bot extends BotBase implements BotController {
   private execFarm(): void {
     const k = this.k, b = this.brain, e = this.e, now = this.now;
     if (!b || k.camps.length === 0) { this.execPush(); return; }
-    const ms = Math.max(1, e.stats.moveSpeed);
     // keep the current camp while it is up; else the best next one
     let ci = this.campTarget;
     if (ci >= 0) {
       const c = k.camps[ci];
       const near = this.dist2(e, c.x, c.y) < 8 * 8;
-      if (near && !this.campUp(c.x, c.y) && w2seen(this, c.x, c.y)) { b.campCleared(ci, now); ci = -1; }
-      else if (b.campReady[ci] > now + 10) ci = -1;
-    }
-    if (ci < 0) {
-      let bs = Infinity;
-      for (const c of k.camps) {
-        if (c.objective) continue;
-        const travel = Math.sqrt(this.dist2(e, c.x, c.y)) / ms;
-        const wait = Math.max(0, b.campReady[c.index] - now - travel);
-        const s = travel + wait * 1.5;
-        if (s < bs) { bs = s; ci = c.index; }
+      // (a camp found empty only counts as cleared once it was due: before its spawn it is just early)
+      if (near && !this.campUp(c.x, c.y) && w2seen(this, c.x, c.y) && b.campReady[ci] <= now) { b.campCleared(ci, now); ci = -1; }
+      else if (b.campReady[ci] > now + 10) {
+        // still down: keep walking to it unless another camp is clearly sooner (no drifting from
+        // camp to camp while every camp waits on its first spawn)
+        const nx = this.nextCamp();
+        if (nx !== ci && this.campScore(k.camps[nx]) < this.campScore(c) - 8) ci = nx;
+        this.campTarget = ci;
       }
-      this.campTarget = ci;
     }
+    if (ci < 0) { ci = this.nextCamp(); this.campTarget = ci; }
     if (ci < 0) { this.execPush(); return; }
     const c = k.camps[ci];
     this.pMove = true; this.pMoveX = c.x; this.pMoveY = c.y;
@@ -1019,6 +1030,43 @@ export class Bot extends BotBase implements BotController {
     }
     const ttk = H / Math.max(1, S);
     return ttk <= 35 && D * ttk <= E * 0.45;
+  }
+
+  /**
+   * The next camp of a clear: the one I can start soonest — arrival is the walk or the respawn left,
+   * whichever is longer (a far camp is never better for being down longer), the nearer of two
+   * equal ones first. The enemy half of the Dialwood costs JUNGLE_INVADE_COST s more (and more again
+   * with an enemy fighter seen near it), so the clear stays home unless the own half is all down.
+   */
+  private nextCamp(): number {
+    let ci = -1, bs = Infinity;
+    for (const c of this.k.camps) {
+      if (c.objective) continue;
+      const s = this.campScore(c);
+      if (s < bs) { bs = s; ci = c.index; }
+    }
+    return ci;
+  }
+  private campScore(c: CampInfo): number {
+    const e = this.e;
+    const travel = Math.sqrt(this.dist2(e, c.x, c.y)) / Math.max(1, e.stats.moveSpeed);
+    const left = Math.max(0, this.brain!.campReady[c.index] - this.now);
+    let s = Math.max(travel, left) + travel * 0.35;
+    if (c.side >= 0 && c.side !== this.team) s += JUNGLE_INVADE_COST + (this.enemiesNear(c.x, c.y, 18) > 0 ? 30 : 0);
+    return s;
+  }
+  /** a jungler with a camp to take now: one of its non-objective camps up (or up within 4 s) within
+   *  `r` m, that it can take on its current health (campOdds), or a monster on it already */
+  private campAtHand(r: number): boolean {
+    const b = this.brain, e = this.e;
+    if (!b || !this.jungle) return false;
+    for (const m of this.perc.monsters) if (m.alive && m.atkTarget === e.id) return true;
+    for (const c of this.k.camps) {
+      if (c.objective || b.campReady[c.index] > this.now + 4 || this.dist2(e, c.x, c.y) > r * r) continue;
+      if (!this.campUp(c.x, c.y) && w2seen(this, c.x, c.y)) continue;
+      if (this.campOdds(c.x, c.y) || !this.campUp(c.x, c.y)) return true;
+    }
+    return false;
   }
 
   private campUp(x: number, y: number): boolean {

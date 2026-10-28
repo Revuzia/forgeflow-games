@@ -28897,7 +28897,7 @@
       {
         "type": "flash",
         "at": "origin",
-        "radius": 0.45,
+        "radius": 0.7,
         "life": 0.05,
         "color": "signature",
         "intensity": 3.0,
@@ -29725,8 +29725,8 @@
           0.16
         ],
         "size": [
-          0.42,
-          0.1
+          0.6,
+          0.14
         ],
         "color": "signature",
         "alpha": [
@@ -29746,15 +29746,15 @@
         "size": [
           [
             0,
-            0.5
-          ],
-          [
-            0.25,
             0.8
           ],
           [
+            0.25,
+            1.3
+          ],
+          [
             1,
-            0.86
+            1.4
           ]
         ],
         "color": [
@@ -29776,7 +29776,7 @@
             0
           ]
         ],
-        "life": 0.32,
+        "life": 0.45,
         "soft": 0.25,
         "follow": true,
         "hold": 1
@@ -44685,7 +44685,7 @@
           1,
           0.6
         ],
-        "emissive": 2.4,
+        "emissive": 1.8,
         "sharp": 1.6,
         "noise": 0.35,
         "blend": "add"
@@ -44751,7 +44751,7 @@
       {
         "type": "emitter",
         "at": "target",
-        "count": 3,
+        "count": 6,
         "delay": 0.1,
         "offset": [
           0,
@@ -44793,15 +44793,15 @@
         "size": [
           [
             0,
-            0.5
+            0.75
           ],
           [
             0.25,
-            0.8
+            1.2
           ],
           [
             1,
-            0.86
+            1.3
           ]
         ],
         "color": [
@@ -44823,7 +44823,7 @@
             0
           ]
         ],
-        "life": 0.32,
+        "life": 0.45,
         "soft": 0.25
       }
     ]
@@ -44887,7 +44887,7 @@
       {
         "type": "emitter",
         "at": "path",
-        "rate": 11,
+        "rate": 18,
         "dir": "none",
         "speed": [
           0,
@@ -47621,7 +47621,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Resin Shot: an olive-gold resin blob drops on the centre, splashes opaque resin drops, a glossy caustic pool; a pale mint crust ring creeps in from the rim while the team edge brightens: when the crust reaches the centre, it sets (combat F6: the resin sits off the HARM band, a cool core) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
+    "$comment": "T3 · Lumen · Resin Shot: an olive-gold resin blob drops on the centre, splashes opaque resin drops, a glossy caustic pool; a pale mint crust ring creeps in from the rim while the team edge brightens: when the crust reaches the centre, it sets (combat F6: the resin sits off the HARM band, a cool core) (combat F6: his light is lime-gold #A6C21E, h 70: within 15 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a1_resin",
     "duration": 2.3,
     "teamTint": true,
@@ -47703,7 +47703,7 @@
           1.2
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "#D4F2CF"
         ],
         "alpha": [
@@ -47768,7 +47768,7 @@
           0.1
         ],
         "life": 0.5,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0,
           0.45,
@@ -47785,7 +47785,7 @@
         "delay": 0.5,
         "radius": 0.8,
         "life": 0.06,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "intensity": 2.2
       },
       {
@@ -47811,7 +47811,7 @@
           0.05
         ],
         "life": 0.32,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           1,
           0.7,
@@ -47889,7 +47889,7 @@
         ],
         "color": [
           "#D4F2CF",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           1,
@@ -48029,7 +48029,7 @@
           ]
         ],
         "life": 1.5,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           [
             0,
@@ -48224,7 +48224,7 @@
           0.05,
           0.28
         ],
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0.7,
           0
@@ -48265,7 +48265,7 @@
           ]
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": 2.4,
@@ -48289,7 +48289,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Resin Shot sets: a mint-white ring snaps inward, the pool hardens into cracked olive-gold glass with team seams cooling (1 s, the root), splinters skitter out (combat F6) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
+    "$comment": "T2 · Lumen · Resin Shot sets: a mint-white ring snaps inward, the pool hardens into cracked olive-gold glass with team seams cooling (1 s, the root), splinters skitter out (combat F6) (combat F6: his light is lime-gold #A6C21E, h 70: within 15 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a1_set",
     "duration": 1.1,
     "teamTint": true,
@@ -48299,7 +48299,7 @@
         "at": "ground",
         "radius": 0.9,
         "life": 0.06,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "intensity": 3.0
       },
       {
@@ -48326,7 +48326,7 @@
         "life": 0.22,
         "color": [
           "#D4F2CF",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           1,
@@ -48385,7 +48385,7 @@
         "texture": "frost",
         "radius": 0.98,
         "life": 1.05,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "rim": "#D4F2CF",
         "alpha": [
           [
@@ -48431,7 +48431,7 @@
         ],
         "color": [
           "#D4F2CF",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           1,
@@ -48515,7 +48515,7 @@
           ]
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": 2.4,
@@ -48539,7 +48539,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Odrum a1 wind-up (odrum_resin_shot, 0.25 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
+    "$comment": "T2 · stone · Odrum a1 wind-up (odrum_resin_shot, 0.25 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: his light is lime-gold #A6C21E, h 70: within 15 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -48560,7 +48560,7 @@
           ]
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": [
@@ -48602,7 +48602,7 @@
         "life": 1.0,
         "fitTime": true,
         "hold": 1.0,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           [
             0,
@@ -48677,7 +48677,7 @@
         "fitTime": true,
         "hold": 1.0,
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "alpha": 1,
@@ -48720,7 +48720,7 @@
           0.06
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "alpha": [
@@ -48745,7 +48745,7 @@
           0.6
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": 3.0,
@@ -48776,7 +48776,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0.8,
           0
@@ -48826,7 +48826,7 @@
           -500,
           500
         ],
-        "rim": "#B4C21E",
+        "rim": "#A6C21E",
         "rimAlpha": 0.5
       },
       {
@@ -48850,7 +48850,7 @@
           0.04
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "#F4EFE2"
         ],
         "alpha": [
@@ -48884,7 +48884,7 @@
         ],
         "color": [
           "#F4EFE2",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           1,
@@ -48898,7 +48898,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Swing Out: the two resin pots whip round at the waist (two mint-white heads fading to his signature, fading tails), olive resin drops fly off, a team ring goes out to 3 m (the hit) with a signature ring inside it, a turn of dust; side streaks as he leans into the run (combat F6) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
+    "$comment": "T2 · Lumen · Swing Out: the two resin pots whip round at the waist (two mint-white heads fading to his signature, fading tails), olive resin drops fly off, a team ring goes out to 3 m (the hit) with a signature ring inside it, a turn of dust; side streaks as he leans into the run (combat F6) (combat F6: his light is lime-gold #A6C21E, h 70: within 15 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a2_whirl",
     "duration": 0.9,
     "teamTint": true,
@@ -48917,7 +48917,7 @@
         "life": 0.32,
         "color": [
           "#D4F2CF",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           [
@@ -48958,7 +48958,7 @@
           0
         ],
         "life": 0.32,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           [
             0,
@@ -49014,7 +49014,7 @@
         "life": 0.32,
         "color": [
           "#D4F2CF",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           [
@@ -49055,7 +49055,7 @@
           0
         ],
         "life": 0.32,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           [
             0,
@@ -49150,7 +49150,7 @@
           0.04
         ],
         "life": 0.3,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0.6,
           0.4,
@@ -49192,7 +49192,7 @@
         ],
         "color": [
           "#8E9A31",
-          "#B4C21E"
+          "#A6C21E"
         ],
         "alpha": [
           1,
@@ -49234,7 +49234,7 @@
           0.18,
           0.05
         ],
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           1,
           0
@@ -49314,7 +49314,7 @@
           ]
         ],
         "life": 0.6,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0.5,
           0.3,
@@ -49344,7 +49344,7 @@
           0.4,
           0.1
         ],
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0.8,
           0
@@ -49388,7 +49388,7 @@
           ]
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": 2.4,
@@ -49412,7 +49412,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Odrum a2 wind-up (odrum_swing_out, 0.2 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
+    "$comment": "T2 · stone · Odrum a2 wind-up (odrum_swing_out, 0.2 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: his light is lime-gold #A6C21E, h 70: within 15 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -49433,7 +49433,7 @@
           ]
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": [
@@ -49475,7 +49475,7 @@
         "life": 1.0,
         "fitTime": true,
         "hold": 1.0,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           [
             0,
@@ -49550,7 +49550,7 @@
         "fitTime": true,
         "hold": 1.0,
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "alpha": 1,
@@ -49593,7 +49593,7 @@
           0.06
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "alpha": [
@@ -49618,7 +49618,7 @@
           0.6
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "secondary"
         ],
         "emissive": 3.0,
@@ -49649,7 +49649,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "#B4C21E",
+        "color": "#A6C21E",
         "alpha": [
           0.8,
           0
@@ -49699,7 +49699,7 @@
           -500,
           500
         ],
-        "rim": "#B4C21E",
+        "rim": "#A6C21E",
         "rimAlpha": 0.5
       },
       {
@@ -49723,7 +49723,7 @@
           0.04
         ],
         "color": [
-          "#B4C21E",
+          "#A6C21E",
           "#F4EFE2"
         ],
         "alpha": [
@@ -59542,7 +59542,7 @@
         "emissive": 0,
         "rim": "signature",
         "rimPow": 12,
-        "rimEmissive": 2.4,
+        "rimEmissive": 3.0,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59586,7 +59586,7 @@
         "emissive": 0,
         "rim": "signature",
         "rimPow": 5,
-        "rimEmissive": 2.4,
+        "rimEmissive": 3.0,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59634,7 +59634,7 @@
         "emissive": 0,
         "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 2.4,
+        "rimEmissive": 3.0,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59682,7 +59682,7 @@
         "emissive": 0,
         "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 2.4,
+        "rimEmissive": 3.0,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59730,7 +59730,7 @@
         "emissive": 0,
         "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 2.4,
+        "rimEmissive": 3.0,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59778,7 +59778,7 @@
         "emissive": 0,
         "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 2.4,
+        "rimEmissive": 3.0,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -60115,7 +60115,7 @@
       {
         "type": "emitter",
         "at": "path",
-        "rate": 16,
+        "rate": 24,
         "shape": "sphere",
         "radius": 0.3,
         "offset": [
@@ -60134,8 +60134,8 @@
           0.22
         ],
         "size": [
-          0.35,
-          0.1
+          0.5,
+          0.14
         ],
         "color": "signature",
         "alpha": [

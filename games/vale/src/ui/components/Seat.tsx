@@ -30,7 +30,7 @@ export function SeatMark(p: { seat: number; you?: boolean; size?: number; showNu
   const name = cv.t(`fray.seat.${p.seat}`, t.name);
   return (
     <span class={`seatmark ${p.you ? 'is-you' : ''} ${p.class ?? ''}`} style={seatStyle(p.seat, !!p.you, mode)}
-      title={cv.t('fray.seat.label', 'Seat {roman} · {colour}', { roman: roman(p.seat), colour: name })}>
+      title={cv.t('fray.seat.label', 'Seat {roman} · {color}', { roman: roman(p.seat), color: name })}>
       <span class="seatmark__glyph" style={mode === 'simple' && !p.you ? { color: 'var(--team-enemy)' } : undefined}>
         <SeatGlyph seat={p.seat} size={(p.size ?? 18) * scale} color={color ?? 'currentColor'} keyline={!p.you} title={`${roman(p.seat)} ${name}`} />
       </span>

@@ -5,6 +5,9 @@
 //   numeric  Atkinson Hyperlegible Mono 500/700/800                  swap
 // Preloaded before first paint (within the block budget): display 400, body 400, body 600, numeric 700.
 // Size-adjusted local fallbacks ('Vale <Role> Fallback', styles/base.css) keep layout from jumping.
+// 'Vale Prose Figures' (client F14): the heading face's digits 0-9 only, first in the body stack (base.css), so a number
+// in a sentence has plain lining figures instead of the body face's slashed zero. Same file as the heading face, so it
+// costs no extra download.
 
 import '@fontsource-variable/instrument-sans/standard.css';
 import '@fontsource/atkinson-hyperlegible-next/400.css';
@@ -16,6 +19,7 @@ import '@fontsource/atkinson-hyperlegible-mono/700.css';
 import '@fontsource/atkinson-hyperlegible-mono/800.css';
 import gloockLatin from '@fontsource/gloock/files/gloock-latin-400-normal.woff2?url';
 import gloockLatinExt from '@fontsource/gloock/files/gloock-latin-ext-400-normal.woff2?url';
+import instrumentLatin from '@fontsource-variable/instrument-sans/files/instrument-sans-latin-standard-normal.woff2?url';
 import { TOKENS } from './tokens.ts';
 
 const LATIN = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
@@ -30,10 +34,12 @@ export function loadFonts(): Promise<void> {
   const faces = [
     new FontFace('Gloock', `url(${gloockLatin}) format('woff2')`, { weight: '400', display: 'block', unicodeRange: LATIN }),
     new FontFace('Gloock', `url(${gloockLatinExt}) format('woff2')`, { weight: '400', display: 'block', unicodeRange: LATIN_EXT }),
+    new FontFace('Vale Prose Figures', `url(${instrumentLatin}) format('woff2-variations')`, { weight: '400 700', stretch: '75% 100%', display: 'swap', unicodeRange: 'U+0030-0039' }),
   ];
   for (const f of faces) document.fonts.add(f);
   const loads = [
     faces[0].load(),
+    faces[2].load(),
     document.fonts.load('400 16px "Atkinson Hyperlegible Next"'),
     document.fonts.load('600 16px "Atkinson Hyperlegible Next"'),
     document.fonts.load('700 16px "Atkinson Hyperlegible Mono"'),

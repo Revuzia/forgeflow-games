@@ -111,7 +111,7 @@ function Overview(): JSX.Element {
           <div class="bar-line bar-line--gloam" role="progressbar" aria-valuemin={0} aria-valuemax={need} aria-valuenow={profile.xp} aria-label={cv.t('profile.xp', '{xp} of {next} XP to level {n}', { xp: profile.xp, next: need, n: profile.level + 1 })}>
             <span class="bar-line__fill" style={{ width: `${Math.min(100, (profile.xp / need) * 100)}%` }} />
           </div>
-          <span class="t-caption muted num">{cv.t('profile.xp', '{xp} of {next} XP to level {n}', { xp: fmtInt(profile.xp), next: fmtInt(need), n: profile.level + 1 })}</span>
+          <span class="t-caption muted fig">{cv.t('profile.xp', '{xp} of {next} XP to level {n}', { xp: fmtInt(profile.xp), next: fmtInt(need), n: profile.level + 1 })}</span>
         </div>
       </section>
       <div class="prof__grid">
@@ -225,7 +225,7 @@ function Rating(): JSX.Element {
       <section class="tiers stg" aria-label={cv.t('profile.rating.tier', 'Tier')}>
         <p class="t-body-s muted">{cv.t('profile.rating.scale', 'Tiers climb with the sun, from Lamplit to Unshadowed.')}</p>
         <div class="tiers__row">
-          {tiers.map((t) => <span class="tiers__t"><RankEmblem tier={t} size={48} /><span class="t-caption">{t.name}</span><span class="t-caption muted num">{fmtInt(t.minRating)}</span></span>)}
+          {tiers.map((t) => <span class="tiers__t"><RankEmblem tier={t} size={48} /><span class="t-caption">{t.name}</span><span class="t-caption muted fig">{fmtInt(t.minRating)}</span></span>)}
         </div>
       </section>
     </div>

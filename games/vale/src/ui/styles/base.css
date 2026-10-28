@@ -61,6 +61,13 @@ img, svg { display: block; }
 #ui { position: fixed; inset: 0; }
 
 .num { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; font-weight: 500; }
+/* client F14 — numbers in prose. The Mono (.num, .t-num-*) is for numbers that CHANGE: timers, the wallet, live stats,
+   table columns (bible 'Type'). A number that sits still in a sentence ('Win: 100 Candles', 'Reach level 3', a shelf
+   count, a price) is set in the body face. Atkinson Hyperlegible Next draws a slashed zero, which reads as a readout in
+   prose, so the body stack starts with 'Vale Prose Figures' (fonts.ts): the heading face's plain lining digits, U+0030-0039
+   only, so letters stay Atkinson. .fig adds tabular widths where a static number has to line up. */
+:root { --font-body: 'Vale Prose Figures', 'Atkinson Hyperlegible Next', 'Vale Body Fallback', system-ui, sans-serif; }
+.fig { font-family: var(--font-body); font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted { color: var(--text-2); }
 .quiet { color: var(--text-3); }
