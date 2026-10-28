@@ -2425,5 +2425,7 @@ Each confirmed finding, what changed, and how it was verified (before → after 
 - **4 / 21** throughput at 1 500 agents: §10.6 (open); re-measure on this tree queued (`fix/perf/`).
 - **20** the late eras: 2 × 230 years on this tree queued (`fix/late230.sh` → `history/out/census-fix230-*`).
 - **24** ecology rows: re-measure queued (`fix/perf/out/ecology-*`).
+- **16 (refinement)**: on the default-seed trace a prophet on a journey still walks home once mid-stay (a `gather` task
+  at h54, `fix/journey.log`): 45–48 % of journey hours are away from the target town.
 - The 8-seed acceptance re-run (alone 50 years for #10/#11/#13; god sessions for #5 and #18) is running
   (`fix/acc/`); its rows replace §10.4's when it finishes.
