@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AUTHORED, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, FADE_IN, OVERRUN } from '../src/audio/authored.ts';
+import { AUTHORED, AuthoredMusic, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, FADE_IN, OVERRUN } from '../src/audio/authored.ts';
 import { MOTIF_HEAD, hasMotifHead, loopSeconds, melodiesOf, partsOf, stemsOf, STEMS, type Piece } from '../src/audio/score/motif.ts';
 import { TITLE } from '../src/audio/score/title.ts';
 import { ERAS } from '../src/audio/score/eras.ts';
@@ -181,4 +181,22 @@ test('stinger pacing: one gap per stinger, a phrase is cut only by a higher one'
   assert.ok(g.admit('fulfilled', 1), 'a prophecy kept outranks an answered prayer');
   assert.ok(!g.admit('wrath', 2), 'wrath does not cut the prophecy\'s phrase');
   assert.ok(g.admit('wrath', 1 + STINGERS.fulfilled.phrase + 0.01), 'after the phrase it may play');
+});
+
+test('a wanted piece loads all its stems at once (never one stem per frame) and the stingers with them', () => {
+  const asked: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = ((url: string) => { asked.push(String(url)); return new Promise(() => { /* never answers */ }); }) as typeof fetch;
+  try {
+    const m = new AuthoredMusic({} as BaseAudioContext, {} as AudioNode);
+    assert.equal(m.update(scene({ town: 0.5, era: 'bronze' }), 1, 1), 0, 'nothing sounds before the stems decode');
+    const stems = Object.values(AUTHORED['era-bronze'].stems) as string[];
+    for (const u of stems) assert.ok(asked.includes(u), `stem ${u} requested on the first frame`);
+    for (const s of Object.values(STINGERS)) assert.ok(asked.includes(s.url), `stinger ${s.id} requested`);
+    const n = asked.length;
+    m.update(scene({ town: 0.5, era: 'bronze' }), 1.1, 1);
+    assert.equal(asked.length, n, 'loads in flight are not requested again');
+    assert.equal(m.state().piece, 'era-bronze');
+    assert.equal(m.state().phase, 'idle', 'the procedural score plays until the piece is ready');
+  } finally { globalThis.fetch = realFetch; }
 });

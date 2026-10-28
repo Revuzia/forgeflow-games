@@ -347,14 +347,16 @@ export class AuthoredMusic {
   private ready(id: string): Map<StemRole, AudioBuffer> | null {
     const p = AUTHORED[id];
     if (!p) return null;
+    // all the stems' loads start together (one at a time would add a frame or more per stem before the piece can play)
     const out = new Map<StemRole, AudioBuffer>();
+    let all = true;
     for (const [role, url] of Object.entries(p.stems) as [StemRole, string][]) {
       const l = this.loads.get(url);
-      if (!l) { this.load(url); return null; }
-      if (!l.buf) return null;
+      if (!l) { this.load(url); all = false; continue; }
+      if (!l.buf) { all = false; continue; }
       out.set(role, l.buf);
     }
-    return out;
+    return all ? out : null;
   }
 
   private failed(id: string): boolean {
