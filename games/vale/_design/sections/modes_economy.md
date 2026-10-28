@@ -9,7 +9,7 @@ A sim smoke run on that catalog checked the following:
 - Sunsplinter grants Splinters, and Longshade grants the Long Shade to fighters and Wicks.
 - All three Sunmotes grant their effects.
 - Fray ends at 12 kills.
-- Bridge starts at level 3 with 1,300 Gleam.
+- Bridge starts at level 3 with 1,300 Gleam (re-keyed 2026-10-28 to level 2 and 1,050; see §2 and the W4 re-key note).
 - Quick overrides land.
 - Practice spawns the Sparring Post.
 
@@ -30,12 +30,12 @@ Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They
 | Seats | 2 teams × 5, roles on | 2 × 5, no roles | 10 teams × 1 (every seat its own team, colour = seat) |
 | Pick | `draft` (queues override) | `random_bench` (the Lot) | `ffa_pick` (no duplicates, first lock wins) |
 | Target length | 22–28 min | 14–20 min | 8–11 min |
-| Start | level 1, 480 Gleam | level 3, 1,300 Gleam | level 6 (ultimate ready), 1,400 Gleam |
+| Start | level 1, 480 Gleam | level 2, 1,050 Gleam (W4 re-key) | level 6 (ultimate ready), 1,400 Gleam |
 | Level cap · XP | 18 · table 240 → 1,520 (+80 per level, 14,960 total) | 18 · ×2 XP on 200 → 1,160 (+60) | 16 · same steps as Rift, 15 entries |
 | Passive Gleam | 2.2/s from 0:30 | 3.4/s from 0:20 | 4/s from 0:00 |
 | Waves | 0:30, every 30 s, level +1 every 90 s | 0:20, every 25 s, level +1 every 60 s | none |
 | Structures · jungle | yes · yes | yes · no | no · no |
-| Shop · recall · fountain | base · 7 s · 12 %/s | base or while dead · none · 8 %/s, in base only | the Lampwright cart(s) (`shops`) · none · none |
+| Shop · recall · fountain | base · 7 s · 12 %/s | base, while dead, or within 6 m of your own standing Needles (`needles`) · none · 8 %/s, in base only | the Lampwright cart(s) (`shops`) · none · none |
 | Respawn | 6 s + 2.4/level, max 50; ×1.25 after 25:00 | 6 s + 1.5/level, max 32; ×1.2 after 14:00 | 4 s + 0.4/level, max 9 |
 | Kill bounty | 280; assists share 50 %; streak +70 to 490; shutdown up to 490 | 250; 60 %; +50 to 350; 350 | 200; 50 %; +40 to 320; 320 |
 | Surrender · sudden death | 12:00, 4 of 5 · 40:00 | 8:00, 4 of 5 · 20:00 | — · — |
@@ -57,7 +57,7 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 
 - *One road.* The map's lane id is **`road_span`** (display "Span Road"), from the Dawn Arch to the Lamp Gate across the Snap.
 - *No recall.* Health becomes a resource spent across fights. Sustain comes from **Mending Sunmotes** on the span (WORLD: Sunmotes fall in FRAY and BRIDGE).
-- *Shopping.* You shop at the base circle or while dead (`base_or_dead`), so dying is partly a tempo tool.
+- *Shopping.* (W4 re-key, 2026-10-28) You shop at the base circle, while dead, or within 6 m of one of your own **standing Needles** (`shopAccess: needles`, `shopAt: { units: [needle_outer, needle_inner, needle_bell], radius: 6 }`). The shop retreats toward home as your Needles fall, so losing the span's front also costs you your forward shop; a team that holds its outer Needle shops 21 m from the Snap. This replaces the genre's "shop only at the fountain or while dead" rule.
 - *Fountain.* It heals only inside the base circle, at 8 %/s, which is a reason not to walk home.
 - *XP.* XP is doubled on a cheaper table because five fighters share one wave inside the 18 m share range. A Bridge fighter reaches about level 14–16 by 17:00.
 - *Waves.* Faster waves (every 25 s) and 60 s minion upgrades keep the lane pushing.
@@ -79,9 +79,9 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 | `rift_standard` | Draft | rift · standard | draft | 1 per team | 20/20/15 | all open, adept | 5 | 3 |
 | `rift_ranked` | Ranked | rift · ranked | draft | 2 per team | 20/20/15 | all open, `by_rating` | 2 | 20 |
 | `rift_coop` | Co-op vs bots | rift · coop | blind | 0 | —/30/10 | opponents only, novice | 5 | 1 |
-| `bridge_standard` | Standard | bridge · standard | (mode) the Lot | 0 | Lot window 25 / finalize 10; bench 2, 1 reroll | all open, adept | 5 | 1 |
+| `bridge_standard` | Standard | bridge · standard | (mode) the Lot | 0 | Lot window 25 / finalize 10; Lot 3, no redraws, 1 take per seat, burns down every 8 s (W4 re-key) | all open, adept | 5 | 1 |
 | `fray_standard` | Standard | fray · standard | (mode) `ffa_pick` | 0 | —/25/10 | all open, adept | 1 | 1 |
-| `custom` | Custom game | any (host picks) · custom | the mode's | 1 per team | 20/20/15; bench 2, 1 reroll | host sets per seat | 10 | 1 |
+| `custom` | Custom game | any (host picks) · custom | the mode's | 1 per team | 20/20/15; BRIDGE Lot as `bridge_standard` | host sets per seat | 10 | 1 |
 | `practice` | Practice | rift · practice | preset or solo blind | 0 | —/30/5 | none | 1 | 1 |
 
 **Quick, the faster queue** *(r01 §2.5, the reference's pre-pick fast queue, is the calibration)*:
@@ -121,15 +121,13 @@ All fighters are free to play in this slice, because the profile has no fighter 
 
 The fiction: the gorge-keepers send fighters across by lot, never by choice. The rules come from `queues.bridge_standard`, and the session's `random_bench` protocol implements them.
 
-1. **The draw.** Each seat gets one random fighter. Each team gets a shared **Lot** (bench) of **2** more fighters. While the pool lasts, there are no duplicates in the match: 10 + 4 = 14 of 16 fighters are dealt and 2 stay in the pool.
-2. **The Lot window (25 s).** Any seat may do either of the following:
-   - **Swap** with a fighter on the Lot. Your old fighter takes that spot, so teammates can pass fighters around through the bench.
-   - **Draw again** once (`rerolls: 1`). You get a new random fighter from the pool, and your old one joins the Lot. The Lot keeps its 2 newest fighters, and the oldest returns to the pool, so the pool never runs dry.
+> **Re-key, 2026-10-28 (W4, originality F4; pending owner sign-off).** The old Lot (bench 2 plus one personal redraw) read as the genre's bench-and-reroll. The Lot is now cast once and burns down: no redraws, one take per seat, and the Lot's first fighter returns to the gorge every 8 s. Data: `bench: { size: 3, rerolls: 0, swaps: 1, fade: 8 }` (`DraftHost` in `src/session/draft.ts`; measured by `_harness/probe_sim_rekey.ts`).
+
+1. **The cast.** Each seat gets one random fighter. Each team gets a shared **Lot** of **3** more fighters, face up. With 16 fighters, 10 + 6 = all 16 are dealt: nothing stays in the gorge, and nobody can draw again.
+2. **The Lot window (25 s).** Each seat may **take one** fighter from the Lot, once (`swaps: 1`); its old fighter takes that spot, so a teammate can still pick it up. **The Lot burns down:** every 8 s its first fighter goes back to the gorge (`fade: 8`), so by 24 s it is empty. Decide early, and talk.
 3. **Finalize (10 s):** skin and loadout, plus direct trades between locked teammates. A trade is a request; the other seat accepts. Bots accept at once.
 
-**Why.** Every player sees at least 4 fighters: their draw, the 2 on the Lot, and one redraw, plus whatever teammates release. The reference replaced unlimited rerolls for the same reason: a guaranteed floor of choices with a ceiling *(r03 §0.6, §2.1)*.
-
-Our mechanism is our own. There are no cards, no keep-one-of-two and no rare third card. Instead there is one shared Lot that the team trades through, and one personal redraw. Bench size and rerolls are data.
+**Why.** Every player sees their draw and the team's three, plus whatever teammates leave behind, and every choice costs time because the Lot shrinks. The choice is a shared, shrinking table the team reads together, not a personal redraw: there are no redraw points, no cards, no keep-one-of-two. Lot size, takes and burn rate are data.
 
 Possible later rule: a constrained Lot, guaranteeing a Plinth or Breaker and a Tender across each team's draw plus Lot *(r03 §4a.10)*. That is session code, not content.
 
@@ -368,10 +366,10 @@ The **Lampwright cart** is one `MapDef.shops` circle at the plate's centre. The 
 
 | id | from | duration | fighters | Wicks |
 |---|---|---|---|---|
-| **Clearglass** | Glasshorn | 90 s | +10 ability haste, +1.5 resource regeneration per second | — |
-| **Resinburn** | Resinback | 90 s | basic attacks on fighters and monsters burn for 3 × (4 + 2 per level) magic over 2 s and slow 10 % for 1 s, once every 3 s per target | — |
+| **Clearglass** | Glasshorn | 90 s | **map-tied (W4 re-key):** while on your own side of the Noonline, +16 ability haste and +2 resource regeneration per second (an `interval` trigger with `cond selfOnSide own`) | — |
+| **Resinburn** | Resinback | 90 s | **map-tied (W4 re-key):** on the enemy side of the Noonline, an attack on a fighter or monster sticks resin (20 % slow for 1.5 s) and your next attack on it within 4 s ignites it for 20 + 4 per level magic; once every 4 s per target | — |
 | **Splinters** | Sunsplinter | 4:00, renewed by the next take | +5 % armor and resist penetration, +5 ability haste | — |
-| **The Long Shade** | Longshade | 2:30 | +25 ad, +40 ap, +10 % tenacity | +400 hp, +30 ad, +25 armor and resist, +10 % move speed |
+| **The Long Shade** | Longshade | 3:30 | +20 ability haste, +15 % tenacity (W4 re-key: no attack or power) | +400 hp, +30 ad, +25 armor and resist, +10 % move speed |
 | **Lanternwake** | an enemy Lantern | 4:00 (= the Lantern's relight) | — | +120 hp, +10 ad, +10 armor and resist |
 
 **Splinters is designed to stack.** Each Sunsplinter your team takes adds one Splinter, up to **3**, and every take renews the 4:00 timer. Each Splinter gives +5 % armor and resist penetration and +5 ability haste. At 3 Splinters that is +15 % penetration and +15 haste, which is a reason to contest every Sunsplinter rather than trade it.

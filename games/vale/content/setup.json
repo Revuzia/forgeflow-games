@@ -1,13 +1,13 @@
 {
-  "$comment": "VALE setup layer (CONTRACT §4 SetupDef, §5.3 loadouts). Before a match each player takes 2 battle spells and, in RIFT and BRIDGE, 2 boons from ONE path (SESSION/UI enforce the one-path rule; the sim only checks pools and slot counts, so a mixed pair is never stronger than its two parts). FRAY: 5 spells and no boons. Pools: empty = every pool, listed explicitly here. Rules, numbers and calibration: _design/sections/items_setup.md.",
+  "$comment": "VALE setup layer (CONTRACT §4 SetupDef, §5.3 loadouts). Before a match each player takes 2 battle spells and, in RIFT and BRIDGE, 2 boons from ONE path (SESSION/UI enforce the one-path rule; the sim only checks pools and slot counts, so a mixed pair is never stronger than its two parts). FRAY: 5 spells and no boons. Pools: empty = every pool, listed explicitly here. Rules, numbers and calibration: _design/sections/items_setup.md. Re-keyed 2026-10-28 to VALE's own light-and-shadow rules (W4, originality F4; before/after table and LoL gauge: _design/reviews/fixwaves/W4_systems_rekey.md, pending owner sign-off).",
   "spells": [
     {
       "id": "glint_step",
       "name": "Glint Step",
-      "desc": "Blink up to 4.5 m toward the target point.",
+      "desc": "Dash up to 5 m toward the point along a line of stopped light; walls stop you. Your shadow stays where you started for 2.5 s, and enemy fighters who step into it are slowed by 30% for 1 s.",
       "icon": "assets/ui/icons/setup/glint_step.webp",
       "maxRank": 1,
-      "cooldown": 270,
+      "cooldown": 180,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -21,9 +21,48 @@
       "castTime": 0,
       "effects": [
         {
-          "op": "blink",
-          "distance": 4.5,
-          "to": "point"
+          "op": "zone",
+          "id": "glint_shadow",
+          "shape": {
+            "kind": "circle",
+            "radius": 1.2
+          },
+          "at": "self",
+          "duration": 2.5,
+          "interval": 0.25,
+          "delay": 0,
+          "filter": {
+            "enemies": true,
+            "allies": false,
+            "self": false,
+            "fighters": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1,
+              "power": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_zone_shade",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 5,
+          "speed": 22,
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
         }
       ],
       "ai": {
@@ -33,8 +72,8 @@
         ]
       },
       "present": {
-        "vfx": "lib_blink",
-        "sfx": "c_blink"
+        "vfx": "lib_dash_trail",
+        "sfx": "c_dash"
       },
       "pools": [
         "rift",
@@ -45,58 +84,55 @@
     {
       "id": "saplight",
       "name": "Saplight",
-      "desc": "Heal 80 + 16 per level. Allied fighters within 6 m heal 40 + 8 per level.",
+      "desc": "Set a 3 m pool of sap-light at your feet for 4 s. You and allied fighters standing in it heal 4% of their max health each second.",
       "icon": "assets/ui/icons/setup/saplight.webp",
       "maxRank": 1,
-      "cooldown": 220,
+      "cooldown": 200,
       "cost": 0,
       "costKind": "none",
       "targeting": {
         "kind": "none",
         "indicator": {
           "kind": "circle",
-          "radius": 6
+          "radius": 3
         }
       },
       "castTime": 0,
       "effects": [
         {
-          "op": "heal",
-          "amount": {
-            "base": 80,
-            "level": 16
-          },
-          "to": "self"
-        },
-        {
-          "op": "area",
+          "op": "zone",
+          "id": "saplight_pool",
           "shape": {
             "kind": "circle",
-            "radius": 6
+            "radius": 3
           },
           "at": "self",
+          "duration": 4,
+          "interval": 1,
           "delay": 0,
           "filter": {
             "enemies": false,
             "allies": true,
-            "self": false,
+            "self": true,
             "fighters": true,
             "minions": false,
             "monsters": false,
             "summons": false
           },
-          "onHit": [
+          "onTick": [
             {
               "op": "heal",
               "amount": {
-                "base": 40,
-                "level": 8
+                "base": 0,
+                "targetMaxHp": 0.04
               },
               "to": "hit"
             }
           ],
           "present": {
-            "hitVfx": "lib_heal_rise"
+            "vfx": "lib_zone_lumen",
+            "hitVfx": "lib_heal_rise",
+            "telegraph": "ally_only"
           }
         }
       ],
@@ -119,10 +155,10 @@
     {
       "id": "hairline",
       "name": "Hairline",
-      "desc": "Crack an enemy fighter within 6 m: deal 20 + 8 per level damage that ignores armor and resist, and for 4 s its armor and resist are 20% lower and healing on it is 35% weaker.",
+      "desc": "Crack an enemy fighter within 6 m: deal 20 + 8 per level damage that ignores armor and resist, and for 4 s its armor and resist are 20% lower and healing on it is 30% weaker.",
       "icon": "assets/ui/icons/setup/hairline.webp",
       "maxRank": 1,
-      "cooldown": 170,
+      "cooldown": 140,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -165,7 +201,7 @@
           "op": "status",
           "status": "grievous",
           "duration": 4,
-          "power": 0.35,
+          "power": 0.3,
           "to": "target"
         }
       ],
@@ -191,15 +227,15 @@
     {
       "id": "hourstrike",
       "name": "Hourstrike",
-      "desc": "Strike a monster or Wick within 5 m for 450 + 30 per level damage that ignores armor and resist, and heal 60 + 6 per level. Holds 2 charges; one returns every 95 s.",
+      "desc": "Strike a monster or Wick within 5 m for 250 + 15 per level plus 12% of its current health as damage that ignores armor and resist, and heal 4% of your max health. The fuller it is, the harder it lands. Holds 3 charges; one returns every 70 s.",
       "icon": "assets/ui/icons/setup/hourstrike.webp",
       "maxRank": 1,
       "cooldown": 10,
       "cost": 0,
       "costKind": "none",
       "charges": {
-        "max": 2,
-        "recharge": 95
+        "max": 3,
+        "recharge": 70
       },
       "targeting": {
         "kind": "unit",
@@ -217,8 +253,9 @@
         {
           "op": "damage",
           "amount": {
-            "base": 450,
-            "level": 30
+            "base": 250,
+            "level": 15,
+            "targetCurrentHp": 0.12
           },
           "type": "true",
           "to": "target"
@@ -226,17 +263,16 @@
         {
           "op": "heal",
           "amount": {
-            "base": 60,
-            "level": 6
+            "base": 0,
+            "maxHp": 0.04
           },
           "to": "self"
         }
       ],
       "ai": {
         "use": [
-          "execute"
-        ],
-        "castWhenTargetHpBelow": 0.3
+          "damage"
+        ]
       },
       "present": {
         "vfx": "lib_burst_lumen",
@@ -250,10 +286,10 @@
     {
       "id": "running_light",
       "name": "Running Light",
-      "desc": "Move 45% faster, fading over 6 s.",
+      "desc": "Move 60% faster, fading over 4 s.",
       "icon": "assets/ui/icons/setup/running_light.webp",
       "maxRank": 1,
-      "cooldown": 200,
+      "cooldown": 150,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -264,8 +300,8 @@
         {
           "op": "status",
           "status": "haste",
-          "duration": 6,
-          "power": 0.45,
+          "duration": 4,
+          "power": 0.6,
           "decay": true,
           "to": "self"
         }
@@ -289,10 +325,10 @@
     {
       "id": "shake_loose",
       "name": "Shake Loose",
-      "desc": "Break free of roots and ignore stuns, roots and knockbacks for 0.5 s, then gain 50% tenacity for 3 s and move 25% faster for 1.5 s. You cannot cast it while stunned, airborne, asleep, taunted or feared.",
+      "desc": "Break free of roots and ignore stuns, roots and knockbacks for 1 s, and move 30% faster for 2 s. You cannot cast it while stunned, airborne, asleep, taunted or feared.",
       "icon": "assets/ui/icons/setup/shake_loose.webp",
       "maxRank": 1,
-      "cooldown": 210,
+      "cooldown": 150,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -303,23 +339,14 @@
         {
           "op": "status",
           "status": "unstoppable",
-          "duration": 0.5,
-          "to": "self"
-        },
-        {
-          "op": "buff",
-          "id": "shake_loose_grit",
-          "duration": 3,
-          "stats": {
-            "tenacity": 0.5
-          },
+          "duration": 1,
           "to": "self"
         },
         {
           "op": "status",
           "status": "haste",
-          "duration": 1.5,
-          "power": 0.25,
+          "duration": 2,
+          "power": 0.3,
           "to": "self"
         }
       ],
@@ -340,31 +367,68 @@
     {
       "id": "glass_pane",
       "name": "Glass Pane",
-      "desc": "Gain a shield of 90 + 20 per level for 3 s.",
+      "desc": "Gain a shield of 50 + 12 per level for 4 s. As the pane sets, enemy fighters within 3 m are slowed by 25% for 1.5 s.",
       "icon": "assets/ui/icons/setup/glass_pane.webp",
       "maxRank": 1,
-      "cooldown": 160,
+      "cooldown": 130,
       "cost": 0,
       "costKind": "none",
       "targeting": {
-        "kind": "none"
+        "kind": "none",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
       },
       "castTime": 0,
       "effects": [
         {
           "op": "shield",
           "amount": {
-            "base": 90, "level": 20
+            "base": 50,
+            "level": 12
           },
-          "duration": 3,
+          "duration": 4,
           "to": "self"
+        },
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "delay": 0,
+          "filter": {
+            "enemies": true,
+            "allies": false,
+            "self": false,
+            "fighters": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onHit": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_ring_pulse",
+            "hitVfx": "lib_slow_glass"
+          }
         }
       ],
       "ai": {
         "use": [
-          "shield"
+          "shield",
+          "cc"
         ],
-        "castWhenSelfHpBelow": 0.4
+        "castWhenSelfHpBelow": 0.45
       },
       "present": {
         "vfx": "lib_shield_up",
@@ -745,7 +809,7 @@
   "defaults": {
     "spells": [
       "glint_step",
-      "saplight"
+      "glass_pane"
     ],
     "boons": [
       "dense_stone",

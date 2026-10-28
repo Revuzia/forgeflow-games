@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE queues (CONTRACT §4, §7, §8, §9.6). A queue = mode + pick protocol + stakes + rule overrides (merged key by key onto the mode's rules; arrays replace). Grants are in Candles (the earnedOnly currency): min(cap, win|loss + perMinute x whole minutes) + Fray placement; first win of the UTC day adds grants.win and grants.xpWin once. Rationale: _design/sections/modes_economy.md.",
+  "$comment": "VALE queues (CONTRACT §4, §7, §8, §9.6). BRIDGE's Lot (W4 re-key 2026-10-28, originality F4): three more per team, no redraws, one take per seat, the Lot's first fighter returns to the gorge every 8 s. A queue = mode + pick protocol + stakes + rule overrides (merged key by key onto the mode's rules; arrays replace). Grants are in Candles (the earnedOnly currency): min(cap, win|loss + perMinute x whole minutes) + Fray placement; first win of the UTC day adds grants.win and grants.xpWin once. Rationale: _design/sections/modes_economy.md.",
   "queues": [
     {
       "id": "rift_quick",
@@ -88,11 +88,11 @@
       "id": "bridge_standard",
       "mode": "bridge",
       "name": "Standard",
-      "desc": "Your fighter is drawn by lot. Swap with one on your team's bench or draw again once, then cross the span.",
+      "desc": "Your fighter is drawn by lot. Your team's Lot holds three more and burns down one every 8 s: take one of them once, then cross the span.",
       "kind": "standard",
       "rules": {},
       "draft": { "bansPerTeam": 0, "pickSeconds": 25, "banSeconds": 0, "finalizeSeconds": 10 },
-      "bench": { "size": 2, "rerolls": 1 },
+      "bench": { "size": 3, "rerolls": 0, "swaps": 1, "fade": 8 },
       "bots": { "fill": "all_open", "difficulty": "adept" },
       "partyMax": 5,
       "grants": { "win": 90, "loss": 60, "perMinute": 4, "cap": 180, "xpWin": 190, "xpLoss": 160 },
@@ -121,7 +121,7 @@
       "kind": "custom",
       "rules": {},
       "draft": { "bansPerTeam": 1, "pickSeconds": 20, "banSeconds": 20, "finalizeSeconds": 15 },
-      "bench": { "size": 2, "rerolls": 1 },
+      "bench": { "size": 3, "rerolls": 0, "swaps": 1, "fade": 8 },
       "bots": { "fill": "all_open", "difficulty": "adept" },
       "partyMax": 10,
       "grants": { "win": 0, "loss": 0, "perMinute": 0, "cap": 0, "xpWin": 0, "xpLoss": 0 },

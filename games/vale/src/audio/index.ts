@@ -43,6 +43,18 @@
 //               Team-private comms stay private: a ping sounds only when a player of YOUR team made it, and a
 //               surrender vote / its outcome only for the team voting (the HUD shows neither for the other
 //               team; online play is lockstep, so every client receives every seat's commands).
+//   kits        a fighter's own sounds (final parity AUD-1): content names them f_<fighter>_<slot>, slots
+//               attack_swing · attack_hit · a1 · a2 · a3 · ult_windup · ult_release · passive · death · call, and
+//               the engine resolves them BEFORE the catalog's present.sfx / hitSfx and the generic roles, so a
+//               fighter is told apart by ear without touching content/fighters. attack_swing on its 'attack',
+//               attack_hit on its basic attack's 'damage' (under the crit cue on a crit), a1-a3 on the slot's
+//               'cast' (whatever form the ability is in), ult_windup on the ult's 'cast', ult_release on the
+//               cast's first effect (area · projectile · hit · damage of that ultimate, or the caster's dash /
+//               blink) at or after its wind-up ends; one that shows no effect RELEASE_GRACE_S past its wind-up
+//               was cancelled and stays silent. An area release sounds where the area lands, the rest at the
+//               caster. death replaces the generic fall, passive is the proc (see `procs`), call is the
+//               lock-in motif the draft plays through fighterCall(). A slot content has no cue for falls
+//               back to the catalog's present and then the generic set, as before
 //   procs       every 'proc' (a passive fired) sounds at its subject (dst, else the owner): a fighter's passive
 //               plays the per-fighter cue f_<fighter>_passive when content has one, else the passive's own
 //               present.sfx / hitSfx; an item / boon / team-buff / unit passive plays its present.sfx / hitSfx,
@@ -105,6 +117,9 @@ interface CueOpts { aware?: boolean; lift?: number }
 
 export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
+  /** the fighter's lock-in call (f_<fighter>_call, see `kits` in the header); false when content has none, and the
+   *  UI keeps its generic lock-in alone */
+  fighterCall(fighter: string): boolean;
   /** where spatial cues are heard from: the camera's ground focus in sim units (x, y), or null to hear from your
    *  fighter (no renderer). boot/main.ts passes the renderer's listenerFocus() */
   listener(focus: (() => { x: number; y: number } | null) | null): void;
@@ -132,6 +147,13 @@ const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after th
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
 const PROC_PERIODIC_S = 6;   // … and a periodic one (an aura's tick, a run-up stack) only reminds this often
 const PERIODIC_ON = new Set(['interval', 'moveDistance']);
+/** a fighter's kit slots (see `kits` in the header): content's cue f_<fighter>_<slot> */
+const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call'] as const;
+type KitSlot = typeof KIT_SLOTS[number];
+const CAST_SLOTS = new Set<string>(['a1', 'a2', 'a3']);
+const RELEASE_GRACE_S = 0.25; // an ult with no effect this long after its wind-up's end was cancelled (CC, death, fizzle)
+const RELEASE_EPS_S = 1e-3;   // the release tick lands on the wind-up's end (sim time)
+const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the crit cue
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
 const AMB_DUCK_DB = 6;       // the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
@@ -197,6 +219,10 @@ class Engine implements ValeAudioPort {
   private focus: (() => { x: number; y: number } | null) | null = null;
   /** passive id → what owns it and the cue its proc plays (undefined: the 'proc.<kind>' role decides) */
   private readonly passives = new Map<string, { kind: PassiveKind; cue?: string }>();
+  /** fighter id → the kit slots content has a cue for (see `kits` in the header) */
+  private readonly kits = new Map<string, Partial<Record<KitSlot, string>>>();
+  /** caster entity → its ultimate waiting for the wind-up's end (see `kits` in the header) */
+  private readonly ults = new Map<number, { cue: string; ability: string; due: number }>();
   /** `${passive}:${owner}` → ctx time of its last sounding proc */
   private readonly procLast = new Map<string, number>();
   /** dev / probes: every proc's outcome, counted */
@@ -224,11 +250,15 @@ class Engine implements ValeAudioPort {
       if (f.attack?.present) this.abilitySfx.set(`attack:${f.id}`, f.attack.present);
     }
     for (const u of cat.units ?? []) if (u.attack?.present) this.abilitySfx.set(`attack:${u.id}`, u.attack.present);   // Needles, Wicks, monsters
+    for (const f of cat.fighters) {
+      const k: Partial<Record<KitSlot, string>> = {};
+      for (const s of KIT_SLOTS) if (this.cues[`f_${f.id}_${s}`]) k[s] = `f_${f.id}_${s}`;
+      this.kits.set(f.id, k);
+    }
     // passives (see `procs` in the header): the per-fighter cue first, then the passive's own present
     const own = (p: PassiveLike | undefined, kind: PassiveKind, fighter?: string): void => {
       if (!p) return;
-      const per = fighter ? `f_${fighter}_passive` : undefined;
-      this.passives.set(p.id, { kind, cue: (per && this.cues[per] ? per : undefined) ?? p.present?.sfx ?? p.present?.hitSfx });
+      this.passives.set(p.id, { kind, cue: (fighter ? this.kits.get(fighter)?.passive : undefined) ?? p.present?.sfx ?? p.present?.hitSfx });
     };
     for (const f of cat.fighters) own(f.kit.passive, 'fighter', f.id);
     for (const it of cat.items ?? []) for (const p of it.passives ?? []) own(p, 'item');
@@ -366,6 +396,18 @@ class Engine implements ValeAudioPort {
   // ── AudioPort ─────────────────────────────────────────────────────────────────────────────────
   play(cueId: string): void { this.cue(cueId, null); }
 
+  fighterCall(fighter: string): boolean {
+    const c = this.kits.get(fighter)?.call;
+    if (c) this.cue(c, null);
+    return !!c;
+  }
+
+  /** a fighter's own cue for a kit slot (see `kits` in the header); undefined when `x` is no fighter or content
+   *  has no such cue (the catalog's present and the generic roles then decide) */
+  private kit(x: EntityLike | undefined, slot: KitSlot): string | undefined {
+    return x?.kind === 'fighter' && x.def ? this.kits.get(x.def)?.[slot] : undefined;
+  }
+
   settings(s: AudioSettings): void { this.vol = { ...s }; this.applyVolumes(); }
 
   duck(on: boolean): void {
@@ -502,6 +544,7 @@ class Engine implements ValeAudioPort {
     this.intensity = 0; this.fight = 0; this.combat = false; this.calmFor = 0;
     this.lastT = client ? client.view.time : null;
     this.procLast.clear();
+    this.ults.clear();
     this.stopAmbience();
     this.ambMap = client?.setup?.map ?? null;
     if (client) {
@@ -667,6 +710,21 @@ class Engine implements ValeAudioPort {
     } catch { return true; }
   }
 
+  /** an ultimate's release (see `kits` in the header): the first effect of the cast at or after its wind-up's end
+   *  sounds the caster's ult_release; a wait open RELEASE_GRACE_S past the wind-up's end was cancelled */
+  private release(kind: string, e: Record<string, unknown>, src: EntityLike | undefined, aw: CueOpts): void {
+    const t = e.t as number;
+    for (const [id, w] of this.ults) if (t > w.due + RELEASE_GRACE_S) this.ults.delete(id);
+    const id = e.src;
+    const p = typeof id === 'number' ? this.ults.get(id) : undefined;
+    if (!p || t + RELEASE_EPS_S < p.due) return;
+    const effect = kind === 'dash' || kind === 'blink'
+      || ((kind === 'area' || kind === 'projectile' || kind === 'hit' || kind === 'damage') && e.ability === p.ability);
+    if (!effect) return;
+    this.ults.delete(id as number);
+    this.cue(p.cue, kind === 'area' ? { x: e.x as number, y: e.y as number } : src ? { x: src.x, y: src.y } : null, 1, 0, aw);
+  }
+
   private onEvent(e: Record<string, unknown>): void {
     const kind = e.e as string;
     const src = this.ent(e.src), dst = this.ent(e.dst);
@@ -689,13 +747,22 @@ class Engine implements ValeAudioPort {
     // priority: an enemy (or a monster) aiming at you, or anything landing on you, +1; an ally's own action −1
     const lift = src ? (src.team !== mine ? (onYou ? 1 : 0) : src.id !== youId && !onYou ? -1 : 0) : onYou ? 1 : 0;
     const aw: CueOpts = { aware: (!!src && src.team !== mine && src.kind !== 'minion') || onYou, lift };
+    if (this.ults.size) this.release(kind, e, src, aw);
     switch (kind) {
       case 'cast': {
+        const slot = e.slot as string;
+        const own = slot === 'ult' ? this.kit(src, 'ult_windup') : CAST_SLOTS.has(slot) ? this.kit(src, slot as KitSlot) : undefined;
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
+        this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
         // the shared shade-breath swell for every enemy fighter's ultimate wind-up (its T4 wind-up VFX; STYLE_BIBLE
         // 'enemy T3+ wind-ups share one shade-breath swell'), placed at the caster like any spatial cue
-        if (src?.kind === 'fighter' && src.team !== mine && e.slot === 'ult') this.cue(this.ev('enemyUltWindup'), at(src), 1, 0, aw);
+        if (src?.kind === 'fighter' && src.team !== mine && slot === 'ult') this.cue(this.ev('enemyUltWindup'), at(src), 1, 0, aw);
+        // the ult's release waits for the wind-up's end (see `kits`); any new cast ends a wait still open
+        if (src) {
+          const rel = slot === 'ult' ? this.kit(src, 'ult_release') : undefined;
+          if (rel) this.ults.set(src.id, { cue: rel, ability: e.ability as string, due: (e.t as number) + ((e.castTime as number) || 0) });
+          else this.ults.delete(src.id);
+        }
         break;
       }
       case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7, 0, aw); break;
@@ -705,7 +772,7 @@ class Engine implements ValeAudioPort {
         break;
       }
       case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw); break;
-      case 'attack': this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw); break;
+      case 'attack': this.cue(this.kit(src, 'attack_swing') ?? this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw); break;
       case 'damage': {
         const p = at(dst);
         const duel = src?.kind === 'fighter' && dst?.kind === 'fighter';
@@ -713,8 +780,11 @@ class Engine implements ValeAudioPort {
         if (near(p) && duel) this.fight = Math.min(1, this.fight + FIGHT_HIT);
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
         if (e.ability) break;
-        if (e.crit) this.cue(this.ev('crit'), p, 1, 0, aw);
-        else this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45, 0, aw);
+        const own = this.kit(src, 'attack_hit');
+        if (e.crit) {
+          this.cue(this.ev('crit'), p, 1, 0, aw);
+          if (own) this.cue(own, p, CRIT_KIT_GAIN, 0, aw);      // whose crit it was
+        } else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45, 0, aw);
         break;
       }
       case 'heal': this.cue(this.ev('heal'), at(dst), 0.7, 0, aw); break;
@@ -747,7 +817,7 @@ class Engine implements ValeAudioPort {
       case 'death': {
         const k = e.kind as string;
         if (k === 'fighter') {
-          this.cue(this.ev('fighterDeath'), at(dst));
+          this.cue(this.kit(dst, 'death') ?? this.ev('fighterDeath'), at(dst));
           const youEnt = this.client?.view.players.find((x) => x.player === this.client?.you)?.entity;
           if (e.dst === youEnt) this.cue(this.ev('selfDown'), null);
           else if (dst && dst.team === this.myTeam()) this.cue(this.ev('allyDown'), null);

@@ -97,6 +97,9 @@ export const Condition: z.ZodType<ConditionT, unknown> = z.lazy(() => z.discrimi
   /** W4 (originality F5, Vashil's chord): at least `min` OTHER units within `radius` m of the hit unit carry `mark`
    *  from this caster (the hit unit itself never counts) */
   z.object({ kind: z.literal('markedNear'), mark: Id, radius: z.number().positive(), min: z.number().int().positive().default(1) }).strict(),
+  /** W4 (originality F4, map-tied camp buffs): the caster stands on its own side of the map (nearer its own base
+   *  than any other team's base: RIFT's own half of the dial, west or east of the Noonline) or on the enemy side */
+  z.object({ kind: z.literal('selfOnSide'), side: z.enum(['own', 'enemy']) }).strict(),
   z.object({ kind: z.literal('not'), cond: Condition }).strict(),
   z.object({ kind: z.literal('all'), conds: z.array(Condition) }).strict(),
   z.object({ kind: z.literal('any'), conds: z.array(Condition) }).strict(),
@@ -107,6 +110,7 @@ export type ConditionT =
   | { kind: 'counterAtLeast'; counter: string; n: number } | { kind: 'targetIs'; filter: z.infer<typeof TargetFilter> }
   | { kind: 'inForm'; form: string } | { kind: 'chance'; p: number }
   | { kind: 'markedNear'; mark: string; radius: number; min?: number }
+  | { kind: 'selfOnSide'; side: 'own' | 'enemy' }
   | { kind: 'not'; cond: ConditionT } | { kind: 'all'; conds: ConditionT[] } | { kind: 'any'; conds: ConditionT[] };
 
 // ── presentation hints carried by sim records (sim ignores them; it echoes ids in events) ─────────
@@ -421,6 +425,12 @@ export const ItemDef = z.object({
   active: AbilityDef.optional(),
   /** items sharing a group cannot be owned together */
   uniqueGroup: Id.optional(),
+  /** W4 re-key (originality F4), the dial-slot rule: the item stands at `hour` (1-12) on the dial. Two owned items that
+   *  both stand on the dial must be at least `apart` hours apart around it (the larger `apart` of the two applies). */
+  dial: z.object({ hour: z.number().int().min(1).max(12), apart: z.number().int().min(1).max(6) }).strict().optional(),
+  /** W4 re-key (originality F4), a starter that grows: buying an item of one of these tiers while carrying this one
+   *  folds it in (consumed at its full cost, like a component) — a starter grows into the first core */
+  foldsInto: z.array(z.enum(['basic', 'core', 'apex'])).optional(),
   consumable: z.object({ charges: z.number().int().positive(), maxStack: z.number().int().positive() }).strict().optional(),
   tags: z.array(z.enum(['attack', 'magic', 'defense', 'speed', 'sustain', 'support', 'jungle', 'utility', 'crit', 'onhit', 'haste', 'vision'])).default([]),
   /** rule-set pools that may sell it (CONTRACT §5.6). Empty = every pool. */
@@ -547,7 +557,10 @@ export const RulesParams = z.object({
   goldMult: z.number().positive(), xpMult: z.number().positive(),
   xpTable: z.array(z.number()),               // xp needed to reach level i+2 from i+1
   respawn: z.object({ base: z.number(), perLevel: z.number(), max: z.number(), lateGameRampAt: z.number().optional(), lateGameMult: z.number().optional() }).strict(),
-  shopAccess: z.enum(['base', 'base_or_dead', 'anywhere', 'shops']),
+  shopAccess: z.enum(['base', 'base_or_dead', 'anywhere', 'shops', 'needles']),
+  /** W4 re-key (originality F4), shopAccess 'needles': besides the base shop (and while dead), a seat may shop within
+   *  `radius` m of one of its own STANDING structures whose unit id is in `units` — the shop retreats as they fall */
+  shopAt: z.object({ units: z.array(Id).min(1), radius: z.number().positive() }).strict().optional(),
   recall: z.boolean(), recallTime: z.number().optional(),
   fountainHeals: z.boolean(),
   itemPool: Id,                                 // ItemDef.pools / setup pools filter
@@ -599,7 +612,10 @@ export const QueueDef = z.object({
   pick: z.enum(['draft', 'blind', 'random_bench', 'ffa_pick', 'role_preset']).optional(),
   draft: z.object({ bansPerTeam: z.number().int().nonnegative(), pickSeconds: z.number(), banSeconds: z.number(),
     finalizeSeconds: z.number() }).strict().optional(),
-  bench: z.object({ size: z.number().int().nonnegative(), rerolls: z.number().int().nonnegative() }).strict().optional(),
+  /** random_bench (BRIDGE's Lot). W4 re-key (originality F4): `swaps` = how many fighters a seat may take from its team's
+   *  Lot (absent = no limit); `fade` = every `fade` s of the window the Lot's first fighter goes back to the gorge */
+  bench: z.object({ size: z.number().int().nonnegative(), rerolls: z.number().int().nonnegative(),
+    swaps: z.number().int().nonnegative().optional(), fade: z.number().positive().optional() }).strict().optional(),
   ranked: z.object({ ratingId: Id, model: z.literal('glicko2'), placementGames: z.number().int() }).strict().optional(),
   bots: z.object({ fill: z.enum(['all_open', 'opponents_only', 'none']), difficulty: z.enum(['novice', 'adept', 'veteran', 'by_rating']) }).strict(),
   partyMax: z.number().int().positive(),

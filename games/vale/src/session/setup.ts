@@ -192,7 +192,7 @@ const OPTIONAL_RULE_KEYS: Readonly<Record<string, 'number' | 'string' | 'object'
 };
 /** enum-valued RulesParams keys */
 const RULE_ENUMS: Readonly<Record<string, readonly string[]>> = {
-  shopAccess: ['base', 'base_or_dead', 'anywhere', 'shops'],
+  shopAccess: ['base', 'base_or_dead', 'anywhere', 'shops', 'needles'],
   'end.kind': ['core', 'last_standing_or_score', 'score'],
 };
 const jsonType = (v: unknown): string => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);

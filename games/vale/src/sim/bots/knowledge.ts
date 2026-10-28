@@ -19,6 +19,7 @@ import type {
 import type { MatchSetup, SeatSetup } from '../../contracts/sim.ts';
 import { indexCatalog, resolveRules, type AbilityCoreT, type CatalogIndex, type RoleDefT } from '../catalog_index.ts';
 import { mitigated } from '../combat.ts';
+import { dialClash } from '../shop.ts';
 import { ranked } from '../effects.ts';
 import type { Entity } from '../entity.ts';
 import { dhypot } from '../dmath.ts';
@@ -443,7 +444,9 @@ export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterP
   const apexes = byScore(items.filter((i) => i.tier === 'apex'));
   const core: string[] = [];
   const takeGroup = new Set<string>();
-  const ok = (it: ItemDefT): boolean => !it.uniqueGroup || !takeGroup.has(it.uniqueGroup);
+  // unique groups, and the dial-slot rule (two dial items must stand far enough apart: sim/shop.ts dialClash)
+  const ok = (it: ItemDefT): boolean => (!it.uniqueGroup || !takeGroup.has(it.uniqueGroup)) &&
+    core.every((id) => !dialClash(it, idx.items.get(id)));
   const take = (it: ItemDefT): void => { core.push(it.id); if (it.uniqueGroup) takeGroup.add(it.uniqueGroup); };
   // two core items, then apex items (preferring ones that build out of a chosen core), then fill
   for (const it of cores) { if (core.length >= 2) break; if (ok(it)) take(it); }

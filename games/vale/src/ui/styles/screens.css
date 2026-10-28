@@ -69,8 +69,12 @@
 .station__tick { position: absolute; top: calc(-0.5 * var(--u)); left: 50%; width: 2px; height: calc(1.25 * var(--u)); background: var(--chalk); transform: translateX(-50%); }
 .station.is-reserved .station__disc { background: transparent; box-shadow: none; outline: 1px dashed var(--line-2); outline-offset: -1px; border-radius: 50%; color: var(--text-3); }
 .station.is-reserved:hover .station__disc, .station.is-reserved:focus-visible .station__disc { outline-color: var(--text-2); box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--chalk); }
-.play__mode { display: flex; flex-direction: column; gap: calc(0.5 * var(--u)); text-align: center; align-items: center; margin-top: calc(-1 * var(--u)); }
+/* the mode's name in the dial's open hub (client F6): inside the inner arc, under the two middle stations */
+.play__dialwrap { position: relative; }
+.play__mode { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 36%; display: flex; flex-direction: column; gap: calc(0.25 * var(--u)); text-align: center; align-items: center; pointer-events: none; }
+.play__mode .t-display-m { line-height: 1; }
 .play__mode .t-body-l { color: var(--text-1); }
+.dial__arc--face { stroke: var(--line-1); stroke-dasharray: 2 5; }
 .play__links { display: flex; gap: var(--u); margin-top: var(--u); flex-wrap: wrap; }
 .qcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(1.5 * var(--u)); }   /* 2 x 2: all four queues above the fold */
 .qcard { display: flex; flex-direction: column; gap: var(--u); padding: calc(2 * var(--u)); text-align: left; transition: background-color 100ms var(--ease-std), transform 60ms linear; }
@@ -81,12 +85,27 @@
 .qcard.is-locked { background: rgba(11, 13, 17, 0.8); outline: 1px dashed var(--line-2); outline-offset: -1px; }   /* readable over the bright needle */
 .qcard__head { display: flex; align-items: center; justify-content: space-between; gap: var(--u); }
 .qcard__name { color: var(--text-1); }
+.qcard__name { flex: 1; min-width: 0; }
 .qcard__desc { color: var(--text-2); }
 .qcard__lines { display: flex; flex-direction: column; gap: 2px; color: var(--text-2); }
 .qcard__reward { display: inline-flex; align-items: center; gap: var(--u); color: var(--text-1); }
 .qcard__reward .cur { display: none; }
-.qcard__rank { display: flex; align-items: center; gap: var(--u); color: var(--text-2); }
 .qcard__lock { display: inline-flex; align-items: center; gap: calc(0.5 * var(--u)); color: var(--text-1); }
+
+/* columns 7–12: the chosen mode's painted card over the chosen queue's terms (client F6). Every live mode's card is
+   stacked; the chosen one fades in from the right (forward is clockwise) in 360 ms while the gnomon swings. */
+.playart { display: flex; flex-direction: column; align-items: flex-end; gap: calc(1.5 * var(--u)); height: 100%; min-height: 0; }
+.playart__frame { position: relative; flex: 1; min-height: 0; aspect-ratio: 2 / 3; max-width: 100%; border-radius: var(--radius); overflow: hidden;
+  background: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 48px rgba(11, 13, 17, 0.55); }
+.playart__img { position: absolute !important; inset: 0; opacity: 0; transform: translateX(calc(2 * var(--u))); transition: opacity 360ms var(--ease-dawn), transform 360ms var(--ease-dawn); }
+.playart__img.is-on { opacity: 1; transform: none; }
+.playart__frame::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(237, 230, 214, 0.08); border-radius: var(--radius); }
+.playart__cap { display: flex; flex-direction: column; gap: calc(0.75 * var(--u)); width: 100%; max-width: calc(64 * var(--u)); padding: calc(1.5 * var(--u)) calc(2 * var(--u)); flex: none; }
+.playart__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--u); flex-wrap: wrap; }
+.playart__desc { color: var(--text-1); }
+.playart__rank { display: flex; align-items: center; gap: var(--u); color: var(--text-2); }
+.playart__terms { display: flex; flex-wrap: wrap; gap: 2px calc(1.5 * var(--u)); margin: 0; padding: 0; list-style: none; color: var(--text-2); }
+.playart__terms li:first-child { color: var(--text-1); flex-basis: 100%; }
 .rolepick { display: flex; flex-direction: column; gap: var(--u); margin-bottom: calc(2 * var(--u)); }
 .rolepick__label { color: var(--text-2); }
 .rolepick__opts { display: flex; flex-wrap: wrap; gap: var(--u); }
@@ -286,7 +305,8 @@
 .stagecard__cap { position: absolute; left: calc(2 * var(--u)); right: calc(2 * var(--u)); bottom: calc(2 * var(--u)); display: flex; flex-direction: column; gap: calc(0.5 * var(--u)); padding: calc(2 * var(--u)); max-width: calc(56 * var(--u)); }
 
 /* ── loading ────────────────────────────────────────────────────────────────────────────────── */
-.loading { position: absolute; left: var(--margin); right: var(--margin); top: calc(var(--bar-h) + 2 * var(--u)); bottom: calc(4 * var(--u)); display: flex; flex-direction: column; gap: calc(3 * var(--u)); }
+/* the foot (tip + progress) rides 52 px up at least: clear of the portal control bar, bottom-left (client F9) */
+.loading { position: absolute; left: var(--margin); right: var(--margin); top: calc(var(--bar-h) + 2 * var(--u)); bottom: max(calc(4 * var(--u)), 52px); display: flex; flex-direction: column; gap: calc(3 * var(--u)); }
 .loading__head { display: flex; flex-direction: column; gap: var(--u); }
 .loading__flavour { color: var(--text-2); max-width: 64ch; }
 /* the cards (client F3): 3:5 crops of each splash, sized from the space the teams get (container units), five to a
@@ -514,6 +534,19 @@
 .cseat.is-you .cseat__n { color: var(--text-1); }
 .cseat__sel { min-width: 0; width: 100%; }
 .cseat__sel .select__btn { height: calc(4 * var(--u)); }
+
+/* ── 720p token set (client F9): the default 1280 x 720 window shows every screen's content without scrolling ── */
+@media (max-height: 820px) {
+  /* Play: the dial a little lower, the queues as compact rows (the stage caption carries the description) */
+  .dial { max-height: min(calc(36 * var(--u)), 30vh); }
+  .qcards { grid-template-columns: minmax(0, 1fr); gap: calc(0.75 * var(--u)); }
+  .qcard { flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(0.5 * var(--u)) calc(1.5 * var(--u)); padding: var(--u) calc(1.5 * var(--u)); }
+  .qcard__head { flex: 1 1 auto; min-width: 0; }
+  .qcard__desc { display: none; }
+  .qcard .chip { order: 2; }
+  .play .sect { margin-top: calc(1.5 * var(--u)); }
+  .play .sect__head { margin-bottom: var(--u); }
+}
 
 /* ── responsive: 1280-wide and UI scale 1.5 ─────────────────────────────────────────────────── */
 @media (max-width: 1400px) {

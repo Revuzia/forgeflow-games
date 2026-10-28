@@ -397,11 +397,12 @@ def drop_hidden_bottoms(ob, z: float = 0.02):
     bm.free()
 
 
-def drop_buried_faces(ob, others=()) -> int:
+def drop_buried_faces(ob, others=(), keep_mats=()) -> int:
     """Delete faces buried inside other closed pieces (stacked lathe caps, sunk frame backs, block
     faces inside floors): a face goes when its centre AND every corner (pulled 12 % toward the centre),
     nudged 2 mm along the normal, first hit a back face when cast along the normal (= they sit inside a
-    solid). Frees most of the atlas for what the camera can see."""
+    solid). Frees most of the atlas for what the camera can see. Faces of a material named in `keep_mats` always
+    stay (a jagged fracture face whose rays graze its own relief)."""
     from mathutils.bvhtree import BVHTree
     bm = bmesh.new()
     bm.from_mesh(ob.data)
@@ -417,8 +418,11 @@ def drop_buried_faces(ob, others=()) -> int:
     bm.normal_update()
     bvh = BVHTree.FromBMesh(bm)
     n_own = len(ob.data.polygons)
+    keep_idx = {i for i, m in enumerate(ob.data.materials) if m is not None and m.name in keep_mats}
     kill = []
     for f in bm.faces[:n_own]:
+        if f.material_index in keep_idx:
+            continue
         n = f.normal
         if n.length < 0.5:
             continue

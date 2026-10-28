@@ -597,7 +597,7 @@
       "collisionRadius": 0.25,
       "bounty": { "gold": 20, "xp": 0 },
       "behavior": { "invisible": true },
-      "sightRange": 9,
+      "sightRange": 7.5,
       "art": { "model": "assets/units/hooded_lamp.glb", "height": 0.8, "icon": "assets/units/hooded_lamp_icon.png",
         "clips": { "idle": "idle" } }
     }

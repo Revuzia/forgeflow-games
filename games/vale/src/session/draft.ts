@@ -16,9 +16,12 @@
 //                 of their role); straight to a short finalize. Duplicates across teams only.
 //   random_bench  every seat gets a random fighter; each team gets a shared bench of `bench.size`
 //                 more (no duplicates in the match while the pool lasts). During the bench window any
-//                 seat may swap with a bench fighter (its old one takes that bench spot) or reroll
-//                 (`bench.rerolls` each: a new random fighter, the old one joins the bench; the bench
-//                 keeps its newest `bench.size`, the oldest returns to the pool). Then finalize.
+//                 seat may swap with a bench fighter (its old one takes that bench spot; at most
+//                 `bench.swaps` times per seat when set) or reroll (`bench.rerolls` each: a new random
+//                 fighter, the old one joins the bench; the bench keeps its newest `bench.size`, the
+//                 oldest returns to the pool). With `bench.fade`, every `fade` s of the window the
+//                 bench's FIRST fighter goes back to the pool (BRIDGE's Lot burns down; W4 re-key,
+//                 originality F4). Then finalize.
 //   ffa_pick      everyone picks at once, no duplicates (first lock wins); then finalize.
 // FINALIZE: `finalizeSeconds` to change skin (owned skins only for the human) and loadout; trades
 // between locked teammates (tradeRequest → the other seat's tradeAccept swaps fighters; bots accept
@@ -49,7 +52,7 @@ export interface DraftConfig {
   pool: string[];
   bansPerTeam: number;
   timers: DraftTimers;
-  bench: { size: number; rerolls: number };
+  bench: { size: number; rerolls: number; swaps?: number; fade?: number };
 }
 export interface DraftHooks {
   brain(seat: DraftSeatInit): DraftBrain | null;
@@ -75,6 +78,8 @@ interface Seat {
   init: DraftSeatInit;
   hover?: string; locked?: string; skin?: string; loadout?: LoadoutChoice;
   rerolls: number;
+  /** bench swaps left (Infinity = no limit) */
+  swaps: number;
   brain: DraftBrain | null;
   botNextAt: number; botActs: number;
 }
@@ -90,6 +95,8 @@ export class DraftHost {
   private timer = 0;
   private timerMax = 0;
   private phaseElapsed = 0;
+  /** seconds of the bench window since the Lot last burned down (bench.fade) */
+  private fadeAcc = 0;
   private serial = 0;
   private bans: BanSlot[] = [];
   private bansRevealed = false;
@@ -107,7 +114,8 @@ export class DraftHost {
     if (cfg.seats.length === 0) throw new Error('draft: no seats');
     this.cfg = cfg; this.rng = rng; this.hooks = hooks;
     this.seats = [...cfg.seats].sort((a, b) => a.player - b.player).map((init) => ({
-      init, rerolls: cfg.protocol === 'random_bench' ? cfg.bench.rerolls : 0, brain: hooks.brain(init), botNextAt: 0, botActs: 0,
+      init, rerolls: cfg.protocol === 'random_bench' ? cfg.bench.rerolls : 0, swaps: cfg.bench.swaps ?? Infinity,
+      brain: hooks.brain(init), botNextAt: 0, botActs: 0,
     }));
     for (const s of this.seats) this.byPlayer.set(s.init.player, s);
     for (const t of this.teams()) this.bench.set(t, []);
@@ -146,6 +154,7 @@ export class DraftHost {
     if (!this.started || this._done) return;
     this.timer -= dt;
     this.phaseElapsed += dt;
+    if (this._phase === 'bench') this.fadeBench(dt);
     this.runBots();
     if (!this._done && this.timer <= 1e-9) this.expire();
     this.changed();
@@ -185,7 +194,7 @@ export class DraftHost {
       if (s.hover !== undefined && ally(s)) d.hover = s.hover;
       if (s.locked !== undefined && lockVisible) { d.locked = s.locked; if (s.skin !== undefined) d.skin = s.skin; }
       if (s.loadout !== undefined && ally(s)) d.loadout = { spells: [...s.loadout.spells], boons: [...s.loadout.boons] };
-      if (this.cfg.protocol === 'random_bench' && ally(s)) d.rerolls = s.rerolls;
+      if (this.cfg.protocol === 'random_bench' && ally(s)) { d.rerolls = s.rerolls; if (Number.isFinite(s.swaps)) d.swaps = s.swaps; }
       return d;
     });
     const bans = this.bansRevealed || vs === null
@@ -291,7 +300,9 @@ export class DraftHost {
         const list = this.bench.get(s.init.team) ?? [];
         const i = list.indexOf(a.fighter);
         if (i < 0) return { ok: false, reason: 'not_on_bench' };
+        if (s.swaps <= 0) return { ok: false, reason: 'no_swaps' };
         const old = s.locked;
+        s.swaps--;
         list[i] = old;
         this.setFighter(s, a.fighter);
         this.log.push(`${s.init.name} swapped ${this.hooks.fighterName(old)} for ${this.hooks.fighterName(a.fighter)}`);
@@ -383,6 +394,7 @@ export class DraftHost {
     this.timer = Math.max(0, seconds);
     this.timerMax = Math.max(0, seconds);
     this.phaseElapsed = 0;
+    this.fadeAcc = 0;
     this.serial++;
     for (const s of this.seats) {
       s.botActs = 0;
@@ -500,6 +512,21 @@ export class DraftHost {
     for (const s of this.seats) if (s.init.team === team && s.locked) teamUsed.add(s.locked);
     const c = this.cfg.pool.filter((f) => !teamUsed.has(f) && f !== not);
     return c.length ? this.rng.pick(c) : null;
+  }
+
+  /** bench.fade: every `fade` s of the window each team's Lot lets its first fighter go back to the pool */
+  private fadeBench(dt: number): void {
+    const fade = this.cfg.bench.fade;
+    if (!fade || fade <= 0) return;
+    this.fadeAcc += dt;
+    while (this.fadeAcc + 1e-9 >= fade) {
+      this.fadeAcc -= fade;
+      for (const t of this.teams()) {
+        const list = this.bench.get(t);
+        const f = list && list.length ? list.shift() as string : null;
+        if (f) { this.free.push(f); this.log.push(`The Lot let ${this.hooks.fighterName(f)} go`); }
+      }
+    }
   }
 
   private toBench(team: number, f: string): void {

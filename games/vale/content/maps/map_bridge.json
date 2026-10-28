@@ -497,17 +497,18 @@
      "id": "dawn_arch", "model": "assets/maps/landmarks/dawn_arch.glb",
      "name": "Dawn Arch",
      "at": [-4.0, 22.0],
-     "size": [3.0, 24.0],
-     "height": 12.0,
-     "note": "Aubade end: dawnglass arch spanning the terrace's back, beyond the west edge"
+     "size": [3.0, 26.1],
+     "height": 13.7,
+     "note": "Aubade end: a four-centred pointed arch of chalk voussoirs on coursed piers, dawnglass in its head under a steel dial rose, beyond the west edge (art/blender/maps/landmarks_art2.py)",
+     "value": 0.55
     },
     {
      "id": "lamp_gate", "model": "assets/maps/landmarks/lamp_gate.glb",
      "name": "Lamp Gate",
      "at": [160.0, 22.0],
-     "size": [5.0, 24.0],
+     "size": [5.0, 27.0],
      "height": 7.0,
-     "note": "Serenade end: low banded ironstone gate with drum towers and a lampresin lamp"
+     "note": "Serenade end: low banded ironstone gate between ochre sandstone drum towers under ribbed domes, one lampresin lamp on its keystone (art/blender/maps/landmarks_art2.py)"
     },
     {
      "id": "snap_stub_n", "model": "assets/maps/landmarks/snap_stub.glb",
@@ -515,7 +516,8 @@
      "at": [78.0, 15.8],
      "size": [2.6, 4.2],
      "height": 2.4,
-     "note": "broken stub of the shaft on the crack line (a wall)"
+     "note": "broken stub of the shaft on the crack line (a wall)",
+     "value": 0.6
     },
     {
      "id": "snap_stub_s", "model": "assets/maps/landmarks/snap_stub.glb", "rot": 180,
@@ -523,7 +525,8 @@
      "at": [78.0, 28.2],
      "size": [2.6, 4.2],
      "height": 2.4,
-     "note": "its twin"
+     "note": "its twin",
+     "value": 0.6
     },
     {
      "id": "snap_crack",

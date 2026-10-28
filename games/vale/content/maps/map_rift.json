@@ -1607,7 +1607,8 @@
      "at": [85.0, 66.6],
      "size": [3.0, 6.4],
      "height": 2.2,
-     "note": "lying drum of the fallen needle (it IS the wall there); broken face south"
+     "note": "lying drum of the fallen needle (it IS the wall there); broken face south",
+     "value": 0.45
     },
     {
      "id": "numeral_xi", "model": "assets/maps/landmarks/numeral_xi.glb",

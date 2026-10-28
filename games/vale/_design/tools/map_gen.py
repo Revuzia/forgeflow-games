@@ -635,8 +635,8 @@ def build_bridge():
         "$comment": "the walls of Needlespan are the gorge: render them as a drop, never as cliffs rising from the span",
         "wallStyle": "gorge",
         "landmarks": [
-            landmark("dawn_arch", "Dawn Arch", (-4.0, CY), (3, 24), 12.0, "Aubade end: dawnglass arch spanning the terrace's back, beyond the west edge"),
-            landmark("lamp_gate", "Lamp Gate", (W + 4.0, CY), (5, 24), 7.0, "Serenade end: low banded ironstone gate with drum towers and a lampresin lamp"),
+            landmark("dawn_arch", "Dawn Arch", (-4.0, CY), (3, 26.1), 13.7, "Aubade end: a four-centred pointed arch of chalk voussoirs on coursed piers, dawnglass in its head under a steel dial rose, beyond the west edge (art/blender/maps/landmarks_art2.py)"),
+            landmark("lamp_gate", "Lamp Gate", (W + 4.0, CY), (5, 27), 7.0, "Serenade end: low banded ironstone gate between ochre sandstone drum towers under ribbed domes, one lampresin lamp on its keystone (art/blender/maps/landmarks_art2.py)"),
             landmark("snap_stub_n", "Snap stub", (CX, CY - 6.2), (2.6, 4.2), 2.4, "broken stub of the shaft on the crack line (a wall)"),
             landmark("snap_stub_s", "Snap stub", (CX, CY + 6.2), (2.6, 4.2), 2.4, "its twin"),
             landmark("snap_crack", "the crack", (CX, CY), (1, 24), 0.05, "the fracture line across the Snap floor, engraved and lit from inside (emissive <= 0.8)", flush=True),

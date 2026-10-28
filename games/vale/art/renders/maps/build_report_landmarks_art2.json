@@ -1,34 +1,34 @@
 {
   "shaft_drum": {
     "id": "shaft_drum",
-    "tris": 1742,
+    "tris": 2231,
     "size_m": [
-      2.45,
-      6.34
+      2.41,
+      6.35
     ],
     "height": 2.16,
     "x": [
-      -1.26,
-      1.19
+      -1.25,
+      1.17
     ],
     "y": [
-      -3.16,
+      -3.17,
       3.18
     ],
-    "kb_raw": 167,
-    "kb": 97,
-    "texture": 512,
-    "buried_faces_dropped": 435,
+    "kb_raw": 341,
+    "kb": 161,
+    "texture": 1024,
+    "buried_faces_dropped": 116,
     "nodes": [
       "body"
     ]
   },
   "snap_stub": {
     "id": "snap_stub",
-    "tris": 1641,
+    "tris": 2046,
     "size_m": [
       2.22,
-      4.14
+      4.17
     ],
     "height": 2.26,
     "x": [
@@ -36,20 +36,20 @@
       1.11
     ],
     "y": [
-      -2.03,
+      -2.06,
       2.11
     ],
-    "kb_raw": 160,
-    "kb": 93,
-    "texture": 512,
-    "buried_faces_dropped": 385,
+    "kb_raw": 326,
+    "kb": 148,
+    "texture": 1024,
+    "buried_faces_dropped": 154,
     "nodes": [
       "body"
     ]
   },
   "dawn_arch": {
     "id": "dawn_arch",
-    "tris": 5986,
+    "tris": 6396,
     "size_m": [
       3.0,
       26.1
@@ -63,22 +63,22 @@
       -13.05,
       13.05
     ],
-    "kb_raw": 395,
-    "kb": 249,
-    "texture": 512,
-    "buried_faces_dropped": 517,
+    "kb_raw": 1310,
+    "kb": 601,
+    "texture": 2048,
+    "buried_faces_dropped": 707,
     "nodes": [
       "body"
     ]
   },
   "lamp_gate": {
     "id": "lamp_gate",
-    "tris": 15218,
+    "tris": 16356,
     "size_m": [
       5.0,
       27.0
     ],
-    "height": 6.97,
+    "height": 6.98,
     "x": [
       -2.5,
       2.5
@@ -87,10 +87,10 @@
       -13.5,
       13.5
     ],
-    "kb_raw": 687,
-    "kb": 450,
-    "texture": 512,
-    "buried_faces_dropped": 2081,
+    "kb_raw": 1510,
+    "kb": 743,
+    "texture": 2048,
+    "buried_faces_dropped": 2334,
     "nodes": [
       "body",
       "lamp"

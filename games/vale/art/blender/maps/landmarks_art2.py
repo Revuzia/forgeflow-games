@@ -115,8 +115,9 @@ def lay(V, zc: float):
     return K.move(K.rot(np.asarray(V, dtype=np.float64), (1, 0, 0), -PI / 2), (0, 0, zc))
 
 
-def drum(B, mat, r, y0, y1, zc, c=0.07, gap=0.014):
-    y0, y1 = y0 + gap, y1 - gap                                # a joint slot each end: the courses part with an ink line
+def drum(B, mat, r, y0, y1, zc, c=0.07, lap=0.006):
+    y0, y1 = y0 - lap, y1 + lap                                # the courses lap a little (their joint faces bury); the joint
+    #                                                            reads as an inked V between the chamfers
     prof = [(0, y0), (r - c, y0), (r, y0 + c), (r, y1 - c), (r - c, y1), (0, y1)]
     v, f = K.lathe(prof, **O8)
     B.add(mat, (lay(v, zc), f))
@@ -349,12 +350,19 @@ def dawn_arch(B, rng):
             u0, u1 = edges[i] + 0.014, edges[i + 1] - 0.014
             us = np.linspace(u0, u1, 4)
             pts = np.stack([np.interp(us, d, Q[:, k]) for k in range(4)], 1)
+            tt = t + (0.06 if i % 2 else 0.0)                 # every second voussoir stands proud: a stepped crown
             inner = [(side * p[0], p[1]) for p in pts]
-            outer = [(side * (p[0] + t * p[2]), p[1] + t * p[3]) for p in pts[::-1]]
+            outer = [(side * (p[0] + tt * p[2]), p[1] + tt * p[3]) for p in pts[::-1]]
             poly = inner + outer
             if side < 0:
                 poly = poly[::-1]
             B.add("chalk", K.prism(poly, origin=(0, 0, 0), u=(0, 1, 0), v=(0, 0, 1), depth=2 * PX, chamfer=0.035))
+            # a blued-steel hour-stud let into each voussoir's back (the ring reads as a dial from above)
+            pm = np.stack([np.interp([(u0 + u1) / 2], d, Q[:, k]) for k in range(4)], 1)[0]
+            ny, nz = side * pm[2], pm[3]
+            o = (0.0, side * pm[0] + ny * (tt + 0.005), pm[1] + nz * (tt + 0.005))
+            dia = [(0.17, 0.0), (0.0, 0.2), (-0.17, 0.0), (0.0, -0.2)]
+            B.add("steel", K.prism(dia, origin=o, u=(1, 0, 0), v=(0, nz, -ny), depth=0.05, chamfer=0.01))
     pk = np.stack([np.interp([key_u + 0.014], d, Q[:, k]) for k in range(4)], 1)[0]
     ztop = apex + t / math.sin(PHI) + 0.32
     yk_in, zk_in = pk[0], pk[1]
@@ -385,8 +393,8 @@ def dawn_arch(B, rng):
         for ui in (0.3, 0.62):
             p = np.stack([np.interp([key_u * ui], d, Q[:, k]) for k in range(4)], 1)[0]
             ny, nz = side * p[2], p[3]
-            poly = [(-PX - 0.05, -0.05), (-PX + 0.0, -0.05), (-PX + 0.0, t + 0.0), (PX - 0.0, t + 0.0), (PX - 0.0, -0.05), (PX + 0.05, -0.05),
-                    (PX + 0.05, t + 0.055), (-PX - 0.05, t + 0.055)]
+            poly = [(-PX - 0.05, -0.05), (-PX + 0.0, -0.05), (-PX + 0.0, t + 0.065), (PX - 0.0, t + 0.065), (PX - 0.0, -0.05), (PX + 0.05, -0.05),
+                    (PX + 0.05, t + 0.12), (-PX - 0.05, t + 0.12)]
             B.add("steel", K.prism(poly, origin=(0, side * p[0], p[1]), u=(1, 0, 0), v=(0, ny, nz), depth=0.26, chamfer=0.01))
     # the steel tie at the springing, the dawnglass infill of the head and its steel dial rose
     zt0 = SPRING + 0.62
@@ -548,7 +556,7 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
     body = objs["body"]
     K.drop_hidden_bottoms(body)
     others = [o for n, o in objs.items() if n != "body"]
-    buried = K.drop_buried_faces(body, others)
+    buried = K.drop_buried_faces(body, others, keep_mats=("raw",))
     os.makedirs(SCRATCH, exist_ok=True)
     K.bake_body(body, others, SCRATCH, name, size=512 if fast else size, samples=6 if fast else 24,
                 ao_samples=16 if fast else 96, ao_distance=ao_d)

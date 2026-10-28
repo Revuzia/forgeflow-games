@@ -4,6 +4,14 @@ What `content/items.json` and `content/setup.json` define, and why. Both are gen
 
 Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They are references, not copies; every name, effect and number here is our own choice.
 
+> **Re-key, 2026-10-28 (W4, final parity review originality F4). Pending owner sign-off.** The systems layer moved to VALE's own stopped-dial rules, so no battle spell, starter, potion, boots, ward, camp buff or BRIDGE start sits within 10 % of its reference-genre counterpart and no rule maps one to one. The full before/after table with the gauge numbers is `_design/reviews/fixwaves/W4_systems_rekey.md`; `_harness/probe_sim_rekey.ts` measures it (53 headline numbers, none within 10 %) and exercises every new rule in the sim. Headlines:
+> - **Battle spells** are light-and-shadow rules. Glint Step is a 5 m wall-stopped dash that leaves your shadow as a slowing patch (no blink). Saplight is a 3 m pool of sap-light that heals 4 % max health a second to whoever stands in it. Hourstrike hits harder the fuller the monster is (250 + 15/level + 12 % of current health; 3 charges, 70 s). Glass Pane's shield sets with a 3 m slow. **Defaults: Glint Step + Glass Pane** (not blink + heal).
+> - **Starters grow** (`ItemDef.foldsInto`): the first Gloam core you buy while carrying a starter folds it in at its full price. Starters are 300–360 Gleam.
+> - **The dial-slot rule** (`ItemDef.dial`) replaces the one-Noonlit cap: each Noonlit item stands at an hour (Seatstone 12, Sunstring 2, Hourcleaver 4, Noonglass 8, Shelter Lamp 10), and two you carry must stand 4 or more hours apart. One to three fit together; same-family pairs (Sunstring + Hourcleaver, Noonglass + Shelter Lamp) never do.
+> - **Potion, ward, boots** re-numbered: Sap Flask 40 Gleam, 150 over 5 s, holds 3; Spare Lamp 60, 3:20, 2 lit, 7.5 m sight, holds 3; Road Sandals 250 (+0.21 m/s), upgrades 800–900 (+0.36 m/s).
+> - **BRIDGE** starts at level 2 with 1,050 Gleam and shops at your standing Needles (`shopAccess: needles`); see `modes_economy.md`.
+> - The tables below were updated in place; numbers struck from older sections are listed in the re-key table.
+
 ---
 
 ## 1. Shape of the catalog
@@ -17,12 +25,14 @@ Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They
 | Slate (1) | `basic`, no components | 8 | 280–420 | **one stat** each; the parts everything is built from |
 | Verdigris (2) | `basic` with components | 7 | 900–1,050 | **two stats**, built from two Slate parts; FRAY's finished pieces |
 | Gloam (3) | `core` | 8 | 2,400–2,900 | stats + **one distinct triggered passive**; unique per fighter |
-| Noonlit (4) | `apex` | 5 | 3,000–3,500 | stats + a **strong passive or active**; **one Noonlit per fighter** |
+| Noonlit (4) | `apex` | 5 | 3,000–3,500 | stats + a **strong passive or active**; **stands at an hour on the dial: two carried Noonlit items must be 4+ hours apart** (W4 re-key) |
 | boots | `boots` | 1 + 3 | 300 / 1,050–1,100 | a Slate base pair and three Verdigris upgrades |
 
 **Frame rule for the UI** (the schema has no frame field, so it is derived): `core` → Gloam, `apex` → Noonlit, `basic` or `boots` **with** components → Verdigris, everything else → Slate. Frame colours and tick counts come from `tokens.json` (`slate`, `verdigris`, `gloam`, `noonlit` + glow).
 
-**Uniqueness.** Starters share `starter`, boots share `boots`, every Noonlit shares `noonlit` (the noon is one hour: you carry one), and each Gloam item is its own group, so its passive never doubles. Slate and Verdigris pieces stack freely.
+**Uniqueness.** Starters share `starter`, boots share `boots`, and each Gloam item is its own group, so its passive never doubles. Slate and Verdigris pieces stack freely. **Noonlit items follow the dial-slot rule instead (W4 re-key, 2026-10-28):** each stands at an hour (`dial.hour`), and two carried Noonlit items must stand at least `dial.apart` = 4 hours apart around the dial (the shop refuses a clash as `unique`). The hours: Seatstone 12, Sunstring 2, Hourcleaver 4, Noonglass 8, Shelter Lamp 10, so the two attack pieces clash, the two power pieces clash, and Seatstone clashes with Sunstring and Shelter Lamp. A fighter carries one, two or (Seatstone + Hourcleaver + Noonglass) three.
+
+**Starters grow (W4 re-key).** Every starter carries `foldsInto: ["core"]`: the first Gloam core bought while a starter is carried consumes it at its full price, exactly like a component, so a road start is never sold for a loss but grows into the role's first core.
 
 **Why Noonlit does not consume a Gloam.** A Noonlit is built from Verdigris and Slate parts with a large fee, the same depth as a Gloam. If it ate a Gloam, a class would need two or three more Gloam items to fill six slots. Building beside the Gloam line gives every class five distinct finished pieces from 13 (§6) and lets a player rush their Noonlit.
 
@@ -52,7 +62,7 @@ Damage of type `true` is described as "damage that ignores armor and resist". **
 | 1 % heal & shield power | 50 | 1 % omnivamp | 45 | 1 % tenacity | 15 |
 | 1 m/s move speed | 1,200 | 1 Light regen/s | 350 | 1 health regen/s | 120 |
 
-Efficiency bands, checked by the probe: Slate 95–105 % (they are 96–100 %), Verdigris 88–105 % (94–101 %), Gloam 75–102 % (85–97 %; the passive pays the rest), Noonlit 80–102 % (90–101 %), boots upgrades 90–110 %. Lane starters are 108–116 % because they never build into anything. The Grove Sickle is all passive.
+Efficiency bands, checked by the probe: Slate 95–105 % (they are 96–100 %), Verdigris 88–105 % (94–101 %), Gloam 75–102 % (85–97 %; the passive pays the rest), Noonlit 80–102 % (90–101 %), boots upgrades 90–110 %. Lane starters are 107–138 % (W4 re-key); they are cheap and fold into the first Gloam core at full price. The Grove Sickle is all passive.
 
 **No `res` stat and no `resource` restore on items.** The sim adds `res` to the max of *any* resource model. +300 would quadruple a Heat bar (100 max) and triple a Tally bar. A `resource` restore adds Heat to a Heat fighter. Items therefore use `resRegen` only: it refills a Light pool, does nothing for Heat and is negligible for Tally (it decays). See §10.
 
@@ -60,12 +70,12 @@ Efficiency bands, checked by the probe: Slate 95–105 % (they are 96–100 %), 
 
 | id | Name | Frame | Gleam | Stats | Pools |
 |---|---|---|---|---|---|
-| `notched_blade` | Notched Blade | starter · Slate | 430 | +8 attack, +80 health | RIFT |
-| `reading_lens` | Reading Lens | starter · Slate | 430 | +12 power, +60 health, +0.25 Light regen/s | RIFT |
-| `ironstone_guard` | Ironstone Guard | starter · Slate | 430 | +120 health, +1.2 health regen/s | RIFT |
-| `grove_sickle` | Grove Sickle | starter · Slate | 350 | +0.8 health regen/s | RIFT |
-| `sap_flask` | Sap Flask | consumable | 50 | — (5 per slot) | RIFT · BRIDGE |
-| `spare_lamp` | Spare Lamp | consumable | 75 | — (2 per slot) | RIFT · BRIDGE |
+| `notched_blade` | Notched Blade | starter · Slate | 360 | +11 attack; folds into the first Gloam core | RIFT |
+| `reading_lens` | Reading Lens | starter · Slate | 350 | +12 power, +30 health, +0.4 Light regen/s; folds into the first Gloam core | RIFT |
+| `ironstone_guard` | Ironstone Guard | starter · Slate | 360 | +150 health, +0.8 health regen/s; folds into the first Gloam core | RIFT |
+| `grove_sickle` | Grove Sickle | starter · Slate | 300 | +0.8 health regen/s; folds into the first Gloam core | RIFT |
+| `sap_flask` | Sap Flask | consumable | 40 | — (3 per slot) | RIFT · BRIDGE |
+| `spare_lamp` | Spare Lamp | consumable | 60 | — (3 per slot) | RIFT · BRIDGE |
 | `noon_tonic` | Noon Tonic | consumable | 60 | — (3 per slot) | FRAY |
 | `chalk_knife` | Chalk Knife | Slate | 350 | +10 attack | RIFT · BRIDGE |
 | `glass_lens` | Glass Lens | Slate | 420 | +20 power | RIFT · BRIDGE |
@@ -95,10 +105,10 @@ Efficiency bands, checked by the probe: Slate 95–105 % (they are 96–100 %), 
 | `seatstone` | Seatstone | Noonlit | 3,300 | +600 health, +35 armor, +35 resist, +10 ability haste | RIFT · BRIDGE |
 | `hourcleaver` | Hourcleaver | Noonlit | 3,400 | +50 attack, +250 health, +15 ability haste, +5 % omnivamp | RIFT · BRIDGE |
 | `shelter_lamp` | Shelter Lamp | Noonlit | 3,000 | +40 power, +15 % heal & shield power, +20 ability haste, +200 health, +20 resist | RIFT · BRIDGE |
-| `road_sandals` | Road Sandals | boots · Slate | 300 | +0.25 m/s | all three |
-| `dust_runners` | Dust Runners | boots · Verdigris | 1,050 | +0.42 m/s, +25 % attack speed | all three |
-| `felt_treads` | Felt Treads | boots · Verdigris | 1,100 | +0.42 m/s, +12 armor, +12 resist, +15 % tenacity | all three |
-| `chalk_slippers` | Chalk Slippers | boots · Verdigris | 1,050 | +0.42 m/s, +10 ability haste, +8 magic pen | all three |
+| `road_sandals` | Road Sandals | boots · Slate | 250 | +0.21 m/s | all three |
+| `dust_runners` | Dust Runners | boots · Verdigris | 900 | +0.36 m/s, +19 % attack speed | all three |
+| `felt_treads` | Felt Treads | boots · Verdigris | 900 | +0.36 m/s, +10 armor, +10 resist, +10 % tenacity | all three |
+| `chalk_slippers` | Chalk Slippers | boots · Verdigris | 800 | +0.36 m/s, +14 ability haste | all three |
 
 Names follow WORLD §4.1: plain English compounds of the Vale's materials and objects (chalk, ochre, felt, linen, lamp, glass, bell, dial, shade, noon), with at most two roots, no possessives and no epithets. The Slate parts are the two sides' materials (Aubade chalk, linen and glass; Serenade ochre, felt and ironstone), so a build reads as gathering from both rims. Every name was grepped against `protected_names.json` and run through `names_check.ts`. Rejected on the way: *Ironstone Buckler* ("Buckler" is a shipped item), *Momentum* (a shipped ability), *Rally Bell* ("Rally" is a shipped spell), and any text containing "true damage".
 
@@ -212,7 +222,7 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
     - Ochre Brick 400
   - Lamp Oil 280
 
-**Boots** (one pair at a time): Road Sandals 300, then one of these:
+**Boots** (one pair at a time; W4 re-key prices): Road Sandals 250, then one of these (Dust Runners 900, Felt Treads 900, Chalk Slippers 800; the fees below are the pre-re-key ones):
 
 - **Dust Runners** 1,050: Road Sandals + fee 750
 - **Felt Treads** 1,100: Road Sandals + fee 800
@@ -224,7 +234,7 @@ Every passive and active uses only `PassiveDef` triggers and `AbilityDef` effect
 
 | item | trigger | effect |
 |---|---|---|
-| Notched Blade · *Keep Fed* | `kill` of a Wick or monster | heal 6 |
+| Notched Blade · *Keep Fed* | `kill` of a Wick or monster | heal 8 |
 | Reading Lens · *Steady Glow* | `abilityHit` on a fighter, 6 s cooldown | heal 10 + 1/level |
 | Ironstone Guard · *Brace* | `damageTaken` from a fighter, 10 s cooldown | shield 20 + 4/level for 2 s |
 | Grove Sickle · *Grove Work* | `attackHit` on a monster | +20 + 3/level magic damage, heal 6 + 1/level |
@@ -241,8 +251,8 @@ Every passive and active uses only `PassiveDef` triggers and `AbilityDef` effect
 | Seatstone · **Hold Ground** (active, 60 s) | cast, 0.2 s wind-up | shield 12 % max health for 3 s; after 0.4 s (telegraphed to everyone) enemies within 4.5 m take 50 + 4 % bonus health magic damage, slowed 40 % fading over 2 s |
 | Hourcleaver · *Last Hour* | `lowHp` below 35 %, 60 s cooldown | shield 100 + 35 % bonus health and +30 % tenacity for 3 s |
 | Shelter Lamp · **Shelter** (active, 75 s) | cast, 0.15 s wind-up | you and allied fighters within 7 m: shield 60 + 10/level + 25 % power for 2.5 s |
-| Sap Flask (active) | drink | heal 12 at once and every second after: 120 over 9 s |
-| Spare Lamp (active) | point within 7 m | a `hooded_lamp` ward for 2:30 (9 m sight, hidden); 3 per owner, a 4th puts out the oldest (`summon.maxAlive`) |
+| Sap Flask (active) | drink | heal 25 at once and every second after: 150 over 5 s |
+| Spare Lamp (active) | point within 7 m | a `hooded_lamp` ward for 3:20 (7.5 m sight, hidden); 2 per owner, a 3rd puts out the oldest (`summon.maxAlive`) |
 | Noon Tonic (active, 6 s) | drink | heal 70 + 6 % max health at once and +25 % move speed for 2 s |
 
 Why these mechanics:
@@ -264,7 +274,7 @@ There is no crit trigger condition, so the crit item rewards attack cadence. The
 | `bridge` | 34 | no starters and no jungle item, no FRAY tonic |
 | `fray` | 12 | the 7 Verdigris pieces, the 4 boots and the Noon Tonic |
 
-**BRIDGE.** Fighters start at level 3 with 1,300 Gleam and can't recall. A lane starter is meant to be sold on the first trip home, so it only makes sense with recall, and the mode has no jungle. A BRIDGE opening is boots plus a Verdigris piece plus a flask (1,250–1,300). Shopping is at base or while dead, so the Sap Flask stays useful.
+**BRIDGE.** (W4 re-key) Fighters start at level 2 with 1,050 Gleam and can't recall. The mode has no starters and no jungle. A BRIDGE opening is a Verdigris piece plus flasks (980–1,040); boots come later. Shopping is at base, while dead, or within 6 m of one of your own standing Needles (`shopAccess: needles`), so the shop retreats toward home as your Needles fall.
 
 **FRAY is the lighter loadout.** It has 12 items, no wards (nobody has a side to light the map for), no starters, no Gloam or Noonlit, and every recipe is one step deep. The cart sells **finished pieces only**: Verdigris pieces and boots, all under 1,100 Gleam.
 
@@ -324,27 +334,27 @@ Spells have no cost and one rank. They scale with your level through the `level`
 
 | id | Name | job | effect | cooldown | pools |
 |---|---|---|---|---|---|
-| `glint_step` | Glint Step | escape | blink up to 4.5 m toward the point | 270 s | all |
-| `saplight` | Saplight | sustain | heal 80 + 16/level; allied fighters within 6 m heal 40 + 8/level | 220 s | all |
-| `hairline` | Hairline | offense | an enemy fighter within 6 m takes 20 + 8/level damage that ignores armor and resist, plus 20 % armor and resist shred and 40 % weaker healing for 4 s | 180 s | all |
-| `hourstrike` | Hourstrike | jungle | a monster or Wick (never a fighter) within 5 m takes 450 + 30/level damage that ignores armor and resist; you heal 60 + 6/level | 2 charges, one per 90 s (15 s between uses) | RIFT |
-| `running_light` | Running Light | haste | +45 % move speed fading over 6 s | 200 s | all |
-| `shake_loose` | Shake Loose | cleanse | breaks roots; immune to stuns, roots and knockbacks for 0.5 s; +50 % tenacity for 3 s; +25 % move speed for 1.5 s | 210 s | RIFT · BRIDGE |
-| `glass_pane` | Glass Pane | shield | shield 90 + 20/level for 2.5 s | 180 s | all |
+| `glint_step` | Glint Step | mobility | **dash** up to 5 m toward the point (walls stop it); your shadow stays where you started for 2.5 s and slows enemy fighters who step into it by 30 % for 1 s | 180 s | all |
+| `saplight` | Saplight | sustain | a 3 m pool of sap-light at your feet for 4 s: you and allied fighters standing in it heal 4 % of max health each second | 200 s | all |
+| `hairline` | Hairline | offense | an enemy fighter within 6 m takes 20 + 8/level damage that ignores armor and resist, plus 20 % armor and resist shred and 30 % weaker healing for 4 s | 140 s | all |
+| `hourstrike` | Hourstrike | jungle | a monster or Wick (never a fighter) within 5 m takes 250 + 15/level **+ 12 % of its current health** damage that ignores armor and resist (the fuller it is, the harder it lands: an opener, not a finisher); you heal 4 % of max health | 3 charges, one per 70 s (10 s between uses) | RIFT |
+| `running_light` | Running Light | haste | +60 % move speed fading over 4 s | 150 s | all |
+| `shake_loose` | Shake Loose | cleanse | breaks roots; immune to stuns, roots and knockbacks for 1 s; +30 % move speed for 2 s (no tenacity) | 150 s | RIFT · BRIDGE |
+| `glass_pane` | Glass Pane | shield | shield 50 + 12/level for 4 s; as it sets, enemy fighters within 3 m are slowed 25 % for 1.5 s | 130 s | all |
 | `calling_bell` | Calling Bell | team / vision | you and allied fighters within 7 m +20 % move speed for 3 s; enemy fighters within 9 m revealed for 4 s | 150 s | RIFT · BRIDGE |
 
 There are 8 spells in RIFT, 7 in BRIDGE and 5 in FRAY (Glint Step, Saplight, Hairline, Running Light, Glass Pane). FRAY drops the team spell, which has no teammates there, the jungle spell, and the cleanse, to keep its loadout short.
 
-**Defaults:** Glint Step and Saplight, which are legal in every pool.
+**Defaults:** Glint Step and Glass Pane (W4 re-key: VALE's own pair, a shadow-leaving dash and a setting pane; never the genre's blink + heal), both legal in every pool.
 
 **Hourstrike is recommended for the Grovehunter, not required.**
 
-- *Why not required.* The Grove Sickle starter makes clearing camps efficient (§4), so a jungler without Hourstrike can still farm. Hourstrike secures camps and the two objectives: its strike is 630 at level 6 (15 % of Sunsplinter's health) and 930 at level 16 (7 % of Longshade's).
+- *Why not required.* The Grove Sickle starter makes clearing camps efficient (§4), so a jungler without Hourstrike can still farm. Hourstrike (W4 re-key) opens camps and objectives rather than securing them: on a full monster it lands 250 + 15/level + 12 % of the monster's health, on a nearly dead one little more than the flat part, so last-second steals lean on the team, not the spell.
 - *Why that is enough.* The reference genre forces its jungle spell *(r02 §1, "jungle gating")*. We keep the choice open because the role assignment already keeps laners out of the Dialwood.
 - *For SESSION.* Suggest Hourstrike + Glint Step for a Grovehunter's first loadout.
 - *For UI.* Show a soft "No Hourstrike" note in the draft, not a block.
 
-**The cleanse.** The sim refuses every cast, spells included, while a fighter is stunned, airborne, asleep, taunted or feared. Shake Loose therefore can't break those controls, and it says so in its text. It breaks roots through the `unstoppable` status, ignores new hard control for 0.5 s, and its tenacity shortens the rest. A cleanse for hard control needs a SIM change (§10).
+**The cleanse.** The sim refuses every cast, spells included, while a fighter is stunned, airborne, asleep, taunted or feared. Shake Loose therefore can't break those controls, and it says so in its text. It breaks roots through the `unstoppable` status and ignores new hard control for 1 s (W4 re-key: no tenacity tail). A cleanse for hard control needs a SIM change (§10).
 
 ### 7.2 Boons (`boonSlots: 2`) and paths
 
@@ -452,7 +462,7 @@ The probe keeps its own stub maps, so the item checks don't depend on another la
   - Use the stat words in §2.
   - Loadout screen:
     - Pick a path, then 2 of its 3 boons.
-    - Show "You can carry one Noonlit item" on Noonlit tooltips. The item `desc` already says it.
+    - Show each Noonlit item's dial hour on its frame and the 4-hour rule on its tooltip (the item `desc` already says it; W4 re-key).
     - Grovehunter: a soft note when Hourstrike is missing.
   - FRAY's cart lists 12 tiles.
 - **SESSION**

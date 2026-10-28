@@ -120,6 +120,8 @@ export interface DraftSeat {
   player: PlayerId; team: number; name: string; isBot: boolean; isYou: boolean;
   role?: string; hover?: string; locked?: string; skin?: string; loadout?: LoadoutChoice;
   rerolls?: number;
+  /** CHANGED(W4), additive: BRIDGE Lot swaps this seat has left (absent = no limit) */
+  swaps?: number;
 }
 export interface DraftState {
   queue: string; mode: string;

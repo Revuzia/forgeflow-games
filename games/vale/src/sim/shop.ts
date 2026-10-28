@@ -5,13 +5,17 @@
 //   base_or_dead  inside the base shop circle, or dead
 //   anywhere      always (alive or dead)
 //   shops         alive and inside any MapDef.shops circle (or the team's base shop, if it has one)
+//   needles       inside the base shop circle, or dead, or alive within rules.shopAt.radius of one of the team's own
+//                 standing structures whose unit is in rules.shopAt.units (W4 re-key: BRIDGE shops at its Needles)
 // Pool: an item is sold when ItemDef.pools is empty or contains rules.itemPool.
 //
 // Buying: price = item.cost − value of owned components it consumes. Components are matched
 // recursively: an owned component is consumed at its full cost; a missing one is looked for one
 // level down (its own components), and so on. The new item takes the first consumed slot, else
 // the first empty one (6 slots). uniqueGroup: no two owned items of a group (components being
-// consumed by this purchase do not count). Consumables stack into a slot holding the same item
+// consumed by this purchase do not count). Dial-slot rule (ItemDef.dial, W4 re-key): two owned items that
+// stand on the dial must sit at least `apart` hours apart (refusal 'unique'). A carried item whose `foldsInto`
+// names the bought item's tier is consumed into it at its full cost (a starter grows into the first core). Consumables stack into a slot holding the same item
 // while charges ≤ consumable.charges × consumable.maxStack.
 // Selling refunds floor(cost × sellRatio) — for consumables × charges / consumable.charges.
 // Refunds are not "earned" gold (goldEarned is unchanged) and emit 'sell' + 'gold' (reason 'sell').
@@ -70,7 +74,21 @@ export function canShopNow(w: World, p: Player): boolean {
     case 'base': return e.alive && inBase;
     case 'base_or_dead': return !e.alive || inBase;
     case 'shops': return e.alive && (inBase || w.mapDef.shops.some((s) => inCircle(e.x, e.y, s)));
+    case 'needles': return !e.alive || inBase || nearOwnShopStructure(w, e);
   }
+}
+
+/** shopAccess 'needles': alive within rules.shopAt.radius of one of the team's own standing listed structures */
+function nearOwnShopStructure(w: World, e: Entity): boolean {
+  const at = w.rules.shopAt;
+  if (!at) return false;
+  const r2 = at.radius * at.radius;
+  for (const s of w.entities) {
+    if (s.kind !== 'structure' || !s.alive || s.team !== e.team || !s.def || !at.units.includes(s.def)) continue;
+    const dx = s.x - e.x, dy = s.y - e.y;
+    if (dx * dx + dy * dy <= r2) return true;
+  }
+  return false;
 }
 
 export function itemInPool(w: World, item: ItemDefT): boolean {
@@ -92,6 +110,25 @@ function claimComponents(w: World, item: ItemDefT, owned: readonly (string | nul
   return value;
 }
 
+/** hours between two dial positions around the 12-hour dial (0-6) */
+function dialGap(a: number, b: number): number { const d = Math.abs(a - b) % 12; return Math.min(d, 12 - d); }
+/** the dial-slot rule (ItemDef.dial): may these two items be owned together? */
+export function dialClash(a: ItemDefT | undefined, b: ItemDefT | undefined): boolean {
+  if (!a?.dial || !b?.dial) return false;
+  return dialGap(a.dial.hour, b.dial.hour) < Math.max(a.dial.apart, b.dial.apart);
+}
+
+/** a starter folds into the first item of a `foldsInto` tier bought while it is carried (full cost, like a component) */
+function claimFold(w: World, item: ItemDefT, owned: readonly (string | null)[], claimed: boolean[]): number {
+  for (let i = 0; i < owned.length; i++) {
+    const id = owned[i];
+    if (!id || claimed[i]) continue;
+    const it = w.idx.items.get(id);
+    if (it?.foldsInto && (it.foldsInto as readonly string[]).includes(item.tier)) { claimed[i] = true; return it.cost; }
+  }
+  return 0;
+}
+
 /** what buying `itemId` would cost and do; never changes state */
 export function quoteBuy(w: World, p: Player, itemId: string, checkAccess = true): BuyQuote {
   const no = (reason: ShopDenied, price = 0): BuyQuote => ({ ok: false, reason, price, consumes: [], slot: -1, stack: false });
@@ -111,7 +148,7 @@ export function quoteBuy(w: World, p: Player, itemId: string, checkAccess = true
     }
   }
   const claimed = new Array<boolean>(ITEM_SLOTS).fill(false);
-  const discount = claimComponents(w, def, items, claimed, 0);
+  const discount = claimComponents(w, def, items, claimed, 0) + claimFold(w, def, items, claimed);
   const price = Math.max(0, def.cost - discount);
   const consumes: number[] = [];
   for (let i = 0; i < ITEM_SLOTS; i++) if (claimed[i]) consumes.push(i);
@@ -119,11 +156,13 @@ export function quoteBuy(w: World, p: Player, itemId: string, checkAccess = true
   if (slot < 0) for (let i = 0; i < ITEM_SLOTS; i++) if (!items[i]) { slot = i; break; }
   if (checkAccess && !canShopNow(w, p)) return no('access', price);
   if (slot < 0) return no('slots', price);
-  if (def.uniqueGroup) {
+  if (def.uniqueGroup || def.dial) {
     for (let i = 0; i < ITEM_SLOTS; i++) {
       const id = items[i];
       if (!id || claimed[i]) continue;
-      if (w.idx.items.get(id)?.uniqueGroup === def.uniqueGroup) return no('unique', price);
+      const it = w.idx.items.get(id);
+      if (def.uniqueGroup && it?.uniqueGroup === def.uniqueGroup) return no('unique', price);
+      if (dialClash(def, it)) return no('unique', price);
     }
   }
   if (p.gold + 1e-9 < price) return no('gold', price);

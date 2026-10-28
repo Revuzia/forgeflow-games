@@ -24,6 +24,9 @@
   --col: calc((100vw - 2 * var(--margin) - 11 * var(--gutter)) / 12);
   --zone: min(calc(100vw - 2 * var(--margin)), max(calc(6 * var(--col) + 5 * var(--gutter)), calc(852px * var(--k))));
   --bar-h: calc(72px * var(--k));
+  /* the screens' bottom edge: 4 units, never closer than 32 px, so a footer line clears the portal control bar
+     (public/game_controls.js, fixed bottom-left, 8 + 34 px) at 1280 x 720 (client F9) */
+  --zone-b: max(calc(4 * var(--u)), 32px);
   --radius: 2px;
   --plate-bg: rgba(23, 27, 34, 0.94);
   --plate-bg-raised: rgba(30, 35, 44, 0.97);
@@ -125,10 +128,10 @@ img, svg { display: block; }
     linear-gradient(180deg, rgba(11, 13, 17, 0.35) 0%, rgba(11, 13, 17, 0) 22%, rgba(11, 13, 17, 0) 80%, rgba(11, 13, 17, 0.45) 100%); }
 .scr { position: absolute; inset: 0; }
 .scr.is-leaving { pointer-events: none; }
-.scr__zone { position: absolute; left: var(--margin); top: calc(var(--bar-h) + 2 * var(--u)); bottom: calc(4 * var(--u)); width: var(--zone); display: flex; flex-direction: column; min-height: 0; }
+.scr__zone { position: absolute; left: var(--margin); top: calc(var(--bar-h) + 2 * var(--u)); bottom: var(--zone-b); width: var(--zone); display: flex; flex-direction: column; min-height: 0; }
 .scr--wide .scr__zone { width: calc(100vw - 2 * var(--margin)); }
 .scr--flow .scr__zone { top: calc(3 * var(--u)); }
-.scr__stage { position: absolute; top: calc(var(--bar-h) + 2 * var(--u)); bottom: calc(4 * var(--u)); right: var(--margin); left: calc(var(--margin) + var(--zone) + var(--gutter)); display: flex; flex-direction: column; min-width: 0; }
+.scr__stage { position: absolute; top: calc(var(--bar-h) + 2 * var(--u)); bottom: var(--zone-b); right: var(--margin); left: calc(var(--margin) + var(--zone) + var(--gutter)); display: flex; flex-direction: column; min-width: 0; }
 .scr__head { display: flex; align-items: flex-end; gap: calc(2 * var(--u)); padding-bottom: calc(2 * var(--u)); flex-wrap: wrap; }
 .scr__title { color: var(--text-1); }
 .scr__kicker { color: var(--text-2); margin-bottom: calc(0.5 * var(--u)); }

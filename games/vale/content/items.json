@@ -1,22 +1,21 @@
 {
-  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4, one per fighter: uniqueGroup noonlit); boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts.",
+  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4; the dial-slot rule: each stands at an hour, dial.hour, and two carried Noonlit items must stand dial.apart = 4 or more hours apart, so a fighter carries one to three; W4 re-key 2026-10-28). Starters carry foldsInto [core]: the first Gloam core bought while one is carried folds it in at full price; boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts.",
   "items": [
     {
       "id": "notched_blade",
       "name": "Notched Blade",
-      "desc": "A road start for attack fighters. Each Wick or monster you finish heals you for 6 health.",
+      "desc": "A road start for attack fighters. Each Wick or monster you finish heals you for 8 health. Folds into your first Gloam core: carry it when you buy one and its full price counts toward it.",
       "icon": "assets/ui/icons/items/notched_blade.webp",
       "tier": "starter",
-      "cost": 430,
+      "cost": 360,
       "stats": {
-        "ad": 8,
-        "hp": 80
+        "ad": 11
       },
       "passives": [
         {
           "id": "notched_blade_keep_fed",
           "name": "Keep Fed",
-          "desc": "Each Wick or monster you finish heals you for 6 health.",
+          "desc": "Each Wick or monster you finish heals you for 8 health.",
           "icon": "assets/ui/icons/items/notched_blade.webp",
           "triggers": [
             {
@@ -31,7 +30,7 @@
               "effects": [
                 {
                   "op": "heal",
-                  "amount": 6,
+                  "amount": 8,
                   "to": "self"
                 }
               ]
@@ -46,19 +45,22 @@
       ],
       "pools": [
         "rift"
+      ],
+      "foldsInto": [
+        "core"
       ]
     },
     {
       "id": "reading_lens",
       "name": "Reading Lens",
-      "desc": "A road start for casters. When one of your abilities hits an enemy fighter, heal 10 + 1 per level. Once every 6 s.",
+      "desc": "A road start for casters. When one of your abilities hits an enemy fighter, heal 10 + 1 per level. Once every 6 s. Folds into your first Gloam core: carry it when you buy one and its full price counts toward it.",
       "icon": "assets/ui/icons/items/reading_lens.webp",
       "tier": "starter",
-      "cost": 430,
+      "cost": 350,
       "stats": {
         "ap": 12,
-        "hp": 60,
-        "resRegen": 0.25
+        "hp": 30,
+        "resRegen": 0.4
       },
       "passives": [
         {
@@ -98,18 +100,21 @@
       ],
       "pools": [
         "rift"
+      ],
+      "foldsInto": [
+        "core"
       ]
     },
     {
       "id": "ironstone_guard",
       "name": "Ironstone Guard",
-      "desc": "A road start for front lines and Tenders. When an enemy fighter damages you, gain a shield of 20 + 4 per level for 2 s. Once every 10 s.",
+      "desc": "A road start for front lines and Tenders. When an enemy fighter damages you, gain a shield of 20 + 4 per level for 2 s. Once every 10 s. Folds into your first Gloam core: carry it when you buy one and its full price counts toward it.",
       "icon": "assets/ui/icons/items/ironstone_guard.webp",
       "tier": "starter",
-      "cost": 430,
+      "cost": 360,
       "stats": {
-        "hp": 120,
-        "hpRegen": 1.2
+        "hp": 150,
+        "hpRegen": 0.8
       },
       "passives": [
         {
@@ -154,15 +159,18 @@
       ],
       "pools": [
         "rift"
+      ],
+      "foldsInto": [
+        "core"
       ]
     },
     {
       "id": "grove_sickle",
       "name": "Grove Sickle",
-      "desc": "For the jungle. Basic attacks on monsters deal 20 + 3 per level bonus magic damage and heal you for 6 + 1 per level.",
+      "desc": "For the Dialwood. Basic attacks on monsters deal 20 + 3 per level bonus magic damage and heal you for 6 + 1 per level. Folds into your first Gloam core: carry it when you buy one and its full price counts toward it.",
       "icon": "assets/ui/icons/items/grove_sickle.webp",
       "tier": "starter",
-      "cost": 350,
+      "cost": 300,
       "stats": {
         "hpRegen": 0.8
       },
@@ -215,20 +223,23 @@
       ],
       "pools": [
         "rift"
+      ],
+      "foldsInto": [
+        "core"
       ]
     },
     {
       "id": "sap_flask",
       "name": "Sap Flask",
-      "desc": "Drink to heal 12 health at once and every second after, 120 in all over 9 s. Holds up to 5.",
+      "desc": "Drink to heal 25 health at once and every second after, 150 in all over 5 s. Holds up to 3.",
       "icon": "assets/ui/icons/items/sap_flask.webp",
       "tier": "consumable",
-      "cost": 50,
+      "cost": 40,
       "stats": {},
       "active": {
         "id": "sap_flask_drink",
         "name": "Drink",
-        "desc": "Heal 12 health at once and every second after, 120 in all over 9 s.",
+        "desc": "Heal 25 health at once and every second after, 150 in all over 5 s.",
         "icon": "assets/ui/icons/items/sap_flask.webp",
         "maxRank": 1,
         "cooldown": 1,
@@ -241,12 +252,12 @@
         "effects": [
           {
             "op": "repeat",
-            "count": 10,
+            "count": 6,
             "interval": 1,
             "effects": [
               {
                 "op": "heal",
-                "amount": 12,
+                "amount": 25,
                 "to": "self"
               }
             ]
@@ -265,7 +276,7 @@
       },
       "consumable": {
         "charges": 1,
-        "maxStack": 5
+        "maxStack": 3
       },
       "tags": [
         "sustain"
@@ -279,15 +290,15 @@
     {
       "id": "spare_lamp",
       "name": "Spare Lamp",
-      "desc": "Set a Hooded Lamp up to 7 m away. Enemies cannot see it, and it shows 9 m around it for 2:30. You keep 3 lit; a 4th puts out your oldest. Holds up to 2.",
+      "desc": "Set a Hooded Lamp up to 7 m away. Enemies cannot see it, and it shows 7.5 m around it for 3:20. You keep 2 lit; a 3rd puts out your oldest. Holds up to 3.",
       "icon": "assets/ui/icons/items/spare_lamp.webp",
       "tier": "consumable",
-      "cost": 75,
+      "cost": 60,
       "stats": {},
       "active": {
         "id": "spare_lamp_set",
         "name": "Set a Lamp",
-        "desc": "Set a Hooded Lamp up to 7 m away that shows 9 m around it for 2:30.",
+        "desc": "Set a Hooded Lamp up to 7 m away that shows 7.5 m around it for 3:20.",
         "icon": "assets/ui/icons/items/spare_lamp.webp",
         "maxRank": 1,
         "cooldown": 1,
@@ -307,9 +318,9 @@
             "op": "summon",
             "unit": "hooded_lamp",
             "count": 1,
-            "duration": 150,
+            "duration": 200,
             "at": "point",
-            "maxAlive": 3
+            "maxAlive": 2
           }
         ],
         "ai": {
@@ -324,7 +335,7 @@
       },
       "consumable": {
         "charges": 1,
-        "maxStack": 2
+        "maxStack": 3
       },
       "tags": [
         "vision",
@@ -1302,7 +1313,7 @@
     {
       "id": "sunstring",
       "name": "Sunstring",
-      "desc": "Basic attacks deal 15 + 2.5% of the target's current health as bonus magic damage (60% against Wicks and monsters). You can carry one Noonlit item.",
+      "desc": "Basic attacks deal 15 + 2.5% of the target's current health as bonus magic damage (60% against Wicks and monsters). Stands at two on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/sunstring.webp",
       "tier": "apex",
       "cost": 3400,
@@ -1353,7 +1364,6 @@
           }
         }
       ],
-      "uniqueGroup": "noonlit",
       "tags": [
         "attack",
         "crit",
@@ -1363,12 +1373,16 @@
       "pools": [
         "rift",
         "bridge"
-      ]
+      ],
+      "dial": {
+        "hour": 2,
+        "apart": 4
+      }
     },
     {
       "id": "noonglass",
       "name": "Noonglass",
-      "desc": "Ability hits mark enemy fighters for 6 s. The third mark bursts for 50 + 20% power + 4% of their max health as magic damage. You can carry one Noonlit item.",
+      "desc": "Ability hits mark enemy fighters for 6 s. The third mark bursts for 50 + 20% power + 4% of their max health as magic damage. Stands at eight on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/noonglass.webp",
       "tier": "apex",
       "cost": 3500,
@@ -1443,7 +1457,6 @@
           }
         }
       ],
-      "uniqueGroup": "noonlit",
       "tags": [
         "magic",
         "haste"
@@ -1451,12 +1464,16 @@
       "pools": [
         "rift",
         "bridge"
-      ]
+      ],
+      "dial": {
+        "hour": 8,
+        "apart": 4
+      }
     },
     {
       "id": "seatstone",
       "name": "Seatstone",
-      "desc": "Active: gain a shield of 12% of your max health for 3 s. After 0.4 s the ground within 4.5 m cracks: enemies take 50 + 4% of your bonus health as magic damage and are slowed 40%, fading over 2 s. 60 s cooldown. You can carry one Noonlit item.",
+      "desc": "Active: gain a shield of 12% of your max health for 3 s. After 0.4 s the ground within 4.5 m cracks: enemies take 50 + 4% of your bonus health as magic damage and are slowed 40%, fading over 2 s. 60 s cooldown. Stands at noon on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/seatstone.webp",
       "tier": "apex",
       "cost": 3300,
@@ -1552,7 +1569,6 @@
           "sfx": "c_shield"
         }
       },
-      "uniqueGroup": "noonlit",
       "tags": [
         "defense",
         "utility"
@@ -1560,12 +1576,16 @@
       "pools": [
         "rift",
         "bridge"
-      ]
+      ],
+      "dial": {
+        "hour": 12,
+        "apart": 4
+      }
     },
     {
       "id": "hourcleaver",
       "name": "Hourcleaver",
-      "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s. You can carry one Noonlit item.",
+      "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s. Stands at four on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/hourcleaver.webp",
       "tier": "apex",
       "cost": 3400,
@@ -1622,7 +1642,6 @@
           }
         }
       ],
-      "uniqueGroup": "noonlit",
       "tags": [
         "attack",
         "defense",
@@ -1632,12 +1651,16 @@
       "pools": [
         "rift",
         "bridge"
-      ]
+      ],
+      "dial": {
+        "hour": 4,
+        "apart": 4
+      }
     },
     {
       "id": "shelter_lamp",
       "name": "Shelter Lamp",
-      "desc": "Active: you and allied fighters within 7 m gain a shield of 60 + 10 per level + 25% power for 2.5 s. 75 s cooldown. You can carry one Noonlit item.",
+      "desc": "Active: you and allied fighters within 7 m gain a shield of 60 + 10 per level + 25% power for 2.5 s. 75 s cooldown. Stands at ten on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/shelter_lamp.webp",
       "tier": "apex",
       "cost": 3000,
@@ -1718,7 +1741,6 @@
           "sfx": "c_shield"
         }
       },
-      "uniqueGroup": "noonlit",
       "tags": [
         "support",
         "haste",
@@ -1727,17 +1749,21 @@
       "pools": [
         "rift",
         "bridge"
-      ]
+      ],
+      "dial": {
+        "hour": 10,
+        "apart": 4
+      }
     },
     {
       "id": "road_sandals",
       "name": "Road Sandals",
-      "desc": "+0.25 m/s move speed. Upgrades into one of three pairs.",
+      "desc": "+0.21 m/s move speed. Upgrades into one of three pairs.",
       "icon": "assets/ui/icons/items/road_sandals.webp",
       "tier": "boots",
-      "cost": 300,
+      "cost": 250,
       "stats": {
-        "moveSpeed": 0.25
+        "moveSpeed": 0.21
       },
       "uniqueGroup": "boots",
       "tags": [
@@ -1752,16 +1778,16 @@
     {
       "id": "dust_runners",
       "name": "Dust Runners",
-      "desc": "+0.42 m/s move speed and +25% attack speed.",
+      "desc": "+0.36 m/s move speed and +19% attack speed.",
       "icon": "assets/ui/icons/items/dust_runners.webp",
       "tier": "boots",
-      "cost": 1050,
+      "cost": 900,
       "components": [
         "road_sandals"
       ],
       "stats": {
-        "moveSpeed": 0.42,
-        "attackSpeed": 0.25
+        "moveSpeed": 0.36,
+        "attackSpeed": 0.19
       },
       "uniqueGroup": "boots",
       "tags": [
@@ -1777,18 +1803,18 @@
     {
       "id": "felt_treads",
       "name": "Felt Treads",
-      "desc": "+0.42 m/s move speed, +12 armor, +12 resist and +15% tenacity.",
+      "desc": "+0.36 m/s move speed, +10 armor, +10 resist and +10% tenacity.",
       "icon": "assets/ui/icons/items/felt_treads.webp",
       "tier": "boots",
-      "cost": 1100,
+      "cost": 900,
       "components": [
         "road_sandals"
       ],
       "stats": {
-        "moveSpeed": 0.42,
-        "armor": 12,
-        "resist": 12,
-        "tenacity": 0.15
+        "moveSpeed": 0.36,
+        "armor": 10,
+        "resist": 10,
+        "tenacity": 0.1
       },
       "uniqueGroup": "boots",
       "tags": [
@@ -1804,17 +1830,16 @@
     {
       "id": "chalk_slippers",
       "name": "Chalk Slippers",
-      "desc": "+0.42 m/s move speed, +10 ability haste and +8 magic penetration.",
+      "desc": "+0.36 m/s move speed and +14 ability haste.",
       "icon": "assets/ui/icons/items/chalk_slippers.webp",
       "tier": "boots",
-      "cost": 1050,
+      "cost": 800,
       "components": [
         "road_sandals"
       ],
       "stats": {
-        "moveSpeed": 0.42,
-        "haste": 10,
-        "magicPen": 8
+        "moveSpeed": 0.36,
+        "haste": 14
       },
       "uniqueGroup": "boots",
       "tags": [

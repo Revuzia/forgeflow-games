@@ -169,6 +169,16 @@ export function evalCondition(w: World, c: ConditionT, ctx: EffectCtx): boolean 
       }
       return found >= (c.min ?? 1);
     }
+    case 'selfOnSide': {
+      const me = ctx.caster;
+      let own = Infinity, other = Infinity;
+      for (const b of w.mapDef.bases) {
+        const dx = b.spawn[0] - me.x, dy = b.spawn[1] - me.y, d2 = dx * dx + dy * dy;
+        if (b.team === me.team) own = Math.min(own, d2); else other = Math.min(other, d2);
+      }
+      if (own === Infinity || other === Infinity) return false;
+      return c.side === 'own' ? own < other : other < own;
+    }
     case 'not': return !evalCondition(w, c.cond, ctx);
     case 'all': for (const x of c.conds) if (!evalCondition(w, x, ctx)) return false; return true;
     case 'any': for (const x of c.conds) if (evalCondition(w, x, ctx)) return true; return false;

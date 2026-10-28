@@ -37,6 +37,13 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              triggered passive (items, boons, team buffs, units) has a present.sfx / hitSfx or its 'proc.<kind>' role
   ambience   every map (content/maps, read only) has 4-6 emitters 'ambient.<map>.<source>' → rendered ambience-bus
              loops: at most one 'bed' (not spatial), every other source an art.ambient group of that map with points
+  kits       fighter identity (final parity AUD-1): every fighter has its whole kit f_<fighter>_<slot> (attack_swing,
+             attack_hit, a1, a2, a3, ult_windup, ult_release, passive, death, call), rendered; resolved as the engine
+             does (kit cue, else the catalog's present, else the generic role), no attack or ult cue is shared by two
+             fighters or with a unit, two fighters' cues in one identity slot (attack swing / hit, ult wind-up /
+             release) sit >= ID_MIN_DIST_DB apart by 1/3-octave distance (averaged over round-robin files), and every
+             cue that can fire more than once a second (attacks, hits, ability hits, procs, FAST_ROLES) has
+             >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
 Deterministic: every random choice is seeded from the cue id (synth.core.rng) and ffmpeg runs
 bitexact, so a rebuild reproduces the same files.
 """
@@ -412,9 +419,174 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     fails, rep = control_gate(contract)
     pf, prep = proc_gate(contract)
     af, arep = ambience_gate(contract)
+    kf, krep = kit_gate(contract)
     rep['procs'] = prep
     rep['ambience'] = arep
-    return fails + pf + af, rep
+    rep['kits'] = krep
+    return fails + pf + af + kf, rep
+
+
+# ── fighter identity (final parity AUD-1) ────────────────────────────────────────────────────────
+KIT_SLOTS = ('attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call')
+ID_SLOTS = ('attack_swing', 'attack_hit', 'ult_windup', 'ult_release')     # the sounds a player tells fighters apart by
+ID_MIN_DIST_DB = 8.0     # 1/3-octave distance between two fighters' cues in the same identity slot
+RR_MIN = 3               # round-robin variants for a cue that can fire more than once a second
+RR_SLOW_COOLDOWN = 1.0   # … a cue whose own cooldown is at least this cannot
+# engine roles that can fire more than once a second (every basic attack, hit, projectile, wave death, heal tick, last hit)
+FAST_ROLES = ('attack', 'crit', 'hitPhysical', 'hitMagic', 'hitTrue', 'hitAbility', 'projectile', 'minionDeath', 'heal', 'gold')
+_SPEC: dict[str, np.ndarray] = {}
+
+
+def fighter_kit(fd: dict, cues: dict, ev: dict) -> dict[str, str | None]:
+    """A fighter's identity cues as src/audio/index.ts resolves them: f_<fighter>_<slot> first, then the catalog's
+    present, then the generic role (an ult release has no fallback: without a kit cue it is silent)."""
+    fid = fd['id']
+
+    def per(s: str) -> str | None:
+        c = f'f_{fid}_{s}'
+        return c if c in cues else None
+
+    att = fd.get('attack') or {}
+    ap = att.get('present') or {}
+    up = ((fd.get('kit') or {}).get('ult') or {}).get('present') or {}
+    hit_role = {'magic': 'hitMagic', 'true': 'hitTrue'}.get(att.get('damageType', 'physical'), 'hitPhysical')
+    return {
+        'attack_swing': per('attack_swing') or ap.get('sfx') or ev.get('attack'),
+        'attack_hit': per('attack_hit') or ap.get('hitSfx') or ev.get(hit_role),
+        'ult_windup': per('ult_windup') or up.get('sfx') or ev.get('castUlt'),
+        'ult_release': per('ult_release'),
+    }
+
+
+def cue_spectrum(cid: str, cues: dict) -> np.ndarray | None:
+    """The cue's 1/3-octave levels, power-averaged over its round-robin files (None: not rendered)."""
+    if cid not in _SPEC:
+        ps = []
+        for f in cues[cid]['files']:
+            p = out_path(f)
+            if not os.path.exists(p):
+                return None
+            ps.append(10 ** (third_octave_db(decode(p)) / 10))
+        _SPEC[cid] = 10 * np.log10(np.maximum(np.mean(ps, axis=0), 1e-9))
+    return _SPEC[cid]
+
+
+def _hit_sfx(node, out: set[str]) -> None:
+    if isinstance(node, dict):
+        pr = node.get('present')
+        if isinstance(pr, dict) and pr.get('hitSfx'):
+            out.add(pr['hitSfx'])
+        for k, v in node.items():
+            if k != '$comment':
+                _hit_sfx(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _hit_sfx(v, out)
+
+
+def kit_gate(contract: dict) -> tuple[list[str], dict]:
+    """kits: every fighter has its whole kit (f_<fighter>_<slot> for every KIT_SLOTS slot, rendered); no identity cue
+    (attack swing / hit, ult wind-up / release) is shared by two fighters or with a unit; two fighters' cues in the
+    same identity slot sit >= ID_MIN_DIST_DB apart by 1/3-octave distance; every cue that can fire more than once a
+    second (fighters' and units' attacks and hits, every ability hit, procs, FAST_ROLES) has >= RR_MIN round-robin
+    variants (files, each from its own recipe variant), unless its own cooldown is >= RR_SLOW_COOLDOWN."""
+    import glob
+    fails: list[str] = []
+    cues, ev = contract['cues'], contract.get('events', {})
+    fighters = []
+    for path in sorted(glob.glob(os.path.join(CONTENT, 'fighters', '*.json'))):
+        with open(path, encoding='utf8') as f:
+            fighters.append(json.load(f))
+    units = _read('units.json')['units']
+    rep: dict = {'fighters': {}, 'nearest': {}, 'fast': {}}
+    resolved = {fd['id']: fighter_kit(fd, cues, ev) for fd in fighters}
+    # completeness
+    for fd in fighters:
+        fid = fd['id']
+        miss = [s for s in KIT_SLOTS if f'f_{fid}_{s}' not in cues]
+        unrendered = [f'f_{fid}_{s}' for s in KIT_SLOTS if f'f_{fid}_{s}' in cues
+                      and not all(os.path.exists(out_path(x)) for x in cues[f'f_{fid}_{s}']['files'])]
+        rep['fighters'][fid] = {'kit': len(KIT_SLOTS) - len(miss), 'missing': miss, 'resolved': resolved[fid]}
+        if miss:
+            fails.append(f"kits: {fid} has no f_{fid}_{{{','.join(miss)}}}")
+        for c in unrendered:
+            fails.append(f'kits: {c} is not rendered')
+    # shared identity cues (between fighters, and with units)
+    unit_cues: dict[str, list[str]] = {}
+    for u in units:
+        ap = ((u.get('attack') or {}).get('present') or {})
+        for k in ('sfx', 'hitSfx'):
+            if ap.get(k):
+                unit_cues.setdefault(ap[k], []).append(u['id'])
+    users: dict[str, list[str]] = {}
+    for fid, k in resolved.items():
+        for s in ID_SLOTS:
+            c = k[s]
+            if not c:
+                if s == 'ult_release':
+                    continue                      # reported by completeness (no release at all)
+                fails.append(f'kits: {fid}.{s} has no cue')
+                continue
+            users.setdefault(c, []).append(f'{fid}.{s}')
+    for c, us in sorted(users.items()):
+        if len({u.split('.')[0] for u in us}) > 1:
+            fails.append(f"kits: {c} is shared by {', '.join(us)}")
+        if c in unit_cues:
+            fails.append(f"kits: {c} ({', '.join(us)}) is also a unit's ({', '.join(unit_cues[c])})")
+    # 1/3-octave distance per identity slot
+    for s in ID_SLOTS:
+        spec = {}
+        for fid, k in resolved.items():
+            if k[s] and k[s] in cues:
+                sp = cue_spectrum(k[s], cues)
+                if sp is not None:
+                    spec[fid] = (k[s], sp)
+        ids = sorted(spec)
+        near: dict[str, tuple[float, str]] = {}
+        for i, a in enumerate(ids):
+            for b in ids[i + 1:]:
+                if spec[a][0] == spec[b][0]:
+                    continue                      # one cue for both: reported as shared above
+                d = band_distance(spec[a][1], spec[b][1])
+                for x, y in ((a, b), (b, a)):
+                    if x not in near or d < near[x][0]:
+                        near[x] = (d, y)
+                if d < ID_MIN_DIST_DB:
+                    fails.append(f'kits: {a}.{s} ({spec[a][0]}) is {d:.1f} dB from {b}.{s} ({spec[b][0]}) by 1/3-octave distance'
+                                 f' (< {ID_MIN_DIST_DB:g} dB)')
+        for x, (d, y) in near.items():
+            rep['nearest'][f'{x}.{s}'] = [y, round(d, 2)]
+    # round-robin for every cue that can fire more than once a second
+    fast: dict[str, str] = {}
+    for fid, k in resolved.items():
+        for s in ('attack_swing', 'attack_hit'):
+            if k[s]:
+                fast.setdefault(k[s], f'{fid} attack')
+        if f'f_{fid}_passive' in cues:
+            fast.setdefault(f'f_{fid}_passive', f'{fid} passive proc')
+    for fd in fighters:
+        hs: set[str] = set()
+        _hit_sfx(fd.get('kit') or {}, hs)
+        for c in sorted(hs):
+            fast.setdefault(c, f"{fd['id']} ability hit")
+    for c, us in unit_cues.items():
+        fast.setdefault(c, f"unit attack ({', '.join(us[:3])}{'…' if len(us) > 3 else ''})")
+    for role in FAST_ROLES:
+        if ev.get(role):
+            fast.setdefault(ev[role], f'role {role}')
+    for role, c in ev.items():
+        if role.startswith('proc.'):
+            fast.setdefault(c, f'role {role}')
+    for c, why in sorted(fast.items()):
+        d = cues.get(c)
+        if not d:
+            continue
+        spec = REGISTRY.get(c)
+        n = min(len(d['files']), spec.variants if spec else len(d['files']))
+        rep['fast'][c] = {'why': why, 'variants': n, 'cooldown': d.get('cooldown', 0)}
+        if n < RR_MIN and d.get('cooldown', 0) < RR_SLOW_COOLDOWN:
+            fails.append(f'kits: {c} can fire more than once a second ({why}) but has {n} variant(s) (< {RR_MIN})')
+    return fails, rep
 
 
 def proc_gate(contract: dict) -> tuple[list[str], dict]:
@@ -673,9 +845,18 @@ def print_gates(fails: list[str], rep: dict) -> None:
     print(f'ambience gate: {len(am)} maps, {AMB_MIN}-{AMB_MAX} emitters each')
     for mid, rows in am.items():
         print(f"  {mid:11s} " + ', '.join(f"{s}→{x['cue']}({'bed' if x['points'] is None else x['points']})" for s, x in rows.items()))
+    kr = rep.get('kits', {})
+    whole = [f for f, x in kr.get('fighters', {}).items() if not x['missing']]
+    print(f"kit gate: {len(whole)}/{len(kr.get('fighters', {}))} fighters with a whole kit ({len(KIT_SLOTS)} slots);"
+          f" identity slots >= {ID_MIN_DIST_DB:g} dB apart; >= {RR_MIN} variants for {len(kr.get('fast', {}))} fast cues")
+    for f, x in kr.get('fighters', {}).items():
+        near = '  '.join(f"{s.replace('attack_', 'atk_').replace('ult_', 'u_')} {kr['nearest'].get(f'{f}.{s}', ['-', float('nan')])[1]:5.1f}"
+                         for s in ID_SLOTS)
+        print(f"  {f:9s} {x['kit']:2d}/{len(KIT_SLOTS)}  nearest dB: {near}")
     print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
                  f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart;'
-                 f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points'))
+                 f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points;'
+                 f' every fighter a whole kit of its own, >= {ID_MIN_DIST_DB:g} dB from the others; fast cues >= {RR_MIN} variants'))
 
 
 if __name__ == '__main__':

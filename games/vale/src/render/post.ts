@@ -25,13 +25,13 @@
 //
 // The grade (tone map + LUT + vignette) and the overlay are identical on every tier; tiers only
 // change AO, bloom, AA, distortion and resolution. The identity LUT stands in until `map.art.lut` loads.
+// The exposure envelope and the death grade run on every tier (they are game information, and cheap:
+// a few ALU per pixel, early-out when idle).
 //
 // GPU MEMORY (perf PERF-M1): the chain is built once per quality, never per scene. A scene switch (match setup, the
 // return to the menu) only re-points the passes at the new scene and camera; a quality change disposes every pass
 // this chain built (render targets, materials, the bloom mip chain, SMAA's lookup textures, N8AO's targets and
 // full-screen quads) before it builds the new set. The overlay and VFX passes are the chain's own and survive both.
-// The exposure envelope and the death grade run on every tier (they are game information, and cheap:
-// a few ALU per pixel, early-out when idle).
 
 import {
   type Camera, Color, HalfFloatType, type Scene, type Texture, type Uniform, type WebGLRenderer, type WebGLRenderTarget,

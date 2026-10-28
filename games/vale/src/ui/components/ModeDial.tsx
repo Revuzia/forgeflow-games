@@ -2,7 +2,9 @@
 // a dial — RIFT three roads crossed by the noon line, BRIDGE one line over an arc, FRAY a ring of ten
 // ticks, and the uncarved hour (dashed, focusable, never selectable). Choosing swings the gnomon shadow
 // CLOCKWISE to the station in 360 ms. Modes get no colour: mark, station and motif tell them apart.
-// Arrow keys move between stations; Enter or Space chooses.
+// Arrow keys move between stations; Enter or Space chooses. The dial's hub is open: the mode's name sits there
+// (play.tsx), so the shadow is drawn on the dial's face only — between the inner arc (R_FACE) and the ticks —
+// and never crosses the name (client F6).
 
 import type { JSX } from 'preact';
 import { useRef } from 'preact/hooks';
@@ -12,6 +14,8 @@ import { ModeMarkGlyph } from './Glyphs.tsx';
 import { TipText, useTip } from './Tooltip.tsx';
 
 const W = 1000, H = 330, CX = 500, CY = 360, R = 300;
+/** the dial face's inner edge: the hub inside it holds the mode's name */
+const R_FACE = 172;
 
 function stationAngles(n: number): number[] {
   if (n <= 1) return [0];
@@ -72,11 +76,12 @@ export function ModeDial(p: { value: string | null; onChange: (mode: string) => 
           const long = (a + 84) % 21 === 0;
           return <line x1={CX + (R + 14) * Math.sin(r)} y1={CY - (R + 14) * Math.cos(r)} x2={CX + (R + (long ? 30 : 22)) * Math.sin(r)} y2={CY - (R + (long ? 30 : 22)) * Math.cos(r)} class="dial__tick" />;
         })}
+        <path d={`M ${CX - R_FACE * Math.sin(1.2)} ${CY - R_FACE * Math.cos(1.2)} A ${R_FACE} ${R_FACE} 0 0 1 ${CX + R_FACE * Math.sin(1.2)} ${CY - R_FACE * Math.cos(1.2)}`} class="dial__arc dial__arc--face" />
         <g class="dial__gnomon" style={{ transform: `rotate(${gnomon}deg)`, transformOrigin: `${CX}px ${CY}px` }}>
-          <polygon points={`${CX},${CY} ${CX - 9},${CY - R + 62} ${CX + 9},${CY - R + 62}`} class="dial__shadow" />
-          <line x1={CX} y1={CY} x2={CX} y2={CY - R + 62} class="dial__edge" />
+          <polygon points={`${CX - 3.5},${CY - R_FACE} ${CX + 3.5},${CY - R_FACE} ${CX + 9},${CY - R + 62} ${CX - 9},${CY - R + 62}`} class="dial__shadow" />
+          <line x1={CX} y1={CY - R_FACE} x2={CX} y2={CY - R + 62} class="dial__edge" />
+          <circle cx={CX} cy={CY - R_FACE} r="4" class="dial__pin" />
         </g>
-        <circle cx={CX} cy={CY - 2} r="7" class="dial__pin" />
       </svg>
       {slots.map((s, i) => (
         <Station slot={s} angle={angles[i]} selected={i === idx && !!s.mode && s.status !== 'reserved'}

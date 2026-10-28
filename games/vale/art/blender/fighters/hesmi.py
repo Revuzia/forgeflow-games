@@ -78,6 +78,15 @@ RECALL_FIST_Y = -0.34                     # recall: the fists on the thighs, thi
 # fix pass 3: the brief's guard (§8): both fists up at chest height before her, forearms near vertical, elbows out
 # (the hanging A-pose fists read as a mannequin, not a braced tank)
 FISTS = {"guard": ((0.06, -0.50, -0.46), (-0.95, 0.10, -0.45)), "jab": ((0.22, -0.95, -0.12), (-0.85, 0.25, -0.45))}
+# W5b (combat m-2): the basic attacks' striking fist (rel: chest frame, arm lengths; pole: the elbow) at the wound-back,
+# the contact and the follow-through. attack1 (right hook): drawn back past the right hip-shoulder, then across at
+# shoulder height. attack2 (left uppercut-hook): low behind the left hip, then up to chin height in front.
+ATK1_WIND = ((-0.66, 0.42, -0.12), (-0.55, 0.65, 0.25))
+ATK1_HIT = ((0.30, -0.97, 0.20), (-0.9, 0.05, 0.45))
+ATK1_FOL = ((0.62, -0.70, 0.12), (-0.9, 0.2, 0.4))
+ATK2_WIND = ((0.52, 0.34, -0.72), (0.85, 0.45, -0.35))
+ATK2_HIT = ((-0.16, -0.95, -0.02), (0.75, 0.1, -0.65))
+ATK2_FOL = ((-0.36, -0.74, 0.22), (0.75, 0.15, -0.6))
 SOCKETS = {"weapon": "prop.R", "shard_mid": "x_shard_mid", "fist_r": "x_fist_r", "fist_l": "x_fist_l",
            "rack_top": "x_rack_top"}
 # the crossed-arms hold, a front three-quarter from the character's left, the hero camera at hip height: the flat
@@ -1734,24 +1743,60 @@ def clip_overrides(ctx) -> dict:
     out["run"] = anim.Clip("run", run.frames, True, run_sample, meta=run.meta)
 
     # attack1 / attack2 (fix pass 4: they read as shadow-boxing: the fist 0.64 m ahead, an 11 degree lean, no step, and
-    # attack2 an exact mirror). attack1: a right HOOK that steps in on the left foot, the weight thrown 18 degrees into
-    # it, the arm long at shoulder height, the chest yawing <= ~22 degrees (the rack stays behind her) and the head on
-    # the target. attack2: a LEFT UPPERCUT-HOOK from a dip, stepping in on the right foot, the fist rising from the hip
-    # to chin height, elbow down; a different arc and timing of the weight, not a mirror. 40 frames, contact f16.
-    w1 = pose(dict(hips=(2, -7, 0), spine=(-1, -6, 2), chest=(-2, -9, 3), neck=(0, 6, 0), head=(0, 10, 0)), (0, 0.04, -0.01),
-              R=((-0.58, 0.26, -0.02), (-0.75, 0.55, 0.1)), ft=feet(dl=(0, -0.05, 0)))
-    h1 = pose(dict(hips=(8, 7, 0), spine=(6, 6, -2), chest=(4, 9, -5), neck=(-6, -5, 0), head=(-10, -10, 0)), (0, -0.16, -0.06),
-              R=((0.30, -0.97, 0.20), (-0.9, 0.05, 0.45)), ft=feet(dl=(0.02, -0.26, 0), dr=(0, 0.02, 0), pr=-12))
-    f1 = pose(dict(hips=(9, 10, 0), spine=(6, 7, -2), chest=(4, 11, -6), neck=(-6, -7, 0), head=(-10, -12, 0)), (0, -0.18, -0.07),
-              R=((0.48, -0.82, 0.14), (-0.9, 0.2, 0.4)), ft=feet(dl=(0.02, -0.26, 0), dr=(0, 0.02, 0), pr=-12))
-    out["attack1"] = strike("attack1", 40, w1, h1, f1, {"head": 1.0, "neck": 0.5, "hand.L": 2.0})
-    w2 = pose(dict(hips=(4, 8, 0), spine=(4, 7, 3), chest=(4, 10, 4), neck=(-2, -6, 0), head=(-2, -10, 0)), (0, 0.02, -0.07),
-              L=((0.30, -0.18, -0.62), (0.85, 0.35, -0.5)), ft=feet(dr=(0, -0.04, 0)))
-    h2 = pose(dict(hips=(10, -8, 0), spine=(6, -6, -3), chest=(2, -10, -5), neck=(-4, 6, 0), head=(-8, 10, 0)), (0, -0.14, -0.02),
-              L=((-0.16, -0.95, -0.02), (0.75, 0.1, -0.65)), ft=feet(dr=(-0.02, -0.24, 0), dl=(0, 0.02, 0), pl=-12))
-    f2 = pose(dict(hips=(9, -11, 0), spine=(5, -8, -3), chest=(0, -13, -5), neck=(-4, 8, 0), head=(-8, 12, 0)), (0, -0.15, 0.0),
-              L=((-0.22, -0.82, 0.16), (0.75, 0.15, -0.6)), ft=feet(dr=(-0.02, -0.24, 0), dl=(0, 0.02, 0), pl=-12))
-    out["attack2"] = strike("attack2", 40, w2, h2, f2, {"head": 1.5, "neck": 0.8, "hand.R": 2.5})
+    # attack2 an exact mirror). attack1: a right HOOK that steps in on the left foot, the weight thrown into it, the arm
+    # long at shoulder height and the head on the target. attack2: a LEFT UPPERCUT-HOOK from a dip, stepping in on the
+    # right foot, the fist rising from the hip to chin height, elbow down; a different arc and timing of the weight,
+    # not a mirror. 40 frames, contact f16.
+    # W5b (combat m-2, the review: the fist travelled 0.61 m over a 13-frame wind-up, against ~3 m of blade tip for
+    # Kemdo and Marund; r12 M5: three readable poses, the weapon travels >= 0.6x the fighter's height): a real wound-
+    # back and a whip. The wind-up COILS the whole body away (hips, spine and chest ~45 degrees round, the weight on the
+    # back foot, the striking fist drawn back past the hip), reaches it by 17 % and HOLDS it (a slow drift, never a
+    # freeze) to 34.5 %; the hips lead the drive; the fist then crosses the whole arc in the last 5.5 % before the
+    # contact (two game frames at the sim's 0.40-0.45 s wind-up) with a step in, and follows through across the body.
+    # Measured in game frames (proto-free: the clip time-scaled so its 40 % lands on the wind-up) in the W5b report.
+    def punch_keys(wind, hit, fol, lead):
+        """Hesmi's punch timing (impact at exactly 40 %): guard, counter, wound-back by 0.17, a moving hold to 0.31,
+        the hips-first drive at 0.345 (the striking fist still back), the whip to the contact at 0.40, the impact
+        hold, the follow-through and the settle. `lead`: the striking hand ('hand.R' / 'hand.L')."""
+        hv = anim.HEAVY[prof["weight"]]
+        still = {"hand.R": 0.0, "hand.L": 0.0, "foot.L": 0.0, "foot.R": 0.0}
+        counter = anim._with_hips(anim.lerp_pose_w(g, wind, -0.12, still), (0.0, 0.0, -0.012 * hv))
+        coil = anim.lerp_pose_w(g, wind, 1.06, {"foot.L": 1.0, "foot.R": 1.0})
+        drive = anim.lerp_pose_w(coil, hit, 0.10, {"hips": 0.55, "spine": 0.40, "chest": 0.22, "hips_loc": 0.45,
+                                                     "foot.L": 0.75, "foot.R": 0.75, "thigh.L": 0.6, "thigh.R": 0.6,
+                                                     lead: 0.04})
+        hit2 = anim._with_hips(hit, (0.0, 0.0, -0.020 * hv))
+        hold = anim._with_hips(anim.lerp_pose(hit, fol, 0.25), (0.0, 0.0, -0.026 * hv))
+        fol2 = anim._with_hips(anim.lerp_pose_w(hit, fol, 1.0, {"head": 0.6, "neck": 0.7}), (0.0, 0.0, -0.010 * hv))
+        rec = anim.lerp_pose(fol, g, 0.5)
+        return [(0.0, g, "linear"), (0.05, counter, "inout"), (0.17, wind, "inout"), (0.31, coil, "out"),
+                (0.345, drive, "in"), (anim.IMPACT, hit2, "accel"), (0.46, hold, "out"), (0.58, fol2, "out"),
+                (0.78, rec, "inout"), (1.0, g, "settle")]
+
+    def punch(name, wind, hit, fol, lead, lags):
+        return anim.Clip(name, 40, False, anim.drag(anim.keyed(punch_keys(wind, hit, fol, lead)), 40, lags),
+                         impact=anim.IMPACT)
+
+    w1 = pose(dict(hips=(2, -14, 0), spine=(-1, -12, 3), chest=(-3, -18, 4), neck=(0, 14, 0), head=(0, 18, 0)),
+              (0.03, 0.08, -0.05), R=ATK1_WIND, L=((0.12, -0.72, -0.22), (0.85, 0.30, -0.40)),
+              ft=feet(dl=(0, -0.02, 0), dr=(0, 0.06, 0)))
+    h1 = pose(dict(hips=(9, 9, 0), spine=(6, 7, -2), chest=(4, 9, -5), neck=(-6, -6, 0), head=(-10, -10, 0)),
+              (-0.02, -0.22, -0.08), R=ATK1_HIT, L=((0.18, -0.40, -0.30), (0.85, 0.30, -0.40)),
+              ft=feet(dl=(0.03, -0.32, 0), dr=(0, 0.02, 0), pr=-14))
+    f1 = pose(dict(hips=(10, 14, 0), spine=(6, 10, -2), chest=(4, 14, -6), neck=(-6, -10, 0), head=(-10, -14, 0)),
+              (-0.03, -0.24, -0.08), R=ATK1_FOL, L=((0.20, -0.38, -0.32), (0.85, 0.30, -0.40)),
+              ft=feet(dl=(0.03, -0.32, 0), dr=(0, 0.02, 0), pr=-14))
+    out["attack1"] = punch("attack1", w1, h1, f1, "hand.R", {"head": 1.0, "neck": 0.5, "hand.L": 2.0})
+    w2 = pose(dict(hips=(6, 14, 0), spine=(6, 12, 4), chest=(8, 18, 6), neck=(-2, -14, 0), head=(-2, -16, 0)),
+              (-0.02, 0.06, -0.10), L=ATK2_WIND, R=((-0.10, -0.62, -0.18), (-0.85, 0.30, -0.40)),
+              ft=feet(dr=(0, -0.02, 0), dl=(0, 0.06, 0)))
+    h2 = pose(dict(hips=(9, -10, 0), spine=(5, -8, -3), chest=(1, -10, -5), neck=(-4, 6, 0), head=(-8, 10, 0)),
+              (0.02, -0.20, -0.01), L=ATK2_HIT, R=((-0.16, -0.42, -0.26), (-0.85, 0.30, -0.40)),
+              ft=feet(dr=(-0.02, -0.28, 0), dl=(0, 0.02, 0), pl=-12))
+    f2 = pose(dict(hips=(9, -14, 0), spine=(5, -11, -3), chest=(0, -15, -5), neck=(-4, 9, 0), head=(-8, 13, 0)),
+              (0.02, -0.21, 0.01), L=ATK2_FOL, R=((-0.18, -0.40, -0.28), (-0.85, 0.30, -0.40)),
+              ft=feet(dr=(-0.02, -0.28, 0), dl=(0, 0.02, 0), pl=-12))
+    out["attack2"] = punch("attack2", w2, h2, f2, "hand.L", {"head": 1.5, "neck": 0.8, "hand.R": 2.5})
 
     # cast_a1 Plant Shard (castTime 0.3 s). In game only the clip's first 40 % plays (time-scaled to the cast, then a
     # 0.1 s fade to idle), so the READABLE pose arrives early: the reach back to the rack by f4, the drive by f9, the stab

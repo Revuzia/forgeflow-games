@@ -15,7 +15,7 @@
     "tris_fingers_L": 640,
     "tris_vambrace": 450,
     "tris_strap_plate": 680,
-    "tris_shoulder_plate": 620,
+    "tris_shoulder_plate": 560,
     "tris_fringe": 300,
     "tris_tier1": 620,
     "tris_tier2": 600,
@@ -29,20 +29,21 @@
     "tris_haft": 480,
     "tris_pommel": 300,
     "tris_pauldron_lame": 260,
-    "validate_burdam": "19430->19427"
+    "tris_pauldron_face": 440,
+    "validate_burdam": "19810->19808"
   },
-  "uv_coverage": 0.613,
+  "uv_coverage": 0.625,
   "bake": {
-    "base": 12.63,
-    "rough_metal": 6.4,
-    "normal": 4.6,
-    "ao": 5.69,
-    "normal_fixed_px": 44570,
-    "projection": 205.36,
-    "pack_save": 205.78,
-    "total": 235.66
+    "base": 10.0,
+    "rough_metal": 5.92,
+    "normal": 2.81,
+    "ao": 3.63,
+    "normal_fixed_px": 39506,
+    "projection": 132.65,
+    "pack_save": 132.86,
+    "total": 155.65
   },
-  "tris": 20067,
+  "tris": 20448,
   "mesh_top_m": 2.157,
   "clips": {
     "idle": {
@@ -139,23 +140,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3017760,
+  "glb_bytes_raw": 3036512,
   "optimize": {
     "ok": true,
-    "before": 3017760,
-    "after": 1152568
+    "before": 3036512,
+    "after": 1159180
   },
-  "glb_bytes": 1152568,
+  "glb_bytes": 1159180,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam.glb (1126 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_base 2048x2048 213K, burdam_normal 512x512 44K, burdam_orm 512x512 64K",
-      "  skinned meshes: burdam(17739v), burdam_accent(332v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam.glb (1132 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_base 2048x2048 214K, burdam_normal 512x512 43K, burdam_orm 512x512 64K",
+      "  skinned meshes: burdam(17879v), burdam_accent(332v)",
       "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/22tr, attack2:1.333s/23tr, cast_a1:0.833s/22tr, cast_a2:1.000s/21tr, cast_a3:1.000s/23tr, cast_ult:1.500s/23tr, channel:1.333s/21tr, dash:0.667s/22tr, death:2.000s/23tr, idle:2.400s/21tr, idle_lobby:4.000s/21tr, recall:6.000s/21tr, run:0.800s/23tr, stunned:1.333s/21tr, victory:2.000s/21tr",
       "  tracks checked: 328; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20067; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "  tris: 20448; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "  run: 24 f, planted samples 6, max foot-speed error 1.6%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -168,10 +169,10 @@
       "icon": "art/out/fighters/burdam/icon.png"
     },
     "seconds": {
-      "splash": 24.58,
-      "portrait": 8.12,
-      "turntable": 7.4,
-      "icon": 2.28
+      "splash": 10.84,
+      "portrait": 4.35,
+      "turntable": 5.3,
+      "icon": 1.77
     }
   },
   "three_qa": {
@@ -194,7 +195,7 @@
       1
     ],
     "headY": 1.849,
-    "accentPct": 1.72,
+    "accentPct": 1.71,
     "accentTopHalfPct": 73.3,
     "heightPx1080": 116,
     "size": [
@@ -203,27 +204,27 @@
     ],
     "clips": 15,
     "out": "art/renders/fighters/burdam/three_burdam.png",
-    "seconds": 20.8,
+    "seconds": 8.9,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/burdam/three_clips_burdam.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.44,
-      "model": 15.51,
-      "lows_bind": 10.9,
-      "uv": 10.83,
-      "bake": 235.66,
-      "clips": 0.54,
-      "export": 2.27,
-      "optimize": 1.34,
-      "load_test": 0.31,
-      "render": 42.56,
-      "three_qa": 49.32,
-      "cache": 0.25
+      "materials": 0.67,
+      "model": 11.67,
+      "lows_bind": 8.69,
+      "uv": 13.27,
+      "bake": 155.65,
+      "clips": 0.33,
+      "export": 1.71,
+      "optimize": 1.24,
+      "load_test": 0.24,
+      "render": 22.42,
+      "three_qa": 21.27,
+      "cache": 0.14
     },
-    "total_s": 370.06
+    "total_s": 237.39
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

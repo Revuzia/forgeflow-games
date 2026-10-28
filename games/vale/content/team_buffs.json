@@ -1,36 +1,59 @@
 {
-  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration (sim core.ts addTeamBuff). Splinters is designed to stack to 3; the sim currently refreshes instead (SIM/LEAD request: _design/sections/modes_economy.md §10).",
+  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). Re-keyed 2026-10-28 (W4, originality F4): Clearglass works on your own side of the Noonline, Resinburn on the enemy side (condition selfOnSide), the Long Shade gives haste and tenacity, not attack and power; table: _design/reviews/fixwaves/W4_systems_rekey.md. A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration (sim core.ts addTeamBuff). Splinters is designed to stack to 3; the sim currently refreshes instead (SIM/LEAD request: _design/sections/modes_economy.md §10).",
   "teamBuffs": [
     {
       "id": "clearglass",
       "name": "Clearglass",
-      "desc": "From the Glasshorn, for 90 s: your whole team gains +10 ability haste and +1.5 resource regeneration per second.",
+      "desc": "From the Glasshorn, for 90 s: while on your own side of the Noonline, your whole team gains +16 ability haste and +2 resource regeneration per second.",
       "icon": "assets/ui/icons/team_buffs/clearglass.webp",
       "duration": 90,
-      "stats": { "haste": 10, "resRegen": 1.5 }
+      "passives": [
+        {
+          "id": "clearglass_own_hours",
+          "name": "Clearglass",
+          "desc": "While you stand on your own side of the Noonline: +16 ability haste and +2 resource regeneration per second.",
+          "icon": "assets/ui/icons/team_buffs/clearglass.webp",
+          "triggers": [
+            {
+              "on": "interval", "interval": 0.5,
+              "cond": { "kind": "selfOnSide", "side": "own" },
+              "effects": [ { "op": "buff", "id": "clearglass_glow", "duration": 0.6, "stats": { "haste": 16, "resRegen": 2 }, "to": "self" } ]
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "resinburn",
       "name": "Resinburn",
-      "desc": "From the Resinback, for 90 s: your team's basic attacks on fighters and monsters burn for 3 magic hits over 2 s and slow briefly. Once every 3 s per target.",
+      "desc": "From the Resinback, for 90 s: on the enemy side of the Noonline, your team's attacks stick resin to fighters and monsters (a 20% slow); your next attack on that target ignites it. Once every 4 s per target.",
       "icon": "assets/ui/icons/team_buffs/resinburn.webp",
       "duration": 90,
       "passives": [
         {
           "id": "resinburn_ignite",
           "name": "Resinburn",
-          "desc": "Basic attacks on fighters and monsters burn for 3 hits of 4 + 2 per level magic damage over 2 s and slow by 10% for 1 s. Once every 3 s per target.",
+          "desc": "On the enemy side of the Noonline, an attack on a fighter or monster sticks resin to it (20% slow for 1.5 s); your next attack on it within 4 s ignites the resin for 20 + 4 per level magic damage. Once every 4 s per target.",
           "icon": "assets/ui/icons/team_buffs/resinburn.webp",
           "triggers": [
             {
               "on": "attackHit",
-              "perTargetCooldown": 3,
               "filter": { "enemies": true, "fighters": true, "monsters": true, "minions": false, "summons": false },
+              "cond": { "kind": "targetHasMark", "mark": "resin_stuck" },
               "effects": [
-                { "op": "repeat", "count": 3, "interval": 1, "effects": [
-                  { "op": "damage", "amount": { "base": 4, "level": 2 }, "type": "magic", "to": "hit" }
-                ] },
-                { "op": "status", "status": "slow", "duration": 1, "power": 0.1, "to": "hit" }
+                { "op": "consumeMark", "mark": "resin_stuck", "to": "hit", "perStack": [
+                  { "op": "damage", "amount": { "base": 20, "level": 4 }, "type": "magic", "to": "hit" }
+                ] }
+              ]
+            },
+            {
+              "on": "attackHit",
+              "perTargetCooldown": 4,
+              "filter": { "enemies": true, "fighters": true, "monsters": true, "minions": false, "summons": false },
+              "cond": { "kind": "all", "conds": [ { "kind": "selfOnSide", "side": "enemy" }, { "kind": "not", "cond": { "kind": "targetHasMark", "mark": "resin_stuck" } } ] },
+              "effects": [
+                { "op": "mark", "mark": "resin_stuck", "duration": 4, "stacks": 1, "max": 1, "to": "hit" },
+                { "op": "status", "status": "slow", "duration": 1.5, "power": 0.2, "to": "hit" }
               ]
             }
           ]
@@ -48,10 +71,10 @@
     {
       "id": "long_shade",
       "name": "The Long Shade",
-      "desc": "From Longshade, for 2:30: your team gains +25 attack, +40 power and +10% tenacity. Your Wicks march tougher, harder-hitting and faster.",
+      "desc": "From Longshade, for 3:30: your team gains +20 ability haste and +15% tenacity. Your Wicks march tougher, harder-hitting and faster.",
       "icon": "assets/ui/icons/team_buffs/long_shade.webp",
-      "duration": 150,
-      "stats": { "ad": 25, "ap": 40, "tenacity": 0.1 },
+      "duration": 210,
+      "stats": { "haste": 20, "tenacity": 0.15 },
       "minionStats": { "hp": 400, "ad": 30, "armor": 25, "resist": 25, "moveSpeedPct": 0.1 }
     },
     {

@@ -35,11 +35,11 @@ const IDS = ['ervet', 'vashil'];
 const TARGET = 'fx_target';
 let catalog!: CatalogT;
 section('catalog', () => {
-  const raw = rawCatalog({ fighters: [...IDS.map((id) => readJson(`content/fighters/${id}.json`)),
+  const raw = rawCatalog({ fighters: [...IDS.map((id) => readJson(`content/fighters/${id}.json`) as Raw),
     fxFighter(TARGET, { resource: 'res_unlit', base: { hp: 100000, ad: 1, attackSpeed: 0.5, moveSpeed: 3.5 }, radius: 0.5 })],
   resources: readJson('content/resources.json') as Raw[] });
-  raw.classes = readJson('content/classes.json');
-  raw.roles = readJson('content/roles.json');
+  raw.classes = readJson('content/classes.json') as Raw[];
+  raw.roles = readJson('content/roles.json') as Raw[];
   const r = Catalog.safeParse(raw);
   if (!r.success) throw new Error(r.error.issues.slice(0, 8).map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
   catalog = r.data;

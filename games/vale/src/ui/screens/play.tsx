@@ -3,6 +3,12 @@
 // RIFT position preference (roles.json) or the quick-queue preset (fighter + role, QueueRequest.preset).
 // Locked queues are dashed with the unlock path; ranked shows the tier emblem or the placement line.
 // CTA: Find match — disabled, with its reason, while locked, during a lockout or until a preset fighter.
+// The mode's painted card (ModeDef.card.art) is the subject in columns 7–12: every live mode's card is stacked there
+// and the chosen one crossfades in as the gnomon swings, with the chosen queue's whole description and terms under it.
+// Fit (client F6/F9): the mode's name sits in the dial's open hub (the gnomon only draws its outer face), the cards
+// carry name, kind, description, the Candles line and the lock; the per-minute, first-win, bans and bots lines are the
+// stage caption's. Below 820 px of height the cards turn into compact rows (no description: the stage has it), so the
+// selected queue and Find match are on screen at 1280x720 without scrolling.
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
@@ -13,6 +19,7 @@ import { Currency } from '../components/Currency.tsx';
 import { ClassMark } from '../components/FighterCard.tsx';
 import { FighterGrid } from '../components/FighterGrid.tsx';
 import { Icon, Wedge } from '../components/Glyphs.tsx';
+import { ArtFrame } from '../components/Portrait.tsx';
 import { ModeDial } from '../components/ModeDial.tsx';
 import { Portrait } from '../components/Portrait.tsx';
 import { RankEmblem } from '../components/RankEmblem.tsx';
@@ -83,17 +90,19 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
 
   return (
     <Screen title={cv.t('play.title', 'Play')}
+      stage={<PlayArt modeId={modeId} queue={queue} note={slot?.note} />}
       foot={reason ? <span class={`reason t-body-s ${lockLeft > 0 ? 'reason--warn' : ''}`}>{reason}</span> : queue ? <span class="t-body-s muted">{queue.bots.fill === 'none' ? cv.t('play.queue.bots_none', 'No bots.') : cv.t('queue.bots_note', 'Open seats are filled with bots.')}</span> : null}
       cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={find} cue="confirm">{cv.t('btn.find_match', 'Find match')}</Button>}>
       <div class="play">
-        <div class="stg"><ModeDial value={modeId} onChange={chooseMode} /></div>
-        {mode ? (
-          <div class="play__mode stg" aria-live="polite">
-            <h2 class="t-display-m">{mode.name}</h2>
-            <p class="t-body-l">{mode.tagline}</p>
-            {slot?.note ? <p class="t-body-s muted">{slot.note}</p> : null}
-          </div>
-        ) : null}
+        <div class="play__dialwrap stg">
+          <ModeDial value={modeId} onChange={chooseMode} />
+          {mode ? (
+            <div class="play__mode" aria-live="polite">
+              <h2 class="t-display-m">{mode.name}</h2>
+              <p class="t-body-l">{mode.tagline}</p>
+            </div>
+          ) : null}
+        </div>
 
         <Section title={cv.t('play.choose_queue', 'Choose how to play')}>
           <div class="qcards" role="radiogroup" aria-label={cv.t('play.choose_queue', 'Choose how to play')} data-arrownav="grid">
@@ -148,52 +157,85 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   );
 }
 
+/** a queue's terms as the player reads them: the Candles line first, then per-minute pay, first win, placement,
+ *  bans and bots (the card shows the first; the stage caption shows them all for the chosen queue) */
+function queueTerms(cv: ReturnType<typeof useApp>['cv'], q: QueueDefT): { reward: string; more: string[] } {
+  const g = q.grants;
+  const more: string[] = [];
+  let reward: string;
+  if (g.win === 0 && g.loss === 0) reward = cv.t('play.queue.reward_none', 'No rewards');
+  else {
+    reward = `${cv.t('play.queue.reward_win', 'Win: {n} Candles', { n: fmtInt(g.win) })} · ${cv.t('play.queue.reward_loss', 'Loss: {n} Candles', { n: fmtInt(g.loss) })}`;
+    if (g.perMinute > 0) more.push(cv.t('play.queue.reward_note', 'Plus {n} Candles a minute, up to {cap} per match.', { n: fmtInt(g.perMinute), cap: fmtInt(g.cap) }));
+    if (g.placement?.length) more.push(cv.t('play.queue.placement_note', 'Top five places earn extra Candles.'));
+    more.push(cv.t('play.queue.first_win', 'First win of the day pays a bonus.'));
+  }
+  const bans = cv.pickOf(q) === 'draft' ? q.draft?.bansPerTeam ?? 0 : null;
+  if (bans !== null) more.push(bans === 0 ? cv.t('play.queue.bans_none', 'No bans') : bans === 1 ? cv.t('play.queue.bans', '{n} ban per team', { n: bans }) : cv.t('play.queue.bans_plural', '{n} bans per team', { n: bans }));
+  more.push(q.bots.fill === 'opponents_only' ? cv.t('play.queue.bots_opponents', 'Opponents are bots.') : q.bots.fill === 'none' ? cv.t('play.queue.bots_none', 'No bots.') : cv.t('play.queue.bots_fill', 'Open seats are filled with bots.'));
+  return { reward, more };
+}
+
 function QueueCard(p: { q: QueueDefT; selected: boolean; onPick: () => void }): JSX.Element {
   const { cv, state, sound } = useApp();
   const profile = state.profile.value;
   const q = p.q;
   const cur = cv.earnedCurrency();
   const locked = q.unlockLevel > profile.level;
-  const g = q.grants;
-  const bans = cv.pickOf(q) === 'draft' ? q.draft?.bansPerTeam ?? 0 : null;
   const rec = q.ranked ? profile.ratings[q.ranked.ratingId] : undefined;
   const tier = cv.ratingTier(rec);
-  const lines: string[] = [];
-  if (g.win === 0 && g.loss === 0) lines.push(cv.t('play.queue.reward_none', 'No rewards'));
-  else {
-    lines.push(`${cv.t('play.queue.reward_win', 'Win: {n} Candles', { n: fmtInt(g.win) })} · ${cv.t('play.queue.reward_loss', 'Loss: {n} Candles', { n: fmtInt(g.loss) })}`);
-    if (g.perMinute > 0) lines.push(cv.t('play.queue.reward_note', 'Plus {n} Candles a minute, up to {cap} per match.', { n: fmtInt(g.perMinute), cap: fmtInt(g.cap) }));
-    if (g.placement?.length) lines.push(cv.t('play.queue.placement_note', 'Top five places earn extra Candles.'));
-    lines.push(cv.t('play.queue.first_win', 'First win of the day pays a bonus.'));
-  }
-  if (bans !== null) lines.push(bans === 0 ? cv.t('play.queue.bans_none', 'No bans') : bans === 1 ? cv.t('play.queue.bans', '{n} ban per team', { n: bans }) : cv.t('play.queue.bans_plural', '{n} bans per team', { n: bans }));
-  lines.push(q.bots.fill === 'opponents_only' ? cv.t('play.queue.bots_opponents', 'Opponents are bots.') : q.bots.fill === 'none' ? cv.t('play.queue.bots_none', 'No bots.') : cv.t('play.queue.bots_fill', 'Open seats are filled with bots.'));
+  const { reward } = queueTerms(cv, q);
   const lockText = locked ? cv.t('state.locked.queue', 'Reach level {level} to play {queue}.', { level: q.unlockLevel, queue: q.name }) : null;
+  const rankLine = q.ranked ? (tier && rec ? `${tier.name} · ${cv.t('play.queue.ranked_rating', 'Rating {n}', { n: fmtInt(rec.rating) })}`
+    : cv.t('play.queue.ranked_provisional', 'Your first {n} matches place you on the ladder.', { n: q.ranked.placementGames })) : null;
   return (
     <button type="button" role="radio" aria-checked={p.selected} data-nav=""
       class={`qcard plate ${p.selected ? 'is-selected plate--lit' : ''} ${locked ? 'is-locked' : ''}`}
-      aria-label={`${q.name}. ${q.desc}${lockText ? ` ${lockText}` : ''}`}
+      aria-label={`${q.name}. ${q.desc}${lockText ? ` ${lockText}` : ''}`} title={rankLine ?? undefined}
       onPointerEnter={() => sound.play('hover')} onClick={p.onPick}>
       {p.selected ? <span class="tick" aria-hidden="true" /> : null}
       <span class="qcard__head">
         <span class="t-h2 qcard__name">{q.name}</span>
+        {q.ranked ? <RankEmblem tier={tier} provisional={!tier} size={28} /> : null}
         <span class={`chip ${q.kind === 'ranked' ? 'chip--line' : ''}`}>{cv.t(`play.queue.kind.${q.kind}`, q.kind)}</span>
       </span>
       <span class="t-body-s qcard__desc">{q.desc}</span>
-      {q.ranked ? (
-        <span class="qcard__rank">
-          <RankEmblem tier={tier} provisional={!tier} size={40} />
-          <span class="t-caption">
-            {tier && rec ? `${tier.name} · ${cv.t('play.queue.ranked_rating', 'Rating {n}', { n: fmtInt(rec.rating) })}`
-              : cv.t('play.queue.ranked_provisional', 'Your first {n} matches place you on the ladder.', { n: q.ranked.placementGames })}
-          </span>
-        </span>
-      ) : null}
-      <span class="qcard__lines">
-        {lines.map((l, i) => <span class={`t-caption ${i === 0 && cur && g.win > 0 ? 'qcard__reward' : ''}`}>{i === 0 && cur && g.win > 0 ? <Currency id={cur.id} amount={g.win} size="s" tick={false} /> : null}{l}</span>)}
-      </span>
-      {lockText ? <span class="qcard__lock t-caption"><Icon name="lock" size={14} />{lockText}</span> : null}
+      {lockText ? <span class="qcard__lock t-caption"><Icon name="lock" size={14} />{lockText}</span>
+        : <span class={`t-caption ${cur && q.grants.win > 0 ? 'qcard__reward' : 'qcard__lines'}`}>{cur && q.grants.win > 0 ? <Currency id={cur.id} amount={q.grants.win} size="s" tick={false} /> : null}{reward}</span>}
     </button>
+  );
+}
+
+/** columns 7–12: the chosen mode's painted card (every live mode stacked, the chosen one on: a 360 ms crossfade
+ *  that enters from the right as the gnomon swings) and the chosen queue's description and terms */
+function PlayArt(p: { modeId: string | null; queue: QueueDefT | undefined; note?: string }): JSX.Element {
+  const { cv, state } = useApp();
+  const live = cv.c.client.modeSlots.filter((s) => s.mode && s.status === 'live' && cv.mode(s.mode)).map((s) => cv.mode(s.mode)!);
+  const q = p.queue;
+  const terms = q ? queueTerms(cv, q) : null;
+  const rec = q?.ranked ? state.profile.value.ratings[q.ranked.ratingId] : undefined;
+  const tier = cv.ratingTier(rec);
+  return (
+    <div class="playart">
+      <div class="playart__frame">
+        {live.map((m) => (
+          <ArtFrame src={m.card.art} mark={cv.modeMark(m)} lanes={cv.laneCount(m)} alt={m.id === p.modeId ? m.name : ''}
+            class={`playart__img ${m.id === p.modeId ? 'is-on' : ''}`} />
+        ))}
+      </div>
+      {q && terms ? (
+        <div class="playart__cap plate" aria-live="polite">
+          <span class="playart__head"><span class="t-label">{q.name}</span>{p.note ? <span class="t-caption muted">{p.note}</span> : null}</span>
+          <p class="t-body-s playart__desc">{q.desc}</p>
+          {q.ranked ? <span class="t-caption playart__rank"><RankEmblem tier={tier} provisional={!tier} size={24} />{tier && rec ? `${tier.name} · ${cv.t('play.queue.ranked_rating', 'Rating {n}', { n: fmtInt(rec.rating) })}`
+            : cv.t('play.queue.ranked_provisional', 'Your first {n} matches place you on the ladder.', { n: q.ranked.placementGames })}</span> : null}
+          <ul class="playart__terms t-caption">
+            <li>{terms.reward}</li>
+            {terms.more.map((l) => <li>{l}</li>)}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

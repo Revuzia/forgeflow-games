@@ -162,14 +162,30 @@ section('catalog: recipes and tiers', () => {
     if (f === 'gloam' && (comps.some((c) => c !== 'slate' && c !== 'verdigris') || it.passives.length !== 1 || it.passives[0].triggers.length === 0 || it.active))
       tierBad.push(`${it.id}: Gloam = Slate/Verdigris parts and exactly one triggered passive`);
     if (f === 'gloam' && it.uniqueGroup !== it.id) tierBad.push(`${it.id}: Gloam is unique per fighter (uniqueGroup = its id)`);
-    if (f === 'noonlit' && (comps.some((c) => c !== 'slate' && c !== 'verdigris') || it.uniqueGroup !== 'noonlit' ||
-      !(it.active || it.passives.some((p) => p.triggers.length > 0)))) tierBad.push(`${it.id}: Noonlit = parts, group 'noonlit', a passive or an active`);
+    // W4 re-key (originality F4): the one-Noonlit cap is gone; every Noonlit item stands on the dial (dial.hour, dial.apart)
+    if (f === 'noonlit' && (comps.some((c) => c !== 'slate' && c !== 'verdigris') || it.uniqueGroup !== undefined || !it.dial ||
+      !(it.active || it.passives.some((p) => p.triggers.length > 0)))) tierBad.push(`${it.id}: Noonlit = parts, on the dial (no unique group), a passive or an active`);
     if (f === 'boots_up' && (it.components.length !== 1 || frame(item(it.components[0])) !== 'boots_base')) tierBad.push(`${it.id}: boots upgrade builds from the base pair`);
     if (it.tier === 'boots' && it.uniqueGroup !== 'boots') tierBad.push(`${it.id}: boots share uniqueGroup 'boots'`);
     if (f === 'starter' && (it.uniqueGroup !== 'starter' || it.pools.join() !== 'rift')) tierBad.push(`${it.id}: starters are RIFT-only and share 'starter'`);
     if (f === 'consumable' && (!it.consumable || !it.active || it.sellRatio >= 0.7)) tierBad.push(`${it.id}: consumables have charges, an active and a low sell ratio`);
   }
   check('every frame is built from the frame below it, with its shape', tierBad.length === 0, tierBad);
+  // the dial-slot rule: Noonlit hours are distinct; every Noonlit item clashes with at least one other (no free stacking),
+  // and at most three fit together (pairwise >= apart)
+  const noon = ITEMS.filter((it) => it.tier === 'apex');
+  const gap = (a: number, b: number): number => { const d = Math.abs(a - b) % 12; return Math.min(d, 12 - d); };
+  const clash = (a: ItemDefT, b: ItemDefT): boolean => gap(a.dial!.hour, b.dial!.hour) < Math.max(a.dial!.apart, b.dial!.apart);
+  check('dial: Noonlit hours are distinct', new Set(noon.map((it) => it.dial?.hour)).size === noon.length, noon.map((it) => `${it.id}@${it.dial?.hour}`));
+  check('dial: every Noonlit item clashes with at least one other', noon.every((a) => noon.some((b) => b !== a && clash(a, b))));
+  let maxSet = 0;
+  for (let m = 1; m < 1 << noon.length; m++) {
+    const set = noon.filter((_, i) => m & (1 << i));
+    if (set.every((a, i) => set.every((b, j) => j <= i || !clash(a, b)))) maxSet = Math.max(maxSet, set.length);
+  }
+  check(`dial: at most three Noonlit items fit together (largest clash-free set ${maxSet})`, maxSet >= 2 && maxSet <= 3, maxSet);
+  check('dial: every item text names its hour and the 4-hour rule', noon.every((it) => / on the dial: another Noonlit item must stand 4 or more hours away\.$/.test(it.desc)));
+  check('starters fold into the first Gloam core (foldsInto core) and say so', byFrame('starter').every((it) => it.foldsInto?.includes('core') && /Folds into your first Gloam core/.test(it.desc)));
   const riftStart = modeRules('rift').startGold as number;
   const flask = byFrame('consumable').filter((i) => inPool(i, 'rift') && JSON.stringify(i.active?.effects).includes('"heal"')).sort((a, b) => a.cost - b.cost)[0];
   check(`every starter + one ${flask?.name} fits RIFT's ${riftStart} starting Gleam`, byFrame('starter').every((s) => s.cost + flask.cost <= riftStart),
@@ -264,12 +280,12 @@ const effectsJson = (s: { effects: unknown }): string => JSON.stringify(s.effect
 section('setup: battle spells', () => {
   const sp = setup.spells;
   check('7-9 battle spells, 2 slots', sp.length >= 7 && sp.length <= 9 && setup.spellSlots === 2);
-  const cdBad = sp.filter((s) => { const cd = s.charges ? (Array.isArray(s.charges.recharge) ? s.charges.recharge[0] : s.charges.recharge) : (Array.isArray(s.cooldown) ? s.cooldown[0] : s.cooldown); return cd < 90 || cd > 300; });
-  check('every spell recovers in 90-300 s (charges: the recharge)', cdBad.length === 0, cdBad.map((s) => s.id));
+  const cdBad = sp.filter((s) => { const cd = s.charges ? (Array.isArray(s.charges.recharge) ? s.charges.recharge[0] : s.charges.recharge) : (Array.isArray(s.cooldown) ? s.cooldown[0] : s.cooldown); return cd < (s.charges ? 60 : 90) || cd > 300; });
+  check('every spell recovers in 90-300 s (charges: the recharge, 60-300 s)', cdBad.length === 0, cdBad.map((s) => s.id));
   check('spells cost nothing and have one rank', sp.every((s) => s.costKind === 'none' && s.maxRank === 1));
   const has = (pred: (s: typeof sp[number]) => boolean): string[] => sp.filter(pred).map((s) => s.id);
   const jobs = {
-    blink: has((s) => effectsJson(s).includes('"op":"blink"')),
+    mobility: has((s) => effectsJson(s).includes('"op":"blink"') || effectsJson(s).includes('"op":"dash"')),
     sustain: has((s) => effectsJson(s).includes('"op":"heal"') && s.targeting.kind !== 'unit'),
     offense: has((s) => s.targeting.kind === 'unit' && s.targeting.filter?.fighters !== false && effectsJson(s).includes('"op":"damage"')),
     jungle: has((s) => s.targeting.filter?.fighters === false && s.targeting.filter?.monsters !== false),
@@ -278,7 +294,11 @@ section('setup: battle spells', () => {
     shield: has((s) => effectsJson(s).includes('"op":"shield"')),
   };
   console.log(`  jobs ${JSON.stringify(jobs)}`);
-  check('the spells cover blink, sustain, offense, jungle, haste, cleanse and shield', Object.values(jobs).every((l) => l.length > 0));
+  check('the spells cover mobility, sustain, offense, jungle, haste, cleanse and shield', Object.values(jobs).every((l) => l.length > 0));
+  // W4 re-key (originality F4): VALE's own default pair, never the reference genre's blink + heal
+  const defJobs = setup.defaults.spells.map((id) => sp.find((s) => s.id === id)!);
+  check('defaults are not blink + heal (no blink op and no heal in the default pair)', defJobs.every((s) => !effectsJson(s).includes('"op":"blink"')) &&
+    !defJobs.some((s) => effectsJson(s).includes('"op":"heal"')), setup.defaults.spells);
   check('the jungle spell is RIFT-only', jobs.jungle.every((id) => sp.find((s) => s.id === id)!.pools.join() === 'rift'));
   const n = (p: Pool): number => sp.filter((s) => s.pools.length === 0 || s.pools.includes(p)).length;
   check(`every pool has ≥ 2 spells (rift ${n('rift')}, bridge ${n('bridge')}, fray ${n('fray')}); fray is lighter`, POOLS.every((p) => n(p) >= 2) && n('fray') < n('rift'));
@@ -318,13 +338,14 @@ const PLANS: Record<Pool, Record<Cls, Plan>> = {
     caster: { open: ['reading_lens', 'sap_flask'], final: RIFT_FINAL.caster },
     tender: { open: ['ironstone_guard', 'sap_flask'], final: RIFT_FINAL.tender },
   },
+  // BRIDGE re-key (W4, originality F4): 1,050 Gleam buys one Verdigris piece and flasks; boots come from the Needle shops later
   bridge: {
-    plinth: { open: ['road_sandals', 'felt_coat', 'sap_flask'], final: RIFT_FINAL.plinth },
-    breaker: { open: ['road_sandals', 'banded_club'], final: RIFT_FINAL.breaker },
-    striker: { open: ['road_sandals', 'whetted_knife', 'sap_flask', 'sap_flask'], final: RIFT_FINAL.striker },
-    slinger: { open: ['road_sandals', 'glint_sling', 'sap_flask'], final: RIFT_FINAL.slinger },
-    caster: { open: ['road_sandals', 'bellglass', 'sap_flask', 'sap_flask'], final: RIFT_FINAL.caster },
-    tender: { open: ['road_sandals', 'bellglass', 'spare_lamp'], final: RIFT_FINAL.tender },
+    plinth: { open: ['felt_coat', 'sap_flask', 'sap_flask'], final: RIFT_FINAL.plinth },
+    breaker: { open: ['banded_club', 'sap_flask'], final: RIFT_FINAL.breaker },
+    striker: { open: ['whetted_knife', 'sap_flask', 'sap_flask'], final: RIFT_FINAL.striker },
+    slinger: { open: ['glint_sling', 'sap_flask', 'sap_flask'], final: RIFT_FINAL.slinger },
+    caster: { open: ['bellglass', 'sap_flask', 'sap_flask'], final: RIFT_FINAL.caster },
+    tender: { open: ['bellglass', 'spare_lamp', 'sap_flask'], final: RIFT_FINAL.tender },
   },
   fray: {
     plinth: { open: ['road_sandals', 'felt_coat', 'noon_tonic'], final: ['felt_treads', 'felt_coat', 'linen_hood', 'felt_coat', 'linen_hood', 'banded_club'] },
@@ -468,7 +489,11 @@ function model(id: string, bag: readonly (string | null)[]): { price: number; co
     }
     return v;
   };
-  const d = walk(item(id), 0);
+  let d = walk(item(id), 0);
+  // a carried starter folds into the first item of a foldsInto tier at its full cost (W4 re-key)
+  const tier = item(id).tier as string;
+  const f = bag.findIndex((x, i) => !claimed[i] && !!x && (item(x).foldsInto as readonly string[] | undefined)?.includes(tier));
+  if (f >= 0) { claimed[f] = true; d += item(bag[f]!).cost; }
   return { price: Math.max(0, item(id).cost - d), consumed: claimed.flatMap((x, i) => (x ? [i] : [])) };
 }
 const earnedIn = (ev: SimEvent[]): number => ofType(ev, 'gold').filter((g) => g.player === 0 && g.reason !== 'sell').reduce((a, g) => a + g.amount, 0);
@@ -579,8 +604,11 @@ section('shop: every class buys its build step by step in every pool', () => {
       const otherBoots = ITEMS.find((it) => frame(it) === 'boots_up' && inPool(it, pool) && !p.items.includes(it.id))!;
       uniqueOk = denied(cmd(sim, { type: 'buy', item: otherBoots.id })) === 'unique';
       if (pool !== 'fray') {
-        const otherNoon = ITEMS.find((it) => it.tier === 'apex' && !plan.final.includes(it.id))!;
-        uniqueOk &&= denied(cmd(sim, { type: 'buy', item: otherNoon.id })) === 'unique';
+        // the dial-slot rule: a Noonlit item too close on the dial to the carried one is refused
+        const mine = ITEMS.find((it) => it.tier === 'apex' && p.items.includes(it.id));
+        const gapH = (a: number, b: number): number => { const g = Math.abs(a - b) % 12; return Math.min(g, 12 - g); };
+        const otherNoon = mine && ITEMS.find((it) => it.tier === 'apex' && it.id !== mine.id && gapH(it.dial!.hour, mine.dial!.hour) < 4);
+        if (otherNoon) uniqueOk &&= denied(cmd(sim, { type: 'buy', item: otherNoon.id })) === 'unique';
       }
       cmd(sim, { type: 'undo' }); // put the sold piece back
     }
@@ -603,7 +631,8 @@ section('shop: the jungle opening and leaving the shop', () => {
   const p = P(sim);
   toShop(sim, 'rift');
   for (const id of ['grove_sickle', 'sap_flask', 'sap_flask']) cmd(sim, { type: 'buy', item: id });
-  check('grove sickle + 2 flasks from 480 Gleam', p.items.includes('grove_sickle') && p.itemCharges[p.items.indexOf('sap_flask')] === 2 && p.gold >= 0 && p.gold < 480 - 449);
+  const openCost = item('grove_sickle').cost + 2 * item('sap_flask').cost;
+  check(`grove sickle + 2 flasks (${openCost}) from 480 Gleam`, p.items.includes('grove_sickle') && p.itemCharges[p.items.indexOf('sap_flask')] === 2 && p.gold >= 480 - openCost - 1 && p.gold < 480 - openCost + 3, p.gold);
   check('a second starter is refused (unique)', denied(cmd(sim, { type: 'buy', item: 'notched_blade' })) === 'unique');
   check('undo depth counts the purchases', undoDepth(sim.world, 0) === 3);
   place(sim, 0, 60, 30); sim.step();
@@ -649,7 +678,7 @@ section('item passives and actives fire in the sim', () => {
     a.e.hp = a.e.maxHp - 100;
     const wick = spawnUnit(a.w, 'shieldwick', 1, 41, 22);
     const ev = hit(a, a.e, wick, 1e6, 'true').concat(run(a.sim, 0.1));
-    check('Notched Blade: a Wick you finish heals 6', healOf(ev, a.e).some((h) => near(h, 6)), healOf(ev, a.e));
+    check('Notched Blade: a Wick you finish heals 8', healOf(ev, a.e).some((h) => near(h, 8)), healOf(ev, a.e));
   }
   {
     const a = arena('rift', 'caster', ['reading_lens']);
@@ -755,7 +784,7 @@ section('item passives and actives fire in the sim', () => {
     a.e.hp = a.e.maxHp * 0.4;
     const [r, ev] = castNow(a, itemSlot(a, 'sap_flask'), 10);
     const healed = healOf(ev, a.e).reduce((x, h) => x + h, 0);
-    check('Sap Flask: heals 120 over 9 s and is used up', r === 'ok' && near(healed, 120, 1e-6) && !P(a.sim).items.includes('sap_flask'), { r, healed });
+    check('Sap Flask: heals 150 over 5 s and is used up', r === 'ok' && near(healed, 150, 1e-6) && !P(a.sim).items.includes('sap_flask'), { r, healed });
   }
   {
     const a = arena('rift', 'tender', ['spare_lamp', 'spare_lamp']);
@@ -763,7 +792,7 @@ section('item passives and actives fire in the sim', () => {
     check('Spare Lamp: two stack in one slot', P(a.sim).itemCharges[slot - SLOT_ITEM1] === 2);
     castNow(a, slot, 1.2, 44, 20);
     const lamps = a.w.entities.filter((x) => x.alive && x.def === 'hooded_lamp' && x.ownerEid === a.e.id);
-    check('Spare Lamp: sets a Hooded Lamp ward for 2:30', lamps.length === 1 && lamps[0].kind === 'ward' && P(a.sim).itemCharges[slot - SLOT_ITEM1] === 1);
+    check('Spare Lamp: sets a Hooded Lamp ward (3:20, 7.5 m sight)', lamps.length === 1 && units.find((u) => u.id === 'hooded_lamp')?.sightRange === 7.5 && lamps[0].kind === 'ward' && P(a.sim).itemCharges[slot - SLOT_ITEM1] === 1);
   }
   {
     const a = arena('fray', 'breaker', ['noon_tonic']);
@@ -800,45 +829,52 @@ section('setup: every battle spell does its job', () => {
   {
     const a = spellArena(['glint_step', 'saplight']);
     const x0 = a.e.x;
-    const [r] = castNow(a, SLOT_SPELL1, 0.1, a.e.x - 20, a.e.y);
-    check('Glint Step: blinks 4.5 m toward the point', r === 'ok' && near(x0 - a.e.x, 4.5, 0.3), { r, d: x0 - a.e.x });
+    const [r, gev] = castNow(a, SLOT_SPELL1, 0.6, a.e.x - 20, a.e.y);
+    check('Glint Step: dashes 5 m toward the point (a dash, not a blink)', r === 'ok' && near(x0 - a.e.x, 5, 0.3) && ofType(gev, 'dash').some((d) => d.src === a.e.id) &&
+      !ofType(gev, 'blink').length, { r, d: x0 - a.e.x });
+    check('Glint Step: its shadow stays where it started', a.w.entities.some((z) => z.kind === 'zone' && z.def === 'glint_shadow' && near(z.x, x0, 0.5)));
     place(a.sim, 0, 40, 20); a.sim.step();
+    place(a.sim, 2, 41.5, 20); a.sim.step();
     a.e.hp = a.e.maxHp * 0.3; a.ally!.hp = a.ally!.maxHp * 0.3;
-    const [r2, ev] = castNow(a, SLOT_SPELL1 + 1, 0.1);
-    const L = a.e.level;
-    check('Saplight: heals you 80 + 16/level and allies 40 + 8/level', r2 === 'ok' && healOf(ev, a.e).some((h) => near(h, 80 + 16 * L)) &&
-      healOf(ev, a.ally!).some((h) => near(h, 40 + 8 * L)), { r2, self: healOf(ev, a.e), ally: healOf(ev, a.ally!) });
+    const [r2, ev] = castNow(a, SLOT_SPELL1 + 1, 4.2);
+    const self = healOf(ev, a.e), ally = healOf(ev, a.ally!);
+    check('Saplight: a 4 s pool heals you and the ally in it 4% of max health a second', r2 === 'ok' && self.length >= 4 && ally.length >= 4 &&
+      self.every((h) => near(h, a.e.maxHp * 0.04, 1)) && ally.every((h) => near(h, a.ally!.maxHp * 0.04, 1)), { r2, self, ally });
   }
   {
     const a = spellArena(['hairline', 'hourstrike']);
     const [r, ev] = castNow(a, SLOT_SPELL1, 0.1, undefined, undefined, a.foe.id);
     const kinds = a.foe.statuses.map((s) => s.kind);
-    check('Hairline: 20 + 8/level true damage, armor/resist shred and grievous on the fighter', r === 'ok' &&
+    check('Hairline: 20 + 8/level true damage, armor/resist shred and 30% grievous on the fighter', r === 'ok' && near(a.foe.statuses.find((x) => x.kind === 'grievous')?.basePower ?? 0, 0.3) &&
       ofType(ev, 'damage').some((d) => d.dst === a.foe.id && d.dtype === 'true' && near(d.amount + d.shielded, 20 + 8 * a.e.level, 1e-6)) &&
       ['armor_shred', 'resist_shred', 'grievous'].every((k) => kinds.includes(k as never)), { r, kinds });
     const mob = spawnUnit(a.w, 'stilltusk', -1, 42, 23);
     run(a.sim, 0.4); // vision catches up (10 Hz)
     const [rf] = castNow(a, SLOT_SPELL1 + 1, 0, undefined, undefined, a.foe.id);
     const [r2, ev2] = castNow(a, SLOT_SPELL1 + 1, 0.1, undefined, undefined, mob.id);
-    check('Hourstrike: refuses fighters, strikes a monster for 450 + 30/level true, uses one of 2 charges', rf === 'target' && r2 === 'ok' &&
-      ofType(ev2, 'damage').some((d) => d.dst === mob.id && d.dtype === 'true' && near(d.amount + d.shielded, 450 + 30 * a.e.level, 1e-6)) &&
-      a.e.slots[SLOT_SPELL1 + 1]!.charges === 1, { rf, r2, ch: a.e.slots[SLOT_SPELL1 + 1]?.charges });
+    const want = Math.min(mob.maxHp, 250 + 15 * a.e.level + 0.12 * mob.maxHp);
+    check('Hourstrike: refuses fighters, strikes a full monster for 250 + 15/level + 12% of its current health true, uses one of 3 charges', rf === 'target' && r2 === 'ok' &&
+      ofType(ev2, 'damage').some((d) => d.dst === mob.id && d.dtype === 'true' && near(d.amount + d.shielded, want, 1)) &&
+      a.e.slots[SLOT_SPELL1 + 1]!.charges === 2, { rf, r2, ch: a.e.slots[SLOT_SPELL1 + 1]?.charges, want, got: ofType(ev2, 'damage').filter((d) => d.dst === mob.id).map((d) => d.amount) });
   }
   {
     const a = spellArena(['running_light', 'shake_loose']);
     castNow(a, SLOT_SPELL1, 0.1);
     const h = a.e.statuses.find((s) => s.kind === 'haste');
-    check('Running Light: 45% haste that fades', !!h && h.decay && near(h.basePower, 0.45));
+    check('Running Light: 60% haste that fades over 4 s', !!h && h.decay && near(h.basePower, 0.6));
     applyStatus(a.w, a.foe, a.e, 'root', 3);
     const [r] = castNow(a, SLOT_SPELL1 + 1, 0.1);
-    check('Shake Loose: breaks a root, then 50% tenacity', r === 'ok' && !a.e.statuses.some((s) => s.kind === 'root') && a.e.stats.tenacity >= 0.5, r);
+    check('Shake Loose: breaks a root, then 1 s unstoppable and haste (no tenacity buff; the stronger Running Light haste holds)', r === 'ok' && !a.e.statuses.some((s) => s.kind === 'root') &&
+      a.e.statuses.some((s) => s.kind === 'unstoppable') && a.e.statuses.some((s) => s.kind === 'haste' && s.basePower >= 0.3 - 1e-9) && a.e.stats.tenacity < 0.5,
+      { r, st: a.e.statuses.map((s) => `${s.kind}:${s.basePower}`), ten: a.e.stats.tenacity });
     applyStatus(a.w, a.foe, a.e, 'stun', 2);
     check('Shake Loose cannot be cast while stunned (documented sim rule)', tryCast(a.w, a.e, SLOT_SPELL1 + 1) !== 'ok');
   }
   {
     const a = spellArena(['glass_pane', 'calling_bell']);
     const [r] = castNow(a, SLOT_SPELL1, 0.05);
-    check('Glass Pane: a 90 + 20/level shield', r === 'ok' && near(a.e.shield, 90 + 20 * a.e.level), a.e.shield);
+    check('Glass Pane: a 50 + 12/level shield, and the enemy within 3 m is slowed 25%', r === 'ok' && near(a.e.shield, 50 + 12 * a.e.level) &&
+      a.foe.statuses.some((s) => s.kind === 'slow' && near(s.basePower, 0.25)), a.e.shield);
     const [r2] = castNow(a, SLOT_SPELL1 + 1, 0.4);
     check('Calling Bell: hastes the ally and reveals the enemy fighter', r2 === 'ok' && a.ally!.statuses.some((s) => s.kind === 'haste') && a.foe.statuses.some((s) => s.kind === 'reveal'), r2);
   }

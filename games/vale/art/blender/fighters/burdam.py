@@ -425,25 +425,25 @@ PAULDRON_TOP = [(-0.170, -0.150, 1.790), (-0.340, -0.140, 1.772), (-0.530, -0.11
 PAULDRON_THICK = [0.090, 0.090, 0.080, 0.085, 0.085, 0.085, 0.085, None]
 PAULDRON_BEVEL = 0.028
 PAULDRON_BIND = ("dblend", "shoulder.R", "upper_arm.R", (-0.38, 0.0, 1.70), (-1.0, 0.0, -0.25), 0.02, 0.17)
-PAULDRON_FACE = [(-0.205, -0.150, 1.795), (-0.465, -0.130, 1.785), (-0.535, -0.159, 1.640), (-0.235, -0.205, 1.555)]
+PAULDRON_FACE = [(-0.205, -0.150, 1.795), (-0.485, -0.129, 1.785), (-0.555, -0.162, 1.628), (-0.242, -0.209, 1.546)]
 PAULDRON_FACE_T = 0.050          # the slab's thickness behind its face
 PAULDRON_FACE_BEVEL = 0.018      # the chamfer round the face
 # hidden points behind the slab (its back joined to the dome, the shoulder and the chest: its edges never float)
-PAULDRON_FACE_FILL = [(-0.210, -0.100, 1.780), (-0.450, -0.080, 1.745), (-0.500, -0.100, 1.630), (-0.240, -0.130, 1.560)]
+PAULDRON_FACE_FILL = [(-0.210, -0.100, 1.780), (-0.465, -0.080, 1.745), (-0.515, -0.103, 1.627), (-0.247, -0.133, 1.552)]
 # the plate rides the clavicle; only its outer flare follows the upper arm part way (a raised arm lifts it instead of
 # poking the sleeve through), the roundel stays rigid
 PAULDRON_FACE_BIND = ("dblend", "shoulder.R", "upper_arm.R", (-0.40, 0.0, 1.70), (-1.0, 0.0, -0.25), 0.05, 0.20)
 LAME_TOP = [(-0.470, -0.150, 1.610), (-0.600, -0.112, 1.588), (-0.648, 0.000, 1.582), (-0.600, 0.112, 1.588),
             (-0.470, 0.150, 1.610)]
-LAME_DROP, LAME_FLARE = 0.072, 0.032
+LAME_DROP, LAME_FLARE = 0.072, 0.022
 
 
 def face_frame() -> tuple:
-    """the front plate's roundel centre (on the face, 55 % out from the neck, half way down) and the face's normal"""
+    """the front plate's roundel centre (on the face, 58 % out from the neck, half way down) and the face's normal"""
     IT, OT, OB, IB = (np.array(p, dtype=np.float64) for p in PAULDRON_FACE)
     n = np.cross(OT - IT, IB - IT)
     n /= np.linalg.norm(n)
-    c = 0.5 * ((IT + 0.55 * (OT - IT)) + (IB + 0.55 * (OB - IB)))
+    c = 0.5 * ((IT + 0.58 * (OT - IT)) + (IB + 0.58 * (OB - IB)))
     return c + n * 0.002, n
 
 
@@ -798,13 +798,14 @@ def sculpts() -> list:
     lame.add(Hull(lame_pts(LAME_TOP), k=0.010).displaced(chips(0.006, 7.0), 0.006), k=0.0)
     part("pauldron_lame", lame, "rust", "bone:upper_arm.R", 260)
     # W5b: the right pauldron's broad FRONT PLATE (see PAULDRON_FACE), last so earlier part ids stay put: a flat
-    # chamfered slab with the carved roundel (a 12 cm raised ring round a low boss) on its face
+    # chamfered slab with the roundel CARVED into its face (a 12 cm ring groove round a dished centre; the paint cuts
+    # the rings, stone_paint): a raised ring and boss read as a nut / knob on the plate's end from the side
     pf = Sculpt("pauldron_face")
-    pf.add(Hull(face_pts(), k=0.010).displaced(chips(0.006, 6.5), 0.006), k=0.0)
+    pf.add(Hull(face_pts(), k=0.010).displaced(chips(0.005, 6.5), 0.005), k=0.0)
     rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N)
     rax = sdf.frame(rn, (1.0, 0.0, 0.0))                              # rows: across, up the face, out of the face
-    pf.add(Torus(rc, 0.050, 0.011, axes=rax), k=0.005)                # the carved roundel: a raised ring
-    pf.add(Sphere(rc - rn * 0.012, 0.026), k=0.006)                    # ... round a low boss
+    pf.sub(Torus(rc + rn * 0.002, 0.050, 0.0075, axes=rax), k=0.004)   # the carved ring groove
+    pf.sub(Sphere(rc + rn * 0.060, 0.064), k=0.006)                    # ... round a shallow dished centre
     part("pauldron_face", pf, "rust", PAULDRON_FACE_BIND, 440)
     return out
 
@@ -1759,9 +1760,18 @@ def clip_overrides(ctx) -> dict:
     lift = anim.lerp_pose(G, reach, ULT_LIFT["body"])
     lift["ik"] = dict(lift["ik"], **one(ULT_LIFT["rel"], ULT_LIFT["d"], carry_flat(ULT_LIFT["d"], ULT_LIFT["roll"]),
                                         pole=ULT_LIFT["pole"]))
+    # W5b: the swing down from the cocked reach arcs OUT past the right shoulder's front plate (pauldron_face) instead
+    # of cutting through it (one in-between, f15: 68 cleaver verts inside the plate -> ULT_ARC)
+    swing = [(0.36, drop, "in")]
+    if ULT_ARC:
+        arc = anim.lerp_pose(reach2, drop, ULT_ARC["at"])
+        h = arc["ik"]["hand.R"]
+        arc["ik"] = dict(arc["ik"], **{"hand.R": HT(rel=tuple(h.rel[i] + ULT_ARC["off"][i] for i in range(3)),
+                                                     pole=h.pole)})
+        swing = [(ULT_ARC["t"], arc, "in"), (0.36, drop, "linear")]
     out["cast_ult"] = clip("cast_ult", 45, [(0.0, G, "linear"), (0.04, anim.lerp_pose(G, reach, -0.06), "inout"),
                                             (ULT_LIFT["t"], lift, "inout"),
-                                            (0.13, reach, "out"), (0.29, reach2, "inout"), (0.36, drop, "in"),
+                                            (0.13, reach, "out"), (0.29, reach2, "inout")] + swing + [
                                             (I, stamp, "accel"),
                                             (0.47, anim._with_hips(stamp, (0, 0.01, -0.012)), "out"),
                                             (0.67, hold, "linear"), (0.78, ult_rec, "inout"),
@@ -2106,6 +2116,9 @@ ULT_CLAW = (0.0, -28.0, 0.0)           # prop.L: the reaching fingers a little c
 # W5b: cast_ult's lift out of the carry (t: clip time of the key; body: how far the torso / left arm are toward the
 # reach there; rel / d / roll / pole: the right fist (chest frame, arm lengths), the blade axis and its flat roll)
 ULT_LIFT = dict(t=0.09, body=0.4, rel=(-0.62, 0.35, 0.58), d=(0.0, 0.72, 0.69), roll=5.0, pole=(-1.0, 0.25, -0.3))
+ULT_ARC = dict(t=0.335, at=0.5, off=(-0.20, -0.12, 0.12))   # W5b: the swing's in-between, its fist pushed out to the right,
+# forward and up (0.2 / 0.12 / 0.12 arm lengths): a wider overhead arc. A sweep on the build-2 cache, cleaver verts inside
+# any body part but the arms, f13-f18: no arc 20/12/37/17/37/0 (f15: the front plate 27 + the coat) -> 20/3/9/17/37/0
 # (picked by a sweep on the cached build, torso hits f2-f6: the fist out and up beside the back of the right shoulder,
 # the blade still straight back but 44 degrees up (the carry's 30): f3 / f4 41 / 41 -> 0 / 0, f5 28 -> 20; a blade
 # that leans out or steepens toward the reach (50 degrees) before the fist leaves the shoulder drives the pommel
@@ -2874,7 +2887,7 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
     if nm == "pauldron_face":
         # W5b: the front plate's broad face is the concept's lit carved face (the top stone), not a dark side band
         fn = np.asarray(PAULDRON_FACE_N, dtype=np.float64)
-        top = np.maximum(top, np.clip((Nm @ fn - 0.70) / 0.20, 0.0, 1.0) * 0.85)
+        top = np.maximum(top, np.clip((Nm @ fn - 0.70) / 0.20, 0.0, 1.0) * 0.6)
     base = _hexlin(STONE_SIDE)[None] * (1 - top[:, None]) + _hexlin(STONE_TOP)[None] * top[:, None]
     base = base * np.clip(1.0 + 0.35 * np.minimum(nz, 0.0), 0.55, 1.0)[:, None]          # undersides darker
     # the painting's own value variation (scratches, stains, the concept's cracks), a third of it
@@ -2912,9 +2925,11 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
             q = Pm - rc
             r = np.hypot(q @ ax[0], q @ ax[1])
             face = np.clip((Nm @ rn - 0.35) / 0.3, 0.0, 1.0) * (np.abs(q @ rn) < 0.035)
-            for rr, hw in ((0.031, 0.0045), (0.069, 0.0055)):
+            for rr, hw in ((0.022, 0.0040), (0.050, 0.0065), (0.069, 0.0045)):   # the dish edge, the groove, the rim
                 cut = np.maximum(cut, np.clip(1.0 - np.abs(r - rr) / hw, 0.0, 1.0))
-            lip = np.clip(1.0 - np.abs(r - 0.050) / 0.010, 0.0, 1.0) * 0.8 + np.clip(1.0 - r / 0.018, 0.0, 1.0) * 0.6
+            lip = np.maximum(np.clip(1.0 - np.abs(r - 0.040) / 0.005, 0.0, 1.0),
+                             np.clip(1.0 - np.abs(r - 0.060) / 0.005, 0.0, 1.0)) * 0.7 \
+                + np.clip(1.0 - r / 0.014, 0.0, 1.0) * 0.5
             cut, lip = cut * face, lip * face
         else:
             # ledger rows: grooves across the top running out from the neck (constant y), spaced over its depth

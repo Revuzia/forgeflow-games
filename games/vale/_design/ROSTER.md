@@ -56,10 +56,10 @@ The task set a floor of 4 fighters per position. I aimed higher: **every positio
 - **Tenders list no secondary.** A healer on a solo road is a trap for new players. Lampglass is still covered six ways because Marund, Ardit, Dunsom and Lisvel can all play it.
 - **Shaftlight is the thinnest position at 5.** Locking it out completely would take five of the 13 removals to be Shaftlight-capable fighters. Positions are soft in the draft host anyway: an off-position pick is legal and bots score role fit, not role locks. The next fighter added should be a Shaftlight or Shaftlight-secondary.
 
-### 2.2 BRIDGE (random fighters with a bench of 3, 1 reroll)
+### 2.2 BRIDGE (random fighters with a Lot of 3 that burns down; W4 re-key 2026-10-28)
 
-- **Every match uses the whole roster.** 10 seats plus two benches of 3 is exactly 16, so the Lot puts every fighter on the field or on a bench each match.
-- **Rerolls still work.** `src/session/draft.ts` `drawFor` falls back to "unused by that team" once the pool is empty, so a reroll can hand out a fighter the other team holds. That is a cross-team mirror, and the code allows it.
+- **Every match uses the whole roster.** 10 seats plus two Lots of 3 is exactly 16, so the Lot puts every fighter on the field or on a Lot each match.
+- **No redraws.** The Lot is cast once (`rerolls: 0`); each seat may take one fighter from its team's Lot (`swaps: 1`), and every 8 s the Lot's first fighter returns to the gorge (`fade: 8`). The old one-redraw rule was cut as the genre's bench-and-reroll (final parity review, originality F4).
 - **Consequence for kits:** all 16 kits must work on one lane with no recall. Every kit has a wave-clear or area tool, and every Plinth and Breaker has some sustain or damage reduction.
 - **Composition odds.** Each team sees 8 of the 16.
   - The chance that a team's 8 holds no Plinth or Breaker is C(10,8)/C(16,8) = **0.35%**.
