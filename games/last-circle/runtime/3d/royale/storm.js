@@ -78,7 +78,7 @@ const ALPHA_CAP = 0.40;                     // a silhouette 20 m behind the wall
 // of the falling streaks, whose BRIGHTNESS is streakGain x the curtain luminance under them (glare bar <= 2x).
 const PAL = {
   base: 0x5e4a9e, curtain: 0xbe96e6, band: 0xc878fa, streak: 0xe8e0ff,
-  baseA: 0.40, curtainA: 0.36, bandA: 0.40, streakGain: 1.8, streakAlpha: 0.45,
+  baseA: 0.40, curtainA: 0.36, bandA: 0.40, streakGain: 1.8, streakGainHi: 1.4, streakAlpha: 0.40,
   baseH0: 8, baseH1: 18, bodyMin: 0.6, bodyH: 160, bandH: 3.0,
   // P1-E (LC-72) distance fade: within farD0 m of the camera the wall is exactly as before (every stormfx_storm view); beyond
   // farD1 m its top is capped by ELEVATION, d x farK (~3.7 deg), never under farMin m; between the two it blends. Streaks follow
@@ -125,7 +125,8 @@ uniform vec3 uStreakCol;    // hue of the falling streaks (their brightness come
 uniform float uBaseA;
 uniform float uCurtainA;
 uniform float uBandA;
-uniform float uStreakGain;  // streak luminance as a multiple of the curtain's own luminance under it (glare bar: <= 2)
+uniform float uStreakGain;  // streak luminance as a multiple of the curtain's own luminance under it, in the dense base (glare bar: <= 2)
+uniform float uStreakGainHi; // the same multiple up in the lighter curtain (R1: there the haze thinning carries the streak)
 uniform float uStreakAlpha; // the haze is this much thinner along a streak (alpha multiplier, < 1)
 uniform float uAlphaCap;
 uniform float uBaseH0;      // metres: the base holds up to here...
@@ -203,9 +204,17 @@ void main() {
   float sk = max( streakLayer( s, hA, 2.7, 1.0, sHs, sHe ), streakLayer( s, hA, 6.4, 7.0, sHs, sHe ) );
   sk *= 1.0 - smoothstep( uStreakFar.x, uStreakFar.y, dC );           // and streaks fade out with distance
   const vec3 LUM = vec3( 0.2126, 0.7152, 0.0722 );
-  vec3 sRgb = uStreakCol * ( uStreakGain * dot( rgb, LUM ) / max( dot( uStreakCol, LUM ), 1e-4 ) );
+  // R1 (stormfx_storm phase6 glare 2.10x / 1.84x over two runs): a streak up in the bright curtain glowed 1.8x of a pixel that is
+  // already ~1.2x the 10-60 m median (the base -> curtain blend sits below it), so the brightest streaks read 2.1-2.2x the curtain.
+  // Up in the curtain the line now glows less and is carried by the thinner haze (above); the dense base keeps its glow, where
+  // thinning is off and the glow is all that shows (the ground-band delta)
+  vec3 sRgb = uStreakCol * ( mix( uStreakGain, uStreakGainHi, up ) * dot( rgb, LUM ) / max( dot( uStreakCol, LUM ), 1e-4 ) );
   rgb = mix( rgb, sRgb, sk );
-  a = mix( a, a * mix( 1.0, uStreakAlpha, up ), sk );                 // the dense base stays dense: streaks there only glow
+  // the haze thins along a streak from 2 m above the dense base (uBaseH0 + 2) up, fully 4 m higher: the dense base and the ground
+  // band below 10 m stay as they were (streaks there only glow), but the base -> curtain blend (8-18 m) no longer hides them (R1: a
+  // near view across a hill sees mostly that blend, where a streak only glowed: 2-5 / 255 over its neighbours at 10-13 m)
+  float thinS = smoothstep( uBaseH0 + 2.0, uBaseH0 + 6.0, hA );
+  a = mix( a, a * mix( 1.0, uStreakAlpha, thinS ), sk );
   gl_FragColor = vec4( rgb, a );                                      // premultiplied
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -360,6 +369,7 @@ export function createStorm(W) {
       uCurtainA: { value: PAL.curtainA },
       uBandA: { value: PAL.bandA },
       uStreakGain: { value: PAL.streakGain },
+      uStreakGainHi: { value: PAL.streakGainHi },
       uStreakAlpha: { value: PAL.streakAlpha },
       uAlphaCap: { value: ALPHA_CAP },
       uBaseH0: { value: PAL.baseH0 },
