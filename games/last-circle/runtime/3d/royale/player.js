@@ -3224,7 +3224,12 @@ function animate(W, a, dt) {
       // the static grip - gun backwards in its shadow, and for the one frame it
       // re-entered the frustum on a non-evaluating frame (rigcheck (c): 3 bots,
       // barrel . chest -0.31 / -0.99 / -0.98, all off screen, 7.7-30.2 m).
-      if ((layers || a._evalNow) && a.hand && a.handBone && !a.emoting && !a.downed && (poseAim || mixamoAim)) barrelWeld(a, bodyFwdYaw, twist, mixamoAim);
+      // (R1, rigcheck (c)) the barrel follows the chest it is welded to: on a frame the mixer re-keyed the bones but the layers above did not
+      // run (off screen: the shadow-range weld), the spine carries the clip's own yaw, NOT the aim twist, so the weld uses twist 0 there. It
+      // used the full twist: a Mixamo rifle bot landing off screen (seed 11, s15, AR, aimDelta 1.0 rad) had its barrel 0.95 rad one side of
+      // the body and its bladed rifle chest ~0.95 rad the other: barrel . chest -0.335 / -0.223, the gun backwards in its shadow.
+      const spineTwisted = pistolTwist || (useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed);
+      if ((layers || a._evalNow) && a.hand && a.handBone && !a.emoting && !a.downed && (poseAim || mixamoAim)) barrelWeld(a, bodyFwdYaw, (spineTwisted && !layers) ? 0 : twist, mixamoAim);
       // ── SUPPORT HAND — two-bone IK onto the foregrip ─────────────────────
       // History, so nobody hunts ghosts: this call spent weeks disabled under
       // the theory that "something later in the frame re-poses the arm". Wrong.
