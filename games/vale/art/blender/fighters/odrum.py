@@ -1242,8 +1242,10 @@ _paint0 = project.paint
 KEY_LIGHT = unit((-0.45, -0.55, 0.70))                    # the concept's key: upper left of the front view
 BACK_KEY = unit((-0.35, 0.60, 0.72))                      # a second key over the back (the back view's light)
 SHEEN = unit((-0.2, -0.45, 0.87))
-WALNUT = "#BB9B76"                                        # oiled pale walnut (the concept's bar): warm, under 40 % sat
-WALNUT_GRAIN = "#6A4A30"                                  # its darker grain lines and knots
+# (value lift, 10-28: the bar a step paler and greyer, L* 66 -> 73 and sat 37 -> 27 %, so it parts from the
+# desaturated golden jars by value and hue, and the top band reads light from every side; brief wood L* 70)
+WALNUT = "#C8B092"                                        # oiled pale walnut (the concept's bar): warm, under 40 % sat
+WALNUT_GRAIN = "#7D5F44"                                  # its darker grain lines and knots
 # the yoke's props are not painted on the concept at the yoke's built length: they paint procedurally, in the
 # concept's palette and light (oiled pale walnut, wound leather, glossy amber lampresin)
 PROCEDURAL = {"staff": "walnut", "staff_wraps": "band", "staff_caps": "amber", "staff_collars": "collar", "pouch": "pouch",
@@ -1275,12 +1277,29 @@ DESPECKLE = ("cap", "mask", "coat", "straps", "belt", "skirt", "trousers", "boot
 # (seventh pass: the lineup at the game camera read top/mid/feet L* 54.5 / 43.4 / 13.9 against Marund's 57.4 / 43.1 /
 # 17.9: the cap and the yoke a step lighter for the top band, the trousers and boots lifted off black for the feet band,
 # still the darkest forms, under the jerkin by a clear step)
-TONE = {"mask": ("#C28C44", 0.12), "cap": ("#86644C", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
+# POLISH (10-28), two reasons at once:
+#  * the marigold band (brief sections 0 and 5: every large area inside hue 25-50 deg stays under 40 % saturation,
+#    Dusk marigold #FF9A1F is the enemy colour): the review measured the jars #B57F3C / #A67538 (hue 33, sat 66-67 %)
+#    and the mask #A97B3E (sat 64 %) in game. The golden ochre is now a PALE golden ochre: the mask, fists and jars
+#    at 32-38 % saturation, the hue nudged from marigold's 33 deg to 36-38 deg (golden, not orange), lighter so the
+#    ochre still reads warm-gold and not khaki (the sixth review's complaint about the fists). The jars keep the most
+#    chroma of the three (38 %, a glaze) and sit a step under the mask in value; small areas (the lampresin in the
+#    mouths, the amber end caps, the incised lines) keep their richer colour.
+#  * the value lift (Wave B environment verify): with the shared character light Odrum measured top-25 L* 66 on
+#    RIFT, 62 on FRAY (seen from behind) -> the head, cap, jars, fists and the bar a clear step lighter (mask L* 62 ->
+#    74, cap 45 -> 62, jars 58 -> 70, bar 66 -> 73) and the jerkin lifted by height toward the shoulders (COAT_LIFT);
+#    the skirt, trousers and boots are untouched (the dark-feet end of the gradient)
+TONE = {"mask": ("#CCB289", 0.08), "cap": ("#AC9177", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
         "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#382B22", 0.30), "boots": ("#2C2018", 0.35)}
-POT_GLAZE = "#C07E32"                     # the jars' golden-ochre glaze (the concept's #C57B23)
-POT_RIM = "#D09A50"                       # the carved window collar and the band: a lighter, carved ochre
-POT_LIP = "#C88B40"                       # the rolled lip
-FIST = "#CC9448"                          # the carved ochre fists: the mask's ochre (the concept paints them alike)
+POT_GLAZE = "#C4A77A"                     # the jars' pale golden-ochre glaze (L* 70, hue 37, sat 38 %; was #C07E32)
+POT_RIM = "#D0B890"                       # the carved window collar and the band: a lighter, carved ochre
+POT_LIP = "#CAAC81"                       # the rolled lip
+FIST = "#C6AD83"                          # the carved ochre fists: the mask's ochre (the concept paints them alike)
+# the jerkin's top light (value lift): each coat texel's luminance x the gain at its rest height (1.0 at the belt,
+# the shoulders and upper back ~1.7x: chocolate felt L* 34 under the belt -> ~44 on the shoulders), mixed this much
+# toward its own grey as it lifts (felt sun-faded on the shoulders under the yoke, not copper)
+COAT_LIFT = ((1.08, 1.0), (1.20, 1.22), (1.32, 1.50), (1.42, 1.70))
+COAT_FADE = 0.22
 
 
 def _hex(h):
@@ -1403,7 +1422,7 @@ def _procedural(kind, name, P, N):
     elif kind == "linen":                                 # the mouth-wrap: pale linen wound round the neck
         ang = np.arctan2(P[:, 0], -(P[:, 1] + 0.012))
         fold = np.sin(P[:, 2] * 140.0 + ang)
-        col = _hex("#B3A286")[None, :] * ((0.92 + 0.10 * fold + 0.04 * NOISE(P, 60.0)) * (0.80 + 0.30 * lam))[:, None]
+        col = _hex("#C0B094")[None, :] * ((0.92 + 0.10 * fold + 0.04 * NOISE(P, 60.0)) * (0.80 + 0.30 * lam))[:, None]
         col[fold < -0.75] *= 0.80                         # the shadowed seam under each turn
     elif kind == "ring":                                  # the dark ironstone ring each window glass is set in
         col = _hex("#3B302A")[None, :] * ((1.0 + 0.08 * NOISE(P, 90.0)) * (0.80 + 0.40 * lam))[:, None]
@@ -1444,7 +1463,9 @@ def _procedural(kind, name, P, N):
         col = col * (1.0 - rim[:, None]) + _hex(POT_RIM)[None, :] * (1.0 + 0.04 * NOISE(P, 50.0))[:, None] * rim[:, None]
         col[ang < WIN_ANG - 1.0] *= 0.42                                            # the seat under the glass
         cav = _cavity(_pot_prim(side), P, N, 0.007)
-        col *= ((0.84 + 0.26 * lam + 0.06 * np.clip(N[:, 2], 0, 1)) * (1.0 - 0.42 * cav))[:, None]
+        # (value lift: the painted light's floor 0.84 -> 0.90, so the jars' far side, seen from behind in game, is
+        # not a dark half; the game's light does the rest)
+        col *= ((0.90 + 0.20 * lam + 0.06 * np.clip(N[:, 2], 0, 1)) * (1.0 - 0.42 * cav))[:, None]
         col += np.array([0.10, 0.075, 0.04])[None, :] * (np.clip(N @ SHEEN, 0, 1) ** 14)[:, None]   # glaze sheen
     elif kind == "potlip":                                # the rolled lip: the same glaze, the mouth's inside in shade
         side = name[-1]
@@ -1787,6 +1808,19 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
         mxc = new.max(axis=1, keepdims=True)
         new = np.where(mxc > 0.98, new * (0.98 / np.maximum(mxc, 1e-4)), new)
         out[m] = project._srgb(np.clip(new, 0.0, 1.0)).astype(np.float32)
+    # the jerkin's top light (value lift, COAT_LIFT): luminance x the gain at the texel's rest height, a little toward
+    # its own grey as it lifts, so the shoulders and upper back read light under the yoke and the gradient runs on
+    # down through the skirt to the dark feet
+    m = sel("coat")
+    if m is not None:
+        zz, gg = zip(*COAT_LIFT)
+        g = np.interp(Pw[m][:, 2].astype(np.float64), zz, gg)
+        lin = project._lin(out[m]) * g[:, None]
+        Y = (lin @ LUMA)[:, None]
+        f = (COAT_FADE * np.clip((g - 1.0) / max(gg[-1] - 1.0, 1e-4), 0.0, 1.0))[:, None]
+        lin = lin * (1.0 - f) + Y * f
+        out[m] = project._srgb(np.clip(lin, 0.0, 0.98)).astype(np.float32)
+        scene.log(f"odrum paint: coat top light x{float(g.min()):.2f}..{float(g.max()):.2f}")
     # felt nap on the jerkin and cap (matte fibre mottling: the hero sun then lights felt, not satin)
     for nm in ("coat", "skirt", "cap"):
         m = sel(nm)

@@ -222,7 +222,7 @@ TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
 ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.25
-ATLAS_SOFTEN = 0.55
+ATLAS_SOFTEN = 0.60       # fix pass 2: 0.55 -> 0.60 (GLB headroom: fp2 build 1 was 1170.5 KiB)
 
 # ART 2.0 skins (brief §9): each part moves onto the skin's colours (_recolour below, the painting's values kept)
 SKINS: list = [
@@ -492,12 +492,32 @@ def back_k(z):
     return 1.0 - BACK_ROUND * ss(1.20, 1.60, np.asarray(z, float))
 
 
+# fix pass 2 (side / back still read as a tall flat column, from behind and above a white slab): the back half's
+# profile is a quarter ellipse from the cowl up to the crown (z0, height, depth behind the crown's centre; never
+# shallower than fix pass 1's), and its section is rounder (super-ellipse 2.15 behind, the front keeps 2.5 round the
+# face): a dome from the side and from above; the front and back silhouettes keep their widths
+HOOD_E_BACK = 2.15
+BACK_DOME = (1.05, 0.60, 0.36)
+
+
+def back_hy(z):
+    """the back half's depth (from the section's depth centre) at height z"""
+    z = np.minimum(np.asarray(z, float), DOME_Z0 + DOME_H - 1e-4)
+    hx, hy, yc = hood_sec(z)
+    z0, H, D = BACK_DOME
+    u = np.clip((z - z0) / H, 0.0, 1.0)
+    ell = float(HYC[-1]) + D * np.sqrt(np.clip(1.0 - u * u, 0.0, 1.0)) - yc
+    return np.maximum(hy * back_k(z), ell)
+
+
 def hood_outer(P):
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
     hx, hy, yc = hood_sec(np.minimum(z, DOME_Z0 + DOME_H - 1e-4))
-    hy = np.where(y > yc, hy * back_k(z), hy)
+    back = y > yc
+    hy = np.where(back, back_hy(z), hy)
     hx, hy = np.maximum(hx, 1e-3), np.maximum(hy, 1e-3)
-    r = (np.abs(x / hx) ** HOOD_E + np.abs((y - yc) / hy) ** HOOD_E) ** (1.0 / HOOD_E)
+    E = np.where(back, HOOD_E_BACK, HOOD_E)
+    r = (np.abs(x / hx) ** E + np.abs((y - yc) / hy) ** E) ** (1.0 / E)
     d = (r - 1.0) * np.minimum(np.minimum(hx, hy), 0.30)
     zbot = HZ[0] + 0.075 * ss(0.14, 0.30, np.abs(x)) * (1 - ss(0.0, 0.20, y))     # the plates show under the sides
     return np.maximum(d, np.maximum(zbot - z, z - (DOME_Z0 + DOME_H)))
@@ -523,9 +543,14 @@ def open_pt(t):
     return float(np.interp(s, L, ws)), float(np.interp(s, L, zs))
 
 
+RIM_TOP = (1.38, 2.5)      # fix pass 2: over 1.38 the rim curves back into the dome (the side view's square top corner)
+
+
 def rim_y(x, z):
     """the rolled rim's front (y) round the opening: the hood's front drawn forward over the face"""
-    return -0.300 + 0.55 * np.asarray(x) ** 2 + 0.25 * np.clip(1.30 - np.asarray(z), 0, None) ** 2
+    z = np.asarray(z)
+    return (-0.300 + 0.55 * np.asarray(x) ** 2 + 0.25 * np.clip(1.30 - z, 0, None) ** 2
+            + RIM_TOP[1] * np.clip(z - RIM_TOP[0], 0, None) ** 2)
 
 
 # ── the sculpt ──────────────────────────────────────────────────────────────────────────────────────
@@ -567,7 +592,7 @@ def sculpts() -> list:
     def seam(P):
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
         hx, hy, yc = hood_sec(np.minimum(z, 1.649))
-        yb = yc + hy * back_k(np.minimum(z, 1.649))
+        yb = yc + back_hy(np.minimum(z, 1.649))
         return np.maximum(np.hypot(x, (y - yb) * 1.0) - 0.0055, np.maximum(1.10 - z, z - 1.645))
     hood.sub(Fn(seam, (-0.03, 0.10, 1.08), (0.03, 0.40, 1.66)), k=0.006)
     for sx in (-1, 1):
@@ -575,8 +600,8 @@ def sculpts() -> list:
         for z in (1.50, 1.35, 1.20, 1.07):
             hx, hy, yc = hood_sec(z)
             a = math.radians(48.0)
-            r = 1.0 / ((abs(math.sin(a)) ** HOOD_E + abs(math.cos(a)) ** HOOD_E) ** (1 / HOOD_E))
-            pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(hy * back_k(z)) * math.cos(a) * r * 0.985, z))
+            r = 1.0 / ((abs(math.sin(a)) ** HOOD_E_BACK + abs(math.cos(a)) ** HOOD_E_BACK) ** (1 / HOOD_E_BACK))
+            pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(back_hy(z)) * math.cos(a) * r * 0.985, z))
         hood.add(Tube(pts, [0.006, 0.010, 0.012, 0.010], k=0.01), k=0.03)
     part("hood", hood, "cloth2", ("weights", "hood"), 1900, uvw=1.3)
 
@@ -698,15 +723,17 @@ def sculpts() -> list:
             painted(1.0, float(sh[1]), 0.10, wraps(0.0020, 0.036, top_, el, 1.3)), 0.011), k=0.0)
         part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 620)
         br = Sculpt(f"bracer_{s}")
-        a_, b_ = el + fo * 0.010, wr - fo * 0.005
-        br.add(FlatCapsule(a_, b_, 0.086, 0.082, 0.072, 0.070, side=(0, 1, 0)).displaced(wraps(0.0045, 0.030, a_, b_, 1.8), 0.0045), k=0.0)
+        # fix pass 2: the bracer starts 1.5 cm further down and a little thinner, so its start stays inside the
+        # sleeve's elbow end (a bent elbow pushed it through the sleeve cap in ragged patches: the victory splash)
+        a_, b_ = el + fo * 0.025, wr - fo * 0.005
+        br.add(FlatCapsule(a_, b_, 0.080, 0.082, 0.068, 0.070, side=(0, 1, 0)).displaced(wraps(0.0045, 0.030, a_, b_, 1.8), 0.0045), k=0.0)
         br.add(Torus(b_ - fo * 0.006, 0.070, 0.008, axes=sdf.frame(fo)), k=0.006)
         part(f"bracer_{s}", br, "leather", f"bone:forearm.{s}", 520, 0.7)
     out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 780, curl=1.0, grip=True))
     out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 720, curl=LEFT_CURL, grip=False, relaxed=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
-    out.append(mantle_part(1560))
+    out.append(mantle_part(1470))                       # fix pass 2: 1560 -> 1470 (GLB headroom)
 
     # THE CORD: a coil of weighted cord at the left hip, on the sash (Wrap Cast leaves from here)
     cord = Sculpt("cord")
@@ -732,7 +759,7 @@ def sculpts() -> list:
     sw.add(Sphere(c0 + np.array([-SWING_R, 0.0, 0.0]), 0.021).displaced(chips(0.002, 25.0), 0.002), k=0.006)   # the weight
     sw.add(Tube([SWING_G + np.array([0.0, 0.0, -0.02]), SWING_G + np.array([0.006, 0.0, 0.5 * SWING_RISE]),
                  SWING_G + np.array([0.0, 0.0, SWING_RISE])], [0.0085, 0.0080, 0.0080], k=0.004), k=0.004)   # fist -> loop
-    part("cord_swing", sw, "rope", "bone:x_cord_swing", 240, 0.5)
+    part("cord_swing", sw, "rope", "bone:x_cord_swing", 210, 0.5)
 
     out.extend(staff_parts())
     out.extend(cup_parts())
@@ -1077,9 +1104,9 @@ def skin_extras(extra: dict) -> list:
 
         def on_back(x, z, lift=0.006):
             hx, hy, yc = hood_sec(z)
-            hy = float(hy * back_k(z))
+            hy = float(back_hy(z))
             u = min(abs(x) / float(hx), 0.98)
-            return np.array([x, float(yc) + hy * (1 - u ** HOOD_E) ** (1 / HOOD_E) + lift, z])
+            return np.array([x, float(yc) + hy * (1 - u ** HOOD_E_BACK) ** (1 / HOOD_E_BACK) + lift, z])
         for i, ang in enumerate((-56.0, -28.0, 0.0, 28.0, 56.0)):
             a_ = math.radians(ang)
             L = 0.215 if i in (1, 2, 3) else 0.190
@@ -1088,6 +1115,7 @@ def skin_extras(extra: dict) -> list:
             for j, (p0, p1) in enumerate(zip(pts[:-1], pts[1:])):
                 mid = 0.5 * (p0 + p1)
                 hx, hy, yc = hood_sec(mid[2])
+                hy = back_hy(mid[2])
                 nrm = unit(np.array([mid[0] / max(float(hx), 1e-3) ** 2, (mid[1] - float(yc)) / max(float(hy), 1e-3) ** 2, 0.25]))
                 t_ = unit(p1 - p0)
                 w_ = unit(np.cross(nrm, t_))
@@ -1483,6 +1511,16 @@ def _band_tone(z, lin, zq, step=0.03):
     return np.stack([np.interp(zq, cen, med[:, c]) for c in range(3)], 1).astype(np.float32)
 
 
+def _elbow_zone(nm, p):
+    """fix pass 2: the sleeve's elbow end (its last quarter along the upper arm and the end cap, at any height: the
+    right elbow sits over build 9's z < 0.78 zone): the painted arm / bracer edge printed ragged brown-cream patches on
+    the bent elbow in the victory splash"""
+    sh, el = (SH_L, E_L) if nm == "sleeve_L" else (SH_R, E_R)
+    d = el - sh
+    t = (p - sh) @ d / float(d @ d)
+    return ss(0.72, 0.86, t)
+
+
 def _side_fill(lin, k, p, n, names, log):
     """Edge-on texels (both plates see them badly: zebra streaks) and texels hidden from both plates take the part's
     own painted tone at their height (front and back blended by the normal), broken by soft vertical brush strokes;
@@ -1505,7 +1543,7 @@ def _side_fill(lin, k, p, n, names, log):
         if nm in ("sleeve_L", "sleeve_R"):
             # build 9: the model's elbows sit 7 cm under the painted ones: the sleeves' lower ends took the painted
             # brown bracer; the cream sleeve wraps run down to the model's own bracer
-            zone = ss(0.78, 0.73, p[:, 2]).astype(np.float32)
+            zone = np.maximum(ss(0.78, 0.73, p[:, 2]), _elbow_zone(nm, p)).astype(np.float32)
             w = np.maximum(w, zone)
         good = sel & (face > 0.78) & ~hid & (zone < 0.05)
         if nm == "hood":
@@ -1646,9 +1684,56 @@ def _clean_wraps(lin, k, p, n, names, plates, vis, log):
                 rs = np.where(hs[sel], 1.0, rs)
             r = r + (rs - 1.0) * w_
         fs = ss(0.30, 0.70, face)
+        if nm in ("sleeve_L", "sleeve_R"):
+            fs = fs * (1 - 0.85 * _elbow_zone(nm, pp))      # fix pass 2: no painted arm edge on the elbow end
         r = 1.0 + (np.clip(r, *CLEAN_RANGE) - 1.0) * fs
         lin[sel] = (tone * r[:, None] * gain).astype(np.float32)
         log(f"  sukri clean wraps {nm}: high-pass {float(np.percentile(r, 5)):.2f}..{float(np.percentile(r, 95)):.2f}")
+    return lin
+
+
+def _bracer_clean(lin, k, p, n, names, log):
+    """fix pass 2: cream outliers on the leather bracers (the painted wraps / sleeve projected where the model's
+    forearm sits off the painted one: torn-looking cream patches on the bent arm) take the bracer's own leather tone"""
+    for nm in ("bracer_L", "bracer_R"):
+        if nm not in names:
+            continue
+        sel = k == names.index(nm)
+        if sel.sum() < 50:
+            continue
+        c = lin[sel]
+        Y = _Y(c)
+        ref = (Y > 0.003) & (Y <= np.percentile(Y, 60))
+        tone = np.median(c[ref] if ref.sum() > 20 else c, axis=0)
+        Yt = max(float(_Y(tone[None, :])[0]), 1e-4)
+        r = Y / Yt
+        wb = ss(1.25, 1.55, r)[:, None]
+        new = tone[None, :] * (np.clip(r, 0.85, 1.12) ** 0.5)[:, None]       # the painted variation, damped
+        lin[sel] = c * (1 - wb) + new * wb
+        log(f"  sukri bracer clean {nm}: {int((wb[:, 0] > 0.5).sum())} texels")
+    return lin
+
+
+def _elbow_cuff(lin, k, p, names, log):
+    """fix pass 2: the sleeve's end cap past the elbow takes the bracer's leather (a clean cuff line on the sleeve):
+    where a bent elbow pushes the bracer through the sleeve cap the two surfaces now share one colour"""
+    for s_ in ("L", "R"):
+        sl, br = f"sleeve_{s_}", f"bracer_{s_}"
+        if sl not in names or br not in names:
+            continue
+        msl, mbr = k == names.index(sl), k == names.index(br)
+        if msl.sum() < 50 or mbr.sum() < 50:
+            continue
+        cb = lin[mbr]
+        Yb = _Y(cb)
+        ref = (Yb > 0.003) & (Yb <= np.percentile(Yb, 60))
+        tone = np.median(cb[ref] if ref.sum() > 20 else cb, axis=0)
+        sh, el = (SH_L, E_L) if s_ == "L" else (SH_R, E_R)
+        d = el - sh
+        t = (p[msl] - sh) @ d / float(d @ d)
+        w = ss(0.97, 1.02, t)[:, None]
+        lin[msl] = lin[msl] * (1 - w) + tone[None, :] * w
+        log(f"  sukri elbow cuff {sl}: {int((w[:, 0] > 0.5).sum())} texels")
     return lin
 
 
@@ -1854,6 +1939,8 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
             lin[m] = fn(p[m], n[m])
     lin = _flank_refill(lin, k, p, n, names, log)
     lin = _clean_wraps(lin, k, p, n, names, plates, vis, log)
+    lin = _bracer_clean(lin, k, p, n, names, log)
+    lin = _elbow_cuff(lin, k, p, names, log)
     m = sel("hood")
     if m is not None:
         # build 2: the cream linen read bone-white in three: toned to the brief's cloth2 (L* ~80) and warmed a touch
@@ -1953,8 +2040,9 @@ WRAP_PARTS = ("torso", "skirt", "sleeve_L", "sleeve_R", "shins")
 SKIN_PARTS = {
     # fix pass 1: the wraps' LIT FRONT tone goes to the named wet-stone (build 9 matched their median, so the cream
     # front came out a pale sky blue-grey); the hood and plates a step darker (the top band was 84.2, at the cap)
+    # fix pass 2: the shin wraps ~3 L* darker (#7E8886: the feet band sat at 34.0 against the 35 cap)
     "sukri_stillwater": {"torso": "#59666A", "skirt": "#5E6B6E", "sleeve_L": "#5C696D", "sleeve_R": "#5C696D",
-                         "shins": "#7E8886", "hood": "#A39E8C", "plates": "#B4B0A4", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
+                         "shins": "#767F7D", "hood": "#A39E8C", "plates": "#B4B0A4", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
                          "bracer_R": "#3E4446", "pants": "#323A3C", "cord": "#6F7468"},
     # fix pass 1: the feet band (L* 18) lifted: lighter leggings / boots and pale printed shin wraps; the hood and
     # plates a step darker
@@ -1990,6 +2078,55 @@ def _relief_smooth_at(side, x, z):
     a = A[j0, i0] * (1 - fu) + A[j0, i0 + 1] * fu
     b = A[j0 + 1, i0] * (1 - fu) + A[j0 + 1, i0 + 1] * fu
     return a * (1 - fv) + b * fv
+
+
+PRINT_BLUR = 2.6            # px (2048 atlas): fix pass 2, the print ratio's smoothing
+
+
+def _smooth_in_atlas(v, m, sigma):
+    """a per-texel value (texels of the image mask m, row-major) blurred in the atlas within m only"""
+    A = np.zeros(m.shape + (2,), dtype=np.float32)
+    A[m, 0] = v
+    A[m, 1] = 1.0
+    B = _project.blur(A, sigma)
+    return (B[m, 0] / np.maximum(B[m, 1], 1e-4)).astype(np.float32)
+
+
+def _skirt_bands(P, r, dz=0.008, nt=72, st=3.5, sz=0.6):
+    """the skirt's print ratio averaged round the skirt per height (bins of dz x 2pi/nt, blurred st bins round and sz
+    bins up), read back bilinearly: printed bands that follow the skirt instead of per-panel blocks"""
+    th = np.arctan2(P[:, 0], -(P[:, 1] - 0.020))
+    z0 = float(P[:, 2].min()) - dz
+    nz = int((float(P[:, 2].max()) - z0) / dz) + 3
+    zf = (P[:, 2] - z0) / dz - 0.5
+    tf = (th + math.pi) / (2 * math.pi) * nt - 0.5
+    zi = np.clip(np.round(zf).astype(int), 0, nz - 1)
+    ti = np.round(tf).astype(int) % nt
+    S = np.zeros((nz, nt))
+    C = np.zeros((nz, nt))
+    np.add.at(S, (zi, ti), r)
+    np.add.at(C, (zi, ti), 1.0)
+
+    def blur2(A):
+        R_ = int(math.ceil(3 * st))
+        kt = np.exp(-0.5 * (np.arange(-R_, R_ + 1) / st) ** 2)
+        Aw = np.concatenate([A[:, -R_:], A, A[:, :R_]], 1)
+        A = sum(kt[i] * Aw[:, i:i + nt] for i in range(len(kt)))
+        Rz = max(1, int(math.ceil(3 * sz)))
+        kz = np.exp(-0.5 * (np.arange(-Rz, Rz + 1) / sz) ** 2)
+        Az = np.pad(A, ((Rz, Rz), (0, 0)), mode="edge")
+        return sum(kz[i] * Az[i:i + nz] for i in range(len(kz)))
+    Bm = blur2(S) / np.maximum(blur2(C), 1e-3)
+    have = blur2(C) > 1e-2
+    Bm = np.where(have, Bm, 1.0)
+    z0i = np.clip(np.floor(zf).astype(int), 0, nz - 2)
+    t0i = np.floor(tf).astype(int)
+    fz = np.clip(zf - z0i, 0.0, 1.0)
+    ft = tf - t0i
+    t0i, t1i = t0i % nt, (t0i + 1) % nt
+    a = Bm[z0i, t0i] * (1 - ft) + Bm[z0i, t1i] * ft
+    b = Bm[z0i + 1, t0i] * (1 - ft) + Bm[z0i + 1, t1i] * ft
+    return (a * (1 - fz) + b * fz).astype(np.float32)
 
 
 def _skirt_hem(P):
@@ -2043,13 +2180,23 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             Yt = np.maximum(_Y(tf * (1 - wbb) + tb * wbb), 1e-4)
             r = Y / Yt
             shade = np.clip(Yt / max(float(np.median(Yt)), 1e-4), 0.6, 1.4) ** 0.35
+            # fix pass 2 (the splash read the light rims as saw-tooth dry-brush and the skirt's marks as blocky
+            # glyphs): the ratio is smoothed in the atlas (within the part) and, on the skirt, averaged round the skirt
+            # per height (bands, not per-panel blocks); the threshold then keeps fix pass 1's light share (the middle
+            # band's value) with a soft edge
+            share0 = (float((ss(0.90, 0.70, r) < 0.5).mean()) if nm == "shins" else float((ss(1.03, 1.17, r) > 0.5).mean()))
+            r = _smooth_in_atlas(r, m, PRINT_BLUR)
+            if nm == "skirt":
+                r = _skirt_bands(P_, r)
             if nm == "shins":
+                q = float(np.quantile(r, 1.0 - share0))
                 pale = _lin(_hex(PRINT_LIGHT_SHINS))
-                k_ = np.clip(0.80 * ss(0.90, 0.70, r), 0, 0.8)[:, None]
+                k_ = np.clip(0.80 * ss(q + 0.05, q - 0.05, r), 0, 0.8)[:, None]
                 col = pale[None, :] * (1 - k_) + ink[None, :] * k_
                 share = float((k_[:, 0] < 0.4).mean())
             else:
-                w_ = np.clip(ss(1.03, 1.17, r) * 0.92, 0, 0.92)
+                q = float(np.quantile(r, 1.0 - share0))
+                w_ = np.clip(ss(q - 0.045, q + 0.045, r) * 0.92, 0, 0.92)
                 if nm == "skirt":
                     hem = _skirt_hem(P_)
                     w_ = np.maximum(w_, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
@@ -2679,17 +2826,31 @@ def clip_overrides(ctx) -> dict:
     f1 = pose(torso=dict(hips=(2, 3, 0), spine=(3, 2, 0), chest=(6, 4, 0), neck=(-2, -3, 0), head=(-5, -5, 0)),
               hips=(0, -0.02, -0.012), R=(-0.49, -0.64, -0.24), aim=(-0.30, -0.78, 0.55),
               L=_rel(GUARD_L, (-0.02, -0.12, 0.02)))
-    out["attack1"] = anim.Clip("attack1", 20, False, anim.drag(anim.keyed(anim.strike_keys(MOTION, w1, h1, f1, G)),
-                                                               20, {"head": 1.0, "neck": 0.5}), impact=0.4)
+    # fix pass 2: the cup popped ~1 m forward in ONE frame at the impact (f7 -> f8: the strike timing's drive key at
+    # 0.34 carries the weapon only 18 %); the swing now spreads over f6-f8 (~25 / 62 / 100 % of the way, the body
+    # leading), so the crook and the cup travel on an arc instead of a jump
+    LEAD1 = {"hips": 0.65, "spine": 0.5, "chest": 0.4, "hips_loc": 0.5, "foot.L": 0.7, "foot.R": 0.7, "thigh.L": 0.6,
+             "thigh.R": 0.6}
+    LEAD2 = {"hips": 0.92, "spine": 0.88, "chest": 0.82, "hips_loc": 0.85, "foot.L": 0.95, "foot.R": 0.95, "thigh.L": 0.9,
+             "thigh.R": 0.9}
+
+    def arc_in(a, b, t0, t1, t2, w1_=0.28, w2_=0.64):
+        """the strike's last three frames: a (the coil) at t0, ~w1_ of the way at t1, ~w2_ at t2, b at the impact"""
+        return [(t0, a, "out"), (t1, anim.lerp_pose_w(a, b, w1_, LEAD1), "sine"),
+                (t2, anim.lerp_pose_w(a, b, w2_, LEAD2), "linear"), (0.40, b, "linear")]
+    ks1 = anim.strike_keys(MOTION, w1, h1, f1, G)
+    ks1 = ks1[:3] + arc_in(ks1[3][1], ks1[5][1], 0.265, 0.31, 0.355) + ks1[6:]
+    out["attack1"] = anim.Clip("attack1", 20, False, anim.drag(anim.keyed(ks1), 20, {"head": 1.0, "neck": 0.5}),
+                               impact=0.4)
     # ATTACK2: an underhand push of the cup: the staff swung low and back, then pushed forward and up at f8
     k2 = [(0.0, G, "linear"),
           (0.22, pose(torso=dict(hips=(0, -3, 0), chest=(-2, -5, 0), head=(0, 6, 0)), R=(-0.60, 0.05, -0.70),
                       aim=(-0.32, 0.42, 0.85)), "inout"),
-          (0.32, pose(torso=dict(hips=(0, -4, 0), chest=(-2, -6, 0), head=(0, 7, 0)), R=(-0.60, 0.08, -0.72),
-                      aim=(-0.34, 0.46, 0.82)), "out"),
-          (0.40, pose(torso=dict(hips=(3, 3, 0), spine=(3, 3, 0), chest=(5, 4, 0), neck=(-2, -3, 0), head=(-3, -6, 0)),
-                      hips=(0, -0.03, -0.014), R=(-0.42, -0.72, -0.42), aim=(-0.18, -0.86, 0.47),
-                      L=_rel(GUARD_L, (-0.04, -0.20, 0.06))), "accel"),
+          *arc_in(pose(torso=dict(hips=(0, -4, 0), chest=(-2, -6, 0), head=(0, 7, 0)), R=(-0.60, 0.08, -0.72),
+                       aim=(-0.34, 0.46, 0.82)),
+                  pose(torso=dict(hips=(3, 3, 0), spine=(3, 3, 0), chest=(5, 4, 0), neck=(-2, -3, 0), head=(-3, -6, 0)),
+                       hips=(0, -0.03, -0.014), R=(-0.42, -0.72, -0.42), aim=(-0.18, -0.86, 0.47),
+                       L=_rel(GUARD_L, (-0.04, -0.20, 0.06))), 0.27, 0.31, 0.355),      # fix pass 2: f6-f8 arc
           (0.52, pose(torso=dict(hips=(3, 4, 0), spine=(3, 3, 0), chest=(5, 5, 0), neck=(-2, -3, 0), head=(-4, -7, 0)),
                       hips=(0, -0.03, -0.016), R=(-0.40, -0.74, -0.36), aim=(-0.16, -0.84, 0.52),
                       L=_rel(GUARD_L, (-0.04, -0.22, 0.06))), "out"),
@@ -2710,9 +2871,11 @@ def clip_overrides(ctx) -> dict:
     fol = pose(torso=dict(hips=(3, 3, 0), spine=(4, 3, 0), chest=(6, 5, 0), neck=(-4, -3, 0), head=(-8, -6, 0)),
                hips=(0, -0.04, -0.025), R=(-0.40, -0.82, 0.02), aim=(-0.20, -0.72, 0.66),
                L=(0.16, -0.84, -0.10), Lp=(0.8, 0.3, -0.5), fk=dict(hand_L=(0, 80, 0)), feet=_feet(l=(0.0, -0.08, 0.0), yl=4.0))
-    k = [(0.0, G, "linear"), (0.12, back, "inout"), (0.30, tilt, "inout"),
-         (0.36, anim.lerp_pose_w(tilt, lob, 0.30, {"hips": 0.6, "spine": 0.5, "hips_loc": 0.5}), "in"),
-         (0.40, lob, "accel"), (0.52, anim.lerp_pose(lob, fol, 0.5), "out"), (0.64, fol, "out"),
+    # fix pass 2: the lob spread over f8-f10 (~30 / 66 / 100 %: build fp1 jumped the cup ~0.7 m in its last frame)
+    k = [(0.0, G, "linear"), (0.12, back, "inout"), (0.28, tilt, "inout"),
+         (0.32, anim.lerp_pose_w(tilt, lob, 0.30, {"hips": 0.6, "spine": 0.5, "hips_loc": 0.5}), "sine"),
+         (0.36, anim.lerp_pose_w(tilt, lob, 0.66, {"hips": 0.9, "spine": 0.85, "hips_loc": 0.85}), "linear"),
+         (0.40, lob, "linear"), (0.52, anim.lerp_pose(lob, fol, 0.5), "out"), (0.64, fol, "out"),
          (0.84, pose(R=_rel(GUARD_R, (0.0, -0.10, 0.04)), aim=(-0.06, -0.15, 0.99)), "inout"), (1.0, G, "settle")]
     out["cast_a1"] = clip("cast_a1", 25, k, impact=0.4, lags={"head": 1.0, "neck": 0.5})
 
@@ -2747,7 +2910,7 @@ def clip_overrides(ctx) -> dict:
                  feet=_feet(l=(0.0, -0.12, 0.0), yl=6.0))
     fol = pose(torso=dict(hips=(5, 5, 0), spine=(7, 4, 0), chest=(11, 6, 2), neck=(-4, -4, 0), head=(-8, -7, 0)),
                hips=(0, -0.05, -0.035), L=(-0.08, -0.86, 0.02), Lp=(0.9, 0.3, -0.2), feet=_feet(l=(0.0, -0.12, 0.0), yl=6.0))
-    k = [(0.0, G, "linear"), (0.10, take, "out"), (0.20, up_, "inout"), (0.30, over, "inout"),
+    k = [(0.0, G, "linear"), (0.10, take, "out"), (0.20, up_, "linear"), (0.30, over, "inout"),
          (0.35, anim.lerp_pose_w(over, throw, 0.30, {"hips": 0.6, "spine": 0.5, "chest": 0.4}), "in"),
          (0.40, throw, "accel"), (0.52, anim.lerp_pose(throw, fol, 0.5), "out"), (0.64, fol, "out"),
          (0.84, pose(L=_rel(GUARD_L, (0.0, -0.10, 0.05))), "inout"), (1.0, G, "settle")]

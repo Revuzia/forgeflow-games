@@ -55389,10 +55389,4958 @@
     "logs": [
      "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
     ]
+   },
+   "fray_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 26,
+     "p50": 85,
+     "p95": 108,
+     "p99": 120,
+     "mean": 80.28,
+     "spread": 82,
+     "lstarP50": 36.5,
+     "sat": 0.24,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.6549,
+      "p5": 62,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.08,
+      "spread": 34,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.6549,
+      "p5": 62,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.08,
+      "spread": 34,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0047,
+      "p5": 29,
+      "p50": 59,
+      "p95": 80,
+      "p99": 92,
+      "mean": 57.28,
+      "spread": 51,
+      "lstarP50": 24.5,
+      "sat": 0.25,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.003,
+      "p5": 25,
+      "p50": 47,
+      "p95": 103,
+      "p99": 108,
+      "mean": 59.98,
+      "spread": 78,
+      "lstarP50": 20,
+      "sat": 0.41,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.0432,
+      "p5": 12,
+      "p50": 20,
+      "p95": 32,
+      "p99": 50,
+      "mean": 21.22,
+      "spread": 20,
+      "lstarP50": 7,
+      "sat": 0.67,
+      "satP50": 0.7
+     },
+     "wallLip": {
+      "share": 0.0386,
+      "p5": 22,
+      "p50": 60,
+      "p95": 71,
+      "p99": 75,
+      "mean": 54.51,
+      "spread": 49,
+      "lstarP50": 25.5,
+      "sat": 0.16,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.2149,
+      "p5": 63,
+      "p50": 86,
+      "p95": 117,
+      "p99": 122,
+      "mean": 88.45,
+      "spread": 54,
+      "lstarP50": 36.5,
+      "sat": 0.06,
+      "satP50": 0
+     },
+     "walls": {
+      "share": 0.0818,
+      "p5": 14,
+      "p50": 25,
+      "p95": 68,
+      "p99": 73,
+      "mean": 36.91,
+      "spread": 54,
+      "lstarP50": 9,
+      "sat": 0.43,
+      "satP50": 0.6
+     },
+     "edge": {
+      "share": 0.0039,
+      "p5": 47,
+      "p50": 62,
+      "p95": 68,
+      "p99": 69,
+      "mean": 59.77,
+      "spread": 21,
+      "lstarP50": 26,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "landmark": {
+      "share": 0.0193,
+      "p5": 16,
+      "p50": 87,
+      "p95": 124,
+      "p99": 164,
+      "mean": 76.37,
+      "spread": 108,
+      "lstarP50": 37,
+      "sat": 0.25,
+      "satP50": 0.1
+     },
+     "lamp": {
+      "share": 0,
+      "p5": 161,
+      "p50": 177,
+      "p95": 183,
+      "p99": 183,
+      "mean": 174.38,
+      "spread": 22,
+      "lstarP50": 74.5,
+      "sat": 0.72,
+      "satP50": 0.7
+     },
+     "ground": {
+      "share": 0.6549,
+      "p5": 62,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.08,
+      "spread": 34,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 6556866,
+     "other": 0,
+     "lamp": 3081,
+     "otherShare": 0,
+     "lampShareOfFrame": 0.00046,
+     "byClass": {
+      "19L": 38,
+      "1L": 3043
+     }
+    },
+    "fighters": {
+     "px": 11992,
+     "top25": 83.4,
+     "p75": 78.5,
+     "p50": 60,
+     "p25": 26.5,
+     "p95": 86.5,
+     "p99": 90.5,
+     "gt90": 0.0103,
+     "lumaP95": 215,
+     "overLane": 46.4,
+     "per": {
+      "kemdo": {
+       "px": 6246,
+       "top25": 80.5,
+       "p75": 70,
+       "p50": 55.5,
+       "p25": 30,
+       "gt90": 0.0104
+      },
+      "nurrow": {
+       "px": 5746,
+       "top25": 84.3,
+       "p75": 80.5,
+       "p50": 74.5,
+       "p25": 22.5,
+       "gt90": 0.0103
+      }
+     },
+     "maxGt90": 0.0104,
+     "medianTop25": 84.3
+    },
+    "wicks": null,
+    "monsters": null,
+    "structures": null,
+    "perSpot": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "frameP50": 87,
+      "frameP95": 96,
+      "frameP99": 106,
+      "laneP50": 88
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "frameP50": 86,
+      "frameP95": 97,
+      "frameP99": 116,
+      "laneP50": 88
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "frameP50": 85,
+      "frameP95": 99,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatII": {
+      "at": [
+       47.3,
+       11
+      ],
+      "frameP50": 85,
+      "frameP95": 100,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatIII": {
+      "at": [
+       56.7,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 114,
+      "frameP99": 121,
+      "laneP50": 87
+     },
+     "seatIV": {
+      "at": [
+       56.7,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 86
+     },
+     "seatV": {
+      "at": [
+       47.3,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 110,
+      "frameP99": 117,
+      "laneP50": 85
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "frameP50": 83,
+      "frameP95": 93,
+      "frameP99": 104,
+      "laneP50": 86
+     },
+     "seatVII": {
+      "at": [
+       16.7,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 103,
+      "frameP99": 112,
+      "laneP50": 86
+     },
+     "seatVIII": {
+      "at": [
+       7.3,
+       40
+      ],
+      "frameP50": 85,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 85
+     },
+     "seatIX": {
+      "at": [
+       7.3,
+       24
+      ],
+      "frameP50": 85,
+      "frameP95": 119,
+      "frameP99": 124,
+      "laneP50": 85
+     },
+     "seatX": {
+      "at": [
+       16.7,
+       11
+      ],
+      "frameP50": 84,
+      "frameP95": 102,
+      "frameP99": 117,
+      "laneP50": 86
+     },
+     "fight": {
+      "at": [
+       13.4,
+       23.9
+      ],
+      "frameP50": 85,
+      "frameP95": 95,
+      "frameP99": 109,
+      "laneP50": 86
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "86 PASS (85-100)",
+     "walkableSpread": "34 PASS (<= 45)",
+     "laneSpread": "34 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "108 PASS (<= 130)",
+     "frameP99": "120 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.046 % of frame PASS",
+     "groundSat": "0.27 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "83.4 PASS (70-85), over lane 46.4 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 1.03 % of fighter pixels PASS (< 2 %), worst fighter 1.0 %, p99 90.5"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   }
+  },
+  "nurrow_verify2": {
+   "rift_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 20,
+     "p50": 62,
+     "p95": 99,
+     "p99": 117,
+     "mean": 62.07,
+     "spread": 79,
+     "lstarP50": 26.5,
+     "sat": 0.33,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.2215,
+      "p5": 67,
+      "p50": 89,
+      "p95": 101,
+      "p99": 105,
+      "mean": 86.68,
+      "spread": 34,
+      "lstarP50": 38,
+      "sat": 0.35,
+      "satP50": 0.4
+     },
+     "walkable": {
+      "share": 0.3767,
+      "p5": 51,
+      "p50": 89,
+      "p95": 101,
+      "p99": 105,
+      "mean": 85.21,
+      "spread": 50,
+      "lstarP50": 38,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.0351,
+      "p5": 15,
+      "p50": 41,
+      "p95": 82,
+      "p99": 96,
+      "mean": 43.99,
+      "spread": 67,
+      "lstarP50": 16.5,
+      "sat": 0.29,
+      "satP50": 0.3
+     },
+     "jungle": {
+      "share": 0.0278,
+      "p5": 18,
+      "p50": 38,
+      "p95": 77,
+      "p99": 88,
+      "mean": 42.06,
+      "spread": 59,
+      "lstarP50": 15,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "camp": {
+      "share": 0.0416,
+      "p5": 32,
+      "p50": 75,
+      "p95": 90,
+      "p99": 95,
+      "mean": 67.81,
+      "spread": 58,
+      "lstarP50": 32,
+      "sat": 0.24,
+      "satP50": 0.2
+     },
+     "seat": {
+      "share": 0.1552,
+      "p5": 42,
+      "p50": 88,
+      "p95": 101,
+      "p99": 106,
+      "mean": 83.13,
+      "spread": 59,
+      "lstarP50": 37.5,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "shadow": {
+      "share": 0.01,
+      "p5": 17,
+      "p50": 38,
+      "p95": 47,
+      "p99": 61,
+      "mean": 35.67,
+      "spread": 30,
+      "lstarP50": 15.5,
+      "sat": 0.38,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0102,
+      "p5": 9,
+      "p50": 29,
+      "p95": 73,
+      "p99": 81,
+      "mean": 35.01,
+      "spread": 64,
+      "lstarP50": 11,
+      "sat": 0.45,
+      "satP50": 0.4
+     },
+     "grass": {
+      "share": 0.0269,
+      "p5": 19,
+      "p50": 44,
+      "p95": 87,
+      "p99": 99,
+      "mean": 48.12,
+      "spread": 68,
+      "lstarP50": 18,
+      "sat": 0.37,
+      "satP50": 0.3
+     },
+     "clutter": {
+      "share": 0.0021,
+      "p5": 19,
+      "p50": 46,
+      "p95": 64,
+      "p99": 68,
+      "mean": 44.52,
+      "spread": 45,
+      "lstarP50": 19,
+      "sat": 0.5,
+      "satP50": 0.5
+     },
+     "wallFace": {
+      "share": 0.1147,
+      "p5": 15,
+      "p50": 34,
+      "p95": 52,
+      "p99": 60,
+      "mean": 33.42,
+      "spread": 37,
+      "lstarP50": 13,
+      "sat": 0.15,
+      "satP50": 0.1
+     },
+     "wallLip": {
+      "share": 0.0659,
+      "p5": 25,
+      "p50": 49,
+      "p95": 79,
+      "p99": 95,
+      "mean": 49.53,
+      "spread": 54,
+      "lstarP50": 20.5,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.082,
+      "p5": 20,
+      "p50": 46,
+      "p95": 70,
+      "p99": 79,
+      "mean": 45.01,
+      "spread": 50,
+      "lstarP50": 19,
+      "sat": 0.49,
+      "satP50": 0.5
+     },
+     "walls": {
+      "share": 0.1806,
+      "p5": 17,
+      "p50": 39,
+      "p95": 62,
+      "p99": 88,
+      "mean": 39.29,
+      "spread": 45,
+      "lstarP50": 16,
+      "sat": 0.14,
+      "satP50": 0.1
+     },
+     "edge": {
+      "share": 0.0067,
+      "p5": 40,
+      "p50": 75,
+      "p95": 97,
+      "p99": 103,
+      "mean": 72.4,
+      "spread": 57,
+      "lstarP50": 31.5,
+      "sat": 0.11,
+      "satP50": 0.1
+     },
+     "canopy": {
+      "share": 0.1386,
+      "p5": 15,
+      "p50": 51,
+      "p95": 83,
+      "p99": 92,
+      "mean": 50.38,
+      "spread": 68,
+      "lstarP50": 22,
+      "sat": 0.58,
+      "satP50": 0.6
+     },
+     "rock": {
+      "share": 0.0014,
+      "p5": 14,
+      "p50": 55,
+      "p95": 88,
+      "p99": 102,
+      "mean": 51.65,
+      "spread": 74,
+      "lstarP50": 23,
+      "sat": 0.34,
+      "satP50": 0.3
+     },
+     "landmark": {
+      "share": 0.0076,
+      "p5": 14,
+      "p50": 69,
+      "p95": 120,
+      "p99": 123,
+      "mean": 72.53,
+      "spread": 106,
+      "lstarP50": 29.5,
+      "sat": 0.2,
+      "satP50": 0.2
+     },
+     "water": {
+      "share": 0.0016,
+      "p5": 38,
+      "p50": 52,
+      "p95": 71,
+      "p99": 78,
+      "mean": 52.58,
+      "spread": 33,
+      "lstarP50": 22.5,
+      "sat": 0.61,
+      "satP50": 0.6
+     },
+     "ground": {
+      "share": 0.4811,
+      "p5": 30,
+      "p50": 85,
+      "p95": 100,
+      "p99": 105,
+      "mean": 78.21,
+      "spread": 70,
+      "lstarP50": 36.5,
+      "sat": 0.3,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 11688069,
+     "other": 5,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {
+      "9": 5
+     }
+    },
+    "fighters": {
+     "px": 177286,
+     "top25": 84.6,
+     "p75": 80,
+     "p50": 52,
+     "p25": 25.5,
+     "p95": 86.5,
+     "p99": 87.5,
+     "gt90": 0.0023,
+     "lumaP95": 216,
+     "overLane": 46.6,
+     "per": {
+      "tunlan": {
+       "px": 45613,
+       "top25": 86.8,
+       "p75": 86,
+       "p50": 85,
+       "p25": 37.5,
+       "gt90": 0.0021
+      },
+      "burdam": {
+       "px": 37935,
+       "top25": 74.4,
+       "p75": 62.5,
+       "p50": 40.5,
+       "p25": 21.5,
+       "gt90": 0
+      },
+      "nurrow": {
+       "px": 5080,
+       "top25": 85,
+       "p75": 81,
+       "p50": 49,
+       "p25": 33,
+       "gt90": 0.0138
+      },
+      "odrum": {
+       "px": 4230,
+       "top25": 70.6,
+       "p75": 63,
+       "p50": 49,
+       "p25": 27.5,
+       "gt90": 0
+      },
+      "vashil": {
+       "px": 15681,
+       "top25": 82.8,
+       "p75": 75.5,
+       "p50": 54,
+       "p25": 34,
+       "gt90": 0.0006
+      },
+      "marund": {
+       "px": 46119,
+       "top25": 80.8,
+       "p75": 77,
+       "p50": 36.5,
+       "p25": 19.5,
+       "gt90": 0.0006
+      },
+      "rishal": {
+       "px": 8503,
+       "top25": 80,
+       "p75": 72.5,
+       "p50": 53,
+       "p25": 29.5,
+       "gt90": 0.0007
+      },
+      "kemdo": {
+       "px": 14125,
+       "top25": 80.4,
+       "p75": 72.5,
+       "p50": 55,
+       "p25": 40,
+       "gt90": 0.0142
+      }
+     },
+     "maxGt90": 0.0142,
+     "medianTop25": 80.8
+    },
+    "wicks": {
+     "px": 117174,
+     "top25": 63.7,
+     "p95": 69,
+     "lumaP95": 164
+    },
+    "monsters": {
+     "px": 4900,
+     "top25": 74.8,
+     "p95": 79.5
+    },
+    "structures": {
+     "px": 86486,
+     "top25": 78,
+     "p95": 84
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       52.3,
+       14.7
+      ],
+      "frameP50": 60,
+      "frameP95": 100,
+      "frameP99": 111,
+      "laneP50": 90
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "frameP50": 59,
+      "frameP95": 99,
+      "frameP99": 110,
+      "laneP50": 91
+     },
+     "lane2": {
+      "at": [
+       52.3,
+       95.3
+      ],
+      "frameP50": 63,
+      "frameP95": 96,
+      "frameP99": 110,
+      "laneP50": 86
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.8
+      ],
+      "frameP50": 48,
+      "frameP95": 88,
+      "frameP99": 116,
+      "laneP50": null
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "frameP50": 77,
+      "frameP95": 100,
+      "frameP99": 133,
+      "laneP50": 89
+     },
+     "fight": {
+      "at": [
+       84.4,
+       55.1
+      ],
+      "frameP50": 77,
+      "frameP95": 100,
+      "frameP99": 133,
+      "laneP50": 89
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "89 PASS (85-100)",
+     "walkableSpread": "50 FAIL (<= 45)",
+     "laneSpread": "34 PASS (<= 45)",
+     "frameP50": "62 PASS (55-75)",
+     "frameP95": "99 PASS (<= 130)",
+     "frameP99": "117 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.3 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "84.6 PASS (70-85), over lane 46.6 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.23 % of fighter pixels PASS (< 2 %), worst fighter 1.4 %, p99 87.5",
+     "wickTop25": "63.7 (info: <= 65, WICK lane)",
+     "monsterTop25": "74.8 (info)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "rift_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 28,
+     "p50": 65,
+     "p95": 99,
+     "p99": 125,
+     "mean": 66.19,
+     "spread": 71,
+     "lstarP50": 28,
+     "sat": 0.31,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.2206,
+      "p5": 69,
+      "p50": 90,
+      "p95": 101,
+      "p99": 105,
+      "mean": 87.45,
+      "spread": 32,
+      "lstarP50": 38.5,
+      "sat": 0.35,
+      "satP50": 0.4
+     },
+     "walkable": {
+      "share": 0.3751,
+      "p5": 60,
+      "p50": 90,
+      "p95": 101,
+      "p99": 105,
+      "mean": 86.6,
+      "spread": 41,
+      "lstarP50": 38.5,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.0359,
+      "p5": 25,
+      "p50": 43,
+      "p95": 81,
+      "p99": 95,
+      "mean": 47.52,
+      "spread": 56,
+      "lstarP50": 18,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "jungle": {
+      "share": 0.0299,
+      "p5": 21,
+      "p50": 41,
+      "p95": 76,
+      "p99": 87,
+      "mean": 43.96,
+      "spread": 55,
+      "lstarP50": 16.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "camp": {
+      "share": 0.0421,
+      "p5": 38,
+      "p50": 76,
+      "p95": 90,
+      "p99": 95,
+      "mean": 70.37,
+      "spread": 52,
+      "lstarP50": 32.5,
+      "sat": 0.24,
+      "satP50": 0.2
+     },
+     "seat": {
+      "share": 0.1545,
+      "p5": 46,
+      "p50": 90,
+      "p95": 101,
+      "p99": 105,
+      "mean": 85.39,
+      "spread": 55,
+      "lstarP50": 38.5,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "shadow": {
+      "share": 0.01,
+      "p5": 21,
+      "p50": 39,
+      "p95": 47,
+      "p99": 62,
+      "mean": 37.05,
+      "spread": 26,
+      "lstarP50": 15.5,
+      "sat": 0.36,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0137,
+      "p5": 18,
+      "p50": 44,
+      "p95": 89,
+      "p99": 96,
+      "mean": 49.16,
+      "spread": 71,
+      "lstarP50": 18,
+      "sat": 0.37,
+      "satP50": 0.3
+     },
+     "grass": {
+      "share": 0.0135,
+      "p5": 30,
+      "p50": 55,
+      "p95": 95,
+      "p99": 102,
+      "mean": 59.22,
+      "spread": 65,
+      "lstarP50": 23,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.1138,
+      "p5": 23,
+      "p50": 39,
+      "p95": 54,
+      "p99": 62,
+      "mean": 38.44,
+      "spread": 31,
+      "lstarP50": 15.5,
+      "sat": 0.13,
+      "satP50": 0.1
+     },
+     "wallLip": {
+      "share": 0.0656,
+      "p5": 34,
+      "p50": 54,
+      "p95": 87,
+      "p99": 101,
+      "mean": 55.8,
+      "spread": 53,
+      "lstarP50": 23,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.1544,
+      "p5": 28,
+      "p50": 55,
+      "p95": 74,
+      "p99": 81,
+      "mean": 53.45,
+      "spread": 46,
+      "lstarP50": 23,
+      "sat": 0.44,
+      "satP50": 0.4
+     },
+     "walls": {
+      "share": 0.1794,
+      "p5": 24,
+      "p50": 44,
+      "p95": 66,
+      "p99": 95,
+      "mean": 44.79,
+      "spread": 42,
+      "lstarP50": 18,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "edge": {
+      "share": 0.0063,
+      "p5": 49,
+      "p50": 84,
+      "p95": 104,
+      "p99": 106,
+      "mean": 81.58,
+      "spread": 55,
+      "lstarP50": 36,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "canopy": {
+      "share": 0.0589,
+      "p5": 23,
+      "p50": 57,
+      "p95": 87,
+      "p99": 96,
+      "mean": 55.51,
+      "spread": 64,
+      "lstarP50": 24.5,
+      "sat": 0.56,
+      "satP50": 0.6
+     },
+     "rock": {
+      "share": 0.0007,
+      "p5": 24,
+      "p50": 69,
+      "p95": 110,
+      "p99": 111,
+      "mean": 64.24,
+      "spread": 86,
+      "lstarP50": 29.5,
+      "sat": 0.29,
+      "satP50": 0.3
+     },
+     "landmark": {
+      "share": 0.0073,
+      "p5": 19,
+      "p50": 66,
+      "p95": 120,
+      "p99": 123,
+      "mean": 74.66,
+      "spread": 101,
+      "lstarP50": 28,
+      "sat": 0.19,
+      "satP50": 0.2
+     },
+     "water": {
+      "share": 0.0015,
+      "p5": 46,
+      "p50": 63,
+      "p95": 74,
+      "p99": 79,
+      "mean": 59.09,
+      "spread": 28,
+      "lstarP50": 27.5,
+      "sat": 0.6,
+      "satP50": 0.6
+     },
+     "ground": {
+      "share": 0.483,
+      "p5": 34,
+      "p50": 86,
+      "p95": 100,
+      "p99": 104,
+      "mean": 79.64,
+      "spread": 66,
+      "lstarP50": 37,
+      "sat": 0.3,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 2852610,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 41495,
+     "top25": 85.1,
+     "p75": 80.5,
+     "p50": 54.5,
+     "p25": 28.5,
+     "p95": 86.5,
+     "p99": 87.5,
+     "gt90": 0.0019,
+     "lumaP95": 216,
+     "overLane": 46.6,
+     "per": {
+      "tunlan": {
+       "px": 10919,
+       "top25": 86.7,
+       "p75": 86,
+       "p50": 85,
+       "p25": 37,
+       "gt90": 0.0007
+      },
+      "burdam": {
+       "px": 8797,
+       "top25": 75,
+       "p75": 64.5,
+       "p50": 41,
+       "p25": 23.5,
+       "gt90": 0.0002
+      },
+      "nurrow": {
+       "px": 1160,
+       "top25": 84.9,
+       "p75": 81.5,
+       "p50": 51.5,
+       "p25": 36,
+       "gt90": 0.0112
+      },
+      "odrum": {
+       "px": 938,
+       "top25": 72,
+       "p75": 65.5,
+       "p50": 50.5,
+       "p25": 29,
+       "gt90": 0
+      },
+      "vashil": {
+       "px": 3464,
+       "top25": 83.6,
+       "p75": 74.5,
+       "p50": 53.5,
+       "p25": 36.5,
+       "gt90": 0.0003
+      },
+      "marund": {
+       "px": 11105,
+       "top25": 81.2,
+       "p75": 78,
+       "p50": 40.5,
+       "p25": 23,
+       "gt90": 0.001
+      },
+      "rishal": {
+       "px": 1859,
+       "top25": 82.8,
+       "p75": 75.5,
+       "p50": 57.5,
+       "p25": 34.5,
+       "gt90": 0.0075
+      },
+      "kemdo": {
+       "px": 3253,
+       "top25": 80.9,
+       "p75": 73.5,
+       "p50": 57,
+       "p25": 42,
+       "gt90": 0.0095
+      }
+     },
+     "maxGt90": 0.0112,
+     "medianTop25": 82.8
+    },
+    "wicks": {
+     "px": 26600,
+     "top25": 66.6,
+     "p95": 72.5,
+     "lumaP95": 169
+    },
+    "monsters": {
+     "px": 1136,
+     "top25": 75.9,
+     "p95": 80
+    },
+    "structures": {
+     "px": 21797,
+     "top25": 83,
+     "p95": 88.5
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       52.3,
+       14.7
+      ],
+      "frameP50": 62,
+      "frameP95": 100,
+      "frameP99": 130,
+      "laneP50": 91
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "frameP50": 63,
+      "frameP95": 99,
+      "frameP99": 126,
+      "laneP50": 92
+     },
+     "lane2": {
+      "at": [
+       52.3,
+       95.3
+      ],
+      "frameP50": 67,
+      "frameP95": 97,
+      "frameP99": 130,
+      "laneP50": 87
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.8
+      ],
+      "frameP50": 54,
+      "frameP95": 88,
+      "frameP99": 116,
+      "laneP50": null
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "frameP50": 80,
+      "frameP95": 101,
+      "frameP99": 141,
+      "laneP50": 89
+     },
+     "fight": {
+      "at": [
+       84.4,
+       55.1
+      ],
+      "frameP50": 80,
+      "frameP95": 101,
+      "frameP99": 141,
+      "laneP50": 90
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "41 PASS (<= 45)",
+     "laneSpread": "32 PASS (<= 45)",
+     "frameP50": "65 PASS (55-75)",
+     "frameP95": "99 PASS (<= 130)",
+     "frameP99": "125 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.3 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "85.1 FAIL (70-85), over lane 46.6 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.19 % of fighter pixels PASS (< 2 %), worst fighter 1.1 %, p99 87.5",
+     "wickTop25": "66.6 (info: <= 65, WICK lane)",
+     "monsterTop25": "75.9 (info)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "bridge_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane_mid",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 21,
+     "p50": 68,
+     "p95": 101,
+     "p99": 130,
+     "mean": 65.31,
+     "spread": 80,
+     "lstarP50": 29,
+     "sat": 0.35,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.4137,
+      "p5": 67,
+      "p50": 89,
+      "p95": 102,
+      "p99": 108,
+      "mean": 87.65,
+      "spread": 35,
+      "lstarP50": 38,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.4137,
+      "p5": 67,
+      "p50": 89,
+      "p95": 102,
+      "p99": 108,
+      "mean": 87.65,
+      "spread": 35,
+      "lstarP50": 38,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.3321,
+      "p5": 25,
+      "p50": 46,
+      "p95": 81,
+      "p99": 106,
+      "mean": 49.25,
+      "spread": 56,
+      "lstarP50": 19,
+      "sat": 0.36,
+      "satP50": 0.4
+     },
+     "brush": {
+      "share": 0.0093,
+      "p5": 11,
+      "p50": 19,
+      "p95": 42,
+      "p99": 51,
+      "mean": 22.52,
+      "spread": 31,
+      "lstarP50": 6,
+      "sat": 0.48,
+      "satP50": 0.5
+     },
+     "grass": {
+      "share": 0.0337,
+      "p5": 19,
+      "p50": 47,
+      "p95": 86,
+      "p99": 99,
+      "mean": 49.24,
+      "spread": 67,
+      "lstarP50": 19.5,
+      "sat": 0.47,
+      "satP50": 0.5
+     },
+     "wallFace": {
+      "share": 0.0722,
+      "p5": 15,
+      "p50": 25,
+      "p95": 34,
+      "p99": 40,
+      "mean": 25.04,
+      "spread": 19,
+      "lstarP50": 9,
+      "sat": 0.4,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.0358,
+      "p5": 21,
+      "p50": 49,
+      "p95": 77,
+      "p99": 92,
+      "mean": 49.65,
+      "spread": 56,
+      "lstarP50": 20.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "walls": {
+      "share": 0.108,
+      "p5": 16,
+      "p50": 28,
+      "p95": 68,
+      "p99": 82,
+      "mean": 33.19,
+      "spread": 52,
+      "lstarP50": 10.5,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "edge": {
+      "share": 0.0021,
+      "p5": 40,
+      "p50": 69,
+      "p95": 93,
+      "p99": 97,
+      "mean": 68.02,
+      "spread": 53,
+      "lstarP50": 29.5,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "rock": {
+      "share": 0.0023,
+      "p5": 14,
+      "p50": 74,
+      "p95": 96,
+      "p99": 110,
+      "mean": 65.13,
+      "spread": 82,
+      "lstarP50": 31.5,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0412,
+      "p5": 10,
+      "p50": 76,
+      "p95": 94,
+      "p99": 103,
+      "mean": 67.96,
+      "spread": 84,
+      "lstarP50": 32.5,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "ground": {
+      "share": 0.7458,
+      "p5": 31,
+      "p50": 77,
+      "p95": 101,
+      "p99": 107,
+      "mean": 70.55,
+      "spread": 70,
+      "lstarP50": 33,
+      "sat": 0.34,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 7777125,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 163227,
+     "top25": 80.1,
+     "p75": 72.5,
+     "p50": 53,
+     "p25": 32.5,
+     "p95": 84.5,
+     "p99": 86,
+     "gt90": 0.0013,
+     "lumaP95": 210,
+     "overLane": 42.1,
+     "per": {
+      "burdam": {
+       "px": 31561,
+       "top25": 75.3,
+       "p75": 64.5,
+       "p50": 41,
+       "p25": 18,
+       "gt90": 0
+      },
+      "vashil": {
+       "px": 19086,
+       "top25": 82.7,
+       "p75": 77,
+       "p50": 57.5,
+       "p25": 40,
+       "gt90": 0
+      },
+      "odrum": {
+       "px": 12193,
+       "top25": 70.3,
+       "p75": 65,
+       "p50": 52,
+       "p25": 30,
+       "gt90": 0
+      },
+      "rishal": {
+       "px": 17146,
+       "top25": 79.6,
+       "p75": 73.5,
+       "p50": 60,
+       "p25": 37.5,
+       "gt90": 0.0018
+      },
+      "nurrow": {
+       "px": 15223,
+       "top25": 80,
+       "p75": 75,
+       "p50": 43,
+       "p25": 23.5,
+       "gt90": 0.0085
+      },
+      "kemdo": {
+       "px": 26418,
+       "top25": 78.8,
+       "p75": 71.5,
+       "p50": 57.5,
+       "p25": 39,
+       "gt90": 0.0019
+      },
+      "dunsom": {
+       "px": 33827,
+       "top25": 83.4,
+       "p75": 77.5,
+       "p50": 49.5,
+       "p25": 39,
+       "gt90": 0
+      },
+      "marund": {
+       "px": 7773,
+       "top25": 81.8,
+       "p75": 79.5,
+       "p50": 73.5,
+       "p25": 48.5,
+       "gt90": 0
+      }
+     },
+     "maxGt90": 0.0085,
+     "medianTop25": 80
+    },
+    "wicks": {
+     "px": 118721,
+     "top25": 59.2,
+     "p95": 64.5,
+     "lumaP95": 152
+    },
+    "monsters": null,
+    "structures": {
+     "px": 48434,
+     "top25": 69.4,
+     "p95": 79
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "frameP50": 70,
+      "frameP95": 102,
+      "frameP99": 126,
+      "laneP50": 89
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 67,
+      "frameP95": 101,
+      "frameP99": 131,
+      "laneP50": 90
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 67,
+      "frameP95": 101,
+      "frameP99": 129,
+      "laneP50": 90
+     },
+     "fight": {
+      "at": [
+       69.2,
+       20.8
+      ],
+      "frameP50": 69,
+      "frameP95": 102,
+      "frameP99": 134,
+      "laneP50": 89
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "89 PASS (85-100)",
+     "walkableSpread": "35 PASS (<= 45)",
+     "laneSpread": "35 PASS (<= 45)",
+     "frameP50": "68 PASS (55-75)",
+     "frameP95": "101 PASS (<= 130)",
+     "frameP99": "130 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.34 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "80.1 PASS (70-85), over lane 42.1 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.13 % of fighter pixels PASS (< 2 %), worst fighter 0.9 %, p99 86",
+     "wickTop25": "59.2 (info: <= 65, WICK lane)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "bridge_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane_mid",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 25,
+     "p50": 70,
+     "p95": 102,
+     "p99": 140,
+     "mean": 67.4,
+     "spread": 77,
+     "lstarP50": 30,
+     "sat": 0.35,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.4121,
+      "p5": 70,
+      "p50": 90,
+      "p95": 102,
+      "p99": 107,
+      "mean": 88.93,
+      "spread": 32,
+      "lstarP50": 38.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.4121,
+      "p5": 70,
+      "p50": 90,
+      "p95": 102,
+      "p99": 107,
+      "mean": 88.93,
+      "spread": 32,
+      "lstarP50": 38.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.3279,
+      "p5": 28,
+      "p50": 47,
+      "p95": 81,
+      "p99": 108,
+      "mean": 50.09,
+      "spread": 53,
+      "lstarP50": 19.5,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "brush": {
+      "share": 0.014,
+      "p5": 21,
+      "p50": 31,
+      "p95": 49,
+      "p99": 58,
+      "mean": 32.58,
+      "spread": 28,
+      "lstarP50": 12,
+      "sat": 0.38,
+      "satP50": 0.3
+     },
+     "grass": {
+      "share": 0.0168,
+      "p5": 30,
+      "p50": 54,
+      "p95": 94,
+      "p99": 103,
+      "mean": 58.41,
+      "spread": 64,
+      "lstarP50": 22.5,
+      "sat": 0.39,
+      "satP50": 0.4
+     },
+     "wallFace": {
+      "share": 0.0719,
+      "p5": 20,
+      "p50": 28,
+      "p95": 36,
+      "p99": 40,
+      "mean": 27.77,
+      "spread": 16,
+      "lstarP50": 10.5,
+      "sat": 0.36,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.0353,
+      "p5": 30,
+      "p50": 56,
+      "p95": 83,
+      "p99": 106,
+      "mean": 55.73,
+      "spread": 53,
+      "lstarP50": 23.5,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "walls": {
+      "share": 0.1072,
+      "p5": 21,
+      "p50": 31,
+      "p95": 70,
+      "p99": 92,
+      "mean": 36.98,
+      "spread": 49,
+      "lstarP50": 11.5,
+      "sat": 0.35,
+      "satP50": 0.4
+     },
+     "edge": {
+      "share": 0.0019,
+      "p5": 53,
+      "p50": 89,
+      "p95": 113,
+      "p99": 114,
+      "mean": 87.35,
+      "spread": 60,
+      "lstarP50": 38,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "rock": {
+      "share": 0.0001,
+      "p5": 18,
+      "p50": 82,
+      "p95": 96,
+      "p99": 99,
+      "mean": 68.16,
+      "spread": 78,
+      "lstarP50": 35,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0431,
+      "p5": 12,
+      "p50": 80,
+      "p95": 94,
+      "p99": 103,
+      "mean": 70.9,
+      "spread": 82,
+      "lstarP50": 34,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "ground": {
+      "share": 0.7399,
+      "p5": 33,
+      "p50": 79,
+      "p95": 101,
+      "p99": 108,
+      "mean": 71.72,
+      "spread": 68,
+      "lstarP50": 34,
+      "sat": 0.34,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 1898986,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 36842,
+     "top25": 81.8,
+     "p75": 74.5,
+     "p50": 56,
+     "p25": 36.5,
+     "p95": 85.5,
+     "p99": 87,
+     "gt90": 0.0029,
+     "lumaP95": 213,
+     "overLane": 43.3,
+     "per": {
+      "burdam": {
+       "px": 7327,
+       "top25": 76,
+       "p75": 66,
+       "p50": 42.5,
+       "p25": 20.5,
+       "gt90": 0
+      },
+      "vashil": {
+       "px": 4173,
+       "top25": 83.7,
+       "p75": 77.5,
+       "p50": 57,
+       "p25": 41.5,
+       "gt90": 0.0007
+      },
+      "odrum": {
+       "px": 2730,
+       "top25": 72.4,
+       "p75": 67.5,
+       "p50": 57,
+       "p25": 32.5,
+       "gt90": 0
+      },
+      "rishal": {
+       "px": 3763,
+       "top25": 82.3,
+       "p75": 77,
+       "p50": 65.5,
+       "p25": 43,
+       "gt90": 0.0093
+      },
+      "kemdo": {
+       "px": 6004,
+       "top25": 80.4,
+       "p75": 73,
+       "p50": 62.5,
+       "p25": 44,
+       "gt90": 0.0033
+      },
+      "nurrow": {
+       "px": 3440,
+       "top25": 83.2,
+       "p75": 79.5,
+       "p50": 52,
+       "p25": 32,
+       "gt90": 0.0142
+      },
+      "dunsom": {
+       "px": 7563,
+       "top25": 84.6,
+       "p75": 80.5,
+       "p50": 51.5,
+       "p25": 42.5,
+       "gt90": 0
+      },
+      "marund": {
+       "px": 1842,
+       "top25": 82.2,
+       "p75": 79.5,
+       "p50": 75.5,
+       "p25": 53.5,
+       "gt90": 0
+      }
+     },
+     "maxGt90": 0.0142,
+     "medianTop25": 82.3
+    },
+    "wicks": {
+     "px": 27208,
+     "top25": 63.1,
+     "p95": 71,
+     "lumaP95": 164
+    },
+    "monsters": null,
+    "structures": {
+     "px": 11646,
+     "top25": 74.4,
+     "p95": 83
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "frameP50": 71,
+      "frameP95": 102,
+      "frameP99": 139,
+      "laneP50": 90
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 69,
+      "frameP95": 101,
+      "frameP99": 140,
+      "laneP50": 91
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 68,
+      "frameP95": 101,
+      "frameP99": 139,
+      "laneP50": 91
+     },
+     "fight": {
+      "at": [
+       69.2,
+       20.8
+      ],
+      "frameP50": 71,
+      "frameP95": 103,
+      "frameP99": 142,
+      "laneP50": 90
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "32 PASS (<= 45)",
+     "laneSpread": "32 PASS (<= 45)",
+     "frameP50": "70 PASS (55-75)",
+     "frameP95": "102 PASS (<= 130)",
+     "frameP99": "140 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.34 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.8 PASS (70-85), over lane 43.3 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.29 % of fighter pixels PASS (< 2 %), worst fighter 1.4 %, p99 87",
+     "wickTop25": "63.1 (info: <= 65, WICK lane)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "fray_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 23,
+     "p50": 85,
+     "p95": 107,
+     "p99": 120,
+     "mean": 78.91,
+     "spread": 84,
+     "lstarP50": 36.5,
+     "sat": 0.24,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.656,
+      "p5": 53,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 83.03,
+      "spread": 43,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.656,
+      "p5": 53,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 83.03,
+      "spread": 43,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0038,
+      "p5": 20,
+      "p50": 40,
+      "p95": 72,
+      "p99": 79,
+      "mean": 42.45,
+      "spread": 52,
+      "lstarP50": 16,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "grass": {
+      "share": 0.0061,
+      "p5": 16,
+      "p50": 40,
+      "p95": 99,
+      "p99": 109,
+      "mean": 50.02,
+      "spread": 83,
+      "lstarP50": 16.5,
+      "sat": 0.45,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.0444,
+      "p5": 9,
+      "p50": 18,
+      "p95": 28,
+      "p99": 35,
+      "mean": 17.83,
+      "spread": 19,
+      "lstarP50": 6,
+      "sat": 0.69,
+      "satP50": 0.7
+     },
+     "wallLip": {
+      "share": 0.0409,
+      "p5": 20,
+      "p50": 55,
+      "p95": 70,
+      "p99": 74,
+      "mean": 50.59,
+      "spread": 50,
+      "lstarP50": 23,
+      "sat": 0.18,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.2166,
+      "p5": 62,
+      "p50": 86,
+      "p95": 117,
+      "p99": 122,
+      "mean": 87.74,
+      "spread": 55,
+      "lstarP50": 36.5,
+      "sat": 0.06,
+      "satP50": 0
+     },
+     "walls": {
+      "share": 0.0853,
+      "p5": 9,
+      "p50": 24,
+      "p95": 67,
+      "p99": 72,
+      "mean": 33.53,
+      "spread": 58,
+      "lstarP50": 8.5,
+      "sat": 0.45,
+      "satP50": 0.6
+     },
+     "edge": {
+      "share": 0.0043,
+      "p5": 37,
+      "p50": 56,
+      "p95": 67,
+      "p99": 69,
+      "mean": 54.72,
+      "spread": 30,
+      "lstarP50": 23.5,
+      "sat": 0.15,
+      "satP50": 0.1
+     },
+     "landmark": {
+      "share": 0.0201,
+      "p5": 13,
+      "p50": 82,
+      "p95": 123,
+      "p99": 162,
+      "mean": 72.98,
+      "spread": 110,
+      "lstarP50": 35,
+      "sat": 0.26,
+      "satP50": 0.1
+     },
+     "lamp": {
+      "share": 0,
+      "p5": 135,
+      "p50": 173,
+      "p95": 183,
+      "p99": 183,
+      "mean": 166.27,
+      "spread": 48,
+      "lstarP50": 73,
+      "sat": 0.72,
+      "satP50": 0.7
+     },
+     "ground": {
+      "share": 0.656,
+      "p5": 53,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 83.03,
+      "spread": 43,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 26554282,
+     "other": 0,
+     "lamp": 13416,
+     "otherShare": 0,
+     "lampShareOfFrame": 0.0005,
+     "byClass": {
+      "19L": 150,
+      "1L": 13266
+     }
+    },
+    "fighters": {
+     "px": 52360,
+     "top25": 83.2,
+     "p75": 78,
+     "p50": 56,
+     "p25": 23,
+     "p95": 86,
+     "p99": 90.5,
+     "gt90": 0.0101,
+     "lumaP95": 215,
+     "overLane": 46.2,
+     "per": {
+      "kemdo": {
+       "px": 27225,
+       "top25": 80,
+       "p75": 69,
+       "p50": 52.5,
+       "p25": 28,
+       "gt90": 0.0085
+      },
+      "nurrow": {
+       "px": 25135,
+       "top25": 84.3,
+       "p75": 80.5,
+       "p50": 72,
+       "p25": 19.5,
+       "gt90": 0.0118
+      }
+     },
+     "maxGt90": 0.0118,
+     "medianTop25": 84.3
+    },
+    "wicks": null,
+    "monsters": null,
+    "structures": null,
+    "perSpot": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "frameP50": 87,
+      "frameP95": 96,
+      "frameP99": 106,
+      "laneP50": 88
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "frameP50": 86,
+      "frameP95": 97,
+      "frameP99": 116,
+      "laneP50": 87
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "frameP50": 85,
+      "frameP95": 100,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatII": {
+      "at": [
+       47.3,
+       11
+      ],
+      "frameP50": 85,
+      "frameP95": 99,
+      "frameP99": 112,
+      "laneP50": 88
+     },
+     "seatIII": {
+      "at": [
+       56.7,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 114,
+      "frameP99": 121,
+      "laneP50": 87
+     },
+     "seatIV": {
+      "at": [
+       56.7,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 86
+     },
+     "seatV": {
+      "at": [
+       47.3,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 109,
+      "frameP99": 116,
+      "laneP50": 85
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "frameP50": 83,
+      "frameP95": 94,
+      "frameP99": 103,
+      "laneP50": 86
+     },
+     "seatVII": {
+      "at": [
+       16.7,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 103,
+      "frameP99": 112,
+      "laneP50": 87
+     },
+     "seatVIII": {
+      "at": [
+       7.3,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 85
+     },
+     "seatIX": {
+      "at": [
+       7.3,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 119,
+      "frameP99": 124,
+      "laneP50": 85
+     },
+     "seatX": {
+      "at": [
+       16.7,
+       11
+      ],
+      "frameP50": 83,
+      "frameP95": 99,
+      "frameP99": 114,
+      "laneP50": 87
+     },
+     "fight": {
+      "at": [
+       13.4,
+       23.9
+      ],
+      "frameP50": 85,
+      "frameP95": 95,
+      "frameP99": 109,
+      "laneP50": 86
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "86 PASS (85-100)",
+     "walkableSpread": "43 PASS (<= 45)",
+     "laneSpread": "43 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "107 PASS (<= 130)",
+     "frameP99": "120 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.050 % of frame PASS",
+     "groundSat": "0.27 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "83.2 PASS (70-85), over lane 46.2 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 1.01 % of fighter pixels PASS (< 2 %), worst fighter 1.2 %, p99 90.5"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "fray_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 26,
+     "p50": 85,
+     "p95": 108,
+     "p99": 120,
+     "mean": 80.28,
+     "spread": 82,
+     "lstarP50": 36.5,
+     "sat": 0.24,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.6549,
+      "p5": 62,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.08,
+      "spread": 34,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.6549,
+      "p5": 62,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.08,
+      "spread": 34,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0047,
+      "p5": 29,
+      "p50": 59,
+      "p95": 80,
+      "p99": 92,
+      "mean": 57.28,
+      "spread": 51,
+      "lstarP50": 24.5,
+      "sat": 0.25,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.003,
+      "p5": 25,
+      "p50": 47,
+      "p95": 103,
+      "p99": 108,
+      "mean": 59.98,
+      "spread": 78,
+      "lstarP50": 20,
+      "sat": 0.41,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.0432,
+      "p5": 12,
+      "p50": 20,
+      "p95": 32,
+      "p99": 50,
+      "mean": 21.22,
+      "spread": 20,
+      "lstarP50": 7,
+      "sat": 0.67,
+      "satP50": 0.7
+     },
+     "wallLip": {
+      "share": 0.0386,
+      "p5": 22,
+      "p50": 60,
+      "p95": 71,
+      "p99": 75,
+      "mean": 54.51,
+      "spread": 49,
+      "lstarP50": 25.5,
+      "sat": 0.16,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.2149,
+      "p5": 63,
+      "p50": 86,
+      "p95": 117,
+      "p99": 122,
+      "mean": 88.45,
+      "spread": 54,
+      "lstarP50": 36.5,
+      "sat": 0.06,
+      "satP50": 0
+     },
+     "walls": {
+      "share": 0.0818,
+      "p5": 14,
+      "p50": 25,
+      "p95": 68,
+      "p99": 73,
+      "mean": 36.91,
+      "spread": 54,
+      "lstarP50": 9,
+      "sat": 0.43,
+      "satP50": 0.6
+     },
+     "edge": {
+      "share": 0.0039,
+      "p5": 47,
+      "p50": 62,
+      "p95": 68,
+      "p99": 69,
+      "mean": 59.77,
+      "spread": 21,
+      "lstarP50": 26,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "landmark": {
+      "share": 0.0193,
+      "p5": 16,
+      "p50": 87,
+      "p95": 124,
+      "p99": 164,
+      "mean": 76.37,
+      "spread": 108,
+      "lstarP50": 37,
+      "sat": 0.25,
+      "satP50": 0.1
+     },
+     "lamp": {
+      "share": 0,
+      "p5": 161,
+      "p50": 177,
+      "p95": 183,
+      "p99": 183,
+      "mean": 174.38,
+      "spread": 22,
+      "lstarP50": 74.5,
+      "sat": 0.72,
+      "satP50": 0.7
+     },
+     "ground": {
+      "share": 0.6549,
+      "p5": 62,
+      "p50": 86,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.08,
+      "spread": 34,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 6556866,
+     "other": 0,
+     "lamp": 3081,
+     "otherShare": 0,
+     "lampShareOfFrame": 0.00046,
+     "byClass": {
+      "19L": 38,
+      "1L": 3043
+     }
+    },
+    "fighters": {
+     "px": 11992,
+     "top25": 83.4,
+     "p75": 78.5,
+     "p50": 60,
+     "p25": 26.5,
+     "p95": 86.5,
+     "p99": 90.5,
+     "gt90": 0.0103,
+     "lumaP95": 215,
+     "overLane": 46.4,
+     "per": {
+      "kemdo": {
+       "px": 6246,
+       "top25": 80.5,
+       "p75": 70,
+       "p50": 55.5,
+       "p25": 30,
+       "gt90": 0.0104
+      },
+      "nurrow": {
+       "px": 5746,
+       "top25": 84.3,
+       "p75": 80.5,
+       "p50": 74.5,
+       "p25": 22.5,
+       "gt90": 0.0103
+      }
+     },
+     "maxGt90": 0.0104,
+     "medianTop25": 84.3
+    },
+    "wicks": null,
+    "monsters": null,
+    "structures": null,
+    "perSpot": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "frameP50": 87,
+      "frameP95": 96,
+      "frameP99": 106,
+      "laneP50": 88
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "frameP50": 86,
+      "frameP95": 97,
+      "frameP99": 116,
+      "laneP50": 88
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "frameP50": 85,
+      "frameP95": 99,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatII": {
+      "at": [
+       47.3,
+       11
+      ],
+      "frameP50": 85,
+      "frameP95": 100,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatIII": {
+      "at": [
+       56.7,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 114,
+      "frameP99": 121,
+      "laneP50": 87
+     },
+     "seatIV": {
+      "at": [
+       56.7,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 86
+     },
+     "seatV": {
+      "at": [
+       47.3,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 110,
+      "frameP99": 117,
+      "laneP50": 85
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "frameP50": 83,
+      "frameP95": 93,
+      "frameP99": 104,
+      "laneP50": 86
+     },
+     "seatVII": {
+      "at": [
+       16.7,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 103,
+      "frameP99": 112,
+      "laneP50": 86
+     },
+     "seatVIII": {
+      "at": [
+       7.3,
+       40
+      ],
+      "frameP50": 85,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 85
+     },
+     "seatIX": {
+      "at": [
+       7.3,
+       24
+      ],
+      "frameP50": 85,
+      "frameP95": 119,
+      "frameP99": 124,
+      "laneP50": 85
+     },
+     "seatX": {
+      "at": [
+       16.7,
+       11
+      ],
+      "frameP50": 84,
+      "frameP95": 102,
+      "frameP99": 117,
+      "laneP50": 86
+     },
+     "fight": {
+      "at": [
+       13.4,
+       23.9
+      ],
+      "frameP50": 85,
+      "frameP95": 95,
+      "frameP99": 109,
+      "laneP50": 86
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "86 PASS (85-100)",
+     "walkableSpread": "34 PASS (<= 45)",
+     "laneSpread": "34 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "108 PASS (<= 130)",
+     "frameP99": "120 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.046 % of frame PASS",
+     "groundSat": "0.27 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "83.4 PASS (70-85), over lane 46.4 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 1.03 % of fighter pixels PASS (< 2 %), worst fighter 1.0 %, p99 90.5"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   }
+  },
+  "odrum_before": {
+   "rift_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 19,
+     "p50": 61,
+     "p95": 99,
+     "p99": 113,
+     "mean": 61.56,
+     "spread": 80,
+     "lstarP50": 26,
+     "sat": 0.34,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.2663,
+      "p5": 66,
+      "p50": 89,
+      "p95": 101,
+      "p99": 106,
+      "mean": 86.55,
+      "spread": 35,
+      "lstarP50": 38,
+      "sat": 0.34,
+      "satP50": 0.4
+     },
+     "walkable": {
+      "share": 0.346,
+      "p5": 60,
+      "p50": 89,
+      "p95": 101,
+      "p99": 106,
+      "mean": 86.01,
+      "spread": 41,
+      "lstarP50": 38,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.045,
+      "p5": 16,
+      "p50": 42,
+      "p95": 83,
+      "p99": 97,
+      "mean": 44.92,
+      "spread": 67,
+      "lstarP50": 17,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "jungle": {
+      "share": 0.0278,
+      "p5": 18,
+      "p50": 38,
+      "p95": 77,
+      "p99": 88,
+      "mean": 42.05,
+      "spread": 59,
+      "lstarP50": 15,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "camp": {
+      "share": 0.0416,
+      "p5": 32,
+      "p50": 75,
+      "p95": 90,
+      "p99": 95,
+      "mean": 67.81,
+      "spread": 58,
+      "lstarP50": 32,
+      "sat": 0.24,
+      "satP50": 0.2
+     },
+     "seat": {
+      "share": 0.0798,
+      "p5": 44,
+      "p50": 89,
+      "p95": 101,
+      "p99": 106,
+      "mean": 84.21,
+      "spread": 57,
+      "lstarP50": 38,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "shadow": {
+      "share": 0.0051,
+      "p5": 17,
+      "p50": 38,
+      "p95": 47,
+      "p99": 61,
+      "mean": 35.69,
+      "spread": 30,
+      "lstarP50": 15.5,
+      "sat": 0.38,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0092,
+      "p5": 10,
+      "p50": 29,
+      "p95": 73,
+      "p99": 81,
+      "mean": 34.87,
+      "spread": 63,
+      "lstarP50": 11,
+      "sat": 0.46,
+      "satP50": 0.4
+     },
+     "grass": {
+      "share": 0.0257,
+      "p5": 19,
+      "p50": 44,
+      "p95": 87,
+      "p99": 99,
+      "mean": 48.45,
+      "spread": 68,
+      "lstarP50": 18.5,
+      "sat": 0.37,
+      "satP50": 0.3
+     },
+     "clutter": {
+      "share": 0.0023,
+      "p5": 18,
+      "p50": 47,
+      "p95": 64,
+      "p99": 68,
+      "mean": 44.77,
+      "spread": 46,
+      "lstarP50": 19.5,
+      "sat": 0.5,
+      "satP50": 0.5
+     },
+     "wallFace": {
+      "share": 0.1139,
+      "p5": 15,
+      "p50": 34,
+      "p95": 52,
+      "p99": 60,
+      "mean": 33.61,
+      "spread": 37,
+      "lstarP50": 13,
+      "sat": 0.15,
+      "satP50": 0.1
+     },
+     "wallLip": {
+      "share": 0.0699,
+      "p5": 26,
+      "p50": 50,
+      "p95": 79,
+      "p99": 94,
+      "mean": 50.27,
+      "spread": 53,
+      "lstarP50": 21,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.0969,
+      "p5": 20,
+      "p50": 48,
+      "p95": 73,
+      "p99": 82,
+      "mean": 46.73,
+      "spread": 53,
+      "lstarP50": 20,
+      "sat": 0.48,
+      "satP50": 0.5
+     },
+     "walls": {
+      "share": 0.1837,
+      "p5": 17,
+      "p50": 40,
+      "p95": 64,
+      "p99": 88,
+      "mean": 39.94,
+      "spread": 47,
+      "lstarP50": 16,
+      "sat": 0.14,
+      "satP50": 0.1
+     },
+     "edge": {
+      "share": 0.0066,
+      "p5": 39,
+      "p50": 74,
+      "p95": 97,
+      "p99": 102,
+      "mean": 72.5,
+      "spread": 58,
+      "lstarP50": 31.5,
+      "sat": 0.11,
+      "satP50": 0.1
+     },
+     "canopy": {
+      "share": 0.1426,
+      "p5": 15,
+      "p50": 51,
+      "p95": 82,
+      "p99": 92,
+      "mean": 50.31,
+      "spread": 67,
+      "lstarP50": 22.5,
+      "sat": 0.58,
+      "satP50": 0.6
+     },
+     "rock": {
+      "share": 0.0015,
+      "p5": 17,
+      "p50": 54,
+      "p95": 74,
+      "p99": 100,
+      "mean": 50.28,
+      "spread": 57,
+      "lstarP50": 22.5,
+      "sat": 0.34,
+      "satP50": 0.3
+     },
+     "landmark": {
+      "share": 0.0104,
+      "p5": 17,
+      "p50": 98,
+      "p95": 120,
+      "p99": 123,
+      "mean": 80.74,
+      "spread": 103,
+      "lstarP50": 41.5,
+      "sat": 0.18,
+      "satP50": 0.2
+     },
+     "water": {
+      "share": 0.0086,
+      "p5": 45,
+      "p50": 70,
+      "p95": 78,
+      "p99": 94,
+      "mean": 65.81,
+      "spread": 33,
+      "lstarP50": 30,
+      "sat": 0.45,
+      "satP50": 0.4
+     },
+     "ground": {
+      "share": 0.4604,
+      "p5": 29,
+      "p50": 85,
+      "p95": 100,
+      "p99": 105,
+      "mean": 77.7,
+      "spread": 71,
+      "lstarP50": 36.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 11741605,
+     "other": 5,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {
+      "9": 5
+     }
+    },
+    "fighters": {
+     "px": 103513,
+     "top25": 81.4,
+     "p75": 76,
+     "p50": 54,
+     "p25": 26,
+     "p95": 84,
+     "p99": 87,
+     "gt90": 0.0006,
+     "lumaP95": 209,
+     "overLane": 43.4,
+     "per": {
+      "burdam": {
+       "px": 18112,
+       "top25": 77.1,
+       "p75": 67,
+       "p50": 43.5,
+       "p25": 19,
+       "gt90": 0.0003
+      },
+      "vashil": {
+       "px": 23188,
+       "top25": 82.9,
+       "p75": 75,
+       "p50": 53.5,
+       "p25": 33.5,
+       "gt90": 0.0003
+      },
+      "marund": {
+       "px": 49492,
+       "top25": 81.7,
+       "p75": 79,
+       "p50": 56.5,
+       "p25": 22.5,
+       "gt90": 0.0003
+      },
+      "rishal": {
+       "px": 8546,
+       "top25": 80.3,
+       "p75": 77,
+       "p50": 63,
+       "p25": 43.5,
+       "gt90": 0.0008
+      },
+      "odrum": {
+       "px": 4175,
+       "top25": 73.5,
+       "p75": 64,
+       "p50": 52,
+       "p25": 34,
+       "gt90": 0.0074
+      }
+     },
+     "maxGt90": 0.0074,
+     "medianTop25": 80.3
+    },
+    "wicks": {
+     "px": 79861,
+     "top25": 64.1,
+     "p95": 69,
+     "lumaP95": 164
+    },
+    "monsters": {
+     "px": 4900,
+     "top25": 74.8,
+     "p95": 79.5
+    },
+    "structures": {
+     "px": 86540,
+     "top25": 78.4,
+     "p95": 84
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       52.3,
+       14.7
+      ],
+      "frameP50": 60,
+      "frameP95": 100,
+      "frameP99": 111,
+      "laneP50": 90
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "frameP50": 59,
+      "frameP95": 99,
+      "frameP99": 111,
+      "laneP50": 91
+     },
+     "lane2": {
+      "at": [
+       52.3,
+       95.3
+      ],
+      "frameP50": 63,
+      "frameP95": 96,
+      "frameP99": 110,
+      "laneP50": 86
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.8
+      ],
+      "frameP50": 48,
+      "frameP95": 88,
+      "frameP99": 116,
+      "laneP50": null
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "frameP50": 78,
+      "frameP95": 100,
+      "frameP99": 110,
+      "laneP50": 89
+     },
+     "fight": {
+      "at": [
+       89.8,
+       97.6
+      ],
+      "frameP50": 69,
+      "frameP95": 101,
+      "frameP99": 115,
+      "laneP50": 89
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "89 PASS (85-100)",
+     "walkableSpread": "41 PASS (<= 45)",
+     "laneSpread": "35 PASS (<= 45)",
+     "frameP50": "61 PASS (55-75)",
+     "frameP95": "99 PASS (<= 130)",
+     "frameP99": "113 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.32 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.4 PASS (70-85), over lane 43.4 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.06 % of fighter pixels PASS (< 2 %), worst fighter 0.7 %, p99 87",
+     "wickTop25": "64.1 (info: <= 65, WICK lane)",
+     "monsterTop25": "74.8 (info)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "rift_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 28,
+     "p50": 64,
+     "p95": 99,
+     "p99": 118,
+     "mean": 65.59,
+     "spread": 71,
+     "lstarP50": 27.5,
+     "sat": 0.31,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.2653,
+      "p5": 69,
+      "p50": 90,
+      "p95": 101,
+      "p99": 105,
+      "mean": 87.45,
+      "spread": 32,
+      "lstarP50": 38.5,
+      "sat": 0.34,
+      "satP50": 0.4
+     },
+     "walkable": {
+      "share": 0.3448,
+      "p5": 65,
+      "p50": 90,
+      "p95": 101,
+      "p99": 105,
+      "mean": 87.09,
+      "spread": 36,
+      "lstarP50": 38.5,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.0466,
+      "p5": 25,
+      "p50": 44,
+      "p95": 82,
+      "p99": 96,
+      "mean": 48.15,
+      "spread": 57,
+      "lstarP50": 18,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "jungle": {
+      "share": 0.0299,
+      "p5": 21,
+      "p50": 41,
+      "p95": 76,
+      "p99": 87,
+      "mean": 43.96,
+      "spread": 55,
+      "lstarP50": 16.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "camp": {
+      "share": 0.0421,
+      "p5": 38,
+      "p50": 76,
+      "p95": 90,
+      "p99": 95,
+      "mean": 70.37,
+      "spread": 52,
+      "lstarP50": 32.5,
+      "sat": 0.24,
+      "satP50": 0.2
+     },
+     "seat": {
+      "share": 0.0795,
+      "p5": 47,
+      "p50": 90,
+      "p95": 101,
+      "p99": 105,
+      "mean": 85.9,
+      "spread": 54,
+      "lstarP50": 38.5,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "shadow": {
+      "share": 0.0051,
+      "p5": 21,
+      "p50": 39,
+      "p95": 47,
+      "p99": 62,
+      "mean": 37.09,
+      "spread": 26,
+      "lstarP50": 15.5,
+      "sat": 0.36,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0127,
+      "p5": 18,
+      "p50": 44,
+      "p95": 90,
+      "p99": 97,
+      "mean": 49.64,
+      "spread": 72,
+      "lstarP50": 18,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "grass": {
+      "share": 0.0129,
+      "p5": 30,
+      "p50": 55,
+      "p95": 95,
+      "p99": 103,
+      "mean": 59.33,
+      "spread": 65,
+      "lstarP50": 23.5,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.1129,
+      "p5": 23,
+      "p50": 39,
+      "p95": 55,
+      "p99": 62,
+      "mean": 38.7,
+      "spread": 32,
+      "lstarP50": 15.5,
+      "sat": 0.14,
+      "satP50": 0.1
+     },
+     "wallLip": {
+      "share": 0.0694,
+      "p5": 36,
+      "p50": 55,
+      "p95": 86,
+      "p99": 100,
+      "mean": 56.29,
+      "spread": 50,
+      "lstarP50": 23,
+      "sat": 0.11,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.1779,
+      "p5": 29,
+      "p50": 55,
+      "p95": 75,
+      "p99": 82,
+      "mean": 54.12,
+      "spread": 46,
+      "lstarP50": 23.5,
+      "sat": 0.44,
+      "satP50": 0.4
+     },
+     "walls": {
+      "share": 0.1822,
+      "p5": 25,
+      "p50": 45,
+      "p95": 67,
+      "p99": 95,
+      "mean": 45.39,
+      "spread": 42,
+      "lstarP50": 18.5,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "edge": {
+      "share": 0.0061,
+      "p5": 49,
+      "p50": 85,
+      "p95": 104,
+      "p99": 106,
+      "mean": 81.82,
+      "spread": 55,
+      "lstarP50": 36,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "canopy": {
+      "share": 0.0545,
+      "p5": 20,
+      "p50": 56,
+      "p95": 87,
+      "p99": 95,
+      "mean": 55.03,
+      "spread": 67,
+      "lstarP50": 24.5,
+      "sat": 0.55,
+      "satP50": 0.6
+     },
+     "rock": {
+      "share": 0.0005,
+      "p5": 26,
+      "p50": 65,
+      "p95": 110,
+      "p99": 111,
+      "mean": 60.9,
+      "spread": 84,
+      "lstarP50": 28,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "landmark": {
+      "share": 0.0101,
+      "p5": 22,
+      "p50": 103,
+      "p95": 120,
+      "p99": 123,
+      "mean": 83.45,
+      "spread": 98,
+      "lstarP50": 43.5,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "water": {
+      "share": 0.0088,
+      "p5": 49,
+      "p50": 71,
+      "p95": 78,
+      "p99": 86,
+      "mean": 67.67,
+      "spread": 29,
+      "lstarP50": 30.5,
+      "sat": 0.45,
+      "satP50": 0.4
+     },
+     "ground": {
+      "share": 0.4634,
+      "p5": 33,
+      "p50": 86,
+      "p95": 100,
+      "p99": 105,
+      "mean": 78.88,
+      "spread": 67,
+      "lstarP50": 36.5,
+      "sat": 0.31,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 2869725,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 24044,
+     "top25": 82.2,
+     "p75": 77.5,
+     "p50": 56,
+     "p25": 29.5,
+     "p95": 85,
+     "p99": 87.5,
+     "gt90": 0.0017,
+     "lumaP95": 213,
+     "overLane": 43.7,
+     "per": {
+      "burdam": {
+       "px": 4206,
+       "top25": 77.8,
+       "p75": 68,
+       "p50": 45.5,
+       "p25": 21,
+       "gt90": 0.001
+      },
+      "vashil": {
+       "px": 5114,
+       "top25": 83.4,
+       "p75": 74,
+       "p50": 53,
+       "p25": 36,
+       "gt90": 0.0014
+      },
+      "marund": {
+       "px": 11890,
+       "top25": 82.1,
+       "p75": 79.5,
+       "p50": 60.5,
+       "p25": 27.5,
+       "gt90": 0.0012
+      },
+      "rishal": {
+       "px": 1884,
+       "top25": 83.9,
+       "p75": 81,
+       "p50": 68.5,
+       "p25": 47.5,
+       "gt90": 0.0053
+      },
+      "odrum": {
+       "px": 950,
+       "top25": 74.7,
+       "p75": 67,
+       "p50": 54.5,
+       "p25": 36,
+       "gt90": 0.0074
+      }
+     },
+     "maxGt90": 0.0074,
+     "medianTop25": 82.1
+    },
+    "wicks": {
+     "px": 18203,
+     "top25": 66.3,
+     "p95": 72,
+     "lumaP95": 169
+    },
+    "monsters": {
+     "px": 1136,
+     "top25": 75.9,
+     "p95": 80
+    },
+    "structures": {
+     "px": 21766,
+     "top25": 83.2,
+     "p95": 88.5
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       52.3,
+       14.7
+      ],
+      "frameP50": 62,
+      "frameP95": 100,
+      "frameP99": 130,
+      "laneP50": 91
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "frameP50": 63,
+      "frameP95": 99,
+      "frameP99": 127,
+      "laneP50": 92
+     },
+     "lane2": {
+      "at": [
+       52.3,
+       95.3
+      ],
+      "frameP50": 67,
+      "frameP95": 97,
+      "frameP99": 130,
+      "laneP50": 87
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.8
+      ],
+      "frameP50": 54,
+      "frameP95": 88,
+      "frameP99": 116,
+      "laneP50": null
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "frameP50": 80,
+      "frameP95": 100,
+      "frameP99": 111,
+      "laneP50": 89
+     },
+     "fight": {
+      "at": [
+       89.8,
+       97.6
+      ],
+      "frameP50": 70,
+      "frameP95": 102,
+      "frameP99": 116,
+      "laneP50": 90
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "36 PASS (<= 45)",
+     "laneSpread": "32 PASS (<= 45)",
+     "frameP50": "64 PASS (55-75)",
+     "frameP95": "99 PASS (<= 130)",
+     "frameP99": "118 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.31 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "82.2 PASS (70-85), over lane 43.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.17 % of fighter pixels PASS (< 2 %), worst fighter 0.7 %, p99 87.5",
+     "wickTop25": "66.3 (info: <= 65, WICK lane)",
+     "monsterTop25": "75.9 (info)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "bridge_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane_mid",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 22,
+     "p50": 68,
+     "p95": 100,
+     "p99": 137,
+     "mean": 65.23,
+     "spread": 78,
+     "lstarP50": 29,
+     "sat": 0.35,
+     "satP50": 0.4
+    },
+    "masks": {
+     "lane": {
+      "share": 0.404,
+      "p5": 66,
+      "p50": 89,
+      "p95": 101,
+      "p99": 106,
+      "mean": 87.25,
+      "spread": 35,
+      "lstarP50": 38,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.404,
+      "p5": 66,
+      "p50": 89,
+      "p95": 101,
+      "p99": 106,
+      "mean": 87.25,
+      "spread": 35,
+      "lstarP50": 38,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.3433,
+      "p5": 25,
+      "p50": 46,
+      "p95": 81,
+      "p99": 106,
+      "mean": 49.48,
+      "spread": 56,
+      "lstarP50": 19,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "brush": {
+      "share": 0.0101,
+      "p5": 11,
+      "p50": 19,
+      "p95": 43,
+      "p99": 52,
+      "mean": 22.7,
+      "spread": 32,
+      "lstarP50": 6.5,
+      "sat": 0.49,
+      "satP50": 0.5
+     },
+     "grass": {
+      "share": 0.0365,
+      "p5": 19,
+      "p50": 47,
+      "p95": 86,
+      "p99": 99,
+      "mean": 49,
+      "spread": 67,
+      "lstarP50": 19.5,
+      "sat": 0.47,
+      "satP50": 0.5
+     },
+     "wallFace": {
+      "share": 0.0653,
+      "p5": 16,
+      "p50": 25,
+      "p95": 33,
+      "p99": 41,
+      "mean": 25.18,
+      "spread": 17,
+      "lstarP50": 9,
+      "sat": 0.39,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.0344,
+      "p5": 21,
+      "p50": 49,
+      "p95": 77,
+      "p99": 92,
+      "mean": 50.12,
+      "spread": 56,
+      "lstarP50": 20.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "walls": {
+      "share": 0.0998,
+      "p5": 17,
+      "p50": 28,
+      "p95": 69,
+      "p99": 83,
+      "mean": 33.79,
+      "spread": 52,
+      "lstarP50": 10.5,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "edge": {
+      "share": 0.0023,
+      "p5": 40,
+      "p50": 70,
+      "p95": 94,
+      "p99": 96,
+      "mean": 68.71,
+      "spread": 54,
+      "lstarP50": 30,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "rock": {
+      "share": 0.0023,
+      "p5": 14,
+      "p50": 76,
+      "p95": 97,
+      "p99": 111,
+      "mean": 65.34,
+      "spread": 83,
+      "lstarP50": 32,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0426,
+      "p5": 9,
+      "p50": 74,
+      "p95": 94,
+      "p99": 103,
+      "mean": 66.28,
+      "spread": 85,
+      "lstarP50": 31.5,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "ground": {
+      "share": 0.7473,
+      "p5": 32,
+      "p50": 76,
+      "p95": 100,
+      "p99": 106,
+      "mean": 69.9,
+      "spread": 68,
+      "lstarP50": 32.5,
+      "sat": 0.34,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 7762243,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 274586,
+     "top25": 82.7,
+     "p75": 76,
+     "p50": 53.5,
+     "p25": 29,
+     "p95": 85,
+     "p99": 86.5,
+     "gt90": 0.0023,
+     "lumaP95": 211,
+     "overLane": 44.7,
+     "per": {
+      "hesmi": {
+       "px": 69314,
+       "top25": 82.6,
+       "p75": 75.5,
+       "p50": 55.5,
+       "p25": 26,
+       "gt90": 0.0071
+      },
+      "tunlan": {
+       "px": 56806,
+       "top25": 84.8,
+       "p75": 84.5,
+       "p50": 82,
+       "p25": 38,
+       "gt90": 0
+      },
+      "vashil": {
+       "px": 39671,
+       "top25": 81.2,
+       "p75": 73.5,
+       "p50": 55,
+       "p25": 37.5,
+       "gt90": 0.0004
+      },
+      "rishal": {
+       "px": 16213,
+       "top25": 76.9,
+       "p75": 68.5,
+       "p50": 50,
+       "p25": 28.5,
+       "gt90": 0.0002
+      },
+      "odrum": {
+       "px": 25978,
+       "top25": 70.9,
+       "p75": 62.5,
+       "p50": 51,
+       "p25": 29.5,
+       "gt90": 0.0043
+      },
+      "burdam": {
+       "px": 41370,
+       "top25": 68.2,
+       "p75": 57.5,
+       "p50": 38.5,
+       "p25": 24,
+       "gt90": 0
+      },
+      "marund": {
+       "px": 25234,
+       "top25": 80.5,
+       "p75": 77.5,
+       "p50": 49.5,
+       "p25": 21.5,
+       "gt90": 0
+      }
+     },
+     "maxGt90": 0.0071,
+     "medianTop25": 80.5
+    },
+    "wicks": {
+     "px": 100593,
+     "top25": 61.9,
+     "p95": 68,
+     "lumaP95": 161
+    },
+    "monsters": null,
+    "structures": {
+     "px": 36323,
+     "top25": 73.9,
+     "p95": 81
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "frameP50": 70,
+      "frameP95": 101,
+      "frameP99": 115,
+      "laneP50": 89
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 67,
+      "frameP95": 100,
+      "frameP99": 144,
+      "laneP50": 89
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 67,
+      "frameP95": 100,
+      "frameP99": 144,
+      "laneP50": 89
+     },
+     "fight": {
+      "at": [
+       83.9,
+       21.2
+      ],
+      "frameP50": 67,
+      "frameP95": 100,
+      "frameP99": 147,
+      "laneP50": 89
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "89 PASS (85-100)",
+     "walkableSpread": "35 PASS (<= 45)",
+     "laneSpread": "35 PASS (<= 45)",
+     "frameP50": "68 PASS (55-75)",
+     "frameP95": "100 PASS (<= 130)",
+     "frameP99": "137 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.34 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "82.7 PASS (70-85), over lane 44.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.23 % of fighter pixels PASS (< 2 %), worst fighter 0.7 %, p99 86.5",
+     "wickTop25": "61.9 (info: <= 65, WICK lane)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "bridge_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane_mid",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 25,
+     "p50": 69,
+     "p95": 101,
+     "p99": 147,
+     "mean": 67.31,
+     "spread": 76,
+     "lstarP50": 29.5,
+     "sat": 0.35,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.402,
+      "p5": 69,
+      "p50": 90,
+      "p95": 102,
+      "p99": 106,
+      "mean": 88.81,
+      "spread": 33,
+      "lstarP50": 38.5,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.402,
+      "p5": 69,
+      "p50": 90,
+      "p95": 102,
+      "p99": 106,
+      "mean": 88.81,
+      "spread": 33,
+      "lstarP50": 38.5,
+      "sat": 0.33,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.3391,
+      "p5": 27,
+      "p50": 46,
+      "p95": 80,
+      "p99": 107,
+      "mean": 50.08,
+      "spread": 53,
+      "lstarP50": 19.5,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "brush": {
+      "share": 0.0148,
+      "p5": 21,
+      "p50": 31,
+      "p95": 50,
+      "p99": 58,
+      "mean": 32.82,
+      "spread": 29,
+      "lstarP50": 12,
+      "sat": 0.38,
+      "satP50": 0.3
+     },
+     "grass": {
+      "share": 0.0184,
+      "p5": 30,
+      "p50": 54,
+      "p95": 93,
+      "p99": 103,
+      "mean": 58.12,
+      "spread": 63,
+      "lstarP50": 22.5,
+      "sat": 0.39,
+      "satP50": 0.4
+     },
+     "wallFace": {
+      "share": 0.0653,
+      "p5": 20,
+      "p50": 27,
+      "p95": 35,
+      "p99": 40,
+      "mean": 27.27,
+      "spread": 15,
+      "lstarP50": 10,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.0339,
+      "p5": 31,
+      "p50": 58,
+      "p95": 85,
+      "p99": 107,
+      "mean": 56.89,
+      "spread": 54,
+      "lstarP50": 24.5,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "walls": {
+      "share": 0.0992,
+      "p5": 21,
+      "p50": 30,
+      "p95": 70,
+      "p99": 96,
+      "mean": 37.4,
+      "spread": 49,
+      "lstarP50": 11.5,
+      "sat": 0.35,
+      "satP50": 0.4
+     },
+     "edge": {
+      "share": 0.0021,
+      "p5": 53,
+      "p50": 91,
+      "p95": 113,
+      "p99": 114,
+      "mean": 88.51,
+      "spread": 60,
+      "lstarP50": 38.5,
+      "sat": 0.29,
+      "satP50": 0.3
+     },
+     "rock": {
+      "share": 0.0001,
+      "p5": 11,
+      "p50": 82,
+      "p95": 98,
+      "p99": 101,
+      "mean": 64.45,
+      "spread": 87,
+      "lstarP50": 35,
+      "sat": 0.26,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0445,
+      "p5": 11,
+      "p50": 78,
+      "p95": 94,
+      "p99": 103,
+      "mean": 69.33,
+      "spread": 83,
+      "lstarP50": 33.5,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "ground": {
+      "share": 0.7411,
+      "p5": 34,
+      "p50": 78,
+      "p95": 101,
+      "p99": 107,
+      "mean": 71.09,
+      "spread": 67,
+      "lstarP50": 33.5,
+      "sat": 0.35,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 1892853,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 63663,
+     "top25": 84,
+     "p75": 79,
+     "p50": 56.5,
+     "p25": 32.5,
+     "p95": 85.5,
+     "p99": 87.5,
+     "gt90": 0.0023,
+     "lumaP95": 213,
+     "overLane": 45.5,
+     "per": {
+      "hesmi": {
+       "px": 16425,
+       "top25": 84.7,
+       "p75": 79.5,
+       "p50": 60,
+       "p25": 31,
+       "gt90": 0.0053
+      },
+      "tunlan": {
+       "px": 13395,
+       "top25": 84.8,
+       "p75": 84.5,
+       "p50": 83,
+       "p25": 39,
+       "gt90": 0
+      },
+      "vashil": {
+       "px": 8903,
+       "top25": 82.8,
+       "p75": 75,
+       "p50": 55.5,
+       "p25": 39.5,
+       "gt90": 0.0017
+      },
+      "rishal": {
+       "px": 3471,
+       "top25": 81.2,
+       "p75": 73,
+       "p50": 53,
+       "p25": 33,
+       "gt90": 0.0023
+      },
+      "odrum": {
+       "px": 5795,
+       "top25": 71.7,
+       "p75": 63.5,
+       "p50": 52.5,
+       "p25": 29,
+       "gt90": 0.0055
+      },
+      "burdam": {
+       "px": 9657,
+       "top25": 70.9,
+       "p75": 61.5,
+       "p50": 40,
+       "p25": 26.5,
+       "gt90": 0
+      },
+      "marund": {
+       "px": 6017,
+       "top25": 80.8,
+       "p75": 78,
+       "p50": 53.5,
+       "p25": 25.5,
+       "gt90": 0.0003
+      }
+     },
+     "maxGt90": 0.0055,
+     "medianTop25": 81.2
+    },
+    "wicks": {
+     "px": 22679,
+     "top25": 65.8,
+     "p95": 72,
+     "lumaP95": 172
+    },
+    "monsters": null,
+    "structures": {
+     "px": 8675,
+     "top25": 78.1,
+     "p95": 84.5
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "frameP50": 71,
+      "frameP95": 102,
+      "frameP99": 123,
+      "laneP50": 90
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 68,
+      "frameP95": 101,
+      "frameP99": 154,
+      "laneP50": 91
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 68,
+      "frameP95": 101,
+      "frameP99": 154,
+      "laneP50": 91
+     },
+     "fight": {
+      "at": [
+       83.9,
+       21.2
+      ],
+      "frameP50": 69,
+      "frameP95": 102,
+      "frameP99": 154,
+      "laneP50": 91
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "33 PASS (<= 45)",
+     "laneSpread": "33 PASS (<= 45)",
+     "frameP50": "69 PASS (55-75)",
+     "frameP95": "101 PASS (<= 130)",
+     "frameP99": "147 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.35 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "84 PASS (70-85), over lane 45.5 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.23 % of fighter pixels PASS (< 2 %), worst fighter 0.5 %, p99 87.5",
+     "wickTop25": "65.8 (info: <= 65, WICK lane)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "fray_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 24,
+     "p50": 85,
+     "p95": 107,
+     "p99": 119,
+     "mean": 79.14,
+     "spread": 83,
+     "lstarP50": 36.5,
+     "sat": 0.24,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.6606,
+      "p5": 54,
+      "p50": 87,
+      "p95": 96,
+      "p99": 102,
+      "mean": 83.27,
+      "spread": 42,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.6606,
+      "p5": 54,
+      "p50": 87,
+      "p95": 96,
+      "p99": 102,
+      "mean": 83.27,
+      "spread": 42,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0047,
+      "p5": 20,
+      "p50": 42,
+      "p95": 72,
+      "p99": 79,
+      "mean": 43.23,
+      "spread": 52,
+      "lstarP50": 17,
+      "sat": 0.31,
+      "satP50": 0.3
+     },
+     "grass": {
+      "share": 0.0071,
+      "p5": 15,
+      "p50": 43,
+      "p95": 100,
+      "p99": 110,
+      "mean": 51.5,
+      "spread": 85,
+      "lstarP50": 18,
+      "sat": 0.45,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.0419,
+      "p5": 9,
+      "p50": 18,
+      "p95": 28,
+      "p99": 35,
+      "mean": 17.66,
+      "spread": 19,
+      "lstarP50": 5.5,
+      "sat": 0.69,
+      "satP50": 0.7
+     },
+     "wallLip": {
+      "share": 0.0402,
+      "p5": 20,
+      "p50": 55,
+      "p95": 70,
+      "p99": 74,
+      "mean": 50.42,
+      "spread": 50,
+      "lstarP50": 23,
+      "sat": 0.18,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.2136,
+      "p5": 62,
+      "p50": 86,
+      "p95": 117,
+      "p99": 122,
+      "mean": 87.85,
+      "spread": 55,
+      "lstarP50": 36.5,
+      "sat": 0.06,
+      "satP50": 0
+     },
+     "walls": {
+      "share": 0.0822,
+      "p5": 9,
+      "p50": 24,
+      "p95": 67,
+      "p99": 72,
+      "mean": 33.7,
+      "spread": 58,
+      "lstarP50": 8.5,
+      "sat": 0.44,
+      "satP50": 0.6
+     },
+     "edge": {
+      "share": 0.0042,
+      "p5": 36,
+      "p50": 56,
+      "p95": 67,
+      "p99": 69,
+      "mean": 54.42,
+      "spread": 31,
+      "lstarP50": 23.5,
+      "sat": 0.15,
+      "satP50": 0.1
+     },
+     "landmark": {
+      "share": 0.0197,
+      "p5": 13,
+      "p50": 80,
+      "p95": 123,
+      "p99": 162,
+      "mean": 72.15,
+      "spread": 110,
+      "lstarP50": 34,
+      "sat": 0.26,
+      "satP50": 0.1
+     },
+     "lamp": {
+      "share": 0.0001,
+      "p5": 138,
+      "p50": 169,
+      "p95": 182,
+      "p99": 183,
+      "mean": 166.81,
+      "spread": 44,
+      "lstarP50": 71.5,
+      "sat": 0.71,
+      "satP50": 0.7
+     },
+     "ground": {
+      "share": 0.6606,
+      "p5": 54,
+      "p50": 87,
+      "p95": 96,
+      "p99": 102,
+      "mean": 83.27,
+      "spread": 42,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 26549874,
+     "other": 0,
+     "lamp": 13416,
+     "otherShare": 0,
+     "lampShareOfFrame": 0.0005,
+     "byClass": {
+      "19L": 150,
+      "1L": 13266
+     }
+    },
+    "fighters": {
+     "px": 35349,
+     "top25": 74.3,
+     "p75": 58.5,
+     "p50": 35,
+     "p25": 16,
+     "p95": 84,
+     "p99": 88.5,
+     "gt90": 0.0056,
+     "lumaP95": 210,
+     "overLane": 37.3,
+     "per": {
+      "hesmi": {
+       "px": 23282,
+       "top25": 79,
+       "p75": 65,
+       "p50": 38,
+       "p25": 18,
+       "gt90": 0.0051
+      },
+      "odrum": {
+       "px": 12067,
+       "top25": 62.6,
+       "p75": 52,
+       "p50": 28,
+       "p25": 12,
+       "gt90": 0.0065
+      }
+     },
+     "maxGt90": 0.0065,
+     "medianTop25": 79
+    },
+    "wicks": null,
+    "monsters": null,
+    "structures": null,
+    "perSpot": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "frameP50": 87,
+      "frameP95": 96,
+      "frameP99": 105,
+      "laneP50": 88
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "frameP50": 86,
+      "frameP95": 97,
+      "frameP99": 110,
+      "laneP50": 87
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "frameP50": 85,
+      "frameP95": 100,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatII": {
+      "at": [
+       47.3,
+       11
+      ],
+      "frameP50": 85,
+      "frameP95": 99,
+      "frameP99": 112,
+      "laneP50": 88
+     },
+     "seatIII": {
+      "at": [
+       56.7,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 114,
+      "frameP99": 121,
+      "laneP50": 87
+     },
+     "seatIV": {
+      "at": [
+       56.7,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 86
+     },
+     "seatV": {
+      "at": [
+       47.3,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 109,
+      "frameP99": 116,
+      "laneP50": 85
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "frameP50": 83,
+      "frameP95": 94,
+      "frameP99": 103,
+      "laneP50": 86
+     },
+     "seatVII": {
+      "at": [
+       16.7,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 103,
+      "frameP99": 112,
+      "laneP50": 87
+     },
+     "seatVIII": {
+      "at": [
+       7.3,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 85
+     },
+     "seatIX": {
+      "at": [
+       7.3,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 119,
+      "frameP99": 124,
+      "laneP50": 85
+     },
+     "seatX": {
+      "at": [
+       16.7,
+       11
+      ],
+      "frameP50": 83,
+      "frameP95": 99,
+      "frameP99": 114,
+      "laneP50": 87
+     },
+     "fight": {
+      "at": [
+       39.8,
+       23.2
+      ],
+      "frameP50": 87,
+      "frameP95": 95,
+      "frameP99": 103,
+      "laneP50": 88
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "87 PASS (85-100)",
+     "walkableSpread": "42 PASS (<= 45)",
+     "laneSpread": "42 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "107 PASS (<= 130)",
+     "frameP99": "119 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.050 % of frame PASS",
+     "groundSat": "0.27 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "74.3 PASS (70-85), over lane 37.3 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.56 % of fighter pixels PASS (< 2 %), worst fighter 0.7 %, p99 88.5"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "fray_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 27,
+     "p50": 85,
+     "p95": 108,
+     "p99": 120,
+     "mean": 80.51,
+     "spread": 81,
+     "lstarP50": 36.5,
+     "sat": 0.24,
+     "satP50": 0.3
+    },
+    "masks": {
+     "lane": {
+      "share": 0.6594,
+      "p5": 63,
+      "p50": 87,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.27,
+      "spread": 33,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.6594,
+      "p5": 63,
+      "p50": 87,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.27,
+      "spread": 33,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0057,
+      "p5": 30,
+      "p50": 60,
+      "p95": 81,
+      "p99": 92,
+      "mean": 58.32,
+      "spread": 51,
+      "lstarP50": 25,
+      "sat": 0.24,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.0035,
+      "p5": 23,
+      "p50": 46,
+      "p95": 104,
+      "p99": 108,
+      "mean": 60.56,
+      "spread": 81,
+      "lstarP50": 19.5,
+      "sat": 0.42,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.0408,
+      "p5": 12,
+      "p50": 20,
+      "p95": 32,
+      "p99": 50,
+      "mean": 21.12,
+      "spread": 20,
+      "lstarP50": 7,
+      "sat": 0.67,
+      "satP50": 0.7
+     },
+     "wallLip": {
+      "share": 0.0379,
+      "p5": 22,
+      "p50": 60,
+      "p95": 71,
+      "p99": 75,
+      "mean": 54.53,
+      "spread": 49,
+      "lstarP50": 25.5,
+      "sat": 0.16,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.2119,
+      "p5": 63,
+      "p50": 86,
+      "p95": 117,
+      "p99": 122,
+      "mean": 88.56,
+      "spread": 54,
+      "lstarP50": 37,
+      "sat": 0.06,
+      "satP50": 0
+     },
+     "walls": {
+      "share": 0.0787,
+      "p5": 14,
+      "p50": 26,
+      "p95": 69,
+      "p99": 73,
+      "mean": 37.2,
+      "spread": 55,
+      "lstarP50": 9.5,
+      "sat": 0.42,
+      "satP50": 0.6
+     },
+     "edge": {
+      "share": 0.0039,
+      "p5": 47,
+      "p50": 62,
+      "p95": 68,
+      "p99": 69,
+      "mean": 59.77,
+      "spread": 21,
+      "lstarP50": 26,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "landmark": {
+      "share": 0.0189,
+      "p5": 16,
+      "p50": 85,
+      "p95": 124,
+      "p99": 164,
+      "mean": 75.56,
+      "spread": 108,
+      "lstarP50": 36,
+      "sat": 0.25,
+      "satP50": 0.1
+     },
+     "lamp": {
+      "share": 0,
+      "p5": 160,
+      "p50": 170,
+      "p95": 182,
+      "p99": 183,
+      "mean": 171.01,
+      "spread": 22,
+      "lstarP50": 72,
+      "sat": 0.71,
+      "satP50": 0.7
+     },
+     "ground": {
+      "share": 0.6594,
+      "p5": 63,
+      "p50": 87,
+      "p95": 96,
+      "p99": 102,
+      "mean": 84.27,
+      "spread": 33,
+      "lstarP50": 37,
+      "sat": 0.27,
+      "satP50": 0.3
+     }
+    },
+    "env180": {
+     "env": 6554156,
+     "other": 0,
+     "lamp": 3081,
+     "otherShare": 0,
+     "lampShareOfFrame": 0.00046,
+     "byClass": {
+      "19L": 38,
+      "1L": 3043
+     }
+    },
+    "fighters": {
+     "px": 8113,
+     "top25": 76.1,
+     "p75": 59.5,
+     "p50": 37,
+     "p25": 19.5,
+     "p95": 86,
+     "p99": 88.5,
+     "gt90": 0.0044,
+     "lumaP95": 215,
+     "overLane": 39.1,
+     "per": {
+      "hesmi": {
+       "px": 5491,
+       "top25": 81,
+       "p75": 68,
+       "p50": 41,
+       "p25": 22,
+       "gt90": 0.0042
+      },
+      "odrum": {
+       "px": 2622,
+       "top25": 61.6,
+       "p75": 52,
+       "p50": 28.5,
+       "p25": 15.5,
+       "gt90": 0.005
+      }
+     },
+     "maxGt90": 0.005,
+     "medianTop25": 81
+    },
+    "wicks": null,
+    "monsters": null,
+    "structures": null,
+    "perSpot": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "frameP50": 87,
+      "frameP95": 96,
+      "frameP99": 105,
+      "laneP50": 88
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "frameP50": 86,
+      "frameP95": 97,
+      "frameP99": 110,
+      "laneP50": 88
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "frameP50": 85,
+      "frameP95": 99,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatII": {
+      "at": [
+       47.3,
+       11
+      ],
+      "frameP50": 85,
+      "frameP95": 100,
+      "frameP99": 117,
+      "laneP50": 88
+     },
+     "seatIII": {
+      "at": [
+       56.7,
+       24
+      ],
+      "frameP50": 86,
+      "frameP95": 114,
+      "frameP99": 121,
+      "laneP50": 87
+     },
+     "seatIV": {
+      "at": [
+       56.7,
+       40
+      ],
+      "frameP50": 86,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 86
+     },
+     "seatV": {
+      "at": [
+       47.3,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 110,
+      "frameP99": 117,
+      "laneP50": 85
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "frameP50": 83,
+      "frameP95": 93,
+      "frameP99": 104,
+      "laneP50": 86
+     },
+     "seatVII": {
+      "at": [
+       16.7,
+       53
+      ],
+      "frameP50": 85,
+      "frameP95": 103,
+      "frameP99": 112,
+      "laneP50": 86
+     },
+     "seatVIII": {
+      "at": [
+       7.3,
+       40
+      ],
+      "frameP50": 85,
+      "frameP95": 116,
+      "frameP99": 120,
+      "laneP50": 85
+     },
+     "seatIX": {
+      "at": [
+       7.3,
+       24
+      ],
+      "frameP50": 85,
+      "frameP95": 119,
+      "frameP99": 124,
+      "laneP50": 85
+     },
+     "seatX": {
+      "at": [
+       16.7,
+       11
+      ],
+      "frameP50": 84,
+      "frameP95": 102,
+      "frameP99": 117,
+      "laneP50": 86
+     },
+     "fight": {
+      "at": [
+       39.8,
+       23.2
+      ],
+      "frameP50": 87,
+      "frameP95": 95,
+      "frameP99": 104,
+      "laneP50": 88
+     }
+    },
+    "flash": null,
+    "verdict": {
+     "laneP50": "87 PASS (85-100)",
+     "walkableSpread": "33 PASS (<= 45)",
+     "laneSpread": "33 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "108 PASS (<= 130)",
+     "frameP99": "120 PASS (<= 160)",
+     "env180": "other 0.000 % of env, lamps 0.046 % of frame PASS",
+     "groundSat": "0.27 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.1 PASS (70-85), over lane 39.1 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.44 % of fighter pixels PASS (< 2 %), worst fighter 0.5 %, p99 88.5"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
    }
   }
  },
- "generated": "2026-10-28T15:46:37.521Z",
+ "generated": "2026-10-28T15:59:12.397Z",
  "caveats": [
   "FRAY: the honed plate is ~86 % of every FRAY frame, so the frame median follows the plate band (L* 34-40 = luma 80-95); frame p50 55-75 cannot hold together with the plate band there.",
   "fighters: top-25 % L* is the fighter art and light rig (unchanged by this rebase, +0.5 L* from the LUT pivot); it measures 59-67, under tokens fighter.valueLstar.top25 70-85, so the >= 30 L* gap over the lane holds only where the fighter art is bright enough.",
