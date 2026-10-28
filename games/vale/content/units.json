@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE units (CONTRACT §5.4; behavior keys ONLY from src/sim/units/behavior_keys.ts). Wicks level up with wave time (growth applies); camps, structures and pickups always spawn at level 1, so their stats are written for the moment they matter. Placement counts, requires chains, camp/pickup timers and respawns for the MAPS lane: _design/sections/modes_economy.md §9. Order matters for practice: the FIRST unit with behavior.dummy is the training dummy.",
+  "$comment": "VALE units (CONTRACT §5.4; behavior keys ONLY from src/sim/units/behavior_keys.ts). Wicks level up with wave time (growth applies); camps, structures and pickups always spawn at level 1, so their stats are written for the moment they matter. Dialwood camps are written so a level-1 grovehunter with a Grove Sickle clears its own half in about three minutes and its camp XP keeps it near a lane's pace (W4 gameplay G2; the Grove tithe in rules.groveTithe is its catch-up). Placement counts, requires chains, camp/pickup timers and respawns for the MAPS lane: _design/sections/modes_economy.md §9. Order matters for practice: the FIRST unit with behavior.dummy is the training dummy.",
   "units": [
     {
       "id": "shieldwick",
@@ -78,7 +78,7 @@
       "id": "needle_outer",
       "name": "Outer Needle",
       "kind": "structure",
-      "base": { "hp": 3200, "ad": 150, "armor": 40, "resist": 40, "attackSpeed": 0.83, "moveSpeed": 0 },
+      "base": { "hp": 3800, "ad": 150, "armor": 40, "resist": 40, "attackSpeed": 0.83, "moveSpeed": 0 },
       "attack": { "range": 7.5, "windup": 0.2, "damageType": "phys", "projectileSpeed": 22,
         "present": { "anim": "attack1", "vfx": "lib_needle_shot", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
       "collisionRadius": 1.1,

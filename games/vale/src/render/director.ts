@@ -160,6 +160,13 @@ const STATUS_TIER: Partial<Record<StatusKindT, Tier>> = {
 };
 const statusKey = (id: number, kind: StatusKindT): number => id * 32 + Math.max(0, STATUS_ORDER.indexOf(kind));
 
+/** combat F4: where an area's impact sits (ground x, 0, z): a circle or ring at its centre, a cone 0.6 × its radius out
+ *  from the apex along the aim, a rect half its length out from its origin */
+export function shapeCentroid(x: number, y: number, dir: number, shape: { kind: string; radius?: number; length?: number } | undefined, out: Vector3): Vector3 {
+  const k = shape?.kind === 'cone' ? (shape.radius ?? 0) * 0.6 : shape?.kind === 'rect' ? (shape.length ?? 0) * 0.5 : 0;
+  return out.set(x + Math.cos(dir) * k, 0, y + Math.sin(dir) * k);
+}
+
 /** wind-ups shorter than this get the cast flare instead of a charge (s) */
 const WINDUP_MIN = 0.12;
 /** default T4 impact envelope (vfx/screen.ts) */
@@ -544,8 +551,8 @@ export class Director {
           const zone = this.matchZone(view, ev);
           if (zone >= 0) {
             // an ultimate that lands as a zone (Ardit's muster: no area or hit carries its impact) takes the T4 envelope
-            // when the zone opens
-            if (tier >= 4 && !this.vfx.def(ev.vfx)?.hasExposure) this.queuePulse(ev.src, ev.ability, ev.vfx, C.set(ev.x, 0.4, ev.y), Math.max(1.5, R), Math.max(0, ev.delay), true);
+            // when the zone opens, centred on the area it covers (combat F4: Rishal's track, not his heels)
+            if (tier >= 4 && !this.vfx.def(ev.vfx)?.hasExposure) this.queuePulse(ev.src, ev.ability, ev.vfx, shapeCentroid(ev.x, ev.y, areaDir, ev.shape, C).setY(0.4), Math.max(1.5, R), Math.max(0, ev.delay), true);
             break;
           }
           C.set(ev.x, 0, ev.y);
@@ -557,8 +564,9 @@ export class Director {
           const origin = A.clone(), ground = C.clone();
           const spawn = (): void => { this.fire(id, ev.src, tier, { origin, ground, scale: R, dir: areaDir, anchor: 'ground' }); };
           if (ev.delay > 0) this.delayed.push({ at: this.host.now() + ev.delay, run: spawn }); else spawn();
-          // the ultimate impact envelope at the landing (the def may carry its own)
-          if (tier >= 4 && !this.vfx.def(id)?.hasExposure) this.queuePulse(ev.src, ev.ability, id, C.clone().setY(0.4), Math.max(1.5, R), Math.max(0, ev.delay), true);
+          // the ultimate impact envelope at the landing (the def may carry its own), centred where the shape hits
+          // (combat F4: a cone's or rect's caster-side apex is not its impact)
+          if (tier >= 4 && !this.vfx.def(id)?.hasExposure) this.queuePulse(ev.src, ev.ability, id, shapeCentroid(ev.x, ev.y, areaDir, ev.shape, new Vector3()).setY(0.4), Math.max(1.5, R), Math.max(0, ev.delay), true);
           break;
         }
         case 'dash': {

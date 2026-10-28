@@ -581,6 +581,23 @@ export const RulesParams = z.object({
   placementPoints: z.array(z.number()).optional(),
   bounty: z.object({ kill: z.number(), assistShare: z.number(), streakStep: z.number(), streakMax: z.number(), shutdownMax: z.number() }).strict(),
   abilityRanks: z.object({ basicMax: z.number().int(), ultLevels: z.array(z.number().int()) }).strict(),
+  /** W4 (gameplay G4), additive: the Dawn Seal. Until `until` s every standing structure whose unit id is in
+   *  `units` carries a dawnglass seal of `amount` (a shield on the structure, soaking damage before its
+   *  health) that re-sets to full every `every` s from the start of the match; at `until` it is gone.
+   *  A thin or lone wave spends itself on the seal; a stacked wave or a committed push breaks through.
+   *  Absent = off. */
+  dawnSeal: z.object({ units: z.array(Id).min(1), until: z.number().positive(), amount: z.number().positive(), every: z.number().positive() }).strict().optional(),
+  /** W4 (gameplay G4), additive: Ringshade, thin-wave protection. Damage from fighters (and their summons) to a
+   *  structure whose unit id is in `units` is × (mult + (1 − mult) × min(1, n / wicks)), n = the striking
+   *  team's Wicks inside the structure's shadow ring (its attack range + its radius): × mult with none
+   *  there, full damage with `wicks` or more. Off in sudden death. Absent = off. */
+  ringshade: z.object({ units: z.array(Id).min(1), mult: z.number().min(0).max(1), wicks: z.number().int().positive() }).strict().optional(),
+  /** W4 (gameplay G2), additive: the Grove tithe, the Dialwood's catch-up. `share` of the XP every Wick
+   *  pays a team's fighters is set aside in that team's grove (on top of what they get, never taken from
+   *  them, the bank holding at most `bankMax`); when a fighter of the team finishes a monster of a
+   *  non-objective camp while it trails the team's highest-level fighter, the grove pays it up to
+   *  `perMonster` XP of the bank. Two-team modes only. Absent = off. */
+  groveTithe: z.object({ share: z.number().min(0).max(1), perMonster: z.number().nonnegative(), bankMax: z.number().nonnegative() }).strict().optional(),
   /** CHANGED(SIM), additive: balance knobs the sim used to hard-code. Every key is optional; an
    *  omitted key keeps the CONTRACT §5.5/§5.6 default shown in brackets. Queues override key by key. */
   tuning: z.object({

@@ -728,7 +728,7 @@
   .pgrec { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: calc(1.25 * var(--u)); margin-bottom: calc(1.25 * var(--u)); }
   .pgnod { grid-column: auto; padding: var(--u) calc(1.25 * var(--u)); gap: calc(0.75 * var(--u)); }
   .pgnod__head .t-caption { display: none; }
-  .pgnod__name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pgnod__name { display: none; }
   .pgnod__mate { padding: 2px; }
   .pgbest { padding: var(--u); }
   .pgbest__text .t-caption { display: none; }

@@ -6,8 +6,12 @@
 //                             10:00 ≥ 45 · laners' in-lane share (lane+trade+push+allin over alive time
 //                             1:00–14:00) ≥ 65 % · fighter deaths to Wicks or monsters with no enemy
 //                             fighter involved (no credit, no assist) ≤ 5 %          — per difficulty
-//   jungle     (gameplay:G2)  jungler level gap to the solo laners at 15:00 ≤ 1.5 (mean)
-//   structures (gameplay:G4)  median first structure on RIFT 9–12 min
+//   jungle     (gameplay:G2)  jungler level gap to the solo laners at 15:00 ≤ 1.5 (mean) · the grovehunter
+//                             is not the role that dies most (deaths per game ≤ the laner roles' highest; like the
+//                             structures median, enforced only with ≥ 16 RIFT games per difficulty)
+//   structures (gameplay:G4)  median first structure on RIFT 9–12 min (a game with none by its end or the cut
+//                             counts as later than all; enforced only with ≥ 16 RIFT games per difficulty —
+//                             the 8-seed quick run reports it)
 //   difficulty (gameplay:G3)  veteran beats novice ≥ 85 %, adept ≥ 65 % of mirrored games (each seed
 //                             played twice with the sides swapped)
 //   bridge     (gameplay:G5)  ≤ 25 % of games end in sudden death · 0 cores fall with a structure they
@@ -51,7 +55,10 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning', 'items']); // items: W4 G7 package (2026-10-28)
+const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package (2026-10-28)
+/** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
+ *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
+const STRUCT_MIN_GAMES = 16;
 
 // ── args ────────────────────────────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -352,7 +359,7 @@ const mean = (a: number[]): number => (a.length ? a.reduce((x, y) => x + y, 0) /
 const median = (a: number[]): number => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const pct = (x: number): string => `${(x * 100).toFixed(1)} %`;
 
-interface Gate { group: string; item: string; label: string; value: string; target: string; pass: boolean; n: number }
+interface Gate { group: string; item: string; label: string; value: string; target: string; pass: boolean; n: number; reportOnly?: boolean }
 
 function laningStats(games: GameRec[]): { lastHit: number; soloCs10: number; inLane: number; noFighter: number; nDeaths: number; byRole: Record<string, Record<string, number>>; modeShare: Record<string, Record<string, number>>; recalls25: Record<string, number>; wick: Record<string, number> } {
   const wick: Record<string, number> = {};
@@ -453,10 +460,23 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       gaps[d] = mean(gs);
     }
     gates.push({ group: 'jungle', item: 'gameplay:G2', label: 'jungler level gap to solo laners at 15:00', value: diffs.map((d) => `${d} ${gaps[d].toFixed(2)}`).join(' / '), target: '≤ 1.5', pass: diffs.every((d) => gaps[d] <= 1.5), n: rift.length });
-    // structures
+    // (the grovehunter used to be the role that died most: per-game deaths against the laner roles')
+    const laneRoles = ['shadehold', 'dialcross', 'shaftlight', 'lampglass'];
+    const jd = (L: ReturnType<typeof laningStats>): { j: number; top: number } => ({ j: L.byRole.grovehunter?.deaths ?? 0, top: Math.max(...laneRoles.map((r) => L.byRole[r]?.deaths ?? 0)) });
+    const fewD = diffs.some((d) => rift.filter((g) => g.job.diffs[0] === d).length < STRUCT_MIN_GAMES);
+    gates.push({ group: 'jungle', item: 'gameplay:G2', label: `grovehunter deaths per game vs the laner roles' highest${cut ? ` (by ${(cut / 60).toFixed(0)}:00)` : ''}${fewD ? ` (fewer than ${STRUCT_MIN_GAMES} games per difficulty: report only)` : ''}`,
+      value: vals((L) => `${jd(L).j.toFixed(1)} vs ${jd(L).top.toFixed(1)}`), target: '≤', pass: both((L) => jd(L).j <= jd(L).top), n: rift.length, reportOnly: fewD });
+    // structures (a game with no structure down by its end or the cut counts as later than every other)
     const fsd: Record<string, number> = {};
-    for (const d of diffs) fsd[d] = median(rift.filter((g) => g.job.diffs[0] === d && g.structs.length).map((g) => g.structs[0].t / 60));
-    gates.push({ group: 'structures', item: 'gameplay:G4', label: 'median first structure (RIFT)', value: diffs.map((d) => `${d} ${fsd[d].toFixed(1)} min`).join(' / '), target: '9–12 min', pass: diffs.every((d) => fsd[d] >= 9 && fsd[d] <= 12), n: rift.length });
+    const fsn: Record<string, number> = {};
+    for (const d of diffs) {
+      const gs = rift.filter((g) => g.job.diffs[0] === d);
+      fsn[d] = gs.length;
+      fsd[d] = median(gs.map((g) => (g.structs.length ? g.structs[0].t / 60 : Infinity)));
+    }
+    const few = diffs.some((d) => fsn[d] < STRUCT_MIN_GAMES);
+    gates.push({ group: 'structures', item: 'gameplay:G4', label: `median first structure (RIFT)${few ? ` (fewer than ${STRUCT_MIN_GAMES} games per difficulty: report only, the gate is --full)` : ''}`,
+      value: diffs.map((d) => `${d} ${Number.isFinite(fsd[d]) ? fsd[d].toFixed(1) + ' min' : '> cut'}`).join(' / '), target: '9–12 min', pass: diffs.every((d) => fsd[d] >= 9 && fsd[d] <= 12), n: rift.length, reportOnly: few });
   }
   // ── items (full RIFT games) ──
   const fullRift = rift.filter((g) => !g.job.cut);
@@ -545,7 +565,7 @@ async function main(): Promise<void> {
   const lines: string[] = [`bot soak ${LABEL}: ${games.length} matches in ${((Date.now() - t0) / 1000).toFixed(0)} s`, ...text, '', 'gates:'];
   let failed = 0;
   for (const g of gates) {
-    const enforced = ENFORCED.has(g.group);
+    const enforced = ENFORCED.has(g.group) && !g.reportOnly;
     const tag = g.pass ? 'PASS' : enforced ? 'FAIL' : 'open';
     if (!g.pass && enforced) failed++;
     lines.push(`  ${tag.padEnd(4)} [${g.group}${enforced ? '' : ', report only'}] ${g.label}: ${g.value} (target ${g.target})`);

@@ -21,7 +21,15 @@
 // grantObjective); gold is economy.ts (bounty.gold to the credited fighter, goldGlobal team-wide).
 // A map entry with `respawn` (gates) comes back after that many seconds as a NEW entity (the
 // corpse is removed) and announces 'structure_respawned'.
+//
+// Dawn Seal (rules.dawnSeal, W4 gameplay G4): until `until` s, each standing structure of a listed unit
+// carries a seal — a shield whose source is the structure itself — of `amount`, set back to full at
+// every multiple of `every` s and gone at `until`. Ringshade (rules.ringshade): damage from fighters and
+// their summons to a listed structure is scaled by how many of the striker's Wicks stand in its shadow
+// ring (attack range + radius): × mult with none, rising evenly to × 1 at `wicks`; off in sudden death.
 
+import { TICK_HZ } from '../../contracts/sim.ts';
+import { addShield } from '../combat.ts';
 import { applyStatus, removeStatusKind } from '../status.ts';
 import type { MapDefT } from '../../contracts/catalog.ts';
 import { attackable, inAttackRange } from '../attack.ts';
@@ -38,7 +46,7 @@ export interface StructEntry {
   ent: Entity;
   respawnAt: number;
 }
-interface StructsState { list: StructEntry[]; byId: Map<string, StructEntry> }
+interface StructsState { list: StructEntry[]; byId: Map<string, StructEntry>; /** tick of the next Dawn Seal re-set */ sealAt: number }
 interface Ramp { target: number; stacks: number; at: number }
 const KEY = 'structures';
 const SKEY = 'struct';
@@ -68,7 +76,7 @@ function spawnStructure(w: World, st: StructsState, entry: StructEntry | null, d
 }
 
 export function spawnStructures(w: World): void {
-  const st: StructsState = { list: [], byId: new Map() };
+  const st: StructsState = { list: [], byId: new Map(), sealAt: 0 };
   w.ext[KEY] = st;
   if (!w.rules.structures) return;
   for (const def of w.mapDef.structures) spawnStructure(w, st, null, def);
@@ -136,6 +144,43 @@ function rampTrack(w: World, src: Entity | null, dst: Entity, info: { isAttack: 
   r.at = w.time;
 }
 
+// ── Dawn Seal and Ringshade ─────────────────────────────────────────────────────────────────────
+/** 'deaths' phase: set every listed structure's Dawn Seal back to full on the seal's beat */
+export function dawnSealSystem(w: World): void {
+  const ds = w.rules.dawnSeal;
+  if (!ds || w.time >= ds.until) return;
+  // the beat: the first run of the match, then every `every` s (whole ticks)
+  const st = w.ext[KEY] as StructsState;
+  if (w.tick < st.sealAt) return;
+  st.sealAt = w.tick + Math.max(1, Math.round(ds.every * TICK_HZ));
+  for (const entry of structuresOf(w)) {
+    const e = entry.ent;
+    if (!e.alive || !ds.units.includes(e.def)) continue;
+    // what is left of the old seal goes; the new one lasts until the seal ends
+    for (let i = e.shields.length - 1; i >= 0; i--) if (e.shields[i].src === e.id) { e.shield -= e.shields[i].amount; e.shields.splice(i, 1); }
+    if (e.shield < 0) e.shield = 0;
+    addShield(w, null, e, ds.amount, ds.until - w.time);
+    e.shields[e.shields.length - 1].src = e.id;
+  }
+}
+
+const shadeScratch: Entity[] = [];
+function ringshadeMult(w: World, src: Entity | null, dst: Entity, raw: number): number {
+  const rs = w.rules.ringshade;
+  if (!rs || !src || dst.kind !== 'structure' || w.suddenDeath || !rs.units.includes(dst.def)) return raw;
+  // (fighters and what they own: summons, their projectiles and zones — never Wicks or towers)
+  if (src.kind === 'minion' || src.kind === 'structure' || !w.creditFighter(src)) return raw;
+  const reach = (dst.stats.range > 0 ? dst.stats.range : 7) + dst.radius;
+  const n0 = w.query(dst.x, dst.y, reach, shadeScratch);
+  let n = 0;
+  for (let i = 0; i < n0; i++) {
+    const u = shadeScratch[i];
+    if (u.kind === 'minion' && u.alive && u.team === src.team && (u.x - dst.x) * (u.x - dst.x) + (u.y - dst.y) * (u.y - dst.y) <= reach * reach) n++;
+  }
+  shadeScratch.length = 0;
+  return raw * (rs.mult + (1 - rs.mult) * Math.min(1, n / rs.wicks));
+}
+
 // ── falling / respawning ────────────────────────────────────────────────────────────────────────
 function onDeath(w: World, victim: Entity, killer: Entity | null): void {
   if (victim.kind !== 'structure') return;
@@ -168,5 +213,6 @@ export function structureRespawnSystem(w: World): void {
 export function installStructures(w: World): void {
   w.hooks.death.push((ww, victim, killer) => onDeath(ww, victim, killer));
   w.hooks.modifyDamage.push(rampMult);
+  w.hooks.modifyDamage.push((ww, src, dst, raw) => ringshadeMult(ww, src, dst, raw));
   w.hooks.damage.push((ww, src, dst, _a, info) => rampTrack(ww, src, dst, info));
 }

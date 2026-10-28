@@ -1,7 +1,8 @@
 {
  "_doc": "Painted dusk plates behind every fighter image (final parity client F3, art half): art/blender/common/plates.py. A fighter listed under `fighters` renders portrait.png / splash.png (and every <skin>_portrait.png / <skin>_splash.png) over a painted plate cut from art/out/backdrops/<src>.webp and graded to dusk for its origin (spec.ORIGIN), with the subject lit to match (key / fill / rims). A skin line (the skin id after '<fighter>_') may pick its own painting under `lines`; the origin grade and light stay. Keys and defaults: plates.DEFAULTS. Re-render: python3 art/build.py portraits <id> --only splash,portrait (base) and --skins (every skin, from its GLB). Re-compose from the kept subject passes without Blender: python3 art/blender/common/plates.py compose [sids]; measure: python3 art/blender/common/plates.py measure (gate: the 3:5 loading crop and the draft-cell crop at p50 70-110 luma, at most a small share above 200).",
  "defaults": {
-  "sub_floor": 0.26,
+  "sub_floor": 0.29,
+  "sub_floor_p": 0.3,
   "sub_p95": 0.76
  },
  "origins": {
@@ -9,7 +10,7 @@
    "src": "aubade_dawn",
    "tint": "#9AABD2",
    "sat": 0.75,
-   "median": 0.31,
+   "median": 0.32,
    "glow": [
     0.1,
     0.6,
@@ -19,8 +20,8 @@
    "glow_color": "#F2C79A",
    "key": 0.8,
    "key_color": "#FFE7CF",
-   "fill": 0.5,
-   "fill_tint": "#9DB0E6",
+   "fill": 0.58,
+   "fill_tint": "#B3C1DE",
    "rim_cool": 1.6,
    "rim_warm": 0.95
   },
@@ -28,7 +29,7 @@
    "src": "serenade_dusk",
    "tint": "#C4A691",
    "sat": 0.85,
-   "median": 0.3,
+   "median": 0.31,
    "glow": [
     0.92,
     0.58,
@@ -38,8 +39,8 @@
    "glow_color": "#FFB067",
    "key": 0.78,
    "key_color": "#FFD9B0",
-   "fill": 0.48,
-   "fill_tint": "#A79BCC",
+   "fill": 0.58,
+   "fill_tint": "#C9BBB4",
    "rim_cool": 0.95,
    "rim_warm": 1.6
   },
@@ -47,7 +48,7 @@
    "src": "needle_gorge",
    "tint": "#A99CC4",
    "sat": 0.8,
-   "median": 0.3,
+   "median": 0.31,
    "glow": [
     0.5,
     0.58,
@@ -57,8 +58,8 @@
    "glow_color": "#EBC39E",
    "key": 0.8,
    "key_color": "#FFE2C6",
-   "fill": 0.5,
-   "fill_tint": "#A9A2CF",
+   "fill": 0.58,
+   "fill_tint": "#BDB7CC",
    "rim_cool": 1.35,
    "rim_warm": 1.35
   }
@@ -89,10 +90,14 @@
    "src": "dialwood"
   },
   "highrim": {
-   "src": "seat_center"
+   "src": "seat_center",
+   "median": 0.35,
+   "floor": 0.16
   },
   "almanac": {
-   "src": "seat_center"
+   "src": "seat_center",
+   "median": 0.35,
+   "floor": 0.16
   }
  },
  "fighters": {

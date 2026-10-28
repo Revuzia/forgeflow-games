@@ -367,18 +367,26 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float hs, js;
     vec2 sa = p - uShaftAx.xy;
     vec2 sq = vec2( dot( sa, uShaftAx.zw ), dot( sa, vec2( -uShaftAx.w, uShaftAx.z ) ) );
-    vec4 sf = valeCourses( sq + vec2( 31.0, 0.4 ), 1.05, 2.1 );
-    vec3 sfc = valeFlag( uShaftFloor * ( 0.95 + 0.1 * nMid ), sf, grainN, chip, 0.06, uShaftFloor * 0.5, 0.18, hs, js );
-    sfc *= mix( 0.78, 1.0, smoothstep( -0.9, -0.15, shaftSD ) );
-    // light through the ripples: drifting caustic threads on the stone
+    // env m2: stone seen through water, never a tiled floor: the depth (0 at the bank, 1 from 2.6 m in) bends the
+    // courses with a slow refraction wobble that grows with it, and the joints under the film run narrower and close to
+    // the stone's own value
+    float depthK = smoothstep( 0.0, 2.6, -shaftSD );
     float ct = uWaterT;
+    vec2 wob = vec2( valeNoise( p * 0.9 + vec2( ct * 0.33, ct * 0.19 ) ), valeNoise( p * 0.9 + vec2( 3.7 - ct * 0.21, 1.3 + ct * 0.29 ) ) ) - 0.5;
+    sq += wob * ( 0.08 + 0.14 * depthK ) * shw;
+    vec4 sf = valeCourses( sq + vec2( 31.0, 0.4 ), 1.05, 2.1 );
+    vec3 sfc = valeFlag( uShaftFloor * ( 0.95 + 0.1 * nMid ), sf, grainN, chip, mix( 0.06, 0.035, shw ), uShaftFloor * mix( 0.5, 0.8, shw ), mix( 0.18, 0.1, shw ), hs, js );
+    sfc *= mix( 0.78, 1.0, smoothstep( -0.9, -0.15, shaftSD ) );
+    // depth darkening: the deeper water drinks the warm light first (cool, ≈ −14 % value in the middle)
+    sfc *= mix( vec3( 1.0 ), vec3( 0.8, 0.87, 0.92 ), depthK * shw );
+    // light through the ripples: drifting caustic threads on the stone
     float ca = abs( valeNoise( p * 1.25 + vec2( ct * 0.21, ct * 0.13 ) ) * 2.0 - 1.0 );
     float cb = abs( valeNoise( p * 1.9 - vec2( ct * 0.17, -ct * 0.11 ) + 4.0 ) * 2.0 - 1.0 );
     float caust = pow( 1.0 - min( ca, cb ), 7.0 );
     sfc *= vec3( 0.8, 0.9, 0.96 );
     emit += uShaftFloor * caust * 0.09 * shw;
     sfc *= 1.0 + caust * 0.35;
-    col = mix( col, sfc, shw ); h = mix( h, hs * 0.5, shw ); rough = mix( rough, 0.6, shw );
+    col = mix( col, sfc, shw ); h = mix( h, hs * mix( 0.5, 0.3, depthK ), shw ); rough = mix( rough, 0.6, shw );
     col *= 1.0 - 0.3 * ( 1.0 - smoothstep( 0.0, 0.7, shaftSD ) ) * ( 1.0 - shw );
   }
 #endif

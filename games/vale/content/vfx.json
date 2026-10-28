@@ -1803,7 +1803,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim (the magic tell), a ring, bloom and petals of light in the caster's signature, streaks in the signature (combat F6) (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
+    "$comment": "T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim (the magic tell), a ring, bloom and petals of light in the caster's signature, streaks in the signature (combat F6) (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint, warm white turning to the signature, holds full for 2 frames and eases out over ~200 ms: the impact reads for ~240 ms at ~0.6-0.7 x victim height)",
     "id": "lib_hit_magic",
     "duration": 0.8,
     "teamTint": true,
@@ -1852,6 +1852,70 @@
         "life": 0.035,
         "color": "#FFEFD8",
         "intensity": 3.0
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "texture": "flare",
+        "size": [
+          [
+            0,
+            1.155
+          ],
+          [
+            0.15,
+            1.32
+          ],
+          [
+            1,
+            1.43
+          ]
+        ],
+        "color": [
+          [
+            0,
+            "#FFEFD8"
+          ],
+          [
+            0.3,
+            "signature"
+          ],
+          [
+            1,
+            "signature"
+          ]
+        ],
+        "emissive": 2.0,
+        "alpha": [
+          [
+            0,
+            1
+          ],
+          [
+            0.15,
+            1
+          ],
+          [
+            0.4,
+            0.55
+          ],
+          [
+            0.7,
+            0.2
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.24,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "space": "world",
+        "hold": 0,
+        "soft": 0.2
       },
       {
         "type": "shockwave",
@@ -2058,7 +2122,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
+    "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint, warm white turning to the signature, holds full for 2 frames and eases out over ~200 ms: the impact reads for ~240 ms at ~0.6-0.7 x victim height)",
     "id": "lib_hit_phys_heavy",
     "duration": 0.8,
     "teamTint": true,
@@ -2107,6 +2171,70 @@
         "life": 0.035,
         "color": "#FFEFD8",
         "intensity": 3.0
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "texture": "flare",
+        "size": [
+          [
+            0,
+            1.26
+          ],
+          [
+            0.15,
+            1.44
+          ],
+          [
+            1,
+            1.56
+          ]
+        ],
+        "color": [
+          [
+            0,
+            "#FFEFD8"
+          ],
+          [
+            0.3,
+            "signature"
+          ],
+          [
+            1,
+            "signature"
+          ]
+        ],
+        "emissive": 2.0,
+        "alpha": [
+          [
+            0,
+            1
+          ],
+          [
+            0.15,
+            1
+          ],
+          [
+            0.4,
+            0.55
+          ],
+          [
+            0.7,
+            0.2
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.24,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "space": "world",
+        "hold": 0,
+        "soft": 0.2
       },
       {
         "type": "mesh",
@@ -2315,7 +2443,7 @@
     ]
   },
   {
-    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
+    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint, warm white turning to the signature, holds full for 2 frames and eases out over ~200 ms: the impact reads for ~240 ms at ~0.6-0.7 x victim height)",
     "id": "lib_hit_phys_light",
     "duration": 0.5,
     "teamTint": true,
@@ -2365,6 +2493,70 @@
         "color": "#FFEFD8",
         "intensity": 2.0,
         "light": false
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "texture": "flare",
+        "size": [
+          [
+            0,
+            1.05
+          ],
+          [
+            0.15,
+            1.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "color": [
+          [
+            0,
+            "#FFEFD8"
+          ],
+          [
+            0.3,
+            "signature"
+          ],
+          [
+            1,
+            "signature"
+          ]
+        ],
+        "emissive": 2.0,
+        "alpha": [
+          [
+            0,
+            1
+          ],
+          [
+            0.15,
+            1
+          ],
+          [
+            0.4,
+            0.55
+          ],
+          [
+            0.7,
+            0.2
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.24,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "space": "world",
+        "hold": 0,
+        "soft": 0.2
       },
       {
         "type": "mesh",

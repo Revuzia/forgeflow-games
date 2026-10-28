@@ -254,11 +254,19 @@ Siege density rises in steps: a Greatwick every third wave, then a Brightwick ev
 
 | id | hp | attack | armor/resist | Gleam to the killer / to each seat on the team | notes |
 |---|---|---|---|---|---|
-| `needle_outer` Outer Needle | 3,200 | 150 ad, 0.83/s, 7.5 m "shadow ring" | 40/40 | 120 / 80 | ramp +35 %/hit to +105 %, ×1.4 vs Wicks and summons |
+| `needle_outer` Outer Needle | 3,800 (W4 G4; was 3,200) | 150 ad, 0.83/s, 7.5 m "shadow ring" | 40/40 | 120 / 80 | ramp +35 %/hit to +105 %, ×1.4 vs Wicks and summons; RIFT: **Dawn Seal** and **Ringshade** (below) |
 | `needle_inner` Inner Needle | 3,600 | 170 ad | 50/50 | 140 / 100 | same ramp |
 | `lantern` Lantern | 3,000 | none | 25/25 | 50 / 60 | `onTakedownTeamBuff: lanternwake`; **relights** (map `respawn`) |
 | `needle_bell` Bell Needle | 2,800 | 190 ad, 0.9/s | 60/60 | 50 / 50 | default ramp +40 % to +120 % |
 | `hourbell` Hourbell | 4,500, regenerates 6 hp/s | none | 20/20 | — | `end.coreStructure` |
+
+**RIFT laning protection (W4 gameplay G4, 2026-10-28).** On RIFT the first Outer Needle used to fall at a median of 5.4–6.3 min, almost all of it to unanswered Wick waves (98 % of the damage on the first Needle to fall came from Wicks). Three of VALE's own rules hold the laning phase now; all three are mode rules in `modes.json`, so BRIDGE keeps its own tempo:
+
+- **Dawn Seal** (`rules.dawnSeal: { units: [needle_outer], until: 420, amount: 700, every: 30 }`). Until 7:00 each Outer Needle wears a 700-point dawnglass seal that soaks damage before its health and **re-sets to full every 30 s**, once a wave. A thin or lone wave spends itself on the seal; a stacked wave or a committed push still breaks through, so a won lane can still take its Needle early. At 7:00 the seal is gone for good. (It is a re-setting seal on the wave's beat, not a flat damage cut and not plates that pay out.)
+- **Ringshade** (`rules.ringshade: { units: [needle_outer, needle_inner, needle_bell, lantern], mult: 0.45, wicks: 3 }`), thin-wave protection. A Needle's shadow ring turns aside a fighter's blows unless that fighter's own Wicks stand in it: fighter (and summon) damage lands × 0.45 with none of the striker's Wicks in the ring, × 0.63 with one, × 0.82 with two and in full with three or more. Wick damage is never shaded, nor anything in sudden death. Diving a Needle without a wave is slow; bringing the wave is the way.
+- **The laning phase lasts.** The bots' team brain moves to the mid game at 10:00 or at the **second** fallen structure, not the first.
+
+Measured (`node _harness/probe_sim_bot_soak.ts`, role-correct lineups, 20 seeds per difficulty): median first structure **10.2 min (adept) / 10.5 min (veteran)**, was 7.4 / 6.7 with the same bots (gate 9–12). The rules are pinned in `_harness/probe_sim_tempo.ts`.
 
 **Counts and `requires` for the MAPS lane.**
 
@@ -295,18 +303,27 @@ Monsters have leash 8 m (9 m for the buff camps) and heal 30 %/s of max hp while
 
 | camp | units | Gleam / XP (whole camp) | ability | team buff |
 |---|---|---|---|---|
-| **Glasshorn** (buff) | 1 Glasshorn: 1,700 hp, 55 ad | 90 / 150 | *Glass Bellow*: 70° cone after 0.6 s, 45 magic and a 25 % slow | **Clearglass** |
-| **Resinback** (buff) | 1 Resinback: 1,800 hp, 62 ad | 90 / 150 | *Resin Spit*: a 2 m pool lands after 0.5 s and burns 12 magic per 0.5 s for 3 s | **Resinburn** |
-| **Gloamoths** | 1 Gloamoth (900 hp, ranged magic) + 3 Little Gloamoths (300 hp) | 81 / 136 | — (a small swarm: kill the little ones with area damage) | — |
-| **Stilltusks** | 1 Stilltusk (1,300 hp) + 2 Young Stilltusks (480 hp) | 96 / 150 | *Still Stamp*: 2.5 m stamp after 0.7 s, 40 physical and a 30 % slow | — |
-| **Strays** | 1 Stray Numeral (1,500 hp, 35/35 armor and resist) + 2 Stray Ticks (380 hp) | 100 / 150 | *Topple*: 4 × 2 m line after 0.9 s, 70 physical and a 0.5 s stun | — |
+| **Glasshorn** (buff) | 1 Glasshorn: 1,250 hp, 30 ad, 10/15 | 90 / 210 | *Glass Bellow*: 70° cone after 0.6 s, 30 magic and a 25 % slow | **Clearglass** |
+| **Resinback** (buff) | 1 Resinback: 1,300 hp, 32 ad, 12/10 | 90 / 210 | *Resin Spit*: a 2 m pool lands after 0.5 s and burns 8 magic per 0.5 s for 3 s | **Resinburn** |
+| **Gloamoths** | 1 Gloamoth (650 hp, 18 ad, ranged magic) + 3 Little Gloamoths (200 hp, 8 ad) | 81 / 196 | — (a small swarm: kill the little ones with area damage) | — |
+| **Stilltusks** | 1 Stilltusk (900 hp, 24 ad, 12/8) + 2 Young Stilltusks (320 hp, 9 ad) | 96 / 209 | *Still Stamp*: 2.5 m stamp after 0.7 s, 28 physical and a 30 % slow | — |
+| **Strays** | 1 Stray Numeral (950 hp, 22 ad, 18/18 armor and resist) + 2 Stray Ticks (260 hp, 10 ad) | 100 / 207 | *Topple*: 4 × 2 m line after 0.9 s, 45 physical and a 0.5 s stun | — |
+
+**The Dialwood as a full role (W4 gameplay G2, 2026-10-28).** The grovehunter used to sit 3.7–6 levels behind the solo laners at 15:00 and die the most: a level-1 fighter needed 50–75 s and more than its own health for one camp, so it went home between camps, and one own-side clear paid at most about 300 XP a minute against a solo lane's 576. Now:
+
+- *Camps* (above) are about a third softer and hit about half as hard, so a level-1 grovehunter with a **Grove Sickle** (30 + 4/level bonus magic on monster hits, heals 12 + 1.5/level per hit; was 20 + 3 and 6 + 1) clears its half in about three minutes without going home; camp XP is about 40 % higher (one side 1,239 XP; at most about 420 XP a minute).
+- **The Grove tithe** (`rules.groveTithe: { share: 0.08, perMonster: 100, bankMax: 1500 }`), the Dialwood's catch-up: 8 % of the XP every Wick pays a team's fighters is also set aside in the team's grove (never taken from the laner). A fighter who finishes a monster of a regular or buff camp while it trails its team's highest-level fighter is paid up to 100 XP of that bank per monster. It tracks the lanes rather than a level formula, it only pays for clearing camps, and it stops once the jungler catches the team's lead.
+- *The bots' clear loop* (`src/sim/bots/bot.ts`): the next camp is the one up soonest after the walk (arrival = the walk or the respawn left, whichever is longer, a far camp never wins for being down longer), the enemy half costs 25 s more; a camp found empty before its first spawn is not counted cleared; no shopping trip with a camp at hand (home on health only below 22 %); home first when the next camp is too much for its health; ganks only between camps (none with a camp up within 25 m, lanes within 40 m); objectives from 6:00.
+
+Measured (soak, 20 seeds per difficulty): jungler level gap to the solo laners at 15:00 **0.69 (adept) / 0.63 (veteran)**, was 6.05 / 6.05; grovehunter cs at 14:00 48 (was 20), deaths by 18:00 0.9 a game (was 3.0, the most of any role).
+
 
 Recommended per team, each mirrored across the noon line (a reflection, never a rotation):
 
 - *North quadrant* (Elevenmark for Aubade, Twomark for Serenade): Glasshorn, Gloamoths and Strays. Glasshorn sits near the Seat road, because its Light and cooldown boon serves the Dialcross.
 - *South quadrant* (Sevenmark, Fourmark): Resinback, Stilltusks and a second Strays camp. Resinback sits near the duo road and Sunsplinter, because its burn-on-hit boon serves the Shaftlight and the Grovehunter.
 
-Timers: every camp first spawns at **1:00**. Regular camps respawn after **2:30** and buff camps after **4:30** *(r02 §9: 0:55, 2:15, about 5:00)*. A full first clear of one side (2 buffs + 4 camps, about 886 XP) ends just short of level 4 at about 3:30, as in the reference *(r02 §9)*.
+Timers: every camp first spawns at **1:00**. Regular camps respawn after **2:30** and buff camps after **4:30** *(r02 §9: 0:55, 2:15, about 5:00)*. A full first clear of one side (2 buffs + 4 camps, 1,239 XP since W4 G2; was 886) ends at level 4 at about 4:00.
 
 ### 9.4 Objectives
 

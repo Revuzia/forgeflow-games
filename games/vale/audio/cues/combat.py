@@ -30,7 +30,7 @@ from synth import sfx as S
 from synth.core import SR, TAU, fade, hz, ns
 
 from .kit import (Layers, R, at_len, bell, breath, crackle, crumble, drum, esc, finish, flutter, fm_tone, glass, harp,
-                  hollow, ink, lp, rev, roll, room, scrape, shimmer, sweep, tink)
+                  hollow, ink, litho, lp, rev, roll, room, scrape, shimmer, sweep, tink)
 
 AIR = (0.12, 0.45)          # QA duration windows (s)
 HIT = (0.12, 0.75)
@@ -148,12 +148,16 @@ def c_proj_whoosh(v: int):
 @cue('c_hit_phys_light', 'combat', ('m', -18.5), HIT, variants=RR, **HITK)
 def c_hit_phys_light(v: int):
     """Physical light hit (the most frequent sound in the game): a short wooden knock with a mid thwack
-    over a saturated 230 → 100 Hz body, a few chips. Knock-led so it reads on laptop speakers; soft-topped."""
+    over a saturated 230 → 100 Hz body, a few chips. Knock-led so it reads on laptop speakers; soft-topped. The
+    contact is an escapement tick tuned up into 2.7-4.3 kHz for the first 30 ms (final parity AUD-4: the hit
+    connects on a small speaker) and a second wood knock an octave up carries the body above a laptop's roll-off."""
     r = R('c_hit_phys_light', v=v)
     L = Layers(0.2)
     L.add(S.snap(r, 2800, 1.8), 0.0, peak_db=-9)
-    L.add(S.thump(0.17, 230, 100, 0.012, 0.09, 2.4), 0.0, peak_db=-3)
+    L.add(at_len(esc('tick', 0.9, rr=v, seed=f'hpl{v}', res=(2700.0, 4300.0), band=4200.0, q=5.0), 0.03), 0.0, peak_db=-6)
+    L.add(S.thump(0.17, 230, 100, 0.012, 0.09, 2.4), 0.0, peak_db=-6)
     L.add(S.knock(r, 470, 0.05, 5, 'wood'), 0.0, peak_db=0)
+    L.add(S.knock(r, 940, 0.035, 4, 'wood'), 0.001, peak_db=-4)
     L.add(S.knock(r, 880, 0.03, 4, 'stone'), 0.002, peak_db=-8)
     L.add(S.burst(r, 0.04, 700, 2600, 0.02, q=0.9), 0.0, peak_db=-6)
     L.add(S.chips(r, 0.14, 8, 1500, 5000, 0.025, 0.05), 0.006, peak_db=-16)
@@ -163,14 +167,18 @@ def c_hit_phys_light(v: int):
 @cue('c_hit_phys_heavy', 'combat', ('m', -16.5), HIT, variants=RR, **HITK)
 def c_hit_phys_heavy(v: int):
     """Physical heavy hit: stone-led. A deep 150 → 45 Hz body, two stone knocks, crunch, a spray of
-    opaque chips and a short stone room."""
+    opaque chips and a short stone room. The contact cracks: an escapement tick tuned into 2.4-3.8 kHz over the first
+    30 ms (final parity AUD-4) and a third stone knock at 1.1 kHz, so the weight still lands on a laptop."""
     r = R('c_hit_phys_heavy', v=v)
     L = Layers(0.45)
-    L.add(S.snap(r, 2500, 3.0), 0.0, peak_db=-9)
-    L.add(S.thump(0.4, 160, 48, 0.03, 0.16, 2.8), 0.0, peak_db=-5)
+    L.add(S.snap(r, 2500, 3.0), 0.0, peak_db=-8)
+    L.add(at_len(esc('tick', 0.95, rr=v, seed=f'hph{v}', res=(2400.0, 3800.0), band=3800.0, q=4.5), 0.03), 0.0, peak_db=-2)
+    L.add(S.burst(r, 0.03, 2200, 5500, 0.012), 0.0, peak_db=-8)
+    L.add(S.thump(0.4, 160, 48, 0.03, 0.16, 2.8), 0.0, peak_db=-8)
     L.add(S.knock(r, 240, 0.18, 6, 'stone'), 0.0, peak_db=0)
     L.add(S.burst(r, 0.14, 300, 1200, 0.08, q=0.8), 0.0, peak_db=-5)
-    L.add(S.knock(r, 560, 0.06, 5, 'stone'), 0.001, peak_db=-4)
+    L.add(S.knock(r, 560, 0.06, 5, 'stone'), 0.001, peak_db=-2)
+    L.add(S.knock(r, 1100, 0.04, 4, 'stone'), 0.001, peak_db=-6)
     L.add(lp(S.burst(r, 0.09, 450, 3500, 0.05), 4000), 0.0, peak_db=-5)
     L.add(S.chips(r, 0.35, 22, 1200, 5500, 0.05, 0.1), 0.008, peak_db=-12)
     L.add(S.rumble(r, 0.45, 150, 0.3, 0.005), 0.0, peak_db=-14)
@@ -221,8 +229,10 @@ def c_crit(v: int):
     L.add(S.knock(r, 700, 0.05, 5, 'stone'), 0.011, peak_db=-4)
     L.add(S.burst(r, 0.06, 900, 3500, 0.03, q=0.9), 0.0, peak_db=-6)
     L.add(S.shards(r, 0.3, 14, 2500, 8000, 0.03, 0.08, 0.2), 0.006, peak_db=-9)
-    L.add(glass('E6', 0.5, 0.8, decay=0.12, bright=0.8, seed=f'cr{v}'), 0.004, peak_db=-11)
-    L.add(glass('B6', 0.4, 0.7, decay=0.09, bright=0.6, seed=f'cr{v}'), 0.012, peak_db=-15)
+    L.add(at_len(esc('tick', 1.0, rr=v, seed=f'crt{v}', res=(3000.0, 5000.0), band=5000.0, q=5.0), 0.03), 0.0, peak_db=-2)
+    L.add(S.burst(r, 0.03, 2500, 6000, 0.012), 0.011, peak_db=-4)
+    L.add(glass('E6', 0.5, 0.8, decay=0.12, bright=0.8, seed=f'cr{v}'), 0.004, peak_db=-5)
+    L.add(glass('B6', 0.4, 0.7, decay=0.09, bright=0.6, seed=f'cr{v}'), 0.012, peak_db=-10)
     L.add(S.chips(r, 0.4, 24, 1200, 6000, 0.05, 0.1), 0.01, peak_db=-15)
     L.add(S.rumble(r, 0.5, 160, 0.35, 0.005), 0.0, peak_db=-11)
     return finish(room(L.out(), 'stone', wet=0.13), hp_hz=35, eq=[('peak', 3300, -2.5, 0.8)])
@@ -230,12 +240,14 @@ def c_crit(v: int):
 
 @cue('c_monster_hit', 'combat', ('m', -19.0), HIT, variants=RR, **HITK)
 def c_monster_hit(v: int):
-    """Hitting a camp monster (and its death): a thick-hide slap and clay thud, no chips, muffled top."""
+    """Hitting a camp monster (and its death): a thick-hide slap and clay thud, no chips, muffled top. The hide
+    speaks in 300-800 Hz (a clay knock at 360 and 520 Hz) so a laptop's roll-off keeps the slap (final parity AUD-4)."""
     r = R('c_monster_hit', v=v)
     L = Layers(0.32)
-    L.add(S.thump(0.3, 150, 60, 0.02, 0.11, 2.6), 0.0, peak_db=-5)
-    L.add(S.knock(r, 210, 0.11, 5, 'clay'), 0.0, peak_db=0)
-    L.add(S.knock(r, 520, 0.04, 4, 'clay'), 0.001, peak_db=-6)
+    L.add(S.thump(0.3, 150, 60, 0.02, 0.11, 2.6), 0.0, peak_db=-11)
+    L.add(S.knock(r, 210, 0.11, 5, 'clay'), 0.0, peak_db=-1)
+    L.add(S.knock(r, 360, 0.07, 5, 'clay'), 0.0, peak_db=0)
+    L.add(S.knock(r, 520, 0.04, 4, 'clay'), 0.001, peak_db=-1)
     L.add(S.burst(r, 0.05, 500, 1800, 0.035, q=0.8), 0.0, peak_db=-4)
     L.add(S.knock(r, 120, 0.1, 3, 'clay'), 0.004, peak_db=-10)
     return finish(room(L.out(), 'small', wet=0.08), hp_hz=40, lp_hz=6000)
@@ -364,16 +376,20 @@ def c_slam(v: int):
     crumble of stone, chips and a rumble that rolls away through the stone room."""
     r = R('c_slam', v=v)
     L = Layers(1.0)
-    L.add(drum('D2', 1.0, 'doum', seed=f'sl{v}', dur=1.0, t60=0.55, kick=0.9), 0.0, peak_db=-2)
-    L.add(S.thump(0.6, 120, 38, 0.04, 0.28, 3.0), 0.0, peak_db=-8)
+    L.add(drum('D2', 1.0, 'doum', seed=f'sl{v}', dur=1.0, t60=0.55, kick=0.9), 0.0, peak_db=-5)
+    L.add(S.thump(0.6, 120, 38, 0.04, 0.28, 3.0), 0.0, peak_db=-11)
     L.add(S.snap(r, 2200, 3.0), 0.0, peak_db=-9)
     L.add(S.knock(r, 180, 0.22, 6, 'stone'), 0.0, peak_db=0)
-    L.add(S.burst(r, 0.2, 250, 1100, 0.12, q=0.8), 0.0, peak_db=-5)
-    L.add(S.knock(r, 450, 0.08, 5, 'stone'), 0.002, peak_db=-5)
+    L.add(S.burst(r, 0.2, 250, 1100, 0.12, q=0.8), 0.0, peak_db=-3)
+    L.add(S.knock(r, 450, 0.08, 5, 'stone'), 0.002, peak_db=-1)
+    # the ground's ring in 300-800 Hz (final parity AUD-4): a struck stone bar on A4 and a 620 Hz knock, so the
+    # slam keeps its weight through a laptop's 220 Hz roll-off
+    L.add(litho(hz('A4'), 0.5, 0.25, r=r), 0.0, peak_db=-1)
+    L.add(S.knock(r, 620, 0.1, 5, 'stone'), 0.003, peak_db=0)
     L.add(lp(S.burst(r, 0.1, 400, 3000, 0.06), 3500), 0.0, peak_db=-6)
     L.add(crumble(r, 0.7, 14, 150, 900, 0.12, 0.06), 0.02, peak_db=-6)
     L.add(S.chips(r, 0.6, 30, 1000, 5000, 0.08, 0.15), 0.01, peak_db=-12)
-    L.add(S.rumble(r, 1.0, 120, 0.7, 0.01, rough=0.4), 0.0, peak_db=-8)
+    L.add(S.rumble(r, 1.0, 120, 0.7, 0.01, rough=0.4), 0.0, peak_db=-11)
     return finish(room(L.out(), 'stone', wet=0.16), hp_hz=30, eq=[('peak', 3300, -2, 0.8)])
 
 
@@ -492,9 +508,10 @@ def c_stun(v: int):
     bits circling left and right."""
     r = R('c_stun', v=v)
     L = Layers(0.75)
-    L.add(S.thump(0.25, 190, 70, 0.015, 0.15, 2.4), 0.0, peak_db=0)
-    L.add(S.knock(r, 420, 0.06, 5, 'stone'), 0.0, peak_db=-6)
-    L.add(S.snap(r, 2600, 2.0), 0.0, peak_db=-11)
+    L.add(S.thump(0.25, 190, 70, 0.015, 0.15, 2.4), 0.0, peak_db=-2)
+    L.add(S.knock(r, 420, 0.06, 5, 'stone'), 0.0, peak_db=-3)
+    L.add(S.snap(r, 2600, 2.0), 0.0, peak_db=-5)
+    L.add(at_len(esc('tick', 0.9, seed='stun', res=(2600.0, 4000.0), band=4000.0, q=5.0), 0.03), 0.0, peak_db=-6)
     L.add(daze(hz('B5'), 0.6, 8.5, 40, 0.5), 0.02, peak_db=-7)
     L.add(daze(hz('F5'), 0.55, 7.0, 35, 0.45), 0.03, peak_db=-10)
     sp = S.sparkle(r, 0.5, 8, 90, 100, t60=0.08)
@@ -524,6 +541,8 @@ def c_root(v: int):
     L = Layers(0.65)
     L.add(S.knock(r, 180, 0.1, 5, 'wood'), 0.0, peak_db=-2)
     L.add(S.thump(0.2, 140, 70, 0.02, 0.12, 1.8), 0.0, peak_db=-5)
+    L.add(S.knock(r, 1300 * r.uniform(0.95, 1.05), 0.02, 4, 'wood'), 0.0, peak_db=-2)     # the grab's first crack: it lands
+    L.add(S.snap(r, 3000, 1.5), 0.0, peak_db=-8)
     creak = np.zeros(ns(0.45))
     t, i = 0.03, 0
     while t < 0.4:

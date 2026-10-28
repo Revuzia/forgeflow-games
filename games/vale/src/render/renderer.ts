@@ -41,13 +41,13 @@ import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
 import { FogOfWar } from './fog.ts';
 import { Sun } from './lighting.ts';
 import { MenuWorld } from './menu.ts';
-import { BAR_KIND, BarLayer, type BarSpec, GLYPH, SHAPE } from './overlay/bars.ts';
+import { BAR_KIND, BarLayer, type BarSpec, CC_PLATE, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
 import { inkShadows } from './ink.ts';
 import { CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
-import { TELE_SHAPE, TelegraphLayer, type TeleSpec } from './overlay/telegraphs.ts';
+import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
 import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
 import { DynamicResolution, type FrameBound, GpuTimer, resolveQuality, type ResolvedQuality } from './quality.ts';
@@ -153,6 +153,8 @@ export interface Renderer {
 }
 
 const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'fear', 'sleep', 'silence']);
+/** combat F5: which hard CC names itself on the plate when several hold a unit (most control lost first) */
+const CC_PLATE_ORDER = ['airborne', 'stun', 'sleep', 'taunt', 'fear', 'root', 'silence'];
 const _v = new Vector3();
 const _v2 = new Vector3();
 const _ndc = new Vector2();
@@ -257,6 +259,8 @@ class ValeRenderer implements Renderer {
   private skipAcc = 0;
   private readonly resources = new Map<string, { color: Color; model: string }>();
   private readonly tmpColor = new Color();
+  /** combat F5: the CC plate each fighter shows and when it appeared (the 70 ms fade-in restarts on a new kind) */
+  private readonly ccShown = new Map<number, { kind: string; t: number }>();
   /** ground offset of a shadow per metre of caster height (−sun.xz / sun.y, ≤ 3 m/m); the actor cull reaches over it */
   private readonly shadowDir = new Vector2();
   private readonly raycaster = new Raycaster();
@@ -523,6 +527,7 @@ class ValeRenderer implements Renderer {
     this.actors.clear();
     this.director.clear();
     this.structs.clear();
+    this.ccShown.clear();
     if (this.ambient) { this.scene.remove(this.ambient.group); this.ambient.dispose(); this.ambient = null; }
     this.ambientPending.length = 0;
     this.vfx.clear();
@@ -805,7 +810,7 @@ class ValeRenderer implements Renderer {
         }
       }
       // ── bars
-      if (!alive) continue;
+      if (!alive) { this.ccShown.delete(v.id); continue; }
       let kind: number = BAR_KIND.fighter;
       let show = true;
       // r12 M7: enemy Wicks always carry their bar (last-hitting reads at a glance); allies when hurt or targeted
@@ -833,7 +838,22 @@ class ValeRenderer implements Renderer {
         }
       }
       let cc = 0;
-      for (const s of v.statuses) if (HARD_CC.has(s.kind) && s.duration > 0) cc = Math.max(cc, s.remaining / s.duration);
+      let ccKind = '', ccRank = 99, ccLeft = 0;
+      for (const s of v.statuses) {
+        if (!HARD_CC.has(s.kind) || !(s.duration > 0)) continue;
+        cc = Math.max(cc, s.remaining / s.duration);
+        const r = CC_PLATE_ORDER.indexOf(s.kind);
+        if (r >= 0 && (r < ccRank || (r === ccRank && s.remaining > ccLeft))) { ccRank = r; ccKind = s.kind; ccLeft = s.remaining; }
+      }
+      // combat F5: the highest-priority hard CC names itself above the bar (fighters), fading in over 70 ms
+      let ccPlate = -1, ccAlpha = 0;
+      if (isF && ccKind) {
+        const was = this.ccShown.get(v.id);
+        if (!was || was.kind !== ccKind) this.ccShown.set(v.id, { kind: ccKind, t: this.time });
+        const since = this.time - (this.ccShown.get(v.id)?.t ?? this.time);
+        ccPlate = bars.ccSlot(ccKind, this.catalog.strings[`status.${ccKind}.name`] ?? ccKind.replace(/_/g, ' '));
+        ccAlpha = Math.min(1, Math.max(0, since / (CC_PLATE.fadeInMs / 1000)));
+      } else if (isF) this.ccShown.delete(v.id);
       const spec: BarSpec = {
         x: a.x, y: a.h + a.barHeight, z: a.y, kind, shape,
         hp: hpF, trail: a.trail, shieldEnd: Math.min(1, (Math.max(0, v.hp) + v.shield) / total), total: this.ticks ? total : 1e9,
@@ -842,6 +862,7 @@ class ValeRenderer implements Renderer {
         keyline, seatLine, alpha: 1, nameSlot, level,
         // lost HP flashes for ~4 frames before the trail's 150 ms hold (trailHoldUntil = hit + 0.15)
         flash: a.trailHoldUntil > 0 ? Math.max(0, 1 - (this.time - (a.trailHoldUntil - 0.15)) / 0.066) : 0,
+        ccPlate, ccAlpha,
       };
       if (!isF) bars.push(spec);
       else {
@@ -861,7 +882,7 @@ class ValeRenderer implements Renderer {
     const t = this.teles;
     t.begin();
     const now = this.time;
-    const spec: TeleSpec = { x: 0, z: 0, dir: 0, shape: 0, radius: 1, inner: 0, halfAngle: 0.5, length: 1, width: 1, color: this.tmpColor, fill: 0, edge: 0, edgePx: 2, sweep: 1, dashed: false, tick: null };
+    const spec: TeleSpec = { x: 0, z: 0, dir: 0, shape: 0, radius: 1, inner: 0, halfAngle: 0.5, length: 1, width: 1, color: this.tmpColor, fill: 0, edge: 0, edgePx: 2, sweep: 1, dashed: false, tick: null, ringFlash: 0, ringDepth: 0 };
     for (const tg of this.director.telegraphs) {
       if (now < tg.start) continue;
       const rel = p.relation(tg.team, tg.owner, true);
@@ -870,7 +891,7 @@ class ValeRenderer implements Renderer {
       spec.shape = s.kind === 'circle' ? TELE_SHAPE.circle : s.kind === 'ring' ? TELE_SHAPE.ring : s.kind === 'cone' ? TELE_SHAPE.cone : TELE_SHAPE.rect;
       spec.radius = s.radius ?? 1; spec.inner = s.inner ?? 0; spec.halfAngle = (s.angle ?? Math.PI / 3) / 2;
       spec.length = s.length ?? 1; spec.width = s.width ?? 1;
-      spec.dashed = false;
+      spec.dashed = false; spec.ringFlash = 0;
       const dur = Math.max(1e-3, tg.land - tg.start);
       const landing = tg.zone < 0 && tg.land > tg.start;
       const prog = landing ? Math.min(1, (now - tg.start) / dur) : 1;
@@ -882,6 +903,12 @@ class ValeRenderer implements Renderer {
         spec.color = p.get(p.viewer.team < 0 ? p.unitHex(tg.team, tg.owner, true) : p.relationHex('enemy'));
         spec.fill = flash ? 0.4 : tg.zone >= 0 ? 0.16 : 0.16 + 0.14 * prog;
         spec.edge = 0.9; spec.edgePx = 3;
+        // combat m-3: a landing wider than 4 m flashes its edge band and an inner contour; the fill stays ≤ 22 %
+        const ext = spec.shape === TELE_SHAPE.rect ? Math.max(spec.length, spec.width) * 0.5 : spec.radius;
+        if (flash && ext > FLASH_RING_OVER_M) {
+          spec.fill = 0.2; spec.ringFlash = 0.5;
+          spec.ringDepth = flashContourDepth(spec.shape, spec.radius, spec.inner, spec.halfAngle, spec.width);
+        }
       } else if (rel === 'neutral') {
         spec.color = p.relationColor('neutral'); spec.fill = 0.12; spec.edge = 0.8; spec.edgePx = 2;
       } else {
@@ -896,14 +923,14 @@ class ValeRenderer implements Renderer {
     if (aim) {
       const self = p.relationColor('self');
       if (aim.range && aim.range > 0) {
-        t.push({ ...spec, x: aim.casterX ?? aim.x, z: aim.casterY ?? aim.y, dir: 0, shape: TELE_SHAPE.circle, radius: aim.range, inner: 0, color: self, fill: 0, edge: 0.45, edgePx: 2, sweep: 1, dashed: true, tick: null, key: 0.45 });
+        t.push({ ...spec, x: aim.casterX ?? aim.x, z: aim.casterY ?? aim.y, dir: 0, shape: TELE_SHAPE.circle, radius: aim.range, inner: 0, color: self, fill: 0, edge: 0.45, edgePx: 2, sweep: 1, dashed: true, tick: null, key: 0.45, ringFlash: 0 });
       }
       const sh = aim.shape === 'circle' ? TELE_SHAPE.circle : aim.shape === 'ring' ? TELE_SHAPE.ring : aim.shape === 'cone' ? TELE_SHAPE.cone : TELE_SHAPE.rect;
       t.push({
         ...spec, x: aim.x, z: aim.y, dir: aim.dir ?? 0, shape: sh, radius: aim.radius ?? 1, inner: aim.inner ?? 0,
         halfAngle: ((aim.angleDeg ?? 60) * Math.PI) / 360, length: aim.length ?? 6, width: aim.shape === 'line' ? Math.min(aim.width ?? 0.4, 0.6) : aim.width ?? 1.2,
         // tokens hud.telegraph.self: it must read on pale lane stone (Noonwhite edge + a stronger ink keyline)
-        color: aim.heal ? p.get('#63D88B') : self, fill: 0.12, edge: 0.9, edgePx: 2.5, sweep: 1, dashed: false, tick: null, key: 0.55,
+        color: aim.heal ? p.get('#63D88B') : self, fill: 0.12, edge: 0.9, edgePx: 2.5, sweep: 1, dashed: false, tick: null, key: 0.55, ringFlash: 0,
       });
     }
     t.end();

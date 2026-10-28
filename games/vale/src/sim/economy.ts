@@ -29,6 +29,11 @@
 // tuning.xpShareRange m of it — plus the credited killer wherever it stands. FFA (more than two teams):
 // only the killer and the assisters are eligible.
 //
+// Grove tithe (rules.groveTithe, two-team modes; W4 gameplay G2): when a Wick (minion) pays XP to
+// fighters of a team, share × that XP goes into the team's grove bank as well (capped at bankMax).
+// When a fighter finishes (is credited with) a monster of a non-objective camp while its level is
+// below its team's highest, the grove pays it min(bank, perMonster) XP.
+//
 // Passive gold: from rules.passiveGoldStart, rules.passiveGoldPerSec × goldMult paid once per
 // second (fractions carried), reason 'passive', dead or alive.
 //
@@ -39,7 +44,7 @@ import { TICK_HZ, type PlayerId } from '../contracts/sim.ts';
 import { grantGold, type GoldReason } from './effects.ts';
 import type { Entity, Player } from './entity.ts';
 import { grantXp, xpStep } from './units/fighters.ts';
-import { isObjectiveUnit } from './units/monsters.ts';
+import { isObjectiveUnit, monsterState } from './units/monsters.ts';
 import type { DeathEvent, World } from './world.ts';
 
 // defaults of the rules.tuning keys of the same names (CONTRACT §5.6)
@@ -54,6 +59,8 @@ interface EconState {
   lastKillAt: number[];
   multi: number[];
   ffa: boolean;
+  /** Grove tithe bank per team */
+  grove: number[];
 }
 const KEY = 'econ';
 function econ(w: World): EconState { return w.ext[KEY] as EconState; }
@@ -163,6 +170,30 @@ function shareXp(w: World, victim: Entity, kp: Player | null, assists: readonly 
   if (eligible.length === 0) return;
   const share = amount / eligible.length;
   for (const p of eligible) grantXp(w, p, share);
+  if (w.rules.groveTithe && !ffa) groveTithe(w, victim, kp, eligible, amount);
+}
+
+/** the Grove tithe: Wicks fill the team's grove bank, camp monsters pay it out to a fighter who trails */
+function groveTithe(w: World, victim: Entity, kp: Player | null, eligible: readonly Player[], amount: number): void {
+  const gt = w.rules.groveTithe!;
+  const bank = econ(w).grove;
+  if (victim.kind === 'minion') {
+    const team = eligible[0].team;
+    if (team < 0 || team >= bank.length) return;
+    bank[team] = Math.min(gt.bankMax, bank[team] + amount * gt.share);
+    return;
+  }
+  if (victim.kind !== 'monster' || !kp || !kp.ent) return;
+  const m = monsterState(victim);
+  if (!m || m.camp.def.objective) return;
+  const team = kp.team;
+  if (team < 0 || team >= bank.length || bank[team] <= 0) return;
+  let top = 0;
+  for (const p of w.players) if (p && p.team === team && p.ent && p.ent.level > top) top = p.ent.level;
+  if (kp.ent.level >= top) return;
+  const pay = Math.min(bank[team], gt.perMonster);
+  bank[team] -= pay;
+  grantXp(w, kp, pay);
 }
 
 // ── passive gold ────────────────────────────────────────────────────────────────────────────────
@@ -186,6 +217,7 @@ export function installEconomy(w: World, ffa: boolean): void {
   const n = w.setup.seats.length;
   const st: EconState = {
     firstBlood: false, passiveAcc: new Array(n).fill(0), lastKillAt: new Array(n).fill(-1e9), multi: new Array(n).fill(0), ffa,
+    grove: new Array(Math.max(2, w.teams.length)).fill(0),
   };
   w.ext[KEY] = st;
   w.hooks.death.push(onDeath);

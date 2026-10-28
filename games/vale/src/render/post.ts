@@ -14,7 +14,9 @@
 //                                           threshold 1.0, smoothing 0.05, intensity 0.6, radius 0.7 (off
 //                                           when video.bloom is false); exposure 1.0 except the ultimate
 //                                           impact envelope (vfx/screen.ts: a local eased lift, applied as a
-//                                           multiply before tone mapping, never full-screen white);
+//                                           multiply before tone mapping, never full-screen white; a pixel
+//                                           that stands above the ground, read from the stable scene depth,
+//                                           takes at most ×1.3 so a struck unit keeps its silhouette);
 //                                           tetrahedral LUT on Ultra; grade: the dead player's world eases
 //                                           to grey (saturation × value) after the LUT; vignette offset 0.35
 //                                           darkness 0.25
@@ -34,7 +36,7 @@
 // full-screen quads) before it builds the new set. The overlay and VFX passes are the chain's own and survive both.
 
 import {
-  type Camera, Color, HalfFloatType, type Scene, type Texture, type Uniform, type WebGLRenderer, type WebGLRenderTarget,
+  type Camera, Color, HalfFloatType, Matrix4, type Scene, type Texture, Uniform, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import {
   BlendFunction, BloomEffect, CopyPass, Effect, EffectComposer, EffectPass, LookupTexture, LUT3DEffect, Pass, RenderPass, SMAAEffect,
@@ -63,11 +65,21 @@ class OverlayPass extends Pass {
     this.needsSwap = false;
     this.needsDepthTexture = true;
   }
-  override setDepthTexture(depthTexture: Texture): void { this.depth = depthTexture; }
+  override setDepthTexture(depthTexture: Texture): void { this.depth = depthTexture; liftDepth.uLiftDepth.value = depthTexture; }
   override render(renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget): void {
     this.draw(renderer, this.renderToScreen ? null : inputBuffer, this.depth);
   }
 }
+
+/** combat F4: the envelope's cap on pixels that stand above the ground (display ratio: units keep their silhouette;
+ *  LoL's own hit flash on a champion is 1–2 frames, VALE's light pours onto the ground around the body) */
+export const LIFT_BODY_CAP = 1.3;
+/** the stable scene depth (the overlay pass's, forwarded) and the camera's matrices the envelope rebuilds height with */
+const liftDepth = {
+  uLiftDepth: new Uniform<Texture | null>(null),
+  uLiftInvProj: new Uniform(new Matrix4()),
+  uLiftCamWorld: new Uniform(new Matrix4()),
+};
 
 export type VfxDraw = (renderer: WebGLRenderer, target: WebGLRenderTarget | null, sceneDepth: Texture | null, camera: Camera) => void;
 
@@ -77,15 +89,23 @@ const uniformsOf = (o: Record<string, Uniform>): Map<string, Uniform> => new Map
 /** the ultimate impact envelope (vfx/screen.ts): local eased lift + saturation drop + global dip, HDR. The envelope's
  *  values are DISPLAY brightness ratios (what the eye and a frame capture measure); they multiply linear HDR light
  *  raised to the display gamma (≈ 2.2) so a ×1.45 hold reads ×1.45 on screen below the tone curve's shoulder, and the
- *  peak saturates toward the stopped-sun white only inside the area (never full-screen white). */
+ *  peak saturates toward the stopped-sun white only inside the area (never full-screen white).
+ *  combat F4: the light pours onto the GROUND. A pixel whose scene point stands above it (rebuilt from the stable depth:
+ *  0.15 → 0.45 m up eases in; bodies, structures, props) takes at most LIFT_BODY_CAP and keeps its colour, so the struck
+ *  unit reads as a silhouette inside the light instead of going white. Only lit pixels above the cap read the depth. */
 class ExposureEffect extends Effect {
-  constructor() {
+  private readonly cam: () => Camera;
+  constructor(cam: () => Camera) {
     super('ValeExposure', /* glsl */`
 uniform vec4 uLiftA[${MAX_LIFTS}];
 uniform vec4 uLiftB[${MAX_LIFTS}];
 uniform float uExpo;
 uniform float uBreath;
 uniform float uAspect;
+uniform highp sampler2D uLiftDepth;
+uniform float uLiftDepthOn;
+uniform mat4 uLiftInvProj;
+uniform mat4 uLiftCamWorld;
 void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
   vec3 c = inputColor.rgb * pow( max( uExpo, 0.0 ), 2.2 );
   float lift = 0.0, desat = 0.0;
@@ -97,10 +117,31 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     lift += a.w * ( k + uBreath * ( 1.0 - k ) );
     desat = max( desat, uLiftB[ i ].x * k );
   }
+  if ( lift > ${(LIFT_BODY_CAP - 1).toFixed(3)} && uLiftDepthOn > 0.5 ) {
+    float z = texture2D( uLiftDepth, uv ).r;
+    vec4 v = uLiftInvProj * vec4( vec3( uv, z ) * 2.0 - 1.0, 1.0 );
+    vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
+    float body = smoothstep( 0.15, 0.45, w.y ) * step( z, 0.99999 );
+    lift = mix( lift, ${(LIFT_BODY_CAP - 1).toFixed(3)}, body );
+    desat *= 1.0 - body;
+  }
   c *= pow( 1.0 + lift, 2.2 );
   float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
   outputColor = vec4( mix( c, vec3( l ), desat ), inputColor.a );
-}`, { blendFunction: BlendFunction.SET, uniforms: uniformsOf({ uLiftA: U.uLiftA, uLiftB: U.uLiftB, uExpo: U.uExpo, uBreath: U.uBreath, uAspect: U.uAspect }) });
+}`, {
+      blendFunction: BlendFunction.SET,
+      uniforms: uniformsOf({
+        uLiftA: U.uLiftA, uLiftB: U.uLiftB, uExpo: U.uExpo, uBreath: U.uBreath, uAspect: U.uAspect,
+        uLiftDepth: liftDepth.uLiftDepth, uLiftDepthOn: new Uniform(0), uLiftInvProj: liftDepth.uLiftInvProj, uLiftCamWorld: liftDepth.uLiftCamWorld,
+      }),
+    });
+    this.cam = cam;
+  }
+  override update(): void {
+    const c = this.cam();
+    liftDepth.uLiftInvProj.value.copy(c.projectionMatrixInverse);
+    liftDepth.uLiftCamWorld.value.copy(c.matrixWorld);
+    this.uniforms.get('uLiftDepthOn')!.value = liftDepth.uLiftDepth.value ? 1 : 0;
   }
 }
 
@@ -277,7 +318,7 @@ export class PostChain {
         levels: q.tier === 'medium' ? 6 : 8,
       }));
     }
-    effects.push(new ExposureEffect());
+    effects.push(new ExposureEffect(() => this.camera));
     effects.push(new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }));
     this.lutEffect = new LUT3DEffect(this.lutTex, { tetrahedralInterpolation: q.tier === 'ultra' || q.tier === 'high' });
     effects.push(this.lutEffect);

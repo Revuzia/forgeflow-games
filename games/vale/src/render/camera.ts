@@ -7,7 +7,9 @@
 //   semi         pan freely, but the focus stays within a 6 m leash of your fighter
 //   free         edge pan (pointer within 18 px of an edge) + keyboard pan at controls.panSpeed
 //   scout (hold) free pan while held; release snaps back to your fighter (cut, 1 frame)
-// Focus is clamped to the map bounds. Zoom eases over 200 ms. Screen shake (structure falls, own
+// Focus is clamped to the map bounds inset by 4 m (env F1 step 4: the view never opens onto more out-of-play ground
+// than it must; W5's dressed skirt fills what is left at an edge, `_harness/probe_camera_edge.mjs` measures it).
+// Zoom eases over 200 ms. Screen shake (structure falls, own
 // T4 casts) is ≤ 4 px for ≤ 120 ms, scaled by access.screenShake and off with reduceMotion.
 
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
@@ -15,6 +17,8 @@ import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 export const CAMERA = {
   pitchDeg: 52, fovDeg: 26, distance: 28.5, minDistance: 24.5, maxDistance: 33.0,
   spectatorMin: 20, spectatorMax: 44, zoomEaseMs: 200, leash: 6, edgePx: 18,
+  /** the focus clamp's inset from the map bounds (m; at most a quarter of a side) */
+  boundsInset: 4,
 } as const;
 
 export type CameraMode = 'locked' | 'semi' | 'free';
@@ -49,7 +53,10 @@ export class CameraRig {
     this.camera.rotation.order = 'YXZ';
   }
 
-  setBounds(sizeX: number, sizeZ: number): void { this.bounds = { minX: 0, minZ: 0, maxX: sizeX, maxZ: sizeZ }; }
+  setBounds(sizeX: number, sizeZ: number, inset: number = CAMERA.boundsInset): void {
+    const ix = Math.max(0, Math.min(inset, sizeX / 4)), iz = Math.max(0, Math.min(inset, sizeZ / 4));
+    this.bounds = { minX: ix, minZ: iz, maxX: sizeX - ix, maxZ: sizeZ - iz };
+  }
   setViewport(w: number, h: number): void {
     this.viewW = Math.max(1, w); this.viewH = Math.max(1, h);
     this.camera.aspect = this.viewW / this.viewH;

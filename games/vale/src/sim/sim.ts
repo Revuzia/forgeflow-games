@@ -53,7 +53,7 @@ import {
 import { minionSystem, initWaves, waveSystem } from './units/minions.ts';
 import { campSystem, initCamps, installMonsters, monsterSystem } from './units/monsters.ts';
 import { initPickups, pickupSystem } from './units/pickups.ts';
-import { installStructures, spawnStructures, structureRespawnSystem, towerSystem } from './units/structures.ts';
+import { dawnSealSystem, installStructures, spawnStructures, structureRespawnSystem, towerSystem } from './units/structures.ts';
 import { summonSystem, wardSpawnHook } from './units/summons.ts';
 import { validCommand, World } from './world.ts';
 
@@ -166,6 +166,7 @@ function buildWorld(catalog: CatalogT, setup: MatchSetup, opts: SimOptions, idx:
   });
   w.addSystem('deaths', respawnSystem);
   w.addSystem('deaths', structureRespawnSystem);
+  w.addSystem('deaths', dawnSealSystem);
   w.addSystem('deaths', campSystem);
   w.addSystem('deaths', passiveGoldSystem);
   w.addSystem('deaths', practiceSystem);

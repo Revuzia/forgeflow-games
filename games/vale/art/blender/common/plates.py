@@ -76,6 +76,10 @@ DEFAULTS = {
     # display luma (a white chalk kit under the dusk key), a dark kit's median lifted toward `sub_floor`, the
     # scale bounded to [sub_min_k, sub_max_k] (linear), then a shoulder above `sub_knee` toward `sub_cap`
     "sub_p95": 0.74, "sub_floor": 0.20, "sub_min_k": 0.55, "sub_max_k": 1.35, "sub_knee": 0.68, "sub_cap": 0.84,
+    # a kit still under its floor after the scale (a face in a hat brim's shadow) gets a toe lift: a gamma that
+    # takes its median to the floor (`sub_floor_p` for the portrait: a draft cell is a face) and keeps white white
+    "sub_floor_p": 0.30, "sub_gamma_min": 0.62,
+    "sub_ceil": 0.39,           # ... and a pale kit's median at most this (the cell stays a mid value)
     # the post (render.splash_post's light wrap / bloom / vignette strengths)
     "post": 1.0, "post_p": 0.6,
 }
@@ -407,9 +411,11 @@ def plate(p: dict, kind: str, w: int, h: int) -> np.ndarray:
     lin = lin * (float(_dec(np.float32(p["median"]))) / max(1e-5, med))
     gx, gy, gr, gk = (float(v) for v in p["glow"])
     if kind != "splash":
-        gr *= 1.5
+        gr, gk = gr * 1.5, gk * 0.6
     g = np.exp(-(((xx - gx) / gr) ** 2 + ((yy - gy) / (gr * 0.8)) ** 2))[..., None]
     lin = lin + gk * g * _dec(_hex(p["glow_color"]))
+    if kind != "splash":                       # the portrait is all far plate behind a head: its median IS the target
+        lin = lin * (float(_dec(np.float32(p["median"]))) / max(1e-5, float(np.median(lin @ Y709))))
     # the shoulder: only small highlights (the lamps) pass the knee toward `cap`
     d = _shoulder(_enc(lin), float(p["knee"]), float(p["cap"]))
     tooth = _noise(w, h, max(8, w // 6), zlib.crc32(p.get("sid", "x").encode()) % 997)
@@ -449,7 +455,7 @@ def _shoulder(d: np.ndarray, knee: float, cap: float) -> np.ndarray:
     return d * (Ls / np.maximum(L, 1e-5))[..., None]
 
 
-def subject_grade(fg: np.ndarray, p: dict) -> tuple[np.ndarray, float]:
+def subject_grade(fg: np.ndarray, p: dict, kind: str = "splash") -> tuple[np.ndarray, float]:
     """The dusk exposure of the subject layer (straight RGBA, display sRGB): one linear scale from its solid
     pixels' luma (the brightest 5 % at most `sub_p95`; a dark kit's median lifted toward `sub_floor`), then the
     highlight shoulder. Returns (graded, scale)."""
@@ -466,9 +472,16 @@ def subject_grade(fg: np.ndarray, p: dict) -> tuple[np.ndarray, float]:
     flo = float(_dec(np.float32(p["sub_floor"])))
     if med * k < flo:                          # a dark kit: lift toward the floor, the highlights still capped
         k = min(flo / max(med, 1e-5), k_hi)
+    k = min(k, float(_dec(np.float32(p["sub_ceil"]))) / max(med, 1e-5))
     k = float(np.clip(k, float(p["sub_min_k"]), float(p["sub_max_k"])))
+    lin = np.clip(lin * k, 0.0, 1.0)
+    flo2 = float(_dec(np.float32(p["sub_floor_p"] if kind == "portrait" else p["sub_floor"])))
+    mk = med * k
+    if 1e-4 < mk < flo2:
+        g = max(float(p["sub_gamma_min"]), float(np.log(flo2) / np.log(mk)))
+        lin = lin ** g
     out = fg.copy()
-    out[..., :3] = _shoulder(_enc(lin * k), float(p["sub_knee"]), float(p["sub_cap"]))
+    out[..., :3] = _shoulder(_enc(lin), float(p["sub_knee"]), float(p["sub_cap"]))
     return out, k
 
 
@@ -477,7 +490,7 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
     SPLASH "post" switch), the LUT."""
     h, w = fg.shape[:2]
     pl = plate(p, kind, w, h)
-    fg, _k = subject_grade(fg.astype(np.float32), p)
+    fg, _k = subject_grade(fg.astype(np.float32), p, kind)
     comp = splash_post(fg, pl, post * float(p["post"] if kind == "splash" else p["post_p"]))
     L = lut()
     if L is not None:
@@ -601,6 +614,24 @@ def main(argv: list[str]) -> int:
             print(f"[plates] cards {len(cards)}: p50 range {min(cards)}-{max(cards)}; cells {len(cells)}: p50 range "
                   f"{min(cells) if cells else '-'}-{max(cells) if cells else '-'}; outside the gate: {bad}")
         return 1 if bad else 0
+    if cmd == "frame":                        # the figure's height in the 3:5 loading card (from the kept raw passes)
+        fr = []
+        for sid in sel:
+            rp = raw_path(sid, "splash", preview)
+            if not os.path.isfile(rp):
+                continue
+            a = card_crop(load_image(rp))[..., 3]
+            rows = np.where((a > 0.6).any(axis=1))[0]
+            if len(rows):
+                f = (rows[-1] - rows[0] + 1) / a.shape[0] * 0.84      # the plate covers the card's lower 84 %
+                fr.append((sid, round(float(f), 3)))
+        v = sorted(x[1] for x in fr)
+        for sid, f in fr:
+            print(f"  {sid:<22} figure {f:.3f} of the card height{'' if 0.70 <= f <= 0.80 else ' (outside 0.70-0.80)'}")
+        if v:
+            print(f"[plates] {len(v)} splashes: figure p50 {v[len(v) // 2]:.3f}, range {v[0]:.3f}-{v[-1]:.3f}, "
+                  f"in 0.70-0.80: {sum(0.70 <= x <= 0.80 for x in v)}")
+        return 0
     if cmd == "plates":                       # the bare plates of every origin and line (look-dev sheet)
         t = table()
         names = sorted(set([v["src"] for v in (t.get("origins") or {}).values()]))

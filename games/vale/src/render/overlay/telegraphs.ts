@@ -9,7 +9,8 @@
 //   every telegraph has a 1 px dark keyline OUTSIDE the edge (#000 at 35 % unless the spec raises it)
 // Delayed areas sweep clockwise from 12 o'clock and land as the circle closes; lines and cones fill
 // origin → tip. On landing a 150 ms impact flash raises the fill (never to white, never pulsing above
-// 2 Hz). Overlaps never stack: telegraphs render into their own target with MAX blending (premultiplied)
+// 2 Hz); an area wider than 4 m (combat m-3) never washes its whole shape: its fill holds ≤ 22 % while the flash
+// lights a 0.35 m band inside the edge and one inner contour (half the shape's inscribed depth). Overlaps never stack: telegraphs render into their own target with MAX blending (premultiplied)
 // and are composited once, so a stack of fills stays ≤ 40 %. Identical on every quality tier. FRAY:
 // telegraphs stay HARM with the caster's seat colour as a 6 px tick at the origin.
 
@@ -37,6 +38,22 @@ export interface TeleSpec {
   tick: Color | null;
   /** keyline alpha (default 0.35) */
   key?: number;
+  /** combat m-3: a large area's landing flash, the alpha of its edge band and inner contour (0 = none) */
+  ringFlash?: number;
+  /** the inner contour's depth inside the edge (m) */
+  ringDepth?: number;
+}
+
+/** combat m-3: a landing flash over an area wider than this (m: circle, ring or cone radius, half a rect's longer
+ *  side) lights the edge band and an inner contour instead of the whole fill */
+export const FLASH_RING_OVER_M = 4;
+/** the depth of a shape's inner contour: half its inscribed radius (circle r/2, ring half its width, cone half the
+ *  inscribed circle of the sector, rect a quarter of its width) */
+export function flashContourDepth(shape: number, radius: number, inner: number, halfAngle: number, width: number): number {
+  if (shape === TELE_SHAPE.circle) return radius * 0.5;
+  if (shape === TELE_SHAPE.ring) return Math.max(0.1, (radius - inner) * 0.5);
+  if (shape === TELE_SHAPE.cone) { const s = Math.sin(Math.min(Math.PI / 2, halfAngle)); return (radius * s) / (1 + s) * 0.5; }
+  return width * 0.25;
 }
 
 const MAX = 128;
@@ -46,9 +63,9 @@ attribute vec4 aA;      // x, z, dir, shape
 attribute vec4 aB;      // radius, inner, halfAngle, length
 attribute vec4 aC;      // width, fill, edge, edgePx
 attribute vec4 aD;      // sweep, dashed, tick on, keyline alpha
-attribute vec3 aColor;
-attribute vec3 aTick;
-varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec3 vColor; varying vec3 vTick;
+attribute vec4 aColor;     // rgb, landing ring flash alpha (combat m-3)
+attribute vec4 aTick;      // FRAY tick rgb, inner contour depth (m)
+varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vColor; varying vec4 vTick;
 void main() {
   float shape = aA.w;
   // bounds in the shape's local frame (u along dir, v across)
@@ -68,7 +85,7 @@ void main() {
 
 export const TELE_FRAG = /* glsl */`
 ${DEPTH_TEST_GLSL}
-varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec3 vColor; varying vec3 vTick;
+varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vColor; varying vec4 vTick;
 float sdBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
 // signed distance to a circular sector (apex at the origin, axis +x, half-angle ha); < 0 inside. The side
 // test is the 2D cross c × p: negative while p lies between the axis and the edge ray c = (cos ha, sin ha),
@@ -124,7 +141,15 @@ void main() {
   float fillA = vC.y * inside * ( 1.0 - edge ) * swept;
   float edgeA = vC.z * edge;
   float a = max( fillA, edgeA );
-  vec3 col = vColor;
+  // combat m-3: a large area lands as its edge band (0.35 m) and one inner contour, never a whole-shape wash
+  if ( vColor.w > 0.001 ) {
+    float depth = -d;
+    float band = inside * ( 1.0 - smoothstep( 0.35 - px, 0.35 + px, depth ) );
+    float rw = max( 1.5 * px, 0.08 );
+    float ring = inside * ( 1.0 - smoothstep( rw - px, rw + px, abs( depth - vTick.w ) ) );
+    a = max( a, vColor.w * max( band, ring ) );
+  }
+  vec3 col = vColor.rgb;
   // the sweep's leading hand: a slim brighter spoke on circles (still the relationship colour)
   if ( sweep < 1.0 && shape < 1.5 ) {
     float lead = ( 1.0 - smoothstep( 0.0, 0.012, abs( prog - sweep ) ) ) * inside;
@@ -133,7 +158,7 @@ void main() {
   // FRAY: caster seat tick at the origin (6 px)
   if ( vD.z > 0.5 ) {
     float t = 1.0 - smoothstep( 3.0 * px - 0.75 * px, 3.0 * px + 0.75 * px, length( p ) );
-    if ( t > 0.0 ) { col = mix( col, vTick, t ); a = max( a, t ); }
+    if ( t > 0.0 ) { col = mix( col, vTick.rgb, t ); a = max( a, t ); }
   }
   float k35 = key * vD.w;
   float vis = valeVisible( 0.2 );
@@ -161,7 +186,7 @@ export class TelegraphLayer {
     this.geo.index = quad.index;
     this.geo.setAttribute('position', quad.getAttribute('position'));
     const mk = (size: number): InstancedBufferAttribute => { const a = new InstancedBufferAttribute(new Float32Array(MAX * size), size); a.setUsage(DynamicDrawUsage); return a; };
-    this.aA = mk(4); this.aB = mk(4); this.aC = mk(4); this.aD = mk(4); this.aColor = mk(3); this.aTick = mk(3);
+    this.aA = mk(4); this.aB = mk(4); this.aC = mk(4); this.aD = mk(4); this.aColor = mk(4); this.aTick = mk(4);
     this.attrs = [this.aA, this.aB, this.aC, this.aD, this.aColor, this.aTick];
     overlayAttrs(this.geo, 'tele', { aA: this.aA, aB: this.aB, aC: this.aC, aD: this.aD, aColor: this.aColor, aTick: this.aTick });
     this.geo.instanceCount = 0;
@@ -187,8 +212,8 @@ export class TelegraphLayer {
     this.aB.setXYZW(i, t.radius, t.inner, t.halfAngle, t.length);
     this.aC.setXYZW(i, t.width, t.fill, t.edge, t.edgePx);
     this.aD.setXYZW(i, t.sweep, t.dashed ? 1 : 0, t.tick ? 1 : 0, t.key ?? 0.35);
-    this.aColor.setXYZ(i, t.color.r, t.color.g, t.color.b);
-    if (t.tick) this.aTick.setXYZ(i, t.tick.r, t.tick.g, t.tick.b);
+    this.aColor.setXYZW(i, t.color.r, t.color.g, t.color.b, t.ringFlash ?? 0);
+    if (t.tick) this.aTick.setXYZW(i, t.tick.r, t.tick.g, t.tick.b, t.ringDepth ?? 0); else this.aTick.setW(i, t.ringDepth ?? 0);
   }
 
   end(): void {

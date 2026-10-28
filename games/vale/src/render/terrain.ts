@@ -1406,13 +1406,28 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   float lap = 1.0 - smoothstep( 0.0, 0.35, -sd );
   diffuseColor.a = mix( diffuseColor.a, 0.75, lap );
   outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( uWaterLap ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
+  // env m2: foam along the banks: a broken pale line lapping 0.12-0.2 m out from the stone and a fainter one ~0.45 m
+  // out, breathing in and out with the swell; pale from the film's own light (never a painted white)
+  {
+    vec2 wp = vValeWorld.xz;
+    float fd = -sd + ( valeNoise( wp * 2.3 + vec2( uWaterT * 0.4, -uWaterT * 0.25 ) ) - 0.5 ) * 0.14;
+    float swell = 0.5 + 0.5 * sin( uWaterT * 1.1 + wp.x * 0.7 - wp.y * 0.4 );
+    float l1 = 1.0 - smoothstep( 0.015, 0.055, abs( fd - ( 0.12 + 0.08 * swell ) ) );
+    float l2 = 1.0 - smoothstep( 0.01, 0.04, abs( fd - ( 0.42 + 0.1 * swell ) ) );
+    float brk = smoothstep( 0.32, 0.62, valeNoise( wp * 1.6 + vec2( uWaterT * 0.12, uWaterT * 0.07 ) ) );
+    float brk2 = smoothstep( 0.45, 0.7, valeNoise( wp * 1.1 + vec2( 9.0 - uWaterT * 0.09, 4.0 ) ) );
+    float foam = clamp( l1 * ( 0.35 + 0.65 * brk ) + 0.55 * l2 * brk2, 0.0, 1.0 ) * step( sd, 0.0 );
+    float fl = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
+    outgoingLight = mix( outgoingLight, vec3( fl * 1.55 + uWaterLap ) * vec3( 1.0, 0.99, 0.95 ), foam * 0.75 );
+    diffuseColor.a = max( diffuseColor.a, foam * 0.85 );
+  }
   // the sky in the film (roughness stays ≥ 0.5 on walkable ground): a cool sheen off the ripples at grazing view
   float nv = clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 );
   outgoingLight += uWaterSheen * smoothstep( 0.98, 0.55, nv );
 }
 #include <opaque_fragment>`);
     };
-    mat.customProgramCacheKey = () => 'vale_water_v4';
+    mat.customProgramCacheKey = () => 'vale_water_v5';
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';

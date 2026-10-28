@@ -15,6 +15,9 @@
 // reads. End shapes per relationship: self double frame, ally rounded, enemy chevron, neutral square. FRAY: other seats in their seat colour (+ 1 px chalk /
 // ink keyline where the bible asks), your own seat colour as a 2 px line on top of your plate.
 // Bars are a fixed screen size: 1 reference px = max(0.8, height / 1080) × hudScale CSS px.
+// CC plate (combat F5, r12 M2): over a fighter under hard control, ONE plate above its name: the status mark at 14 px
+// and the status name in caps at 12 px, chalk with a 2 px ink outline, fading in over 70 ms (the renderer picks the
+// highest-priority hard CC; the 2 px drain strip under the plate stays). Same atlas, same label draw.
 
 import {
   CanvasTexture, Color, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, LinearFilter,
@@ -42,6 +45,9 @@ export interface BarSpec {
   nameSlot: number; level: number;
   /** 0..1: the lost-HP flash (1 on the hit, 0 after ~66 ms) */
   flash?: number;
+  /** combat F5: the CC plate's atlas cell (ccSlot; −1 / undefined = none) and its fade-in alpha */
+  ccPlate?: number;
+  ccAlpha?: number;
 }
 
 /** bar sizes in 1080p reference px (tokens.json hud.overheadBar) */
@@ -56,6 +62,26 @@ const ATLAS_W = 1024, ATLAS_H = 1024;
 const ROW_H = 36;          // atlas px per name row (2× of 14 + outline room)
 const DIGIT_ROW_Y = NAME_ROWS * ROW_H;
 const DIGIT_W = 28, DIGIT_H = 36;
+/** combat F5: CC plates (glyph + caps name) under the digit rows: 5 cells × 2 rows of 204 × 40 atlas px (2×) */
+const CC_ROW_Y = DIGIT_ROW_Y + 2 * DIGIT_H + 4;
+const CC_CELL_W = 204, CC_CELL_H = 40, CC_COLS = 5, CC_CELLS = 10;
+/** the plate in 1080p reference px: 20 tall, the mark 14 (tokens.json hud.overheadBar.ccPlate) */
+export const CC_PLATE = { hPx: 20, glyphPx: 14, textPx: 12, fadeInMs: 70 } as const;
+
+/** the status marks (r12 M4; the same drawn marks as the HUD's chips, src/ui/hud/glyphs.tsx STATUS_PATHS) on a 24 px
+ *  grid, stroked 1.7 with round caps: `p` a path, `c` a circle [cx, cy, r], `f` filled, `o` opacity, `w` stroke width */
+type MarkPart = { p?: string; c?: [number, number, number]; f?: boolean; o?: number; w?: number };
+const CC_MARKS: Record<string, MarkPart[]> = {
+  stun: [{ p: 'M12 3.5v4.5M12 16v4.5M3.5 12H8M16 12h4.5' }, { p: 'M9.5 6.5L12 9l2.5-2.5M9.5 17.5L12 15l2.5 2.5M6.5 9.5L9 12l-2.5 2.5M17.5 9.5L15 12l2.5 2.5' }, { c: [12, 12, 1.3], f: true }],
+  airborne: [{ p: 'M6 13l6-6 6 6' }, { p: 'M6 19l6-6 6 6', o: 0.6 }, { p: 'M8 4h8' }],
+  sleep: [{ p: 'M15.5 4.5a7.5 7.5 0 1 0 4 12.5 6 6 0 0 1-4-12.5z' }, { p: 'M5 5h3l-3 3h3', o: 0.7 }],
+  fear: [{ c: [12, 12, 2.2] }, { p: 'M12 6.5V3M12 17.5V21M6.5 12H3M17.5 12H21' }, { p: 'M7.5 7.5L5.5 5.5M16.5 16.5l2 2M16.5 7.5l2-2M7.5 16.5l-2 2', o: 0.6 }],
+  taunt: [{ c: [18, 12, 2.6] }, { p: 'M3.5 12h10' }, { p: 'M10 7.5l4.5 4.5-4.5 4.5' }],
+  silence: [{ p: 'M3.5 12c1.6-3 3.4-3 5 0s3.4 3 5 0 3.4-3 5 0', o: 0.75 }, { p: 'M5 19.5L19 4.5', w: 2.2 }],
+  root: [{ c: [12, 6.5, 3] }, { p: 'M12 9.5v11' }, { p: 'M11.2 11.5C9 13.5 7 15 4.5 19.5' }, { p: 'M12.8 11.5c2.2 2 4.2 3.5 6.7 8' }, { p: 'M6.6 16.6L4 15.5M17.4 16.6l2.6-1.1M12 16l-2 2.2', o: 0.6 }],
+  disarm: [{ p: 'M4.5 19.5l5-5', w: 2.2 }, { p: 'M13 11l6.5-6.5', w: 2.2 }, { p: 'M10.5 10.5l3 3', o: 0.6 }, { p: 'M16 4.5h3.5V8' }],
+};
+const CC_FALLBACK: MarkPart[] = [{ p: 'M5 19L12 5l7 14z' }];
 
 export const BAR_VERT = /* glsl */`
 attribute vec3 aAnchor;
@@ -276,6 +302,11 @@ export class BarLayer {
   private readonly slots = new Map<string, number>();
   private readonly slotWidth: number[] = [];
   private nextSlot = 0;
+  /** combat F5: CC plate cells by kind, their drawn width (atlas px) and label */
+  private readonly ccCells = new Map<string, number>();
+  private readonly ccWidth: number[] = [];
+  private readonly ccText: string[] = [];
+  private readonly ccKind: string[] = [];
   private fontsReady = false;
   readonly uniforms = { uPxScale: { value: 1 }, uResolution: overlayUniforms.uResolution };
 
@@ -321,6 +352,7 @@ export class BarLayer {
       Promise.all([
         fonts.load('600 28px "Atkinson Hyperlegible Next"').catch(() => []),
         fonts.load('700 26px "Atkinson Hyperlegible Mono"').catch(() => []),
+        fonts.load('700 24px "Atkinson Hyperlegible Next"').catch(() => []),
       ]).then(() => { this.fontsReady = true; this.redrawAll(); });
     }
   }
@@ -364,6 +396,68 @@ export class BarLayer {
   private redrawAll(): void {
     for (const [text, slot] of this.slots) this.drawName(slot, text);
     this.drawDigits();
+    for (let i = 0; i < this.ccKind.length; i++) this.drawCc(i);
+  }
+
+  /** combat F5: one CC plate cell: the status mark (28 atlas px = 14 ref px) and the caps name (24 = 12), both chalk on a
+   *  2 px ink outline, centred in the cell */
+  private drawCc(cell: number): void {
+    const c = this.ctx;
+    const x0 = (cell % CC_COLS) * CC_CELL_W, y0 = CC_ROW_Y + Math.floor(cell / CC_COLS) * CC_CELL_H;
+    c.clearRect(x0, y0, CC_CELL_W, CC_CELL_H);
+    const text = this.ccText[cell];
+    c.font = '700 24px "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif';
+    const G = CC_PLATE.glyphPx * 2, gap = 6;
+    const tw = Math.min(CC_CELL_W - G - gap - 10, Math.ceil(c.measureText(text).width));
+    const w = G + gap + tw;
+    const left = x0 + Math.round((CC_CELL_W - w) / 2), cy = y0 + CC_CELL_H / 2;
+    // the mark: ink under-stroke, then chalk
+    const k = G / 24;
+    const parts = CC_MARKS[this.ccKind[cell]] ?? CC_FALLBACK;
+    c.save();
+    c.translate(left, cy - G / 2);
+    c.scale(k, k);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const pass of [0, 1]) {
+      for (const m of parts) {
+        const path = new Path2D();
+        if (m.p) path.addPath(new Path2D(m.p));
+        if (m.c) { path.moveTo(m.c[0] + m.c[2], m.c[1]); path.arc(m.c[0], m.c[1], m.c[2], 0, Math.PI * 2); }
+        const lw = m.w ?? 1.7;
+        if (pass === 0) {
+          c.globalAlpha = 0.92; c.strokeStyle = 'rgb(11,13,17)'; c.lineWidth = lw + 4 / k;
+          c.stroke(path);
+          if (m.f) { c.fillStyle = 'rgb(11,13,17)'; c.fill(path); }
+        } else {
+          c.globalAlpha = m.o ?? 1; c.strokeStyle = '#EDE6D6'; c.lineWidth = lw;
+          c.stroke(path);
+          if (m.f) { c.fillStyle = '#EDE6D6'; c.fill(path); }
+        }
+      }
+    }
+    c.restore();
+    // the name
+    c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.lineJoin = 'round'; c.lineWidth = 4;
+    c.strokeStyle = 'rgba(11,13,17,0.92)';
+    const tx = left + G + gap;
+    c.strokeText(text, tx, cy + 1, tw);
+    c.fillStyle = '#EDE6D6';
+    c.fillText(text, tx, cy + 1, tw);
+    this.ccWidth[cell] = w + 8;
+    this.atlas.needsUpdate = true;
+  }
+
+  /** combat F5: a CC plate's atlas cell for a status kind and its caps label (−1 when the cells are full) */
+  ccSlot(kind: string, label: string): number {
+    let s = this.ccCells.get(kind);
+    if (s !== undefined) return s;
+    if (this.ccKind.length >= CC_CELLS) return -1;
+    s = this.ccKind.length;
+    this.ccKind.push(kind); this.ccText.push(label.toUpperCase());
+    this.ccCells.set(kind, s);
+    this.drawCc(s);
+    return s;
   }
 
   /** a stable atlas slot for a name (−1 when the atlas is full) */
@@ -415,17 +509,26 @@ export class BarLayer {
         const cx = -(barW / 2 + 2) - 3 - BAR_SIZE.levelChip / 2;
         this.pushLabel(b, cx, 0.5, DIGIT_W * 0.58, DIGIT_H * 0.58, u0, v0, u1, v1, 1, 1, 1);
       }
+      // combat F5: the CC plate rides above the name line (or in its place when the unit has no name)
+      const cell = b.ccPlate ?? -1;
+      if (cell >= 0 && cell < this.ccKind.length && (b.ccAlpha ?? 1) > 0.001) {
+        const nameTop = plateTop + 2 + (b.nameSlot >= 0 ? BAR_SIZE.nameLinePx + 1 : 0);
+        const cw = this.ccWidth[cell] ?? CC_CELL_W;
+        const x0 = (cell % CC_COLS) * CC_CELL_W + (CC_CELL_W - cw) / 2, y0 = CC_ROW_Y + Math.floor(cell / CC_COLS) * CC_CELL_H;
+        this.pushLabel(b, 0, nameTop + CC_PLATE.hPx / 2, cw / 2, CC_CELL_H / 2, x0 / ATLAS_W, 1 - (y0 + CC_CELL_H) / ATLAS_H,
+          (x0 + cw) / ATLAS_W, 1 - y0 / ATLAS_H, 1, 1, 1, b.ccAlpha ?? 1);
+      }
     }
   }
 
-  private pushLabel(b: BarSpec, ox: number, oy: number, w: number, h: number, u0: number, v0: number, u1: number, v1: number, r: number, g: number, bl: number): void {
+  private pushLabel(b: BarSpec, ox: number, oy: number, w: number, h: number, u0: number, v0: number, u1: number, v1: number, r: number, g: number, bl: number, a = 1): void {
     if (this.lcount >= MAX) return;
     const j = this.lcount++;
     const L = this.la;
     L.aAnchor.setXYZ(j, b.x, b.y, b.z);
     L.aRect.setXYZW(j, ox, oy, w, h);
     L.aUv.setXYZW(j, u0, v0, u1, v1);
-    L.aTint.setXYZW(j, r, g, bl, b.alpha);
+    L.aTint.setXYZW(j, r, g, bl, b.alpha * a);
   }
 
   end(): void {
