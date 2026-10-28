@@ -124,6 +124,9 @@ export interface Renderer {
   pickGround(x: number, y: number): { x: number; y: number } | null;
   pickEntity(x: number, y: number): EntityId | null;
   worldToScreen(x: number, y: number, height?: number): { x: number; y: number; visible: boolean };
+  /** the match camera's focus point on the ground, in sim units and axes (x, y = world x, z) — the audio
+   *  listener rides it (W3 AUD-9); the last match focus while the menu is up */
+  listenerFocus(): { x: number; y: number };
   setAim(aim: AimSpec | null): void;
   setHover(id: EntityId | null): void;
   setTarget(id: EntityId | null): void;
@@ -1089,6 +1092,8 @@ class ValeRenderer implements Renderer {
     const t = a?.crowdBake ? (a.root.visible ? this.crowd.hoverTarget(a, a.hoverWidth, a.hoverTint) : null) : a?.hoverTarget();
     if (t) this.hoverRim.draw(r, cam, r.getRenderTarget(), t);
   }
+
+  listenerFocus(): { x: number; y: number } { return { x: this.rig.focus.x, y: this.rig.focus.z }; }
 
   setAim(aim: AimSpec | null): void { this.aim = aim; }
   setHover(id: EntityId | null): void { this.hover = id; }
