@@ -89,6 +89,7 @@ from common.anim import Aim, FootTarget, HandTarget  # noqa: E402
 from common.hifi import project, sdf  # noqa: E402
 from wick_common import (Capsule, Ellipsoid, HalfSpace, Lathe, RoundBox, RoundCone, Sculpt, Sphere,  # noqa: E402
                          Torus)
+from common.hifi.sdf import FlatCapsule  # noqa: E402
 
 V3 = np.array
 NOISE = sdf.Noise(29)
@@ -154,7 +155,10 @@ FORM = {
         "hood": ((0.0, 0.02, 1.545), (0.170, 0.178, 0.170)),
         "hood_bell": [(1.34, 0.200), (1.40, 0.214), (1.46, 0.214), (1.51, 0.204), (1.56, 0.186), (1.60, 0.164)],
         # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
-        "tomb": ((0.114, 1.370, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
+        # (r7, verify wave-b: the dark collar roll under the opening + the roll round it = lips round an O) the sill
+        # 1.370 -> 1.385 and the collar's front flattened under it (COLLAR_FRONT): a 4 cm band of felt is the arch's
+        # straight sill between the dark opening and the collar
+        "tomb": ((0.114, 1.385, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
         # one soft core floating in the hollow (see the Aubade note): 12 x 7 cm, front ~3.5 cm behind the opening
         # (r6: 5.1 -> 3.9 cm across: the 2.07 x halo filled the broad opening edge to edge, a lit visor from 52 deg)
         "hood_light": ((0.0, -0.124, 1.445), (0.039, 0.021, 0.025), 8.0),
@@ -829,18 +833,20 @@ def disc_on(surf, a_deg, z, r, nseg=8, lift=0.0016, dz_per_m=1.0, rad_fn=None):
     return V, orient(V, F, ("dir", out))
 
 
-def torus_mesh(c, axes, R, r, nu=16, nv=6, rz=None, ry_scale=1.0):
-    """an explicit torus (tube radius r, squashed to rz along the local Z), ring scaled by ry_scale on local Y"""
+def torus_mesh(c, axes, R, r, nu=16, nv=6, rz=None, ry_scale=1.0, tube=None):
+    """an explicit torus (tube radius r, squashed to rz along the local Z), ring scaled by ry_scale on local Y;
+    tube(a_rad) -> (r scale, rz scale, z offset) varies the tube round the ring (CollarTorus)"""
     c, ax = np.asarray(c, float), np.asarray(axes, float)
     rz = r if rz is None else rz
     V = []
     for i in range(nu):
         a = 2 * math.pi * (i + 0.5) / nu
         ca, sa = math.cos(a), math.sin(a)
+        ks, kz, dz = tube(a) if tube is not None else (1.0, 1.0, 0.0)
         for j in range(nv):
             b = 2 * math.pi * j / nv
-            rr = R + r * math.cos(b)
-            V.append(c + ax[0] * ca * rr + ax[1] * sa * rr * ry_scale + ax[2] * rz * math.sin(b))
+            rr = R + r * ks * math.cos(b)
+            V.append(c + ax[0] * ca * rr + ax[1] * sa * rr * ry_scale + ax[2] * (rz * kz * math.sin(b) + dz))
     V = np.array(V)
     F = []
     for i in range(nu):
@@ -1143,15 +1149,18 @@ def hood_parts(F, aub, part):
         # lower corners (sunk half into the felt: it turns the edge, it never stands round the opening), so the dark
         # opening reads as an arch under a rolled brim, not a ringed O
         T_ = tomb_of(F)
-        rr_at, sink_at = rim_profile_s(T_)
+        rr_at, flat_at, sink_at = rim_profile_s(T_)
         loop = opening_loop(F, n=24, lift=0.004)
-        loop = [(x_, y_ + sink_at(z_), z_) for x_, y_, z_ in loop]
+        loop = [np.array((x_, y_ + sink_at(z_), z_)) for x_, y_, z_ in loop]
         for i in range(len(loop) - 1):
             a_, b_ = loop[i], loop[i + 1]
-            rim.add(RoundCone(a_, b_, rr_at(a_[2]), rr_at(b_[2])), k=0.004)
+            side = np.cross(b_ - a_, (0.0, 1.0, 0.0))
+            ra, rb = rr_at(a_[2]), rr_at(b_[2])
+            rim.add(FlatCapsule(a_, b_, ra, ra * flat_at(a_[2]), rb, rb * flat_at(b_[2]), side=side), k=0.004)
         lo_loop = opening_loop(F, n=13, lift=0.004)
         lo_loop = [(x_, y_ + sink_at(z_), z_) for x_, y_, z_ in lo_loop]
-        tv, tf = sweep_tube(lo_loop, [rr_at(p_[2]) * 1.04 for p_ in lo_loop], 6)
+        tv, tf = sweep_tube(lo_loop, [rr_at(p_[2]) * 1.04 for p_ in lo_loop], 6,
+                            flat=[flat_at(p_[2]) for p_ in lo_loop])
         part("hood_rim", rim, "cloth", "bone:head", 0, 0.7, 1.4, low=lambda D, v=tv, f=tf: (v, f))
     # the hood light (brief §0.2 / §4): ONE soft core, wider than tall, floating in the head space with ink all
     # round it (FORM "hood_light"): a lamp glowing inside the hood. (A broad tilted lens that filled the opening
@@ -1199,20 +1208,24 @@ wc.HALO_PROFILES.setdefault(HALO_BW, (lambda rho: wc.halo_alpha(rho, wc.HALO_SCA
 
 
 def rim_profile_s(T):
-    """(r7) the Serenade roll along the opening: (radius(z), sink(z)): a 1.6 cm roll over the top of the arch (its
-    upper ~100 deg), falling through the arch's shoulders to a 4.5 mm felt edge down the sides, sunk 6 mm back into
-    the felt there (the edge turns into the hollow; nothing stands proud round the opening's sides)"""
+    """(r7) the Serenade roll along the opening: (half width(z), flatness(z), sink(z)): a round 1.6 cm roll over the
+    top of the arch (its upper ~100 deg), falling through the arch's shoulders to a FLAT felt edge down the sides
+    (8 mm either side of the cut, 3 mm proud: the felt's turned edge covering the hood low's cut, nothing standing
+    round the opening's sides)"""
     zc = T.zc
 
     def brow(z):
         return float(smooth(zc + 0.020, zc + 0.075, z))
 
     def rr_at(z):
-        return 0.0045 + (0.016 - 0.0045) * brow(z)
+        return 0.008 + (0.016 - 0.008) * brow(z)
+
+    def flat_at(z):
+        return 0.38 + 0.62 * brow(z)
 
     def sink_at(z):
-        return (1.0 - brow(z)) * 0.0062
-    return rr_at, sink_at
+        return (1.0 - brow(z)) * 0.0048
+    return rr_at, flat_at, sink_at
 
 
 def rim_band(F, D, width, height, n=17, inner=0.016):
@@ -1267,9 +1280,10 @@ def rim_band(F, D, width, height, n=17, inner=0.016):
     return V, Fc
 
 
-def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0)):
+def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0), flat=None):
     """a round tube (nseg sides) swept along an open polyline, its frame from `out` (the side it faces); the
-    ends are left open (they tuck into the cowl / the collar)"""
+    ends are left open (they tuck into the cowl / the collar). `flat` (per station) squashes the section along
+    `out`: a flat band lying on the surface (r across, r * flat proud)"""
     P = np.asarray(pts, float)
     T = np.gradient(P, axis=0)
     T /= np.linalg.norm(T, axis=1, keepdims=True)
@@ -1278,11 +1292,12 @@ def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0)):
     N /= np.linalg.norm(N, axis=1, keepdims=True)
     B = np.cross(T, N)
     R = np.broadcast_to(np.asarray(r, dtype=np.float64), (len(P),))      # a radius per station (a tapered tube)
+    Fl = np.broadcast_to(np.asarray(1.0 if flat is None else flat, dtype=np.float64), (len(P),))
     V = []
     for i in range(len(P)):
         for k in range(nseg):
             a = 2 * math.pi * (k + 0.5) / nseg
-            V.append(P[i] + (N[i] * math.cos(a) + B[i] * math.sin(a)) * R[i])
+            V.append(P[i] + (N[i] * math.cos(a) * Fl[i] + B[i] * math.sin(a)) * R[i])
     V = np.array(V)
     F_ = grid_faces(len(P), nseg, closed=False)
     # grid_faces is column-major (i * nv + j) with i the path index and j the ring index: rings are closed, so
@@ -1415,6 +1430,52 @@ class OpenCut(sdf.Prim):
 
     def d(self, P):
         return np.maximum(np.maximum(np.abs(P[:, 0]) - interp(self.w, P[:, 2]), P[:, 1] - self.y), P[:, 2] - self.ztop)
+
+
+# (r7, verify wave-b: from 52 deg the collar's thick front roll was the lower lip of an O round the opening) the Serenade
+# collar's front, round the local angle -90 deg (the frame's -Y = the wick's front): the tube's radius x (1 - k_r w),
+# its height x (1 - k_z w), its centre lowered dz x rz x w; w = 1 within +-span[0] deg, 0 past +-span[1] (the sides
+# and the back stay the full roll). Its front top drops 1.388 -> ~1.345, under the hood's felt sill
+COLLAR_FRONT = {"k_r": 0.30, "k_z": 0.50, "dz": -0.16, "span": (24.0, 68.0)}
+
+
+def collar_tube(rz):
+    cf = COLLAR_FRONT
+
+    def w_(a_rad):
+        da = abs(((math.degrees(a_rad) + 90.0 + 180.0) % 360.0) - 180.0)
+        return 1.0 - float(smooth(cf["span"][0], cf["span"][1], da))
+
+    def tube(a_rad):
+        w = w_(a_rad)
+        return 1.0 - cf["k_r"] * w, 1.0 - cf["k_z"] * w, cf["dz"] * rz * w
+    return tube
+
+
+class CollarTorus(Torus):
+    """a Torus whose tube varies round the ring: tube(a_rad) -> (r scale, rz scale, z offset), a = the local angle
+    atan2(y, x) in the frame's XY plane (the same parametrisation as torus_mesh)"""
+
+    def __init__(self, c, R, r, axes=None, rz=None, tube=None):
+        super().__init__(c, R, r, axes=axes, rz=rz)
+        self.tube = tube
+
+    def d(self, P):
+        p = self.local(P)
+        a = np.arctan2(p[:, 1], p[:, 0])
+        ks, kz, dz = self._tube_vec(a)
+        r_ = self.r * ks
+        q0 = np.hypot(p[:, 0], p[:, 1]) - self.R
+        q1 = (p[:, 2] - dz) * (r_ / (self.rz * kz))
+        return np.sqrt(q0 * q0 + q1 * q1) - r_
+
+    def _tube_vec(self, a):
+        # tabulated round the ring (0.25 deg), looked up per point: the scalar tube() on every voxel would be slow
+        if not hasattr(self, "_tab"):
+            g = np.radians(np.arange(-180.0, 180.25, 0.25))
+            self._tab = (g, np.array([self.tube(float(x)) for x in g]))
+        g, tab = self._tab
+        return (np.interp(a, g, tab[:, 0]), np.interp(a, g, tab[:, 1]), np.interp(a, g, tab[:, 2]))
 
 
 def open_hw(F, z):
@@ -1562,7 +1623,9 @@ def body_parts(F, aub, info, part):
         # dome at the sides; then the iron GORGET across the chest under it and the sand MANTLE
         cax = sdf.frame((0, -0.22, 0.976))
         cc, cR, cr, crz = (0, 0.030, 1.372), 0.222, 0.074, 0.066
-        v, f = torus_mesh(cc, cax, cR, cr, nu=18, nv=5, rz=crz, ry_scale=1.04)
+        # (r7) its FRONT under the opening flattened (COLLAR_FRONT): a lower, slimmer roll there, the felt sill above it
+        ctube = collar_tube(crz)
+        v, f = torus_mesh(cc, cax, cR, cr, nu=18, nv=5, rz=crz, ry_scale=1.04, tube=ctube)
         col = Sculpt("collar")
         cax_ = np.asarray(cax, dtype=np.float64)
 
@@ -1574,7 +1637,7 @@ def body_parts(F, aub, info, part):
             rho = np.hypot(q[:, 0], q[:, 1])
             v_ = np.arctan2(q[:, 2] / crz, rho - cR)
             return -0.0065 * smooth(0.35, 0.95, np.cos(u_ * 13.0 + v_)) + 0.0015 * NOISE(P, 9.0)
-        col.add(Torus(cc, cR, cr, axes=cax, rz=crz).displaced(twist, 0.008), k=0.0)
+        col.add(CollarTorus(cc, cR, cr, axes=cax, rz=crz, tube=ctube).displaced(twist, 0.008), k=0.0)
         part("collar", col, "cloth", ("zblend", "chest", "neck", 1.30, 1.44), 0, 1.0, 1.1,
              low=lambda D, v=v, f=f: (v, f))
 
@@ -2526,8 +2589,15 @@ def _pauldron_aubade(spec, p, g, col, side):
     col = col * (1.0 + (0.22 - 0.10 * cap) * (1 - smooth(0.004, 0.020, edge)))[:, None]
     col = col * (1.0 - 0.11 * cap * smooth(0.35, 0.90, g[:, 2]))[:, None]
     # (r7, verify wave-b: the pale stepped cap inside the inlay's U read as teeth in an open mouth from the side) the cap
-    # plate a weathered chalk ~12 L* darker (linear x 0.62), its worn edges with it: the lames below stay the light chalk
-    col = col * (1.0 - CAP_DARK * cap)[:, None]
+    # plate (and its two points) a weathered chalk ~12 L* darker, its worn edges with it: the lames below stay the light
+    # chalk. Found by the cap's OUTER sheet and its theta span (the nearest-mid-surface test above gives the cap's outer
+    # face to the first lame, whose mid surface lies within 1 mm of it)
+    rc_ = np.asarray(plates[0][0], float)
+    sc_ = q / rc_
+    rho_c = np.linalg.norm(sc_, axis=1) + 1e-9
+    th_c = np.degrees(np.arccos(np.clip(sc_[:, 2] / rho_c, -1, 1)))
+    capm = (((rho_c > 0.94) & (rho_c < 1.03) & (th_c < plates[0][1][1] + 1.0)) | ((rho_c >= 1.03) & (th_c < 50.0)))
+    col = col * (1.0 - CAP_DARK * capm)[:, None]
     col = col * (1.0 - 0.38 * tuck)[:, None]
     col = col * (1.0 - 0.22 * groove)[:, None]
     # the inlay's thin slate bezel (the light is the `pauldron_light_*` ribbon on the middle lame)
@@ -2768,6 +2838,74 @@ def ink_hollow(spec, P, N, col, with_mask=False):
         orm_ink = np.maximum(orm_ink, lip_)
     # the ORM's dark (occluded, matte) ink: less of it where the spill paints the glow (the glow takes the sky)
     return (out, orm_ink) if with_mask else out
+
+
+def floor_uv_mask(spec, obj, names, size, part_attr="vale_part", dil=2):
+    """(r7) the texels of the hood low's hollow FLOOR triangles (UV rows top-down, like `project.rasterize`), dilated
+    `dil` px. The decimated floor is a few long sliver triangles 3-4 texels wide in UV: the texel centres inside them
+    are few, so the renderer samples their neighbours (the felt of the sill's front face) across them, a pale streak
+    in the pocket under the core at 52 deg. These are painted ink after the gutter fill, whatever owns them."""
+    me = obj.data
+    me.calc_loop_triangles()
+    nt = len(me.loop_triangles)
+    if nt == 0 or "hood" not in names:
+        return None
+    k_hood = names.index("hood")
+    tl = np.empty(nt * 3, dtype=np.int64)
+    me.loop_triangles.foreach_get("loops", tl)
+    tl = tl.reshape(nt, 3)
+    tp = np.empty(nt, dtype=np.int64)
+    me.loop_triangles.foreach_get("polygon_index", tp)
+    pp = project.poly_parts(me, part_attr)
+    sel = pp[tp] == k_hood
+    if not sel.any():
+        return None
+    nl = len(me.loops)
+    uv = np.empty(nl * 2, dtype=np.float32)
+    me.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(nl, 2)
+    lv = np.empty(nl, dtype=np.int64)
+    me.loops.foreach_get("vertex_index", lv)
+    co = np.empty(len(me.vertices) * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3).astype(np.float64)
+    mw = np.array(obj.matrix_world)
+    if not np.allclose(mw, np.eye(4), atol=1e-6):
+        co = co @ mw[:3, :3].T + mw[:3, 3]
+    V = co[lv[tl[sel]]]
+    UV = uv[tl[sel]] * size
+    T = tomb_of(spec.F)
+    c = V.mean(1)
+    n = np.cross(V[:, 1] - V[:, 0], V[:, 2] - V[:, 0])
+    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
+    ok = ((np.abs(c[:, 0]) < T.w) & (c[:, 2] > T.zb - 0.006) & (c[:, 2] < T.zb + 0.012) & (np.abs(n[:, 2]) > 0.7))
+    ok &= hood_outer(spec.F).d(c) < -0.003
+    if not ok.any():
+        return None
+    mask = np.zeros((size, size), dtype=bool)
+    for (a, b, cc) in UV[ok]:
+        x0 = int(max(0, math.floor(min(a[0], b[0], cc[0]) - 1)))
+        x1 = int(min(size - 1, math.ceil(max(a[0], b[0], cc[0]) + 1)))
+        y0 = int(max(0, math.floor(min(a[1], b[1], cc[1]) - 1)))
+        y1 = int(min(size - 1, math.ceil(max(a[1], b[1], cc[1]) + 1)))
+        den = (b[1] - cc[1]) * (a[0] - cc[0]) + (cc[0] - b[0]) * (a[1] - cc[1])
+        if x1 < x0 or y1 < y0 or abs(den) < 1e-12:
+            continue
+        gx, gy = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
+        w0 = ((b[1] - cc[1]) * (gx - cc[0]) + (cc[0] - b[0]) * (gy - cc[1])) / den
+        w1 = ((cc[1] - a[1]) * (gx - cc[0]) + (a[0] - cc[0]) * (gy - cc[1])) / den
+        m = (w0 >= -0.02) & (w1 >= -0.02) & (1 - w0 - w1 >= -0.02)
+        # a sliver may hold no texel centre: its three corners and its centroid are marked too
+        iy, ix = np.nonzero(m)
+        rows = list(size - 1 - (iy + y0))
+        cols = list(ix + x0)
+        for q in (a, b, cc, (a + b + cc) / 3.0, (a + b) / 2.0, (b + cc) / 2.0, (a + cc) / 2.0):
+            rows.append(size - 1 - int(min(size - 1, max(0, math.floor(q[1])))))
+            cols.append(int(min(size - 1, max(0, math.floor(q[0])))))
+        mask[np.array(rows), np.array(cols)] = True
+    for _ in range(dil):
+        mask = (mask | np.roll(mask, 1, 0) | np.roll(mask, -1, 0) | np.roll(mask, 1, 1) | np.roll(mask, -1, 1))
+    return mask
 
 
 def lowpass3d(P, v, cell, keep=None, passes=1):
@@ -3201,6 +3339,12 @@ def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=N
         project.save_rgb(np.clip(project._srgb(np.clip(out, 0, 1)), 0, 1), os.path.join(dbg, f"{spec.ID}_paint.png"))
     iy, ix = project.nearest_index(part >= 0)
     out = out[iy, ix]
+    fm = floor_uv_mask(spec, obj, names, size, part_attr)
+    if fm is not None:
+        # (r7) the hollow floor's sliver triangles and the texels round them: ink (base) + the ORM's matte occluded ink
+        out[fm] = lin(spec.PALETTE.get("ink", "#15171B")).astype(np.float32)[None]
+        inkm[fm] = 1.0
+        log(f"brightwick: hollow floor ink on {int(fm.sum())} texels")
     log(f"brightwick: painted from the sculpt + the concept ({len(shares)} parts; concept share {shares})")
     spec.paint_shares = shares
     spec.ink_map = inkm

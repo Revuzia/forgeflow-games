@@ -3,44 +3,44 @@
   "fighter": "dunsom",
   "skin": false,
   "parts": {
-    "tris_hat": 4032,
+    "tris_hat": 4224,
     "tris_hood": 1500,
-    "tris_mask": 1900,
-    "tris_scarf": 1700,
-    "tris_coat_top": 1300,
-    "tris_belt": 450,
-    "tris_buckle": 160,
-    "tris_skirt": 2300,
+    "tris_mask": 1800,
+    "tris_scarf": 1500,
+    "tris_coat_top": 1200,
+    "tris_belt": 500,
+    "tris_buckle": 200,
+    "tris_skirt": 2150,
     "tris_under_robe": 500,
     "tris_trousers": 320,
     "tris_sleeve_L": 800,
     "tris_sleeve_R": 900,
-    "tris_hand_R": 950,
-    "tris_hand_L": 900,
+    "tris_hand_R": 1150,
+    "tris_hand_L": 1050,
     "tris_boots": 950,
     "tris_toecaps": 220,
-    "tris_crook_shaft": 1050,
+    "tris_crook_shaft": 1500,
     "tris_crook_grip": 360,
     "tris_crook_ferrule": 160,
     "tris_lantern_ring": 140,
-    "tris_lantern_frame": 1350,
-    "tris_lantern_glass": 220,
-    "tris_lantern_core": 420,
-    "validate_dunsom": "20218->20215"
+    "tris_lantern_frame": 1400,
+    "tris_lantern_glass": 260,
+    "tris_lantern_core": 600,
+    "validate_dunsom": "20736->20728"
   },
-  "uv_coverage": 0.622,
+  "uv_coverage": 0.604,
   "bake": {
-    "base": 11.12,
-    "rough_metal": 14.05,
-    "normal": 7.69,
-    "ao": 13.87,
-    "normal_fixed_px": 16829,
-    "projection": 177.94,
-    "pack_save": 178.74,
-    "total": 226.22
+    "base": 7.44,
+    "rough_metal": 5.41,
+    "normal": 3.66,
+    "ao": 4.53,
+    "normal_fixed_px": 100970,
+    "projection": 81.39,
+    "pack_save": 81.81,
+    "total": 103.54
   },
-  "tris": 22579,
-  "mesh_top_m": 2.182,
+  "tris": 23376,
+  "mesh_top_m": 2.06,
   "clips": {
     "idle": {
       "frames": 72,
@@ -142,25 +142,27 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2756748,
+  "glb_bytes_raw": 2892032,
   "optimize": {
     "ok": true,
-    "before": 2756748,
-    "after": 1144340
+    "before": 2892032,
+    "after": 1219544
   },
-  "glb_bytes": 1144340,
+  "glb_bytes": 1219544,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom.glb (1118 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_base 2048x2048 169K, dunsom_normal 512x512 42K, dunsom_orm 512x512 69K",
-      "  skinned meshes: dunsom(19185v), dunsom_accent(220v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom.glb (1191 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_base 2048x2048 172K, dunsom_normal 512x512 47K, dunsom_orm 512x512 75K",
+      "  skinned meshes: dunsom(20839v), dunsom_accent(332v)",
       "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:0.833s/18tr, attack2:0.833s/18tr, cast_a1:1.000s/21tr, cast_a2:1.167s/21tr, cast_a3:0.667s/20tr, cast_ult:1.500s/20tr, channel:1.333s/16tr, dash:0.500s/22tr, death:1.667s/22tr, idle:2.400s/19tr, idle_lobby:4.000s/21tr, recall:2.000s/18tr, run:0.667s/25tr, stunned:1.333s/20tr, taunt:1.500s/17tr, victory:2.000s/21tr",
-      "  tracks checked: 319; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 22579; bind-pose bounds (three units, Y up): 1.09 x 2.18 x 0.84; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
+      "  clips: attack1:0.833s/19tr, attack2:0.833s/19tr, cast_a1:1.000s/21tr, cast_a2:1.167s/21tr, cast_a3:0.667s/21tr, cast_ult:1.500s/21tr, channel:1.333s/16tr, dash:0.500s/22tr, death:1.667s/24tr, idle:2.400s/20tr, idle_lobby:4.000s/21tr, recall:2.000s/18tr, run:0.667s/25tr, stunned:1.333s/21tr, taunt:1.500s/18tr, victory:2.000s/22tr",
+      "  tracks checked: 329; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 23376; bind-pose bounds (three units, Y up): 1.18 x 2.06 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "  run: 20 f, planted samples 4, max foot-speed error 1.3%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (2)",
+      "  - GLB is 1191 KiB > budget 1172 KiB",
+      "  - art.json height 2.18 vs model top 2.06 m"
     ]
   },
   "renders": {
@@ -171,10 +173,10 @@
       "turntable": "art/renders/fighters/dunsom/turntable.png"
     },
     "seconds": {
-      "splash": 34.23,
-      "portrait": 15.8,
-      "icon": 2.83,
-      "turntable": 26.67
+      "splash": 19.21,
+      "portrait": 6.33,
+      "icon": 1.28,
+      "turntable": 7.91
     }
   },
   "three_qa": {
@@ -182,14 +184,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.737,
+        -0.825,
         0,
-        -0.368
+        -1.032
       ],
       [
-        0.356,
-        2.182,
-        0.471
+        0.355,
+        2.06,
+        1.399
       ]
     ],
     "facing": [
@@ -197,36 +199,36 @@
       1
     ],
     "headY": 1.683,
-    "accentPct": 1.91,
-    "accentTopHalfPct": 67.2,
-    "heightPx1080": 117,
+    "accentPct": 1.38,
+    "accentTopHalfPct": 88.1,
+    "heightPx1080": 110,
     "size": [
       2400,
       900
     ],
     "clips": 16,
     "out": "art/renders/fighters/dunsom/three_dunsom.png",
-    "seconds": 106.1,
+    "seconds": 23.7,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/dunsom/three_clips_dunsom.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.66,
-      "model": 130.08,
-      "lows_bind": 16.13,
-      "uv": 8.32,
-      "bake": 226.23,
-      "clips": 0.52,
-      "export": 5.31,
-      "optimize": 2.26,
-      "load_test": 0.46,
-      "render": 79.77,
-      "three_qa": 211.95,
-      "cache": 0.34
+      "rig": 0.0,
+      "materials": 0.46,
+      "model": 94.32,
+      "lows_bind": 11.17,
+      "uv": 13.29,
+      "bake": 103.55,
+      "clips": 0.38,
+      "export": 3.19,
+      "optimize": 1.57,
+      "load_test": 0.44,
+      "render": 34.93,
+      "three_qa": 118.8,
+      "cache": 0.81
     },
-    "total_s": 682.23
+    "total_s": 383.12
   },
   "run_ref_speed": 3.35,
   "height_m": 1.95

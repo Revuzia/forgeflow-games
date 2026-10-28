@@ -228,12 +228,12 @@ def compare(res: int = 900) -> None:
     concept = Image.open(ART.parent / "_design" / "concept" / "dunsom.webp").convert("RGB")
     H = res
     W = int(res * 0.75)
-    scale = 2.42 / H                     # m per px of the ortho renders (ortho_scale 2.42 over the height)
+    scale = 2.80 / H                     # m per px of the ortho renders (ortho_scale 2.80 over the height)
     tiles = []
     for side in ("front", "back"):
         info = meta[side]
         k = (info["ground"] - info["top"]) / dunsom.HEIGHT
-        zc, half_w, half_h = 1.13, W * scale / 2, H * scale / 2
+        zc, half_w, half_h = 1.32, W * scale / 2, H * scale / 2
         box = (info["cx"] - half_w * k, info["ground"] - (zc + half_h) * k, info["cx"] + half_w * k,
                info["ground"] - (zc - half_h) * k)
         tiles.append(concept.crop(tuple(int(round(v)) for v in box)).resize((W, H), Image.LANCZOS))

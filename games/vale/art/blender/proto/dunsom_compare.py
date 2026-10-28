@@ -1,5 +1,5 @@
 """Dunsom side-by-side (the marund_v2.py proof's views on the built fighter): the cached build
-(art/.cache/fighters/dunsom.blend, written by `art/build.py fighter dunsom`) at its rest pose, orthographic front and
+(art/.cache/fighters/dunsom.blend, written by `art/build.py fighter dunsom`) at idle frame 0 (fix pass 1; was the rest pose), orthographic front and
 back at the concept's scale, a three-quarter and the 52 degree game camera, rendered with the game material.
 
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python art/blender/proto/dunsom_compare.py -- [--res 900]
@@ -39,7 +39,18 @@ def main():
     sc = bpy.context.scene
     for o in sc.objects:
         if o.type == "ARMATURE":
-            o.data.pose_position = "REST"
+            # fix pass 1: the bind pose turns the crook down (art.height = the hat's crown): pose idle frame 0, the
+            # upright carry every clip starts from
+            o.data.pose_position = "POSE"
+            act = bpy.data.actions.get("idle")
+            if act is not None:
+                o.animation_data_create()
+                o.animation_data.action = act
+                if getattr(act, "slots", None) and len(act.slots):
+                    o.animation_data.action_slot = act.slots[0]
+                sc.frame_set(0)
+            else:
+                o.data.pose_position = "REST"
         if o.type == "MESH":
             o.hide_render = o.name not in ("dunsom", "dunsom_accent")
         if o.type in ("LIGHT", "CAMERA"):
@@ -89,10 +100,10 @@ def main():
         sc.camera = co
         if kind in ("front", "back"):
             cam.type = "ORTHO"
-            cam.ortho_scale = 2.42
+            cam.ortho_scale = 2.80                 # fix pass 1: the 2.56 m crook (was 2.42)
             cam.sensor_fit = "VERTICAL"
             y = -6.0 if kind == "front" else 6.0
-            co.location = (0, y, 1.13)
+            co.location = (0, y, 1.32)
             co.rotation_euler = (math.radians(90), 0, 0 if kind == "front" else math.radians(180))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
         elif kind in ("threeq", "threeq_l"):
