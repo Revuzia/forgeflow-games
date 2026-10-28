@@ -86,6 +86,23 @@ tree). `src/data/creatures.json` is imported nowhere; deleting it is the DOCS la
 UI hooks from this round (sim side done, nothing new required): new chronicle lines `bud` and `revolt.renounced`; relStats
 `prophet.journeys`, `prophet.awayHours`, `prophet.awayHeard`; free-text previews carry the §3.6 power names.
 
+**Fix round 2** (2026-10-28, the 23-finding review; LIVING §12, ledger `_harness/scratch/ledgers/fix-r2.md`): fixed and
+tested — survivable by default for every Disasters power (35 kinds × 4 seeds at the default wrath: at most 30 % of a
+30-person town dead, by a meteor; no town fallen except the volcano's, which walks away alive; comet, supervolcano,
+gravity-slip and moon-fall need wrath ≥ 0.85 or "apocalyptic" and are refused below it with the reason; god-sent heat is
+under the wrath law; rogue wave tamed); the plague test's far town (a spontaneous food-borne flux, not the plague; 12
+seeds); a prophet who moves takes their record along (no duplicate members, save/load identical after a revolt); "the
+new crops" no longer turns a storm or a swarm into a crop; a war band no longer fights or "conquers" its own polity's
+town; young daughter villages get aid and their share of the stores, and an early famine is not held against the
+mother; sacred herds are never slaughtered; "teach Aru to smelt iron" teaches iron-smelting instead of inventing a
+metal; disaster refugees "left their ruined homes"; "touch Hesh", "abandon Hesh", "no longer my prophet", "a sparing
+flood", "red rain on Aru" and "Which sigil?"; hunters no longer stand at the shore re-planning; trust tapers (7
+answered prayers in 8 days: 0.88, was 0.93); children's chores cost 3 % less at L1 (identical state). **Open:** hunting
+where game exists (re-tune gated on an 8-seed run), everyday prayer, throughput at 1 500 agents, ecology, late eras,
+`creatures.json` (lead / DOCS). The 8-seed acceptance re-run on this tree (`fix2/acc/`, rows from r6 marked "[r6 tree,
+not re-measured]") installs `_harness/scratch/living/acceptance.json` when it ends (`fix2/acc/FINISHED`); the gate is
+`fix2/check/check-r2.log`. UI hooks: powers query `minWrath` on gated disasters; the "Touch … how?" ask.
+
 ## How to run
 
 ```

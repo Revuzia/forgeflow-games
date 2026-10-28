@@ -910,6 +910,11 @@ zigzag, triangle, V, square or star). The ids go in `powers.json`; the UI team d
 | plague | none in its first 3 days; 26–30 of ~30 alive 10 days later · — · 0 of 4 | dead ≤ 25 % over its course |
 | any of these at wrath 1 or "apocalyptic" | — | today's lethality allowed (≥ 80 % dead possible) |
 
+- **Every Disasters power (fix round 2, §12.1 #12).** All 35 kinds at the law on 4 seeds: max dead 0.30 (meteor), every
+  kind but meteor / tornado / rift / firestorm 0 dead, no town fallen but the volcano's (walked away, all alive). The
+  planet-scale kinds (comet, supervolcano, gravity-slip, moon-fall) carry `minWrath` 0.85: below it the cast is refused
+  with the reason, and the powers query shows the requirement.
+
 - **Warnings and evacuation.** Volcano: a warning phase (rumbling, smoke, small quakes) of ≥ 12 game hours at wrath
   ≤ 0.5, 2 h at wrath 1, none if apocalyptic; tsunami: the sea draws back ≥ 30 min before the wave; meteor: a bright
   streak seen ≥ 20 min before (an omen). The threatened settlement gets an `evacuate` order: every member walks to the
@@ -2465,7 +2470,7 @@ Each confirmed finding, what changed, and how it was verified (before → after 
   and gunpowder → first orbit were not measured. Open.
 - **24** ecology (`fix/perf/out/ecology-a.log`, 3 years, no people): open grassland 1.1–1.5 % (seed 1234) and 1.8–2.4 %
   (seed 1) against ≥ 3 %; the dominant-tree mix drifts up to 0.68 / 0.61 against ≤ 0.15 — both still missed (seeds
-  20261008 / 7 in `ecology-b.log` when its slot comes).
+  20261008 / 7 in `ecology-b.log`, finished 09:13: grassland [1, 1, 1, 1.2] % and [1.5, 1.5, 1.7, 3.2] % — missed, §12.3).
 - **16 (refinement)**: on the default-seed trace a prophet on a journey still walks home once mid-stay (a `gather` task
   at h54, `fix/journey.log`): 45–48 % of journey hours are away from the target town.
 - The 8-seed acceptance re-run on the final tree (hunting switch-off and the dusk bell included) was launched at 08:57
@@ -2474,3 +2479,113 @@ Each confirmed finding, what changed, and how it was verified (before → after 
   `_harness/scratch/living/acceptance.json` (the r6 table kept as `acceptance.r6.json`), then runs `npm run check` once
   (`fix/check-final.log`; `fix/acc2/FINAL.done`). Until it lands, §10.4's rows are the r6 tree's; the round's own god
   sessions (before the switch-off) gave quiet-town prayer 0.008 and post-tornado 0.066 (§11.1 #18).
+
+## 12. Fix round 2 (2026-10-28; the 23-finding review; ledger `_harness/scratch/ledgers/fix-r2.md`, probes and logs in `_harness/scratch/living/fix2/`)
+Finding numbers are the review's (0–22). Every entry names its proof; the logs are under `fix2/` unless a path says otherwise.
+
+### 12.1 Fixed
+- **13 (gate red: plague test)** — the far town's "epidemic" was a spontaneous bloody flux from rotten grain (from: null,
+  day 14.9), not the plague. 12 world seeds (`fix2/plague/seeds.ts`): the old any-epidemic assertion held 3/12 before
+  round 1 and 2/12 now; plague in the far town 0/12 and 0/12, plague reached the near town 12/12 both. The assertion is
+  narrowed to the plague (no case, `epidemic !== plague + 1`) and every outbreak seen there must be spontaneous
+  (`from === null`) — numbers in the test comment. `logs/plague-test.log` 2/2.
+- **12 (critical: survivable by default)** — `DisasterDef.minWrath` (disasters.json 0.85 on comet, supervolcano,
+  gravity-slip, moon-fall): below it `disaster.spawn` refuses with the reason ("... needs the wrath at huge (0.85) or
+  more — raise the wrath slider, or call it down \"apocalyptic\"") and random disasters skip it; god-sent thermal
+  weather (heat wave, cold snap, blizzard, hail) is painted at `harmScale().L`; at wrath < 1 a drowned or lava-struck
+  heart moves (`moveHeart`, chronicle `heart.ruin`) before a town is abandoned; the sinkhole opens beside the aimed
+  point (1.2 cells, radius × R(w) × L(w)); the rift line is offset (R·0.12·R(w) + 60 m); rogue-wave front harm 0.3 → 0.08,
+  damage 0.4 → 0.15. Every Disasters power (35 kinds × 4 seeds, the cached 30-person bronze town, 3 days, at the law;
+  `fix2/leth/all-<seed>.log`, `redo-<seed>.log` for the rows re-measured on the final code): max dead 0.30 (meteor
+  6–9/30); tornado 2–5/30 on 3 seeds, rift 3/30 on one (20 → 14 standing), firestorm 1/30 on one; every other kind 0; the 4 gated kinds refused on all seeds; the volcano
+  town walks away before the eruption, all alive (2 of 4 seeds leave the old site "fallen" and refound); rogue wave
+  0/30 (was 27/30 on seed 1; 20/30 at wrath 1); sinkhole and rift never fell a town. Test `disasters.test.ts`
+  'survivable by default' (meteor, rift, sinkhole, heat wave, tornado at the law: dead ≤ 35 %, never fallen) and the
+  gated-kind test (refused at the law, cast at minWrath).
+- **0 (prophet who moves)** — `prophets.ts followHome` (hourly, daily, on acts) keeps `ProphetState.settlement` equal
+  to the agent's town and clears journey / persecution / silence; a newcomer to a town that already has a prophet goes
+  to the end of the list (the resident stays the voice); `exile()` acts only on a member of `from`; `revolt()` takes
+  the prophet only if they live there; `PeopleState.addMember` ignores a slot already listed. No saved field.
+  `living-relationship` 'fix r2 #0' (move, one voice, no duplicate member, old-town revolt, member lists and hashes equal
+  after a load); `logs/stalerevolt.log` ('distinct 21/21', 'continuous vs loaded … same').
+- **1 ('the new crops')** — a crop/animal/ore introduction needs "a / an / some / another new X" and no harm or weather
+  act word in the clause: the six review sentences give swarm, flood, drought, rain, storm and wolves again
+  (`logs/words-r2-1.log`); "give Lune a new crop" still introduces. Rows in `living-content`.
+- **5 (a war outlives its conquest)** — `conquer()` is a no-op on the conqueror's own town and sends home every war or
+  raid band now between towns of one polity; a war band arriving at a town of its own polity goes home (`resolveArrival`,
+  the siege branch of `warDone`). `living-history` 'fix r2 #5'.
+- **14 (bud famine → kin wars)** — a daughter founded < 2 game years ago (`POLITICS.youngYears`) always gets aid when the
+  mother has food to spare, and a famine or neglect then is never held against the mother; `splitOff` gives the leavers
+  their head share of the stores (clamped 0.25–0.5, was a flat 0.25). `living-history` famine test (young daughter: aid
+  sent, no grievance; the established-daughter cases now set `founded` 3 years back). The 50-year re-check is in the
+  round-2 acceptance run (§12.4).
+- **18 (sacred herd slaughtered)** — `herding.ts`: no cull, lean-time or increase slaughter of a sacred species; over
+  the pen cap up to 2 head at a time go wild. `logs/sacredherd.log`: goats slaughtered 0/0/0/0 at days 6–24 (was
+  0/1/6/11), the herd 11.9 → 19.2, bounded. `living-relationship` 'fix r2 #18'.
+- **17 ('teach Aru to smelt iron')** — a teach phrase "(how) to <verb> <noun>" never names a material; it resolves to an
+  existing craft by verb and object (smelt iron → iron-smelting, herd goats → animal-husbandry, tan hides → tanning, cut
+  wood → woodcutting …); only a phrase with no match invents an idea ("teach Aru to sing to the moon"). `living-content`
+  placeholder test (8 phrases, registries unchanged), `logs/content-17.log`.
+- **7 (refugees of a disaster)** — `refugees(…, cause)`: after a disaster the chronicle says "{count} of {settlement} left
+  their ruined homes for their kin at {other}." (`diaspora.ruin`); the conquerors line stays for war. `living-history`
+  'ruined homes'.
+- **21 (free text for the new levers)** — "touch Hesh" asks "Lift, Rebuke or Soothe?"; "abandon / forsake Hesh",
+  "make Hesh stop being a prophet", "Hesh is no longer my prophet" → `prophet.abandon` (a negated Called is an ask, never
+  a call); "a sparing flood", "red rain on Aru", "lightning as a sign", "send a comet over Aru" → `god.omen`; "drop a comet
+  on Aru" / "send a flood to Aru" stay the disasters; "Which sigil?". `living-relationship` 'restyle words'.
+- **2 (hunters at the shore)** — `bestGame` skips game on a wet (> 0.6) or ocean cell; the tracking leg skips a leg
+  under 10 m and tries the way round the water on foot (findPath, maxExpand 2 500), else the hunter does other work.
+  `logs/huntthrash-fix3.log`: 5 isolated zero legs in ticks 4 300–9 000 (was 152 in a row, ~12.7 h). A first variant
+  (end or re-target the party when no leg moves them) failed `living-land` 'tracks game beyond the old reach' and was
+  dropped.
+- **8 / 19 (trust pins)** — `regard.ts riseTrust`: over trust's upper half a gain shrinks by ((1 − v)/0.5)^1.5 (faith
+  keeps `rise`); no saved state. `review-owner/loop.ts` 'answered', day 8: trust 0.878 / 0.874 (was 0.931 / 0.928),
+  loyalty 0.609 / 0.566 (was 0.61 / 0.572), ignored 0.002 (`fix2/trust/loop-{1,2}.log`); `living-integration` 'three
+  prophecies' (loyalty + 0.2, trust ≤ 0.9) passes.
+- **3 (perf)** — profiled (`fix2/perf`, the §6.1 world, 1 500 agents, L1, 2 days): the review's candidates are small
+  (`relDecide` 0.7 % self; the dusk bell not in the top 30). The one new hot spot was `gatherings.ts nearHome` (children's
+  chores), 19 → 333 ms self against the pre-round tree; it now tests distance before its (pure) predicates: 41 ms.
+  Same state proven: `fix2/perf/hasheq.ts`, old vs new nearHome, 4 checkpoints over 2 880 ticks, identical hashes.
+
+### 12.2 Seed-bound tests that moved
+- `plague.test.ts` (see 13 above: 12 seeds before and after, the plague itself never reached the far town on any).
+- `living-history` famine and neglect tests: they test an *established* daughter, so they now set `founded` 3 years
+  back; the kin fixture's daughter is founded at spawn (young) and gets the new young-daughter case.
+
+### 12.3 Not fixed here / left open
+- **6 / 16 hunting where game exists** — not re-tuned. `assignRoles` still deals hunters from the leftover food pool;
+  the folk hunt and the pack hunt stay off (`HUNT_TUNE`), because the last time they were on they cost 30–60 % of
+  births (§11.3). The plan stands: day-trip parties of able adults (an unmet hide demand, a yearly folk hunt, a pack that
+  took livestock answered by armed men only), switched on only after an 8-seed alone run that measures births, hunter
+  injuries, kills and livestock losses together against r6. The round-2 alone numbers land in `fix2/acc/extras-r2.log`.
+- **9 prayer as part of ordinary life** — not changed: quiet-town prayer 0.002–0.011 of time (≥ 0.02 asked, 0/8),
+  post-tornado d3 0.043–0.082 (≥ 0.08, 1/8) on the round-1 tree. A faith-scaled hearth devotion barely moves a town of
+  faith ≈ 0.13–0.19, and days-long post-disaster prayer is the failure noted at `relationship.ts:236` (34–48 % of the
+  days after a meteor, no rebuilding). Round-2 numbers: `fix2/acc/extras-r2.log`.
+- **20 child mortality / under-15 share** — reported per seed from the round-2 alone run (`extras-r2.log`); no tuning
+  (the share and growth targets meet only at their corners, §2.8).
+- **11 / 22** throughput at 1 500 agents stays short of §1.6 (§11.3; nearHome above is −3 % of L1 stepping); GC time grew
+  this round (379 → 1 064 ms in the L1 profile), not localized. Ecology (`fix/perf/out/ecology-b.log`, 09:13): open
+  grassland [1, 1, 1, 1.2] % (seed 20261008) and [1.5, 1.5, 1.7, 3.2] % (seed 7) against ≥ 3 % every year end — missed.
+  The seed-7 230-year census and gunpowder → first orbit are not measured.
+- **4 / 10** `src/data/creatures.json` (imported nowhere) still waits for the lead or DOCS to delete it; `content.ts`
+  keeps `creatures` in its known pack keys on purpose (a mod's creature list is ignored with a note instead of loading
+  into `extra`). Hook H6 unchanged.
+
+### 12.4 Acceptance re-run and gate (round 2)
+- Launched 12:40 UTC on the final tree: `fix2/acc/chain.sh` × 2 (god sessions 1–4 / 5–8; 50 years alone on 1, 3, 5, 7 /
+  2, 4, 1234, 20261008; the kin fixture r2 and its control r2c on seeds 1–8), every job through `slot.sh`. Its first jobs
+  were still waiting for a slot at 14:15 (slots held by other teams' shot runs). `fix2/acc/finish.sh` then runs
+  `fix2/acc/summarize-r2.ts`, installs `fix2/acc/acceptance-r2.json` as `_harness/scratch/living/acceptance.json` (round 1's
+  table kept as `acceptance.fix-r1.json`), and writes `extras-r2.log`; marker `fix2/acc/FINISHED`.
+- **Provenance (15).** Each row of the table carries `tree`. Re-measured on the round-2 tree: the world left alone, the
+  scripted god sessions, the kin fixture (when ≥ 6 seeds of r2 and r2c are there), and the new §3.7 every-Disasters-power
+  row. Copied from r6 and marked "[r6 tree, not re-measured]": the year-50 god sessions, fire without people, the PACE
+  daily probe, speciation, the god's plague and LAND's round-5 census.
+- Gate: `npm run check` through `slot.sh` → `fix2/check/check-r2.log` (`fix2/check/check-r2.done`). Focused runs on the
+  final code: disasters 6/6, freeform 7/7, living-content 24/24, living-history 19/19, living-relationship 25/25,
+  omnipotence 22/22, living-integration 20/20, living-land 28/28, society 4/4, ecology 3/3, ui-* 20/20; tsc clean;
+  detban 146 files clean.
+- UI hooks: the powers query carries `minWrath` on gated `disaster.spawn` powers (show "needs huge wrath" and the
+  refusal text); "Touch Hesh how? Lift, Rebuke or Soothe" is an ask the free-text box shows; H6 (`Snapshot.creatures`
+  optional, never sent) unchanged; the mod-loader's 'creatures' label (`ui/mods.ts`) belongs to the UI team.
