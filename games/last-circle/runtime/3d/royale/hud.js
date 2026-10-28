@@ -297,6 +297,15 @@ html.lc-touch .lc-circ-l { display: none; } html.lc-touch .lc-circ-s { display: 
 .lc-dp .hs { font-size: ${MINFS(10)}; font-weight: 900; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; background: #ffc83d; color: #1a1204; }
 .lc-dp.rc { color: #cfe4ff; }
 .lc-dp .lab-s { display: none; }
+/* R1 (hud_checks: the LC-81 recap row made the desktop banner 148 px tall at 1280x720 / 1366x768, bar 120 and <= 12 % of the
+   screen): desktop only (html:not(.lc-touch) - every touch layout keeps its own rules byte-identical) the rows are tighter -
+   20 / 24 px title, 16 px pill lines, 3 px gaps, a slimmer MATCH STATS pill - inside the same signed-off spot (the band's top, centred) */
+html:not(.lc-touch) .lc-death { gap: 3px; padding: 6px 16px 7px; }
+html:not(.lc-touch) .lc-dt, html:not(.lc-touch) .lc-dn { font-size: 20px; line-height: 24px; }
+html:not(.lc-touch) .lc-d1 { gap: 12px; }
+html:not(.lc-touch) .lc-d2 { gap: 3px 12px; }
+html:not(.lc-touch) .lc-dp { padding: 2px 12px; line-height: 16px; }
+html:not(.lc-touch) .lc-dbtn { padding: 3px 14px; }
 /* ---- post-match: summary + standings ---- */
 .lc-pm { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 18px; width: min(1000px, calc(100% - 32px)); max-height: calc(100% - 28px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 4px; }
 .lc-pm-sum { flex: 1 1 360px; max-width: 440px; padding: 28px 30px 24px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; overflow: hidden; }
@@ -5292,7 +5301,11 @@ function showDeath(W, killerId, weaponId) {
   // LC-81: row 3 - EVERY damage source of the last 10 s with its total (Apex's death recap; ours named the killer only). Sorted by damage;
   // at most three pills, the rest folded into "+N more".
   const rec = deathRecap(W, 10);
-  if (rec.length) {
+  // R1: a recap whose only source IS the killer repeats row 2 (killer, weapon, HEADSHOT): it is folded away, so the common death is
+  // three rows, not four (hud_checks: 148 px at 1280x720, bar 120; a 7-inch tablet's banner ran 16 px into the reticle). Any OTHER
+  // source in the last 10 s (a second shooter, the storm, a fall) still gets the row with every source.
+  const recRedundant = !!killer && rec.length === 1 && rec[0].src === killerId;
+  if (rec.length && !recRedundant) {
     const d3 = h("div", null, null, box); d3.className = "lc-d2"; d3.dataset.lc = "deathrecap";
     const p3 = h("div", null, null, d3); p3.className = "lc-dp rc";
     h("span", null, "LAST 10 S", p3).className = "lab";
@@ -5304,8 +5317,8 @@ function showDeath(W, killerId, weaponId) {
       if (r.heads) h("span", null, r.heads + " HS", p3).className = "hs";
     });
     if (rec.length > 3) h("span", null, "+" + (rec.length - 3) + " more", p3).className = "lab";
-    R._deathRecap = rec;
-  } else R._deathRecap = [];
+  }
+  R._deathRecap = rec;                               // the sources, shown or folded (a probe reads them either way)
 }
 /** LC-81: the damage the local player took in the last `win` seconds of the match clock, per source: [{ src, name, dmg, hits, heads, what }],
  *  biggest first. Sources: an attacker id (its name, its weapon if it used one), "storm", or "world" (a fall or a blast with no owner). */
