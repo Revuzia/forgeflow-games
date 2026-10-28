@@ -343,5 +343,51 @@
     "fix": "Add a per-fighter triangle check to the content build, or a simpler actor mesh for the shadow pass (shadow actors are 75\u201395k)."
    }
   ]
- }
+ },
+ "verify:wick face-fix": [
+  {
+   "kind": "brightwick",
+   "pass": true,
+   "score": 8.3,
+   "open": [
+    {
+     "severity": "minor",
+     "status": "new",
+     "what": "The Aubade pauldron is still a stepped cup from the side. It has a lighter lame rim round a darker cap, two small cap points inside, and the short accent arc on its bottom edge. The builder flagged this himself.\n- At yaw 90/270 (game camera x3) and at x6 in game, someone looking for a face could still see an 'open mouth' under the hood. The cap points are mid-grey now, no longer the pale fangs from before.\n- It is not blocker-class: there are no eye lamps above it any more, and at 1:1 and x2 in a walking wave from both seats it reads as a shoulder cup.\n- Evidence: ba_a_g3_side.png (tiles 2 and 4), igcrops/z_a_high_s0_t84_x6_ba.png, _cupbox.png.",
+     "fix": "Optional polish: make the cap read as filled rather than hollow. Either dome it convex above the lame rim, or drop the lame rim by about 8 L* so the rim and the cap stop forming a lit lip round a dark cavity. Shorten or drop the two cap points inside the cup."
+    },
+    {
+     "severity": "minor",
+     "status": "new",
+     "what": "The Serenade opening at the 52\u00b0 camera still foreshortens to a horizontal dark oval under the felt brow. That is inherent to a 19 x 23 cm arch seen at 52\u00b0, and the lower lip and roll are gone.\n- There is a tiny lit facet on the opening's inner side wall: at eye level yaw 0/315 (upper right) and at 52\u00b0 yaw \u221235 (2 px at about 2000 px/m). It is not visible in game and was there before the fix.\n- Evidence: ba_s_h52_open.png, ba_s_eye_open.png, _m35_lit.png.",
+     "fix": "Watch item only. If it is touched again, ink that wall facet the same way as the floor (ORM roughness 1, occlusion about 0.05)."
+    },
+    {
+     "severity": "minor",
+     "status": "out_of_lane",
+     "what": "npm run content:check now fails with 36 errors. All are missing fighter assets: ilsheta, sukri and tunlan model/portrait/splash/icon, plus the lisvel, ilsheta, sukri and tunlan skins. None involves a wick. The previous verify recorded content:check as OK.",
+     "fix": "Tell the fighter-art lane. This is not a wick issue."
+    }
+   ]
+  },
+  {
+   "kind": "greatwick",
+   "pass": false,
+   "score": 7.3,
+   "open": [
+    {
+     "severity": "major",
+     "status": "partly",
+     "what": "Task item 1, Serenade mantle top as one continuous tucked curve with no tooth.\nFIXED:\n- Round the back, the shoulders and the sides, the top edge is one smooth curve tucked under the hood/collar at every eye-level yaw.\n- r6's torn sawtooth left of the hood is gone (sheet rows 1/1b, r6 vs r8).\nOPEN at the V under the chin, at eye level:\n- The two notch-side columns still form teeth: pointed pale lapel tips reach up to the rim's lower corners.\n- A thin pale lit sliver stands inside the dark opening at its lower front corner. It shows at 3/4-r, side-r and side views in idle t0.0/0.3/0.5 and run t0.25/0.75.\n- Cause: the builder's own mantlepose REST line reports 12 tuck-row samples (side 34\u00b0, row 0, both sides) outside the felt inside the opening, up to 1.25 cm deep. The per-clip gate exempts them (`~open_rest`).\n- In attack1 t0.25\u20130.33 (the same in r7) the lapels hang as two pointed pale slabs under the rim, and at 3/4-r the left lapel flares out as a separate pointed tab.\n- None of this is visible at the game camera at x1; at x3 it is only a 1 px pale dot at each lower corner of the opening.",
+     "fix": "In serenade_parts (art/blender/units/wick_greatwick.py), push the tuck row on the notch columns (side about 34\u00b0, both sides) fully into the felt: at least 0.6 cm inside, with nothing in the opening's prism. Alternatively, stop the turned facing / tuck on those two columns below the rim.\nRound off the lapels' top inner corners and drop them 1\u20132 cm below the rim, so no point reaches it.\nIn proto/wick_greatwick_mantlepose.py, remove the `~open_rest` exemption so the gate fails on rest intrusions; the tuck is now head-rigid, so a rest intrusion shows on every frame.\nGrade the left lapel's hem/70% rows so it does not flare out at attack1 t0.25\u20130.33.\nRe-check idle 0/0.3/0.5 and run at eye level, neck q34r and side-r.\nEvidence: sheets/cmp_idle_neck_r7_r8_x2.png, sheets/idle_run_neck_cycle.png, sheets/z_idle_sider_x3.png, clips/s/greatwick_serenade_attack1_0.25_neck_q34r.png, logs/mantlepose.log"
+    },
+    {
+     "severity": "major",
+     "status": "regression",
+     "what": "Idle eye-level read is worse than r7.\n- Same camera and same idle t0.3: r7 shows a clean dark opening with the lapels below it.\n- r8 shows the pale sliver inside the opening's lower front corner and the lapel tips rising to the rim (side, side-r, 3/4, 3/4-r and front).\n- The rest positions are identical, so this is r8's 100% head binding of the tuck/top rows: the rest-pose intrusion above now rides with the hood on every frame of idle and run. Under r7's torso binding, idle motion hid it except near t0.\n- Not blocker-class: it is a single small shard, with no eye pair and no mouth shape, and it is not visible at game scale.",
+     "fix": "The same fix as item 1: clear the 34\u00b0 tuck columns out of the opening at rest and gate rest intrusions. Keep the r8 head binding, since it is what fixed the attack1/death tabs.\nEvidence: sheets/cmp_idle_neck_r7_r8_x2.png (left r7 | right r8), close/r7/*_neck_*.png vs close/s/*_neck_*.png"
+    }
+   ]
+  }
+ ]
 }

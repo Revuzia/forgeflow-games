@@ -487,17 +487,23 @@ SKULL = {"c": (0.0, 0.014, 1.668), "r": (0.074, 0.096, 0.122)}
 # (fix pass 4, review: the band stood ~7 cm off the narrow skull at the temples, a dark void between the visor and the
 # helm in every three-quarter view: the two lens ellipsoids are narrower and closer, the band hugs the temples ~1 cm off)
 LENS = {"d": 0.018, "c": (0.0, 0.004, 1.620), "r": (0.080, 0.150, 0.260), "thick": 0.010}
-VISOR_PROF = np.array([(-0.200, 1.700), (-0.120, 1.708), (-0.080, 1.718), (-0.040, 1.734), (0.000, 1.750),
-                       (0.024, 1.760), (0.044, 1.768), (0.040, 1.740), (0.024, 1.706), (0.002, 1.674),
-                       (-0.028, 1.646), (-0.056, 1.616), (-0.076, 1.580), (-0.090, 1.536), (-0.100, 1.498),
-                       (-0.108, 1.470), (-0.200, 1.470)])
-# (fix pass 5) the band's lower edge runs down from the temples beside the jaw into the beak, a point 2 cm under the
-# chin and 5 cm in front of it: from the front the mask's jaw shows either side of the narrow beak
-VISOR_FRONT = np.array([(-0.140, 1.820), (-0.084, 1.800), (-0.068, 1.758), (-0.050, 1.730), (-0.028, 1.713),
-                        (0.000, 1.706), (0.028, 1.713), (0.050, 1.730), (0.068, 1.758), (0.084, 1.800), (0.140, 1.820),
-                        (0.140, 1.640), (0.076, 1.632), (0.058, 1.612), (0.044, 1.584), (0.032, 1.556),
-                        (0.020, 1.528), (0.009, 1.503), (0.0, 1.488), (-0.009, 1.503), (-0.020, 1.528),
-                        (-0.032, 1.556), (-0.044, 1.584), (-0.058, 1.612), (-0.076, 1.632), (-0.140, 1.640)])
+# (POLISH, review 3: the visor read as one big opaque shield from the brow to below the chin, the mask never showed):
+# the concept's SICKLE, side by side with the painting: a band across the eyes that sweeps UP and back to a horn over
+# each temple (its back end at crown height, the ring boss inside it), and only at the front, the narrow beak (the
+# hook) hanging on down past the chin. Under the band the slim carved mask shows at the cheeks, the mouth line and
+# the jaw either side of the beak.
+VISOR_PROF = np.array([(-0.200, 1.704), (-0.130, 1.708), (-0.090, 1.720), (-0.050, 1.738), (-0.015, 1.758),
+                       (0.020, 1.778), (0.046, 1.798), (0.052, 1.786), (0.042, 1.752), (0.026, 1.718),
+                       (0.004, 1.692), (-0.024, 1.670), (-0.056, 1.652), (-0.084, 1.640), (-0.100, 1.614),
+                       (-0.110, 1.574), (-0.117, 1.532), (-0.122, 1.496), (-0.125, 1.474), (-0.200, 1.468)])
+# the front outline: the band's top edge over the brow, its lower edge level under the eyes out to the beak, then the
+# beak itself ~5 cm wide at the cheekbones narrowing to its point 2 cm under the chin
+VISOR_FRONT = np.array([(-0.140, 1.820), (-0.084, 1.800), (-0.068, 1.762), (-0.050, 1.736), (-0.028, 1.720),
+                        (0.000, 1.714), (0.028, 1.720), (0.050, 1.736), (0.068, 1.762), (0.084, 1.800), (0.140, 1.820),
+                        (0.140, 1.644), (0.070, 1.642), (0.050, 1.636), (0.037, 1.618), (0.029, 1.590),
+                        (0.022, 1.556), (0.014, 1.522), (0.006, 1.500), (0.0, 1.490), (-0.006, 1.500), (-0.014, 1.522),
+                        (-0.022, 1.556), (-0.029, 1.590), (-0.037, 1.618), (-0.050, 1.636), (-0.070, 1.642),
+                        (-0.140, 1.644)])
 
 
 def lens_y(x, z, inset=0.0):
@@ -538,14 +544,65 @@ def _visor_top_edge(xs):
 
 
 # the accent ridge rides the visor's top edge (on the glass's outer face) from horn to horn over the brow
-# (fix pass 5: the brief's ridge fin, ~30 cm of it: the whole top edge, not only the 10 cm over the brow)
-_RX = np.linspace(-0.074, 0.074, 9)
-RIDGE_PTS = []
-RIDGE_R = []
-for _pt, _r in zip(_visor_top_edge(_RX), (0.0080, 0.0100, 0.0120, 0.0134, 0.0140, 0.0134, 0.0120, 0.0100, 0.0080)):
-    if _pt is not None:
-        RIDGE_PTS.append((_pt[0], _pt[1] + 0.001, _pt[2] - 0.003))
-        RIDGE_R.append(_r)
+# (POLISH, review 3: the thin ridge tube plus the seams, inlays and keel line read as glowing glyphs and fell under
+# 1 % from the back and the sides): ONE clean shape, the brief's ridge FIN (~30 x 4-6 cm): a glass blade standing on
+# the visor's whole top edge, leaning back, tallest over the brow where the crest springs from it and rising again
+# into the horns over the temples; nothing else on the helm glows (the crest is chalk and pale glass)
+_RX = np.linspace(-0.074, 0.074, 41)
+RIDGE_PTS = [p for p in _visor_top_edge(_RX) if p is not None]
+FIN_H = (0.016, 0.050, 0.030)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
+FIN_LEAN = 0.62                    # the fin leans back: its rise direction (0, FIN_LEAN, 1)
+FIN_T = 0.0075                     # thickness at its foot (it thins to ~40 % at the top edge)
+
+
+def fin_height(s):
+    """the ridge fin's height along the top edge, s 0 (his right horn) .. 1 (left horn)"""
+    s = np.asarray(s, dtype=np.float64)
+    c = np.abs(s - 0.5) * 2.0                       # 0 over the brow, 1 at the horn tips
+    mid = FIN_H[1] + (FIN_H[2] - FIN_H[1]) * _ss(c / 0.64)
+    return np.where(c < 0.64, mid, FIN_H[2] + (FIN_H[0] - FIN_H[2]) * _ss((c - 0.64) / 0.36))
+
+
+class FinMesh:
+    """the accent fin, built directly as the game mesh (clean edges): sections along the top-edge polyline, each a
+    5-point blade section (inner foot, outer foot, outer shoulder, the top edge, inner shoulder) rising along the
+    lean direction, the foot sunk 4 mm into the glass. mesh() mirrors Sculpt.mesh -> (verts, quads)."""
+    low = True
+
+    def __init__(self, name, pts):
+        self.name, self.pts = name, np.asarray(pts, dtype=np.float64)
+
+    def evaluate(self, voxel, bounds=None):
+        return np.ones((1, 1, 1)), np.zeros(3)
+
+    def mesh(self, voxel=None):
+        P = self.pts
+        n = len(P)
+        s = np.linspace(0.0, 1.0, n)
+        H = fin_height(s)
+        up = unit((0.0, FIN_LEAN, 1.0))
+        c0 = np.array([0.0, 0.010, 1.66])
+        V, Q = [], []
+        for i in range(n):
+            t = unit(P[min(i + 1, n - 1)] - P[max(i - 1, 0)])
+            o = unit(np.cross(t, up))
+            if o.dot(P[i] - c0) < 0:
+                o = -o
+            u = unit(up - t * up.dot(t))
+            base = P[i] - u * 0.004
+            h = H[i]
+            th = FIN_T * 0.5
+            for du, dv in ((-th, 0.0), (th, 0.0), (th * 0.75, h * 0.62), (th * 0.3, h), (-th * 0.3, h),
+                           (-th * 0.75, h * 0.62)):
+                V.append(base + o * du + u * dv)
+        for i in range(n - 1):
+            r0, r1 = 6 * i, 6 * (i + 1)
+            for j in range(6):
+                k = (j + 1) % 6
+                Q.append((r0 + j, r0 + k, r1 + k, r1 + j))
+        last = 6 * (n - 1)
+        Q.extend([(5, 2, 1, 0), (5, 4, 3, 2), (last + 0, last + 1, last + 2, last + 5), (last + 2, last + 3, last + 4, last + 5)])
+        return np.array(V), np.array(Q)
 
 
 def _visor_low_edge(xs):
@@ -890,15 +947,9 @@ def sculpts() -> list:
     visor.inter(Profile((0, 0, 0), F_mid, smooth_poly(VISOR_PROF, n=4, closed=True), 0.40, 0.003), k=0.003)
     visor.inter(Profile((0, 0, 0), F_front, VISOR_FRONT, 0.60, 0.003), k=0.003)
     part("visor", visor, "dawnglass", "bone:head", 900, 0.42)
-    # the brief's accent fin: a ridge along the visor's top edge, horn to horn, into the crest's root
-    ridge = Sculpt("visor_ridge")
-    ridge.add(Tube(RIDGE_PTS, RIDGE_R, k=0.004), k=0.0)
-    ridge.add(Tube(KEEL_PTS, KEEL_R, k=0.003), k=0.0)
-    ridge.add(Profile((0, 0, 0), F_mid, crest_inlay_poly(), INLAY_W, 0.003), k=0.0)
-    # ...and the seam where the crest roots on the dome (fix pass 5: the crest's glass is dawnglass again; the team
-    # colour reads from above along the crest's foot at any facing)
-    ridge.add(Profile((0, 0, 0), F_mid, crest_root_poly(), ROOT_W, 0.004), k=0.004)
-    part("visor_ridge", ridge, "accent", "bone:head", 300, 0.5)
+    # the brief's accent fin: one glass blade along the visor's top edge, horn to horn, the crest springing from it
+    # (POLISH: no keel line, crest inlay or root seam: they read as glowing glyphs)
+    part("visor_ridge", FinMesh("visor_ridge", RIDGE_PTS), "accent", "bone:head", 400)
     # the crest: the carved stone frame (outer band, the inner band on the dome, the ribs) round recessed glass panes
     crest = Sculpt("crest")
     crest.add(Profile((0, 0, 0), F_mid, CREST_POLY, CREST_W, 0.007), k=0.0)
@@ -914,8 +965,10 @@ def sculpts() -> list:
 
     # ── NECK + COWL ──────────────────────────────────────────────────────────────────────────────────────────
     neck = Sculpt("neck")
-    neck.add(FlatCapsule((0, 0.012, 1.41), (0, 0.000, 1.585), 0.050, 0.046, 0.040, 0.040, side=(1, 0, 0)).displaced(
-        folds(0.002, 60.0, axis=0), 0.002), k=0.0)
+    # (POLISH, review 3: a long pale beige column, the mannequin neck): the concept's slender dark carved neck, mostly
+    # wrapped by the cowl's high collar
+    neck.add(FlatCapsule((0, 0.010, 1.42), (0, 0.000, 1.585), 0.040, 0.038, 0.033, 0.032, side=(1, 0, 0)).displaced(
+        folds(0.0018, 60.0, axis=0), 0.0018), k=0.0)
     part("neck", neck, "wood", ("auto_only", "chest", "neck", "head"), 380, 0.7)
     cowl = Sculpt("cowl")
     # (fix pass 5, review: a lumpy white bib instead of the concept's draped light-blue scarf): a slimmer collar
@@ -1288,7 +1341,8 @@ def rig_extras(ctx) -> None:
         palm = J[f"palm.{s}"]
         gc = palm + np.array([0.0, 0.058, -0.004])
         rig.add_socket(ctx.info, f"x_knife_tip_{s.lower()}", f"prop.{s}", tuple(gc + tip), (0, 0.05, 0))
-    rig.add_socket(ctx.info, "x_visor_ridge", "head", tuple(np.asarray(RIDGE_PTS[4]) + (0, 0, 0.006)), (0, 0, 0.05))
+    mid = np.asarray(RIDGE_PTS[len(RIDGE_PTS) // 2]) + unit((0.0, FIN_LEAN, 1.0)) * FIN_H[1] * 0.5   # the fin's middle
+    rig.add_socket(ctx.info, "x_visor_ridge", "head", tuple(mid), (0, 0, 0.05))
 
 
 # ── binding: Rishal's wrap of the pipeline's part bind (common/ is shared, so it lives here) ────────────────────
@@ -1369,6 +1423,7 @@ PAINTED = ("knife_blade_R", "knife_blade_L", "knife_grip_R", "knife_grip_L", "kn
 PROC_HIDDEN = {"face"}          # parts whose texels the painting hides take procedural paint, not the nearest pixel
 FACE_COL = {"lit": "#E2E0DB", "mid": "#C8C7C3", "shade": "#9C9EA1", "cool": "#8B97A3", "ink": "#4A4644",
             "lip": "#EEECE7"}
+EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
 HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97A0AA", "ink": "#5E5650",
             "keel": "#ECE9E4"}
 # the warm carved plates of the helm's back and the nape (the painting's back of the head: warm taupe carved stone
@@ -1376,9 +1431,12 @@ HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97
 NAPE_COL = {"lit": "#C8BBAB", "mid": "#A99A8B", "shade": "#7C6F64", "ink": "#463B33", "lip": "#DACFC2"}
 # the visor (fix pass 5): ice-blue glass (the fix pass 4 lavender washed out pale lavender in the three QA light),
 # the mask seen through it; the pale cyan rim #C1E9F5 with a dark outline (the concept's)
-VISOR_COL = {"top": "#7FA2C8", "core": "#5E86AE", "low": "#567C9E", "streak": "#D6E8F4", "sheen": "#AECBE2",
-             "keel": "#C2DAEE", "rim": "#A8D4EA", "rim_hi": "#D2ECF7", "outline": "#3A4D66", "inner_line": "#557499",
-             "inner": "#40597A", "ring": "#C6DEF0", "ring_in": "#5F7EA6", "tint": "#6E99C0"}
+# (POLISH: sampled off the painting's visor, L* 67-85: a pale lavender-blue glass #96A3C2 / #ABBFE1 / #89A6CB, the
+# hook lighter and cooler #A9D0E8, the thick pale rim #C8E4F0 with a dark outline; fix pass 5's #6E99C0 tint read as
+# a dark blue plate in the hero renders and kept the head band under L* 70)
+VISOR_COL = {"top": "#A4B4DA", "core": "#8194C2", "low": "#A6CCE4", "streak": "#E6F1F8", "sheen": "#C6D7EE",
+             "keel": "#D2E4F2", "rim": "#C3DFEE", "rim_hi": "#E4F2F8", "outline": "#3E5170", "inner_line": "#7286B2",
+             "inner": "#5D6F98", "ring": "#CEDDF2", "ring_in": "#7C8FBC", "tint": "#97A8D0"}
 # the fins: smooth pale glass like the knives (fix pass 3: the lavender gradient and frayed edges read as feathers)
 FIN_COL = {"root": "#93B1C6", "mid": "#B2CADA", "tip": "#C6D8E4", "spine": "#7896AE", "edge": "#DDE9F0"}
 # the crest's stone frame (painted: the projection put the painting's sky and fins on the moved crest)
@@ -1682,6 +1740,20 @@ def face_paint(p, n):
         col = _mix(col, C["ink"][None], cut * 0.78)
         lip = _ss((w * 1.1 - np.abs(d - w * 2.2)) / 0.0011) * front * (sg < 0)
         col = _mix(col, C["lip"][None], lip * 0.35)
+    # (POLISH: the brief's ink almond recesses, behind the glass): two slanted almonds, the inner corners low, cut
+    # deep into the mask with a lit lower lid; seen through the visor they read as eyes in shadow, not an alien face
+    for sx in (-1.0, 1.0):
+        u = np.abs(p[:, 0]) - 0.027
+        v = p[:, 2] - (EYE_Z + 0.10 * (np.abs(p[:, 0]) - 0.027))
+        side = (np.sign(p[:, 0]) == sx)
+        q = np.sqrt((u / 0.0125) ** 2 + (v / 0.0050) ** 2)
+        a = _ss((1.0 - q) / 0.25) * front * side
+        col = _mix(col, _hexrgb(INK_EYE)[None], a * 0.92)
+        lid = _ss((0.0012 - np.abs(v + 0.0062)) / 0.0010) * _ss((0.0125 - np.abs(u)) / 0.004) * front * side
+        col = _mix(col, C["lip"][None], lid * 0.40)
+    # a short carved mouth line on the long chin (the concept's), shallow
+    d = np.hypot(np.maximum(np.abs(p[:, 0]) - 0.010, 0.0), p[:, 2] - (1.537 + 4.0 * p[:, 0] ** 2))
+    col = _mix(col, C["ink"][None], _ss((0.0014 - d) / 0.0009) * front * 0.55)
     return col
 
 
@@ -1759,25 +1831,24 @@ def nape_paint(p, n):
     """the nape plates: the warm carved stone of the helm's back, each lame lit at its top lip and shaded down to the
     inked seam under it, painterly strokes across"""
     C = {k: _hexrgb(h) for k, h in NAPE_COL.items()}
-    col = np.zeros((len(p), 3), dtype=np.float32)
-    best = np.full(len(p), 1e3)
-    for z1, z0, _ in NAPE:
-        z1y, z0y = nape_z(z1, p[:, 1]), nape_z(z0, p[:, 1])
-        zc = (z0y + z1y) / 2
-        f = np.clip((z1y - p[:, 2]) / (z1 - z0), 0, 1)                      # 0 at the lame's top, 1 at its bottom
-        tl = _ss(0.58 + 0.30 * n[:, 2] + 0.15 * n[:, 1] - 0.50 * f)
-        c = np.where((tl < 0.5)[:, None], _mix(C["shade"][None].repeat(len(p), 0), C["mid"][None], tl * 2),
-                     _mix(C["mid"][None].repeat(len(p), 0), C["lit"][None], tl * 2 - 1))
-        c = _mix(c, C["lip"][None], np.clip(1 - f / 0.16, 0, 1) * 0.45)
-        c = _mix(c, C["ink"][None], np.clip((f - 0.86) / 0.14, 0, 1) * 0.6 + np.clip(-n[:, 2] - 0.4, 0, 1) * 0.4)
-        dz = np.abs(p[:, 2] - zc)
-        sel = dz < best
-        col[sel] = c[sel]
-        best = np.minimum(best, dz)
-    return col * (1.0 + 0.06 * strokes(p, (1, 0, 0), 120.0, 30.0, 4.0))[:, None]
+    # (POLISH, review 3: three even stacked lames read as a grub / beehive): ONE nape guard plate under the helm's back
+    # plate, lit along its top lip and shaded down to its lower edge, the keel's ridge running down its middle
+    z1, z0 = NAPE[0][0], NAPE[-1][1]
+    z1y = nape_z(z1, p[:, 1])
+    f = np.clip((z1y - p[:, 2]) / (z1 - z0), 0, 1)                       # 0 at the plate's top, 1 at its bottom
+    tl = _ss(0.60 + 0.30 * n[:, 2] + 0.15 * n[:, 1] - 0.40 * f)
+    col = np.where((tl < 0.5)[:, None], _mix(C["shade"][None].repeat(len(p), 0), C["mid"][None], tl * 2),
+                   _mix(C["mid"][None].repeat(len(p), 0), C["lit"][None], tl * 2 - 1))
+    col = _mix(col, C["lip"][None], np.clip(1 - f / 0.10, 0, 1) * 0.50)
+    col = _mix(col, C["ink"][None], np.clip((f - 0.90) / 0.10, 0, 1) * 0.55 + np.clip(-n[:, 2] - 0.4, 0, 1) * 0.35)
+    kd = np.abs(p[:, 0])
+    col = _mix(col, C["lip"][None], _ss((0.004 - kd) / 0.003) * 0.35)
+    col = _mix(col, C["ink"][None], _ss(1 - np.abs(kd - 0.0110) / 0.0020) * 0.40)
+    return col * (1.0 + 0.05 * strokes(p, (0, 0, 1), 120.0, 30.0, 4.0))[:, None]
 
 
-NECK_COL = {"lit": "#ABA39A", "mid": "#8E867E", "shade": "#686059", "ink": "#4A433D"}
+# (POLISH: the painting's neck is a dark warm carved column, #644B40 / #482F26, never the pale beige of the mask)
+NECK_COL = {"lit": "#8C6E5C", "mid": "#674E41", "shade": "#45332A", "ink": "#271C17"}
 
 
 def neck_paint(p, n):
@@ -1857,13 +1928,16 @@ def visor_paint(p, n):
     nf[:, 0] = np.clip(p[:, 0] / 0.06, -1, 1) * 0.5
     nf = nf / np.linalg.norm(nf, axis=1, keepdims=True)
     behind = face_paint(pf, nf)
-    behind = _mix(behind, helm_paint(pf, nf), _ss((p[:, 2] - 1.690) / 0.02))
+    behind = _mix(behind, helm_paint(pf, nf), _ss((p[:, 2] - 1.700) / 0.02))
     side_w = _ss((np.abs(p[:, 0]) - 0.050) / 0.025)                # the side band: the dark gap to the skull behind
-    behind = _mix(behind, C["inner"][None] * 0.9, side_w * 0.75)
-    eye = _ss((p[:, 2] - 1.612) / 0.012) * _ss((1.700 - p[:, 2]) / 0.012)   # the deep band across the eyes
-    k = 0.56 + 0.24 * eye + 0.14 * side_w            # (the first try's 0.40 washed out pale grey in the QA light)
+    behind = _mix(behind, C["inner"][None] * 0.9, side_w * 0.55)
+    eye = _ss((p[:, 2] - 1.630) / 0.012) * _ss((1.700 - p[:, 2]) / 0.012)   # the deep band across the eyes
+    beak = _ss((1.625 - p[:, 2]) / 0.03)                            # the hook below the band: lighter, cooler glass
+    k = 0.62 + 0.16 * eye + 0.10 * side_w
     col = behind * (1 - k[:, None]) + C["tint"][None] * k[:, None]
-    col = _mix(col, C["core"][None], eye * 0.30)
+    col = _mix(col, C["core"][None], eye * 0.28)
+    col = _mix(col, C["top"][None], _ss((p[:, 2] - 1.700) / 0.03) * 0.5)
+    col = _mix(col, C["low"][None], beak * 0.55)
     band = 0.40 * p[:, 0] + (p[:, 2] - 1.668)
     col = _mix(col, C["sheen"][None], np.clip(1 - np.abs(band) / 0.022, 0, 1) ** 1.5 * np.clip(-n[:, 1] + 0.2, 0, 1) * 0.45)
     streak = np.clip(1 - np.abs(0.52 * p[:, 0] + (p[:, 2] - 1.690)) / 0.0040, 0, 1) * np.clip(-n[:, 1], 0, 1)
@@ -1873,7 +1947,7 @@ def visor_paint(p, n):
     keel = np.clip(1 - np.abs(p[:, 0]) / 0.0040, 0, 1) * np.clip((1.69 - p[:, 2]) / 0.03, 0, 1)
     col = _mix(col, C["keel"][None], keel * 0.55)
     side = np.clip((np.abs(n[:, 0]) - 0.55) / 0.25, 0, 1) * outer
-    dr = np.hypot(p[:, 1] - 0.000, p[:, 2] - 1.716)
+    dr = np.hypot(p[:, 1] - 0.012, p[:, 2] - 1.738)
     col = _mix(col, C["ring_in"][None], np.clip((0.0120 - dr) / 0.003, 0, 1) * side * 0.35)
     col = _mix(col, C["ring"][None], np.clip(1 - np.abs(dr - 0.0150) / 0.0026, 0, 1) * side * 0.9)
     col = _mix(col, C["outline"][None], np.clip(1 - np.abs(dr - 0.0182) / 0.0012, 0, 1) * side * 0.6)

@@ -31,7 +31,11 @@
 //              screen, before vs the brightest frame of the next 0.8 s (sim held, VFX on, UI hidden)
 //
 //   node _harness/value_probe.mjs [--maps rift,bridge,fray] [--tiers high,low] [--tag before] [--t 75]
-//                                 [--seed 7] [--shots 1] [--flash 1] [--masks 0]
+//                                 [--seed 7] [--shots 1] [--flash 1] [--masks 0] [--you burdam] [--fshots 0]
+//
+//   --you     pins seat 0's fighter (the bench's `you=`): measure a fighter the map's default seat roster leaves out
+//             (e.g. FRAY has no Burdam); other seats keep the default roster
+//   --fshots  1 also screenshots each fighter spot (value_<map>_<tier>_<tag>_f_<fighter>.png)
 //
 // Tiers: high = 1920×1080, low = 1280×720 (the camera sign-off tier). Report: _harness/_reports/value_probe.json
 // (runs keyed by --tag, merged with earlier tags). Shots: _harness/_shots/value_<map>_<tier>_<tag>_<spot>.png.
@@ -53,6 +57,8 @@ const SEED = Number(opt('seed', 7));
 const SHOTS = opt('shots', '1') === '1';
 const FLASH = opt('flash', '1') === '1';
 const MASKS = opt('masks', '0') === '1';
+const YOU = opt('you', '');
+const FSHOTS = opt('fshots', '0') === '1';
 const RES = { high: [1920, 1080], low: [1280, 720], medium: [1920, 1080], ultra: [1920, 1080] };
 
 // ── in-page probe (installed once per page as window.__VP__) ──────────────────────────────────────────
@@ -475,7 +481,7 @@ const report = existsSync(REPORT) ? JSON.parse(readFileSync(REPORT, 'utf8')) : {
 report.runs[TAG] ??= {};
 for (const map of MAPS) for (const tier of TIERS) {
   const [w, h] = RES[tier] ?? RES.high;
-  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${map}&q=${tier}&t=${T}&seed=${SEED}&dev=1&hud=0&manual=1`, { wait: false, hmr: false, width: w, height: h });
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${map}&q=${tier}&t=${T}&seed=${SEED}&dev=1&hud=0&manual=1${YOU ? `&you=${YOU}` : ''}`, { wait: false, hmr: false, width: w, height: h });
   try {
     await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 180000 });
     const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
@@ -498,7 +504,8 @@ for (const map of MAPS) for (const tier of TIERS) {
     const fspots = await V((v) => v.fighterSpots());
     for (const [k, at] of Object.entries(fspots)) {
       const m = await V((v, a) => v.measureAt(a.at[0], a.at[1], false), { at });
-      fres[k] = { at: at.map((x) => +x.toFixed(1)), hist: m.hist, figs: m.figs };
+      if (FSHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}`);
+      fres[k] ={ at: at.map((x) => +x.toFixed(1)), hist: m.hist, figs: m.figs };
     }
     let flash = null;
     if (FLASH) flash = await V((v) => v.flash('marund_domefall', 'marund_ult_domefall', 3.5));

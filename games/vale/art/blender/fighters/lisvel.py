@@ -555,7 +555,7 @@ def sculpts() -> list:
     body.add(Ellipsoid((0.0, 0.008, 1.00), (0.150, 0.105, 0.10)), k=0.06)
     for sx in (-1, 1):
         body.add(Sphere((sx * 0.180, 0.008, 1.455), 0.058), k=0.05)
-    part("body", body, "cloth2", "auto", 500)
+    part("body", body, "cloth2", "torso_ua", 500)
 
     # TABARD (heat weights above the belt): steel-blue chest panels with stiff shoulder wings
     tab = Sculpt("tabard")
@@ -569,7 +569,7 @@ def sculpts() -> list:
         tab.sub(Ellipsoid((sx * 0.215, 0.008, 1.405), (0.060, 0.080, 0.090)), k=0.012)
     tab.sub(Ellipsoid((0.0, 0.004, 1.57), (0.085, 0.075, 0.07)), k=0.01)                            # the neck hole
     tab.inter(HalfSpace((0, 0, 1.165), (0, 0, -1), 1.0), k=0.0)
-    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1150, uvw=1.3)
+    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "torso_ua", 1150, uvw=1.3)
 
     # TABARD SKIRT (analytic hips -> thighs): four panels from the belt to the hem, open at the front and back centre
     # and slit at the sides
@@ -598,12 +598,12 @@ def sculpts() -> list:
     belt = Sculpt("belt")
     belt.add(_Band((0.0, 0.002, 1.212), 0.150, 0.114, 0.008, 0.022, rr=0.004), k=0.0)
     belt.add(_Band((0.0, 0.004, 1.128), 0.158, 0.122, 0.007, 0.018, rr=0.004, slope=0.20, front_dip=0.012), k=0.0)
-    part("belt", belt, "leather", "auto", 520)
+    part("belt", belt, "leather", "torso", 520)
     bk = Sculpt("buckle")
     c = np.array([0.050, -0.122, 1.212])
     bk.add(Torus(c, 0.020, 0.0045, axes=np.stack([[1, 0, 0], [0, 0, 1], [0, -1, 0]]).astype(float), rz=0.0035), k=0.0)
     bk.add(RoundBox(c + (0.0, 0.002, 0.0), (0.004, 0.003, 0.020), 0.002), k=0.002)
-    part("buckle", bk, "ironstone", "auto", 160, vs=0.4)
+    part("buckle", bk, "ironstone", "torso", 160, vs=0.4)
     straps = Sculpt("straps")
     for sx in (-1, 1):
         # the painting's broad straps (5 cm), on its own paths (build 4: the painted straps beside the modelled ones
@@ -614,7 +614,7 @@ def sculpts() -> list:
         bk_ = [(sx * 0.110, 0.084, 1.52), (sx * 0.050, 0.112, 1.465), (0.0, 0.118, 1.415), (-sx * 0.10, 0.114, 1.30),
                (-sx * 0.13, 0.098, 1.235)]
         strap(straps, bk_, torso_normal, 0.025, 0.0045)
-    part("straps", straps, "leather", "auto", 420, vs=0.7)
+    part("straps", straps, "leather", "torso", 420, vs=0.7)
 
     # THE BROOCH on the cowl's edge at her right chest: a chalk ring round a glowing glass disc (accent)
     br, brg = Sculpt("brooch"), Sculpt("brooch_glass")
@@ -622,8 +622,8 @@ def sculpts() -> list:
     bn = _n([-0.15, -1.0, 0.45])
     br.add(Torus(bc, 0.0235, 0.0055, axes=sdf.frame(bn)), k=0.0)
     brg.add(Ellipsoid(bc - bn * 0.001, (0.0215, 0.0215, 0.0080), axes=sdf.frame(bn)), k=0.0)
-    part("brooch", br, "chalk", "auto", 200, vs=0.4)
-    part("brooch_glass", brg, "accent", "auto", 120, vs=0.4)
+    part("brooch", br, "chalk", "torso", 200, vs=0.4)
+    part("brooch_glass", brg, "accent", "torso", 120, vs=0.4)
 
     # SLEEVES (heat weights): loose white linen from the armholes to the bracers
     sl = Sculpt("sleeves")
@@ -1077,6 +1077,16 @@ def _install_bind() -> None:
         if part.bind == "arm":
             _assign(obj, ctx.info.armature, _arm_weights)
             return {}
+        if part.bind in ("torso", "torso_ua"):
+            # bone heat without the arms (build 9 splash: the right forearm lies on the belly at bind and heat gave
+            # the belt's and the strap's front to it: a dark strip followed the raised hand)
+            from common import mesh as _mesh
+            ex = ("root", "prop.L", "prop.R", "forearm.L", "forearm.R", "hand.L", "hand.R")
+            if part.bind == "torso":
+                ex = ex + ("upper_arm.L", "upper_arm.R")
+            res = _mesh.bind_auto(obj, ctx.info.armature, exclude=ex)
+            _mesh.limit_weights(obj)
+            return res
         return orig(ctx, part, obj, body_low)
     bind_part._lisvel = True
     pipeline.bind_part = bind_part

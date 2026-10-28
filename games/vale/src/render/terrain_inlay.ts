@@ -246,6 +246,109 @@ export function numeral(set: StrokeSet, c: V2, n: number, h: number, w: number, 
   }
 }
 
+/** the painted lane decals along one road (lane polish): hairline cracks across the flags and, sparser, the chalk a
+ *  walker leaves on a sundial's road (a sketched noon-mark, an hour tally, a shadow-arrow along the road, an hour
+ *  numeral, a ringed spot). Deterministic from the path and the seed. `crack` / `chalk` name the inlay channels the
+ *  surface reads them from (each ground style keeps its own free channels; chalk null = cracks only); `half` is the
+ *  lateral range either side of the path (m); keep() vets every point a mark touches (walls, plazas, the Seat, the
+ *  drop, the brush). Strokes are thin, so every mark lands in the fine atlas (crisp at 3 cm). */
+export interface LaneDecalOpts {
+  half: number; every: readonly [number, number]; seed: number;
+  crack: number; chalk: number | null; pCrack: number; pChalk: number;
+  keep: (x: number, y: number) => boolean;
+}
+export function laneDecals(set: StrokeSet, path: readonly V2[], o: LaneDecalOpts): void {
+  const rnd = mulberry(o.seed);
+  const pts = along(path, 0.5, 0);
+  if (pts.length < 2) return;
+  const okAll = (q: readonly V2[]): boolean => q.every((p) => o.keep(p[0], p[1]));
+  const line = (q: V2[], w0: number, w1: number, ch: number): void => {
+    for (let i = 1; i < q.length; i++) { const t = (i - 0.5) / (q.length - 1); set.seg(q[i - 1], q[i], w0 + (w1 - w0) * t, ch); }
+  };
+  // a hand-drawn chalk stroke: a little wobble, never ruled
+  const chalkLine = (a: V2, b: V2, w: number, ch: number): void => {
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (l < 0.18) { set.seg(a, b, w, ch); return; }
+    line(fracture(a, b, l * 0.035, 2, rnd), w, w * 0.8, ch);
+  };
+  let s = o.every[0] * (0.3 + rnd());
+  const total = pts[pts.length - 1].s;
+  while (s < total) {
+    const k = Math.min(pts.length - 1, Math.round(s / 0.5));
+    const { p, t } = pts[k];
+    s += o.every[0] + rnd() * (o.every[1] - o.every[0]);
+    const n: V2 = [-t[1], t[0]];
+    const v = (rnd() * 2 - 1) * o.half;
+    const c: V2 = [p[0] + n[0] * v, p[1] + n[1] * v];
+    const roll = rnd();
+    if (roll < o.pCrack) {
+      // a hairline crack across one or two flags, pinching out at both ends; often a short branch
+      const ang = rnd() * Math.PI, len = 0.7 + rnd() * 1.6;
+      const d: V2 = [Math.cos(ang), Math.sin(ang)];
+      const a: V2 = [c[0] - d[0] * len * 0.5, c[1] - d[1] * len * 0.5], b: V2 = [c[0] + d[0] * len * 0.5, c[1] + d[1] * len * 0.5];
+      const main = fracture(a, b, len * 0.11, 4, rnd);
+      if (!okAll(main)) continue;
+      for (let i = 1; i < main.length; i++) {
+        const tt = (i - 0.5) / (main.length - 1);
+        set.seg(main[i - 1], main[i], 0.018 + 0.026 * Math.pow(Math.sin(Math.PI * tt), 0.8), o.crack);
+      }
+      if (rnd() < 0.55) {
+        const m = main[1 + Math.floor(rnd() * (main.length - 2))];
+        const a2 = ang + (rnd() < 0.5 ? -1 : 1) * (0.45 + rnd() * 0.6), l2 = len * (0.25 + rnd() * 0.25);
+        const br = fracture(m, [m[0] + Math.cos(a2) * l2, m[1] + Math.sin(a2) * l2], l2 * 0.12, 3, rnd);
+        if (okAll(br)) line(br, 0.026, 0.014, o.crack);
+      }
+    } else if (roll < o.pCrack + o.pChalk && o.chalk !== null) {
+      const ch = o.chalk, w = 0.032 + rnd() * 0.01;
+      if (!okAll([c, [c[0] - 0.7, c[1]], [c[0] + 0.7, c[1]], [c[0], c[1] - 0.7], [c[0], c[1] + 0.7]])) continue;
+      const kind = Math.floor(rnd() * 5);
+      if (kind === 0) {
+        // a sketched noon-mark: a wobbly dial, its gnomon line cast toward an hour, hour dashes round it
+        const r = 0.17 + rnd() * 0.09, n0 = 13, gap = 1 + Math.floor(rnd() * 2);
+        const ring: V2[] = [];
+        const a0 = rnd() * Math.PI * 2;
+        for (let i = 0; i <= n0 - gap; i++) { const a = a0 + (i / n0) * Math.PI * 2, rr = r * (1 + (rnd() - 0.5) * 0.1); ring.push([c[0] + Math.cos(a) * rr, c[1] + Math.sin(a) * rr]); }
+        line(ring, w, w * 0.85, ch);
+        const g = rnd() * Math.PI * 2;
+        chalkLine(c, [c[0] + Math.cos(g) * r * 2.1, c[1] + Math.sin(g) * r * 2.1], w, ch);
+        for (let h = -2; h <= 2; h++) {
+          const a = g + h * (Math.PI / 6);
+          set.seg([c[0] + Math.cos(a) * r * 1.3, c[1] + Math.sin(a) * r * 1.3], [c[0] + Math.cos(a) * r * 1.55, c[1] + Math.sin(a) * r * 1.55], w * 0.85, ch);
+        }
+      } else if (kind === 1) {
+        // an hour tally: four or five strokes and the strike across them (upright for the fixed camera, screen-up −y)
+        const m = 3 + Math.floor(rnd() * 2), sp = 0.075, hh = 0.15, tilt = (rnd() - 0.5) * 0.25;
+        const x0 = c[0] - (sp * (m - 1)) / 2;
+        for (let i = 0; i < m; i++) { const x = x0 + i * sp + (rnd() - 0.5) * 0.015; chalkLine([x + tilt * hh, c[1] - hh], [x - tilt * hh, c[1] + hh], w, ch); }
+        chalkLine([x0 - 0.07, c[1] + hh * 0.55], [x0 + sp * (m - 1) + 0.07, c[1] - hh * 0.6], w, ch);
+      } else if (kind === 2) {
+        // a shadow-arrow along the road: which way the noon shadow fell (or which way the walker went)
+        const sg = rnd() < 0.5 ? -1 : 1, d: V2 = [t[0] * sg, t[1] * sg], L = 0.4 + rnd() * 0.2;
+        const tip: V2 = [c[0] + d[0] * L, c[1] + d[1] * L];
+        chalkLine([c[0] - d[0] * L, c[1] - d[1] * L], tip, w, ch);
+        for (const side of [-1, 1]) {
+          const a = Math.atan2(d[1], d[0]) + Math.PI + side * 0.5;
+          chalkLine(tip, [tip[0] + Math.cos(a) * 0.2, tip[1] + Math.sin(a) * 0.2], w, ch);
+        }
+        // the dial's foot: a short bar across the tail
+        set.seg([c[0] - d[0] * L - n[0] * 0.09, c[1] - d[1] * L - n[1] * 0.09], [c[0] - d[0] * L + n[0] * 0.09, c[1] - d[1] * L + n[1] * 0.09], w * 0.9, ch);
+      } else if (kind === 3) {
+        // an hour numeral, chalked where someone waited for it
+        numeral(set, c, 1 + Math.floor(rnd() * 12), 0.26 + rnd() * 0.06, w, ch);
+      } else {
+        // a ringed spot: a cross in an open ring (a meeting mark)
+        const r = 0.24 + rnd() * 0.08, n0 = 14, a0 = rnd() * Math.PI * 2;
+        const ring: V2[] = [];
+        for (let i = 0; i <= n0 - 2; i++) { const a = a0 + (i / n0) * Math.PI * 2, rr = r * (1 + (rnd() - 0.5) * 0.12); ring.push([c[0] + Math.cos(a) * rr, c[1] + Math.sin(a) * rr]); }
+        line(ring, w, w * 0.8, ch);
+        const q = r * 0.5;
+        chalkLine([c[0] - q, c[1] - q], [c[0] + q, c[1] + q], w, ch);
+        chalkLine([c[0] - q, c[1] + q], [c[0] + q, c[1] - q], w, ch);
+      }
+    }
+  }
+}
+
 /** a jagged fracture from a to b (midpoint displacement), returned as a polyline */
 export function fracture(a: V2, b: V2, rough: number, depth: number, rnd: () => number): V2[] {
   let pts: V2[] = [a, b];

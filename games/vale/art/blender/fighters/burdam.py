@@ -400,6 +400,53 @@ def blade_ht(u, v):
     return (0.0035 + 0.0085 * band + 0.0080 * body) * (0.55 + 0.45 * tip)
 
 
+# the right pauldron (polish pass): the cap's top outline (x, y, z) from the neck round the shoulder, a low crown on
+# top; per-point thickness (the front face is the deep carved one, 13 cm, the concept's roundel face); the roundel's
+# centre on that face and the face's outward normal. The lame: a second plate over the outer upper arm, tucked under
+# the cap's rim (its top outline; it hangs 7 cm and flares 2 cm out)
+PAULDRON_TOP = [(-0.170, -0.232, 1.776), (-0.340, -0.205, 1.742), (-0.500, -0.165, 1.680), (-0.552, 0.000, 1.668),
+                (-0.500, 0.172, 1.680), (-0.340, 0.214, 1.742), (-0.170, 0.214, 1.776), (-0.350, 0.000, 1.788)]
+PAULDRON_THICK = [0.120, 0.130, 0.120, 0.085, 0.085, 0.085, 0.085, None]
+PAULDRON_BEVEL = 0.028
+PAULDRON_ROUNDEL = (-0.405, -0.204, 1.655)
+PAULDRON_FACE_N = (-0.24, -0.97, 0.0)
+LAME_TOP = [(-0.462, -0.150, 1.612), (-0.585, -0.112, 1.590), (-0.628, 0.000, 1.584), (-0.585, 0.112, 1.590),
+            (-0.462, 0.150, 1.612)]
+
+
+def pauldron_pts(top, thick, bevel: float = PAULDRON_BEVEL) -> list:
+    """a chamfered stone plate's hull points: the top outline inset by `bevel`, the full outline `bevel` lower, and
+    each outline point `thick[i]` below its top (None: a top-only point, the crown)"""
+    top = np.asarray(top, dtype=np.float64)
+    ring = np.array([t is not None for t in thick])
+    c = top[ring].mean(axis=0)
+    out = []
+    for p, t in zip(top, thick):
+        d = p[:2] - c[:2]
+        L = max(float(np.linalg.norm(d)), 1e-6)
+        q = p.copy()
+        q[:2] = c[:2] + d * (max(L - bevel, 0.3 * L) / L)
+        out.append(q)
+        if t is None:
+            continue
+        out.append(p - np.array([0.0, 0.0, bevel * 0.85]))
+        out.append(p - np.array([0.0, 0.0, t]))
+    return out
+
+
+def lame_pts(top, drop: float = 0.072, flare: float = 0.022, bevel: float = 0.02) -> list:
+    """the lame's hull: its top outline (inset by the bevel toward the arm's axis), and the outline dropped `drop`
+    and pushed `flare` out from the upper arm's axis (x -0.43, y 0)"""
+    out = []
+    for p in np.asarray(top, dtype=np.float64):
+        r = np.array([p[0] + 0.43, p[1], 0.0])
+        r /= max(float(np.linalg.norm(r)), 1e-6)
+        out.append(p - r * bevel)
+        out.append(p - np.array([0.0, 0.0, bevel * 0.8]))
+        out.append(p + r * flare - np.array([0.0, 0.0, drop]))
+    return out
+
+
 # ── the sculpt ────────────────────────────────────────────────────────────────────────────────────
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris, space) in build order; space 'world' (rest
@@ -572,18 +619,31 @@ def sculpts() -> list:
     fs.inter(HalfSpace((-0.565, 0, 0), (1, 0, 0), 1.0), k=0.01)
     part("strap_plate", fs, "rust", "bone:forearm.R", 200)
 
-    # RIGHT SHOULDER: the carved front plate (on the clavicle) over a leather fringe (on the upper arm)
+    # RIGHT PAULDRON (polish pass; the review: the weapon-side shoulder was a 31 x 19 x 7 cm board on the front of the
+    # clavicle, a plank beside the huge left stack): the concept's layered pauldron that CAPS the shoulder. A broad
+    # stone cap over the whole shoulder top (52 x 49 cm, on the clavicle like the stack's top tiers; its inner edge
+    # tucks under the cowl), a deep carved front face with the concept's roundel, a second plate (the lame) over the
+    # outer upper arm under the cap's rim (it rides the arm like tiers 3-4), and the slatted fringe under that. The
+    # stack stays the bigger, stepped shoulder; this one is ONE domed plate: the asymmetry reads from above
     sp = Sculpt("shoulder_plate")
-    sp.add(RoundBox((-0.315, -0.215, 1.69), (0.155, 0.035, 0.095), 0.03, axes=rot(rx=-28, ry=-12)).displaced(
-        chips(0.009, 7.0), 0.009), k=0.0)
-    sp.add(RoundBox((-0.19, -0.255, 1.625), (0.085, 0.025, 0.038), 0.018, axes=rot(rx=-15, ry=6)), k=0.01)
-    part("shoulder_plate", sp, "rust", "bone:shoulder.R", 500)
+    sp.add(Hull(pauldron_pts(PAULDRON_TOP, PAULDRON_THICK), k=0.012).displaced(chips(0.007, 6.5), 0.007), k=0.0)
+    rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N)
+    rn = rn / np.linalg.norm(rn)
+    rax = sdf.frame(rn, (1.0, 0.0, 0.0))                              # rows: across, up the face, out of the face
+    sp.add(Torus(rc, 0.046, 0.0105, axes=rax), k=0.005)               # the carved roundel: a raised ring
+    sp.add(Sphere(rc - rn * 0.010, 0.022), k=0.006)                    # ... round a low boss
+    # the cap's inner (neck) half rides the clavicle, its outer rim the upper arm (the shared pauldron blend): a
+    # raised arm (the shoulder carry) lifts the rim with the sleeve under it instead of poking the sleeve through
+    part("shoulder_plate", sp, "rust", ("dblend", "shoulder.R", "upper_arm.R", (-0.38, 0.0, 1.70), (-1.0, 0.0, -0.25),
+                                        0.02, 0.17), 700)
     fr = Sculpt("fringe")
+    # the slatted fringe under the lame, round the front and outer side of the upper arm (rigid on it)
     for i in range(7):
-        a = -70.0 + i * 22.0                                           # around the arm's outer side, front -> back
-        x = -0.395 - 0.08 * math.cos(math.radians(a))
-        y = 0.13 * math.sin(math.radians(a))
-        fr.add(RoundBox((x, y, 1.578 - 0.006 * (i % 2)), (0.010, 0.021, 0.08), 0.006, axes=rot(rz=-a)), k=0.0)
+        a = -78.0 + i * 21.0                                           # around the arm's outer side, front -> back
+        x = -0.430 - 0.150 * math.cos(math.radians(a))
+        y = -0.005 + 0.150 * math.sin(math.radians(a))
+        fr.add(RoundBox((x, y, 1.462 - 0.010 * (i % 2)), (0.011, 0.024, 0.066), 0.006,
+                        axes=rot(ry=8.0, rz=-a)), k=0.0)
     part("fringe", fr, "leather", "bone:upper_arm.R", 300, 0.7)
 
     # LEFT PAULDRON: four stacked plates, rust-grey oxidised iron. Each plate is set diamond-wise on the
@@ -678,6 +738,11 @@ def sculpts() -> list:
         pom.sub(Plate(_diamond(cl.POMMEL_U, 0.0, cl.POMMEL_GEM[0] + 0.010, cl.POMMEL_GEM[1] + 0.010), 0.006,
                       r=0.002, dw=side * 0.034), k=0.003)
     part("pommel", pom, "ironstone", "bone:prop.R", 300, 0.6, "prop")
+    # the right pauldron's second plate (polish pass), after the cleaver so earlier part ids stay put (the proto
+    # tools read the cached build by part index): over the outer upper arm under the cap's rim, rigid on the arm
+    lame = Sculpt("pauldron_lame")
+    lame.add(Hull(lame_pts(LAME_TOP), k=0.010).displaced(chips(0.006, 7.0), 0.006), k=0.0)
+    part("pauldron_lame", lame, "rust", "bone:upper_arm.R", 320)
     return out
 
 
@@ -1981,7 +2046,8 @@ PAINT_LAYERS = (("burdam_head", ("mask",), CLEAVER), ("burdam_cleaver", CLEAVER,
 LIFT_ALPHA = 0.62
 LIFT_MAX = 2.6
 LIFT_SKIP = ("mask",) + CLEAVER
-GRADED = ("cowl", "trousers", "boots", "tier1", "tier2", "tier3", "tier4", "shoulder_plate", "vambrace", "strap_plate",
+GRADED = ("cowl", "trousers", "boots", "tier1", "tier2", "tier3", "tier4", "shoulder_plate", "pauldron_lame", "vambrace",
+          "strap_plate", "belt",
           "coat", "skirt", "tally")
 
 
@@ -2225,7 +2291,7 @@ def blade_rim(lin: np.ndarray, maps: dict, names: list) -> np.ndarray:
     return out
 
 
-RUST_PARTS = ("tier1", "tier2", "tier3", "tier4", "shoulder_plate", "vambrace", "strap_plate")
+RUST_PARTS = ("tier1", "tier2", "tier3", "tier4", "shoulder_plate", "pauldron_lame", "vambrace", "strap_plate")
 BLADE_GAIN = 0.62         # the blade's painted value two steps down (linear; L* ~80 -> ~70): the splash's sun and
                           # bloom lifted the flat to L* 86-97 (brief: never above 85); in game it still reads as light stone
 
@@ -2234,13 +2300,24 @@ BLADE_GAIN = 0.62         # the blade's painted value two steps down (linear; L*
 # see _tint). Brief section 3/5/6: the lacquered mask is the brightest value and only a pale ochre (not
 # gold), framed by the concept's dark felt cowl; the pauldrons are neutral grey stone stained only in the
 # recesses; the legs darken toward the feet.
-MASK_FACE = "#C6A55E"         # the lit face's mean: the concept's ochre-gold lacquer, L* ~68 (fix pass 5: #CDAE6C still read pale in three.js; pale ochre rendered
-                              # bone-white in game and the crown read as a bald skull from the top-down camera)
-CROWN_DARK = 0.20             # the crown's lacquer a step darker toward the back (the concept's back of the head)
-COWL_MEAN = "#6A5845"         # fix pass 8: the concept's WARM taupe felt (L* ~39, b* ~+14; the review: #4F4943 rendered a
-                              # cool charcoal, L* 36-40 / b* +3 in the splash, near black round the mask in the portrait)
-RUST_MEAN = "#8E8A84"         # neutral grey oxidised stone (L* ~57; lit from above it reads near 70)
-RUST_PART_MEAN = {"shoulder_plate": "#77736D"}    # the right shoulder's carved plate faces the key: a step down
+# VALUE LIFT (polish pass; the Wave B environment verify: with the shared character light Burdam was the darkest kit in
+# game, top-25 L* 57.5 / 59.8 on RIFT, only 20-22 over the lane, where the bar is >= 70 and >= 30 over it): the top of
+# the figure carries it in its own albedo, not a brighter rig. Seen from the game camera and from behind (RIFT's spot
+# walks him away from it) the top quarter is the cowl, the crown, both pauldrons and the blade, so those step up; the
+# coat, belt and legs stay dark (the brief's light-top / dark-feet gradient; the review: the coat, the belt, the cowl
+# and the plates sat in one taupe family)
+MASK_FACE = "#CDAF6E"         # the lit face's mean: the concept's ochre-gold lacquer, L* ~73 (polish: was #C6A55E, L* 69;
+                              # the review measured the splash mask L* 65 against the concept's 81; fix pass 5: pale ochre
+                              # rendered bone-white in game and the crown read as a bald skull from the top-down camera)
+CROWN_DARK = 0.10             # the crown's lacquer a step darker toward the back (polish: half the pass-5 0.20, the crown is
+                              # the top of the figure from the game camera)
+COWL_MEAN = "#9A8670"         # polish: the concept's warm taupe felt a step under the mask (L* ~57, b* ~+15; was #6A5845,
+                              # L* 39: from behind, the RIFT probe's facing, the cowl is most of the top quarter); fix pass 8:
+                              # #4F4943 rendered a cool charcoal, near black round the mask in the portrait
+COAT_TOP_GAIN = 1.30          # polish: the coat's shoulders and upper back a step lighter than its mean (linear gain at
+COAT_TOP_Z = (1.25, 1.58)     # z >= 1.58 m, none below 1.25: the bible's light top, the hem stays the concept's dark felt)
+BELT_MEAN = "#45311F"         # polish: the belt and its buckle strap the darkest leather on the torso (the review: belt L* 43
+                              # beside a coat L* 44; the concept's straps sit clearly darker than the felt)
 TROUSER_MEAN = "#504236"      # dark trousers (feet band); fix pass 8 a greyer taupe (the brief's `under` family), so the
                               # warm leather boots and their wraps separate from them (the review: one brown mass)
 BOOT_MEAN = "#3F2D20"         # dark waxed-leather boots (warm brown: cooler browns read mauve outdoors; fix pass 4
@@ -2633,13 +2710,17 @@ def tally_paint(c: np.ndarray, P: np.ndarray, N: np.ndarray) -> np.ndarray:
 # one above and along every concave crease; the projected painting rides on top as texture only (a third of its
 # value variation). Means a step under the brief's rust (L* 69): lit from above the tops land near the concept's
 # L* 56-62 and the mask stays the brightest value on the figure.
-STONE_TOP = "#9E9282"          # warm grey top faces (L* ~61, b* ~+9: three.js's sky light cools a neutral grey); fix pass 8
-STONE_CHALK = "#C3B6A2"        # a step lighter (the review: the stack's splash median L* 47 against the concept's 65)
-STONE_SIDE = "#776A5C"         # the 8 cm side bands (L* ~45); chalked convex bevels (L* ~74)
+STONE_TOP = "#B2A592"          # warm grey top faces (L* ~68; polish: was #9E9282, L* 61, the value lift; b* ~+11: three.js's
+                               # sky light cools a neutral grey); fix pass 8 a step lighter (the stack's splash median L* 47
+                               # against the concept's 65)
+STONE_CHALK = "#CEC2AE"        # chalked convex bevels (L* ~79; was #C3B6A2, 75)
+STONE_SIDE = "#8A7C6C"         # the 8 cm side bands (L* ~53; was #776A5C, 46)
 STONE_RECESS = "#3E2D21"       # rust-brown recesses and creases (L* ~20)
-STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78, "shoulder_plate": 0.88}   # forearm plates a step down: the
-                               # vambrace never merges with the pauldron into one pale sleeve
+STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78}   # forearm plates a step down: the vambrace never merges with the
+                               # pauldron into one pale sleeve (polish: the right pauldron is the stack's stone now, no step)
 STONE_TIERS = ("tier1", "tier2", "tier3", "tier4")
+STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame"))   # plates that tuck under each other (recess paint)
+LEDGER_ROWS = 6                # the cap's top: the brief's ledger relief, one carved row per day (painted grooves)
 
 
 def _nblur(arr: np.ndarray, w: np.ndarray, sigma: float) -> np.ndarray:
@@ -2678,11 +2759,12 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
     col = col * (1 - 0.75 * chalk[:, None]) + _hexlin(STONE_CHALK)[None] * 0.75 * chalk[:, None] * det[:, None]
     # recesses: a tier's texels close under another tier (the gap where one tucks under the next), and creases
     occ = np.zeros(len(Pm))
-    if nm in STONE_TIERS:
+    group = next((g for g in STONE_GROUPS if nm in g), ())
+    if group:
         if "sculpts" not in cache:
             cache["sculpts"] = {x[0]: x[1] for x in sculpts()}
         S = cache["sculpts"]
-        for other in STONE_TIERS:
+        for other in group:
             if other == nm or other not in S:
                 continue
             d = sculpt_d(S[other], Pm)
@@ -2690,6 +2772,30 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
     rec = np.clip(np.maximum(occ * (1.0 - 0.5 * chalk), crease), 0.0, 1.0)
     if nm == "tier1":
         rec = rec * (1.0 - 0.7 * top)                  # (the light top keeps its value where it meets the felt)
+    if nm == "shoulder_plate":
+        # the carved work painted as well as sculpted (the game mesh keeps ~700 triangles of the cap: the relief
+        # softens, the paint keeps it): the roundel's two cut rings and its boss on the deep front face, and the
+        # ledger rows across the cap's top (the brief: one carved row per day), each a dark cut with a chalked lip
+        rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N, dtype=np.float64)
+        rn /= np.linalg.norm(rn)
+        ax = sdf.frame(rn, (1.0, 0.0, 0.0))
+        q = Pm - rc
+        r = np.hypot(q @ ax[0], q @ ax[1])
+        face = np.clip((Nm @ rn - 0.35) / 0.3, 0.0, 1.0) * (np.abs(q @ rn) < 0.035)
+        cut = np.zeros(len(Pm))
+        for rr, hw in ((0.031, 0.0045), (0.064, 0.0050)):
+            cut = np.maximum(cut, np.clip(1.0 - np.abs(r - rr) / hw, 0.0, 1.0))
+        lip = np.clip(1.0 - np.abs(r - 0.047) / 0.009, 0.0, 1.0) * 0.8 + np.clip(1.0 - r / 0.016, 0.0, 1.0) * 0.6
+        # ledger rows: grooves across the top running out from the neck (constant y), spaced over its depth
+        topw = np.clip((nz - 0.5) / 0.25, 0.0, 1.0) * (Pm[:, 0] < -0.22)
+        ys = np.linspace(-0.15, 0.15, LEDGER_ROWS)
+        dy = np.min(np.abs(Pm[:, 1][:, None] - ys[None]), axis=1)
+        row = np.clip(1.0 - dy / 0.0045, 0.0, 1.0) * topw
+        rowlip = np.clip(1.0 - np.abs(dy - 0.0085) / 0.004, 0.0, 1.0) * topw
+        cut = np.maximum(cut * face, row)
+        lip = np.maximum(lip * face, rowlip * 0.6)
+        col = col * (1 - 0.5 * lip[:, None]) + _hexlin(STONE_CHALK)[None] * 0.5 * lip[:, None]
+        rec = np.maximum(rec, cut * 0.85)
     col = col * (1 - 0.78 * rec[:, None]) + _hexlin(STONE_RECESS)[None] * 0.78 * rec[:, None]
     return col * STONE_DARKER.get(nm, 1.0)
 
@@ -2753,7 +2859,14 @@ def grade_parts(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
             c[inner] = _hexlin(FELT_SHADOW)[None] * (0.9 + 0.2 * (_lum(c[inner]) / max(float(_lum(c).mean()), 1e-5)))[:, None]
             out[m] = c
         elif nm in ("coat", "skirt"):
-            out[m] = _tint(out[m], COAT_MEAN if nm == "coat" else SKIRT_MEAN, contrast=0.85, keep=0.12)
+            c = _tint(out[m], COAT_MEAN if nm == "coat" else SKIRT_MEAN, contrast=0.85, keep=0.12)
+            if nm == "coat":                                                    # (polish) the light top
+                z0, z1 = COAT_TOP_Z
+                t = np.clip((maps["P"][..., 2][m] - z0) / (z1 - z0), 0.0, 1.0)
+                c = c * (1.0 + (COAT_TOP_GAIN - 1.0) * t * t * (3 - 2 * t))[:, None]
+            out[m] = c
+        elif nm == "belt":
+            out[m] = _tint(out[m], BELT_MEAN, contrast=0.8, keep=0.15)
         elif nm == "tally":
             out[m] = tally_paint(out[m], maps["P"][m], N[m])
         elif nm in RUST_PARTS:

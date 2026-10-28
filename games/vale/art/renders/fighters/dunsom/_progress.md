@@ -44,3 +44,4 @@
   9 stunned: half the sway, the hat takes back 80 % (stays near level); the lantern never goes through the floor (pendulum ground constraint), the a2 sweep raised.
   10 the icon frames the lantern's lit middle beside the mask; the in-game core is the renderer's per-viewer tint (chalk for self).
   11 Tunlan / Ilsheta still have no models (art/out has none): IoU not measurable; Odrum 0.62.
+- 2026-10-28 04:01 CDT FIX PASS 2 (agent 4) started: reading the review (11 items), dunsom.py.

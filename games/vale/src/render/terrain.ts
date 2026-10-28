@@ -70,7 +70,7 @@ import {
   GORGE_MIST_PARS, gorgeFogLift, gorgeMistApply, MIST_SHEET_MAIN, MIST_SHEET_PARS, WALL_PARS_GLSL, WALL_VERT_MAIN, WALL_VERT_PARS,
 } from './terrain_glsl.ts';
 import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep, WallMesh, WK } from './terrain_walls.ts';
-import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
+import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, laneDecals, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
 import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
 import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
 import { INK_SWAY, swayDepth } from './ink.ts';
@@ -717,6 +717,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     if (ring) strokes.circle(hc, ring, 0.3, INLAY.groove, 0.5);
     for (const p of linesOf(hl.paths)) strokes.poly(p, 0.3, INLAY.groove);
     // (the Standing Shadow's tip is the shadow's own point: SHADOW_MAIN_GLSL's core wedge, no glyph)
+    // the painted road decals (lane polish): hairline cracks (the free lit channel) and a walker's chalk (the free mid
+    // channel) on the road's flags, inside the inscription bands, never in a wall, a plaza, the Seat, the brush or a room
+    const onRoad = (x: number, y: number): boolean => x > 0.5 && y > 0.5 && x < SX - 0.5 && y < SY - 0.5 && field(F.ld, x, y) < LANE_HALF - 0.42
+      && !inWall(x, y) && field(F.wd, x, y) > 0.5 && field(F.td, x, y) > 0.35 && field(F.cd, x, y) > 0.5 && !inPlaza(x, y, 1.2)
+      && !(seatV.z > 0 && Math.hypot(x - seatV.x, y - seatV.y) < seatV.z + 1.5);
+    lanes.forEach((l, k) => laneDecals(strokes, l, { half: LANE_HALF - 0.6, every: [2.6, 6.2], seed: 7100 + k * 131, crack: INLAY.lit, chalk: INLAY.mid, pCrack: 0.5, pChalk: 0.2, keep: onRoad }));
   } else if (surface === 'span') {
     // carved hour-script along every edge of the drop, inside the 0.4 m chalk band
     chasmPolys.forEach((poly, k) => {
