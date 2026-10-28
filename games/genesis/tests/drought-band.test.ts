@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 import { world, people, must, ctx, membersOf } from './helpers/peoples.ts';
-import { INV, TASK } from '../src/sim/people/defs.ts';
+import { INV, PHASE, TASK } from '../src/sim/people/defs.ts';
 import { NEED_N, WATER } from '../src/sim/people/needs.ts';
 import { decide, waterHere } from '../src/sim/people/decide.ts';
 import { finishTask } from '../src/sim/people/work.ts';
@@ -17,14 +17,14 @@ import { abandon } from '../src/sim/people/settlement.ts';
 import { itemIdx } from '../src/sim/people/resources.ts';
 import { ROAD_W, soakable, waterOnFoot } from '../src/sim/people/waterway.ts';
 import { LOAD_KG } from '../src/sim/perf/pace.ts';
-import { distM } from '../src/sim/people/world.ts';
+import { cellPos, distM } from '../src/sim/people/world.ts';
 
 interface DustBowl { sim: Sim; town: Settlement; fellH: number; deaths: Record<string, number>; alive: number; road: { keep: number; drink: number } }
 
 /** the drought fixture set down: village, a day at 3000x; `dry` is the god holding the dust bowl (call it every hour) */
-function dustBowlStart(seed: number, radius = 1500): { sim: Sim; town: Settlement; dry: (on: Sim) => void } {
+function dustBowlStart(seed: number, radius = 1500, n = 30): { sim: Sim; town: Settlement; dry: (on: Sim) => void } {
   const sim = world(64, seed);
-  people(sim, 'plains-folk', 30, { era: 'stone', settled: true });
+  people(sim, 'plains-folk', n, { era: 'stone', settled: true });
   must(sim, { k: 'time.scale', tps: 3000 });
   sim.step(1440);
   const town = sim.u.planets[0].people.settlements.find((s) => s.fallen < 0 && !s.band);
@@ -306,7 +306,10 @@ test('the search for water on foot stops at the walk a body will risk, and the a
 // band's camp that fills every hour and drains in about twenty minutes. Before the camp-water memory (decide.ts bandWater)
 // the parched walked out for water 1.5 km off and the band went with its leader (village sizes 28-32: the camp up to
 // 1541 m from the pond, 746-1195 member-hours beyond 450 m, 0-2 thirst deaths); the game before the drought change stayed
-// within 458 m (150-294 member-hours) and lost no one (_harness/scratch/living/drought/build/LEDGER.md, round 2)
+// within 458 m (150-294 member-hours) and lost no one (_harness/scratch/living/drought/build/LEDGER.md, round 2).
+// The bounds (600 m, 500 member-hours) are tuned to seed 11: on the same fixture over seeds 1-8 the band's camp goes past
+// 600 m on 3 of 8 seeds with the camp-water code and on 4 of 8 with the game before the drought change (both lose no one
+// to thirst there). A re-seed or re-threshold must measure seeds 1-8 and 11 on both first.
 test('a band in a dust bowl waits at its camp\'s pond that fills and drains, and does not walk off for far water', () => {
   const { sim, town, dry } = dustBowlStart(11);
   const p = sim.u.planets[0], ps = p.people, A = ps.agents, f = p.f, g = p.grid;
@@ -337,3 +340,82 @@ test('a band in a dust bowl waits at its camp\'s pond that fills and drains, and
   assert.ok(maxD <= 600, `the band keeps its camp by the pond (${tell})`);
   assert.ok(farH <= 500, `few walk far from it (${tell})`);
 });
+
+/**
+ * The pond-test fixture (above) with a choice of pond and ground: a village of `n`, the dust bowl held 96 h on bare
+ * ground; from the hour after the town falls a pond at the band's camp (its cell and those beside it) is filled every
+ * `period` hours and drains in about twenty minutes. `mesa` raises one cell 200-320 m from the camp 200 m above its
+ * neighbours (no walk climbs it) with a seep on it that the rings see. Deaths are counted over 144 h; a drink walk
+ * (agent, goal) seen in separate stretches of the hourly samples was dropped and taken up again.
+ */
+function pondCamp(seed: number, o: { n?: number; period?: number; mesa?: boolean } = {}) {
+  const { sim, town, dry } = dustBowlStart(seed, 1500, o.n ?? 30);
+  const p = sim.u.planets[0], ps = p.people, A = ps.agents, f = p.f, g = p.grid;
+  const disc = p.cellsNear(town.pos.slice(), 1500).slice();
+  const deaths: Record<string, number> = {};
+  const P = o.period ?? 1;
+  let pond: number[] = [], at: number[] | null = null, fellH = -1, mesa = -1, farH = 0, maxD = 0;
+  const q = [0, 0, 0], last = new Map<string, number>(), stretches = new Map<string, number>();
+  for (let h = 0; h < 144; h++) {
+    if (h < 96) {
+      dry(sim);
+      for (const c of disc) if (!p.s.ocean[c]) { f.grass[c] = 0; f.shrub[c] = 0; f.tree[c] = 0; }
+      if (mesa >= 0) f.moisture[mesa] = 0.6;
+      if (fellH >= 0 && (h - fellH) % P === 0) for (const c of pond) { f.water[c] = 0.3; f.salinity[c] = 0; }
+    }
+    sim.step(60);
+    for (const e of sim.drainEvents()) if (e.t === 'death') { const k = String((e.data as { cause?: string } | undefined)?.cause ?? '?'); deaths[k] = (deaths[k] ?? 0) + 1; }
+    const b = ps.settlements.find((s) => s.fallen < 0 && s.band);
+    if (!at && town.fallen >= 0 && b) {
+      fellH = h + 1;
+      pond = [b.cell];
+      for (let e = g.nbrStart[b.cell]; e < g.nbrStart[b.cell + 1]; e++) if (!p.s.ocean[g.nbr[e]]) pond.push(g.nbr[e]);
+      at = b.pos.slice();
+      if (o.mesa) {
+        for (const c of p.cellsNear(b.pos.slice(), 320)) {
+          if (p.s.ocean[c] || pond.includes(c)) continue;
+          const d = distM(p, b.pos, cellPos(p, c, q));
+          if (d >= 200 && d <= 320) { mesa = c; break; }
+        }
+        assert.ok(mesa >= 0, 'a cell for the mesa');
+        f.rock[mesa] += 200; p.updSurface(mesa); f.moisture[mesa] = 0.6;
+      }
+    }
+    if (at && b && h < 96) {
+      for (const m of ps.members.get(b.id) ?? []) {
+        A.posAt(m, sim.u.tick, q); if (distM(p, q, at) > 450) farH++;
+        if (A.task[m] === TASK.drink && A.phase[m] === PHASE.moving && A.gcell[m] >= 0) {
+          const k = `${A.id[m]}:${A.gcell[m]}`;
+          if (last.get(k) !== h - 1) stretches.set(k, (stretches.get(k) ?? 0) + 1);
+          last.set(k, h);
+        }
+      }
+      maxD = Math.max(maxD, distM(p, b.pos, at));
+    }
+  }
+  let retaken = 0, most = 0;
+  for (const v of stretches.values()) { if (v >= 2) retaken++; most = Math.max(most, v); }
+  assert.ok(at, 'the dust bowl drives the village out');
+  return { deaths, farH, maxD, retaken, most, tell: `deaths ${JSON.stringify(deaths)}, camp at most ${Math.round(maxD)} m from the pond, ${farH} member-hours beyond 450 m, ${retaken} drink walks taken up again (one up to ${most} times)` };
+}
+
+// the verifier's 'mesa' (round 2): a seep the rings see 200-320 m from the camp, up a cliff no walk climbs. Three rules for
+// the camp water disagreed: the band's recall dropped a walk to water 1.4 km off for the camp's pond, and planDrink — its
+// search sent past the camp water by the unreachable seep — picked the same far water again; the band lost 2-3 to thirst
+// and 12 walks were taken up again, one 4 times (decide.ts campBeats is now the one rule; build/LEDGER.md round 3)
+test('a band by its camp\'s pond does not keep dropping and retaking a far walk for water when a seep up a cliff is in sight', () => {
+  const r = pondCamp(11, { mesa: true });
+  assert.equal(r.deaths.thirst ?? 0, 0, `no one dies of thirst (${r.tell})`);
+  assert.ok(r.most <= 2, `no walk is dropped and taken up again and again (${r.tell})`);
+  assert.ok(r.maxD <= 600, `the band keeps its camp by the pond (${r.tell})`);
+});
+
+// the verifier's break test (round 2): the pond fills only every two hours. The whole band lay up through its first filling
+// (planDrink's lie-up in the shade), woke to a dry pond and — the camp water only remembered once someone drank there —
+// walked off for water 1.5 km away: village sizes 28-32 on seed 4 lost 2/4/3/0/0 to thirst where the game before the
+// drought change lost none. Water running within WATER_NEAR's walk of the camp is now the camp water once seen (bandStep)
+test('a band whose camp pond fills only every two hours waits for it and loses no one to thirst', () => {
+  const r = pondCamp(4, { n: 29, period: 2 });
+  assert.equal(r.deaths.thirst ?? 0, 0, `no one dies of thirst (${r.tell})`);
+});
+

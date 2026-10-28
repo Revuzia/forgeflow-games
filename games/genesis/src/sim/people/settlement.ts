@@ -24,10 +24,10 @@ import { settlementRef, vars, emitSt } from './util.ts';
 import { burnHearths } from './fire.ts';
 import { cohortStep, cohortTotal } from './cohorts.ts';
 import { diseaseStep } from '../life/disease.ts';
-import { bandWater, inputsAvailable, seedItems } from './decide.ts';
+import { bandWater, campBeats, inputsAvailable, seedItems } from './decide.ts';
 import { interrupt } from './people.ts';
 import { placeFor } from './context.ts';
-import { FOOD, NEED_N, WARMTH } from './needs.ts';
+import { FOOD, NEED_N, WARMTH, WATER } from './needs.ts';
 import { packColor } from './ctx.ts';
 import { recipeTable } from '../recipes/recipes.ts';
 import type { Household } from './state.ts';
@@ -43,7 +43,7 @@ import { findPath } from '../grid/pathfind.ts';
 import { pathOptsFor } from './resources.ts';
 import { recountShelters } from './tasks.ts';
 import { planetLevel } from '../perf/lapse.ts';
-import { DAY_WALK, WATER_NEAR, lastingWater, reachCost, waterReach } from './waterway.ts'; // LIVING.md §2.7: the water a band can walk to
+import { DAY_WALK, WATER_NEAR, lastingWater, reachCost, waterOnFoot, waterReach } from './waterway.ts'; // LIVING.md §2.7: the water a band can walk to
 import { LOAD_KG } from '../perf/pace.ts';
 // SIM perf push 3 — the coarse settlement step of the peoples' time-lapse (perf/plapse.ts)
 import { chanceIn, dueIn, hourly, settleHours } from '../perf/plapse.ts';
@@ -462,7 +462,7 @@ export function settlementStep(x: PCtx, st: Settlement): void {
 }
 
 /** a wandering band: the leader picks a site, the band walks there, and settles */
-const _bw = [0, 0, 0], _bp = [0, 0, 0], _bg = [0, 0, 0], _bt = [0, 0, 0];
+const _bt = [0, 0, 0];
 /** (fix r3 #17) a cell within `m` metres of a live town other than `st` (a budding daughter's own rule, BUD_APART) */
 function nearTown(x: PCtx, st: Settlement, c: number, m: number): boolean {
   cellPos(x.p, c, _bt);
@@ -483,16 +483,19 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   A.posAt(lead, x.tick, at);
   const here = x.p.cellAt(at);
   refreshLibrary(x, st);
-  // (LIVING.md §2.7: the band's camp water came back — decide.ts bandWater: members walking out to water farther off are
-  // called back to it; at time-lapse a walk is lived in legs of hours, too long to wait for the walker's own next look)
-  const wm = bandWater(x, st);
-  if (wm >= 0) {
-    cellPos(x.p, wm, _bw);
+  // (LIVING.md §2.7: water running within WATER_NEAR's walk of the camp is the band's camp water — decide.ts bandWater —
+  // once it is seen, not only once someone has drunk there: a band that lay up through its pond's filling woke to a dry
+  // pond and walked off for water 1.5 km away)
+  const seen = waterOnFoot(x, A.species[lead], here, false, WATER_NEAR);
+  if (seen.drink >= 0) { st.recent.wcell = seen.drink; st.recent.wseen = x.tick; }
+  // (the band's camp water came back: members walking out to water farther off are called back to it — by planDrink's
+  // own rule, decide.ts campBeats; at time-lapse a walk is lived in legs of hours, too long to wait for the walker's own
+  // next look)
+  if (bandWater(x, st) >= 0) {
     for (const m of members) {
       const g = A.gcell[m];
-      if (A.task[m] !== TASK.drink || A.phase[m] !== PHASE.moving || g < 0 || g === wm) continue;
-      A.posAt(m, x.tick, _bp);
-      if (distM(x.p, _bp, _bw) < distM(x.p, _bp, cellPos(x.p, g, _bg)) - WATER_NEAR) interrupt(x, m);
+      if (A.task[m] !== TASK.drink || A.phase[m] !== PHASE.moving || g < 0 || A.needs[m * NEED_N + WATER] >= 0.3) continue;
+      if (campBeats(x, m, st, g)) interrupt(x, m);
     }
   }
   // (fix r3 #17) a budding daughter keeps the bud's own rule wherever the band ends up: a band that lost the ground

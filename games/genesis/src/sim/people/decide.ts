@@ -89,11 +89,11 @@ function staleDrink(x: PCtx, s: number): boolean {
   if (dg <= WATER_NEAR) return false;
   const st = x.ps.settlement(A.settlement[s]);
   // (a band's camp water — bandWater: a walk back to it is not given up because it is dry now; a walk out to a far spot
-  // is given up for it)
+  // is given up for it by planDrink's own rule: campBeats)
   const m = st && st.band ? bandWater(x, st) : -1;
   if (m === g) return false;
   if (A.tData[s] === 3 ? !soakable(x, g) : (!waterAtCell(x, s, g) || p.f.fire[g] > FIRE_BURN)) return true;
-  if (m >= 0 && distM(p, _p, cellPos(p, m, _q)) < dg - WATER_NEAR) return true;
+  if (m >= 0 && campBeats(x, s, st, g)) return true;
   if (st && !st.band && st.res) {
     for (const w of st.res.water) {
       if (w === g || !waterAtCell(x, s, w) || p.f.fire[w] > FIRE_BURN) continue;
@@ -104,13 +104,39 @@ function staleDrink(x: PCtx, s: number): boolean {
 }
 
 /**
- * The water a band drank at near its camp within the last three hours, or -1 (work.ts records it: st.recent.wcell /
- * wseen). LIVING.md §2.7: a pond that fills and drains, a seep that runs by night, is gone back to and waited at — the
- * parched who walked out for water two kilometres off while their camp's pond came back every hour died on the way.
+ * The water a band drank at, or saw running, near its camp within the last three hours, or -1 (work.ts records a drink,
+ * settlement.ts bandStep the water it sees: st.recent.wcell / wseen). LIVING.md §2.7: a pond that fills and drains, water
+ * that comes back within about three hours, is gone back to and waited at — the parched who walked out for water two
+ * kilometres off while their camp's pond came back every hour died on the way. (Water that comes back less often is
+ * forgotten and the band goes on to farther water: measured, leaving was the better outcome there.)
  */
 export function bandWater(x: PCtx, st: Settlement): number {
   const c = st.recent.wcell;
   return c !== undefined && x.tick - (st.recent.wseen ?? -Infinity) < x.day / 8 ? c : -1;
+}
+
+/** body s's straight-line distance to its band's camp water (bandWater), Infinity when there is none or it is farther
+ * than TOWN_WALK; the cell is left in _cm, the body's position in _cp */
+let _cm = -1;
+const _cp = [0, 0, 0], _cq = [0, 0, 0];
+function campDist(x: PCtx, s: number, st: Settlement | undefined): number {
+  _cm = st && st.band ? bandWater(x, st) : -1;
+  if (_cm < 0) return Infinity;
+  x.A.posAt(s, x.tick, _cp);
+  const d = distM(x.p, _cp, cellPos(x.p, _cm, _cq));
+  return d <= TOWN_WALK ? d : Infinity;
+}
+
+/**
+ * LIVING.md §2.7 — ONE rule for a band's camp water, used by planDrink (what it picks), staleDrink (a walk given up on the
+ * way) and settlement.ts bandStep (members called back): a drink at cell g is given up for the camp water when that is
+ * within TOWN_WALK of the body and g is farther than it by more than WATER_NEAR. (Three rules once disagreed: a walk the
+ * recall dropped was picked again by planDrink — water up a cliff, seen by the rings, sent the body 1.4 km off — and the
+ * same walk was dropped and re-taken every hour.)
+ */
+export function campBeats(x: PCtx, s: number, st: Settlement | undefined, g: number): boolean {
+  const dm = campDist(x, s, st);
+  return dm < Infinity && g !== _cm && distM(x.p, _cp, cellPos(x.p, g, _cq)) > dm + WATER_NEAR;
 }
 
 /** a need has turned critical and the current task does not answer it (the agent should decide again now) */
@@ -425,6 +451,11 @@ function nearestCell(x: PCtx, from: number, rings: number, pred: (c: number) => 
 
 // ───────────────────────────── survival ─────────────────────────────
 
+/** to the band's camp water m — or, at it, lie up beside it until it runs again (asleep, water is lost at half the rate) */
+function toCamp(x: PCtx, s: number, here: number, m: number): TaskSpec {
+  return here === m ? { kind: TASK.sleep, goal: null, goalCell: x.A.cell[s], work: 30, target: -1 } : { kind: TASK.drink, goal: spot(x, s, m, 3), goalCell: m, work: 15 };
+}
+
 function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | null {
   const p = x.p, A = x.A;
   const c0 = A.cell[s];
@@ -454,37 +485,34 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   // across a strait or below a cliff, which the walk never reaches. A band member keeps to the band's road while their
   // own water lasts (ROAD_W); a town's drinking list is already sorted by the way from home.
   const w = A.needs[s * NEED_N + WATER];
-  if (st && st.band && st.target && w >= ROAD_W) return c < 0 ? null : { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
+  // the band's camp water (bandWater: a pond that fills and drains) is gone back to and waited at, unless water or a soak
+  // is found on foot no more than WATER_NEAR farther than it (every search below looks no farther than that) — the one
+  // rule staleDrink and bandStep's recall apply to a walk already under way (campBeats)
+  const dm = campDist(x, s, st), m = _cm;
+  if (st && st.band && st.target && w >= ROAD_W) return c < 0 ? null : dm < Infinity && campBeats(x, s, st, c) ? toCamp(x, s, here, m) : { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
   const budget = st && !st.band ? Math.min(TOWN_WALK, thirstBudget(w)) : thirstBudget(w);
+  const b = Math.min(budget, dm + WATER_NEAR);
   if (c >= 0 && budget > 0 && !(st && !st.band && st.res && st.res.water.length)) {
     // a ring pick must be within the walk this thirst will risk: else the nearest water on foot, or none
-    const r = waterOnFoot(x, A.species[s], here, true, budget);
-    c = r.drink >= 0 && r.drinkCost <= budget ? r.drink : -1;
+    const r = waterOnFoot(x, A.species[s], here, true, b);
+    c = r.drink >= 0 && r.drinkCost <= b ? r.drink : -1;
   }
   if (c < 0 && budget > 0) {
-    // the band's camp water (bandWater: a pond that fills and drains) is gone back to and waited at, unless water or a
-    // soak is found on foot nearer than it by more than WATER_NEAR (the search then looks no farther than that)
-    const m = st && st.band ? bandWater(x, st) : -1;
-    let dm = Infinity;
-    if (m >= 0) { A.posAt(s, x.tick, _p); dm = distM(p, _p, cellPos(p, m, _q)); if (dm > TOWN_WALK) dm = Infinity; }
-    const b = Math.min(budget, dm + WATER_NEAR);
     // nothing found: the nearest water on foot, farther the thirstier; else ground water near the surface, dug as a
     // soak (real water is preferred unless it is farther than the soak by more than the digging is worth)
     const r = waterOnFoot(x, A.species[s], here, true, b);
     const dOk = r.drink >= 0 && r.drinkCost <= b, sOk = r.soak >= 0 && r.soakCost <= b;
-    if (dm < Infinity && !dOk && !sOk) {
-      // at the camp's water: lie up beside it until it runs again (asleep, water is lost at half the rate)
-      if (here === m) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 30, target: -1 };
-      return { kind: TASK.drink, goal: spot(x, s, m, 3), goalCell: m, work: 15 };
-    }
+    if (dm < Infinity && !dOk && !sOk) return toCamp(x, s, here, m);
     if (dOk && !(sOk && r.drinkCost > r.soakCost + SOAK_EXTRA)) c = r.drink;
-    else if (sOk) return { kind: TASK.drink, goal: spot(x, s, r.soak, 3), goalCell: r.soak, work: 60, data: 3 };
+    else if (sOk) return dm < Infinity && campBeats(x, s, st, r.soak) ? toCamp(x, s, here, m) : { kind: TASK.drink, goal: spot(x, s, r.soak, 3), goalCell: r.soak, work: 60, data: 3 };
     // nothing within reach: lie up in the shade through the heat of the day (asleep, water is lost at half the rate)
     // rather than forage in the sun; a band's leader keeps going, and townsfolk go on with the day's work (a day worker
     // carries the skins: waterHere — lying up in a dried town cost the day trips that kept base villagers watered)
     if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && (!st.band || st.leader === s))) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
   }
   if (c < 0) return null;
+  // (a road walks faster than the crow flies: what campBeats would drop on the way is not picked)
+  if (dm < Infinity && campBeats(x, s, st, c)) return toCamp(x, s, here, m);
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
 }
 

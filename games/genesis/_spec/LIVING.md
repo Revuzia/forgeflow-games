@@ -415,8 +415,8 @@ from a base made from the current tree with only the drought hunks reversed. The
 - The thirst interrupt counts boat casks only afloat, like the needs clamp does.
 - A band member caught by night far from the band makes camp. This gives a fire only where fire-keeping is known.
 - **Camp water** (`decide.ts bandWater`). A band remembers, for 3 hours, the ground water it drank at near its camp. A
-  parched member goes back to that water and lies up beside it until it runs again. It walks to far water only when that
-  water is nearer than the camp water by more than 300 m. `bandStep` calls back members already walking to far water: at
+  parched member goes back to that water and lies up beside it until it runs again. It walks to other water only when that
+  water is no more than 300 m farther than the camp water. `bandStep` calls back members already walking to far water: at
   time-lapse a walk is lived in legs of hours, too long to wait for the walker's own next look. Without this, a band whose
   pond filled and drained every hour walked 1.5 km to far water behind its leader.
 
@@ -425,8 +425,10 @@ Measured on the held 1.5 km dust bowl, seeds 1–32, as thirst + cold deaths:
 - Without camp water: 152 + 5, 833 alive.
 - With camp water: 146 + 5, 841 alive.
 
-Seeds 17 and 25 are worse than base by more than 1 (4 → 6 and 1 → 9). Replicates at village sizes 28–32 show both are
-chance: summed over the replicates, the new code has fewer deaths. Seed 29 has 9 thirst deaths in base and 5 cold deaths
+Seeds 17 and 25 are worse than base by more than 1 (4 → 6 and 1 → 9). (Corrected in round 3: the replicates at village
+sizes 28–32 were run on the code without camp water. Seed 25 is chance: summed over N = 28–32, 31 → 22 with camp water.
+Seed 17 is not shown to be chance: 29 → 32 over four sizes without camp water, 33 → 38 over five with it, worse at 3 of
+5.) Seed 29 has 9 thirst deaths in base and 5 cold deaths
 with the change. That band has no fire-keeping, so a parched walker who drinks far off at night freezes.
 
 On the refilling-pond fixture (seeds 1–8 and 11), base had 0 deaths and 2464 member-hours farther than 450 m from the pond.
