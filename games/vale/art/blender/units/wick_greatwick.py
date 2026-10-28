@@ -3783,6 +3783,23 @@ def bind_cloak(ctx, obj) -> dict:
     return {"custom": "gw_cloak"}
 
 
+# (fix round 8) the mantle strip's HEAD share per row (rows: tuck, top, 36 %, 70 %, hem, lip) on the front columns,
+# faded to `back` from `front` to `fade` degrees off the front; blended over the torso weighting (w (1 - h) + h head)
+MANTLE_HEAD = {"rows": [1.0, 1.0, 0.0, 0.0, 0.0, 0.0], "front": 60.0, "fade": 90.0, "back": [0.0] * 6}
+_MANTLE_BIND: dict = {}          # filled by serenade_parts: the strip's model-space grid + its head share per vertex
+
+
+def mantle_head_share(side, row, cfg=None):
+    """Head weight of a mantle strip vertex at `side` degrees from the front, grid `row` (MANTLE_HEAD layout)."""
+    cfg = cfg or MANTLE_HEAD
+    side = np.asarray(side, float)
+    row = np.asarray(row, int)
+    fr = np.asarray(cfg["rows"], float)[row]
+    bk = np.asarray(cfg.get("back", [0.0] * 6), float)[row]
+    u = _smooth01((side - cfg["front"]) / max(cfg["fade"] - cfg["front"], 1e-6))
+    return fr + (bk - fr) * u
+
+
 def bind_mantle(ctx, obj) -> dict:
     """(fix round 7) The Serenade mantle: a felt cape ON the torso. Bone heat gave its front columns 25-31 % forearm and
     37-42 % upper arm, so the hammer grip dragged the lapels' tops 10-17 cm down out of the hood in idle (the torn

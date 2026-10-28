@@ -50,7 +50,7 @@ from mathutils import Matrix, Vector  # noqa: E402
 
 from common import anim, fighter, materials, rig, scene  # noqa: E402
 from common import render as _render  # noqa: E402
-from common import mesh as _mesh, pipeline as _pipeline  # noqa: E402
+from common import bake as _bake, mesh as _mesh, pipeline as _pipeline  # noqa: E402
 from common.anim import Aim, FootTarget, HandTarget  # noqa: E402
 from common.hifi import project as _project, sdf  # noqa: E402
 from common.hifi.sdf import (Capsule, Ellipsoid, FlatCapsule, HalfSpace, Lathe, Prim, RoundBox,  # noqa: E402
@@ -417,8 +417,8 @@ def glove(name, C, a, f, out, bind, tris, curl=1.0, grip=True, s=HS):
     S.add(Tube([tb, tm, tt], [0.0150 * s, 0.0128 * s, 0.0105 * s], k=0.004), k=0.008)
     S.add(Sphere(tm, 0.0135 * s), k=0.004)                                           # the thumb's joint
     # the glove's flared gauntlet cuff over the wrist, a rolled edge
-    S.add(RoundCone(C - f * 0.108 * s, C - f * 0.054 * s, 0.041 * s, 0.033 * s), k=0.010)
-    S.add(Torus(C - f * 0.106 * s, 0.040 * s, 0.0045 * s, axes=sdf.frame(f)), k=0.004)
+    S.add(RoundCone(C - f * 0.104 * s, C - f * 0.054 * s, 0.033 * s, 0.031 * s), k=0.010)      # (inside the sleeve's 5 cm
+    S.add(Torus(C - f * 0.100 * s, 0.033 * s, 0.0042 * s, axes=sdf.frame(f)), k=0.004)       # opening: no ball at the wrist)
     if grip:
         S.sub(Capsule(C - a * 0.15, C + a * 0.15, SHAFT_R + 0.004), k=0.003)
     S.ops = [(op, prim.displaced(felt(0.0006, 60.0), 0.0006) if op == "add" else prim, k, tg) for op, prim, k, tg in S.ops]
@@ -647,9 +647,9 @@ def sculpts() -> list:
 
     legs = Sculpt("trousers")
     for sx in (-1, 1):
-        legs.add(FlatCapsule((sx * 0.127, 0.023, 0.40), (sx * 0.130, 0.020, 0.15), 0.058, 0.060, 0.054, 0.056, side=(1, 0, 0))
-                 .displaced(cloth_noise(0.002, 10.0), 0.002), k=0.0)       # (fix pass 1: below the knee only)
-    part("trousers", legs, "under", ("weights", "trousers"), 220, 0.8)
+        legs.add(FlatCapsule((sx * 0.128, 0.022, 0.33), (sx * 0.130, 0.020, 0.15), 0.057, 0.059, 0.054, 0.056, side=(1, 0, 0))
+                 .displaced(cloth_noise(0.002, 10.0), 0.002), k=0.0)       # (fix pass 1: only what shows under the hem)
+    part("trousers", legs, "under", ("weights", "trousers"), 180, 0.8)
 
     for s, sh, el, wr, fo in (("L", SH_L, E_L, W_L, FO_L), ("R", SH_R, E_R, W_R, FO_R)):
         sx = 1.0 if s == "L" else -1.0
@@ -837,12 +837,12 @@ def lantern_parts() -> list:
             along = q[:, :2] @ n - LAN_GLASS
             across = q[:, :2] @ np.array([-n[1], n[0]])
             w = lancet(across, P[:, 2], WIN_W, lan_z(WIN_LO), lan_z(WIN_SPRING), lan_z(WIN_TOP))
-            best = np.minimum(best, np.maximum(w, np.abs(along - 0.0010) - 0.0035))
+            best = np.minimum(best, np.maximum(w, np.abs(along - 0.0020) - 0.0045))   # 6.5 mm proud of the glass
         return best
     core = Sculpt("lantern_core")
     core.add(Fn(windows, lo, hi), k=0.0)
-    core.add(Fn(lambda P: vent_d(P, VENT[4] - 0.0005, VENT[4] + 0.0045), lo, hi), k=0.0)      # the glow in the vents
-    out.append(("lantern_core", core, 0.4, "accent", "bone:x_lantern", 420, 0.6))
+    core.add(Fn(lambda P: vent_d(P, VENT[4] - 0.0035, VENT[4] + 0.0030), lo, hi), k=0.0)      # the glow: 3.5 mm proud of the vents' floor
+    out.append(("lantern_core", core, 0.4, "accent", "bone:x_lantern", 680, 0.6))   # (420 collapsed the thin lancets)
     return out
 
 
@@ -1048,7 +1048,7 @@ def _w_skirt(P, J):
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
     leg = 0.64 * ss(1.12, 0.66, z)
     side_l = ss(-0.13, 0.13, x)
-    shin = leg * 0.40 * ss(0.66, 0.30, z) * (0.35 + 0.65 * ss(-0.05, 0.12, y))
+    shin = leg * 0.40 * ss(0.66, 0.30, z) * (0.60 + 0.40 * ss(-0.05, 0.12, y))   # (fp1: the front hem follows the shin more)
     th = leg - shin
     return {"hips": 1 - leg, "thigh.L": th * side_l, "thigh.R": th * (1 - side_l),
             "shin.L": shin * side_l, "shin.R": shin * (1 - side_l)}
@@ -1711,6 +1711,61 @@ _orig_paint = _project.paint
 _project.paint = _paint
 
 
+# ── the ORM's gutters (bake.bake_asset wrapper) ────────────────────────────────────────────────────────
+# fix pass 1 (review: white frost-like smears over the shoulders and sleeves): the ORM is baked at 2048 with an 8 px
+# margin and scaled to 512, so its gutters are mostly empty: roughness 0 (a mirror) round every island. The cloth is
+# cut into many small islands, and at the game camera's mip levels their borders sampled that gloss and caught the
+# sky as white smears. Every gutter texel now takes its nearest island's roughness / metal / occlusion.
+def _fill_gutters(arr, valid, iters=40):
+    """nearest-ish fill of invalid texels from valid neighbours (iterative 8-neighbour mean), in place"""
+    a = arr.copy()
+    v = valid.astype(np.float32)
+    for _ in range(iters):
+        if v.min() > 0.5:
+            break
+        acc = np.zeros_like(a)
+        cnt = np.zeros(v.shape, dtype=np.float32)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                vs = np.roll(np.roll(v, dy, 0), dx, 1)
+                acc += np.roll(np.roll(a, dy, 0), dx, 1) * vs[..., None]
+                cnt += vs
+        new = (v < 0.5) & (cnt > 0)
+        a[new] = acc[new] / cnt[new][:, None]
+        v = np.where(new, 1.0, v)
+    return a
+
+
+_orig_bake_asset = _bake.bake_asset
+
+
+def _bake_asset(low, highs, out_dir, name="body", *a, **k):
+    res = _orig_bake_asset(low, highs, out_dir, name, *a, **k)
+    path = (res.get("images") or {}).get("orm")
+    if not str(name).startswith(ID) or not path:
+        return res
+    img = bpy.data.images.load(path, check_existing=True)
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    valid = px[..., 1] > 0.035                       # roughness: never below ~0.2 on this figure; 0 = an empty gutter
+    before = float(1 - valid.mean())
+    px[..., :3] = _fill_gutters(px[..., :3], valid)
+    img.pixels.foreach_set(px.ravel())
+    img.update()
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+    scene.log(f"dunsom ORM gutters filled: {100 * before:.1f}% of the {w}x{h} map took their island's roughness / AO")
+    return res
+
+
+_bake.bake_asset = _bake_asset
+
+
 # ── skins (project.recolour wrapper) ────────────────────────────────────────────────────────────────────
 # Each listed part's painted median moves onto the skin's colour (linear gain per channel: the painted values and
 # detail keep their relationships); the coat parts follow the cloth role's own change. Highrim: a wind-carved
@@ -1802,7 +1857,7 @@ def _strata(P):
     """Highrim: eroded sandstone strata round the hat's top: wavy concentric layers every ~4.5 cm (0..1 per texel)"""
     q = P[:, :2] - HAT_C[None, :]
     r = np.hypot(q[:, 0], q[:, 1])
-    s_ = np.sin(2 * math.pi * r / 0.045 + 1.3 * NOISE(P * np.array([1.0, 1.0, 0.0]), 7.0))
+    s_ = np.sin(2 * math.pi * r / 0.045 + 3.0 * NOISE(P * np.array([1.0, 1.0, 0.0]), 9.0) + 1.2 * NOISE(P * np.array([1.0, 1.0, 0.0]), 23.0))
     return ss(-0.15, 0.55, s_) * ss(0.04, 0.08, r)
 
 
@@ -2602,15 +2657,15 @@ def clip_overrides(ctx) -> dict:
     # stay before the chest as it turns (left 44 deg at the wind, right 46 at the follow), and at the level mid-sweep
     # the right fist is at the right hip so the butt passes beside it
     wind = pose(torso=dict(hips=(6, 16, 0), spine=(4, 12, 0), chest=(5, 16, 0), neck=(0, -6, 0), head=(-2, -14, 0)),
-                hips=(0, 0.02, -0.10), R=(0.22, -0.55, -0.72), aim=(0.80, -0.53, -0.22), slide=S, grip=0.36,
+                hips=(0, 0.02, -0.10), R=(0.22, -0.55, -0.66), aim=(0.83, -0.54, -0.06), slide=S, grip=0.36,
                 feet=_feet(**crouch))
     gather = pose(torso=dict(hips=(3, 8, 0), spine=(2, 6, 0), chest=(3, 8, 0), head=(-1, -6, 0)), hips=(0, 0.01, -0.05),
                   R=(0.10, -0.45, -0.70), aim=(0.55, -0.40, 0.73), slide=S * 0.7, L=left_at(wind), Lp=(0.8, 0.4, -0.4))
     hit = pose(torso=dict(hips=(8, 0, 0), spine=(6, 0, 0), chest=(7, -2, 0), neck=(-2, 0, 0), head=(-4, 2, 0)),
-               hips=(0, -0.03, -0.11), R=(-0.12, -0.42, -0.80), aim=(0.12, -0.99, -0.06), slide=S, grip=0.36,
+               hips=(0, -0.03, -0.11), R=(-0.12, -0.44, -0.74), aim=(0.12, -0.98, 0.12), slide=S, grip=0.36,
                feet=_feet(**crouch))
     fol = pose(torso=dict(hips=(6, -16, 0), spine=(5, -12, 0), chest=(6, -18, 0), neck=(0, 6, 0), head=(-2, 14, 0)),
-               hips=(0, -0.02, -0.11), R=(0.20, -0.60, -0.70), aim=(-0.85, -0.48, -0.14), slide=S, grip=0.36,
+               hips=(0, -0.02, -0.11), R=(0.20, -0.60, -0.64), aim=(-0.87, -0.49, 0.02), slide=S, grip=0.36,
                feet=_feet(**crouch))
     rel_ = pose(torso=dict(hips=(1, -6, 0), chest=(2, -5, 0), head=(-1, 4, 0)), R=(-0.30, -0.45, -0.25),
                 aim=(-0.20, -0.25, 0.95), slide=S * 0.3, L=(0.18, -0.35, -0.85))

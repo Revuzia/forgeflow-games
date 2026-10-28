@@ -131,7 +131,7 @@ def snap_hollow(F, ob, tol=0.004, log=print) -> int:
     return len(sel)
 
 
-def refine_hollow(F, ob, D, tol=0.006, iters=8, log=print) -> int:
+def refine_hollow(F, ob, D, tol=0.010, iters=4, log=print) -> int:
     """(r7, verify wave-b) the decimated hood low's CHORDS across the hollow: the collapse joined vertices on the
     opening's front edge to vertices on the head space's back wall, so whole triangles cut through the void and
     showed as wedges jutting 2-4 cm into the opening at the arch's springing line (pale teeth at its sides from
@@ -1161,8 +1161,9 @@ def matte_accent(mat) -> None:
 # triangles (their grids are sized in the part functions).
 TRIS = {
     # (r6: the forearm wraps and the mitts are explicit clean lows now: wrap_mesh, box_low + the thumb)
-    # (r7: the hood 440 -> 400 pays for the ten-lamp crown)
-    "aubade": {"hood": 400, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
+    # (r7: the hood 440 -> 390 pays for the ten-lamp crown and the hollow refine's splits; the Serenade hood 310 -> 300
+    # for the refine; the halo 10 round)
+    "aubade": {"hood": 390, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
                "sleeves": 150, "staff": 130},
     "serenade": {"hood": 300, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
                  "sleeves": 138, "cuffs": 48, "staff": 110},
@@ -1266,7 +1267,7 @@ def hood_parts(F, aub, part):
     # its lower fall comes forward under the core, where the 52 deg sight line sees it below the brow
     th_ = math.radians(HALO_TILT_BW)
     Zh, Yh = np.array((0.0, math.sin(th_), math.cos(th_))), np.array((0.0, -math.cos(th_), math.sin(th_)))
-    v, f = wc.halo_mesh(lc, X, Yh, Zh, lr[0], lr[1], lr[2], seg=12, rings=HALO_RINGS_BW)
+    v, f = wc.halo_mesh(lc, X, Yh, Zh, lr[0], lr[1], lr[2], seg=10, rings=HALO_RINGS_BW)
     part("hood_halo", ("mesh", v, f), HALO_BW, "bone:head", None, 0.5)
     if aub:
         crown_aubade(F, part, hood)
@@ -1840,7 +1841,7 @@ def body_parts(F, aub, info, part):
 
 
 PAULDRON_A = {"O": (0.282, 0.0, 1.268), "tilt": 22.0, "cap": (0.150, 0.156, 0.124)}
-CAP_DARK = 0.38             # (r7) the Aubade pauldron's cap plate: linear x (1 - CAP_DARK), about -12 L*
+CAP_DARK = 0.44             # (r7) the Aubade pauldron's cap plate: linear x (1 - CAP_DARK), about -12 L*
 PLATES: dict = {}           # side -> (centre, frame, plates): the paint's carved edges on the Aubade pauldrons
 
 
