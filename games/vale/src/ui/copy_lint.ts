@@ -7,6 +7,7 @@
 // and strings.en.json and reports each hit as an error; harnesses can import it the same way.
 //
 //   GENRE_WORDS   whole-word, case-insensitive; the value is VALE's word to use instead
+//   SPELLING      British forms in player copy (client F11: one spelling, American)
 //   raw stat ids  a stat whose display name (strings `stat.<id>.name`) differs from its id: the id may not appear as a
 //                 whole word in prose ('cs', 'omnivamp', 'lifesteal' …). Ids that are ordinary English words a sentence
 //                 needs ('kills', 'deaths', 'level', 'damage', 'range' …) are skipped (STAT_ID_PLAIN_WORDS)
@@ -31,6 +32,14 @@ export const GENRE_WORDS: Readonly<Record<string, string>> = {
   'battle spells': 'Hour spells',
   'summoner spell': 'Hour spell',
   'summoner spells': 'Hour spells',
+};
+
+/** client F11: player copy is American English (armor x113 decided it). Each British form, with its -s / -ed / -ing / -ful /
+ *  -less forms, is reported with the American one. Proper names are safe: 'Greylight' is one word, never 'grey' */
+export const SPELLING: Readonly<Record<string, string>> = {
+  armour: 'armor', colour: 'color', centre: 'center', centred: 'centered', metre: 'meter', grey: 'gray', honour: 'honor',
+  favour: 'favor', favourite: 'favorite', behaviour: 'behavior', cancelled: 'canceled', cancelling: 'canceling', defence: 'defense',
+  licence: 'license', catalogue: 'catalog', travelled: 'traveled', vigour: 'vigor', splendour: 'splendor', armoured: 'armored',
 };
 
 /** stat ids that are plain English a sentence needs, so they are not linted as raw ids */
@@ -74,6 +83,7 @@ export function proseOf(value: unknown, path = '', out: { path: string; text: st
 export function lintPlayerCopy(files: Readonly<Record<string, unknown>>, strings: Readonly<Record<string, string>>): CopyHit[] {
   const rules: [string, string][] = Object.entries(GENRE_WORDS);
   for (const [id, name] of Object.entries(rawStatIds(strings))) rules.push([id, name]);
+  for (const [gb, us] of Object.entries(SPELLING)) { rules.push([gb, us]); for (const sfx of ['s', 'ed', 'ing', 'ful', 'less']) if (!SPELLING[gb + sfx]) rules.push([gb + sfx, us + sfx]); }
   // longest phrases first, so 'battle spells' reports once (not also as 'battle spell')
   rules.sort((a, b) => b[0].length - a[0].length);
   const compiled = rules.map(([w, use]) => ({ w, use, re: wordRe(w) }));
