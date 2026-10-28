@@ -121,7 +121,7 @@ PAV_FRAME_W = 0.052                           # the chalk frame's face width
 LINE_W = 0.008                                # the pale glass hairline along the window's edge (frame faces)
 SPIRE_X = 0.640
 DIAMONDS = [((0.630, 2.030), 0.052, 0.105), ((0.668, 1.800), 0.058, 0.118)]   # (centre x, z), half w, half h
-INLAY_K = 0.86                                # inlay size / bezel size (the concept's diamonds are mostly glass)
+INLAY_K = 0.90                                # inlay size / bezel size (the concept's diamonds are mostly glass)
 GIRDLE = 0.024                                # the glass band round each diamond's edge (half thickness, m)
 
 
@@ -287,9 +287,9 @@ def sculpts() -> list:
     box = RoundBox((HX, 0.0, 2.185), (0.160, 0.170, 0.163), 0.024)
     helm.add(box.displaced(chips(0.008, 8.0), 0.008), k=0.0)
     helm.add(RoundBox((HX, 0.0, 2.302), (0.167, 0.177, 0.046), 0.016).displaced(chips(0.009, 7.0), 0.009), k=0.004)
-    helm.sub(RoundBox((HX, -0.18, 2.236), (0.136, 0.05, 0.028), 0.006), k=0.004)           # the visor band
+    helm.sub(RoundBox((HX, -0.18, 2.233), (0.136, 0.05, 0.032), 0.006), k=0.004)           # the visor band
     for sx in (-1, 1):                                                                     # its side windows
-        helm.sub(RoundBox((HX + sx * 0.17, -0.105, 2.236), (0.03, 0.055, 0.028), 0.006), k=0.004)
+        helm.sub(RoundBox((HX + sx * 0.17, -0.105, 2.233), (0.03, 0.055, 0.032), 0.006), k=0.004)
     # the face opening below the visor: the cheek guards' inner edges slant inward toward the chin
     helm.sub(slab([(HX - 0.098, 2.212), (HX + 0.098, 2.212), (HX + 0.084, 1.96), (HX - 0.084, 1.96)], -0.17, 0.07, 0.008), k=0.006)
     helm.add(RoundBox((HX, -0.163, 2.133), (0.022, 0.016, 0.082), 0.008), k=0.006)          # the nasal bar
@@ -297,9 +297,9 @@ def sculpts() -> list:
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
     part("helm", helm, "chalk", "bone:head", 1500)
     visor = Sculpt("visor")
-    visor.add(RoundBox((HX, -0.160, 2.236), (0.134, 0.012, 0.026), 0.006), k=0.0)     # flush with the helm face
+    visor.add(RoundBox((HX, -0.160, 2.233), (0.134, 0.012, 0.030), 0.006), k=0.0)     # flush with the helm face
     for sx in (-1, 1):                    # wrapped round the corners (the colour reads from the side facings)
-        visor.add(RoundBox((HX + sx * 0.150, -0.105, 2.236), (0.012, 0.052, 0.026), 0.006), k=0.0)
+        visor.add(RoundBox((HX + sx * 0.150, -0.105, 2.233), (0.012, 0.052, 0.030), 0.006), k=0.0)
     part("visor", visor, "accent", "bone:head", 220, 0.6)
     face = Sculpt("face")
     face.add(Ellipsoid((HX, -0.02, 2.11), (0.118, 0.132, 0.120)), k=0.0)
@@ -383,7 +383,9 @@ def sculpts() -> list:
     c0 = FlatCapsule((0, 0.012, 0.86), (0, 0.008, 1.42), 0.400, 0.335, 0.330, 0.250, side=(1, 0, 0))
     coat.add(c0.displaced(folds(0.012, 15.0, axis=0, zfade=(1.30, 0.85)), 0.012), k=0.0)
     coat.inter(HalfSpace((0, 0, 0.80), (0, 0, -1), 2.0), k=0.012)
-    coat.sub(slab([(-0.165, 1.40), (0.165, 1.40), (0.175, 0.70), (-0.175, 0.70)], -0.36, 0.06, 0.01), k=0.02)   # the front opening
+    # the front opening: its back wall parallel to the tabard panels, 3 cm behind them (review fix 1: the wall sat
+    # inside the panels' thickness and showed through them in every pose that moved the coat)
+    coat.sub(RoundBox((0.0, -0.336, 1.03), (0.170, 0.080, 0.40), 0.01, axes=sdf.rot_x(7.5)), k=0.02)
     part("coat", coat, "cloth", "auto", 1600)
     for s, sx in (("R", -1), ("L", 1)):
         tb = Sculpt(f"tabard_{s}")
@@ -649,8 +651,19 @@ def chain_config(ctx) -> list:
             want = TAB_K * (th - hp) + (1.0 - TAB_G) * hp - TAB_MARGIN
             return max(0.0, min(TAB_CAP, want))
         return f
-    return [anim.ChainCfg(ctx.chains["tabard_l"], gravity=TAB_G, stiffness=170.0, damping=18.0, inertia=0.4, drive=push("L")),
-            anim.ChainCfg(ctx.chains["tabard_r"], gravity=TAB_G, stiffness=170.0, damping=18.0, inertia=0.4, drive=push("R"))]
+    def least(side):                        # the same, as the panel's angle on the hips (a hard floor, no lag)
+        def f(p):
+            th = p.get(f"thigh.{side}", (0.0, 0.0, 0.0))[0]
+            hp = p.get("hips", (0.0, 0.0, 0.0))[0]
+            return min(TAB_CAP, TAB_K * (th - hp) + hp - TAB_MARGIN)
+        return f
+    out = []
+    for s_ in ("L", "R"):
+        c = anim.ChainCfg(ctx.chains[f"tabard_{s_.lower()}"], gravity=TAB_G, stiffness=170.0, damping=18.0, inertia=0.4,
+                          drive=push(s_))
+        c._ardit_least = least(s_)
+        out.append(c)
+    return out
 
 
 # ── paint (Ardit's wrap of common/hifi/project.paint; common/ is shared, so it lives here) ──────────────────
@@ -667,6 +680,7 @@ SIDEMAP = {"helm": (0.42, "back"), "pauldron_R": (0.50, "wrap"), "pauldron_L": (
            "legs": (0.40, "wrap"), "sleeves": (0.45, "wrap"), "fist_R": (0.45, "wrap"), "fist_L": (0.45, "wrap"),
            "belt": (0.10, "wrap")}
 PAIRS = ("boots", "legs", "sleeves")
+SIDE_LOW_SIGMA, SIDE_DETAIL, SIDE_SHADE = 16.0, 1.0, 0.95    # side planes: the paint's detail over the part's median
 TOPMAP = {                 # up-facing texels: the part's own front paint, depth (y) mapped onto this z band
     "helm": (2.262, 2.335), "pauldron_R": (1.935, 1.995), "pauldron_L": (1.935, 1.995), "tier_R": (1.70, 1.78),
     "tier_L": (1.70, 1.78), "boots": (0.03, 0.12), "gorget": (1.86, 1.925), "cuirass": (1.70, 1.80),
@@ -892,7 +906,8 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     soft = {s_: pj.blur(plates.img[s_], 2.5) for s_ in ("front", "back")}
     TOP_IDS = [names.index(nm) for nm in TOPMAP if nm in names]
     unseen = {}
-    cols, bcols = {}, {}
+    cols, bcols, blows = {}, {}, {}
+    lows = {s_: pj.blur(plates.img[s_], SIDE_LOW_SIGMA) for s_ in ("front", "back")}
     for side in ("front", "back"):
         px, py = plates.to_px(side, xs, zs)
         c = pj.bilinear(plates.img[side], px, py)
@@ -918,6 +933,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         bx = np.where(box, xf if side == "front" else xb, xs)
         qx, qy = plates.to_px(side, bx[box], zs[box])
         cb = pj.bilinear(plates.img[side], qx, qy)
+        cl = pj.bilinear(lows[side], qx, qy)
         _, hid2 = vis.lookup(side, qx, qy)
         other = (hid2 != k[box]) | off_figure(qx, qy)
         for kk in np.unique(k[box][other]):
@@ -926,11 +942,28 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
                 continue
             sel = other & (k[box] == kk)
             cb[sel] = pj.bilinear(f, qx[sel] / vis.step, qy[sel] / vis.step)
+            cl[sel] = cb[sel]
         bcols[side] = cb
+        blows[side] = cl
     wb = _ss(-0.25, 0.25, n[:, 1])
     col = cols["front"] * (1 - wb[:, None]) + cols["back"] * wb[:, None]
     if box.any():
         cbox = bcols["front"] * (1 - fb[box, None]) + bcols["back"] * fb[box, None]
+        # the side planes of the SIDEMAP parts keep the wrapped paint's DETAIL (cracks, chips, seams) over the part's
+        # own median tone: the front's painted light (a white highlight band over a brown shadow) wrapped round a
+        # side read as a glowing streak (review fix 2)
+        clow = blows["front"] * (1 - fb[box, None]) + blows["back"] * fb[box, None]
+        kb = k[box]
+        side_ids = [names.index(nm) for nm in SIDEMAP if nm in names]
+        hp = np.isin(kb, side_ids)
+        if hp.any():
+            med = np.zeros((len(kb), 3), dtype=np.float32)
+            for i in np.unique(kb[hp]):
+                face = (k == i) & (np.abs(n[:, 1]) > 0.7)
+                src = col[face] if face.sum() > 30 else col[k == i]
+                med[kb == i] = np.median(src, axis=0)
+            hx = np.clip(med + (cbox - clow) * SIDE_DETAIL, 0, 1) * SIDE_SHADE
+            cbox[hp] = hx[hp]
         w = bw[box, None]
         col[box] = col[box] * (1 - w) + cbox * w
     # texels no plate shows (under the coat and the tabard): clean cloth instead of a smeared nearest fill (review fix
@@ -1294,6 +1327,28 @@ def _install_anim() -> None:
             return act
         write_action._ardit = True
         anim.write_action = write_action
+    if not getattr(anim.secondary_motion, "_ardit", False):
+        orig_s = anim.secondary_motion
+
+        def secondary_motion(skel, poses, cfgs, loop):
+            """the shared spring pass, then the tabard's push by the thigh as a floor with no lag (a thigh driven up
+            in 2 frames must not pass through the panel while the spring catches up)"""
+            out = orig_s(skel, poses, cfgs, loop)
+            for cfg in cfgs or []:
+                least = getattr(cfg, "_ardit_least", None)
+                if least is None:
+                    continue
+                b = cfg.bones[0]
+                for f, p in enumerate(out):
+                    a = p.get(b, (0.0, 0.0, 0.0))
+                    m = least(poses[f])
+                    if m > a[0]:
+                        p[b] = (m, a[1], a[2])
+                    if loop and f == len(out) - 1:
+                        p[b] = out[0][b]
+            return out
+        secondary_motion._ardit = True
+        anim.secondary_motion = secondary_motion
 
 
 def _cl(x):
@@ -1450,7 +1505,8 @@ RUN_PAV = (0.10, -0.20, 0.975)                  # the pavise's axis in the run: 
 RUN_FACE = (0.62, -0.78, 0.0)                   # its pane turned out 38 deg (edge-on enough to keep the legs clear)
 
 
-RUN_LIFT, RUN_PITCH = 0.58, 0.70               # the shared swing's foot lift / toe pitch scaled (a heavy, low run)
+RUN_LIFT, RUN_PITCH = 0.50, 0.70               # the shared swing's foot lift / toe pitch scaled (a heavy, low run)
+RUN_TUCK = 0.12                                # the swing foot carried further back (the knee stays low at passing)
 
 
 def gen_run() -> anim.Clip:
@@ -1459,13 +1515,18 @@ def gen_run() -> anim.Clip:
     c = anim.gen_run(MOTION)
     base = c.sample
 
+    c_ = anim.WEIGHTS[MOTION["weight"]][3]
+
     def sample(t):
         p = anim.add(base(t), RUN_LEAN)
         ik = dict(p["ik"])
         for side in ("L", "R"):
             ft = ik.get(f"foot.{side}")
-            if ft is not None and ft.ankle[2] > 1e-4:
+            q = (t + (0.0 if side == "L" else 0.5)) % 1.0
+            if ft is not None and ft.ankle[2] > 1e-4 and q >= c_:
+                sw = (q - c_) / (1.0 - c_)
                 a = ft.ankle
+                a = (a[0], a[1] + RUN_TUCK * math.sin(math.pi * sw) ** 1.5, a[2])     # the heel tucked back
                 k = 1.0 - (1.0 - RUN_PITCH) * min(1.0, a[2] / 0.06)          # continuous into the contact
                 ik[f"foot.{side}"] = FT((a[0], a[1], a[2] * RUN_LIFT), ft.pitch * k, ft.yaw, ft.toe, ft.knee, ft.weight)
         a = ik.get("aim.R")

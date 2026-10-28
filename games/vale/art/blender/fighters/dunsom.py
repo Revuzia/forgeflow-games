@@ -1671,8 +1671,8 @@ _orig_fit_camera = _render._fit_camera
 
 
 def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=None):
-    if _BUILD.get("dunsom") and (hi.z - lo.z) < 1.0:
-        arm = next((o for o in bpy.data.objects if o.type == "ARMATURE" and o.name.startswith(ID)), None)
+    arm = next((o for o in bpy.data.objects if o.type == "ARMATURE" and o.name.startswith(ID + "_")), None)
+    if arm is not None and (hi.z - lo.z) < 1.0:
         pts = [V((HAT_C[0] - HAT_R, HAT_C[1], 1.95)), V((HAT_C[0] + HAT_R, HAT_C[1], 1.95))]
         if arm is not None and "head" in arm.pose.bones:
             mw = arm.matrix_world
@@ -1680,7 +1680,8 @@ def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=No
             pts = [mw @ hb.matrix @ V((x, hb.length * 0.85, 0.0)) for x in (-HAT_R, HAT_R)]
             if "x_lantern" in arm.pose.bones and (hi.z - lo.z) > 0.6:
                 lb = arm.pose.bones["x_lantern"]
-                pts += [mw @ lb.head, mw @ lb.tail]
+                c = mw @ lb.head
+                pts += [c + V((dx, dy, dz)) for dx in (-0.11, 0.11) for dy in (-0.11, 0.11) for dz in (0.0, -0.40)]
         for q in pts:
             lo = V((min(lo.x, q.x - 0.06), min(lo.y, q.y - 0.06), lo.z))
             hi = V((max(hi.x, q.x + 0.06), max(hi.y, q.y + 0.06), max(hi.z, q.z + 0.10)))
