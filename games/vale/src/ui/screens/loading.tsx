@@ -4,7 +4,7 @@
 // once; you are ready when the session reports progress 1 and the renderer (if attached) has loaded the
 // match. Then Session.matchReady() starts the clock. The shadow-line wipe starts and ends the screen.
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { SeatSetup } from '../../contracts/sim.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
@@ -16,6 +16,14 @@ import { ErrorState, Skeleton } from '../components/States.tsx';
 
 /** long enough to read one tip, never a wait for its own sake */
 const MIN_SHOW_MS = 2400;
+/** cards per row (a team of five; FRAY's ten seats make two rows) */
+const PER_ROW = 5;
+/** the 3:5 loading-card crop of a splash (client F3). Every splash comes from the same plate rig (16:9, the
+ *  figure's mass centred at 0.66–0.75 of the width, head to feet over most of the plate's height). The plate
+ *  covers the lower 84 % of the card (screens.css .pcard__art) and fades into the ink above it, and the window
+ *  holds at 86 % across, so the figure stands at about 70–80 % of the card's height (p50 75 % over the 48
+ *  plates) with headroom over it */
+const CARD_CROP = '86% 50%';
 
 export function LoadingScreen(): JSX.Element {
   const { cv, state, session, router } = useApp();
@@ -74,7 +82,7 @@ export function LoadingScreen(): JSX.Element {
         <h1 class="t-display-l">{map?.name ?? mode?.name}</h1>
         <p class="t-body-l loading__flavour">{flavour}</p>
       </header>
-      <div class="loading__teams">
+      <div class="loading__teams" style={{ '--lrows': ordered.reduce((n, seats) => n + Math.max(1, Math.ceil(seats.length / PER_ROW)), 0), '--lheads': ffa ? 0 : ordered.length, '--lgaps': ordered.length - 1 } as CSSProperties}>
         {ordered.map((seats, ti) => (
           <section class={`lteam ${ffa ? 'lteam--ffa' : ti === 0 ? 'lteam--ally' : 'lteam--enemy'}`} aria-label={ffa ? cv.t('hourboard.title', 'Hour Board') : ti === 0 ? cv.t('team.yours', 'Your team') : cv.t('team.theirs', 'The other team')}>
             {!ffa ? <h2 class="lteam__head t-label"><SideMark team={seats[0]?.team ?? 0} withName />{ti === 0 ? cv.t('team.yours', 'Your team') : cv.t('team.theirs', 'The other team')}</h2> : null}
@@ -115,15 +123,16 @@ function PlayerCard(p: { s: SeatSetup; ffa: boolean; you: boolean; ready: boolea
   const seat = seatOf(p.s.colorIndex);
   return (
     <article class={`pcard pcard--${p.rel} stg ${p.ready ? 'is-ready' : ''}`} aria-label={`${p.s.name}, ${f?.name ?? ''}${p.ready ? `. ${cv.t('loading.status_ready', 'Ready')}` : ''}`}>
-      <Portrait fighter={f} skin={p.s.skin} size="fill" class="pcard__art" kind="splash" position="60% 25%" />
+      <Portrait fighter={f} skin={p.s.skin} size="fill" class="pcard__art" kind="splash" position={CARD_CROP} />
       <div class="pcard__meta">
         <span class="pcard__fighter t-label">{f?.name}</span>
-        <span class="pcard__name t-body-s">{p.you ? cv.t('common.you', 'You') : p.s.name}{p.s.controller === 'bot' ? <span class="chip chip--bot">{cv.t('party.bot', 'Bot')}</span> : null}</span>
+        <span class="pcard__name t-body-s" title={p.s.name}><span class="pcard__pname">{p.you ? cv.t('common.you', 'You') : p.s.name}</span></span>
         <span class="pcard__role t-caption">
-          {p.ffa ? <><SeatMark seat={seat} you={p.you} size={14} showNumeral={false} />{cv.t('fray.seat.label', 'Seat {roman} · {colour}', { roman: roman(seat), colour: cv.t(`fray.seat.${seat}`, '') })}</>
+          {p.ffa ? <><SeatMark seat={seat} you={p.you} size={14} showNumeral={false} /><span class="pcard__seat" title={cv.t('fray.seat.label', 'Seat {roman} · {colour}', { roman: roman(seat), colour: cv.t(`fray.seat.${seat}`, '') })}>{cv.t('fray.seat.short', 'Seat {roman}', { roman: roman(seat) })}<span class="pcard__seatcol"> · {cv.t(`fray.seat.${seat}`, '')}</span></span></>
             : role ? <><span class="roledot" style={{ background: role.color }} />{role.name}</> : null}
         </span>
       </div>
+      {p.s.controller === 'bot' ? <span class="chip chip--bot pcard__bot">{cv.t('party.bot', 'Bot')}</span> : null}
       <span class="pcard__tick" aria-hidden="true">{p.ready ? <Icon name="check" /> : null}</span>
     </article>
   );

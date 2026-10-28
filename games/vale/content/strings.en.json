@@ -430,6 +430,7 @@
   "fray.seat.9": "Plum",
   "fray.seat.10": "Rose",
   "fray.seat.label": "Seat {roman} · {colour}",
+  "fray.seat.short": "Seat {roman}",
   "fray.seat.you": "You hold Seat {roman} · {colour}.",
   "fray.seat.rim": "Your hour-mark is on the rim at Seat {roman}.",
   "fray.pick.title": "Pick your fighter",
