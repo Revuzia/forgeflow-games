@@ -156,7 +156,7 @@ Value bands (area-weighted): top **70** (70-85) · mid **47** (45-65) · feet **
 
 *"Ink-wash below, pale above, with light-rimmed edges; his resin pots become ink pots and his pools set in violet."* `vfxTint` `#7A6BB0`.
 
-Ink-wash lower body (`#2B2A33`) with light-rimmed edges and a pale upper body (`#B7B4BE`), so the value gradient holds; the pots become ink pots (dark bodies with a pale rim and the accent window). `vfxTint` is `#7A6BB0` (hue 253): it tints the resin pools and the pot-rim resin only, never the accent. **Extra geometry:** none; the ink pots are the same shape with a pale rim band.
+Ink-wash lower body (`#2B2A33`) with light-rimmed edges and a pale upper body (`#B7B4BE`), so the value gradient holds; the pots become ink pots (dark bodies with a pale rim and the accent window). `vfxTint` is `#7A6BB0` (hue 253): it tints the resin pools and the pot-rim resin only, never the accent. **Extra geometry:** none; the ink pots are the same shape with a pale rim band. **Mask (ruling 2026-10-28):** a warm amber lacquer `#B39272` with honey-amber inlays in the eye slits, so the slits read lit and the face reads alive; never a grey, blank or hollow-eyed mask on this skin.
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|

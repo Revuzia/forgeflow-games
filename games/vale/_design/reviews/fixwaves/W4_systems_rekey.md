@@ -1,6 +1,6 @@
 # W4 · Systems re-key: before and after
 
-**Status: pending owner sign-off.** This page covers final parity review item **originality F4**, the systems layer that mapped one to one onto LoL's, and the matching kit hooks in **originality F5**. The owner approves or rejects each row. Nothing ships as final until then.
+**Status: signed off 2026-10-28 (owner-delegated ruling 4 in `owner_rulings.md`; the probe_sim_rekey 10 % gate stays on).** This page covers final parity review item **originality F4**, the systems layer that mapped one to one onto LoL's, and the matching kit hooks in **originality F5**. The owner approves or rejects each row. Nothing ships as final until then.
 
 **The rule.** LoL is a gauge only. Each row below names the LoL system that a LoL player would read into VALE's old version. After the re-key:
 

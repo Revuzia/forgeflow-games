@@ -99,7 +99,7 @@ The crest, the visor and the pauldron spike carry the top quarter (L* 73); the s
 
 ## 7. Accent (template 7)
 
-The visor ridge fin, about 30 x 6 cm = 180 cm2 against roughly 9,900 cm2 of silhouette: **about 1.8%** (budget 5%), 100% in the top half (all on the head). At rest the emissive is 0.8; it blooms to 1.5 or more only in the wind-up of Long Glint, as a warning that the 9 m rush is coming. The ridge is on top of the head, so a viewer sees the colour from any angle, including from above.
+The narrow ridge blade along the visor's top edge plus the two swept fins off the left temple (ruling 2026-10-28, `_design/reviews/fixwaves/owner_rulings.md`; the earlier rear vanes are removed and nothing glows on the crest). Measured by three_qa: **2.28%** of the silhouette (budget 5%), 100% in the top half (all on the head). At rest the emissive is 0.8; it blooms to 1.5 or more only in the wind-up of Long Glint, as a warning that the 9 m rush is coming. The ridge is on top of the head, so a viewer sees the colour from any angle, including from above.
 
 ## 8. Motion (template 8)
 
@@ -127,7 +127,7 @@ Other clips: `run` at 3.55 m/s (light, foot slide under 8%); `attack1` a quick r
 
 ## 9. Skins (template 9)
 
-Palette swaps plus optional extra geometry read from `ctx.skin["extra"]`. Every skin keeps the rig, clips, silhouette class (height ±5%, footprint ±10%), accent locations and value gradient; none adds metal, a single saturated full-body colour, or a reserved hue above 40% saturation. Names, tiers and descriptions come from `content/skins/rishal.json`. The named hex is the identity colour of the skin: where it falls outside a band's L* range, the surface steps lighter or darker by band and the identity hex is used at its own band.
+Palette swaps plus optional extra geometry read from `ctx.skin["extra"]`. Every skin keeps the rig, clips, silhouette class (height ±5%, footprint ±10%), accent locations and value gradient (the visor ridge blade and both temple fins are accent on every skin and are never recoloured by a skin palette); none adds metal, a single saturated full-body colour, or a reserved hue above 40% saturation. Names, tiers and descriptions come from `content/skins/rishal.json`. The named hex is the identity colour of the skin: where it falls outside a band's L* range, the surface steps lighter or darker by band and the identity hex is used at its own band.
 
 ### `rishal_base`: Rishal (base)
 
