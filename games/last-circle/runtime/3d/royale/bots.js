@@ -863,7 +863,7 @@ function think(W, b) {
   // inside the edge, and the loot goal it was walking to in the storm is parked for 30 s (a player leaves the chest the storm has taken).
   const inStorm = st && st.dps > 0 && hyp(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius - (bb.stormLatch ? STORM_IN_M : 0);
   if (inStorm && !bb.stormLatch && bb.lootId && bb.moveTo && hyp(bb.moveTo.x - st.center.x, bb.moveTo.z - st.center.z) > st.radius - 2) {
-    if (!bb.badLoot) bb.badLoot = {};
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
     bb.badLoot[bb.lootId] = W.t + 30; bb.lootId = null;
   }
   bb.stormLatch = !!inStorm;
@@ -1700,7 +1700,7 @@ function act(W, b, dt) {
     case "FLEE": case "ROTATE": case "PUSH": case "WANDER": case "HUNT": case "CLOSEIN": case "SUPPLY": case "FOLLOW": case "PING": case "ASSIST":
       if (b.state === "SUPPLY") actSupply(W, b, dt);
       else if (b.state === "FOLLOW" || b.state === "PING" || b.state === "ASSIST") actSquadMove(W, b, dt);
-      else actMove(W, b, dt, b.state !== "PUSH" && b.state !== "WANDER");     // sprint: ROTATE, FLEE, HUNT, CLOSEIN
+      else { const nP = b.state !== "PUSH", nW = b.state !== "WANDER"; actMove(W, b, dt, nP && nW); }     // sprint: ROTATE, FLEE, HUNT, CLOSEIN (R1: both compares every call)
       fireOnTheMove(W, b, dt);
       break;
   }
@@ -1720,8 +1720,12 @@ function act(W, b, dt) {
 
   // suppression reflex: shot recently by someone unseen → sprint to lateral
   // cover instead of standing there soaking damage
-  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
-    const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
+  // (R1, tierprof kb) the test's reads run on every frame (pure reads, same answer): read only behind `!answering && ...` they had no type feedback until
+  // the first unseen hit of the match, which threw the optimized act() away inside tierprof's measured window
+  const lastAtt = a.lastAttacker, hitNow = W.t - a.lastDamageT < 0.9, reflexFree = W.t >= (bb.coverReflexUntil || 0), notEngage = b.state !== "ENGAGE";
+  const attNow = W.actorById.get(lastAtt);         // (the Map read of a null key is undefined: `lastAtt && attNow` is the old value)
+  if (!answering && hitNow && reflexFree && notEngage) {
+    const att = lastAtt && attNow;
     if (att) {
       const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
       bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
@@ -1781,10 +1785,19 @@ function actTail(W, b, dt) {
     const still = fx * fx + fz * fz < 0.15 * 0.15 && (inp.mz || inp.mx || MOVING_STATES[b.state]) && a.onGround && free;
     bb.furnT = W.t; bb.furnX = a.pos.x; bb.furnZ = a.pos.z;
     const gi = still ? offWalkRoom(W, b, true) : travel ? offWalkRoom(W, b, false) : -1;     // (the travel-only test reads the room without refreshing the brain's cached one)
-    if (gi >= 0 && still && ++bb.furnN >= FURN_ESC_N) { bb.furnN = 0; bb.furnD = 0; escapeToWalk(W, b, gi); }
-    else if (gi >= 0 && travel && ++bb.furnD >= FURN_DWELL_N) { bb.furnN = 0; bb.furnD = 0; if (escapeToWalk(W, b, gi)) nav.st.furnDwell++; }
-    if (!(gi >= 0 && still)) bb.furnN = 0;
-    if (!(gi >= 0 && travel)) bb.furnD = 0;
+    // (R1, tierprof kb) the two counters are read and written on EVERY window (same values, same order of the escape): `++bb.furnN` / `++bb.furnD` on
+    // the rare side of `&&` had no type feedback until a bot first stood off the walk area, and that first time threw the optimized actTail away
+    // (V8 log: "Insufficient type feedback" at both, inside tierprof's measured window)
+    const gS = gi >= 0 && still, gT = gi >= 0 && travel;
+    let fN = bb.furnN, fD = bb.furnD, esc = 0;
+    if (gS) fN++;
+    if (gS && fN >= FURN_ESC_N) { fN = 0; fD = 0; esc = 1; }
+    else if (gT && ++fD >= FURN_DWELL_N) { fN = 0; fD = 0; esc = 2; }
+    bb.furnN = fN; bb.furnD = fD;
+    if (esc === 1) escapeToWalk(W, b, gi);
+    else if (esc === 2) { if (escapeToWalk(W, b, gi)) nav.st.furnDwell++; }
+    if (!gS) bb.furnN = 0;
+    if (!gT) bb.furnD = 0;
   }
 
   // PROGRESS BREAKER for the fight and the heal (Wave 5; Unreal's path follower does block detection the same way). The
@@ -2019,7 +2032,7 @@ function breakOut(W, b) {
   const a = b.actor, bb = b.bb;
   bb.breaks = (bb.breaks || 0) + 1;
   if (bb.lootId) {
-    if (!bb.badLoot) bb.badLoot = {};
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
     bb.badLoot[bb.lootId] = W.t + 60;
     bb.lootId = null;
   }
@@ -3766,7 +3779,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
        the SAME item every time, so the bot escaped the wall and walked straight
        back into it. Park this id for 30 s and let it pick something else. */
     if (bb.lootId && !routed) {
-      if (!bb.badLoot) bb.badLoot = {};
+      if (!bb.badLoot) bb.badLoot = Object.create(null);
       bb.badLoot[bb.lootId] = W.t + 30;
       bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
     }
@@ -4023,7 +4036,7 @@ function offFurniture(W, b, dt) {
   }
   // a loot goal a few metres off is what led the bot in (an item in the pocket / on the piece): park it, or the bot walks back in the moment it is out
   if (bb.lootId && bb.moveTo && hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) < 4) {
-    if (!bb.badLoot) bb.badLoot = {};
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
     bb.badLoot[bb.lootId] = W.t + 30;
     bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
   }
@@ -4143,7 +4156,7 @@ function actLoot(W, b, dt) {
     if (IND.H !== null && bb.lootId && bb.moveTo && d < LOOT_NEAR_M) {
       bb.nearLootT += dt;
       if (bb.nearLootT > 2.5) {
-        if (!bb.badLoot) bb.badLoot = {};
+        if (!bb.badLoot) bb.badLoot = Object.create(null);
         bb.badLoot[bb.lootId] = W.t + 30;
         bb.lootId = null; bb.moveTo = null; bb.nearLootT = 0; b.nextThink = 0; nav.st.lootParked++;
       }
@@ -4885,6 +4898,7 @@ function dodgeGrenade(W, b, dt) {
  *  stands over the terrain. A refused heading is held for 0.6 s and the bot re-plans (a route takes the stairs). */
 function edgeGuard(W, b) {
   const a = b.actor, bb = b.bb, inp = a.input;
+  const wyE = W.map.waterY;          // (R1, tierprof kb) read on every call: read only inside the probe loop it had no type feedback when the loop first ran
   // (release blockers) no held heading and no probe due (3 frames in 4): nothing below can act - the same early return the tests below reach,
   // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
   if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
@@ -4920,7 +4934,7 @@ function edgeGuard(W, b) {
     let sup;
     if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = a.pos.y; supportA(W, SPQ, 0); sup = SPQ[3]; }      // supportAt(W, px, pz, a.pos.y), unboxed
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
-    if (W.map.waterY != null && sup < W.map.waterY) sup = W.map.waterY;      // water breaks a fall
+    if (wyE != null && sup < wyE) sup = wyE;      // water breaks a fall
     const steep = prev - sup > STEEP_STEP;
     if (steep && runTop !== runTop && k <= win) runTop = prev;
     if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
