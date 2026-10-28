@@ -1751,26 +1751,29 @@ def clip_overrides(ctx) -> dict:
     # Kemdo and Marund; r12 M5: three readable poses, the weapon travels >= 0.6x the fighter's height): a real wound-
     # back and a whip. The wind-up COILS the whole body away (hips, spine and chest ~45 degrees round, the weight on the
     # back foot, the striking fist drawn back past the hip), reaches it by 17 % and HOLDS it (a slow drift, never a
-    # freeze) to 34.5 %; the hips lead the drive; the fist then crosses the whole arc in the last 5.5 % before the
-    # contact (two game frames at the sim's 0.40-0.45 s wind-up) with a step in, and follows through across the body.
+    # freeze) to 36 %; the hips lead the drive; the fist then crosses the whole arc in the last 4 % before the contact
+    # (two game frames at the sim's 0.40-0.45 s wind-up) with a step in, and follows through across the body.
+    # In attack2 the rear (right) fist counter-rotates: out in front as a cover in the wind-up, snapped back to the
+    # cheek on the hit (the weapon socket, prop.R, is that fist).
     # Measured in game frames (proto-free: the clip time-scaled so its 40 % lands on the wind-up) in the W5b report.
     def punch_keys(wind, hit, fol, lead):
-        """Hesmi's punch timing (impact at exactly 40 %): guard, counter, wound-back by 0.17, a moving hold to 0.31,
-        the hips-first drive at 0.345 (the striking fist still back), the whip to the contact at 0.40, the impact
-        hold, the follow-through and the settle. `lead`: the striking hand ('hand.R' / 'hand.L')."""
+        """Hesmi's punch timing (impact at exactly 40 %): guard, counter, wound-back by 0.17, a moving hold to 0.33,
+        the hips-first drive at 0.36 (the chest and the striking fist still back), the whip to the contact at 0.40
+        (the last 1.4-1.8 game frames at a 0.40-0.45 s wind-up), the impact hold, the follow-through and the settle.
+        `lead`: the striking hand ('hand.R' / 'hand.L')."""
         hv = anim.HEAVY[prof["weight"]]
         still = {"hand.R": 0.0, "hand.L": 0.0, "foot.L": 0.0, "foot.R": 0.0}
         counter = anim._with_hips(anim.lerp_pose_w(g, wind, -0.12, still), (0.0, 0.0, -0.012 * hv))
         coil = anim.lerp_pose_w(g, wind, 1.06, {"foot.L": 1.0, "foot.R": 1.0})
-        drive = anim.lerp_pose_w(coil, hit, 0.10, {"hips": 0.55, "spine": 0.40, "chest": 0.22, "hips_loc": 0.45,
+        drive = anim.lerp_pose_w(coil, hit, 0.06, {"hips": 0.45, "spine": 0.22, "chest": 0.08, "hips_loc": 0.40,
                                                      "foot.L": 0.75, "foot.R": 0.75, "thigh.L": 0.6, "thigh.R": 0.6,
-                                                     lead: 0.04})
+                                                     lead: 0.02})
         hit2 = anim._with_hips(hit, (0.0, 0.0, -0.020 * hv))
         hold = anim._with_hips(anim.lerp_pose(hit, fol, 0.25), (0.0, 0.0, -0.026 * hv))
         fol2 = anim._with_hips(anim.lerp_pose_w(hit, fol, 1.0, {"head": 0.6, "neck": 0.7}), (0.0, 0.0, -0.010 * hv))
         rec = anim.lerp_pose(fol, g, 0.5)
-        return [(0.0, g, "linear"), (0.05, counter, "inout"), (0.17, wind, "inout"), (0.31, coil, "out"),
-                (0.345, drive, "in"), (anim.IMPACT, hit2, "accel"), (0.46, hold, "out"), (0.58, fol2, "out"),
+        return [(0.0, g, "linear"), (0.05, counter, "inout"), (0.17, wind, "inout"), (0.33, coil, "out"),
+                (0.36, drive, "in"), (anim.IMPACT, hit2, "accel"), (0.46, hold, "out"), (0.58, fol2, "out"),
                 (0.78, rec, "inout"), (1.0, g, "settle")]
 
     def punch(name, wind, hit, fol, lead, lags):
@@ -1788,13 +1791,13 @@ def clip_overrides(ctx) -> dict:
               ft=feet(dl=(0.03, -0.32, 0), dr=(0, 0.02, 0), pr=-14))
     out["attack1"] = punch("attack1", w1, h1, f1, "hand.R", {"head": 1.0, "neck": 0.5, "hand.L": 2.0})
     w2 = pose(dict(hips=(6, 14, 0), spine=(6, 12, 4), chest=(8, 18, 6), neck=(-2, -14, 0), head=(-2, -16, 0)),
-              (-0.02, 0.06, -0.10), L=ATK2_WIND, R=((-0.10, -0.62, -0.18), (-0.85, 0.30, -0.40)),
+              (-0.02, 0.06, -0.10), L=ATK2_WIND, R=((-0.04, -0.82, -0.04), (-0.85, 0.30, -0.40)),
               ft=feet(dr=(0, -0.02, 0), dl=(0, 0.06, 0)))
     h2 = pose(dict(hips=(9, -10, 0), spine=(5, -8, -3), chest=(1, -10, -5), neck=(-4, 6, 0), head=(-8, 10, 0)),
-              (0.02, -0.20, -0.01), L=ATK2_HIT, R=((-0.16, -0.42, -0.26), (-0.85, 0.30, -0.40)),
+              (0.02, -0.20, -0.01), L=ATK2_HIT, R=((-0.30, -0.28, -0.12), (-0.85, 0.30, -0.40)),
               ft=feet(dr=(-0.02, -0.28, 0), dl=(0, 0.02, 0), pl=-12))
     f2 = pose(dict(hips=(9, -14, 0), spine=(5, -11, -3), chest=(0, -15, -5), neck=(-4, 9, 0), head=(-8, 13, 0)),
-              (0.02, -0.21, 0.01), L=ATK2_FOL, R=((-0.18, -0.40, -0.28), (-0.85, 0.30, -0.40)),
+              (0.02, -0.21, 0.01), L=ATK2_FOL, R=((-0.32, -0.26, -0.14), (-0.85, 0.30, -0.40)),
               ft=feet(dr=(-0.02, -0.28, 0), dl=(0, 0.02, 0), pl=-12))
     out["attack2"] = punch("attack2", w2, h2, f2, "hand.L", {"head": 1.5, "neck": 0.8, "hand.R": 2.5})
 
