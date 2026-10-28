@@ -1,0 +1,249 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "rishal": {
+      "glb": "art/out/fighters/rishal/rishal.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 75.2,
+            "mid": 54.2,
+            "bottom": 30.6
+          },
+          "accentPct": 2.16,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.16
+        },
+        "90": {
+          "heightPx": 129,
+          "valueBands": {
+            "top": 76.0,
+            "mid": 48.5,
+            "bottom": 28.7
+          },
+          "accentPct": 1.59,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.59
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 69.7,
+            "mid": 51.8,
+            "bottom": 22.1
+          },
+          "accentPct": 1.81,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.81
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 71.8,
+            "mid": 47.7,
+            "bottom": 26.1
+          },
+          "accentPct": 2.23,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.23
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.23,
+      "accentOk": true
+    },
+    "rishal_chalkline": {
+      "glb": "art/out/fighters/rishal/rishal_chalkline.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 69.9,
+            "mid": 45.0,
+            "bottom": 27.8
+          },
+          "accentPct": 2.16,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.16
+        },
+        "90": {
+          "heightPx": 129,
+          "valueBands": {
+            "top": 69.7,
+            "mid": 38.3,
+            "bottom": 21.1
+          },
+          "accentPct": 1.59,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.59
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 63.0,
+            "mid": 39.7,
+            "bottom": 17.4
+          },
+          "accentPct": 1.81,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.81
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 66.7,
+            "mid": 37.9,
+            "bottom": 21.0
+          },
+          "accentPct": 2.23,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.23
+        }
+      },
+      "clipsFrom": "rishal",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.23,
+      "accentOk": true
+    },
+    "rishal_lamplit": {
+      "glb": "art/out/fighters/rishal/rishal_lamplit.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 70.3,
+            "mid": 53.4,
+            "bottom": 34.1
+          },
+          "accentPct": 2.08,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.08
+        },
+        "90": {
+          "heightPx": 129,
+          "valueBands": {
+            "top": 70.4,
+            "mid": 48.1,
+            "bottom": 29.7
+          },
+          "accentPct": 1.58,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.58
+        },
+        "180": {
+          "heightPx": 130,
+          "valueBands": {
+            "top": 69.9,
+            "mid": 52.0,
+            "bottom": 27.2
+          },
+          "accentPct": 1.8,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.8
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 67.6,
+            "mid": 46.6,
+            "bottom": 29.0
+          },
+          "accentPct": 2.21,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.21
+        }
+      },
+      "clipsFrom": "rishal",
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.21,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "rishal",
+      "b": "rishal_chalkline",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "rishal",
+      "b": "rishal_lamplit",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 0.993,
+        "180": 0.994,
+        "270": 0.992
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 0.989,
+        "180": 0.703,
+        "270": 0.992
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "rishal_chalkline",
+      "b": "rishal_lamplit",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 0.993,
+        "180": 0.994,
+        "270": 0.992
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 0.989,
+        "180": 0.703,
+        "270": 0.992
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/rishal_w5b_b2_skins.png",
+  "seconds": 14.6
+}
