@@ -84,6 +84,30 @@ test('integration: a sign foretold through a prophet is fulfilled by the Signs p
   assert.equal(s2.u.god.rel!.prophets.find((q) => q.agent === w2)!.fulfilled, 0, 'a far sign does not fulfil it');
 });
 
+test('integration: a sign sent to a named town stands over that town, wherever the camera dwells (god.omen { settlement })', () => {
+  // (the year-50 omen sessions, 2026-10-28: a rainbow sent to a town far from the camera focus landed at the focus — the
+  // focus fills a command's missing `pos` — so the town saw it but the prophet's "a sign within two days" failed; the
+  // living panel sends exactly { k: 'god.omen', settlement, kind })
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const far = [...Array(p.grid.count).keys()].find((c) => !p.s.ocean[c] && Math.acos(Math.min(1, p.grid.pos[c * 3] * st.pos[0] + p.grid.pos[c * 3 + 1] * st.pos[1] + p.grid.pos[c * 3 + 2] * st.pos[2])) * p.st.radius > 6000);
+  assert.ok(far !== undefined, 'a place far from the town');
+  const farPos: [number, number, number] = [p.grid.pos[far! * 3], p.grid.pos[far! * 3 + 1], p.grid.pos[far! * 3 + 2]];
+  must(sim, { k: 'focus', pos: farPos });
+  const who = commoner(sim, st);
+  must(sim, { k: 'prophet.call', agent: who });
+  must(sim, { k: 'prophet.foretell', agent: who, what: 'sign', days: 2 });
+  sim.step(120);
+  must(sim, { k: 'god.omen', settlement: st.id, kind: 'comet' });
+  const R = sim.u.god.rel!;
+  const o = R.omens[R.omens.length - 1];
+  assert.ok(distM(p, o.pos, st.pos) < 1, `the comet is read over the town, not at the focus (${Math.round(distM(p, o.pos, st.pos))} m off)`);
+  assert.equal(R.prophets.find((q) => q.agent === who)!.fulfilled, 1, 'the sign came as foretold');
+  // a place the command names itself still wins over the town
+  must(sim, { k: 'god.omen', settlement: st.id, pos: farPos, kind: 'comet' });
+  assert.ok(distM(p, R.omens[R.omens.length - 1].pos, farPos) < 1, 'an explicit place is kept');
+});
+
 test('integration: infants neither pray nor wander off, even in a town at prayer in hardship (they sleep, rest, eat and keep by their people)', () => {
   // (the acceptance run's day slices: the under-twos of a town in hardship — no play or chores for them yet — spent 17 % of
   // the day praying, and once kept from it, 13 % wandering)

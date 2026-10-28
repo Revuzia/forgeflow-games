@@ -393,7 +393,11 @@ export function registerOmenCommands(r: CommandRegistry): void {
     const g = typeof cmd.god === 'number' ? cmd.god : 0;
     const st = typeof a.settlement === 'number' ? p.people?.settlement(a.settlement) ?? null : a.pos ? nearestSettlement(p, a.pos, 2500) : null;
     if (typeof a.settlement === 'number' && (!st || st.fallen >= 0)) return fail('There is no such settlement.');
-    const at: V3 = a.pos ? norm(a.pos) : st ? [st.pos[0], st.pos[1], st.pos[2]] : herePos(u, p);
+    // a sign sent to a named settlement stands over it: `a.pos` falls back to the camera focus when the command names no
+    // place (god/commands.ts resolvePos), so it wins only when the command gave one itself (integration 2026-10-28:
+    // before, a sign sent to a town far from the focus landed at the focus and could not fulfil its prophet's word)
+    const placed = Array.isArray(cmd.pos) || (typeof cmd.lat === 'number' && typeof cmd.lon === 'number') || typeof cmd.cell === 'number';
+    const at: V3 = st && typeof a.settlement === 'number' && !placed ? [st.pos[0], st.pos[1], st.pos[2]] : a.pos ? norm(a.pos) : st ? [st.pos[0], st.pos[1], st.pos[2]] : herePos(u, p);
     const kind = (typeof a.kind === 'string' ? a.kind : fitting(u, p, st, at)) as OmenKind | null;
     if (!kind) return fail('No sign fits this world now.');
     const res = makeOmen(u, p, kind, st, at, g);

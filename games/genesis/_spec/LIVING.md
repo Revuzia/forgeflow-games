@@ -2093,6 +2093,19 @@ migration test on a save of the previous 1.5 build, and ran the whole suite agai
   the old build's own hash (`8a07301846261933`), the same people, towns, polity and grievance; the old grievance record
   is judged by this build's rules (the famine weighed: 0.52 → 0.97, the calamity counters begun); a re-saved copy and two
   loads live three days alike. (The old build's zebra reads as born here, as §4.8 says.)
+- **A sign sent to a named town stands over that town** (ninth pass, 2026-10-28; `god/omens.ts` `god.omen`). The year-50
+  omen sessions missed "fulfilled raises trust above contradicted": on 5 of 8 worlds the prophet's "a sign within two
+  days" failed although the god sent the rainbow. Traced on seed 1 (`integrate/god-dbg9.ts`): `god.omen { settlement }`
+  placed the omen at `a.pos`, which the command layer fills with the camera focus when a command names no place
+  (`god/commands.ts resolvePos`), so the rainbow stood ~7 km from the town — near enough to be seen (`readOmen` reaches
+  +1.5 km) but not to count as the god's act for that town (`actReaches`, +200 m). On the fresh towns the focus was on
+  the town, so the fresh sessions met. The living panel sends exactly this command (`src/ui/living.ts`). A named
+  settlement now wins over the focus default (a place the command gives itself still wins). Seed 1's year-50 omen pair
+  after the fix: credibility 0.475 vs 0.05, trust 0.21 vs 0.194, loyalty 0.156 vs 0.056 (before: 0.05 vs 0.05, 0.09 vs
+  0.12, 0.03 vs 0.03). Test: `tests/living-integration.test.ts` "a sign sent to a named town stands over that town …"
+  (fails without the fix: the comet read 6959 m off). The probe also fulfils a prophet's own reading of the comet
+  (healing, rebuilding, warmth, protection) with the act that answers it (before: a rainbow, which cannot). Both omen
+  cases were re-run on all 16 worlds (`r6/out/god-omen-i9.log`, `god50-omen-i9.log`). No saved state changed.
 
 ### 10.3 The acceptance suite (how it ran)
 All on the final integrated tree, two processes at a time on the shared 4-core machine (`r6/jobs.txt`, run by
