@@ -38,14 +38,14 @@
   },
   "uv_coverage": 0.696,
   "bake": {
-    "base": 1.1,
-    "rough_metal": 0.75,
-    "normal": 0.56,
-    "ao": 0.75,
+    "base": 1.96,
+    "rough_metal": 3.09,
+    "normal": 1.33,
+    "ao": 3.08,
     "normal_fixed_px": 22652,
-    "projection": 4.9,
-    "pack_save": 6.25,
-    "total": 9.51
+    "projection": 13.25,
+    "pack_save": 15.57,
+    "total": 25.22
   },
   "tris": 3981,
   "mesh_top_m": 1.728,
@@ -153,17 +153,17 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 861772,
+  "glb_bytes_raw": 861260,
   "optimize": {
     "ok": true,
-    "before": 863512,
-    "after": 341508
+    "before": 863000,
+    "after": 341404
   },
-  "glb_bytes": 341508,
+  "glb_bytes": 341404,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/brightwick_aubade.glb (334 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/brightwick_aubade.glb (333 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: brightwick_aubade_base 1024x1024 78K, brightwick_aubade_normal 256x256 13K, brightwick_aubade_orm 256x256 8K",
       "  skinned meshes: brightwick_aubade(3942v), brightwick_aubade_accent_1(33v), brightwick_aubade_accent_2(57v), brightwick_aubade_accent_3(314v)",
       "  bones: 25 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR x_hem_1)",
@@ -194,8 +194,8 @@
       1
     ],
     "headY": 1.342,
-    "accentPct": 7.02,
-    "accentTopHalfPct": 72.9,
+    "accentPct": 6.96,
+    "accentTopHalfPct": 72.7,
     "heightPx1080": 92,
     "size": [
       2400,
@@ -203,25 +203,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_brightwick_aubade.png",
-    "seconds": 7,
-    "exit": 0
+    "seconds": 12.3,
+    "exit": 0,
+    "clip_sheet": "art/renders/units/three_clips_brightwick_aubade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.11,
-      "model": 2.97,
-      "lows_bind": 0.03,
-      "uv": 5.16,
-      "bake": 9.51,
-      "clips": 0.37,
-      "export": 0.66,
-      "optimize": 0.35,
-      "load_test": 0.12,
-      "three_qa": 7.21,
-      "cache": 0.03
+      "materials": 0.24,
+      "model": 7.66,
+      "lows_bind": 0.08,
+      "uv": 10.67,
+      "bake": 25.22,
+      "clips": 0.52,
+      "export": 0.79,
+      "optimize": 0.54,
+      "load_test": 0.19,
+      "three_qa": 31.55,
+      "cache": 0.04
     },
-    "total_s": 26.53
+    "total_s": 77.56
   },
   "run_ref_speed": 3.3,
   "height_m": 1.6

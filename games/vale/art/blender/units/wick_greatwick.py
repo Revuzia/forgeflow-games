@@ -22,10 +22,10 @@ small warp (`to_model`), because the two sheets disagree with each other and wit
   * Serenade: the sheet's whole upper body stands 13 cm taller than Aubade's (hood crown 1.33 m): the body is
     lowered (z 0.15-1.33 -> 0.15-1.25, a lower, broader dome as the brief asks) and narrowed 6 %. The drum is built
     in MODEL space (`lantern_serenade`, SER_DRUM): 0.72 x 0.45 m, seated over the shoulders (its front on the
-    collar's back): two heavy block-cut ironstone courses (exact carved hulls), eight lampresin panes behind
-    ironstone posts each framing one domed accent core, a low tan felt lid with four crossed dark straps (fix round
-    3); on an A-frame of walnut posts down the built back to the belt with two yokes, a strapped felt PACK filling the
-    back under it (fix 5: the side view is one load on the back, not a lamp on stilts).
+    collar's back): two heavy ironstone courses (fix round 6: round chamfered lathe rings, the blocks painted),
+    eight smoky lampresin panes behind ironstone posts each framing one small domed accent core in a soft lamp glow,
+    a low tan felt lid framed by an ironstone rim; on an A-frame of walnut posts down the built back to the belt with
+    two yokes, a strapped felt PACK filling the back under it (fix 5: one load on the back, not a lamp on stilts).
   * Parts sculpted directly in model space (sleeves, mitts: the rest pose is symmetric, the sheet's arms are
     not) carry the opposite map (`to_concept`).
 The projection pass inverts every warp (the PAINT POSE: vertices go back to where the concept paints them for
@@ -39,23 +39,28 @@ sculpt's own folds painted over both, the Serenade hem rolls / belt in their own
 move the projected median onto the palette role (the Aubade slate hem band is a zone). Everything else is
 PROCEDURAL-PAINTERLY (gw_proc: palette hex with the sheet's value structure; stone mottle / cracks / chips / block
 courses, wood grain, felt nap, linen weave and hem lines, sleeve cuffs and wraps, finger lines, dawnglass margins),
-with edge wear and cavities read from each part's own SDF (_edges). Dark channels are painted either side of the
-accent seams / crown band (gw_halo) so the team light holds value contrast. INK fills the hood hollows; value ramps
-darken the Aubade's feet band.
-Accent (§4): hood light (fix round 3: ONE smooth UV-ellipsoid core in the MIDDLE of the hollow, 8 cm back, wider than
-tall, dark hollow above, below and to both sides; its soft falloff is a dim see-through LINING of light over the
-hollow's deep half: the wide low lens of fix 5 read as a tongue in an open mouth; roughness 1 in the GLB: no glint),
-the hood mark (Aubade seam / Serenade crown band: an exact ribbon arching close over the opening, in a dark bed), the
-back-lantern (Aubade: an oval core on each pane + the roof light well; Serenade: a domed core on each of the 8
-lampresin panes; both with one see-through glow fan round each core), the Aubade stole clasp. The see-through parts
-are a second material renamed `accent` and alpha-blended in the GLB (glb_metallic_zero), so the renderer tints them
-per viewer with the cores. The Serenade hammer window is lampresin, not accent. No lid oculus (it read as a gem).
+with edge wear and cavities read from each part's own SDF (_edges). Fix round 6, the Art 2.0 finish over all of it
+(gw_finish, `_finish`: the glimwick's paint means): the concept's own brush strokes as gains (wick_common.detail_ratio,
+0.4-0.65), felt / wool nap, lit edges and dark seams from each part's field, painted fold creases on the Serenade
+felt; on Serenade the reserved marigold band is clamped (gw_reserved; the lampresin panes keep theirs). Dark channels
+are painted either side of the accent seams / crown band (gw_halo) so the team light holds value contrast. INK fills
+the hood hollows; value ramps darken the Aubade's feet band.
+Accent (§4): hood light (the shared wick_common core + halo: one soft core centred in the dark hollow, its alpha
+falling to its outline, in a wide halo), the hood mark (Aubade seam / Serenade crown band: an exact ribbon arching close
+over the opening, in a dark bed), the back-lantern (Aubade: an oval core on each SMOKED dawnglass pane; Serenade: a
+small domed core on each of the 8 smoky lampresin panes; both in the shared soft lamp glow, glow_halo_lamp, black
+diffuse so it only adds light), the Aubade stole clasp, the Serenade hammer window (fix round 6: accent framed in dark
+iron). The see-through parts are renamed `accent` and alpha-blended in the GLB, so the renderer tints them per viewer
+with the cores. No lid oculus (it read as a gem).
 
 EXACT GAME MESHES (fix 4): hard carved props are convex HULLS (meta low_hulls: `hull_sp`, `carved_block`,
 `prism_block`, `oval_disc`): the Aubade hammer head (a waist block + two stepped wedge striking blocks, chamfered,
 two corners broken) and its lashing (a wrap band + flat X straps that stay on the faces), the pommel, the lantern
 posts and cores, the lenses; flat shaded, their SDF field still drives the paint's edge wear. Decimated SDF versions
-went soft (a pillow) or collapsed thin straps into blades.
+went soft (a pillow) or collapsed thin straps into blades. Fix round 6 (meta low_mesh, smooth): the Serenade mantle
+(an open radial strip, the V notch left open), collar (a tube), A-frame (tubes + yoke bars), pack (rounded blocks),
+hammer head (a lathe: flanges and the two sandstone bands as clean rings), drum courses and lid (oval lathes): the
+decimated versions broke into torn-paper shards, crumpled tape and an octagonal drum.
 
 Motion: every clip is checked against the real game mesh skinned in numpy (`_Ground`; probe:
 proto/wick_greatwick_motion.py): the run's planted boots sit exactly on the ground and the bell never cuts it (a
@@ -1801,29 +1806,39 @@ def serenade_parts(L: dict) -> list:
     # torn-paper shards behind the hood and a spike under the chin
     F_m = field_of(mantle)
 
-    def m_rows(a):
-        hz = 0.745 + float(lapels(np.array([[-0.03 + math.sin(a), 0.02 - math.cos(a), 0.0]]))[0])
-        zb = hz - 0.006
-        zt = 0.936
-        return [zt, zt + (zb - zt) * 0.36, zt + (zb - zt) * 0.70, zb]
-    m_cols = [0.0, 8.0, 15.0, 24.0, 34.0, 46.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 165.0, 180.0]
-    m_cols = sorted(set(m_cols + [-c_ for c_ in m_cols if 0.0 < c_ < 180.0]))
-    mV, mF = wc.radial_low(F_m, -0.03, 0.02, m_cols, m_rows, rmax=0.62, lip=[(0.030, 0.008)])
-    # (fix round 6) rows whose ray found no felt (the collar's front is carved out of the hood's hollow, the V notch
-    # under the chin) were filled in 5 cm off the axis by radial_low: those faces stood up inside the hollow as lit
-    # slabs. Drop every face with a vertex off the felt's surface (the notch stays open; the lip row follows its column)
-    nv_ = len(m_rows(0.0)) + 1
-    off = np.abs(F_m.d(mV)) > 0.012
-    off = off.reshape(-1, nv_)
-    off[:, -1] = off[:, -2]
-    off = off.reshape(-1)
-    scene.log(f"greatwick mantle low: {int(off.sum())} of {len(off)} vertices off the felt, "
-              f"{int(off[mF].any(1).sum())} faces dropped")
-    mF = mF[~off[mF].any(1)]
-    used = np.unique(mF)
-    remap = np.full(len(mV), -1, np.int64)
-    remap[used] = np.arange(len(used))
-    mV, mF = mV[used], remap[mF]
+    def m_hem(a):
+        return 0.745 + float(lapels(np.array([[-0.03 + math.sin(a), 0.02 - math.cos(a), 0.0]]))[0])
+    # (fix round 6) an OPEN strip round the back from one side of the V notch to the other (no column inside the notch:
+    # the collar's front there is carved out of the hood's hollow, and radial_low filled those rays 5 cm off the axis,
+    # lit slabs inside the hollow), each column's top the highest row whose ray still finds felt (the cut under the
+    # hood's sill), its foot the hem (+ one turned-under lip row)
+    m_cols = [15.0, 24.0, 34.0, 46.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 165.0, 180.0]
+    m_cols = m_cols + [360.0 - c_ for c_ in m_cols[::-1][1:]]
+    zs_probe = np.arange(0.936, 0.70, -0.004)
+    cols_V = []
+    for c_ in m_cols:
+        a = math.radians(c_)
+        dv = np.array([math.sin(a), -math.cos(a), 0.0])
+        zb = m_hem(a) - 0.006
+        zp = zs_probe[zs_probe > zb + 0.02]
+        tp = wc.march_in(F_m, np.stack([np.full(len(zp), -0.03), np.full(len(zp), 0.02), zp], 1),
+                         np.repeat(dv[None], len(zp), 0), 0.62)
+        hit = np.nonzero(~np.isnan(tp))[0]
+        zt = float(zp[hit[0]]) if len(hit) else zb + 0.03
+        zr = np.array([zt, zt + (zb - zt) * 0.36, zt + (zb - zt) * 0.70, zb])
+        O = np.stack([np.full(4, -0.03), np.full(4, 0.02), zr], 1)
+        t = wc.march_in(F_m, O, np.repeat(dv[None], 4, 0), 0.62)
+        if np.isnan(t).any():
+            good = np.nonzero(~np.isnan(t))[0]
+            t[np.isnan(t)] = np.interp(np.nonzero(np.isnan(t))[0], good, t[good]) if len(good) else 0.2
+        Vc = O + dv[None] * t[:, None]
+        lip = Vc[-1] - dv * 0.030 + np.array([0.0, 0.0, 0.008])
+        cols_V.append(np.vstack([Vc, lip[None]]))
+    mV = np.vstack(cols_V)
+    mF = wc.grid_faces(len(m_cols), 5, closed=False)
+    mF = wc.wind_out(mV, mF, lambda cen: np.stack([np.full(len(cen), -0.03), np.full(len(cen), 0.02), cen[:, 2]], 1))
+    scene.log(f"greatwick mantle low: {len(m_cols)} columns, tops {min(v[0, 2] for v in cols_V):.3f}-"
+              f"{max(v[0, 2] for v in cols_V):.3f}, {len(mF)} tris")
     out.append(SP("mantle", mantle, "cloth2", "auto", len(mF), to_model=mantle_tf,
                   meta={"low_mesh": (mV, mF), "smooth": True}))
     # (no over-the-shoulder straps: their ends stopped dead on the felt; the A-frame is lashed at the belt, paint)
@@ -2324,7 +2339,7 @@ PAINT = {
             # (fix round 3) a deeper dawnglass with a dim frost (the core is the light: a near-white bloom out-valued the
             # ally azure, so the west viewer saw a blue hole in white glass)
             # (fix round 6) SMOKED dawnglass, L* <= 30 round the cores (the lamp halo only adds light: no dark ring)
-            "lantern_glass": {"kind": "glass", "hex": "#3F454C", "smoke": True,
+            "lantern_glass": {"kind": "glass", "hex": "#4A535D", "smoke": True,
                               "box": (0.0, _A_LANT[1], _AL["hw"] - 0.015, _AL["hd"] - 0.015, *_AL["z_pane"])},
         },
         # (fix round 6) the Art 2.0 finish (_finish): the concept's strokes, nap, lit edges and dark seams
@@ -2385,7 +2400,7 @@ PAINT = {
             # felt is ochre): 39-40 % saturation (the reserved-band cap), lower value, modelled by the key
             "mantle": {"kind": "cloth", "hex": "#A08562", "light": (0.68, 1.02), "key": 0.14, "brush": 0.06, "felt": True},
             "hood": {"kind": "cowl", "hex": "#958061", "light": (0.68, 0.98), "key": 0.14, "brush": 0.05, "felt": True,
-                     "centre": (-0.035, 0.03, 1.07), "folds": 5, "fold": 0.10},
+                     "centre": (-0.035, 0.03, 1.07), "folds": 5, "fold": 0.13},
             "hood_rim": {"kind": "felt", "hex": "#45392F", "light": (0.80, 1.40), "nap": 0.06},
             "hollow_floor": {"kind": "flat", "hex": "#17150F", "light": (1.0, 1.0), "noise": 0.03},
             "collar": {"kind": "felt", "hex": "#45392F", "light": (0.80, 1.40), "nap": 0.06},
@@ -2399,7 +2414,9 @@ PAINT = {
                        "edge_w": 0.012},
             "haft": _WALNUT, "pommel": _IRON,
             "hammer_window": {"kind": "flat", "hex": "#C99555", "light": (0.85, 1.25), "key": 0.08, "noise": 0.04},
-            "hammer_head": dict(_IRON, kind="spool"),
+            # (fix round 6) the sandstone bands a step under the palette's #C3A47A (lit, the clean rings read near-white
+            # at hip height, over the hood)
+            "hammer_head": dict(_IRON, kind="spool", band="#B09370"),
             "hammer_bands": {"kind": "stone", "hex": "#C3A47A", "light": (0.80, 1.10), "cracks": 0.10, "freq": 10.0,
                              "edge": 0.18, "cavity": 0.35, "edge_w": 0.008},
             # the drum: heavy dark ironstone block bands with lit chipped edges, the posts ironstone, the window
@@ -2442,6 +2459,10 @@ PAINT = {
                    # the lower corners: the 'tan sliver'): every tunic texel inside the carve itself, whatever its facing
                    {"part": "cloak", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
                     "hex": "#17150F", "pad": 0.012},
+                   # (fix round 6) but in the V under the chin (below the hollow's floor) the carved tunic is a shadowed
+                   # dark felt collar, not ink: a black wedge there read as a spike under the chin (review r4)
+                   {"part": "cloak", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
+                    "hex": "#3A2D24", "pad": 0.014, "z_max": 0.855},
                    # (the faces the clearance carve leaves round the hollow's deep part, seen through the hood's floor)
                    {"part": "mantle", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0, 0]), 0.03),
                     "hex": "#17150F", "pad": 0.012}],
@@ -2870,6 +2891,8 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
         w = 1.0 - _smooth01((dcarve - it.get("pad", 0.008)) / 0.010)
         if it.get("nz_min") is not None:             # up-facing texels only (a top seen through a hollow, not a front)
             w = w * _smooth01((nrm[sel, 2] - it["nz_min"]) / 0.2)
+        if it.get("z_max") is not None:              # (fix round 6) only below a height (the V under the chin)
+            w = w * (1.0 - _smooth01((q[:, 2] - it["z_max"]) / 0.02))
         ink = np.asarray(scene.hex_srgb(it["hex"]), np.float32)
         tone = np.repeat(ink[None, :], len(q), 0) * (1.0 + 0.06 * NOISE.fbm(q, 14.0, 2))[:, None]
         lt = (meta.get("hoodlight") or {}).get("light")
@@ -2889,7 +2912,12 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
         # saturation; the lampresin panes keep theirs (the brief's <= 4 % allowance)
         keep = np.isin(k, [i_ for i_, nm in enumerate(names) if nm in cfg["gw_reserved"].get("keep", ())])
         col, frac = wc.clamp_reserved(col, keep, sat_max=cfg["gw_reserved"].get("sat_max", 0.37))
-        log(f"greatwick paint: reserved-band clamp on {100 * frac:.1f} % of texels")
+        # the near-black texels (ink, leather and walnut in shade) a margin lower: the bake's AO and the WebP chroma
+        # error push dark colours' saturation up by several points
+        dark = col.max(1) < 0.30
+        col2, frac2 = wc.clamp_reserved(col, keep | ~dark, sat_max=cfg["gw_reserved"].get("sat_dark", 0.30))
+        col = col2
+        log(f"greatwick paint: reserved-band clamp on {100 * frac:.1f} % of texels (+{100 * frac2:.1f} % dark)")
     out = np.zeros((size, size, 3), dtype=np.float32)
     out[idx] = col
     iy, ix = project.nearest_index(have)

@@ -117,7 +117,9 @@ FORM = {
         # mouth. The soft falloff is the painted spill on the hollow's walls BEHIND and beside it (`ink_hollow`:
         # the front of the hollow, the sill and the cheeks stay ink). Matte. Centre, radii (local X, depth, up),
         # tilt (deg, top back)
-        "hood_light": ((0.0, -0.118, 1.420), (0.042, 0.023, 0.027), 8.0),      # (r6: ~0.5 of the sunk opening)
+        # (r6: ~0.5 of the sunk opening; the core 4.2 -> 3.5 cm across: the shared halo is 2.07 x the core now, and
+        # at the old size it filled 88 % of the opening's width, a lit plate; now it fades out inside the dark)
+        "hood_light": ((0.0, -0.118, 1.420), (0.035, 0.021, 0.023), 8.0),
         "shoulder": 0.205,
         # A-line cape: +-0.33 under the pauldrons -> +-0.43 at the hem, deeper toward the hem (side view flares too)
         "cloak_rx": [(0.04, 0.432), (0.25, 0.418), (0.50, 0.400), (0.75, 0.380), (0.95, 0.362), (1.10, 0.338),
@@ -145,7 +147,8 @@ FORM = {
         # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
         "tomb": ((0.114, 1.370, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
         # one soft core floating in the hollow (see the Aubade note): 12 x 7 cm, front ~3.5 cm behind the opening
-        "hood_light": ((0.0, -0.124, 1.445), (0.051, 0.024, 0.032), 8.0),      # (r4: ~0.5 of the opening; 2 x halo)
+        # (r6: 5.1 -> 3.9 cm across: the 2.07 x halo filled the broad opening edge to edge, a lit visor from 52 deg)
+        "hood_light": ((0.0, -0.124, 1.445), (0.039, 0.021, 0.025), 8.0),
         "shoulder": 0.215,
         "cloak_rx": [(0.13, 0.398), (0.20, 0.405), (0.30, 0.398), (0.45, 0.378), (0.62, 0.350), (0.80, 0.326),
                      (0.98, 0.308), (1.10, 0.288), (1.18, 0.245), (1.24, 0.18)],
@@ -1592,14 +1595,19 @@ def body_parts(F, aub, info, part):
         a_w = abs(wall_angle(F, zs_, 1.0, 0.0)) + 1.0
         # (r6, review r4: "a torn notch at the back seam") the ribbon's stations ARE the cloak low's columns: its
         # chords run parallel to the coat's, so no coat vertex pokes through between two stations
-        cc = sorted({c % 360.0 for c in CLOAK_COLS["serenade"] + [-c for c in CLOAK_COLS["serenade"]]})
-        aa = np.radians([a_w] + [c for c in cc if a_w + 4.0 < c < 360.0 - a_w - 4.0] + [360.0 - a_w])
-        R_ = float(interp(tab, zs_))
-        ry_ = float(interp(ytab, zs_))
-        P0 = np.stack([np.sin(aa) * R_, -np.cos(aa) * R_ * ry_, np.full(len(aa), zs_)], 1)
-        N0 = np.stack([np.sin(aa) * ry_, -np.cos(aa), np.zeros(len(aa))], 1)
-        S0, G0 = onto_surface(cl_d, P0, N0, reach=0.06, lift=0.0025)
-        v, q = ribbon(S0, G0, SASH_W, 0.005, sink=0.008)
+        ccols = sorted({c % 360.0 for c in CLOAK_COLS["serenade"] + [-c for c in CLOAK_COLS["serenade"]]})
+        aa = np.radians([a_w] + [c for c in ccols if a_w + 4.0 < c < 360.0 - a_w - 4.0] + [360.0 - a_w])
+        # each station is found exactly as the cloak low finds its vertices (the outermost surface on the horizontal
+        # ray from the axis at that world angle), then lifted along the surface normal
+        dirs = np.stack([np.sin(aa), -np.cos(aa), np.zeros(len(aa))], 1)
+        O_ = np.tile((0.0, 0.0, zs_), (len(aa), 1))
+        t_ = march_in(cl_d, O_, dirs, 0.70)
+        S0 = O_ + dirs * np.nan_to_num(t_, nan=float(interp(tab, zs_)))[:, None]
+        e_ = 1e-3
+        G0 = np.stack([cl_d.d(S0 + np.eye(3)[i] * e_) - cl_d.d(S0 - np.eye(3)[i] * e_) for i in range(3)], 1)
+        G0[:, 2] = 0.0
+        G0 /= np.linalg.norm(G0, axis=1, keepdims=True) + 1e-12
+        v, q = ribbon(S0 + G0 * 0.0025, G0, SASH_W, 0.005, sink=0.008)
         part("sash", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.6)
     tabard_parts(F, aub, part)
     # LEGS (dark trousers, slim: they live under the bell) and BOOTS
@@ -2175,7 +2183,7 @@ RAMP = {   # value (linear multiplier) by height: light top, dark feet (bible §
     # (fix round 4: in game the Serenade feet read lighter than its top, 30-35 against 26-28) the feet a step darker
     # (r6, review r4: in game top / mid / feet 34 / 31 / 28 on High, 34 / 34 / 33 on Low: flat) the lower coat darker
     # toward the hem (the feet quarter <= L* 28 on screen), the top kept
-    "serenade": [(0.0, 0.28), (0.20, 0.36), (0.45, 0.58), (0.80, 0.86), (1.05, 1.02), (1.35, 1.10), (1.80, 1.16)],
+    "serenade": [(0.0, 0.24), (0.20, 0.31), (0.45, 0.53), (0.80, 0.84), (1.05, 1.02), (1.35, 1.10), (1.80, 1.16)],
 }
 SHADOW_TINT = {"aubade": (-0.10, -0.03, 0.14), "serenade": (0.10, -0.02, -0.14)}
 KEY = np.array((-0.35, -0.60, 0.72)) / np.linalg.norm((-0.35, -0.60, 0.72))   # painted key: front, upper right
@@ -2272,6 +2280,10 @@ def _hood_aubade(spec, p, g, col):
     col = col * (1.0 - 0.22 * under)[:, None]
     above = smooth(CROWN_A[1], CROWN_A[1] + 0.03, z)                       # the band's shadow on the cap
     col = col * (1.0 - 0.14 * above * (1 - smooth(CROWN_A[1] + 0.01, CROWN_A[1] + 0.05, z)))[:, None]
+    # (r6, review r4: the hood top quarter L* 65-66 in game, over the B5 cap; measured in game, the brightest quarter of
+    # the hood region is the round linen CAP inside the circlet, which faces the sky and the sun from 52 deg) the cap
+    # above the circlet 15 % darker (about -3 L*), fading in over 4.5 cm
+    col = col * (1.0 - 0.15 * smooth(CROWN_A[1] + 0.005, CROWN_A[1] + 0.050, z))[:, None]
     half = np.interp(a, [-50, -40, 50, 62, 120, 130], [0.011, SEAM_CAP / 2, SEAM_CAP / 2, SEAM_W / 2, SEAM_W / 2, 0.018])
     col = channel(col, np.abs(p[:, 0]) - half + (1 - along) * 1.0, w=BEZEL)
     return col
@@ -2300,7 +2312,7 @@ def _mantle_serenade(spec, p, g, col):
     v, w = mantle_drape(p)
     w = np.maximum(w, 0.35 * (1.0 - smooth(1.20, 1.31, z)))           # soft folds over the front too
     crest = (1.0 - v) ** 4
-    col = col * (1 - 0.36 * v * w + 0.14 * crest * w)[:, None]
+    col = col * (1 - 0.42 * v * w + 0.16 * crest * w)[:, None]
     col = col * (1 + 0.06 * PNOISE(p, 16.0, (0.3, 1.2, 2.1)))[:, None]
     edge = 1 - smooth(0.010, 0.032, z - hem)
     col = col * (1 - 0.30 * edge)[:, None]
@@ -2580,7 +2592,7 @@ def paint_part(spec, name, role, p, g, lap, occ) -> np.ndarray:
         w = cloak_fold_w(spec.F, False, p)
         hang = 1.0 - smooth(1.02, 1.20, p[:, 2])
         crest_ = np.maximum(w, 0.0) ** 2 * smooth(-0.4, 0.6, g[:, 2] + 0.25)
-        shade = shade * (1.0 + hang * (np.where(w > 0, 0.16, 0.30) * w + 0.10 * crest_))
+        shade = shade * (1.0 + hang * (np.where(w > 0, 0.20, 0.38) * w + 0.12 * crest_))
     nz = 0.034 * PNOISE(p, 6.0) + 0.016 * PNOISE(p, 17.0, (1.7, 0.3, 0.9))
     if cloth and fac == "aubade":
         # long vertical brush strokes down the wool (the concept's straight folds), soft
@@ -2656,7 +2668,9 @@ def ink_hollow(spec, P, N, col, with_mask=False):
     to_c /= np.linalg.norm(to_c, axis=1, keepdims=True) + 1e-9
     face = np.clip((N * to_c).sum(1), 0.0, 1.0) ** 0.6
     back = smooth(lc[1] - 0.025, lc[1] + 0.020, P[:, 1])
-    spill = face * back / (1.0 + (dist / 0.070) ** 2) * 0.85
+    # (r6, review r4: "a lit diagonal shard of inner wall shows inside the hollow": the painted spill lit the walls
+    # beside the core as grey planes; the halo carries the falloff now) the spill halved: the pocket stays ink
+    spill = face * back / (1.0 + (dist / 0.060) ** 2) * 0.40
     warm = spec.faction == "serenade"
     ink = mix(ink, "#645E57" if warm else "#5A5F66", np.clip(spill, 0.0, 1.0))
     out = col * (1 - inside[:, None]) + ink * inside[:, None]
@@ -3119,7 +3133,15 @@ def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=N
         resin = np.isin(part_n, [i for i, nm in enumerate(names)
                                  if spec.parts_info.get(nm, ("cloth", None))[0] == "lampresin"])
         flat = img.reshape(-1, 3)
-        flat, frac = wc.clamp_reserved(flat, resin.reshape(-1))
+        # (sat 0.34, the band from 24 deg with a 4 deg feather: the lossy WebP and the warm painted shade push texels a
+        # few points back up, so the clamp keeps a margin under the brief's 0.40)
+        y0 = project._lin(np.clip(flat, 0, 1)) @ LUMA
+        flat, frac = wc.clamp_reserved(flat, resin.reshape(-1), hue=(24.0, 50.0), sat_max=0.34, feather=4.0)
+        # the clamp keeps HSV value, so a desaturated umber came out ~3 L* LIGHTER (the feet band lost its dark): the
+        # texel's luminance is restored (linear), only its saturation drops
+        lin_ = project._lin(np.clip(flat, 0, 1))
+        k_ = y0 / np.maximum(lin_ @ LUMA, 1e-6)
+        flat = project._srgb(np.clip(lin_ * np.clip(k_, 0.5, 1.0)[:, None], 0, 1))
         img = flat.reshape(img.shape).astype(np.float32)
         log(f"brightwick: reserved-band clamp on {100 * frac:.1f} % of texels")
     return img, maps

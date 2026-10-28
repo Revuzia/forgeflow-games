@@ -20,7 +20,7 @@
         "toe.R"
       ]
     },
-    "tris_mantle": 190,
+    "tris_mantle": 192,
     "bind_legs": {
       "heat_ok": true,
       "unweighted": 0,
@@ -72,20 +72,20 @@
     "tris_drum_lid": 208,
     "tris_frame_posts": 130,
     "tris_pack": 88,
-    "validate_greatwick_serenade": "2918->2917"
+    "validate_greatwick_serenade": "2920->2919"
   },
-  "uv_coverage": 0.685,
+  "uv_coverage": 0.671,
   "bake": {
-    "base": 1.74,
-    "rough_metal": 1.19,
-    "normal": 0.6,
-    "ao": 0.84,
-    "normal_fixed_px": 43684,
-    "projection": 6.37,
-    "pack_save": 6.43,
-    "total": 10.96
+    "base": 1.75,
+    "rough_metal": 1.48,
+    "normal": 0.72,
+    "ao": 0.74,
+    "normal_fixed_px": 39722,
+    "projection": 6.04,
+    "pack_save": 6.1,
+    "total": 10.94
   },
-  "tris": 3523,
+  "tris": 3525,
   "mesh_top_m": 1.486,
   "clips": {
     "idle": {
@@ -182,24 +182,24 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1261308,
+  "glb_bytes_raw": 1257080,
   "optimize": {
     "ok": true,
-    "before": 1265244,
-    "after": 441544,
+    "before": 1261016,
+    "after": 440528,
     "metallic_zero": 2
   },
-  "glb_bytes": 441604,
+  "glb_bytes": 440588,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_serenade.glb (431 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: greatwick_serenade_base 1024x1024 63K, greatwick_serenade_normal 512x512 49K, greatwick_serenade_orm 256x256 20K",
-      "  skinned meshes: greatwick_serenade(3706v), greatwick_serenade_accent_1(184v), greatwick_serenade_accent_2(33v), greatwick_serenade_accent_3(57v), greatwick_serenade_accent_4(128v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_serenade.glb (430 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: greatwick_serenade_base 1024x1024 62K, greatwick_serenade_normal 512x512 48K, greatwick_serenade_orm 256x256 20K",
+      "  skinned meshes: greatwick_serenade(3700v), greatwick_serenade_accent_1(184v), greatwick_serenade_accent_2(33v), greatwick_serenade_accent_3(57v), greatwick_serenade_accent_4(128v)",
       "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/19tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.400s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
       "  tracks checked: 303; materials: body, accent; textures: body.map=1024x1024, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3523; bind-pose bounds (three units, Y up): 1.19 x 1.49 x 1.23; facing (-0.00, 1.00); head bone y 0.92; runRefSpeed 3.2",
+      "  tris: 3525; bind-pose bounds (three units, Y up): 1.19 x 1.49 x 1.23; facing (-0.00, 1.00); head bone y 0.92; runRefSpeed 3.2",
       "  run: 12 f, planted samples 4, max foot-speed error 3.4%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -233,25 +233,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_serenade.png",
-    "seconds": 8.4,
-    "exit": 0
+    "seconds": 8.3,
+    "exit": 0,
+    "clip_sheet": "art/renders/units/three_clips_greatwick_serenade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.12,
-      "model": 7.31,
+      "materials": 0.17,
+      "model": 14.09,
       "lows_bind": 0.03,
-      "uv": 5.28,
-      "bake": 10.96,
-      "clips": 16.37,
-      "export": 0.83,
-      "optimize": 0.49,
-      "load_test": 0.14,
-      "three_qa": 8.57,
-      "cache": 0.04
+      "uv": 4.3,
+      "bake": 10.94,
+      "clips": 15.72,
+      "export": 0.88,
+      "optimize": 0.46,
+      "load_test": 0.17,
+      "three_qa": 17.17,
+      "cache": 0.03
     },
-    "total_s": 50.17
+    "total_s": 63.99
   },
   "run_ref_speed": 3.2,
   "height_m": 1.215

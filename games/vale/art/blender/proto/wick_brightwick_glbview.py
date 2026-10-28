@@ -108,7 +108,7 @@ def tint_accent(tint):
             b.inputs["Emission Color"].default_value = (*t, 1.0)
             b.inputs["Emission Strength"].default_value = 0.8
             ca = ob.data.color_attributes
-            if len(ca) and (getattr(m, "blend_method", "OPAQUE") != "OPAQUE" or m.name != "accent"):
+            if len(ca):     # (the merged prims without COLOR_0 import as white, alpha 1: wiring every copy is safe)
                 # the BLEND copies (halo, core): alpha = COLOR_0 alpha, emission x alpha, RGB x COLOR_0 RGB
                 at = nt.nodes.new("ShaderNodeAttribute")
                 at.attribute_name = ca[0].name
@@ -179,6 +179,10 @@ def main():
             shots.append((nm, yaw, (0.0, -11.0, 0.88 + 11 * math.sin(math.radians(5))), (0.0, 0.0, 0.88), lens_for(11.0), None, (900, 1000)))
         for nm, yaw in (("head_front", 0), ("head_q34", 35), ("head_q34r", -35)):
             shots.append((nm, yaw, (0.0, -11.0, 1.44 + 11 * math.sin(math.radians(2))), (0.0, 0.0, 1.44), lens_for(3.0), None, (800, 800)))
+    if "arm" in views:
+        # the forearm wraps and the mitts, eye level, close
+        for nm, yaw in (("arm_front", 0), ("arm_q34", 35), ("arm_q34r", -40)):
+            shots.append((nm, yaw, (0.0, -11.0, 0.95 + 11 * math.sin(math.radians(4))), (0.0, 0.0, 0.95), lens_for(4.2), None, (900, 800)))
     if "52" in views:
         p = math.radians(52)
         for nm, yaw in (("h52_front", 0), ("h52_q34", 35), ("h52_q34r", -35)):
