@@ -101,15 +101,14 @@
     // body, the way every reference launcher does; the 2 s fuse is the air-burst for a round that touches nothing.
     // (It used to bounce off walls like a hand grenade and roll back toward the shooter.)
     glauncher:{ cls: "launcher", fire: "semi", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, impact: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45, adsTimeS: 0.30 },
-    // FRAG GRENADE (parity P1-A, LC-14; BUILT DARK). The blast definition explode() and hitDamage() read by
+    // FRAG GRENADE (parity P1-A, LC-14; built dark until the FIX ROUND, loot weight live since D8). The blast definition explode() and hitDamage() read by
     // id - it is NOT a gun: it is deliberately absent from WEAPON_IDS (loot, bot weapon choice and every
     // per-gun selftest loop iterate that list), it has no magazine or ammo, and nothing ever equips "frag"
     // as a.weapon.id. The carried item is CONSUMABLES.frag (kind "consumable", thrown by its own branch in
     // weapons.js stepWeapon, never through useConsumable / applyHeal). Apex's frag deals 100 with falloff;
     // splashScale here runs linearly to 25 % at splashR + 0.8 (the launcher's convention), fuse from the throw.
     frag:     { cls: "throwable", damage: 100, headMult: 1.0, rpm: 60, speed: 20, arc: true, fuseS: 3.0, splashR: 4.5, spreadDeg: 0 },
-    // SMOKE GRENADE (contract C-SMOKE, LC-14 round 2; BUILT DARK like the frag: loot weight 0 until the integrator
-    // turns it on with the frag). Thrown by the same branch, bounces like the frag, and on its fuse it does NO damage:
+    // SMOKE GRENADE (contract C-SMOKE, LC-14 round 2; built dark like the frag until the FIX ROUND turned both on, D8). Thrown by the same branch, bounces like the frag, and on its fuse it does NO damage:
     // weapons.js pushes a sphere {x,y,z,r,t0,t1} onto W.smokes (sizes in SMOKE below) that maps.js losBlocked treats as
     // solid for sight, fx.js draws and bots.js reads. Not in WEAPON_IDS; damage 0 and no splashR, so explode() is
     // never called for it.
@@ -171,16 +170,17 @@
     big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 5, stack: 3 },
     // LC-14 frag, BUILT DARK: no `heals` key, so every heal path refuses it (player.js useConsumable/applyHeal,
     // bots.js usable(): `c.heals === "hp" ? ... : a.shield < c.cap` reads cap undefined -> false). `throws`
-    // names the WEAPONS entry the blast uses. Loot weight 0 until P2-D turns it on with bot throws (P2-B).
+    // names the WEAPONS entry the blast uses. Loot weight live since the FIX ROUND (D8: bots throw it).
     frag:        { throws: "frag", useS: 0, stack: 3 },
-    // C-SMOKE: the same shape as the frag (no heal fields, so every heal path refuses it), built dark at loot weight 0
+    // C-SMOKE: the same shape as the frag (no heal fields, so every heal path refuses it); loot weight live since D8
     smoke:       { throws: "smoke", useS: 0, stack: 3 },
   };
 
   /** Smoke cloud tunables (C-SMOKE). On its fuse a smoke round becomes a sphere at its rest point: radius grows from
    *  r0Frac x r to r over growS (eased), holds, and the entry is dropped at t1 = t0 + lifeS (fx fades the last fadeS).
-   *  W.smokes entries carry {x, y, z, r, t0, t1} (the contract) plus rMax/grow/ownerId: r is the LIVE radius,
-   *  rewritten every tick by weapons.js, so losBlocked never blocks more than the cloud already covers.
+   *  W.smokes entries are {x, y, z, r, rMax, t0, t1} (integrator D1; + ownerId): r is the LIVE radius (0.35 rMax ->
+   *  rMax over growS 1.6 s, rewritten every tick by weapons.js tickSmokes), rMax the full radius. fx draws exactly r
+   *  and maps.losBlocked uses r, so nothing blocks or shows more than the cloud already covers.
    *  Sizes: PUBG's smoke is ~6 m across at 2 s and lasts ~40 s; Apex's Bangalore canister ~30 s. 6 m radius / 20 s
    *  covers a doorway or a street crossing for a revive (owner D-DBNO) without blanking a whole compound. */
   var SMOKE = { r: 6.0, r0Frac: 0.35, growS: 1.6, lifeS: 20, fadeS: 3, maxLive: 12, yOff: 1.2 };
@@ -313,15 +313,22 @@
   // Applied by player.js on touchdown from the vertical impact speed v (m/s), NOT while gliding / under canopy, NOT
   // on a mantle, NOT into water; armour does not absorb it (PUBG). The curve is set by HEIGHTS, then converted with
   // THIS game's gravity (MOVE.gravity -22 m/s^2, the value player.js integrates), so it stays right if gravity is
-  // retuned: a drop of FALL_SAFE_H (4 m, a storey: ledges, stairs, a jump off a container) is free; 10 m costs ~42;
-  // 15 m ~86; 20 m and more is lethal from full health (>= 100). (The contract's "4 m ~ 8.9 m/s" assumed 9.8 m/s^2;
-  // here a 4 m drop lands at 13.3 m/s.) dmg = FALL_DMG_PER_V x (v - FALL_SAFE_V)^FALL_EXP, rounded.
+  // retuned: a drop of FALL_SAFE_H (4 m, a storey: ledges, stairs, a jump off a container) is free; 10 m costs 38;
+  // 15 m 72; lethal from full health (>= 100) from 19.4 m; 20 m 104 (integrator D2: 10 m 35-40, 15 m about 60-75,
+  // lethal at about 20 m - the first curve, 42 at 10 m on ^1.5, killed from 16.6 m). With the 4 m safe point fixed, the
+  // exponent sets dmg(20 m) / dmg(10 m): ^1.5 gives 3.1, so 10 m 35-40 could only reach lethal 18.3-18.9 m; ^1.33
+  // gives 2.75, so 38 at 10 m is lethal at 19.4 m and a frame-stepped 20 m drop (the impact lands ~1 % under v(20 m))
+  // still kills with margin (~102). SECOND FIX PASS: the exponent moved off 1.5 now that every consumer calls
+  // K.fallDamage(v) - bots.js always did, player.js fallHurt does from lane player 14233948 (D2 / D3: sim's K is the
+  // single source; the f367520c player.js still hardcoded ^1.5 on K.FALL_DMG_PER_V and would deal 54 at 10 m with this
+  // curve - it ships only with that player.js). (The contract's "4 m ~ 8.9 m/s" assumed 9.8 m/s^2; here a 4 m drop
+  // lands at 13.3 m/s.) dmg = FALL_DMG_PER_V x (v - FALL_SAFE_V)^FALL_EXP, rounded.
   // A hard landing (v > LAND_STAGGER_V, the same 4 m) also staggers for LAND_STAGGER_S (LC-61).
-  var FALL_SAFE_H = 4, FALL_EXP = 1.5, LAND_STAGGER_S = 0.4;
+  var FALL_SAFE_H = 4, FALL_EXP = 1.33, LAND_STAGGER_S = 0.4;
   function fallSpeedForHeight(h) { return Math.sqrt(2 * Math.abs(MOVE.gravity) * Math.max(0, h)); }
   var FALL_SAFE_V = fallSpeedForHeight(FALL_SAFE_H);
-  // calibrated so a 10 m drop costs FALL_REF_DMG (the middle of the contract's 35-50 band)
-  var FALL_REF_H = 10, FALL_REF_DMG = 42;
+  // calibrated so a 10 m drop costs FALL_REF_DMG (D2: 35-40 at 10 m; the in-game impact lands ~1 % under v(10 m))
+  var FALL_REF_H = 10, FALL_REF_DMG = 38;
   var FALL_DMG_PER_V = FALL_REF_DMG / Math.pow(fallSpeedForHeight(FALL_REF_H) - FALL_SAFE_V, FALL_EXP);
   var LAND_STAGGER_V = FALL_SAFE_V;
   /** HP lost to a landing at vertical impact speed v (m/s, positive down). 0 for v <= FALL_SAFE_V. Pure. */
@@ -515,7 +522,7 @@
   // gs > HV_RUN_GS (4.4) and not backing up -> the run clip ("|run"), gs > HV_WALK_GS (0.7) -> the walk clip ("|walk"),
   // else idle (no suffix). The clip's PHASE is not sim state, so those rows are the mean over sampled phases with
   // radii that hold every phase (probe_bones9.py). Airborne, crouched, reloading and hit-react clips use the idle rows.
-  var COMBAT_POSE_S = 1.5, HV_RUN_GS = 4.4, HV_WALK_GS = 0.7, HV_FACE_GS = 1.2;
+  var COMBAT_POSE_S = 1.5, HV_RUN_GS = 4.4, HV_WALK_GS = 0.7, HV_FACE_GS = 1.2, HV_TWIST_MAX = 0.95;
   var HV_KEYS = {};
   ["rifle", "pistol", "pistolAds"].forEach(function (h) {
     HV_KEYS[h] = { crouch: h + "|crouch", stand: h + "|stand", walk: h + "|stand|walk", run: h + "|stand|run" };
@@ -525,7 +532,15 @@
   }
   /** The body's facing (sim yaw convention: forward = (-sin, -cos)): player.js syncObj turns the body toward its
    *  VELOCITY when out of combat and moving faster than 1.2 m/s (on foot), else squares it to the aim (a.yaw). */
-  function hitVolFacing(a, now) {
+  // FIX ROUND (int-p23): the integrated player.js draws the body on its own facing state a._bodyYaw (model yaw = facing +
+  // PI) - a still body stays PLANTED while the aim turns (LC-64 turn-in-place, the chest twists up to 0.95 rad), a combat
+  // strafer's body is warped onto its cardinal clip (LC-10). syncObj writes it for every live actor every frame (not
+  // camera-gated), so a VIEW test (view true: the local human's own shot, weapons.js) faces the DRAWN lower body when
+  // that state exists. SECOND FIX PASS: _bodyYaw is view state - eased with the FRAME dt and written only for view-mode
+  // actors - so a SIM test (every other shot: bots, remotes, the headless sim; view false, the default) never reads it:
+  // the old sim-state rule below keeps a seed's outcome independent of the display rate and of the camera.
+  function hitVolFacing(a, now, view) {
+    if (view && a && a._hasBodyYaw && a._bodyYaw === a._bodyYaw && typeof a._bodyYaw === "number") return a._bodyYaw - Math.PI;
     var vx = (a.vel && a.vel.x) || 0, vz = (a.vel && a.vel.z) || 0;
     if (!a.gliding && !a.swimming && !hvCombat(a, now) && vx * vx + vz * vz > HV_FACE_GS * HV_FACE_GS) return Math.atan2(-vx, -vz);
     return a.yaw || 0;
@@ -537,11 +552,11 @@
     if (!a || !a.vel || a.onGround === false) return K3.stand;
     var vx = a.vel.x || 0, vz = a.vel.z || 0, gs = Math.sqrt(vx * vx + vz * vz);
     if (gs <= HV_WALK_GS) return K3.stand;
-    var f = hitVolFacing(a, now);
+    var f = hitVolFacing(a, now, _hvView);
     var back = vx * -Math.sin(f) + vz * -Math.cos(f) < -0.5;
     return gs > HV_RUN_GS && !back ? K3.run : K3.walk;
   }
-  var _hvJ = new Float64Array(72);
+  var _hvJ = new Float64Array(80);
   /** Fill _hvJ with the actor's interpolated joints + head (local frame). Returns the radius table or null (no data). */
   function hitVolJoints(a, now) {
     if (!HITVOL.ok) return null;
@@ -564,11 +579,14 @@
     // the camera by aimDelta = aim yaw - body yaw clamped to +-0.6 (half on spine1, half on spine2). Nonzero for a rifle
     // carrier moving off its aim axis out of combat (its body faces the velocity). Rotate about the hips' vertical:
     // Spine2 by half, neck / arms / head by the whole twist (local frame: x' = x cos - z sin, z' = x sin + z cos).
-    if (key.charCodeAt(0) === 114 /* r: rifle */ && a.onGround !== false && !a.swimming && !a.gliding) {
-      var tw = (a.yaw || 0) - hitVolFacing(a, now);
+    // (int-p23) player.js twists by up to TWIST_MAX 0.95 rad (rifle always; a pistol only in combat or mid-turn), the old 0.6
+    // was the pre-P23 clamp
+    var pistolCombat = key.charCodeAt(0) === 112 /* p */ && key.charCodeAt(6) === 65 /* pistolAds */;
+    if ((key.charCodeAt(0) === 114 /* r: rifle */ || pistolCombat) && a.onGround !== false && !a.swimming && !a.gliding) {
+      var tw = (a.yaw || 0) - hitVolFacing(a, now, _hvView);
       while (tw > Math.PI) tw -= Math.PI * 2;
       while (tw < -Math.PI) tw += Math.PI * 2;
-      tw = clamp(tw, -0.6, 0.6);
+      tw = clamp(tw, -HV_TWIST_MAX, HV_TWIST_MAX);
       if (tw > 1e-4 || tw < -1e-4) {
         // the spine's own axis (Hips -> Neck of this row: a runner leans ~25 deg forward), not the world vertical
         var ux = _hvJ[6] - _hvJ[0], uy = _hvJ[7] - _hvJ[1], uz = _hvJ[8] - _hvJ[2], ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
@@ -631,12 +649,80 @@
   /** LC-22: does the WORLD segment (ax..bz) hit actor t's body? Returns the entry parameter in [0, 1] or -1, and sets
    *  HITVOL_HIT.head (head sphere) / .part (segment index, -1 head). Swimming / downed / no data: the legacy cylinder
    *  rule (callers keep their own broad phase). Pure: no allocation. */
-  var HITVOL_HIT = { head: false, part: -1, legacy: false };
-  function hitVolSegment(t, ax, ay, az, bx, by, bz, now) {
-    HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false;
+  var HITVOL_HIT = { head: false, part: -1, legacy: false, live: false };
+  // LIVE BONES (FIX ROUND, int-p23). The integrated player.js draws far more than the table can key on (turn-in-place
+  // planted feet + chest twist, the combat-strafe orientation warp on four cardinal clips, the re-baked "_g" clip set, a
+  // crouched-still rifle lean that accumulates): measured on the integrated build the table path put a pistol dummy's arm
+  // 0.28 m BEHIND its drawn body in the side view. So an actor whose pose is LIVE (weapons.js liveJoints: the camera
+  // focus, or any actor whose mixer the view policy still steps - the pose it is drawn in) is tested against its LIVE
+  // bones: the caller passes `live` = the world positions of the 15 JOINTS (0-44), head point A (45-47), the two ToeBase
+  // joints (48-53), head point B (54-56) and the head radius in metres (57): a head CAPSULE A-B fitted to the Head-weighted
+  // vertices in the Head bone's frame (weapons.js headLocal); r <= 0 = a sphere at A with the table's head radius. Same capsules, the
+  // skin's measured RADII (the idle fit, <= 0.045 m outside the drawn triangles; no phase shrink is needed when the joints
+  // ARE the drawn ones), plus a foot capsule Foot -> ToeBase. Everything else (a mixer the view policy skips: beyond
+  // 250 m or off screen without a shadow; no rig yet; the headless sim) keeps the deterministic table. HITVOL_LIVE_N = the length of `live`.
+  var HITVOL_LIVE_N = 58, HV_FOOT_R = 0.055;
+  // live-mode radius pads (m) on the measured radii: body capsules / head capsule. The skin radii were fitted <= 0.045 m
+  // outside the drawn triangles (bar 0.06), so 0.015 more keeps the bar and closes the seams between capsules. Measured
+  // (fix/probes/probe_pad.py, p23_hitbox's own lines - 3 cm raster, 8 x 0.06 m offsets - 5 skins x 4 views on the idle
+  // player + the range dummy): pad 0 -> deep-line coverage 0.914-1.0, 0 outside; 0.015 / 0.01 -> 0.957-1.0, 0 outside,
+  // head-top + 0.1 m 0 hits; 0.02 / 0.02 -> 1 outside line on athlete and viper (side view).
+  // The swinging forearms and shins of a walking rig deform thinner than their idle fit (probe_hitbox_live, 5 skins x
+  // 7 gaits: 28 of 2.69 M body-hit cells at 0.061-0.067 m with 0.015 on every slot, all on the forearm / upper-arm /
+  // shin capsules), so those slots (2, 3, 5) take `limb` instead.
+  var HV_LIVE_PAD = { body: 0.015, limb: 0.005, head: 0.01 };
+  var HV_HEAD_R = {};
+  function hitVolHeadR(sk) {
+    if (HV_HEAD_R[sk] != null) return HV_HEAD_R[sk];
+    var tab = HITVOL.T[sk] || HITVOL.T.soldier, v = tab && (tab["rifle|stand"] || tab["pistol|stand"]);
+    var k0 = Math.max(0, HITVOL.PITCH.indexOf(0));
+    var r = v ? v[k0 * HITVOL.NV + HITVOL.JOINTS.length * 3 + 3] : 0.1;
+    HV_HEAD_R[sk] = r;
+    return r;
+  }
+  function hitVolLive(t, live, ax, ay, az, bx, by, bz) {
+    var sk = HITVOL.T[t.skin] ? t.skin : "soldier";
+    var R = HITVOL.RADII[sk] || HITVOL.RADII.soldier;
+    if (!R) return -2;
+    var J = _hvJ, i;
+    for (i = 0; i < 48; i++) J[i] = live[i];
+    J[48] = hitVolHeadR(sk) + HV_LIVE_PAD.head;
+    for (i = 0; i < 6; i++) J[HITVOL.DOFF + 18 + i] = live[48 + i];   // points 21, 22 = LeftToeBase, RightToeBase
+    hvSide(0, 9, 12, R[7], 15); hvSide(1, 3, 6, R[8], 17); hvSide(2, 3, 6, R[9], 19);
+    var dx = bx - ax, dy = by - ay, dz = bz - az;
+    if (dx * dx + dy * dy + dz * dz < 1e-12) return -1;
+    var best = 2, part = -1, head = false, S = HITVOL.SEGS;
+    for (i = 0; i < S.length + 2; i++) {
+      var a3, b3, rr;
+      if (i < S.length) { var g = S[i], sl = g[2]; rr = R[sl] > 0 ? R[sl] + (sl === 2 || sl === 3 || sl === 5 ? HV_LIVE_PAD.limb : HV_LIVE_PAD.body) : 0; a3 = hvOff(g[0]); b3 = hvOff(g[1]); }
+      else { rr = Math.min(R[5], HV_FOOT_R); a3 = hvOff(i === S.length ? 11 : 14); b3 = hvOff(i === S.length ? 21 : 22); }
+      if (!(rr > 0)) continue;
+      var e = segCapsule(ax, ay, az, dx, dy, dz, J[a3], J[a3 + 1], J[a3 + 2], J[b3], J[b3 + 1], J[b3 + 2], rr);
+      if (e >= 0 && e < best) { best = e; part = i; }
+    }
+    var hb = live[57] > 0, hr = hb ? live[57] + HV_LIVE_PAD.head : J[48];
+    var eh = hb ? segCapsule(ax, ay, az, dx, dy, dz, J[45], J[46], J[47], live[54], live[55], live[56], hr)
+                : segCapsule(ax, ay, az, dx, dy, dz, J[45], J[46], J[47], J[45], J[46], J[47], hr);
+    if (eh >= 0 && eh <= best) { best = eh; part = -1; head = true; }
+    HITVOL_HIT.live = true;
+    if (best > 1) return -1;
+    HITVOL_HIT.head = head; HITVOL_HIT.part = part;
+    return best;
+  }
+  // view: true only for a test made FOR the local human's eye (weapons.js: the local player's own rounds and crosshair):
+  // the table may then face the drawn body (_bodyYaw). live: the drawn joints (weapons.js passes them only with view).
+  // Every other test is a pure function of sim state, so a seed replays identically at any frame rate (SECOND FIX PASS).
+  var _hvView = false;
+  function hitVolSegment(t, ax, ay, az, bx, by, bz, now, live, view) {
+    HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false; HITVOL_HIT.live = false;
+    _hvView = !!view;
+    if (live && t && !t.swimming && !t.downed && HITVOL.ok) {
+      var lv = hitVolLive(t, live, ax, ay, az, bx, by, bz);
+      if (lv !== -2) return lv;
+    }
     var R = (t && !t.swimming && !t.downed) ? hitVolJoints(t, now) : null;
     if (!R) { HITVOL_HIT.legacy = true; return -2; }
-    var fy = hitVolFacing(t, now), s = Math.sin(fy), c = Math.cos(fy);
+    var fy = hitVolFacing(t, now, _hvView), s = Math.sin(fy), c = Math.cos(fy);
     // world -> local (x right = (c, -s), z forward = (-s, -c) in world xz)
     var px = ax - t.pos.x, pz = az - t.pos.z, qx = bx - t.pos.x, qz = bz - t.pos.z;
     var lpx = px * c - pz * s, lpz = -px * s - pz * c, lqx = qx * c - qz * s, lqz = -qx * s - qz * c;
@@ -1109,23 +1195,10 @@
     // spread over the other tiers in proportion.
     chest: [0, 35, 35, 21, 9],
     supply: [0, 0, 10, 35, 55],
-    // LC-29 POI LOOT TIERS (parity P2-D tables; loot.js P2-H picks the tier per POI and the hot zone). "floor" IS
-    // the basic tier (unchanged, so a basic POI rolls exactly what every point rolled before). Rare share
-    // (index 2): basic 18 %, mid 23 %, high 28 % (1.56x basic: the >= 1.5x gate), hot 32 % (1.78x); rare+ share
-    // 30 / 38 / 52 / 64 %.
-    floor_mid:  [32, 31, 23, 11, 3],
-    floor_high: [20, 28, 28, 18, 6],
-    floor_hot:  [10, 26, 32, 22, 10],
+    // LC-29 POI loot tiers: ONE source (integrator D7) = loot.js's per-POI rarity UPLIFT on top of these tables.
+    // The sim's own tier tables (floor_mid / floor_high / floor_hot + LOOT_TIERS / lootTier, never called by loot.js)
+    // were removed in the FIX ROUND so no second tier table can stack on the uplift.
   };
-  /** POI loot tiers (LC-29): the rarity table and the floor-roll multiplier (into floorRollCount's lootMult) per tier.
-   *  basic = today's table and today's roll count, so an untiered point is unchanged. */
-  var LOOT_TIERS = {
-    basic: { table: "floor",      rollMult: 1.0 },
-    mid:   { table: "floor_mid",  rollMult: 1.15 },
-    high:  { table: "floor_high", rollMult: 1.35 },
-    hot:   { table: "floor_hot",  rollMult: 1.6 },
-  };
-  function lootTier(tier) { return LOOT_TIERS[tier] || LOOT_TIERS.basic; }
 
   // AI skill tiers (1-indexed by tier-1) — wide spread so the lobby reads as
   // real players: beginners whiff constantly, experts are genuinely scary.
@@ -1530,24 +1603,25 @@
   var FLOOR_AMMO_WEIGHTS = [25, 41, 16, 11, 7];
   // a chest's spare-ammo extra [light, medium, shells] (was [34, 34, 32]: the same medium shortfall)
   var CHEST_AMMO_WEIGHTS = [28, 46, 26];
-  // consumable rolls; the trailing "frag" and "smoke" entries are weight 0 (LC-14 built dark: the integrator raises
-  // them together once bots throw, with a MAP_GEN_VERSION bump). Trailing zeros never roll (see rollFloorItem).
+  // consumable rolls. The trailing "frag" and "smoke" entries went LIVE together in the FIX ROUND (integrator D8: bots
+  // throw both now, hud ships both icons): about 1 consumable roll in 9 is a frag and 1 in 15 a smoke on the floor,
+  // a little more in chests. Every floor / chest consumable roll changes with this (world_or_loot_output_changed; the
+  // integrator bumps MAP_GEN_VERSION).
   var FLOOR_CON_IDS = ["bandage", "mini_shield", "medkit", "big_shield", "frag", "smoke"];
-  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 0, 0];
+  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 13, 8];
   var CHEST_CON_IDS = ["mini_shield", "big_shield", "medkit", "bandage", "frag", "smoke"];
-  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 0, 0];
+  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 15, 10];
   function conCount(cid) { return cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : (cid === "frag" || cid === "smoke") ? 2 : 1; }
 
   /** One floor-spawn item. kind: weapon|ammo|consumable.
    *  A weapon carries `companions`: its own ammo, 1-2 boxes' worth, as ONE item
    *  (one pickup, one mesh — a box per box would double the loot draw calls).
-   *  `tier` (LC-29, optional): "basic" | "mid" | "high" | "hot" picks the rarity table (lootTier); omitted =
-   *  basic = exactly the old draw sequence. A big-magazine gun brings proportionally more boxes (the LMG: 3-4). */
-  function rollFloorItem(rng, tier) {
+   *  POI tiers (LC-29) are loot.js's rarity uplift, applied after this roll (D7: one source). A big-magazine gun brings proportionally more boxes (the LMG: 3-4). */
+  function rollFloorItem(rng) {
     var r = rng();
     if (r < FLOOR_GUN_SHARE) {
       var wid = WEAPON_IDS[weightedIndex(rng, FLOOR_GUN_WEIGHTS)];
-      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, lootTier(tier).table) };
+      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, "floor") };
       var am = WEAPONS[wid].ammo;
       if (am && AMMO[am]) {
         var boxes = rng() < 0.5 ? 1 : 2;
@@ -1559,9 +1633,7 @@
       var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, FLOOR_AMMO_WEIGHTS)];
       return { kind: "ammo", id: aid, count: AMMO[aid].box };
     }
-    // "frag" rides LAST at weight 0 (LC-14, built dark): weightedIndex never lands on a trailing zero-weight
-    // entry (the running roll is already <= 0 at the last positive weight) and the total is unchanged, so
-    // every seed rolls exactly what it rolled before. P2-D raises the weight with MAP_GEN_VERSION.
+    // frag + smoke ride last (live since the FIX ROUND, D8)
     var cid = FLOOR_CON_IDS[weightedIndex(rng, FLOOR_CON_WEIGHTS)];
     return { kind: "consumable", id: cid, count: conCount(cid) };
   }
@@ -1570,9 +1642,9 @@
   function ammoBoxMult(wid) { var d = WEAPONS[wid]; return Math.max(1, Math.round(((d && d.mag) || 0) / 30)); }
 
   /** Flat list for one floor roll: [item, ...its companions], companions stripped
-   *  off the item so they never ride along into an inventory slot. `tier`: see rollFloorItem. */
-  function rollFloorSpawn(rng, tier) {
-    var it = rollFloorItem(rng, tier);
+   *  off the item so they never ride along into an inventory slot. */
+  function rollFloorSpawn(rng) {
+    var it = rollFloorItem(rng);
     var out = [it];
     if (it.companions) {
       for (var i = 0; i < it.companions.length; i++) out.push(it.companions[i]);
@@ -1584,8 +1656,8 @@
   /** How many floor rolls a loot point gets. First roll almost always, a second
    *  one sometimes — a pile, not a single item. `lootMult` is MODE[mode].lootMult. */
   var FLOOR_ROLL_P = [0.85, 0.25];
-  function floorRollCount(rng, lootMult, tier) {
-    var m = (lootMult || 1) * (tier ? lootTier(tier).rollMult : 1);
+  function floorRollCount(rng, lootMult) {
+    var m = lootMult || 1;
     var n = 0;
     if (rng() < Math.min(0.97, FLOOR_ROLL_P[0] * Math.sqrt(m))) n++;
     if (rng() < Math.min(0.9, FLOOR_ROLL_P[1] * m)) n++;
@@ -1617,10 +1689,12 @@
    *  trackM (a LINEAR miss at the target in metres that does not shrink with range:
    *  a turret that lags a strafing target by a fixed time misses it by
    *  lateral speed x lag wherever it stands; omit = 0)} */
+  var GV_NO_OPTS = {};
+  var _gvSt = { ads: false, speed: 0, airborne: false, crouching: false, sinceLastShotS: 0, heat: null };
   function gunValueAt(id, rarity, distM, opts) {
     var d = WEAPONS[id];
     if (!d) return 0;
-    opts = opts || {};
+    opts = opts || GV_NO_OPTS;
     var dist = Math.max(0.5, distM || 0);
     if (d.arc && dist > LAUNCHER_MAX_M) return 0;             // shell cannot reach
     var ehp = Math.max(1, opts.ehp != null ? opts.ehp : 150);
@@ -1628,9 +1702,11 @@
     var loaded = opts.mag != null ? opts.mag : d.mag;
     var reserve = opts.reserve != null ? opts.reserve : Infinity;
     if (loaded + reserve <= 0) return 0;                        // dry: worth nothing
-    var spread = effectiveSpread(id, rarity || 0, {
-      ads: dist > 25, speed: opts.speed || 0, airborne: false, crouching: false, sinceLastShotS: interval, heat: null,
-    });
+    // one reused stance record (bots call this per gun per candidate every think: the literal was framecheck's top
+    // royale.js allocation site, gunValueAt ~1 MB per 600 match frames); effectiveSpread only reads it
+    var st = _gvSt;
+    st.ads = dist > 25; st.speed = opts.speed || 0; st.sinceLastShotS = interval;
+    var spread = effectiveSpread(id, rarity || 0, st);
     var aim = opts.aimDeg != null ? opts.aimDeg : VALUE_AIM_DEG;   // the shooter's own aim error, when known
     var ang = Math.sqrt(spread * spread + aim * aim) * Math.PI / 180;
     var flight = d.speed ? dist / d.speed : 0;
@@ -1677,7 +1753,7 @@
     if (w.ammo) items.push({ kind: "ammo", id: w.ammo, count: AMMO[w.ammo].box * 2 * ammoBoxMult(wid) });
     var r = rng();
     if (r < 0.55) {
-      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag + smoke last at weight 0 (see rollFloorItem)
+      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag + smoke last (D8: live)
       items.push({ kind: "consumable", id: cid, count: conCount(cid) });
     } else {
       items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, CHEST_AMMO_WEIGHTS)], count: 20 });
@@ -1785,7 +1861,7 @@
     FLOOR_CON_IDS: FLOOR_CON_IDS, FLOOR_CON_WEIGHTS: FLOOR_CON_WEIGHTS, CHEST_CON_IDS: CHEST_CON_IDS, CHEST_CON_WEIGHTS: CHEST_CON_WEIGHTS,
     // parity P2-D / P3 (lane sim)
     fireInterval: fireInterval, fireMode: fireMode, ammoBoxMult: ammoBoxMult, conCount: conCount,
-    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, FLOOR_AMMO_WEIGHTS: FLOOR_AMMO_WEIGHTS, CHEST_AMMO_WEIGHTS: CHEST_AMMO_WEIGHTS, LOOT_TIERS: LOOT_TIERS, lootTier: lootTier,
+    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, FLOOR_AMMO_WEIGHTS: FLOOR_AMMO_WEIGHTS, CHEST_AMMO_WEIGHTS: CHEST_AMMO_WEIGHTS,
     STORM_PLACE: STORM_PLACE, placeCircle: placeCircle,
     SMOKE: SMOKE, smokeRadiusAt: smokeRadiusAt, segmentSmoked: segmentSmoked,
     TEAM_SIZE: TEAM_SIZE, TEAM_MODES: TEAM_MODES, teamSize: teamSize, dbnoOn: dbnoOn, teamCount: teamCount,
@@ -1794,7 +1870,7 @@
     FALL: FALL, FALL_SAFE_H: FALL_SAFE_H, FALL_SAFE_V: FALL_SAFE_V, FALL_DMG_PER_V: FALL_DMG_PER_V, FALL_EXP: FALL_EXP,
     LAND_STAGGER_S: LAND_STAGGER_S, LAND_STAGGER_V: LAND_STAGGER_V, fallDamage: fallDamage, fallSpeedForHeight: fallSpeedForHeight,
     fallSafeHeight: fallSafeHeight, fallLethalHeight: fallLethalHeight,
-    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
+    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, HITVOL_LIVE_N: HITVOL_LIVE_N, HV_LIVE_PAD: HV_LIVE_PAD, hitVolHeadR: hitVolHeadR, HV_TWIST_MAX: HV_TWIST_MAX, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};

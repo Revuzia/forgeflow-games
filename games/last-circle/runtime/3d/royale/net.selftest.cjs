@@ -405,6 +405,14 @@ function suiteP23(M, SIM, count) {
     row(!J({ slot: 1, key: s1 }, null, { live: false }).ok && !J({ slot: 1, key: s1 }, null, { gvOk: false }).ok && !J({ slot: 0, key: s1 }).ok && !J({ slot: 7, key: s1 }).ok && !J({ slot: 1, key: s1 }, "g_old").ok,
       "LC-49 rejoin: refused with no match running, on another game version, for the host's slot, a slot not in the match, or the peer that already has it");
     row(M.REJOIN_MS === 60000, "LC-49: the rejoin window is 60 s (plan: rejoin within 60 s on ?room=)");
+    // fix round: a crashed / killed tab sends no bye - the right secret for a slot that has been SILENT REJOIN_SILENT_MS is its leave
+    row(!J({ slot: 2, key: s2 }, null, { silentMs: 900 }).ok && J({ slot: 2, key: s2 }, null, { silentMs: 900 }).retry === true && J({ slot: 2, key: s2 }, null, { silentMs: M.REJOIN_SILENT_MS + 1 }).ok === true,
+      "LC-49 rejoin: a slot still sending (silent 0.9 s) is refused with retry; silent past REJOIN_SILENT_MS it is given back without waiting for the 12 s watchdog");
+    row(!J({ slot: 2, key: s1 }, null, { silentMs: 30000 }).ok && !J({ slot: 2, key: s2 }, null, { silentMs: M.REJOIN_MS + 1 }).ok && !J({ slot: 2, key: s2 }, null, { silentMs: NaN }).ok &&
+        M.REJOIN_SILENT_MS >= 3000 && M.REJOIN_SILENT_MS < 12000,
+      "LC-49 rejoin: silence never excuses a wrong secret; the window still closes REJOIN_MS after the last packet; the silence bar is 3..12 s");
+    row(M.REJOIN_ASK_TRIES * M.REJOIN_ASK_EVERY_MS >= M.REJOIN_MS && M.REJOIN_ASK_EVERY_MS <= 3000,
+      "LC-49 rejoin: the returning page keeps asking for the whole window (it gave up after 15 s while the host's watchdog needs 12 s + a loaded box)");
     const now = 1e6;
     const own = { room: "ABCD", slot: 1, key: s1, at: now - 5000 };
     const list = [{ room: "ABCD", slot: 2, key: s2, at: now - 20000 }, { room: "ABCD", slot: 3, key: s2, at: now - 1000 }, { room: "ZZZZ", slot: 2, key: s2, at: now - 9000 },
@@ -413,6 +421,22 @@ function suiteP23(M, SIM, count) {
     row(c.length === 2 && c[0].slot === 1 && c[1].slot === 2 && c[1].at === now - 20000, "LC-49: the candidates are this tab's record first, then a closed tab's stale record; a live tab (< 3 s), another room and an expired record are not", c);
     row(M.rejoinCandidates("ABCD", null, null, now).length === 0 && M.rejoinCandidates("ABCD", { room: "ABCD", slot: 1, key: s1, at: now - M.REJOIN_MS - 16000 }, [], now).length === 0,
       "LC-49: no record / an expired record -> no rejoin ask");
+    // second fix pass: a tab that closes writes its record on pagehide (age ~46 ms when the invite link opens in a new tab at once) and marks
+    // it closed; an unmarked young record (a killed tab) is re-read when it comes of age
+    const one = (age, extra) => M.rejoinCandidates("ABCD", null, [Object.assign({ room: "ABCD", slot: 2, key: s2, at: now - age }, extra || {})], now).length;
+    row(one(46) === 0 && one(59) === 0 && one(2999) === 0 && one(3000) === 1 && one(46, { closed: 1 }) === 1 && one(0, { closed: 1 }) === 1 && one(M.REJOIN_MS + 16000, { closed: 1 }) === 0 &&
+        M.rejoinCandidates("ABCD", { room: "ABCD", slot: 1, key: s1, at: now - 46 }, [], now).length === 1 && M.REJOIN_LIVE_TAB_MS === 3000,
+      "LC-49 rejoin: a record its tab marked closed (pagehide) is a candidate at once (46 ms old); unmarked, one younger than 3 s is a live tab; expired stays out", [one(46), one(2999), one(3000), one(46, { closed: 1 })]);
+    const rs = (age, extra, own2) => M.rejoinRescanMs("ABCD", own2 || null, [Object.assign({ room: "ABCD", slot: 2, key: s2, at: now - age }, extra || {})], now);
+    row(rs(46) === 3000 - 46 + 50 && rs(2999) === 51 && rs(3000) === -1 && rs(46, { closed: 1 }) === -1 && rs(46, { room: "ZZZZ" }) === -1 && M.rejoinRescanMs("ABCD", null, null, now) === -1 &&
+        M.rejoinCandidates("ABCD", null, [{ room: "ABCD", slot: 2, key: s2, at: now - 46 }], now + rs(46)).length === 1 && M.REJOIN_RESCANS >= 1 && M.REJOIN_RESCANS * M.REJOIN_LIVE_TAB_MS <= 15000,
+      "LC-49 rejoin: a page with no candidate re-reads the records when the youngest one comes of age (46 ms old -> 3004 ms, then it is a candidate); nothing to wait for -> -1", [rs(46), rs(2999), rs(3000)]);
+  }
+  // ── D3: the revive done range reads sim's K ──────────────────────────────────────────────────────────────────────────────────────
+  {
+    row(M.reviveDoneRange(SIM) === SIM.REVIVE_RANGE + M.REVIVE_LAG_SLACK_M && M.reviveDoneRange({ REVIVE_RANGE: 3 }) === 3 + M.REVIVE_LAG_SLACK_M &&
+        M.reviveDoneRange({}) === 2 + M.REVIVE_LAG_SLACK_M && M.reviveDoneRange(null) === 2 + M.REVIVE_LAG_SLACK_M && M.reviveDoneRange({ REVIVE_RANGE: NaN }) === 2 + M.REVIVE_LAG_SLACK_M,
+      "D3: the owner's revive 'done' distance is K.REVIVE_RANGE + the lag slack (5 m at sim's 2 m), 2 m only when sim has none", [M.reviveDoneRange(SIM), M.reviveDoneRange({ REVIVE_RANGE: 3 })]);
   }
   // ── C-DBNO ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   {
@@ -437,7 +461,53 @@ function suiteP23(M, SIM, count) {
     row(!M.normSmoke({ x: 0, y: 0, z: 0, r: 60, t0: 0, t1: 10 }) && !M.normSmoke({ x: 0, y: 0, z: 0, r: 5, t0: 10, t1: 5 }) && !M.normSmoke({ x: 0, y: 0, z: 0, r: 5, t0: 0, t1: 600 }) &&
         !M.normSmoke({ x: 9000, y: 0, z: 0, r: 5, t0: 0, t1: 10 }, 850) && !M.normSmoke({ x: NaN, y: 0, z: 0, r: 5, t0: 0, t1: 10 }) && !M.normSmoke(null),
       "LC-14: a smoke that is huge, ends before it starts, lasts over 60 s, is off the map or not a number is dropped");
-    row(M.SMOKE_MAX_PER_SENDER === 6, "LC-14: at most 6 relayed smokes alive per sender");
+    // D5: run it back keeps the room's PICK (squad stays squad, AUTO stays AUTO even though the boot passes the mode AUTO resolved to)
+    row(M.rematchTeamWant({ teamWant: "squad" }, "duo") === "squad" && M.rematchTeamWant({ teamWant: "auto" }, "duo") === null && M.rematchTeamWant({}, "trio") === "trio" &&
+        M.rematchTeamWant(null, "squad") === "squad" && M.rematchTeamWant({ teamWant: "auto" }, "solo") === null && M.rematchTeamWant({}, "solo") === null,
+      "D5: run it back keeps the room's team pick (SQUADS stays SQUADS, AUTO stays AUTO; only a start without teamWant takes the caller's mode)");
+    row(M.SMOKE_MAX_PER_SENDER === 6 && M.SMOKE_MAX_PER_THROWER === 6, "LC-14: at most 6 relayed smokes alive per thrower");
+    // D1: the live radius AND the full radius travel (weapons.js grows r from t0 + rMax on every client)
+    const sg = M.normSmoke(rt({ x: 1, y: 2, z: 3, r: 2.1, rMax: 6, t0: 50, t1: 70 }), 850), sOld = M.normSmoke({ x: 1, y: 2, z: 3, r: 6, t0: 50, t1: 70 }, 850);
+    row(sg && sg.r === 2.1 && sg.rMax === 6 && sOld && sOld.rMax === 6 && !M.normSmoke({ x: 1, y: 2, z: 3, r: 7, rMax: 6, t0: 50, t1: 70 }) && !M.normSmoke({ x: 1, y: 2, z: 3, r: 1, rMax: 40, t0: 50, t1: 70 }),
+      "D1: a relayed smoke carries its live r and its full rMax (r <= rMax <= 15; a sender without rMax reads as rMax = r)", { sg, sOld });
+    // D12: the cap counts per THROWER: the host relays every bot's smokes, each bot has its own 6
+    const L0 = [];
+    for (let i = 0; i < 8; i++) { row(M.smokeRelayRoom(L0, "s" + (10 + i), 60) === null, "D12: host bot s" + (10 + i) + "'s first smoke is relayed (the cap is not per sending peer)"); L0.push({ _net: "a_host", by: "s" + (10 + i), t1: 80 }); }
+    const L1 = [];
+    for (let i = 0; i < 6; i++) L1.push({ _net: "b_g1", by: "s1", t1: 80 });
+    row(M.smokeRelayRoom(L1, "s1", 60) !== null && M.smokeRelayRoom(L1, "s1", 81) === null && M.smokeRelayRoom(L1, "s2", 60) === null,
+      "D12: a 7th live smoke by the same thrower is refused; ended clouds do not count; another thrower is not capped by it");
+    const L2 = [];
+    for (let i = 0; i < M.SMOKE_MAX_RELAYED; i++) L2.push({ _net: "a_host", by: "s" + (10 + (i % 40)), t1: 80 });
+    row(M.smokeRelayRoom(L2, "s49", 60) !== null && M.SMOKE_MAX_RELAYED >= 24, "D12: every thrower together is still bounded (SMOKE_MAX_RELAYED)");
+    // late-join loot sync: a fake loot.js (a chest bursts its "cb:<id>:<i>" items when it opens; a take of a missing item is a no-op) - the
+    // host's sync must leave no item the host already saw taken
+    {
+      const mkLoot = (landed) => {
+        const items = new Set(["w1"]), chests = new Map([["c7", { id: "c7", opened: false }], ["sd2", { id: "sd2", supply: true, n: 2, opened: false }]]);
+        const pending = new Set();
+        const L = { items, opened: [],
+          open(id) { const c = chests.get(id); if (!c || c.opened) return; if (c.supply && !landed.has(id)) { pending.add(id); return; } c.opened = true; L.opened.push(c);
+            const pre = M.chestItemPrefix(c); for (let i = 0; i < 3; i++) items.add(pre + i); },
+          take(id) { items.delete(id); },
+          land(id) { landed.add(id); if (pending.has(id)) { pending.delete(id); L.open(id); } } };
+        return L;
+      };
+      const sync = { opened: ["c7", "sd2"], taken: ["w1", "cb:c7:0", "cb:c7:2", "sd:2:1"] };
+      const L1 = mkLoot(new Set(["sd2"]));
+      const def1 = M.applyLootSync(rt(sync), L1.open, L1.take);
+      row([...L1.items].sort().join() === "cb:c7:1,sd:2:0,sd:2:2", "late join: the opened list is applied before the taken list - no item taken from a chest comes back as a ghost", [...L1.items]);
+      row(def1.join() === "cb:c7:0,cb:c7:2,sd:2:1" && M.isChestItem("sd:2:1") && !M.isChestItem("w1") && !M.isChestItem(null), "late join: the chest items of the sync are handed back to be kept until their chest opens here", def1);
+      // a supply crate that has not landed on the joiner yet: the kept take goes when it opens (net.js chestOpened listener)
+      const L2 = mkLoot(new Set());
+      const def2 = M.applyLootSync(rt(sync), L2.open, L2.take);
+      L2.land("sd2");
+      const c2 = L2.opened.find((c) => c.supply), pre2 = M.chestItemPrefix(c2);
+      for (const id of def2) if (id.startsWith(pre2)) L2.take(id);
+      row(pre2 === "sd:2:" && M.chestItemPrefix({ id: "c7" }) === "cb:c7:" && !M.chestItemPrefix(null) && ![...L2.items].includes("sd:2:1") && [...L2.items].includes("sd:2:0"),
+        "late join: a crate that lands on the joiner after the sync still loses the items taken from it", [...L2.items]);
+      row(!M.applyLootSync(null, L2.open, L2.take).length && M.LOOT_DEFER_MAX >= 64, "late join: a sync without loot is a no-op; the kept takes are bounded");
+    }
     const roster = [{ peerId: "a_host", slot: 0 }, { peerId: "b_g1", slot: 1 }, { peerId: "c_g2", slot: 2 }];
     const actor = (id) => (id === "s10" ? { isBot: true } : /^s[0-2]$/.test(id) ? { isBot: false } : null);
     const onHost = { roster, isHost: true, actor, K: SIM }, onGuest = { roster, isHost: false, actor, K: SIM };
@@ -610,7 +680,8 @@ function suiteP23(M, SIM, count) {
     ["a gate that applies duplicates (chat shown twice)", { SeqGate: class extends M.SeqGate { accept(k, q) { const r = super.accept(k, q); return r === "dup" ? "old" : r; } } }],
     ["a rejoin judge with no key check", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { keys: new Map([[req && req.slot, M.rejoinHash(req && req.key)]]) })) }],
     ["a rejoin judge that hands out a live player's slot", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { goneAt: { ["s" + (req && req.slot)]: c.nowMs } })) }],
-    ["a rejoin judge with no time window", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { nowMs: Math.min(c.nowMs, ((c.goneAt || {})["s" + (req && req.slot)] || 0) + 1) })) }],
+    ["a rejoin judge that takes any silence as the leave", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, typeof c.silentMs === "number" ? { silentMs: Math.max(c.silentMs, M.REJOIN_SILENT_MS) } : {})) }],
+    ["a rejoin judge with no time window",{ judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { nowMs: Math.min(c.nowMs, ((c.goneAt || {})["s" + (req && req.slot)] || 0) + 1) })) }],
     ["a revive owner that takes any done", { reviveDoneOk: () => true }],
     ["a sender check that trusts the reviver named in the body", { senderMay: (t, d, from, c) => (t === "revive" ? null : M.senderMay(t, d, from, c)) }],
     ["a rejoin 'ok' accepted from anyone", { senderMay: (t, d, from, c) => (t === "rejoin" ? null : M.senderMay(t, d, from, c)) }],
@@ -619,6 +690,14 @@ function suiteP23(M, SIM, count) {
     ["a reconnect judge with no time window", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { nowMs: c.takenAt })) }],
     ["a reconnect judge that lets any peer reclaim a body", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { senderSlot: parseInt(String(c.id).slice(1), 10) })) }],
     ["a smoke parser with no radius / life cap", { normSmoke: (d) => (d && typeof d === "object" && [d.x, d.y, d.z].every(Number.isFinite) ? d : null) }],
+    ["a smoke cap counted per sending peer (D12: the host's bots share one cap)", { smokeRelayRoom: (list, by, t) => { const L = (list || []).filter((x) => x && x._net && !(x.t1 < t)); const peer = L.length ? L[L.length - 1]._net : null; return L.filter((x) => x._net === peer).length >= 6 ? "flood" : null; } }],
+    ["a smoke parser that drops rMax (a relayed cloud stuck at its send-time radius)", { normSmoke: (d, h) => { const s = M.normSmoke(d, h); if (s) s.rMax = s.r; return s; } }],
+    ["a run-it-back that takes the last RESOLVED mode as the pick (the old rule)", { rematchTeamWant: (cfg, asked) => M.normTeamMode(asked) || (cfg && cfg.teamWant !== "auto" ? M.normTeamMode(cfg.teamWant) : null) }],
+    ["a late-join sync that applies the taken list first (the ghost-item bug)", { applyLootSync: (loot, open, take) => { const out = []; for (const id of (loot && loot.taken) || []) { take(id); if (M.isChestItem(id)) out.push(id); } for (const id of (loot && loot.opened) || []) open(id); return out; } }],
+    ["a candidate scan that holds a closed tab's record back 3 s (the rj3_d0 miss)", { rejoinCandidates: (room, own, list, n) => M.rejoinCandidates(room, own, (list || []).map((r) => (r ? Object.assign({}, r, { closed: 0 }) : r)), n) }],
+    ["a page that never re-reads the records (one scan before the first hello)", { rejoinRescanMs: () => -1 }],
+    ["a revive done range fixed at 5 m (not K.REVIVE_RANGE)", { reviveDoneRange: () => 5 }],
+    ["a late-join sync that forgets the chest items for a crate that lands later", { applyLootSync: (loot, open, take) => { M.applyLootSync(loot, open, take); return []; } }],
   ];
   for (const [name, over] of p23Mutants) {
     const bad = suiteP23(Object.assign({}, M, over), SIM, false);
@@ -635,7 +714,10 @@ function suiteP23(M, SIM, count) {
       "LC-49: onMsg orders every state packet before it touches a body: duplicates dropped, a late packet applies only its events (no positions, no clock)");
     ok(/S\.txSeq = \(S\.txSeq \| 0\) \+ 1;\s*\r?\n\s*const st = pack\(W\.player, \{ q: S\.txSeq, t: \+W\.t\.toFixed\(2\) \}\);/.test(src) && /if \(stamp\) \{ st\.q = stamp\.q; st\.t = stamp\.t; \}/.test(src),
       "LC-49: pack() stamps every sender's state packet with q (its counter) and t (its match clock = the host's: the server-time stamp)");
-    ok(/\(a\.downed \? F_DOWNED : 0\)/.test(src) && /if \(a\.downed\) st\.dh = /.test(src) && /const dn = !!\(f & F_DOWNED\);/.test(src), "C-DBNO: the downed bit (and the bleed pool while downed) rides the state packet and is applied to remotes");
+    const packSrc = sl("function pack(a, stamp) {", "return st;");
+    ok(/\(a\.downed \? F_DOWNED : 0\)/.test(packSrc) && /hp: Math\.round\(a\.downed \? Math\.max\(0, a\.downedHp \|\| 0\) : a\.hp\)/.test(packSrc) && !/dh/.test(packSrc) &&
+      /const dn = !!\(f & F_DOWNED\);/.test(src) && /if \(dn\) \{ a\.downedHp = typeof d\.hp === "number" && Number\.isFinite\(d\.hp\) \? Math\.max\(0, d\.hp\) : a\.downedHp; a\.hp = 0; \}/.test(src),
+      "C-DBNO: the downed bit rides the stance byte and, while it is set, the hp field carries the bleed pool (no extra key: per-tick bytes unchanged); remotes get downedHp = hp, hp = 0");
     ok(/revive: 1, smoke: 1, rejoin: 1, room: 1/.test(src) && !/qsend\("revive"/.test(src) && /send\("revive", \{ k: "done"/.test(src) && /send\("smoke"/.test(src),
       "P23: revive / smoke / rejoin / room are CRITICAL and sent at once (never batched, never shed)");
     ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}\); \}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
@@ -651,6 +733,26 @@ function suiteP23(M, SIM, count) {
       /if \(S\.silentTake\) delete S\.silentTake\[r\.id\];/.test(src) && /if \(S\.silentTake\) delete S\.silentTake\[d\.slot\];/.test(src),
       "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
     ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
+    ok(/let teamWant = normTeamMode\(sel && \(sel\.teamMode \|\| sel\.team\)\) \|\| normTeamMode\(W\.settings && W\.settings\.teamMode\);/.test(src) &&
+      /const want = rematchTeamWant\(S\.cfg, opts\.teamMode\);\s*\r?\n\s*const teamMode = resolveTeamMode\(want === "solo" \? null : want/.test(src) && /mode: pace, teamMode, teamWant: teamWant \|\| "auto", roster/.test(src),
+      "D5: the room starts from the menu's team pick (W.settings.teamMode), START carries teamMode + teamWant, run it back re-resolves the room's pick");
+    ok(/if \(S\.rejoinAsk\.tries >= REJOIN_ASK_TRIES\)/.test(src) && /setTimeout\(ask, REJOIN_ASK_EVERY_MS\);/.test(src) && !/tries >= 6/.test(src) &&
+      /silentMs: typeof seen === "number" \? now - seen : null/.test(src) && /if \(S\.goneAt\) delete S\.goneAt\[id\];\s+\/\/ \(null when/.test(src) && /if \(S\.lastSeen\) delete S\.lastSeen\[id\];/.test(src) &&
+      /window\.addEventListener\("pagehide", \(\) => flushRejoin\(true\)\)/.test(src) && /if \(closed\) rec\.closed = 1;/.test(src),
+      "LC-49 rejoin: the page asks for the whole window, the host judges the slot's silence, a rejoin by silence alone cannot throw on a null goneAt, and a hidden / closing tab writes its record");
+    const lobR = sl("const readCands = () =>", 'send("hello", hello);');
+    ok(/S\.rejoinAsk\.cands = mergeCands\(S\.rejoinAsk\.cands, readCands\(\)\);/.test(lobR) && /rejoinRescanMs\(net\.room,/.test(lobR) && /setTimeout\(\(\) => rescan\(n \+ 1\), ms\)/.test(lobR) &&
+      /n < REJOIN_RESCANS/.test(lobR) && /startAsk\(c2, false\)/.test(lobR) && /if \(d\.code === "busy" && S\.rejoinAsk\) return;\s+if \(d\.code === "busy" && S\.rjRescan\) \{ S\.rjBusy = \{ from, d \}; return; \}/.test(src),
+      "LC-49 rejoin (second pass): every ask re-reads the records, a page with no candidate yet re-reads them when one comes of age, and the host's 'busy' (a reply to a hello without rj) never ends an ask and waits until the re-reads have given up");
+    ok(/bp\.distanceTo\(a\.pos\) > reviveDoneRange\(K\)/.test(src) && !/distanceTo\(a\.pos\) > 5\)/.test(src) && !/\+ `dh`/.test(src),
+      "D3: onRevive checks the reviver's distance with reviveDoneRange(K) (no literal 5 m); the header no longer promises a dh key");
+    ok(/const full = smokeRelayRoom\(W\.smokes, d\.by, W\.t\);\s*if \(full\) \{ reject\(t, from, full\); return; \}/.test(src) && !/x\._net === from/.test(src),
+      "D12: the smoke relay's cap is applied per thrower (d.by) on receive, never per sending peer");
+    const syncSrc = sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState");
+    ok(/deferTakes\(applyLootSync\(d\.loot, W\.netOpenChest, W\.netTakeItem\)\)/.test(syncSrc) && !/W\.netTakeItem\(id\)/.test(syncSrc) &&
+      /if \(t === "take"\) \{ W\.netTakeItem\(d\.id\); if \(isChestItem\(d\.id\)\) deferTakes\(\[d\.id\]\);/.test(src) &&
+      /const pre = chestItemPrefix\(c\);[\s\S]{0,120}for \(const id of \[\.\.\.S\.lootDefer\]\) if \(id\.startsWith\(pre\)\) \{ S\.lootDefer\.delete\(id\); W\.netTakeItem\(id\); \}/.test(src) && /S\.lootDefer = null;/.test(src),
+      "late join: the sync goes through applyLootSync (opened first) and a chest that opens here later drops the items taken from it");
   }
 
   console.log("");

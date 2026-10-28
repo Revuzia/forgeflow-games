@@ -24,7 +24,7 @@
  *
  * View models: Meshy GLBs for the six original guns (composed low-poly builds
  * as the fallback); the P2-D guns are CC0 Poly Pizza models baked to
- * assets/props/wpn_cc0/ (credits: F:/lc_p23/sim/credits.md -> CREDITS.md).
+ * assets/props/wpn_cc0/ (credits: _spec/parity_2026-10/credits_sim.md -> CREDITS.md).
  */
 import * as THREE from "three";
 
@@ -47,7 +47,13 @@ export function init(W) {
   W.deploySmoke = (x, y, z, ownerId, t0) => deploySmoke(W, x, y, z, ownerId, t0);
   // LC-22: the same bone-derived volumes the bullets test, for any caller that needs "is this ray on the body"
   // (hud.js aim-at name tags per OD-11, bots' line checks). Returns the entry distance along the unit ray or -1.
-  W.hitVolRay = (t, ox, oy, oz, dx, dy, dz, maxT) => hitVolRay(t, ox, oy, oz, dx, dy, dz, maxT, null);
+  // shooter: the drawn body is used only when shooter is the local human (W.player); anything else gets the sim volumes.
+  W.hitVolRay = (t, ox, oy, oz, dx, dy, dz, maxT, shooter) => hitVolRay(W, t, ox, oy, oz, dx, dy, dz, maxT, shooter);
+  // the drawn joints the local human's rounds would test t against right now (sim HITVOL_LIVE layout, world: the pose
+  // captured after the last frame's view pass) or null = the table (probes / harness)
+  W.hitVolLiveJoints = (t) => liveJoints(W, t);
+  // probe handle: t's joints read from its bones AS THEY ARE NOW (same layout; whatever pose the bones hold at the call)
+  W.hitVolBonesNow = (t) => { const L = t && liveRig(t); if (!L) return null; const J = new Float64Array(L.J.length); bonesToJoints(L, J); return J; };
   protosPromise = null;
   W.weaponProto = (id) => protos(W).then((p) => p[id]);
 }
@@ -403,6 +409,9 @@ export function disposeMatch(W) {
 
 export function update(W, dt) {
   const acts = W.actors;
+  // LC-22: the drawn-pose capture runs as a kernel updater AFTER the royale frame (registered here, from inside that
+  // frame's simTick, so it lands behind it in the updater list); once per session
+  if (!W._hvCapture && W.kernel && typeof W.kernel.onUpdate === "function") { W._hvCapture = true; W.kernel.onUpdate(() => captureDrawn(W)); }
   for (let ai = 0; ai < acts.length; ai++) {
     const a = acts[ai];
     if (!a.alive || a.netRemote) continue;
@@ -471,6 +480,12 @@ export function update(W, dt) {
   // the reticle's bloom registry describes the LIVE local human only
   if (W.player && !W.player.alive) K.setLiveHeat(null);
   tickSmokes(W);
+  // LC-22: build the live-bone rig tables (bone list + the per-skin head capsule, a one-time sort of ~4k vertices per skin)
+  // during the lobby / drop, one actor a frame, so the first fight of the match never pays for them
+  if (W.phase !== "match" && acts.length) {
+    const a = acts[_hvWarm++ % acts.length];
+    if (a && a.rig && (a._hvRig !== a.rig || a._hvObj !== a.obj)) liveRig(a);
+  }
   stepProjectiles(W, dt);
 }
 
@@ -733,7 +748,8 @@ function crosshairPoint(W, shooter, out) {
     if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.3) continue;
     if (W.SIM.hitVolSegment) {
       const L = bestT;
-      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L, W.t);
+      const view = shooter === W.player;    // the camera ray is the local human's eye
+      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L, W.t, view ? liveJoints(W, t) : null, view);
       if (hv >= 0) { if (hv * L >= 1) bestT = hv * L; continue; }
       if (hv === -1) continue;
     }
@@ -1009,8 +1025,158 @@ function tickSmokes(W) {
   }
   L.length = j;
 }
+// ── LC-22 LIVE BONES (FIX ROUND; SECOND FIX PASS) ─────────────────────────────────────────────────────────────────────
+// The LOCAL HUMAN's rounds and crosshair (and only those: weapons.js passes view = true) test a target against the body
+// that was DRAWN: the pose player.frame left on its bones (clip + aim lean + arm pose + twist + upright layers), captured
+// by captureDrawn, a kernel updater that runs AFTER the royale frame (simTick -> player.frame -> fx -> hud), into one
+// Float64Array per rig. The bullets tick at the start of the NEXT kernel frame, after the kernel has re-keyed the mixers
+// to the raw clip pose (kernel order: mixers -> updaters), so reading the bones at tick time tested a pose nobody saw
+// (check2: LeftHand 0.13-0.20 m off the drawn bone, up to 11 lines outside the drawn body). The snapshot is the pose on
+// screen when the trigger was pulled. It is valid for at most LIVE_MAX_TICKS sim ticks (one kernel frame's worth: the
+// fixed loop runs <= 5 ticks a frame) and for the same rig; fastForward (no kernel frame) and an actor the capture did
+// not reach fall back to sim's table.
+// Captured: an actor whose mixer the view policy still steps (player.js _mixRate 1 / 2 / 4 - on screen within 250 m
+// fov-scaled, or off screen inside shadow range; its bones are the pose it is drawn in), the camera focus and the player.
+// EVERY OTHER SHOT (bots, remote humans' rounds, the headless sim) tests sim's table with sim-state facing only: the
+// drawn pose depends on the frame dt the mixers stepped with and on the camera, so using it for a bot's round made a
+// seed's outcome depend on the display rate (check2 frate: 1/30 vs 1/60 frames diverged by 30 s). The sim stays a pure
+// function of the seed; only what the local human sees decides the local human's own hits.
+const HV_LIVE_BONES = ["Hips", "Spine2", "Neck", "LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm", "RightHand",
+  "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot", "Head", "LeftToeBase", "RightToeBase"];
+const _hvV = new THREE.Vector3(), _hvM = new THREE.Matrix4();
+/** The HEAD volume in the Head bone's own frame, from the body meshes' Head-dominant vertices in bind pose (skinned
+ *  world = bone.matrixWorld x boneInverse x bindMatrix x v, three's attached bind mode): a CAPSULE along the local axis
+ *  with the widest p10-p90 spread (a hood, hair or a helmet makes some heads far wider than deep: the athlete's head
+ *  cloud is 0.36 m ear to ear and 0.19 m front to back), its tips at the p10 / p90 extents less the radius, the radius
+ *  the p80 distance of the cloud from that axis. Local units (the bone frame carries the rig's scale); once per skin. */
+const _hvHeadBySkin = new Map();
+let _hvWarm = 0;
+function headLocal(t, headBone) {
+  const key = t.skin || "?";
+  if (_hvHeadBySkin.has(key)) return _hvHeadBySkin.get(key);
+  const P3 = [];
+  for (const mesh of t._bodies) {
+    const g = mesh.geometry, sk = mesh.skeleton;
+    if (!g || !sk || !g.attributes.skinIndex || !g.attributes.skinWeight) continue;
+    const hi = sk.bones.indexOf(headBone);
+    if (hi < 0) continue;
+    const P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
+    _hvM.multiplyMatrices(sk.boneInverses[hi], mesh.bindMatrix);
+    for (let i = 0; i < P.count; i++) {
+      let bw = -1, bi = -1;
+      for (let k = 0; k < 4; k++) { const w = SW.getComponent(i, k); if (w > bw) { bw = w; bi = SI.getComponent(i, k); } }
+      if (bi !== hi) continue;
+      _hvV.fromBufferAttribute(P, i).applyMatrix4(_hvM);
+      P3.push(_hvV.x, _hvV.y, _hvV.z);
+    }
+  }
+  const n = P3.length / 3;
+  let out = null;
+  if (n > 20) {
+    const q = (arr, f) => { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(f * a.length))]; };
+    const ax = [0, 1, 2].map((k) => { const v = []; for (let i = 0; i < n; i++) v.push(P3[i * 3 + k]); return { lo: q(v, 0.1), hi: q(v, 0.9), mid: q(v, 0.5) }; });
+    let k0 = 0;
+    for (let k = 1; k < 3; k++) if (ax[k].hi - ax[k].lo > ax[k0].hi - ax[k0].lo) k0 = k;
+    const c = [0, 1, 2].map((k) => (ax[k].lo + ax[k].hi) / 2);
+    const dist = [];
+    for (let i = 0; i < n; i++) { let d2 = 0; for (let k = 0; k < 3; k++) if (k !== k0) { const e = P3[i * 3 + k] - c[k]; d2 += e * e; } dist.push(Math.sqrt(d2)); }
+    const r = q(dist, 0.8), half = Math.max(0, (ax[k0].hi - ax[k0].lo) / 2 - r);
+    const A = c.slice(), B = c.slice(); A[k0] -= half; B[k0] += half;
+    out = { a: { x: A[0], y: A[1], z: A[2] }, b: { x: B[0], y: B[1], z: B[2] }, r };
+  }
+  _hvHeadBySkin.set(key, out);
+  return out;
+}
+/** Per rig: the 18 bones, the node chain from below t.obj down to them (parents first: the matrices captureDrawn
+ *  refreshes), the head capsule and the snapshot buffer. Built once per rig (lobby / drop warm); null = no usable rig. */
+function liveRig(t) {
+  const rig = t.rig;
+  if (t._hvRig === rig && t._hvObj === t.obj) return t._hvLB;
+  t._hvRig = rig; t._hvObj = t.obj; t._hvLB = null;
+  if (!rig || !rig.scene || !t.obj || !t._bodies || !t._bodies.length) return null;
+  const by = {};
+  rig.scene.traverse((o) => { if (o.isBone) { const n = o.name.replace(/^mixamorig:?/, ""); if (!by[n]) by[n] = o; } });
+  const bones = HV_LIVE_BONES.map((n) => by[n] || null);
+  if (bones.some((b) => !b)) return null;
+  const hl = headLocal(t, bones[15]);
+  if (!hl) return null;
+  // every node strictly below t.obj on the way to a needed bone, shallowest first
+  const seen = new Set(), chain = [];
+  for (const b of bones) {
+    const up = [];
+    let o = b;
+    while (o && o !== t.obj) { up.push(o); o = o.parent; }
+    if (o !== t.obj) return null;                 // the rig is not under the actor's object: keep the table
+    for (let i = up.length - 1; i >= 0; i--) if (!seen.has(up[i])) { seen.add(up[i]); chain.push(up[i]); }
+  }
+  const n = K.HITVOL_LIVE_N || 58;
+  t._hvLB = { bones, chain, obj: t.obj, head: hl, J: new Float64Array(n), tick: -1e9, ok: false };
+  return t._hvLB;
+}
+/** The joints from the rig's bones as they are NOW into J (the sim's HITVOL_LIVE layout, world): refreshes the world
+ *  matrices of the actor's object, its ancestors and the bone chain first (player.frame sets local transforms; the
+ *  render's own matrix update has not run yet, and a frame can be stepped without a render). No allocation. */
+function bonesToJoints(L, J) {
+  const B = L.bones, C = L.chain;
+  L.obj.updateWorldMatrix(true, false);
+  for (let i = 0; i < C.length; i++) C[i].updateWorldMatrix(false, false);
+  for (let i = 0; i < 15; i++) { const e = B[i].matrixWorld.elements; J[i * 3] = e[12]; J[i * 3 + 1] = e[13]; J[i * 3 + 2] = e[14]; }
+  const hm = B[15].matrixWorld, he = hm.elements, H = L.head;
+  _hvV.set(H.a.x, H.a.y, H.a.z).applyMatrix4(hm); J[45] = _hvV.x; J[46] = _hvV.y; J[47] = _hvV.z;
+  _hvV.set(H.b.x, H.b.y, H.b.z).applyMatrix4(hm); J[54] = _hvV.x; J[55] = _hvV.y; J[56] = _hvV.z;
+  J[57] = H.r * Math.sqrt(he[0] * he[0] + he[1] * he[1] + he[2] * he[2]);    // local units -> metres (the bone frame's scale)
+  for (let i = 0; i < 2; i++) { const e = B[16 + i].matrixWorld.elements; J[48 + i * 3] = e[12]; J[49 + i * 3] = e[13]; J[50 + i * 3] = e[14]; }
+}
+const LIVE_MAX_TICKS = 5;      // ffg_royale3d.js MAX_STEPS: the most ticks one kernel frame runs between two captures
+function liveEligible(W, t) {
+  if (!t || !t.alive || !t.rig || !t.obj || t.downed || t.swimming || t.obj.visible === false) return false;
+  return t === W.player || t === W._camFocus || t._mixRate > 0;
+}
+/** Kernel updater (registered behind the royale frame): snapshot the drawn pose of every eligible actor. */
+function captureDrawn(W) {
+  if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") return;
+  if (!K || !K.HITVOL_LIVE_N) return;
+  const acts = W.actors;
+  if (!acts) return;
+  for (let i = 0; i < acts.length; i++) {
+    const t = acts[i];
+    if (!t) continue;
+    if (!liveEligible(W, t)) { if (t._hvLB) t._hvLB.ok = false; continue; }
+    const L = liveRig(t);
+    if (!L) continue;
+    bonesToJoints(L, L.J);
+    L.tick = W.simTick; L.ok = true;
+  }
+}
+/** the drawn joints of t for the local human's view (world, the sim's HITVOL_LIVE layout) or null = use the table */
+function liveJoints(W, t) {
+  if (!K.HITVOL_LIVE_N || !liveEligible(W, t)) return null;
+  const L = t._hvRig === t.rig && t._hvObj === t.obj ? t._hvLB : null;
+  if (!L || !L.ok) return null;
+  const age = W.simTick - L.tick;
+  return age >= 0 && age <= LIVE_MAX_TICKS ? L.J : null;
+}
+/** LC-22 for any caller that needs "is this ray on the body" (hud aim-at tags, bots' line checks): the entry distance of
+ *  the unit ray (o, d) into actor t's body within maxT (default 300 m), or -1. Same volumes as the bullets (live bones
+ *  where fresh, else the table; swimming / downed / no data: the legacy cylinder). */
+function hitVolRay(W, t, ox, oy, oz, dx, dy, dz, maxT, shooter) {
+  if (!K || !t || !t.alive || !t.pos) return -1;
+  const L = maxT > 0 ? maxT : 300;
+  const bx = ox + dx * L, by = oy + dy * L, bz = oz + dz * L;
+  const view = shooter != null && shooter === W.player;
+  const hv = K.hitVolSegment ? K.hitVolSegment(t, ox, oy, oz, bx, by, bz, W.t, view ? liveJoints(W, t) : null, view) : -2;
+  if (hv !== -2) return hv >= 0 ? hv * L : -1;
+  // legacy cylinder (the bullets' own rule in testSegment): closest approach of the segment to the actor's axis
+  const ex = bx - ox, ez = bz - oz, len2 = ex * ex + ez * ez;
+  let u = len2 > 0 ? ((t.pos.x - ox) * ex + (t.pos.z - oz) * ez) / len2 : 0;
+  u = u < 0 ? 0 : u > 1 ? 1 : u;
+  const px = ox + ex * u - t.pos.x, pz = oz + ez * u - t.pos.z, py = oy + (by - oy) * u;
+  const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
+  if (px * px + pz * pz < (K.PLAYERK.radius + 0.12) ** 2 && py > feetY - 0.05 && py < headY + 0.12) return u * L;
+  return -1;
+}
 const NO_ACTORS = [];
-const BOUNCED = 2;          // testSegment: the round bounced and its position + velocity are already set
+const BOUNCED = 2;         // testSegment: the round bounced and its position + velocity are already set
 // Colliders along ONE projectile's whole frame of travel. testSegment used to run a
 // fresh queryColliders per 2.5 m sub-step (up to 8 a frame per round, each building
 // an array, a Set and string keys) — the top allocation site of the whole frame,
@@ -1133,13 +1299,15 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
   const bz0 = (az < bz ? az : bz) - BREACH, bz1 = (az < bz ? bz : az) + BREACH;
   let hitT = Infinity, hitActor = null, hitPx = 0, hitPy = 0, hitPz = 0, hitDh = 0, hitHead = false, hitVol = false;
   const acts = p.noActor ? NO_ACTORS : W.actors;
+  // LC-22 view rule (SECOND FIX PASS): only the local human's own round tests the DRAWN body; every other round is sim
+  const view = p.ownerId != null && !!W.player && p.ownerId === W.player.id;
   for (let ai = 0; ai < acts.length; ai++) {
     const t = acts[ai];
     if (!t.alive || t.id === p.ownerId) continue;
     const cx = t.pos.x, cz = t.pos.z;
     if (cx < bx0 || cx > bx1 || cz < bz0 || cz > bz1) continue;
     // LC-22: the bone-derived body (sim HITVOL); -2 = no measured volume here (swimming, downed, no data): the cylinder
-    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz, W.t) : -2;
+    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz, W.t, view ? liveJoints(W, t) : null, view) : -2;
     if (hv !== -2) {
       if (hv >= 0 && hv < hitT) {
         hitT = hv; hitActor = t; hitVol = true; hitHead = K.HITVOL_HIT.head;

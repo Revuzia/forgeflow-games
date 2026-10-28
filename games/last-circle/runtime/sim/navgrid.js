@@ -12,6 +12,11 @@
  *   NavGrid.findPath(world, sx, sy, sz, tx, ty, tz [, { pad, maxExpand, noPull, maxDrop }])  -> [{ x, y, z, k }, ...] | null
  *       (P2-E) opts.maxDrop (m): drop edges taller than this are left out (default: all, up to DROP_MAX 6 m). For C-FALL (a 4 m drop is safe, a
  *       taller one hurts) and C-DBNO crawlers. A downed actor (0.6 m capsule, same radius) needs no grid of its own: every standing edge fits it.
+ *       maxDrop is a HEIGHT; C-FALL gives the safe landing as a SPEED (K.FALL_SAFE_V, m/s): convert it with h = v^2 / (2 g) at THIS game's gravity,
+ *       g = 22 m/s^2 (sim MOVE.gravity; not 9.8): NavGrid.dropHeight(K.FALL_SAFE_V) = 4.0 m (= K.FALL_SAFE_H; a fall-damage budget of b hp: the height
+ *       whose fallDamage is b). A NULL route is a valid answer, not an error: with a budget it is "no-path" whenever every way needs a taller drop
+ *       (a downed crawler on a deck whose only exits are drops, a walled yard only a drop leads into) - the caller keeps its own plan (stays, or
+ *       uses its fallback planner) and may ask again; world.lastFail says why.
  *       k = the kind of the leg that ARRIVES at the waypoint (0 walk, 1 drop, 2 ramp); the array also carries .cost .expanded
  *       .nodes; world.lastFail names why a query returned null: "no-goal" (no floor near the goal), "no-start", "start-blocked"
  *       (the walker cannot walk to any node near it), "no-path", "limit" (maxExpand reached, or the search table is full)
@@ -405,7 +410,7 @@
   function latRead(G) {
     var L = G.L, C = G.c, N = G.n;
     var fx = (_hq[0] + G.h) * G.k, fz = (_hq[1] + G.h) * G.k;
-    fx = fx < 0 ? 0 : fx > C ? C : fx; fz = fz < 0 ? 0 : fz > C ? C : fz;
+    fx = Math.min(Math.max(fx, 0), C); fz = Math.min(Math.max(fz, 0), C);      // (final/nav) not the nested ?: (boxed by Maglev, see supBlockQ); equal up to the sign of a zero
     var ix = fx | 0, iz = fz | 0;
     if (ix >= C) ix = C - 1;
     if (iz >= C) iz = C - 1;
@@ -432,7 +437,10 @@
     for (var k = a; k < b; k++) {
       var i = items[k];
       var x0 = lx0[i], x1 = lx1[i], z0 = lz0[i], z1 = lz1[i];
-      var ex = x - (x < x0 ? x0 : x > x1 ? x1 : x), ez = z - (z < z0 ? z0 : z > z1 ? z1 : z);
+      // (final/nav) the clamp as Math.min / Math.max: the nested ?: form is a phi of a phi, which V8 14's mid tier (Maglev) keeps boxed - a fresh heap number
+      // per collider per step while the replay runs there (V8 14.8 under --no-turbofan: supBlockQ 29.9 -> 3.9 B a step; Chrome 156's V8 boxes elsewhere in
+      // this function either way). Equal for every box with minX <= maxX (every collider of 15 builds, 3 maps x 5 seeds) up to the sign of a zero (ex is squared).
+      var ex = x - Math.min(Math.max(x, x0), x1), ez = z - Math.min(Math.max(z, z0), z1);
       if (!(ex * ex + ez * ez < r2)) continue;
       if (nn < 48) _sbN[nn++] = i; else over = true;
       var kd = lk[i];
@@ -538,13 +546,15 @@
     // support and the blocking tests (one tick of fall); a grounded one is not.
     _marginUse = 0;
     var water = T0.deepY > -1e8;
+    // (final/nav) the fields of the tile the line is in, as locals: read once per tile, not twice a step (each read of a tile field was a property load; see tileShell)
+    var tMinX = T.minX, tMaxX = T.maxX, tMinZ = T.minZ, tMaxZ = T.maxZ, tInv = T.inv, tCell = T.cell, tNx = T.nx, tNz = T.nz, tNS = T.nearStart, tNI = T.nearItems, tDeep = T.deepY, tWet = T.wetY;
     for (var s = 1; s <= n; s++) {
       var f = rest ? (s >= n ? 1 : (s <= REST_N ? REST_D[s] : REST_D[REST_N] + (s - REST_N) * HOP_STEP) / L) : s / n, px = ax + dx * f, pz = az + dz * f;      // (restDist, inlined)
       // X move (the destination floor decides the band, player.js blockedIn)
       if (!fixed) {
-        if (px < T.minX || px >= T.maxX || z < T.minZ || z >= T.maxZ) { T = W ? (_tf[0] = px, _tf[1] = z, tileForQ(W, true)) : null; if (T === null) return false; }
-        { var cix0 = ((px - T.minX) * T.inv) | 0, ciz0 = ((z - T.minZ) * T.inv) | 0; if (cix0 >= T.nx) cix0 = T.nx - 1; if (ciz0 >= T.nz) ciz0 = T.nz - 1; ci = ciz0 * T.nx + cix0; }      // (cellOf, inlined: no boxed call per step)
-        a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
+        if (px < tMinX || px >= tMaxX || z < tMinZ || z >= tMaxZ) { T = W ? (_tf[0] = px, _tf[1] = z, tileForQ(W, true)) : null; if (T === null) return false; tMinX = T.minX; tMaxX = T.maxX; tMinZ = T.minZ; tMaxZ = T.maxZ; tInv = T.inv; tCell = T.cell; tNx = T.nx; tNz = T.nz; tNS = T.nearStart; tNI = T.nearItems; tDeep = T.deepY; tWet = T.wetY; }
+        { var cix0 = ((px - tMinX) * tInv) | 0, ciz0 = ((z - tMinZ) * tInv) | 0; if (cix0 >= tNx) cix0 = tNx - 1; if (ciz0 >= tNz) ciz0 = tNz - 1; ci = ciz0 * tNx + cix0; }      // (cellOf, inlined: no boxed call per step)
+        a = tNS[ci]; b = tNS[ci + 1]; items = tNI;
       }
       if (b > a) {
         if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
@@ -557,9 +567,9 @@
       x = px;
       // Z move
       if (!fixed) {
-        if (x < T.minX || x >= T.maxX || pz < T.minZ || pz >= T.maxZ) { T = W ? (_tf[0] = x, _tf[1] = pz, tileForQ(W, true)) : null; if (T === null) return false; }
-        { var cix1 = ((x - T.minX) * T.inv) | 0, ciz1 = ((pz - T.minZ) * T.inv) | 0; if (cix1 >= T.nx) cix1 = T.nx - 1; if (ciz1 >= T.nz) ciz1 = T.nz - 1; ci = ciz1 * T.nx + cix1; }
-        a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
+        if (x < tMinX || x >= tMaxX || pz < tMinZ || pz >= tMaxZ) { T = W ? (_tf[0] = x, _tf[1] = pz, tileForQ(W, true)) : null; if (T === null) return false; tMinX = T.minX; tMaxX = T.maxX; tMinZ = T.minZ; tMaxZ = T.maxZ; tInv = T.inv; tCell = T.cell; tNx = T.nx; tNz = T.nz; tNS = T.nearStart; tNI = T.nearItems; tDeep = T.deepY; tWet = T.wetY; }
+        { var cix1 = ((x - tMinX) * tInv) | 0, ciz1 = ((pz - tMinZ) * tInv) | 0; if (cix1 >= tNx) cix1 = tNx - 1; if (ciz1 >= tNz) ciz1 = tNz - 1; ci = ciz1 * tNx + cix1; }
+        a = tNS[ci]; b = tNS[ci + 1]; items = tNI;
       }
       if (b === a && !fixed) {
         // OPEN cell: nothing within reach of the capsule, so nothing blocks, nothing lifts, the floor is the terrain. Over GENTLE ground the feet ride it
@@ -569,9 +579,9 @@
         _hq[0] = x; _hq[1] = z; hfQ(T);
         var hS = _hq[2];
         if (gT) {
-          var cix = ci % T.nx, ciz = (ci - cix) / T.nx;
-          var tx1 = dx > 1e-12 ? (T.minX + (cix + 1) * T.cell - ax) / dx : dx < -1e-12 ? (T.minX + cix * T.cell - ax) / dx : 1e30;
-          var tz1 = dz > 1e-12 ? (T.minZ + (ciz + 1) * T.cell - az) / dz : dz < -1e-12 ? (T.minZ + ciz * T.cell - az) / dz : 1e30;
+          var cix = ci % tNx, ciz = (ci - cix) / tNx;
+          var tx1 = dx > 1e-12 ? (tMinX + (cix + 1) * tCell - ax) / dx : dx < -1e-12 ? (tMinX + cix * tCell - ax) / dx : 1e30;
+          var tz1 = dz > 1e-12 ? (tMinZ + (ciz + 1) * tCell - az) / dz : dz < -1e-12 ? (tMinZ + ciz * tCell - az) / dz : 1e30;
           var tEx = tx1 < tz1 ? tx1 : tz1;
           var sLast = rest ? restTicks(tEx * L) - 1 : Math.ceil(tEx * n) - 1;
           if (sLast > n) sLast = n;
@@ -583,13 +593,13 @@
             var hJ = _hq[2];
             if (!(hS - hS === 0) || !(hJ - hJ === 0)) return false;                      // no ground height at either end of the jump (NaN, infinite): nobody walks there
             var jl = Math.sqrt((jx - x) * (jx - x) + (jz - z) * (jz - z));
-            if ((hS - hJ) <= JUMP_SLOPE * jl && (!water || (hS >= T.deepY + WATER_GUARD && hJ >= T.deepY + WATER_GUARD))) { s = sLast; x = jx; z = jz; continue; }
+            if ((hS - hJ) <= JUMP_SLOPE * jl && (!water || (hS >= tDeep + WATER_GUARD && hJ >= tDeep + WATER_GUARD))) { s = sLast; x = jx; z = jz; continue; }
           }
           _hq[0] = x; _hq[1] = pz; hfQ(T);
           var hN = _hq[2];
           if (!(hN - hN === 0)) return false;
           if (hS - hN <= GLUE_DROP) {                       // still glued to the ground: one more step on it
-            if (water && hN < T.deepY) return false;
+            if (water && hN < tDeep) return false;
             z = pz;
             continue;
           }
@@ -599,7 +609,7 @@
         Hz = _hq[2];
         if (!(Hz - Hz === 0)) return false;
         vy += GRAVITY * TICK; y += vy * TICK;
-        if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;
+        if (water && Hz < tDeep && (air ? y - AIR_PAD : y) <= tWet) return false;
         sup = Hz;
         if (y <= Hz + 0.02) { y = Hz; vy = 0; air = false; gT = (hS - Hz) <= GLUE_DROP; } else { air = true; airTicks++; if (y - Hz > BIG_GAP) bigTicks++; }
         z = pz;
@@ -608,7 +618,7 @@
       if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
       _hq[0] = x; _hq[1] = pz; hfQ(T);
       Hz = _hq[2];
-      if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;          // swimming (player.js: deep terrain under feet at the surface)
+      if (water && Hz < tDeep && (air ? y - AIR_PAD : y) <= tWet) return false;          // swimming (player.js: deep terrain under feet at the surface)
       var sr0 = _supRamp;                  // the ramp flag this support call starts from (see the gravity step below)
       if (b > a) {
         yq = air ? y - AIR_PAD : y;
@@ -1023,6 +1033,64 @@
     do { r = g.next(); } while (!r.done);
     return r.value;
   }
+  /** (final/nav) EVERY TILE HAS ONE HIDDEN CLASS, from birth to the end of the match. A tile used to start with 30 properties and grow the rest in
+   *  stages (the bake's graph, the install's kind / tx / tz / rectRef, the stitch's linking / linkedAt, the settle's rch), so the tiles of a match wore
+   *  5+ hidden classes (5 in a fully baked Deepwood, more while tiles are mid-bake or mid-stitch). Every read of a tile field in the replay was then a
+   *  megamorphic load, and a megamorphic load of a double field (minX, inv, cell, deepY ...) hands back a FRESH heap number: hopQ made 49 B of garbage
+   *  per replayed 10 cm step in TurboFan (Node probe, Deepwood seed 7: 5,842 B a 12 m hop; ~465 B a step before it is optimized), and each new class
+   *  a hot function met deoptimized it ("wrong map", Chrome's V8 log of a framecheck run). Now: one literal with every field, in one order, with a value
+   *  of the field's final kind; the later stages assign in place. The integer fields are stored as small integers (| 0): a payload's numbers come out of a
+   *  double array (pbAssemble's s[]) as heap numbers, and ONE heap number in a small-integer field re-classes every tile (Chrome's log: tileShell 'not a
+   *  Smi', then 'wrong map' in hopQ / supBlockQ / supportTQ / hfQ, right before the drop). Same values, read the same way: no tile, edge or route
+   *  changes (world hash). */
+  function tileShell(key, minX, minZ, maxX, maxZ, cell, nx, nz, inv, hf, deepY, wetY, cs) {
+    // the literal holds CONSTANTS of each field's kind (0.5 = a double field, 0 = a small-integer one, null = an object), so its boilerplate is born with
+    // the final representations; a computed integral double (a coarse tile's minX -544) would otherwise make minX a small-integer field (V8 log: 'not a Smi')
+    var T = {
+      isTile: true, grp: null, island: null, key: 0, minX: 0.5, minZ: 0.5, maxX: 0.5, maxZ: 0.5, cell: 0.5, nx: 0, nz: 0, inv: 0.5, hf: null, hl: null,
+      deepY: 0.5, wetY: 0.5,
+      m: 0, lx0: null, lx1: null, ly0: null, ly1: null,
+      lz0: null, lz1: null, lk: null, ld: null,
+      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
+      // set by the bake (bakeTileGen) / the payload (pbAssemble)
+      dOrth: 0.5, dDiag: 0.5, n: 0, x: null, y: null, z: null, flag: null, bord: null, adj: null, cellStart: null,
+      edgeStart: null, edgeTo: null, edgeCost: null, edgeKind: null, bordCount: 0, holes: null,
+      extStart: null, extTo: null, extCost: null, extKind: null, pend: null, linked: null, stats: null, hash: "",
+      // set by the install (bakeCoarse / bakeFine / stepJob / pbHostAdd), the stitch (stepJob, linkTileGen) and the settle (resolveGroup)
+      kind: "", tx: 0, tz: 0, rectRef: null, linking: false, linkedAt: -1, rch: null,
+    };
+    T.key = key | 0; T.minX = minX; T.minZ = minZ; T.maxX = maxX; T.maxZ = maxZ; T.cell = cell; T.nx = nx | 0; T.nz = nz | 0; T.inv = inv; T.hf = hf; T.hl = latFor(hf);
+    T.deepY = deepY; T.wetY = wetY;
+    T.m = cs.n; T.lx0 = cs.minX; T.lx1 = cs.maxX; T.ly0 = cs.minY; T.ly1 = cs.maxY; T.lz0 = cs.minZ; T.lz1 = cs.maxZ; T.lk = cs.kind; T.ld = cs.dir;
+    T.dOrth = cell; T.dDiag = cell * Math.SQRT2;
+    return T;
+  }
+  /** Drive every field of the tile class through the kinds of value it will ever hold, once, when the module loads: a field's representation (small
+   *  integer -> double), its type (null -> an array) and its constness (written once -> written again) only ever GENERALIZE, and each generalization
+   *  deoptimizes the code that relied on the old one. Done here, before any code is optimized, no tile ever changes the class mid-match. */
+  (function primeTileShape() {
+    var f0 = function () { return 0; }, cs = makeColSet([], null, null);
+    var A = tileShell(1, 0, 0, 32, 32, 2, 16, 16, 1, f0, -Infinity, -Infinity, cs), B = tileShell(100000001, 0.25, 0.5, 16.25, 16.5, 0.75, 21, 21, 4 / 3, f0, -1.08, 0.3, cs);
+    var P = [A, B], i, T;
+    for (i = 0; i < 2; i++) {
+      T = P[i];
+      T.grp = { rects: [] }; T.island = new Uint8Array(1); T.island = null; T.key = 2 + i; T.minX = 0.5; T.minZ = 0.5; T.maxX = 1.5; T.maxZ = 1.5; T.cell = 1.5; T.inv = 0.6;
+      T.nx = 3; T.nz = 3; T.hf = function () { return 1; }; T.hl = { L: null, n: 0, c: 0, k: 0.5, h: 0.5 }; T.hl = null; T.deepY = -0.5; T.wetY = 0.5; T.m = 1;
+      T.nearStart = new Int32Array(1); T.nearItems = new Int32Array(1); T.nearStart = new Uint16Array(1); T.nearItems = new Uint16Array(1);
+      T.slot = 1; T.base = STRIDE; T.linkedAll = true; T.linkedAll = false;
+      T.dOrth = 0.75; T.dDiag = 1.06; T.n = 1; T.n = 2;
+      T.x = new Float32Array(1); T.y = new Float32Array(1); T.z = new Float32Array(1); T.flag = new Uint8Array(1); T.bord = new Uint8Array(1); T.adj = new Uint8Array(1);
+      T.cellStart = new Int32Array(1); T.cellStart = new Uint16Array(1); T.edgeStart = new Int32Array(1); T.edgeStart = new Uint16Array(1);
+      T.edgeTo = new Int32Array(1); T.edgeTo = new Uint16Array(1); T.edgeCost = new Float32Array(1); T.edgeKind = new Uint8Array(1);
+      T.bordCount = 1; T.bordCount = 2; T.holes = []; T.holes = [];
+      T.extStart = new Int32Array(1); T.extStart = new Uint16Array(1); T.extTo = new Int32Array(1); T.extCost = new Float32Array(1); T.extKind = new Uint8Array(1);
+      T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null;
+      T.pend = []; T.pend = null; T.linked = []; T.linked = [];
+      T.stats = { ms: 0.5 }; T.stats = { ms: 1.5 }; T.hash = (0x811c9dc5 + i).toString(16); T.hash = "1";
+      T.kind = "coarse"; T.kind = "fine"; T.tx = 1; T.tx = -1; T.tz = 1; T.tz = -1; T.rectRef = { tile: null }; T.rectRef = null;
+      T.linking = true; T.linking = false; T.linkedAt = 0; T.linkedAt = 1; T.rch = new Uint8Array(1); T.rch = null;
+    }
+  })();
   /** bakeTile as a GENERATOR (Wave 7, lane 7B2): the same code, with a `yield` every 4 flagged cells of the node pass and every YIELD_STEPS replayed
    *  steps of the edge pass, so one 10-190 ms tile can be baked a slice at a time (stepJob). The yields carry no data and change no state: driven
    *  to the end the result is byte for byte the tile the single call gave (world hash pinned by the selftest). The work counters are the only clock. */
@@ -1050,13 +1118,7 @@
     // (Wave 8, lane I2) the tile reads the collider set's own arrays and its lists hold collider-set indices: it used to copy its colliders (6 Float64 + 2 bytes
     // each, ~50 B a collider a tile: 3.1 MB in a furnished downtown, the biggest part of its tiles). Same numbers, same order in every list (the selection runs
     // in collider-set order and the lists are built in that order), so every replay reads exactly what it read before. T.m = the index space (_mk's size).
-    var T = {
-      isTile: true, grp: null, island: null, key: opts.key != null ? opts.key : 0, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf, hl: latFor(hf),
-      deepY: waterY - DEEP, wetY: waterY + 0.3,
-      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
-      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
-      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
-    };
+    var T = tileShell(opts.key != null ? opts.key : 0, minX, minZ, maxX, maxZ, cell, nx, nz, inv, hf, waterY - DEEP, waterY + 0.3, cs);
     var lx0 = T.lx0, lx1 = T.lx1, ly0 = T.ly0, ly1 = T.ly1, lz0 = T.lz0, lz1 = T.lz1, lk = T.lk;
 
     // 2. per-cell collider lists: every collider within E1 (capsule + pad) of the cell's rectangle. An empty list = an
@@ -1503,6 +1565,7 @@
    *   opts.portals     [{x, y, z}] the map's launch portals: walking into one flings the actor, so they are obstacles
    */
   function createWorld(opts) {
+    if (_primeMs < 0) { _primeMs = 0; primeReplay(); }      // (final/nav) once per module, before its first world: see FEEDBACK PRIMING
     var t0 = now();
     var blockers = [];
     if (opts.portals) for (var pi = 0; pi < opts.portals.length; pi++) blockers.push(portalBlocker(opts.portals[pi]));
@@ -1601,7 +1664,9 @@
   /** The module scratch a replay uses (bakeTile saves and restores it around a whole bake; an incremental bake does the same around every slice). */
   var _scr = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];       // (reused: stepJob is not re-entrant, and a fresh array per slice was 10 MB of garbage per city)
   function saveScratch() { var s = _scr; s[0] = _hr[0]; s[1] = _hr[1]; s[2] = _hr[2]; s[3] = _hr[3]; s[4] = _hr[4]; s[5] = _hr[5]; s[6] = _marginUse; s[7] = _ec[0]; s[8] = _strictRamp; s[9] = _supRamp; s[10] = _rest; s[11] = _wsRamp; return s; }
-  function loadScratch(s) { _hr[0] = s[0]; _hr[1] = s[1]; _hr[2] = s[2]; _hr[3] = s[3]; _hr[4] = s[4]; _hr[5] = s[5]; _marginUse = s[6]; _ec[0] = s[7]; _strictRamp = s[8]; _supRamp = s[9]; _rest = s[10]; _wsRamp = s[11]; }
+  // (final/nav) the flags come back as small integers (| 0, they are 0 / 1; _wsRamp is a boolean): _scr holds doubles too (_hr), so its reads are heap numbers, and a heap number in
+  // _supRamp / _rest / ... deoptimized every function that compares them ('not a Smi' in hopQ, Chrome's V8 log, at the first stepJob of the match)
+  function loadScratch(s) { _hr[0] = s[0]; _hr[1] = s[1]; _hr[2] = s[2]; _hr[3] = s[3]; _hr[4] = s[4]; _hr[5] = s[5]; _marginUse = s[6] | 0; _ec[0] = s[7]; _strictRamp = s[8] | 0; _supRamp = s[9] | 0; _rest = s[10] | 0; _wsRamp = s[11] === true; }
 
   /**
    * AN INCREMENTAL JOB (lane 7B2): bake one tile of a lazy world (a { kind, key, tx, tz, rect } from collectJobs / takeWanted), stitch it to the baked
@@ -1669,11 +1734,23 @@
   // tile arrived in time or not - a missing one is simply baked as before - and a replay of a seed is identical with or without workers.
   // Only the wall clock differs: the drop's bots section loses the bake (89 % of its nav cost, split.mjs). Workers start when a lazy world is created
   // (bots.js startNav, right after buildMap: the model loading and the lobby are their time) and stop when every tile of the world's rects is done.
+  // (P23 fix round) THAT IS MAP-BUILD TIME: the world needs the map's final collider set, which exists when buildMap resolves, and startNav runs from the
+  // first attachBrain right after it (measured: bakeTown 0.08-0.13 s, before the first idle moment after W.map is set). The window to Enter is then only the
+  // actor-model load, the shader warm-up and the lobby - 6-14 s on the shared box when Enter is pressed at once (the default flow). So the queue puts the
+  // BUILDINGS first (the only tiles the drop's schedule bakes: the outdoor ones are bots.js's own loading pump + barrier) and a desktop runs up to 6 bake
+  // workers. Measured (ashgrid seed 7, Enter at once): at Enter 525 of 711 buildings in (was ~30), drop bots section p95 2.3 ms real rAF (base 4.6) and
+  // 1.9 ms per paced tick (base 3.8), first 5 s p95 1.1 ms (base 15.9), every state hash equal to the base build's.
+  // The schedule itself is NOT paced by the wall clock while results are pending: which tile is in at which tick is sim state, so a wall-clock pace would
+  // make a seed play differently with and without workers (and on a fast and a slow machine). A deterministic pace (a smaller NAV_STEPS_TICK_DROP while
+  // nobody has landed) would be bots.js's schedule, as is prebakeHint(world, landing spots) - the exact drop order - which assignDrops could pass.
   // Off when: no Worker / Blob (Node, old browsers), the height function carries no validated lattice (a worker could not read the same ground), the
   // page URL has ngworker=0 (A/B), opts.prebake === false, or anything throws (the bake then runs on the main thread exactly as before).
   var _rec = null, _recB0 = 0, _recB1 = 0;
   function recEv(k) { _rec.push(k, _cnt[0] - _recB0, _cnt[1] - _recB1); }
-  var PB_MAX_WORKERS = 3, PB_INFLIGHT = 2, PB_SEEDS = 64;
+  // (P23 fix round) PB_MAX_WORKERS 3 -> 6 on a desktop (half the hardware threads, at most 6): the default flow (Enter straight from the lobby) leaves the
+  // workers only the actor-model load + the shader warm-up after buildMap (6-13 s on the shared box) to bake ~750 building tiles; 3 workers had 40 % of them
+  // in at Enter. A touch device keeps the 3 workers it had (PB_TOUCH_WORKERS: phones untouched).
+  var PB_MAX_WORKERS = 6, PB_TOUCH_WORKERS = 3, PB_INFLIGHT = 2, PB_SEEDS = 64;
   var PB_ARRS = ["nearStart", "nearItems", "x", "y", "z", "flag", "bord", "adj", "cellStart", "edgeStart", "edgeTo", "edgeCost", "edgeKind"];
   var _pbLive = null;                // the world whose workers run (a new lazy world retires the old one's)
 
@@ -1700,18 +1777,12 @@
   function pbAssemble(W, P) {
     var s = P.s, a = P.a, cs = W.cs, hf = W.hf;
     var holes = P.kind === 0 ? (W.fineByCoarse.get(P.key) || null) : null;
-    var T = {
-      isTile: true, grp: null, island: null, key: P.key, minX: s[0], minZ: s[1], maxX: s[2], maxZ: s[3], cell: s[4], nx: s[5], nz: s[6], inv: s[7], hf: hf, hl: latFor(hf),
-      deepY: s[8], wetY: s[9],
-      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
-      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
-      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
-    };
+    var T = tileShell(P.key, s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], hf, s[8], s[9], cs);      // (final/nav) the one tile class, see tileShell
     T.nearStart = a.nearStart; T.nearItems = a.nearItems;
     T.dOrth = s[11]; T.dDiag = s[12];
-    T.n = s[10]; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
+    T.n = s[10] | 0; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
     T.edgeStart = a.edgeStart; T.edgeTo = a.edgeTo; T.edgeCost = a.edgeCost; T.edgeKind = a.edgeKind;
-    T.bordCount = s[13]; T.holes = holes || [];
+    T.bordCount = s[13] | 0; T.holes = holes || [];
     T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null; T.pend = null; T.linked = [];
     T.stats = P.stats;
     T.hash = P.hash;
@@ -1770,22 +1841,31 @@
   }
   function pbInit(W, on) {
     var J = pbJobs(W);
-    W.pb = { on: on, cache: new Map(), done: new Set(), coarse: J.coarse, ci: 0, fine: J.fine, front: [], seeds: [], hinted: false, jobs: J.coarse.length + J.fine.length,
+    W.pb = { on: on, cache: new Map(), done: new Set(), coarse: J.coarse, ci: J.coarse.length, fine: J.fine, front: [], seeds: [], hinted: false, jobs: J.coarse.length + J.fine.length,
              byKey: null, list: null, workers: [], sw: null, swIdle: false, bakeOver: false, url: null, sent: 0, baked: 0, dropped: 0, hits: 0, misses: 0, workerMs: 0,
-             t0: now(), tDone: -1, tSeams: -1, err: null,
+             t0: now(), tDone: -1, tSeams: -1, tFine: -1, fineSent: 0, fineBaked: 0, fineMs: 0, err: null,
              seams: new Map(), seamsIn: 0, seamsUsed: 0, seamsLate: 0, recMemo: 0, recLive: 0, fwd: 0, swMs: 0 };
     var bk = new Map(), i, list = [];
     for (i = 0; i < J.coarse.length; i++) { bk.set(J.coarse[i].key, J.coarse[i]); list.push({ key: J.coarse[i].key, rect: J.coarse[i].rect }); }
     for (i = 0; i < J.fine.length; i++) { bk.set(J.fine[i].key, J.fine[i]); list.push({ key: J.fine[i].key, rect: J.fine[i].rect }); }
-    W.pb.byKey = bk; W.pb.list = list;
+    W.pb.byKey = bk; W.pb.list = list; W.pb.fine0 = J.fine.length;
     return W.pb;
   }
-  /** The next job to hand a worker: a tile a query asked for (takeWanted) first, then the outdoor tiles in order, then the building nearest to the
-   *  buildings the schedule has started (its first jobs are the ones round the bots' landing spots, bots.js navPrefetch) - or prebakeHint's points. */
+  /** The next job to hand a worker: a tile a query asked for (takeWanted) first, then the building nearest to the buildings the schedule has started (its
+   *  first jobs are the ones round the bots' landing spots, bots.js navPrefetch) - or prebakeHint's points - and the OUTDOOR tiles last, from the far end
+   *  of their list. (P23 fix round) The outdoor tiles came first: bots.js bakes every one of them itself in the loading screen's idle time (startNav's
+   *  background pump, collectJobs order, then the barrier), so the workers spent half their load-time window racing it for the same tiles (225 of 1205 jobs
+   *  "dropped" at Enter) while the drop's BUILDINGS - the only tiles the drop's schedule bakes - waited. From the far end, a worker never takes the tile the
+   *  pump takes next. */
   function pbNext(pb) {
+    var j = pbNextFine(pb);
+    if (j !== null) return j;
+    while (pb.ci > 0) { j = pb.coarse[--pb.ci]; if (!pb.done.has(j.key) && !j.sent) return j; }
+    return null;
+  }
+  function pbNextFine(pb) {
     var j, i;
     while (pb.front.length) { j = pb.front.shift(); if (!pb.done.has(j.key) && !j.sent) return j; }
-    while (pb.ci < pb.coarse.length) { j = pb.coarse[pb.ci++]; if (!pb.done.has(j.key) && !j.sent) return j; }
     var F = pb.fine, best = -1, bd = Infinity, S = pb.seeds;
     for (i = 0; i < F.length; i++) {
       j = F[i];
@@ -1804,6 +1884,7 @@
       var j = pbNext(pb);
       if (j === null) break;
       j.sent = true; wk.out++; pb.sent++;
+      if (j.kind === 1) pb.fineSent++;
       wk.w.postMessage(j);
     }
     if (pb.on && !pb.bakeOver) {
@@ -1844,7 +1925,7 @@
     if (pb.jobs === 0) { pb.on = false; return; }
     try {
       var hc = typeof navigator !== "undefined" && navigator.hardwareConcurrency > 0 ? navigator.hardwareConcurrency : 2;
-      var nW = Math.max(1, Math.min(PB_MAX_WORKERS, hc - 2, Math.ceil(pb.jobs / 8)));
+      var nW = pbWorkerCount(hc, typeof navigator !== "undefined" && navigator.maxTouchPoints > 0, pb.jobs);
       var src = "self.__ngPrebake = 1;\n(" + navgridFactory.toString() + ")(self);\n";
       pb.url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
       var cs = W.cs, csd = { n: cs.n, minX: cs.minX, maxX: cs.maxX, minY: cs.minY, maxY: cs.maxY, minZ: cs.minZ, maxZ: cs.maxZ, kind: cs.kind, dir: cs.dir };
@@ -1867,6 +1948,12 @@
       for (i = 0; i < pb.workers.length; i++) pbFeed(W, pb, pb.workers[i]);
     } catch (e) { pb.err = String(e && e.message || e); pbStop(W); }
   }
+  /** How many bake workers: half the hardware threads (the main thread, the GPU process and the stitch worker keep the rest), at most PB_MAX_WORKERS
+   *  (PB_TOUCH_WORKERS on a touch device: the phones' count of before), at most one per 8 jobs, at least one. */
+  function pbWorkerCount(hc, touch, jobs) {
+    var cap = touch ? Math.min(PB_TOUCH_WORKERS, hc - 2) : Math.min(PB_MAX_WORKERS, Math.floor(hc / 2));
+    return Math.max(1, Math.min(cap, Math.ceil(jobs / 8)));
+  }
   function pbOnMessage(W, pb, wk) {
     return function (e) {
       var d = e.data;
@@ -1876,6 +1963,7 @@
       if (d.t === "tile") {
         var P = d.P;
         pb.workerMs += P.stats.ms; pb.baked++;
+        if (P.kind === 1) { pb.fineBaked++; pb.fineMs += P.stats.ms; if (pb.fineBaked === pb.fine0 && pb.tFine < 0) pb.tFine = now() - pb.t0; }
         if (pb.done.has(P.key)) pb.dropped++;          // the schedule got there first: it baked the tile itself
         else pb.cache.set(P.key, P);
       }
@@ -2009,7 +2097,7 @@
     var M = H.M;
     if (pbHas(M, P.key)) return;
     var T = pbAssemble(M, P);
-    if (P.kind === 0) { T.kind = "coarse"; T.tx = Math.floor(P.key / 8192) - 4096; T.tz = P.key % 8192 - 4096; M.coarse.set(P.key, T); }
+    if (P.kind === 0) { T.kind = "coarse"; T.tx = (Math.floor(P.key / 8192) - 4096) | 0; T.tz = (P.key % 8192 - 4096) | 0; M.coarse.set(P.key, T); }
     else { var r = M.fine[P.key - 100000000]; T.kind = "fine"; T.rectRef = r; r.tile = T; }
     T.slot = M.slots.length; T.base = T.slot * STRIDE; M.slots.push(T);
     if (H.jobs.has(P.key)) H.arrived++;
@@ -2024,6 +2112,10 @@
   /** Open the seam X-Y: it runs once every job tile that its replays may look up (2 m round the two rects' overlap) is in the mirror. (A lookup
    *  outside that, or of a tile that is never baked, only makes that record unusable: the main thread replays it.) */
   function pbHostSeam(H, X, Y) {
+    // (P23 fix round) only a seam with a BUILDING tile on one side: the outdoor tiles are all baked AND stitched to each other before the first tick (bots.js
+    // startNav's loading-screen pump + the barrier), so an outdoor-outdoor record could only arrive late (1020 of 3376 seams "late" at Enter, the stitch
+    // worker's time and a core of the box spent on them while the drop's building seams waited). The main thread stitches those pairs live, as it always did.
+    if (X.kind === "coarse" && Y.kind === "coarse") return;
     var A = X.key < Y.key ? X : Y, B = A === X ? Y : X, sk = A.key + "," + B.key, M = H.M;
     if (H.pend.has(sk)) return;
     H.pend.add(sk);
@@ -2200,7 +2292,14 @@
     return { on: pb.on, workers: pb.workers.length, stitchWorker: pb.sw !== null, jobs: pb.jobs, sent: pb.sent, baked: pb.baked, cached: pb.cache.size, hits: pb.hits, misses: pb.misses,
              dropped: pb.dropped, fwd: pb.fwd, workerMs: Math.round(pb.workerMs), doneMs: pb.tDone >= 0 ? Math.round(pb.tDone) : null,
              seamsIn: pb.seamsIn, seamsHeld: pb.seams.size, seamsUsed: pb.seamsUsed, seamsLate: pb.seamsLate, recMemo: pb.recMemo, recLive: pb.recLive,
-             stitchMs: Math.round(pb.swMs), seamsDoneMs: pb.tSeams >= 0 ? Math.round(pb.tSeams) : null, err: pb.err };
+             stitchMs: Math.round(pb.swMs), seamsDoneMs: pb.tSeams >= 0 ? Math.round(pb.tSeams) : null, err: pb.err,
+             fineJobs: pb.fine0, fineSent: pb.fineSent, fineBaked: pb.fineBaked, fineMs: Math.round(pb.fineMs), fineDoneMs: pb.tFine >= 0 ? Math.round(pb.tFine) : null,
+             fineCached: pbCountFine(pb), ageMs: Math.round(now() - pb.t0) };
+  }
+  function pbCountFine(pb) {
+    var n = 0;
+    pb.cache.forEach(function (v, k) { if (k >= 100000000) n++; });
+    return n;
   }
 
   /** A lazy world (W.noBake) refused to bake a tile: remember it, once, as a job for runJob. A building cut into chunks is wanted whole
@@ -3059,6 +3158,89 @@
     return o;
   }
 
+  /** The height (m) of a free fall that lands at vertical speed v (m/s): h = v^2 / (2 g), g = |GRAVITY| (22 m/s^2, the sim's MOVE.gravity, the value player.js
+   *  integrates). C-FALL states its safe landing as a SPEED (K.FALL_SAFE_V, 13.3 m/s here); findPath's opts.maxDrop wants the HEIGHT: dropHeight(K.FALL_SAFE_V)
+   *  = 4.0 m = K.FALL_SAFE_H. 0 for v <= 0. */
+  function dropHeight(v) { v = +v; return v > 0 ? v * v / (2 * Math.abs(GRAVITY)) : 0; }
+
+  // ── FEEDBACK PRIMING (final/nav) ─────────────────────────────────────────────────────────────────────────────────────
+  // V8 compiles the replay (hopQ and the functions it calls) from the type feedback the calls so far left behind. A branch no call has taken yet (deep
+  // water under the line, a jump over open ground from a standstill, a ramp side, a drop) has none, so the optimized code exits at it: the FIRST bot whose
+  // route takes such a branch, mid-match, throws the code away, and until V8 has compiled it again the replay runs in a tier that boxes every double
+  // (~465 B a 10 cm step, Node probe; Chrome's log of a Deepwood framecheck: hopQ out of TurboFan for ~3 s of the first match seconds). The module
+  // therefore walks every branch once, before the first world is made (createWorld), on a 32 m world of its own (terrain dipping under a water line,
+  // a roofed hut, a ramp of each direction, tall furniture, a portal): bake, stitch, settle, search, walk, straight replays (~85 ms on this box's
+  // desktop Chrome; skipped in a prebake worker and on a touch device). Nothing of it stays: its world is dropped and the work counter and the replay
+  // scratch are put back, so no tile, edge, route or work count of any later world can differ (the selftest's hashes and routes, the world hashes).
+  function primeReplay() {
+    if (root.__ngPrebake === 1) return;                                                  // a prebake worker only bakes: its replays cost nothing on the main thread
+    if (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) return;     // phones: as they were (load time untouched)
+    if (root.__ngNoPrime === 1) return;                                                // the selftest's control: a module that never primes
+    var t0 = now(), c0 = _cnt[0], c1 = _cnt[1], c2 = _cnt[2], c3 = _cnt[3], sv = saveScratch().slice(), sb = _sbBlk;
+    var N = 33, size = 128, L = new Float32Array(N * N), i, j;      // a 4 m lattice; the world below is ONE 32 m tile (0..32 m) with buildings in it
+    for (j = 0; j < N; j++) for (i = 0; i < N; i++) { var lx = i * 4 - 64, lz = j * 4 - 64; L[j * N + i] = 0.12 * (lx - 10) + 0.3 * Math.sin(lz * 0.33) - (lx < 4 ? 1.5 : 0); }
+    var C = N - 1, kk = C / size, hh = size / 2;
+    var hf = function (x, z) {
+      var fx = (x + hh) * kk, fz = (z + hh) * kk;
+      fx = fx < 0 ? 0 : fx > C ? C : fx; fz = fz < 0 ? 0 : fz > C ? C : fz;
+      var ix = fx | 0, iz = fz | 0; if (ix >= C) ix = C - 1; if (iz >= C) iz = C - 1;
+      var u = fx - ix, v = fz - iz, q = iz * N + ix;
+      if (u + v <= 1) return L[q] + u * (L[q + 1] - L[q]) + v * (L[q + N] - L[q]);
+      var h11 = L[q + N + 1]; return h11 + (1 - u) * (L[q + N] - h11) + (1 - v) * (L[q + 1] - h11);
+    };
+    hf.ground = { lattice: L, latN: N }; hf.size = size;
+    var cols = [];
+    var box = function (x0, z0, x1, z1, y0, y1) { var c = { kind: "box", minX: x0, maxX: x1, minZ: z0, maxZ: z1, minY: y0, maxY: y1, dir: 0 }; cols.push(c); return c; };
+    var bx = 18.25, bz = 3.75, g = hf(bx + 3, bz + 3);
+    box(bx, bz, bx + 6.5, bz + 0.2, g - 0.6, g + 3.1); box(bx, bz + 5.3, bx + 6.5, bz + 5.5, g - 0.6, g + 3.1);         // a hut: walls, a door, a roof
+    box(bx, bz, bx + 0.2, bz + 5.5, g - 0.6, g + 3.1); box(bx + 6.3, bz, bx + 6.5, bz + 2.0, g - 0.6, g + 3.1); box(bx + 6.3, bz + 3.2, bx + 6.5, bz + 5.5, g - 0.6, g + 3.1);
+    box(bx - 0.3, bz - 0.3, bx + 6.8, bz + 5.8, g + 3.1, g + 3.35);
+    var tall = box(bx + 1.0, bz + 1.0, bx + 2.2, bz + 1.8, g, g + 0.85);                                              // tall furniture, a low crate
+    box(bx + 3.5, bz + 3.0, bx + 4.3, bz + 3.6, g, g + 0.45);
+    for (i = 0; i < 4; i++) {                                                                                         // a ramp of each direction up to a deck
+      var rx = 14.5 + i * 4.2, rz = 21.0 + (i & 1) * 2.0, rg = hf(rx, rz), lo = i < 2;
+      cols.push({ kind: "ramp", minX: rx, maxX: rx + (lo ? 3.0 : 1.3), minZ: rz, maxZ: rz + (lo ? 1.3 : 3.0), minY: rg - 0.2, maxY: rg + 1.4, dir: i });
+      if (i === 0) box(rx + 3.0, rz - 0.4, rx + 4.0, rz + 1.7, rg + 1.1, rg + 1.4); else if (i === 1) box(rx - 1.0, rz - 0.4, rx, rz + 1.7, rg + 1.1, rg + 1.4);
+      else if (i === 2) box(rx - 0.4, rz + 3.0, rx + 1.7, rz + 4.0, rg + 1.1, rg + 1.4); else box(rx - 0.4, rz - 1.0, rx + 1.7, rz, rg + 1.1, rg + 1.4);
+    }
+    for (i = 0; i < 8; i++) { var px = 0.8 + i * 1.6, pz = 13.0 + (i & 1) * 1.9, pg = hf(px, pz); box(px, pz, px + 0.6, pz + 0.6, pg - 0.3, pg + 0.2 + i * 0.3); }   // posts and steps, deep water to dry
+    var nf = new Set(); nf.add(tall);
+    var area = { minX: 0.5, minZ: 0.5, maxX: 31.5, maxZ: 31.5 };
+    var pts = [[2.0, 10.0], [21.5, 6.5], [8.0, 15.5], [26.5, 12.0], [15.0, 27.5], [29.0, 29.0], [12.0, 2.0], [5.0, 26.0], [17.0, 21.6], [24.0, 18.5]];
+    var run = function (W) {
+      var k, a, b, ya, yb;
+      for (k = 0; k < pts.length; k++) {
+        a = pts[k]; b = pts[(k + 3) % pts.length]; ya = hf(a[0], a[1]); yb = hf(b[0], b[1]);
+        findPath(W, a[0], ya, a[1], b[0], yb, b[1], { hw: 1.6, maxExpand: 4000 });
+        findPath(W, a[0], ya, a[1], b[0], null, b[1], { hw: 1.6, maxExpand: 4000, noPull: true, maxDrop: 1.5 });
+        walkSegment(W, a[0], ya, a[1], a[0] + 3.3, a[1] - 2.1);
+        walkSegment(W, a[0], ya, a[1], b[0], b[1], { pad: 0.1 });
+      }
+      findPath(W, bx + 0.1, g, bz + 2.5, 26.5, null, 12.0);                                                           // starts inside a wall
+      findPath(W, 26.5, hf(26.5, 12.0), 12.0, 1.0, null, 20.0);                                                        // a goal under deep water
+    };
+    try {
+      var W = createWorld({ colliders: cols, heightFn: hf, waterY: -1.0, portals: [{ x: 28.0, y: hf(28.0, 14.0), z: 14.0 }], noFloor: nf, lazy: true, prebake: false, cover: function () { return true; } });
+      var js = collectJobs(W, area), jb, guard = 0;
+      for (i = 0; i < js.length; i++) { jb = beginJob(W, js[i]); while (!stepJob(W, jb) && guard++ < 100000) { /* slices */ } }
+      run(W); js = takeWanted(W); for (i = 0; i < js.length; i++) runJob(W, js[i]);
+      // straight replays through the posts (deep water to dry), the hut's door and a ramp: on foot and falling, at speed and from rest, loose and strict
+      var lines = [[0.2, 13.3, 13.5, 13.3], [13.5, 15.2, 0.2, 15.2], [0.4, 14.0, 13.0, 16.0], [bx - 2.0, bz + 2.6, bx + 8.0, bz + 2.6], [14.0, 21.6, 30.5, 21.6], [16.0, 19.5, 16.0, 30.0], [24.9, 30.0, 24.9, 19.0]];
+      for (var li = 0; li < lines.length; li++) for (var md = 0; md < 8; md++) {
+        var l0 = lines[li], T0 = tileFor(W, l0[0], l0[1], false);
+        if (T0 === null) continue;
+        _rest = md & 1; _strictRamp = (md >> 1) & 1;
+        _hp[0] = l0[0]; _hp[1] = hf(l0[0], l0[1]) + ((md & 4) ? 1.3 : 0); _hp[2] = l0[1]; _hp[3] = l0[2]; _hp[4] = l0[3]; _hp[5] = RADIUS;
+        hopQ(W, T0, null, -1);
+      }
+      _rest = 0; _strictRamp = 0;
+    } catch (e) { /* priming is an optimization only: whatever it hit, the module works as before */ }
+    _cnt[0] = c0; _cnt[1] = c1; _cnt[2] = c2; _cnt[3] = c3;      // the work clock (sim state: bots.js budgets its bake schedule by it) as it was
+    loadScratch(sv); _sbBlk = sb;                               // the replay's result and flags as they were (the inputs are written before every use)
+    _primeMs = now() - t0;
+  }
+  var _primeMs = -1;            // -1 = not primed yet (createWorld primes once, before its first world); else the priming's wall time in ms
+
   var api = {
     bakeTile: bakeTile, createWorld: createWorld, findPath: findPath, walkSegment: walkSegment, tileFor: tileFor, prewarm: prewarm,
     VERSION: VERSION, bakeTown: bakeTown, rectOfLayout: rectOfLayout, edgesOf: edgesOf, linkTile: linkTile,
@@ -3075,7 +3257,10 @@
       _strictRamp = 0;
       return ok ? { y: _hr[0], gap: _hr[1], ramp: _hr[2] === 1, yMin: _hr[3] } : null;
     },
+    primeMs: function () { return _primeMs; },      // (final/nav) the feedback priming's wall time (ms; 0 = skipped: a worker or a touch device; -1 = no world made yet)
     counters: function () { return { hops: _cnt[0], steps: _cnt[1] }; }, resetCounters: function () { _cnt[0] = 0; _cnt[1] = 0; },
+    // (P23 fix round) the drop height a landing speed stands for, at this grid's gravity (= sim MOVE.gravity): findPath's opts.maxDrop is a HEIGHT
+    dropHeight: dropHeight,
     // (P2-E, LC-88) the prebake: workers bake a lazy world's tiles ahead (see PREBAKE); the sim is the same with or without them
     prebakeStats: prebakeStats, prebakeHint: prebakeHint, prebakeStop: pbStop, prebakeInline: prebakeInline,
     EDGE_WALK: EDGE_WALK, EDGE_DROP: EDGE_DROP, EDGE_RAMP: EDGE_RAMP,

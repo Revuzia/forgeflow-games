@@ -207,7 +207,7 @@ def main():
     C.add_common_args(ap)
     ap.add_argument("--matches", type=int, default=3)
     ap.add_argument("--map", default="ashgrid")
-    ap.add_argument("--maps", default=None, help="Wave 7b: a comma list cycled across the matches (match k plays maps[(k-1) % N]); each map's later lobbies are judged against its first lobby")
+    ap.add_argument("--maps", default=None, help="Wave 7b: a comma list cycled across the matches (match k plays maps[(k-1) %% N]); each map's later lobbies are judged against its first lobby")
     ap.add_argument("--plant", default=None, choices=["leak"], help="negative control (Wave 7b): 24 geometries + 5 textures are rendered and never disposed in every lobby; the rows MUST fail")
     ap.add_argument("--geo-tolerance", type=int, default=30, help="cycle mode: lobby geometries within +-N of the same map's first lobby (the hud_cycle bar)")
     ap.add_argument("--seed", type=int, default=4242)

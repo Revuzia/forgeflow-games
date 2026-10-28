@@ -75,7 +75,12 @@ def main():
                 if args.plant:
                     L.plant_js(s, PLANTS[args.plant])
                 prof = {}
+                # integrator D10 (fix round): boot emits W.events 'gfxTier'(tier) whenever the tier changes - every change below must emit it
+                s.js("() => { const W = window.__LC__.W; window.__P23GT__ = []; W.events.on('gfxTier', (t) => window.__P23GT__.push(t)); }")
+                gt_rows = []
                 for t in TIERS:
+                    prev = s.safe_js("() => window.__LC__.W.gfxTier", default=None)
+                    n_ev = s.js("() => window.__P23GT__.length")
                     try:
                         s.js("(t) => window.__LC__.W.setGfx('tier', t)", t)
                     except Exception as e:
@@ -84,6 +89,8 @@ def main():
                         continue
                     s.step_frames(120, 1 / 60, render=True)
                     got = s.js("() => window.__LC__.W.gfxTier || window.__LC__.W.settings.graphics")
+                    evs = s.js("(n) => window.__P23GT__.slice(n)", n_ev)
+                    gt_rows.append({"from": prev, "to": t, "events": evs, "ok": (prev == t) or (bool(evs) and evs[-1] == t)})
                     # KB/frame and queryColliders exactly as framecheck defines them (the bars' source): HeapProfiler sampling (4 KB interval,
                     # GC-collected objects included) over SIMULATED frames, and queryColliders calls as the MEAN per frame. tierprof_disk (10-26,
                     # int-p1 base) read 169-215 KB on RENDERED frames (three.module.js alone 74-98 KB/frame) and a per-frame MAX of 160/163 -
@@ -126,6 +133,8 @@ def main():
                     v.check("programs [%s %s] (no shader linked in 240 measured frames)" % (mp, t), m["programsAfter"] == m["programsBefore"],
                             {"before": m["programsBefore"], "after": m["programsAfter"], "new": m.get("newPrograms")}, "unchanged")
                     v.info("gpu / raw [%s %s]" % (mp, t), {"gpuMsMedian": prof[t]["gpu"], "raw": raw})
+                v.check("gfxTier event [%s] (D10: every tier change emits W.events 'gfxTier'(tier) with the new tier)" % mp,
+                        bool(gt_rows) and all(r["ok"] for r in gt_rows) and any(r["from"] != r["to"] for r in gt_rows), gt_rows, "one per change, the new tier")
                 v.data.setdefault("profile", {})[mp] = prof
                 gs = [prof.get(t, {}).get("gpu") for t in TIERS]
                 if all(x is not None for x in gs):

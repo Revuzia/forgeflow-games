@@ -54,6 +54,11 @@ CONTRACT = {
     "K.DBNO_CRAWL": "typeof K.DBNO_CRAWL === 'number'",
     "K.DBNO_BLEED_HPS": "typeof K.DBNO_BLEED_HPS === 'number'",
     "K.REVIVE_S": "typeof K.REVIVE_S === 'number'",
+    # integrator D3 (fix round): sim's K is the single source of the DBNO tunables - these names are canonical
+    "K.DBNO_HP": "typeof K.DBNO_HP === 'number'",
+    "K.DBNO_KNOCK_MULT": "typeof K.DBNO_KNOCK_MULT === 'number'",
+    "K.REVIVE_HP": "typeof K.REVIVE_HP === 'number'",
+    "K.REVIVE_RANGE": "Math.abs(K.REVIVE_RANGE - 2.0) < 1e-9",
     "K.actorHeight": "typeof K.actorHeight === 'function'",
     "K.TEAM_SIZE": "!!K.TEAM_SIZE && K.TEAM_SIZE.duo === 2 && K.TEAM_SIZE.trio === 3",
 }
@@ -130,7 +135,7 @@ def part_bot(args, v):
         st = L.start(s, "standard", 7, "ashgrid", team="duo", guard=True)
         v.data["bot_start"] = st
         have = L.contract(s, CONTRACT)
-        L.contract_row(v, "contract (K.DBNO_CRAWL, K.DBNO_BLEED_HPS, K.REVIVE_S, K.actorHeight, K.TEAM_SIZE)", have)
+        L.contract_row(v, "contract (K.DBNO_CRAWL, K.DBNO_BLEED_HPS, K.REVIVE_S, K.DBNO_HP, K.DBNO_KNOCK_MULT, K.REVIVE_HP, K.REVIVE_RANGE 2.0 (D3), K.actorHeight, K.TEAM_SIZE)", have)
         s.land(140, protect=True)
         s.freeze_loop()
         s.install_pump()
@@ -318,6 +323,15 @@ def part_human2(args, v):
         v.check("human2: both humans on one team in a duo", ids["host"]["team"] is not None and ids["host"]["team"] == ids["guest"]["team"] and ids["host"]["mode"] == "duo",
                 ids, "same team, duo")
         g_id = ids["guest"]["me"]
+        # SETUP (D16, fix round): one squad session, both match clocks >= 0.6 x real time (net.js's watchdogs and the revive channel's relay
+        # slack run on the wall clock: a starved page fails the revive rows by itself - gateA 10-27 01:55, 4 other Chromes: 'guest: null')
+        ok_s, sess = L.pair_session(hpg, gpg, ids["host"]["me"], g_id)
+        hpg.bring_to_front()
+        rates = L.pair_rates(hpg, gpg)
+        v.info("human2: pair session + rates (host match clock x real time, host / guest fps)", {"session": sess, "rates": rates})
+        if not ok_s or not rates["ok"]:
+            v.cnj("human2: the two-page rows", "SETUP missed: %s" % ("the pair is not one squad session: %s" % sess if not ok_s else "the box is starved - sim rates %s" % rates))
+            return
         # both bodies together on open ground (host page moves its own body; guest its own)
         spot = hpg.evaluate(ISO_JS)
         if not spot:

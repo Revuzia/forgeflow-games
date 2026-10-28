@@ -143,7 +143,7 @@ WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wav
                              # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 # ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
 # reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
-MAP_GEN_TARGET = 6                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings)
+MAP_GEN_TARGET = 7                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
 ALL_MAPS = "isla_viva,ashgrid,deepwood"
 CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
 NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps
@@ -173,7 +173,7 @@ PREP1_REV = "e10b9836"       # the Wave-8 working-tree snapshot BEFORE P1: the f
 # P23_PENDING: the P2/P3 feature gates run as INFORMATION until the integrator has merged the lanes (their contract rows FAIL on a tree without the
 # feature: a missing feature is a failing gate, never a pass). The INTEGRATOR sets this False after the merge: the rows count, and the planted
 # faults of those gates join the negative controls (P23_PENDING_NEG). The ports of the P1 probes count NOW (their features are in the base).
-P23_PENDING = True
+P23_PENDING = False          # D15 (P2/P3 fix round, 2026-10-26): the lanes are merged (int-p23 f367520c) - the feature gates COUNT and their plants join NEGATIVE
 
 # (name, script, extra args, timeout s, informational)
 GATES = [
@@ -380,8 +380,10 @@ GATES = [
     ("p23_lootp2", "p23/lootp2.py", [], 7200, P23_PENDING),               # P2-H death pile, supply drops (>= 3 by 760 s, beacons, open), tiers 1.5x + hot zone
     ("p23_footsteps", "p23/footsteps.py", [], 3600, P23_PENDING),         # LC-52 footstep census >= 90 % per zone
     ("p23_tierprof", "p23/tierprof.py", ["--gpu", "default"], 5400, P23_PENDING),    # C-GFX per-tier profile on the iGPU: KB/frame, queryColliders, programs, GPU order
-    ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),
-    ("p23_netseq", "p23/netseq.py", [], 3600, P23_PENDING),               # LC-49: late (reordered) state packets never pull a remote back; rejoin <= 60 s on ?room=          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
+    ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
+    ("p23_netseq", "p23/netseq.py", [], 3600, P23_PENDING),               # LC-49: late (reordered) state packets never pull a remote back; rejoin <= 60 s on ?room=
+    # lane net's live probe, promoted in the fix round (cases mode / mode3 / match; the in-process server with backlog 256; a browser-level wrong-key rejoin)
+    ("p23_netlive", "p23/netlive.py", [], 5400, P23_PENDING),
     # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
@@ -684,6 +686,9 @@ NEGATIVE = [
                                                                   "--shot-houses", "0", "--no-walk"], 2400),
     # (K3 re-run) mobile's USE row stands where the player SEES the chest (loot.js pickLos): standing at a free spot with a wall between the player and a house chest must fail it
     ("mobile_ashgrid-plant-chest-through-wall", "mobile.py", ["--map", "ashgrid", "--devices", "pixel7", "--plant", "chest-through-wall"], 3600),
+    # (P2/P3 fix round) player_deaths' facing row judges the VISIBLE facing (the torso; toes are information for the sprint-strafe / run clips):
+    # every model turned 90 deg inside its actor must still fail it
+    ("player_deaths-plant-rig-turned", "new/player_deaths.py", ["--plant", "rig-turned"], 3600),
 ]
 # the P2 / P3 feature gates' planted faults: they bite only on a tree that HAS the feature (on the base every one of them fails anyway, which proves
 # nothing), so they join the negative controls when the integrator sets P23_PENDING = False
@@ -697,6 +702,8 @@ P23_PENDING_NEG = [
     ("p23_fall-plant-no-damage", "p23/fall.py", ["--plant", "no-damage", "--parts", "human"], 3600),
     ("p23_fall-plant-harsh", "p23/fall.py", ["--plant", "harsh", "--parts", "human"], 3600),
     ("p23_fall-plant-no-event", "p23/fall.py", ["--plant", "no-event", "--parts", "human"], 3600),
+    # (fix round) bots-avoid's falsifier: bots.js served with its C-FALL guard off (LETHAL_H / WALK_H null = the base bots) - bots-avoid lips must FAIL
+    ("p23_fall-plant-no-fall-guard", "p23/fall.py", ["--plant", "no-fall-guard", "--parts", "lip"], 3600),
     ("p23_move-plant-slide-flat", "p23/move.py", ["--plant", "slide-flat", "--parts", "slide"], 3600),
     ("p23_move-plant-no-swap", "p23/move.py", ["--plant", "no-swap", "--parts", "shoulder"], 3600),
     ("p23_move-plant-aim-past", "p23/move.py", ["--plant", "aim-past", "--parts", "crosshair"], 3600),
@@ -717,6 +724,10 @@ P23_PENDING_NEG = [
     ("p23_botbatch-plant-shield-cap", "p23/botbatch.py", ["--plant", "shield-cap", "--runs", "2:isla_viva"], 5400),
     ("p23_netseq-plant-pull-back", "p23/netseq.py", ["--plant", "pull-back"], 3600),
     ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
+    # p23_netlive (fix round): the host's order gate off (every packet 'new') must FAIL the late / duplicate row; the guest's revive gate off must
+    # FAIL the early-done row
+    ("p23_netlive-plant-no-order", "p23/netlive.py", ["--cases", "match", "--plant", "no-order"], 5400),
+    ("p23_netlive-plant-no-revive-gate", "p23/netlive.py", ["--cases", "match", "--plant", "no-revive-gate"], 5400),
 ]
 if not P23_PENDING:
     NEGATIVE = NEGATIVE + P23_PENDING_NEG
@@ -783,6 +794,21 @@ def run_gate(name, script, extra, timeout, args, logdir):
     return {"name": name, "exit": code, "verdict": verdict, "wall": round(time.time() - t0, 1), "log": log, "report": report}
 
 
+def retry_cnj(r, name, script, extra, timeout, args, logdir):
+    """D16 (P2/P3 fix round): a p23 gate that came back COULD-NOT-JUDGE (a setup miss: no pointer lock, a page that never reached the state, a
+    busy-box timeout) runs ONCE more; the second verdict stands (still CNJ = CNJ, never a pass and never a fail). Older gates are unchanged.
+    A control that must exit 2 (feelcheck-plant-blind-sampler) is never retried."""
+    if r["exit"] != 2 or not name.startswith("p23_"):
+        return r
+    print("    -> could-not-judge: retrying %s once (D16)" % name, flush=True)
+    r2 = run_gate(name + "#retry", script, extra, timeout, args, logdir)
+    r2["name"] = name
+    r2["firstAttempt"] = {"exit": r["exit"], "verdict": r["verdict"], "wall": r["wall"], "log": r["log"]}
+    r2["verdict"] = "(retry after a could-not-judge) " + r2["verdict"]
+    r2["wall"] = round(r["wall"] + r2["wall"], 1)
+    return r2
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
@@ -819,6 +845,7 @@ def main():
         if (only is not None and name not in only) or name in skip:
             continue
         r = run_gate(name, script, extra, timeout, args, logdir)
+        r = retry_cnj(r, name, script, extra, timeout, args, logdir)
         r["info"] = info
         rows.append(r)
     if args.negative_controls and not args.post_deploy:
@@ -828,6 +855,8 @@ def main():
             if only is not None and name.split("-")[0] not in only:
                 continue
             r = run_gate(name, script, extra, timeout, args, logdir)
+            if want == 1:
+                r = retry_cnj(r, name, script, extra, timeout, args, logdir)
             r["negative"] = True
             r["info"] = False
             r["gateExit"] = r["exit"]
