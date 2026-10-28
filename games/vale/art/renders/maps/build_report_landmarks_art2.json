@@ -217,5 +217,125 @@
     "nodes": [
       "body"
     ]
+  },
+  "camp_glasshorn": {
+    "id": "camp_glasshorn",
+    "tris": 393,
+    "size_m": [
+      2.11,
+      1.36
+    ],
+    "height": 0.44,
+    "x": [
+      -0.98,
+      1.13
+    ],
+    "y": [
+      -0.41,
+      0.95
+    ],
+    "kb_raw": 79,
+    "kb": 36,
+    "texture": 512,
+    "buried_faces_dropped": 71,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_gloamoths": {
+    "id": "camp_gloamoths",
+    "tris": 409,
+    "size_m": [
+      1.96,
+      0.82
+    ],
+    "height": 1.33,
+    "x": [
+      -1.04,
+      0.92
+    ],
+    "y": [
+      -0.21,
+      0.61
+    ],
+    "kb_raw": 83,
+    "kb": 38,
+    "texture": 512,
+    "buried_faces_dropped": 42,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_strays": {
+    "id": "camp_strays",
+    "tris": 340,
+    "size_m": [
+      2.43,
+      0.89
+    ],
+    "height": 0.29,
+    "x": [
+      -1.13,
+      1.3
+    ],
+    "y": [
+      -0.27,
+      0.62
+    ],
+    "kb_raw": 69,
+    "kb": 30,
+    "texture": 512,
+    "buried_faces_dropped": 4,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_resinback": {
+    "id": "camp_resinback",
+    "tris": 347,
+    "size_m": [
+      2.11,
+      1.19
+    ],
+    "height": 0.38,
+    "x": [
+      -1.17,
+      0.94
+    ],
+    "y": [
+      -0.4,
+      0.79
+    ],
+    "kb_raw": 62,
+    "kb": 28,
+    "texture": 512,
+    "buried_faces_dropped": 52,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_stilltusks": {
+    "id": "camp_stilltusks",
+    "tris": 460,
+    "size_m": [
+      2.23,
+      0.96
+    ],
+    "height": 0.43,
+    "x": [
+      -0.94,
+      1.3
+    ],
+    "y": [
+      -0.34,
+      0.62
+    ],
+    "kb_raw": 73,
+    "kb": 34,
+    "texture": 512,
+    "buried_faces_dropped": 35,
+    "nodes": [
+      "body"
+    ]
   }
 }

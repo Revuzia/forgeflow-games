@@ -263,6 +263,30 @@ def landmark(lid, name, at, size, height, note, flush=False, **extra):
     return rec
 
 
+def camp_lips(W):
+    """env m2: one low dressing cluster per camp on its clearing's north lip (art/blender/maps/landmarks_art2.py camp_*;
+    brief map_rift_landmarks.md §3 "Dressing (low, flush or on the clearing's wall lip)"): 1.1 m inside the first wall
+    met walking out from the lead unit, the bearing (0 = north) chosen nearest north with open floor >= 2 m from any
+    Needlegrass (the Gloamoths' north lip is all brush, so its lamp-pole stands on the east lip, 70 deg); the
+    Serenade copy is the mirror (x -> W - x, rot -> -rot). Flush: low dressing on open ground, the sim never sees it.
+    rot turns the model's +Y (out of the clearing) to the bearing: three.js rotation.y = atan2(-ox, -oy)."""
+    spots = {"glasshorn": ((61.6, 37.6), 0.0), "gloamoths": ((67.3, 23.8), -70.0), "strays": ((44.5, 28.3), 20.0),
+             "resinback": ((64.3, 80.8), 0.0), "stilltusks": ((62.3, 64.8), -10.0)}
+    south = {"strays": ((47.6, 74.0), -25.0)}
+    out = []
+    for side, flip in (("a", 1), ("s", -1)):
+        for tag, ((x, y), rot) in list(spots.items()) + [("strays_s", v) for v in south.values()]:
+            model = "strays" if tag.startswith("strays") else tag
+            at = (x if flip > 0 else W - x, y)
+            out.append(landmark(f"camp_lip_{side}_{tag}", f"{model} camp lip", at, (2.4, 1.4), 1.3 if model == "gloamoths" else 0.45,
+                                f"low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_{model}", flush=True,
+                                model=f"assets/maps/landmarks/camp_{model}.glb", rot=rot * flip + 0.0, value=CAMP_LIP_VALUE.get(model, 1.0)))
+    return out
+
+
+CAMP_LIP_VALUE = {"glasshorn": 0.8}      # the pale horn-glass lands L* <= 46 (shot_map --nofog at the camp)
+
+
 def skirts_rift(W, H):
     """env F1: the dressed skirt beyond every bound (art/blender/maps/skirts.py), 22 m modules on the rim's cap;
     the west / east runs leave 44-66 to the Glass Belfry's and the Lamp Dome's own courts."""
@@ -598,6 +622,7 @@ def build_rift():
             landmark("noon_stone", "noon stone XII", (CX, 3.0), (3, 1.5), 9.0, "upright stele where the Noonline meets the north rim"),
             landmark("vi_slab", "VI slab", (CX, H - 3.0), (6, 2), 1.2, "lying flat: south of the South Road"),
             *skirts_rift(W, H),
+            *camp_lips(W),
         ],
     }
     rec = {

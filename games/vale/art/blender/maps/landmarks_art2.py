@@ -47,6 +47,9 @@ report: art/renders/maps/build_report_landmarks_art2.json; looks: art/renders/ma
                a proud footing, an octagonal monolith, a cap stone with a chalked chamfer and a chalk lip, the
                half-hour tick inlaid in chalk down each broad face and across the top. Exported sunk by 1.2 m: the
                renderer stands it on its own wall block's top, which it encloses.
+  camp_*       RIFT, one low cluster on each camp's north lip (env m2, brief §3 dressing): Glasshorn's shed horn-glass
+               antlers, a Gloamoths moth-lamp on a crooked pole (unlit), the Strays' toppled numerals, Resinback's
+               resin-filled cracked slab and rubbed stump, a tusk-scored Stilltusk boulder; content places them flush.
 The SDF landmarks that remain (numerals, VI slab, the stalls, FRAY's cart and stands) stay in landmarks.py;
 the skirts beyond the map bounds are art/blender/maps/skirts.py.
 """
@@ -983,6 +986,139 @@ HOUR_MATS = {
 }
 
 
+# ── RIFT camp lips (final parity env m2; brief map_rift_landmarks.md §3 "Dressing (low, flush or on the clearing's
+# wall lip)"): one low cluster per camp, on the clearing's floor just inside its north lip, so it reads behind the
+# monsters and never hides a foot. Local +Y points out of the clearing (toward the wall), X along the lip; origin on
+# the ground at the cluster's centre; <= 0.45 m tall but the Gloamoths' lamp-pole (1.3 m, the north lip). On screen
+# L* <= 46 (content `value` on top of the map's landmark band); the clearings sit at L* 30-35.
+def rod(B, mat, pts, r0, r1, segs=6):
+    """A tapered round rod along a polyline (each span a frustum, r0 at the first point -> r1 at the last)."""
+    P = [np.asarray(p, dtype=np.float64) for p in pts]
+    n = len(P) - 1
+    for i in range(n):
+        a, b = P[i], P[i + 1]
+        d = b - a
+        L = float(np.linalg.norm(d))
+        ra, rb = r0 + (r1 - r0) * i / n, r0 + (r1 - r0) * (i + 1) / n
+        v, f = K.lathe([(0.0, -0.01), (ra, -0.01), (rb, L + 0.01), (0.0, L + 0.01)], segs)
+        z = np.array([0.0, 0.0, 1.0])
+        u = d / L
+        ax = np.cross(z, u)
+        s = float(np.linalg.norm(ax))
+        if s > 1e-6:
+            v = K.rot(v, ax / s, math.atan2(s, float(np.dot(z, u))))
+        elif u[2] < 0:
+            v = K.rot(v, (1, 0, 0), PI)
+        B.add(mat, (K.move(v, a), f))
+
+
+def pebbles(B, mat, rng, spots):
+    for (x, y, s) in spots:
+        chunk(B, mat, (x, y, s * 0.55), (s, s * rng.uniform(0.7, 1.1), s * 0.6), rng)
+
+
+def camp_glasshorn(B, rng):
+    """Glasshorn: two shed antlers of pale horn-glass on a low lip stone (they catch the sun, never glow)."""
+    v, f = K.box((0.25, 0.2, 0.08), (0.62, 0.36, 0.1), 0.04, rz=0.2)
+    B.add("lipstone", (K.rot(v, (1, 0, 0), 0.07, about=(0.25, 0.2, 0.0)), f))
+    for (ox, oy, yaw, flip) in ((-0.45, -0.05, 0.35, 1), (0.55, 0.25, 2.6, -1)):
+        def T(p):
+            x, y, z = p
+            c, s_ = math.cos(yaw), math.sin(yaw)
+            return (ox + c * x - s_ * y * flip, oy + s_ * x + c * y * flip, z)
+        beam = [T(p) for p in ((0.0, 0.0, 0.06), (0.3, 0.08, 0.12), (0.6, 0.12, 0.22), (0.85, 0.06, 0.34))]
+        rod(B, "hornglass", beam, 0.055, 0.022)
+        B.add("hornglass", K.box(beam[0], (0.07, 0.07, 0.06), 0.02))                 # the burr where it was shed
+        for (t0, tip) in ((1, (0.38, 0.32, 0.3)), (2, (0.66, 0.4, 0.42))):
+            rod(B, "hornglass", [beam[t0], T(tip)], 0.032, 0.012, segs=5)
+    pebbles(B, "lipstone", rng, ((-0.9, 0.35, 0.09), (1.05, -0.2, 0.07), (0.1, -0.35, 0.06)))
+
+
+def camp_gloamoths(B, rng):
+    """Gloamoths: a crooked lamp-pole on the north lip with one moth-lamp hung from its crook (paper wings over a
+    resin cup, unlit by day) and a second lamp fallen in the moss."""
+    rod(B, "wood", [(0.35, 0.35, 0.0), (0.3, 0.38, 0.6), (0.38, 0.32, 1.1), (0.2, 0.22, 1.3), (-0.05, 0.12, 1.28)], 0.05, 0.03)
+    B.add("lipstone", K.box((0.35, 0.35, 0.07), (0.22, 0.2, 0.08), 0.03, rz=0.4))      # its footing stone
+    rod(B, "wood", [(-0.05, 0.12, 1.28), (-0.05, 0.12, 1.12)], 0.008, 0.008, segs=4)    # the cord
+
+    def lamp(c, tilt=0.0):
+        cx, cy, cz = c
+        body = K.lathe([(0.0, -0.13), (0.06, -0.12), (0.09, 0.0), (0.06, 0.12), (0.0, 0.13)], 8)
+        B.add("paper", (K.move(K.rot(body[0], (1, 0, 0), tilt), c), body[1]))
+        for sx in (-1, 1):                                                               # the folded wings
+            wing = [(0.0, -0.1), (0.2, -0.04), (0.24, 0.1), (0.05, 0.12)]
+            v, f = K.prism([(sx * x, z) for x, z in wing], origin=(0, 0, 0), u=(1, 0, 0), v=(0, 0, 1), depth=0.025)
+            v = K.rot(v, (0, 0, 1), sx * 0.35)
+            B.add("paper", (K.move(K.rot(v, (1, 0, 0), tilt), c), f))
+        B.add("resin", K.box((cx, cy, cz - 0.15 * math.cos(tilt)), (0.04, 0.04, 0.03), 0.01))
+    lamp((-0.05, 0.12, 0.98))
+    lamp((-0.6, -0.05, 0.1), tilt=1.35)
+    pebbles(B, "lipstone", rng, ((-0.95, 0.3, 0.08), (0.85, -0.15, 0.07)))
+
+
+def camp_strays(B, rng):
+    """Strays: small carved numerals toppled round the rim of the clearing: a V lying on its face, an I propped on a
+    stone, an X half sunk; dial-stone with their carving inked."""
+    def glyph(strokes, c, yaw, tilt_ax, tilt, th=0.16, w=0.12):
+        for (a, b) in strokes:
+            a, b = np.array(a, float), np.array(b, float)
+            d = (b - a) / np.linalg.norm(b - a)
+            nrm = np.array([-d[1], d[0]]) * w / 2
+            poly = [tuple(a - nrm), tuple(a + nrm), tuple(b + nrm), tuple(b - nrm)]
+            v, f = K.prism(poly, origin=(0, 0, 0), u=(1, 0, 0), v=(0, 1, 0), depth=th, chamfer=0.02)
+            v = K.rot(K.rot(v, tilt_ax, tilt), (0, 0, 1), yaw)
+            B.add("dialstone", (K.move(v, c), f))
+    glyph([((-0.22, 0.3), (0.0, -0.3)), ((0.0, -0.3), (0.22, 0.3))], (-0.55, 0.05, 0.08), 0.5, (1, 0, 0), 0.06)   # V, on its face
+    B.add("lipstone", K.box((0.35, 0.25, 0.11), (0.2, 0.17, 0.12), 0.04, rz=-0.3))
+    glyph([((0.0, -0.3), (0.0, 0.3))], (0.42, 0.0, 0.2), 1.3, (0, 1, 0), 0.55, th=0.15, w=0.14)                     # I, propped
+    glyph([((-0.2, -0.25), (0.2, 0.25)), ((0.2, -0.25), (-0.2, 0.25))], (1.0, 0.3, 0.05), -0.4, (1, 0, 0), -0.35)    # X, half sunk
+    pebbles(B, "lipstone", rng, ((-1.05, -0.2, 0.07), (0.05, 0.45, 0.08)))
+
+
+def camp_resinback(B, rng):
+    """Resinback: a cracked lip slab with amber resin pooled in its cracks (warm, below bloom: albedo only) and a
+    resin-crusted root stump the beast has rubbed."""
+    for (x0, x1, dz) in ((-0.95, -0.06, 0.0), (0.06, 0.9, 0.025)):
+        v, f = K.box(((x0 + x1) / 2, 0.05, 0.06 + dz), ((x1 - x0) / 2, 0.45, 0.07), 0.035)
+        B.add("lipstone", (K.rot(v, (0, 1, 0), 0.03 if dz else -0.02, about=((x0 + x1) / 2, 0, 0)), f))
+    B.add("resin", K.box((0.0, 0.05, 0.1), (0.07, 0.43, 0.035), 0.02))                 # the crack, full of resin
+    B.add("resin", K.box((-0.45, -0.12, 0.125), (0.2, 0.05, 0.012), 0.01, rz=0.35))     # a branch crack
+    v, f = K.lathe([(0.0, 0.0), (0.24, 0.0), (0.2, 0.18), (0.15, 0.36), (0.0, 0.38)], 9)
+    B.add("wood", (K.move(v, (0.7, 0.55, 0.0)), f))                                       # the stump
+    for k in range(4):
+        a = k * TAU / 4 + 0.4
+        B.add("resin", K.box((0.7 + 0.17 * math.cos(a), 0.55 + 0.17 * math.sin(a), 0.2 - 0.04 * k), (0.035, 0.035, 0.08), 0.02, rz=a))
+    pebbles(B, "lipstone", rng, ((-1.1, 0.45, 0.07),))
+
+
+def camp_stilltusks(B, rng):
+    """Stilltusks: a low lip boulder scored deep by tusks (three parallel gouges, inked) and a broken tusk tip."""
+    v, f = K.box((0.0, 0.15, 0.2), (0.6, 0.38, 0.22), 0.09, rz=0.15)
+    B.add("lipstone", (v, f))
+    for k in range(3):
+        B.add("groove", K.box((-0.2 + 0.2 * k, 0.15 - 0.37, 0.24 - 0.02 * k), (0.035, 0.012, 0.16), 0.006, rz=0.15 + 0.25))
+        B.add("groove", K.box((-0.25 + 0.2 * k, 0.15, 0.425), (0.03, 0.3, 0.008), 0.004, rz=0.15 + 0.35))
+    rod(B, "ivory", [(0.75, -0.25, 0.05), (1.0, -0.2, 0.09), (1.2, -0.05, 0.14), (1.28, 0.12, 0.2)], 0.07, 0.015)
+    B.add("ivory", K.box((0.73, -0.26, 0.06), (0.06, 0.07, 0.06), 0.02))                 # its broken base
+    pebbles(B, "lipstone", rng, ((-0.85, -0.25, 0.08), (-0.7, 0.55, 0.06)))
+
+
+LIP = dict(hex="#8A857A", chisel=0.8, var=0.08, streaks=0.3, chips=0.5, speckle=0.3, scale=0.6, rough=0.75,
+           edge_light=(0.03, 0.6, 0.6, 0.06))
+CAMP_MATS = {
+    "lipstone": LIP,
+    "dialstone": dict(DIAL, edge_light=(0.03, 0.7, 0.6, 0.06)),
+    "hornglass": dict(hex="#B3C3C9", chisel=0.2, var=0.05, streaks=0.1, chips=0.2, scale=0.9, rough=0.32,
+                      edge_light=(0.02, 0.7, 0.4, 0.05)),
+    "wood": dict(hex="#6E5B47", chisel=0.4, var=0.1, streaks=0.2, chips=0.2, scale=0.8, rough=0.8),
+    "paper": dict(hex="#C2B48E", chisel=0.1, var=0.06, streaks=0.1, chips=0.0, scale=1.0, rough=0.85),
+    "resin": dict(hex="#B0702C", chisel=0.1, var=0.08, streaks=0.0, chips=0.0, scale=1.0, rough=0.35),
+    "ivory": dict(hex="#CFC3A3", chisel=0.3, var=0.06, streaks=0.2, chips=0.2, scale=0.8, rough=0.6,
+                  edge_light=(0.02, 0.5, 0.5, 0.05)),
+    "groove": dict(hex="#3A352F", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),
+}
+
+
 SLAB_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"],
              "basalt": dict(hex="#4C4854", chisel=0.9, var=0.09, streaks=0.3, chips=0.6, speckle=0.35, scale=0.55, rough=0.62,
                             edge_light=(0.04, 0.55, 0.6, 0.1))}
@@ -1011,6 +1147,11 @@ DESIGNS = {
     "noon_stone": (noon_stone, NOON_MATS, 1024, 0.6),
     "shadow_slab": (shadow_slab, SLAB_MATS, 1024, 0.5),
     "hour_stone": (hour_stone, HOUR_MATS, 1024, 0.4),
+    "camp_glasshorn": (camp_glasshorn, CAMP_MATS, 512, 0.3),
+    "camp_gloamoths": (camp_gloamoths, CAMP_MATS, 512, 0.3),
+    "camp_strays": (camp_strays, CAMP_MATS, 512, 0.3),
+    "camp_resinback": (camp_resinback, CAMP_MATS, 512, 0.3),
+    "camp_stilltusks": (camp_stilltusks, CAMP_MATS, 512, 0.3),
 }
 SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}
@@ -1071,7 +1212,7 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 # landmarks stand beyond the map's edge, so the camera sees the Dawn Arch from the east and the Lamp Gate from the west
 LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
         "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0),
-        "hour_stone": (0.0, 0.0, 12.0)}
+        "hour_stone": (0.0, 0.0, 12.0), **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}}
 
 
 def look(name, objs, lo, hi, fast):
