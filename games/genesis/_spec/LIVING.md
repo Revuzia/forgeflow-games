@@ -2308,3 +2308,11 @@ on the 1.4 saves and the previous 1.5 build's save (`tests/living-migration.test
 test (`tests/living-integration.test.ts`), the §9 owner fixes (`fire-flee`, `society`) and the UI team's
 `ui-living`, `ui-defaults`, `ui-embed` (also run alone: 11 / 11 pass). (The sixth pass's gate, `r6/out/check-0.log`,
 502 / 504 pass, had started at 13:52, before its last fix.)
+
+**Ninth pass (2026-10-28).** `npm run check` on HEAD `ccfcb5c3` plus the two `god/omens.ts` fixes of §10.2 (a sign sent
+to a named town stands over it; a repeat sign inside the ten quiet days adds no wonder) — the only sim change since the
+seventh pass — finished 03:05 UTC (`integrate/r6/out/check-i9b.log`, EXIT 0; the tests took 17 min): detban **145 sim files clean**;
+`tsc --noEmit` clean; **523 tests, 523 pass, 0 fail, 0 skipped** (the throughput floors ran this time: wall/CPU 2.2–3.2).
+Among them the migration tests (1.4 saves and the previous 1.5 build's save), the new sign-placement test, the rainbow
+test that the first try of this gate (`check-i9.log`, 517 / 518) had caught, and the UI team's `ui-living`,
+`ui-defaults`, `ui-embed`.

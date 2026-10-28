@@ -40,7 +40,8 @@ town (`god.omen { settlement }`, as the living panel sends it) stands over that 
 §10.2; test in `tests/living-integration.test.ts`). Its gate (`integrate/r6/out/check-i9.log`: 518 tests, 517 pass,
 1 fail) caught a follow-on — a repeat sign inside the ten quiet days still added wonder over the town
 (`tests/living-relationship.test.ts` "a rainbow a day is weather"); fixed in `god/omens.ts`, the file passes 18/18, and
-the gate re-runs on it (`integrate/r6/out/check-i9b.log`).
+the gate re-ran on it (`integrate/r6/out/check-i9b.log`, 2026-10-28 03:05 UTC): detban 145 clean, tsc clean,
+**523 tests, 523 pass, 0 fail, 0 skipped** (LIVING §10.7, ninth pass).
 **Acceptance** (LIVING §10.3–10.6, every metric per seed in `_harness/scratch/living/acceptance.json`): 8 census seeds left
 alone for 50 game years at 3000x, scripted god sessions on 8 seeds (storm, default meteor, drought answered vs ignored,
 prophet fulfilled vs failed, omen fulfilled vs contradicted, a new material, an iron vein, a new crop) and on each
