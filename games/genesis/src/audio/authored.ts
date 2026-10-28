@@ -124,6 +124,13 @@ export function stingerFor(e: SimEvent): StingerId | null {
   return null;
 }
 
+/** the id of a disaster the player's god sent (its 'disaster' event; nature's are null): the scene hears it at a floor */
+export function godSentDisaster(e: SimEvent): number | null {
+  if (e.t !== 'disaster') return null;
+  const d = (e.data ?? {}) as Record<string, unknown>;
+  return d.god === PLAYER_GOD && d.cause !== 'nature' && typeof d.id === 'number' ? d.id : null;
+}
+
 /** of a batch of events (one snapshot), the stinger to play: the highest priority (a sign's eclipse is a sign, not wrath) */
 export function pickStinger(events: readonly SimEvent[]): StingerId | null {
   let best: StingerId | null = null;

@@ -292,10 +292,24 @@ interface CellCache { version: number; cells: number[] }
  * The probe. Stateful only for caches (the burning / molten cell lists, rebuilt when their field version changes);
  * every result is a function of (world, listener).
  */
+/** the least a disaster the god called is heard at (before distance): the audit's god-sent tornado sat at 0.04 under
+ *  the thunderstorm it came in, inaudible; the act the player chose must be heard over the weather it rides in */
+export const CALLED_FLOOR = 0.45;
+
 export class SceneProbe {
+  /** disasters the god called ('planet:id', newest last, at most 64) */
+  private readonly called = new Set<string>();
   private fireCache = new Map<number, CellCache>();
   private lavaCache = new Map<number, CellCache>();
   private readonly t3: [number, number, number] = [0, 0, 0];
+
+  /** a disaster the god called (engine: from its 'disaster' event): heard at CALLED_FLOOR at least while it lives */
+  markCalled(planet: number, id: number): void {
+    const k = `${planet}:${id}`;
+    this.called.delete(k);
+    this.called.add(k);
+    if (this.called.size > 64) this.called.delete(this.called.values().next().value as string);
+  }
 
   probe(w: SceneWorld, L: ListenerState): AudioScene {
     const sc: AudioScene = {
@@ -581,7 +595,9 @@ export class SceneProbe {
       const gd = Math.acos(Math.max(-1, Math.min(1, d.pos[0] * dx + d.pos[1] * dy + d.pos[2] * dz))) * R;
       const inside = 1 - smoothstep(d.radius * 0.6, d.radius * 1.3, gd);
       const carrier = d.kind === 'solar-flare' || d.kind === 'magnetic-storm' || d.kind === 'eclipse' || d.kind === 'rogue-flyby' ? 1 : Math.max(inAir, 0.25);
-      const lvl = carrier * clamp01(0.35 + 0.65 * Math.min(1.5, d.intensity)) * Math.max(inside, attenuate(loc[3], ref(60 + d.radius)));
+      // one the god called keeps a floor that only fades at a distance the size of a region (not under a storm's roar)
+      const floor = this.called.has(`${pv.id}:${d.id}`) ? CALLED_FLOOR * attenuate(loc[3], ref(1500 + 2 * d.radius)) : 0;
+      const lvl = carrier * Math.max(floor, clamp01(0.35 + 0.65 * Math.min(1.5, d.intensity)) * Math.max(inside, attenuate(loc[3], ref(60 + d.radius))));
       if (lvl > 0.01) emit.push({ key: `dis:${d.id}`, kind: 'disaster', sub: d.kind, local: [loc[0], loc[1], loc[2]], body: this.lastBody, dist: loc[3], level: clamp01(lvl), size: d.intensity, param: d.progress, spread: inside });
       if (DISASTER_QUAKE.has(d.kind) && !d.frozen) lay.quake = Math.max(lay.quake, clamp01(d.intensity) * Math.max(inside, attenuate(gd, d.radius * 2)) * (d.kind === 'quake' || d.kind === 'sinkhole' ? 1 : 0.6));
     }

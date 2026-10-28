@@ -32,7 +32,7 @@ import { SceneProbe, attenuate, bodyPoint, hearingRef, toLocal, rotate, rotateIn
 import { Ambience, type PlayOpts } from './ambience.ts';
 import { Emitters } from './emitters.ts';
 import { MusicDirector, type MusicState } from './musicplayer.ts';
-import { STINGERS, pickStinger } from './authored.ts';
+import { STINGERS, godSentDisaster, pickStinger } from './authored.ts';
 import { FALLBACK, SFX, Sfx } from './sfx.ts';
 import { SpatialOut, soundDelay } from './spatial.ts';
 import { Knob, bq } from './synth.ts';
@@ -637,6 +637,9 @@ class AudioEngine implements GenesisAudio {
       this.stats.stingers++;
     }
     for (const e of q) {
+      // a disaster the god called is never buried under the weather it rides in (scene.ts CALLED_FLOOR)
+      const called = godSentDisaster(e);
+      if (called != null && e.planet != null) this.probe.markCalled(e.planet, called);
       const spec = cueFor(e);
       if (!spec) continue;
       const n = this.gate.admit(spec, now);

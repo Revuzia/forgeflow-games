@@ -70,6 +70,19 @@ varying vec4 vState;
 varying vec4 vInfo;
 `;
 
+/**
+ * A boat's sail (PART.cloth, buildinggen lugRig): its belly is its local X, so scaling X breathes the cloth in the
+ * gusts (luff, yard and boom have none and stay put) with a ripple running aft and up; the instance's seed sets the
+ * tack (which side the belly fills to). Real time (uTime), like the windmill: the wind does not stop with the sim.
+ */
+const CLOTH_GLSL = /* glsl */ `
+float clothTack(float seed) { return fract(seed * 7.31) > 0.5 ? 1.0 : -1.0; }
+float clothBreath(vec3 p, float seed) {
+  float ph = uTime * 2.2 + seed * 6.28 - p.z * 1.4 + p.y * 0.6;
+  return 1.0 + 0.13 * sin(ph) + 0.05 * sin(ph * 2.7 + 1.3) + 0.08 * sin(uTime * 0.43 + seed * 3.0);
+}
+`;
+
 /** windmill sails turn about the local Z axis through (0, uv.x); everything else is static */
 const VERT_BEGIN = /* glsl */ `
   vec3 transformed = vec3(position);
@@ -77,6 +90,7 @@ const VERT_BEGIN = /* glsl */ `
   vec3 bFade = I_FADE;
   // open works follow the ground's slope: a shear (verticals stay plumb)
   transformed.y += bFade.y * transformed.x + bFade.z * transformed.z;
+  if (abs(aKit.y - 15.0) < 0.5) transformed.x *= clothTack(bInfo.w) * clothBreath(transformed, bInfo.w);
   if (abs(aKit.y - 9.0) < 0.5) {
     float a = uTime * 0.7 + bInfo.w * 6.28;
     float ca = cos(a), sa = sin(a);
@@ -679,8 +693,8 @@ export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSid
     shader.uniforms.uBldDebug = debug;
     if (instData) shader.uniforms.uBldInst = instData;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}`)
-      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n  {\n    vec3 nRot = objectNormal;\n    if (abs(aKit.y - 9.0) < 0.5) { float a = uTime * 0.7 + I_INFO.w * 6.28; nRot.xy = vec2(cos(a) * nRot.x - sin(a) * nRot.y, sin(a) * nRot.x + cos(a) * nRot.y); }\n    objectNormal = nRot;\n  }')
+      .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}\n${CLOTH_GLSL}`)
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n  {\n    vec3 nRot = objectNormal;\n    if (abs(aKit.y - 9.0) < 0.5) { float a = uTime * 0.7 + I_INFO.w * 6.28; nRot.xy = vec2(cos(a) * nRot.x - sin(a) * nRot.y, sin(a) * nRot.x + cos(a) * nRot.y); }\n    if (abs(aKit.y - 15.0) < 0.5) nRot.x *= clothTack(I_INFO.w);\n    objectNormal = nRot;\n  }')
       .replace('#include <begin_vertex>', VERT_BEGIN)
       .replace('#include <project_vertex>', `#include <project_vertex>
   // the building meshes sit at the identity inside the planet's body-frame group: instance space IS the body frame
@@ -715,7 +729,7 @@ export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSid
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-building-v6';
+  mat.customProgramCacheKey = () => 'genesis-building-v7';
   return mat;
 }
 
@@ -725,6 +739,7 @@ const DEPTH_VERT = /* glsl */ `
 attribute vec4 aKit;
 ${INST_PARS}
 uniform float uTime;
+${CLOTH_GLSL}
 varying vec3 vLocal;
 varying vec4 vKit;
 varying vec4 vState;
@@ -737,6 +752,7 @@ void main() {
   vec3 bFade = I_FADE;
   transformed.y += bFade.y * transformed.x + bFade.z * transformed.z;
   vLocal = transformed; vKit = aKit; vState = I_STATE; vInfo = bInfo;
+  if (abs(aKit.y - 15.0) < 0.5) transformed.x *= clothTack(bInfo.w) * clothBreath(transformed, bInfo.w);
   if (abs(aKit.y - 9.0) < 0.5) {
     float a = uTime * 0.7 + bInfo.w * 6.28;
     vec2 r = vec2(transformed.x, transformed.y - uv.x);

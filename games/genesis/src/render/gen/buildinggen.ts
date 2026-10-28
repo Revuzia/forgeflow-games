@@ -2571,15 +2571,87 @@ function dock(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
     barrel(k, W / 4, -Lz / 2 + 2.2, 0.32, 0.9, WOOD_DARK);
     // a moored rowing / sailing boat alongside
     k.push(W / 2 + 1.6, -0.35, Lz * 0.15, 0);
-    boat(k, 2.0, 7.0, spec.era >= 4, rng);
+    boat(k, 2.0, 7.0, spec.era >= 4 ? 'furled' : 'none', rng, spec.lod);
     k.pop();
   }
   k.pop();
   return deck + 0.6;
 }
 
-/** a small wooden boat hull (and a mast for sailing eras) along local Z */
-function boat(k: KitBuilder, beam: number, len: number, mast: boolean, rng: Rng): void {
+const SAILCLOTH: RGB = [0.6, 0.55, 0.44];
+const CORD: RGB = [0.13, 0.1, 0.065];
+
+/**
+ * A standing lugsail on a boat's mast at z = zm (boat-local: keel near y = 0, gunwale ~1 m, mast to 6.5 m). 'set': a
+ * cloth grid between a yard that crosses the mast and peaks high aft and a boom along the foot, bellied to +X (the
+ * building material's PART.cloth breathes the belly in the wind and swings it to either side by the instance's
+ * seed), with halyard, sheet, forestay and shrouds. 'furled': the yard lowered onto the thwarts, the sail bundled on
+ * it (a moored boat). The canvas uv runs 0.3 per metre up the sail, so a banded (two-dye) sail has ~0.8 m panels.
+ */
+function lugRig(k: KitBuilder, zm: number, beam: number, len: number, set: boolean, lod: number): void {
+  const top: V3 = [0, 6.45, zm];
+  const rope = (a: V3, b: V3, w = 0.014) => k.beam(a, b, w, w, SURF.rope, PART.prop, CORD, 0.9);
+  rope(top, [0, 1.15, len / 2 - 0.25]);
+  for (const sx of [-1, 1]) rope(top, [sx * beam * 0.44, 1.0, zm - 0.35]);
+  if (!set) {
+    const y = 2.1;
+    k.tube([[0.12, y, zm + 0.6], [0.12, y + 0.05, zm - 3.2]], [0.045, 0.04], 5, SURF.bark, PART.prop, WOOD_DARK, { cap: true });
+    const pts: V3[] = [], radii: number[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const t = i / 6;
+      pts.push([0.12 + 0.03 * Math.sin(i * 2.1), y + 0.1, zm + 0.45 - t * 3.5]);
+      radii.push((0.05 + 0.11 * Math.sin(Math.PI * t) ** 0.6) * (0.85 + 0.3 * ((i * 0.618) % 1)));
+    }
+    k.tube(pts, radii, lod === 0 ? 7 : 4, SURF.cloth, PART.prop, mulc(SAILCLOTH, 0.9), { cap: true });
+    rope(top, [0.12, y + 0.05, zm - 0.6]);
+    return;
+  }
+  // corners (z, y): tack and throat on the luff by the mast, peak high aft, clew at the boom's end
+  const T = [zm + 0.3, 2.0], Th = [zm + 0.5, 5.1], P = [zm - 2.9, 6.8], C = [Math.max(zm - 3.15, -len / 2 + 0.45), 2.1];
+  const D = 0.5;
+  const at = (u: number, v: number): V3 => {
+    const zb = T[0] + (C[0] - T[0]) * u, yb = T[1] + (C[1] - T[1]) * u;
+    const zt = Th[0] + (P[0] - Th[0]) * u, yt = Th[1] + (P[1] - Th[1]) * u;
+    // the belly: none along the luff, yard and boom; deepest a third back, the leech still a little full
+    const x = D * Math.sin(Math.PI * Math.min(1, u * 0.88)) ** 0.85 * Math.sin(Math.PI * v) ** 0.75;
+    return [x, yb + (yt - yb) * v, zb + (zt - zb) * v];
+  };
+  const nu = lod === 0 ? 9 : 4, nv = lod === 0 ? 8 : 3;
+  const e = 1e-3;
+  for (const face of [1, -1]) {
+    const ids: number[][] = [];
+    for (let j = 0; j <= nv; j++) {
+      const row: number[] = [];
+      for (let i = 0; i <= nu; i++) {
+        const u = i / nu, v = j / nv;
+        const p = at(u, v), pu = at(Math.min(1, u + e), v), pv = at(u, Math.min(1, v + e));
+        const du = [pu[0] - p[0], pu[1] - p[1], pu[2] - p[2]], dv = [pv[0] - p[0], pv[1] - p[1], pv[2] - p[2]];
+        // du × dv points to -X on this layout (u runs aft, v up): the front face looks to +X, the belly's outside
+        let nx = du[1] * dv[2] - du[2] * dv[1], ny = du[2] * dv[0] - du[0] * dv[2], nz = du[0] * dv[1] - du[1] * dv[0];
+        if (u >= 1 - e || v >= 1 - e) { nx = 1; ny = 0; nz = 0; }
+        const sgn = -face;
+        // grime toward the foot, sun-bleached toward the head, a darker band where the reef points are
+        const reef = Math.exp(-(((v - 0.22) / 0.035) ** 2)) * 0.12;
+        const col = mulc(SAILCLOTH, (0.86 + 0.18 * v) * (1 - reef));
+        row.push(k.vert(p[0] + face * 0.004, p[1], p[2], nx * sgn, ny * sgn, nz * sgn, SURF.cloth, PART.cloth, col, 0.95, 0.07, [p[1] * 0.3, p[2]]));
+      }
+      ids.push(row);
+    }
+    for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+      const a = ids[j][i], b = ids[j][i + 1], c = ids[j + 1][i], d = ids[j + 1][i + 1];
+      if (face > 0) { k.tri(a, d, b); k.tri(a, c, d); } else { k.tri(a, b, d); k.tri(a, d, c); }
+    }
+  }
+  // the yard crossing the mast, the boom along the foot, halyard and sheet
+  k.tube([[0.02, Th[1] - 0.18, Th[0] + 0.35], [0.02, P[1] + 0.06, P[0] - 0.12]], [0.05, 0.035], 5, SURF.bark, PART.prop, WOOD_DARK, { cap: true });
+  k.tube([[0.02, T[1] - 0.06, T[0] + 0.15], [0.02, C[1] - 0.05, C[0] - 0.15]], [0.045, 0.04], 5, SURF.bark, PART.prop, WOOD_DARK, { cap: true });
+  const yh = 0.35;
+  rope(top, [0.02, Th[1] + (P[1] - Th[1]) * yh, Th[0] + (P[0] - Th[0]) * yh]);
+  rope([0.02, C[1] - 0.05, C[0] + 0.1], [0.25, 1.2, -len / 2 + 0.55]);
+}
+
+/** a small wooden boat hull (and a mast for sailing eras, its sail set or furled) along local Z */
+function boat(k: KitBuilder, beam: number, len: number, sail: 'set' | 'furled' | 'none', rng: Rng, lod = 0): void {
   const rows = 7;
   const hull: number[][] = [];
   for (let i = 0; i <= rows; i++) {
@@ -2600,10 +2672,9 @@ function boat(k: KitBuilder, beam: number, len: number, mast: boolean, rng: Rng)
     k.tri(a, b, d); k.tri(a, d, c);
     k.tri(a, d, b); k.tri(a, c, d);
   }
-  if (mast) {
+  if (sail !== 'none') {
     k.tube([[0, 0.2, len * 0.1], [0, 6.5, len * 0.1]], [0.09, 0.06], 6, SURF.bark, PART.prop, WOOD_DARK, {});
-    k.quad([0, 1.6, len * 0.1 + 0.05], [0, 1.6, len * 0.1 - 2.6], [0, 6.0, len * 0.1 - 1.4], [0, 6.0, len * 0.1 + 0.05], SURF.cloth, PART.prop, [0.55, 0.5, 0.42], 0.9, rng.float());
-    k.quad([0, 6.0, len * 0.1 + 0.05], [0, 6.0, len * 0.1 - 1.4], [0, 1.6, len * 0.1 - 2.6], [0, 1.6, len * 0.1 + 0.05], SURF.cloth, PART.prop, [0.45, 0.4, 0.33], 0.7, rng.float());
+    lugRig(k, len * 0.1, beam, len, sail === 'set', lod);
   }
 }
 
@@ -2630,7 +2701,7 @@ export function vesselMesh(kind: 'raft' | 'boat' | 'sail', lod: number): BufferG
   const big = kind === 'sail';
   // the hull sits ~0.55 of its depth below the waterline
   k.push(0, big ? -0.75 : -0.62, 0, 0);
-  boat(k, big ? 2.4 : 1.5, big ? 7.5 : 4.2, big, rng);
+  boat(k, big ? 2.4 : 1.5, big ? 7.5 : 4.2, big ? 'set' : 'none', rng, lod);
   k.pop();
   if (!big && lod === 0) {
     // thwart and oars shipped along the gunwales
@@ -3183,18 +3254,57 @@ function oven(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[
   return 0.8 + R * 0.9;
 }
 
-/** wayside shrine: a small open structure with an altar, offerings and a brazier; a carved post for early peoples */
+/**
+ * The sky-ring: this faith's sign (the god is light and weather, LIVING §0): an upright ring, the eye the sky looks
+ * through, with three rays rising from its crown, the middle one tallest, on a short stem. Facing ±Z, centred at
+ * (x, y, z) with ring radius r. Trusted / plain: gilt or bronze, the rays straight; feared: black iron, the rays bent
+ * into lightning. (Not a cross, crescent, wheel or knot: a ring under a fan of rays.)
+ */
+function skyRing(k: KitBuilder, x: number, y: number, z: number, r: number, fear: boolean, kind: boolean, lod: number): void {
+  const col: RGB = fear ? IRON : kind ? GOLD : BRONZE;
+  const surf = fear ? SURF.iron : SURF.lacquer;
+  const t = r * 0.16, n = lod === 0 ? 16 : 8;
+  const ring: V3[] = [];
+  for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI * 2; ring.push([x + Math.sin(a) * r, y + Math.cos(a) * r, z]); }
+  k.tube(ring, ring.map(() => t), lod === 0 ? 6 : 4, surf, PART.trim, col);
+  k.tube([[x, y - r - r * 0.9, z], [x, y - r + t * 0.5, z]], [t * 1.2, t], 5, surf, PART.trim, col, { cap: true });
+  for (const j of [-1, 0, 1]) {
+    const a = j * 0.42, len = r * (j === 0 ? 1.15 : 0.8);
+    const bx = x + Math.sin(a) * r, by = y + Math.cos(a) * r;
+    const ex = x + Math.sin(a) * (r + len), ey = y + Math.cos(a) * (r + len);
+    if (fear) {
+      const mx = (bx + ex) / 2 + Math.cos(a) * len * 0.18, my = (by + ey) / 2 - Math.sin(a) * len * 0.18;
+      k.tube([[bx, by, z], [mx, my, z], [mx - Math.cos(a) * len * 0.3, my + Math.sin(a) * len * 0.3, z], [ex, ey, z]], [t * 0.8, t * 0.6, t * 0.6, t * 0.2], 4, surf, PART.trim, col, { cap: true });
+    } else k.tube([[bx, by, z], [ex, ey, z]], [t * 0.8, t * 0.15], 4, surf, PART.trim, col, { cap: true });
+  }
+}
+
+/**
+ * Wayside shrine: for early peoples a sky-stone (a standing stone crowned by a holed ring stone the sky shows through)
+ * in a ring of stones with an offering stone and a fire; later a small open pavilion with an altar, offerings and a
+ * brazier under a roof crowned with the sky-ring.
+ */
 function shrine(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]): number {
-  const fear = spec.mood < -0.33;
+  const fear = spec.mood < -0.33, kind = spec.mood > 0.33;
   if (spec.era <= 1 || spec.mat.tier <= 0 || spec.mat.id === 'wood') {
-    // a carved totem with stones around it
-    const h = 3.6;
-    k.cylinder(0, 0, -0.6, h, 0.28, 0.22, 8, SURF.bark, PART.wall, fear ? [0.04, 0.03, 0.025] : WOOD, { top: true });
-    for (let i = 0; i < 4; i++) k.box(-0.3, 0.6 + i * 0.75, 0.15, 0.3, 0.95 + i * 0.75, 0.3, SURF.planks, PART.trim, i % 2 ? (fear ? [0.2, 0.02, 0.02] : [0.35, 0.18, 0.04]) : WOOD_DARK, {});
-    k.beam([-0.9, h - 0.4, 0], [0.9, h - 0.4, 0], 0.15, 0.2, SURF.beam, PART.trim, WOOD_DARK, 0.9);
-    stoneRing(k, 1.4, 7, 0.2, STONE, rng, spec.lod);
-    em.push({ p: [0, 0.3, 0.9], kind: EMIT.brazier, size: 0.18 });
-    return h;
+    const stone: RGB = fear ? BASALT : mixc(STONE, [0.5, 0.45, 0.36], 0.35);
+    // the holed stone: a thick disc set on edge in the ground, its hole facing the way the shrine faces, flanked by
+    // two standing stones; daubed ochre (kept) or dried blood (feared) round the hole's rim
+    const rr = 0.56, tr = 0.3, cy = rr + tr - 0.12;
+    const pts: V3[] = [];
+    const n = spec.lod === 0 ? 14 : 8;
+    for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI * 2; pts.push([Math.sin(a) * rr, cy + Math.cos(a) * rr, 0]); }
+    k.tube(pts, pts.map((_, i) => tr * (0.92 + 0.16 * ((i * 0.618) % 1))), spec.lod === 0 ? 7 : 5, SURF.rubble, PART.wall, mulc(stone, 1.05));
+    const daub: RGB = fear ? [0.2, 0.03, 0.02] : [0.45, 0.24, 0.08];
+    const ki = (rr - tr * 0.88) / rr;
+    const inner: V3[] = pts.map(([x, y, z]) => [x * ki, cy + (y - cy) * ki, z]);
+    k.tube(inner, inner.map(() => 0.05), 4, SURF.rubble, PART.trim, daub);
+    for (const [sx, hh] of [[-1, 2.0], [1, 1.65]] as const) k.cylinder(sx * 1.35, 0.05 * sx, -0.6, hh, 0.36, 0.24, 6, SURF.rubble, PART.wall, mulc(stone, 0.95 + 0.1 * rng.float()), { top: true });
+    k.box(-0.4, -0.3, 1.0, 0.4, 0.38, 1.5, SURF.rubble, PART.plinth, mulc(stone, 0.9), { skip: ['bottom'] });
+    stoneRing(k, 2.4, 10, 0.24, STONE, rng, spec.lod);
+    em.push({ p: [0, 0.3, 2.2], kind: EMIT.brazier, size: 0.18 });
+    void kind;
+    return 2.0;
   }
   const S = Math.min(spec.w, spec.d) * 0.7;
   const col = fear ? STONE_DARK : mixc(L.wall.col, [0.62, 0.55, 0.45], 0.3);
@@ -3203,10 +3313,12 @@ function shrine(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitte
   k.box(-S / 2 - 0.1, 2.6, -S / 2 - 0.1, S / 2 + 0.1, 2.9, S / 2 + 0.1, SURF.ashlar, PART.trim, mulc(col, 1.1), {});
   const rf: RoofLook = { ...L.roof };
   hipRoof(k, S + 0.2, S + 0.2, 2.9, 0.6, 0.3, rf, spec.lod);
+  const apex = 2.9 + (S / 2 + 0.1) * Math.tan(0.6);
+  skyRing(k, 0, apex + 0.75, 0, 0.36, fear, kind, spec.lod);
   k.box(-0.45, 0.4, -0.3, 0.45, 1.25, 0.3, SURF.ashlar, PART.wall, mulc(col, 1.1), {});
   if (spec.lod === 0) for (let i = 0; i < 3; i++) k.lathe(-0.25 + i * 0.25, 0, [[0.06, 1.25], [0.08, 1.35], [0.02, 1.45]], 6, SURF.cloth, PART.prop, [[0.5, 0.1, 0.05], [0.55, 0.42, 0.08], [0.2, 0.35, 0.1]][i] as RGB, 1, 1);
   em.push({ p: [0, 1.4, 0], kind: EMIT.brazier, size: 0.15 });
-  return 2.9 + (S / 2) * Math.tan(0.6);
+  return apex + 1.6;
 }
 
 /** mine head: a timber headframe with a wheel over the shaft, a spoil heap, ore carts on rails */

@@ -12,7 +12,8 @@ import {
   orbitalStyle, setOfEra, styleFor, type CultureMusic, type MusicStyle,
 } from '../src/audio/music.ts';
 import { foldLoop, peakOf, renderBell, renderCrickets, renderImpulse, renderNoise, renderPluck, softClipCurve, CHIME, hash32 } from '../src/audio/dsp.ts';
-import { SceneProbe, type ScenePlanet, type SceneWorld } from '../src/audio/scene.ts';
+import { CALLED_FLOOR, SceneProbe, type ScenePlanet, type SceneWorld } from '../src/audio/scene.ts';
+import { godSentDisaster } from '../src/audio/authored.ts';
 import { CueGate, DISASTER_FAMILIES, MIRACLE_KINDS, commandCue, cueFor, disasterFamily, touchVariant } from '../src/audio/eventmap.ts';
 import { SFX, type Sfx } from '../src/audio/sfx.ts';
 import { disasterBed } from '../src/audio/emitters.ts';
@@ -335,6 +336,39 @@ test('the shore: surf from the direction of the sea; rain, fire and a town are h
   // far above it, the town's music has faded and the score of space takes over
   const away = listen({ planets: [planet({ fields: forest, settlements: [town] })] }, R * 3);
   assert.ok((away.music[0]?.weight ?? 0) < 0.05 && away.orbital > 0.9);
+});
+
+test('a disaster the god called is heard over the storm it rides in; nature\'s fades with distance', () => {
+  // a weak tornado 1.2 km off, the camera 300 m up (the audit's god-sent tornado sat at 0.04 under its thunderstorm)
+  const a = 0.4;
+  const world = (): SceneWorld => {
+    const pl = planet({ fields: forest });
+    pl.disasters.push({ id: 9, kind: 'tornado', planet: 0, pos: [Math.sin(a), 0, Math.cos(a)], radius: 80, intensity: 0.3, progress: -1, frozen: false, params: {} });
+    return { planets: [pl] };
+  };
+  const L = { pos: [0, 0, R + 300] as [number, number, number], quat: [0, 0, 0, 1] as [number, number, number, number], planet: 0, altitude: 300 };
+  const level = (p: SceneProbe): number => p.probe(world(), L).emitters.find((e) => e.key === 'dis:9')?.level ?? 0;
+  const nature = level(new SceneProbe());
+  const called = new SceneProbe();
+  const sent: SimEvent = { t: 'disaster', tick: 5, planet: 0, data: { kind: 'tornado', id: 9, god: 0, cause: 'god', life: 400 } };
+  const id = godSentDisaster(sent);
+  assert.equal(id, 9);
+  called.markCalled(0, id!);
+  const god = level(called);
+  assert.ok(nature < 0.05, `nature's far tornado is faint (${nature})`);
+  assert.ok(god > 0.25 && god <= CALLED_FLOOR, `the god's is heard (${god})`);
+  // only the player's own acts: nature's, a rival god's, or an event without an id are not marked
+  assert.equal(godSentDisaster({ ...sent, data: { ...sent.data, cause: 'nature' } }), null);
+  assert.equal(godSentDisaster({ ...sent, data: { ...sent.data, god: 1 } }), null);
+  assert.equal(godSentDisaster({ ...sent, data: { kind: 'tornado', god: 0, cause: 'god' } }), null);
+  assert.equal(godSentDisaster({ t: 'birth', tick: 1 } as SimEvent), null);
+  // another planet's disaster with the same id is not the one the god called; the memory stays bounded
+  const other = new SceneProbe();
+  other.markCalled(1, 9);
+  assert.ok(level(other) < 0.05);
+  for (let i = 0; i < 100; i++) other.markCalled(0, 1000 + i);
+  other.markCalled(0, 9);
+  assert.ok(level(other) > 0.25, 'the newest call is remembered after a hundred others');
 });
 
 // ───────────────────────────── events → sounds ─────────────────────────────

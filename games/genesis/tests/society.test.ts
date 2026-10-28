@@ -69,8 +69,14 @@ test('an iron monopoly drives the have-nots toward war (a town that holds iron a
   // seeds 1-12 with _harness/scratch/living/land/seedbound/iron.ts, guarded over 24 days: before LAND it held on 4 of 12
   // (1, 2, 4, 7), with LAND on 2 of 12 (1, 4) — seed 2 now has no war within the 24 days. Seed 4 holds it on both trees
   // with the widest margin (war on day 19 on both; 0.34 before, 0.36 now).
+  // FIX r1 #11 (a farming town hunts for hides and furs and in folk hunts: more goods on the road, so the daily trade
+  // warms the have-nots longer — on seed 4 their opinion crosses -0.4 on day 10, not 7, and the daily war roll does not
+  // come up within the 24 days; _harness/scratch/living/fix/seedbound/irondiag-{before,after}.log). Measured over seeds
+  // 1-12 with fix/seedbound/iron.ts (before: the tree with the fix's hunting, fever and budding reverted, fix/before/):
+  // before it held on 3 of 12 (4, 7, 9), after on 3 of 12 (3, 7, 9) — as often as before. Seed 9 holds on both trees
+  // with the war mid-window (day 8 before, 11 after; margin 0.32 / 0.29).
   const run = (monopoly: boolean) => {
-    const { sim, a, b } = twoTowns(4, 'iron');
+    const { sim, a, b } = twoTowns(9, 'iron');
     metals(sim, a, true);
     metals(sim, b, !monopoly);
     warlike(sim, b);

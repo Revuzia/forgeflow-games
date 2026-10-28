@@ -26,6 +26,8 @@ import {
   type IUniform,
 } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
+import type { BuildingBlock } from '../../sim/types.ts';
+import { buildingAt } from './catalog.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { hash32, hashFloat } from '../../sim/core/rng.ts';
 import { SHRUB_KINDS, TREE_KINDS, treeGeometry, type TreeKind } from '../gen/treegen.ts';
@@ -459,12 +461,26 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
 const _m = new Matrix4();
 const _c = new Color();
 const _v = new Vector3();
+const _cells: number[] = [];
+
+/**
+ * Metres kept clear of trees beyond a building's half-diagonal: a house stands in its yard, not in a wood (crowns
+ * 3-5 m across would otherwise reach through its roof); walls and aqueducts are long and thin, so their half-diagonal
+ * already clears more than they cover. Shrubs come 1.5 m closer (garden hedges, a bush by the door).
+ */
+const CLEAR_MARGIN: Partial<Record<string, number>> = { wall: 0.5, gate: 1.5, aqueduct: 0.5, pen: 1.5, market: 2, well: 2.5, hearth: 2.5 };
+const CLEAR_DEFAULT = 3.2;
+const SHRUB_CLOSER = 1.5;
 
 export class Vegetation {
   readonly group = new Group();
   private buckets: Bucket[] = [];
   private cache = new Map<number, Float32Array>();
   private stamp = '';
+  /** building clearings: cell -> [ux, uy, uz, clear radius m, ...] of the buildings whose clearing reaches its plants */
+  private clearings = new Map<number, number[]>();
+  private clearBlock: BuildingBlock | null = null;
+  private clearSig = '';
   private lastCam = new Vector3(1e9, 0, 0);
   private lastFrame = -1e9;
   private material: MeshStandardMaterial;
@@ -568,6 +584,7 @@ export class Vegetation {
       // understory: shrubs (and ferny scrub) under a closed canopy, so a forest is not a fence of trunks on bare floor
       const nUnder = tc > 0.45 ? Math.ceil((area / 95) * this.density * Math.min(1, (tc - 0.45) * 2)) : 0;
       const R0 = R;
+      const near = this.clearings.get(c);
       const place = (i: number, salt: number, isShrub: boolean, under = false): void => {
         const h1 = hashFloat(c, i, salt), h2 = hashFloat(c, i, salt + 1), h3 = hashFloat(c, i, salt + 2);
         const a = h1 * Math.PI * 2;
@@ -578,6 +595,14 @@ export class Vegetation {
         let dx = cx + ox, dy = cy + oy, dz = cz + oz;
         const l = Math.hypot(dx, dy, dz);
         dx /= l; dy /= l; dz /= l;
+        // no tree inside a building or on its doorstep: the town's footprint is cleared
+        if (near) {
+          for (let k = 0; k < near.length; k += 4) {
+            const ddx = dx - near[k], ddy = dy - near[k + 1], ddz = dz - near[k + 2];
+            const r = isShrub ? near[k + 3] - SHRUB_CLOSER : near[k + 3];
+            if ((ddx * ddx + ddy * ddy + ddz * ddz) * R0 * R0 < r * r) return;
+          }
+        }
         const hit = g.locate(dx, dy, dz);
         const at = (f: Float32Array | undefined) => (f ? f[hit.a] * hit.wa + f[hit.b] * hit.wb + f[hit.c] * hit.wc : 0);
         // groves and clearings: a ~45 m clumping noise modulates the acceptance (mean ≈ 1), so stands cluster
@@ -628,6 +653,60 @@ export class Vegetation {
   }
 
   /**
+   * Index the buildings' clearings by the cells whose scattered plants they can reach (a plant lies within ~0.62 of a
+   * cell's spacing of its centre), and drop the cached plants of only the cells whose clearings changed: a new house
+   * fells the trees on its plot, a fresh town does not re-scatter the whole forest.
+   */
+  private syncClearings(pv: PlanetView): void {
+    const b = pv.buildings ?? null;
+    if (b === this.clearBlock) return;
+    this.clearBlock = b;
+    let h = 0;
+    const n = b ? b.count : 0;
+    if (b) {
+      for (let i = 0; i < n; i++) {
+        h = (Math.imul(h, 31) + b.id[i]) | 0;
+        h = (Math.imul(h, 31) + b.type[i]) | 0;
+        h = (Math.imul(h, 31) + Math.round(b.pos[i * 3] * 4e6) + Math.round(b.pos[i * 3 + 2] * 4e6)) | 0;
+        h = (Math.imul(h, 31) + Math.round((b.scale[i] || 1) * 20)) | 0;
+      }
+    }
+    const sig = `${pv.id}|${n}|${h}`;
+    if (sig === this.clearSig) return;
+    this.clearSig = sig;
+    const g = pv.grid, R = pv.params.radius;
+    const next = new Map<number, number[]>();
+    if (b) {
+      for (let i = 0; i < n; i++) {
+        const look = buildingAt(b.type[i]);
+        const sc = Math.max(0.4, Math.min(4, b.scale[i] || 1));
+        const clear = 0.5 * Math.hypot(look.w, look.d) * sc + (CLEAR_MARGIN[look.kind] ?? CLEAR_DEFAULT);
+        let ux = b.pos[i * 3], uy = b.pos[i * 3 + 1], uz = b.pos[i * 3 + 2];
+        const l = Math.hypot(ux, uy, uz) || 1;
+        ux /= l; uy /= l; uz /= l;
+        const c0 = g.nearestCell(ux, uy, uz);
+        const reach = clear + Math.sqrt(g.area[c0]) * R * 0.75;
+        for (const c of g.cellsWithin(ux, uy, uz, reach / R, _cells)) {
+          let a = next.get(c);
+          if (!a) next.set(c, (a = []));
+          a.push(ux, uy, uz, clear);
+        }
+      }
+    }
+    let changed = false;
+    const same = (x: number[] | undefined, y: number[] | undefined): boolean => {
+      if (!x || !y) return x === y;
+      if (x.length !== y.length) return false;
+      for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return false;
+      return true;
+    };
+    for (const [c, a] of next) if (!same(a, this.clearings.get(c))) { this.cache.delete(c); changed = true; }
+    for (const c of this.clearings.keys()) if (!next.has(c)) { this.cache.delete(c); changed = true; }
+    this.clearings = next;
+    if (changed) this.lastFrame = -1e9;
+  }
+
+  /**
    * Refresh instances around the camera. `camBody` is the camera in the body frame (m); returns quickly when the
    * camera has not moved much (instances stay valid: they live in the body frame).
    */
@@ -649,6 +728,7 @@ export class Vegetation {
     const season = Math.floor(this.yearFrac * 48);
     if (season !== this.seasonStep) { this.seasonStep = season; this.lastFrame = -1e9; }
     if (stamp !== this.stamp) { this.stamp = stamp; this.cache.clear(); this.lastFrame = -1e9; }
+    this.syncClearings(pv);
     const R = pv.params.radius;
     const rc = camBody.length();
     const alt = rc - R - Math.max(0, pv.maxSurface * 0.5);

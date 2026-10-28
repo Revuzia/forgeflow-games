@@ -1097,18 +1097,35 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // what a pixel too coarse for the tears still sees: their share of glow
     float crackMean = mix(0.02, 0.08, heat) * (1.0 - k1);
     // open melt in a few winding channels on the deepest ground, with rafts of crust
+    // (each channel pinches and swells along its course, ~1–5 m wide: at one width throughout it read as a ribbon)
     float chR = 1.0 - abs(snoise(lp * 0.025 + vec3(5.0, 1.0, 3.0)) + 0.25 * snoise(lp * 0.08 + 2.0));
-    float chan = smoothstep(0.92, 0.975, chR) * smoothstep(1.6, 2.8, lava + lobe * 0.3);
+    float chW = 0.08 * (0.45 + 1.1 * smoothstep(-0.6, 0.6, snoise(lp * 0.016 + 17.0)));
+    float chan = smoothstep(1.0 - chW, 1.0 - chW * 0.35, chR) * smoothstep(1.6, 2.8, lava + lobe * 0.3);
+    float chCore = smoothstep(1.0 - chW * 0.45, 1.0 - chW * 0.1, chR);
     if (chan > 0.001) {
       vec3 vr = voronoi3(lp * 0.45 + 2.0);
       // (a raft: the inside of every fourth cell, its rim melting into the stream)
       float raft = step(0.72, vr.z) * smoothstep(0.1, 0.3, vr.y - vr.x);
-      chan *= 1.0 - 0.8 * raft * aaF(fw, 1.2);
+      // the stream's own SKIN: a thin dark film crusting over the melt in drifting patches, torn open along the seams
+      // between them and at the hot centre line (one even incandescent stream read as a ribbon of paint); a skin
+      // still glows dull red through, it is not crust
+      float skin = smoothstep(-0.05, 0.5, snoise(lp * 0.3 + vec3(0.0, uTime * 0.04, 0.0)) * 0.7 + snoise(lp * 0.9 + 4.0) * 0.3)
+        * smoothstep(0.06, 0.22, vr.y - vr.x) * (1.0 - 0.6 * chCore);
+      float aS = aaF(fw, 1.2);
+      // (far off, the pattern's mean: about a quarter of the stream under skins and rafts)
+      chan *= 1.0 - mix(0.22, 0.8 * raft + 0.6 * skin * (1.0 - raft), aS);
     }
     // the toe: where the flow advances it breaks open in glowing lobes
     // (a few breakouts ~10–20 m apart along the front, each a lobe of melt: a fine noise there drew the whole margin as a
     // dotted 'leopard print' band at night)
-    float toe = lw * (1.0 - smoothstep(0.1, 0.4, lava + lobe * 0.06)) * smoothstep(0.62, 0.86, snoise(P * 0.075 + vec3(0.0, uTime * 0.02, 0.0)) * 0.5 + 0.5 + 0.15 * snoise(P * 0.3 + 4.0) * aaF(fw, 2.0));
+    float toe = lw * (1.0 - smoothstep(0.1, 0.4, lava + lobe * 0.06)) * smoothstep(0.62, 0.86, snoise(P * 0.075 + vec3(0.0, uTime * 0.02, 0.0)) * 0.5 + 0.5 + 0.24 * snoise(P * 0.3 + 4.0) * aaF(fw, 2.0));
+    // (a breakout's lobe skins over within minutes: silvery crust glowing through its cracks and a few open patches —
+    // a lobe of melt glowing evenly was a round bead of paint on the end of each channel)
+    if (toe > 0.001) {
+      vec3 vt = voronoi3(lp * 0.6 + 11.0);
+      float tcr = 1.0 - smoothstep(0.02, 0.06 + fw * 0.5, vt.y - vt.x);
+      toe *= mix(0.45, 0.2 + 0.8 * max(tcr, smoothstep(0.78, 0.95, vt.z)), aaF(fw, 1.2));
+    }
     // only part of a flow is active at a time: tears glow in broad, irregular zones (~20–40 m) where the melt is pushing
     // through, the rest has crusted over (its tears dark seams); the fine shrinkage cracks glow only on the very hottest
     // ground. (Every tear and crack of the whole flow alight read as red crushed gravel.)
@@ -1122,7 +1139,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float seamVis = smoothstep(0.35, 0.8, tearV);
     // incandescence: deep red at a tear's cooling lips → orange → yellow-white in the open channels
     vec3 hotC = mix(vec3(0.9, 0.07, 0.006), vec3(1.0, 0.32, 0.035), smoothstep(0.2, 0.7, glowT) * (0.4 + 0.6 * heat));
-    hotC = mix(hotC, vec3(1.0, 0.62, 0.22), chan * heat);
+    // (the open stream: orange at its margins, yellow-orange on the hot centre line — a pale peach throughout tonemapped
+    // to a near-white ribbon)
+    hotC = mix(hotC, mix(vec3(1.0, 0.36, 0.045), vec3(1.0, 0.52, 0.12), chCore), chan * heat);
     float flick = 0.85 + 0.15 * snoise(lp * 0.5 + vec3(0.0, uTime * 0.6, 0.0));
     // the same light by day and by night (the exposure changes, not the lava), a little restrained by day, when the eye
     // reads the sunlit ground first
