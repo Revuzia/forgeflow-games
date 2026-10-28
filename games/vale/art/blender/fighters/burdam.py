@@ -457,6 +457,10 @@ def lame_pts(top, drop: float = 0.072, flare: float = 0.022, bevel: float = 0.02
 
 
 # ── the sculpt ────────────────────────────────────────────────────────────────────────────────────
+GEM_THICK = 0.046         # the inlays through the 3 cm heel (fix round 2: 3.8 -> 4.6 cm, 8 mm proud of each face: the rims catch
+                          # the game camera at the low angles, the accent gate with the back-pointing carry)
+
+
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris, space) in build order; space 'world' (rest
     pose, metres, faces -Y) or 'prop' (the cleaver, mapped onto prop.R by model())."""
@@ -726,7 +730,7 @@ def sculpts() -> list:
     # (core + hanging diamond read as ten cells, a zipper down the spine); fix pass 6: small diamonds set IN the dark
     # band (stone all round them) and the concept's blue gem in the pommel
     for poly in cl.gem_polys():                                        # one diamond per notch, under its bite
-        gems.add(Plate(poly, 0.0380, r=0.004), k=0.0)                      # proud of the setting (decimation-safe;
+        gems.add(Plate(poly, GEM_THICK, r=0.004), k=0.0)                   # proud of the setting (decimation-safe;
                                                                            # fix pass 8: 8 mm proud, its rim lit too)
     gems.add(Plate(_diamond(cl.POMMEL_U, 0.0, *cl.POMMEL_GEM), 0.040, r=0.004), k=0.0)
     # fix pass 8: no lit linings in the bites' floors any more (passes 6-7 lined each bite: with the diamond under it
@@ -3318,17 +3322,60 @@ RENDER_SPECULAR = 0.05    # Specular IOR Level of the baked body material in the
 # the inlays read as set blue stones in the heel instead of lit tiles. The GLB is exported before the renders: the game's
 # accent (and its 1.5-6 % share) is untouched.
 STILL_ACCENT = {"Roughness": 0.7, "Specular IOR Level": 0.1, "Emission Strength": 0.35}
+# ... and the stills set each inlay (and the pommel gem) smaller and nearly flush: every accent island scaled about its
+# centre, x STILL_GEM_SCALE in its plane and x STILL_GEM_FLUSH through it (the 4.6 cm inlay through the 3 cm heel -> 3.4 cm,
+# ~2 mm proud): the concept's small gems set in the heel. Rest-pose vertex positions, restored after the renders.
+STILL_GEM_SCALE = 0.66
+STILL_GEM_FLUSH = 0.74
+
+
+def _shrink_islands(o, k_plane: float, k_thick: float):
+    """scale every connected island of mesh `o` about its centroid: x k_plane in its two widest axes, x k_thick through
+    its thinnest; returns the original coordinates (flat float array) for the restore"""
+    me = o.data
+    n = len(me.vertices)
+    co = np.empty(n * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", co)
+    orig = co.copy()
+    co = co.reshape(-1, 3)
+    ev = np.empty(len(me.edges) * 2, dtype=np.int64)
+    me.edges.foreach_get("vertices", ev)
+    par = list(range(n))
+
+    def find(i):
+        while par[i] != i:
+            par[i] = par[par[i]]
+            i = par[i]
+        return i
+    for a_, b_ in ev.reshape(-1, 2):
+        ra, rb = find(int(a_)), find(int(b_))
+        if ra != rb:
+            par[ra] = rb
+    lab = np.array([find(i) for i in range(n)])
+    for L_ in np.unique(lab):
+        idx = np.nonzero(lab == L_)[0]
+        if len(idx) < 4:
+            continue
+        P_ = co[idx]
+        c = P_.mean(0)
+        Q = P_ - c
+        w = np.linalg.svd(Q, full_matrices=False)[2][2]
+        t = Q @ w
+        co[idx] = c + (Q - t[:, None] * w[None]) * k_plane + (t * k_thick)[:, None] * w[None]
+    me.vertices.foreach_set("co", co.ravel())
+    me.update()
+    return orig
 # FIX ROUND 2 (the verifier: the value lift left the cowl, the right cap and the stack one pale family; in the splash
-# the felt's sunlit top folds passed L* 86, p90 93.5): the splash only takes the felt's painted top light back down
-# (base colour x (1 - SPLASH_COWL_DIM x the COWL_TOP_GAIN ramp on N.z 0.05 -> 0.65), the cowl's texels picked by the
-# mesh's vale_part attribute). The game keeps COWL_TOP_GAIN 1.45 (the RIFT value margin is under 1 L*).
-SPLASH_COWL_DIM = 0.24
-_COWL_DIM = []            # the Value nodes feeding the dim while the renders run (set per still by bible_lights)
+# the felt's sunlit top folds passed L* 86, p90 93.5): the splash only takes the felt back down a step, most on its
+# sunlit tops (base colour x (1 - all - top x the COWL_TOP_GAIN ramp on N.z 0.05 -> 0.65), the cowl's texels picked by
+# the mesh's vale_part attribute). The game keeps COWL_TOP_GAIN 1.45 (the RIFT value margin is under 1 L*).
+SPLASH_COWL_DIM = (0.18, 0.22)      # (all, top)
+_COWL_DIM = []            # the Value node pairs feeding the dim while the renders run (set per still by bible_lights)
 
 
 def _cowl_dim_nodes(m, cowl_id: int):
-    """insert base colour x (1 - k * [part == cowl] * ramp(N.z)) in front of the Principled BSDF's linked base colour;
-    returns (undo, value node) or None"""
+    """insert base colour x (1 - [part == cowl] * (all + top * ramp(N.z))) in front of the Principled BSDF's linked base
+    colour; returns (undo, (all, top) value nodes) or None"""
     nt = m.node_tree
     bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
     if bsdf is None or not bsdf.inputs["Base Color"].is_linked:
@@ -3349,10 +3396,14 @@ def _cowl_dim_nodes(m, cowl_id: int):
     rng.clamp = True
     rng.inputs["From Min"].default_value = 0.05
     rng.inputs["From Max"].default_value = 0.65
-    val = N.new("ShaderNodeValue")
+    val = N.new("ShaderNodeValue")                  # top
     val.outputs[0].default_value = 0.0
+    val_all = N.new("ShaderNodeValue")              # all
+    val_all.outputs[0].default_value = 0.0
     m1 = N.new("ShaderNodeMath")
     m1.operation = "MULTIPLY"
+    add = N.new("ShaderNodeMath")
+    add.operation = "ADD"
     m2 = N.new("ShaderNodeMath")
     m2.operation = "MULTIPLY"
     one_minus = N.new("ShaderNodeMath")
@@ -3364,22 +3415,24 @@ def _cowl_dim_nodes(m, cowl_id: int):
     L.new(attr.outputs["Fac"], cmp_.inputs[0])
     L.new(geo.outputs["Normal"], sep.inputs[0])
     L.new(sep.outputs["Z"], rng.inputs["Value"])
-    L.new(cmp_.outputs[0], m1.inputs[0])
-    L.new(rng.outputs["Result"], m1.inputs[1])
-    L.new(m1.outputs[0], m2.inputs[0])
-    L.new(val.outputs[0], m2.inputs[1])
+    L.new(rng.outputs["Result"], m1.inputs[0])
+    L.new(val.outputs[0], m1.inputs[1])
+    L.new(m1.outputs[0], add.inputs[0])
+    L.new(val_all.outputs[0], add.inputs[1])
+    L.new(add.outputs[0], m2.inputs[0])
+    L.new(cmp_.outputs[0], m2.inputs[1])
     L.new(m2.outputs[0], one_minus.inputs[1])
     L.new(src, sc.inputs[0])
     L.new(one_minus.outputs[0], sc.inputs["Scale"])
     L.remove(link)
     L.new(sc.outputs["Vector"], bsdf.inputs["Base Color"])
-    made = [attr, cmp_, geo, sep, rng, val, m1, m2, one_minus, sc]
+    made = [attr, cmp_, geo, sep, rng, val, val_all, m1, add, m2, one_minus, sc]
 
     def undo():
         for n in made:
             nt.nodes.remove(n)
         nt.links.new(src, bsdf.inputs["Base Color"])
-    return undo, val
+    return undo, (val_all, val)
 
 
 def _install_render_specular() -> None:
@@ -3393,7 +3446,7 @@ def _install_render_specular() -> None:
     orig = render.fighter_renders
 
     def fighter_renders(ctx, objs, P, skin, *a, **kw):
-        saved, undos, done = [], [], set()
+        saved, undos, done, shrunk = [], [], set(), []
         if getattr(ctx.spec, "ID", None) == ID:
             cowl_id = [x[0] for x in sculpts()].index("cowl")
             for o in objs:
@@ -3404,6 +3457,9 @@ def _install_render_specular() -> None:
                     if not m or not m.use_nodes:
                         continue
                     if m.name == "accent":                     # (fix round 2) the stills' matte, dimmer accent glass
+                        if all(s_.material and s_.material.name == "accent" for s_ in o.material_slots) \
+                                and all(o is not x for x, _c in shrunk):
+                            shrunk.append((o, _shrink_islands(o, STILL_GEM_SCALE, STILL_GEM_FLUSH)))
                         for n in m.node_tree.nodes:
                             if n.type == "BSDF_PRINCIPLED":
                                 for k, v in STILL_ACCENT.items():
@@ -3434,6 +3490,9 @@ def _install_render_specular() -> None:
             for u in undos:
                 u()
             _COWL_DIM.clear()
+            for o, co in shrunk:
+                o.data.vertices.foreach_set("co", co)
+                o.data.update()
 
     fighter_renders._burdam = True
     render.fighter_renders = fighter_renders
@@ -3460,8 +3519,9 @@ def _install_portrait_rim() -> None:
             cfg = dict(cfg, rim_cool=float(cfg.get("rim_cool", 1.0)) * PORTRAIT_RIM_COOL)
         # (fix round 2) the splash (rim 1.0 / scale 1.6) dims the felt's sunlit tops; every other still renders them as built
         splash = _RENDERING[0] and pair and abs(rim - 1.0) < 1e-6 and abs(scale - 1.6) < 1e-6
-        for v in _COWL_DIM:
-            v.outputs[0].default_value = SPLASH_COWL_DIM if splash else 0.0
+        for v_all, v_top in _COWL_DIM:
+            v_all.outputs[0].default_value = SPLASH_COWL_DIM[0] if splash else 0.0
+            v_top.outputs[0].default_value = SPLASH_COWL_DIM[1] if splash else 0.0
         return orig(cam, cfg, light, rim=rim, scale=scale, pair=pair, target=target)
 
     bible_lights._burdam = True

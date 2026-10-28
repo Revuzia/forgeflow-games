@@ -127,7 +127,7 @@ def finger_chain(side: str, which: str, curl=None):
     else:
         off = -FING_W if which == "a" else FING_W
         base = W + u * PALM + lat * off
-        d = unit(u + lat * (-0.01 if which == "a" else 0.015))
+        d = u
         segs, curls = FING, REST_CURL
     curls = curl or curls
     pts = [base]
@@ -348,8 +348,8 @@ def hand_parts(side: str) -> list:
             taper = 1.0 - 0.05 * i
             for o in offs:
                 c0 = a + d * (L * 0.5 + 0.001) + lx * o
-                w = (FING_W * 0.5 - 0.0006) * (1.0 if which == "t" else 1.0)
-                S.add(RoundBox(c0, (w * taper, FING_T * 0.5 * taper, L * 0.5 - 0.0040), 0.0080, axes=ax_), k=0.0)
+                w = FING_W * 0.5 + (0.0004 if which != "t" else -0.002)
+                S.add(RoundBox(c0, (w * taper, FING_T * 0.5 * taper, L * 0.5 - 0.0040), 0.0055, axes=ax_), k=0.0)
                 if i < nseg - 1 or which == "t" and i == 0:
                     S.add(Capsule(b + lx * (o - w * 0.80), b + lx * (o + w * 0.80), 0.0115 * taper), k=0.003)  # the joint
                 if i == nseg - 1:
@@ -437,17 +437,25 @@ def sculpts() -> list:
     plate = TaperBox(0.0, -0.100, 1.494, 1.832, 0.108, 0.172, 0.050, 0.050, 0.020)
     mask.add(plate, k=0.0)
     mask.inter(Ellipsoid((0.0, 0.095, 1.68), (0.320, 0.243, 0.64)), k=0.010)
-    mask.add(RoundBox((0.0, -0.140, 1.768), (0.150, 0.016, 0.011), 0.008), k=0.010)                      # brow shelf
+    # the planar side plates: the face turns back 38 degrees at the painted incised lines (x ~ +-0.12)
     for sx in (-1, 1):
-        mask.add(Ellipsoid((sx * 0.072, -0.138, 1.640), (0.050, 0.020, 0.040)), k=0.025)                 # cheek plates
-        mask.sub(Ellipsoid((sx * 0.066, -0.150, 1.726), (0.044, 0.024, 0.0115), axes=sdf.rot_y(sx * 6)), k=0.004)  # eyes
+        a_ = math.radians(38.0)
+        mask.inter(HalfSpace((sx * 0.120, -0.142, 1.66), (sx * math.sin(a_), -math.cos(a_), 0.0), 0.4), k=0.004)
+    mask.add(RoundBox((0.0, -0.146, 1.770), (0.148, 0.020, 0.012), 0.008), k=0.010)                      # brow shelf
+    mask.add(RoundBox((0.0, -0.150, 1.800), (0.011, 0.010, 0.030), 0.006), k=0.010)                      # forehead keel
+    for sx in (-1, 1):
+        mask.add(Ellipsoid((sx * 0.074, -0.142, 1.642), (0.052, 0.024, 0.042)), k=0.022)                 # cheek plates
+        mask.sub(Ellipsoid((sx * 0.066, -0.152, 1.726), (0.046, 0.030, 0.0125), axes=sdf.rot_y(sx * 6)), k=0.004)  # eyes
+        mask.add(Capsule((sx * 0.030, -0.158, 1.736), (sx * 0.102, -0.150, 1.733), 0.0045), k=0.004)     # the upper lids
         mask.sub(Tube([(sx * 0.130, -0.118, 1.810), (sx * 0.134, -0.120, 1.700), (sx * 0.112, -0.126, 1.590),
                        (sx * 0.076, -0.130, 1.520)], [0.0028] * 4), k=0.0015)                               # side plates
-    mask.add(RoundCone((0.0, -0.146, 1.752), (0.0, -0.196, 1.632), 0.018, 0.016), k=0.012)              # the beak
-    mask.add(Ellipsoid((0.0, -0.178, 1.628), (0.032, 0.022, 0.016)), k=0.012)                            # nostril wings
+        mask.sub(Tube([(sx * 0.024, -0.162, 1.700), (sx * 0.060, -0.156, 1.668), (sx * 0.110, -0.140, 1.660)],
+                      [0.0022] * 3), k=0.001)                                                                # cheek seams
+    mask.add(RoundCone((0.0, -0.148, 1.752), (0.0, -0.198, 1.632), 0.018, 0.016), k=0.012)              # the beak
+    mask.add(Ellipsoid((0.0, -0.180, 1.628), (0.032, 0.022, 0.016)), k=0.012)                            # nostril wings
     smile = [(-0.068, 1.598), (-0.038, 1.588), (0.0, 1.585), (0.038, 1.588), (0.068, 1.598)]
-    mask.sub(Tube([(x, -0.147 + 0.30 * x * x, z) for x, z in smile], [0.0055] * 5), k=0.002)
-    mask.add(Ellipsoid((0.0, -0.126, 1.530), (0.066, 0.024, 0.032)), k=0.020)                            # chin
+    mask.sub(Tube([(x, -0.149 + 0.30 * x * x, z) for x, z in smile], [0.0060] * 5), k=0.002)
+    mask.add(Ellipsoid((0.0, -0.130, 1.530), (0.066, 0.024, 0.032)), k=0.020)                            # chin
     part("mask", mask, "wood", "bone:head", 1650, 0.6)
 
     # ── NECK (wrapped) ──
@@ -863,7 +871,7 @@ _pipeline.bind_part = _bind_part
 from common import bake as _bake  # noqa: E402
 from common.hifi import project as _project  # noqa: E402
 
-PROC = ("hat", "hat_rim", "vent_ring", "lantern_hook", "lantern_frame", "legs", "boots")
+PROC = ("hat", "hat_rim", "vent_ring", "lantern_hook", "lantern_frame", "legs", "boots", "head")
 WOOD_PARTS = tuple(f"{nm}_{s}" for s in "LR" for nm in ["palm"] + [f"f{w}{i}" for w, n in (("a", 3), ("b", 3), ("t", 2))
                                                                 for i in range(1, n + 1)])
 CLOTH_PARTS = ("robe_top", "robe_skirt", "sleeve_L", "sleeve_R")
@@ -1159,6 +1167,22 @@ def _wood_paint(p, n, frame=None):
     return c
 
 
+def _head_paint(p, n):
+    """the walnut head-box (the back sheet's carved block): vertical boards with dark joints and grain, a darker crown
+    band under the hat, the edges lit; the front lies behind the mask"""
+    base = _lin(_hex("#5E4836"))
+    band_c = _lin(_hex("#4A382B"))
+    gx = p[:, 0] * np.where(np.abs(n[:, 0]) > 0.7, 0.0, 1.0) + p[:, 1] * np.where(np.abs(n[:, 0]) > 0.7, 1.0, 0.0)
+    board = np.abs(((gx + 0.5) / 0.062) % 1.0 - 0.5) * 2               # 0 mid-board, 1 at a joint
+    grain = 1 + 0.08 * NOISE(np.stack([gx * 40.0, p[:, 2] * 3.0, gx * 0.0], 1), 1.0) + 0.05 * _fbm(p, 50.0)
+    lit = 0.80 + 0.30 * ss(-0.3, 0.9, n @ KEY)
+    c = base[None, :] * (grain * lit * (1 - 0.35 * ss(0.86, 0.97, board)))[:, None]
+    band = ss(1.790, 1.798, p[:, 2])
+    c = c * (1 - band[:, None]) + band_c[None, :] * (grain * lit)[:, None] * band[:, None]
+    c = c * (1 - 0.4 * np.exp(-((p[:, 2] - 1.795) / 0.003) ** 2))[:, None]
+    return c * (1 + 0.15 * ss(0.5, 0.95, np.abs(n[:, 2])))[:, None]
+
+
 def _boot_paint(p, n):
     """soft brown ankle boots (the painted #4A3428): a lighter turned cuff, creases over the instep, a dark sole"""
     base = _lin(_hex("#563C2D"))
@@ -1195,7 +1219,8 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         return m if m.any() else None
 
     procs = {"hat": _hat_paint, "hat_rim": _rim_paint, "vent_ring": _iron_paint, "lantern_hook": _iron_paint,
-             "lantern_frame": _iron_paint, "legs": _legs_paint, "boots": _boot_paint}
+             "lantern_frame": _iron_paint, "legs": _legs_paint, "boots": _boot_paint,
+             "head": _head_paint}
     for nm in WOOD_PARTS:
         procs[nm] = _wood_paint
     for name, fn in procs.items():
@@ -1229,6 +1254,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     lin[body] = lin[body] * g[body][:, None]
     lin = _hi_cap(lin)
     out[idx] = _srgb(lin)
+    out = _refill_cream(out, maps, names, log)
     if bleed:
         iy, ix = _project.nearest_index(part >= 0)
         out = out[iy, ix]
@@ -1236,6 +1262,66 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         smooth = _project.blur(out, 6.0)
         out[far] = smooth[far]
         out = _project.blur(out, 0.45).astype(np.float32)
+    return out
+
+
+def _box(a, r):
+    def along(x, axis):
+        pad = [(0, 0)] * x.ndim
+        pad[axis] = (r + 1, r)
+        c = np.cumsum(np.pad(x, pad, mode="edge"), axis=axis, dtype=np.float64)
+        nn = x.shape[axis]
+        hi = np.take(c, np.arange(2 * r + 1, 2 * r + 1 + nn), axis=axis)
+        lo = np.take(c, np.arange(0, nn), axis=axis)
+        return ((hi - lo) / (2 * r + 1)).astype(np.float32)
+    return along(along(a, 0), 1)
+
+
+def _fill_atlas(out, own, bad):
+    good = (own & ~bad).astype(np.float32)
+    todo = own & bad
+    for r in (2, 4, 8, 16, 32):
+        if not todo.any():
+            break
+        num = _box(out * good[..., None], r)
+        den = _box(good, r)
+        s_ = todo & (den > 0.12)
+        out[s_] = num[s_] / den[s_][:, None]
+        todo &= ~s_
+    return out
+
+
+# where the cream collar and under-robe may show on the felt parts (x from / to, y below, z above); elsewhere a pale,
+# unsaturated texel is the concept's neighbouring paint (the collar beside a sleeve the model holds wider, a cuff's
+# turn above it): refilled from the part's own felt
+CREAM_OK = {"robe_top": (-0.13, 0.13, -0.02, 1.10), "robe_skirt": (-0.15, 0.11, -0.04, 0.0)}
+
+
+def _refill_cream(out, maps, names, log):
+    P, part = maps["P"], maps["part"]
+    for name in ("robe_top", "robe_skirt", "sleeve_L", "sleeve_R"):
+        if name not in names:
+            continue
+        own = part == names.index(name)
+        if not own.any():
+            continue
+        c = out[own]
+        mx, mn = c.max(1), c.min(1)
+        sat = (mx - mn) / np.maximum(mx, 1e-3)
+        Y = c @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+        felt = sat > 0.26
+        ref = float(np.median(Y[felt])) if felt.sum() > 50 else float(np.median(Y))
+        cream = (sat < 0.24) & (Y > 1.08 * ref)
+        ok = CREAM_OK.get(name)
+        if ok is not None:
+            pp = P[own]
+            cream &= ~((pp[:, 0] > ok[0]) & (pp[:, 0] < ok[1]) & (pp[:, 1] < ok[2]) & (pp[:, 2] > ok[3]))
+        if not cream.any():
+            continue
+        bad = np.zeros_like(own)
+        bad[own] = cream
+        out = _fill_atlas(out, own, bad)
+        log(f"  tunlan paint: {name} {int(cream.sum())} cream texels refilled from its felt")
     return out
 
 
@@ -1298,6 +1384,37 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
 
 
 _project.recolour = _recolour
+
+# renders (Cycles, the bible lights): the default specular glazes the dark felt and leather white under the rim light
+from common import render as _render  # noqa: E402
+
+SPEC_RENDER = 0.12
+_orig_fighter_renders = _render.fighter_renders
+
+
+def _fighter_renders(ctx, objs, P, skin, *a, **k):
+    saved = []
+    if getattr(ctx.spec, "ID", None) == ID:
+        for o in objs:
+            if o.type != "MESH":
+                continue
+            for m in o.data.materials:
+                if m is None or not m.use_nodes:
+                    continue
+                for nd in m.node_tree.nodes:
+                    if nd.type == "BSDF_PRINCIPLED" and "Specular IOR Level" in nd.inputs:
+                        inp = nd.inputs["Specular IOR Level"]
+                        if not inp.is_linked:
+                            saved.append((inp, inp.default_value))
+                            inp.default_value = SPEC_RENDER
+    try:
+        return _orig_fighter_renders(ctx, objs, P, skin, *a, **k)
+    finally:
+        for inp, v in saved:
+            inp.default_value = v
+
+
+_render.fighter_renders = _fighter_renders
 
 _orig_bake_asset = _bake.bake_asset
 
@@ -1770,7 +1887,7 @@ def beast_hands(spread=1.0, x=0.70, y=-0.16, z=1.72):
 def pounce_hands(y=-0.74, z=1.18, curl=1.0):
     """the arms swept forward and down at the cone, the hands clawed (absolute places: the torso pitches 30 deg)"""
     return dict(ik(wrist_abs("L", 0.25, y, z, (0.9, 0.3, -0.2)), wrist_abs("R", -0.25, y, z, (-0.9, 0.3, -0.2)),
-                   orient("L", (0.15, -0.95, 0.27), (0.0, 0.27, 0.96)), orient("R", (-0.15, -0.95, 0.27), (0.0, 0.27, 0.96))),
+                   orient("L", (0.15, -0.95, 0.27), (0.0, -0.27, -0.96)), orient("R", (-0.15, -0.95, 0.27), (0.0, -0.27, -0.96))),
                 **fingers("L", a=(20 * curl, 34 * curl, 40 * curl), b=(22 * curl, 36 * curl, 42 * curl), t=(4, 18), sa=14, sb=16, st=24),
                 **fingers("R", a=(20 * curl, 34 * curl, 40 * curl), b=(22 * curl, 36 * curl, 42 * curl), t=(4, 18), sa=14, sb=16, st=24))
 
@@ -1838,11 +1955,11 @@ def clip_death():
                    ik(wrist_abs("L", 0.30, -0.62, 0.06, (0.9, 0.3, 0.3)), wrist_abs("R", -0.30, -0.64, 0.06, (-0.9, 0.3, 0.3)),
                       orient("L", (0.25, -0.96, 0.0), (0.0, 0.0, -1.0)), orient("R", (-0.25, -0.96, 0.0), (0.0, 0.0, -1.0))),
                    both(fingers, a=(10, 14, 12), b=(12, 16, 14), t=(4, 6)))
-    down["hat_level"] = (0.20, 0, 0)
+    down["hat_level"] = (0.45, 0, 0)
     bounce = compose(down, body(chest=(-3, 0, 0), drop=-0.012))
-    bounce["hat_level"] = (0.20, 0, 0)
+    bounce["hat_level"] = (0.45, 0, 0)
     rest = compose(down, body(spine=(2, 0, 0), chest=(2, 0, 0), head=(2, 0, 0), drop=0.006))
-    rest["hat_level"] = (0.20, 0, 0)
+    rest["hat_level"] = (0.50, 0, 0)
     for k_ in (g, recoil, sink, fold, down, bounce, rest):
         k_["hat_floor"] = (0.012, 0, 0)
     keys = [(0.0, g, "linear"), (0.12, recoil, "snap"), (0.40, sink, "inout"), (0.62, fold, "in"), (0.76, down, "in"),
@@ -1926,9 +2043,9 @@ def clip_victory():
                   ik(wrist("L", 0.22, -0.30, 0.95), wrist("R", -0.22, -0.30, 0.95),
                      orient("L", (0.1, -0.3, -0.95), (-0.3, 0.9, -0.3)), orient("R", (-0.1, -0.3, -0.95), (0.3, 0.9, -0.3))),
                   both(fingers, **RELAX))
-    cup = dict(ik(wrist("L", 0.07, -0.30, 1.24, (0.9, 0.4, -0.3)), wrist("R", -0.05, -0.31, 1.22, (-0.9, 0.4, -0.3)),
-                  orient("L", (-0.75, -0.35, 0.56), (-0.30, -0.10, -0.95)), orient("R", (0.75, -0.35, 0.56), (0.30, -0.10, -0.95))),
-               **both(fingers, a=(28, 36, 30), b=(32, 40, 34), t=(14, 20)))
+    cup = dict(ik(wrist("L", 0.09, -0.28, 1.22, (0.9, 0.4, -0.3)), wrist("R", -0.07, -0.29, 1.20, (-0.9, 0.4, -0.3)),
+                  orient("L", (-0.55, -0.62, 0.56), (-0.40, -0.28, 0.87)), orient("R", (0.55, -0.62, 0.56), (0.40, -0.28, 0.87))),
+               **both(fingers, a=(40, 56, 46), b=(46, 62, 52), t=(12, 22)))
     final = compose(stance_pose(), body(hips=(2, -24, 0), spine=(3, -10, 0), chest=(4, -8, 0), neck=(6, 4, 0), head=(10, 6, 2),
                                         hat=(8, 0, 0)), cup)
     keys = [(0.0, g, "linear"), (0.20, hound_hi, "out"), (0.36, compose(hound_hi, hound_hands(x=0.04, y=-0.48, z=1.54, jaw=6, ears=44, pitch=0.25)), "inout"),

@@ -30,6 +30,7 @@ def args():
     p.add_argument("--skin", default="")
     p.add_argument("--views", default="", help="a subset of front,q3,side,back,q3back,game,gamef")
     p.add_argument("--ortho", type=float, default=0.62)
+    p.add_argument("--custom", default="", help="extra views name:yaw:pitch[,...] (e.g. portrait:36:6)")
     p.add_argument("--target", default="0,0,1.66", help="the views' target x,y,z (m)")
     p.add_argument("--only", action="store_true", help="only the --parts (not the helmet)")
     p.add_argument("--out", default=os.path.join(scene.RENDERS_DIR, "fighters", "rishal", "_fit", "head.png"))
@@ -106,6 +107,9 @@ def main():
              ("games", 90, 52), ("gameb", 180, 52), ("gamer", 270, 52)]
     if a.views:
         views = [v for v in views if v[0] in a.views.split(",")]
+    for c_ in (x for x in a.custom.split(",") if x):
+        nm_, yw_, pt_ = c_.split(":")
+        views.append((nm_, float(yw_), float(pt_)))
     paths = []
     for nm, yaw, pitch in views:
         y, p = math.radians(yaw), math.radians(pitch)

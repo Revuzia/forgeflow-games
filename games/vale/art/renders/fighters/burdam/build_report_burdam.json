@@ -33,14 +33,14 @@
   },
   "uv_coverage": 0.613,
   "bake": {
-    "base": 14.25,
-    "rough_metal": 7.43,
-    "normal": 4.64,
-    "ao": 7.91,
+    "base": 12.63,
+    "rough_metal": 6.4,
+    "normal": 4.6,
+    "ao": 5.69,
     "normal_fixed_px": 44570,
-    "projection": 296.2,
-    "pack_save": 296.93,
-    "total": 332.88
+    "projection": 205.36,
+    "pack_save": 205.78,
+    "total": 235.66
   },
   "tris": 20067,
   "mesh_top_m": 2.157,
@@ -139,13 +139,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3015752,
+  "glb_bytes_raw": 3017760,
   "optimize": {
     "ok": true,
-    "before": 3015752,
-    "after": 1152808
+    "before": 3017760,
+    "after": 1152568
   },
-  "glb_bytes": 1152808,
+  "glb_bytes": 1152568,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -168,10 +168,10 @@
       "icon": "art/out/fighters/burdam/icon.png"
     },
     "seconds": {
-      "splash": 20.37,
-      "portrait": 6.9,
-      "turntable": 8.84,
-      "icon": 3.37
+      "splash": 24.58,
+      "portrait": 8.12,
+      "turntable": 7.4,
+      "icon": 2.28
     }
   },
   "three_qa": {
@@ -194,8 +194,8 @@
       1
     ],
     "headY": 1.849,
-    "accentPct": 1.65,
-    "accentTopHalfPct": 94.2,
+    "accentPct": 1.72,
+    "accentTopHalfPct": 73.3,
     "heightPx1080": 116,
     "size": [
       2400,
@@ -203,27 +203,27 @@
     ],
     "clips": 15,
     "out": "art/renders/fighters/burdam/three_burdam.png",
-    "seconds": 29.9,
+    "seconds": 20.8,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/burdam/three_clips_burdam.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.43,
-      "model": 12.79,
-      "lows_bind": 10.09,
-      "uv": 8.75,
-      "bake": 332.88,
-      "clips": 0.89,
-      "export": 3.42,
-      "optimize": 1.58,
-      "load_test": 0.3,
-      "render": 39.65,
-      "three_qa": 73.96,
+      "materials": 0.44,
+      "model": 15.51,
+      "lows_bind": 10.9,
+      "uv": 10.83,
+      "bake": 235.66,
+      "clips": 0.54,
+      "export": 2.27,
+      "optimize": 1.34,
+      "load_test": 0.31,
+      "render": 42.56,
+      "three_qa": 49.32,
       "cache": 0.25
     },
-    "total_s": 485.12
+    "total_s": 370.06
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

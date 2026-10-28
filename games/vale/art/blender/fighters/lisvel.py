@@ -824,14 +824,14 @@ def sculpts() -> list:
     # parted lips read as an aged statue): a broad oval brow, a narrower jaw and a soft chin, a short soft nose, closed
     # lips as one soft mound (the slight smile is painted), the ink recess across the eyes behind the glass
     # FIX PASS 2 (review item 6: in the 3/4 close-up the nose and the lip mound merged into one muzzle): the jaw is
-    # wider and sits 9 mm further back, so the mouth lies on the face's curve 1.5 cm behind the nose tip
+    # wider and sits 12 mm further back, so the mouth lies on the face's curve 1.6 cm behind the nose tip
     mask = Sculpt("mask")
     mask.add(Ellipsoid((0.0, -0.044, 1.722), (0.069, 0.062, 0.088)), k=0.0)
-    mask.add(Ellipsoid((0.0, -0.045, 1.668), (0.058, 0.0515, 0.062)), k=0.022)
+    mask.add(Ellipsoid((0.0, -0.043, 1.668), (0.058, 0.0505, 0.062)), k=0.022)
     mask.inter(HalfSpace((0, -0.048, 1.7), (0, 1, 0), 1.0), k=0.012)
     mask.sub(Ellipsoid((0.0, -0.112, VIS_Z + 0.001), (0.078, 0.020, 0.0185)), k=0.006)            # the eye recess
     mask.add(RoundCone((0.0, -0.0985, 1.712), (0.0, -0.1022, 1.692), 0.0054, 0.0062), k=0.012)    # the nose
-    mask.add(Ellipsoid((0.0, -0.0955, 1.652), (0.0150, 0.0030, 0.0056)), k=0.010)                 # the closed lips
+    mask.add(Ellipsoid((0.0, -0.0925, 1.652), (0.0150, 0.0030, 0.0056)), k=0.010)                 # the closed lips
     part("mask", mask, "chalk", "bone:head", 1100, vs=0.55, uvw=2.4)
     vis = Sculpt("visor")
     vis.add(_VisorSlab(), k=0.0)
@@ -851,9 +851,10 @@ def sculpts() -> list:
     for sx in (-1, 1):
         body.add(Sphere((sx * 0.180, 0.008, 1.455), 0.058), k=0.05)
         body.add(Ellipsoid((sx * 0.056, -0.064, 1.352), (0.056, 0.050, 0.054)), k=0.04)            # bust
-    # FIX PASS 2: no torso below the tunic's top (its heat-weighted hips pushed through the skirt's back panel as a
-    # dark patch in the guard; the tunic, now up to 1.14 m, fills the front slit)
-    body.inter(HalfSpace((0, 0, 1.11), (0, 0, -1), 1.0), k=0.0)
+    # FIX PASS 2: no torso below the skirt's top (its heat-weighted hips pushed through the skirt's back panel as a
+    # dark patch in the guard, and showed torn in the front slit's top in the taunt; the tunic, now up to 1.14 m,
+    # fills the slit, the tabard and the skirt overlap under the belt)
+    body.inter(HalfSpace((0, 0, 1.15), (0, 0, -1), 1.0), k=0.0)
     part("body", body, "cloth2", "torso_ua", 520)
 
     # TABARD (heat weights above the belt): steel-blue chest panels, soft shoulder pads lying on the shoulders (review
@@ -1662,10 +1663,10 @@ def paint_mask(p, n):
     k = (0.86 + 0.14 * front) * (1.0 - 0.10 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
     col = C("mask") * k[:, None]
     # the lips: a soft warm mound and the smile line
-    lip = np.exp(-((x / 0.016) ** 2 + ((z - 1.652) / 0.0080) ** 2)) * _ss(-0.089, -0.096, y)
+    lip = np.exp(-((x / 0.016) ** 2 + ((z - 1.652) / 0.0080) ** 2)) * _ss(-0.086, -0.093, y)
     col = _mix(col, C("lip") * k[:, None], 0.40 * lip)
     line_z = 1.6515 + 0.0030 * (x / 0.0145) ** 2
-    mline = np.exp(-((z - line_z) / 0.0015) ** 2) * _ss(0.018, 0.011, np.abs(x)) * _ss(-0.090, -0.096, y)
+    mline = np.exp(-((z - line_z) / 0.0015) ** 2) * _ss(0.018, 0.011, np.abs(x)) * _ss(-0.087, -0.093, y)
     col = col * (1.0 - 0.24 * mline)[:, None]
     # under the nose: one soft broad shade (FIX PASS 2, review item 6: two dark dots at the nose's base)
     ns = np.exp(-((x / 0.014) ** 2 + ((z - 1.681) / 0.006) ** 2)) * _ss(-0.092, -0.101, y)

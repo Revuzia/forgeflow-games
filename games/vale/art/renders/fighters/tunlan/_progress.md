@@ -20,3 +20,9 @@
   death (kneel + fold), recall (cupped lantern), idle_lobby (bird/rabbit/hound/beast/hat tip), victory, stunned,
   dash, channel, taunt. Hand frames via an Orient IK key (anim.resolve wrapper); corrected foot roll (Vashil's).
 - Paint wrapper written (projection + back match + side fill; hat/rim/lantern/hands/legs procedural; value ramp).
+- Build 4 (fast): 21.7k tris, 1146 KiB, accent 1.9 %, three load test OK (run planted feet OK after the foot-roll fix).
+  Fixed since build 2: hat leveling (x_hat takes back 60 % of the head's tilt; poses may set hat_level / hat_floor),
+  chunkier touching fingers, warm cream hat (#CDB89F), robe lift, shorter legs + stronger skirt leg weights (no
+  poke-through), death = kneel + fold with the hat resting on its brim (floor clamp), pounce/death wrists absolute.
+- Skins written (SKINS, HAT_SCHEMES, selective rose-felt recolour, SKIN_FLAT puppet rods); not built yet.
+- Compare renders: proto/tunlan_compare.py (Blender) + tunlan_fit.py --compare -> _fit/compare.png.

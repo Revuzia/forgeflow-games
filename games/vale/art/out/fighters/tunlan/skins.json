@@ -1,0 +1,16 @@
+[
+  {
+    "id": "tunlan_noon_fair",
+    "fighter": "tunlan",
+    "model": "assets/fighters/tunlan/tunlan_noon_fair.glb",
+    "portrait": "assets/fighters/tunlan/tunlan_noon_fair_portrait.png",
+    "splash": "assets/fighters/tunlan/tunlan_noon_fair_splash.png"
+  },
+  {
+    "id": "tunlan_lamplit",
+    "fighter": "tunlan",
+    "model": "assets/fighters/tunlan/tunlan_lamplit.glb",
+    "portrait": "assets/fighters/tunlan/tunlan_lamplit_portrait.png",
+    "splash": "assets/fighters/tunlan/tunlan_lamplit_splash.png"
+  }
+]
