@@ -318,6 +318,15 @@ export class VfxSystem {
   private distortN = 0;
   private readonly byUid = new Map<number, Inst>();
   private readonly _res = new Vector2();
+  /** parse and (re)place defs by id: the catalog's at construction; the harness swaps in edited defs live (combat F6
+   *  tuning: probe_kit_hue --live), so a running instance keeps the def it spawned with */
+  redefine(defs: readonly VfxDefT[]): void {
+    for (const d of defs) {
+      const def = parseDef(d);
+      this.defs.set(d.id, def);
+      for (const l of def.layers) if (l.type === 'emitter' && !this.emitterIndex.has(l)) { this.emitterIndex.set(l, this.emitters.length); this.emitters.push(l); }
+    }
+  }
   /** reduce motion (accessibility): halves exposure envelopes, cuts the death grade (screen.ts) */
   set reduceMotion(on: boolean) { screenFx.reduceMotion = on; }
   get reduceMotion(): boolean { return screenFx.reduceMotion; }
@@ -326,11 +335,7 @@ export class VfxSystem {
 
   constructor(defs: readonly VfxDefT[], world: VfxWorld) {
     this.world = world;
-    for (const d of defs) {
-      const def = parseDef(d);
-      this.defs.set(d.id, def);
-      for (const l of def.layers) if (l.type === 'emitter' && !this.emitterIndex.has(l)) { this.emitterIndex.set(l, this.emitters.length); this.emitters.push(l); }
-    }
+    this.redefine(defs);
     this.group.name = 'vale_vfx_lights';
     this.scene.name = 'vale_vfx';
     vfxUniforms.uAtlas.value = this.textures.atlas;

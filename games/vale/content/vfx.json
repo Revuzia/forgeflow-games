@@ -1803,7 +1803,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim, an orchid-rose ring and bloom, streaks in the caster's signature, petals of light",
+    "$comment": "T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim (the magic tell), a ring, bloom and petals of light in the caster's signature, streaks in the signature (combat F6)",
     "id": "lib_hit_magic",
     "duration": 0.8,
     "teamTint": true,
@@ -1876,8 +1876,8 @@
         ],
         "life": 0.2,
         "color": [
-          "#E59BB0",
-          "#D9A7C7"
+          "signature",
+          "secondary"
         ],
         "alpha": [
           1,
@@ -1910,15 +1910,15 @@
         ],
         "life": 0.16,
         "color": [
-          "#D9A7C7",
-          "#E59BB0"
+          "secondary",
+          "signature"
         ],
         "alpha": [
           0.8,
           0
         ],
         "emissive": 2.6,
-        "rim": "#E59BB0",
+        "rim": "signature",
         "rimPow": 1.6,
         "rimEmissive": 2.4,
         "noise": 0.6,
@@ -1987,8 +1987,8 @@
           0
         ],
         "color": [
-          "#D9A7C7",
-          "#E59BB0"
+          "signature",
+          "secondary"
         ],
         "alpha": [
           1,
@@ -12477,7 +12477,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ardit a1 wind-up (ardit_lancing_run, 0.15 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ardit a1 wind-up (ardit_lancing_run, 0.15 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ardit_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -12734,7 +12734,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -13154,7 +13154,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ardit a2 wind-up (ardit_glare, 0.3 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ardit a2 wind-up (ardit_glare, 0.3 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ardit_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -13411,7 +13411,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -13877,7 +13877,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ardit a3 wind-up (ardit_spire_strike, 0.25 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ardit a3 wind-up (ardit_spire_strike, 0.25 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ardit_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -14134,7 +14134,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -14907,7 +14907,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Ardit ult wind-up (ardit_muster, 0.35 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Ardit ult wind-up (ardit_muster, 0.35 s, fitted): the pane motif gathers at weapon in Ardit's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ardit_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -15164,7 +15164,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -16849,7 +16849,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Burdam a3 wind-up (burdam_old_wound, 0.25 s, fitted): the tally motif gathers at weapon in Burdam's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · stone · Burdam a3 wind-up (burdam_old_wound, 0.25 s, fitted): the tally motif gathers at weapon in Burdam's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "burdam_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -17118,7 +17118,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -18498,7 +18498,7 @@
     ]
   },
   {
-    "$comment": "T4 · stone · Burdam ult wind-up (burdam_settled_account, 0.35 s, fitted): the tally motif gathers at weapon in Burdam's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T4 · stone · Burdam ult wind-up (burdam_settled_account, 0.35 s, fitted): the tally motif gathers at weapon in Burdam's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "burdam_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -18767,7 +18767,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -19256,7 +19256,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Dunsom a1 wind-up (dunsom_draw_in, 0.25 s, fitted): the crook motif gathers at weapon in Dunsom's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Dunsom a1 wind-up (dunsom_draw_in, 0.25 s, fitted): the crook motif gathers at weapon in Dunsom's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "dunsom_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -19506,7 +19506,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -19948,7 +19948,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Dunsom a2 wind-up (dunsom_crook_sweep, 0.3 s, fitted): the crook motif gathers at weapon in Dunsom's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Dunsom a2 wind-up (dunsom_crook_sweep, 0.3 s, fitted): the crook motif gathers at weapon in Dunsom's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "dunsom_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -20198,7 +20198,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -21783,7 +21783,7 @@
     ]
   },
   {
-    "$comment": "T4 · shade · Dunsom ult wind-up (dunsom_driving_hour, 0.35 s, fitted): the crook motif gathers at weapon in Dunsom's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · shade · Dunsom ult wind-up (dunsom_driving_hour, 0.35 s, fitted): the crook motif gathers at weapon in Dunsom's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "dunsom_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -22033,7 +22033,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -22189,7 +22189,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Heavy Arc: the whole blade sweeps the 140° arc as a sheet of cold glass light at waist height (bright leading edge, the rim flashing), splinters and streaks thrown out along it, the floor frosts (the slow)",
+    "$comment": "T2 · Lumen · Heavy Arc: the whole blade sweeps the 140° arc as a sheet of her pale orchid glass light at waist height (bright leading edge, the rim flashing), splinters and streaks thrown out along it, the floor frosts (the slow) (combat F6)",
     "id": "ervet_a1_arc",
     "duration": 0.9,
     "teamTint": true,
@@ -22203,11 +22203,11 @@
         "color": [
           [
             0,
-            "#FFFFFF"
+            "#F1CBF7"
           ],
           [
             0.25,
-            "#B6CEE0"
+            "#F1CBF7"
           ],
           [
             1,
@@ -22256,7 +22256,7 @@
         "scale": 2.04,
         "life": 0.3,
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -22308,7 +22308,7 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -22355,7 +22355,7 @@
           0.12
         ],
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -22389,7 +22389,7 @@
           ]
         ],
         "life": 1.0,
-        "color": "#BFD3E6",
+        "color": "#F1CBF7",
         "alpha": [
           0.6,
           0.45,
@@ -22429,7 +22429,7 @@
           0
         ],
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -22852,7 +22852,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ervet a1 wind-up (ervet_heavy_arc, 0.3 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ervet a1 wind-up (ervet_heavy_arc, 0.3 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ervet_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -23113,7 +23113,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -23190,7 +23190,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Glass Guard: the blade stands planted before her as a pale wall and a cold glass shell wraps her (team fresnel rim), the floor frosts, glass flakes rise (help is up); the shell splinters when it ends",
+    "$comment": "T2 · Lumen · Glass Guard: the blade stands planted before her as a pale wall and a shell of her pale orchid glass wraps her (signature fresnel rim, the planted blade keeps a team rim), the floor frosts, glass flakes rise (help is up); the shell splinters when it ends (combat F6)",
     "id": "ervet_a2_guard",
     "duration": 2.1,
     "teamTint": true,
@@ -23200,7 +23200,7 @@
         "at": "caster",
         "radius": 0.6,
         "life": 0.05,
-        "color": "#B6CEE0",
+        "color": "#F1CBF7",
         "intensity": 3.0
       },
       {
@@ -23228,7 +23228,7 @@
         ],
         "life": 2.0,
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -23300,7 +23300,7 @@
         ],
         "life": 2.0,
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -23322,7 +23322,7 @@
           ]
         ],
         "emissive": 0.12,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.4,
         "rimEmissive": 3.0,
         "noise": 0.55,
@@ -23393,7 +23393,7 @@
           ]
         ],
         "life": 2.0,
-        "color": "#BFD3E6",
+        "color": "#F1CBF7",
         "alpha": [
           [
             0,
@@ -23441,7 +23441,7 @@
           0.05
         ],
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -23481,7 +23481,7 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
+          "#F1CBF7",
           "signature"
         ],
         "alpha": [
@@ -23541,7 +23541,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ervet a2 wind-up (ervet_shard_kick, 0.2 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ervet a2 wind-up (ervet_shard_kick, 0.2 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ervet_a2_hilt_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -23802,7 +23802,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -23971,7 +23971,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ervet a3 wind-up (ervet_reform, 0.2 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ervet a3 wind-up (ervet_reform, 0.2 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ervet_a3_hilt_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -24232,7 +24232,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -25233,7 +25233,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ervet a3 wind-up (ervet_shatter, 0.3 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ervet a3 wind-up (ervet_shatter, 0.3 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ervet_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -25494,7 +25494,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -26851,7 +26851,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Ervet ult wind-up (ervet_whole_again, 0.3 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Ervet ult wind-up (ervet_whole_again, 0.3 s, fitted): the blade motif gathers at weapon in Ervet's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ervet_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -27112,7 +27112,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -27229,7 +27229,7 @@
     ]
   },
   {
-    "$comment": "T3 · Shade · Plant Shard (rect zone, whole life): the shard is driven in (chips, dust, a crack), a dark stone with a pale honed edge and a team-lit cut top leaning toward its 9 × 2.5 m shadow; the shadow is a hard slab of shade with low ink drifting along it; the far end carries a team keyline that brightens as the shard trembles in the last half-second",
+    "$comment": "T3 · Shade · Plant Shard (rect zone, whole life): the shard is driven in (chips, dust, a crack), a dark stone with a pale honed edge and a violet-lit cut top leaning toward its 9 × 2.5 m shadow; the shadow is a hard slab of shade with low ink drifting along it; the far end carries a team keyline that brightens as the shard trembles in the last half-second (combat F6: the shade slab is rimmed in her violet) (combat F6: her chips and dust are violet-grey shade)",
     "id": "hesmi_a1_shadow",
     "duration": 3.3,
     "teamTint": true,
@@ -27271,9 +27271,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -27317,8 +27317,8 @@
           1.125
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -27379,7 +27379,7 @@
           ]
         ],
         "emissive": 1.2,
-        "rim": "team",
+        "rim": "signature",
         "fit": false
       },
       {
@@ -27406,7 +27406,7 @@
           1
         ],
         "life": 3.05,
-        "color": "#4C4A53",
+        "color": "#4C4858",
         "alpha": [
           [
             0,
@@ -27422,7 +27422,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "#D3CEC3",
+        "rim": "#D3CCDD",
         "rimPow": 3.5,
         "rimEmissive": 0.8,
         "noise": 0,
@@ -27715,8 +27715,8 @@
           0.07
         ],
         "color": [
-          "#D3CEC3",
-          "#8A867D"
+          "#D3CCDD",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -27750,8 +27750,8 @@
           0.875
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -27779,7 +27779,7 @@
     ]
   },
   {
-    "$comment": "T2 · Shade · Plant Shard topple: the shard falls flat along its shadow: a long stone slab lies the 9 m length and dissolves at a team edge, the ground cracks the length of it, chips and dust burst in sequence from her end to the far end, team sparks along it",
+    "$comment": "T2 · Shade · Plant Shard topple: the shard falls flat along its shadow: a long stone slab lies the 9 m length and dissolves at a team edge, the ground cracks the length of it, chips and dust burst in sequence from her end to the far end, team sparks along it (combat F6: the slab cracks in her violet) (combat F6: her chips and dust are violet-grey shade)",
     "id": "hesmi_a1_topple",
     "duration": 1.1,
     "teamTint": true,
@@ -27803,7 +27803,7 @@
           1
         ],
         "life": 0.95,
-        "color": "#4C4A53",
+        "color": "#4C4858",
         "alpha": [
           [
             0,
@@ -27823,7 +27823,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "#D3CEC3",
+        "rim": "#D3CCDD",
         "rimPow": 3.5,
         "rimEmissive": 0.8,
         "noise": 0.3,
@@ -27860,7 +27860,7 @@
           0
         ],
         "emissive": 1.8,
-        "rim": "team",
+        "rim": "signature",
         "length": 2.0,
         "width": 2.6,
         "fit": true
@@ -27950,9 +27950,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -28001,8 +28001,8 @@
           1.375
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -28056,9 +28056,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -28107,8 +28107,8 @@
           1.375
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -28162,9 +28162,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -28213,8 +28213,8 @@
           1.375
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -28268,9 +28268,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -28319,8 +28319,8 @@
           1.375
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -28374,9 +28374,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -28425,8 +28425,8 @@
           1.375
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -28494,7 +28494,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Hesmi a1 wind-up (hesmi_plant_shard, 0.3 s, fitted): the shard motif gathers at weapon in Hesmi's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Hesmi a1 wind-up (hesmi_plant_shard, 0.3 s, fitted): the shard motif gathers at weapon in Hesmi's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: her chips and dust are violet-grey shade)",
     "id": "hesmi_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -28773,7 +28773,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -28889,7 +28889,7 @@
     ]
   },
   {
-    "$comment": "T3 · Shade · Shoulder the Stone: a dark slab of shade with a team rim is shoved ahead of her shoulder, stone chips and dust thrown to both sides (knocked aside), a hard shade band and team side-streaks behind. Timed bursts",
+    "$comment": "T3 · Shade · Shoulder the Stone: a dark slab of shade with a team rim is shoved ahead of her shoulder, stone chips and dust thrown to both sides (knocked aside), a hard shade band and team side-streaks behind. Timed bursts (combat F6: her chips and dust are violet-grey shade)",
     "id": "hesmi_a2_shoulder",
     "duration": 0.55,
     "teamTint": true,
@@ -28925,8 +28925,8 @@
           1.25
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -28974,9 +28974,9 @@
           1.4
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -29111,8 +29111,8 @@
           1.0
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -29206,9 +29206,9 @@
           1.3
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -29303,9 +29303,9 @@
           1.3
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -29400,9 +29400,9 @@
           1.3
         ],
         "color": [
-          "#D3CEC3",
-          "#4C4A53",
-          "#8A867D"
+          "#D3CCDD",
+          "#4C4858",
+          "#8A8496"
         ],
         "alpha": [
           1,
@@ -29506,8 +29506,8 @@
           1.1
         ],
         "color": [
-          "#6E6A62",
-          "#57544E"
+          "#6B6478",
+          "#55505F"
         ],
         "alpha": [
           0,
@@ -29638,7 +29638,7 @@
         "texture": "ink_puff",
         "frame": 2,
         "blend": "ink",
-        "rim": "team",
+        "rim": "secondary",
         "rimAlpha": 0.25,
         "stretch": 0.32,
         "soft": 0.1
@@ -29649,67 +29649,67 @@
         "bursts": [
           [
             0.0,
-            2
+            3
           ],
           [
             0.025,
-            2
+            3
           ],
           [
             0.05,
-            2
+            3
           ],
           [
             0.075,
-            2
+            3
           ],
           [
             0.1,
-            2
+            3
           ],
           [
             0.125,
-            2
+            3
           ],
           [
             0.15,
-            2
+            3
           ],
           [
             0.175,
-            2
+            3
           ],
           [
             0.2,
-            2
+            3
           ],
           [
             0.225,
-            2
+            3
           ],
           [
             0.25,
-            2
+            3
           ],
           [
             0.275,
-            2
+            3
           ],
           [
             0.3,
-            2
+            3
           ],
           [
             0.325,
-            2
+            3
           ],
           [
             0.35,
-            2
+            3
           ],
           [
             0.375,
-            2
+            3
           ]
         ],
         "shape": "sphere",
@@ -31356,7 +31356,7 @@
     ]
   },
   {
-    "$comment": "T4 · shade · Hesmi ult wind-up (hesmi_felled_shard, 0.35 s, fitted): the shard motif gathers at weapon in Hesmi's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · shade · Hesmi ult wind-up (hesmi_felled_shard, 0.35 s, fitted): the shard motif gathers at weapon in Hesmi's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "hesmi_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -31635,7 +31635,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -31958,7 +31958,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ilsheta a1 wind-up (ilsheta_glint_bolt, 0.25 s, fitted): the lamp motif gathers at weapon in Ilsheta's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ilsheta a1 wind-up (ilsheta_glint_bolt, 0.25 s, fitted): the lamp motif gathers at weapon in Ilsheta's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ilsheta_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -32205,7 +32205,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -32614,7 +32614,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ilsheta a2 wind-up (ilsheta_hung_lamp, 0.2 s, fitted): the lamp motif gathers at weapon in Ilsheta's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ilsheta a2 wind-up (ilsheta_hung_lamp, 0.2 s, fitted): the lamp motif gathers at weapon in Ilsheta's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ilsheta_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -32861,7 +32861,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -34363,7 +34363,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Ilsheta ult wind-up (ilsheta_every_window_lit, 0.3 s, fitted): the lamp motif gathers at weapon in Ilsheta's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Ilsheta ult wind-up (ilsheta_every_window_lit, 0.3 s, fitted): the lamp motif gathers at weapon in Ilsheta's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ilsheta_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -34610,7 +34610,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -34966,7 +34966,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Kemdo a1 wind-up (kemdo_long_thrust, 0.25 s, fitted): the lens motif gathers at lens in Kemdo's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Kemdo a1 wind-up (kemdo_long_thrust, 0.25 s, fitted): the lens motif gathers at lens in Kemdo's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "kemdo_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -35206,7 +35206,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -36802,7 +36802,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Kemdo ult wind-up (kemdo_held_focus, 0.25 s, fitted): the lens motif gathers at lens in Kemdo's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Kemdo ult wind-up (kemdo_held_focus, 0.25 s, fitted): the lens motif gathers at lens in Kemdo's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "kemdo_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -37042,7 +37042,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -37604,7 +37604,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Lisvel a1 wind-up (lisvel_dawn_line, 0.25 s, fitted): the draw motif gathers at weapon in Lisvel's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Lisvel a1 wind-up (lisvel_dawn_line, 0.25 s, fitted): the draw motif gathers at weapon in Lisvel's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "lisvel_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -37835,7 +37835,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -39234,7 +39234,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Lisvel ult wind-up (lisvel_sun_corridor, 0.35 s, fitted): the draw motif gathers at weapon in Lisvel's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Lisvel ult wind-up (lisvel_sun_corridor, 0.35 s, fitted): the draw motif gathers at weapon in Lisvel's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "lisvel_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -39465,7 +39465,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -39582,7 +39582,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Shoulder In: the cap turns battering ram (a stone plate inside a forward team dome), a furrow of light, dust and chips ploughed aside, side streaks (movement)",
+    "$comment": "T3 · Lumen · Shoulder In: the cap turns battering ram (a stone plate inside a forward team dome), a furrow of light, dust and chips ploughed aside, side streaks (movement) (combat F6): the pale light is pale jade",
     "id": "marund_a1_shoulder",
     "duration": 0.55,
     "teamTint": true,
@@ -39737,7 +39737,7 @@
           ]
         ],
         "emissive": 1.8,
-        "rim": "team",
+        "rim": "#C8F0E2",
         "rimPow": 1.8,
         "rimEmissive": 5.0,
         "noise": 0.6,
@@ -39827,7 +39827,7 @@
       {
         "type": "ribbon",
         "at": "path",
-        "color": "#D0C6B3",
+        "color": "#C8F0E2",
         "width": [
           0.0,
           0.5
@@ -39987,7 +39987,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Marund a1 wind-up (marund_shoulder_in, 0.15 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · stone · Marund a1 wind-up (marund_shoulder_in, 0.15 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "marund_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -40315,7 +40315,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -40437,7 +40437,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Shelter Dome (loop): a clear team shell with a bright fresnel silhouette and a solid foot band, two stone banding courses, a catch-light on the crown, three warm windows low on the wall, the no-entry foot ring brightest, motes rising inside (help is up)",
+    "$comment": "T3 · Lumen · Shelter Dome (loop): a clear team shell with a bright fresnel silhouette and a solid foot band, two stone banding courses, a catch-light on the crown, three warm windows low on the wall, the no-entry foot ring brightest, motes rising inside (help is up) (combat F6): the pale light is pale jade",
     "id": "marund_a2_dome",
     "duration": 1.0,
     "teamTint": true,
@@ -40589,7 +40589,7 @@
           1.1,
           1.1880000000000002
         ],
-        "color": "#BFD3E6",
+        "color": "#C8F0E2",
         "emissive": 1.2,
         "alpha": [
           [
@@ -40653,7 +40653,7 @@
             0
           ]
         ],
-        "emissive": 5.5,
+        "emissive": 3.0,
         "sharp": 2.6,
         "noise": 0.15,
         "blend": "add"
@@ -40699,7 +40699,7 @@
           0.5,
           0.54
         ],
-        "color": "#EBD9B8",
+        "color": "#C8F0E2",
         "emissive": 2.0,
         "alpha": [
           [
@@ -40735,7 +40735,7 @@
           0.5,
           0.54
         ],
-        "color": "#EBD9B8",
+        "color": "#C8F0E2",
         "emissive": 2.0,
         "alpha": [
           [
@@ -40771,7 +40771,7 @@
           0.5,
           0.54
         ],
-        "color": "#EBD9B8",
+        "color": "#C8F0E2",
         "emissive": 2.0,
         "alpha": [
           [
@@ -40817,7 +40817,7 @@
           0
         ],
         "color": [
-          "#EBD9B8",
+          "#C8F0E2",
           "signature"
         ],
         "alpha": [
@@ -40879,7 +40879,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Shelter Dome raised: the maul post cracks the floor, a team shell swells to 3 m and shoves (out is harm), a course of stone light climbs it, chips and dust at the foot",
+    "$comment": "T2 · Lumen · Shelter Dome raised: the maul post cracks the floor, a team shell swells to 3 m and shoves (out is harm), a course of stone light climbs it, chips and dust at the foot (combat F6): the pale light is pale jade",
     "id": "marund_a2_raise",
     "duration": 0.9,
     "teamTint": true,
@@ -40889,7 +40889,7 @@
         "at": "ground",
         "radius": 0.9,
         "life": 0.05,
-        "color": "#D0C6B3",
+        "color": "#C8F0E2",
         "intensity": 3.0
       },
       {
@@ -41022,7 +41022,7 @@
         "scale": 2.0,
         "life": 0.42,
         "color": [
-          "#D0C6B3",
+          "#C8F0E2",
           "signature"
         ],
         "alpha": [
@@ -41237,7 +41237,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Marund a2 wind-up (marund_shelter_dome, 0.25 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T2 · stone · Marund a2 wind-up (marund_shelter_dome, 0.25 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "marund_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -41565,7 +41565,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -42232,7 +42232,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Marund a3 wind-up (marund_mortar_pail, 0.25 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · stone · Marund a3 wind-up (marund_mortar_pail, 0.25 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "marund_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -42560,7 +42560,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -43851,7 +43851,7 @@
     ]
   },
   {
-    "$comment": "T4 · stone · Marund ult wind-up (marund_domefall, 0.3 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · stone · Marund ult wind-up (marund_domefall, 0.3 s, fitted): the course motif gathers at weapon in Marund's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "marund_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -44179,7 +44179,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -44586,7 +44586,7 @@
     ]
   },
   {
-    "$comment": "T2 · Shade · asleep: a hood of ink settles over the head under a light rim, a team ring narrows onto them, felt petals spiral down past the shoulders (control, down), a last soft note",
+    "$comment": "T2 · Shade · asleep: a hood of ink settles over the head under a light rim, a team ring narrows onto them, felt petals spiral down past the shoulders (control, down), a last soft note (combat F6): pale rose light, signature rims (the wake and the closing ring keep the team)",
     "id": "nurrow_a2_drowse",
     "duration": 1.15,
     "teamTint": true,
@@ -44596,7 +44596,7 @@
         "at": "target",
         "radius": 0.45,
         "life": 0.05,
-        "color": "#B7B4BE",
+        "color": "#F2D0E8",
         "intensity": 3.0,
         "light": false
       },
@@ -44744,7 +44744,7 @@
         ],
         "texture": "petal",
         "blend": "alpha",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.55,
         "secondary": true
       },
@@ -44774,7 +44774,7 @@
         ],
         "color": [
           "signature",
-          "#B7B4BE"
+          "#F2D0E8"
         ],
         "alpha": [
           0.8,
@@ -44829,7 +44829,7 @@
     ]
   },
   {
-    "$comment": "T2 · Shade · Lullaby Dart: a slim plum-ink needle inside a team rim, a wavering ink wake that sinks, soft team rings widen off it like held notes",
+    "$comment": "T2 · Shade · Lullaby Dart: a slim plum-ink needle inside a team rim, a wavering ink wake that sinks, soft team rings widen off it like held notes (combat F6): pale rose light, signature rims (the wake and the closing ring keep the team)",
     "id": "nurrow_a2_lullaby",
     "duration": 0.7,
     "teamTint": true,
@@ -44839,7 +44839,7 @@
         "at": "origin",
         "radius": 0.375,
         "life": 0.05,
-        "color": "#B7B4BE",
+        "color": "#F2D0E8",
         "intensity": 3.0,
         "light": false
       },
@@ -44857,7 +44857,7 @@
         "color": "#2B2433",
         "alpha": 1,
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.0,
         "rimEmissive": 2.8,
         "blend": "ink",
@@ -44904,7 +44904,7 @@
         ],
         "color": [
           "signature",
-          "#B7B4BE"
+          "#F2D0E8"
         ],
         "alpha": [
           0.9,
@@ -44975,7 +44975,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Nurrow a2 wind-up (nurrow_lullaby_dart, 0.25 s, fitted): the lull motif gathers at weapon in Nurrow's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Nurrow a2 wind-up (nurrow_lullaby_dart, 0.25 s, fitted): the lull motif gathers at weapon in Nurrow's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "nurrow_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -45208,7 +45208,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -45661,7 +45661,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Nurrow a3 wind-up (nurrow_snuff, 0.15 s, fitted): the lull motif gathers at weapon in Nurrow's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Nurrow a3 wind-up (nurrow_snuff, 0.15 s, fitted): the lull motif gathers at weapon in Nurrow's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "nurrow_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -45894,7 +45894,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -47232,7 +47232,7 @@
     ]
   },
   {
-    "$comment": "T4 · shade · Nurrow ult wind-up (nurrow_lull_the_rest, 0.25 s, fitted): the lull motif gathers at weapon in Nurrow's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · shade · Nurrow ult wind-up (nurrow_lull_the_rest, 0.25 s, fitted): the lull motif gathers at weapon in Nurrow's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "nurrow_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -47465,7 +47465,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -47621,7 +47621,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Resin Shot: a resin blob drops on the centre, splashes opaque amber drops, a glossy caustic pool; a pale crust ring creeps in from the rim while the team edge brightens: when the crust reaches the centre, it sets",
+    "$comment": "T3 · Lumen · Resin Shot: an olive-gold resin blob drops on the centre, splashes opaque resin drops, a glossy caustic pool; a pale mint crust ring creeps in from the rim while the team edge brightens: when the crust reaches the centre, it sets (combat F6: the resin sits off the HARM band, a cool core) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a1_resin",
     "duration": 2.3,
     "teamTint": true,
@@ -47658,8 +47658,8 @@
           0.7
         ],
         "color": [
-          "#9A6331",
-          "#4A2F18"
+          "#8E9A31",
+          "#3F4718"
         ],
         "alpha": [
           1,
@@ -47667,7 +47667,7 @@
         ],
         "texture": "drop",
         "blend": "chip",
-        "rim": "#E8C48E",
+        "rim": "#D4F2CF",
         "rimAlpha": 0.7,
         "stretch": 0.02
       },
@@ -47703,8 +47703,8 @@
           1.2
         ],
         "color": [
-          "signature",
-          "#E8C48E"
+          "#B4C21E",
+          "#D4F2CF"
         ],
         "alpha": [
           0,
@@ -47768,7 +47768,7 @@
           0.1
         ],
         "life": 0.5,
-        "color": "team",
+        "color": "#B4C21E",
         "alpha": [
           0,
           0.45,
@@ -47785,7 +47785,7 @@
         "delay": 0.5,
         "radius": 0.8,
         "life": 0.06,
-        "color": "signature",
+        "color": "#B4C21E",
         "intensity": 2.2
       },
       {
@@ -47811,7 +47811,7 @@
           0.05
         ],
         "life": 0.32,
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           1,
           0.7,
@@ -47848,8 +47848,8 @@
           1.4
         ],
         "color": [
-          "#9A6331",
-          "#4A2F18"
+          "#8E9A31",
+          "#3F4718"
         ],
         "alpha": [
           1,
@@ -47861,7 +47861,7 @@
         "bounce": 0.1,
         "texture": "drop",
         "blend": "chip",
-        "rim": "#E8C48E",
+        "rim": "#D4F2CF",
         "rimAlpha": 0.55,
         "align": "velocity",
         "stretch": 0.02
@@ -47888,8 +47888,8 @@
           0.03
         ],
         "color": [
-          "#E8C48E",
-          "signature"
+          "#D4F2CF",
+          "#B4C21E"
         ],
         "alpha": [
           1,
@@ -47975,15 +47975,15 @@
         "color": [
           [
             0,
-            "#4A2F18"
+            "#3F4718"
           ],
           [
             0.15,
-            "#9A6331"
+            "#8E9A31"
           ],
           [
             1,
-            "#B08050"
+            "#9AA050"
           ]
         ],
         "alpha": [
@@ -48029,7 +48029,7 @@
           ]
         ],
         "life": 1.5,
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           [
             0,
@@ -48074,8 +48074,8 @@
         ],
         "life": 1.5,
         "color": [
-          "#E8C48E",
-          "#BFD3E6"
+          "#D4F2CF",
+          "#D4F2CF"
         ],
         "alpha": [
           [
@@ -48130,15 +48130,15 @@
         "alpha": [
           [
             0,
-            0.3
+            0.2
           ],
           [
             0.1,
-            0.6
+            0.45
           ],
           [
             0.85,
-            1.0
+            0.8
           ],
           [
             1,
@@ -48148,15 +48148,15 @@
         "emissive": [
           [
             0,
-            1.4
+            1.2
           ],
           [
             0.7,
-            2.6
+            2.0
           ],
           [
             1,
-            4.0
+            2.8
           ]
         ],
         "sharp": 2.4,
@@ -48187,8 +48187,8 @@
           0
         ],
         "color": [
-          "#E8C48E",
-          "#BFD3E6"
+          "#D4F2CF",
+          "#D4F2CF"
         ],
         "alpha": [
           0,
@@ -48224,7 +48224,7 @@
           0.05,
           0.28
         ],
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           0.7,
           0
@@ -48265,7 +48265,7 @@
           ]
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": 2.4,
@@ -48289,7 +48289,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Resin Shot sets: the team edge snaps inward, the pool hardens into cracked amber glass with team seams cooling (1 s, the root), splinters skitter out",
+    "$comment": "T2 · Lumen · Resin Shot sets: a mint-white ring snaps inward, the pool hardens into cracked olive-gold glass with team seams cooling (1 s, the root), splinters skitter out (combat F6) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a1_set",
     "duration": 1.1,
     "teamTint": true,
@@ -48299,7 +48299,7 @@
         "at": "ground",
         "radius": 0.9,
         "life": 0.06,
-        "color": "signature",
+        "color": "#B4C21E",
         "intensity": 3.0
       },
       {
@@ -48325,8 +48325,8 @@
         ],
         "life": 0.22,
         "color": [
-          "#BFD3E6",
-          "team"
+          "#D4F2CF",
+          "#B4C21E"
         ],
         "alpha": [
           1,
@@ -48358,7 +48358,7 @@
           ]
         ],
         "life": 1.05,
-        "color": "#4A2F18",
+        "color": "#3F4718",
         "rim": "team",
         "alpha": [
           [
@@ -48385,8 +48385,8 @@
         "texture": "frost",
         "radius": 0.98,
         "life": 1.05,
-        "color": "signature",
-        "rim": "#E8C48E",
+        "color": "#B4C21E",
+        "rim": "#D4F2CF",
         "alpha": [
           [
             0,
@@ -48430,8 +48430,8 @@
           1.3
         ],
         "color": [
-          "#E8C48E",
-          "signature"
+          "#D4F2CF",
+          "#B4C21E"
         ],
         "alpha": [
           1,
@@ -48473,8 +48473,8 @@
           1.3
         ],
         "color": [
-          "#E8C48E",
-          "#9A6331"
+          "#D4F2CF",
+          "#8E9A31"
         ],
         "alpha": [
           1,
@@ -48515,7 +48515,7 @@
           ]
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": 2.4,
@@ -48539,7 +48539,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Odrum a1 wind-up (odrum_resin_shot, 0.25 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · stone · Odrum a1 wind-up (odrum_resin_shot, 0.25 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -48560,7 +48560,7 @@
           ]
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": [
@@ -48602,7 +48602,7 @@
         "life": 1.0,
         "fitTime": true,
         "hold": 1.0,
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           [
             0,
@@ -48677,7 +48677,7 @@
         "fitTime": true,
         "hold": 1.0,
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "alpha": 1,
@@ -48720,7 +48720,7 @@
           0.06
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "alpha": [
@@ -48745,7 +48745,7 @@
           0.6
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": 3.0,
@@ -48776,7 +48776,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "#B4C21E",
         "alpha": [
           0.8,
           0
@@ -48826,7 +48826,7 @@
           -500,
           500
         ],
-        "rim": "signature",
+        "rim": "#B4C21E",
         "rimAlpha": 0.5
       },
       {
@@ -48850,7 +48850,7 @@
           0.04
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "#F4EFE2"
         ],
         "alpha": [
@@ -48884,7 +48884,7 @@
         ],
         "color": [
           "#F4EFE2",
-          "signature"
+          "#B4C21E"
         ],
         "alpha": [
           1,
@@ -48898,7 +48898,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Swing Out: the two resin pots whip round at the waist (two bright heads, fading tails), drops of resin fly off, a team ring goes out to 3 m (the hit), a turn of dust; side streaks as he leans into the run",
+    "$comment": "T2 · Lumen · Swing Out: the two resin pots whip round at the waist (two mint-white heads fading to his signature, fading tails), olive resin drops fly off, a team ring goes out to 3 m (the hit) with a signature ring inside it, a turn of dust; side streaks as he leans into the run (combat F6) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a2_whirl",
     "duration": 0.9,
     "teamTint": true,
@@ -48916,8 +48916,8 @@
         ],
         "life": 0.32,
         "color": [
-          "#E8C48E",
-          "signature"
+          "#D4F2CF",
+          "#B4C21E"
         ],
         "alpha": [
           [
@@ -48958,7 +48958,7 @@
           0
         ],
         "life": 0.32,
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           [
             0,
@@ -49013,8 +49013,8 @@
         ],
         "life": 0.32,
         "color": [
-          "#E8C48E",
-          "signature"
+          "#D4F2CF",
+          "#B4C21E"
         ],
         "alpha": [
           [
@@ -49055,7 +49055,7 @@
           0
         ],
         "life": 0.32,
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           [
             0,
@@ -49150,7 +49150,7 @@
           0.04
         ],
         "life": 0.3,
-        "color": "team",
+        "color": "#B4C21E",
         "alpha": [
           0.6,
           0.4,
@@ -49191,8 +49191,8 @@
           1.4
         ],
         "color": [
-          "#9A6331",
-          "signature"
+          "#8E9A31",
+          "#B4C21E"
         ],
         "alpha": [
           1,
@@ -49204,7 +49204,7 @@
         "orbitDeg": -140,
         "texture": "drop",
         "blend": "chip",
-        "rim": "#E8C48E",
+        "rim": "#D4F2CF",
         "rimAlpha": 0.5,
         "align": "velocity",
         "stretch": 0.02
@@ -49234,7 +49234,7 @@
           0.18,
           0.05
         ],
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           1,
           0
@@ -49314,7 +49314,7 @@
           ]
         ],
         "life": 0.6,
-        "color": "team",
+        "color": "#B4C21E",
         "alpha": [
           0.5,
           0.3,
@@ -49344,7 +49344,7 @@
           0.4,
           0.1
         ],
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           0.8,
           0
@@ -49388,7 +49388,7 @@
           ]
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": 2.4,
@@ -49412,7 +49412,7 @@
     ]
   },
   {
-    "$comment": "T2 · stone · Odrum a2 wind-up (odrum_swing_out, 0.2 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T2 · stone · Odrum a2 wind-up (odrum_swing_out, 0.2 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell) (combat F6: his light is lime-gold #B4C21E, h 65: within 10 deg of his signature #B3A400 and clear of the HARM band 20-55, which his h 55 signature itself rendered into; the signature hex stays)",
     "id": "odrum_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -49433,7 +49433,7 @@
           ]
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": [
@@ -49475,7 +49475,7 @@
         "life": 1.0,
         "fitTime": true,
         "hold": 1.0,
-        "color": "signature",
+        "color": "#B4C21E",
         "alpha": [
           [
             0,
@@ -49550,7 +49550,7 @@
         "fitTime": true,
         "hold": 1.0,
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "alpha": 1,
@@ -49593,7 +49593,7 @@
           0.06
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "alpha": [
@@ -49618,7 +49618,7 @@
           0.6
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "secondary"
         ],
         "emissive": 3.0,
@@ -49649,7 +49649,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "#B4C21E",
         "alpha": [
           0.8,
           0
@@ -49699,7 +49699,7 @@
           -500,
           500
         ],
-        "rim": "signature",
+        "rim": "#B4C21E",
         "rimAlpha": 0.5
       },
       {
@@ -49723,7 +49723,7 @@
           0.04
         ],
         "color": [
-          "signature",
+          "#B4C21E",
           "#F4EFE2"
         ],
         "alpha": [
@@ -51797,7 +51797,7 @@
     ]
   },
   {
-    "$comment": "T4 · stone · Odrum ult wind-up (odrum_amber_hour, 0.35 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · stone · Odrum ult wind-up (odrum_amber_hour, 0.35 s, fitted): the resin motif gathers at weapon_tip in Odrum's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "odrum_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -52034,7 +52034,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -52196,7 +52196,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Glass Dash: a hard glass streak at the body over a team ground streak (the track being laid), knife-tip sparks skimming the ground, glass flakes shed, a chalk skid where he stops",
+    "$comment": "T3 · Lumen · Glass Dash: a hard streak of his raspberry glass at the body over a signature ground streak (the track being laid), knife-tip sparks skimming the ground, glass flakes shed, a chalk skid where he stops (combat F6)",
     "id": "rishal_a1_dash",
     "duration": 0.6,
     "teamTint": true,
@@ -52206,7 +52206,7 @@
         "at": "origin",
         "radius": 0.55,
         "life": 0.05,
-        "color": "#BFD3E6",
+        "color": "secondary",
         "intensity": 2.6,
         "offset": [
           0,
@@ -52270,7 +52270,7 @@
         "type": "ribbon",
         "at": "path",
         "color": [
-          "#BFD3E6",
+          "secondary",
           "signature"
         ],
         "width": [
@@ -52345,8 +52345,8 @@
           0.03
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6"
+          "secondary",
+          "secondary"
         ],
         "alpha": [
           1,
@@ -52397,8 +52397,8 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "#A9C6DE"
+          "secondary",
+          "secondary"
         ],
         "alpha": [
           1,
@@ -52487,8 +52487,8 @@
           0.03
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6"
+          "secondary",
+          "secondary"
         ],
         "alpha": [
           1,
@@ -52508,7 +52508,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Glass Dash track: a 5 x 1 m strip of ground glass (frost facets sparkling in team), a team keyline down both edges, glints and standing slivers along it; loops seamlessly while the track lives",
+    "$comment": "T3 · Lumen · Glass Dash track: a 5 x 1 m strip of ground glass in his pale raspberry (frost facets sparkling), a team keyline down both edges, glints and standing slivers along it; loops seamlessly while the track lives (combat F6)",
     "id": "rishal_a1_track",
     "duration": 1.0,
     "teamTint": true,
@@ -52529,7 +52529,7 @@
           0
         ],
         "life": 1.3,
-        "color": "#A9C6DE",
+        "color": "secondary",
         "alpha": [
           [
             0,
@@ -52566,7 +52566,7 @@
           0
         ],
         "life": 1.3,
-        "color": "#BFD3E6",
+        "color": "secondary",
         "alpha": [
           [
             0,
@@ -52621,7 +52621,7 @@
             0.0
           ]
         ],
-        "emissive": 2.6
+        "emissive": 1.8
       },
       {
         "type": "decal",
@@ -52657,7 +52657,7 @@
             0.0
           ]
         ],
-        "emissive": 2.6
+        "emissive": 1.8
       },
       {
         "type": "emitter",
@@ -52683,8 +52683,8 @@
           0
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
+          "secondary",
+          "secondary",
           "signature"
         ],
         "alpha": [
@@ -52734,8 +52734,8 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "#A9C6DE"
+          "secondary",
+          "secondary"
         ],
         "alpha": [
           0,
@@ -52793,7 +52793,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Glint Cut (each slash): a crossing X of thin glass slashes on the target, splinters fly on through in the cut's direction, chalk chips, a glass crack at the feet",
+    "$comment": "T2 · Lumen · Glint Cut (each slash): a crossing X of thin raspberry-glass slashes on the target, splinters fly on through in the cut's direction, chalk chips, a glass crack at the feet (combat F6)",
     "id": "rishal_a2_cut",
     "duration": 0.5,
     "teamTint": true,
@@ -52831,8 +52831,8 @@
         ],
         "life": 0.16,
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
+          "secondary",
+          "secondary",
           "signature"
         ],
         "alpha": [
@@ -52879,8 +52879,8 @@
         ],
         "life": 0.16,
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
+          "secondary",
+          "secondary",
           "signature"
         ],
         "alpha": [
@@ -52927,7 +52927,7 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
+          "secondary",
           "signature"
         ],
         "alpha": [
@@ -53041,7 +53041,7 @@
         ],
         "life": 0.5,
         "color": "#8A8478",
-        "rim": "#BFD3E6",
+        "rim": "secondary",
         "alpha": [
           0.7,
           0.5,
@@ -53057,7 +53057,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Rishal a2 wind-up (rishal_glint_cut, 0.15 s, fitted): the glint motif gathers at weapon in Rishal's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Rishal a2 wind-up (rishal_glint_cut, 0.15 s, fitted): the glint motif gathers at weapon in Rishal's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "rishal_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -53254,7 +53254,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -55389,7 +55389,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Rishal ult wind-up (rishal_long_glint, 0.2 s, fitted): the glint motif gathers at weapon in Rishal's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Rishal ult wind-up (rishal_long_glint, 0.2 s, fitted): the glint motif gathers at weapon in Rishal's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "rishal_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -55586,7 +55586,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -56309,7 +56309,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Sukri a1 wind-up (sukri_mote_toss, 0.25 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Sukri a1 wind-up (sukri_mote_toss, 0.25 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "sukri_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -56554,7 +56554,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -56941,7 +56941,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Sukri a2 wind-up (sukri_draw_near, 0.15 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Sukri a2 wind-up (sukri_draw_near, 0.15 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "sukri_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -57186,7 +57186,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -57517,7 +57517,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Sukri a3 wind-up (sukri_wrap_cast, 0.25 s, fitted): the cup motif gathers at the left hand (the swung cord) in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Sukri a3 wind-up (sukri_wrap_cast, 0.25 s, fitted): the cup motif gathers at the left hand (the swung cord) in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "sukri_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -57762,7 +57762,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -59113,7 +59113,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Sukri ult wind-up (sukri_gather_in, 0.4 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Sukri ult wind-up (sukri_gather_in, 0.4 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "sukri_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -59358,7 +59358,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -59442,7 +59442,7 @@
     ]
   },
   {
-    "$comment": "T2 · Shade · Hound Shadow: an ink hound (body, head, snout, ears, tail) runs low along the ground with a team rim and two team eyes, its paws kicking up shadow over an ink wake; the lamp gutters at the cast",
+    "$comment": "T2 · Shade · Hound Shadow: an ink hound (body, head, snout, ears, tail) runs low along the ground lit by a violet signature rim, pale ears and tail, two signature eyes, its paws kicking up shadow over an ink wake with a team keyline; the lamp gutters at the cast (combat F6)",
     "id": "tunlan_a1_hound",
     "duration": 0.8,
     "teamTint": true,
@@ -59452,7 +59452,7 @@
         "at": "origin",
         "radius": 0.6,
         "life": 0.06,
-        "color": "#EAD7AE",
+        "color": "secondary",
         "intensity": 2.6,
         "offset": [
           0.3,
@@ -59498,7 +59498,7 @@
         "gravity": 0.6,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "#F4EFE2",
+        "rim": "secondary",
         "rimAlpha": 0.6,
         "rotDeg": [
           0,
@@ -59540,9 +59540,9 @@
           1
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 12,
-        "rimEmissive": 2.0,
+        "rimEmissive": 2.4,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59584,9 +59584,9 @@
           1
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 5,
-        "rimEmissive": 2.0,
+        "rimEmissive": 2.4,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59632,9 +59632,9 @@
           1
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.4,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59680,9 +59680,9 @@
           1
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.4,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59728,9 +59728,9 @@
           1
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.4,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59776,9 +59776,9 @@
           1
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.4,
         "noise": 0.7,
         "noiseScale": 2.2,
         "scroll": [
@@ -59824,7 +59824,7 @@
           1
         ],
         "emissive": 0,
-        "rim": "#F4EFE2",
+        "rim": "secondary",
         "rimPow": 4.5,
         "rimEmissive": 1.2,
         "noise": 0.7,
@@ -59872,7 +59872,7 @@
           1
         ],
         "emissive": 0,
-        "rim": "#F4EFE2",
+        "rim": "secondary",
         "rimPow": 4.5,
         "rimEmissive": 1.2,
         "noise": 0.7,
@@ -59920,7 +59920,7 @@
           1
         ],
         "emissive": 0,
-        "rim": "#F4EFE2",
+        "rim": "secondary",
         "rimPow": 4.5,
         "rimEmissive": 1.2,
         "noise": 0.7,
@@ -59968,7 +59968,7 @@
           1
         ],
         "emissive": 0,
-        "rim": "#F4EFE2",
+        "rim": "secondary",
         "rimPow": 4.5,
         "rimEmissive": 1.2,
         "noise": 0.7,
@@ -60081,7 +60081,7 @@
         "drag": 2.5,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "#F4EFE2",
+        "rim": "secondary",
         "rimAlpha": 0.55,
         "rotDeg": [
           0,
@@ -60142,17 +60142,18 @@
           0.7,
           0
         ],
-        "emissive": 2.2,
+        "emissive": 2.6,
         "drag": 3,
         "texture": "streak",
         "stretch": 0.05,
         "blend": "add",
-        "secondary": true
+        "secondary": true,
+        "count": 28
       }
     ]
   },
   {
-    "$comment": "T2 · shade · Tunlan a1 wind-up (tunlan_hound_shadow, 0.3 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Tunlan a1 wind-up (tunlan_hound_shadow, 0.3 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "tunlan_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -60399,7 +60400,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -60515,7 +60516,7 @@
     ]
   },
   {
-    "$comment": "T2 · Shade · Hand Shadow: five ink fingers with team rims rise open round the target, then close in tight as the palm's shadow spreads under it; a team ring closes, ink drops spray at the grip",
+    "$comment": "T2 · Shade · Hand Shadow: five ink fingers with violet signature rims rise open round the target, then close in tight as the palm's shadow spreads under it (a team keyline on its edge); a signature ring closes, ink drops spray at the grip (combat F6)",
     "id": "tunlan_a2_grip",
     "duration": 0.95,
     "teamTint": true,
@@ -60574,9 +60575,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -60640,9 +60641,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -60706,9 +60707,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -60772,9 +60773,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -60838,9 +60839,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -60904,9 +60905,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -60971,9 +60972,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -61038,9 +61039,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -61105,9 +61106,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -61172,9 +61173,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
-        "rimEmissive": 1.8,
+        "rimEmissive": 2.2,
         "noise": 0.55,
         "noiseScale": 2.2,
         "scroll": [
@@ -61250,7 +61251,7 @@
           0.2
         ],
         "life": 0.32,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.3,
           1,
@@ -61340,7 +61341,7 @@
         "drag": 2.5,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "team",
+        "rim": "secondary",
         "rimAlpha": 0.5,
         "rotDeg": [
           0,
@@ -61391,7 +61392,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Tunlan a2 wind-up (tunlan_hand_shadow, 0.25 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Tunlan a2 wind-up (tunlan_hand_shadow, 0.25 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "tunlan_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -61638,7 +61639,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -62018,7 +62019,7 @@
     ]
   },
   {
-    "$comment": "T2 · shade · Tunlan a3 wind-up (tunlan_lamp_flare, 0.15 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T2 · shade · Tunlan a3 wind-up (tunlan_lamp_flare, 0.15 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "tunlan_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -62265,7 +62266,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -64009,7 +64010,7 @@
     ]
   },
   {
-    "$comment": "T4 · shade · Tunlan ult wind-up (tunlan_shadow_play, 0.3 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · shade · Tunlan ult wind-up (tunlan_shadow_play, 0.3 s, fitted): the puppet motif gathers at hand_r in Tunlan's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "tunlan_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -64256,7 +64257,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -64412,7 +64413,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · Hurl: a crack of air at her hand, a long bone dart with a glass leaf head in a team glow, a hard team streak and wind lines, rings of torn air shed along the throw",
+    "$comment": "T2 · Lumen · Hurl: a crack of air at her hand, a long bone dart with a glass leaf head in a team glow, a hard team streak and wind lines, rings of torn air shed along the throw (combat F6): the glass leaf and its trail rings are her pale green; the hand crack and the dart rim keep the team",
     "id": "ulkro_a1_hurl",
     "duration": 0.6,
     "teamTint": true,
@@ -64454,7 +64455,7 @@
         ],
         "life": 0.2,
         "color": [
-          "#BFD3E6",
+          "#D6F2CC",
           "team"
         ],
         "alpha": [
@@ -64514,8 +64515,8 @@
         ],
         "life": 0.5,
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
+          "#D6F2CC",
+          "#D6F2CC",
           "signature"
         ],
         "alpha": 1,
@@ -64562,7 +64563,7 @@
         "at": "path",
         "color": [
           "signature",
-          "#BFD3E6"
+          "#D6F2CC"
         ],
         "width": [
           0.0,
@@ -64598,7 +64599,7 @@
           0.08
         ],
         "color": [
-          "#C9D4DC",
+          "#D6F2CC",
           "signature"
         ],
         "alpha": [
@@ -64632,8 +64633,8 @@
         ],
         "life": 0.22,
         "color": [
-          "#C9D4DC",
-          "team"
+          "#D6F2CC",
+          "signature"
         ],
         "alpha": [
           0.8,
@@ -64664,8 +64665,8 @@
         ],
         "life": 0.22,
         "color": [
-          "#C9D4DC",
-          "team"
+          "#D6F2CC",
+          "signature"
         ],
         "alpha": [
           0.8,
@@ -64696,8 +64697,8 @@
         ],
         "life": 0.22,
         "color": [
-          "#C9D4DC",
-          "team"
+          "#D6F2CC",
+          "signature"
         ],
         "alpha": [
           0.8,
@@ -64728,8 +64729,8 @@
         ],
         "life": 0.22,
         "color": [
-          "#C9D4DC",
-          "team"
+          "#D6F2CC",
+          "signature"
         ],
         "alpha": [
           0.8,
@@ -64743,7 +64744,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ulkro a1 wind-up (ulkro_hurl, 0.3 s, fitted): the dart motif gathers at weapon in Ulkro's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ulkro a1 wind-up (ulkro_hurl, 0.3 s, fitted): the dart motif gathers at weapon in Ulkro's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ulkro_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -64980,7 +64981,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -65782,7 +65783,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Ulkro a3 wind-up (ulkro_hamstring_dart, 0.2 s, fitted): the dart motif gathers at weapon in Ulkro's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Ulkro a3 wind-up (ulkro_hamstring_dart, 0.2 s, fitted): the dart motif gathers at weapon in Ulkro's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ulkro_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -66019,7 +66020,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -67104,7 +67105,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Ulkro ult wind-up (ulkro_long_run, 0.2 s, fitted): the dart motif gathers at weapon in Ulkro's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Ulkro ult wind-up (ulkro_long_run, 0.2 s, fitted): the dart motif gathers at weapon in Ulkro's signature, a signature ring at the feet with a closing team edge; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "ulkro_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -67341,7 +67342,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -67843,7 +67844,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Vashil a1 wind-up (vashil_peal, 0.2 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Vashil a1 wind-up (vashil_peal, 0.2 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "vashil_a1_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -68071,7 +68072,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -68377,7 +68378,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Vashil a2 wind-up (vashil_glass_chime, 0.2 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Vashil a2 wind-up (vashil_glass_chime, 0.2 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "vashil_a2_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -68605,7 +68606,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -69043,7 +69044,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Vashil a3 wind-up (vashil_ring_out, 0.2 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Vashil a3 wind-up (vashil_ring_out, 0.2 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "vashil_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -69271,7 +69272,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0
@@ -70303,7 +70304,7 @@
     ]
   },
   {
-    "$comment": "T4 · lumen · Vashil ult wind-up (vashil_morning_toll, 0.3 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T4 · lumen · Vashil ult wind-up (vashil_morning_toll, 0.3 s, fitted): the bell motif gathers at weapon in Vashil's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)",
     "id": "vashil_ult_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -70531,7 +70532,7 @@
           0.04
         ],
         "life": 0.16,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0

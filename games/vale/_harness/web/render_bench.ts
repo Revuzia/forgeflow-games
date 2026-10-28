@@ -15,6 +15,8 @@
 //             path into a match (perf PERF-M2: perf_1080 --prod's dynres step); __VALE_BENCH__.menuScale is the render
 //             scale the menu left
 //
+// URL: mode, q (tier), t (fast-forward s), seed, you (seat 0's fighter), picks (comma list: a fighter per seat), dev, hud,
+//   manual, dyn, crowd, cb, menu, fighter, menufirst
 // window.__VALE_BENCH__: { ready, stats(), timing(), profile(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
 //   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station), rebuild() }
 //   rebuild()  a NEW host for the identical match (same setup and seed, fast-forwarded to the same `t`, so the same sim
@@ -42,8 +44,10 @@ function buildSetup(catalog: CatalogT, modeArg: string | null, seed: number): Ma
   const ffa = mode.rules.end.kind === 'last_standing_or_score' || mode.pick === 'ffa_pick';
   const fighters = catalog.fighters.map((f) => f.id);
   const seats: SeatSetup[] = [];
+  // picks=a,b,,c: a fighter per seat in order (an empty or unknown entry keeps that seat's default; combat F6 hue probe)
+  const picks = (qs.get('picks') ?? '').split(',');
   for (let i = 0; i < n; i++) {
-    const pinned = i === 0 ? qs.get('you') : null;
+    const pinned = i === 0 ? qs.get('you') ?? picks[0] : picks[i] || null;
     const fighter = pinned && fighters.includes(pinned) ? pinned : fighters[(i * 7 + 3) % fighters.length];
     const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
     const team = ffa ? i : Math.floor(i / mode.perTeam);
