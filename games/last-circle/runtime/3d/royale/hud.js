@@ -3152,6 +3152,7 @@ export function showHUD(W) {
 
   R._hudCache = {};
   R.dmgLog = [];            // LC-81: the damage-taken log belongs to this match
+  R.knockCause = null;      // (OD-8) the knock causes too (actor ids repeat across matches)
   // C-MODE / C-DBNO / OD-9: teammates (none in solo: nothing below is built), LC-45 hints + the practice guide
   R._mates = null; R._matesFor = null; R._revive = null; R.bleedRow = null; R._bleedK = ""; R._inStorm = false;
   W._supplyMark = null; W._supplyMarks = [];   // LC-28: a new match starts with no crate marks (match 1's last one used to stay on match 2's map)
@@ -4725,6 +4726,9 @@ function wireEvents(W) {
     L2.push({ t: W.t, src: "storm", w: "storm", dmg: +dmg, head: false });
     if (L2.length > 96) L2.splice(0, L2.length - 96);
   });
+  // (release blockers, OD-8) the cause of a knock, per actor: a fall-knocked player who bleeds out with nobody to credit died of the FALL
+  W.events.on("actorDowned", (v, attackerId, weaponId) => { if (v) (R.knockCause || (R.knockCause = new Map())).set(v.id, weaponId || null); });
+  W.events.on("actorRevived", (v) => { if (v && R.knockCause) R.knockCause.delete(v.id); });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     // The killing blow looked identical to chipping someone for 13 — the same
     // white marker. Kill style = red ticks + ring, held, and LATCHED so the
@@ -4737,7 +4741,8 @@ function wireEvents(W) {
     }
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
-    feedRow(killer ? killer.name : null, victim.name, weaponId, victim === W.player || killer === W.player);
+    feedRow(killer ? killer.name : null, victim.name, weaponId, victim === W.player || killer === W.player, deathCause(victim, killer, weaponId) === "fall");
+    if (R.knockCause) R.knockCause.delete(victim.id);
     // YOUR elimination gets a banner + streak escalation (kills used to land silently)
     if (killer === W.player && victim !== W.player) {
       // Bank the elimination's XP NOW. The kills/damage/placement/victory/time
@@ -4888,6 +4893,7 @@ function mkFeedRow() {
 /** killer [silhouette] victim - or "killer > victim . Weapon name" until / unless
  *  the silhouette exists. Written on row reuse and when a silhouette finishes loading. */
 function feedMode(el) {
+  if (el._fell) { el._w.style.display = "none"; el._x.textContent = ""; el._t.textContent = "fell"; return; }      // "<name> fell" (OD-8)
   const u = el._wid ? silFor(_tW, el._wid) : null;
   if (u) {
     if (el._w.src !== u) el._w.src = u;
@@ -4896,19 +4902,32 @@ function feedMode(el) {
     el._w.style.display = "none"; el._x.textContent = "›"; el._t.textContent = el._wn ? "·  " + el._wn : "";
   }
 }
-function feedRow(killerName, victimName, weaponId, mine) {
+function feedRow(killerName, victimName, weaponId, mine, fell) {
   if (!R.feed) return;
   const kids = R.feed.children;
   const el = kids.length < FEED_N ? mkFeedRow() : kids[0];
-  el._k.textContent = killerName || "the Storm";
+  // (release blockers, OD-8) a death nobody is credited with is the storm's - unless it was a FALL: "<name> fell", the victim alone
+  el._fell = !!fell;
+  el._k.textContent = fell ? "" : (killerName || "the Storm");
+  el._k.style.display = fell ? "none" : "";
+  el._x.style.display = fell ? "none" : "";
   el._v.textContent = victimName;
-  el._wid = killerName && weaponId ? weaponId : null;     // the storm has no silhouette
+  el._wid = !fell && killerName && weaponId ? weaponId : null;     // the storm (and a fall) has no silhouette
   el._wn = el._wid ? K.weaponName(el._wid) : "";
   el.className = mine ? "lc-fr me" : "lc-fr";
   feedMode(el);
   if (el.style.display === "none") el.style.display = "";
   el._exp = performance.now() + FEED_MS;
   if (el !== R.feed.lastChild) R.feed.appendChild(el);
+}
+/** (release blockers, OD-8) What ended a life nobody is credited with: "fall" when the killing blow was a fall (player.js kills with the
+ *  weapon id "fall"), or when a fall-knocked player bled out; else "storm" - the card and the feed read every killer-less death as the
+ *  storm, so a fall death said THE STORM GOT YOU. A credited death returns null (the killer is named, as before). */
+function deathCause(victim, killer, weaponId) {
+  if (killer) return null;
+  if (weaponId === "fall") return "fall";
+  if (weaponId === "bleed" && victim && R.knockCause && R.knockCause.get(victim.id) === "fall") return "fall";
+  return "storm";
 }
 function expireFeed(now) {
   if (!R.feed) return;
@@ -5254,7 +5273,7 @@ function showDeath(W, killerId, weaponId) {
     const mine = hit && hit.attackerId === killerId;
     if (mine && hit.isHead) h("span", null, "HEADSHOT", p1).className = "hs";
     if (mine && hit.dist != null) h("span", null, hit.dist + " m", p1);
-  } else h("span", null, "THE STORM GOT YOU", p1).className = "lab";
+  } else h("span", null, deathCause(W.player, killer, weaponId) === "fall" ? "YOU FELL" : "THE STORM GOT YOU", p1).className = "lab";      // OD-8
   if (killer) {
     // how close you came - the single most-wanted number on a death screen
     const dealt = Math.round((killer.dmgFrom && killer.dmgFrom[W.player.id]) || 0);
