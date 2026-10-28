@@ -195,8 +195,17 @@ function wdefN(id) {
   }
   return r;
 }
+// (release blockers) a consumable's use time through one Map (the consumable defs have a shape each: coverStepQ's K.CONSUMABLES[cid].useS
+// read went polymorphic and threw the optimized function away when a bot first used a new kind - a 'wrong map' deopt after the landing)
+let _useS = new Map();
+function useSOf(id) {
+  let v = _useS.get(id);
+  if (v === undefined && !_useS.has(id)) { v = K.CONSUMABLES[id].useS; _useS.set(id, v); }
+  return v;
+}
 export function init(W) {
   K = W.SIM;
+  _useS = new Map();
   WN = Object.create(null);           // (release blockers) this sim's weapon table, normalized on first use
   loadPace(W);
   brains.length = 0;
@@ -1703,6 +1712,31 @@ function act(W, b, dt) {
   // downhill onto lower ground (p23_fall: a 10 m lift cost 53.9 hp, the human's curve says 41.4)
   if (LETHAL_H && !a.onGround && !a.gliding && !a.swimming && a.vel.y < -9) { inp.mx = 0; inp.mz = 0; inp.sprint = false; }
 
+  // (release blockers) the per-frame bookkeeping (stuck / pin / solid / furniture / progress / hard breaker) lives in actTail: act() itself
+  // deoptimizes on code paths first reached seconds after the landing (a state's first frame, the first suppression reflex) and ran
+  // unoptimized - every number of all this bookkeeping a heap box, for every bot - until it was optimized again (tierprof's first window).
+  // Same statements, same order: actTail runs exactly where they stood.
+  actTail(W, b, dt);
+
+  // suppression reflex: shot recently by someone unseen → sprint to lateral
+  // cover instead of standing there soaking damage
+  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
+    const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
+    if (att) {
+      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
+      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
+      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
+      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
+      bb.coverReflexUntil = W.t + 1.5;
+    }
+  }
+}
+
+/** (release blockers) act()'s per-frame bookkeeping, moved out unchanged (see the call in act). _v is act's _wasStuckPos (this frame's
+ *  start position, copied before the state ran). */
+function actTail(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const _wasStuckPos = _v;
   // now inp.mx / inp.mz carry this frame's intent: barely moved while TRYING to
   // move => stuck
   const sqx = _wasStuckPos.x - a.pos.x, sqy = _wasStuckPos.y - a.pos.y, sqz = _wasStuckPos.z - a.pos.z;     // Vector3.distanceToSquared, inline (a call returns a boxed double)
@@ -1778,21 +1812,7 @@ function act(W, b, dt) {
       bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; bb.anchorT = W.t;
     }
   } else if (bb.anchor) { bb.anchorT = W.t; bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; }
-
-  // suppression reflex: shot recently by someone unseen → sprint to lateral
-  // cover instead of standing there soaking damage
-  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
-    const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
-    if (att) {
-      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
-      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
-      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
-      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
-      bb.coverReflexUntil = W.t + 1.5;
-    }
-  }
 }
-
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
 const _solidCols = [];
@@ -5179,7 +5199,7 @@ function coverStepQ(W, b, dt, tp, seen) {
     // (P23, LC-20) ...and to put a cell in: a shield item that still adds, no hit for 0.8 s -> pop it behind the wall and hold the wall until it is in
     else if (!a.healing && !bb.nadeS && a.shield < 100 && W.t - (a.lastDamageT || -99) > 0.8 && !(bb.healBlockedUntil > W.t)) {
       const cid = coverShieldId(a);
-      if (cid && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + K.CONSUMABLES[cid].useS + 0.25);
+      if (cid && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + useSOf(cid) + 0.25);
     }
     return true;
   }
