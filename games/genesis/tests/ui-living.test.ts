@@ -5,11 +5,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { regardBand, meterWord, regardSentence, openPrayers, answerCommand, foretellSays, FORETELL, OMEN_NAMES, prophetState } from '../src/ui/living.ts';
-import { PowerBook, wrathWord, castValues, autoWords, fmtParam, WRATH_DEFAULT } from '../src/ui/powers.ts';
+import { PowerBook, wrathWord, castValues, autoWords, fmtParam, WRATH_DEFAULT, oreRows } from '../src/ui/powers.ts';
 import { ACTIONS, Keybinds } from '../src/ui/keybinds.ts';
 import { wrathWords } from '../src/sim/god/wrath.ts';
 import type { WorldView } from '../src/client/worldview.ts';
 import { town } from './helpers/god.ts';
+import { setOverlayOres, overlayOres } from '../src/ui/overlays.ts';
 
 test('living words: regard bands at ±0.33, the four values in words, a sentence for the card', () => {
   assert.equal(regardBand(-0.5), 'feared');
@@ -84,4 +85,37 @@ test('the god\'s keys: a window, a sign, an answer — bound and free of conflic
   const c = kb.conflicts();
   const ours = c.filter((x) => x.actions.some((a) => a === 'ui.god' || a === 'ui.signs' || a === 'god.answer'));
   assert.deepEqual(ours, []);
+});
+
+test('H12: an invented material\'s vein crops out in its own colour — the ores query in content order feeds the palette', () => {
+  const { sim, st } = town(20261031);
+  const before = oreRows(sim.query('ores', {}));
+  const r = sim.applyNow({ k: 'content.material', name: 'mithril', settlement: st.id, traits: ['hard', 'light'] });
+  assert.ok(r.ok, r.msg);
+  const c = sim.u.content;
+  const rows = oreRows(sim.query('ores', {}));
+  // one row per deposit kind, in content order: oreType i + 1 (what a vein writes) is row i
+  assert.equal(rows.length, c.ores.list.length);
+  assert.equal(rows.length, before.length + 1, 'the invented deposit kind is added');
+  const i = c.ores.idx('mithril');
+  assert.equal(rows[i].id, 'mithril');
+  assert.match(rows[i].color ?? '', /^#[0-9a-f]{6}$/i, 'the invention has its own colour');
+  assert.equal(rows[i].color, c.ores.find('mithril')!.color);
+  // the base pack's rows keep their place and colour
+  for (let k = 0; k < before.length; k++) assert.deepEqual(rows[k], before[k]);
+  let veins = 0;
+  const p = sim.u.planets[0];
+  for (let k = 0; k < p.count; k++) if (p.f.oreType[k] === i + 1) veins++;
+  assert.ok(veins > 0, 'its vein is laid with oreType = row + 1');
+  // the Ore overlay paints, names and lists it too (not a nameless "ore" left off the map)
+  const base = overlayOres().length;
+  setOverlayOres(sim.query('ores', {}));
+  assert.equal(overlayOres().length, rows.length);
+  assert.ok(overlayOres().length > base);
+  assert.equal(overlayOres()[i].color, rows[i].color);
+  assert.match(overlayOres()[i].name, /mithril/i);
+  setOverlayOres(null);
+  assert.equal(overlayOres().length, rows.length, 'a failed query keeps the list');
+  assert.deepEqual(oreRows(null), []);
+  assert.deepEqual(oreRows([{ id: 7, color: null }]), [{ id: undefined, color: undefined }]);
 });

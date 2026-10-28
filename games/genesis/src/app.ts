@@ -36,7 +36,8 @@ import { customScenarioPack, decodeWorlds, type CustomSpec } from './ui/newworld
 import { SaveStore, readSaveHeader, neededPacks, type LoadOutcome, type SaveRecord, type PackRef } from './ui/saves.ts';
 import { BASE_PACK } from './data/index.ts';
 import type { StarDef, PlanetKindDef } from './sim/content.ts';
-import { PowerBook } from './ui/powers.ts';
+import { PowerBook, oreRows } from './ui/powers.ts';
+import { setOverlayOres } from './ui/overlays.ts';
 import { Keybinds } from './ui/keybinds.ts';
 import { PrefsStore } from './ui/prefs.ts';
 import type { ToastSpec, ToastAction } from './ui/toasts.ts';
@@ -613,7 +614,8 @@ export class App implements UiHost {
     if (Array.isArray(ores)) {
       this.powers.setRegistry('ores', (ores as { id?: unknown }[]).map((o) => String(o.id ?? '')).filter(Boolean));
       // (the outcrops' colours in content order, so a vein of an invented material crops out in its own colour)
-      setOrePalette((ores as { id?: unknown; color?: unknown }[]).map((o) => ({ id: typeof o.id === 'string' ? o.id : undefined, color: typeof o.color === 'string' ? o.color : undefined })));
+      setOrePalette(oreRows(ores));
+      setOverlayOres(ores);
     }
     void plants;
   }
@@ -982,6 +984,9 @@ export class App implements UiHost {
     }
     const r = await this.sim.cmd(c);
     if (c.k !== 'focus') this.freshAfter = performance.now();
+    // (an invention — a material, a plant, or one the god's words made — joins the catalogue at once: its ore in the
+    // vein brush and its own colour on the outcrops it was just laid in, not a minute later)
+    if (r.ok && (c.k.startsWith('content.') || c.k === 'freeform')) void this.loadPowers();
     // (the opening answers an act at once: water poured on the airless rock, before the field shows it)
     if (c.k !== 'focus' && !c.k.startsWith('hand.move')) this.ui?.opening.heard(c, r);
     const ctl = r.control;

@@ -159,6 +159,15 @@ export function intentSigns(c: SignClause): boolean {
     return c.ask(words.length ? `${words.join('; ')}. ("answer the prayers of ${mine[0].name}")` : `${st ? st.name : 'Nobody'} prays for nothing now.`);
   }
   if (!p) return false;
+  // (fix r3 #14) ── "grant Aru's prayer", "answer the prayers of Lune", "hear Aru's plea": prayer.answer (was a law) ──
+  if (/\b(grant|answer|hear|fulfil|fulfill)\b/.test(f) && /\b(prayers?|pleas?)\b/.test(f) && !/\b(not|never|don't|refuse|ignore|deny)\b/.test(f)) {
+    const named = p.people?.settlements.find((s) => s.fallen < 0 && wordAt(f, s.name.toLowerCase()) >= 0);
+    const st = mods.place?.settlement !== undefined ? p.people?.settlement(mods.place.settlement) : named;
+    if (st) {
+      c.add({ k: 'prayer.answer', settlement: st.id }, `answer the prayers of ${st.name}`);
+      return true;
+    }
+  }
   const person = live(c, f, ['agent']);
   // (fix r2 #21) ── the Touch laid on a person or a town: which of its acts ("touch Hesh" was read as "torch") ──
   // (fix r3 #3) only "touch Hesh" / "use the Touch on Aru" with nothing after the name asks: "touch Aru with rain" is the rain
@@ -249,7 +258,8 @@ export function intentSigns(c: SignClause): boolean {
   }
   // ── sacred animals: "make deer sacred in Aru", "the wolves are holy to Lune" ──
   if (/\b(sacred|holy|revered|taboo)\b/.test(f) && !/\b(place|site|ground|spring|grove|mountain|peak|hill)\b/.test(f)) {
-    const animal = animalIn(u, c.s) ?? animalIn(u, f);
+    // (fix r3 #18) "make the fish sacred in Lune": the fish shoal (was a shoal spawned)
+    const animal = animalIn(u, c.s) ?? animalIn(u, f) ?? (/\bfish(es)?\b/.test(f) && u.content.animals.list.some((a) => a.id === 'fish-shoal') ? 'fish-shoal' : null);
     if (animal) {
       if (mods.place?.settlement === undefined) return c.ask(`Sacred to whom? Name a town ("make the ${animal.replace(/-/g, ' ')} sacred in Aru").`);
       c.add({ k: 'settlement.sacred', settlement: mods.place.settlement, animal, planet: p.id }, `sacred ${animal}`);

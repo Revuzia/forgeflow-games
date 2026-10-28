@@ -175,3 +175,34 @@ test('sacred animals: the god culling a town\'s sacred species costs trust and r
   assert.equal(stat(spare.sim, 'sacred.spared'), 1, 'more of the sacred deer');
   assert.ok(spare.dTrust > spareCtl.dTrust + 0.05, `trust rises: ${spare.dTrust.toFixed(3)} vs ${spareCtl.dTrust.toFixed(3)}`);
 });
+
+// (fix r3 #18) the taboo reaches the water: a people never nets, rakes or harpoons the animal it reveres, and where the
+// fish themselves are sacred nobody goes fishing
+test('sacred animals (fix r3 #18): a sacred fish shoal is never netted; a town that reveres the fish does not fish', async () => {
+  const { twoTowns } = await import('./helpers/god.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const { fishWork, fishTask } = await import('../src/sim/people/fishing.ts');
+  const took: Record<string, number> = {};
+  for (const mode of ['control', 'sacred']) {
+    const w = twoTowns();
+    const sim = w.sim;
+    const p = sim.u.planets[0];
+    const ps = p.people!;
+    const lune = ps.settlement(w.lune.id)!;
+    const shoal = ps.herds.find((h) => h.owner < 0 && sim.u.content.animals.list[h.species].id === 'fish-shoal');
+    assert.ok(shoal, 'the fixture has a wild fish shoal');
+    if (mode === 'sacred') must(sim, { k: 'settlement.sacred', settlement: lune.id, animal: 'fish-shoal' });
+    const x = makeCtx(sim.u, p);
+    const s = (ps.members.get(lune.id) ?? []).find((k) => x.A.alive[k])!;
+    const c0 = shoal.count;
+    for (let i = 0; i < 20; i++) {
+      x.A.cell[s] = shoal.cell; x.A.tTarget[s] = shoal.cell;
+      fishWork(x, s, lune, 1, () => true);
+      x.tick += 37;
+    }
+    took[mode] = c0 - shoal.count;
+    if (mode === 'sacred') assert.equal(fishTask(x, s, lune, () => -1), null, 'no fishing trip where the fish are sacred');
+  }
+  assert.ok(took.control > 1, `control: the nets take from the shoal (${took.control})`);
+  assert.equal(took.sacred, 0, 'sacred: the shoal is never taken');
+});

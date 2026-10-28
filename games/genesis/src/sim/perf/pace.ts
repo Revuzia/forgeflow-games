@@ -250,7 +250,17 @@ export function paceWork(x: PCtx, s: number, st: Settlement, t: TaskSpec): TaskS
  */
 export function paceUtilities(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Readonly<Record<string, number>>, night: boolean): void {
   const A = x.A;
-  if (A.trip[s] !== 0 && A.trip[s] <= x.tick) endTrip(x, s);
+  if (A.trip[s] !== 0 && A.trip[s] <= x.tick) {
+    // (fix r3 #7) a camp trip's days are up far from home: the camp is struck, but the water skin and the food last the
+    // walk home (once: camp -1 marks the way home; TRIP_DAYS from setting out left hunters a day and a half from home dry)
+    if (A.camp[s] >= 0) {
+      storePoint(x, st, _h);
+      A.posAt(s, x.tick, _c);
+      const home = distM(x.p, _c, _h) > NEAR_HOME_M ? walkTicks(x, s, _c, _h) : 0;
+      if (home > 0) { A.camp[s] = -1; A.tripTask[s] = 0; A.trip[s] = x.tick + Math.min(x.day, Math.ceil(home * 1.5) + 60); }
+      else endTrip(x, s);
+    } else endTrip(x, s);
+  }
   const camp = A.camp[s] >= 0;
   if (camp) {
     U[C.social] = 0; U[C.pray] = 0; U[C.curious] = 0; U[C.court] = 0; U[C.mourn] = 0; U[C.bury] = 0; U[C.tendFire] = 0; U[C.wander] = 0;
@@ -298,6 +308,8 @@ export function paceSleep(x: PCtx, s: number, st: Settlement, night: boolean, du
     // square after the evening worship and the festival instead of going home — integration, 2026-10-15)
     if (distM(x.p, _a, st.pos) <= st.territory) return null;
   }
+  // (fix r3 #7) never a camp afloat: one caught by the night in the water (no boat) goes on to the shore and home
+  if (A.boat[s] < 0 && x.p.f.water[A.cell[s]] > 0.6) return null;
   return { kind: TASK.camp, goal: null, goalCell: A.cell[s], work: dur, target: -1 };
 }
 

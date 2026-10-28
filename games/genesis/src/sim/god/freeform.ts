@@ -2913,7 +2913,11 @@ function intentSky(c: Clause): boolean {
     const kind2 = w?.id ?? known[firstW] ?? known[singular(firstW)];
     if (kind2) { c.add({ k: mods.place?.everywhere ? 'weather.global' : 'weather.paint', kind: kind2 }, `rain of ${firstW || kind2}`); return true; }
     const onSomeone = cx.live.some((l) => wordAt(after, l.name) >= 0);
-    if (firstW && !onSomeone && !L.stop.has(firstW) && !/^(here|there|hard|heavily|lightly|gently|now|again|today|tonight|everywhere|forever|more|less|down)$/.test(firstW)) {
+    // (fix r3 #14) "cast the rain sigil on Aru": the rain sigil is the Water miracle, never a weather called "Rain of sigil"
+    if (/^(sigils?|glyphs?|miracle)$/.test(firstW)) { c.add({ k: 'miracle.water' }, 'the rain sigil'); return true; }
+    // (fix r3 #14) a new rain needs a noun: "rain in 2 days", "rain for a week", "rain at dawn" are rain ("Rain of in 2")
+    const notNoun = /^(\d.*|in|within|after|before|by|until|till|for|at|to|into|upon|across|around|near|beside|soon|tomorrow|tonight|today|once|twice|all|until|while|when|where|as|so|if|but|and|or|then|later|is|are|was|be|will|shall|must|should|can|could|would|may|might)$/;
+    if (firstW && !onSomeone && !notNoun.test(firstW) && !L.stop.has(firstW) && !/^(here|there|hard|heavily|lightly|gently|now|again|today|tonight|everywhere|forever|more|less|down)$/.test(firstW)) {
       // a rain the world never had: of animals (they land alive), or of anything else (tinted)
       const noun = after.split(' ').filter((x) => !L.stop.has(x)).slice(0, 2).join(' ');
       const sing = singular(noun.split(' ').pop() ?? noun);
@@ -3048,6 +3052,9 @@ function plausibleNew(cx: PCtx2, noun: string): boolean {
   // a kind, not a name: "a new crop", "new animal", "ore" never become a thing called "New crop" (freeform-content.ts
   // intentNewKind answers them with a real one or asks for the name)
   if ((words.length === 1 || (words.length === 2 && /^(new|another|other)$/.test(words[0]))) && /^(crop|grain|vegetable|plant|tree|fruit|bush|shrub|herb|flower|grass|animal|beast|creature|species|ore|metal|mineral|stone|rock|material|substance|tool|weapon|thing|item|invention)(s|es)?$/.test(words[words.length - 1])) return false;
+  // (fix r3 #2) nor "new crop resists", "new animal hunt", "new tree fires", "vein copper": a miss asks, it never registers junk
+  if (words.length > 1 && /^(new|another|other)$/.test(words[0]) && /^(crop|grain|vegetable|plant|fruit|tree|bush|shrub|herb|flower|grass|animal|beast|creature|species|ore|metal|mineral|stone|rock|material|substance|tool|weapon|thing|item|invention)(s|es)?$/.test(words[1])) return false;
+  if (/^(veins?|seams?|lodes?|deposits?)$/.test(words[0])) return false;
   const verbs = new Set(Object.values(cx.L.verbs).flat().filter((v) => !v.includes(' ')));
   const head = words[words.length - 1];
   if (verbs.has(words[0]) || verbs.has(head)) return false;

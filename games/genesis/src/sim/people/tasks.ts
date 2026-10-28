@@ -139,7 +139,10 @@ function planRoute(x: PCtx, s: number, from: number, to: number): void {
     if (A.boat[s] >= 0) opts.swim = Math.max(opts.swim, boatSwim(x, A.boat[s]));
     // short hops need little search; long journeys a bit more (bounded either way)
     opts.maxExpand = 1500;
-    findPath(x.p, from, to, opts, _path);
+    // (fix r3 #7) a hunter of a people that does not swim keeps to the land where a way on foot exists (the search with
+    // swimming took the short way over open sea: hunters swam kilometres, camped afloat and died of thirst)
+    const dry = A.task[s] === TASK.hunt && A.boat[s] < 0 && opts.swim < 1 && !opts.fly && findPath(x.p, from, to, { ...opts, swim: 0 }, _path);
+    if (!dry) findPath(x.p, from, to, opts, _path);
   }
   if (from === to) _path.length = 0;
   const n = Math.min(PATH_MAX, _path.length);

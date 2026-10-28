@@ -181,6 +181,8 @@ function intentMaterial(c: ContentClause): boolean {
     // named for a verb phrase ("Smelt iron is a new metal")
     if (/^(teach|show|reveal)$/.test(giveV[1]) && /^(them |the people |us )?(how )?to [a-z]/.test(rest)) return false;
     const words = rest.replace(/\b(\d+|a|an|some|the|of|to|and|lots|many|few|several|dozen|hundred)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    // (fix r3 #2, #14) never a material named for a kind or a vein: "new crop resists", "vein copper" (a miss falls through)
+    if (/^(new|another|other) [a-z]+/.test(words) || /^(veins?|seams?|lodes?|deposits?)\b/.test(words)) return false;
     if (words && !u.content.items.has(slug(words)) && !u.content.recipes.has(slug(words)) && !u.content.plants.has(slug(words)) && materialLike(u, words) && animalWord(u.content, words).kind === 'none') {
       const id = slug(words);
       cx.made.add(id);
@@ -200,9 +202,14 @@ function intentSeedOre(c: ContentClause): boolean {
   // (the whole clause: "in the hills" may have been lifted out of the core as its place)
   const s = c.full;
   // "seed a vein of copper near Aru", "lay a seam of coal", "put gold in the hills", "bury iron ore under the mountains"
-  const vein = s.match(/\b(?:seed|lay|put|place|make|create|hide|bury|plant|scatter|add|give)\b (?:a |an |some |rich |great |small |big |new )*(?:vein|veins|seam|seams|lode|lodes|deposit|deposits)(?: of)? ([a-z -]+?)(?=\s+(?:in|into|under|beneath|near|by|at|on|around)\b|$)/);
+  // (fix r3 #14) a town or person may stand between the verb and the vein: "give Aru a vein of copper" (was a new metal
+  // "Vein copper"); the ore may come before the vein: "add an iron deposit near Aru", "seed an iron vein near Aru" (was a
+  // gift of 1 iron, or not understood); "plant iron ore near Aru" (was teosinte)
+  const vein = s.match(/\b(?:seed|lay|put|place|make|create|hide|bury|plant|scatter|add|give|grant|open)\b(?: (?!a\b|an\b|some\b)[a-z']+){0,2}? (?:a |an |some |rich |great |small |big |new )*(?:vein|veins|seam|seams|lode|lodes|deposit|deposits)(?: of)? ([a-z -]+?)(?=\s+(?:in|into|under|beneath|near|by|at|on|around|beside|for|to)\b|$)/);
+  const pre = vein ? null : s.match(/\b(?:seed|lay|put|place|make|create|hide|bury|plant|scatter|add|give|grant|open)\b(?: (?!a\b|an\b|some\b)[a-z']+){0,2}? (?:a |an |some |rich |great |small |big |new )*([a-z]+(?: ore)?) (?:vein|veins|seam|seams|lode|lodes|deposit|deposits)\b/);
+  const oreNear = vein || pre ? null : s.match(/\b(?:seed|lay|put|place|hide|bury|plant|scatter|sow|add)\b (?:some |more |rich )?([a-z]+) ores?\b(?= (?:near|by|beside|around|at|under|beneath|in|into|outside)\b)/);
   const into = s.match(/\b(?:put|place|hide|bury|seed|scatter|add|sow|lay)\b (?:some |more |a lot of |lots of )?([a-z -]+?) (?:in|into|under|beneath|inside) (?:the )?(hills|hill|mountains|mountain|peaks|ground|earth|rock|rocks|soil|land|cliffs)\b/);
-  const word = (vein?.[1] ?? into?.[1] ?? '').trim();
+  const word = (vein?.[1] ?? pre?.[1] ?? oreNear?.[1] ?? into?.[1] ?? '').trim();
   if (!word) return false;
   const country = into?.[2] ?? (s.match(/\b(?:in|into|under|beneath) (?:the )?(hills|hill|mountains|mountain|peaks|cliffs)\b/)?.[1] ?? '');
   // the ore: a known one, the material made earlier in the sentence ("it"), or a new one
@@ -442,7 +449,9 @@ function intentNewKind(c: ContentClause): boolean {
   if (!m || !p || /\b(called|named|known as)\b/.test(s)) return false;
   if (!/\b(introduce|invent|create|make|add|give|bring|grow|devise|conjure|send|plant|sow|discover|teach|show|release|breed)\b/.test(s)) return false;
   // (fix r2 #1: a harm, the weather or a hunt in the clause is the act — "send a storm to destroy a new crop" is a storm)
-  if (HARM_ACT.test(s)) return false;
+  // (fix r3 #2) only a harm word BEFORE "a new X" is the act: after it, the words describe the thing asked for ("a new crop
+  // that resists drought", "a new animal to hunt", "a new tree for fires" — were junk content, a cold snap, a storm)
+  if (HARM_ACT.test(s.slice(0, m.index))) return false;
   const w = m[1];
   if (/^(crop|grain|vegetable)/.test(w)) {
     if (plantWord(u, s)) return false; // "introduce potatoes, a new crop, to Aru": intentPlants

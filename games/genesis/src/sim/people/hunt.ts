@@ -158,6 +158,36 @@ export function bestGame(x: PCtx, st: Settlement, from: ArrayLike<number>, n: nu
   return best;
 }
 
+/**
+ * (fix r3 #7) is the herd's cell reached on foot from `from`, round the water (A* with no swimming, bounded as the
+ * tracking leg's search is)? Game seen across a strait was hunted by swimming kilometres of open sea.
+ */
+export function onFoot(x: PCtx, st: Settlement, from: ArrayLike<number>, cell: number): boolean {
+  const opts = pathOptsFor(x, st.species);
+  if (opts.fly || opts.swim >= 1) return true; // (swimmers and fliers cross as they please)
+  const here = x.p.cellAt(from);
+  if (here === cell) return true;
+  // rivers are forded (the species' swim), the sea and deep water are not: the search shuns them, and a way that still
+  // needs them is no way on foot
+  const W = x.p.f.water, O = x.p.s.ocean;
+  opts.extra = (c) => (W[c] > DEEP_M || (O[c] && W[c] > 0.6) ? 40 : 1);
+  opts.maxExpand = 2500;
+  if (!findPath(x.p, here, cell, opts, _route) || !_route.length) return false;
+  for (const c of _route) if (W[c] > DEEP_M || (O[c] && W[c] > 0.6)) return false;
+  return true;
+}
+
+/** (fix r3 #7) bestGame for a party setting out: the best game they can WALK to (the next best when water lies between) */
+function gameOnFoot(x: PCtx, st: Settlement, from: ArrayLike<number>, n: number, bold: boolean, skip?: readonly number[]): Herd | null {
+  const sk = skip ? skip.slice() : [];
+  for (let i = 0; i < 3; i++) {
+    const g = bestGame(x, st, from, n, bold, sk);
+    if (!g || onFoot(x, st, from, g.cell)) return g;
+    sk.push(g.id);
+  }
+  return null;
+}
+
 function carcassKg(a: AnimalDef): number {
   let kg = 0;
   for (const p of carcass(a)) kg += p.qty * itemKg(p.item);
@@ -289,7 +319,7 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     // one party, after the pack (when it is game for them: dangerous beasts want four with spears or bows) or the best game
     const party = hunters.slice(0, PARTY_MAX);
     const bold = party.length >= 4 && armed(x, st);
-    const g = raid !== null ? (isGame(x, st, raid, bold, true) ? raid : null) : bestGame(x, st, st.pos, party.length, bold);
+    const g = raid !== null ? (isGame(x, st, raid, bold, true) ? raid : null) : gameOnFoot(x, st, st.pos, party.length, bold);
     if (!g) return;
     // they are hunters until the party is home (assignRoles keeps a party out hunting, then gives the roles out again)
     for (const m of party) A.role[m] = ROLE.hunter;
@@ -307,8 +337,8 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     const n = !out.length && PARTIES_MAX > 1 && free.length >= 2 * PARTY_MIN + 1 ? Math.ceil(free.length / 2) : all;
     const skip = out.map((q) => q.herd);
     let party = free.slice(0, n);
-    let g = bestGame(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip);
-    if (!g && n < all) { party = free.slice(0, all); g = bestGame(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip); }
+    let g = gameOnFoot(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip);
+    if (!g && n < all) { party = free.slice(0, all); g = gameOnFoot(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip); }
     if (!g) return;
     const np: HuntParty = { id: x.tick + out.length, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
     if (!L.party) L.party = np; else (L.more ??= []).push(np);
@@ -364,7 +394,7 @@ function keepParty(x: PCtx, st: Settlement, p: HuntParty): boolean {
     const lead = A.slotOf(p.members[0]);
     if (lead >= 0) A.posAt(lead, x.tick, _p); else { _p[0] = st.pos[0]; _p[1] = st.pos[1]; _p[2] = st.pos[2]; }
     const others = parties(st).filter((q) => q !== p).map((q) => q.herd);
-    const g = bestGame(x, st, _p, p.members.length, p.members.length >= 4 && armed(x, st), others);
+    const g = gameOnFoot(x, st, _p, p.members.length, p.members.length >= 4 && armed(x, st), others);
     if (!g || p.kills > 0) return false;
     p.herd = g.id; p.species = g.species;
   }
@@ -402,6 +432,27 @@ export function meatDays(x: PCtx, st: Settlement): number {
     for (const it of meats) { const q = A.carried(m, it); if (q > 0) d += q * ed[it]; }
   }
   return d;
+}
+
+/** (fix r3 #7) water deeper than this (m), or the sea past the shallows, is not crossed on a hunt by a people that does not
+ * swim (a river is forded) */
+const DEEP_M = 3;
+
+/** (fix r3 #7) does the straight way from a to b cross the sea or deep water (cells sampled ~0.75 edge apart) */
+const _w = [0, 0, 0];
+export function wetBetween(x: PCtx, a: ArrayLike<number>, b: ArrayLike<number>): boolean {
+  const d = distM(x.p, a, b);
+  const n = Math.min(120, Math.ceil(d / (0.75 * x.p.edgeM)));
+  const W = x.p.f.water, O = x.p.s.ocean;
+  for (let i = 1; i < n; i++) {
+    const f = i / n;
+    _w[0] = a[0] + (b[0] - a[0]) * f; _w[1] = a[1] + (b[1] - a[1]) * f; _w[2] = a[2] + (b[2] - a[2]) * f;
+    const l = Math.hypot(_w[0], _w[1], _w[2]) || 1;
+    _w[0] /= l; _w[1] /= l; _w[2] /= l;
+    const c = x.p.cellAt(_w);
+    if (W[c] > DEEP_M || (O[c] && W[c] > 0.6)) return true;
+  }
+  return false;
 }
 
 function daylightAt(x: PCtx, st: Settlement): number {
@@ -467,6 +518,8 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
     // (fix r2 #2) a leg that goes nowhere (the dry cell beside a wet leg's end was the hunter's own, and they stand on
     // its spot) is no leg: a coastal party re-planned one every five minutes at the shore for half a day
     if (distM(x.p, _p, goal) < 10) continue;
+    // (fix r3 #7) nor a leg whose straight way crosses the sea or deep water: the way round it on foot (A* below) or none
+    if (x.info[A.species[s]].def.swim < 1 && !x.info[A.species[s]].def.fly && wetBetween(x, _p, goal)) continue;
     if (camping(x, s)) A.camp[s] = c;
     return { kind: TASK.hunt, goal, goalCell: c, work: 5, target: h.id, data2: 1 };
   }

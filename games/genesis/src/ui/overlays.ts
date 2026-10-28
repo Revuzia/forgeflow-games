@@ -119,7 +119,29 @@ function ramp(stops: string[]): (t: number) => RGB {
 }
 
 const BIOMES = (BASE_PACK.biomes ?? []) as unknown as { id: string; name: string; color: string }[];
-const ORES = (BASE_PACK.ores ?? []) as unknown as { id: string; name: string; color: string }[];
+const BASE_ORES = (BASE_PACK.ores ?? []) as unknown as { id: string; name: string; color: string }[];
+let ORES = BASE_ORES;
+let oresVersion = 0;
+
+/**
+ * The live deposit kinds — the sim's `ores` query (base pack, mods, then the god's inventions, in content order) — so
+ * the Ore overlay paints, names and lists a vein of an invented material in its own colour (hook H12), not as a
+ * nameless "ore" left off the map. Rows without a usable colour keep the base pack's (or a neutral stone).
+ */
+export function setOverlayOres(rows: unknown): void {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const next = rows.map((o, i) => {
+    const r = (o && typeof o === 'object' ? o : {}) as { id?: unknown; name?: unknown; color?: unknown };
+    const id = typeof r.id === 'string' ? r.id : BASE_ORES[i]?.id ?? `ore-${i + 1}`;
+    const color = typeof r.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(r.color) ? r.color : BASE_ORES[i]?.color ?? '#8a8274';
+    return { id, name: typeof r.name === 'string' && r.name ? r.name : BASE_ORES[i]?.name ?? id, color };
+  });
+  if (next.length === ORES.length && next.every((x, i) => x.id === ORES[i].id && x.name === ORES[i].name && x.color === ORES[i].color)) return;
+  ORES = next;
+  oresVersion++;
+}
+/** the overlay's deposit kinds now (for tests) */
+export function overlayOres(): readonly { id: string; name: string; color: string }[] { return ORES; }
 
 export interface OverlayDeps {
   host: UiHost;
@@ -219,7 +241,7 @@ export class Overlays {
       do map.build(16); while (!map.ready && performance.now() - t0 < budget);
     }
     // recompute when the inputs changed (fields) or, for settlement overlays, at most every 0.8 s
-    const st = `${this.mode}|${this.deps.palette()}|${def.fields.map((f) => host.view.fieldVersionOf(pv, f)).join(',')}|${building ? Math.random() : ''}`;
+    const st = `${this.mode}|${this.deps.palette()}|${def.fields.map((f) => host.view.fieldVersionOf(pv, f)).join(',')}|${def.id === 'ore' ? oresVersion : ''}|${building ? Math.random() : ''}`;
     const now = performance.now();
     const due = def.live ? now - (this.computedAt.get(pv.id) ?? -1e9) > 800 : false;
     if (this.stamp.get(pv.id) !== st || due) {
@@ -429,7 +451,7 @@ export class Overlays {
   private renderLegend(pv: PlanetView | null): void {
     const def = OVERLAYS.find((o) => o.id === this.mode);
     if (!def) return;
-    const key = `${def.id}|${this.deps.palette()}|${pv?.id ?? -1}|${def.id === 'ore' || def.id === 'territory' || def.id === 'era' ? pv?.settlements.length ?? 0 : ''}`;
+    const key = `${def.id}|${this.deps.palette()}|${pv?.id ?? -1}|${def.id === 'ore' || def.id === 'territory' || def.id === 'era' ? pv?.settlements.length ?? 0 : ''}|${def.id === 'ore' ? oresVersion : ''}`;
     if (key === this.legendKey) return;
     this.legendKey = key;
     clear(this.legend);

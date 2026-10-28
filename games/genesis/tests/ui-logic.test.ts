@@ -8,9 +8,10 @@ import { fuzzy, fuzzyAny, highlight } from '../src/ui/fuzzy.ts';
 import { Unistroke, SIGILS, SIGIL_WORDS, type Pt } from '../src/ui/unistroke.ts';
 import { Keybinds, ACTIONS, comboOf, comboLabel } from '../src/ui/keybinds.ts';
 import { PowerBook, toolMode, buildCommand, castValues, missingRequired, entityKey, isSelector, CATEGORIES, categoryLabel, worldPrefill, type Power, type ParamSpec } from '../src/ui/powers.ts';
-import { placeWords, humanize, tollOf, stripYear, fmtDuration, unitOf, latLonText, areaText } from '../src/ui/words.ts';
+import { placeWords, humanize, tollOf, stripYear, fmtDuration, unitOf, latLonText, areaText, masteryWords } from '../src/ui/words.ts';
 import { hasIcon, categoryIcon } from '../src/ui/icons.ts';
 import { town } from './helpers/god.ts';
+import { SKILLS } from '../src/sim/content.ts';
 
 test('fuzzy: exact names first, words in any order, synonyms count, misses are null', () => {
   const names = ['Rain', 'Acid rain', 'Blood rain', 'Rain strength', 'Drain', 'Raise land'];
@@ -217,4 +218,15 @@ test('powers: moving a thing is one pick and one place; a filter enum on a power
   assert.equal(c.id, 7);
   assert.deepEqual(c.to, [0, 1, 0]);
   assert.equal(c.kind, undefined);
+});
+
+test('words: a person card names mastery as agent nouns, never a raw skill id', () => {
+  assert.equal(masteryWords([]), '');
+  assert.equal(masteryWords(['gather']), 'master gatherer');
+  assert.equal(masteryWords(['hunt', 'fish']), 'master hunter and fisher');
+  assert.equal(masteryWords(['farm', 'herd', 'build']), 'master farmer, herder and builder');
+  assert.equal(masteryWords(['hunt', 'basket_weaving']), 'master hunter and master of basket weaving');
+  for (const k of SKILLS) {
+    assert.notEqual(masteryWords([k]), `master of ${k}`, `${k} has an agent noun`);
+  }
 });

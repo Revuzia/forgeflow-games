@@ -30,6 +30,7 @@ import { FOOD_YIELD, foodSessionDone } from '../perf/pace.ts';
 import { FOOD_SESSION } from './decide.ts';
 import { bestBoat } from './missions.ts';
 import { carcass } from './hunt.ts';
+import { sacredAnimal } from './culture.ts';
 
 /** units of fish a cell of a river or lake holds at its carrying capacity per metre of depth (½-4 m counted; more at sea) */
 export const STOCK_PER_CELL = 12, SEA_PER_CELL = 30;
@@ -141,6 +142,8 @@ function shoalNear(x: PCtx, st: Settlement | undefined, c: number): Herd | null 
     if (h.count < 1 || h.owner >= 0) continue;
     const a = animalDef(x, h.species);
     if (a.kind !== 'fish' && !a.products.some((io) => io.item === 'shellfish')) continue;
+    // (fix r3 #18, LIVING §3.4.7) a people never nets, rakes or harpoons the animal it reveres (the whale, the shellfish)
+    if (sacredAnimal(x, st, h.species)) continue;
     const d = P[h.cell * 3] * P[c * 3] + P[h.cell * 3 + 1] * P[c * 3 + 1] + P[h.cell * 3 + 2] * P[c * 3 + 2];
     if (d < reach) continue;
     if (a.size >= 5) {
@@ -161,6 +164,8 @@ export function fishTask(x: PCtx, s: number, st: Settlement | undefined, nearest
   const k = x.rt.byId.get('fishing') ?? -1;
   const knows = st ? libHas(st, k) : A.knows(s, k);
   if (!knows) return null;
+  // (fix r3 #18) where the fish themselves are sacred, nobody fishes: the fisher gathers, farms or herds instead
+  if (st && st.culture.sacred.includes('animal:fish-shoal')) return null;
   const p = x.p;
   let c = -1;
   if (st && st.res && st.res.fish.length) {

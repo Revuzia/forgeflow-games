@@ -609,3 +609,16 @@ export function buildCommand(p: Power, values: Record<string, unknown>, place: P
   if (wk && c[wk] === undefined && (p.target === 'planet' || toolMode(p) === 'world')) c[wk] = planet;
   return c;
 }
+
+/**
+ * The sim's `ores` query → the rows the renderer's ore palette takes (hook H12): every deposit kind in content order
+ * (base pack, mods, then the god's inventions), its id and colour as they come, so oreType i + 1 crops out in row i's
+ * colour and a vein of an invented material shows its own.
+ */
+export function oreRows(ores: unknown): { id?: string; color?: string }[] {
+  if (!Array.isArray(ores)) return [];
+  return ores.map((o) => {
+    const r = (o && typeof o === 'object' ? o : {}) as { id?: unknown; color?: unknown };
+    return { id: typeof r.id === 'string' ? r.id : undefined, color: typeof r.color === 'string' ? r.color : undefined };
+  });
+}

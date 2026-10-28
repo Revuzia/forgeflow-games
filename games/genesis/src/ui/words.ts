@@ -168,9 +168,9 @@ const MASTER_NOUNS: Record<string, string> = {
 
 /** a person's mastered skills as words: ['gather'] → "master gatherer"; ['hunt', 'fish'] → "master hunter and fisher" */
 export function masteryWords(skills: readonly string[]): string {
-  // (a skill a mod adds reads "master of <skill>")
-  const nouns = skills.map((k) => MASTER_NOUNS[k] ?? `of ${k.replace(/[_-]+/g, ' ')}`);
-  if (!nouns.length) return '';
-  const list = nouns.length === 1 ? nouns[0] : `${nouns.slice(0, -1).join(', ')} and ${nouns[nouns.length - 1]}`;
-  return `master ${list}`;
+  if (!skills.length) return '';
+  const and = (xs: string[]): string => (xs.length === 1 ? xs[0] : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  // every skill known: "master hunter and fisher"; a skill a mod adds reads "master of <skill>", each phrase whole
+  if (skills.every((k) => MASTER_NOUNS[k])) return `master ${and(skills.map((k) => MASTER_NOUNS[k]))}`;
+  return and(skills.map((k) => (MASTER_NOUNS[k] ? `master ${MASTER_NOUNS[k]}` : `master of ${k.replace(/[_-]+/g, ' ')}`)));
 }

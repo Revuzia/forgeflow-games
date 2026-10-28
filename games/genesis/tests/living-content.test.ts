@@ -146,23 +146,44 @@ test('content: "a new crop / animal / ore" with no name never makes a placeholde
     assert.ok(!r.c.some((x) => x.k === 'settlement.introduce') && r.c.some((x) => x.k === want), `${t}: ${JSON.stringify(r.c)} ${r.msg}`);
   }
   assert.ok(parse('give Aru a new crop to eat').c.some((x) => x.k === 'settlement.introduce'), 'a new crop asked for is still one');
+  // (fix r3 #2) a harm word AFTER "a new X" describes the thing asked for: a real crop, a real tree, or the ask for a real animal —
+  // never junk content, a cold snap or a storm on the town
+  for (const [t, want] of [['give Aru a new crop that resists drought', 'settlement.introduce'], ['give Aru a new crop that survives frost', 'settlement.introduce'], ['give Aru a new crop that can survive storms', 'settlement.introduce'], ['introduce a new crop that survives the frost', 'settlement.introduce'], ['give Aru a new tree for fires', 'life.plant'], ['give Aru a new animal to hunt', 'content.animal'], ['invent a new animal for the hunters', 'content.animal']] as const) {
+    const r = parse(t);
+    assert.ok(r.c.some((x) => x.k === want) && !r.c.some((x) => /^(weather\.|disaster\.)/.test(String(x.k)) || (x.k === 'content.material') || (typeof x.name === 'string' && /^new\b/.test(x.name)) || (typeof x.substance === 'string')), `${t}: ${JSON.stringify(r.c)} ${r.msg}`);
+  }
+  // (fix r3 #14) a vein, deposit, lode or "X ore near" is an ore laid in the ground, never a material "Vein copper" or a gift of 1;
+  // the rain sigil is the Water miracle; "rain in 2 days" is rain; "grant Aru's prayer" answers it (was a law)
+  for (const [t, k, ore] of [['give Aru a vein of copper', 'terrain.seed-ore', 'copper'], ['add an iron deposit near Aru', 'terrain.seed-ore', 'iron'], ['put a copper vein near Aru', 'terrain.seed-ore', 'copper'], ['plant iron ore near Aru', 'terrain.seed-ore', 'iron'], ['seed an iron vein near Aru', 'terrain.seed-ore', 'iron'], ['cast the rain sigil on Aru', 'miracle.water', ''], ['rain in 2 days on Aru', 'water.rain', ''], ["grant Aru's prayer", 'prayer.answer', ''], ["answer Aru's prayer", 'prayer.answer', ''], ['answer the prayers of Lune', 'prayer.answer', '']] as const) {
+    const r = parse(t);
+    assert.ok(r.c.some((x) => x.k === k && (!ore || x.ore === ore)) && !r.c.some((x) => String(x.k).startsWith('content.') || x.k === 'settlement.law' || x.k === 'settlement.gift'), `${t}: ${JSON.stringify(r.c)} ${r.msg}`);
+  }
+  assert.equal(parse("grant Aru's prayer").c.find((x) => x.k === 'prayer.answer')?.settlement, w.st.id);
+  assert.ok(parse('give Aru 10 iron ore').c.some((x) => x.k === 'settlement.gift'), 'ore counted out is still a gift');
   // a new tree: the real tree that suits the ground there
   assert.ok(parse('invent a new tree').c.some((x) => x.k === 'life.plant' && x.type === 'tree'));
   // applied, the registries gain nothing called "new …"
-  for (const t of ['introduce a new crop to Aru', 'give Lune a new crop', 'invent a new animal', 'add a new ore', 'invent a new tree']) sim.applyNow({ k: 'freeform', text: t });
-  assert.ok(!c.items.list.some((d) => /^new-/.test(d.id)) && !c.recipes.list.some((d) => /^new-/.test(d.id)), c.items.list.filter((d) => /^new-/.test(d.id)).map((d) => d.id).join(','));
-  assert.equal(c.items.list.length, items0);
-  assert.equal(c.recipes.list.length, recipes0);
+  // (fix r3 #4) registering content REBUILDS u.content (god/runtime.ts rebuildContent): every check below re-reads it, the
+  // object captured above would never see an addition
+  const weather0 = c.weather.ids().length;
+  // (fix r3 #2, #14) with them, the round-3 junk sentences: a harm word describing the new thing, a vein, a rain sigil
+  for (const t of ['introduce a new crop to Aru', 'give Lune a new crop', 'invent a new animal', 'add a new ore', 'invent a new tree', 'give Aru a new crop that resists drought', 'give Aru a new animal to hunt', 'invent a new animal for the hunters', 'give Aru a new tree for fires', 'give Aru a new crop that survives frost', 'give Aru a vein of copper', 'add an iron deposit near Aru', 'put a copper vein near Aru', 'plant iron ore near Aru', 'cast the rain sigil on Aru', 'rain in 2 days on Aru']) sim.applyNow({ k: 'freeform', text: t });
+  const c2 = sim.u.content;
+  assert.ok(!c2.items.list.some((d) => /^(new|vein)-/.test(d.id)) && !c2.recipes.list.some((d) => /^(new|vein)-/.test(d.id)), c2.items.list.filter((d) => /^(new|vein)-/.test(d.id)).map((d) => d.id).join(','));
+  assert.equal(c2.items.list.length, items0, c2.items.list.slice(items0).map((d) => d.id).join(','));
+  assert.equal(c2.recipes.list.length, recipes0);
+  assert.equal(c2.weather.ids().length, weather0, c2.weather.ids().slice(weather0).join(','));
   // (fix r2 #17) "teach <town> to <verb> <noun>": the craft that exists, never a material or an idea named for the phrase
-  const ores0 = c.ores.list.length;
+  const ores0 = c2.ores.list.length;
   for (const [t, want] of [['teach Aru to smelt iron', 'iron-smelting'], ['teach Aru to herd goats', 'animal-husbandry'], ['teach Aru to tan hides', 'tanning'], ['show Aru how to smelt copper', 'copper-smelting'], ['teach Aru to cut wood', 'woodcutting'], ['teach Aru to make rope', 'rope-making'], ['teach Aru to keep sheep', 'animal-husbandry'], ['teach Aru to milk goats', 'dairy']] as const) {
     const r = parse(t);
     assert.ok(r.c.some((x) => x.k === 'settlement.teach' && x.knowledge === want) && !r.c.some((x) => String(x.k).startsWith('content.')), `${t}: ${JSON.stringify(r.c)} ${r.msg}`);
     sim.applyNow({ k: 'freeform', text: t });
   }
-  assert.equal(c.items.list.length, items0, c.items.list.slice(items0).map((d) => d.id).join(','));
-  assert.equal(c.recipes.list.length, recipes0, c.recipes.list.slice(recipes0).map((d) => d.id).join(','));
-  assert.equal(c.ores.list.length, ores0);
+  const c3 = sim.u.content;
+  assert.equal(c3.items.list.length, items0, c3.items.list.slice(items0).map((d) => d.id).join(','));
+  assert.equal(c3.recipes.list.length, recipes0, c3.recipes.list.slice(recipes0).map((d) => d.id).join(','));
+  assert.equal(c3.ores.list.length, ores0);
   assert.ok(parse('introduce mithril to Aru').c.some((x) => x.k === 'content.material'), 'a material named and shown is still made');
   // myth words on a real animal: the nearest real kind, said so; the real compounds stay real; a size word is the animal itself
   for (const t of ['flying horse', 'winged lion', 'fire lizard', 'two-headed dog', 'dire wolf']) assert.equal(animalWord(c, t).kind, 'fantasy', t);

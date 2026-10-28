@@ -926,3 +926,71 @@ test('land: childhood fevers are lighter in a fed, housed village and peak in cr
   assert.ok(Math.abs(childHazard(x, st, 0.5) / fedBaby - 2.5) < 1e-9, 'famine: the fever peaks (x2.5)');
   assert.ok(Math.abs(childHazard(x, st, 0.5, true) / fedBaby - 2.5 * CROWDED_FEVER) < 1e-9, 'famine in crowded houses: worse still');
 });
+
+// (fix r3 #7, and fix r2 #2's shore re-planning, which had only a probe log) a people that does not swim hunts the game it
+// can walk to: game seen across a strait is not chased over open sea (hunters swam kilometres of 30-114 m deep salt water,
+// camped afloat and died of thirst on the way home), and no tracking leg crosses deep water or goes nowhere
+test('land: game across the sea is not hunted by swimming — no party after it, no leg over deep water or of no length, nobody at sea (fix r3 #7)', async () => {
+  const { twoTowns } = await import('./helpers/god.ts');
+  const { bestGame, onFoot, wetBetween, huntRange, huntTask } = await import('../src/sim/people/hunt.ts');
+  const w = twoTowns();
+  const sim = w.sim;
+  const x0 = cx(sim);
+  const aru = x0.ps.settlement(w.st.id)!;
+  const lune = x0.ps.settlement(w.lune.id)!;
+  // Aru stands on a spit with the sea round it: a land cell in hunting range reached only across the water
+  const G = x0.p.grid;
+  let across = -1, walk = -1;
+  for (let c = 0; c < G.count && (across < 0 || walk < 0); c++) {
+    if (x0.p.f.water[c] > 0.6 || x0.p.s.ocean[c]) continue;
+    const pos = cellPos(x0.p, c);
+    if (across < 0) { const d = distM(x0.p, aru.pos, pos); if (d >= 500 && d <= huntRange(aru) - 200 && wetBetween(x0, aru.pos, pos) && !onFoot(x0, aru, aru.pos, c)) across = c; }
+    if (walk < 0) { const d = distM(x0.p, lune.pos, pos); if (d >= 500 && d <= huntRange(lune) - 200 && !wetBetween(x0, lune.pos, pos) && onFoot(x0, lune, lune.pos, c)) walk = c; }
+  }
+  assert.ok(across >= 0, 'land across the sea from Aru');
+  assert.ok(walk >= 0, 'land Lune walks to');
+  clearWild(x0);
+  for (const it of x0.c.itemsByTag.get('meat') ?? []) aru.store[it] = 0;
+  const deer = x0.c.animals.idx('deer');
+  spawnHerd(x0, deer, across, 12);
+  const h = x0.ps.herds.find((q) => q.species === deer && q.cell === across)!;
+  // the old choice: the best game by the straight line is that herd
+  assert.equal(bestGame(x0, aru, aru.pos, 3, false)?.id, h.id, 'by the straight line the herd across the water is the best game');
+  // a morning, hunters at home with empty hands
+  const adult = adultsOf(sim, aru)[0];
+  for (let i = 0; i < 200 && daylightLeft(cx(sim), adult) < 7 * 60; i++) sim.step(15);
+  const x = cx(sim);
+  const A = x.A;
+  const L = landOf(aru);
+  L.party = null; delete L.more;
+  const hunters = adultsOf(sim, aru).filter((s) => !A.mission[s] && A.health[s] >= 0.55).slice(0, 4);
+  assert.ok(hunters.length >= 3, 'grown-ups to hunt');
+  for (const s of hunters) {
+    A.role[s] = ROLE.hunter; A.camp[s] = -1; A.trip[s] = 0;
+    A.place(s, aru.pos[0], aru.pos[1], aru.pos[2], x.tick);
+    for (const it of x.info[A.species[s]].foods) A.take(s, it, 1e6);
+  }
+  storeAdd(x, aru, itemIdx(x, 'wild-grain'), 300);
+  huntHourly(x, aru);
+  assert.ok(!parties(aru).some((p) => p.herd === h.id), `no party sets out after the herd across the sea (${parties(aru).map((p) => p.herd)})`);
+  // a party already after it (as one was before this fix): every leg it is given stays dry and goes somewhere
+  L.party = { id: x.tick, members: hunters.map((s) => A.id[s]), herd: h.id, species: deer, since: x.tick, lastTry: -1, kills: 0 };
+  for (const s of hunters) {
+    const t = huntTask(x, s, aru);
+    if (!t || !t.goal) continue;
+    assert.ok(!wetBetween(x, aru.pos, t.goal) || t.goalCell !== across, 'no straight leg over the water to the herd');
+    assert.ok(distM(x.p, aru.pos, t.goal) >= 10, 'no leg of no length (fix r2 #2)');
+  }
+  // a day on: nobody of Aru without a boat stands in water deeper than wading
+  let wet = 0;
+  for (let i = 0; i < 48; i++) {
+    sim.step(30);
+    const xa = cx(sim);
+    for (const s of xa.ps.members.get(aru.id) ?? []) {
+      if (!xa.A.alive[s] || xa.A.boat[s] >= 0) continue;
+      const c = xa.A.cell[s];
+      if (xa.p.f.water[c] > 3 || (xa.p.s.ocean[c] && xa.p.f.water[c] > 0.6)) wet++;
+    }
+  }
+  assert.equal(wet, 0, 'nobody of Aru at sea');
+});
