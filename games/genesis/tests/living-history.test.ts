@@ -16,7 +16,7 @@ import { pathOptsFor } from '../src/sim/people/resources.ts';
 import { findPath } from '../src/sim/grid/pathfind.ts';
 import { accident, computeEra, refreshLibrary, inputsSeen } from '../src/sim/people/knowledge.ts';
 import { histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
-import { politicsDaily, polityOf, plunder } from '../src/sim/people/war.ts';
+import { politicsDaily, polityOf, plunder, conquer, resolveArrival, secede } from '../src/sim/people/war.ts';
 import { spawnHerd } from '../src/sim/life/herds.ts';
 import { BUD_POP } from '../src/sim/people/settlement.ts';
 import { newMission, volunteers } from '../src/sim/people/missions.ts';
@@ -362,6 +362,41 @@ test('raiders drive off livestock: a share of the raided town\'s largest herd go
   const taken = x.ps.herds.find((h) => h.owner === d.id && h.species === sheep);
   assert.ok(taken && taken.count >= 1, 'the raiders own some of it now');
   assert.match(note, /head of sheep/);
+});
+
+// (fix r2 #5) a war band still on the road when its war ended in a conquest fought a town of its own polity on arrival:
+// 'Mashnam by the Lake fell to the chiefdom of Mashnam', a chief removed, refugees from a town that was never taken
+test('a war ends with its conquest: the bands on the road go home, no town is conquered by its own polity, the winner keeps its chief (fix r2 #5)', () => {
+  const { sim, cap, d } = kinTowns();
+  const x = ctx(sim);
+  secede(x, d, polityOf(x, cap)!, 'revolt');
+  assert.notEqual(d.polity, cap.polity);
+  const r = x.ps.relation(cap.polity, d.polity)!;
+  assert.ok(r && r.war >= 0, 'the revolt is a war');
+  // a band of the rebels marches on the capital, and one of the capital's on the rebels
+  const out = newMission(x, 'war', d, cap, volunteers(x, d, 4, true))!;
+  const back = newMission(x, 'war', cap, d, volunteers(x, cap, 4, true))!;
+  assert.ok(out && back, 'two war bands set out');
+  const chief = cap.leader;
+  const t0 = sim.u.tick;
+  // the rebel town falls (its only town: the war ends)
+  conquer(x, cap, d, null);
+  assert.equal(d.polity, cap.polity);
+  assert.ok(r.war < 0, 'the war is over');
+  assert.ok(out.phase >= 3 && back.phase >= 3, `both bands turn for home (phases ${out.phase}, ${back.phase})`);
+  // a war band that arrives at a town of its own polity goes home without a fight; nobody conquers their own
+  const late = newMission(x, 'war', d, cap, volunteers(x, d, 3, true))!;
+  late.phase = 2;
+  resolveArrival(x, late, d, cap);
+  assert.equal(late.phase, 3, 'the late band goes home');
+  conquer(x, d, cap, null);
+  assert.equal(cap.leader, chief, 'the capital keeps its chief');
+  assert.equal(cap.recent.conquered, undefined, 'the capital was never conquered');
+  sim.step(2 * 1440);
+  const lines = sim.u.chronicle.filter((c) => c.tick > t0).map((c) => c.text);
+  assert.ok(!lines.some((l) => /stood firm against|won the day|lay dead/.test(l)), `no battle after the war: ${lines.filter((l) => /battle|warriors|stood/i.test(l)).join(' | ')}`);
+  assert.ok(!lines.some((l) => new RegExp(`${cap.name} fell to`).test(l)), 'the capital did not fall to its own polity');
+  assert.equal(cap.leader, chief);
 });
 
 test('a polity\'s capital is the town that founded it, whichever of its towns is asked about first', () => {
