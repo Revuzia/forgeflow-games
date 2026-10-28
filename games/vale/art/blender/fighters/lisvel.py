@@ -489,7 +489,7 @@ def sculpts() -> list:
     wrap.add(Capsule((0.0, 0.03, 1.60), (0.0, 0.02, 1.66), 0.072), k=0.04)                          # the nape
     wrap.sub(Ellipsoid((0.0, -0.118, 1.695), (0.070, 0.075, 0.098)), k=0.014)                        # the face opening
     wrap.inter(HalfSpace((0, 0, 1.585), (0, 0, -1), 1.0), k=0.02)
-    part("wrap", _with_disp(wrap, turban, 0.003), "wrap", "bone:head", 1150, uvw=1.6)
+    part("wrap", _with_disp(wrap, turban, 0.003), "wrap", "bone:head", 1050, uvw=1.6)
 
     # FACE-PLATE (rigid on the head): a carved chalk face, serene: brow, nose, closed lips, chin; the facets are the
     # painting's incised lines
@@ -544,7 +544,7 @@ def sculpts() -> list:
         tab.sub(Ellipsoid((sx * 0.215, 0.008, 1.405), (0.060, 0.080, 0.090)), k=0.012)
     tab.sub(Ellipsoid((0.0, 0.004, 1.57), (0.085, 0.075, 0.07)), k=0.01)                            # the neck hole
     tab.inter(HalfSpace((0, 0, 1.165), (0, 0, -1), 1.0), k=0.0)
-    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1250, uvw=1.3)
+    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1150, uvw=1.3)
 
     # TABARD SKIRT (analytic hips -> thighs): four panels from the belt to the hem, open at the front and back centre
     # and slit at the sides
@@ -589,14 +589,14 @@ def sculpts() -> list:
         bk_ = [(sx * 0.110, 0.084, 1.52), (sx * 0.050, 0.112, 1.465), (0.0, 0.118, 1.415), (-sx * 0.10, 0.114, 1.30),
                (-sx * 0.13, 0.098, 1.235)]
         strap(straps, bk_, torso_normal, 0.025, 0.0045)
-    part("straps", straps, "leather", "auto", 460, vs=0.7)
+    part("straps", straps, "leather", "auto", 420, vs=0.7)
 
     # THE BROOCH on the cowl's edge at her right chest: a chalk ring round a glowing glass disc (accent)
     br, brg = Sculpt("brooch"), Sculpt("brooch_glass")
     bc = np.array([-0.072, -0.118, 1.508])
     bn = _n([-0.15, -1.0, 0.45])
-    br.add(Torus(bc, 0.021, 0.0055, axes=sdf.frame(bn)), k=0.0)
-    brg.add(Ellipsoid(bc - bn * 0.001, (0.019, 0.019, 0.0075), axes=sdf.frame(bn)), k=0.0)
+    br.add(Torus(bc, 0.0235, 0.0055, axes=sdf.frame(bn)), k=0.0)
+    brg.add(Ellipsoid(bc - bn * 0.001, (0.0215, 0.0215, 0.0080), axes=sdf.frame(bn)), k=0.0)
     part("brooch", br, "chalk", "auto", 200, vs=0.4)
     part("brooch_glass", brg, "accent", "auto", 120, vs=0.4)
 
@@ -615,8 +615,8 @@ def sculpts() -> list:
     part("bracers", brc, "leather", "auto", 700)
     # HANDS: the left fist round the grip (its axis = the chord), the right hook on the string
     WK_L = _n(np.array([0.0, -0.6, -0.8]))
-    part("hand_L", fist("hand_L", HAND_L, U_REST, WR_L, WK_L, 0.021, 1.12, index_fwd=-1.0), "skin", "bone:hand.L", 700, vs=0.55)
-    part("hand_R", pinch("hand_R", PINCH_R, U_REST, WR_R, 1.10), "skin", "bone:hand.R", 600, vs=0.55)
+    part("hand_L", fist("hand_L", HAND_L, U_REST, WR_L, WK_L, 0.021, 1.12, index_fwd=-1.0), "skin", "bone:hand.L", 620, vs=0.55)
+    part("hand_R", pinch("hand_R", PINCH_R, U_REST, WR_R, 1.10), "skin", "bone:hand.R", 540, vs=0.55)
 
     # LEGS: dark leggings, tall soft boots to below the knee
     legs = Sculpt("legs")
@@ -701,7 +701,7 @@ def sculpts() -> list:
         tan = _n(b - a)
         side = _n(N_REST - tan * (tan @ N_REST))
         caps.add(FlatCapsule(a, b, 0.024, 0.017, 0.019, 0.013, side=side), k=0.0)
-        for f0, f1 in ((0.18, 0.42), (0.58, 0.86)):
+        for f0, f1 in ((0.12, 0.44), (0.54, 0.88)):
             pa, pb = a + (b - a) * f0, a + (b - a) * f1
             inl.add(FlatCapsule(pa, pb, 0.0262, 0.0192, 0.0250, 0.0182, side=side), k=0.0)
     part("bow_caps", caps, "dawnglass", "bone:prop.L", 500, vs=0.45)
@@ -825,7 +825,7 @@ def _install_decimate() -> None:
 
 _install_decimate()
 
-Q_BASE = 60
+Q_BASE = 58
 
 
 def _install_optimize() -> None:
@@ -1032,7 +1032,7 @@ TONE = {
     "cowl": ("#A8A59E", 0.80, 0.85), "sleeves": ("#AAA69E", 0.75, 0.85),
     "tabard": ("#4C6272", 0.95, 0.45), "tabard_skirt": ("#465A69", 0.95, 0.45),
     "tunic": ("#7E796F", 0.85, 0.8), "belt": ("#40372F", 0.9, 0.6), "straps": ("#3F3630", 0.9, 0.6),
-    "boots": ("#2D2A28", 0.9, 0.7), "quiver": ("#56402F", 0.9, 0.6), "quiver_straps": ("#352D28", 0.9, 0.6),
+    "boots": ("#2D2A28", 0.9, 0.7), "quiver": ("#5A4A3C", 0.9, 0.6), "quiver_straps": ("#352D28", 0.9, 0.6),
 }
 # the material classes the projection must not carry onto a part (the plates paint the neighbouring material where
 # the model's part stands: the sleeves' white on the tabard's shoulder wings and back, the tabard's blue on the cowl's
@@ -1211,7 +1211,10 @@ def _calm_w(name, lin):
     if name in PALE:
         w = _ss(0.10, 0.22, blue) * _ss(0.15, 0.35, lum / max(med, 1e-4))
     elif name in BLUE:
-        w = _ss(0.14, 0.05, blue) * _ss(1.9, 2.6, lum / max(med, 1e-4)) + _ss(0.30, 0.16, lum / max(med, 1e-4))
+        # near-white (the sleeves), very dark, or WARM (the quiver's and straps' brown: the tabard's own trims are a
+        # neutral grey) paint is another material's
+        w = (_ss(0.14, 0.05, blue) * _ss(1.9, 2.6, lum / max(med, 1e-4)) + _ss(0.30, 0.16, lum / max(med, 1e-4))
+             + _ss(-0.02, -0.14, blue))
     else:
         return np.zeros(len(lin))
     return np.clip(w, 0, 1)
@@ -1719,7 +1722,7 @@ def shot_arms(draw, elev=0.0, cant=12.0, yaw=-45.0, lean=0.0, reach=0.93, side=0
     up = _rz(up, side)
     # the bow arm a little above level (build 4: the fist hangs ~7 cm under the wrist, so a level arm put the arrow line
     # at the chest and the drawing hand at the belt; the anchor belongs under the jaw)
-    rel = chest_rel(d * reach + np.array([0.0, 0.0, 0.17]), yaw, lean)
+    rel = chest_rel(d * reach + np.array([0.0, 0.0, 0.22]), yaw, lean)
     out = bowl(rel=rel, aim=tuple(d), up=tuple(up), pole=(0.75, 0.25, -0.6))
     out.update(rh(along=-(BRACE + draw), uoff=uoff, k=k, rel=rel_r, pole=(-0.85, 0.45, 0.15)))
     return out
@@ -1803,9 +1806,9 @@ def gen_idle() -> anim.Clip:
     return anim.Clip("idle", N, True, sample)
 
 
-FEET_SHOT = feet_(l=(0.03, -0.10, 0.0), r=(-0.03, 0.10, 0.0), yl=-12.0, yr=-40.0)
-FEET_STEPB = feet_(l=(0.03, -0.06, 0.0), r=(-0.05, 0.22, 0.0), yl=-10.0, yr=-38.0)
-FEET_LUNGE = feet_(l=(0.04, -0.24, 0.0), r=(-0.03, 0.12, 0.0), yl=-14.0, yr=-44.0, pr=-10.0)
+FEET_SHOT = feet_(l=(0.04, -0.10, 0.0), r=(-0.04, 0.11, 0.0), yl=-24.0, yr=-58.0)
+FEET_STEPB = feet_(l=(0.04, -0.06, 0.0), r=(-0.06, 0.22, 0.0), yl=-22.0, yr=-56.0)
+FEET_LUNGE = feet_(l=(0.05, -0.24, 0.0), r=(-0.04, 0.12, 0.0), yl=-26.0, yr=-60.0, pr=-10.0)
 
 
 def _shot_clip(name, N, wind, draw, hit, fol, g=None, extra_keys=None, lags=None):
@@ -1827,12 +1830,12 @@ def gen_attack1() -> anim.Clip:
     the right hand draws to the jaw; the arrow leaves at f8 (the string snaps back), the drawing hand slides back"""
     wind = pz(lean=2.0, yaw=-22.0, drop=0.03, feet=FEET_SHOT, string=1.0)
     _shoot(wind, 0.10, elev=-18, cant=55, yaw=-22, reach=0.78, uoff=-0.05)
-    draw = pz(lean=0.0, yaw=-48.0, drop=0.04, feet=FEET_SHOT, string=1.0, look=(0.0, 6.0, 0.0))
-    _shoot(draw, 0.43, elev=2, cant=14, yaw=-48)
-    hit = pz(lean=1.0, yaw=-50.0, drop=0.05, feet=FEET_SHOT, string=0.0, look=(0.0, 6.0, 0.0))
-    _shoot(hit, 0.56, elev=3, cant=16, yaw=-50)
-    fol = pz(lean=2.0, yaw=-46.0, drop=0.045, feet=FEET_SHOT, string=0.0, look=(0.0, 4.0, 0.0))
-    _shoot(fol, 0.60, elev=0, cant=20, yaw=-46, k=0.75, rel_r=(-0.30, 0.22, 0.10))
+    draw = pz(lean=0.0, yaw=-70.0, drop=0.04, feet=FEET_SHOT, string=1.0, look=(0.0, 6.0, 0.0))
+    _shoot(draw, 0.43, elev=2, cant=22, yaw=-70)
+    hit = pz(lean=1.0, yaw=-72.0, drop=0.05, feet=FEET_SHOT, string=0.0, look=(0.0, 6.0, 0.0))
+    _shoot(hit, 0.56, elev=3, cant=24, yaw=-72)
+    fol = pz(lean=2.0, yaw=-66.0, drop=0.045, feet=FEET_SHOT, string=0.0, look=(0.0, 4.0, 0.0))
+    _shoot(fol, 0.60, elev=0, cant=26, yaw=-66, k=0.75, rel_r=(-0.30, 0.22, 0.10))
     return _shot_clip("attack1", 20, wind, draw, hit, fol)
 
 
@@ -1841,12 +1844,12 @@ def gen_attack2() -> anim.Clip:
     at f8 low and flat"""
     wind = pz(lean=4.0, yaw=-26.0, drop=0.05, feet=FEET_STEPB, string=1.0, dy=0.03)
     _shoot(wind, 0.12, elev=-14, cant=60, yaw=-26, reach=0.80, uoff=-0.05)
-    draw = pz(lean=4.0, yaw=-44.0, drop=0.07, feet=FEET_STEPB, string=1.0, dy=0.05, look=(0.0, 6.0, 0.0))
-    _shoot(draw, 0.42, elev=-3, cant=44, yaw=-44)
-    hit = pz(lean=5.0, yaw=-46.0, drop=0.075, feet=FEET_STEPB, string=0.0, dy=0.05, look=(0.0, 6.0, 0.0))
-    _shoot(hit, 0.55, elev=-2, cant=46, yaw=-46)
-    fol = pz(lean=6.0, yaw=-40.0, drop=0.07, feet=FEET_STEPB, string=0.0, dy=0.04)
-    _shoot(fol, 0.58, elev=-4, cant=50, yaw=-40, k=0.7, rel_r=(-0.32, 0.20, 0.0))
+    draw = pz(lean=4.0, yaw=-64.0, drop=0.07, feet=FEET_STEPB, string=1.0, dy=0.05, look=(0.0, 6.0, 0.0))
+    _shoot(draw, 0.42, elev=-3, cant=44, yaw=-64)
+    hit = pz(lean=5.0, yaw=-66.0, drop=0.075, feet=FEET_STEPB, string=0.0, dy=0.05, look=(0.0, 6.0, 0.0))
+    _shoot(hit, 0.55, elev=-2, cant=46, yaw=-66)
+    fol = pz(lean=6.0, yaw=-60.0, drop=0.07, feet=FEET_STEPB, string=0.0, dy=0.04)
+    _shoot(fol, 0.58, elev=-4, cant=50, yaw=-60, k=0.7, rel_r=(-0.32, 0.20, 0.0))
     return _shot_clip("attack2", 20, wind, draw, hit, fol)
 
 
@@ -1857,12 +1860,12 @@ def gen_dawn_line() -> anim.Clip:
     shoulder; recovers by f25"""
     wind = pz(lean=4.0, yaw=-24.0, drop=0.05, feet=FEET_SHOT, string=1.0)
     _shoot(wind, 0.10, elev=-20, cant=62, yaw=-24, reach=0.76, uoff=-0.06)
-    draw = pz(lean=-3.0, yaw=-55.0, drop=0.09, feet=FEET_LUNGE, string=1.0, dy=-0.03, look=(0.0, 8.0, 0.0))
-    _shoot(draw, 0.47, elev=4, cant=40, yaw=-55, reach=0.95)
-    hit = pz(lean=-6.0, yaw=-56.0, drop=0.10, feet=FEET_LUNGE, string=0.0, dy=-0.01, look=(0.0, 8.0, 0.0))
-    _shoot(hit, 0.62, elev=9, cant=42, yaw=-56, reach=0.96)
-    fol = pz(lean=-2.0, yaw=-50.0, drop=0.09, feet=FEET_LUNGE, string=0.0, dy=-0.02, look=(0.0, 6.0, 0.0))
-    _shoot(fol, 0.64, elev=3, cant=40, yaw=-50, k=0.6, rel_r=(-0.34, 0.26, 0.14))
+    draw = pz(lean=-3.0, yaw=-76.0, drop=0.09, feet=FEET_LUNGE, string=1.0, dy=-0.03, look=(0.0, 8.0, 0.0))
+    _shoot(draw, 0.47, elev=4, cant=40, yaw=-76, reach=0.95)
+    hit = pz(lean=-6.0, yaw=-78.0, drop=0.10, feet=FEET_LUNGE, string=0.0, dy=-0.01, look=(0.0, 8.0, 0.0))
+    _shoot(hit, 0.62, elev=9, cant=42, yaw=-78, reach=0.96)
+    fol = pz(lean=-2.0, yaw=-72.0, drop=0.09, feet=FEET_LUNGE, string=0.0, dy=-0.02, look=(0.0, 6.0, 0.0))
+    _shoot(fol, 0.64, elev=3, cant=40, yaw=-72, k=0.6, rel_r=(-0.34, 0.26, 0.14))
     return _shot_clip("cast_a1", 25, wind, draw, hit, fol, lags={"head": 1.0, "neck": 0.5})
 
 
@@ -1941,18 +1944,18 @@ def gen_sun_corridor() -> anim.Clip:
     g = G()
     dip = pz(lean=8.0, yaw=-8.0, drop=0.07, string=0.0)
     dip["ik"].update(bowl(rel=(REST_L[0], REST_L[1] + 0.05, REST_L[2] - 0.05), aim=(0.0, -0.20, -0.98), up=(1.0, 0.0, 0.0)))
-    sky = pz(lean=-14.0, yaw=-30.0, drop=0.05, string=1.0, look=(-26.0, 4.0, 0.0), feet=FEET_SHOT)
-    _shoot(sky, 0.40, elev=62, cant=28, yaw=-30, lean=-14, reach=0.95)
-    sky2 = pz(lean=-15.0, yaw=-31.0, drop=0.055, string=1.0, look=(-28.0, 4.0, 0.0), feet=FEET_SHOT)
-    _shoot(sky2, 0.44, elev=63, cant=30, yaw=-31, lean=-15, reach=0.96)
-    sky3 = pz(lean=-14.0, yaw=-30.0, drop=0.05, string=1.0, look=(-26.0, 4.0, 0.0), feet=FEET_SHOT)
-    _shoot(sky3, 0.42, elev=62, cant=28, yaw=-30, lean=-14, reach=0.95)
-    aim = pz(lean=-2.0, yaw=-24.0, drop=0.08, string=1.0, look=(2.0, 4.0, 0.0), feet=FEET_LUNGE)
-    _shoot(aim, 0.50, elev=1, cant=86, yaw=-24, reach=0.94)
-    hit = pz(lean=-9.0, yaw=-24.0, drop=0.08, dy=0.05, string=0.0, look=(0.0, 4.0, 0.0), feet=FEET_LUNGE)
-    _shoot(hit, 0.66, elev=4, cant=88, yaw=-24, reach=0.94)
-    fol = pz(lean=-5.0, yaw=-22.0, drop=0.08, dy=0.03, string=0.0, look=(0.0, 3.0, 0.0), feet=FEET_LUNGE)
-    _shoot(fol, 0.62, elev=1, cant=88, yaw=-22, reach=0.94, k=0.7, rel_r=(-0.34, 0.24, 0.08))
+    sky = pz(lean=-14.0, yaw=-48.0, drop=0.05, string=1.0, look=(-26.0, 4.0, 0.0), feet=FEET_SHOT)
+    _shoot(sky, 0.40, elev=62, cant=28, yaw=-48, lean=-14, reach=0.95)
+    sky2 = pz(lean=-15.0, yaw=-49.0, drop=0.055, string=1.0, look=(-28.0, 4.0, 0.0), feet=FEET_SHOT)
+    _shoot(sky2, 0.44, elev=63, cant=30, yaw=-49, lean=-15, reach=0.96)
+    sky3 = pz(lean=-14.0, yaw=-48.0, drop=0.05, string=1.0, look=(-26.0, 4.0, 0.0), feet=FEET_SHOT)
+    _shoot(sky3, 0.42, elev=62, cant=28, yaw=-48, lean=-14, reach=0.95)
+    aim = pz(lean=-2.0, yaw=-40.0, drop=0.08, string=1.0, look=(2.0, 4.0, 0.0), feet=FEET_LUNGE)
+    _shoot(aim, 0.50, elev=1, cant=86, yaw=-40, reach=0.94)
+    hit = pz(lean=-9.0, yaw=-40.0, drop=0.08, dy=0.05, string=0.0, look=(0.0, 4.0, 0.0), feet=FEET_LUNGE)
+    _shoot(hit, 0.66, elev=4, cant=88, yaw=-40, reach=0.94)
+    fol = pz(lean=-5.0, yaw=-38.0, drop=0.08, dy=0.03, string=0.0, look=(0.0, 3.0, 0.0), feet=FEET_LUNGE)
+    _shoot(fol, 0.62, elev=1, cant=88, yaw=-38, reach=0.94, k=0.7, rel_r=(-0.34, 0.24, 0.08))
     fol2 = anim._with_hips(anim.lerp_pose(fol, hit, 0.1), (0, 0, -0.003))
     keys = [(0.0, g, "linear"), (0.10, dip, "inout"), (0.26, sky, "out"), (0.30, sky2, "inout"), (0.33, sky3, "inout"),
             (0.375, aim, "inout"), (anim.IMPACT, hit, "accel"), (0.52, fol, "out"), (0.74, fol2, "inout"),
@@ -2067,8 +2070,9 @@ def gen_idle_lobby() -> anim.Clip:
     return anim.Clip("idle_lobby", N, True, sample)
 
 
-SALUTE = chest_rel((np.array([-0.118, -0.080, 1.770]) - SH_R) / L_ARM)    # the wrist at her right temple, the
-                                                                          # flat hand over the brow (the visor clear)
+SALUTE = chest_rel((np.array([-0.128, -0.045, 1.810]) - SH_R) / L_ARM)    # the wrist above her right temple, the
+                                                                          # flat hand over the wrap's brow (build 6
+                                                                          # splash: lower, it covered the face)
 
 
 def gen_victory() -> anim.Clip:
@@ -2076,10 +2080,10 @@ def gen_victory() -> anim.Clip:
     of light; the hold: the bow level across her body, the right hand raised to the visor in a salute to the dawn,
     a quarter turned from the camera (50 f, then the hold)"""
     g = G()
-    draw = pz(lean=8.0, yaw=-40.0, drop=0.06, feet=FEET_SHOT, string=1.0, look=(12.0, 4.0, 0.0))
-    _shoot(draw, 0.40, elev=-26, cant=18, yaw=-40, lean=8, reach=0.92)
-    hit = pz(lean=9.0, yaw=-40.0, drop=0.065, feet=FEET_SHOT, string=0.0, look=(12.0, 4.0, 0.0))
-    _shoot(hit, 0.54, elev=-25, cant=20, yaw=-40, lean=9, reach=0.92)
+    draw = pz(lean=8.0, yaw=-58.0, drop=0.06, feet=FEET_SHOT, string=1.0, look=(12.0, 4.0, 0.0))
+    _shoot(draw, 0.40, elev=-26, cant=18, yaw=-58, lean=8, reach=0.92)
+    hit = pz(lean=9.0, yaw=-58.0, drop=0.065, feet=FEET_SHOT, string=0.0, look=(12.0, 4.0, 0.0))
+    _shoot(hit, 0.54, elev=-25, cant=20, yaw=-58, lean=9, reach=0.92)
     step = pz(lean=3.0, yaw=-10.0, drop=0.05, dy=-0.06, string=0.0,
               feet=feet_(l=(0.02, -0.22, 0.06), r=(-0.012, 0.04, 0.0), yl=0.0, yr=-10.0, pl=10.0))
     hold_l = bowl(rel=(REST_L[0] - 0.02, REST_L[1] - 0.10, REST_L[2] + 0.12), aim=tuple(D_REST), up=tuple(U_REST))
@@ -2131,8 +2135,8 @@ def gen_stunned() -> anim.Clip:
 
 def gen_channel() -> anim.Clip:
     """a held half draw, the bow raised, breathing"""
-    base = pz(lean=0.0, yaw=-40.0, drop=0.04, feet=FEET_SHOT, string=1.0, look=(0.0, 6.0, 0.0))
-    _shoot(base, 0.25, elev=8, cant=20, yaw=-40)
+    base = pz(lean=0.0, yaw=-62.0, drop=0.04, feet=FEET_SHOT, string=1.0, look=(0.0, 6.0, 0.0))
+    _shoot(base, 0.25, elev=8, cant=20, yaw=-62)
     N = 40
 
     def sample(t):

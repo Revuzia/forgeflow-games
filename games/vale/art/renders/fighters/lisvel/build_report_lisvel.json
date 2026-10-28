@@ -45,7 +45,7 @@
         "toe.R"
       ]
     },
-    "tris_tabard": 1250,
+    "tris_tabard": 1150,
     "bind_belt": {
       "heat_ok": true,
       "unweighted": 0,
@@ -96,7 +96,9 @@
       "fixed_vertices": 0,
       "empty_groups": [
         "hips",
+        "neck",
         "head",
+        "forearm.L",
         "hand.L",
         "thigh.L",
         "shin.L",
@@ -108,7 +110,7 @@
         "toe.R"
       ]
     },
-    "tris_straps": 460,
+    "tris_straps": 616,
     "bind_brooch": {
       "heat_ok": true,
       "unweighted": 0,
@@ -250,15 +252,15 @@
       ]
     },
     "tris_boots": 780,
-    "tris_wrap": 1150,
+    "tris_wrap": 1050,
     "tris_mask": 1098,
     "tris_visor": 500,
     "tris_neck": 258,
     "tris_cowl": 900,
     "tris_tabard_skirt": 1100,
     "tris_tunic": 2254,
-    "tris_hand_L": 700,
-    "tris_hand_R": 600,
+    "tris_hand_L": 620,
+    "tris_hand_R": 540,
     "tris_quiver": 560,
     "tris_quiver_straps": 400,
     "tris_arrow_shafts": 300,
@@ -270,20 +272,20 @@
     "tris_string": 526,
     "tris_fan_shafts": 190,
     "tris_fan_fletch": 200,
-    "validate_lisvel": "19660->19649"
+    "validate_lisvel": "19476->19466"
   },
-  "uv_coverage": 0.575,
+  "uv_coverage": 0.553,
   "bake": {
-    "base": 9.98,
-    "rough_metal": 4.32,
-    "normal": 3.84,
-    "ao": 5.38,
-    "normal_fixed_px": 66921,
-    "projection": 97.01,
-    "pack_save": 97.79,
-    "total": 121.73
+    "base": 8.39,
+    "rough_metal": 5.3,
+    "normal": 3.79,
+    "ao": 7.54,
+    "normal_fixed_px": 71671,
+    "projection": 137.41,
+    "pack_save": 137.98,
+    "total": 163.38
   },
-  "tris": 20393,
+  "tris": 20210,
   "mesh_top_m": 1.884,
   "clips": {
     "idle": {
@@ -386,24 +388,24 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2784860,
+  "glb_bytes_raw": 2748736,
   "optimize": {
     "ok": true,
-    "before": 2784860,
-    "after": 1167452,
-    "q_base": 60
+    "before": 2748736,
+    "after": 1152036,
+    "q_base": 58
   },
-  "glb_bytes": 1167452,
+  "glb_bytes": 1152036,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel.glb (1140 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_base 2048x2048 199K, lisvel_normal 512x512 60K, lisvel_orm 256x256 10K",
-      "  skinned meshes: lisvel(20796v), lisvel_accent(246v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel.glb (1125 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_base 2048x2048 187K, lisvel_normal 512x512 57K, lisvel_orm 256x256 10K",
+      "  skinned meshes: lisvel(20864v), lisvel_accent(246v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver)",
       "  clips: attack1:0.667s/23tr, attack2:0.667s/23tr, cast_a1:0.833s/24tr, cast_a2:0.500s/24tr, cast_a3:0.667s/21tr, cast_ult:1.167s/24tr, channel:1.333s/23tr, dash:0.333s/22tr, death:1.500s/23tr, idle:3.000s/21tr, idle_lobby:4.000s/21tr, recall:3.000s/22tr, run:0.600s/23tr, stunned:1.333s/21tr, taunt:2.000s/21tr, victory:1.667s/23tr",
       "  tracks checked: 359; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 20393; bind-pose bounds (three units, Y up): 1.52 x 1.88 x 0.81; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
+      "  tris: 20210; bind-pose bounds (three units, Y up): 1.52 x 1.88 x 0.81; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
       "  run: 18 f, planted samples 2, max foot-speed error 0%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -416,10 +418,10 @@
       "turntable": "art/renders/fighters/lisvel/turntable.png"
     },
     "seconds": {
-      "splash": 21.16,
-      "portrait": 6.81,
-      "icon": 1.53,
-      "turntable": 8.02
+      "splash": 23.74,
+      "portrait": 11.11,
+      "icon": 2.2,
+      "turntable": 9.72
     }
   },
   "three_qa": {
@@ -451,27 +453,27 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/lisvel/three_lisvel.png",
-    "seconds": 23,
+    "seconds": 28,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/lisvel/three_clips_lisvel.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.54,
-      "model": 3.65,
-      "lows_bind": 5.74,
-      "uv": 6.46,
-      "bake": 126.18,
-      "clips": 0.46,
-      "export": 3.09,
-      "optimize": 1.81,
+      "materials": 1.33,
+      "model": 11.47,
+      "lows_bind": 12.85,
+      "uv": 13.65,
+      "bake": 170.99,
+      "clips": 1.23,
+      "export": 9.34,
+      "optimize": 2.27,
       "load_test": 0.36,
-      "render": 37.71,
-      "three_qa": 98.2,
-      "cache": 0.37
+      "render": 46.97,
+      "three_qa": 80.51,
+      "cache": 0.18
     },
-    "total_s": 284.69
+    "total_s": 351.38
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

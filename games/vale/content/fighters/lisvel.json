@@ -505,9 +505,9 @@
     "portrait": "assets/fighters/lisvel/portrait.png",
     "splash": "assets/fighters/lisvel/splash.png",
     "icon": "assets/fighters/lisvel/icon.png",
-    "height": 1.85,
+    "height": 1.93,
     "scale": 1,
-    "runRefSpeed": 3.6,
+    "runRefSpeed": 3.35,
     "clips": {
       "idle": "idle",
       "run": "run",
@@ -521,10 +521,9 @@
       "recall": "recall",
       "idle_lobby": "idle_lobby",
       "victory": "victory",
-      "crit": "crit",
-      "spawn": "spawn",
-      "stunned": "stunned",
+      "channel": "channel",
       "dash": "dash",
+      "stunned": "stunned",
       "taunt": "taunt"
     },
     "sockets": {
@@ -533,11 +532,16 @@
       "head": "head",
       "hand_r": "hand.R",
       "hand_l": "hand.L",
-      "weapon": "prop.R",
       "weapon_r": "prop.R",
       "weapon_l": "prop.L",
       "foot_r": "foot.R",
-      "foot_l": "foot.L"
+      "foot_l": "foot.L",
+      "weapon": "prop.R",
+      "arrow_nock": "x_arrow_nock",
+      "bow_tip_l": "x_bow_tip_l",
+      "bow_tip_r": "x_bow_tip_r",
+      "weapon_tip": "x_arrow_nock",
+      "quiver": "x_quiver"
     },
     "accentMaterial": "accent"
   },

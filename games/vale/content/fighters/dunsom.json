@@ -488,7 +488,7 @@
     "portrait": "assets/fighters/dunsom/portrait.png",
     "splash": "assets/fighters/dunsom/splash.png",
     "icon": "assets/fighters/dunsom/icon.png",
-    "height": 2.18,
+    "height": 2.11,
     "scale": 1,
     "runRefSpeed": 3.35,
     "clips": {

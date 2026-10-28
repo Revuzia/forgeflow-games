@@ -1523,10 +1523,21 @@ TONE_CLAMP = {"coat_top": (0.80, 1.07, 0.55), "skirt": (0.86, 1.07, 0.55), "slee
               "under_robe": (0.70, 1.25, 0.70)}
 
 
+COAT_GROUP = ("coat_top", "skirt", "sleeve_L", "sleeve_R")    # one felt: one value and hue (the sleeves' own paler
+                                                              # value met the coat's at the shoulders as a ragged patch)
+
+
 def _tone_clamp(lin, k, p, n, names, log):
-    """(see above) the absolute tone is the FRONT's (texels squarely facing the front plate, banded every 6 cm): the
-    back sheet's rim strokes and the shoulder tops that see neither plate cannot set a paler band (the 'frost'); each
-    texel's detail is measured against its own side's band"""
+    """(see above) the absolute tone is the FRONT's (texels squarely facing the front plate): the back sheet's rim
+    strokes and the shoulder tops that see neither plate cannot set a paler tone (the 'frost'); each texel's detail is
+    measured against its own side's 6 cm band"""
+    grp = np.isin(k, [names.index(g) for g in COAT_GROUP if g in names])
+    gf = grp & (n[:, 1] < -0.6) & (_Y(lin) > 0.003)
+    g_hue = g_y = None
+    if gf.sum() >= 200:
+        g_hue = np.median(lin[gf], axis=0)
+        g_hue = g_hue / max(float(_Y(g_hue[None, :])[0]), 1e-5)
+        g_y = float(np.median(_Y(lin[gf])))
     for kk in np.unique(k):
         nm = names[kk]
         if nm not in TONE_CLAMP:
@@ -1563,6 +1574,8 @@ def _tone_clamp(lin, k, p, n, names, log):
         # light (the concept's lit shoulders) set pale bands that wrapped round the back as 'frost'; the light-head /
         # dark-feet ramp and the baked folds give the value structure, the painting only its fold detail (r)
         yv = float(np.median(Y[f])) if f.sum() >= 40 else float(np.median(Y[ok]))
+        if nm in COAT_GROUP and g_y is not None:
+            hue, yv = g_hue, g_y
         tone = hue[None, :] * (yv * (1 - 0.05 * wbb))[:, None]
         r = Y / np.maximum(_Y(ref), 1e-5)
         r2 = 1 + (r - 1) * keep
@@ -1620,7 +1633,9 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     if m is not None:
         pp = p[m]
         sd = face_sd(pp[:, 0], pp[:, 2])
-        inner = ss(0.004, -0.006, sd) * ss(-0.10, -0.05, pp[:, 1])
+        # (fix pass 1: was ss(-0.10, -0.05, y), 1 for every y > -0.05: it darkened the hood's BACK inside the face's x-z
+        # outline -- the 'ghost' head column seen from behind; only the front rim round the mask is in shade)
+        inner = ss(0.004, -0.006, sd) * ss(-0.03, -0.08, pp[:, 1])
         c = lin[m]
         Y = _Y(c)
         fl = HOOD_FLOOR * float(_Y(_lin(_hex(HOOD_HEX))[None, :])[0])
