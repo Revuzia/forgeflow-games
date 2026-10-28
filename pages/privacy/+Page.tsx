@@ -93,7 +93,7 @@ export default function PrivacyPage() {
         <h2 className={H2}>Contact</h2>
         <p>
           For privacy-related questions or requests, contact us at{" "}
-          <a href="mailto:privacy@forgeflowlabs.com" className={LINK}>privacy@forgeflowlabs.com</a>.
+          <a href="mailto:sales@forgeflowlabs.com" className={LINK}>sales@forgeflowlabs.com</a>.
         </p>
       </div>
     </div>

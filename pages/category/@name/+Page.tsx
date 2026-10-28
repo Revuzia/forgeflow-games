@@ -1,3 +1,6 @@
+import { MIN_INDEXABLE_CATEGORY_GAMES } from "../../../src/config/site";
+import { CATEGORY_INTROS } from "../../../src/content/categoryIntros";
+import { guideBySlug } from "../../../src/content/guides";
 import { usePageContext } from "vike-react/usePageContext";
 import { useConfig } from "vike-react/useConfig";
 import { Head } from "vike-react/Head";
@@ -19,6 +22,7 @@ export default function CategoryPage() {
   const { data: games, isLoading } = useGames({ genre: genreSlug, limit: 100 }, gamesSeed);
 
   const title = category?.label || genreSlug.replace("_", " ");
+  const intro = CATEGORY_INTROS[genreSlug];
 
   // Head: a category page used to have no title/description of its own.
   const config = useConfig();
@@ -37,7 +41,7 @@ export default function CategoryPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {/* A category with no games is a thin page (Puzzle has none today): keep it
           out of the index until it has something on it. */}
-      {games && games.length === 0 && <Head><meta name="robots" content="noindex, follow" /></Head>}
+      {games && games.length < MIN_INDEXABLE_CATEGORY_GAMES && <Head><meta name="robots" content="noindex, follow" /></Head>}
       {/* Header */}
       <div className="mb-8">
         <nav className="text-sm text-surface-500 mb-4 flex items-center gap-2">
@@ -48,9 +52,26 @@ export default function CategoryPage() {
           <span className="text-gray-300 capitalize">{title}</span>
         </nav>
         <h1 className="font-display font-bold text-3xl text-gray-100 mb-2 capitalize">{title}</h1>
-        <p className="text-surface-500">
-          Browse all {title.toLowerCase()} games in our collection
-        </p>
+        {intro ? (
+          <div className="max-w-3xl space-y-3">
+            {intro.text.map((para, i) => (
+              <p key={i} className="text-gray-300 leading-relaxed">{para}</p>
+            ))}
+            {intro.guides && intro.guides.length > 0 && (
+              <p className="text-sm text-gray-400">
+                Guides:{" "}
+                {intro.guides.map((slug, i) => (
+                  <span key={slug}>
+                    {i > 0 && " · "}
+                    <a href={`/guides/${slug}`} className="text-brand-orange hover:underline">{guideBySlug(slug)?.title || slug}</a>
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-300">Browse all {title.toLowerCase()} games in our collection</p>
+        )}
       </div>
 
       {/* Other categories */}

@@ -11,6 +11,7 @@ import { useGame, useRelatedGames } from "../../../src/hooks/useGames";
 import GamePlayer from "../../../src/components/game/GamePlayer";
 import GameCarousel from "../../../src/components/game/GameCarousel";
 import GameDescription from "../../../src/components/game/GameDescription";
+import GameExtras from "../../../src/components/game/GameExtras";
 import ScreenshotGallery from "../../../src/components/game/ScreenshotGallery";
 import { getMobileSupport, MOBILE_BADGE } from "../../../src/lib/mobile";
 import useIsTouchDevice from "../../../src/hooks/useIsTouchDevice";
@@ -175,6 +176,9 @@ export default function GamePage() {
             {game.description && (
               <GameDescription text={game.description} className="text-gray-200 text-[17px] leading-relaxed mb-6" />
             )}
+
+            {/* Hand-written how-to-play, tips and related guides (src/content). */}
+            <GameExtras game={game} />
 
             {/* 2026-10-01 — per-game RECORDS & LEADERBOARDS, only for slugs
                 in GAME_STATS_PANELS (BLOCKTOOTH first); every other game

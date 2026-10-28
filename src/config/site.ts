@@ -44,7 +44,11 @@ export function clip(text: string | null | undefined, max = 155): string {
 }
 
 /** Paths that must never be indexed (private, per-user or transient pages). */
-export const NOINDEX_PREFIXES = ["/auth", "/profile", "/friends", "/search"];
+// /leaderboards and /achievements are live app screens (a few words of static text each): keep them out of the index.
+export const NOINDEX_PREFIXES = ["/auth", "/profile", "/friends", "/search", "/leaderboards", "/achievements"];
+
+/** A category page with fewer games than this is too thin to index (and is left out of the sitemap). */
+export const MIN_INDEXABLE_CATEGORY_GAMES = 3;
 
 export function isNoindex(urlPathname: string): boolean {
   const p = (urlPathname || "/").toLowerCase();

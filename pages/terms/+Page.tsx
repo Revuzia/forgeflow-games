@@ -38,7 +38,7 @@ export default function TermsPage() {
         <h2 className="font-display font-semibold text-xl text-gray-200">Contact</h2>
         <p>
           Questions about these terms? Contact us at{" "}
-          <a href="mailto:legal@forgeflowlabs.com" className="text-brand-blue hover:underline">legal@forgeflowlabs.com</a>.
+          <a href="mailto:sales@forgeflowlabs.com" className="text-brand-blue hover:underline">sales@forgeflowlabs.com</a>.
         </p>
       </div>
     </div>

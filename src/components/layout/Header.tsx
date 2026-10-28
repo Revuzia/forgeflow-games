@@ -40,6 +40,9 @@ export default function Header() {
             >
               All Games
             </a>
+            <a href="/guides" aria-current={here.startsWith("/guides") ? "page" : undefined} className="nav-link font-semibold text-white">
+              Guides
+            </a>
             {CATEGORIES.map((cat) => (
               <a
                 key={cat.slug}
