@@ -11,7 +11,7 @@ fdist.mjs).
 Two halves:
   * render_chip(...)  in Blender (called by render.fighter_renders for every fighter listed in
     art/blender/fighters/face_chips.json): poses the fighter, frames the head, renders two linear EXRs with the
-    same seed (key + sky fill; key + fill + a white rim pair), keeps them as art/renders/fighters/<id>/chip_raw.npz
+    same seed (key + sky fill; key + fill + a white rim pair), keeps them as art/.cache/fighters/chips/<id>.npz
     and composes the chip.
   * compose(...)      pure numpy (+ art/grade/gradelib.py): rim tint, exposure / value floor, the painted ink
     ground, tone map (Khronos PBR Neutral), the vale_grade_01 LUT. It runs in plain python3 too, so the hues and
@@ -37,6 +37,7 @@ TABLE = os.path.join(BLENDER_DIR, "fighters", "face_chips.json")
 OUT_DIR = os.path.join(ART_DIR, "out", "fighters")
 RENDERS_DIR = os.path.join(ART_DIR, "renders", "fighters")
 LUT = os.path.join(ART_DIR, "out", "grade", "vale_grade_01.cube")
+CACHE_DIR = os.path.join(ART_DIR, ".cache", "fighters", "chips")
 
 DEFAULTS = {
     "size": 128,            # shipped icon size
@@ -226,7 +227,8 @@ def compose(raw: dict, p: dict, grade: bool = True) -> tuple[np.ndarray, dict]:
 
 
 def raw_path(fid: str) -> str:
-    return os.path.join(RENDERS_DIR, fid, "chip_raw.npz")
+    """The chip's two linear passes (float16), kept in the git-ignored art/.cache for re-composing."""
+    return os.path.join(CACHE_DIR, f"{fid}.npz")
 
 
 def load_raw(fid: str) -> dict:
@@ -477,8 +479,9 @@ def render_chip(ctx, objs, P: dict, cfg: dict, light: dict, chains, clips, fast:
     for o in rims:
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.context.scene.render.image_settings.file_format = "PNG"
-    np.savez_compressed(os.path.join(P["renders"], "chip_raw.npz"), base=raw["base"].astype(np.float16),
-                        lit=raw["lit"].astype(np.float16))
+    if os.path.abspath(dest) == os.path.abspath(icon_path(spec.ID)):       # (previews keep the shipped raw)
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        np.savez_compressed(raw_path(spec.ID), base=raw["base"].astype(np.float16), lit=raw["lit"].astype(np.float16))
     img, cinfo = compose(raw, p)
     gradelib().save_png(dest, img)
     for o in list(bpy.context.scene.objects):
