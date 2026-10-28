@@ -470,3 +470,41 @@ halo and black-diffuse lamp halo are picked up by the rebuild). Both factions re
   Open: the concept-detail coverage is modest (5-24 % of a part's texels see their own paint square on); the
   Aubade enemy-Low hood top quarter sits at 64.7 (p90 66.2), 0.3 under the cap; compare_greatwick.jpg and
   lineup_greatwick.png are from round 4 (not regenerated).
+
+## Fix round 7 (verify:wick (wave-b-finish), score 6.8: the greatwick major, Serenade) — 2026-10-28
+Scope: art/blender/units/wick_greatwick.py (+ proto/wick_greatwick_mantle.py, a no-build geometry check: per-part flat
+colours from eye level / 52 deg and r-z slices through the mantle axis). Serenade rebuilt; Aubade untouched (no shared
+code path changed; its GLB is the r6 one).
+- ROOT CAUSE of the eye-level torn-paper teeth: the mantle was bound by bone heat, which gave its front columns 25-31 %
+  forearm + 37-42 % upper arm (and, being the first 'auto' part, the armour conform ran on it); the hammer grip dragged
+  the lapels' tops 10-17 cm down out of the hood in idle (measured on the cached rig), so the raw top edge, its lining
+  and the ink texels by the hollow showed as pale / dark teeth by the hood and either side of the V.
+  Now `bind_mantle` (bind ("gw_mantle",)): the cloak's hips / spine / chest by height, 35 % neck at the tucked top, an
+  arm share over the shoulders growing toward the hem (shoulder <= 0.22, upper arm <= 0.38), never at the top edge, no
+  forearm; ARMOUR_CONFORM off for Serenade (the hidden legs stay unconformed, as before).
+- MANTLE TOP: one smooth curve (0.884 at the lapels rising to the felt's crown 0.946 from 32 to 62 deg, smoothed so no
+  column sits above its neighbours; the probe had left a 4.9 cm step between the 34 and 46 deg columns) and TUCKED: a
+  turned-in row from the top edge into the hood / collar felt, grid-searched per column (deepest point within 2.5 cm of
+  the wanted rise, the segment clear of the hollow by 6 mm: by the opening's sides the hood is a thin wall), 1.6-6.5 cm
+  inside. The tuck band is painted as felt going into shadow (#4A3B2F; lit it drew a pale ring at the hood's foot). The
+  mantle's ink rules dropped / narrowed (a 1.4 cm pad inked the lapels' tops, which meet the chin just under the
+  hollow's floor, in triangle patches).
+- V NOTCH: each lapel edge is TURNED felt: a facing column folded 2.6 cm in behind the edge and 6 mm toward the notch,
+  the strip oriented as one surface so the smooth normals round each fold; paint `turn`: the facing a shadowed dark
+  felt (#5E4A39), a lit roll along the fold, a soft shade line where the turned thickness ends.
+- PACK: a flat-faced 3 x 3 x 3 rounded block (`roundbox_flat_low`: inner grid lines on the flat faces' borders; the
+  2 x 2 x 2 block's normals tilted 45 deg across whole faces, so the paint light and the normal map's per-triangle
+  corrections drew triangles), the two straps paint only (6 mm proud: no game-camera silhouette; the high keeps them for
+  the bake), `_pp_pack` lit by the sculpt's own normals (`field_normals`). With the sun shadow off the pack face is one
+  smooth gradient (scratch close1ns vs close0ns); with it, the only edge left is the drum's cast shadow.
+- Budget: mantle 192 -> 240 tris (back columns 165 / 195 dropped: under the pack), pack 88 -> 108; total 3593 (cap
+  3600), GLB 444,052 B. Gates: three load test OK, facing +Z, clips idle/run/attack1/death (+ standard set), accentPct
+  5.36 % (top half 64 %), mesh top 1.486.
+- Kept: the round drum, the clean hammer bands, no chin spike, the game-camera read (in game, review ig.mjs, Rift seed 7
+  t74/84/99 High seats 0/5, the glimwick slot served as greatwick: same read as r6, the mantle edge clean).
+- §0 check (both factions, game camera x3 at yaws 0/45/90/180/270/315 + eye level / 52 deg close-ups): one soft core in
+  each hollow, no eye pair or mouth in the hood; the Aubade's two pane cores at 45 / 315 deg sit on two faces of the
+  lantern box behind the hood (a lantern, not a face); the Serenade V under the chin reads as two felt lapels over the
+  tunic, not a mouth.
+- Review sheet: review_greatwick_r7.jpg (top HEAD r6, bottom r7: eye-level head x3, neck front / 3-4, pack back 3-4
+  with and without the sun shadow, game camera x3). paint_greatwick_serenade.png regenerated.

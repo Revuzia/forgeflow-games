@@ -60,7 +60,12 @@ posts and cores, the lenses; flat shaded, their SDF field still drives the paint
 went soft (a pillow) or collapsed thin straps into blades. Fix round 6 (meta low_mesh, smooth): the Serenade mantle
 (an open radial strip, the V notch left open), collar (a tube), A-frame (tubes + yoke bars), pack (rounded blocks),
 hammer head (a lathe: flanges and the two sandstone bands as clean rings), drum courses and lid (oval lathes): the
-decimated versions broke into torn-paper shards, crumpled tape and an octagonal drum.
+decimated versions broke into torn-paper shards, crumpled tape and an octagonal drum. Fix round 7 (verify:wick): the
+mantle strip's top is one smooth curve TUCKED into the hood's solid felt (a turned-in row, grid-searched clear of the
+hollow), the V notch's edges turned felt (a facing column + gw paint `turn`), the strip bound by its own binder
+(`bind_mantle`: torso + a hem-ward arm share; bone heat dragged the lapels 10-17 cm out of the hood in idle: the
+torn teeth), the pack a flat-faced 3 x 3 x 3 block painted by the sculpt's own normals (`roundbox_flat_low`,
+`field_normals`: the 2 x 2 x 2 block shaded in triangles).
 
 Motion: every clip is checked against the real game mesh skinned in numpy (`_Ground`; probe:
 proto/wick_greatwick_motion.py): the run's planted boots sit exactly on the ground and the bell never cuts it (a
