@@ -120,5 +120,11 @@
     "total_s": 374.71
   },
   "run_ref_speed": 3.35,
-  "height_m": 1.95
+  "height_m": 1.95,
+  "three_qa_idle": {
+    "accentPct": 2.52,
+    "accentTopHalfPct": 91.6,
+    "out": "art/renders/fighters/dunsom/three_dunsom_highrim.png",
+    "note": "fix pass 1: a skin GLB has no clips, so the build's three_qa (accentPct 1.13) measured its BIND pose, where the crook is turned down 60 deg for art.height; this is the same QA on a copy with the base's clips (art/.cache/tools/dunsom_skin_qa_glb.mjs), i.e. what the game plays"
+  }
 }

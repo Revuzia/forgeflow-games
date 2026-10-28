@@ -67,11 +67,12 @@ MATERIAL_SET = "bible"
 # the concept's own material colours (sampled on the sheet): the chalk wrap and face-plate, the linen cowl and
 # sleeves, the steel-blue tabard (hue 203, 23 %: under the 40 % reserved-hue ceiling), the dark leather, the brown
 # quiver, the dark leggings and boots, the pale ash bow
-PALETTE = materials.bible_palette(chalk="#C9C6BE", dawnglass="#A9CBE3", wood="#CBC3B4", cloth2="#C4C0B8",
-                                  stone="#A9B6C0", cloth="#6A7F8D", leather="#463D37", under="#332C29",
-                                  ink="#17181B", accent="#3F9CFF", ironstone="#4A4743", skin="#B48C74",
-                                  wrap="#C8C6C0", boots="#3A3633", quiver="#5E4A3A", linen="#8E887E", rope="#9A8F7A",
-                                  fletching="#A9B6C0")
+# (each role at the albedo the paint pass actually lands the part on: the skins' recolour is skin / base per channel)
+PALETTE = materials.bible_palette(chalk="#B6B1A7", dawnglass="#93BCD8", wood="#C9C1B1", cloth2="#AAA69E",
+                                  stone="#A9B6C0", cloth="#4C6272", leather="#3F3630", under="#241E1C",
+                                  ink="#17181B", accent="#3F9CFF", ironstone="#4A4743", skin="#B48F78",
+                                  wrap="#A9A69F", boots="#2D2A28", quiver="#5A4A3C", linen="#7E796F", rope="#9A8F7A",
+                                  fletching="#9DAFBE")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "arrow_nock": "x_arrow_nock", "bow_tip_l": "x_bow_tip_l", "bow_tip_r": "x_bow_tip_r",
            "weapon_tip": "x_arrow_nock", "quiver": "x_quiver"}
@@ -90,13 +91,37 @@ VOXEL = 0.007
 ART_HEIGHT_PAD = 0.05     # FighterArt.height = mesh top + 5 cm (the HP bar's anchor - 0.35 m; the load test allows 6)
 
 # skins: the brief's palettes (section 9) re-colour the painting by role; the identity parts land ON the named colour
+# the brief's skin tables (section 9) are written against ITS base palette (paler than the painting): the named identity
+# colours are used as named (Gorgewalk's slate limbs and rope, Almanac's parchment limbs and ink fletching), every
+# other role takes the brief's own change (skin / brief base) on top of the colour the paint lands the part on
+BRIEF_BASE = {"chalk": "#D6D2C6", "wrap": "#D6D2C6", "cloth2": "#CFCEC6", "cloth": "#707D8B", "wood": "#D4C3A2"}
+
+
+def _hl0(h):
+    h = h.lstrip("#")
+    c = np.array([int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)])
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+
+def _lh0(c):
+    c = np.clip(c, 0, 1)
+    s_ = np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
+    return "#" + "".join(f"{int(round(v * 255)):02X}" for v in s_)
+
+
+def _skin_pal(identity: dict, relative: dict) -> dict:
+    out = dict(identity)
+    for role, hx in relative.items():
+        out[role] = _lh0(_hl0(PALETTE[role]) * _hl0(hx) / np.maximum(_hl0(BRIEF_BASE[role]), 1e-4))
+    return out
+
+
 SKINS: list = [
     {"id": "lisvel_gorgewalk", "extra": {"rope_bind": True}, "card": {"primary": "#6E747C", "secondary": "#9A8F7A"},
-     "palette": {"wood": "#6E747C", "rope": "#9A8F7A", "chalk": "#C6C6C2", "wrap": "#C6C6C2", "cloth2": "#C4C4BF",
-                 "cloth": "#66737F", "ironstone": "#3F4348", "quiver": "#4F4A44"}},
+     "palette": _skin_pal({"wood": "#6E747C", "rope": "#9A8F7A", "ironstone": "#3F4348", "quiver": "#545A61"},
+                          {"chalk": "#D2D2CE", "wrap": "#D2D2CE", "cloth2": "#CFCFCA", "cloth": "#6B7885"})},
     {"id": "lisvel_almanac", "extra": {"page_fletching": True}, "card": {"primary": "#4A4640", "secondary": "#D8CDB4"},
-     "palette": {"wood": "#D2C7AE", "fletching": "#2E2A26", "chalk": "#C9C6BE", "wrap": "#C8C6C0",
-                 "cloth": "#757A82"}},
+     "palette": _skin_pal({"wood": "#D8CDB4", "fletching": "#2E2A26", "cloth": "#5E6369"}, {})},   # parchment-grey tabard
 ]
 SKIN_FLAT = {}
 
@@ -539,7 +564,7 @@ def sculpts() -> list:
     tab.add(Ellipsoid((0.0, 0.002, 1.21), (0.140, 0.104, 0.075)), k=0.06)
     for sx in (-1, 1):
         # the shoulder wing: a stiff flap over the shoulder, turned down and out
-        tab.add(RoundBox((sx * 0.172, 0.006, 1.508), (0.060, 0.098, 0.008), 0.007, axes=sdf.rot_y(sx * 32.0)), k=0.02)
+        tab.add(RoundBox((sx * 0.172, 0.006, 1.508), (0.056, 0.096, 0.008), 0.007, axes=sdf.rot_y(sx * 40.0)), k=0.02)
         # the armhole (the sleeve comes out under the wing)
         tab.sub(Ellipsoid((sx * 0.215, 0.008, 1.405), (0.060, 0.080, 0.090)), k=0.012)
     tab.sub(Ellipsoid((0.0, 0.004, 1.57), (0.085, 0.075, 0.07)), k=0.01)                            # the neck hole
@@ -606,13 +631,13 @@ def sculpts() -> list:
         sl.add(FlatCapsule(sh, el, 0.060, 0.058, 0.054, 0.052, side=(1, 0, 0)).displaced(folds(0.005, 60.0, axis=2), 0.005), k=0.0)
         sl.add(Sphere(el, 0.054), k=0.03)
         sl.add(FlatCapsule(el, el + (wr - el) * 0.35, 0.052, 0.050, 0.046, 0.044, side=(1, 0, 0)), k=0.02)
-    part("sleeves", sl, "cloth2", "auto", 1000)
+    part("sleeves", sl, "cloth2", "arm", 1000)
     brc = Sculpt("bracers")
     for el, wr in ((EL_R, WR_R), (EL_L, WR_L)):
         a, b = el + (wr - el) * 0.22, wr + (wr - el) * 0.05
         brc.add(FlatCapsule(a, b, 0.047, 0.045, 0.039, 0.037, side=(1, 0, 0)).displaced(wraps(0.004, 0.032, a, b, slant=0.8), 0.004),
                 k=0.0)
-    part("bracers", brc, "leather", "auto", 700)
+    part("bracers", brc, "leather", "arm", 700)
     # HANDS: the left fist round the grip (its axis = the chord), the right hook on the string
     WK_L = _n(np.array([0.0, -0.6, -0.8]))
     part("hand_L", fist("hand_L", HAND_L, U_REST, WR_L, WK_L, 0.021, 1.12, index_fwd=-1.0), "skin", "bone:hand.L", 620, vs=0.55)
@@ -769,17 +794,17 @@ def skin_extras(extra: dict) -> list:
     if extra.get("rope_bind"):
         rope = Sculpt("rope_bind")
         for uu in (-0.10, 0.10, -0.60, 0.60):
-            a = bow_pt(uu)
+            c = bow_pt(uu)
             tan = bow_tangent(uu)
-            for j in range(4):
-                c = a + tan * (j - 1.5) * 0.0105
-                w = float(_tab(LIMB_W, uu)) * 0.5 + 0.004
-                t = float(_tab(LIMB_T, uu)) * 0.5 + 0.004
-                if abs(uu) < 0.2:
-                    w, t = 0.032 + 0.004, 0.024 + 0.004
-                side = _n(N_REST - tan * (tan @ N_REST))
-                ax = np.stack([side, np.cross(tan, side), tan])
-                rope.add(Torus(c, 1.0, 0.0055, axes=np.diag([1.0 / w, 1.0 / t, 1.0]) @ ax, rz=0.0055 / 1.0), k=0.002)
+            if abs(uu) < 0.2:
+                w, t = 0.034, 0.026
+            else:
+                w = float(_tab(LIMB_W, uu)) * 0.5 + 0.0045
+                t = float(_tab(LIMB_T, uu)) * 0.5 + 0.0045
+            side = _n(N_REST - tan * (tan @ N_REST))
+            a_, b_ = c - tan * 0.022, c + tan * 0.022
+            rope.add(FlatCapsule(a_, b_, w, t, w, t, side=side).displaced(wraps(0.0018, 0.0075, a_, b_, slant=0.4), 0.0018),
+                     k=0.0)
         out.append(("rope_bind", rope, 0.45, "rope", "bone:prop.L", 700, 1.0))
     return out
 
@@ -978,6 +1003,42 @@ def _skirt_weights(co):
     return {"hips": wh, "thigh.L": (1 - wh) * sL, "thigh.R": (1 - wh) * (1 - sL)}
 
 
+def _seg_t(p, a, b):
+    ab = b - a
+    t = ((p - a) @ ab) / (ab @ ab)
+    d = np.linalg.norm(p - (a + np.outer(np.clip(t, 0, 1), ab)), axis=1)
+    return t, d
+
+
+def _arm_weights(co):
+    """the sleeves and bracers on their own arm only (build 8 splash: bone heat gave the right bracer's wrist end, which
+    lies against the belly at bind, to the spine, and a dark strip stretched from the raised hand to the belt):
+    shoulder -> upper arm -> forearm -> hand by the position along each arm's chain, soft at the joints"""
+    W = {}
+    for s_, sh, el, wr in (("R", SH_R, EL_R, WR_R), ("L", SH_L, EL_L, WR_L)):
+        t1, d1 = _seg_t(co, sh, el)
+        t2, d2 = _seg_t(co, el, wr)
+        W[s_] = (t1, d1, t2, d2)
+    dR = np.minimum(W["R"][1], W["R"][3])
+    dL = np.minimum(W["L"][1], W["L"][3])
+    out = {}
+    for s_ in ("R", "L"):
+        t1, d1, t2, d2 = W[s_]
+        mine = (dR <= dL) if s_ == "R" else (dL < dR)
+        upper = d1 <= d2
+        w_sh = np.where(upper, _ss(0.16, -0.04, t1) * 0.6, 0.0)
+        w_fa = np.where(upper, _ss(0.86, 1.10, t1), 1.0 - _ss(0.14, -0.10, t2))
+        w_ua = np.where(upper, 1.0 - w_fa, _ss(0.14, -0.10, t2))
+        w_ua = w_ua * (1.0 - w_sh)
+        w_hd = np.where(upper, 0.0, _ss(0.90, 1.06, t2))
+        w_fa = w_fa * (1.0 - w_hd)
+        out[f"shoulder.{s_}"] = w_sh * mine
+        out[f"upper_arm.{s_}"] = w_ua * mine
+        out[f"forearm.{s_}"] = w_fa * mine
+        out[f"hand.{s_}"] = w_hd * mine
+    return out
+
+
 def _string_weights(co):
     """x_string at the nock, falling linearly to the tips (prop.L): a drawn string is two straight lines"""
     u = (co - S0) @ U_REST
@@ -1012,6 +1073,9 @@ def _install_bind() -> None:
             return {}
         if part.bind == "string":
             _assign(obj, ctx.info.armature, _string_weights)
+            return {}
+        if part.bind == "arm":
+            _assign(obj, ctx.info.armature, _arm_weights)
             return {}
         return orig(ctx, part, obj, body_low)
     bind_part._lisvel = True
@@ -2019,7 +2083,9 @@ def gen_idle_lobby() -> anim.Clip:
     motif, then a stop, the head tilted as if waiting for someone to supply the fifth; she looks over her shoulder at
     the camera, then counts again (120 f, closed loop)"""
     N = 120
-    low = bowl(rel=(0.06, -0.20, -0.92), aim=(0.15, -0.55, -0.82), up=(0.95, 0.15, 0.25), pole=(0.8, 0.3, -0.4))
+    # the bow lowered and stood upright at her left side like a staff, its upper tip cap by her shoulder (the brief's
+    # portrait: idle_lobby t 0 shows the visor, the wrap and the near bow tip cap)
+    low = bowl(rel=(0.16, -0.16, -0.86), aim=(0.30, -0.95, 0.0), up=(0.10, 0.12, 0.99), pole=(0.8, 0.4, -0.3))
     g = pz(lean=1.0, yaw=0.0, drop=0.02, L=low, R=rh(k=0.0, rel=(-0.12, -0.42, -0.50)))
     beats = [(-0.10, -0.46, -0.36), (-0.02, -0.50, -0.50), (-0.22, -0.48, -0.44), (-0.12, -0.52, -0.24)]
 
@@ -2164,7 +2230,10 @@ def model(ctx) -> list:
         if name == "string":
             low = string_mesh(ctx.col)
             low.data.materials.append(ctx.mats[role])
-            P.append(fighter.Part(name, low=low, bind=bind, uv_weight=uvw))
+            high = string_mesh(ctx.col)                 # its own bake source (the pipeline reads the part's role
+            high.name = "string_high"                   # from the high after the low is joined into the body)
+            high.data.materials.append(ctx.mats[role])
+            P.append(fighter.Part(name, high=high, low=low, bind=bind, uv_weight=uvw))
             continue
         if extra.get("page_fletching") and name in ("fletching", "fan_fletch"):
             S = page_fletching(name)
