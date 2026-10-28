@@ -131,7 +131,9 @@ try {
         const W = b.__W;
         b.__park();
         const me = W.players[0].entity;
-        if (a.c !== 0) b.__prep(me, a.x - 5, a.y + 1.5, 0);   // seat 0 watches (its vision covers the spot)
+        // seat 0 watches (its vision covers the spot), out of reach and not attacking (a hit would not break the channel,
+        // but its own auto-attack would make the scene a fight)
+        if (a.c !== 0) { b.__prep(me, a.x - 7, a.y + 2, 0); W.entity(me).autoAttack = false; }
         const id = W.players[a.c].entity;
         b.__prep(id, a.x, a.y, Math.PI / 2); b.__cmd(a.c, { type: 'stop' }); b.frames(45, 1 / 30);
         b.__prep(id, a.x, a.y, Math.PI / 2); b.frames(2, 1 / 30);
@@ -156,7 +158,7 @@ try {
         if (sampleNow) {
           const px = await B((b, a) => b.__vfxOnly(a.box), { box });
           samples.push({ f, t: +t.toFixed(2), st: r.st, vfxPx: px, ev: r.ev });
-          if ([15, 90, 180].includes(f - start) || f === done + 2) await shot(`recall_${tag}_${done > 0 ? 'departure' : `t${(f - start) / 30}`}`);
+          if ([15, 90, 180].includes(f - start) || (done > 0 && f === done + 2)) await shot(`recall_${tag}_${done > 0 ? 'departure' : `t${(f - start) / 30}`}`);
         }
         if (done > 0 && f > done + 3) break;
       }

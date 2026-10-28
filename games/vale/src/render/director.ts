@@ -170,6 +170,8 @@ const FALL_EXPOSURE = { peak: 1.7, hold: 0.2, fade: 0.14, dip: 0.95, desat: 0.2 
 const PULSE_MAX_R = 3.5;
 /** a T4 landing whose cast this viewer never saw (no cast event): its instance is the window after its first beat (s) */
 const UNSEEN_CAST_S = 8;
+/** the recall channel's origin over the feet (m) */
+const RECALL_LIFT = 0.12;
 
 function viewShape(s: ShapeT | undefined): ViewShape | null {
   if (!s) return null;
@@ -395,8 +397,9 @@ export class Director {
 
   /** the default T4 exposure envelope (once per caster per 0.6 s) */
   private pulse(src: number, at: Vector3, radius: number, o = ULT_EXPOSURE, delay = 0): boolean {
+    // landings ≥ 0.6 s apart (a delayed landing is gated at the time it lands, not the time it was queued)
     const now = this.host.now();
-    if (now - (this.lastPulse.get(src) ?? -1e9) < 0.6) return false;
+    if (now + delay - (this.lastPulse.get(src) ?? -1e9) < 0.6) return false;
     this.lastPulse.set(src, now + delay);
     this.vfx.exposurePulse(at, radius, { ...o, delay });
     return true;
@@ -631,7 +634,7 @@ export class Director {
           const e = view.entity(pl.entity);
           if (ev.state !== 'done' || !this.eventVfx.recall || !e || !this.host.entityVisible(e)) break;
           // the arrival: the same departure light where the fighter lands
-          B.set(e.x, 1, e.y);
+          B.set(e.x, RECALL_LIFT, e.y);
           this.fire(this.eventVfx.recall, e.id, 2, { origin: B, ground: B, anchor: 'origin', phase: 'release' });
           break;
         }
@@ -794,8 +797,9 @@ export class Director {
     const e = view.entity(id);
     if (!e || !e.alive || e.state !== 'recall' || !this.host.entityVisible(e)) return;
     const left = e.stateDuration > 0 ? Math.max(0.25, e.stateDuration - e.stateTime) : def.duration;
+    // the channel's origin sits just over the feet: its ring meshes would fade in the soft-depth test ON the ground
     const B = this.tmpB;
-    if (!this.host.bodyPos(id, B)) B.set(e.x, 1, e.y);
+    if (this.host.bodyPos(id, B)) B.y = RECALL_LIFT; else B.set(e.x, RECALL_LIFT, e.y);
     const live = { h: 0 };
     live.h = this.fire(vid, id, 2, { origin: B, ground: B, anchor: 'origin', dir: 0, timeScale: def.duration / left, sustain: () => this.recallFx.get(id) === live.h });
     if (live.h > 0) this.recallFx.set(id, live.h);

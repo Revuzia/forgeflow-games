@@ -3760,7 +3760,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · recall channel: an hour dial of light at the feet (12 carved ticks, its rim in the relationship colour); one hand of dawnglass sweeps it once over the channel (the director fits the def's clock, 7 s nominal, to the channel and holds it while it runs); motes rise, faster from 4.5 s; a column gathers over the last second; release (the departure, and the arrival where the fighter lands): a pillar of dawnglass, a ring rolling out, motes thrown up",
+    "$comment": "T2 · Lumen · recall channel: an hour dial of light at the feet (the rings ride the origin, which the director sets 0.12 m over the feet) (12 carved ticks, its rim in the relationship colour); one hand of dawnglass sweeps it once over the channel (the director fits the def's clock, 7 s nominal, to the channel and holds it while it runs); motes rise, faster from 4.5 s; a column gathers over the last second; release (the departure, and the arrival where the fighter lands): a pillar of dawnglass, a ring rolling out, motes thrown up",
     "id": "lib_recall",
     "duration": 7.0,
     "teamTint": true,
@@ -3798,7 +3798,7 @@
       },
       {
         "type": "mesh",
-        "at": "ground",
+        "at": "origin",
         "shape": "ringwave",
         "scale": 2.1,
         "life": 1.0,
@@ -3835,7 +3835,7 @@
       },
       {
         "type": "mesh",
-        "at": "ground",
+        "at": "origin",
         "shape": "ringwave",
         "scale": 2.1,
         "life": 1.0,
@@ -3848,11 +3848,11 @@
           ],
           [
             0.3,
-            0.16
+            0.22
           ],
           [
             0.9,
-            0.16
+            0.22
           ],
           [
             1,
@@ -3872,7 +3872,7 @@
       },
       {
         "type": "mesh",
-        "at": "ground",
+        "at": "origin",
         "shape": "ringwave",
         "scale": 2.1,
         "life": 7.0,
@@ -3886,14 +3886,14 @@
           ],
           [
             0.02,
-            0.85
+            1.0
           ],
           [
             1,
-            0.85
+            1.0
           ]
         ],
-        "emissive": 2.6,
+        "emissive": 3.0,
         "mask": "sweep",
         "maskParam": [
           [
@@ -3907,7 +3907,12 @@
         ],
         "noise": 0.15,
         "noiseScale": 2,
-        "blend": "add"
+        "blend": "add",
+        "rotateDeg": [
+          180,
+          0,
+          0
+        ]
       },
       {
         "type": "emitter",
