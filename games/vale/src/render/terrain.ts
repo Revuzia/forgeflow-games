@@ -48,8 +48,8 @@
 //             takes roughness down to 0.75); the Dialwood crowns sway (≤ 4 cm at 0.2–0.4 Hz, terrain_brush.ts).
 //   marks     the Standing Shadow floor (violet-cool stone, hard engraved edge, keeps its colour under
 //             fog) and the Fallen Shaft's shallow water.
-// r12 B4: instanced scatter (grass, Dialwood, rocks, clutter) keeps only the 4 m cells the camera can show (+ 4 m)
-// or shadow into, in one instanced draw per geometry (instance_cull.ts; the renderer calls cull() every frame); trees
+// r12 B4: instanced scatter keeps only the 4 m cells the camera can show (grass and clutter + 4 m, props + 1 m past
+// their bounds) or shadow into, in one instanced draw per geometry (instance_cull.ts; the renderer calls cull() every frame); trees
 // that only shadow into view draw a ≤ 250-triangle LOD crown. The cliffs are 16 m chunks that three culls itself, and
 // they (and the landmarks) cast into the shadow map only when their shadow can reach the view.
 // Every material is patched with the world chunk (fog of war + edge haze).
@@ -522,11 +522,11 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   /** the view version the sets were last culled for; dirty: a set or caster arrived since (re-scatter, props, landmarks) */
   let culledFor = -2, dirty = true;
   const chunked = (geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true,
-    depth?: Material, renderOrder = 0, lod: { geometry: BufferGeometry; dist: number } | null = null): Group => {
+    depth?: Material, renderOrder = 0, o: { lod?: { geometry: BufferGeometry; dist: number }; margin?: number } = {}): Group => {
     const g = new Group();
     g.name = name;
     if (!items.length) return g;
-    const ci = new CellInstances(geo, mat, items, { name, shadows, depth, renderOrder, lod });
+    const ci = new CellInstances(geo, mat, items, { name, shadows, depth, renderOrder, lod: o.lod ?? null, margin: o.margin });
     g.add(ci.mesh);
     if (ci.lodMesh) g.add(ci.lodMesh);
     g.userData.cull = ci;
@@ -535,7 +535,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     return g;
   };
   /** r12 B4: static shadow casters (cliff chunks, landmarks): each frame a caster draws into the shadow map only
-   *  when it, or the shadow it throws along the sun's ground offset, can reach the view (+ 4 m); three's square
+   *  when it, or the shadow it throws along the sun's ground offset, can reach the view (+ 1 m); three's square
    *  shadow box alone keeps ~1.5x the chunks the view sees */
   const casters: { o: Mesh; s: Sphere; top: number }[] = [];
   const caster = (o: Mesh): void => {
@@ -551,12 +551,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     const sl = v ? Math.hypot(v.sdx, v.sdz) : 0;
     for (const c of casters) {
       if (!v) { c.o.castShadow = true; continue; }
-      _cs.copy(c.s); _cs.radius += 4;
+      _cs.copy(c.s); _cs.radius += 1;
       let on = v.frustum.intersectsSphere(_cs);
       if (!on && sl > 0) {
         const k = Math.max(0, c.top) * 0.5;
         _cs.center.set(c.s.center.x + v.sdx * k, Math.min(c.s.center.y, k), c.s.center.z + v.sdz * k);
-        _cs.radius = c.s.radius + sl * k + 4;
+        _cs.radius = c.s.radius + sl * k + 1;
         on = v.frustum.intersectsSphere(_cs);
       }
       c.o.castShadow = on;
@@ -1619,8 +1619,10 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const propParts = (geos: BufferGeometry[], items: { x: number; y: number; m: Matrix4; c?: Color }[], name: string, shadows = true, sway = false): Group[] => {
     const by: { m: Matrix4; c?: Color }[][] = geos.map(() => []);
     for (const it of items) by[variantOf(it.x, it.y, geos.length)].push(it);
+    // props (Dialwood, boulders, stones): 1 m past their bounds (the cull runs every frame for that frame's camera, so
+    // nothing can pop in; the bounds already hold the crowns, sway is ≤ 4 cm)
     return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined, 0,
-      sway && shadows ? { geometry: treeLod(g), dist: Infinity } : null)).filter((g) => g.children.length > 0);
+      { margin: 1, lod: sway && shadows ? { geometry: treeLod(g), dist: Infinity } : undefined })).filter((g) => g.children.length > 0);
   };
   /** r12 B4 Dialwood LOD: a ≤ 250-triangle crown for the trees that only shadow into view (instance_cull.ts) */
   const lods = new WeakMap<BufferGeometry, BufferGeometry>();

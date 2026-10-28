@@ -355,14 +355,14 @@ def sculpts() -> list:
 
     # BELT + BUCKLE
     belt = Sculpt("belt")
-    belt.add(_band((0.0, 0.008, 1.445), 0.352, 0.268, 0.042, 0.014), k=0.0)
+    belt.add(_band((0.0, 0.008, 1.439), 0.352, 0.268, 0.054, 0.014), k=0.0)          # the concept's belt: z 1.385-1.493
     for x in (-0.24, -0.15, 0.15, 0.24):
-        belt.add(Sphere((x, -0.255 + 0.06 * (abs(x) > 0.2), 1.445), 0.012), k=0.004)
+        belt.add(Sphere((x, -0.255 + 0.06 * (abs(x) > 0.2), 1.439), 0.012), k=0.004)
     part("belt", belt, "leather", "auto", 560)
     buckle = Sculpt("buckle")
-    buckle.add(RoundBox((0.0, -0.268, 1.445), (0.072, 0.022, 0.058), 0.012), k=0.0)
-    buckle.sub(RoundBox((0.0, -0.29, 1.445), (0.042, 0.03, 0.030), 0.006), k=0.004)
-    buckle.add(RoundBox((0.0, -0.262, 1.445), (0.040, 0.012, 0.028), 0.006), k=0.004)
+    buckle.add(RoundBox((0.0, -0.268, 1.439), (0.072, 0.022, 0.058), 0.012), k=0.0)
+    buckle.sub(RoundBox((0.0, -0.30, 1.439), (0.042, 0.018, 0.030), 0.006), k=0.004)       # a shallow frame (6 mm)
+    buckle.add(RoundBox((0.0, -0.272, 1.439), (0.040, 0.012, 0.028), 0.006), k=0.004)
     part("buckle", buckle, "ironstone", "bone:hips", 220, 0.7)
 
     # COAT SKIRT (cloth, heat weights): flared from the belt to the hem at 0.80; the tabard panels hang over it
@@ -375,7 +375,7 @@ def sculpts() -> list:
     for s, sx in (("R", -1), ("L", 1)):
         tb = Sculpt(f"tabard_{s}")
         c = (sx * 0.086, -0.302, 1.0175)
-        pan = RoundBox(c, (0.082, 0.016, 0.3925), 0.010, axes=sdf.rot_x(-6.5))
+        pan = RoundBox(c, (0.082, 0.016, 0.3925), 0.010, axes=sdf.rot_x(7.5))       # hangs from under the belt, hem forward
         tb.add(pan.displaced(folds(0.008, 26.0, axis=0, phase=sx * 1.1, zfade=(1.3, 0.7)), 0.008), k=0.0)
         part(f"tabard_{s}", tb, "cloth2", ("chain", f"tabard_{s.lower()}", "hips"), 420)
 
@@ -404,7 +404,7 @@ def sculpts() -> list:
         part(f"knee_{s}", kn, "ironstone", f"bone:shin.{s}", 420)
     boots = Sculpt("boots")
     for sx in (-1, 1):
-        rz = sdf.rot_z(sx * 11)
+        rz = sdf.rot_z(-sx * 11)                    # toes OUT 11 deg (the concept; the rig's feet: toe_out_deg 11)
         boots.add(RoundBox((sx * 0.268, -0.055, 0.075), (0.120, 0.190, 0.075), 0.055, axes=rz), k=0.0)
         boots.add(FlatCapsule((sx * 0.258, 0.02, 0.06), (sx * 0.257, 0.02, 0.19), 0.122, 0.118, 0.118, 0.115, side=(1, 0, 0)), k=0.04)
         boots.add(RoundBox((sx * 0.272, -0.05, 0.022), (0.128, 0.198, 0.022), 0.012, axes=rz), k=0.008)              # the welted sole
@@ -630,7 +630,7 @@ TOPMAP = {                 # up-facing texels: the part's own front paint, depth
     "helm": (2.262, 2.335), "pauldron_R": (1.935, 1.995), "pauldron_L": (1.935, 1.995), "tier_R": (1.70, 1.78),
     "tier_L": (1.70, 1.78), "boots": (0.03, 0.12), "gorget": (1.88, 1.95), "cuirass": (1.70, 1.80),
     "greave_R": (0.45, 0.53), "greave_L": (0.45, 0.53), "bracer_R": (1.40, 1.48), "bracer_L": (1.40, 1.48),
-    "belt": (1.415, 1.475),
+    "belt": (1.40, 1.48),
 }
 BASE_TONE = {}             # part: (target median hex, hue strength, gamma) after the first look
 # the value cap (brief: no large area lighter than L* 86): albedo luminance above KNEE (L* ~80) is compressed by SLOPE,

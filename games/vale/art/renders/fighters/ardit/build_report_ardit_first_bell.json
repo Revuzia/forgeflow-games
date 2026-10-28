@@ -1,0 +1,286 @@
+{
+  "id": "ardit_first_bell",
+  "fighter": "ardit",
+  "skin": true,
+  "parts": {
+    "bind_neck": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "neck",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_neck": 298,
+    "bind_cuirass": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "head",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_cuirass": 2000,
+    "bind_sleeves": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "hand.L",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_sleeves": 860,
+    "bind_belt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_belt": 560,
+    "bind_coat": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_coat": 1600,
+    "bind_legs": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "toe.L",
+        "toe.R"
+      ]
+    },
+    "tris_legs": 800,
+    "bind_boots": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "thigh.R"
+      ]
+    },
+    "tris_boots": 1000,
+    "tris_helm": 1500,
+    "tris_visor": 120,
+    "tris_face": 600,
+    "tris_gorget": 760,
+    "tris_pauldron_R": 560,
+    "tris_tier_R": 420,
+    "tris_pauldron_L": 560,
+    "tris_tier_L": 420,
+    "tris_bracer_R": 420,
+    "tris_bracer_L": 420,
+    "tris_fist_R": 580,
+    "tris_fist_L": 520,
+    "tris_buckle": 220,
+    "tris_tabard_R": 420,
+    "tris_tabard_L": 420,
+    "tris_greave_R": 560,
+    "tris_knee_R": 420,
+    "tris_greave_L": 560,
+    "tris_knee_L": 420,
+    "tris_spear_shaft": 260,
+    "tris_spear_collar": 360,
+    "tris_spear_head": 220,
+    "tris_pavise_frame": 820,
+    "tris_pavise_pane": 160,
+    "tris_pane_line": 420,
+    "tris_pavise_handle": 220,
+    "tris_spire": 520,
+    "tris_inlays": 160,
+    "tris_bell_bail": 120,
+    "tris_bell_glass": 200,
+    "validate_ardit": "19778->19771"
+  },
+  "uv_coverage": 0.623,
+  "bake": {
+    "base": 5.1,
+    "rough_metal": 3.81,
+    "normal": 2.5,
+    "ao": 3.04,
+    "normal_fixed_px": 139542,
+    "projection": 32.13,
+    "pack_save": 32.28,
+    "total": 46.91
+  },
+  "tris": 20471,
+  "mesh_top_m": 2.476,
+  "glb_bytes_raw": 2498460,
+  "optimize": {
+    "ok": true,
+    "before": 2498460,
+    "after": 979736,
+    "q_base": 70,
+    "q_orm": 64
+  },
+  "glb_bytes": 979736,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (957 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_first_bell_base 2048x2048 251K, ardit_first_bell_normal 512x512 37K, ardit_first_bell_orm 512x512 57K",
+      "  skinned meshes: ardit_accent(360v), ardit_first_bell(17228v)",
+      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise_top shoulderR upper_armR forearmR handR propR x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 20471; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ardit/ardit_first_bell_splash.png",
+      "portrait": "art/out/fighters/ardit/ardit_first_bell_portrait.png"
+    },
+    "seconds": {
+      "splash": 8.82,
+      "portrait": 6.45
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.799,
+        0,
+        -0.347
+      ],
+      [
+        0.8,
+        2.476,
+        0.372
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 2.025,
+    "accentPct": 1.91,
+    "accentTopHalfPct": 50.8,
+    "heightPx1080": 134,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/ardit/three_ardit_first_bell.png",
+    "seconds": 9.1,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.27,
+      "model": 3.3,
+      "lows_bind": 3.4,
+      "uv": 3.62,
+      "bake": 46.91,
+      "export": 0.06,
+      "optimize": 0.53,
+      "load_test": 0.11,
+      "render": 15.3,
+      "three_qa": 9.36
+    },
+    "total_s": 83.03
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 2.3
+}

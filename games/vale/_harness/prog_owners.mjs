@@ -1,4 +1,6 @@
-// scratch (B4 lane): which materials own each live program; run against the prod preview
+// VALE harness — r12 B4 programs: every live WebGL program of the render bench (RIFT, densest fight) with the
+// materials and scene parts that own it and its first fragment uniforms, so the program budget can be worked down.
+//   VALE_URL=http://localhost:<port> node _harness/prog_owners.mjs [t=900] [q=high]      (prints one line per program)
 import { open } from './pw.mjs';
 const T = Number(process.argv[2] ?? 900), Q = process.argv[3] ?? 'high';
 const { browser, page } = await open(`/_harness/web/render_bench.html?mode=rift&q=${Q}&t=${T}&dev=1&hud=1`, { wait: false, hmr: false });

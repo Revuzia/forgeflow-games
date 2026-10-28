@@ -1,5 +1,7 @@
-// scratch (B4 lane): do HUD components re-render per sim tick? Real game, RIFT co-op, autopilot at speed 1;
-// counts preact component renders (options.diffed) over a window of live play, per component.
+// VALE harness — r12 B4 "do the HUD's slot components re-render every sim tick?" The real game (RIFT co-op, your
+// seat on the dev autopilot at speed 1), 20 s into the match: preact's options.diffed counts every component render
+// for 6 s, per component, next to the sim ticks in that window (per-tick re-renders would show ≥ the tick count).
+//   VALE_URL=http://localhost:<port> node _harness/hud_renders.mjs        (dev server; prints JSON)
 import { open, vale, waitFor } from './pw.mjs';
 const { browser, page } = await open('/?dev=1&autopilot=match&speed=1');
 const frames = () => page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { timeout: 60000 });

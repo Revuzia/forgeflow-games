@@ -8,7 +8,8 @@
 // served by `vite preview` on the first free port in 5191-5199 (started and stopped here), RIFT at t 900 s,
 // 10 s per preset, High and Low by default. It reports avg fps, p95 / p99 frame ms, the renderer's own CPU ms per
 // frame (renderer.render, mean and p95) and the sim pump's, draw calls, programs and triangles per group
-// (grass, canopy, terrain, clutter, rocks, landmarks, actors, VFX, ambient, overlay, post: Renderer.profile) and
+// (grass, canopy, terrain, clutter, rocks, landmarks, actors, VFX, ambient, overlay, post: Renderer.profile; main and
+// shadow pass apart), the live programs (and how many the frame bound), the 5 worst frames, and
 // exits non-zero on a miss of the hard budgets:
 //   High (and Low, as a ceiling): ≤ 500k triangles a frame (every pass, shadows included), ≤ 450 draw calls,
 //   ≤ 40 programs, renderer CPU ≤ 6 ms a frame.

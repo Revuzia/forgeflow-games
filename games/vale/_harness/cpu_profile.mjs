@@ -1,4 +1,8 @@
-// scratch (B4 lane): a CPU profile of the live bench loop, self time by function (dev server: readable names)
+// VALE harness — r12 B4 CPU profile of the live render-bench loop (RIFT, densest fight): the CDP sampling profiler
+// for <sec> seconds, then self and inclusive ms PER FRAME by function, plus the bench's own pump / render means.
+//   VALE_URL=http://localhost:<port> node _harness/cpu_profile.mjs [t=900] [q=high] [sec=4]
+// Point it at a dev server (readable names); note the shared 5190 server does not watch _harness/, so a changed
+// render_bench.ts needs a fresh server. Prints only (no report).
 import { open } from './pw.mjs';
 const T = Number(process.argv[2] ?? 900), Q = process.argv[3] ?? 'high', SEC = Number(process.argv[4] ?? 4);
 const { browser, page } = await open(`/_harness/web/render_bench.html?mode=rift&q=${Q}&t=${T}&dev=1&hud=1`, { wait: false, hmr: false });

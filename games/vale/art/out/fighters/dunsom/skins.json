@@ -1,0 +1,16 @@
+[
+  {
+    "id": "dunsom_highrim",
+    "fighter": "dunsom",
+    "model": "assets/fighters/dunsom/dunsom_highrim.glb",
+    "portrait": "assets/fighters/dunsom/dunsom_highrim_portrait.png",
+    "splash": "assets/fighters/dunsom/dunsom_highrim_splash.png"
+  },
+  {
+    "id": "dunsom_almanac",
+    "fighter": "dunsom",
+    "model": "assets/fighters/dunsom/dunsom_almanac.glb",
+    "portrait": "assets/fighters/dunsom/dunsom_almanac_portrait.png",
+    "splash": "assets/fighters/dunsom/dunsom_almanac_splash.png"
+  }
+]
