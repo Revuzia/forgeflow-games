@@ -18,7 +18,11 @@
 //     "Behind" is a world-space ray test, not a screen box: rays from the camera to 12 points on the unit's body
 //     against an occluder proxy built once per template from the upper's triangles (stacked 0.5 m bands, each a set
 //     of box ∩ cylinder volumes, one per connected footprint, so a gate's two piers and the open arch between them
-//     are told apart). On when ≥ 25 % of the rays are blocked by the fade-able part, off below 12 %.
+//     are told apart; each volume's box and cylinder fitted to the real triangles, the grid only links them).
+//     A ray counts only when its crossing of the proxy ends ≥ 0.3 m before the body point (a unit beside the
+//     tower, or touching its proxy, is not behind it). On when ≥ 25 % of the rays are blocked, off below 12 %.
+//     While it collapses, the falling top fades whole the same way whenever it covers or buries one of them
+//     (its proxy rides along with it; a ray then counts from the moment it enters the top).
 //   * shell: while protected (untargetable) a dawnglass glaze hugs the tower's own silhouette (its surface pushed out
 //     7 cm along smoothed normals: a fresnel rim, the shield's 45° hatch, a slow rising band) over a low foot ring of
 //     twelve hour-ticks on the plinth, so the protected tower stands no larger on screen than the bare one; the glaze
@@ -54,6 +58,8 @@ const FLARE = { k: 1.25, s: 0.066 } as const;
 /** occluder proxy: band height and footprint cell (m) */
 const OCC_BAND = 0.5;
 const OCC_CELL = 0.2;
+/** the clearance (m, along the ray) the proxy must leave before a body point for that ray to count as blocked */
+const OCC_CLEAR = 0.3;
 /** the unit's body rays: heights (× art height) and sideways offsets (× its half-width) */
 const RAY_ROWS = [0.25, 0.5, 0.72, 0.92] as const;
 const RAY_COLS = [-1, 0, 1] as const;
@@ -96,6 +102,8 @@ interface Struct {
   depth: Mesh[];
   depthMat: MeshBasicMaterial | null;
   trans: boolean;
+  /** the upper's rest matrix in the root's space (the occluder proxy's frame; the falling top's proxy rides on it) */
+  upRest: Matrix4;
   /** model-space bounds (root-local, y up): plinth top, tower top, tower radius */
   plinth: number;
   top: number;
@@ -302,7 +310,7 @@ export class StructureFx {
     const u: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 } };
     const s: Struct = {
       a, def, upper, ruin, chips: [nodes.get('chip1') ?? null, nodes.get('chip2') ?? null], dmg, accents: [],
-      u, clones: [], upperMats: [], depth: [], depthMat: null, trans: false, plinth: 0.4, top: def.art.height, radius: 1,
+      u, clones: [], upperMats: [], depth: [], depthMat: null, trans: false, upRest: new Matrix4(), plinth: 0.4, top: def.art.height, radius: 1,
       stage: 0, seen: false, dieT: -1, fallDir: new Vector3(1, 0, 0), broke: false, landed: false, dead: false, riseT: -1, fade: 0,
       occ: null, occWant: false, shell: null, skins: [], skinMat: null, noSkin: new Set(),
       shellK: 0, shellBreak: -1, seed: (a.id * 0.6180339) % 1 * 100, dipUntil: 0, nextDip: 0, flareT: -1, falling: [], warmed: false,
@@ -312,6 +320,7 @@ export class StructureFx {
     const base = nodes.get('base');
     if (base) s.plinth = boundsIn(base, a.root, _box).max.y;
     if (upper) {
+      relMatrix(upper, a.root, s.upRest);
       boundsIn(upper, a.root, _box);
       s.top = _box.max.y;
       s.radius = Math.max(0.4, Math.abs(_box.min.x), Math.abs(_box.max.x), Math.abs(_box.min.z), Math.abs(_box.max.z));
@@ -459,14 +468,15 @@ export class StructureFx {
       this.shellUpdate(s, dt, v);
       // ── broken-off chips on their way down
       if (s.falling.length) this.fallUpdate(s, dt);
-      // ── occlusion fade
+      // ── occlusion fade (the standing tower, or its top while it falls)
       let want = 0;
-      if (!s.dead && a.root.visible && s.upper && s.occ) {
+      const falling = s.dieT >= 0;
+      if ((!s.dead || falling) && a.root.visible && s.upper && s.occ) {
         const need = s.occWant ? STRUCT_FADE.keep : STRUCT_FADE.on;
         for (const id of focus) {
           if (id < 0 || id === a.id) continue;
           const o = actors.get(id);
-          if (o && o.visible && o.root.visible && o.view?.alive && this.blocked(s, o, cam) >= need) { want = 1; break; }
+          if (o && o.visible && o.root.visible && o.view?.alive && this.blocked(s, o, cam, falling) >= need) { want = 1; break; }
         }
       }
       s.occWant = want > 0;
@@ -786,17 +796,24 @@ export class StructureFx {
 
   // ── occlusion ──────────────────────────────────────────────────────────────────────────────────
   /** the share (0..1) of rays from the camera to points on the unit's body that the structure's fade-able part
-   *  blocks (world-space, against the occluder proxy; no screen-space boxes, so no aspect-ratio dependence) */
-  private blocked(s: Struct, o: Actor, cam: PerspectiveCamera): number {
+   *  blocks (world-space, against the occluder proxy; no screen-space boxes, so no aspect-ratio dependence).
+   *  `fall`: the top is falling (the proxy rides along with it, and a unit it buries counts as hidden). */
+  private blocked(s: Struct, o: Actor, cam: PerspectiveCamera, fall = false): number {
     const a = s.a;
     const occ = s.occ!;
-    // cheap cull: near the structure, and not in front of its front face along the camera's ground-forward axis
+    // cheap cull: near the structure, and (standing) not in front of its front face along the camera's
+    // ground-forward axis; a falling top reaches about its height out, toward the camera too
     const dx = o.x - a.x, dz = o.y - a.y;
-    if (dx * dx + dz * dz > (s.radius + 8) ** 2) return 0;
-    const fl = Math.hypot(_fwd.x, _fwd.z) || 1;
-    if ((dx * _fwd.x + dz * _fwd.z) / fl < -(s.radius + 0.6)) return 0;
-    // root-local frame (static; composed from the root's own transform so it is right before the first render)
+    if (fall) { if (dx * dx + dz * dz > (s.radius + s.top + 1) ** 2) return 0; }
+    else {
+      if (dx * dx + dz * dz > (s.radius + 8) ** 2) return 0;
+      const fl = Math.hypot(_fwd.x, _fwd.z) || 1;
+      if ((dx * _fwd.x + dz * _fwd.z) / fl < -(s.radius + 0.6)) return 0;
+    }
+    // the proxy's frame: root-local (static; composed from the root's own transform so it is right before the
+    // first render), and for a falling top the upper's rest pose × its current pose⁻¹ on top
     _inv.compose(a.root.position, a.root.quaternion, a.root.scale).invert();
+    if (fall && s.upper) _inv.premultiply(relMatrix(s.upper, a.root, _m2).invert().premultiply(s.upRest));
     _rc.copy(cam.position).applyMatrix4(_inv);
     const H = Math.max(0.6, o.artHeight);
     const w = Math.min(0.45, Math.max(0.2, o.radius * 0.8));
@@ -804,7 +821,7 @@ export class StructureFx {
     for (const f of RAY_ROWS) for (const c of RAY_COLS) {
       n++;
       _rp.set(o.x + _right.x * c * w, o.h + f * H, o.y + _right.z * c * w).applyMatrix4(_inv);
-      if (segBlocked(_rc, _rp, occ.vols)) hit++;
+      if (segBlocked(_rc, _rp, occ.vols, !fall)) hit++;
     }
     return hit / n;
   }
@@ -812,7 +829,8 @@ export class StructureFx {
   private applyFade(s: Struct): void {
     const a = s.a;
     const on = s.fade > 0.001;
-    s.u.uSfY0.value = a.h + s.plinth + STRUCT_FADE.from;
+    // standing: the upper part from STRUCT_FADE.from above the plinth; falling: the whole top (it lies low)
+    s.u.uSfY0.value = s.dieT >= 0 ? a.h - 100 : a.h + s.plinth + STRUCT_FADE.from;
     s.u.uSfY1.value = s.u.uSfY0.value + STRUCT_FADE.band;
     s.u.uSfA.value = 1 - (1 - STRUCT_FADE.alpha) * smooth(0, 1, s.fade);
     const trans = on || (s.dieT >= 0 && s.u.uSfAlpha.value < 0.999);
@@ -853,15 +871,19 @@ function showPart(node: Object3D, shown: boolean): void {
   }
 }
 
-/** does the segment c → p pass through an occluder volume at least 0.25 m before p? (root-local) */
-function segBlocked(c: Vector3, p: Vector3, vols: readonly OccVol[]): boolean {
+/** does the ray c → p cross an occluder volume before p? (root-local) `strict` (a standing tower): only a crossing
+ *  that ends ≥ OCC_CLEAR m before p counts, so a point inside or right at a volume (a unit beside the tower, its
+ *  body touching the conservative proxy) is not hidden by it; else (a falling top) a crossing that starts
+ *  ≥ OCC_CLEAR m before p counts, a point inside the top (a unit it buries) included */
+function segBlocked(c: Vector3, p: Vector3, vols: readonly OccVol[], strict: boolean): boolean {
   const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z;
   const len = Math.hypot(dx, dy, dz);
   if (len < 0.3) return false;
-  const tMax = 1 - 0.25 / len;
+  const tMax = 1 - OCC_CLEAR / len;
   const aa = dx * dx + dz * dz;
   for (const b of vols) {
-    let lo = 0, hi = tMax;
+    // strict: the whole crossing (on the unbounded ray) must lie before tMax; else only its start
+    let lo = 0, hi = strict ? Infinity : tMax;
     // slabs: y, x, z
     if (Math.abs(dy) < 1e-9) { if (c.y < b.y0 || c.y > b.y1) continue; }
     else { let t0 = (b.y0 - c.y) / dy, t1 = (b.y1 - c.y) / dy; if (t0 > t1) { const q = t0; t0 = t1; t1 = q; } lo = Math.max(lo, t0); hi = Math.min(hi, t1); if (lo > hi) continue; }
@@ -880,14 +902,16 @@ function segBlocked(c: Vector3, p: Vector3, vols: readonly OccVol[]): boolean {
       lo = Math.max(lo, (-bb - sq) / (2 * aa)); hi = Math.min(hi, (-bb + sq) / (2 * aa));
       if (lo > hi) continue;
     }
-    return true;
+    if (hi <= tMax) return true;
   }
   return false;
 }
 
 /** the occluder proxy of an upper (root-local): from the fade line to the top in OCC_BAND slabs; in each, the
  *  footprint of the triangles clipped to the slab rasterised on an OCC_CELL grid, one volume per 8-connected
- *  footprint (its box ∩ its bounding cylinder). `foot`: the tower's widest reach just above the plinth. */
+ *  footprint: the box of its clipped triangles' real points ∩ their bounding cylinder round the box's centre
+ *  (the grid only tells the footprints apart, so its cells never widen a volume). `foot`: the tower's widest
+ *  reach just above the plinth. */
 function occProxy(upper: Object3D, root: Object3D, plinth: number, top: number, radius: number): OccProxy {
   const ms = meshes(upper);
   const m4 = new Matrix4();
@@ -900,6 +924,9 @@ function occProxy(upper: Object3D, root: Object3D, plinth: number, top: number, 
   const ext = radius + OCC_CELL;
   const n = Math.ceil((2 * ext) / OCC_CELL);
   const grids = Array.from({ length: nb }, () => new Uint8Array(n * n));
+  // per band, every clipped piece: its points (x, z pairs) and [its centre cell, its span in the points]
+  const pp: number[][] = Array.from({ length: nb }, () => []);
+  const pc: number[][] = Array.from({ length: nb }, () => []);
   let foot = 0;
   const A = new Vector3(), B = new Vector3(), C = new Vector3();
   const pts: number[] = [];
@@ -944,15 +971,21 @@ function occProxy(upper: Object3D, root: Object3D, plinth: number, top: number, 
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
         for (let i = 0; i < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); z0 = Math.min(z0, pts[i + 1]); z1 = Math.max(z1, pts[i + 1]); }
         mark(grids[k], x0, x1, z0, z1);
+        const ci = Math.min(n - 1, Math.max(0, Math.floor(((x0 + x1) / 2 + ext) / OCC_CELL)));
+        const cj = Math.min(n - 1, Math.max(0, Math.floor(((z0 + z1) / 2 + ext) / OCC_CELL)));
+        pc[k].push(cj * n + ci, pp[k].length, pp[k].length + pts.length);
+        for (const v of pts) pp[k].push(v);
       }
     }
   }
   // the footprints: 8-connected components of each band's grid
   const vols: OccVol[] = [];
   const seen = new Uint8Array(n * n);
+  const lab = new Int32Array(n * n);
   const stack: number[] = [];
   grids.forEach((g, k) => {
     seen.fill(0);
+    const first = vols.length;
     for (let s0 = 0; s0 < n * n; s0++) {
       if (!g[s0] || seen[s0]) continue;
       const cells: number[] = [];
@@ -968,19 +1001,26 @@ function occProxy(upper: Object3D, root: Object3D, plinth: number, top: number, 
           if (g[q] && !seen[q]) { seen[q] = 1; stack.push(q); }
         }
       }
-      let i0 = n, i1 = -1, j0 = n, j1 = -1;
-      for (const c of cells) { const i = c % n, j = (c / n) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); }
-      const x0 = -ext + i0 * OCC_CELL, x1 = -ext + (i1 + 1) * OCC_CELL, z0 = -ext + j0 * OCC_CELL, z1 = -ext + (j1 + 1) * OCC_CELL;
-      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-      let r2 = 0;
-      for (const c of cells) {
-        const i = c % n, j = (c / n) | 0;
-        const fx = Math.max(Math.abs(-ext + i * OCC_CELL - cx), Math.abs(-ext + (i + 1) * OCC_CELL - cx));
-        const fz = Math.max(Math.abs(-ext + j * OCC_CELL - cz), Math.abs(-ext + (j + 1) * OCC_CELL - cz));
-        r2 = Math.max(r2, fx * fx + fz * fz);
-      }
-      vols.push({ y0: y0 + k * bh, y1: y0 + (k + 1) * bh, x0, x1, z0, z1, cx, cz, r2 });
+      for (const c of cells) lab[c] = vols.length;
+      vols.push({ y0: y0 + k * bh, y1: y0 + (k + 1) * bh, x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity, cx: 0, cz: 0, r2: 0 });
     }
+    // fit each footprint's volume to its pieces' real points (every marked cell belongs to a piece of its own
+    // footprint): the box, then the cylinder round the box's centre; 1 cm of slack against rounding
+    const P = pp[k], Q = pc[k];
+    for (let i = 0; i < Q.length; i += 3) {
+      const v = vols[lab[Q[i]]];
+      for (let j = Q[i + 1]; j < Q[i + 2]; j += 2) { v.x0 = Math.min(v.x0, P[j]); v.x1 = Math.max(v.x1, P[j]); v.z0 = Math.min(v.z0, P[j + 1]); v.z1 = Math.max(v.z1, P[j + 1]); }
+    }
+    for (let i = first; i < vols.length; i++) {
+      const v = vols[i];
+      v.x0 -= 0.01; v.x1 += 0.01; v.z0 -= 0.01; v.z1 += 0.01;
+      v.cx = (v.x0 + v.x1) / 2; v.cz = (v.z0 + v.z1) / 2;
+    }
+    for (let i = 0; i < Q.length; i += 3) {
+      const v = vols[lab[Q[i]]];
+      for (let j = Q[i + 1]; j < Q[i + 2]; j += 2) v.r2 = Math.max(v.r2, (P[j] - v.cx) ** 2 + (P[j + 1] - v.cz) ** 2);
+    }
+    for (let i = first; i < vols.length; i++) vols[i].r2 = (Math.sqrt(vols[i].r2) + 0.01) ** 2;
   });
   const out = { vols, foot: foot || radius };
   occCache.set(key, out);

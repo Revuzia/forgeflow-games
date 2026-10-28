@@ -142,6 +142,7 @@ HALO_C = np.array([0.0, -0.015, 2.025])
 HALO_RI, HALO_RO, HALO_HZ = 0.335, 0.400, 0.016
 HALO_RM = 0.5 * (HALO_RI + HALO_RO)
 HALO_SEG = 24                                       # carved segments round the band (radial notches)
+FIN_H = 0.075                                       # the front strut's arch finial
 CLASP_ANG = (0.0, 125.0, -125.0)                    # degrees from the front (-Y) toward the left (+X)
 BELL_H = 0.11
 BELL_TOP = HALO_C[2] - HALO_HZ - 0.016              # the bell crowns hang 1.6 cm under the band (a hook loop)
@@ -450,7 +451,7 @@ def sculpts(n_bells: int = 7) -> list:
                      (max(sx * 0.10, sx * 0.36), 0.22, czl + 0.16)).displaced(chips(0.0035, 10.0), 0.0035), k=0.0)
             org = (sx * 0.22, 0.03, 1.472)
             part(f"pauldron_{s}{i + 1}", L, "stone", ("dblend", f"shoulder.{s}", f"upper_arm.{s}", org,
-                                                        (sx * 0.14, 0.0, -0.99), 0.03 + 0.03 * i, 0.10 + 0.03 * i), 400, 0.6)
+                                                        (sx * 0.14, 0.0, -0.99), 0.03 + 0.03 * i, 0.10 + 0.03 * i), 360, 0.6)
 
     # ROBE TOP (chalk) under the cowl, the SASH over the seam, the SKIRT to the hem (coat + blue-grey panel + band)
     top = Sculpt("robe_top")
@@ -494,7 +495,7 @@ def sculpts(n_bells: int = 7) -> list:
     nrm = unit((-0.30, -0.45, -0.84))
     sl.inter(HalfSpace((0.29, 0.0, 0.93), nrm, 1.0), k=0.008)
     sl.sub(FlatCapsule((0.262, 0.01, 1.20), (0.288, -0.005, 0.80), 0.046, 0.07, 0.058, 0.118, side=(1, 0, 0)), k=0.008)
-    part("sleeve_L", sl, "chalk", ("weights", "sleeves"), 1100)
+    part("sleeve_L", sl, "chalk", ("weights", "sleeves"), 1000)
     sr = Sculpt("sleeve_R")                     # a bell sleeve hanging from the bent arm, its mouth turned front-out
     sr.add(FlatCapsule((-0.235, 0.03, 1.42), (-0.292, 0.02, 0.86), 0.070, 0.10, 0.084, 0.142, side=(1, 0, 0))
            .displaced(folds_ang(0.008, 7, c=(-0.28, 0.02), zfade=(1.25, 1.0)), 0.008), k=0.0)
@@ -503,7 +504,7 @@ def sculpts(n_bells: int = 7) -> list:
     sr.sub(Fn(lambda P: np.maximum(-((P - p_open) @ n_open), P[:, 2] - 1.235), (-0.5, -0.4, 0.7), (0.0, 0.3, 1.3)), k=0.012)
     sr.inter(HalfSpace((0.0, 0.0, 0.84), (0.25, 0.30, -0.92), 1.0), k=0.01)
     sr.sub(FlatCapsule((-0.258, 0.015, 1.24), (-0.30, 0.005, 0.80), 0.046, 0.07, 0.060, 0.118, side=(1, 0, 0)), k=0.008)
-    part("sleeve_R", sr, "chalk", ("weights", "sleeves"), 1200)
+    part("sleeve_R", sr, "chalk", ("weights", "sleeves"), 1100)
 
     # FOREARMS: tan linen bandages out of the cuffs
     for s, E_, W_ in (("L", E_L, W_L), ("R", E_R, W_R)):
@@ -635,12 +636,28 @@ def halo_parts(n_bells: int = 7) -> list:
     ring = Sculpt("halo_ring")
     lo, hi = HALO_C - np.array([HALO_RO + 0.01, HALO_RO + 0.01, 0.03]), HALO_C + np.array([HALO_RO + 0.01, HALO_RO + 0.01, 0.03])
     ring.add(Fn(ring_d, lo, hi).displaced(chips(0.0025, 8.0), 0.0025), k=0.0)
-    out.append(("halo_ring", ring, 0.55, "chalk", "bone:x_halo", 1300, 1.4))
+    out.append(("halo_ring", ring, 0.55, "chalk", "bone:x_halo", 1200, 1.4))
     cl = Sculpt("halo_clasps")
     for ang in CLASP_ANG:
-        c = ring_pt(ang, z=HALO_C[2] + 0.028)                  # the struts: 14 cm tall (brief), 9 cm over the band
-        cl.add(RoundBox(c, (0.024, 0.044, 0.060), 0.008, axes=sdf.rot_z(-ang)).displaced(chips(0.003, 10.0), 0.003), k=0.0)
-        cl.add(RoundBox(c + np.array([0, 0, 0.063]), (0.017, 0.034, 0.008), 0.005, axes=sdf.rot_z(-ang)), k=0.004)
+        # the front strut stands 7 cm over the band, the two back ones 4.5 cm (from the game camera the back of the
+        # ring is its screen top, under the HP bar)
+        zc, hz = (0.020, 0.053) if ang == 0.0 else (0.006, 0.040)
+        c = ring_pt(ang, z=HALO_C[2] + zc)
+        cl.add(RoundBox(c, (0.024, 0.044, hz), 0.008, axes=sdf.rot_z(-ang)).displaced(chips(0.003, 10.0), 0.003), k=0.0)
+        cl.add(RoundBox(c + np.array([0, 0, hz + 0.003]), (0.017, 0.034, 0.008), 0.005, axes=sdf.rot_z(-ang)), k=0.004)
+        if ang == 0.0:
+            # the front strut ends in a small pointed bell-window arch (the visor's shape): it marks the front from
+            # above, and its top is the model's top, so the HP bar hangs clear of the ring (see ART_LIFT)
+            z0 = float(c[2] + 0.062)
+            ta, ra = np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0])
+
+            def fin(P, c=c, z0=z0, ta=ta, ra=ra):
+                t = (P - c) @ ta
+                r = (P - c) @ ra
+                zz = P[:, 2] - z0
+                d = arch_d(t, zz, 0.0, 0.020, FIN_H) - 0.003
+                return np.maximum(np.maximum(d, -zz - 0.012), np.abs(r) - 0.013)
+            cl.add(Fn(fin, c + np.array([-0.04, -0.04, 0.03]), c + np.array([0.04, 0.04, 0.062 + FIN_H + 0.01])), k=0.004)
     out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 300, 1.0))
     bells, hooks, stems, beads = Sculpt("bells"), Sculpt("bell_hooks"), Sculpt("clapper_stems"), Sculpt("clappers")
     for ang in bell_angles(n_bells):
@@ -1767,8 +1784,9 @@ _BUILD: dict = {}
 # The game hangs the HP bar at art.height + 0.35 m over the feet. The halo is a 0.80 m disc 2.05 m up: from the 52
 # degree game camera its far edge projects like a point 0.5 m higher, over the bar's anchor (2.45 m with art.height
 # = the mesh top 2.10), so the ring met the bar (fix pass 1). The ring now sits 3.5 cm further forward and 1 cm
-# lower (its far edge lifts less), the struts are the brief's 14 cm (mesh top ~2.13) and art.height reads 5.5 cm
-# over the mesh top (the load test's tolerance is 6 cm): the bar clears the ring by a few px.
+# lower (its far edge lifts less), the front strut ends in a 6 cm arch finial (mesh top ~2.17, on the near side
+# so it never nears the bar itself) and art.height reads 5.5 cm over the mesh top (the load test allows 6 cm):
+# the bar hangs ~0.11 m higher against the ring than in the first build, a few px clear.
 ART_LIFT = 0.055          # the load test allows art.height within 0.06 m of the model's top
 _orig_art_fragment = _pipeline.art_fragment
 

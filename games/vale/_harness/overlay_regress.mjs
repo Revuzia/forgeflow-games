@@ -8,7 +8,10 @@
 //        outline is at the hover width, and the console stays clean. Clean rim: with rings and bars held
 //        off, the pixels the hover changes lie OUTSIDE the unit's silhouette (the hover pass' own mask,
 //        eroded 2 px): ≤ 0.5 % of the silhouette may change (no interior seams, no back-face specks), and
-//        the rim itself must draw ≥ 150 px.
+//        the rim itself must draw ≥ 150 px. The interior share is read from the same pair rendered with the
+//        post chain's SMAA off: SMAA runs after the overlay (grade.passOrder) and antialiases the rim's inner
+//        edge into the body by design, up to 3 px deep through its local-contrast test (diagonals included),
+//        which on a small wick is ≈ 0.3–0.6 % of the silhouette and no seam. The rim count stays as shown.
 //   B2   per quality tier, a layer-only render of the telegraph pass (into an 8-bit target, alpha > 0 counted):
 //        an injected enemy delayed circle (r 3 m, delay 0.6 s) must draw ≥ 5,000 px two frames in, and an own
 //        rect aim (9 × 0.9 m + its range ring) ≥ 20,000 px. Fails below either threshold on any tier.
@@ -127,22 +130,30 @@ const b1 = await B((b) => {
     const on = grab();
     let mask = null;
     try { const t = R.hoverRim.target; mask = new Uint8Array(t.width * t.height * 4); R.gl.readRenderTargetPixels(t, 0, 0, t.width, t.height, mask); if (t.width !== W || t.height !== H) mask = null; } catch { mask = null; }
+    // the same pair without the final SMAA pass (the hover's own pixels: seams and specks show here, AA does not)
+    const pq = R.post.quality;
+    R.post.setQuality({ ...pq, aa: 'off' });
+    const onRaw = grab();
+    b.hover(null);
+    const offRaw = grab();
+    R.post.setQuality(pq);
     b.hover(null); R.rings.push = rp; R.bars.push = bp; render(1);
     let rim = null;
     if (mask) {
       // the mask came back as RED (1 byte per px) or RGBA: read the red channel either way
       const stride = mask.length >= W * H * 4 && mask.slice(W * H, W * H * 4).some((v) => v) ? 4 : 1;
       const inMask = (x, y) => mask[(y * W + x) * stride] > 127;
-      let silhouette = 0, interior = 0, outside = 0;
+      let silhouette = 0, interior = 0, interiorAA = 0, outside = 0;
+      const diff = (p, q, i) => Math.abs(p[i] - q[i]) + Math.abs(p[i + 1] - q[i + 1]) + Math.abs(p[i + 2] - q[i + 2]);
       for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
         const i = (y * W + x) * 4;
-        const d = Math.abs(on[i] - off[i]) + Math.abs(on[i + 1] - off[i + 1]) + Math.abs(on[i + 2] - off[i + 2]);
+        const d = diff(on, off, i);
         const m = inMask(x, y);
-        // eroded 2 px: SMAA blends the rim's inner edge one or two pixels into the body
+        // eroded 2 px: the mask is the unexpanded hull, the body's own edge pixels may differ from it by one
         const deep = m && inMask(x - 2, y) && inMask(x + 2, y) && inMask(x, y - 2) && inMask(x, y + 2);
-        if (deep) { silhouette++; if (d > 48) interior++; } else if (!m && d > 48) outside++;
+        if (deep) { silhouette++; if (diff(onRaw, offRaw, i) > 48) interior++; if (d > 48) interiorAA++; } else if (!m && d > 48) outside++;
       }
-      rim = { silhouette, interior, outside, interiorShare: silhouette ? +(interior / silhouette).toFixed(4) : null };
+      rim = { silhouette, interior, interiorAA, outside, interiorShare: silhouette ? +(interior / silhouette).toFixed(4) : null };
     }
     out.push({ kind, id: a.id, def: a.def, crowd: !!a.crowdBake, before, afterFirst, after, subBefore, subAfter, width, restWidth: a.outlineWidth, rim, err });
   }
