@@ -71,6 +71,7 @@ const OCEAN_VERT = /* glsl */ `
 ${TERRAIN_VERT_PARS}
 uniform highp sampler2D uFieldM1;
 uniform highp sampler2D uFieldC;
+uniform highp sampler2D uFieldW;
 uniform float uTime;
 uniform float uWind;
 uniform vec4 uTide;
@@ -85,7 +86,7 @@ varying float vTemp;
 varying float vCrest;
 varying float vSalt;
 varying vec3 vWind;
-varying vec3 vSheet;
+varying vec4 vSurge;
 varying float vBedCos;
 #include <logdepthbuf_pars_vertex>
 void main() {
@@ -128,8 +129,10 @@ ${TERRAIN_VERT_CORE}
     crest += amp * max(sin(ph), 0.0);
   }
   vCrest = crest / max(sea * 0.7, 0.05);
-  // the water level itself, before the waves ride on it: its slope is the sim's moving volume (a surge, a tsunami)
-  vSheet = tPos;
+  // the water level's own slope per cell, before the waves ride on it (fieldtex.ts W: x = its excess over the bed's,
+  // yzw = its gradient): the sim's moving volume — a surge, a tsunami. Interpolated from the cells, so it is
+  // continuous across the 50 m sim triangles (the level itself is linear over each: its screen slope jumps per triangle)
+  vSurge = tfInterp(uFieldW, aCells, aMisc.x);
   // the bed's own slope (cos to the vertical): a sheet leaning with its bed is a cascade, not a surge
   vBedCos = dot(normalize(tN), up);
   tPos += disp;
@@ -189,7 +192,7 @@ varying float vTemp;
 varying float vCrest;
 varying float vSalt;
 varying vec3 vWind;
-varying vec3 vSheet;
+varying vec4 vSurge;
 varying float vBedCos;
 float gSea = 1.0;
 vec3 gWindT = vec3(0.0);
@@ -593,25 +596,23 @@ void main() {
   // one sheet of foam lace: from 100 m, TV static where the town's lake should be)
   float rapids = max(smoothstep(3.5, 5.0, flowSpd) * smoothstep(0.4, 1.2, vDepth), smoothstep(0.06, 0.25, lean) * smoothstep(0.5, 2.0, vDepth) * smoothstep(0.3, 1.0, flowSpd));
   // a SURGE: the sim moves a tsunami's (or a flood's) volume as a steep bulge of the water level over deep water — the
-  // level's own slope (vSheet, before the wind waves ride on it), not the waves'. Its face is a wall of turbulent white
+  // level's own slope (vSurge, before the wind waves ride on it), not the waves'. Its face is a wall of turbulent white
   // water streaked down the slope, foam boiling at its foot; a calm sea's level is flat, a river's barely tilts (the
   // tsunami's flow field stays at rest in the sim, so this cannot wait for a speed)
-  vec3 sgN = cross(dFdx(vSheet), dFdy(vSheet));
-  float sgL = length(sgN);
-  float sgCos = sgL > 1e-20 ? abs(dot(sgN / sgL, up)) : 1.0;
-  float sheetSlope = sqrt(max(1.0 - sgCos * sgCos, 0.0)) / max(sgCos, 1e-3);
-  // (only where the level is steeper than its bed — a cascade down a slope leans with the ground under it — and over
-  // a bed no steeper than a shelf)
+  // (only where the level is steeper than its bed — a cascade down a slope leans with the ground under it; the cells'
+  // least-squares slopes, fieldtex.ts W — and over a bed no steeper than a shelf)
   float bedC = clamp(vBedCos, 1e-3, 1.0);
   float bedSlope = sqrt(max(1.0 - bedC * bedC, 0.0)) / bedC;
   // (fast water spares only a gentle excess slope — a river's surface tilting over its bed — never a wall: where a
   // surge runs with its flow, as the bore of a wave does, a gate on the speed alone took the white off the whole face
   // and left a smooth grey slope that mirrored the sky like polished metal)
-  float excess = sheetSlope - bedSlope;
+  // (the foam's margin is an iso-line of the excess: interpolated over sim triangles it runs in straight segments, so
+  // it is broken by noise at ~15 m and ~5 m into a ragged, curving edge of churned water)
+  float excess = vSurge.x + (snoise(P * 0.067 + 5.0) * 0.65 + snoise(P * 0.19 + 9.0) * 0.35 * (1.0 - smoothstep(1.5, 5.0, fw))) * 0.045 * smoothstep(0.0, 0.06, vSurge.x);
   float surge = smoothstep(0.045, 0.16, excess) * (1.0 - smoothstep(0.12, 0.3, bedSlope)) * smoothstep(1.0, 3.0, vDepth)
     * (1.0 - smoothstep(0.5, 1.5, riverK + max(flowSpd - 2.0, 0.0)) * (1.0 - smoothstep(0.1, 0.2, excess)));
-  vec3 surgeDown = sgL > 1e-20 ? (sgN / sgL) * sign(dot(sgN, up)) : up;
-  surgeDown -= up * dot(surgeDown, up);
+  // (down the face: against the level's gradient, in the tangent plane)
+  vec3 surgeDown = -(vSurge.yzw - up * dot(vSurge.yzw, up));
   surgeDown = length(surgeDown) > 1e-5 ? normalize(surgeDown) : vec3(0.0);
   // the bore breaks on its FRONT face (the level falling away the way the water runs); behind the crest the slope
   // trails a thinner wash of the foam it left (both slopes foamed alike drew a white band twice the face's depth)

@@ -169,8 +169,9 @@ export function prophetsAct(u: Universe, p: Planet, acts: ActInfo[]): void {
     for (const a of acts) {
       if (a.god !== 0 || !a.pos) continue;
       const near = distM(p, a.pos, _p) <= Math.max(60, Math.min(a.radius, 400));
-      // a risen prophet waits on the god's next act: a sign near them confirms, an act against them discredits
-      if (ph.how === 'risen' && !ph.confirmed && u.tick - ph.since <= 2 * x.day && near) {
+      // a risen prophet waits on the god's next act: a sign near them confirms, an act against them discredits (fix r1
+      // #23: the next one — not the wonder they rose at, which this same act list still holds)
+      if (ph.how === 'risen' && !ph.confirmed && u.tick > ph.since && u.tick - ph.since <= 2 * x.day && near) {
         const st = x.ps.settlement(ph.settlement);
         if (a.kind === 'sign' || a.kind === 'protection') {
           ph.confirmed = true;

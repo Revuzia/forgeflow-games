@@ -81,9 +81,11 @@ function oreVis(type: number): number {
 export const FIELD_ROW = 256;
 const WET = 0.02;
 
-type TexName = 'A' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S' | 'G' | 'D' | 'O';
+type TexName = 'A' | 'W' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S' | 'G' | 'D' | 'O';
 const SOURCES: Record<TexName, FieldName[]> = {
   A: ['surface', 'soil', 'sand', 'snow', 'water'],
+  // (after A: built from A's water level)
+  W: ['surface', 'water'],
   N: ['surface'],
   M0: ['snow', 'sand', 'soil', 'ash'],
   M1: ['lava', 'wetness', 'ice', 'burnt'],
@@ -102,7 +104,7 @@ export class FieldTextures {
   /** CPU copies used by the chunk system for bounds / water presence (same arrays as the textures) */
   readonly waterLevel: Float32Array;
   readonly waterDepth: Float32Array;
-  private stamps: Record<TexName, string> = { A: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '', O: '' };
+  private stamps: Record<TexName, string> = { A: '', W: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '', O: '' };
   /** night light per cell, supplied by the life layer (lit buildings), packed into S.z; and its version */
   private light: Float32Array | null = null;
   private lightVersion = 0;
@@ -131,7 +133,7 @@ export class FieldTextures {
       t.needsUpdate = true;
       return t;
     };
-    this.tex = { A: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk(), G: mk(), D: mk(), O: mk() };
+    this.tex = { A: mk(), W: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk(), G: mk(), D: mk(), O: mk() };
     this.waterLevel = new Float32Array(count);
     this.waterDepth = new Float32Array(count);
   }
@@ -247,6 +249,7 @@ export class FieldTextures {
         for (let c = 0; c < n; c++) d[c * 4 + 2] = wl[c];
         break;
       }
+      case 'W': this.fillSurge(); break;
       case 'N': {
         const d = this.tex.N.image.data as Float32Array;
         const s = this.field('surface');
@@ -380,6 +383,60 @@ export class FieldTextures {
         if (g) d.set(g.subarray(0, n * 4)); else d.fill(0);
         break;
       }
+    }
+  }
+
+  /**
+   * W: the water level's own slope per CELL — x = excess (|grad level| less the bed's slope along it, m/m: a surge face where
+   * it is clearly positive), yzw = the level's gradient (body frame, m/m, tangent). Least-squares over the cell's wet
+   * neighbours. The ocean once took this slope from screen derivatives of the level, which is linear over each 50 m sim
+   * triangle: its slope jumped at every triangle edge and whole triangles of a wave's face switched to white (flat foam
+   * polygons with straight edges). Interpolated from the cells' values it is continuous, so the foam follows contours.
+   */
+  private fillSurge(): void {
+    const g = this.pv.grid;
+    const n = g.count;
+    const R = this.pv.params.radius;
+    const d = this.tex.W.image.data as Float32Array;
+    const s = this.field('surface');
+    const wl = this.waterLevel, wd = this.waterDepth;
+    const P = g.pos;
+    d.fill(0);
+    if (!s) return;
+    for (let c = 0; c < n; c++) {
+      if (wd[c] <= WET) continue;
+      const px = P[c * 3], py = P[c * 3 + 1], pz = P[c * 3 + 2];
+      // tangent basis at the cell
+      let ax = 1, ay = 0, az = 0;
+      if (Math.abs(px) > 0.8) { ax = 0; ay = 1; }
+      let t1x = py * az - pz * ay, t1y = pz * ax - px * az, t1z = px * ay - py * ax;
+      const l1 = Math.hypot(t1x, t1y, t1z);
+      t1x /= l1; t1y /= l1; t1z /= l1;
+      const t2x = py * t1z - pz * t1y, t2y = pz * t1x - px * t1z, t2z = px * t1y - py * t1x;
+      let sxx = 0, sxy = 0, syy = 0, sxw = 0, syw = 0, sxb = 0, syb = 0, k = 0;
+      const wc = wl[c], sc = s[c];
+      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+        const o = g.nbr[e];
+        if (wd[o] <= WET) continue;
+        const dx0 = (P[o * 3] - px) * R, dy0 = (P[o * 3 + 1] - py) * R, dz0 = (P[o * 3 + 2] - pz) * R;
+        const u = dx0 * t1x + dy0 * t1y + dz0 * t1z, v = dx0 * t2x + dy0 * t2y + dz0 * t2z;
+        const dw = wl[o] - wc, db = s[o] - sc;
+        sxx += u * u; sxy += u * v; syy += v * v;
+        sxw += u * dw; syw += v * dw; sxb += u * db; syb += v * db;
+        k++;
+      }
+      if (k < 3) continue;
+      const det = sxx * syy - sxy * sxy;
+      if (det <= 1e-9 * (sxx * syy + 1e-9)) continue;
+      const gwu = (syy * sxw - sxy * syw) / det, gwv = (sxx * syw - sxy * sxw) / det;
+      const gbu = (syy * sxb - sxy * syb) / det, gbv = (sxx * syb - sxy * sxb) / det;
+      // (the bed's slope only excuses the part of the level's tilt that leans WITH it — a river running down its bed; a
+      // still sea over a shelving bed is flat, and a wave's face over that shelf owes nothing to the bed)
+      const gw = Math.hypot(gwu, gwv);
+      d[c * 4] = gw > 1e-6 ? gw - Math.max(0, gwu * gbu + gwv * gbv) / gw : 0;
+      d[c * 4 + 1] = gwu * t1x + gwv * t2x;
+      d[c * 4 + 2] = gwu * t1y + gwv * t2y;
+      d[c * 4 + 3] = gwu * t1z + gwv * t2z;
     }
   }
 

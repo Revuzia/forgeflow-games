@@ -1583,7 +1583,7 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
   return {
     uFieldA: { value: null }, uFieldN: { value: null }, uFieldM0: { value: null }, uFieldM1: { value: null },
     uFieldV: { value: null }, uFieldC: { value: null }, uFieldS: { value: null }, uFieldF: { value: null }, uFieldG: { value: null },
-    uFieldD: { value: null }, uFieldO: { value: null },
+    uFieldD: { value: null }, uFieldO: { value: null }, uFieldW: { value: null },
     uRadius: { value: 3000 }, uCamBody: { value: new Vector3() },
     uBodyToView: { value: new Matrix3() }, uSunDirBody: { value: new Vector3(1, 0, 0) }, uSunDirView: { value: new Vector3(1, 0, 0) },
     uKind: { value: 0 }, uSeaLevel: { value: 0 }, uYearFrac: { value: 0 }, uSeasonAmp: { value: 1 }, uTime: { value: 0 },

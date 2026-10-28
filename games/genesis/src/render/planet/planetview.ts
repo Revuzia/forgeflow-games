@@ -94,7 +94,7 @@ export class PlanetVisual {
     u.uFieldA.value = this.fields.tex.A; u.uFieldN.value = this.fields.tex.N; u.uFieldM0.value = this.fields.tex.M0;
     u.uFieldM1.value = this.fields.tex.M1; u.uFieldV.value = this.fields.tex.V; u.uFieldC.value = this.fields.tex.C;
     u.uFieldS.value = this.fields.tex.S; u.uFieldF.value = this.fields.tex.F; u.uFieldG.value = this.fields.tex.G;
-    u.uFieldD.value = this.fields.tex.D; u.uFieldO.value = this.fields.tex.O;
+    u.uFieldD.value = this.fields.tex.D; u.uFieldO.value = this.fields.tex.O; u.uFieldW.value = this.fields.tex.W;
     // atmosphere, cloud and shadow uniforms are shared by reference
     const atmoU = this.atmo.uniforms as unknown as Record<string, IUniform>;
     for (const k of Object.keys(atmoU)) u[k] = atmoU[k];
