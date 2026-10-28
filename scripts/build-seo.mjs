@@ -37,6 +37,26 @@ function categorySlugs() {
   return [...block.slice(0, end).matchAll(/slug:\s*"([a-z0-9_-]+)"/g)].map((m) => m[1]);
 }
 
+// Guide slugs come from the one place they are defined (src/content/guides.ts).
+function guideSlugs() {
+  const src = readFileSync(join(ROOT, "src", "content", "guides.ts"), "utf8");
+  return [...src.matchAll(/^    slug:\s*"([a-z0-9-]+)"/gm)].map((m) => m[1]);
+}
+
+// Slugs that have hand-written how-to-play / tips (src/content/gameExtras).
+function extrasSlugs() {
+  const dir = join(ROOT, "src", "content", "gameExtras");
+  const out = new Set();
+  for (const f of ["a_c.ts", "d_l.ts", "m_z.ts"]) {
+    const src = readFileSync(join(dir, f), "utf8");
+    for (const m of src.matchAll(/^  "?([a-z0-9-]+)"?:\s*\{/gm)) out.add(m[1]);
+  }
+  return out;
+}
+
+// A category page with fewer games than this is too thin to index (mirrors MIN_INDEXABLE_CATEGORY_GAMES in src/config/site.ts).
+const MIN_INDEXABLE_CATEGORY_GAMES = 3;
+
 const xmlEsc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -66,8 +86,17 @@ async function buildSitemap() {
     return;
   }
 
-  const genres = new Set(games.map((g) => g.genre));
-  const cats = categorySlugs().filter((s) => genres.has(s)); // never advertise an empty category page
+  const perGenre = new Map();
+  for (const g of games) perGenre.set(g.genre, (perGenre.get(g.genre) || 0) + 1);
+  // never advertise a thin category page (the page itself is noindexed below the same threshold)
+  const cats = categorySlugs().filter((s) => (perGenre.get(s) || 0) >= MIN_INDEXABLE_CATEGORY_GAMES);
+  const guides = guideSlugs();
+  const have = extrasSlugs();
+  const missing = games.map((g) => g.slug).filter((s) => !have.has(s));
+  if (missing.length) {
+    console.warn(`[seo] !! ${missing.length} published game(s) have NO hand-written how-to/tips in src/content/gameExtras: ${missing.join(", ")}`);
+    console.warn("[seo] !! their pages fall back to the registry controls text only (thin) — write an entry for each");
+  }
   const newest = games.map((g) => g.updated_at).filter(Boolean).sort().pop();
   const day = (iso) => (iso ? String(iso).slice(0, 10) : undefined);
 
@@ -75,9 +104,10 @@ async function buildSitemap() {
     urlEntry("/", day(newest)),
     urlEntry("/games/", day(newest)),
     ...cats.map((s) => urlEntry(`/category/${s}/`, day(newest))),
-    urlEntry("/leaderboards/"),
-    urlEntry("/achievements/"),
+    urlEntry("/guides/", day(newest)),
+    ...guides.map((s) => urlEntry(`/guides/${s}/`)),
     urlEntry("/about/"),
+    urlEntry("/contact/"),
     urlEntry("/privacy/"),
     urlEntry("/terms/"),
     ...games.map((g) => urlEntry(`/games/${g.slug}/`, day(g.updated_at))),
@@ -85,7 +115,7 @@ async function buildSitemap() {
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join("\n")}\n</urlset>\n`;
   writeFileSync(out, xml, "utf8");
-  console.log(`[seo] sitemap.xml: ${entries.length} URLs (${games.length} games, ${cats.length} categories)`);
+  console.log(`[seo] sitemap.xml: ${entries.length} URLs (${games.length} games, ${cats.length} categories, ${guides.length} guides)`);
 }
 
 function buildAdsTxt() {

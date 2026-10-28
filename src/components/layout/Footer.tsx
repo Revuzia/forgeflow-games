@@ -41,7 +41,9 @@ export default function Footer() {
             <h3 className="font-display font-bold text-white text-xs uppercase tracking-widest mb-4">Explore</h3>
             <ul className="space-y-2.5">
               <li><a href="/games" className="text-sm text-gray-300 hover:text-white transition-colors">All Games</a></li>
+              <li><a href="/guides" className="text-sm text-gray-300 hover:text-white transition-colors">Game Guides</a></li>
               <li><a href="/about" className="text-sm text-gray-300 hover:text-white transition-colors">About Us</a></li>
+              <li><a href="/contact" className="text-sm text-gray-300 hover:text-white transition-colors">Contact</a></li>
               <li><a href="/privacy" className="text-sm text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
               <li><a href="/terms" className="text-sm text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
             </ul>
