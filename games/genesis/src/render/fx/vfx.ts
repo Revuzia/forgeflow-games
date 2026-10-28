@@ -483,6 +483,9 @@ void main() {
     sz = size * (0.6 + 0.8 * r2) * (1.0 - age * 0.4);
     c = col * 8.0 * (0.6 + 0.4 * sin(now * 6.0 + r1 * 30.0));
     a = smoothstep(0.0, 0.15, age) * (1.0 - smoothstep(0.6, 1.0, age));
+    // (a mote that drifts up past the camera is not a lit disc a metre across on the lens: the art review's pale and
+    // yellow-green 'lens ghost' discs over a camp and a field were sacred-place motes within a few metres of the eye)
+    a *= smoothstep(3.0, 14.0, length(p - uCamBody));
     kind = 2.0;
   } else if (S == 25) {
     // a meteor shower: streaks across the sky high over the place, all from one radiant (axis)

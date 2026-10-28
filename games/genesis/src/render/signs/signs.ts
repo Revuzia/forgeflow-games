@@ -339,7 +339,7 @@ export class SignsLayer {
         // (a grove's rise from its crowns: from the floor they would show only through the gaps in the leaves)
         const mo = pl.kind === 'grove' ? _h.copy(g).addScaledVector(up, look.lift) : g;
         const def = {
-          sys: SYS.motes, x: mo.x, y: mo.y, z: mo.z, size: pl.kind === 'grove' ? 0.4 : 0.3, life: 7, count: Math.round(70 * look.motes), p0: look.ring * 0.8,
+          sys: SYS.motes, x: mo.x, y: mo.y, z: mo.z, size: pl.kind === 'grove' ? 0.18 : 0.14, life: 7, count: Math.round(70 * look.motes), p0: look.ring * 0.8,
           p1: 0, r: cr, g: cg, b: cb, power: 0.55,
         };
         if (em === undefined || !f.vfx.alive(em)) { const id = f.vfx.emit(def, f.now); if (id) this.motes.set(pl.id, id); }

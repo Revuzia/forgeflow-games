@@ -977,7 +977,8 @@ function hut(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]
   const rise = early ? [1.05, 1.15, 0.98, 1.1, 1.2, 1.0][hv % 6] : [1.15, 1.32, 1.02, 1.22, 1.4, 1.08][hv % 6];
   const over = early ? [0.6, 0.5, 0.7, 0.55, 0.5, 0.65][hv % 6] : [0.85, 0.7, 0.95, 0.8, 0.75, 1.0][hv % 6];
   // (an early roof is fresher straw, warmer: the weathered grey of a hall's old thatch read as concrete on a small cone)
-  const roof = early ? { ...L.roof, col: mixc(L.roof.col, [0.42, 0.32, 0.17], 0.45) } : L.roof;
+  // (and not pale: at night a light straw cone glowed cream against the dark camp floor — a deeper gold-brown)
+  const roof = early ? { ...L.roof, col: mixc(L.roof.col, [0.3, 0.215, 0.105], 0.55) } : L.roof;
   const top = coneRoof(k, R, wallH, R * rise, over, roof, sides);
   // the top knot of bound straw
   if (spec.lod === 0) k.lathe(0, 0, [[0.28, top - 0.3], [0.2, top], [0.05, top + 0.35]], 8, SURF.thatch, PART.roof, mulc(roof.col, 0.75), 0.8, 1);
