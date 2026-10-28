@@ -621,6 +621,55 @@ def dome_oval(c, ax, a, b, h, n=18, base=0.004):
     return np.array(pts)
 
 
+def roundbox_flat_low(box):
+    """(fix round 7) A clean low for a sdf.RoundBox whose FLAT faces stay flat: a 3 x 3 x 3 cube grid with its inner
+    lines on the flat faces' borders (h - r per axis), every vertex moved from the box centre onto the surface (the
+    rounded edges and corners are the outer ring of cells). 108 tris, wound outward."""
+    f = np.clip(box.r / np.maximum(box.h, 1e-6), 0.08, 0.9)
+    ts = [np.array([-1.0, -(1.0 - f_), 1.0 - f_, 1.0]) for f_ in f]
+    P, F, key = [], [], {}
+
+    def vid(q):
+        k_ = tuple(np.round(q, 6))
+        if k_ not in key:
+            key[k_] = len(P)
+            P.append(q)
+        return key[k_]
+    for ax_ in range(3):
+        for sgn in (-1.0, 1.0):
+            ua, va = [a_ for a_ in range(3) if a_ != ax_]
+            ids = np.zeros((4, 4), dtype=np.int64)
+            for i in range(4):
+                for j in range(4):
+                    q = np.zeros(3)
+                    q[ax_] = sgn
+                    q[ua] = ts[ua][i]
+                    q[va] = ts[va][j]
+                    ids[i, j] = vid(q)
+            for i in range(3):
+                for j in range(3):
+                    F += [(ids[i, j], ids[i + 1, j], ids[i + 1, j + 1]), (ids[i, j], ids[i + 1, j + 1], ids[i, j + 1])]
+    Q = np.array(P) * box.h[None]
+    dirs = Q @ box.ax
+    rmax = np.linalg.norm(Q, axis=1) * 1.3 + 0.03
+    dirs = dirs / np.linalg.norm(dirs, axis=1, keepdims=True)
+    t = np.array([wc.march_in(box, box.c[None], dirs[i:i + 1], rmax[i], steps=32)[0] for i in range(len(dirs))])
+    V = box.c[None] + dirs * np.where(np.isnan(t), 0.0, t)[:, None]
+    F = np.array(F, dtype=np.int64)
+    return V, wc.wind_out(V, F, lambda cen: np.repeat(box.c[None], len(cen), 0))
+
+
+def field_normals(F, q, n, eps: float = 0.003):
+    """(fix round 7) Unit normals of a part's own SDF at texel points q (the sculpt's form, not the game mesh's
+    interpolated normals); n where the field's gradient is degenerate."""
+    g = np.stack([(F.d(q + v) - F.d(q - v)) / (2 * eps) for v in np.eye(3) * eps], 1)
+    ln = np.linalg.norm(g, axis=1, keepdims=True)
+    out = np.array(n, dtype=np.float64, copy=True)
+    ok = ln[:, 0] > 0.3
+    out[ok] = g[ok] / ln[ok]
+    return out
+
+
 def hull_sp(name, hulls, role, bind, **kw):
     """An SP made of convex hulls: the sculpt is their field, the game mesh the hulls (exact, flat shaded)."""
     S = Sculpt(name)
@@ -693,6 +742,10 @@ class Greatwick(wc.Wick):
             return
         # (fix 5: the 256 normal map let the low facets show through on the sleeves, the Serenade tunic and the mantle)
         self.TEXTURE_SIZES = {"normal": 512, "orm": 256}
+        if faction == "serenade":
+            # (fix round 7) no armour conform: it ran on the first bone-heat part, the mantle (it took the sleeves' and
+            # the hood's weights from them); the mantle has its own binder now and the hidden legs stay as they were
+            self.ARMOUR_CONFORM = False
         self.L = LAYOUT[faction]
         self.PROPORTIONS = fit_proportions(self.L)
         self.MOTION = anim.motion_profile(weight="heavy", weapon="two_hand", stance="wide", run_ref_speed=3.2)
@@ -1810,21 +1863,43 @@ def serenade_parts(L: dict) -> list:
         return 0.745 + float(lapels(np.array([[-0.03 + math.sin(a), 0.02 - math.cos(a), 0.0]]))[0])
     # (fix round 6) an OPEN strip round the back from one side of the V notch to the other (no column inside the notch:
     # the collar's front there is carved out of the hood's hollow, and radial_low filled those rays 5 cm off the axis,
-    # lit slabs inside the hollow), each column's top the highest row whose ray still finds felt (the cut under the
-    # hood's sill), its foot the hem (+ one turned-under lip row)
-    m_cols = [15.0, 24.0, 34.0, 46.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 165.0, 180.0]
+    # lit slabs inside the hollow), its foot the hem (+ one turned-under lip row).
+    # (fix round 7: at eye level its top edge was still a sawtooth of pale torn-paper teeth by the hood and either side
+    # of the V; review verify:wick) the top is ONE smooth curve round the neck (0.884 at the lapels rising to the felt's
+    # crown 0.946 from 32 to 62 degrees: the probe gave a 4.9 cm step between the 34 and 46 degree columns), and it is
+    # TUCKED: a turned-in row runs from the top edge into the hood's solid felt (>= 1.5 cm in, kept under the hollow's
+    # floor at the front), so the hood's foot draws the edge whatever the decimated hood and the breath do; the notch's
+    # two edges are TURNED felt (a facing column folded 2.6 cm in behind each lapel edge, painted, gw_turn). Back
+    # columns 165 / 195 dropped (under the pack: they paid for the tuck row).
+    m_cols = [15.0, 24.0, 34.0, 46.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 180.0]
     m_cols = m_cols + [360.0 - c_ for c_ in m_cols[::-1][1:]]
-    zs_probe = np.arange(0.936, 0.70, -0.004)
-    cols_V = []
-    for c_ in m_cols:
+    F_cov = DomainWarp(sdf.Blend([("add", field_of(hood), 0.0), ("add", field_of(col), 0.0)]),
+                       lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.01)       # (hood space = mantle - 5 mm in x)
+    A_m = DomainWarp(SER_ARCH, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.01)
+
+    def m_side(c_):
+        return min(c_, 360.0 - c_)                    # degrees from the front centre
+
+    def m_top(c_):
+        return 0.884 + (0.946 - 0.884) * _smooth01((m_side(c_) - 32.0) / 30.0)
+
+    tops = []
+    for c_ in m_cols:                                 # the curve's height where its ray still finds felt (4 mm steps down)
         a = math.radians(c_)
         dv = np.array([math.sin(a), -math.cos(a), 0.0])
-        zb = m_hem(a) - 0.006
-        zp = zs_probe[zs_probe > zb + 0.02]
+        zp = m_top(c_) - 0.004 * np.arange(12)
         tp = wc.march_in(F_m, np.stack([np.full(len(zp), -0.03), np.full(len(zp), 0.02), zp], 1),
                          np.repeat(dv[None], len(zp), 0), 0.62)
         hit = np.nonzero(~np.isnan(tp))[0]
-        zt = float(zp[hit[0]]) if len(hit) else zb + 0.03
+        tops.append(float(zp[hit[0]]) if len(hit) else m_top(c_) - 0.05)
+    tops = np.array(tops)
+    for _ in range(3):                                # one curve: never above a neighbour's felt, no tooth
+        tops[1:-1] = np.minimum(tops[1:-1], (tops[:-2] + 2 * tops[1:-1] + tops[2:]) / 4 + 0.002)
+    cols_V, tuck_in = [], []
+    for c_, zt in zip(m_cols, tops):
+        a = math.radians(c_)
+        dv = np.array([math.sin(a), -math.cos(a), 0.0])
+        zb = m_hem(a) - 0.006
         zr = np.array([zt, zt + (zb - zt) * 0.36, zt + (zb - zt) * 0.70, zb])
         O = np.stack([np.full(4, -0.03), np.full(4, 0.02), zr], 1)
         t = wc.march_in(F_m, O, np.repeat(dv[None], 4, 0), 0.62)
@@ -1832,15 +1907,57 @@ def serenade_parts(L: dict) -> list:
             good = np.nonzero(~np.isnan(t))[0]
             t[np.isnan(t)] = np.interp(np.nonzero(np.isnan(t))[0], good, t[good]) if len(good) else 0.2
         Vc = O + dv[None] * t[:, None]
+        # the tuck: in and up under the hood at the sides and the back, in and a little down at the lapels (under the
+        # hollow's floor: the chin's solid felt), pushed in until it is >= 1.5 cm inside the hood / collar felt
+        # (a grid search: the deepest point within 2.5 cm, near the wanted rise, never through the hollow: by the
+        # opening's sides the hood is a thin wall round the hollow)
+        dz_t = -0.010 + 0.032 * _smooth01((m_side(c_) - 32.0) / 30.0)
+        DI, DZ = np.meshgrid(np.arange(0.020, 0.0701, 0.005), np.arange(-0.025, 0.0351, 0.005))
+        DI, DZ = DI.ravel(), DZ.ravel()
+        cand = Vc[0][None] - dv[None] * DI[:, None] + np.stack([0 * DZ, 0 * DZ, DZ], 1)
+        fr = np.linspace(0.2, 1.0, 5)
+        seg = (Vc[0][None, None] + fr[None, :, None] * (cand - Vc[0][None])[:, None]).reshape(-1, 3)
+        clear = (A_m.d(seg).reshape(len(cand), len(fr)) > 0.006).all(1)
+        dep = -F_cov.d(cand)
+        score = np.minimum(dep, 0.025) - 0.15 * np.abs(DZ - dz_t) - 0.05 * DI - 10.0 * (~clear)
+        b_ = int(np.argmax(score))
+        tk = cand[b_]
+        tuck_in.append(float(dep[b_]))
         lip = Vc[-1] - dv * 0.030 + np.array([0.0, 0.0, 0.008])
-        cols_V.append(np.vstack([Vc, lip[None]]))
+        cols_V.append(np.vstack([tk[None], Vc, lip[None]]))
+    # the turned felt facings: each notch edge folds 2.6 cm in behind the lapel (and 6 mm toward the notch, so the fold
+    # faces it), the whole edge column copied (its tuck and lip too)
+    nv_ = 6
+
+    def facing(Vc, c_):
+        a = math.radians(c_)
+        dv = np.array([math.sin(a), -math.cos(a), 0.0])
+        tn = np.array([math.cos(a), math.sin(a), 0.0]) * (-1.0 if m_side(c_) == c_ else 1.0)   # toward the notch
+        return Vc - dv[None] * 0.026 + tn[None] * 0.006
+    sa_ = np.array([c_ if c_ <= 180.0 else c_ - 360.0 for c_ in m_cols])
+    o_ = np.argsort(sa_)
+    top_r = np.array([math.hypot(v[1, 0] + 0.03, v[1, 1] - 0.02) for v in cols_V])
+    tuck_meta = (sa_[o_], tops[o_], top_r[o_], (-0.03, 0.02))
+    cols_V = [facing(cols_V[0], m_cols[0])] + cols_V + [facing(cols_V[-1], m_cols[-1])]
     mV = np.vstack(cols_V)
-    mF = wc.grid_faces(len(m_cols), 5, closed=False)
-    mF = wc.wind_out(mV, mF, lambda cen: np.stack([np.full(len(cen), -0.03), np.full(len(cen), 0.02), cen[:, 2]], 1))
-    scene.log(f"greatwick mantle low: {len(m_cols)} columns, tops {min(v[0, 2] for v in cols_V):.3f}-"
-              f"{max(v[0, 2] for v in cols_V):.3f}, {len(mF)} tris")
-    out.append(SP("mantle", mantle, "cloth2", "auto", len(mF), to_model=mantle_tf,
-                  meta={"low_mesh": (mV, mF), "smooth": True}))
+    mF = wc.grid_faces(len(cols_V), nv_, closed=False)
+    # ONE orientation for the whole strip (outer felt out; the tuck, the lip and the facings follow round their folds,
+    # so the smooth normals turn round each fold as a rounded edge): flipped as a whole by the felt rows' majority
+    a_, b_, c3 = mV[mF[:, 0]], mV[mF[:, 1]], mV[mF[:, 2]]
+    cen = (a_ + b_ + c3) / 3.0
+    nrm_ = np.cross(b_ - a_, c3 - a_)
+    radial = cen - np.stack([np.full(len(cen), -0.03), np.full(len(cen), 0.02), cen[:, 2]], 1)
+    felt = np.zeros(len(mF), bool)
+    for i_ in range(1, len(cols_V) - 2):
+        felt[i_ * (nv_ - 1) * 2 + 2:i_ * (nv_ - 1) * 2 + 8] = True    # rows top..hem of the real columns
+    if np.einsum("ij,ij->i", nrm_[felt], radial[felt]).sum() < 0:
+        mF = mF[:, ::-1].copy()
+    scene.log(f"greatwick mantle low: {len(m_cols)} columns + 2 facings, tops {tops.min():.3f}-{tops.max():.3f} "
+              f"(max step {np.abs(np.diff(tops)).max() * 100:.1f} cm), tuck {min(tuck_in) * 100:.1f}-"
+              f"{max(tuck_in) * 100:.1f} cm inside the hood, {len(mF)} tris")
+    out.append(SP("mantle", mantle, "cloth2", ("gw_mantle",), len(mF), to_model=mantle_tf,
+                  meta={"low_mesh": (mV, mF), "smooth": True,
+                        "turn": {"axis": (-0.03, 0.02), "edge_deg": m_cols[0], "facing": 0.026}, "tuck": tuck_meta}))
     # (no over-the-shoulder straps: their ends stopped dead on the felt; the A-frame is lashed at the belt, paint)
 
     # ── ARMS, FISTS, LEGS, BOOTS ───────────────────────────────────────────────────────────────────────
@@ -2251,15 +2368,17 @@ def lantern_serenade(L, out, back):
         boxes.append(RoundBox((0, (y_front + y_back) / 2, zb_), (0.221, (y_back - y_front) / 2 + 0.006, 0.020), 0.012))
     for i_, bx in enumerate(boxes):
         pk.add(bx, k=0.0 if i_ == 0 else 0.004)
-    # (fix round 6) the GAME mesh: an exact padded block + two exact strap bands (decimated, the pack's top broke into
-    # torn-paper shards behind the hood: review r4)
-    kV, kF = [], []
-    for i_, bx in enumerate(boxes):
-        v_, f_ = wc.roundbox_low(bx, (2, 2, 2) if i_ == 0 else (2, 1, 1))
-        kF.append(f_ + sum(len(x) for x in kV))
-        kV.append(v_)
-    out.append(SP("pack", pk, "cloth", "bone:chest", len(np.vstack(kF)), 0.8,
-                  meta={"pack": (y_front, y_back, zc_, hz_), "low_mesh": (np.vstack(kV), np.vstack(kF)), "smooth": True}))
+    # (fix round 6) the GAME mesh: an exact padded block (decimated, the pack's top broke into torn-paper shards behind
+    # the hood: review r4).
+    # (fix round 7: from the back 3/4 the 2 x 2 x 2 block showed triangular light / dark facet patches: its smooth
+    # normals tilted 45 degrees across whole faces, so the paint's light and the normal map's big per-triangle
+    # corrections both drew the triangles) a 3 x 3 x 3 block whose inner grid lines sit on the flat faces' borders: the
+    # faces shade flat, the rounded edges and corners are the outer cells; the two straps are paint only (they were
+    # 6 mm proud: no silhouette at the game camera; the high keeps them for the normal bake), the paint lit by the
+    # sculpt's own normals (_pp_pack)
+    kV, kF = roundbox_flat_low(boxes[0])
+    out.append(SP("pack", pk, "cloth", "bone:chest", len(kF), 0.8,
+                  meta={"pack": (y_front, y_back, zc_, hz_), "low_mesh": (kV, kF), "smooth": True}))
 
 
 # ── grading, top plates, tints ─────────────────────────────────────────────────────────────────────────
@@ -2453,8 +2572,10 @@ PAINT = {
                    # = hood + 0.5 cm)
                    {"part": "cloak", "carve": DomainWarp(SER_ARCH, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.04),
                     "hex": "#17150F", "pad": 0.045, "glow": "#594A3E", "glow_r": 0.075, "glow_k": 0.9, "nz_min": 0.2},
+                   # (fix round 7: only texels truly inside the hollow; with a 1.4 cm pad the lapels' tops, which meet the
+                   # chin just under the hollow's floor, took ink in triangle patches: the dark teeth by the V)
                    {"part": "mantle", "carve": DomainWarp(SER_ARCH, lambda P: _arr(P) + np.array([-0.005, 0, 0]), 0.01),
-                    "hex": "#17150F", "pad": 0.014},
+                    "hex": "#17150F", "pad": -0.012},
                    # (fix round 3) the tunic's top rises through the hollow's floor (side-facing slivers, umber / sand, at
                    # the lower corners: the 'tan sliver'): every tunic texel inside the carve itself, whatever its facing
                    {"part": "cloak", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
@@ -2462,10 +2583,9 @@ PAINT = {
                    # (fix round 6) but in the V under the chin (below the hollow's floor) the carved tunic is a shadowed
                    # dark felt collar, not ink: a black wedge there read as a spike under the chin (review r4)
                    {"part": "cloak", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
-                    "hex": "#3A2D24", "pad": 0.014, "z_max": 0.855},
-                   # (the faces the clearance carve leaves round the hollow's deep part, seen through the hood's floor)
-                   {"part": "mantle", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0, 0]), 0.03),
-                    "hex": "#17150F", "pad": 0.012}],
+                    "hex": "#3A2D24", "pad": 0.014, "z_max": 0.855}],
+                   # (fix round 7: the mantle's clearance-carve ink dropped: the exact strip has no faces round the
+                   # hollow's deep part, and it inked the lapels' tucked tops)
         "gw_under": {"cloak": "#33291F"},
         "gw_inner": {"mantle": ((-0.03, 0.02), 0.62)},
         "gw_ramp": [],
@@ -2517,6 +2637,8 @@ def _install() -> None:
             b = part.bind
             if isinstance(b, tuple) and b and b[0] == "gw_cloak":
                 return bind_cloak(ctx, obj)
+            if isinstance(b, tuple) and b and b[0] == "gw_mantle":
+                return bind_mantle(ctx, obj)
             if isinstance(b, tuple) and b and b[0] == "gw_arm":
                 return bind_arm(ctx, obj, b[1])
             return orig_bind(ctx, part, obj, body_low)
@@ -2847,6 +2969,37 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
         inward = -(nrm[sel, 0] * rad[:, 0] + nrm[sel, 1] * rad[:, 1]) / (np.linalg.norm(rad, axis=1) + 1e-6)
         w = _smooth01((inward - 0.35) / 0.2) * (1 - _smooth01((nrm[sel, 2] - 0.1) / 0.3))
         col[sel] = col[sel] * (1 - w[:, None] * (1 - dk))
+    # (fix round 7) TURNED felt (meta "turn" / "tuck", the Serenade mantle): the V notch's two lapel edges read as felt
+    # folded back (the facing behind the edge a shadowed dark felt, a lit roll along the fold, a soft shade line where
+    # the turned thickness ends on the face), and the top edge's turn-in under the hood as felt going into shadow
+    # (lit, it drew a pale ring round the hood's foot)
+    for kk in np.unique(k):
+        nm = names[kk]
+        mt = (cfg.get("gw_meta") or {}).get(nm) or {}
+        if not (mt.get("turn") or mt.get("tuck")):
+            continue
+        sel = k == kk
+        q = ps[sel]
+        if mt.get("turn"):
+            tr = mt["turn"]
+            cx, cy = tr["axis"]
+            rad = np.hypot(q[:, 0] - cx, q[:, 1] - cy)
+            side = np.abs(np.degrees(np.arctan2(q[:, 0] - cx, -(q[:, 1] - cy))))
+            arc = np.radians(side - tr["edge_deg"]) * rad          # + on the lapel's face, - round the fold / facing
+            g = 1.0 + 0.17 * np.exp(-((arc - 0.003) / 0.0035) ** 2) - 0.10 * np.exp(-((arc - 0.017) / 0.004) ** 2)
+            face = 1.0 - _smooth01((arc + 0.0015) / 0.003)
+            tone = np.array(scene.hex_srgb(tr.get("hex", "#5E4A39")), np.float32)[None, :] * (
+                0.92 + 0.10 * NOISE.fbm(q, 16.0, 2))[:, None]
+            c_ = np.clip(col[sel] * g[:, None], 0, 1)
+            col[sel] = c_ * (1 - face[:, None]) + tone * face[:, None]
+        if mt.get("tuck"):
+            ta, tz, tr_, cxy = mt["tuck"]
+            rad = np.hypot(q[:, 0] - cxy[0], q[:, 1] - cxy[1])
+            sa = np.degrees(np.arctan2(q[:, 0] - cxy[0], -(q[:, 1] - cxy[1])))
+            zt_, rt_ = np.interp(sa, ta, tz), np.interp(sa, ta, tr_)
+            w = _smooth01((rt_ - 0.002 - rad) / 0.010) * _smooth01((q[:, 2] - zt_ + 0.012) / 0.008)
+            shade = np.array(scene.hex_srgb("#4A3B2F"), np.float32)[None, :]
+            col[sel] = col[sel] * (1 - 0.85 * w[:, None]) + shade * (0.85 * w[:, None])
     # top paint on up-facing texels
     for nm, spec in (cfg.get("gw_top") or {}).items():
         if nm not in names:
@@ -3536,7 +3689,12 @@ def _pp_spool(p, n, spec, cfg=None, nm=None):
 
 
 def _pp_pack(p, n, spec, cfg=None, nm=None):
-    """(fix 5) the Serenade back pack: brushed umber felt, its two raised straps dark waxed leather with lit edges."""
+    """(fix 5) the Serenade back pack: brushed umber felt, its two raised straps dark waxed leather with lit edges.
+    (fix round 7) lit by the sculpt's own normals (field_normals): the game mesh's interpolated normals painted its
+    triangles in."""
+    F = (cfg or {}).get("gw_fields", {}).get(nm)
+    if F is not None:
+        n = field_normals(F, np.asarray(p, np.float64), n)
     v = _lit(n, spec) * (1.0 + 0.06 * NOISE.fbm(p, 7.0, 3) + spec.get("nap", 0.04) * NOISE(p, 70.0))
     col = _out(spec["hex"], v * _brush(p, n, 0.05))
     yf, yb, zc, hz = (cfg or {}).get("gw_meta", {}).get(nm, {}).get("pack", (0.3, 0.55, 0.82, 0.16))
@@ -3618,6 +3776,46 @@ def bind_cloak(ctx, obj) -> dict:
     mesh.parent_keep(obj, arm)
     mesh.limit_weights(obj)
     return {"custom": "gw_cloak"}
+
+
+def bind_mantle(ctx, obj) -> dict:
+    """(fix round 7) The Serenade mantle: a felt cape ON the torso. Bone heat gave its front columns 25-31 % forearm and
+    37-42 % upper arm, so the hammer grip dragged the lapels' tops 10-17 cm down out of the hood in idle (the torn
+    teeth by the chin). Now: the cloak's hips / spine / chest by height (the hem moves with the tunic under it), a
+    little neck at the tucked top (it follows the hood's foot), and over the shoulders an arm share that grows toward
+    the hem (shoulder <= 0.22, upper arm <= 0.38: the sleeves come out under it), never at the top edge, no forearm."""
+    from common import mesh
+    arm = ctx.info.armature
+    info = ctx.info
+    obj.vertex_groups.clear()
+    names = ("hips", "spine", "chest", "neck", "shoulder.L", "upper_arm.L", "shoulder.R", "upper_arm.R")
+    G = {b: obj.vertex_groups.new(name=b) for b in names}
+    z_hip = info.j("pelvis").z
+    z_sp = info.j("spine1").z
+    z_ch = info.j("neck_base").z
+    z_sh = info.side("shoulder", "L").z
+    for v in obj.data.vertices:
+        p = obj.matrix_world @ v.co
+        t1 = mesh.smoothstep(z_hip + 0.02, z_sp, p.z)
+        t2 = mesh.smoothstep(z_sp, z_ch - 0.03, p.z)
+        w = {"hips": 1 - t1, "spine": t1 * (1 - t2), "chest": t2}
+        fx = mesh.smoothstep(0.12, 0.28, abs(p.x))
+        w_up = 0.38 * fx * mesh.smoothstep(z_sh + 0.10, z_sh - 0.08, p.z)
+        w_sh = 0.22 * fx * mesh.smoothstep(z_sh + 0.12, z_sh - 0.01, p.z)
+        w_nk = 0.35 * mesh.smoothstep(z_ch - 0.01, z_ch + 0.04, p.z)
+        keep = 1.0 - w_up - w_sh - w_nk
+        w = {k: v_ * keep for k, v_ in w.items()}
+        s = "L" if p.x > 0 else "R"
+        w[f"upper_arm.{s}"] = w_up
+        w[f"shoulder.{s}"] = w_sh
+        w["neck"] = w_nk
+        for k, val in w.items():
+            if val > 1e-3:
+                G[k].add([v.index], val, "REPLACE")
+    mesh.add_armature_modifier(obj, arm)
+    mesh.parent_keep(obj, arm)
+    mesh.limit_weights(obj)
+    return {"custom": "gw_mantle"}
 
 
 def bind_arm(ctx, obj, side: str) -> dict:

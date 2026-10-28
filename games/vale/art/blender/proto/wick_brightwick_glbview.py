@@ -4,6 +4,9 @@ game (base 0.3 x tint, emission tint x 0.8, the BLEND accent copies weighted by 
   eye level   body front / 3-4 / back, head front / 3-4 (camera pitch 2 deg)
   52 deg      head close at facings 0 / 35 / -35 (the gameplay pitch, magnified)
   game        the gameplay camera at TRUE 1080p pixel scale (82.1 px/m across), facings 0 / 45 / 90 / 180, then x4
+  yaw8        every 45 deg facing (0 .. 315): the head at eye level, the head close at 52 deg, and the gameplay camera
+              (52 deg, ortho) at true 1080p scale (x1, 82.1 px/m) and at x3 (246.3 px/m): `yaw8_<view>_<yaw>.png`
+              (r7: the face check from every side - the crown lamps, the pauldron accent, the hood opening)
 Every frame is posed in the GLB's `idle` clip at `--t` (0..1).
 
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python art/blender/proto/wick_brightwick_glbview.py \
@@ -195,6 +198,17 @@ def main():
             # true 1080p scale: 82.1 px/m across; a 180 px tile = 180 / 82.1 m
             shots.append((f"game_{yaw:03d}", yaw, (0.0, -28.5 * math.cos(p), 0.85 + 28.5 * math.sin(p)), (0.0, 0.0, 0.85), None,
                           180 / 82.1, (180, 180)))
+    if "yaw8" in views:
+        p = math.radians(52)
+        for yaw in range(0, 360, 45):
+            shots.append((f"yaw8_eye_{yaw:03d}", yaw, (0.0, -11.0, 1.46 + 11 * math.sin(math.radians(2))), (0.0, 0.0, 1.46),
+                          lens_for(3.4), None, (700, 700)))
+            shots.append((f"yaw8_h52_{yaw:03d}", yaw, (0.0, -11.0 * math.cos(p), 1.40 + 11.0 * math.sin(p)), (0.0, 0.0, 1.40),
+                          lens_for(3.4), None, (700, 700)))
+            shots.append((f"yaw8_g1_{yaw:03d}", yaw, (0.0, -28.5 * math.cos(p), 0.85 + 28.5 * math.sin(p)), (0.0, 0.0, 0.85), None,
+                          180 / 82.1, (180, 180)))
+            shots.append((f"yaw8_g3_{yaw:03d}", yaw, (0.0, -28.5 * math.cos(p), 0.85 + 28.5 * math.sin(p)), (0.0, 0.0, 0.85), None,
+                          540 / 246.3, (540, 540)))
     for nm, yaw, loc, tgt, lens, ortho, res in shots:
         root.rotation_euler = (root.rotation_euler[0], root.rotation_euler[1], 0.0)
         root.rotation_mode = "XYZ"

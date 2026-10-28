@@ -64,7 +64,7 @@ COLS = {"cloth2": (205, 198, 214), "sandstone": (200, 145, 70), "cloth": (130, 1
 def march(parts, voxel):
     """per view: (depth, part index, normal z-ish shade) images on a common world grid"""
     lo = np.array([-0.85, -0.6, -0.02])
-    hi = np.array([0.85, 0.75, 2.26])
+    hi = np.array([0.85, 0.75, 2.66])
     n = np.ceil((hi - lo) / voxel).astype(int)
     views = {"front": (0, 2, 1, +1), "back": (0, 2, 1, -1), "side": (1, 2, 0, -1), "top": (0, 1, 2, -1)}
     res = {}

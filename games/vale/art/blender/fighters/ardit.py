@@ -719,7 +719,7 @@ def _tab_lower_floor(skel, pose, cfg) -> None:
         return
     samples = [(bone, w, V(P)) for bone, w, P in _tab_samples(side)]
     last = cfg.bones[-1]
-    for b in cfg.bones[1:]:
+    for j, b in enumerate(cfg.bones[1:], 1):
         M = skel.fk(pose)
         H = M[b].translation
         R = M[b].to_3x3()
@@ -741,6 +741,17 @@ def _tab_lower_floor(skel, pose, cfg) -> None:
         if need > 1e-4:
             a = pose.get(b, (0.0, 0.0, 0.0))
             pose[b] = (a[0] + math.degrees(need), a[1], a[2])
+            _tab_hang(pose, cfg, j + 1, math.degrees(need))
+
+
+def _tab_hang(pose, cfg, j, lift) -> None:
+    """bone j of the chain counter-rotates by gravity's share of a lift forced on the bone above it (a floor raised the
+    parent; the spring's relative angle below assumed the old one), so the cloth below keeps hanging"""
+    if j >= len(cfg.bones) or lift <= 0.0:
+        return
+    b = cfg.bones[j]
+    a = pose.get(b, (0.0, 0.0, 0.0))
+    pose[b] = (max(cfg.limit[0], a[0] - cfg.gravity * lift), a[1], a[2])
 
 
 # ── paint (Ardit's wrap of common/hifi/project.paint; common/ is shared, so it lives here) ──────────────────
@@ -1529,7 +1540,8 @@ def _install_anim() -> None:
                     m = least(poses[f])
                     if m > a[0]:
                         p[b] = (m, a[1], a[2])
-                    _tab_lower_floor(skel, p, cfg)      # then the lower bone clears the coat wall / knee
+                        _tab_hang(p, cfg, 1, m - a[0])
+                    _tab_lower_floor(skel, p, cfg)      # then the lower bones clear the coat wall / knee
                     if loop and f == len(out) - 1:
                         for bb in cfg.bones:
                             p[bb] = out[0][bb]

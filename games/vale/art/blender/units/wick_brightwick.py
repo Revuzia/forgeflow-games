@@ -977,6 +977,7 @@ class Brightwick(wc.Wick):
         self.parts_info = {}
         matte_accent(ctx.mats.get("accent"))
         wc.halo_material(ctx)
+        wc.halo_material(ctx, HALO_BW)
         wc.install_halo_export()
         for name, S, vs, role, bind, tris, uvw, low in self.sculpts(ctx):
             if isinstance(S, tuple):                       # ("mesh", verts, faces): explicit low geometry
@@ -1079,7 +1080,8 @@ def matte_accent(mat) -> None:
 # triangles (their grids are sized in the part functions).
 TRIS = {
     # (r6: the forearm wraps and the mitts are explicit clean lows now: wrap_mesh, box_low + the thumb)
-    "aubade": {"hood": 440, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
+    # (r7: the hood 440 -> 400 pays for the ten-lamp crown)
+    "aubade": {"hood": 400, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
                "sleeves": 150, "staff": 130},
     "serenade": {"hood": 310, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
                  "sleeves": 138, "cuffs": 48, "staff": 110},
@@ -1134,18 +1136,21 @@ def hood_parts(F, aub, part):
         part("hood_rim", ("mesh", rv, rf), "chalk", "bone:head", None, 0.7)
     else:
         rim = Sculpt("hood_rim")
-        rr = 0.018
         # (r6, review r4: from 52 deg the thick dark roll all round the opening read as lips) the roll THINS down the
         # arch's sides: full over the brow, a slim felt edge where it meets the collar
-        zb_ = tomb_of(F).zb
-
-        def rr_at(z):
-            return rr * (0.50 + 0.50 * float(smooth(zb_ + 0.015, zb_ + 0.120, z)))
+        # (r7, verify wave-b: still "lips round an O" at x8 in game) the roll is a BROW only: full (1.6 cm) over the top
+        # of the arch, thinning fast through the arch's shoulders to a flat 4.5 mm felt edge down the sides and the
+        # lower corners (sunk half into the felt: it turns the edge, it never stands round the opening), so the dark
+        # opening reads as an arch under a rolled brim, not a ringed O
+        T_ = tomb_of(F)
+        rr_at, sink_at = rim_profile_s(T_)
         loop = opening_loop(F, n=24, lift=0.004)
+        loop = [(x_, y_ + sink_at(z_), z_) for x_, y_, z_ in loop]
         for i in range(len(loop) - 1):
             a_, b_ = loop[i], loop[i + 1]
-            rim.add(RoundCone(a_, b_, rr_at(a_[2]), rr_at(b_[2])), k=0.006)
-        lo_loop = opening_loop(F, n=15, lift=0.004)
+            rim.add(RoundCone(a_, b_, rr_at(a_[2]), rr_at(b_[2])), k=0.004)
+        lo_loop = opening_loop(F, n=13, lift=0.004)
+        lo_loop = [(x_, y_ + sink_at(z_), z_) for x_, y_, z_ in lo_loop]
         tv, tf = sweep_tube(lo_loop, [rr_at(p_[2]) * 1.04 for p_ in lo_loop], 6)
         part("hood_rim", rim, "cloth", "bone:head", 0, 0.7, 1.4, low=lambda D, v=tv, f=tf: (v, f))
     # the hood light (brief §0.2 / §4): ONE soft core, wider than tall, floating in the head space with ink all
@@ -1166,8 +1171,16 @@ def hood_parts(F, aub, part):
     # the shared profile's alpha at each vertex, linear between rings) moved into the FALL: 0.62 / 0.74 / 0.87 / 1.0
     # (alpha 0.80 / 0.45 / 0.16 / 0) instead of 0.43 / 0.62 / 0.82 / 1.0 (0.82 / 0.80 / 0.26 / 0: one steep step that
     # read as the disc's edge); the same 98 triangles, the plateau inside 0.62 stays flat either way
-    v, f = wc.halo_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2], rings=HALO_RINGS_BW)
-    part("hood_halo", ("mesh", v, f), wc.HALO_MAT, "bone:head", None, 0.5)
+    # (r7, verify wave-b: "still a flat disc at 52 deg, L* 63 across then 36 within 6 px": the shared profile's plateau
+    # (alpha 0.80 out to 0.62 of the halo, 1.3 x the core) composited the core into one flat lit disc, and the brow hid
+    # the fall above it) the brightwick halo has its OWN profile (HALO_BW: the shared halo_alpha with its plateau ending
+    # at 0.15, so it falls all the way from the centre: core + halo 1.0 / 0.78 / 0.43 / 0.26 / 0.10 / 0 at 0 / 0.30 /
+    # 0.435 (the core's outline) / 0.60 / 0.78 / 1.0) and leans back HALO_TILT_BW, facing up toward the gameplay camera:
+    # its lower fall comes forward under the core, where the 52 deg sight line sees it below the brow
+    th_ = math.radians(HALO_TILT_BW)
+    Zh, Yh = np.array((0.0, math.sin(th_), math.cos(th_))), np.array((0.0, -math.cos(th_), math.sin(th_)))
+    v, f = wc.halo_mesh(lc, X, Yh, Zh, lr[0], lr[1], lr[2], seg=12, rings=HALO_RINGS_BW)
+    part("hood_halo", ("mesh", v, f), HALO_BW, "bone:head", None, 0.5)
     if aub:
         crown_aubade(F, part, hood)
     else:
@@ -1175,7 +1188,31 @@ def hood_parts(F, aub, part):
 
 
 RIM_A = (0.034, 0.011)      # the Aubade carved rim band: width on the cowl, height proud of it (m)
-HALO_RINGS_BW = (0.0, 0.62, 0.74, 0.87, 1.0)     # the hood halo's ring stations (lateral radius / its rim)
+# the hood halo (r7): its own kept material + alpha profile (registered in the shared HALO_PROFILES under a brightwick
+# name: the export hook writes it like every halo; the other kinds keep theirs), its ring stations (lateral radius /
+# its rim: one on the core's outline, the rest down the fall) and its lean (deg, top back)
+HALO_BW = "glow_halo_bw"
+HALO_PLATEAU_BW = 0.15
+HALO_RINGS_BW = (0.0, 0.25, 1.0 / wc.HALO_SCALE, 0.60, 0.78, 1.0)
+HALO_TILT_BW = 30.0
+wc.HALO_PROFILES.setdefault(HALO_BW, (lambda rho: wc.halo_alpha(rho, wc.HALO_SCALE, HALO_PLATEAU_BW), 1.0))
+
+
+def rim_profile_s(T):
+    """(r7) the Serenade roll along the opening: (radius(z), sink(z)): a 1.6 cm roll over the top of the arch (its
+    upper ~100 deg), falling through the arch's shoulders to a 4.5 mm felt edge down the sides, sunk 6 mm back into
+    the felt there (the edge turns into the hollow; nothing stands proud round the opening's sides)"""
+    zc = T.zc
+
+    def brow(z):
+        return float(smooth(zc + 0.020, zc + 0.075, z))
+
+    def rr_at(z):
+        return 0.0045 + (0.016 - 0.0045) * brow(z)
+
+    def sink_at(z):
+        return (1.0 - brow(z)) * 0.0062
+    return rr_at, sink_at
 
 
 def rim_band(F, D, width, height, n=17, inner=0.016):
@@ -1263,17 +1300,25 @@ def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0)):
     return V, F_
 
 
-FLAME = [(0.0, 0.0), (0.011, 0.028), (0.034, 0.027), (0.057, 0.0)]   # a crown lamp: a round-shouldered drop, 5.7 cm
+FLAME = [(0.0, 0.0), (0.008, 0.021), (0.026, 0.020), (0.043, 0.0)]   # a crown lamp: a round-shouldered drop, 4.3 cm
+CUP = [(-0.0045, 0.0), (0.0015, 0.023), (0.010, 0.028)]               # its slim slate bezel cup (4 mm past the drop)
+SPIRE = [(0.0, 0.015), (0.034, 0.014), (0.064, 0.0)]                   # a chalk spire tower: square shaft, pyramid roof
 CROWN_A = (1.584, 1.614)            # the Aubade circlet (z): just over the opening's arch, under the round cap
+# (r7, verify wave-b: from the side at 52 deg the six lamps put a LEVEL PAIR (60 / 120 deg) either side of the side
+# spire: two eyes over the pauldron's cup, a face) TEN smaller lamps, 36 deg apart, one over the arch (0) and one on the
+# seam at the nape (180); the spires between them, so a chalk point faces each side (90 / 270). From any facing the
+# near half of the ring shows 4-6 evenly spaced lamps on its arc (never an isolated pair: the inner two always have
+# their neighbours at the same spacing, a string of lights round the crown, like the Serenade's ten windows)
+CROWN_N = 10
 
 
 def crown_aubade(F, part, hood):
-    """a low CHALK circlet on the cowl (the concept) with six little chalk SPIRE TOWERS and, between them, six
+    """a low CHALK circlet on the cowl (the concept) with ten little chalk SPIRE TOWERS and, between them, ten
     dawnglass LAMPS (accent drops), each seated in a thin dark slate BEZEL cup on the band (the only dark on the
-    crown: the light's edge, so the ally azure stands off the chalk). Lamps sit low, the towers rise past them (a
+    crown: the light's edge, so the ally azure stands off the chalk). Lamps sit low, the towers rise with them (a
     crown that holds its lamps, never candles on posts). One lamp sits over the arch's crown (a single light above
-    the hollow, never a pair). Then the accent seam (the Aubade hood mark): a fine lit line over the cap from the
-    brow, full width down the back of the cowl to the nape, a thin painted bezel either side."""
+    the hollow, never a pair), a spire faces each side. Then the accent seam (the Aubade hood mark): a fine lit line
+    over the cap from the brow, full width down the back of the cowl to the nape, a thin painted bezel either side."""
     hc, hr = F["hood"]
     z0, z1 = CROWN_A
 
@@ -1289,17 +1334,17 @@ def crown_aubade(F, part, hood):
         out[2] = 0.0
         out /= np.linalg.norm(out)
         return base, out, sdf.frame(out * lean + np.array((0.0, 0.0, 1.0)), out)
-    for i in range(6):
-        # spires between the lamps: little four-sided chalk SPIRE TOWERS (a square shaft, a drip ledge and a short
-        # pyramid roof: the Aubade spire architecture in miniature, never teeth), 7 cm over the band's foot
-        base, out, ax = frame_at(60.0 * i + 30.0, z1 - 0.012, 0.10)
-        meshes.append(lathe_mesh(base - ax[2] * 0.008, ax, [(0.0, 0.017), (0.032, 0.016), (0.036, 0.021),
-                                                            (0.042, 0.016), (0.070, 0.0)], 4, aspect=(1.0, 1.0)))
-        # the lamp: a slim slate bezel cup on the band's top-outer edge (5 mm past the drop) and the drop in it
-        base, out, ax = frame_at(60.0 * i, z1 - 0.004, 0.22)
-        c0 = base - out * 0.008                  # seated on the band's top
-        cups.append(lathe_mesh(c0, ax, [(-0.006, 0.0), (0.002, 0.031), (0.013, 0.037)], 6))
-        lamps.append(lathe_mesh(c0 + ax[2] * 0.004, ax, FLAME, 8))
+    step = 360.0 / CROWN_N
+    for i in range(CROWN_N):
+        # spires between the lamps: little four-sided chalk SPIRE TOWERS (a square shaft and a short pyramid roof:
+        # the Aubade spire architecture in miniature, never teeth), 4.4 cm over the band's top
+        base, out, ax = frame_at(step * i + step / 2, z1 - 0.012, 0.10)
+        meshes.append(lathe_mesh(base - ax[2] * 0.008, ax, SPIRE, 4, aspect=(1.0, 1.0)))
+        # the lamp: a slim slate bezel cup on the band's top-outer edge and the drop in it
+        base, out, ax = frame_at(step * i, z1 - 0.004, 0.22)
+        c0 = base - out * 0.007                  # seated on the band's top
+        cups.append(lathe_mesh(c0, ax, CUP, 6))
+        lamps.append(lathe_mesh(c0 + ax[2] * 0.003, ax, FLAME, 6))
     v, f = merge_meshes(meshes)
     part("crown", ("mesh", v, f), "chalk", "bone:head", None, 0.6)
     v, f = merge_meshes(cups)
@@ -1647,6 +1692,7 @@ def body_parts(F, aub, info, part):
 
 
 PAULDRON_A = {"O": (0.282, 0.0, 1.268), "tilt": 22.0, "cap": (0.150, 0.156, 0.124)}
+CAP_DARK = 0.38             # (r7) the Aubade pauldron's cap plate: linear x (1 - CAP_DARK), about -12 L*
 PLATES: dict = {}           # side -> (centre, frame, plates): the paint's carved edges on the Aubade pauldrons
 
 
@@ -1694,7 +1740,7 @@ def aubade_pauldron(part, s, sx, px, bind):
     # side (the pauldrons are the widest point, and the side facings carried the least accent), a lamp line
     # in the chalk, never a gem; its thin slate bezel is painted (`_pauldron_aubade`)
     r1 = rc * 1.085
-    phs = np.radians(np.linspace(-INLAY_PH, INLAY_PH, 8))
+    phs = np.radians(np.linspace(-INLAY_PH, INLAY_PH, INLAY_N))
     th = math.radians(INLAY_TH)
     pts = np.array([O + ax[0] * r1[0] * math.cos(p_) * math.sin(th) + ax[1] * r1[1] * math.sin(p_) * math.sin(th)
                     + ax[2] * r1[2] * math.cos(th) for p_ in phs])
@@ -1704,7 +1750,10 @@ def aubade_pauldron(part, s, sx, px, bind):
     part(f"pauldron_light_{s}", ("mesh", v, f), "accent", bind, None, 0.4)
 
 
-INLAY_TH, INLAY_PH, INLAY_W = 63.0, 110.0, 0.026     # the pauldron inlay: theta on the middle lame, phi span, width
+# (r7, verify wave-b: from the side at 52 deg the inlay ran front -> outside -> back, 220 deg: a CLOSED U round the pale
+# stepped cap, an open mouth with teeth under the crown's lamps) a SHORT ARC on the plate's outer edge only (+-40 deg
+# round the outermost point), the cap inside it darker (`_pauldron_aubade`)
+INLAY_TH, INLAY_PH, INLAY_W, INLAY_N = 63.0, 40.0, 0.026, 5     # the pauldron inlay: theta on the lame, phi half span, width, stations
 
 
 PAULDRON_S_Z = 1.226
@@ -2476,6 +2525,9 @@ def _pauldron_aubade(spec, p, g, col, side):
     # a little darker and its worn edge light softer (-3..4 L* where the 52 deg camera looks down on it)
     col = col * (1.0 + (0.22 - 0.10 * cap) * (1 - smooth(0.004, 0.020, edge)))[:, None]
     col = col * (1.0 - 0.11 * cap * smooth(0.35, 0.90, g[:, 2]))[:, None]
+    # (r7, verify wave-b: the pale stepped cap inside the inlay's U read as teeth in an open mouth from the side) the cap
+    # plate a weathered chalk ~12 L* darker (linear x 0.62), its worn edges with it: the lames below stay the light chalk
+    col = col * (1.0 - CAP_DARK * cap)[:, None]
     col = col * (1.0 - 0.38 * tuck)[:, None]
     col = col * (1.0 - 0.22 * groove)[:, None]
     # the inlay's thin slate bezel (the light is the `pauldron_light_*` ribbon on the middle lame)
@@ -2665,6 +2717,16 @@ def ink_hollow(spec, P, N, col, with_mask=False):
     (ec_, er_) = spec.F["tomb"][1]
     deep_y = ec_[1] + 0.8 * er_[1]                  # never past the head space's back (the hood's back stays felt)
     inside = np.maximum(inside, thru * (P[:, 1] > -0.30) * (P[:, 1] < deep_y))
+    # (r7, verify wave-b: "a thin lit sliver inside the hollow below the core at 52 deg") the hollow's FLOOR is ink
+    # whatever its normal: the hood low's decimated floor is one long sliver triangle wound DOWN (its texels failed the
+    # facing test) lying exactly on the outline's bottom edge (`thru` 0), so its front was painted as felt, a pale
+    # streak in the pocket under the core. Every near-level texel on the floor band inside the hood's outer shell
+    T_w = T.w + 0.004
+    floor = ((np.abs(P[:, 0]) < T_w) & (P[:, 2] > T.zb - 0.008) & (P[:, 2] < T.zb + 0.022) & (np.abs(N[:, 2]) > 0.5)
+             & (P[:, 1] > -0.30) & (P[:, 1] < deep_y))
+    if floor.any():
+        floor[floor] = hood_outer(spec.F).d(P[floor]) < 0.002
+    inside = np.maximum(inside, floor.astype(np.float64))
     deep = smooth(0.0, 0.06, P[:, 1] + 0.20)
     ink = np.tile(lin(spec.PALETTE.get("ink", "#15171B")), (len(P), 1)) * (1.0 + 0.8 * (1 - deep))[:, None]
     # the core's SPILL (fix round 3: the soft falloff round the one lamp core): its light on the walls that FACE it,
@@ -2685,6 +2747,9 @@ def ink_hollow(spec, P, N, col, with_mask=False):
     # (r6, review r4: "a lit diagonal shard of inner wall shows inside the hollow": the painted spill lit the walls
     # beside the core as grey planes; the halo carries the falloff now) the spill halved: the pocket stays ink
     spill = face * back / (1.0 + (dist / 0.060) ** 2) * 0.40
+    # (r7) none in the POCKET under the core (the floor and the low walls behind it): it stays ink, matte and occluded in
+    # the ORM (roughness 1, occlusion 0.05): no lit face under the light from the 52 deg camera
+    spill = spill * smooth(lc[2] - 1.6 * lr[2], lc[2] - 0.4 * lr[2], P[:, 2])
     warm = spec.faction == "serenade"
     ink = mix(ink, "#645E57" if warm else "#5A5F66", np.clip(spill, 0.0, 1.0))
     out = col * (1 - inside[:, None]) + ink * inside[:, None]

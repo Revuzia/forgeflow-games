@@ -101,9 +101,9 @@ def main():
         ob.color = (*lin(SHOW[sp.name]), 1.0)
         ob.parent = root
         if sp.name == "mantle":
-            nv = 5
+            nv = 6                                    # rows: tuck, top, two felt rows, hem, lip (fix round 7)
             VV = np.asarray(V).reshape(-1, nv, 3)
-            tops = VV[:, 0, 2]
+            tops = VV[1:-1, 1, 2]                     # (the two end columns are the notch facings)
             jump = np.abs(np.diff(tops))
             print("MANTLE tops", " ".join(f"{z:.3f}" for z in tops))
             print(f"MANTLE max neighbour jump {jump.max():.4f} m, mean {jump.mean():.4f}; 2nd diff max "

@@ -135,14 +135,18 @@ def _right_arm():
 
 E_R, W_R, FO_R = _right_arm()
 
-# THE CROOK (prop.R): the butt beside the right boot, the shaft through the fist, the hook curling out-forward
+# THE CROOK (prop.R): the butt beside the right boot, the shaft through the fist, the hook curling out-forward.
+# Fix pass 1 (review: a lumpy rope / candy-cane crook, the hook only 0.11 m over the hat, the lantern under the HP
+# bar): pale carved wood in long faceted planes (FacetTube: a 7-sided section, slowly twisting, a knuckle at every
+# joint) with a few gnarled kinks under an ANGULAR hook (straight carved runs between hard turns, as painted), and the
+# brief's height: the hook's top 2.56 m (0.5 m over the hat's crown), the lantern hanging above the brim (1.95-2.31 m)
 BUTT = np.array([-0.375, -0.085, 0.0])
 CROOK_U = unit(GRIP - BUTT)
 S_BUTT = -float(np.linalg.norm(GRIP - BUTT))       # the butt's place along the shaft (m from the grip)
-S_TOP = 0.70                                       # where the shaft turns into the hook (z ~2.02)
+S_TOP = 1.050                                      # where the shaft turns into the hook (z ~2.37)
 SHAFT_R = 0.030                                    # 6 cm (brief: 6 cm, 5 px at 1080p)
-HOOK_R = 0.032
-HOOK_YAW = 35.0                                    # the hook's plane: out (his right) turned 35 degrees to the front
+HOOK_R = 0.034                                     # the hook ~7 cm (brief)
+HOOK_YAW = 40.0                                    # the hook's plane: out (his right) turned 40 degrees to the front
 GRIPS = ((-0.09, 0.12), (-0.46, -0.27))            # the leather wraps: the rest grip, the low grip (two-handed holds)
 SLIDE2 = 0.365                                     # slide that puts the right fist on the low wrap
 
@@ -157,33 +161,37 @@ def _hook_frame():
     return h, CROOK_U
 
 
-HOOK_PTS = [(0.0, -0.06), (0.0, 0.0), (0.004, 0.040), (0.022, 0.085), (0.058, 0.122), (0.105, 0.136), (0.150, 0.118),
-            (0.184, 0.072), (0.199, 0.016), (0.197, -0.040), (0.184, -0.086), (0.164, -0.118), (0.146, -0.134)]
-HOOK_K = 1.08                                      # the hook a little wider than painted (its plane turns 35 deg)
+# the hook (out along h, up along the shaft, sideways): straight carved runs between hard turns, a squared shoulder,
+# a flat-ish top and a tip that comes down to the lantern's ring
+HOOK_PTS = [(0.000, -0.050, 0.000), (0.000, 0.000, 0.000), (-0.007, 0.104, 0.004), (0.038, 0.166, 0.000),
+            (0.110, 0.192, -0.004), (0.172, 0.168, 0.003), (0.212, 0.108, 0.000), (0.217, 0.030, 0.000)]
+HOOK_K = 1.0
 
 
 def hook_pts():
     h, u = _hook_frame()
+    side = unit(np.cross(u, h))
     top = crook_at(S_TOP)
-    return [top + h * a * HOOK_K + u * b for a, b in HOOK_PTS]
+    return [top + h * a * HOOK_K + u * b + side * c for a, b, c in HOOK_PTS]
 
 
 HOOK_TIP = hook_pts()[-1]
-HANG = HOOK_TIP - np.array([0.0, 0.0, 0.052])      # the lantern's pivot: the bottom of the ring through the tip
-HOOK_TOP = hook_pts()[5]
+HANG = HOOK_TIP - np.array([0.0, 0.0, 0.050])      # the lantern's pivot: the bottom of the ring through the tip
+HOOK_TOP = hook_pts()[4]
 
-# THE LANTERN (on x_lantern, hanging straight down from HANG at rest): octagonal, 0.19 m across the flats, 0.41 m
-# tall with its cupola and base. The azure core shows through the middle of every pane (amber lampresin at the pane
-# edges, as painted: a blue centre between amber) and through a glass cupola on top, so the accent reads from the
-# 52 degree game camera at every facing (the gate: 1.5-6 % of the silhouette; the painted 0.16 m lantern with one
-# blue pane per side measured 0.3 %)
-LAN_A = 0.095                                      # body apothem (the posts' faces)
-LAN_GLASS = 0.088
-LAN_CUP = (0.094, 0.080)                           # the cupola: centre below HANG, radius
-LAN_EAVE = (0.080, 0.106, 0.106)                   # the eave ring: top / bottom below HANG, bottom apothem
-LAN_BODY = (0.115, 0.330)                          # the panes: from / to below HANG
-LAN_BASE = (0.342, 0.392)
-PANE_W, PANE_H = 0.0300, 0.096                     # the core's half width / half height in each pane
+# THE LANTERN (on x_lantern, hanging straight down from HANG at rest), as painted: a carved dark-wood octagon (a
+# pitched wooden cap with a finial, a flared eave, banded frame, eight posts, a tapered base) round warm amber
+# lampresin panes, the cold azure core showing through a lancet window in the middle of EVERY pane (amber all round
+# it: 'warm lantern, cold heart') and out through eight vents pierced in the cap, so the team colour reads from the
+# 52 degree game camera at every facing without a glass dome (the gate: 1.5-6 % of the silhouette)
+LAN_A = 0.100                                      # body apothem (the bands' faces)
+LAN_GLASS = 0.092
+LAN_ROOF = (0.048, 0.106, 0.112, 0.024)            # the cap: apex / eave below HANG, eave / apex apothems
+LAN_EAVE = (0.104, 0.118, 0.114)                   # the eave lip: top / bottom below HANG, apothem
+LAN_BODY = (0.132, 0.318)                          # the panes: from / to below HANG
+LAN_BASE = (0.332, 0.368)
+WIN_W, WIN_LO, WIN_SPRING, WIN_TOP = 0.019, 0.300, 0.178, 0.150   # the lancet: half width, bottom / spring / apex
+VENT = (0.036, 0.094, 0.007, 0.016, 0.009)        # roof vents: r from / to, half width in / out, depth
 
 
 def lan_z(dz):
@@ -195,11 +203,25 @@ MX = -0.017                                        # the mask's centre line (as 
 KX = -0.006                                        # the beak keel's centre line (as painted)
 HAT_C = np.array([0.0, 0.012])               # on the mirror plane (the symmetric decimate left pinholes off it)
 HAT_R, HAT_EDGE, HAT_RISE, HAT_T = 0.355, 1.946, 0.095, 0.026
+# fix pass 1: the felt is 3.6 cm at the edge (brief: 4 cm with bevels) and thickens toward the crown (the underside
+# rises less than the top): the 2.6 cm shell's underside z-fought its top through the double-sided material in
+# three's depth buffer (the 1-px dark specks on the disc from the game camera)
+HAT_TE, HAT_TC = 0.036, 0.030       # thickness at the edge, + extra toward the crown
+HAT_BAND = (0.300, 0.334)           # the stitched edge band (r from / to)
 
 
 def hat_top(r):
     u = np.clip(r / HAT_R, 0.0, 1.0)
     return HAT_EDGE + HAT_T * 0.5 + HAT_RISE * (1.0 - u ** 1.3)
+
+
+def hat_thick(r):
+    u = np.clip(r / HAT_R, 0.0, 1.0)
+    return HAT_TE + HAT_TC * (1.0 - u) ** 1.2
+
+
+def hat_under(r):
+    return hat_top(r) - hat_thick(r)
 
 
 MATERIAL_SET = "bible"
@@ -355,7 +377,7 @@ def finger_pts(C, a, f, out, i, s=HS, curl=1.0):
     round a shaft at C (Vashil's), 0.55 = a relaxed hand (an open C)"""
     o = 1.0 - curl
     sp = (i - 1.5) * 0.0245 * s
-    rr = (0.0128 if i else 0.0115) * s ** 0.85
+    rr = (0.0108 if i else 0.0097) * s ** 0.85         # fix pass 1: ~3 mm gaps between the fingers (were touching slabs)
     K = C + f * 0.006 * s + out * 0.026 * s + a * sp
     M = C + f * (0.040 + 0.016 * o) * s + out * (0.004 + 0.020 * o) * s + a * sp
     T = C + f * (0.026 + 0.050 * o) * s - out * (0.026 - 0.040 * o) * s + a * sp
@@ -376,28 +398,35 @@ def glove(name, C, a, f, out, bind, tris, curl=1.0, grip=True, s=HS):
     C, a, f, out = fist_frame(C, a, f, out)
     S = Sculpt(name)
     ax = np.stack([a, f, out])
-    S.add(RoundBox(C - f * 0.030 * s + out * 0.012 * s, (0.046 * s, 0.042 * s, 0.024 * s), 0.016 * s, axes=ax), k=0.0)
+    # fix pass 1 (review: four stacked finger slabs, a paddle): a narrower palm with a domed back, raised knuckles, a
+    # joint bump on every finger, gaps between the fingers, and a thumb that wraps over the index finger's middle
+    # joint (a fist round the crook) or lies along it (the relaxed hand)
+    S.add(RoundBox(C - f * 0.032 * s + out * 0.010 * s, (0.044 * s, 0.040 * s, 0.020 * s), 0.015 * s, axes=ax), k=0.0)
+    S.add(Ellipsoid(C - f * 0.034 * s + out * 0.024 * s, (0.040 * s, 0.038 * s, 0.010 * s), axes=ax), k=0.010)
     for i in range(4):
         K, M, T, rr = finger_pts(C, a, f, out, i, s, curl)
-        S.add(Sphere(K + out * 0.004 * s, rr + 0.003), k=0.006)
-        S.add(Tube([K, M, T], [rr + 0.002, rr + 0.001, rr * 0.92], k=0.006), k=0.006)
+        S.add(Sphere(K + out * 0.007 * s, rr + 0.0045), k=0.004)                     # the knuckle
+        S.add(Tube([K, M, T], [rr + 0.0010, rr + 0.0004, rr * 0.86], k=0.003), k=0.003)
+        S.add(Sphere(M + unit(M - C) * 0.004, rr + 0.0012), k=0.003)                 # the middle joint
     o = 1.0 - curl
-    tb = C - f * 0.030 * s - out * 0.022 * s + a * 0.050 * s
-    tm = C + f * 0.004 * s - out * (0.032 - 0.004 * o) * s + a * (0.050 + 0.006 * o) * s
-    tt = C + f * (0.026 + 0.018 * o) * s - out * (0.020 - 0.006 * o) * s + a * (0.028 + 0.012 * o) * s
-    S.add(Tube([tb, tm, tt], [0.017 * s, 0.0145 * s, 0.0125 * s], k=0.006), k=0.010)
-    # the glove's flared gauntlet cuff over the wrist
-    S.add(RoundCone(C - f * 0.105 * s, C - f * 0.050 * s, 0.040 * s, 0.034 * s), k=0.012)
+    tb = C - f * 0.034 * s - out * 0.018 * s + a * 0.046 * s
+    tm = C + f * 0.006 * s - out * (0.034 - 0.006 * o) * s + a * (0.050 + 0.004 * o) * s
+    tt = C + f * (0.040 + 0.010 * o) * s - out * (0.016 + 0.004 * o) * s + a * (0.034 + 0.010 * o) * s
+    S.add(Tube([tb, tm, tt], [0.0150 * s, 0.0128 * s, 0.0105 * s], k=0.004), k=0.008)
+    S.add(Sphere(tm, 0.0135 * s), k=0.004)                                           # the thumb's joint
+    # the glove's flared gauntlet cuff over the wrist, a rolled edge
+    S.add(RoundCone(C - f * 0.108 * s, C - f * 0.054 * s, 0.041 * s, 0.033 * s), k=0.010)
+    S.add(Torus(C - f * 0.106 * s, 0.040 * s, 0.0045 * s, axes=sdf.frame(f)), k=0.004)
     if grip:
-        S.sub(Capsule(C - a * 0.15, C + a * 0.15, SHAFT_R + 0.002), k=0.003)
-    S.ops = [(op, prim.displaced(felt(0.0009, 60.0), 0.0009) if op == "add" else prim, k, tg) for op, prim, k, tg in S.ops]
-    return (name, S, 0.5, "sandstone", bind, tris, 2.0)
+        S.sub(Capsule(C - a * 0.15, C + a * 0.15, SHAFT_R + 0.004), k=0.003)
+    S.ops = [(op, prim.displaced(felt(0.0006, 60.0), 0.0006) if op == "add" else prim, k, tg) for op, prim, k, tg in S.ops]
+    return (name, S, 0.45, "sandstone", bind, tris, 2.0)
 
 
 HAND_R_FRAME = fist_frame(GRIP, CROOK_U, FO_R, np.cross(FO_R, CROOK_U))
 C_L = W_L + FO_L * 0.072 * HS / 1.35 + np.array([0.0, -0.004, 0.0])
 HAND_L_FRAME = fist_frame(C_L, (0.0, -1.0, 0.0), FO_L, (1.0, 0.0, 0.0))
-LEFT_CURL = 0.62
+LEFT_CURL = 0.80                                   # a loose fist: hangs relaxed, wraps the crook in the stacked grips
 
 
 def octa(P, c, apo, zlo, zhi):
@@ -415,6 +444,58 @@ def octa_r(q):
                             (-q[:, 0] + q[:, 1]) * 0.7071, (-q[:, 0] - q[:, 1]) * 0.7071], 1), 1)
 
 
+class FacetTube(Prim):
+    """A carved polyline: every segment an n-sided prism (flat carved planes, not a round tube) whose facets turn
+    slowly along the length (parallel transported + a small random twist at each joint), each segment overshooting
+    its ends by `ext` x its radius so the turns close into angular knuckles. radii per point."""
+
+    def __init__(self, pts, radii, n=7, twist=0.5, seed=3, jitter=0.06, ext=0.85, ref=(0.0, 0.0, 1.0)):
+        self.pts = [np.asarray(p, float) for p in pts]
+        self.radii = [float(r) for r in radii]
+        rng = np.random.default_rng(seed)
+        self.segs = []
+        e1 = None
+        acc = 0.0
+        for i in range(len(self.pts) - 1):
+            a, b = self.pts[i], self.pts[i + 1]
+            u = unit(b - a)
+            L = float(np.linalg.norm(b - a))
+            if e1 is None:
+                r0 = np.asarray(ref, float)
+                if abs(r0 @ u) > 0.9:
+                    r0 = np.array([1.0, 0.0, 0.0])
+                e1 = unit(r0 - u * (r0 @ u))
+            else:
+                e1 = unit(e1 - u * (e1 @ u))
+            e2 = np.cross(u, e1)
+            acc += twist * L + float(rng.uniform(-0.12, 0.12))
+            th = acc + 2 * math.pi * np.arange(n) / n + rng.uniform(-0.16, 0.16, n)
+            N = np.cos(th)[:, None] * e1[None, :] + np.sin(th)[:, None] * e2[None, :]
+            sc = 1.0 + rng.uniform(-jitter, jitter, n)
+            self.segs.append((a, u, L, self.radii[i], self.radii[i + 1], N, sc))
+        self.ext = ext
+        self.pad = 0.0
+
+    def bounds(self):
+        P = np.array(self.pts)
+        r = max(self.radii) * 1.6
+        return P.min(0) - r, P.max(0) + r
+
+    def d(self, P):
+        d = np.full(len(P), 1e3)
+        for a, u, L, ra, rb, N, sc in self.segs:
+            q = P - a
+            s = q @ u
+            t = np.clip(s / L, 0.0, 1.0)
+            r = ra + (rb - ra) * t
+            qp = q - s[:, None] * u[None, :]
+            poly = np.max(qp @ N.T - r[:, None] * sc[None, :], axis=1)
+            e = self.ext * max(ra, rb)
+            cap = np.maximum(-s - e, s - L - e)
+            d = np.minimum(d, np.maximum(poly, cap))
+        return d
+
+
 # ── the sculpt ──────────────────────────────────────────────────────────────────────────────────────
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris, uv weight) in build order."""
@@ -427,13 +508,17 @@ def sculpts() -> list:
     # from the edge, a small rounded crown; solid under the crown where it sits on the hood (no gap under the brim)
     def hat_prof(r, z):
         zt = hat_top(r)
-        zm = zt - HAT_T * 0.5
-        shell = np.abs(z - zm) - HAT_T * 0.5
-        d = smax(shell, r - HAT_R, 0.011)
+        th = hat_thick(r)
+        zm = zt - th * 0.5
+        shell = np.abs(z - zm) - th * 0.5
+        d = smax(shell, r - HAT_R, 0.016)
         crown = np.maximum(np.maximum(r - 0.168, 1.958 - z), z - zt)
         d = np.minimum(d, crown)
-        band = 0.0022 * np.exp(-((r - 0.322) / 0.0055) ** 2) * (z > zm)
-        return (d - band) * 0.93
+        # the stitched edge band: a felt strip 3.4 cm wide laid round the top just inside the edge (a 1.8 mm step at
+        # each side), a soft seam ring round the crown
+        band = 0.0018 * ss(HAT_BAND[0] - 0.003, HAT_BAND[0] + 0.002, r) * (1 - ss(HAT_BAND[1] - 0.002, HAT_BAND[1] + 0.003, r))
+        seam = -0.0012 * np.exp(-((r - 0.172) / 0.004) ** 2)
+        return (d - (band + seam) * (z > zm)) * 0.93
     hat = Sculpt("hat")
     hat.add(Lathe((HAT_C[0], HAT_C[1], 0.0), hat_prof, HAT_R + 0.01, 1.90, 2.08), k=0.0)
     hat.add(Sphere((HAT_C[0], HAT_C[1], 2.032), 0.026), k=0.03)
@@ -441,14 +526,17 @@ def sculpts() -> list:
 
     # HOOD: a lavender column from under the hat to the scarf, framing the mask (the painted outline cut out in
     # front, a rolled edge round it); rigid on the head above the chin, blending to the neck and chest below
+    # fix pass 1: a TAPERED cowl (the concept's back view), not a straight column: narrow under the crown, flaring
+    # to the shoulders, a soft centre-back crease and two folds falling into the scarf
     hood = Sculpt("hood")
-    hood.add(FlatCapsule((MX, 0.025, 1.585), (MX, 0.018, 1.935), 0.178, 0.172, 0.150, 0.158, side=(1, 0, 0))
+    hood.add(FlatCapsule((MX, 0.032, 1.585), (MX, 0.012, 1.925), 0.190, 0.186, 0.130, 0.136, side=(1, 0, 0))
              .displaced(cloth_noise(0.003, 8.0), 0.003), k=0.0)
-    hood.add(Ellipsoid((MX, 0.018, 1.935), (0.150, 0.158, 0.060)), k=0.02)
+    hood.add(Ellipsoid((MX, 0.012, 1.925), (0.130, 0.136, 0.052)), k=0.02)
     hood.inter(HalfSpace((0, 0, 1.972), (0, 0, 1), 1.0), k=0.0)
+    hood.add(Tube([(MX, 0.140, 1.93), (MX, 0.168, 1.80), (MX, 0.205, 1.64)], [0.008, 0.012, 0.014], k=0.01), k=0.025)
     for sx in (-1, 1):                                                    # soft folds falling down the back
-        hood.add(Tube([(MX + sx * 0.07, 0.16, 1.90), (MX + sx * 0.085, 0.175, 1.74), (MX + sx * 0.09, 0.18, 1.62)],
-                      [0.010, 0.014, 0.012], k=0.01), k=0.03)
+        hood.add(Tube([(MX + sx * 0.075, 0.128, 1.88), (MX + sx * 0.105, 0.160, 1.74), (MX + sx * 0.125, 0.175, 1.62)],
+                      [0.008, 0.012, 0.012], k=0.01), k=0.03)
 
     def opening(P):
         return np.maximum(face_sd(P[:, 0], P[:, 2]) - 0.006, P[:, 1] + 0.030)
@@ -503,15 +591,29 @@ def sculpts() -> list:
                 else prim, k, tg) for i, (op, prim, k, tg) in enumerate(top.ops)]
     part("coat_top", top, "cloth", ("weights", "torso"), 1300)
 
+    # BELT (fix pass 1: was a round hose with toggle-like sides): a flat leather strap 4.8 cm tall, 1.1 cm thick,
+    # laid on the coat's waist ellipse, a rectangular frame buckle at the front and the strap's end hanging from it
+    BY = 0.735                                                      # the waist ellipse's depth / width
+
+    def belt_d(P):
+        x, y, z = P[:, 0], (P[:, 1] - 0.026) / BY, P[:, 2]
+        r = np.hypot(x, y)
+        q0 = np.abs(r - 0.1885) - (0.0055 - 0.002)
+        q1 = np.abs(z - 1.250) - (0.024 - 0.002)
+        d = np.hypot(np.maximum(q0, 0), np.maximum(q1, 0)) + np.minimum(np.maximum(q0, q1), 0) - 0.002
+        return d * BY
     belt = Sculpt("belt")
-    belt.add(Torus((0.0, 0.025, 1.250), 0.184, 0.020, axes=np.diag([1.0, 0.140 / 0.184, 1.0]), rz=0.027)
-             .displaced(chips(0.0015, 30.0), 0.0015), k=0.0)
-    part("belt", belt, "leather", ("weights", "belt"), 450, 0.6)
+    belt.add(Fn(belt_d, (-0.22, -0.15, 1.21), (0.22, 0.20, 1.29)).displaced(chips(0.0008, 30.0), 0.0008), k=0.0)
+    # the strap's end: through the buckle, hanging 9 cm down the front, a little to his left
+    belt.add(RoundBox((0.040, -0.123, 1.206), (0.016, 0.0035, 0.046), 0.003,
+                      axes=sdf.axes_from_rot(_rot((0, 0, 1), -6.0) @ _rot((0, 1, 0), 5.0))), k=0.003)
+    part("belt", belt, "leather", ("weights", "belt"), 500, 0.6)
     buckle = Sculpt("buckle")
-    buckle.add(RoundBox((-0.004, -0.128, 1.250), (0.034, 0.010, 0.030), 0.007), k=0.0)
-    buckle.sub(RoundBox((-0.004, -0.140, 1.250), (0.020, 0.010, 0.017), 0.004), k=0.003)
-    buckle.add(Capsule((-0.004, -0.138, 1.236), (-0.004, -0.138, 1.264), 0.0045), k=0.002)
-    part("buckle", buckle, "wood_dark", ("weights", "belt"), 160, 0.4)
+    buckle.add(RoundBox((-0.004, -0.126, 1.250), (0.030, 0.0045, 0.029), 0.004), k=0.0)
+    buckle.sub(RoundBox((-0.004, -0.126, 1.250), (0.019, 0.012, 0.018), 0.003), k=0.002)
+    buckle.add(RoundBox((-0.004, -0.124, 1.250), (0.021, 0.004, 0.020), 0.002), k=0.0)       # the strap in the frame
+    buckle.add(Capsule((-0.004, -0.131, 1.234), (-0.004, -0.131, 1.266), 0.0035), k=0.002)   # the pin
+    part("buckle", buckle, "wood_dark", ("weights", "belt"), 200, 0.4)
 
     skirt = Sculpt("skirt")
     f1 = FlatCapsule((0.0, 0.025, 1.235), (0.0, 0.030, 0.80), 0.182, 0.135, 0.228, 0.165, side=(1, 0, 0))
@@ -558,8 +660,8 @@ def sculpts() -> list:
         part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 900 if s == "R" else 800)
 
     # HANDS: ochre gloves, the right closed round the crook (thumb up), the left a relaxed curl hanging at the hip
-    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 950, curl=1.0, grip=True))
-    out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 900, curl=LEFT_CURL, grip=False))
+    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 1250, curl=1.0, grip=True))
+    out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 1150, curl=LEFT_CURL, grip=False))
 
     # BOOTS: plain dark leather, a little wide (x1.2), ironstone toe caps
     boots, caps = Sculpt("boots"), Sculpt("toecaps")
@@ -585,44 +687,50 @@ def sculpts() -> list:
     return out
 
 
-def crook_parts() -> list:
-    """the crook on prop.R: the gnarled pale shaft (straight and even under the two wraps), the hook, the carved
-    ironstone ferrule, the leather wraps"""
-    out = []
+# shaft knots: (s along the shaft, offset along h, offset sideways, radius): straight and even under the two wraps
+# (the hands' grip channels), a few gnarled kinks and knots above the rest grip, as painted
+SHAFT_KNOTS = [(None, 0.0, 0.0, 0.0275), (-1.10, 0.003, -0.002, 0.029), (-0.82, -0.003, 0.004, 0.030),
+               (-0.57, 0.0, 0.0, 0.030), (-0.17, 0.0, 0.0, 0.030), (0.22, 0.0, 0.0, 0.030), (0.44, 0.006, -0.007, 0.033),
+               (0.64, -0.009, 0.006, 0.030), (0.84, 0.012, 0.004, 0.034), (0.96, 0.002, -0.003, 0.031)]
 
-    def free(s):
-        f = 1.0
-        for a_, b_ in GRIPS:
-            f = min(f, 1.0 - float(ss(a_ - 0.10, a_ - 0.03, s)) * (1.0 - float(ss(b_ + 0.03, b_ + 0.10, s))))
-        return f
+
+def crook_line():
+    """the crook's carved centreline: the shaft knots, then the hook (points, radii)"""
     h, u = _hook_frame()
     side = unit(np.cross(u, h))
     pts, rads = [], []
-    for s in np.linspace(S_BUTT + 0.012, S_TOP - 0.07, 34):
-        p = crook_at(s)
-        z = p[2]
-        wob = 0.007 * (h * math.sin(s * 6.3 + 0.4) + side * math.cos(s * 4.7 + 1.1)) * float(ss(-1.25, -1.05, s))
-        if s > 0.25:                                                     # the painted kinks under the hook
-            wob = wob + 0.012 * h * math.sin((s - 0.25) * 9.0)
-        fz = free(s)
-        pts.append(p + wob * fz)
-        rads.append(SHAFT_R * (1.0 + 0.10 * math.sin(s * 9.0 + 1.0) * fz) * (0.95 if z < 0.1 else 1.0))
+    for s, oh, os_, r in SHAFT_KNOTS:
+        s = S_BUTT + 0.006 if s is None else s
+        pts.append(crook_at(s) + h * oh + side * os_)
+        rads.append(r)
     hp = hook_pts()
     for i, p in enumerate(hp[1:]):
         t = i / (len(hp) - 2)
         pts.append(p)
-        rads.append(SHAFT_R + (HOOK_R - SHAFT_R) * min(1.0, t * 2.5) + 0.004 * math.sin(t * 7.0))
+        rads.append(SHAFT_R + (HOOK_R - SHAFT_R) * min(1.0, t * 3.0) + (0.003 if i in (2, 5) else 0.0))
+    return pts, rads
+
+
+def crook_parts() -> list:
+    """the crook on prop.R: the pale carved shaft and its angular hook (one faceted polyline), the carved knob at the
+    hook's tip, the carved ironstone ferrule, the leather wraps"""
+    out = []
+    h, u = _hook_frame()
+    pts, rads = crook_line()
     shaft = Sculpt("crook_shaft")
-    shaft.add(Tube(pts, rads, k=0.012).displaced(lambda P: 0.0020 * NOISE(P * np.array([1.0, 1.0, 0.18]), 36.0), 0.0020), k=0.0)
-    shaft.add(Sphere(HOOK_TIP + u * -0.004, HOOK_R + 0.006), k=0.012)          # the carved knob at the hook's tip
+    shaft.add(FacetTube(pts, rads, n=7, twist=0.55, seed=5, jitter=0.07, ext=0.80, ref=h)
+              .displaced(lambda P: 0.0007 * NOISE(P * np.array([1.0, 1.0, 0.25]), 45.0), 0.0007), k=0.0)
+    tip_d = unit(pts[-1] - pts[-2])
+    shaft.add(FacetTube([HOOK_TIP - tip_d * 0.030, HOOK_TIP + tip_d * 0.006], [HOOK_R + 0.002, HOOK_R + 0.005], n=6,
+                        twist=0.0, seed=11, jitter=0.10, ext=0.55, ref=h), k=0.004)      # the carved knob at the tip
     shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)              # the butt sits on the ground (load test)
-    out.append(("crook_shaft", shaft, 0.5, "wood", "bone:prop.R", 1050, 1.1))
+    out.append(("crook_shaft", shaft, 0.5, "wood", "bone:prop.R", 1500, 1.1))
     grip = Sculpt("crook_grip")
     for a_, b_ in GRIPS:
         g0, g1 = crook_at(a_), crook_at(b_)
-        grip.add(Capsule(g0, g1, SHAFT_R + 0.0060).displaced(wraps(0.0020, 0.017, g0, g1), 0.0020), k=0.0)
+        grip.add(Capsule(g0, g1, SHAFT_R + 0.0065).displaced(wraps(0.0020, 0.017, g0, g1), 0.0020), k=0.0)
         for e in (g0 + u * 0.006, g1 - u * 0.006):
-            grip.add(Torus(e, SHAFT_R + 0.0060, 0.0042, axes=sdf.frame(u)), k=0.002)
+            grip.add(Torus(e, SHAFT_R + 0.0065, 0.0042, axes=sdf.frame(u)), k=0.002)
     out.append(("crook_grip", grip, 0.5, "leather", "bone:prop.R", 360, 0.8))
     fer = Sculpt("crook_ferrule")
     b0 = crook_at(S_BUTT)
@@ -633,67 +741,103 @@ def crook_parts() -> list:
     return out
 
 
+def lancet(t, z, w, z_lo, z_spring, z_top):
+    """2D distance (m, < 0 inside) of a pointed-arch window: half width w from z_lo up to the spring line, then two
+    arcs meeting at z_top (all heights world z, z_lo < z_spring < z_top)"""
+    hgt = z_top - z_spring
+    R = (w * w + hgt * hgt) / (2 * w)                       # the two arcs' radius (centres on the spring line)
+    body = np.maximum(np.abs(t) - w, np.maximum(z_lo - z, z - z_spring))
+    arc = np.hypot(np.abs(t) + (R - w), z - z_spring) - R
+    arc = np.maximum(arc, np.maximum(z_spring - z, z - z_top))
+    return np.minimum(body, arc)
+
+
 def lantern_parts() -> list:
-    """the lantern (rigid on x_lantern): a ring through the hook's knob, a carved dark-wood octagon (finial and ribs
-    over a glass cupola, a flared eave, banded frame, eight posts, a tapered base), amber lampresin panes, the azure
-    core (the accent) in the middle of every pane and in the cupola"""
+    """the lantern (rigid on x_lantern): a ring through the hook's knob, a carved dark-wood octagon (finial, a pitched
+    cap pierced by eight vents, a flared eave, banded frame, eight posts, a tapered base), amber lampresin panes, the
+    azure core (the accent) in a lancet window in the middle of every pane and glowing up through the cap's vents"""
     out = []
     c = np.array([HANG[0], HANG[1], 0.0])
     ring = Sculpt("lantern_ring")
     h, u = _hook_frame()
     ring.add(Torus(HANG + np.array([0, 0, 0.026]), 0.022, 0.0055, axes=sdf.frame(unit(np.cross(h, (0, 0, 1))))), k=0.0)
-    ring.add(Torus(HANG + np.array([0, 0, -0.010]), 0.012, 0.0045, axes=sdf.frame(h)), k=0.0)
+    ring.add(Torus(HANG + np.array([0, 0, -0.012]), 0.013, 0.0048, axes=sdf.frame(h)), k=0.0)
     out.append(("lantern_ring", ring, 0.4, "wood_dark", "bone:x_lantern", 140, 0.5))
-    zc_cup = lan_z(LAN_CUP[0])
-    ze0, ze1, a_eave = lan_z(LAN_EAVE[0]), lan_z(LAN_EAVE[1]), LAN_EAVE[2]
+    za, ze, a_e, a_a = lan_z(LAN_ROOF[0]), lan_z(LAN_ROOF[1]), LAN_ROOF[2], LAN_ROOF[3]
+    zl0, zl1, a_l = lan_z(LAN_EAVE[0]), lan_z(LAN_EAVE[1]), LAN_EAVE[2]
     zb0, zb1 = lan_z(LAN_BODY[0]), lan_z(LAN_BODY[1])
     zs0, zs1 = lan_z(LAN_BASE[0]), lan_z(LAN_BASE[1])
+    face_ang = [math.radians(45.0 * i) for i in range(8)]          # octa_r's facet normals: 0, 45, ... degrees
+
+    def roof(P):
+        q = P - c
+        k = np.clip((za - P[:, 2]) / (za - ze), 0.0, 1.0)
+        slope = (a_e - a_a) / (za - ze)
+        d = (octa_r(q) - (a_a + (a_e - a_a) * k)) / math.sqrt(1 + slope * slope)
+        return np.maximum(d, np.maximum(P[:, 2] - za, ze - P[:, 2]))
+
+    def vent_d(P, d0, d1):
+        """the eight vent slots down the cap's facets, between depths d0..d1 under the roof's surface"""
+        q = P - c
+        rr = np.hypot(q[:, 0], q[:, 1])
+        k = np.clip((za - P[:, 2]) / (za - ze), 0.0, 1.0)
+        slope = (a_e - a_a) / (za - ze)
+        depth = -(octa_r(q) - (a_a + (a_e - a_a) * k)) / math.sqrt(1 + slope * slope)
+        best = np.full(len(P), 1e3)
+        for th in face_ang:
+            n = np.array([math.cos(th), math.sin(th)])
+            along = q[:, :2] @ n
+            across = q[:, :2] @ np.array([-n[1], n[0]])
+            f = np.clip((along - VENT[0]) / (VENT[1] - VENT[0]), 0.0, 1.0)
+            hw = VENT[2] + (VENT[3] - VENT[2]) * f
+            dd = np.maximum(np.abs(across) - hw, np.maximum(VENT[0] - along, along - VENT[1]))
+            best = np.minimum(best, dd)
+        return np.maximum(np.maximum(best, np.maximum(depth - d1, d0 - depth)), np.maximum(P[:, 2] - za, ze - P[:, 2]))
 
     def eave(P):
         q = P - c
-        k = np.clip((ze0 - P[:, 2]) / (ze0 - ze1), 0.0, 1.0)
-        d = (octa_r(q) - (0.062 + (a_eave - 0.062) * k)) * 0.62
-        inner = octa_r(q) - (0.050 + 0.012 * k)
-        return np.maximum(np.maximum(d, -inner), np.maximum(P[:, 2] - ze0, ze1 - P[:, 2]))
+        return np.maximum(octa_r(q) - a_l, np.maximum(P[:, 2] - zl0, zl1 - P[:, 2]))
 
     def base(P):
         q = P - c
         k = np.clip((zs0 - P[:, 2]) / (zs0 - zs1), 0.0, 1.0)
-        d = (octa_r(q) - (0.099 - 0.060 * k)) * 0.75
+        d = (octa_r(q) - (0.100 - 0.056 * k)) * 0.8
         return np.maximum(d, np.maximum(P[:, 2] - zs0, zs1 - P[:, 2]))
     fr = Sculpt("lantern_frame")
-    lo, hi = c + np.array([-0.13, -0.13, zs1 - 0.03]), c + np.array([0.13, 0.13, HANG[2] + 0.01])
-    fr.add(Fn(eave, lo, hi), k=0.0)
-    fr.add(Sphere((c[0], c[1], zc_cup + LAN_CUP[1] + 0.006), 0.017), k=0.004)                    # the finial
-    for i in range(4):                                                                         # ribs over the cupola
-        a = math.radians(45.0 * i + 22.5)
-        pts = [(c[0] + math.cos(a) * LAN_CUP[1] * math.sin(t) * 1.03 * sg, c[1] + math.sin(a) * LAN_CUP[1] * math.sin(t) * 1.03 * sg,
-                zc_cup + LAN_CUP[1] * math.cos(t) * 1.03) for sg in (-1.0, 1.0) for t in np.linspace(1.45, 0.0, 6)[::(1 if sg < 0 else -1)]]
-        fr.add(Tube(pts, [0.0045] * len(pts), k=0.003), k=0.003)
-    fr.add(Fn(lambda P: octa(P, c, 0.099, zb0 - 0.004, zb0 + 0.012), lo, hi), k=0.004)
-    fr.add(Fn(lambda P: octa(P, c, 0.099, zb1 - 0.014, zb1 + 0.003), lo, hi), k=0.004)
-    R_post = LAN_A / math.cos(math.radians(22.5))
+    lo, hi = c + np.array([-0.135, -0.135, zs1 - 0.03]), c + np.array([0.135, 0.135, HANG[2] + 0.01])
+    fr.add(Fn(roof, lo, hi), k=0.0)
+    fr.add(Fn(eave, lo, hi), k=0.004)
+    fr.add(Sphere((c[0], c[1], za + 0.010), 0.016), k=0.006)                                     # the finial
+    fr.add(Fn(lambda P: octa(P, c, LAN_A, zb0 - 0.004, zb0 + 0.010), lo, hi), k=0.004)          # the top band
+    fr.add(Fn(lambda P: octa(P, c, LAN_A, zb1 - 0.012, zb1 + 0.003), lo, hi), k=0.004)          # the bottom band
+    R_post = LAN_A / math.cos(math.radians(22.5)) - 0.004
     for i in range(8):
         a = math.radians(22.5 + 45.0 * i)
         pc = c + np.array([math.cos(a) * R_post, math.sin(a) * R_post, 0.0])
-        fr.add(Capsule((pc[0], pc[1], zb1), (pc[0], pc[1], zb0), 0.0095), k=0.004)
+        fr.add(Capsule((pc[0], pc[1], zb1), (pc[0], pc[1], zb0), 0.0100), k=0.004)
     fr.add(Fn(base, lo, hi), k=0.004)
     fr.add(Sphere((c[0], c[1], zs1 - 0.008), 0.016), k=0.006)
-    fr.ops = [(op, prim.displaced(chips(0.0015, 26.0), 0.0015) if op == "add" else prim, k, tg) for op, prim, k, tg in fr.ops]
-    out.append(("lantern_frame", fr, 0.4, "wood_dark", "bone:x_lantern", 1350, 1.2))
+    fr.ops = [(op, prim.displaced(chips(0.0012, 26.0), 0.0012) if op == "add" else prim, k, tg) for op, prim, k, tg in fr.ops]
+    fr.sub(Fn(lambda P: vent_d(P, -0.02, VENT[4]), lo, hi), k=0.0015)
+    out.append(("lantern_frame", fr, 0.4, "wood_dark", "bone:x_lantern", 1500, 1.2))
     gl = Sculpt("lantern_glass")
     gl.add(Fn(lambda P: octa(P, c, LAN_GLASS, zb1, zb0), lo, hi), k=0.0)
-    out.append(("lantern_glass", gl, 0.45, "lampresin", "bone:x_lantern", 220, 0.8))
+    out.append(("lantern_glass", gl, 0.45, "lampresin", "bone:x_lantern", 260, 0.8))
+
+    def windows(P):
+        q = P - c
+        best = np.full(len(P), 1e3)
+        for th in face_ang:
+            n = np.array([math.cos(th), math.sin(th)])
+            along = q[:, :2] @ n - LAN_GLASS
+            across = q[:, :2] @ np.array([-n[1], n[0]])
+            w = lancet(across, P[:, 2], WIN_W, lan_z(WIN_LO), lan_z(WIN_SPRING), lan_z(WIN_TOP))
+            best = np.minimum(best, np.maximum(w, np.abs(along - 0.0010) - 0.0035))
+        return best
     core = Sculpt("lantern_core")
-    for i in range(4):
-        a = math.radians(90.0 * i)
-        n = np.array([math.cos(a), math.sin(a), 0.0])
-        t = np.array([-math.sin(a), math.cos(a), 0.0])
-        pc = c + n * (LAN_GLASS + 0.0015) + np.array([0, 0, 0.5 * (zb0 + zb1)])
-        core.add(RoundBox(pc, (PANE_W, 0.0040, PANE_H), 0.003, axes=np.stack([t, n, (0, 0, 1)])), k=0.0)
-    core.add(Fn(lambda P: np.maximum(np.linalg.norm(P - np.array([c[0], c[1], zc_cup]), axis=1) - LAN_CUP[1], zc_cup - 0.012 - P[:, 2]),
-                c + np.array([-0.07, -0.07, zc_cup - 0.02]), c + np.array([0.07, 0.07, zc_cup + 0.07])), k=0.0)
-    out.append(("lantern_core", core, 0.4, "accent", "bone:x_lantern", 420, 0.6))
+    core.add(Fn(windows, lo, hi), k=0.0)
+    core.add(Fn(lambda P: vent_d(P, VENT[4] - 0.0005, VENT[4] + 0.0045), lo, hi), k=0.0)      # the glow in the vents
+    out.append(("lantern_core", core, 0.4, "accent", "bone:x_lantern", 600, 0.6))
     return out
 
 
@@ -727,19 +871,21 @@ _BUILD: dict = {}
 def hat_profile() -> list:
     """the hat's game-mesh profile (r, z) from the crown down the top, round the edge roll, back along the underside
     and in under the crown (to the axis)"""
+    re_ = HAT_R - 0.016                                  # where the edge roll starts
     pts = [(0.0, hat_top(0.0) + 0.006)]
-    for u in (0.02, 0.05, 0.09, 0.14, 0.20, 0.27, 0.35, 0.44, 0.53, 0.62, 0.71, 0.79, 0.86, 0.92, 0.965):
-        r = u * (HAT_R - 0.010)
-        pts.append((r, hat_top(r) + (0.006 * max(0.0, 1 - r / 0.03))))
-    zt = hat_top(HAT_R - 0.010)
-    c = (HAT_R - 0.010, zt - HAT_T * 0.5)
-    for a in (60.0, 25.0, -10.0, -45.0, -80.0):
+    for r in (0.007, 0.018, 0.032, 0.050, 0.072, 0.098, 0.128, 0.160, 0.168, 0.176, 0.200, 0.230, 0.260, 0.285,
+              HAT_BAND[0] - 0.004, HAT_BAND[0] + 0.002, 0.317, HAT_BAND[1] - 0.002, re_):
+        b = 0.0018 if HAT_BAND[0] < r < HAT_BAND[1] else 0.0
+        b -= 0.0012 if abs(r - 0.172) < 0.005 else 0.0
+        pts.append((r, hat_top(r) + b + (0.006 * max(0.0, 1 - r / 0.03))))
+    zt, th = hat_top(re_), hat_thick(re_)
+    c = (re_, zt - th * 0.5)
+    for a in (70.0, 40.0, 10.0, -20.0, -50.0, -80.0):
         t = math.radians(a)
-        pts.append((c[0] + 0.0115 * math.cos(t), c[1] + HAT_T * 0.5 * math.sin(t)))
-    for u in (0.94, 0.86, 0.76, 0.66, 0.56, 0.48):
-        r = u * (HAT_R - 0.010)
-        pts.append((r, hat_top(r) - HAT_T))
-    pts += [(0.168, 1.962), (0.12, 1.958), (0.0, 1.958)]
+        pts.append((c[0] + 0.016 * math.cos(t), c[1] + th * 0.5 * math.sin(t)))
+    for r in (re_ - 0.010, 0.30, 0.27, 0.24, 0.21, 0.19):
+        pts.append((r, hat_under(r)))
+    pts += [(0.168, max(1.962, hat_under(0.168))), (0.12, 1.958), (0.0, 1.958)]
     return pts
 
 
