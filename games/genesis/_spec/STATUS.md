@@ -35,7 +35,9 @@ the god's acts land on a society that answers them. What is in the sim now:
 
 **Gate** (2026-10-27, HEAD `ccfcb5c3`, the sim unchanged since): `npm run check` — detban 145 sim files clean, tsc clean,
 509 tests: 507 pass, 0 fail, 2 skipped (the throughput floors skip themselves on an overloaded machine); the UI team's
-`ui-living`, `ui-defaults`, `ui-embed` pass (LIVING §10.7).
+`ui-living`, `ui-defaults`, `ui-embed` pass (LIVING §10.7). Since then (2026-10-28) one sim fix: a sign sent to a named
+town (`god.omen { settlement }`, as the living panel sends it) stands over that town, not at the camera focus (LIVING
+§10.2; test in `tests/living-integration.test.ts`); the gate re-runs on it (`integrate/r6/out/check-i9.log`).
 **Acceptance** (LIVING §10.3–10.6, every metric per seed in `_harness/scratch/living/acceptance.json`): 8 census seeds left
 alone for 50 game years at 3000x, scripted god sessions on 8 seeds (storm, default meteor, drought answered vs ignored,
 prophet fulfilled vs failed, omen fulfilled vs contradicted, a new material, an iron vein, a new crop) and on each
