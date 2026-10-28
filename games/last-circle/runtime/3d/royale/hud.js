@@ -3565,7 +3565,7 @@ export function update(W, dt) {
     let ia = rvT
       ? (rvP > 0 ? "Reviving " + rvN + "…" : (touchOn ? "HOLD USE  ·  Revive " + rvN : "[HOLD " + keyOf(W, "KeyE") + "] Revive " + rvN))
       : hint.type === "chest"
-      ? (hint.progress > 0 ? "Opening…" : (touchOn ? "HOLD USE  ·  Open chest" : "[HOLD " + keyOf(W, "KeyE") + "] Open chest"))
+      ? (hint.progress > 0 ? "Opening…" : (touchOn ? "HOLD USE  ·  Open chest" : "[HOLD " + keyOf(W, "KeyE") + "] " + (hint.supply ? "Open" : "Open chest")))   // (release blockers) a supply crate is named by its pill
       : interactLabel(W, hint.data);
     if (C.ia !== ia) { R.interact.textContent = ia; C.ia = ia; }
   } else if (C.iaOn !== false) { R.interact.style.display = "none"; C.iaOn = false; }
@@ -3643,7 +3643,7 @@ export function update(W, dt) {
         R._lv.set(n.pos.x, n.pos.y + (n.type === "chest" ? 1.0 : 0.55), n.pos.z).project(cam);
         if (R._lv.z > 1 || R._lv.x < -1 || R._lv.x > 1 || R._lv.y < -1 || R._lv.y > 1) continue;
         const isW = n.type === "item" && n.data.kind === "weapon";
-        const txt = n.type === "chest" ? "CHEST"
+        const txt = n.type === "chest" ? (n.supply && !touchOn ? "SUPPLY DROP" : "CHEST")      // (release blockers) the supply crate by name (touch: unchanged)
                   : shortName(n.data) + (isW ? " · " + (K.RARITY[n.data.rarity || 0] || "").toUpperCase() : "");
         let lx = (R._lv.x * 0.5 + 0.5) * sw, ly = (-R._lv.y * 0.5 + 0.5) * sh;   // the pill's bottom-centre
         if (koOn) { ly = koPlace(txt, lx, ly); if (ly === null) continue; }    // under a control: not drawn, slot kept
