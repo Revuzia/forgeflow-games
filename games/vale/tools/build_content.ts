@@ -754,12 +754,13 @@ const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
   decal: {
     shape: E('circle', 'ring', 'cone', 'rect', 'line'), style: E('plain', 'scorch', 'crack', 'ink', 'frost', 'light'), radius: 'curve',
     life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve', rim: 'color', texture: TEX, angleDeg: 'nonneg', length: 'nonneg', width: 'nonneg',
-    hold: 'unit',
+    hold: 'unit', rotateDeg: 'num',
   },
   light: { color: 'color', intensity: 'nonneg', radius: 'nonneg', life: 'nonneg', attack: 'nonneg', flicker: 'unit' },
   distort: { mode: E('ring', 'haze', 'bulge'), size: 'curve', strength: 'curve', life: 'nonneg', align: E('camera', 'ground') },
   feel: { shake: 'unit', who: E('self', 'all'), hitFlash: 'nonneg', hitStop: 'nonneg', squash: 'nonneg',
-    exposure: 'nonneg', exposureRadius: 'nonneg', exposureHold: 'nonneg', exposureFade: 'nonneg', exposureDip: 'unit', exposureDesat: 'unit' },
+    exposure: 'nonneg', exposureRadius: 'nonneg', exposureHold: 'nonneg', exposureFade: 'nonneg', exposureDip: 'unit', exposureDesat: 'unit',
+    exposureRepeat: 'unit' },
   bind: { event: 'str' },
 };
 const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element' || v === 'signature' || v === 'secondary');

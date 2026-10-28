@@ -84,6 +84,10 @@ export class TeamBrain {
   readonly defend: Float64Array;
   readonly defendX: Float64Array;
   readonly defendY: Float64Array;
+  /** enemy fighters at the most threatened own structure of each lane */
+  readonly defendFighters: Int32Array;
+  /** laners assigned to each lane */
+  private readonly laners: Int32Array;
   /** an own structure off the lanes (core) under attack */
   baseThreat = 0; baseX = 0; baseY = 0;
   phase: 'early' | 'mid' | 'late' = 'early';
@@ -115,9 +119,11 @@ export class TeamBrain {
     const n = k.lanes.length;
     this.push = new Float64Array(n); this.defend = new Float64Array(n);
     this.defendX = new Float64Array(n); this.defendY = new Float64Array(n);
+    this.defendFighters = new Int32Array(n); this.laners = new Int32Array(n);
     this.campReady = new Float64Array(k.camps.length);
     for (const c of k.camps) this.campReady[c.index] = c.firstSpawn;
     this.assignLanes();
+    for (const a of this.assign.values()) if (a.lane >= 0 && !a.jungle) this.laners[a.lane]++;
   }
 
   // ── lanes ─────────────────────────────────────────────────────────────────────────────────────
@@ -125,6 +131,8 @@ export class TeamBrain {
     for (const [p, a] of assignLanes(this.k, this.team)) this.assign.set(p, a);
   }
   laneOf(p: PlayerId): LaneAssign { return this.assign.get(p) ?? { lane: this.k.lanes.length > 0 ? 0 : -1, jungle: false, support: false }; }
+  /** how many of this team's laners hold `lane` */
+  lanersOn(lane: number): number { return lane >= 0 && lane < this.laners.length ? this.laners[lane] : 0; }
 
   // ── intents ───────────────────────────────────────────────────────────────────────────────────
   think(w: World): void {
@@ -189,6 +197,7 @@ export class TeamBrain {
   private thinkDefend(w: World): void {
     const k = this.k, tp = this.perc;
     this.defend.fill(0);
+    this.defendFighters.fill(0);
     this.baseThreat = 0;
     for (const st of tp.allyStructs) {
       if (!st.alive) continue;
@@ -205,7 +214,7 @@ export class TeamBrain {
       if (threat <= 0.05) continue;
       const lane = info ? info.lane : -1;
       if (lane >= 0) {
-        if (threat > this.defend[lane]) { this.defend[lane] = threat; this.defendX[lane] = st.x; this.defendY[lane] = st.y; }
+        if (threat > this.defend[lane]) { this.defend[lane] = threat; this.defendX[lane] = st.x; this.defendY[lane] = st.y; this.defendFighters[lane] = fighters; }
       } else if (threat > this.baseThreat) { this.baseThreat = threat; this.baseX = st.x; this.baseY = st.y; }
     }
     void k;

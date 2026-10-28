@@ -107,6 +107,9 @@ export interface DecalL extends LayerBase {
   type: 'decal';
   shape: number; style: number; radius: Curve; life: number; color: Gradient; alpha: Curve; emissive: Curve; rim: ColorRef | null;
   tex: TexSpec; angle: number; length: number; width: number; spinRandom: boolean;
+  /** a fixed turn (radians) on top of the spawn's facing; `rotateDeg` replaces a round decal's random spin (a dial's
+   *  hour ticks stay square to the screen) */
+  rotate: number;
   /** sustained instances: age stops at life × hold until released */
   hold: number;
 }
@@ -128,6 +131,10 @@ export interface FeelL extends LayerBase {
    *  area radius when fitted), hold (s at ≥ 1.4×), fade half-life (s), the pre-peak dip and the peak
    *  saturation drop (0..1). Applied by the post chain before tone mapping; never full-screen. */
   exposure: number; exposureRadius: number; exposureHold: number; exposureFade: number; exposureDip: number; exposureDesat: number;
+  /** combat F3: the director plays ONE default T4 envelope per cast instance; a def landed again by the same cast (a
+   *  repeat's later strikes, Vashil's tolls) opts its later landings into a reduced beat at this share of the
+   *  default lift (0..1; 0 = no further beat, the default) */
+  exposureRepeat: number;
 }
 
 export type Layer = EmitterL | RibbonL | BeamL | MeshL | ShockwaveL | DecalL | LightL | DistortL | FeelL;
@@ -145,6 +152,10 @@ export interface Def {
   binds: string[];
   /** does a feel layer carry its own exposure envelope? (the director adds the default T4 one otherwise) */
   hasExposure: boolean;
+  /** the share of the default T4 lift a later landing of the same cast beats at (feel `exposureRepeat`; 0 = none) */
+  beatRepeat: number;
+  /** time after a release-only spawn (phase 'release') when nothing of its release layers is alive (s) */
+  relSpan: number;
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
@@ -310,7 +321,8 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
         ...b, type: 'decal', shape: Math.max(0, DECAL_SHAPES.indexOf(String(r.shape ?? 'circle'))), style,
         radius: curve(r.radius, 1), life: Math.max(0.05, num(r.life, 0.8)), color: gradient(r.color, 'team'), alpha: curve(r.alpha, [0.5, 0]),
         emissive: curve(r.emissive, style === DECAL_STYLES.light ? 1.5 : 0), rim: colorRef(r.rim), tex: texSpec(legacyTex),
-        angle: deg(r.angleDeg, 60) / 2, length: num(r.length, 0), width: num(r.width, 0), spinRandom: r.shape === undefined || r.shape === 'circle' || r.shape === 'ring',
+        angle: deg(r.angleDeg, 60) / 2, length: num(r.length, 0), width: num(r.width, 0),
+        spinRandom: r.rotateDeg === undefined && (r.shape === undefined || r.shape === 'circle' || r.shape === 'ring'), rotate: deg(r.rotateDeg, 0),
         hold: Math.max(0, Math.min(1, num(r.hold, 0.5))),
       }];
     }
@@ -328,6 +340,7 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
       exposure: Math.max(0, Math.min(4, num(r.exposure, 0))), exposureRadius: Math.max(0, num(r.exposureRadius, 1)),
       exposureHold: Math.max(0, Math.min(0.6, num(r.exposureHold, 0.28))), exposureFade: Math.max(0.03, Math.min(0.4, num(r.exposureFade, 0.12))),
       exposureDip: Math.max(0.5, Math.min(1, num(r.exposureDip, 0.92))), exposureDesat: Math.max(0, Math.min(1, num(r.exposureDesat, 0.35))),
+      exposureRepeat: Math.max(0, Math.min(1, num(r.exposureRepeat, 0))),
     }];
     default: return [];
   }
@@ -351,11 +364,16 @@ export function parseDef(d: VfxDefT): Def {
   const layers: Layer[] = [];
   const binds: string[] = [];
   for (const raw of d.layers) for (const l of parseLayer(raw as Record<string, unknown>, d, binds)) layers.push(l);
-  let span = d.duration;
-  for (const l of layers) span = Math.max(span, l.delay + layerSpan(l, d.duration));
+  let span = d.duration, relSpan = 0;
+  for (const l of layers) {
+    span = Math.max(span, l.delay + layerSpan(l, d.duration));
+    if (l.release) relSpan = Math.max(relSpan, l.delay + layerSpan(l, 0));
+  }
   return {
     id: d.id, duration: d.duration, teamTint: d.teamTint, layers, span, hasWindup: layers.some((l) => l.windup), binds,
     hasExposure: layers.some((l) => l.type === 'feel' && l.exposure > 0),
+    beatRepeat: layers.reduce((m, l) => (l.type === 'feel' ? Math.max(m, l.exposureRepeat) : m), 0),
+    relSpan,
   };
 }
 

@@ -3760,115 +3760,389 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · recall channel (loop): a slow team ring at the feet, a faint column, motes drifting up",
+    "$comment": "T2 · Lumen · recall channel: an hour dial of light at the feet (12 carved ticks, its rim in the relationship colour); one hand of dawnglass sweeps it once over the channel (the director fits the def's clock, 7 s nominal, to the channel and holds it while it runs); motes rise, faster from 4.5 s; a column gathers over the last second; release (the departure, and the arrival where the fighter lands): a pillar of dawnglass, a ring rolling out, motes thrown up",
     "id": "lib_recall",
-    "duration": 1.0,
+    "duration": 7.0,
     "teamTint": true,
     "layers": [
       {
-        "type": "shockwave",
-        "at": "origin",
-        "radius": [
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "texture": "rune",
+        "rotateDeg": -15,
+        "radius": 1.12,
+        "life": 1.0,
+        "hold": 0.9,
+        "color": "#DCE8EE",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.3,
+            0.8
+          ],
+          [
+            0.9,
+            0.8
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "ringwave",
+        "scale": 2.1,
+        "life": 1.0,
+        "hold": 0.9,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.3,
+            0.9
+          ],
+          [
+            0.9,
+            0.9
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.4,
+        "mask": "edge",
+        "maskParam": 0.95,
+        "noise": 0.2,
+        "noiseScale": 2,
+        "scroll": [
+          0.05,
+          0
+        ],
+        "blend": "add"
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "ringwave",
+        "scale": 2.1,
+        "life": 1.0,
+        "hold": 0.9,
+        "color": "#DCE8EE",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.3,
+            0.16
+          ],
+          [
+            0.9,
+            0.16
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.0,
+        "mask": "band",
+        "maskParam": 0.4,
+        "noise": 0.35,
+        "noiseScale": 2,
+        "scroll": [
+          0.04,
+          0
+        ],
+        "blend": "add"
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "ringwave",
+        "scale": 2.1,
+        "life": 7.0,
+        "fitTime": true,
+        "hold": 1,
+        "color": "#DCE8EE",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.02,
+            0.85
+          ],
+          [
+            1,
+            0.85
+          ]
+        ],
+        "emissive": 2.6,
+        "mask": "sweep",
+        "maskParam": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "noise": 0.15,
+        "noiseScale": 2,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "rate": 9,
+        "shape": "disc",
+        "radius": 0.8,
+        "dir": "up",
+        "spreadDeg": 12,
+        "speed": [
+          0.5,
+          1.0
+        ],
+        "life": [
+          0.9,
+          1.4
+        ],
+        "size": [
+          0,
+          0.13,
+          0.1,
+          0
+        ],
+        "color": "#DCE8EE",
+        "alpha": [
+          0,
+          0.9,
+          0.7,
+          0
+        ],
+        "emissive": 2.0,
+        "gravity": -0.3,
+        "drag": 0.6,
+        "turbulence": 0.5,
+        "texture": "mote",
+        "blend": "add",
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "delay": 4.5,
+        "rate": 16,
+        "shape": "ring",
+        "radius": 0.95,
+        "dir": "up",
+        "spreadDeg": 8,
+        "speed": [
+          1.8,
+          3.0
+        ],
+        "life": [
+          0.55,
+          0.85
+        ],
+        "size": [
+          0,
+          0.12,
+          0.08,
+          0
+        ],
+        "color": "#DCE8EE",
+        "alpha": [
+          0,
+          1,
+          0.7,
+          0
+        ],
+        "emissive": 2.4,
+        "drag": 0.4,
+        "texture": "mote",
+        "blend": "add",
+        "secondary": true
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "delay": 6.0,
+        "shape": "column",
+        "scale": 1.0,
+        "stretch": [
+          1.6,
+          2.8,
+          1.6
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1,
+        "color": "#DCE8EE",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0.45
+          ]
+        ],
+        "emissive": [
           [
             0,
             0.8
           ],
           [
-            0.35,
-            0.8
-          ],
-          [
             1,
-            0.8
+            2.6
           ]
         ],
-        "width": [
-          0.1,
-          0.1
-        ],
-        "life": 1.0,
-        "color": "team",
-        "alpha": [
+        "noise": 0.5,
+        "scroll": [
           0,
-          0.9,
-          0.9,
-          0
+          1.2
         ],
-        "emissive": 2.0,
-        "sharp": 2.0,
-        "noise": 0.35,
+        "mask": "top",
+        "maskParam": 0.55,
         "blend": "add"
       },
       {
         "type": "mesh",
-        "at": "origin",
-        "shape": "column",
-        "scale": 0.8,
-        "stretch": [
-          0.8,
-          2.6,
-          0.8
+        "at": "ground",
+        "phase": "release",
+        "shape": "pillar",
+        "scale": [
+          [
+            0,
+            0.9
+          ],
+          [
+            1,
+            0.55
+          ]
         ],
-        "life": 1.0,
+        "stretch": [
+          1.3,
+          4.0,
+          1.3
+        ],
+        "life": 0.45,
+        "color": [
+          "#F4F8FA",
+          "#DCE8EE"
+        ],
+        "alpha": [
+          [
+            0,
+            0.85
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 3.0,
+        "dissolve": [
+          0,
+          0.25,
+          1
+        ],
+        "edge": "#DCE8EE",
+        "edgeEmissive": 3.0,
+        "mask": "top",
+        "maskParam": 0.3,
+        "noise": 0.3,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "phase": "release",
+        "radius": [
+          [
+            0,
+            1.0
+          ],
+          [
+            0.4,
+            1.45
+          ],
+          [
+            1,
+            1.7
+          ]
+        ],
+        "width": [
+          0.22,
+          0.05
+        ],
+        "life": 0.42,
         "color": "team",
         "alpha": [
-          0,
-          0.3,
-          0.3,
+          1,
+          0.6,
           0
         ],
-        "emissive": 1.6,
-        "noise": 0.6,
-        "scroll": [
-          0,
-          1.0
-        ],
-        "mask": "top",
-        "maskParam": 0.4,
-        "blend": "add",
-        "hold": 1,
-        "offset": [
-          0,
-          -0.9,
-          0
-        ]
+        "emissive": 2.6,
+        "sharp": 2.0,
+        "noise": 0.3,
+        "blend": "add"
       },
       {
         "type": "emitter",
-        "at": "origin",
-        "rate": 14,
+        "at": "ground",
+        "phase": "release",
+        "count": 22,
         "shape": "disc",
-        "radius": 0.7,
+        "radius": 0.6,
         "dir": "up",
-        "spreadDeg": 25,
+        "spreadDeg": 14,
         "speed": [
-          0.8,
-          1.6
+          3.0,
+          5.5
         ],
         "life": [
-          0.6,
-          1.1
+          0.4,
+          0.7
         ],
         "size": [
-          0,
-          0.2,
-          0.16000000000000003,
+          0.16,
+          0.12,
           0
         ],
-        "color": "team",
+        "color": [
+          "#F4F8FA",
+          "#DCE8EE"
+        ],
         "alpha": [
-          0,
           1,
           0.8,
           0
         ],
-        "emissive": 2.0,
-        "gravity": -0.2,
-        "drag": 1.2,
-        "turbulence": 0.8,
+        "emissive": 3.0,
+        "drag": 1.0,
         "texture": "mote",
-        "blend": "add",
-        "secondary": true
+        "blend": "add"
       }
     ]
   },
@@ -69513,7 +69787,7 @@
     ]
   },
   {
-    "$comment": "T4 · Lumen · Morning Toll (each toll): a white-core flash, a tall glass bell over the 4.5 m area rings (a squash) and dissolves along team seams, three rings roll out brightest at the edge, glass shaken off, chips out, a cracked ring stays",
+    "$comment": "T4 · Lumen · Morning Toll (each toll): a white-core flash, a tall glass bell over the 4.5 m area rings (a squash) and dissolves along team seams, three rings roll out brightest at the edge, glass shaken off, chips out, a cracked ring stays; each later toll of the same cast beats again at half the ultimate's lift (feel exposureRepeat)",
     "id": "vashil_ult_toll",
     "duration": 1.3,
     "teamTint": true,
@@ -70016,6 +70290,10 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "exposureRepeat": 0.5
       }
     ]
   },

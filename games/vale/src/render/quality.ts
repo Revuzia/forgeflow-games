@@ -13,13 +13,22 @@
 // fog of war and every overlay are IDENTICAL on every tier (competitive information).
 //
 // Dynamic resolution: when the frame interval stays above the target (1 / fpsCap, 60 Hz when
-// uncapped) the render scale steps down by 0.05 to a floor of min(scale, 0.8); it steps back up after
-// a sustained headroom. Hysteresis windows are 1 s; never more than one step per window.
-// It only steps down for GPU-bound frames (r12 B4): a smaller buffer cannot shorten a frame the CPU is
-// late on. Each window is classified from the GPU time (EXT_disjoint_timer_query_webgl2 around the
-// frame's draws, GpuTimer) when the driver offers it, else from the renderer's own CPU time:
-//   gpu   GPU time ≥ 85 % of the target (or, without a timer, renderer CPU < 60 % of it) → step down
-//   cpu   otherwise → hold the scale; a scale already lowered steps back up while the GPU has headroom
+// uncapped) the render scale steps down by 0.05 to a floor of min(scale, 0.8). Hysteresis windows are 1 s;
+// never more than one step per window. It only steps down for GPU-bound frames (r12 B4): a smaller buffer
+// cannot shorten a frame the CPU is late on. Each window is classified from the GPU time
+// (EXT_disjoint_timer_query_webgl2 around the frame's draws, GpuTimer) when the driver offers it, else from the
+// renderer's own CPU time:
+//   gpu   GPU time ≥ 85 % of the target (or, with no timer at all, renderer CPU < 60 % of it) → step down
+//   cpu   otherwise → hold the scale
+// A GPU time longer than the frame interval it is fed with is not that frame's draws (another process holding the
+// GPU, a timer straddling a hitch): it is dropped, and a window whose readings were all dropped is never GPU-bound
+// (perf PERF-M2: 29–31 ms readings at a steady 60 fps made contention hitches look GPU-bound).
+// Back up (perf PERF-M2): vsync holds the interval at the display rate, so spare GPU time never shows as a faster
+// frame on a 60 Hz display. A lowered scale therefore PROBES: after 3 on-target windows it steps up 0.05 and keeps
+// the step only if the next 2 windows stay on target; a GPU-bound slow window inside the probe takes it back and
+// doubles the wait before the next probe (≤ 32 windows), a kept probe resets it.
+// The renderer feeds it only frames it wanted at the display rate: match frames, never the menu or its idle cap,
+// never under an fpsCap below the display rate (Renderer.render), and re-configures it for every match.
 
 import type { Settings } from '../contracts/session.ts';
 
@@ -88,6 +97,12 @@ export function resolveQuality(v: Video): ResolvedQuality {
 
 export type FrameBound = 'cpu' | 'gpu' | '';
 
+/** on-target windows before the first up-probe, the most a failed probe can push that wait to, and the windows a
+ *  probe step must stay on target to be kept */
+const PROBE_AFTER = 3;
+const PROBE_MAX = 32;
+const PROBE_HOLD = 2;
+
 /** frame-interval driven render-scale controller (GPU-bound windows only; see the header) */
 export class DynamicResolution {
   enabled = true;
@@ -100,8 +115,16 @@ export class DynamicResolution {
   private cpuSum = 0;
   private gpuSum = 0;
   private gpuN = 0;
+  /** GPU readings dropped this window (longer than their frame interval) */
+  private gpuDropped = 0;
   private slow = 0;
-  private fast = 0;
+  /** on-target windows in a row below base (toward the next up-probe) */
+  private onTarget = 0;
+  /** the scale before the running up-probe (−1: no probe running) and the windows it still has to hold */
+  private probeFrom = -1;
+  private probeLeft = 0;
+  /** on-target windows the next probe waits for */
+  private probeWait = PROBE_AFTER;
   private targetMs = 1000 / 60;
   /** what limited the last slow window ('' = on target) */
   bound: FrameBound = '';
@@ -111,8 +134,16 @@ export class DynamicResolution {
     this.floor = Math.min(base, 0.8);
     this.current = base;
     this.targetMs = 1000 / (fpsCap > 0 ? Math.min(fpsCap, 144) : 60);
-    this.acc = this.frames = this.sum = this.cpuSum = this.gpuSum = this.gpuN = this.slow = this.fast = 0;
+    this.reset();
+    this.slow = this.onTarget = this.probeLeft = 0;
+    this.probeFrom = -1;
+    this.probeWait = PROBE_AFTER;
     this.bound = '';
+  }
+
+  /** drop the window in progress (sampling paused: a menu, an idle cap, a scene change) */
+  reset(): void {
+    this.acc = this.frames = this.sum = this.cpuSum = this.gpuSum = this.gpuN = this.gpuDropped = 0;
   }
 
   get scale(): number { return this.enabled ? this.current : this.base; }
@@ -124,27 +155,52 @@ export class DynamicResolution {
   sample(intervalMs: number, cpuMs = 0, gpuMs: number | null = null): boolean {
     if (!this.enabled || !(intervalMs > 0) || intervalMs > 250) return false;
     this.acc += intervalMs; this.frames++; this.sum += intervalMs; this.cpuSum += Math.max(0, cpuMs);
-    if (gpuMs !== null && gpuMs >= 0) { this.gpuSum += gpuMs; this.gpuN++; }
+    if (gpuMs !== null && gpuMs >= 0) {
+      if (gpuMs <= intervalMs) { this.gpuSum += gpuMs; this.gpuN++; } else this.gpuDropped++;
+    }
     if (this.acc < 1000) return false;
     const avg = this.sum / this.frames, cpu = this.cpuSum / this.frames, gpu = this.gpuN > 0 ? this.gpuSum / this.gpuN : null;
-    this.acc = this.frames = this.sum = this.cpuSum = this.gpuSum = this.gpuN = 0;
+    const timed = this.gpuN + this.gpuDropped > 0;
+    this.reset();
     const t = this.targetMs;
-    const gpuBound = gpu !== null ? gpu >= t * 0.85 : cpu < t * 0.6;
-    if (avg > t * 1.12) {
-      this.bound = gpuBound ? 'gpu' : 'cpu';
-      if (gpuBound) { this.slow++; this.fast = 0; } else {
-        // CPU-late: the scale is not the problem; give back resolution the GPU has room for
-        this.slow = 0;
-        if (gpu !== null && gpu < t * 0.6) this.fast++; else this.fast = 0;
+    const gpuBound = gpu !== null ? gpu >= t * 0.85 : !timed && cpu < t * 0.6;
+    const late = avg > t * 1.12;
+    // a CPU-late window with a light GPU (measured) says the resolution has room; without a reading it says nothing
+    const room = !late || (!gpuBound && gpu !== null && gpu < t * 0.6);
+    this.bound = late ? (gpuBound ? 'gpu' : 'cpu') : '';
+    if (this.probeFrom >= 0) {
+      if (late && gpuBound) {
+        // the probe step did not hold: back down, and wait longer before the next one
+        this.current = this.probeFrom; this.probeFrom = -1; this.probeLeft = 0;
+        this.probeWait = Math.min(PROBE_MAX, this.probeWait * 2);
+        this.slow = this.onTarget = 0;
+        return true;
       }
-    } else if (avg < t * 0.8) { this.bound = ''; this.fast++; this.slow = 0; } else { this.bound = ''; this.slow = this.fast = 0; }
-    if (this.slow >= 2 && this.current > this.floor + 1e-3) {
-      this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = 0; return true;
+      if (!room || --this.probeLeft > 0) return false;
+      // kept: the wait resets, and a scale still under base probes the next step at once
+      this.probeFrom = -1; this.probeWait = PROBE_AFTER;
+      return this.probeUp();
     }
-    if (this.fast >= 3 && this.current < this.base - 1e-3) {
-      this.current = Math.min(this.base, Math.round((this.current + 0.05) * 100) / 100); this.fast = 0; return true;
+    if (late && gpuBound) {
+      this.onTarget = 0;
+      if (++this.slow >= 2 && this.current > this.floor + 1e-3) {
+        this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = 0; return true;
+      }
+      return false;
     }
+    this.slow = 0;
+    if (!room) return false;
+    if (this.current < this.base - 1e-3 && ++this.onTarget >= this.probeWait) return this.probeUp();
     return false;
+  }
+
+  /** the up-probe (vsync never shows headroom as a faster frame): one step, kept if the next windows hold */
+  private probeUp(): boolean {
+    this.onTarget = 0;
+    if (this.current >= this.base - 1e-3) return false;
+    this.probeFrom = this.current; this.probeLeft = PROBE_HOLD;
+    this.current = Math.min(this.base, Math.round((this.current + 0.05) * 100) / 100);
+    return true;
   }
 }
 
@@ -159,6 +215,8 @@ export class GpuTimer {
   private readonly pool: WebGLQuery[] = [];
   private readonly pending: WebGLQuery[] = [];
   private active: WebGLQuery | null = null;
+  /** queries in flight when the reading was cleared: their results are dropped */
+  private discard = 0;
   last: number | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
@@ -194,10 +252,14 @@ export class GpuTimer {
       const disjoint = !!gl.getParameter(ext.GPU_DISJOINT_EXT);
       this.pending.shift();
       this.pool.push(q);
+      if (this.discard > 0) { this.discard--; continue; }
       this.last = disjoint ? null : ns / 1e6;
     }
     return this.last;
   }
+
+  /** forget the last reading and the queries still in flight (a match ended: the next one must not inherit them) */
+  clear(): void { this.last = null; this.discard = this.pending.length; }
 
   dispose(): void {
     for (const q of [...this.pool, ...this.pending]) this.gl.deleteQuery(q);

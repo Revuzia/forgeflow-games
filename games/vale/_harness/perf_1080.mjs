@@ -22,6 +22,10 @@
 // bench's own page does not count against it) and measure again while a window was busy; the last idle
 // measurement (else the last one) is reported.
 // --no-build reuses the last _harness/_prod/dist. --keys keeps every program's three cache key in the report.
+// dynres (perf PERF-M2, part of --prod; --no-dyn skips it, --dyn-sec <s> sets its match window, default 60): the
+// real client's path into a match with dynamic resolution ON — 16 s of the Home menu (its 30 fps idle cap from 4 s),
+// then the RIFT match at High. Hard check (any machine): the menu never moves the render scale (it stays 1.0).
+// Idle machine only: after the window the match renders at High's own scale, 1.0 (else "not measured: machine busy").
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -44,6 +48,8 @@ const PROD_DIR = join(HERE, '_prod', 'dist');
 const BUDGET = { tris: 500000, draws: 450, programs: 40 };
 const TARGET = { high: { fps: 60, p95Ms: 16.7, p99Ms: 25, cpuMs: 6 }, low: { p95Ms: 16.7, cpuMs: 6 } };
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
+const DYN = PROD && !args.includes('--no-dyn');
+const DYN_SEC = Number(opt('dyn-sec', 60)), DYN_MENU_S = 16;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
 function heavyOthers() {
@@ -170,6 +176,45 @@ async function measure(q) {
   }
 }
 
+/** perf PERF-M2: Home menu → RIFT match with dynamic resolution on (see the header) */
+async function dynres() {
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=${T}&seed=${SEED}&dev=1&hud=1&dyn=1&menufirst=${DYN_MENU_S}`, { wait: false, hmr: false });
+  try {
+    await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+    const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
+    if (err) throw new Error(`bench failed: ${err}`);
+    await page.evaluate(() => { const b = window.__VALE_BENCH__; const f = b.fight(); if (f) b.focus(f.x, f.y); });
+    const menuScale = await page.evaluate(() => window.__VALE_BENCH__.menuScale());
+    const before = machine();
+    const timeline = [];
+    for (let s = 5; s <= DYN_SEC; s += 5) {
+      await page.waitForTimeout(5000);
+      const st = await page.evaluate(() => { const x = window.__VALE_BENCH__.stats(); return { scale: x.renderScale, w: x.width, h: x.height, bound: x.bound, gpuMs: x.gpuMs == null ? null : +x.gpuMs.toFixed(1), fps: +x.fps.toFixed(1) }; });
+      timeline.push({ t: s, ...st });
+    }
+    const after = machine();
+    const end = timeline[timeline.length - 1];
+    const res = {
+      menuS: DYN_MENU_S, matchS: DYN_SEC, menuScale, base: 1, scale: end.scale, buffer: `${end.w}x${end.h}`, minScale: Math.min(...timeline.map((x) => x.scale)),
+      timeline, machine: { before, after, idle: before.idle && after.idle }, errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 10),
+    };
+    const misses = [];
+    if (menuScale !== null && menuScale < 1 - 1e-6) misses.push(`the menu moved the render scale to ${menuScale}`);
+    if (!res.machine.idle) res.matchScale = `not measured: machine busy (load ${before.load}/${after.load}${before.heavy.length || after.heavy.length ? `; ${[...new Set([...before.heavy, ...after.heavy])].join('; ')}` : ''})`;
+    else {
+      if (end.scale < 1 - 1e-6) misses.push(`render scale ${end.scale} after ${DYN_SEC} s of the match (High's base 1.0)`);
+      res.matchScale = end.scale < 1 - 1e-6 ? 'MISS' : 'pass';
+    }
+    res.misses = misses;
+    res.pass = misses.length === 0;
+    console.log(`dynres  menu ${DYN_MENU_S} s → scale ${menuScale}; match ${DYN_SEC} s → scale ${end.scale} (${res.buffer}, min ${res.minScale}, bound '${end.bound}', gpu ${end.gpuMs} ms, ${end.fps} fps)`);
+    console.log(`        load ${before.load}→${after.load}  ${res.matchScale}  ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
+    return res;
+  } finally {
+    await browser.close();
+  }
+}
+
 /** wait (≤ `sec` seconds, polled every 10 s) for an idle machine; true when one came */
 async function waitIdle(sec) {
   const end = Date.now() + sec * 1000;
@@ -195,6 +240,11 @@ try {
     }
     if (PROD && !res.pass) out.pass = false;
     out.presets[q] = res;
+  }
+  if (DYN) {
+    if (WAIT_IDLE_S > 0) await waitIdle(Math.max(0, (deadline - Date.now()) / 1000));
+    out.dynres = await dynres();
+    if (!out.dynres.pass) out.pass = false;
   }
 } finally {
   await stopServer();

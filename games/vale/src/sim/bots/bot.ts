@@ -16,6 +16,7 @@
 
 import type { Command, PlayerView, SeatSetup, WorldView } from '../../contracts/sim.ts';
 import { attackable, inAttackRange } from '../attack.ts';
+import { mitigated } from '../combat.ts';
 import type { Entity, Player } from '../entity.ts';
 import type { Rng } from '../rng.ts';
 import type { BotController } from '../sim.ts';
@@ -24,7 +25,7 @@ import type { World } from '../world.ts';
 import type { DifficultyProfile } from './difficulty.ts';
 import { Economy } from './economy.ts';
 import type { AbilityCoreT } from '../catalog_index.ts';
-import { abilityInfo, estimateDamage, fromProgress, lanePoint, progress, proj, type BuildPlan, type FighterProfile } from './knowledge.ts';
+import { abilityInfo, estimateDamage, fromProgress, lanePoint, laneProject, progress, proj, type BuildPlan, type FighterProfile } from './knowledge.ts';
 import type { BotMatch } from './match.ts';
 import { BotBase, gauss, type Mode } from './micro.ts';
 import { memoryWeight } from './perception.ts';
@@ -32,6 +33,16 @@ import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 const MODE_TICKS = 6;
 const MIN_MODE_TIME = 1.5;
+/** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
+ *  — until this time, unless its team starts the endgame push sooner */
+const LANE_PHASE_END = 840;
+/** during the laning phase a laner only leaves its lane for an objective camp this close to its lane (m) */
+const LANE_OBJECTIVE_REACH = 40;
+/** Wicks within this distance of an enemy fighter turn on whoever hits that fighter (call for help) */
+const WAVE_AGGRO_R = 9;
+/** how far from the nearest enemy Wick a fighter stands to stay out of its reach when no Wick of mine
+ *  is there to take its attention (m) */
+const WICK_REACH = 8.5;
 
 export class Bot extends BotBase implements BotController {
   readonly eco: Economy;
@@ -56,6 +67,8 @@ export class Bot extends BotBase implements BotController {
   killMargin = 0;
   laneEnemy: Entity | null = null;
   huntTarget: Entity | null = null;
+  /** damage per second of the enemy Wicks, summons and monsters attacking me (after my defenses) */
+  unitDps = 0;
   private holdX = 0; private holdY = 0;
 
   constructor(m: BotMatch, seat: SeatSetup, diff: DifficultyProfile, rng: Rng, prof: FighterProfile, plan: BuildPlan, support: boolean) {
@@ -187,6 +200,64 @@ export class Bot extends BotBase implements BotController {
     if (this.killMargin < 1.1) this.killTarget = null;
     // lane opponent: the nearest noticed enemy fighter on my lane, close by
     this.laneEnemy = this.nearestEnemyFighter(this.prof.attackRange + 6);
+    // Wicks, summons and monsters hitting me
+    let ud = 0;
+    for (const u of tp.enemyUnits) if (u.alive && u.atkTarget === e.id && u.attackDef) ud += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
+    for (const m of tp.monsters) if (m.alive && m.atkTarget === e.id && m.attackDef) ud += mitigated(m, e, m.stats.ad, m.attackDef.damageType) * m.stats.attackSpeed;
+    this.unitDps = ud;
+  }
+
+  /** fighters are trading blows near me: an enemy fighter hitting one of us, or one of us hitting it */
+  private fightOn(): boolean {
+    const e = this.e, R2 = 13 * 13;
+    for (const f of this.perc.enemyFighters) {
+      if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > R2) continue;
+      const t = f.atkTarget >= 0 ? this.w.entity(f.atkTarget) : null;
+      if (t && t.kind === 'fighter' && t.team === this.team) return true;
+      for (const a of this.perc.allyFighters) if (a.alive && a.atkTarget === f.id) return true;
+    }
+    return false;
+  }
+
+  /** a RIFT laner in the laning phase: the lane comes first */
+  private lanePhase(): boolean {
+    const b = this.brain;
+    return this.k.kind === 'rift' && !this.jungle && this.lane >= 0 && this.now < LANE_PHASE_END && !!b && !b.rush && !b.stage && b.phase !== 'late';
+  }
+
+  /** enemy Wicks within r of (x, y) */
+  private wicksNear(x: number, y: number, r: number): number {
+    let n = 0;
+    for (const u of this.perc.enemyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, x, y) <= r * r) n++;
+    return n;
+  }
+
+  /** rough sustained damage per second of a fighter against `t` (attacks + a share for abilities) */
+  private dpsOn(f: Entity, t: Entity): number {
+    const s = f.stats;
+    return s.ad * s.attackSpeed * (1 + s.crit * 0.75) * (100 / (100 + Math.max(0, t.stats.armor))) + s.ap * 0.5 + f.level * 10;
+  }
+
+  /**
+   * Wicks or monsters are wearing me down and no enemy fighter is near: walk out before they finish
+   * me — unless the monster on me dies first (my team's damage on it beats my time to die).
+   * Returns a retreat utility (0: stay).
+   */
+  private outmatched(): number {
+    const e = this.e;
+    const inc = Math.max(this.unitDps, this.recentDps);
+    if (inc <= 0 || this.nearE > 0 || this.hpF > 0.55) return 0;
+    const ttd = (e.hp + e.shield) / inc;
+    if (ttd > 7) return 0;
+    let ttk = Infinity;
+    for (const m of this.perc.monsters) {
+      if (!m.alive || m.atkTarget !== e.id) continue;
+      let dps = 0;
+      for (const a of this.perc.allyFighters) if (a.alive && this.dist2(a, m.x, m.y) <= 10 * 10) dps += this.dpsOn(a, m);
+      ttk = Math.min(ttk, (m.hp + m.shield) / Math.max(1, dps));
+    }
+    if (ttk < ttd * 0.6) return 0;
+    return ttd < 3 ? 0.9 : 0.82;
   }
 
   // ── utility mode selection ────────────────────────────────────────────────────────────────────
@@ -216,8 +287,10 @@ export class Bot extends BotBase implements BotController {
     }
     if (this.towerAggro && !(this.mode === 'allin' && this.killTarget && this.killTarget.hp < this.killTarget.maxHp * 0.25 && hpF > 0.5)) retreat = Math.max(retreat, 0.86);
     if (kind === 'fray' && hpF < thr && this.recentDps > 0) retreat = Math.max(retreat, 0.75);
+    retreat = Math.max(retreat, this.outmatched());
     consider('retreat', retreat);
     // recall / shop
+    const lp = this.lanePhase();
     const base = k.bases.find((x) => x.team === this.team);
     const atBase = !!base && this.dist2(e, base.fx, base.fy) <= sq(base.fr + 1.5);
     const nextPrice = this.eco.nextPrice(this.w, this.p);
@@ -225,9 +298,18 @@ export class Bot extends BotBase implements BotController {
     if (kind !== 'fray') {
       if (base) {
         // without a recall the walk home is the cost: only go when nearly out (attrition modes)
-        const lowAt = (k.rules.recall ? 0.36 : 0.22) + this.diff.recallBias;
+        const lowAt = (k.rules.recall ? (lp ? 0.3 : 0.36) : 0.22) + this.diff.recallBias;
         if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
         else if (hpF < lowAt && this.nearE === 0) recall = 0.74;
+        else if (k.rules.recall && lp) {
+          // laning: shop on a real purchase, and not while a wave is there to farm
+          const farm = this.wicksNear(e.x, e.y, 12) >= 3 && hpF > 0.35;
+          if (this.nearE === 0 && !farm) {
+            if (this.p.gold >= Math.max(nextPrice, 1250) && hpF < 0.6) recall = 0.5;
+            else if (this.p.gold >= Math.max(nextPrice, 2000)) recall = 0.46;
+            else if (resF < 0.1 && hpF < 0.7) recall = 0.5;
+          }
+        }
         else if (k.rules.recall && this.p.gold >= Math.max(nextPrice, 1100) && this.nearE === 0 && hpF < 0.8) recall = 0.5;
         else if (k.rules.recall && this.p.gold >= Math.max(nextPrice, 1700) && this.nearE === 0) recall = 0.46;
         else if (k.rules.recall && resF < 0.12 && this.nearE === 0) recall = 0.5;
@@ -251,16 +333,20 @@ export class Bot extends BotBase implements BotController {
       (this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push')) {
       const leF = le.hp / Math.max(1, le.maxHp);
       const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) : 0;
-      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5);
-      if (edge >= 0.12 || this.mode === 'trade') consider('trade', 0.42 + Math.min(0.25, edge));
+      // hitting a fighter that stands in its own wave turns that wave on me: a trade there costs more
+      const wavePenalty = Math.max(0, this.coverWicks(le) - 1) * 0.07 + (this.unitDps > 0 ? 0.1 : 0);
+      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) - wavePenalty;
+      if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
     }
     // all-in
     const kt = this.killTarget;
     if (kt && hpF > 0.3 && (this.towerSafe(kt.x, kt.y, 0) || (kt.hp < kt.maxHp * 0.2 && hpF > 0.6))) {
       consider('allin', 0.7 + Math.min(0.2, (this.killMargin - 1) * 0.2) - (lastLife && this.killMargin < 1.5 ? 0.15 : 0));
     }
-    // teamfight
-    if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42) consider('teamfight', 0.6 + (this.adv - 0.5) * 0.6);
+    // teamfight (laning: two against two is a lane, not a fight — join only one that has started)
+    if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42 && (!lp || this.nearE + this.nearA >= 5 || this.fightOn())) {
+      consider('teamfight', 0.6 + (this.adv - 0.5) * 0.6);
+    }
     // push / group / defend / objective / roam (team intents)
     if (b) {
       const follow = this.follows ? 1 : 0;
@@ -280,10 +366,19 @@ export class Bot extends BotBase implements BotController {
       let global = 0;
       for (let i = 0; i < b.defend.length; i++) global = Math.max(global, b.defend[i]);
       global = Math.max(global, b.baseThreat);
-      if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
+      if (lp) {
+        // laning: a wave or my lane opponent at my own tower is laning (lane mode clears it under the
+        // tower); I defend only a dive — more enemy fighters at my tower than my lane has laners —
+        // and the base. Other lanes are their laners' and the jungler's to answer.
+        if (d > 0.05 && b.defendFighters[this.lane] > b.lanersOn(this.lane)) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
+        else if (b.baseThreat >= 0.7 && follow) consider('defend', 0.55 + 0.2 * b.baseThreat);
+      } else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
       else if (global >= 0.7 && follow) consider('defend', 0.55 + 0.2 * global);
-      if (b.objective && follow) consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
-      if (b.gank && (this.jungle || this.prof.style === 'burst' || this.prof.style === 'diver') && hpF > 0.6 &&
+      // laning: only an objective near my lane, and only to take it (not to wait for its spawn)
+      if (b.objective && follow && (!lp || (b.objective.desire >= 0.55 && this.laneDist2(b.objective.camp.x, b.objective.camp.y) <= sq(LANE_OBJECTIVE_REACH)))) {
+        consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
+      }
+      if (b.gank && !lp && (this.jungle ? e.level >= 3 : this.prof.style === 'burst' || this.prof.style === 'diver') && hpF > 0.6 &&
         this.dist2(e, b.gank.x, b.gank.y) < 50 * 50 && b.gank.alive) consider('roam', this.jungle ? 0.53 : 0.44);
     }
     // Fray hunting
@@ -316,7 +411,7 @@ export class Bot extends BotBase implements BotController {
     this.computeSafe(base);
     switch (this.mode) {
       case 'lane': this.execLane(); break;
-      case 'return': this.computeHold(); this.pMove = true; this.pMoveX = this.holdX; this.pMoveY = this.holdY; this.selfDefense(); break;
+      case 'return': this.computeHold(); this.pMove = true; this.pMoveX = this.holdX; this.pMoveY = this.holdY; this.selfDefense(); this.shedWicks(); break;
       case 'farm': this.execFarm(); break;
       case 'trade': this.execTrade(); break;
       case 'allin': this.execAllin(); break;
@@ -367,8 +462,9 @@ export class Bot extends BotBase implements BotController {
     this.safeX = tx; this.safeY = ty;
   }
 
-  /** the lane stand point behind my wave (last-hit position), tower-safe */
-  private computeHold(): void {
+  /** the lane stand point behind my wave (last-hit position), tower-safe; `wary`: with no wave of
+   *  mine in front, stand out of the enemy Wicks' reach (step in for last hits, not to tank them) */
+  private computeHold(wary = false): void {
     const k = this.k, tp = this.perc, e = this.e;
     const lane = this.lane >= 0 ? this.lane : 0;
     const l = k.lanes[lane];
@@ -393,8 +489,10 @@ export class Bot extends BotBase implements BotController {
     else if (ownF >= 0) front = ownF;
     else if (enF < Infinity) front = Math.max(Math.min(enF, towerP + 4), 4);
     else front = Math.max(towerP + 5, Math.min(l.length * 0.45, enemyTowerP - enemyTowerR - 4));
-    const standoff = this.prof.ranged ? e.stats.range + e.radius + 1.2 : 2.4;
+    // just outside my reach of the contact line (an idle fighter in reach swings at the nearest Wick)
+    const standoff = e.stats.range + e.radius + 1.2;
     let p = front - standoff - (this.support ? 1.2 : 0);
+    if (wary && ownF < 0 && enF < Infinity) p = Math.min(p, enF - WICK_REACH);
     // never park inside the first enemy tower's reach (micro re-checks minions tanking it)
     const cap = enemyTowerP - enemyTowerR - e.radius - 1;
     if (p > cap) p = cap;
@@ -407,6 +505,12 @@ export class Bot extends BotBase implements BotController {
     this.holdX = x; this.holdY = y;
   }
 
+  /** squared distance from (x, y) to my lane stand point */
+  private laneDist2(x: number, y: number): number {
+    this.computeHold();
+    return sq(this.holdX - x) + sq(this.holdY - y);
+  }
+
   /** fight back an enemy fighter that is attacking me (any mode that is not running away) */
   private selfDefense(): void {
     if (this.recentDps <= 0 || this.hpF <= 0.4) return;
@@ -414,26 +518,65 @@ export class Bot extends BotBase implements BotController {
     for (const f of this.perc.enemyFighters) {
       if (f.atkTarget !== e.id || !this.isNoticed(f) || this.dist2(f, e.x, e.y) > reach * reach) continue;
       if (!this.towerSafe(f.x, f.y, 0)) continue;
+      // hitting back into its covering wave costs more than the trade is worth (unless it is losing)
+      if (this.coverWicks(f) >= 3 && f.hp > e.hp * 0.6) continue;
       this.pFight = f; this.pAggro = Math.max(this.pAggro, 0.5);
       return;
     }
   }
 
   private execLane(): void {
-    this.computeHold();
+    // a wave crashing into my tower with no enemy fighter around: clear it (when healthy enough to
+    // take its hits — else last hits only, the tower does the rest); one-lane modes always shove
+    const li = Math.max(0, this.lane);
+    const clear = (this.nearE === 0 && this.hpF > 0.45 && this.perc.enemyN[li] >= 4 && this.perc.ownN[li] <= 1) ||
+      this.k.kind === 'bridge' || this.k.kind === 'brawl';
+    this.computeHold(!clear);
     this.pMove = true; this.pMoveX = this.holdX; this.pMoveY = this.holdY;
-    this.pFarm = 1;
+    this.pFarm = clear ? 2 : 1;
     this.pAggro = this.hpF > 0.5 ? 0.3 : 0.15;
-    // a wave crashing into my tower with no enemy champion around: clear it; one-lane modes always shove
-    if (this.nearE === 0 && this.perc.enemyN[Math.max(0, this.lane)] >= 4 && this.perc.ownN[Math.max(0, this.lane)] <= 1) this.pFarm = 2;
-    if (this.k.kind === 'bridge' || this.k.kind === 'brawl') this.pFarm = 2;
+    // no pokes at a lane opponent its own wave covers: every Wick near it would turn on me
+    const le = this.laneEnemy;
+    if (le && this.coverWicks(le) >= 2) this.pAggro = 0.15;
     this.selfDefense();
+    this.shedWicks();
+  }
+
+  /**
+   * Wicks are hitting me: a Wick keeps its target while that target stays in reach, so step back
+   * along the lane out of it instead of standing there last-hitting — unless I am healthy and the
+   * hits are light.
+   */
+  private shedWicks(): void {
+    if (this.unitDps <= 0 || this.lane < 0) return;
+    const e = this.e;
+    if (this.hpF > 0.6 && (e.hp + e.shield) / this.unitDps > 12) return;
+    const l = this.k.lanes[this.lane];
+    if (!l) return;
+    laneProject(l, e.x, e.y);
+    const p = progress(l, this.team, proj.s) - WICK_REACH;
+    lanePoint(l, fromProgress(l, this.team, Math.max(0, p)));
+    this.pMove = true; this.pMoveX = proj.x; this.pMoveY = proj.y;
+    this.pFarm = 0;
+    if (this.pFight && this.pFight.kind === 'fighter' && this.pFight.hp > this.pFight.maxHp * 0.25) this.pFight = null;
+  }
+
+  /** enemy Wicks that would turn on me if I hit `t` now: beside it (they answer its call for help)
+   *  and close enough to reach me */
+  private coverWicks(t: Entity): number {
+    const e = this.e;
+    let n = 0;
+    for (const u of this.perc.enemyUnits) {
+      if (!u.alive || u.kind !== 'minion' || this.dist2(u, t.x, t.y) > WAVE_AGGRO_R * WAVE_AGGRO_R) continue;
+      if (this.dist2(u, e.x, e.y) <= sq(WAVE_AGGRO_R + 0.5)) n++;
+    }
+    return n;
   }
 
   private execTrade(): void {
     this.execLane();
     const t = this.laneEnemy;
-    if (t && this.isNoticed(t) && attackable(this.w, this.e, t)) { this.pFight = t; this.pAggro = 0.6; }
+    if (t && this.isNoticed(t) && attackable(this.w, this.e, t) && !(this.unitDps > 0 && this.pFarm === 0)) { this.pFight = t; this.pAggro = 0.6; }
   }
 
   private execAllin(): void {
@@ -499,7 +642,8 @@ export class Bot extends BotBase implements BotController {
 
   private execPush(): void {
     const b = this.brain, k = this.k, e = this.e;
-    const grouped = !!b && (b.group || k.kind === 'bridge' || k.kind === 'brawl');
+    // a laner in the laning phase pushes its own lane (a won fight is a free wave, not a cross-map siege)
+    const grouped = !!b && (b.group || k.kind === 'bridge' || k.kind === 'brawl') && !this.lanePhase();
     let lane = this.lane >= 0 ? this.lane : 0;
     if (grouped && b && b.siegeLane >= 0) lane = b.siegeLane;
     const saveLane = this.lane;
@@ -548,6 +692,8 @@ export class Bot extends BotBase implements BotController {
     this.pMoveX = mx; this.pMoveY = my;
     const f = this.pickFightTarget(9);
     if (f && this.adv >= 0.45 && this.hpF > 0.4 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = 0.7; }
+    // laning: shoving my own lane is not worth tanking its Wicks
+    if (!grouped && this.lanePhase() && !this.pSiege) this.shedWicks();
   }
 
   private execDefend(): void {
@@ -577,7 +723,8 @@ export class Bot extends BotBase implements BotController {
     this.pAggro = 0.7;
     const allies = this.alliesNear(c.x, c.y, 13);
     const up = this.campUp(c.x, c.y);
-    if (up && (allies >= 3 || o.desire >= 0.7 || (allies >= 2 && this.jungle))) {
+    // start (and keep at) it only when the fighters there can take it: never a lone attempt
+    if (up && allies >= 2 && this.campOdds(c.x, c.y)) {
       this.pMonsters = true; this.pMonsterX = c.x; this.pMonsterY = c.y;
     } else {
       // wait outside its reach for the team
@@ -762,6 +909,31 @@ export class Bot extends BotBase implements BotController {
     for (const f of this.perc.enemyFighters) if (f.alive && this.isNoticed(f) && this.dist2(f, x, y) <= r * r) n++;
     return n;
   }
+  /**
+   * Can the allied fighters at a camp take it? Their damage kills its monsters within 35 s, and the
+   * monsters' damage over that time stays within 45 % of the fighters' combined health.
+   */
+  private campOdds(x: number, y: number): boolean {
+    let H = 0, D = 0;
+    let first: Entity | null = null;
+    for (const m of this.perc.monsters) {
+      if (!m.alive || Math.abs(m.x - x) >= 8 || Math.abs(m.y - y) >= 8) continue;
+      first ??= m;
+      H += m.hp + m.shield;
+      // attacks, plus a third again for the monster's own abilities
+      D += (m.attackDef ? mitigated(m, this.e, m.stats.ad, m.attackDef.damageType) * m.stats.attackSpeed : 0) * 1.33;
+    }
+    if (!first) return false;
+    let S = 0, E = 0;
+    for (const a of this.perc.allyFighters) {
+      if (!a.alive || this.dist2(a, x, y) > 14 * 14) continue;
+      S += this.dpsOn(a, first);
+      E += a.hp + a.shield;
+    }
+    const ttk = H / Math.max(1, S);
+    return ttk <= 35 && D * ttk <= E * 0.45;
+  }
+
   private campUp(x: number, y: number): boolean {
     for (const m of this.perc.monsters) if (m.alive && Math.abs(m.x - x) < 8 && Math.abs(m.y - y) < 8) return true;
     return false;

@@ -10,6 +10,10 @@
 //     hud     0 hides the stats box (screenshots)
 //     cb      off | deutan | protan | tritan
 //     you     fighter id for seat 0 (your seat), e.g. you=marund
+//     dyn     1 = dynamic resolution on (the game's default; benches measure a fixed scale without it)
+//     menufirst  seconds of the Home menu (and its 30 fps idle cap after 4 s) before the match, the real client's
+//             path into a match (perf PERF-M2: perf_1080 --prod's dynres step); __VALE_BENCH__.menuScale is the render
+//             scale the menu left
 //
 // window.__VALE_BENCH__: { ready, stats(), timing(), profile(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
 //   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station) }
@@ -51,6 +55,9 @@ function buildSetup(catalog: CatalogT, modeArg: string | null, seed: number): Ma
   return { matchId: `bench-${seed}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
 }
 
+/** the render scale the menu phase left (menufirst) */
+let menuScale: number | null = null;
+
 async function main(): Promise<void> {
   const cat = await loadCatalog({ url: new URL('/catalog/manifest.json', location.href).href });
   const catalog = cat.catalog;
@@ -78,6 +85,25 @@ async function main(): Promise<void> {
     install(renderer, null, catalog);
     loop(renderer, null);
     return;
+  }
+
+  const menuFirst = Number(qs.get('menufirst') ?? 0);
+  if (menuFirst > 0) {
+    renderer.setScene('menu');
+    renderer.setMenuView({ screen: 'home' });
+    hud.textContent = `menu ${menuFirst} s`;
+    await new Promise<void>((res) => {
+      let last = performance.now();
+      const end = last + menuFirst * 1000;
+      const tick = (): void => {
+        const now = performance.now();
+        renderer.render(Math.min(0.1, (now - last) / 1000));
+        last = now;
+        if (now < end) requestAnimationFrame(tick); else res();
+      };
+      requestAnimationFrame(tick);
+    });
+    menuScale = renderer.stats().renderScale;
   }
 
   const setup = buildSetup(catalog, qs.get('mode'), Number(qs.get('seed') ?? 7));
@@ -129,6 +155,8 @@ function install(renderer: Renderer, host: LocalMatchHost | null, catalog: Catal
     renderer,
     host,
     stats: () => renderer.stats(),
+    /** the render scale the menu phase left (?menufirst), null without one */
+    menuScale: () => menuScale,
     /** the live loop's per-frame pump / render ms since the last call (reset = true clears them) */
     timing: (reset = true) => { const r = { pump: timing.pump.slice(), render: timing.render.slice() }; if (reset) timing.pump.length = timing.render.length = 0; return r; },
     /** draw calls and triangles of the next frame by group (renderer.profile) */

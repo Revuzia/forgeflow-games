@@ -94,8 +94,9 @@ export interface SpawnOpts {
   anchor?: VfxAnchor;
   /** loop the def while this entity exists (zones) */
   loopWhile?: number;
-  /** which layers fire: the anticipation (windup) layers or the main ones */
-  phase?: 'main' | 'windup';
+  /** which layers fire: the anticipation (windup) layers, the main ones, or only the release layers at once (a
+   *  release-only spawn: the recall's arrival plays the departure burst of the channel's def where it lands) */
+  phase?: 'main' | 'windup' | 'release';
   /** sustain the instance while this holds (status visuals, wind-ups); see the header */
   sustain?: () => boolean;
   /** the def's clock runs this many times faster (a wind-up def fitted to castTime) */
@@ -169,7 +170,7 @@ class Inst {
   sourceId = -1;
   loopWhile = -1;
   anchor: VfxAnchor = 'origin';
-  phase: 'main' | 'windup' = 'main';
+  phase: 'main' | 'windup' | 'release' = 'main';
   active = false;
   fired = new Uint8Array(0);
   acc = new Float32Array(0);
@@ -483,6 +484,8 @@ export class VfxSystem {
     it.loopWhile = o.loopWhile ?? -1;
     it.anchor = o.anchor ?? 'origin';
     it.phase = o.phase ?? 'main';
+    // a release-only spawn is a sustained instance released on its first frame (its release layers fire at once)
+    if (it.phase === 'release') { it.sustain = null; it.sustained = true; it.held = false; it.relT = 0; }
     if (it.following && this.world.entityPos(it.follow, it.head)) it.prevHead.copy(it.head);
     else { it.head.copy(it.origin); it.prevHead.copy(it.origin); }
     it.vel.set(0, 0, 0);
@@ -744,7 +747,7 @@ export class VfxSystem {
       t = it.t - it.relT - l.delay;
       if (t < 0) return;
     } else {
-      if (l.windup !== (it.phase === 'windup') || it.cancelled) return;
+      if (it.phase === 'release' || l.windup !== (it.phase === 'windup') || it.cancelled) return;
       t = it.t - l.delay;
     }
     // repeat: re-arm while the instance lives (sustained: while held)
@@ -803,7 +806,7 @@ export class VfxSystem {
         const dc = this.decals.find((x) => !x.on);
         if (!dc) return;
         const p = this.anchorPos(it, l, _v);
-        dc.on = true; dc.l = l; dc.x = p.x; dc.z = p.z; dc.rot = it.dir + (l.spinRandom ? Math.random() * Math.PI * 2 : 0);
+        dc.on = true; dc.l = l; dc.x = p.x; dc.z = p.z; dc.rot = it.dir + (l.spinRandom ? Math.random() * Math.PI * 2 : l.rotate);
         dc.age = 0; dc.s = s; dc.slot = this.bake(it, li, l.color); dc.opacity = it.opacity; dc.cap = this.cap(it); dc.seed = Math.random();
         dc.rate = l.fitTime ? it.rate : 1;
         dc.inst = it.sustained || l.follow ? it : null;
@@ -1019,6 +1022,7 @@ export class VfxSystem {
         it.loopWhile = -1;
       }
       const done = it.cancelled
+        || (it.phase === 'release' && it.t >= it.def.relSpan + 0.05)
         || (!it.following && it.loopWhile < 0 && !it.held && it.t >= it.def.span + 0.05 && (!it.sustained || it.t >= it.relT + RELEASE_TAIL * it.rate));
       if (done) {
         for (const r of this.ribbons) if (r.inst === it) r.inst = null;

@@ -28,7 +28,7 @@ from synth import osc as O
 from synth import sfx as S
 from synth.core import SR, TAU, fade, hz, ns
 
-from .kit import (Layers, R, at_len, bell, breath, crackle, crumble, drum, finish, flutter, fm_tone, glass, harp,
+from .kit import (Layers, R, at_len, bell, breath, crackle, crumble, drum, esc, finish, flutter, fm_tone, glass, harp,
                   hollow, ink, lp, rev, roll, room, scrape, shimmer, sweep, tink)
 
 AIR = (0.12, 0.45)          # QA duration windows (s)
@@ -537,6 +537,121 @@ def c_root(v: int):
     L.add(S.chips(r, 0.3, 10, 1500, 4500, 0.08, 0.1), 0.05, peak_db=-17)
     L.add(S.rumble(r, 0.4, 200, 0.25, 0.01), 0.0, peak_db=-14)
     return finish(room(L.out(), 'small', wet=0.1), hp_hz=50, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+# ── loss of control: every kind its own sound (c_buff is for buffs only) ─────────────────────────────
+# Each lands on its first 10 ms (a transient you can react to, like the stun's thud) and then says WHICH control
+# it is, from the bible's eight voices. None resolves upward to a consonance: up means help.
+def metal_bar(r: np.random.Generator, f: float, t60: float) -> np.ndarray:
+    """A struck free metal bar (modes 1 : 2.756 : 5.404): the dropped blade of a disarm."""
+    n = ns(t60 * 1.3)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for m, a, d in ((1.0, 1.0, 1.0), (2.756, 0.6, 0.6), (5.404, 0.35, 0.35)):
+        y += a * np.sin(TAU * f * m * t + r.uniform(0, TAU)) * np.exp(-6.9078 * t / (t60 * d))
+    k = ns(0.0008)
+    y[:k] *= np.linspace(0, 1, k)
+    return S.norm(y)
+
+
+@cue('c_airborne', 'combat', ('m', -17.0), CAST, **CASTK)
+def c_airborne(v: int):
+    """Airborne: knocked off the ground. A dull ground thump and a frame-drum rim 'tek' on the first frame, then a
+    rising air-glass whoosh (pink noise sweeping 500 Hz -> 6 kHz) with four sparse dawnglass grains thrown
+    D6 F6 A6 C7 left and right at the top of the arc, and gone."""
+    r = R('c_airborne', v=v)
+    L = Layers(0.75)
+    L.add(S.thump(0.16, 170, 80, 0.012, 0.09, 2.0), 0.0, peak_db=-3)
+    L.add(drum('D3', 0.8, 'tek', seed=f'ab{v}', dur=0.15, t60=0.08), 0.0, peak_db=-6)
+    L.add(S.snap(r, 3200, 2.0), 0.0, peak_db=-12)
+    L.add(S.whoosh(r, 0.5, 500, 6000, q=1.6, peak_at=0.55, f_mid=3000, rise=-0.8, fall=2.5), 0.01, peak_db=0, width=0.6)
+    for i, (note, tt) in enumerate((('D6', 0.12), ('F6', 0.19), ('A6', 0.26), ('C7', 0.32))):
+        L.add(tink(hz(note), 0.2, 0.12, bright=0.4), tt, peak_db=-11 - 1.5 * i, pan=(-0.3 if i % 2 else 0.3))
+    return finish(room(L.out(), 'glass', wet=0.1), hp_hz=50, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('c_fear', 'combat', ('m', -17.0), CAST, **CASTK)
+def c_fear(v: int):
+    """Fear: a hollow ink knock on the first frame and a shade-breath drawn in BACKWARDS over it (a gasp cresting at
+    100 ms), then a shiver: a hollow D4 + G#4 tritone trembling at 11 Hz and sinking a quarter-tone, a cold breath
+    trailing away downhill."""
+    r = R('c_fear', v=v)
+    L = Layers(0.8)
+    L.add(hollow(hz('D3'), 0.3, 0.18, r), 0.0, peak_db=-3)
+    L.add(S.burst(r, 0.03, 300, 2500, 0.015), 0.0, peak_db=-12)
+    gasp = rev(breath(0.12, 2600, 700, shape='breath', q=2.2, seed=f'fe{v}', peak_at=0.02), 0.004)
+    L.add(gasp, 0.0, peak_db=-2, width=0.6)
+    n = ns(0.6)
+    t = np.arange(n) / SR
+    sink = 2 ** (-0.5 / 12 * np.clip(t / 0.5, 0, 1))
+    for note, g, p in (('D4', 0, -0.2), ('G#4', -2, 0.2)):
+        ph = TAU * np.cumsum(hz(note) * sink) / SR
+        tone = (np.sin(ph) + 0.3 * np.sin(3 * ph)) * E.stages([(0, 0, 0), (0.03, 1, -1.5), (0.6, 0, 2.0)], n)
+        L.add(S.am(tone, 11.0, 0.8), 0.06, peak_db=-6 + g, pan=p)
+    L.add(breath(0.45, 1800, 500, shape='breath', q=1.6, seed=f'fe{v}t', peak_at=0.08), 0.12, peak_db=-12, width=0.8)
+    return finish(room(L.out(), 'small', wet=0.12), hp_hz=60, lp_hz=9000, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('c_sleep', 'combat', ('m', -18.0), (0.6, 1.3), **CASTK)
+def c_sleep(v: int):
+    """Sleep: a soft escapement 'tock' and a muffled F5 dawnglass on the first frame (the lid closes), then the lamp
+    drone sighs: three detuned saws on A3 under a low-pass closing 1.8 kHz -> 300 Hz, a sine sagging A3 -> F3 and an
+    exhaled breath under it, slow as a yawn. Nothing in it rises."""
+    L = Layers(1.05)
+    L.add(esc('tock', 0.8, seed=f'sl{v}'), 0.0, peak_db=-7)
+    L.add(lp(glass('F5', 0.6, 0.6, decay=0.35, bright=0.3, seed=f'sl{v}'), 2500), 0.0, peak_db=-4)
+    D = 0.9
+    drone = I.lamp_drone(hz('A3'), D, vel=0.8, seed=f'sl{v}', attack=0.02, release=0.4,
+                         cutoff_env=lambda t: 1800.0 * (300.0 / 1800.0) ** np.clip(t / D, 0.0, 1.0))
+    L.add(drone, 0.01, peak_db=-3, width=0.6)
+    L.add(sweep(hz('A3'), hz('F3'), D, curve=1.2, t60=D * 0.9), 0.02, peak_db=-9)
+    L.add(breath(0.8, 1500, 380, shape='breath', q=1.4, seed=f'sl{v}', peak_at=0.15), 0.03, peak_db=-10, width=0.7)
+    return finish(room(L.out(), 'small', wet=0.1), hp_hz=60, lp_hz=7000)
+
+
+@cue('c_taunt', 'combat', ('m', -16.5), (0.5, 1.4), **CASTK)
+def c_taunt(v: int):
+    """Taunt: the challenge struck on an hourbell rim. Two hard stone-on-bronze knocks 110 ms apart, the second
+    louder ('come here'), a D4 then A3 hourbell ringing under them and a frame-drum doum on the second."""
+    r = R('c_taunt', v=v)
+    L = Layers(0.95)
+    L.add(S.knock(r, 520, 0.05, 5, 'stone'), 0.0, peak_db=-4)
+    L.add(bell('D4', 0.9, 0.55, decay=0.25, bright=0.8, seed=f'ta{v}'), 0.0, peak_db=-6)
+    L.add(S.knock(r, 480, 0.06, 5, 'stone'), 0.11, peak_db=-1)
+    L.add(bell('A3', 0.8, 0.85, decay=0.35, bright=0.9, seed=f'ta{v}x'), 0.11, peak_db=-2)
+    L.add(drum('D2', 0.7, 'doum', seed=f'ta{v}', dur=0.4, t60=0.25, kick=0.6), 0.11, peak_db=-8)
+    return finish(room(L.out(), 'stone', wet=0.12), hp_hz=45, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('c_disarm', 'combat', ('m', -17.0), (0.3, 1.0), **CASTK)
+def c_disarm(v: int):
+    """Disarm: the blade knocked from the hand. A bright metal clank on the first frame, then the piece bounces on
+    stone: five escapement ticks closing in (120, 75, 48, 31, 20 ms), each ringing the bar a little duller."""
+    r = R('c_disarm', v=v)
+    L = Layers(0.65)
+    L.add(S.snap(r, 4200, 1.5), 0.0, peak_db=-9)
+    L.add(metal_bar(r, 1180, 0.35), 0.0, peak_db=-1)
+    t = 0.0
+    for i, gap in enumerate((0.12, 0.075, 0.048, 0.031, 0.02)):
+        t += gap
+        L.add(esc('tick', 0.7, rr=i, seed=f'di{v}'), t, peak_db=-7 - 2.5 * i)
+        L.add(lp(metal_bar(r, 1180 * r.uniform(0.97, 1.03), 0.12), 6000 - 800 * i), t, peak_db=-6 - 3 * i, pan=r.uniform(-0.3, 0.3))
+    return finish(room(L.out(), 'small', wet=0.1), hp_hz=120, eq=[('peak', 3300, -3, 0.8), ('high', 9000, -2.0)])
+
+
+@cue('c_silence', 'combat', ('m', -17.0), CAST, **CASTK)
+def c_silence(v: int):
+    """Silence: an A4 hourbell struck and choked by a hand at 70 ms (its ring cut to a muffled thud), a 'shh' of
+    breath closing 6 kHz -> 1.2 kHz over it, then nothing: the absence is the sound."""
+    r = R('c_silence', v=v)
+    L = Layers(0.55)
+    b = bell('A4', 0.5, 0.85, decay=0.3, bright=0.9, seed=f'si{v}')
+    n = b.shape[-1]
+    choke = E.stages([(0, 1, 0), (0.07, 1, 0), (0.11, 0.06, 2.0), (n / SR, 0, 1.0)], n)
+    L.add(b * choke, 0.0, peak_db=0)
+    L.add(S.thump(0.12, 300, 160, 0.01, 0.06, 1.2), 0.07, peak_db=-8)
+    L.add(breath(0.3, 6000, 1200, shape='breath', q=1.4, seed=f'si{v}', peak_at=0.05), 0.0, peak_db=-9, width=0.5)
+    return finish(room(L.out(), 'small', wet=0.06), hp_hz=80, eq=[('peak', 3300, -2.5, 0.8)])
 
 
 @cue('c_summon', 'combat', ('m', -18.0), (0.5, 1.5), **CASTK)

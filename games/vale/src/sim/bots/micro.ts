@@ -625,7 +625,7 @@ export abstract class BotBase {
       const busy = e.atkWindup >= 0 ? e.atkWindup + period * (1 - ad.windup) : Math.max(0, e.atkCd);
       const tImpact = Math.max(busy, gap / ms) + windup + flight;
       const noisy = Math.max(0, tImpact + gauss(this.rng) * this.diff.lastHitSigma);
-      const hpAt = c.hp - this.m.incoming.before(c.id, noisy, bit, false);
+      const hpAt = c.hp - this.m.incoming.before(c.id, noisy, bit, true);
       if (hpAt <= 0) continue;
       const dmg = mitigated(e, c, e.stats.ad, ad.damageType);
       if (hpAt > dmg * 0.97) continue;
@@ -685,6 +685,8 @@ export abstract class BotBase {
     }
     const f = this.pFight;
     if (f && f.alive && attackable(w, e, f)) {
+      // a last hit that is there now beats harass (not an all-in or a teamfight)
+      if (f.kind === 'fighter' && this.pFarm > 0 && this.pAggro < 0.9) { const lh = this.lastHitTarget(); if (lh) { this.attack(lh); return; } }
       const towerOk = this.pDive || f.kind !== 'fighter' || this.towerSafe(f.x, f.y, 0.2) || inAttackRange(e, f);
       if (towerOk) { this.fightTarget(f); return; }
     }
@@ -709,6 +711,7 @@ export abstract class BotBase {
         this.attack(lh);
         return;
       }
+      if (this.pFarm === 1 && this.secureLastHit()) return;
       if (this.pFarm === 2) {
         const t = this.pushTarget();
         if (t) { this.attack(t); return; }
@@ -716,12 +719,15 @@ export abstract class BotBase {
         return; // finish the swing in progress
       } else {
         const soon = this.lastHitSoon();
-        if (soon) {
-          // drift into range of it, but stay where the plan says otherwise
-          const r = e.stats.range + e.radius + soon.radius - 0.3;
-          const dx = e.x - soon.x, dy = e.y - soon.y, d = dhypot(dx, dy) || 1;
-          if (d > r + 0.6 && this.towerSafe(soon.x, soon.y, 0)) { this.moveTo(soon.x + (dx / d) * r, soon.y + (dy / d) * r); return; }
+        if (soon && this.towerSafe(soon.x, soon.y, 0) && this.waitPoint(soon)) {
+          // wait just outside reach for the hit: inside any Wick's reach an idle fighter swings at the
+          // nearest one and spends the attack the last hit needs; and walking back to the stand
+          // point in between never lets the swing start
+          const wp = this.waitOut;
+          if (sq(e.x - wp.x) + sq(e.y - wp.y) > 0.25) this.moveTo(wp.x, wp.y);
+          return;
         }
+        if (e.order === ORDER_NONE && this.keepOutOfReach()) return;
       }
     }
     // 7. movement
@@ -729,6 +735,90 @@ export abstract class BotBase {
       const dx = this.pMoveX - e.x, dy = this.pMoveY - e.y;
       if (dx * dx + dy * dy > 0.8 || e.order === ORDER_ATTACK || e.order === ORDER_ATTACK_MOVE) this.moveTo(this.pMoveX, this.pMoveY);
     }
+  }
+
+  /**
+   * An enemy Wick the next hit on it will finish, which my basic attack cannot reach first: a
+   * damaging ability that kills it and lands before that hit takes the last hit — only with
+   * resource to spare (never the ultimate, a dash or a battle spell).
+   */
+  private secureLastHit(): boolean {
+    const e = this.e;
+    if (e.cast || e.dash || this.now < this.castLockUntil || e.order === ORDER_CAST) return false;
+    const res = e.resource;
+    if (res && res.model === 'pool' && e.maxRes > 0 && e.res / e.maxRes < 0.45) return false;
+    this.m.incoming.build(this.w);
+    const inc = this.m.incoming, bit = this.perc.bit;
+    for (const c of this.perc.enemyUnits) {
+      if (!c.alive || c.kind !== 'minion') continue;
+      const d = Math.sqrt(this.dist2(c, e.x, e.y));
+      if (d > 12) continue;
+      const next = inc.soonest(c.id, bit);
+      if (next === Infinity || inc.before(c.id, next + 0.05, bit, true) < c.hp + c.shield) continue;
+      for (let si = 0; si < 3; si++) {
+        const s = e.slots[si];
+        if (!s || !s.ready) continue;
+        const info = abilityInfo(s.def);
+        if (!info.dmg.length || !(info.use & (U_DAMAGE | U_EXECUTE | U_WAVECLEAR | U_POKE)) || info.minTargets > 1) continue;
+        if (info.delivery === 'dash' || info.delivery === 'blink') continue;
+        if (info.tk === 'unit' && !matchesFilter(this.w, e, c, info.filter)) continue;
+        if (estimateDamage(info, e, Math.max(1, s.rank), c) < c.hp + c.shield) continue;
+        let land = info.castTime;
+        if (info.delivery === 'projectile') { if (d > info.projRange + c.radius * 0.5) continue; land += d / Math.max(1, info.projSpeed); }
+        else if (info.tk === 'unit') { if (d > info.range + c.radius) continue; }
+        else if (info.tk === 'point' || info.tk === 'direction') { if (info.range > 0 && d > info.range + info.radius * 0.5) continue; land += info.delay; }
+        else { if (d > Math.max(info.radius, 1.5) + c.radius) continue; land += info.delay; }
+        if (land >= next) continue;
+        this.cast(s, info, c, c.x, c.y);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private readonly waitOut = { x: 0, y: 0 };
+  /** where to wait for `soon` to become last-hittable: just outside my reach of it and outside my
+   *  reach of every other enemy Wick (written to waitOut; false if no walkable spot) */
+  private waitPoint(soon: Entity): boolean {
+    const e = this.e;
+    const reach = (u: Entity): number => e.stats.range + e.radius + u.radius;
+    const dx = e.x - soon.x, dy = e.y - soon.y, d = dhypot(dx, dy) || 1;
+    let x = soon.x + (dx / d) * (reach(soon) + 0.4), y = soon.y + (dy / d) * (reach(soon) + 0.4);
+    for (let it = 0; it < 3; it++) {
+      let moved = false;
+      for (const u of this.perc.enemyUnits) {
+        if (!u.alive || u.kind !== 'minion') continue;
+        const rr = reach(u) + 0.3, ux = x - u.x, uy = y - u.y, ud = dhypot(ux, uy);
+        if (ud >= rr) continue;
+        const k = ud > 0.01 ? (rr + 0.1) / ud : 0;
+        if (k > 0) { x = u.x + ux * k; y = u.y + uy * k; } else { x += (dx / d) * (rr + 0.1); y += (dy / d) * (rr + 0.1); }
+        moved = true;
+      }
+      if (!moved) break;
+    }
+    if (!this.w.nav.walkable(x, y)) return false;
+    this.waitOut.x = x; this.waitOut.y = y;
+    return true;
+  }
+
+  /** last-hitting: standing idle within reach of an enemy Wick starts an unwanted swing — step back
+   *  out of reach of the nearest one (true if a move was issued) */
+  private keepOutOfReach(): boolean {
+    const e = this.e;
+    let best: Entity | null = null, bd = Infinity;
+    for (const u of this.perc.enemyUnits) {
+      if (!u.alive || u.kind !== 'minion') continue;
+      const reach = e.stats.range + e.radius + u.radius + 0.1;
+      const d2 = this.dist2(u, e.x, e.y);
+      if (d2 <= reach * reach && d2 < bd) { bd = d2; best = u; }
+    }
+    if (!best) return false;
+    const dx = e.x - best.x, dy = e.y - best.y, d = Math.sqrt(bd) || 1;
+    const out = e.stats.range + e.radius + best.radius + 0.5;
+    const tx = best.x + (dx / d) * out, ty = best.y + (dy / d) * out;
+    if (!this.w.nav.walkable(tx, ty)) return false;
+    this.moveTo(tx, ty);
+    return true;
   }
 
   /** attack a fight target; ranged styles orb-walk away from shorter-ranged targets */

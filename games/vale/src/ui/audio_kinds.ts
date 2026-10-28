@@ -5,7 +5,7 @@
 
 export const UI_CUE_KINDS = [
   'hover', 'click', 'confirm', 'back', 'error', 'tab', 'toggle', 'slider',
-  'queue_search', 'queue_pop', 'accept', 'lockin', 'ban', 'hover_fighter',
+  'queue_search', 'queue_pop', 'queue_remind', 'accept', 'lockin', 'ban', 'hover_fighter',
   'currency_tick', 'equip', 'purchase', 'reward_reveal', 'level_account', 'notify',
   'shop_buy', 'shop_sell', 'shop_undo',
 ] as const;

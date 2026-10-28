@@ -7,7 +7,8 @@
 // Shopping (whenever PlayerView.canShop — at base, dead in a base_or_dead mode, at a shared shop):
 // a build plan derived from item TAGS and STATS scored for the fighter's ai.style and the stat its
 // kit scales with (knowledge.buildPlan), restricted to rules.itemPool. Order: a starter (the jungle
-// starter for a jungler) and one consumable at the start; boots once the first core item is done
+// starter for a jungler) and consumables at the start (topped back up to two charges on base visits
+// during the laning phase, from what is left after the build); boots once the first core item is done
 // or the mid game starts, upgraded boots after the second; then core → apex items. A completed item
 // is bought when sim.quoteBuy says it is affordable (owned components discount it), else its most
 // valuable affordable missing component (recursively). A full inventory sells consumables, then
@@ -20,6 +21,8 @@ import type { World } from '../world.ts';
 import { abilityInfo, U_HEAL, type BuildPlan, type FighterProfile, type Knowledge } from './knowledge.ts';
 
 const LEVEL_SLOTS = ['a1', 'a2', 'a3'] as const;
+/** the laning phase (s): base visits top the healing consumable back up to two charges */
+const LANING_END = 840;
 
 export class Economy {
   readonly k: Knowledge;
@@ -162,13 +165,25 @@ export class Economy {
       this.wardBought = true; out.push({ type: 'buy', item: plan.ward }); return;
     }
     const goal = this.goal(w, p);
-    if (!goal) return;
-    const st = this.step(w, p, goal);
+    const st = goal ? this.step(w, p, goal) : { buy: null, full: false };
     if (st.buy) { out.push({ type: 'buy', item: st.buy }); return; }
+    // laning: leftover gold refills the healing consumable (up to two charges), so a trip home
+    // buys staying power as well as stats
+    if (plan.consumable && w.time < LANING_END && this.charges(p, plan.consumable) < 2 && !st.full) {
+      const q = quoteBuy(w, p, plan.consumable);
+      if (q.ok) { out.push({ type: 'buy', item: plan.consumable }); return; }
+    }
     if (st.full) {
       const slot = this.sellSlot(p);
       if (slot >= 0) out.push({ type: 'sell', slot });
     }
+  }
+
+  /** charges of a consumable held */
+  private charges(p: Player, item: string): number {
+    let n = 0;
+    for (let i = 0; i < p.items.length; i++) if (p.items[i] === item) n += p.itemCharges[i];
+    return n;
   }
 
   /** what to sell for room: consumables, starters, wards, then the cheapest off-plan item */

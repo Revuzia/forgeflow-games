@@ -244,6 +244,8 @@ class ValeRenderer implements Renderer {
   private cssH = 1;
   private time = 0;
   private lastFrameAt = 0;
+  /** the display's frame interval (ms, EMA of render() calls): a cap below it is a cap, not a slow GPU */
+  private displayMs = 1000 / 60;
   private fpsEma = 0;
   private frameMs = 0;
   private sceneCalls = 0;
@@ -323,7 +325,6 @@ class ValeRenderer implements Renderer {
     this.post = new PostChain(this.gl, this.scene, this.rig.camera, (r, target, depth) => this.overlay.draw(r, target, depth, (cam) => this.drawHover(r, cam)),
       (r, target, depth, cam) => { this.vfx.setCamera(cam as import('three').PerspectiveCamera); this.vfx.draw(r, target, depth); });
     this.q = resolveQuality(settings.video);
-    this.dyn.enabled = opts.dynamicResolution !== false;
     const rig = this.rig;
     this.camera = {
       setMode: (m) => rig.setMode(m),
@@ -368,6 +369,9 @@ class ValeRenderer implements Renderer {
 
   setQuality(video: Settings['video']): void {
     this.q = resolveQuality(video);
+    // dynamic resolution: the caller's option (harness benches turn it off) and the player's Settings › Video choice
+    // (`video.dynamicResolution`, on unless false)
+    this.dyn.enabled = this.opts.dynamicResolution !== false && (video as { dynamicResolution?: boolean }).dynamicResolution !== false;
     this.dyn.configure(this.q.renderScale, this.q.fpsCap);
     this.sun.setQuality(this.gl, this.q.shadows);
     this.menu.sun.setQuality(this.gl, this.q.shadows);
@@ -424,6 +428,10 @@ class ValeRenderer implements Renderer {
     const gen = ++this.matchGen;
     this.client = client;
     this.mode = 'match';
+    // perf PERF-M2: every match starts at the player's own render scale (nothing a menu or the last match did carries over)
+    this.dyn.configure(this.q.renderScale, this.q.fpsCap);
+    this.lastFrameAt = 0;
+    this.applySize();
     const view = client.view;
     const map = this.catalog.maps.find((m) => m.id === (view.map || client.setup.map)) ?? this.catalog.maps[0];
     this.map = map ?? null;
@@ -517,6 +525,7 @@ class ValeRenderer implements Renderer {
     if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
     this.fog.dispose();
+    this.gpuTimer.clear();
     this.envReady = false;
     this.client = null;
     this.map = null;
@@ -894,6 +903,8 @@ class ValeRenderer implements Renderer {
   render(dt: number): void {
     if (typeof document !== 'undefined' && document.hidden) return;
     const d = Math.max(0, Math.min(0.25, Number.isFinite(dt) ? dt : 0));
+    // the display's own frame interval (every call is one display frame, drawn or skipped by a cap)
+    if (d > 0.002 && d < 0.1) this.displayMs = this.displayMs > 0 ? this.displayMs * 0.95 + d * 50 : d * 1000;
     // fps cap (and the menu's 30 fps idle cap after 4 s)
     const cap = this.mode === 'menu' && this.menu.idle > 4 ? 30 : this.q.fpsCap;
     if (cap > 0) {
@@ -905,8 +916,13 @@ class ValeRenderer implements Renderer {
     if (this.lastFrameAt > 0) {
       const iv = t0 - this.lastFrameAt;
       this.fpsEma = this.fpsEma > 0 ? this.fpsEma * 0.9 + (1000 / Math.max(1, iv)) * 0.1 : 1000 / Math.max(1, iv);
-      // the previous frame's own CPU time and (when timed) its GPU time tell a CPU-late frame from a GPU-late one
-      if (this.dyn.sample(iv, this.frameMs, this.dyn.enabled ? this.gpuTimer.poll() : null)) this.applySize();
+      // the previous frame's own CPU time and (when timed) its GPU time tell a CPU-late frame from a GPU-late one.
+      // perf PERF-M2: only match frames the renderer wanted at the display rate feed it (never the menu and its idle
+      // cap, never an fpsCap below the display rate: those intervals are the cap's, not the GPU's)
+      const capped = cap > 0 && 1000 / cap > this.displayMs * 1.1;
+      if (this.mode === 'match' && this.dyn.enabled && !capped) {
+        if (this.dyn.sample(iv, this.frameMs, this.gpuTimer.poll())) this.applySize();
+      } else this.dyn.reset();
     }
     this.lastFrameAt = t0;
     this.time += d;

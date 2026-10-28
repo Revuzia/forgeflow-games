@@ -26,6 +26,12 @@ Exit 1 if any non-music cue in audio.json has no recipe, or a rendered cue fails
   loop seam  (loops) a burst of >6 kHz energy across the wrap (codec splatter or a step)
   m4a        the .m4a decode: M4A-LEN not sample-exact to the .ogg's, M4A-LOUD more than 1 LU (dB) from the .ogg's
              measurement, M4A-TP above -1.0 dBTP, M4A-SEAM a loop seam burst as above
+Contract gates (every build, over the shipped files in audio/out; `--gates` runs only these):
+  control    every loss-of-control StatusKind (the sim's CC_<KIND> flags in src/sim/entity.ts, plus slow) is bound
+             ('status.<kind>') to its OWN cue that no other status kind shares (c_buff voices buffs only), and
+             there is no catch-all 'status' role; each control cue lands (its 10 ms RMS envelope within 6 dB of its
+             peak by CC_ONSET_MS) and sits >= CC_MIN_DIST_DB from every other control cue and every buff cue by
+             1/3-octave spectral distance (ear-level identity, not just a different file name)
 Deterministic: every random choice is seeded from the cue id (synth.core.rng) and ffmpeg runs
 bitexact, so a rebuild reproduces the same files.
 """
@@ -36,6 +42,7 @@ import concurrent.futures as cf
 import json
 import math
 import os
+import re
 import sys
 import time
 
@@ -58,6 +65,7 @@ from synth import loudness as L  # noqa: E402
 from synth.core import SR, stereo  # noqa: E402
 
 CONTRACT = os.path.normpath(os.path.join(HERE, '..', 'content', 'audio.json'))
+SRC = os.path.normpath(os.path.join(HERE, '..', 'src'))
 OUT = os.path.join(HERE, 'out')
 WORK = os.path.join(HERE, '_work', 'cues')
 BITRATE = {1: '96k', 2: '128k'}    # libopus VBR targets per channel count: transparent for SFX
@@ -321,6 +329,98 @@ def _work(args):
         return [dict(id=cid, file=files[0] if files else '', error=f'{type(e).__name__}: {e}', tb=traceback.format_exc())]
 
 
+# ── contract gates ───────────────────────────────────────────────────────────────────────────────
+CC_ONSET_MS = 60.0       # a control cue lands: its 10 ms RMS envelope reaches -6 dB of its peak by then
+CC_MIN_DIST_DB = 6.0     # 1/3-octave distance between any two control cues, and from every buff cue
+
+
+def status_kinds() -> list[str]:
+    """The contract's StatusKind enum (src/contracts/catalog.ts)."""
+    with open(os.path.join(SRC, 'contracts', 'catalog.ts'), encoding='utf8') as f:
+        m = re.search(r'export const StatusKind = z\.enum\(\[([^\]]+)\]\)', f.read())
+    return re.findall(r"'([a-z_]+)'", m.group(1)) if m else []
+
+
+def control_kinds() -> list[str]:
+    """Loss of control: the sim's CC_<KIND> flags (src/sim/entity.ts; not the CC_HARD mask), plus slow."""
+    with open(os.path.join(SRC, 'sim', 'entity.ts'), encoding='utf8') as f:
+        kinds = [k.lower() for k in re.findall(r'\bCC_([A-Z]+)\s*=\s*\d', f.read())]
+    return sorted(set(kinds)) + ['slow']
+
+
+def onset_ms(x: np.ndarray) -> float:
+    """Time from the file's start (its 5 ms codec lead included) until the 10 ms RMS envelope first comes within
+    6 dB of its maximum."""
+    m = stereo(x).mean(axis=0) ** 2
+    w = ns_(0.01)
+    env = np.sqrt(np.convolve(m, np.ones(w) / w, mode='same'))
+    i = int(np.argmax(env >= np.max(env) * 0.5012))
+    return i / SR * 1000.0
+
+
+def third_octave_db(x: np.ndarray) -> np.ndarray:
+    """The cue's 1/3-octave band levels (25 Hz .. 16 kHz), power-normalised so loudness does not count."""
+    m = stereo(x).mean(axis=0)
+    P = np.abs(np.fft.rfft(m)) ** 2
+    f = np.fft.rfftfreq(m.size, 1 / SR)
+    centres = 1000.0 * 2.0 ** (np.arange(-16, 13) / 3.0)
+    bands = np.array([P[(f >= c * 2 ** (-1 / 6)) & (f < c * 2 ** (1 / 6))].sum() for c in centres])
+    bands = bands / (bands.sum() + 1e-30)
+    return 10 * np.log10(np.maximum(bands, 1e-9))
+
+
+def band_distance(a: np.ndarray, b: np.ndarray) -> float:
+    """RMS dB difference over the bands where either cue has energy (within 50 dB of its strongest band)."""
+    keep = (a > a.max() - 50) | (b > b.max() - 50)
+    a_, b_ = np.maximum(a, a.max() - 50), np.maximum(b, b.max() - 50)
+    return float(np.sqrt(np.mean((a_[keep] - b_[keep]) ** 2)))
+
+
+def contract_gates(contract: dict) -> tuple[list[str], dict]:
+    """The control gate (see the module doc); returns (failures, report)."""
+    fails: list[str] = []
+    ev = contract.get('events', {})
+    cues = contract['cues']
+    kinds = status_kinds()
+    ctrl = [k for k in control_kinds() if k in kinds]
+    if 'status' in ev:
+        fails.append(f"control: events.status = {ev['status']!r} is a catch-all: a control or a debuff would play a buff's sound")
+    bound = {k: ev.get(f'status.{k}') for k in kinds}
+    users: dict[str, list[str]] = {}
+    for k, c in bound.items():
+        if c:
+            users.setdefault(c, []).append(k)
+    for k in ctrl:
+        c = bound[k]
+        if not c or c not in cues:
+            fails.append(f'control: status.{k} has no cue (bound {c!r})')
+        elif len(users[c]) > 1:
+            fails.append(f"control: status.{k} shares {c} with {', '.join(x for x in users[c] if x != k)}")
+    buff_cues = sorted({c for k, c in bound.items() if c and k not in ctrl and c in cues})
+    spec: dict[str, np.ndarray] = {}
+    rep: dict = {'controlKinds': ctrl, 'bound': bound, 'buffCues': buff_cues, 'onsetMs': {}, 'nearest': {}}
+    for c in sorted({bound[k] for k in ctrl if bound[k] in cues} | set(buff_cues)):
+        path = out_path(cues[c]['files'][0])
+        if not os.path.exists(path):
+            fails.append(f'control: {c} is not rendered ({path})')
+            continue
+        x = decode(path)
+        spec[c] = third_octave_db(x)
+        rep['onsetMs'][c] = round(onset_ms(x), 1)
+    for k in ctrl:
+        c = bound[k]
+        if c not in spec:
+            continue
+        if rep['onsetMs'][c] > CC_ONSET_MS:
+            fails.append(f'control: {c} ({k}) takes {rep["onsetMs"][c]:.0f} ms to land (> {CC_ONSET_MS:.0f} ms)')
+        others = [(band_distance(spec[c], spec[o]), o) for o in spec if o != c]
+        d, o = min(others) if others else (float('inf'), '')
+        rep['nearest'][c] = [o, round(d, 2)]
+        if d < CC_MIN_DIST_DB:
+            fails.append(f'control: {c} ({k}) is {d:.1f} dB from {o} by 1/3-octave distance (< {CC_MIN_DIST_DB:g} dB)')
+    return fails, rep
+
+
 # ── sheet ────────────────────────────────────────────────────────────────────────────────────────
 def write_sheet(rows: list[dict], path: str) -> None:
     from synth import viz
@@ -342,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--sheet', help='write a contact sheet PNG here')
     ap.add_argument('--json', help='write the QA rows as JSON here')
     ap.add_argument('-j', type=int, default=min(8, os.cpu_count() or 1))
+    ap.add_argument('--gates', action='store_true', help='run only the contract gates over the shipped files')
     a = ap.parse_args(argv)
 
     contract = load_contract()
@@ -359,6 +460,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if extra:
         print(f'note: recipes not in audio.json (not rendered): {", ".join(extra)}')
+    if a.gates:
+        gfails, grep_ = contract_gates(contract)
+        print_gates(gfails, grep_)
+        if a.json:
+            with open(a.json, 'w', encoding='utf8') as f:
+                json.dump({'gates': grep_, 'gateFailures': gfails}, f, indent=1)
+        return 1 if gfails else 0
 
     ids = sorted(want)
     if a.only:
@@ -400,13 +508,29 @@ def main(argv: list[str] | None = None) -> int:
           f' (loudness tol ±{TOL_LU} LU, true peak ≤ {TP_MAX} dBTP decoded, Ogg Opus 48 kHz;'
           f' .m4a siblings AAC-LC, same checks)'
           f'\n.ogg {sum(r["kb"] for r in rows if "kb" in r) / 1024:.2f} MB, .m4a {sum(r["m4a_kb"] for r in rows if "m4a_kb" in r) / 1024:.2f} MB')
+    gfails, grep_ = contract_gates(contract)
+    print_gates(gfails, grep_)
     if a.json:
         with open(a.json, 'w', encoding='utf8') as f:
-            json.dump([{k: v for k, v in r.items() if k != 'tb'} for r in rows], f, indent=1)
+            json.dump({'cues': [{k: v for k, v in r.items() if k != 'tb'} for r in rows], 'gates': grep_, 'gateFailures': gfails}, f, indent=1)
     if a.sheet:
         write_sheet(rows, a.sheet)
         print(f'sheet → {a.sheet}')
-    return 1 if fails else 0
+    return 1 if fails or gfails else 0
+
+
+def print_gates(fails: list[str], rep: dict) -> None:
+    print(f"\ncontrol gate: {len(rep['controlKinds'])} control kinds ({', '.join(rep['controlKinds'])}); buffs voice {', '.join(rep['buffCues']) or '-'}")
+    for k in rep['controlKinds']:
+        c = rep['bound'].get(k)
+        if c in rep['onsetMs']:
+            o, d = rep['nearest'].get(c, ['', float('nan')])
+            print(f"  {k:9s} {c:12s} lands {rep['onsetMs'][c]:5.1f} ms   nearest {o:12s} {d:5.1f} dB")
+    for c in rep['buffCues']:
+        if c in rep['onsetMs']:
+            print(f"  (buff)    {c:12s} lands {rep['onsetMs'][c]:5.1f} ms")
+    print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
+                 f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart'))
 
 
 if __name__ == '__main__':

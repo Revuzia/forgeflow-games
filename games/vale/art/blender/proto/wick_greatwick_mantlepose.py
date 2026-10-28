@@ -4,7 +4,9 @@ share blended over them) on EVERY frame of every clip, carries each posed point 
 of the head bone's skinning matrix: the hood is rigid on the head) and measures it against the hood sculpt:
   * opening : strip samples (vertices + 5 x 5 per quad) OUTSIDE the hood / collar felt and INSIDE the opening's prism
               (SER_ARCH: the hollow and the 40 cm in front of it, above its floor): a pale tab standing in the dark
-              opening. Gate: none, on any frame.
+              opening. Gate: none, on any frame, the REST pose included (fix round 9: the tuck and top rows ride the
+              head rigidly, so a rest intrusion shows on every frame; r8 exempted 12 rest samples and they read as a
+              lit sliver in the opening's lower corner at eye level).
   * rise    : the largest rise (head frame) of a strip sample outside the felt but within 3 cm of it on the lapels
               (columns to +-46 deg, tuck to the 70 % row), over the same sample at rest: the lapels coming up in front of
               the hood's lower rim (the eye-level 'teeth'). Gate: < 2 cm.
@@ -16,11 +18,15 @@ Per clip it prints the worst frame of each, then a PASS / FAIL line over the cli
 
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 \
         --python art/blender/proto/wick_greatwick_mantlepose.py -- [--blend PATH] [--clips attack1,death] \
-        [--share '{"rows": [1, 1, 0.5, 0.15, 0, 0], "front": 60, "fade": 95, "back": [..]}'] [--frames-log]
+        [--share '{"rows": [1, 1, 0.5, 0.15, 0, 0], "front": 60, "fade": 95, "back": [..]}'] [--frames-log] \
+        [--grid-from-code [--match-grid R8_GRID.npy]]
 
 --share replaces the mantle's weights with wick_greatwick.mantle_weights for that MANTLE_HEAD-style config (per-row
 head share on the front columns, faded to `back` rows by `fade` degrees from the front; optional `neck` / `neck_back`
 rows), so a share is tried without a build; without it the check runs on the weights the build exported.
+--grid-from-code checks the strip serenade_parts builds NOW (its rest grid, weighted by --share or MANTLE_HEAD) on the
+cached rig and clips, so a strip change is tried without a build; with --render, --match-grid (the cached build's own
+strip grid, model space, .npy) maps the cached mesh's vertices onto the grid so the posed renders show the new strip.
 """
 from __future__ import annotations
 
@@ -55,8 +61,10 @@ def args():
     p.add_argument("--render", default="", help="DIR: flat part-colour renders of the posed neck (Workbench)")
     p.add_argument("--times", default="idle:0.3;attack1:0.18,0.25,0.33,0.42;death:0.2,0.4,0.6,1.0")
     p.add_argument("--tag", default="")
-    p.add_argument("--diag", action="store_true", help="render the tunic red, the collar green, the rim blue-grey")
+    p.add_argument("--diag", action="store_true", help="render the tunic red, the collar green, the rim blue-grey, the mantle magenta")
     p.add_argument("--zoom", type=float, default=0.62, help="ortho scale (m)")
+    p.add_argument("--grid-from-code", action="store_true", help="check the strip serenade_parts builds now")
+    p.add_argument("--match-grid", default="", help="NPY: the cached build's strip grid (for --render with the code's grid)")
     return p.parse_args(scene.script_args())
 
 
@@ -97,6 +105,22 @@ def main():
     d2 = ((X0[:, None, :] - mV_model[None, :, :]) ** 2).sum(-1)
     gi = d2.argmin(1)
     print(f"MANTLE {len(sel)} verts matched to {len(mV_model)} grid points, max {math.sqrt(d2.min(1).max()) * 1000:.2f} mm")
+    new_co = None
+    if a.grid_from_code:
+        # the code's strip (rest, model space) replaces the cached build's: each cached vertex keeps its grid index
+        # (matched to the cached build's own grid when given), the analysis runs on the grid itself
+        if a.match_grid:
+            g_old = np.load(a.match_grid)
+            d2o = ((X0[:, None, :] - g_old[None, :, :]) ** 2).sum(-1)
+            gi_b = d2o.argmin(1)
+            print(f"MATCH cached mesh -> its grid: max {math.sqrt(d2o.min(1).max()) * 1000:.2f} mm")
+        else:
+            gi_b = gi
+        new_co = mV_model[gi_b].astype(float)
+        X0 = mV_model.astype(float).copy()
+        gi = np.arange(len(X0))
+        a.share = a.share or json.dumps(gw.MANTLE_HEAD)
+        print(f"GRID FROM CODE: {len(X0)} grid points ({ncol} columns x {nv} rows)")
     bones = [b.name for b in arm.data.bones]
     bi = {b: i for i, b in enumerate(bones)}
     gname = {g.index: g.name for g in body.vertex_groups}
@@ -124,7 +148,7 @@ def main():
         # the binder's own weights for this share, from scratch (joints: the rig's bone heads)
         jz = (rb_["hips"].head_local.z, rb_["chest"].head_local.z, rb_["neck"].head_local.z, rb_["upper_arm.L"].head_local.z)
         Wd = gw.mantle_weights(X0, jz, side_c[col_i], row_i, cfg)
-        W = np.zeros_like(W)
+        W = np.zeros((len(X0), len(bones)))
         for b_, arr in Wd.items():
             W[:, bi[b_]] = arr
         # glTF's 4 influences (limit_weights: the 4 largest >= 0.01, renormalised)
@@ -141,7 +165,7 @@ def main():
             m = row_i == r
             print(f"  row {r}: head share front {hh[m & (side_c[col_i] < 40)].mean():.3f} side {hh[m & (np.abs(side_c[col_i] - 90) < 20)].mean():.3f} back {hh[m & (side_c[col_i] > 150)].mean():.3f}")
     if a.render:
-        render(a, arm, body, sel, W, bones, names, pid)
+        render(a, arm, body, sel, W[gi_b] if new_co is not None else W, bones, names, pid, new_co)
         return
     # the hood frame fields (model space)
     hood_tf = by["hood"].to_model
@@ -177,6 +201,7 @@ def main():
     print(f"REST: tuck depth front {(-ct0[side_c[col_i[tuck]] < 60]).min() * 100:.2f} cm, all {(-ct0).min() * 100:.2f} cm; "
           f"opening samples outside felt {int(((a0 < 0) & (c0 > 0.002)).sum())}")
     open_rest = ((a0 < 0) & (c0 > 0.002)).reshape(S0.shape[:3])
+    n_rest_open = int(open_rest.sum())
     for ii in zip(*np.nonzero(open_rest)):
         print(f"  rest-open sample: quad side {qc[ii[0], ii[1]]:.0f} row {ii[1]} ad {a0.reshape(S0.shape[:3])[ii] * 100:.2f} cm "
               f"felt {c0.reshape(S0.shape[:3])[ii] * 100:.2f} cm at {np.round(Q0[ii], 3).tolist()}")
@@ -231,7 +256,7 @@ def main():
             c, ad, Q = fields(S.reshape(-1, 3))
             c, ad, Q = c.reshape(S.shape[:3]), ad.reshape(S.shape[:3]), Q.reshape(S.shape)
             outside = c > 0.002
-            opn = outside & (ad < 0) & ~open_rest
+            opn = outside & (ad < 0)                          # (fix round 9: no rest exemption)
             n_open = int(opn.sum())
             dep = float((-ad[opn]).max()) if n_open else 0.0
             near = outside & (c < 0.03) & front_q[:, :, None]            # out of the felt, within 3 cm of the hood
@@ -274,8 +299,11 @@ def main():
               f"rise {worst['rise'][0] * 100:.1f} cm at {worst['rise'][1]}; tuck min {worst['tuck'][0] * 100:.1f} cm at {worst['tuck'][1]}; "
               f"sink {worst['sink'][0]} at {worst['sink'][1]} ({worst['sink'][2] * 100:.1f} cm)  {'ok' if ok else 'FAIL'}"
               f"{'' if clip in WICK_CLIPS else ' (not a wick clip: info)'}")
+    ok_all &= n_rest_open == 0
+    print(f"REST GATE: {n_rest_open} strip samples in the opening at rest {'ok' if n_rest_open == 0 else 'FAIL'}")
     print("MANTLEPOSE", "PASS" if ok_all else "FAIL")
     if a.json:
+        report["_rest"] = {"open": n_rest_open}
         with open(a.json, "w") as fh:
             json.dump(report, fh, indent=1)
 
@@ -285,13 +313,19 @@ SHOW = {"hood": "#B49A74", "hood_rim": "#3B302A", "collar": "#4B4039", "crown_ba
         "pack": "#6E5848", "hollow_floor": "#17150F", "hood_light": "#3F9CFF"}
 
 
-def render(a, arm, body, sel, W, bones, names, pid):
+def render(a, arm, body, sel, W, bones, names, pid, new_co=None):
     """Write W into the body's mantle vertex groups and render the posed neck in flat part colours (the mantle pale,
     the hollow and the rim dark): eye level front / 3-4 / side and the 52-degree camera front / 315, framed on the
-    posed hood, at each clip time."""
+    posed hood, at each clip time. new_co: the mantle vertices' rest positions (model space) to render instead."""
     from mathutils import Vector
     os.makedirs(a.render, exist_ok=True)
-    show = dict(SHOW, **({"cloak": "#C02020", "collar": "#20A040", "hood_rim": "#304060"} if a.diag else {}))
+    if new_co is not None:
+        mwi = np.linalg.inv(np.array(body.matrix_world))
+        loc = new_co @ mwi[:3, :3].T + mwi[:3, 3]
+        for k, vi in enumerate(sel):
+            body.data.vertices[int(vi)].co = [float(v) for v in loc[k]]
+        body.data.update()
+    show = dict(SHOW, **({"cloak": "#C02020", "collar": "#20A040", "hood_rim": "#304060", "mantle": "#FF30FF"} if a.diag else {}))
     vg = {g.name: g for g in body.vertex_groups}
     for b in bones:
         if b not in vg and W[:, bones.index(b)].max() > 0:
@@ -334,7 +368,8 @@ def render(a, arm, body, sel, W, bones, names, pid):
     cam = bpy.data.objects.new("cam_mp", cam_d)
     sc.collection.objects.link(cam)
     sc.camera = cam
-    views = [("eye0", 0, 3), ("eye35", 35, 3), ("eye70", 70, 3), ("g52_0", 0, 52), ("g52_315", -45, 52)]
+    views = [("eye0", 0, 3), ("eye35", 35, 3), ("eye70", 70, 3), ("eye-35", -35, 3), ("eye-70", -70, 3),
+             ("g52_0", 0, 52), ("g52_315", -45, 52)]
     hood_i = names.index("hood")
     paths = []
     for spec in a.times.split(";"):

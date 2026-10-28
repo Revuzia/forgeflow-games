@@ -1683,6 +1683,7 @@ SER_ARCH_DEEP = Arch((-0.035, -0.229, 0.975), 8.0, hw_bot=0.200, hw_mid=0.170, h
 SER_ARCH_SINK = Arch((-0.035, -0.229, 0.975), 8.0, hw_bot=0.200, hw_mid=0.170, h_bot=0.20, h_top=0.185, r_corner=0.05,
                      w0=0.04, w1=0.21, kb=0.06, z_floor=0.825)
 SER_BAND_HW = 0.0215                          # the crown band: 3.1 cm over the opening (6 cm read as a headband)
+SER_LAPEL_DROP = 0.022                        # (fix round 9) the mantle lapels' inner top corners, under the rim
 
 
 def _ser_band_hw(a, extra=0.0):
@@ -1905,7 +1906,11 @@ def serenade_parts(L: dict) -> list:
     tops = np.array(tops)
     for _ in range(3):                                # one curve: never above a neighbour's felt, no tooth
         tops[1:-1] = np.minimum(tops[1:-1], (tops[:-2] + 2 * tops[1:-1] + tops[2:]) / 4 + 0.002)
-    cols_V, tuck_in = [], []
+    # (fix round 9, verify greatwick r2: at eye level the notch-side lapel tops rose to the opening rim's lower corners
+    # as pale pointed teeth) the lapels' top INNER corners are rounded off and dropped under the rim: 2.2 cm at the
+    # notch edge (and its facing), easing to nothing by the 46 degree column
+    tops = tops - np.array([SER_LAPEL_DROP * (1.0 - float(_smooth01((m_side(c_) - 15.0) / 30.0))) for c_ in m_cols])
+    cols_V, tuck_in, tuck_c = [], [], []
     for c_, zt in zip(m_cols, tops):
         a = math.radians(c_)
         dv = np.array([math.sin(a), -math.cos(a), 0.0])
@@ -1922,7 +1927,9 @@ def serenade_parts(L: dict) -> list:
         # (a grid search: the deepest point within 2.5 cm, near the wanted rise, never through the hollow: by the
         # opening's sides the hood is a thin wall round the hollow)
         dz_t = -0.010 + 0.032 * _smooth01((m_side(c_) - 32.0) / 30.0)
-        DI, DZ = np.meshgrid(np.arange(0.020, 0.0701, 0.005), np.arange(-0.025, 0.0351, 0.005))
+        # (fix round 9: down to 6 cm under the top, so the 46 degree tuck can pass round the hollow's lower corner
+        # under its floor instead of up into the thin side wall)
+        DI, DZ = np.meshgrid(np.arange(0.020, 0.0701, 0.005), np.arange(-0.060, 0.0351, 0.005))
         DI, DZ = DI.ravel(), DZ.ravel()
         cand = Vc[0][None] - dv[None] * DI[:, None] + np.stack([0 * DZ, 0 * DZ, DZ], 1)
         fr = np.linspace(0.2, 1.0, 5)
@@ -1930,11 +1937,42 @@ def serenade_parts(L: dict) -> list:
         clear = (A_m.d(seg).reshape(len(cand), len(fr)) > 0.006).all(1)
         dep = -F_cov.d(cand)
         score = np.minimum(dep, 0.025) - 0.15 * np.abs(DZ - dz_t) - 0.05 * DI - 10.0 * (~clear)
-        b_ = int(np.argmax(score))
-        tk = cand[b_]
-        tuck_in.append(float(dep[b_]))
+        # (fix round 9) and >= 3 cm from the hollow: the hood's game mesh is a decimated low of its felt, and a tuck
+        # 1.6 cm in but 1.9 cm from the hollow showed through the low's inner wall as a speck in the opening
+        score = score - 40.0 * np.maximum(0.0, 0.030 - A_m.d(cand))
+        tuck_c.append((cand, dep, score))
         lip = Vc[-1] - dv * 0.030 + np.array([0.0, 0.0, 0.008])
-        cols_V.append(np.vstack([tk[None], Vc, lip[None]]))
+        cols_V.append(np.vstack([cand[int(np.argmax(score))][None], Vc, lip[None]]))
+    # (fix round 9, verify greatwick r2: the turned-in quads between the 34 and 46 degree columns crossed the opening's
+    # lower corners, 1.25 cm out of the felt: a lit sliver in the dark at eye level, on every frame now the tuck rides
+    # the head) each column's tuck is chosen with its NEIGHBOURS: every sample of the turned-in quads either side must
+    # be out of the opening's prism or >= 6 mm inside the hood / collar felt (a few passes round the front columns)
+    s5 = np.linspace(0.0, 1.0, 5)
+    QU, QV = (x.ravel() for x in np.meshgrid(s5, s5))
+
+    def quad_bad(t0, p0, t1, p1):
+        """per tuck candidate t0 (n, 3): the samples of the quad (t0, t1 | p0, p1) in the opening and out of the felt
+        (weighted 1), or within 6 mm of the opening and not 1 cm inside the felt (weighted 0.15: the hood's game mesh
+        is a decimated low of its felt, a few mm off it)"""
+        P = (((1 - QU) * (1 - QV))[None, :, None] * t0[:, None] + (QU * (1 - QV))[None, :, None] * t1[None, None]
+             + ((1 - QU) * QV)[None, :, None] * p0[None, None] + (QU * QV)[None, :, None] * p1[None, None]).reshape(-1, 3)
+        a_, f_ = A_m.d(P), F_cov.d(P)
+        bad = (a_ < 0.0) & (f_ > 0.002)
+        near = (a_ < 0.006) & (f_ > -0.010)
+        return (bad + 0.15 * near).reshape(len(t0), -1).sum(1)
+    for _ in range(5):
+        for j, c_ in enumerate(m_cols):
+            if m_side(c_) > 75.0:
+                continue
+            cand, dep, score = tuck_c[j]
+            pen = np.zeros(len(cand))
+            for nb in (j - 1, j + 1):
+                if 0 <= nb < len(m_cols):
+                    pen += quad_bad(cand, cols_V[j][1], cols_V[nb][0], cols_V[nb][1])
+            cols_V[j][0] = cand[int(np.argmax(score - 2.0 * pen - 5.0 * (dep < 0.016)))]   # (and >= 1.6 cm in)
+    for j in range(len(m_cols)):
+        cand, dep, score = tuck_c[j]
+        tuck_in.append(float(-F_cov.d(cols_V[j][0][None])[0]))
     # the turned felt facings: each notch edge folds 2.6 cm in behind the lapel (and 6 mm toward the notch, so the fold
     # faces it), the whole edge column copied (its tuck and lip too)
     nv_ = 6

@@ -44,7 +44,18 @@
 //              its owner's; non-fighters (and status looks: the victim's state) fall back to the relationship colour.
 //   exposure   ultimate impacts (T4 area landings, the first T4 hit, a T4 zone opening) start the default
 //              exposure envelope (vfx/screen.ts; display ratios) unless their def carries its own feel.exposure.
-//              Structure falls a softer one.
+//              ONE envelope per cast instance (combat F3; r12 M13 "one envelope per ultimate impact, lingering
+//              effects never re-flash"): the instance is (caster, ability, the sim time of its cast); once its
+//              first area, hit or zone has beaten, a zone's ticks, a follow-up hit or a second landing of the
+//              same cast stay dark, unless the landing def opts in with feel `exposureRepeat` (a repeat's later
+//              strikes, e.g. Vashil's tolls), which beats again at that share of the lift. Structure falls a
+//              softer one.
+//   recall     combat F2: the channel is shown for its WHOLE length to every viewer who sees the fighter: one
+//              instance of client.vfxEvents.recall per fighter, its clock fitted so the def's duration is the
+//              channel (EntityView.stateDuration), sustained while the fighter is in 'recall'; a 'done' releases
+//              it (its release layers are the departure), a cancel / death / loss of vision fades it at once; a
+//              channel that comes into view mid-way starts fitted to what is left. The arrival plays the def's
+//              release layers where the fighter lands (if that is in view).
 //   death      the local player's world eases to grey while they wait to respawn.
 //   shake      m4: no ability shakes the camera (the own-ultimate shake is gone); structure falls keep
 //              ≤ 4 px for 120 ms × access.screenShake (the camera clamps).
@@ -79,6 +90,10 @@ interface CastTele {
 
 /** a live wind-up anticipation (cast or basic attack) */
 interface Windup { h: number; src: number; castEnd: number; rel: number; attack: boolean }
+
+/** a T4 envelope queued by this batch: its caster, the ability whose cast instance it belongs to, the share a repeat
+ *  landing beats at (the landing def's feel `exposureRepeat`) */
+interface QueuedBeat { src: number; ability: string; repeat: number; at: Vector3; radius: number; delay: number; area: boolean }
 
 /** sim time of the release tick of a wind-up that started at `t` (the cast system counts the issuing tick) */
 const castReleaseAt = (t: number, castTime: number): number => t + Math.max(0, Math.ceil(castTime / TICK_DT - 1e-6) - 1) * TICK_DT;
@@ -153,6 +168,8 @@ const ULT_EXPOSURE = { peak: 2.4, hold: 0.28, fade: 0.12, dip: 0.92, desat: 0.35
 const FALL_EXPOSURE = { peak: 1.7, hold: 0.2, fade: 0.14, dip: 0.95, desat: 0.2 };
 /** the envelope's radius cap (m): its lift falls off between 0.55 and 1.35 × the radius (vfx/screen.ts) */
 const PULSE_MAX_R = 3.5;
+/** a T4 landing whose cast this viewer never saw (no cast event): its instance is the window after its first beat (s) */
+const UNSEEN_CAST_S = 8;
 
 function viewShape(s: ShapeT | undefined): ViewShape | null {
   if (!s) return null;
@@ -284,6 +301,12 @@ export class Director {
   private readonly lastHit = new Map<number, number>();
   /** T4 exposure envelopes: one per caster per 0.6 s */
   private readonly lastPulse = new Map<number, number>();
+  /** combat F3: `${caster}|${T4 ability}` → the sim time of its latest cast (the cast instance) */
+  private readonly castAt = new Map<string, number>();
+  /** combat F3: cast instances whose envelope has beaten (`${caster}|${ability}|${cast time}`) → host time of the beat */
+  private readonly beats = new Map<string, number>();
+  /** combat F2: live recall channels, fighter entity → VFX handle */
+  private readonly recallFx = new Map<number, number>();
   /** zone effect id (a zone entity's def) → who sees its outline (its own Present.telegraph, else the ability's) */
   private readonly zoneTele = new Map<string, 'none' | 'ally_only' | 'everyone'>();
 
@@ -349,7 +372,7 @@ export class Director {
   }
 
   /** spawn a def anchored on/around a source entity; returns the VFX handle (0 = nothing spawned) */
-  private fire(id: string | undefined, srcId: number, tier: Tier, o: { origin?: Vector3 | null; target?: Vector3 | null; ground?: Vector3 | null; scale?: number; dir?: number; follow?: number; followFor?: number; targetId?: number; anchor?: 'origin' | 'target' | 'path' | 'ground'; loopWhile?: number; sustain?: () => boolean; timeScale?: number; phase?: 'main' | 'windup'; world?: boolean }): number {
+  private fire(id: string | undefined, srcId: number, tier: Tier, o: { origin?: Vector3 | null; target?: Vector3 | null; ground?: Vector3 | null; scale?: number; dir?: number; follow?: number; followFor?: number; targetId?: number; anchor?: 'origin' | 'target' | 'path' | 'ground'; loopWhile?: number; sustain?: () => boolean; timeScale?: number; phase?: 'main' | 'windup' | 'release'; world?: boolean }): number {
     if (!id || !this.vfx.has(id)) return 0;
     const view = this.host.view();
     const src = view?.entity(srcId);
@@ -371,11 +394,12 @@ export class Director {
   }
 
   /** the default T4 exposure envelope (once per caster per 0.6 s) */
-  private pulse(src: number, at: Vector3, radius: number, o = ULT_EXPOSURE, delay = 0): void {
+  private pulse(src: number, at: Vector3, radius: number, o = ULT_EXPOSURE, delay = 0): boolean {
     const now = this.host.now();
-    if (now - (this.lastPulse.get(src) ?? -1e9) < 0.6) return;
+    if (now - (this.lastPulse.get(src) ?? -1e9) < 0.6) return false;
     this.lastPulse.set(src, now + delay);
     this.vfx.exposurePulse(at, radius, { ...o, delay });
+    return true;
   }
 
   handle(events: readonly SimEvent[]): void {
@@ -390,6 +414,8 @@ export class Director {
           const src = view.entity(ev.src);
           if (src) this.lastCast.set(ev.src, { x: ev.x, y: ev.y, t: this.host.now(), slot: ev.slot, ability: ev.ability });
           const info = this.abilities.get(ev.ability);
+          // a new cast instance of an ultimate: its first landing beats (combat F3)
+          if ((ev.slot === 'ult' ? 4 : info?.tier ?? 0) >= 4) this.castAt.set(`${ev.src}|${ev.ability}`, ev.t);
           // the ground warning starts with the wind-up (its own visibility rules: fog, per ability, per viewer)
           if (src && info && info.cast.length && ev.castTime > 0) this.windupTelegraph(view, src, ev, info.cast, info.heal);
           if (!src || !this.host.entityVisible(src)) break;
@@ -440,8 +466,8 @@ export class Director {
           this.host.bodyPos(ev.dst, B);
           if (!this.host.bodyPos(ev.src, A)) A.copy(B);
           this.fire(ev.vfx, ev.src, info?.tier ?? 2, { origin: A, target: B, ground: B, targetId: ev.dst, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
-          // a targeted ultimate's first hit carries the impact envelope
-          if ((info?.tier ?? 0) >= 4 && !this.vfx.def(ev.vfx)?.hasExposure) this.queuePulse(ev.src, C.set(B.x, 0.5, B.z), 1.8, 0, false);
+          // a targeted ultimate's first hit carries the impact envelope (its later hits and ticks: the cast already beat)
+          if ((info?.tier ?? 0) >= 4 && !this.vfx.def(ev.vfx)?.hasExposure) this.queuePulse(ev.src, ev.ability, ev.vfx, C.set(B.x, 0.5, B.z), 1.8, 0, false);
           break;
         }
         case 'proc': {
@@ -516,7 +542,7 @@ export class Director {
           if (zone >= 0) {
             // an ultimate that lands as a zone (Ardit's muster: no area or hit carries its impact) takes the T4 envelope
             // when the zone opens
-            if (tier >= 4 && !this.vfx.def(ev.vfx)?.hasExposure) this.queuePulse(ev.src, C.set(ev.x, 0.4, ev.y), Math.max(1.5, R), Math.max(0, ev.delay), true);
+            if (tier >= 4 && !this.vfx.def(ev.vfx)?.hasExposure) this.queuePulse(ev.src, ev.ability, ev.vfx, C.set(ev.x, 0.4, ev.y), Math.max(1.5, R), Math.max(0, ev.delay), true);
             break;
           }
           C.set(ev.x, 0, ev.y);
@@ -529,7 +555,7 @@ export class Director {
           const spawn = (): void => { this.fire(id, ev.src, tier, { origin, ground, scale: R, dir: areaDir, anchor: 'ground' }); };
           if (ev.delay > 0) this.delayed.push({ at: this.host.now() + ev.delay, run: spawn }); else spawn();
           // the ultimate impact envelope at the landing (the def may carry its own)
-          if (tier >= 4 && !this.vfx.def(id)?.hasExposure) this.queuePulse(ev.src, C.clone().setY(0.4), Math.max(1.5, R), Math.max(0, ev.delay), true);
+          if (tier >= 4 && !this.vfx.def(id)?.hasExposure) this.queuePulse(ev.src, ev.ability, id, C.clone().setY(0.4), Math.max(1.5, R), Math.max(0, ev.delay), true);
           break;
         }
         case 'dash': {
@@ -595,12 +621,18 @@ export class Director {
           break;
         }
         case 'recall': {
-          if (ev.state === 'cancel' || !this.eventVfx.recall) break;
+          // the channel itself is sustained from EntityView.state (syncRecalls); here: how it ends
           const pl = view.players.find((x) => x.player === ev.player);
-          const e = pl ? view.entity(pl.entity) : undefined;
-          if (!e || !this.host.entityVisible(e)) break;
-          this.host.bodyPos(e.id, B);
-          this.fire(this.eventVfx.recall, e.id, 2, { origin: B, ground: B, anchor: 'origin' });
+          if (!pl) break;
+          if (ev.state === 'start') { this.startRecall(view, pl.entity); break; }
+          const h = this.recallFx.get(pl.entity);
+          // done: the release layers are the departure (where the channel stood); a cancel fades it at once
+          if (h !== undefined) { this.recallFx.delete(pl.entity); this.vfx.release(h, ev.state === 'cancel'); }
+          const e = view.entity(pl.entity);
+          if (ev.state !== 'done' || !this.eventVfx.recall || !e || !this.host.entityVisible(e)) break;
+          // the arrival: the same departure light where the fighter lands
+          B.set(e.x, 1, e.y);
+          this.fire(this.eventVfx.recall, e.id, 2, { origin: B, ground: B, anchor: 'origin', phase: 'release' });
           break;
         }
         case 'pickup': {
@@ -616,15 +648,34 @@ export class Director {
     // the T4 envelope of this batch, one per caster: an area landing beats a hit, the LAST landing beats an earlier one
     // (Dunsom's eruption 0.6 s after release is the impact, not the pull ring that opens it)
     // the lit area is the impact, never the whole fight: a 7 m ultimate lifts its central ~2 m, fading out by ~4.7 m
-    for (const q of this.pulseQ.values()) this.pulse(q.src, q.at, Math.min(PULSE_MAX_R, q.radius), ULT_EXPOSURE, q.delay);
+    for (const q of this.pulseQ.values()) this.beat(q);
     this.pulseQ.clear();
   }
 
-  private readonly pulseQ = new Map<number, { src: number; at: Vector3; radius: number; delay: number; area: boolean }>();
-  private queuePulse(src: number, at: Vector3, radius: number, delay: number, area: boolean): void {
+  private readonly pulseQ = new Map<number, QueuedBeat>();
+  private queuePulse(src: number, ability: string | undefined, vfx: string | undefined, at: Vector3, radius: number, delay: number, area: boolean): void {
     const q = this.pulseQ.get(src);
     if (q && (q.area && !area || (q.area === area && q.delay >= delay))) return;
-    this.pulseQ.set(src, { src, at: at.clone(), radius, delay, area });
+    this.pulseQ.set(src, { src, ability: ability ?? '', repeat: vfx ? this.vfx.def(vfx)?.beatRepeat ?? 0 : 0, at: at.clone(), radius, delay, area });
+  }
+
+  /** combat F3: the default T4 envelope, once per cast instance (a def's `exposureRepeat` lets later landings of the
+   *  same cast beat again, lower) */
+  private beat(q: QueuedBeat): void {
+    const r = Math.min(PULSE_MAX_R, q.radius);
+    if (!q.ability) { this.pulse(q.src, q.at, r, ULT_EXPOSURE, q.delay); return; }
+    const ck = `${q.src}|${q.ability}`;
+    const castT = this.castAt.get(ck);
+    const key = `${ck}|${castT ?? 'unseen'}`;
+    const now = this.host.now();
+    const prev = this.beats.get(key);
+    if (prev === undefined || (castT === undefined && now - prev > UNSEEN_CAST_S)) {
+      if (this.pulse(q.src, q.at, r, ULT_EXPOSURE, q.delay)) this.beats.set(key, now);
+      return;
+    }
+    if (!(q.repeat > 0)) return;
+    const k = q.repeat, E = ULT_EXPOSURE;
+    this.pulse(q.src, q.at, r, { peak: 1 + (E.peak - 1) * k, hold: E.hold * k, fade: E.fade, dip: 1 - (1 - E.dip) * k, desat: E.desat * k }, q.delay);
   }
 
   // ── wind-up: the ground warning (M1) ───────────────────────────────────────────────────────────
@@ -732,6 +783,38 @@ export class Director {
     const e = v?.entity(id);
     if (!v || !e || !e.alive) return false;
     return v.time < rel - TICK_DT * 0.5 && (e.state === 'cast' || e.state === 'channel');
+  }
+
+  // ── recall (combat F2) ─────────────────────────────────────────────────────────────────────────
+  /** start the channel look of a recalling fighter this viewer sees (its clock fitted to what is left of the channel) */
+  private startRecall(view: WorldView, id: number): void {
+    const vid = this.eventVfx.recall;
+    const def = vid ? this.vfx.def(vid) : undefined;
+    if (!vid || !def || this.recallFx.has(id)) return;
+    const e = view.entity(id);
+    if (!e || !e.alive || e.state !== 'recall' || !this.host.entityVisible(e)) return;
+    const left = e.stateDuration > 0 ? Math.max(0.25, e.stateDuration - e.stateTime) : def.duration;
+    const B = this.tmpB;
+    if (!this.host.bodyPos(id, B)) B.set(e.x, 1, e.y);
+    const live = { h: 0 };
+    live.h = this.fire(vid, id, 2, { origin: B, ground: B, anchor: 'origin', dir: 0, timeScale: def.duration / left, sustain: () => this.recallFx.get(id) === live.h });
+    if (live.h > 0) this.recallFx.set(id, live.h);
+  }
+
+  /** every visible recalling fighter shows its channel; one that stops (no event: death, vision lost) fades at once */
+  private syncRecalls(view: WorldView): void {
+    for (const [id, h] of this.recallFx) {
+      const e = view.entity(id);
+      if (this.vfx.isAlive(h) && e && e.alive && e.state === 'recall' && this.host.entityVisible(e)) continue;
+      this.recallFx.delete(id);
+      this.vfx.release(h, true);
+    }
+    if (!this.eventVfx.recall) return;
+    for (const pl of view.players) {
+      if (this.recallFx.has(pl.entity)) continue;
+      const e = view.entity(pl.entity);
+      if (e && e.state === 'recall') this.startRecall(view, pl.entity);
+    }
   }
 
   // ── statuses (M2) ──────────────────────────────────────────────────────────────────────────────
@@ -845,6 +928,7 @@ export class Director {
     const meE = me ? view.entity(me.entity) : undefined;
     screenFx.setDead(!!me && view.phase !== 'ended' && me.respawnIn > 0 && (!meE || !meE.alive));
     this.syncStatuses(view);
+    this.syncRecalls(view);
     for (const e of view.entities) {
       if (e.kind !== 'zone' || this.zonesSeen.has(e.id)) continue;
       this.zonesSeen.add(e.id);
@@ -899,6 +983,7 @@ export class Director {
   clear(): void {
     this.telegraphs.length = 0; this.lastCast.clear(); this.delayed.length = 0; this.zonesSeen.clear();
     this.windups.length = 0; this.statusFx.clear(); this.statusSrc.clear(); this.lastHit.clear(); this.lastPulse.clear(); this.pulseQ.clear();
+    this.castAt.clear(); this.beats.clear(); this.recallFx.clear();
     screenFx.reset();
   }
 }

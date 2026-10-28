@@ -8,9 +8,16 @@
 //               is still heard (a missed ready check costs a re-queue lockout), the UI slider cannot take it
 //               below the floor (tokens.audio.motif.queuePop.ownSliderWithFloor), and every other cue stays
 //               muted in the background. A master at exactly 0 is the player's explicit full mute and is kept
-//   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices (the quietest-
-//               priority oldest voice is stolen), cooldown (s), loop; files decode lazily on first use,
-//               UI cues preload; an unknown or missing cue is silently ignored (art may still be rendering)
+//   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices, cooldown (s), loop; files
+//               decode lazily on first use, UI cues preload; an unknown or missing cue is silently ignored (art
+//               may still be rendering)
+//   priority    a voice's priority is its cue's, LIFTED +1 when an enemy aims it at you (or it lands on you) and
+//               DROPPED −1 when an ally made it (threat > self > ally, content/audio.json). A cue at its maxVoices,
+//               or the sfx pool at MAX_SFX_VOICES, frees the lowest-priority, oldest voice, never one that
+//               outranks the newcomer (then the newcomer is the one dropped)
+//   threat      every control status has its own cue (content binds 'status.<kind>'; no catch-all, so an unbound
+//               kind is silent), played on fighters only, +YOU_CC_DB when you are the one controlled; every enemy
+//               fighter's ultimate wind-up adds the shared shade-breath swell (enemyUltWindup) at the caster
 //   format      every cue / bed ships as Ogg Opus with an AAC .m4a sibling (catalog audio.m4a). The session
 //               decodes .ogg; the first .ogg that fails to decode (or canPlayType saying no Ogg Opus, or the
 //               dev-build switch ?audio=m4a) switches the whole session to .m4a and that file is retried. While
@@ -51,11 +58,12 @@ interface CatalogLike {
   units?: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } } }[];
 }
 interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean }
-interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean }
+interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
+  statuses?: readonly { kind: string; src?: number }[] }
 /** a spatial cue's placement around the listener */
 interface Place { att: number; pan: number; lpf: number }
 /** per-play options: `aware` = a threat to your fighter (the awareness pass applies) */
-interface CueOpts { aware?: boolean }
+interface CueOpts { aware?: boolean; lift?: number }
 
 export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
@@ -80,6 +88,8 @@ const LPF_LO_HZ = 3500;
 const AWARE_M = 10;          // the awareness pass: threats within this of your living fighter …
 const AWARE_GAIN = 0.8;      // … play at least this loud (−2 dB), unfiltered
 const NEAR_COMBAT_M = 14;    // fighter damage within this of the listener (or of your living fighter) feeds the combat layer
+const MAX_SFX_VOICES = 32;   // the combat pool: past it the lowest-priority, oldest voice yields (see `priority`)
+const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROBE_MS = 10000;      // the format-deciding .ogg: other loads wait this long for its request (then the
                              // next one probes: a stalled request), and its decode counts as failed if unsettled
@@ -92,7 +102,7 @@ const ALERT_EVENT_ROLES = ['countdown', 'matchStart'];
  *  shipped) then still peaks above −12 dBFS at the output whatever the UI slider says */
 const ALERT_FLOOR = 0.4;
 
-interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; priority: number; started: number }
+interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; bus: Bus; priority: number; started: number }
 
 class Engine implements ValeAudioPort {
   readonly log: string[] = [];
@@ -312,12 +322,10 @@ class Engine implements ValeAudioPort {
       if (pl.att <= 0) return;
       ({ att, pan, lpf } = pl);
     }
-    // voice limit: steal the oldest voice of the lowest priority
-    const mine = this.voices.filter((v) => v.cue === cueId);
-    if (mine.length >= c.maxVoices) {
-      const v = mine.sort((a, b) => a.started - b.started)[0];
-      this.stopVoice(v, 0.03);
-    }
+    // voice limits (see `priority` in the header): the cue's own maxVoices, then the sfx pool
+    const prio = c.priority + (o.lift ?? 0);
+    if (!this.makeRoom(this.voices.filter((v) => v.cue === cueId), c.maxVoices, prio)) return;
+    if (c.bus === 'sfx' && !this.makeRoom(this.voices.filter((v) => v.bus === 'sfx'), MAX_SFX_VOICES, prio)) return;
     this.lastPlay.set(cueId, now);
     const file = c.files[Math.floor(Math.random() * c.files.length)];
     void this.buffer(file).then((buf) => {
@@ -336,13 +344,26 @@ class Engine implements ValeAudioPort {
       }
       if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
       node.connect(g).connect((this.alertCues.has(cueId) ? this.alertBus : this.bus).get(c.bus)!);
-      const v: Voice = { src, gain: g, cue: cueId, priority: c.priority, started: this.ctx.currentTime };
+      const v: Voice = { src, gain: g, cue: cueId, bus: c.bus, priority: prio, started: this.ctx.currentTime };
       this.voices.push(v);
       src.onended = () => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
       src.start();
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
     });
+  }
+
+  /** a full set of voices frees its lowest-priority, oldest one for a newcomer of priority `prio`; false (the
+   *  newcomer is dropped) when every voice outranks it */
+  private makeRoom(set: Voice[], max: number, prio: number): boolean {
+    if (set.length < max) return true;
+    let w: Voice | null = null;
+    for (const v of set) if (!w || v.priority < w.priority || (v.priority === w.priority && v.started < w.started)) w = v;
+    if (!w || w.priority > prio) return false;
+    this.stopVoice(w, 0.03);
+    const i = this.voices.indexOf(w);
+    if (i >= 0) this.voices.splice(i, 1);           // it fades out on its own; it no longer holds a slot
+    return true;
   }
 
   private stopVoice(v: Voice, fade: number, after = 0): void {
@@ -485,12 +506,18 @@ class Engine implements ValeAudioPort {
     // a threat to your fighter (the awareness pass): a non-allied fighter / tower / monster acting, or anything
     // landing on you; Wick swings are not threats worth lifting over the camera's mix
     const youId = this.you()?.id;
-    const aw: CueOpts = { aware: (!!src && src.team !== this.myTeam() && src.kind !== 'minion') || (e.dst !== undefined && e.dst === youId) };
+    const mine = this.myTeam();
+    const onYou = youId !== undefined && (e.dst === youId || e.target === youId);
+    // priority: an enemy (or a monster) aiming at you, or anything landing on you, +1; an ally's own action −1
+    const lift = src ? (src.team !== mine ? (onYou ? 1 : 0) : src.id !== youId && !onYou ? -1 : 0) : onYou ? 1 : 0;
+    const aw: CueOpts = { aware: (!!src && src.team !== mine && src.kind !== 'minion') || onYou, lift };
     switch (kind) {
       case 'cast': {
         const pr = this.abilitySfx.get(e.ability as string);
         this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
-        if (src && src.team !== this.myTeam() && e.slot === 'ult' && near(at(src))) this.cue(this.ev('enemyUltWindup'), null);
+        // the shared shade-breath swell for every enemy fighter's ultimate wind-up (its T4 wind-up VFX; STYLE_BIBLE
+        // 'enemy T3+ wind-ups share one shade-breath swell'), placed at the caster like any spatial cue
+        if (src?.kind === 'fighter' && src.team !== mine && e.slot === 'ult') this.cue(this.ev('enemyUltWindup'), at(src), 1, 0, aw);
         break;
       }
       case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7, 0, aw); break;
@@ -509,11 +536,15 @@ class Engine implements ValeAudioPort {
         else this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45, 0, aw);
         break;
       }
-      case 'heal': this.cue(this.ev('heal'), at(dst), 0.7); break;
-      case 'shield': this.cue(this.ev('shield'), at(dst)); break;
+      case 'heal': this.cue(this.ev('heal'), at(dst), 0.7, 0, aw); break;
+      case 'shield': this.cue(this.ev('shield'), at(dst), 1, 0, aw); break;
       case 'status': {
-        const s = e.status as string;
-        this.cue(this.ev(`status.${s}`) ?? this.ev('status'), at(dst), 0.8, 0, aw);
+        // fighters only (a Wick's slow is noise); no catch-all: an unbound kind (a rider on a hit that sounds) is silent
+        if (dst?.kind !== 'fighter') break;
+        const k = e.status as string;
+        const by = dst.statuses?.filter((x) => x.kind === k).map((x) => this.ent(x.src)) ?? [];
+        const hostile = by.some((x) => !!x && x.team !== dst.team);
+        this.cue(this.ev(`status.${k}`), at(dst), 0.8 * (hostile && e.dst === youId ? YOU_CC_GAIN : 1), 0, aw);
         break;
       }
       case 'dash': this.cue(this.ev('dash'), at(src), 1, 0, aw); break;

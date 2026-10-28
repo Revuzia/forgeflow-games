@@ -121,9 +121,8 @@ SKINS: list = [
                "skirt_L": "#5E646E", "skirt_R": "#5E646E", "torso": "#5E646E",
                "pauldron_L": "#9CA2AA", "lames_L": "#9CA2AA", "pauldron_R": "#9CA2AA",
                "helm": "#CFCCC4", "nape": "#7A7F87", "visor": "#7E858E", "neck": "#3E3A38",
-               # (FIX ROUND 2: the fins are dawnglass again, not accent; the skin's smoked #A9AEB5 dawnglass took the
-               # front top band from 70.8 to 68.5: they keep a pale chalky smoke glass)
-               "fins": "#CDD0D4"},
+               # (FIX ROUND 2 gave the dawnglass fins a pale chalky smoke "#CDD0D4" here; W5b: the fins are accent)
+               },
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
      # sketches, the nape plates the deep ink, the crest the named #A7A9AC, and the visor and fins frosted to a
      # chalky smoke-grey glass: the role gain alone left the painted lavender-blue visor blue)
@@ -135,7 +134,7 @@ SKINS: list = [
     # (the painting's cowl and sleeves are pale blue linen: their mean moves onto the warm scarf colour, `absolute`)
     {"id": "rishal_lamplit", "extra": {"lamp_cage": True}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
      "absolute": ("cloth2",),
-     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F", "fins": "#CDBD9F"},   # (FIX ROUND 2: the fins pale smoked
+     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F"},   # (W5b: the fins are accent; FIX ROUND 2 had them pale smoked
      # amber glass: as dawnglass again they took the walnut-dark #A38C6B, the top band 73.6 -> 68.4)   # (fix pass 5: the scarf a step down again, L* 69: the
      # hero light still blew the painted scarf's lit folds out to near white)   # (review: the cowl blew out near white: the scarf a step
      # down, L* 74; fix pass 2: the sleeves keep the base's mid-light step under the scarf, L* 66)
@@ -519,10 +518,11 @@ VISOR_PROF = np.array([(-0.200, 1.704), (-0.130, 1.708), (-0.090, 1.720), (-0.05
 # beak itself ~5 cm wide at the cheekbones narrowing to its point 2 cm under the chin
 VISOR_FRONT = np.array([(-0.140, 1.820), (-0.084, 1.800), (-0.068, 1.762), (-0.050, 1.736), (-0.028, 1.720),
                         (0.000, 1.714), (0.028, 1.720), (0.050, 1.736), (0.068, 1.762), (0.084, 1.800), (0.140, 1.820),
-                        (0.140, 1.646), (0.070, 1.645), (0.042, 1.641), (0.024, 1.631), (0.015, 1.607),
-                        (0.0105, 1.572), (0.0068, 1.536), (0.0038, 1.508), (0.0, 1.494), (-0.0038, 1.508),
-                        (-0.0068, 1.536), (-0.0105, 1.572), (-0.015, 1.607), (-0.024, 1.631), (-0.042, 1.641),
+                        (0.140, 1.646), (0.070, 1.645), (0.038, 1.641), (0.021, 1.630), (0.0130, 1.606),
+                        (0.0092, 1.572), (0.0062, 1.536), (0.0034, 1.508), (0.0, 1.494), (-0.0034, 1.508),
+                        (-0.0062, 1.536), (-0.0092, 1.572), (-0.0130, 1.606), (-0.021, 1.630), (-0.038, 1.641),
                         (-0.070, 1.645), (-0.140, 1.646)])
+# (W5b: the hook a step narrower again under the band; with VISOR_RIM it is all frame)
 # (FIX ROUND 2, verify: the hook still read as a tall slab over the mask in the portrait): the hook ~25 % narrower
 # below the band, so the mouth line's end and the chin show beside it
 
@@ -591,6 +591,11 @@ REAR_UP = ((0.050, 0.010, 1.762), (0.031, 0.045, 1.790), (0.021, 0.090, 1.811), 
 REAR_LO = ((0.053, 0.006, 1.740), (0.059, 0.050, 1.766), (0.058, 0.098, 1.774), (0.058, 0.150, 1.780),
            (0.052, 0.202, 1.796), (0.014, 0.252, 1.858))
 REAR_T = 0.0034                # the vane's thickness (its edges thin to ~40 %)
+# (W5b, final parity review: the rear-rise vanes were saturated emissive slabs along both flanks of the crest - a blue
+# mohawk from the front, two blue patches either side of it from behind; brief §7 budgets a ridge fin, the concept has
+# no emissive on the crest): the vanes are OFF; the swept fins carry the team colour with the ridge instead (thin
+# glass blades splayed out from the left temple, well apart from the crest), the reviewer's option (1)
+REAR_VANES = False
 REAR_N = 20                    # sections along the vane
 
 
@@ -733,7 +738,7 @@ class RidgeMesh:
         last = 6 * (n - 1)
         Q.extend([(5, 2, 1, 0), (5, 4, 3, 2), (last + 0, last + 1, last + 2, last + 5), (last + 2, last + 3, last + 4, last + 5)])
         V, Q = np.array(V), np.array(Q)
-        for U, L in rear_vanes():
+        for U, L in (rear_vanes() if REAR_VANES else []):
             v2, q2 = _vane_mesh(U, L, REAR_T)
             Q = np.concatenate([Q, q2 + len(V)], 0)
             V = np.concatenate([V, v2], 0)
@@ -825,8 +830,14 @@ def crest_inlay_poly():
 # the front at the game camera): pale non-emissive dawnglass again (the concept's ice glass, fin_paint), rooted at the
 # left temple boss under the ridge's rear vane and SPLAYED out to his left and a little lower, so from the front they
 # fan away from the crest toward the pauldron spike instead of standing as a second prong beside it
-FINS = (((0.064, 0.048, 1.738), (0.215, 0.280, 1.780), 0.010, 0.029, (0.50, -0.16, 0.85)),
-        ((0.068, 0.058, 1.714), (0.210, 0.232, 1.722), 0.006, 0.023, (0.58, -0.14, 0.80)))
+# (W5b, final parity review, option 1: the rear vanes are gone): the fins carry the team colour with the ridge again,
+# as thin glass blades well apart from the crest (rooted at the left temple boss, splayed out and back to his left);
+# splayed OUT more than back (from the front game camera a fin running back stands up beside the crest as a second
+# prong), a little broader than fix round 2's, their faces turned up and BACK (normal +y) so the back facing sees
+# them (proto/rishal_accent.py, 0/90/180/270: fix round 2's fins as accent 2.36 / 3.15 / 1.39 / 1.28 % -> these
+# 2.36 / 3.03 / 2.25 / 2.11 %)
+FINS = (((0.064, 0.048, 1.738), (0.270, 0.230, 1.760), 0.010, 0.034, (0.10, 0.30, 0.95)),
+        ((0.068, 0.058, 1.714), (0.255, 0.180, 1.700), 0.006, 0.028, (0.15, 0.28, 0.95)))
 # the nape plates: three stacked lames hugging the skull's lower back, each an offset shell of NAPE_E a step further
 # out than the one above, so the back steps down and in toward the neck like a lobster tail: (top z, bottom z, offset)
 NAPE_E = {"c": (0.0, 0.020, 1.640), "r": (0.070, 0.090, 0.095)}
@@ -863,8 +874,14 @@ FACE_LINES = [([(0.008, 1.645), (0.026, 1.647), (0.048, 1.652), (0.066, 1.657)],
               ([(0.012, 1.636), (0.030, 1.629), (0.050, 1.623), (0.067, 1.609), (0.076, 1.588)], 0.0015),
               ([(0.012, 1.612), (0.018, 1.588), (0.023, 1.564), (0.021, 1.549)], 0.0012),
               ([(0.000, 1.539), (0.010, 1.540), (0.018, 1.536)], 0.0012),
-              ([(0.000, 1.521), (0.010, 1.524), (0.018, 1.531)], 0.0010),
-              ([(0.074, 1.580), (0.062, 1.553), (0.044, 1.529), (0.026, 1.513)], 0.0013)]
+              # (W5b: the chin's crease short and straight, well under the mouth: curving up into the mouth's ends it
+              # closed an open-lips outline)
+              ([(0.000, 1.5185), (0.009, 1.5190)], 0.0009),
+              ([(0.074, 1.580), (0.062, 1.553), (0.044, 1.529), (0.026, 1.513)], 0.0013),
+              # (W5b) the nostril's wing (a nasal-flank line down from the brow read with the cheek's line as
+              # parallel claw marks in the portrait: the nose is carved in the geometry instead)
+              ([(0.0125, 1.581), (0.0060, 1.578)], 0.0010)]
+FACE_LINE_GAIN = 1.45          # (W5b) every carved line this much wider than authored above
 
 
 class BladeMesh:
@@ -965,7 +982,9 @@ def bracer_tip(s: str, J: dict):
 # the left pauldron's four stacked stone blades out, up and back from the cap, the top one the 30 cm spike:
 # (root, tip, half-width, thickness)
 # (fix pass 5, review: flat planes): a third thicker, the edges blunter (BladeMesh emax)
-LAMES = (((0.085, -0.015, 1.470), (0.428, 0.150, 1.672), 0.052, 0.029),
+# (W5b, review minor: the crest and the spike made a rabbit-ear V from the camera-facing angles): the spike's tip ~8 deg
+# lower (elevation 28 -> 20 deg, a hair shorter, the same reach out): (0.428, 0.150, 1.672) -> (0.440, 0.158, 1.612)
+LAMES = (((0.085, -0.015, 1.470), (0.440, 0.158, 1.612), 0.052, 0.029),
          ((0.170, -0.020, 1.418), (0.360, 0.105, 1.545), 0.050, 0.027),
          ((0.205, -0.018, 1.378), (0.385, 0.085, 1.448), 0.046, 0.025),
          ((0.225, -0.012, 1.340), (0.372, 0.065, 1.370), 0.040, 0.022))
@@ -1199,7 +1218,14 @@ def sculpts() -> list:
     # sides as a stub in the portrait)
     for sx in (-1, 1):
         face.add(Ellipsoid((sx * 0.029, -0.071, 1.616), (0.019, 0.013, 0.017)), k=0.016)
-    face.add(RoundBox((0, -0.090, 1.612), (0.0060, 0.007, 0.027), 0.004), k=0.008)                # the nose line
+    # (W5b, final parity review: "a smooth beige-ivory oval ... reads as a mannequin or egg"): CARVED PLANES, the
+    # concept's cut stone mask - each cheek a flat plane turned ~53 deg off the front, meeting it in a crisp edge down
+    # the cheekbone, and under it a jaw plane turning down and out to the chin (the chin re-added below)
+    for sx in (-1, 1):
+        face.inter(HalfSpace((sx * 0.025, -0.086, 1.60), unit((sx * 0.80, -0.60, 0.0)), 0.5), k=0.003)
+        face.inter(HalfSpace((sx * 0.021, -0.084, 1.540), unit((sx * 0.62, -0.40, -0.68)), 0.5), k=0.004)
+    # the nasal ridge: a narrow carved wedge from under the brow to the nose's tip (a step prouder and longer)
+    face.add(RoundBox((0, -0.0915, 1.611), (0.0055, 0.0080, 0.031), 0.003), k=0.006)
     face.add(RoundCone((0, -0.058, 1.548), (0, -0.061, 1.506), 0.028, 0.012), k=0.02)             # the chin, down
     face.inter(HalfSpace((0, 0.02, 1.6), (0, 1, 0), 0.5), k=0.01)
     part("face", face, "chalk", "bone:head", 620, 0.5)
@@ -1227,7 +1253,7 @@ def sculpts() -> list:
     glass = Sculpt("crest_glass")
     glass.add(Profile((0, 0, 0), F_mid, crest_pane_poly(0.003), PANE_W, 0.003), k=0.0)
     part("crest_glass", glass, "dawnglass", "bone:head", 360, 0.45)
-    part("fins", BladeMesh("fins", fin_blades()), "dawnglass", "bone:head", 600)
+    part("fins", BladeMesh("fins", fin_blades()), "accent", "bone:head", 600)     # (W5b: the team colour, option 1)
 
     # ── NECK + COWL ──────────────────────────────────────────────────────────────────────────────────────────
     neck = Sculpt("neck")
@@ -1789,10 +1815,17 @@ CONCEPT_POSE = {
 PAINTED = ("knife_blade_R", "knife_blade_L", "knife_grip_R", "knife_grip_L", "knife_guard_R", "knife_guard_L", "boots",
            "bracer_R", "bracer_L")
 PROC_HIDDEN = {"face"}          # parts whose texels the painting hides take procedural paint, not the nearest pixel
-FACE_COL = {"lit": "#ECE7DE", "mid": "#D9D2C7", "shade": "#B8AEA2", "cool": "#A9A8A8", "ink": "#4A4644",
-            "carve": "#957F6E", "lip": "#F4EFE6"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
+FACE_COL = {"lit": "#E4E3DE", "mid": "#D8D6D0", "shade": "#AFAEAA", "cool": "#A2A6AC", "ink": "#3A3634",
+            "carve": "#4C4744", "lip": "#F1F0EB"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
 # carving; the cool grey shade read as a grey speckled sliver in the portrait's shadow side)
+# (W5b, final parity review: the warm ivory oval with faint tan lines read as a mannequin or an egg): WHITE chalk
+# (#D8D6D0, no ivory), the planes parted by the light (the cheek planes a step into the shade), the carving cut in
+# INK with a lit lip beside each cut, bolder and wider
 EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
+# (W5b: "the ink eye recesses can't be read in any shipped render"): larger, sharper almonds (half length, half height,
+# the inner corner's x), and the visor lets them through (visor_paint EYE_SHOW)
+EYE_ALMOND = (0.0150, 0.0064, 0.026)
+EYE_SHOW = 0.62
 # (FIX ROUND 2: the turned-away tones a step lighter - the back facing's top band sees the helm's shaded side)
 HELM_COL = {"lit": "#E2DFDA", "mid": "#CFCBC5", "shade": "#ABA6A0", "cool": "#A1A9B2", "ink": "#5E5650",
             "keel": "#ECE9E4"}
@@ -1807,8 +1840,13 @@ NAPE_COL = {"lit": "#EAE3D8", "mid": "#DCD4C9", "shade": "#C0B6AA", "ink": "#4A3
 # hook lighter and cooler #A9D0E8, the thick pale rim #C8E4F0 with a dark outline; fix pass 5's #6E99C0 tint read as
 # a dark blue plate in the hero renders and kept the head band under L* 70)
 VISOR_COL = {"top": "#98AADA", "core": "#7184BE", "low": "#9CC0E2", "streak": "#E6F1F8", "sheen": "#BCCDEE",
-             "keel": "#CFE1F2", "rim": "#D2EAF5", "rim_hi": "#EEF7FB", "outline": "#34466A", "inner_line": "#6578AC",
-             "inner": "#55669A", "ring": "#CEDDF2", "ring_in": "#6F82B8", "tint": "#8A9CD0"}
+             "keel": "#CFE1F2", "rim": "#A6CBE3", "rim_hi": "#C7E1EF", "outline": "#2C4266", "inner_line": "#4F639A",
+             "inner": "#55669A", "ring": "#CEDDF2", "ring_in": "#6F82B8", "tint": "#8A9CD0", "eye": "#252C44"}
+# (W5b, final parity review: "at portrait yaw 28 the visor reads as a tall lavender shield running to the chin with a
+# thin rim, not the concept's thick-rimmed curved sickle"): the concept's THICK pale-blue frame (VISOR_RIM m wide,
+# was 0.8 cm) along every cut edge with a dark outline outside and a fine dark line inside, so the band reads as a
+# framed sickle and the narrow hook below it is all frame (a pale-blue beak, not a glass sheet)
+VISOR_RIM = 0.0165
 # (build 1: the hero light washed the 0.62 tint into a pale grey shield that merged with the white helm and mask):
 # the glass a clear lavender-blue a step under the chalk (L* ~66), the face seen faintly through it, the thick pale
 # rim (the concept's) setting it off the helm
@@ -1827,6 +1865,9 @@ VALUE_RAMP = ((0.0, 0.70), (0.25, 0.76), (0.55, 0.90), (0.95, 0.98), (1.20, 1.0)
 # the bible: no large area lighter than L* 86 (the painting's helmet is near white): luminance above the knee is
 # compressed (linear Y 0.52 -> L* 77; Y 0.85 -> ~0.64, L* 84)
 VALUE_KNEE = (0.58, 0.40)     # (POLISH: knee at L* 81; Y 0.75 -> L* 84, under the bible's 86)
+# (W5b, review minor: the atlas crown crept over L* 86, p99 88.5 - the knee alone tops out at L* 89): a second, hard
+# knee above L* 84 (Y 0.640 -> slope 0.25), so nothing paints over ~L* 85.3
+VALUE_CAP = (0.640, 0.25)
 SOFTEN = 0.55             # px gaussian on the finished atlas (the painting is soft; keeps the WebP in budget)
 # (POLISH: more value range across the blade so it reads on the pale lane and the dark one: a deeper blue core and
 # spine against the bright bevels)
@@ -2108,7 +2149,8 @@ def face_paint(p, n):
     grey in its turns and under the brow and chin (no warm flesh tones), the concept's carved lines inked with a lit
     lip under each, painterly strokes"""
     C = {k: _hexrgb(h) for k, h in FACE_COL.items()}
-    t = _ss(0.60 + 0.30 * n[:, 2] - 0.12 * np.abs(n[:, 0]) - 0.18 * _ss((1.548 - p[:, 2]) / 0.04))
+    # (W5b: the planes parted: the side planes a clear step into the shade, the front plane lit)
+    t = _ss(0.62 + 0.30 * n[:, 2] - 0.30 * np.abs(n[:, 0]) - 0.18 * _ss((1.548 - p[:, 2]) / 0.04))
     col = np.where((t < 0.5)[:, None], _mix(C["shade"][None].repeat(len(p), 0), C["mid"][None], t * 2),
                    _mix(C["mid"][None].repeat(len(p), 0), C["lit"][None], t * 2 - 1))
     col = _mix(col, C["cool"][None], _ss(-n[:, 2] - 0.15) * 0.45)
@@ -2118,23 +2160,37 @@ def face_paint(p, n):
     vis = _ss((-n[:, 1] + 0.40) / 0.45)
     wu = FACE_WRAP_R * np.abs(np.arctan2(p[:, 0], -(p[:, 1] - FACE_WRAP_C)))
     for pts, w in FACE_LINES:
+        w = w * FACE_LINE_GAIN
         d, sg = _polyline_dist2(wu, p[:, 2], pts)
-        cut = _ss((w * 1.35 + 0.0006 - d) / 0.0010) * vis
-        col = _mix(col, C["carve"][None], cut * 0.62)
+        cut = _ss((w * 1.35 + 0.0006 - d) / 0.0009) * vis
+        col = _mix(col, C["carve"][None], cut * 0.72)
         lip = _ss((w * 1.2 - np.abs(d - w * 2.6)) / 0.0010) * vis * (sg < 0)
-        col = _mix(col, C["lip"][None], lip * 0.40)
+        col = _mix(col, C["lip"][None], lip * 0.55)
+    # the mouth: the upper lip a lit plane over the carved line, the lower lip's shade under it (closed, calm)
+    ax = np.abs(p[:, 0])
+    up = _ss((0.0040 - np.abs(p[:, 2] - 1.5445)) / 0.002) * _ss((0.016 - ax) / 0.004) * front
+    col = _mix(col, C["lip"][None], up * 0.30)
+    lo = _ss((0.0030 - np.abs(p[:, 2] - 1.5340)) / 0.002) * _ss((0.013 - ax) / 0.004) * front
+    col = _mix(col, C["shade"][None], lo * 0.25)
     # (POLISH: the brief's ink almond recesses, behind the glass): two slanted almonds, the inner corners low, cut
     # deep into the mask with a lit lower lid; seen through the visor they read as eyes in shadow, not an alien face
-    for sx in (-1.0, 1.0):
-        u = np.abs(p[:, 0]) - 0.027
-        v = p[:, 2] - (EYE_Z + 0.10 * (np.abs(p[:, 0]) - 0.027))
-        side = (np.sign(p[:, 0]) == sx)
-        q = np.sqrt((u / 0.0125) ** 2 + (v / 0.0050) ** 2)
-        a = _ss((1.0 - q) / 0.25) * front * side
-        col = _mix(col, _hexrgb(INK_EYE)[None], a * 0.92)
-        lid = _ss((0.0012 - np.abs(v + 0.0062)) / 0.0010) * _ss((0.0125 - np.abs(u)) / 0.004) * front * side
-        col = _mix(col, C["lip"][None], lid * 0.40)
+    a = eye_almond(p) * front
+    col = _mix(col, _hexrgb(INK_EYE)[None], a * 0.95)
+    EL, EH, EX = EYE_ALMOND
+    u = np.abs(p[:, 0]) - EX - EL
+    v = p[:, 2] - (EYE_Z + 0.10 * (np.abs(p[:, 0]) - EX - EL))
+    lid = _ss((0.0012 - np.abs(v + EH + 0.0013)) / 0.0010) * _ss((EL - np.abs(u)) / 0.004) * front
+    col = _mix(col, C["lip"][None], lid * 0.50)
     return col
+
+
+def eye_almond(p):
+    """0..1 inside the two slanted ink almonds (the inner corners low), sharp-edged (W5b: larger and crisper)"""
+    EL, EH, EX = EYE_ALMOND
+    u = np.abs(p[:, 0]) - EX - EL
+    v = p[:, 2] - (EYE_Z + 0.10 * (np.abs(p[:, 0]) - EX - EL))
+    q = np.sqrt((u / EL) ** 2 + (v / EH) ** 2)
+    return _ss((1.0 - q) / 0.15)
 
 
 def _brow(p):
@@ -2316,12 +2372,14 @@ def visor_paint(p, n):
     side_w = _ss((np.abs(p[:, 0]) - 0.050) / 0.025)                # the side band: the dark gap to the skull behind
     behind = _mix(behind, C["inner"][None] * 0.9, side_w * 0.55)
     eye = _ss((p[:, 2] - 1.630) / 0.012) * _ss((1.700 - p[:, 2]) / 0.012)   # the deep band across the eyes
+    almond = eye_almond(p)                                          # the ink recesses read through the glass
     beak = _ss((1.625 - p[:, 2]) / 0.03)                            # the hook below the band: lighter, cooler glass
     k = 0.76 + 0.12 * eye + 0.08 * side_w
     col = behind * (1 - k[:, None]) + C["tint"][None] * k[:, None]
     col = _mix(col, C["core"][None], eye * 0.28)
     col = _mix(col, C["top"][None], _ss((p[:, 2] - 1.700) / 0.03) * 0.5)
     col = _mix(col, C["low"][None], beak * 0.55)
+    col = _mix(col, C["eye"][None], almond * EYE_SHOW * outer)
     band = 0.40 * p[:, 0] + (p[:, 2] - 1.668)
     col = _mix(col, C["sheen"][None], np.clip(1 - np.abs(band) / 0.022, 0, 1) ** 1.5 * np.clip(-n[:, 1] + 0.2, 0, 1) * 0.45)
     streak = np.clip(1 - np.abs(0.52 * p[:, 0] + (p[:, 2] - 1.690)) / 0.0040, 0, 1) * np.clip(-n[:, 1], 0, 1)
@@ -2337,8 +2395,8 @@ def visor_paint(p, n):
     col = _mix(col, C["outline"][None], np.clip(1 - np.abs(dr - 0.0182) / 0.0012, 0, 1) * side * 0.6)
     col = _mix(col, C["inner"][None], (1 - outer) * 0.85)
     de = _visor_edge(p)
-    col = _mix(col, C["inner_line"][None], np.clip(1 - np.abs(de - 0.0093) / 0.0014, 0, 1) * 0.60)
-    rim = np.clip((0.0080 - de) / 0.0014, 0, 1)        # (FIX ROUND 2: 1.05 -> 0.8 cm, a lighter frame round the hook)
+    col = _mix(col, C["inner_line"][None], np.clip(1 - np.abs(de - (VISOR_RIM + 0.0012)) / 0.0013, 0, 1) * 0.75)
+    rim = np.clip((VISOR_RIM - de) / 0.0014, 0, 1)     # (FIX ROUND 2: 0.8 cm; W5b: VISOR_RIM, the concept's thick frame)
     rim_c = _mix(C["rim"][None].repeat(len(p), 0), C["rim_hi"][None], np.clip((n[:, 2] + 0.1) / 0.6, 0, 1) * 0.8)
     col = _mix(col, rim_c, rim * 0.95)
     col = _mix(col, C["outline"][None], np.clip((0.0026 - de) / 0.0012, 0, 1) * 0.85)
@@ -2767,6 +2825,7 @@ def _value_grade(col, z):
     Y = lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
     k0, sl = VALUE_KNEE
     Yc = np.where(Y > k0, k0 + (Y - k0) * sl, Y)
+    Yc = np.where(Yc > VALUE_CAP[0], VALUE_CAP[0] + (Yc - VALUE_CAP[0]) * VALUE_CAP[1], Yc)
     return _srgb(lin * (Yc / np.maximum(Y, 1e-5))[:, None]).astype(np.float32)
 
 
@@ -2942,6 +3001,7 @@ def rishal_paint(maps0, sides, plates, names, flat=None, eps=0.02, log=print, ma
     Y = lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
     k0, sl = VALUE_KNEE
     Yc = np.where(Y > k0, k0 + (Y - k0) * sl, Y)
+    Yc = np.where(Yc > VALUE_CAP[0], VALUE_CAP[0] + (Yc - VALUE_CAP[0]) * VALUE_CAP[1], Yc)
     col = _srgb(lin * (Yc / np.maximum(Y, 1e-5))[:, None]).astype(np.float32)
     out[idx] = col
     iy, ix = pj.nearest_index(have)
@@ -3101,7 +3161,7 @@ def chalk_decals() -> list:
         out.append((tuple(c), (sx, 0, 0), tuple(unit(sh - el)), 0.05, _speed(3, 0.09, 0.016, 90), ("sleeves",)))
         out.append((tuple(sh + (el - sh) * 0.5 + np.array([0.0, 0.05, 0.0])), (0, 1, 0), (0, 0, 1), 0.04,
                     _runner(0.07, 0.2), ("sleeves",)))
-    root, tip = np.array((0.085, -0.015, 1.470)), np.array((0.428, 0.150, 1.672))
+    root, tip = np.array(LAMES[0][0]), np.array(LAMES[0][1])           # (W5b: follows the spike)
     n = unit(np.cross(tip - root, (0.0, -1.0, 0.25)))
     if n[2] < 0:
         n = -n

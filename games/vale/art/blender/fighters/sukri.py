@@ -1400,6 +1400,11 @@ OBLIQUE = {"torso": 0.55, "hood": 0.45, "skirt": 0.45, "sleeve_L": 0.5, "sleeve_
 DARK_FLOOR, DARK_KNEE = 0.66, 0.86
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
 LINING_HEX = "#3A2F28"          # fp1-6: a step up (the lining is a big dark area in the middle band from above)
+# (W5b, final parity review originality F9: "Sukri's mask framed in a dark hood" - the near-black lining round the face
+# read as a void, a hooded-figure read): the lining LIFTED to a warm brown linen (L* ~43, was ~20), its deepest
+# fold a little darker, so the hood reads as cloth round a smiling carved face
+LINING_HEX = "#74624F"
+LINING_DEEP = 0.78              # the deepest fold's share of LINING_HEX (was 0.80, the rim's 1.20 kept)
 HOOD_TONE = 0.68
 HOOD_WARM, HOOD_WARM_K = "#D6C6A6", 0.45     # build 3: three rendered the linen a cool bone-white: pulled toward warm cream
 
@@ -1900,7 +1905,7 @@ def _lining(p, n, lin):  # noqa: C901
     inside = ss(0.012, -0.004, od) * ss(-0.020, 0.010, y - rim_y(x, z) - 0.020) * ss(-0.03, -0.085, y)
     inside = inside * ss(0.40, 0.05, n[:, 0] * np.sign(x))       # (build 3: never the hood's outward-facing sides)
     deep = ss(-0.215, -0.135, y)
-    c = _lin(_hex(LINING_HEX))[None, :] * (0.80 + 0.40 * (1 - deep) + 0.08 * _fbm(p, 25.0))[:, None]
+    c = _lin(_hex(LINING_HEX))[None, :] * (LINING_DEEP + (1.20 - LINING_DEEP) * (1 - deep) + 0.08 * _fbm(p, 25.0))[:, None]
     w = inside[:, None]
     return lin * (1 - w) + c * w
 
