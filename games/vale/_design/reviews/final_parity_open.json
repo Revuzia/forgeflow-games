@@ -1,0 +1,2011 @@
+{
+ "meta": {
+  "date": "2026-10-28",
+  "branch": "claude/youthful-ramanujan-gdud5w",
+  "src_unchanged_since": "1d176f8a",
+  "gauge_only": "LoL is a quality gauge; every fix is VALE-original (STYLE_BIBLE.md, WORLD.md).",
+  "sources": [
+   "_design/reviews/final/combat.json",
+   "_design/reviews/final/hud.json",
+   "_design/reviews/final/env.json",
+   "_design/reviews/final/perf.json",
+   "_design/reviews/final/client.json",
+   "_design/reviews/final/audio.json",
+   "_design/reviews/final/originality.json",
+   "_design/reviews/final/gameplay.json"
+  ],
+  "review": "_design/reviews/final_parity_review.md",
+  "counts": {
+   "blocker_findings": 8,
+   "major_findings": 33,
+   "polish_items": 51,
+   "r12_closed": 15,
+   "r12_partly": 9,
+   "r12_open": 0
+  },
+  "excluded": "Ilsheta art (own fix pass); recorded leftovers art/renders/fighters/*/_open.json and _design/reviews/wave_b_open.json",
+  "prerequisite": "Owner rotates the Meshy key before any wave."
+ },
+ "scores": {
+  "combat": 6,
+  "hud": 7,
+  "env": 6.5,
+  "perf": 6.5,
+  "client": 5.5,
+  "audio": 4,
+  "originality": 5,
+  "gameplay": 4
+ },
+ "r12": [
+  {
+   "id": "B1",
+   "status": "closed",
+   "evidence": "overlay_regress --q high PASS; node count 2494 before/during/after a 180-frame hover; e2e 0 page errors (_harness/_reports/final_hud_verify_overlay_regress.json)."
+  },
+  {
+   "id": "B2",
+   "status": "partly",
+   "evidence": "Circles, rings, rects draw; every cone filled inside-out (axis alpha 0, ground behind the apex 43-102). src/render/overlay/telegraphs.ts:76 (combat F1)."
+  },
+  {
+   "id": "B3",
+   "status": "partly",
+   "evidence": "15/16 fighters final Art 2.0; Ilsheta in her fix pass; all 16 portraits in draft, loading and collection. A per-fighter review follows."
+  },
+  {
+   "id": "B4",
+   "status": "closed",
+   "evidence": "High 1080p 60.1 fps, p99 16.8 ms, 179 draws, 385k tris (final_perf_verify_perf_1080.json). Caveats: gate jitter (PERF-V1), real client at 0.8 scale (PERF-M2)."
+  },
+  {
+   "id": "B5",
+   "status": "closed",
+   "evidence": "final_maps_value_probe.json PASS on all maps and tiers: lane p50 86-91, env180 0 %. Bases not probed (env m1)."
+  },
+  {
+   "id": "M1",
+   "status": "closed",
+   "evidence": "All 13 delayed damaging areas everyone-visible with >= 0.60 s lead; build lint in force."
+  },
+  {
+   "id": "M2",
+   "status": "partly",
+   "evidence": "All 17 CC looks sustained, hard-CC drain strip exists; no status word/icon (combat F5); hostile CC sounds like a buff (AUD-5)."
+  },
+  {
+   "id": "M3",
+   "status": "closed",
+   "evidence": "48/48 casts >= 0.12 s have a windupVfx."
+  },
+  {
+   "id": "M4",
+   "status": "closed",
+   "evidence": "SILENCED chip, slashed slots, refusal captions (final_hud_s3_07_silence_press.png)."
+  },
+  {
+   "id": "M5",
+   "status": "partly",
+   "evidence": "Ranged 0.31-0.38 s; 6/8 melee 0.406-0.452 s; impact fades ~100 ms; Hesmi tip travel 0.61 m (combat m-1, m-2)."
+  },
+  {
+   "id": "M6",
+   "status": "closed",
+   "evidence": "Victim box luma 94 -> 226-239 at the beat; flash 0.7 -> 0 by frame 5."
+  },
+  {
+   "id": "M7",
+   "status": "closed",
+   "evidence": "104x10 self bar with white lost-HP span (final_hud_s3_04_selfhit_combo.png)."
+  },
+  {
+   "id": "M8",
+   "status": "partly",
+   "evidence": "Team models differ; rounded hoods, one light, no face. Hood L* 64-66 recorded leftover (wave_b_open.json). Latent faced Wick wave in rift_card.webp (W2 MISS-1)."
+  },
+  {
+   "id": "M9",
+   "status": "closed",
+   "evidence": "Structure sweep n=317, 0 failures; ratio 2.38-2.46; collapse to ruin. Terrain occlusion is env F4."
+  },
+  {
+   "id": "M10",
+   "status": "closed",
+   "evidence": "m10: 9 units, 0 missing, restWidth 1 (overlay_regress)."
+  },
+  {
+   "id": "M11",
+   "status": "partly",
+   "evidence": "All r12 M11 gates pass (canopy p50 51-56, brush bend, 0 px leak); plates unpainted (env F5)."
+  },
+  {
+   "id": "M12",
+   "status": "partly",
+   "evidence": "Content meets spec (signature 56-80 %); in play Tunlan 0.04/0.08, Rishal 0.11/0.00, Hesmi a2 0.01, Odrum in HARM band (combat F6); no per-fighter sound (AUD-1)."
+  },
+  {
+   "id": "M13",
+   "status": "partly",
+   "evidence": "Core peak 2.27-2.64x meets 2.3-2.5x; Kemdo, Rishal, Hesmi re-fire every 1 s (combat F3); caster anchor on Tunlan cone and Rishal rect (combat F4)."
+  },
+  {
+   "id": "M14",
+   "status": "closed",
+   "evidence": "final_maps_ambient.json all pass (faintness recorded leftover); no audio ambience (AUD-8)."
+  },
+  {
+   "id": "m1",
+   "status": "closed",
+   "evidence": "M:SS cooldowns, regen readout, ledger flyout (final_hud_1080_10_scoreboard.png)."
+  },
+  {
+   "id": "m2",
+   "status": "closed",
+   "evidence": "Desaturated death, two-portrait banner, LEVEL plate; level-up/kill banner timing not measured; level-up cue 119 ms dead air (AUD-m1)."
+  },
+  {
+   "id": "m3",
+   "status": "partly",
+   "evidence": "Chip 29-31 px meets LoL lower bound; identity fails: 9/15 pale, 11/105 pairs < 45 (HUD-2)."
+  },
+  {
+   "id": "m4",
+   "status": "closed",
+   "evidence": "Camera displacement 0.0000 in 4 ult runs; 0 feel layers with shake."
+  },
+  {
+   "id": "m5",
+   "status": "closed",
+   "evidence": "33 defs carry a distort layer."
+  },
+  {
+   "id": "r12-4-fog",
+   "status": "open",
+   "evidence": "Fog A/B ratio 0.23-0.32 vs the 0.55 spec r12 scored as matching; world_material.ts:84-91 ignores tone map and LUT (env F3)."
+  }
+ ],
+ "waves": [
+  {
+   "id": "W1",
+   "name": "Engine: render, VFX, performance & build hygiene",
+   "goal": "Danger cues tell the truth (cones, recall, ult beats), kits keep their hue in play, frames render at full resolution with flat memory, fog and walls stay readable, and no credential sits in the public repo.",
+   "files": [
+    "src/render/** (except src/render/menu.ts)",
+    "content/vfx.json",
+    "_design/tokens.json",
+    "_harness/overlay_regress.mjs",
+    "_harness/value_probe.mjs",
+    "_harness/vfx_gallery.mjs",
+    "_harness/perf_1080.mjs",
+    "_harness/web/render_bench.ts",
+    "package.json",
+    "../../pipeline/*.py (repo root)",
+    "tools/secret_scan (new) + pre-commit hook"
+   ],
+   "size": "XL overall; both blockers are S and go first",
+   "prerequisite": "Owner revokes and rotates the Meshy key in the Meshy dashboard (only rotation fixes a public key). History purge needs owner approval (filter-repo + coordinated force-push).",
+   "seams": [
+    "Adds Renderer.listenerFocus(): {x,y} (renderer.ts) for W3 AUD-9.",
+    "Authors any new VFX defs for W4's Ervet/Vashil kit changes after they land."
+   ],
+   "done": [
+    "overlay_regress has a cone case for enemy telegraph and own aim: axis pixel at r/2 filled; pixels at +/-90 deg and 0.4 m behind the apex empty; PASS. Tunlan ult re-shot from the enemy side.",
+    "Recall VFX visible at every 0.5 s sample across the ~6.9 s channel (final_combat_verify2 recall re-run).",
+    "Exactly one lift start >= 1.3 per ultimate cast instance (final_combat_verify ult[].liftStarts length 1 for Kemdo, Rishal, Hesmi).",
+    "dynlive: renderScale 1.0 after 90 s in a RIFT match on an idle 60 Hz machine; GPU-timer values longer than the frame interval ignored.",
+    "leakid with 4 identical rebuilds: live render targets, geometries and textures at menu_5 <= menu_2 values; GPU-process growth <= 3 %.",
+    "Fog A/B: displayed ratio 0.50-0.60 on lane, FRAY plate and jungle floor at High and Low; landmarks, ambient props and cart use the same function.",
+    "wallmask (RIFT): 0 walkable spots leave a fighter under 50 % readable, counting the silhouette.",
+    "In-play hue probe: signature share >= 0.5 on every a1/a2 slot of every kit (Tunlan, Rishal, Hesmi, Odrum included); Odrum saturated pixels mostly outside the HARM band.",
+    "git ls-files | xargs grep msy_ -> 0 hits; secret scan wired into npm run check.",
+    "perf_1080 still 60 fps at High, p99 <= 25 ms."
+   ],
+   "findings": [
+    {
+     "dim": "combat",
+     "id": "F1",
+     "severity": "blocker",
+     "title": "Every cone telegraph and cone aim indicator is drawn inside-out",
+     "what": "`sdSector` keeps the side test from Inigo Quilez's +y-axis sector SDF after re-axing the shape to +x. Points inside the half-angle therefore come out positive (outside), and points beside or behind the apex come out negative (inside).\n\nAs a result, the fill, the landing flash and the sweep paint the safe ground beside and behind the caster, and leave the real cone empty. Only the two radial edge lines are right.\n\nAffected: Ardit a2, Burdam a3, Ervet a1, Tunlan ult (an enemy-visible 9 m fear) and Vashil a3, in both enemy warnings and own aim.",
+     "evidence": "Reproduced on the current build:\n\nEnemy view: _harness/_reports/final_combat_verify.json `cone`, Tunlan ult seen by team 0.\n- In all 31 frames, the samples on the axis at 0.25, 0.5 and 0.75 r read alpha 0.\n- Total telegraph pixels grow from 9.3k to 188k.\n- The point 0.4 m behind the apex reads 43 → 102.\n- Shots: _harness/_shots/final_combat_verify_cone_tunlan_ult_f9.jpg and _f20.jpg.\n\nOwn aim (`aim`, via renderer.setAim):\n- Ardit a2, Vashil a3 and Ervet a1: axis 0/0/0, beside ±90° 31, outside the angle 31, behind 31.\n- Shot: _harness/_shots/final_combat_verify_aim_ardit_a2.jpg.\n\nMath (src/render/overlay/telegraphs.ts:76, `m * sign(c.y*p.x - c.x*p.y)` with c = (cos ha, sin ha)):\n- r 9, ha 25°: p = (4.5, 0) gives d = +1.90 (outside), and p = (−4, 0) gives d = −4.00 (inside).\n- The correct +x form is `sign(c.x*p.y - c.y*p.x)`.\n\n_harness/overlay_regress.mjs has no cone case.\n\nRepro:\n```\nnode _harness/_reports/final_combat_verify_tools/verify.mjs cone,aim\n```",
+     "gauge": "LoL (r12 B2, R1): an indicator fills exactly the area that will be hit, with a translucent fill and a bright rim. It never paints safe ground.",
+     "fix": "1. In sdSector, use `m * sign(c.x*p.y - c.y*p.x)` (after `p.y = abs(p.y)`).\n2. Add a cone case to overlay_regress, for both the enemy telegraph and the own aim:\n   - the pixel on the axis at r/2 must be filled;\n   - the pixels at 90° and 0.4 m behind the apex must be empty.\n3. Re-shoot Tunlan's ultimate from the enemy side.",
+     "size": "S",
+     "files": [
+      "src/render/overlay/telegraphs.ts",
+      "_harness/overlay_regress.mjs"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "originality",
+     "id": "F1",
+     "severity": "blocker",
+     "title": "Live Meshy API key hard-coded in 10 tracked files of a PUBLIC repo",
+     "what": "One Meshy key literal (msy_…) is committed in 10 tracked pipeline scripts. It has been on origin/master of the public repo since 2026-07-07.",
+     "evidence": "From /Users/sitskovich/Developer/forgeflow-games: `git ls-files -z | xargs -0 grep -I -l -E 'msy_[A-Za-z0-9_-]{20,}'` lists pipeline/{colosseum_meshy_meshes:20, colosseum_meshy_remesh:25, meshy_anims:22, meshy_chars:27, meshy_chars_img:23, meshy_enemies:27, meshy_lc_deaths:37, meshy_lc_run:34, meshy_prop_bow:24, meshy_rig_anims_v2:32}.py, with one unique value. `git branch -r --contains 77c4f69d` includes origin/master. `gh repo view --json visibility` returns PUBLIC. Summary in _harness/_reports/final_originality_verify_masks.txt (secret-scan lines).",
+     "gauge": "A publisher-tier product never publishes a working vendor credential. Secrets live in a vault or environment, and public repos are secret-scanned.",
+     "fix": "Revoke and rotate the key in the Meshy dashboard first, since only rotation fixes a public key. Replace the 10 literals with an env/untracked-file loader (the pattern tools/imagegen/run_xai.py already uses). Purge the key from history only with owner approval (filter-repo plus a coordinated force-push). Add a secret-pattern grep to `npm run check` and a pre-commit hook.\n\nWave note: Key rotation is an owner action and comes first. Never print or commit the key value.",
+     "size": "S",
+     "files": [
+      "../../pipeline/*.py (10 files, repo root)",
+      "package.json",
+      "tools/secret_scan (new)"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "combat",
+     "id": "F3",
+     "severity": "major",
+     "title": "Ultimates that hit repeatedly re-fire the full exposure beat about every second",
+     "what": "Every T4 `hit` event queues an exposure pulse. The only limit is a 0.6 s gate per caster, so an ultimate that ticks or hits again fires a fresh ×2.4 beat roughly every second, for as long as it lasts. This contradicts the code's own comment, 'a targeted ultimate's first hit carries the impact envelope'.",
+     "evidence": "_harness/_reports/final_combat_verify.json `ult[].liftStarts`, start times of lifts ≥ 1.3:\n- Kemdo: 0.30, 1.30 and 2.30 s. Hits fall every 0.5 s (f8, 23, 38, 53, 68, 83), so every second hit pulses.\n- Rishal: 0.23, 1.23 and 2.23 s.\n- Hesmi: 1.17, 2.13 and 3.13 s.\n- Tunlan: 0.93 s only.\n\nThe later beats centre on the victim and whiten 59–60 % of its box pixels (`peaks`).\n\nCode: src/render/director.ts:443-444 (hit case), with the gate at :374-377.\n\nThe reviewer's photosensitivity framing is overstated: one ultimate pulses at 1 Hz, below the 3 flashes/s guideline.",
+     "gauge": "r12 M13 (V4, V5): one envelope of about 1 s per ultimate impact. Lingering effects never re-flash.",
+     "fix": "1. Key the envelope to the cast instance: (src, ability, cast time). Once that cast's first area, hit or zone has pulsed, ignore further pulses from it.\n2. Let a def opt in to repeated beats explicitly (Vashil's tolls), at a reduced peak.",
+     "size": "S",
+     "files": [
+      "src/render/director.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "combat",
+     "id": "F2",
+     "severity": "major",
+     "title": "Recall effect is visible for about 1 s of a ≈ 6.9 s channel",
+     "what": "lib_recall is a 1.0 s def that the director fires once, at start and again at done, with no sustain. For the rest of the channel nothing but the body clip shows that the unit is recalling: no effect and no bar cue.",
+     "evidence": "_harness/_reports/final_combat_verify2.json `recall`: ally Odrum recalling alone, seen by team 0. Pixels added by the VFX inside a 240 px box:\n- 0.1 s: 5,302.\n- 0.5 s: 5,925.\n- 1.0 s: 152.\n- 1.5 s: 21.\n- 2.0 s: 0.\n- 3.0 s: 19.\n- 5.0 s: 0.\n- 6.7 s: 0.\n- 'done' at f206 (6.87 s): 8,059 (departure).\n\nThe actor plays its 'recall' clip throughout (a kneel), so the unit does not look exactly idle as the reviewer said. Even so, no effect is visible from 1.5 s on (_harness/_shots/final_combat_verify_recall_ally_f090.jpg, f150).\n\nCode: src/render/director.ts:597-604 fires with no sustain or loopWhile. content/vfx.json lib_recall has duration 1.0, and its comment says '(loop)'.",
+     "gauge": "LoL: a recall is a clearly visible, team-coloured channel for its whole duration. Any enemy with vision reads it, and the channel is also shown on the health bar. It ends in a departure flash.",
+     "fix": "1. In the director's recall start case, sustain the effect while `view.entity(id)?.state === 'recall'`, and release it on cancel.\n2. Author a looping VALE channel paced to the recall time:\n   - a dial ring at the feet whose hand sweeps once;\n   - motes rising faster near the end;\n   - a column that brightens over the last second;\n   - the existing departure burst.\n3. Use relationship colour on the ring edge only.",
+     "size": "S",
+     "files": [
+      "src/render/director.ts",
+      "content/vfx.json (lib_recall)"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "perf",
+     "id": "PERF-M2",
+     "severity": "major",
+     "title": "Dynamic resolution drops to 80% in the menu and never recovers on a 60 Hz display, so every High match renders at 1536×864 with eased AO",
+     "what": "In the menu, the 30 fps idle cap (renderer.ts:895, after 4 s without a station change) feeds its 33 ms intervals into DynamicResolution.sample (renderer.ts:906).\n- Outside a match the GPU timer reads null, or a stale `last` from the previous match: 144 ms in final_perf_longmatch.json postgame.\n- quality.ts:132 therefore classes these CPU-light frames as GPU-bound. The scale steps down to the 0.8 floor in about 8 s of the cap, about 12 s after arriving on a screen.\n- configure() runs only in setQuality (renderer.ts:368), never at match setup.\n- The only way back up needs an average interval under 0.8× target, i.e. 13.3 ms (quality.ts:140), which a 60 Hz vsync display never delivers.\n\nThe result: the whole match renders at 64% of the pixels, and applySize eases N8AO while scale ≤ 0.85 (renderer.ts:400). On a display of 120 Hz or more the scale does climb back (8.33 ms intervals).\n\nThe bench disables dynamic resolution (render_bench.ts:67), so the B4 gate cannot see any of this.",
+     "evidence": "Verifier live run of the real client: a dev bundle (NODE_ENV=development, same index hash as the reviewer's) running `node <scratchpad>/perf_verify/dynlive.mjs <devbundle>`. Report _harness/_reports/final_perf_verify_dynlive.json, log final_perf_verify_dynlive.log.\n\nIdle Home, load 2.1–2.4:\n\n| Time on Home | 0–4 s | 6 s | 8 s | 10 s | 12 s |\n|---|---|---|---|---|---|\n| Render scale | 1 | 0.95 | 0.9 | 0.85 | 0.8 |\n\nAt 0.8 the buffer is 1536×864, bound 'gpu', gpuMs null.\n\nThrough the match:\n- The scale stays 0.8 through queue, draft (itself idle-capped to 30 fps) and loading.\n- It stays 0.8 for 90 s of the RIFT match at 59.6 fps (p95 16.7, p99 16.8), while the GPU timer reads 13.9–32.1 ms.\n- Calling `renderer.setQuality(settings.video)` mid-match restores 1.0 (1920×1080).\n\nPure-logic check against src/render/quality.ts (`node <scratchpad>/perf_verify/dyn.ts`, output _harness/_reports/final_perf_verify_dynres.txt):\n- 20 s at the 30 fps cap: 0.8.\n- Then 300 s at 60 Hz with gpu null, 3, 8 or 12.9 ms: 0.8.\n- With a hitch every 2 s: 0.8.\n- 10 s at 120 Hz: climbs to 0.95.\n\nShots: _harness/_shots/final_perf_verify_home_idle16s.png, final_perf_verify_match_scale_default.png, final_perf_verify_match_scale_reconfigured.png.",
+     "gauge": "LoL renders at the resolution and quality the player picked and holds 60 fps on mid hardware. It never quietly trades sharpness away, so a player who picks High gets the full image.",
+     "fix": "1. Sample the controller only for frames the renderer wanted at the display rate: never in menu mode, never while the idle cap or an fpsCap below the display rate is active.\n2. Call dyn.configure() in setupMatch, and clear GpuTimer.last at teardown.\n3. Replace the up-rule 'interval below 0.8× target', which vsync makes impossible, with a probe: after N on-target windows below base, step up 0.05 and keep the step only if the next windows stay on target.\n4. Ignore GPU-timer values longer than the measured frame interval. This step is required: right after the reconfigure the scale fell to 0.95 within 10 s at load about 5, because readings of 29–31 ms at a steady 60 fps made contention hitches look GPU-bound.\n5. Add a Settings › Video row to turn dynamic resolution on and off.\n6. Add a gate step: the real bundled client, 60 s in a match with dynamic resolution on, asserting renderScale equals base on an idle machine.\n\nWave note: Step 5 (Settings > Video toggle) moves to the polish list under W2, which owns settings files.",
+     "size": "S",
+     "files": [
+      "src/render/quality.ts",
+      "src/render/renderer.ts",
+      "_harness/web/render_bench.ts",
+      "_harness/perf_1080.mjs"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "perf",
+     "id": "PERF-M1",
+     "severity": "major",
+     "title": "Every scene switch leaks the whole post-processing chain, about 190 MB of GPU memory per match, and it never plateaus",
+     "what": "Tearing a match down does not free what setting it up created. The main cause is the post-processing stack, not terrain props.\n- `PostStack.setScene` calls `build()` on every scene switch (src/render/post.ts:178-182). That happens at match setup (renderer.ts:428) and again on the return to the menu (renderer.ts:411), so twice per match.\n- `build()` (post.ts:212-258) calls `composer.removeAllPasses()`. In postprocessing 6.39.5 that method only empties the pass array (node_modules/postprocessing/build/index.js:1282-1291) and disposes nothing.\n- It then creates a new RenderPass, N8AOPostPass, EffectPass (bloom mip chain, luminance) and SMAA EffectPass. Each one allocates its own render targets, materials and SMAA lookup textures.\n- The old set stays on the GPU. A Settings › Video preset change (post.ts:193) leaks one more chain.\n\nSmaller leaks, together a few MB per match:\n- terrain prop geometries from loadTerrainProps (terrain.ts:353-392, kept by setProps at 1816, never disposed in Terrain.dispose at 1840-1845);\n- crowd InstancedBufferGeometries (crowd.ts:320; CrowdSet.dispose at 440 frees only materials);\n- the crowd animation DataTexture (crowd.ts:130);\n- landmark material clones (terrain.ts:454).\n\nThe reviewer's real-client renderer-process growth (+180 MB per match) is mostly the by-design asset cache filling with new fighters. With an identical rebuild the renderer process stays flat.",
+     "evidence": "Verifier leak identification: `node <scratchpad>/perf_verify/leakid.mjs 4`, report _harness/_reports/final_perf_verify_leakid.json, log final_perf_verify_leakid.log.\n- Setup: the production render bench rebuilds the identical RIFT match (same fighters, map, seed 7) 4 times.\n- Method: every object three uploads is tracked through its 'dispose' listener.\n\nAt the menu after each teardown, menu_1 → menu_5:\n\n| Measure | menu_1 | menu_2 | menu_3 | menu_4 | menu_5 |\n|---|---|---|---|---|---|\n| Live render targets | 56 | 104 | 150 | 197 | 243 |\n| renderer.info geometries | 13 | 68 | 106 | 139 | 179 |\n| renderer.info textures | 173 | 233 | 285 | 338 | 391 |\n| GPU process footprint (MB) | 1201 | 1467 | 1660 | 1817 | 1975 |\n| Renderer process (MB) | 789 | 799 | 797 | 804 | 802 |\n\nThe GPU process grows +266, +193, +157 and +158 MB per rebuild. The renderer process stays flat.\n\nWhat leaks per identical rebuild (uploaded in rebuilds 2-4 and still live at the last menu):\n- 47 render targets: 8 at 1920×1080, about 12 at 960×540, and the 480×270 … 8×5 bloom mip chain ×4, which matches 2 chains per match;\n- 1 set of SMAA Area and Search textures;\n- Effect, Luminance, Downsampling, Upsampling, EdgeDetection and SMAAWeights materials, 2 each;\n- 37 geometries at about 4 MB, mostly crowd instanced views plus the terrain prop set.\n\nThe reviewer's own numbers agree: _harness/_reports/final_perf_scenecycle.json and final_perf_multimatch.json (GPU process at Home 698 → 1647 → 1903 → 2129 MB over 3 real matches).",
+     "gauge": "LoL runs each game in a fresh game process, so the game's memory goes back to baseline after every match and the client does not degrade over a session.\n\nRiot's published minimum is 2 GB RAM on Windows (4 GB recommended) in the older support-leagueoflegends.riotgames.com snapshot (article 201752654). The current support.riotgames.com page lists 8 GB unified memory on Mac. The Windows RAM row may have changed since.\n\nAt about +190 MB of GPU memory per match, VALE would add about 1 GB after 5 matches. On shared-memory integrated GPUs, which is LoL's mid-hardware tier, that leads to context loss or a tab kill.",
+     "fix": "1. Build the post chain once per quality. `setScene` should only re-point the existing passes: RenderPass.mainScene and mainCamera, N8AO scene and camera, and each EffectPass camera.\n2. When `build()` must run (quality change), dispose every old pass except the shared overlay and VFX passes before `removeAllPasses`. `pass.dispose()` frees each pass's targets, materials and effects.\n3. Then fix the small leaks:\n   - Terrain.dispose disposes the prop geometries passed to setProps;\n   - CrowdSet.dispose disposes its InstancedBufferGeometry (only the attribute views it owns);\n   - the crowd animation texture and the landmark material clones are disposed at teardown.\n4. Add a harness memory step to the B4 gate: rebuild the identical match 4 times (as in final_perf_verify_leakid). Fail if live render targets, geometries or textures at the menu exceed the menu_2 values, or if the GPU-process footprint grows more than 3%.",
+     "size": "M",
+     "files": [
+      "src/render/post.ts",
+      "src/render/renderer.ts",
+      "src/render/terrain.ts",
+      "src/render/crowd.ts",
+      "_harness/perf_1080.mjs"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "env",
+     "id": "F3",
+     "severity": "major",
+     "title": "Fog of war is about twice as dark as VALE's own ×0.55 spec, and inconsistent between materials",
+     "what": "Fogged terrain displays at ×0.21–0.32 of its lit luma, against the spec's ×0.55 on the display. The shader assumes pure sRGB gamma: `vec3 fogged = ... * 0.268` with the comment '0.55^2.2 = 0.268' (`src/render/world_material.ts:84-91`). The Neutral tone map and the LUT then crush the dark end further.\n- Fogged RIFT jungle frames sit at luma p50 10–15.\n- The FRAY plate falls to about L* 6, against the brief's ≈ 27 (`_design/maps/map_fray_landmarks.md` §3).\n- Landmark materials take a different path: the FRAY cart awning only goes to ×0.38.\n\nFighters' sight is a 12 m disc (`src/sim/vision.ts:24`), with no wall occlusion of sight. So a lone fighter's frame corners and every scouting pan show this near-black ground.",
+     "evidence": "Command: `node /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/verify_env/fog_ab.mjs fray --at \"32,8;6,6;58,58;32,32\" --name final_maps_vfy_fray`, and the same for rift with `--at \"85,31;61.6,41.5;108.4,68.5;85,90\"`. It renders fog on, then fog off, at the same spots in one session and does not pump the sim in between.\n\nReport `_harness/_reports/final_maps_vfy_fog_ab.json`. Per-pixel ratio p50 at fully fogged spots:\n- FRAY: 0.232, 0.28 and 0.296;\n- RIFT: 0.23, 0.254 and 0.322;\n- control spot in vision: 1.0.\n\nBox stats, measured with /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/final_maps/imgstat.mjs:\n- FRAY plate: 83.75 → 18.72;\n- cart awning: 156.07 → 58.72.\n\nShots `_harness/_shots/final_maps_vfy_{fray,rift}_{fog,nf}_at*.png`; sheet `final_maps_vfy_sheet_fog_rift.png`. These match the reviewer's numbers almost exactly.",
+     "gauge": "LoL darkens and desaturates unseen terrain, but lane edges, walls and brush stay legible, so players plan through fog. Riot's 2014 update tuned fog for a clear edge, not for blackout. r12 §4 scored VALE as matching at ×0.55, a figure the build does not deliver. No LoL frame was re-measured, so the LoL ratio itself is unmeasured.",
+     "fix": "1. Calibrate fog on the display. Either apply it after the tone map and LUT, in a screen-space pass that samples valeFogTex at the reconstructed world position, or solve the linear factor against the measured tone map + LUT response.\n2. Route landmarks, ambient props and the cart through the same function.\n3. Add a fog A/B gate to value_probe: ratio 0.50–0.60 on lane, plate and jungle floor, at both tiers.",
+     "size": "M",
+     "files": [
+      "src/render/world_material.ts",
+      "src/render/post.ts",
+      "src/render/ambient.ts",
+      "_design/tokens.json",
+      "_harness/value_probe.mjs"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "env",
+     "id": "F4",
+     "severity": "major",
+     "title": "Fighters standing just north of a wall block are hidden by the block and its canopy, with no silhouette",
+     "what": "On RIFT, a fighter on walkable ground within about 1.7 m north of a wall block is mostly hidden by the block's lip and its Dialwood canopy. The block sits between the fighter and the camera, and nothing replaces the hidden body. Only the overhead bar shows.\n- Structures have an occlusion fade (`src/render/structures.ts`); terrain and trees do not.\n- `src/render/terrain.ts:1410-1411` accepts that a cliff hides 0.78·h of ground behind it. It only stops the crowns from adding more.\n- 15.3 % of RIFT walkable cells fall in this band: 3.7 % fully behind and 11.5 % partly.",
+     "evidence": "My pixel-mask variant of the reviewer's probe: `node /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/verify_env/wallmask.mjs rift --n 24 --out _harness/_reports/final_maps_vfy_wallmask_rift.json --shots final_maps_vfy_wallmask_rift`. The fighter is drawn flat magenta, with no shadow and the outline hidden. Visibility is the number of mask pixels with the occluders, divided by the number with cliffs, rock stacks and scatter hidden.\n\n| Distance north of wall | Spots under 50 % visible | Median visibility |\n|---|---|---|\n| 0.2–0.7 m | 6/6 | 0.08 |\n| 0.7–1.1 m | 6/6 | 0.18 |\n| 1.1–1.7 m | 5/6 | 0.45 |\n| 1.7–2.6 m | 0/6 | 0.67 |\n\nThe reviewer's diff-sum metric gave about the same.\n\nShots: `_harness/_shots/final_maps_vfy_sheet_wallmask.png` (four spots: head only, or nothing, above the lip) and `final_maps_vfy_wallmask_rift_*.png`.",
+     "gauge": "r06 §2 and §6.1 [30][32] record that Riot's 2014 rebuild cut how often terrain hides champions, and r06 item 8 asks VALE to 'minimize terrain that hides characters'. The reviewer's further claim that LoL keeps the camera-side terrain low was not confirmed by my search. It is plausible, but unsourced.",
+     "fix": "1. Draw an occluded-unit silhouette after the opaque pass: a depth test GREATER against terrain and scatter only, then a 40–50 % relationship-colour fill with a 1.5 px rim, batched with the unit path.\n2. Where a lane runs along a block's north lip, cap the lip and the crowns within 2 m of it at ≤ 2.2 m.\n3. Acceptance: no walkable spot leaves a fighter under 50 % readable, counting the silhouette.",
+     "size": "M",
+     "files": [
+      "src/render/actors.ts",
+      "src/render/ink.ts",
+      "src/render/renderer.ts",
+      "src/render/terrain.ts",
+      "src/render/terrain_walls.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "combat",
+     "id": "F6",
+     "severity": "major",
+     "title": "Several kits lose their signature hue in play (Tunlan, Rishal, Hesmi a2) and Odrum sits in the enemy HARM band",
+     "what": "Content now follows r12's M12 spec:\n- Signature is ≥ 50 % of each kit's emissive layers.\n- Team colour is ≤ 26 % of them.\n- Same-hue pairs pass the documented ΔL* ≥ 25 rule.\n\nIn play, though, the light some kits add is mostly white, blue or warm orange rather than their signature. About half of the a1/a2 slots are identifiable by hue alone.",
+     "evidence": "_harness/_reports/final_combat_verify3.json `hue`. Metric: the hue of the light the VFX add (positive VFX-on minus VFX-off delta, telegraph layer hidden), measured a few frames after release, as the share of saturated pixels within ±25° of the signature.\n\nStrong:\n- Lisvel 0.92 / 0.75.\n- Burdam 0.90 / 0.94.\n- Kemdo 0.96 / 0.78, though its salmon H13 sits next to HARM: 45 % of a1 pixels are in 20–55°.\n- Dunsom a2 0.76.\n- Vashil a2 0.61.\n\nLost:\n- Tunlan 0.04 / 0.08 (a1 is 61 % white).\n- Rishal 0.11 / 0.00: dominant hue 210–240°, blue, not orange as the reviewer said.\n- Hesmi a2 0.01 (78 % white).\n- Odrum 0.43 / 0.41, with 68–91 % of saturated pixels in the HARM band.\n\nLayer shares (my count over content/vfx.json, emissive layers): signature 56–80 %, team 8–26 %. The reviewer's 'Tunlan 42 % / 39 %' was not reproduced.\n\nContact sheet: _harness/_shots/final_combat_identity_a1_a2.png (reviewer).",
+     "gauge": "r12 M12 (C1, R1): every champion owns a signature hue that survives in play. Hit sparks share a warm white, and team colour lives in indicators, rings and rims.",
+     "fix": "1. Re-tune the cores of Tunlan, Rishal, Hesmi and Odrum so the signature survives tone mapping and bloom:\n   - cap core luminance after tone mapping at about 0.85;\n   - saturation ≥ 0.45;\n   - give each a signature motif shape.\n2. Move Odrum's signature at least 15° further from the HARM band, or give it a cool secondary in the core.\n3. Add a vfx_gallery or bench check that reports each kit's in-play signature share using this additive-delta metric, with a gate of ≥ 0.5 per slot.\n4. The same-hue pairs are allowed by the documented rule, so they need no change by themselves.\n\nWave note: Take the vfx.json route for Odrum (cool secondary in the core) so content/fighters/*.json (W4) is not touched; signature hex values stay as they are.",
+     "size": "L",
+     "files": [
+      "content/vfx.json",
+      "src/render/vfx/system.ts",
+      "_harness/vfx_gallery.mjs"
+     ],
+     "verdict": "confirmed"
+    }
+   ]
+  },
+  {
+   "id": "W2",
+   "name": "Client front door & HUD (UI code and UI art)",
+   "goal": "The first screens are sensitivity-clean and navigable on every path, menus present fighters and modes at LoL level, the client fits 1280x720, and items, personal stats and the queue pop read at a glance.",
+   "files": [
+    "src/ui/** (incl. state.ts, app.tsx, audio_port.ts, styles)",
+    "src/render/menu.ts",
+    "src/session/settings.ts",
+    "src/session/grants.ts",
+    "content/ui/** (home, modes, icons)",
+    "public/thumbnail.png",
+    "tools/imagegen/**",
+    "content/client.json",
+    "content/strings.en.json",
+    "_design/sections/client_hud.md",
+    "_harness/e2e.mjs",
+    "_harness/icon_probe.mjs (new)",
+    "_harness/sweep_720.mjs (new)"
+   ],
+   "size": "XL overall; blockers M + S + S first",
+   "seams": [
+    "Plays f_<fighter>_call at lock-in (fallback lockin) and ui_queue_remind at 4 s left; W3 authors both cues.",
+    "Generates icons for W4's new items and spells with the HUD-1 spec (fallback glyph until then).",
+    "Adds display strings for new announce/HUD keys W4 emits."
+   ],
+   "done": [
+    "Sensitivity sign-off for every image in content/ui/home, content/ui/modes and public/thumbnail.png: each figure named to a roster id; no blank full-face masks, animal-ear cowls, skull plates, pointed or conical hoods, glowing empty eyes, or faced Wicks.",
+    "e2e dodge journey: after Leave draft, 6 .nav__item and the wallet on Play and on Home; Settings and Profile reachable.",
+    "Post-game header and cell x-centres within 4 px at 1920 and 1280; item cells render painted icons.",
+    "720p sweep: 0 clipped labels, nothing under the footer on Play, draft, finalize, loading, collection, post-game.",
+    "Play: the selected queue card and Find match above the fold at 1080p and 720p; mode art shown only after the repainted cards land.",
+    "Draft: hovered or locked fighter shown >= 200 px; a lock-in beat plays.",
+    "Collection Skins: 0 clipped names at 1080p and 720p.",
+    "Icon probe at 38-40 px: p50 >= 60, p95 >= 190, no ground shared across stat families.",
+    "Sky strip shows T/F/A and Wicks, re-rendering only on change (hud_renders.mjs).",
+    "Hidden-tab queue pop raises a Notification and favicon badge; with W3, peaks >= -12 dBFS.",
+    "Home shows level ring with XP to next, first-win state, and Play again."
+   ],
+   "findings": [
+    {
+     "dim": "client",
+     "id": "F1",
+     "severity": "blocker",
+     "title": "Home paintings show blank, horror-reading full-face masks (4 of 5 Home images)",
+     "what": "The sensitivity rule (no masks that read as horror, hockey mask or blank mannequin) is broken on the first screen a player sees.\n- **Ranked season tile:** a figure in a smooth blank mask with frowning eye slits.\n- **Your collection tile:** cowled statues in blank masks with pointed tips.\n- **Skins in the shop tile (missed by the reviewer):** three figures in a carved silver mask, a wooden mask with empty eye holes, and a faceless chrome visor.\n- **Feature painting:** five fighters in carved stone and wooden masks with glowing blank eyes.\nOnly practice_tool.webp is clean. None of these paintings shows a VALE roster fighter.",
+     "evidence": "- Assets: content/ui/home/{ranked_season,collection_highlight,store_banner,feature}.webp, referenced from content/client.json lines 21, 31, 35, 48.\n- They are live on Home: the _harness/_reports/final_client_v.json homeTiles img srcs (feature at 341x192 px, tiles at 201x101 px).\n- Crops: _harness/_shots/final_menus_zoom_ranked_tile_figure.png, final_menus_zoom_collection_tile_statues.png, final_menus_zoom_feature_masks.png, and my new crop _harness/_shots/final_client_v_zoom_store_banner_masks.png (store_banner).\n- In context: _harness/_shots/final_client_v_1920_home.png.",
+     "gauge": "LoL's home and event art shows recognisable champions in their own art, never anonymous masked figures. Apart from the gauge, the owner's rule makes this blocker class anywhere in the game.",
+     "fix": "Repaint all four Home images in VALE's world with named roster fighters showing faces or open helms. Ideas: the Hourbell stair for Ranked; a plinth gallery of real skins for Collection and Shop; the feature with visible faces. Add a sensitivity line to the imagegen checklist for content/ui/** (no full-face blank masks, no pointed or conical hoods, no glowing empty eyes).",
+     "size": "M",
+     "files": [
+      "content/ui/home/ranked_season.webp",
+      "content/ui/home/collection_highlight.webp",
+      "content/ui/home/store_banner.webp",
+      "content/ui/home/feature.webp",
+      "tools/imagegen/manifest.json"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "originality",
+     "id": "F2",
+     "severity": "blocker",
+     "title": "Home 'Your collection' art shows pointed-ear cowled, caped figures with skull face plates",
+     "what": "content/ui/home/collection_highlight.webp is the home tile (content/client.json:44-50) and ships in dist-catalog (28184e129720-collection_highlight.webp). It paints statues in full-head cowls with two pointed ears and capes, the signature silhouette of a famous third-party character. Their face plates are grimacing skulls, which breaks the no-horror-mask rule, and the pointed ears break the hood rule. No VALE fighter appears. The other key art (feature.webp, store_banner.webp, public/thumbnail.png) shows generic masked men who are not roster fighters. The thumbnail's pale, cracked mask with glowing slit eyes is the closest of these to the blank-mask line.",
+     "evidence": "My 2.2x crop of the source: _harness/_shots/final_originality_verify_coll_heads.png (region x360-920, y200-370 of the 1280x960 source). The full frame clearly shows the caped, ear-cowled figures. In context: _harness/_shots/final_menus_1920x1080_01_home.png, where the 'YOUR COLLECTION' tile shows the eared heads at tile size. The prompt in tools/imagegen/manifest.json (home_tile_collection_highlight) asks for 'a different masked fighter's outfit on a wooden stand'; its negatives say nothing about ears, cowls or skulls.",
+     "gauge": "LoL's client and key art show only its own champions and skins, on-model. Nothing in them resembles another company's character.",
+     "fix": "Repaint the tile as a VALE scene: real skin pieces from the roster (for example Marund's dome hat, Tunlan's lampshade hat, Ervet's dawnglass blade) on stands in a chalk-and-ironstone hall, with no full-head cowls, animal ears, skull plates or capes. Regenerate feature, store_banner and thumbnail with roster portraits as reference images. Add 'no animal ears, no cowls, no skull faces' to the key-art negatives, and a sign-off step that names each figure to a roster id.\n\nWave note: Same repaint as client F1: one pass over all Home key art.",
+     "size": "M",
+     "files": [
+      "content/ui/home/collection_highlight.webp",
+      "content/ui/home/feature.webp",
+      "content/ui/home/store_banner.webp",
+      "public/thumbnail.png",
+      "tools/imagegen/manifest.json",
+      "tools/imagegen/keyart_subjects.json"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F2",
+     "severity": "blocker",
+     "title": "Leaving a draft strands the client with no main navigation",
+     "what": "After Esc and then 'Leave draft', the client returns to Play with the correct toast. But state.draft is never cleared, so TopBar stays in flow mode on every menu screen:\n- no nav, wallet or profile chip;\n- only 'RIFT · CO-OP VS BOTS' remains.\nOn Home the 'Pause / Menu' button does nothing, so Settings and Profile cannot be reached until the next match loads or the page is reloaded.",
+     "evidence": "- _harness/_reports/final_client_v.json m.dodge:\n  - navBefore 6;\n  - after 2 s: nav 0, route play, draft true;\n  - after 11 s: nav 0, draft true;\n  - Home after Esc: nav 0, draft true, bar 'VALE RIFT · CO-OP VS BOTS'.\n- _harness/_reports/final_client_v2.json: afterPauseBtn opened no menu, and no Settings button exists.\n- Shots: _harness/_shots/final_client_v_1920_dodge_play_2s.png, final_client_v_1920_dodge_home.png, final_client_v_1920_dodge_pausemenu.png.\n- Cause:\n  - src/ui/app.tsx:268 `flow = ... || !!state.draft.value`;\n  - src/ui/state.ts:166-176: the idle/dodged branch resets the route but not draft;\n  - draft.value is only nulled on 'loading' (state.ts:193).\n- The dodge is emitted from src/session/local_session.ts:301 and :626.",
+     "gauge": "Dodging LoL champion select returns you to the lobby with the full client and a dodge notice. Losing navigation after it reads as a broken client.",
+     "fix": "In AppState.onEvent, clear draft and accepted on every flow-ending queue event (declined, or idle with a reason). Derive the flow chrome from the route definition, not from leftover draft state. Add an e2e 'dodge' journey that asserts 6 .nav__item on Play and Home and that the wallet is visible.",
+     "size": "S",
+     "files": [
+      "src/ui/state.ts",
+      "src/ui/app.tsx",
+      "_harness/e2e.mjs"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-2",
+     "severity": "blocker",
+     "title": "The queue pop is silent in a background tab at default settings",
+     "what": "A player who queues and switches tabs hears nothing when the match is found.\n- muteInBackground defaults to true and sets the master gain to 0 while hidden.\n- ui_queue_pop is an ordinary UI cue behind that master and has no bypass.\n- There is no Notification API or favicon fallback. Only a title flash remains, so the 10 s ready check is easy to miss.\n- A miss costs an escalating lockout (5 s up to 60 s). Online, it also sends the other humans back (server/room.ts ready check).",
+     "evidence": "Reproduced in harness Chrome, writing _harness/_reports/final_audio_verify_qpop.json:\n- Phase A: tab hidden (document.hidden and visibilityState overridden, visibilitychange dispatched), default settings, queue found. ui_queue_pop is in the cue log, yet the post-limiter output has no non-zero sample over 72 blocks (3.0 s) and master gain is 0.0 throughout.\n- Phase B: same hidden tab, only muteInBackground switched off via session.updateSettings, then the same 'queue_pop' role. Output peaks at -8.2 dBFS with master gain 0.8.\n\nCode:\n- src/session/settings.ts:52 sets muteInBackground: true.\n- src/audio/index.ts:139-143: applyVolumes sets master to 0 while hidden.\n- src/ui/state.ts:158 plays the pop; :161 is a title flash only.\n- No Notification usage anywhere in src.\n- _design/tokens.json:446 queuePop.ownSliderWithFloor is unimplemented.\n\nRepro:\n```\nnode <scratchpad>/audio/qpop.mjs _harness/_reports/final_audio_verify_qpop.json\n```",
+     "gauge": "r07 §3.3 calls match-found the highest-stakes sound in the product. LoL's ready check is about 12 s, and missing it costs the lobby. The FACEIT precedent (verified in r07 [55]) plays it while tabbed out or minimized, on by default. r07 §7 item 7 asks for Notification, tab-title and favicon redundancy.",
+     "fix": "Ask for Notification permission on the first queue and raise a Notification on queue pop while hidden; add a favicon badge next to the title flash; when the player has not accepted with 4 s left, play ui_queue_remind (cue authored by W3). The alert bus and floor are the W3 engine half.",
+     "size": "S",
+     "files": [
+      "src/ui/state.ts",
+      "src/ui/audio_port.ts"
+     ],
+     "verdict": "confirmed",
+     "part": "UI half"
+    },
+    {
+     "dim": "originality",
+     "id": "MISS-1",
+     "severity": "major",
+     "size": "S",
+     "verdict": "verifier-added (latent blocker-class)",
+     "title": "Latent blocker-class: all three mode cards show faced or masked figures (rift_card a faced 'Wick wave'; bridge_card, fray_card full-face masks)",
+     "what": "Not on screen today (no UI reads modes[].card.art), but shipped in dist-catalog. rift_card.webp paints a single-file lane column of masked figures with eye holes, mouth slits and spiked crests, which reads as faced Wicks; bridge_card.webp and fray_card.webp show full-face masked figures. client F6's fix would surface them.",
+     "evidence": "Latent, blocker-class if displayed: content/ui/modes/rift_card.webp (referenced at content/modes.json:14, shipped as dist-catalog/assets/8ccebd0539e2-rift_card.webp) paints a single-file column of identical small figures marching the road, which reads as the lane wave and so as Wicks. They wear masks with eye holes and mouth slits, several with spiked crests. That contradicts 'Wicks have no face' and the Wick design (rounded hood, one central light). Crop: _harness/_shots/final_originality_verify_rift_card_wicks.png. The prompt (tools/imagegen/manifest.json mode_rift) asked for 'tiny masked armies marching on the roads'. No UI code reads modes[].card.art today (ModeDial draws glyphs), so it is not on screen. Regenerate it with real Wick silhouettes, or drop it from the catalog, before any screen uses it.\n\nLatent sensitivity issue (not on screen today, shipped in the catalog): the unused mode cards content/ui/modes/bridge_card.webp and fray_card.webp show full-face masked figures. F6's fix would surface them, so they must be repainted first. Crop: _harness/_shots/final_client_v_zoom_mode_cards_masks.png.",
+     "gauge": "VALE sensitivity rule (blocker class anywhere): Wicks have no face; no blank, horror or hockey masks. LoL mode art shows its own on-model champions and minions.",
+     "fix": "Repaint content/ui/modes/{rift,bridge,fray}_card.webp under the sensitivity rule (real Wick silhouettes: rounded hood, one central light, no face; named roster fighters with faces or open helms) before client F6 displays them, or drop them from the catalog. Add the sensitivity negatives to tools/imagegen/manifest.json mode_* entries.",
+     "files": [
+      "content/ui/modes/rift_card.webp",
+      "content/ui/modes/bridge_card.webp",
+      "content/ui/modes/fray_card.webp",
+      "tools/imagegen/manifest.json"
+     ]
+    },
+    {
+     "dim": "client",
+     "id": "F4",
+     "severity": "major",
+     "title": "Post-game scoreboard columns do not line up, and items render as letters",
+     "what": "Stat values pack left after the names while the headers sit far right. At 720p the values wrap onto a second line and 'T / F / A' wraps vertically. Items show as the first letter of their name although 39 painted item icons exist. The 'best' marker is a bare 2 px bar.",
+     "evidence": "_harness/_reports/final_client_v.json score1920:\n- header 'Lv' cx 1130 against value '12' cx 279, an 851 px offset;\n- 'Items' header cx 1789 against the cell at cx 815;\n- every <td> computes display:block, the player cell display:flex;\n- items render as R F B R G O with img:false.\nscore1280: 'T / F / A' header height 47 px (wrapped).\nShots: _harness/_shots/final_client_v_1920_postgame_scoreboard.png, final_client_v_1280_postgame_scoreboard.png.\nCode:\n- src/ui/styles/hud.css:349 `.srow { display: flex; ... }` (an HUD class reused by the post-game <tr class=\"srow\">);\n- src/ui/styles/screens.css:359 `.srow__player { display:flex }`;\n- src/ui/screens/postgame.tsx:258 `it.name.slice(0, 1)`.",
+     "gauge": "LoL's post-game scoreboard is a clean, aligned table with K/D/A, CS, gold and damage columns and six item icons with tooltips per player.",
+     "fix": "Rename the post-game row class (or scope hud.css .srow under .hud) so the <tr> stays a table row. Put the portrait and names in an inner flex div. Render items with the existing painted icon component. Mark 'best' with a noon tick plus tooltip. Add a harness assertion that header and cell x-centres match within 4 px.",
+     "size": "S",
+     "files": [
+      "src/ui/screens/postgame.tsx",
+      "src/ui/styles/screens.css",
+      "src/ui/styles/hud.css"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "hud",
+     "id": "HUD-4",
+     "severity": "major",
+     "title": "Your own T/F/A and Wick count are never on the always-on HUD",
+     "what": "The sky strip shows team takedowns, structures down, the clock and objective chips. Your own takedowns, falls and assists, your Wicks and your Wicks per minute appear only while the Tab scoreboard is held. No other always-on element (Dial Bar, medallion, minimap frame) shows them.",
+     "evidence": "src/ui/hud/top.tsx:22-80: SkyStrip renders only team kills, structures, the clock and ObjectiveChips. `grep -n 'cs|deaths|assists' src/ui/hud/*` finds per-player stats only in panels.tsx:84/115-116/142 (scoreboard). The spec omits them too: the client_hud.md §4.4 sky strip has no personal stats. Shots: _harness/_shots/final_hud_1080_02_mid_full.png (none on screen) against final_hud_1080_10_scoreboard.png.",
+     "gauge": "LoL keeps your K/D/A, CS and the clock in an always-visible top-right block. VALE's own research lists 'Team score, clock, KDA/CS' for the top edge (r04_hud_camera_readability.md:37).",
+     "fix": "Add a quiet Mono 13 'ledger line' docked to the sky strip's right end or the minimap frame: 'T/F/A 1/0/2 · Wicks 46'. Re-render it through useViewKey on discrete changes only, add it to the HUD budget table, and give it a hide option.",
+     "size": "S",
+     "files": [
+      "src/ui/hud/top.tsx",
+      "src/ui/styles/hud.css",
+      "content/strings.en.json",
+      "_design/sections/client_hud.md"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F9",
+     "severity": "major",
+     "title": "1280x720 fit: labels truncate and key content falls under the footer",
+     "what": "At 1280x720:\n- **Draft grid.** Role labels are truncated on 9 of 16 cards.\n- **Finalize.** Boons sit entirely below the fold and the battle-spell list is cut.\n- **Play.** The selected queue is not visible at entry.\n- **Loading.** The tip line runs under the page control bar.\n- **Post-game.** The scoreboard header and values wrap (F4).",
+     "evidence": "_harness/_reports/final_client_v.json:\n- draft1280 roleClipped: 9 entries, 52 px boxes ('Grovehunter' needs 65 px);\n- finalize1280 below: BOONS, SHADELINE, WARMSTONE and HOURTURN at y 692–727, under the footer at 637;\n- loading1280: tip box x64–661, y675–694 overlaps the control buttons x13–129, y682–708.\nShots: _harness/_shots/final_client_v_1280_draft_myturn.png, final_client_v_1280_draft_finalize.png, final_client_v_1280_loading.png, final_client_v_1280_play_rift.png.",
+     "gauge": "Corrected: Riot support gives 1280x720 as the LoL client's default window size. Champion select, loading and store show all their content at that size, and the client also supports smaller sizes such as 1024x576.",
+     "fix": "Add a 720p token set:\n- draft grid with the role as an icon plus tooltip;\n- finalize with spells and boons as tabs;\n- loading tip padded past the control bar;\n- compact queue cards.\nAdd a 720p sweep to CI that fails on clipped labels or text under the footer.",
+     "size": "M",
+     "files": [
+      "src/ui/styles/tokens.css",
+      "src/ui/styles/screens.css",
+      "src/ui/screens/draft.tsx",
+      "src/ui/components/FighterGrid.tsx",
+      "src/ui/screens/loading.tsx",
+      "_harness/sweep_720.mjs (new)"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F6",
+     "severity": "major",
+     "title": "Play screen: painted mode art unused, default queue below the fold, gnomon across the title",
+     "what": "Three problems:\n- **No mode art.** The Mode Dial shows thin glyphs only. No UI code reads ModeDef.card.art, and the backdrop does not change per mode.\n- **Below the fold.** At 1080p the default-selected Co-op card is cut by the footer. At 720p it is not visible at all at entry, so Find match is pressed without seeing the selected queue.\n- **Gnomon across the title.** The gnomon shadow crosses the mode title ('RI•FT').",
+     "evidence": "_harness/_reports/final_client_v.json:\n- play1920: body h 832 against scrollHeight 1369; Co-op card bottom 980 against footer top 976 (after selection scroll); gnomon box x338–525, y203–309 overlaps title box x473–571, y276–324; modeImgs [] and no background-image with modes/.\n- play1280: body 523 against 1149.\nShots: _harness/_shots/final_client_v_1920_play_rift.png, final_client_v_1280_play_rift.png, final_menus_1280x720_02_play_rift.png (unscrolled 720p: Co-op not visible).\nCode: grep for card.art or _card.webp in src/ finds nothing; src/ui/components/ModeDial.tsx has no art reference; content/modes.json:14 declares card.art.",
+     "gauge": "LoL's mode selection shows each map or mode with a large illustration, and queue choice and Find Match fit without scrolling at the default 1280x720 client size.",
+     "fix": "Show a painted mode illustration in the stage columns with a crossfade on gnomon swing. Compact the queue cards so the selected card and Find match fit at 1080p and 720p. End the gnomon at the dial arc, or drop the title 24–32 px. **Caution:** the existing content/ui/modes/{bridge,fray}_card.webp show full-face masked figures (crop: _harness/_shots/final_client_v_zoom_mode_cards_masks.png), so repaint them under the sensitivity rule before surfacing them.\n\nWave note: Ship mode illustrations only after MISS-1 repaints the cards.",
+     "size": "M",
+     "files": [
+      "src/ui/screens/play.tsx",
+      "src/ui/components/ModeDial.tsx",
+      "src/ui/styles/screens.css",
+      "content/ui/modes/*.webp"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F5",
+     "severity": "major",
+     "title": "The draft never shows your fighter large and has no lock-in moment",
+     "what": "During pick, hover and lock show only in the 56 px seat portrait and a footer line ('You locked Ervet. Waiting for the others.'). Below the grid the screen is empty and the backdrop stays generic. Finalize shows a ~128 px render. After locking, the player waits for the rest of the 30 s timer with nothing to look at.",
+     "evidence": "_harness/_reports/final_client_v.json:\n- draft1920: gridBottom 588, bigVisuals [] (no img or canvas larger than 200 px), draftHover [];\n- draftTimes: draft entered at 7.2 s, lock at 11.2 s, finalize at 37.3 s.\nShots: _harness/_shots/final_client_v_1920_draft_myturn.png, final_client_v_1920_draft_locked.png, final_client_v_1920_draft_finalize.png.\nCode: src/ui/app.tsx:128-137 (bindRenderer passes only route params; the draft route has no fighter param). src/ui/screens/draft.tsx never calls setParams or setMenuView.",
+     "gauge": "LoL champion select shows the hovered or locked champion's art large and marks lock-in with a flourish and voice line (r05 [19]).",
+     "fix": "Pass the hovered or locked fighter and skin to setMenuView on the draft route (the plinth showcase already exists in render/menu.ts), with a short crossfade. Add an original lock-in beat (gnomon sweep plus a signature pose or line). Fill the empty band with class, role and ability icons.\n\nWave note: content/fighters/*.json is read-only here (W4 owns it). Lock-in plays f_<fighter>_call when W3 has authored it.",
+     "size": "M",
+     "files": [
+      "src/ui/app.tsx",
+      "src/ui/screens/draft.tsx",
+      "src/render/menu.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F8",
+     "severity": "major",
+     "title": "Collection Skins tab is sparse and truncates half the skin names",
+     "what": "- **Sparse layout.** Each fighter row holds 3 cards of about 120 px across a 1728 px row.\n- **Truncated names.** Half the skin names are cut off.\n- **Price line.** The price wraps to 3–4 lines.\n- **Finalize.** The skin strip truncates names the same way, and the BOT chip in seat rows is clipped ('BC', 'BOT' cut) at both sizes.",
+     "evidence": "_harness/_reports/final_client_v.json:\n- skins1920: 16 of the 32 non-base names clipped (e.g. 'Stillwater Cleaver' 104/109 px, 'Gorgewalk Longbow' 104/127 px);\n- skins1280: 21 clipped;\n- finalize1920 and finalize1280: seatNames clipped for 3 bot rows; skin names 'Stillwater Blade' and 'Lamplit Blade' clipped.\nShots: _harness/_shots/final_client_v_1920_collection_skins.png, final_client_v_1280_collection_skins.png, final_client_v_1920_draft_finalize.png, final_client_v_1280_draft_finalize.png.",
+     "gauge": "LoL's collection is a dense grid of large splash tiles with full names, filterable by champion, ownership and tier (r05 [1]).",
+     "fix": "Use a responsive grid of 3:4 tiles (about 6 per row at 1080p, 4 at 720p) with sticky fighter headers. Give names two lines, and show ownership or price as one chip with the tier inside. Move the Bot chip to the role line in seat rows.",
+     "size": "M",
+     "files": [
+      "src/ui/screens/collection.tsx",
+      "src/ui/components/LoadoutPanel.tsx",
+      "src/ui/components/Seat.tsx",
+      "src/ui/styles/screens.css"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F3",
+     "severity": "major",
+     "title": "Every fighter image in the client is a bright studio render, not painted art",
+     "what": "The draft grid, finalize, loading cards, Collection, Skins and shop all use in-engine renders over a pale blue-white sky. On loading cards the figure fills only a narrow slice of a wide 336x147 strip. These plates are the brightest things on every menu screen and break the dusk mood. The owner asked for painted art in menus.",
+     "evidence": "Re-measured with `node _harness/_reports/final_menus_scripts/luma.cjs`:\n- final_menus_1920x1080_29_loading.png cards (96,375,1728,147): p50 205, 55.8% of pixels above 200.\n- final_menus_1920x1080_26_draft_myturn.png Ardit cell: p50 196, 47% above 200.\n- The same shot's backdrop (1000,700,500,250): p50 47.\nNew shots: _harness/_shots/final_client_v_1920_loading.png, final_client_v_1280_loading.png, final_client_v_1920_draft_myturn.png, final_client_v_1920_collection_skins.png.",
+     "gauge": "LoL shows painted loading art per skin, and splash art in the store and collection. Characters fill their frame at mid values beneath the UI (r05 [1][24][30]).",
+     "fix": "Crop loading cards to 3:5 from the existing splash (object-position per fighter) so the fighter fills 70-80 % of the card height; reuse the same crop for grid, Lot, Collection and shop tiles. The painted plates themselves are W5's art half, re-rendered in place.",
+     "size": "S",
+     "files": [
+      "src/ui/screens/loading.tsx",
+      "src/ui/styles/screens.css"
+     ],
+     "verdict": "confirmed",
+     "part": "UI half (loading-card crop)"
+    },
+    {
+     "dim": "client",
+     "id": "F7",
+     "severity": "major",
+     "title": "Home is a static brochure with no progress or reason to come back",
+     "what": "Home shows a fixed headline, one fixed feature and four tiles.\n- Account progress is only the 'LV 1' chip.\n- There is no XP to the next level and no next reward.\n- The first-win bonus is advertised on every queue card, but whether it is still available is never shown.",
+     "evidence": "src/ui/screens/home.tsx (68 lines, no XP, first-win or news). src/session/grants.ts:84 computes first-win from profile.firstWinAt, but nothing surfaces it on Home. _harness/_shots/final_client_v_1920_home.png and final_client_v_1920_home_after.png show the same layout after a won match.",
+     "gauge": "r05 key takeaway 5 and recommendation 4 (sources [2][3]): LoL's 2025 home is the season stage with pass level, XP progress, next reward and missions; news sits in a separate overlay.",
+     "fix": "Add a Home progress band from existing data:\n- level ring with XP to next level and the level-up reward;\n- first-win candle (lit or spent) with time to the UTC reset;\n- last result with a one-click 'Play again';\n- a feature that rotates per content version.",
+     "size": "L",
+     "files": [
+      "src/ui/screens/home.tsx",
+      "content/client.json",
+      "src/session/grants.ts",
+      "src/ui/styles/screens.css"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "hud",
+     "id": "HUD-1",
+     "severity": "major",
+     "title": "Item icons (and ability icons) read as one dark navy family at slot size",
+     "what": "All 39 item and 94 ability icons are painted, and at 96 px they are attractive and recognisable (_harness/_shots/final_hud_icons_items_96.png). But almost all sit on one dark navy vignette with a dim, mid-size subject. At the 38 px inventory and the 48 px shop tile they read as a uniform dark family, so items are told apart only by squinting at silhouette, not by colour or value. Each fighter's Q, W and E icons are likewise silver on navy.",
+     "evidence": "My re-measure at 40 px (_harness/_reports/final_hud_verify_scripts/iconstats.mjs over content/ui/icons/items): median p50 luma 31, median p90 99, median p95 133. 25 of 39 have p50 < 35, only 3 of 39 reach p95 >= 200, and 27 of 39 have a corner ground within 30 (L1 RGB) of (13,20,32). Median subject coverage is 39 % (pixels more than 60 L1 from the ground). Abilities at 64 px: median p50 33; 64 of 94 share the navy ground (the reviewer said 72; the threshold differs). Live slots on _harness/_shots/final_hud_1080_02_mid_full.png (DOM boxes in final_hud_capture_1080.json, my slots.mjs): owned p50 24/30/30 and p90 85/107/80; empty p50 20-24 and p90 29-31. The shop grid in final_hud_1080_11_shop.png shows the same dim tiles.",
+     "gauge": "LoL's inventory and shop icons are single subjects cropped tight to fill most of the frame, each with its own dominant colour, so a 6-slot inventory and the shop grid read at a glance. Many LoL icons also sit on dark grounds; the difference is subject scale, value and per-item hue. This gauge is qualitative: no LoL images were sampled.",
+     "fix": "Re-grade or re-render to VALE's own 'ledger family' code. Tint each item's ground by its dominant stat family (the Dial Bar ledger's Strike, Craft, Guard and Stride hues), add a 1 px chalk keyline, keep the hour-tick tier marks, and crop or scale the subject to cover at least 60 % of the frame. Lift the values so that at 38 px p50 is >= 60 and p95 is >= 190. Tint ability grounds with the fighter's signature VFX hue. Add an icon probe that fails on p50 < 60 at 40 px or on a shared ground across families.",
+     "size": "L",
+     "files": [
+      "content/ui/icons/items/*.webp",
+      "content/ui/icons/abilities/*.webp",
+      "src/ui/hud/glyphs.tsx",
+      "src/ui/styles/hud.css",
+      "tools/imagegen/manifest.json",
+      "_harness/icon_probe.mjs (new)"
+     ],
+     "verdict": "confirmed"
+    }
+   ]
+  },
+  {
+   "id": "W3",
+   "name": "Audio",
+   "goal": "Gate sounds are fair and never silent, the enemy team's comms stay private, the listener follows the camera, and every fighter, CC and passive is identifiable by ear in a world that has ambience.",
+   "files": [
+    "src/audio/**",
+    "audio/** (cues, synth, build.py, build_music.py)",
+    "content/audio.json",
+    "src/boot/main.ts",
+    "_harness/probe_audio_*.mjs (new)"
+   ],
+   "size": "XL overall; both blockers are S and go first",
+   "seams": [
+    "Per-fighter cues are named f_<fighter>_<slot> (attack_swing, attack_hit, a1, a2, a3, ult_windup, ult_release, passive, death, call) and resolved by src/audio/index.ts before present.sfx/hitSfx, so content/fighters/*.json (W4) is not edited.",
+    "Ambience emitter table keyed by map id in content/audio.json, positions copied from the maps' existing art.ambient points (content/maps is W5's).",
+    "Listener reads W1's Renderer.listenerFocus(), wired in src/boot/main.ts.",
+    "Authors ui_queue_remind and f_<fighter>_call for W2."
+   ],
+   "done": [
+    "final_audio_verify_qpop re-run: hidden tab, default settings, ui_queue_pop post-limiter peak >= -12 dBFS; every other cue still muted in background.",
+    "Team-private probe: 0 cues for other-team pings and surrender votes; own-team pings play.",
+    "audio/build.py gates: no attack or ult cue shared by two fighters; >= 8 dB 1/3-octave distance between fighters' attack and ult cues; >= 3 variants for any cue that can fire > 1/s; a distinct cue per CC kind (c_buff only for buffs); a proc cue for every passive with a damage/status/mark/resource payoff.",
+    "9-min capture: 0 unhandled proc events; enemy T3+ wind-up swell spatialised at the caster.",
+    "Ambience bus > 0 cues on RIFT, BRIDGE and FRAY; laning master short-term p10 above the music stem alone.",
+    "Dead-spectating capture: a fight at the camera focus is audible; enemy casts within 10 m of the living fighter stay audible."
+   ],
+   "findings": [
+    {
+     "dim": "audio",
+     "id": "AUD-MISS-1",
+     "severity": "blocker",
+     "size": "S",
+     "verdict": "verifier-added",
+     "title": "Audio engine plays the enemy team's pings and surrender votes for you",
+     "what": "src/ui/hud/model.ts:431 drops other-team pings and :547/:556 ignore other-team surrender events, but src/audio/index.ts:439 plays every ping and :441-444 every announce key with no team check. Online PvP is lockstep and every client applies every seat's commands (src/session/lockstep_host.ts:165), so each player hears the kind and timing of every enemy ping and surrender vote.",
+     "evidence": "BLOCKER-CLASS (competitive integrity, size S): the audio engine plays the ENEMY team's pings and surrender votes for you, which the HUD deliberately hides.\n\nReproduced in a live RIFT co-op match (_harness/_reports/final_audio_verify_enemy_ping.json; you = seat 8, team 1). A 'danger' ping and a 'missing' ping issued through the sim by enemy seat 0 (team 0) each played their cue for you: m_ping_danger, then m_ping_missing.\n\nCause:\n- src/ui/hud/model.ts:431 drops other-team pings (`pv.team !== this.myTeam`), but src/audio/index.ts:439 plays every ping with no team check.\n- Likewise, model.ts:547 and :556 ignore the other team's surrender_vote and surrender_failed, but index.ts:441-444 plays m_announce_minor for every announce key.\n- Online PvP is lockstep and every client applies every seat's commands (src/session/lockstep_host.ts:165), so each player hears the kind and timing of every enemy ping (danger, missing, objective, push, retreat ...) and every enemy surrender vote.\n\nIn LoL, pings and surrender votes are team-private.\n\nFix: gate 'ping' on view.players[e.player].team === myTeam, and gate the team-private announce keys (surrender_*) on e.team === myTeam, plus a regression test.\n\nRepro:\n```\nnode <scratchpad>/audio/enemyping.mjs _harness/_reports/final_audio_verify_enemy_ping.json\n```",
+     "gauge": "In LoL, pings and surrender votes are team-private.",
+     "fix": "Gate 'ping' on view.players[e.player].team === myTeam and the team-private announce keys (surrender_*) on e.team === myTeam in src/audio/index.ts. Add a regression probe (_harness/probe_audio_team_private.*) that issues enemy danger/missing pings and a surrender vote and asserts 0 cues, and that own-team pings still play.",
+     "files": [
+      "src/audio/index.ts",
+      "_harness/probe_audio_team_private.mjs (new)"
+     ]
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-2",
+     "severity": "blocker",
+     "title": "The queue pop is silent in a background tab at default settings",
+     "what": "A player who queues and switches tabs hears nothing when the match is found.\n- muteInBackground defaults to true and sets the master gain to 0 while hidden.\n- ui_queue_pop is an ordinary UI cue behind that master and has no bypass.\n- There is no Notification API or favicon fallback. Only a title flash remains, so the 10 s ready check is easy to miss.\n- A miss costs an escalating lockout (5 s up to 60 s). Online, it also sends the other humans back (server/room.ts ready check).",
+     "evidence": "Reproduced in harness Chrome, writing _harness/_reports/final_audio_verify_qpop.json:\n- Phase A: tab hidden (document.hidden and visibilityState overridden, visibilitychange dispatched), default settings, queue found. ui_queue_pop is in the cue log, yet the post-limiter output has no non-zero sample over 72 blocks (3.0 s) and master gain is 0.0 throughout.\n- Phase B: same hidden tab, only muteInBackground switched off via session.updateSettings, then the same 'queue_pop' role. Output peaks at -8.2 dBFS with master gain 0.8.\n\nCode:\n- src/session/settings.ts:52 sets muteInBackground: true.\n- src/audio/index.ts:139-143: applyVolumes sets master to 0 while hidden.\n- src/ui/state.ts:158 plays the pop; :161 is a title flash only.\n- No Notification usage anywhere in src.\n- _design/tokens.json:446 queuePop.ownSliderWithFloor is unimplemented.\n\nRepro:\n```\nnode <scratchpad>/audio/qpop.mjs _harness/_reports/final_audio_verify_qpop.json\n```",
+     "gauge": "r07 §3.3 calls match-found the highest-stakes sound in the product. LoL's ready check is about 12 s, and missing it costs the lobby. The FACEIT precedent (verified in r07 [55]) plays it while tabbed out or minimized, on by default. r07 §7 item 7 asks for Notification, tab-title and favicon redundancy.",
+     "fix": "Route the gate cues (ui_queue_pop, ui_queue_remind, m_countdown, m_match_start) on an alert bus connected to the limiter after the background-mute gain, with a floor the UI slider cannot go below (tokens queuePop.ownSliderWithFloor). Author ui_queue_remind as a softer two-pulse hourbell. Keep muteInBackground for everything else. Notification and favicon are the W2 UI half.",
+     "size": "S",
+     "files": [
+      "src/audio/index.ts",
+      "content/audio.json",
+      "audio/cues/ui.py"
+     ],
+     "verdict": "confirmed",
+     "part": "engine half"
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-9",
+     "severity": "major",
+     "title": "The listener is your fighter (or your corpse), not the camera, against CONTRACT §11",
+     "what": "Every spatial cue is attenuated and culled at 26 m from your fighter's position.\n\nWhen you die, the camera goes free so you can watch the fight, but the listener stays at your corpse. A fight you spectate while dead, or watch with scout-hold, can therefore be silent.\n\nIn the default semi camera (6 m leash), an on-screen event near the screen edge plays up to about 11.5 dB down. Panning reaches ±0.85 by 12 m, and there is no distance filtering.",
+     "evidence": "- src/audio/index.ts:50-51 (HEAR_M 26, NEAR_M 6), :243-250 (attenuation and pan dx/14 clamped to ±0.85) and :337-343 (youPos = your fighter entity, alive or not).\n- src/sim/combat.ts:220-224: fighters stay in the store while dead.\n- src/render/renderer.ts:946 calls rig.setSelf(null) when your fighter is dead, which makes the camera free (src/render/camera.ts:100).\n- Default mode is 'semi' (camera.ts:25).\n- CONTRACT §11 (_spec/CONTRACT.md:793-794): 'listener at the camera target'.",
+     "gauge": "r07 §4.4 recommends a hybrid listener at the camera's ground focus, plus an awareness pass near your fighter, and moderate panning of about ±60%. LoL players watch fights while dead or scouting. LoL's own listener placement is unverified (r07 §8 item 14).",
+     "fix": "- Expose CameraRig.focus to the audio port and put the listener there, using 2D distance with an inner radius of about 12 m and a rolloff to about 30 m.\n- Keep an awareness pass so enemy casts and attacks within 10 m of your living fighter stay audible.\n- Pan at most ±0.6, with a gentle low-pass beyond 15 m.\n\nWave note: Camera focus comes from W1's Renderer.listenerFocus(); src/render/camera.ts and src/ui/app.tsx are not edited.",
+     "size": "M",
+     "files": [
+      "src/audio/index.ts",
+      "src/boot/main.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-5",
+     "severity": "major",
+     "title": "Threat and CC are unreadable by ear: most hostile statuses play a friendly 'buff', and the enemy wind-up tell is limited and unpanned",
+     "what": "Fear, airborne, sleep, taunt, disarm and silence all play c_buff, the same soft swell as a friendly haste. Only stun, root and slow have their own cues.\n\nThe only allegiance cue is m_enemy_windup:\n- it fires only for enemy ultimates within 14 m, although the STYLE_BIBLE says T3+;\n- it plays centre-panned, although the cue is spatial;\n- it played once in 9 minutes.\n\nNo ability has an enemy or ally variant, and the priority lift for enemy sources described in audio.json is not implemented.",
+     "evidence": "- content/audio.json:103 binds only status.stun, status.root and status.slow. src/audio/index.ts:408-411 falls back to c_buff.\n- Kit status uses, re-counted: slow 34, stun 9, root 9, haste 7, fear 6, sleep 6, airborne 4, taunt 3, disarm 3, silence 1.\n- In the capture (final_audio_mix_summary.json), fear 25, airborne 65, disarm 25 and shred 200 applications were all voiced by c_buff (88 plays).\n- c_buff takes 242 ms to reach -6 dB (final_audio_verify_files.json).\n- src/audio/index.ts:387: the cue fires only when an enemy's slot is 'ult' within 14 m, with pos null.\n- _design/STYLE_BIBLE.md:123: 'enemy T3+ wind-ups share one shade-breath swell'.",
+     "gauge": "r07 §0.3, §3.1 and §4.5 rank threat above self above ally, call the enemy wind-up the most important counterplay sound, and say hard CC must out-read damage. LoL players react to an enemy cast sound before the effect lands.",
+     "fix": "Give each CC class its own sound from VALE's palette:\n- airborne: a rising air-glass whoosh;\n- fear: reversed shade-breath;\n- sleep: a slow lamp-drone sigh;\n- taunt: an hourbell knock;\n- disarm: a dropped-metal escapement;\n- silence: a damped hourbell.\n\nPlay CC cues only on fighters, +3 dB when you are the target. Keep c_buff for buffs.\n\nApply the shade-breath swell to every enemy T3+ wind-up, as the style bible states, spatialised at the caster.\n\nAdd the enemy-source priority lift that audio.json describes.",
+     "size": "M",
+     "files": [
+      "content/audio.json",
+      "audio/cues/combat.py",
+      "src/audio/index.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-6",
+     "severity": "major",
+     "title": "Passive procs are silent: ~1,800 proc events per 9 minutes produce no sound, and 12/16 passives have no SFX",
+     "what": "The sim emits a 'proc' event every time a passive triggers, but the audio engine has no handler for it. 12 of 16 passives also declare no sfx anywhere.\n\nA passive's bonus damage that is not delivered by a projectile or area emits only a 'damage' event that carries the passive's ability id. The engine skips such events because 'ability hits voice through hit', and no 'hit' event is emitted for them.\n\nThe base attack's own hit still sounds. It is the payoff layer that both sides cannot hear.",
+     "evidence": "- Capture (_harness/_reports/final_audio_mix_summary.json): 1,778 proc events.\n- src/sim/triggers.ts:87-88 emits { e: 'proc', ... }. src/audio/index.ts:383-447 has no 'proc' case.\n- Passive scan: ardit, burdam, dunsom, hesmi, ilsheta, kemdo, lisvel, marund, odrum, rishal, tunlan and vashil have no sfx. Ervet, nurrow, sukri and ulkro have some.\n- src/sim/effects.ts:192 deals damage with ability = ctx.source.id. 'hit' is emitted only in onEffectHit (effects.ts:136-139, deliveries only). src/audio/index.ts:402 contains `if (e.ability) break;`.",
+     "gauge": "In LoL, passives that change a fight (empowered autos, mark detonations, stack payoffs) have their own proc sound, so both the user and the victim learn the timing.",
+     "fix": "- Add case 'proc' in src/audio/index.ts. Play the passive's present.sfx at dst, or at src if there is no target, with a short per-fighter cooldown.\n- Voice passive damage that has no delivery through the passive's hitSfx.\n- Author the proc cues with each fighter kit (AUD-1).\n- Add a content-build check: every passive with a damage, status, mark or resource payoff must declare a proc sfx.\n\nWave note: Proc cues follow the f_<fighter>_passive convention; the content check lives in audio/build.py (reads content/fighters read-only) instead of tools/build_content.ts.",
+     "size": "M",
+     "files": [
+      "src/audio/index.ts",
+      "audio/cues/kit.py",
+      "audio/build.py"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-8",
+     "severity": "major",
+     "title": "The world is silent: no ambience on any map",
+     "what": "Outside combat the only sound is the music bed. There is no wind, water, lamp hum, crowd or structure presence, so jungle, river and base all sound the same. The Ambience slider controls nothing.",
+     "evidence": "- Re-counted content/audio.json buses: sfx 49, ui 32, voice 10, music 3, ambience 0.\n- content/maps/map_{rift,bridge,fray}.json contain 0 sfx, audio or ambience keys.\n- src/ui/screens/settings.tsx:147 shows the ambience slider.\n- Capture: master short-term p10 is -29.2 LUFS during laning, against a music-stem p50 of -28.8 (final_audio_mix_summary.json).",
+     "gauge": "r07 §1.3 describes Summoner's Rift as ambience plus a restrained reactive score. r07 §7 item 5 recommends an ambience-first match.",
+     "fix": "Place 4-6 looping emitters per map on the ambience bus, attenuated by distance and ducked in combat, all in VALE's own fiction:\n- RIFT: wind over the hour-lines, water in the Noonline, a faint ring in the Standing Shadow, lamp hum at the Lamp Dome;\n- BRIDGE: gorge updraft and the creaking shaft;\n- FRAY: fair murmur.\n\nDrive them from the map art.ambient points that r12 M14 plans.\n\nWave note: Emitter positions live in content/audio.json keyed by map id; content/maps/*.json is not edited.",
+     "size": "M",
+     "files": [
+      "content/audio.json",
+      "audio/cues/match.py",
+      "src/audio/index.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "audio",
+     "id": "AUD-1",
+     "severity": "major",
+     "title": "Fighters have no audio identity: a shared 27-cue library, near-identical ults, autos shared with Wicks and camp monsters, one file per cue",
+     "what": "All 16 kits pick from one generic combat library, and nothing is authored per fighter.\n- 12/16 ultimates use the same wind-up and release pair.\n- 11 of 16 fighters' basic attacks use exactly the (swing, hit) cue pair of a Wick or a camp monster. The reviewer counted 8: 8 match a Wick and 3 more match Gloamoth or Sunsplinter. Only the level differs: fighters play at gain 0.6/0.8, units at 0.3/0.45 (src/audio/index.ts:397, :404).\n- Every cue is a single file with no round-robin. Cues do carry a ±2-10% playback-rate pitch variation (pitchVar 0.02-0.10).\n- Projectiles, dashes, heals and shields always use one generic cue.\n- There is no fighter voice, and draft lock-in plays the same 'lockin' for every fighter (src/ui/screens/draft.tsx:162, :322).",
+     "evidence": "Re-derived independently with the scratchpad script kits.py over content/fighters/*.json and content/units.json:\n- 16 fighters use 27 distinct cues.\n- The only single-user cues are c_blink (dunsom), c_hit_true (kemdo), c_shot_bow (lisvel) and c_crit (rishal), all generic event cues.\n- c_ult_windup is the ult present.sfx in 14 of 16 kits.\n\nAttack pairs shared with units:\n- (c_swing_heavy, c_hit_phys_heavy): burdam, ervet, hesmi, kemdo and marund, plus brightwick.\n- (c_swing_light, c_hit_phys_light): ardit, nurrow and rishal, plus shieldwick.\n- (c_shot_bolt_lumen, c_hit_magic): ilsheta, sukri and vashil, plus gloamoth and sunsplinter.\n\nIn content/audio.json, 0 of 94 cues have more than one file.\n\nCapture (_harness/_reports/final_audio_mix_summary.json): c_hit_phys_light played 2,261 times in 541 s. The audio/build.py variants machinery exists (cuelib.py:33, build.py:132), but every cue uses variants=1.",
+     "gauge": "In LoL each champion has its own auto-attack, cast, impact and ultimate sounds and its own VO. The LoL wiki Quote page gives minimum line counts per champion. r07 [39] describes champion SFX as a trade-off between clarity and character. A LoL player hears who cast what, including off-screen.",
+     "fix": "Give every fighter a sound kit built from VALE's eight synthesized voices plus a home material taken from its own kit fiction. Examples:\n- Odrum: a resin/amber crack transient over a frame-drum body.\n- Vashil: dawnglass/hourbell partials on his own interval.\n- Tunlan: shade-breath with a padded low growl.\n- Marund: mortar-stone thuds with hearth crackle.\n- Kemdo: heat-hiss FM.\n\nPer fighter, author:\n- attack swing and hit, each with 3 round-robin variants (variants=3 in the @cue decorator);\n- casts and impacts;\n- an ult wind-up an enemy can learn, plus a release;\n- a passive proc and a death cue;\n- a 2-3-note 'call' on the fighter's signature instrument in D Dorian, for lock-in and ult release.\n\nName the cues f_<fighter>_* and point present.sfx and hitSfx at them. Keep Wicks and monsters on quieter library sounds.\n\nAdd audio/build.py gates:\n- no attack or ult cue shared by two fighters;\n- at least 8 dB of 1/3-octave distance between fighters' attack and ult cues;\n- at least 3 variants for any cue that can fire more than once per second.\n\nFighter VO is outside the CONTRACT §11 slice ('no voice in this slice'). Schedule it as a separate scope decision.\n\nWave note: Bind by the f_<fighter>_<slot> naming convention instead of editing present.sfx in content/fighters/*.json; the lock-in call is played by W2. Fighter VO stays a separate scope decision (CONTRACT section 11).",
+     "size": "XL",
+     "files": [
+      "content/audio.json",
+      "audio/cues/kit.py",
+      "audio/cues/combat.py",
+      "audio/build.py",
+      "src/audio/index.ts"
+     ],
+     "verdict": "downgraded"
+    }
+   ]
+  },
+  {
+   "id": "W4",
+   "name": "Gameplay, bots & systems",
+   "goal": "Bots play a real laning phase and a real jungle, difficulty tiers are felt in results, RIFT and BRIDGE pace like LoL's modes, items offer real choices, and the rules layer and kits are VALE's own.",
+   "files": [
+    "src/sim/**",
+    "src/contracts/**",
+    "src/session/draft.ts",
+    "content/units.json",
+    "content/items.json",
+    "content/setup.json",
+    "content/team_buffs.json",
+    "content/modes.json",
+    "content/queues.json",
+    "content/fighters/*.json",
+    "_harness/pacing.ts",
+    "_harness/probe_sim_*.ts",
+    "_harness/probe_items.ts",
+    "_harness/probe_sim_bot_soak.ts (new)",
+    "_design/sections/items_setup.md",
+    "_design/sections/modes_economy.md",
+    "_design/ROSTER.md"
+   ],
+   "size": "XL overall; the blocker (G1) is L and goes first, with the soak probe",
+   "seams": [
+    "Camp XP is tuned in content/units.json; respawn timers live in content/maps/map_rift.json (W5), so hand any respawn change to W5.",
+    "New item and spell icons are generated by W2 (imagegen owner) from a list W4 provides.",
+    "New display strings are handed to W2 (strings.en.json owner).",
+    "New Ervet/Vashil VFX defs are authored by W1 after the kits land; reuse existing defs meanwhile."
+   ],
+   "done": [
+    "New _harness/probe_sim_bot_soak.ts on role-correct pickLoadout lineups, >= 20 seeds at adept and veteran.",
+    "Fighters last-hit >= 50 % of Wicks dying before 14:00; solo laner cs at 10:00 >= 45; in-lane share >= 65 % of laning time; <= 5 % of fighter deaths to Wicks or monsters with no enemy fighter involved.",
+    "Jungler within 1.5 levels of the solo laners at 15:00 (mean).",
+    "Median first structure 9-12 min on RIFT.",
+    "Veteran beats novice >= 85 % and adept >= 65 % of 20 mirrored role-correct games.",
+    "BRIDGE: <= 25 % of games end in sudden death; 0 cores fall with their chain standing; natural end 15-18 min.",
+    "Items: >= 2.5 finished per player by 25:00; >= 80 % of finished items bought at least once in 40 games; at least one anti-heal family; builds change with enemy composition.",
+    "Systems table signed off by the owner: no battle spell, starter, potion, boots, ward or buff within 10 % of a LoL counterpart on its headline numbers; default spell pair is not blink + heal.",
+    "Ervet's ult has no reach bonus; Vashil's stun needs a chord condition; ROSTER section 5 lists Riven and Brand with the differences."
+   ],
+   "findings": [
+    {
+     "dim": "gameplay",
+     "id": "G1",
+     "severity": "blocker",
+     "title": "RIFT bots leave their lanes: laners farm about 2–2.5 cs/min and Wicks kill most Wicks",
+     "what": "During the laning phase, role-correct bots spend only about 43% of their alive time in lane (modes lane, trade, push and all-in):\n- 26–29% goes to recall and return;\n- 20–26% goes to objective, defend and roam calls.\n\nResults:\n- Fighters last-hit only 23% of the Wicks that die before 14:00; about 63% die to other Wicks.\n- Solo laners have 18.6–25.0 cs at 10:00, about 1.9–2.8 cs/min over the match.\n- Each player recalls about 10 times per 25 min.\n- Failed Longshade attempts kill about 3 fighters per game with no enemy fighter involved.\n\nEvery queue fills open seats with bots, so this is what most matches look like.\n\nTwo reviewer sub-claims do not hold for real lineups:\n- With native supports, lampglass takes 8.9–9.1 cs by 10:00 against 21.6–21.8 for shaftlight. Supports do not share farm equally; the reviewer's 15.8 vs 14.7 came from role-blind seats.\n- Wicks land the final blow on 30–33% of fighter deaths, but only 11% are Wick deaths with no enemy fighter in the assist window. Another 8% are monster-only deaths, mostly Longshade.",
+     "evidence": "Role-correct native lineups, with the bots' own pickLoadout (grovehunter has Hourstrike):\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --seeds 16 --lineup role --diff adept|veteran --out _harness/_reports/final_gameplay_verify_role_{adept,vet}.json\npython3 -I _harness/_reports/final_gameplay_verify_tools/an_gp.py <json>\n```\nOutput: _harness/_reports/final_gameplay_verify_role_summary.txt.\n\nAdept / veteran:\n- cs at 10:00: shadehold 18.6/22.7, dialcross 23.8/25.0, shaftlight 21.6/21.8, lampglass 8.9/9.1.\n- Wicks dying before 14:00: 15,650 / 15,619. Killers: fighter 23%, minion 63% (9,856 / 9,831), structure 14%.\n- Fighter deaths 835 / 746. Wick final blow 33% / 30%; with no enemy fighter assist 11% / 11%. Monster-only 8% / 8% (Longshade 43 / 48 of them).\n- In-lane share (lane+trade+push+allin), 1:00–14:00: 39–44%. Recall+return: 25–29%.\n- Recalls: 9.5–11.1 per 25 min.\n\nThe reviewer's role-blind trace (_harness/_reports/final_gameplay_botmodes_vet.txt) agrees on Wick share (16–33%).\n\nCode cites check out:\n- src/sim/bots/bot.ts:242: lane 0.40, return 0.43;\n- bot.ts:285: 'objective' for anyone who follows;\n- bot.ts:228-231: recall at 36% HP or 1,100 gold;\n- src/sim/bots/team.ts:328-330: objective desire from 4:00.\n\nShot: _harness/_shots/final_gameplay_watch_rift_lane_you.png.",
+     "gauge": "In LoL, waves have the same cadence as VALE's: 6 minions plus a siege unit every third wave, every 30 s, about 12.7 per minute. A solo-queue laner stays in lane through laning, leaving for recalls and deliberate rotations, and takes about 50–60% of that (about 5.5–7 cs/min). Deaths to minions or monsters alone are rare. VALE bots take about 20–25% of the farm in the first 10 min.",
+     "fix": "Keep the reviewer's fixes 1, 3, 4 and 5:\n1. Lane-first utility before the first outer Needle falls or 10:00.\n3. Situate() counts the DPS of nearby Wicks, so a low-HP bot walks out of the wave.\n4. A stricter Longshade start check.\n5. A soak gate.\n\nDrop fix 2 (Lampglass yields last hits). Native supports already leave the farm to the carry.\n\nAlso make _harness/pacing.ts and the soak seat role-correct lineups with pickLoadout(catalog, fighter, rules.itemPool, role), so the gate measures what players actually face.",
+     "size": "L",
+     "files": [
+      "src/sim/bots/bot.ts",
+      "src/sim/bots/team.ts",
+      "src/sim/bots/micro.ts",
+      "src/sim/bots/difficulty.ts",
+      "_harness/pacing.ts",
+      "_harness/ (new probe_sim_bot_soak.ts)"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "gameplay",
+     "id": "G4",
+     "severity": "major",
+     "title": "RIFT laning phase collapses: the first outer Needle falls at a median of 5.4–6.3 min",
+     "what": "On role-correct lineups, the first structure (always an outer Needle) falls at:\n- adept: mean 5.8 min, median 5.4, earliest 3.0; 6 of 16 games before 5:00;\n- veteran: mean 6.8 min, median 6.3, earliest 3.1; 4 of 16 before 5:00.\n\nOne veteran game ended by core at 13.4 min.\n\nOuter Needles have 3,200 HP and 40/40 armor and resist, with no early or thin-wave protection. Only the `requires` chain protects structures. The team brain switches to phase 'mid' when any structure falls.",
+     "evidence": "- _harness/_reports/final_gameplay_verify_role_summary.txt: 'first struct mean 5.8 median 5.4 min 3.0; <5min 6/16' (adept) and 'mean 6.8 median 6.3 min 3.1; <5min 4/16' (veteran).\n- Per-game lines: final_gameplay_verify_role_{adept,vet}.txt.\n- content/units.json: needle_outer hp 3200, armor 40.\n- src/sim/units/structures.ts:6-9 (protection only through requires).\n- src/sim/bots/team.ts:154 (phase 'mid' when ownLost + enemyLost > 0).",
+     "gauge": "LoL's outer turrets are built to outlast laning:\n- about 5,000 HP with plates, which pay out gradually (r02 §7.2);\n- protection when no enemy minions are near.\nA first turret before 5:00 is a rare stomp, not the median game.",
+     "fix": "As the reviewer proposes:\n- VALE's own 'Dawn Seal' until 7:00;\n- needle_outer at about 4,000 HP;\n- thin-wave protection;\n- 'mid' phase from 10:00 or the second fallen structure;\n- soak gate: median first structure 9–12 min on role-correct lineups.",
+     "size": "M",
+     "files": [
+      "content/units.json",
+      "src/sim/units/structures.ts",
+      "src/sim/combat.ts",
+      "src/sim/bots/team.ts",
+      "content/team_buffs.json"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "gameplay",
+     "id": "G2",
+     "severity": "major",
+     "title": "The jungle role doesn't work: grovehunters are about 4 levels behind at 15:00 and die the most",
+     "what": "With native grovehunters (ardit, kemdo, nurrow) carrying Hourstrike, as real drafts give them:\n- they are level 3.7–3.9 at 10:00 and 5.5–5.7 at 15:00, against 9.3–9.6 for the solo laners;\n- the gap at 15:00 averages 3.7–4.0 levels (range 0.5–6.5);\n- they end at level 7.7–8.2;\n- they farm about 1.0 cs/min and die 7.6–8.8 times, the most of any role;\n- 'farm' is only 49% of their time; 16% goes to recall and return, and 26% to objective, defend and roam.\n\nThe content also caps the role:\n- an own-side clear pays 886 XP (4 small camps 586 every 150 s, 2 buffs 300 every 270 s), at most about 300 XP/min;\n- a solo laner on full waves gets about 576 XP/min.",
+     "evidence": "_harness/_reports/final_gameplay_verify_role_summary.txt: 'jungler level gap vs solo laners at 15:00 mean 4.0 (adept) / 3.7 (veteran)'. Grovehunter rows: cs10 9.1/9.9, lvl15 5.5/5.7, deaths 8.8/7.6.\n\nLoadouts were checked in the run JSON: players[].spells = ['hourstrike', …] for every grovehunter.\n\nContent:\n- content/units.json bounties: glasshorn/resinback 150 XP; gloamoth 70 + 3×22; stray_numeral 100 + 2×25; stilltusk 90 + 2×30.\n- content/maps/map_rift.json respawns: 150/270 s.\n- Waves (content/modes.json): 3 shieldwick (56 XP) + 3 glimwick (30 XP) + a greatwick (90 XP) every third wave, every 30 s.",
+     "gauge": "In LoL the jungle is a full role. The jungler stays within about 1 level of the solo laners, and camp XP (with a catch-up bonus when behind) keeps one clear cycle near a lane's pace.",
+     "fix": "As the reviewer proposes:\n1. Retune camp XP or respawns to at least 80% of a solo lane's XP rate.\n2. VALE's own 'Grove tithe' catch-up XP.\n3. Bot clear loop: no recall near a ready camp; 'objective' only after 6:00; nearest-ready clear order.\n4. Soak gate on the level gap and deaths, run on role-correct lineups.\n\nWave note: Retune XP via content/units.json first; respawn timers in content/maps/map_rift.json are W5's file, so hand any change there.",
+     "size": "M",
+     "files": [
+      "content/units.json",
+      "src/sim/economy.ts",
+      "src/sim/bots/bot.ts",
+      "src/sim/bots/team.ts"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "gameplay",
+     "id": "G5",
+     "severity": "major",
+     "title": "BRIDGE ends through sudden death, which drops structure protection, often with the gate chain still standing",
+     "what": "Sudden death at 16:00 removes all structure protection and triples respawn time.\n\nWith the bots' own loadouts (adept):\n- 15 of 20 BRIDGE games end in sudden death;\n- in 10 of 20, the losing Hourbell falls while its Bell Needle still stands (e.g. seed 1: lost only outer, inner and the Hourbell).\n\nThe reviewer's 40 role-blind games:\n- 33 of 40 end in sudden death and 24 of 40 skip the chain;\n- seed 8 was won after destroying 2 structures, by the team 7.5k gold behind.\n\nWithout sudden death, games end naturally at a median of 19.0 min, but one ran 87.7 min. A backstop is needed, but not one that unlocks the core.\n\nThe content also diverges from the design: _design/sections/modes_economy.md:41/64 has BRIDGE sudden death at 20:00 'to end stalemates', while content/modes.json has suddenDeathAt 960 and suddenDeathRespawnMult 3.",
+     "evidence": "Commands:\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode bridge --seeds 20 --lineup role --diff adept\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode bridge --seeds 20 --lineup role --diff adept --rules '{\"suddenDeathAt\": 99999}'\n```\nSummary: _harness/_reports/final_gameplay_verify_bridge_fray_summary.txt.\n- With sudden death: 'ended in SD 15, core fell with bell needle standing 10'.\n- Without: 'dur mean 23.7 median 19.0 max 87.7'.\n\nChain: content/maps/map_bridge.json (outer → inner → lantern → bell needle → hourbell).\n\nReviewer data rechecked from _harness/_reports/final_gameplay_pace40.json: 33/40 sudden death, 24/40 chain skips, seed 8 final goldGraph −7530 with winner 0.\n\nRule: src/sim/units/structures.ts:9.",
+     "gauge": "LoL's single-lane mode ends when one side breaks through the towers to the core, at a natural 15–20 min. LoL has no rule that removes structure protection, and the core can't be hit while its path stands.",
+     "fix": "As the reviewer proposes:\n- keep `requires` protection in sudden death;\n- replace the protection drop with VALE's own 'Gorge Wind' escalation (stacking Wick buffs and structure resist decay), with a ×2 respawn multiplier;\n- retune BRIDGE toward a natural 15–18 min;\n- apply the same change to rift_quick;\n- soak gate: at most 25% of games end in sudden death, and 0 cores fall with their chain standing.\n\nReconcile modes_economy.md with content.",
+     "size": "M",
+     "files": [
+      "src/sim/units/structures.ts",
+      "src/sim/modes/match.ts",
+      "content/modes.json",
+      "content/queues.json",
+      "content/units.json",
+      "content/team_buffs.json",
+      "_design/sections/modes_economy.md"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "gameplay",
+     "id": "G3",
+     "severity": "major",
+     "title": "Difficulty tiers barely separate in RIFT",
+     "what": "On role-correct lineups, veteran bots win fights about 1.7:1 against novice (14.3 vs 8.3 kills per game) but take only 14 of 24 mirrored RIFT games. Neither side pulls ahead elsewhere:\n- enemy structures destroyed: 8.8 vs 8.2;\n- novice laners farm slightly more (60 vs 56 cs).\n\nVeteran against adept wins 7 of 12, with equal kills and structures.\n\nThe rift_coop (novice) and ranked 'by_rating' queues rely on these tiers.\n\nCorrections:\n- Lead conversion is mixed. Role-correct veteran games show the team ahead at 15:00 winning 12/15; adept 9/16. That sub-claim is not firm.\n- difficulty.ts does differ in some macro inputs (intentFollow 0.55/0.85/1.0, decisionNoise, knowsCooldowns, recall and retreat bias), not only micro. The team brain itself is identical across tiers.",
+     "evidence": "Commands:\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode rift --seeds 12 --lineup role --mix veteran,novice\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode rift --seeds 12 --lineup role --mix novice,veteran\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode rift --seeds 12 --lineup role --mix veteran,adept\n```\nOutput in _harness/_reports/final_gameplay_verify_difficulty_summary.txt: 'veteran vs novice: stronger tier wins 14/24; kills 14.3 vs 8.3; enemy structures destroyed 8.8 vs 8.2; laner cs 56 vs 60' and 'veteran(team0) vs adept: 7/12'.\n\nThe reviewer's role-blind 11/20 (_harness/_reports/final_gameplay_vet_vs_novice.json, final_gameplay_novice_vs_vet.json) agrees. Combined: 25/44 (57%).\n\nDifficulty profiles: src/sim/bots/difficulty.ts:46-62.",
+     "gauge": "In LoL the harder bot tiers reliably beat the easier ones. Intermediate bots add lane swaps, frequent ganks and early three-man pushes (r09 §1.1), so a tier is felt in the result, not only in the kill count.",
+     "fix": "As the reviewer proposes: the team brain converts advantages, by sieging after an aliveDiff ≥ 2 or a 1.5k lead. Add macro-tier knobs: macroDelay and convertsLeads. Soak gate: veteran beats novice in at least 85% of 20 mirrored role-correct games, and adept in at least 65%.",
+     "size": "L",
+     "files": [
+      "src/sim/bots/team.ts",
+      "src/sim/bots/bot.ts",
+      "src/sim/bots/difficulty.ts",
+      "_harness/"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "originality",
+     "id": "F5",
+     "severity": "major",
+     "title": "Ervet's ult copies Riven's reforged-blade hook; the ROSTER self-audit omits Riven and Brand",
+     "what": "Ervet breaks her blade (Shatter, Hilt form). In her ult the blade 'reforms oversized: her attacks reach 0.6 m farther and cleave'. A reforged broken blade that gains attack reach is the signature of LoL's Riven ult. Vashil's Hum (an ability marks, a second ability on the marked enemy stuns) together with a fast single-target bolt and a delayed circle echoes Brand's ablaze-into-stun. The trigger is broader (any ability), so this half is weaker. ROSTER §5 lists Kled, Gnar, Jayce, Annie, Seraphine and Darius, never Riven or Brand.",
+     "evidence": "content/fighters/ervet.json kit.a3 'Shatter' and kit.ult 'Whole Again' (text dumped with python from kit.*). content/fighters/vashil.json kit.passive 'Hum', a1 'Peal', a2 'Glass Chime'. `grep -n -i -E 'riven|brand\\b' _design/ROSTER.md` finds no kit comparison; ROSTER.md:507 and :512 list the comparisons it does make. Heat ~ Rumble is acknowledged at ROSTER.md:505.",
+     "gauge": "Each LoL champion owns its signature hook. Gauge-level kinship (dash, shield, a form swap) is fine; a famous single hook is not.",
+     "fix": "Ervet: make the ult payoff the shards, not reach. For example, Shatter's shards fly back to the hilt along lines, damaging and dragging enemies they cross, with no reach bonus. Vashil: change the stun trigger to a group or chord condition, such as two humming enemies within 3 m. Add Riven and Brand, with the differences, to ROSTER §5.",
+     "size": "M",
+     "files": [],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "originality",
+     "id": "F4",
+     "severity": "major",
+     "title": "The systems layer reproduces LoL's ruleset under new names",
+     "what": "Battle spells, starters, potion, boots, ward, the one-of-a-class apex rule, the buff camps, the epic objective and the single-lane mode rules each map to a LoL system. Together a LoL player reads them as LoL's layer re-skinned. The owner's rule bars copying LoL abilities and designs.",
+     "evidence": "content/setup.json: glint_step 4.5 m blink, CD 270 (Flash: 300); saplight 80 + 16/level, CD 220 (Heal: 80 base, 240); hourstrike 2 charges, 95 s recharge, true damage to monsters plus a heal (Smite: 2 charges, 90 s); glass_pane 90 + 20/level, 3 s, CD 160 (Barrier: about 105-411, 2.5 s, 180); shake_loose 50 % tenacity for 3 s, CD 210 (Cleanse: 65 % for 3 s, 210); defaults glint_step + saplight. content/items.json: notched_blade 430, +8 attack, +80 health; sap_flask 50, 120 health, holds 5; road_sandals 300; spare_lamp 75, invisible, 3 lit; 'You can carry one Noonlit item' at :1305, :1371, :1459, :1568, :1640. content/team_buffs.json: Clearglass +10 haste and regen, Resinburn burn and slow, The Long Shade +attack, +power and empowered Wicks. content/modes.json bridge: startLevel 3, recall false, shopAccess base_or_dead. content/queues.json bridge_standard: bench 2, rerolls 1. _design/NAMES_NOT_USED.md:160 records a 2026-10-14 retune of three exact matches only.",
+     "gauge": "LoL's summoner spells, starter items, Mythic rule, buff camps and ARAM ruleset are its own. A same-tier MOBA owns its pre-match and economy layer.",
+     "fix": "Re-key the systems to the stopped dial so that none maps one-to-one. Battle spells built on light and shadow rules, with a default pair that is not blink + heal. One starter that grows into the role's first core. Replace the one-Noonlit cap with a dial-slot rule. Map-tied effects for Glasshorn and Resinback. An original draw for BRIDGE instead of bench plus reroll.\n\nWave note: New spell icons (e.g. replacing hourstrike.webp) are generated by W2.",
+     "size": "L",
+     "files": [
+      "content/setup.json",
+      "content/items.json",
+      "content/team_buffs.json",
+      "content/queues.json",
+      "content/modes.json",
+      "_design/sections/items_setup.md"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "gameplay",
+     "id": "G7",
+     "severity": "major",
+     "title": "Item depth: 13 finished items, the same build every game, top tier almost never reached, no anti-heal",
+     "what": "content/items.json has 8 core and 5 apex finished items in the rift/bridge pools; FRAY gets none.\n\nIn role-correct RIFT games:\n- players finish 1.65 (adept) and 1.43 (veteran) items per game on average;\n- apex items appear in only 7 and 4 of 160 player-games;\n- only 11 and 9 of the 13 finished items are ever bought;\n- sukri and ilsheta, even as native lampglass, build focal_lens first in 21 of 22 games; only marund buys kindly_lamp.\n\nNothing in items or kits applies grievous, although the status exists in the sim.",
+     "evidence": "- Item tiers counted with python over content/items.json: core 8, apex 5.\n- `grep -c grievous content/items.json content/fighters/*.json` gives 0 everywhere; it appears only in src/sim/status.ts, combat.ts, entity.ts and the UI.\n- Usage from _harness/_reports/final_gameplay_verify_role_{adept,vet}.json (python in this verification): focal_lens 68/66, inkglass_rod 48/41 … hourcleaver 1/0, shelter_lamp 0/0.",
+     "gauge": "LoL offers many finished items per class, including situational counters: anti-heal, anti-burst, penetration. Players finish about 3 items by 25 min, and builds change with the matchup.",
+     "fix": "As the reviewer proposes:\n- grow to about 30 finished items with VALE-original counters (a 'Stillwater' grievous family, a burst ward, tank penetration);\n- a buildPlan that reads the enemy team, and a support path;\n- an economy check once G1 lands;\n- a build-diversity probe.\n\nWave note: New item icons are generated by W2 with the HUD-1 icon spec.",
+     "size": "XL",
+     "files": [
+      "content/items.json",
+      "src/sim/bots/economy.ts",
+      "src/sim/bots/knowledge.ts",
+      "_harness/probe_items.ts"
+     ],
+     "verdict": "confirmed"
+    }
+   ]
+  },
+  {
+   "id": "W5",
+   "name": "World & character art",
+   "goal": "Landmarks and out-of-bounds edges are finished to Art 2.0, brush never hides defenders under their tower, fighter images are painted dusk plates with identifiable face chips, and the near-the-line masks get an owner ruling.",
+   "files": [
+    "art/blender/** (never ilsheta paths while its pass runs)",
+    "art/out/** (never ilsheta paths while its pass runs)",
+    "content/maps/*.json",
+    "_design/tools/map_gen.py"
+   ],
+   "size": "XL overall; runs as three internal streams with disjoint directories (maps; fighters; units)",
+   "seams": [
+    "icon.png, portrait.png and splash plates are re-rendered in place (same paths), so no UI or content/fighters change is needed.",
+    "Applies camp-respawn numbers handed over by W4."
+   ],
+   "done": [
+    "Point-in-polygon over content/maps/map_rift.json: 0 structures within collision radius + 3 m of any thicket; probe_maps.ts and value_probe still PASS.",
+    "shot_map re-shoots at the final_maps_vfy_*_edge spots: Shaft drum, Snap stubs, Dawn Arch, Belfry, noon stone and shadow slabs show painted albedo with ink and chalk edges.",
+    "Spawn views: out-of-bounds area shows a dressed skirt at L* <= 52, no bare plane.",
+    "fdist.mjs at 26 px (circle mask): every fighter pair >= 55 mean absolute difference.",
+    "luma.cjs on loading cards and draft cells: plate p50 70-110 with only small highlights above 200.",
+    "Owner ruling on Odrum Shadeprint and Longshade recorded; if changed, Shadeprint mask saturation >= 0.25 and Longshade has no tear streaks."
+   ],
+   "findings": [
+    {
+     "dim": "env",
+     "id": "F6",
+     "severity": "major",
+     "title": "RIFT's four side-lane Outer Needles stand inside Needlegrass thickets",
+     "what": "The north and south Outer Needles of both teams stand inside thickets 4, 5, 6 and 7. Each thicket is 23 m² round a needle of collision radius 1.1 m, which leaves about 19 m² of brush at the tower's foot.\n\nThe sim treats this brush asymmetrically:\n- Structures count as occupying their thicket (`src/sim/vision.ts:104-106`), so the tower's own team always sees inside it.\n- Defenders standing in that ring are hidden from attackers outside it (`vision.ts:130`).\n\nThe result is a free hiding spot for defenders at the tower's foot, and the base of the tower is cluttered with grass blades.\n\nCause: `_design/tools/map_gen.py:397` places the eleven-line tuft at polar(85,55,46,57°), which is (59.95, 16.42). The keep_out list at `:403-405` covers camps only.",
+     "evidence": "An offline point-in-polygon check over `content/maps/map_rift.json` structures × thickets shows exactly these four inside: a_high/a_low/s_high/s_low needle_outer. Every other structure is at least 1.7 m outside any thicket.\n\nVisual: `_harness/_shots/final_maps_value/value_rift_high_final_maps_lane0.png` shows the needle inside a curbed grass ring. `_harness/_shots/final_maps_vfy_wallmask_rift_13_d1.4.png` shows the same at 59.75,17.75.",
+     "gauge": "LoL keeps turret footprints on open ground. Its lane bushes sit between turrets, not on them, so tower dives and fights under a tower stay readable for both sides.",
+     "fix": "1. Add keep-out discs of collision radius + 3 m round every structure to thicket_json(..., keep_out=...).\n2. Move the eleven-line tuft back to the jungle mouth.\n3. Regenerate the map, then re-run _harness/probe_maps.ts and value_probe.",
+     "size": "S",
+     "files": [
+      "_design/tools/map_gen.py",
+      "content/maps/map_rift.json"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "originality",
+     "id": "F3",
+     "severity": "major",
+     "title": "Odrum Shadeprint's grey mask and Longshade's tear-streaked chalk plate sit near the horror line (base Odrum mask refuted)",
+     "what": "Odrum's base mask follows the approved concept: golden-ochre carved block, brow slab, big beak nose, dark eye slits, no open mouth. It is not bone-white. The Shadeprint skin re-colours the same carved form to desaturated grey with cracks and black eye slits, which pushes it toward a ghostly read, but its carved brow, beak and cheek planes keep it from being a blank, hockey or slasher mask. Longshade, the epic monster, has a pale chalk plate with two lamp eyes and two ink tear streaks. The eyes are emissive (#FFE9B8), not hollow. The tear streaks are the horror-adjacent element.",
+     "evidence": "_harness/_reports/final_originality_verify_masks.txt: portrait mask region, base L* 68.0 / saturation 0.46, Noon Fair 67.7 / 0.46, Shadeprint 54.9 / 0.08 with 21.6 % of pixels below L* 20. Concept: _design/concept/odrum.webp. Renders: art/renders/fighters/odrum/three_odrum.png and three_odrum_shadeprint.png (bottom-row close-ups, 10-28 11:58 and 12:01). Longshade: _harness/_shots/final_originality_verify_longshade_icon_3x.png and final_originality_verify_longshade_close.png. Design intent at art/blender/units/creatures_b.py:6-8 and :1324 ('chalk plate ... ink tears under the eyes').",
+     "gauge": "VALE's own rule (no horror, hockey or blank-mannequin faces) is stricter than LoL. LoL's broad-audience presentation gives masks readable carved features, and lets epic monsters be menacing without human horror tropes.",
+     "fix": "Shadeprint: keep the ink cloth, but give the mask a warm lacquer (saturation >= 0.25) or amber inlay in the eye slits so they read lit, not hollow. Optionally carve the concept's under-nose V as a closed lip line on both skins. Longshade: remove the tear streaks and keep the lamp eyes, or move to a gnomon or hour-line plate motif, then re-render the icon. Ask the owner to rule on both.",
+     "size": "S",
+     "files": [],
+     "verdict": "downgraded"
+    },
+    {
+     "dim": "hud",
+     "id": "HUD-2",
+     "severity": "major",
+     "title": "Fighter identity chips are pale, near-identical mid-shot renders; who-is-who fails at chip size",
+     "what": "art/out/fighters/*/icon.png (128x128) is a mid-shot render on a pale sky and stone backdrop. Six fighters (ardit, lisvel, vashil, ervet, ulkro, dunsom) are white or cream on that pale ground. At the 26 px minimap chip, the 28 px scoreboard face and the 22-24 px kill-feed chip these blur together, so the ring shows the team but not the fighter.",
+     "evidence": "Re-measured (_harness/_reports/final_hud_verify_scripts/fdist.mjs, 26 px circle mask): 9 of 15 have more than 50 % of pixels above luma 150, with per-icon p50 of 196 for ardit, 172 for vashil and 171 for lisvel. The closest pairs are ardit-lisvel 33.7, lisvel-vashil 34.4, ervet-lisvel 35.7 and lisvel-ulkro 36.5; 11 of 105 pairs are below 45 and the median is 64.8. The reviewer reported 31.6/34.2/34.8, so their numbers reproduce within the mask difference. In context: _harness/_shots/final_hud_fighter_icons_26.png and final_hud_fighter_icons_96.png, the minimap at final_hud_1080_01z_minimap_2x.png, and the scoreboard at final_hud_1080_10_scoreboard.png.",
+     "gauge": "LoL's champion square icons are tight, saturated head-and-shoulder crops with individual colour and stay identifiable at about 30-36 px on the minimap (r12 m3 LoL bar).",
+     "fix": "Add a HUD 'face chip' render pass to the fighter icon tool. Crop to head and shoulders (head about 60-70 % of the frame), set it on a dark ink ground with a rim and backdrop tint in the fighter's signature hue, and apply a value floor for dark kits. Gate it on pairwise distinctness at 26 px (mean absolute difference >= 55). Use it on the minimap, scoreboard, kill feed, ally frames and banners; keep portrait.png for menus.\n\nWave note: Render the face chip to icon.png in place so Portrait.tsx and minimap.tsx (W2) need no change. Skip Ilsheta until her pass finishes.",
+     "size": "M",
+     "files": [
+      "art/blender/fighters/common (icon render)",
+      "art/out/fighters/*/icon.png"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "env",
+     "id": "F1",
+     "severity": "major",
+     "title": "Base, rim and centre landmarks are early SDF primitives next to Art 2.0 structures; out-of-bounds areas are flat planes",
+     "what": "All the landmarks come from `art/blender/maps/landmarks.py`, built 2026-10-14, before Art 2.0. At gameplay zoom they read as primitives:\n- **In fight zones:** the Fallen Shaft drum in the Sunsplinter pit is a plain cylinder with two dark bands. The BRIDGE Snap stubs at the map centre are plain banded cylinders.\n- **At the bases:** the Dawn Arch is a smooth beige pillow. The Glass Belfry shows as a smooth chalk block with one arch niche, because only its first stage is in frame.\n- **Rim and north choke:** the noon stone is a plain slab. The Longshade shadow slab renders as a near-black featureless box with no visible chalk edge.\n- **Contrast:** they stand a few metres from the detailed Art 2.0 Hourbells and Needles.\n\nThe camera's focus is clamped to [0, W] (`src/render/camera.ts:52`, `:142-145`), so out-of-bounds ground is on screen:\n- **At spawn:** RIFT 8.5,55 shows about 11 % and BRIDGE 7,22 about 17 %. What shows is the boundary wall and then a flat moss or purple terrace strip.\n- **Edge pans:** about 50 %.\n\nCorrection to the reviewer: the 'straight seam' is the N–S boundary wall seen edge-on from directly south. It is not a cut in the plaza mesh.",
+     "evidence": "My reproductions, from `node _harness/shot_map.mjs rift --q high --nofog --name final_maps_vfy_rift_edge --at \"8.5,55;161.5,55;85,66.6;55.3,28.2;85,4\"`, the same for bridge (\"7,22;78,22;149,22\") and for fray (\"32,6;7.3,24;32,32;38,13.5\"). Shots under `_harness/_shots/`:\n- `final_maps_vfy_rift_edge_at2.png`: Shaft drum.\n- `final_maps_vfy_bridge_edge_at1.png`: Snap stubs in a live fight.\n- `final_maps_vfy_rift_edge_at4.png`: noon stone.\n- `final_maps_vfy_rift_edge_at0.png` and `final_maps_vfy_bridge_edge_at0.png`: spawn views.\n- `final_maps_vfy_wallmask_rift_01_d0.6.png`: the black shadow slab at 87.75,16.25.\n- Sheet: `final_maps_vfy_sheet_edges.png`.\n- The reviewer's `final_maps_rift_edge_at0.png` (Belfry) and `final_maps_bridge_nf_at4.png` (Dawn Arch) also reproduce what they claim.\n\nSources:\n- `content/maps/map_rift.json` art.terrain.landmarks: model `assets/maps/landmarks/*.glb`.\n- `art/out/maps/landmarks/*.glb`, dated Oct 14.\n- `git log`: commits 67bc09d5 and ff3db500.\n- Brief: `_design/maps/map_rift_landmarks.md` §2.",
+     "gauge": "At gameplay zoom, every Summoner's Rift prop is painted and finished to the same level as its turrets. Out-of-play vistas are dressed scenery: Riot even brightened them in the 2014 update as 'not a gameplay space' (surrenderat20 2014 dev blog mirror). They are never a bare ground plane or an untextured primitive.",
+     "fix": "1. Art 2.0 pass on the landmark set in VALE's own language, using structure_kit's painted albedo, ink edge and chalk edge light:\n   - the Shaft drum and the Snap stubs first, because they sit in fight zones;\n   - then the Dawn Arch, Lamp Gate, Belfry (its lower stage carries the read at this zoom), Lamp Dome, noon stone and shadow slabs, each with a lit chalk edge.\n2. A 20–30 m dressed skirt beyond every bound, kept at L* ≤ 52:\n   - RIFT: Dialwood terraces stepping down;\n   - BRIDGE: the gorge walls and the far bank.\n3. Replace the flat spawn ring with a low dais.\n4. Optionally inset the camera clamp by about 4 m.\n\nWave note: Build the dressed skirt as landmark/terrain-skirt GLBs placed through map_gen.py and content/maps. The optional camera clamp inset (src/render/camera.ts) moves to the polish list under W1.",
+     "size": "XL",
+     "files": [
+      "art/blender/maps/landmarks.py",
+      "art/out/maps/landmarks/*.glb",
+      "content/maps/map_rift.json",
+      "content/maps/map_bridge.json",
+      "content/maps/map_fray.json",
+      "_design/tools/map_gen.py"
+     ],
+     "verdict": "confirmed"
+    },
+    {
+     "dim": "client",
+     "id": "F3",
+     "severity": "major",
+     "title": "Every fighter image in the client is a bright studio render, not painted art",
+     "what": "The draft grid, finalize, loading cards, Collection, Skins and shop all use in-engine renders over a pale blue-white sky. On loading cards the figure fills only a narrow slice of a wide 336x147 strip. These plates are the brightest things on every menu screen and break the dusk mood. The owner asked for painted art in menus.",
+     "evidence": "Re-measured with `node _harness/_reports/final_menus_scripts/luma.cjs`:\n- final_menus_1920x1080_29_loading.png cards (96,375,1728,147): p50 205, 55.8% of pixels above 200.\n- final_menus_1920x1080_26_draft_myturn.png Ardit cell: p50 196, 47% above 200.\n- The same shot's backdrop (1000,700,500,250): p50 47.\nNew shots: _harness/_shots/final_client_v_1920_loading.png, final_client_v_1280_loading.png, final_client_v_1920_draft_myturn.png, final_client_v_1920_collection_skins.png.",
+     "gauge": "LoL shows painted loading art per skin, and splash art in the store and collection. Characters fill their frame at mid values beneath the UI (r05 [1][24][30]).",
+     "fix": "Add a painted or graded portrait-plate pass to the fighter pipeline (dusk plate per origin, plate p50 about 70–110, at most small highlights above 200). Use 3:5 loading crops with the fighter filling 70–80% of the height. Reuse the plates for grid, Lot, Collection and shop tiles.\n\nWave note: Re-render in place (same paths). The 3:5 loading crop is W2's UI half. Skip Ilsheta until her pass finishes.",
+     "size": "XL",
+     "files": [
+      "art/blender/fighters/*",
+      "art/out/fighters/*/portrait.png",
+      "art/out/fighters/*/splash.png",
+      "art/out/fighters/*/*_portrait.png",
+      "art/out/fighters/*/*_splash.png"
+     ],
+     "verdict": "confirmed",
+     "part": "art half (painted plates)"
+    }
+   ]
+  }
+ ],
+ "polish": [
+  {
+   "dim": "combat",
+   "id": "F4",
+   "severity": "minor",
+   "title": "Ultimate beat whites out the struck unit for 2–3 frames and is anchored on the caster for caster-origin cones and rects",
+   "what": "The headline claim, that the peak misses LoL's brightness on lane stone, does not hold. Inside the lit core the peak is 2.27–2.64×, so the brightness meets the gauge.\n\nWhat remains:\n- At each beat the struck unit goes mostly white for 2–3 frames.\n- Tunlan's cone ultimate and Rishal's rect ultimate centre the lift on the caster instead of on the area that hits.",
+   "evidence": "_harness/_reports/final_combat_verify.json `ult`. Core = a circle of 0.5× the lift radius around the uLiftA centre, same camera.\n\nPeak brightness, base → peak:\n- Kemdo: 97.4 → 234.3 (2.41×).\n- Rishal: 92.1 → 219–243 (2.38–2.64×).\n- Tunlan: 95.8 → 218–222 (2.27–2.32×).\n- Hesmi: 93.3 → 226 (2.42×).\n- The reviewer's 1.55–2.17× was the mean of a ~700×400 px duel box, larger than the ≤ 3.5 m lift (PULSE_MAX_R, director.ts:155), so the ratio was diluted.\n\nWhiteout, share of white pixels in the victim box:\n- Base: 2–5 %.\n- First beat: 22–34 % (Kemdo, Hesmi).\n- Re-fired beats: 59–60 %.\n- The lift reaches ≥ 1.3 for only 2–3 frames.\n\nAnchor (`ult[].firstCtr`):\n- Tunlan: lift at [774, 519], caster at [775, 540], victim at [1145, 540].\n- Rishal's rect: the same, on the caster.\n- Kemdo and Hesmi: correctly on the victim.\n\nShot: _harness/_shots/final_combat_ult_peak_frames.png (reviewer).",
+   "gauge": "r12 M13: one frame at 2.3–2.5× fight-area brightness. This is met in the core. R1: never full-screen white, and champions stay readable. LoL's own hit flash on champions lasts 1–2 frames.",
+   "fix": "1. Anchor the pulse at the shape's centroid: a cone at origin + dir·0.6r, a rect at origin + dir·L/2. The director's area case currently takes ev.x/ev.y when the area matches a zone.\n2. Cap the lift on actor pixels at about ×1.3 so struck units keep their silhouette.\n3. F3 removes the 59–60 % whiteouts on re-fired beats.",
+   "size": "S",
+   "files": [
+    "src/render/director.ts",
+    "src/render/vfx/screen.ts",
+    "src/render/post.ts"
+   ],
+   "verdict": "downgraded",
+   "wave": "W1"
+  },
+  {
+   "dim": "combat",
+   "id": "F5",
+   "severity": "minor",
+   "title": "Crowd control has no word or icon on the overhead bar",
+   "what": "All 17 CC kinds show an in-world look for their full duration. The overhead bar also shows a strip, only for hard CC, that drains by remaining/duration. What is missing is the status word or glyph above an affected unit's bar, which LoL shows.",
+   "evidence": "Present:\n- src/render/renderer.ts:148 defines HARD_CC (stun, root, airborne, taunt, fear, sleep, silence).\n- renderer.ts:814 sets the strip to remaining/duration for hard CC only, and bars.ts:194-200 draws it.\n- So hard CC already reads stronger than damage on the bar, and the reviewer's fix step 3 already exists.\n\nMissing:\n- _design/tokens.json hud.overheadBar statusIconPx 14 / maxStatusIcons 3 have no consumer in src/.\n- status.<kind>.name is used only by the HUD self chip (src/ui/hud/status.tsx:164) and the ability lock (dialbar.tsx:291).\n- No word appears in _harness/_shots/final_combat_cc_status_looks.png.",
+   "gauge": "r12 M2 (V5, R7, R8): words such as STUNNED or AIRBORNE above the bars, readable in 6–10-effect teamfights. The primary CC read in LoL is still the in-world effect, which VALE now has.",
+   "fix": "Add a CC plate to the BarLayer label atlas: the StatusGlyph at 14 px and the status name in caps at 12–13 px with an ink outline, highest-priority hard CC only, fading in over 70 ms. The existing drain strip stays.",
+   "size": "M",
+   "files": [
+    "src/render/overlay/bars.ts",
+    "src/render/renderer.ts"
+   ],
+   "verdict": "downgraded",
+   "wave": "W1"
+  },
+  {
+   "dim": "combat",
+   "id": "m-1",
+   "severity": "minor",
+   "title": "Basic-attack impacts fade in about 100 ms, and six melee wind-ups are above 0.40 s",
+   "what": "The impact element is large on its first frame and mostly gone by 133 ms. Six of the eight melee wind-ups are 0.406–0.452 s.",
+   "evidence": "Re-computed content/fighters/*.json attack.windup / base.attackSpeed: Ardit 0.406, Ervet 0.415, Kemdo 0.415, Marund 0.422, Burdam 0.424, Hesmi 0.452 s. Impact decay per the reviewer's _harness/_reports/final_combat_attack_pose.json (not re-measured).",
+   "gauge": "r12 M5 (C1, V4): wind-up 250–400 ms; an impact starburst of ≈ 0.7× victim height for ≈ 200 ms.",
+   "fix": "1. Hold a mid-scale impact element at full for 2 frames, then ease it out over 160–200 ms.\n2. Trim the heavy melee wind-ups toward 0.36–0.40 s.\n3. Re-run the balance sims.",
+   "size": "S",
+   "files": [
+    "content/vfx.json",
+    "content/fighters/{hesmi",
+    "ardit",
+    "burdam",
+    "ervet",
+    "kemdo",
+    "marund}.json"
+   ],
+   "verdict": "confirmed",
+   "wave": "W1 (vfx impact hold) + W4 (melee windups in content/fighters)"
+  },
+  {
+   "dim": "combat",
+   "id": "m-2",
+   "severity": "minor",
+   "title": "Hesmi's basic attack has little body motion",
+   "what": "The weapon tip travels 0.61 m over a 13-frame wind-up, against about 3 m for Kemdo and Marund.",
+   "evidence": "_harness/_reports/final_combat_attack_pose.json (reviewer) and _harness/_shots/final_combat_attack_pose_strip.png. Not re-measured.",
+   "gauge": "r12 M5: three readable poses; the weapon tip travels ≥ 0.6× champion height.",
+   "fix": "Re-key Hesmi's attack1 and attack2:\n- a held wound-back of ≥ 4 frames;\n- a 2-frame strike with ≥ 1.2 m of tip travel;\n- a follow-through.",
+   "size": "M",
+   "files": [
+    "art/blender/fighters/hesmi",
+    "art/out fighter GLB"
+   ],
+   "verdict": "confirmed",
+   "wave": "W5"
+  },
+  {
+   "dim": "combat",
+   "id": "m-3",
+   "severity": "minor",
+   "title": "Large-area landing flashes wash the frame orange at impact",
+   "what": "At landing, the telegraph fill rises to 40 % over the whole shape for 150 ms, on top of the exposure lift.",
+   "evidence": "src/render/renderer.ts:861 `spec.fill = flash ? 0.4 : …`. Burdam ult f14 in _harness/_shots/final_combat_ult_peak_frames.png.",
+   "gauge": "r12 B2 / R1: the warning yields to the impact and never becomes a flat wash.",
+   "fix": "On areas over 4 m radius, flash only the edge band and an inner ring, with fill ≤ 0.22.",
+   "size": "S",
+   "files": [
+    "src/render/renderer.ts",
+    "src/render/overlay/telegraphs.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W1"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-3",
+   "severity": "minor",
+   "title": "Minimap reads busy, and its lanes lose contrast under fog",
+   "what": "The RIFT minimap is feature-complete: painted art, fog, portrait chips, objective timers, the camera trapezoid and pings. In vision it reads well. Under fog the lane band nearly merges with the canopy, the per-tree canopy texture adds noise, Wick dots are small (1.7*k radius, minimap.tsx:358), and the two plaza discs are clipped by the art edge.",
+   "evidence": "Luma profiles of the live 1x minimap _harness/_shots/final_hud_1080_04_minimap.png (_harness/_reports/final_hud_verify_scripts/prof.mjs, rows y 110/128/133). The seen mid-lane reads about 100-125 against seen canopy at 40-90, a gap of about 60. The fogged mid-lane reads about 40-60 against fogged canopy at 26-46, a gap of about 15-20. Fog is ink at 140/255 (minimap.tsx:315). In art/out/maps/map_rift/minimap.png (1100x712), the base plaza discs touch the left and right edges with about 10-15 % of each disc outside the frame: the left disc spans x of about 0-115 at y 356 (_harness/_reports/final_hud_verify_scripts/col2.mjs). The world fountain is at x 4.5 m with radius 5 in a 170 m map (content/maps/map_rift.json), so the art is faithful to the world edge. Portraits measure about 29-31 px outside the ring (see m3).",
+   "gauge": "LoL's minimap keeps lanes, river and jungle as clear value masses that still read in fog, with portraits at about 30-36 px (r12 m3).",
+   "fix": "Re-render minimap.png as a calmer 'survey chart': canopy flattened to two value bands, lanes as one light band with an ink edge, and the bounds padded so both plazas sit inside. Keep the lane band at least 25 luma above canopy in fog by lightening lane pixels before the fog overlay or lowering fog alpha on lane pixels. Raise the Wick dots to about 2.2*k with a 1 px ink keyline.",
+   "size": "M",
+   "files": [
+    "art/blender/maps/ (minimap render)",
+    "art/out/maps/map_rift/minimap.png",
+    "src/ui/hud/minimap.tsx"
+   ],
+   "verdict": "downgraded",
+   "wave": "W5 (minimap art) + W2 (minimap.tsx)"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-5",
+   "severity": "minor",
+   "title": "Ability tooltips do not lead with the current rank; a locked ultimate says 'Level up an ability'",
+   "what": "Tooltip cooldown, cost and damage lines list every rank without marking the one you have. A Rank 0 ultimate at level 4 shows the 'Level up an ability' hint although it cannot be learned yet.",
+   "evidence": "_harness/_shots/final_hud_1080_08_tip_ult_crop.png shows 'Ultimate · Rank 0 of 3', 'Cooldown 110/95/80 s' and the 'Level up an ability' footer. src/ui/components/Tooltip.tsx:95-100 (rankedText joins all ranks). src/ui/hud/dialbar.tsx:268 (the hint is shown whenever rank <= 0 && !spell, regardless of canLevel).",
+   "gauge": "LoL's in-game ability tooltip shows the values for the rank you have and the next-rank change on level-up.",
+   "fix": "Highlight the current rank in rankedText (chalk-hi, others dimmed; at rank 0 show rank 1) and show the full row with a modifier. On a locked ultimate show 'Unlocks at level {n}'.",
+   "size": "S",
+   "files": [
+    "src/ui/components/Tooltip.tsx",
+    "src/ui/hud/dialbar.tsx",
+    "content/strings.en.json"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-6",
+   "severity": "minor",
+   "title": "Kill-feed and recap copy bugs: wrong article, duplicated name, raw id leak",
+   "what": "(a) Structure deaths read 'ottoline_v ottoline_v fell to a Outer Needle': the victim chip repeats the name in the sentence, and the article is wrong. (b) The death recap falls back to the raw id for non-ability sources such as setup boons ('first_cut' lives in content/setup.json, not in the ability index).",
+   "evidence": "(a) _harness/_shots/final_hud_1080_02_mid_full.png top right; content/strings.en.json:812; src/ui/hud/model.ts:378; src/ui/hud/top.tsx:205-206 (chip and text both rendered for non-takedown rows). (b) src/ui/hud/panels.tsx:186 `index.get(id)?.name ?? id`; first_cut exists only in content/setup.json. The live recap was not re-captured.",
+   "gauge": "LoL's turret-execution feed row is pictographic, and its recap names every source in display text.",
+   "fix": "Drop the sentence on structure rows (glyph, then victim chip, with the full sentence in aria-label) and use 'fell to the {structure}'. Resolve recap ids through items, setup boons and spells before a neutral fallback.",
+   "size": "S",
+   "files": [
+    "content/strings.en.json",
+    "src/ui/hud/model.ts",
+    "src/ui/hud/top.tsx",
+    "src/ui/hud/panels.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-7",
+   "severity": "minor",
+   "title": "Scoreboard has no battle-spell column; faces and item glyphs are small",
+   "what": "The Tab scoreboard has no column for each player's two battle spells; its faces are 28 px and its item glyphs 20 px.",
+   "evidence": "_harness/_shots/final_hud_1080_10_scoreboard.png; src/ui/hud/panels.tsx:70 (headers Player, LV, T/F/A, Wicks, Gleam, Damage, Items).",
+   "gauge": "LoL's Tab scoreboard shows both summoner spells and the keystone per champion.",
+   "fix": "Add a 'Spells' cell with the two battle-spell glyphs and a respawn count over a down player's face. Raise item glyphs to 24 px.",
+   "size": "S",
+   "files": [
+    "src/ui/hud/panels.tsx",
+    "src/ui/styles/hud.css"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-8",
+   "severity": "minor",
+   "title": "The always-on HUD exceeds VALE's own 11 % budget (but matches LoL's ~13 %)",
+   "what": "The Dial Bar box is 776x160 (spec 640x132), the RIFT minimap 352x228 (spec 352x198; 228 follows the 170:110 map aspect) and the sky strip 760x56 (spec 720x48).",
+   "evidence": "DOM boxes in _harness/_reports/final_hud_capture_1080.json steps.mid_dom: dbar 776x160 + mmap 352x228 + sky 760x56 + 4 afr 168x52 = 281,920 px, or 13.6 % of 1080p without the contextual kill feed (14.7 % with it). Spec at _design/STYLE_BIBLE.md:99-109 and client_hud.md §4.1.",
+   "gauge": "LoL's always-on HUD is about 13 % (r12 §5); VALE is now at LoL's level, above its own bible.",
+   "fix": "Either update the bible and client_hud budget to the shipped kit (13.6 % box coverage; the 198 px minimap height is inconsistent with the map aspect anyway), or trim the Dial Bar's empty upper arc and side margin.",
+   "size": "M",
+   "files": [
+    "_design/STYLE_BIBLE.md",
+    "_design/sections/client_hud.md",
+    "src/ui/hud/frame_layout.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2 (docs) / W1 (tokens.json)"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-9",
+   "severity": "minor",
+   "title": "At 720p the HUD loses legibility; ally names truncate even at 1080p",
+   "what": "At 1280x720 item slots are 25 px and ability slots 43 px. Ally-frame names truncate ('ruth_afterlig' and 'wrenna_lam' are already cut at 1080p in final_hud_1080_02_mid_full.png). The regen text is a fixed 12 px over an 11 px HP bar.",
+   "evidence": "_harness/_reports/final_hud_capture_s4.json steps.p720: hpbar 285x11, slot 43, item 25x25, cdFont 12.8px, regenFont 12px. The regen text was empty at capture, so the overflow is inferred from src/ui/styles/hud.css:312. Shots: _harness/_shots/final_hud_s4_04_720_full.png and final_hud_s4_04_720_dbar.png.",
+   "gauge": "LoL's HUD scale keeps inventory and cooldown text legible at small resolutions (r04 §1.6). VALE's own spec: no text under 12 px at any scale (client_hud.md:370).",
+   "fix": "Floor the HUD scale at 0.8 below 1080p. Keep the regen text at 12 px (VALE's floor) and instead grow the HP bar to >= 13 px or move the readout outside the bar. Put full names in the ally-frame tooltip and widen the name column.",
+   "size": "S",
+   "files": [
+    "src/ui/styles/hud.css",
+    "src/ui/app.tsx",
+    "src/ui/hud/side.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-10",
+   "severity": "minor",
+   "title": "Sensitivity watch: the 'Linen Hood' item icon is an empty white cowl with a dark void face",
+   "what": "Not tall or conical; the crown is rounded and back-slanted. But it is a white, empty hood with a black opening, the item art closest to the sensitivity line.",
+   "evidence": "_harness/_shots/final_hud_icon_linen_hood_512.png (an upscale of content/ui/icons/items/linen_hood.webp); shop BASIC row in final_hud_1080_11_shop.png.",
+   "gauge": "This is the brief's sensitivity requirement, not a LoL measurement.",
+   "fix": "Repaint as folded linen, or the hood seen from behind with an oat lining and hem stitch, so no empty face opening reads; keep it off pure white.",
+   "size": "S",
+   "files": [
+    "content/ui/icons/items/linen_hood.webp"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "hud",
+   "id": "HUD-11",
+   "severity": "minor",
+   "title": "World ping is small and low-salience; the shop has unpolished edges",
+   "what": "The world 'Look here' ping is a roughly 36 px ink disc with a thin ripple that nearly vanishes on bright structure stone. The shop's last tile row is cut through its prices with no fade.",
+   "evidence": "_harness/_shots/final_hud_1080_20z_ping_world_3x.png; final_hud_1080_11_shop.png (prices cut at y about 776).",
+   "gauge": "LoL pings are large animated markers that read on any terrain; its shop scrolls cleanly.",
+   "fix": "Use a 56 px chalk ring with an ink keyline, a lifted glyph and two expanding rings (respecting reduce motion). Add a 24 px bottom fade mask on the shop tile scroller.",
+   "size": "S",
+   "files": [
+    "src/ui/hud/world.tsx",
+    "src/ui/styles/hud.css",
+    "src/ui/hud/shop.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "env",
+   "id": "F2",
+   "severity": "minor",
+   "title": "FRAY's hour-stones are off-brief pale caps; the boundary dressing is sparse (largely by design)",
+   "what": "**The real defect: the ten hour-stones.** Each seat's view shows two of them, and they render as pale rounded caps with a slot, sitting on dark plinths. The brief asks for carved dark basalt with a chalk top edge and a half-hour tick on each face, with the lit top at L* 20–28 (`_design/maps/map_fray_landmarks.md` §2 stone ring, §3).\n\n**The rest of the reviewer's whole-map read is mostly what the brief specifies:**\n- §2 'Beyond the rim' calls for the fair's court as a haze into the noon glare, hazier mid-tone #75726C, L* ≤ 52;\n- the same row calls for the stands to be 'low and empty of detail';\n- §4 says 'a clean stone stage'.\n\nMeasured, the court is luma p50 104 at saturation 0.02. That is inside its value spec, though it is a near-neutral haze. The plate is honed stone with carved grooves and numerals.",
+   "evidence": "Seat IX spawn view: `_harness/_shots/final_maps_vfy_fray_edge_at1.png`. imgstat boxes:\n- hour-stone cap 1440,1000–1560,1080: luma p50 113.6;\n- cap 1610,160–1750,300: p95 122.5;\n- court 0,0–450,1080: p50 103.7, saturation 0.02.\n\nAlso `final_maps_vfy_fray_edge_at3.png` and the reviewer's `final_maps_value/value_fray_high_final_maps_seat*.png`.",
+   "gauge": "LoL's out-of-play vistas are scenery that is deliberately lighter and non-gameplay. A hazed boundary is within that vocabulary. Obstacles in play are finished, painted props.",
+   "fix": "1. Rebuild the hour-stones to the brief: dark basalt, chalk-lit chamfer, half-hour tick, lit top L* 20–28.\n2. Optional, as a design ask rather than a defect: give the court some lampwright stalls or rope lines at L* ≤ 52, and add the low cloth awnings the brief allows on the stands.",
+   "size": "M",
+   "files": [
+    "art/blender/maps/landmarks.py (hour_stone",
+    "fair_stand)",
+    "content/maps/map_fray.json",
+    "src/render/terrain_glsl.ts"
+   ],
+   "verdict": "downgraded",
+   "wave": "W5"
+  },
+  {
+   "dim": "env",
+   "id": "F5",
+   "severity": "minor",
+   "title": "Dialwood crowns show unpainted polygon plates (the M11 residual)",
+   "what": "The crowns are clusters of flat-coloured polygon plates with straight edges. At 11 m the plates are plainly untextured. At 28.5 m they read as a stylized papercraft canopy that is consistent and readable.\n\nEvery measurable item in the r12 M11 fix spec passes:\n- gloss 0;\n- a gradient;\n- 20+ jittered plates;\n- sway ≤ 4 cm;\n- canopy p50 51–56 and p99 91–95;\n- brush bend and no leak.\n\nWORLD.md:62 specifies 'instanced bevelled plates, no alpha cards'. What is left is the 'painted edges hide the geometry' half of the LoL bar.",
+   "evidence": "`_harness/_shots/final_maps_foliage/foliage_rift_final_wood.png` (11 m) and `_harness/_shots/final_maps_value/value_rift_high_final_maps_lane0.png` (28.5 m). Canopy share is 14.1 % of RIFT High frames (`_harness/_reports/final_maps_value_probe.json` masks.canopy). The reviewer's acceptance metric for straight-edge runs was not measured, by either of us.",
+   "gauge": "r12 M11: LoL foliage is painterly but graphic, and painted edges hide the geometry.",
+   "fix": "Keep the plate language and add painted albedo per plate: vein strokes, a root-to-tip gradient, notched tips, cavity darkening between plates, and ±3 % hue jitter per tree. Keep the canopy value band.",
+   "size": "L",
+   "files": [
+    "art/blender/props/dialwood.py",
+    "src/render/terrain.ts"
+   ],
+   "verdict": "downgraded",
+   "wave": "W5"
+  },
+  {
+   "dim": "env",
+   "id": "m1",
+   "severity": "minor",
+   "title": "Bases are outside the B5 probe; the Aubade plaza is grey and the Hourbell tops the value range",
+   "what": "value_probe.mjs has no base spot (`:279-303`). At the Aubade spawn the plaza is near-neutral (saturation p50 0.03), below the 0.17–0.40 ground band, while the Serenade plaza is at 0.37. The white Aubade Hourbell outshines the fighters: luma p95 225 against the fighters' 214.",
+   "evidence": "imgstat on `_harness/_shots/final_maps_vfy_rift_edge_at0.png`:\n- plaza box 400,300–1200,900: saturation 0.03;\n- Hourbell box 1300,230–1700,700: p95 225.1, 22.6 % above 180.\n\nOn `final_maps_vfy_rift_edge_at1.png`, the Serenade plaza: saturation 0.37.\n\nFighter lumaP95 214: `final_maps_value_probe.json` rift_high.fighters.",
+   "gauge": "In LoL the ground stays tinted, and structures sit below champions in visual priority (r12 B5).",
+   "fix": "1. Add base spots to value_probe.\n2. Tint the Aubade plaza toward a cool chalk-cream at C* 10–14.\n3. Cap structure chalk at about L* 80, keeping the lit accent as the bright point.",
+   "size": "S",
+   "files": [
+    "_harness/value_probe.mjs",
+    "content/maps/map_rift.json",
+    "content/maps/map_bridge.json",
+    "art/blender/units/structure_kit.py"
+   ],
+   "verdict": "confirmed",
+   "wave": "W5 (+ W1 value_probe base spots)"
+  },
+  {
+   "dim": "env",
+   "id": "m2",
+   "severity": "minor",
+   "title": "Camps and the Sunsplinter pit lack identity dressing",
+   "what": "Camp clearings are bare discs with ring flags. The Sunsplinter shallows read as a blue-tinted tiled floor with faint ripples and the flag grid dominating.",
+   "evidence": "`_harness/_shots/final_maps_vfy_rift_edge_at2.png` (Sunsplinter pit with the drum), `_harness/_shots/final_maps_rift_nf_at4.png` (Glasshorn camp). Brief: `_design/maps/map_rift_landmarks.md` §3.",
+   "gauge": "In LoL, camps and the river read at a glance from their props and water treatment.",
+   "fix": "1. Add one low prop cluster per camp lip, at L* ≤ 46.\n2. Soften the joints under the water with depth darkening and a refraction wobble, and add foam lines at the banks.",
+   "size": "M",
+   "files": [
+    "art/blender/props/",
+    "content/maps/map_rift.json",
+    "src/render/terrain_glsl.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W5 (+ W1 terrain_glsl water)"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-m1",
+   "severity": "minor",
+   "title": "First match downloads 55.7 MB, a third of it PNG art, and nothing preloads during the draft",
+   "what": "Splash and portrait art ships as PNG: 48 splashes at 1600×900, 68.9 MB in total. The first RIFT load pulls about 55.7 MB, 16 MB of it splash PNG.\n\nrenderer.preload starts only when the loading screen mounts (src/ui/screens/loading.tsx:41-46), so the draft time goes unused.",
+   "evidence": "- _harness/_reports/final_perf_longmatch.json match.loadNet and _harness/_reports/final_perf_catalog_sizes.txt (reviewer).\n- I confirmed the preload site at loading.tsx:41-46 and that renderer.preload has no other caller in src/ui.\n- content:check reports assets of 658 files, 210.60 MB (_harness/_reports/final_perf_verify_content.txt).",
+   "gauge": "LoL's loading screen pulls nothing over the network, because the client is pre-patched, and its loading art is compressed.",
+   "fix": "Encode splashes and portraits to WebP or AVIF in the content build. Start renderer.preload at match-found and at each lock-in, and fetch the splashes when the draft completes.",
+   "size": "M",
+   "files": [
+    "tools/build_content.ts",
+    "src/ui/screens/draft.tsx",
+    "src/ui/screens/loading.tsx:41-46",
+    "src/render/renderer.ts:1105",
+    "src/ui/state.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2 (preload at match-found/lock-in) + build tooling (tools/build_content.ts)"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-m2",
+   "severity": "minor",
+   "title": "`npm run package` ships 1.49 GB of assets no catalog references",
+   "what": "dist-catalog/assets holds 2,961 files (1.7 GB), but the catalog references only 658 files, 210.6 MB. package_deploy copies the whole of dist-catalog.",
+   "evidence": "`du -sh dist-catalog/assets` gives 1.7G. `ls dist-catalog/assets | wc -l` gives 2961. content:check: 658 referenced files, 210.60 MB. Reviewer's union count: _harness/_reports/final_perf_download.txt.",
+   "gauge": "LoL patches ship deltas of live content only.",
+   "fix": "Have package_deploy copy only the assets referenced by the catalogs the manifest lists. Add `build_content --prune`.",
+   "size": "S",
+   "files": [
+    "tools/package_deploy.ts:60-70",
+    "tools/build_content.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "build tooling (tools/package_deploy.ts, tools/build_content.ts)"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-m3",
+   "severity": "minor",
+   "title": "Console noise in every match and at boot",
+   "what": "`THREE.BufferGeometry.toNonIndexed(): BufferGeometry is already non-indexed.` is logged from the pebble builder at src/render/terrain_clutter.ts:111, which calls toNonIndexed without an index guard. Boot also logs a favicon 404, because index.html has no icon link.",
+   "evidence": "Reproduced in my e2e run: the warning appears in the RIFT, BRIDGE and FRAY journeys (_harness/_reports/final_perf_verify_e2e.json consoleErrors). The 404 and the warning both appear in _harness/_reports/final_perf_verify_leakid.json logs. `grep -n icon index.html` finds nothing.",
+   "gauge": "A shipped LoL client logs nothing in normal play.",
+   "fix": "Use `g.index ? g.toNonIndexed() : g` in pebble(). Add an original favicon and a `<link rel=icon>`. Assert zero console warnings in e2e.",
+   "size": "S",
+   "files": [
+    "src/render/terrain_clutter.ts:111",
+    "index.html",
+    "public/",
+    "_harness/e2e.mjs"
+   ],
+   "verdict": "confirmed",
+   "wave": "W1"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-m4",
+   "severity": "minor",
+   "title": "After WebGL context loss the view recovers, but the GPU timer spams warnings and dynamic resolution goes blind",
+   "what": "src/ has no webglcontextlost or webglcontextrestored handling. GpuTimer (quality.ts:156-200) keeps polling queries from the dead context. Nothing tells the player while the world is blank.",
+   "evidence": "Reviewer's artifacts: _harness/_reports/final_perf_ctxloss.json and _harness/_shots/final_perf_ctxloss_1_lost.png / _3_later.png. `grep -rn webglcontextlost src` finds nothing.",
+   "gauge": "LoL recovers from device loss with a clear reconnect flow.",
+   "fix": "Handle webglcontextlost and webglcontextrestored in Renderer: reset GpuTimer, freeze dynamic resolution, show a VALE-styled 'Restoring the view' plate, and re-warm the programs on restore.",
+   "size": "S",
+   "files": [
+    "src/render/renderer.ts:270",
+    "src/render/quality.ts:156-200",
+    "src/ui/hud/world.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W1"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-m5",
+   "severity": "minor",
+   "title": "Real play exceeds the gate's triangle and program budgets that the fixed gate view passes",
+   "what": "The gate's fixed view reads 385k triangles and 37 programs. In real play the client reached 520,859 triangles and 42 programs, both over budget (≤ 500k, ≤ 40).",
+   "evidence": "_harness/_reports/final_perf_longmatch.json, sample x4 at t=362.4: tris 520859, calls 217. Programs go 37 → 42 by t=497. My gate run: High actors 228k/78 draws (_harness/_reports/final_perf_verify_perf_1080.json).",
+   "gauge": "LoL holds its budget in every fight, not only in a benchmark shot.",
+   "fix": "Record the per-second peak triangles and programs over a whole real-client match in the gate and assert on the peak. Add a far fighter LOD, and prewarm the late VFX program variants.",
+   "size": "M",
+   "files": [
+    "_harness/perf_1080.mjs",
+    "src/render/actors.ts",
+    "src/render/vfx/system.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W1"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-V1",
+   "severity": "minor",
+   "title": "The B4 gate flips between PASS and FAIL on 0.1 ms of vsync jitter",
+   "what": "The gate requires High p95 ≤ 16.7 ms (perf_1080.mjs:44). Frame intervals at 60 Hz land at 16.6, 16.7 and 16.8 ms, so p95 sits right on the threshold. The same build passes in one idle window and fails in the next, with no frame dropped in either.",
+   "evidence": "Reviewer's run: p95 16.7, GATE PASS (_harness/_reports/final_perf_perf_1080.json). My run 10 minutes later in an idle window (load 2.99→2.92): 60.1 fps, avg 16.64, p95 16.8, p99 16.8, all 5 worst frames 16.8 ms, printed 'GATE FAIL' (_harness/_reports/final_perf_verify_gate.log, final_perf_verify_perf_1080.json).",
+   "gauge": "LoL's 60 fps target means no frames missed. Riot's 16.66 ms budget is a per-frame cost budget, not a test that rAF timestamps land within 0.03 ms.",
+   "fix": "Measure dropped frames instead: count intervals above 1.5× the measured vsync interval, or allow about 0.5 ms of vsync tolerance on p95 (≤ 17.2 ms). Keep p99 ≤ 25 ms and the renderer CPU budget as they are.",
+   "size": "S",
+   "files": [
+    "_harness/perf_1080.mjs:43-44",
+    "140-160"
+   ],
+   "verdict": "confirmed",
+   "wave": "W1"
+  },
+  {
+   "dim": "client",
+   "id": "F10",
+   "severity": "minor",
+   "title": "Declining the ready check shows two identical toasts",
+   "what": "After Decline, two identical toasts stack. The handler toasts on both 'declined' and 'idle with reason'.",
+   "evidence": "_harness/_reports/final_client_v.json declineToasts: two copies of 'The match was declined. You can queue again in 5 s.' Shot: _harness/_shots/final_client_v_1920_after_decline.png. Code: src/ui/state.ts:166-174. The dodge path shows one toast (final_client_v2.json toasts).",
+   "gauge": "LoL shows a single notice for a declined or failed ready check.",
+   "fix": "Toast only once per flow end, de-duplicated on reason, or only on the terminal idle event.",
+   "size": "S",
+   "files": [
+    "src/ui/state.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "client",
+   "id": "F11",
+   "severity": "minor",
+   "title": "Copy inconsistencies and one LoL-coined term",
+   "what": "- **Spelling mix.** British 'armour' ×7, 'colour' ×5 and 'Centre' sit beside American 'armor' ×113 and 'Armor' ×6.\n- **LoL term.** Kemdo's ult description says 'omnivamp' although the stat is displayed as 'Drain'.\n- **Wrong reason.** The Gleam-lead tab's disabled reason reuses 'No damage was recorded.'\n- **Missing timer.** The Practice setup reuses the draft 'if time runs out' line on a screen with no timer.",
+   "evidence": "- content/fighters/kemdo.json:353 kit.ult.desc '... Kemdo gains {effects.1.stats.omnivamp} omnivamp ...'.\n- content/strings.en.json:923 'stat.omnivamp.name': 'Drain'.\n- src/ui/screens/postgame.tsx:69 reuses state.empty.recap.\n- src/ui/screens/practice.tsx:54 reuses draft.pick.random.\n- Counts from `grep -rhoi armou?r content`.",
+   "gauge": "LoL keeps one stat vocabulary across tooltips, store and client.",
+   "fix": "Pick one spelling. Replace 'omnivamp' with 'Drain'. Add dedicated strings for the graph-empty and practice cases. Lint player copy for raw stat ids.",
+   "size": "S",
+   "files": [
+    "content/strings.en.json",
+    "content/fighters/kemdo.json",
+    "src/ui/screens/postgame.tsx",
+    "src/ui/screens/practice.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2 (strings, postgame, practice) + W4 (kemdo.json omnivamp)"
+  },
+  {
+   "dim": "client",
+   "id": "F12",
+   "severity": "minor",
+   "title": "Draft timers always run to zero, and finalize 'Lock in' does nothing",
+   "what": "Co-op blind pick runs the full 30 s even after every human has locked. Clicking finalize 'Lock in' does not shorten the 10 s finalize.",
+   "evidence": "_harness/_reports/final_client_v.json draftTimes: draft at 7.2 s, my lock at 11.2 s, finalize at 37.3 s (30.1 s after the draft opened), finalize Lock in clicked at 40.4 s, loading at 47.5 s (10.2 s after finalize began).",
+   "gauge": "r05 [14]: Riot tracks lock-in time as a client KPI. Dead waits read as slowness.",
+   "fix": "Bots lock within 3–8 s. End a blind or FFA pick phase as soon as everyone has locked. Make finalize Lock in a ready flag with a short grace period.",
+   "size": "S",
+   "files": [
+    "src/session/local_session.ts",
+    "src/session/draft_brain.ts",
+    "src/ui/screens/draft.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W4 (local_session, draft_brain) + W2 (draft.tsx)"
+  },
+  {
+   "dim": "client",
+   "id": "F13",
+   "severity": "minor",
+   "title": "Selection tick overlaps the first letter of segmented-control labels",
+   "what": "The selected-segment noon tick is drawn through the first glyph ('|MEDIUM'), and the same happens on the draft filter 'ALL'.",
+   "evidence": "_harness/_shots/final_menus_zoom_segmented_tick.png. The draft filter 'ALL' in _harness/_shots/final_client_v_1920_draft_myturn.png shows the same.",
+   "gauge": "LoL's selected states never overlap label glyphs.",
+   "fix": "Position the tick above the label as the nav does, or inset the label.",
+   "size": "S",
+   "files": [
+    "src/ui/styles/components.css"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "client",
+   "id": "F14",
+   "severity": "minor",
+   "title": "Monospace slashed-zero numerals in static prose feel technical",
+   "what": "Static numbers in prose and reward lines ('Win: 100 Candles', 'Plus 4 Candles a minute') use the Mono numeric face with a slashed zero.",
+   "evidence": "src/ui/styles/tokens.css:106 --font-numeric. _harness/_shots/final_client_v_1920_play_rift.png (queue cards).",
+   "gauge": "LoL uses proportional lining figures in prose and keeps fixed-width digits for timers and columns.",
+   "fix": "Scope the Mono face to numbers that change (timers, wallet, live stats, table columns), as STYLE_BIBLE 'Type' already says. Static prose numbers use the body face, with tabular-nums where they need to align.",
+   "size": "S",
+   "files": [
+    "src/ui/styles/tokens.css",
+    "src/ui/styles/components.css",
+    "src/ui/components/Currency.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "client",
+   "id": "F15",
+   "severity": "minor",
+   "title": "No recognition beat in the post-game",
+   "what": "The post-game goes straight from the banner to the reward ledger. There is no teammate-recognition step and no best-in-match card.",
+   "evidence": "src/ui/screens/postgame.tsx (no vote step; grep for commend or recognition finds nothing). _harness/_shots/final_menus_1920x1080_30_postgame_summary.png.",
+   "gauge": "r05 [28][40]: LoL runs a short timed recognition vote, and Dota stages an MVP screen.",
+   "fix": "Add an original, skippable, timed 'Lantern nod' step and two best-in-match cards.",
+   "size": "M",
+   "files": [
+    "src/ui/screens/postgame.tsx",
+    "src/session/local_session.ts",
+    "content/strings.en.json"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "client",
+   "id": "F16",
+   "severity": "minor",
+   "title": "Unreachable server shows 'Connecting…' indefinitely",
+   "what": "With ?server=ws://127.0.0.1:9 the pill still reads CONNECTING… after 24 s. OnlineLink.open() sets 'connecting' on every retry (backoff 1, 2, 4, 8, 15 s), so the 'Offline · vs bots' state is barely ever shown.",
+   "evidence": "_harness/_shots/final_client_v_1920_server_down.png (after 24 s of sampling). src/session/online_link.ts:81 sets connecting on each open; :95 sets offline on close; :11 BACKOFF_S.",
+   "gauge": "LoL surfaces connection loss with a clear status and a reconnect action.",
+   "fix": "After the first failure keep showing Offline while retrying, and switch to 'connecting' only when an attempt is user-initiated. Add a 'Try again' action.",
+   "size": "S",
+   "files": [
+    "src/session/online_link.ts",
+    "src/ui/app.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2 (+ src/session/online_link.ts)"
+  },
+  {
+   "dim": "client",
+   "id": "F17",
+   "severity": "minor",
+   "title": "Bare profile, history rows that do not open, hard-cut shop shelves",
+   "what": "- **Profile.** A generic avatar, no icon or banner choice.\n- **History.** Rows do not reopen the post-game.\n- **Shop.** Shelves end in a hard cut.",
+   "evidence": "_harness/_shots/final_menus_1920x1080_15_profile_overview.png, final_menus_1920x1080_34_profile_history_after.png, final_menus_1920x1080_13_shop.png. src/ui/screens/profile.tsx has no row action.",
+   "gauge": "LoL profiles carry an icon, banner and challenges; match-history rows open the full post-game.",
+   "fix": "Add earnable emblems, stored MatchResults that open in the post-game, and shelf edge fades with chevrons.",
+   "size": "M",
+   "files": [
+    "src/ui/screens/profile.tsx",
+    "src/ui/screens/shop.tsx",
+    "src/session",
+    "src/ui/styles/screens.css"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-3",
+   "severity": "minor",
+   "title": "Announcer stings do not distinguish events and stack in the same tick, with no queue",
+   "what": "The engine sorts every announcement into 'major' or 'minor' with a regex.\n- A 5-fighter multi-takedown, a shutdown and a failed surrender all play the same 0.81 s minor sting.\n- Structure and objective falls emit two events in the same tick, so two voice-bus stings play at once.\n- There is no one-at-a-time queue, no merging and no expiry.\n\nThe information itself is not lost: the HUD banner names every event, including each multikill tier, shutdowns and a derived team wipe.",
+   "evidence": "Code:\n- src/audio/index.ts:441-444: /first|ace|objective|structure|inhib|core/ maps to m_announce_major, everything else to m_announce_minor.\n- Same-tick pairs:\n  - src/sim/units/structures.ts:148-149 emits 'structure', then announce structure_destroyed;\n  - src/sim/units/monsters.ts:166-167 emits 'objective', then announce objective_taken;\n  - src/sim/modes/match.ts:84 emits announce match_start, while the engine plays m_match_start at t=0 (index.ts:457).\n\nIn the capture, final_audio_mix_summary.json voice_stacks lists 4 of 6 announcer moments as double stings.\n\nThe HUD shows specific banners for every key: src/ui/hud/model.ts:492-560, with multikill tiers at :501-505 and the team wipe at :485-488.",
+   "gauge": "LoL speaks a distinct announcer line for each event class and schedules lines one at a time in sync with the banner (r07 §2.1-2.2).",
+   "fix": "Keep the tonal announcer the contract specifies and give it a bell language:\n- first takedown: one high hourbell toll;\n- multi-takedown n: n rising tolls;\n- shutdown: falling glass;\n- structures: a low hourbell, with your loss over Dsus2 and the enemy's resolving to F#;\n- Longshade and Sunsplinter: one timbre each.\n\nImplement r07 §2.2 for the voice bus:\n- one sting at a time, in priority bands;\n- merge multi-takedowns inside the window;\n- 2-4 s expiry;\n- duck music -6 dB and SFX -3 dB while a sting plays.\n\nPlay one voice-bus item per world event, keeping c_structure_fall as the spatial world sound. A spoken announcer is a separate scope decision (CONTRACT §11).",
+   "size": "M",
+   "files": [
+    "src/audio/index.ts",
+    "content/audio.json",
+    "audio/cues/match.py"
+   ],
+   "verdict": "downgraded",
+   "wave": "W3"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-4",
+   "severity": "minor",
+   "title": "Physical hits, slam, stun and root have little high-frequency attack and lose 3-6 LU on a laptop roll-off",
+   "what": "The physical hit family, plus c_slam, c_stun and c_root, has almost no energy above 2 kHz at the attack, and its centroid sits near 190-220 Hz. On a small speaker these cues thin out more than the music does.\n\nIt is not true that 'a hit never audibly connects'. Every hit reaches -6 dB within 5.3-7.8 ms of onset, on a 470 Hz knock for the light hit.\n\nIt is also not true that the crit is darker:\n- c_crit's centroid is 388 Hz, against 185-191 Hz for the hits;\n- its HF share is about twice theirs.\n\nMagic hits (c_hit_magic, 747 plays) are bright and lose nothing on a laptop.",
+   "evidence": "Independent re-measure of the shipped .ogg files (scratchpad verify_files.py, written to _harness/_reports/final_audio_verify_files.json). Columns are: >2 kHz share in the first 30 ms after a -40 dB onset (rectangular window) / loss through a 4th-order 220 Hz high-pass / loss through a 2nd-order 150 Hz high-pass.\n- c_hit_phys_light: 0.018 / 4.8 / 1.9 LU\n- c_hit_phys_heavy: 0.018 / 4.2 / 2.4\n- c_crit: 0.039 / 3.7 / 2.5\n- c_slam: 0.009 / 5.8 / 3.7\n- c_stun: 0.007 / 3.0 / 1.9\n- c_root: 0.001 / 2.7 / 1.7\n- c_hit_magic: 0.246 / 0.1 / 0.0\n\nThe calm match bed mus_match_rift loses 1.4 LU through the same 220 Hz filter, and the intense layer loses 3.5 LU (scratchpad music_loss.py).\n\nThe reviewer's 1/3-octave distances (final_audio_confusable_pairs.json) are whole-file averages: they ignore c_stun's 8.5 Hz B5/F5 daze wobble and c_root's creak train (audio/cues/combat.py:487-541).",
+   "gauge": "r07 §3.1 recommends a three-layer impact with a bright 0-30 ms transient, and a crit that is 'the same hit, but sharper'. r07 labels this '[unverified as any studio's documented practice]', so it is a craft norm rather than a measured LoL number.",
+   "fix": "Add a 0-30 ms 2-6 kHz transient layer (an escapement tick or glass snap) to c_hit_phys_light and c_hit_phys_heavy, at about 10-20% of the first-30 ms energy, while keeping the documented soft top on frequent cues.\n\nAdd a 300-800 Hz harmonic to c_slam and c_monster_hit, so a 220 Hz roll-off costs at most 3 LU.\n\nAdd build.py QA gates on the transient HF share and the laptop loss for c_hit_*, c_crit and the status cues.",
+   "size": "M",
+   "files": [
+    "audio/cues/combat.py",
+    "audio/cuelib.py",
+    "audio/build.py"
+   ],
+   "verdict": "downgraded",
+   "wave": "W3"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-7",
+   "severity": "minor",
+   "title": "The mixer limits only per cue: priority is unused, there is no voice-bus ducking or global budget, lifesteal chimes on every hit, and the limiter can overshoot",
+   "what": "The engine:\n- caps voices per cue only, and never reads the declared priority field;\n- has no global voice budget (204 slots summed across cues);\n- ducks only the music, and only for the ready check, although CONTRACT §11 requires 'ducking (voice > sfx > music)';\n- uses a DynamicsCompressor as its limiter, which is not a brickwall.\n\nHeal cues chime about once a second. Part of that comes from lifesteal and omnivamp: every vamped hit emits a 'heal' event.",
+   "evidence": "Code:\n- src/audio/index.ts:252-257 steals only the same cue's oldest voice.\n- priority is stored at :271 and never read, although the header at :5-6 claims a priority steal.\n- duck() is called only from src/ui/state.ts:161.\n- The compressor is set at index.ts:120-121.\n- src/sim/combat.ts:133-135 calls heal() for vamp, and :161 emits 'heal'.\n\nCapture (final_audio_mix_summary.json):\n- c_heal 497 plays from 1,388 heal events;\n- the post-limiter peak exceeded 0 dBFS in 2 of 6,344 blocks (max +0.25 dBFS) and -1 dBFS in 46;\n- master integrated -20.7 LUFS at the default master of 0.8;\n- SFX sat a median +6.3 dB over music.",
+   "gauge": "r07 §4.2-4.3 recommends a bus hierarchy with side-chain ducking, a global budget of about 32-48 voices ranked by priority × audibility, merging of ticks within 100 ms, and a -1 dBTP ceiling.",
+   "fix": "- Implement the CONTRACT §11 ducking: under the voice bus, music -6 dB and SFX -3 dB.\n- Add a global voice pool of about 32 ranked by priority × gain × attenuation, and use the priority field.\n- Do not voice vamp heals, and merge heal ticks within 250 ms.\n- Follow the compressor with a soft clip, or lower its threshold to -4 dB.",
+   "size": "M",
+   "files": [
+    "src/audio/index.ts",
+    "content/audio.json"
+   ],
+   "verdict": "downgraded",
+   "wave": "W3"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-m1",
+   "severity": "minor",
+   "title": "Dead air before cues tied to instant events",
+   "what": "Several cues for instant events start or peak well after the event:\n- level-up is silent for about 119 ms;\n- respawn reaches -6 dB at 506 ms;\n- blink peaks at 186 ms;\n- c_summon reaches -6 dB at 306 ms;\n- c_cast_shade reaches -6 dB at 185 ms;\n- m_ping_vision peaks at 199 ms.",
+   "evidence": "Re-measured in _harness/_reports/final_audio_verify_files.json. Values are the first sample above -40 dB / -20 dB / -6 dB, then the peak:\n- m_level_up: 118.8 / 125.2 / 126.0 / 268 ms\n- m_respawn: 127 / 464 / 506 / 518 ms\n- c_blink: 51 / 112 / 160 / 186 ms\n- c_summon: 72 / 233 / 306 / 310 ms\n- m_ping_vision: 105 / 171 / 196 / 199 ms",
+   "gauge": "Cues for instant events land on the event frame, and swells are reserved for deliberate wind-ups.",
+   "fix": "Trim the pre-roll so the first -20 dB sample comes within 15 ms for instant events (blink, level-up, respawn, summon, pings). Add a build.py gate keyed on an 'instant' recipe flag.",
+   "size": "S",
+   "files": [
+    "audio/cues/match.py",
+    "audio/cues/combat.py",
+    "audio/cues/ui.py",
+    "audio/build.py"
+   ],
+   "verdict": "confirmed",
+   "wave": "W3"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-m2",
+   "severity": "minor",
+   "title": "The music is static: one 160 s match loop with one layer, a 96 s menu file, and a draft bed blind to the draft",
+   "what": "- The match bed is a single 160 s loop with one 'intense' layer, so it repeats about 11 times in a 30-minute match.\n- The menu bed is one 96 s file, although the tokens specify stems [64, 48, 80] with a 960 s full repeat.\n- The draft bed is a linear 136 s file, with no phase sync and no 8 s urgency layer for the local player.",
+   "evidence": "- ffprobe: mus_match_* and their *_intense layers are 160.0 s, mus_menu 96.0 s, mus_draft 136.0 s, mus_postgame 80.0 s.\n- _design/tokens.json:463-464 specifies the menu stems and the draft phases with localUrgencyLastS 8.\n- src/ui/screens/draft.tsx plays only lockin and ban.",
+   "gauge": "r07 §1.2-1.3: draft music builds toward lock-in, and the match score reacts to game progress and location while staying in the background.",
+   "fix": "- Render the menu as the three tokens stems, looped independently.\n- Give the draft phase layers driven by draft state, plus a local 8 s urgency pulse.\n- Later, add dead and objective match states (r07 §7 item 5).",
+   "size": "M",
+   "files": [
+    "audio/synth/music_menu.py",
+    "audio/synth/music_draft.py",
+    "content/audio.json",
+    "src/audio/index.ts",
+    "src/ui/screens/draft.tsx"
+   ],
+   "verdict": "confirmed",
+   "wave": "W3 (+ W2 draft.tsx urgency trigger)"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-m3",
+   "severity": "minor",
+   "title": ".m4a fallback beds decode several times slower in Safari, and the bed waits for both stems",
+   "what": "On a browser that falls back to .m4a, match music can start many seconds late, because startBed waits for the main stem and the layer together (Promise.all). Safari 27 decodes .ogg, so the problem is latent.",
+   "evidence": "- _harness/_reports/final_audio_probe_safari_layer.json (today): mus_match_rift_intense decodes as .m4a in 20,946 ms vs .ogg in 2,040 ms.\n- The mus_menu figures of 5,302 / 2,127 ms are in _harness/_reports/audio_probe_safari.json. final_audio_probe_safari.json actually holds a 2026-10-20 run (2,855 / 1,463 ms).\n- src/audio/index.ts:301 uses Promise.all.",
+   "gauge": "LoL's client starts its music immediately on every supported platform.",
+   "fix": "Start the main stem as soon as it decodes, and fade the layer in on the next bar once it is ready. On the .m4a path, decode beds as 16 s segments.",
+   "size": "S",
+   "files": [
+    "src/audio/index.ts",
+    "audio/build_music.py"
+   ],
+   "verdict": "confirmed",
+   "wave": "W3"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-m4",
+   "severity": "minor",
+   "title": "Audio accessibility is thin: no mono or loud-transient option, and the ambience slider does nothing",
+   "what": "Settings offer six sliders and a background-mute toggle. There is no mono mix and no option to reduce loud transients, and the ambience slider drives an empty bus.\n\nThe subtitles toggle does work: it shows or hides the announcer banner, which CONTRACT §11 names as the tonal announcer's subtitles.",
+   "evidence": "- src/ui/screens/settings.tsx:147-159 holds the sliders and muteInBackground.\n- Subtitles toggle at :310-311, consumed by src/ui/hud/top.tsx:133.\n- The ambience bus has 0 cues.\n- r07 §5 items 4 and 6.",
+   "gauge": "r07 §5 and the Game Accessibility Guidelines [49] ask for separate speech, effects and music controls, a mono option, and no essential information carried by sound alone.",
+   "fix": "- Add 'Mono' (sum to mono after the master).\n- Add 'Soften loud sounds' (a lower limiter threshold with gentle compression).\n- Hide the ambience slider until AUD-8 ships.\n- Keep the subtitles toggle.",
+   "size": "S",
+   "files": [
+    "src/ui/screens/settings.tsx",
+    "src/session/settings.ts",
+    "src/audio/index.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W2 (settings UI) + W3 (engine)"
+  },
+  {
+   "dim": "originality",
+   "id": "F6",
+   "severity": "minor",
+   "title": "'Battle spells' is Mobile Legends' term; RIFT is a recorded owner risk",
+   "what": "The system name 'Battle spells' (strings.en.json:449, :529-530) is exactly MLBB's name for its summoner spells, and the registry does not hold it. RIFT is owner-allowlisted, with its risk recorded.",
+   "evidence": "`grep -c -i 'battle spell' _design/research/protected_names.json` returns 0. _design/names_allowlist.json allows Rift only. protected_names.json:1116-1117 hold 'Bridge of Progress' and 'Butcher's Bridge'.",
+   "gauge": "A same-tier product names its systems and modes in its own world.",
+   "fix": "Rename the system term to an in-world word, and add 'Battle Spell(s)' to protected_names.json other_moba. Optionally note BRIDGE next to RIFT in DESIGN_NOTE §5.",
+   "size": "S",
+   "files": [],
+   "verdict": "confirmed",
+   "wave": "W2"
+  },
+  {
+   "dim": "originality",
+   "id": "F7",
+   "severity": "minor",
+   "title": "Third-party licence notices are stripped from the bundle and there is no credits page",
+   "what": "The shipped JS carries no licence comments, no notices file is emitted, and there is no credits or licences string or screen. three, preact and @preact/signals are MIT and n8ao is ISC; those licences require the notice to travel with copies. postprocessing is Zlib.",
+   "evidence": "_harness/_prod/dist/assets/*.js (built 10-28 06:13): 0 lines matching '@license|copyright|MIT License'. vite.config.ts has no legalComments or banner option and was last changed 10-20. `grep -c -i 'licen\\|credit' content/strings.en.json` returns 0. Licences read from node_modules/<pkg>/package.json.",
+   "gauge": "LoL ships a third-party and legal notices page in its client.",
+   "fix": "Emit THIRD_PARTY_NOTICES.txt at build time and add a 'Credits & licences' panel under Settings (code libraries plus the OFL fonts).",
+   "size": "S",
+   "files": [],
+   "verdict": "confirmed",
+   "wave": "W1 (vite.config, package_deploy) + W2 (credits panel)"
+  },
+  {
+   "dim": "originality",
+   "id": "F8",
+   "severity": "minor",
+   "title": "The genre words 'gold' and 'jungle' leak into player-facing text",
+   "what": "VALE's own vocabulary (Gleam, Dialwood) is broken in several player-facing strings.",
+   "evidence": "content/strings.en.json:266 'Add gold and levels'. content/client.json:39 (Sparring practice tile, visible in final_menus_1920x1080_01_home.png). content/queues.json:8 'start at level 3 with more gold' (visible in final_menus_1280x720_02_play_rift.png). content/modes.json:8 'hold the jungle'. content/items.json grove_sickle 'For the jungle'. Extra instance the reviewer missed: content/queues.json:135 (practice queue desc 'Add gold').",
+   "gauge": "LoL keeps one consistent vocabulary of its own terms throughout the client.",
+   "fix": "Replace the words with Gleam and Dialwood, and add a content-build lint that rejects the replaced genre words in player-facing strings.",
+   "size": "S",
+   "files": [],
+   "verdict": "confirmed",
+   "wave": "W2 (strings, client.json) + W4 (queues, modes, items)"
+  },
+  {
+   "dim": "originality",
+   "id": "F9",
+   "severity": "minor",
+   "title": "Sensitivity watch: hood-shaped icons and blank or uncanny faces near the line",
+   "what": "Linen Hood item icon: an empty, rounded pale hood around a dark void (ghost or reaper read). Hooded Lamp ward icon: an onion-dome cap with a small tip over one blue orb; it reads as a lamp object, not a figure. Lisvel's wrapped, featureless head and Sukri's mask framed in a dark hood are watch items.",
+   "evidence": "_harness/_shots/final_originality_verify_linen_hood.png, final_originality_verify_hooded_lamp_3x.png, _harness/_shots/final_originality_masks_zoom.png (Lisvel, Sukri).",
+   "gauge": "VALE's own rule. LoL items and wards read as objects, not as hooded figures.",
+   "fix": "Linen Hood: paint it folded or on a stand, with no face void. Hooded Lamp: round off the tip. Lisvel: a carved face plate under the visor. Sukri: lift the inside of the hood.",
+   "size": "S",
+   "files": [],
+   "verdict": "confirmed",
+   "wave": "W2 (icons) + W5 (Lisvel, Sukri, hooded lamp)"
+  },
+  {
+   "dim": "gameplay",
+   "id": "G6",
+   "severity": "minor",
+   "title": "FRAY sometimes goes quiet before the 11:00 limit",
+   "what": "With the bots' own loadouts (adept, 30 seeds):\n- 16 of 30 FRAY games end on the 11:00 limit, 8 on the 12-kill score and 6 by last standing;\n- mean length is 9.6 min.\n\nIn 5 of 30 the last 2 or more minutes have no takedown (longest 3.7 min), with 2–5 fighters still alive. The last-life caution in bot.ts:202 (+0.15 retreat threshold) is the likely cause.\n\nWhy this is a downgrade:\n- The timer ending is the documented design. content/modes.json gives FRAY 'Target 8-11 min… first to 12 kills, else 11:00'. _design/sections/modes_economy.md §6 models it on the Overthrow-style score race with a timer (r03 §3.2).\n- The mode lands in its target length with 3.5 kills/min.\n- The design's own expectation ('the 12-kill race usually closes between 8 and 11 minutes') is missed, and the end-of-match lull is real in about 1 game in 6.",
+   "evidence": "Command:\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode fray --seeds 30 --lineup role --diff adept\n```\nOutput in _harness/_reports/final_gameplay_verify_bridge_fray_summary.txt: \"fray n 30 Counter({'time': 16, 'score': 8, 'last_standing': 6}) dur mean 9.6; dead air at end mean 0.9 max 3.7; >=2 min in 5\", plus a per-timeout table (seed, dead air, alive at end).\n\nThe reviewer's 27/40 time-outs and 10/40 with ≥2 min of dead air (_harness/_reports/final_gameplay_pace40_summary.txt) agree in direction.",
+   "gauge": "LoL's placement mode uses a different format: rounds with a closing ring. VALE deliberately chose a timed score race, so the right bar is pacing. A score race should not end with minutes of no fighting.",
+   "fix": "Keep VALE's 'Noon Toll' idea but scale it down: from 9:00, reveal the survivors on the minimap every 30 s. Bots drop the last-life caution once 4 or fewer remain. Gate: no stretch of 90 s or more with no takedown while 3 or more fighters are alive, in at least 85% of games.",
+   "size": "M",
+   "files": [
+    "src/sim/modes/last_standing_or_score.ts",
+    "src/sim/bots/bot.ts",
+    "content/modes.json",
+    "src/ui/hud"
+   ],
+   "verdict": "downgraded",
+   "wave": "W4"
+  },
+  {
+   "dim": "gameplay",
+   "id": "G8",
+   "severity": "minor",
+   "title": "Ranked draft (2 bans per team) leaves the last picker as few as 2 fighters",
+   "what": "rift_ranked uses 2 bans per team. With unique picks across the match and 4 distinct bans, 14 of 16 fighters are used, so the last picker sees 2.\n\nThe reviewer's 'at most 2' is wrong. Bans are simultaneous and hidden, and only same-team duplicates are rejected (src/session/draft.ts:250, :269), so overlapping bans leave 3 or more.\n\nWhy this is a downgrade:\n- Every fighter is free, so VALE meets r03 §1.6's own worst-case gate: O_min = C = 2T + B = 14 ≤ 16.\n- The impact is limited to the last picks of one queue, which unlocks at level 20.\n\nStill, the roster is far below r03's comfort target (R ≥ 2C = 28), and r03 asks for ban count as a function of roster size.",
+   "evidence": "- content/queues.json:64 (rift_ranked bansPerTeam 2), :49 (rift_standard 1).\n- src/session/draft.ts:1-30 (simultaneous hidden bans), :230-238 (matchUnique for 'draft').\n- r03 §1.6 table.",
+   "gauge": "LoL gates ranked behind owning 20 champions so a legal pick always exists. Out of a 170+ roster, the last pick still has real choice.",
+   "fix": "Derive bansPerTeam from roster size in data (1 at R = 16), and lint it in build_content. Optionally, a draft-host role floor.",
+   "size": "S",
+   "files": [
+    "content/queues.json",
+    "src/session/draft.ts",
+    "tools/build_content.ts",
+    "_harness/probe_session_draft.ts"
+   ],
+   "verdict": "downgraded",
+   "wave": "W4"
+  },
+  {
+   "dim": "gameplay",
+   "id": "G9",
+   "severity": "minor",
+   "title": "Nurrow finishes last in FRAY, and no soak or balance probe exists",
+   "what": "Nurrow is last in FRAY in every run: average placement 9.1 of 10 with 0.8 kills (30 adept seeds, the bots' own loadouts). Her dart puts the target to sleep but deals no damage and gives no payoff on waking.\n\nNo probe asserts bot-play or balance ranges; r09 §4.4 asked for one. The only bot probe, probe_session_botslane, checks correctness.\n\nThe team-mode win-rate spread (31–69% veteran, 19–79% adept) does not hold up:\n- pacing.ts seating repeats with period 16: fighter = (7i + 3 + 5·seed) mod 16. So each fighter always plays with the same teammates and the same, often off-role, seats.\n- On role-correct lineups Nurrow wins 12/22 (55%), ardit 13/22 (59%) and burdam 7/20 (35%). That reverses the reviewer's ardit 31% and burdam 69%.\n- At n ≈ 20, the remaining spread is within noise.",
+   "evidence": "- _harness/_reports/final_gameplay_verify_fighters_summary.txt: 'nurrow n 20 place 9.1 kills 0.8'. RIFT role-correct win rates are in the same file.\n- Kit: content/fighters/nurrow.json nurrow_lullaby_dart ('The dart deals no damage. Damage wakes the sleeper'); ai.comboOrder [a2, a1, a3, ult].\n- `grep -ln createBots _harness/probe_*.ts` returns only probe_items.ts and probe_session_botslane.ts (correctness).",
+   "gauge": "Riot keeps champions roughly inside a 45–55% win band and patches outliers. No champion finishes last in nearly every game of a mode.",
+   "fix": "1. Nurrow payoff, VALE's own: refund cooldown and extend the silence when hitting a sleeping enemy; reorder her combo.\n2. A new _harness/probe_sim_bot_soak.ts that seats role-correct, pickLoadout lineups, with:\n   - FRAY average placement 3.5–7.5 per fighter;\n   - team win-rate bands only at a sample size that supports them;\n   - the G1–G5 thresholds.",
+   "size": "M",
+   "files": [
+    "content/fighters/nurrow.json",
+    "src/sim/bots/knowledge.ts",
+    "_harness/ (new soak probe)",
+    "package.json"
+   ],
+   "verdict": "downgraded",
+   "wave": "W4"
+  },
+  {
+   "dim": "gameplay",
+   "id": "g1",
+   "severity": "minor",
+   "title": "About a quarter of RIFT fighter deaths award no kill even though an enemy fighter helped",
+   "what": "When a Wick, Needle or monster lands the final blow, the takedown has killer −1. Contributors split only the assist share, and no streak, first blood or multikill is recorded.\n\nOn role-correct lineups, a non-fighter final blow with an enemy fighter in the assist window happens in:\n- 231 of 835 deaths (28%) on adept;\n- 170 of 746 (23%) on veteran.",
+   "evidence": "- fdeaths in _harness/_reports/final_gameplay_verify_role_{adept,vet}.json, summarised in final_gameplay_verify_role_summary.txt (killer kind vs 'no enemy fighter in assist window').\n- Code: src/sim/economy.ts:84-86 (kp only from a credited fighter), :137 (killer −1).",
+   "gauge": "In LoL, a death finished by a minion, tower or monster soon after an enemy champion's damage is credited to that champion. 'Executed' is kept for deaths with no champion involved.",
+   "fix": "As the reviewer proposes: credit the top-damage enemy fighter in the window, and keep 'executed' for deaths with no fighter involved.",
+   "size": "S",
+   "files": [
+    "src/sim/combat.ts",
+    "src/sim/economy.ts",
+    "_harness/probe_sim_core_combat.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W4"
+  },
+  {
+   "dim": "gameplay",
+   "id": "g2",
+   "severity": "minor",
+   "title": "RIFT match length drifts long on adept, the default queue difficulty",
+   "what": "Role-correct adept RIFT averages 27.4 min (median 26.9, p90 33.5, max 40.1, one game into sudden death at 40:00). Longshade is taken in only 9 of 16 games, first at 28.1 min on average. Veteran averages 24.3. _harness/pacing.ts only runs veteran.",
+   "evidence": "_harness/_reports/final_gameplay_verify_role_summary.txt (adept: 'dur mean 27.4 median 26.9 p10 19.7 p90 33.5 max 40.1'). _harness/pacing.ts:49 hard-codes botDifficulty 'veteran'.",
+   "gauge": "LoL solo-queue games cluster around 25–30 min (about 27.5 min on EUW), with a tail.",
+   "fix": "Add --diff and role-correct seating to pacing.ts, report adept by default, and gate RIFT adept p90 at 32 min or less.",
+   "size": "S",
+   "files": [
+    "_harness/pacing.ts"
+   ],
+   "verdict": "confirmed",
+   "wave": "W4"
+  },
+  {
+   "dim": "gameplay",
+   "id": "g3",
+   "severity": "minor",
+   "title": "The practice tool covers the basics but not the full lab feature set",
+   "what": "Practice offers gold, level, cooldown refresh and toggle, training targets, heal, reset and speed ×0–16. Missing:\n- other maps;\n- wave and structure toggles;\n- a damage readout;\n- configurable targets;\n- teleport;\n- a sparring fighter.\n\n'Return to life' labels a full heal while alive.",
+   "evidence": "- src/sim/modes/practice.ts:1-17;\n- src/ui/hud/panels.tsx:249-280;\n- content/strings.en.json:281 ('practice.panel.heal': 'Return to life');\n- content/queues.json practice → mode rift.",
+   "gauge": "LoL's practice tool toggles minions and turrets, fast-forwards, resets and shows damage on dummies.",
+   "fix": "As the reviewer proposes.",
+   "size": "M",
+   "files": [
+    "src/sim/modes/practice.ts",
+    "src/contracts/sim.ts",
+    "src/ui/hud/panels.tsx",
+    "src/ui/screens/practice.tsx",
+    "content/strings.en.json",
+    "content/queues.json"
+   ],
+   "verdict": "confirmed",
+   "wave": "W4 (sim) + W2 (panel UI)"
+  },
+  {
+   "dim": "audio",
+   "id": "AUD-MISS-2",
+   "severity": "minor",
+   "size": "S",
+   "verdict": "verifier-added",
+   "title": "The 'On my way' ping is always silent",
+   "what": "content/audio.json:110 binds 'ping.onmyway' but the PingKind is 'onMyWay' (src/contracts/sim.ts:60), so src/audio/index.ts:439 finds no cue.",
+   "evidence": "content/audio.json:110; src/contracts/sim.ts:60; src/audio/index.ts:439 (audio verifier summary).",
+   "gauge": "Every LoL ping type has its own sound.",
+   "fix": "Rename the binding to 'ping.onMyWay' (or normalise case in the lookup) and add every PingKind to the audio probe.",
+   "files": [
+    "content/audio.json",
+    "src/audio/index.ts"
+   ],
+   "wave": "W3"
+  },
+  {
+   "dim": "perf",
+   "id": "PERF-M2-step5",
+   "severity": "minor",
+   "size": "S",
+   "verdict": "split from PERF-M2",
+   "title": "Settings > Video row to turn dynamic resolution on and off",
+   "what": "Split from PERF-M2 so W1 does not touch settings files.",
+   "evidence": "See PERF-M2.",
+   "gauge": "LoL renders at the resolution the player picked.",
+   "fix": "Add the toggle in src/ui/screens/settings.tsx and src/session/settings.ts; the renderer honours it.",
+   "files": [
+    "src/ui/screens/settings.tsx",
+    "src/session/settings.ts"
+   ],
+   "wave": "W2"
+  },
+  {
+   "dim": "env",
+   "id": "F1-step4",
+   "severity": "minor",
+   "size": "S",
+   "verdict": "split from env F1",
+   "title": "Inset the camera focus clamp by about 4 m",
+   "what": "Optional step of env F1, split so W5 does not touch src/render/camera.ts.",
+   "evidence": "src/render/camera.ts:52, :142-145 clamp focus to [0, W].",
+   "gauge": "LoL never shows bare out-of-play ground.",
+   "fix": "Inset the clamp by about 4 m once W5's dressed skirt lands, and re-check edge pans.",
+   "files": [
+    "src/render/camera.ts"
+   ],
+   "wave": "W1"
+  }
+ ]
+}
