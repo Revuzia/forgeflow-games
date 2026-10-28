@@ -30,7 +30,7 @@ Not in the shared pipeline, implemented here (module-level wrappers installed fo
 untouched): part binding restricted to named bones ("auto_only"), the projection paint (the painted blade taken off
 the plate and every part behind it filled from its own paint; the hat's lacquer PAINTED by hand-placed brushwork
 (_lacquer: gores, radial strokes, the painted line, soot, chips, scratches, crackle; each skin's own paint on it:
-Noon Fair's moths, Shadeprint's ink crown); the hat's top and underside are two parts (their own texel weights)
+Noon Fair's moths, Shadeprint's ink moth and ink-dipped brim); the hat's top and underside are two parts (their own texel weights)
 (its underside the
 concept's warm ochre-brown, not the brief's ink), a clean dark iron rim / knob, the blade with its pale bevel, the
 grip, the brown head wrap, the red-brown belt, the carved pauldron lames, the umber boots with their sole and welt;
@@ -85,8 +85,9 @@ AO_INTO_BASE = 0.25
 # ART 2.0 skins (brief §9): the projected painting re-coloured part by part (pipeline -> project.recolour, wrapped
 # here: the painted hat / rim / knob are painted in the skin's own colours instead), plus painted skin details:
 # Noon Fair's lacquer moths ringing the chalky hat and the half-lids painted over the mask's closed lids; Shadeprint's
-# pale paper cone printed with one great ink moth (light-printed details) inside an ink brim band and a chalk light
-# rim, the cape dipped in the same ink with small ink moths flying up its back. Both re-dress the body part by part
+# pale paper cone printed with one great ink moth (light-printed details), its brim dipped in ink at a slant (front
+# first, scalloped, light moths printed on it) inside a chalk light rim, the cape dipped in the same ink with small
+# ink moths flying up its back. Both re-dress the body part by part
 # (SKIN_PARTS; legs and boots keep the base's L*). No extra geometry (brief).
 SKINS: list = [
     {"id": "nurrow_noon_fair", "extra": {}, "card": {"primary": "#6A4F5E", "secondary": "#E2D6C3"},
@@ -1512,8 +1513,8 @@ def _noon_moths(q, r, phi, ground):
 #    light rim; the splash shows only two feathery strokes, the portrait a white cone with a dark rule'). Measured with
 #    the store cameras' own passes (which hat points the splash / portrait see): both see the FRONT half, r p25-p75
 #    0.48-0.83, so the outer brim is half of what the store images show, and the splash DID frame both forewings: the
-#    glossy lacquer's mirror of the screen-left kicker washed the near one out to a grey ghost. So: the BRIM DIPPED IN
-#    INK, as the cape is (a wide band from r ~0.75 to the chalk rim, its inner edge scalloped like the moth's wing
+#    screen-left kicker's grazing sheen washed the near one out to a grey ghost. So: the BRIM DIPPED IN INK, as the
+#    cape is (a band from r 0.79 at the front, 0.885 at the back, to the chalk rim, its inner edge scalloped like the moth's wing
 #    margin with a light line following the scallops and a light rule through the band, exactly the cape's dip), the
 #    moth's forewing tips crossing it inside a paper reserve (the woodblock's white line), light moths printed on the
 #    dip's front; and the store lighting without the screen-left kicker (SKINS: its sheen, not the paint, washed the
