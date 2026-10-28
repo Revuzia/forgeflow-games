@@ -147,6 +147,15 @@ def main():
                         "-30) facing W / WSW / WNW (the lane facing the yoke was tuned for), no more pointer facings "
                         "than --max-ptr, ranked by the eye-level front angle and the blade + heel in view")
     p.add_argument("--max-ptr", type=int, default=99)
+    p.add_argument("--by-game", action="store_true",
+                   help="fix round 2: rank by the GAME camera alone: the lane facings (W 240-300, E 60-120) blade in "
+                        "view, the share of the blade lying ALONG the health bar's band (|dv| <= 16 px, the bar's "
+                        "x range + 30 px) in the W facings, the worst facing and the mean; the eye level only breaks "
+                        "ties (front view share)")
+    p.add_argument("--min-angw", type=float, default=-999.0,
+                   help="fix round 2: keep candidates whose blade RISES at least this steeply on screen (degrees) in "
+                        "every W facing 240-300 (crossing the bar, not lying along it)")
+    p.add_argument("--dump", default="", help="write every scored candidate's metrics (JSON lines) to this path")
     p.add_argument("--lobby", type=float, default=0.0,
                    help="fix pass 8: rank for the LOBBY carry (no health bar): the eye-level front angle near this "
                         "value, the blade, the heel and the haft + pommel all in view at eye level (front, portrait)")
@@ -256,12 +265,14 @@ def main():
 
     def score(P, d, up):
         B = P[is_blade]
-        g, angs, ptr = {}, {}, 0
+        g, angs, ptr, along = {}, {}, 0, {}
         tip = B[np.argmax(B @ d)]
         for yd in yaws:
             x, v, dp = game_proj(B, yd)
             vis = ~bar_hidden(x, v, anchor) & ~zg[yd].hidden(x, v, dp)
             g[yd] = area(x, v, vis)
+            band = (np.abs(v - anchor) <= 16) & (x >= -106) & (x <= 84)
+            along[yd] = area(x, v, band) / max(1, area(x, v, np.ones(len(x), dtype=bool)))
             angs[yd] = screen_angle(x, v)[0]
             tx, tv, _ = game_proj(tip[None], yd)
             if abs(tv[0] - anchor) < 16 and (tx[0] > 54 or tx[0] < -76) and -130 < tx[0] < 110:
@@ -279,7 +290,7 @@ def main():
             eye[yd] = (ang, 1.0 - float(hid.mean()), L / EYE_PPM, float(tx[0]) / EYE_PPM, area(x * 0.5, v * 0.5, ~hid),
                        parts[0], parts[1])
         lane = min(g[y] for y in LANE)
-        return dict(game=g, angs=angs, ptr=ptr, lane=lane, mean=float(np.mean(list(g.values()))),
+        return dict(game=g, angs=angs, ptr=ptr, lane=lane, along=along, mean=float(np.mean(list(g.values()))),
                     minall=min(g.values()), eye=eye, tipz=float(tip[2]))
 
     def hits(P):
@@ -306,6 +317,15 @@ def main():
         s.update(c=c, d=d, up=up, ok=ok)
         rows.append(s)
     print(f"{len(cands)} candidates, {len(rows)} reachable")
+    if a.dump:
+        import json
+        with open(a.dump, "w") as f:
+            for r in rows:
+                f.write(json.dumps(dict(c=r["c"], game={str(k): v for k, v in r["game"].items()},
+                                        angs={str(k): round(v, 1) for k, v in r["angs"].items()},
+                                        along={str(k): round(v, 3) for k, v in r["along"].items()}, ptr=r["ptr"],
+                                        eye0=[round(float(x), 3) for x in r["eye"][0]],
+                                        eye28=[round(float(x), 3) for x in r["eye"][-28]], tipz=r["tipz"])) + "\n")
 
     def key_min(r):
         fa, fv = r["eye"][0][0], r["eye"][0][1]
@@ -328,7 +348,18 @@ def main():
         return -(2.0 * e0[1] + e28[1] + 1.5 * e0[5] + 0.5 * e28[5] + 1.5 * e0[6] + 0.5 * e28[6]
                  - abs(e0[0] - a.lobby) / 6.0 - abs(e28[0] - a.lobby) / 12.0)
 
+    WSET, ESET = (240, 255, 270, 285, 300), (60, 75, 90, 105, 120)
+
+    def key_game(r):
+        g = r["game"]
+        wmin, emin = min(g[y] for y in WSET), min(g[y] for y in ESET)
+        al = max(r["along"][y] for y in WSET)
+        return -(wmin / 300.0 + emin / 600.0 + r["minall"] / 400.0 + r["mean"] / 600.0 - 4.0 * al - 1.0 * r["ptr"]
+                 + 0.5 * r["eye"][0][1])
+
     lo_a, hi_a = fl(a.eye_ang)
+    if a.min_angw > -900 and not a.pick:
+        rows = [r for r in rows if min(r["angs"][y] for y in WSET) >= a.min_angw]
     if a.max_angw < 900:
         rows = [r for r in rows if max(r["angs"][y] for y in (255, 270, 285)) <= a.max_angw and r["ptr"] <= a.max_ptr]
 
@@ -338,7 +369,7 @@ def main():
     rows = [r for r in rows if r["eye"][0][1] >= a.eye_min and r["eye"][-28][1] >= a.eye_min
             and lo_a <= r["eye"][0][0] <= hi_a] if not a.pick else rows
     print(f"{len(rows)} pass the eye-level filter")
-    rows.sort(key=key_w if a.max_angw < 900 else (key_lobby if a.lobby else (key_sw if a.by_sw else (key_min if a.by_min else key))))
+    rows.sort(key=key_game if a.by_game else key_w if a.max_angw < 900 else (key_lobby if a.lobby else (key_sw if a.by_sw else (key_min if a.by_min else key))))
     if not a.pick:
         top = []
         for r in rows:
@@ -364,6 +395,7 @@ def main():
               f"| W {g[270]:4d} E {g[90]:4d} S {g[0]:4d} N {g[180]:4d} "
               f"angW {r['angs'][270]:+4.0f} angE {r['angs'][90]:+4.0f} angS {r['angs'][0]:+4.0f} "
               f"| eye0 {e0[0]:+4.0f}deg vis {e0[1]:.2f} heel {e0[5]:.2f} haft {e0[6]:.2f} A {e0[4]:4d} eye28 {e28[0]:+4.0f}deg vis {e28[1]:.2f} heel {e28[5]:.2f} haft {e28[6]:.2f} A {e28[4]:4d} tipx {e28[3]:+.2f} "
+              f"| alongW {max(r['along'][y] for y in WSET):.2f} alongE {max(r['along'][y] for y in ESET):.2f} "
               f"| tip z {r['tipz']:.2f} hits {r.get('hits')} ok {r['ok']} d {np.round(r['d'], 3).tolist()} "
               f"up {np.round(r['up'], 3).tolist()}")
     if a.sheet or a.pick:
@@ -378,7 +410,7 @@ PART_RGB = {"mask": (0.78, 0.65, 0.37), "cowl": (0.31, 0.29, 0.26), "coat": (0.3
 
 def sheet(rows, body, bpart, cnames, pose_cleaver, anchor, out):
     from common import scene
-    cw, chh = 200, 230
+    cw, chh = 200, 320
     views = [("g", 270), ("g", 90), ("g", 0), ("g", 180), ("g", 225), ("g", 45), ("e", 0), ("e", -28)]
     W, H = cw * len(views), chh * len(rows)
     img = np.full((H, W, 4), 1.0, dtype=np.float32)

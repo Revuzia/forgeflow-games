@@ -1589,7 +1589,7 @@ HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97
 # the warm carved plates of the helm's back and the nape (the painting's back of the head: warm taupe carved stone
 # with dark seams and lit lips)
 # (POLISH: a step lighter, a light warm stone under the white crown, the value lift's top band from behind)
-NAPE_COL = {"lit": "#E0D7CA", "mid": "#C9BEB0", "shade": "#A3978B", "ink": "#4A3F37", "lip": "#E8E0D4"}
+NAPE_COL = {"lit": "#E4DCD0", "mid": "#D0C6B9", "shade": "#A99D91", "ink": "#4A3F37", "lip": "#ECE5DA"}
 # the visor (fix pass 5): ice-blue glass (the fix pass 4 lavender washed out pale lavender in the three QA light),
 # the mask seen through it; the pale cyan rim #C1E9F5 with a dark outline (the concept's)
 # (POLISH: sampled off the painting's visor, L* 67-85: a pale lavender-blue glass #96A3C2 / #ABBFE1 / #89A6CB, the
@@ -2338,11 +2338,11 @@ def wrap_paint(p, n):
 # sleeves are painted, not projected, in the concept's material colours: painterly key light with cool shadows,
 # strokes along the drape, fold shadows, the coat's hem trim and its darker lining
 TROUSER_COL = {"base": "#5A6A78", "fold": "#3B4652", "lit": "#71818E"}
-COAT_COL = {"front": "#A0AEB4", "back": "#95A1A9", "lining": "#66717A", "trim": "#C3CCCF", "trim_lit": "#D4DCDE",
+COAT_COL = {"front": "#A0AEB4", "back": "#A4AFB6", "lining": "#66717A", "trim": "#C3CCCF", "trim_lit": "#D4DCDE",
             "ink": "#363F47"}
 # (POLISH: the painting's hood, lit #A8C7D0 L* 78, shade #899CA6 L* 63; a step lighter than fix pass 5's for the
 # value lift: the cowl is in the top band from every facing)
-COWL_COL = {"front": "#98B6C9", "back": "#A8C0CE", "fold": "#5D7889", "lit": "#BED5E0"}   # (build 1: washed to white)
+COWL_COL = {"front": "#98B6C9", "back": "#B4C9D5", "fold": "#5D7889", "lit": "#BED5E0"}   # (build 1: washed to white)
 SLEEVE_COL = {"base": "#A2B2BE", "fold": "#72838F"}      # (POLISH, value lift: the concept's light blue sleeves)
 
 
@@ -2481,7 +2481,7 @@ PROC_HEAD = {"helm": helm_paint, "nape": nape_paint, "face": face_paint, "visor"
 # tunic and hood, the pale coat front and apron, the mid-grey coat back, the pale carved chest, slate-teal trousers),
 # its painted variation kept (squeezed) and the brown leather straps across it protected (keep_brown)
 # (part, side, luminance squeeze, hue pull, target, keep_brown); side None = all, "front" / "back" = that side's texels
-HARMONIZE = [("torso", None, 0.55, 0.70, "#8C9CA8", True),
+HARMONIZE = [("torso", None, 0.55, 0.70, "#9AA8B3", True),
              ("apron", "front", 0.40, 0.35, "#9DADB1", True), ("apron", "back", 0.60, 0.60, "#7E8A90", True),
              ("chest_plate", None, 0.40, 0.30, "#BCB8B0", True),
              ("belt", None, 0.50, 0.70, "#5E4838", False),

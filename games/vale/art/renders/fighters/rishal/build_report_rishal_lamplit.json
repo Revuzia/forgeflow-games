@@ -50,29 +50,29 @@
   },
   "uv_coverage": 0.59,
   "bake": {
-    "base": 4.86,
-    "rough_metal": 4.68,
-    "normal": 3.54,
-    "ao": 4.75,
+    "base": 4.68,
+    "rough_metal": 3.68,
+    "normal": 3.03,
+    "ao": 4.29,
     "normal_fixed_px": 94148,
-    "projection": 101.44,
-    "pack_save": 101.84,
-    "total": 119.89
+    "projection": 68.8,
+    "pack_save": 68.98,
+    "total": 84.83
   },
   "tris": 20814,
   "mesh_top_m": 1.879,
-  "glb_bytes_raw": 2460316,
+  "glb_bytes_raw": 2462788,
   "optimize": {
     "ok": true,
-    "before": 2460316,
-    "after": 1037208
+    "before": 2462788,
+    "after": 1033728
   },
-  "glb_bytes": 1037208,
+  "glb_bytes": 1033728,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_lamplit.glb (1013 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: rishal_lamplit_base 2048x2048 235K, rishal_lamplit_normal 512x512 46K, rishal_lamplit_orm 512x512 71K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_lamplit.glb (1010 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: rishal_lamplit_base 2048x2048 232K, rishal_lamplit_normal 512x512 46K, rishal_lamplit_orm 512x512 71K",
       "  skinned meshes: rishal_accent(462v), rishal_lamplit(18831v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -87,8 +87,8 @@
       "portrait": "art/out/fighters/rishal/rishal_lamplit_portrait.png"
     },
     "seconds": {
-      "splash": 23.46,
-      "portrait": 9.69
+      "splash": 12.73,
+      "portrait": 6.3
     }
   },
   "three_qa": {
@@ -111,7 +111,7 @@
       1
     ],
     "headY": 1.549,
-    "accentPct": 2.56,
+    "accentPct": 2.48,
     "accentTopHalfPct": 100,
     "heightPx1080": 100,
     "size": [
@@ -120,24 +120,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/rishal/three_rishal_lamplit.png",
-    "seconds": 25.6,
+    "seconds": 12.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.25,
-      "model": 32.12,
-      "lows_bind": 2.63,
-      "uv": 7.92,
-      "bake": 119.9,
-      "export": 0.33,
-      "optimize": 1.4,
-      "load_test": 0.28,
-      "render": 33.23,
-      "three_qa": 26.14
+      "rig": 0.02,
+      "materials": 0.58,
+      "model": 40.29,
+      "lows_bind": 1.89,
+      "uv": 8.0,
+      "bake": 84.83,
+      "export": 0.1,
+      "optimize": 0.81,
+      "load_test": 0.2,
+      "render": 19.08,
+      "three_qa": 12.83
     },
-    "total_s": 224.55
+    "total_s": 168.98
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

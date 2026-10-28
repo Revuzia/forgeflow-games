@@ -605,13 +605,15 @@ def sculpts() -> list:
     # FACE-PLATE (rigid on the head): a smooth, calm chalk face (review item 3: the deep shell, the beak nose and the
     # parted lips read as an aged statue): a broad oval brow, a narrower jaw and a soft chin, a short soft nose, closed
     # lips as one soft mound (the slight smile is painted), the ink recess across the eyes behind the glass
+    # FIX PASS 2 (review item 6: in the 3/4 close-up the nose and the lip mound merged into one muzzle): the jaw is
+    # wider and sits 9 mm further back, so the mouth lies on the face's curve 1.5 cm behind the nose tip
     mask = Sculpt("mask")
     mask.add(Ellipsoid((0.0, -0.044, 1.722), (0.069, 0.062, 0.088)), k=0.0)
-    mask.add(Ellipsoid((0.0, -0.050, 1.668), (0.052, 0.057, 0.062)), k=0.022)
+    mask.add(Ellipsoid((0.0, -0.045, 1.668), (0.058, 0.0515, 0.062)), k=0.022)
     mask.inter(HalfSpace((0, -0.048, 1.7), (0, 1, 0), 1.0), k=0.012)
     mask.sub(Ellipsoid((0.0, -0.112, VIS_Z + 0.001), (0.078, 0.020, 0.0185)), k=0.006)            # the eye recess
-    mask.add(RoundCone((0.0, -0.1000, 1.711), (0.0, -0.1062, 1.688), 0.0058, 0.0072), k=0.012)    # the nose
-    mask.add(Ellipsoid((0.0, -0.1020, 1.651), (0.0160, 0.0036, 0.0064)), k=0.012)                 # the closed lips
+    mask.add(RoundCone((0.0, -0.0995, 1.711), (0.0, -0.1040, 1.690), 0.0058, 0.0066), k=0.012)    # the nose
+    mask.add(Ellipsoid((0.0, -0.0955, 1.652), (0.0150, 0.0030, 0.0056)), k=0.010)                 # the closed lips
     part("mask", mask, "chalk", "bone:head", 1100, vs=0.55, uvw=2.4)
     vis = Sculpt("visor")
     vis.add(_VisorSlab(), k=0.0)
@@ -619,18 +621,6 @@ def sculpts() -> list:
     neck = Sculpt("neck")
     neck.add(Capsule((0.0, 0.012, 1.52), (0.0, 0.002, 1.630), 0.040), k=0.0)
     part("neck", neck, "skin", "bone:neck", 240, vs=0.8)
-
-    # COWL (zblend chest -> neck): the pale linen scarf wound round the neck, draped over the upper chest in a soft
-    # V and over the shoulders, a wider collar at the back
-    cowl = Sculpt("cowl")
-    cowl.add(Torus((0.0, 0.006, 1.588), 0.070, 0.036, axes=np.diag([1.0, 1.10, 1.0]), rz=0.038)
-             .displaced(hfolds(0.006, 70.0, tilt=(0.4, 0.0)), 0.006), k=0.0)
-    cowl.add(Ellipsoid((0.0, -0.086, 1.528), (0.130, 0.038, 0.058)).displaced(soft_folds(0.007, 45.0, axis=0), 0.007), k=0.04)
-    cowl.add(Ellipsoid((0.0, 0.074, 1.535), (0.170, 0.064, 0.075)).displaced(hfolds(0.006, 55.0), 0.006), k=0.04)
-    for sx in (-1, 1):
-        cowl.add(Ellipsoid((sx * 0.120, 0.0, 1.540), (0.075, 0.088, 0.040), axes=sdf.rot_y(sx * -18)), k=0.04)
-    cowl.inter(HalfSpace((0, 0, 1.475), (0, 0, -1), 1.0), k=0.02)
-    part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.54, 1.62), 900, uvw=1.3)
 
     # TORSO under the tabard (the linen shirt's shoulders and the body): heat weights; the bust and the shoulder
     # blades give the profile its depth (review item 6: almost flat from the side)
@@ -647,19 +637,20 @@ def sculpts() -> list:
 
     # TABARD (heat weights above the belt): steel-blue chest panels, soft shoulder pads lying on the shoulders (review
     # item 6: the stiff wings stood up as blue horns), the armholes and the neck edged in grey trim (painted)
-    tab = Sculpt("tabard")
-    tab.add(Ellipsoid((0.0, 0.004, 1.34), (0.158, 0.113, 0.205)), k=0.0)
-    tab.add(Ellipsoid((0.0, 0.008, 1.445), (0.172, 0.106, 0.075)), k=0.06)
-    tab.add(Ellipsoid((0.0, 0.002, 1.21), (0.140, 0.106, 0.075)), k=0.06)
-    tab.add(Ellipsoid((0.0, 0.054, 1.40), (0.130, 0.076, 0.100)), k=0.05)                           # over the blades
-    for sx in (-1, 1):
-        tab.add(Ellipsoid((sx * 0.058, -0.072, 1.352), (0.062, 0.054, 0.060)), k=0.045)            # over the bust
-        tab.sub(ARMHOLES[(sx + 1) // 2], k=0.012)
-    for sx in (-1, 1):
-        tab.add(PADS[(sx + 1) // 2], k=0.03)
-    tab.sub(NECKHOLE, k=0.01)
-    tab.inter(HalfSpace((0, 0, 1.165), (0, 0, -1), 1.0), k=0.0)
+    tab = tabard_base()
     part("tabard", _with_disp(tab, soft_folds(0.0025, 30.0, axis=0), 0.0025), "cloth", "torso_ua", 1200, uvw=1.3)
+
+    # COWL (FIX PASS 2, review item 3: the fat torus stack read as a smooth inflated neck pillow): the pale linen
+    # scarf as the concept drapes it: a loose roll round the neck, dipping and open in front (the neck shows), and a
+    # draped shell lying on the shoulders 14 mm off the tabard (over the straps' ends), hanging in a V in front and
+    # a rounded point at the back, nested folds parallel to its rolled hem (sculpted here and painted in paint_cowl).
+    # Weights: the drape takes the tabard's (it lies on it in every pose), the roll blends to the neck
+    cowl = Sculpt("cowl")
+    cowl.add(Torus(COWL_ROLL_C, 0.063, 0.024, axes=sdf.frame(COWL_ROLL_AX), rz=0.027)
+             .displaced(roll_folds, 0.003), k=0.0)
+    cowl.add(_Drape(tab), k=0.026)
+    cowl.inter(HalfSpace((0, 0, 1.415), (0, 0, -1), 1.0), k=0.0)
+    part("cowl", cowl, "cloth2", "cowl", 1000, vs=0.8, uvw=1.3)
 
     # TABARD SKIRT (analytic hips -> thighs): four panels from the belt to the hem, open at the front and back centre
     # and slit at the sides
@@ -692,27 +683,24 @@ def sculpts() -> list:
     bk.add(Torus(c, 0.020, 0.0045, axes=np.stack([[1, 0, 0], [0, 0, 1], [0, -1, 0]]).astype(float), rz=0.0035), k=0.0)
     bk.add(RoundBox(c + (0.0, 0.002, 0.0), (0.004, 0.003, 0.020), 0.002), k=0.002)
     part("buckle", bk, "ironstone", "torso", 160, vs=0.4)
+    # the crossed straps: exact swept bands (strap_mesh; FIX PASS 2, review item 1: the elliptic SDF strap was a
+    # knife edge 9 mm thick that meshed into jagged, torn edges with the tabard showing through in bites), lying on
+    # the tabard 3 mm above it and taking its weights; this Sculpt is only the fit check's stand-in
     straps = Sculpt("straps")
-    for sx in (-1, 1):
-        # the strap paths projected onto the tabard's surface, the band's centre 6 mm above it (build 11: the straps
-        # half buried in the tabard showed as ragged dark patches)
-        fr = [(sx * 0.105, -0.084, 1.52), (sx * 0.052, -0.118, 1.455), (0.0, -0.128, 1.395), (-sx * 0.065, -0.126, 1.31),
-              (-sx * 0.100, -0.114, 1.262), (-sx * 0.128, -0.096, 1.222)]
-        strap(straps, _onto(tab, fr, torso_normal, 0.0062), torso_normal, 0.025, 0.0045)
-        bk_ = [(sx * 0.110, 0.088, 1.52), (sx * 0.050, 0.124, 1.465), (0.0, 0.130, 1.415), (-sx * 0.10, 0.122, 1.30),
-               (-sx * 0.13, 0.100, 1.235)]
-        strap(straps, _onto(tab, bk_, torso_normal, 0.0062), torso_normal, 0.025, 0.0045)
-    part("straps", straps, "leather", "torso", 1000, vs=0.55)
+    for pts, _ in strap_paths(tab):
+        strap(straps, pts, torso_normal, STRAP_W, STRAP_T)
+    part("straps", straps, "leather", "onto:tabard", 1300, vs=0.55)
 
     # THE BROOCH on the cowl's edge at her right chest: a chalk ring round a dawnglass disc (glossy, not emissive:
-    # review item 10, the tip-cap inlays are the only accent)
+    # review item 10, the tip-cap inlays are the only accent); seated on the drape, moving with it
     br, brg = Sculpt("brooch"), Sculpt("brooch_glass")
-    bc = np.array([-0.072, -0.124, 1.508])
     bn = _n([-0.15, -1.0, 0.45])
+    bc = _onto(cowl, [np.array([-0.072, -0.110, 1.506])], lambda p: bn, 0.0035)[0]
     br.add(Torus(bc, 0.0235, 0.0055, axes=sdf.frame(bn)), k=0.0)
     brg.add(Ellipsoid(bc - bn * 0.001, (0.0215, 0.0215, 0.0080), axes=sdf.frame(bn)), k=0.0)
-    part("brooch", br, "chalk", "torso", 200, vs=0.4)
-    part("brooch_glass", brg, "dawnglass", "torso", 120, vs=0.4)
+    BROOCH_C[:] = bc
+    part("brooch", br, "chalk", "onto:cowl", 200, vs=0.4)
+    part("brooch_glass", brg, "dawnglass", "onto:cowl", 120, vs=0.4)
 
     # SLEEVES (analytic arm weights): linen from under the shoulder pads to the bracers, soft drape lines (review item
     # 6: no horizontal pillow bands), fuller on the upper arm, gathered into the bracer
@@ -790,11 +778,14 @@ def sculpts() -> list:
     part("quiver", qv, "quiver", "bone:hips", 520)
     hol = Sculpt("quiver_holster")
     hc = Q_TOP - Q_U * 0.17 + Q_N * 0.004
-    hol.add(RoundBox(hc, (Q_HW + 0.008, Q_HD + 0.008, 0.155), 0.036, axes=qax), k=0.0)
+    # FIX PASS 2 (review item 1: a black shard stuck out of the quiver's side): the cover's shell 1 cm thick (the
+    # 7 mm shell decimated into crossing faces at its cut corners) and its curved lower edge cut clean through
+    # both side walls
+    hol.add(RoundBox(hc, (Q_HW + 0.011, Q_HD + 0.011, 0.155), 0.038, axes=qax), k=0.0)
     hol.sub(RoundBox(hc, (Q_HW + 0.001, Q_HD + 0.001, 0.30), 0.034, axes=qax), k=0.002)
-    hol.inter(HalfSpace(hc, Q_N, 1.0), k=0.0)       # the outer half only (the cover's cut edge runs down its sides)
-    hol.sub(Ellipsoid(hc - Q_U * 0.16 + Q_N * 0.02, (0.07, 0.09, 0.06), axes=qax), k=0.01)   # the curved lower edge
-    part("quiver_holster", hol, "quiver", "bone:hips", 360, vs=0.7)
+    hol.inter(HalfSpace(hc - Q_N * 0.004, Q_N, 1.0), k=0.003)   # the outer half only (its cut edge runs down its sides)
+    hol.sub(Ellipsoid(hc - Q_U * 0.17 + Q_N * 0.02, (0.11, 0.12, 0.07), axes=qax), k=0.008)  # the curved lower edge
+    part("quiver_holster", hol, "quiver", "bone:hips", 480, vs=0.7)
     qb = Sculpt("quiver_straps")
     for zz in (0.07, 0.36):
         qb.add(RoundBox(Q_TOP - Q_U * zz, (Q_HW + 0.011, Q_HD + 0.011, 0.012), 0.037, axes=qax), k=0.0)

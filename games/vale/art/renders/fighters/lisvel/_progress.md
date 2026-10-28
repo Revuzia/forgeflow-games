@@ -35,3 +35,6 @@
   12 x_fan's rest scale patched to 0.001 in every GLB (skin QA sheets show no fan).
   13 smart-project at 70 deg: uv coverage 0.546 -> 0.61 (the atlas is still smart-UV islands).
   Open: facing straight away from the camera the bow's far tip still crosses the HP bar in the guard (~122 px); shots cross it briefly (a 1.76 m bow drawn at the jaw); value bands top/mid a few L* under the bible's (as the peers); the drawing hand is the sculpted pinch hand in the salute.
+
+## FIX PASS 2 (review: 2 major/regression + 6 minor)
+- 2026-10-28 06:07 start. Read the review; plan next.
