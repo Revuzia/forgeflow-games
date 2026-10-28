@@ -31,7 +31,7 @@ home ──► play ──► mode dial ──► queue select ──► queue �
 | Mode dial | pick a mode | stays on `play` | gnomon shadow swings clockwise to the station, 360 ms | `mus_menu` |
 | Queue select | pick a queue under the dial | stays on `play` | panel swap, 160 ms | `mus_menu` |
 | Find match | CTA bottom-right | `queue` (Session `queue` event, state `searching`) | forward | `mus_menu` |
-| Ready check | state `found` | `queue` (modal over the search) | `ui_queue_pop`, window title flashes | `mus_menu` ducked |
+| Ready check | state `found` | `queue` (modal over the search) | `ui_queue_pop`, window title flashes, favicon lamp; hidden tab: system notification | `mus_menu` ducked |
 | Draft | `draft` event | `draft` (reset) | forward | `mus_draft` |
 | Finalize (loadout) | `DraftState.phase = finalize` | same screen, panel swap | 240 ms | `mus_draft` |
 | Loading | `loading` event | `loading` (reset) | shadow-line wipe, 900 ms | none (bed fades) |
@@ -43,7 +43,9 @@ home ──► play ──► mode dial ──► queue select ──► queue �
 Rules of the flow:
 - The match flow owns the screen. Session events drive it (`queue`, `draft`, `loading`, `match`, `postgame`); nothing in the nav can be reached from draft, loading or match except Settings through the in-match menu.
 - Leaving a matchmade draft is a dodge. A confirm modal says so first (`draft.leave.*`), then the toast and lockout come from `queue.dodged` + `queue.lockout`.
-- Any queue error or decline returns to `play` with a toast (`queue.timeout`, `queue.declined`, `queue.cancelled`).
+- Any queue error or decline returns to `play` with ONE toast (`queue.timeout`, `queue.declined`, `queue.cancelled`): a decline arrives as `declined` then `idle`, and the second is not toasted again.
+- When the flow ends (decline, timeout, cancel, dodge) the draft state is cleared and the client is whole again: the top bar's chrome follows the route (a `flow` screen, or a screen opened over a live `match`), never leftover draft or match state. e2e `flow` (dodge) asserts 6 nav items, the wallet and the profile chip on Play and Home after Leave draft.
+- The portal bar's Pause / Menu (`window.__PAUSE__.toggle`): in a match it opens the in-match menu; on menu screens it opens Settings over the current screen and a second press goes back; the ready check, draft and loading ignore it.
 - Esc goes Back everywhere except the ready check (no accidental decline), the match (opens the in-match menu) and rebinding (cancels the rebind).
 
 ---
@@ -93,13 +95,14 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Party panel:** you plus bot allies. A stepper sets bot party members (`Session.setPartyBots`); queues with `partyMax` 1 show `play.solo_only`. Open seats are filled with bots (`play.queue.bots_fill`).
 - **RIFT roles:** primary and secondary role pickers (`play.roles.*`) for `draft` and `ranked` queues, using the five positions from `roles.json`. `role_preset` (Quick) shows the preset panel instead: pick role and fighter now (`play.preset.*`); the CTA stays disabled with `play.preset.missing` until a fighter is chosen.
 - **CTA label by queue kind:** quick, standard, ranked, coop: Find match (`btn.find_match`); practice: Start practice; custom: Start game.
-- **States:** a locked queue, a lockout after a dodge (CTA disabled, `queue.lockout_banner`), an offline notice (`state.offline`; local matches still work).
+- **States:** a locked queue, a lockout after a dodge (CTA disabled, `queue.lockout_banner`), an offline notice (`state.offline`; local matches still work). The bar's link pill reads `net.connecting` only for the first attempt, the first retry after a drop and a retry the player asked for; after a failure it stays `net.offline` while the link retries in the background, with a `net.retry` (Try again) button beside it.
 
 ### 3.3 Queue and ready check
 - **Searching:** `queue.searching` ("Searching · 1:24 · usually under 2:00") over a slow ring, a Cancel search button, and `queue.bots_note`. The elapsed time is `SessionEvent.elapsed`, the estimate `estimate`.
 - **Found:** `ready.title` ("Match found"), `ready.sub` ("RIFT · Ranked. Ready in 12 s."), a timed ring (`readyTimer` of `readyMax`, HARM in the last 5 s), Ready and Decline. After Ready: `ready.accepted` and `ready.waiting` ("Waiting for the others · 3 of 5 ready"). Timer out: `queue.timeout`.
 - **Declined or dodged:** back to `play`, toast from `queue.declined` / `queue.dodged`, lockout line from `queue.lockout`.
-- **Sound:** `ui_queue_search` on start and as a soft pulse every 8 s, `ui_queue_pop` on found, `ui_accept` on Ready, `ui_back` on cancel.
+- **Sound:** `ui_queue_search` on start and as a soft pulse every 8 s, `ui_queue_pop` on found, `ui_queue_remind` once when the check is unanswered with 4 s left (`READY_REMIND_S`), `ui_accept` on Ready, `ui_back` on cancel. The pop and the reminder ride the audio engine's alert path, so they are heard in a background tab.
+- **Away from the tab** (`src/ui/ready_alert.ts`): Find match asks once per device for notification permission (a user gesture). While the check waits on you, the favicon shows the dial with a lit lamp dot. If the page is hidden or unfocused, a system notification (`ready.title`, `ready.notify.body`) is raised; at the reminder it is raised again (`ready.notify.remind`). Returning to the page closes it. Each channel is best-effort.
 
 ### 3.4 Draft (RIFT: ban, pick, finalize)
 - **Layout:** your team's five seats on the left, the other team's on the right, the fighter grid in the middle with class / role / search filters (`draft.filter.*`), bans along the top edge, the phase title and a timer ring top-centre.
@@ -437,6 +440,7 @@ Cue ids are VOCAB's; the engine decides voices, ducking (voice over sfx over mus
 | `ui_notify` | info or ok toast, party change, incoming trade request, teammate Lot swap |
 | `ui_queue_search` | search starts, then a soft pulse every 8 s |
 | `ui_queue_pop` | ready check appears (found) |
+| `ui_queue_remind` | ready check unanswered with 4 s left (once per check) |
 | `ui_accept` | Ready pressed, trade accepted |
 | `ui_lockin` | Lock in (pick, Fray pick, finalize), Lot window ends on your fighter |
 | `ui_ban` | ban submitted |

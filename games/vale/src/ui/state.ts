@@ -11,6 +11,7 @@ import type { CatalogView } from './catalog_view.ts';
 import { fmtWait } from './format.ts';
 import type { Router } from './router.ts';
 import type { UiSound } from './audio_port.ts';
+import { ReadyAlert } from './ready_alert.ts';
 
 export type QueueEvt = Extract<SessionEvent, { type: 'queue' }>;
 export interface Toast { id: number; text: string; tone: 'info' | 'ok' | 'warn' | 'error'; action?: { label: string; run: () => void }; ms: number }
@@ -19,6 +20,8 @@ export type FrayColors = 'standard' | 'stamp' | 'simple';
 export interface UiPrefs { frayColors: FrayColors | 'auto'; seenScreens: string[]; lastMode?: string; lastQueue?: string; roles?: [string?, string?] }
 
 const PREFS_KEY = 'vale.ui.v1';
+/** seconds left on an unanswered ready check when the reminder (queue_remind) sounds and the notification is raised again */
+export const READY_REMIND_S = 4;
 /** how long the end banner holds over the last frame before the shadow-line wipe to the post-game */
 export const END_HOLD_MS = 3800;
 function loadPrefs(): UiPrefs {
@@ -78,8 +81,15 @@ export class AppState {
   /** 1 Hz clock for countdowns that are not rings (lockout lines) */
   readonly now = signal(performance.now());
 
+  /** the hidden-tab channels of the ready check: system notification + favicon badge (AUD-2, UI half) */
+  readonly readyAlert = new ReadyAlert();
+
   private toastSeq = 1;
   private off: (() => void) | null = null;
+  /** the reason the current queue flow already ended with (a decline arrives as 'declined' then 'idle'): one notice per flow */
+  private flowEnd: string | null = null;
+  /** the reminder already sounded for this ready check */
+  private reminded = false;
 
   constructor(o: { session: Session; cv: CatalogView; router: Router; sound: UiSound; renderer?: RendererPort | null }) {
     this.session = o.session; this.cv = o.cv; this.router = o.router; this.sound = o.sound; this.renderer = o.renderer ?? null;
@@ -104,13 +114,15 @@ export class AppState {
     this.lastError.value = null;
     this.session.queue(req);
     if (q && q.kind !== 'custom' && q.kind !== 'practice' && this.queue.value?.state === 'searching') {
+      // Find match is a user gesture: the one moment a browser lets the page ask to notify (once per device)
+      this.readyAlert.prime();
       this.sound.play('queue_search');
       if (this.router.route.value.screen !== 'queue') this.router.go('queue', {}, { transition: 'forward' });
     }
   }
   /** Play again: Session.playAgain when offered, else the last request */
   playAgain(): void {
-    if (this.session.playAgain) { this.session.playAgain(); this.sound.play('queue_search'); }
+    if (this.session.playAgain) { this.readyAlert.prime(); this.session.playAgain(); this.sound.play('queue_search'); }
     else if (this.lastRequest.value) this.queueFor(this.lastRequest.value);
   }
 
@@ -152,27 +164,48 @@ export class AppState {
       }
       case 'queue': {
         const prev = this.queue.value;
+        const popped = e.state === 'found' && prev?.state !== 'found';
+        // a new search or ready check: the flow is open again
+        if (e.state === 'searching' || e.state === 'found' || e.state === 'accepted') this.flowEnd = null;
         batch(() => {
           this.queue.value = e;
           if (e.state === 'searching' && prev?.state !== 'searching') this.searchStartedAt.value = performance.now();
-          if (e.state === 'found' && prev?.state !== 'found') { this.accepted.value = false; this.sound.play('queue_pop'); }
+          if (popped) { this.accepted.value = false; this.reminded = false; this.sound.play('queue_pop'); }
           if (e.state === 'accepted') this.accepted.value = true;
         });
-        if (e.state === 'found' && prev?.state !== 'found') { this.flashTitle(cv.t('ready.title', 'Match found')); this.sound.duck(true); }
-        if (e.state !== 'found') this.sound.duck(false);
+        if (popped) {
+          this.flashTitle(cv.t('ready.title', 'Match found'));
+          this.sound.duck(true);
+          this.readyAlert.found(cv.t('ready.title', 'Match found'), this.readyLine(e, 'ready.notify.body', '{mode} · {queue}. Come back and press Ready within {t}.'));
+        }
+        // the check is about to close on you: the reminder bell, and the notification once more
+        if (e.state === 'found' && !this.reminded && e.readyTimer !== undefined && e.readyTimer > 0 && e.readyTimer <= READY_REMIND_S) {
+          this.reminded = true;
+          this.sound.play('queue_remind');
+          this.readyAlert.remind(cv.t('ready.title', 'Match found'), this.readyLine(e, 'ready.notify.remind', 'The ready check closes in {t}. Press Ready to keep your place.'));
+        }
+        if (e.state !== 'found') { this.sound.duck(false); this.readyAlert.clear(); }
         if (e.lockout && e.lockout > 0) { this.lockoutUntil.value = performance.now() + e.lockout * 1000; if (e.reason) this.lastLockoutS = e.lockout; }
         if (e.state === 'accepted') this.lastLockoutS = 0;
         if ((e.state === 'searching' || e.state === 'found') && r.route.value.screen !== 'queue') r.reset('queue', {}, 'forward');
         if (e.state === 'idle' && !e.reason && e.lockout) this.toast(cv.t('queue.lockout_banner', 'You can queue again in {t}.', { t: fmtWait(e.lockout) }), 'warn');
         if (e.state === 'declined' || (e.state === 'idle' && e.reason)) {
-          this.accepted.value = false;
-          const lock = e.lockout && e.lockout > 0 ? cv.t('queue.lockout', ' You can queue again in {t}.', { t: fmtWait(e.lockout) }) : '';
-          const why = e.reason === 'timeout' ? cv.t('queue.timeout', 'The ready check ran out.')
-            : e.reason === 'declined' ? cv.t('queue.declined', 'The match was declined.')
-              : e.reason === 'dodged' ? cv.t('queue.dodged', 'You left the draft.')
-                : e.reason === 'cancelled' ? cv.t('queue.cancelled', 'Search cancelled.') : '';
-          if (why) this.toast(`${why}${lock}`, e.reason === 'cancelled' ? 'info' : 'warn');
-          if (r.route.value.screen === 'draft' || r.route.value.screen === 'queue') r.reset('play', {}, 'back');
+          // the flow is over: nothing of the ready check or the draft outlives it (the client's chrome follows the
+          // route, but a stale draft would still label the bar and keep the draft board's data alive)
+          batch(() => { this.accepted.value = false; this.draft.value = null; });
+          const why = e.reason ?? 'declined';
+          // a local decline or timeout arrives twice ('declined', then 'idle'): one notice per flow end
+          if (this.flowEnd !== why) {
+            this.flowEnd = why;
+            const lock = e.lockout && e.lockout > 0 ? cv.t('queue.lockout', ' You can queue again in {t}.', { t: fmtWait(e.lockout) }) : '';
+            const text = why === 'timeout' ? cv.t('queue.timeout', 'The ready check ran out.')
+              : why === 'declined' ? cv.t('queue.declined', 'The match was declined.')
+                : why === 'dodged' ? cv.t('queue.dodged', 'You left the draft.')
+                  : why === 'cancelled' ? cv.t('queue.cancelled', 'Search cancelled.') : '';
+            if (text) this.toast(`${text}${lock}`, why === 'cancelled' ? 'info' : 'warn');
+          }
+          // back to Play from anywhere inside the flow (Settings opened over a draft included)
+          if (r.inStack((sc) => sc === 'draft' || sc === 'queue')) r.reset('play', {}, 'back');
         }
         break;
       }
@@ -213,6 +246,13 @@ export class AppState {
         break;
       }
     }
+  }
+
+  /** a ready-check line for the notification: mode, queue and the seconds left */
+  private readyLine(e: QueueEvt, key: string, fallback: string): string {
+    const q = this.cv.queue(e.queue);
+    const mode = this.cv.mode(q?.mode);
+    return this.cv.t(key, fallback, { mode: mode?.name ?? '', queue: q?.name ?? '', t: fmtWait(Math.max(1, Math.ceil(e.readyTimer ?? e.readyMax ?? 10))) });
   }
 
   private titleTimer = 0;

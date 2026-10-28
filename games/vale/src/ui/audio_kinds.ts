@@ -5,11 +5,14 @@
 
 export const UI_CUE_KINDS = [
   'hover', 'click', 'confirm', 'back', 'error', 'tab', 'toggle', 'slider',
-  'queue_search', 'queue_pop', 'queue_remind', 'accept', 'lockin', 'ban', 'hover_fighter',
+  'queue_search', 'queue_pop', 'accept', 'lockin', 'ban', 'hover_fighter',
   'currency_tick', 'equip', 'purchase', 'reward_reveal', 'level_account', 'notify',
   'shop_buy', 'shop_sell', 'shop_undo',
 ] as const;
-export type UiCueKind = typeof UI_CUE_KINDS[number];
+/** roles the client plays when content binds them and skips silently otherwise (the build does not require them):
+ *  queue_remind sounds once when an unanswered ready check has READY_REMIND_S left (src/ui/state.ts) */
+export const UI_CUE_KINDS_OPTIONAL = ['queue_remind'] as const;
+export type UiCueKind = typeof UI_CUE_KINDS[number] | typeof UI_CUE_KINDS_OPTIONAL[number];
 
 /** music beds for the client's own screens; match beds come from MapDef.art.music */
 export const SCREEN_MUSIC_KINDS = ['menu', 'draft', 'postgame'] as const;

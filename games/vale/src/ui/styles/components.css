@@ -292,3 +292,9 @@
 .netpill--connecting .netpill__dot { background: var(--warn); }
 .netpill--refused .netpill__dot { background: var(--danger); }
 .queue__net { color: var(--ok); }
+/* the link offline: the pill and its Try again share the bar slot */
+.netwrap { display: inline-flex; align-items: center; gap: var(--u); margin-right: calc(2 * var(--u)); }
+.netwrap .netpill { margin-right: 0; }
+.netpill__retry { padding: calc(0.5 * var(--u)) calc(1.25 * var(--u)); border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--text-1); cursor: pointer; white-space: nowrap; }
+.netpill__retry:hover { border-color: var(--chalk); }
+.netpill__retry:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }

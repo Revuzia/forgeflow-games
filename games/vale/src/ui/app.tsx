@@ -28,6 +28,7 @@ import { NewDot } from './components/Plate.tsx';
 import { ToastStack } from './components/Toast.tsx';
 import { TooltipLayer } from './components/Tooltip.tsx';
 import { arrowNav } from './components/arrownav.ts';
+import { NET_RETRY_EVENT } from '../session/online_link.ts';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
@@ -78,13 +79,35 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
     else kb.unlock?.();
   };
   document.addEventListener('fullscreenchange', onFs);
+  // the portal bar's Pause / Menu button (public/game_controls.js calls window.__PAUSE__.toggle)
+  const w = window as unknown as { __PAUSE__?: { toggle(): void } };
+  w.__PAUSE__ = { toggle: () => pauseMenu(state, router, sound, overlay) };
   if (o.dev) (window as unknown as { __vale?: unknown }).__vale = { ...ctx, audioLog: (port as { log?: unknown }).log, cueLog: (o.audio as { log?: unknown } | null)?.log, screens: Object.keys(SCREENS) };
   root.textContent = '';
   void loadFonts().then(() => render(<AppContext.Provider value={ctx}><App /></AppContext.Provider>, root));
   return {
     state, router,
-    unmount: () => { stopLoop(); removeEventListener('beforeunload', guard); document.removeEventListener('fullscreenchange', onFs); state.dispose(); render(null, root); },
+    unmount: () => { stopLoop(); removeEventListener('beforeunload', guard); document.removeEventListener('fullscreenchange', onFs); delete w.__PAUSE__; state.dispose(); render(null, root); },
   };
+}
+
+/** Pause / Menu: an open dialog closes; in a match the match menu opens (what Esc does); on the menu screens
+ *  Settings opens over the current screen, and a second press goes back. The ready check, the draft and
+ *  loading own the screen, so the button does nothing there (a live match cannot pause). */
+function pauseMenu(state: AppState, router: Router, sound: UiSound, overlay: Overlay): void {
+  const top = overlay.top;
+  if (top) { if (top.dismissable !== false) { sound.play('back'); overlay.close(top.id); } return; }
+  const route = router.route.peek();
+  const chrome = SCREENS[route.screen]?.chrome ?? 'nav';
+  if (chrome === 'match') { if (state.match.peek()) handleEsc(); return; }
+  if (chrome === 'flow' && route.screen !== 'postgame') return;
+  if (route.screen === 'settings') {
+    sound.play('back');
+    if (router.canGoBack()) router.back(); else router.go('home', {}, { root: true });
+    return;
+  }
+  sound.play('confirm');
+  router.go('settings');
 }
 
 /** the boot skeleton while the catalog loads: the shell at its final size with a shadow sweep */
@@ -264,8 +287,9 @@ function TopBar(p: { def: ScreenDef; route: Route }): JSX.Element {
   const profile = state.profile.value;
   const cur = cv.earnedCurrency();
   const nav = cv.c.client.nav.filter((n) => SCREENS[n.screen]);
-  // the match flow owns the client: Settings opened from the in-match menu shows no nav either
-  const flow = p.def.chrome === 'flow' || !!state.match.value || !!state.draft.value;
+  // the chrome follows the route, never leftover state: a flow screen (queue, draft, loading, post-game) shows no
+  // nav, and neither does a menu screen opened from inside a live match (Settings from the in-match menu)
+  const flow = p.def.chrome === 'flow' || router.inStack((s) => SCREENS[s]?.chrome === 'match');
   const seen = state.prefs.value.seenScreens;
   const navRef = useRef<HTMLElement>(null);
   const goNav = (screen: string, params: Record<string, string> = {}): void => {
@@ -344,16 +368,38 @@ function ScreenHost(): JSX.Element {
   );
 }
 
-/** the game-server link: online (players on now), connecting, or offline (queues play against bots) */
+/** the game-server link: online (players on now), connecting, or offline (queues play against bots). Offline
+ *  keeps retrying on its own and offers Try again; a retry the player asked for reads Connecting… for a beat. */
 function OnlinePill(p: { info: OnlineInfo }): JSX.Element {
-  const { cv } = useApp();
+  const { cv, session, sound } = useApp();
+  const [trying, setTrying] = useState(false);
+  useEffect(() => {
+    if (!trying) return;
+    const t = setTimeout(() => setTrying(false), 1200);
+    return () => clearTimeout(t);
+  }, [trying]);
   const i = p.info;
-  const label = i.status === 'online' ? cv.t('net.online', 'Online · {n}', { n: i.players })
-    : i.status === 'connecting' ? cv.t('net.connecting', 'Connecting…')
-      : i.status === 'refused' ? cv.t('net.refused', 'Update needed') : cv.t('net.offline', 'Offline · vs bots');
-  const tip = i.status === 'online' ? cv.t('net.online_tip', 'Matchmade queues play online with other players; bots fill the empty seats.')
-    : i.status === 'refused' ? (i.reason ?? '') : cv.t('net.offline_tip', 'The game server is not reachable: queues play against bots. It reconnects on its own.');
-  return <span class={`netpill netpill--${i.status} t-label`} title={tip} role="status"><span class="netpill__dot" aria-hidden="true" />{label}</span>;
+  const status = trying && i.status === 'offline' ? 'connecting' : i.status;
+  const label = status === 'online' ? cv.t('net.online', 'Online · {n}', { n: i.players })
+    : status === 'connecting' ? cv.t('net.connecting', 'Connecting…')
+      : status === 'refused' ? cv.t('net.refused', 'Update needed') : cv.t('net.offline', 'Offline · vs bots');
+  const tip = status === 'online' ? cv.t('net.online_tip', 'Matchmade queues play online with other players; bots fill the empty seats.')
+    : status === 'refused' ? (i.reason ?? '') : cv.t('net.offline_tip', 'The game server is not reachable: queues play against bots. VALE keeps trying in the background.');
+  const retry = (): void => {
+    sound.play('click');
+    setTrying(true);
+    // a Session that can reconnect does it; otherwise the link listens for the page-level retry event
+    const s = session as Session & { reconnect?: () => void };
+    if (typeof s.reconnect === 'function') s.reconnect(); else dispatchEvent(new Event(NET_RETRY_EVENT));
+  };
+  return (
+    <span class="netwrap">
+      <span class={`netpill netpill--${status} t-label`} title={tip} role="status"><span class="netpill__dot" aria-hidden="true" />{label}</span>
+      {status === 'offline' ? (
+        <button type="button" class="netpill__retry t-label" title={tip} onPointerEnter={() => sound.play('hover')} onClick={retry}>{cv.t('net.retry', 'Try again')}</button>
+      ) : null}
+    </span>
+  );
 }
 
 const WIPE_SWAP_MS = Math.round(TOKENS.motion.signature.ms / 2);

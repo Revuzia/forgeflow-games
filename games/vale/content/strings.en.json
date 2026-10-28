@@ -314,6 +314,8 @@
   "ready.accepted": "You are ready.",
   "ready.timeout_note": "If the timer runs out, you leave the queue.",
   "ready.timeout_lock": "Declining or missing the check can lock you out of the queue for a short time.",
+  "ready.notify.body": "{mode} · {queue}. Come back and press Ready within {t}.",
+  "ready.notify.remind": "The ready check closes in {t}. Press Ready to keep your place.",
   "draft.title": "Draft",
   "draft.title_bridge": "The Lot",
   "draft.title_fray": "Pick your fighter",
@@ -1415,7 +1417,8 @@
   "net.connecting": "Connecting…",
   "net.refused": "Update needed",
   "net.offline": "Offline · vs bots",
+  "net.retry": "Try again",
   "net.online_tip": "Matchmade queues play online with other players; bots fill the empty seats.",
-  "net.offline_tip": "The game server is not reachable: queues play against bots. It reconnects on its own.",
+  "net.offline_tip": "The game server is not reachable: queues play against bots. VALE keeps trying in the background.",
   "queue.online": "Online · {n} searching this queue · bots fill the empty seats"
 }

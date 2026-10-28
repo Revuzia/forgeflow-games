@@ -27,6 +27,8 @@ export class Router {
 
   get depth(): number { return this.stack.length; }
   canGoBack(): boolean { return this.stack.length > 1; }
+  /** a screen in the stack (the current one included) matches: Settings opened over a match is still inside it */
+  inStack(pred: (screen: string) => boolean): boolean { return this.stack.some((r) => pred(r.screen)); }
 
   /** push a screen (forward). `root: true` = a top-level nav jump: the stack becomes [home, screen]. */
   go(screen: string, params: Record<string, string> = {}, o: { root?: boolean; replace?: boolean; transition?: Transition } = {}): void {
