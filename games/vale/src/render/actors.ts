@@ -451,7 +451,7 @@ export class ModelLibrary {
         const roles: Record<string, string | undefined> = { ...def.art.clips };
         for (const c of clips.keys()) if (!(c in roles)) roles[c] = c;
         const hull = hullPlan(m.gltf.scene);
-        const crowd = def.art.instanced && this.opts.crowd !== false ? bakeCrowd(m.gltf.scene, clips, hull, 'accent', CROWD_MAX_ROWS) : null;
+        const crowd = def.art.instanced && this.opts.crowd !== false ? bakeCrowd(m.gltf.scene, clips, hull, 'accent', CROWD_MAX_ROWS, def.kind === 'monster') : null;
         return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false, hull, crowd };
       }
       if (this.opts.dev) return devUnitTemplate(def);

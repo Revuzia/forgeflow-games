@@ -208,7 +208,36 @@
      "ratio": 5.31
     }
    }
+  },
+  "r2a": {
+   "rift": {
+    "spots": {
+     "a": [
+      59.8,
+      55
+     ],
+     "b": [
+      76.77694938111514,
+      11.678761969975756
+     ]
+    },
+    "a": {
+     "hp": 7.86,
+     "mean": 79.5
+    },
+    "b": {
+     "hp": 4.58,
+     "mean": 79.4
+    },
+    "close": {
+     "hp": 6.54,
+     "mean": 85.2
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   }
   }
  },
- "generated": "2026-10-28T10:09:49.351Z"
+ "generated": "2026-10-28T10:40:33.330Z"
 }

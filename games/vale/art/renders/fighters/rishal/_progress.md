@@ -254,3 +254,57 @@
   noise fold multiplier. Head: the visor's front outline was a straight V from the temples to the beak tip, so from
   any front or three-quarter view the glass covered the whole mask (a shield); the neck was a pale beige column where
   the painting's is dark carved brown.
+- 2026-10-28 05:40 CDT: POLISH changes (builds 1-4 checked; each step compared with the concept crops in the
+  scratchpad, proto/rishal_head.py now also renders the game camera from the sides and the back: games/gameb/gamer).
+  HEAD (major): VISOR_PROF / VISOR_FRONT re-cut to the painting's sickle: the band crosses the eyes and sweeps up to a
+  horn over each temple (its back end at crown height, the ring boss inside it), the lower edge level under the eyes
+  out to the beak, and only the beak (a 3-4 cm hook, was a 15 cm wide V) hangs on to its point 2 cm under the chin;
+  the mask 1.2 cm further forward and a little broader/longer so the cheeks, mouth line and jaw show under the band
+  and beside the hook; ink almond eye recesses cut into the mask (seen through the glass), a short carved mouth line,
+  the face carving finer (the dark claw-mark cuts read as stripes). Visor glass a clear lavender-blue sampled off the
+  painting (#8A9CD0 tint at 0.76-0.96 over the mask, the hook a cooler #9CC0E2) inside a 1 cm pale rim with a dark
+  outline (fix pass 5's 0.56 tint washed to a grey shield in the hero light). Neck: the painting's slender dark carved
+  column (#674E41, ribs inked; was a pale beige mannequin column, 5 -> 4 cm). Helm back: ONE chevron seam over one nape
+  plate (four even stacked arcs read as a grub), a step lighter. Crest: chalk frame + pale dawnglass panes, NO accent
+  on it (the inlay along its crown, the root seam and the keel line down the back - the ladder / U / dagger glyphs -
+  are gone).
+  ACCENT (major): one clean shape family instead of thin lines: the brief's ridge FIN (FinMesh: a 6-point blade section
+  swept along the visor's real top edge, horn to horn, leaning back 45 degrees, 4.6 cm over the brow and 5.8 cm at the
+  temples, tapering into the horn tips) + the two swept fins off the left temple (accent glass, laid open with their
+  faces up and out so every game-camera facing sees them). proto/rishal_accent.py: 3.35 / 3.76 / 4.58 / 3.33 / 1.68 /
+  1.57 / 1.65 / 1.92 % (8 facings). lineup (build 4, idle f0, 0/90/180/270): 3.07 / 1.22 / 1.18 / 4.31 %, 100 % top
+  half, accentOk TRUE (was 1.66 / 0.84 / 0.44 / 1.11). Brief deviation, flagged for the brief: §7 names the ridge fin
+  only; the fin alone measured 1.17 / 0.77 / 0.39 % (front / side / back) in the estimator, so the left fins carry the
+  team colour too (the concept's fins are the same glass as the crest panes; the crest stays non-emissive).
+  COWL + MEDALLION (major): the cowl REBUILT as cloth: CowlShell, a 1.5 cm shell laid 2 cm over the torso + chest plate
+  surface (torso_field), its hem dipping to a soft point over the sternum and low behind, stopping under the pauldrons;
+  a Collar band standing round the neck (high behind, open at the throat, rolled lip); the front hem a thick creased
+  roll (the scarf's loop); the hood bunched behind; folds hang from the collar and deepen to the hem (cowl_fold), and
+  the paint darkens exactly those creases (no noise folds). The medallion: a dawnglass lens in a carved stone ring on
+  a backing plate at the left collarbone with two small stone link rings down to the strap, both painted
+  (medallion_paint / medglass_paint, radial glass + one streak; the projected spiral is gone).
+  LOWER BODY (major): AO_INTO_BASE 0 and the ORM occlusion rewritten when it is saved (_install_bake wraps
+  bake.save_image for rishal*_orm.png): the cloth parts (SOFT_AO) keep only 0.88 + 0.12 x a 5 px masked blur of the
+  occlusion, the hard parts the usual 0.55 + 0.45 x AO. trouser_paint / coat_paint without noise patches: shaded by the
+  sculpt's own normals, the coat's crease darkening from the skirt's fold field, fine strokes only; the coat hem a
+  PALE trim (#C3CCCF) under an inked line so the skirt's edge reads against the dark trousers; trousers slimmer under
+  the skirt and the skirt 8 mm roomier (the hip bulged through the coat's back).
+  CHALKLINE (major): an ink figure under a chalk-white head and scarf (parts: coat / torso #5A606A, apron #5E646E,
+  sleeves #636A74, chest #6C727C, pauldrons + lames #949AA2, helm #CFCCC4, cowl #D4D1C8, visor smoked #7E858E, nape
+  #7A7F87, neck #3E3A38), ~20 L* under the base's pale blue on every big piece; brief §9's table needs the same move
+  (it kept most roles within a few L* of base) - routed to the brief owner (not edited here).
+  SPLASH (major): the brief's victory hold (SPLASH clip victory t 0.92, yaw 10): the hold re-posed for that camera -
+  the body open to it, the head a quarter away to his right, chin up a little, the visor's beak pointing into the
+  frame, crossed wrists in the small of his back with both blades flaring out behind the hips (FK: wrists y +0.26
+  behind the chest, tips 0.4 m behind); the left lames, the crest and the knife sweep to screen right.
+  MINORS: icon - fill 0.80 (margin round the crest) and a deeper cooler sky behind the head (ICON_SKY, wrapped
+  imageops.over); attack1 windup - the fist cocked OUT beside the right shoulder with the blade hanging point-down
+  (was against the visor); crit windup - both arms flung wide and high, blades raked back clear of the head (was
+  crossed before the visor); Feint apex - the body arched back 0.30 m off the floor, both arms wide and high, blades
+  up and back as wings, left knee tucked, right leg trailing; Glass Dash - one long low stride held from the impact to
+  the end (the leg swap every 3 frames passed through a tucked crouch); ult coil - blades back and DOWN (FK tips at
+  0.55-0.59 m, under the hips); knives 0.42 x 0.036 m with a deeper core and spine against bright bevels; arms tapered
+  (full shoulder and biceps to a 3.9 cm elbow), forearm guards twice as thick, fists x1.17 broader and lighter
+  (#6A7680); VALUE: STONE_COL to the brief's L* 75 (lames, left cap), right cap #BDBEBB, sleeves #A2B2BE, cowl
+  #98B6C9 / #A8C0CE, chest plate harmonize #BCB8B0, torso #8C9CA8, guards L* 67-78, VALUE_RAMP 1.05-1.10 over the
+  shoulders and head, VALUE_KNEE (0.58, 0.40) (knee at L* 81, L* 84 at Y 0.75); Lamplit's cage moved above the fin.

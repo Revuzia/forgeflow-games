@@ -240,12 +240,18 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float wearN = valeFbm( p * 0.07 + 17.3 );
     float dustP = smoothstep( 0.5, 0.72, wearN + ( nMid - 0.5 ) * 0.35 ) * smoothstep( 0.6, uLaneHalf - 0.4, laneD + ( n2 - 0.5 ) * 0.8 );
     vec3 dustTone = mix( uLane, uClearing * ( dot( uLane, LWr ) / max( dot( uClearing, LWr ), 1e-4 ) ), 0.6 );
-    vec3 stone = fam * ( 0.92 + 0.14 * fB ) * ( 1.0 + 0.035 * vol );
-    // under the track the stones are walked to one paler, warmer tone (the families fade, the grain polishes out)
-    stone = mix( stone, vec3( 1.05, 1.04, 0.99 ) * ( 0.98 + 0.04 * fB ), trackP * 0.75 );
+    // (lane polish r2) the value is the flag's own too: 0.86-1.10, and about one flag in nine an outlier (a dark
+    // weathered stone or a pale fresh-cut one), so the road never reads as one even web at a single value
+    float fD = valeHash12( fl.zw * 0.53 + 2.3 );
+    float fVal = ( 0.86 + 0.24 * fB ) * ( fD < 0.06 ? 0.86 : fD > 0.945 ? 1.1 : 1.0 );
+    vec3 stone = fam * fVal * ( 1.0 + 0.035 * vol );
+    // under the track the stones are walked paler and warmer (the families fade but survive, each keeps most of its
+    // value; the grain polishes out)
+    stone = mix( stone, vec3( 1.05, 1.04, 0.99 ) * mix( 1.0, fVal, 0.7 ), trackP * 0.4 );
     vec3 roadBand = uLane * longT * stone * ( 1.0 + 0.03 * ( nMid - 0.5 ) );
-    roadBand = mix( roadBand, dustTone * longT * ( 1.0 + 0.03 * ( n2 - 0.5 ) ), dustP * 0.7 );
-    roadBand *= 1.0 + 0.06 * trackP;
+    roadBand = mix( roadBand, dustTone * longT * mix( 1.0, fVal, 0.5 ) * ( 1.0 + 0.03 * ( n2 - 0.5 ) ), dustP * 0.7 );
+    // the walked path reads: +2-3 L* over the stone either side
+    roadBand *= 1.0 + 0.13 * trackP;
     vec3 grainR = mix( grainN, vec3( 1.0 ), max( dustP * 0.55, trackP * 0.6 ) );
     float chipR = chip * ( 1.0 + 2.4 * smoothstep( uLaneHalf - 2.0, uLaneHalf - 0.3, laneD + wob * 0.5 ) );
     // joints: some laid tight (the web breaks: no even mortar net), dust-filled and paler on the track and under the
@@ -339,7 +345,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float lost = step( fC, 0.2 ) * smoothstep( uLaneHalf - 1.6, uLaneHalf - 0.7, sLane ) * step( sLane, uLaneHalf ) * smoothstep( -0.01, 0.05, fl.y - 0.025 + chip );
     coverA = max( coverA, lost * road ) * ( 1.0 - roomW );
     // the cover's rim: a thin damp contact line on the stone where the turf lies over it
-    col *= 1.0 - 0.13 * ( 1.0 - smoothstep( 0.0, 0.07, abs( coverE + 0.02 ) ) ) * road * ( 1.0 - lost ) * ( 1.0 - roomW );
+    col *= 1.0 - 0.07 * ( 1.0 - smoothstep( 0.0, 0.07, abs( coverE + 0.02 ) ) ) * road * ( 1.0 - lost ) * ( 1.0 - roomW );
     if ( coverA > 0.0 ) {
       vec3 soilC = mix( uEarth, uClearing, 0.55 ) * ( 0.92 + 0.2 * nMid ) * mix( vec3( 1.0 ), grainN, 0.7 );
       float peb = smoothstep( 0.62, 0.72, valeNoise( p * 6.0 + 1.7 ) );
@@ -388,9 +394,13 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   float famK = fract( fA + ( lfA - 0.5 ) * 0.6 + 1.0 );
   vec3 fam = famK < 0.35 ? vec3( 0.955, 1.0, 1.08 ) : famK < 0.62 ? vec3( 1.05, 1.0, 0.92 ) : famK < 0.86 ? vec3( 0.99, 1.0, 1.02 ) : vec3( 1.07, 1.01, 0.87 );
   float trackP = ( 1.0 - smoothstep( 1.2, 2.6, laneD + ( nMid - 0.5 ) * 1.2 + ( n2 - 0.5 ) * 0.3 ) ) * ( 0.45 + 0.55 * smoothstep( 0.2, 0.6, valeNoise( p * 0.08 + 4.0 ) ) );
-  vec3 stoneS = mix( fam * ( 0.93 + 0.13 * fB ), vec3( 1.04, 1.03, 0.99 ), trackP * 0.65 );
+  // (lane polish r2) each course stone its own value too (0.86-1.10, about one in nine a dark or pale outlier); the
+  // walked path keeps the families and most of the value, and reads paler by +2-3 L*
+  float fD = valeHash12( fl.zw * 0.53 + 2.3 );
+  float fVal = ( 0.86 + 0.24 * fB ) * ( fD < 0.06 ? 0.86 : fD > 0.945 ? 1.1 : 1.0 );
+  vec3 stoneS = mix( fam * fVal, vec3( 1.04, 1.03, 0.99 ) * mix( 1.0, fVal, 0.7 ), trackP * 0.35 );
   // (held to the deck's own chroma: the families shift the hue, never the saturation band, spec 0.22-0.35)
-  vec3 deckB = uLane * longT * stoneS * ( 0.99 + 0.04 * nMid ) * ( 1.0 + 0.05 * trackP );
+  vec3 deckB = uLane * longT * stoneS * ( 0.99 + 0.04 * nMid ) * ( 1.0 + 0.12 * trackP );
   deckB = mix( vec3( dot( deckB, vec3( 0.2126, 0.7152, 0.0722 ) ) ), deckB, 0.88 );
   col = valeFlag( deckB, fl, mix( grainN, vec3( 1.0 ), trackP * 0.55 ), chip,
     0.035 - 0.012 * trackP, mix( uGrout, uLane * 0.95, trackP * 0.7 ), 0.04, fh, jw );
@@ -455,7 +465,12 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   float lfP = valeFbm( p * 0.04 + 41.0 );
   slabC *= mix( vec3( 1.025, 1.0, 0.95 ), vec3( 0.975, 1.0, 1.04 ), smoothstep( 0.3, 0.7, lfP ) );
   float scuff = smoothstep( 0.55, 0.8, valeFbm( p * 0.16 + 9.0 ) + ( valeNoise( p * 1.3 ) - 0.5 ) * 0.25 );
-  slabC = mix( slabC, vec3( dot( slabC, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * vec3( 1.02, 1.01, 0.97 ), scuff * 0.55 );
+  // (r2) the dust is the plate's own stone ground fine: its colour a third desaturated, leaned warm-pale at the same
+  // luminance (the tint's own luminance is 1) and a touch lifted, never toward grey (on the warm plate grey read as a
+  // cool stain)
+  float slL = dot( slabC, vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 chalkD = mix( vec3( slL ), slabC, 0.7 ) * vec3( 1.02, 1.0, 0.94 ) * 1.03;
+  slabC = mix( slabC, chalkD, scuff * 0.45 );
   col = valeFlag( slabC, pf, basN, chip * 0.6, 0.03, uLane * 0.62, 0.1, fh, jw );
   // veins: thin grey mineral threads wandering across some slabs
   vec2 vq = p * 0.55 + pf.zw * 3.1;

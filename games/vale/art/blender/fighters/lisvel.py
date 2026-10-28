@@ -87,7 +87,7 @@ TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
 ARMOUR_CONFORM = False
-AO_INTO_BASE = 0.25
+AO_INTO_BASE = 0.12      # the bind pose's occlusion baked into the base read as grey smudges on the moving sleeves
 
 HEIGHT = 1.85             # the head-wrap crown in the concept (the plates' scale, the fit check)
 PROJECTION = {"concept": "lisvel", "height": HEIGHT}     # the paint hook (post_paint paints every part itself)
@@ -101,7 +101,7 @@ SKINS: list = [
     {"id": "lisvel_gorgewalk", "extra": {"rope_bind": True}, "card": {"primary": "#6E747C", "secondary": "#9A8F7A"},
      "palette": {"wood": "#6E747C", "rope": "#9A8F7A", "ironstone": "#3F4348", "chalk": "#D2D2CE", "cloth": "#56604F",
                  "quiver": "#545A61"},
-     "splash": {"map": "map_bridge", "clip": "cast_a1", "t": 0.34, "yaw": 34.0, "pitch": -7.0}},
+     "splash": {"map": "map_bridge", "clip": "taunt", "t": 0.32, "yaw": 30.0, "pitch": -6.0}},
     {"id": "lisvel_almanac", "extra": {"page_fletching": True}, "card": {"primary": "#4A4640", "secondary": "#D8CDB4"},
      "palette": {"wood": "#D8CDB4", "fletching": "#2E2A26", "cloth": "#8C8577", "quiver": "#3A3430"},
      "splash": {"map": "map_fray", "clip": "cast_a3", "t": 0.44, "yaw": 14.0, "pitch": -4.0}},
@@ -135,7 +135,7 @@ GRIP_L = S0 + D_REST * BRACE                          # the grip's centre (prop.
 LIMB_W = ((0.0, 0.064), (0.28, 0.062), (0.45, 0.058), (0.70, 0.052), (0.86, 0.048), (0.93, 0.024))
 LIMB_T = ((0.0, 0.046), (0.26, 0.042), (0.33, 0.027), (0.55, 0.024), (0.86, 0.018), (0.93, 0.008))
 CHAMFER = 0.0065                                      # the bevels along the strip's four edges
-CAP0 = 0.800                                          # the glass hook cap from |u| 0.80 to the end
+CAP0 = 0.770                                          # the glass hook cap from |u| 0.77 to the end
 INLAY0 = CAP0                                         # the accent: an inlay panel on both broad faces of each cap
 PINCH_U = -0.12                                       # the right hand's pinch on the string at rest
 HAND_U = 0.16                                         # the left fist at rest: on the riser beside the grip (the
@@ -467,9 +467,10 @@ class _Limb(sdf.Prim):
     (half width across the flat faces, half width across the edges) keeps only those two bands of the section (the
     accent inlays: proud lines along the faces and along the edges)"""
 
-    def __init__(self, ua=0.0, ub=TIP_U, sides=(-1, 1), grow=0.0, chamfer=CHAMFER, stripe=None,
+    def __init__(self, ua=0.0, ub=TIP_U, sides=(-1, 1), grow=0.0, chamfer=CHAMFER, stripe=None, belly=False,
                  S=S0, U=U_REST, D=D_REST, N=N_REST):
         self.ua, self.ub, self.sides, self.grow, self.ch, self.stripe = ua, ub, tuple(sides), grow, chamfer, stripe
+        self.belly = belly
         self.S, self.U, self.D, self.N = (np.asarray(x, float) for x in (S, U, D, N))
 
     def bounds(self):
@@ -501,6 +502,8 @@ class _Limb(sdf.Prim):
             if se is not None:
                 st = np.minimum(st, ad - se)
             d = np.maximum(d, st)
+            if self.belly:
+                d = np.maximum(d, dv + 0.001)               # the string-side (belly) face only
         if len(self.sides) == 1:
             d = np.where(np.sign(u) == self.sides[0], d, np.maximum(d, 0.05))
         return d
@@ -568,7 +571,24 @@ SKIRT_SLITS = [_Slit(0.0, "x", 1.13, 0.012, 0.055, sign=-1.0), _Slit(0.0, "x", 1
                _Slit(0.012, "y", 0.98, 0.004, 0.018, sign=-1.0), _Slit(0.012, "y", 0.98, 0.004, 0.018, sign=1.0)]
 ARMHOLES = [Ellipsoid((sx * 0.218, 0.008, 1.405), (0.058, 0.082, 0.090)) for sx in (-1, 1)]
 NECKHOLE = Ellipsoid((0.0, 0.004, 1.57), (0.085, 0.075, 0.07))
-PADS = [Ellipsoid((sx * 0.184, 0.006, 1.522), (0.074, 0.098, 0.026), axes=sdf.rot_y(-sx * 20.0)) for sx in (-1, 1)]
+PAD_Z = 1.443                                         # the shoulder caps' lower edge
+
+
+class _Cap(sdf.Prim):
+    """a sphere above a plane z0: the tabard's rounded shoulder cap lying on the shoulder (review item 6: the flat
+    flaps stood out as pointed horns from the front and the back)"""
+
+    def __init__(self, c, r, z0):
+        self.c, self.r, self.z0 = np.asarray(c, float), r, z0
+
+    def bounds(self):
+        return self.c - self.r, self.c + self.r
+
+    def d(self, P):
+        return np.maximum(np.linalg.norm(P - self.c, axis=1) - self.r, self.z0 - P[:, 2])
+
+
+PADS = [_Cap((sx * 0.182, 0.008, 1.458), 0.072, PAD_Z) for sx in (-1, 1)]
 
 
 # ── the sculpt ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -642,8 +662,9 @@ def sculpts() -> list:
     tab.add(Ellipsoid((0.0, 0.054, 1.40), (0.130, 0.076, 0.100)), k=0.05)                           # over the blades
     for sx in (-1, 1):
         tab.add(Ellipsoid((sx * 0.058, -0.072, 1.352), (0.062, 0.054, 0.060)), k=0.045)            # over the bust
-        tab.add(PADS[(sx + 1) // 2], k=0.035)
         tab.sub(ARMHOLES[(sx + 1) // 2], k=0.012)
+    for sx in (-1, 1):
+        tab.add(PADS[(sx + 1) // 2], k=0.03)
     tab.sub(NECKHOLE, k=0.01)
     tab.inter(HalfSpace((0, 0, 1.165), (0, 0, -1), 1.0), k=0.0)
     part("tabard", _with_disp(tab, soft_folds(0.0025, 30.0, axis=0), 0.0025), "cloth", "torso_ua", 1200, uvw=1.3)
@@ -689,7 +710,7 @@ def sculpts() -> list:
         bk_ = [(sx * 0.110, 0.088, 1.52), (sx * 0.050, 0.124, 1.465), (0.0, 0.130, 1.415), (-sx * 0.10, 0.122, 1.30),
                (-sx * 0.13, 0.100, 1.235)]
         strap(straps, _onto(tab, bk_, torso_normal, 0.0062), torso_normal, 0.025, 0.0045)
-    part("straps", straps, "leather", "torso", 420, vs=0.7)
+    part("straps", straps, "leather", "torso", 1000, vs=0.55)
 
     # THE BROOCH on the cowl's edge at her right chest: a chalk ring round a dawnglass disc (glossy, not emissive:
     # review item 10, the tip-cap inlays are the only accent)
@@ -814,7 +835,9 @@ def sculpts() -> list:
     part("bow_grip", grip, "leather", "bone:prop.L", 300, vs=0.5)
     caps, inl = Sculpt("bow_caps"), Sculpt("bow_inlays")
     caps.add(_Limb(CAP0, TIP_U, grow=0.0035, chamfer=0.007), k=0.0)
-    inl.add(_Limb(CAP0 + 0.010, TIP_U - 0.014, grow=0.0050, chamfer=0.007, stripe=(0.0185, None)), k=0.0)
+    # the inlay on the string-side face only: the game camera sees it from above in the carry; a close view of the
+    # bow's back (the lobby portrait) sees a glass hook, not a blue capsule (review item 1)
+    inl.add(_Limb(CAP0 + 0.015, TIP_U - 0.014, grow=0.0050, chamfer=0.007, stripe=(0.0230, None), belly=True), k=0.0)
     part("bow_caps", caps, "dawnglass", "bone:prop.L", 460, vs=0.45)
     part("bow_inlays", inl, "accent", "bone:prop.L", 420, vs=0.4)
     st = Sculpt("string")
@@ -1071,6 +1094,20 @@ def _clean_normals(img, part):
     return (out * 0.5 + 0.5).astype(np.float32)
 
 
+AO_LIFT = ("sleeves", "bracers", "hand_L", "hand_R", "bow", "bow_grip", "bow_caps", "string", "fan_shafts", "fan_fletch",
+           "fan_heads", "rope_bind")
+
+
+def _lift_ao(img, part):
+    """the ORM's occlusion (R) on parts that move away from where the bind pose shadowed them, lifted 65 %"""
+    out = img.copy()
+    for i, nm in enumerate(_PART_NAMES):
+        if nm in AO_LIFT:
+            m = part == i
+            out[..., 0][m] = 1.0 - 0.35 * (1.0 - out[..., 0][m])
+    return out
+
+
 def _install_bleed() -> None:
     """the data maps (ORM 256, normal 512) are baked at 2048 with an 8 px margin and scaled down: the gaps between the
     atlas's islands stay black (roughness 0 = glossy, AO 0) and bleed into the islands at three.js's mip levels.
@@ -1098,6 +1135,8 @@ def _install_bleed() -> None:
             img = img[iy, ix]
             if kind == "normal":
                 img = _clean_normals(img, part[iy, ix])
+            else:
+                img = _lift_ao(img, part[iy, ix])
             project.save_rgb(img, full)
             for im in bpy.data.images:
                 if im.filepath and os.path.abspath(bpy.path.abspath(im.filepath)) == os.path.abspath(full):
@@ -1268,7 +1307,7 @@ _install_bind()
 # own colours (PAINT_SKIN over PAINT_BASE), so the recolour pass leaves them as painted.
 PAINT_BASE = dict(
     wrap="#ABA79F", mask="#BDB8AD", lip="#AE9F95", recess="#1D2127", glass="#A6C2D6", glass_core="#6D8597",
-    glass_eye="#46596A", cowl="#A9A69F", sleeve="#ADA8A0", shirt="#8F8B84", tabard="#5B6670", trim="#878C90",
+    glass_eye="#46596A", cowl="#A9A69F", sleeve="#ADA8A0", shirt="#A39F97", tabard="#5B6670", trim="#878C90",
     chevron="#878C90", tunic="#8A867E", belt="#40372F", strap="#3F3630", bracer="#433A34", buckle="#4A4743",
     legs="#262120", boots="#2C2926", sole="#1B1917", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
     quiver_in="#211B17", wood="#C6BDAB", grip="#3E3530", shaft="#BDB29E", fletch="#A9B6C0", string="#CFC8B8",
@@ -1386,8 +1425,8 @@ def paint_mask(p, n):
     lip = np.exp(-((x / 0.017) ** 2 + ((z - 1.651) / 0.0085) ** 2)) * _ss(-0.095, -0.102, y)
     col = _mix(col, C("lip") * k[:, None], 0.45 * lip)
     line_z = 1.6505 + 0.0032 * (x / 0.0155) ** 2
-    mline = np.exp(-((z - line_z) / 0.0010) ** 2) * _ss(0.018, 0.012, np.abs(x)) * _ss(-0.097, -0.103, y)
-    col = col * (1.0 - 0.30 * mline)[:, None]
+    mline = np.exp(-((z - line_z) / 0.0016) ** 2) * _ss(0.019, 0.012, np.abs(x)) * _ss(-0.096, -0.102, y)
+    col = col * (1.0 - 0.26 * mline)[:, None]
     # under the nose
     ns = np.exp(-((x / 0.010) ** 2 + ((z - 1.678) / 0.006) ** 2)) * _ss(-0.095, -0.104, y)
     col = col * (1.0 - 0.14 * ns)[:, None]
@@ -1405,7 +1444,7 @@ def paint_mask(p, n):
             a, b = np.array([sx * x0, z0]), np.array([sx * x1, z1])
             t = np.clip(((q - a) @ (b - a)) / max((b - a) @ (b - a), 1e-9), 0, 1)
             d = np.linalg.norm(q - (a + np.outer(t, b - a)), axis=1)
-            fac = np.maximum(fac, np.exp(-(d / 0.0011) ** 2))
+            fac = np.maximum(fac, np.exp(-(d / 0.0016) ** 2))
     fac = fac * _ss(-0.08, -0.095, y)
     col = col * (1.0 - 0.42 * fac)[:, None]
     # the ink recess behind the glass
@@ -1418,24 +1457,27 @@ def paint_visor(p, n):
     smoky core where the ink recess shows through, two darker eye shapes behind, a bright streak along the upper
     third, pale lit top and bottom faces (the beak's top reads from the game camera), the sides darker into the wrap"""
     x, y, z = p[:, 0], p[:, 1], p[:, 2] - VIS_Z
-    fr = _ss(0.55, 0.85, -n[:, 1])
-    core = np.exp(-(z / 0.014) ** 2) * fr
-    col = _mix(np.tile(C("glass"), (len(p), 1)), C("glass_core"), 0.30 * core)
+    outv = np.stack([x, y + 0.035, np.zeros(len(p))], 1)
+    outv = outv / (np.linalg.norm(outv, axis=1, keepdims=True) + 1e-9)
+    fr = _ss(0.35, 0.75, (n * outv).sum(1)) * (1.0 - _ss(0.6, 0.85, np.abs(n[:, 2])))
+    core = np.exp(-(z / 0.014) ** 2) * fr * _ss(0.09, 0.06, np.abs(x))
+    col = _mix(np.tile(C("glass"), (len(p), 1)), C("glass_core"), 0.38 * core)
     eye = np.zeros(len(p))
     for sx in (-1.0, 1.0):
         # an almond eye socket seen through the glass: crisp-edged, its outer corner lifted a little
-        ex = (x - sx * 0.033) / 0.019
-        ez = (z + 0.001 - 0.002 * sx * (x - sx * 0.033) / 0.019 * 0.0) / 0.0072
+        ex = (x - sx * 0.033) / 0.022
+        ez = (z + 0.001) / 0.0085
         r = ex ** 2 + (ez / np.maximum(1.0 - 0.35 * ex ** 2, 0.2)) ** 2
-        eye = np.maximum(eye, _ss(1.0, 0.65, r))
-    col = _mix(col, C("glass_eye"), 0.62 * eye * fr)
+        eye = np.maximum(eye, _ss(1.0, 0.45, r))
+    col = _mix(col, C("glass_eye"), 0.58 * eye * fr)
     streak = np.exp(-((z - 0.0135) / 0.0024) ** 2) * fr * _ss(0.085, 0.05, np.abs(x))
     col = col * (1.0 + 0.32 * streak)[:, None]
     topb = _ss(0.5, 0.8, np.abs(n[:, 2]))
     col = _mix(col, C("glass") * 1.08, topb)
-    sides = _ss(-0.10, -0.06, y) * (1.0 - topb)
+    sides = _ss(0.075, 0.095, np.abs(x)) * (1.0 - topb)
     col = col * (1.0 - 0.22 * sides)[:, None]
-    return col
+    inner = _ss(-0.3, -0.7, (n * outv).sum(1))
+    return _mix(col, C("glass_core") * 0.7, 0.6 * inner)
 
 
 def paint_neck(p, n):
@@ -1465,11 +1507,13 @@ def paint_tabard(p, n):
     concept's grey trims round the armholes, the neck and the shoulder pads' outer edges (review item 6)"""
     col = _cloth(p, n, "tabard", 0.05)
     trim = np.zeros(len(p))
+    on_pad = np.max(np.stack([_ss(0.006, 0.0, e.d(p)) for e in PADS]), axis=0)
     for e in ARMHOLES + [NECKHOLE]:
-        trim = np.maximum(trim, _trim_band(e.d(p)))
-    for e in PADS:
         dd = e.d(p)
-        edge = _ss(0.012, 0.004, np.abs(dd)) * _ss(0.226, 0.236, np.abs(p[:, 0]))
+        trim = np.maximum(trim, _trim_band(dd) * _ss(-0.006, -0.002, dd) * (1.0 - on_pad))
+    for e in PADS:
+        on = _ss(0.010, 0.003, np.abs(e.d(p)))
+        edge = on * _ss(0.013, 0.006, p[:, 2] - PAD_Z) * _ss(0.185, 0.20, np.abs(p[:, 0]))
         trim = np.maximum(trim, edge)
     col = _mix(col, C("trim") * (_brk(p, 0.04) * _tl(n, 0.12))[:, None], trim)
     return _skin_print(col, p, n, trim)
@@ -1857,6 +1901,16 @@ def _lightline(col):
     vs = [(bm.verts.new(tuple(a)), bm.verts.new(tuple(b))) for a, b in pts]
     for i in range(len(vs) - 1):
         bm.faces.new((vs[i][0], vs[i + 1][0], vs[i + 1][1], vs[i][1]))
+    # a soft halo strip under the core (its own material slot, dim)
+    hal = []
+    for i in range(41):
+        t = 0.15 + 6.0 * i / 40.0
+        w = 0.22 * (1.0 - 0.5 * i / 40.0)
+        c = d * t + np.array([0.0, 0.0, 0.002])
+        hal.append((bm.verts.new(tuple(c - s * w)), bm.verts.new(tuple(c + s * w))))
+    for i in range(len(hal) - 1):
+        f = bm.faces.new((hal[i][0], hal[i + 1][0], hal[i + 1][1], hal[i][1]))
+        f.material_index = 1
     ob = _mesh.bm_to_obj(bm, me_name, col)
     m = bpy.data.materials.new("lisvel_lightline")
     m.use_nodes = True
@@ -1868,6 +1922,16 @@ def _lightline(col):
     o = nt.nodes.new("ShaderNodeOutputMaterial")
     nt.links.new(e.outputs[0], o.inputs[0])
     ob.data.materials.append(m)
+    m2 = bpy.data.materials.new("lisvel_lighthalo")
+    m2.use_nodes = True
+    nt2 = m2.node_tree
+    nt2.nodes.clear()
+    e2 = nt2.nodes.new("ShaderNodeEmission")
+    e2.inputs["Color"].default_value = (0.70, 0.84, 1.0, 1.0)
+    e2.inputs["Strength"].default_value = 1.1
+    o2 = nt2.nodes.new("ShaderNodeOutputMaterial")
+    nt2.links.new(e2.outputs[0], o2.inputs[0])
+    ob.data.materials.append(m2)
     ob.visible_shadow = False
     return ob
 
@@ -2832,6 +2896,14 @@ def model(ctx) -> list:
     items = sculpts() + skin_extras(extra)
     _PART_NAMES[:] = [it[0] for it in items]
     for name, S, vs, role, bind, tris, uvw in items:
+        if name == "visor":
+            low = visor_mesh(ctx.col)
+            low.data.materials.append(ctx.mats[role])
+            high = visor_mesh(ctx.col)
+            high.name = "visor_high"
+            high.data.materials.append(ctx.mats[role])
+            P.append(fighter.Part(name, high=high, low=low, bind=bind, uv_weight=uvw))
+            continue
         if name == "string":
             low = string_mesh(ctx.col)
             low.data.materials.append(ctx.mats[role])
@@ -2841,12 +2913,58 @@ def model(ctx) -> list:
             P.append(fighter.Part(name, high=high, low=low, bind=bind, uv_weight=uvw))
             continue
         if extra.get("page_fletching") and name in ("fletching", "fan_fletch"):
-            S = page_fletching(name)
+            # the page-cut plates as exact boxes (an SDF of 3 mm plates meshed to 2500 tris and would not decimate)
+            low = page_mesh(name, ctx.col)
+            low.data.materials.append(ctx.mats[role])
+            high = page_mesh(name, ctx.col)
+            high.name = f"{name}_high"
+            high.data.materials.append(ctx.mats[role])
+            P.append(fighter.Part(name, high=high, low=low, bind=bind, uv_weight=uvw))
+            continue
         v, q = S.mesh(VOXEL * vs)
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind, uv_weight=uvw))
     return P
+
+
+VIS_T, VIS_H = 0.0036, 0.025                          # the visor glass: half thickness, half height
+
+
+def visor_path(x):
+    """the visor band's centreline seen from above (y at x): a flat front 3.2 cm ahead of the face-plate across the
+    eyes, bending back at the sides into the wrap at the temples"""
+    a = np.abs(np.asarray(x, dtype=np.float64)) / 0.100
+    return -0.1375 + 0.040 * a ** 1.6 + 0.062 * a ** 6
+
+
+def visor_mesh(col, n=46):
+    """the flat dawnglass visor as an exact strip (a decimated SDF slab shaded in long streaks and read as a box): a
+    rounded-rectangle section 7 mm x 5 cm swept along visor_path from temple to temple, ends closed"""
+    import bmesh
+    from common import mesh as _mesh
+    bm = bmesh.new()
+    xs = 0.100 * np.sin(np.linspace(-0.5 * math.pi, 0.5 * math.pi, n))
+    T, H, c = VIS_T, VIS_H, 0.0014
+    sec = [(T, H - c), (T - c, H), (-T + c, H), (-T, H - c), (-T, -H + c), (-T + c, -H), (T - c, -H), (T, -H + c)]
+    rings = []
+    for x in xs:
+        e = 1e-4
+        p0 = np.array([x, float(visor_path(x)), VIS_Z])
+        t = _n(np.array([2 * e, float(visor_path(x + e) - visor_path(x - e)), 0.0]))
+        out = np.array([t[1], -t[0], 0.0])                      # away from the head (front: -y)
+        if out[1] > 0:
+            out = -out
+        rings.append([bm.verts.new(tuple(p0 + out * a + np.array([0.0, 0.0, b]))) for a, b in sec])
+    m = len(sec)
+    for i in range(len(rings) - 1):
+        r0, r1 = rings[i], rings[i + 1]
+        for k in range(m):
+            bm.faces.new((r0[k], r1[k], r1[(k + 1) % m], r0[(k + 1) % m]))
+    bm.faces.new(list(reversed(rings[0])))
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh.bm_to_obj(bm, "visor_low", col)
 
 
 def string_mesh(col, sides=5, rings=26, r=0.0046):
@@ -2872,6 +2990,48 @@ def string_mesh(col, sides=5, rings=26, r=0.0046):
     bm.faces.new(ringv[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return _mesh.bm_to_obj(bm, "string_low", col)
+
+
+def _page_boxes(name: str) -> list:
+    """(centre, axes rows, half sizes) of Almanac's page-cut plates (flat 3 x 8 cm, 3 mm)"""
+    out = []
+    if name == "fletching":
+        for w, n, rise, lean, vt in ARROWS:
+            d = _n(Q_U + Q_W * math.tan(math.radians(lean)))
+            tip = Q_TOP + Q_W * w + Q_N * n + d * rise
+            e1 = _n(np.cross(d, Q_N))
+            for j in range(2):
+                a = math.radians(vt + j * 90.0)
+                vd = e1 * math.cos(a) + np.cross(d, e1) * math.sin(a)
+                out.append((tip - d * 0.060 + vd * 0.004, np.stack([np.cross(d, vd), d, vd]), (0.0015, 0.040, 0.016)))
+    else:
+        for ang in FAN_ANGLES:
+            d = fan_dir(ang)
+            base = PINCH_R - d * 0.05
+            e1 = _n(np.cross(d, [0.0, 0.0, 1.0]))
+            for j in range(2):
+                a = math.radians(30.0 + j * 90.0)
+                vd = e1 * math.cos(a) + np.cross(d, e1) * math.sin(a)
+                out.append((base + d * 0.045, np.stack([np.cross(d, vd), d, vd]), (0.0015, 0.040, 0.016)))
+    return out
+
+
+def page_mesh(name: str, col):
+    import bmesh
+    from common import mesh as _mesh
+    bm = bmesh.new()
+    for c, ax, h in _page_boxes(name):
+        vs = {}
+        for i in (-1, 1):
+            for j in (-1, 1):
+                for k in (-1, 1):
+                    vs[(i, j, k)] = bm.verts.new(tuple(c + ax[0] * h[0] * i + ax[1] * h[1] * j + ax[2] * h[2] * k))
+        for f in (((-1, -1, -1), (-1, 1, -1), (1, 1, -1), (1, -1, -1)), ((-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)),
+                  ((-1, -1, -1), (1, -1, -1), (1, -1, 1), (-1, -1, 1)), ((-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1)),
+                  ((-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1)), ((1, -1, -1), (1, 1, -1), (1, 1, 1), (1, -1, 1))):
+            bm.faces.new([vs[q] for q in f])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh.bm_to_obj(bm, f"{name}_low", col)
 
 
 def page_fletching(name: str) -> Sculpt:

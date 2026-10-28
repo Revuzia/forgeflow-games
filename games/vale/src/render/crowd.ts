@@ -50,6 +50,9 @@ export interface CrowdBake {
   /** the template root's placement: the per-actor clone keeps it, so the crowd does too */
   readonly rootPos: Vector3;
   readonly rootQuat: Quaternion;
+  /** a monster template (UnitDef.kind): its accent takes the monster's share of the character light (actors.ts
+   *  charLight), as the per-actor accents and the crowd bodies' cloned hook do */
+  readonly monster: boolean;
 }
 
 let bakeSeq = 0;
@@ -74,7 +77,7 @@ function foldBind(ref: Skeleton, m: SkinnedMesh): Matrix4 | null {
  * Bake a template for the crowd, or null when it does not qualify. `hull`: the template's hull plan (lead mesh
  * index in traverse order + merged geometry). `accentName`: the material whose colour is the readability accent.
  */
-export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hull: readonly { lead: number; geometry: BufferGeometry; skinned: boolean }[], accentName: string, maxRows: number): CrowdBake | null {
+export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hull: readonly { lead: number; geometry: BufferGeometry; skinned: boolean }[], accentName: string, maxRows: number, monster = false): CrowdBake | null {
   const meshes: SkinnedMesh[] = [];
   let ok = clips.size > 0;
   scene.traverse((o) => {
@@ -134,7 +137,7 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
     id: ++bakeSeq, texture, bones: ref.bones.length, clips: table,
     parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName })),
     hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0] })),
-    rootPos: scene.position.clone(), rootQuat: scene.quaternion.clone(),
+    rootPos: scene.position.clone(), rootQuat: scene.quaternion.clone(), monster,
   };
 }
 
@@ -380,8 +383,9 @@ class CrowdSet {
         mat.color.copy(tint).multiplyScalar(0.3);
         mat.emissive.copy(tint);
         mat.emissiveIntensity = 1;
-        // crowd units are wicks and small monsters (UnitDef.art.instanced): their share of the character light
-        patchWorldMaterial(mat, { unit: true });
+        // crowd units are wicks and small monsters (UnitDef.art.instanced): their share of the character light (a
+        // uniform: the same program either way)
+        patchWorldMaterial(mat, { unit: true, monster: bake.monster });
         this.accentMats.push(mat);
       } else {
         // the template material's world patch (fog of war, grade hooks) does not survive clone(): carry its hook

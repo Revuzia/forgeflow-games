@@ -247,7 +247,7 @@ export function numeral(set: StrokeSet, c: V2, n: number, h: number, w: number, 
 }
 
 /** the painted lane decals along one road (lane polish): hairline cracks across the flags and, sparser, the chalk a
- *  walker leaves on a sundial's road (a sketched noon-mark, an hour tally, a shadow-arrow along the road, an hour
+ *  walker leaves on a sundial's road (a sketched noon-mark, an hour tally, a dusk crescent, an hour
  *  numeral, a ringed spot). Deterministic from the path and the seed. `crack` / `chalk` name the inlay channels the
  *  surface reads them from (each ground style keeps its own free channels; chalk null = cracks only); `half` is the
  *  lateral range either side of the path (m); keep() vets every point a mark touches (walls, plazas, the Seat, the
@@ -322,16 +322,20 @@ export function laneDecals(set: StrokeSet, path: readonly V2[], o: LaneDecalOpts
         for (let i = 0; i < m; i++) { const x = x0 + i * sp + (rnd() - 0.5) * 0.015; chalkLine([x + tilt * hh, c[1] - hh], [x - tilt * hh, c[1] + hh], w, ch); }
         chalkLine([x0 - 0.07, c[1] + hh * 0.55], [x0 + sp * (m - 1) + 0.07, c[1] - hh * 0.6], w, ch);
       } else if (kind === 2) {
-        // a shadow-arrow along the road: which way the noon shadow fell (or which way the walker went)
-        const sg = rnd() < 0.5 ? -1 : 1, d: V2 = [t[0] * sg, t[1] * sg], L = 0.4 + rnd() * 0.2;
-        const tip: V2 = [c[0] + d[0] * L, c[1] + d[1] * L];
-        chalkLine([c[0] - d[0] * L, c[1] - d[1] * L], tip, w, ch);
-        for (const side of [-1, 1]) {
-          const a = Math.atan2(d[1], d[0]) + Math.PI + side * 0.5;
-          chalkLine(tip, [tip[0] + Math.cos(a) * 0.2, tip[1] + Math.sin(a) * 0.2], w, ch);
-        }
-        // the dial's foot: a short bar across the tail
-        set.seg([c[0] - d[0] * L - n[0] * 0.09, c[1] - d[1] * L - n[1] * 0.09], [c[0] - d[0] * L + n[0] * 0.09, c[1] - d[1] * L + n[1] * 0.09], w * 0.9, ch);
+        // a dusk crescent: the hour the walker left (never an arrow: a pale arrow on the road reads as an aim or a
+        // direction cue). Outer circle (c, r), inner (c + u·s, r2), each arc drawn on the side away from u
+        const r = 0.19 + rnd() * 0.05, r2 = r * 0.86, s2 = r * 0.5, g = rnd() * Math.PI * 2, u: V2 = [Math.cos(g), Math.sin(g)];
+        const xi = (r * r - r2 * r2 + s2 * s2) / (2 * s2), yi = Math.sqrt(Math.max(0, r * r - xi * xi));
+        const arc = (o: V2, rr: number, th: number): V2[] => {
+          const q: V2[] = [], m = 9;
+          for (let i = 0; i <= m; i++) {
+            const a = g + th + (i / m) * (Math.PI * 2 - 2 * th), k = rr * (1 + (rnd() - 0.5) * 0.06);
+            q.push([o[0] + Math.cos(a) * k, o[1] + Math.sin(a) * k]);
+          }
+          return q;
+        };
+        line(arc(c, r, Math.atan2(yi, xi)), w, w * 0.85, ch);
+        line(arc([c[0] + u[0] * s2, c[1] + u[1] * s2], r2, Math.atan2(yi, xi - s2)), w * 0.85, w * 0.8, ch);
       } else if (kind === 3) {
         // an hour numeral, chalked where someone waited for it
         numeral(set, c, 1 + Math.floor(rnd() * 12), 0.26 + rnd() * 0.06, w, ch);
