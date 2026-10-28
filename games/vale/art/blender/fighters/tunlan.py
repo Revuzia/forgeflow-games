@@ -204,9 +204,9 @@ BEAD_R = 0.040            # the smoked lampresin bead inside the cage; the accen
 # the lamp-glass lens in the FRONT brim (accent inside an ironstone grommet): centre radius, half sizes along / across
 VENT_CR = 0.418           # the lamp slot's centre radius on the front brim
 # its half width across the brim / half length along it (arc length, round ends): fix pass 2 cut the 42 cm arc (a
-# white bracket over the disc in game) to a 25 x 10 cm lamp lens, the brief's notch kept as large as the 1.5 % accent
-# gate needs
-VENT_HR, VENT_HT = 0.052, 0.125
+# white bracket over the disc in game) to a 30 x 12 cm lamp lens, the brief's notch kept as large as the accent gates
+# need (three QA 1.5 %; lineup_qa >= 1.0 % at every facing, the back facing sees it foreshortened)
+VENT_HR, VENT_HT = 0.060, 0.150
 
 
 HEAD_CRACK = [(0.058, 1.782), (0.036, 1.738), (0.046, 1.706), (0.016, 1.652), (0.010, 1.612)]   # (x, z) on the back
@@ -705,6 +705,7 @@ def rim_profile() -> list:
 
 
 _BUILD = {"skin": None}
+HEAD_LOW_VOXEL = 0.034    # the head-box low: surface nets at 3.4 cm (~1000 tris)
 
 
 def model(ctx) -> list:
@@ -720,6 +721,15 @@ def model(ctx) -> list:
             continue
         if name == "hat_rim":
             low = lathe_low("hat_rim_low", rim_profile(), ctx.mats[role], ctx.col, 48)
+            P.append(fighter.Part(name, high=ob, low=low, bind=bind))
+            continue
+        if name == "head":
+            # the head-box's game mesh is the same SDF netted coarse (regular quads, no folds): the collapse
+            # decimation folded two triangles over its flat back, whose vertex normals then pointed up and the
+            # normal bake drew a pale 'shard' across the back of the box in three
+            lv, lq = S.mesh(HEAD_LOW_VOXEL)
+            low = sdf.to_object("head_low", lv, lq, ctx.col)
+            low.data.materials.append(ctx.mats[role])
             P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
@@ -1239,7 +1249,7 @@ HAT_SCHEMES = {
     # in each panel fading to the named #A38C6B at its ribs)
     # (fix pass 2: golden panels lit from the middle out, the light falling off over most of the panel's width to a warm
     # tan, the named #A38C6B only at the ribs; the rim the brief's walnut #5E4D3E, which also carries the top band)
-    "tunlan_lamplit": {"top": "#ECD5A6", "edge": "#A38C6B", "mid": "#D2B387", "glow": "#F2D49A", "seam": "#4E3D2F",
+    "tunlan_lamplit": {"top": "#ECD5A6", "edge": "#A38C6B", "mid": "#DDBB86", "glow": "#F2D49A", "seam": "#4E3D2F",
                        "crown": "#E0CCA2", "under": "#3E3229", "rim": "#5E4D3E", "rim_hi": "#7E6650"},
 }
 
@@ -1273,11 +1283,11 @@ def _hat_paint(p, n, hexes=None):
         # most of its width (a falloff only at the rim sat under the highlight cap and read as flat cream paper), a
         # brighter ring across the middle of the shade, dimmer toward the crown and the brim; the named lampresin edge
         # #A38C6B against the ribs
-        across = np.cos(np.clip(du, 0, 1) * math.pi / 2) ** 1.4
-        along = 0.70 + 0.30 * np.exp(-((rr - 0.45) / 0.40) ** 2)
+        across = np.cos(np.clip(du, 0, 1) * math.pi / 2) ** 1.1
+        along = 0.76 + 0.24 * np.exp(-((rr - 0.45) / 0.40) ** 2)
         g_ = np.clip(across * along, 0, 1)
         pc = mid_c[None, :] * (1 - g_)[:, None] + glow_c[None, :] * g_[:, None]
-        e_ = ss(0.80, 1.0, du)
+        e_ = ss(0.86, 1.0, du)
         pc = pc * (1 - e_)[:, None] + edge_c[None, :] * e_[:, None]
         c = pc * (mott * (1.0 + 0.04 * ss(-0.3, 0.9, n @ KEY)))[:, None]
         rib = np.exp(-((dth * r) / 0.0050) ** 4) * ss(0.20, 0.23, r)
@@ -1664,10 +1674,11 @@ def _fill_gutters(arr, valid, iters=40):
 
 _orig_recolour = _project.recolour
 BRIEF_CLOTH = "#7C6C66"       # the brief's base felt robe (§5): the skins' cloth hexes (§9) are written against it
-SKIN_FELT = {"tunlan_noon_fair": (1.7, 0.88), "tunlan_lamplit": (1.0, 0.92)}   # (chroma gain, value gain)
+SKIN_FELT = {"tunlan_noon_fair": (1.7, 0.88), "tunlan_lamplit": (1.0, 0.84)}   # (chroma gain, value gain)
 # the felt's target colour where the skin's cloth hex reads wrong on screen: Lamplit's #7F6D60 (24 % sat) came out a
-# neutral blue-grey under the sky ambient (hue 247, 3 %); a warmer walnut (hue 23, 35 % sat: outside the marigold band)
-SKIN_FELT_HEX = {"tunlan_lamplit": "#7E6352"}
+# neutral blue-grey under the sky ambient (hue 247, 3 %) and a beige wash in the splash; a deeper warm walnut (hue 23,
+# outside the marigold band; ~20 % saturation on screen)
+SKIN_FELT_HEX = {"tunlan_lamplit": "#7A5A46"}
 
 
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
@@ -1720,7 +1731,8 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         rel = np.clip(_Y(lc) / max(Ymed, 1e-4), 0.25, 2.2)
         new = 0.75 * skin_lin[None, :] * rel[:, None] + 0.25 * lc * gain[None, :]
         out[m] = _srgb(lc * (1 - rose[:, None]) + new * rose[:, None])
-        log(f"  tunlan recolour {nm}: felt -> {skin_pal['cloth']} on {100 * float((rose > 0.5).mean()):.0f}% of it")
+        log(f"  tunlan recolour {nm}: felt -> {SKIN_FELT_HEX.get(_BUILD.get('skin'), skin_pal['cloth'])} on "
+            f"{100 * float((rose > 0.5).mean()):.0f}% of it")
     return out
 
 
@@ -1773,16 +1785,18 @@ def _fighter_renders(ctx, objs, P, skin, *a, **k):
 _render.fighter_renders = _fighter_renders
 
 # the health bar (src/render/actors.ts: art height + 0.35 m, the 15 px bar centred there): from the 52 degree camera the
-# 1.10 m brim's far edge (r 0.55, z 1.89) projects ABOVE an anchor at 2.05 + 0.35 m, so the bar sat on the back of
-# the brim. At 2.50 (+22 %, inside the content's 25 %) the bar's lower edge clears the far rim by ~5 px at 1080p.
-ART_HEIGHT = 2.50
+# 1.10 m brim's far edge (r 0.55, z 1.89) projects ABOVE an anchor at 2.05 + 0.35 m, so the bar sits on the back of the
+# brim. Full clearance needs art.height ~2.50, but three_load_test requires art.height == the model's top within 6 cm
+# (Burdam's fix pass 4 met the same wall): the bar is lifted the allowed 5 cm (ART_LIFT, as Vashil); the rest is a
+# game-side bar offset, outside the art lane.
+ART_LIFT = 0.05
 _orig_art_fragment = _pipeline.art_fragment
 
 
 def _art_fragment(spec, clips_info, mesh_top=None):
     frag = _orig_art_fragment(spec, clips_info, mesh_top)
-    if getattr(spec, "ID", None) == ID:
-        frag["height"] = ART_HEIGHT
+    if getattr(spec, "ID", None) == ID and mesh_top:
+        frag["height"] = round(float(mesh_top) + ART_LIFT, 2)
     return frag
 
 
@@ -2188,7 +2202,7 @@ def ik(*ds):
 # as if they held a marionette's strings (brief §8: "both hands held loosely in front of the chest, about to shape")
 # (fix pass 2: the wrists lifted to the chest and the hands pitched UP from them, so the half-curled fingers arch
 # forward over the chest instead of hanging off the wrists at 90 degrees)
-GUARD_W = (0.165, -0.215, 1.315)          # her left wrist (the right mirrored in x)
+GUARD_W = (0.165, -0.230, 1.355)          # her left wrist (the right mirrored in x)
 GUARD_F = (-0.16, -0.90, 0.40)            # the left hand: forward, rising ~24 deg, a little in
 GUARD_P = (-0.34, -0.33, -0.88)           # its palm: down and in (the backs of the hands up, toward the camera)
 GF_L = dict(a=(20, 28, 24), b=(26, 34, 28), t=(10, 14), sa=4)
@@ -2290,7 +2304,7 @@ def clip_attack1():
     fol = compose(stance_pose(), body(hips=(5, 15, 0), spine=(6, 12, 0), chest=(7, 16, 0), head=(-3, -13, 0), fwd=0.055),
                   guard_arms(), ik(wrist("R", -0.10, -0.72, 1.32, (-0.8, 0.3, -0.4)),
                                    orient("R", (0.10, -0.96, 0.10), (0.05, -0.10, -0.99))),
-                  guard_fingers(), fingers("R", a=(46, 58, 44), b=(84, 94, 62), t=(32, 38)))
+                  guard_fingers(), fingers("R", a=(80, 94, 68), b=(84, 96, 70), t=(32, 40)))
     # (fix pass 2: after the flick the pointing pair snaps back into the fist and the hand stays level, so the
     # recovery never droops the 0.28 m fingers into a sickle hook)
     return strike("attack1", 20, wind, hit, fol, g)

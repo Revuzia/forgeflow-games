@@ -130,13 +130,13 @@
  Silhouette fit to the concept now IoU 0.826 front / 0.822 back (was 0.85: the smaller hat). Not committed.
 
 ## FIX PASS 2 (2026-10-28 09:41) — reviewer items 1-8; agent started, read _progress.md
-- 10:20 diagnosis: (1) three.js with normal + AO maps stripped still shows the stripes -> they are in the albedo: the
+- ~09:52 diagnosis: (1) three.js with normal + AO maps stripped still shows the stripes -> they are in the albedo: the
   projected skirt (plate brush lines + the soft cream/felt edge stretched round the sides); the hand ghost is the AO
   bake (bind-pose hands at the thighs; 25 % of it is in the base too). (6) the head 'shard' is geometry: the 1.5 mm crack
   groove folds the 900-tri low into a tilted sliver (pale in three with or without the normal map); the pale sliver on
   the box's edge is the mask's pale side faces seen past the box from behind. (HP bar) the 1.10 m brim's far edge
   projects above an anchor at 2.05 + 0.35 m from the 52 deg camera.
-- 10:20 code (fix pass 2): skirt painted from the plate's TONES (_skirt_tones / _skirt_paint: felt + cream per 2 cm of
+- ~09:53 code (fix pass 2): skirt painted from the plate's TONES (_skirt_tones / _skirt_paint: felt + cream per 2 cm of
   height, panel bounded by the SKIRT_EDGE grooves, key light + the sculpt's own ang_folds + felt grain, dark seam at the
   panel edge, hem); AO bake with the rigid hands / wraps / cuffs moved 1 m out (_ao_hands_away, select_only hook,
   restored before the paint); head crack painted only (no groove), darker; mask side faces in wood shade; lamp slot
@@ -145,3 +145,23 @@
   the floor (Orient world=True); taunt with two real hops (feet off the ground) + bigger ear flops; ART_HEIGHT 2.50
   (art_fragment wrapper); Lamplit felt target #7E6352 (SKIN_FELT_HEX), golden panel glow over the whole panel width,
   rim #5E4D3E. Base build started (log /tmp/tunlan_fp2_base.log).
+- ~10:00 base fp2-a: 21,224 tris, 1144 KiB, three accent 1.57 %, load OK. Skirt clean in three (felt + crisp cream
+  panel, no stripes / ghost; turntable cells 2 + 8 clean); AO without hand blobs; idle hands before the chest; death
+  hands flat on the floor; taunt hops. Left: attack1 follow still hooks (the pair at 148 deg curl = a hook) -> fist;
+  the head 'shard' is NOT the crack: two collapse-decimation triangles folded over the flat back (normals (0,-1,0)),
+  their vertices' normals point up and the normal bake draws a wedge -> head low = the SDF netted at 3.4 cm
+  (HEAD_LOW_VOXEL, no decimation); guard wrists up to z 1.355; lens 27 x 11 cm (accent margin). Base rebuild fp2-b.
+- ~10:07 base fp2-b: 21,224 tris (head low = 448 netted quads, no folded faces), 1137 KiB, three accent 1.81 % (top 100 %);
+  head back clean in three (dark crack, no shard); attack1 follow = a compact fist (no hook); idle hands before the
+  chest. LOAD TEST FAIL: three_load_test requires art.json height == model top within 6 cm (2.50 vs 2.05) -> the HP-bar
+  lift limited to ART_LIFT 0.05 (art.height 2.10, as Vashil); full clearance needs a game-side bar offset. Rebuild fp2-c.
+- ~10:12 base fp2-c: art.json height 2.10; standalone three_load_test OK (the in-build test had read the previous
+  art.json). Final base rebuild (report shows the load test) + skins build started (log /tmp/tunlan_fp2_skins.log).
+- ~10:16 final base (load test OK, 21,224 tris, 1137 KiB, three accent 1.81 %) + skins s1 (noon_fair 21,904 / 907 KiB,
+  lamplit 21,224 / 886 KiB, accent 1.79 %, load OK). content art.height 2.10 (= art.json); build_content --check OK
+  (nothing missing for tunlan / skins); probe_kits_A 525/0, B 733/0; in game _harness/_shots/art2_tunlan_* (bar just
+  touches the brim's top). lineup_qa (art/renders/fighters/tunlan/lineup/tunlan_fp2.*): base 70.9/60.4/32.3,
+  noon_fair 70.4/61.7/32.2 OK; lamplit top 69.0 (< 70); accentOk FALSE (the back facing 0.90 % < 1.0 with the
+  27 cm lens). Lamplit felt on screen now hue 15-21 / 16-22 % (was 247 / 3 %) but the splash still reads beige.
+  s2: lens 30 x 12 cm (hr 0.060 / ht 0.150); Lamplit felt #7A5A46 x 0.84 (deeper walnut), panel mid #DDBB86 (39 %
+  sat), wider core, edge only at the ribs (top band). Base + skins rebuild.

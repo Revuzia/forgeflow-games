@@ -1352,11 +1352,11 @@ HOLD = ("staff", "staff_grip", "ferrule", "cup_hook", "cup_rim", "cup_glass", "r
 # normal) times the concept's HIGH-PASS (the painted bands, their lit tops, the dark lines between them, < ~4 cm): the
 # painting's broad shading and the arm / staff paint beside the barrel no longer print as grey-brown camouflage
 # patches (the splash's victory pose shows the flanks); the gain lifts the middle band off the L* 45 floor
-CLEAN = {"torso": 1.10, "skirt": 1.13, "sleeve_L": 1.07, "sleeve_R": 1.07}
+CLEAN = {"torso": 1.16, "skirt": 1.18, "sleeve_L": 1.12, "sleeve_R": 1.12}
 CLEAN_SIGMA = 0.035                                   # m: the high-pass's low-pass
 CLEAN_RANGE = (0.62, 1.32)
 # z / 1.65 -> linear gain: light hood and face, the wraps a step down, dark boots (brief §6)
-VALUE_RAMP = [(0.0, 0.66), (0.06, 0.70), (0.14, 0.78), (0.24, 0.86), (0.34, 0.90), (0.48, 0.93), (0.60, 0.98),
+VALUE_RAMP = [(0.0, 0.66), (0.06, 0.70), (0.14, 0.78), (0.24, 0.86), (0.34, 0.92), (0.48, 0.955), (0.60, 0.99),
               (0.72, 1.02), (0.85, 1.04), (1.0, 1.05)]
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
 SIDE_PARTS = ("hood", "torso", "belt", "skirt", "pants", "shins", "sleeve_L", "sleeve_R", "bracer_L", "bracer_R", "face")
@@ -1371,7 +1371,7 @@ SIDE_X = {"torso": (0.30, 0.36, 0.30, 0.92), "skirt": (0.34, 0.40, 0.30, 0.52)}
 OBLIQUE = {"torso": 0.55, "hood": 0.45, "skirt": 0.45, "sleeve_L": 0.5, "sleeve_R": 0.5, "pants": 0.4, "shins": 0.4}
 DARK_FLOOR, DARK_KNEE = 0.66, 0.86
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
-LINING_HEX = "#2B221D"
+LINING_HEX = "#3A2F28"          # fp1-6: a step up (the lining is a big dark area in the middle band from above)
 HOOD_TONE = 0.68
 HOOD_WARM, HOOD_WARM_K = "#D6C6A6", 0.45     # build 3: three rendered the linen a cool bone-white: pulled toward warm cream
 
@@ -1954,21 +1954,23 @@ SKIN_PARTS = {
     # fix pass 1: the wraps' LIT FRONT tone goes to the named wet-stone (build 9 matched their median, so the cream
     # front came out a pale sky blue-grey); the hood and plates a step darker (the top band was 84.2, at the cap)
     "sukri_stillwater": {"torso": "#59666A", "skirt": "#5E6B6E", "sleeve_L": "#5C696D", "sleeve_R": "#5C696D",
-                         "shins": "#7E8886", "hood": "#A39E8C", "plates": "#9C998E", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
+                         "shins": "#7E8886", "hood": "#A39E8C", "plates": "#B4B0A4", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
                          "bracer_R": "#3E4446", "pants": "#323A3C", "cord": "#6F7468"},
     # fix pass 1: the feet band (L* 18) lifted: lighter leggings / boots and pale printed shin wraps; the hood and
     # plates a step darker
-    "sukri_shadeprint": {"hood": "#A29EAD", "plates": "#B0ADBA",
+    "sukri_shadeprint": {"hood": "#A29EAD", "plates": "#BAB7C4",
                          "face": "#BDB3A3", "staff": "#BFB5A4", "cup_glass": "#C5CFE0", "belt": "#34323D",
                          "bracer_L": "#383640", "bracer_R": "#383640", "pants": "#3A3843", "boots": "#3F3C46",
                          "hand_R": "#3E3C46", "hand_L": "#3E3C46", "cord": "#5A5566"},
 }
 FRONT_MED = ("torso", "skirt", "sleeve_L", "sleeve_R")     # matched on their lit front texels
+HI_MED = ("hood", "plates")    # matched on their lit half (fp1-4: the hood's dark lining pulled the median down, so the
+                               # gain lit Stillwater's hood near-white: top band 85.1)
 # Shadeprint (fix pass 1: build 9's thin light lines along the painted grooves read as white pyjama scribbles): the
 # wraps printed in two tones from the painted relief smoothed to band scale: every band's LIT surface in a soft light
 # (the light-rimmed edge), the rest and the grooves in ink; the skirt panels carry a printed light hem; the shin wraps
 # print the other way round (light cloth, ink lines) for the feet band
-PRINT = {"sukri_shadeprint": ("#383744", "#9E9AAC")}       # (ink, light rim: fp1-3 a softer pair, less zebra)
+PRINT = {"sukri_shadeprint": ("#3A3946", "#A8A4B6")}       # (ink, light rim: fp1-3 a softer pair, less zebra)
 PRINT_LIGHT_SHINS = "#ABA7B6"
 _RELIEF_SMOOTH: dict = {}
 
@@ -2023,37 +2025,46 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         c = out[m]
         own = part[m] >= 0
         if sid in PRINT and nm in WRAP_PARTS:
+            # fp1-5: the print follows the BASE wraps' own band structure (their luminance over the part's clean tone
+            # per height = the concept's high-pass, hidden texels already flat): each band's lit top prints light,
+            # the rest ink (coherent band shapes; the painted relief gave dabs and scribbles)
             ink, light = (_lin(_hex(h)) for h in PRINT[sid])
             lin = _lin(c)
             Y = _Y(lin)
-            med = float(np.median(Y[own])) if own.any() else float(np.median(Y))
-            r = np.clip(Y / max(med, 1e-4), 0.55, 1.45) ** 0.40
-            P_ = Pm[m]
-            wf = ss(0.05, -0.05, Nm[m][:, 1])
-            rel = (_relief_smooth_at("front", P_[:, 0], P_[:, 2]) * wf
-                   + _relief_smooth_at("back", P_[:, 0], P_[:, 2]) * (1 - wf))
-            lit = ss(0.00025, 0.0011, rel)
-            groove = ss(0.0006, 0.0018, -rel)
+            P_, N_ = Pm[m], Nm[m]
+            face = np.abs(N_[:, 1])
+            good = (face > 0.80) & own & (Y > 0.01)
+            gf, gb = good & (N_[:, 1] < 0), good & (N_[:, 1] > 0)
+            tf = _band_tone(P_[gf, 2], lin[gf], P_[:, 2], step=0.04) if gf.sum() >= 40 else None
+            tb = _band_tone(P_[gb, 2], lin[gb], P_[:, 2], step=0.04) if gb.sum() >= 40 else None
+            tf = tf if tf is not None else (tb if tb is not None else np.repeat(np.median(lin, 0)[None, :], len(lin), 0))
+            tb = tb if tb is not None else tf
+            wbb = ss(-0.35, 0.35, N_[:, 1])[:, None]
+            Yt = np.maximum(_Y(tf * (1 - wbb) + tb * wbb), 1e-4)
+            r = Y / Yt
+            shade = np.clip(Yt / max(float(np.median(Yt)), 1e-4), 0.6, 1.4) ** 0.35
             if nm == "shins":
                 pale = _lin(_hex(PRINT_LIGHT_SHINS))
-                k_ = np.clip(0.80 * groove, 0, 0.8)[:, None]
+                k_ = np.clip(0.80 * ss(0.90, 0.70, r), 0, 0.8)[:, None]
                 col = pale[None, :] * (1 - k_) + ink[None, :] * k_
                 share = float((k_[:, 0] < 0.4).mean())
             else:
-                w_ = np.clip(lit * 0.90, 0, 0.9)
+                w_ = np.clip(ss(1.03, 1.17, r) * 0.92, 0, 0.92)
                 if nm == "skirt":
                     hem = _skirt_hem(P_)
-                    w_ = np.maximum(w_ * 0.55, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
+                    w_ = np.maximum(w_, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
                 col = ink[None, :] * (1 - w_[:, None]) + light[None, :] * w_[:, None]
-                col = col * (1 - 0.25 * groove)[:, None]
+                col = col * (1 - 0.30 * ss(0.85, 0.65, r))[:, None]          # the dark band edges stay inked
                 share = float((w_ > 0.45).mean())
-            out[m] = _srgb(_hi_cap(col * r[:, None]))
+            out[m] = _srgb(_hi_cap(col * shade[:, None]))
             log(f"  sukri print {nm}: {100 * share:.0f}% light")
             continue
         if nm in targets:
             lin = _lin(c[own]) if own.any() else _lin(c)
             Y = _Y(lin)
             mid = (Y > np.quantile(Y, 0.25)) & (Y < np.quantile(Y, 0.9))
+            if nm in HI_MED:                       # the lit outer shell, never the dark lining / grooves
+                mid = (Y > np.quantile(Y, 0.45)) & (Y < np.quantile(Y, 0.95))
             if nm in FRONT_MED:
                 fr = (Nm[m][own] if own.any() else Nm[m])[:, 1] < -0.55
                 if fr.sum() > 40:
