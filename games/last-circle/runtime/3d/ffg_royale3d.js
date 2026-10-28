@@ -996,6 +996,11 @@ register3d("royale", async function (kernel, content) {
     // maps.js builds the tier that will be drawn. LC-23: PLAY stops the idle prefetch (in-flight bytes are aborted).
     try { if (AUTO.state === "measuring") autoTierDecide(true); } catch (e) { console.warn("[royale] auto-tier decision failed:", e); }
     try { prefetchStop("play"); } catch (e) {}
+    // R1 boot (sky_lowtier boot row): a tier re-warm still linking the OLD match's programs (KHR_parallel_shader_compile links
+    // off-thread) must finish before teardownMatch disposes those materials: deleting a program whose link is in flight made the
+    // browser's own program-status poll hit a deleted name (GL_INVALID_VALUE: glGetProgramiv: Program object expected, measured
+    // 3 to 48 per run). W._starting is already set, so the re-warm skips its frame; the wait is the link wait only, bounded.
+    if (REWARM.busy && REWARM.p) { try { await withTimeout(REWARM.p, 20000); } catch (e) { /* bounded: start anyway */ } }
     try {
       return await _startMatch(opts || {});
     } catch (err) {
@@ -1012,6 +1017,9 @@ register3d("royale", async function (kernel, content) {
    *  to call twice, and an empty roster makes the actor walk a no-op. */
   function teardownMatch() {
     const out = {};
+    // R1 boot: a new generation of the match world - an in-flight tier re-warm (rewarmRoute) checks it and stops drawing a world
+    // that is being disposed under it
+    W._matchGen = (W._matchGen | 0) + 1;
     // DISPOSE BEFORE DROPPING THE ROSTER: every actor registers an
     // AnimationMixer with the kernel, and the kernel only ever removes one on an
     // explicit disposeMixer. Clearing the group detaches the meshes but leaves
@@ -1430,7 +1438,7 @@ register3d("royale", async function (kernel, content) {
    *  bodies, FX pools) plus the weapon and pickup prototypes, which are never in
    *  the scene themselves (only clones are) — warmup parents them for the one
    *  frame and removes them again. Every provider is feature-detected. */
-  async function warmMatch(slot) {
+  async function warmMatch(slot, alive) {
     const extras = [];
     const seen = new Set();                 // the same object offered by two modules is parented once
     const by = {};                          // per-provider counts (W._warm.by) so a probe sees who contributed
@@ -1464,8 +1472,10 @@ register3d("royale", async function (kernel, content) {
       } catch (e) { /* bounded wait: the fallback capsules are already warm */ }
     }
     let stats = null;
+    // a re-warm whose match was torn down during the pickup wait above warms nothing (the extras belong to a disposed world)
+    if (alive && !alive()) { const rec = { extrasIn: extras.length, by, post: W._gfx && W._gfx.post, aborted: true }; W[slot || "_warm"] = rec; return rec; }
     try {
-      if (typeof kernel.warmup === "function") stats = await kernel.warmup({ extras });
+      if (typeof kernel.warmup === "function") stats = await kernel.warmup(alive ? { extras, alive } : { extras });
       else {
         // pre-C7 kernel: the old canvas-variant compile + fx's own pool warm
         if (fxMod.prewarm) fxMod.prewarm(W);
@@ -1487,17 +1497,26 @@ register3d("royale", async function (kernel, content) {
    *  culled, a pickup out of cull range) linked on the frame it first came into view - measured: a MeshStandardMaterial body/gun program at
    *  frame 135 after medium -> low. So the same C7 warm-up the match start runs is re-run for the new route: every variant links at the
    *  switch (the player's own deliberate action), none later. One at a time; a change that lands while one runs queues ONE more. */
-  const REWARM = { busy: false, again: null, n: 0 };
-  async function rewarmRoute(why) {
-    if (REWARM.busy) { REWARM.again = why; return; }
+  const REWARM = { busy: false, again: null, n: 0, p: null };
+  function rewarmRoute(why) {
+    if (REWARM.busy) { REWARM.again = why; return REWARM.p; }
     REWARM.busy = true;
+    REWARM.p = rewarmLoop(why);
+    return REWARM.p;
+  }
+  async function rewarmLoop(why) {
     try {
       let w = why;
       while (w) {
         REWARM.again = null;
         if (!(W.match && !W._starting && (W.phase === "lobby" || W.phase === "drop" || W.phase === "match"))) break;
         const t0 = performance.now();
-        const rec = await warmMatch("_rewarm");
+        // R1 boot (sky_lowtier boot row): the warm-up awaits (pickup models, the program-link wait); a tier change in a match
+        // followed at once by the next match start ran teardownMatch under it. Bound the re-warm to the match it was for: once
+        // that world is torn down or a new one is building, the remaining steps are skipped.
+        const gen = W._matchGen | 0, match = W.match;
+        const alive = () => (W._matchGen | 0) === gen && W.match === match && !W._starting;
+        const rec = await warmMatch("_rewarm", alive);
         REWARM.n++;
         rec.why = w; rec.n = REWARM.n; rec.tier = W.gfxTier; rec.wallMs = Math.round(performance.now() - t0);
         w = REWARM.again;
