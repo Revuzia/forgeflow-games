@@ -232,10 +232,21 @@ CHIM_C = (0.0, -0.046)            # the chimney's axis (x, y)
 CHIM_R = [(1.178, 0.098), (1.200, 0.112), (1.230, 0.119), (1.270, 0.122), (1.320, 0.119), (1.370, 0.110),
           (1.420, 0.098), (1.460, 0.088), (1.500, 0.080), (1.540, 0.075), (1.580, 0.073), (1.620, 0.073),
           (1.660, 0.075), (1.690, 0.078), (1.710, 0.082), (1.720, 0.083)]
-CHIM_BEAK = [(1.178, 0.012), (1.230, 0.022), (1.290, 0.024), (1.350, 0.018), (1.420, 0.007), (1.470, 0.0), (1.72, 0.0)]
+CHIM_BEAK = [(1.178, 0.014), (1.230, 0.026), (1.290, 0.030), (1.350, 0.024), (1.420, 0.009), (1.470, 0.0), (1.72, 0.0)]
 CHIM_BOT, CHIM_TOP = 1.178, 1.72
 MASK_C = (0.0, -0.083, 1.330)     # the painted face inside the glass (the concept's mask: the paint's face zone)
 MASK_R = (0.088, 0.062, 0.118)
+# fix pass 2 (the review: the painted-opaque tube still read as a frosted milk-bottle neck / stovepipe; the hood and
+# the tube stacked into one pale column from the back): the glass is REAL see-through glass now. The tube is a low-only
+# part `glass` in the kept material gem_chimglass (factor-only, alpha GLASS_ALPHA, both sides drawn: the near wall and
+# the far wall's inside), exported as its own see-through primitive (glTF BLEND; the renderer gives see-through parts
+# no ink). The FACE stays opaque: a 9 mm shell just inside the glass's front over FACE_PATCH (x, z centre, x, z half
+# axes) carries the concept's mask; the rolled lip and the chin rim are opaque bright glass edges; the lip pinches
+# forward into a small spout (CHIM_SPOUT) so the rim's outline points her way from the game camera above
+FACE_PATCH = (0.0, 1.330, 0.100, 0.128)
+GLASS_ALPHA = 0.34
+GLASS_HEX = "#D3E0E8"
+CHIM_SPOUT = 0.018
 # the hood: lofted sections (z, half width, front y, back y); a rounded crown hugging the glass (never a point)
 HOOD_S = [(1.165, 0.200, -0.150, 0.205), (1.19, 0.197, -0.152, 0.207), (1.22, 0.182, -0.153, 0.207),
           (1.26, 0.162, -0.153, 0.203), (1.30, 0.146, -0.153, 0.198), (1.34, 0.136, -0.150, 0.190),
@@ -368,6 +379,56 @@ def chim_d(P):
     return np.maximum(d, -well)
 
 
+def _patch_q(x, z):
+    """the face patch's elliptic coordinate (< 1 inside)"""
+    _, pz, ax, az = FACE_PATCH
+    return np.sqrt((x / ax) ** 2 + ((z - pz) / az) ** 2)
+
+
+def patch_d(P):
+    """the opaque face patch (fix pass 2): a 9 mm shell 2.5 mm inside the glass's front surface over FACE_PATCH"""
+    d = chim_d(P)
+    shell = np.maximum(d + 0.0025, -(d + 0.0115))
+    reg = (_patch_q(P[:, 0], P[:, 2]) - 1.0) * min(FACE_PATCH[2], FACE_PATCH[3])
+    return np.maximum(np.maximum(shell, reg), P[:, 1] - (CHIM_C[1] - 0.02))
+
+
+def chim_ring(z, n=40):
+    """the glass's section at height z: n points round the axis from the front (phi 0 = -Y) toward her left; the
+    front half an ellipse pushed out by the cheek beak, the rim's front pinched into the spout"""
+    cx, cy = CHIM_C
+    r = float(_interp(CHIM_R, z, 1))
+    bk = float(np.interp(z, [b[0] for b in CHIM_BEAK], [b[1] for b in CHIM_BEAK]))
+    sp = CHIM_SPOUT * float(ss(1.650, 1.716, z))
+    ph = np.arange(n) * (2.0 * math.pi / n)
+    c, s = np.cos(ph), np.sin(ph)
+    Y = np.where(c > 0, r + bk, r)
+    return np.stack([cx + r * s, cy - Y * c - sp * np.clip(c, 0, 1) ** 6, np.full(n, z)], 1)
+
+
+GLASS_Z = np.concatenate([np.linspace(1.184, 1.470, 23), np.linspace(1.482, 1.712, 15)])
+
+
+def glass_mesh(n=40):
+    """the see-through tube (vertices, quads): open at both ends, the face patch's window and the faces buried in the
+    hood dropped"""
+    V = np.concatenate([chim_ring(z, n) for z in GLASS_Z])
+    nz = len(GLASS_Z)
+    F = []
+    for i in range(nz - 1):
+        for j in range(n):
+            F.append((i * n + j, i * n + (j + 1) % n, (i + 1) * n + (j + 1) % n, (i + 1) * n + j))
+    F = np.array(F)
+    C = V[F].mean(1)
+    keep = hood_d(C) > -0.003
+    keep &= ~((_patch_q(C[:, 0], C[:, 2]) < 0.92) & (C[:, 1] < CHIM_C[1] - 0.03))
+    F = F[keep]
+    used = np.unique(F)
+    remap = -np.ones(len(V), dtype=np.int64)
+    remap[used] = np.arange(len(used))
+    return V[used], remap[F]
+
+
 def folds(amp, freq, axis=0, phase=0.0, zfade=None):
     def fn(P):
         u = P[:, axis] * freq + phase + 0.6 * NOISE(P, 3.0)
@@ -436,12 +497,18 @@ def sculpts() -> list:
         out.append((name, S, vs, role, bind, tris, uvw))
 
     cx, cy = CHIM_C
-    # THE CHIMNEY VISOR (rigid on the head): one glass body from the chin to the open rim; the carved chalk face-plate
-    # is the concept's painting seen through the glass (projected onto the glass's front), so the face reads INSIDE it
+    # THE CHIMNEY VISOR (rigid on the head; fix pass 2): the see-through tube is the low-only `glass` part (model());
+    # this opaque part is what of it is NOT clear: the face patch (the concept's carved face-plate painted on a shell
+    # just inside the glass's front), the rolled lip round the open rim (pinched into the spout) and the chin rim
     ch = Sculpt("chimney")
-    ch.add(Fn(chim_d, (-0.14, -0.22, CHIM_BOT - 0.01), (0.14, 0.10, CHIM_TOP + 0.01)), k=0.0)
-    ch.add(Torus((cx, cy, CHIM_TOP - 0.004), 0.080, 0.0055), k=0.003)                     # the rolled lip
-    part("chimney", ch, "dawnglass", "bone:head", 1900, 0.6, 1.9)
+    ch.add(Fn(patch_d, (-0.125, -0.23, 1.19), (0.125, -0.04, 1.47)), k=0.0)
+    lip = chim_ring(CHIM_TOP - 0.004, 48)
+    lip = np.concatenate([lip, lip[:2]])
+    ch.add(Tube([tuple(p) for p in lip], [0.0058] * len(lip), k=0.002), k=0.0)            # the rolled lip
+    chin = chim_ring(GLASS_Z[0] + 0.002, 40)
+    chin = np.concatenate([chin, chin[:2]])
+    ch.add(Tube([tuple(p) for p in chin], [0.0042] * len(chin), k=0.002), k=0.0)          # the chin rim
+    part("chimney", ch, "dawnglass", "bone:head", 1250, 0.45, 1.9)
 
     # THE HOOD (rounded crown, a soft rim round the face opening) and the neck wrap
     hd = Sculpt("hood")
@@ -642,8 +709,40 @@ def model(ctx) -> list:
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind, uv_weight=uvw))
+    # the see-through chimney tube (fix pass 2): low-only, its kept material split into the accent mesh, unbaked
+    gv, gf = glass_mesh()
+    go = sdf.to_object("glass_low", gv, gf, ctx.col)
+    go.data.materials.append(_glass_material())
+    P.append(fighter.Part("glass", low=go, bind="bone:head"))
     _BUILD["names"] = [p.name for p in P]
     return P
+
+
+GLASS_MAT = "gem_chimglass"      # gem_: a kept (unbaked, factor-only) material; the name is pipeline plumbing only
+
+
+def _glass_material():
+    """the chimney's clear dawnglass: a factor-only Principled (glossy, never emissive), alpha GLASS_ALPHA, both
+    sides drawn (glTF: alphaMode BLEND, doubleSided)"""
+    m = bpy.data.materials.get(GLASS_MAT)
+    if m is not None:
+        return m
+    m = bpy.data.materials.new(GLASS_MAT)
+    m.use_nodes = True
+    b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    b.name = "BSDF"
+    c = _lin(_hex(GLASS_HEX))
+    b.inputs["Base Color"].default_value = (float(c[0]), float(c[1]), float(c[2]), 1.0)
+    b.inputs["Roughness"].default_value = 0.08
+    b.inputs["Metallic"].default_value = 0.0
+    b.inputs["Alpha"].default_value = GLASS_ALPHA
+    m.use_backface_culling = False
+    for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
+        try:
+            setattr(m, attr, val)
+        except (AttributeError, TypeError, ValueError):
+            pass
+    return m
 
 
 def extra_materials(ctx) -> dict:
@@ -899,61 +998,35 @@ def _paint_glass(p, n, pal, key="lampglass"):
     return _srgb(np.clip(lin, 0, 1))
 
 
-def _face_zone(p, n):
-    """the chimney's texels that show the face through the glass: in front, inside the hood's opening"""
-    ow, oz, oh = HOOD_OPEN
-    q = np.hypot(p[:, 0] / (ow * 0.97), (p[:, 2] - oz) / (oh * 0.98))
-    return ss(1.04, 0.86, q) * ss(-0.12, -0.42, n[:, 1]) * ss(1.49, 1.44, p[:, 2])
-
-
 def _paint_chimney(c, p, n, pal=None):
-    """THE GLASS VISOR (fix pass 1). In the hood's opening the projection keeps the concept's face-plate seen through
-    the glass (its carving's contrast raised x1.45, a faint cool cast, a soft diagonal glint across it); everywhere
-    else the glass is painted clear cool dawnglass: the see-through tint lighter toward the rim, the sides turning
-    darker blue-grey (thick glass seen edge-on), two vertical catch-light streaks front and back, a bright rolled lip
-    and the open top's well a deep cool grey (a hollow chimney from the game's camera above)"""
+    """THE VISOR'S OPAQUE PIECES (fix pass 2; the tube itself is see-through glass, unpainted). The face patch keeps the
+    concept's face-plate as the projection paints it through the glass (its carving's contrast raised x1.45, a faint
+    cool cast, a soft diagonal glint), its back (seen through the glass's sides) a shaded chalk; the rolled lip and
+    the chin rim are bright cool glass edges (lit on top, a catch-light on her front-left)"""
     pal = pal or PALETTE
     cx, cy = CHIM_C
     x, y, z = p[:, 0], p[:, 1], p[:, 2]
     th = np.arctan2(x - cx, -(y - cy))
     glass = _lin(_hex(pal.get("dawnglass", "#C0D6E8")))
-    edge = _lin(_hex("#6F8599"))
-    lin = np.repeat(glass[None, :], len(p), 0) * (0.92 + 0.10 * ss(1.48, 1.70, z))[:, None]
-    side = np.clip((np.abs(np.sin(th)) - 0.55) / 0.45, 0, 1) ** 1.2
-    lin = lin * (1 - 0.66 * side[:, None]) + edge * (0.66 * side[:, None])
-    low = ss(1.56, 1.47, z) * 0.30                                     # the hood's shade read through the glass's foot
-    lin = lin * (1 - low[:, None]) + edge * 0.8 * low[:, None]
-    streak = (np.exp(-((th + 0.58) / 0.085) ** 2) + 0.55 * np.exp(-((th - 0.40) / 0.06) ** 2)
-              + 0.75 * np.exp(-((th - (math.pi - 0.58)) / 0.085) ** 2) + 0.4 * np.exp(-((th + math.pi - 0.40) / 0.06) ** 2))
-    streak = streak * ss(1.40, 1.50, z) * (1.0 - ss(1.68, 1.70, z))
-    lin = lin + 0.55 * streak[:, None]
-    # the flare's own glass (the bulb round the face): two bright edge lines down its sides where it turns away, a
-    # crescent glint on its shoulder where it narrows into the chimney, and a bright rolled rim along the chin
-    fl = ss(1.47, 1.43, z) * ss(1.17, 1.20, z)
-    rim_side = np.exp(-((np.abs(np.sin(th)) - 0.80) / 0.06) ** 2) * (np.cos(th) > -0.2) * fl
-    shoulder = np.exp(-((z - 1.452) / 0.014) ** 2) * np.exp(-((th + 0.25) / 0.55) ** 2) * ss(-0.1, 0.3, n[:, 2])
-    chin = ss(1.200, 1.186, z) * (np.cos(th) > -0.3)
-    lip = ss(1.700, 1.712, z) * (n[:, 2] > -0.3)
-    lin = lin * (1 - lip[:, None]) + _lin(_hex("#EEF4F8")) * lip[:, None]
-    r = np.hypot(x - cx, y - cy)
-    inside = (z > 1.672) & (r < _interp(CHIM_R, z, 1) - 0.006) & (n[:, 2] > -0.95)
-    lin[inside] = _lin(_hex("#5F6F7E")) * (0.85 + 0.25 * ss(1.67, 1.71, z[inside]))[:, None]
-    # the face through the glass
-    wf = _face_zone(p, n)
+    edge = _lin(_hex("#E9F1F6"))
+    rim = (z > 1.69) | (z < 1.196)
+    lit = np.clip(0.5 + 0.5 * n[:, 2], 0, 1)
+    glint = np.exp(-((th + 0.60) / 0.35) ** 2) + 0.6 * np.exp(-((th - 2.5) / 0.35) ** 2)
+    lin = np.repeat(edge[None, :], len(p), 0) * (0.80 + 0.20 * lit)[:, None]
+    lin = lin * (1 - 0.18 * ss(0.2, -0.6, n[:, 2]))[:, None] + (0.20 * glint)[:, None]
+    # the face patch: the concept's face through the glass
     fc = c.copy()
     qm = np.hypot(x / (MASK_R[0] * 1.05), (z - MASK_C[2]) / (MASK_R[2] * 1.05)) < 1.0
     if qm.any():
         m = np.median(fc[qm], axis=0, keepdims=True)
         fc[qm] = np.clip(m + (fc[qm] - m) * 1.45, 0.0, 1.0)
-    flin = _lin(fc) * 0.92 + glass * 0.06
-    dk = ss(0.10, 0.02, flin @ np.array([0.2126, 0.7152, 0.0722]))[:, None]   # the dark hood behind: glass sheen
-    flin = flin * (1 - 0.30 * dk) + edge * 0.30 * dk
-    glint = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
-    flin = flin + 0.16 * glint[:, None]
-    lin = lin * (1 - wf[:, None]) + flin * wf[:, None]
-    lin = lin + (0.50 * rim_side + 0.45 * shoulder)[:, None]
-    lin = lin * (1 - 0.7 * chin[:, None]) + _lin(_hex("#E4EEF4")) * 0.7 * chin[:, None]
-    return _srgb(np.clip(lin, 0, 1))
+    flin = _lin(fc) * 0.93 + glass * 0.05
+    gl = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
+    flin = flin + 0.14 * gl[:, None]
+    back = ss(-0.05, 0.35, n[:, 1])[:, None]                          # the shell's back, seen through the glass
+    flin = flin * (1 - back) + _lin(_hex("#7E8288")) * (0.75 + 0.25 * lit)[:, None] * back
+    out = np.where(rim[:, None], lin, flin)
+    return _srgb(np.clip(out, 0, 1))
 
 
 def _paint_glove(p, n, pal):
@@ -1078,10 +1151,51 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
             if sel.any():
                 w = ss(0.98, 1.10, P[sel][:, 2]) if nm == "mantle" else 1.0
                 out[sel] = _lift(out[sel], amt * w)
+    # fix pass 2: what the clear glass now shows inside the hood (after the lift: the lining stays dark), and the
+    # pepper specks the review found on the hood and the scarf
+    for nm in ("hood", "scarf"):
+        if nm in names:
+            sel = have & (part == names.index(nm))
+            if sel.any():
+                p_, n_ = P[sel].astype(np.float64), N[sel].astype(np.float64)
+                c = _despeckle(out[sel], p_, n_)
+                out[sel] = _hood_inside(c, p_, n_) if nm == "hood" else c
     if bleed:
         iy, ix = _project.nearest_index(have)
         out = out[iy, ix]
     return out
+
+
+def _hood_inside(c, p, n):
+    """the face opening's tunnel (walls and back, seen through the glass's sides) the dark lining; the crown's top
+    inside the tube a shaded linen (the tube's floor from above)"""
+    ow, oz, oh = HOOD_OPEN
+    q = np.hypot(p[:, 0] / ow, (p[:, 2] - oz) / oh)
+    tun = ss(1.0, 0.95, q) * ss(-0.132, -0.122, p[:, 1])
+    lin = _lin(c)
+    lining = _lin(_hex(LINING)) * (0.85 + 0.25 * np.clip(-n[:, 1], 0, 1))[:, None]
+    lin = lin * (1 - 0.9 * tun[:, None]) + lining * 0.9 * tun[:, None]
+    r = np.hypot(p[:, 0] - CHIM_C[0], p[:, 1] - CHIM_C[1])
+    crown = ss(1.455, 1.470, p[:, 2]) * ss(0.090, 0.080, r)
+    lin = lin * (1 - 0.30 * crown)[:, None]
+    return _srgb(lin)
+
+
+def _despeckle(c, p, n, cell=0.012, thr=13.0):
+    """texels far darker than their neighbourhood (1.2 cm cells, split by the normal's octant so the lining and the
+    outer cloth never mix) go to the cell's mean: the projection's pepper specks, not the painted folds"""
+    lum = np.array([0.2126, 0.7152, 0.0722])
+    lin = _lin(c)
+    Y = np.maximum(lin @ lum, 1e-5)
+    L = 116 * np.cbrt(Y) - 16
+    key = np.floor(p / cell).astype(np.int64)
+    oc = (n > 0).astype(np.int64)
+    k = ((key[:, 0] * 73856093) ^ (key[:, 1] * 19349663) ^ (key[:, 2] * 83492791) ^ (oc[:, 0] * 2 + oc[:, 1] * 4 + oc[:, 2] * 8))
+    _, inv, cnt = np.unique(k, return_inverse=True, return_counts=True)
+    mL = np.bincount(inv, weights=L) / cnt
+    mc = np.stack([np.bincount(inv, weights=lin[:, i]) / cnt for i in range(3)], 1)
+    w = (ss(thr, thr + 8.0, mL[inv] - L) * (cnt[inv] >= 5))[:, None]
+    return _srgb(lin * (1 - w) + mc[inv] * w)
 
 
 LIFT = {"hood": 15.0, "scarf": 13.0, "mantle": 8.0, "sleeve_L": 5.0, "sleeve_R": 5.0, "lamp_stone": 0.0}
@@ -1279,6 +1393,18 @@ def _bake_asset(low, highs, out_dir, name="body", *a, **k):
 
     if bf is not None:
         k["base_fn"] = base_fn
+    # fix pass 2: the see-through glass (in the accent mesh, an AO occluder) must not shade the face and the hood
+    # inside it: its vertices stand 10 m away for the bake
+    moved = []
+    for o in k.get("ao_extra") or ():
+        gi = [i for i, mt in enumerate(o.data.materials) if mt and mt.name.startswith(GLASS_MAT)]
+        if not gi:
+            continue
+        vs = sorted({v for p in o.data.polygons if p.material_index in gi for v in p.vertices})
+        for v in vs:
+            o.data.vertices[v].co.x += 10.0
+        o.data.update()
+        moved.append((o, vs))
     _bake.scene.select_only = select_only
     try:
         return _orig_bake_asset(low, highs, out_dir, name, *a, **k)
@@ -1286,6 +1412,10 @@ def _bake_asset(low, highs, out_dir, name="body", *a, **k):
         _bake.scene.select_only = orig_sel
         if st["on"]:
             move(-1.0)
+        for o, vs in moved:
+            for v in vs:
+                o.data.vertices[v].co.x -= 10.0
+            o.data.update()
 
 
 _bake.bake_asset = _bake_asset
@@ -1331,6 +1461,56 @@ def _backdrop(cam, cfg, light, w, h, path, fast, paint_r=2):
 
 
 _render.backdrop_plate = _backdrop
+
+# fix pass 2: the Cycles renders (splash / portrait / icon / turntable) draw the chimney as THIN clear glass: mostly
+# transparent (a faint cool tint), a Fresnel-weighted gloss that lights its edges and throws the lamps' streaks, a 10 %
+# dawnglass body so it never vanishes; the GLB keeps the factor-only alpha material (exported before the renders)
+_orig_fighter_renders = _render.fighter_renders
+
+
+def _cycles_glass():
+    m = bpy.data.materials.get(GLASS_MAT)
+    if m is None or m.get("vale_thin_glass"):
+        return
+    nt = m.node_tree
+    N, L = nt.nodes, nt.links
+    out = next(n for n in N if n.type == "OUTPUT_MATERIAL")
+    body = next(n for n in N if n.type == "BSDF_PRINCIPLED")
+    body.inputs["Alpha"].default_value = 1.0
+    tr = N.new("ShaderNodeBsdfTransparent")
+    tr.inputs["Color"].default_value = (0.90, 0.94, 0.97, 1.0)
+    try:
+        gl = N.new("ShaderNodeBsdfGlossy")
+    except RuntimeError:
+        gl = N.new("ShaderNodeBsdfAnisotropic")
+    gl.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+    gl.inputs["Roughness"].default_value = 0.05
+    lw = N.new("ShaderNodeLayerWeight")
+    lw.inputs["Blend"].default_value = 0.30
+    fm = N.new("ShaderNodeMath")
+    fm.operation = "MULTIPLY_ADD"
+    fm.use_clamp = True
+    fm.inputs[1].default_value = 0.85
+    fm.inputs[2].default_value = 0.07
+    L.new(lw.outputs["Fresnel"], fm.inputs[0])
+    m1 = N.new("ShaderNodeMixShader")
+    L.new(fm.outputs[0], m1.inputs[0])
+    L.new(tr.outputs[0], m1.inputs[1])
+    L.new(gl.outputs[0], m1.inputs[2])
+    m2 = N.new("ShaderNodeMixShader")
+    m2.inputs[0].default_value = 0.10
+    L.new(m1.outputs[0], m2.inputs[1])
+    L.new(body.outputs[0], m2.inputs[2])
+    L.new(m2.outputs[0], out.inputs["Surface"])
+    m["vale_thin_glass"] = True
+
+
+def _fighter_renders(ctx, objs, P, skin, *a, **k):
+    _cycles_glass()
+    return _orig_fighter_renders(ctx, objs, P, skin, *a, **k)
+
+
+_render.fighter_renders = _fighter_renders
 
 # ── motion ─────────────────────────────────────────────────────────────────────────────────────────────────────
 # weight light, a focus prop in the right hand (blocks below): the clips are bespoke (clip_overrides); the run's legs

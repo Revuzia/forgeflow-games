@@ -1,0 +1,192 @@
+{
+ "score": 7,
+ "summary": "Adversarial verification of the HUD & in-match readability review on the current build. HUD source is unchanged since 2026-10-20 (git log -- src/ui/hud), so the reviewer's 13:05-13:21 captures are current. I re-ran `node _harness/overlay_regress.mjs --q high --name final_hud_verify_overlay` on the real Chrome GPU: PASS, identical B1/M10 numbers (_harness/_reports/final_hud_verify_overlay_regress.json). I re-measured the icon, fighter-chip, live-slot and minimap claims from source assets and shots with my own sharp scripts (_harness/_reports/final_hud_verify_scripts/iconstats.mjs, fdist.mjs, slots.mjs, prof.mjs, col2.mjs), and read every cited file:line.\n\nVerdicts: HUD-1 (item/ability icon grade), HUD-2 (fighter chips) and HUD-4 (no always-on personal T/F/A and Wicks) are confirmed majors. HUD-1's headline proof was overstated: owned slots are clearly separable from empty ones (p90 80-107 vs 29-31). The real gap is item-to-item recognition: 27 of 39 icons share the navy ground, median p50 is 31, median subject coverage is 39 %, and only 3 of 39 reach p95 >= 200. HUD-3 (minimap) is downgraded to minor. The portrait size is exactly r12's own m3 fix spec (13*k), about 29-31 px outside the ring, which is LoL's lower bound in absolute pixels. The bases are clipped about 10-15 %, not 'cut in half'. Lanes in vision sit about 60 luma above the canopy. What remains is art polish: fogged lanes are only about 15-20 luma above fogged canopy, plus canopy noise and 3.4 px Wick dots. All minors are kept. The HUD-9 fix is corrected because it would break VALE's own 12 px text floor.\n\nGap status: B1, M4, M7, M10, m1 and m2 are closed (B1 and M10 re-measured). m3 stays partly, now for identity, not size. I also ran `_harness/hud_renders.mjs` for the HUD part of B4, which the reviewer had not measured (see gapStatus B4-HUD). No missed blocker-class problem was found. The Linen Hood icon is a rounded, back-slanted cowl, not tall or conical, so it stays minor HUD-10.\n\nScore: 7. The HUD is feature-complete at LoL's tier. Three presentation majors remain: icon grade, fighter face chips, and personal stats.",
+ "gapStatus": [
+  {
+   "id": "B1",
+   "status": "closed",
+   "evidence": "Reproduced. `node _harness/overlay_regress.mjs --q high --name final_hud_verify_overlay` -> 'overlay_regress: PASS', exit 0 (report copied to _harness/_reports/final_hud_verify_overlay_regress.json, shot _harness/_shots/final_hud_verify_overlay_fight_outlines.png). For kemdo, glimwick and gloamoth the scene node count before, during and after the 180-frame hover is 2494/2494/2494 and 2506/2506/2506. The hover width is 2.5, interiorShare is 0 for all three, and the rim draws outside the silhouette (2153 / 728 / 1248 px). The numbers are identical to the reviewer's run."
+  },
+  {
+   "id": "M4",
+   "status": "closed",
+   "evidence": "Confirmed from the reviewer's live shots. _harness/_shots/final_hud_s3_07_silence_press.png shows the 'SILENCED 3' loss-of-control chip with a draining bar, and Q/W/E/R slashed with the ember lock tint while D and F stay usable. The 26 px status chip sits over the bar and the LEVEL 3 plate is present. The refusal captions are in final_hud_s2_05_refused_resource.png and final_hud_s3_05_refused_cooldown.png. Matches the STYLE_BIBLE.md:111 spec."
+  },
+  {
+   "id": "M7",
+   "status": "closed",
+   "evidence": "Confirmed. final_hud_s2_01z_selfbar_4x.png shows a 104x10 self bar with a resource strip, a level chip and a name. final_hud_s3_04_selfhit_combo.png shows the Sap self fill followed by the white lost-HP span on the overhead bar, plus the Dial Bar's 116/640 trail. The r12 baseline was an 82x9 bar with an invisible self trail."
+  },
+  {
+   "id": "M10",
+   "status": "closed",
+   "evidence": "Reproduced in my overlay_regress run: m10 = {units 9, missing [], offscreenDrawn [], crowdUnits 5}. Every live, visible fighter, Wick and monster carries the rest outline (restWidth 1)."
+  },
+  {
+   "id": "m1",
+   "status": "closed",
+   "evidence": "Confirmed in the shots. m:ss cooldowns read 'D 4:23 / F 2:53' (final_hud_1080_10_scoreboard.png) and 'F 3:14' (final_hud_1080_02_mid_full.png). Regen readouts read '+2.6 / +1.6' (final_hud_1080_01z_dbar_2x.png). The Strike/Craft/Guard/Stride ledger flyout appears in final_hud_1080_10_scoreboard.png. The ready wash and active border are code-only, as the reviewer said (not timed by me either)."
+  },
+  {
+   "id": "m2",
+   "status": "closed",
+   "evidence": "Confirmed. final_hud_1080_21_kill_1.png shows a fully desaturated world, the 'YOUR LAMP GOES OUT' banner with two round portraits (about 48 px) in relationship rings, 'BACK IN 13 S', and the dimmed Dial Bar with a respawn count in the medallion. The 'LEVEL 3' caption plate is in final_hud_s3_07_silence_press.png."
+  },
+  {
+   "id": "m3",
+   "status": "partly",
+   "evidence": "Partly, but for identity, not size. src/ui/hud/minimap.tsx:369 uses PR = 13*k, exactly r12 m3 fix spec 1 ('clipped to radius 13*k, about 26 px at 352 px width'). With the 2.4*k ink backing and the 2*k ring, the chip measures about 29-31 px outside the ring on _harness/_shots/final_hud_1080_01z_minimap_2x.png (bottom chip spans x 287-345 at 2x). That is LoL's 30-36 px lower bound in absolute pixels, so the reviewer's map-width-ratio argument (7.4 % vs 12 %) does not show a readability shortfall. What keeps m3 open is the chip art (HUD-2). My re-measure of art/out/fighters/*/icon.png at 26 px with a circle mask: 9 of 15 have more than 50 % of pixels above luma 150; the closest pairs are ardit-lisvel 33.7, lisvel-vashil 34.4 and ervet-lisvel 35.7; 11 of 105 pairs are below 45 (_harness/_reports/final_hud_verify_scripts/fdist.mjs). The ring shows the team, but for the pale cluster (ardit, lisvel, vashil, ervet, ulkro, dunsom) it does not show who."
+  },
+  {
+   "id": "B4-HUD",
+   "status": "closed",
+   "evidence": "This is only the HUD part of B4: do the Dial Bar slot components re-render every sim tick? The reviewer did not measure it, so I ran it: `VALE_URL=http://localhost:5190 node _harness/hud_renders.mjs` (live RIFT co-op, dev autopilot, real Chrome GPU), result in _harness/_reports/final_hud_verify_hud_renders.json. Over 6 s (180 sim ticks), the most-rendered components are AbilitySlot 12, AbilityGlyph 12 and ItemSlot 12 across all their instances (6 slots each), then Portrait 10 and AllyFrame 8; every other HUD component rendered 2-4 times. Per-tick re-rendering would show at least 180 per instance. The fps part of B4 belongs to the performance review."
+  }
+ ],
+ "findings": [
+  {
+   "id": "HUD-1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "L",
+   "title": "Item icons (and ability icons) read as one dark navy family at slot size",
+   "what": "All 39 item and 94 ability icons are painted, and at 96 px they are attractive and recognisable (_harness/_shots/final_hud_icons_items_96.png). But almost all sit on one dark navy vignette with a dim, mid-size subject. At the 38 px inventory and the 48 px shop tile they read as a uniform dark family, so items are told apart only by squinting at silhouette, not by colour or value. Each fighter's Q, W and E icons are likewise silver on navy.",
+   "evidence": "My re-measure at 40 px (_harness/_reports/final_hud_verify_scripts/iconstats.mjs over content/ui/icons/items): median p50 luma 31, median p90 99, median p95 133. 25 of 39 have p50 < 35, only 3 of 39 reach p95 >= 200, and 27 of 39 have a corner ground within 30 (L1 RGB) of (13,20,32). Median subject coverage is 39 % (pixels more than 60 L1 from the ground). Abilities at 64 px: median p50 33; 64 of 94 share the navy ground (the reviewer said 72; the threshold differs). Live slots on _harness/_shots/final_hud_1080_02_mid_full.png (DOM boxes in final_hud_capture_1080.json, my slots.mjs): owned p50 24/30/30 and p90 85/107/80; empty p50 20-24 and p90 29-31. The shop grid in final_hud_1080_11_shop.png shows the same dim tiles.",
+   "gauge": "LoL's inventory and shop icons are single subjects cropped tight to fill most of the frame, each with its own dominant colour, so a 6-slot inventory and the shop grid read at a glance. Many LoL icons also sit on dark grounds; the difference is subject scale, value and per-item hue. This gauge is qualitative: no LoL images were sampled.",
+   "fix": "Re-grade or re-render to VALE's own 'ledger family' code. Tint each item's ground by its dominant stat family (the Dial Bar ledger's Strike, Craft, Guard and Stride hues), add a 1 px chalk keyline, keep the hour-tick tier marks, and crop or scale the subject to cover at least 60 % of the frame. Lift the values so that at 38 px p50 is >= 60 and p95 is >= 190. Tint ability grounds with the fighter's signature VFX hue. Add an icon probe that fails on p50 < 60 at 40 px or on a shared ground across families.",
+   "files": "content/ui/icons/items/*.webp, content/ui/icons/abilities/*.webp, src/ui/hud/glyphs.tsx, src/ui/styles/hud.css, _harness/ (new icon probe)",
+   "verifierNote": "Reproduced, and severity kept major because the owner explicitly asked for item images and the result is the least LoL-like surface of the HUD. One part of the evidence is corrected. 'An owned slot is barely brighter than an empty one' is not true. The p50 gap is only 4-8 levels, but p90 is 80-107 against 29-31 and the navy ground itself marks an owned slot. The defect is item-versus-item recognition, not owned versus empty."
+  },
+  {
+   "id": "HUD-2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "Fighter identity chips are pale, near-identical mid-shot renders; who-is-who fails at chip size",
+   "what": "art/out/fighters/*/icon.png (128x128) is a mid-shot render on a pale sky and stone backdrop. Six fighters (ardit, lisvel, vashil, ervet, ulkro, dunsom) are white or cream on that pale ground. At the 26 px minimap chip, the 28 px scoreboard face and the 22-24 px kill-feed chip these blur together, so the ring shows the team but not the fighter.",
+   "evidence": "Re-measured (_harness/_reports/final_hud_verify_scripts/fdist.mjs, 26 px circle mask): 9 of 15 have more than 50 % of pixels above luma 150, with per-icon p50 of 196 for ardit, 172 for vashil and 171 for lisvel. The closest pairs are ardit-lisvel 33.7, lisvel-vashil 34.4, ervet-lisvel 35.7 and lisvel-ulkro 36.5; 11 of 105 pairs are below 45 and the median is 64.8. The reviewer reported 31.6/34.2/34.8, so their numbers reproduce within the mask difference. In context: _harness/_shots/final_hud_fighter_icons_26.png and final_hud_fighter_icons_96.png, the minimap at final_hud_1080_01z_minimap_2x.png, and the scoreboard at final_hud_1080_10_scoreboard.png.",
+   "gauge": "LoL's champion square icons are tight, saturated head-and-shoulder crops with individual colour and stay identifiable at about 30-36 px on the minimap (r12 m3 LoL bar).",
+   "fix": "Add a HUD 'face chip' render pass to the fighter icon tool. Crop to head and shoulders (head about 60-70 % of the frame), set it on a dark ink ground with a rim and backdrop tint in the fighter's signature hue, and apply a value floor for dark kits. Gate it on pairwise distinctness at 26 px (mean absolute difference >= 55). Use it on the minimap, scoreboard, kill feed, ally frames and banners; keep portrait.png for menus.",
+   "files": "art/blender/fighters/common (icon render), art/out/fighters/*/icon.png, src/ui/components/Portrait.tsx, src/ui/hud/minimap.tsx",
+   "verifierNote": "Reproduced. Major stands because identity is the purpose of m3 portraits, which r12 bought in exchange for the old dots. Ilsheta was excluded as instructed."
+  },
+  {
+   "id": "HUD-3",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "size": "M",
+   "title": "Minimap reads busy, and its lanes lose contrast under fog",
+   "what": "The RIFT minimap is feature-complete: painted art, fog, portrait chips, objective timers, the camera trapezoid and pings. In vision it reads well. Under fog the lane band nearly merges with the canopy, the per-tree canopy texture adds noise, Wick dots are small (1.7*k radius, minimap.tsx:358), and the two plaza discs are clipped by the art edge.",
+   "evidence": "Luma profiles of the live 1x minimap _harness/_shots/final_hud_1080_04_minimap.png (_harness/_reports/final_hud_verify_scripts/prof.mjs, rows y 110/128/133). The seen mid-lane reads about 100-125 against seen canopy at 40-90, a gap of about 60. The fogged mid-lane reads about 40-60 against fogged canopy at 26-46, a gap of about 15-20. Fog is ink at 140/255 (minimap.tsx:315). In art/out/maps/map_rift/minimap.png (1100x712), the base plaza discs touch the left and right edges with about 10-15 % of each disc outside the frame: the left disc spans x of about 0-115 at y 356 (_harness/_reports/final_hud_verify_scripts/col2.mjs). The world fountain is at x 4.5 m with radius 5 in a 170 m map (content/maps/map_rift.json), so the art is faithful to the world edge. Portraits measure about 29-31 px outside the ring (see m3).",
+   "gauge": "LoL's minimap keeps lanes, river and jungle as clear value masses that still read in fog, with portraits at about 30-36 px (r12 m3).",
+   "fix": "Re-render minimap.png as a calmer 'survey chart': canopy flattened to two value bands, lanes as one light band with an ink edge, and the bounds padded so both plazas sit inside. Keep the lane band at least 25 luma above canopy in fog by lightening lane pixels before the fog overlay or lowering fog alpha on lane pixels. Raise the Wick dots to about 2.2*k with a 1 px ink keyline.",
+   "files": "art/blender/maps/ (minimap render), art/out/maps/map_rift/minimap.png, src/ui/hud/minimap.tsx",
+   "verifierNote": "Downgraded from major to minor. Three of the reviewer's pillars do not hold. (1) The 26 px portrait is r12's own prescribed m3 size, and the chip measures about 29-31 px outside the ring, LoL's lower bound in absolute pixels. (2) The bases are clipped about 10-15 %, not 'cut in half', and the clip mirrors the world edge. (3) In vision the lanes stand about 60 luma above the canopy. What reproduces is fog-lane contrast of about 15-20 levels, canopy noise and small Wick dots: art polish on a working, LoL-tier-featured minimap. The identity problem is HUD-2's, not the minimap's."
+  },
+  {
+   "id": "HUD-4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "S",
+   "title": "Your own T/F/A and Wick count are never on the always-on HUD",
+   "what": "The sky strip shows team takedowns, structures down, the clock and objective chips. Your own takedowns, falls and assists, your Wicks and your Wicks per minute appear only while the Tab scoreboard is held. No other always-on element (Dial Bar, medallion, minimap frame) shows them.",
+   "evidence": "src/ui/hud/top.tsx:22-80: SkyStrip renders only team kills, structures, the clock and ObjectiveChips. `grep -n 'cs|deaths|assists' src/ui/hud/*` finds per-player stats only in panels.tsx:84/115-116/142 (scoreboard). The spec omits them too: the client_hud.md §4.4 sky strip has no personal stats. Shots: _harness/_shots/final_hud_1080_02_mid_full.png (none on screen) against final_hud_1080_10_scoreboard.png.",
+   "gauge": "LoL keeps your K/D/A, CS and the clock in an always-visible top-right block. VALE's own research lists 'Team score, clock, KDA/CS' for the top edge (r04_hud_camera_readability.md:37).",
+   "fix": "Add a quiet Mono 13 'ledger line' docked to the sky strip's right end or the minimap frame: 'T/F/A 1/0/2 · Wicks 46'. Re-render it through useViewKey on discrete changes only, add it to the HUD budget table, and give it a hide option.",
+   "files": "src/ui/hud/top.tsx, src/ui/styles/hud.css, content/strings.en.json, _design/sections/client_hud.md",
+   "verifierNote": "Reproduced in code and shots. This is not a documented design choice: no doc decides against it, and VALE's own r04 places KDA/CS on the top edge. Major is kept because last-hit feedback is the core lane loop and both genre references keep it on screen. The fix is S."
+  },
+  {
+   "id": "HUD-5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Ability tooltips do not lead with the current rank; a locked ultimate says 'Level up an ability'",
+   "what": "Tooltip cooldown, cost and damage lines list every rank without marking the one you have. A Rank 0 ultimate at level 4 shows the 'Level up an ability' hint although it cannot be learned yet.",
+   "evidence": "_harness/_shots/final_hud_1080_08_tip_ult_crop.png shows 'Ultimate · Rank 0 of 3', 'Cooldown 110/95/80 s' and the 'Level up an ability' footer. src/ui/components/Tooltip.tsx:95-100 (rankedText joins all ranks). src/ui/hud/dialbar.tsx:268 (the hint is shown whenever rank <= 0 && !spell, regardless of canLevel).",
+   "gauge": "LoL's in-game ability tooltip shows the values for the rank you have and the next-rank change on level-up.",
+   "fix": "Highlight the current rank in rankedText (chalk-hi, others dimmed; at rank 0 show rank 1) and show the full row with a modifier. On a locked ultimate show 'Unlocks at level {n}'.",
+   "files": "src/ui/components/Tooltip.tsx, src/ui/hud/dialbar.tsx, content/strings.en.json",
+   "verifierNote": "Confirmed in code and shot."
+  },
+  {
+   "id": "HUD-6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Kill-feed and recap copy bugs: wrong article, duplicated name, raw id leak",
+   "what": "(a) Structure deaths read 'ottoline_v ottoline_v fell to a Outer Needle': the victim chip repeats the name in the sentence, and the article is wrong. (b) The death recap falls back to the raw id for non-ability sources such as setup boons ('first_cut' lives in content/setup.json, not in the ability index).",
+   "evidence": "(a) _harness/_shots/final_hud_1080_02_mid_full.png top right; content/strings.en.json:812; src/ui/hud/model.ts:378; src/ui/hud/top.tsx:205-206 (chip and text both rendered for non-takedown rows). (b) src/ui/hud/panels.tsx:186 `index.get(id)?.name ?? id`; first_cut exists only in content/setup.json. The live recap was not re-captured.",
+   "gauge": "LoL's turret-execution feed row is pictographic, and its recap names every source in display text.",
+   "fix": "Drop the sentence on structure rows (glyph, then victim chip, with the full sentence in aria-label) and use 'fell to the {structure}'. Resolve recap ids through items, setup boons and spells before a neutral fallback.",
+   "files": "content/strings.en.json, src/ui/hud/model.ts, src/ui/hud/top.tsx, src/ui/hud/panels.tsx",
+   "verifierNote": "Confirmed (a) visually and (b) in code."
+  },
+  {
+   "id": "HUD-7",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Scoreboard has no battle-spell column; faces and item glyphs are small",
+   "what": "The Tab scoreboard has no column for each player's two battle spells; its faces are 28 px and its item glyphs 20 px.",
+   "evidence": "_harness/_shots/final_hud_1080_10_scoreboard.png; src/ui/hud/panels.tsx:70 (headers Player, LV, T/F/A, Wicks, Gleam, Damage, Items).",
+   "gauge": "LoL's Tab scoreboard shows both summoner spells and the keystone per champion.",
+   "fix": "Add a 'Spells' cell with the two battle-spell glyphs and a respawn count over a down player's face. Raise item glyphs to 24 px.",
+   "files": "src/ui/hud/panels.tsx, src/ui/styles/hud.css",
+   "verifierNote": "Confirmed."
+  },
+  {
+   "id": "HUD-8",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "The always-on HUD exceeds VALE's own 11 % budget (but matches LoL's ~13 %)",
+   "what": "The Dial Bar box is 776x160 (spec 640x132), the RIFT minimap 352x228 (spec 352x198; 228 follows the 170:110 map aspect) and the sky strip 760x56 (spec 720x48).",
+   "evidence": "DOM boxes in _harness/_reports/final_hud_capture_1080.json steps.mid_dom: dbar 776x160 + mmap 352x228 + sky 760x56 + 4 afr 168x52 = 281,920 px, or 13.6 % of 1080p without the contextual kill feed (14.7 % with it). Spec at _design/STYLE_BIBLE.md:99-109 and client_hud.md §4.1.",
+   "gauge": "LoL's always-on HUD is about 13 % (r12 §5); VALE is now at LoL's level, above its own bible.",
+   "fix": "Either update the bible and client_hud budget to the shipped kit (13.6 % box coverage; the 198 px minimap height is inconsistent with the map aspect anyway), or trim the Dial Bar's empty upper arc and side margin.",
+   "files": "_design/STYLE_BIBLE.md, _design/sections/client_hud.md, src/ui/hud/frame_layout.ts",
+   "verifierNote": "Confirmed. This is mostly a doc-to-build inconsistency, not a readability defect."
+  },
+  {
+   "id": "HUD-9",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "At 720p the HUD loses legibility; ally names truncate even at 1080p",
+   "what": "At 1280x720 item slots are 25 px and ability slots 43 px. Ally-frame names truncate ('ruth_afterlig' and 'wrenna_lam' are already cut at 1080p in final_hud_1080_02_mid_full.png). The regen text is a fixed 12 px over an 11 px HP bar.",
+   "evidence": "_harness/_reports/final_hud_capture_s4.json steps.p720: hpbar 285x11, slot 43, item 25x25, cdFont 12.8px, regenFont 12px. The regen text was empty at capture, so the overflow is inferred from src/ui/styles/hud.css:312. Shots: _harness/_shots/final_hud_s4_04_720_full.png and final_hud_s4_04_720_dbar.png.",
+   "gauge": "LoL's HUD scale keeps inventory and cooldown text legible at small resolutions (r04 §1.6). VALE's own spec: no text under 12 px at any scale (client_hud.md:370).",
+   "fix": "Floor the HUD scale at 0.8 below 1080p. Keep the regen text at 12 px (VALE's floor) and instead grow the HP bar to >= 13 px or move the readout outside the bar. Put full names in the ally-frame tooltip and widen the name column.",
+   "files": "src/ui/styles/hud.css, src/ui/app.tsx, src/ui/hud/side.tsx",
+   "verifierNote": "Confirmed. The reviewer's fix ('regen calc(11*px) floored at 10 px') is corrected because it would break VALE's 12 px text floor. The 12.8 px cooldown text itself meets the floor."
+  },
+  {
+   "id": "HUD-10",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Sensitivity watch: the 'Linen Hood' item icon is an empty white cowl with a dark void face",
+   "what": "Not tall or conical; the crown is rounded and back-slanted. But it is a white, empty hood with a black opening, the item art closest to the sensitivity line.",
+   "evidence": "_harness/_shots/final_hud_icon_linen_hood_512.png (an upscale of content/ui/icons/items/linen_hood.webp); shop BASIC row in final_hud_1080_11_shop.png.",
+   "gauge": "This is the brief's sensitivity requirement, not a LoL measurement.",
+   "fix": "Repaint as folded linen, or the hood seen from behind with an oat lining and hem stitch, so no empty face opening reads; keep it off pure white.",
+   "files": "content/ui/icons/items/linen_hood.webp",
+   "verifierNote": "Confirmed as minor. I viewed it at 512 px: rounded crown, not pointed or tall, so it is not blocker-class."
+  },
+  {
+   "id": "HUD-11",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "World ping is small and low-salience; the shop has unpolished edges",
+   "what": "The world 'Look here' ping is a roughly 36 px ink disc with a thin ripple that nearly vanishes on bright structure stone. The shop's last tile row is cut through its prices with no fade.",
+   "evidence": "_harness/_shots/final_hud_1080_20z_ping_world_3x.png; final_hud_1080_11_shop.png (prices cut at y about 776).",
+   "gauge": "LoL pings are large animated markers that read on any terrain; its shop scrolls cleanly.",
+   "fix": "Use a 56 px chalk ring with an ink keyline, a lifted glyph and two expanding rings (respecting reduce motion). Add a 24 px bottom fade mask on the shop tile scroller.",
+   "files": "src/ui/hud/world.tsx, src/ui/styles/hud.css, src/ui/hud/shop.tsx",
+   "verifierNote": "Confirmed."
+  }
+ ],
+ "missed": []
+}

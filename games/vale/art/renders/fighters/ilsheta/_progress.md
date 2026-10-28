@@ -117,3 +117,22 @@
   (1.1 over), accent top-half 0.87-0.89 at facing 0 (guide 0.9), the back facing's accent ~0.8-1.1 % (the lamp is in
   front of her chest, the brief's place); a tiny grey texel triangle on the chimney's back (survived re-decimation);
   ally/enemy-tinted in-game view not possible with the bench (Ilsheta can only be seat 0 = self).
+
+## FIX PASS 2 (review: 4 majors, 8 minors)
+- 2026-10-28 13:45 start. Plan (one batched build; ilsheta.py unless noted):
+  1 chimney: the painted-opaque glass could not read clear (3 passes). The tube is now REAL see-through glass: a
+    low-only part `glass` (bmesh surface of revolution on the chimney's sections, open at both ends, culled inside
+    the hood) in a kept material `gem_chimglass` (factor-only Principled, alpha 0.34, double-sided; glTF BLEND; the
+    renderer already draws see-through parts without ink). The face stays OPAQUE: a 9 mm shell `chimney` set just
+    inside the glass's front (the concept's face projected on it), plus an opaque bright rolled lip and chin rim; the
+    rim pinches forward into a small spout (the facing cue from above). Hood tunnel interior painted dark lining
+    (now seen through the glass), the crown inside the tube shaded. AO bake ignores the glass; Cycles renders swap the
+    glass to a thin-glass shader (transparent + Fresnel gloss) for splash / portrait / turntable.
+  2 accent: flame 14 x 19.4 cm (r 0.070, tip higher), guard lamp ~3 cm higher (top-half share at facing 0).
+  3 cast_ult re-authored: both hands overhead on the staff (lamp hung out at her upper right, above the head), the
+    bloom a Y (staff high + left arm wide); cast_a2: the LEFT arm raised high palm-up, the staff held out front-right
+    (lamp beside the face, never before it).
+  4 skins: the recolour's shade reference was the band median incl. the dark lining (outer cloth x1.35 lighter):
+    now the band's 75th percentile; Stillwater wet stone from 0.88 m with a salt tide line; First Bell same fix.
+  minors: base hem deeper (bottom band), hood / scarf despeckle, sleeve band-fill smoothed (First Bell stripes),
+    attack2 a downward staff tap, death keeps the lamp upright + head less bowed, portrait lamp below the visor.
