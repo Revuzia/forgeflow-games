@@ -5,7 +5,11 @@
 //                                     whoever owns the loop calls client.pump(dt) before render(dt))
 //     resize(w?, h?)                  CSS pixels (default: the canvas' client size)
 //     render(dt)                      one frame; dt in seconds (honours fpsCap, menu idle cap, hidden tab)
-//     setQuality(video)               §9.4 ladder (Settings.video) + dynamic resolution
+//     setQuality(video)               §9.4 ladder (Settings.video) + dynamic resolution (on unless the options or
+//                                     video.dynamicResolution say false; perf PERF-M2: fed only match frames drawn at
+//                                     the display rate, never the menu, its idle cap or an fpsCap below the display;
+//                                     every match starts at the player's own scale; GPU readings longer than their
+//                                     frame are dropped; a lowered scale probes back up — quality.ts)
 //     setSettings(patch)              colourblind palette, camera lock / edge pan / pan speed,
 //                                     reduce motion, screen shake, HUD scale, health bar ticks
 //     pickGround(x, y)                CSS px → sim (x, y) on the walkable plane, or null
