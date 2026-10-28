@@ -15,13 +15,13 @@
   },
   "uv_coverage": 0.686,
   "bake": {
-    "base": 1.75,
-    "rough_metal": 1.16,
-    "normal": 1.25,
-    "ao": 1.49,
+    "base": 2.33,
+    "rough_metal": 1.38,
+    "normal": 1.68,
+    "ao": 1.96,
     "normal_fixed_px": 130,
-    "pack_save": 0.17,
-    "total": 5.97
+    "pack_save": 0.28,
+    "total": 7.82
   },
   "bake_holes_filled": 127775,
   "clips": {
@@ -162,13 +162,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 2817896,
+  "glb_bytes_raw": 2820500,
   "optimize": {
     "ok": true,
-    "before": 2817896,
-    "after": 789724
+    "before": 2820500,
+    "after": 789380
   },
-  "glb_bytes": 789724,
+  "glb_bytes": 789380,
   "icon": {
     "out": "art/out/units/longshade_icon.png"
   },
@@ -177,7 +177,7 @@
     "  material longshade_lamp: maps=[] emissive=0.80,0.65,0.38 base=1,0.815,0.479,1",
     "  texture longshade_normal: image/webp ? 78.0 KiB",
     "  texture longshade_orm: image/webp ? 122.6 KiB",
-    "  texture longshade_base: image/webp ? 144.5 KiB",
+    "  texture longshade_base: image/webp ? 144.2 KiB",
     "  clip attack1      1.000 s (30 f) channels=24 bones=22",
     "  clip cast_a1      1.167 s (35 f) channels=24 bones=22",
     "  clip cast_a2      1.333 s (40 f) channels=25 bones=23",
@@ -190,7 +190,7 @@
     "ok": true,
     "log": [
       "[three] art/out/units/longshade.glb (771 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: longshade_base 2048x2048 145K, longshade_normal 1024x1024 78K, longshade_orm 1024x1024 123K",
+      "  webp: longshade_base 2048x2048 144K, longshade_normal 1024x1024 78K, longshade_orm 1024x1024 123K",
       "  skinned meshes: longshade_1(8725v), longshade_2(155v)",
       "  bones: 26 (root hips spine chest neck neck2 head eyeL eyeR mask scapulaL upper_armL forearmL handL clawL scapulaR upper_armR forearmR handR clawR tail tail2 tail3 tail4 tail5 tail6)",
       "  clips: attack1:1.000s/24tr, cast_a1:1.167s/24tr, cast_a2:1.333s/25tr, cast_a3:2.167s/26tr, death:1.833s/26tr, idle:3.000s/26tr, run:0.800s/23tr",
@@ -204,23 +204,23 @@
     "ok": true,
     "out": "art/renders/units/longshade.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-1.186,0.004,-6.472],[1.185,4.202,2.606]],\"facing\":[0,1],\"headY\":3.08,\"heightPx1080\":240,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/longshade.png\",\"seconds\":7}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-1.186,0.004,-6.472],[1.185,4.202,2.606]],\"facing\":[0,1],\"headY\":3.08,\"heightPx1080\":240,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/longshade.png\",\"seconds\":8.1}"
     ]
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "sculpt": 29.13,
+      "sculpt": 30.07,
       "bind": 0.16,
-      "uv": 7.18,
-      "bake": 11.68,
-      "clips": 0.2,
+      "uv": 7.17,
+      "bake": 14.37,
+      "clips": 0.24,
       "ground_qa": 0.12,
-      "export": 0.38,
-      "optimize": 0.47,
-      "icon": 0.54,
-      "qa": 7.37
+      "export": 0.4,
+      "optimize": 0.57,
+      "icon": 0.77,
+      "qa": 8.44
     },
-    "total_s": 57.27
+    "total_s": 62.39
   }
 }
