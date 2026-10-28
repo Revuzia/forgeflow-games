@@ -65,6 +65,8 @@ def args():
     p.add_argument("--zoom", type=float, default=0.62, help="ortho scale (m)")
     p.add_argument("--grid-from-code", action="store_true", help="check the strip serenade_parts builds now")
     p.add_argument("--match-grid", default="", help="NPY: the cached build's strip grid (for --render with the code's grid)")
+    p.add_argument("--grid-colors", action="store_true", help="--render: the mantle coloured by strip column (front ones)")
+    p.add_argument("--grid-npy", default="", help="with --grid-from-code: check this saved strip grid (model space) instead")
     return p.parse_args(scene.script_args())
 
 
@@ -116,6 +118,8 @@ def main():
             print(f"MATCH cached mesh -> its grid: max {math.sqrt(d2o.min(1).max()) * 1000:.2f} mm")
         else:
             gi_b = gi
+        if a.grid_npy:
+            mV_model = np.load(a.grid_npy)
         new_co = mV_model[gi_b].astype(float)
         X0 = mV_model.astype(float).copy()
         gi = np.arange(len(X0))
@@ -165,7 +169,8 @@ def main():
             m = row_i == r
             print(f"  row {r}: head share front {hh[m & (side_c[col_i] < 40)].mean():.3f} side {hh[m & (np.abs(side_c[col_i] - 90) < 20)].mean():.3f} back {hh[m & (side_c[col_i] > 150)].mean():.3f}")
     if a.render:
-        render(a, arm, body, sel, W[gi_b] if new_co is not None else W, bones, names, pid, new_co)
+        render(a, arm, body, sel, W[gi_b] if new_co is not None else W, bones, names, pid, new_co,
+               gi_b if new_co is not None else gi)
         return
     # the hood frame fields (model space)
     hood_tf = by["hood"].to_model
@@ -205,6 +210,52 @@ def main():
     for ii in zip(*np.nonzero(open_rest)):
         print(f"  rest-open sample: quad side {qc[ii[0], ii[1]]:.0f} row {ii[1]} ad {a0.reshape(S0.shape[:3])[ii] * 100:.2f} cm "
               f"felt {c0.reshape(S0.shape[:3])[ii] * 100:.2f} cm at {np.round(Q0[ii], 3).tolist()}")
+    # (fix round 9) the same against the GAME meshes, as a viewer sees them: a strip sample behind the opening's plane
+    # (above the floor - 3 cm) whose sight line to an eye-level or 52-degree camera (yaws 0 / +-35 / +-70, 52: 0 /
+    # +-45) leaves THROUGH the opening, past the cached build's own hood, rim, collar, hollow floor and light lows, is a
+    # pale bit standing in the opening; the SDF felt check above passes samples the low's thin walls leave bare
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    cov_ids = [i_ for i_, nm in enumerate(names) if nm != "mantle" and (nm.startswith("hood") or nm in ("collar", "hollow_floor", "crown_band"))]
+    cov_v = np.isin(pid, cov_ids)
+    polys = [list(pl.vertices) for pl in me.polygons if all(cov_v[v_] for v_ in pl.vertices)]
+    bvh = BVHTree.FromPolygons([Vector(v_) for v_ in co.tolist()], polys)
+    S0f_ = S0.reshape(-1, 3)
+    uvw = gw.SER_ARCH.uvw(Q0.reshape(-1, 3))
+    cand_ = np.nonzero((uvw[:, 2] > -0.02) & (Q0.reshape(-1, 3)[:, 2] > gw.SER_ARCH.zf - 0.03) & (a0 < 0.03))[0]
+    dirs = []
+    for yaw, pitch in ((0, 3), (35, 3), (-35, 3), (70, 3), (-70, 3), (0, 52), (45, 52), (-45, 52)):
+        y_, p_ = math.radians(yaw), math.radians(pitch)
+        dirs.append(Vector((math.sin(y_) * math.cos(p_), -math.cos(y_) * math.cos(p_), math.sin(p_))))
+    seen = np.zeros(len(S0f_), bool)
+    A_ = gw.SER_ARCH
+    for k in cand_:
+        P_ = Vector(S0f_[k].tolist())
+        for d_ in dirs:
+            # the sight line must leave through the opening: cross the arch's plane (w = 0) inside its outline, above
+            # the hollow's floor (a sample beside the hood seen from outside is the mantle's own top edge, not a bit in
+            # the opening)
+            q0 = A_.uvw(inv_h(np.array([S0f_[k]])))[0]
+            q1 = A_.uvw(inv_h(np.array([S0f_[k] + np.array(d_[:]) * 0.1])))[0]
+            dq = (q1 - q0) / 0.1
+            if q0[2] <= 0.0 or dq[2] >= -1e-6:
+                continue
+            t_ = -q0[2] / dq[2]
+            qx = q0 + dq * t_
+            zx = (S0f_[k] + np.array(d_[:]) * t_)[2]
+            if A_.d2uv(np.array([qx[0]]), np.array([qx[1]]))[0] > 0.0 or zx < A_.zf - 0.01:
+                continue
+            hit = bvh.ray_cast(P_ + d_ * 0.002, d_, 0.8)
+            if hit[0] is None:
+                seen[k] = True
+                break
+    n_rest_open_low = int(seen.sum())
+    print(f"REST: strip samples behind the opening's plane in plain sight past the GAME hood lows: {n_rest_open_low} "
+          f"(of {len(cand_)} candidates)")
+    ol = seen.reshape(S0.shape[:3])
+    for ii in list(zip(*np.nonzero(ol)))[:12]:
+        print(f"  rest-open (game mesh): quad cols {int(side_c[ii[0]])}-{int(side_c[ii[0] + 1])} row {ii[1]} "
+              f"at {np.round(Q0[ii], 3).tolist()}")
     # the tunic ('cloak'): each strip sample skinned with the tunic's own weights there (inverse-distance mean of its
     # 4 nearest tunic vertices at rest), so a posed sample is read in the tunic's rest space against its sculpt
     tsel = np.nonzero(pid == names.index("cloak"))[0]
@@ -299,11 +350,12 @@ def main():
               f"rise {worst['rise'][0] * 100:.1f} cm at {worst['rise'][1]}; tuck min {worst['tuck'][0] * 100:.1f} cm at {worst['tuck'][1]}; "
               f"sink {worst['sink'][0]} at {worst['sink'][1]} ({worst['sink'][2] * 100:.1f} cm)  {'ok' if ok else 'FAIL'}"
               f"{'' if clip in WICK_CLIPS else ' (not a wick clip: info)'}")
-    ok_all &= n_rest_open == 0
-    print(f"REST GATE: {n_rest_open} strip samples in the opening at rest {'ok' if n_rest_open == 0 else 'FAIL'}")
+    ok_all &= n_rest_open == 0 and n_rest_open_low == 0
+    print(f"REST GATE: {n_rest_open} strip samples in the opening at rest (felt), {n_rest_open_low} (game mesh) "
+          f"{'ok' if n_rest_open == 0 and n_rest_open_low == 0 else 'FAIL'}")
     print("MANTLEPOSE", "PASS" if ok_all else "FAIL")
     if a.json:
-        report["_rest"] = {"open": n_rest_open}
+        report["_rest"] = {"open": n_rest_open, "open_game_mesh": n_rest_open_low}
         with open(a.json, "w") as fh:
             json.dump(report, fh, indent=1)
 
@@ -313,7 +365,11 @@ SHOW = {"hood": "#B49A74", "hood_rim": "#3B302A", "collar": "#4B4039", "crown_ba
         "pack": "#6E5848", "hollow_floor": "#17150F", "hood_light": "#3F9CFF"}
 
 
-def render(a, arm, body, sel, W, bones, names, pid, new_co=None):
+# --grid-colors: the front columns by side angle (the facings white, the tuck row darker)
+GRID_COL = {15: "#FFE040", 24: "#FF8C1A", 34: "#E02020", 46: "#FF30FF", 60: "#20D0E0"}
+
+
+def render(a, arm, body, sel, W, bones, names, pid, new_co=None, grid_idx=None):
     """Write W into the body's mantle vertex groups and render the posed neck in flat part colours (the mantle pale,
     the hollow and the rim dark): eye level front / 3-4 / side and the 52-degree camera front / 315, framed on the
     posed hood, at each clip time. new_co: the mantle vertices' rest positions (model space) to render instead."""
@@ -352,6 +408,14 @@ def render(a, arm, body, sel, W, bones, names, pid, new_co=None):
                 cols[pp == i] = lin(hx) + [1.0]
         if o.name.endswith("_accent"):
             cols[:] = lin("#3F9CFF") + [1.0]
+        if a.grid_colors and o == body and grid_idx is not None:
+            m_cols = [15.0, 24.0, 34.0, 46.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 180.0]
+            m_cols = m_cols + [360.0 - c_ for c_ in m_cols[::-1][1:]]
+            side = [None] + [int(min(c_, 360 - c_)) for c_ in m_cols] + [None]
+            for k, vi in enumerate(sel):
+                ci, ri = int(grid_idx[k]) // 6, int(grid_idx[k]) % 6
+                hx = "#FFFFFF" if side[ci] is None else GRID_COL.get(side[ci], "#8A8A8A")
+                cols[int(vi)] = [c_ * (0.35 if ri == 0 else 1.0) for c_ in lin(hx)] + [1.0]
         at = me.color_attributes.get("_flat") or me.color_attributes.new("_flat", "FLOAT_COLOR", "POINT")
         at.data.foreach_set("color", cols.ravel())
         me.color_attributes.active_color = at

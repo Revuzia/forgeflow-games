@@ -1683,7 +1683,7 @@ SER_ARCH_DEEP = Arch((-0.035, -0.229, 0.975), 8.0, hw_bot=0.200, hw_mid=0.170, h
 SER_ARCH_SINK = Arch((-0.035, -0.229, 0.975), 8.0, hw_bot=0.200, hw_mid=0.170, h_bot=0.20, h_top=0.185, r_corner=0.05,
                      w0=0.04, w1=0.21, kb=0.06, z_floor=0.825)
 SER_BAND_HW = 0.0215                          # the crown band: 3.1 cm over the opening (6 cm read as a headband)
-SER_LAPEL_DROP = 0.022                        # (fix round 9) the mantle lapels' inner top corners, under the rim
+SER_LAPEL_DROP = 0.045                        # (fix round 9) the mantle lapels' inner top corners, under the rim
 
 
 def _ser_band_hw(a, extra=0.0):
@@ -1907,9 +1907,10 @@ def serenade_parts(L: dict) -> list:
     for _ in range(3):                                # one curve: never above a neighbour's felt, no tooth
         tops[1:-1] = np.minimum(tops[1:-1], (tops[:-2] + 2 * tops[1:-1] + tops[2:]) / 4 + 0.002)
     # (fix round 9, verify greatwick r2: at eye level the notch-side lapel tops rose to the opening rim's lower corners
-    # as pale pointed teeth) the lapels' top INNER corners are rounded off and dropped under the rim: 2.2 cm at the
-    # notch edge (and its facing), easing to nothing by the 46 degree column
-    tops = tops - np.array([SER_LAPEL_DROP * (1.0 - float(_smooth01((m_side(c_) - 15.0) / 30.0))) for c_ in m_cols])
+    # as pale pointed teeth) the lapels' top INNER corners are rounded off and dropped under the rim: 4.5 cm at the
+    # notch edge (the sill rim's foot is ~3 cm under the lapel tops), easing to nothing by the 50 degree column, and
+    # the turned facing's top 1.2 cm under its edge column's (a round corner into the notch, not a point)
+    tops = tops - np.array([SER_LAPEL_DROP * (1.0 - float(_smooth01((m_side(c_) - 15.0) / 35.0))) for c_ in m_cols])
     cols_V, tuck_in, tuck_c = [], [], []
     for c_, zt in zip(m_cols, tops):
         a = math.radians(c_)
@@ -1927,19 +1928,23 @@ def serenade_parts(L: dict) -> list:
         # (a grid search: the deepest point within 2.5 cm, near the wanted rise, never through the hollow: by the
         # opening's sides the hood is a thin wall round the hollow)
         dz_t = -0.010 + 0.032 * _smooth01((m_side(c_) - 32.0) / 30.0)
-        # (fix round 9: down to 6 cm under the top, so the 46 degree tuck can pass round the hollow's lower corner
-        # under its floor instead of up into the thin side wall)
-        DI, DZ = np.meshgrid(np.arange(0.020, 0.0701, 0.005), np.arange(-0.060, 0.0351, 0.005))
+        # (fix round 9: down to 9 cm under the top, so the tucks beside the hollow pass round its lower corner UNDER
+        # its floor instead of up into the thin side wall, whose decimated low left the turned-in felt in plain sight)
+        DI, DZ = np.meshgrid(np.arange(0.020, 0.0701, 0.005), np.arange(-0.090, 0.0351, 0.005))
         DI, DZ = DI.ravel(), DZ.ravel()
         cand = Vc[0][None] - dv[None] * DI[:, None] + np.stack([0 * DZ, 0 * DZ, DZ], 1)
         fr = np.linspace(0.2, 1.0, 5)
         seg = (Vc[0][None, None] + fr[None, :, None] * (cand - Vc[0][None])[:, None]).reshape(-1, 3)
-        clear = (A_m.d(seg).reshape(len(cand), len(fr)) > 0.006).all(1)
+        clear = (A_m.d(seg).reshape(len(cand), len(fr)) > 0.012).all(1)     # (r9: 12 mm, was 6: the low's error)
         dep = -F_cov.d(cand)
         score = np.minimum(dep, 0.025) - 0.15 * np.abs(DZ - dz_t) - 0.05 * DI - 10.0 * (~clear)
         # (fix round 9) and >= 3 cm from the hollow: the hood's game mesh is a decimated low of its felt, and a tuck
         # 1.6 cm in but 1.9 cm from the hollow showed through the low's inner wall as a speck in the opening
         score = score - 40.0 * np.maximum(0.0, 0.030 - A_m.d(cand))
+        # (fix round 9) beside the hollow (to the 62 degree column, its side walls reach back to ~65) the tuck stays
+        # under the hollow's floor; behind it the tucks rise into the hood as before
+        if m_side(c_) <= 62.0:
+            score = score - 5.0 * (cand[:, 2] > SER_ARCH.zf - 0.010)
         tuck_c.append((cand, dep, score))
         lip = Vc[-1] - dv * 0.030 + np.array([0.0, 0.0, 0.008])
         cols_V.append(np.vstack([cand[int(np.argmax(score))][None], Vc, lip[None]]))
@@ -1952,14 +1957,15 @@ def serenade_parts(L: dict) -> list:
 
     def quad_bad(t0, p0, t1, p1):
         """per tuck candidate t0 (n, 3): the samples of the quad (t0, t1 | p0, p1) in the opening and out of the felt
-        (weighted 1), or within 6 mm of the opening and not 1 cm inside the felt (weighted 0.15: the hood's game mesh
-        is a decimated low of its felt, a few mm off it)"""
+        (weighted 1), or within 2.5 cm of the opening and not 1.5 cm inside the felt (weighted 0.3: the hood's game
+        mesh is a decimated low of its felt, its thin side walls by the hollow's lower corners 1-2 cm off it; checked
+        on the game mesh by proto/wick_greatwick_mantlepose.py's line-of-sight rest gate)"""
         P = (((1 - QU) * (1 - QV))[None, :, None] * t0[:, None] + (QU * (1 - QV))[None, :, None] * t1[None, None]
              + ((1 - QU) * QV)[None, :, None] * p0[None, None] + (QU * QV)[None, :, None] * p1[None, None]).reshape(-1, 3)
         a_, f_ = A_m.d(P), F_cov.d(P)
         bad = (a_ < 0.0) & (f_ > 0.002)
-        near = (a_ < 0.006) & (f_ > -0.010)
-        return (bad + 0.15 * near).reshape(len(t0), -1).sum(1)
+        near = (a_ < 0.025) & (f_ > -0.015)
+        return (bad + 0.3 * near).reshape(len(t0), -1).sum(1)
     for _ in range(5):
         for j, c_ in enumerate(m_cols):
             if m_side(c_) > 75.0:
@@ -1986,7 +1992,8 @@ def serenade_parts(L: dict) -> list:
     o_ = np.argsort(sa_)
     top_r = np.array([math.hypot(v[1, 0] + 0.03, v[1, 1] - 0.02) for v in cols_V])
     tuck_meta = (sa_[o_], tops[o_], top_r[o_], (-0.03, 0.02))
-    cols_V = [facing(cols_V[0], m_cols[0])] + cols_V + [facing(cols_V[-1], m_cols[-1])]
+    corner = np.array([[0.0, 0.0, -0.012], [0.0, 0.0, -0.012], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]])
+    cols_V = [facing(cols_V[0], m_cols[0]) + corner] + cols_V + [facing(cols_V[-1], m_cols[-1]) + corner]
     mV = np.vstack(cols_V)
     mF = wc.grid_faces(len(cols_V), nv_, closed=False)
     # ONE orientation for the whole strip (outer felt out; the tuck, the lip and the facings follow round their folds,

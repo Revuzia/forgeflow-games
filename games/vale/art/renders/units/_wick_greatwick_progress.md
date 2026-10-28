@@ -544,3 +544,34 @@ Serenade rebuilt; Aubade untouched (its death bow factor is 1.0 and its stunned 
   enemy, in-game burst r6 / r7 / r8, stunned).
 - Not done (optional minors): the hem-fold glint from the back and the crown band's paint specks (both pre-r7, not
   visible at game scale); the pane pairs stay a watch item.
+
+## Fix round 9 (verify greatwick r2 + final parity W5a: the Serenade lapel tuck / tips, the ~open_rest exemption) — 2026-10-28
+Scope: art/blender/units/wick_greatwick.py (serenade_parts' mantle strip) + proto/wick_greatwick_mantlepose.py. Serenade
+rebuilt; Aubade untouched.
+- GATE: the posed-mantle check no longer exempts rest intrusions (`~open_rest` removed): the tuck and top rows ride the
+  head rigidly, so a rest intrusion shows on every frame. r8's strip FAILS it (12 rest samples in the opening's prism,
+  1.25 cm out of the felt, on the turned-in quads between the 34 and 46 degree columns). NEW rest gate on the GAME
+  meshes: strip samples behind the opening's plane whose sight line to an eye-level or 52-degree camera (yaws 0/+-35/
+  +-70; 52: 0/+-45) leaves through the opening past the cached build's own hood / rim / collar / floor / light lows
+  (BVH ray casts). It catches what the SDF test misses (the decimated low's thin side walls): r8's strip 22 samples,
+  this round's 0. `--grid-from-code` (+ `--match-grid`, `--grid-npy`, `--grid-colors`) checks / renders a strip change
+  on the cached rig without a build.
+- TUCK: each column's tuck is chosen with its neighbours (5 passes over the front columns to 75 deg): the turned-in
+  quads either side are penalised for samples in the opening and out of the felt (1.0) or within 2.5 cm of it and
+  not 1.5 cm in (0.3); the tuck stays >= 1.6 cm in the felt and >= 3 cm from the hollow; beside the hollow (to 62 deg)
+  it stays UNDER the hollow's floor (the search reaches 9 cm under the top), the column segment clears the hollow by
+  12 mm (was 6). Result: tuck 1.75-6.5 cm in, the 46 / 60 deg tucks under the floor (r8: 46 up at z 0.947 in the thin
+  side wall, the quad to 34 crossed the hollow's lower corner = the lit sliver at eye level).
+- LAPELS: the tops' inner corners rounded off and dropped under the opening rim (SER_LAPEL_DROP 4.5 cm at the notch
+  edge, easing to nothing by 50 deg; the turned facing's top a further 1.2 cm down): tops 0.839 at the notch (r8 0.884,
+  1.3 cm above the sill rim's top) - the pale points no longer reach the rim at eye level.
+- CHECK (built rig, every frame): REST 0 (felt) / 0 (game mesh); idle, run, attack1, death, stunned: open 0, rise
+  <= 1.2 cm (r8 1.8), tuck >= 1.75 cm, sink 0: MANTLEPOSE PASS. Report _harness/_reports/fw_W5a_greatwick_mantlepose.{log,json}.
+- Gates: 3593 tris (cap 3600), GLB 441,716 B, three load test + QA OK, facing +Z, 15 clips, accentPct 5.35 % (64 % top
+  half), mesh top 1.486.
+- Close-ups (EEVEE, Rift sky, ally tint; r8 GLB vs r9): _harness/_shots/fw_W5a_greatwick_neck_{idle_0.3,idle_0.0,
+  run_0.25,attack1_0.25,attack1_0.33}_r8_r9.png - the sliver in the opening (side-r, 3/4-r) is gone, the lapel tips sit
+  under the rim; game camera x3 (enemy tint) fw_W5a_greatwick_serenade_game3_enemy.png.
+- Not done (minor): the attack1 t0.25-0.33 lapel flare at 3/4-r (a lapel standing out as its own tab) is unchanged:
+  grading the lapels' 70 % / hem head share down (0.45 / 0.12) lifts attack1's rise to 3.3 cm (gate 2 cm), so
+  MANTLE_HEAD stays as r8's.
