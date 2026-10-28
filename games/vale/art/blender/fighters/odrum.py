@@ -1943,7 +1943,15 @@ SHADEPRINT = {"ink": "#2B2A33", "pale": "#B7B4BE", "rim_col": "#C6C2CF", "bleed"
               # the hem prints near the ink, mid-skirt ~L* 32 and under the belt ~45; the seventh pass measured the
               # old curve at L* 47 a hand under the belt)
               "wash": ((0.45, 0.62, 0.80, 1.00, 1.16, 1.40), (1.0, 0.97, 0.88, 0.62, 0.25, 0.04)),
-              "rim": ("coat", "skirt"), "rim_w": 0.45}
+              "rim": ("coat", "skirt"), "rim_w": 0.45,
+              # (final parity review, originality F3: the pale lilac-grey mask with black slits read ghostly, portrait
+              # mask sat 0.08 with 21.6 % of it under L* 20): the print's ONE warm colour is the mask, a warm amber
+              # lacquer over the carved block (its lit planes at L* `L`, hue 30, sat 36 %: under the bible's 40 % in
+              # the marigold band), and the slits' floors an inlaid honey-amber glass (non-emissive, a small area),
+              # lighter at the floor's middle, so they read lit, not hollow; the ink cloth and pale cap stay
+              # (build 1, hue 26 / sat 39 % with a #8A5A3E shade: portrait sat 0.48, the shaded planes salmon-pink in
+              # the three QA light -> a step toward honey, the shade less red)
+              "lacquer": {"col": "#B39272", "L": 68.0, "shade": "#8E6C4E", "inlay": "#E2B26A", "inlay_deep": "#B07A40"}}
 
 OWN_REF = ("neckwrap",)
 
@@ -2047,6 +2055,30 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
             p = P[m].reshape(-1, 3)
             st = np.clip(NOISE(np.stack([p[:, 0] * 2.0 + p[:, 2], p[:, 1], p[:, 2] * 0.3], 1), 30.0) - 0.30, 0.0, 1.0)
             out[m] = out[m] * (1.0 - 0.30 * st)[:, None]
+        lac = SHADEPRINT.get("lacquer")
+        m = sel("mask")
+        if lac and m is not None:                     # the warm lacquer mask (its carving, cracks and strokes kept)
+            p = P[m].reshape(-1, 3)
+            Y = out[m] @ LUMA
+            p85 = max(float(np.percentile(Y, 85)), 1e-4)
+            rel = np.clip(Y / p85, 0.0, 1.25)
+            lc = project._lin(scene.hex_srgb(lac["col"]))
+            sh = project._lin(scene.hex_srgb(lac["shade"]))
+            # the lacquer pools deeper and warmer in the shaded planes and cuts (a value-matched shade colour)
+            sh = sh * (float(lc @ LUMA) / max(float(sh @ LUMA), 1e-4))
+            k = _smooth(0.75, 0.25, rel)[:, None]
+            hue = lc[None, :] * (1.0 - k) + sh[None, :] * k
+            Yt = ((lac["L"] + 16.0) / 116.0) ** 3
+            col = hue * (Yt / max(float(lc @ LUMA), 1e-4)) * rel[:, None]
+            # the eye slits: an inlaid amber glass, its floor lit honey, its walls deeper amber
+            ev = in_eye(p, 0.0015) & (p[:, 1] > FY - 0.008)
+            if ev.any():
+                dep = np.clip((p[ev, 1] - (FY - 0.008)) / 0.03, 0.0, 1.0)[:, None]
+                a0 = project._lin(scene.hex_srgb(lac["inlay_deep"]))
+                a1 = project._lin(scene.hex_srgb(lac["inlay"]))
+                col[ev] = a0[None, :] * (1.0 - dep) + a1[None, :] * dep
+            out[m] = np.clip(col, 0.0, 0.92)
+            log(f"  shadeprint: lacquer mask {lac['col']} at L* {lac['L']}, {int(ev.sum())} inlay texels")
         rimc = project._lin(scene.hex_srgb(SHADEPRINT["rim_col"]))
         for nm in SHADEPRINT["rim"]:                  # light-rimmed edges: the print's pale outline on the jerkin
             m = sel(nm)

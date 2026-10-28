@@ -1,0 +1,106 @@
+{
+  "cap": {
+    "hex": "#AA8D76",
+    "texels": 63320
+  },
+  "mask": {
+    "hex": "#C3A87D",
+    "texels": 338748
+  },
+  "neckwrap": {
+    "hex": "#928670",
+    "texels": 21654
+  },
+  "coat": {
+    "hex": "#83614E",
+    "texels": 199791
+  },
+  "straps": {
+    "hex": "#4E3425",
+    "texels": 32979
+  },
+  "belt": {
+    "hex": "#513523",
+    "texels": 36573
+  },
+  "skirt": {
+    "hex": "#694939",
+    "texels": 188505
+  },
+  "trousers": {
+    "hex": "#3B2C23",
+    "texels": 83573
+  },
+  "boots": {
+    "hex": "#302119",
+    "texels": 91882
+  },
+  "wrap_L": {
+    "hex": "#412A1D",
+    "texels": 18512
+  },
+  "wrap_R": {
+    "hex": "#422B1D",
+    "texels": 18151
+  },
+  "hand_L": {
+    "hex": "#A67B4F",
+    "texels": 19512
+  },
+  "hand_R": {
+    "hex": "#A3794E",
+    "texels": 24773
+  },
+  "staff": {
+    "hex": "#B9A489",
+    "texels": 35633
+  },
+  "staff_wraps": {
+    "hex": "#5C4231",
+    "texels": 19929
+  },
+  "staff_caps": {
+    "hex": "#B16D2A",
+    "texels": 10582
+  },
+  "staff_collars": {
+    "hex": "#3F2B1F",
+    "texels": 2889
+  },
+  "pouch": {
+    "hex": "#5A402F",
+    "texels": 10998
+  },
+  "cords_R": {
+    "hex": "#402F25",
+    "texels": 946
+  },
+  "pot_R": {
+    "hex": "#A28764",
+    "texels": 95280
+  },
+  "pot_rim_R": {
+    "hex": "#9A8262",
+    "texels": 15624
+  },
+  "resin_R": {
+    "hex": "#C48742",
+    "texels": 11021
+  },
+  "cords_L": {
+    "hex": "#402F25",
+    "texels": 1088
+  },
+  "pot_L": {
+    "hex": "#A38764",
+    "texels": 93985
+  },
+  "pot_rim_L": {
+    "hex": "#998162",
+    "texels": 15663
+  },
+  "resin_L": {
+    "hex": "#C48742",
+    "texels": 10972
+  }
+}

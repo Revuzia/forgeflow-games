@@ -180,30 +180,30 @@
   },
   "uv_coverage": 0.604,
   "bake": {
-    "base": 2.77,
-    "rough_metal": 2.13,
-    "normal": 1.56,
-    "ao": 1.86,
+    "base": 2.19,
+    "rough_metal": 1.7,
+    "normal": 1.36,
+    "ao": 1.52,
     "normal_fixed_px": 45656,
-    "projection": 29.46,
-    "pack_save": 29.58,
-    "total": 37.99
+    "projection": 26.81,
+    "pack_save": 26.93,
+    "total": 33.78
   },
   "tris": 19384,
   "mesh_top_m": 1.913,
-  "glb_bytes_raw": 2567016,
+  "glb_bytes_raw": 2581724,
   "optimize": {
     "ok": true,
-    "before": 2567016,
-    "after": 986500,
+    "before": 2581724,
+    "after": 992668,
     "q_base": 63
   },
-  "glb_bytes": 986500,
+  "glb_bytes": 992668,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_shadeprint.glb (963 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: odrum_shadeprint_base 2048x2048 217K, odrum_shadeprint_normal 512x512 44K, odrum_shadeprint_orm 512x512 76K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_shadeprint.glb (969 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: odrum_shadeprint_base 2048x2048 223K, odrum_shadeprint_normal 512x512 44K, odrum_shadeprint_orm 512x512 76K",
       "  skinned meshes: odrum_accent(224v), odrum_shadeprint(18073v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_hang_l x_pot_l x_hang_r x_pot_r x_pellet x_sling_pouch thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -218,8 +218,8 @@
       "portrait": "art/out/fighters/odrum/odrum_shadeprint_portrait.png"
     },
     "seconds": {
-      "splash": 7.46,
-      "portrait": 2.45
+      "splash": 7.68,
+      "portrait": 3.95
     }
   },
   "three_qa": {
@@ -251,24 +251,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/odrum/three_odrum_shadeprint.png",
-    "seconds": 7.1,
+    "seconds": 11.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.18,
-      "model": 3.11,
-      "lows_bind": 1.89,
-      "uv": 2.73,
-      "bake": 37.99,
-      "export": 0.05,
+      "materials": 0.14,
+      "model": 2.89,
+      "lows_bind": 1.99,
+      "uv": 2.68,
+      "bake": 33.78,
+      "export": 0.07,
       "optimize": 0.44,
       "load_test": 0.09,
-      "render": 9.94,
-      "three_qa": 7.38
+      "render": 11.67,
+      "three_qa": 11.61
     },
-    "total_s": 63.91
+    "total_s": 65.41
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82
