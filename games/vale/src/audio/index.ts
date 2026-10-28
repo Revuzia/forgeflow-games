@@ -1,7 +1,14 @@
 // VALE audio — the WebAudio engine (CONTRACT §11; tokens.json `audio`). Implements the UI's AudioPort.
 //
-//   buses       music · sfx · ui · voice · ambience → master → limiter → out (Settings.audio volumes;
-//               `muteInBackground` silences a hidden tab)
+//   buses       music · sfx · ui · voice · ambience → master → [soften] → limiter → soft clip → out (Settings.audio
+//               volumes; `muteInBackground` silences a hidden tab). The limiter (a compressor) can overshoot on a
+//               fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing passes
+//               −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both speakers
+//               carry everything: one-sided hearing, a single earbud); `soften` puts a gentle compressor before
+//               the limiter (SOFT_*: about 6 dB off the loudest transients, quiet sounds untouched)
+//   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
+//               VOICE_DUCK_DB lower and the sfx bus SFX_DUCK_DB lower, except threats to your fighter (the
+//               awareness pass below), which are never ducked (r07 §2.2.7)
 //   alert path  the GATE cues — whatever content binds to the UI roles queue_pop / queue_remind and the event
 //               roles countdown / matchStart — skip the master and join at the limiter through their own
 //               per-bus alert gain: max(ALERT_FLOOR, master × bus). So a match found while the tab is hidden
@@ -12,9 +19,22 @@
 //               decode lazily on first use, UI cues preload; an unknown or missing cue is silently ignored (art
 //               may still be rendering)
 //   priority    a voice's priority is its cue's, LIFTED +1 when an enemy aims it at you (or it lands on you) and
-//               DROPPED −1 when an ally made it (threat > self > ally, content/audio.json). A cue at its maxVoices,
-//               or the sfx pool at MAX_SFX_VOICES, frees the lowest-priority, oldest voice, never one that
-//               outranks the newcomer (then the newcomer is the one dropped)
+//               DROPPED −1 when an ally made it (threat > self > ally, content/audio.json). A voice ranks by
+//               priority × audibility on a log scale: priority + log10(cue gain × placement × the event's gain), so
+//               one priority step outweighs 20 dB and a faint, far voice yields before a loud one of its priority.
+//               A cue at its maxVoices, or
+//               the whole engine at MAX_VOICES (one global budget over every bus; the gate cues and music beds
+//               are outside it), frees its lowest-ranked, oldest voice, never one that outranks the newcomer
+//               (then the newcomer is the one dropped)
+//   announcer   the voice bus speaks one line at a time (r07 §2.2): a world event becomes at most ONE line, queued
+//               by band (0 match flow · 1 a wipe, your elimination · 2 takedown news · 3 structures and
+//               objectives · 4 team notices · 5 the rest), merged (a takedown's first / multi / shutdown lines and
+//               a later multi by the same player are one line, the best; a structure and the objective it
+//               grants in one tick are one line; a wipe swallows that tick's takedown lines), expired after
+//               ANN_TTL_S of waiting, and only bands 0-1 cut a playing line short (a short fade). The lines are a
+//               bell language bound in content ('announce.<line>'): first takedown one high toll, a multi-takedown
+//               n rising tolls, a shutdown falling glass, structures a low hourbell (yours lost over Dsus2,
+//               theirs resolving to F#), each named objective its own timbre. The HUD banner carries the words
 //   threat      every control status has its own cue (content binds 'status.<kind>'; no catch-all, so an unbound
 //               kind is silent), played on fighters only, +3 dB (YOU_CC_GAIN) when an enemy controls YOU; every enemy
 //               fighter's ultimate wind-up adds the shared shade-breath swell (enemyUltWindup) at the caster
@@ -26,9 +46,14 @@
 //               priming, so a .m4a starts sample-aligned with its .ogg and loops / beds decode to its exact
 //               length: loop points are format-independent (audio/aac.py; Safari pads a one-shot's end to a
 //               whole 1024-sample frame of silence, inaudible)
-//   music       MusicDef beds crossfade (1.2 s); `layers` start sample-aligned with the main stem and
-//               fade by the match's combat intensity (enter above 0.6, leave below 0.35 after 8 s,
-//               quantised to the bar); duck() pulls the bed −8 dB under a moment (the ready check)
+//   music       MusicDef beds crossfade (1.2 s). The main stem starts as soon as IT decodes (a slow layer never
+//               holds the bed back); each layer joins phase-locked to the main stem at the next bar once its own
+//               file is in. A layer's id gives its role: 'stem…' loops on its own length, always on (the menu's
+//               independent stems, tokens.audio.beds.menu.stemsS); 'phase_<p>' follows musicPhase() (the draft:
+//               every phase layer up to and including <p>, in content order, fades in on the next bar);
+//               'urgency' follows musicUrgency() (your last seconds to pick, fast in and out); any other layer is
+//               the combat layer, faded by the match's combat intensity (enter above 0.6, leave below 0.35
+//               after 8 s, quantised to the bar). duck() pulls the bed −8 dB under a moment (the ready check)
 //   listener    spatial cues are heard from the CAMERA's ground focus (CONTRACT §11 'listener at the camera
 //               target'; listener(): the renderer's focus, wired in boot/main.ts; without one, your fighter):
 //               full volume within LISTEN_INNER_M (the whole screen at default zoom), rolled off to silence
@@ -42,7 +67,9 @@
 //               (c_* combat, m_* match events), so content can re-voice any ability without code.
 //               Team-private comms stay private: a ping sounds only when a player of YOUR team made it, and a
 //               surrender vote / its outcome only for the team voting (the HUD shows neither for the other
-//               team; online play is lockstep, so every client receives every seat's commands).
+//               team; online play is lockstep, so every client receives every seat's commands). Heals: a
+//               lifesteal / omnivamp heal (a unit healing itself in the tick of its own damage) is not voiced, and
+//               one target's heals within HEAL_MERGE_S are one chime.
 //   kits        a fighter's own sounds (final parity AUD-1): content names them f_<fighter>_<slot>, slots
 //               attack_swing · attack_hit · a1 · a2 · a3 · ult_windup · ult_release · passive · death · call, and
 //               the engine resolves them BEFORE the catalog's present.sfx / hitSfx and the generic roles, so a
@@ -108,13 +135,21 @@ interface Emitter {
   src: AudioBufferSourceNode | null; gain: GainNode; pan: StereoPannerNode; lpf: BiquadFilterNode;
   att: number; panV: number; lpfV: number; started: boolean;
 }
-interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean }
+/** Settings.audio; `mono` and `soften` are the accessibility options (absent: off) */
+interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean;
+  mono?: boolean; soften?: boolean }
+/** one announcer line waiting for the voice bus (see `announcer` in the header) */
+interface AnnItem { cue: string; band: number; rank: number; key: string; t: number; born: number }
+/** a bed layer (see `music` in the header) */
+type LayerRole = 'combat' | 'stem' | 'phase' | 'urgency';
+interface BedLayer { id: string; role: LayerRole; file: string; gain: GainNode; src: AudioBufferSourceNode | null; buf: AudioBuffer | null }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
   statuses?: readonly { kind: string; src?: number }[] }
 /** a spatial cue's placement around the listener */
 interface Place { att: number; pan: number; lpf: number }
-/** per-play options: `aware` = a threat to your fighter (the awareness pass applies) */
-interface CueOpts { aware?: boolean; lift?: number }
+/** per-play options: `aware` = a threat to your fighter (the awareness pass applies, and the voice-bus duck spares
+ *  it); `onVoice` hears the voice once its file is decoded and started (the announcer times its line by it) */
+interface CueOpts { aware?: boolean; lift?: number; onVoice?: (v: Voice, buf: AudioBuffer) => void }
 
 export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
@@ -125,6 +160,11 @@ export interface ValeAudioPort extends AudioPort {
    *  fighter (no renderer). boot/main.ts passes the renderer's listenerFocus() */
   listener(focus: (() => { x: number; y: number } | null) | null): void;
   settings(s: AudioSettings): void;
+  /** the draft's phase (the bed's 'phase_<p>' layers, see `music` in the header); null: the main stem alone. Reset
+   *  when the bed changes, so call it after music() */
+  musicPhase(phase: string | null): void;
+  /** your own last seconds to act in the draft (tokens.audio.beds.draft.localUrgencyLastS): the 'urgency' layer */
+  musicUrgency(on: boolean): void;
   readonly log: string[];
   /** the session's file format: null until the first .ogg decodes (or fails) */
   readonly format: 'ogg' | 'm4a' | null;
@@ -142,7 +182,24 @@ const LPF_LO_HZ = 3500;
 const AWARE_M = 10;          // the awareness pass: threats within this of your living fighter …
 const AWARE_GAIN = 0.8;      // … play at least this loud (−2 dB), unfiltered
 const NEAR_COMBAT_M = 14;    // fighter damage within this of the listener (or of your living fighter) feeds the combat layer
-const MAX_SFX_VOICES = 32;   // the combat pool: past it the lowest-priority, oldest voice yields (see `priority`)
+const MAX_VOICES = 32;       // the global budget (r07 §4.3: 32-48 in a browser): past it the lowest-ranked voice yields
+const HEAL_MERGE_S = 0.25;   // one target's heals within this are one chime
+// the mixer (see `buses` / `ducking` in the header)
+const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
+const CLIP_CEIL = 0.891;     // … and bends everything above into −1 dBFS
+const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
+const SFX_DUCK_DB = 3;       // … and the sfx bus (threats to your fighter excepted)
+const DUCK_IN_S = 0.01;      // time constants: in fast (r07 §4.2: 10-30 ms attack), out over a few hundred ms
+const DUCK_OUT_S = 0.12;
+const SOFT_THRESHOLD_DB = -26;   // `soften`: a gentle compressor before the limiter
+const SOFT_RATIO = 3;
+const SOFT_KNEE_DB = 12;
+// the announcer (see `announcer` in the header)
+const ANN_TTL_S = [1.5, 4, 4, 3, 3, 3];   // per band: a line that waited longer is dropped (r07 §2.2.4: 2-4 s)
+const ANN_PREEMPT = 1;       // bands up to this cut a playing line of a lower band short …
+const ANN_CUT_S = 0.15;      // … with this fade
+const ANN_TAIL_S = 0.6;      // the next line may start this long before the playing file ends (its ring-out) …
+const ANN_MIN_S = 0.6;       // … but never sooner than this after it started
 const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
@@ -174,14 +231,27 @@ const ALERT_EVENT_ROLES = ['countdown', 'matchStart'];
  *  shipped) then still peaks above −12 dBFS at the output whatever the UI slider says */
 const ALERT_FLOOR = 0.4;
 
-interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; bus: Bus; priority: number; started: number }
+/** a one-shot, from the moment it is admitted (its slot is held while its file decodes: `src` null until it starts;
+ *  `dead` when it was freed before starting); `rank` = priority + log10(audibility) (see `priority`); `pooled` false
+ *  for the gate cues */
+interface Voice { src: AudioBufferSourceNode | null; gain: GainNode | null; cue: string; bus: Bus; priority: number; rank: number; pooled: boolean;
+  started: number; dead?: boolean }
 
 class Engine implements ValeAudioPort {
   readonly log: string[] = [];
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private limiter!: DynamicsCompressorNode;
+  /** `soften`'s compressor (wired between the master and the limiter while it is on) */
+  private soft!: DynamicsCompressorNode;
+  private softOn = false;
+  /** the output stage after the limiter / soft clip: 2 channels, or 1 (summed) under `mono` */
+  private out!: GainNode;
   private readonly bus = new Map<Bus, GainNode>();
+  /** the voice-bus duck after a bus (music, ambience, sfx; see `ducking` in the header) */
+  private readonly vduck = new Map<Bus, GainNode>();
+  /** threats to your fighter: the sfx bus's volume, past its duck */
+  private threat!: GainNode;
   /** the alert path, one gain per bus, straight into the limiter (see `alert path` in the header) */
   private readonly alertBus = new Map<Bus, GainNode>();
   /** the cue ids content binds to the gate roles */
@@ -200,8 +270,22 @@ class Engine implements ValeAudioPort {
   private fmt: 'ogg' | 'm4a' | null;
   /** the first .ogg decode while the format is undecided; other loads wait for it */
   private probe: Promise<void> | null = null;
-  private bed: { id: string; main: AudioBufferSourceNode | null; layer: AudioBufferSourceNode | null; gain: GainNode; layerGain: GainNode } | null = null;
+  /** the playing bed: `t0` = when its main stem started (ctx time; null until it decodes), `pos(t)` its loop position */
+  private bed: { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; t0: number | null; len: number; gain: GainNode; layers: BedLayer[] } | null = null;
   private wantBed: string | null = null;
+  /** musicPhase() / musicUrgency() (see `music` in the header) */
+  private phase: string | null = null;
+  private urgent = false;
+  // the announcer (see `announcer` in the header)
+  private annQ: AnnItem[] = [];
+  private annNow: { item: AnnItem; voice: Voice | null; until: number } | null = null;
+  private annT: ReturnType<typeof setTimeout> | undefined;
+  /** entity → the sim time of its last damage dealt (a heal in that same tick to itself is vamp) */
+  private readonly dealt = new Map<number, number>();
+  /** heal target entity → ctx time of its last voiced heal */
+  private readonly healLast = new Map<number, number>();
+  /** teams whose every fighter is down (a wipe, announced once until one of them is back) */
+  private readonly wiped = new Set<number>();
   private duckGain!: GainNode;
   private hidden = false;
   // match
@@ -283,15 +367,37 @@ class Engine implements ValeAudioPort {
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
     this.limiter = limiter;
+    const soft = ctx.createDynamicsCompressor();
+    soft.threshold.value = SOFT_THRESHOLD_DB; soft.knee.value = SOFT_KNEE_DB; soft.ratio.value = SOFT_RATIO; soft.attack.value = 0.003; soft.release.value = 0.25;
+    this.soft = soft;
+    soft.connect(limiter);
+    // the output: the limiter, a soft clip where the platform has one (see `buses`), the mono switch, the speakers
+    this.out = ctx.createGain();
+    this.out.channelCountMode = 'explicit'; this.out.channelInterpretation = 'speakers'; this.out.channelCount = 2;
+    let tail: AudioNode = limiter;
+    if (typeof ctx.createWaveShaper === 'function') {
+      const clip = ctx.createWaveShaper();
+      clip.curve = softClipCurve();
+      clip.oversample = '4x';
+      tail = tail.connect(clip);
+    }
+    tail.connect(this.out).connect(ctx.destination);
     this.master = ctx.createGain();
-    this.master.connect(limiter).connect(ctx.destination);
+    this.master.connect(limiter);
     this.duckGain = ctx.createGain();
-    this.duckGain.connect(this.master);
     for (const b of BUSES) {
       const g = ctx.createGain();
-      g.connect(b === 'music' ? this.duckGain : this.master);
       this.bus.set(b, g);
+      // music → the ready-check duck → the voice duck; ambience and sfx → their voice duck; ui and voice straight in
+      if (b === 'music' || b === 'ambience' || b === 'sfx') {
+        const d = ctx.createGain();
+        this.vduck.set(b, d);
+        d.connect(this.master);
+        if (b === 'music') g.connect(this.duckGain).connect(d); else g.connect(d);
+      } else g.connect(this.master);
     }
+    this.threat = ctx.createGain();
+    this.threat.connect(this.master);
     // the alert path joins after the master (the background mute), before the limiter
     for (const b of BUSES) {
       const g = ctx.createGain();
@@ -320,11 +426,24 @@ class Engine implements ValeAudioPort {
       const alert = this.vol.master <= 0 ? 0 : Math.max(ALERT_FLOOR, this.vol.master * this.vol[b]);
       this.alertBus.get(b)!.gain.setTargetAtTime(alert, t, 0.05);
     }
+    this.threat.gain.setTargetAtTime(this.vol.sfx, t, 0.05);
+    // accessibility (see `buses`): mono sums to one channel the speakers up-mix; soften re-wires its compressor in
+    this.out.channelCount = this.vol.mono ? 1 : 2;
+    const soften = !!this.vol.soften;
+    if (soften !== this.softOn) {
+      this.softOn = soften;
+      this.master.disconnect();
+      this.master.connect(soften ? this.soft : this.limiter);
+    }
   }
 
-  /** dev / harness: the output graph (the probes meter the limiter's output) */
-  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; master: GainNode; bus: Record<Bus, GainNode> } | null {
-    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, master: this.master, bus: Object.fromEntries(this.bus) as Record<Bus, GainNode> } : null;
+  /** dev / harness: the accessibility state as wired (mono channels, soften in the chain) */
+  get access(): { channels: number; soften: boolean } { return { channels: this.out?.channelCount ?? 2, soften: this.softOn }; }
+
+  /** dev / harness: the output graph (the probes meter `out`: what reaches the speakers, after the soft clip; the
+   *  limiter's own output is before it) */
+  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; out: GainNode; master: GainNode; bus: Record<Bus, GainNode> } | null {
+    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, out: this.out, master: this.master, bus: Object.fromEntries(this.bus) as Record<Bus, GainNode> } : null;
   }
 
   /** dev / harness: the cue ids on the alert path */
@@ -411,6 +530,10 @@ class Engine implements ValeAudioPort {
 
   settings(s: AudioSettings): void { this.vol = { ...s }; this.applyVolumes(); }
 
+  musicPhase(phase: string | null): void { this.phase = phase; this.bedRoles(); }
+
+  musicUrgency(on: boolean): void { this.urgent = on; this.bedRoles(); }
+
   duck(on: boolean): void {
     if (!this.ctx) return;
     this.duckGain.gain.setTargetAtTime(on ? Math.pow(10, -8 / 20) : 1, this.ctx.currentTime, 0.15);
@@ -419,6 +542,7 @@ class Engine implements ValeAudioPort {
   music(id: string | null): void {
     if (id === this.wantBed) return;
     this.wantBed = id;
+    this.phase = null; this.urgent = false;
     if (!this.ctx) return;
     this.stopBed();
     if (id) this.startBed(id);
@@ -445,14 +569,23 @@ class Engine implements ValeAudioPort {
       if (pl.att <= 0) return 'culled';
       ({ att, pan, lpf } = pl);
     }
-    // voice limits (see `priority` in the header): the cue's own maxVoices, then the sfx pool
+    // voice limits (see `priority` in the header): the cue's own maxVoices, then the global budget
     const prio = c.priority + (o.lift ?? 0);
-    if (!this.makeRoom(this.voices.filter((v) => v.cue === cueId), c.maxVoices, prio)) return 'voices';
-    if (c.bus === 'sfx' && !this.makeRoom(this.voices.filter((v) => v.bus === 'sfx'), MAX_SFX_VOICES, prio)) return 'voices';
+    const alert = this.alertCues.has(cueId);
+    const rank = prio + Math.log10(Math.max(1e-3, c.gain * att * gainMul));
+    if (!this.makeRoom(this.voices.filter((v) => v.cue === cueId), c.maxVoices, rank)) return 'voices';
+    if (!alert && !this.makeRoom(this.voices.filter((v) => v.pooled), MAX_VOICES, rank)) return 'voices';
     this.lastPlay.set(cueId, now);
+    // where it joins the mix: the gate cues' alert path; a threat to your fighter past the sfx duck; else its bus
+    const into = alert ? this.alertBus.get(c.bus)! : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
     const file = c.files[Math.floor(Math.random() * c.files.length)];
+    // the slot is held from now (a burst of cues decoding at once must not overrun the budget)
+    const v: Voice = { src: null, gain: null, cue: cueId, bus: c.bus, priority: prio, rank, pooled: !alert, started: now };
+    this.voices.push(v);
+    const drop = (): void => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
     void this.buffer(file).then((buf) => {
-      if (!buf || !this.ctx) return;
+      if (v.dead) return;
+      if (!buf || !this.ctx) { drop(); return; }
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = c.loop;
@@ -466,24 +599,24 @@ class Engine implements ValeAudioPort {
         node.connect(f); node = f;
       }
       if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
-      node.connect(g).connect((this.alertCues.has(cueId) ? this.alertBus : this.bus).get(c.bus)!);
-      const v: Voice = { src, gain: g, cue: cueId, bus: c.bus, priority: prio, started: this.ctx.currentTime };
-      this.voices.push(v);
-      src.onended = () => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
+      node.connect(g).connect(into);
+      v.src = src; v.gain = g; v.started = this.ctx.currentTime;
+      src.onended = drop;
       src.start();
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
+      o.onVoice?.(v, buf);
     });
     return 'played';
   }
 
-  /** a full set of voices frees its lowest-priority, oldest one for a newcomer of priority `prio`; false (the
-   *  newcomer is dropped) when every voice outranks it */
-  private makeRoom(set: Voice[], max: number, prio: number): boolean {
+  /** a full set of voices frees its lowest-ranked, oldest one for a newcomer of rank `rank`; false (the newcomer is
+   *  dropped) when every voice outranks it */
+  private makeRoom(set: Voice[], max: number, rank: number): boolean {
     if (set.length < max) return true;
     let w: Voice | null = null;
-    for (const v of set) if (!w || v.priority < w.priority || (v.priority === w.priority && v.started < w.started)) w = v;
-    if (!w || w.priority > prio) return false;
+    for (const v of set) if (!w || v.rank < w.rank || (v.rank === w.rank && v.started < w.started)) w = v;
+    if (!w || w.rank > rank) return false;
     this.stopVoice(w, 0.03);
     const i = this.voices.indexOf(w);
     if (i >= 0) this.voices.splice(i, 1);           // it fades out on its own; it no longer holds a slot
@@ -492,6 +625,7 @@ class Engine implements ValeAudioPort {
 
   private stopVoice(v: Voice, fade: number, after = 0): void {
     if (!this.ctx) return;
+    if (!v.src || !v.gain) { v.dead = true; return; }        // still decoding: it never starts
     const t = this.ctx.currentTime + after;
     v.gain.gain.setTargetAtTime(0, t, fade / 3);
     try { v.src.stop(t + fade + 0.02); } catch { /* already stopped */ }
@@ -503,28 +637,87 @@ class Engine implements ValeAudioPort {
     const ctx = this.ctx;
     if (!def || !ctx) return;
     const gain = ctx.createGain();
-    const layerGain = ctx.createGain();
     gain.gain.value = 0;
-    layerGain.gain.value = 0;
     gain.connect(this.bus.get('music')!);
-    layerGain.connect(gain);
-    const bed = { id, main: null as AudioBufferSourceNode | null, layer: null as AudioBufferSourceNode | null, gain, layerGain };
+    let combat = false;
+    const layers: BedLayer[] = def.layers.map((l) => {
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      g.connect(gain);
+      // the first layer with no other role is the combat layer (see `music` in the header)
+      const role: LayerRole = l.id.startsWith('stem') ? 'stem' : l.id.startsWith('phase_') ? 'phase' : l.id === 'urgency' ? 'urgency'
+        : combat ? 'stem' : 'combat';
+      if (role === 'combat') combat = true;
+      return { id: l.id, role, file: l.file, gain: g, src: null, buf: null };
+    });
+    const bed = { id, def, main: null as AudioBufferSourceNode | null, t0: null as number | null, len: 0, gain, layers };
     this.bed = bed;
-    const layerRef = def.layers[0]?.file;
-    void Promise.all([this.buffer(def.file), layerRef ? this.buffer(layerRef) : Promise.resolve(null)]).then(([main, layer]) => {
+    // the main stem starts as soon as it decodes; each layer joins when both it and the main stem are in
+    void this.buffer(def.file).then((main) => {
       if (this.bed !== bed || !main || !this.ctx) return;
       const t0 = this.ctx.currentTime + 0.05;
-      const mk = (buf: AudioBuffer, out: AudioNode): AudioBufferSourceNode => {
-        const s = this.ctx!.createBufferSource();
-        s.buffer = buf; s.loop = true;
-        s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? buf.duration;
-        s.connect(out); s.start(t0);
-        return s;
-      };
-      bed.main = mk(main, gain);
-      if (layer) bed.layer = mk(layer, layerGain);
+      const s = this.ctx.createBufferSource();
+      s.buffer = main; s.loop = true;
+      s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? main.duration;
+      s.connect(gain); s.start(t0);
+      bed.main = s; bed.t0 = t0; bed.len = Math.max(0.001, s.loopEnd - s.loopStart);
       gain.gain.setTargetAtTime(def.gain, t0, XFADE_S / 3);
+      for (const l of layers) if (l.buf) this.startLayer(bed, l);
     });
+    for (const l of layers) {
+      void this.buffer(l.file).then((buf) => {
+        if (this.bed !== bed || !buf || !this.ctx) return;
+        l.buf = buf;
+        if (bed.t0 !== null) this.startLayer(bed, l);
+      });
+    }
+  }
+
+  /** a layer joins its bed (see `music` in the header): a stem loops on its own from now; a synced layer starts on
+   *  the main stem's next bar (or with the main stem, when both decoded together) at the main stem's loop position */
+  private startLayer(bed: NonNullable<Engine['bed']>, l: BedLayer): void {
+    const ctx = this.ctx;
+    if (!ctx || !l.buf || l.src || bed.t0 === null) return;
+    const s = ctx.createBufferSource();
+    s.buffer = l.buf; s.loop = true;
+    s.connect(l.gain);
+    const now = ctx.currentTime;
+    if (l.role === 'stem') {
+      s.loopStart = 0; s.loopEnd = l.buf.duration;
+      s.start(now + 0.05);
+      l.gain.gain.setTargetAtTime(1, now + 0.05, XFADE_S / 3);
+    } else {
+      const def = bed.def;
+      s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? l.buf.duration;
+      const bar = (60 / def.bpm) * 4;
+      const at = now + 0.05 <= bed.t0 ? bed.t0 : bed.t0 + Math.ceil((now + 0.05 - bed.t0) / bar) * bar;
+      const p = at - bed.t0;
+      const end = s.loopEnd;
+      const pos = p < end ? p : def.loopStart + ((p - end) % bed.len);
+      s.start(at, Math.min(pos, Math.max(0, l.buf.duration - 0.001)));
+    }
+    l.src = s;
+    this.bedRoles();
+  }
+
+  /** the phase / urgency / combat layers' gains (see `music` in the header), switched on the main stem's next bar
+   *  (urgency at once) */
+  private bedRoles(): void {
+    const b = this.bed;
+    const ctx = this.ctx;
+    if (!b || !ctx) return;
+    const t = ctx.currentTime;
+    const barS = (60 / b.def.bpm) * 4;
+    const nextBar = b.t0 !== null && t > b.t0 ? b.t0 + Math.ceil((t - b.t0) / barS) * barS : t;
+    const phases = b.layers.filter((l) => l.role === 'phase').map((l) => l.id.slice('phase_'.length));
+    const upTo = this.phase === null ? -1 : phases.indexOf(this.phase);
+    for (const l of b.layers) {
+      if (l.role === 'stem') continue;
+      const on = l.role === 'combat' ? this.combat : l.role === 'urgency' ? this.urgent : phases.indexOf(l.id.slice('phase_'.length)) <= upTo;
+      const at = l.role === 'urgency' ? t : nextBar;
+      l.gain.gain.cancelScheduledValues(t);
+      l.gain.gain.setTargetAtTime(on ? 1 : 0, at, l.role === 'urgency' ? 0.12 : 0.6);
+    }
   }
 
   private stopBed(): void {
@@ -533,7 +726,84 @@ class Engine implements ValeAudioPort {
     this.bed = null;
     const t = this.ctx.currentTime;
     b.gain.gain.setTargetAtTime(0, t, XFADE_S / 3);
-    for (const s of [b.main, b.layer]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
+    for (const s of [b.main, ...b.layers.map((l) => l.src)]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
+  }
+
+  // ── the announcer (see `announcer` in the header) ─────────────────────────────────────────────────
+  /** queue the line bound to `role` (else to `fallback`), merged by `key` (rank decides within a key) */
+  private announce(role: string, band: number, rank: number, key: string, t: number, fallback?: string): void {
+    const cue = this.ev(role) ?? (fallback ? this.ev(fallback) : undefined);
+    if (!cue || !this.cues[cue]) return;
+    const now = this.ctx?.currentTime ?? 0;
+    const cur = this.annNow && now < this.annNow.until ? this.annNow.item : null;
+    // a wipe swallows its own tick's takedown lines
+    if (key.startsWith('kill:') && (this.annQ.some((q) => q.key === 'wipe' && q.t === t) || (cur?.key === 'wipe' && cur.t === t))) return;
+    if (key === 'wipe') this.annQ = this.annQ.filter((q) => !(q.key.startsWith('kill:') && q.t === t));
+    if (cur && cur.key === key && cur.rank >= rank) return;          // already saying it (or better)
+    const i = this.annQ.findIndex((q) => q.key === key);
+    if (i >= 0) {
+      if (this.annQ[i].rank > rank) return;
+      this.annQ.splice(i, 1);
+    }
+    this.annQ.push({ cue, band, rank, key, t, born: now });
+  }
+
+  /** speak the best waiting line when the voice bus is free (or cut a lower line for a band 0-1 one) */
+  private pumpAnn(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.annQ.length) return;
+    const now = ctx.currentTime;
+    this.annQ = this.annQ.filter((q) => now - q.born <= ANN_TTL_S[Math.min(q.band, ANN_TTL_S.length - 1)]);
+    if (!this.annQ.length) return;
+    this.annQ.sort((a, b) => a.band - b.band || b.rank - a.rank || a.born - b.born);
+    const top = this.annQ[0];
+    const cur = this.annNow;
+    if (cur && now < cur.until) {
+      if (!(top.band <= ANN_PREEMPT && top.band < cur.item.band)) { this.annLater(cur.until - now); return; }
+      if (cur.voice) this.stopVoice(cur.voice, ANN_CUT_S);
+    }
+    this.annQ.shift();
+    const slot: { item: AnnItem; voice: Voice | null; until: number } = { item: top, voice: null, until: now + 1 };
+    this.annNow = slot;
+    const r = this.cue(top.cue, null, 1, 0, {
+      onVoice: (v, buf) => {
+        if (this.annNow !== slot) { this.stopVoice(v, ANN_CUT_S); return; }    // cut before its file was in
+        if (!this.ctx) return;
+        slot.voice = v;
+        slot.until = v.started + Math.max(ANN_MIN_S, buf.duration - ANN_TAIL_S);
+        this.voiceDuck(slot.until);
+        this.annLater(slot.until - this.ctx.currentTime);
+      },
+    });
+    if (r !== 'played') { this.annNow = null; this.pumpAnn(); return; }
+    this.voiceDuck(slot.until);
+    this.annLater(1);
+  }
+
+  private annLater(dt: number): void {
+    clearTimeout(this.annT);
+    this.annT = setTimeout(() => this.pumpAnn(), Math.max(0, dt) * 1000 + 20);
+  }
+
+  /** duck music / ambience / sfx under the voice bus until `until` (see `ducking` in the header) */
+  private voiceDuck(until: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (const [b, d] of [['music', VOICE_DUCK_DB], ['ambience', VOICE_DUCK_DB], ['sfx', SFX_DUCK_DB]] as const) {
+      const p = this.vduck.get(b)?.gain;
+      if (!p) continue;
+      p.cancelScheduledValues(now);
+      p.setTargetAtTime(Math.pow(10, -d / 20), now, DUCK_IN_S);
+      p.setTargetAtTime(1, Math.max(now, until), DUCK_OUT_S);
+    }
+  }
+
+  /** dev / probes: the announcer's state */
+  get announcer(): { playing: string | null; until: number; queued: string[] } {
+    const now = this.ctx?.currentTime ?? 0;
+    const cur = this.annNow && now < this.annNow.until ? this.annNow : null;
+    return { playing: cur?.item.cue ?? null, until: cur?.until ?? 0, queued: this.annQ.map((q) => q.cue) };
   }
 
   // ── match ─────────────────────────────────────────────────────────────────────────────────────
@@ -546,12 +816,16 @@ class Engine implements ValeAudioPort {
     this.lastT = client ? client.view.time : null;
     this.procLast.clear();
     this.ults.clear();
+    this.dealt.clear(); this.healLast.clear(); this.wiped.clear();
+    this.annQ = [];
     this.stopAmbience();
     this.ambMap = client?.setup?.map ?? null;
     if (client) {
       this.off = client.onEvents((evs: SimEvent[]) => {
         for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>);
         if (this.ults.size) this.settleUlts();
+        // a whole tick's lines are queued (and merged) before the best of them speaks
+        if (this.annQ.length) this.pumpAnn();
       });
       this.syncAmbience();
     }
@@ -748,6 +1022,13 @@ class Engine implements ValeAudioPort {
   private onEvent(e: Record<string, unknown>): void {
     const kind = e.e as string;
     const src = this.ent(e.src), dst = this.ent(e.dst);
+    // before fog: whose damage this tick was (vamp), and a wipe (the HUD banners both whatever you can see)
+    if (kind === 'damage' && typeof e.src === 'number') this.dealt.set(e.src, e.t as number);
+    if (kind === 'death' && e.kind === 'fighter' && dst) this.wipeCheck(dst.team, e.t as number);
+    if (kind === 'respawn') {
+      const p = this.client?.view.players.find((x) => x.player === e.player);
+      if (p) this.wiped.delete(p.team);
+    }
     // events about a unit your team cannot see stay silent (a panned sound would give the unit away)
     const subject = kind === 'cast' || kind === 'projectile' || kind === 'attack' || kind === 'dash' || kind === 'blink' ? src
       : kind === 'hit' || kind === 'damage' || kind === 'heal' || kind === 'shield' || kind === 'status' || kind === 'death' ? dst
@@ -807,7 +1088,14 @@ class Engine implements ValeAudioPort {
         } else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45, 0, aw);
         break;
       }
-      case 'heal': this.cue(this.ev('heal'), at(dst), 0.7, 0, aw); break;
+      case 'heal': {
+        // lifesteal / omnivamp (a self-heal in the tick of its own damage) is not voiced; one target's heals merge
+        if (e.src === e.dst && this.dealt.get(e.src as number) === e.t) break;
+        const now = this.ctx?.currentTime ?? 0;
+        if (dst && now - (this.healLast.get(dst.id) ?? -1e9) < HEAL_MERGE_S) break;
+        if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played' && dst) this.healLast.set(dst.id, now);
+        break;
+      }
       case 'shield': this.cue(this.ev('shield'), at(dst), 1, 0, aw); break;
       case 'status': {
         // fighters only (a Wick's slow is noise); no catch-all: an unbound kind (a rider on a hit that sounds) is silent
@@ -849,13 +1137,8 @@ class Engine implements ValeAudioPort {
       case 'respawn': if (e.player === this.client?.you) this.cue(this.ev('respawn'), null); break;
       case 'levelUp': if (e.player === this.client?.you) this.cue(this.ev('levelUp'), null); break;
       case 'gold': if (e.player === this.client?.you && (e.reason === 'cs' || e.reason === 'kill')) this.cue(this.ev('gold'), null, 0.6); break;
-      case 'structure': {
-        const p = this.ent(e.id);
-        this.cue(this.ev('structureFall'), at(p));
-        this.cue(this.ev(e.team === this.myTeam() ? 'structureAllyFall' : 'structureEnemyFall'), null);
-        break;
-      }
-      case 'objective': this.cue(this.ev(e.team === this.myTeam() ? 'objectiveAlly' : 'objectiveEnemy'), null); break;
+      // the world sound where it fell; the announcer line comes from the 'announce' that follows (one line per event)
+      case 'structure': this.cue(this.ev('structureFall'), at(this.ent(e.id))); break;
       case 'wave': if ((e.n as number) <= 1) this.cue(this.ev('waveSpawn'), null); break;
       case 'recall': if (e.player === this.client?.you) this.cue(this.ev(e.state === 'done' ? 'recallDone' : e.state === 'start' ? 'recallStart' : 'recallCancel'), null); break;
       case 'ping': {
@@ -866,19 +1149,62 @@ class Engine implements ValeAudioPort {
         break;
       }
       case 'pickup': if (e.player === this.client?.you) this.cue(this.ev('pickup'), null); break;
-      case 'announce': {
-        const key = e.key as string;
-        // a personal notice (a denied purchase, a practice reset) is only yours to hear
-        if (/^(shop_denied|practice_reset)$/.test(key) && e.player !== undefined && e.player !== this.client?.you) break;
-        // a team's own business (a surrender vote, its outcome) is only that team's to hear
-        if (/^surrender_/.test(key) && e.team !== this.myTeam()) break;
-        this.cue(this.ev(/first|ace|objective|structure|inhib|core/i.test(key) ? 'announceMajor' : 'announceMinor'), null);
-        break;
-      }
-      case 'eliminated': if (e.player === this.client?.you) this.cue(this.ev('eliminated'), null); break;
-      case 'suddenDeath': this.cue(this.ev('suddenDeath'), null); break;
+      case 'announce': this.onAnnounce(e); break;
+      case 'eliminated': if (e.player === this.client?.you) this.announce('eliminated', 1, 1, 'you', e.t as number); break;
+      case 'suddenDeath': this.announce('suddenDeath', 0, 1, 'flow', e.t as number); break;
       default: break;
     }
+  }
+
+  /** an 'announce' event → at most one announcer line (see `announcer` in the header). Line roles: 'announce.first',
+   *  'announce.multi.<n>' (2-5), 'announce.shutdown', 'announce.structure.<own|foe>' (WHOSE structure fell: own = your
+   *  loss), 'announce.objective[.<unit>].<own|foe>' (WHO took it: own = your gain), 'announce.wipe.<own|foe>' (whose team
+   *  is down), 'announce.surrender_vote' / '…_failed', 'announce.structure_respawned', 'announce.eliminated', else
+   *  'announce.<key>'; an unbound line falls back to announceMajor / announceMinor */
+  private onAnnounce(e: Record<string, unknown>): void {
+    const key = e.key as string;
+    const t = e.t as number;
+    const mine = this.myTeam();
+    const you = this.client?.you;
+    const pl = e.player as number | undefined;
+    const p = (e.params ?? {}) as Record<string, unknown>;
+    switch (key) {
+      // a personal refusal is a UI error, not the announcer's
+      case 'shop_denied': if (pl === you) this.cue(this.ev('shopDenied'), null); break;
+      case 'practice_reset': case 'practice': if (pl === undefined || pl === you) this.announce('announce.practice', 5, 1, 'practice', t, 'announceMinor'); break;
+      // a team's own business (a surrender vote, its outcome) is only that team's to hear
+      case 'surrender_vote': if (e.team === mine) this.announce('announce.surrender_vote', 4, 1, 'vote', t, 'announceMinor'); break;
+      case 'surrender_failed': if (e.team === mine) this.announce('announce.surrender_failed', 4, 2, 'vote', t, 'announceMinor'); break;
+      // these have their own sound: the end sting, matchStart at time 0, the suddenDeath event
+      case 'surrender_passed': case 'match_start': case 'sudden_death': break;
+      case 'first_blood': this.announce('announce.first', 2, 6, `kill:${pl}`, t, 'announceMajor'); break;
+      case 'multikill': {
+        const n = Math.max(2, Math.min(5, Math.round(Number(p.n) || 2)));
+        this.announce(`announce.multi.${n}`, 2, 10 + n, `kill:${pl}`, t, 'announceMajor');
+        break;
+      }
+      case 'shutdown': this.announce('announce.shutdown', 2, 5, `kill:${pl}`, t, 'announceMinor'); break;
+      case 'structure_destroyed': this.announce(`announce.structure.${e.team === mine ? 'own' : 'foe'}`, 3, 5, `obj:${t}`, t, 'announceMajor'); break;
+      case 'objective_taken': {
+        const side = e.team === mine ? 'own' : 'foe';
+        const named = `announce.objective.${String(p.unit ?? '')}.${side}`;
+        this.announce(this.ev(named) ? named : `announce.objective.${side}`, 3, 4, `obj:${t}`, t, 'announceMajor');
+        break;
+      }
+      case 'structure_respawned': this.announce('announce.structure_respawned', 4, 1, `resp:${t}`, t, 'announceMinor'); break;
+      case 'eliminated': if (pl !== you) this.announce('announce.eliminated', 4, 1, `elim:${pl}`, t, 'announceMinor'); break;
+      default: this.announce(`announce.${key}`, 5, 1, key, t, 'announceMinor');
+    }
+  }
+
+  /** every fighter of `team` down at once (a team of two or more): the wipe line, once until one of them is back */
+  private wipeCheck(team: number, t: number): void {
+    const v = this.client?.view;
+    if (!v || this.wiped.has(team)) return;
+    const ps = v.players.filter((p) => p.team === team);
+    if (ps.length < 2 || !ps.every((p) => p.respawnIn > 0 || !(v.entity(p.entity)?.alive ?? false))) return;
+    this.wiped.add(team);
+    this.announce(`announce.wipe.${team === this.myTeam() ? 'own' : 'foe'}`, 1, 20, 'wipe', t);
   }
 
   /** combat intensity → the bed's combat layer (bar-quantised enter/leave, tokens.audio.beds.match) */
@@ -886,26 +1212,22 @@ class Engine implements ValeAudioPort {
     const view = this.client?.view;
     if (view && this.lastT !== null) {
       const t0 = this.lastT, t1 = view.time;
-      for (const s of [-3, -2, -1]) if (t0 < s && t1 >= s) this.cue(this.ev('countdown'), null);
-      if (t0 < 0 && t1 >= 0) this.cue(this.ev('matchStart'), null);
+      for (const s of [-3, -2, -1]) if (t0 < s && t1 >= s) this.announce('countdown', 0, 1, 'flow', s);
+      if (t0 < 0 && t1 >= 0) this.announce('matchStart', 0, 2, 'flow', 0);
+      if (this.annQ.length) this.pumpAnn();
     }
     this.lastT = view ? view.time : null;
     this.intensity = Math.max(0, this.intensity - dt * 0.12);
     this.fight = Math.max(0, this.fight - dt * FIGHT_DECAY);
     this.syncAmbience();
     const b = this.bed;
-    if (!b || !this.ctx || !b.layer) return;
+    if (!b || !this.ctx || !b.layers.some((l) => l.role === 'combat')) return;
     if (!this.combat && this.intensity > 0.6) { this.combat = true; this.calmFor = 0; }
     else if (this.combat) {
       this.calmFor = this.intensity < 0.35 ? this.calmFor + dt : 0;
       if (this.calmFor > 8) this.combat = false;
     }
-    const def = this.beds[b.id];
-    const bar = def ? (60 / def.bpm) * 4 : 2;
-    const t = this.ctx.currentTime;
-    const at = Math.ceil(t / bar) * bar;
-    b.layerGain.gain.cancelScheduledValues(t);
-    b.layerGain.gain.setTargetAtTime(this.combat ? 1 : 0, at, 0.6);
+    this.bedRoles();
   }
 }
 
@@ -921,6 +1243,21 @@ function ambientPoints(art: AmbientLike | undefined, source: string): { x: numbe
     if (p.fx?.vfx === source || file === source) at.push(...p.at);
   }
   return at.filter((a) => Number.isFinite(a[0]) && Number.isFinite(a[1])).map((a) => ({ x: a[0], y: a[1] }));
+}
+
+/** the soft clip after the limiter (see `buses` in the header): linear to CLIP_KNEE, then a tanh knee that never
+ *  passes CLIP_CEIL (−1 dBFS); odd-symmetric, 4097 points over −1..1 */
+function softClipCurve(): Float32Array<ArrayBuffer> {
+  const n = 4097;
+  const c = new Float32Array(new ArrayBuffer(n * 4));
+  const room = CLIP_CEIL - CLIP_KNEE;
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    const a = Math.abs(x);
+    const y = a <= CLIP_KNEE ? a : CLIP_KNEE + room * Math.tanh((a - CLIP_KNEE) / room);
+    c[i] = Math.sign(x) * y;
+  }
+  return c;
 }
 
 /** the dev switch ?audio=m4a forces the fallback (to test it in any browser; dev builds only, like ?dev=1); a

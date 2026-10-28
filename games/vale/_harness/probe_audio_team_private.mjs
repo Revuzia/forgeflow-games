@@ -105,9 +105,15 @@ const eng = createAudioEngine({ catalog: { ...catalog, audio }, assetUrl: (r) =>
 // attribute every cue the engine TRIES to the event that caused it
 let cur = null;
 const tried = [];
-const origOn = eng.onEvent, origCue = eng.cue;
+const origOn = eng.onEvent, origCue = eng.cue, origAnn = eng.announce;
 eng.onEvent = function (e) { cur = e; try { return origOn.call(this, e); } finally { cur = null; } };
 eng.cue = function (id, ...rest) { if (id && cur) tried.push({ id, e: cur }); return origCue.call(this, id, ...rest); };
+// an announcer line is queued by its event and spoken after the tick's batch (AUD-3): it counts for the event that queued it
+eng.announce = function (role, band, rank, key, t, fallback) {
+  const id = this.events[role] ?? (fallback ? this.events[fallback] : undefined);
+  if (id && cur) tried.push({ id, e: cur });
+  return origAnn.call(this, role, band, rank, key, t, fallback);
+};
 const events = [];
 host.onEvents((evs) => { for (const e of evs) events.push(e); });
 eng.attach(host);
