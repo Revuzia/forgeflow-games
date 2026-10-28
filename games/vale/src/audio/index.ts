@@ -51,11 +51,11 @@
 //               'cast' (whatever form the ability is in), ult_windup on the ult's 'cast', ult_release on the
 //               cast's first effect (area · projectile · hit · damage of that ultimate, or the caster's dash /
 //               blink) at or after its wind-up ends. A release with no effect event (a leap that cannot start)
-//               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch; a
-//               wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where the area lands, the
-//               rest at the caster. death replaces the generic fall, passive is the proc (see `procs`), call is the
-//               lock-in motif the draft plays through fighterCall(). A slot content has no cue for falls
-//               back to the catalog's present and then the generic set, as before
+//               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch;
+//               a wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where
+//               the area lands, the rest at the caster. death replaces the generic fall, passive is the proc (see
+//               `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content has no
+//               cue for falls back to the catalog's present and then the generic set, as before
 //   procs       every 'proc' (a passive fired) sounds at its subject (dst, else the owner): a fighter's passive
 //               plays the per-fighter cue f_<fighter>_passive when content has one, else the passive's own
 //               present.sfx / hitSfx; an item / boon / team-buff / unit passive plays its present.sfx / hitSfx,
