@@ -447,6 +447,8 @@ fixed:
   there becomes the camp water. A band that lay up while its pond filled used to wake to a dry pond and walk 1.5 km away.
   The memory is still 3 hours. Water that comes back less often is forgotten, and the band goes on to farther water: on
   the round-2 code, with a 4- or 6-hourly pond, that was the better outcome (seed 11: 1 death against base 9 and 16).
+  Round 3 keeps it: seed 11 with a 4-hourly pond 2 thirst deaths against base 9 (the band refounded 1.7 km off), with a
+  6-hourly pond 1 against base 16.
 
 Measured on the same-snapshot base (thirst / cold, alive):
 - Held 1.5 km dust bowl, seeds 1–32: base 381 / 0, 604 alive; round 2 146 / 5, 841 alive; round 3 140 / 5, 846 alive.
@@ -454,14 +456,25 @@ Measured on the same-snapshot base (thirst / cold, alive):
 - Refilling-pond fixture, seeds 1–8 and 11: 0 deaths, as in base and round 2. Member-hours past 450 m: 2464 / 1488 / 1540.
 - Pond filling every 2 hours (thirst deaths, base / round 2 / round 3): seed 4 at N = 29 0 / 4 / 0 and at N = 30
   0 / 3 / 0; seed 5 0 / 0 / 0, but the round-2 band went 1455 m from the pond (round 3 505 m, base 435 m); seed 11
-  1 / 1 / 1.
+  1 / 1 / 1. Seeds 1, 2, 3, 7, 8: 0 thirst deaths in base and round 3 (round 2: 1, on seed 8) (member-hours past 450 m, base / round
+  3: 885 / 866, 470 / 290, 48 / 92, 329 / 284, 707 / 733). Seed 4 at N = 28 and 32: base 0 / 0, round 3 0 / 0.
 - Unreachable seep up a cliff by the pond (seed 11): round 2 3 deaths and 12 walks taken up again; round 3 0 and 0.
 - Year-45 band (seed 1, Y45 → Y48): base 9 thirst + 5 starvation in the band; round 3 none in the band. Raftless island:
   base 27 thirst + 2 starvation; round 3 1 thirst.
 
 Tests: 'seep up a cliff' (no walk taken up again) and 'pond fills only every two hours' (seed 4, N = 29: no thirst death)
-fail on the round-2 code and pass now. Perf (review F2: the search costs 21–38% of throughput in a held dust bowl of 1500
-agents at 1000x and 3000x) is not fixed yet; see the ledger.
+fail on the round-2 code and pass now. npm run check on the landed code (21:47 UTC): 577 of 578 pass; the one failure
+('a material the god introduces to a town ... mines it') also fails on the live tree with every drought hunk removed, so it
+is not from this change. Perf (review F2: the search costs 21–38% of throughput in a held dust bowl of 1500
+agents at 1000x and 3000x) is not fixed. All of the gap is the per-body search, which base does not have. About 98% of
+its cost comes from parched band members (water < 0.1). Water also comes and goes within the hour: in the held bowl, 16%
+of the searches from a cell where a band-mate had found nothing in the last hour found water. Three ways to share or skip the search were measured:
+- An hourly look by the band: 30% fewer cells searched, but 2 more thirst deaths.
+- Each body skipping a recent fruitless search: at most 31% fewer cells, but a quarter of the skipped searches would have
+  found water.
+- An exact same-tick proof: it never fired.
+
+The 5% target means searching less, and that gives back the lives the search saves.
 
 ### 2.8 Demography
 Today: no birth spacing (`settlement.ts:913-957`), median interval between a mother's births 0.69 game years,
