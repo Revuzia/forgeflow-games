@@ -176,8 +176,37 @@ const _eye_actEngage = { x: 0, y: 0, z: 0 }, _eye_fireOnTheMove = { x: 0, y: 0, 
 // lobby. The soft end is now band B0, which keeps 69% of the lobby in tiers 3-5.
 const ROOKIE_TIER_MIX = [18, 16, 10, 4, 1];   // eslint-disable-line no-unused-vars
 
+// (release blockers) THE WEAPON TABLE IN ONE SHAPE. Every weapon def has its own hidden class (a burst rifle carries burst, an LMG adsSpreadMult,
+// a launcher arc ...), so each def.* read in actEngage / coverStepQ / chooseGun went polymorphic, then megamorphic, as bots picked up new
+// classes - every new class at every site threw the optimized function away (a 'wrong map' deopt: actEngage at def.rpm, seconds after the
+// landing, tierprof's first window). wdefN(id) hands back a copy of K.WEAPONS[id] with the 14 fields this module reads, in one fixed shape (the
+// same values; the falloff array is the def's own); a missing id reads exactly as K.WEAPONS[id] does. Built on first use per id, reset per sim.
+let WN = Object.create(null);
+function normDef(d) {
+  return { falloff: d.falloff, cls: d.cls, rpm: d.rpm, mag: d.mag, speed: d.speed, damage: d.damage, ammo: d.ammo, fire: d.fire,
+    splashR: d.splashR, smoke: d.smoke, pellets: d.pellets, fuseS: d.fuseS, burst: d.burst, arc: d.arc };
+}
+function wdefN(id) {
+  let r = WN[id];
+  if (r === undefined) {
+    const d = K.WEAPONS[id];
+    if (d === undefined) return d;
+    r = WN[id] = d && typeof d === "object" ? normDef(d) : d;
+  }
+  return r;
+}
+// (release blockers) a consumable's use time through one Map (the consumable defs have a shape each: coverStepQ's K.CONSUMABLES[cid].useS
+// read went polymorphic and threw the optimized function away when a bot first used a new kind - a 'wrong map' deopt after the landing)
+let _useS = new Map();
+function useSOf(id) {
+  let v = _useS.get(id);
+  if (v === undefined && !_useS.has(id)) { v = K.CONSUMABLES[id].useS; _useS.set(id, v); }
+  return v;
+}
 export function init(W) {
   K = W.SIM;
+  _useS = new Map();
+  WN = Object.create(null);           // (release blockers) this sim's weapon table, normalized on first use
   loadPace(W);
   brains.length = 0;
   // kill taunts: a bot that just won a fight (and sees no new threat)
@@ -237,7 +266,7 @@ export function init(W) {
   // (P23, LC-14) a live grenade: bots near where it will land get out of the blast (the round's flight, terrain only: no collider query)
   W.events.on("grenadeThrown", (thrower, wid, o, v) => {
     if (!o || !v || !brains.length) return;
-    const def = K.WEAPONS[wid];
+    const def = wdefN(wid);
     if (!def || !(def.damage > 0)) return;                 // a smoke is no blast
     const g = (K.FRAG && K.FRAG.gravity) || -15;
     let lx = o.x, lz = o.z, ly = o.y;
@@ -1396,7 +1425,7 @@ function isUpgraded(a) {
 }
 /** Fewer rounds on hand (mag + matching reserve) than `frac` of a magazine. */
 function lowOnAmmo(a, s, frac) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   return !def || slotAmmo(a, s) < Math.max(1, def.mag * frac);
 }
 /** Does this ammo type feed a carried primary that is short of a full magazine?
@@ -1407,7 +1436,7 @@ function feedsStarvingPrimary(a, ammoId) {
   for (let i = 0; i < sl.length; i++) {
     const s2 = sl[i];
     if (!s2 || s2.kind !== "weapon" || s2.id === "pistol") continue;
-    const def = K.WEAPONS[s2.id];
+    const def = wdefN(s2.id);
     if (def && def.ammo === ammoId && lowOnAmmo(a, s2, 1)) return true;
   }
   return false;
@@ -1524,7 +1553,7 @@ function carriesLongGun(a) {
     // makes a 100 m fight worth starting (measured: bots with "ar:1:4"-style
     // loadouts opened 70-140 m fights, drew the pistol when the rifle ran dry and
     // stayed in them instead of looting rifle ammo)
-    if (s2 && s2.kind === "weapon" && (s2.id === "sniper" || s2.id === "ar" || (K.WEAPONS[s2.id] && LONG_CLS[K.WEAPONS[s2.id].cls])) && !lowOnAmmo(a, s2, 0.5)) return true;
+    if (s2 && s2.kind === "weapon" && (s2.id === "sniper" || s2.id === "ar" || (wdefN(s2.id) && LONG_CLS[wdefN(s2.id).cls])) && !lowOnAmmo(a, s2, 0.5)) return true;
   }
   return false;
 }
@@ -1683,6 +1712,31 @@ function act(W, b, dt) {
   // downhill onto lower ground (p23_fall: a 10 m lift cost 53.9 hp, the human's curve says 41.4)
   if (LETHAL_H && !a.onGround && !a.gliding && !a.swimming && a.vel.y < -9) { inp.mx = 0; inp.mz = 0; inp.sprint = false; }
 
+  // (release blockers) the per-frame bookkeeping (stuck / pin / solid / furniture / progress / hard breaker) lives in actTail: act() itself
+  // deoptimizes on code paths first reached seconds after the landing (a state's first frame, the first suppression reflex) and ran
+  // unoptimized - every number of all this bookkeeping a heap box, for every bot - until it was optimized again (tierprof's first window).
+  // Same statements, same order: actTail runs exactly where they stood.
+  actTail(W, b, dt);
+
+  // suppression reflex: shot recently by someone unseen → sprint to lateral
+  // cover instead of standing there soaking damage
+  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
+    const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
+    if (att) {
+      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
+      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
+      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
+      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
+      bb.coverReflexUntil = W.t + 1.5;
+    }
+  }
+}
+
+/** (release blockers) act()'s per-frame bookkeeping, moved out unchanged (see the call in act). _v is act's _wasStuckPos (this frame's
+ *  start position, copied before the state ran). */
+function actTail(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const _wasStuckPos = _v;
   // now inp.mx / inp.mz carry this frame's intent: barely moved while TRYING to
   // move => stuck
   const sqx = _wasStuckPos.x - a.pos.x, sqy = _wasStuckPos.y - a.pos.y, sqz = _wasStuckPos.z - a.pos.z;     // Vector3.distanceToSquared, inline (a call returns a boxed double)
@@ -1758,21 +1812,7 @@ function act(W, b, dt) {
       bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; bb.anchorT = W.t;
     }
   } else if (bb.anchor) { bb.anchorT = W.t; bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; }
-
-  // suppression reflex: shot recently by someone unseen → sprint to lateral
-  // cover instead of standing there soaking damage
-  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
-    const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
-    if (att) {
-      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
-      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
-      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
-      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
-      bb.coverReflexUntil = W.t + 1.5;
-    }
-  }
 }
-
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
 const _solidCols = [];
@@ -2026,7 +2066,7 @@ function underFire(W, b, dt) {
   (SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), SYQ[1] = 4 + (a.tier || 3) * 1.6, steerYawS(a, dt));
   // can this actually be answered — gun, ammo, reach, and a clear line?
   const slot = a.inventory.slots[a.inventory.active];
-  const def = K.WEAPONS[a.weapon && a.weapon.id];
+  const def = wdefN(a.weapon && a.weapon.id);
   if (!def || !slot || slotAmmo(a, slot) <= 0) return false;
   const dist = hyp(att.pos.x - a.pos.x, att.pos.z - a.pos.z);
   if (dist > (def.falloff ? def.falloff[1] * 1.2 : 40)) return false;
@@ -3737,7 +3777,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   if (bb.path && bb.pathGoal) { qx = tx - bb.pathGoal.x; qz = tz - bb.pathGoal.z; if (Math.sqrt(qx * qx + qz * qz) > 8) { bb.path = null; bb.pathGoal = null; } }
   // (Wave 5) a goal on another floor needs a ROUTE (the stairs), not a straight walk at it: plan one as soon as it is in
   // reach of the planner's window instead of waiting for a wall to stop the bot (requestPath is rate-limited to 2.5 s)
-  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; requestPath(W, b, tx, tz, ty); }
+  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; if (!((bb.nextPathT || 0) > W.t)) requestPath(W, b, tx, tz, ty); }      // (requestPath's own first test, here: the call boxes its numbers)
   // (Wave 7, round 2) a bot on a roof / wall top whose path request came back with "no route" and whose goal is well below it walks off the nearest open edge
   if (!bb.path && a.onGround && bb.noRouteT > W.t - DECK_NOROUTE_S && W.t >= bb.deckT && (ty != null ? ty : W.map.heightAt(tx, tz)) < a.pos.y - 2.5) {
     bb.deckT = W.t + DECK_RETRY_S;
@@ -3827,7 +3867,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   if ((!(bb.path && (bb.path.nav || bb.path.exit)) && ((WAQ[0] = want), (WAQ[1] = bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2), wallAheadQ(W, a))) ||
       (bb.stuckT > 0.3 && ((WAQ[0] = want), (WAQ[1] = 0.9), wallAheadQ(W, a)))) {
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
-    reqWhy = 4; requestPath(W, b, tx, tz, ty);
+    reqWhy = 4; if (!((bb.nextPathT || 0) > W.t)) requestPath(W, b, tx, tz, ty);      // (requestPath's own first test, here: a walled bot asked every frame)
     if (!bb.wallSide) bb.wallSide = !((WAQ[0] = want + 0.9), (WAQ[1] = 3.2), wallAheadQ(W, a)) ? 1 : (!((WAQ[0] = want - 0.9), (WAQ[1] = 3.2), wallAheadQ(W, a)) ? -1 : 1);
     if (!bb.path) {
       // The slide itself must not walk the bot somewhere it cannot leave. Sliding
@@ -4007,7 +4047,7 @@ function fireOnTheMove(W, b, dt) {
   const t = bb.target && W.actorById.get(bb.target);
   if (!t || !t.alive || W.t - bb.targetSeenT > 0.4) return;
   if (W.t - bb.acquireT < b.tierK.reactionMs / 1000 + (bb.graceMul > 0 && !t.isBot ? bb.graceMul * GRACE_REACT_S : 0)) return;   // (P23, LC-96) the grace delay too
-  const def = K.WEAPONS[a.weapon ? a.weapon.id : "pistol"] || K.WEAPONS.pistol;
+  const def = wdefN(a.weapon ? a.weapon.id : "pistol") || wdefN("pistol");
   if (a.weapon && (a.weapon.state === "reloading" || a.weapon.magAmmo === 0)) {
     /* An empty mag is only a reload if there is something to reload FROM.
        weapons.js:381 refuses the reload when the matching reserve is 0, so a
@@ -4131,14 +4171,14 @@ function actSupply(W, b, dt) {
 
 /** Ammo a slot can actually put downrange right now (mag + matching reserve). */
 function slotAmmo(a, s) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   if (!def) return 0;
   const mag = s.mag != null ? s.mag : 0;
   return mag + (a.inventory.ammo[def.ammo] || 0);
 }
 /** Sustained DPS of a slot, rarity-weighted. Fallback only (sim without gunValueAt). */
 function slotScore(a, s) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   if (!def) return -1;
   if (slotAmmo(a, s) <= 0) return 0;                       // a dry gun is worth nothing
   const pellets = def.pellets || 1;                        // without this a legendary
@@ -4186,7 +4226,7 @@ const _gvOpts = { ehp: 150, speed: 0, mag: 0, reserve: 0, aimDeg: undefined, tra
  *  only). No fight: the next one is assumed to be against someone strafing at walk
  *  speed while this bot strafes too (actEngage strafes at mx = +-1 inside 50 m). */
 function slotValue(a, s, dist, ehp, speed, tgtSpeed, tgtAir) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   if (!def) return -1;
   if (!K.gunValueAt) return slotScore(a, s);
   const reserve = a.inventory.ammo[def.ammo] || 0;
@@ -4271,7 +4311,7 @@ function chooseGun(W, a) {
   for (let i = 0; i < sl.length; i++) {
     const s = sl[i];
     if (!s || s.kind !== "weapon" || slotAmmo(a, s) <= 0) continue;
-    const def = K.WEAPONS[s.id];
+    const def = wdefN(s.id);
     if (!def) continue;
     const reach = dist == null || dist <= fireRangeM(def);
     if (reach) anyReach = true;
@@ -4633,7 +4673,7 @@ function actSquadMove(W, b, dt) {
 // THROWABLES (LC-14 frag, C-SMOKE smoke). A consumable whose def has `throws` is thrown by weapons.js stepThrow: equip it, aim, pull the
 // trigger once. A smoke is told from a frag by its id or its weapon def (`smoke`, or no damage); nothing here knows the smoke lane's names.
 function isSmokeDef(id, c) {
-  const w = K.WEAPONS[c.throws];
+  const w = wdefN(c.throws);
   return id.indexOf("smoke") >= 0 || String(c.throws).indexOf("smoke") >= 0 || !!(w && (w.smoke || !(w.damage > 0)));
 }
 /** Inventory slot of a throwable of kind 1 (frag) / 2 (smoke) with something left, or -1. */
@@ -5155,11 +5195,11 @@ function coverStepQ(W, b, dt, tp, seen) {
     if (bb.coverFace === 1) (SYQ[0] = Math.atan2(-(bb.coverFX - a.pos.x), -(bb.coverFZ - a.pos.z)), steerYawQ(a, dt, 6));
     else (SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), steerYawQ(a, dt, 6));
     // (P23, LC-12) reload behind the wall: a ranged cover hold is the moment to top the magazine up
-    if (a.weapon && a.weapon.state === "ready") { const wd = K.WEAPONS[a.weapon.id]; if (wd && wd.mag > 0 && a.weapon.magAmmo < wd.mag * 0.6) inp.reload = true; }
+    if (a.weapon && a.weapon.state === "ready") { const wd = wdefN(a.weapon.id); if (wd && wd.mag > 0 && a.weapon.magAmmo < wd.mag * 0.6) inp.reload = true; }
     // (P23, LC-20) ...and to put a cell in: a shield item that still adds, no hit for 0.8 s -> pop it behind the wall and hold the wall until it is in
     else if (!a.healing && !bb.nadeS && a.shield < 100 && W.t - (a.lastDamageT || -99) > 0.8 && !(bb.healBlockedUntil > W.t)) {
       const cid = coverShieldId(a);
-      if (cid && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + K.CONSUMABLES[cid].useS + 0.25);
+      if (cid && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + useSOf(cid) + 0.25);
     }
     return true;
   }
@@ -5172,14 +5212,14 @@ function coverStepQ(W, b, dt, tp, seen) {
   // (P23, LC-12) COVER AT RANGE. Cover was only ever taken to reload, when hurt or when just hit, so a ranged duel was two men standing in a
   // field (measured live: ENGAGE in cover 2.6-3.4 %). Seen, more than 30 m off, a rifle / DMR / LMG / sniper in hand: fight it from cover -
   // hide, peek, shoot, hide.
-  const wcls = a.weapon && K.WEAPONS[a.weapon.id] ? K.WEAPONS[a.weapon.id].cls : null;
+  const wcls = a.weapon && wdefN(a.weapon.id) ? wdefN(a.weapon.id).cls : null;
   // (mid-range too: past 20 m with anything but a shotgun / pistol, unless he is nearly finished - then press)
   const tA = bb.target ? W.actorById.get(bb.target) : null;
   // (...or he is cracked by this bot's own fire in the last 3 s: a player who just landed a rifle / sniper hit stays on him for the follow-up, he does not
   // duck back behind the rock and let him heal - probe_match: sniper kills fell from 43 in 24 matches (21 with one) to 27 (13) with the ranged hold)
   // (slowGun: a bolt / single-round gun, rpm < 100 - the sniper. A rifle's next round is 0.2 s away and its cover cycle already shoots; J24 with the
   // two rules below on every gun: ENGAGE in cover 16.0 -> 13.7 %)
-  const wdef = a.weapon && K.WEAPONS[a.weapon.id], slowGun = !!wdef && wdef.rpm > 0 && wdef.rpm < 100;
+  const wdef = a.weapon && wdefN(a.weapon.id), slowGun = !!wdef && wdef.rpm > 0 && wdef.rpm < 100;
   const pressIt = !!tA && (tA.downed || (tA.hp || 0) + (tA.shield || 0) < 40 ||
     (slowGun && (tA.hp || 0) + (tA.shield || 0) < 100 && tA.lastAttacker === a.id && W.t - (tA.lastHurtByActorT || -99) < 3));
   const ranged = seen && !pressIt && ((dist > 30 && !!LONG_CLS[wcls]) || (dist > 20 && wcls !== "shotgun" && wcls !== "pistol"));
@@ -5350,7 +5390,7 @@ function actEngage(W, b, dt) {
   const dist = Math.sqrt(dx * dx + dz * dz);   // (inline: actEngage is past the inliner's budget, and every call boxes its numbers)
 
   const wid = a.weapon ? a.weapon.id : "pistol";
-  const def = K.WEAPONS[wid] || K.WEAPONS.pistol;
+  const def = wdefN(wid) || wdefN("pistol");
 
   // preferred range by class
   const prefer = PREFER_RANGE[wid] || PREFER_CLS[def.cls] || 25;          // (module table: the literal was an allocation per bot per frame)
@@ -5435,7 +5475,7 @@ function actEngage(W, b, dt) {
   // a flat aim drops every bot-fired shell well short — bots holding one were
   // harmless. Solve the low-arc launch angle for the horizontal range.
   {
-    const wdef = K.WEAPONS[a.weapon && a.weapon.id];
+    const wdef = wdefN(a.weapon && a.weapon.id);
     if (wdef && wdef.arc) {
       const dHoriz = dHorizE;
       if (dHoriz > 0.5) wantPitch = arcPitch(wdef, dHoriz, aimY - eye.y);
