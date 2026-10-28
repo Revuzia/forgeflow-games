@@ -143,7 +143,7 @@ WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wav
                              # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 # ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
 # reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
-MAP_GEN_TARGET = 6                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings)
+MAP_GEN_TARGET = 7                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
 ALL_MAPS = "isla_viva,ashgrid,deepwood"
 CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
 NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps

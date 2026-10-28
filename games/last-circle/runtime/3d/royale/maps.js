@@ -760,7 +760,16 @@ function mkHeightFn(mapId, seed) {
 //   bake()            freeze into the Float32 lattice; from then on at(x, z) is the ground
 // Everything is deterministic: pads come from the seeded layout only and the bake is plain IEEE arithmetic (+, -, *, /, sqrt), the same on
 // every client.
-export const MAP_GEN_VERSION = 6;                   // see map.genVersion (6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+// 7 = the parity release (P1 + P2 + P3 on top of Wave 8; measured against the version-6 snapshot e10b9836: genversion says the colliders, props,
+//     loot points and settled items moved on all 9 builds of 3 maps x seeds 1 / 7 / 1234 and the ground heights on 8 of them, e.g. Isla Viva s1
+//     33,901 -> 34,493 colliders, Savanna s1 67,186 -> 69,425, Deepwood s1 28,762 -> 31,962). What changed, from the lanes' commits: rotation cover
+//     between the POIs on all three maps incl. Isla Viva (towngen.rotationCover: rock outcrops, ruined walls, wrecks, with colliders); POI identity
+//     (Savanna's Container Yard container lots, the Old Mall department store, Deepwood's Logging Camp woodyards with log piles); the link roads
+//     string-pulled and filleted (the road grade moves the ground); ground launch portals (LC-51), Deepwood's fire lookout (LC-90), the sky islands'
+//     rocks and braziers (LC-73); in the seeded loot: POI loot tiers and one hot zone per match, the three new guns (DMR, LMG, burst rifle) in the
+//     floor / chest lists, frag and smoke grenade weights on, the medium-ammo / sniper rebalance; and in the match's seeded loot stream supply drops
+//     (crates by storm phase) and death piles (a dead man's whole bag on one spot). A version-6 client builds a different world from the same seed.
+export const MAP_GEN_VERSION = 7;                   // see map.genVersion (7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
 const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
