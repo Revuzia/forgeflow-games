@@ -55,7 +55,7 @@ export function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: 
 
 /** distance-readability growth for land beasts (see update): from HERD_D0 metres, (d / HERD_D0)^HERD_K, and at least
  *  HERD_MIN_PX (CSS px, body length) on screen from HERD_NEAR metres out; capped at HERD_MAX */
-export const HERD_D0 = 80, HERD_K = 0.7, HERD_MAX = 2.6, HERD_MIN_PX = 6, HERD_NEAR = 60;
+export const HERD_D0 = 80, HERD_K = 0.7, HERD_MAX = 2.6, HERD_MIN_PX = 9, HERD_NEAR = 60;
 /** forms that keep their size at any distance: swimmers, fliers, swarms and shell beds */
 const UNSCALED = new Set(['fish', 'whale', 'ray', 'bird', 'gull', 'vulture', 'duck', 'locust', 'bees', 'shells']);
 

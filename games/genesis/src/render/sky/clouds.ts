@@ -553,10 +553,9 @@ float cloudDetailed(vec3 pb, float hf, float cov, float storm, float ctype, floa
   // ... and its thin parts are thin: density grows with the square of the cover toward the margins, so a far cloud's
   // fringe is translucent veil over the ground (τ ≈ 1 a few pixels in) and only its core is opaque white
   c *= mix(1.0, c, cl_far * 0.75);
-  // ... and round the masses a thin veil (the art review, at High from orbit: hard-edged cotton-ball clumps on a clear
-  // sea): the field just under the threshold is thin cloud the ground shows through, fading out over the margin, so a
-  // mass melts into the sky round it (not inside a storm system's clean-edged towers and bands)
-  if (cl_far > 0.0 && v > 0.0) c = max(c, 0.12 * cl_far * smoothstep(lo - 0.13, lo + 0.03, vv) * (1.0 - smoothstep(0.3, 0.7, storm)));
+  // (no flat 'veil' under the threshold round the masses: a density of even 0.12 over the field just under it summed
+  // over the deck's depth into an opaque grey sheet across every sea far from the camera, from orbit; the margins are
+  // softened by the wider threshold ramp and the squared fringe above instead)
   // ... and a mass is not of one thickness: thinner streaks and pockets (~30–250 m, the fBm again) let the sea and
   // the land show through as grey, so from orbit a mass has an inner texture instead of one flat white
   if (cl_far > 0.0 && c > 0.0) {

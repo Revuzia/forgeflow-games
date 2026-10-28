@@ -103,6 +103,26 @@ where game exists (re-tune gated on an 8-seed run), everyday prayer, throughput 
 not re-measured]") installs `_harness/scratch/living/acceptance.json` when it ends (`fix2/acc/FINISHED`); the gate is
 `fix2/check/check-r2.log`. UI hooks: powers query `minWrath` on gated disasters; the "Touch … how?" ask.
 
+**Fix round 3** (2026-10-28, the 20-finding review; LIVING §13, ledger `_harness/scratch/ledgers/fix-r3.md`): the
+round-2 gate was **red** (`fix2/check/check-r2.done` "EXIT 1": 1 failure, `living-migration` — the 1.5a kin fixture's
+daughter fell under the new young-daughter rule; the two throughput floors skipped "overloaded machine"), now fixed
+(established daughter set on the loaded world and its twin; a young-daughter case added; the kin acceptance fixture's
+daughters founded 3 years back). Fixed and tested: the god's own rain relents its own drought (seed 1 year 50, prayers
+answered: 34 thirst deaths and both towns fallen → none, both stand); hunters no longer swim open sea, camp afloat or die
+of thirst on the way home (seed 1: hunt samples deeper than 10 m 481 → 0, thirst deaths 2 → 0 in 48 000 ticks); a
+budding band never founds within 600 m of a town and goes home when it finds no ground; the sacred-animal taboo covers
+fish and whales; free text: protective sentences never abandon the prophet, named disasters can be foretold (and a
+"speak through <prophet>:" sentence never strikes), "a new crop that resists drought" is a real crop, veins and deposits
+seed ore, "grant Aru's prayer" answers it, "spares no one" is the real flood. **Survivable by default** holds for the
+dead share of every Disasters power (round-2 table) but the default meteor leaves fewer than 60 % of buildings standing
+on 3 of 8 seeds (10/20, 11/20, 11/21) and the evacuation reaches 0–10 % beyond the danger radius — listed, not
+calibrated. **Open:** hunting where game exists (unmet against the owner's default: the re-tune is built behind
+`HUNT_TUNE`, off, its 8-seed gate `fix3/hv/` queued), everyday prayer, the drought exodus (drought lane), a herder
+walking a flock through the sea, throughput, `creatures.json` (lead / DOCS). The 8-seed acceptance re-run on this tree
+(`fix3/acc/`, rows from r6 / r2 marked) installs `_harness/scratch/living/acceptance.json` when it ends
+(`fix3/acc/FINISHED`); the gate is `fix3/check/check-r3.log`. UI hooks: `god.omen {warning: true}`, event
+`disaster.relent`, chronicle line `bud.home`, the "Through whom?" ask.
+
 ## How to run
 
 ```

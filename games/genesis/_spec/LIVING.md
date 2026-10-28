@@ -2617,3 +2617,63 @@ Finding numbers are the review's (0–22). Every entry names its proof; the logs
 - UI hooks: the powers query carries `minWrath` on gated `disaster.spawn` powers (show "needs huge wrath" and the
   refusal text); "Touch Hesh how? Lift, Rebuke or Soothe" is an ask the free-text box shows; H6 (`Snapshot.creatures`
   optional, never sent) unchanged; the mod-loader's 'creatures' label (`ui/mods.ts`) belongs to the UI team.
+
+## 13. Fix round 3 (2026-10-28; the 20-finding review, deduplicated to 15; ledger `_harness/scratch/ledgers/fix-r3.md`, probes and logs in `_harness/scratch/living/fix3/`)
+
+### 13.1 Fixed
+| # (review index) | finding | fix and evidence |
+|---|---|---|
+| 0 / 6 / 12 (critical) | the round-2 gate was red: `living-migration` "the previous 1.5 build's grievance record…" failed (0.396927) — the 1.5a kin fixture's daughter, founded at tick 0, fell under the young-daughter rule (`politics.ts` `POLITICS.youngYears`) | `tests/living-migration.test.ts`: the established case sets `founded = tick − 3 years` on the loaded sim **and** its twin before the re-save (here negative: it clears the rule through the `founded >= 0` guard, said in a comment), the assertion unchanged; a new case keeps the daughter young and asserts aid sent, no grievance. `history/kin.ts`: the planted daughters are founded 3 years back (tags `r3`/`r3c`); the round-2 rows (`r2`/`r2c`) are amnesty-affected for years 0–2 and were superseded (chain B's last two control runs cancelled). Focused: living-migration 7/7. |
+| 13 (critical) | a god-sent drought with the target town's prayers answered emptied the daughter town 101 m away by thirst (34 of 35, seed 1, year 50) | `god/relationship.ts` `relentDroughts`: the god's own rain (rain miracle, painted rain, an answered rain prayer) inside a drought **this** god sent draws it back to clear of the rain's reach + 400 m, or ends it when under 300 m would remain ("relented: the rain broke the drought"; new event `disaster.relent`). Disaster commands (cancel / move / freeze) answer rain prayers but are not rain: they never relent it (a first version cancelled a frozen drought — caught by `disasters.test`, fixed). Seed 1 year 50, 1x, prayers answered (`fix3/d50-1-answer.log`): deaths `{"old age@1":2}`, both towns stand (was `{"thirst@4":34}`, both fell). The 8-world extension (10 days, answered vs none): `fix3/d50m-*.log`, summarized as a §3.7 row of the round-3 table. |
+| 1 | the prophet negation abandoned the god's prophet on protective sentences ("free my prophet", "do not let them harm my prophet", "release the prophet Hesh", "do not abandon my prophet" …) | `god/freeform-signs.ts`: the negation is anchored to the role ("stop being / no longer / not … any more / unmake / depose … (my) prophet"); protect / keep / free sentences ask; the abandon branch skips a negated verb. All ten sentences are rows of the living-relationship free-text test (no `prophet.abandon`). |
+| 2 | "a new crop that resists drought" registered `new-crop-resists`; "survives the frost" painted a cold snap | `god/freeform-content.ts` `intentNewKind` tests the harm words only on the text **before** "a new X"; `plausibleNew` / `intentMaterial` refuse a substance starting "new <kind>" or "vein …". "…resists drought" → rice, "…survives frost" → maize, "a new animal to hunt" → the real-animal ask, "a new tree for fires" → a tree planted; "send a storm to destroy a new crop at Lune" is still a storm. |
+| 3 | "a flood that spares no one" sent the harmless omen; "touch Aru with rain" only asked | `asSign` excludes "spares no one / sparing none"; the Touch ask fires only when nothing but the name follows. Rows in the free-text test. |
+| 4 | the living-content placeholder test read a stale registry (`u.content` is rebuilt on registration) | the test re-reads `sim.u.content` after the applies; the round-3 junk sentences are in its applied loop. Mutation check: adding "introduce mithril to Aru" to the loop fails it (148 → 153). |
+| 7 / 19 | hunters swam kilometres of open sea, camped afloat and died of thirst (seed 1: 11 of 49 deaths) | `people/hunt.ts` `gameOnFoot` (party pick: `bestGame` + an `onFoot` A* with the species' swim, sea / deep cells ×40, a route using the sea past the shallows or water > 3 m rejected; swimmers and fliers exempt; up to 3 candidates); the tracking leg rejects a straight way `wetBetween` says crosses sea or deep water; `tasks.ts` a non-swimmer hunter without a boat tries a swim-0 route first; `perf/pace.ts` never camps afloat, and a trip that expires away from home keeps its water skin for the walk home (once). `verify/r3-reproduce/sea.ts`, 48 000 ticks: seed 1 sea-without-boat 10.81 → 9.98 % (the rest are fishers in 0.5 m shallows), deeper than 10 m 1 138 → 0, hunt samples deeper than 10 m 481 → 0, thirst deaths 2 → 0; seed 2 0.72 → 0.18 %, camp at sea 36 → 0. Hunting volume unchanged on seed 2 (`fix3/hunt48-2-{live,head}.log`: 10 trips, 11 kills on both). New test living-land "game across the sea is not hunted by swimming (fix r3 #7)" (also the missing guard for fix r2 #2: no wet or zero-length legs). |
+| 8 / 14 | a named disaster could not be foretold; "speak through Subo: a flood will come" struck the town with a real flood; "warn … of a flood" showed a rainbow; "prophesy a flood for Aru" cast it; "foretell rain in 2 days" invented "Rain of in 2"; "a vein of copper" invented a metal; "grant Aru's prayer" gave a law | WHAT: the disaster nouns are harm (storm = harm unless rain is named; "the drought will end" = rain); the through-name ends at `: ; —` or "will"; a "through <prophet>" sentence never falls through to an act; foretell / prophesy / predict with no person goes to the town's prophet or asks "Through whom?"; a warning omen is `god.omen {warning: true}` (`omens.ts` `fitting()` leaves out the rainbow); `freeform.ts` rain-X: "sigil / glyph / miracle" → the rain miracle, prepositions, digits and auxiliaries are never a rain noun; `intentSeedOre`: "a vein / deposit / lode / seam of X", "an iron deposit", "plant iron ore near X" → `terrain.seed-ore`; "grant / answer / hear <town>'s prayer" → `prayer.answer`. Rows in living-relationship and living-content with "registries unchanged" on a re-read registry. |
+| 17 | budding placed a daughter village 101 m from her mother (its own rule: ≥ 700 m from the mother, ≥ 600 m from any town) | `people/settlement.ts` `bandStep`: a bud band (`recent.bud`) skips sites within `BUD_APART` (600 m) of a live town in its re-search, a crowded target counts as spoilt, arrival never founds when crowded (also the "wandered 3 days" path; a site the god chose is exempt), and a bud with no ground after `BUD_HOME` (12) days goes home to its mother (new chronicle line `bud.home`). Probe `fix3/budnear.ts` (the bud's target cleared at its mother's door): founded 168 m off before, 655 m after. Test living-history "a budding band that loses its ground never founds within 600 m … goes home (fix r3 #17)". The 8 alone worlds of the round-3 re-run carry the town distances (`review-critic/r3/towndist.ts`). |
+| 18 | the taboo skipped fish and whales | `people/fishing.ts` `shoalNear` skips sacred herds; no fishing where the fish shoal itself is sacred; "make the fish sacred" → the fish shoal (was a spawn). Test living-sacred "sacred animals (fix r3 #18)"; `verify/r3-reproduce/sacredfish2.ts`: sacred shoal 38.36 → 38.36 (was → 0.00). |
+
+### 13.2 Seed-bound tests that moved
+- living-land "tracks game beyond", "muster at home", "hunts for hides": the default village (`world(24, 20261008)`)
+  stands on a spit — no land on foot beyond 500 m (`fix3` seeds probe: 1 200–1 700 m 0 of 92 cells) — so their herds
+  lay across 6–78 m of open sea, which the round-3 hunters rightly no longer swim. Re-sited to `village('bronze',
+  HUNT_SEED = 3)` with herds placed on land reached on foot (`gameLandAt`). The mechanism over village seeds 3–6
+  (`fix3/hs{3,4,5,6}.log`): 10 of 12 seed-test pairs pass (seed 5 "muster" 0.70 food-days; seed 6 "tracks" no kill in
+  the window).
+
+### 13.3 Not fixed here / left open
+- **9 / 15 hunting where game exists** — the re-tune LIVING §11.3 names is built behind `HUNT_TUNE` (`armedOnly`: a
+  raiding pack is answered by hunters and soldiers only; `folkReach`: the folk hunt is a day trip with a day's food) and
+  stays OFF until its gate: `fix3/hv/run.sh` runs it (folk hunt once a 12-day year, reach 450 m, pack hunt 2 days, armed
+  only) 25 years on the 8 acceptance seeds after the acceptance chain A, compared with the round-3 baseline by
+  `node fix/hv/cmp.cjs 25 <seed> fix3/hv/out/alone-hv-<seed>.json fix3/acc/out/alone-live-<seed>.json` (births, trips,
+  kills, injuries, deaths by cause). §2.1 stays missed (round 2: kills per 100 a year median 3.04, ≥ 20 asked; hunted
+  share 0.037, 0.15–0.35 asked; seed 1 27 kills in 50 years, r6 68).
+- **10 / 19 everyday prayer** — unchanged (round 2: quiet town 0.001–0.009 of time, 0 of 8 seeds ≥ 0.02; days 1–3
+  after a tornado 0.043–0.082, 1 of 8 ≥ 0.08).
+- **16 the default meteor row** — missed on 3 of 8 seeds since fix round 1: buildings standing after the blow 10 / 20,
+  11 / 20, 11 / 21 on seeds 1, 3, 4 (r6: 12, 12, 13) against ≥ 60 %; at the blow 0–10 % of the people are outside the
+  danger radius (§3.7 asks all of them at radius + 100 m). Not calibrated here (the 10–35 % dead band must hold on 8 seeds
+  with it); "survivable by default" holds for the dead share, not the buildings.
+- **13, the rest** — the drought exodus (start abandoning while the water still holds; carry water) is the drought lane's
+  (task "Keep a drought-driven band alive"), whose fixture is a dust bowl; handed the seed-1 case
+  (`fix2/acc/out/alone-live-1-y50.gnss.gz`, `review-critic/r3/drought50{,b}.ts`). A herder was seen walking the flock
+  through 9–26 m of water (twoTowns Aru, task herd): the sea fault of #7 in herding, not fixed here.
+- **5 / 11 / 19** `src/data/creatures.json` (imported nowhere) still waits for the lead or DOCS to delete it; the
+  `creatures` pack key stays in `content.ts` for the mod note; hook H6 (`Snapshot.creatures` optional, never sent)
+  unchanged. Throughput at 1 500 agents: no consistent change this round (`review-code/r3/bench.log`).
+
+### 13.4 Acceptance re-run and gate (round 3)
+- Launched 20:32 UTC: `fix3/acc/chain.sh` × 2 (god sessions 1–4 / 5–8; 50 years alone on 1, 3, 5, 7 / 2, 4, 1234,
+  20261008; kin `r3` and control `r3c` on seeds 1–8), every job through `slot.sh`; `fix3/d50many.sh` (the god's drought
+  on the 8 round-2 year-50 worlds, 10 days at 1x, answered vs none). `fix3/acc/finish.sh` then runs
+  `fix3/acc/summarize-r3.ts`, installs `fix3/acc/acceptance-r3.json` as `_harness/scratch/living/acceptance.json` (the
+  round-2 table kept as `acceptance.fix-r2.json`) and writes `fix3/acc/extras-r3.log`; marker `fix3/acc/FINISHED`.
+  Provenance: rows re-run on this tree say `fix r3 final tree`; the every-Disasters-power row is the round-2 tree's
+  (`[r2 tree, not re-measured]`); the r6 copies stay marked.
+- Gate: `fix3/check.sh` waits for the other team's full suite on this tree, then `npm run check` through `slot.sh` →
+  `fix3/check/check-r3.log` (`check-r3.done` holds the exit code). Result: see 13.5 (filled when it has run).
+- UI hooks (sim side done): `god.omen` takes `warning: true` (a warning sign, never the rainbow); event
+  `disaster.relent` (the god's drought draws back: show it shrinking); chronicle line `bud.home`; the "Through whom?"
+  ask; H6 unchanged.

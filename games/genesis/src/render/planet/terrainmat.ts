@@ -436,6 +436,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // where plants grow there is earth under them: the gaps of a thin sward show soil, not the bedrock grey (partial
   // cover on uplands read as blue-grey rock blotches between the grass); rock stays on steep faces and ridges
   if (!airless) soilW = max(soilW, smoothstep(0.04, 0.3, vF2.x + vF2.y + vF2.z + vF2.w) * (1.0 - steep * 0.9) * 0.9);
+  // an airless world is blanketed in regolith (the sim's soil is 0 there: the noise alone left bare grey rock wherever
+  // the sim's sand thinned — on every crater rim and wall — a dark ring round each pale sandy floor); bedrock shows
+  // only on the steepest faces
+  if (airless) soilW = max(soilW, 0.92 * (1.0 - smoothstep(0.55, 0.95, steep)) * (1.0 - outc));
   if (soilW > 0.001) {
     vec3 sc;
     float sb;
@@ -756,6 +760,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // plants root in sand too: cover hides the sand beneath it (dune grass, a meadow on regolith)
     float sw = smoothstep(0.05, 0.5, sand + m2 * 0.18) * (1.0 - steep * 0.6) * (1.0 - clamp(vegTotal * 1.4 + m1 * 0.2, 0.0, 0.9)) * (1.0 - fieldW);
     vec3 scl = uSandCol * (0.9 + 0.16 * m1 + 0.06 * m2);
+    // (on an airless world the sand is the same regolith, sorted finer: a near-match of its tone, so where the sim's
+    // sand thins over the rims there is no ring of another colour)
+    if (airless) scl = mix(scl, uRegolith * (0.95 + 0.12 * m1), 0.7);
     // ripples, finer ripples and wind streaks + sun glints (groundfloor.ts sandDetail)
     vec3 sdt = fine ? sandDetail(P, up, fw) : vec3(1.0, 0.0, 0.0);
     scl *= sdt.x;
