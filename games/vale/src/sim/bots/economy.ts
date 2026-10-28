@@ -9,7 +9,7 @@
 // kit scales with, the seat's role (the Lampglass path) and the ENEMY TEAM (anti-heal against healers,
 // tank breakers against front lines, burst wards against burst; knowledge.buildPlan), restricted to
 // rules.itemPool. Order: a starter (the jungle starter for a jungler) and consumables at the start
-// (topped back up to two charges on base visits during the laning phase, from what is left after the
+// (topped back up on base visits during the laning phase, two charges until 6:00 and one after, from what is left after the
 // build); boots once the first core item is done or the mid game starts, upgraded boots after the
 // third finished piece; then the plan's Gloam → Noonlit items. A completed item
 // is bought when sim.quoteBuy says it is affordable (owned components discount it), else its most
@@ -23,7 +23,7 @@ import type { World } from '../world.ts';
 import { abilityInfo, U_HEAL, type BuildPlan, type FighterProfile, type Knowledge } from './knowledge.ts';
 
 const LEVEL_SLOTS = ['a1', 'a2', 'a3'] as const;
-/** the laning phase (s): base visits top the healing consumable back up to two charges */
+/** the laning phase (s): base visits top the healing consumable back up (two charges until 6:00, then one) */
 const LANING_END = 840;
 
 export class Economy {
@@ -170,9 +170,9 @@ export class Economy {
     const goal = this.goal(w, p);
     const st = goal ? this.step(w, p, goal) : { buy: null, full: false };
     if (st.buy) { out.push({ type: 'buy', item: st.buy }); return; }
-    // laning: leftover gold refills the healing consumable (up to two charges), so a trip home
-    // buys staying power as well as stats
-    if (plan.consumable && w.time < LANING_END && this.charges(p, plan.consumable) < 2 && !st.full) {
+    // laning: leftover gold refills the healing consumable (two charges in the first 6 minutes, then one), so a
+    // trip home buys staying power as well as stats without eating the next finished piece
+    if (plan.consumable && w.time < LANING_END && this.charges(p, plan.consumable) < (w.time < 360 ? 2 : 1) && !st.full) {
       const q = quoteBuy(w, p, plan.consumable);
       if (q.ok) { out.push({ type: 'buy', item: plan.consumable }); return; }
     }

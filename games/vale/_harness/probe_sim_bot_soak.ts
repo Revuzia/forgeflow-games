@@ -51,7 +51,7 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning']);
+const ENFORCED = new Set<string>(['laning', 'items']); // items: W4 G7 package (2026-10-28)
 
 // ── args ────────────────────────────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);

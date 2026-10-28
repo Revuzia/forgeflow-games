@@ -12,11 +12,19 @@ Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They
 > - **BRIDGE** starts at level 2 with 1,050 Gleam and shops at your standing Needles (`shopAccess: needles`); see `modes_economy.md`.
 > - The tables below were updated in place; numbers struck from older sections are listed in the re-key table.
 
+> **Finished line, 2026-10-28 (W4, gameplay G7).** The finished line grew from 13 to **31 pieces** (20 Gloam, 11 Noonlit), each with a VALE rule, and the bots' build plan now reads the enemy team. Gauge: a LoL player finishes about three items by 25 minutes and builds counters to the matchup; VALE's numbers and rules are its own.
+> - **Counters.** The **Lampblack** family is the anti-heal answer: soot from the stalled lamps turns sap black (the sim's `grievous`, shown as *Wounded*). Lampblack Edge Wounds 50 % on the second hit within 4 s, Lampblack Coat Wounds 30 % in a 4 m ring around you, Lampblack Lens Wounds 50 % whenever you hold an enemy (slow, root, stun …). One Lampblack piece per fighter (shared `uniqueGroup`). **Tank breakers:** Quarry Pick (24 % armor pen, + 3.5 % max health above 60 %), Deepglass Rod (10 % magic pen, + 4 % max health on the first hit per 6 s); Noonglass, Sunstring and Hourstring also read as breakers. **Burst wards:** Glass Veil (casters) and Glintmail (slingers) set a shield and +15 armor/resist on the first fighter hit (18 s), Stillhour's *Hold the Hour* roots you in place with +80 armor and resist, and Hourcleaver's low-health shield.
+> - **New roles:** Dawnspur (diver opener), Resin Maul (bruiser heal on ability hits), Shadowpin (every fourth attack pins the shadow), Hourstring (every twelfth attack strikes the hour), Needlefall (takedowns cut cooldowns), Afterlight (the first hit lands again 1 s later), Callstone (a taunting call). **The Lampglass path:** Bellrope (hard CC tolls shields onto allies), Almslamp (+35 Gleam per takedown), Watchbell (reveals and slows enemy fighters within 9 m every 10 s), beside Kindly Lamp and Shelter Lamp.
+> - **Price band.** The Gloam and Noonlit line moved about 20 % under the reference band (×0.8 on price and stats, so Gleam efficiency is unchanged): Gloam 1,800–2,300, Noonlit 2,300–2,800. RIFT passive Gleam is 3.2/s and the Shieldwick and Glimwick pay 24 and 17 (`modes_economy.md` §2).
+> - **Bots** (`src/sim/bots/knowledge.ts` `buildPlan`, `itemRole`, `readEnemies`): an item's role is read from its data (Wounded, percent pen or target-health damage, one-shot shields, status-triggered passives, support tag). Against two or more healers, front lines or burst threats the plan takes the best answer second or third; a support seat takes support pieces first; a per-seat taste breaks near-ties; a Noonlit waits behind a Gloam unless clearly better; the boots upgrade waits for the third finished piece. A stance active that roots its caster is never cast while retreating.
+> - **Measured:** `_harness/probe_sim_buildplan.ts` (12 checks: legal plans, counters follow the enemy team, the Lampglass path, every finished item has a buyer), `_harness/probe_items.ts` (every new passive and active fires in the sim) and the bot soak (`_harness/probe_sim_bot_soak.ts`, items group): 40 role-correct RIFT games (20 seeds × adept and veteran, `fw_W4_soak_g7_final`): **2.52 finished pieces held per player at min(25:00, end)** (2.78 in the 17 games that reach 25:00; it was 1.41 before), **28 of 31 finished items bought** (90 %; never Callstone, Needlefall, Watchbell), anti-heal bought by 98.5 % of players facing two or more healers against 30.4 % otherwise, and every fighter's first two finished pieces vary between its games.
+> - **Icons:** the 18 new pieces show a related item's icon until W2 paints `assets/ui/icons/items/<id>.webp` (handoff).
+
 ---
 
 ## 1. Shape of the catalog
 
-**39 items** in four hour-tick frames, plus starters, consumables and boots.
+**57 items** in four hour-tick frames, plus starters, consumables and boots.
 
 | frame (hour-ticks) | schema `tier` | count | price | what it is |
 |---|---|---|---|---|
@@ -24,8 +32,8 @@ Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They
 | Slate (1) | `consumable` | 3 | 50–75 | a heal flask, a ward, a FRAY tonic |
 | Slate (1) | `basic`, no components | 8 | 280–420 | **one stat** each; the parts everything is built from |
 | Verdigris (2) | `basic` with components | 7 | 900–1,050 | **two stats**, built from two Slate parts; FRAY's finished pieces |
-| Gloam (3) | `core` | 8 | 2,400–2,900 | stats + **one distinct triggered passive**; unique per fighter |
-| Noonlit (4) | `apex` | 5 | 3,000–3,500 | stats + a **strong passive or active**; **stands at an hour on the dial: two carried Noonlit items must be 4+ hours apart** (W4 re-key) |
+| Gloam (3) | `core` | 20 | 1,800–2,300 | stats + **one distinct triggered passive**; unique per fighter |
+| Noonlit (4) | `apex` | 11 | 2,300–2,800 | stats + a **strong passive or active**; **stands at an hour on the dial: two carried Noonlit items must be 4+ hours apart** (W4 re-key) |
 | boots | `boots` | 1 + 3 | 300 / 1,050–1,100 | a Slate base pair and three Verdigris upgrades |
 
 **Frame rule for the UI** (the schema has no frame field, so it is derived): `core` → Gloam, `apex` → Noonlit, `basic` or `boots` **with** components → Verdigris, everything else → Slate. Frame colours and tick counts come from `tokens.json` (`slate`, `verdigris`, `gloam`, `noonlit` + glow).
@@ -92,19 +100,37 @@ Efficiency bands, checked by the probe: Slate 95–105 % (they are 96–100 %), 
 | `burning_glass` | Burning Glass | Verdigris | 1,050 | +35 power, +8 magic pen | all three |
 | `felt_coat` | Felt Coat | Verdigris | 900 | +180 health, +20 armor | all three |
 | `linen_hood` | Linen Hood | Verdigris | 950 | +180 health, +22 resist | all three |
-| `ironstone_mantle` | Ironstone Mantle | Gloam | 2,600 | +400 health, +60 armor | RIFT · BRIDGE |
-| `warning_bell` | Warning Bell | Gloam | 2,650 | +350 health, +55 resist, +10 ability haste | RIFT · BRIDGE |
-| `dialcutter` | Dialcutter | Gloam | 2,800 | +40 attack, +300 health, +15 ability haste | RIFT · BRIDGE |
-| `shadecut` | Shadecut | Gloam | 2,800 | +50 attack, +18 armor pen, +10 ability haste | RIFT · BRIDGE |
-| `splitlight_bow` | Splitlight Bow | Gloam | 2,900 | +40 attack, +25 % crit, +12 % attack speed | RIFT · BRIDGE |
-| `focal_lens` | Focal Lens | Gloam | 2,800 | +90 power, +15 ability haste, +0.6 Light regen/s | RIFT · BRIDGE |
-| `inkglass_rod` | Inkglass Rod | Gloam | 2,800 | +70 power, +250 health, +10 magic pen | RIFT · BRIDGE |
-| `kindly_lamp` | Kindly Lamp | Gloam | 2,400 | +35 power, +10 % heal & shield power, +15 ability haste, +150 health, +0.8 Light regen/s | RIFT · BRIDGE |
-| `sunstring` | Sunstring | Noonlit | 3,400 | +30 attack, +45 % attack speed, +20 % crit, +6 % life steal | RIFT · BRIDGE |
-| `noonglass` | Noonglass | Noonlit | 3,500 | +110 power, +15 ability haste, +15 % magic pen | RIFT · BRIDGE |
-| `seatstone` | Seatstone | Noonlit | 3,300 | +600 health, +35 armor, +35 resist, +10 ability haste | RIFT · BRIDGE |
-| `hourcleaver` | Hourcleaver | Noonlit | 3,400 | +50 attack, +250 health, +15 ability haste, +5 % omnivamp | RIFT · BRIDGE |
-| `shelter_lamp` | Shelter Lamp | Noonlit | 3,000 | +40 power, +15 % heal & shield power, +20 ability haste, +200 health, +20 resist | RIFT · BRIDGE |
+| `ironstone_mantle` | Ironstone Mantle | Gloam | 2,100 | +320 health, +48 armor | RIFT · BRIDGE |
+| `warning_bell` | Warning Bell | Gloam | 2,100 | +280 health, +44 resist, +8 ability haste | RIFT · BRIDGE |
+| `dialcutter` | Dialcutter | Gloam | 2,250 | +32 attack, +240 health, +12 ability haste | RIFT · BRIDGE |
+| `shadecut` | Shadecut | Gloam | 2,250 | +40 attack, +14 armor pen, +8 ability haste | RIFT · BRIDGE |
+| `splitlight_bow` | Splitlight Bow | Gloam | 2,300 | +32 attack, +20 % crit, +10 % attack speed | RIFT · BRIDGE |
+| `focal_lens` | Focal Lens | Gloam | 2,250 | +72 power, +12 ability haste, +0.5 Light regen/s | RIFT · BRIDGE |
+| `inkglass_rod` | Inkglass Rod | Gloam | 2,250 | +56 power, +200 health, +8 magic pen | RIFT · BRIDGE |
+| `kindly_lamp` | Kindly Lamp | Gloam | 1,900 | +28 power, +8 % heal & shield power, +12 ability haste, +120 health, +0.6 Light regen/s | RIFT · BRIDGE |
+| `lampblack_edge` | Lampblack Edge | Gloam | 2,000 | +28 attack, +16 % attack speed, +6 armor pen; one Lampblack piece per fighter | RIFT · BRIDGE |
+| `lampblack_coat` | Lampblack Coat | Gloam | 1,950 | +240 health, +24 armor, +20 resist; one Lampblack piece per fighter | RIFT · BRIDGE |
+| `lampblack_lens` | Lampblack Lens | Gloam | 2,100 | +56 power, +12 ability haste, +5 magic pen; one Lampblack piece per fighter | RIFT · BRIDGE |
+| `quarry_pick` | Quarry Pick | Gloam | 2,150 | +32 attack, +24 % armor pen | RIFT · BRIDGE |
+| `deepglass_rod` | Deepglass Rod | Gloam | 2,150 | +56 power, +10 % magic pen, +8 ability haste | RIFT · BRIDGE |
+| `glass_veil` | Glass Veil | Gloam | 2,100 | +44 power, +160 health, +20 resist | RIFT · BRIDGE |
+| `glintmail` | Glintmail | Gloam | 2,050 | +20 attack, +15 % attack speed, +10 % crit, +15 armor | RIFT · BRIDGE |
+| `dawnspur` | Dawnspur | Gloam | 2,250 | +26 attack, +200 health, +12 ability haste, +3 % move speed | RIFT · BRIDGE |
+| `resin_maul` | Resin Maul | Gloam | 2,150 | +28 attack, +240 health, +4 % omnivamp | RIFT · BRIDGE |
+| `shadowpin` | Shadowpin | Gloam | 2,150 | +24 attack, +20 % attack speed, +12 % crit | RIFT · BRIDGE |
+| `bellrope` | Bellrope | Gloam | 1,800 | +220 health, +18 armor, +12 ability haste, +0.4 Light regen/s | RIFT · BRIDGE |
+| `almslamp` | Almslamp | Gloam | 1,800 | +24 power, +150 health, +10 ability haste, +6 % heal & shield power | RIFT · BRIDGE |
+| `sunstring` | Sunstring | Noonlit | 2,700 | +24 attack, +36 % attack speed, +16 % crit, +5 % life steal; dial 2 | RIFT · BRIDGE |
+| `noonglass` | Noonglass | Noonlit | 2,800 | +88 power, +12 ability haste, +12 % magic pen; dial 8 | RIFT · BRIDGE |
+| `seatstone` | Seatstone | Noonlit | 2,650 | +480 health, +28 armor, +28 resist, +8 ability haste; dial 12 | RIFT · BRIDGE |
+| `hourcleaver` | Hourcleaver | Noonlit | 2,700 | +40 attack, +200 health, +12 ability haste, +4 % omnivamp; dial 4 | RIFT · BRIDGE |
+| `shelter_lamp` | Shelter Lamp | Noonlit | 2,400 | +32 power, +12 % heal & shield power, +16 ability haste, +160 health, +16 resist; dial 10 | RIFT · BRIDGE |
+| `callstone` | Callstone | Noonlit | 2,500 | +400 health, +24 armor, +24 resist, +8 ability haste; dial 1 | RIFT · BRIDGE |
+| `hourstring` | Hourstring | Noonlit | 2,650 | +32 attack, +25 % attack speed, +16 % crit; dial 3 | RIFT · BRIDGE |
+| `needlefall` | Needlefall | Noonlit | 2,650 | +40 attack, +250 health, +15 ability haste; dial 5 | RIFT · BRIDGE |
+| `stillhour` | Stillhour | Noonlit | 2,500 | +300 health, +32 armor, +32 resist, +8 ability haste; dial 6 | RIFT · BRIDGE |
+| `afterlight` | Afterlight | Noonlit | 2,650 | +80 power, +16 ability haste, +0.5 Light regen/s; dial 7 | RIFT · BRIDGE |
+| `watchbell` | Watchbell | Noonlit | 2,300 | +32 power, +200 health, +16 ability haste, +8 % heal & shield power; dial 9 | RIFT · BRIDGE |
 | `road_sandals` | Road Sandals | boots · Slate | 250 | +0.21 m/s | all three |
 | `dust_runners` | Dust Runners | boots · Verdigris | 900 | +0.36 m/s, +19 % attack speed | all three |
 | `felt_treads` | Felt Treads | boots · Verdigris | 900 | +0.36 m/s, +10 armor, +10 resist, +10 % tenacity | all three |
@@ -126,62 +152,127 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
 - **Felt Coat** 900 — Felt Vest 300 · Ochre Brick 400 (fee 200)
 - **Linen Hood** 950 — Linen Wrap 380 · Ochre Brick 400 (fee 170)
 
-**Gloam** (fee 800–1,250):
+**Gloam** (fee 300–800):
 
-- **Ironstone Mantle** 2,600 (fee 800)
+- **Ironstone Mantle** 2,100 (fee 300)
   - Felt Coat 900
     - Felt Vest 300
     - Ochre Brick 400
   - Felt Coat 900
     - Felt Vest 300
     - Ochre Brick 400
-- **Warning Bell** 2,650 (fee 1,040)
+- **Warning Bell** 2,100 (fee 490)
   - Linen Hood 950
     - Linen Wrap 380
     - Ochre Brick 400
   - Linen Wrap 380
   - Hand Bell 280
-- **Dialcutter** 2,800 (fee 1,170)
+- **Dialcutter** 2,250 (fee 620)
   - Banded Club 1,000
     - Chalk Knife 350
     - Ochre Brick 400
   - Chalk Knife 350
   - Hand Bell 280
-- **Shadecut** 2,800 (fee 1,000)
+- **Shadecut** 2,250 (fee 450)
   - Whetted Knife 900
     - Chalk Knife 350
     - Chalk Knife 350
   - Whetted Knife 900
     - Chalk Knife 350
     - Chalk Knife 350
-- **Splitlight Bow** 2,900 (fee 1,250)
+- **Splitlight Bow** 2,300 (fee 650)
   - Glint Sling 950
     - Taut Cord 300
     - Taut Cord 300
   - Chalk Knife 350
   - Chalk Knife 350
-- **Focal Lens** 2,800 (fee 1,200)
+- **Focal Lens** 2,250 (fee 650)
   - Bellglass 900
     - Glass Lens 420
     - Hand Bell 280
   - Glass Lens 420
   - Lamp Oil 280
-- **Inkglass Rod** 2,800 (fee 930)
+- **Inkglass Rod** 2,250 (fee 380)
   - Burning Glass 1,050
     - Glass Lens 420
     - Glass Lens 420
   - Ochre Brick 400
   - Glass Lens 420
-- **Kindly Lamp** 2,400 (fee 820)
+- **Kindly Lamp** 1,900 (fee 320)
   - Bellglass 900
     - Glass Lens 420
     - Hand Bell 280
   - Lamp Oil 280
   - Ochre Brick 400
+- **Lampblack Edge** 2,000 (fee 450)
+  - Whetted Knife 900
+    - Chalk Knife 350
+    - Chalk Knife 350
+  - Taut Cord 300
+  - Chalk Knife 350
+- **Lampblack Coat** 1,950 (fee 670)
+  - Felt Coat 900
+    - Felt Vest 300
+    - Ochre Brick 400
+  - Linen Wrap 380
+- **Lampblack Lens** 2,100 (fee 770)
+  - Burning Glass 1,050
+    - Glass Lens 420
+    - Glass Lens 420
+  - Hand Bell 280
+- **Quarry Pick** 2,150 (fee 550)
+  - Whetted Knife 900
+    - Chalk Knife 350
+    - Chalk Knife 350
+  - Chalk Knife 350
+  - Chalk Knife 350
+- **Deepglass Rod** 2,150 (fee 680)
+  - Burning Glass 1,050
+    - Glass Lens 420
+    - Glass Lens 420
+  - Glass Lens 420
+- **Glass Veil** 2,100 (fee 730)
+  - Linen Hood 950
+    - Linen Wrap 380
+    - Ochre Brick 400
+  - Glass Lens 420
+- **Glintmail** 2,050 (fee 800)
+  - Glint Sling 950
+    - Taut Cord 300
+    - Taut Cord 300
+  - Felt Vest 300
+- **Dawnspur** 2,250 (fee 670)
+  - Banded Club 1,000
+    - Chalk Knife 350
+    - Ochre Brick 400
+  - Taut Cord 300
+  - Hand Bell 280
+- **Resin Maul** 2,150 (fee 400)
+  - Banded Club 1,000
+    - Chalk Knife 350
+    - Ochre Brick 400
+  - Chalk Knife 350
+  - Ochre Brick 400
+- **Shadowpin** 2,150 (fee 550)
+  - Glint Sling 950
+    - Taut Cord 300
+    - Taut Cord 300
+  - Chalk Knife 350
+  - Taut Cord 300
+- **Bellrope** 1,800 (fee 620)
+  - Felt Coat 900
+    - Felt Vest 300
+    - Ochre Brick 400
+  - Hand Bell 280
+- **Almslamp** 1,800 (fee 500)
+  - Bellglass 900
+    - Glass Lens 420
+    - Hand Bell 280
+  - Ochre Brick 400
 
-**Noonlit** (fee 870–1,220; one per fighter):
+**Noonlit** (fee 270–570; each stands at a dial hour):
 
-- **Sunstring** 3,400 (fee 1,150)
+- **Sunstring** 2,700 (fee 450)
   - Glint Sling 950
     - Taut Cord 300
     - Taut Cord 300
@@ -189,7 +280,7 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
     - Taut Cord 300
     - Taut Cord 300
   - Chalk Knife 350
-- **Noonglass** 3,500 (fee 1,130)
+- **Noonglass** 2,800 (fee 430)
   - Burning Glass 1,050
     - Glass Lens 420
     - Glass Lens 420
@@ -197,7 +288,7 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
     - Glass Lens 420
     - Hand Bell 280
   - Glass Lens 420
-- **Seatstone** 3,300 (fee 1,050)
+- **Seatstone** 2,650 (fee 400)
   - Felt Coat 900
     - Felt Vest 300
     - Ochre Brick 400
@@ -205,7 +296,7 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
     - Linen Wrap 380
     - Ochre Brick 400
   - Ochre Brick 400
-- **Hourcleaver** 3,400 (fee 1,220)
+- **Hourcleaver** 2,700 (fee 520)
   - Banded Club 1,000
     - Chalk Knife 350
     - Ochre Brick 400
@@ -213,7 +304,7 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
     - Chalk Knife 350
     - Chalk Knife 350
   - Hand Bell 280
-- **Shelter Lamp** 3,000 (fee 870)
+- **Shelter Lamp** 2,400 (fee 270)
   - Bellglass 900
     - Glass Lens 420
     - Hand Bell 280
@@ -221,6 +312,52 @@ Recipe fees are the total minus the components; every fee is positive. Prices ar
     - Linen Wrap 380
     - Ochre Brick 400
   - Lamp Oil 280
+- **Callstone** 2,500 (fee 540)
+  - Felt Coat 900
+    - Felt Vest 300
+    - Ochre Brick 400
+  - Linen Wrap 380
+  - Ochre Brick 400
+  - Hand Bell 280
+- **Hourstring** 2,650 (fee 500)
+  - Glint Sling 950
+    - Taut Cord 300
+    - Taut Cord 300
+  - Whetted Knife 900
+    - Chalk Knife 350
+    - Chalk Knife 350
+  - Taut Cord 300
+- **Needlefall** 2,650 (fee 570)
+  - Whetted Knife 900
+    - Chalk Knife 350
+    - Chalk Knife 350
+  - Whetted Knife 900
+    - Chalk Knife 350
+    - Chalk Knife 350
+  - Hand Bell 280
+- **Stillhour** 2,500 (fee 370)
+  - Felt Coat 900
+    - Felt Vest 300
+    - Ochre Brick 400
+  - Linen Hood 950
+    - Linen Wrap 380
+    - Ochre Brick 400
+  - Hand Bell 280
+- **Afterlight** 2,650 (fee 420)
+  - Bellglass 900
+    - Glass Lens 420
+    - Hand Bell 280
+  - Burning Glass 1,050
+    - Glass Lens 420
+    - Glass Lens 420
+  - Lamp Oil 280
+- **Watchbell** 2,300 (fee 340)
+  - Bellglass 900
+    - Glass Lens 420
+    - Hand Bell 280
+  - Ochre Brick 400
+  - Linen Wrap 380
+  - Hand Bell 280
 
 **Boots** (one pair at a time; W4 re-key prices): Road Sandals 250, then one of these (Dust Runners 900, Felt Treads 900, Chalk Slippers 800; the fees below are the pre-re-key ones):
 
@@ -288,8 +425,8 @@ There is no crit trigger condition, so the crit item rewards attack cadence. The
 
 | pool | items | rule |
 |---|---|---|
-| `rift` | 38 | everything except the FRAY tonic |
-| `bridge` | 34 | no starters and no jungle item, no FRAY tonic |
+| `rift` | 56 | everything except the FRAY tonic |
+| `bridge` | 52 | no starters and no jungle item, no FRAY tonic |
 | `fray` | 12 | the 7 Verdigris pieces, the 4 boots and the Noon Tonic |
 
 **BRIDGE.** (W4 re-key) Fighters start at level 2 with 1,050 Gleam and can't recall. The mode has no starters and no jungle. A BRIDGE opening is a Verdigris piece plus flasks (980–1,040); boots come later. Shopping is at base, while dead, or within 6 m of one of your own standing Needles (`shopAccess: needles`), so the shop retreats toward home as your Needles fall.
@@ -328,17 +465,17 @@ The jungle opening is Grove Sickle + 2 Sap Flasks (450). FRAY builds don't ask f
 
 **Timelines.** The estimates use the economy in `modes_economy.md` §2.
 
-**RIFT laner**, about 350 Gleam a minute:
+**RIFT laner** (W4 G7 economy, measured by the bot soak `fw_W4_soak_g7_final`): about 7,700–8,900 Gleam earned by play at 25:00 (or the end), about 340 a minute, plus the 480 start:
 
-| | Gleam | what it buys |
-|---|---|---|
-| 10:00 | about 3,800 | boots and the first Gloam |
-| 20:00 | about 7,300 | upgraded boots and two Gloam |
-| 28:00 | about 10,100 | the Noonlit |
+| | what the bots hold |
+|---|---|
+| 7–10 min | boots and the first Gloam (a starter folds in) |
+| 15–20 min | the second finished piece |
+| 22–25 min | the third finished piece; the boots upgrade after it |
 
-A full build of 14,500–15,650 takes about 42 minutes, so most matches (22–28 min) end on three finished items plus boots. That is the reference genre's pace, which reaches 5–6 completed items at 35–40 minutes *(r02 §11)*.
+A full build is 11,550–12,500 Gleam, so most matches (22–28 min) end on three finished pieces plus boots: 2.6–3.0 per laner at min(25:00, end) in the soak.
 
-**Tender**, about 200 Gleam a minute from passive Gleam and assists. Tenders have no income item on purpose, so their items are the cheapest: Kindly Lamp 2,400 and Shelter Lamp 3,000.
+**Tender**, about 6,200–6,500 Gleam by 25:00 from passive Gleam and assists. The Lampglass path is the cheapest (Bellrope and Almslamp 1,800, Kindly Lamp 1,900, Watchbell 2,300, Shelter Lamp 2,400), and Almslamp pays 35 Gleam per takedown: 2.3–2.5 finished pieces at min(25:00, end). The Grovehunter sits lowest (1.8–1.9), because the jungle is still about six levels behind (gameplay G2).
 
 **BRIDGE**, about 375 Gleam a minute. A fighter has about 7,600 Gleam at 17:00, which buys upgraded boots, two Gloam and a Verdigris piece. Only the richest fighters reach a Noonlit.
 
@@ -403,11 +540,11 @@ Path colours sit at least 60 RGB units away from every readability colour and fr
 |---|---|---|
 | lane starters | about 400–500, bought with the start purse *(r02 §11)* | 430 + a 50 flask = exactly the RIFT purse of 480; jungle 350 + 2 flasks |
 | mid components | "epic" 1,000–1,500 *(r02 §11)* | Verdigris 900–1,050 (two stats, cheaper, so FRAY can use them as finished pieces) |
-| finished items | 2,500–3,300 *(r02 §11)* | Gloam 2,400–2,900, Noonlit 3,000–3,500 |
+| finished items | 2,500–3,300 *(r02 §11)* | Gloam 1,800–2,300, Noonlit 2,300–2,800 (W4 G7: about 20 % under the reference, so three finish by 25:00) |
 | full build | 5–6 completed items at 35–40 min *(r02 §11)* | about 42 min for boots + 5; three items + boots at 25 min |
 | sell-back | about 70 % *(r02 §11)* | 70 % (schema default); consumables 40 % so a flask is not a bank |
 | boots | three tiers *(r02 §11)* | two: one base pair and three upgrades; no third tier, fewer steps for a browser match |
-| support income | quest-style support item *(r02 §1)* | none: Tenders live on passive Gleam and assists, and their items are cheaper |
+| support income | quest-style support item *(r02 §1)* | Tenders live on passive Gleam and assists; the Lampglass path is the cheapest, and Almslamp adds 35 Gleam per takedown (W4 G7) |
 | single-lane mode | no starters, buy only when dead, mode-only spells *(r03 §2.1)* | BRIDGE: no starters, base or dead shopping, no jungle spell; no mode-only gap-closer (r03 lists the reference's as protected) |
 | FFA mode | item drops that favour trailing players *(r03 §4a)* | FRAY: finished pieces at one cart, Gleam Sunmotes (flat 120 matters more to a trailing player) |
 | battle spells | two long-cooldown utility spells, a forced jungle spell *(r02 §11)* | two slots, 90–300 s; the jungle spell is optional (§7.1) |

@@ -17,7 +17,7 @@
         "startLevel": 1,
         "maxLevel": 18,
         "startGold": 480,
-        "passiveGoldPerSec": 3.0,
+        "passiveGoldPerSec": 3.2,
         "passiveGoldStart": 30,
         "goldMult": 1,
         "xpMult": 1,

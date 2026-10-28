@@ -11,7 +11,7 @@
       "rules": {
         "startLevel": 3,
         "startGold": 1250,
-        "passiveGoldPerSec": 3.4,
+        "passiveGoldPerSec": 3.6,
         "goldMult": 1.15,
         "xpMult": 1.15,
         "recallTime": 5,

@@ -79,6 +79,21 @@
 
 `_design/ROSTER.md` §5 now lists **Riven** and **Brand**, with the differences.
 
+## 7. Economy and the finished line (gameplay G7, added 2026-10-28)
+
+The item package (gameplay G7) moved four economy numbers and added VALE's own counters. **This block was added after the 2026-10-28 sign-off of blocks 1–6 and is pending its own sign-off.** Full write-up: `_design/sections/items_setup.md` (the "Finished line" note) and `modes_economy.md` §2.
+
+| | Reads as | Before | After (VALE) | Closest gap |
+|---|---|---|---|---|
+| RIFT passive Gleam | passive gold, 20.4 per 10 s (2.04/s) | 2.2/s (+8 %) | **3.2/s** from 0:30. Quick queue 3.6/s. | +57 % |
+| Shieldwick / Glimwick bounty | melee 21 / caster 14 gold | 21 / 15 (0 % / +7 %) | **24 / 17** | +14 % / +21 % |
+| Finished-item band | legendary items, about 2,600–3,300 | Gloam 2,400–2,900, Noonlit 3,000–3,500 | **Gloam 1,800–2,300, Noonlit 2,300–2,800** (price and stats ×0.8; Gleam per stat unchanged) | −31 % / −15 % at the ends |
+| Anti-heal | Grievous Wounds, 40 % on any hit | none on items (Hairline 30 %) | **Lampblack:** 50 % only on the second hit within 4 s (Edge) or when you hold the enemy (Lens); 30 % in a 4 m ring around you (Coat). One per fighter. | +25 % / −25 %, and conditional rules |
+| Percent armor pen | 18–35 % (several items) | none on items | Quarry Pick **24 %**, plus a max-health bite above 60 % | +20 % vs 20 %, −20 % vs 30 % |
+| Burst ward | stasis (untargetable, no actions); low-health shields | Hourcleaver only | Stillhour **roots you in place** with +80 armor and resist (you still attack and cast); Glass Veil / Glintmail shield on the **first** fighter hit, not at low health | rule |
+
+Measured in `fw_W4_soak_g7_final` (bot soak, 40 RIFT games); see the G7 status in the wave report.
+
 ---
 
 ## Match effect (bot soak, same seeds as the G1 baseline)
@@ -124,5 +139,6 @@ The lone deaths per game hardly moved. The share rose because fights kill about 
 | 4 · Camp buffs and the Long Shade | ☐ approve ☐ change | |
 | 5 · BRIDGE start, Needle shops, the Lot | ☐ approve ☐ change | |
 | 6 · Ervet and Vashil hooks | ☐ approve ☐ change | |
+| 7 · Economy and the finished line (G7; added later, pending) | ☐ approve ☐ change | |
 
 Signed: ____________ Date: ________
