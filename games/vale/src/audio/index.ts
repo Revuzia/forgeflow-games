@@ -50,9 +50,10 @@
 //               attack_hit on its basic attack's 'damage' (under the crit cue on a crit), a1-a3 on the slot's
 //               'cast' (whatever form the ability is in), ult_windup on the ult's 'cast', ult_release on the
 //               cast's first effect (area · projectile · hit · damage of that ultimate, or the caster's dash /
-//               blink) at or after its wind-up ends; one that shows no effect RELEASE_GRACE_S past its wind-up
-//               was cancelled and stays silent. An area release sounds where the area lands, the rest at the
-//               caster. death replaces the generic fall, passive is the proc (see `procs`), call is the
+//               blink) at or after its wind-up ends. A release with no effect event (a leap that cannot start)
+//               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch; a
+//               wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where the area lands, the
+//               rest at the caster. death replaces the generic fall, passive is the proc (see `procs`), call is the
 //               lock-in motif the draft plays through fighterCall(). A slot content has no cue for falls
 //               back to the catalog's present and then the generic set, as before
 //   procs       every 'proc' (a passive fired) sounds at its subject (dst, else the owner): a fighter's passive
@@ -151,8 +152,8 @@ const PERIODIC_ON = new Set(['interval', 'moveDistance']);
 const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call'] as const;
 type KitSlot = typeof KIT_SLOTS[number];
 const CAST_SLOTS = new Set<string>(['a1', 'a2', 'a3']);
-const RELEASE_GRACE_S = 0.25; // an ult with no effect this long after its wind-up's end was cancelled (CC, death, fizzle)
-const RELEASE_EPS_S = 1e-3;   // the release tick lands on the wind-up's end (sim time)
+const RELEASE_EPS_S = 1.5 / 30;        // the sim counts the wind-up from the cast's own tick: its release lands up to
+                                        // one tick before cast.t + castTime (sim time)
 const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the crit cue
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
@@ -222,7 +223,7 @@ class Engine implements ValeAudioPort {
   /** fighter id → the kit slots content has a cue for (see `kits` in the header) */
   private readonly kits = new Map<string, Partial<Record<KitSlot, string>>>();
   /** caster entity → its ultimate waiting for the wind-up's end (see `kits` in the header) */
-  private readonly ults = new Map<number, { cue: string; ability: string; due: number }>();
+  private readonly ults = new Map<number, { cue: string; ability: string; due: number; cd0: number }>();
   /** `${passive}:${owner}` → ctx time of its last sounding proc */
   private readonly procLast = new Map<string, number>();
   /** dev / probes: every proc's outcome, counted */
@@ -548,7 +549,10 @@ class Engine implements ValeAudioPort {
     this.stopAmbience();
     this.ambMap = client?.setup?.map ?? null;
     if (client) {
-      this.off = client.onEvents((evs: SimEvent[]) => { for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>); });
+      this.off = client.onEvents((evs: SimEvent[]) => {
+        for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>);
+        if (this.ults.size) this.settleUlts();
+      });
       this.syncAmbience();
     }
   }
@@ -711,18 +715,34 @@ class Engine implements ValeAudioPort {
   }
 
   /** an ultimate's release (see `kits` in the header): the first effect of the cast at or after its wind-up's end
-   *  sounds the caster's ult_release; a wait open RELEASE_GRACE_S past the wind-up's end was cancelled */
+   *  sounds the caster's ult_release (a release with no effect event: settleUlts) */
   private release(kind: string, e: Record<string, unknown>, src: EntityLike | undefined, aw: CueOpts): void {
-    const t = e.t as number;
-    for (const [id, w] of this.ults) if (t > w.due + RELEASE_GRACE_S) this.ults.delete(id);
     const id = e.src;
     const p = typeof id === 'number' ? this.ults.get(id) : undefined;
-    if (!p || t + RELEASE_EPS_S < p.due) return;
-    const effect = kind === 'dash' || kind === 'blink'
-      || ((kind === 'area' || kind === 'projectile' || kind === 'hit' || kind === 'damage') && e.ability === p.ability);
-    if (!effect) return;
+    if (!p || (e.t as number) + RELEASE_EPS_S < p.due) return;
+    if (kind !== 'dash' && kind !== 'blink'
+      && !((kind === 'area' || kind === 'projectile' || kind === 'hit' || kind === 'damage') && e.ability === p.ability)) return;
     this.ults.delete(id as number);
     this.cue(p.cue, kind === 'area' ? { x: e.x as number, y: e.y as number } : src ? { x: src.x, y: src.y } : null, 1, 0, aw);
+  }
+
+  /** after a whole batch of events: a wind-up whose release committed (the ult's cooldown started) without an effect
+   *  event in the batch sounds now, at the caster; one past its release tick with no commit was cancelled */
+  private settleUlts(): void {
+    const now = this.client?.view.time ?? 0;
+    for (const [cid, w] of this.ults) {
+      const c = this.ent(cid);
+      if (c && c.alive !== false && this.ultCooldown(cid) > w.cd0 + 0.5) {
+        this.ults.delete(cid);
+        if (this.seen(c)) this.cue(w.cue, { x: c.x, y: c.y }, 1, 0, { aware: c.team !== this.myTeam() });
+      } else if (!c || c.alive === false || now > w.due + RELEASE_EPS_S) this.ults.delete(cid);
+    }
+  }
+
+  /** the ult cooldown of the fighter `entity` (0 when ready or unknown): the sim starts it on a release */
+  private ultCooldown(entity: number): number {
+    const p = this.client?.view.players.find((x) => x.entity === entity);
+    return p?.abilities.find((a) => a.slot === 'ult')?.cooldown ?? 0;
   }
 
   private onEvent(e: Record<string, unknown>): void {
@@ -760,7 +780,7 @@ class Engine implements ValeAudioPort {
         // the ult's release waits for the wind-up's end (see `kits`); any new cast ends a wait still open
         if (src) {
           const rel = slot === 'ult' ? this.kit(src, 'ult_release') : undefined;
-          if (rel) this.ults.set(src.id, { cue: rel, ability: e.ability as string, due: (e.t as number) + ((e.castTime as number) || 0) });
+          if (rel) this.ults.set(src.id, { cue: rel, ability: e.ability as string, due: (e.t as number) + ((e.castTime as number) || 0), cd0: this.ultCooldown(src.id) });
           else this.ults.delete(src.id);
         }
         break;

@@ -514,7 +514,7 @@ def f_dunsom_ult_release(v: int):
     r = R('f_dunsom_ult_release', v=v)
     dl = max(timing('dunsom', 'ult')[1], 0.3)
     L = Layers(dl + 1.6)
-    L.add(S.whoosh(r, 0.8, 1200, 1800, q=1.4, peak_at=0.25, f_mid=3200), 0.0, peak_db=0, width=0.9)
+    L.add(S.whoosh(r, 0.8, 2000, 2800, q=1.4, peak_at=0.25, f_mid=4600), 0.0, peak_db=0, width=0.9)
     for t, note, g in ((0.04, 'F4', -1), (0.2, 'D4', -1), (0.36, 'A3', 0)):
         L.add(clonk(hz(note), 0.7, 0.45, R('f_dunsom_ult_release', note)), t, peak_db=g)
     L.add(S.thump(0.7, 160, 60, 0.04, 0.5, 2.0), dl, peak_db=-12)
