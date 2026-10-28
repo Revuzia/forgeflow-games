@@ -3686,7 +3686,8 @@ def _install_icon() -> None:
     orig = render.fighter_renders
 
     def fighter_renders(ctx, objs, P, skin, fast=False, clip_sheet=False, only=None, scale=1.0):
-        if getattr(ctx.spec, "ID", None) != ID or skin:
+        from common import facechip       # (HUD-2: the shared face chip replaces this icon while Burdam has one)
+        if getattr(ctx.spec, "ID", None) != ID or skin or facechip.params(ID) is not None:
             return orig(ctx, objs, P, skin, fast=fast, clip_sheet=clip_sheet, only=only, scale=scale)
         rest = (set(only) - {"icon"}) if only else {"splash", "portrait", "turntable"}
         res = {"files": {}, "seconds": {}}

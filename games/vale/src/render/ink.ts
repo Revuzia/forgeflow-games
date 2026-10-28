@@ -9,6 +9,11 @@
 //   rim      the hover rim: pushed like the outline, drawn outside the mask, depth-tested by hand against the scene
 //   glaze    the protected structure's glaze (its surface pushed out along smoothed normals)
 //   foot     the protected structure's foot ring of hour-ticks
+//   xray     the occluded silhouette (env F4): a fighter's body where cover stands between it and the camera, drawn
+//            in the scene after the cover and before every unit with the depth test inverted (GREATER), so only
+//            the parts a cliff, a Dialwood crown or a landmark hides take it: a relationship-coloured fill with a
+//            lit edge about uPx screen px wide, the body pulled uBias metres toward the camera first (the ground
+//            and the lip it stands against never trip it)
 //
 // A RawShaderMaterial's program key is its source, its defines and nothing else (three's side / opaque / skinning /
 // instancing / light-count flags never enter it), so every material of one vertex path shares ONE program whatever
@@ -22,14 +27,15 @@
 // does not read never points at a texture unit holding the render target it draws into.
 
 import {
-  BackSide, Color, CustomBlending, DoubleSide, FrontSide, GLSL3, type InstancedMesh, Matrix4, type Mesh,
-  NormalBlending, type Object3D, OneFactor, OneMinusSrcAlphaFactor, RawShaderMaterial, type Side, type SkinnedMesh, type Texture, Vector2, Vector3,
+  AddEquation, BackSide, Color, CustomBlending, DoubleSide, FrontSide, GLSL3, GreaterDepth, type InstancedMesh, Matrix4, type Mesh,
+  NormalBlending, type Object3D, OneFactor, OneMinusSrcAlphaFactor, RawShaderMaterial, type Side, type SkinnedMesh, SrcAlphaFactor, type Texture,
+  Vector2, Vector3, ZeroFactor,
 } from 'three';
 import { DEPTH_TEST_GLSL } from './overlay/depth.ts';
 import { CLOTH_MAIN, CLOTH_PARS, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
 
 /** the pass a material draws (uniform uInkMode) */
-export const INK = { depth: 0, outline: 1, flash: 2, mask: 3, rim: 4, glaze: 5, foot: 6 } as const;
+export const INK = { depth: 0, outline: 1, flash: 2, mask: 3, rim: 4, glaze: 5, foot: 6, xray: 7 } as const;
 export type InkMode = (typeof INK)[keyof typeof INK];
 /** the vertex path: one program each */
 export type InkPath = 'rigid' | 'skin' | 'crowd';
@@ -104,6 +110,7 @@ uniform mat3 normalMatrix;
 uniform vec3 cameraPosition;
 uniform int uInkMode;
 uniform float uPx;
+uniform float uBias;
 uniform vec2 uOutlineRes;
 in vec3 position;
 in vec3 normal;
@@ -188,10 +195,12 @@ ${CLOTH_MAIN}
   if ( uInst > 0.5 ) { mv = instanceMatrix * mv; objectNormal = mat3( instanceMatrix ) * objectNormal; }
   #endif
   mv = modelViewMatrix * mv;
+  // xray: slid toward the camera along its own view ray (same pixel, nearer depth)
+  if ( uInkMode == 7 ) mv.xyz *= max( 0.0, 1.0 - uBias / max( length( mv.xyz ), 1e-3 ) );
   gl_Position = projectionMatrix * mv;
   vec3 vn = normalMatrix * objectNormal;
   float px = uPx;
-  if ( uInkMode == 2 ) { vN = vn; vV = -mv.xyz; }
+  if ( uInkMode == 2 || uInkMode == 7 ) { vN = vn; vV = -mv.xyz; }
 #endif
   if ( uInkMode == 1 || uInkMode == 4 ) {
     // screen-space push along the view normal (never flipped for the back faces drawn)
@@ -206,6 +215,7 @@ precision highp float;
 precision highp int;
 precision highp sampler2D;
 uniform int uInkMode;
+uniform float uPx;
 uniform vec3 uColor;
 uniform float uAlpha;
 uniform vec3 uFlashColor;
@@ -277,6 +287,14 @@ void main() {
     c = a <= 0.003 ? vec4( 0.0 ) : vec4( uColor, a );
   } else if ( uInkMode == 5 ) c = valeGlaze();
   else if ( uInkMode == 6 ) c = valeFoot();
+  else if ( uInkMode == 7 ) {
+    // the occluded silhouette: fill at uAlpha, and an edge ~uPx screen px wide where the surface turns away
+    // (n.v reaches 0 on the silhouette: its screen-space distance is n.v over its own derivative)
+    float ndv = abs( dot( normalize( vN ), normalize( vV ) ) );
+    float edgePx = ndv / max( fwidth( ndv ), 1e-4 );
+    float edge = max( 1.0 - smoothstep( uPx * 0.5, uPx + 0.75, edgePx ), 0.55 * ( 1.0 - smoothstep( 0.05, 0.32, ndv ) ) );
+    c = vec4( uColor * ( 1.0 + 0.45 * edge ), mix( uAlpha, 0.92, edge ) );
+  }
   pc_fragColor = c;
 }
 `;
@@ -361,6 +379,25 @@ export const flashU = (): FlashU => ({ uFlashColor: { value: new Color() }, uFla
 /** the flash: front faces, premultiplied over, in front of the body by a polygon offset */
 export function flashMaterial(path: InkPath, u: FlashU): RawShaderMaterial {
   return inkMaterial(path, INK.flash, { side: FrontSide, blend: 'premul', depthWrite: false, offset: [-1, -2], uniforms: { ...u } });
+}
+/** the occluded silhouette's uniforms an actor drives (tokens.json `hud.unitOutline.occluded`) */
+export interface XrayU { uColor: { value: Color }; uAlpha: { value: number }; uPx: { value: number }; uBias: { value: number } }
+export const xrayU = (): XrayU => ({ uColor: { value: new Color() }, uAlpha: { value: 0.42 }, uPx: { value: 1.5 }, uBias: { value: 0.3 } });
+/** draw order of the occluded silhouette in the opaque list: after the cover (OCCLUDER_ORDER: cliffs, rock stacks,
+ *  Dialwood, boulders, landmarks) and before every unit (0), so its GREATER test meets only the cover's depth and a
+ *  unit standing in front still draws over it */
+export const XRAY_ORDER = -2;
+export const OCCLUDER_ORDER = -3;
+/** the occluded silhouette (env F4): front faces, depth test GREATER (only where cover is nearer), no depth write;
+ *  opaque-listed (transparent false) so it draws at XRAY_ORDER among the opaque, blended over the cover by its own
+ *  alpha with the target's alpha kept */
+export function xrayMaterial(path: InkPath, u: XrayU): RawShaderMaterial {
+  const m = inkMaterial(path, INK.xray, { side: FrontSide, depthWrite: false, uniforms: { ...u }, name: `vale_ink_xray_${path}` });
+  m.depthFunc = GreaterDepth;
+  m.blending = CustomBlending;
+  m.blendEquation = AddEquation; m.blendSrc = SrcAlphaFactor; m.blendDst = OneMinusSrcAlphaFactor;
+  m.blendEquationAlpha = AddEquation; m.blendSrcAlpha = ZeroFactor; m.blendDstAlpha = OneFactor;
+  return m;
 }
 /** a depth-only prepass copy (veils, the structure fade): drawn last among the opaque so the see-through body shows
  *  only its nearest surface */

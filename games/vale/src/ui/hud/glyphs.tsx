@@ -9,6 +9,7 @@ import type { CSSProperties, JSX } from 'preact';
 import type { ItemDefT } from '../../contracts/catalog.ts';
 import type { PingKind } from '../../contracts/sim.ts';
 import type { AbilityCore } from '../../input/index.ts';
+import FAMILIES from './icon_families.json';
 
 const S = { fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } as const;
 
@@ -69,13 +70,16 @@ const FAMILY_PATHS: Record<Family, JSX.Element> = {
   wedge: <g {...S}><path d="M5 19L12 4l7 15-7-4z" /></g>,
 };
 
-/** an ability icon: the asset when it exists, else the family glyph over the fighter palette */
-export function AbilityGlyph(p: { def: AbilityCore | undefined; src: string | null; palette?: [string, string]; ult?: boolean; spell?: boolean }): JSX.Element {
+/** an ability icon: the asset when it exists, else the family glyph over the fighter's ground (HUD-1: the painted
+ *  icons sit on the fighter's vfx.signature hue, so the fallback does too when `hue` is given; else the palette) */
+export function AbilityGlyph(p: { def: AbilityCore | undefined; src: string | null; palette?: [string, string]; hue?: string; ult?: boolean; spell?: boolean }): JSX.Element {
   const fam = abilityFamily(p.def);
   const [a, b] = p.palette ?? ['#2C333F', '#8F8A80'];
   const bg = p.spell
     ? 'radial-gradient(120% 120% at 30% 20%, #262C37 0%, #171B22 70%)'
-    : `radial-gradient(130% 120% at 25% 15%, color-mix(in srgb, ${b} 55%, #11141A) 0%, color-mix(in srgb, ${a} 60%, #0B0D11) 62%, #0B0D11 100%)`;
+    : p.hue
+      ? `radial-gradient(130% 120% at 35% 30%, color-mix(in srgb, ${p.hue} 52%, #6E6A62) 0%, color-mix(in srgb, ${p.hue} 40%, #2A2730) 70%, color-mix(in srgb, ${p.hue} 30%, #17151B) 100%)`
+      : `radial-gradient(130% 120% at 25% 15%, color-mix(in srgb, ${b} 55%, #11141A) 0%, color-mix(in srgb, ${a} 60%, #0B0D11) 62%, #0B0D11 100%)`;
   return (
     <span class={`hglyph ${p.ult ? 'hglyph--ult' : ''}`} style={{ background: bg }} aria-hidden="true">
       {p.src ? <img src={p.src} alt="" draggable={false} /> : (
@@ -104,6 +108,28 @@ const ITEM_PATHS: Partial<Record<ItemTag, JSX.Element>> & { plain: JSX.Element }
   plain: <g {...S}><path d="M12 4l7 8-7 8-7-8z" /></g>,
 };
 
+/** HUD-1: the Dial Bar ledger family an item belongs to (icon_families.json, the same rule as the icon grader and
+ *  _harness/icon_probe.mjs): a listed tier first (boots), else the family carrying most stat weight, else its first
+ *  mapped tag. Its painted icon sits on that family's ground; an item without art gets the same ground behind its glyph. */
+export type LedgerFamily = keyof typeof FAMILIES.families;
+const FAM_IDS = Object.keys(FAMILIES.families) as LedgerFamily[];
+export function itemFamily(it: ItemDefT | undefined): LedgerFamily {
+  if (!it) return 'craft';
+  const tier = (FAMILIES.tiers as Record<string, string>)[it.tier];
+  if (tier) return tier as LedgerFamily;
+  let best: LedgerFamily | null = null, score = 0;
+  const stats = (it.stats ?? {}) as Record<string, number | undefined>;
+  for (const f of FAM_IDS) {
+    const w = FAMILIES.families[f].stats as Record<string, number>;
+    let s = 0;
+    for (const k in stats) s += (w[k] ?? 0) * (stats[k] ?? 0);
+    if (s > score) { best = f; score = s; }
+  }
+  if (best) return best;
+  for (const t of it.tags) { const f = (FAMILIES.tags as Record<string, string>)[t]; if (f) return f as LedgerFamily; }
+  return 'craft';
+}
+
 /** item tier → hour-ticks (bible: Slate 1 · Verdigris 2 · Gloam 3 · Noonlit 4) */
 export function itemHour(tier: ItemDefT['tier'] | undefined): 1 | 2 | 3 | 4 {
   switch (tier) {
@@ -119,8 +145,10 @@ export function ItemGlyph(p: { item: ItemDefT | undefined; src: string | null })
   const it = p.item;
   const hour = itemHour(it?.tier);
   const tag = it?.tags.find((t) => ITEM_PATHS[t]) ?? 'plain';
+  const fam = itemFamily(it);
+  const [g0, g1] = FAMILIES.families[fam].ground;
   return (
-    <span class={`iglyph iglyph--h${hour}`} style={{ '--hour': HOUR_COLOR[hour] } as CSSProperties} aria-hidden="true">
+    <span class={`iglyph iglyph--h${hour} iglyph--${fam} ${p.src ? '' : 'iglyph--drawn'}`} style={{ '--hour': HOUR_COLOR[hour], '--fam0': g0, '--fam1': g1 } as CSSProperties} aria-hidden="true">
       {p.src ? <img src={p.src} alt="" draggable={false} /> : <svg viewBox="0 0 24 24" class="iglyph__svg">{ITEM_PATHS[tag] ?? ITEM_PATHS.plain}</svg>}
       <span class="iglyph__ticks">{Array.from({ length: hour }, () => <i />)}</span>
     </span>

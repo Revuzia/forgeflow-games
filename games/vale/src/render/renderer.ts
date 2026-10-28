@@ -739,6 +739,12 @@ class ValeRenderer implements Renderer {
         else a.hideOutline();
         // M2 veils on the body (actors.ts): unseen (its allies, or a reveal, still see it) · untargetable
         a.setVeil(v.alive && v.kind !== 'structure' ? veilOf(v) : 0);
+        // env F4: a fighter with cover between it and the camera shows its occluded parts as a silhouette in its
+        // readability colour (the cover gate is terrain.coverToward; the depth test picks the pixels)
+        if (v.kind === 'fighter') {
+          const cp = cam.position;
+          a.setXray(live && a.veil !== 1 && !!this.terrain?.coverToward(a.x, a.y, cp.x, cp.z, cp.y - a.h), p.get(hex));
+        }
       }
     }
   }

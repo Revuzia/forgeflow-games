@@ -40,11 +40,16 @@
 .hglyph__svg { width: 58%; height: 58%; filter: drop-shadow(0 1px 0 rgba(11, 13, 17, 0.6)); }
 .hglyph__ultmark { position: absolute; left: 50%; top: 5%; width: 0; height: 0; transform: translateX(-50%);
   border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid rgba(237, 230, 214, 0.75); }
-.iglyph { position: absolute; inset: 0; display: grid; grid-template: 100% / 100%; place-items: center; border-radius: inherit; overflow: hidden; color: var(--hour);
-  background: radial-gradient(120% 120% at 30% 20%, color-mix(in srgb, var(--hour) 18%, var(--ink-3)) 0%, var(--ink-1) 75%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hour) 35%, transparent); }
+/* items (HUD-1): the painted icon sits on its ledger family's ground (Strike, Craft, Guard, Stride; icon_families.json);
+   an item without art draws its tag glyph in chalk on the same ground. A 1 px chalk keyline over the art (::after, so
+   it is never hidden under the img; hover / owned states recolour it through --kc / --kw), and the hour-ticks on an
+   ink backing so they read on every ground */
+.iglyph { position: absolute; inset: 0; display: grid; grid-template: 100% / 100%; place-items: center; border-radius: inherit; overflow: hidden; color: var(--chalk-hi);
+  background: radial-gradient(120% 120% at 35% 30%, var(--fam0, #3A4250) 0%, var(--fam1, #14171D) 80%); --kc: rgba(237, 230, 214, 0.5); --kw: 1px; }
+.iglyph::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 var(--kw) var(--kc); pointer-events: none; }
 .iglyph img { width: 100%; height: 100%; object-fit: cover; grid-area: 1 / 1; }
-.iglyph__svg { width: 56%; height: 56%; }
-.iglyph__ticks { position: absolute; left: 3px; top: 3px; display: flex; gap: 2px; }
+.iglyph__svg { width: 56%; height: 56%; filter: drop-shadow(0 1px 0 rgba(11, 13, 17, 0.7)); }
+.iglyph__ticks { position: absolute; z-index: 1; left: 2px; top: 2px; display: flex; gap: 2px; padding: 1px 2px; border-radius: 1px; background: rgba(11, 13, 17, 0.72); }
 .iglyph__ticks i { display: block; width: 2px; height: 5px; background: var(--hour); }
 .gleam { display: inline-block; color: var(--chalk); vertical-align: -2px; }
 .pglyph { display: block; }
@@ -534,7 +539,7 @@
 .lshop__tiles { display: flex; flex-wrap: wrap; gap: calc(8 * var(--px)); }
 .istile { position: relative; width: calc(56 * var(--px)); height: calc(72 * var(--px)); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
 .istile .iglyph { position: relative; inset: auto; width: calc(52 * var(--px)); height: calc(52 * var(--px)); margin-top: 2px; }
-.istile:hover .iglyph { box-shadow: inset 0 0 0 1px var(--chalk); }
+.istile:hover .iglyph { --kc: var(--chalk-hi); }
 .istile.is-selected { background: var(--ink-3); box-shadow: 0 0 0 2px var(--chalk); }
 .istile__price { font-size: max(12px, calc(13 * var(--px))); color: var(--text-1); margin-top: 2px; }
 .istile.is-short .istile__price { color: var(--team-enemy); }
@@ -553,7 +558,7 @@
 .sdet__parts { display: flex; flex-wrap: wrap; gap: 6px; }
 .sdet__part { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; width: calc(40 * var(--px)); }
 .sdet__part .iglyph { position: relative; inset: auto; width: calc(36 * var(--px)); height: calc(36 * var(--px)); }
-.sdet__part.is-owned .iglyph { box-shadow: inset 0 0 0 2px var(--ok); }
+.sdet__part.is-owned .iglyph { --kc: var(--ok); --kw: 2px; }
 .sdet__part.is-owned .t-caption { color: var(--ok); }
 .sdet__act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: calc(4 * var(--px)); }
 .sdet__buy { height: calc(38 * var(--px)); padding: 0 calc(18 * var(--px)); font-size: max(13px, calc(15 * var(--px))); }

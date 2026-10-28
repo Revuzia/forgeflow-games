@@ -32,7 +32,7 @@ Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They
 | Target length | 22–28 min | 14–20 min | 8–11 min |
 | Start | level 1, 480 Gleam | level 2, 1,050 Gleam (W4 re-key) | level 6 (ultimate ready), 1,400 Gleam |
 | Level cap · XP | 18 · table 240 → 1,520 (+80 per level, 14,960 total) | 18 · ×2 XP on 200 → 1,160 (+60) | 16 · same steps as Rift, 15 entries |
-| Passive Gleam | 2.2/s from 0:30 | 3.4/s from 0:20 | 4/s from 0:00 |
+| Passive Gleam | 3.0/s from 0:30 (W4 G7; was 2.2) | 3.4/s from 0:20 | 4/s from 0:00 |
 | Waves | 0:30, every 30 s, level +1 every 90 s | 0:20, every 25 s, level +1 every 60 s | none |
 | Structures · jungle | yes · yes | yes · no | no · no |
 | Shop · recall · fountain | base · 7 s · 12 %/s | base, while dead, or within 6 m of your own standing Needles (`needles`) · none · 8 %/s, in base only | the Lampwright cart(s) (`shops`) · none · none |
@@ -46,7 +46,7 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 
 **RIFT calibration** *(r02 §3–6)*:
 
-- *Gold.* Start gold is 480 (reference 500) and passive income is 2.2/s (reference about 2/s). A wave is 3 Shieldwicks (21 Gleam, 56 XP) and 3 Glimwicks (15, 30), worth 108 Gleam. A Greatwick (50, 90) joins every third wave, so perfect farm is about 250 Gleam a minute.
+- *Gold.* Start gold is 480 (reference 500) and passive income is 3.0/s (reference about 2/s). *(W4 G7, 2026-10-28: raised from 2.2/s, and the Shieldwick and Glimwick bounties from 21 and 15 to 24 and 17; the old values sat within 10 % of the reference's 2.04/s and 21 / 14. With VALE's cheaper finished line (Gloam 1,800–2,300, Noonlit 2,300–2,800; `items_setup.md`) a fighter finishes about three pieces by 25:00. The Quick queue's override moved with it, 2.6 → 3.4.)* A wave is 3 Shieldwicks (24 Gleam, 56 XP) and 3 Glimwicks (17, 30), worth 123 Gleam. A Greatwick (50, 90) joins every third wave, so perfect farm is about 250 Gleam a minute.
 - *XP.* A solo road reaches level 6 at about 4:30 to 5:00, and the shared duo road at about 7:00 to 8:00. That is slightly faster than the reference, to fit a 25-minute target.
 - *Respawn.* Death timers run 6 s at level 1 to 47 s at level 18, and reach about 58 s after 25:00. The reference is 10 s to 52.5 s, rising to 78.75 s at 55:00. Ours are shorter on purpose: a browser player who waits a minute leaves.
 - *Kills.* A kill pays 280 and the assist pool 140 (reference 300 and 150). Shutdowns are capped at 490 with no carry-over.
@@ -88,7 +88,7 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 
 - *Pick.* You choose your role and fighter before you queue, so there is no draft and no dodge.
 - *Start.* You start at level 3 with 1,250 Gleam (the reference uses level 3 and 1,400).
-- *Economy.* Passive income is 2.6/s, and gold and XP are ×1.15.
+- *Economy.* Passive income is 3.4/s (W4 G7; was 2.6), and gold and XP are ×1.15.
 - *Waves.* The first wave comes at 0:20, then every 25 s. Wicks upgrade every 75 s, and Brightwicks start at 11:00.
 - *Logistics.* Recall takes 5 s. Respawns are 5 s + 2/level, max 38, ×1.2 after 16:00.
 - *Ending.* Surrender opens at 9:00. Sudden death comes at 23:00, with a gentler ×1.3 respawn multiplier.
@@ -241,8 +241,8 @@ Wicks level up with wave time: level = 1 + floor(wave time / `upgradeEvery`), an
 
 | id | role | hp (+/lvl) | ad (+/lvl) | armor/resist | range | speed | Gleam / XP | behavior |
 |---|---|---|---|---|---|---|---|---|
-| `shieldwick` Shieldwick | melee | 460 (+22) | 13 (+0.8), 1.1 attacks/s | 0/0 (+1.5/+1) | 1.4 | 3.25 | 21 / 56 | aggro 7, chase 10, help 9 |
-| `glimwick` Glimwick | ranged (`lib_bolt_lumen`) | 290 (+12) | 22 (+1.4), 0.7/s | 0/0 | 5 | 3.25 | 15 / 30 | aggro 8 |
+| `shieldwick` Shieldwick | melee | 460 (+22) | 13 (+0.8), 1.1 attacks/s | 0/0 (+1.5/+1) | 1.4 | 3.25 | 24 / 56 (W4 G7; was 21) | aggro 7, chase 10, help 9 |
+| `glimwick` Glimwick | ranged (`lib_bolt_lumen`) | 290 (+12) | 22 (+1.4), 0.7/s | 0/0 | 5 | 3.25 | 17 / 30 (W4 G7; was 15) | aggro 8 |
 | `greatwick` Greatwick | siege, every 3rd wave (`lib_lob`) | 880 (+40) | 38 (+2) | 15/0 | 6.5 | 3.2 | 50 / 90 | priority: fighterAttacker, **structure**, minion…; `damageMult.structure` 2 |
 | `brightwick` Brightwick | late heavy, every 2nd wave from 15:00 (12:00 Bridge, 11:00 Quick) | 1,200 (+45) | 45 (+2.2) | 30/30 | 1.8 | 3.3 | 70 / 110 | `damageMult` structure 1.5, minion 1.25 |
 

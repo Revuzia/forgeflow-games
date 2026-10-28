@@ -77,6 +77,8 @@ export interface AbilityInfo {
   readonly selfBuff: boolean;
   /** the area/zone/heal reaches allies (support ults) */
   readonly affectsAllies: boolean;
+  /** the cast holds its own caster in place (a self root or stun: a stance, never an escape) */
+  readonly selfHold: boolean;
 }
 
 const CC_STATUSES = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborne', 'taunt', 'fear', 'sleep']);
@@ -92,7 +94,7 @@ function shapeReach(s: ShapeT): number {
 interface Acc {
   delivery: Delivery; projSpeed: number; projWidth: number; projRange: number;
   shape: ShapeT | null; areaAt: AbilityInfo['areaAt']; delay: number; dashDist: number; dashMode: string; blinkDist: number;
-  cc: boolean; dmg: DmgTerm[]; heal: boolean; shield: boolean; selfBuff: boolean; affectsAllies: boolean;
+  cc: boolean; dmg: DmgTerm[]; heal: boolean; shield: boolean; selfBuff: boolean; affectsAllies: boolean; selfHold: boolean;
 }
 
 function walk(list: readonly EffectT[] | undefined, mult: number, top: boolean, a: Acc, depth: number): void {
@@ -106,6 +108,7 @@ function walk(list: readonly EffectT[] | undefined, mult: number, top: boolean, 
       case 'shield': a.shield = true; break;
       case 'status':
         if (CC_STATUSES.has(eff.status) && eff.to !== 'self') a.cc = true;
+        else if (top && eff.to === 'self' && (eff.status === 'root' || eff.status === 'stun')) a.selfHold = true;
         else if (SELF_BUFF_STATUSES.has(eff.status) && eff.to === 'self') a.selfBuff = true;
         break;
       case 'buff': if (eff.to === 'self') a.selfBuff = true; if (eff.empowerAttacks) walk(eff.empowerAttacks.effects, mult * eff.empowerAttacks.count, false, a, depth + 1); break;
@@ -158,7 +161,7 @@ export function abilityInfo(def: AbilityCoreT): AbilityInfo {
   if (r) return r;
   const a: Acc = {
     delivery: 'none', projSpeed: 0, projWidth: 0, projRange: 0, shape: null, areaAt: 'point', delay: 0, dashDist: 0, dashMode: '',
-    blinkDist: 0, cc: false, dmg: [], heal: false, shield: false, selfBuff: false, affectsAllies: false,
+    blinkDist: 0, cc: false, dmg: [], heal: false, shield: false, selfBuff: false, affectsAllies: false, selfHold: false,
   };
   walk(def.effects, 1, true, a, 0);
   if (def.channel) walk(def.channel.onTick, Math.max(1, def.channel.duration / Math.max(0.1, def.channel.interval ?? def.channel.duration)), false, a, 1);
@@ -188,7 +191,7 @@ export function abilityInfo(def: AbilityCoreT): AbilityInfo {
     lead: !!def.ai.leadTarget, tk, range, filter, allyUnit, delivery: a.delivery,
     projSpeed: a.projSpeed, projWidth: a.projWidth, projRange: a.projRange, shape: a.shape, areaAt: a.areaAt, delay: a.delay,
     dashDist: a.dashDist, dashMode: a.dashMode, blinkDist: a.blinkDist, reach, radius, castTime: def.castTime, cc: a.cc,
-    dmg: a.dmg, heal: a.heal, shield: a.shield, selfBuff: a.selfBuff, affectsAllies: a.affectsAllies,
+    dmg: a.dmg, heal: a.heal, shield: a.shield, selfBuff: a.selfBuff, affectsAllies: a.affectsAllies, selfHold: a.selfHold,
   };
   infoCache.set(def, r);
   return r;
@@ -317,6 +320,14 @@ export interface FighterProfile {
   readonly retreatHp: number;
   /** frontline-ish (engages first, soaks) */
   readonly front: boolean;
+  /** the kit heals or drains (a heal effect, life steal or omnivamp anywhere in it): what anti-heal answers */
+  readonly heals: boolean;
+  /** the kit slows, roots, stuns or otherwise holds enemies (any CC status or displacement) */
+  readonly holds: boolean;
+  /** the kit has hard CC: stun, root, lift, taunt, sleep, fear or a displacement */
+  readonly hardCc: boolean;
+  /** squishy: ranged, or a burst / artillery / marksman style (what a burst ward protects) */
+  readonly squishy: boolean;
 }
 
 const RETREAT_HP: Readonly<Record<Style, number>> = {
@@ -357,10 +368,35 @@ export function fighterProfile(def: FighterDefT): FighterProfile {
   rest.sort((a, b) => useRank(abilityInfo(def.kit[b]).use) - useRank(abilityInfo(def.kit[a]).use) || (a < b ? -1 : 1));
   for (const s of rest) basics.push(s);
   const ranged = def.attack.range >= 3;
+  const kitRead = readKit(def);
   return {
     def, style, prefRange: def.ai.preferredRange, attackRange: def.attack.range, ranged, scaling, combo, levelOrder: basics,
     retreatHp: RETREAT_HP[style] ?? 0.28, front: FRONT_STYLES.has(style),
+    heals: kitRead.heals || style === 'sustain', holds: kitRead.holds, hardCc: kitRead.hardCc,
+    squishy: ranged || style === 'burst' || style === 'artillery' || style === 'marksman',
   };
+}
+
+const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'sleep', 'fear']);
+/** what a kit does, read from its whole effect tree (abilities, recasts, forms, passive triggers) */
+function readKit(def: FighterDefT): { heals: boolean; holds: boolean; hardCc: boolean } {
+  const out = { heals: false, holds: false, hardCc: false };
+  const visit = (v: unknown, depth: number): void => {
+    if (depth > 24 || !v || typeof v !== 'object') return;
+    if (Array.isArray(v)) { for (const x of v) visit(x, depth + 1); return; }
+    const o = v as Record<string, unknown>;
+    if (o.op === 'heal') out.heals = true;
+    if (o.op === 'status' && o.to !== 'self' && typeof o.status === 'string') {
+      if (CC_STATUSES.has(o.status) && o.status !== 'disarm') out.holds = true;
+      if (HARD_CC.has(o.status)) out.hardCc = true;
+    }
+    if (o.op === 'displace' && o.to !== 'self') { out.holds = true; out.hardCc = true; }
+    if (typeof o.lifesteal === 'number' && o.lifesteal > 0) out.heals = true;
+    if (typeof o.omnivamp === 'number' && o.omnivamp > 0) out.heals = true;
+    for (const k in o) if (k !== 'present' && k !== 'ai') visit(o[k], depth + 1);
+  };
+  visit(def.kit, 0);
+  return out;
 }
 
 // ── itemization ─────────────────────────────────────────────────────────────────────────────────
@@ -378,14 +414,14 @@ const STYLE_TAGS: Readonly<Record<Style, TagW>> = {
 type StatW = Partial<Record<keyof StatBlockT, number>>;
 /** value points per unit of stat, by style (phys-scaling kit; magic kits swap ad/ap) */
 const STYLE_STATS: Readonly<Record<Style, StatW>> = {
-  marksman: { ad: 1, attackSpeed: 70, crit: 70, lifesteal: 35, armorPen: 0.9, range: 20, moveSpeed: 8, hp: 0.02 },
+  marksman: { ad: 1, attackSpeed: 70, crit: 70, lifesteal: 35, armorPen: 0.9, armorPenPct: 60, range: 20, moveSpeed: 8, hp: 0.02 },
   artillery: { ap: 0.8, haste: 0.9, magicPenPct: 70, magicPen: 0.8, hp: 0.02, res: 0.03 },
-  burst: { ad: 1, ap: 0.8, haste: 0.6, armorPen: 1, magicPenPct: 70, hp: 0.025, moveSpeed: 8 },
+  burst: { ad: 1, ap: 0.8, haste: 0.6, armorPen: 1, armorPenPct: 60, magicPenPct: 70, hp: 0.025, moveSpeed: 8, moveSpeedPct: 60 },
   frontline: { hp: 0.08, armor: 0.6, resist: 0.6, haste: 0.5, hpRegen: 4, ad: 0.3, tenacity: 30, moveSpeed: 6 },
   warden: { healShieldPower: 80, haste: 0.8, hp: 0.05, armor: 0.4, resist: 0.4, ap: 0.3, resRegen: 3, moveSpeed: 6 },
-  diver: { ad: 0.8, hp: 0.06, armor: 0.45, resist: 0.4, haste: 0.6, lifesteal: 30, moveSpeed: 8 },
-  skirmisher: { ad: 1, attackSpeed: 40, crit: 35, lifesteal: 40, hp: 0.04, armor: 0.3, haste: 0.4, omnivamp: 40 },
-  sustain: { ad: 0.7, ap: 0.7, hp: 0.06, omnivamp: 50, lifesteal: 30, hpRegen: 4, armor: 0.3, resist: 0.3, haste: 0.4 },
+  diver: { ad: 0.8, hp: 0.06, armor: 0.45, resist: 0.4, haste: 0.6, lifesteal: 30, moveSpeed: 8, moveSpeedPct: 60, armorPenPct: 30, omnivamp: 30 },
+  skirmisher: { ad: 1, attackSpeed: 40, crit: 35, lifesteal: 40, hp: 0.04, armor: 0.3, haste: 0.4, omnivamp: 40, armorPenPct: 40 },
+  sustain: { ad: 0.7, ap: 0.7, hp: 0.06, omnivamp: 50, lifesteal: 30, hpRegen: 4, armor: 0.3, resist: 0.3, haste: 0.4, healShieldPower: 60 },
 };
 
 /** value points of a stat block for a fighter (items, boons) */
@@ -433,7 +469,7 @@ export function itemValue(it: ItemDefT, prof: FighterProfile): number {
 }
 
 export interface BuildPlan {
-  /** completed items in buy order (core → apex), boots handled separately */
+  /** completed items in buy order (Gloam → Noonlit), boots handled separately */
   readonly core: readonly string[];
   readonly boots: readonly string[];
   readonly starter: string | null;
@@ -441,28 +477,149 @@ export interface BuildPlan {
   readonly ward: string | null;
 }
 
-export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterProfile, jungler: boolean): BuildPlan {
+/** what a finished item answers, read from its data (never from ids): the counters a build reaches for */
+export interface ItemRole {
+  /** applies Wounded (the sim's grievous): the answer to heals */
+  readonly antiHeal: boolean;
+  /** percent penetration, or damage that scales with the target's health: the answer to tanks */
+  readonly tankBreak: boolean;
+  /** a shield or armor/resist burst when hit or low, or an active that hardens you: the answer to burst */
+  readonly burstWard: boolean;
+  /** fires when you apply a status: needs a kit that holds enemies; hardOnly when slows do not count */
+  readonly needsHold: boolean;
+  readonly hardOnly: boolean;
+  readonly support: boolean;
+  readonly armor: number;
+  readonly resist: number;
+}
+const roleCache = new WeakMap<ItemDefT, ItemRole>();
+export function itemRole(it: ItemDefT): ItemRole {
+  let r = roleCache.get(it);
+  if (r) return r;
+  const fx = JSON.stringify([it.passives, it.active ?? null]);
+  let burstWard = false, needsHold = false, hardOnly = false;
+  for (const p of it.passives) for (const t of p.triggers) {
+    const body = JSON.stringify(t.effects);
+    // a one-shot ward: a shield or an armor/resist burst when hit (on a long cooldown: not a stacking tank passive) or low
+    const oneShot = t.on === 'lowHp' || (t.on === 'damageTaken' && (t.cooldown ?? 0) >= 10);
+    if (oneShot && /"to":"self"/.test(body) && (/"op":"shield"/.test(body) || /"armor":|"resist":/.test(body))) burstWard = true;
+    if (t.on === 'statusApplied') { needsHold = true; hardOnly = !JSON.stringify(t.cond ?? {}).includes('"slow"'); }
+  }
+  if (it.active) {
+    // an active that hardens you and does nothing to enemies (an engage that also hardens you is not a ward)
+    const hits = it.active.effects.some((e) => e.op === 'area' || e.op === 'projectile' || e.op === 'damage');
+    for (const e of it.active.effects) {
+      if (!hits && e.op === 'buff' && e.to === 'self' && ((e.stats?.armor ?? 0) + (e.stats?.resist ?? 0)) >= 40) burstWard = true;
+    }
+  }
+  r = {
+    antiHeal: fx.includes('"status":"grievous"'),
+    tankBreak: (it.stats.armorPenPct ?? 0) > 0 || (it.stats.magicPenPct ?? 0) > 0 || /"targetMaxHp"|"targetCurrentHp"/.test(fx),
+    burstWard, needsHold, hardOnly,
+    support: it.tags.includes('support'),
+    armor: it.stats.armor ?? 0, resist: it.stats.resist ?? 0,
+  };
+  roleCache.set(it, r);
+  return r;
+}
+
+/** the enemy team as a build reads it (public at the draft) */
+export interface EnemyRead {
+  readonly n: number;
+  /** fighters whose kits heal or drain */
+  readonly healers: number;
+  /** front lines (frontline / warden styles; a diver counts half) */
+  readonly tanks: number;
+  /** burst threats (burst styles; a diver counts half) */
+  readonly threats: number;
+  /** share of the enemy team that deals magic damage (0..1) */
+  readonly magic: number;
+}
+export function readEnemies(enemies: readonly FighterProfile[]): EnemyRead {
+  let healers = 0, tanks = 0, threats = 0, magic = 0;
+  for (const e of enemies) {
+    if (e.heals) healers++;
+    if (e.style === 'frontline' || e.style === 'warden') tanks++;
+    else if (e.style === 'diver') { tanks += 0.5; threats += 0.5; }
+    if (e.style === 'burst') threats++;
+    if (e.scaling === 'magic') magic++;
+  }
+  const n = enemies.length;
+  return { n, healers, tanks, threats, magic: n ? magic / n : 0.5 };
+}
+
+/** a stable 0..1 draw per (salt, item): a seat's taste, so two games of one fighter need not build alike (no RNG draws) */
+function taste(salt: number, id: string): number {
+  let h = (2166136261 ^ (salt | 0)) >>> 0;
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13;
+  return (h >>> 0) / 4294967296;
+}
+
+export interface PlanOpts {
+  /** the seat plays the support role (the Lampglass path: support items, no damage items) */
+  readonly support?: boolean;
+  /** the enemy team's fighters: the build answers heals, tanks, burst and the damage mix */
+  readonly enemies?: readonly FighterProfile[];
+  /** per-seat taste (e.g. match seed × 31 + player): breaks near-ties between items differently per game */
+  readonly salt?: number;
+}
+
+/** how much an item is worth in THIS match (1 = neutral): the enemy read, the seat's role, what the kit can trigger */
+export function situational(it: ItemDefT, prof: FighterProfile, er: EnemyRead, support: boolean): number {
+  const r = itemRole(it);
+  let m = 1;
+  if (r.needsHold && !(r.hardOnly ? prof.hardCc : prof.holds)) return 0.15;
+  if (r.antiHeal) m *= er.n === 0 ? 0.8 : er.healers >= 2 ? 1.6 : er.healers >= 1 ? 1.1 : 0.5;
+  if (r.tankBreak) m *= er.n === 0 ? 1 : er.tanks >= 2 ? 1.35 : er.tanks >= 1 ? 1.05 : 0.8;
+  if (r.burstWard) m *= er.n === 0 ? 1 : er.threats >= 2.5 ? (prof.squishy ? 1.7 : 1.2) : er.threats >= 1.5 ? (prof.squishy ? 1.45 : 1.15) : er.threats >= 1 ? 1.05 : 0.85;
+  const def = r.armor + r.resist;
+  if (def > 0 && er.n > 0) m *= 1 + 0.5 * ((r.resist - r.armor) / def) * (er.magic - 0.5);
+  // the Lampglass path: support pieces first; counters and defence stay possible; damage pieces almost never
+  if (support) m *= r.support ? 2 : (r.antiHeal || r.burstWard) ? 0.9 : it.tags.includes('attack') ? 0.25 : it.tags.includes('defense') ? 0.8 : 0.45;
+  else if (r.support) m *= 0.75;
+  return m;
+}
+
+export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterProfile, jungler: boolean, opts: PlanOpts = {}): BuildPlan {
   const pool = rules.itemPool;
   const inPool = (it: ItemDefT): boolean => it.pools.length === 0 || it.pools.includes(pool);
   const items = idx.catalog.items.filter(inPool);
-  const score = (it: ItemDefT): number => itemValue(it, prof) / Math.max(150, it.cost) * 1000;
-  const byScore = (list: ItemDefT[]): ItemDefT[] => list.slice().sort((a, b) => score(b) - score(a) || (a.id < b.id ? -1 : 1));
+  const er = readEnemies(opts.enemies ?? []);
+  const support = !!opts.support;
+  const salt = opts.salt ?? 0;
+  const score = (it: ItemDefT): number => itemValue(it, prof) / Math.max(150, it.cost) * 1000 *
+    situational(it, prof, er, support) * (0.9 + 0.2 * taste(salt, it.id));
+  const byScore = (list: ItemDefT[]): ItemDefT[] => list.map((it) => ({ it, s: score(it) }))
+    .sort((a, b) => b.s - a.s || (a.it.id < b.it.id ? -1 : 1)).map((x) => x.it);
   const cores = byScore(items.filter((i) => i.tier === 'core'));
-  const apexes = byScore(items.filter((i) => i.tier === 'apex'));
+  const finished = byScore(items.filter((i) => i.tier === 'core' || i.tier === 'apex'));
   const core: string[] = [];
   const takeGroup = new Set<string>();
-  // unique groups, and the dial-slot rule (two dial items must stand far enough apart: sim/shop.ts dialClash)
-  const ok = (it: ItemDefT): boolean => (!it.uniqueGroup || !takeGroup.has(it.uniqueGroup)) &&
-    core.every((id) => !dialClash(it, idx.items.get(id)));
-  const take = (it: ItemDefT): void => { core.push(it.id); if (it.uniqueGroup) takeGroup.add(it.uniqueGroup); };
-  // two core items, then apex items (preferring ones that build out of a chosen core), then fill
-  for (const it of cores) { if (core.length >= 2) break; if (ok(it)) take(it); }
-  const apexOrder = apexes.slice().sort((a, b) => {
-    const ba = a.components.some((c) => core.includes(c)) ? 1 : 0, bb = b.components.some((c) => core.includes(c)) ? 1 : 0;
-    return bb - ba || score(b) - score(a) || (a.id < b.id ? -1 : 1);
-  });
-  for (const it of apexOrder) { if (core.length >= 4) break; if (ok(it) && !core.includes(it.id)) take(it); }
-  for (const it of [...apexOrder, ...cores]) { if (core.length >= 5) break; if (ok(it) && !core.includes(it.id)) take(it); }
+  let antiHeal = false;
+  // unique groups, the dial-slot rule (two dial items must stand far enough apart: sim/shop.ts dialClash), one anti-heal piece
+  const ok = (it: ItemDefT): boolean => !core.includes(it.id) && (!it.uniqueGroup || !takeGroup.has(it.uniqueGroup)) &&
+    core.every((id) => !dialClash(it, idx.items.get(id))) && !(antiHeal && itemRole(it).antiHeal);
+  const take = (it: ItemDefT): void => { core.push(it.id); if (it.uniqueGroup) takeGroup.add(it.uniqueGroup); if (itemRole(it).antiHeal) antiHeal = true; };
+  // the first finished piece is a Gloam core (the cheaper step); each threat the enemy team carries (two or more
+  // healers, front lines or burst threats) then takes its best answer, at most two answers, one per kind, before
+  // the plan fills by value per Gleam
+  for (const it of cores) { if (core.length >= 1) break; if (ok(it)) take(it); }
+  const kinds: ((r: ItemRole) => boolean)[] = [];
+  if (er.healers >= 2) kinds.push((r) => r.antiHeal);
+  if (er.tanks >= 2) kinds.push((r) => r.tankBreak);
+  if (er.threats >= 1.5 && prof.squishy) kinds.push((r) => r.burstWard);
+  const answers = kinds.map((kind) => finished.find((it) => kind(itemRole(it)) && ok(it) && score(it) >= 0.7 * score(finished[0])))
+    .filter((it): it is ItemDefT => !!it).sort((a, b) => score(b) - score(a));
+  for (const it of answers) { if (core.length >= 3) break; if (ok(it)) take(it); }
+  const fixed = core.length;
+  for (const it of finished) { if (core.length >= 5) break; if (ok(it)) take(it); }
+  // buy order: after the first core and the answers, a Noonlit piece waits behind a Gloam piece unless it is clearly
+  // the better buy (worth 15 % more per Gleam): the cheaper finished piece comes sooner; an answer keeps its place
+  const rest = core.splice(fixed);
+  const order = new Map(rest.map((id) => { const it = idx.items.get(id)!; return [id, score(it) * (it.tier === 'apex' ? 0.85 : 1)] as const; }));
+  rest.sort((a, b) => (order.get(b) ?? 0) - (order.get(a) ?? 0) || (a < b ? -1 : 1));
+  core.push(...rest);
   if (core.length === 0) for (const it of byScore(items.filter((i) => i.tier === 'basic'))) { if (core.length >= 5) break; if (!it.active) take(it); }
   const bootsAll = items.filter((i) => i.tier === 'boots');
   const boots1 = bootsAll.filter((b) => b.components.length === 0).sort((a, b) => a.cost - b.cost || (a.id < b.id ? -1 : 1))[0];

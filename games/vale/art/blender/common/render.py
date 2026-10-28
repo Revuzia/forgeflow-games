@@ -761,7 +761,11 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     phi = V((head.x + 0.3, head.y + 0.3, min(top, head.z + 0.36 * H / 1.9) + 0.03))
     _fit_camera(cam, plo, phi, cfg["portrait_yaw"], 6.0, 85.0, 0.92, 1.0, 0.5)
     bible_lights(cam, cfg, light, rim=0.8, scale=0.8, pair=True, target=(plo + phi) * 0.5)
-    if want("portrait") or want("icon"):
+    # HUD face chip (facechip.py): fighters listed in art/blender/fighters/face_chips.json render their icon as a
+    # head-and-shoulders chip on an ink ground; everything else keeps the head close-up below
+    from . import facechip
+    chip = (not skin) and want("icon") and facechip.params(spec.ID) is not None
+    if want("portrait") or (want("icon") and not chip):
         PW = max(64, int(round(512 * scale)))
         pplate = backdrop_plate(cam, cfg, light, PW, PW, os.path.join(P["renders"], f"{pre}_pplate.png"), fast,
                                 paint_r=2)
@@ -776,7 +780,11 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         T["portrait"] = round(time.perf_counter() - t0, 2)
 
     # ── icon 128² (head close-up: the mask and crown read at a glance) ──
-    if not skin and want("icon"):
+    if chip:
+        t0 = time.perf_counter()
+        out["icon"], _ = facechip.render_chip(ctx, objs, P, cfg, light, chains, clips, fast, dest("icon"))
+        T["icon"] = round(time.perf_counter() - t0, 2)
+    elif not skin and want("icon"):
         t0 = time.perf_counter()
         ilo = V((head.x - 0.2, head.y - 0.2, head.z - 0.16 * H / 1.9))
         ihi = V((head.x + 0.2, head.y + 0.2, min(top, head.z + 0.34 * H / 1.9) + 0.02))

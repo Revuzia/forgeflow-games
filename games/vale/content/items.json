@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4; the dial-slot rule: each stands at an hour, dial.hour, and two carried Noonlit items must stand dial.apart = 4 or more hours apart, so a fighter carries one to three; W4 re-key 2026-10-28). Starters carry foldsInto [core]: the first Gloam core bought while one is carried folds it in at full price; boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts.",
+  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4; the dial-slot rule: each stands at an hour, dial.hour, and two carried Noonlit items must stand dial.apart = 4 or more hours apart, so a fighter carries one to three; W4 re-key 2026-10-28). Starters carry foldsInto [core]: the first Gloam core bought while one is carried folds it in at full price; boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts. W4 G7 (2026-10-28): 17 new finished items use a related item's icon as a placeholder until W2 paints assets/ui/icons/items/<id>.webp (handoff).",
   "items": [
     {
       "id": "notched_blade",
@@ -730,14 +730,14 @@
       "desc": "When an enemy fighter damages you, gain 4 armor and 4 resist for 4 s, stacking up to 5 times (one stack every 0.5 s at most).",
       "icon": "assets/ui/icons/items/ironstone_mantle.webp",
       "tier": "core",
-      "cost": 2600,
+      "cost": 2100,
       "components": [
         "felt_coat",
         "felt_coat"
       ],
       "stats": {
-        "hp": 400,
-        "armor": 60
+        "hp": 320,
+        "armor": 48
       },
       "passives": [
         {
@@ -788,16 +788,16 @@
       "desc": "Take 6 hits from enemy fighters, each within 3 s of the last, and the bell rings: enemies within 4 m take 30 + 4% of your bonus health as magic damage and are slowed 30% for 1.5 s.",
       "icon": "assets/ui/icons/items/warning_bell.webp",
       "tier": "core",
-      "cost": 2650,
+      "cost": 2100,
       "components": [
         "linen_hood",
         "linen_wrap",
         "hand_bell"
       ],
       "stats": {
-        "hp": 350,
-        "resist": 55,
-        "haste": 10
+        "hp": 280,
+        "resist": 44,
+        "haste": 8
       },
       "passives": [
         {
@@ -900,16 +900,16 @@
       "desc": "Each ability you cast gives you 6 attack and 3% move speed for 5 s, stacking up to 4 times.",
       "icon": "assets/ui/icons/items/dialcutter.webp",
       "tier": "core",
-      "cost": 2800,
+      "cost": 2250,
       "components": [
         "banded_club",
         "chalk_knife",
         "hand_bell"
       ],
       "stats": {
-        "ad": 40,
-        "hp": 300,
-        "haste": 15
+        "ad": 32,
+        "hp": 240,
+        "haste": 12
       },
       "passives": [
         {
@@ -958,15 +958,15 @@
       "desc": "Damaging an enemy fighter below 40% health deals 20 + 8% of its missing health as bonus physical damage. Once every 6 s per fighter.",
       "icon": "assets/ui/icons/items/shadecut.webp",
       "tier": "core",
-      "cost": 2800,
+      "cost": 2250,
       "components": [
         "whetted_knife",
         "whetted_knife"
       ],
       "stats": {
-        "ad": 50,
-        "armorPen": 18,
-        "haste": 10
+        "ad": 40,
+        "armorPen": 14,
+        "haste": 8
       },
       "passives": [
         {
@@ -1024,16 +1024,16 @@
       "desc": "Every third basic attack, each within 4 s of the last, deals 15 + 35% bonus attack as extra physical damage. The extra hit can crit.",
       "icon": "assets/ui/icons/items/splitlight_bow.webp",
       "tier": "core",
-      "cost": 2900,
+      "cost": 2300,
       "components": [
         "glint_sling",
         "chalk_knife",
         "chalk_knife"
       ],
       "stats": {
-        "ad": 40,
-        "crit": 0.25,
-        "attackSpeed": 0.12
+        "ad": 32,
+        "crit": 0.2,
+        "attackSpeed": 0.1
       },
       "passives": [
         {
@@ -1110,16 +1110,16 @@
       "desc": "Your first ability hit on an enemy fighter every 8 s deals 40 + 3 per level + 15% power as bonus magic damage.",
       "icon": "assets/ui/icons/items/focal_lens.webp",
       "tier": "core",
-      "cost": 2800,
+      "cost": 2250,
       "components": [
         "bellglass",
         "glass_lens",
         "lamp_oil"
       ],
       "stats": {
-        "ap": 90,
-        "haste": 15,
-        "resRegen": 0.6
+        "ap": 72,
+        "haste": 12,
+        "resRegen": 0.5
       },
       "passives": [
         {
@@ -1174,16 +1174,16 @@
       "desc": "Ability hits on enemy fighters lower their resist by 15% for 4 s.",
       "icon": "assets/ui/icons/items/inkglass_rod.webp",
       "tier": "core",
-      "cost": 2800,
+      "cost": 2250,
       "components": [
         "burning_glass",
         "ochre_brick",
         "glass_lens"
       ],
       "stats": {
-        "ap": 70,
-        "hp": 250,
-        "magicPen": 10
+        "ap": 56,
+        "hp": 200,
+        "magicPen": 8
       },
       "passives": [
         {
@@ -1230,18 +1230,18 @@
       "desc": "When you cast an ability, you and allied fighters within 6 m move 15% faster and gain a shield of 20 + 4 per level for 2 s. Once every 6 s.",
       "icon": "assets/ui/icons/items/kindly_lamp.webp",
       "tier": "core",
-      "cost": 2400,
+      "cost": 1900,
       "components": [
         "bellglass",
         "lamp_oil",
         "ochre_brick"
       ],
       "stats": {
-        "ap": 35,
-        "healShieldPower": 0.1,
-        "haste": 15,
-        "hp": 150,
-        "resRegen": 0.8
+        "ap": 28,
+        "healShieldPower": 0.08,
+        "haste": 12,
+        "hp": 120,
+        "resRegen": 0.6
       },
       "passives": [
         {
@@ -1311,22 +1311,938 @@
       ]
     },
     {
+      "id": "lampblack_edge",
+      "name": "Lampblack Edge",
+      "desc": "Damage an enemy fighter twice within 4 s and its sap runs black: it is Wounded (50% less healing) for 3 s. One Lampblack item per fighter.",
+      "icon": "assets/ui/icons/items/whetted_knife.webp",
+      "tier": "core",
+      "cost": 2000,
+      "components": [
+        "whetted_knife",
+        "taut_cord",
+        "chalk_knife"
+      ],
+      "stats": {
+        "ad": 28,
+        "attackSpeed": 0.16,
+        "armorPen": 6
+      },
+      "passives": [
+        {
+          "id": "lampblack_edge_black_sap",
+          "name": "Black Sap",
+          "desc": "Damage an enemy fighter twice within 4 s and it is Wounded (50% less healing) for 3 s.",
+          "icon": "assets/ui/icons/items/whetted_knife.webp",
+          "triggers": [
+            {
+              "on": "damageDealt",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 0.25,
+              "effects": [
+                {
+                  "op": "mark",
+                  "mark": "lampblack_soot",
+                  "duration": 4,
+                  "stacks": 1,
+                  "max": 2,
+                  "to": "hit"
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "targetHasMark",
+                    "mark": "lampblack_soot",
+                    "min": 2
+                  },
+                  "then": [
+                    {
+                      "op": "status",
+                      "status": "grievous",
+                      "duration": 3,
+                      "power": 0.5,
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "lampblack",
+      "tags": [
+        "attack",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "lampblack_coat",
+      "name": "Lampblack Coat",
+      "desc": "Soot hangs around you: enemy fighters within 4 m of you are Wounded (30% less healing). One Lampblack item per fighter.",
+      "icon": "assets/ui/icons/items/felt_coat.webp",
+      "tier": "core",
+      "cost": 1950,
+      "components": [
+        "felt_coat",
+        "linen_wrap"
+      ],
+      "stats": {
+        "hp": 240,
+        "armor": 24,
+        "resist": 20
+      },
+      "passives": [
+        {
+          "id": "lampblack_coat_soot_ring",
+          "name": "Soot Ring",
+          "desc": "Enemy fighters within 4 m of you are Wounded (30% less healing), checked every second.",
+          "icon": "assets/ui/icons/items/felt_coat.webp",
+          "triggers": [
+            {
+              "on": "interval",
+              "interval": 1,
+              "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 4
+                  },
+                  "at": "self",
+                  "delay": 0,
+                  "filter": {
+                    "enemies": true,
+                    "fighters": true,
+                    "minions": false,
+                    "monsters": false,
+                    "summons": false
+                  },
+                  "onHit": [
+                    {
+                      "op": "status",
+                      "status": "grievous",
+                      "duration": 1.5,
+                      "power": 0.3,
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "lampblack",
+      "tags": [
+        "defense",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "lampblack_lens",
+      "name": "Lampblack Lens",
+      "desc": "When you slow, root, stun or otherwise hold an enemy fighter, its sap runs black: it is Wounded (50% less healing) for 4 s. One Lampblack item per fighter.",
+      "icon": "assets/ui/icons/items/burning_glass.webp",
+      "tier": "core",
+      "cost": 2100,
+      "components": [
+        "burning_glass",
+        "hand_bell"
+      ],
+      "stats": {
+        "ap": 56,
+        "haste": 12,
+        "magicPen": 5
+      },
+      "passives": [
+        {
+          "id": "lampblack_lens_held_sap",
+          "name": "Held Sap",
+          "desc": "When you slow, root, stun or otherwise hold an enemy fighter, it is Wounded (50% less healing) for 4 s.",
+          "icon": "assets/ui/icons/items/burning_glass.webp",
+          "triggers": [
+            {
+              "on": "statusApplied",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 1,
+              "cond": {
+                "kind": "any",
+                "conds": [
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "slow"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "root"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "stun"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "sleep"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "fear"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "silence"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "taunt"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "airborne"
+                  }
+                ]
+              },
+              "effects": [
+                {
+                  "op": "status",
+                  "status": "grievous",
+                  "duration": 4,
+                  "power": 0.5,
+                  "to": "hit"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "lampblack",
+      "tags": [
+        "magic",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "quarry_pick",
+      "name": "Quarry Pick",
+      "desc": "Damaging an enemy fighter above 60% health deals 10 + 3.5% of its max health as bonus physical damage. Once every 4 s per fighter.",
+      "icon": "assets/ui/icons/items/chalk_knife.webp",
+      "tier": "core",
+      "cost": 2150,
+      "components": [
+        "whetted_knife",
+        "chalk_knife",
+        "chalk_knife"
+      ],
+      "stats": {
+        "ad": 32,
+        "armorPenPct": 0.24
+      },
+      "passives": [
+        {
+          "id": "quarry_pick_split",
+          "name": "Split the Stone",
+          "desc": "Damaging an enemy fighter above 60% health deals 10 + 3.5% of its max health as bonus physical damage. Once every 4 s per fighter.",
+          "icon": "assets/ui/icons/items/chalk_knife.webp",
+          "triggers": [
+            {
+              "on": "damageDealt",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 4,
+              "cond": {
+                "kind": "not",
+                "cond": {
+                  "kind": "targetHpBelow",
+                  "pct": 0.6
+                }
+              },
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 10,
+                    "targetMaxHp": 0.035
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_phys_heavy",
+            "hitSfx": "c_hit_phys_heavy"
+          }
+        }
+      ],
+      "uniqueGroup": "quarry_pick",
+      "tags": [
+        "attack"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "deepglass_rod",
+      "name": "Deepglass Rod",
+      "desc": "Your first ability hit on an enemy fighter every 6 s deals 20 + 4% of its max health as bonus magic damage.",
+      "icon": "assets/ui/icons/items/inkglass_rod.webp",
+      "tier": "core",
+      "cost": 2150,
+      "components": [
+        "burning_glass",
+        "glass_lens"
+      ],
+      "stats": {
+        "ap": 56,
+        "magicPenPct": 0.1,
+        "haste": 8
+      },
+      "passives": [
+        {
+          "id": "deepglass_rod_weight",
+          "name": "Weight of Light",
+          "desc": "Your first ability hit on an enemy fighter every 6 s deals 20 + 4% of its max health as bonus magic damage.",
+          "icon": "assets/ui/icons/items/inkglass_rod.webp",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 6,
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 20,
+                    "targetMaxHp": 0.04
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_magic",
+            "hitSfx": "c_hit_magic"
+          }
+        }
+      ],
+      "uniqueGroup": "deepglass_rod",
+      "tags": [
+        "magic"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "glass_veil",
+      "name": "Glass Veil",
+      "desc": "When an enemy fighter damages you, the glass settles: a shield of 70 + 10 per level + 20% power and 15 armor and resist for 2.5 s. Once every 18 s.",
+      "icon": "assets/ui/icons/items/linen_hood.webp",
+      "tier": "core",
+      "cost": 2100,
+      "components": [
+        "linen_hood",
+        "glass_lens"
+      ],
+      "stats": {
+        "ap": 44,
+        "hp": 160,
+        "resist": 20
+      },
+      "passives": [
+        {
+          "id": "glass_veil_settle",
+          "name": "Settling Glass",
+          "desc": "When an enemy fighter damages you, gain a shield of 70 + 10 per level + 20% power and 15 armor and resist for 2.5 s. Once every 18 s.",
+          "icon": "assets/ui/icons/items/linen_hood.webp",
+          "triggers": [
+            {
+              "on": "damageTaken",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 18,
+              "effects": [
+                {
+                  "op": "shield",
+                  "amount": {
+                    "base": 70,
+                    "level": 10,
+                    "ap": 0.2
+                  },
+                  "duration": 2.5,
+                  "to": "self"
+                },
+                {
+                  "op": "buff",
+                  "id": "glass_veil_settle",
+                  "duration": 2.5,
+                  "stats": {
+                    "armor": 15,
+                    "resist": 15
+                  },
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_shield_up",
+            "sfx": "c_shield"
+          }
+        }
+      ],
+      "uniqueGroup": "glass_veil",
+      "tags": [
+        "magic",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "glintmail",
+      "name": "Glintmail",
+      "desc": "When an enemy fighter damages you, the mail sets: a shield of 60 + 10 per level + 30% attack and 15 armor and resist for 2.5 s. Once every 18 s.",
+      "icon": "assets/ui/icons/items/glint_sling.webp",
+      "tier": "core",
+      "cost": 2050,
+      "components": [
+        "glint_sling",
+        "felt_vest"
+      ],
+      "stats": {
+        "ad": 20,
+        "attackSpeed": 0.15,
+        "crit": 0.1,
+        "armor": 15
+      },
+      "passives": [
+        {
+          "id": "glintmail_set_against",
+          "name": "Set Against",
+          "desc": "When an enemy fighter damages you, gain a shield of 60 + 10 per level + 30% attack and 15 armor and resist for 2.5 s. Once every 18 s.",
+          "icon": "assets/ui/icons/items/glint_sling.webp",
+          "triggers": [
+            {
+              "on": "damageTaken",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 18,
+              "effects": [
+                {
+                  "op": "shield",
+                  "amount": {
+                    "base": 60,
+                    "level": 10,
+                    "ad": 0.3
+                  },
+                  "duration": 2.5,
+                  "to": "self"
+                },
+                {
+                  "op": "buff",
+                  "id": "glintmail_set_against",
+                  "duration": 2.5,
+                  "stats": {
+                    "armor": 15,
+                    "resist": 15
+                  },
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_shield_up",
+            "sfx": "c_shield"
+          }
+        }
+      ],
+      "uniqueGroup": "glintmail",
+      "tags": [
+        "attack",
+        "crit",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "dawnspur",
+      "name": "Dawnspur",
+      "desc": "The first time you damage an enemy fighter in 8 s you strike first light: 30 + 3 per level + 30% bonus attack physical damage, and it is slowed 30% for 1 s.",
+      "icon": "assets/ui/icons/items/dialcutter.webp",
+      "tier": "core",
+      "cost": 2250,
+      "components": [
+        "banded_club",
+        "taut_cord",
+        "hand_bell"
+      ],
+      "stats": {
+        "ad": 26,
+        "hp": 200,
+        "haste": 12,
+        "moveSpeedPct": 0.03
+      },
+      "passives": [
+        {
+          "id": "dawnspur_first_light",
+          "name": "First Light",
+          "desc": "The first time you damage an enemy fighter in 8 s: 30 + 3 per level + 30% bonus attack physical damage, and it is slowed 30% for 1 s.",
+          "icon": "assets/ui/icons/items/dialcutter.webp",
+          "triggers": [
+            {
+              "on": "damageDealt",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 8,
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 30,
+                    "level": 3,
+                    "bonusAd": 0.3
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "slow",
+                  "duration": 1,
+                  "power": 0.3,
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_phys_heavy",
+            "hitSfx": "c_hit_phys_heavy"
+          }
+        }
+      ],
+      "uniqueGroup": "dawnspur",
+      "tags": [
+        "attack",
+        "defense",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "resin_maul",
+      "name": "Resin Maul",
+      "desc": "When one of your abilities hits an enemy fighter, heal 12 + 2 per level + 1.5% of your max health. Once every 3 s.",
+      "icon": "assets/ui/icons/items/banded_club.webp",
+      "tier": "core",
+      "cost": 2150,
+      "components": [
+        "banded_club",
+        "chalk_knife",
+        "ochre_brick"
+      ],
+      "stats": {
+        "ad": 28,
+        "hp": 240,
+        "omnivamp": 0.04
+      },
+      "passives": [
+        {
+          "id": "resin_maul_warm_through",
+          "name": "Warm Through",
+          "desc": "When one of your abilities hits an enemy fighter, heal 12 + 2 per level + 1.5% of your max health. Once every 3 s.",
+          "icon": "assets/ui/icons/items/banded_club.webp",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 3,
+              "effects": [
+                {
+                  "op": "heal",
+                  "amount": {
+                    "base": 12,
+                    "level": 2,
+                    "maxHp": 0.015
+                  },
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_heal_rise"
+          }
+        }
+      ],
+      "uniqueGroup": "resin_maul",
+      "tags": [
+        "attack",
+        "sustain",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "shadowpin",
+      "name": "Shadowpin",
+      "desc": "Every fourth basic attack on the same enemy fighter, each within 4 s of the last, pins its shadow: 20 + 30% bonus attack physical damage, and it is slowed 40% for 1 s.",
+      "icon": "assets/ui/icons/items/glint_sling.webp",
+      "tier": "core",
+      "cost": 2150,
+      "components": [
+        "glint_sling",
+        "chalk_knife",
+        "taut_cord"
+      ],
+      "stats": {
+        "ad": 24,
+        "attackSpeed": 0.2,
+        "crit": 0.12
+      },
+      "passives": [
+        {
+          "id": "shadowpin_pin",
+          "name": "Pin the Shadow",
+          "desc": "Every fourth basic attack on the same enemy fighter, each within 4 s of the last: 20 + 30% bonus attack physical damage and a 40% slow for 1 s.",
+          "icon": "assets/ui/icons/items/glint_sling.webp",
+          "triggers": [
+            {
+              "on": "attackHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "mark",
+                  "mark": "shadowpin_pin",
+                  "duration": 4,
+                  "stacks": 1,
+                  "max": 4,
+                  "to": "hit"
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "targetHasMark",
+                    "mark": "shadowpin_pin",
+                    "min": 4
+                  },
+                  "then": [
+                    {
+                      "op": "consumeMark",
+                      "mark": "shadowpin_pin",
+                      "perStack": [],
+                      "to": "hit"
+                    },
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 20,
+                        "bonusAd": 0.3
+                      },
+                      "type": "phys",
+                      "to": "hit"
+                    },
+                    {
+                      "op": "status",
+                      "status": "slow",
+                      "duration": 1,
+                      "power": 0.4,
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_root_bind",
+            "hitSfx": "c_root"
+          }
+        }
+      ],
+      "uniqueGroup": "shadowpin",
+      "tags": [
+        "attack",
+        "crit",
+        "onhit"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "bellrope",
+      "name": "Bellrope",
+      "desc": "When you stun, root, lift, taunt, put to sleep or frighten an enemy fighter, the bell tolls: you and allied fighters within 7 m gain a shield of 30 + 6 per level for 2.5 s and move 20% faster for 1.5 s. Once every 8 s.",
+      "icon": "assets/ui/icons/items/hand_bell.webp",
+      "tier": "core",
+      "cost": 1800,
+      "components": [
+        "felt_coat",
+        "hand_bell"
+      ],
+      "stats": {
+        "hp": 220,
+        "armor": 18,
+        "haste": 12,
+        "resRegen": 0.4
+      },
+      "passives": [
+        {
+          "id": "bellrope_toll",
+          "name": "Toll Together",
+          "desc": "When you stun, root, lift, taunt, put to sleep or frighten an enemy fighter: you and allied fighters within 7 m gain a shield of 30 + 6 per level for 2.5 s and 20% move speed for 1.5 s. Once every 8 s.",
+          "icon": "assets/ui/icons/items/hand_bell.webp",
+          "triggers": [
+            {
+              "on": "statusApplied",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 8,
+              "cond": {
+                "kind": "any",
+                "conds": [
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "stun"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "root"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "airborne"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "taunt"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "sleep"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "fear"
+                  }
+                ]
+              },
+              "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 7
+                  },
+                  "at": "self",
+                  "delay": 0,
+                  "filter": {
+                    "enemies": false,
+                    "allies": true,
+                    "self": true,
+                    "fighters": true,
+                    "minions": false,
+                    "monsters": false,
+                    "summons": false
+                  },
+                  "onHit": [
+                    {
+                      "op": "shield",
+                      "amount": {
+                        "base": 30,
+                        "level": 6
+                      },
+                      "duration": 2.5,
+                      "to": "hit"
+                    },
+                    {
+                      "op": "status",
+                      "status": "haste",
+                      "duration": 1.5,
+                      "power": 0.2,
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_ring_pulse",
+                    "sfx": "c_shield",
+                    "hitVfx": "lib_shield_up"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "bellrope",
+      "tags": [
+        "support",
+        "defense",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "almslamp",
+      "name": "Almslamp",
+      "desc": "Each enemy fighter takedown you take part in gives you 35 more Gleam.",
+      "icon": "assets/ui/icons/items/kindly_lamp.webp",
+      "tier": "core",
+      "cost": 1800,
+      "components": [
+        "bellglass",
+        "ochre_brick"
+      ],
+      "stats": {
+        "ap": 24,
+        "hp": 150,
+        "haste": 10,
+        "healShieldPower": 0.06
+      },
+      "passives": [
+        {
+          "id": "almslamp_shared_light",
+          "name": "Shared Light",
+          "desc": "Each enemy fighter takedown you take part in gives you 35 more Gleam.",
+          "icon": "assets/ui/icons/items/kindly_lamp.webp",
+          "triggers": [
+            {
+              "on": "takedown",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "gold",
+                  "amount": 35
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "almslamp",
+      "tags": [
+        "support",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
       "id": "sunstring",
       "name": "Sunstring",
       "desc": "Basic attacks deal 15 + 2.5% of the target's current health as bonus magic damage (60% against Wicks and monsters). Stands at two on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/sunstring.webp",
       "tier": "apex",
-      "cost": 3400,
+      "cost": 2700,
       "components": [
         "glint_sling",
         "glint_sling",
         "chalk_knife"
       ],
       "stats": {
-        "ad": 30,
-        "attackSpeed": 0.45,
-        "crit": 0.2,
-        "lifesteal": 0.06
+        "ad": 24,
+        "attackSpeed": 0.36,
+        "crit": 0.16,
+        "lifesteal": 0.05
       },
       "passives": [
         {
@@ -1385,16 +2301,16 @@
       "desc": "Ability hits mark enemy fighters for 6 s. The third mark bursts for 50 + 20% power + 4% of their max health as magic damage. Stands at eight on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/noonglass.webp",
       "tier": "apex",
-      "cost": 3500,
+      "cost": 2800,
       "components": [
         "burning_glass",
         "bellglass",
         "glass_lens"
       ],
       "stats": {
-        "ap": 110,
-        "haste": 15,
-        "magicPenPct": 0.15
+        "ap": 88,
+        "haste": 12,
+        "magicPenPct": 0.12
       },
       "passives": [
         {
@@ -1476,17 +2392,17 @@
       "desc": "Active: gain a shield of 12% of your max health for 3 s. After 0.4 s the ground within 4.5 m cracks: enemies take 50 + 4% of your bonus health as magic damage and are slowed 40%, fading over 2 s. 60 s cooldown. Stands at noon on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/seatstone.webp",
       "tier": "apex",
-      "cost": 3300,
+      "cost": 2650,
       "components": [
         "felt_coat",
         "linen_hood",
         "ochre_brick"
       ],
       "stats": {
-        "hp": 600,
-        "armor": 35,
-        "resist": 35,
-        "haste": 10
+        "hp": 480,
+        "armor": 28,
+        "resist": 28,
+        "haste": 8
       },
       "active": {
         "id": "seatstone_hold",
@@ -1588,17 +2504,17 @@
       "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s. Stands at four on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/hourcleaver.webp",
       "tier": "apex",
-      "cost": 3400,
+      "cost": 2700,
       "components": [
         "banded_club",
         "whetted_knife",
         "hand_bell"
       ],
       "stats": {
-        "ad": 50,
-        "hp": 250,
-        "haste": 15,
-        "omnivamp": 0.05
+        "ad": 40,
+        "hp": 200,
+        "haste": 12,
+        "omnivamp": 0.04
       },
       "passives": [
         {
@@ -1663,18 +2579,18 @@
       "desc": "Active: you and allied fighters within 7 m gain a shield of 60 + 10 per level + 25% power for 2.5 s. 75 s cooldown. Stands at ten on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/shelter_lamp.webp",
       "tier": "apex",
-      "cost": 3000,
+      "cost": 2400,
       "components": [
         "bellglass",
         "linen_hood",
         "lamp_oil"
       ],
       "stats": {
-        "ap": 40,
-        "healShieldPower": 0.15,
-        "haste": 20,
-        "hp": 200,
-        "resist": 20
+        "ap": 32,
+        "healShieldPower": 0.12,
+        "haste": 16,
+        "hp": 160,
+        "resist": 16
       },
       "active": {
         "id": "shelter_lamp_shelter",
@@ -1752,6 +2668,537 @@
       ],
       "dial": {
         "hour": 10,
+        "apart": 4
+      }
+    },
+    {
+      "id": "callstone",
+      "name": "Callstone",
+      "desc": "Active: call out: enemy fighters within 4 m are taunted to you for 0.75 s, and you gain 30 armor and 30 resist for 2.5 s. 70 s cooldown. Stands at one on the dial: another Noonlit item must stand 4 or more hours away.",
+      "icon": "assets/ui/icons/items/seatstone.webp",
+      "tier": "apex",
+      "cost": 2500,
+      "components": [
+        "felt_coat",
+        "linen_wrap",
+        "ochre_brick",
+        "hand_bell"
+      ],
+      "stats": {
+        "hp": 400,
+        "armor": 24,
+        "resist": 24,
+        "haste": 8
+      },
+      "active": {
+        "id": "callstone_call",
+        "name": "Call Out",
+        "desc": "Enemy fighters within 4 m are taunted to you for 0.75 s, and you gain 30 armor and 30 resist for 2.5 s.",
+        "icon": "assets/ui/icons/items/seatstone.webp",
+        "maxRank": 1,
+        "cooldown": 70,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "none",
+          "indicator": {
+            "kind": "circle",
+            "radius": 4
+          }
+        },
+        "castTime": 0.15,
+        "effects": [
+          {
+            "op": "buff",
+            "id": "callstone_call",
+            "duration": 2.5,
+            "stats": {
+              "armor": 30,
+              "resist": 30
+            },
+            "to": "self"
+          },
+          {
+            "op": "area",
+            "shape": {
+              "kind": "circle",
+              "radius": 4
+            },
+            "at": "self",
+            "delay": 0,
+            "filter": {
+              "enemies": true,
+              "fighters": true,
+              "minions": false,
+              "monsters": false,
+              "summons": false
+            },
+            "onHit": [
+              {
+                "op": "status",
+                "status": "taunt",
+                "duration": 0.75,
+                "to": "hit"
+              }
+            ],
+            "present": {
+              "vfx": "lib_ring_pulse",
+              "sfx": "c_taunt",
+              "hitVfx": "lib_status_taunt",
+              "telegraph": "everyone"
+            }
+          }
+        ],
+        "ai": {
+          "use": [
+            "cc",
+            "engage"
+          ],
+          "minTargets": 1
+        },
+        "present": {
+          "vfx": "lib_shield_up",
+          "sfx": "c_shield"
+        }
+      },
+      "tags": [
+        "defense",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "dial": {
+        "hour": 1,
+        "apart": 4
+      }
+    },
+    {
+      "id": "hourstring",
+      "name": "Hourstring",
+      "desc": "Every twelfth basic attack you land on enemy fighters, each within 8 s of the last, strikes the hour: enemies within 3 m of the target take 60 + 6 per level + 6% of their max health as magic damage and are slowed 30% for 1 s. Stands at three on the dial: another Noonlit item must stand 4 or more hours away.",
+      "icon": "assets/ui/icons/items/sunstring.webp",
+      "tier": "apex",
+      "cost": 2650,
+      "components": [
+        "glint_sling",
+        "whetted_knife",
+        "taut_cord"
+      ],
+      "stats": {
+        "ad": 32,
+        "attackSpeed": 0.25,
+        "crit": 0.16
+      },
+      "passives": [
+        {
+          "id": "hourstring_strike",
+          "name": "Strike the Hour",
+          "desc": "Every twelfth basic attack on enemy fighters, each within 8 s of the last: enemies within 3 m of the target take 60 + 6 per level + 6% of their max health as magic damage and are slowed 30% for 1 s.",
+          "icon": "assets/ui/icons/items/sunstring.webp",
+          "triggers": [
+            {
+              "on": "attackHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "counter",
+                  "counter": "hourstring_hours",
+                  "add": 1,
+                  "max": 12,
+                  "duration": 8
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "counterAtLeast",
+                    "counter": "hourstring_hours",
+                    "n": 12
+                  },
+                  "then": [
+                    {
+                      "op": "counter",
+                      "counter": "hourstring_hours",
+                      "add": 0,
+                      "reset": true
+                    },
+                    {
+                      "op": "area",
+                      "shape": {
+                        "kind": "circle",
+                        "radius": 3
+                      },
+                      "at": "hit",
+                      "delay": 0,
+                      "filter": {
+                        "enemies": true,
+                        "fighters": true,
+                        "minions": true,
+                        "monsters": true,
+                        "summons": true
+                      },
+                      "onHit": [
+                        {
+                          "op": "damage",
+                          "amount": {
+                            "base": 60,
+                            "level": 6,
+                            "targetMaxHp": 0.06
+                          },
+                          "type": "magic",
+                          "to": "hit"
+                        },
+                        {
+                          "op": "status",
+                          "status": "slow",
+                          "duration": 1,
+                          "power": 0.3,
+                          "to": "hit"
+                        }
+                      ],
+                      "present": {
+                        "vfx": "lib_burst_lumen",
+                        "sfx": "c_burst_lumen",
+                        "hitVfx": "lib_hit_magic"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "attack",
+        "crit",
+        "onhit"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "dial": {
+        "hour": 3,
+        "apart": 4
+      }
+    },
+    {
+      "id": "needlefall",
+      "name": "Needlefall",
+      "desc": "When you take part in a takedown of an enemy fighter, your ability cooldowns drop by 30% of what is left and you move 30% faster for 2 s. Stands at five on the dial: another Noonlit item must stand 4 or more hours away.",
+      "icon": "assets/ui/icons/items/hourcleaver.webp",
+      "tier": "apex",
+      "cost": 2650,
+      "components": [
+        "whetted_knife",
+        "whetted_knife",
+        "hand_bell"
+      ],
+      "stats": {
+        "ad": 40,
+        "hp": 250,
+        "haste": 15
+      },
+      "passives": [
+        {
+          "id": "needlefall_falling_shadow",
+          "name": "Falling Shadow",
+          "desc": "When you take part in a takedown of an enemy fighter, your ability cooldowns drop by 30% of what is left and you move 30% faster for 2 s.",
+          "icon": "assets/ui/icons/items/hourcleaver.webp",
+          "triggers": [
+            {
+              "on": "takedown",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "cooldown",
+                  "slot": "all_abilities",
+                  "percent": 0.3
+                },
+                {
+                  "op": "status",
+                  "status": "haste",
+                  "duration": 2,
+                  "power": 0.3,
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_haste",
+            "sfx": "c_buff"
+          }
+        }
+      ],
+      "tags": [
+        "attack",
+        "defense",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "dial": {
+        "hour": 5,
+        "apart": 4
+      }
+    },
+    {
+      "id": "stillhour",
+      "name": "Stillhour",
+      "desc": "Active: stand still like the stopped light: for 1.5 s you are rooted and gain 80 armor and 80 resist. You can still attack and cast. 80 s cooldown. Stands at six on the dial: another Noonlit item must stand 4 or more hours away.",
+      "icon": "assets/ui/icons/items/ironstone_mantle.webp",
+      "tier": "apex",
+      "cost": 2500,
+      "components": [
+        "felt_coat",
+        "linen_hood",
+        "hand_bell"
+      ],
+      "stats": {
+        "hp": 300,
+        "armor": 32,
+        "resist": 32,
+        "haste": 8
+      },
+      "active": {
+        "id": "stillhour_hold",
+        "name": "Hold the Hour",
+        "desc": "For 1.5 s you are rooted and gain 80 armor and 80 resist. You can still attack and cast.",
+        "icon": "assets/ui/icons/items/ironstone_mantle.webp",
+        "maxRank": 1,
+        "cooldown": 80,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "none"
+        },
+        "castTime": 0,
+        "effects": [
+          {
+            "op": "status",
+            "status": "root",
+            "duration": 1.5,
+            "to": "self"
+          },
+          {
+            "op": "buff",
+            "id": "stillhour_hold",
+            "duration": 1.5,
+            "stats": {
+              "armor": 80,
+              "resist": 80
+            },
+            "to": "self"
+          }
+        ],
+        "ai": {
+          "use": [
+            "shield"
+          ],
+          "castWhenSelfHpBelow": 0.45
+        },
+        "present": {
+          "vfx": "lib_zone_glass",
+          "sfx": "c_shield"
+        }
+      },
+      "tags": [
+        "defense",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "dial": {
+        "hour": 6,
+        "apart": 4
+      }
+    },
+    {
+      "id": "afterlight",
+      "name": "Afterlight",
+      "desc": "Your first ability hit on an enemy fighter every 5 s lands again 1 s later where it stood: 35 + 4 per level + 20% power magic damage to enemies within 2.5 m. Stands at seven on the dial: another Noonlit item must stand 4 or more hours away.",
+      "icon": "assets/ui/icons/items/noonglass.webp",
+      "tier": "apex",
+      "cost": 2650,
+      "components": [
+        "bellglass",
+        "burning_glass",
+        "lamp_oil"
+      ],
+      "stats": {
+        "ap": 80,
+        "haste": 16,
+        "resRegen": 0.5
+      },
+      "passives": [
+        {
+          "id": "afterlight_lands_twice",
+          "name": "Light Lands Twice",
+          "desc": "Your first ability hit on an enemy fighter every 5 s lands again 1 s later where it stood: 35 + 4 per level + 20% power magic damage to enemies within 2.5 m.",
+          "icon": "assets/ui/icons/items/noonglass.webp",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 5,
+              "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 2.5
+                  },
+                  "at": "hit",
+                  "delay": 1,
+                  "filter": {
+                    "enemies": true,
+                    "fighters": true,
+                    "minions": true,
+                    "monsters": true,
+                    "summons": true
+                  },
+                  "onHit": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 35,
+                        "level": 4,
+                        "ap": 0.2
+                      },
+                      "type": "magic",
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_burst_lumen",
+                    "sfx": "c_burst_lumen",
+                    "hitVfx": "lib_hit_magic",
+                    "telegraph": "everyone"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "magic",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "dial": {
+        "hour": 7,
+        "apart": 4
+      }
+    },
+    {
+      "id": "watchbell",
+      "name": "Watchbell",
+      "desc": "Every 10 s the bell rings out: enemy fighters within 9 m are revealed for 3 s, even in Needlegrass, and slowed 15% for 1 s. Stands at nine on the dial: another Noonlit item must stand 4 or more hours away.",
+      "icon": "assets/ui/icons/items/shelter_lamp.webp",
+      "tier": "apex",
+      "cost": 2300,
+      "components": [
+        "bellglass",
+        "ochre_brick",
+        "linen_wrap",
+        "hand_bell"
+      ],
+      "stats": {
+        "ap": 32,
+        "hp": 200,
+        "haste": 16,
+        "healShieldPower": 0.08
+      },
+      "passives": [
+        {
+          "id": "watchbell_watch",
+          "name": "Watch Hour",
+          "desc": "Every 10 s: enemy fighters within 9 m are revealed for 3 s, even in Needlegrass, and slowed 15% for 1 s.",
+          "icon": "assets/ui/icons/items/shelter_lamp.webp",
+          "triggers": [
+            {
+              "on": "interval",
+              "interval": 10,
+              "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 9
+                  },
+                  "at": "self",
+                  "delay": 0,
+                  "filter": {
+                    "enemies": true,
+                    "fighters": true,
+                    "minions": false,
+                    "monsters": false,
+                    "summons": false
+                  },
+                  "onHit": [
+                    {
+                      "op": "status",
+                      "status": "reveal",
+                      "duration": 3,
+                      "to": "hit"
+                    },
+                    {
+                      "op": "status",
+                      "status": "slow",
+                      "duration": 1,
+                      "power": 0.15,
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_ring_pulse",
+                    "hitVfx": "lib_reveal_mark"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "support",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "dial": {
+        "hour": 9,
         "apart": 4
       }
     },

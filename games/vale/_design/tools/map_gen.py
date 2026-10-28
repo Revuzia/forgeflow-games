@@ -249,14 +249,69 @@ def P(p):
     return [rnd(p[0]), rnd(p[1])]
 
 
-def landmark(lid, name, at, size, height, note, flush=False):
+def landmark(lid, name, at, size, height, note, flush=False, **extra):
     """art hint: a landmark's footprint (axis-aligned w × d, metres) and height. The probe checks that
     a solid one stands on wall cells or outside the map and hides no open ground from the camera
-    (52°: h metres tall hides 0.78 h m of ground north of it). Flush ones are inlays on open ground."""
+    (52°: h metres tall hides 0.78 h m of ground north of it). Flush ones are inlays on open ground.
+    extra: model / rot / value, as the content entry carries them (render/terrain.ts loadTerrainLandmarks)."""
     rec = {"id": lid, "name": name, "at": P(at), "size": [rnd(size[0]), rnd(size[1])], "height": height, "note": note}
     if flush:
         rec["flush"] = True
+    for k in ("model", "rot", "value"):
+        if extra.get(k) is not None:
+            rec[k] = extra[k]
     return rec
+
+
+def skirts_rift(W, H):
+    """env F1: the dressed skirt beyond every bound (art/blender/maps/skirts.py), 22 m modules on the rim's cap;
+    the west / east runs leave 44-66 to the Glass Belfry's and the Lamp Dome's own courts."""
+    out = []
+    xs = [W / 2 - 99 + 22 * k for k in range(10)]
+    hi = "assets/maps/landmarks/skirt_rift.glb"
+    for k, x in enumerate(xs):
+        out.append(landmark(f"skirt_rift_n{k + 1}", "Dialwood terraces", (x, -10.0), (22, 12), 8.2, "off-map skirt on the north rim: the rim walk, then three terraced Dialwood banks stepping down to the dial", model=hi, value=1.15))
+    for k, x in enumerate(xs):
+        out.append(landmark(f"skirt_rift_s{k + 1}", "Dialwood terraces", (x, H + 8.5), (22, 11), 3.9, "off-map skirt on the south rim, the camera side: kept low", model="assets/maps/landmarks/skirt_rift_low.glb", rot=180, value=1.15))
+    for side, x, rot in (("w", -10.0, 90), ("e", W + 10.0, -90)):
+        for k, y in enumerate((11, 33, H - 33, H - 11)):
+            out.append(landmark(f"skirt_rift_{side}{k + 1}", "Dialwood terraces", (x, y), (12, 22), 8.2, "off-map skirt on the side rim", model=hi, rot=rot, value=1.15))
+    return out
+
+
+def skirts_fray(C):
+    """env F1: the noon fair on the court beyond the rim (brief §2): booths with canvas awnings (<= the rim's 2.4 m) north
+    of the plate, low benches (< 1 m) south of it; between the corner stands, r 34.5 (36 on the diagonals, so the
+    footprint's box stays off the plate)."""
+    out = []
+    for th in (0, 36, 72, 108, 144, 180, 216, 252, 288, 324):
+        hi = th in (0, 36, 72, 288, 324)
+        r = 36.0 if th % 72 == 36 else 34.5
+        a = math.radians(th)
+        at = (C[0] + r * math.sin(a), C[1] - r * math.cos(a))
+        c, sn = abs(math.cos(a)), abs(math.sin(a))
+        size = (6.4 * c + 3.8 * sn, 6.4 * sn + 3.8 * c)
+        rot = -th if th <= 180 else 360 - th
+        if hi:
+            out.append(landmark(f"skirt_fray_{th}", "fair booth", at, size, 2.5, "off-map skirt: a fair booth on the court north of the plate", model="assets/maps/landmarks/skirt_fray.glb", rot=rot, value=1.0))
+        else:
+            out.append(landmark(f"skirt_fray_{th}", "fair benches", at, size, 0.9, "off-map skirt south of the plate: low benches", model="assets/maps/landmarks/skirt_fray_low.glb", rot=rot, value=1.0))
+    return out
+
+
+def skirts_bridge(W, H):
+    """env F1: the gorge's far banks on the plain north and south (24 m modules) and the terrace ends' courts on the rim."""
+    out = []
+    xs = [round(0.5 + (W - 1.0) * k / 7, 2) for k in range(8)]
+    bank = "assets/maps/landmarks/skirt_bridge.glb"
+    for k, x in enumerate(xs):
+        out.append(landmark(f"skirt_bridge_n{k + 1}", "far bank", (x, -13.0), (24, 24), 3.9, "off-map skirt: the gorge's north bank", model=bank, value=1.0))
+    for k, x in enumerate(xs):
+        out.append(landmark(f"skirt_bridge_s{k + 1}", "far bank", (x, H + 13.0), (24, 24), 3.9, "its mirror on the south bank", model=bank, rot=180, value=1.0))
+    for side, x, rot in (("w", -7.0, 90), ("e", W + 7.0, -90)):
+        for k, y in enumerate((11, 33)):
+            out.append(landmark(f"skirt_court_{side}{k + 1}", "terrace court", (x, y), (13, 22), 0.45, "off-map skirt on a terrace end's rim", model="assets/maps/landmarks/skirt_court.glb", rot=rot, value=1.0))
+    return out
 
 
 # ── shared art blocks ────────────────────────────────────────────────────────────────────────────
@@ -527,13 +582,13 @@ def build_rift():
         "seat": {"at": [CX, CY], "radius": seat_r, "relief": "flush; carved rim <= 0.15 m"},
         "hourLines": {"centre": [CX, CY], "ring": RING, "note": "Dialwood paths follow the hour-ring and two hour-lines per quadrant (Baseward, Rimward)"},
         "landmarks": [
-            landmark("glass_belfry", "Glass Belfry", (-5.0, CY), (7, 7), 22.0, "Aubade base; spire, chalk + dawnglass; beyond the west edge"),
-            landmark("lamp_dome", "Lamp Dome", (W + 10.0, CY), (18, 18), 8.0, "Serenade base; low banded ironstone dome, lampresin oculus; beyond the east edge"),
+            landmark("glass_belfry", "Glass Belfry", (-5.0, CY), (7, 7), 22.0, "Aubade base, beyond the west edge (art/blender/maps/landmarks_art2.py): three coursed chalk stages, the dawnglass bell-lantern, a steel-ribbed spire; its court fills the rim 44-66"),
+            landmark("lamp_dome", "Lamp Dome", (W + 10.0, CY), (18.4, 18.4), 8.0, "Serenade base, beyond the east edge (art/blender/maps/landmarks_art2.py): ribbed ironstone dome on a coursed sandstone drum, lampresin windows and oculus; its court fills the rim 44-66"),
             landmark("lampwright_stall_a", "Lampwright stall", (5.5, 41.5), (3, 3), 4.0, "Aubade shop kiosk on the wall lip north of the shop circle"),
             landmark("lampwright_stall_s", "Lampwright stall", (W - 5.5, 41.5), (3, 3), 4.0, "Serenade shop kiosk"),
             landmark("the_seat", "the Seat", (CX, CY), (16, 16), 0.15, "the needle's base-stone, flush, carved rim and socket scar", flush=True),
             landmark("shadow_slab_w", "shadow slab", (CX - 5.6, 19.6), (2, 3), 4.0, "leaning basalt slab framing Longshade's north choke"),
-            landmark("shadow_slab_e", "shadow slab", (CX + 5.6, 19.6), (2, 3), 4.0, "its mirror"),
+            landmark("shadow_slab_e", "shadow slab", (CX + 5.6, 19.6), (2, 3), 4.0, "its mirror", rot=180),
             landmark("shadow_tip", "shadow tip", (CX, 24.0), (2, 2), 0.02, "the Standing Shadow's engraved point on the pit floor", flush=True),
             landmark("shaft_drum", "needle drum", (CX, 66.6), (3, 6.4), 2.2, "lying drum of the fallen needle (it IS the wall there); broken face south"),
             landmark("numeral_xi", "Elevenmark numeral XI", (55.3, 28.2), (9, 4), 5.0, "half-buried, tilted 20 degrees"),
@@ -542,6 +597,7 @@ def build_rift():
             landmark("numeral_iiii", "Fourmark numeral IIII", (W - 55.3, H - 28.2), (9, 4), 5.0, "half-buried"),
             landmark("noon_stone", "noon stone XII", (CX, 3.0), (3, 1.5), 9.0, "upright stele where the Noonline meets the north rim"),
             landmark("vi_slab", "VI slab", (CX, H - 3.0), (6, 2), 1.2, "lying flat: south of the South Road"),
+            *skirts_rift(W, H),
         ],
     }
     rec = {
@@ -642,6 +698,7 @@ def build_bridge():
             landmark("snap_crack", "the crack", (CX, CY), (1, 24), 0.05, "the fracture line across the Snap floor, engraved and lit from inside (emissive <= 0.8)", flush=True),
             landmark("lampwright_stall_a", "Lampwright stall", (5.0, 8.5), (3, 2.5), 3.5, "Aubade shop kiosk on the gorge lip north of the shop circle"),
             landmark("lampwright_stall_s", "Lampwright stall", (W - 5.0, 8.5), (3, 2.5), 3.5, "Serenade shop kiosk"),
+            *skirts_bridge(W, H),
         ],
         "colors": {"lane": "#988F7C", "clearing": "#7E786B", "inscription": "#B7B0A0"},
     }
@@ -728,6 +785,7 @@ def build_fray():
             landmark("fair_stand_ne", "fair stand", (W - 4.0, 4.0), (6, 6), 3.0, "as NW"),
             landmark("fair_stand_sw", "fair stand", (4.0, H - 4.0), (6, 6), 1.0, "south of the plate: kept low"),
             landmark("fair_stand_se", "fair stand", (W - 4.0, H - 4.0), (6, 6), 1.0, "south of the plate: kept low"),
+            *skirts_fray(C),
         ],
     }
     rec = {

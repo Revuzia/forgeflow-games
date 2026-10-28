@@ -1,0 +1,17 @@
+{
+  "$comment": "HUD-1 'ledger family' icon code. One source for the UI (glyphs.tsx: the fallback ground of an item with no art), the icon grader (tools/imagegen/icon_grade.py) and the icon probe (_harness/icon_probe.mjs). An item's family is the Dial Bar ledger family (Strike, Craft, Guard, Stride) that carries most of its stat weight: sum weight × value per family, highest wins; an item with no stats takes the family of its first tag in `tags`; a tier listed in `tiers` (boots) always takes that family. `ground` = [centre, edge] of the painted ground the item sits on (centre lit behind the subject, edge dark), all four VALE's own and far apart (CIELAB hue 32, 305, 188, 82 degrees at L* 54 centre / 27 edge; none near the old navy). Abilities sit on the owning fighter's vfx.signature hue (monsters and other owners on `abilityNeutral`). Weights only rank a record's own stats against each other; they are not prices.",
+  "families": {
+    "strike": { "ground": ["#CA6258", "#6A2D27"], "stats": { "ad": 35, "attackSpeed": 2500, "crit": 3000, "armorPen": 30, "lifesteal": 3000 } },
+    "craft":  { "ground": ["#8C73C5", "#463868"], "stats": { "ap": 20, "haste": 25, "magicPen": 30, "magicPenPct": 3000, "resRegen": 300, "healShieldPower": 3000 } },
+    "guard":  { "ground": ["#00938A", "#004A45"], "stats": { "hp": 2.7, "armor": 20, "resist": 18, "tenacity": 2000, "hpRegen": 100, "omnivamp": 3000 } },
+    "stride": { "ground": ["#A17B2B", "#523C0B"], "stats": { "moveSpeed": 1500, "range": 300 } }
+  },
+  "tiers": { "boots": "stride" },
+  "tags": {
+    "attack": "strike", "crit": "strike", "onhit": "strike",
+    "magic": "craft", "haste": "craft", "support": "craft", "utility": "craft",
+    "defense": "guard", "sustain": "guard", "jungle": "guard",
+    "speed": "stride", "vision": "stride"
+  },
+  "abilityNeutral": ["#857A6F", "#403A34"]
+}

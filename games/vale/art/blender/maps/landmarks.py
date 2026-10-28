@@ -13,8 +13,9 @@ content/maps/map_rift.json `art.terrain.landmarks` (the renderer places each at 
 Surfacing as structures.py (SDF volumes per material, painted tiling textures × vertex light). Glass glows
 neutral (never a relationship colour: the Hourbell carries that). Blender (x, y, z) = sim (x, -y, height)
 local to each landmark; +Y (Blender) is north. Output: art/out/maps/landmarks/<id>.glb.
-The Shaft drum, the Snap stubs, the Dawn Arch and the Lamp Gate are Art 2.0 builds now (env F1):
-art/blender/maps/landmarks_art2.py (structure_kit's painted, baked stone).
+The Shaft drum, the Snap stubs, the Dawn Arch, the Lamp Gate, the Glass Belfry, the Lamp Dome, the noon stone and the
+shadow slab are Art 2.0 builds now (env F1): art/blender/maps/landmarks_art2.py (structure_kit's painted, baked
+stone); this script no longer writes them. The skirts beyond the map bounds: art/blender/maps/skirts.py.
 """
 from __future__ import annotations
 
@@ -283,9 +284,10 @@ def fair_stand(tiers: int, step: float) -> dict:
     return {"chalk": st, "wood": wood}
 
 
+# the Glass Belfry, the Lamp Dome, the shadow slab and the noon stone are Art 2.0 builds now (env F1,
+# art/blender/maps/landmarks_art2.py); belfry(), lamp_dome(), shadow_slab() and noon_stone() above are the old SDF looks
 DESIGNS = {
-    "glass_belfry": (belfry, 16000, 0.06), "lamp_dome": (lamp_dome, 14000, 0.07), "lampwright_stall": (stall, 3000, 0.04),
-    "shadow_slab": (shadow_slab, 1500, 0.05), "noon_stone": (noon_stone, 3000, 0.05),
+    "lampwright_stall": (stall, 3000, 0.04),
     "vi_slab": (vi_slab, 1500, 0.04),
     "lampwright_cart": (lampwright_cart, 4000, 0.025), "hour_stone": (hour_stone, 700, 0.03),
     "fair_stand_high": (lambda: fair_stand(3, 1.0), 2000, 0.05), "fair_stand_low": (lambda: fair_stand(2, 0.5), 1500, 0.05),

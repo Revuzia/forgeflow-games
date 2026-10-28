@@ -25,7 +25,26 @@ chips), one baked base-colour atlas with AO multiplied in (the joints between st
 No team hue anywhere (the world carries none): no `accent` material. Blender (x, y, z) = sim (x, -y, height) local
 to the landmark; +Y (Blender) is north. Output: art/out/maps/landmarks/<id>.glb (quantized, WebP);
 report: art/renders/maps/build_report_landmarks_art2.json; looks: art/renders/maps/landmarks_art2_<id>.png.
-The older SDF landmarks (Belfry, Lamp Dome, slabs, numerals, FRAY props) stay in landmarks.py.
+  glass_belfry RIFT, Aubade's end (-5, 55) on the rim, 7 x 7 m, 22 m: three stages of coursed chalk blocks (bonded
+               corners), a glazed pointed lancet in each face of the first (voussoirs, every second proud, a keystone
+               with a blued-steel stud, a chalk hood, a steel mullion and transom over dawnglass), stepped corner
+               buttresses with dawnglass-tipped pinnacles, open pointed arches on corner piers above, blued-steel
+               bands and chalk cornices, the dawnglass bell-lantern in the top stage (neutral cool #BFD3E6, emissive
+               0.5, its own node) and a concave steel-ribbed spire; a dial-stone plinth and a chalk-flagged court on
+               the rim (sim x -14..-0.6, y 44..66) so the spawn view's corner of rim is dressed.
+  lamp_dome    RIFT, Serenade's end (180, 55) on the rim, 18.4 m across, 8 m (built at half size with structures.py's
+               helpers, then x2): an ironstone foot, a coursed sandstone drum with ironstone bands, twelve round-
+               arched lampresin windows between sandstone pilasters, a ribbed ironstone dome, the oculus a lampresin
+               lens (emissive 0.8, its own node) in a sandstone curb with iron hour-lugs; a footing down to the plain
+               past the rim and a sandstone-flagged court on the rim (sim x 170.6..184, y 44..66).
+  noon_stone   RIFT, (85, 3) on the north frame, 3 x 1.5 m, 9 m: a dial-stone plinth, four battered chalk drums, XII
+               raised in chalk in a sunk dial-stone panel on the south face, a blued-steel band, cornice and hipped
+               cap, the steel noon ring on top.
+  shadow_slab  RIFT, Longshade's north choke (79.4 / 90.6, 19.6; the east one turned 180), 2 x 3 m, 4 m: dressed
+               dark basalt in three courses leaning 9 deg toward the Noonline, a saddle-backed chalk coping (the
+               lit top edge), chalk-beaded arrises, the shadow's hour-line and a stud inlaid in steel on both faces.
+The SDF landmarks that remain (numerals, VI slab, the stalls, FRAY's cart, stones and stands) stay in landmarks.py;
+the skirts beyond the map bounds are art/blender/maps/skirts.py.
 """
 from __future__ import annotations
 
@@ -73,18 +92,20 @@ GATE_MATS = {
     "lampresin": ST.SERENADE_MATS["lampresin"],
 }
 LAMP_HEX, LAMP_EMIT = "#E8A04A", 0.8
+BELL_HEX, BELL_EMIT = "#BFD3E6", 0.5        # the Belfry's lantern glass: neutral cool (RIFT brief §2)
 
 
-def lamp_material(name: str = "lampglow"):
-    """The Lamp Gate's lamp: lampresin lit from inside (brief: emissive <= 0.8), not baked (its own node)."""
+def lamp_material(name: str = "lampglow", hexcol: str = LAMP_HEX, emit: float = LAMP_EMIT):
+    """The Lamp Gate's lamp: lampresin lit from inside (brief: emissive <= 0.8), not baked (its own node).
+    `bellglow`: the Belfry's bell-lantern, dawnglass lit neutral cool (never a relationship colour)."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     b = m.node_tree.nodes.get("Principled BSDF")
-    c = scene.hex_rgba(LAMP_HEX)
+    c = scene.hex_rgba(hexcol)
     b.inputs["Base Color"].default_value = c
     b.inputs["Roughness"].default_value = 0.3
     b.inputs["Emission Color"].default_value = c
-    b.inputs["Emission Strength"].default_value = LAMP_EMIT
+    b.inputs["Emission Strength"].default_value = emit
     return m
 
 
@@ -593,7 +614,7 @@ def face_arch(B, face, H, T, w, spring, k=1.25, rt=0.34, nv=4, mat="chalk", stud
     if key_shard:
         B.add("dawnglass", K.crystal(tuple(n * (H - T / 2) + np.array([0, 0, apex_o + 0.5])), 0.13, 0.34, 0.12, sides=4, band=0.04, phase=PI / 4))
     # the hood moulding along the extrados (a crisp lit line from the camera)
-    hood, _ = pointed(w, spring, k, 16, rt + 0.04)
+    hood, _ = pointed(w, spring, k, 16, rt + 0.06)
     path = [(-u, z) for u, z in hood] + [(u, z) for u, z in hood[::-1][1:]]
     nn = tuple(n)
     B.add(mat, K.sweep([tuple(n * H + t * u + np.array([0, 0, z])) for u, z in path], 0.12, 0.07, out_fn=lambda p, nn=nn: nn, sink=0.03))
@@ -700,7 +721,7 @@ def belfry_stage(B, rng, H, T, z0, z1, w, sill, spring, k, rt, glass=False, face
     skips = {f: [(-w / 2, w / 2, sl, sp), (-Ws, Ws, sp - 1e-3, ztop)] for f in faces}
     coursed_shaft(B, rng, H, T, zs, skips=skips, faces="sewn")
     for f in faces:
-        face_arch(B, f, H, T, w, sp, k, rt, key_shard=(f == "s" and glass))
+        face_arch(B, f, H, T, w, sp, k, rt)
         spandrels(B, f, H, T, w, sp, k, rt, Ws, ztop)
         n, t, rz = FACES[f]
         nv = np.array(n, float)
@@ -749,7 +770,7 @@ def glass_belfry(B, rng):
     H2, P2 = 2.2, 0.42
     z2a, z2b = z1 + 0.28, 12.1
     B.add("dialstone", K.box((0, 0, z2a + 0.06), (H2 - 0.05, H2 - 0.05, 0.06), 0.02))
-    belfry_stage(B, rng, H2, 2 * P2, z2a, z2b, w=2 * (H2 - 2 * P2), sill=z2a, spring=z2a + 2.3, k=1.2, rt=0.3)
+    belfry_stage(B, rng, H2, 2 * P2, z2a, z2b, w=2 * (H2 - 2 * P2), sill=z2a, spring=z2a + 1.5, k=1.0, rt=0.3)
     B.add("chalk", K.lathe(K.chamfer_profile([(0, z2a), (0.42, z2a), (0.42, z2b), (0, z2b)], 0.04), **O8))
     square_band(B, "steel", H2, z2b - 0.3, z2b - 0.12)
     B.add("chalk", K.box((0, 0, z2b + 0.1), (H2 + 0.2, H2 + 0.2, 0.16), 0.045))
@@ -757,7 +778,7 @@ def glass_belfry(B, rng):
     H3, P3 = 1.65, 0.32
     z3a, z3b = z2b + 0.26, 15.6
     B.add("dialstone", K.box((0, 0, z3a + 0.05), (H3 - 0.05, H3 - 0.05, 0.05), 0.02))
-    belfry_stage(B, rng, H3, 2 * P3, z3a, z3b, w=2 * (H3 - 2 * P3), sill=z3a, spring=z3a + 1.6, k=1.2, rt=0.24)
+    belfry_stage(B, rng, H3, 2 * P3, z3a, z3b, w=2 * (H3 - 2 * P3), sill=z3a, spring=z3a + 0.9, k=1.0, rt=0.22)
     square_band(B, "steel", H3, z3b - 0.26, z3b - 0.1)
     B.add("chalk", K.box((0, 0, z3b + 0.08), (H3 + 0.16, H3 + 0.16, 0.14), 0.04))
     # the dawnglass bell-lantern hung from a steel yoke (neutral cool, its own glow node: never a team hue)
@@ -769,7 +790,7 @@ def glass_belfry(B, rng):
         a = PI / 8 + kk * TAU / 8
         B.add("steel", K.sweep([((r + 0.02) * math.cos(a), (r + 0.02) * math.sin(a), z) for r, z in bell[1:6]], 0.06, 0.04,
                                out_fn=lambda p: (p[0], p[1], 0.0), sink=0.01))
-    B.add("steel", K.box((0, 0, zc + 2.05), (H3 - 0.3, 0.07, 0.07), 0.015))
+    B.add("steel", K.box((0, 0, zc + 2.05), (1.2, 0.07, 0.07), 0.015))
     B.add("steel", K.lathe([(0, zc + 1.9), (0.26, zc + 1.9), (0.26, zc + 2.0), (0, zc + 2.0)], 12))
     # the spire: concave, octagonal, steel-ribbed, a dawnglass finial
     ST.a_spire_cap(B, z3b + 0.22, 21.3, H3 + 0.05, panes=0, ribs=True, finial=0.62, sides=8)
@@ -792,7 +813,7 @@ def lamp_dome(B, rng):
     nw = 12
     for kk in range(nw):
         a = PI / nw + kk * TAU / nw
-        ST.s_window(B, a, R - 0.02, 1.08, 0.46, 0.32)
+        ST.s_window(B, a, R - 0.02, 1.06, 0.4, 0.24)
         ap = kk * TAU / nw                                              # sandstone pilasters between the windows
         v, f = K.box((R + 0.02, 0, (zs[0] + 1.96) / 2), (0.07, 0.16, (1.96 - zs[0]) / 2), 0.015)
         B.add("sandblock", (K.rotz(v, ap), f))
@@ -811,7 +832,7 @@ def lamp_dome(B, rng):
 
 def dome_court(B, rng):
     """The sandstone court round the Lamp Dome on the rim (built at full size, after the scale)."""
-    flags(B, "sandblock", rng, -4.4, 10.0, -11.0, 11.0, keep=lambda x, y: math.hypot(x, y) > 8.75, z=0.09)
+    flags(B, "courtsand", rng, -9.4, 4.0, -11.0, 11.0, keep=lambda x, y: math.hypot(x, y) > 9.1, z=0.09)
 
 
 # ── the noon stone (RIFT, (85, 3) on the north frame, 3 x 1.5 m, 9 m) ──────────────────────────────────
@@ -888,11 +909,10 @@ def shadow_slab(B, rng):
     sec = [(-th - 0.07, 0.0), (th + 0.07, 0.0), (th + 0.07, 0.1), (0.0, 0.3), (-th - 0.07, 0.1)]
     v, f = K.prism(sec, origin=(0, 0, ht), u=(1, 0, 0), v=(0, 0, 1), depth=2 * wd + 0.14, chamfer=0.03)
     B.add("chalk", lean_v(v, f))
-    # chalk quoins up the two ends (the lit edges the camera sees on the south end)
+    # a chalk bead up each end's two arrises (the lit edges the camera sees on the south end; the faces stay basalt)
     for sy in (-1, 1):
-        for i, (za, zb) in enumerate(((0.05, 0.85), (0.85, 1.75), (1.75, 2.65), (2.65, ht - 0.02))):
-            w_ = 0.16 if i % 2 else 0.24
-            B.add("chalk", lean_v(*K.box((0, sy * (wd - w_ + 0.03), (za + zb) / 2), (th + 0.035, w_, (zb - za) / 2 - 0.012), 0.03)))
+        for sx in (-1, 1):
+            B.add("chalk", lean_v(*K.box((sx * (th - 0.012), sy * (wd - 0.012), ht / 2), (0.04, 0.04, ht / 2 - 0.02), 0.015)))
     # the shadow's hour-line cut down both broad faces (a steel inlay) and a steel hour-stud on each
     for sx in (-1, 1):
         B.add("steel", lean_v(*K.box((sx * (th + 0.012), 0, 1.9), (0.02, 0.045, 1.55), 0.008)))
@@ -905,8 +925,8 @@ def shadow_slab(B, rng):
 
 
 SLAB_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"],
-             "basalt": dict(hex="#5D5966", chisel=0.9, var=0.09, streaks=0.3, chips=0.6, speckle=0.35, scale=0.55, rough=0.62,
-                            edge_light=(0.06, 0.85, 0.6, 0.1))}
+             "basalt": dict(hex="#4C4854", chisel=0.9, var=0.09, streaks=0.3, chips=0.6, speckle=0.35, scale=0.55, rough=0.62,
+                            edge_light=(0.04, 0.55, 0.6, 0.1))}
 NOON_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"]}
 BELFRY_MATS = dict(DAWN_MATS)
 DOME_MATS = {
@@ -916,6 +936,7 @@ DOME_MATS = {
     "ironstone": _IRON,
     "iron": GATE_MATS["iron"],
     "lampresin": ST.SERENADE_MATS["lampresin"],
+    "courtsand": dict(GATE_MATS["sandblock"], hex="#A18A6C"),                  # the court's flags: a step below the ribs
 }
 
 
@@ -942,10 +963,16 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
     col = scene.collection(name)
     fn, spec, size, ao_d = DESIGNS[name]
     B = K.Build(name, 3.0)
-    fn(B, _random.Random(scene.seed_of(name) + 3))
+    rng = _random.Random(scene.seed_of(name) + 3)
+    fn(B, rng)
+    if name in SCALE:
+        B.scale(SCALE[name])
+    if name in AFTER:
+        AFTER[name](B, rng)
     zmax = max(float(v[:, 2].max()) for lst in B.parts.values() for v, _, _, _ in lst)
     K.paint_set(spec, zmax)
     lamp_material()
+    lamp_material("bellglow", BELL_HEX, BELL_EMIT)
     objs = B.objects(col)
     body = objs["body"]
     K.drop_hidden_bottoms(body)
@@ -977,7 +1004,8 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 
 # where the gameplay camera stands relative to each landmark (it looks north, 52 deg down): the base-end
 # landmarks stand beyond the map's edge, so the camera sees the Dawn Arch from the east and the Lamp Gate from the west
-LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0)}
+LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
+        "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0)}
 
 
 def look(name, objs, lo, hi, fast):

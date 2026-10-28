@@ -1541,15 +1541,17 @@
      "at": [-5.0, 55.0],
      "size": [7.0, 7.0],
      "height": 22.0,
-     "note": "Aubade base; spire, chalk + dawnglass; beyond the west edge"
+     "note": "Aubade base, beyond the west edge (art/blender/maps/landmarks_art2.py): coursed chalk in three stages (a glazed lancet on each face of the first, open pointed arches on corner piers above), buttress pinnacles with dawnglass shards, blued-steel bands, the dawnglass bell-lantern (neutral cool, emissive 0.5) under a steel-ribbed spire; its chalk-flagged court fills the rim 44-66",
+     "value": 0.77
     },
     {
      "id": "lamp_dome", "model": "assets/maps/landmarks/lamp_dome.glb",
      "name": "Lamp Dome",
      "at": [180.0, 55.0],
-     "size": [18.0, 18.0],
+     "size": [18.4, 18.4],
      "height": 8.0,
-     "note": "Serenade base; low banded ironstone dome, lampresin oculus; beyond the east edge"
+     "note": "Serenade base, beyond the east edge (art/blender/maps/landmarks_art2.py): a ribbed ironstone dome on a coursed sandstone drum (ironstone bands, twelve round-arched lampresin windows between pilasters), a lampresin oculus (emissive 0.8); its sandstone-flagged court fills the rim 44-66",
+     "value": 0.85
     },
     {
      "id": "lampwright_stall_a", "model": "assets/maps/landmarks/lampwright_stall.glb",
@@ -1582,10 +1584,11 @@
      "at": [79.4, 19.6],
      "size": [2.0, 3.0],
      "height": 4.0,
-     "note": "leaning basalt slab framing Longshade's north choke"
+     "note": "dressed basalt slab leaning toward the Noonline, framing Longshade's north choke: a chalk coping and chalk-beaded arrises (the lit edges), the shadow's hour-line inlaid in steel (art/blender/maps/landmarks_art2.py)"
     },
     {
      "id": "shadow_slab_e", "model": "assets/maps/landmarks/shadow_slab.glb",
+     "rot": 180,
      "name": "shadow slab",
      "at": [90.6, 19.6],
      "size": [2.0, 3.0],
@@ -1648,7 +1651,7 @@
      "at": [85.0, 3.0],
      "size": [3.0, 1.5],
      "height": 9.0,
-     "note": "upright stele where the Noonline meets the north rim"
+     "note": "upright stele where the Noonline meets the north rim: four battered chalk drums on a dial-stone plinth, XII raised in a sunk panel on its south face, a blued-steel band, a hipped cap under the steel noon ring (art/blender/maps/landmarks_art2.py)"
     },
     {
      "id": "vi_slab", "model": "assets/maps/landmarks/vi_slab.glb",
@@ -1657,6 +1660,276 @@
      "size": [6.0, 2.0],
      "height": 1.2,
      "note": "lying flat: south of the South Road"
+    },
+    {
+     "id": "skirt_rift_n1", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [-14.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n2", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [8.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n3", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [30.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n4", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [52.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n5", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [74.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n6", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [96.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n7", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [118.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n8", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [140.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n9", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [162.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_n10", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "name": "Dialwood terraces",
+     "at": [184.0, -10.0],
+     "size": [22.0, 12.0],
+     "height": 8.2,
+     "note": "off-map skirt on the north rim (art/blender/maps/skirts.py): the rim walk, then three terraced Dialwood banks stepping down to the dial",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s1", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [-14.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s2", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [8.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s3", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [30.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s4", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [52.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s5", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [74.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s6", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [96.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s7", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [118.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s8", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [140.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s9", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [162.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_s10", "model": "assets/maps/landmarks/skirt_rift_low.glb",
+     "rot": 180,
+     "name": "Dialwood terraces",
+     "at": [184.0, 118.5],
+     "size": [22.0, 11.0],
+     "height": 3.9,
+     "note": "off-map skirt on the south rim, the camera side: kept low (rim walk, a young-Dialwood bed, one low terrace)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_w1", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": 90,
+     "name": "Dialwood terraces",
+     "at": [-10.0, 11.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the west rim (the Glass Belfry's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_w2", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": 90,
+     "name": "Dialwood terraces",
+     "at": [-10.0, 33.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the west rim (the Glass Belfry's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_w3", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": 90,
+     "name": "Dialwood terraces",
+     "at": [-10.0, 77.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the west rim (the Glass Belfry's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_w4", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": 90,
+     "name": "Dialwood terraces",
+     "at": [-10.0, 99.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the west rim (the Glass Belfry's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_e1", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": -90,
+     "name": "Dialwood terraces",
+     "at": [180.0, 11.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the east rim (the Lamp Dome's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_e2", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": -90,
+     "name": "Dialwood terraces",
+     "at": [180.0, 33.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the east rim (the Lamp Dome's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_e3", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": -90,
+     "name": "Dialwood terraces",
+     "at": [180.0, 77.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the east rim (the Lamp Dome's court fills 44-66)",
+     "value": 1.15
+    },
+    {
+     "id": "skirt_rift_e4", "model": "assets/maps/landmarks/skirt_rift.glb",
+     "rot": -90,
+     "name": "Dialwood terraces",
+     "at": [180.0, 99.0],
+     "size": [12.0, 22.0],
+     "height": 8.2,
+     "note": "off-map skirt on the east rim (the Lamp Dome's court fills 44-66)",
+     "value": 1.15
     }
    ]
   },

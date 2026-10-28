@@ -1,0 +1,152 @@
+{
+  "skirt_rift": {
+    "id": "skirt_rift",
+    "tris": 25438,
+    "trees": 21,
+    "size_m": [
+      22.79,
+      16.5
+    ],
+    "z": [
+      -3.5,
+      7.88
+    ],
+    "x": [
+      -11.38,
+      11.41
+    ],
+    "y": [
+      -9.38,
+      7.12
+    ],
+    "kb_raw": 2166,
+    "kb": 1121,
+    "texture": 2048,
+    "buried_faces_dropped": 1519
+  },
+  "skirt_rift_low": {
+    "id": "skirt_rift_low",
+    "tris": 16687,
+    "trees": 16,
+    "size_m": [
+      22.05,
+      13.9
+    ],
+    "z": [
+      -3.5,
+      3.72
+    ],
+    "x": [
+      -11.02,
+      11.02
+    ],
+    "y": [
+      -7.88,
+      6.02
+    ],
+    "kb_raw": 1556,
+    "kb": 747,
+    "texture": 2048,
+    "buried_faces_dropped": 698
+  },
+  "skirt_bridge": {
+    "id": "skirt_bridge",
+    "tris": 8077,
+    "trees": 0,
+    "size_m": [
+      24.52,
+      25.14
+    ],
+    "z": [
+      -0.54,
+      3.72
+    ],
+    "x": [
+      -12.29,
+      12.23
+    ],
+    "y": [
+      -12.64,
+      12.5
+    ],
+    "kb_raw": 1394,
+    "kb": 643,
+    "texture": 2048,
+    "buried_faces_dropped": 1073
+  },
+  "skirt_court": {
+    "id": "skirt_court",
+    "tris": 7216,
+    "trees": 0,
+    "size_m": [
+      21.99,
+      13.1
+    ],
+    "z": [
+      -0.13,
+      0.47
+    ],
+    "x": [
+      -10.99,
+      10.99
+    ],
+    "y": [
+      -6.38,
+      6.71
+    ],
+    "kb_raw": 624,
+    "kb": 347,
+    "texture": 1024,
+    "buried_faces_dropped": 0
+  },
+  "skirt_fray": {
+    "id": "skirt_fray",
+    "tris": 1158,
+    "trees": 0,
+    "size_m": [
+      6.53,
+      4.71
+    ],
+    "z": [
+      -0.08,
+      2.45
+    ],
+    "x": [
+      -3.34,
+      3.19
+    ],
+    "y": [
+      -2.81,
+      1.9
+    ],
+    "kb_raw": 245,
+    "kb": 98,
+    "texture": 1024,
+    "buried_faces_dropped": 98
+  },
+  "skirt_fray_low": {
+    "id": "skirt_fray_low",
+    "tris": 713,
+    "trees": 0,
+    "size_m": [
+      5.98,
+      3.2
+    ],
+    "z": [
+      -0.08,
+      0.81
+    ],
+    "x": [
+      -2.99,
+      2.99
+    ],
+    "y": [
+      -1.6,
+      1.6
+    ],
+    "kb_raw": 177,
+    "kb": 64,
+    "texture": 1024,
+    "buried_faces_dropped": 19
+  }
+}

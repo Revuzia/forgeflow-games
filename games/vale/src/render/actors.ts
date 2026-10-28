@@ -29,6 +29,10 @@
 //     a clean silhouette rim in the overlay pass (overlay/hover.ts) from the same prebuilt meshes, 2.5 px HARM
 //     (enemy and neutral: "this is what you attack"), 1.5 px ally colour on allies. Neither ever touches the
 //     scene graph.
+//   * Occluded silhouette (env F4; tokens hud.unitOutline.occluded = OCCLUDED): a fighter also carries a front-face
+//     copy of the hull in the ink xray pass (ink.ts), hidden until the renderer finds cover between it and the camera
+//     (terrain.coverToward); then the parts a cliff, a Dialwood crown or a landmark hides draw as a 42 % fill in its
+//     readability colour with a lit edge (depth test GREATER against the cover, drawn before every unit).
 //   * Victim reaction (tokens vfx.impact.victimFlash = VICTIM_FLASH): a rim-weighted flash copy of the same
 //     hull geometry (front faces, premultiplied): chalkstone for physical, orchid-rose for magic, the
 //     value-inverted Shade (ink body, noonwhite rim) for true damage, dawnglass when a shield took it all.
@@ -62,7 +66,10 @@ import { TICK_DT } from '../contracts/sim.ts';
 import type { Assets, LoadedModel } from './assets.ts';
 import { INK, type Palette } from './palette.ts';
 import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake } from './crowd.ts';
-import { flashMaterial, flashU, type FlashU, type InkPath, inkShadows, outlineMaterial, outlineU, type OutlineU, outlineUniforms, prepassMaterial } from './ink.ts';
+import {
+  flashMaterial, flashU, type FlashU, type InkPath, inkShadows, outlineMaterial, outlineU, type OutlineU, outlineUniforms, prepassMaterial,
+  XRAY_ORDER, xrayMaterial, xrayU, type XrayU,
+} from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
 import { structureMaterial } from './structures.ts';
@@ -91,6 +98,9 @@ export const UNIT_OUTLINE = {
   hoverEnemy: { px: 2.5, alpha: 1 },
   hoverAlly: { px: 1.5, alpha: 1 },
 } as const;
+/** tokens.json `hud.unitOutline.occluded` (env F4): a fighter's body where cover hides it, in its readability
+ *  colour; `fill` alpha, `edgePx` the lit edge (screen px), `biasM` the depth the cover must lead by */
+export const OCCLUDED = { fill: 0.42, edgePx: 1.5, biasM: 0.3 } as const;
 /** tokens.json `vfx.impact.victimFlash` (victimRimMs 80: ≈ 80 ms visible, exponential τ 70 ms, cleared by 150 ms) */
 export const VICTIM_FLASH = { k: { T1: 0.45, T2: 0.7, T4: 1.0 }, critMult: 1.3, tauMs: 70, endMs: 150 } as const;
 const FLASH_TAU = VICTIM_FLASH.tauMs / 1000;
@@ -551,6 +561,11 @@ export class Actor implements CrowdActor {
   private readonly inkMats: Material[] = [];
   private readonly hullMeshes: Mesh[] = [];
   private readonly flashMeshes: Mesh[] = [];
+  /** env F4: the occluded silhouette (fighters only; ink.ts xray): hidden unless the renderer finds cover between the
+   *  body and the camera */
+  private xrayU: XrayU | null = null;
+  private readonly xrayMeshes: Mesh[] = [];
+  private xrayOn = false;
   private outlinePx = -1;
   private readonly outlineColor = new Color();
   private outlineOpacity = -1;
@@ -961,7 +976,54 @@ export class Actor implements CrowdActor {
     this.outlinePx = -1;
     this.applyOutline();
     for (const m of this.flashMeshes) m.visible = true;
+    if (this.kind === 'fighter') this.buildXray(t, cm);
   }
+
+  /** env F4: one silhouette copy per hull part (the flash's front faces, same program), hidden; tokens.json
+   *  `hud.unitOutline.occluded` (OCCLUDED) sets its fill, edge and bias */
+  private buildXray(t: Template, cm: Mesh[]): void {
+    const u = (this.xrayU = xrayU());
+    u.uAlpha.value = OCCLUDED.fill; u.uPx.value = OCCLUDED.edgePx; u.uBias.value = OCCLUDED.biasM;
+    const mats: Partial<Record<InkPath, Material>> = {};
+    for (const part of t.hull) {
+      const lead = cm[part.lead];
+      if (!lead) continue;
+      const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';
+      let mat = mats[path];
+      if (!mat) { mat = mats[path] = xrayMaterial(path, u); this.inkMats.push(mat); }
+      let copy: Mesh;
+      if (path === 'skin') {
+        const sm = lead as SkinnedMesh;
+        const c = new SkinnedMesh(part.geometry, mat);
+        c.bind(sm.skeleton, sm.bindMatrix);
+        c.frustumCulled = false;
+        if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
+        c.boundingSphere = part.geometry.boundingSphere!.clone();
+        copy = c;
+      } else copy = new Mesh(part.geometry, mat);
+      copy.name = 'vale_xray';
+      copy.userData.valeOutline = true;
+      copy.userData.valeXray = true;
+      copy.castShadow = false; copy.receiveShadow = false;
+      copy.renderOrder = XRAY_ORDER;
+      copy.matrixAutoUpdate = false;
+      copy.visible = false;
+      lead.add(copy);
+      this.xrayMeshes.push(copy);
+    }
+  }
+
+  /** env F4: show the occluded silhouette in `color` (linear; the unit's readability colour) or hide it. Cheap to
+   *  call every frame. */
+  setXray(on: boolean, color: Color | null = null): void {
+    const want = on && this.xrayMeshes.length > 0;
+    if (want && color) this.xrayU!.uColor.value.copy(color);
+    if (want === this.xrayOn) return;
+    this.xrayOn = want;
+    for (const m of this.xrayMeshes) m.visible = want;
+  }
+  /** is the occluded silhouette drawn this frame (harness) */
+  get xray(): boolean { return this.xrayOn; }
 
   // ── crowd surface (crowd.ts CrowdActor) ────────────────────────────────────────────────────────
   /** the baked crowd form this actor draws through, or null (a per-actor model) */

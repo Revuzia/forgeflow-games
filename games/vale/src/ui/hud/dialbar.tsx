@@ -286,7 +286,7 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
       ) : null}
       <button ref={el} type="button" class={cls} {...tip} aria-label={def?.name ?? p.slot}
         onPointerDown={(e) => { if (e.button === 0) { e.preventDefault(); input.press(p.slot); } }}>
-        <AbilityGlyph def={def} src={cv.asset(def?.icon)} palette={f ? [f.palette.primary, f.palette.secondary] : undefined} ult={ult} spell={spell} />
+        <AbilityGlyph def={def} src={cv.asset(def?.icon)} palette={f ? [f.palette.primary, f.palette.secondary] : undefined} hue={f?.vfx?.signature} ult={ult} spell={spell} />
         <span class="aslot__glint" ref={glint} aria-hidden="true" />
         {s.onCd ? <span class="aslot__cd" ref={sweep} aria-hidden="true" /> : null}
         {s.onCd ? <span class="aslot__secs num" ref={secs} /> : null}

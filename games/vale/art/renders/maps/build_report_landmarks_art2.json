@@ -95,5 +95,103 @@
       "body",
       "lamp"
     ]
+  },
+  "glass_belfry": {
+    "id": "glass_belfry",
+    "tris": 34778,
+    "size_m": [
+      13.39,
+      21.97
+    ],
+    "height": 21.92,
+    "x": [
+      -9.0,
+      4.38
+    ],
+    "y": [
+      -10.98,
+      10.98
+    ],
+    "kb_raw": 3057,
+    "kb": 1703,
+    "texture": 2048,
+    "buried_faces_dropped": 3405,
+    "nodes": [
+      "body",
+      "lantern"
+    ]
+  },
+  "lamp_dome": {
+    "id": "lamp_dome",
+    "tris": 11140,
+    "size_m": [
+      18.58,
+      21.97
+    ],
+    "height": 8.01,
+    "x": [
+      -9.38,
+      9.2
+    ],
+    "y": [
+      -10.98,
+      10.98
+    ],
+    "kb_raw": 1216,
+    "kb": 576,
+    "texture": 2048,
+    "buried_faces_dropped": 1821,
+    "nodes": [
+      "body",
+      "lamp"
+    ]
+  },
+  "noon_stone": {
+    "id": "noon_stone",
+    "tris": 1418,
+    "size_m": [
+      3.0,
+      1.48
+    ],
+    "height": 9.06,
+    "x": [
+      -1.5,
+      1.5
+    ],
+    "y": [
+      -0.74,
+      0.74
+    ],
+    "kb_raw": 260,
+    "kb": 107,
+    "texture": 1024,
+    "buried_faces_dropped": 102,
+    "nodes": [
+      "body"
+    ]
+  },
+  "shadow_slab": {
+    "id": "shadow_slab",
+    "tris": 643,
+    "size_m": [
+      1.81,
+      2.9
+    ],
+    "height": 3.91,
+    "x": [
+      -1.07,
+      0.74
+    ],
+    "y": [
+      -1.45,
+      1.45
+    ],
+    "kb_raw": 180,
+    "kb": 63,
+    "texture": 1024,
+    "buried_faces_dropped": 41,
+    "nodes": [
+      "body"
+    ]
   }
 }

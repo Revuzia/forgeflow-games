@@ -5,11 +5,13 @@
 // FighterDef.ai.comboOrder priority, then by the ability's ai.use priority (knowledge.ts).
 //
 // Shopping (whenever PlayerView.canShop — at base, dead in a base_or_dead mode, at a shared shop):
-// a build plan derived from item TAGS and STATS scored for the fighter's ai.style and the stat its
-// kit scales with (knowledge.buildPlan), restricted to rules.itemPool. Order: a starter (the jungle
-// starter for a jungler) and consumables at the start (topped back up to two charges on base visits
-// during the laning phase, from what is left after the build); boots once the first core item is done
-// or the mid game starts, upgraded boots after the second; then core → apex items. A completed item
+// a build plan derived from item TAGS, STATS and ROLES scored for the fighter's ai.style, the stat its
+// kit scales with, the seat's role (the Lampglass path) and the ENEMY TEAM (anti-heal against healers,
+// tank breakers against front lines, burst wards against burst; knowledge.buildPlan), restricted to
+// rules.itemPool. Order: a starter (the jungle starter for a jungler) and consumables at the start
+// (topped back up to two charges on base visits during the laning phase, from what is left after the
+// build); boots once the first core item is done or the mid game starts, upgraded boots after the
+// third finished piece; then the plan's Gloam → Noonlit items. A completed item
 // is bought when sim.quoteBuy says it is affordable (owned components discount it), else its most
 // valuable affordable missing component (recursively). A full inventory sells consumables, then
 // starters, then wards to make room. Prices always come from quoteBuy; nothing is assumed.
@@ -79,7 +81,8 @@ export class Economy {
     const coreDone = plan.core.filter(has).length;
     const anyBoots = p.items.some((id) => !!id && this.k.idx.items.get(id)?.tier === 'boots');
     if (plan.boots.length > 0 && !anyBoots && (coreDone >= 1 || w.time > 480) && !this.skip.has(plan.boots[0])) return plan.boots[0];
-    if (plan.boots.length > 1 && anyBoots && !has(plan.boots[1]) && coreDone >= 2 && !this.skip.has(plan.boots[1])) return plan.boots[1];
+    // the boots upgrade waits for the third finished piece: finished pieces first
+    if (plan.boots.length > 1 && anyBoots && !has(plan.boots[1]) && coreDone >= 3 && !this.skip.has(plan.boots[1])) return plan.boots[1];
     for (const id of plan.core) if (!has(id) && !this.skip.has(id)) return id;
     return null;
   }

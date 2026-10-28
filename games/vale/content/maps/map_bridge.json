@@ -552,6 +552,198 @@
      "size": [3.0, 2.5],
      "height": 3.5,
      "note": "Serenade shop kiosk"
+    },
+    {
+     "id": "skirt_bridge_n1", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [0.5, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n2", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [22.6, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n3", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [44.8, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n4", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [66.9, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n5", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [89.1, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n6", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [111.2, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n7", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [133.4, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_n8", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "name": "far bank",
+     "at": [155.5, -13.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "off-map skirt (art/blender/maps/skirts.py): the gorge's north bank, raw rock ledges stepping up from the lip, fallen drums of the shaft",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s1", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [0.5, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s2", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [22.6, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s3", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [44.8, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s4", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [66.9, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s5", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [89.1, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s6", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [111.2, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s7", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [133.4, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_bridge_s8", "model": "assets/maps/landmarks/skirt_bridge.glb",
+     "rot": 180,
+     "name": "far bank",
+     "at": [155.5, 57.0],
+     "size": [24.0, 24.0],
+     "height": 3.9,
+     "note": "its mirror on the south bank",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_court_w1", "model": "assets/maps/landmarks/skirt_court.glb",
+     "rot": 90,
+     "name": "terrace court",
+     "at": [-7.0, 11.0],
+     "size": [13.0, 22.0],
+     "height": 0.45,
+     "note": "off-map skirt on the Dawn Arch's rim: dial-stone flags, a chalk kerb at the rim's outer edge",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_court_w2", "model": "assets/maps/landmarks/skirt_court.glb",
+     "rot": 90,
+     "name": "terrace court",
+     "at": [-7.0, 33.0],
+     "size": [13.0, 22.0],
+     "height": 0.45,
+     "note": "off-map skirt on the Dawn Arch's rim: dial-stone flags, a chalk kerb at the rim's outer edge",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_court_e1", "model": "assets/maps/landmarks/skirt_court.glb",
+     "rot": -90,
+     "name": "terrace court",
+     "at": [163.0, 11.0],
+     "size": [13.0, 22.0],
+     "height": 0.45,
+     "note": "its mirror on the Lamp Gate's rim",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_court_e2", "model": "assets/maps/landmarks/skirt_court.glb",
+     "rot": -90,
+     "name": "terrace court",
+     "at": [163.0, 33.0],
+     "size": [13.0, 22.0],
+     "height": 0.45,
+     "note": "its mirror on the Lamp Gate's rim",
+     "value": 1.0
     }
    ],
    "colors": {"lane": "#686254", "clearing": "#4B4740", "inscription": "#777469", "laneGrout": "#605A4C", "moss": "#34402F", "cliffFace": "#322F2B", "cliffLip": "#524F45", "edgeLight": "#716D63", "flank": "#272523", "rock": "#33353C", "mist": "#3F4963", "grassRoot": "#2B362C", "grassTip": "#8F986F", "lit": "#FFE2B8", "plazaAubade": "#5F6A6C", "plazaSerenade": "#685A45", "inlayAubade": "#868C91", "inlaySerenade": "#856234"}

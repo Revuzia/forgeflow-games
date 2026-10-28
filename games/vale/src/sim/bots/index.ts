@@ -20,7 +20,7 @@ import type { MatchSetup, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import type { BotController, BotHost } from '../sim.ts';
 import { Bot } from './bot.ts';
 import { difficultyOf } from './difficulty.ts';
-import { buildKnowledge, buildPlan } from './knowledge.ts';
+import { buildKnowledge, buildPlan, type FighterProfile } from './knowledge.ts';
 import { BotMatch } from './match.ts';
 import { assignLanes, type LaneAssign } from './team.ts';
 
@@ -45,7 +45,10 @@ export function createBots(catalog: CatalogT, setup: MatchSetup): BotFactory {
     let la = lanes.get(seat.team);
     if (!la) { la = assignLanes(k, seat.team); lanes.set(seat.team, la); }
     const a = la.get(seat.player);
-    const plan = buildPlan(k.idx, k.rules, prof, !!a?.jungle);
-    return new Bot(match, seat, difficultyOf(seat.botDifficulty), host.rng, prof, plan, !!a?.support || prof.style === 'warden');
+    const support = !!a?.support || prof.style === 'warden';
+    // the build reads the enemy team (public from the draft) and the seat's role; the salt gives each seat its own taste
+    const enemies = setup.seats.filter((s) => s.team !== seat.team).map((s) => k.profiles.get(s.fighter)).filter((x): x is FighterProfile => !!x);
+    const plan = buildPlan(k.idx, k.rules, prof, !!a?.jungle, { support, enemies, salt: (setup.seed | 0) * 31 + seat.player });
+    return new Bot(match, seat, difficultyOf(seat.botDifficulty), host.rng, prof, plan, support);
   };
 }

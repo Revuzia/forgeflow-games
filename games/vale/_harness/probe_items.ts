@@ -123,7 +123,9 @@ section('catalog: ids, frames, counts', () => {
   const n = (f: Frame): number => byFrame(f).length;
   const counts = { total: ITEMS.length, starter: n('starter'), consumable: n('consumable'), slate: n('slate'), verdigris: n('verdigris'), gloam: n('gloam'), noonlit: n('noonlit'), boots: n('boots_base') + n('boots_up') };
   console.log(`  counts ${JSON.stringify(counts)}`);
-  check('32-40 items', counts.total >= 32 && counts.total <= 40, counts.total);
+  // W4 G7 (2026-10-28): the finished line grew from 13 to 31 pieces (VALE counters: the Lampblack anti-heal family, tank
+  // breakers, burst wards, the Lampglass path), so the catalog is 50-60 items
+  check('50-60 items', counts.total >= 50 && counts.total <= 60, counts.total);
   check('starters: 3-5 (one per broad style + jungle)', counts.starter >= 3 && counts.starter <= 5, counts.starter);
   check('consumables: potion-like, ward-like, fray tonic', counts.consumable === 3 &&
     byFrame('consumable').some((i) => JSON.stringify(i.active?.effects ?? []).includes('"heal"') && inPool(i, 'rift')) &&
@@ -131,8 +133,9 @@ section('catalog: ids, frames, counts', () => {
     byFrame('consumable').some((i) => i.pools.length === 1 && i.pools[0] === 'fray'));
   check('Slate basics: 8-10', counts.slate >= 8 && counts.slate <= 10, counts.slate);
   check('Verdigris components: 6-8', counts.verdigris >= 6 && counts.verdigris <= 8, counts.verdigris);
-  check('Gloam cores: 8-10', counts.gloam >= 8 && counts.gloam <= 10, counts.gloam);
-  check('Noonlit apex: 4-6', counts.noonlit >= 4 && counts.noonlit <= 6, counts.noonlit);
+  check('Gloam cores: 18-22', counts.gloam >= 18 && counts.gloam <= 22, counts.gloam);
+  check('Noonlit apex: 9-12 (one per dial hour at most)', counts.noonlit >= 9 && counts.noonlit <= 12, counts.noonlit);
+  check('about 30 finished pieces (Gloam + Noonlit: 28-34)', counts.gloam + counts.noonlit >= 28 && counts.gloam + counts.noonlit <= 34, counts.gloam + counts.noonlit);
   check('boots: one base + 3 upgrades', n('boots_base') === 1 && n('boots_up') === 3);
 });
 
@@ -161,7 +164,11 @@ section('catalog: recipes and tiers', () => {
     if (f === 'verdigris' && (nStats !== 2 || comps.some((c) => c !== 'slate'))) tierBad.push(`${it.id}: Verdigris = two stats from Slate parts`);
     if (f === 'gloam' && (comps.some((c) => c !== 'slate' && c !== 'verdigris') || it.passives.length !== 1 || it.passives[0].triggers.length === 0 || it.active))
       tierBad.push(`${it.id}: Gloam = Slate/Verdigris parts and exactly one triggered passive`);
-    if (f === 'gloam' && it.uniqueGroup !== it.id) tierBad.push(`${it.id}: Gloam is unique per fighter (uniqueGroup = its id)`);
+    // a Gloam is unique per fighter: its own group, or a FAMILY group that only Gloam pieces share (the Lampblack anti-heal
+    // pieces: Wounded never stacks, so one per fighter)
+    const fam = ITEMS.filter((x) => x.uniqueGroup === it.uniqueGroup);
+    if (f === 'gloam' && it.uniqueGroup !== it.id && !(fam.length >= 2 && fam.every((x) => x.tier === 'core')))
+      tierBad.push(`${it.id}: Gloam is unique per fighter (uniqueGroup = its id or a Gloam-only family)`);
     // W4 re-key (originality F4): the one-Noonlit cap is gone; every Noonlit item stands on the dial (dial.hour, dial.apart)
     if (f === 'noonlit' && (comps.some((c) => c !== 'slate' && c !== 'verdigris') || it.uniqueGroup !== undefined || !it.dial ||
       !(it.active || it.passives.some((p) => p.triggers.length > 0)))) tierBad.push(`${it.id}: Noonlit = parts, on the dial (no unique group), a passive or an active`);
@@ -324,7 +331,7 @@ interface Plan { open: string[]; final: string[] }
 const RIFT_FINAL: Record<Cls, string[]> = {
   plinth: ['felt_treads', 'ironstone_mantle', 'warning_bell', 'seatstone', 'dialcutter', 'kindly_lamp'],
   breaker: ['felt_treads', 'dialcutter', 'hourcleaver', 'shadecut', 'ironstone_mantle', 'warning_bell'],
-  striker: ['felt_treads', 'shadecut', 'hourcleaver', 'dialcutter', 'splitlight_bow', 'warning_bell'],
+  striker: ['felt_treads', 'shadecut', 'needlefall', 'dialcutter', 'quarry_pick', 'warning_bell'],
   slinger: ['dust_runners', 'splitlight_bow', 'sunstring', 'shadecut', 'dialcutter', 'warning_bell'],
   caster: ['chalk_slippers', 'focal_lens', 'noonglass', 'inkglass_rod', 'warning_bell', 'kindly_lamp'],
   tender: ['chalk_slippers', 'kindly_lamp', 'shelter_lamp', 'warning_bell', 'ironstone_mantle', 'focal_lens'],
@@ -365,7 +372,7 @@ const sumStats = (ids: string[]): Record<string, number> => {
 const NEEDS: Record<Cls, (s: Record<string, number>, tags: Set<string>, pool: Pool) => string[]> = {
   plinth: (s, _t, p) => { const f = p === 'fray' ? 0.6 : 1; return [s.hp >= 1000 * f ? '' : 'hp', s.armor >= 60 * f ? '' : 'armor', s.resist >= 60 * f ? '' : 'resist']; },
   breaker: (s, _t, p) => { const f = p === 'fray' ? 0.5 : 1; return [s.ad >= 80 * f ? '' : 'ad', s.hp >= 600 * f ? '' : 'hp']; },
-  striker: (s, _t, p) => [s.ad >= (p === 'fray' ? 45 : 90) ? '' : 'ad', (s.armorPen ?? 0) >= 15 ? '' : 'armorPen'],
+  striker: (s, _t, p) => [s.ad >= (p === 'fray' ? 45 : 90) ? '' : 'ad', (s.armorPen ?? 0) >= 15 || (s.armorPenPct ?? 0) >= 0.2 ? '' : 'armorPen'],
   slinger: (s, t, p) => [(s.attackSpeed ?? 0) >= 0.5 ? '' : 'attackSpeed', (s.crit ?? 0) >= 0.3 ? '' : 'crit', p === 'fray' || t.has('onhit') ? '' : 'onhit'],
   caster: (s, _t, p) => [(s.ap ?? 0) >= (p === 'fray' ? 100 : 150) ? '' : 'ap', (s.haste ?? 0) >= 20 ? '' : 'haste', (s.magicPen ?? 0) + (s.magicPenPct ?? 0) * 100 >= 8 ? '' : 'pen'],
   tender: (s, _t, p) => [p === 'fray' || (s.healShieldPower ?? 0) >= 0.1 ? '' : 'healShieldPower', (s.haste ?? 0) >= 20 ? '' : 'haste', (s.ap ?? 0) >= 40 ? '' : 'ap'],
@@ -778,6 +785,125 @@ section('item passives and actives fire in the sim', () => {
     const a = arena('rift', 'tender', ['shelter_lamp']);
     const [r, ev] = castNow(a, itemSlot(a, 'shelter_lamp'), 0.5);
     check('Shelter Lamp: Shelter shields you and nearby allies', r === 'ok' && ofType(ev, 'shield').some((s) => s.dst === a.e.id) && ofType(ev, 'shield').some((s) => s.dst === a.ally!.id), r);
+  }
+  // ── W4 G7 (2026-10-28): the counters and the wider finished line ──
+  const griev = (x: Entity): number => x.statuses.filter((s) => s.kind === 'grievous').reduce((m, s) => Math.max(m, s.power), 0);
+  {
+    const a = arena('rift', 'breaker', ['lampblack_edge']);
+    castA1(a);
+    const one = griev(a.foe);
+    run(a.sim, 0.5); castA1(a);
+    check('Lampblack Edge: one hit leaves no mark of soot, the second within 4 s Wounds 50%', one === 0 && near(griev(a.foe), 0.5), { one, two: griev(a.foe) });
+  }
+  {
+    const a = arena('rift', 'plinth', ['lampblack_coat']);
+    const far = spawnUnit(a.w, 'shieldwick', 1, 52, 20);
+    run(a.sim, 1.5);
+    check('Lampblack Coat: an enemy fighter within 4 m is Wounded 30%; a Wick is not', near(griev(a.foe), 0.3) && griev(far) === 0, griev(a.foe));
+  }
+  {
+    const a = arena('rift', 'caster', ['lampblack_lens']);
+    castA1(a);
+    const before = griev(a.foe);
+    applyStatus(a.w, a.e, a.foe, 'slow', 1.5, { power: 0.2 });
+    check('Lampblack Lens: a plain hit does not Wound; slowing a fighter Wounds it 50%', before === 0 && near(griev(a.foe), 0.5), { before, after: griev(a.foe) });
+  }
+  {
+    const a = arena('rift', 'striker', ['quarry_pick']);
+    const ev = castA1(a);
+    const b = arena('rift', 'striker', ['quarry_pick']);
+    b.foe.hp = b.foe.maxHp * 0.5;
+    const ev2 = castA1(b);
+    check('Quarry Pick: a hit on a fighter above 60% adds 10 + 3.5% max-health physical damage; below 60% it does not',
+      dmgBy(ev, 'quarry_pick_split').some((d) => d.dst === a.foe.id && d.dtype === 'phys') && dmgBy(ev2, 'quarry_pick_split').length === 0);
+  }
+  {
+    const a = arena('rift', 'caster', ['deepglass_rod']);
+    const ev1 = castA1(a); run(a.sim, 0.5); const ev2 = castA1(a);
+    check('Deepglass Rod: the first ability hit per 6 s adds 20 + 4% max-health magic damage, the next does not',
+      dmgBy(ev1, 'deepglass_rod_weight').filter((d) => d.dtype === 'magic').length === 1 && dmgBy(ev2, 'deepglass_rod_weight').length === 0);
+  }
+  for (const [cls, id, buff] of [['caster', 'glass_veil', 'glass_veil_settle'], ['slinger', 'glintmail', 'glintmail_set_against']] as const) {
+    const a = arena('rift', cls, [id]);
+    const arm0 = a.e.stats.armor;
+    hit(a, a.foe, a.e, 20);
+    a.sim.step();
+    const s1 = a.e.shield;
+    hit(a, a.foe, a.e, 20);
+    check(`${item(id).name}: the first fighter hit sets a shield and +15 armor/resist (once per 18 s)`, s1 > 0 && a.e.buffs.some((b) => b.id === buff) && near(a.e.stats.armor - arm0, 15, 1e-6) && a.e.shield <= s1,
+      { s1, d: a.e.stats.armor - arm0 });
+  }
+  {
+    const a = arena('rift', 'breaker', ['dawnspur']);
+    const ev1 = castA1(a); run(a.sim, 0.5); const ev2 = castA1(a);
+    check('Dawnspur: the first damage on a fighter in 8 s adds physical damage and a slow, the next does not',
+      dmgBy(ev1, 'dawnspur_first_light').length === 1 && dmgBy(ev2, 'dawnspur_first_light').length === 0 && a.foe.statuses.some((s) => s.kind === 'slow'));
+  }
+  {
+    const a = arena('rift', 'breaker', ['resin_maul']);
+    a.e.hp = a.e.maxHp - 300;
+    const ev = castA1(a);
+    check('Resin Maul: an ability hit on a fighter heals 12 + 2/level + 1.5% max health', healOf(ev, a.e).some((h) => near(h, 12 + 2 * a.e.level + 0.015 * a.e.maxHp, 1e-6)), healOf(ev, a.e));
+  }
+  {
+    const a = arena('rift', 'slinger', ['shadowpin']);
+    cmd(a.sim, { type: 'attack', target: a.foe.id });
+    const ev = run(a.sim, 6);
+    check('Shadowpin: the fourth attack on one fighter pins its shadow (damage + slow)', dmgBy(ev, 'shadowpin_pin').length >= 1 &&
+      ofType(ev, 'status').some((s) => s.dst === a.foe.id && s.status === 'slow'), ofType(ev, 'damage').filter((d) => d.src === a.e.id).map((d) => d.ability ?? 'attack').slice(0, 8));
+  }
+  {
+    const a = arena('rift', 'plinth', ['bellrope']);
+    const ev0 = during(a.w, () => { applyStatus(a.w, a.e, a.foe, 'slow', 1, { power: 0.2 }); });
+    const ev = during(a.w, () => { applyStatus(a.w, a.e, a.foe, 'stun', 0.5); }).concat(run(a.sim, 0.1));
+    check('Bellrope: a slow does not toll; a stun shields and hastes you and the nearby ally', ofType(ev0, 'shield').length === 0 &&
+      ofType(ev, 'shield').some((s) => s.dst === a.e.id) && ofType(ev, 'shield').some((s) => s.dst === a.ally!.id) && a.ally!.statuses.some((s) => s.kind === 'haste'));
+  }
+  {
+    const a = arena('rift', 'tender', ['almslamp']);
+    const ev = hit(a, a.e, a.foe, 1e6, 'true').concat(run(a.sim, 0.1));
+    check('Almslamp: a takedown pays 35 more Gleam', ofType(ev, 'gold').some((g) => g.player === 0 && g.amount === 35), ofType(ev, 'gold').filter((g) => g.player === 0));
+  }
+  {
+    const a = arena('rift', 'plinth', ['callstone']);
+    const arm0 = a.e.stats.armor;
+    const [r] = castNow(a, itemSlot(a, 'callstone'), 0.3);
+    check('Callstone: Call Out taunts the enemy fighter and hardens you (+30 armor/resist)', r === 'ok' && a.foe.statuses.some((s) => s.kind === 'taunt') && near(a.e.stats.armor - arm0, 30, 1e-6), r);
+  }
+  {
+    const a = arena('rift', 'slinger', ['hourstring']);
+    cmd(a.sim, { type: 'attack', target: a.foe.id });
+    let ev: SimEvent[] = [];
+    for (let i = 0; i < 12 && dmgBy(ev, 'hourstring_strike').length === 0; i++) { a.foe.hp = a.foe.maxHp; ev = ev.concat(run(a.sim, 2)); }
+    const n = ofType(ev, 'damage').filter((d) => d.src === a.e.id && !d.ability).length;
+    check('Hourstring: the twelfth attack on fighters strikes the hour (area magic damage + slow)', dmgBy(ev, 'hourstring_strike').some((d) => d.dst === a.foe.id && d.dtype === 'magic'), { attacks: n });
+  }
+  {
+    const a = arena('rift', 'striker', ['needlefall']);
+    castA1(a);
+    const cd0 = a.e.slots[SLOT_A1]!.cooldown;
+    hit(a, a.e, a.foe, 1e6, 'true');
+    check('Needlefall: a takedown cuts the cooldowns left by 30% and hastes you 30%', cd0 > 0 && near(a.e.slots[SLOT_A1]!.cooldown, cd0 * 0.7, 1e-6) &&
+      a.e.statuses.some((s) => s.kind === 'haste' && near(s.power, 0.3)), { cd0, cd: a.e.slots[SLOT_A1]?.cooldown });
+  }
+  {
+    const a = arena('rift', 'plinth', ['stillhour']);
+    const arm0 = a.e.stats.armor;
+    const [r] = castNow(a, itemSlot(a, 'stillhour'), 0.2);
+    check('Stillhour: Hold the Hour roots you and adds 80 armor and resist', r === 'ok' && a.e.statuses.some((s) => s.kind === 'root') && near(a.e.stats.armor - arm0, 80, 1e-6), { r, d: a.e.stats.armor - arm0 });
+  }
+  {
+    const a = arena('rift', 'caster', ['afterlight']);
+    const ev0 = castA1(a);
+    const ev = ev0.concat(run(a.sim, 1.3));
+    check('Afterlight: the first ability hit lands again 1 s later where the fighter stood', dmgBy(ev0, 'afterlight_lands_twice').length === 0 &&
+      dmgBy(ev, 'afterlight_lands_twice').some((d) => d.dst === a.foe.id && d.dtype === 'magic'));
+  }
+  {
+    const a = arena('rift', 'tender', ['watchbell']);
+    const ev = run(a.sim, 10.5);
+    check('Watchbell: every 10 s enemy fighters within 9 m are revealed and slowed', ofType(ev, 'status').some((s) => s.dst === a.foe.id && s.status === 'reveal') &&
+      ofType(ev, 'status').some((s) => s.dst === a.foe.id && s.status === 'slow'));
   }
   { // consumables
     const a = arena('rift', 'breaker', ['sap_flask']);

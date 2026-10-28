@@ -73,8 +73,14 @@ import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep
 import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, laneDecals, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
 import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
 import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
-import { INK_SWAY, swayDepth } from './ink.ts';
+import { INK_SWAY, OCCLUDER_ORDER, swayDepth } from './ink.ts';
 import { CellInstances, type CullView, decimate, splitGeometry } from './instance_cull.ts';
+
+/** env F4: the cover grid's cell (m), how far along the sight line from a unit cover counts (m), and the lowest
+ *  block that counts as cover (m; a unit's feet stay in view over an hour stone lower than this) */
+const COVER_CELL_M = 0.5;
+const COVER_REACH_M = 4.5;
+const COVER_MIN_H = 0.9;
 
 type V2 = readonly [number, number];
 type Poly = readonly V2[];
@@ -330,6 +336,11 @@ export interface TerrainBuild {
   setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void;
   /** standing height at a map point: a cliff block's top inside a wall polygon, else 0 */
   groundAt(x: number, y: number): number;
+  /** env F4: does cover (a cliff block with its Dialwood, a landmark) stand between a unit at map (x, y) and a camera
+   *  at map (camX, camY), `camH` m up, within `reach` m of the unit along that sight line? A cheap gate on a 0.5 m
+   *  grid: the occluded silhouette (actors.ts setXray) draws only for the units it passes, and its depth test decides
+   *  the pixels. The cover meshes draw at OCCLUDER_ORDER (ink.ts), before the silhouette */
+  coverToward(x: number, y: number, camX: number, camY: number, camH: number, reach?: number): boolean;
   /** r12 B4: the instanced scatter (grass, Dialwood, rocks, clutter) keeps only the cells the camera can show or
    *  shadow into (instance_cull.ts); call every frame after the camera moved (null: draw every cell); a view whose
    *  version it already culled for costs nothing unless a set arrived since */
@@ -573,6 +584,13 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     if (o.name === 'vale_scatter' || o.name.startsWith('vale_')) return;
     o.updateMatrixWorld(true);
     o.traverse((m) => { if ((m as Mesh).isMesh && !(m as InstancedMesh).isInstancedMesh && !(m as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) caster(m as Mesh); });
+    // env F4: a landmark's opaque stone is cover, drawn before the occluded silhouette
+    o.traverse((m) => {
+      const mesh = m as Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (mats.every((x) => !x.transparent)) mesh.renderOrder = OCCLUDER_ORDER;
+    });
   });
   /** drop a scatter part's instance sets (setScatter rebuilds) */
   const unchunk = (g: Group): void => {
@@ -1136,6 +1154,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   for (const g of wallParts) {
     const wallMesh = new Mesh(g, wallMat);
     wallMesh.castShadow = true; wallMesh.receiveShadow = true; wallMesh.name = 'vale_cliffs';
+    wallMesh.renderOrder = OCCLUDER_ORDER;      // env F4: cover draws before the occluded silhouette
     group.add(wallMesh);
     caster(wallMesh);
   }
@@ -1177,7 +1196,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     patchWorldMaterial(spMat);
     if (stackIdx.length) {
       const stacks = new Mesh(spGeo, spMat);
-      stacks.name = 'vale_rock_stacks'; stacks.receiveShadow = true;
+      stacks.name = 'vale_rock_stacks'; stacks.receiveShadow = true; stacks.renderOrder = OCCLUDER_ORDER;
       group.add(stacks);
     }
     disposables.push(spGeo, spMat);
@@ -1669,7 +1688,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     // Dialwood variant is under the spec's 750-triangle near budget (tall 674, broad 584, squat 552, lean 540, young
     // 350: art/out/props/dialwood_*.glb), and at the widest zoom the frame corners lie past 15 m, where a 250-triangle
     // crown would read as a cut-out on screen; only the trees that just shadow into view take the LOD crown.
-    return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined, 0,
+    return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined, OCCLUDER_ORDER,
       { margin: 1, lod: sway && shadows ? { geometry: treeLod(g), dist: Infinity } : undefined })).filter((g) => g.children.length > 0);
   };
   /** r12 B4 Dialwood LOD: a ≤ 250-triangle crown for the trees that only shadow into view (instance_cull.ts) */
@@ -1727,7 +1746,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         s.set(t.s * 1.25, t.s * 1.15, t.s * 1.25); pos.set(t.x, t.h + th * 0.82, t.y);
         canopies.push({ m: new Matrix4().compose(pos, q, s), c: new Color(0.82 + t.tint * 0.3, 0.86 + t.tint * 0.24, 0.84 + t.tint * 0.2).multiplyScalar(pv.tree) });
       }
-      scatterParts.push(chunked(trunkGeo, trunkMat, trunks, 'vale_trunks'), chunked(canopyGeo, leafMat, canopies, 'vale_canopies'));
+      scatterParts.push(chunked(trunkGeo, trunkMat, trunks, 'vale_trunks', true, undefined, OCCLUDER_ORDER),
+        chunked(canopyGeo, leafMat, canopies, 'vale_canopies', true, undefined, OCCLUDER_ORDER));
     }
     if ((props.rock && !props.rock.length) || awaiting.has('rock')) {
       // an explicit empty list: no boulders (or the authored ones are still loading)
@@ -1740,7 +1760,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       scatterParts.push(chunked(rockGeo, stoneMat, boulders.map((b) => {
         q.setFromAxisAngle(up, b.r); s.set(b.s * 1.2, b.s * 0.8, b.s); pos.set(b.x, b.s * 0.15, b.y);
         return { m: new Matrix4().compose(pos, q, s), c: pvC(pv.rock) };
-      }), 'vale_boulders'));
+      }), 'vale_boulders', true, undefined, OCCLUDER_ORDER));
     }
     // stones fall back to the rock variants only when the map names no stone list at all
     const stoneGeos = props.stone ?? props.rock;
@@ -1755,7 +1775,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       scatterParts.push(chunked(rockGeo, stoneMat, stones.map((p) => {
         q.setFromAxisAngle(up, p.r); s.set(p.s, p.s * 0.6, p.s * 0.85); pos.set(p.x, p.s * 0.1, p.y);
         return { m: new Matrix4().compose(pos, q, s), c: pvC(pv.stone) };
-      }), 'vale_stones', false));
+      }), 'vale_stones', false, undefined, OCCLUDER_ORDER));
     }
     // ground clutter: none on Low, half on Medium, all on High/Ultra; never casts shadows
     const keepC = level === 0 ? 0 : level === 1 ? 0.5 : 1;
@@ -1811,6 +1831,42 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     });
   }
 
+  // env F4: the cover grid behind coverToward (built on first use): raised cliff blocks (with their Dialwood) and
+  // landmark footprints, dilated by the crown's lean over a lip (≤ 0.8 m)
+  let coverGrid: { x0: number; y0: number; w: number; h: number; cells: Uint8Array } | null = null;
+  const buildCoverGrid = (): { x0: number; y0: number; w: number; h: number; cells: Uint8Array } => {
+    const pad = 4, x0 = -pad, y0 = -pad;
+    const w = Math.ceil((SX + 2 * pad) / COVER_CELL_M), h = Math.ceil((SY + 2 * pad) / COVER_CELL_M);
+    const cells = new Uint8Array(w * h);
+    const grow = 0.8;
+    const fill = (minX: number, minY: number, maxX: number, maxY: number, inside: (px: number, py: number) => boolean): void => {
+      const i0 = Math.max(0, Math.floor((minX - grow - x0) / COVER_CELL_M)), i1 = Math.min(w - 1, Math.floor((maxX + grow - x0) / COVER_CELL_M));
+      const j0 = Math.max(0, Math.floor((minY - grow - y0) / COVER_CELL_M)), j1 = Math.min(h - 1, Math.floor((maxY + grow - y0) / COVER_CELL_M));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        if (cells[j * w + i]) continue;
+        const px = x0 + (i + 0.5) * COVER_CELL_M, py = y0 + (j + 0.5) * COVER_CELL_M;
+        if (inside(px, py)) cells[j * w + i] = 1;
+      }
+    };
+    walls.forEach((poly, i) => {
+      if (chasm[i] || replaced[i] || !(wallHeights[i] > COVER_MIN_H)) return;
+      const b = wallBoxes[i];
+      fill(b.minX, b.minY, b.maxX, b.maxY, (px, py) => pointInPolygon(px, py, poly) || polyEdgeDist(px, py, poly) <= grow);
+    });
+    for (const m of marks) {
+      if (!(m.h > COVER_MIN_H)) continue;
+      fill(m.x - m.sx, m.y - m.sy, m.x + m.sx, m.y + m.sy, (px, py) => Math.abs(px - m.x) <= m.sx + grow && Math.abs(py - m.y) <= m.sy + grow);
+    }
+    // the carved rim beyond the map's edge (groundAt's rule)
+    if (RH > COVER_MIN_H) {
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+        const px = x0 + (i + 0.5) * COVER_CELL_M, py = y0 + (j + 0.5) * COVER_CELL_M;
+        if (gorge ? px < 0 || px > SX : px < 0 || px > SX || py < 0 || py > SY) cells[j * w + i] = 1;
+      }
+    }
+    return { x0, y0, w, h, cells };
+  };
+
   return {
     group,
     wallHeights,
@@ -1836,6 +1892,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       for (const nq of bandNotches) if (pointInPolygon(x, y, nq)) return bandH;
       const out = gorge ? x < 0 || x > SX : x < 0 || x > SX || y < 0 || y > SY;
       return out ? RH : 0;                                                   // the carved rim round the plate
+    },
+    coverToward(x: number, y: number, camX: number, camY: number, camH: number, reach = COVER_REACH_M): boolean {
+      const g = (coverGrid ??= buildCoverGrid());
+      const dx = camX - x, dy = camY - y, d = Math.hypot(dx, dy);
+      if (d < 0.5 || !(camH > 0)) return false;
+      const ux = dx / d, uy = dy / d, end = Math.min(reach, d);
+      for (let s = 0; s <= end; s += COVER_CELL_M * 0.5) {
+        const cx = Math.floor((x + ux * s - g.x0) / COVER_CELL_M), cy = Math.floor((y + uy * s - g.y0) / COVER_CELL_M);
+        if (cx < 0 || cy < 0 || cx >= g.w || cy >= g.h) continue;
+        if (g.cells[cy * g.w + cx]) return true;
+      }
+      return false;
     },
     cull(view: CullView | null): void {
       const ver = view ? view.version : -1;

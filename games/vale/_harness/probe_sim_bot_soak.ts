@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import type { CatalogT } from '../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent, WorldView, PlayerView } from '../src/contracts/sim.ts';
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
+import { fighterProfile, itemRole } from '../src/sim/bots/knowledge.ts';
 import type { Player } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
 import { structuresOf } from '../src/sim/units/structures.ts';
@@ -156,6 +157,9 @@ interface GameRec {
   /** Gleam earned by play (Player.goldEarned) at min(25:00, end), and Gleam spent on finished items by then */
   gold25: number[];
   finSpent25: number[];
+  /** Gleam unspent at min(25:00, end), and Gleam spent on consumables by then */
+  bank25: number[];
+  cons25: number[];
   finalItems: string[][];
   goldGraph: number[];
   kills: number[]; deaths: number[]; cs: number[]; levels: number[];
@@ -194,7 +198,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     job, reason: 'cut', dur: 0, winner: -1, sudden: -1, faults: [],
     seats: setup.seats.map((s) => ({ p: s.player, team: s.team, fighter: s.fighter, role: s.role ?? '', spells: s.loadout.spells.slice() })),
     wick14: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
-    buys: [], fin25: [], gold25: [], finSpent25: [], finalItems: [], goldGraph: [], kills: [], deaths: [], cs: [], levels: [],
+    buys: [], fin25: [], gold25: [], finSpent25: [], bank25: [], cons25: [], finalItems: [], goldGraph: [], kills: [], deaths: [], cs: [], levels: [],
   };
   const csNow = new Array<number>(n).fill(0);
   const world = () => sim.world;
@@ -206,7 +210,11 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     rec.fin25 = finHeld();
     rec.gold25 = world().players.map((p) => p.goldEarned);
     rec.finSpent25 = world().players.map((p) => p.items.reduce((a, x) => a + (x && finished.has(x) ? costOf.get(x) ?? 0 : 0), 0));
+    rec.bank25 = world().players.map((p) => p.gold);
+    rec.cons25 = consSpent.slice();
   };
+  const consumables = new Set(catalog.items.filter((i) => i.tier === 'consumable').map((i) => i.id));
+  const consSpent = new Array<number>(n).fill(0);
   const killerKind = (killerId: number, victimTeam: number): { kind: KillerKind; def: string; credited: boolean } => {
     const w = world();
     const k = killerId >= 0 ? w.entity(killerId) ?? null : null;
@@ -258,7 +266,10 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
         case 'objective': rec.objs.push({ t: e.t, unit: e.unit, team: e.team }); break;
         case 'recall': if (e.state === 'done') rec.recalls[e.player]++; break;
         case 'suddenDeath': rec.sudden = e.t; break;
-        case 'buy': if (finished.has(e.item)) rec.buys.push({ t: e.t, p: e.player, item: e.item }); break;
+        case 'buy':
+          if (finished.has(e.item)) rec.buys.push({ t: e.t, p: e.player, item: e.item });
+          else if (consumables.has(e.item) && e.t < 1500) consSpent[e.player] += costOf.get(e.item) ?? 0;
+          break;
         default: break;
       }
     }
@@ -470,15 +481,30 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     gates.push({ group: 'items', item: 'gameplay:G7', label: 'finished items held per player at min(25:00, end)', value: mean(per).toFixed(2), target: '≥ 2.5', pass: mean(per) >= 2.5, n: fullRift.length });
     gates.push({ group: 'items', item: 'gameplay:G7', label: 'finished items bought at least once', value: `${pct(cover)} (${finIds.filter((id) => bought.has(id)).length}/${finIds.length})`, target: '≥ 80 %', pass: cover >= 0.8, n: fullRift.length });
     gates.push({ group: 'items', item: 'gameplay:G7', label: 'anti-heal item families', value: `${antiHeal.length}${antiHeal.length ? ` (${antiHeal.join(', ')})` : ''}`, target: '≥ 1', pass: antiHeal.length >= 1, n: 0 });
-    gates.push({ group: 'items', item: 'gameplay:G7', label: 'fighters whose first two finished items vary', value: `${pct(varied)} of ${eligible.length}`, target: '≥ 50 %', pass: varied >= 0.5, n: fullRift.length });
-    const byRole: Record<string, { fin: number[]; gold: number[]; spent: number[] }> = {};
+    // builds answer the enemy team: anti-heal pieces bought against two or more enemy healers vs against fewer
+    const heals = new Map(catalog.fighters.map((f) => [f.id, fighterProfile(f).heals] as const));
+    const antiIds = new Set(catalog.items.filter((i) => itemRole(i).antiHeal).map((i) => i.id));
+    const resp = { many: { n: 0, ah: 0 }, few: { n: 0, ah: 0 } };
     for (const g of fullRift) for (const s of g.seats) {
-      const r = (byRole[`${g.job.diffs[0]} ${s.role}`] ??= { fin: [], gold: [], spent: [] });
-      r.fin.push(g.fin25[s.p] ?? 0); r.gold.push(g.gold25?.[s.p] ?? NaN); r.spent.push(g.finSpent25?.[s.p] ?? NaN);
+      const h = g.seats.filter((o) => o.team !== s.team && heals.get(o.fighter)).length;
+      const r = h >= 2 ? resp.many : resp.few;
+      r.n++; if (g.buys.some((b) => b.p === s.p && antiIds.has(b.item))) r.ah++;
     }
-    text.push('', 'items by role at min(25:00, end): finished held · Gleam earned by play · Gleam in finished items');
-    for (const [k, v] of Object.entries(byRole).sort()) text.push(`   ${k.padEnd(20)} ${mean(v.fin).toFixed(2)} · ${mean(v.gold).toFixed(0).padStart(5)} · ${mean(v.spent).toFixed(0).padStart(5)}`);
-    detail.itemsByRole = Object.fromEntries(Object.entries(byRole).map(([k, v]) => [k, { fin: mean(v.fin), gold: mean(v.gold), spent: mean(v.spent) }]));
+    const rMany = resp.many.n ? resp.many.ah / resp.many.n : 0, rFew = resp.few.n ? resp.few.ah / resp.few.n : 0;
+    detail.antiHealResponse = resp;
+    gates.push({ group: 'items', item: 'gameplay:G7', label: 'builds answer the enemy team: players buying an anti-heal piece, ≥ 2 enemy healers vs fewer', value: `${pct(rMany)} of ${resp.many.n} vs ${pct(rFew)} of ${resp.few.n}`, target: 'more than twice as often', pass: resp.many.n > 0 && rMany > 2 * rFew, n: fullRift.length });
+    gates.push({ group: 'items', item: 'gameplay:G7', label: 'fighters whose first two finished items vary', value: `${pct(varied)} of ${eligible.length}`, target: '≥ 50 %', pass: varied >= 0.5, n: fullRift.length });
+    const byRole: Record<string, { fin: number[]; gold: number[]; spent: number[]; bank: number[]; cons: number[] }> = {};
+    for (const g of fullRift) for (const s of g.seats) {
+      const r = (byRole[`${g.job.diffs[0]} ${s.role}`] ??= { fin: [], gold: [], spent: [], bank: [], cons: [] });
+      r.fin.push(g.fin25[s.p] ?? 0); r.gold.push(g.gold25?.[s.p] ?? NaN); r.spent.push(g.finSpent25?.[s.p] ?? NaN);
+      r.bank.push(g.bank25?.[s.p] ?? NaN); r.cons.push(g.cons25?.[s.p] ?? NaN);
+    }
+    text.push('', 'items by role at min(25:00, end): finished held · Gleam earned by play · in finished items · unspent · spent on consumables');
+    for (const [k, v] of Object.entries(byRole).sort()) text.push(`   ${k.padEnd(20)} ${mean(v.fin).toFixed(2)} · ${mean(v.gold).toFixed(0).padStart(5)} · ${mean(v.spent).toFixed(0).padStart(5)} · ${mean(v.bank).toFixed(0).padStart(5)} · ${mean(v.cons).toFixed(0).padStart(4)}`);
+    detail.itemsByRole = Object.fromEntries(Object.entries(byRole).map(([k, v]) => [k, { fin: mean(v.fin), gold: mean(v.gold), spent: mean(v.spent), bank: mean(v.bank), cons: mean(v.cons) }]));
+    const long = fullRift.filter((g) => g.dur >= 1500);
+    if (long.length) text.push(`   games reaching 25:00: ${long.length}/${fullRift.length}, finished held at 25:00 ${mean(long.flatMap((g) => g.fin25)).toFixed(2)}`);
     text.push('', `items: finished bought ${[...bought.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}; never: ${finIds.filter((id) => !bought.has(id)).join(', ') || '-'}`);
   }
   // ── mirrored difficulty ──

@@ -37,7 +37,9 @@ def render_cached(fid: str, fast: bool, only=None, scale: float = 1.0) -> dict:
     bpy.ops.wm.open_mainfile(filepath=P["cache"])
     arm = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
     ctx = Context(spec=spec)
-    ctx.info = rig.RigInfo(armature=arm, props=spec.PROPORTIONS)
+    # the joints a build's rig carries (clip overrides read them, e.g. Ervet's guard pose needs palm.R)
+    p = rig.proportions(**(spec.PROPORTIONS or {}))
+    ctx.info = rig.RigInfo(armature=arm, props=spec.PROPORTIONS, joints=rig._layout(p))
     chains = {}
     for b in arm.data.bones:
         m = re.match(r"x_(.+)_(\d+)$", b.name)

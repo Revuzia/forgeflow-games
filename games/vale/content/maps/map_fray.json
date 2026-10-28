@@ -571,6 +571,106 @@
      "size": [6.0, 6.0],
      "height": 1.0,
      "note": "south of the plate: kept low"
+    },
+    {
+     "id": "skirt_fray_0", "model": "assets/maps/landmarks/skirt_fray.glb",
+     "rot": 0,
+     "name": "fair booth",
+     "at": [32.0, -2.5],
+     "size": [6.4, 3.8],
+     "height": 2.5,
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_36", "model": "assets/maps/landmarks/skirt_fray.glb",
+     "rot": -36,
+     "name": "fair booth",
+     "at": [53.2, 2.9],
+     "size": [7.4, 6.8],
+     "height": 2.5,
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_72", "model": "assets/maps/landmarks/skirt_fray.glb",
+     "rot": -72,
+     "name": "fair booth",
+     "at": [64.8, 21.3],
+     "size": [5.6, 7.3],
+     "height": 2.5,
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_108", "model": "assets/maps/landmarks/skirt_fray_low.glb",
+     "rot": -108,
+     "name": "fair benches",
+     "at": [66.2, 43.1],
+     "size": [5.6, 7.3],
+     "height": 0.9,
+     "note": "off-map skirt south of the plate (the camera side): a setts dais, two stone benches, crates, under 1 m",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_144", "model": "assets/maps/landmarks/skirt_fray_low.glb",
+     "rot": -144,
+     "name": "fair benches",
+     "at": [52.3, 59.9],
+     "size": [7.4, 6.8],
+     "height": 0.9,
+     "note": "off-map skirt south of the plate (the camera side): a setts dais, two stone benches, crates, under 1 m",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_180", "model": "assets/maps/landmarks/skirt_fray_low.glb",
+     "rot": -180,
+     "name": "fair benches",
+     "at": [32.0, 68.0],
+     "size": [6.4, 3.8],
+     "height": 0.9,
+     "note": "off-map skirt south of the plate (the camera side): a setts dais, two stone benches, crates, under 1 m",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_216", "model": "assets/maps/landmarks/skirt_fray_low.glb",
+     "rot": 144,
+     "name": "fair benches",
+     "at": [11.7, 59.9],
+     "size": [7.4, 6.8],
+     "height": 0.9,
+     "note": "off-map skirt south of the plate (the camera side): a setts dais, two stone benches, crates, under 1 m",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_252", "model": "assets/maps/landmarks/skirt_fray_low.glb",
+     "rot": 108,
+     "name": "fair benches",
+     "at": [-2.2, 43.1],
+     "size": [5.6, 7.3],
+     "height": 0.9,
+     "note": "off-map skirt south of the plate (the camera side): a setts dais, two stone benches, crates, under 1 m",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_288", "model": "assets/maps/landmarks/skirt_fray.glb",
+     "rot": 72,
+     "name": "fair booth",
+     "at": [-0.8, 21.3],
+     "size": [5.6, 7.3],
+     "height": 2.5,
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "value": 1.0
+    },
+    {
+     "id": "skirt_fray_324", "model": "assets/maps/landmarks/skirt_fray.glb",
+     "rot": 36,
+     "name": "fair booth",
+     "at": [10.8, 2.9],
+     "size": [7.4, 6.8],
+     "height": 2.5,
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "value": 1.0
     }
    ]
   },

@@ -388,6 +388,8 @@ export abstract class BotBase {
 
   private tryCast(s: AbilitySlot, info: AbilityInfo, hpF: number): boolean {
     const e = this.e, u = info.use;
+    // a cast that roots its own caster (a stance such as an item's hold-the-hour) is for standing a fight, never a getaway
+    if (info.selfHold && this.mode === 'retreat') return false;
     const res = e.resource;
     const resF = res && res.model === 'pool' && e.maxRes > 0 ? e.res / e.maxRes : 1;
     const threatened = this.recentDps > 0 || this.nearestEnemyFighter(9) !== null;

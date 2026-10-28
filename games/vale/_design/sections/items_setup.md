@@ -251,6 +251,24 @@ Every passive and active uses only `PassiveDef` triggers and `AbilityDef` effect
 | Seatstone · **Hold Ground** (active, 60 s) | cast, 0.2 s wind-up | shield 12 % max health for 3 s; after 0.4 s (telegraphed to everyone) enemies within 4.5 m take 50 + 4 % bonus health magic damage, slowed 40 % fading over 2 s |
 | Hourcleaver · *Last Hour* | `lowHp` below 35 %, 60 s cooldown | shield 100 + 35 % bonus health and +30 % tenacity for 3 s |
 | Shelter Lamp · **Shelter** (active, 75 s) | cast, 0.15 s wind-up | you and allied fighters within 7 m: shield 60 + 10/level + 25 % power for 2.5 s |
+| Lampblack Edge · *Black Sap* (W4 G7) | `damageDealt` to a fighter, a soot mark for 4 s (max 2) | the second hit within 4 s: Wounded 50 % for 3 s (`grievous`) |
+| Lampblack Coat · *Soot Ring* (W4 G7) | `interval` 1 s | enemy fighters within 4 m: Wounded 30 % for 1.5 s |
+| Lampblack Lens · *Held Sap* (W4 G7) | `statusApplied` to a fighter that is slowed, rooted, stunned, asleep, afraid, silenced, taunted or lifted; 1 s per target | Wounded 50 % for 4 s |
+| Quarry Pick · *Split the Stone* (W4 G7) | `damageDealt` to a fighter above 60 %, 4 s per target | +10 + 3.5 % of its max health physical damage |
+| Deepglass Rod · *Weight of Light* (W4 G7) | `abilityHit` on a fighter, 6 s per target | +20 + 4 % of its max health magic damage |
+| Glass Veil · *Settling Glass* (W4 G7) | `damageTaken` from a fighter, 18 s cooldown | shield 70 + 10/level + 20 % power and +15 armor and resist for 2.5 s |
+| Glintmail · *Set Against* (W4 G7) | `damageTaken` from a fighter, 18 s cooldown | shield 60 + 10/level + 30 % attack and +15 armor and resist for 2.5 s |
+| Dawnspur · *First Light* (W4 G7) | `damageDealt` to a fighter, 8 s per target | +30 + 3/level + 30 % bonus attack physical damage and a 30 % slow for 1 s |
+| Resin Maul · *Warm Through* (W4 G7) | `abilityHit` on a fighter, 3 s cooldown | heal 12 + 2/level + 1.5 % max health |
+| Shadowpin · *Pin the Shadow* (W4 G7) | `attackHit` on a fighter, a mark for 4 s (max 4) | the fourth: +20 + 30 % bonus attack physical damage and a 40 % slow for 1 s |
+| Bellrope · *Toll Together* (W4 G7) | `statusApplied` hard CC (stun, root, lift, taunt, sleep, fear) on a fighter, 8 s cooldown | you and allied fighters within 7 m: shield 30 + 6/level for 2.5 s and +20 % move speed for 1.5 s |
+| Almslamp · *Shared Light* (W4 G7) | `takedown` of an enemy fighter (kill or assist) | +35 Gleam |
+| Callstone · **Call Out** (active, 70 s; W4 G7) | cast, 0.15 s wind-up, telegraphed | enemy fighters within 4 m are taunted for 0.75 s; +30 armor and resist for 2.5 s |
+| Hourstring · *Strike the Hour* (W4 G7) | `attackHit` on a fighter, counter 12 within 8 s of the last | the twelfth: enemies within 3 m of the target take 60 + 6/level + 6 % of their max health magic damage and a 30 % slow for 1 s |
+| Needlefall · *Falling Shadow* (W4 G7) | `takedown` of an enemy fighter | ability cooldowns −30 % of what is left, +30 % move speed for 2 s |
+| Stillhour · **Hold the Hour** (active, 80 s; W4 G7) | cast | you are rooted for 1.5 s with +80 armor and resist; you can still attack and cast (bots never cast it while retreating) |
+| Afterlight · *Light Lands Twice* (W4 G7) | `abilityHit` on a fighter, 5 s per target | 1 s later, where it stood (telegraphed): 35 + 4/level + 20 % power magic damage within 2.5 m |
+| Watchbell · *Watch Hour* (W4 G7) | `interval` 10 s | enemy fighters within 9 m: revealed for 3 s and slowed 15 % for 1 s |
 | Sap Flask (active) | drink | heal 25 at once and every second after: 150 over 5 s |
 | Spare Lamp (active) | point within 7 m | a `hooded_lamp` ward for 3:20 (7.5 m sight, hidden); 2 per owner, a 3rd puts out the oldest (`summon.maxAlive`) |
 | Noon Tonic (active, 6 s) | drink | heal 70 + 6 % max health at once and +25 % move speed for 2 s |
@@ -290,12 +308,12 @@ These are the reference builds per class, checked by the probe for pool, slots, 
 
 | class | needs (probe) | RIFT / BRIDGE full build | Gleam |
 |---|---|---|---|
-| Plinth | health, armor, resist | Felt Treads · Ironstone Mantle · Warning Bell · **Seatstone** · Dialcutter · Kindly Lamp | 14,850 |
-| Breaker | attack, health | Felt Treads · Dialcutter · **Hourcleaver** · Shadecut · Ironstone Mantle · Warning Bell | 15,350 |
-| Striker | attack, armor pen | Felt Treads · Shadecut · **Hourcleaver** · Dialcutter · Splitlight Bow · Warning Bell | 15,650 |
-| Slinger | attack speed, crit, on-hit | Dust Runners · Splitlight Bow · **Sunstring** · Shadecut · Dialcutter · Warning Bell | 15,600 |
-| Caster | power, haste, penetration | Chalk Slippers · Focal Lens · **Noonglass** · Inkglass Rod · Warning Bell · Kindly Lamp | 15,200 |
-| Tender | heal & shield power, haste, power | Chalk Slippers · Kindly Lamp · **Shelter Lamp** · Warning Bell · Ironstone Mantle · Focal Lens | 14,500 |
+| Plinth | health, armor, resist | Felt Treads · Ironstone Mantle · Warning Bell · **Seatstone** · Dialcutter · Kindly Lamp | 11,900 |
+| Breaker | attack, health | Felt Treads · Dialcutter · **Hourcleaver** · Shadecut · Ironstone Mantle · Warning Bell | 12,300 |
+| Striker | attack, armor pen | Felt Treads · Shadecut · **Needlefall** · Dialcutter · Quarry Pick · Warning Bell | 12,300 |
+| Slinger | attack speed, crit, on-hit | Dust Runners · Splitlight Bow · **Sunstring** · Shadecut · Dialcutter · Warning Bell | 12,500 |
+| Caster | power, haste, penetration | Chalk Slippers · Focal Lens · **Noonglass** · Inkglass Rod · Warning Bell · Kindly Lamp | 12,100 |
+| Tender | heal & shield power, haste, power | Chalk Slippers · Kindly Lamp · **Shelter Lamp** · Warning Bell · Ironstone Mantle · Focal Lens | 11,550 |
 
 | class | RIFT opening (480) | BRIDGE opening (1,300) | FRAY full bag | Gleam |
 |---|---|---|---|---|
