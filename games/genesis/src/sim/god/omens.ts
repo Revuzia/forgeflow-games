@@ -248,12 +248,13 @@ export function naturalOmens(u: Universe, p: Planet): void {
 // ───────────────────────────── god.omen ─────────────────────────────
 
 /** the fitting omen for a place now (none fits: null) */
-function fitting(u: Universe, p: Planet, st: Settlement | null, at: ArrayLike<number>): OmenKind | null {
+function fitting(u: Universe, p: Planet, st: Settlement | null, at: ArrayLike<number>, warning = false): OmenKind | null {
   const r = st ? srel(u, p.id, st.id) : null;
   const fresh = (k: OmenKind) => !r || r.omens[k] === undefined || u.tick - r.omens[k] >= QUIET_DAYS * Math.max(60, Math.round(p.st.dayHours * 60));
   const el = sunElevation(u, p, u.tick, at);
   const order: OmenKind[] = [];
-  if (p.airy && el > 0.02) order.push('rainbow');
+  // (fix r3 #8) a warning is never the rainbow: the people read a rainbow as a promise
+  if (p.airy && el > 0.02 && !warning) order.push('rainbow');
   if (p.st.magnetism > 0.1 && p.airy && el < 0) order.push('aurora');
   order.push('lightning', 'comet');
   if (el > 0.05) order.push('eclipse');
@@ -423,7 +424,7 @@ export function registerOmenCommands(r: CommandRegistry): void {
     // before, a sign sent to a town far from the focus landed at the focus and could not fulfil its prophet's word)
     const placed = Array.isArray(cmd.pos) || (typeof cmd.lat === 'number' && typeof cmd.lon === 'number') || typeof cmd.cell === 'number';
     const at: V3 = st && typeof a.settlement === 'number' && !placed ? [st.pos[0], st.pos[1], st.pos[2]] : a.pos ? norm(a.pos) : st ? [st.pos[0], st.pos[1], st.pos[2]] : herePos(u, p);
-    const kind = (typeof a.kind === 'string' ? a.kind : fitting(u, p, st, at)) as OmenKind | null;
+    const kind = (typeof a.kind === 'string' ? a.kind : fitting(u, p, st, at, a.warning === true)) as OmenKind | null;
     if (!kind) return fail('No sign fits this world now.');
     // the same sign again within ten days is weather to the town it was sent to: no wonder either (integration
     // 2026-10-28: once the sign stood over the named town, the wonder witnessed there moved faith on every repeat)
@@ -434,7 +435,7 @@ export function registerOmenCommands(r: CommandRegistry): void {
     return res;
   }, {
     desc: 'Send a sign: an eclipse, a comet, a rainbow, lightning on one tree, an aurora, red rain, the sun standing still, the sacred animal, a spring', category: 'Signs',
-    params: { settlement: { type: 'int', min: 0 }, pos: { type: 'pos' }, kind: { type: 'enum', values: [...OMEN_KINDS] } },
+    params: { settlement: { type: 'int', min: 0 }, pos: { type: 'pos' }, kind: { type: 'enum', values: [...OMEN_KINDS] }, warning: { type: 'boolean' } },
   });
 }
 

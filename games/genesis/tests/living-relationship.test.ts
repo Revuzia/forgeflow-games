@@ -758,3 +758,74 @@ test('relationship state survives save → load and lives the same future', () =
   b.step(240);
   assert.equal(b.hash(), sim.hash(), 'the same future');
 });
+
+test('wrath (fix r3 #13): the god\'s own rain inside its own drought relents it — at the town it ends, far out it draws back; nature\'s drought is not the god\'s to relent', () => {
+  const { sim, st, lune } = twoTowns();
+  const p = sim.u.planets[0];
+  const droughts = () => sim.u.god.disasters.filter((d) => d.planet === 0 && d.kind === 'drought');
+  // a drought on Aru, then rain on Aru (the answer to its rain prayer, or the god's own change of heart): it ends
+  must(sim, { k: 'disaster.spawn', kind: 'drought', pos: st.pos });
+  assert.equal(droughts().length, 1);
+  sim.step(60);
+  must(sim, { k: 'miracle.water', pos: st.pos, radius: 300 });
+  assert.equal(droughts().length, 0, 'the rain broke the god\'s drought');
+  // a drought on Aru, rain on Lune (inside its reach, ~1 km out): it draws back clear of Lune and goes on over Aru
+  must(sim, { k: 'disaster.spawn', kind: 'drought', pos: st.pos });
+  const d = droughts()[0];
+  const R0 = d.radius;
+  const dl = distM(p, lune.pos, d.pos);
+  assert.ok(dl < R0, `Lune lies inside the drought (${Math.round(dl)} m < ${R0} m)`);
+  // (a rain miracle of radius r reaches r + 300 m as an answer — relationship.ts actsOf)
+  must(sim, { k: 'miracle.water', pos: lune.pos, radius: 100 });
+  assert.equal(droughts().length, 1, 'still over Aru');
+  assert.ok(d.radius < R0 && d.radius <= dl - 400 - 400 + 1e-6, `drawn back from Lune (${R0} -> ${Math.round(d.radius)} m)`);
+  // the same rain does not touch a drought of nature's
+  const nat = spawnDisaster(sim.u, p, 'drought', { pos: lune.pos, god: -1, cause: 'nature' });
+  assert.ok(typeof nat !== 'string');
+  must(sim, { k: 'miracle.water', pos: lune.pos, radius: 100 });
+  assert.ok(sim.u.god.disasters.includes(nat), 'nature\'s drought runs on');
+});
+
+test('free text (fix r3 #1, #3, #8, #14): care for the prophet never abandons; a named disaster is foretold, never cast; a warning is no rainbow', () => {
+  const { sim, st, hesh } = twoTowns();
+  const r = (t: string) => { const x = sim.parse(t); return { x, ks: (x.resolved ?? []).map((c) => c.k), msg: String(x.msg ?? '') }; };
+  // before there is a prophet, foretelling asks — it never does the act (nor invents a weather called "rain of in 2")
+  for (const t of ['foretell rain in 2 days', 'prophesy a flood for Aru']) {
+    const a = r(t);
+    assert.ok(!a.x.ok && /Through whom/.test(a.msg) && !a.ks.length, `${t}: ${a.ks} ${a.msg}`);
+  }
+  must(sim, { k: 'prophet.call', agent: hesh });
+  // #1: the god's care for its prophet, and a negated abandoning, keep the prophet (abandoning cannot be undone)
+  for (const t of ['free my prophet', 'do not let them harm my prophet', 'remove the chief who persecutes my prophet', 'release the prophet Hesh', 'never let my prophet die', 'free the prophet from persecution', 'strip the chief of power for persecuting my prophet', 'is Hesh not my prophet?', 'do not abandon my prophet', 'never forsake my prophet']) {
+    const a = r(t);
+    assert.ok(!a.ks.includes('prophet.abandon'), `${t}: ${a.ks} ${a.msg}`);
+  }
+  for (const t of ['abandon Hesh', 'abandon my prophet', 'make Hesh stop being a prophet', 'Hesh is no longer my prophet', 'Hesh is not my prophet any more', 'depose Hesh as prophet']) {
+    assert.ok(r(t).ks.includes('prophet.abandon'), `${t}: ${r(t).ks} ${r(t).msg}`);
+  }
+  // #3: "spares no one" is the disaster; "harms no one" is the sign; "touch Aru with rain" is the rain
+  for (const t of ['send a flood that spares no one to Aru', 'send a flood to Aru sparing no one']) {
+    const a = r(t);
+    assert.ok(a.ks.includes('disaster.spawn') && !a.ks.includes('god.omen'), `${t}: ${a.ks} ${a.msg}`);
+  }
+  assert.ok(r('send a flood that harms no one to Aru').ks.includes('god.omen'));
+  assert.ok(r('touch Aru with rain').ks.includes('water.rain'), r('touch Aru with rain').msg);
+  // #8 / #14: a named disaster foretold is a prophecy of harm, by any wording; the colon form never casts it
+  for (const t of ['tell Aru through Hesh that a flood will come in two days', 'tell Aru through Hesh that the earth will shake', 'tell Aru through Hesh that an earthquake will come', 'tell Aru through Hesh that a plague will come', 'tell Aru through Hesh that locusts will come', 'tell Aru through Hesh that a meteor will fall', 'tell Aru through Hesh that a drought will come', 'tell Aru through Hesh that famine will come', 'tell Aru through Hesh that fire will come', 'tell Aru through Hesh that the god will send a storm', 'speak through Hesh: a flood will come', 'speak through Hesh: the earth will shake', 'prophesy a flood for Aru', 'foretell a storm over Aru']) {
+    const a = r(t);
+    assert.ok(a.x.resolved?.some((c) => c.k === 'prophet.foretell' && c.what === 'harm') && !a.ks.includes('disaster.spawn') && !a.ks.includes('weather.paint'), `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`);
+  }
+  for (const t of ['speak through Hesh: rain will come', 'foretell rain in 2 days', 'tell Aru through Hesh that the drought will end']) {
+    const a = r(t);
+    assert.ok(a.x.resolved?.some((c) => c.k === 'prophet.foretell' && c.what === 'rain') && !a.ks.includes('water.rain') && !a.ks.includes('content.weather'), `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`);
+  }
+  // a warning sent as a sign is never the rainbow (read as a promise)
+  const w = r('warn Aru of a flood');
+  const om = w.x.resolved?.find((c) => c.k === 'god.omen') as { warning?: boolean } | undefined;
+  assert.ok(om && om.warning === true, JSON.stringify(w.x.resolved));
+  for (let i = 0; i < 3; i++) {
+    const res = sim.applyNow({ k: 'god.omen', settlement: st.id, warning: true });
+    assert.ok(res.ok && !/rainbow/i.test(String(res.msg)), String(res.msg));
+    sim.step(11 * 1440);
+  }
+});

@@ -182,7 +182,14 @@ test('migration: the previous 1.5 build\'s grievance record is judged by this bu
   // a first-pass record has no `hard`: it is a famine, and this build's view says so while it is judged
   const view0 = (sim.query('settlement', { id: d.id }) as { history: { grievance: { hard?: { kind: string; judged: boolean } } } }).history;
   assert.deepEqual([view0.grievance.hard?.kind, view0.grievance.hard?.judged], ['famine', false]);
+  // (fix r3 #0) the fixture's daughter was founded at tick 0 and the save is 2 days old, so under this build's rules she is a
+  // young daughter (POLITICS.youngYears — always relieved, never aggrieved: the next test). This case is the ESTABLISHED
+  // daughter, as in living-history: founded three years back. On this young world tick − 3 years is negative, so the rule
+  // is cleared through its `founded >= 0` guard, not the age test — any negative founding tick reads the same.
+  const year = Math.max(1440, Math.round(sim.u.planets[0].st.orbit.period));
+  d.founded = sim.tick - 3 * year;
   const twin = Sim.load(kin);
+  twin.u.planets[0].people.settlement(kinFacts.daughter)!.founded = d.founded;
   const back = Sim.load(sim.save());
   assert.equal(back.hash(), sim.hash());
   sim.step(3 * 1440); twin.step(3 * 1440); back.step(3 * 1440);
@@ -192,4 +199,20 @@ test('migration: the previous 1.5 build\'s grievance record is judged by this bu
   assert.equal(d.hist!.judged, true);
   assert.ok(d.hist!.grievance > kinFacts.settlements.find((s) => s.id === d.id)!.hist!.grievance, `the unrelieved famine weighed (${d.hist!.grievance})`);
   assert.ok(d.hist!.calam !== undefined && d.hist!.cp !== undefined, 'the calamity counters began');
+});
+
+test('migration (fix r3 #0): the same 1.5 record of a YOUNG daughter (founded at tick 0, as saved) is relieved, not held against her mother', () => {
+  const sim = Sim.load(kin);
+  const d = sim.u.planets[0].people.settlement(kinFacts.daughter)!;
+  const year = Math.max(1440, Math.round(sim.u.planets[0].st.orbit.period));
+  assert.ok(d.founded >= 0 && sim.tick - d.founded < 2 * year, 'the fixture daughter is young under this build\'s rules');
+  const g0 = kinFacts.settlements.find((s) => s.id === d.id)!.hist!.grievance;
+  const famine0 = d.hist!.why.famine ?? 0;
+  sim.step(3 * 1440);
+  // judged under the young-daughter rule (politics.ts, POLITICS.youngYears): the mother had food to spare, so aid went
+  // unasked, and no famine grievance was added — the old grievance only fades
+  assert.equal(d.hist!.judged, true);
+  assert.ok(d.hist!.aid >= kinFacts.tick, `the mother sent aid (aid tick ${d.hist!.aid})`);
+  assert.ok(d.hist!.grievance <= g0, `no new grievance (${g0} -> ${d.hist!.grievance})`);
+  assert.ok((d.hist!.why.famine ?? 0) <= famine0, `no famine part added (${famine0} -> ${d.hist!.why.famine ?? 0})`);
 });

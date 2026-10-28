@@ -43,6 +43,7 @@ import { actor, fail, ok } from './util.ts';
 import { actHooks, bindUniverse, beginAct, currentAct, endAct, freshen, meansNow, moveSettlement, noteDeath, regardOf, relOf, relStat, srel, type ActCtx } from './regard.ts';
 import { castWarning, currentWrath, lethality, popWrath, pushWrath, reach, ruination, wrathLaw, wrathOf, WRATHFUL } from './wrath.ts';
 import { answerPrayers, canonicalAnswer, hardshipOf, prayersHourly, prayersOf } from './prayers.ts';
+import { cancelDisaster, effR } from './disasters.ts';
 import { exile, prophetOf, prophetOfSettlement, prophetTask, prophetsAct, prophetsDaily, prophetsHourly, prophetsQuery, registerProphetCommands } from './prophets.ts';
 import { naturalOmens, omensOfCommand, omensQuery, omensTick, registerOmenCommands } from './omens.ts';
 import { pilgrimageDaily, pilgrimTask, registerSacredCommands, sacredAnimalAct, sacredAnimalOf, sacredHourly, sacredQuery } from './sacred.ts';
@@ -129,6 +130,37 @@ function afterAct(u: Universe, p: Planet, cmd: Command, res: CommandResult, a: A
   if (!list.length) return;
   answerPrayers(u, p, list);
   prophetsAct(u, p, list);
+  relentDroughts(u, p, list);
+}
+
+/** (fix r3 #13, owner decision 3: survivable by default; answered prayers) the god's own rain inside its own drought: the
+ * god relented. A rain act (a rain miracle, painted rain, an answered rain prayer) that falls within a drought this god
+ * sent draws the drought back from it — to clear of the rain's reach and a short walk (400 m) more, or, when that leaves
+ * too little (under 300 m: rain at its heart, or the town beside it), ends it. Before, the miracle wetted the ground once
+ * while the drought ran on: on the round-2 seed-1 world at year 50 a town whose rain prayers were answered dried out and
+ * its daughter 101 m away lost 34 of 35 to thirst. Nature's droughts and another god's are not this god's to relent. */
+const DRY = new Set(['drought', 'dust-bowl']);
+function relentDroughts(u: Universe, p: Planet, acts: ActInfo[]): void {
+  for (const a of acts) {
+    if (a.kind !== 'rain' || a.god < 0) continue;
+    const sp = a.settlement >= 0 ? p.people?.settlement(a.settlement)?.pos : undefined;
+    const at = a.pos ?? (sp ? [sp[0], sp[1], sp[2]] as [number, number, number] : null);
+    for (const d of u.god.disasters.slice()) {
+      if (d.planet !== p.id || !DRY.has(d.kind) || d.god !== a.god || d.cause === 'nature') continue;
+      if (a.radius !== Infinity) {
+        if (!at) continue;
+        const dist = distM(p, at, d.pos);
+        if (dist > effR(d) + a.radius) continue;
+        const keep = dist - a.radius - 400;
+        if (keep >= 300) {
+          d.radius = Math.min(d.radius, keep / Math.sqrt(Math.max(0.01, d.scale)));
+          u.emit({ t: 'disaster.relent', planet: p.id, pos: [d.pos[0], d.pos[1], d.pos[2]], a: Math.round(effR(d)), text: 'the drought draws back from the rain', ref: { kind: 'disaster', id: d.id, planet: p.id }, data: { kind: d.kind } });
+          continue;
+        }
+      }
+      cancelDisaster(u, d, 'relented: the rain broke the drought');
+    }
+  }
 }
 
 const RAINY = new Set(['rain', 'drizzle', 'storm', 'thunderstorm', 'monsoon', 'snow']);

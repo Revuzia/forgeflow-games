@@ -91,6 +91,18 @@ const WHAT: [RegExp, string][] = [
   [/\b(anger|wrath|punish|punishment|doom|disaster|ruin|fire from the sky|destroy|destruction|death|harm|suffer)\b/, 'harm'],
 ];
 
+// (fix r3 #8) a named disaster foretold is harm (LIVING §3.4.3: any harmful act fulfils it) — the storm too, unless rain is
+// named; "the drought will end", "the plague will pass" are relief, read by WHAT below
+const DOOM = /\b(floods?|flooding|(?:the )?waters? (?:will )?rise|earthquakes?|quakes?|the (?:earth|ground) (?:will )?(?:shake|tremble|split|open)|plagues?|sickness|pestilence|locusts?|swarms?|meteors?|stars? (?:will )?fall|falling stars?|droughts?|famine|hunger|fires?(?! for)|wildfires?|storms?|tornado(?:e?s)?|hurricanes?|whirlwinds?|volcano(?:e?s)?|eruptions?|the mountain (?:will )?burn|wolves|tsunami|tidal wave|blight|hail)\b/;
+const RAIN_WORD = /\b(rain|rains|showers?|drizzle)\b/;
+const RELIEF = /\b(end|ends|break|breaks|pass|passes|lift|lifts|be over|cease|ceases)\b/;
+function whatOf(tail: string): string | undefined {
+  if (DOOM.test(tail) && !RAIN_WORD.test(tail) && !RELIEF.test(tail)) return 'harm';
+  if (/\bdroughts? (?:will )?(?:end|break|pass)/.test(tail)) return 'rain';
+  if (/\b(famine|hunger) (?:will )?(?:end|pass)/.test(tail)) return 'food';
+  return WHAT.find(([re]) => re.test(tail))?.[1];
+}
+
 /** "in two days", "within 3 days", "tomorrow" (1 day): 1..5, default 2 */
 function daysOf(c: SignClause): number {
   const m = c.full.match(/\b(?:in|within|before)\s+(\w+)\s+days?\b/);
@@ -149,23 +161,38 @@ export function intentSigns(c: SignClause): boolean {
   if (!p) return false;
   const person = live(c, f, ['agent']);
   // (fix r2 #21) ── the Touch laid on a person or a town: which of its acts ("touch Hesh" was read as "torch") ──
-  if (/^(?:please )?(?:touch|(?:use|lay|put) (?:the|my|your) touch on)\b/.test(f.trim()) && (person || mods.place?.settlement !== undefined)) {
+  // (fix r3 #3) only "touch Hesh" / "use the Touch on Aru" with nothing after the name asks: "touch Aru with rain" is the rain
+  const touchM = f.trim().match(/^(?:please )?(?:touch|(?:use|lay|put) (?:the|my|your) touch on)\s+(.+)$/);
+  const touchRest = touchM ? touchM[1].replace(/\b(please|now|gently)\b/g, ' ').trim() : '';
+  if (touchM && (person || mods.place?.settlement !== undefined) && touchRest.split(/\s+/).length <= 4 && !/\b(with|using|by|and|to|into|in|of|for|so|until)\b/.test(touchRest)) {
     const w0 = person ? person.name : mods.place?.label ?? 'them';
     const who = w0 === 'them' ? w0 : w0.replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
     return c.ask(`Touch ${who} how? Lift, Rebuke or Soothe ("lift ${who}", "rebuke ${who}", "soothe ${who}").`);
   }
   // (fix r2 #21) ── a negation never does the act it negates: "make Hesh stop being a prophet", "Hesh is no longer my
   //    prophet" abandon the prophet; "Hesh is no longer one of the Called" is never a call ──
+  // (fix r3 #1) for a prophet the negation must govern the ROLE itself ("stop being a prophet", "is no longer my prophet",
+  //    "not my prophet any more", "depose Hesh as prophet"): abandoning cannot be undone, and "free my prophet", "do not let
+  //    them harm my prophet", "release the prophet Hesh" are the god's care for the prophet, never its rejection
   const NEG = /\b(stop(?:s|ped)? being|no longer|not|never|un-?make|strip|remove|depose|dismiss|release|free)\b[^,.;]*\b/;
-  if (new RegExp(`${NEG.source}prophets?\\b`).test(f)) {
+  const UNPROPHET = /\b(?:stop(?:s|ped)? being|(?:is|be|are) no longer|no longer|un-?make|depose|dismiss)\s+(?:(?:a|my|the|your|the god's|his|her|our)\s+)?prophets?\b|\bnot (?:a |my |the |the god's )?prophet any ?more\b|\b(?:un-?make|depose|dismiss|strip)\s+[a-z' -]+?\s+(?:as|of being)\s+(?:(?:a|my|the|your)\s+)?prophets?\b/;
+  if (UNPROPHET.test(f)) {
     const agent = person ? person.id : u.god.rel?.prophets.find((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement))?.agent;
     if (agent === undefined) { cx.asked.push({ k: 'prophet.abandon' }); return c.ask('Abandon which prophet? Name them ("abandon the prophet Hesh").'); }
     c.add({ k: 'prophet.abandon', agent, planet: person?.planet ?? p.id }, 'abandon the prophet');
     return true;
   }
   if (new RegExp(`${NEG.source}(?:one of )?the called\\b`).test(f)) return c.ask('The Called serve the god until they die: none is sent back ("charge the Called to farm" sets them other work).');
+  // (fix r3 #1) care for the prophet ("free my prophet", "never let my prophet die", "the chief who persecutes my prophet")
+  //    and a negated abandoning ("do not abandon my prophet") keep the prophet: the god is told how to act for them
+  const ABANDON = /\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/;
+  const keepsProphet = /\b(?:not|never|don't|dont|won't|wont|shall not|will not)\b[^,.;]*\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/.test(f);
+  if (/\bprophets?\b/.test(f) && !/\b(make|anoint|choose|appoint|raise|mark)\b/.test(f) && (keepsProphet || (!ABANDON.test(f) && (/\b(free|protect|save|shield|guard|defend|spare|rescue|persecut\w*)\b/.test(f) || /\b(?:not|never|don't|dont)\b[^,.;]*\b(?:let|allow)\b[^,.;]*\b(?:harm|hurt|kill|die|persecute|touch)\b/.test(f))))) {
+    const ph = person && u.god.rel?.prophets.some((q) => q.agent === person.id) ? person : null;
+    return c.ask(`${ph ? `${ph.name} remains your prophet` : 'Your prophet remains yours'}. To shield ${ph ? ph.name : 'them'}, act for them: lift them out of harm's way with the Touch, or strike at those who persecute them.`);
+  }
   // ── abandon a prophet ("abandon Hesh", "forsake Hesh": the command says so when Hesh is not the god's prophet) ──
-  if (/\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/.test(f) && (has(f, 'prophet') || person)) {
+  if (ABANDON.test(f) && (has(f, 'prophet') || person)) {
     // (a person named: the command says so when they are not the god's prophet)
     const agent = person ? person.id : u.god.rel?.prophets.find((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement))?.agent;
     if (agent === undefined) { cx.asked.push({ k: 'prophet.abandon' }); return c.ask('Abandon which prophet? Name them ("abandon the prophet Hesh").'); }
@@ -173,12 +200,25 @@ export function intentSigns(c: SignClause): boolean {
     return true;
   }
   // ── speak through a prophet: "tell Aru through Hesh that rain will come in two days" ──
-  const through = f.match(/\bthrough\s+([a-z' -]+?)(?:,|\s+that\b|\s+of\b|\s+the\b|\s+rain\b|$)/);
-  if ((through && /\b(tell|warn|promise|say|speak|announce|foretell|prophesy)\b/.test(f)) || (person && /\b(foretell|prophesy|predict)\b/.test(f))) {
-    const who = through ? live(c, through[1], ['agent']) ?? person : person;
+  // (fix r3 #8) the name ends at a colon, a dash or "will" too ("speak through Hesh: a flood will come"); a sentence that
+  //    speaks through someone never falls through to the act itself — it asks
+  const through = f.match(/\bthrough\s+([a-z' -]+?)(?:\s*[:;\u2014\u2013]|\s+-\s|,|\s+that\b|\s+of\b|\s+the\b|\s+rain\b|\s+will\b|\s+an?\b|$)/);
+  const SPEAK = /\b(tell|warn|promise|say|speak|announce|foretell|prophesy|predict)\b/;
+  const FORE = /\b(foretell|prophesy|predict|forewarn)\b/;
+  const isProphet = (id: number) => !!u.god.rel?.prophets.some((q) => q.agent === id && q.planet === p.id);
+  // (fix r3 #14) foretelling with no one named speaks through the god's prophet of the named town (or its only one), else asks
+  let speaker: { id: number; planet: number } | null = null;
+  if (!through && !person && FORE.test(f)) {
+    const mine = (u.god.rel?.prophets ?? []).filter((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement));
+    if (mine.length !== 1) return c.ask(mine.length ? 'Through whom? Name the prophet ("tell Aru through Hesh that rain will come in two days").' : 'Through whom? You have no prophet here: make one first ("make Hesh my prophet").');
+    speaker = { id: mine[0].agent, planet: mine[0].planet };
+  }
+  if (!through && /\bthrough\b/.test(f) && SPEAK.test(f)) return c.ask('Through whom? Name your prophet ("tell Aru through Hesh that rain will come in two days").');
+  if ((through && SPEAK.test(f)) || (person && (FORE.test(f) || (/\bwarn\b/.test(f) && isProphet(person.id)))) || speaker) {
+    const who = speaker ?? (through ? live(c, through[1], ['agent']) ?? person : person);
     if (!who) return c.ask('Through whom? Name your prophet ("tell Aru through Hesh that rain will come in two days").');
     const tail = (f.match(/\bthat\s+(.+)$/)?.[1] ?? f).replace(/\bthrough\s+[a-z' -]+/, '');
-    const what = WHAT.find(([re]) => re.test(tail))?.[1];
+    const what = whatOf(tail);
     if (!what) return c.ask('Foretell what? (rain, food, healing, warmth, protection, rebuilding, a sign, or harm).');
     c.add({ k: 'prophet.foretell', agent: who.id, what, days: daysOf(c), planet: who.planet }, `foretell ${what}`);
     return true;
@@ -231,7 +271,7 @@ export function intentSigns(c: SignClause): boolean {
   }
   // ── omens: "warn Aru of the coming fire", "an eclipse over Aru" ──
   if (/\bwarn\b/.test(f) && mods.place?.settlement !== undefined && !/\bthrough\b/.test(f)) {
-    c.add({ k: 'god.omen', settlement: mods.place.settlement, planet: p.id }, 'a sign of warning');
+    c.add({ k: 'god.omen', settlement: mods.place.settlement, warning: true, planet: p.id }, 'a sign of warning');
     return true;
   }
   if (/\beclipse\b/.test(f) && !/\b(year|long|year-long|endless|forever)\b/.test(f)) {
@@ -240,7 +280,9 @@ export function intentSigns(c: SignClause): boolean {
   }
   // (fix r2 #21) a sign by its own name, or any act "as a sign" / "sparing": "send a sparing flood to Aru", "send red rain on
   // Aru", "strike lightning near Aru as a sign" are omens (no deaths), never the disaster or plain rain
-  const asSign = /\bas an? (sign|omen|portent|warning|wonder)\b|\bsparing\b|\bharmless(ly)?\b|\bthat (spares|harms) no ?one\b/.test(f);
+  // (fix r3 #3) "that spares no one", "sparing none" mean the opposite: the disaster itself
+  const asSign = (/\bas an? (sign|omen|portent|warning|wonder)\b|\b(?:an?|the) sparing\b|\bsparing (?:them|the people|everyone|everybody|all|lives|life|the town)\b|\bharmless(ly)?\b|\bthat (?:spares (?:them|the people|everyone|everybody|all|lives)|(?:harms|hurts|kills) no ?(?:one|body))\b/.test(f))
+    && !/\bspar(?:es|ing|e) no(?:ne|body| ?one)\b/.test(f);
   const OMEN_WORD: [RegExp, string][] = [[/\b(red|blood|bloody)[ -]rain\b|\brain of blood\b/, 'red-rain'], [/\bfloods?\b|\bwaters? rise\b/, 'flood'], [/\brainbow\b/, 'rainbow'], [/\blightning\b/, 'lightning'], [/\baurora\b|\bnorthern lights\b/, 'aurora'], [/\bcomet\b/, 'comet']];
   const ow = OMEN_WORD.find(([re]) => re.test(f));
   if (ow && (asSign || (ow[1] === 'red-rain' && mods.place?.settlement !== undefined))) {
