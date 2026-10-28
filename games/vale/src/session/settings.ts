@@ -14,6 +14,14 @@
 // ('High: AO' vs 'Ultra: AO full' in §9.4 reads as High = the half-resolution pass.) A preset
 // never touches fpsCap, fullscreen or ambientEffects (r12 M14: on/off; its density follows the tier). Changing any ladder field by hand turns the preset 'custom'.
 //
+// EXTRAS (perf PERF-M2 step 5, audio AUD-m4): fields the session contract does not list yet ride along on the same
+// sections, typed by VideoSettings / AudioSettings below; a stored profile without them reads the default:
+//   video.dynamicResolution  on (default): the renderer lowers the render scale for a moment when frames run long
+//                            (render/quality.ts DynamicResolution); off: it always draws at renderScale. Not a ladder value
+//   audio.mono               off (default): the mix is summed to mono after the master (one-sided hearing, one earbud)
+//   audio.softenLoud         off (default): a lower limiter threshold with gentle compression tames loud transients
+// The renderer reads video.dynamicResolution; the audio engine reads mono / softenLoud through AudioPort.settings.
+//
 // KEYBINDS: action → KeyboardEvent.code (layout-independent). Actions: a1 a2 a3 ult spell1 spell2
 // item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod.
 // There is no chat bind in this slice. Mouse buttons are 'Mouse0'..'Mouse4'.
@@ -21,6 +29,12 @@
 import type { Settings } from '../contracts/session.ts';
 
 export type VideoPreset = Exclude<Settings['video']['preset'], 'custom'>;
+/** Settings.video plus the extras above (see EXTRAS) */
+export type VideoSettings = Settings['video'] & { dynamicResolution?: boolean };
+/** Settings.audio plus the extras above (see EXTRAS) */
+export type AudioSettings = Settings['audio'] & { mono?: boolean; softenLoud?: boolean };
+/** the extras' defaults */
+export const SETTINGS_EXTRAS = { video: { dynamicResolution: true }, audio: { mono: false, softenLoud: false } } as const;
 export const VIDEO_PRESETS: readonly VideoPreset[] = ['low', 'medium', 'high', 'ultra'];
 
 type Ladder = Pick<Settings['video'], 'renderScale' | 'shadows' | 'ao' | 'bloom' | 'antialias' | 'particles' | 'scatter' | 'maxDpr'>;
@@ -48,8 +62,8 @@ export function defaultSettings(): Settings {
 
 function rawDefaults(): Settings {
   return {
-    video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false, ambientEffects: true },
-    audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true },
+    video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false, ambientEffects: true, ...SETTINGS_EXTRAS.video } as VideoSettings,
+    audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true, ...SETTINGS_EXTRAS.audio } as AudioSettings,
     controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: false, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
     access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 0.5, subtitles: true, locFlash: false, damageFlash: false },
     gameplay: { showDamageNumbers: true, showAllyIndicators: true, healthBarTicks: true, minimapSide: 'right' },
@@ -81,12 +95,12 @@ const str = (v: unknown, d: string): string => (typeof v === 'string' && v.lengt
 export function normalizeSettings(raw: unknown, base: Settings = defaultSettings()): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof Settings, Record<string, unknown>>>;
   const v = r.video ?? {}, a = r.audio ?? {}, c = r.controls ?? {}, x = r.access ?? {}, g = r.gameplay ?? {};
-  const bv = base.video, ba = base.audio, bc = base.controls, bx = base.access, bg = base.gameplay;
+  const bv: VideoSettings = base.video, ba: AudioSettings = base.audio, bc = base.controls, bx = base.access, bg = base.gameplay;
   const binds: Record<string, string> = { ...DEFAULT_BINDS, ...bc.binds };
   if (c.binds && typeof c.binds === 'object') {
     for (const [k, val] of Object.entries(c.binds as Record<string, unknown>)) if (typeof val === 'string' && val.length <= 32) binds[k] = val;
   }
-  const video: Settings['video'] = {
+  const video: VideoSettings = {
     preset: oneOf(v.preset, ['low', 'medium', 'high', 'ultra', 'custom'] as const, bv.preset),
     renderScale: clamp(v.renderScale, 0.5, 2, bv.renderScale),
     shadows: oneOf(v.shadows, [0, 1, 2, 3] as const, bv.shadows),
@@ -99,14 +113,17 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
     maxDpr: clamp(v.maxDpr, 0.5, 4, bv.maxDpr),
     fullscreen: bool(v.fullscreen, bv.fullscreen),
     ambientEffects: bool(v.ambientEffects, bv.ambientEffects !== false),
+    dynamicResolution: bool(v.dynamicResolution, bv.dynamicResolution ?? SETTINGS_EXTRAS.video.dynamicResolution),
+  };
+  const audio: AudioSettings = {
+    master: clamp(a.master, 0, 1, ba.master), music: clamp(a.music, 0, 1, ba.music), sfx: clamp(a.sfx, 0, 1, ba.sfx),
+    voice: clamp(a.voice, 0, 1, ba.voice), ui: clamp(a.ui, 0, 1, ba.ui), ambience: clamp(a.ambience, 0, 1, ba.ambience),
+    muteInBackground: bool(a.muteInBackground, ba.muteInBackground),
+    mono: bool(a.mono, ba.mono ?? SETTINGS_EXTRAS.audio.mono), softenLoud: bool(a.softenLoud, ba.softenLoud ?? SETTINGS_EXTRAS.audio.softenLoud),
   };
   return {
     video,
-    audio: {
-      master: clamp(a.master, 0, 1, ba.master), music: clamp(a.music, 0, 1, ba.music), sfx: clamp(a.sfx, 0, 1, ba.sfx),
-      voice: clamp(a.voice, 0, 1, ba.voice), ui: clamp(a.ui, 0, 1, ba.ui), ambience: clamp(a.ambience, 0, 1, ba.ambience),
-      muteInBackground: bool(a.muteInBackground, ba.muteInBackground),
-    },
+    audio,
     controls: {
       binds, quickCast: bool(c.quickCast, bc.quickCast), cameraLock: bool(c.cameraLock, bc.cameraLock), edgePan: bool(c.edgePan, bc.edgePan),
       panSpeed: clamp(c.panSpeed, 0, 1, bc.panSpeed), attackMoveOnClick: bool(c.attackMoveOnClick, bc.attackMoveOnClick),

@@ -5,10 +5,15 @@
 // speed, attack on move, the self-cast key. Accessibility: colourblind palettes with live swatches and
 // shape codes, FRAY seat colours (Automatic / Standard / Stamp-forward / Simple colours, previewed),
 // UI scale 80–150 %, HUD and minimap scale, reduce motion, screen shake, subtitles. Gameplay toggles.
+// Video › Dynamic resolution (perf PERF-M2 step 5; on by default, the renderer honours video.dynamicResolution). Audio ›
+// Mono and Soften loud sounds (audio AUD-m4; the engine reads audio.mono / audio.softenLoud). Credits (originality F7):
+// the open-source code and typefaces with their licenses (ui/credits.ts) and the full notices file when the build has it.
 
 import type { ComponentChildren, JSX } from 'preact';
+import { useState } from 'preact/hooks';
 import type { Settings } from '../../contracts/session.ts';
-import { defaultSettings } from '../../session/settings.ts';
+import { defaultSettings, type AudioSettings, type VideoSettings } from '../../session/settings.ts';
+import { CREDITS, NOTICES_FILE, type CreditEntry } from '../credits.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
 import { KeybindCapture } from '../components/KeybindCapture.tsx';
@@ -23,8 +28,10 @@ import { keyLabel } from '../keys.ts';
 import type { FrayColors } from '../state.ts';
 import { TOKENS } from '../tokens.ts';
 
-type Tab = 'video' | 'audio' | 'controls' | 'access' | 'gameplay';
-const TABS: Tab[] = ['video', 'audio', 'controls', 'access', 'gameplay'];
+type Tab = 'video' | 'audio' | 'controls' | 'access' | 'gameplay' | 'credits';
+const TABS: Tab[] = ['video', 'audio', 'controls', 'access', 'gameplay', 'credits'];
+/** the tabs that hold settings (Credits holds none: no reset there) */
+type SettingsTab = Exclude<Tab, 'credits'>;
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
 function Row(p: { id: string; label: string; desc?: string; children: ComponentChildren; wide?: boolean }): JSX.Element {
@@ -46,11 +53,13 @@ export function SettingsScreen(p: { params: Record<string, string> }): JSX.Eleme
   const t = (k: string, f: string): string => cv.t(`settings.${k}`, f);
   const set = <K extends keyof Settings>(sec: K, patch: Partial<Settings[K]>): void => { session.updateSettings({ [sec]: { ...s[sec], ...patch } } as Partial<Settings>); };
   const resetTab = (): void => {
+    if (tab === 'credits') return;
+    const sec: SettingsTab = tab;
     void confirmDialog(overlay, { title: t('reset_tab', 'Reset this tab'), confirm: t('reset_tab', 'Reset this tab'), tone: 'danger' }).then((yes) => {
       if (!yes) return;
       const d = defaultSettings();
-      if (tab === 'access') state.setPrefs({ frayColors: 'auto' });
-      session.updateSettings({ [tab]: d[tab] } as Partial<Settings>);
+      if (sec === 'access') state.setPrefs({ frayColors: 'auto' });
+      session.updateSettings({ [sec]: d[sec] } as Partial<Settings>);
       state.toast(cv.t('toast.settings_reset', 'Settings reset to defaults.'), 'ok');
     });
   };
@@ -66,7 +75,7 @@ export function SettingsScreen(p: { params: Record<string, string> }): JSX.Eleme
     <Screen title={t('title', 'Settings')}
       headSide={<span class="t-body-s muted">{t('changes_saved', 'Changes are saved as you make them.')}</span>}
       foot={<div class="row">
-        <Button variant="secondary" size="s" icon="reroll" onPress={resetTab}>{t('reset_tab', 'Reset this tab')}</Button>
+        {tab !== 'credits' ? <Button variant="secondary" size="s" icon="reroll" onPress={resetTab}>{t('reset_tab', 'Reset this tab')}</Button> : null}
         <Button variant="quiet" size="s" onPress={resetAll}>{t('reset_defaults', 'Reset to defaults')}</Button>
       </div>}>
       <Tabs label={t('title', 'Settings')} value={tab} onChange={(id) => router.setParams({ tab: id })}
@@ -77,6 +86,7 @@ export function SettingsScreen(p: { params: Record<string, string> }): JSX.Eleme
         {tab === 'controls' ? <Controls s={s} set={set} /> : null}
         {tab === 'access' ? <Access s={s} set={set} /> : null}
         {tab === 'gameplay' ? <Gameplay s={s} set={set} /> : null}
+        {tab === 'credits' ? <Credits /> : null}
       </div>
     </Screen>
   );
@@ -90,7 +100,7 @@ function opts<T extends string | number>(cv: ReturnType<typeof useApp>['cv'], ke
 
 function Video(p: { s: Settings; set: SetFn }): JSX.Element {
   const { cv } = useApp();
-  const v = p.s.video;
+  const v: VideoSettings = p.s.video;
   const L = (k: string, f: string): string => cv.t(`settings.video.${k}.label`, f);
   const D = (k: string): string => cv.t(`settings.video.${k}.desc`, '');
   const fullscreen = (on: boolean): void => {
@@ -105,6 +115,10 @@ function Video(p: { s: Settings; set: SetFn }): JSX.Element {
       </Row>
       <Row id="v-scale" label={L('renderScale', 'Render scale')} desc={D('renderScale')}>
         <Slider id="v-scale" label={L('renderScale', 'Render scale')} value={v.renderScale} min={0.5} max={2} step={0.05} format={(x) => `${Math.round(x * 100)}%`} marks={[1]} onChange={(x) => p.set('video', { renderScale: x })} />
+      </Row>
+      <Row id="v-dyn" label={L('dynamicResolution', 'Dynamic resolution')} desc={D('dynamicResolution')}>
+        <Toggle id="v-dyn" label={L('dynamicResolution', 'Dynamic resolution')} checked={v.dynamicResolution !== false}
+          onChange={(x) => p.set('video', { dynamicResolution: x } as Partial<VideoSettings> as Partial<Settings['video']>)} />
       </Row>
       <Row id="v-shadows" label={L('shadows', 'Shadows')} desc={D('shadows')}>
         <Segmented size="s" label={L('shadows', 'Shadows')} value={v.shadows} options={opts(cv, 'video.shadows', [0, 1, 2, 3] as const)} onChange={(x) => p.set('video', { shadows: x })} />
@@ -143,8 +157,11 @@ function Video(p: { s: Settings; set: SetFn }): JSX.Element {
 
 function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
   const { cv } = useApp();
-  const a = p.s.audio;
+  const a: AudioSettings = p.s.audio;
   const keys = ['master', 'music', 'sfx', 'voice', 'ui', 'ambience'] as const;
+  const L = (k: string, f: string): string => cv.t(`settings.audio.${k}.label`, f);
+  const D = (k: string): string => cv.t(`settings.audio.${k}.desc`, '');
+  const setX = (patch: Partial<AudioSettings>): void => p.set('audio', patch as Partial<Settings['audio']>);
   return (
     <div class="srows">
       {keys.map((k) => (
@@ -152,6 +169,12 @@ function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
           <Slider id={`a-${k}`} label={cv.t(`settings.audio.${k}.label`, k)} value={a[k]} min={0} max={1} step={0.05} format={pct} onChange={(x) => p.set('audio', { [k]: x } as Partial<Settings['audio']>)} />
         </Row>
       ))}
+      <Row id="a-mono" label={L('mono', 'Mono')} desc={D('mono')}>
+        <Toggle id="a-mono" label={L('mono', 'Mono')} checked={a.mono === true} onChange={(x) => setX({ mono: x })} />
+      </Row>
+      <Row id="a-soft" label={L('softenLoud', 'Soften loud sounds')} desc={D('softenLoud')}>
+        <Toggle id="a-soft" label={L('softenLoud', 'Soften loud sounds')} checked={a.softenLoud === true} onChange={(x) => setX({ softenLoud: x })} />
+      </Row>
       <Row id="a-bg" label={cv.t('settings.audio.muteInBackground.label', 'Mute in the background')} desc={cv.t('settings.audio.muteInBackground.desc', '')}>
         <Toggle id="a-bg" label={cv.t('settings.audio.muteInBackground.label', 'Mute in the background')} checked={a.muteInBackground} onChange={(x) => p.set('audio', { muteInBackground: x })} />
       </Row>
@@ -335,3 +358,52 @@ function Gameplay(p: { s: Settings; set: SetFn }): JSX.Element {
   );
 }
 
+
+/** Settings › Credits (originality F7): the open-source code and typefaces VALE ships, each with its license and copyright
+ *  line; "Show the full license texts" opens THIRD_PARTY_NOTICES.txt when the build carries it */
+function Credits(): JSX.Element {
+  const { cv } = useApp();
+  const [notices, setNotices] = useState<{ state: 'closed' | 'loading' | 'missing' } | { state: 'open'; text: string }>({ state: 'closed' });
+  const T = (k: string, f: string, v?: Record<string, string | number>): string => cv.t(`settings.credits.${k}`, f, v);
+  const open = (): void => {
+    if (notices.state === 'open') { setNotices({ state: 'closed' }); return; }
+    setNotices({ state: 'loading' });
+    // the dev server answers an unknown path with the app's index.html, so only a plain-text body counts
+    fetch(`${import.meta.env.BASE_URL ?? '/'}${NOTICES_FILE}`)
+      .then((r) => (r.ok && !/html/i.test(r.headers.get('content-type') ?? '') ? r.text() : Promise.reject(new Error('missing'))))
+      .then((text) => setNotices(text.trim() ? { state: 'open', text } : { state: 'missing' }))
+      .catch(() => setNotices({ state: 'missing' }));
+  };
+  const group = (kind: CreditEntry['kind']): JSX.Element => (
+    <div class="credits__group stg">
+      <h2 class="t-label muted credits__head">{kind === 'code' ? T('code', 'Code') : T('type', 'Typefaces')}</h2>
+      <ul class="credits__list">
+        {CREDITS.filter((c) => c.kind === kind).map((c) => (
+          <li class="credits__row">
+            <span class="credits__name t-body">{c.name}</span>
+            <span class="credits__use t-caption muted">{T(`use.${c.use}`, c.use)}</span>
+            <span class="chip chip--line credits__lic t-caption">{c.license}</span>
+            <span class="credits__notice t-caption muted">{c.notice}</span>
+            <a class="credits__link t-caption" href={c.url} target="_blank" rel="noopener noreferrer">{T('project', 'Project page')}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <div class="srows credits">
+      <div class="srows__intro stg">
+        <h2 class="t-h2">{T('title', 'Credits & licenses')}</h2>
+        <span class="t-body-s muted">{T('intro', 'VALE is built with the open-source code and typefaces below. Each is used under its license.')}</span>
+      </div>
+      {group('code')}
+      {group('type')}
+      <div class="credits__notices stg">
+        <Button variant="secondary" size="s" onPress={open}>{notices.state === 'open' ? T('hide_notices', 'Hide the full license texts') : T('show_notices', 'Show the full license texts')}</Button>
+        {notices.state === 'loading' ? <span class="t-caption muted">{cv.t('state.loading', 'Loading…')}</span> : null}
+        {notices.state === 'missing' ? <span class="t-caption muted">{T('notices_missing', 'The full license texts ship with the game as {file}.', { file: NOTICES_FILE })}</span> : null}
+        {notices.state === 'open' ? <pre class="credits__text t-caption" tabIndex={0}>{notices.text}</pre> : null}
+      </div>
+    </div>
+  );
+}

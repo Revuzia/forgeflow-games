@@ -316,7 +316,7 @@ if (want('draft') && which === 'fast') await step('draft_fixture', async () => {
   await draftFixture({ phase: 'finalize', hover: 4 });
   await W(1500);
   await draftChecks('finalize');
-  for (const tab of ['Boons', 'Battle spells']) {
+  for (const tab of ['Boons', 'Hour spells']) {
     const t = page.locator('.scr--draft:not(.is-leaving) .loadout [role=tab]', { hasText: tab }).first();
     if (await t.count()) { await t.click(); await W(400); await each(async (w) => { await check(page, 'finalize', `${w}_${tab.replace(' ', '_').toLowerCase()}`); await shot(page, `${PREFIX}_${w}_draft_finalize_${tab.replace(' ', '_').toLowerCase()}`); }); }
   }
@@ -353,7 +353,7 @@ if (want('draft') && which === 'flow') await step('draft_flow', async () => {
   await waitFor(page, (v) => { const s = v.state.draft.value; return !s || ['finalize', 'trade', 'done'].includes(s.phase); }, 120000);
   await W(1200);
   await draftChecks('finalize');
-  for (const tab of ['Boons', 'Battle spells']) {
+  for (const tab of ['Boons', 'Hour spells']) {
     const t = page.locator('.scr--draft:not(.is-leaving) .loadout [role=tab]', { hasText: tab }).first();
     if (await t.count()) { await t.click(); await W(400); await each(async (w) => { await check(page, 'finalize', `${w}_${tab.replace(' ', '_').toLowerCase()}`); await shot(page, `${PREFIX}_${w}_draft_finalize_${tab.replace(' ', '_').toLowerCase()}`); }); }
   }

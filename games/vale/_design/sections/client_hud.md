@@ -123,7 +123,7 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Log:** the session's draft log is shown as a quiet one-line ticker (`draft.log.*`).
 - **Leave:** Esc or Back opens the dodge confirm (`draft.leave.*`).
 - **States:** waiting on other seats (`draft.seat.thinking`), bots shown with a bot mark on the seat's role line, an unavailable fighter (`error.draft.unavailable`), reconnect (`state.reconnecting`). A seat's trade request is the swap glyph with its tooltip (`draft.trade.request`).
-- **Finalize panel:** battle spells and boons sit behind two tabs that count their filled slots (§3.6), so the whole panel fits at 1280 x 720.
+- **Finalize panel:** Hour spells and boons sit behind two tabs that count their filled slots (§3.6), so the whole panel fits at 1280 x 720.
 
 ### 3.5 BRIDGE: the Lot, and FRAY: pick
 - **BRIDGE Lot** is its own layout, see §10.
@@ -180,31 +180,33 @@ Mapped to the bible's HUD density table (1080p; scale with `access.hudScale`). S
 
 | Element | Where | Size | Share | RIFT | BRIDGE | FRAY |
 |---|---|---|---|---|---|---|
-| Dial Bar | bottom centre | 640 x 132 | 4.07% | yes | yes | yes |
-| Minimap | bottom right (swappable left) | 352 x 198 · 384 x 96 · 232 disc | 3.36 · 1.78 · 2.60% | 3.36 | 1.78 | 2.60 |
-| Sky strip | top centre | 720 x 48 | 1.67% | yes | yes | yes |
+| Dial Bar | bottom centre | 776 x 160 (frame box, arc and slab included) | 5.99% | yes | yes | yes |
+| Minimap | bottom right (swappable left) | 352 x 228 · 384 x 108 · 232 disc | 3.87 · 2.00 · 2.60% | 3.87 | 2.00 | 2.60 |
+| Sky strip | top centre | 760 x 56 | 2.05% | yes | yes | yes |
 | Ledger line | under the sky strip, right end | about 200 x 20 (FRAY 110 x 20) | 0.19% (FRAY 0.11%) | yes | yes | yes |
 | Ally frames | left edge | 4 x 168 x 52 | 1.69% | yes | yes | no |
 | Hour Board | top right | 220 x 236 | 2.50% | no | no | yes |
-| **Always-on total** | | | | **10.98%** | **9.39%** | **10.95%** |
+| **Always-on total** | | | | **13.79%** | **11.92%** | **13.25%** |
 | Kill feed (3 rows) | top right (FRAY: under the Hour Board) | contextual | 1.46% | peak | peak | peak |
 | Announcer | under the strip | about 480 x 75 | 1.73% | peak | peak | peak |
 | Feed (chat region) | bottom left | about 360 x 154 | 2.67% | peak | peak | peak |
-| **Peak total** | | | | 16.84% | 15.25% | 16.81% |
+| **Peak total** | | | | 19.65% | 17.78% | 19.11% |
 
-The always-on total stays at or under 11%, the peak under 17%. The centre 40% x 50% of the screen holds no HUD. The bible's chat region has no chat in this slice (the session has no chat bind), so the bottom-left box is the **feed**: ally pings, shop refusals, first-run hints (`hint.*`), surrender votes. Same size, same budget.
+The always-on total stays at or under 14%, the peak under 20%. The centre 40% x 50% of the screen holds no HUD.
+
+The budget is the shipped kit's (hud HUD-8, 2026-10-28). Sizes are the frame boxes from `src/ui/hud/frame_layout.ts` (generated from `art/blender/ui/hud_layout.json`) and were measured in the live HUD (`_harness/_reports/final_hud_capture_1080.json`, `steps.mid_dom`: dbar 776 x 160, mmap 352 x 228, sky 760 x 56, four ally frames 168 x 52, 13.6% before the ledger line). The earlier 11% plan (Dial Bar 640 x 132, minimap 352 x 198, strip 720 x 48) did not survive the frame art: the Dial Bar box carries the frame's upper arc and the portrait slab, and the RIFT minimap keeps the map's 170:110 aspect, which 198 px squashed. 13.8% is on the genre gauge (about 13% always-on, r12 §5). A new always-on element has to fit inside these totals or take its pixels from an existing box. The bible's chat region has no chat in this slice (the session has no chat bind), so the bottom-left box is the **feed**: ally pings, shop refusals, first-run hints (`hint.*`), surrender votes. Same size, same budget.
 
 ### 4.2 Dial Bar (bottom centre)
 - **Portrait** with a level ring (`PlayerView.xp / xpToNext`, level number centred), the passive as a small badge on its corner, a gloam dot while `skillPoints > 0`.
 - **HP bar over the resource bar.** HP: `EntityView.hp / maxHp` with ticks every 100 and heavy ticks every 1,000 (`gameplay.healthBarTicks`), a hatched Dawnglass shield segment, and a Noonwhite damage trail (150 ms hold, 450 ms out). Resource row: Light `#8F86F0` (pool), Tally `#E8C27A` (builds), Heat `#D96A4A` hatched (a full bar overheats; the lock-out shows as a sweeping hatch), Unlit shows no row. Row colour comes from `resources.json`, the fighter's `resource` picks the model.
 - **Gleam** as a Mono number beside the bars (`PlayerView.gold`), `hud.gleam_tip` on hover.
 - **Abilities:** a1, a2, a3 at 64 px and the ultimate at 76 px, each with the key chip (from `settings.controls.binds`), rank pips (`AbilityView.rank / maxRank`), cost, and a clockwise cooldown shadow from 12 o'clock with the remaining seconds in 22/700 Mono. A `canLevel` ability shows a chalk "+" and `hud.ability.level_up`. Not enough resource tints the cost HARM; silence draws a diagonal bar. Recast windows show a ring (`hud.ability.recast`).
-- **Battle spells:** two 48 px slots. **Items:** 3 x 2 grid, each with a number key chip and a cooldown shadow for actives (`itemCooldowns`).
+- **Hour spells:** two 48 px slots. **Items:** 3 x 2 grid, each with a number key chip and a cooldown shadow for actives (`itemCooldowns`).
 - **Icon code (HUD-1):** an item's painted icon sits on its ledger family's ground — Strike madder, Craft violet, Guard verdigris, Stride dust-gold (`src/ui/hud/icon_families.json`: the family carrying most stat weight; boots are Stride; a statless consumable takes its first tag's family) — with its subject cropped to about 0.92 of the frame and lifted; an ability's icon sits on its fighter's `vfx.signature` hue (monsters on a neutral stone). The HUD adds a 1 px chalk keyline over the art (`.iglyph::after`) and the tier hour-ticks on an ink backing. An item with no art draws its tag glyph in chalk on the same family ground; an ability with no art draws its delivery glyph on the fighter hue. Graded by `tools/imagegen/icon_grade.py`; `node _harness/icon_probe.mjs` fails on p50 < 60 or p95 < 190 at 38 or 40 px, on a ground nearest another family or within 40 (L1) of another family's, on the old navy, and lists icons still missing.
 - **Tooltips** (hover or focus, 150 ms): name, cooldown, cost, range in metres, rank line, `desc`. At most two sentences of explanation; numbers carry units. Every per-rank number leads with the rank you have (rank 0 shows rank 1, the one you would learn), with `→ next` when a point can go in now; held Shift shows the whole row with yours lit and the rest dimmed (`tip.ranks_hint`). The line under it says how to level now (`hud.ability.level_up`), the level a locked ultimate opens at (`hud.ability.locked`, `hud.ability.next_rank_at`) or that a basic ability is not learned yet (`hud.ability.unlearned`) — never "Level up an ability" while it cannot be learned (HUD-5).
 
 ### 4.3 Minimap
-- RIFT 352 x 198 (three roads and the noon line), BRIDGE 384 x 96 (the span and the Snap), FRAY a 232 px disc (the plate, ten hour-marks on the rim). It sits bottom right and can swap left (`gameplay.minimapSide`); `access.minimapScale` resizes it.
+- RIFT 352 x 228 (three roads and the noon line; the map's 170:110 aspect), BRIDGE 384 x 108 (the span and the Snap), FRAY a 232 px disc (the plate, ten hour-marks on the rim). It sits bottom right and can swap left (`gameplay.minimapSide`); `access.minimapScale` resizes it.
 - **Marks:** terrain from the map's `minimap.png` (fog applies value x0.55 and saturation x0.4 to the unseen; the Standing Shadow keeps colour and a hard edge); structures; fighters as portrait dots (ally round, enemy with the heading wedge, you a solid ring with a gnomon wedge); Wicks as small dots; objectives with their timers; the camera rectangle; ping markers (§5).
 - **Input:** click moves the camera, right-click moves your fighter, the ping key pings at the cursor.
 - **Shape codes** (identical in every colour palette): self double-frame, ally rounded, enemy chevron or notched, neutral square.
@@ -324,7 +326,7 @@ The announcer has tonal stingers, no voice, so the banner and the feed carry the
 Opens 1.2 s after your fighter falls (never during the final-blow effect), anchored left of centre so the centre 40% x 50% stays free, 360 px wide. It never blocks the shop or the map and closes on respawn, Esc or its Close button.
 
 - **Header:** `recap.taken_down_by` ("Taken down by Longshade") or `recap.fell_to` for a structure or Wick; the killer's portrait; `recap.respawn` countdown.
-- **Body:** `recap.window` ("Damage taken in the last 15 s"), then one row per source from `SimApi.damageLog(player)` grouped by source: portrait, name, ability (or `recap.basic`), a stacked bar by damage type, the total, and `recap.ago` for the last hit. Source ids resolve through abilities, battle spells, item actives, items, setup boons and every passive (fighter, item, unit, team buff), then `recap.other`; a raw id never shows (HUD-6). Rows sort by total, largest first. A grand `recap.total` closes the list.
+- **Body:** `recap.window` ("Damage taken in the last 15 s"), then one row per source from `SimApi.damageLog(player)` grouped by source: portrait, name, ability (or `recap.basic`), a stacked bar by damage type, the total, and `recap.ago` for the last hit. Source ids resolve through abilities, Hour spells, item actives, items, setup boons and every passive (fighter, item, unit, team buff), then `recap.other`; a raw id never shows (HUD-6). Rows sort by total, largest first. A grand `recap.total` closes the list.
 - **Damage types:** physical (Chalkstone, upright numerals), magic (Orchid-rose, oval chip), piercing (ink with a halo, "Ignores armor and resist"); each with its `dmg.<type>_tip`. Piercing is the wording for damage that ignores armor and resist; the phrase "true damage" is never shown.
 - **One tip line** from the dominant type: `recap.tip.phys`, `.magic`, `.pierce`, `.mixed`, plus `recap.tip.burst` when the whole sum landed inside 2 s. Factual, never a verdict.
 - **Empty:** `recap.none` (a structure or a self-inflicted fall).
@@ -393,12 +395,13 @@ Spectators have no side, so relationship colours do not apply. These rules hold 
 
 ## 12. Settings inventory
 
-Five tabs; changes save as you make them. Copy lives in `settings.<tab>.<field>.label` and `.desc`, options in `.opt.<value>`. Defaults are `src/session/settings.ts`.
+Five settings tabs and Credits; changes save as you make them. Copy lives in `settings.<tab>.<field>.label` and `.desc`, options in `.opt.<value>`. Defaults are `src/session/settings.ts`.
 
 | Tab | Setting | Control | Default | Range or options |
 |---|---|---|---|---|
 | Video | Quality preset | segmented | High | Low, Medium, High, Ultra, Custom (a manual change sets Custom) |
 | Video | Render scale | slider | 1.0 | 0.5 to 2 |
+| Video | Dynamic resolution | toggle | On | `video.dynamicResolution` (PERF-M2 step 5): on, the renderer drops below the render scale for a moment when frames run long and climbs back; off, it always draws at the render scale. Not on the ladder |
 | Video | Shadows | segmented | Medium | Off, Low, Medium, High |
 | Video | Ambient occlusion | segmented | Half | Off, Half resolution, Full resolution |
 | Video | Bloom | toggle | On | |
@@ -409,17 +412,19 @@ Five tabs; changes save as you make them. Copy lives in `settings.<tab>.<field>.
 | Video | Sharpness (max pixel ratio) | slider | 1 | 0.5 to 4 |
 | Video | Fullscreen | toggle | Off | |
 | Audio | Master, Music, Effects, Announcer, Interface, Ambience | sliders | 80, 60, 80, 90, 70, 60% | 0 to 100% |
+| Audio | Mono | toggle | Off | `audio.mono` (AUD-m4): the mix summed to mono after the master |
+| Audio | Soften loud sounds | toggle | Off | `audio.softenLoud` (AUD-m4): a lower limiter threshold with gentle compression |
 | Audio | Mute in the background | toggle | On | |
-| Controls | Keys: Ability 1-3, Ultimate, Battle spells 1-2, Item slots 1-6, Recall, Open shop, Scoreboard (hold), Ping (hold), Attack-move, Stop, Camera lock, Centre camera (hold), Self-cast modifier | keycaps | Q W E R · D F · 1-6 · B P Tab G A S Y Space Left Alt | any key or mouse button; a conflict moves the key and says so (`toast.bind_conflict`) |
+| Controls | Keys: Ability 1-3, Ultimate, Hour spells 1-2, Item slots 1-6, Recall, Open shop, Scoreboard (hold), Ping (hold), Attack-move, Stop, Camera lock, Center camera (hold), Self-cast modifier | keycaps | Q W E R · D F · 1-6 · B P Tab G A S Y Space Left Alt | any key or mouse button; a conflict moves the key and says so (`toast.bind_conflict`) |
 | Controls | Quick cast | toggle | Off | |
 | Controls | Lock camera to your fighter | toggle | Off | |
 | Controls | Edge pan | toggle | On | |
 | Controls | Pan speed | slider | 50% | 0 to 100% |
 | Controls | Attack on move | toggle | Off | |
 | Controls | Self-cast key | keycap | Left Alt | |
-| Accessibility | Colourblind mode | segmented | Off | Off, Deutan (green-weak), Protan (red-weak), Tritan (blue-yellow); each shows its swatches and `opt_desc` |
-| Accessibility | Team colours | swatches | Noonwhite, Dawn azure, Dusk marigold, Dialstone | override self and enemy; a pair under delta-E 20 warns (`settings.access.colors.warn`) |
-| Accessibility | FRAY seat colours | segmented | Automatic | Automatic, Standard, Stamp-forward, Simple colours |
+| Accessibility | Colorblind mode | segmented | Off | Off, Deutan (green-weak), Protan (red-weak), Tritan (blue-yellow); each shows its swatches and `opt_desc` |
+| Accessibility | Team colors | swatches | Noonwhite, Dawn azure, Dusk marigold, Dialstone | override self and enemy; a pair under delta-E 20 warns (`settings.access.colors.warn`) |
+| Accessibility | FRAY seat colors | segmented | Automatic | Automatic, Standard, Stamp-forward, Simple colors |
 | Accessibility | UI scale | slider | 100% | UI offers 80 to 150% (nothing renders below 12 px) |
 | Accessibility | HUD scale, Minimap scale | sliders | 100% | 50 to 200% |
 | Accessibility | Reduce motion | toggle | Off | 120 ms fades, camera cuts |
@@ -429,6 +434,7 @@ Five tabs; changes save as you make them. Copy lives in `settings.<tab>.<field>.
 | Gameplay | Ally indicators | toggle | On | |
 | Gameplay | Health bar ticks | toggle | On | |
 | Gameplay | Minimap side | segmented | Right | Right, Left |
+| Credits | Credits & licenses | list | | the open-source code and typefaces with license and copyright line (`src/ui/credits.ts`, originality F7); `Show the full license texts` opens `THIRD_PARTY_NOTICES.txt` when the build ships it |
 
 - **Video ladder** (a preset sets all of these at once; `fpsCap` and `fullscreen` are never touched): Low 0.75 / shadows 1 / AO off / bloom off / AA off / effects 0 / scenery 0 / DPR 1; Medium 0.9 / 2 / half / on / SMAA / 1 / 1 / 1; High 1.0 / 2 / half / on / SMAA / 2 / 2 / 1; Ultra 1.0 / 3 / full / on / SMAA / 2 / 2 / 2. Telegraphs look identical on every tier (`settings.video.note`).
 - **Colourblind modes** change relationship colours per the bible (deutan and protan move enemies to `#FFC21F`, tritan to `#FF3D6E`, deutan and tritan move allies to `#2FA8FF`) and Stamp-forward becomes the FRAY default. Shape codes are on in every mode.

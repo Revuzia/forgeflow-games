@@ -13,8 +13,13 @@
 // name, title, class, role and kit — crossfading as you hover. Locking in strikes noon (VALE's own beat: the gnomon on
 // the plate's dial swings clockwise to 12, the ring closes, the plate comes up to full light) and the fighter's call
 // plays (UiSound.lockCall: `f_<fighter>_call`, the lockin role when a fighter has none). A timeout lock gets the beat too.
-// Fit (client F9): the draft grid's cards are compact (class and role as marks on the portrait), finalize puts battle
+// Fit (client F9): the draft grid's cards are compact (class and role as marks on the portrait), finalize puts Hour
 // spells and boons behind tabs, and the seat's Bot chip rides the role line.
+// Music (audio AUD-m2): the draft bed hears the phase, whether you have to act, and the last
+// tokens.audio.beds.draft.localUrgencyLastS seconds of a timer you still have to act on (UiSound.draftMusic → AudioPort.draft).
+// Ready (client F12): finalize Lock in is a ready flag. When the session reports seats' `ready` (DraftSeat.ready, the
+// session's half), Lock in sends { a: 'ready' }, each seat shows its check, and the line says the match starts when
+// everyone is ready; a session without it keeps the timer line.
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -37,8 +42,25 @@ import { roman, SeatMark, seatOf, SideMark } from '../components/Seat.tsx';
 import { EmptyState, Skeleton } from '../components/States.tsx';
 import { fmtWait } from '../format.ts';
 import { animateIn } from '../motion.ts';
+import { TOKENS } from '../tokens.ts';
+import type { DraftMusicState } from '../audio_port.ts';
+import type { DraftAction } from '../../contracts/session.ts';
 
 type View = 'team' | 'lot' | 'ffa' | 'finalize';
+
+/** client F12: the session's ready flag on a seat (absent while the session has no ready action) */
+const readyOf = (s: DraftSeat | undefined): boolean | undefined => (s as (DraftSeat & { ready?: boolean }) | undefined)?.ready;
+/** the ready action (DraftAction gains { a: 'ready' } with the session's half) */
+const READY = { a: 'ready' } as unknown as DraftAction;
+
+/** audio AUD-m2: what the draft bed should play for this state */
+function draftMusicOf(d: DraftState): DraftMusicState {
+  const me = d.seats.find((s) => s.isYou);
+  const phase: DraftMusicState['phase'] = d.phase === 'ban' ? 'ban' : d.phase === 'finalize' || d.phase === 'trade' || d.phase === 'done' ? 'finalize' : 'pick';
+  const mine = !!me && d.phase !== 'done' && (phase === 'finalize' ? readyOf(me) !== true
+    : !me.locked && !!d.turn && (d.turn.players.includes(me.player) || d.turn.action === 'free'));
+  return { phase, mine, urgent: mine && d.timer > 0 && d.timer <= TOKENS.audioDraft.localUrgencyLastS };
+}
 
 function viewOf(d: DraftState, ffa: boolean): View {
   if (d.phase === 'finalize' || d.phase === 'trade' || d.phase === 'done') return 'finalize';
@@ -82,12 +104,22 @@ export function DraftScreen(): JSX.Element {
   const view = viewOf(d, ffa);
   return (
     <>
+      <DraftMusic d={d} />
       {view === 'team' ? <TeamDraft d={d} onLeave={leave} /> : null}
       {view === 'lot' ? <LotView d={d} onLeave={leave} /> : null}
       {view === 'ffa' ? <FrayPick d={d} onLeave={leave} /> : null}
       {view === 'finalize' ? <Finalize d={d} ffa={ffa} onLeave={leave} /> : null}
     </>
   );
+}
+
+/** drives the draft bed (AUD-m2): a state change is sent once; leaving the draft sends null */
+function DraftMusic(p: { d: DraftState }): null {
+  const { sound } = useApp();
+  const m = draftMusicOf(p.d);
+  useEffect(() => { sound.draftMusic(m); }, [m.phase, m.mine, m.urgent]);
+  useEffect(() => () => sound.draftMusic(null), []);
+  return null;
 }
 
 // ── shared pieces ──────────────────────────────────────────────────────────────────────────────
@@ -118,7 +150,8 @@ function SeatCard(p: { s: DraftSeat; d: DraftState; rel: 'self' | 'ally' | 'enem
   const f = p.hidden ? undefined : cv.fighter(fid);
   const role = cv.role(s.role);
   const active = !!p.d.turn?.players.includes(s.player) && !s.locked;
-  const status = s.locked ? (p.hidden ? cv.t('draft.seat.locked', 'Locked in') : f?.name ?? '') : s.hover && !p.hidden ? cv.t('draft.seat.hovering', 'Hovering {fighter}', { fighter: cv.fighter(s.hover)?.name ?? '' })
+  const ready = readyOf(s) === true && (p.d.phase === 'finalize' || p.d.phase === 'trade');
+  const status = ready ? cv.t('draft.seat.ready', 'Ready') : s.locked ? (p.hidden ? cv.t('draft.seat.locked', 'Locked in') : f?.name ?? '') : s.hover && !p.hidden ? cv.t('draft.seat.hovering', 'Hovering {fighter}', { fighter: cv.fighter(s.hover)?.name ?? '' })
     : active ? cv.t('draft.seat.thinking', 'Choosing…') : '';
   return (
     <div class={`seat seat--${p.rel} ${active ? 'is-active' : ''} ${s.locked ? 'is-locked-in' : ''}`}>
@@ -128,7 +161,7 @@ function SeatCard(p: { s: DraftSeat; d: DraftState; rel: 'self' | 'ally' | 'enem
       <span class="seat__text">
         <span class="seat__name t-body-s" title={s.isYou ? undefined : s.name}>{s.isYou ? cv.t('draft.you', 'You') : s.name}</span>
         {role || s.isBot ? <span class="seat__role t-caption">{role ? <><span class="roledot" style={{ background: role.color }} /><span class="seat__rolename">{role.name}</span></> : null}{s.isBot ? <span class="chip chip--bot chip--glyph" role="img" title={cv.t('draft.seat.bot', 'Bot')} aria-label={cv.t('draft.seat.bot', 'Bot')}><Icon name="bot" size={12} /></span> : null}</span> : null}
-        <span class={`seat__status t-caption ${s.locked ? 'is-locked' : ''}`}>{s.locked && !p.hidden ? <Icon name="check" size={12} /> : null}{status}</span>
+        <span class={`seat__status t-caption ${s.locked ? 'is-locked' : ''} ${ready ? 'is-ready' : ''}`}>{s.locked && !p.hidden ? <Icon name="check" size={12} /> : null}{status}</span>
       </span>
       {p.actions}
     </div>
@@ -476,7 +509,11 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
   const queue = cv.queue(d.queue)!;
   const mode = cv.mode(d.mode);
   const rules = cv.rulesOf(queue);
-  const [lockedIn, setLockedIn] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  // client F12: with the session's ready flag, Lock in is "I am ready" and the session's word is final
+  const canReady = typeof readyOf(me) === 'boolean';
+  const lockedIn = canReady ? readyOf(me) === true || pressed : pressed;
+  const waitingOn = canReady ? d.seats.filter((s) => !s.isBot && readyOf(s) !== true).length : 0;
   const loadout = me.loadout ?? state.profile.value.loadouts[me.locked ?? ''] ?? { spells: [], boons: [] };
   const trades = d.trades ?? [];
   const incoming = trades.filter((t) => t.to === me.player);
@@ -493,7 +530,10 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
   const done = d.phase === 'done';
   const nBoons = cv.boonSlots(rules.itemPool);
   const full = loadout.spells.length >= cv.spellSlots() && loadout.boons.length >= nBoons;
-  const reason = done ? cv.t('draft.phase.done', 'Draft complete') : lockedIn ? cv.t('draft.finalize.starting', 'The match starts when the timer ends.') : !full ? cv.t('loadout.needs_full', 'Fill every slot to lock in.') : null;
+  const reason = done ? cv.t('draft.phase.done', 'Draft complete')
+    : lockedIn ? (canReady ? (waitingOn > 0 ? cv.t('draft.finalize.ready_waiting', 'Ready. The match starts when everyone is ready, or when the timer ends.') : cv.t('draft.finalize.ready_all', 'Everyone is ready. The match is starting.'))
+      : cv.t('draft.finalize.starting', 'The match starts when the timer ends.'))
+      : !full ? cv.t('loadout.needs_full', 'Fill every slot to lock in.') : null;
   const tradeActions = (s: DraftSeat): JSX.Element | null => {
     if (s.isYou || !s.locked || !me.locked || s.team !== me.team || p.ffa || done) return null;
     const inc = incoming.find((t) => t.from === s.player);
@@ -510,7 +550,7 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
     <Screen layout="wide"
       foot={<div class="draft__foot"><Ticker d={d} />{reason ? <span class="reason t-body-s">{reason}</span> : null}</div>}
       cta={<Button variant="chalk" size="l" wedge cue={null} disabled={!!reason} reason={reason ?? undefined}
-        onPress={() => { sound.play('lockin'); session.draft({ a: 'loadout', loadout }); if (me.skin) session.draft({ a: 'skin', skin: me.skin }); setLockedIn(true); state.toast(cv.t('loadout.locked_in', 'Locked in'), 'ok'); }}>
+        onPress={() => { sound.play('lockin'); session.draft({ a: 'loadout', loadout }); if (me.skin) session.draft({ a: 'skin', skin: me.skin }); if (canReady) session.draft(READY); setPressed(true); state.toast(cv.t('loadout.locked_in', 'Locked in'), 'ok'); }}>
         {lockedIn ? cv.t('loadout.locked_in', 'Locked in') : cv.t('btn.lock_in', 'Lock in')}
       </Button>}>
       <div class="draft draft--final">

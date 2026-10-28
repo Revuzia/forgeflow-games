@@ -681,3 +681,21 @@
   .fseats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .cvd { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Settings › Credits (originality F7): one row per library or typeface — name and use, license chip, copyright line,
+   project link; the full notices open in a scrolling plate below */
+.credits__group { display: flex; flex-direction: column; gap: var(--u); padding: calc(2 * var(--u)) 0; border-bottom: 1px solid var(--line-1); }
+.credits__list { display: flex; flex-direction: column; }
+.credits__row { display: grid; grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.6fr) auto; grid-template-areas: 'name lic notice link' 'use lic notice link'; column-gap: calc(2 * var(--u)); align-items: center; padding: var(--u) 0; border-top: 1px solid var(--line-1); }
+.credits__row:first-child { border-top: 0; }
+.credits__name { grid-area: name; }
+.credits__use { grid-area: use; }
+.credits__lic { grid-area: lic; justify-self: start; }
+.credits__notice { grid-area: notice; }
+.credits__link { grid-area: link; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
+.credits__link:hover, .credits__link:focus-visible { color: var(--text-1); }
+.credits__notices { display: flex; flex-wrap: wrap; align-items: center; gap: calc(1.5 * var(--u)); padding-top: calc(2 * var(--u)); }
+.credits__text { flex-basis: 100%; max-height: calc(40 * var(--u)); overflow: auto; margin: 0; padding: calc(1.5 * var(--u)); white-space: pre-wrap; background: var(--ink-1); border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--line-1); color: var(--text-2); }
+@media (max-width: 1100px) {
+  .credits__row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name lic' 'use link' 'notice notice'; }
+}

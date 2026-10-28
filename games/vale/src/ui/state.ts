@@ -91,6 +91,9 @@ export class AppState {
   /** the reminder already sounded for this ready check */
   private reminded = false;
 
+  /** perf PERF-m1: what the draft has already warmed for the coming match (see warmMatch) */
+  private warm = { key: '', fighters: new Set<string>(), splashes: false };
+
   constructor(o: { session: Session; cv: CatalogView; router: Router; sound: UiSound; renderer?: RendererPort | null }) {
     this.session = o.session; this.cv = o.cv; this.router = o.router; this.sound = o.sound; this.renderer = o.renderer ?? null;
     this.profile.value = o.session.profile();
@@ -201,7 +204,7 @@ export class AppState {
             const text = why === 'timeout' ? cv.t('queue.timeout', 'The ready check ran out.')
               : why === 'declined' ? cv.t('queue.declined', 'The match was declined.')
                 : why === 'dodged' ? cv.t('queue.dodged', 'You left the draft.')
-                  : why === 'cancelled' ? cv.t('queue.cancelled', 'Search cancelled.') : '';
+                  : why === 'cancelled' ? cv.t('queue.cancelled', 'Search canceled.') : '';
             if (text) this.toast(`${text}${lock}`, why === 'cancelled' ? 'info' : 'warn');
           }
           // back to Play from anywhere inside the flow (Settings opened over a draft included)
@@ -219,7 +222,7 @@ export class AppState {
         if ((first || r.route.value.screen !== 'draft') && !decided) {
           if (r.route.value.screen !== 'draft') { this.sound.play('confirm'); r.reset('draft', {}, 'wipe'); }
         }
-        if (e.state.phase === 'done') { /* loading follows */ }
+        this.warmMatch(e.state);
         break;
       }
       case 'loading':
@@ -249,6 +252,41 @@ export class AppState {
   }
 
   /** a ready-check line for the notification: mode, queue and the seconds left */
+  /**
+   * perf PERF-m1: the loading screen's work starts during the draft. The first draft state (the match was found) warms the
+   * map: its scene, sky, grade and every unit model (renderer.preload with no seats); each fighter that locks in after
+   * that warms its model and skin; when the draft is done the loading cards' splashes are fetched. The loading screen's
+   * own preload then finds them in the renderer's cache. A warm-up never fails the flow (errors are dropped).
+   */
+  private warmMatch(d: DraftState): void {
+    const key = `${d.queue}|${d.mode}|${d.seats.map((s) => s.player).join(',')}`;
+    if (key !== this.warm.key) this.warm = { key, fighters: new Set(), splashes: false };
+    const r = this.renderer;
+    const mode = this.cv.mode(d.mode);
+    if (r?.preload && mode) {
+      const fresh = d.seats.filter((s) => s.locked && !this.warm.fighters.has(`${s.locked}:${s.skin ?? ''}`));
+      const first = !this.warm.fighters.has('');   // '' marks the map pass (the first draft state)
+      if (first || fresh.length) {
+        if (first) this.warm.fighters.add('');
+        for (const s of fresh) this.warm.fighters.add(`${s.locked}:${s.skin ?? ''}`);
+        const setup = {
+          matchId: `warm:${key}`, seed: 0, queue: d.queue, mode: d.mode, map: mode.map, catalogVersion: this.cv.version,
+          seats: fresh.map((s, i) => ({ player: s.player, team: s.team, name: s.name, fighter: s.locked!, skin: s.skin ?? '', loadout: { spells: [], boons: [] }, controller: s.isBot ? 'bot' : 'human', colorIndex: i })),
+        } as MatchSetup;
+        r.preload(setup, () => { /* progress belongs to the loading screen */ }).catch(() => { /* the loading screen retries */ });
+      }
+    }
+    if (d.phase === 'done' && !this.warm.splashes && typeof Image !== 'undefined') {
+      this.warm.splashes = true;
+      for (const s of d.seats) {
+        const f = this.cv.fighter(s.locked);
+        const ref = (s.skin ? this.cv.skin(s.skin)?.splash : undefined) ?? f?.art.splash;
+        const url = ref ? this.cv.asset(ref) : null;
+        if (url) { const img = new Image(); img.decoding = 'async'; img.src = url; }
+      }
+    }
+  }
+
   private readyLine(e: QueueEvt, key: string, fallback: string): string {
     const q = this.cv.queue(e.queue);
     const mode = this.cv.mode(q?.mode);

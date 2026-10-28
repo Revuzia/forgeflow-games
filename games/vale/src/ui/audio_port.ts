@@ -19,9 +19,18 @@ export interface AudioPort {
   duck?(on: boolean): void;
   /** OPTIONAL: the live match (its SimEvents become spatial cues), or null after it */
   attach?(client: import('../contracts/session.ts').MatchClient | null): void;
-  /** OPTIONAL: Settings.audio volumes changed */
+  /** OPTIONAL: Settings.audio volumes changed (plus the AUD-m4 extras mono / softenLoud, session/settings.ts AudioSettings) */
   settings?(s: import('../contracts/session.ts').Settings['audio']): void;
+  /** OPTIONAL (requested from AUDIO, AUD-m2): the draft bed follows the draft. Called on every change of the draft's
+   *  phase, of whether the local player has to act, and of the urgency window; null when the draft screen closes.
+   *  `urgent` is true in the last tokens.audio.beds.draft.localUrgencyLastS seconds of a timer the local player still has
+   *  to act on (their ban, their pick, their finalize Lock in). */
+  draft?(s: DraftMusicState | null): void;
 }
+
+/** the draft's state as the music hears it (audio AUD-m2; tokens.audio.beds.draft.phases: bans drone · picks harp pulse ·
+ *  finalise drums) */
+export interface DraftMusicState { phase: 'ban' | 'pick' | 'finalize'; mine: boolean; urgent: boolean }
 
 /** content's role → id bindings (CatalogT.audio `ui`, `screens`, `stings`); an unbound role is silent. `cues` is the
  *  catalog's cue table, read only to ask whether a fighter's own cue exists (FIGHTER_CALL) */
@@ -50,6 +59,15 @@ export class UiSound {
   }
   duck(on: boolean): void { try { this.port?.duck?.(on); } catch { /* never breaks the UI */ } }
   private bed: string | null | undefined = undefined;
+
+  /** the draft bed's state (AudioPort.draft); repeats of the same state are not sent */
+  draftMusic(s: DraftMusicState | null): void {
+    const k = s ? `${s.phase}:${s.mine ? 1 : 0}:${s.urgent ? 1 : 0}` : '';
+    if (k === this.draftKey) return;
+    this.draftKey = k;
+    try { this.port?.draft?.(s); } catch { /* never breaks the UI */ }
+  }
+  private draftKey: string | undefined = undefined;
 
   /** a non-UI cue the client itself owns (the post-game sting) */
   sting(kind: StingKind): void {
@@ -90,5 +108,6 @@ export function recordingPort(inner?: AudioPort | null): AudioPort & { log: { id
     play(id: string): void { rec(id); inner?.play(id); },
     music(id: string | null): void { rec(`music:${id ?? 'off'}`); inner?.music?.(id); },
     duck(on: boolean): void { rec(`duck:${on}`); inner?.duck?.(on); },
+    draft(s: DraftMusicState | null): void { rec(s ? `draft:${s.phase}:${s.mine ? 'mine' : 'theirs'}${s.urgent ? ':urgent' : ''}` : 'draft:off'); inner?.draft?.(s); },
   };
 }

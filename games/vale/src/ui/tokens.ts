@@ -542,6 +542,15 @@ export const TOKENS = {
     "error": "clay double-thud D3",
     "locked": "muffled tick + low glass",
     "purchase": "FM shimmer arpeggio D-F#-A-C#"
+  },
+  "audioDraft": {
+    "bpm": 90,
+    "phases": [
+      "bans: drone",
+      "picks: harp pulse",
+      "finalise: drums"
+    ],
+    "localUrgencyLastS": 8
   }
 } as const;
 
