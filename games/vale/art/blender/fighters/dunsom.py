@@ -190,8 +190,8 @@ LAN_ROOF = (0.046, 0.106, 0.120, 0.026)            # the cap: apex / eave below 
 LAN_EAVE = (0.104, 0.118, 0.122)                   # the eave lip: top / bottom below HANG, apothem
 LAN_BODY = (0.132, 0.318)                          # the panes: from / to below HANG
 LAN_BASE = (0.332, 0.368)
-WIN_W, WIN_LO, WIN_SPRING, WIN_TOP = 0.024, 0.308, 0.178, 0.146   # the lancet: half width, bottom / spring / apex
-VENT = (0.036, 0.104, 0.010, 0.024, 0.009)        # roof vents: r from / to, half width in / out, depth
+WIN_W, WIN_LO, WIN_SPRING, WIN_TOP = 0.025, 0.308, 0.178, 0.146   # the lancet: half width, bottom / spring / apex
+VENT = (0.034, 0.110, 0.011, 0.027, 0.009)        # roof vents: r from / to, half width in / out, depth
 
 
 def lan_z(dz):
@@ -206,7 +206,7 @@ HAT_R, HAT_EDGE, HAT_RISE, HAT_T = 0.355, 1.946, 0.095, 0.026
 # fix pass 1: the felt is 3.6 cm at the edge (brief: 4 cm with bevels) and thickens toward the crown (the underside
 # rises less than the top): the 2.6 cm shell's underside z-fought its top through the double-sided material in
 # three's depth buffer (the 1-px dark specks on the disc from the game camera)
-HAT_TE, HAT_TC = 0.036, 0.030       # thickness at the edge, + extra toward the crown
+HAT_TE, HAT_TC = 0.036, 0.055       # thickness at the edge, + extra toward the crown (5-7 cm mid-radius)
 HAT_BAND = (0.300, 0.334)           # the stitched edge band (r from / to)
 
 
@@ -531,14 +531,14 @@ def sculpts() -> list:
     # fix pass 1: a TAPERED cowl (the concept's back view), not a straight column: narrow under the crown, flaring
     # to the shoulders, a soft centre-back crease and two folds falling into the scarf
     hood = Sculpt("hood")
-    hood.add(FlatCapsule((MX, 0.032, 1.585), (MX, 0.012, 1.925), 0.190, 0.186, 0.130, 0.136, side=(1, 0, 0))
+    hood.add(FlatCapsule((MX, 0.026, 1.600), (MX, 0.012, 1.925), 0.178, 0.168, 0.130, 0.136, side=(1, 0, 0))
              .displaced(cloth_noise(0.003, 8.0), 0.003), k=0.0)
     hood.add(Ellipsoid((MX, 0.012, 1.925), (0.130, 0.136, 0.052)), k=0.02)
     hood.inter(HalfSpace((0, 0, 1.972), (0, 0, 1), 1.0), k=0.0)
-    hood.add(Tube([(MX, 0.140, 1.93), (MX, 0.168, 1.80), (MX, 0.205, 1.64)], [0.008, 0.012, 0.014], k=0.01), k=0.025)
-    for sx in (-1, 1):                                                    # soft folds falling down the back
-        hood.add(Tube([(MX + sx * 0.075, 0.128, 1.88), (MX + sx * 0.105, 0.160, 1.74), (MX + sx * 0.125, 0.175, 1.62)],
-                      [0.008, 0.012, 0.012], k=0.01), k=0.03)
+    hood.add(Tube([(MX, 0.140, 1.93), (MX, 0.160, 1.80), (MX, 0.178, 1.69)], [0.008, 0.011, 0.012], k=0.01), k=0.025)
+    for sx in (-1, 1):                                                    # soft folds falling into the scarf
+        hood.add(Tube([(MX + sx * 0.075, 0.128, 1.88), (MX + sx * 0.100, 0.150, 1.76), (MX + sx * 0.115, 0.160, 1.68)],
+                      [0.008, 0.011, 0.010], k=0.01), k=0.03)
 
     def opening(P):
         return np.maximum(face_sd(P[:, 0], P[:, 2]) - 0.006, P[:, 1] + 0.030)
@@ -637,16 +637,19 @@ def sculpts() -> list:
     skirt.sub(Fn(slot, (-0.12, -0.40, 0.2), (0.08, 0.0, 1.22)), k=0.006)
     part("skirt", skirt, "cloth", ("weights", "skirt"), 2150)
 
+    # fix pass 1 (review: dark ragged blotches on the coat in strides, kneels and the bow): the full under-robe and the
+    # trousers' knees poked through the skirt wherever the legs move it (its side verts blend the thighs differently):
+    # the under-robe is now only the dark panel behind the front opening, 2.5 cm inside the skirt everywhere
     under = Sculpt("under_robe")
-    under.add(FlatCapsule((0.0, 0.030, 1.22), (0.0, 0.040, 0.36), 0.160, 0.112, 0.215, 0.150, side=(1, 0, 0)), k=0.0)
+    under.add(FlatCapsule((-0.020, -0.035, 1.21), (-0.020, -0.050, 0.36), 0.060, 0.050, 0.105, 0.088, side=(1, 0, 0)), k=0.0)
     under.inter(HalfSpace((0, 0, 0.33), (0, 0, -1), 2.0), k=0.004)
-    part("under_robe", under, "under", ("weights", "skirt"), 500)
+    part("under_robe", under, "under", ("weights", "skirt"), 260)
 
     legs = Sculpt("trousers")
     for sx in (-1, 1):
-        legs.add(FlatCapsule((sx * 0.125, 0.025, 0.46), (sx * 0.130, 0.020, 0.15), 0.060, 0.062, 0.054, 0.056, side=(1, 0, 0))
-                 .displaced(cloth_noise(0.002, 10.0), 0.002), k=0.0)
-    part("trousers", legs, "under", ("weights", "trousers"), 320, 0.8)
+        legs.add(FlatCapsule((sx * 0.127, 0.023, 0.40), (sx * 0.130, 0.020, 0.15), 0.058, 0.060, 0.054, 0.056, side=(1, 0, 0))
+                 .displaced(cloth_noise(0.002, 10.0), 0.002), k=0.0)       # (fix pass 1: below the knee only)
+    part("trousers", legs, "under", ("weights", "trousers"), 220, 0.8)
 
     for s, sh, el, wr, fo in (("L", SH_L, E_L, W_L, FO_L), ("R", SH_R, E_R, W_R, FO_R)):
         sx = 1.0 if s == "L" else -1.0
@@ -662,8 +665,8 @@ def sculpts() -> list:
         part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 900 if s == "R" else 800)
 
     # HANDS: ochre gloves, the right closed round the crook (thumb up), the left a relaxed curl hanging at the hip
-    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 1150, curl=1.0, grip=True))
-    out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 1050, curl=LEFT_CURL, grip=False))
+    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 1050, curl=1.0, grip=True))
+    out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 950, curl=LEFT_CURL, grip=False))
 
     # BOOTS: plain dark leather, a little wide (x1.2), ironstone toe caps
     boots, caps = Sculpt("boots"), Sculpt("toecaps")
@@ -726,7 +729,7 @@ def crook_parts() -> list:
     shaft.add(FacetTube([HOOK_TIP - tip_d * 0.030, HOOK_TIP + tip_d * 0.006], [HOOK_R + 0.002, HOOK_R + 0.005], n=6,
                         twist=0.0, seed=11, jitter=0.10, ext=0.55, ref=h), k=0.004)      # the carved knob at the tip
     shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)              # the butt sits on the ground (load test)
-    out.append(("crook_shaft", shaft, 0.5, "wood", "bone:prop.R", 1500, 1.1))
+    out.append(("crook_shaft", shaft, 0.5, "wood", "bone:prop.R", 1300, 1.1))
     grip = Sculpt("crook_grip")
     for a_, b_ in GRIPS:
         g0, g1 = crook_at(a_), crook_at(b_)
@@ -821,7 +824,7 @@ def lantern_parts() -> list:
     fr.add(Sphere((c[0], c[1], zs1 - 0.008), 0.016), k=0.006)
     fr.ops = [(op, prim.displaced(chips(0.0012, 26.0), 0.0012) if op == "add" else prim, k, tg) for op, prim, k, tg in fr.ops]
     fr.sub(Fn(lambda P: vent_d(P, -0.02, VENT[4]), lo, hi), k=0.0015)
-    out.append(("lantern_frame", fr, 0.4, "wood_dark", "bone:x_lantern", 1400, 1.2))
+    out.append(("lantern_frame", fr, 0.4, "wood_dark", "bone:x_lantern", 1200, 1.2))
     gl = Sculpt("lantern_glass")
     gl.add(Fn(lambda P: octa(P, c, LAN_GLASS, zb1, zb0), lo, hi), k=0.0)
     out.append(("lantern_glass", gl, 0.45, "lampresin", "bone:x_lantern", 260, 0.8))
@@ -839,7 +842,7 @@ def lantern_parts() -> list:
     core = Sculpt("lantern_core")
     core.add(Fn(windows, lo, hi), k=0.0)
     core.add(Fn(lambda P: vent_d(P, VENT[4] - 0.0005, VENT[4] + 0.0045), lo, hi), k=0.0)      # the glow in the vents
-    out.append(("lantern_core", core, 0.4, "accent", "bone:x_lantern", 600, 0.6))
+    out.append(("lantern_core", core, 0.4, "accent", "bone:x_lantern", 420, 0.6))
     return out
 
 
@@ -897,7 +900,7 @@ def hat_profile() -> list:
     return pts
 
 
-def hat_low(ctx, mat, seg: int = 64):
+def hat_low(ctx, mat, seg: int = 60):
     """the hat's game mesh as a clean lathe (the decimated SDF shell left 1-px pinholes on the broad top in three);
     the SDF sculpt stays the bake source for its normals"""
     import bmesh
@@ -1368,7 +1371,7 @@ def _match_back(k, p, cols, wb, names, log):
 
 
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
-COAT_LIFT, COAT_DESAT = 1.34, 0.10      # fix pass 1: x1.52 / 22 % read white-washed in three (the concept's mid lavender)
+COAT_LIFT, COAT_DESAT = 1.18, 0.05      # fix pass 1: x1.52 / 22 % read white-washed in three (the concept's mid lavender)
 HOOD_FLOOR = 0.62           # no hood texel darker than this x the lit hood's median (the back sheet paints its back
                             # in the brim's shadow: a black column from behind) except inside the face opening
 HOOD_HEX = "#7A6E86"        # the hood's felt (the coat's lavender): 40 % of its hue / chroma
@@ -1426,8 +1429,8 @@ def _wood_paint(p, n):
     running ALONG the shaft (not round it), darker carving cuts where the planes meet (the facet edges catch less
     light: n's curvature from the bake does the rest), a few knots, a little grime toward the butt"""
     s, th = _crook_local(p)
-    base = _lin(_hex("#CDC4B6"))
-    dark = _lin(_hex("#8F8476"))
+    base = _lin(_hex("#B7AEA0"))
+    dark = _lin(_hex("#7D7468"))
     grain = np.sin(th * 9.0 + 2.2 * NOISE(p * np.array([1.0, 1.0, 0.12]), 5.0)) * 0.5 + 0.5
     fine = np.sin(th * 23.0 + 3.0 * NOISE(p * np.array([1.0, 1.0, 0.10]), 9.0)) * 0.5 + 0.5
     g = 0.55 * grain ** 4 + 0.30 * fine ** 6
@@ -1435,7 +1438,7 @@ def _wood_paint(p, n):
     knots = np.clip(NOISE.ridged(p, 9.0, 2) - 0.62, 0, 1) * 1.8
     z = p[:, 2]
     butt = 0.72 + 0.28 * ss(0.05, 0.70, z)
-    c = c * ((1 - 0.30 * knots) * butt * _lam(n, 0.84, 0.18))[:, None] * (1 + 0.05 * _fbm(p, 30.0))[:, None]
+    c = c * ((1 - 0.30 * knots) * butt * _lam(n, 0.86, 0.14))[:, None] * (1 + 0.05 * _fbm(p, 30.0))[:, None]
     return c
 
 
@@ -1532,7 +1535,10 @@ def _tone_clamp(lin, k, p, n, names, log):
         ny = n[sel, 1]
         Y = _Y(c)
         ok = Y > 0.003
-        f, b = ok & (ny < 0.0), ok & (ny >= 0.0)
+        if nm == "hood":              # one felt tone all round (front / back apart left a darker 'ghost' column behind)
+            f = b = ok & (ny > -0.30)
+        else:
+            f, b = ok & (ny < 0.0), ok & (ny >= 0.0)
         tf = _band_tone(zs[f], c[f], zs) if f.sum() >= 40 else None
         tb = _band_tone(zs[b], c[b], zs) if b.sum() >= 40 else None
         if tf is None and tb is None:
@@ -1541,6 +1547,12 @@ def _tone_clamp(lin, k, p, n, names, log):
         tb = tb if tb is not None else tf
         wbb = ss(-0.35, 0.35, ny)[:, None]
         tone = tf * (1 - wbb) + tb * wbb
+        # one hue for the whole part (its well-lit front median's chroma): the bands keep only their VALUE (a warm rim
+        # stroke or a glove-tinted band left a pink stripe round the back of the coat)
+        good = f if nm == "hood" else (ok & (ny < -0.5) if (ok & (ny < -0.5)).sum() >= 40 else ok)
+        hue = np.median(c[good], axis=0)
+        hue = hue / max(float(_Y(hue[None, :])[0]), 1e-5)
+        tone = hue[None, :] * _Y(tone)[:, None]
         r = Y / np.maximum(_Y(tone), 1e-5)
         r2 = 1 + (r - 1) * keep
         lo_ = np.full(len(r2), lo, dtype=np.float32)
@@ -1635,7 +1647,9 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     if bleed:
         iy, ix = _project.nearest_index(part >= 0)
         out = out[iy, ix]
-        far = np.hypot(iy - np.arange(out.shape[0])[:, None], ix - np.arange(out.shape[1])[None, :]) > 3.0
+        # fix pass 1: the islands' own colour fills the whole 7 px gutter (mip levels of the many small islands
+        # pulled their neighbours' colours in: the pale crook's into the coat as 'frost')
+        far = np.hypot(iy - np.arange(out.shape[0])[:, None], ix - np.arange(out.shape[1])[None, :]) > 9.0
         smooth = _project.blur(out, 6.0)
         out[far] = smooth[far]
         out = _project.blur(out, ATLAS_SOFTEN).astype(np.float32)
@@ -2079,6 +2093,38 @@ def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=No
 
 
 _render._fit_camera = _fit_camera
+
+# fix pass 1 (review: the splash rendered the dark boots cream with white toes): the low hero camera sees the boots'
+# tops at a 3-degree graze, where the Principled sheen mirrors the bright hazy horizon of the map sky (Vashil's and
+# Marund's feet show it too); this all-felt-and-leather figure renders its splash / portrait / icon with the body's
+# specular eased to SPEC_RENDER (the in-game material is untouched)
+SPEC_RENDER = 0.12
+_orig_fighter_renders = _render.fighter_renders
+
+
+def _fighter_renders(ctx, objs, P, skin, *a, **k):
+    saved = []
+    if getattr(ctx.spec, "ID", None) == ID:
+        for o in objs:
+            if o.type != "MESH":
+                continue
+            for m in o.data.materials:
+                if m is None or not m.use_nodes:
+                    continue
+                for nd in m.node_tree.nodes:
+                    if nd.type == "BSDF_PRINCIPLED" and "Specular IOR Level" in nd.inputs:
+                        inp = nd.inputs["Specular IOR Level"]
+                        if not inp.is_linked:
+                            saved.append((inp, inp.default_value))
+                            inp.default_value = SPEC_RENDER
+    try:
+        return _orig_fighter_renders(ctx, objs, P, skin, *a, **k)
+    finally:
+        for inp, v in saved:
+            inp.default_value = v
+
+
+_render.fighter_renders = _fighter_renders
 
 
 # ── the bind pose (fix pass 1; Kemdo's method): art.height is the hat's crown, never the crook's hook ────────
@@ -2665,11 +2711,11 @@ def clip_overrides(ctx) -> dict:
 
     # RECALL: the crook lifted so the lantern hangs at eye level before him, the left hand cupped under it (loops)
     # (fix pass 1: the 2.56 m crook leans forward 40 degrees so the lantern still comes down to eye level)
-    RC_R, RC_AIM = (-0.26, -0.72, 0.04), (0.30, -0.56, 0.77)
-    up_c = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=RC_R, aim=RC_AIM)
+    RC_R, RC_AIM, RC_S = (-0.22, -0.72, 0.02), (0.20, -0.35, 0.91), -0.30
+    up_c = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=RC_R, aim=RC_AIM, slide=RC_S)
     lp = lantern_at(up_c)
     cup = lp + V((0.0, 0.0, -(LAN_BASE[1] + 0.05)))
-    rc = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=RC_R, aim=RC_AIM, Lpos=tuple(cup),
+    rc = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=RC_R, aim=RC_AIM, slide=RC_S, Lpos=tuple(cup),
               Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 0, 30)))
     scene.log(f"dunsom recall: lantern pivot at {tuple(round(v, 3) for v in lp)}, cupped hand at z {cup.z:.2f}")
 

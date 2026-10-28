@@ -103,6 +103,75 @@ LEG_BONES = tuple(f"{b}.{s}" for s in "LR" for b in ("thigh", "shin", "foot", "t
 BODY_EXCLUDE = ("root", "neck", "head", "x_hem_1") + ARM_BONES
 SLEEVE_EXCLUDE = ("root", "hips", "spine", "neck", "head", "prop.L", "prop.R", "x_hem_1") + LEG_BONES
 
+def snap_hollow(F, ob, tol=0.004, log=print) -> int:
+    """(r7, verify wave-b) the decimated hood low's vertices that lie INSIDE the carved hollow (the tombstone
+    opening + head space, deeper than `tol`) are pulled back onto its walls: the collapse left spikes of the side
+    walls jutting 2-4 cm into the opening at the arch's springing line (lit dark wedges beside the core at eye level,
+    ragged teeth at the opening's sides from 52 deg once the rim no longer covered them). Returns the count moved."""
+    T = tomb_of(F)
+    me = ob.data
+    n = len(me.vertices)
+    co = np.empty(n * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(n, 3)
+    d = T.d(co)
+    sel = np.nonzero(d < -tol)[0]
+    if len(sel) == 0:
+        return 0
+    Q = co[sel].copy()
+    e = 1e-4
+    for _ in range(8):
+        dq = T.d(Q)
+        g = np.stack([T.d(Q + np.eye(3)[i] * e) - T.d(Q - np.eye(3)[i] * e) for i in range(3)], 1) / (2 * e)
+        Q = Q - (dq / np.maximum((g * g).sum(1), 1e-6))[:, None] * g
+    co[sel] = Q
+    me.vertices.foreach_set("co", co.ravel())
+    me.update()
+    log(f"brightwick: hollow snap moved {len(sel)} hood low vertices (max depth {-float(d[sel].min()) * 100:.1f} cm)")
+    return len(sel)
+
+
+def refine_hollow(F, ob, D, tol=0.006, iters=8, log=print) -> int:
+    """(r7, verify wave-b) the decimated hood low's CHORDS across the hollow: the collapse joined vertices on the
+    opening's front edge to vertices on the head space's back wall, so whole triangles cut through the void and
+    showed as wedges jutting 2-4 cm into the opening at the arch's springing line (pale teeth at its sides from
+    52 deg, lit wedges beside the core at eye level). Every triangle whose centre lies inside the void has its
+    longest edge split, the new vertex projected onto the hood's own surface (its SDF), until none is left.
+    Returns the vertices added."""
+    import bmesh
+    T = tomb_of(F)
+    me = ob.data
+    added = 0
+    e_ = 1e-4
+    for _ in range(iters):
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bm.faces.ensure_lookup_table()
+        cents = np.array([f.calc_center_median()[:] for f in bm.faces], dtype=np.float64)
+        bad = np.nonzero(T.d(cents) < -tol)[0]
+        if len(bad) == 0:
+            bm.free()
+            break
+        edges = {max(bm.faces[int(i)].edges, key=lambda ed: ed.calc_length()) for i in bad}
+        res = bmesh.ops.subdivide_edges(bm, edges=list(edges), cuts=1, use_grid_fill=False)
+        newv = [g for g in res["geom_split"] if isinstance(g, bmesh.types.BMVert)]
+        bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+        Q = np.array([v.co[:] for v in newv], dtype=np.float64)
+        for _k in range(12):
+            dq = D.d(Q)
+            g = np.stack([D.d(Q + np.eye(3)[i] * e_) - D.d(Q - np.eye(3)[i] * e_) for i in range(3)], 1) / (2 * e_)
+            Q = Q - (dq / np.maximum((g * g).sum(1), 1e-6))[:, None] * g
+        for v, q in zip(newv, Q):
+            v.co = q.tolist()
+        added += len(newv)
+        bm.to_mesh(me)
+        bm.free()
+    me.update()
+    if added:
+        log(f"brightwick: hollow refine split {added} chord edges across the opening")
+    return added
+
+
 # ── per-culture forms (metres; Z up, the wick faces -Y, soles at 0, its right hand at -X) ─────────────────
 # measured on the concepts (Aubade 709.3 px/m, Serenade 744 px/m; the plates' masks, widths per height):
 #   Aubade   cloak +-0.37 at the chest .. +-0.42 at the hem, pauldrons +-0.17..0.36, hem points at 0.07
@@ -157,8 +226,10 @@ FORM = {
         # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
         # (r7, verify wave-b: the dark collar roll under the opening + the roll round it = lips round an O) the sill
         # 1.370 -> 1.385 and the collar's front flattened under it (COLLAR_FRONT): a 4 cm band of felt is the arch's
-        # straight sill between the dark opening and the collar
-        "tomb": ((0.114, 1.385, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
+        # straight sill between the dark opening and the collar; its bottom corners 4.5 -> 3.4 cm round (the rounded
+        # box under the arch needs 2 x the corner radius <= its height, 7.6 cm now: a bigger corner pinched the
+        # outline at the springing line, a notch either side)
+        "tomb": ((0.114, 1.385, 1.575, 0.034), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
         # one soft core floating in the hollow (see the Aubade note): 12 x 7 cm, front ~3.5 cm behind the opening
         # (r6: 5.1 -> 3.9 cm across: the 2.07 x halo filled the broad opening edge to edge, a lit visor from 52 deg)
         "hood_light": ((0.0, -0.124, 1.445), (0.039, 0.021, 0.025), 8.0),
@@ -404,11 +475,12 @@ def hood_radius(F, z):
     return _HOOD_R[key]
 
 
-def opening_loop(F, n=24, lift=0.0):
-    """the rim path: the tombstone's sides and arch laid on the hood's outer front surface (rays along +Y)"""
+def opening_loop(F, n=24, lift=0.0, full=False):
+    """the rim path: the tombstone's sides and arch laid on the hood's outer front surface (rays along +Y);
+    `full`: the whole outline, round the bottom corners and along the sill, closed (the last point = the first)"""
     T = tomb_of(F)
     D = hood_outer(F)
-    xz = T.arch(n)
+    xz = T.arch(n) if not full else T.loop(n) + T.loop(n)[:1]
     # march_in finds the outermost crossing coming in from t = rmax: rays from the hood's mid plane toward -Y
     O = np.array([(x, 0.0, z) for x, z in xz])
     t = march_in(D, O, np.tile((0.0, -1.0, 0.0), (len(O), 1)), 0.6, steps=120)
@@ -1013,6 +1085,9 @@ class Brightwick(wc.Wick):
                 bpy.data.objects.remove(lo_ob)
                 lo_ob = mesh.duplicate(ob, f"{name}_low", ctx.col)
                 mesh.decimate_to(lo_ob, tris, symmetric=False)
+            if name == "hood":
+                snap_hollow(self.F, lo_ob)
+                refine_hollow(self.F, lo_ob, sdf_of(S))
             P.append(fighter.Part(name, high=ob, low=lo_ob, tris=tris, bind=bind, uv_weight=uvw))
         return P
 
@@ -1089,7 +1164,7 @@ TRIS = {
     # (r7: the hood 440 -> 400 pays for the ten-lamp crown)
     "aubade": {"hood": 400, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
                "sleeves": 150, "staff": 130},
-    "serenade": {"hood": 310, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
+    "serenade": {"hood": 300, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
                  "sleeves": 138, "cuffs": 48, "staff": 110},
 }
 PAINT: dict = {}            # paint id -> spec (the hybrid paint looks its spec up here)
@@ -1148,19 +1223,22 @@ def hood_parts(F, aub, part):
         # of the arch, thinning fast through the arch's shoulders to a flat 4.5 mm felt edge down the sides and the
         # lower corners (sunk half into the felt: it turns the edge, it never stands round the opening), so the dark
         # opening reads as an arch under a rolled brim, not a ringed O
+        # The FULL outline: with the collar's front lowered, the opening's bottom corners and the sill's edge were the
+        # hood low's bare cut (ragged felt / dark notches); the flat edge runs round them and along the sill, where it
+        # is painted the felt's own turned edge (`_rim_serenade`), never a dark lower lip
         T_ = tomb_of(F)
         rr_at, flat_at, sink_at = rim_profile_s(T_)
-        loop = opening_loop(F, n=24, lift=0.004)
+        loop = opening_loop(F, n=30, lift=0.004, full=True)
         loop = [np.array((x_, y_ + sink_at(z_), z_)) for x_, y_, z_ in loop]
         for i in range(len(loop) - 1):
             a_, b_ = loop[i], loop[i + 1]
             side = np.cross(b_ - a_, (0.0, 1.0, 0.0))
             ra, rb = rr_at(a_[2]), rr_at(b_[2])
             rim.add(FlatCapsule(a_, b_, ra, ra * flat_at(a_[2]), rb, rb * flat_at(b_[2]), side=side), k=0.004)
-        lo_loop = opening_loop(F, n=13, lift=0.004)
+        lo_loop = opening_loop(F, n=18, lift=0.004, full=True)[:-1]
         lo_loop = [(x_, y_ + sink_at(z_), z_) for x_, y_, z_ in lo_loop]
-        tv, tf = sweep_tube(lo_loop, [rr_at(p_[2]) * 1.04 for p_ in lo_loop], 6,
-                            flat=[flat_at(p_[2]) for p_ in lo_loop])
+        tv, tf = sweep_tube(lo_loop, [rr_at(p_[2]) * 1.04 for p_ in lo_loop], 5,
+                            flat=[flat_at(p_[2]) for p_ in lo_loop], closed=True)
         part("hood_rim", rim, "cloth", "bone:head", 0, 0.7, 1.4, low=lambda D, v=tv, f=tf: (v, f))
     # the hood light (brief §0.2 / §4): ONE soft core, wider than tall, floating in the head space with ink all
     # round it (FORM "hood_light"): a lamp glowing inside the hood. (A broad tilted lens that filled the opening
@@ -1280,12 +1358,13 @@ def rim_band(F, D, width, height, n=17, inner=0.016):
     return V, Fc
 
 
-def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0), flat=None):
+def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0), flat=None, closed=False):
     """a round tube (nseg sides) swept along an open polyline, its frame from `out` (the side it faces); the
     ends are left open (they tuck into the cowl / the collar). `flat` (per station) squashes the section along
-    `out`: a flat band lying on the surface (r across, r * flat proud)"""
+    `out`: a flat band lying on the surface (r across, r * flat proud). `closed`: the path is a loop (its last
+    station joins the first: no seam)"""
     P = np.asarray(pts, float)
-    T = np.gradient(P, axis=0)
+    T = np.gradient(P, axis=0) if not closed else 0.5 * (np.roll(P, -1, 0) - np.roll(P, 1, 0))
     T /= np.linalg.norm(T, axis=1, keepdims=True)
     o = np.asarray(out, float)
     N = o[None] - T * (T @ o)[:, None]
@@ -1303,9 +1382,15 @@ def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0), flat=None):
     # grid_faces is column-major (i * nv + j) with i the path index and j the ring index: rings are closed, so
     # add the seam quads between ring vertex nseg-1 and 0
     extra = []
-    for i in range(len(P) - 1):
-        a, b, c, d = i * nseg + nseg - 1, (i + 1) * nseg + nseg - 1, (i + 1) * nseg, i * nseg
+    nP = len(P)
+    for i in range(nP - 1 + (1 if closed else 0)):
+        i2 = (i + 1) % nP
+        a, b, c, d = i * nseg + nseg - 1, i2 * nseg + nseg - 1, i2 * nseg, i * nseg
         extra += [(a, b, c), (a, c, d)]
+        if closed and i == nP - 1:
+            for j in range(nseg - 1):                     # the loop's closing span (last ring -> first)
+                a, b, c, d = i * nseg + j, i2 * nseg + j, i2 * nseg + j + 1, i * nseg + j + 1
+                extra += [(a, b, c), (a, c, d)]
     F_ = np.concatenate([F_, np.array(extra, dtype=np.int64)])
     cen = V[F_].mean(1)
     near = np.argmin(((cen[:, None, :] - P[None]) ** 2).sum(2), axis=1)
@@ -2427,6 +2512,13 @@ def _hood_serenade(spec, p, g, col):
     return col * (1 + 0.07 * PNOISE(p, 7.0, (2.2, 0.4, 1.1)) + 0.04 * PNOISE(p, 23.0, (0.7, 3.1, 0.2)))[:, None]
 
 
+def _rim_serenade(spec, p, g, col):
+    """(r7) the rim's sill run (along the opening's bottom, round its lower corners) is the felt's own turned edge in
+    the dome's felt, a little darker: the opening's straight sill, never a dark lower lip under it"""
+    zb = tomb_of(spec.F).zb
+    return mix(col, "#8A765E", 1.0 - smooth(zb + 0.012, zb + 0.040, p[:, 2]))
+
+
 def _mantle_serenade(spec, p, g, col):
     """the felt capelet (r6, review r4: "a flat slab with a straight hem and barely visible folds"): the drape's own
     folds painted from the sculpt's function (`mantle_drape`: a shadowed valley between every two lobes of the
@@ -2686,7 +2778,7 @@ REGIONS = {
                "pauldron_R": lambda s, p, g, c: _pauldron_aubade(s, p, g, c, "R"),
                "pauldron_L": lambda s, p, g, c: _pauldron_aubade(s, p, g, c, "L")},
     "serenade": {"cloak": _cloak_serenade, "staff": _grain, "gorget": _iron, "lantern": _iron, "hood": _hood_serenade,
-                 "hood_cap": _hood_serenade, "mantle": _mantle_serenade,
+                 "hood_cap": _hood_serenade, "mantle": _mantle_serenade, "hood_rim": _rim_serenade,
                  "tabard": _tabard_serenade,
                  "pauldron_R": lambda s, p, g, c: _pauldron_serenade(s, p, g, c, -1.0),
                  "pauldron_L": lambda s, p, g, c: _pauldron_serenade(s, p, g, c, 1.0)},
