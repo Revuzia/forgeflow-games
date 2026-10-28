@@ -26,6 +26,7 @@
 //   C1  a bed's main stem starts while its layer is still decoding; the layer joins on a bar, phase-locked
 //   C2  draft layers: musicPhase / musicUrgency switch the 'phase_*' / 'urgency' layers; a 'stem*' layer loops on its
 //       own length
+//   C3  the shipped draft bed walks its own phases (picks from 16 s, final from 80 s) until musicPhase() drives it
 // Exit 0 = all hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_announcer.json.
 
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
@@ -340,7 +341,8 @@ report.B4 = { monoChannels: monoCh, softenWired: softIn, offChannels: stereoCh, 
 if (monoCh !== 1 || stereoCh !== 2 || !softIn || !softOut) failures.push(`B4: ${JSON.stringify(report.B4)}`);
 
 // C1 — a bed whose layer decodes slowly
-const bedId = Object.keys(audio.music).find((k) => audio.music[k].layers.length);
+const synced = (id) => !id.startsWith('stem') && !id.startsWith('phase_') && id !== 'urgency';      // the combat layer
+const bedId = Object.keys(audio.music).find((k) => audio.music[k].layers.length && synced(audio.music[k].layers[0].id));
 const bdef = audio.music[bedId];
 let release;
 DELAY[bdef.layers[0].file] = new Promise((r) => { release = r; });
@@ -384,6 +386,23 @@ if (!(on(p1.picks) && off(p1.final) && on(p2.picks) && on(p2.final) && off(p0.pi
 if (!(on(u1) && off(u0))) failures.push(`C2: urgency on ${u1} off ${u0}`);
 if (!stemSrc || Math.abs(stemSrc.loopEnd - report.C2.stemOwnLength) > 1e-6 || !on(report.C2.stemGain)) failures.push(`C2: stem ${JSON.stringify(report.C2)}`);
 
+// C3 — the real draft bed walks its own phases while nobody drives them, and stops walking once musicPhase() is called
+const draft = audio.music.mus_draft;
+if (draft?.layers.some((l) => l.id.startsWith('phase_'))) {
+  eng.music('mus_draft');
+  await flush();
+  const D = Object.fromEntries(eng.bed.layers.map((l) => [l.id, l]));
+  const t0 = eng.bed.t0;
+  const g = (id) => D[id].gain.gain.at(ctx.currentTime + 4);
+  const step = (to) => { ctx.currentTime = t0 + to; eng.update(0.25); };
+  step(10); const at10 = { picks: g('phase_picks'), final: g('phase_final') };
+  step(20); const at20 = { picks: g('phase_picks'), final: g('phase_final') };
+  step(85); const at85 = { picks: g('phase_picks'), final: g('phase_final') };
+  eng.musicPhase('picks'); step(90); const driven = { picks: g('phase_picks'), final: g('phase_final') };
+  report.C3 = { at10, at20, at85, drivenPicksAt90: driven };
+  if (!(off(at10.picks) && on(at20.picks) && off(at20.final) && on(at85.final) && on(driven.picks) && off(driven.final))) failures.push(`C3: ${JSON.stringify(report.C3)}`);
+} else failures.push('C3: content has no draft bed with phase layers');
+
 report.failures = failures; report.pass = failures.length === 0;
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(report, null, 1));
@@ -400,6 +419,7 @@ console.log(`B1 ${JSON.stringify(report.B1)} · B2 ${JSON.stringify(report.B2)}`
 console.log(`B3 ${JSON.stringify(report.B3)} · B4 ${JSON.stringify(report.B4)}`);
 console.log(`C1 ${JSON.stringify(report.C1)}`);
 console.log(`C2 ${JSON.stringify(report.C2)}`);
+console.log(`C3 ${JSON.stringify(report.C3)}`);
 console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : 'PASS: one announcer line per event, merged, expired, preempted only by bands 0-1, the mix ducked under it; the voice budget, heal merging, soft clip, mono / soften and the bed layers hold');
 console.log(`report → ${OUT}`);
 process.exit(failures.length ? 1 : 0);

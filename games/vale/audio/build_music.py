@@ -12,7 +12,8 @@ Deterministic: every random choice in the scores is seeded by name (synth.core.r
 bit-identical up to the encoder.
 
 QA per bed stem (decoded OGG)
-  len      exact sample count (must equal the render; a layer must equal its main stem) and the 8 s grid
+  len      exact sample count (must equal the render; a layer must equal its main stem, except a 'stem…' layer, which
+           loops on its own length: tokens.audio.beds.menu.stemsS) and the 8 s grid
   seam     the wrap (sample 0) measured like every other bar downbeat of the loop (bar 0 is itself a
            downbeat: a chord change, a strike, a fill landing): the sample step there over the 99.9th-pct
            step within ±0.5 s (≤ 1.5 = no step), the > 7 kHz peak (a click) and the spectral distance
@@ -174,7 +175,10 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool) -> dict
     for lid in want_layers:
         if lid not in stems:
             raise SystemExit(f'{bid}: audio.json wants layer {lid!r}, the composition gives {sorted(stems)}')
-        if stems[lid].shape[1] != n:
+        if lid.startswith('stem'):                 # an independent stem: its own length, on the 8 s grid
+            if abs((stems[lid].shape[1] / SR) % 8.0) > 1e-6:
+                raise SystemExit(f'{bid}: stem {lid} is {stems[lid].shape[1] / SR:.3f} s, not a whole number of 8 s phrases')
+        elif stems[lid].shape[1] != n:
             raise SystemExit(f'{bid}: layer {lid} is {stems[lid].shape[1]} samples, main is {n}')
     # pre-level every stem 3 dB above its target so bedlib's fixed-threshold glue compressor sees the same
     # input level on every bed (it then only moves loud moments by a dB or two)

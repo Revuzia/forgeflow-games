@@ -51,7 +51,9 @@
 //               file is in. A layer's id gives its role: 'stem…' loops on its own length, always on (the menu's
 //               independent stems, tokens.audio.beds.menu.stemsS); 'phase_<p>' follows musicPhase() (the draft:
 //               every phase layer up to and including <p>, in content order, fades in on the next bar);
-//               'urgency' follows musicUrgency() (your last seconds to pick, fast in and out); any other layer is
+//               'urgency' follows musicUrgency() (your last seconds to pick, fast in and out); until the client
+//               calls musicPhase() for a bed, the bed walks its phases itself on the old through-composed arc
+//               (AUTO_PHASE_S: the first phase layer from 16 s, the last from 80 s); any other layer is
 //               the combat layer, faded by the match's combat intensity (enter above 0.6, leave below 0.35
 //               after 8 s, quantised to the bar). duck() pulls the bed −8 dB under a moment (the ready check)
 //   listener    spatial cues are heard from the CAMERA's ground focus (CONTRACT §11 'listener at the camera
@@ -200,6 +202,7 @@ const ANN_PREEMPT = 1;       // bands up to this cut a playing line of a lower b
 const ANN_CUT_S = 0.15;      // … with this fade
 const ANN_TAIL_S = 0.6;      // the next line may start this long before the playing file ends (its ring-out) …
 const ANN_MIN_S = 0.6;       // … but never sooner than this after it started
+const AUTO_PHASE_S = [16, 80];   // a bed's phases walk themselves (first, last phase layer) until musicPhase() drives them
 const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
@@ -276,6 +279,8 @@ class Engine implements ValeAudioPort {
   /** musicPhase() / musicUrgency() (see `music` in the header) */
   private phase: string | null = null;
   private urgent = false;
+  /** musicPhase() was called for this bed (else the bed walks its own phases, AUTO_PHASE_S) */
+  private phaseDriven = false;
   // the announcer (see `announcer` in the header)
   private annQ: AnnItem[] = [];
   private annNow: { item: AnnItem; voice: Voice | null; until: number } | null = null;
@@ -530,7 +535,7 @@ class Engine implements ValeAudioPort {
 
   settings(s: AudioSettings): void { this.vol = { ...s }; this.applyVolumes(); }
 
-  musicPhase(phase: string | null): void { this.phase = phase; this.bedRoles(); }
+  musicPhase(phase: string | null): void { this.phase = phase; this.phaseDriven = true; this.bedRoles(); }
 
   musicUrgency(on: boolean): void { this.urgent = on; this.bedRoles(); }
 
@@ -542,7 +547,7 @@ class Engine implements ValeAudioPort {
   music(id: string | null): void {
     if (id === this.wantBed) return;
     this.wantBed = id;
-    this.phase = null; this.urgent = false;
+    this.phase = null; this.urgent = false; this.phaseDriven = false;
     if (!this.ctx) return;
     this.stopBed();
     if (id) this.startBed(id);
@@ -1221,7 +1226,16 @@ class Engine implements ValeAudioPort {
     this.fight = Math.max(0, this.fight - dt * FIGHT_DECAY);
     this.syncAmbience();
     const b = this.bed;
-    if (!b || !this.ctx || !b.layers.some((l) => l.role === 'combat')) return;
+    if (!b || !this.ctx) return;
+    // phases nobody drives walk themselves (see `music` in the header)
+    const phases = b.layers.filter((l) => l.role === 'phase');
+    if (!this.phaseDriven && phases.length && b.t0 !== null) {
+      const at = this.ctx.currentTime - b.t0;
+      const auto = at >= AUTO_PHASE_S[1] ? phases[phases.length - 1].id.slice('phase_'.length)
+        : at >= AUTO_PHASE_S[0] ? phases[0].id.slice('phase_'.length) : null;
+      if (auto !== this.phase) { this.phase = auto; this.bedRoles(); }
+    }
+    if (!b.layers.some((l) => l.role === 'combat')) return;
     if (!this.combat && this.intensity > 0.6) { this.combat = true; this.calmFor = 0; }
     else if (this.combat) {
       this.calmFor = this.intensity < 0.35 ? this.calmFor + dt : 0;

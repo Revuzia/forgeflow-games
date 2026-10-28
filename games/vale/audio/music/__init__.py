@@ -15,12 +15,20 @@ from dataclasses import dataclass
 import bedlib
 
 BEDS: dict[str, tuple[str, str]] = {
-    'mus_menu':         ('synth.music_menu:build', '60 BPM, 96 s, 12 chords x 8 s, no hook, 1-4 kHz dip'),
-    'mus_draft':        ('synth.music_draft:build', '90 BPM, 136 s: bans drone -> picks harp pulse -> finalise drums -> release'),
+    'mus_menu':         ('synth.music_menu:build', '60 BPM, stems 64 / 48 / 80 s looped on their own lengths (960 s full repeat), no hook, 1-4 kHz dip'),
+    'mus_draft':        ('synth.music_draft:build', '90 BPM, 32 s: bans drone + phase layers picks (harp pulse) / final (drums) + your urgency pulse'),
     'mus_match_rift':   ('synth.music_match:build_rift', '120 BPM, 160 s + intense layer; bright, driving; motif -> F#5'),
     'mus_match_bridge': ('synth.music_match:build_bridge', '120 BPM, 160 s + intense layer; tense, D pedal; motif -> G4'),
     'mus_match_fray':   ('synth.music_match:build_fray', '120 BPM, 160 s + intense layer; festive, Lydian G#; motif -> G#4'),
     'mus_postgame':     ('synth.music_postgame:build', '60 BPM, 80 s; bell chorale, the motif once, ending home on D5'),
+}
+
+
+# beds whose layers are ADDED to the main stem more than once (independent stems, stacked phases): (main, layer)
+# integrated LUFS so the whole sits where one stem did (bedlib's -23 / -25 is for a main and one combat layer)
+BED_LUFS: dict[str, tuple[float, float]] = {
+    'mus_menu': (-25.5, -28.0),       # all three together ≈ -23
+    'mus_draft': (-24.5, -27.0),      # main + picks + final ≈ -22, + urgency ≈ -21
 }
 
 
@@ -57,7 +65,9 @@ def resolve(ref: str):
 def register_beds() -> None:
     for bid, (ref, notes) in BEDS.items():
         if bid not in bedlib.REGISTRY:
-            bedlib.REGISTRY[bid] = bedlib.BedSpec(bid, (lambda r=ref: resolve(r)()), notes=notes)
+            lufs = BED_LUFS.get(bid)
+            kw = dict(main_lufs=lufs[0], layer_lufs=lufs[1]) if lufs else {}
+            bedlib.REGISTRY[bid] = bedlib.BedSpec(bid, (lambda r=ref: resolve(r)()), notes=notes, **kw)
 
 
 register_beds()
