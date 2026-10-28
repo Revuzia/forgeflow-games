@@ -932,7 +932,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · critical hit: a warm starburst >= 0.7 x fighter height for one beat over an ink puff, a big cut in the attacker's signature, 9 hard streaks, a heavy chip spray",
+    "$comment": "T2 · impact · critical hit: a warm starburst >= 0.7 x fighter height for one beat over an ink puff, a big cut in the attacker's signature, 9 hard streaks, a heavy chip spray (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
     "id": "lib_crit",
     "duration": 0.8,
     "teamTint": true,
@@ -966,7 +966,7 @@
         ],
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "#FFE4B8",
+        "rim": "#FFEFD8",
         "rimAlpha": 0.9,
         "soft": 0.25,
         "rotDeg": [
@@ -992,7 +992,7 @@
             1.7
           ]
         ],
-        "color": "#FFE4B8",
+        "color": "#FFEFD8",
         "emissive": 3.0,
         "alpha": [
           [
@@ -1021,7 +1021,7 @@
         "at": "target",
         "radius": 0.9,
         "life": 0.04,
-        "color": "#FFE4B8",
+        "color": "#FFEFD8",
         "intensity": 3.0
       },
       {
@@ -1044,7 +1044,7 @@
         ],
         "life": 0.16,
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -1086,7 +1086,7 @@
           0.05
         ],
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -1141,7 +1141,7 @@
           -540,
           540
         ],
-        "rim": "#FFE4B8",
+        "rim": "#FFEFD8",
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true
@@ -1803,7 +1803,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim (the magic tell), a ring, bloom and petals of light in the caster's signature, streaks in the signature (combat F6)",
+    "$comment": "T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim (the magic tell), a ring, bloom and petals of light in the caster's signature, streaks in the signature (combat F6) (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
     "id": "lib_hit_magic",
     "duration": 0.8,
     "teamTint": true,
@@ -1850,7 +1850,7 @@
         "at": "target",
         "radius": 0.7,
         "life": 0.035,
-        "color": "#FFE4B8",
+        "color": "#FFEFD8",
         "intensity": 3.0
       },
       {
@@ -1952,7 +1952,7 @@
           0.04
         ],
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -2058,7 +2058,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust",
+    "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
     "id": "lib_hit_phys_heavy",
     "duration": 0.8,
     "teamTint": true,
@@ -2092,7 +2092,7 @@
         ],
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "#FFE4B8",
+        "rim": "#FFEFD8",
         "rimAlpha": 0.85,
         "soft": 0.25,
         "rotDeg": [
@@ -2105,7 +2105,7 @@
         "at": "target",
         "radius": 0.85,
         "life": 0.035,
-        "color": "#FFE4B8",
+        "color": "#FFEFD8",
         "intensity": 3.0
       },
       {
@@ -2133,7 +2133,7 @@
         ],
         "life": 0.13,
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -2175,7 +2175,7 @@
           0.04
         ],
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -2230,7 +2230,7 @@
           -540,
           540
         ],
-        "rim": "#FFE4B8",
+        "rim": "#FFEFD8",
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true
@@ -2315,7 +2315,7 @@
     ]
   },
   {
-    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s",
+    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange)",
     "id": "lib_hit_phys_light",
     "duration": 0.5,
     "teamTint": true,
@@ -2349,7 +2349,7 @@
         ],
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "#FFE4B8",
+        "rim": "#FFEFD8",
         "rimAlpha": 0.85,
         "soft": 0.25,
         "rotDeg": [
@@ -2362,7 +2362,7 @@
         "at": "target",
         "radius": 0.62,
         "life": 0.035,
-        "color": "#FFE4B8",
+        "color": "#FFEFD8",
         "intensity": 2.0,
         "light": false
       },
@@ -2391,7 +2391,7 @@
         ],
         "life": 0.11,
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -2433,7 +2433,7 @@
           0.04
         ],
         "color": [
-          "#FFE4B8",
+          "#FFEFD8",
           "signature"
         ],
         "alpha": [
@@ -2488,7 +2488,7 @@
           -540,
           540
         ],
-        "rim": "#FFE4B8",
+        "rim": "#FFEFD8",
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true

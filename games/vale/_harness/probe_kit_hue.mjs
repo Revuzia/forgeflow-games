@@ -16,7 +16,8 @@
 // never counts for a2. The status looks (client.vfxStatus → lib_status_*: a unit's state drawn in THAT unit's
 // relationship colour, the same for every kit that applies it) are off by default: they are not the kit's light
 // (--status counts them too). From the cast to the last sample only the slot's own effects spawn: the VFX the slot
-// names (its present / effect vfx ids: cast, wind-up, zone, projectile, hit) with the caster as their source. A unit
+// names (its present / effect vfx ids: cast, wind-up, zone, projectile, hit) with the caster (or a non-fighter unit it
+// owns: a lamp, a summon) as their source. A unit
 // reacting to the hit (the victim's passive), an item or boon proc, a bystander is dropped, so the light measured is
 // the kit's.
 //
@@ -58,7 +59,9 @@ await B((b, status) => {
   b.__only = -1;
   const spawn0 = R.vfx.spawnHandle.bind(R.vfx);
   b.__ids = new Set();
-  R.vfx.spawnHandle = (id, o) => (b.__only >= 0 && (o?.sourceId !== b.__only || !b.__ids.has(id)) ? 0 : spawn0(id, o));
+  // the caster's own source: the caster, or a unit it owns (a lamp, a summon) that is not a fighter
+  const mine = (src) => { if (src === b.__only) return true; const e = src >= 0 ? b.__H.view.entity(src) : null; return !!e && e.kind !== 'fighter' && e.owner === b.__seat; };
+  R.vfx.spawnHandle = (id, o) => (b.__only >= 0 && (!mine(o?.sourceId ?? -1) || !b.__ids.has(id)) ? 0 : spawn0(id, o));
   b.__step = (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) { b.__H.pump(dt); R.render(dt); } };
   b.__grab = () => { R.render(0); const gl = R.gl.getContext(); const Wd = gl.drawingBufferWidth, Hd = gl.drawingBufferHeight; const px = new Uint8Array(Wd * Hd * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, Wd, Hd, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, Wd, Hd }; };
   b.__vfxHue = (box, sigH) => {
@@ -135,7 +138,7 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
   await page.waitForTimeout(9000);
   await B((b) => b.__step(20));
   const hueOf = (hex) => { const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, bl = parseInt(hex.slice(5, 7), 16) / 255; const mx = Math.max(r, g, bl), mn = Math.min(r, g, bl); if (mx === mn) return 0; let h; if (mx === r) h = ((g - bl) / (mx - mn)) % 6; else if (mx === g) h = (bl - r) / (mx - mn) + 2; else h = (r - g) / (mx - mn) + 4; return (h * 60 + 360) % 360; };
-  const kitInfo = await B((b) => Object.fromEntries(b.catalog.fighters.map((f) => [f.id, { sig: f.vfx?.signature ?? null, ct: { a1: f.kit.a1.castTime ?? 0, a2: f.kit.a2.castTime ?? 0 }, range: { a1: f.kit.a1.targeting?.range ?? 0, a2: f.kit.a2.targeting?.range ?? 0 } }])));
+  const kitInfo = await B((b) => Object.fromEntries(b.catalog.fighters.map((f) => [f.id, { sig: f.vfx?.signature ?? null, ct: { a1: f.kit.a1.castTime ?? 0, a2: f.kit.a2.castTime ?? 0 }, range: { a1: f.kit.a1.targeting?.range ?? 0, a2: f.kit.a2.targeting?.range ?? 0 }, self: { a1: f.kit.a1.targeting?.filter?.enemies === false, a2: f.kit.a2.targeting?.filter?.enemies === false } }])));
   const views = [{ name: 'A', you: 0, casters: [5, 6, 7, 8, 9], victim: 0 }, { name: 'B', you: 5, casters: [0, 1, 2, 3, 4], victim: 5 }];
   for (const v of views) {
     const casters = v.casters.filter((cp) => batch.includes(players[cp].def));
@@ -157,7 +160,7 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
           // pair is set up would linger into the samples)
           const f = b.catalog.fighters.find((x) => x.id === a.fid);
           b.__ids = new Set([...JSON.stringify(f.kit[a.slot]).matchAll(/"[a-zA-Z]*[vV]fx":"([^"]+)"/g)].map((m) => m[1]));
-          b.__only = W.players[a.cp].entity;
+          b.__only = W.players[a.cp].entity; b.__seat = a.cp;
           const stage = () => {
             const pc = W.players[a.cp].entity, pv = W.players[a.vp].entity;
             b.__prep(pc, a.x - a.d / 2, a.y, 0); b.__prep(pv, a.x + a.d / 2, a.y, Math.PI);
@@ -167,7 +170,8 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
           b.__clear(); stage(); b.__step(30); b.__clear(); const r = stage(); b.__step(2); return r;
         }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist, fid, slot });
         await B((b, a) => {
-          b.renderer.vfx.clear(); const me = b.__H.view.entity(a.pv); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, cp, slot, fid });
+          // a slot that never targets an enemy (a lamp hung on an ally or herself) is cast on the caster
+          b.renderer.vfx.clear(); const tid = a.self ? a.pc : a.pv; const me = b.__H.view.entity(tid); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: tid }); }, { ...st, cp, slot, fid, self: info.self[slot] });
         const rel = Math.max(1, Math.round(info.ct[slot] * 30));
         const best = { n: -1 };
         for (let f = 1; f <= rel + 12; f++) {
