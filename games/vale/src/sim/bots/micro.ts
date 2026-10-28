@@ -11,8 +11,12 @@
 //      minTargets, castWhenSelfHpBelow / castWhenTargetHpBelow, leadTarget (intercept prediction +
 //      difficulty aim error), ally-targeted heals/shields by lowest hp;
 //   3. attacks: focus target (kiting / orb-walking for ranged styles vs. shorter-ranged targets),
-//      structures, monsters, last hits (hp minus damage already in flight before my hit could land:
-//      windup + projectile travel + walk, with difficulty timing noise and skipped chances);
+//      structures, monsters, last hits (hp minus the damage that lands before my hit could:
+//      windup + projectile travel + walk, with difficulty timing noise and skipped chances). A last
+//      hit that is there, or due within one swing, beats harass and wave-shoving swings; while
+//      waiting for one the fighter stands just outside every enemy Wick's reach (an idle fighter in
+//      reach swings at the nearest Wick and spends the attack the last hit needs), and a Wick its
+//      swing cannot reach in time is taken with a cheap damaging ability when resource allows;
 //   4. movement, never re-issuing an order that is already running (a fresh move order clears
 //      the sim's path), never standing inside an enemy tower's reach without minions tanking it.
 // Bots only ever emit Commands — the same surface a human has.
@@ -655,6 +659,16 @@ export abstract class BotBase {
     return best;
   }
 
+  /** an enemy Wick near me will be last-hittable within one attack period */
+  protected lastHitDue(): boolean {
+    const e = this.e, ad = e.attackDef;
+    if (!ad) return false;
+    const soon = this.lastHitSoon();
+    if (!soon) return false;
+    const left = soon.hp - this.m.incoming.before(soon.id, 1 / Math.max(0.05, e.stats.attackSpeed), this.perc.bit, true);
+    return left > 0 && left <= mitigated(e, soon, e.stats.ad, ad.damageType) * 1.1;
+  }
+
   /** lowest-hp enemy minion within reach (wave pushing) */
   protected pushTarget(): Entity | null {
     const e = this.e;
@@ -685,10 +699,13 @@ export abstract class BotBase {
     }
     const f = this.pFight;
     if (f && f.alive && attackable(w, e, f)) {
-      // a last hit that is there now beats harass (not an all-in or a teamfight)
-      if (f.kind === 'fighter' && this.pFarm > 0 && this.pAggro < 0.9) { const lh = this.lastHitTarget(); if (lh) { this.attack(lh); return; } }
+      // a last hit that is there now — or due within one swing — beats harass (not an all-in or a
+      // teamfight): a harass swing then would spend the attack the last hit needs
+      const harass = f.kind === 'fighter' && this.pFarm > 0 && this.pAggro < 0.9;
+      if (harass) { const lh = this.lastHitTarget(); if (lh) { this.attack(lh); return; } }
+      const due = harass && e.atkWindup < 0 && this.lastHitDue();
       const towerOk = this.pDive || f.kind !== 'fighter' || this.towerSafe(f.x, f.y, 0.2) || inAttackRange(e, f);
-      if (towerOk) { this.fightTarget(f); return; }
+      if (towerOk && !due) { this.fightTarget(f); return; }
     }
     // 4. siege
     const sg = this.pSiege;
@@ -713,8 +730,13 @@ export abstract class BotBase {
       }
       if (this.pFarm === 1 && this.secureLastHit()) return;
       if (this.pFarm === 2) {
-        const t = this.pushTarget();
-        if (t) { this.attack(t); return; }
+        // shoving still takes the last hits: hold the swing for a Wick that is about to be killable
+        if (e.atkWindup < 0 && this.lastHitDue()) {
+          if (e.order === ORDER_NONE && this.keepOutOfReach()) return;
+        } else {
+          const t = this.pushTarget();
+          if (t) { this.attack(t); return; }
+        }
       } else if (e.atkWindup >= 0 && (e.order === ORDER_ATTACK || e.order === ORDER_NONE)) {
         return; // finish the swing in progress
       } else {
@@ -738,9 +760,9 @@ export abstract class BotBase {
   }
 
   /**
-   * An enemy Wick the next hit on it will finish, which my basic attack cannot reach first: a
-   * damaging ability that kills it and lands before that hit takes the last hit — only with
-   * resource to spare (never the ultimate, a dash or a battle spell).
+   * An enemy Wick that the hits already coming at it will finish before my basic attack could land:
+   * a damaging ability that kills it and lands first takes the last hit — only with resource to
+   * spare (never the ultimate, a dash or a battle spell).
    */
   private secureLastHit(): boolean {
     const e = this.e;
@@ -749,12 +771,24 @@ export abstract class BotBase {
     if (res && res.model === 'pool' && e.maxRes > 0 && e.res / e.maxRes < 0.45) return false;
     this.m.incoming.build(this.w);
     const inc = this.m.incoming, bit = this.perc.bit;
+    const ad = e.attackDef;
+    const period = 1 / Math.max(0.05, e.stats.attackSpeed);
     for (const c of this.perc.enemyUnits) {
       if (!c.alive || c.kind !== 'minion') continue;
       const d = Math.sqrt(this.dist2(c, e.x, e.y));
       if (d > 12) continue;
-      const next = inc.soonest(c.id, bit);
-      if (next === Infinity || inc.before(c.id, next + 0.05, bit, true) < c.hp + c.shield) continue;
+      // when the others' hits finish it (within 1.5 s), and whether my basic attack lands first
+      const hp = c.hp + c.shield;
+      let next = Infinity;
+      for (let t = 0.05; t <= 1.5; t += 0.05) if (inc.before(c.id, t, bit, true) >= hp) { next = t; break; }
+      if (next === Infinity) continue;
+      if (ad) {
+        const gap = Math.max(0, d - c.radius - e.radius - e.stats.range);
+        const busy = e.atkWindup >= 0 ? e.atkWindup + period * (1 - ad.windup) : Math.max(0, e.atkCd);
+        const flight = ad.projectileSpeed ? Math.max(0, d - gap - c.radius) / ad.projectileSpeed : 0;
+        const auto = Math.max(busy, gap / Math.max(0.5, e.stats.moveSpeed)) + ad.windup * period + flight;
+        if (auto < next - 0.1 && hp > this.m.incoming.before(c.id, auto, bit, true)) continue;   // my swing can still take it
+      }
       for (let si = 0; si < 3; si++) {
         const s = e.slots[si];
         if (!s || !s.ready) continue;

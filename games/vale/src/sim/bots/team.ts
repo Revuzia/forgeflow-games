@@ -4,7 +4,8 @@
 //   * lane assignment from SeatSetup.role → RoleDef.assign (lane id / jungle / support on the duo
 //     lane), falling back to FighterDef.role, and filling gaps so every lane is covered; on a one-lane
 //     map (Bridge) everyone shares the lane and the team groups as one;
-//   * defend[lane]: an own structure with enemies at it (gates/cores weigh more);
+//   * defend[lane]: an own structure with enemies at it (gates/cores weigh more), with the enemy
+//     fighter count there (defendFighters: a laner answers a dive, not its lane opponent);
 //   * group + siege: in the mid/late game (or always on one lane) the team gathers on one target —
 //     the core when it is open, else the least-pushed tower, and respawning structures (gates) only
 //     once every tower that guards the core is down, so the core can follow before they return;

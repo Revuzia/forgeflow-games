@@ -51,7 +51,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   },
   adept: {
     id: 'adept', reaction: 0.25, reactionJitter: 0.07, aimErrorDeg: 6, leadSkill: 0.75,
-    lastHitSigma: 0.07, lastHitMiss: 0.1, dodgeChance: 0.5, kiteSkill: 0.55,
+    lastHitSigma: 0.05, lastHitMiss: 0.07, dodgeChance: 0.5, kiteSkill: 0.55,
     intentFollow: 0.85, recallBias: 0, retreatBias: 0, knowsCooldowns: false,
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
   },

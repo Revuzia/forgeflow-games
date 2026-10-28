@@ -418,7 +418,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     gates.push({ group: 'structures', item: 'gameplay:G4', label: 'median first structure (RIFT)', value: diffs.map((d) => `${d} ${fsd[d].toFixed(1)} min`).join(' / '), target: '9–12 min', pass: diffs.every((d) => fsd[d] >= 9 && fsd[d] <= 12), n: rift.length });
   }
   // ── items (full RIFT games) ──
-  const fullRift = rift.filter((g) => g.reason !== 'cut');
+  const fullRift = rift.filter((g) => !g.job.cut);
   if (fullRift.length) {
     const finIds = catalog.items.filter((i) => i.tier === 'core' || i.tier === 'apex').map((i) => i.id);
     const per: number[] = [];

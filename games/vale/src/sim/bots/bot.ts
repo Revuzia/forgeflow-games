@@ -10,6 +10,15 @@
 //   4. the active mode's executor writes the plan; the micro layer (micro.ts) turns it into commands.
 // Modes: lane · farm (jungle) · trade · allin · retreat · recall (+ shop) · push (and group/siege) ·
 // defend · objective · roam (gank) · teamfight · hunt (Fray) · pickup · return (to lane).
+// RIFT laning phase (until LANE_PHASE_END or the team's endgame): laners hold their lane first —
+// a wave or the lane opponent at their own tower is laning, not a defend call; they answer only a
+// dive and the base, skip roams, shove their own lane only while no enemy fighter is there to farm
+// it under its tower, rotate to an objective only from the lane beside it and only on an opening,
+// recall on a real purchase or low health rather than every 1,100 gold, never trade into a fighter
+// its own Wicks cover, step out of Wick aggro instead of tanking it, and join a 2v2 only once it
+// has started. Wicks and monsters that would finish a bot with no enemy fighter near send it out
+// (unless the monster dies first), and an objective is started only when the fighters at it can
+// take it (damage vs. health over the time to kill), never alone.
 // Fray: no team brain; targets the weakest reachable enemy, penalises fights other players can
 // reach, never favours or spares other bots, caps how many bots hunt the same human seat at 2,
 // contests pickups, uses the shared shop, plays safer on its last life.
@@ -361,7 +370,8 @@ export class Bot extends BotBase implements BotController {
       else if (b.window && b.siege && hpF > 0.4 && (!this.jungle || b.phase !== 'early')) consider('push', 0.72);
       else if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
       else if (b.group && follow && (!this.jungle || b.phase === 'late')) consider('push', 0.56);
-      else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle) consider('push', 0.3 + 0.2 * b.push[this.lane]);
+      // (laning: shove my own lane only while no enemy fighter is there to farm it under its tower)
+      else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
       let global = 0;
       for (let i = 0; i < b.defend.length; i++) global = Math.max(global, b.defend[i]);
@@ -374,8 +384,14 @@ export class Bot extends BotBase implements BotController {
         else if (b.baseThreat >= 0.7 && follow) consider('defend', 0.55 + 0.2 * b.baseThreat);
       } else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
       else if (global >= 0.7 && follow) consider('defend', 0.55 + 0.2 * global);
-      // laning: only an objective near my lane, and only to take it (not to wait for its spawn)
-      if (b.objective && follow && (!lp || (b.objective.desire >= 0.55 && this.laneDist2(b.objective.camp.x, b.objective.camp.y) <= sq(LANE_OBJECTIVE_REACH)))) {
+      // laning: only the laners of the lane beside an objective go, and only on an opening (it is up
+      // and we have a fighter more), not to wait for its spawn; the other lanes keep farming
+      // (the jungler too: during the laning phase no one comes to wait with it, so it keeps its camps)
+      const oc = b.objective?.camp;
+      const opening = !!b.objective && b.objective.desire >= 0.75;
+      const jungleLaning = this.jungle && kind === 'rift' && now < LANE_PHASE_END && b.phase !== 'late';
+      if (b.objective && oc && follow && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
+        : !jungleLaning || opening)) {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }
       if (b.gank && !lp && (this.jungle ? e.level >= 3 : this.prof.style === 'burst' || this.prof.style === 'diver') && hpF > 0.6 &&
@@ -505,6 +521,13 @@ export class Bot extends BotBase implements BotController {
     this.holdX = x; this.holdY = y;
   }
 
+  /** the lane whose path passes closest to (x, y) */
+  private nearestLane(x: number, y: number): number {
+    let best = -1, bd = Infinity;
+    for (const l of this.k.lanes) { laneProject(l, x, y); if (proj.d2 < bd) { bd = proj.d2; best = l.index; } }
+    return best;
+  }
+
   /** squared distance from (x, y) to my lane stand point */
   private laneDist2(x: number, y: number): number {
     this.computeHold();
@@ -550,7 +573,7 @@ export class Bot extends BotBase implements BotController {
   private shedWicks(): void {
     if (this.unitDps <= 0 || this.lane < 0) return;
     const e = this.e;
-    if (this.hpF > 0.6 && (e.hp + e.shield) / this.unitDps > 12) return;
+    if (this.hpF > 0.5 && (e.hp + e.shield) / this.unitDps > 8) return;
     const l = this.k.lanes[this.lane];
     if (!l) return;
     laneProject(l, e.x, e.y);
