@@ -182,25 +182,25 @@
   },
   "uv_coverage": 0.608,
   "bake": {
-    "base": 4.65,
-    "rough_metal": 3.32,
-    "normal": 1.7,
-    "ao": 2.11,
+    "base": 3.8,
+    "rough_metal": 3.71,
+    "normal": 1.82,
+    "ao": 1.73,
     "normal_fixed_px": 47692,
-    "projection": 33.22,
-    "pack_save": 33.37,
-    "total": 45.34
+    "projection": 32.53,
+    "pack_save": 32.67,
+    "total": 43.83
   },
   "tris": 19344,
   "mesh_top_m": 1.913,
-  "glb_bytes_raw": 2733932,
+  "glb_bytes_raw": 2732464,
   "optimize": {
     "ok": true,
-    "before": 2733932,
-    "after": 1040432,
+    "before": 2732464,
+    "after": 1040080,
     "q_base": 63
   },
-  "glb_bytes": 1040432,
+  "glb_bytes": 1040080,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -220,8 +220,8 @@
       "portrait": "art/out/fighters/odrum/odrum_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 9.81,
-      "portrait": 2.2
+      "splash": 6.76,
+      "portrait": 2.17
     }
   },
   "three_qa": {
@@ -253,24 +253,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/odrum/three_odrum_noon_fair.png",
-    "seconds": 8.2,
+    "seconds": 8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.58,
-      "model": 3.83,
-      "lows_bind": 3.07,
-      "uv": 5.29,
-      "bake": 45.34,
-      "export": 0.11,
-      "optimize": 0.63,
-      "load_test": 0.13,
-      "render": 12.05,
-      "three_qa": 8.44
+      "materials": 0.13,
+      "model": 2.12,
+      "lows_bind": 2.18,
+      "uv": 2.86,
+      "bake": 43.84,
+      "export": 0.08,
+      "optimize": 0.47,
+      "load_test": 0.09,
+      "render": 8.96,
+      "three_qa": 8.13
     },
-    "total_s": 79.54
+    "total_s": 68.89
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82

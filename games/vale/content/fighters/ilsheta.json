@@ -662,7 +662,7 @@
     "icon": "assets/fighters/ilsheta/icon.png",
     "height": 1.72,
     "scale": 1,
-    "runRefSpeed": 3.6,
+    "runRefSpeed": 3.35,
     "clips": {
       "idle": "idle",
       "run": "run",
@@ -676,10 +676,10 @@
       "recall": "recall",
       "idle_lobby": "idle_lobby",
       "victory": "victory",
-      "crit": "crit",
-      "spawn": "spawn",
-      "stunned": "stunned",
+      "channel": "channel",
       "dash": "dash",
+      "stunned": "stunned",
+      "crit": "crit",
       "taunt": "taunt"
     },
     "sockets": {
@@ -688,11 +688,13 @@
       "head": "head",
       "hand_r": "hand.R",
       "hand_l": "hand.L",
-      "weapon": "prop.R",
       "weapon_r": "prop.R",
       "weapon_l": "prop.L",
       "foot_r": "foot.R",
-      "foot_l": "foot.L"
+      "foot_l": "foot.L",
+      "weapon": "prop.R",
+      "weapon_tip": "x_lamp",
+      "visor_top": "x_chimney_top"
     },
     "accentMaterial": "accent"
   },

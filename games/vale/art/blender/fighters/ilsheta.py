@@ -132,6 +132,12 @@ def hand_frame(s):
 WR = {s: side_pt("wrist", s) for s in "LR"}
 SHJ = {s: side_pt("shoulder", s) for s in "LR"}
 HF = {s: hand_frame(s) for s in "LR"}
+# the right hand's REST frame is the fist upright (thumb up, knuckles forward): rig_extras turns hand.R to it, so the
+# bind pose already holds the staff upright at her side with the lamp beside her shoulder (the skins' QA and any
+# bind-pose view show the bind pose; the rig's own A-pose hand put the staff out like a broom and the lamp in the bell)
+_fR = unit((-0.25, -0.97, 0.0))
+_tR = np.array([0.0, 0.0, 1.0])
+HF["R"] = (_fR, unit(np.cross(_tR, _fR)), _tR)
 
 
 def hpt(s, a, b, c):
@@ -191,7 +197,7 @@ ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.25
 SKINS: list = [
     {"id": "ilsheta_stillwater", "extra": {"reed_plates": True}, "card": {"primary": "#59666A", "secondary": "#8FB3A8"},
-     "palette": {"cloth2": "#B9C6CA", "chalk": "#C9CFCB", "cloth": "#59666A", "cloth3": "#434F53", "wood": "#B7A98F",
+     "palette": {"cloth2": "#C4CFD3", "chalk": "#C9CFCB", "cloth": "#59666A", "cloth3": "#434F53", "wood": "#B7A98F",
                  "lampglass": "#8FB3A8", "reed": "#8E9672"}},
     {"id": "ilsheta_first_bell", "extra": {"glass_bell": True, "hour_marks": True},
      "card": {"primary": "#3A3633", "secondary": "#CFCAC0"},
@@ -549,10 +555,10 @@ def skin_extras(extra: dict) -> list:
         for i in range(6):
             a = math.radians(30.0 + 60.0 * i)
             r = np.array([math.sin(a), -math.cos(a), 0.0])
-            d = unit(r * math.cos(math.radians(38)) + np.array([0, 0, math.sin(math.radians(38))]))
-            c = np.array([cx, cy, COLLAR[0] + 0.012]) + r * (COLLAR[1] + 0.028) + d * 0.045
+            d = unit(r * math.cos(math.radians(24)) + np.array([0, 0, math.sin(math.radians(24))]))
+            c = np.array([cx, cy, COLLAR[0] + 0.006]) + r * (COLLAR[1] + 0.018) + d * 0.045
             side = np.cross(d, r)
-            rp.add(RoundBox(c, (0.020, 0.050, 0.005), 0.0045, axes=np.stack([unit(side), d, unit(np.cross(unit(side), d))])), k=0.0)
+            rp.add(RoundBox(c, (0.024, 0.048, 0.0045), 0.0042, axes=np.stack([unit(side), d, unit(np.cross(unit(side), d))])), k=0.0)
         out.append(("reed_plates", rp, 0.5, "reed", "bone:head", 420, 0.6))
     if extra.get("glass_bell"):
         gb = Sculpt("glass_bell")
@@ -610,6 +616,22 @@ def extra_materials(ctx) -> dict:
 # ── rig extras: the lamp's pivot (plumb in every pose) and the chimney-top socket ─────────────────────────────
 def rig_extras(ctx) -> None:
     info = ctx.info
+    from mathutils import Vector
+    arm = info.armature
+    scene.select_only([arm], arm)
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    f, n, t = HF["R"]
+    h = eb["hand.R"]
+    h.tail = h.head + Vector(tuple(f)) * h.length
+    h.align_roll(Vector(tuple(-n)))
+    pr = eb["prop.R"]
+    pr.head = Vector(tuple(C0))
+    pr.tail = Vector(tuple(C0 + U0 * 0.12))
+    pr.align_roll(Vector(tuple(K0)))
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for b in arm.data.bones:
+        info.lengths[b.name] = b.length
     rig.add_socket(info, "x_lamp", "prop.R", tuple(HANG0), direction=(0.0, 0.0, -0.10))
     info.armature.data.bones["x_lamp"].use_deform = True          # the lamp's parts are skinned to it
     rig.add_socket(info, "x_chimney_top", "head", (CHIM_C[0], CHIM_C[1], CHIM_TOP), direction=(0.0, 0.0, 0.08))
@@ -942,6 +964,14 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
                 g = c.mean(axis=1, keepdims=True)
                 w = (ss(0.0, 0.05, c[:, 0] - c[:, 2]) * ss(0.55, 0.75, c @ np.array([0.30, 0.59, 0.11])))[:, None]
                 out[sel] = np.clip(g + (c - g) * (1.0 + (k - 1.0) * w), 0.0, 1.0)
+    # the face-plate's carving (the concept's swirls, eyes, keel) read faint under the game's soft light: its paint's
+    # contrast about the plate's own mean is raised x1.45 (the grooves darker, the plate stays chalk)
+    if "mask" in names:
+        sel = have & (part == names.index("mask"))
+        if sel.any():
+            c = out[sel]
+            m = np.median(c, axis=0, keepdims=True)
+            out[sel] = np.clip(m + (c - m) * 1.45, 0.0, 1.0)
     # the top quarter's value (lineup_qa build 4: L* 61 against the bible's 70-85): the head's pale pieces are lifted
     # with a soft knee (the darks and mids most, nothing past L* 88), the mantle's shoulders fading in above 1.0 m
     for nm, amt in LIFT.items():
@@ -956,7 +986,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     return out
 
 
-LIFT = {"chimney": 12.0, "collar": 12.0, "hood": 12.0, "scarf": 11.0, "mask": 8.0, "mantle": 8.0, "lamp_stone": 0.0}
+LIFT = {"chimney": 12.0, "collar": 12.0, "hood": 12.0, "scarf": 11.0, "mask": 4.0, "mantle": 8.0, "lamp_stone": 0.0}
 
 
 def _lift(c, amt):

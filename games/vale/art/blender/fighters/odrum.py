@@ -1302,8 +1302,9 @@ GLAZE_RUNS = 9                            # runs per jar
 GLAZE_RUN_W = 0.70                        # their opacity over the glaze
 POT_RIM = "#CAAF8A"                       # the carved window collar and the band: a lighter, carved ochre
 POT_LIP = "#C2A47C"                       # the rolled lip
-FIST = "#BC9B68"                          # the carved ochre fists: the mask's ochre, a richer step (small areas: at the
-                                          # mask's 34 % the fists in the splash's shade read khaki against the coat)
+FIST = "#C08F5C"                          # the carved ochre fists: the mask's ochre, a richer, warmer step (hand-oiled
+                                          # stone; small areas, ~1.5 % of the silhouette: at the mask's 34 % / hue 37,
+                                          # then 44 % / hue 33, the fists beside the copper coat read khaki in the splash)
 # the jerkin's top light (value lift): each coat texel's luminance x the gain at its rest height (1.0 at the belt,
 # the shoulders and upper back 2.25x: chocolate felt L* 34 under the belt -> ~50 on the shoulders), mixed this much
 # toward a sun-faded felt as it lifts (COAT_FADED: the chocolate lightened alone read salmon-pink in game; faded

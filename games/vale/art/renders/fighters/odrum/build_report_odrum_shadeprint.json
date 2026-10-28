@@ -180,29 +180,29 @@
   },
   "uv_coverage": 0.604,
   "bake": {
-    "base": 2.26,
-    "rough_metal": 1.89,
-    "normal": 1.48,
-    "ao": 1.83,
+    "base": 2.77,
+    "rough_metal": 2.13,
+    "normal": 1.56,
+    "ao": 1.86,
     "normal_fixed_px": 45656,
-    "projection": 39.91,
-    "pack_save": 40.1,
-    "total": 47.66
+    "projection": 29.46,
+    "pack_save": 29.58,
+    "total": 37.99
   },
   "tris": 19384,
   "mesh_top_m": 1.913,
-  "glb_bytes_raw": 2568696,
+  "glb_bytes_raw": 2567016,
   "optimize": {
     "ok": true,
-    "before": 2568696,
-    "after": 987212,
+    "before": 2567016,
+    "after": 986500,
     "q_base": 63
   },
-  "glb_bytes": 987212,
+  "glb_bytes": 986500,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_shadeprint.glb (964 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_shadeprint.glb (963 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: odrum_shadeprint_base 2048x2048 217K, odrum_shadeprint_normal 512x512 44K, odrum_shadeprint_orm 512x512 76K",
       "  skinned meshes: odrum_accent(224v), odrum_shadeprint(18073v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_hang_l x_pot_l x_hang_r x_pot_r x_pellet x_sling_pouch thighL shinL footL toeL thighR shinR footR toeR)",
@@ -218,8 +218,8 @@
       "portrait": "art/out/fighters/odrum/odrum_shadeprint_portrait.png"
     },
     "seconds": {
-      "splash": 11.61,
-      "portrait": 3.89
+      "splash": 7.46,
+      "portrait": 2.45
     }
   },
   "three_qa": {
@@ -251,24 +251,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/odrum/three_odrum_shadeprint.png",
-    "seconds": 12.4,
+    "seconds": 7.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.17,
-      "model": 2.5,
-      "lows_bind": 2.07,
-      "uv": 2.85,
-      "bake": 47.67,
-      "export": 0.09,
-      "optimize": 0.68,
-      "load_test": 0.14,
-      "render": 15.55,
-      "three_qa": 12.76
+      "materials": 0.18,
+      "model": 3.11,
+      "lows_bind": 1.89,
+      "uv": 2.73,
+      "bake": 37.99,
+      "export": 0.05,
+      "optimize": 0.44,
+      "load_test": 0.09,
+      "render": 9.94,
+      "three_qa": 7.38
     },
-    "total_s": 84.6
+    "total_s": 63.91
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82
