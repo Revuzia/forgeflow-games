@@ -75,13 +75,14 @@ SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x
 # (POLISH, review 3: the splash_hero crouch-lunge read stiff and confusing, the near knife hidden, the face in hard
 # profile behind an oversized visor): the brief's splash, the victory hold (arms crossed behind, chin up, a quarter
 # turn away, the knives sweeping toward screen right), framed like the roster's other victory splashes
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "fill": 0.86, "x": 0.64,
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 0.86, "x": 0.64,
           "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 36.0, "icon_yaw": 20.0}
 # (fix pass 5, review: the hero art read as untextured plastic, washed out: the sun 2.4 -> 1.9 and the sky fill
 # x0.5, so the painted values, strokes and carving hold in the light; the icon turned to 28 degrees: from the front
 # the crest stood edge-on over the visor, the review's down-arrow, where the crescent frame and its panes now show)
 HERO_SPEC = 0.15
 PORTRAIT_TIGHTEN, PORTRAIT_X = 0.15, 0.47
+ICON_FILL, ICON_SKY = 0.80, (0.66, 0.70, 0.78)     # (POLISH) the icon: margin round the head, a deeper cool sky
 HERO_FILL = 0.5
 HERO_SAMPLES = 2.0        # hero render samples x this, and the nlmeans denoise strength x HERO_DENOISE (grain)
 HERO_DENOISE = 1.4
@@ -559,7 +560,7 @@ def _visor_top_edge(xs):
 # into the horns over the temples; nothing else on the helm glows (the crest is chalk and pale glass)
 _RX = np.linspace(-0.074, 0.074, 41)
 RIDGE_PTS = [p for p in _visor_top_edge(_RX) if p is not None]
-FIN_H = (0.020, 0.045, 0.035)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
+FIN_H = (0.040, 0.045, 0.054)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
 FIN_LEAN = 1.00                    # the fin leans back: its rise direction (0, FIN_LEAN, 1)
 FIN_T = 0.0075                     # thickness at its foot (it thins to ~40 % at the top edge)
 
@@ -695,8 +696,8 @@ def crest_inlay_poly():
 # (POLISH, review 3: the accent fell under 1 % from the back and the right side): the two fins carry the team colour
 # with the ridge (one swept comb of light, never thin glowing lines), laid open like the painting's: their faces turned
 # up and out, the tips spreading back and out from the left temple, so the game camera sees them from every facing
-FINS = (((0.042, 0.022, 1.762), (0.100, 0.350, 1.862), 0.010, 0.034, (0.62, -0.10, 0.78)),
-        ((0.056, 0.032, 1.726), (0.122, 0.292, 1.784), 0.006, 0.028, (0.72, -0.08, 0.69)))
+FINS = (((0.042, 0.022, 1.762), (0.100, 0.350, 1.862), 0.010, 0.029, (0.45, -0.10, 0.89)),
+        ((0.056, 0.032, 1.726), (0.122, 0.292, 1.784), 0.006, 0.023, (0.55, -0.08, 0.83)))
 # the nape plates: three stacked lames hugging the skull's lower back, each an offset shell of NAPE_E a step further
 # out than the one above, so the back steps down and in toward the neck like a lobster tail: (top z, bottom z, offset)
 NAPE_E = {"c": (0.0, 0.020, 1.640), "r": (0.070, 0.090, 0.095)}
@@ -1334,7 +1335,8 @@ def skin_extras(extra: dict) -> list:
     """Lamplit's lamp cage on the crest's front horn: four carved-wood slats round a lampresin bead (7 cm)"""
     out = []
     if extra.get("lamp_cage"):
-        c = np.array([0.0, -0.152, 1.758])       # before the crest's front edge (clear of its glass), above the ridge
+        # before the crest's front edge, above the accent fin (POLISH: the fin now stands where the cage hung)
+        c = np.array([0.0, -0.150, 1.796])
         slats, bead = Sculpt("cage_slats"), Sculpt("cage_bead")
         for i in range(4):
             a = math.radians(45 + 90 * i)
@@ -1400,8 +1402,21 @@ def _install_render() -> None:
             lo = lo.copy()
             lo.z += PORTRAIT_TIGHTEN
             x_frac = PORTRAIT_X
+        if state["on"] and abs(pitch - 3.0) < 1e-6 and abs(lens - 85.0) < 1e-6 and abs(fill - 0.9) < 1e-6:
+            # (POLISH, review 3: the icon's crest touched the top edge): a margin round the crest and the beak
+            fill = ICON_FILL
         return orig_fit(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center)
     render._fit_camera = fit
+    orig_over = render.imageops.over
+
+    def over(fg, bg):
+        # (POLISH, review 3: the weakest icon of the roster, a pale visor on a pale sky): the icon's sky a step deeper
+        # and cooler behind the pale head, so the visor, the crest and the lit fins read at 128 px
+        if state["on"] and getattr(fg, "shape", (0,))[0] == 128 and getattr(bg, "shape", (0,))[0] == 128:
+            bg = bg.copy()
+            bg[..., :3] = bg[..., :3] * np.array(ICON_SKY, dtype=np.float32)[None, None]
+        return orig_over(fg, bg)
+    render.imageops.over = over
     render.map_lighting = ml
     orig_fc = render.fighter_clips
 
@@ -1561,8 +1576,8 @@ CONCEPT_POSE = {
 PAINTED = ("knife_blade_R", "knife_blade_L", "knife_grip_R", "knife_grip_L", "knife_guard_R", "knife_guard_L", "boots",
            "bracer_R", "bracer_L")
 PROC_HIDDEN = {"face"}          # parts whose texels the painting hides take procedural paint, not the nearest pixel
-FACE_COL = {"lit": "#E2E0DB", "mid": "#C8C7C3", "shade": "#9C9EA1", "cool": "#8B97A3", "ink": "#4A4644",
-            "lip": "#EEECE7"}
+FACE_COL = {"lit": "#E4E2DD", "mid": "#D0CFCB", "shade": "#ADAFB1", "cool": "#97A2AD", "ink": "#4A4644",
+            "lip": "#EEECE7"}   # (POLISH: a step lighter: the hero key leaves the mask's camera side in shade)
 EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
 HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97A0AA", "ink": "#5E5650",
             "keel": "#ECE9E4"}
@@ -1575,9 +1590,12 @@ NAPE_COL = {"lit": "#D4C9BA", "mid": "#B6A999", "shade": "#8B7F73", "ink": "#4A3
 # (POLISH: sampled off the painting's visor, L* 67-85: a pale lavender-blue glass #96A3C2 / #ABBFE1 / #89A6CB, the
 # hook lighter and cooler #A9D0E8, the thick pale rim #C8E4F0 with a dark outline; fix pass 5's #6E99C0 tint read as
 # a dark blue plate in the hero renders and kept the head band under L* 70)
-VISOR_COL = {"top": "#A4B4DA", "core": "#8194C2", "low": "#A6CCE4", "streak": "#E6F1F8", "sheen": "#C6D7EE",
-             "keel": "#D2E4F2", "rim": "#C3DFEE", "rim_hi": "#E4F2F8", "outline": "#3E5170", "inner_line": "#7286B2",
-             "inner": "#5D6F98", "ring": "#CEDDF2", "ring_in": "#7C8FBC", "tint": "#97A8D0"}
+VISOR_COL = {"top": "#98AADA", "core": "#7184BE", "low": "#9CC0E2", "streak": "#E6F1F8", "sheen": "#BCCDEE",
+             "keel": "#CFE1F2", "rim": "#D2EAF5", "rim_hi": "#EEF7FB", "outline": "#34466A", "inner_line": "#6578AC",
+             "inner": "#55669A", "ring": "#CEDDF2", "ring_in": "#6F82B8", "tint": "#8A9CD0"}
+# (build 1: the hero light washed the 0.62 tint into a pale grey shield that merged with the white helm and mask):
+# the glass a clear lavender-blue a step under the chalk (L* ~66), the face seen faintly through it, the thick pale
+# rim (the concept's) setting it off the helm
 # the fins: smooth pale glass like the knives (fix pass 3: the lavender gradient and frayed edges read as feathers)
 FIN_COL = {"root": "#93B1C6", "mid": "#B2CADA", "tip": "#C6D8E4", "spine": "#7896AE", "edge": "#DDE9F0"}
 # the crest's stone frame (painted: the projection put the painting's sky and fins on the moved crest)
@@ -2078,7 +2096,7 @@ def visor_paint(p, n):
     behind = _mix(behind, C["inner"][None] * 0.9, side_w * 0.55)
     eye = _ss((p[:, 2] - 1.630) / 0.012) * _ss((1.700 - p[:, 2]) / 0.012)   # the deep band across the eyes
     beak = _ss((1.625 - p[:, 2]) / 0.03)                            # the hook below the band: lighter, cooler glass
-    k = 0.62 + 0.16 * eye + 0.10 * side_w
+    k = 0.76 + 0.12 * eye + 0.08 * side_w
     col = behind * (1 - k[:, None]) + C["tint"][None] * k[:, None]
     col = _mix(col, C["core"][None], eye * 0.28)
     col = _mix(col, C["top"][None], _ss((p[:, 2] - 1.700) / 0.03) * 0.5)
@@ -2098,8 +2116,8 @@ def visor_paint(p, n):
     col = _mix(col, C["outline"][None], np.clip(1 - np.abs(dr - 0.0182) / 0.0012, 0, 1) * side * 0.6)
     col = _mix(col, C["inner"][None], (1 - outer) * 0.85)
     de = _visor_edge(p)
-    col = _mix(col, C["inner_line"][None], np.clip(1 - np.abs(de - 0.0092) / 0.0014, 0, 1) * 0.55)
-    rim = np.clip((0.0080 - de) / 0.0014, 0, 1)
+    col = _mix(col, C["inner_line"][None], np.clip(1 - np.abs(de - 0.0118) / 0.0014, 0, 1) * 0.60)
+    rim = np.clip((0.0105 - de) / 0.0014, 0, 1)
     rim_c = _mix(C["rim"][None].repeat(len(p), 0), C["rim_hi"][None], np.clip((n[:, 2] + 0.1) / 0.6, 0, 1) * 0.8)
     col = _mix(col, rim_c, rim * 0.95)
     col = _mix(col, C["outline"][None], np.clip((0.0026 - de) / 0.0012, 0, 1) * 0.85)
@@ -2319,7 +2337,7 @@ COAT_COL = {"front": "#A0AEB4", "back": "#8D99A1", "lining": "#66717A", "trim": 
             "ink": "#363F47"}
 # (POLISH: the painting's hood, lit #A8C7D0 L* 78, shade #899CA6 L* 63; a step lighter than fix pass 5's for the
 # value lift: the cowl is in the top band from every facing)
-COWL_COL = {"front": "#A7BFCC", "back": "#A2B8C6", "fold": "#6C8494", "lit": "#C8DAE2"}
+COWL_COL = {"front": "#98B6C9", "back": "#96B0C2", "fold": "#5D7889", "lit": "#BED5E0"}   # (build 1: washed to white)
 SLEEVE_COL = {"base": "#A2B2BE", "fold": "#72838F"}      # (POLISH, value lift: the concept's light blue sleeves)
 
 
@@ -2379,7 +2397,7 @@ def cowl_paint(p, n):
     col = painted(base, n, p, 0.70, None, 0.025, 140.0, seed=19.0)
     f, depth = cowl_fold(p)
     dk = np.clip(depth / 0.0100, 0, 1)
-    col = _mix(col, C["fold"][None], _ss((0.35 - f) / 0.35) * (0.15 + 0.45 * dk))
+    col = _mix(col, C["fold"][None], _ss((0.40 - f) / 0.40) * (0.30 + 0.45 * dk))
     col = _mix(col, C["lit"][None], _ss((f - 0.75) / 0.25) * _ss(0.3 + n @ KEY) * (0.15 + 0.25 * dk))
     # the collar's inside (facing the neck) in shadow, its rolled top lit
     rad = np.stack([p[:, 0] - COWL_AX[0], p[:, 1] - COWL_AX[1], np.zeros(len(p))], 1)
@@ -2531,6 +2549,8 @@ def head_preview_colour(name, p, n, pal, role, skin=None):
     """proto/rishal_head.py: the procedural head paint (with a skin's role change as a per-channel gain, the
     recolour's rule) or the flat role colour, graded like the atlas"""
     fn = PROC_HEAD.get(name) or PROC_BODY.get(name)
+    if role == "accent":
+        fn = None
     if fn is not None:
         col = fn(p, n).astype(np.float32)
         if skin and role in skin.get("palette", {}):
@@ -3295,9 +3315,13 @@ def _cast_a1(g) -> anim.Clip:
                    R=(0.02, 0.10, -0.85), Rp=(-0.8, 0.5, 0.0), Rb=(-0.30, 0.80, -0.50),
                    L=(-0.02, 0.10, -0.85), Lp=(0.8, 0.5, 0.0), Lb=(0.30, 0.80, -0.50),
                    feet=_feet(g, dl=(0.0, -0.04, 0.0), dr=(0.0, 0.06, 0.0), pr=-20.0))
+    # (POLISH, review 3: swapping legs every 3 frames passed through a tucked crouch each time, the squat-hop): ONE
+    # long stride held from the impact to the end, the body gliding on it (the sim carries him 5 m), so the long low
+    # diagonal holds through the dash; the run / idle cross-fade takes the legs home
+    glide = _sprint(g, 1.06, 0.0)
+    glide = anim.add(glide, anim.P(hips=(2, 0, 0), chest=(-2, 0, 0)))
     keys = [(0.0, g, "linear"), (0.12, crouch, "out"), (0.26, _sprint(g, 0.8, 0.0), "accel"),
-            (anim.IMPACT, _sprint(g, 1.12, 0.0), "out"), (0.62, _sprint(g, 1.0, 1.0), "inout"),
-            (0.82, _sprint(g, 1.0, 0.0), "inout"), (1.0, _sprint(g, 1.0, 1.0), "inout")]
+            (anim.IMPACT, _sprint(g, 1.12, 0.0), "out"), (0.70, glide, "inout"), (1.0, _sprint(g, 1.0, 0.0), "inout")]
     return _clip("cast_a1", 15, keys, impact=anim.IMPACT, lags={"head": 1.0})
 
 
@@ -3550,10 +3574,15 @@ def _victory(g) -> anim.Clip:
     # (fix pass 4, review: the hold read as a frontal stand with the knives at the hips): the whole body turned ~45
     # degrees away to his right (hips, chest and the planted feet), chest up and chin raised, both wrists crossed in the
     # small of his back with the elbows out like folded wings, the two blades jutting back and up past the hips in an X
-    hold = _pose(g, dict(hips=(-6, -42, 0), spine=(-8, -10, 0), chest=(-10, -10, 0), neck=(-8, 8, 0), head=(-16, 12, 0)), (0.0, 0.05, 0.04),
-                 R=(0.42, 0.46, -0.52), Rp=(-0.9, 0.6, 0.1), Rb=(0.12, 0.95, 0.28),
-                 L=(-0.42, 0.46, -0.50), Lp=(0.9, 0.6, 0.1), Lb=(-0.12, 0.95, 0.28),
-                 feet=_feet(g, dl=(0.14, 0.08, 0.0), dr=(-0.10, -0.10, 0.0), yr=-70.0, yl=-46.0))
+    # (POLISH, review 3: the splash is this hold, the brief's; turned 62 degrees away the left pauldron's lames hid
+    # the head from the splash camera on his left): the body stays open to that camera (the chest ~16 degrees to his
+    # right), the HEAD turns the quarter away to his right with the chin up, so the visor's beak points into the frame
+    # in profile and the crest, the left spike and both knives (crossed wrists in the small of his back, the blades
+    # jutting back past the hips) sweep toward screen right
+    hold = _pose(g, dict(hips=(-6, -8, 0), spine=(-8, -4, 0), chest=(-10, -4, 0), neck=(-8, -12, 0), head=(-16, -16, 0)), (0.0, 0.05, 0.04),
+                 R=(0.42, 0.46, -0.52), Rp=(-0.9, 0.6, 0.1), Rb=(0.62, 0.68, 0.38),
+                 L=(-0.42, 0.46, -0.50), Lp=(0.9, 0.6, 0.1), Lb=(-0.62, 0.68, 0.38),
+                 feet=_feet(g, dl=(0.06, -0.04, 0.0), dr=(-0.06, 0.10, 0.0), yr=-40.0, yl=-10.0))
     keys = [(0.0, g, "linear"), (0.08, skid, "out"), (0.22, kneel, "inout"), (0.36, draw, "inout"), (0.50, up, "inout"),
             (0.60, flick, "snap"), (0.75, hold, "inout"), (1.0, hold, "linear")]
     base = anim.keyed(keys)

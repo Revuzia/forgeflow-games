@@ -245,3 +245,12 @@
   band stays ~60 (the warm carved plates of the helm's back are the concept's); the side facings' mid band 38-41
   (the dark slate trousers sit in the middle half); cast_a1's tips stop at knee height (a 0.40 m blade from a fist
   ~0.85 m up cannot reach the floor without a deeper crouch than the dash allows).
+- 2026-10-28 04:05 CDT: POLISH started (review3 5/10: 5 major, 7 minor in _open.json; then the Wave B value lift).
+  Rule this pass: every change checked side by side with _design/concept/rishal.webp (crops of the head, chest, back
+  head), keeping what already worked (crest frame + panes, carved helm, lames, chest projection, clips that passed).
+  Diagnosis of the lower-body "paint": the base atlas of the trousers / skirt was even; the ragged pale/dark clouds
+  were the ORM occlusion channel (the skirt's and the arms' cast AO baked as grey islands, which three's aoMap applies
+  to the ambient in game and in the three QA, and which stayed put while the skirt swung), plus the coat paint's 3 cm
+  noise fold multiplier. Head: the visor's front outline was a straight V from the temples to the beak tip, so from
+  any front or three-quarter view the glass covered the whole mask (a shield); the neck was a pale beige column where
+  the painting's is dark carved brown.

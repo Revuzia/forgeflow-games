@@ -4,7 +4,7 @@
   "skin": false,
   "parts": {
     "tris_hat": 3960,
-    "tris_hood": 1500,
+    "tris_hood": 1598,
     "tris_mask": 1800,
     "tris_scarf": 1500,
     "tris_coat_top": 1200,
@@ -16,7 +16,7 @@
     "tris_sleeve_L": 800,
     "tris_sleeve_R": 900,
     "tris_hand_R": 1050,
-    "tris_hand_L": 950,
+    "tris_hand_L": 1000,
     "tris_boots": 950,
     "tris_toecaps": 220,
     "tris_crook_shaft": 1300,
@@ -24,23 +24,23 @@
     "tris_crook_ferrule": 160,
     "tris_lantern_ring": 140,
     "tris_lantern_frame": 1200,
-    "tris_lantern_glass": 260,
+    "tris_lantern_glass": 300,
     "tris_lantern_core": 680,
-    "validate_dunsom": "19620->19619"
+    "validate_dunsom": "19808->19804"
   },
-  "uv_coverage": 0.61,
+  "uv_coverage": 0.614,
   "bake": {
-    "base": 13.02,
-    "rough_metal": 14.4,
-    "normal": 13.83,
-    "ao": 5.57,
-    "normal_fixed_px": 65269,
-    "projection": 119.75,
-    "pack_save": 120.97,
-    "total": 169.09
+    "base": 13.34,
+    "rough_metal": 6.73,
+    "normal": 3.97,
+    "ao": 6.26,
+    "normal_fixed_px": 42082,
+    "projection": 84.22,
+    "pack_save": 84.73,
+    "total": 116.36
   },
-  "tris": 22219,
-  "mesh_top_m": 2.06,
+  "tris": 22404,
+  "mesh_top_m": 2.054,
   "clips": {
     "idle": {
       "frames": 72,
@@ -142,23 +142,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2847420,
+  "glb_bytes_raw": 2866036,
   "optimize": {
     "ok": true,
-    "before": 2847420,
-    "after": 1135304
+    "before": 2866036,
+    "after": 1142496
   },
-  "glb_bytes": 1135304,
+  "glb_bytes": 1142496,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom.glb (1109 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_base 2048x2048 157K, dunsom_normal 512x512 45K, dunsom_orm 512x512 70K",
-      "  skinned meshes: dunsom(18860v), dunsom_accent(324v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom.glb (1116 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_base 2048x2048 163K, dunsom_normal 512x512 45K, dunsom_orm 512x512 71K",
+      "  skinned meshes: dunsom(18782v), dunsom_accent(358v)",
       "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:0.833s/19tr, attack2:0.833s/19tr, cast_a1:1.000s/21tr, cast_a2:1.167s/21tr, cast_a3:0.667s/21tr, cast_ult:1.500s/21tr, channel:1.333s/16tr, dash:0.500s/22tr, death:1.667s/24tr, idle:2.400s/20tr, idle_lobby:4.000s/21tr, recall:2.000s/19tr, run:0.667s/25tr, stunned:1.333s/21tr, taunt:1.500s/18tr, victory:2.000s/22tr",
-      "  tracks checked: 330; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 22219; bind-pose bounds (three units, Y up): 1.19 x 2.06 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
+      "  clips: attack1:0.833s/19tr, attack2:0.833s/19tr, cast_a1:1.000s/21tr, cast_a2:1.167s/21tr, cast_a3:0.667s/21tr, cast_ult:1.500s/21tr, channel:1.333s/16tr, dash:0.500s/22tr, death:1.667s/24tr, idle:2.400s/20tr, idle_lobby:4.000s/22tr, recall:2.000s/19tr, run:0.667s/25tr, stunned:1.333s/21tr, taunt:1.500s/18tr, victory:2.000s/22tr",
+      "  tracks checked: 331; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 22404; bind-pose bounds (three units, Y up): 1.21 x 2.05 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "  run: 20 f, planted samples 4, max foot-speed error 1.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -171,10 +171,10 @@
       "turntable": "art/renders/fighters/dunsom/turntable.png"
     },
     "seconds": {
-      "splash": 29.14,
-      "portrait": 12.7,
-      "icon": 2.81,
-      "turntable": 17.21
+      "splash": 16.26,
+      "portrait": 8.05,
+      "icon": 1.21,
+      "turntable": 13.85
     }
   },
   "three_qa": {
@@ -182,13 +182,13 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.831,
+        -0.839,
         0,
         -1.032
       ],
       [
-        0.355,
-        2.06,
+        0.373,
+        2.054,
         1.398
       ]
     ],
@@ -197,8 +197,8 @@
       1
     ],
     "headY": 1.683,
-    "accentPct": 2.52,
-    "accentTopHalfPct": 91.6,
+    "accentPct": 1.72,
+    "accentTopHalfPct": 87.7,
     "heightPx1080": 110,
     "size": [
       2400,
@@ -206,28 +206,29 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/dunsom/three_dunsom.png",
-    "seconds": 43.4,
+    "seconds": 26.2,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/dunsom/three_clips_dunsom.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.63,
-      "model": 221.18,
-      "lows_bind": 29.85,
-      "uv": 14.7,
-      "bake": 169.72,
-      "clips": 0.62,
-      "export": 5.26,
-      "optimize": 2.11,
-      "load_test": 0.36,
-      "render": 62.1,
-      "three_qa": 103.4,
-      "cache": 0.63
+      "materials": 0.3,
+      "model": 172.48,
+      "lows_bind": 15.07,
+      "uv": 12.79,
+      "bake": 116.86,
+      "clips": 0.44,
+      "export": 3.84,
+      "optimize": 1.6,
+      "load_test": 0.33,
+      "render": 39.61,
+      "three_qa": 65.62,
+      "cache": 0.43
     },
-    "total_s": 610.73
+    "total_s": 429.5
   },
   "run_ref_speed": 3.35,
-  "height_m": 1.95
+  "height_m": 2.05,
+  "rig_crown_m": 1.95
 }

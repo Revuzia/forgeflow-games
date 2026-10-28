@@ -22,10 +22,10 @@
 //   * the eye fill: a soft fill from the camera that lifts the mid-tones the key leaves in its shadow side.
 // A knee fades both out where the world's own light (key, sky, specular) already lights the surface brightly, so
 // pale kits never blow out. Fighters take all of it; wicks and monsters (`unit`) keep the sun as their key and
-// take only a share of the crown, on their darker cloth. Jungle monsters (`monster`) take the sun at their own share
-// (`valeCharMonster`, lighting.ts CHAR_LIGHT.monsterKeyOfSun), so their pale hides sit at or just below the
-// fighters' top-25 L* (characters own the top of the value range; a camp never outshines the fighters in it); their
-// own glow (emissive) follows the same share.
+// take only a share of the crown, on their darker cloth. Jungle monsters (`monster`) take the world's light and show
+// their own glow at their own share (`valeCharMonster`, lighting.ts CHAR_LIGHT.monsterLight), so their pale hides
+// sit at or just below the fighters' top-25 L* (characters own the top of the value range; a camp never outshines
+// the fighters fighting in it).
 //
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
@@ -56,7 +56,7 @@ export const worldUniforms = {
   valeCharRim: { value: new Vector4(0, 0, 0, 3) },
   valeCharFill: { value: new Color(0, 0, 0) },
   valeCharShape: { value: new Vector4(0.3, 0.35, 0.25, 0.75) },
-  // a jungle monster's share of the sun (its key) and of its own glow; wicks keep both at 1
+  // a jungle monster's share of the world's light and of its own glow (wicks keep 1)
   valeCharMonster: { value: 1 },
 };
 
@@ -153,8 +153,13 @@ const CHAR_LIGHT = /* glsl */`
   // brightly, so a pale kit never blows out and the lift goes to the mid-tones and the shadow side
   float valeLit = dot( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular, vec3( 0.2126, 0.7152, 0.0722 ) );
   reflectedLight.directDiffuse += valeAdd * ( 1.0 - smoothstep( valeCharShape.z, valeCharShape.w, valeLit ) );
-  // a jungle monster's own glow (a gloamoth's wing, a glasshorn's dawnglass) at the monster's share too, like its key
-  if ( valeCharMode > 1.1 && valeCharMode < 1.5 ) totalEmissiveRadiance *= valeCharMonster;
+  // a jungle monster takes the world's light (sun, sky, its crown share) and shows its own glow (a gloamoth's wing,
+  // a glasshorn's dawnglass) at its own share: its whole value scales, its painted contrast kept
+  if ( valeCharMode > 1.1 && valeCharMode < 1.5 ) {
+    reflectedLight.directDiffuse *= valeCharMonster; reflectedLight.indirectDiffuse *= valeCharMonster;
+    reflectedLight.directSpecular *= valeCharMonster; reflectedLight.indirectSpecular *= valeCharMonster;
+    totalEmissiveRadiance *= valeCharMonster;
+  }
 }
 #endif
 `;
@@ -166,7 +171,8 @@ export interface WorldPatchOptions {
   fighter?: boolean;
   /** wick / monster shading: the sun stays the key; a share of the character light (`valeCharShape.y`) */
   unit?: boolean;
-  /** a jungle monster: unit shading, the sun at the monster's own share (`valeCharMonster`); implies `unit` */
+  /** a jungle monster: unit shading, the world's light and its glow at the monster's share (`valeCharMonster`);
+   *  implies `unit` */
   monster?: boolean;
   /** fog of war darkens but does not desaturate (the Standing Shadow keeps its colour) */
   keepColor?: boolean;
@@ -174,11 +180,11 @@ export interface WorldPatchOptions {
 
 const PATCHED = Symbol('valePatched');
 
-/** the fighter key light and its shadow floor, applied where valeCharMode says fighter (2); a wick (1) keeps the sun
- *  exactly (× 1.0), a jungle monster (1.25) at its own share (valeCharMonster) */
+/** the fighter key light and its shadow floor, applied where valeCharMode says fighter (2); a wick (1) or a jungle
+ *  monster (1.25) keeps the sun exactly (× 1.0; the monster's share of the world's light applies in CHAR_LIGHT) */
 const CHAR_LIGHTS_BEGIN = ShaderChunk.lights_fragment_begin
   .split('getDirectionalLightInfo( directionalLight, directLight );')
-  .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tif ( valeCharMode > 1.5 ) { directLight.direction = normalize( valeKeyDir ); directLight.color *= valeCharKey; }\n\t\telse if ( valeCharMode > 1.1 ) directLight.color *= valeCharMonster;')
+  .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tif ( valeCharMode > 1.5 ) { directLight.direction = normalize( valeKeyDir ); directLight.color *= valeCharKey; }')
   .split('directionalLightShadow.shadowIntensity').join('( directionalLightShadow.shadowIntensity * ( valeCharMode > 1.5 ? 0.25 : 1.0 ) )');
 
 /**

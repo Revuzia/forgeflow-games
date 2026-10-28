@@ -2327,6 +2327,8 @@ CROWN_DARK = 0.10             # the crown's lacquer a step darker toward the bac
 COWL_MEAN = "#9A8670"         # polish: the concept's warm taupe felt a step under the mask (L* ~57, b* ~+15; was #6A5845,
                               # L* 39: from behind, the RIFT probe's facing, the cowl is most of the top quarter); fix pass 8:
                               # #4F4943 rendered a cool charcoal, near black round the mask in the portrait
+COWL_TOP_GAIN = 1.0           # polish: linear gain on the felt's upward faces (N.z 0.05 -> 0.65), the game camera's view
+COWL_UNDER_DARK = 0.0         # ... and the darkening of its downward faces
 COAT_TOP_GAIN = 1.30          # polish: the coat's shoulders and upper back a step lighter than its mean (linear gain at
 COAT_TOP_Z = (1.25, 1.58)     # z >= 1.58 m, none below 1.25: the bible's light top, the hem stays the concept's dark felt)
 BELT_MEAN = "#45311F"         # polish: the belt and its buckle strap the darkest leather on the torso (the review: belt L* 43
@@ -2863,6 +2865,11 @@ def grade_parts(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
             continue
         if nm == "cowl":
             c = _tint(out[m], COWL_MEAN, contrast=0.9, keep=0.2)
+            # (polish) the felt's painted top light: the faces the game camera looks down on a step up, the undersides a
+            # step down (the concept's lit scarf folds; the low splash camera sees mostly the front faces)
+            nz_ = N[m][:, 2]
+            c = c * (1.0 + (COWL_TOP_GAIN - 1.0) * np.clip((nz_ - 0.05) / 0.6, 0.0, 1.0)
+                     - COWL_UNDER_DARK * np.clip(-nz_ / 0.6, 0.0, 1.0))[:, None]
             # the head's socket in the felt (its inner wall shows under the chin when he bows his head): the
             # felt's shadow, not the projected face paint
             P_ = maps["P"][m]

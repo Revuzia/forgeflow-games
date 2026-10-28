@@ -102,7 +102,7 @@ const ANIM_FAR_DT = 1 / 15;
 
 export type ActorKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'ward' | 'pickup';
 /** who takes the character light (world_material.ts): fighters all of it, wicks and monsters a share, the rest none;
- *  jungle monsters also take the sun at their own share (CHAR_LIGHT.monsterKeyOfSun) */
+ *  jungle monsters take the world's light and their own glow at their own share (CHAR_LIGHT.monsterLight) */
 interface CharLight { fighter: boolean; unit: boolean; monster: boolean }
 const charLight = (kind: string): CharLight => ({ fighter: kind === 'fighter', unit: kind === 'minion' || kind === 'monster', monster: kind === 'monster' });
 const LOOPING = new Set(['idle', 'run', 'recall', 'channel', 'stunned', 'idle_lobby', 'victory', 'taunt']);

@@ -202,7 +202,10 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   h -= gr * 0.008;
   // stone: roads, their broken verges, camp rooms
   if ( laneD < uLaneHalf + 2.4 || clearD < 2.4 ) {
-    vec4 fl = valePavers( p, 1.3 );
+    // hand-laid, not stamped: the flag layout is gently warped, so the stones run in irregular sizes and soft-cornered
+    // shapes (never one even Voronoi web down the whole road)
+    vec2 pq = p + ( vec2( valeNoise( p * 0.27 + 3.1 ), valeNoise( p * 0.27 + 8.7 ) ) - 0.5 ) * 0.85;
+    vec4 fl = valePavers( pq, 1.3 );
     // whole flags are lost to the wood: decide per flag from the fields at its centre
     vec2 site = valePaverSite( fl, 1.3 );
     vec4 ss = texture( uSplat, site * uSplatScale );
@@ -227,7 +230,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float fA = valeHash12( fl.zw + 3.17 ), fB = valeHash12( fl.zw * 1.31 + 8.4 ), fC = valeHash12( fl.zw * 0.71 + 5.9 );
     float famK = fract( fA + ( lfA - 0.5 ) * 0.6 + 1.0 );
     vec3 fam = famK < 0.3 ? vec3( 1.06, 1.0, 0.91 ) : famK < 0.56 ? vec3( 0.95, 0.995, 1.09 ) : famK < 0.8 ? vec3( 1.09, 1.0, 0.84 ) : vec3( 0.99, 1.005, 1.0 );
-    vec2 toS = clamp( ( p - site ) / 0.62, -1.0, 1.0 );
+    vec2 toS = clamp( ( pq - site ) / 0.62, -1.0, 1.0 );
     float vol = dot( toS, vec2( -0.55, 0.83 ) );
     // the walked path: a polished, paler track down the middle, wandering in width, fading in and out along the road
     float trackW = 1.15 + 0.95 * valeNoise( p * 0.05 + 21.0 );
@@ -255,7 +258,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float eR = fl.y + chipR;
     jw = 1.0 - smoothstep( jW * 0.35, jW, eR );
     float rimB = 1.0 - smoothstep( 0.0, 0.15, eR );
-    float litR = dot( normalize( p - site + vec2( 1e-4 ) ), vec2( -0.55, 0.83 ) );
+    float litR = dot( normalize( pq - site + vec2( 1e-4 ) ), vec2( -0.55, 0.83 ) );
     vec3 roadC = roadBand * grainR * ( 1.0 + rimB * ( litR > 0.0 ? 0.07 : 0.11 ) * litR ) * ( 1.0 + 0.04 * smoothstep( 0.18, 0.5, eR ) );
     roadC = mix( roadC, jointC, jw );
     fh = ( smoothstep( 0.0, 0.085, eR ) * 0.02 + ( fB - 0.5 ) * 0.004 ) * ( 1.0 - 0.5 * trackP );
@@ -386,7 +389,10 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   vec3 fam = famK < 0.35 ? vec3( 0.955, 1.0, 1.08 ) : famK < 0.62 ? vec3( 1.05, 1.0, 0.92 ) : famK < 0.86 ? vec3( 0.99, 1.0, 1.02 ) : vec3( 1.07, 1.01, 0.87 );
   float trackP = ( 1.0 - smoothstep( 1.2, 2.6, laneD + ( nMid - 0.5 ) * 1.2 + ( n2 - 0.5 ) * 0.3 ) ) * ( 0.45 + 0.55 * smoothstep( 0.2, 0.6, valeNoise( p * 0.08 + 4.0 ) ) );
   vec3 stoneS = mix( fam * ( 0.93 + 0.13 * fB ), vec3( 1.04, 1.03, 0.99 ), trackP * 0.65 );
-  col = valeFlag( uLane * longT * stoneS * ( 0.99 + 0.04 * nMid ) * ( 1.0 + 0.05 * trackP ), fl, mix( grainN, vec3( 1.0 ), trackP * 0.55 ), chip,
+  // (held to the deck's own chroma: the families shift the hue, never the saturation band, spec 0.22-0.35)
+  vec3 deckB = uLane * longT * stoneS * ( 0.99 + 0.04 * nMid ) * ( 1.0 + 0.05 * trackP );
+  deckB = mix( vec3( dot( deckB, vec3( 0.2126, 0.7152, 0.0722 ) ) ), deckB, 0.88 );
+  col = valeFlag( deckB, fl, mix( grainN, vec3( 1.0 ), trackP * 0.55 ), chip,
     0.035 - 0.012 * trackP, mix( uGrout, uLane * 0.95, trackP * 0.7 ), 0.04, fh, jw );
   fh *= 0.75 - 0.3 * trackP;
   // moss in the joints in sparse patches where few feet go
