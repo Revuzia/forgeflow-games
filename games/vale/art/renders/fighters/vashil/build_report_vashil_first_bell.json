@@ -41,36 +41,36 @@
     "tris_clappers": 398,
     "validate_vashil": "22610->22607"
   },
-  "uv_coverage": 0.605,
+  "uv_coverage": 0.589,
   "bake": {
-    "base": 14.55,
-    "rough_metal": 14.1,
-    "normal": 6.14,
-    "ao": 7.62,
-    "normal_fixed_px": 26326,
-    "projection": 146.1,
-    "pack_save": 146.31,
-    "total": 189.76
+    "base": 2.64,
+    "rough_metal": 2.13,
+    "normal": 1.92,
+    "ao": 2.87,
+    "normal_fixed_px": 25082,
+    "projection": 37.54,
+    "pack_save": 37.67,
+    "total": 47.4
   },
   "tris": 23065,
-  "mesh_top_m": 2.172,
-  "glb_bytes_raw": 2456764,
+  "mesh_top_m": 2.188,
+  "glb_bytes_raw": 2449716,
   "optimize": {
     "ok": true,
-    "before": 2456764,
-    "after": 1083780
+    "before": 2449716,
+    "after": 1084820
   },
-  "glb_bytes": 1083780,
+  "glb_bytes": 1084820,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil_first_bell.glb (1058 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: vashil_first_bell_base 2048x2048 247K, vashil_first_bell_normal 512x512 50K, vashil_first_bell_orm 256x256 24K",
-      "  skinned meshes: vashil_accent(251v), vashil_first_bell(21323v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil_first_bell.glb (1059 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: vashil_first_bell_base 2048x2048 249K, vashil_first_bell_normal 512x512 49K, vashil_first_bell_orm 256x256 24K",
+      "  skinned meshes: vashil_accent(251v), vashil_first_bell(21356v)",
       "  bones: 30 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL x_index1L x_index2L x_sleeveL_1 shoulderR upper_armR forearmR handR propR x_rod_head x_sleeveR_1 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 23065; bind-pose bounds (three units, Y up): 0.98 x 2.18 x 0.81; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
+      "  tris: 23065; bind-pose bounds (three units, Y up): 0.98 x 2.19 x 0.81; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -80,8 +80,8 @@
       "portrait": "art/out/fighters/vashil/vashil_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 8.36,
-      "portrait": 4.22
+      "splash": 10.14,
+      "portrait": 3.8
     }
   },
   "three_qa": {
@@ -95,8 +95,8 @@
       ],
       [
         0.414,
-        2.172,
-        0.426
+        2.188,
+        0.427
       ]
     ],
     "facing": [
@@ -104,33 +104,33 @@
       1
     ],
     "headY": 1.642,
-    "accentPct": 2.24,
+    "accentPct": 2.25,
     "accentTopHalfPct": 99.9,
-    "heightPx1080": 117,
+    "heightPx1080": 118,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/vashil/three_vashil_first_bell.png",
-    "seconds": 10.1,
+    "seconds": 8.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 1.0,
-      "model": 37.7,
-      "lows_bind": 23.45,
-      "uv": 15.94,
-      "bake": 189.77,
+      "materials": 0.53,
+      "model": 10.96,
+      "lows_bind": 4.08,
+      "uv": 4.63,
+      "bake": 47.41,
       "export": 0.06,
-      "optimize": 0.51,
-      "load_test": 0.12,
-      "render": 12.61,
-      "three_qa": 10.41
+      "optimize": 0.7,
+      "load_test": 0.16,
+      "render": 13.97,
+      "three_qa": 8.79
     },
-    "total_s": 292.04
+    "total_s": 91.71
   },
   "run_ref_speed": 3.35,
   "height_m": 1.9

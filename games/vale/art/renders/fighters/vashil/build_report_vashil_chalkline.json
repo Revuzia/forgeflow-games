@@ -42,36 +42,36 @@
     "validate_vashil": "21986->21976",
     "validate_vashil_accent": "338->335"
   },
-  "uv_coverage": 0.599,
+  "uv_coverage": 0.598,
   "bake": {
-    "base": 6.22,
-    "rough_metal": 5.05,
-    "normal": 4.46,
-    "ao": 5.14,
-    "normal_fixed_px": 20464,
-    "projection": 79.79,
-    "pack_save": 79.97,
-    "total": 101.04
+    "base": 5.41,
+    "rough_metal": 2.93,
+    "normal": 1.92,
+    "ao": 2.46,
+    "normal_fixed_px": 20163,
+    "projection": 109.83,
+    "pack_save": 110.21,
+    "total": 123.12
   },
   "tris": 22311,
-  "mesh_top_m": 2.172,
-  "glb_bytes_raw": 2440900,
+  "mesh_top_m": 2.188,
+  "glb_bytes_raw": 2433296,
   "optimize": {
     "ok": true,
-    "before": 2440900,
-    "after": 1080792
+    "before": 2433296,
+    "after": 1083896
   },
-  "glb_bytes": 1080792,
+  "glb_bytes": 1083896,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil_chalkline.glb (1055 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: vashil_chalkline_base 2048x2048 275K, vashil_chalkline_normal 512x512 49K, vashil_chalkline_orm 256x256 24K",
-      "  skinned meshes: vashil_accent(185v), vashil_chalkline(20488v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil_chalkline.glb (1058 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: vashil_chalkline_base 2048x2048 278K, vashil_chalkline_normal 512x512 48K, vashil_chalkline_orm 256x256 23K",
+      "  skinned meshes: vashil_accent(185v), vashil_chalkline(20537v)",
       "  bones: 30 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL x_index1L x_index2L x_sleeveL_1 shoulderR upper_armR forearmR handR propR x_rod_head x_sleeveR_1 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 22311; bind-pose bounds (three units, Y up): 0.97 x 2.18 x 0.83; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
+      "  tris: 22311; bind-pose bounds (three units, Y up): 0.97 x 2.19 x 0.83; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -81,8 +81,8 @@
       "portrait": "art/out/fighters/vashil/vashil_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 11.31,
-      "portrait": 5.33
+      "splash": 26.62,
+      "portrait": 10.41
     }
   },
   "three_qa": {
@@ -96,7 +96,7 @@
       ],
       [
         0.406,
-        2.172,
+        2.188,
         0.427
       ]
     ],
@@ -105,33 +105,33 @@
       1
     ],
     "headY": 1.642,
-    "accentPct": 1.59,
+    "accentPct": 1.6,
     "accentTopHalfPct": 99.9,
-    "heightPx1080": 117,
+    "heightPx1080": 118,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/vashil/three_vashil_chalkline.png",
-    "seconds": 30.5,
+    "seconds": 46.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.09,
-      "model": 21.39,
-      "lows_bind": 9.0,
-      "uv": 5.35,
-      "bake": 101.04,
-      "export": 0.11,
-      "optimize": 0.68,
-      "load_test": 0.14,
-      "render": 16.67,
-      "three_qa": 31.21
+      "rig": 0.01,
+      "materials": 0.5,
+      "model": 29.53,
+      "lows_bind": 9.4,
+      "uv": 7.35,
+      "bake": 123.12,
+      "export": 0.27,
+      "optimize": 1.52,
+      "load_test": 0.29,
+      "render": 37.09,
+      "three_qa": 47.36
     },
-    "total_s": 185.72
+    "total_s": 256.57
   },
   "run_ref_speed": 3.35,
   "height_m": 1.9

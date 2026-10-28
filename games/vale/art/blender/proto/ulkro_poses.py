@@ -93,6 +93,10 @@ def main():
         fi = int(round(float(f) * clip.frames)) if "." in f else int(f)
         fi = max(0, min(len(poses) - 1, fi))
         anim.apply_pose(arm, poses[fi])
+        for i in range(len(ulkro.CREST)):                 # the death's crest slide (location keys, not in the pose)
+            pb = arm.pose.bones.get(f"x_crest{i}")
+            if pb is not None:
+                pb.location = ulkro.crest_slide(i, fi / max(1, clip.frames)) if c == "death" else (0.0, 0.0, 0.0)
         bpy.context.view_layer.update()
         y, pr = math.radians(yw), math.radians(pt)
         tgt = Vector((0.0, 0.0, a.zc))

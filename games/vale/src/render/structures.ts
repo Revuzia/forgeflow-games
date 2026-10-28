@@ -60,7 +60,7 @@ const OCC_BAND = 0.5;
 const OCC_CELL = 0.2;
 /** the clearance (m, along the ray) the proxy must leave before a body point for that ray to count as blocked */
 const OCC_CLEAR = 0.3;
-/** the unit's body rays: heights (× art height) and sideways offsets (× its half-width) */
+/** the unit's body rays: heights (× art height) and sideways offsets (× the flank offset, see blocked()) */
 const RAY_ROWS = [0.25, 0.5, 0.72, 0.92] as const;
 const RAY_COLS = [-1, 0, 1] as const;
 /** a broken-off chip draws nothing but keeps its node: the outline / hover / hit-flash hull of its siblings hangs
@@ -816,7 +816,9 @@ export class StructureFx {
     if (fall && s.upper) _inv.premultiply(relMatrix(s.upper, a.root, _m2).invert().premultiply(s.upRest));
     _rc.copy(cam.position).applyMatrix4(_inv);
     const H = Math.max(0.6, o.artHeight);
-    const w = Math.min(0.45, Math.max(0.2, o.radius * 0.8));
+    // the flank rays sample inside the body (its collision radius is wider than its head, legs and waist): a
+    // tower edge that only passes beside the unit must not count as hiding it
+    const w = Math.min(0.3, Math.max(0.15, o.radius * 0.55));
     let hit = 0, n = 0;
     for (const f of RAY_ROWS) for (const c of RAY_COLS) {
       n++;
