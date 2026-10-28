@@ -8,9 +8,19 @@
 //   * map-edge haze: outside the playable bounds only (world space, NEVER camera distance — the
 //     bible bans camera-distance fog), fading to the map's fog colour.
 // FIGHTER materials replace the sun's direction with their own key (view-space azimuth 225°, elevation
-// 45°, 0.9 × the sun's colour and intensity), so every fighter reads the same on every map, and take a
-// shadow floor (the sun's shadow removes at most 25 % of the key: ≥ 75 % brightness in shadow, bible
-// `shadow = mix(1.0, s, 0.25)`), plus a faint sun-side rim for separation from the ground.
+// 45°, `valeCharKey` × the sun's colour and intensity), so every fighter reads the same on every map, and
+// take a shadow floor (the sun's shadow removes at most 25 % of the key: ≥ 75 % brightness in shadow, bible
+// `shadow = mix(1.0, s, 0.25)`).
+//
+// THE CHARACTER LIGHT (r12 B5 round 2, tokens `grade.fighterLight.rig`; lighting.ts sets it per map): the
+// environment was rebased down, so characters carry their own light instead of the world getting brighter.
+// It is a shading term, not a three.js light: no extra light in any program's key, no shadow map, a few ALU
+// on character fragments only, the world's pixels untouched. Both parts follow the camera (view space):
+//   * the noon crown: a Fresnel rim on the silhouette weighted to its top and back (the side above and away
+//     from the camera), so a character's upper outline lifts off the ground under it. Its albedo carries a
+//     value floor (hue kept), so a dark kit's edge reads as well as a pale one's;
+//   * the eye fill: a soft fill from the camera that lifts the mid-tones the key leaves in its shadow side.
+// Fighters take all of it; wicks and monsters (`unit`) take a smaller share and keep the sun as their key.
 //
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
@@ -31,10 +41,15 @@ export const worldUniforms = {
   valeEdgeRange: { value: new Vector2(4, 18) },       // haze starts / is full this far outside the bounds
   valeEdgeOn: { value: 1 },
   valeTime: { value: 0 },
-  // fighter key light (view space) and sun-side rim
+  // the fighter key (view space) and its share of the sun
   valeKeyDir: { value: new Vector3(-0.5, 0.7071, 0.5).normalize() },
-  valeSunDirView: { value: new Vector3(0, 1, 0) },
-  valeRimColor: { value: new Color(0.25, 0.24, 0.22) },
+  valeCharKey: { value: 0.9 },
+  // the character light (lighting.ts CHAR_LIGHT): crown direction (view space), crown radiance (rgb, linear) and
+  // Fresnel power (a), eye-fill radiance, and x = the crown's albedo value floor, y = the wick/monster share
+  valeCharRimDir: { value: new Vector3(0, 0.8, -0.6).normalize() },
+  valeCharRim: { value: new Vector4(0, 0, 0, 3) },
+  valeCharFill: { value: new Color(0, 0, 0) },
+  valeCharShape: { value: new Vector4(0.2, 0.3, 50, 51) },
 };
 
 /** GLSL: the fog-of-war + edge haze functions (shared with custom ShaderMaterials) */
@@ -100,17 +115,33 @@ const VERT_MAIN = /* glsl */`
 }
 `;
 
-const FIGHTER_PARS = /* glsl */`
+const CHAR_PARS = /* glsl */`
 uniform vec3 valeKeyDir;
-uniform vec3 valeSunDirView;
-uniform vec3 valeRimColor;
+uniform float valeCharKey;
+uniform vec3 valeCharRimDir;
+uniform vec4 valeCharRim;
+uniform vec3 valeCharFill;
+uniform vec4 valeCharShape;
 `;
-/** after the material's direct lights: a faint sun-side rim (separation from the ground) */
-const FIGHTER_RIM = /* glsl */`
+/** after the material's lights (direct and sky): the character light (noon crown + eye fill), see the header */
+const CHAR_LIGHT = /* glsl */`
 #if defined( RE_Direct )
 {
-  float valeRim = pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), 3.0 ) * saturate( dot( geometryNormal, normalize( valeSunDirView ) ) * 0.6 + 0.4 );
-  reflectedLight.directDiffuse += valeRimColor * valeRim * material.diffuseColor;
+  float valeNdV = saturate( dot( geometryNormal, geometryViewDir ) );
+  float valeUp = saturate( dot( geometryNormal, valeCharRimDir ) * 0.5 + 0.5 );
+  float valeRim = pow( 1.0 - valeNdV, valeCharRim.a ) * valeUp * valeUp;
+  float valeLa = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 valeAlb = min( diffuseColor.rgb * ( max( valeLa, valeCharShape.x ) / max( valeLa, 0.02 ) ), vec3( 1.0 ) );
+  #ifdef VALE_CHAR_UNIT
+  // wicks and monsters keep the sun as their key: a share of the crown, on their darker cloth only (a pale hood takes none)
+  vec3 valeAdd = valeCharShape.y * ( 1.0 - smoothstep( 0.12, 0.3, valeLa ) ) * valeCharRim.rgb * valeRim * valeAlb;
+  #else
+  vec3 valeAdd = valeCharRim.rgb * valeRim * valeAlb + valeCharFill * ( 0.4 + 0.6 * valeNdV ) * material.diffuseColor;
+  #endif
+  // the knee: the character light fades where the world's light (key, sky, specular) already lights the surface
+  // brightly, so a pale kit never blows out and the lift goes to the mid-tones and the shadow side
+  float valeLit = dot( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular, vec3( 0.2126, 0.7152, 0.0722 ) );
+  reflectedLight.directDiffuse += valeAdd * ( 1.0 - smoothstep( valeCharShape.z, valeCharShape.w, valeLit ) );
 }
 #endif
 `;
@@ -118,8 +149,10 @@ const FIGHTER_RIM = /* glsl */`
 export interface WorldPatchOptions {
   /** fog of war + edge haze (default true) */
   fog?: boolean;
-  /** fighter shading: own key light, shadow floor, rim */
+  /** fighter shading: own key light, shadow floor, the character light */
   fighter?: boolean;
+  /** wick / monster shading: the sun stays the key; a share of the character light (`valeCharShape.y`) */
+  unit?: boolean;
   /** fog of war darkens but does not desaturate (the Standing Shadow keeps its colour) */
   keepColor?: boolean;
 }
@@ -131,11 +164,12 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
   const m = material as Material & { [PATCHED]?: string };
   const fog = opts.fog !== false;
   const fighter = opts.fighter === true;
+  const unit = !fighter && opts.unit === true;
   const keep = opts.keepColor === true;
-  const key = `${fog ? 'f' : ''}${fighter ? 'k' : ''}${keep ? 'c' : ''}`;
+  const key = `${fog ? 'f' : ''}${fighter ? 'k' : ''}${unit ? 'u' : ''}${keep ? 'c' : ''}`;
   if (m[PATCHED] === key) return;
   m[PATCHED] = key;
-  if (!fog && !fighter) return;
+  if (!fog && !fighter && !unit) return;
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer) => {
     prev.call(material, shader, renderer);
@@ -153,11 +187,16 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
       // its shadow keeps ≥ 75 % of the key
       const lights = ShaderChunk.lights_fragment_begin
         .split('getDirectionalLightInfo( directionalLight, directLight );')
-        .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.direction = normalize( valeKeyDir );\n\t\tdirectLight.color *= 0.9;')
+        .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.direction = normalize( valeKeyDir );\n\t\tdirectLight.color *= valeCharKey;')
         .split('directionalLightShadow.shadowIntensity').join('( directionalLightShadow.shadowIntensity * 0.25 )');
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n${FIGHTER_PARS}`)
-        .replace('#include <lights_fragment_begin>', `${lights}\n${FIGHTER_RIM}`);
+        .replace('#include <common>', `#include <common>\n${CHAR_PARS}`)
+        .replace('#include <lights_fragment_begin>', lights)
+        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
+    } else if (unit) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\n#define VALE_CHAR_UNIT\n${CHAR_PARS}`)
+        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
     }
   };
   const prevKey = material.customProgramCacheKey;

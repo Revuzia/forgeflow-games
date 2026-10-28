@@ -151,29 +151,33 @@ def wpt(s, up=0.0, side=0.0):
 DART_TIP = wpt(DART_S[2], DART_OFF)
 
 # the quiver: a flattened linen tube on the back, right shoulder (mouth) -> left hip
-Q_TOP = np.array([-0.205, 0.175, 1.585])
+Q_TOP = np.array([-0.18, 0.17, 1.585])
 Q_BOT = np.array([0.215, 0.165, 1.075])
 Q_U = _n(Q_TOP - Q_BOT)                              # up the quiver
 Q_N = _n(np.array([0.0, 1.0, 0.0]) - Q_U * Q_U[1])  # out from her back
 Q_W = np.cross(Q_U, Q_N)                             # across the quiver (in the back's plane)
 Q_HW, Q_HD = 0.078, 0.048                            # half width / half depth of the tube
 # the five crest darts: (tilt toward her right, tilt forward (-) / back (+), base offset across the mouth, length).
-# The concept fans them 18-46 degrees over the right shoulder; in game (build 4/6) the health bar, which sits 0.35 m over
-# art.height = the crest's top, hid every tip that leaned AWAY from the camera: the tips leaning back whenever she faced
-# the camera, the outer darts whenever her right side faced away (one of the two lane facings). The fan is kept to her
-# right but stands more upright (6-30 degrees) and its darts lean a little forward over the hood instead of back, so
-# the spray of lines stays under the bar from both lane facings.
-CREST = [(6.0, -10.0, -0.040, 0.60), (12.0, -3.0, -0.018, 0.62), (18.0, 3.0, 0.004, 0.63), (24.0, -1.0, 0.026, 0.61),
-         (30.0, -8.0, 0.046, 0.58)]
-DART_R = 0.0145
-HEAD_L, HEAD_W, HEAD_T = 0.16, 0.034, 0.007          # the leaf head: length, half width, half thickness
+# FIX PASS 1 (review: 'one tight bundle, the tips touch the HP bar'): solved numerically at the game camera
+# (scratchpad crest_eval: a tip at height h, horizontal distance r from the unit's axis, reaches h*50.5 + r*64.7 px in
+# its worst facing; the bar's lower edge is (art.height + 0.35)*50.5 - 12 px). The fan keeps the concept's spread over
+# the right shoulder (5-37 degrees, 8 apart) and staggers the darts back / forward in two rows across the mouth, so the
+# five tips separate in the lane facings too (13.6 / 5.7 px, were 7.7 / 2.8); the tips sit 1.80-2.01 m (the concept's
+# tips stand 0-14 cm over the hood peak), clear of the hood, and ART_HEIGHT (below) puts the bar over them in every
+# facing (>= 1.7 px; lanes 2.5 px).
+CREST = [(5.0, 18.0, -0.045, 0.52), (13.0, -2.0, -0.022, 0.55), (21.0, 18.0, 0.0, 0.52), (29.0, -12.0, 0.022, 0.51),
+         (37.0, 10.0, 0.045, 0.47)]
+CREST_DEPTH = (-0.012, 0.012, -0.012, 0.012, -0.012)   # the two rows across the quiver's mouth (out from her back)
+ART_HEIGHT = 2.28           # FighterArt.height = the HP bar's anchor (- 0.35 m): clears the leaning crest (see above)
+DART_R = 0.0135
+HEAD_L, HEAD_W, HEAD_T = 0.17, 0.037, 0.0065         # the leaf head: length, half width, half thickness
 
 
 def crest_dart(i):
     """(base inside the quiver, unit direction, tip) of crest dart i"""
     a, b, off, L = CREST[i]
     d = _n([-math.tan(math.radians(a)), math.tan(math.radians(b)), 1.0])
-    base = Q_TOP - Q_U * 0.16 + Q_W * off + Q_N * 0.004 * (i - 2)
+    base = Q_TOP - Q_U * 0.16 + Q_W * off + Q_N * CREST_DEPTH[i]
     return base, d, base + d * L
 
 
@@ -269,6 +273,94 @@ def fist(name, grip, axis, wrist, knuckle, shaft_r, scale=1.0, index_fwd=1.0):
     return S
 
 
+# the hood's tail streamer: control points (spline), half widths, half thickness, twist (deg) along it
+TAIL_PTS = [(0.03, 0.165, 1.716), (0.10, 0.212, 1.700), (0.175, 0.248, 1.668), (0.25, 0.272, 1.657),
+            (0.315, 0.288, 1.676), (0.37, 0.300, 1.664)]
+TAIL_W = (0.028, 0.032, 0.028, 0.022, 0.016, 0.0095)
+TAIL_T = (0.0058, 0.0052, 0.0048, 0.0046, 0.0045, 0.0045)
+TAIL_TWIST = (8.0, 30.0, 52.0, 40.0, 18.0, 6.0)
+
+
+def _catmull(pts, n=56):
+    P = np.asarray(pts, float)
+    P = np.vstack([P[0] * 2 - P[1], P, P[-1] * 2 - P[-2]])
+    out, prm = [], []
+    seg = len(P) - 3
+    for i in range(seg):
+        p0, p1, p2, p3 = P[i], P[i + 1], P[i + 2], P[i + 3]
+        for t in np.linspace(0.0, 1.0, n // seg, endpoint=(i == seg - 1)):
+            t2, t3 = t * t, t * t * t
+            out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+                              + (-p0 + 3 * p1 - 3 * p2 + p3) * t3))
+            prm.append((i + t) / seg)
+    return np.array(out), np.array(prm)
+
+
+class _Ribbon(sdf.Prim):
+    """a cloth ribbon swept along a spline: stadium cross-section (half width w, half thickness t, both
+    interpolated along it), its width turned `twist` degrees about the path from the vertical; rounded ends"""
+
+    def __init__(self, pts, w, t, twist):
+        S, u = _catmull(pts)
+        T = np.gradient(S, axis=0)
+        T = T / np.linalg.norm(T, axis=1, keepdims=True)
+        ku = np.linspace(0, 1, len(w))
+        self.W = np.interp(u, ku, w)
+        self.Th = np.interp(u, ku, t)
+        tw = np.radians(np.interp(u, ku, twist))
+        up = np.array([0.0, 0.0, 1.0])
+        e1 = up[None] - T * (T @ up)[:, None]
+        e1 = e1 / np.linalg.norm(e1, axis=1, keepdims=True)
+        e2 = np.cross(T, e1)
+        self.Sd = e1 * np.cos(tw)[:, None] + e2 * np.sin(tw)[:, None]
+        self.Nm = np.cross(T, self.Sd)
+        self.S, self.T = S, T
+
+    def bounds(self):
+        m = float(self.W.max()) + 0.01
+        return self.S.min(0) - m, self.S.max(0) + m
+
+    def d(self, P):
+        out = np.empty(len(P))
+        N = len(self.S)
+        for c0 in range(0, len(P), 16384):
+            p = P[c0:c0 + 16384]
+            D2 = ((p[:, None, :] - self.S[None]) ** 2).sum(-1)
+            i = np.argmin(D2, axis=1)
+            q = p - self.S[i]
+            a = (q * self.T[i]).sum(1)
+            u = (q * self.Sd[i]).sum(1)
+            v = (q * self.Nm[i]).sum(1)
+            ea = np.where(i == 0, np.maximum(-a, 0.0), np.where(i == N - 1, np.maximum(a, 0.0), 0.0))
+            du = np.maximum(np.abs(u) - (self.W[i] - self.Th[i]), 0.0)
+            out[c0:c0 + 16384] = np.sqrt(du * du + v * v + ea * ea) - self.Th[i]
+        return out
+
+
+class _Band(sdf.Prim):
+    """a flat band round an elliptical waist (radii rx, ry at its mid-thickness): rectangular section of half
+    thickness t and half height h, edges rounded by `rr`; `tilt` (deg) dips it toward the front"""
+
+    def __init__(self, c, rx, ry, t, h, rr=0.004, tilt=0.0):
+        self.c = np.asarray(c, float)
+        self.rx, self.ry, self.t, self.h, self.rr = rx, ry, t, h, rr
+        self.tilt = math.tan(math.radians(tilt))
+
+    def bounds(self):
+        e = max(self.rx, self.ry) + self.t + 0.01
+        return self.c - (e, e, self.h + 0.06), self.c + (e, e, self.h + 0.06)
+
+    def d(self, P):
+        q = P - self.c
+        th = np.arctan2(q[:, 1] / self.ry, q[:, 0] / self.rx)
+        R = np.hypot(self.rx * np.cos(th), self.ry * np.sin(th))
+        r = np.hypot(q[:, 0], q[:, 1])
+        zz = q[:, 2] - self.tilt * np.minimum(q[:, 1], 0.0)          # the front dips a little (worn low there)
+        a = np.abs(r - R) - (self.t - self.rr)
+        b = np.abs(zz) - (self.h - self.rr)
+        return np.hypot(np.maximum(a, 0), np.maximum(b, 0)) + np.minimum(np.maximum(a, b), 0) - self.rr
+
+
 # ── the sculpt ──────────────────────────────────────────────────────────────────────────────────────────
 HEAD_C = np.array([0.0, -0.025, 1.69])
 HOOD_C = np.array([0.0, 0.005, 1.675])
@@ -285,27 +377,21 @@ def sculpts() -> list:
 
     # HOOD (rigid on the head): a peaked shell with a deep face opening, the point trailing back
     hood = Sculpt("hood")
-    hood.add(Ellipsoid(HOOD_C, (0.135, 0.168, 0.168)).displaced(folds(0.006, 26.0, axis=0, phase=0.6), 0.006), k=0.0)
-    hood.add(RoundCone(HOOD_C + (0.0, 0.015, 0.06), (0.0, 0.065, 1.858), 0.088, 0.010), k=0.05)
-    hood.add(RoundCone(HOOD_C + (0.0, 0.09, 0.03), (0.0, 0.185, 1.70), 0.06, 0.016), k=0.04)      # the trailing point
+    hood.add(Ellipsoid(HOOD_C, (0.135, 0.168, 0.168)).displaced(folds(0.005, 22.0, axis=0, phase=0.6), 0.005), k=0.0)
+    # the peak: a soft, rounded cloth crown folding back (never a tall point; brief + the sensitivity note)
+    hood.add(RoundCone(HOOD_C + (0.0, 0.015, 0.05), (0.0, 0.072, 1.826), 0.090, 0.034), k=0.05)
+    hood.add(RoundCone(HOOD_C + (0.0, 0.09, 0.03), (0.0, 0.175, 1.705), 0.06, 0.03), k=0.05)       # the trailing point
     hood.add(Ellipsoid(HOOD_C + (0.0, 0.02, -0.10), (0.142, 0.16, 0.06)), k=0.04)                   # flare to the cowl
     hood.sub(Ellipsoid(HOOD_C + (0.0, -0.005, 0.0), (0.112, 0.142, 0.142)), k=0.01)                  # the hollow
     hood.sub(Ellipsoid((0.0, -0.215, 1.676), (0.084, 0.13, 0.106)), k=0.012)                         # the face opening
     hood.inter(HalfSpace((0, 0, 1.555), (0, 0, -1), 1.0), k=0.02)
     part("hood", hood, "sandstone", "bone:head", 1750, uvw=1.6)
+    # the tail (FIX PASS 1, review: 'a rigid sawtooth spike'): one smooth cloth streamer from the trailing point, flying
+    # back and to her left in a soft S, twisting slowly, tapering to a rounded end (a spline swept ribbon, rigid on the
+    # head as the brief asks; painted, not projected)
     tail = Sculpt("hood_tail")
-    path = [(0.105, 0.075, 1.705), (0.17, 0.11, 1.70), (0.25, 0.155, 1.665), (0.33, 0.19, 1.625), (0.41, 0.215, 1.585),
-            (0.465, 0.23, 1.555)]
-    widths = [0.034, 0.036, 0.033, 0.029, 0.022, 0.012]
-    for i in range(len(path) - 1):
-        a, b = np.array(path[i]), np.array(path[i + 1])
-        tw = math.radians(25 + 70 * i / (len(path) - 1))           # the ribbon twists as it flies out
-        d = _n(b - a)
-        e1 = _n(np.cross(d, [0, 0, 1]))
-        e2 = np.cross(d, e1)
-        side = math.cos(tw) * e2 + math.sin(tw) * e1
-        tail.add(FlatCapsule(a, b, widths[i], 0.0055, widths[i + 1], 0.005, side=side), k=0.012)
-    part("hood_tail", tail, "sandstone", "bone:head", 260, vs=0.6)
+    tail.add(_Ribbon(TAIL_PTS, TAIL_W, TAIL_T, TAIL_TWIST), k=0.0)
+    part("hood_tail", tail, "sandstone", "bone:head", 420, vs=0.55)
 
     # HEAD + FACE WRAP (rigid on the head) and the carved eye band
     head = Sculpt("head")

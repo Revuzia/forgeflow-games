@@ -99,6 +99,9 @@ export const ANIM_FAR_M = 12;
 const ANIM_FAR_DT = 1 / 15;
 
 export type ActorKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'ward' | 'pickup';
+/** who takes the character light (world_material.ts): fighters all of it, wicks and monsters a share, the rest none */
+interface CharLight { fighter: boolean; unit: boolean }
+const charLight = (kind: string): CharLight => ({ fighter: kind === 'fighter', unit: kind === 'minion' || kind === 'monster' });
 const LOOPING = new Set(['idle', 'run', 'recall', 'channel', 'stunned', 'idle_lobby', 'victory', 'taunt']);
 
 interface Template {
@@ -364,7 +367,7 @@ export class ModelLibrary {
   /** called once per template when it is built (the renderer uploads its textures and compiles its programs
    *  then, at load, instead of on the frame the unit first walks into view) */
   onReady: ((scene: Object3D, crowd: CrowdBake | null, again: boolean) => void) | null = null;
-  private readonly built: { t: Template; accentName: string; fighter: boolean }[] = [];
+  private readonly built: { t: Template; accentName: string; char: CharLight }[] = [];
 
   constructor(catalog: CatalogT, assets: Assets, opts: ActorOptions) {
     this.assets = assets;
@@ -405,7 +408,7 @@ export class ModelLibrary {
     return team !== null && team >= 0 && tm && team < tm.length ? tm[team] : def.art.model;
   }
 
-  private patchMaterials(root: Object3D, fighter: boolean, accentName: string): void {
+  private patchMaterials(root: Object3D, char: CharLight, accentName: string): void {
     root.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh) return;
@@ -416,7 +419,7 @@ export class ModelLibrary {
         if (this.patched.has(mat)) continue;
         this.patched.add(mat);
         if (mat.name === accentName) continue; // patched per actor clone
-        patchWorldMaterial(mat, { fighter });
+        patchWorldMaterial(mat, char);
       }
     });
   }
@@ -436,7 +439,7 @@ export class ModelLibrary {
         const clips = new Map<string, AnimationClip>();
         for (const c of base?.gltf.animations ?? []) clips.set(c.name, c);
         for (const c of body.gltf.animations) if (!clips.has(c.name)) clips.set(c.name, c);
-        this.patchMaterials(body.gltf.scene, true, def.art.accentMaterial);
+        this.patchMaterials(body.gltf.scene, charLight('fighter'), def.art.accentMaterial);
         return { scene: body.gltf.scene, clips, roles: def.art.clips as Record<string, string | undefined>, fit: 1, dev: false, hull: hullPlan(body.gltf.scene) };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
@@ -444,24 +447,24 @@ export class ModelLibrary {
         if (m?.renderable) {
           const clips = new Map<string, AnimationClip>();
           for (const c of m.gltf.animations) clips.set(c.name, c);
-          this.patchMaterials(m.gltf.scene, true, def.art.accentMaterial);
+          this.patchMaterials(m.gltf.scene, charLight('fighter'), def.art.accentMaterial);
           const roles: Record<string, string> = {};
           for (const c of clips.keys()) roles[c] = c;
           return { scene: m.gltf.scene, clips, roles, fit: def.art.height / DEV_MANNEQUIN_HEIGHT, dev: true, hull: hullPlan(m.gltf.scene) };
         }
       }
       return null;
-    })().then((t) => this.ready(t, def.art.accentMaterial, true));
+    })().then((t) => this.ready(t, def.art.accentMaterial, charLight('fighter')));
     this.templates.set(key, p);
     return p;
   }
 
-  private ready(t: Template | null, accentName: string, fighter: boolean): Template | null {
+  private ready(t: Template | null, accentName: string, char: CharLight): Template | null {
     if (t && !this.built.some((b) => b.t === t)) {
       // skinned parts: a bind-pose bounding sphere per clone (three would otherwise skin every vertex on the CPU
       // to compute it the first time the part is sorted; the actor cull and the hover pick never use it)
       t.scene.traverse((o) => { const m = o as SkinnedMesh; if (m.isSkinnedMesh && !m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); });
-      const b = { t, accentName, fighter };
+      const b = { t, accentName, char };
       this.built.push(b);
       this.warm(b, false);
     }
@@ -471,7 +474,7 @@ export class ModelLibrary {
   /** every template built so far, warmed again (the match's lighting and environment are part of a program's key) */
   warmAll(): void { for (const b of this.built) this.warm(b, true); }
 
-  private warm(b: { t: Template; accentName: string; fighter: boolean }, again: boolean): void {
+  private warm(b: { t: Template; accentName: string; char: CharLight }, again: boolean): void {
     const t = b.t;
     // actors draw a per-actor PATCHED clone of the accent, never the template's own: the warm-up compiles that
     // variant (one clone kept per template so its program stays alive), not the unpatched one
@@ -479,7 +482,7 @@ export class ModelLibrary {
     t.scene.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh || Array.isArray(m.material) || m.material.name !== b.accentName) return;
-      if (!t.warmAccent) { const c = (m.material as MeshStandardMaterial).clone(); patchWorldMaterial(c, { fighter: b.fighter }); t.warmAccent = c; }
+      if (!t.warmAccent) { const c = (m.material as MeshStandardMaterial).clone(); patchWorldMaterial(c, b.char); t.warmAccent = c; }
       swaps.push([m, m.material]);
       m.material = t.warmAccent;
     });
@@ -501,7 +504,7 @@ export class ModelLibrary {
       if (m?.renderable) {
         const clips = new Map<string, AnimationClip>();
         for (const c of m.gltf.animations) clips.set(c.name, c);
-        this.patchMaterials(m.gltf.scene, false, 'accent');
+        this.patchMaterials(m.gltf.scene, charLight(def.kind), 'accent');
         const roles: Record<string, string | undefined> = { ...def.art.clips };
         for (const c of clips.keys()) if (!(c in roles)) roles[c] = c;
         const hull = hullPlan(m.gltf.scene);
@@ -510,7 +513,7 @@ export class ModelLibrary {
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
-    })().then((t) => this.ready(t, 'accent', false));
+    })().then((t) => this.ready(t, 'accent', charLight(def.kind)));
     this.templates.set(key, p);
     return p;
   }
@@ -701,7 +704,7 @@ export class Actor implements CrowdActor {
       const next = mats.map((mat) => {
         if (mat.name !== accentName) return mat;
         const c = (mat as MeshStandardMaterial).clone();
-        patchWorldMaterial(c, { fighter: this.kind === 'fighter' });
+        patchWorldMaterial(c, charLight(this.kind));
         this.accent.push(c);
         return c;
       });
@@ -1071,7 +1074,7 @@ export class Actor implements CrowdActor {
         let c = this.veilMats.get(mat);
         if (!c) {
           c = (mat as MeshStandardMaterial).clone();
-          patchWorldMaterial(c, { fighter: this.kind === 'fighter' });
+          patchWorldMaterial(c, charLight(this.kind));
           this.veilMats.set(mat, c);
         }
         see(c, mat.transparent ? mat.opacity : 1);

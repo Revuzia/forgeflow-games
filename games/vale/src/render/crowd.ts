@@ -477,7 +477,8 @@ class CrowdSet {
         mat.color.copy(tint).multiplyScalar(0.3);
         mat.emissive.copy(tint);
         mat.emissiveIntensity = 1;
-        patchWorldMaterial(mat);
+        // crowd units are wicks and small monsters (UnitDef.art.instanced): their share of the character light
+        patchWorldMaterial(mat, { unit: true });
         this.accentMats.push(mat);
       } else {
         // the template material's world patch (fog of war, grade hooks) does not survive clone(): carry its hook

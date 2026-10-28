@@ -16,6 +16,18 @@ import { worldUniforms } from './world_material.ts';
 
 export interface SunSpec { sunDir: readonly [number, number, number]; sunColor: string; sunIntensity: number }
 
+/** tokens.json `grade.fighterLight` (key) and `grade.fighterLight.rig` (the character light, world_material.ts): the key's
+ *  share of the sun; the noon crown (view-space direction, Fresnel power, radiance as luminance in linear light, its hue
+ *  Noonwhite leaned toward the sun's colour, the albedo value floor); the eye fill (luminance, Noonwhite); the wick and
+ *  monster share. The same on every map: a character reads alike wherever it stands. */
+export const CHAR_LIGHT = {
+  keyOfSun: 0.9,
+  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 0.9, sunHue: 0.5, albedoFloor: 0.22 },
+  fill: { luminance: 0.12 },
+  unitShare: 0.3,
+} as const;
+const NOONWHITE = '#F4EFE2';
+
 const CEILING = 6;
 const QUANT = 2;
 const PAD = 3;
@@ -51,8 +63,18 @@ export class Sun {
     const up = Math.abs(this.dir.y) > 0.999 ? new Vector3(0, 0, -1) : new Vector3(0, 1, 0);
     this.basis.lookAt(this.dir, new Vector3(0, 0, 0), up);
     this.basisInv.copy(this.basis).invert();
-    // fighters re-aim this light to their own view-space key at 0.9 × (world_material.ts)
-    worldUniforms.valeRimColor.value.setStyle(spec.sunColor).multiplyScalar(0.18 * spec.sunIntensity / 3);
+    // fighters re-aim this light to their own view-space key at CHAR_LIGHT.keyOfSun × (world_material.ts), and take
+    // the character light: crown and fill radiance set here as luminance (hue only from Noonwhite and the sun)
+    const W = worldUniforms, C = CHAR_LIGHT;
+    W.valeCharKey.value = C.keyOfSun;
+    const lum = (c: Color): number => Math.max(1e-4, 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b);
+    const noon = new Color().setStyle(NOONWHITE);
+    const crown = noon.clone().lerp(new Color().setStyle(spec.sunColor), C.crown.sunHue);
+    crown.multiplyScalar(C.crown.luminance / lum(crown));
+    W.valeCharRim.value.set(crown.r, crown.g, crown.b, C.crown.power);
+    W.valeCharRimDir.value.set(C.crown.viewDir[0], C.crown.viewDir[1], C.crown.viewDir[2]).normalize();
+    W.valeCharFill.value.copy(noon).multiplyScalar(C.fill.luminance / lum(noon));
+    W.valeCharShape.value.set(C.crown.albedoFloor, C.unitShare, 50, 51);
   }
 
   /** 0 off · 1 1024² hard · 2 2048² PCF · 3 4096² PCF */
@@ -74,8 +96,6 @@ export class Sun {
 
   /** fit the shadow frustum to what the camera sees (call after the camera moved) */
   fit(camera: PerspectiveCamera): void {
-    // view-space sun direction for the fighters' rim term
-    worldUniforms.valeSunDirView.value.copy(this.dir).transformDirection(camera.matrixWorldInverse);
     const cam = camera.position;
     for (let i = 0; i < 4; i++) {
       const [nx, ny] = this.ndc[i];
