@@ -79,6 +79,10 @@ const ALPHA_CAP = 0.40;                     // a silhouette 20 m behind the wall
 const PAL = {
   base: 0x5e4a9e, curtain: 0xbe96e6, band: 0xc878fa, streak: 0xe8e0ff,
   baseA: 0.40, curtainA: 0.36, bandA: 0.40, streakGain: 1.8, streakGainHi: 1.4, streakAlpha: 0.45,
+  // R1 near rain: a third, FINE streak layer (fineM m apart) that only exists while its lines are >= 5-8 px apart on screen
+  // (a wall within ~60 m): up close the curtain reads as falling rain, not three lines over a hill crest. fineK = its strength,
+  // fineGlow = its share of the streak glow (it is carried by the thinner haze), fineP = the hash cut (cells without a line)
+  fineM: 0.5, fineK: 0.9, fineGlow: 0.5, fineP: 0.12,
   baseH0: 8, baseH1: 18, bodyMin: 0.6, bodyH: 160, bandH: 3.0,
   // P1-E (LC-72) distance fade: within farD0 m of the camera the wall is exactly as before (every stormfx_storm view); beyond
   // farD1 m its top is capped by ELEVATION, d x farK (~3.7 deg), never under farMin m; between the two it blends. Streaks follow
@@ -136,6 +140,7 @@ uniform float uBodyH;       // metres over which it falls
 uniform float uBandH;       // metres of the brighter band at the ground
 uniform vec4 uFar;          // P1-E distance fade: x, y = camera distance (m) of the near -> far blend; z = far top slope (m per m); w = far top floor (m)
 uniform vec2 uStreakFar;    // P1-E: camera distance (m) where the streaks start / finish fading out
+uniform vec4 uFine;         // R1 near rain: x = spacing (m), y = strength, z = glow share, w = hash cut (cells without a line)
 varying vec2 vUv;
 varying vec3 vW;
 
@@ -160,6 +165,26 @@ float streakLayer( float s, float h, float spacing, float seed, float hS, float 
   float pat = 0.72 + 0.28 * sin( ph * 6.2831853 );
   float vfade = 1.0 - smoothstep( hS, hE, h );                       // height fade (lower when the wall is far: P1-E)
   return cov * present * dense * pat * vfade * ( 0.75 + 0.25 * r2 );
+}
+
+// R1 near rain: the fine layer. Same anti-aliased ~1.7 px line as streakLayer, a steadier spacing (centres 0.3-0.7 of the
+// cell, ~9 in 10 cells carry one) and a SCREEN-SPACE level of detail: full while a cell is >= 8 px wide, gone by 5 px, so it
+// only shows on a wall within ~60 m and never turns into a shimmer or a flat brightening further out.
+float fineLayer( float s, float h, float hS, float hE ) {
+  float sx = s / uFine.x;
+  float fw = max( fwidth( sx ), 1e-5 );
+  float cell = floor( sx );
+  float r  = hash11( cell * 2.3 + 29.0 );
+  float r2 = hash11( cell * 4.7 + 41.0 );
+  float d = abs( fract( sx ) - ( 0.3 + 0.4 * r ) );
+  float halfW = 0.85 * fw;
+  float cov = clamp( ( halfW - d ) / fw + 0.5, 0.0, 1.0 );
+  float present = step( uFine.w, r2 );
+  float lod = 1.0 - smoothstep( 0.125, 0.2, fw );
+  float ph = h * 0.04 + uTime * ( 0.9 + 0.6 * r2 ) + r * 7.0;        // brightness runs down the line, faster than the big streaks
+  float pat = 0.75 + 0.25 * sin( ph * 6.2831853 );
+  float vfade = 1.0 - smoothstep( hS, hE, h );
+  return cov * present * lod * pat * vfade;
 }
 
 void main() {
@@ -209,8 +234,11 @@ void main() {
   // Up in the curtain the line now glows less and is carried by the thinner haze (below); the dense base keeps its glow, where
   // thinning is off and the glow is all that shows (the ground-band delta)
   vec3 sRgb = uStreakCol * ( mix( uStreakGain, uStreakGainHi, up ) * dot( rgb, LUM ) / max( dot( uStreakCol, LUM ), 1e-4 ) );
-  rgb = mix( rgb, sRgb, sk );
-  a = mix( a, a * mix( 1.0, uStreakAlpha, up ), sk );                 // the dense base stays dense: streaks there only glow
+  // R1 near rain (stormfx_storm phase6/near: 1-4 peaks per row, bar 8): the fine layer thins the haze like a streak but glows
+  // only uFine.z of one, so the glare bar (streaks <= 2x the curtain) keeps its headroom
+  float skF = fineLayer( s, hA, sHs, sHe ) * uFine.y;
+  rgb = mix( rgb, sRgb, max( sk, skF * uFine.z ) );
+  a = mix( a, a * mix( 1.0, uStreakAlpha, up ), max( sk, skF ) );     // the dense base stays dense: streaks there only glow
   gl_FragColor = vec4( rgb, a );                                      // premultiplied
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -375,6 +403,7 @@ export function createStorm(W) {
       uBandH: { value: PAL.bandH },
       uFar: { value: new THREE.Vector4(PAL.farD0, PAL.farD1, PAL.farK, PAL.farMin) },
       uStreakFar: { value: new THREE.Vector2(PAL.streakD0, PAL.streakD1) },
+      uFine: { value: new THREE.Vector4(PAL.fineM, PAL.fineK, PAL.fineGlow, PAL.fineP) },
     },
     vertexShader: WALL_VS, fragmentShader: WALL_FS,
     transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending,
