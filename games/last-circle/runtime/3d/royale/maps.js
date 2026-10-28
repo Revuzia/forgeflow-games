@@ -3019,7 +3019,36 @@ export async function buildMap(W, mapId) {
       const op = pois.find((q) => q.id === "overpass"), cr = pois.find((q) => q.id === "crane");
       reserve = [[op.x - 106, op.z - 8, op.x + 108, op.z + 8], [cr.x - 6, cr.z - 20, cr.x + 10, cr.z + 24]];
     }
-    const lay = TG.layoutMap(seed, mapId, pois.map((q) => ({ id: q.id, x: q.x, z: q.z, r: q.r })), baseH, waterY, { reserve });
+    const layPois = pois.map((q) => ({ id: q.id, x: q.x, z: q.z, r: q.r }));
+    const lay = TG.layoutMap(seed, mapId, layPois, baseH, waterY, { reserve });
+    // (R1 / colliders: the shared stream) a town with a POI identity (P23 / LC-29: towngen applyIdentity - container lots, the Old Mall, woodyards) has FEWER or other
+    // buildings than the layout the live build drew for, and legacyRolls (below) re-made the live generators' loot rolls per building: every draw after the towns -
+    // the wild scatter, landmarks, portals, wild loot - moved (worldcheck rng-stream vs 9115494d: ashgrid s7 trees / bushes / rocks / cars / barrels). The rolls of such a
+    // town are made for the buildings of ITS layout WITHOUT the identity (the same towngen call layoutMap made, identity off, the same avoid list): the shared stream
+    // leaves the towns exactly where the live build left it. The identity buildings themselves draw nothing from the shared `rng` (housegen + towngen sub-streams).
+    const legacyParcels = new Map();
+    {
+      const avoid = (reserve || []).map((r) => r.slice()), HPq = TG.PITCH / 2;
+      lay.towns.forEach((T, i) => {
+        const plan = TG.planFor(mapId, layPois[i]);
+        if (plan.identity && T.blocks.length) {
+          const L0 = TG.layout(seed, layPois[i], baseH, waterY, plan.theme, Object.assign({}, plan, { avoid: avoid.slice(), identity: null }));
+          legacyParcels.set(T.id, L0);
+        }
+        for (const b of T.blocks) avoid.push([b.cx - HPq, b.cz - HPq, b.cx + HPq, b.cz + HPq]);
+        if (T.compound && T.parcels.length) avoid.push(T.compound.bounds);
+      });
+      // the compounds' farthest-point fill keeps away from every town's ENTERABLE buildings (towngen enterableBoxes): an identity that removes buildings moved every
+      // compound of the map (ashgrid s7: 25 of 30 sites) and with them the wilderness rejects (inCity) that decide how many draws the car / barrel scatter makes.
+      // The compounds are placed against the towns as the live build laid them out (identity off); the towns themselves keep their identity.
+      if (legacyParcels.size) {
+        const comp = TG.placeCompounds(seed, mapId, lay.towns.map((T) => legacyParcels.get(T.id) || T), baseH, waterY, { reserve: reserve || [] });
+        lay.compounds = comp.sites;
+        const all = lay.towns.concat(comp.sites);
+        Object.assign(lay.stats, { compounds: comp.sites.length, enterable: all.reduce((n, T) => n + T.stats.enterable, 0), buildings: all.reduce((n, T) => n + T.stats.buildings, 0), compoundFill: comp.stats });
+      }
+      for (const [k, L0] of legacyParcels) legacyParcels.set(k, L0.parcels);
+    }
     // Isla Viva and Deepwood (Wave 7b): a town the generator had to move (a coastal POI on open water, a river bank, a steep slope) takes its POI with it, so the named place,
     // the drop-screen label, the bots' targets and the citycheck attribution all sit where the buildings are. Savanna's POIs never move.
     if (mapId !== "ashgrid") for (const T of lay.towns) {
@@ -3032,7 +3061,7 @@ export async function buildMap(W, mapId) {
     for (const T of lay.towns.concat(lay.compounds)) for (const p of T.parcels) if (p.building) { const a = p.building.aabb; cityBld.push([a[0], a[1], a[2], a[3]]); }
     for (const T of lay.towns) if (T.kind === "docks" && T.docks) for (const dk of T.docks.decks) cityDecks.push([dk.rect[0], dk.rect[1], dk.rect[2], dk.rect[3]]);
     for (const T of lay.compounds) for (const q of T.compound.props) cityBld.push(q.kind === "container" ? [q.x - 3.4, q.z - 3.4, q.x + 3.4, q.z + 3.4] : [q.x - 5, q.z - 5, q.x + 5, q.z + 5]);   // (silo / water tower / containers: wild loot keeps out)
-    return { TG, CK, HG, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
+    return { TG, CK, HG, lay, legacyParcels, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
   }
   // the streets and the links between towns go into the ground field NOW (before any pad), as ROAD_W-wide corridors
   function registerCityRoads() {
@@ -4311,6 +4340,15 @@ export async function buildMap(W, mapId) {
       const dim = T.theme === "ruin" ? 0.8 : 1;
       const core = T.kind === "core";
       const blockLoot = new Map(), blockHome = new Map();       // block id -> loot points it holds / its first enterable building (every block ends up holding loot)
+      // (R1 / colliders) a POI-identity town: the live generators' rolls for the buildings of its layout without the identity (see legacyParcels), in parcel order - nothing
+      // else in this parcel loop draws from the shared stream, so making them here is the same sequence the live build made in the loop
+      const legacyP = city.HG ? city.legacyParcels.get(T.id) : null;
+      if (legacyP) for (const p of legacyP) {
+        const b = mapId !== "ashgrid" && p.building && p.building.use == null ? Object.assign({}, p.building, { use: p.use }) : p.building;
+        if (!b || b.gen === "shell") continue;
+        const PAL0 = cityPalette(T, isCmp ? -1 : p.block, core);          // (cached per block, its own sub-stream; themedStyle reads it, the storeys roll does not)
+        legacyRolls(T, b, isCmp, core, TG.subRng(seed, T.id, "sty" + p.id), PAL0, PAL0.roof[0]);
+      }
       for (const p of T.parcels) {
         // (Wave 7b stage B: a layout's building record carries no `use` - the parcel does - so every `b.use` test below read undefined: on the themed maps every shop, hall, shed and barn
         //  was styled, textured and looted as a house (no shop fronts, no awnings). The themed maps read the parcel's use; Savanna keeps what it built (its world must hash as the live one).)
@@ -4338,7 +4376,7 @@ export async function buildMap(W, mapId) {
         } else if (city.HG) {
           // WAVE 8: a furnished housegen house (see hgHouse); a tower / mid-rise keeps its rooftop crown (the units, a mast, Savanna's curtain-wall shaft, a resort terrace)
           // standing on the housegen roof (the crown functions measure from y + floors x 4 + 0.3: they are handed the y that puts that on the roof slab's top)
-          legacyRolls(T, b, isCmp, core, sr, PAL, roofC);
+          if (!legacyP) legacyRolls(T, b, isCmp, core, sr, PAL, roofC);
           const hr = hgHouse(T, p, b, did, wallC, roofC);
           look = hr.look;
           nHouseLoot += hr.H.loot.length + hr.H.chests.length;
