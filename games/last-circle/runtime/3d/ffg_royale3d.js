@@ -121,6 +121,33 @@ const CO_ADD_K = "0.62";
 const CO_PREMUL_POST = "\ngl_FragColor.rgb = gl_FragColor.rgb * lcCanvasOutA + lcCanvasOutL * " + CO_ADD_K + ";";
 const CO_ADD_PRE = "vec3 lcCanvasOutL = gl_FragColor.rgb;   // ORCH canvas output: additive light stays linear\n";
 const CO_ADD_POST = "\ngl_FragColor.rgb = lcCanvasOutL * " + CO_ADD_K + ";";
+// 4 FOG (R1 bootfx, orch_lowpost "direct vs composer: the sky band": topStripMeanDiff 17.1 / 20.6 / 21.3 against 14; with
+//   scene.fog off the same frame differed 2.6 / 0.9 / 1.0, measured in one page): three runs fog_fragment AFTER the tone-mapping
+//   and colour-space chunks and, on the canvas, hands it the fog colour sRGB-encoded but NOT tone-mapped. Through the composer the
+//   fog mixes in linear light and the output pass tone-maps (exposure 0.72, Neutral) the result, so on the canvas every distant
+//   pixel - the far sea and haze that fill the top of a drop view - came out at the raw fog colour, ~20/255 too bright. On the
+//   canvas the fog therefore runs where the composer runs it: in linear light (the uniform decoded back with three's own
+//   sRGBTransferEOTF), before the tone-mapping chunk. Keyed like everything here to the canvas output only.
+const CO_FOG = /^[ \t]*#include\s*<fog_fragment>[ \t]*$/m;
+const CO_FOG_LIN = ["/* lcCanvasOut: fog in linear light, before tone mapping (the composer's order) */",
+  "#ifdef USE_FOG",
+  "  #ifdef FOG_EXP2",
+  "    float lcCanvasOutFogF = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );",
+  "  #else",
+  "    float lcCanvasOutFogF = smoothstep( fogNear, fogFar, vFogDepth );",
+  "  #endif",
+  "  gl_FragColor.rgb = mix( gl_FragColor.rgb, sRGBTransferEOTF( vec4( fogColor, 1.0 ) ).rgb, lcCanvasOutFogF );",
+  "#endif", ""].join("\n");
+function linearFog(fs) {
+  const f = CO_FOG.exec(fs);
+  if (!f) return fs;
+  const without = fs.slice(0, f.index) + fs.slice(f.index + f[0].length);
+  const t = CO_TM.exec(without), c = CO_CS.exec(without);
+  const first = t && c ? (t.index < c.index ? t : c) : (t || c);
+  // no output chunk before the fog (a shader that gets its chunks appended): the fog stays where it is, in linear light
+  if (!first || first.index >= f.index) return fs.slice(0, f.index) + CO_FOG_LIN + fs.slice(f.index + f[0].length);
+  return without.slice(0, first.index) + CO_FOG_LIN + without.slice(first.index);
+}
 function wrapOutputChunks(fs, pre, post) {
   const t = CO_TM.exec(fs), c = CO_CS.exec(fs);
   if (!c || (t && t.index > c.index)) return null;
@@ -133,9 +160,10 @@ function lcCanvasOutput(parameters) {
   // post AA (kernel setAA, LC-03) draws an image that is ALREADY tone-mapped + sRGB onto the canvas: appending the
   // chunks (case 1 below) would tone-map and encode it a second time
   if (this.userData && this.userData.lcNoCanvasOut) return;
-  const fs = parameters.fragmentShader;
-  if (typeof fs !== "string" || fs.indexOf("lcCanvasOut") !== -1) return;
-  let out = null;
+  const fs0 = parameters.fragmentShader;
+  if (typeof fs0 !== "string" || fs0.indexOf("lcCanvasOut") !== -1) return;
+  const fs = linearFog(fs0);                // 4: fog in linear light first (a no-op without a fog_fragment include)
+  let out = fs !== fs0 ? fs : null;
   if (this.isShaderMaterial && !/tonemapping_fragment|colorspace_fragment|linearToOutputTexel/.test(fs)) {
     // 1: an #include must start its own line - both sky shaders are one-liners
     if (/\}\s*$/.test(fs)) out = fs.replace(/\}\s*$/, "\n/* lcCanvasOut: chunks */\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}");
