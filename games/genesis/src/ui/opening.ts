@@ -573,20 +573,26 @@ export class Opening {
 
   /**
    * The ring's label never lies over the whisper's words or the power's card (in the site's small frame both can sit
-   * over the spot): under the ring, else over it, else the ring alone — its words are the whisper's too.
+   * over the spot), nor over the HUD's panels: under the ring, else over it, else beside it (right, then left), else the
+   * ring alone — its words are the whisper's too.
    */
   private fitRingLabel(x: number, y: number): void {
     const l = this.ringLabel;
     const w = l.offsetWidth, ht = l.offsetHeight;
-    const shown = (e: Element | null): e is HTMLElement => !!e && !(e as HTMLElement).hidden && (e as HTMLElement).offsetParent !== null && !e.classList.contains('gn-away');
-    const blocks = [this.card, document.querySelector('.gn-tool')].filter(shown).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
-    const fits = (y0: number): boolean => {
-      const x0 = x - w / 2, x1 = x + w / 2, y1 = y0 + ht;
+    // (a fixed-position card has no offsetParent: a zero rect is what says it is not shown)
+    const shown = (e: Element | null): e is HTMLElement => !!e && !(e as HTMLElement).hidden && !e.classList.contains('gn-away');
+    const blocks = [this.card, ...['.gn-tool', '.gn-time', '.gn-topright', '.gn-dock'].map((s) => document.querySelector(s))].filter(shown)
+      .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const fits = (x0: number, y0: number): boolean => {
+      const x1 = x0 + w, y1 = y0 + ht;
       if (x0 < 4 || x1 > innerWidth - 4 || y0 < 4 || y1 > innerHeight - 4) return false;
       return !blocks.some((r) => x0 < r.right + 8 && x1 > r.left - 8 && y0 < r.bottom + 6 && y1 > r.top - 6);
     };
-    const where = fits(y + 44) ? 'below' : fits(y - 44 - ht) ? 'above' : 'none';
+    const spots: [string, number, number][] = [['below', x - w / 2, y + 44], ['above', x - w / 2, y - 44 - ht], ['right', x + 44, y - ht / 2], ['left', x - 44 - w, y - ht / 2]];
+    const where = spots.find(([, x0, y0]) => fits(x0, y0))?.[0] ?? 'none';
     l.classList.toggle('gn-up', where === 'above');
+    l.classList.toggle('gn-right', where === 'right');
+    l.classList.toggle('gn-left', where === 'left');
     l.classList.toggle('gn-off', where === 'none');
   }
 

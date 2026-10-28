@@ -1006,6 +1006,8 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-open-ring-l { position: absolute; left: 0; top: 44px; transform: translateX(-50%); white-space: nowrap; font: italic 500 16px var(--gn-serif); color: var(--gn-gold-hi);
   text-shadow: 0 1px 2px rgba(0, 0, 0, .95), 0 0 14px rgba(0, 0, 0, .85); animation: gnFade 1.2s ease both; }
 .gn-open-ring-l.gn-up { top: auto; bottom: 44px; }
+.gn-open-ring-l.gn-right { top: 0; left: 44px; transform: translateY(-50%); }
+.gn-open-ring-l.gn-left { top: 0; left: auto; right: 44px; transform: translateY(-50%); }
 .gn-open-ring-l.gn-off { visibility: hidden; }
 @keyframes gnRingPulse { 0%, 100% { transform: scale(1); opacity: .95; } 50% { transform: scale(1.12); opacity: .6; } }
 body.gn-reduce-motion .gn-open-ring-o { animation: none; }

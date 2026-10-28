@@ -823,9 +823,11 @@ test('free text (fix r3 #1, #3, #8, #14): care for the prophet never abandons; a
   const w = r('warn Aru of a flood');
   const om = w.x.resolved?.find((c) => c.k === 'god.omen') as { warning?: boolean } | undefined;
   assert.ok(om && om.warning === true, JSON.stringify(w.x.resolved));
+  // (by day, when the rainbow would come first; again at once, when the first sign is stale and the next fresh one is taken)
+  const plain = sim.applyNow({ k: 'god.omen', settlement: st.id });
+  assert.ok(plain.ok && /rainbow/i.test(String(plain.msg)), `an unkinded sign by day is the rainbow: ${plain.msg}`);
   for (let i = 0; i < 3; i++) {
     const res = sim.applyNow({ k: 'god.omen', settlement: st.id, warning: true });
     assert.ok(res.ok && !/rainbow/i.test(String(res.msg)), String(res.msg));
-    sim.step(11 * 1440);
   }
 });
