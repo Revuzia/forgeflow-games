@@ -2584,8 +2584,12 @@ function swimStep(W, a, inp, dt, wy) {
   // the swimmer's chest gives exactly "a surface I could pull myself onto";
   // requiring it to sit above the waterline keeps the SEABED from qualifying,
   // which would otherwise beach the swimmer in open water.
+  // (R1, worldlive ramp-sides) the haul-out reach is the move test's own step: blockedIn above lets a swimmer INTO any collider whose top
+  // (a ramp's walk line) is within STEP_UP of swimFeet, i.e. up to pos.y + 1.0, so a reach of only pos.y + 0.9 left a 0.1 m band of decks and
+  // ramp planks the swimmer was let into but never lifted onto: it swam on INSIDE the plank (isla_viva ramp (538.5, 131.5), 37 ticks).
+  // Whatever the move lets the swimmer reach, it now climbs onto, exactly like the ground branch's support step.
   const ledge = supportIn(W, scols, a.pos.x, a.pos.z, a.pos.y + 0.9);
-  if (ledge > wy - 0.25 && ledge <= a.pos.y + 0.9) {
+  if (ledge > wy - 0.25 && ledge <= swimFeet + STEP_UP) {
     a.pos.y = ledge;
     a.onGround = true; a.swimming = false; a.inWater = false;
     a.vel.y = 0;
