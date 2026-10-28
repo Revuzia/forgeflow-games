@@ -34,6 +34,7 @@
     "weapon_l": "prop.L",
     "foot_r": "foot.R",
     "foot_l": "foot.L",
+    "weapon": "prop.R",
     "lamp": "x_lamp",
     "hand_gesture_r": "x_gesture_r",
     "hand_gesture_l": "x_gesture_l"

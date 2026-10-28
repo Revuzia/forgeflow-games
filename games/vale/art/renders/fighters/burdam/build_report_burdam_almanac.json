@@ -36,24 +36,24 @@
   },
   "uv_coverage": 0.611,
   "bake": {
-    "base": 8.81,
-    "rough_metal": 10.04,
-    "normal": 8.0,
-    "ao": 5.29,
+    "base": 2.81,
+    "rough_metal": 2.05,
+    "normal": 1.35,
+    "ao": 1.86,
     "normal_fixed_px": 40405,
-    "projection": 268.34,
-    "pack_save": 268.88,
-    "total": 301.91
+    "projection": 73.94,
+    "pack_save": 74.06,
+    "total": 82.3
   },
   "tris": 20787,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2662404,
+  "glb_bytes_raw": 2662448,
   "optimize": {
     "ok": true,
-    "before": 2662404,
-    "after": 1022748
+    "before": 2662448,
+    "after": 1022652
   },
-  "glb_bytes": 1022748,
+  "glb_bytes": 1022652,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -73,8 +73,8 @@
       "portrait": "art/out/fighters/burdam/burdam_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 12.32,
-      "portrait": 5.82
+      "splash": 5.61,
+      "portrait": 2.36
     }
   },
   "three_qa": {
@@ -97,8 +97,8 @@
       1
     ],
     "headY": 1.849,
-    "accentPct": 1.16,
-    "accentTopHalfPct": 29.8,
+    "accentPct": 1.47,
+    "accentTopHalfPct": 30.5,
     "heightPx1080": 116,
     "size": [
       2400,
@@ -106,24 +106,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_almanac.png",
-    "seconds": 23.2,
+    "seconds": 6.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.35,
-      "model": 10.18,
-      "lows_bind": 8.9,
-      "uv": 12.05,
-      "bake": 301.91,
-      "export": 0.21,
-      "optimize": 1.42,
-      "load_test": 0.32,
-      "render": 18.27,
-      "three_qa": 23.6
+      "materials": 0.13,
+      "model": 3.33,
+      "lows_bind": 2.89,
+      "uv": 3.93,
+      "bake": 82.3,
+      "export": 0.05,
+      "optimize": 0.48,
+      "load_test": 0.09,
+      "render": 8.01,
+      "three_qa": 6.9
     },
-    "total_s": 377.45
+    "total_s": 108.21
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

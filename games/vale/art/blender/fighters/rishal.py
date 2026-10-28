@@ -553,58 +553,161 @@ def _visor_top_edge(xs):
     return out
 
 
-# the accent ridge rides the visor's top edge (on the glass's outer face) from horn to horn over the brow
+# the accent ridge rides the visor's top edge (on the glass's outer face) from temple to temple over the brow
 # (POLISH, review 3: the thin ridge tube plus the seams, inlays and keel line read as glowing glyphs and fell under
-# 1 % from the back and the sides): ONE clean shape, the brief's ridge FIN (~30 x 4-6 cm): a glass blade standing on
-# the visor's whole top edge, leaning back, tallest over the brow where the crest springs from it and rising again
-# into the horns over the temples; nothing else on the helm glows (the crest is chalk and pale glass)
-_RX = np.linspace(-0.074, 0.074, 41)
-RIDGE_PTS = [p for p in _visor_top_edge(_RX) if p is not None]
-FIN_H = (0.014, 0.046, 0.058)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
-FIN_LEAN = 1.00                    # the fin leans back: its rise direction (0, FIN_LEAN, 1)
-FIN_LEAN_T = 2.00                  # ...and lies further back over the temples (in game the upright horns stood up
-#                                    beside the crest from the game camera, a V of "rabbit ears")
-FIN_T = 0.0075                     # thickness at its foot (it thins to ~40 % at the top edge)
+# 1 % from the back and the sides): ONE clean shape family, the brief's ridge fin
+# (FIX ROUND 2, verify: the polish fin was a flat saturated brim, 4.6-5.8 cm leaning 45 degrees back, that hid the
+# chalk dome and from the front cradled the crest root as a blue U; and the swept fins carried the team colour too,
+# against brief §7 and the concept's pale ice glass): the accent is the RIDGE ALONE again, in two pieces of one blade -
+#   * along the band: a raised NARROW blade standing on the visor's top edge (RIDGE_H: 1.7 cm over the brow, nearly
+#     upright, RIDGE_LEAN), so the chalk dome shows above the band from the game camera;
+#   * the REAR RISE (brief §3: "along the visor's upper edge and back into the crest root"): at each temple the blade
+#     turns up and back into a swept vane (REAR) that runs under the crest's arc along its flank into the crest root,
+#     its face turned up and out, so the ridge's colour reads from behind and from the sides (the band alone measured
+#     0.5 % from behind at the game camera) without the fins
+RIDGE_H = (0.017, 0.022)       # the band blade's height over the brow / at the temples
+RIDGE_LEAN = 0.18              # its rise direction (0, RIDGE_LEAN, 1) over the brow (nearly upright)
+RIDGE_T = 0.0060               # thickness at its foot (it thins to ~40 % at the top edge)
+RIDGE_PHI = math.radians(86.0)  # the band blade runs phi -RIDGE_PHI..RIDGE_PHI round the lens axis
+# the rear rise (per side, x mirrored): a crescent vane between two edge curves (Catmull-Rom through these points),
+# the UPPER edge running from the band blade's top at the temple up along the crest's flank just under its arc to the
+# tail, the LOWER edge from the band blade's foot sweeping back under it (the crescent's belly); they meet in the tip
+REAR_UP = ((0.050, 0.010, 1.762), (0.031, 0.045, 1.790), (0.021, 0.090, 1.811), (0.019, 0.140, 1.829),
+           (0.018, 0.190, 1.843), (0.016, 0.228, 1.853))
+REAR_LO = ((0.053, 0.006, 1.740), (0.061, 0.050, 1.761), (0.052, 0.095, 1.779), (0.046, 0.142, 1.799),
+           (0.036, 0.190, 1.822), (0.016, 0.228, 1.853))
+REAR_T = 0.0034                # the vane's thickness (its edges thin to ~40 %)
+REAR_N = 28                    # sections along the vane
 
 
-def fin_height(s):
-    """the ridge fin's height along the top edge, s 0 (his right horn) .. 1 (left horn)"""
-    s = np.asarray(s, dtype=np.float64)
-    c = np.abs(s - 0.5) * 2.0                       # 0 over the brow, 1 at the horn tips
-    mid = FIN_H[1] + (FIN_H[2] - FIN_H[1]) * _ss(c / 0.64)
-    return np.where(c < 0.64, mid, FIN_H[2] + (FIN_H[0] - FIN_H[2]) * _ss((c - 0.64) / 0.36))
+def band_top(phis):
+    """the visor band's real top edge in 3D by the angle phi (rad) round the lens's vertical axis (0: the brow's
+    centre, + toward his left temple): for each phi the highest lens point inside both clip outlines"""
+    prof = smooth_poly(VISOR_PROF, n=4, closed=True)
+    cy, cz = LENS["c"][1], LENS["c"][2]
+    rx, ry, rz = LENS["r"]
+    d = LENS["d"]
+    zs = np.linspace(1.60, 1.86, 261)
+    out = []
+    for phi in np.atleast_1d(phis):
+        s, c = math.sin(phi), -math.cos(phi)
+        rs = []
+        for sx in (1.0, -1.0):
+            A = (s / rx) ** 2 + (c / ry) ** 2
+            B = -2.0 * s * sx * d / rx ** 2
+            C = (d / rx) ** 2 - (1.0 - ((zs - cz) / rz) ** 2)
+            disc = B * B - 4.0 * A * C
+            rs.append(np.where(disc > 0, (-B + np.sqrt(np.maximum(disc, 0.0))) / (2.0 * A), np.nan))
+        r = np.minimum(rs[0], rs[1])
+        x, y = r * s, cy + r * c
+        ok = ~np.isnan(r)
+        din = np.minimum(_poly_inside_dist(prof, np.nan_to_num(y, nan=9.0), zs),
+                         _poly_inside_dist(VISOR_FRONT, np.nan_to_num(x, nan=9.0), zs))
+        ok &= din > 0.0
+        i = int(np.nonzero(ok)[0].max())
+        out.append((float(x[i]), float(y[i]), float(zs[i])))
+    return np.array(out)
 
 
-class FinMesh:
-    """the accent fin, built directly as the game mesh (clean edges): sections along the top-edge polyline, each a
-    5-point blade section (inner foot, outer foot, outer shoulder, the top edge, inner shoulder) rising along the
-    lean direction, the foot sunk 4 mm into the glass. mesh() mirrors Sculpt.mesh -> (verts, quads)."""
+_PHIS = np.linspace(-RIDGE_PHI, RIDGE_PHI, 37)
+RIDGE_PTS = band_top(_PHIS)
+
+
+def ridge_sections():
+    """the band blade's sections: (foot point, rise direction, height) along RIDGE_PTS"""
+    c = np.abs(_PHIS) / RIDGE_PHI                       # 0 over the brow, 1 at the temples
+    H = RIDGE_H[0] + (RIDGE_H[1] - RIDGE_H[0]) * _ss(c)
+    ups = []
+    for i, ph in enumerate(_PHIS):
+        out_ = np.array([math.sin(ph), -math.cos(ph), 0.0])       # outward from the lens axis
+        ups.append(unit(np.array([0.0, RIDGE_LEAN, 1.0]) + 0.10 * out_ + np.array([0.0, 0.35, 0.0]) * float(_ss(c[i]))))
+    return RIDGE_PTS, ups, H
+
+
+def _catmull(pts, n):
+    """n points along a Catmull-Rom curve through pts (ends clamped)"""
+    P = np.asarray(pts, dtype=np.float64)
+    P = np.concatenate([P[:1] * 2 - P[1:2], P, P[-1:] * 2 - P[-2:-1]], 0)
+    out = []
+    for t in np.linspace(0.0, len(pts) - 1.0, n):
+        i = min(int(t), len(pts) - 2)
+        u = t - i
+        p0, p1, p2, p3 = P[i], P[i + 1], P[i + 2], P[i + 3]
+        out.append(0.5 * ((2 * p1) + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (-p0 + 3 * p1 - 3 * p2 + p3) * u ** 3))
+    return np.array(out)
+
+
+def rear_vanes():
+    """the two rear-rise vanes: per side (upper edge, lower edge) point lists, REAR_N each"""
+    out = []
+    for sx in (-1.0, 1.0):
+        mx = np.array([sx, 1.0, 1.0])
+        out.append((_catmull(np.asarray(REAR_UP) * mx, REAR_N), _catmull(np.asarray(REAR_LO) * mx, REAR_N)))
+    return out
+
+
+def _vane_mesh(U, L, thick):
+    """a thin plate between edge curves U and L (same length): 6-point sections (upper edge, the middle, lower edge,
+    each split +-normal), quads between them, the tip closed"""
+    V, Q = [], []
+    n = len(U)
+    for i in range(n):
+        t = unit(U[min(i + 1, n - 1)] + L[min(i + 1, n - 1)] - U[max(i - 1, 0)] - L[max(i - 1, 0)])
+        acr = U[i] - L[i]
+        nn = np.cross(t, acr if np.linalg.norm(acr) > 1e-6 else np.array([0.0, 0.0, 1.0]))
+        nn = unit(nn if np.linalg.norm(nn) > 1e-9 else np.array([0.0, 0.0, 1.0]))
+        if nn[2] < 0:
+            nn = -nn
+        h = thick * 0.5 * (1.0 - 0.55 * i / (n - 1))
+        M = (U[i] + L[i]) * 0.5
+        for p_, k in ((U[i], 0.4), (M, 1.0), (L[i], 0.4)):
+            V.append(p_ + nn * h * k)
+        for p_, k in ((L[i], 0.4), (M, 1.0), (U[i], 0.4)):
+            V.append(p_ - nn * h * k)
+    for i in range(n - 1):
+        r0, r1 = 6 * i, 6 * (i + 1)
+        for j in range(6):
+            k = (j + 1) % 6
+            Q.append((r0 + j, r1 + j, r1 + k, r0 + k))
+    Q.extend([(0, 1, 4, 5), (1, 2, 3, 4)])                         # the root cap (inside the band blade's end)
+    V, Q = np.array(V), np.array(Q)
+    # wind every quad outward (its normal away from its section's middle line)
+    mids = V.reshape(-1, 6, 3)[:, [1, 4]].mean(1)
+    for qi, q in enumerate(Q):
+        a_, b_, c_ = V[q[0]], V[q[1]], V[q[2]]
+        fn = np.cross(b_ - a_, c_ - a_)
+        cen = V[list(q)].mean(0)
+        if fn @ (cen - mids[q[0] // 6]) < 0:
+            Q[qi] = q[::-1]
+    return V, Q
+
+
+class RidgeMesh:
+    """the accent ridge built directly as the game mesh (clean edges): the band blade (sections along the top-edge
+    polyline, each a 6-point blade section rising along its own direction, the foot sunk 4 mm into the glass) plus
+    the two rear-rise vanes (BladeMesh). mesh() mirrors Sculpt.mesh -> (verts, quads)."""
     low = True
 
-    def __init__(self, name, pts):
-        self.name, self.pts = name, np.asarray(pts, dtype=np.float64)
+    def __init__(self, name):
+        self.name = name
 
     def evaluate(self, voxel, bounds=None):
         return np.ones((1, 1, 1)), np.zeros(3)
 
     def mesh(self, voxel=None):
-        P = self.pts
+        P, ups, H = ridge_sections()
+        P = np.asarray(P)
         n = len(P)
-        s = np.linspace(0.0, 1.0, n)
-        H = fin_height(s)
         c0 = np.array([0.0, 0.010, 1.66])
         V, Q = [], []
         for i in range(n):
-            cc = abs(s[i] - 0.5) * 2.0
-            up = unit((0.0, FIN_LEAN + (FIN_LEAN_T - FIN_LEAN) * float(_ss((cc - 0.30) / 0.45)), 1.0))
             t = unit(P[min(i + 1, n - 1)] - P[max(i - 1, 0)])
-            o = unit(np.cross(t, up))
+            u = unit(ups[i] - t * float(np.dot(ups[i], t)))
+            o = unit(np.cross(t, u))
             if o.dot(P[i] - c0) < 0:
                 o = -o
-            u = unit(up - t * up.dot(t))
             base = P[i] - u * 0.004
-            h = H[i]
-            th = FIN_T * 0.5
+            h, th = float(H[i]), RIDGE_T * 0.5
             for du, dv in ((-th, 0.0), (th, 0.0), (th * 0.75, h * 0.62), (th * 0.3, h), (-th * 0.3, h),
                            (-th * 0.75, h * 0.62)):
                 V.append(base + o * du + u * dv)
@@ -615,7 +718,12 @@ class FinMesh:
                 Q.append((r0 + j, r0 + k, r1 + k, r1 + j))
         last = 6 * (n - 1)
         Q.extend([(5, 2, 1, 0), (5, 4, 3, 2), (last + 0, last + 1, last + 2, last + 5), (last + 2, last + 3, last + 4, last + 5)])
-        return np.array(V), np.array(Q)
+        V, Q = np.array(V), np.array(Q)
+        for U, L in rear_vanes():
+            v2, q2 = _vane_mesh(U, L, REAR_T)
+            Q = np.concatenate([Q, q2 + len(V)], 0)
+            V = np.concatenate([V, v2], 0)
+        return V, Q
 
 
 def _visor_low_edge(xs):
@@ -699,8 +807,12 @@ def crest_inlay_poly():
 # (POLISH, review 3: the accent fell under 1 % from the back and the right side): the two fins carry the team colour
 # with the ridge (one swept comb of light, never thin glowing lines), laid open like the painting's: their faces turned
 # up and out, the tips spreading back and out from the left temple, so the game camera sees them from every facing
-FINS = (((0.042, 0.022, 1.762), (0.100, 0.350, 1.862), 0.010, 0.029, (0.45, -0.10, 0.89)),
-        ((0.056, 0.032, 1.726), (0.122, 0.292, 1.784), 0.006, 0.023, (0.55, -0.08, 0.83)))
+# (FIX ROUND 2, verify: the fins were saturated accent spikes, and with the crest they made a two-prong crown from
+# the front at the game camera): pale non-emissive dawnglass again (the concept's ice glass, fin_paint), rooted at the
+# left temple boss under the ridge's rear vane and SPLAYED out to his left and a little lower, so from the front they
+# fan away from the crest toward the pauldron spike instead of standing as a second prong beside it
+FINS = (((0.064, 0.048, 1.738), (0.175, 0.340, 1.840), 0.010, 0.029, (0.50, -0.16, 0.85)),
+        ((0.068, 0.058, 1.714), (0.180, 0.280, 1.768), 0.006, 0.023, (0.58, -0.14, 0.80)))
 # the nape plates: three stacked lames hugging the skull's lower back, each an offset shell of NAPE_E a step further
 # out than the one above, so the back steps down and in toward the neck like a lobster tail: (top z, bottom z, offset)
 NAPE_E = {"c": (0.0, 0.020, 1.640), "r": (0.070, 0.090, 0.095)}
@@ -725,16 +837,20 @@ BROW = (1.738, 1.760, 0.30)
 # below the crest in warm carved plates (the concept's back view) stepping down to the nape
 HELM_BACK_Y = 0.020            # the warm plates start behind this (y) under the crest
 HELM_BACK_ARCS = (1.722,)   # their seams (z at the back's centre, curving up toward the temples)
-# carved lines of the face-plate, painted (no slit mouth: the horizontal cut read as a robot grille): the concept's
-# mask: a brow line, a long line down each cheek from under the eye to the jaw, the jaw's edge, a short line under
-# the cheekbone; centre lines (m) and half-width
-FACE_LINES = []
-for _sx in (-1.0, 1.0):
-    FACE_LINES.append(([(_sx * 0.046, 1.654), (_sx * 0.024, 1.650), (_sx * 0.008, 1.641)], 0.0016))
-    FACE_LINES.append(([(_sx * 0.041, 1.630), (_sx * 0.037, 1.598), (_sx * 0.031, 1.566), (_sx * 0.019, 1.537),
-                        (_sx * 0.006, 1.518)], 0.0017))
-    FACE_LINES.append(([(_sx * 0.050, 1.614), (_sx * 0.048, 1.580), (_sx * 0.041, 1.550), (_sx * 0.027, 1.523)], 0.0015))
-    FACE_LINES.append(([(_sx * 0.020, 1.606), (_sx * 0.012, 1.586)], 0.0013))
+# carved lines of the face-plate, painted (no slit mouth: the horizontal cut read as a robot grille)
+# (FIX ROUND 2, verify: the long vertical cuts down each cheek read as claw marks, where the concept carves the mask's
+# CONTOURS): the lines follow the face's forms, in the face's own wrap coordinate (u = FACE_WRAP_R x the angle round
+# the mask's axis, so a line keeps its place as the face turns away in a three-quarter view; z up): the brow, an arc
+# under the cheekbone sweeping out and down to the jaw's hinge, the cheek plane beside the nose to the mouth corner,
+# a short mouth line, the chin's crease and the jaw's edge; cut in warm chalk (FACE_COL carve / lip), not ink.
+# (u, z) centre lines for his left side (mirrored), half-width (m)
+FACE_WRAP_C, FACE_WRAP_R = -0.030, 0.050
+FACE_LINES = [([(0.008, 1.645), (0.026, 1.647), (0.048, 1.652), (0.066, 1.657)], 0.0013),
+              ([(0.012, 1.636), (0.030, 1.629), (0.050, 1.623), (0.067, 1.609), (0.076, 1.588)], 0.0015),
+              ([(0.012, 1.612), (0.018, 1.588), (0.023, 1.564), (0.021, 1.549)], 0.0012),
+              ([(0.000, 1.539), (0.010, 1.540), (0.018, 1.536)], 0.0012),
+              ([(0.000, 1.521), (0.010, 1.524), (0.018, 1.531)], 0.0010),
+              ([(0.074, 1.580), (0.062, 1.553), (0.044, 1.529), (0.026, 1.513)], 0.0013)]
 
 
 class BladeMesh:
@@ -1064,8 +1180,10 @@ def sculpts() -> list:
     face.add(Ellipsoid((0, -0.030, 1.598), (0.056, 0.064, 0.092)), k=0.0)
     face.inter(HalfSpace((0, -0.086, 1.6), (0, -1, 0), 0.5), k=0.012)                             # the flat front
     face.add(RoundBox((0, -0.082, 1.652), (0.046, 0.010, 0.009), 0.006, axes=sdf.rot_x(-8)), k=0.010)  # the brow
-    for sx in (-1, 1):                                                                             # cheek planes
-        face.add(RoundBox((sx * 0.034, -0.078, 1.606), (0.017, 0.008, 0.025), 0.006, axes=sdf.rot_z(sx * 18)), k=0.012)
+    # the cheekbones: soft carved swells under the eyes (FIX ROUND 2: the boxed cheek planes stood off the mask's
+    # sides as a stub in the portrait)
+    for sx in (-1, 1):
+        face.add(Ellipsoid((sx * 0.029, -0.071, 1.616), (0.019, 0.013, 0.017)), k=0.016)
     face.add(RoundBox((0, -0.090, 1.612), (0.0060, 0.007, 0.027), 0.004), k=0.008)                # the nose line
     face.add(RoundCone((0, -0.058, 1.548), (0, -0.061, 1.506), 0.028, 0.012), k=0.02)             # the chin, down
     face.inter(HalfSpace((0, 0.02, 1.6), (0, 1, 0), 0.5), k=0.01)
@@ -1080,9 +1198,9 @@ def sculpts() -> list:
     visor.inter(Profile((0, 0, 0), F_mid, smooth_poly(VISOR_PROF, n=4, closed=True), 0.40, 0.003), k=0.003)
     visor.inter(Profile((0, 0, 0), F_front, VISOR_FRONT, 0.60, 0.003), k=0.003)
     part("visor", visor, "dawnglass", "bone:head", 900, 0.42)
-    # the brief's accent fin: one glass blade along the visor's top edge, horn to horn, the crest springing from it
-    # (POLISH: no keel line, crest inlay or root seam: they read as glowing glyphs)
-    part("visor_ridge", FinMesh("visor_ridge", RIDGE_PTS), "accent", "bone:head", 400)
+    # the brief's accent ridge: a narrow blade along the visor's top edge, temple to temple, rising at each temple
+    # into the swept rear vane along the crest's flank into its root (FIX ROUND 2: the ridge alone carries the accent)
+    part("visor_ridge", RidgeMesh("visor_ridge"), "accent", "bone:head", 700)
     # the crest: the carved stone frame (outer band, the inner band on the dome, the ribs) round recessed glass panes
     crest = Sculpt("crest")
     crest.add(Profile((0, 0, 0), F_mid, CREST_POLY, CREST_W, 0.007), k=0.0)
@@ -1094,7 +1212,7 @@ def sculpts() -> list:
     glass = Sculpt("crest_glass")
     glass.add(Profile((0, 0, 0), F_mid, crest_pane_poly(0.003), PANE_W, 0.003), k=0.0)
     part("crest_glass", glass, "dawnglass", "bone:head", 360, 0.45)
-    part("fins", BladeMesh("fins", fin_blades()), "accent", "bone:head", 600)
+    part("fins", BladeMesh("fins", fin_blades()), "dawnglass", "bone:head", 600)
 
     # ── NECK + COWL ──────────────────────────────────────────────────────────────────────────────────────────
     neck = Sculpt("neck")
@@ -1501,7 +1619,7 @@ def rig_extras(ctx) -> None:
         palm = J[f"palm.{s}"]
         gc = palm + np.array([0.0, 0.058, -0.004])
         rig.add_socket(ctx.info, f"x_knife_tip_{s.lower()}", f"prop.{s}", tuple(gc + tip), (0, 0.05, 0))
-    mid = np.asarray(RIDGE_PTS[len(RIDGE_PTS) // 2]) + unit((0.0, FIN_LEAN, 1.0)) * FIN_H[1] * 0.5   # the fin's middle
+    mid = np.asarray(RIDGE_PTS[len(RIDGE_PTS) // 2]) + unit((0.0, RIDGE_LEAN, 1.0)) * RIDGE_H[0] * 0.5   # the blade's middle
     rig.add_socket(ctx.info, "x_visor_ridge", "head", tuple(mid), (0, 0, 0.05))
 
 
@@ -1581,8 +1699,9 @@ CONCEPT_POSE = {
 PAINTED = ("knife_blade_R", "knife_blade_L", "knife_grip_R", "knife_grip_L", "knife_guard_R", "knife_guard_L", "boots",
            "bracer_R", "bracer_L")
 PROC_HIDDEN = {"face"}          # parts whose texels the painting hides take procedural paint, not the nearest pixel
-FACE_COL = {"lit": "#E4E2DD", "mid": "#D0CFCB", "shade": "#ADAFB1", "cool": "#97A2AD", "ink": "#4A4644",
-            "lip": "#EEECE7"}   # (POLISH: a step lighter: the hero key leaves the mask's camera side in shade)
+FACE_COL = {"lit": "#ECE7DE", "mid": "#D9D2C7", "shade": "#B8AEA2", "cool": "#A9A8A8", "ink": "#4A4644",
+            "carve": "#937C6A", "lip": "#F4EFE6"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
+# carving; the cool grey shade read as a grey speckled sliver in the portrait's shadow side)
 EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
 HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97A0AA", "ink": "#5E5650",
             "keel": "#ECE9E4"}
@@ -1900,14 +2019,17 @@ def face_paint(p, n):
     col = np.where((t < 0.5)[:, None], _mix(C["shade"][None].repeat(len(p), 0), C["mid"][None], t * 2),
                    _mix(C["mid"][None].repeat(len(p), 0), C["lit"][None], t * 2 - 1))
     col = _mix(col, C["cool"][None], _ss(-n[:, 2] - 0.15) * 0.45)
-    col = col * (1.0 + 0.05 * strokes(p, (0, 0, 1), 120.0, 30.0, 1.0))[:, None]
+    col = col * (1.0 + 0.03 * strokes(p, (0, 0, 1), 80.0, 24.0, 1.0))[:, None]
     front = _ss((-n[:, 1] + 0.05) / 0.35)
+    # the contour carving (warm chalk, a lit lip on the lower side of each cut), wrapped round the mask
+    vis = _ss((-n[:, 1] + 0.40) / 0.45)
+    wu = FACE_WRAP_R * np.abs(np.arctan2(p[:, 0], -(p[:, 1] - FACE_WRAP_C)))
     for pts, w in FACE_LINES:
-        d, sg = _polyline_dist2(p[:, 0], p[:, 2], pts)
-        cut = _ss((w * 0.8 + 0.0006 - d) / 0.0010) * front
-        col = _mix(col, C["ink"][None], cut * 0.50)       # (POLISH: carved, not clawed: a softer, finer cut)
-        lip = _ss((w * 1.1 - np.abs(d - w * 2.2)) / 0.0011) * front * (sg < 0)
-        col = _mix(col, C["lip"][None], lip * 0.35)
+        d, sg = _polyline_dist2(wu, p[:, 2], pts)
+        cut = _ss((w + 0.0005 - d) / 0.0010) * vis
+        col = _mix(col, C["carve"][None], cut * 0.62)
+        lip = _ss((w * 1.1 - np.abs(d - w * 2.1)) / 0.0010) * vis
+        col = _mix(col, C["lip"][None], lip * 0.30)
     # (POLISH: the brief's ink almond recesses, behind the glass): two slanted almonds, the inner corners low, cut
     # deep into the mask with a lit lower lid; seen through the visor they read as eyes in shadow, not an alien face
     for sx in (-1.0, 1.0):
@@ -1919,9 +2041,6 @@ def face_paint(p, n):
         col = _mix(col, _hexrgb(INK_EYE)[None], a * 0.92)
         lid = _ss((0.0012 - np.abs(v + 0.0062)) / 0.0010) * _ss((0.0125 - np.abs(u)) / 0.004) * front * side
         col = _mix(col, C["lip"][None], lid * 0.40)
-    # a short carved mouth line on the long chin (the concept's), shallow
-    d = np.hypot(np.maximum(np.abs(p[:, 0]) - 0.010, 0.0), p[:, 2] - (1.537 + 4.0 * p[:, 0] ** 2))
-    col = _mix(col, C["ink"][None], _ss((0.0014 - d) / 0.0009) * front * 0.55)
     return col
 
 

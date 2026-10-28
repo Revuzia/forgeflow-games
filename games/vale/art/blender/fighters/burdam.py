@@ -3325,8 +3325,8 @@ STILL_ACCENT = {"Roughness": 0.7, "Specular IOR Level": 0.1, "Emission Strength"
 # ... and the stills set each inlay (and the pommel gem) smaller and nearly flush: every accent island scaled about its
 # centre, x STILL_GEM_SCALE in its plane and x STILL_GEM_FLUSH through it (the 4.6 cm inlay through the 3 cm heel -> 3.4 cm,
 # ~2 mm proud): the concept's small gems set in the heel. Rest-pose vertex positions, restored after the renders.
-STILL_GEM_SCALE = 0.66
-STILL_GEM_FLUSH = 0.74
+STILL_GEM_SCALE = 0.80
+STILL_GEM_FLUSH = 0.80
 
 
 def _shrink_islands(o, k_plane: float, k_thick: float):
@@ -3369,7 +3369,7 @@ def _shrink_islands(o, k_plane: float, k_thick: float):
 # the felt's sunlit top folds passed L* 86, p90 93.5): the splash only takes the felt back down a step, most on its
 # sunlit tops (base colour x (1 - all - top x the COWL_TOP_GAIN ramp on N.z 0.05 -> 0.65), the cowl's texels picked by
 # the mesh's vale_part attribute). The game keeps COWL_TOP_GAIN 1.45 (the RIFT value margin is under 1 L*).
-SPLASH_COWL_DIM = (0.18, 0.22)      # (all, top)
+SPLASH_COWL_DIM = (0.18, 0.32)      # (all, top)
 _COWL_DIM = []            # the Value node pairs feeding the dim while the renders run (set per still by bible_lights)
 
 

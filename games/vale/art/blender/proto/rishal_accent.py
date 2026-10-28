@@ -26,6 +26,7 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--res", type=int, default=240)
+    ap.add_argument("--acc", default="", help="extra parts counted as accent (what-if), comma separated")
     ap.add_argument("--vs", type=float, default=1.6, help="voxel scale over the build's (coarser = faster)")
     a = ap.parse_args(scene.script_args())
     import rishal as R
@@ -48,7 +49,7 @@ def main():
         if len(v) == 0:
             continue
         ob = sdf.to_object(name, v, q, sc.collection)
-        ob.data.materials.append(mats["acc" if role == "accent" else "body"])
+        ob.data.materials.append(mats["acc" if role == "accent" or name in a.acc.split(",") else "body"])
     sc.render.engine = "BLENDER_EEVEE"
     sc.view_settings.view_transform = "Standard"
     w = bpy.data.worlds.new("w")
@@ -63,7 +64,7 @@ def main():
     sc.camera = co
     sc.render.resolution_x = sc.render.resolution_y = a.res
     tgt = Vector((0.0, 0.0, 0.95))
-    shares = []
+    shares, counts = [], []
     for i in range(8):
         yaw = math.radians(45.0 * i)
         p = math.radians(52.0)
@@ -81,8 +82,11 @@ def main():
         r = px.reshape(-1, 4)[:, 0]
         body, acc = int((r > 0.15).sum()), int((r > 0.8).sum())
         shares.append(100.0 * acc / max(1, body))
+        counts.append((body, acc))
     print("[rishal_accent] by facing (0..315 step 45):", " ".join(f"{s:.2f}" for s in shares),
           f"| mean {np.mean(shares):.2f} %")
+    px_cm2 = (cam.ortho_scale * 100.0 / a.res) ** 2
+    print("[rishal_accent] silhouette / accent cm2:", " ".join(f"{b * px_cm2:.0f}/{c * px_cm2:.0f}" for b, c in counts))
 
 
 if __name__ == "__main__":

@@ -143,7 +143,7 @@ def finger_chain(side: str, which: str, curl=None):
 # ── materials ────────────────────────────────────────────────────────────────────────────────────────────────
 MATERIAL_SET = "bible"
 PALETTE = materials.bible_palette(sandstone="#D9CBAA", wood="#CDB892", wood_dark="#5A4433", cloth2="#CEC5B6",
-                                  cloth="#9C6E69", lampresin="#A8916F", ironstone="#4B4140", leather="#5A3E2C",
+                                  cloth="#7E4E42", lampresin="#A8916F", ironstone="#4B4140", leather="#5A3E2C",
                                   under="#342C2B", ink="#17161A", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 # ART 2.0 skins: the projected painting re-coloured part by part (the robe only where it is the rose felt: the cream
@@ -156,7 +156,7 @@ SKINS: list = [
      "palette": {"sandstone": "#5E4D3E", "panel": "#CDB98F", "lampresin": "#A38C6B", "cloth": "#7F6D60", "wood": "#D3C0A0"}},
 ]
 SKIN_FLAT = {"rod_0": "wood_dark", "rod_1": "wood_dark", "rodhead_0": "lilac", "rodhead_1": "lilac"}
-SOCKETS = {"lamp": "x_lamp", "hand_gesture_r": "x_gesture_r", "hand_gesture_l": "x_gesture_l"}
+SOCKETS = {"weapon": "prop.R", "lamp": "x_lamp", "hand_gesture_r": "x_gesture_r", "hand_gesture_l": "x_gesture_l"}
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrait_clip": "idle_lobby", "portrait_t": 0.0,
           "portrait_yaw": 28.0}
 TEXTURE_SIZE = 2048
@@ -886,7 +886,7 @@ BACK_DETAIL = 0.6
 BACK_TARGET = {"head": "#5E4836"}
 # z / 2.05 -> linear gain: light head, darker feet (brief §6: top L* 70-85, middle 45-65, feet 20-35)
 VALUE_RAMP = [(0.0, 0.78), (0.06, 0.80), (0.12, 0.84), (0.20, 0.90), (0.35, 0.98), (0.50, 1.04), (0.62, 1.10),
-              (0.72, 1.10), (0.85, 1.02), (1.0, 0.98)]
+              (0.72, 1.10), (0.85, 1.05), (1.0, 1.05)]
 ROBE_LIFT = {"robe_top": 1.14, "robe_skirt": 1.16, "sleeve_L": 1.12, "sleeve_R": 1.12, "sash": 1.22}
 HI_KNEE, HI_TOP = 0.56, 0.68      # linear luminance: a soft shoulder from L* 80 up to ~L* 86 (no large area over 86)
 KEY = unit((-0.40, -0.70, 0.60))  # the painted key light: upper front, her right
@@ -1056,7 +1056,7 @@ def _side_fill(lin, k, p, n, names, log):
 
 
 # the hat: pale lacquered paper panels (warm cream, toned under L* 86), darker seams, a lit crown, the walnut underside
-HAT_HEX = {"top": "#CDB89F", "seam": "#8A735F", "crown": "#C2A98C", "under": "#5E4A3C", "rim": "#3A302D",
+HAT_HEX = {"top": "#D4C0A6", "seam": "#94806C", "crown": "#C8B093", "under": "#5E4A3C", "rim": "#42373A",
            "rim_plate": "#4A3F3B", "iron": "#4B4342", "iron_hi": "#6A625E", "legs": "#2E2523"}
 
 
@@ -1100,8 +1100,8 @@ def _hat_paint(p, n, hexes=None):
         wc = seam_c[None, :] * (mott * (0.9 + 0.2 * ss(-0.3, 0.9, n @ KEY)))[:, None]
         c = c * (1 - wal[:, None]) + wc * wal[:, None]
     else:
-        c = c * (1 - 0.55 * sw)[:, None] + seam_c[None, :] * (0.55 * sw)[:, None]
-        c = c * (1 - 0.12 * ss(0.50, 0.60, r))[:, None]
+        c = c * (1 - 0.45 * sw)[:, None] + seam_c[None, :] * (0.45 * sw)[:, None]
+        c = c * (1 - 0.08 * ss(0.50, 0.60, r))[:, None]
     if "paint" in hx:                                          # Noon Fair: rose-lilac rings and a dot on every panel
         pnt = _lin(_hex(hx["paint"]))
         ring = (ss(0.258, 0.264, r) * (1 - ss(0.300, 0.306, r)) + ss(0.476, 0.482, r) * (1 - ss(0.516, 0.522, r)))
@@ -1366,7 +1366,8 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
     part = maps["part"]
     iy, ix = _project.nearest_index(part >= 0)
     pid = part[iy, ix]
-    gain = np.clip(_lin(_hex(skin_pal["cloth"])) / np.maximum(_lin(_hex(base_pal["cloth"])), 1e-4), 0.05, 8.0)
+    skin_lin = _lin(_hex(skin_pal["cloth"]))
+    wsel, felt = {}, []
     for nm in CLOTH_PARTS:
         if nm not in names:
             continue
@@ -1377,9 +1378,22 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         r_, g_, b_ = c[:, 0], c[:, 1], c[:, 2]
         hue = np.degrees(np.arctan2(np.sqrt(3) * (g_ - b_), 2 * r_ - g_ - b_)) % 360
         rose = (1 - ss(18.0, 26.0, np.where(hue > 180, 0.0, hue))) * ss(0.10, 0.20, sat)
-        lc = _lin(c)
-        out[m] = _srgb(lc * (1 + (gain[None, :] - 1) * rose[:, None]))
-        log(f"  tunlan recolour {nm}: cloth {base_pal['cloth']} -> {skin_pal['cloth']} on {100 * float((rose > 0.5).mean()):.0f}% (the felt)")
+        wsel[nm] = (m, rose)
+        felt.append(_lin(c[rose > 0.6]))
+    felt = np.concatenate(felt) if felt else np.zeros((0, 3), np.float32)
+    if len(felt) < 100:
+        return out
+    # the felt's painted median lands exactly on the skin's cloth colour: its value relationships (folds, light) kept,
+    # its chroma replaced (a per-channel gain alone blew the lit sleeves out to a pale wash)
+    med = np.median(felt, axis=0)
+    Ymed = float(_Y(med[None, :])[0])
+    gain = np.clip(skin_lin / np.maximum(med, 1e-4), 0.05, 8.0)
+    for nm, (m, rose) in wsel.items():
+        lc = _lin(img[m])
+        rel = np.clip(_Y(lc) / max(Ymed, 1e-4), 0.25, 2.2)
+        new = 0.75 * skin_lin[None, :] * rel[:, None] + 0.25 * lc * gain[None, :]
+        out[m] = _srgb(lc * (1 - rose[:, None]) + new * rose[:, None])
+        log(f"  tunlan recolour {nm}: felt -> {skin_pal['cloth']} on {100 * float((rose > 0.5).mean()):.0f}% of it")
     return out
 
 
@@ -1776,9 +1790,12 @@ def clip_attack2():
 
 
 # the hound: wrists together before the chest, fingers forward, palms facing, thumbs up as ears, the ring pairs the jaw
-def hound_hands(x=0.040, y=-0.34, z=1.30, jaw=10.0, ears=40.0, snout=0.0, pitch=0.06):
+def hound_hands(x=0.040, y=-0.34, z=1.30, jaw=10.0, ears=40.0, snout=0.0, pitch=0.06, absolute=False):
+    """(absolute: the wrists at armature-space places, for the leaning thrust; `pitch` is then the chest-frame tilt that
+    keeps the snout level in the world)"""
     d = unit((0.0, -1.0, pitch))
-    return dict(ik(wrist("L", x, y, z, (0.9, 0.3, -0.3)), wrist("R", -x, y, z, (-0.9, 0.3, -0.3)),
+    wf = wrist_abs if absolute else wrist
+    return dict(ik(wf("L", x, y, z, (0.9, 0.3, -0.3)), wf("R", -x, y, z, (-0.9, 0.3, -0.3)),
                    orient("L", d, (-1.0, 0.0, 0.0)), orient("R", d, (1.0, 0.0, 0.0))),
                 **fingers("L", a=(snout, 2, 4), b=(4, 6, 6), t=(-10, 0), sb=jaw, st=ears),
                 **fingers("R", a=(snout, 2, 4), b=(4, 6, 6), t=(-10, 0), sb=jaw, st=ears))
@@ -1795,12 +1812,13 @@ def clip_cast_a1():
     hold2 = compose(stance_pose(), body(hips=(-3, -8, 0), spine=(-3, -5, 0), chest=(-6, -7, 0), neck=(5, 5, 0), head=(7, 5, 0),
                                         drop=0.01), hound_hands(z=1.32, y=-0.26, jaw=16))
     snap = compose(st_, body(hips=(8, 6, 0), spine=(8, 4, 0), chest=(8, 6, 0), neck=(-6, -3, 0), head=(-8, -3, 0), fwd=0.10,
-                             drop=0.03), hound_hands(z=1.28, y=-0.64, jaw=34, ears=50, snout=-8, pitch=0.0))
+                             drop=0.03), hound_hands(x=0.045, z=1.31, y=-0.70, jaw=34, ears=50, snout=-8, pitch=0.42, absolute=True))
     fol = compose(st_, body(hips=(9, 7, 0), spine=(9, 5, 0), chest=(9, 7, 0), neck=(-7, -3, 0), head=(-9, -3, 0), fwd=0.11,
-                            drop=0.035), hound_hands(z=1.24, y=-0.66, jaw=24, ears=46, snout=-4, pitch=-0.15))
+                            drop=0.035), hound_hands(x=0.045, z=1.27, y=-0.71, jaw=24, ears=46, snout=-4, pitch=0.30, absolute=True))
     keys = [(0.0, g, "linear"), (0.12, hold, "out"), (0.22, compose(hold, hound_hands(z=1.30, y=-0.30, jaw=18)), "inout"),
             (0.30, hold2, "inout"), (0.34, compose(hold2, hound_hands(z=1.33, y=-0.24, jaw=4)), "inout"),
-            (anim.IMPACT, snap, anim.snap), (0.50, fol, "out"), (0.66, compose(fol, hound_hands(z=1.22, y=-0.60, jaw=8, ears=30)), "inout"),
+            (anim.IMPACT, snap, anim.snap), (0.50, fol, "out"),
+            (0.66, compose(fol, hound_hands(x=0.045, z=1.24, y=-0.66, jaw=8, ears=30, pitch=0.25, absolute=True)), "inout"),
             (0.84, anim.lerp_pose(fol, g, 0.6), "inout"), (1.0, g, "settle")]
     return anim.Clip("cast_a1", N, False, anim.drag(anim.keyed(keys), N, {"head": 1.0}), impact=anim.IMPACT)
 
@@ -1970,8 +1988,9 @@ def clip_death():
 def clip_recall():
     """cups both hands round the lantern and blows it out, a slow breath held; loops"""
     N = 60
-    base = compose(stance_pose(), body(hips=(0, -10, 0), spine=(2, -8, 0), chest=(3, -10, 0), neck=(6, -16, 0), head=(8, -18, 6)),
-                   ik(wrist_abs("R", -0.50, -0.34, 1.28, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.20, -0.58, 1.28, (0.6, 0.4, -0.6)),
+    # (the lantern hangs from the hat: the head barely turns, or the lamp would swing away from the cupped hands)
+    base = compose(stance_pose(), body(hips=(0, -6, 0), spine=(2, -5, 0), chest=(4, -5, 0), neck=(8, -4, 0), head=(10, -3, 8)),
+                   ik(wrist_abs("R", -0.53, -0.30, 1.30, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.25, -0.60, 1.30, (0.6, 0.4, -0.6)),
                       orient("R", (0.30, -0.25, 0.92), (0.70, -0.62, 0.30)), orient("L", (-0.30, 0.25, 0.92), (-0.62, 0.70, 0.30))),
                    fingers("R", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4),
                    fingers("L", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4))

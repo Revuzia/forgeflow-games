@@ -1,0 +1,113 @@
+{
+  "id": "tunlan_lamplit",
+  "fighter": "tunlan",
+  "skin": true,
+  "parts": {
+    "tris_hat": 2576,
+    "tris_crown_glow": 258,
+    "tris_hat_rim": 896,
+    "tris_vent_ring": 240,
+    "tris_vent_glow": 146,
+    "tris_lantern_hook": 300,
+    "tris_lantern_frame": 1050,
+    "tris_lantern_glass": 160,
+    "tris_head": 898,
+    "tris_mask": 1650,
+    "tris_neck": 380,
+    "tris_robe_top": 1898,
+    "tris_robe_skirt": 2050,
+    "tris_sash": 850,
+    "tris_sleeve_R": 900,
+    "tris_cuff_R": 458,
+    "tris_wrap_R": 420,
+    "tris_sleeve_L": 898,
+    "tris_cuff_L": 460,
+    "tris_wrap_L": 420,
+    "tris_palm_R": 420,
+    "tris_fa1_R": 150,
+    "tris_fa2_R": 150,
+    "tris_fa3_R": 150,
+    "tris_fb1_R": 150,
+    "tris_fb2_R": 150,
+    "tris_fb3_R": 150,
+    "tris_ft1_R": 150,
+    "tris_ft2_R": 150,
+    "tris_palm_L": 420,
+    "tris_fa1_L": 150,
+    "tris_fa2_L": 150,
+    "tris_fa3_L": 150,
+    "tris_fb1_L": 150,
+    "tris_fb2_L": 150,
+    "tris_fb3_L": 150,
+    "tris_ft1_L": 150,
+    "tris_ft2_L": 150,
+    "tris_legs": 420,
+    "tris_boots": 1100,
+    "validate_tunlan": "19424->19414"
+  },
+  "uv_coverage": 0.637,
+  "bake": {
+    "base": 7.56,
+    "rough_metal": 5.45,
+    "normal": 4.65,
+    "ao": 5.82,
+    "normal_fixed_px": 47436,
+    "projection": 65.76,
+    "pack_save": 65.98,
+    "total": 90.35
+  },
+  "tris": 21658,
+  "mesh_top_m": 2.05,
+  "glb_bytes_raw": 2336276,
+  "optimize": {
+    "ok": true,
+    "before": 2336276,
+    "after": 919268
+  },
+  "glb_bytes": 919268,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan_lamplit.glb (898 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: tunlan_lamplit_base 2048x2048 167K, tunlan_lamplit_normal 512x512 37K, tunlan_lamplit_orm 512x512 58K",
+      "  skinned meshes: tunlan_accent(267v), tunlan_lamplit(17723v)",
+      "  bones: 45 (root hips spine chest neck head x_hat x_lantern x_lamp shoulderL upper_armL forearmL handL propL x_fa1L x_fa2L x_fa3L x_gesture_l x_fb1L x_fb2L x_fb3L x_ft1L x_ft2L shoulderR upper_armR forearmR handR propR x_fa1R x_fa2R x_fa3R x_gesture_r x_fb1R x_fb2R x_fb3R x_ft1R x_ft2R thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 21658; bind-pose bounds (three units, Y up): 1.27 x 2.05 x 1.27; facing (0.00, 1.00); head bone y 1.57; runRefSpeed 3.35",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/tunlan/tunlan_lamplit_splash.png",
+      "portrait": "art/out/fighters/tunlan/tunlan_lamplit_portrait.png"
+    },
+    "seconds": {
+      "splash": 8.06,
+      "portrait": 6.01
+    }
+  },
+  "three_qa": {
+    "ok": false,
+    "skipped": ""
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.18,
+      "model": 4.78,
+      "lows_bind": 2.68,
+      "uv": 15.18,
+      "bake": 90.53,
+      "export": 0.07,
+      "optimize": 0.56,
+      "load_test": 0.12,
+      "render": 14.11,
+      "three_qa": 450.78
+    },
+    "total_s": 579.19
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 1.86
+}

@@ -26,3 +26,12 @@
   poke-through), death = kneel + fold with the hat resting on its brim (floor clamp), pounce/death wrists absolute.
 - Skins written (SKINS, HAT_SCHEMES, selective rose-felt recolour, SKIN_FLAT puppet rods); not built yet.
 - Compare renders: proto/tunlan_compare.py (Blender) + tunlan_fit.py --compare -> _fit/compare.png.
+- Build 9 (full quality, base): 21658 tris, 1136 KiB, accent 1.9 % (three QA), load test OK, clip sheet reviewed
+  (hound thrust level, palm -> grip, recall cups the lantern, victory cupped hands, death kneel/fold).
+  lineup_qa (tunlan vs dunsom/vashil/nurrow): IoU64 max 0.565 / 0.555 / 0.494; bands top 66.6 (low: hat lightened
+  after), mid 60.9, bottom 33.8. Splash (victory) and portrait (idle_lobby t0, facing front) checked.
+- Skins build started (--skins-only).
+- Skins build 1: noon_fair 22.3k tris 932 KiB accent 1.97 %, lamplit 21.7k tris 898 KiB (its three QA hung in headless
+  Chrome: my own child killed after 25 min idle). Both robes came out a pale wash (per-channel gain off a wrong base
+  median): recolour now anchors the felt's painted median on the skin hex and keeps the painted values.
+- Added "weapon": "prop.R" to SOCKETS (the content's standard set). Final build (base + skins, --clip-sheet) started.
