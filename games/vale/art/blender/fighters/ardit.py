@@ -43,7 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import bpy  # noqa: E402,F401
 import numpy as np  # noqa: E402
-from mathutils import Matrix, Vector  # noqa: E402
+from mathutils import Euler, Matrix, Quaternion, Vector  # noqa: E402
 
 from common import anim, fighter, materials, rig, scene  # noqa: E402
 from common.anim import Aim, FootTarget, HandTarget  # noqa: E402
@@ -84,12 +84,19 @@ AO_INTO_BASE = 0.25
 # palettes: _design/fighters/ardit.md section 9 (identity hexes stepped by band where the brief says so)
 SKINS: list = [
     {"id": "ardit_chalkline", "extra": {}, "card": {"primary": "#3A3F47", "secondary": "#E6E0D2"},
-     "palette": {"chalk": "#BDBFC2", "stone": "#B9BEC4", "cloth": "#7A828D", "ironstone": "#3A3F47",
-                 "under": "#2E3238", "gauntlet": "#4A5059", "cloth2": "#646A73"}},
+     "palette": {"chalk": "#BDBFC2", "stone": "#A9AEB5", "cloth": "#5C636D", "ironstone": "#3A3F47",
+                 "under": "#2E3238", "gauntlet": "#4A5059", "cloth2": "#40454D", "leather": "#34363A"}},
     {"id": "ardit_first_bell", "extra": {"bell": True}, "card": {"primary": "#4A4640", "secondary": "#D8D2C4"},
-     "palette": {"chalk": "#D8D2C4", "stone": "#CFC8BA", "cloth": "#8D8A84", "ironstone": "#38363A",
-                 "leather": "#3A332D", "under": "#34322F", "gauntlet": "#5B5750"}},
+     "palette": {"chalk": "#D8D2C4", "stone": "#CFC8BA", "cloth": "#7A6F62", "ironstone": "#38363A",
+                 "leather": "#3A332D", "under": "#34322F", "gauntlet": "#4A453F", "cloth2": "#D6CFC0"}},
 ]
+# per-part targets over the role palette (review fix 4: the skins must read apart at the game camera and in the
+# portrait, not only from the front): Chalkline's pavise frame and tabard are the deep ink-grey the chalk line-work is
+# drawn on; First Bell's vambraces go dark with its greaves (brief: "dark greaves and vambraces")
+SKIN_PARTS = {
+    "ardit_chalkline": {"pavise_frame": "#4A5059", "tabard_R": "#3A3F47", "tabard_L": "#3A3F47", "spear_collar": "#9DA2A8"},
+    "ardit_first_bell": {"bracer_R": "#4E4A44", "bracer_L": "#4E4A44"},
+}
 SKIN_FLAT = {"bell_glass": "dawnglass", "bell_bail": "ironstone"}
 
 HEIGHT = 2.35             # the helm's flat crown (the projection plates' scale)
@@ -111,10 +118,11 @@ SPEAR_S = {"butt": -0.735, "shaft0": -0.66, "shaft1": 0.62, "collar0": 0.58, "kn
 PAV_Y, PAV_T = -0.235, 0.032                  # mid plane, half thickness (6.4 cm frame)
 PAV_OUT = [(0.372, 1.842), (0.800, 1.842), (0.800, 0.585), (0.600, 0.355), (0.372, 0.560)]
 PAV_FRAME_W = 0.052                           # the chalk frame's face width
-LINE_W = 0.016                                # the accent line along the window's edge (on the frame's faces)
+LINE_W = 0.008                                # the pale glass hairline along the window's edge (frame faces)
 SPIRE_X = 0.640
 DIAMONDS = [((0.630, 2.030), 0.052, 0.105), ((0.668, 1.800), 0.058, 0.118)]   # (centre x, z), half w, half h
-INLAY_K = 0.62                                # inlay size / bezel size
+INLAY_K = 0.86                                # inlay size / bezel size (the concept's diamonds are mostly glass)
+GIRDLE = 0.024                                # the glass band round each diamond's edge (half thickness, m)
 
 
 def spear_at(s: float) -> np.ndarray:
@@ -280,6 +288,8 @@ def sculpts() -> list:
     helm.add(box.displaced(chips(0.008, 8.0), 0.008), k=0.0)
     helm.add(RoundBox((HX, 0.0, 2.302), (0.167, 0.177, 0.046), 0.016).displaced(chips(0.009, 7.0), 0.009), k=0.004)
     helm.sub(RoundBox((HX, -0.18, 2.236), (0.136, 0.05, 0.028), 0.006), k=0.004)           # the visor band
+    for sx in (-1, 1):                                                                     # its side windows
+        helm.sub(RoundBox((HX + sx * 0.17, -0.105, 2.236), (0.03, 0.055, 0.028), 0.006), k=0.004)
     # the face opening below the visor: the cheek guards' inner edges slant inward toward the chin
     helm.sub(slab([(HX - 0.098, 2.212), (HX + 0.098, 2.212), (HX + 0.084, 1.96), (HX - 0.084, 1.96)], -0.17, 0.07, 0.008), k=0.006)
     helm.add(RoundBox((HX, -0.163, 2.133), (0.022, 0.016, 0.082), 0.008), k=0.006)          # the nasal bar
@@ -287,8 +297,10 @@ def sculpts() -> list:
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
     part("helm", helm, "chalk", "bone:head", 1500)
     visor = Sculpt("visor")
-    visor.add(RoundBox((HX, -0.148, 2.236), (0.130, 0.010, 0.022), 0.006), k=0.0)
-    part("visor", visor, "accent", "bone:head", 120, 0.6)
+    visor.add(RoundBox((HX, -0.160, 2.236), (0.134, 0.012, 0.026), 0.006), k=0.0)     # flush with the helm face
+    for sx in (-1, 1):                    # wrapped round the corners (the colour reads from the side facings)
+        visor.add(RoundBox((HX + sx * 0.150, -0.105, 2.236), (0.012, 0.052, 0.026), 0.006), k=0.0)
+    part("visor", visor, "accent", "bone:head", 220, 0.6)
     face = Sculpt("face")
     face.add(Ellipsoid((HX, -0.02, 2.11), (0.118, 0.132, 0.120)), k=0.0)
     face.add(RoundBox((HX, -0.115, 2.035), (0.060, 0.035, 0.035), 0.030), k=0.03)            # the chin
@@ -358,14 +370,13 @@ def sculpts() -> list:
     # BELT + BUCKLE
     belt = Sculpt("belt")
     belt.add(_band((0.0, 0.008, 1.439), 0.352, 0.268, 0.054, 0.014), k=0.0)          # the concept's belt: z 1.385-1.493
-    for x in (-0.24, -0.15, 0.15, 0.24):
-        belt.add(Sphere((x, -0.255 + 0.06 * (abs(x) > 0.2), 1.439), 0.012), k=0.004)
+    for x in (-0.24, -0.15, 0.15, 0.24):           # studs ON the band (were 2 cm proud: loose islands on the hands)
+        belt.add(Sphere((x, 0.008 - 0.268 * math.sqrt(1.0 - (x / 0.352) ** 2) + 0.002, 1.439), 0.012), k=0.006)
     part("belt", belt, "leather", "auto", 560)
     buckle = Sculpt("buckle")
-    buckle.add(RoundBox((0.0, -0.268, 1.439), (0.072, 0.022, 0.058), 0.012), k=0.0)
-    buckle.sub(RoundBox((0.0, -0.30, 1.439), (0.042, 0.018, 0.030), 0.006), k=0.004)       # a shallow frame (6 mm)
-    buckle.add(RoundBox((0.0, -0.272, 1.439), (0.040, 0.012, 0.028), 0.006), k=0.004)
-    part("buckle", buckle, "ironstone", "bone:hips", 220, 0.7)
+    buckle.add(RoundBox((0.0, -0.268, 1.439), (0.072, 0.020, 0.058), 0.014), k=0.0)
+    buckle.add(RoundBox((0.0, -0.284, 1.439), (0.040, 0.012, 0.030), 0.010), k=0.008)     # the raised boss
+    part("buckle", buckle, "ironstone", "bone:hips", 320, 0.7)
 
     # COAT SKIRT (cloth, heat weights): flared from the belt to the hem at 0.80; the tabard panels hang over it
     coat = Sculpt("coat")
@@ -416,13 +427,13 @@ def sculpts() -> list:
     # SPEAR (prop.R): ash shaft, the chalk collar with its knot, the dawnglass leaf head, the chalk butt
     shaft = Sculpt("spear_shaft")
     shaft.add(Capsule(spear_at(SPEAR_S["shaft0"]), spear_at(SPEAR_S["shaft1"]), 0.0215), k=0.0)
-    part("spear_shaft", shaft, "wood", "bone:prop.R", 260, 0.6)
+    part("spear_shaft", shaft, "wood", "bone:x_spear", 260, 0.6)
     col = Sculpt("spear_collar")
     col.add(RoundCone(spear_at(SPEAR_S["collar0"]), spear_at(SPEAR_S["knot"] - 0.02), 0.030, 0.024), k=0.0)
     col.add(Ellipsoid(spear_at(SPEAR_S["knot"]), (0.038, 0.030, 0.045), axes=frame_of(SPEAR_U, (1, 0, 0))), k=0.01)
     col.add(RoundCone(spear_at(SPEAR_S["knot"] + 0.02), spear_at(SPEAR_S["collar1"]), 0.026, 0.017), k=0.008)
     col.add(RoundCone(spear_at(SPEAR_S["butt"]), spear_at(SPEAR_S["shaft0"] + 0.01), 0.010, 0.031), k=0.0)       # the butt cap
-    part("spear_collar", col, "chalk", "bone:prop.R", 360, 0.6)
+    part("spear_collar", col, "chalk", "bone:x_spear", 360, 0.6)
     head = Sculpt("spear_head")
     L = SPEAR_S["tip"] - SPEAR_S["head0"]
     bw = 0.046
@@ -441,60 +452,66 @@ def sculpts() -> list:
         return np.maximum(d, dt * 0.9)
     lo, hi = c - 0.30, c + 0.30
     head.add(Fn(leaf, lo, hi), k=0.0)
-    part("spear_head", head, "dawnglass", "bone:prop.R", 220, 0.5)
+    part("spear_head", head, "dawnglass", "bone:x_spear", 220, 0.5)
 
     # PAVISE (prop.L): the chalk frame, the glass pane, the leather handle, the ironstone spire + diamond inlays
     frame = Sculpt("pavise_frame")
     frame.add(slab(PAV_OUT, PAV_Y, PAV_T, 0.012).displaced(chips(0.006, 8.0), 0.006), k=0.0)
     win = inset(PAV_OUT, PAV_FRAME_W)
     frame.sub(slab(win, PAV_Y, PAV_T + 0.03, 0.0), k=0.008)
-    part("pavise_frame", frame, "chalk", "bone:prop.L", 820)
+    part("pavise_frame", frame, "chalk", "bone:x_pavise", 820)
     pane = Sculpt("pavise_pane")
     pane.add(slab(inset(PAV_OUT, PAV_FRAME_W - 0.012), PAV_Y + 0.004, 0.0085, 0.004), k=0.0)
-    part("pavise_pane", pane, "dawnglass", "bone:prop.L", 160, 0.6)
+    part("pavise_pane", pane, "dawnglass", "bone:x_pavise", 260, 0.6)
     # the concept's thin pale-blue line round the window, on both faces of the frame: the dawnglass edge catching the
-    # light (`accent`, the team tint: with the visor and the spire inlays about 2 % of the game-camera silhouette)
+    # light (a pale glass hairline, NOT the accent: review fix 1, the team tint stays on the visor and the spire)
     line = Sculpt("pane_line")
     for sgn in (-1, 1):
         yy = PAV_Y + sgn * (PAV_T + 0.0015)
         line.add(slab(inset(PAV_OUT, PAV_FRAME_W - LINE_W), yy, 0.0045, 0.002), k=0.0)
     line.sub(slab(inset(PAV_OUT, PAV_FRAME_W + 0.002), PAV_Y, PAV_T + 0.02, 0.0), k=0.0)
-    part("pane_line", line, "accent", "bone:prop.L", 420, 0.5)
+    part("pane_line", line, "dawnglass", "bone:x_pavise", 360, 0.5)
     handle = Sculpt("pavise_handle")
     handle.add(Capsule(F_L + (0, 0, -0.10), F_L + (0, 0, 0.10), 0.024), k=0.0)
     for dz in (-0.10, 0.10):
         handle.add(RoundCone(F_L + (0, 0, dz), (F_L[0], PAV_Y + 0.0125 + 0.030, F_L[2] + dz * 1.3), 0.022, 0.026), k=0.01)
-    part("pavise_handle", handle, "leather", "bone:prop.L", 220, 0.7)
+    part("pavise_handle", handle, "leather", "bone:x_pavise", 220, 0.7)
     spire = Sculpt("spire")
     spire.add(RoundCone((SPIRE_X + 0.02, PAV_Y, 1.70), (SPIRE_X - 0.01, PAV_Y, 2.15), 0.026, 0.012), k=0.0)
     for (cx, cz), hw, hh in DIAMONDS:
         spire.add(diamond((cx, cz), hw, hh, PAV_Y, PAV_T + 0.012, 0.008).displaced(chips(0.004, 10.0), 0.004), k=0.008)
         for sgn in (-1, 1):                         # the inlay pockets, front and back
             spire.sub(diamond((cx, cz), hw * INLAY_K + 0.008, hh * INLAY_K + 0.012, PAV_Y + sgn * (PAV_T + 0.012), 0.010, 0.004), k=0.003)
-    part("spire", spire, "ironstone", "bone:prop.L", 520, 0.6)
+    part("spire", spire, "ironstone", "bone:x_pavise", 520, 0.6)
     inl = Sculpt("inlays")
     for (cx, cz), hw, hh in DIAMONDS:
         for sgn in (-1, 1):
             inl.add(diamond((cx, cz), hw * INLAY_K, hh * INLAY_K, PAV_Y + sgn * (PAV_T + 0.006), 0.006, 0.003), k=0.0)
-    part("inlays", inl, "accent", "bone:prop.L", 160, 0.5)
+        # the glass core shows as a band round the diamond's edge (the colour reads from the side and from above)
+        inl.add(diamond((cx, cz), hw + 0.006, hh + 0.011, PAV_Y, GIRDLE, 0.003), k=0.0)
+    part("inlays", inl, "accent", "bone:x_pavise", 260, 0.5)
     return out
 
 
 def skin_extras(extra: dict) -> list:
-    """First Bell's small glass bell (0.08 m) on a rigid 3 cm bail above the spire tip (duller than the inlays)"""
+    """First Bell's glass bell (0.10 m) set as a finial on the spire tip, its rigid 3 cm bail ring on top (pale glass:
+    duller than the inlays; review fix 4: the 5 cm bell read as a dot hidden by the upper diamond)"""
     out = []
     if extra.get("bell"):
         top = np.array([SPIRE_X - 0.012, PAV_Y, 2.15])
+        H = 0.100
         bail, bell = Sculpt("bell_bail"), Sculpt("bell_glass")
-        bail.add(Torus(top + (0, 0, 0.026), 0.016, 0.005, axes=sdf.rot_x(90)), k=0.0)
-        bail.add(Capsule(top, top + (0, 0, 0.012), 0.007), k=0.004)
 
         def bell_prof(r, z):
-            rr = 0.016 + 0.024 * np.clip((0.052 - z) / 0.052, 0, 1) ** 1.6
-            return np.maximum(np.maximum(r - rr, z - 0.052), -z)
-        bell.add(sdf.Lathe(top + (0, 0, -0.010), bell_prof, 0.045, 0.0, 0.055, axes=sdf.rot_x(180)), k=0.0)
-        out.append(("bell_bail", bail, 0.4, "ironstone", "bone:prop.L", 120))
-        out.append(("bell_glass", bell, 0.5, "dawnglass", "bone:prop.L", 200))
+            u = np.clip((H - z) / H, 0, 1)
+            rr = 0.019 + 0.033 * u ** 1.7 + 0.006 * np.clip((0.012 - z) / 0.012, 0, 1)    # flared lip at the mouth
+            return np.maximum(np.maximum(r - rr, z - H), -z)
+        bell.add(sdf.Lathe(top + (0, 0, -0.006), bell_prof, 0.06, 0.0, H, axes=None), k=0.0)
+        bell.add(Sphere(top + (0, 0, H - 0.004), 0.017), k=0.008)                       # the crown
+        bail.add(Torus(top + (0, 0, H + 0.030), 0.018, 0.0055, axes=sdf.rot_x(90)), k=0.0)
+        bail.add(Capsule(top + (0, 0, H + 0.004), top + (0, 0, H + 0.014), 0.007), k=0.004)
+        out.append(("bell_bail", bail, 0.4, "ironstone", "bone:x_pavise", 160))
+        out.append(("bell_glass", bell, 0.5, "dawnglass", "bone:x_pavise", 360))
     return out
 
 
@@ -564,6 +581,9 @@ _install_build()
 
 
 # ── rig ──────────────────────────────────────────────────────────────────────────────────────────────────────
+SLIDE = {"R": "x_spear", "L": "x_pavise"}      # the items' own bones under prop.R / prop.L
+
+
 def rig_extras(ctx) -> None:
     """the arms onto the concept's carry, the props' frames, the tabard chains, the VFX sockets"""
     info = ctx.info
@@ -591,27 +611,46 @@ def rig_extras(ctx) -> None:
         eb[f"prop.{s}"].head = fv
         eb[f"prop.{s}"].tail = fv + V(tuple(pu)) * 0.12
         eb[f"prop.{s}"].align_roll(V((0.0, -1.0, 0.0)))
+        # the held item's own bone (the same frame as prop.S): rest = rigid in the fist; a clip may slide / turn the
+        # item in the grip (victory: the pavise stood on the ground under the fist, the spear grounded through it)
+        xb = eb.new(SLIDE[s])
+        xb.head, xb.tail = fv, fv + V(tuple(pu)) * 0.12
+        xb.align_roll(V((0.0, -1.0, 0.0)))
+        xb.parent = eb[f"prop.{s}"]
+        xb.use_deform = True
         info.joints[f"elbow.{s}"], info.joints[f"wrist.{s}"] = elv, wrv
         info.joints[f"palm.{s}"] = fv
         info.joints[f"forearm_dir.{s}"], info.joints[f"arm_dir.{s}"] = fo_d, up_d
     bpy.ops.object.mode_set(mode="OBJECT")
+    for nm in SLIDE.values():
+        arm.pose.bones[nm].rotation_mode = "XYZ"
     for b in arm.data.bones:
         info.lengths[b.name] = b.length
     for s, sx in (("l", 1), ("r", -1)):
         ctx.chains[f"tabard_{s}"] = rig.add_chain(info, f"tabard_{s}", "hips",
                                                   [V((sx * 0.086, -0.27, 1.40)), V((sx * 0.086, -0.345, 0.66))])
-    rig.add_socket(info, "x_spear_tip", "prop.R", tuple(spear_at(SPEAR_S["tip"])), tuple(SPEAR_U * 0.08), z_hint=(0, -1, 0))
-    rig.add_socket(info, "x_pavise_top", "prop.L", (SPIRE_X - 0.01, PAV_Y, 2.15), (0, 0, 0.08), z_hint=(0, -1, 0))
+    rig.add_socket(info, "x_spear_tip", SLIDE["R"], tuple(spear_at(SPEAR_S["tip"])), tuple(SPEAR_U * 0.08), z_hint=(0, -1, 0))
+    rig.add_socket(info, "x_pavise_top", SLIDE["L"], (SPIRE_X - 0.01, PAV_Y, 2.15), (0, 0, 0.08), z_hint=(0, -1, 0))
+
+
+TAB_G = 0.8                # the tabard's pull toward hanging straight down
+TAB_K, TAB_MARGIN, TAB_CAP = 0.85, 3.0, 62.0
 
 
 def chain_config(ctx) -> list:
-    """the tabard panels: one bone each, hanging with gravity, pushed forward by their own thigh"""
+    """the tabard panels: one bone each, hanging with gravity, kept IN FRONT of their own thigh (review fix 1: the old
+    push of half the thigh's flexion, capped at 28 deg, let a raised thigh and the coat over it tear through the panel).
+    The panel's forward swing in the world is drive - (1 - g) * hips pitch; the thigh's is thigh - hips pitch (both
+    hang from the hips), so the drive keeps the panel at TAB_K of the thigh's world swing"""
     def push(side):
         def f(p):
-            return min(28.0, 0.5 * max(0.0, p.get(f"thigh.{side}", (0.0,))[0]))      # never flipped up like a board
+            th = p.get(f"thigh.{side}", (0.0, 0.0, 0.0))[0]
+            hp = p.get("hips", (0.0, 0.0, 0.0))[0]
+            want = TAB_K * (th - hp) + (1.0 - TAB_G) * hp - TAB_MARGIN
+            return max(0.0, min(TAB_CAP, want))
         return f
-    return [anim.ChainCfg(ctx.chains["tabard_l"], gravity=0.8, stiffness=150.0, damping=16.0, inertia=0.5, drive=push("L")),
-            anim.ChainCfg(ctx.chains["tabard_r"], gravity=0.8, stiffness=150.0, damping=16.0, inertia=0.5, drive=push("R"))]
+    return [anim.ChainCfg(ctx.chains["tabard_l"], gravity=TAB_G, stiffness=170.0, damping=18.0, inertia=0.4, drive=push("L")),
+            anim.ChainCfg(ctx.chains["tabard_r"], gravity=TAB_G, stiffness=170.0, damping=18.0, inertia=0.4, drive=push("R"))]
 
 
 # ── paint (Ardit's wrap of common/hifi/project.paint; common/ is shared, so it lives here) ──────────────────
@@ -626,7 +665,7 @@ SIDEMAP = {"helm": (0.42, "back"), "pauldron_R": (0.50, "wrap"), "pauldron_L": (
            "greave_L": (0.45, "wrap"), "knee_R": (0.40, "wrap"), "knee_L": (0.40, "wrap"), "bracer_R": (0.45, "wrap"),
            "bracer_L": (0.45, "wrap"), "gorget": (0.28, "wrap"), "cuirass": (0.22, "wrap"), "coat": (0.20, "wrap"),
            "legs": (0.40, "wrap"), "sleeves": (0.45, "wrap"), "fist_R": (0.45, "wrap"), "fist_L": (0.45, "wrap"),
-           "pavise_frame": (0.06, "wrap"), "belt": (0.10, "wrap")}
+           "belt": (0.10, "wrap")}
 PAIRS = ("boots", "legs", "sleeves")
 TOPMAP = {                 # up-facing texels: the part's own front paint, depth (y) mapped onto this z band
     "helm": (2.262, 2.335), "pauldron_R": (1.935, 1.995), "pauldron_L": (1.935, 1.995), "tier_R": (1.70, 1.78),
@@ -634,7 +673,9 @@ TOPMAP = {                 # up-facing texels: the part's own front paint, depth
     "greave_R": (0.45, 0.53), "greave_L": (0.45, 0.53), "bracer_R": (1.40, 1.48), "bracer_L": (1.40, 1.48),
     "belt": (1.40, 1.48),
 }
-BASE_TONE = {}             # part: (target median hex, hue strength, gamma) after the first look
+# part: (target median hex, hue strength, gamma). The painted pauldrons / tiers (median ~L* 85) blew out to flat white
+# under the splash's low sun (review fix 5): toned to ~L* 78 with a little more contrast (form)
+BASE_TONE = {nm: ("#C4C3BA", 0.0, 1.15) for nm in ("pauldron_R", "pauldron_L", "tier_R", "tier_L")}
 # the highest plate row a part may sample (m): the sculpted gorget rises 4 cm over the painted one, where the sheet
 # paints the bare neck: sampled there it read as a mouth across the collar
 ZMAX = {"gorget": 1.93}
@@ -687,6 +728,47 @@ def _collar(p, n, base="#4A3B33"):
     return np.clip(b[None, :] * shade[:, None], 0, 1)
 
 
+def _pingpong(d, b):
+    """0 at d = 0, b at d = b, back to 0 at 2b (a 1:1 mirrored wrap: no stretch along the side plane)"""
+    b = max(1e-4, float(b))
+    return b - np.abs(np.mod(np.maximum(d, 0.0), 2.0 * b) - b)
+
+
+def _window_d(x, z):
+    """distance inside the pavise's window edge (m, + = inside the pane)"""
+    return -poly2d(inset(PAV_OUT, PAV_FRAME_W))(x, z)
+
+
+def _pane(p, n):
+    """the dawnglass pane as clear glass (review fix 9: the concept's ghosted fist read as a teal stain on an opaque
+    pane): cool pale glass, two broad diagonal glints and a thin sharp one, a soft shade inside the frame, a little
+    lighter toward the top (the sky in it)"""
+    b = _hex("#B3C5D1")
+    u = (p[:, 0] * 0.9 + p[:, 2]) / 0.62 + 0.35
+    back = n[:, 1] > 0
+    u = np.where(back, u + 0.37, u)
+    g1 = np.clip(np.sin(u * 2 * np.pi) * 1.7 - 1.0, 0, 1)
+    g2 = np.clip(np.sin(u * 2 * np.pi * 2.6 + 1.3) * 3.0 - 2.6, 0, 1)
+    zf = np.clip((p[:, 2] - 0.40) / 1.40, 0, 1)
+    edge = _ss(0.0, 0.045, _window_d(p[:, 0], p[:, 2]))
+    lift = (0.90 + 0.10 * zf) * (0.86 + 0.14 * edge)
+    col = b[None, :] * lift[:, None]
+    hi = np.array([0.90, 0.94, 0.96], dtype=np.float32)
+    k = np.clip(0.45 * g1 + 0.55 * g2, 0, 1)[:, None]
+    return np.clip(col * (1 - k) + hi[None, :] * k, 0, 1)
+
+
+def _line(p, n):
+    """the pale glass hairline round the window"""
+    return np.clip(_hex("#C9DAE6")[None, :] * (0.95 + 0.05 * np.sin(p[:, 2] * 9.0))[:, None], 0, 1)
+
+
+def _cloth_folds(p, base, axis=2, freq=38.0, amp=0.22):
+    b = np.asarray(base, dtype=np.float32)
+    f = 0.5 + 0.5 * np.sin(p[:, axis] * freq + 2.2 * NOISE(p, 7.0))
+    return np.clip(b[None, :] * (1.0 - amp * 0.5 + amp * f)[:, None], 0, 1)
+
+
 def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True, log=print):
     from common.hifi import project as pj
     P, N, part = maps["P"], maps["N"], maps["part"]
@@ -734,7 +816,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
                     cx[ss_] = float(np.median(p[ss_, 0]))
         else:
             cx[sel] = float(np.median(p[sel, 0]))
-    OWN_IDS = [names.index(nm) for nm in ("spear_head", "spear_shaft", "neck") if nm in names]
+    OWN_IDS = [names.index(nm) for nm in ("spear_head", "spear_shaft", "neck", "pavise_pane", "pane_line") if nm in names]
     st = np.abs(n[:, 0]) / (np.abs(n[:, 0]) + np.abs(n[:, 1]) + 1e-6)
     ws = _ss(0.55, 0.90, st)
     xs = p[:, 0] - np.sign(p[:, 0] - cx) * SIDE_INSET * ws
@@ -763,11 +845,32 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
                 continue
             sg = np.sign(n[sel, 0])
             f = np.clip((p[sel, 1] - y0) / max(1e-4, y1 - y0), 0, 1)
-            xf[sel] = p[sel, 0] - sg * band * f
-            xb[sel] = p[sel, 0] - sg * band * (1 - f)
+            # 1:1 (review fix 2: the band squeezed the side's whole depth into a few cm of the front paint, so the
+            # painted edge shading stretched along the side as brown streaks)
+            xf[sel] = p[sel, 0] - sg * _pingpong(p[sel, 1] - y0, band)
+            xb[sel] = p[sel, 0] - sg * _pingpong(y1 - p[sel, 1], band)
             fb[sel] = 1.0 if mode == "back" else _ss(0.30, 0.70, f)
             box |= sel
     zs = p[:, 2].copy()
+    bw = ws.copy()                                   # the box-mapped sample's weight
+    # the pavise frame's rims (outer edge, window edge, top / bottom): the frame's own paint at the middle of its face
+    # width, at the same place round the outline (review fix 2: they sampled the painted outline = dark streaks)
+    if "pavise_frame" in names:
+        sel = (k == names.index("pavise_frame")) & (np.abs(n[:, 1]) < 0.6)
+        if sel.any():
+            fx, fz = p[sel, 0].astype(np.float64), p[sel, 2].astype(np.float64)
+            dfn = lambda x, z: -poly2d(PAV_OUT)(x, z)                      # noqa: E731
+            h = 1e-3
+            d0 = dfn(fx, fz)
+            gx = (dfn(fx + h, fz) - dfn(fx - h, fz)) / (2 * h)
+            gz = (dfn(fx, fz + h) - dfn(fx, fz - h)) / (2 * h)
+            gn = np.maximum(np.hypot(gx, gz), 1e-6)
+            step = PAV_FRAME_W * 0.5 - d0
+            mx, mz = fx + gx / gn * step, fz + gz / gn * step
+            xf[sel], xb[sel], zs[sel] = mx, mx, mz
+            fb[sel] = _ss(PAV_Y - 0.012, PAV_Y + 0.012, p[sel, 1])
+            bw[sel] = 1.0
+            box |= sel
     # up-facing texels of TOPMAP parts: box-mapped from the part's own front paint
     wt = _ss(0.55, 0.85, n[:, 2])
     for name, (z0, z1) in TOPMAP.items():
@@ -787,6 +890,8 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
             sel = k == names.index(name)
             zs[sel] = np.minimum(zs[sel], zmax)
     soft = {s_: pj.blur(plates.img[s_], 2.5) for s_ in ("front", "back")}
+    TOP_IDS = [names.index(nm) for nm in TOPMAP if nm in names]
+    unseen = {}
     cols, bcols = {}, {}
     for side in ("front", "back"):
         px, py = plates.to_px(side, xs, zs)
@@ -797,8 +902,11 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
             hidden = ~(p[:, 1] <= np.nan_to_num(dep, nan=1e9) + eps)
         else:
             hidden = ~(p[:, 1] >= np.nan_to_num(dep, nan=-1e9) - eps)
-        hidden &= ~(wt > 0.5)
+        # only the TOPMAP parts' up-facing texels skip the depth test (they were re-mapped onto their own band);
+        # review fix 2: every up-facing texel used to, so a raised kneecap's top took the white tabard over it
+        hidden &= ~((wt > 0.5) & np.isin(k, TOP_IDS))
         hidden |= off_figure(px, py) & ~np.isin(k, OWN_IDS)
+        unseen[side] = hidden
         for kk in np.unique(k[hidden]):
             f = fills.get((side, int(kk)))
             if f is None:
@@ -823,11 +931,27 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     col = cols["front"] * (1 - wb[:, None]) + cols["back"] * wb[:, None]
     if box.any():
         cbox = bcols["front"] * (1 - fb[box, None]) + bcols["back"] * fb[box, None]
-        w = ws[box, None]
+        w = bw[box, None]
         col[box] = col[box] * (1 - w) + cbox * w
+    # texels no plate shows (under the coat and the tabard): clean cloth instead of a smeared nearest fill (review fix
+    # 1: a lifted panel showed a smeared grey-brown block). The leggings: their own painted median with folds; the
+    # coat's front opening behind the tabard: the coat's shadowed inside
+    never = np.where(wb < 0.5, unseen["front"], unseen["back"])
+    if "legs" in names:
+        il = names.index("legs")
+        sel = k == il
+        vis_l = sel & ~never
+        if vis_l.sum() > 50:
+            med = np.median(col[vis_l], axis=0)
+            hid_l = sel & never
+            col[hid_l] = _cloth_folds(p[hid_l], med * 0.92, axis=2, freq=36.0)
+    if "coat" in names:
+        sel = (k == names.index("coat")) & never & (np.abs(p[:, 0]) < 0.20) & (p[:, 1] > -0.34) & (p[:, 1] < -0.18) & (n[:, 1] < 0.3)
+        if sel.any():
+            col[sel] = _cloth_folds(p[sel], _hex("#3A4450"), axis=0, freq=30.0, amp=0.25)
     # own-material parts
     own = {"spear_head": lambda pp, nn: _glass(pp, nn, "#CFE0EA", 1.3), "spear_shaft": lambda pp, nn: _wood(pp),
-           "neck": _collar}
+           "neck": _collar, "pavise_pane": _pane, "pane_line": _line}
     for name, fn in own.items():
         if name in names:
             sel = k == names.index(name)
@@ -890,10 +1014,24 @@ def _chalk(img_lin, sel, mask, rgb, p):
     img_lin[ii] = img_lin[ii] * (1 - grain[:, None]) + tgt * grain[:, None]
 
 
+def _box_border(q, half, margin, w):
+    """texels on a box's faces lying on a border `margin` inside each face's edges (q = box-local coords)"""
+    ax = np.abs(q)
+    hx, hy, hz = half
+    out = np.zeros(len(q), dtype=bool)
+    near = 0.022
+    for i, (a_, b_) in ((2, (0, 1)), (1, (0, 2)), (0, (1, 2))):
+        face = ax[:, i] > half[i] - near
+        d = np.maximum(ax[:, a_] - (half[a_] - margin), ax[:, b_] - (half[b_] - margin))
+        out |= face & (np.abs(d) < w)
+    return out
+
+
 def _skin_marks(img, maps, names, sid, log=print):
-    """Chalkline: chalk line-work drawn across the pavise frame (two rails + diagonal strokes between them) and the
-    tabard panels (a border and three rising chevrons); First Bell: ten etched hour-marks across the frame (four on
-    each side rail, two on the top), front and back"""
+    """Chalkline: chalk line-work over the dark ink-grey pavise frame (two rails + diagonal strokes on both faces, a
+    line along the rims), the dark tabard panels (a border and three rising chevrons), a hem line round the coat and a
+    drawn border on every face of the pauldrons (seen from any side); First Bell: ten bold etched hour-marks across
+    the frame (four on each side rail, two on the top), cut through the faces and the rims"""
     P, N, part = maps["P"], maps["N"], maps["part"]
     have = part >= 0
     idx = np.nonzero(have)
@@ -901,28 +1039,39 @@ def _skin_marks(img, maps, names, sid, log=print):
     lin = _lin(img[idx])
     drawn = 0
     if "pavise_frame" in names:
-        sel = (k == names.index("pavise_frame")) & (np.abs(n[:, 1]) > 0.6)
+        allf = k == names.index("pavise_frame")
+        sel = allf & (np.abs(n[:, 1]) > 0.6)
         fp = p[sel]
         d = _frame_inside(fp[:, 0], fp[:, 2])
+        rim = allf & (np.abs(n[:, 1]) <= 0.6)
+        rp = p[rim]
         if sid == "ardit_chalkline":
-            rails = (np.abs(d - 0.012) < 0.0038) | (np.abs(d - 0.040) < 0.0038)
+            rails = (np.abs(d - 0.011) < 0.0042) | (np.abs(d - 0.041) < 0.0042)
             u = (fp[:, 0] * 0.8 + fp[:, 2]) / 0.075
-            strokes = (np.abs((u % 1.0) - 0.5) < 0.07) & (d > 0.012) & (d < 0.040)
+            strokes = (np.abs((u % 1.0) - 0.5) < 0.075) & (d > 0.011) & (d < 0.041)
             m = rails | strokes
             _chalk(lin, sel, m, LINEWORK, fp)
-            drawn += int(m.sum())
+            mr = np.abs(rp[:, 1] - PAV_Y) < 0.0045
+            _chalk(lin, rim, mr, LINEWORK, rp)
+            drawn += int(m.sum()) + int(mr.sum())
         elif sid == "ardit_first_bell":
-            m = np.zeros(len(fp), dtype=bool)
             rails_x = (PAV_OUT[0][0] + PAV_FRAME_W / 2, PAV_OUT[1][0] - PAV_FRAME_W / 2)
-            for xr in rails_x:
-                for zc in (0.78, 1.04, 1.30, 1.56):
-                    m |= (np.abs(fp[:, 2] - zc) < 0.0045) & (np.abs(fp[:, 0] - xr) < 0.019)
-            for xc in (0.52, 0.66):
-                m |= (np.abs(fp[:, 0] - xc) < 0.0045) & (np.abs(fp[:, 2] - (PAV_OUT[0][1] - PAV_FRAME_W / 2)) < 0.019)
+            ztop = PAV_OUT[0][1] - PAV_FRAME_W / 2
+
+            def marks(q, reach):
+                m = np.zeros(len(q), dtype=bool)
+                for xr in rails_x:
+                    for zc in (0.80, 1.06, 1.32, 1.58):
+                        m |= (np.abs(q[:, 2] - zc) < 0.0085) & (np.abs(q[:, 0] - xr) < reach)
+                for xc in (0.47, 0.75):
+                    m |= (np.abs(q[:, 0] - xc) < 0.0085) & (np.abs(q[:, 2] - ztop) < reach)
+                return m
             ink = _lin(_hex(HOUR_INK))[None, :]
-            ii = np.nonzero(sel)[0][m]
-            lin[ii] = lin[ii] * 0.25 + ink * 0.75
-            drawn += int(m.sum())
+            for sl, q, reach in ((sel, fp, PAV_FRAME_W / 2 + 0.004), (rim, rp, PAV_FRAME_W / 2 + 0.012)):
+                m = marks(q, reach)
+                ii = np.nonzero(sl)[0][m]
+                lin[ii] = lin[ii] * 0.18 + ink * 0.82
+                drawn += int(m.sum())
     if sid == "ardit_chalkline":
         for nm, sx in (("tabard_R", -1), ("tabard_L", 1)):
             if nm not in names:
@@ -931,12 +1080,29 @@ def _skin_marks(img, maps, names, sid, log=print):
             tp = p[sel]
             xc = sx * 0.086
             ax = np.abs(tp[:, 0] - xc)
-            border = ((np.abs(ax - 0.064) < 0.004) & (tp[:, 2] > 0.665)) | ((np.abs(tp[:, 2] - 0.672) < 0.004) & (ax < 0.068))
+            border = ((np.abs(ax - 0.064) < 0.0045) & (tp[:, 2] > 0.665)) | ((np.abs(tp[:, 2] - 0.672) < 0.0045) & (ax < 0.068))
             chev = np.zeros(len(tp), dtype=bool)
-            for z0 in (0.76, 0.84, 0.92):
-                chev |= (np.abs(tp[:, 2] - (z0 + 0.0 - ax * 0.55)) < 0.0042) & (ax < 0.050)
+            for z0 in (0.78, 0.88, 0.98, 1.08):
+                chev |= (np.abs(tp[:, 2] - (z0 - ax * 0.55)) < 0.0048) & (ax < 0.050)
             m = border | chev
             _chalk(lin, sel, m, LINEWORK, tp)
+            drawn += int(m.sum())
+        if "coat" in names:                          # a hem line round the coat skirt (reads from the back and sides)
+            sel = (k == names.index("coat")) & (np.abs(n[:, 2]) < 0.7)
+            cp = p[sel]
+            m = (np.abs(cp[:, 2] - 0.845) < 0.0048) | (np.abs(cp[:, 2] - 0.875) < 0.0035)
+            _chalk(lin, sel, m, LINEWORK, cp)
+            drawn += int(m.sum())
+        for s_, sx in (("R", -1), ("L", 1)):         # a drawn border on every face of the square pauldrons
+            nm = f"pauldron_{s_}"
+            if nm not in names:
+                continue
+            sel = k == names.index(nm)
+            pp = p[sel]
+            c = np.array([sx * 0.385, 0.0, 1.915])
+            q = (pp - c) @ sdf.rot_y(sx * 8).T
+            m = _box_border(q, (0.148, 0.218, 0.080), 0.048, 0.0045)
+            _chalk(lin, sel, m, LINEWORK, pp)
             drawn += int(m.sum())
     out = img.copy()
     out[idx] = _srgb(lin)
@@ -965,13 +1131,15 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
     out = lin.copy()
     skip = skip or set()
     lum = lambda c: 0.2126 * c[..., 0] + 0.7152 * c[..., 1] + 0.0722 * c[..., 2]  # noqa: E731
+    over = SKIN_PARTS.get(_SKIN["id"], {})
     for i, n in enumerate(names):
         r = roles.get(n)
-        if n in skip or not r or r == "accent" or r not in skin_pal or r not in base_pal:
+        if n in skip or not r or r == "accent" or r not in base_pal or (r not in skin_pal and n not in over):
             continue
-        if str(base_pal[r]).lower() == str(skin_pal[r]).lower():
+        tgt = over.get(n, skin_pal.get(r))
+        if str(base_pal[r]).lower() == str(tgt).lower():
             continue
-        B, S = _lin(_hex(base_pal[r])), _lin(_hex(skin_pal[r]))
+        B, S = _lin(_hex(base_pal[r])), _lin(_hex(tgt))
         gain = np.clip(S / np.maximum(B, 1e-4), 0.05, 8.0)
         yg = float(np.clip(lum(S) / max(1e-4, lum(B)), 0.05, 8.0))
         m = pid == i
@@ -987,7 +1155,7 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             cos = (dt @ db) / np.maximum(nt * nb, 1e-6)
             w = (np.clip(nt / nb, 0, 1) * np.clip(cos, 0, 1))[:, None]
         out[m] = c * (gain[None, :] * w + yg * (1 - w))
-        log(f"  recolour {n} ({r}): {base_pal[r]} -> {skin_pal[r]}, gain {np.round(gain, 2).tolist()}, "
+        log(f"  recolour {n} ({r}): {base_pal[r]} -> {tgt}, gain {np.round(gain, 2).tolist()}, "
             f"luminance {yg:.2f}, role share {float(w.mean()):.2f}")
     return _srgb(out).astype(np.float32)
 
@@ -1108,6 +1276,91 @@ def _install_anim() -> None:
         anim._solve_foot = solve_f
 
 
+    if not getattr(anim.resolve, "_ardit", False):
+        orig_r = anim.resolve
+
+        def resolve(skel, pose):
+            out = orig_r(skel, pose)
+            _place_items(skel, out)
+            return out
+        resolve._ardit = True
+        anim.resolve = resolve
+    if not getattr(anim.write_action, "_ardit", False):
+        orig_w = anim.write_action
+
+        def write_action(arm, name, poses, bones=None):
+            act = orig_w(arm, name, poses, bones)
+            _write_slides(arm, act, poses)
+            return act
+        write_action._ardit = True
+        anim.write_action = write_action
+
+
+def _cl(x):
+    return max(0.0, min(1.0, float(x)))
+
+
+def _place_items(skel, pose) -> None:
+    """after the IK: the items' own bones (x_pavise / x_spear) from the pose keys
+      pav_w = (w_rot, w_loc, 0): how much the pavise follows pav_dir / pav_face (its up axis and pane facing, armature
+              space) instead of the fist, and how much its prop.L-local point pav_hang is moved onto the fist centre;
+      spr_w = (w, 0, 0): the spear slid down through the fist until its butt stands on the ground (grounded).
+    The bones' translations go out as `<bone>_loc` (bone-local metres; written by _write_slides)."""
+    w = pose.get("pav_w")
+    if w is not None and (w[0] > 1e-3 or w[1] > 1e-3):
+        M = skel.fk(pose)
+        Mp = M["prop.L"]
+        Rp = Mp.to_3x3().normalized()
+        Rl = Matrix.Identity(3)
+        d = V(pose.get("pav_dir", (0.0, 0.0, 1.0)))
+        f = V(pose.get("pav_face", FRONT))
+        if w[0] > 1e-3 and d.length > 1e-6:
+            Y = d.normalized()
+            Z = f - Y * f.dot(Y)
+            Z = Z.normalized() if Z.length > 1e-6 else Y.orthogonal().normalized()
+            X = Y.cross(Z).normalized()
+            Rd = Matrix((X, Y, Z)).transposed()
+            q = (Rp.transposed() @ Rd).to_quaternion()
+            q = Quaternion().slerp(q, _cl(w[0]))
+            Rl = q.to_matrix()
+            e = Rl.to_euler("XYZ", Euler((0.0, 0.0, math.pi * 0.5)))
+            pose[SLIDE["L"]] = tuple(math.degrees(a) for a in e)
+        if w[1] > 1e-3 and "pav_hang" in pose:
+            h = V(pose["pav_hang"])
+            Ra = Rp @ Rl                                  # the pavise's world frame
+            if w[2] > 1e-3 and Ra[2][1] > 0.5:            # slide it in the fist until its foot stands on the ground
+                fl = V(PAV_FOOT_L)
+                hy = fl.y + (Mp.translation.z + Ra[2][0] * (fl.x - h.x) + Ra[2][2] * (fl.z - h.z) - 0.004) / Ra[2][1]
+                h.y = h.y + (hy - h.y) * _cl(w[2])
+            t = -(Rl @ h)
+            pose[SLIDE["L"] + "_loc"] = tuple(float(c) * _cl(w[1]) for c in t)
+    sw = pose.get("spr_w")
+    if sw is not None and sw[0] > 1e-3:
+        Mr = skel.fk(pose)["prop.R"]
+        ax = Mr.to_3x3().col[1].normalized()
+        if ax.z > 0.3:
+            d = max(0.0, (Mr.translation.z - 0.004) / ax.z - SPEAR_BUTT)
+            pose[SLIDE["R"] + "_loc"] = (0.0, -d * _cl(sw[0]), 0.0)
+
+
+def _write_slides(arm, act, poses) -> None:
+    """location keys for the items' own bones (the shared writer keys rotations + the hips' location only)"""
+    try:
+        strip = act.layers[0].strips[0]
+        cb = strip.channelbag(act.slots[0], ensure=True)
+    except (AttributeError, IndexError):
+        return
+    n = len(poses)
+    for b in SLIDE.values():
+        key = b + "_loc"                     # keyed in EVERY clip (zeros if unused): an unkeyed channel would keep
+        for i in range(3):                   # the last clip's slide in the player
+            fc = anim._new_fcurve(cb, f'pose.bones["{b}"].location', i, b)
+            fc.keyframe_points.add(n)
+            fc.keyframe_points.foreach_set("co", [c for f, p in enumerate(poses) for c in (f, p.get(key, (0, 0, 0))[i])])
+            fc.keyframe_points.foreach_set("interpolation", [1] * n)
+            fc.update()
+
+
 _install_anim()
 
 
@@ -1197,13 +1450,24 @@ RUN_PAV = (0.10, -0.20, 0.975)                  # the pavise's axis in the run: 
 RUN_FACE = (0.62, -0.78, 0.0)                   # its pane turned out 38 deg (edge-on enough to keep the legs clear)
 
 
+RUN_LIFT, RUN_PITCH = 0.58, 0.70               # the shared swing's foot lift / toe pitch scaled (a heavy, low run)
+
+
 def gen_run() -> anim.Clip:
+    """the shared run (exact planted-foot speed: the contact phase is untouched) with the swing foot carried LOWER
+    (review fix 1: the 0.36 m ankle lift raised his thigh to belt height, a goose-step that ballooned the coat)"""
     c = anim.gen_run(MOTION)
     base = c.sample
 
     def sample(t):
         p = anim.add(base(t), RUN_LEAN)
         ik = dict(p["ik"])
+        for side in ("L", "R"):
+            ft = ik.get(f"foot.{side}")
+            if ft is not None and ft.ankle[2] > 1e-4:
+                a = ft.ankle
+                k = 1.0 - (1.0 - RUN_PITCH) * min(1.0, a[2] / 0.06)          # continuous into the contact
+                ik[f"foot.{side}"] = FT((a[0], a[1], a[2] * RUN_LIFT), ft.pitch * k, ft.yaw, ft.toe, ft.knee, ft.weight)
         a = ik.get("aim.R")
         if a is not None:
             ik["aim.R"] = AimRoll(a.dir, a.weight, FRONT)
@@ -1332,30 +1596,48 @@ def gen_glare() -> anim.Clip:
     return clip("cast_a2", 30, keys, impact=anim.IMPACT, lags={"head": 1.5})
 
 
+def lh_free(v=None, pos=None, pole=POLE_L) -> dict:
+    """the left hand placed by IK with NO aim (the fist keeps its natural set on the forearm: no wrist twist); the
+    pavise is then oriented by pav_keys"""
+    ht = HT(rel=tuple(float(c) / L_L for c in v), pole=tuple(pole)) if v is not None else HT(pos=tuple(pos), pole=tuple(pole))
+    return {"hand.L": ht, "aim.L": AimRoll(PAV0, 0.0, FRONT)}
+
+
+SPIRE_DOWN = (0.05, -0.04, -0.998)
+
+
 def gen_spire_strike() -> anim.Clip:
-    """cast_a3 Spire Strike, 25 f, impact f10: the pavise cartwheeled up over his left side in the left fist (lying
-    flat above his head at f5: a tall pale T) and on over until it hangs overhead with the spire tip pointing down; the
-    knees bend and at f10 he drives the spire tip into the ground beside his left foot (the VFX strike point, 0.75 m to
-    his left); the pane trembles but stays rigid; he pulls it up overhead and wheels it back over to guard by f25 (the
-    same path reversed: the pavise never swings through his body)"""
+    """cast_a3 Spire Strike, 25 f, impact f10: the pavise cartwheeled up over his left side (lying flat above his head
+    at f5: a tall pale T) and on over until it hangs overhead with the spire tip pointing down; the knees bend and at
+    f10 he drives the spire tip into the ground at his left; the pane trembles but stays rigid; he pulls it up
+    overhead and wheels it back over to guard by f25 (the same path reversed: it never swings through his body).
+    From overhead to the strike the pavise keeps its spire-down set in the world while the arm comes down, so the fist
+    keeps its natural set on the forearm (review fix 7: aiming the spire down from a lowered arm turned the fist
+    ~130 deg into the bracer)"""
     g = G()
     lean_r = anim.P(spine=(0, 0, 3.0), chest=(0, 0, 4.0))       # the chest tipped to his right (+Z = his right)
-    tee = pz(lean=-2.0, yaw=4.0, drop=-0.01, dy=0.02, look=(-8.0, 0.0, 0.0), extra=lean_r,
-             R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
-             L=lh((0.16, -0.12, 0.55), aim=(0.995, 0.0, 0.10), face=FRONT, pole=(0.9, 0.1, -0.2)))
-    up_ = pz(lean=-4.0, yaw=6.0, drop=-0.01, dy=0.03, look=(-10.0, 0.0, 0.0), extra=lean_r,
-             R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
-             L=lh((0.10, -0.20, 0.54), aim=(0.10, -0.06, -0.99), face=FRONT, pole=(0.9, 0.1, -0.2)))
-    hit = pz(lean=14.0, yaw=8.0, drop=0.24, dx=0.05, dy=-0.02, look=(4.0, 0.0, 0.0), feet=FEET_WIDE,
-             extra=anim.P(spine=(0, 0, -3.0), chest=(0, 0, -4.0)),
-             R=rh(REST_R + np.array([0.02, -0.06, 0.06]), aim=(-0.14, -0.20, 0.97)),
-             L=lh((0.22, -0.16, -0.50), aim=(0.04, -0.06, -0.997), face=FRONT, pole=(0.9, 0.3, -0.1)))
+    tee = with_(pz(lean=-2.0, yaw=4.0, drop=-0.01, dy=0.02, look=(-8.0, 0.0, 0.0), extra=lean_r,
+                   R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
+                   L=lh((0.16, -0.12, 0.55), aim=(0.995, 0.0, 0.10), face=FRONT, pole=(0.9, 0.1, -0.2))),
+                pav_keys(0.0, 0.0, SPIRE_DOWN))
+    up_ = with_(pz(lean=-4.0, yaw=6.0, drop=-0.01, dy=0.03, look=(-10.0, 0.0, 0.0), extra=lean_r,
+                   R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
+                   L=lh_free((0.12, -0.20, 0.54), pole=(0.9, 0.1, -0.2))),
+                pav_keys(1.0, 0.0, SPIRE_DOWN))
+    hit = with_(pz(lean=14.0, yaw=8.0, drop=0.20, dx=0.06, dy=-0.02, look=(4.0, 0.0, 0.0), feet=FEET_WIDE,
+                   extra=anim.P(spine=(0, 0, -4.0), chest=(0, 0, -5.0)),
+                   R=rh(REST_R + np.array([0.02, -0.06, 0.06]), aim=(-0.14, -0.20, 0.97)),
+                   L=lh_free(A3_REL, pole=(0.9, 0.3, 0.1))),
+                pav_keys(1.0, 0.0, SPIRE_DOWN))
     tremble = anim._with_hips(anim.lerp_pose(hit, up_, -0.03), (0.0, 0.0, -0.01))
-    pull = anim._with_hips(anim.lerp_pose(up_, hit, 0.35), (0.0, 0.0, 0.0))
+    pull = anim.lerp_pose(up_, hit, 0.35)
     keys = [(0.0, g, "linear"), (0.07, anim._with_hips(g, (0, 0, -0.02)), "inout"), (0.20, tee, "inout"),
             (0.30, up_, "out"), (anim.IMPACT, hit, "accel"), (0.48, tremble, "out"), (0.54, hit, "inout"),
             (0.66, pull, "inout"), (0.80, tee, "inout"), (1.0, g, "inout")]
     return clip("cast_a3", 25, keys, impact=anim.IMPACT, lags={"head": 1.0})
+
+
+A3_REL = np.array([0.24, -0.14, -0.44])         # the left wrist at the strike (the spire tip ~0.97 below the fist)
 
 
 def gen_muster() -> anim.Clip:
@@ -1479,26 +1761,70 @@ def gen_idle_lobby() -> anim.Clip:
     return anim.Clip("idle_lobby", N, True, sample)
 
 
+# the pavise / spear in the grip (see _place_items): the pavise's own frame where a clip sets it apart from the fist
+PAV_FOOT_L = (PAV_OUT[3][0] - F_L[0], PAV_OUT[3][1] - F_L[2], -(PAV_Y - F_L[1]))     # its foot point, prop.L-local
+PAV_TOP_Y = PAV_OUT[0][1] - F_L[2]                                                  # its top edge, prop.L-local y
+SPEAR_BUTT = -SPEAR_S["butt"] + 0.010                                               # the butt below the fist (m)
+
+
+def pav_keys(w_rot, w_loc, dir_=PAV0, face=FRONT, hang=(0.0, 0.0, 0.0), ground=0.0) -> dict:
+    """the pavise's own frame: w_rot = how much it takes the world axis / pane facing (dir_, face) instead of the
+    fist's; w_loc = how much the prop.L-local point `hang` of the pavise is moved onto the fist centre (the fist
+    let go of the handle and rests elsewhere on it); ground = how much hang's y is re-solved so that the pavise's
+    foot stands on the ground"""
+    return {"pav_w": (float(w_rot), float(w_loc), float(ground)), "pav_dir": tuple(_n(dir_)), "pav_face": tuple(_n(face)),
+            "pav_hang": tuple(float(c) for c in hang)}
+
+
+def spr_keys(w) -> dict:
+    """w = how much the spear slides down through the fist until its butt stands on the ground"""
+    return {"spr_w": (float(w), 0.0, 0.0)}
+
+
+def with_(p, *extra) -> dict:
+    out = dict(p)
+    for e in extra:
+        out.update(e)
+    return out
+
+
+VIC_FEET = feet_(l=(0.03, -0.06, 0.0), r=(-0.12, 0.05, 0.0), yl=-4.0, yr=-24.0)
+VIC_PAV = (0.07, 0.0, 0.9975)                      # standing on its foot, the top leaning out 4 deg
+VIC_FACE = _yawd(FRONT, -12.0)                     # the pane turned a little toward the camera's side
+VIC_HANG = (-0.10, PAV_TOP_Y + 0.064, PAV_FOOT_L[2])          # the fist on the top edge, between the corner and the spire
+VIC_REL_L = np.array([0.33, -0.02, -0.20])        # the left wrist over the planted pavise's top edge (from the shoulder)
+
+
 def gen_victory() -> anim.Clip:
-    """he steps out from behind the pavise for the first time, sets it down at his left and tilts it so the sun passes
-    across his visor. Final hold: the pavise low at his left, the spear upright at his right, chin up, the visor in
-    the light, a quarter turned from the camera (50 f, hold)"""
+    """he steps out from behind the pavise for the first time and sets it down: it stands on its own foot at his left
+    and his left fist comes to rest on its top edge; the spear slides down through the right fist until its butt is
+    grounded beside the right boot. Final hold: chin up, the visor catching the light, a quarter turned from the
+    camera, a wall that has turned to face the morning (50 f, hold)"""
     g = G()
     behind = pz(lean=4.0, yaw=6.0, drop=0.05, L=lh((-0.18, -0.30, -0.40), face=_yawd(FRONT, 6.0)))
-    out_ = pz(lean=2.0, yaw=-10.0, drop=0.05, dx=-0.10, feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.14, 0.02, 0.04), yl=-8.0,
-                                                                   yr=-20.0),
-              L=lh((0.12, -0.10, -0.55), aim=(0.12, 0.0, 0.99), face=_yawd(FRONT, -6.0)))
-    hold = pz(lean=-8.0, yaw=-26.0, drop=0.03, dx=-0.10, look=(-26.0, 16.0, 0.0),
-              feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.16, 0.06, 0.0), yl=-18.0, yr=-30.0),
-              R=rh(REST_R + np.array([0.02, -0.04, 0.02]), aim=(-0.10, -0.06, 0.99)),
-              L=lh((0.14, -0.14, -0.50), aim=(0.26, 0.30, 0.92), face=(-0.45, -0.75, 0.48)))
-    keys = [(0.0, g, "linear"), (0.16, behind, "inout"), (0.40, out_, "inout"), (0.66, hold, "out"), (1.0, hold, "linear")]
+    out_ = pz(lean=2.0, yaw=-12.0, drop=0.06, dx=-0.08, feet=VIC_FEET,
+              R=rh(REST_R + np.array([0.02, -0.03, 0.0]), aim=(-0.08, -0.04, 0.996)),
+              L=lh((0.14, -0.16, -0.52), aim=(0.06, 0.0, 0.998), face=_yawd(FRONT, -8.0)))
+    plant = with_(pz(lean=8.0, yaw=-14.0, drop=0.14, dx=-0.08, look=(6.0, 0.0, 0.0), feet=VIC_FEET,
+                     R=rh(REST_R + np.array([0.03, -0.04, -0.02]), aim=(-0.06, -0.03, 0.998)),
+                     L=lh((0.22, -0.12, -0.58), aim=VIC_PAV, face=VIC_FACE)),
+                  pav_keys(1.0, 1.0, VIC_PAV, VIC_FACE, ground=1.0), spr_keys(1.0))
+    lift = with_(pz(lean=0.0, yaw=-16.0, drop=0.06, dx=-0.08, look=(-8.0, 4.0, 0.0), feet=VIC_FEET,
+                    R=rh(REST_R + np.array([0.03, -0.04, 0.0]), aim=(-0.05, -0.03, 0.998)),
+                    L=lh_free(VIC_REL_L + np.array([0.0, 0.03, -0.06]))),
+                 pav_keys(1.0, 1.0, VIC_PAV, VIC_FACE, (VIC_HANG[0], VIC_HANG[1] - 0.10, 0.0), ground=1.0), spr_keys(1.0))
+    hold = with_(pz(lean=-6.0, yaw=-18.0, drop=0.03, dx=-0.08, look=(-22.0, 12.0, 0.0), feet=VIC_FEET,
+                    R=rh(REST_R + np.array([0.03, -0.04, 0.0]), aim=(-0.05, -0.03, 0.998)),
+                    L=lh_free(VIC_REL_L)),
+                 pav_keys(1.0, 1.0, VIC_PAV, VIC_FACE, VIC_HANG, ground=1.0), spr_keys(1.0))
+    keys = [(0.0, g, "linear"), (0.16, behind, "inout"), (0.36, out_, "inout"), (0.48, plant, "in"),
+            (0.58, lift, "inout"), (0.68, hold, "out"), (1.0, hold, "linear")]
     base = anim.drag(anim.keyed(keys), 50, {"head": 2.0, "neck": 1.0})
 
     def sample(t):
         p = base(t)
-        if t > 0.66:
-            k = min(1.0, (t - 0.66) / 0.15)
+        if t > 0.68:
+            k = min(1.0, (t - 0.68) / 0.15)
             p = anim.add(p, anim.P(chest=(0.8 * k * anim.osc(t, 2), 0, 0)))
         return p
 

@@ -50,9 +50,11 @@ def main():
         sys.modules["ardit_spec"] = K                 # dataclasses in the module need it registered
         spec.loader.exec_module(K)
         want = {v[6] for v in views if len(v) > 6}
-        clips = {k: c for k, c in K.clip_overrides(SimpleNamespace(info=SimpleNamespace(armature=arm), chains={})).items()
-                 if k in want}
-        anim.write_clips(arm, clips, [])
+        ctx = SimpleNamespace(info=SimpleNamespace(armature=arm), chains={})
+        for s_ in ("l", "r"):
+            ctx.chains[f"tabard_{s_}"] = sorted(b.name for b in arm.data.bones if b.name.startswith(f"x_tabard_{s_}_"))
+        clips = {k: c for k, c in K.clip_overrides(ctx).items() if k in want}
+        anim.write_clips(arm, clips, K.chain_config(ctx))
     for o in sc.objects:
         if o.type == "MESH":
             o.hide_render = not (o.parent == arm or o.name.startswith(("ardit", "form_")))

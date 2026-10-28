@@ -189,7 +189,7 @@ def lan_z(dz):
 # ── the hat, the head (painted placement: the mask's centre is 1.7 cm right of the axis) ──────────────────
 MX = -0.017                                        # the mask's centre line (as painted)
 KX = -0.006                                        # the beak keel's centre line (as painted)
-HAT_C = np.array([-0.006, 0.012])
+HAT_C = np.array([0.0, 0.012])               # on the mirror plane (the symmetric decimate left pinholes off it)
 HAT_R, HAT_EDGE, HAT_RISE, HAT_T = 0.355, 1.946, 0.095, 0.026
 
 
@@ -431,9 +431,9 @@ def sculpts() -> list:
         band = 0.0022 * np.exp(-((r - 0.322) / 0.0055) ** 2) * (z > zm)
         return (d - band) * 0.93
     hat = Sculpt("hat")
-    hat.add(Lathe((HAT_C[0], HAT_C[1], 0.0), hat_prof, HAT_R + 0.01, 1.90, 2.08).displaced(felt(0.0007, 18.0), 0.0007), k=0.0)
+    hat.add(Lathe((HAT_C[0], HAT_C[1], 0.0), hat_prof, HAT_R + 0.01, 1.90, 2.08), k=0.0)
     hat.add(Sphere((HAT_C[0], HAT_C[1], 2.032), 0.026), k=0.03)
-    part("hat", hat, "cloth2", "bone:x_hat", 2300, 0.6, uvw=1.5)
+    part("hat", hat, "cloth2", "bone:x_hat", 2800, 0.6, uvw=1.5)
 
     # HOOD: a lavender column from under the hat to the scarf, framing the mask (the painted outline cut out in
     # front, a rolled edge round it); rigid on the head above the chin, blending to the neck and chest below
@@ -719,6 +719,57 @@ def skin_extras(extra: dict) -> list:
 _BUILD: dict = {}
 
 
+def hat_profile() -> list:
+    """the hat's game-mesh profile (r, z) from the crown down the top, round the edge roll, back along the underside
+    and in under the crown (to the axis)"""
+    pts = [(0.0, hat_top(0.0) + 0.006)]
+    for u in (0.02, 0.05, 0.09, 0.14, 0.20, 0.27, 0.35, 0.44, 0.53, 0.62, 0.71, 0.79, 0.86, 0.92, 0.965):
+        r = u * (HAT_R - 0.010)
+        pts.append((r, hat_top(r) + (0.006 * max(0.0, 1 - r / 0.03))))
+    zt = hat_top(HAT_R - 0.010)
+    c = (HAT_R - 0.010, zt - HAT_T * 0.5)
+    for a in (60.0, 25.0, -10.0, -45.0, -80.0):
+        t = math.radians(a)
+        pts.append((c[0] + 0.0115 * math.cos(t), c[1] + HAT_T * 0.5 * math.sin(t)))
+    for u in (0.94, 0.86, 0.76, 0.66, 0.56, 0.48):
+        r = u * (HAT_R - 0.010)
+        pts.append((r, hat_top(r) - HAT_T))
+    pts += [(0.168, 1.962), (0.12, 1.958), (0.0, 1.958)]
+    return pts
+
+
+def hat_low(ctx, mat, seg: int = 72):
+    """the hat's game mesh as a clean lathe (the decimated SDF shell left 1-px pinholes on the broad top in three);
+    the SDF sculpt stays the bake source for its normals"""
+    import bmesh
+    bm = bmesh.new()
+    rings = []
+    for r, z in hat_profile():
+        if r < 1e-6:
+            rings.append([bm.verts.new((HAT_C[0], HAT_C[1], z))])
+        else:
+            rings.append([bm.verts.new((HAT_C[0] + r * math.cos(2 * math.pi * j / seg),
+                                        HAT_C[1] + r * math.sin(2 * math.pi * j / seg), z)) for j in range(seg)])
+    for A, B in zip(rings[:-1], rings[1:]):
+        for j in range(seg):
+            if len(A) == 1:
+                bm.faces.new((A[0], B[(j + 1) % seg], B[j]))
+            elif len(B) == 1:
+                bm.faces.new((A[j], A[(j + 1) % seg], B[0]))
+            else:
+                bm.faces.new((A[j], A[(j + 1) % seg], B[(j + 1) % seg], B[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new("hat_low")
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    ob = bpy.data.objects.new("hat_low", me)
+    ctx.col.objects.link(ob)
+    ob.data.materials.append(mat)
+    return ob
+
+
 def model(ctx) -> list:
     P = []
     extra = (ctx.skin or {}).get("extra") or {}
@@ -728,6 +779,9 @@ def model(ctx) -> list:
         v, q = S.mesh(VOXEL * vs)
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
+        if name == "hat":
+            P.append(fighter.Part(name, high=ob, low=hat_low(ctx, ctx.mats[role]), bind=bind, uv_weight=uvw))
+            continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind, uv_weight=uvw))
     return P
 
@@ -923,7 +977,7 @@ _pipeline.bind_part = _bind_part
 
 
 # ── paint (project.paint wrapper) ──────────────────────────────────────────────────────────────────────
-PROC = ("hat", "crook_shaft", "crook_grip", "crook_ferrule", "lantern_ring", "lantern_frame", "lantern_glass",
+PROC = ("hat", "boots", "trousers", "crook_shaft", "crook_grip", "crook_ferrule", "lantern_ring", "lantern_frame", "lantern_glass",
         "hand_R", "hand_L", "toecaps", "buckle", "almanac_pages", "almanac_cords")
 BACK_MATCH = 0.85
 # z / 2.0 -> linear gain: the light head (hat, mask) and the darker coat skirt toward the boots (brief §6)
@@ -1224,6 +1278,18 @@ def _glove_paint(p, n, frame, curl):
     return c
 
 
+def _boot_paint(p, n):
+    """plain dark-brown leather boots (the projection sampled the pale floor round the painted boots): lit tops and
+    shins, a darker sole edge, creases over the instep, the turned top band"""
+    base = _lin(_hex("#3B2B27"))
+    z = p[:, 2]
+    crease = np.clip(np.sin(z * 260.0 + 3.0 * NOISE(p, 12.0)), 0, 1) ** 6 * ss(0.05, 0.08, z) * (1 - ss(0.12, 0.16, z))
+    sole = 1 - ss(0.006, 0.020, z)
+    band = ss(0.212, 0.220, z)
+    k = _lam(n, 0.72, 0.45) * (1 - 0.25 * crease) * (1 - 0.45 * sole) * (1 + 0.10 * band) * (1 + 0.10 * _fbm(p, 35.0))
+    return base[None, :] * k[:, None]
+
+
 def _lantern_frame_paint(p, n):
     c = _lin(_hex("#5E4234"))[None, :] * (1 + 0.12 * _fbm(p * np.array([1, 1, 4.0]), 30.0))[:, None]
     edge = ss(0.5, 0.95, np.abs(n[:, 2]))
@@ -1268,9 +1334,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         "lantern_ring": _lantern_frame_paint, "lantern_frame": _lantern_frame_paint, "lantern_glass": _lantern_glass_paint,
         "hand_R": lambda pp, nn: _glove_paint(pp, nn, HAND_R_FRAME, 1.0),
         "hand_L": lambda pp, nn: _glove_paint(pp, nn, HAND_L_FRAME, LEFT_CURL),
-        "toecaps": lambda pp, nn: _stone_paint(pp, nn, "#47434B", 0.12),
+        "toecaps": lambda pp, nn: _stone_paint(pp, nn, "#2F2B31", 0.12),
+        "boots": _boot_paint, "trousers": lambda pp, nn: _leather_paint(pp, nn, "#2A2228"),
         "buckle": lambda pp, nn: _stone_paint(pp, nn, "#4B3A31", 0.10),
-        "almanac_pages": lambda pp, nn: _stone_paint(pp, nn, "#D8CDB4", 0.05),
+        "almanac_pages": lambda pp, nn: _stone_paint(pp, nn, "#BDB39C", 0.05),
         "almanac_cords": lambda pp, nn: _leather_paint(pp, nn, "#4A3730"),
     }
     for name, fn in procs.items():
@@ -1379,10 +1446,12 @@ _project.paint = _paint
 # detail keep their relationships); the coat parts follow the cloth role's own change. Highrim: a wind-carved
 # grain across the hat (light and dark streaks flowing one way, ~6 %); Almanac: printed tables on the hat (rings and
 # spokes of ruled cells with tick 'figures', ink at 60 %), printed pages on the crook.
+# targets are the parts' painted MEDIANS: the brief's identity hexes x the base's own albedo-to-brief ratio (the base hat
+# paints at 0.70 x the brief's #CAC5D4 in linear light, so it reads L* ~80 under the game's top light, not white)
 SKIN_PARTS = {
-    "dunsom_highrim": {"hat": "#CDBB9C", "scarf": "#A69477", "crook_shaft": "#BFAE95"},
-    "dunsom_almanac": {"hat": "#D8CDB4", "scarf": "#B3A891", "crook_shaft": "#3A342E", "lantern_frame": "#2E2A26",
-                       "lantern_ring": "#2E2A26", "buckle": "#2E2A26"},
+    "dunsom_highrim": {"hat": "#AF9F85", "scarf": "#9A8A70", "crook_shaft": "#8F8476"},
+    "dunsom_almanac": {"hat": "#B8AF99", "scarf": "#A39A86", "crook_shaft": "#2E2A26", "lantern_frame": "#2E2A26",
+                       "lantern_ring": "#2E2A26", "buckle": "#2E2A26", "crook_ferrule": "#262326"},
 }
 SKIN_CLOTH = {"dunsom_almanac": ("#85818F", "#7D7185", ("coat_top", "skirt", "sleeve_L", "sleeve_R", "hood"))}
 INK_HEX = "#3A342C"
@@ -2033,10 +2102,16 @@ def clip_overrides(ctx) -> dict:
                  fk=dict(prop_R=(0, TWIST_OUT * 0.5, 0)))
     lift = pose(torso=dict(spine=(-3, 0, 0), chest=(-6, -4, 0), neck=(-4, 0, 0), head=(-10, -6, 0)),
                 R=(-0.30, -0.36, 0.60), aim=(-0.22, -0.08, 0.97), L=(0.20, -0.20, -0.70), fk=dict(prop_R=(0, TWIST_OUT, 0)))
-    brim = (0.40, -0.30, 0.82)                  # the left hand up at the brim's left side (tipping the hat)
-    bow = pose(torso=dict(hips=(14, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), neck=(2, 0, 0), head=(0, 0, 0)),
-               hips=(0, 0.06, -0.02), R=(-0.42, -0.42, -0.22), aim=(-0.06, -0.05, 1.0), L=brim, Lp=(0.9, 0.2, -0.3),
-               fk=dict(hand_L=(0, -20, 10), prop_R=(0, TWIST_OUT, 0)))
+    bow_t = dict(hips=(16, 0, 0), spine=(12, 0, 0), chest=(10, 0, 0), neck=(4, 0, 0), head=(4, 0, 0))
+    bow0 = pose(torso=bow_t, hips=(0, 0.06, -0.02), R=(-0.42, -0.42, -0.22), aim=(-0.06, -0.05, 1.0),
+                fk=dict(prop_R=(0, TWIST_OUT, 0)))
+    # the left hand on the brim's front-left edge: found on the bowed (half-levelled) hat, the wrist 11 cm under it
+    rb = anim.resolve(skel, dict(level(lambda t: bow0)(0.0)))
+    Mh = skel.fk(rb)["x_hat"]
+    brim_pt = Mh @ V((0.25, -0.012, 0.17))
+    bow = pose(torso=bow_t, hips=(0, 0.06, -0.02), R=(-0.42, -0.42, -0.22), aim=(-0.06, -0.05, 1.0),
+               Lpos=tuple(brim_pt - V((0.0, 0.0, 0.11))), Lp=(0.9, 0.2, -0.3),
+               fk=dict(hand_L=(-10, -20, 30), prop_R=(0, TWIST_OUT, 0)))
     k = [(0.0, G, "linear"), (0.14, plant, "inout"), (0.30, lift, "inout"), (0.45, lift, "linear"),
          (0.62, anim.lerp_pose(lift, bow, 0.5), "inout"), (0.80, bow, "out"), (1.0, bow, "linear")]
     vic = anim.keyed(k)
