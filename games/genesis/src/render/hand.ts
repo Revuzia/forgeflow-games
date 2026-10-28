@@ -645,22 +645,26 @@ void main() {
   float vis = fxSoft(vZ, 0.5);
   if (vis <= 0.0) discard;
   float x = abs(vSide);
-  // (a filament of light in its own glow: a broad bright core over most of the strip read as a lit white tube — at
-  // night the fork's three strokes were three plastic bars)
-  float core = exp(-x * x * 18.0), halo = exp(-x * x * 3.2) * (1.0 - smoothstep(0.7, 1.0, x));
+  // a thread of light about a pixel wide in a broad glow of its own colour. (A broad bright core read as a lit white
+  // tube: at night the fork's strokes were plastic bars; at dusk, near-white over most of the strip, two hard white
+  // rods hung in the air. The thread is now thin and never brighter than its colour; the glow carries the shape.)
+  float core = exp(-x * x * 48.0), halo = exp(-x * x * 4.0) * (1.0 - smoothstep(0.75, 1.0, x));
   float drawn = 1.0 - smoothstep(uTrace - 0.004, uTrace + 0.004, vT);
   float head = exp(-pow((vT - uTrace) / 0.025, 2.0)) * (1.0 - step(0.999, uTrace));
-  // (below the tone curve's shoulder, its colour deepened at the line's heart: brighter, the regard's gold — or a feared
-  // god's cold blue — burned to a white thread)
-  // (and nearly display-referred: drawn as physical light it blazed into a white bar at dusk, when the view's exposure
-  // opens up, while it read right by day)
-  float k = (core * 0.78 + halo * 0.2) * drawn + head * (core * 1.95 + halo * 0.5);
+  // (the light runs along the stroke, from where it began toward its head: beads of brightness, never a steady rod)
+  float flow = 0.6 + 0.4 * sin(vT * 150.0 - uTouchT * 9.0) * (0.55 + 0.45 * sin(vT * 41.0 + uTouchT * 2.3));
+  float ends = smoothstep(0.0, 0.035, vT);
+  float kc = core * 0.55 * flow * drawn * ends + head * core * 1.3;
+  float kh = halo * 0.2 * (0.75 + 0.25 * flow) * drawn * ends + head * halo * 0.45;
+  // the regard's gold — or a feared god's cold blue — saturated in the glow (cubed): the tone curve and the bloom
+  // pale a light colour to white, so the hue lives in the glow round the thread
   vec3 col = mix(uCol, uRim, uDark * 0.75);
-  col = mix(col, col * col, 0.35 * core) + vec3(0.3) * head * core;
+  vec3 deep = col * col * col;
+  vec3 c = col * kc + deep * kh * 1.6 + vec3(0.22) * head * core;
   // (the air behind the line a little veiled: against a bright sky light added alone summed to a white thread and the
   // glyph's shape and colour were lost; over the night it changes nothing)
-  float veil = clamp(halo * 0.22 + core * 0.2, 0.0, 0.38) * max(drawn, head) * uGlyphK * uPres * vis;
-  gl_FragColor = vec4(col * k * uGlyphK * uPres * vis * fxDisplay(0.92), veil);
+  float veil = clamp(halo * 0.2 + core * 0.1, 0.0, 0.32) * max(drawn, head) * ends * uGlyphK * uPres * vis;
+  gl_FragColor = vec4(c * uGlyphK * uPres * vis * fxDisplay(0.92), veil);
 }
 `;
 const CRACKLE_FRAG = /* glsl */ `
@@ -1500,7 +1504,7 @@ export class HandVisual {
     const pos = this.glyphGeo.getAttribute('position') as BufferAttribute;
     const cam = f.camBody;
     const wpx = f.fov && f.viewH ? Math.tan((f.fov * Math.PI) / 360) * 2 / f.viewH : 0.002;
-    const n = TOUCH_N.glyph, st = sg.stroke;
+    const n = TOUCH_N.glyph, st = sg.stroke, tw = this.u.uTouchT.value;
     for (let i = 0; i < n; i++) {
       const j0 = Math.max(0, i - 1), j1 = Math.min(n - 1, i + 1);
       const px = cx + (right.x * st[i * 2] + up.x * st[i * 2 + 1]) * G, py = cy + (right.y * st[i * 2] + up.y * st[i * 2 + 1]) * G, pz = cz + (right.z * st[i * 2] + up.z * st[i * 2 + 1]) * G;
@@ -1509,12 +1513,14 @@ export class HandVisual {
       const tl = Math.hypot(tx, ty) || 1;
       const sx = -ty / tl, sy = tx / tl;
       const d = Math.hypot(cam.x - px, cam.y - py, cam.z - pz);
-      // (the line's core two or three pixels wide at any distance, its glow round it: at 2.5 px of strip it was a
-      // one-pixel thread)
-      const w = Math.max(L * 0.05, d * wpx * 5.5);
+      // (the strip ±7 px at any distance: a one-pixel thread at its heart, its glow round it)
+      const w = Math.max(L * 0.05, d * wpx * 7);
+      // (the line wavers a little in its plane, as drawn light would: a ruler-straight stroke read as a rod)
+      const wob = G * 0.02 * (0.6 * Math.sin(i * 0.43 + tw * 7.3) + 0.4 * Math.sin(i * 1.31 - tw * 11.7));
+      const qx = px + (right.x * sx + up.x * sy) * wob, qy = py + (right.y * sx + up.y * sy) * wob, qz = pz + (right.z * sx + up.z * sy) * wob;
       const ox = (right.x * sx + up.x * sy) * w, oy = (right.y * sx + up.y * sy) * w, oz = (right.z * sx + up.z * sy) * w;
-      pos.setXYZ(i * 2, px + ox, py + oy, pz + oz);
-      pos.setXYZ(i * 2 + 1, px - ox, py - oy, pz - oz);
+      pos.setXYZ(i * 2, qx + ox, qy + oy, qz + oz);
+      pos.setXYZ(i * 2 + 1, qx - ox, qy - oy, qz - oz);
     }
     pos.needsUpdate = true;
   }

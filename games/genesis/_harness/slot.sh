@@ -6,8 +6,8 @@
 #   setsid nohup _harness/slot.sh node _harness/shots.mjs spec.json --port=5199 > out.log 2>&1 &
 # Fairness: each job takes a numbered ticket and only the oldest live ticket may take a free slot (a retry-every-5-s
 # scramble let a chain that started its next job the moment one ended win slot after slot over jobs waiting for 15 min).
-# Tickets and slot records of dead processes are swept. The job runs at normal priority (renicing a job to a negative
-# niceness starves everyone else); `slot.sh --status` prints who holds and who waits. Returns the job's exit status.
+# Tickets and slot records of dead processes are swept. The job cannot raise its own priority (setpriv drops
+# CAP_SYS_NICE: renicing to a negative niceness starves everyone else); `slot.sh --status` prints who holds and who waits. Returns the job's exit status.
 set -u
 N=${GENESIS_SLOTS:-3}
 DIR=${GENESIS_SLOT_DIR:-/tmp/genesis-slots}
@@ -40,7 +40,8 @@ while true; do
       if flock -n "$fd"; then
         rm -f "$DIR/wait/$ticket"
         echo "$$ $(date -u +%FT%TZ) $*" >"$DIR/slot.$i.who"
-        "$@"
+        # (Chromium, running as root, raises its GPU and renderer threads to nice -8 and starves the sim runs: take that right away)
+        if command -v setpriv >/dev/null 2>&1; then setpriv --bounding-set=-sys_nice -- "$@"; else "$@"; fi
         rc=$?
         : >"$DIR/slot.$i.who"
         exit "$rc"

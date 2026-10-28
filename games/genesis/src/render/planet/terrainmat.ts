@@ -499,6 +499,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float swardTop = 0.5;
   // the shrubs' crowns here (their share where a crown is finer than a pixel): a thin snow lies between them, not on them
   float shrubLocal = 0.0;
+  // and the share of a crown's top that holds the snow (patches on its upper twigs; its flanks and rim shed it)
+  float shrubCap = 0.0;
   // farmland's own weight: a sown field shows as tilled rows even where little else grows (and covers the sand)
   float fieldW = 0.0;
   if (vegTotal > 0.01) {
@@ -548,14 +550,26 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // dot print — the crowns shed their snow by this same mask — instead of white ground and dark bushes)
       float rS = mix(0.32, 0.62, fract(sv.z * 7.13));
       float eS = max(0.05, fw * 0.54);
-      float blobRaw = (1.0 - smoothstep(rS - eS, rS + eS, sv.x + edgeS)) * keepS;
+      float sdS = sv.x + edgeS;
+      float blobRaw = (1.0 - smoothstep(rS - eS, rS + eS, sdS)) * keepS;
       float blob = blobRaw * aaF(fw, 2.0);
-      shrubLocal = sw * mix(0.45 * mix(0.3, 1.1, sw), blobRaw, aaF(fw, 2.0));
+      // a crown is a dome of twigs, lit on its sun side and shaded at its rim (the border distance's smoothstep has no
+      // slope at the centre or the border: no crease for the screen-derivative normals); a bush that stands is a whole
+      // bush — the cover thins the bushes (keepS), not each crown's opacity (a crown at 60 % opacity held 60 % of the
+      // snow: a dusting turned every bush into a grey disc — a dalmatian print of dirty-snow stains)
+      float shDome = (1.0 - smoothstep(0.0, rS + eS, sdS)) * keepS;
+      float shLeaf = fine ? snoise(P * 3.3 + 5.3) * aaF(fw, 0.3) : 0.0;
+      float shAA = aaF(fw, 2.0);
+      shrubLocal = mix(0.45 * mix(0.3, 1.1, sw) * sw, blobRaw, shAA);
+      // snow on the top of a crown in patches of ~0.25 m, none on its flanks
+      shrubCap = smoothstep(0.3, 0.8, shDome) * smoothstep(-0.15, 0.35, shLeaf + 0.25 * snoise(P * 7.1 + 2.0) * aaF(fw, 0.14));
       vec3 shc = mix(vec3(0.045, 0.07, 0.025), vec3(0.09, 0.09, 0.04), cold * 0.5 + sv.z * 0.4);
-      float cover = sw * mix(0.65, 1.0, blob);
-      vcol = mix(vcol, shc, cover * mix(0.55, 1.0, blob));
-      vb += blob * 0.18 * sw;
-      vao *= mix(1.0, 0.85 + 0.15 * blob, sw);
+      shc *= mix(1.0, 0.7 + 0.45 * shDome + 0.18 * shLeaf, shAA);
+      // (far: the same mean tint as before, 0.36 of the cover; near: an opaque crown on the sward between bushes)
+      float cover = mix(sw * 0.3575, 1.0, blob);
+      vcol = mix(vcol, shc, cover);
+      vb += mix(blob * 0.18 * sw, shDome * 0.45 + shLeaf * 0.04 * blob, shAA * aaF(fw * 2.5, 2.8));
+      vao *= mix(mix(1.0, 0.85, sw), mix(1.0, 0.72 + 0.28 * shDome, blob), shAA);
     }
     // forest canopy: crowns as Voronoi domes, gaps dark (where trees are not instanced)
     if (tree > 0.01) {
@@ -887,7 +901,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // (a crown catches some of the snow on its top — in patches of a few decimetres — so a bush in a dusting is dark
     // green flecked white, not a clean dark spot)
     // (0.75–0.95 of it shed: at 0.55–0.9 the bushes went grey smudges — dirty snow — rather than dark crowns)
-    float crownSnow = 0.75 + 0.2 * smoothstep(-0.3, 0.5, snoise(P * 2.3 + 11.0)) * aaF(fw, 0.3);
+    // (0.85 of it shed on average; up close the top of each crown holds its patches — dark bushes flecked white on top —
+    // a flat 75–95 % shed drew every crown as a uniform grey stain)
+    float crownSnow = mix(0.85, 1.0 - 0.7 * shrubCap, aaF(fw, 0.6));
     full *= 1.0 - shrubLocal * (1.0 - smoothstep(0.12, 0.42, sd)) * crownSnow;
     float sw = full * (1.0 - smoothstep(0.3, 0.55, slope));
     // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke
