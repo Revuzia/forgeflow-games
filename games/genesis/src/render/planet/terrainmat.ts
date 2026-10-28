@@ -568,7 +568,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // (far: the same mean tint as before, 0.36 of the cover; near: an opaque crown on the sward between bushes)
       float cover = mix(sw * 0.3575, 1.0, blob);
       vcol = mix(vcol, shc, cover);
-      vb += mix(blob * 0.18 * sw, shDome * 0.45 + shLeaf * 0.04 * blob, shAA * aaF(fw * 2.5, 2.8));
+      // (the relief rounds off into the cell border too — a big crown reaching past it was cut there — and has no step
+      // at the crown's crisp colour outline: a 0.18 m step over a pixel and a half drew every outline as a lit rim and a
+      // dark line, the meandering 'worms' a low sun raked across every shrubby meadow)
+      float shH = shDome * smoothstep(0.0, 0.2, sv.y - sv.x);
+      vb += (shH * 0.45 + shLeaf * 0.04 * blob) * shAA * aaF(fw * 2.5, 2.8);
       vao *= mix(mix(1.0, 0.85, sw), mix(1.0, 0.72 + 0.28 * shDome, blob), shAA);
     }
     // forest canopy: crowns as Voronoi domes, gaps dark (where trees are not instanced)
