@@ -32282,7 +32282,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · Hung Lamp (loop, follows the bearer): a glass lamp with a warm core hangs over them, a faint lampshade cone of light down to a 3 m caustic pool with a team edge, motes and a few Sap petals rising (help is up)",
+    "$comment": "T3 · Lumen · Hung Lamp (loop, follows the bearer): a glass lamp with a pale sap-green core hangs over them in a glow of her signature, a faint lampshade cone of light down to a 3 m caustic pool with a soft team edge, motes and a few Sap petals rising (help is up) (combat F6: her pale light, the lamp glass rimmed in her signature, the cone keeps a team rim, the pool edge a soft team line)",
     "id": "ilsheta_a2_lamp",
     "duration": 0.5,
     "teamTint": true,
@@ -32294,7 +32294,7 @@
         "scale": 0.34,
         "life": 0.58,
         "color": [
-          "#F7EBD0"
+          "#CFF0C0"
         ],
         "alpha": [
           [
@@ -32315,7 +32315,7 @@
           ]
         ],
         "emissive": 3.0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.4,
         "rimEmissive": 3.0,
         "noise": 0.35,
@@ -32341,8 +32341,8 @@
         ],
         "texture": "glow",
         "size": [
-          1.088,
-          1.17504
+          1.6,
+          1.75
         ],
         "color": "signature",
         "emissive": 1.5,
@@ -32380,7 +32380,7 @@
           0.544,
           0.58752
         ],
-        "color": "#F7EBD0",
+        "color": "#CFF0C0",
         "emissive": 2.4000000000000004,
         "alpha": [
           [
@@ -32415,7 +32415,7 @@
         ],
         "life": 0.58,
         "color": [
-          "#F7EBD0"
+          "#CFF0C0"
         ],
         "alpha": [
           [
@@ -32456,7 +32456,7 @@
         "style": "light",
         "radius": 1.0,
         "life": 0.58,
-        "color": "#F7EBD0",
+        "color": "#CFF0C0",
         "alpha": [
           [
             0,
@@ -32508,18 +32508,18 @@
           ],
           [
             0.13793103448275856,
-            0.85
+            0.4
           ],
           [
             0.8620689655172414,
-            0.85
+            0.4
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 2.6,
+        "emissive": 1.2,
         "sharp": 2.2,
         "noise": 0.2,
         "blend": "add"
@@ -32547,7 +32547,7 @@
           0
         ],
         "color": [
-          "#F7EBD0",
+          "#CFF0C0",
           "signature"
         ],
         "alpha": [
@@ -32606,7 +32606,7 @@
       {
         "type": "light",
         "at": "ground",
-        "color": "#F7EBD0",
+        "color": "#CFF0C0",
         "intensity": 3,
         "radius": 5,
         "life": 0.58
