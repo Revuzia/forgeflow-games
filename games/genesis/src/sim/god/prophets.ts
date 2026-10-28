@@ -306,6 +306,7 @@ function preachHour(x: PCtx, ph: ProphetState, s: number): number {
   }
   relStat(x.u, 'prophet.heard', heardBy);
   relStat(x.u, 'prophet.effect', Math.round(effect * 1000) / 1000);
+  return heardBy;
 }
 
 /** a prophet is dead: the chronicle; a martyr's place made sacred; a successor from the Called */

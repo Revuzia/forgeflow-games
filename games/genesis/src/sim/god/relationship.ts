@@ -242,7 +242,7 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
   if (babe) U[C.pray] = 0;
   // a prophet's own work: preaching by day, at home or in the town they carry the faith to
   if (u.god.rel?.prophets.length) {
-    const t = prophetTask(x, s, st, night, pressing);
+    const t = prophetTask(x, s, st, night, pressing, U[C.drink] >= 1.2 && U[C.drink] >= pressing);
     if (t) return t;
   }
   // evening worship at dusk: attendance ≈ 0.5 faith + 0.3 loyalty — once an evening each, at their first decision from
