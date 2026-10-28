@@ -1,0 +1,214 @@
+{
+ "note": "lane surface look-dev (_harness/shot_lane.mjs)",
+ "runs": {
+  "before": {
+   "rift": {
+    "spots": {
+     "a": [
+      59.8,
+      55
+     ],
+     "b": [
+      76.77694938111514,
+      11.678761969975756
+     ]
+    },
+    "a": {
+     "hp": 8.04,
+     "mean": 77.4
+    },
+    "b": {
+     "hp": 4.82,
+     "mean": 78.5
+    },
+    "close": {
+     "hp": 6.69,
+     "mean": 82.9
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "tele_low": {
+     "groundHp": 10.98,
+     "groundMean": 80.6,
+     "telePx": 67825,
+     "teleDelta": 44.7,
+     "ratio": 4.07
+    }
+   },
+   "bridge": {
+    "spots": {
+     "a": [
+      63.36,
+      22
+     ],
+     "b": [
+      92.64,
+      22
+     ]
+    },
+    "a": {
+     "hp": 5,
+     "mean": 83.9
+    },
+    "b": {
+     "hp": 10.02,
+     "mean": 83.3
+    },
+    "close": {
+     "hp": 4.23,
+     "mean": 85.3
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "tele_low": {
+     "groundHp": 6.65,
+     "groundMean": 84.4,
+     "telePx": 61784,
+     "teleDelta": 39.9,
+     "ratio": 6
+    }
+   },
+   "fray": {
+    "spots": {
+     "a": [
+      32,
+      23.04
+     ],
+     "b": [
+      19.2,
+      35.2
+     ]
+    },
+    "a": {
+     "hp": 6.24,
+     "mean": 81.7
+    },
+    "b": {
+     "hp": 6.08,
+     "mean": 80
+    },
+    "close": {
+     "hp": 5.62,
+     "mean": 82.5
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "tele_low": {
+     "groundHp": 7.83,
+     "groundMean": 83.8,
+     "telePx": 53269,
+     "teleDelta": 41.6,
+     "ratio": 5.31
+    }
+   }
+  },
+  "after": {
+   "rift": {
+    "spots": {
+     "a": [
+      59.8,
+      55
+     ],
+     "b": [
+      76.77694938111514,
+      11.678761969975756
+     ]
+    },
+    "a": {
+     "hp": 7.84,
+     "mean": 79.4
+    },
+    "b": {
+     "hp": 4.59,
+     "mean": 79.3
+    },
+    "close": {
+     "hp": 6.5,
+     "mean": 85.1
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "tele_low": {
+     "groundHp": 10.74,
+     "groundMean": 82.6,
+     "telePx": 67862,
+     "teleDelta": 43.7,
+     "ratio": 4.07
+    }
+   },
+   "bridge": {
+    "spots": {
+     "a": [
+      63.36,
+      22
+     ],
+     "b": [
+      92.64,
+      22
+     ]
+    },
+    "a": {
+     "hp": 4.05,
+     "mean": 85.9
+    },
+    "b": {
+     "hp": 9.58,
+     "mean": 85.8
+    },
+    "close": {
+     "hp": 3.09,
+     "mean": 87.6
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "tele_low": {
+     "groundHp": 5.61,
+     "groundMean": 86.4,
+     "telePx": 61866,
+     "teleDelta": 38.8,
+     "ratio": 6.92
+    }
+   },
+   "fray": {
+    "spots": {
+     "a": [
+      32,
+      23.04
+     ],
+     "b": [
+      19.2,
+      35.2
+     ]
+    },
+    "a": {
+     "hp": 6.3,
+     "mean": 81.7
+    },
+    "b": {
+     "hp": 6.18,
+     "mean": 79.8
+    },
+    "close": {
+     "hp": 5.69,
+     "mean": 82.4
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "tele_low": {
+     "groundHp": 7.86,
+     "groundMean": 83.8,
+     "telePx": 53263,
+     "teleDelta": 41.7,
+     "ratio": 5.31
+    }
+   }
+  }
+ },
+ "generated": "2026-10-28T10:09:49.351Z"
+}
