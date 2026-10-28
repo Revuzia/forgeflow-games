@@ -327,7 +327,8 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     vec3 tc = base * (0.85 + 0.3 * cid) * mix(0.8, 1.04, lip * k2 + (1.0 - k2) * 0.85) * (0.85 + 0.25 * strands * k1);
     float aged = smoothstep(0.45, 0.8, fbm3(vec3(uv * 0.28, seed * 5.0)));
     float mended = smoothstep(0.62, 0.85, fbm3(vec3(uv * 0.35 + 7.0, seed * 2.0)));
-    tc = mix(tc, vec3(dot(tc, vec3(0.33))) * vec3(0.95, 0.95, 0.92), aged * 0.55);
+    // (weathered straw greys toward a warm silver-brown, not to neutral grey: whole grey cones read as concrete)
+    tc = mix(tc, vec3(dot(tc, vec3(0.33))) * vec3(1.02, 0.95, 0.84), aged * 0.42);
     tc = mix(tc, base * vec3(1.3, 1.18, 0.85), mended * 0.45);
     o.col = mix(tc, vec3(0.07, 0.09, 0.035), moss * k2);
     // (the lip's bump eases back to zero before the course wraps: a step there in one pixel row made the bump's screen

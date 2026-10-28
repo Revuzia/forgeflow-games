@@ -430,7 +430,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
 
   // ── regolith (airless) / soil ──
   // noise-broken thresholds: per-cell fields change linearly across 50 m triangles, the noise hides those edges
-  float soilW = smoothstep(0.1, 0.9, soil + m1 * 0.45 + m2 * 0.25) * (1.0 - steep * 0.85) * (1.0 - outc);
+  // (on an airless world the steep faces are crater walls and rims of the same dust, not bare dark rock: a dark rock
+  // ring round every pale floor read as stamped ring decals on the title's dead rock)
+  float soilW = smoothstep(0.1, 0.9, soil + m1 * 0.45 + m2 * 0.25) * (1.0 - steep * (airless ? 0.3 : 0.85)) * (1.0 - outc);
   // where plants grow there is earth under them: the gaps of a thin sward show soil, not the bedrock grey (partial
   // cover on uplands read as blue-grey rock blotches between the grass); rock stays on steep faces and ridges
   if (!airless) soilW = max(soilW, smoothstep(0.04, 0.3, vF2.x + vF2.y + vF2.z + vF2.w) * (1.0 - steep * 0.9) * 0.9);
@@ -485,6 +487,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     rough = mix(rough, 0.92, soilW);
     mk = mix(mk, 0.3, soilW);
   }
+
+  // an airless world's crater walls and rims are freshly broken ground, brighter than the old dust of the plains and
+  // floors (as on the Moon): the bowl reads by its bright walls and its own shading, not by a dark outline
+  if (airless) col *= 1.0 + 0.32 * steep * (1.0 - smoothstep(0.02, 0.3, ash));
 
   // ── maria (dark basalt on moons, mapped from 'ash' on airless worlds) / volcanic ash ──
   if (ash > 0.005) {
