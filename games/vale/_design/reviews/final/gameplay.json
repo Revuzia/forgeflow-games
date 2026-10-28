@@ -1,0 +1,180 @@
+{
+ "score": 4,
+ "summary": "I re-ran this lens on the current build: HEAD ed4e9f82, catalog 2026.10.1, and `node tools/build_content.ts --check` gives 0 warnings. `node _harness/pacing.ts --seeds 10` reproduces the reviewer's output line for line (_harness/_reports/final_gameplay_verify_pacing10.txt), so the sim is deterministic.\n\n**Method gap in the original review.** Every extended run the reviewer made copies pacing.ts seating:\n- fighters are seated role-blind, so off-role fighters fill the grovehunter and lampglass seats;\n- every seat gets the default spells (glint_step, saplight), so the grovehunter never has Hourstrike.\nReal queues draft by role, and the bots' pickLoadout gives the jungler Hourstrike (src/sim/bots/draft.ts:236-264).\n\nSo I re-measured with role-correct native lineups and the bots' own loadouts, all with 0 faults:\n- 32 RIFT matches (16 adept, 16 veteran);\n- 36 mixed-tier RIFT matches;\n- 40 BRIDGE matches (20 with sudden death, 20 without);\n- 30 FRAY matches.\nTools: _harness/_reports/final_gameplay_verify_tools/verify_gp.ts and an_gp.py. Reports: _harness/_reports/final_gameplay_verify_*.\n\n**These reproduce:**\n- G1 (blocker): solo laners have 19–25 cs at 10:00. Fighters last-hit 23% of the Wicks that die before 14:00. Laners spend about 43% of laning time in lane and recall about 10 times per 25 min.\n- G2: the jungler is 3.7–4.0 levels behind the solo laners at 15:00, even with Hourstrike.\n- G3: veteran beats novice in only 14 of 24 RIFT games.\n- G4: the median first Needle falls at 5.4–6.3 min.\n- G5: 15 of 20 BRIDGE games end in sudden death. In 10 of 20 the Hourbell falls while its Bell Needle still stands.\n- G7: players finish 1.4–1.7 items per game, apex items appear in at most 7 of 160 player-games, and nothing applies anti-heal.\n\n**These were corrected:**\n- Two G1 sub-claims are artifacts of role-blind seating or overstated:\n  - Native supports take 9 cs by 10:00 against 22 for shaftlights, not an equal share.\n  - The 30–33% figure counts final blows. Only 11% of fighter deaths are to Wicks with no enemy fighter involved.\n- G6 is downgraded to minor. FRAY's timer ending is the documented Overthrow-style ending, the mode lands in its 8–11 min target, and the lull before the end affects about 1 game in 6.\n- G8 is downgraded to minor. Cross-team bans can overlap, so the last pick has 2 or more legal fighters, and all fighters are free, so r03's worst-case gate is met. It is a comfort issue in one queue.\n- G9 is downgraded to minor. The team-mode win-rate spread comes from the harness's fixed seating; in role-correct RIFT, Nurrow wins 12/22. Only Nurrow's last place in FRAY and the missing soak gate stand.\n\nScore stays 4: one blocker and five majors remain.",
+ "gapStatus": [
+  {
+   "id": "B3",
+   "status": "closed",
+   "evidence": "Gameplay side: in dist-catalog/schema-1/2026.10.1/catalog.json, all 16 fighters' model, portrait, icon and splash resolve to files under dist-catalog/assets (I checked with python in this verification). Bots draft and seat from the full pool. Ilsheta's art is in a separate fix pass and was not judged here."
+  },
+  {
+   "id": "M1",
+   "status": "closed",
+   "evidence": "Content and code side, agreeing with the reviewer:\n- `node tools/build_content.ts --check` gives 0 warnings, and its M1 lint (WARN_MIN_S 0.6, tools/build_content.ts:790-800) is in force.\n- src/render/director.ts:389-394 starts a wind-up telegraph from the `cast` event.\n- director.ts:187-204 warns a dash's landing area.\n\nOn-screen drawing was not re-measured here; that belongs to the VFX/HUD lens."
+  },
+  {
+   "id": "M5",
+   "status": "partly",
+   "evidence": "The timing half is closed: content/fighters/*.json attack.windup ÷ attackSpeed gives 0.37–0.45 s for melee (e.g. marund 0.27/0.64 = 0.42 s) and 0.31–0.38 s for ranged, which matches the r12 spec. The swing trail, projectile and impact halves are outside this lens."
+  }
+ ],
+ "findings": [
+  {
+   "id": "G1",
+   "verdict": "confirmed",
+   "severity": "blocker",
+   "size": "L",
+   "title": "RIFT bots leave their lanes: laners farm about 2–2.5 cs/min and Wicks kill most Wicks",
+   "what": "During the laning phase, role-correct bots spend only about 43% of their alive time in lane (modes lane, trade, push and all-in):\n- 26–29% goes to recall and return;\n- 20–26% goes to objective, defend and roam calls.\n\nResults:\n- Fighters last-hit only 23% of the Wicks that die before 14:00; about 63% die to other Wicks.\n- Solo laners have 18.6–25.0 cs at 10:00, about 1.9–2.8 cs/min over the match.\n- Each player recalls about 10 times per 25 min.\n- Failed Longshade attempts kill about 3 fighters per game with no enemy fighter involved.\n\nEvery queue fills open seats with bots, so this is what most matches look like.\n\nTwo reviewer sub-claims do not hold for real lineups:\n- With native supports, lampglass takes 8.9–9.1 cs by 10:00 against 21.6–21.8 for shaftlight. Supports do not share farm equally; the reviewer's 15.8 vs 14.7 came from role-blind seats.\n- Wicks land the final blow on 30–33% of fighter deaths, but only 11% are Wick deaths with no enemy fighter in the assist window. Another 8% are monster-only deaths, mostly Longshade.",
+   "evidence": "Role-correct native lineups, with the bots' own pickLoadout (grovehunter has Hourstrike):\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --seeds 16 --lineup role --diff adept|veteran --out _harness/_reports/final_gameplay_verify_role_{adept,vet}.json\npython3 -I _harness/_reports/final_gameplay_verify_tools/an_gp.py <json>\n```\nOutput: _harness/_reports/final_gameplay_verify_role_summary.txt.\n\nAdept / veteran:\n- cs at 10:00: shadehold 18.6/22.7, dialcross 23.8/25.0, shaftlight 21.6/21.8, lampglass 8.9/9.1.\n- Wicks dying before 14:00: 15,650 / 15,619. Killers: fighter 23%, minion 63% (9,856 / 9,831), structure 14%.\n- Fighter deaths 835 / 746. Wick final blow 33% / 30%; with no enemy fighter assist 11% / 11%. Monster-only 8% / 8% (Longshade 43 / 48 of them).\n- In-lane share (lane+trade+push+allin), 1:00–14:00: 39–44%. Recall+return: 25–29%.\n- Recalls: 9.5–11.1 per 25 min.\n\nThe reviewer's role-blind trace (_harness/_reports/final_gameplay_botmodes_vet.txt) agrees on Wick share (16–33%).\n\nCode cites check out:\n- src/sim/bots/bot.ts:242: lane 0.40, return 0.43;\n- bot.ts:285: 'objective' for anyone who follows;\n- bot.ts:228-231: recall at 36% HP or 1,100 gold;\n- src/sim/bots/team.ts:328-330: objective desire from 4:00.\n\nShot: _harness/_shots/final_gameplay_watch_rift_lane_you.png.",
+   "gauge": "In LoL, waves have the same cadence as VALE's: 6 minions plus a siege unit every third wave, every 30 s, about 12.7 per minute. A solo-queue laner stays in lane through laning, leaving for recalls and deliberate rotations, and takes about 50–60% of that (about 5.5–7 cs/min). Deaths to minions or monsters alone are rare. VALE bots take about 20–25% of the farm in the first 10 min.",
+   "fix": "Keep the reviewer's fixes 1, 3, 4 and 5:\n1. Lane-first utility before the first outer Needle falls or 10:00.\n3. Situate() counts the DPS of nearby Wicks, so a low-HP bot walks out of the wave.\n4. A stricter Longshade start check.\n5. A soak gate.\n\nDrop fix 2 (Lampglass yields last hits). Native supports already leave the farm to the carry.\n\nAlso make _harness/pacing.ts and the soak seat role-correct lineups with pickLoadout(catalog, fighter, rules.itemPool, role), so the gate measures what players actually face.",
+   "files": "src/sim/bots/bot.ts, src/sim/bots/team.ts, src/sim/bots/micro.ts, src/sim/bots/difficulty.ts, _harness/pacing.ts, _harness/ (new probe_sim_bot_soak.ts)",
+   "verifierNote": "Reproduced on role-correct lineups at both adept and veteran; role-blind seating did not cause it. Blocker kept: bots fill every queue, and a laning phase where lane opponents spend most of their time away and Wicks kill most Wicks is the core loop of a lane-brawler. Two sub-claims were corrected (support farm, Wick deaths), and the Lampglass fix was dropped."
+  },
+  {
+   "id": "G2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "The jungle role doesn't work: grovehunters are about 4 levels behind at 15:00 and die the most",
+   "what": "With native grovehunters (ardit, kemdo, nurrow) carrying Hourstrike, as real drafts give them:\n- they are level 3.7–3.9 at 10:00 and 5.5–5.7 at 15:00, against 9.3–9.6 for the solo laners;\n- the gap at 15:00 averages 3.7–4.0 levels (range 0.5–6.5);\n- they end at level 7.7–8.2;\n- they farm about 1.0 cs/min and die 7.6–8.8 times, the most of any role;\n- 'farm' is only 49% of their time; 16% goes to recall and return, and 26% to objective, defend and roam.\n\nThe content also caps the role:\n- an own-side clear pays 886 XP (4 small camps 586 every 150 s, 2 buffs 300 every 270 s), at most about 300 XP/min;\n- a solo laner on full waves gets about 576 XP/min.",
+   "evidence": "_harness/_reports/final_gameplay_verify_role_summary.txt: 'jungler level gap vs solo laners at 15:00 mean 4.0 (adept) / 3.7 (veteran)'. Grovehunter rows: cs10 9.1/9.9, lvl15 5.5/5.7, deaths 8.8/7.6.\n\nLoadouts were checked in the run JSON: players[].spells = ['hourstrike', …] for every grovehunter.\n\nContent:\n- content/units.json bounties: glasshorn/resinback 150 XP; gloamoth 70 + 3×22; stray_numeral 100 + 2×25; stilltusk 90 + 2×30.\n- content/maps/map_rift.json respawns: 150/270 s.\n- Waves (content/modes.json): 3 shieldwick (56 XP) + 3 glimwick (30 XP) + a greatwick (90 XP) every third wave, every 30 s.",
+   "gauge": "In LoL the jungle is a full role. The jungler stays within about 1 level of the solo laners, and camp XP (with a catch-up bonus when behind) keeps one clear cycle near a lane's pace.",
+   "fix": "As the reviewer proposes:\n1. Retune camp XP or respawns to at least 80% of a solo lane's XP rate.\n2. VALE's own 'Grove tithe' catch-up XP.\n3. Bot clear loop: no recall near a ready camp; 'objective' only after 6:00; nearest-ready clear order.\n4. Soak gate on the level gap and deaths, run on role-correct lineups.",
+   "files": "content/units.json, content/maps/map_rift.json, src/sim/economy.ts, src/sim/bots/bot.ts (execFarm, selectMode), src/sim/bots/team.ts",
+   "verifierNote": "Reproduced, and slightly worse once Hourstrike and native junglers are in place. The reviewer's role-blind runs had denied the jungler its spell, but that was not the cause. Major kept."
+  },
+  {
+   "id": "G3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "L",
+   "title": "Difficulty tiers barely separate in RIFT",
+   "what": "On role-correct lineups, veteran bots win fights about 1.7:1 against novice (14.3 vs 8.3 kills per game) but take only 14 of 24 mirrored RIFT games. Neither side pulls ahead elsewhere:\n- enemy structures destroyed: 8.8 vs 8.2;\n- novice laners farm slightly more (60 vs 56 cs).\n\nVeteran against adept wins 7 of 12, with equal kills and structures.\n\nThe rift_coop (novice) and ranked 'by_rating' queues rely on these tiers.\n\nCorrections:\n- Lead conversion is mixed. Role-correct veteran games show the team ahead at 15:00 winning 12/15; adept 9/16. That sub-claim is not firm.\n- difficulty.ts does differ in some macro inputs (intentFollow 0.55/0.85/1.0, decisionNoise, knowsCooldowns, recall and retreat bias), not only micro. The team brain itself is identical across tiers.",
+   "evidence": "Commands:\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode rift --seeds 12 --lineup role --mix veteran,novice\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode rift --seeds 12 --lineup role --mix novice,veteran\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode rift --seeds 12 --lineup role --mix veteran,adept\n```\nOutput in _harness/_reports/final_gameplay_verify_difficulty_summary.txt: 'veteran vs novice: stronger tier wins 14/24; kills 14.3 vs 8.3; enemy structures destroyed 8.8 vs 8.2; laner cs 56 vs 60' and 'veteran(team0) vs adept: 7/12'.\n\nThe reviewer's role-blind 11/20 (_harness/_reports/final_gameplay_vet_vs_novice.json, final_gameplay_novice_vs_vet.json) agrees. Combined: 25/44 (57%).\n\nDifficulty profiles: src/sim/bots/difficulty.ts:46-62.",
+   "gauge": "In LoL the harder bot tiers reliably beat the easier ones. Intermediate bots add lane swaps, frequent ganks and early three-man pushes (r09 §1.1), so a tier is felt in the result, not only in the kill count.",
+   "fix": "As the reviewer proposes: the team brain converts advantages, by sieging after an aliveDiff ≥ 2 or a 1.5k lead. Add macro-tier knobs: macroDelay and convertsLeads. Soak gate: veteran beats novice in at least 85% of 20 mirrored role-correct games, and adept in at least 65%.",
+   "files": "src/sim/bots/team.ts, src/sim/bots/bot.ts, src/sim/bots/difficulty.ts, _harness/",
+   "verifierNote": "The headline reproduces on role-correct lineups (14/24, 7/12). The lead-conversion half is weaker than stated, and 'differ only in micro' is slightly off. Major kept."
+  },
+  {
+   "id": "G4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "RIFT laning phase collapses: the first outer Needle falls at a median of 5.4–6.3 min",
+   "what": "On role-correct lineups, the first structure (always an outer Needle) falls at:\n- adept: mean 5.8 min, median 5.4, earliest 3.0; 6 of 16 games before 5:00;\n- veteran: mean 6.8 min, median 6.3, earliest 3.1; 4 of 16 before 5:00.\n\nOne veteran game ended by core at 13.4 min.\n\nOuter Needles have 3,200 HP and 40/40 armor and resist, with no early or thin-wave protection. Only the `requires` chain protects structures. The team brain switches to phase 'mid' when any structure falls.",
+   "evidence": "- _harness/_reports/final_gameplay_verify_role_summary.txt: 'first struct mean 5.8 median 5.4 min 3.0; <5min 6/16' (adept) and 'mean 6.8 median 6.3 min 3.1; <5min 4/16' (veteran).\n- Per-game lines: final_gameplay_verify_role_{adept,vet}.txt.\n- content/units.json: needle_outer hp 3200, armor 40.\n- src/sim/units/structures.ts:6-9 (protection only through requires).\n- src/sim/bots/team.ts:154 (phase 'mid' when ownLost + enemyLost > 0).",
+   "gauge": "LoL's outer turrets are built to outlast laning:\n- about 5,000 HP with plates, which pay out gradually (r02 §7.2);\n- protection when no enemy minions are near.\nA first turret before 5:00 is a rare stomp, not the median game.",
+   "fix": "As the reviewer proposes:\n- VALE's own 'Dawn Seal' until 7:00;\n- needle_outer at about 4,000 HP;\n- thin-wave protection;\n- 'mid' phase from 10:00 or the second fallen structure;\n- soak gate: median first structure 9–12 min on role-correct lineups.",
+   "files": "content/units.json, src/sim/units/structures.ts, src/sim/combat.ts, src/sim/bots/team.ts, content/team_buffs.json",
+   "verifierNote": "Reproduced on role-correct lineups, with numbers close to the reviewer's (6.3 / 6.0 / 5.1). Major kept."
+  },
+  {
+   "id": "G5",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "BRIDGE ends through sudden death, which drops structure protection, often with the gate chain still standing",
+   "what": "Sudden death at 16:00 removes all structure protection and triples respawn time.\n\nWith the bots' own loadouts (adept):\n- 15 of 20 BRIDGE games end in sudden death;\n- in 10 of 20, the losing Hourbell falls while its Bell Needle still stands (e.g. seed 1: lost only outer, inner and the Hourbell).\n\nThe reviewer's 40 role-blind games:\n- 33 of 40 end in sudden death and 24 of 40 skip the chain;\n- seed 8 was won after destroying 2 structures, by the team 7.5k gold behind.\n\nWithout sudden death, games end naturally at a median of 19.0 min, but one ran 87.7 min. A backstop is needed, but not one that unlocks the core.\n\nThe content also diverges from the design: _design/sections/modes_economy.md:41/64 has BRIDGE sudden death at 20:00 'to end stalemates', while content/modes.json has suddenDeathAt 960 and suddenDeathRespawnMult 3.",
+   "evidence": "Commands:\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode bridge --seeds 20 --lineup role --diff adept\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode bridge --seeds 20 --lineup role --diff adept --rules '{\"suddenDeathAt\": 99999}'\n```\nSummary: _harness/_reports/final_gameplay_verify_bridge_fray_summary.txt.\n- With sudden death: 'ended in SD 15, core fell with bell needle standing 10'.\n- Without: 'dur mean 23.7 median 19.0 max 87.7'.\n\nChain: content/maps/map_bridge.json (outer → inner → lantern → bell needle → hourbell).\n\nReviewer data rechecked from _harness/_reports/final_gameplay_pace40.json: 33/40 sudden death, 24/40 chain skips, seed 8 final goldGraph −7530 with winner 0.\n\nRule: src/sim/units/structures.ts:9.",
+   "gauge": "LoL's single-lane mode ends when one side breaks through the towers to the core, at a natural 15–20 min. LoL has no rule that removes structure protection, and the core can't be hit while its path stands.",
+   "fix": "As the reviewer proposes:\n- keep `requires` protection in sudden death;\n- replace the protection drop with VALE's own 'Gorge Wind' escalation (stacking Wick buffs and structure resist decay), with a ×2 respawn multiplier;\n- retune BRIDGE toward a natural 15–18 min;\n- apply the same change to rift_quick;\n- soak gate: at most 25% of games end in sudden death, and 0 cores fall with their chain standing.\n\nReconcile modes_economy.md with content.",
+   "files": "src/sim/units/structures.ts, src/sim/modes/match.ts, content/modes.json, content/queues.json, content/units.json, content/team_buffs.json, _design/sections/modes_economy.md",
+   "verifierNote": "Reproduced with real bot loadouts. The no-sudden-death run shows the backstop masks rare stalls, but in about half of all games the actual ending skips the chain. Major kept."
+  },
+  {
+   "id": "G6",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "size": "M",
+   "title": "FRAY sometimes goes quiet before the 11:00 limit",
+   "what": "With the bots' own loadouts (adept, 30 seeds):\n- 16 of 30 FRAY games end on the 11:00 limit, 8 on the 12-kill score and 6 by last standing;\n- mean length is 9.6 min.\n\nIn 5 of 30 the last 2 or more minutes have no takedown (longest 3.7 min), with 2–5 fighters still alive. The last-life caution in bot.ts:202 (+0.15 retreat threshold) is the likely cause.\n\nWhy this is a downgrade:\n- The timer ending is the documented design. content/modes.json gives FRAY 'Target 8-11 min… first to 12 kills, else 11:00'. _design/sections/modes_economy.md §6 models it on the Overthrow-style score race with a timer (r03 §3.2).\n- The mode lands in its target length with 3.5 kills/min.\n- The design's own expectation ('the 12-kill race usually closes between 8 and 11 minutes') is missed, and the end-of-match lull is real in about 1 game in 6.",
+   "evidence": "Command:\n```\nnode _harness/_reports/final_gameplay_verify_tools/verify_gp.ts --mode fray --seeds 30 --lineup role --diff adept\n```\nOutput in _harness/_reports/final_gameplay_verify_bridge_fray_summary.txt: \"fray n 30 Counter({'time': 16, 'score': 8, 'last_standing': 6}) dur mean 9.6; dead air at end mean 0.9 max 3.7; >=2 min in 5\", plus a per-timeout table (seed, dead air, alive at end).\n\nThe reviewer's 27/40 time-outs and 10/40 with ≥2 min of dead air (_harness/_reports/final_gameplay_pace40_summary.txt) agree in direction.",
+   "gauge": "LoL's placement mode uses a different format: rounds with a closing ring. VALE deliberately chose a timed score race, so the right bar is pacing. A score race should not end with minutes of no fighting.",
+   "fix": "Keep VALE's 'Noon Toll' idea but scale it down: from 9:00, reveal the survivors on the minimap every 30 s. Bots drop the last-life caution once 4 or fewer remain. Gate: no stretch of 90 s or more with no takedown while 3 or more fighters are alive, in at least 85% of games.",
+   "files": "src/sim/modes/last_standing_or_score.ts, src/sim/bots/bot.ts, content/modes.json, src/ui/hud",
+   "verifierNote": "Real, but most of the 'major' case (time-limit endings) is a documented design choice, and length is in target. Downgraded to minor."
+  },
+  {
+   "id": "G7",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "XL",
+   "title": "Item depth: 13 finished items, the same build every game, top tier almost never reached, no anti-heal",
+   "what": "content/items.json has 8 core and 5 apex finished items in the rift/bridge pools; FRAY gets none.\n\nIn role-correct RIFT games:\n- players finish 1.65 (adept) and 1.43 (veteran) items per game on average;\n- apex items appear in only 7 and 4 of 160 player-games;\n- only 11 and 9 of the 13 finished items are ever bought;\n- sukri and ilsheta, even as native lampglass, build focal_lens first in 21 of 22 games; only marund buys kindly_lamp.\n\nNothing in items or kits applies grievous, although the status exists in the sim.",
+   "evidence": "- Item tiers counted with python over content/items.json: core 8, apex 5.\n- `grep -c grievous content/items.json content/fighters/*.json` gives 0 everywhere; it appears only in src/sim/status.ts, combat.ts, entity.ts and the UI.\n- Usage from _harness/_reports/final_gameplay_verify_role_{adept,vet}.json (python in this verification): focal_lens 68/66, inkglass_rod 48/41 … hourcleaver 1/0, shelter_lamp 0/0.",
+   "gauge": "LoL offers many finished items per class, including situational counters: anti-heal, anti-burst, penetration. Players finish about 3 items by 25 min, and builds change with the matchup.",
+   "fix": "As the reviewer proposes:\n- grow to about 30 finished items with VALE-original counters (a 'Stillwater' grievous family, a burst ward, tank penetration);\n- a buildPlan that reads the enemy team, and a support path;\n- an economy check once G1 lands;\n- a build-diversity probe.",
+   "files": "content/items.json, src/sim/bots/economy.ts, src/sim/bots/knowledge.ts, _harness/probe_items.ts",
+   "verifierNote": "Reproduced on role-correct lineups: support bots still build a damage item. Major kept."
+  },
+  {
+   "id": "G8",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "size": "S",
+   "title": "Ranked draft (2 bans per team) leaves the last picker as few as 2 fighters",
+   "what": "rift_ranked uses 2 bans per team. With unique picks across the match and 4 distinct bans, 14 of 16 fighters are used, so the last picker sees 2.\n\nThe reviewer's 'at most 2' is wrong. Bans are simultaneous and hidden, and only same-team duplicates are rejected (src/session/draft.ts:250, :269), so overlapping bans leave 3 or more.\n\nWhy this is a downgrade:\n- Every fighter is free, so VALE meets r03 §1.6's own worst-case gate: O_min = C = 2T + B = 14 ≤ 16.\n- The impact is limited to the last picks of one queue, which unlocks at level 20.\n\nStill, the roster is far below r03's comfort target (R ≥ 2C = 28), and r03 asks for ban count as a function of roster size.",
+   "evidence": "- content/queues.json:64 (rift_ranked bansPerTeam 2), :49 (rift_standard 1).\n- src/session/draft.ts:1-30 (simultaneous hidden bans), :230-238 (matchUnique for 'draft').\n- r03 §1.6 table.",
+   "gauge": "LoL gates ranked behind owning 20 champions so a legal pick always exists. Out of a 170+ roster, the last pick still has real choice.",
+   "fix": "Derive bansPerTeam from roster size in data (1 at R = 16), and lint it in build_content. Optionally, a draft-host role floor.",
+   "files": "content/queues.json, src/session/draft.ts, tools/build_content.ts, _harness/probe_session_draft.ts",
+   "verifierNote": "The arithmetic is right but the wording overstates it, and the r03 gate is met. A comfort issue in one queue: minor."
+  },
+  {
+   "id": "G9",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "size": "M",
+   "title": "Nurrow finishes last in FRAY, and no soak or balance probe exists",
+   "what": "Nurrow is last in FRAY in every run: average placement 9.1 of 10 with 0.8 kills (30 adept seeds, the bots' own loadouts). Her dart puts the target to sleep but deals no damage and gives no payoff on waking.\n\nNo probe asserts bot-play or balance ranges; r09 §4.4 asked for one. The only bot probe, probe_session_botslane, checks correctness.\n\nThe team-mode win-rate spread (31–69% veteran, 19–79% adept) does not hold up:\n- pacing.ts seating repeats with period 16: fighter = (7i + 3 + 5·seed) mod 16. So each fighter always plays with the same teammates and the same, often off-role, seats.\n- On role-correct lineups Nurrow wins 12/22 (55%), ardit 13/22 (59%) and burdam 7/20 (35%). That reverses the reviewer's ardit 31% and burdam 69%.\n- At n ≈ 20, the remaining spread is within noise.",
+   "evidence": "- _harness/_reports/final_gameplay_verify_fighters_summary.txt: 'nurrow n 20 place 9.1 kills 0.8'. RIFT role-correct win rates are in the same file.\n- Kit: content/fighters/nurrow.json nurrow_lullaby_dart ('The dart deals no damage. Damage wakes the sleeper'); ai.comboOrder [a2, a1, a3, ult].\n- `grep -ln createBots _harness/probe_*.ts` returns only probe_items.ts and probe_session_botslane.ts (correctness).",
+   "gauge": "Riot keeps champions roughly inside a 45–55% win band and patches outliers. No champion finishes last in nearly every game of a mode.",
+   "fix": "1. Nurrow payoff, VALE's own: refund cooldown and extend the silence when hitting a sleeping enemy; reorder her combo.\n2. A new _harness/probe_sim_bot_soak.ts that seats role-correct, pickLoadout lineups, with:\n   - FRAY average placement 3.5–7.5 per fighter;\n   - team win-rate bands only at a sample size that supports them;\n   - the G1–G5 thresholds.",
+   "files": "content/fighters/nurrow.json, src/sim/bots/knowledge.ts, _harness/ (new soak probe), package.json",
+   "verifierNote": "Nurrow's FRAY result and the missing gate are real. The team-mode spread is a harness seating artifact and noise. Downgraded to minor."
+  },
+  {
+   "id": "g1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "About a quarter of RIFT fighter deaths award no kill even though an enemy fighter helped",
+   "what": "When a Wick, Needle or monster lands the final blow, the takedown has killer −1. Contributors split only the assist share, and no streak, first blood or multikill is recorded.\n\nOn role-correct lineups, a non-fighter final blow with an enemy fighter in the assist window happens in:\n- 231 of 835 deaths (28%) on adept;\n- 170 of 746 (23%) on veteran.",
+   "evidence": "- fdeaths in _harness/_reports/final_gameplay_verify_role_{adept,vet}.json, summarised in final_gameplay_verify_role_summary.txt (killer kind vs 'no enemy fighter in assist window').\n- Code: src/sim/economy.ts:84-86 (kp only from a credited fighter), :137 (killer −1).",
+   "gauge": "In LoL, a death finished by a minion, tower or monster soon after an enemy champion's damage is credited to that champion. 'Executed' is kept for deaths with no champion involved.",
+   "fix": "As the reviewer proposes: credit the top-damage enemy fighter in the window, and keep 'executed' for deaths with no fighter involved.",
+   "files": "src/sim/combat.ts, src/sim/economy.ts, _harness/probe_sim_core_combat.ts",
+   "verifierNote": "Reproduced (23–28%)."
+  },
+  {
+   "id": "g2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "RIFT match length drifts long on adept, the default queue difficulty",
+   "what": "Role-correct adept RIFT averages 27.4 min (median 26.9, p90 33.5, max 40.1, one game into sudden death at 40:00). Longshade is taken in only 9 of 16 games, first at 28.1 min on average. Veteran averages 24.3. _harness/pacing.ts only runs veteran.",
+   "evidence": "_harness/_reports/final_gameplay_verify_role_summary.txt (adept: 'dur mean 27.4 median 26.9 p10 19.7 p90 33.5 max 40.1'). _harness/pacing.ts:49 hard-codes botDifficulty 'veteran'.",
+   "gauge": "LoL solo-queue games cluster around 25–30 min (about 27.5 min on EUW), with a tail.",
+   "fix": "Add --diff and role-correct seating to pacing.ts, report adept by default, and gate RIFT adept p90 at 32 min or less.",
+   "files": "_harness/pacing.ts",
+   "verifierNote": "Reproduced."
+  },
+  {
+   "id": "g3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "The practice tool covers the basics but not the full lab feature set",
+   "what": "Practice offers gold, level, cooldown refresh and toggle, training targets, heal, reset and speed ×0–16. Missing:\n- other maps;\n- wave and structure toggles;\n- a damage readout;\n- configurable targets;\n- teleport;\n- a sparring fighter.\n\n'Return to life' labels a full heal while alive.",
+   "evidence": "- src/sim/modes/practice.ts:1-17;\n- src/ui/hud/panels.tsx:249-280;\n- content/strings.en.json:281 ('practice.panel.heal': 'Return to life');\n- content/queues.json practice → mode rift.",
+   "gauge": "LoL's practice tool toggles minions and turrets, fast-forwards, resets and shows damage on dummies.",
+   "fix": "As the reviewer proposes.",
+   "files": "src/sim/modes/practice.ts, src/contracts/sim.ts, src/ui/hud/panels.tsx, src/ui/screens/practice.tsx, content/strings.en.json, content/queues.json",
+   "verifierNote": "Confirmed from code."
+  }
+ ],
+ "missed": []
+}

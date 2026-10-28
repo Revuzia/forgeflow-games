@@ -136,3 +136,35 @@
     now the band's 75th percentile; Stillwater wet stone from 0.88 m with a salt tide line; First Bell same fix.
   minors: base hem deeper (bottom band), hood / scarf despeckle, sleeve band-fill smoothed (First Bell stripes),
     attack2 a downward staff tap, death keeps the lamp upright + head less bowed, portrait lamp below the visor.
+- 2026-10-28 13:51 edits done (glass part + material + AO/Cycles wrappers, face patch, hood inside, despeckle, flame, guard +3.5 cm, attack2 / cast_a2 / cast_ult / death re-authored, recolour shade ref + Stillwater tide, sleeve fill smoothing, hem x0.70, portrait pitch). Fit: guard flame 1.33 m, accent estimate 1.83 % (top half 1.0 all facings). build FP2-1 (fast base, clip sheet) starting.
+- 2026-10-28 13:54 build FP2-1 (fast) DONE: 19188 tris, 1180 KiB (fast textures; over 1172), three accent 1.78 % (top half 95 %). Read: the tube is see-through (horizon through it in three; Cycles thin glass in splash / portrait reads as clear glass), face patch inside the bulb; ult = V then Y with the lamp at her upper right level with the rim; a2 = left arm up, lamp out at her right beside the face; attack2 = gavel knock; death ends kneeling with the lamp upright. BUG: the hood-inside paint darkened a big oval on the hood's BACK (tunnel test lacked y < -0.025) -> fixed. Also: glass 968 tris (n 32, 29 rings), patch 1000 tris (size), alpha 0.40 (the cap must still read at gameplay zoom), portrait pitch +13, attack2 wind hook turned out (the lamp was before the face). build FP2-2 (FULL base, clip sheet) starting.
+- 2026-10-28 13:56 build FP2-2 (FULL base) DONE: 18272 tris / 1117 KiB / load OK / three accent 1.77 % (top half 95 %), clip sheet. Read: hood back clean, tube see-through in three (horizon through it) and clear glass in Cycles (splash / portrait), portrait face clear of the lamp, attack2 wind lamp beside the head. build FP2-3 (skins-only, both) starting.
+- 2026-10-28 13:57 FP2-3 skins failed at once (pipeline _role_of reads part.high; the low-only glass had none): the glass part gets a hidden high twin (base GLB unaffected). Skins re-run.
+- 2026-10-28 14:01 FP2-3 skins DONE: stillwater 18972 tris / 961 KiB, first_bell 19092 / 958 KiB, load OK, three QA OK (bind-pose accents 1.64 / 1.53 %). lineup_qa (facing 0): base top 69.0 / mid 46.5 / bottom 35.7, accent 1.80 % top-half 1.0 at every facing (accentOk TRUE; back 1.15 %); stillwater 66.6 / 39.4 / 30.3, back accent 0.95 %; first_bell 68.7 / 44.7 / 29.8; IoU64 max vs sukri 0.70. Stillwater now two-tone (dark wet-stone lower half, tide step) and clearly apart from base in the lineup; its mid 39.4 is low -> tide line moved to the brief's 'lower half' (0.80 m, was 0.89). Stillwater-only rebuild starting.
+- 2026-10-28 14:02 Stillwater-only rebuild DONE: 18972 tris / 963 KiB / load OK / three QA OK (report clean). lineup_qa: stillwater 66.6 / 42.8 / 31.4 (mid was 39.4), back accent 0.95 %; base + first_bell unchanged; IoU64 max 0.70. Content / probes / in-game next.
+- 2026-10-28 14:03 content: art.json == the content art block (unchanged); build_content --check OK, 0 warnings, nothing
+  missing; probe_kits_A 525/0, probe_kits_B 733/0. In-game: _harness/_shots/art2_ilsheta_fp2_{game,close,close2}.png
+  (t 40, open ground): the cap reads as a see-through glass tube with a bright rolled rim under the HP bar.
+  FIX PASS 2 DONE (full builds used: FP2-2 base, FP2-3 skins; plus one fast base and one Stillwater-only).
+  Per review item:
+  1 chimney = REAL see-through glass: low-only part 'glass' (968 tris, open both ends, culled inside the hood) in the
+    kept material gem_chimglass (alpha 0.40, double-sided, glTF BLEND; no ink on see-through parts); the face an opaque
+    9 mm patch just inside the glass's front (the concept's face-plate), opaque bright rolled lip (front spout) and
+    chin rim; hood tunnel painted lining, crown floor shaded; AO ignores the glass; Cycles renders use thin clear
+    glass (transparent + Fresnel gloss): splash / portrait show the backdrop through the tube. The grey texel
+    triangle went with the painted tube.
+  2 accent: flame 14 x 19.6 cm, guard lamp +3.5 cm: base lineup accentOk TRUE (1.80 %, top-half share 1.0 at every
+    facing; three QA 1.77 %, top half 95 %).
+  3 cast_ult = both arms up in a V (shoulders shrugged), the lamp hung out at her upper right level with the rim,
+    then a wide Y; cast_a2 = the LEFT arm straight up, open palm, the lamp held out front-right beside the face.
+  4 skins: recolour shade reference = the band's 70th percentile (the median had made outer cloth up to x1.35
+    lighter); Stillwater wet stone #59666A on the mantle's lower half from a wavy tide line at 0.80 m with a pale
+    salt rim: lineup column 2 is now two-tone, clearly apart from base.
+  5 value bands (guides): base 69.0 / 46.5 / 35.7, stillwater 66.6 / 42.8 / 31.4, first_bell 68.7 / 44.7 / 29.8.
+  6 not changed (idle arm tuck, hook shape).  7 attack2 = an upright gavel knock (not the a1 thrust); death keeps
+    the lamp upright to the end, bow ~55 deg.  8 bench still seats her only as self.  9 hem x0.70: bottom 35.7
+    (0.7 over the guide).  10 Stillwater report rebuilt clean (three QA ok).  11 hood / scarf despeckle, sleeve
+    band-fill smoothed (First Bell's raised sleeve no longer striped).  12 portrait camera +13 deg pitch: the
+    lamp sits below the face; a2 / ult keep the lamp off the visor.
+  Open (minor): Stillwater mid 42.8 (2.2 under the guide) and back-facing accent 0.95 %; base bottom 35.7; top
+  bands 66.6-69.0 (roster-wide); no ally / enemy-tinted in-game view (bench limit); idle arms still tucked.

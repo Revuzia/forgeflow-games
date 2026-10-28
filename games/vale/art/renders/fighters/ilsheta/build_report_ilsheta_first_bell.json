@@ -3,7 +3,7 @@
   "fighter": "ilsheta",
   "skin": true,
   "parts": {
-    "tris_chimney": 1898,
+    "tris_chimney": 998,
     "tris_hood": 2000,
     "tris_neck": 250,
     "tris_scarf": 1450,
@@ -22,38 +22,39 @@
     "tris_flame": 300,
     "tris_glass_bell": 320,
     "tris_hour_marks": 500,
-    "validate_ilsheta": "18726->18722"
+    "tris_glass": 968,
+    "validate_ilsheta": "17826->17824"
   },
-  "uv_coverage": 0.593,
+  "uv_coverage": 0.627,
   "bake": {
-    "base": 7.1,
-    "rough_metal": 4.24,
-    "normal": 3.61,
-    "ao": 6.5,
-    "normal_fixed_px": 13567,
-    "projection": 50.83,
-    "pack_save": 51.86,
-    "total": 73.7
+    "base": 5.12,
+    "rough_metal": 5.97,
+    "normal": 3.86,
+    "ao": 3.2,
+    "normal_fixed_px": 14237,
+    "projection": 19.54,
+    "pack_save": 19.69,
+    "total": 38.01
   },
-  "tris": 19022,
+  "tris": 19092,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2391016,
+  "glb_bytes_raw": 2373144,
   "optimize": {
     "ok": true,
-    "before": 2391016,
-    "after": 999404
+    "before": 2373144,
+    "after": 981488
   },
-  "glb_bytes": 999404,
+  "glb_bytes": 981488,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_first_bell.glb (976 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_first_bell_base 2048x2048 276K, ilsheta_first_bell_normal 512x512 33K, ilsheta_first_bell_orm 512x512 68K",
-      "  skinned meshes: ilsheta_accent(152v), ilsheta_first_bell(17245v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_first_bell.glb (958 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ilsheta_first_bell_base 2048x2048 270K, ilsheta_first_bell_normal 512x512 38K, ilsheta_first_bell_orm 512x512 62K",
+      "  skinned meshes: ilsheta_accent_1(564v), ilsheta_accent_2(152v), ilsheta_first_bell(16331v)",
       "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
-      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19022; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
+      "  tracks checked: 0; materials: gem_chimglass, accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 19092; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -63,8 +64,8 @@
       "portrait": "art/out/fighters/ilsheta/ilsheta_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 42.88,
-      "portrait": 25.54
+      "splash": 6.79,
+      "portrait": 2.9
     }
   },
   "three_qa": {
@@ -87,8 +88,8 @@
       1
     ],
     "headY": 1.238,
-    "accentPct": 1.41,
-    "accentTopHalfPct": 41.6,
+    "accentPct": 1.53,
+    "accentTopHalfPct": 40.4,
     "heightPx1080": 91,
     "size": [
       2400,
@@ -96,24 +97,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_first_bell.png",
-    "seconds": 91,
+    "seconds": 7.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.22,
-      "model": 3.62,
-      "lows_bind": 3.93,
-      "uv": 7.0,
-      "bake": 73.7,
-      "export": 0.82,
-      "optimize": 2.03,
-      "load_test": 0.65,
-      "render": 68.55,
-      "three_qa": 92.37
+      "rig": 0.01,
+      "materials": 0.27,
+      "model": 3.77,
+      "lows_bind": 4.51,
+      "uv": 7.55,
+      "bake": 38.01,
+      "export": 0.09,
+      "optimize": 0.52,
+      "load_test": 0.1,
+      "render": 9.71,
+      "three_qa": 7.91
     },
-    "total_s": 253.1
+    "total_s": 72.66
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

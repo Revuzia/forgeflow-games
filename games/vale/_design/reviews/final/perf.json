@@ -1,0 +1,123 @@
+{
+ "score": 6.5,
+ "summary": "Verified on the current build (commit ed4e9f82, src unchanged since 06:01), Apple M5, ANGLE-Metal, real Chrome GPU. Frame rate holds at LoL's tier and the stability checks pass: typecheck exit 0, content:check OK with 0 warnings, run_probes 40/40, and e2e all passes RIFT, BRIDGE, FRAY and store. Both majors reproduce.\n\nPERF-M1 (major) is real, but the reviewer named the wrong main cause. PostStack.build() (src/render/post.ts:212-258) runs on every scene switch, twice per match. It calls removeAllPasses(), which in postprocessing 6.39.5 does not dispose anything. So each match leaves about 47 render targets on the GPU: the RenderPass, N8AO, bloom mip chain and SMAA targets plus their materials. With the identical match rebuilt 4 times, the GPU process grew 157-266 MB per rebuild (mean +194 MB) while the renderer process stayed flat at about 800 MB. The terrain prop geometry the reviewer blamed is under 1 MB per rebuild, and the reviewer's per-match disposal list would not reach the post chain.\n\nPERF-M2 (major) reproduces live. Idle Home steps the scale 1 → 0.95 → 0.9 → 0.85 → 0.8 by 12 s. It stays at 0.8 (1536×864) through queue, draft, loading and 90 s of a match at 60 fps. Re-running setQuality mid-match restores 1.0.\n\nMy B4 gate run printed GATE FAIL. High p95 was 16.8 ms against the 16.7 target, but it ran at 60.1 fps with every worst frame at 16.8 ms. The gate threshold sits on vsync jitter, so it flips between runs; I added this as minor PERF-V1. B4 is closed on substance. Minors m1-m5 confirmed.",
+ "gapStatus": [
+  {
+   "id": "B4",
+   "status": "closed",
+   "evidence": "Re-ran `node _harness/perf_1080.mjs --prod --wait-idle 30 --out _harness/_reports/final_perf_verify_perf_1080.json` in an idle window (log: _harness/_reports/final_perf_verify_gate.log).\n- High: 60.1 fps, avg 16.64 ms, p95 16.8, p99 16.8. The 5 worst frames are all 16.8 ms. Renderer CPU 1.23 ms mean (p95 1.5). 179 draws, 37 programs, 385k tris. Load 2.99→2.92.\n- Low: 60.1 fps, p95 16.7, p99 16.8, 148 draws, 25 programs, 312k tris.\n\nThe script printed GATE FAIL only because High p95 was 16.8 against the 16.7 target. The reviewer's run read 16.7 and passed.\n\nNo frame was dropped, so the performance gap is closed. The pass/fail flip is a gate defect, reported as PERF-V1.\n\nCaveat: the shipped client plays at render scale 0.8 (PERF-M2). Native-scale numbers come only from the bench. A 30 s real-client window at 1.0 under load about 5 read 57.8 fps, p99 33.4 (_harness/_reports/final_perf_verify_dynlive.json, window 'match_reconfigured'). That window was contended, so it does not decide anything."
+  },
+  {
+   "id": "B1",
+   "status": "closed",
+   "evidence": "Not re-measured by the verifier. The reviewer's real-mouse artifacts exist and are consistent:\n- report: _harness/_reports/final_perf_multimatch.json 'hover';\n- shots: _harness/_shots/final_perf_hover_enemy_fighter.png, _enemy_minion.png, _ally_fighter.png.\n\nMy runs produced no contrary evidence. Re-run e2e all: 0 page errors in any journey (_harness/_reports/final_perf_verify_e2e.json)."
+  }
+ ],
+ "findings": [
+  {
+   "id": "PERF-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "Every scene switch leaks the whole post-processing chain, about 190 MB of GPU memory per match, and it never plateaus",
+   "what": "Tearing a match down does not free what setting it up created. The main cause is the post-processing stack, not terrain props.\n- `PostStack.setScene` calls `build()` on every scene switch (src/render/post.ts:178-182). That happens at match setup (renderer.ts:428) and again on the return to the menu (renderer.ts:411), so twice per match.\n- `build()` (post.ts:212-258) calls `composer.removeAllPasses()`. In postprocessing 6.39.5 that method only empties the pass array (node_modules/postprocessing/build/index.js:1282-1291) and disposes nothing.\n- It then creates a new RenderPass, N8AOPostPass, EffectPass (bloom mip chain, luminance) and SMAA EffectPass. Each one allocates its own render targets, materials and SMAA lookup textures.\n- The old set stays on the GPU. A Settings › Video preset change (post.ts:193) leaks one more chain.\n\nSmaller leaks, together a few MB per match:\n- terrain prop geometries from loadTerrainProps (terrain.ts:353-392, kept by setProps at 1816, never disposed in Terrain.dispose at 1840-1845);\n- crowd InstancedBufferGeometries (crowd.ts:320; CrowdSet.dispose at 440 frees only materials);\n- the crowd animation DataTexture (crowd.ts:130);\n- landmark material clones (terrain.ts:454).\n\nThe reviewer's real-client renderer-process growth (+180 MB per match) is mostly the by-design asset cache filling with new fighters. With an identical rebuild the renderer process stays flat.",
+   "evidence": "Verifier leak identification: `node <scratchpad>/perf_verify/leakid.mjs 4`, report _harness/_reports/final_perf_verify_leakid.json, log final_perf_verify_leakid.log.\n- Setup: the production render bench rebuilds the identical RIFT match (same fighters, map, seed 7) 4 times.\n- Method: every object three uploads is tracked through its 'dispose' listener.\n\nAt the menu after each teardown, menu_1 → menu_5:\n\n| Measure | menu_1 | menu_2 | menu_3 | menu_4 | menu_5 |\n|---|---|---|---|---|---|\n| Live render targets | 56 | 104 | 150 | 197 | 243 |\n| renderer.info geometries | 13 | 68 | 106 | 139 | 179 |\n| renderer.info textures | 173 | 233 | 285 | 338 | 391 |\n| GPU process footprint (MB) | 1201 | 1467 | 1660 | 1817 | 1975 |\n| Renderer process (MB) | 789 | 799 | 797 | 804 | 802 |\n\nThe GPU process grows +266, +193, +157 and +158 MB per rebuild. The renderer process stays flat.\n\nWhat leaks per identical rebuild (uploaded in rebuilds 2-4 and still live at the last menu):\n- 47 render targets: 8 at 1920×1080, about 12 at 960×540, and the 480×270 … 8×5 bloom mip chain ×4, which matches 2 chains per match;\n- 1 set of SMAA Area and Search textures;\n- Effect, Luminance, Downsampling, Upsampling, EdgeDetection and SMAAWeights materials, 2 each;\n- 37 geometries at about 4 MB, mostly crowd instanced views plus the terrain prop set.\n\nThe reviewer's own numbers agree: _harness/_reports/final_perf_scenecycle.json and final_perf_multimatch.json (GPU process at Home 698 → 1647 → 1903 → 2129 MB over 3 real matches).",
+   "gauge": "LoL runs each game in a fresh game process, so the game's memory goes back to baseline after every match and the client does not degrade over a session.\n\nRiot's published minimum is 2 GB RAM on Windows (4 GB recommended) in the older support-leagueoflegends.riotgames.com snapshot (article 201752654). The current support.riotgames.com page lists 8 GB unified memory on Mac. The Windows RAM row may have changed since.\n\nAt about +190 MB of GPU memory per match, VALE would add about 1 GB after 5 matches. On shared-memory integrated GPUs, which is LoL's mid-hardware tier, that leads to context loss or a tab kill.",
+   "fix": "1. Build the post chain once per quality. `setScene` should only re-point the existing passes: RenderPass.mainScene and mainCamera, N8AO scene and camera, and each EffectPass camera.\n2. When `build()` must run (quality change), dispose every old pass except the shared overlay and VFX passes before `removeAllPasses`. `pass.dispose()` frees each pass's targets, materials and effects.\n3. Then fix the small leaks:\n   - Terrain.dispose disposes the prop geometries passed to setProps;\n   - CrowdSet.dispose disposes its InstancedBufferGeometry (only the attribute views it owns);\n   - the crowd animation texture and the landmark material clones are disposed at teardown.\n4. Add a harness memory step to the B4 gate: rebuild the identical match 4 times (as in final_perf_verify_leakid). Fail if live render targets, geometries or textures at the menu exceed the menu_2 values, or if the GPU-process footprint grows more than 3%.",
+   "files": "src/render/post.ts:178-182, 193, 212-260; src/render/renderer.ts:405-418, 428, 498-519; src/render/terrain.ts:353-392, 440-460, 1816, 1840-1845; src/render/crowd.ts:130, 320, 440-447; _harness/perf_1080.mjs (new memory step)",
+   "verifierNote": "Reproduced, and the severity is right. I corrected the cause.\n- The reviewer's 'confirmed cause' (terrain prop geometry) is real but under 1 MB per rebuild.\n- The dominant leak is post.ts build(), which leaks 47 render targets per match (+157–266 MB of GPU process per identical rebuild).\n- The reviewer's proposed per-match disposal list in setupMatch would not reach it.\n- The renderer-process share (+180 MB per match) is not reproduced with identical rebuilds: it stays flat at about 800 MB, so that growth is the asset cache, not a leak.\n- An asset-cache byte budget is optional hygiene, not the fix."
+  },
+  {
+   "id": "PERF-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "S",
+   "title": "Dynamic resolution drops to 80% in the menu and never recovers on a 60 Hz display, so every High match renders at 1536×864 with eased AO",
+   "what": "In the menu, the 30 fps idle cap (renderer.ts:895, after 4 s without a station change) feeds its 33 ms intervals into DynamicResolution.sample (renderer.ts:906).\n- Outside a match the GPU timer reads null, or a stale `last` from the previous match: 144 ms in final_perf_longmatch.json postgame.\n- quality.ts:132 therefore classes these CPU-light frames as GPU-bound. The scale steps down to the 0.8 floor in about 8 s of the cap, about 12 s after arriving on a screen.\n- configure() runs only in setQuality (renderer.ts:368), never at match setup.\n- The only way back up needs an average interval under 0.8× target, i.e. 13.3 ms (quality.ts:140), which a 60 Hz vsync display never delivers.\n\nThe result: the whole match renders at 64% of the pixels, and applySize eases N8AO while scale ≤ 0.85 (renderer.ts:400). On a display of 120 Hz or more the scale does climb back (8.33 ms intervals).\n\nThe bench disables dynamic resolution (render_bench.ts:67), so the B4 gate cannot see any of this.",
+   "evidence": "Verifier live run of the real client: a dev bundle (NODE_ENV=development, same index hash as the reviewer's) running `node <scratchpad>/perf_verify/dynlive.mjs <devbundle>`. Report _harness/_reports/final_perf_verify_dynlive.json, log final_perf_verify_dynlive.log.\n\nIdle Home, load 2.1–2.4:\n\n| Time on Home | 0–4 s | 6 s | 8 s | 10 s | 12 s |\n|---|---|---|---|---|---|\n| Render scale | 1 | 0.95 | 0.9 | 0.85 | 0.8 |\n\nAt 0.8 the buffer is 1536×864, bound 'gpu', gpuMs null.\n\nThrough the match:\n- The scale stays 0.8 through queue, draft (itself idle-capped to 30 fps) and loading.\n- It stays 0.8 for 90 s of the RIFT match at 59.6 fps (p95 16.7, p99 16.8), while the GPU timer reads 13.9–32.1 ms.\n- Calling `renderer.setQuality(settings.video)` mid-match restores 1.0 (1920×1080).\n\nPure-logic check against src/render/quality.ts (`node <scratchpad>/perf_verify/dyn.ts`, output _harness/_reports/final_perf_verify_dynres.txt):\n- 20 s at the 30 fps cap: 0.8.\n- Then 300 s at 60 Hz with gpu null, 3, 8 or 12.9 ms: 0.8.\n- With a hitch every 2 s: 0.8.\n- 10 s at 120 Hz: climbs to 0.95.\n\nShots: _harness/_shots/final_perf_verify_home_idle16s.png, final_perf_verify_match_scale_default.png, final_perf_verify_match_scale_reconfigured.png.",
+   "gauge": "LoL renders at the resolution and quality the player picked and holds 60 fps on mid hardware. It never quietly trades sharpness away, so a player who picks High gets the full image.",
+   "fix": "1. Sample the controller only for frames the renderer wanted at the display rate: never in menu mode, never while the idle cap or an fpsCap below the display rate is active.\n2. Call dyn.configure() in setupMatch, and clear GpuTimer.last at teardown.\n3. Replace the up-rule 'interval below 0.8× target', which vsync makes impossible, with a probe: after N on-target windows below base, step up 0.05 and keep the step only if the next windows stay on target.\n4. Ignore GPU-timer values longer than the measured frame interval. This step is required: right after the reconfigure the scale fell to 0.95 within 10 s at load about 5, because readings of 29–31 ms at a steady 60 fps made contention hitches look GPU-bound.\n5. Add a Settings › Video row to turn dynamic resolution on and off.\n6. Add a gate step: the real bundled client, 60 s in a match with dynamic resolution on, asserting renderScale equals base on an idle machine.",
+   "files": "src/render/quality.ts:92-150, 156-200; src/render/renderer.ts:323, 366-368, 393-403, 420, 891-907; _harness/web/render_bench.ts:67; _harness/perf_1080.mjs; src/ui/screens/settings.tsx; src/session/settings.ts",
+   "verifierNote": "Reproduced live and in pure logic. The severity is right: it is a silent, constant quality downgrade on 60 Hz displays (the mid-hardware norm), and it contradicts the module's own contract ('it steps back up after a sustained headroom', quality.ts:16).\n\nTwo refinements:\n- Displays of 120 Hz or more do recover.\n- Fix step 4 is mandatory, not optional."
+  },
+  {
+   "id": "PERF-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "First match downloads 55.7 MB, a third of it PNG art, and nothing preloads during the draft",
+   "what": "Splash and portrait art ships as PNG: 48 splashes at 1600×900, 68.9 MB in total. The first RIFT load pulls about 55.7 MB, 16 MB of it splash PNG.\n\nrenderer.preload starts only when the loading screen mounts (src/ui/screens/loading.tsx:41-46), so the draft time goes unused.",
+   "evidence": "- _harness/_reports/final_perf_longmatch.json match.loadNet and _harness/_reports/final_perf_catalog_sizes.txt (reviewer).\n- I confirmed the preload site at loading.tsx:41-46 and that renderer.preload has no other caller in src/ui.\n- content:check reports assets of 658 files, 210.60 MB (_harness/_reports/final_perf_verify_content.txt).",
+   "gauge": "LoL's loading screen pulls nothing over the network, because the client is pre-patched, and its loading art is compressed.",
+   "fix": "Encode splashes and portraits to WebP or AVIF in the content build. Start renderer.preload at match-found and at each lock-in, and fetch the splashes when the draft completes.",
+   "files": "tools/build_content.ts, src/ui/screens/draft.tsx, src/ui/screens/loading.tsx:41-46, src/render/renderer.ts:1105, src/ui/state.ts",
+   "verifierNote": "Kept as a minor. The code claims check out. The download figures come from the reviewer's localhost measurement."
+  },
+  {
+   "id": "PERF-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "`npm run package` ships 1.49 GB of assets no catalog references",
+   "what": "dist-catalog/assets holds 2,961 files (1.7 GB), but the catalog references only 658 files, 210.6 MB. package_deploy copies the whole of dist-catalog.",
+   "evidence": "`du -sh dist-catalog/assets` gives 1.7G. `ls dist-catalog/assets | wc -l` gives 2961. content:check: 658 referenced files, 210.60 MB. Reviewer's union count: _harness/_reports/final_perf_download.txt.",
+   "gauge": "LoL patches ship deltas of live content only.",
+   "fix": "Have package_deploy copy only the assets referenced by the catalogs the manifest lists. Add `build_content --prune`.",
+   "files": "tools/package_deploy.ts:60-70, tools/build_content.ts",
+   "verifierNote": "Confirmed."
+  },
+  {
+   "id": "PERF-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Console noise in every match and at boot",
+   "what": "`THREE.BufferGeometry.toNonIndexed(): BufferGeometry is already non-indexed.` is logged from the pebble builder at src/render/terrain_clutter.ts:111, which calls toNonIndexed without an index guard. Boot also logs a favicon 404, because index.html has no icon link.",
+   "evidence": "Reproduced in my e2e run: the warning appears in the RIFT, BRIDGE and FRAY journeys (_harness/_reports/final_perf_verify_e2e.json consoleErrors). The 404 and the warning both appear in _harness/_reports/final_perf_verify_leakid.json logs. `grep -n icon index.html` finds nothing.",
+   "gauge": "A shipped LoL client logs nothing in normal play.",
+   "fix": "Use `g.index ? g.toNonIndexed() : g` in pebble(). Add an original favicon and a `<link rel=icon>`. Assert zero console warnings in e2e.",
+   "files": "src/render/terrain_clutter.ts:111, index.html, public/, _harness/e2e.mjs",
+   "verifierNote": "Reproduced."
+  },
+  {
+   "id": "PERF-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "After WebGL context loss the view recovers, but the GPU timer spams warnings and dynamic resolution goes blind",
+   "what": "src/ has no webglcontextlost or webglcontextrestored handling. GpuTimer (quality.ts:156-200) keeps polling queries from the dead context. Nothing tells the player while the world is blank.",
+   "evidence": "Reviewer's artifacts: _harness/_reports/final_perf_ctxloss.json and _harness/_shots/final_perf_ctxloss_1_lost.png / _3_later.png. `grep -rn webglcontextlost src` finds nothing.",
+   "gauge": "LoL recovers from device loss with a clear reconnect flow.",
+   "fix": "Handle webglcontextlost and webglcontextrestored in Renderer: reset GpuTimer, freeze dynamic resolution, show a VALE-styled 'Restoring the view' plate, and re-warm the programs on restore.",
+   "files": "src/render/renderer.ts:270, src/render/quality.ts:156-200, src/ui/hud/world.tsx",
+   "verifierNote": "Kept. I did not re-run it. The code claim checks out."
+  },
+  {
+   "id": "PERF-m5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "Real play exceeds the gate's triangle and program budgets that the fixed gate view passes",
+   "what": "The gate's fixed view reads 385k triangles and 37 programs. In real play the client reached 520,859 triangles and 42 programs, both over budget (≤ 500k, ≤ 40).",
+   "evidence": "_harness/_reports/final_perf_longmatch.json, sample x4 at t=362.4: tris 520859, calls 217. Programs go 37 → 42 by t=497. My gate run: High actors 228k/78 draws (_harness/_reports/final_perf_verify_perf_1080.json).",
+   "gauge": "LoL holds its budget in every fight, not only in a benchmark shot.",
+   "fix": "Record the per-second peak triangles and programs over a whole real-client match in the gate and assert on the peak. Add a far fighter LOD, and prewarm the late VFX program variants.",
+   "files": "_harness/perf_1080.mjs, src/render/actors.ts, src/render/vfx/system.ts",
+   "verifierNote": "Kept as a minor. Frame rate held at 60 in those windows."
+  },
+  {
+   "id": "PERF-V1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "The B4 gate flips between PASS and FAIL on 0.1 ms of vsync jitter",
+   "what": "The gate requires High p95 ≤ 16.7 ms (perf_1080.mjs:44). Frame intervals at 60 Hz land at 16.6, 16.7 and 16.8 ms, so p95 sits right on the threshold. The same build passes in one idle window and fails in the next, with no frame dropped in either.",
+   "evidence": "Reviewer's run: p95 16.7, GATE PASS (_harness/_reports/final_perf_perf_1080.json). My run 10 minutes later in an idle window (load 2.99→2.92): 60.1 fps, avg 16.64, p95 16.8, p99 16.8, all 5 worst frames 16.8 ms, printed 'GATE FAIL' (_harness/_reports/final_perf_verify_gate.log, final_perf_verify_perf_1080.json).",
+   "gauge": "LoL's 60 fps target means no frames missed. Riot's 16.66 ms budget is a per-frame cost budget, not a test that rAF timestamps land within 0.03 ms.",
+   "fix": "Measure dropped frames instead: count intervals above 1.5× the measured vsync interval, or allow about 0.5 ms of vsync tolerance on p95 (≤ 17.2 ms). Keep p99 ≤ 25 ms and the renderer CPU budget as they are.",
+   "files": "_harness/perf_1080.mjs:43-44, 140-160",
+   "verifierNote": "Added by the verifier. It is a harness defect, not a performance regression."
+  }
+ ],
+ "missed": []
+}
