@@ -437,6 +437,8 @@ class ValeRenderer implements Renderer {
     { const [sx, sy, sz] = L.sunDir; const k = 1 / Math.max(0.05, Math.abs(sy)); this.shadowDir.set(-sx * k, -sz * k); if (this.shadowDir.length() > 3) this.shadowDir.setLength(3); }
     const sc = new Color().setStyle(L.sunColor);
     this.sky.makeFallback(L.sunDir, sc, new Color(0.16, 0.25, 0.42), new Color().setStyle(L.fogColor).multiplyScalar(0.9));
+    // r12 B4: the match draws no sky box (never on screen at the lane camera): one program and a full-screen draw less
+    this.sky.solid = new Color().setStyle(L.fogColor);
     this.sky.apply(this.scene, null, L.ambient);
     // the environment map is part of every lit program's key: once this match's sky is final, warm every built
     // template against it (and every template built later, as it is built)
@@ -461,7 +463,7 @@ class ValeRenderer implements Renderer {
     this.scene.add(this.ambient.group);
     this.scene.add(this.terrain.group);
     this.loadTerrainTextures(map, gen);
-    void loadTerrainProps(map, (r) => this.assets.model(r)).then((p) => { if (gen === this.matchGen && this.terrain && p) this.terrain.setProps(p); });
+    void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) this.terrain.setProps(p ?? {}); });
     void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) this.terrain.group.add(o); });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
@@ -950,13 +952,25 @@ class ValeRenderer implements Renderer {
 
   /** r12 B4: the terrain's instanced scatter keeps only the cells this frame's camera can show or shadow into */
   private readonly cullView: CullView = { frustum: _cullFrustum, fx: 0, fz: 0, sdx: 0, sdz: 0 };
+  /** the view the last cull ran for (view-projection, shadow reach, the terrain): a still camera skips it */
+  private readonly cullKey = new Float32Array(18);
+  private cullFor: TerrainBuild | null = null;
   private cullScatter(): void {
     if (!this.terrain) return;
     const cam = this.rig.camera, v = this.cullView;
-    _cullFrustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
-    v.fx = this.rig.focus.x; v.fz = this.rig.focus.z;
+    _m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     const sh = this.sun.shadowsOn;
-    v.sdx = sh ? this.shadowDir.x : 0; v.sdz = sh ? this.shadowDir.y : 0;
+    const sdx = sh ? this.shadowDir.x : 0, sdz = sh ? this.shadowDir.y : 0;
+    const K = this.cullKey, e = _m4.elements;
+    let same = this.cullFor === this.terrain && K[16] === Math.fround(sdx) && K[17] === Math.fround(sdz);
+    for (let i = 0; same && i < 16; i++) same = K[i] === Math.fround(e[i]);
+    if (same) return;
+    for (let i = 0; i < 16; i++) K[i] = e[i];
+    K[16] = sdx; K[17] = sdz;
+    this.cullFor = this.terrain;
+    _cullFrustum.setFromProjectionMatrix(_m4);
+    v.fx = this.rig.focus.x; v.fz = this.rig.focus.z;
+    v.sdx = sdx; v.sdz = sdz;
     this.terrain.cull(v);
   }
 

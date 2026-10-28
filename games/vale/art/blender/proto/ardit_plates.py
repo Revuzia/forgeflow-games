@@ -12,7 +12,8 @@ count). Fixes over the shared cut (its figure estimate, edge padding and output 
   * the same backdrop rule round the spear arm, the spear and the pavise's lower edge (pale, smooth, neutral
     regions connected to the outside background are not paint).
   * the floor-shadow trim: the shared trim keeps only dark pixels in the lowest 90 rows, which cuts a seam across
-    both boots at their pale highlight band; here the trim drops only near-neutral pale pixels (shadow/backdrop).
+    both boots at their pale highlight band; here the trim drops only near-neutral pixels (the painted floor shadow is
+    a perfectly neutral grey, L 105-130, the boot leather is warm), so the boot toes no longer pick up grey shadow.
 Writes art/.cache/concept/ardit_{front,back}.png, ardit_mask.png, ardit_plates.json (+ ardit_plates_debug.png).
 """
 from __future__ import annotations
@@ -121,11 +122,16 @@ def main() -> None:
         g = meta[side]["ground"]
         keep[g + 1:, x0:x1] = False
         band = slice(g - 90, g + 1)
-        shadow = (lum[band, x0:x1] > 120) & (sat[band, x0:x1] < 0.08)
+        # the painted floor shadow is a perfectly neutral grey (sat 0, L 105-130); the boot leather is warm (sat ~0.15)
+        shadow = ((lum[band, x0:x1] > 120) & (sat[band, x0:x1] < 0.08)) | ((lum[band, x0:x1] > 68) & (sat[band, x0:x1] < 0.035))
+        shadow = nd.binary_opening(shadow, iterations=1) | ((lum[band, x0:x1] > 120) & (sat[band, x0:x1] < 0.08))
         keep[band, x0:x1] &= ~shadow
         sub = nd.binary_closing(keep[band, x0:x1], iterations=3)
         keep[band, x0:x1] = sub & ~shadow
         keep[:, x0:x1] = nd.binary_opening(keep[:, x0:x1], iterations=2)
+        # the band's top edge left a 1-2 px seam across both boots: close it vertically
+        seam = slice(g - 100, g - 80)
+        keep[seam, x0:x1] |= nd.binary_closing(keep[seam, x0:x1], structure=np.ones((7, 1), bool))
     _, (iy, ix) = nd.distance_transform_edt(~keep, return_indices=True)
     padded = im[iy, ix]
     soft = np.stack([nd.gaussian_filter(padded[..., c], 5) for c in range(3)], -1)

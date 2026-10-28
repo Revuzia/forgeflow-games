@@ -39,8 +39,18 @@ const res = await page.evaluate(() => {
     if (pass.fullscreenMaterial) note(pass.fullscreenMaterial, `post/${pass.name}.fs`);
     for (const e of pass.effects ?? []) note(e?.material, `post/${pass.name}.effect`);
   }
-  const list = gl.info.programs.map((p) => ({ id: p.id, type: p.type, name: p.name, used: p.usedTimes, owners: [...(owners.get(p.id) ?? [])].slice(0, 6) }));
+  walk(r.vfx?.distortScene, 'distort');
+  walk(r.hoverRim?.scene, 'hover');
+  for (const [k, v] of Object.entries(r.hoverRim ?? {})) if (v && v.isMaterial) note(v, 'hover.' + k);
+  for (const [k, v] of Object.entries(r.crowd ?? {})) if (v instanceof Map) for (const s of v.values()) walk(s.group, 'crowd.' + k);
+  const g2 = gl.getContext();
+  const list = gl.info.programs.map((p) => {
+    const vs = g2.getShaderSource(p.vertexShader?.shader ?? p.vertexShader) ?? '';
+    const fs = g2.getShaderSource(p.fragmentShader?.shader ?? p.fragmentShader) ?? '';
+    const hint = (fs.match(/uniform [a-zA-Z0-9]+ (u[A-Z][a-zA-Z0-9]*)/g) ?? []).slice(0, 4).map((x) => x.split(' ').pop()).join(',');
+    return { id: p.id, type: p.type, name: p.name, used: p.usedTimes, owners: [...(owners.get(p.id) ?? [])].slice(0, 4), hint };
+  });
   return list;
 });
-for (const p of res) console.log(p.id, p.type, JSON.stringify(p.name), p.used, p.owners.join(' | '));
+for (const p of res) console.log(p.id, p.type, JSON.stringify(p.name), p.used, '{' + p.hint + '}', p.owners.join(' | ').slice(0, 200));
 await browser.close();

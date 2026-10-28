@@ -114,7 +114,7 @@ export class MenuWorld {
         for (const [r, t] of pairs) if (t) set[r] = t;
         terrain.setTextures(set);
       });
-      void loadTerrainProps(map, (r) => assets.model(r)).then((p) => { if (p) terrain.setProps(p); });
+      void loadTerrainProps(map, (r) => assets.model(r)).catch(() => null).then((p) => terrain.setProps(p ?? {}));
       void loadTerrainLandmarks(map, (r) => assets.model(r), terrain.groundAt).then((ls) => { for (const o of ls) terrain.group.add(o); });
       this.scene.add(this.terrain.group);
       this.generateStations(map);

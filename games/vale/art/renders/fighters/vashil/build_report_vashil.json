@@ -39,22 +39,22 @@
     "tris_bell_hooks": 182,
     "tris_clapper_stems": 140,
     "tris_clappers": 280,
-    "validate_vashil": "22050->22036",
+    "validate_vashil": "22050->22039",
     "validate_vashil_accent": "280->273"
   },
-  "uv_coverage": 0.608,
+  "uv_coverage": 0.594,
   "bake": {
-    "base": 3.33,
-    "rough_metal": 3.68,
-    "normal": 1.77,
-    "ao": 2.51,
-    "normal_fixed_px": 21381,
-    "projection": 40.55,
-    "pack_save": 40.94,
-    "total": 52.35
+    "base": 6.49,
+    "rough_metal": 7.84,
+    "normal": 4.54,
+    "ao": 4.1,
+    "normal_fixed_px": 23366,
+    "projection": 52.0,
+    "pack_save": 52.31,
+    "total": 75.55
   },
-  "tris": 22309,
-  "mesh_top_m": 2.174,
+  "tris": 22312,
+  "mesh_top_m": 2.188,
   "clips": {
     "idle": {
       "frames": 72,
@@ -156,23 +156,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2774960,
+  "glb_bytes_raw": 2740032,
   "optimize": {
     "ok": true,
-    "before": 2774960,
-    "after": 1189872
+    "before": 2740032,
+    "after": 1172176
   },
-  "glb_bytes": 1189872,
+  "glb_bytes": 1172176,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil.glb (1162 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: vashil_base 2048x2048 222K, vashil_normal 512x512 49K, vashil_orm 256x256 24K",
-      "  skinned meshes: vashil(20780v), vashil_accent(154v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil.glb (1145 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: vashil_base 2048x2048 213K, vashil_normal 512x512 48K, vashil_orm 256x256 24K",
+      "  skinned meshes: vashil(20522v), vashil_accent(154v)",
       "  bones: 30 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL x_index1L x_index2L x_sleeveL_1 shoulderR upper_armR forearmR handR propR x_rod_head x_sleeveR_1 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.667s/20tr, attack2:0.667s/19tr, cast_a1:0.833s/20tr, cast_a2:0.500s/19tr, cast_a3:0.667s/22tr, cast_ult:1.333s/22tr, channel:1.333s/17tr, dash:0.500s/21tr, death:1.667s/23tr, idle:2.400s/20tr, idle_lobby:4.000s/21tr, recall:2.000s/19tr, run:0.533s/26tr, stunned:1.333s/20tr, taunt:1.500s/17tr, victory:1.833s/22tr",
       "  tracks checked: 328; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 22309; bind-pose bounds (three units, Y up): 0.97 x 2.18 x 0.83; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
+      "  tris: 22312; bind-pose bounds (three units, Y up): 0.97 x 2.19 x 0.83; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
       "  run: 16 f, planted samples 2, max foot-speed error 0.2%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -185,10 +185,10 @@
       "turntable": "art/renders/fighters/vashil/turntable.png"
     },
     "seconds": {
-      "splash": 11.21,
-      "portrait": 5.47,
-      "icon": 1.04,
-      "turntable": 6.36
+      "splash": 16.87,
+      "portrait": 4.64,
+      "icon": 0.92,
+      "turntable": 4.74
     }
   },
   "three_qa": {
@@ -202,8 +202,8 @@
       ],
       [
         0.407,
-        2.174,
-        0.431
+        2.188,
+        0.427
       ]
     ],
     "facing": [
@@ -213,34 +213,34 @@
     "headY": 1.642,
     "accentPct": 1.65,
     "accentTopHalfPct": 100,
-    "heightPx1080": 117,
+    "heightPx1080": 118,
     "size": [
       2400,
       900
     ],
     "clips": 16,
     "out": "art/renders/fighters/vashil/three_vashil.png",
-    "seconds": 11,
+    "seconds": 23,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/vashil/three_clips_vashil.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.08,
-      "model": 5.21,
-      "lows_bind": 2.27,
-      "uv": 2.18,
-      "bake": 52.36,
+      "materials": 0.23,
+      "model": 6.83,
+      "lows_bind": 2.61,
+      "uv": 7.77,
+      "bake": 75.55,
       "clips": 0.21,
-      "export": 1.6,
-      "optimize": 0.68,
-      "load_test": 0.16,
-      "render": 24.17,
-      "three_qa": 30.4,
-      "cache": 0.08
+      "export": 2.06,
+      "optimize": 4.88,
+      "load_test": 0.56,
+      "render": 27.29,
+      "three_qa": 39.43,
+      "cache": 0.09
     },
-    "total_s": 119.45
+    "total_s": 167.61
   },
   "run_ref_speed": 3.35,
   "height_m": 1.9

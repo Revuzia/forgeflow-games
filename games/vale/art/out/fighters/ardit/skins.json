@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ardit_chalkline",
+    "fighter": "ardit",
+    "model": "assets/fighters/ardit/ardit_chalkline.glb",
+    "portrait": "assets/fighters/ardit/ardit_chalkline_portrait.png",
+    "splash": "assets/fighters/ardit/ardit_chalkline_splash.png"
+  },
+  {
+    "id": "ardit_first_bell",
+    "fighter": "ardit",
+    "model": "assets/fighters/ardit/ardit_first_bell.glb",
+    "portrait": "assets/fighters/ardit/ardit_first_bell_portrait.png",
+    "splash": "assets/fighters/ardit/ardit_first_bell_splash.png"
+  }
+]

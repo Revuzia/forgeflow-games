@@ -54,7 +54,7 @@
 import {
   BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
   InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
-  RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
+  RGBAFormat, Shape, ShapeGeometry, ShapeUtils, Sphere, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
   type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -70,7 +70,7 @@ import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep
 import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
 import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
 import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, motionDepthMaterial, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
-import { CellInstances, type CullView } from './instance_cull.ts';
+import { CellInstances, type CullView, decimate, splitGeometry } from './instance_cull.ts';
 
 type V2 = readonly [number, number];
 type Poly = readonly V2[];
@@ -321,7 +321,8 @@ export interface TerrainBuild {
   /** painted tiling textures by role (map.art.terrain.textures): litter, grain, moss */
   setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void;
   /** authored scatter props (map.art.terrain.props: tree / rock / stone → GLB variants), vertex-coloured,
-   *  real size, origin at the ground contact; they replace the procedural shapes and re-scatter */
+   *  real size, origin at the ground contact; they replace the procedural shapes and re-scatter. Call it once the
+   *  load settles, with {} when nothing loaded: a role the map names props for scatters nothing until then */
   setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void;
   /** standing height at a map point: a cliff block's top inside a wall polygon, else 0 */
   groundAt(x: number, y: number): number;
@@ -526,6 +527,40 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     culls.add(ci);
     return g;
   };
+  /** r12 B4: static shadow casters (cliff chunks, landmarks): each frame a caster draws into the shadow map only
+   *  when it, or the shadow it throws along the sun's ground offset, can reach the view (+ 4 m); three's square
+   *  shadow box alone keeps ~1.5x the chunks the view sees */
+  const casters: { o: Mesh; s: Sphere; top: number }[] = [];
+  const caster = (o: Mesh): void => {
+    if (!o.castShadow) return;
+    o.updateMatrixWorld(true);
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    const sp = o.geometry.boundingSphere!.clone().applyMatrix4(o.matrixWorld);
+    casters.push({ o, s: sp, top: sp.center.y + sp.radius });
+  };
+  const _cs = new Sphere();
+  const cullCasters = (v: CullView | null): void => {
+    const sl = v ? Math.hypot(v.sdx, v.sdz) : 0;
+    for (const c of casters) {
+      if (!v) { c.o.castShadow = true; continue; }
+      _cs.copy(c.s); _cs.radius += 4;
+      let on = v.frustum.intersectsSphere(_cs);
+      if (!on && sl > 0) {
+        const k = Math.max(0, c.top) * 0.5;
+        _cs.center.set(c.s.center.x + v.sdx * k, Math.min(c.s.center.y, k), c.s.center.z + v.sdz * k);
+        _cs.radius = c.s.radius + sl * k + 4;
+        on = v.frustum.intersectsSphere(_cs);
+      }
+      c.o.castShadow = on;
+    }
+  };
+  // landmarks the renderer adds (static GLB scenes): their shadow-casting meshes join the casters
+  group.addEventListener('childadded', (ev) => {
+    const o = ev.child;
+    if (o.name === 'vale_scatter' || o.name.startsWith('vale_')) return;
+    o.updateMatrixWorld(true);
+    o.traverse((m) => { if ((m as Mesh).isMesh && !(m as InstancedMesh).isInstancedMesh && !(m as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) caster(m as Mesh); });
+  });
   /** drop a scatter part's instance sets (setScatter rebuilds) */
   const unchunk = (g: Group): void => {
     const ci = g.userData.cull as CellInstances | undefined;
@@ -1057,10 +1092,17 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
   wallMat.customProgramCacheKey = () => 'vale_walls_v10';
   patchWorldMaterial(wallMat);
-  const wallMesh = new Mesh(wallGeo, wallMat);
-  wallMesh.castShadow = true; wallMesh.receiveShadow = true; wallMesh.name = 'vale_cliffs';
-  group.add(wallMesh);
-  disposables.push(wallGeo, wallMat);
+  // r12 B4: the cliffs in 16 m chunks (same triangles), so the view draws only the ones it sees and the shadow map
+  // only the ones whose shadow can reach the view (casters, below)
+  const wallParts = splitGeometry(wallGeo, 16);
+  wallGeo.dispose();
+  for (const g of wallParts) {
+    const wallMesh = new Mesh(g, wallMat);
+    wallMesh.castShadow = true; wallMesh.receiveShadow = true; wallMesh.name = 'vale_cliffs';
+    group.add(wallMesh);
+    caster(wallMesh);
+  }
+  disposables.push(...wallParts, wallMat);
 
   // gorge extras: rock columns standing in the drop (parallax as the camera moves) and drifting mist banks
   if (gorge) {
@@ -1550,6 +1592,11 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   disposables.push(clutterGeo.moss, clutterGeo.leaf, clutterGeo.pebble, clutterGeo.tuft, clutterMat);
   let scatterParts: Group[] = [];
   let props: Partial<Record<TerrainPropRole, BufferGeometry[]>> = {};
+  // r12 B4: a role the map names authored props for waits for them (setProps) instead of scattering the procedural
+  // stand-ins for the first frames: their programs never compile and nothing pops; a role whose GLBs all fail
+  // falls back to the stand-ins once setProps arrives without it
+  const named = ((tr.props ?? {}) as Record<string, unknown>);
+  const awaiting = new Set<TerrainPropRole>(TERRAIN_PROP_ROLES.filter((r) => Array.isArray(named[r]) && (named[r] as unknown[]).some((x) => typeof x === 'string')));
   let scatterLevel: 0 | 1 | 2 = 2;
   const propMat = propMaterial();
   patchWorldMaterial(propMat);
@@ -1564,7 +1611,15 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const propParts = (geos: BufferGeometry[], items: { x: number; y: number; m: Matrix4; c?: Color }[], name: string, shadows = true, sway = false): Group[] => {
     const by: { m: Matrix4; c?: Color }[][] = geos.map(() => []);
     for (const it of items) by[variantOf(it.x, it.y, geos.length)].push(it);
-    return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined)).filter((g) => g.children.length > 0);
+    return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined, 0,
+      sway && shadows ? { geometry: treeLod(g), dist: Infinity } : null)).filter((g) => g.children.length > 0);
+  };
+  /** r12 B4 Dialwood LOD: a ≤ 250-triangle crown for the trees that only shadow into view (instance_cull.ts) */
+  const lods = new WeakMap<BufferGeometry, BufferGeometry>();
+  const treeLod = (g: BufferGeometry): BufferGeometry => {
+    let l = lods.get(g);
+    if (!l) { l = decimate(g, 250); lods.set(g, l); disposables.push(l); }
+    return l;
   };
   /** real height and horizontal crown reach of a prop (origin at its ground contact) */
   const dimsOf = (g: BufferGeometry): { H: number; R: number } => {
@@ -1586,8 +1641,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     const pick = <T,>(arr: T[], keep: number): T[] => arr.filter((_, i) => (i * 0.618034) % 1 < keep);
     const trees = pick(treeSpots, keepT), boulders = pick(boulderSpots, level === 0 ? 0.5 : 1), stones = pick(stoneSpots, keepS);
     const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
-    if (props.tree && !props.tree.length) {
-      // the map names no trees (an explicit empty list): none
+    if ((props.tree && !props.tree.length) || awaiting.has('tree')) {
+      // the map names no trees (an explicit empty list): none; or its authored trees are still loading
     } else if (trees.length && props.tree?.length) {
       const geos = props.tree, dims = geos.map(dimsOf);
       const items: { x: number; y: number; m: Matrix4; c: Color }[] = [];
@@ -1615,8 +1670,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       }
       scatterParts.push(chunked(trunkGeo, trunkMat, trunks, 'vale_trunks'), chunked(canopyGeo, leafMat, canopies, 'vale_canopies'));
     }
-    if (props.rock && !props.rock.length) {
-      // an explicit empty list: no boulders
+    if ((props.rock && !props.rock.length) || awaiting.has('rock')) {
+      // an explicit empty list: no boulders (or the authored ones are still loading)
     } else if (boulders.length && props.rock?.length) {
       scatterParts.push(...propParts(props.rock, boulders.map((b) => {
         q.setFromAxisAngle(up, b.r); s.set(b.s * 1.25, b.s * 1.1, b.s * 1.25); pos.set(b.x, (b.h ?? 0) - 0.04, b.y);
@@ -1630,8 +1685,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     }
     // stones fall back to the rock variants only when the map names no stone list at all
     const stoneGeos = props.stone ?? props.rock;
-    if (stoneGeos && !stoneGeos.length) {
-      // an explicit empty list: no loose stones
+    if ((stoneGeos && !stoneGeos.length) || awaiting.has('stone') || (!named.stone && awaiting.has('rock'))) {
+      // an explicit empty list: no loose stones (or the authored ones are still loading)
     } else if (stones.length && stoneGeos?.length) {
       scatterParts.push(...propParts(stoneGeos, stones.map((p) => {
         q.setFromAxisAngle(up, p.r); s.set(p.s * 1.1, p.s * 0.9, p.s); pos.set(p.x, (p.h ?? 0) - 0.02, p.y);
@@ -1707,6 +1762,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     },
     setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void {
       props = p;
+      awaiting.clear();
       setScatter(scatterLevel);
     },
     groundAt(x: number, y: number): number {
@@ -1720,7 +1776,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       const out = gorge ? x < 0 || x > SX : x < 0 || x > SX || y < 0 || y > SY;
       return out ? RH : 0;                                                   // the carved rim round the plate
     },
-    cull(view: CullView | null): void { for (const c of culls) c.cull(view); },
+    cull(view: CullView | null): void { for (const c of culls) c.cull(view); cullCasters(view); },
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {
       for (const c of culls) c.dispose();

@@ -146,7 +146,10 @@ HALO_RI, HALO_RO, HALO_HZ = 0.335, 0.400, 0.016
 HALO_RM = 0.5 * (HALO_RI + HALO_RO)
 HALO_SEG = 24                                       # carved segments round the band (radial notches)
 FIN_H = 0.075                                       # the front strut's arch finial
-FIN_LEAN = 26.0                                     # degrees the struts lean in toward the head (fix pass 2)
+# fix pass 2 tried leaning the struts 26 degrees in toward the head (the finial's point ~6 cm nearer the axis, so it
+# stays under the HP bar when he faces away), but from the game camera facing front the leant finial then stood over
+# the visor's arch point (the facing cue): kept upright. A full fix needs the game's bar anchor (src/render).
+FIN_LEAN = 0.0
 CLASP_ANG = (0.0, 125.0, -125.0)                    # degrees from the front (-Y) toward the left (+X)
 BELL_H = 0.11
 BELL_TOP = HALO_C[2] - HALO_HZ - 0.016              # the bell crowns hang 1.6 cm under the band (a hook loop)
@@ -682,13 +685,12 @@ def halo_parts(n_bells: int = 7) -> list:
         zc, hz = (0.020, 0.053) if ang == 0.0 else (0.006, 0.040)
         R = sdf.rot_z(-ang)
         c = ring_pt(ang, z=HALO_C[2] + zc)
-        # fix pass 2: the struts lean FIN_LEAN degrees in toward the head (a crown's points), their feet on the
-        # band's inner half: when he faces away the front strut is the ring's far side, the screen top under the
-        # HP bar, and the upright finial's point touched the bar; leant in, the point sits ~6 cm nearer the axis
-        lam = math.radians(FIN_LEAN)
-        t_, in_, up_ = R[0], R[1], R[2]
-        R = np.stack([t_, math.cos(lam) * in_ - math.sin(lam) * up_, math.cos(lam) * up_ + math.sin(lam) * in_])
-        c = ring_pt(ang, r=HALO_RM - 0.010, z=HALO_C[2] + zc - 0.004)
+        if FIN_LEAN:
+            # the struts leant in toward the head (tried in fix pass 2, see FIN_LEAN): feet on the band's inner half
+            lam = math.radians(FIN_LEAN)
+            t_, in_, up_ = R[0], R[1], R[2]
+            R = np.stack([t_, math.cos(lam) * in_ - math.sin(lam) * up_, math.cos(lam) * up_ + math.sin(lam) * in_])
+            c = ring_pt(ang, r=HALO_RM - 0.010, z=HALO_C[2] + zc - 0.004)
         cl.add(RoundBox(c, (0.024, 0.044, hz), 0.008, axes=R).displaced(chips(0.003, 10.0), 0.003), k=0.0)
         cl.add(RoundBox(c + R[2] * (hz + 0.003), (0.017, 0.034, 0.008), 0.005, axes=R), k=0.004)
         if ang == 0.0:
@@ -992,6 +994,7 @@ BACK_MATCH = 0.9           # how far each part's back projection moves onto its 
 # hem roll to the shins falls off further, the hem band a little darker; the knees up are unchanged)
 VALUE_RAMP = [(0.0, 0.52), (0.07, 0.56), (0.135, 0.58), (0.20, 0.60), (0.275, 0.72), (0.33, 0.83), (0.40, 0.91),
               (0.45, 0.95), (0.70, 1.0), (1.0, 1.04)]
+LOW_CAP_Z, LOW_CAP = 0.60, 1.12
 HEM_TOP = 0.262            # under the coat's hem roll: the dark slate under-robe (the concept's hem band)
 HEM_HEX = "#3B424B"
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
@@ -1361,9 +1364,14 @@ def _wood_paint(p, n):
     dark = _lin(_hex("#6E5A47"))
     c = base[None, :] * (1 - 0.35 * grain ** 3)[:, None] + dark[None, :] * (0.35 * grain ** 3)[:, None]
     knots = np.clip(NOISE.ridged(p, 11.0, 2) - 0.55, 0, 1) * 1.6
-    # fix pass 2: the butt darkened by the ground (the pale shaft lit the feet band)
-    butt = 0.58 + 0.42 * ss(0.04, 0.62, p[:, 2])
-    return c * ((1 - 0.35 * knots) * butt)[:, None] * (1 + 0.08 * _fbm(p, 30.0))[:, None]
+    # fix pass 2: the butt stained dark by the ground and shod with a painted ironstone heel (the pale shaft lit
+    # the feet band)
+    z = p[:, 2]
+    butt = 0.40 + 0.60 * ss(0.05, 0.52, z)
+    c = c * ((1 - 0.35 * knots) * butt)[:, None] * (1 + 0.08 * _fbm(p, 30.0))[:, None]
+    heel = ss(0.115, 0.100, z)[:, None]
+    shoe = _lin(_hex("#4A4F57"))[None, :] * (1 + 0.10 * _fbm(p, 25.0))[:, None]
+    return c * (1 - heel) + shoe * heel
 
 
 def _leather_paint(p, n, hexc="#4A4440"):
@@ -1507,6 +1515,21 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     zz = np.clip(p[:, 2] / 2.0, 0, 1)
     g = np.interp(zz, [a for a, _ in VALUE_RAMP], [b for _, b in VALUE_RAMP]).astype(np.float32)
     lin[body] = lin[body] * g[body][:, None]
+    # fix pass 2: the painted highlight strokes on the lower robe (under the knees) held the feet band light: no
+    # skirt texel under LOW_CAP_Z outshines its height band's median by more than LOW_CAP (soft), fading in below
+    m = sel("skirt")
+    if m is not None:
+        lo = m & (p[:, 2] < LOW_CAP_Z + 0.05)
+        if lo.sum() > 100:
+            Yl = _Y(lin[lo])
+            zl = p[lo, 2]
+            med = _band_tone(zl, np.repeat(Yl[:, None], 3, 1), zl)[:, 0]
+            cap = med * LOW_CAP
+            over = Yl > cap
+            Y2 = Yl.copy()
+            Y2[over] = cap[over] + (Yl[over] - cap[over]) * 0.35
+            f = 1 + (Y2 / np.maximum(Yl, 1e-6) - 1) * ss(LOW_CAP_Z + 0.05, LOW_CAP_Z - 0.05, zl)
+            lin[lo] = lin[lo] * f[:, None]
     lin = _hi_cap(lin)
     out[idx] = _srgb(lin)
     out = _refill(out, maps, names, log)

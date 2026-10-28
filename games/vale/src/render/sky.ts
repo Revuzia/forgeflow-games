@@ -12,13 +12,16 @@ import {
 } from 'three';
 
 export class Sky {
-  private readonly pmrem: PMREMGenerator;
+  private readonly renderer: WebGLRenderer;
   private envRT: ReturnType<PMREMGenerator['fromEquirectangular']> | null = null;
   private background: Texture | null = null;
   private fallback: DataTexture | null = null;
+  /** r12 B4: draw no sky box, clear to this colour instead (the lane camera never sees the horizon: measured 0 px of
+   *  sky at every map's edges and corners at the widest zoom); the HDR still lights the world. null = the sky box */
+  solid: Color | null = null;
 
   constructor(renderer: WebGLRenderer) {
-    this.pmrem = new PMREMGenerator(renderer);
+    this.renderer = renderer;
   }
 
   /** a soft procedural sky in the sun's direction and colour (used until / unless the HDR exists) */
@@ -63,13 +66,17 @@ export class Sky {
     const src = hdr ?? this.fallback;
     if (!src) return;
     src.mapping = EquirectangularReflectionMapping;
-    const rt = this.pmrem.fromEquirectangular(src);
+    // r12 B4: a generator per bake, disposed right after: its two programs (equirect → cube UV, GGX convolution)
+    // are released instead of staying live for the whole match
+    const pmrem = new PMREMGenerator(this.renderer);
+    const rt = pmrem.fromEquirectangular(src);
+    pmrem.dispose();
     this.envRT?.dispose();
     this.envRT = rt;
     this.background = src;
     scene.environment = rt.texture;
     scene.environmentIntensity = envIntensity;
-    scene.background = src;
+    scene.background = this.solid ?? src;
     scene.backgroundIntensity = backgroundIntensity;
     scene.backgroundBlurriness = 0;
   }
@@ -77,7 +84,6 @@ export class Sky {
   dispose(): void {
     this.envRT?.dispose();
     this.fallback?.dispose();
-    this.pmrem.dispose();
     this.envRT = null; this.background = null; this.fallback = null;
   }
 }

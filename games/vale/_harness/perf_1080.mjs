@@ -89,7 +89,7 @@ const { open } = await import('./pw.mjs');
 const stat = (xs) => {
   const r = xs.slice().sort((a, b) => a - b);
   const p = (k) => (r.length ? r[Math.min(r.length - 1, Math.floor(r.length * k))] : 0);
-  return { mean: r.length ? +(r.reduce((s, x) => s + x, 0) / r.length).toFixed(2) : 0, p95: +p(0.95).toFixed(2), p99: +p(0.99).toFixed(2) };
+  return { mean: r.length ? +(r.reduce((s, x) => s + x, 0) / r.length).toFixed(2) : 0, p50: +p(0.5).toFixed(2), p95: +p(0.95).toFixed(2), p99: +p(0.99).toFixed(2) };
 };
 const sumGroup = (g) => ({ calls: g.calls + g.shadowCalls, tris: g.tris + g.shadowTris, main: { calls: g.calls, tris: g.tris }, shadow: { calls: g.shadowCalls, tris: g.shadowTris } });
 const out = {
@@ -128,8 +128,10 @@ try {
       const detail = prof ? Object.fromEntries(Object.entries(prof.detail).slice(0, 40).map(([k, g]) => [k, sumGroup(g)])) : null;
       const res = {
         fps: +(1000 / avg).toFixed(1), avgMs: avg, p95Ms: ft.p95, p99Ms: ft.p99, frames: r.length,
+        worstMs: r.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
+        worstCpuMs: tm.render.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
         cpuMs: cpu, simMs: sim,
-        draws: prof?.total.calls ?? stats.sceneCalls, tris: prof?.total.tris ?? stats.sceneTriangles, programs: stats.programs,
+        draws: prof?.total.calls ?? stats.sceneCalls, tris: prof?.total.tris ?? stats.sceneTriangles, programs: stats.programs, programsDrawn: prof?.programsDrawn ?? null,
         groups, detail, programList: prof?.programs.map((p) => (args.includes('--keys') ? p : { type: p.type, name: p.name, used: p.used })) ?? null, stats,
         machine: { before, after, idle: before.idle && after.idle },
       };
@@ -155,7 +157,7 @@ try {
       res.errors = logs.filter((l) => !/favicon/.test(l)).slice(0, 20);
       out.presets[q] = res;
       const gs = groups ? Object.entries(groups).sort((a, b) => b[1].tris - a[1].tris).map(([k, g]) => `${k} ${(g.tris / 1000).toFixed(0)}k/${g.calls}`).join(' ') : '';
-      console.log(`${q.padEnd(7)} ${res.fps} fps  avg ${res.avgMs} p95 ${res.p95Ms} p99 ${res.p99Ms} ms  cpu ${cpu.mean}/${cpu.p95} ms  sim ${sim.mean} ms  draws ${res.draws}  programs ${res.programs}  tris ${(res.tris / 1000).toFixed(0)}k  [${gs}]`);
+      console.log(`${q.padEnd(7)} ${res.fps} fps  avg ${res.avgMs} p95 ${res.p95Ms} p99 ${res.p99Ms} ms  cpu ${cpu.mean} (p50 ${cpu.p50} p95 ${cpu.p95}) ms  sim ${sim.mean} ms  draws ${res.draws}  programs ${res.programs} (${res.programsDrawn} drawn)  tris ${(res.tris / 1000).toFixed(0)}k  [${gs}]`);
       console.log(`        load ${before.load}→${after.load}  ${res.frameTargets ?? ''}  ${PROD ? (res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`) : ''}`);
     } finally {
       await browser.close();

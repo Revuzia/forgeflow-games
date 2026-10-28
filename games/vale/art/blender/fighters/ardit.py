@@ -31,12 +31,13 @@ from __future__ import annotations
 import math
 import os
 import sys
+from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import bpy  # noqa: E402,F401
 import numpy as np  # noqa: E402
-from mathutils import Vector  # noqa: E402
+from mathutils import Matrix, Vector  # noqa: E402
 
 from common import anim, fighter, materials, rig, scene  # noqa: E402
 from common.anim import Aim, FootTarget, HandTarget  # noqa: E402
@@ -102,6 +103,7 @@ SPEAR_S = {"butt": -0.735, "shaft0": -0.66, "shaft1": 0.62, "collar0": 0.58, "kn
 PAV_Y, PAV_T = -0.235, 0.032                  # mid plane, half thickness (6.4 cm frame)
 PAV_OUT = [(0.372, 1.842), (0.800, 1.842), (0.800, 0.585), (0.600, 0.355), (0.372, 0.560)]
 PAV_FRAME_W = 0.052                           # the chalk frame's face width
+LINE_W = 0.019                                # the accent line along the window's edge (on the frame's faces)
 SPIRE_X = 0.640
 DIAMONDS = [((0.630, 2.030), 0.052, 0.105), ((0.668, 1.800), 0.058, 0.118)]   # (centre x, z), half w, half h
 INLAY_K = 0.62                                # inlay size / bezel size
@@ -259,7 +261,7 @@ def sculpts() -> list:
     helm.add(RoundBox((HX, -0.163, 2.133), (0.022, 0.016, 0.082), 0.008), k=0.006)          # the nasal bar
     helm.add(RoundBox((HX, -0.172, 2.214), (0.050, 0.010, 0.010), 0.006), k=0.006)          # the nasal's brow root
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
-    part("helm", helm, "chalk", "bone:head", 1900)
+    part("helm", helm, "chalk", "bone:head", 1500)
     visor = Sculpt("visor")
     visor.add(RoundBox((HX, -0.148, 2.236), (0.130, 0.010, 0.022), 0.006), k=0.0)
     part("visor", visor, "accent", "bone:head", 120, 0.6)
@@ -272,14 +274,14 @@ def sculpts() -> list:
 
     # NECK + GORGET (the pale stone collar, rigid on the chest)
     neck = Sculpt("neck")
-    neck.add(Capsule((0, 0.0, 1.86), (0, 0.01, 2.05), 0.105), k=0.0)
-    part("neck", neck, "under", "auto", 300)
+    neck.add(FlatCapsule((0, 0.008, 1.84), (0, 0.004, 2.045), 0.128, 0.152, 0.112, 0.130, side=(1, 0, 0)), k=0.0)
+    part("neck", neck, "leather", "auto", 300)
     gorget = Sculpt("gorget")
     gorget.add(Torus((0, 0.0, 1.925), 0.175, 0.060, axes=np.diag([1.0, 0.24 / 0.20, 1.0]), rz=0.055).displaced(chips(0.006, 9.0), 0.006), k=0.0)
     gorget.add(RoundBox((-0.01, -0.185, 1.915), (0.225, 0.045, 0.058), 0.026, axes=sdf.rot_x(-12)).displaced(chips(0.007, 8.0), 0.007), k=0.03)
     for sx in (-1, 1):                              # the notched lower edge of the bib
         gorget.sub(slab([(sx * 0.13, 1.86), (sx * 0.21, 1.86), (sx * 0.17, 1.885)], -0.21, 0.06, 0.004), k=0.004)
-    part("gorget", gorget, "stone", "bone:chest", 900)
+    part("gorget", gorget, "stone", "bone:chest", 760)
 
     # PAULDRONS: the square honed upper plates (rigid on the shoulders) and the lower tiers (on the upper arms)
     for s, sx in (("R", -1), ("L", 1)):
@@ -288,7 +290,7 @@ def sculpts() -> list:
         pu.add(RoundBox((sx * 0.385, 0.0, 1.915), (0.148, 0.218, 0.080), 0.034, axes=tilt).displaced(chips(0.009, 7.0), 0.009), k=0.0)
         pu.add(RoundBox((sx * 0.365, -0.005, 1.995), (0.118, 0.182, 0.026), 0.016, axes=tilt).displaced(chips(0.007, 9.0), 0.007), k=0.006)
         pu.sub(Capsule((sx * 0.25, -0.225, 1.975), (sx * 0.52, -0.225, 1.955), 0.007), k=0.004)   # the front lip line
-        part(f"pauldron_{s}", pu, "stone", f"bone:shoulder.{s}", 650)
+        part(f"pauldron_{s}", pu, "stone", f"bone:shoulder.{s}", 560)
         pl = Sculpt(f"tier_{s}")
         pl.add(RoundBox((sx * 0.470, 0.005, 1.742), (0.080, 0.185, 0.066), 0.030, axes=sdf.rot_y(sx * 14)).displaced(chips(0.008, 8.0), 0.008), k=0.0)
         part(f"tier_{s}", pl, "stone", f"bone:upper_arm.{s}", 420)
@@ -304,13 +306,13 @@ def sculpts() -> list:
     torso.sub(Capsule((0, -0.255, 1.82), (0, -0.25, 1.50), 0.006), k=0.004)                       # the centre seam
     for z in (1.585, 1.525):                                                                    # abdomen bands
         torso.sub(Torus((0, 0.01, z), 0.30, 0.006, axes=np.diag([1.0, 0.30 / 0.235, 1.0])), k=0.004)
-    part("cuirass", torso, "cloth", "auto", 2400)
+    part("cuirass", torso, "cloth", "auto", 2000)
     sleeves = Sculpt("sleeves")
     for E, S in ((E_R, S_R), (E_L, S_L)):
         sx = np.sign(S[0])
         sleeves.add(FlatCapsule(S + (sx * 0.01, 0.0, -0.02), E + (0, 0, -0.03), 0.098, 0.100, 0.092, 0.095, side=(1, 0, 0)).displaced(
             folds(0.007, 40.0, axis=2), 0.007), k=0.0)
-    part("sleeves", sleeves, "cloth", "auto", 1000)
+    part("sleeves", sleeves, "cloth", "auto", 860)
 
     # BRACERS (chalk stone, rigid on the forearms) and the GAUNTLET FISTS (rigid on the hands)
     for s, E, W in (("R", E_R, W_R), ("L", E_L, W_L)):
@@ -324,17 +326,17 @@ def sculpts() -> list:
         part(f"bracer_{s}", br, "stone", f"bone:forearm.{s}", 420)
     fr = fist("fist_R", F_R, SPEAR_U, (-0.85, 0.35, 0.0), (0.15, -1.0, 0.0), -1)
     fr.add(Torus(W_R + (W_R - E_R) * 0.05, 0.062, 0.020, axes=sdf.frame(W_R - E_R)), k=0.02)
-    part("fist_R", fr, "gauntlet", "bone:hand.R", 650, 0.7)
+    part("fist_R", fr, "gauntlet", "bone:hand.R", 580, 0.7)
     fl = fist("fist_L", F_L, (0, 0, 1), (0.85, 0.35, 0.0), (-0.1, -1.0, 0.0), 1)
     fl.add(Torus(W_L + (W_L - E_L) * 0.05, 0.062, 0.020, axes=sdf.frame(W_L - E_L)), k=0.02)
-    part("fist_L", fl, "gauntlet", "bone:hand.L", 600, 0.7)
+    part("fist_L", fl, "gauntlet", "bone:hand.L", 520, 0.7)
 
     # BELT + BUCKLE
     belt = Sculpt("belt")
     belt.add(Torus((0, 0.01, 1.445), 0.318, 0.050, axes=np.diag([1.0, 0.318 / 0.250, 1.0]), rz=0.062), k=0.0)
     for x in (-0.24, -0.15, 0.15, 0.24):
         belt.add(Sphere((x, -0.255 + 0.06 * (abs(x) > 0.2), 1.445), 0.012), k=0.004)
-    part("belt", belt, "leather", "auto", 700)
+    part("belt", belt, "leather", "auto", 560)
     buckle = Sculpt("buckle")
     buckle.add(RoundBox((0.0, -0.268, 1.445), (0.072, 0.022, 0.058), 0.012), k=0.0)
     buckle.sub(RoundBox((0.0, -0.29, 1.445), (0.042, 0.03, 0.030), 0.006), k=0.004)
@@ -347,7 +349,7 @@ def sculpts() -> list:
     coat.add(c0.displaced(folds(0.012, 15.0, axis=0, zfade=(1.30, 0.85)), 0.012), k=0.0)
     coat.inter(HalfSpace((0, 0, 0.80), (0, 0, -1), 2.0), k=0.012)
     coat.sub(slab([(-0.165, 1.40), (0.165, 1.40), (0.175, 0.70), (-0.175, 0.70)], -0.36, 0.06, 0.01), k=0.02)   # the front opening
-    part("coat", coat, "cloth", "auto", 1900)
+    part("coat", coat, "cloth", "auto", 1600)
     for s, sx in (("R", -1), ("L", 1)):
         tb = Sculpt(f"tabard_{s}")
         c = (sx * 0.086, -0.302, 1.03)
@@ -361,7 +363,7 @@ def sculpts() -> list:
         legs.add(FlatCapsule((sx * 0.185, 0.0, 1.10), (sx * 0.235, -0.012, 0.64), 0.150, 0.145, 0.125, 0.120, side=(1, 0, 0)).displaced(
             folds(0.010, 30.0, axis=2), 0.010), k=0.0)
         legs.add(FlatCapsule((sx * 0.235, -0.012, 0.66), (sx * 0.255, 0.02, 0.16), 0.110, 0.105, 0.080, 0.085, side=(1, 0, 0)), k=0.05)
-    part("legs", legs, "under", "auto", 1000)
+    part("legs", legs, "under", "auto", 800)
     for s, sx in (("R", -1), ("L", 1)):
         gr = Sculpt(f"greave_{s}")
         gr.add(FlatCapsule((sx * 0.256, 0.018, 0.15), (sx * 0.248, 0.004, 0.53), 0.112, 0.108, 0.118, 0.114, side=(1, 0, 0)).displaced(
@@ -369,7 +371,7 @@ def sculpts() -> list:
         gr.add(Torus((sx * 0.248, 0.008, 0.555), 0.112, 0.034, axes=np.diag([1.0, 0.95, 1.0])), k=0.01)              # the top cuff
         gr.add(RoundBox((sx * 0.252, -0.088, 0.33), (0.085, 0.030, 0.165), 0.024), k=0.02)                            # the shin plate
         gr.add(Capsule((sx * 0.252, -0.118, 0.18), (sx * 0.252, -0.118, 0.47), 0.010), k=0.01)                        # its ridge
-        part(f"greave_{s}", gr, "ironstone", f"bone:shin.{s}", 700)
+        part(f"greave_{s}", gr, "ironstone", f"bone:shin.{s}", 560)
         kn = Sculpt(f"knee_{s}")
         hexa = [(sx * 0.248 + dx, z) for dx, z in ((-0.125, 0.70), (-0.06, 0.775), (0.06, 0.775), (0.125, 0.70),
                                                    (0.11, 0.55), (0.0, 0.515), (-0.11, 0.55))]
@@ -385,7 +387,7 @@ def sculpts() -> list:
         boots.add(FlatCapsule((sx * 0.258, 0.02, 0.06), (sx * 0.257, 0.02, 0.19), 0.122, 0.118, 0.118, 0.115, side=(1, 0, 0)), k=0.04)
         boots.add(RoundBox((sx * 0.272, -0.05, 0.022), (0.128, 0.198, 0.022), 0.012, axes=rz), k=0.008)              # the welted sole
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", "auto", 1200)
+    part("boots", boots, "leather", "auto", 1000)
 
     # SPEAR (prop.R): ash shaft, the chalk collar with its knot, the dawnglass leaf head, the chalk butt
     shaft = Sculpt("spear_shaft")
@@ -422,14 +424,22 @@ def sculpts() -> list:
     frame.add(slab(PAV_OUT, PAV_Y, PAV_T, 0.012).displaced(chips(0.006, 8.0), 0.006), k=0.0)
     win = inset(PAV_OUT, PAV_FRAME_W)
     frame.sub(slab(win, PAV_Y, PAV_T + 0.03, 0.0), k=0.008)
-    part("pavise_frame", frame, "chalk", "bone:prop.L", 950)
+    part("pavise_frame", frame, "chalk", "bone:prop.L", 820)
     pane = Sculpt("pavise_pane")
     pane.add(slab(inset(PAV_OUT, PAV_FRAME_W - 0.012), PAV_Y + 0.004, 0.0085, 0.004), k=0.0)
     part("pavise_pane", pane, "dawnglass", "bone:prop.L", 160, 0.6)
+    # the concept's thin pale-blue line round the window, on both faces of the frame: the dawnglass edge catching the
+    # light (`accent`, the team tint: with the visor and the spire inlays about 2 % of the game-camera silhouette)
+    line = Sculpt("pane_line")
+    for sgn in (-1, 1):
+        yy = PAV_Y + sgn * (PAV_T + 0.0015)
+        line.add(slab(inset(PAV_OUT, PAV_FRAME_W - LINE_W), yy, 0.0045, 0.002), k=0.0)
+    line.sub(slab(inset(PAV_OUT, PAV_FRAME_W + 0.002), PAV_Y, PAV_T + 0.02, 0.0), k=0.0)
+    part("pane_line", line, "accent", "bone:prop.L", 420, 0.5)
     handle = Sculpt("pavise_handle")
     handle.add(Capsule(F_L + (0, 0, -0.10), F_L + (0, 0, 0.10), 0.024), k=0.0)
     for dz in (-0.10, 0.10):
-        handle.add(RoundCone(F_L + (0, 0, dz), (F_L[0], PAV_Y + PAV_T - 0.01, F_L[2] + dz * 1.3), 0.022, 0.03), k=0.01)
+        handle.add(RoundCone(F_L + (0, 0, dz), (F_L[0], PAV_Y + 0.0125 + 0.030, F_L[2] + dz * 1.3), 0.022, 0.026), k=0.01)
     part("pavise_handle", handle, "leather", "bone:prop.L", 220, 0.7)
     spire = Sculpt("spire")
     spire.add(RoundCone((SPIRE_X + 0.02, PAV_Y, 1.70), (SPIRE_X - 0.01, PAV_Y, 2.15), 0.026, 0.012), k=0.0)
@@ -480,6 +490,51 @@ def model(ctx) -> list:
         ob.data.materials.append(ctx.mats[role])
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
     return P
+
+
+# ── build wrappers (this build process only; common/ untouched) ──────────────────────────────────────────────
+# one-sided parts decimate without the X-mirror constraint (it is meaningless off the centre line)
+SYM = ("helm", "visor", "face", "neck", "gorget", "cuirass", "sleeves", "belt", "buckle", "coat", "legs", "boots")
+Q_BASE = 72                # the base colour's WebP quality (the shared default 80 left the GLB over 1172 KiB)
+
+
+def _install_build() -> None:
+    from common import export, mesh
+    if not getattr(mesh.decimate_to, "_ardit", False):
+        orig_d = mesh.decimate_to
+
+        def decimate_to(obj, target_tris, symmetric=True):
+            nm = obj.name[:-4] if obj.name.endswith("_low") else obj.name
+            if not nm.startswith(SYM):
+                symmetric = False
+            return orig_d(obj, target_tris, symmetric)
+        decimate_to._ardit = True
+        mesh.decimate_to = decimate_to
+    if not getattr(export.optimize, "_ardit", False):
+        orig_o = export.optimize
+
+        def optimize(path, out=None, quantize=False, fighter=False):
+            if not fighter:
+                return orig_o(path, out, quantize, fighter)
+            import subprocess
+            out = out or path
+            script = os.path.join(scene.TOOLS_DIR, "optimize.mjs")
+            node = export.node_exe()
+            before = os.path.getsize(path)
+            if not node or not os.path.isfile(script):
+                return orig_o(path, out, quantize, fighter)
+            args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE)]
+            r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+            if r.returncode != 0:
+                scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
+                return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
+            scene.log(r.stdout.strip())
+            return {"ok": True, "before": before, "after": os.path.getsize(out), "q_base": Q_BASE}
+        optimize._ardit = True
+        export.optimize = optimize
+
+
+_install_build()
 
 
 # ── rig ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -534,13 +589,28 @@ def chain_config(ctx) -> list:
 
 
 # ── paint (Ardit's wrap of common/hifi/project.paint; common/ is shared, so it lives here) ──────────────────
-SIDE_INSET = 0.045         # m: sideways texels sample their part's paint this far inside the outline
+SIDE_INSET = 0.045         # m: sideways texels of round parts sample their part's paint this far inside the outline
+# sideways texels of boxy parts are BOX-MAPPED (review lesson: no projection streaks on side planes): a side face of
+# depth D wraps onto the outer band (band = frac x the part's width) of its own front paint for its front half and of
+# its own back paint for its back half, so it carries the painted bevels, cracks and seams instead of one pixel
+# stretched along Y. mode "wrap" = front then back; "back" = the back plate only (the helm: its front band is the visor
+# and the face opening, its back is plain carved chalk). Parts in PAIRS hold both sides (left/right halves apart).
+SIDEMAP = {"helm": (0.42, "back"), "pauldron_R": (0.50, "wrap"), "pauldron_L": (0.50, "wrap"),
+           "tier_R": (0.50, "wrap"), "tier_L": (0.50, "wrap"), "boots": (0.45, "wrap"), "greave_R": (0.45, "wrap"),
+           "greave_L": (0.45, "wrap"), "knee_R": (0.40, "wrap"), "knee_L": (0.40, "wrap"), "bracer_R": (0.45, "wrap"),
+           "bracer_L": (0.45, "wrap"), "gorget": (0.28, "wrap"), "cuirass": (0.22, "wrap"), "coat": (0.20, "wrap"),
+           "legs": (0.40, "wrap"), "sleeves": (0.45, "wrap"), "fist_R": (0.45, "wrap"), "fist_L": (0.45, "wrap"),
+           "pavise_frame": (0.06, "wrap"), "belt": (0.10, "wrap")}
+PAIRS = ("boots", "legs", "sleeves")
 TOPMAP = {                 # up-facing texels: the part's own front paint, depth (y) mapped onto this z band
     "helm": (2.262, 2.335), "pauldron_R": (1.935, 1.995), "pauldron_L": (1.935, 1.995), "tier_R": (1.70, 1.78),
     "tier_L": (1.70, 1.78), "boots": (0.03, 0.12), "gorget": (1.88, 1.95), "cuirass": (1.70, 1.80),
     "greave_R": (0.45, 0.53), "greave_L": (0.45, 0.53), "bracer_R": (1.40, 1.48), "bracer_L": (1.40, 1.48),
 }
 BASE_TONE = {}             # part: (target median hex, hue strength, gamma) after the first look
+# the value cap (brief: no large area lighter than L* 86): albedo luminance above KNEE (L* ~80) is compressed by SLOPE,
+# so the concept's lit chalk crown (median L* 87) lands near L* 84 and its brightest licks near L* 88
+KNEE_Y, SLOPE = 0.56, 0.55
 
 
 def _lin(c):
@@ -557,8 +627,13 @@ def _hex(h):
     return np.array([int(h[i:i + 2], 16) / 255.0 for i in (1, 3, 5)], dtype=np.float32)
 
 
+def _ss(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
 def _glass(p, n, base="#C7D6E0", seed=0.0):
-    """the pane / spear head: pale cool glass with soft diagonal glints and a darker rim toward the frame"""
+    """the spear head: pale cool glass with soft diagonal glints"""
     b = _hex(base)
     u = p[:, 0] * 2.2 + p[:, 2] * 1.0 + seed
     streak = np.clip(np.sin(u * 9.0) * 1.4 - 0.6, 0, 1) * 0.5 + np.clip(np.sin(u * 23.0 + 1.0) * 2.0 - 1.6, 0, 1) * 0.35
@@ -572,6 +647,14 @@ def _wood(p, base="#A1855F"):
     b = _hex(base)
     g = 0.5 + 0.5 * np.sin((p[:, 0] * 37.0 + p[:, 1] * 41.0) + 3.0 * NOISE(p * np.array([1.0, 1.0, 0.15]), 6.0))
     return np.clip(b[None, :] * (0.86 + 0.20 * g[:, None]), 0, 1)
+
+
+def _collar(p, n, base="#4A3B33"):
+    """the concept's dark brown under-collar in the gorget's ring: soft folds, darker down into the ring"""
+    b = _hex(base)
+    f = 0.5 + 0.5 * np.sin(np.arctan2(p[:, 1], p[:, 0]) * 9.0 + 2.0 * NOISE(p, 9.0))
+    shade = 0.80 + 0.22 * f - 0.25 * np.clip((1.93 - p[:, 2]) / 0.08, 0, 1)
+    return np.clip(b[None, :] * shade[:, None], 0, 1)
 
 
 def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True, log=print):
@@ -596,21 +679,55 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     p = P[idx]
     n = N[idx]
     k = part[idx].astype(np.int64)
-    # part centre lines (x) for the side inset
-    cxp = np.zeros(len(names), dtype=np.float32)
+    M = len(p)
+    # part centre lines (x) for the round parts' side inset (pairs: per side)
+    cx = np.zeros(M, dtype=np.float32)
     for i in range(len(names)):
         sel = k == i
-        if sel.any():
-            cxp[i] = float(np.median(p[sel, 0]))
+        if not sel.any():
+            continue
+        if names[i] in PAIRS:
+            for sg in (1, -1):
+                ss_ = sel & (np.sign(p[:, 0] + 1e-6) == sg)
+                if ss_.any():
+                    cx[ss_] = float(np.median(p[ss_, 0]))
+        else:
+            cx[sel] = float(np.median(p[sel, 0]))
     st = np.abs(n[:, 0]) / (np.abs(n[:, 0]) + np.abs(n[:, 1]) + 1e-6)
-    ws = np.clip((st - 0.55) / 0.35, 0, 1)
-    ws = ws * ws * (3 - 2 * ws)
-    xs = p[:, 0] - np.sign(p[:, 0] - cxp[k]) * SIDE_INSET * ws
-    xs = np.where(np.sign(xs - cxp[k]) != np.sign(p[:, 0] - cxp[k]), cxp[k], xs)
+    ws = _ss(0.55, 0.90, st)
+    xs = p[:, 0] - np.sign(p[:, 0] - cx) * SIDE_INSET * ws
+    xs = np.where(np.sign(xs - cx) != np.sign(p[:, 0] - cx), cx, xs)
+    # box-mapped sides
+    box = np.zeros(M, dtype=bool)
+    xf, xb = p[:, 0].copy(), p[:, 0].copy()
+    fb = np.zeros(M, dtype=np.float32)               # the back plate's share on a box-mapped side texel
+    for name, (frac, mode) in SIDEMAP.items():
+        if name not in names:
+            continue
+        i = names.index(name)
+        selp = k == i
+        if not selp.any():
+            continue
+        groups = [selp & (p[:, 0] >= 0), selp & (p[:, 0] < 0)] if name in PAIRS else [selp]
+        for g in groups:
+            if g.sum() < 20:
+                continue
+            gp = p[g]
+            xlo, xhi = np.percentile(gp[:, 0], 1), np.percentile(gp[:, 0], 99)
+            y0, y1 = np.percentile(gp[:, 1], 2), np.percentile(gp[:, 1], 98)
+            band = frac * (xhi - xlo)
+            sel = g & (ws > 0)
+            if not sel.any():
+                continue
+            sg = np.sign(n[sel, 0])
+            f = np.clip((p[sel, 1] - y0) / max(1e-4, y1 - y0), 0, 1)
+            xf[sel] = p[sel, 0] - sg * band * f
+            xb[sel] = p[sel, 0] - sg * band * (1 - f)
+            fb[sel] = 1.0 if mode == "back" else _ss(0.30, 0.70, f)
+            box |= sel
     zs = p[:, 2].copy()
     # up-facing texels of TOPMAP parts: box-mapped from the part's own front paint
-    wt = np.clip((n[:, 2] - 0.55) / 0.30, 0, 1)
-    wt = wt * wt * (3 - 2 * wt)
+    wt = _ss(0.55, 0.85, n[:, 2])
     for name, (z0, z1) in TOPMAP.items():
         if name not in names:
             continue
@@ -624,7 +741,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         zt = z1 - f * (z1 - z0)
         zs[sel] = zs[sel] * (1 - wt[sel]) + zt * wt[sel]
     soft = {s_: pj.blur(plates.img[s_], 2.5) for s_ in ("front", "back")}
-    cols = {}
+    cols, bcols = {}, {}
     for side in ("front", "back"):
         px, py = plates.to_px(side, xs, zs)
         c = pj.bilinear(plates.img[side], px, py)
@@ -642,19 +759,36 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
             sel = hidden & (k == kk)
             c[sel] = pj.bilinear(f, px[sel] / vis.step, py[sel] / vis.step)
         cols[side] = c
-    wb = np.clip((n[:, 1] + 0.25) / 0.5, 0, 1)
-    wb = wb * wb * (3 - 2 * wb)
+        # the box-mapped sample: the plate at the wrapped x where that pixel shows this part, else its own fill
+        bx = np.where(box, xf if side == "front" else xb, xs)
+        qx, qy = plates.to_px(side, bx[box], zs[box])
+        cb = pj.bilinear(plates.img[side], qx, qy)
+        _, hid2 = vis.lookup(side, qx, qy)
+        other = hid2 != k[box]
+        for kk in np.unique(k[box][other]):
+            f = fills.get((side, int(kk)))
+            if f is None:
+                continue
+            sel = other & (k[box] == kk)
+            cb[sel] = pj.bilinear(f, qx[sel] / vis.step, qy[sel] / vis.step)
+        bcols[side] = cb
+    wb = _ss(-0.25, 0.25, n[:, 1])
     col = cols["front"] * (1 - wb[:, None]) + cols["back"] * wb[:, None]
+    if box.any():
+        cbox = bcols["front"] * (1 - fb[box, None]) + bcols["back"] * fb[box, None]
+        w = ws[box, None]
+        col[box] = col[box] * (1 - w) + cbox * w
     # own-material parts
-    own = {"pavise_pane": lambda pp, nn: _glass(pp, nn), "spear_head": lambda pp, nn: _glass(pp, nn, "#CFE0EA", 1.3),
-           "spear_shaft": lambda pp, nn: _wood(pp)}
+    own = {"spear_head": lambda pp, nn: _glass(pp, nn, "#CFE0EA", 1.3), "spear_shaft": lambda pp, nn: _wood(pp),
+           "neck": _collar}
     for name, fn in own.items():
         if name in names:
             sel = k == names.index(name)
             if sel.any():
                 col[sel] = fn(p[sel], n[sel])
-    # tone: each part's painted median onto its brief colour (linear-light gain), value structure kept
     lin = _lin(col)
+    Y = 0.2126 * lin[:, 0] + 0.7152 * lin[:, 1] + 0.0722 * lin[:, 2]
+    # tone: each part's painted median onto its brief colour (linear-light gain), value structure kept
     for name, (hexc, hue, gam) in BASE_TONE.items():
         if name not in names:
             continue
@@ -663,15 +797,18 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
             continue
         cur = np.median(lin[sel], axis=0)
         tgt = _lin(_hex(hexc))
-        Y = lambda c: 0.2126 * c[..., 0] + 0.7152 * c[..., 1] + 0.0722 * c[..., 2]  # noqa: E731
-        y = Y(lin[sel])
-        ym, yt = max(1e-4, float(Y(cur))), float(Y(tgt))
+        lum = lambda c: 0.2126 * c[..., 0] + 0.7152 * c[..., 1] + 0.0722 * c[..., 2]  # noqa: E731
+        y = lum(lin[sel])
+        ym, yt = max(1e-4, float(lum(cur))), float(lum(tgt))
         yy = yt * np.power(np.maximum(y / ym, 1e-4), gam)
         chroma = lin[sel] / np.maximum(y[:, None], 1e-4)
         ch_t = tgt / max(1e-4, yt)
         ch_c = cur / ym
         chroma = chroma * (1 - hue) + (chroma / np.maximum(ch_c, 1e-4) * ch_t) * hue
         lin[sel] = chroma * yy[:, None]
+    Y = 0.2126 * lin[:, 0] + 0.7152 * lin[:, 1] + 0.0722 * lin[:, 2]
+    Yc = np.where(Y > KNEE_Y, KNEE_Y + (Y - KNEE_Y) * SLOPE, Y)
+    lin = lin * (Yc / np.maximum(Y, 1e-5))[:, None]
     col = _srgb(lin)
     for name, rgb in flat.items():
         if name in names:
@@ -680,7 +817,8 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     if bleed:
         iy, ix = pj.nearest_index(have)
         out = out[iy, ix]
-    log(f"ardit paint: {len(fills)} part fills, {int((ws > 0).sum())} side texels, {int((wt > 0).sum())} top texels")
+    log(f"ardit paint: {len(fills)} part fills, {int((ws > 0).sum())} side texels ({int(box.sum())} box-mapped), "
+        f"{int((wt > 0).sum())} top texels")
     return out
 
 
@@ -693,11 +831,542 @@ def _install() -> None:
 
 
 # ── motion (brief §8) ────────────────────────────────────────────────────────────────────────────────────────
-MOTION = anim.motion_profile(weight="heavy", weapon="one_hand", stance="wide", run_ref_speed=3.35)
+# Arms are blocked with IK (anim.HandTarget rel: the wrist from the posed shoulder joint in the chest frame, in arm
+# lengths; the helpers take metres) and BOTH props are aimed with a roll (AimRoll): the spear's axis + where its blade
+# faces, the pavise's axis (up its height) + where its pane faces. Aims are in armature space (+X his left, -Y front).
+HT, FT = HandTarget, FootTarget
+SH_R, SH_L = np.array([-0.42, 0.03, 1.8198]), np.array([0.42, 0.03, 1.8198])      # the rig's shoulder joints
+L_R = float(np.linalg.norm(E_R - SH_R) + np.linalg.norm(W_R - E_R))
+L_L = float(np.linalg.norm(E_L - SH_L) + np.linalg.norm(W_L - E_L))
+REST_R, REST_L = W_R - SH_R, W_L - SH_L
+POLE_R, POLE_L = (-0.70, 0.60, -0.40), (0.70, 0.60, -0.40)
+FRONT, UP = (0.0, -1.0, 0.0), (0.0, 0.0, 1.0)
+SPEAR0 = tuple(float(c) for c in SPEAR_U)       # the spear's rest axis (upright, 8 deg out)
+LEVEL = (0.0, 0.0, -1.0)                        # the blade's face roll when the spear is levelled forward
+PAV0 = (0.06, 0.0, 0.998)                       # the pavise's guard axis (top edge leaning out a little)
+
+
+def _n(v):
+    v = np.asarray(v, dtype=float)
+    return v / max(1e-9, np.linalg.norm(v))
+
+
+def _yawd(v, deg):
+    """a direction turned about Z by deg (+ = toward his left, like the body's yaw)"""
+    a = math.radians(deg)
+    x, y, z = v
+    return (x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a), z)
+
+
+@dataclass
+class AimRoll(anim.Aim):
+    """anim.Aim + `up`: where the held item's +Z faces (the spear blade's flat, the pavise's pane)"""
+    up: tuple = (0.0, -1.0, 0.0)
+
+    def lerp(self, o, t):
+        b = anim.Aim.lerp(self, o, t)
+        t = max(0.0, min(1.0, t))
+        up = self.up
+        if isinstance(o, AimRoll):
+            a, c = V(self.up).normalized(), V(o.up).normalized()
+            up = tuple((a.slerp(c, t) if a.dot(c) > -0.999 else a.lerp(c, t) + a.orthogonal() * 1e-3).normalized())
+        return AimRoll(b.dir, b.weight, up)
+
+    def mirrored(self):
+        return AimRoll((-self.dir[0], self.dir[1], self.dir[2]), self.weight, (-self.up[0], self.up[1], self.up[2]))
+
+
+def _install_anim() -> None:
+    """the roll after the shared aim; and the shared foot solver's pitch sign (on VALE_BIPED_1 the foot's local X runs
+    along -X, so FootTarget.pitch turns the toes DOWN about the heel: flipped here, pivot kept, as Ulkro/Odrum do)"""
+    if not getattr(anim._solve_aim, "_ardit", False):
+        orig = anim._solve_aim
+
+        def solve(skel, pose, M, side, am):
+            orig(skel, pose, M, side, am)
+            if not isinstance(am, AimRoll) or am.weight <= 0:
+                return
+            hand, prop = f"hand.{side}", f"prop.{side}"
+            M2 = skel.fk(pose)
+            R = M2[prop].to_3x3()
+            axis = R.col[1].normalized()
+            cur = R.col[2].normalized()
+            want = V(am.up)
+            want = want - axis * want.dot(axis)
+            if want.length < 1e-5:
+                return
+            want.normalize()
+            ang = math.atan2(cur.cross(want).dot(axis), cur.dot(want)) * am.weight
+            new = Matrix.Rotation(ang, 3, axis) @ M2[hand].to_3x3()
+            Ph = (M2[skel.parent[hand]] @ skel.local[hand]).to_3x3()
+            pose[hand] = skel.euler_of(Ph.inverted() @ new, pose.get(hand))
+        solve._ardit = True
+        anim._solve_aim = solve
+    if not getattr(anim._solve_foot, "_ardit", False):
+        orig_f = anim._solve_foot
+
+        def solve_f(skel, pose, M, side, ft):
+            pt = ft.pitch
+            if abs(pt) > 1e-6:
+                rest_f = skel.rest[f"foot.{side}"]
+                ankle0 = rest_f.translation.copy()
+                ball0 = skel.rest[f"toe.{side}"].translation.copy()
+                heel0 = ankle0 + V((0, 0, -ankle0.z)) + (ankle0 - ball0) * V((1, 1, 0)) * 0.55
+                lat = rest_f.to_3x3().col[0].normalized()
+                pn = -pt
+                rot = Matrix.Rotation(math.radians(ft.yaw), 3, "Z") @ Matrix.Rotation(math.radians(-pn), 3, lat)
+                want_pv, got_pv = (heel0 if pt > 0 else ball0), (heel0 if pn > 0 else ball0)
+                d = (want_pv - got_pv) - rot @ (want_pv - got_pv)
+                near = max(0.0, min(1.0, 1.0 - ft.ankle[2] / 0.06))
+                toe = ft.toe + (abs(pt) * near if pt < 0 else -pt)
+                ft = FT(tuple(ft.ankle[i] + d[i] for i in range(3)), pn, ft.yaw, toe, ft.knee, ft.weight)
+            orig_f(skel, pose, M, side, ft)
+        solve_f._ardit = True
+        anim._solve_foot = solve_f
+
+
+_install_anim()
+
+
+def rh(v, aim=SPEAR0, up=FRONT, pole=POLE_R) -> dict:
+    """the spear hand: wrist offset (m, chest frame) from the right shoulder; the spear's axis and blade facing"""
+    return {"hand.R": HT(rel=tuple(float(c) / L_R for c in v), pole=tuple(pole)),
+            "aim.R": AimRoll(tuple(_n(aim)), 1.0, tuple(up))}
+
+
+def rhp(pos, aim=SPEAR0, up=FRONT, pole=POLE_R) -> dict:
+    """the spear hand at an absolute wrist position (planted / grounded)"""
+    return {"hand.R": HT(pos=tuple(pos), pole=tuple(pole)), "aim.R": AimRoll(tuple(_n(aim)), 1.0, tuple(up))}
+
+
+def lh(v, aim=PAV0, face=FRONT, pole=POLE_L) -> dict:
+    """the pavise hand: wrist offset (m, chest frame) from the left shoulder; the pavise's axis and pane facing"""
+    return {"hand.L": HT(rel=tuple(float(c) / L_L for c in v), pole=tuple(pole)),
+            "aim.L": AimRoll(tuple(_n(aim)), 1.0, tuple(face))}
+
+
+def lhp(pos, aim=PAV0, face=FRONT, pole=POLE_L) -> dict:
+    return {"hand.L": HT(pos=tuple(pos), pole=tuple(pole)), "aim.L": AimRoll(tuple(_n(aim)), 1.0, tuple(face))}
+
+
+def feet_(l=(0.0, 0.0, 0.0), r=(0.0, 0.0, 0.0), yl=0.0, yr=0.0, pl=0.0, pr=0.0, kl=0.0, kr=0.0) -> dict:
+    return anim.feet(l=l, r=r, yl=yl, yr=yr, pl=pl, pr=pr, kl=kl, kr=kr)
+
+
+FEET0 = feet_(l=(0.01, -0.01, 0.0), r=(-0.01, 0.01, 0.0), yl=2.0, yr=-2.0)          # the concept's square stance
+R0 = rh(tuple(REST_R))
+L0 = lh(tuple(REST_L))
+
+
+def pz(lean=3.0, yaw=0.0, roll=0.0, drop=0.03, dx=0.0, dy=0.0, look=(0.0, 0.0, 0.0), feet=None, R=None, L=None,
+       extra=None) -> dict:
+    """a body pose: lean / yaw / roll spread over hips, spine and chest, the head held level toward the front (look =
+    extra head pitch / yaw / roll), hips dropped by `drop`, feet planted by IK, both props aimed"""
+    p = anim.merge(anim.arms_relaxed(), anim.P(
+        hips=(lean * 0.40, yaw * 0.30, roll * 0.5), spine=(lean * 0.30, yaw * 0.30, -roll * 0.3),
+        chest=(lean * 0.30, yaw * 0.40, -roll * 0.2),
+        neck=(-lean * 0.45 + look[0] * 0.4, -yaw * 0.40 + look[1] * 0.4, look[2] * 0.4),
+        head=(-lean * 0.45 + look[0] * 0.6, -yaw * 0.50 + look[1] * 0.6, look[2] * 0.6)))
+    p["hips_loc"] = (dx, dy, -drop)
+    ik = dict(feet if feet is not None else FEET0)
+    ik.update(R if R is not None else R0)
+    ik.update(L if L is not None else L0)
+    p["ik"] = ik
+    if extra:
+        p = anim.add(p, extra)
+    return p
+
+
+def G(**kw) -> dict:
+    """the guard: the concept's carry, the pavise at his left, the spear upright in the right fist"""
+    return pz(**kw)
+
+
+def clip(name, N, keys, loop=False, impact=None, lags=None) -> anim.Clip:
+    fn = anim.keyed(keys)
+    if lags:
+        fn = anim.drag(fn, N, lags, loop=loop)
+    return anim.Clip(name, N, loop, fn, impact=impact)
+
+
+def strike(name, N, wind, hit, fol, g=None) -> anim.Clip:
+    keys = anim.strike_keys(MOTION, wind, hit, fol, guard_pose=g or G())
+    return clip(name, N, keys, impact=anim.IMPACT, lags={"head": 1.5, "neck": 1.0})
+
+
+def _m(v):
+    return tuple(float(c) for c in v)
+
+
+# run: the spear carried upright (leaning into the run), a short heavy arm swing; the pavise held back and low on the
+# left, its pane turned out so it never hides the legs (aims added in gen_run: the shared run aims only the right hand)
+BLOCKS: dict = {
+    "guard": (_m(REST_R / L_R), POLE_R, SPEAR0, _m(REST_L / L_L), POLE_L),
+    "run_fwd": (_m(np.array([-0.12, -0.22, -0.44]) / L_R), POLE_R, (-0.10, -0.22, 0.97),
+                _m(np.array([0.13, -0.07, -0.54]) / L_L), POLE_L),
+    "run_back": (_m(np.array([-0.15, 0.04, -0.47]) / L_R), POLE_R, (-0.12, 0.02, 0.99),
+                 _m(np.array([0.14, 0.06, -0.54]) / L_L), POLE_L),
+}
+MOTION = anim.motion_profile(weight="heavy", weapon="one_hand", stance="wide", run_ref_speed=3.35, blocks=BLOCKS,
+                             arm_swing=0.7)
+RUN_LEAN = anim.P(hips=(2.0, 0, 0), spine=(1.5, 0, 0), chest=(1.0, 0, 0), neck=(-2.0, 0, 0), head=(-2.5, 0, 0))
+RUN_PAV = (0.10, -0.20, 0.975)                  # the pavise's axis in the run: the top tipped forward and out
+RUN_FACE = (0.62, -0.78, 0.0)                   # its pane turned out 38 deg (edge-on enough to keep the legs clear)
+
+
+def gen_run() -> anim.Clip:
+    c = anim.gen_run(MOTION)
+    base = c.sample
+
+    def sample(t):
+        p = anim.add(base(t), RUN_LEAN)
+        ik = dict(p["ik"])
+        a = ik.get("aim.R")
+        if a is not None:
+            ik["aim.R"] = AimRoll(a.dir, a.weight, FRONT)
+        sw = math.cos(2 * math.pi * (t - 0.03))
+        ik["aim.L"] = AimRoll(tuple(_n(np.array(RUN_PAV) + np.array([0.0, -0.04 * sw, 0.0]))), 1.0, RUN_FACE)
+        p["ik"] = ik
+        return p
+    return anim.Clip("run", c.frames, True, sample, meta=c.meta)
+
+
+def gen_idle() -> anim.Clip:
+    base = G()
+    N = 80
+
+    def sample(t):
+        b = anim.osc(t, 2)
+        s = anim.osc(t, 1, 0.1)
+        d = anim.P(chest=(1.2 * b, 0, 0), spine=(0.5 * b, 0, 0.5 * s), neck=(-0.8 * b, 0, 0), head=(-0.4 * b, 1.5 * s, 0),
+                   shoulder_L=(0, 0, 1.0 * b), shoulder_R=(0, 0, -1.0 * b), hips=(0, 1.0 * s, -0.8 * s))
+        p = anim.add(base, d)
+        p = anim._nudge_hands(p, (0.0, 0.0, 0.010 * anim.osc(t, 2, 0.08)), (0.0, 0.0, 0.008 * anim.osc(t, 2, 0.15)))
+        ik = dict(p["ik"])
+        ik["aim.L"] = AimRoll(tuple(_n(np.array(PAV0) + np.array([0.015 * s, 0.0, 0.0]))), 1.0, _yawd(FRONT, 2.0 * s))
+        p["ik"] = ik
+        return anim._with_hips(p, (0.010 * s, 0.0, -0.004 * (0.5 + 0.5 * b)))
+
+    return anim.Clip("idle", N, True, sample)
+
+
+# feet
+FEET_THRUST = feet_(l=(0.03, -0.30, 0.0), r=(-0.02, 0.10, 0.0), yl=4.0, yr=-14.0, pr=-10.0)
+FEET_BASH = feet_(l=(0.04, -0.32, 0.0), r=(-0.02, 0.08, 0.0), yl=-6.0, yr=-10.0, pr=-8.0)
+FEET_CHARGE = feet_(l=(0.03, -0.40, 0.0), r=(-0.03, 0.24, 0.03), yl=0.0, yr=-8.0, pr=-34.0)
+FEET_WIDE = feet_(l=(0.06, -0.04, 0.0), r=(-0.06, 0.04, 0.0), yl=8.0, yr=-8.0)
+
+
+def gen_attack1() -> anim.Clip:
+    """a spear thrust: the right side drawn back with the spear levelled at the hip, then driven straight out at f10
+    off a short lunge of the left foot (the right shoulder through), the pavise held up on the left; recovers to guard"""
+    wind = pz(lean=2.0, yaw=-16.0, drop=0.06, dy=0.05,
+              R=rh((-0.12, 0.14, -0.40), aim=(0.06, -0.99, 0.10), up=LEVEL, pole=(-0.8, 0.5, -0.3)),
+              L=lh(REST_L + np.array([0.0, -0.04, 0.03]), face=_yawd(FRONT, -16.0)))
+    hit = pz(lean=14.0, yaw=16.0, drop=0.09, dy=-0.10, feet=FEET_THRUST,
+             R=rh((0.02, -0.46, -0.24), aim=(0.02, -0.996, -0.08), up=LEVEL, pole=(-0.8, 0.2, -0.5)),
+             L=lh(REST_L + np.array([-0.02, -0.08, 0.04]), aim=(0.04, -0.05, 0.998), face=_yawd(FRONT, 16.0)))
+    fol = pz(lean=16.0, yaw=20.0, drop=0.10, dy=-0.12, feet=FEET_THRUST,
+             R=rh((0.04, -0.47, -0.26), aim=(0.06, -0.99, -0.12), up=LEVEL, pole=(-0.8, 0.2, -0.5)),
+             L=lh(REST_L + np.array([-0.02, -0.08, 0.03]), aim=(0.04, -0.05, 0.998), face=_yawd(FRONT, 20.0)))
+    return strike("attack1", 25, wind, hit, fol)
+
+
+def gen_attack2() -> anim.Clip:
+    """a pavise bash: the left shoulder drawn back, then the pane driven face-first into the target at f10 off a step
+    of the left foot, the top edge leading; the spear stays upright in the right fist"""
+    wind = pz(lean=0.0, yaw=16.0, drop=0.06, dy=0.04,
+              R=rh(REST_R + np.array([0.03, -0.06, 0.02]), aim=(-0.08, -0.10, 0.99)),
+              L=lh((0.14, 0.08, -0.50), aim=(0.10, 0.12, 0.99), face=_yawd(FRONT, 22.0)))
+    hit = pz(lean=12.0, yaw=-18.0, drop=0.09, dy=-0.10, feet=FEET_BASH,
+             R=rh(REST_R + np.array([0.0, 0.04, 0.0]), aim=(-0.16, 0.06, 0.98)),
+             L=lh((0.02, -0.40, -0.38), aim=(0.0, -0.30, 0.95), face=_yawd(FRONT, -16.0)))
+    fol = pz(lean=14.0, yaw=-22.0, drop=0.10, dy=-0.12, feet=FEET_BASH,
+             R=rh(REST_R + np.array([0.0, 0.05, 0.0]), aim=(-0.18, 0.08, 0.98)),
+             L=lh((0.0, -0.42, -0.36), aim=(0.0, -0.36, 0.93), face=_yawd(FRONT, -20.0)))
+    return strike("attack2", 25, wind, hit, fol)
+
+
+def charge_pose(bob=0.0) -> dict:
+    """Lancing Run's ram: crouched behind the pavise, which is carried square in front of the body (pane first, top
+    edge tipped forward), the spear levelled low beside it on the right, shoulders driving"""
+    return pz(lean=24.0, drop=0.17 - bob, dy=-0.16, look=(-14.0, 0.0, 0.0), feet=FEET_CHARGE,
+              R=rh((0.04, -0.30, -0.40), aim=(0.04, -0.995, -0.06), up=LEVEL, pole=(-0.8, 0.3, -0.4)),
+              L=lh((-0.30, -0.36, -0.32), aim=(0.0, -0.30, 0.95), face=(0.0, -0.95, -0.30), pole=(0.8, 0.2, -0.5)))
+
+
+def gen_lancing_run() -> anim.Clip:
+    """cast_a1 Lancing Run, 20 f, the lunge peaks at f8 (castTime 0.15 s: the sim dashes him at 16 m/s from there): a
+    2-frame crouch behind the pavise, then one drive into the ram (pavise square in front, spear levelled low); held
+    while the dash runs; back to guard with the spear upright by f20. No second swing (the dash clip holds the ram)."""
+    g = G()
+    crouch = pz(lean=10.0, drop=0.11, dy=0.02, look=(-4.0, 0.0, 0.0),
+                R=rh(REST_R + np.array([0.02, -0.04, -0.02]), aim=(-0.06, -0.45, 0.89)),
+                L=lh((-0.10, -0.24, -0.44), aim=(0.0, -0.10, 0.99), face=(0.2, -0.98, 0.0)))
+    ram = charge_pose()
+    hold = anim._with_hips(charge_pose(), (0.0, -0.02, -0.006))
+    back = anim.lerp_pose(ram, g, 0.6)
+    keys = [(0.0, g, "linear"), (0.10, crouch, "out"), (anim.IMPACT, ram, "accel"), (0.60, hold, "out"),
+            (0.82, back, "inout"), (1.0, g, "settle")]
+    return clip("cast_a1", 20, keys, impact=anim.IMPACT, lags={"head": 1.0})
+
+
+def gen_dash() -> anim.Clip:
+    """the ram carried through the dash: the pavise square in front, the spear level, short driving strides (the clip
+    is stretched over the dash's duration by the renderer; it starts and ends in cast_a1's ram)"""
+    N = 15
+
+    def sample(t):
+        ph = 2 * math.pi * 2 * t
+        bob = 0.025 * abs(math.sin(ph))
+        p = charge_pose(bob)
+        ik = dict(p["ik"])
+        s = math.sin(ph)
+        lift_l = max(0.0, s) * 0.10
+        lift_r = max(0.0, -s) * 0.10
+        ik["foot.L"] = FT((0.03, -0.40 + 0.30 * max(0.0, -s), lift_l), 0.0, 0.0)
+        ik["foot.R"] = FT((-0.03, 0.24 - 0.30 * max(0.0, s), 0.03 + lift_r), -20.0 * (1 - max(0.0, s)), -8.0)
+        p["ik"] = ik
+        return anim.add(p, anim.P(chest=(0, 3.0 * s, 0), hips=(0, -3.0 * s, 0)))
+
+    return anim.Clip("dash", N, False, sample)
+
+
+def gen_glare() -> anim.Clip:
+    """cast_a2 Glare, 30 f, release f12: the left arm lifts the pavise in front of the left shoulder and tilts it 35
+    degrees back toward the sun (the pale rectangle swings from vertical to a sail), the spear's point drops forward to
+    guard; at f12 the pane catches the light (the accent blooms in the wind-up), a short trembling hold, back by f30"""
+    g = G()
+    lift = pz(lean=4.0, yaw=4.0, drop=0.06, dy=0.02,
+              R=rh(REST_R + np.array([0.02, -0.06, 0.02]), aim=(-0.08, -0.40, 0.91)),
+              L=lh((-0.04, -0.32, -0.30), aim=(0.03, 0.10, 0.99), face=(0.0, -1.0, 0.1)))
+    tilt = pz(lean=-6.0, yaw=6.0, drop=0.05, dy=0.03, look=(-8.0, 0.0, 0.0), feet=FEET_WIDE,
+              R=rh(REST_R + np.array([0.04, -0.14, 0.06]), aim=(-0.05, -0.72, 0.69), up=(0.0, -0.69, -0.72)),
+              L=lh((-0.06, -0.40, -0.14), aim=(0.04, 0.574, 0.819), face=(0.0, -0.819, 0.574)))
+    hold = anim.lerp_pose(tilt, lift, -0.04)
+    keys = [(0.0, g, "linear"), (0.20, lift, "inout"), (anim.IMPACT, tilt, "snap"), (0.52, hold, "inout"),
+            (0.66, tilt, "inout"), (1.0, g, "inout")]
+    return clip("cast_a2", 30, keys, impact=anim.IMPACT, lags={"head": 1.5})
+
+
+def gen_spire_strike() -> anim.Clip:
+    """cast_a3 Spire Strike, 25 f, impact f10: the pavise swung up overhead in the left fist and turned over (the spire
+    tip pointing down; a tall pale shape over him), the knees bend, and at f10 he drives the spire tip into the ground
+    beside his left foot (the strike point of the VFX, 0.75 m to his left); the pane trembles but stays rigid; back to
+    guard by f25"""
+    g = G()
+    up_ = pz(lean=-4.0, yaw=6.0, drop=-0.01, dy=0.03, look=(-10.0, 0.0, 0.0),
+             R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
+             L=lh((0.02, -0.26, 0.46), aim=(0.06, -0.08, -0.99), face=(0.0, 1.0, 0.0), pole=(0.8, 0.2, -0.3)))
+    hit = pz(lean=14.0, yaw=8.0, roll=0.0, drop=0.24, dx=0.05, dy=-0.02, look=(4.0, 0.0, 0.0), feet=FEET_WIDE,
+             R=rh(REST_R + np.array([0.02, -0.06, 0.06]), aim=(-0.14, -0.20, 0.97)),
+             L=lh((0.22, -0.16, -0.50), aim=(0.04, -0.06, -0.997), face=(0.0, 1.0, 0.0), pole=(0.9, 0.3, -0.1)))
+    tremble = anim._with_hips(anim.lerp_pose(hit, up_, -0.03), (0.0, 0.0, -0.01))
+    rise = anim.lerp_pose(hit, g, 0.5)
+    keys = [(0.0, g, "linear"), (0.08, anim._with_hips(g, (0, 0, -0.02)), "inout"), (0.30, up_, "out"),
+            (anim.IMPACT, hit, "accel"), (0.48, tremble, "out"), (0.56, hit, "inout"), (0.78, rise, "inout"),
+            (1.0, g, "settle")]
+    return clip("cast_a3", 25, keys, impact=anim.IMPACT, lags={"head": 1.0})
+
+
+def gen_muster() -> anim.Clip:
+    """cast_ult Muster, 40 f, f16: he brings the pavise round square in front of him and steps in behind it, the
+    right fist rising to its frame with the spear laid back over his right shoulder; at f16 the accent flares along the
+    spire tip and the figure stands tall and still behind the raised pane (a pale spire with a figure behind it);
+    held f16-f30, then lowered to guard"""
+    g = G()
+    step = pz(lean=4.0, drop=0.07, dy=0.06, feet=feet_(l=(0.02, -0.02, 0.0), r=(-0.02, 0.14, 0.0), yr=-6.0),
+              R=rh(REST_R + np.array([0.06, -0.06, 0.06]), aim=(-0.2, 0.25, 0.95)),
+              L=lh((-0.24, -0.36, -0.42), aim=(0.0, 0.0, 1.0), face=FRONT))
+    tall = pz(lean=-2.0, drop=0.0, dy=0.05, look=(-6.0, 0.0, 0.0), feet=feet_(l=(0.02, -0.02, 0.0), r=(-0.02, 0.14, 0.0),
+                                                                               yr=-6.0),
+              R=rh((0.30, -0.40, -0.08), aim=(-0.35, 0.50, 0.79), up=(0.0, -0.85, 0.53), pole=(-0.6, 0.2, -0.8)),
+              L=lh((-0.30, -0.40, -0.24), aim=(0.0, 0.0, 1.0), face=FRONT, pole=(0.8, 0.3, -0.5)))
+    breathe = anim._with_hips(anim.add(tall, anim.P(chest=(-1.0, 0, 0))), (0, 0, 0.004))
+    keys = [(0.0, g, "linear"), (0.18, step, "inout"), (anim.IMPACT, tall, "back"), (0.58, breathe, "inout"),
+            (0.75, tall, "inout"), (1.0, g, "inout")]
+    return clip("cast_ult", 40, keys, impact=anim.IMPACT, lags={"head": 1.5})
+
+
+def gen_death(skel) -> anim.Clip:
+    """struck, he drops to his right knee behind the pavise, which tips forward and falls flat on its face in front of
+    him (his left fist still on it), then he sinks onto his right side; ends at rest"""
+    g = G()
+    hip_h = skel.rest_point("hips").z
+    recoil = pz(lean=-10.0, yaw=6.0, drop=0.05, dy=0.05, look=(-12.0, 0.0, 0.0),
+                R=rh(REST_R + np.array([-0.03, 0.02, 0.0]), aim=(-0.25, 0.10, 0.96)),
+                L=lh(REST_L + np.array([0.02, 0.04, 0.02]), aim=(0.15, 0.10, 0.98)))
+    kneel = pz(lean=14.0, yaw=4.0, drop=0.50, dy=0.04, look=(10.0, 0.0, 0.0),
+               feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.02, 0.38, 0.06), yl=2.0, yr=-8.0, pr=-55.0),
+               R=rh((-0.10, -0.12, -0.46), aim=(-0.4, -0.3, 0.87)),
+               L=lh((-0.02, -0.36, -0.40), aim=(0.0, -0.55, 0.83), face=(0.0, -0.83, -0.55)))
+    tip = pz(lean=26.0, yaw=4.0, drop=0.58, dy=0.02, look=(14.0, 0.0, 0.0),
+             feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.02, 0.40, 0.04), yl=2.0, yr=-8.0, pr=-60.0),
+             R=rh((-0.12, -0.10, -0.46), aim=(-0.6, -0.2, 0.77)),
+             L=lh((-0.04, -0.46, -0.30), aim=(0.0, -0.99, 0.12), face=(0.0, 0.12, 0.99)))
+    side = anim.merge(anim.arms_relaxed(), anim.P(hips=(10, 0, -78), spine=(8, 0, -6), chest=(6, 0, -4),
+                                                  neck=(4, 0, 8), head=(6, 10, 14), thigh_L=(30, 0, 0), shin_L=(-50, 0, 0),
+                                                  thigh_R=(40, 0, 0), shin_R=(-70, 0, 0), foot_L=(10, 0, 0),
+                                                  foot_R=(15, 0, 0)))
+    side["hips_loc"] = (-0.62, 0.06, -hip_h + 0.30)
+    side["ik"] = {"hand.L": HT(pos=(0.15, -0.70, 0.62), pole=(0.3, 0.8, 0.4)),
+                  "aim.L": AimRoll((0.0, -1.0, 0.02), 1.0, (0.0, 0.0, 1.0)),
+                  "hand.R": HT(pos=(-1.15, -0.20, 0.10), pole=(-0.2, 0.5, 1.0)),
+                  "aim.R": AimRoll((0.60, -0.80, 0.02), 1.0, (0.0, 0.0, 1.0))}
+    rest = anim.add(side, anim.P(head=(4, 4, 4), spine=(-2, 0, 0)))
+    keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.32, kneel, "in"), (0.50, tip, "inout"), (0.74, side, "in"),
+            (0.84, rest, "out"), (1.0, rest, "linear")]
+    return clip("death", 50, keys)
+
+
+def kneel_pose(bow=0.0) -> dict:
+    """down on the right knee, the pavise stood on its foot at his left, the spear stood on its butt at his right, the
+    head bowed"""
+    p = pz(lean=8.0 + 4.0 * bow, drop=0.55, dy=0.06, look=(18.0 + 10.0 * bow, 0.0, 0.0),
+           feet=feet_(l=(0.06, -0.24, 0.0), r=(-0.02, 0.40, 0.05), yl=6.0, yr=-10.0, pr=-58.0),
+           R=rhp((-0.53, -0.30, 0.83), aim=(-0.04, -0.06, 0.998), pole=(-0.8, 0.5, -0.2)),
+           L=lhp((0.60, -0.24, 0.93), aim=(0.04, 0.0, 0.999), face=_yawd(FRONT, -12.0), pole=(0.8, 0.4, -0.3)))
+    return p
+
+
+def gen_recall() -> anim.Clip:
+    """recall (loops): a vigil on one knee, the pavise stood up at his left, the spear stood on its butt, the head
+    bowed; slow breaths"""
+    N = 90
+    base = kneel_pose()
+
+    def sample(t):
+        b = anim.osc(t, 2)
+        return anim.add(base, anim.P(chest=(1.2 * b, 0, 0), spine=(0.4 * b, 0, 0), head=(1.5 * b, 0, 0)))
+
+    return anim.Clip("recall", N, True, sample)
+
+
+def gen_idle_lobby() -> anim.Clip:
+    """patient and courteous (120 f loop): behind the pavise, he turns it a few degrees to catch the light, wipes a
+    smudge from the pane with his right cuff, glances over the top at the camera with a small apologetic nod, then
+    settles his weight and lets the pavise lean. He never raises the spear."""
+    N = 120
+    stand = pz(lean=2.0, yaw=8.0, drop=0.03, feet=FEET_WIDE,
+               L=lh((-0.12, -0.24, -0.44), aim=(0.10, 0.0, 0.995), face=_yawd(FRONT, 8.0)))
+
+    def seg(t, a, b):
+        return min(1.0, max(0.0, (t - a) / (b - a)))
+
+    def bump(t, a, b):
+        return math.sin(math.pi * seg(t, a, b)) if a < t < b else 0.0
+
+    def sample(t):
+        p = dict(stand)
+        p["ik"] = dict(stand["ik"])
+        # 0.06-0.34 the pavise turned to catch the light and back
+        k = bump(t, 0.06, 0.34)
+        turn = 14.0 * math.sin(2 * math.pi * seg(t, 0.06, 0.34)) * (1.0 if t < 0.34 else 0.0)
+        lw = np.array([-0.12, -0.24, -0.44]) + np.array([0.0, -0.05 * k, 0.05 * k])
+        p["ik"].update(lh(lw, aim=(0.10 - 0.06 * k, -0.08 * k, 0.995), face=_yawd(FRONT, 8.0 + turn)))
+        p = anim.add(p, anim.P(head=(4 * k, -6 * k, 0), neck=(2 * k, -3 * k, 0)))
+        # 0.32-0.62 a smudge wiped off the pane with the right cuff (small circles, the spear carried along upright)
+        w = bump(t, 0.32, 0.62)
+        if w > 0:
+            ph = 2 * math.pi * 3 * seg(t, 0.32, 0.62)
+            rw = REST_R * (1 - w) + np.array([0.30, -0.40, -0.30]) * w + np.array([0.04 * math.cos(ph), 0.0, 0.035 * math.sin(ph)]) * w
+            p["ik"].update(rh(rw, aim=_n(np.array(SPEAR0) * (1 - w) + np.array([0.15, -0.12, 0.98]) * w),
+                              pole=(-0.6 + 0.3 * w, 0.6, -0.4 - 0.3 * w)))
+            p = anim.add(p, anim.P(head=(8 * w, 6 * w, 0), chest=(2 * w, 4 * w, 0)))
+        # 0.62-0.84 a glance over the top at the camera, a small apologetic nod
+        c = bump(t, 0.62, 0.84)
+        nod = max(0.0, math.sin(2 * math.pi * seg(t, 0.70, 0.80))) if 0.70 < t < 0.80 else 0.0
+        p = anim.add(p, anim.P(head=(-6 * c + 12 * nod, -10 * c, -6 * c), neck=(-3 * c + 4 * nod, -4 * c, 0),
+                               chest=(-2 * c, 0, 0)))
+        p = anim._with_hips(p, (0.0, 0.0, 0.015 * c))
+        # 0.84-1.0 settles the weight, lets the pavise lean out
+        s2 = bump(t, 0.84, 1.0)
+        p["ik"]["aim.L"] = AimRoll(tuple(_n(np.array(p["ik"]["aim.L"].dir) + np.array([0.10 * s2, 0.0, 0.0]))), 1.0,
+                                   p["ik"]["aim.L"].up)
+        p = anim._with_hips(p, (0.02 * s2, 0.0, -0.02 * s2))
+        b = anim.osc(t, 3)
+        return anim.add(p, anim.P(chest=(0.8 * b, 0, 0)))
+
+    return anim.Clip("idle_lobby", N, True, sample)
+
+
+def gen_victory() -> anim.Clip:
+    """he steps out from behind the pavise for the first time, sets it down at his left and tilts it so the sun passes
+    across his visor. Final hold: the pavise low at his left, the spear upright at his right, chin up, the visor in
+    the light, a quarter turned from the camera (50 f, hold)"""
+    g = G()
+    behind = pz(lean=4.0, yaw=6.0, drop=0.05, L=lh((-0.18, -0.30, -0.40), face=_yawd(FRONT, 6.0)))
+    out_ = pz(lean=2.0, yaw=-10.0, drop=0.05, dx=-0.10, feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.14, 0.02, 0.04), yl=-8.0,
+                                                                   yr=-20.0),
+              L=lh((0.12, -0.10, -0.55), aim=(0.12, 0.0, 0.99), face=_yawd(FRONT, -6.0)))
+    hold = pz(lean=-4.0, yaw=-22.0, drop=0.03, dx=-0.10, look=(-14.0, 6.0, 0.0),
+              feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.16, 0.04, 0.0), yl=-16.0, yr=-28.0),
+              R=rh(REST_R + np.array([0.0, 0.02, 0.0]), aim=(-0.06, 0.04, 0.998)),
+              L=lh((0.14, -0.06, -0.56), aim=(0.20, 0.30, 0.93), face=(0.35, -0.83, 0.43)))
+    keys = [(0.0, g, "linear"), (0.16, behind, "inout"), (0.40, out_, "inout"), (0.66, hold, "out"), (1.0, hold, "linear")]
+    base = anim.drag(anim.keyed(keys), 50, {"head": 2.0, "neck": 1.0})
+
+    def sample(t):
+        p = base(t)
+        if t > 0.66:
+            k = min(1.0, (t - 0.66) / 0.15)
+            p = anim.add(p, anim.P(chest=(0.8 * k * anim.osc(t, 2), 0, 0)))
+        return p
+
+    return anim.Clip("victory", 50, False, sample)
+
+
+def gen_taunt() -> anim.Clip:
+    """raps the spear shaft twice on the pavise frame (a clear glass note), then a small nod"""
+    g = G()
+    ready = pz(lean=3.0, yaw=10.0, drop=0.04,
+               R=rh((0.10, -0.30, -0.30), aim=(0.55, -0.30, 0.78), pole=(-0.8, 0.3, -0.4)),
+               L=lh((-0.16, -0.24, -0.42), face=_yawd(FRONT, 18.0)))
+    tap = pz(lean=3.0, yaw=10.0, drop=0.045,
+             R=rh((0.12, -0.31, -0.32), aim=(0.68, -0.28, 0.68), pole=(-0.8, 0.3, -0.4)),
+             L=lh((-0.16, -0.24, -0.42), face=_yawd(FRONT, 18.0)))
+    nod = anim.add(ready, anim.P(head=(12, -6, 0), neck=(4, -2, 0)))
+    keys = [(0.0, g, "linear"), (0.24, ready, "inout"), (0.32, tap, "in"), (0.40, ready, "out"), (0.48, tap, "in"),
+            (0.56, ready, "out"), (0.72, nod, "inout"), (0.82, ready, "inout"), (1.0, g, "inout")]
+    return clip("taunt", 50, keys, lags={"head": 1.5})
+
+
+def gen_stunned() -> anim.Clip:
+    """staggering, the pavise slipping in his fist (its top lolling outward), the head swimming"""
+    base = pz(lean=10.0, drop=0.08, look=(12.0, 0.0, 0.0),
+              R=rh(REST_R + np.array([0.0, 0.0, -0.04]), aim=(-0.25, -0.15, 0.96)),
+              L=lh(REST_L + np.array([0.02, 0.02, -0.04]), aim=(0.30, 0.0, 0.95), face=(0.2, -0.98, 0.0)))
+    N = 40
+
+    def sample(t):
+        a, b = anim.osc(t, 1), anim.osc(t, 1, 0.25)
+        p = anim.add(base, anim.P(hips=(0, 0, 3 * a), spine=(3 * b, 0, -3 * a), chest=(3 * b, 0, -3 * a),
+                                  neck=(6 * b, 0, 6 * a), head=(8 * b, 4 * a, 8 * a)))
+        p["ik"] = dict(p["ik"])
+        p["ik"]["aim.L"] = AimRoll(tuple(_n((0.30 + 0.08 * a, 0.05 * b, 0.95))), 1.0, (0.2, -0.98, 0.0))
+        return p
+
+    return anim.Clip("stunned", N, True, sample)
+
+
+def gen_channel() -> anim.Clip:
+    base = G(drop=0.05)
+    N = 40
+
+    def sample(t):
+        p = anim.add(base, anim.P(chest=(1.2 * anim.osc(t, 2), 0, 0), head=(-0.8 * anim.osc(t, 2), 0, 0)))
+        return anim._nudge_hands(p, (0, 0, 0.006 * anim.osc(t, 2)), (0, 0, 0.006 * anim.osc(t, 2, 0.2)))
+
+    return anim.Clip("channel", N, True, sample)
 
 
 def clip_overrides(ctx) -> dict:
-    return {}
+    skel = anim.Skeleton(ctx.info.armature)
+    return {"idle": gen_idle(), "run": gen_run(), "attack1": gen_attack1(), "attack2": gen_attack2(),
+            "cast_a1": gen_lancing_run(), "cast_a2": gen_glare(), "cast_a3": gen_spire_strike(),
+            "cast_ult": gen_muster(), "death": gen_death(skel), "recall": gen_recall(), "idle_lobby": gen_idle_lobby(),
+            "victory": gen_victory(), "dash": gen_dash(), "stunned": gen_stunned(), "channel": gen_channel(),
+            "taunt": gen_taunt()}
 
 
 if __name__ == "__main__":
