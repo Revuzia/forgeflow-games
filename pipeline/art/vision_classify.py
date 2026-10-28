@@ -72,7 +72,9 @@ HEARTBEAT_SEC = 3600                     # log + telegram heartbeat every hour
 
 # Backoff schedule when we hit a rate limit — doubles until max 1 hour
 BACKOFF_SCHEDULE = [30, 60, 120, 300, 600, 1200, 1800, 3600]  # seconds
-RATE_LIMIT_MARKERS = ["rate_limit", "429", "too many requests", "quota", "exceeded", "limit_exceeded"]
+RATE_LIMIT_MARKERS = ["rate_limit", "429", "too many requests", "quota", "exceeded", "limit_exceeded",
+                     "hit your limit", "usage limit", "limit reached", "limit will reset", "resets "]   # weekly-limit text arrives on STDOUT with rc=1 (10-24: 1,800 files marked failed)
+_CONSEC_RC_FAIL = 0   # consecutive rc!=0 calls; a streak means the CLI is refusing us, not that the images are bad
 
 # Kinds we classify (ones with a meaningful visual)
 CLASSIFY_KINDS = {"model_3d", "tileset_2d", "character_2d", "object_2d", "ui_2d", "bg_2d"}
@@ -384,9 +386,14 @@ Respond with ONLY the JSON, no other text."""
         if any(m in combined for m in RATE_LIMIT_MARKERS):
             _log(f"  ⚠️ rate_limit detected: {result.stderr[:200] or result.stdout[:200]}")
             return {"_rate_limited": True, "_raw": (result.stderr or result.stdout)[:300]}
+        global _CONSEC_RC_FAIL
         if result.returncode != 0:
-            _log(f"  claude rc={result.returncode} stderr={result.stderr[:100]}")
+            _CONSEC_RC_FAIL += 1
+            _log(f"  claude rc={result.returncode} stderr={result.stderr[:100]!r} stdout={result.stdout[:200]!r}")
+            if _CONSEC_RC_FAIL >= 5:   # CLI refusing everything -> back off instead of burning the queue
+                return {"_rate_limited": True, "_raw": (result.stderr or result.stdout)[:300]}
             return None
+        _CONSEC_RC_FAIL = 0
         resp = result.stdout.strip()
         # Extract JSON from response
         start = resp.find("{")
