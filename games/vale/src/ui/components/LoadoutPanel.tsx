@@ -3,6 +3,10 @@
 // "Boons must come from one path." · "Not available in FRAY." · "Fill every slot to lock in." Spells and
 // boons outside the mode's pool (rules.itemPool vs SetupDef pools) are dashed with the reason (locked,
 // never grey). Spell slots carry the player's spell keys.
+// Skin cards (client F8): the name gets two lines (never cut), and ownership is ONE chip with the tier's hour-ticks
+// inside — Equipped, Owned, or the price with the currency glyph; the long "In the shop for …" line is the tooltip's.
+// `tabs` (the draft's finalize, client F9): battle spells and boons sit behind two tabs that count their filled slots,
+// so the whole panel fits at 1280 x 720.
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
@@ -13,6 +17,7 @@ import type { BoonT, FighterDefT, SpellT } from '../catalog_view.ts';
 import { fmtInt } from '../format.ts';
 import { keyShort } from '../keys.ts';
 import { Icon } from './Glyphs.tsx';
+import { Currency } from './Currency.tsx';
 import { HourTicks } from './Plate.tsx';
 import { Portrait, SetupIcon } from './Portrait.tsx';
 import { AbilityTip, TipText, useTip } from './Tooltip.tsx';
@@ -21,15 +26,16 @@ const TIER_TICKS: Record<SkinDefT['tier'], number> = { base: 1, standard: 2, del
 
 export function ownsSkin(owned: readonly { kind: string; ref: string }[], skin: string): boolean { return owned.some((o) => o.kind === 'skin' && o.ref === skin); }
 
-export function SkinStrip(p: { fighter: FighterDefT; value: string | undefined; onPick: (s: SkinDefT) => void; onShop?: (sku: string) => void; draftOnly?: boolean; size?: 's' | 'm' }): JSX.Element {
+export function SkinStrip(p: { fighter: FighterDefT; value: string | undefined; onPick: (s: SkinDefT) => void; onShop?: (sku: string) => void; draftOnly?: boolean; size?: 's' | 'm';
+  /** 'cells': the cards alone, for a parent grid (the collection's Skins tab) */
+  as?: 'strip' | 'cells' }): JSX.Element {
   const { cv, state, sound } = useApp();
   const profile = state.profile.value;
   const skins = cv.skinsOf(p.fighter.id);
   const equipped = profile.equipped[p.fighter.id] ?? cv.baseSkin(p.fighter.id)?.id;
   if (!skins.length) return <p class="t-body-s muted">{cv.t('collection.empty_skins', 'No skins for {fighter} yet.', { fighter: p.fighter.name })}</p>;
-  return (
-    <div class={`skins skins--${p.size ?? 'm'}`} role="radiogroup" aria-label={cv.t('loadout.skin', 'Skin')} data-arrownav="row">
-      {skins.map((s) => {
+  const cards = (
+      skins.map((s) => {
         const owned = ownsSkin(profile.owned, s.id) || s.tier === 'base';
         const offer = cv.offerForSkin(s.id);
         const cur = offer ? cv.currency(offer.price.currency) : undefined;
@@ -37,20 +43,28 @@ export function SkinStrip(p: { fighter: FighterDefT; value: string | undefined; 
         const sel = p.value === s.id;
         const lockLine = owned ? null : offer ? cv.t('collection.skin.locked', 'In the shop for {price}', { price }) : cv.t('state.locked.skin', 'Buy {skin} in the shop to use it.', { skin: s.name });
         const state2 = s.id === equipped ? cv.t('collection.skin.equipped', 'Equipped') : owned ? cv.t('collection.skin.owned', 'Owned') : lockLine;
+        const chip = owned ? <span class="t-caption">{state2}</span>
+          : offer ? <Currency id={offer.price.currency} amount={offer.price.amount} size="s" tick={false} />
+            : <span class="t-caption">{cv.t('collection.skin.not_for_sale', 'Not for sale')}</span>;
         return (
-          <SkinCard skin={s} fighter={p.fighter} selected={sel} owned={owned} stateLine={state2 ?? ''} lockLine={lockLine}
+          <SkinCard skin={s} fighter={p.fighter} selected={sel} owned={owned} stateLine={state2 ?? ''} lockLine={lockLine} chip={chip} equipped={s.id === equipped}
             onPress={() => {
               if (owned) { if (!sel) { sound.play('toggle'); p.onPick(s); } }
               else if (offer && p.onShop && !p.draftOnly) p.onShop(offer.sku);
               else sound.play('error');
             }} />
         );
-      })}
+      })
+  );
+  if (p.as === 'cells') return <>{cards}</>;
+  return (
+    <div class={`skins skins--${p.size ?? 'm'}`} role="radiogroup" aria-label={cv.t('loadout.skin', 'Skin')} data-arrownav="row">
+      {cards}
     </div>
   );
 }
 
-function SkinCard(p: { skin: SkinDefT; fighter: FighterDefT; selected: boolean; owned: boolean; stateLine: string; lockLine: string | null; onPress: () => void }): JSX.Element {
+function SkinCard(p: { skin: SkinDefT; fighter: FighterDefT; selected: boolean; owned: boolean; equipped?: boolean; stateLine: string; lockLine: string | null; chip: JSX.Element; onPress: () => void }): JSX.Element {
   const { cv, sound } = useApp();
   const tip = useTip(() => <TipText text={p.skin.name} sub={p.lockLine ?? cv.t('loadout.skin_hint', 'Skins change how a fighter looks, never how they play.')} />, { place: 'above' });
   return (
@@ -63,7 +77,7 @@ function SkinCard(p: { skin: SkinDefT; fighter: FighterDefT; selected: boolean; 
       {!p.owned ? <Icon name="lock" class="skin__lock" /> : null}
       <span class="skin__meta">
         <span class="skin__name t-body-s">{p.skin.tier === 'base' ? cv.t('collection.skin.default', 'Base skin') : p.skin.name}</span>
-        <span class="skin__state t-caption"><HourTicks n={TIER_TICKS[p.skin.tier]} label={cv.t(`shop.tier.${p.skin.tier}`, p.skin.tier)} />{p.stateLine}</span>
+        <span class={`skin__chip ${p.equipped ? 'is-equipped' : p.owned ? 'is-owned' : 'is-shop'}`}><HourTicks n={TIER_TICKS[p.skin.tier]} label={cv.t(`shop.tier.${p.skin.tier}`, p.skin.tier)} />{p.chip}</span>
       </span>
     </button>
   );
@@ -82,6 +96,8 @@ export interface LoadoutPanelProps {
   draft?: boolean;
   hideSkins?: boolean;
   readOnly?: string;
+  /** battle spells and boons behind two tabs (the draft's finalize) */
+  tabs?: boolean;
 }
 
 export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
@@ -91,6 +107,7 @@ export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
   const nBoons = cv.boonSlots(p.pool);
   const binds = state.settings.value.controls.binds;
   const [active, setActive] = useState(0);
+  const [tab, setTab] = useState<'spells' | 'boons'>('spells');
   const firstPath = p.loadout.boons.length ? cv.boon(p.loadout.boons[0])?.path : undefined;
   const [path, setPath] = useState<string>(firstPath ?? set.paths[0]?.id ?? '');
   const modeName = p.modeName ?? '';
@@ -131,9 +148,27 @@ export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
         </section>
       ) : null}
 
+      {p.tabs && nBoons > 0 ? (
+        <div class="tabs tabs--s loadout__tabs" role="tablist" aria-label={cv.t('loadout.title', 'Loadout')}>
+          {(['spells', 'boons'] as const).map((t) => {
+            const have = t === 'spells' ? p.loadout.spells.length : p.loadout.boons.length;
+            const need = t === 'spells' ? nSpells : nBoons;
+            return (
+              <button type="button" role="tab" aria-selected={tab === t} class={`tab ${tab === t ? 'is-selected' : ''}`} tabIndex={tab === t ? 0 : -1}
+                onPointerDown={() => sound.play('tab')} onClick={() => setTab(t)}
+                onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); setTab(t === 'spells' ? 'boons' : 'spells'); } }}>
+                <span class="t-label">{t === 'spells' ? cv.t('loadout.spells', 'Battle spells') : cv.t('loadout.boons', 'Boons')}</span>
+                <span class={`tab__badge num ${have >= need ? '' : 'reason--warn'}`}>{have}/{need}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {!p.tabs || nBoons === 0 || tab === 'spells' ? (
       <section class="loadout__sect stg">
         <div class="sect__head">
-          <h3 class="t-h2">{cv.t('loadout.spells', 'Battle spells')}</h3>
+          {p.tabs && nBoons > 0 ? null : <h3 class="t-h2">{cv.t('loadout.spells', 'Battle spells')}</h3>}
           <span class="t-body-s sect__hint">{nBoons === 0 ? cv.t('loadout.spells_hint_fray', 'Pick {n}. FRAY has no boons.', { n: nSpells }) : cv.t('loadout.spells_hint', 'Pick {n}. Cast them with the spell keys.', { n: nSpells })}</span>
         </div>
         <div class="slots" role="radiogroup" aria-label={cv.t('loadout.spells', 'Battle spells')}>
@@ -156,11 +191,12 @@ export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
           })}
         </div>
       </section>
+      ) : null}
 
-      {nBoons > 0 ? (
+      {nBoons > 0 && (!p.tabs || tab === 'boons') ? (
         <section class="loadout__sect stg">
           <div class="sect__head">
-            <h3 class="t-h2">{cv.t('loadout.boons', 'Boons')}</h3>
+            {p.tabs ? null : <h3 class="t-h2">{cv.t('loadout.boons', 'Boons')}</h3>}
             <span class={`t-body-s sect__hint ${mixed ? 'reason--warn' : ''}`}>{mixed ? cv.t('loadout.path_mixed', 'Pick both boons from the same path.') : cv.t('loadout.path_one', 'Boons must come from one path.')}</span>
           </div>
           <div class="paths" role="tablist" aria-label={cv.t('loadout.path', 'Path')}>

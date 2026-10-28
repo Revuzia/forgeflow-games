@@ -109,6 +109,13 @@
 .fcard.is-taken .fcard__portrait { filter: brightness(0.5); }
 .fcard.is-taken .fcard__name { color: var(--text-2); }
 .fcard .tag-you { position: absolute; right: var(--u); top: var(--u); z-index: 2; }
+/* compact cards (the draft grid, client F9): class and role ride the portrait's foot as marks; the meta is the name */
+.fcard--compact { container-type: inline-size; }
+.fcard__marks { position: absolute; z-index: 2; left: calc(0.5 * var(--u)); top: calc(100cqw * var(--pa, 1) - 0.5 * var(--u)); transform: translateY(-100%); display: inline-flex; align-items: center; gap: calc(0.5 * var(--u));
+  padding: 3px calc(0.5 * var(--u)); border-radius: var(--radius); background: rgba(11, 13, 17, 0.78); color: var(--text-1); }
+.fcard__marks .classmark { display: inline-flex; }
+.fcard--compact .fcard__meta { padding: calc(0.75 * var(--u)) var(--u) var(--u); }
+.roleicon { display: inline-block; flex: none; vertical-align: middle; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
 
 .classmark { display: inline-flex; align-items: center; gap: calc(0.5 * var(--u)); color: inherit; }
 .classmark__init { font-weight: 700; }

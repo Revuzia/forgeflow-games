@@ -11,7 +11,7 @@
 // selected queue and Find match are on screen at 1280x720 without scrolling.
 
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { QueueDefT } from '../../contracts/catalog.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
@@ -215,9 +215,18 @@ function PlayArt(p: { modeId: string | null; queue: QueueDefT | undefined; note?
   const terms = q ? queueTerms(cv, q) : null;
   const rec = q?.ranked ? state.profile.value.ratings[q.ranked.ratingId] : undefined;
   const tier = cv.ratingTier(rec);
+  // the caption is as wide as the painted card above it (the card's width follows the stage's height)
+  const root = useRef<HTMLDivElement>(null), frame = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const f = frame.current, r = root.current;
+    if (!f || !r || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => r.style.setProperty('--artw', `${Math.round(f.getBoundingClientRect().width)}px`));
+    ro.observe(f);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div class="playart">
-      <div class="playart__frame">
+    <div class="playart" ref={root}>
+      <div class="playart__frame" ref={frame}>
         {live.map((m) => (
           <ArtFrame src={m.card.art} mark={cv.modeMark(m)} lanes={cv.laneCount(m)} alt={m.id === p.modeId ? m.name : ''}
             class={`playart__img ${m.id === p.modeId ? 'is-on' : ''}`} />

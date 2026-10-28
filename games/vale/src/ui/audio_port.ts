@@ -23,8 +23,13 @@ export interface AudioPort {
   settings?(s: import('../contracts/session.ts').Settings['audio']): void;
 }
 
-/** content's role → id bindings (CatalogT.audio `ui`, `screens`, `stings`); an unbound role is silent */
-export interface UiSoundIds { ui?: Record<string, string>; screens?: Record<string, string>; stings?: Record<string, string> }
+/** content's role → id bindings (CatalogT.audio `ui`, `screens`, `stings`); an unbound role is silent. `cues` is the
+ *  catalog's cue table, read only to ask whether a fighter's own cue exists (FIGHTER_CALL) */
+export interface UiSoundIds { ui?: Record<string, string>; screens?: Record<string, string>; stings?: Record<string, string>; cues?: Record<string, unknown> }
+
+/** a fighter's lock-in call: the cue `f_<fighter id>_call` (the audio lane's per-fighter cue family, like
+ *  `f_<id>_passive`), played when your pick is locked in; a fighter without one falls back to the `lockin` role */
+export const FIGHTER_CALL = (fighter: string): string => `f_${fighter}_call`;
 
 const HOVER_MIN_MS = TOKENS.audioUi.hover.minIntervalMs;
 
@@ -51,6 +56,17 @@ export class UiSound {
     const id = this.ids.stings?.[kind];
     if (!id) return;
     try { this.port?.play(id); } catch { /* never breaks the UI */ }
+  }
+
+  /** your pick is locked in: the fighter's call when content has one, else the `lockin` role. Returns the cue played. */
+  lockCall(fighter: string | null | undefined): string | null {
+    const id = fighter ? FIGHTER_CALL(fighter) : null;
+    if (id && this.ids.cues && Object.prototype.hasOwnProperty.call(this.ids.cues, id)) {
+      try { this.port?.play(id); } catch { /* never breaks the UI */ }
+      return id;
+    }
+    this.play('lockin');
+    return this.ids.ui?.lockin ?? null;
   }
 
   play(kind: UiCueKind, minIntervalMs = 0): void {

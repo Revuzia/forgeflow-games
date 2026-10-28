@@ -9,18 +9,28 @@
 //               with your seat colour; first lock keeps a fighter.
 //   finalize    skin + spells + boons (LoadoutPanel) and trades with locked teammates.
 // Timers are rings (linear sweep, HARM in the last 5 s). Esc / Back opens the dodge confirm.
+// The showcase (client F5): under the team draft's grid your hovered or locked fighter stands large — the painted plate,
+// name, title, class, role and kit — crossfading as you hover. Locking in strikes noon (VALE's own beat: the gnomon on
+// the plate's dial swings clockwise to 12, the ring closes, the plate comes up to full light) and the fighter's call
+// plays (UiSound.lockCall: `f_<fighter>_call`, the lockin role when a fighter has none). A timeout lock gets the beat too.
+// Fit (client F9): the draft grid's cards are compact (class and role as marks on the portrait), finalize puts battle
+// spells and boons behind tabs, and the seat's Bot chip rides the role line.
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import type { FighterDefT } from '../catalog_view.ts';
 import type { DraftSeat, DraftState } from '../../contracts/session.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
-import { ClassMark } from '../components/FighterCard.tsx';
+import { ClassMark, RoleIcon } from '../components/FighterCard.tsx';
 import { FighterGrid, NO_FILTER, type GridFilter } from '../components/FighterGrid.tsx';
 import { Icon } from '../components/Glyphs.tsx';
 import { LoadoutPanel } from '../components/LoadoutPanel.tsx';
 import { confirmDialog } from '../components/Modal.tsx';
-import { Portrait } from '../components/Portrait.tsx';
+import { Portrait, SetupIcon } from '../components/Portrait.tsx';
+import { AbilityTip, useTip } from '../components/Tooltip.tsx';
+import { keyShort } from '../keys.ts';
+import { reducedMotion } from '../motion.ts';
 import { Ring } from '../components/Ring.tsx';
 import { Screen } from '../components/Screen.tsx';
 import { roman, SeatMark, seatOf, SideMark } from '../components/Seat.tsx';
@@ -116,8 +126,8 @@ function SeatCard(p: { s: DraftSeat; d: DraftState; rel: 'self' | 'ally' | 'enem
         {f ? <Portrait fighter={f} skin={s.skin} size="fill" class={s.locked ? '' : 'is-hover'} /> : <span class="seat__empty">{p.hidden && s.locked ? '?' : ''}</span>}
       </span>
       <span class="seat__text">
-        <span class="seat__name t-body-s">{s.isYou ? cv.t('draft.you', 'You') : s.name}{s.isBot ? <span class="chip chip--bot">{cv.t('draft.seat.bot', 'Bot')}</span> : null}</span>
-        {role ? <span class="seat__role t-caption"><span class="roledot" style={{ background: role.color }} />{role.name}</span> : null}
+        <span class="seat__name t-body-s" title={s.isYou ? undefined : s.name}>{s.isYou ? cv.t('draft.you', 'You') : s.name}</span>
+        {role || s.isBot ? <span class="seat__role t-caption">{role ? <><span class="roledot" style={{ background: role.color }} /><span class="seat__rolename">{role.name}</span></> : null}{s.isBot ? <span class="chip chip--bot chip--glyph" role="img" title={cv.t('draft.seat.bot', 'Bot')} aria-label={cv.t('draft.seat.bot', 'Bot')}><Icon name="bot" size={12} /></span> : null}</span> : null}
         <span class={`seat__status t-caption ${s.locked ? 'is-locked' : ''}`}>{s.locked && !p.hidden ? <Icon name="check" size={12} /> : null}{status}</span>
       </span>
       {p.actions}
@@ -136,9 +146,100 @@ function TeamColumn(p: { d: DraftState; team: number; rel: 'ally' | 'enemy'; hid
   );
 }
 
+/** the lock-in beat: when the session confirms your lock (a press or the timer's own lock), the fighter's call plays
+ *  and the showcase strikes noon for BEAT_MS. Returns whether the beat is running. */
+const BEAT_MS = 1200;
+function useLockBeat(locked: string | undefined): boolean {
+  const { sound } = useApp();
+  const prev = useRef(locked);
+  const [beat, setBeat] = useState(false);
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = locked;
+    if (!locked || was === locked) return;
+    sound.lockCall(locked);
+    setBeat(true);
+    const t = setTimeout(() => setBeat(false), reducedMotion.peek() ? 200 : BEAT_MS);
+    return () => clearTimeout(t);
+  }, [locked]);
+  return beat;
+}
+
+const KIT = ['passive', 'a1', 'a2', 'a3', 'ult'] as const;
+
+function KitIcon(p: { f: FighterDefT; slot: typeof KIT[number] }): JSX.Element {
+  const { cv, state } = useApp();
+  const r = p.f.kit[p.slot];
+  const binds = state.settings.value.controls.binds;
+  const keyLabel = p.slot === 'passive' ? undefined : keyShort(binds[p.slot]);
+  const slotLabel = p.slot === 'passive' ? cv.t('collection.detail.passive', 'Passive') : cv.t(`settings.controls.action.${p.slot}`, p.slot);
+  const tip = useTip(() => <AbilityTip record={r as Parameters<typeof AbilityTip>[0]['record']} slotLabel={slotLabel} keyLabel={keyLabel} resourceName={cv.resource(p.f.resource)?.name} cv={cv} />, { place: 'above', wide: true });
+  return (
+    <span class="dshow__ab" tabIndex={0} aria-label={`${slotLabel}: ${r.name}`} onPointerEnter={tip.onPointerEnter} onPointerLeave={tip.onPointerLeave} onFocus={tip.onFocus} onBlur={tip.onBlur}>
+      <SetupIcon icon={r.icon} kind={p.slot === 'passive' ? 'passive' : 'ability'} keyLabel={keyLabel} name={r.name} palette={p.f.palette.primary} size="s" />
+    </span>
+  );
+}
+
+/** your hovered or locked fighter, large (client F5): the painted plate on the right fading into ink, the name, title,
+ *  class, role and kit on the left; a new hover crossfades over the last one (240 ms). The dial seal in the corner
+ *  rests with its gnomon at ten o'clock and a dashed ring while you hover; locking in swings it to noon and closes it. */
+function Showcase(p: { fighter: FighterDefT | undefined; skin?: string; role?: string; locked: boolean; beat: boolean }): JSX.Element {
+  const { cv } = useApp();
+  const f = p.fighter;
+  const key = f ? `${f.id}:${p.skin ?? ''}` : '';
+  const last = useRef<{ key: string; f?: FighterDefT; skin?: string }>({ key, f, skin: p.skin });
+  const [prev, setPrev] = useState<{ key: string; f?: FighterDefT; skin?: string } | null>(null);
+  useEffect(() => {
+    const was = last.current;
+    last.current = { key, f, skin: p.skin };
+    if (!was.key || was.key === key) return;
+    setPrev(was);
+    const t = setTimeout(() => setPrev(null), 260);
+    return () => clearTimeout(t);
+  }, [key]);
+  const role = cv.role(p.role ?? f?.role);
+  if (!f) {
+    return (
+      <section class="dshow dshow--empty plate" aria-label={cv.t('draft.show.title', 'Your pick')}>
+        <DialSeal locked={false} />
+        <p class="t-body muted">{cv.t('draft.show.empty', 'Hover a fighter to see them here. Your team sees your hover.')}</p>
+      </section>
+    );
+  }
+  return (
+    <section class={`dshow plate ${p.locked ? 'is-locked' : 'is-hover'} ${p.beat ? 'is-beat' : ''}`} aria-label={cv.t('draft.show.title', 'Your pick')} aria-live="polite">
+      {prev?.f ? <span class="dshow__art is-out" key={`out:${prev.key}`}><Portrait fighter={prev.f} skin={prev.skin} kind="splash" size="fill" position="72% 40%" /></span> : null}
+      <span class="dshow__art" key={key}><Portrait fighter={f} skin={p.skin} kind="splash" size="fill" position="72% 40%" /></span>
+      <div class="dshow__text">
+        <span class="dshow__kick t-label">{p.locked ? cv.t('draft.show.locked', 'Locked in') : cv.t('draft.show.hover', 'Your pick')}</span>
+        <h2 class="t-display-m dshow__name">{f.name}</h2>
+        <span class="dshow__title">{f.title}</span>
+        <span class="dshow__facts t-body-s"><ClassMark classId={f.class} withName />{role ? <span class="dshow__role"><RoleIcon roleId={role.id} size={14} />{role.name}</span> : null}</span>
+        <span class="dshow__kit">{KIT.map((slot) => <KitIcon f={f} slot={slot} />)}</span>
+      </div>
+      <DialSeal locked={p.locked} />
+    </section>
+  );
+}
+
+/** the showcase's dial seal: a ring (state) and the gnomon (the act of choosing) — ten o'clock and dashed while you
+ *  hover, swung clockwise to noon and closed when you lock in */
+function DialSeal(p: { locked: boolean }): JSX.Element {
+  return (
+    <svg class={`dseal ${p.locked ? 'is-locked' : ''}`} viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="19" class="dseal__face" />
+      <circle cx="24" cy="24" r="19" class="dseal__ring" pathLength={100} />
+      <line x1="24" y1="2" x2="24" y2="8" class="dseal__noon" />
+      <g class="dseal__gnomon"><polygon points="24,24 21.5,9 26.5,9" /></g>
+      <circle cx="24" cy="24" r="2.2" class="dseal__pin" />
+    </svg>
+  );
+}
+
 // ── RIFT: bans + snake picks (and blind) ───────────────────────────────────────────────────────
 function TeamDraft(p: { d: DraftState; onLeave: () => void }): JSX.Element {
-  const { cv, state, session, sound } = useApp();
+  const { cv, session, sound } = useApp();
   const d = p.d;
   const me = d.seats.find((s) => s.isYou)!;
   const queue = cv.queue(d.queue)!;
@@ -159,8 +260,9 @@ function TeamDraft(p: { d: DraftState; onLeave: () => void }): JSX.Element {
   const hover = (id: string): void => { if (me.locked) return; session.draft({ a: 'hover', fighter: id }); };
   const act = (): void => {
     if (ban && sel) { sound.play('ban'); session.draft({ a: 'ban', fighter: sel }); setBanned(sel); }
-    else if (!ban && sel) { sound.play('lockin'); session.draft({ a: 'lock' }); }
+    else if (!ban && sel) session.draft({ a: 'lock' });   // the sound is the lock-in beat's, when the session confirms
   };
+  const beat = useLockBeat(me.locked);
   let reason: string | null = null;
   if (ban) {
     if (banned) reason = cv.t('draft.ban.waiting', 'Waiting for the other bans.');
@@ -192,8 +294,9 @@ function TeamDraft(p: { d: DraftState; onLeave: () => void }): JSX.Element {
         </header>
         <div class="draft__main">
           <TeamColumn d={d} team={me.team} rel="ally" />
+          <div class="draft__center">
           <section class="draft__grid stg" aria-label={cv.t('draft.pick.title', 'Pick a fighter')}>
-            <FighterGrid label={cv.t('draft.pick.title', 'Pick a fighter')} size="s" filter={filter} onFilter={setFilter} compactFilters
+            <FighterGrid label={cv.t('draft.pick.title', 'Pick a fighter')} size="s" filter={filter} onFilter={setFilter} compactFilters compact
               card={(f) => {
                 const isBanned = bansVisible.some((b) => b.fighter === f.id && (b.team === me.team || !ban));
                 const tk = takenBy.get(f.id);
@@ -211,6 +314,8 @@ function TeamDraft(p: { d: DraftState; onLeave: () => void }): JSX.Element {
                 };
               }} />
           </section>
+          {!ban ? <Showcase fighter={cv.fighter(me.locked ?? me.hover)} skin={me.skin} role={me.role} locked={!!me.locked} beat={beat} /> : null}
+          </div>
           <TeamColumn d={d} team={other} rel="enemy" hideLocks={blind} />
         </div>
       </div>
@@ -305,9 +410,10 @@ function LotView(p: { d: DraftState; onLeave: () => void }): JSX.Element {
 
 // ── FRAY: simultaneous pick ────────────────────────────────────────────────────────────────────
 function FrayPick(p: { d: DraftState; onLeave: () => void }): JSX.Element {
-  const { cv, session, sound } = useApp();
+  const { cv, session } = useApp();
   const d = p.d;
   const me = d.seats.find((s) => s.isYou)!;
+  useLockBeat(me.locked);
   const [filter, setFilter] = useState<GridFilter>(NO_FILTER);
   const lockedBy = new Map(d.seats.filter((s) => s.locked && !s.isYou).map((s) => [s.locked!, s]));
   const mySeat = seatOf(me.player);
@@ -319,7 +425,7 @@ function FrayPick(p: { d: DraftState; onLeave: () => void }): JSX.Element {
   return (
     <Screen layout="wide"
       foot={<div class="draft__foot"><Ticker d={d} /><span class="t-body-s muted">{cv.t('fray.pick.first_lock', 'If two players lock the same fighter, the first lock keeps it.')}</span></div>}
-      cta={<Button variant="chalk" size="l" wedge cue={null} disabled={!!reason} reason={reason ?? undefined} onPress={() => { sound.play('lockin'); session.draft({ a: 'lock' }); }}>{cv.t('btn.lock_in', 'Lock in')}</Button>}>
+      cta={<Button variant="chalk" size="l" wedge cue={null} disabled={!!reason} reason={reason ?? undefined} onPress={() => session.draft({ a: 'lock' })}>{cv.t('btn.lock_in', 'Lock in')}</Button>}>
       <div class="draft draft--ffa">
         <header class="draft__top draft__top--ffa stg">
           <PhaseHead d={d} title={cv.t('fray.pick.title', 'Pick your fighter')} prompt={cv.t('fray.pick.prompt', 'Pick any fighter nobody else has locked.')}
@@ -389,7 +495,7 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
     const out = trades.find((t) => t.from === me.player && t.to === s.player);
     if (inc) return <Button variant="secondary" size="s" icon="swap" cue="accept" onPress={() => session.draft({ a: 'tradeAccept', with: s.player })}>{cv.t('draft.trade.accept', 'Accept')}</Button>;
     if (out) return <span class="t-caption muted">{cv.t('draft.trade.pending', 'Waiting for {name}.', { name: s.name })}</span>;
-    return <Button variant="quiet" size="s" icon="swap" label={cv.t('draft.trade.request', 'Ask {name} to trade', { name: s.name })} tip={cv.t('draft.trade.request', 'Ask {name} to trade', { name: s.name })}
+    return <Button variant="quiet" size="s" icon="swap" class="seat__trade" label={cv.t('draft.trade.request', 'Ask {name} to trade', { name: s.name })} tip={cv.t('draft.trade.request', 'Ask {name} to trade', { name: s.name })}
       onPress={() => { session.draft({ a: 'tradeRequest', with: s.player }); state.toast(cv.t('toast.trade_request', 'Trade request sent to {name}.', { name: s.name }), 'info'); }}>{cv.t('btn.trade', 'Trade')}</Button>;
   };
   const teams = [...new Set(d.seats.map((s) => s.team))];
@@ -425,14 +531,11 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
             {f ? (
               <div class="final">
                 <div class="final__who">
-                  <Portrait fighter={f} skin={me.skin} size="l" />
-                  <div class="stack stack--s">
-                    <h2 class="t-display-m">{f.name}</h2>
-                    <span class="t-body-s muted"><ClassMark classId={f.class} withName /> · {cv.role(me.role ?? f.role)?.name}</span>
-                    <p class="t-body-s">{f.job}</p>
-                  </div>
+                  <h2 class="t-display-m">{f.name}</h2>
+                  <span class="t-body-s muted final__facts"><ClassMark classId={f.class} withName /><span class="dshow__role"><RoleIcon roleId={me.role ?? f.role} size={14} />{cv.role(me.role ?? f.role)?.name}</span></span>
+                  <p class="t-body-s final__job">{f.job}</p>
                 </div>
-                <LoadoutPanel fighter={f} skin={me.skin} loadout={loadout} pool={rules.itemPool} modeName={mode?.name} draft
+                <LoadoutPanel fighter={f} skin={me.skin} loadout={loadout} pool={rules.itemPool} modeName={mode?.name} draft tabs
                   readOnly={done || lockedIn ? (done ? cv.t('draft.phase.done', 'Draft complete') : cv.t('loadout.locked_in', 'Locked in')) : undefined}
                   onSkin={(s) => { session.draft({ a: 'skin', skin: s.id }); sound.play('equip'); }}
                   onLoadout={(l) => session.draft({ a: 'loadout', loadout: l })} />

@@ -100,7 +100,7 @@
 .playart__img { position: absolute !important; inset: 0; opacity: 0; transform: translateX(calc(2 * var(--u))); transition: opacity 360ms var(--ease-dawn), transform 360ms var(--ease-dawn); }
 .playart__img.is-on { opacity: 1; transform: none; }
 .playart__frame::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(237, 230, 214, 0.08); border-radius: var(--radius); }
-.playart__cap { display: flex; flex-direction: column; gap: calc(0.75 * var(--u)); width: 100%; max-width: calc(64 * var(--u)); padding: calc(1.5 * var(--u)) calc(2 * var(--u)); flex: none; }
+.playart__cap { display: flex; flex-direction: column; gap: calc(0.75 * var(--u)); width: var(--artw, 100%); max-width: 100%; padding: calc(1.5 * var(--u)) calc(2 * var(--u)); flex: none; }
 .playart__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--u); flex-wrap: wrap; }
 .playart__desc { color: var(--text-1); }
 .playart__rank { display: flex; align-items: center; gap: var(--u); color: var(--text-2); }
@@ -195,7 +195,55 @@
 .ban__x .glyph { width: 60%; height: 60%; }
 .draft__main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(calc(26 * var(--u)), 2fr) minmax(0, 8fr) minmax(calc(26 * var(--u)), 2fr); gap: calc(2 * var(--u)); }
 .draft__main--ffa { grid-template-columns: minmax(calc(26 * var(--u)), 2.4fr) minmax(0, 9.6fr); }
+/* the centre column: the grid, then the showcase band under it (client F5) */
+.draft__center { min-height: 0; display: flex; flex-direction: column; gap: calc(1.5 * var(--u)); }
+.draft__center > .draft__grid { flex: 0 1 auto; }
 .draft__grid { min-height: 0; overflow-y: auto; padding: 4px; margin: -4px; }
+
+/* the showcase: your hovered or locked fighter large — the painted plate on the right fading into the ink, the text on
+   the left. A hover crossfades in from the right (240 ms); locking in strikes noon (the beat, BEAT_MS in draft.tsx). */
+.dshow { position: relative; flex: 1 1 0; min-height: max(calc(26 * var(--u)), 200px); display: flex; align-items: center; overflow: hidden;
+  padding: calc(2.5 * var(--u)) calc(3 * var(--u)); background: linear-gradient(90deg, rgba(11, 13, 17, 0.94) 0%, rgba(11, 13, 17, 0.82) 42%, rgba(19, 22, 28, 0.55) 100%); }
+.dshow__art { position: absolute; top: 0; bottom: 0; right: 0; height: 100%; aspect-ratio: 16 / 9; max-width: 78%; pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.12) 12%, rgba(0, 0, 0, 0.45) 26%, rgba(0, 0, 0, 0.82) 42%, #000 56%);
+  mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.12) 12%, rgba(0, 0, 0, 0.45) 26%, rgba(0, 0, 0, 0.82) 42%, #000 56%);
+  animation: dshow-in 240ms var(--ease-dawn) both; }
+.dshow__art.is-out { animation: dshow-out 240ms var(--ease-dusk) both; }
+.dshow__art .portrait { width: 100%; height: 100%; border-radius: 0; background: none; transition: filter 360ms var(--ease-dawn); }
+.dshow.is-hover .dshow__art .portrait { filter: saturate(0.82) brightness(0.8); }
+@keyframes dshow-in { from { opacity: 0; transform: translateX(calc(2 * var(--u))); } to { opacity: 1; transform: none; } }
+@keyframes dshow-out { from { opacity: 1; } to { opacity: 0; } }
+.dshow__text { position: relative; z-index: 1; display: flex; flex-direction: column; gap: calc(0.75 * var(--u)); max-width: 52%; min-width: 0; }
+.dshow__kick { color: var(--text-2); }
+.dshow.is-locked .dshow__kick { color: var(--chalk); }
+.dshow__name { color: var(--text-1); line-height: 1; }
+.dshow__title { font-family: var(--font-display); font-style: italic; font-size: var(--fs-body-l); color: var(--text-2); }
+.dshow__title { font-size: max(14px, calc(var(--fs-body-l) * var(--k) * 1px)); }
+.dshow__facts, .final__facts { display: flex; flex-wrap: wrap; align-items: center; gap: calc(0.5 * var(--u)) calc(2 * var(--u)); color: var(--text-1); }
+.dshow__role { display: inline-flex; align-items: center; gap: calc(0.75 * var(--u)); }
+.dshow__kit { display: flex; gap: var(--u); margin-top: calc(0.5 * var(--u)); }
+.dshow__ab { display: inline-flex; border-radius: var(--radius); }
+.dshow__ab:focus-visible { box-shadow: var(--ring); }
+.dshow--empty { justify-content: center; gap: calc(2 * var(--u)); }
+.dshow--empty .dseal { position: static; flex: none; }
+/* the dial seal: ring = state, gnomon = the act of choosing. Hover: ten o'clock and a dashed ring; locked: noon, closed */
+.dseal { position: absolute; z-index: 1; right: calc(2 * var(--u)); top: calc(2 * var(--u)); width: calc(48px * var(--k)); height: calc(48px * var(--k)); overflow: visible; }
+.dseal__face { fill: rgba(11, 13, 17, 0.62); }
+.dseal__ring { fill: none; stroke: var(--line-2); stroke-width: 1.5; stroke-dasharray: 3 4; transform: rotate(-90deg); transform-origin: 24px 24px; }
+.dseal__noon { stroke: var(--line-2); stroke-width: 2; stroke-linecap: round; }
+.dseal__gnomon { fill: var(--text-2); transform: rotate(-60deg); transform-origin: 24px 24px; transition: transform 360ms var(--ease-dawn), fill 160ms var(--ease-std); }
+.dseal__pin { fill: var(--text-1); }
+.dseal.is-locked .dseal__ring { stroke: var(--chalk); stroke-dasharray: 100 0; }
+.dseal.is-locked .dseal__noon { stroke: var(--chalk); }
+.dseal.is-locked .dseal__gnomon { fill: var(--chalk); transform: rotate(0deg); }
+.dshow.is-beat .dseal__ring { animation: seal-close 360ms 160ms var(--ease-dawn) both; }
+.dshow.is-beat .dshow__art .portrait { animation: noonlight 900ms var(--ease-dawn) both; }
+.dshow.is-beat .dshow__kick { animation: noonkick 600ms var(--ease-dawn) both; }
+@keyframes seal-close { from { stroke-dasharray: 0 100; } to { stroke-dasharray: 100 0; } }
+@keyframes noonlight { 0% { filter: saturate(0.82) brightness(0.8); } 32% { filter: saturate(1.05) brightness(1.12); } 100% { filter: none; } }
+@keyframes noonkick { from { letter-spacing: 0.3em; opacity: 0.4; } to { letter-spacing: normal; opacity: 1; } }
+.reduce-motion .dshow__art, .reduce-motion .dshow.is-beat .dseal__ring, .reduce-motion .dshow.is-beat .dshow__art .portrait, .reduce-motion .dshow.is-beat .dshow__kick { animation: none !important; }
+.reduce-motion .dseal__gnomon { transition-duration: 120ms; }
 .draft__grid--ffa { flex: 1; }
 .draft__final { min-height: 0; overflow-y: auto; padding: 4px; margin: -4px; }
 .draft__foot { display: flex; align-items: center; gap: calc(3 * var(--u)); min-width: 0; }
@@ -217,12 +265,22 @@
 .seat__empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-3); font-family: var(--font-numeric); font-weight: 700; }
 .seat__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .seat__name { display: flex; align-items: center; gap: calc(0.75 * var(--u)); color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.seat__role { display: flex; align-items: center; color: var(--text-2); }
+.seat__role { display: flex; align-items: center; color: var(--text-2); min-width: 0; white-space: nowrap; }
+.seat__rolename { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.seat__role .chip { flex: none; margin-left: calc(0.75 * var(--u)); }
+/* the seat's trade request is the swap glyph with its tooltip ("Ask … to trade"), so the name and role stay whole */
+.seat__trade .btn__label { display: none; }
+.chip--glyph { display: inline-flex; align-items: center; justify-content: center; padding: 0 calc(0.5 * var(--u)); }
+.dteam__head { text-shadow: 0 1px 2px var(--ink-0), 0 0 8px rgba(11, 13, 17, 0.8); }
 .seat__status { color: var(--text-3); display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seat__status.is-locked { color: var(--text-1); }
 .seat--ffa::before { background: var(--line-2); }
 .final { display: flex; flex-direction: column; gap: calc(2 * var(--u)); }
-.final__who { display: flex; gap: calc(2 * var(--u)); align-items: center; }
+.final__who { display: flex; flex-direction: column; gap: calc(0.75 * var(--u)); }
+.final__who .t-display-m { line-height: 1; }
+.final__job { color: var(--text-2); max-width: 72ch; }
+.final .loadout { gap: calc(2 * var(--u)); }
+.loadout__tabs { margin-bottom: calc(-0.5 * var(--u)); }
 
 .fseats { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--u); }
 .fseat { display: flex; flex-direction: column; align-items: center; gap: calc(0.5 * var(--u)); padding: calc(0.75 * var(--u)); border-radius: var(--radius); background: var(--plate-bg); min-width: 0;
@@ -263,13 +321,19 @@
 .skins--s .skin { width: calc(13 * var(--u)); }
 .skin__art { aspect-ratio: 1; height: auto !important; border-radius: 0; }
 .skin__meta { display: flex; flex-direction: column; gap: 2px; padding: var(--u); }
-.skin__name { color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.skin__state { display: flex; align-items: center; gap: calc(0.75 * var(--u)); color: var(--text-2); }
-.skin__state .hourticks i { height: 8px; }
+/* the name gets two lines (client F8: never cut); ownership is ONE chip with the tier's hour-ticks inside */
+.skin__meta { flex: 1; }
+.skin__name { color: var(--text-1); line-height: 1.3; min-height: 2.6em; overflow-wrap: break-word; }
+.skin__chip { display: inline-flex; align-items: center; gap: calc(0.75 * var(--u)); align-self: flex-start; max-width: 100%; height: calc(3 * var(--u)); padding: 0 var(--u);
+  border-radius: calc(1.5 * var(--u)); background: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-1); color: var(--text-2); white-space: nowrap; }
+.skin__chip .hourticks i { height: 8px; }
+.skin__chip.is-equipped { color: var(--text-1); box-shadow: inset 0 0 0 1px var(--chalk); }
+.skin__chip.is-owned { color: var(--text-1); }
+.skin__chip .cur { color: var(--text-1); }
 .skin:hover, .skin:focus-visible { background: var(--ink-3); box-shadow: var(--ring); }
 .skin.is-selected { box-shadow: inset 0 0 0 2px var(--chalk); }
 .skin.is-selected:hover, .skin.is-selected:focus-visible { box-shadow: inset 0 0 0 2px var(--chalk), var(--ring); }
-.skin.is-locked { background: transparent; outline: 1px dashed var(--line-2); outline-offset: -1px; }
+.skin.is-locked { background: rgba(11, 13, 17, 0.78); outline: 1px dashed var(--line-2); outline-offset: -1px; }
 .skin.is-locked .skin__art { opacity: 0.6; }
 .skin__lock { position: absolute; right: var(--u); top: var(--u); width: calc(18px * var(--k)); height: calc(18px * var(--k)); color: var(--text-1); }
 .slots { display: flex; gap: calc(1.5 * var(--u)); margin-bottom: calc(1.5 * var(--u)); flex-wrap: wrap; }
@@ -447,8 +511,20 @@
 .kit__text { display: flex; flex-direction: column; gap: calc(0.5 * var(--u)); min-width: 0; }
 .kit__head { display: flex; align-items: baseline; gap: var(--u); flex-wrap: wrap; }
 .kit__desc { color: var(--text-2); }
-.skinstab { display: flex; flex-direction: column; }
-.skinstab__bar { justify-content: flex-end; }
+.skinstab { display: flex; flex-direction: column; gap: calc(1.5 * var(--u)); }
+.skinstab__bar { justify-content: flex-end; position: sticky; top: 0; z-index: 2; padding: calc(0.5 * var(--u)) 0; background: linear-gradient(180deg, rgba(11, 13, 17, 0.85), rgba(11, 13, 17, 0)); }
+/* client F8: one dense grid of 3:4 tiles. Each fighter is a 4-column block (header cell + its skins, subgrid): two blocks
+   a row from 1100 px wide (six skins: 1280 x 720 included), one below that (three skins + the header) */
+.skingrid { --skcols: 8; display: grid; grid-template-columns: repeat(var(--skcols), minmax(0, 1fr)); gap: calc(3 * var(--u)) calc(1.5 * var(--u)); }
+.skinsect { grid-column: span 4; display: grid; grid-template-columns: subgrid; row-gap: calc(1.5 * var(--u)); }
+.skinsect__head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--u); padding: calc(1.5 * var(--u)); min-width: 0; }
+.skinsect__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.skinsect__name { color: var(--text-1); }
+.skinsect__own { color: var(--text-2); margin-top: var(--u); }
+.skingrid .skin { width: auto; }
+.skingrid .skin__art { aspect-ratio: 3 / 4; }
+.skingrid .skin__meta { padding: var(--u) calc(1.25 * var(--u)) calc(1.25 * var(--u)); gap: calc(0.75 * var(--u)); }
+@media (max-width: 1099px) { .skingrid { --skcols: 4; } }
 
 /* ── shop ───────────────────────────────────────────────────────────────────────────────────── */
 .shop { display: flex; flex-direction: column; gap: calc(1 * var(--u)); }
@@ -546,6 +622,17 @@
   .qcard .chip { order: 2; }
   .play .sect { margin-top: calc(1.5 * var(--u)); }
   .play .sect__head { margin-bottom: var(--u); }
+  /* draft: the compact cards' portraits go 5:4, so the showcase band keeps its 200 px */
+  .fgrid__cards--compact .fcard__portrait { aspect-ratio: 5 / 4; }
+  .fgrid__cards--compact { --pa: 0.8; }
+  .dshow { padding: calc(2 * var(--u)) calc(2.5 * var(--u)); }
+  /* finalize: the job line goes (the showcase said it); the spells' second row stays above the fold */
+  .final__job { display: none; }
+  .final { gap: calc(1.5 * var(--u)); }
+  .draft { gap: calc(1.5 * var(--u)); }
+  /* loading: the map's name at Display M, so the cards keep their names whole */
+  .loading { gap: calc(2 * var(--u)); }
+  .loading__head .t-display-l { font-size: max(calc(var(--type-display-floor) * 1px), calc(var(--fs-display-m) * var(--k) * 1px)); }
 }
 
 /* ── responsive: 1280-wide and UI scale 1.5 ─────────────────────────────────────────────────── */

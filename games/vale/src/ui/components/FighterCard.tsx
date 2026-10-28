@@ -2,13 +2,25 @@
 // (chalk border + hour-tick), intent (an ally hovers it: dashed relationship rim), locked (dashed
 // border + the unlock path, never grey), banned (shadowed with a struck wedge), taken (who took it).
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { useApp } from '../app_ctx.ts';
 import type { FighterDefT } from '../catalog_view.ts';
 import { ClassGlyph, classShapeOf, Icon } from './Glyphs.tsx';
 import { Portrait } from './Portrait.tsx';
 import { AbilityTip, TipText, useTip } from './Tooltip.tsx';
 import type { UiCueKind } from '../audio_port.ts';
+
+/** a role's own icon (roles.json `icon`) in the role's colour; the dot when the art is missing */
+export function RoleIcon(p: { roleId: string | undefined; size?: number; title?: boolean }): JSX.Element | null {
+  const { cv } = useApp();
+  const r = cv.role(p.roleId);
+  if (!r) return null;
+  const src = cv.asset(r.icon);
+  const px = `calc(${p.size ?? 14}px * var(--k))`;
+  return src
+    ? <span class="roleicon" role="img" aria-label={r.name} title={p.title === false ? undefined : r.name} style={{ width: px, height: px, background: r.color, WebkitMaskImage: `url("${src}")`, maskImage: `url("${src}")` } as CSSProperties} />
+    : <span class="roledot" role="img" aria-label={r.name} title={p.title === false ? undefined : r.name} style={{ background: r.color }} />;
+}
 
 export function ClassMark(p: { classId: string; size?: number; withName?: boolean }): JSX.Element | null {
   const { cv } = useApp();
@@ -35,6 +47,9 @@ export interface FighterCardProps {
   lockedKind?: 'locked' | 'banned' | 'taken';
   owned?: boolean;
   showRole?: boolean;
+  /** the draft grid's compact card (client F9): class and role ride the portrait as marks (names in the tooltip), the
+   *  meta is the name alone, so the card never truncates a role at 1280 x 720 */
+  compact?: boolean;
   onPress?: () => void;
   onHover?: () => void;
   cue?: UiCueKind;
@@ -56,7 +71,7 @@ export function FighterCard(p: FighterCardProps): JSX.Element {
   const kind = p.locked ? (p.lockedKind ?? 'locked') : null;
   return (
     <button type="button"
-      class={`fcard fcard--${p.size ?? 'm'} ${p.selected ? 'is-selected' : ''} ${p.intent ? `is-intent is-intent--${p.intent}` : ''} ${kind ? `is-${kind}` : ''}`}
+      class={`fcard fcard--${p.size ?? 'm'} ${p.compact ? 'fcard--compact' : ''} ${p.selected ? 'is-selected' : ''} ${p.intent ? `is-intent is-intent--${p.intent}` : ''} ${kind ? `is-${kind}` : ''}`}
       aria-pressed={p.selected ?? false} aria-disabled={inert ? 'true' : undefined}
       aria-label={`${f.name}${role ? `, ${role.name}` : ''}${p.locked ? `. ${p.locked}` : ''}`}
       data-nav=""
@@ -69,9 +84,12 @@ export function FighterCard(p: FighterCardProps): JSX.Element {
       <Portrait fighter={f} skin={p.skin} size="fill" class="fcard__portrait" />
       {kind === 'banned' ? <span class="fcard__ban" aria-hidden="true"><Icon name="close" /></span> : null}
       {kind === 'locked' ? <span class="fcard__lock" aria-hidden="true"><Icon name="lock" /></span> : null}
+      {p.compact && p.showRole !== false ? (
+        <span class="fcard__marks" aria-hidden="true"><ClassMark classId={f.class} size={12} /><RoleIcon roleId={f.role} size={12} title={false} /></span>
+      ) : null}
       <span class="fcard__meta">
         <span class="fcard__name">{f.name}</span>
-        {p.showRole !== false ? (
+        {p.showRole !== false && !p.compact ? (
           <span class="fcard__sub">
             <ClassMark classId={f.class} size={12} />
             {role ? <span class="fcard__role">{role.name}</span> : null}

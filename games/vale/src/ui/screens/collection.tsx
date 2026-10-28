@@ -4,6 +4,9 @@
 // values, format.ts), lore and the skin strip with ownership states. The splash of the previewed skin
 // is the subject in columns 7–12. EQUIP goes through Session.equipSkin. Skins: every skin by fighter,
 // owned / equipped / in the shop. Empty: "You do not own any extra skins yet." + Browse the shop.
+// Skins tab (client F8): one dense grid of 3:4 tiles — 8 columns from 1100 px wide (two fighters a row, six skins),
+// 4 below 1100 px (one fighter a row) — each fighter's row opening with its header cell (portrait, name, title,
+// owned count, Details). Names get two lines, ownership is one chip with the tier inside; the Owned bar stays put.
 
 import type { JSX } from 'preact';
 import type { SkinDefT } from '../../contracts/catalog.ts';
@@ -67,11 +70,28 @@ function SkinsTab(p: { ownedOnly: boolean }): JSX.Element {
       </div>
       {fighters.length === 0 ? (
         <EmptyState text={cv.t('state.empty.owned', 'You do not own any extra skins yet.')} action={{ label: cv.t('btn.browse_shop', 'Browse the shop'), run: () => router.go('shop', {}, { root: true }) }} />
-      ) : fighters.map((f) => (
-        <Section title={f.name} hint={f.title} side={<Button variant="quiet" size="s" iconAfter="arrow" onPress={() => router.go('collection', { tab: 'fighters', fighter: f.id })}>{cv.t('btn.details', 'Details')}</Button>}>
-          <SkinStrip fighter={f} value={profile.equipped[f.id] ?? cv.baseSkin(f.id)?.id} onPick={(s) => equip(f, s)} onShop={(sku) => router.go('shop', { sku })} />
-        </Section>
-      ))}
+      ) : (
+        <div class="skingrid" role="list" aria-label={cv.t('collection.tab.skins', 'Skins')}>
+          {fighters.map((f) => {
+            const all = cv.skinsOf(f.id).filter((s) => s.tier !== 'base');
+            const own = all.filter((s) => ownsSkin(profile.owned, s.id)).length;
+            return (
+              <section class="skinsect" role="listitem" aria-label={f.name}>
+                <header class="skinsect__head plate">
+                  <Portrait fighter={f} skin={profile.equipped[f.id]} size="m" />
+                  <span class="skinsect__text">
+                    <h2 class="t-h2 skinsect__name">{f.name}</h2>
+                    <span class="t-caption muted">{f.title}</span>
+                    <span class="t-caption skinsect__own">{cv.t('collection.skins_owned', '{n} of {m} skins owned', { n: own, m: all.length })}</span>
+                  </span>
+                  <Button variant="quiet" size="s" iconAfter="arrow" onPress={() => router.go('collection', { tab: 'fighters', fighter: f.id })}>{cv.t('btn.details', 'Details')}</Button>
+                </header>
+                <SkinStrip fighter={f} as="cells" value={profile.equipped[f.id] ?? cv.baseSkin(f.id)?.id} onPick={(s) => equip(f, s)} onShop={(sku) => router.go('shop', { sku })} />
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

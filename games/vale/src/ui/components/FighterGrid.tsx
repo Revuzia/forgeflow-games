@@ -70,6 +70,8 @@ export interface FighterGridProps {
   card: (f: FighterDefT) => Omit<FighterCardProps, 'fighter'>;
   size?: 's' | 'm';
   cols?: number;
+  /** compact cards (the draft grid): class and role as marks on the portrait */
+  compact?: boolean;
   label: string;
   class?: string;
 }
@@ -84,9 +86,9 @@ export function FighterGrid(p: FighterGridProps): JSX.Element {
     <div class={`fgrid ${p.class ?? ''}`}>
       <FilterBar value={f} onChange={set} origin={p.origin} compact={p.compactFilters} />
       {list.length ? (
-        <div class={`fgrid__cards fgrid__cards--${p.size ?? 'm'}`} style={p.cols ? { gridTemplateColumns: `repeat(${p.cols}, minmax(0, 1fr))` } : undefined}
+        <div class={`fgrid__cards fgrid__cards--${p.size ?? 'm'} ${p.compact ? 'fgrid__cards--compact' : ''}`} style={p.cols ? { gridTemplateColumns: `repeat(${p.cols}, minmax(0, 1fr))` } : undefined}
           role="list" aria-label={p.label} data-arrownav="grid">
-          {list.map((x) => <div role="listitem" class="fgrid__cell"><FighterCard fighter={x} size={p.size === 's' ? 's' : 'm'} {...p.card(x)} /></div>)}
+          {list.map((x) => <div role="listitem" class="fgrid__cell"><FighterCard fighter={x} size={p.size === 's' ? 's' : 'm'} compact={p.compact} {...p.card(x)} /></div>)}
         </div>
       ) : (
         <EmptyState compact text={f.q ? cv.t('state.empty.search', 'Nothing matches "{q}".', { q: f.q }) : cv.t('state.empty.collection_fighters', 'No fighters match this filter.')}

@@ -75,7 +75,8 @@ function measure(o) {
         const ar = a.getBoundingClientRect();
         if (r.bottom > ar.bottom + 1.5 || r.top < ar.top - 1.5) { cut = { by: String(a.className).slice(0, 40), box: rect(a) }; break; }
       }
-      const underFoot = !e.closest('.scr__foot') && r.bottom > footTop + 1;
+      const fr = foot?.getBoundingClientRect();
+      const underFoot = !!fr && !e.closest('.scr__foot') && r.bottom > footTop + 1 && r.right > fr.left && r.left < fr.right;
       if (cut || underFoot) fold.push({ name: m.name, t: txt(e), box: rect(e), cut, footTop: Math.round(footTop) });
     }
   }
