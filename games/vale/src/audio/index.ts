@@ -22,8 +22,15 @@
 //   music       MusicDef beds crossfade (1.2 s); `layers` start sample-aligned with the main stem and
 //               fade by the match's combat intensity (enter above 0.6, leave below 0.35 after 8 s,
 //               quantised to the bar); duck() pulls the bed −8 dB under a moment (the ready check)
-//   match       attach(client): SimEvents become cues. Spatial cues pan and attenuate by their world
-//               position relative to YOUR fighter (the camera's subject); ability cues come from the
+//   listener    spatial cues are heard from the CAMERA's ground focus (CONTRACT §11 'listener at the camera
+//               target'; listener(): the renderer's focus, wired in boot/main.ts; without one, your fighter):
+//               full volume within LISTEN_INNER_M (the whole screen at default zoom), rolled off to silence
+//               at LISTEN_HEAR_M by 2D distance, panned at most ±PAN_MAX (screen x is world x: the camera
+//               never yaws), and gently low-passed beyond LPF_FROM_M. So a fight you watch while dead or
+//               scouting sounds where you look. The AWARENESS pass keeps a threat to your LIVING fighter
+//               audible wherever the camera is: an enemy's cast / attack / wind-up within AWARE_M of you, and
+//               what lands on you, never drop below AWARE_GAIN and are not low-passed
+//   match       attach(client): SimEvents become cues, placed by the listener above; ability cues come from the
 //               catalog (`present.sfx` / `hitSfx` / event `sfx`), the rest from the generic set
 //               (c_* combat, m_* match events), so content can re-voice any ability without code.
 //               Team-private comms stay private: a ping sounds only when a player of YOUR team made it, and a
@@ -44,10 +51,17 @@ interface CatalogLike {
   units?: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } } }[];
 }
 interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean }
-interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number }
+interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean }
+/** a spatial cue's placement around the listener */
+interface Place { att: number; pan: number; lpf: number }
+/** per-play options: `aware` = a threat to your fighter (the awareness pass applies) */
+interface CueOpts { aware?: boolean }
 
 export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
+  /** where spatial cues are heard from: the camera's ground focus in sim units (x, y), or null to hear from your
+   *  fighter (no renderer). boot/main.ts passes the renderer's listenerFocus() */
+  listener(focus: (() => { x: number; y: number } | null) | null): void;
   settings(s: AudioSettings): void;
   readonly log: string[];
   /** the session's file format: null until the first .ogg decodes (or fails) */
@@ -56,8 +70,16 @@ export interface ValeAudioPort extends AudioPort {
 
 const BUSES: Bus[] = ['music', 'sfx', 'ui', 'voice', 'ambience'];
 const XFADE_S = 1.2;
-const HEAR_M = 26;           // beyond this a spatial cue is silent
-const NEAR_M = 6;            // inside this it is full volume
+const LISTEN_INNER_M = 12;   // full volume within this of the camera focus (the screen's half-width at default zoom: 11.7 m)
+const LISTEN_HEAR_M = 30;    // silent beyond this (2D distance from the focus), unless the awareness pass keeps it
+const PAN_MAX = 0.6;         // moderate panning (r07 §4.4): a cue at the screen edge pans about ±0.58
+const PAN_M = 20;            // metres from the focus to PAN_MAX
+const LPF_FROM_M = 15;       // beyond this a gentle low-pass: LPF_HI_HZ at LPF_FROM_M falling to LPF_LO_HZ at LISTEN_HEAR_M
+const LPF_HI_HZ = 16000;
+const LPF_LO_HZ = 3500;
+const AWARE_M = 10;          // the awareness pass: threats within this of your living fighter …
+const AWARE_GAIN = 0.8;      // … play at least this loud (−2 dB), unfiltered
+const NEAR_COMBAT_M = 14;    // fighter damage within this of the listener (or of your living fighter) feeds the combat layer
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROBE_MS = 10000;      // the format-deciding .ogg: other loads wait this long for its request (then the
                              // next one probes: a stalled request), and its decode counts as failed if unsettled
@@ -110,6 +132,8 @@ class Engine implements ValeAudioPort {
   private combat = false;
   private calmFor = 0;
   private tick: number | null = null;
+  /** the camera focus provider (listener()); null: hear from your fighter */
+  private focus: (() => { x: number; y: number } | null) | null = null;
 
   constructor(cat: CatalogLike, url: (ref: string) => string, settings: AudioSettings) {
     this.cues = cat.audio.cues;
@@ -272,9 +296,9 @@ class Engine implements ValeAudioPort {
   /** the cue bound to an engine event role, if the catalog binds one */
   private ev(role: string): string | undefined { return this.events[role]; }
 
-  /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around your fighter. A looping cue
-   *  stops after `hold` seconds (a zone's delay + life), else after LOOP_DEFAULT_S. */
-  private cue(cueId: string | undefined, pos: { x: number; y: number } | null, gainMul = 1, hold = 0): void {
+  /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around the listener (see `listener` in the
+   *  header). A looping cue stops after `hold` seconds (a zone's delay + life), else after LOOP_DEFAULT_S. */
+  private cue(cueId: string | undefined, pos: { x: number; y: number } | null, gainMul = 1, hold = 0, o: CueOpts = {}): void {
     if (!cueId) return;
     const c = this.cues[cueId];
     if (!c) return;
@@ -282,15 +306,11 @@ class Engine implements ValeAudioPort {
     if (!ctx || ctx.state !== 'running') return;
     const now = ctx.currentTime;
     if (c.cooldown > 0 && now - (this.lastPlay.get(cueId) ?? -1e9) < c.cooldown) return;
-    let pan = 0, att = 1;
+    let pan = 0, att = 1, lpf = 0;
     if (pos && c.spatial) {
-      const me = this.youPos();
-      if (me) {
-        const dx = pos.x - me.x, dy = pos.y - me.y, d = Math.hypot(dx, dy);
-        if (d > HEAR_M) return;
-        att = d <= NEAR_M ? 1 : Math.max(0, 1 - (d - NEAR_M) / (HEAR_M - NEAR_M)) ** 1.5;
-        pan = Math.max(-0.85, Math.min(0.85, dx / 14));
-      }
+      const pl = this.place(pos, !!o.aware);
+      if (pl.att <= 0) return;
+      ({ att, pan, lpf } = pl);
     }
     // voice limit: steal the oldest voice of the lowest priority
     const mine = this.voices.filter((v) => v.cue === cueId);
@@ -309,6 +329,11 @@ class Engine implements ValeAudioPort {
       const g = this.ctx.createGain();
       g.gain.value = c.gain * att * gainMul;
       let node: AudioNode = src;
+      if (lpf > 0) {
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = lpf; f.Q.value = 0.7071;
+        node.connect(f); node = f;
+      }
       if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
       node.connect(g).connect((this.alertCues.has(cueId) ? this.alertBus : this.bus).get(c.bus)!);
       const v: Voice = { src, gain: g, cue: cueId, priority: c.priority, started: this.ctx.currentTime };
@@ -377,12 +402,45 @@ class Engine implements ValeAudioPort {
     if (client) this.off = client.onEvents((evs: SimEvent[]) => { for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>); });
   }
 
-  private youPos(): { x: number; y: number } | null {
+  listener(focus: (() => { x: number; y: number } | null) | null): void { this.focus = focus; }
+
+  /** your fighter's entity (alive or not) */
+  private you(): EntityLike | undefined {
     const c = this.client;
-    if (!c) return null;
+    if (!c) return undefined;
     const p = c.view.players.find((x) => x.player === c.you);
-    const e = p ? c.view.entity(p.entity) : undefined;
+    return p ? c.view.entity(p.entity) : undefined;
+  }
+
+  /** where cues are heard from: the camera focus, else your fighter (no renderer); null outside a match */
+  private ear(): { x: number; y: number } | null {
+    if (!this.client) return null;
+    let f: { x: number; y: number } | null = null;
+    try { f = this.focus?.() ?? null; } catch { f = null; }
+    if (f && Number.isFinite(f.x) && Number.isFinite(f.y)) return f;
+    const e = this.you();
     return e ? { x: e.x, y: e.y } : null;
+  }
+
+  /** your fighter's position while it is alive (the awareness pass); null when dead or not in a match */
+  private aliveAt(): { x: number; y: number } | null {
+    const e = this.you();
+    return e && e.alive !== false ? { x: e.x, y: e.y } : null;
+  }
+
+  /** a spatial cue's gain / pan / low-pass around the listener (see `listener` in the header) */
+  private place(pos: { x: number; y: number }, aware: boolean): Place {
+    const ear = this.ear();
+    if (!ear) return { att: 1, pan: 0, lpf: 0 };
+    const dx = pos.x - ear.x, d = Math.hypot(dx, pos.y - ear.y);
+    let att = d <= LISTEN_INNER_M ? 1 : d >= LISTEN_HEAR_M ? 0 : ((LISTEN_HEAR_M - d) / (LISTEN_HEAR_M - LISTEN_INNER_M)) ** 1.5;
+    let lpf = d <= LPF_FROM_M ? 0 : LPF_HI_HZ * (LPF_LO_HZ / LPF_HI_HZ) ** Math.min(1, (d - LPF_FROM_M) / (LISTEN_HEAR_M - LPF_FROM_M));
+    const pan = Math.max(-PAN_MAX, Math.min(PAN_MAX, dx / PAN_M));
+    if (aware && att < AWARE_GAIN) {
+      const me = this.aliveAt();
+      if (me && Math.hypot(pos.x - me.x, pos.y - me.y) <= AWARE_M) { att = AWARE_GAIN; lpf = 0; }
+    }
+    return { att, pan, lpf };
   }
 
   private ent(id: unknown): EntityLike | undefined {
@@ -421,40 +479,45 @@ class Engine implements ValeAudioPort {
     if (subject && !this.seen(subject)) return;
     if (kind === 'area' && !this.seen(src) && !this.seenAt(e.x as number, e.y as number)) return;
     const at = (x: EntityLike | undefined): { x: number; y: number } | null => (x ? { x: x.x, y: x.y } : null);
-    const me = this.youPos();
-    const near = (p: { x: number; y: number } | null): boolean => !!p && !!me && Math.hypot(p.x - me.x, p.y - me.y) < 14;
+    const ear = this.ear(), me = this.aliveAt();
+    const near = (p: { x: number; y: number } | null): boolean => !!p && (
+      (!!ear && Math.hypot(p.x - ear.x, p.y - ear.y) < NEAR_COMBAT_M) || (!!me && Math.hypot(p.x - me.x, p.y - me.y) < AWARE_M));
+    // a threat to your fighter (the awareness pass): a non-allied fighter / tower / monster acting, or anything
+    // landing on you; Wick swings are not threats worth lifting over the camera's mix
+    const youId = this.you()?.id;
+    const aw: CueOpts = { aware: (!!src && src.team !== this.myTeam() && src.kind !== 'minion') || (e.dst !== undefined && e.dst === youId) };
     switch (kind) {
       case 'cast': {
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src));
+        this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
         if (src && src.team !== this.myTeam() && e.slot === 'ult' && near(at(src))) this.cue(this.ev('enemyUltWindup'), null);
         break;
       }
-      case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7); break;
+      case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7, 0, aw); break;
       case 'hit': {
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue((e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst));
+        this.cue((e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst), 1, 0, aw);
         break;
       }
-      case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0)); break;
-      case 'attack': this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3); break;
+      case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw); break;
+      case 'attack': this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw); break;
       case 'damage': {
         const p = at(dst);
         if (near(p)) this.intensity = Math.min(1, this.intensity + (src?.kind === 'fighter' && dst?.kind === 'fighter' ? 0.12 : 0.02));
         if (e.ability) break;                         // ability hits voice through `hit`
-        if (e.crit) this.cue(this.ev('crit'), p);
-        else this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45);
+        if (e.crit) this.cue(this.ev('crit'), p, 1, 0, aw);
+        else this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45, 0, aw);
         break;
       }
       case 'heal': this.cue(this.ev('heal'), at(dst), 0.7); break;
       case 'shield': this.cue(this.ev('shield'), at(dst)); break;
       case 'status': {
         const s = e.status as string;
-        this.cue(this.ev(`status.${s}`) ?? this.ev('status'), at(dst), 0.8);
+        this.cue(this.ev(`status.${s}`) ?? this.ev('status'), at(dst), 0.8, 0, aw);
         break;
       }
-      case 'dash': this.cue(this.ev('dash'), at(src)); break;
-      case 'blink': this.cue(this.ev('blink'), at(src)); break;
+      case 'dash': this.cue(this.ev('dash'), at(src), 1, 0, aw); break;
+      case 'blink': this.cue(this.ev('blink'), at(src), 1, 0, aw); break;
       case 'death': {
         const k = e.kind as string;
         if (k === 'fighter') {

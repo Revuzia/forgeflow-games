@@ -35,6 +35,7 @@ class FakeCtx {
   constructor() { this.state = 'running'; this.currentTime = 0; this.destination = new Node(this, 'destination'); this.started = []; }
   createGain() { return new Node(this, 'gain'); }
   createStereoPanner() { const n = new Node(this, 'panner'); n.pan = new Param(0); return n; }
+  createBiquadFilter() { const n = new Node(this, 'biquad'); n.type = 'lowpass'; n.frequency = new Param(350); n.Q = new Param(1); return n; }
   createDynamicsCompressor() {
     const n = new Node(this, 'limiter');
     for (const k of ['threshold', 'knee', 'ratio', 'attack', 'release']) n[k] = new Param(0);

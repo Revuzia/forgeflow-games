@@ -70,6 +70,11 @@ loadCatalog().then(
       }) ?? null) as typeof renderer; }
       catch (e) { console.warn('[vale] renderer unavailable', e); }
     }
+    // the audio listener rides the camera's ground focus (Renderer.listenerFocus), so a fight watched while dead or
+    // scouting is heard where you look; with no renderer the engine hears from your fighter
+    const focusOf = (renderer as { listenerFocus?: () => { x: number; y: number } } | null)?.listenerFocus;
+    const ear = audio as { listener?: (f: (() => { x: number; y: number } | null) | null) => void } | null;
+    if (renderer && focusOf) ear?.listener?.(() => focusOf.call(renderer));
     mount(ui, { catalog: c.catalog, session, audio, renderer, assetUrl: c.assetUrl, dev });
   },
   (e: unknown) => {
