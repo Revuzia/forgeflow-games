@@ -48,8 +48,11 @@
 //             takes roughness down to 0.75); the Dialwood crowns sway (≤ 4 cm at 0.2–0.4 Hz, terrain_brush.ts).
 //   marks     the Standing Shadow floor (violet-cool stone, hard engraved edge, keeps its colour under
 //             fog) and the Fallen Shaft's shallow water.
-// Instanced scatter is chunked (24 m cells) so off-screen chunks are culled from the main and shadow
-// passes. Every material is patched with the world chunk (fog of war + edge haze).
+// r12 B4: instanced scatter (grass, Dialwood, rocks, clutter) keeps only the 4 m cells the camera can show (+ 4 m)
+// or shadow into, in one instanced draw per geometry (instance_cull.ts; the renderer calls cull() every frame); trees
+// that only shadow into view draw a ≤ 250-triangle LOD crown. The cliffs are 16 m chunks that three culls itself, and
+// they (and the landmarks) cast into the shadow map only when their shadow can reach the view.
+// Every material is patched with the world chunk (fog of war + edge haze).
 
 import {
   BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
@@ -327,7 +330,8 @@ export interface TerrainBuild {
   /** standing height at a map point: a cliff block's top inside a wall polygon, else 0 */
   groundAt(x: number, y: number): number;
   /** r12 B4: the instanced scatter (grass, Dialwood, rocks, clutter) keeps only the cells the camera can show or
-   *  shadow into (instance_cull.ts); call once a frame after the camera moved (null: draw every cell) */
+   *  shadow into (instance_cull.ts); call every frame after the camera moved (null: draw every cell); a view whose
+   *  version it already culled for costs nothing unless a set arrived since */
   cull(view: CullView | null): void;
   update(time: number): void;
   dispose(): void;
@@ -515,6 +519,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const disposables: { dispose(): void }[] = [];
   /** r12 B4: every instanced scatter set, culled per 4 m cell to the view (+ 4 m) and its shadow reach each frame */
   const culls = new Set<CellInstances>();
+  /** the view version the sets were last culled for; dirty: a set or caster arrived since (re-scatter, props, landmarks) */
+  let culledFor = -2, dirty = true;
   const chunked = (geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true,
     depth?: Material, renderOrder = 0, lod: { geometry: BufferGeometry; dist: number } | null = null): Group => {
     const g = new Group();
@@ -525,6 +531,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     if (ci.lodMesh) g.add(ci.lodMesh);
     g.userData.cull = ci;
     culls.add(ci);
+    dirty = true;
     return g;
   };
   /** r12 B4: static shadow casters (cliff chunks, landmarks): each frame a caster draws into the shadow map only
@@ -537,6 +544,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
     const sp = o.geometry.boundingSphere!.clone().applyMatrix4(o.matrixWorld);
     casters.push({ o, s: sp, top: sp.center.y + sp.radius });
+    dirty = true;
   };
   const _cs = new Sphere();
   const cullCasters = (v: CullView | null): void => {
@@ -1776,7 +1784,13 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       const out = gorge ? x < 0 || x > SX : x < 0 || x > SX || y < 0 || y > SY;
       return out ? RH : 0;                                                   // the carved rim round the plate
     },
-    cull(view: CullView | null): void { for (const c of culls) c.cull(view); cullCasters(view); },
+    cull(view: CullView | null): void {
+      const ver = view ? view.version : -1;
+      if (ver === culledFor && !dirty) return;
+      culledFor = ver; dirty = false;
+      for (const c of culls) c.cull(view);
+      cullCasters(view);
+    },
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {
       for (const c of culls) c.dispose();

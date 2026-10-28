@@ -26,6 +26,8 @@ export interface CullView {
   fx: number; fz: number;
   /** a shadow's ground offset per metre of caster height (−sun.xz / sun.y; 0, 0 = no shadow reach) */
   sdx: number; sdz: number;
+  /** bumped whenever any of the above changed: a set already culled for this version skips the work */
+  version: number;
 }
 
 interface Cell { s: Sphere; top: number; start: number; n: number }

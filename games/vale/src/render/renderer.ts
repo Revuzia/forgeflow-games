@@ -392,6 +392,7 @@ class ValeRenderer implements Renderer {
     const dpr = Math.min(typeof devicePixelRatio === 'number' ? devicePixelRatio : 1, this.q.maxDpr);
     const pr = Math.max(0.25, dpr * this.dyn.scale);
     this.gl.setPixelRatio(pr);
+    this.post.setAoLow(this.dyn.scale < 0.9 - 1e-3);
     this.post.setSize(this.cssW, this.cssH);
   }
 
@@ -951,10 +952,10 @@ class ValeRenderer implements Renderer {
   }
 
   /** r12 B4: the terrain's instanced scatter keeps only the cells this frame's camera can show or shadow into */
-  private readonly cullView: CullView = { frustum: _cullFrustum, fx: 0, fz: 0, sdx: 0, sdz: 0 };
-  /** the view the last cull ran for (view-projection, shadow reach, the terrain): a still camera skips it */
+  private readonly cullView: CullView = { frustum: _cullFrustum, fx: 0, fz: 0, sdx: 0, sdz: 0, version: 0 };
+  /** the view of the last version (view-projection, shadow reach): a still camera keeps the version, and the terrain
+   *  skips its cull */
   private readonly cullKey = new Float32Array(18);
-  private cullFor: TerrainBuild | null = null;
   private cullScatter(): void {
     if (!this.terrain) return;
     const cam = this.rig.camera, v = this.cullView;
@@ -962,15 +963,16 @@ class ValeRenderer implements Renderer {
     const sh = this.sun.shadowsOn;
     const sdx = sh ? this.shadowDir.x : 0, sdz = sh ? this.shadowDir.y : 0;
     const K = this.cullKey, e = _m4.elements;
-    let same = this.cullFor === this.terrain && K[16] === Math.fround(sdx) && K[17] === Math.fround(sdz);
+    let same = v.version > 0 && K[16] === Math.fround(sdx) && K[17] === Math.fround(sdz);
     for (let i = 0; same && i < 16; i++) same = K[i] === Math.fround(e[i]);
-    if (same) return;
-    for (let i = 0; i < 16; i++) K[i] = e[i];
-    K[16] = sdx; K[17] = sdz;
-    this.cullFor = this.terrain;
-    _cullFrustum.setFromProjectionMatrix(_m4);
-    v.fx = this.rig.focus.x; v.fz = this.rig.focus.z;
-    v.sdx = sdx; v.sdz = sdz;
+    if (!same) {
+      for (let i = 0; i < 16; i++) K[i] = e[i];
+      K[16] = sdx; K[17] = sdz;
+      _cullFrustum.setFromProjectionMatrix(_m4);
+      v.fx = this.rig.focus.x; v.fz = this.rig.focus.z;
+      v.sdx = sdx; v.sdz = sdz;
+      v.version++;
+    }
     this.terrain.cull(v);
   }
 

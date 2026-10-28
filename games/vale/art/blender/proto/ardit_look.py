@@ -47,6 +47,7 @@ def main():
         from types import SimpleNamespace
         spec = importlib.util.spec_from_file_location("ardit_spec", os.path.join(os.path.dirname(HERE), "fighters", "ardit.py"))
         K = importlib.util.module_from_spec(spec)
+        sys.modules["ardit_spec"] = K                 # dataclasses in the module need it registered
         spec.loader.exec_module(K)
         want = {v[6] for v in views if len(v) > 6}
         clips = {k: c for k, c in K.clip_overrides(SimpleNamespace(info=SimpleNamespace(armature=arm), chains={})).items()

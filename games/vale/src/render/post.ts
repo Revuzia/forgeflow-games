@@ -2,7 +2,8 @@
 // LUT → vignette → overlay → SMAA; tokens.json `grade.passOrder`).
 //
 //   RenderPass(world)                       HalfFloat buffers, renderer.toneMapping = NoToneMapping
-//   N8AOPostPass                            ao 1 = half resolution "Medium", ao 2 = full "High"; off on Low
+//   N8AOPostPass                            ao 1 = half resolution "Medium", ao 2 = full "High"; off on Low; "Low"
+//                                           samples while dynamic resolution holds the scale under 0.9 (r12 B4)
 //   VfxPass                                 the VFX scene drawn into the HDR buffer (premultiplied, soft
 //                                           depth against the stable scene depth), so emissive blooms
 //                                           and the grade applies to effects like the world
@@ -154,6 +155,8 @@ export class PostChain {
   private lutEffect: LUT3DEffect | null = null;
   private quality: PostQuality = { ao: 1, bloom: true, aa: 'smaa', tier: 'high' };
   aoPass: N8AOPostPass | null = null;
+  /** r12 B4: AO at N8AO 'Low' (fewer denoise / AO samples) while the dynamic-resolution scale is under 0.9 */
+  private aoLow = false;
   private width = 1;
   private height = 1;
 
@@ -189,6 +192,13 @@ export class PostChain {
     if (!same) this.build();
   }
 
+  /** the dynamic-resolution scale fell under 0.9 (GPU-bound): AO drops to 'Low' samples until it recovers */
+  setAoLow(low: boolean): void {
+    if (low === this.aoLow) return;
+    this.aoLow = low;
+    this.aoPass?.setQualityMode(low ? 'Low' : this.quality.ao === 2 ? 'High' : 'Medium');
+  }
+
   setSize(cssWidth: number, cssHeight: number): void {
     this.width = cssWidth; this.height = cssHeight;
     this.composer.setSize(cssWidth, cssHeight, false);
@@ -206,7 +216,7 @@ export class PostChain {
       const ao = new N8AOPostPass(this.scene, this.camera, this.width, this.height);
       ao.autoDetectTransparency = false;
       ao.configuration.transparencyAware = false;
-      ao.setQualityMode(q.ao === 2 ? 'High' : 'Medium');
+      ao.setQualityMode(this.aoLow ? 'Low' : q.ao === 2 ? 'High' : 'Medium');
       ao.configuration.halfRes = q.ao === 1;
       ao.configuration.aoRadius = 1.4;
       ao.configuration.distanceFalloff = 1.0;

@@ -20,11 +20,17 @@ Not in the shared pipeline, implemented here (module-level wrappers; common/ unt
   * the arms' rest pose: rig.proportions is an A-pose; rig_extras re-places upper_arm / forearm / hand / prop on
     both sides onto the concept's carry (fists at the spear and at the pavise's grip), prop.R up the spear,
     prop.L up the pavise (its +Z = the pane's facing);
-  * the paint (ardit_paint, installed over common/hifi/project.paint for this build): sideways texels sample
-    their own part's paint inset from the outline (no outline streaks on side planes), up-facing tops of the helm
-    / pauldrons / boots take their part's own front paint box-mapped by depth (no streaked crowns), the pane,
-    the spear and the inlays are painted from their own materials (the painted fist behind the glass and the
-    eroded thin spear would otherwise ghost), and each part's painted median is graded onto its brief colour.
+  * the paint (ardit_paint, installed over common/hifi/project.paint for this build): side planes of boxy parts are
+    BOX-MAPPED onto their own front / back paint (SIDEMAP: no outline streaks), round parts' sides sample inset from
+    the outline, up-facing tops of the helm / pauldrons / boots take their part's own front paint mapped by depth
+    (TOPMAP), the spear head and shaft and the under-collar are painted from their own materials, the pane is the
+    concept's own glass (the fist ghosted through it moves with it: both are rigid on the left hand), and a value
+    soft-cap keeps every large area under L* 86 (the lit chalk crown is L* 87 on the sheet);
+  * the skins: project.recolour wrapped so Chalkline gets its chalk line-work (frame + tabard) and First Bell its ten
+    etched hour-marks, painted after the role recolour, then the value cap again;
+  * the clips: an aim with a roll (AimRoll, both props: the spear's blade and the pavise's pane face where authored),
+    the shared foot solver's pitch sign (flipped, as on Ulkro / Odrum), symmetric decimation only for centred parts,
+    the base colour / ORM WebP quality (Q_BASE / Q_ORM) to keep the GLB under 1172 KiB.
 """
 from __future__ import annotations
 
@@ -77,7 +83,7 @@ AO_INTO_BASE = 0.25
 SKINS: list = [
     {"id": "ardit_chalkline", "extra": {}, "card": {"primary": "#3A3F47", "secondary": "#E6E0D2"},
      "palette": {"chalk": "#BDBFC2", "stone": "#B9BEC4", "cloth": "#7A828D", "ironstone": "#3A3F47",
-                 "under": "#2E3238", "gauntlet": "#4A5059"}},
+                 "under": "#2E3238", "gauntlet": "#4A5059", "cloth2": "#646A73"}},
     {"id": "ardit_first_bell", "extra": {"bell": True}, "card": {"primary": "#4A4640", "secondary": "#D8D2C4"},
      "palette": {"chalk": "#D8D2C4", "stone": "#CFC8BA", "cloth": "#8D8A84", "ironstone": "#38363A",
                  "leather": "#3A332D", "under": "#34322F", "gauntlet": "#5B5750"}},
@@ -103,7 +109,7 @@ SPEAR_S = {"butt": -0.735, "shaft0": -0.66, "shaft1": 0.62, "collar0": 0.58, "kn
 PAV_Y, PAV_T = -0.235, 0.032                  # mid plane, half thickness (6.4 cm frame)
 PAV_OUT = [(0.372, 1.842), (0.800, 1.842), (0.800, 0.585), (0.600, 0.355), (0.372, 0.560)]
 PAV_FRAME_W = 0.052                           # the chalk frame's face width
-LINE_W = 0.019                                # the accent line along the window's edge (on the frame's faces)
+LINE_W = 0.016                                # the accent line along the window's edge (on the frame's faces)
 SPIRE_X = 0.640
 DIAMONDS = [((0.630, 2.030), 0.052, 0.105), ((0.668, 1.800), 0.058, 0.118)]   # (centre x, z), half w, half h
 INLAY_K = 0.62                                # inlay size / bezel size
@@ -182,6 +188,22 @@ def slab(pts, y0, half_t, round_=0.0, axis_pts=None):
         dy = np.abs(P[:, 1] - y0) - (half_t - round_)
         q = np.stack([np.maximum(dp, 0), np.maximum(dy, 0)], 1)
         return np.linalg.norm(q, axis=1) + np.minimum(np.maximum(dp, dy), 0) - round_
+    return Fn(d, lo, hi)
+
+
+def _band(c, a, b, hz, r):
+    """a belt band round the body: an elliptic cylinder (semi-axes a, b; half height hz) with rounded edges r (the body
+    fills it; only its outer face and rims show)"""
+    c = np.asarray(c, float)
+    lo, hi = c - (a + 0.02, b + 0.02, hz + 0.02), c + (a + 0.02, b + 0.02, hz + 0.02)
+
+    def d(P):
+        x, y, z = P[:, 0] - c[0], P[:, 1] - c[1], P[:, 2] - c[2]
+        q = np.sqrt((x / (a - r)) ** 2 + (y / (b - r)) ** 2)
+        de = (q - 1.0) * min(a, b) * 0.98
+        dz = np.abs(z) - (hz - r)
+        w = np.stack([np.maximum(de, 0), np.maximum(dz, 0)], 1)
+        return np.linalg.norm(w, axis=1) + np.minimum(np.maximum(de, dz), 0) - r
     return Fn(d, lo, hi)
 
 
@@ -333,7 +355,7 @@ def sculpts() -> list:
 
     # BELT + BUCKLE
     belt = Sculpt("belt")
-    belt.add(Torus((0, 0.01, 1.445), 0.318, 0.050, axes=np.diag([1.0, 0.318 / 0.250, 1.0]), rz=0.062), k=0.0)
+    belt.add(_band((0.0, 0.008, 1.445), 0.352, 0.268, 0.042, 0.014), k=0.0)
     for x in (-0.24, -0.15, 0.15, 0.24):
         belt.add(Sphere((x, -0.255 + 0.06 * (abs(x) > 0.2), 1.445), 0.012), k=0.004)
     part("belt", belt, "leather", "auto", 560)
@@ -352,8 +374,8 @@ def sculpts() -> list:
     part("coat", coat, "cloth", "auto", 1600)
     for s, sx in (("R", -1), ("L", 1)):
         tb = Sculpt(f"tabard_{s}")
-        c = (sx * 0.086, -0.302, 1.03)
-        pan = RoundBox(c, (0.082, 0.016, 0.395), 0.010, axes=sdf.rot_x(-6.5))
+        c = (sx * 0.086, -0.302, 1.0175)
+        pan = RoundBox(c, (0.082, 0.016, 0.3925), 0.010, axes=sdf.rot_x(-6.5))
         tb.add(pan.displaced(folds(0.008, 26.0, axis=0, phase=sx * 1.1, zfade=(1.3, 0.7)), 0.008), k=0.0)
         part(f"tabard_{s}", tb, "cloth2", ("chain", f"tabard_{s.lower()}", "hips"), 420)
 
@@ -482,6 +504,7 @@ def extra_materials(ctx) -> dict:
 
 def model(ctx) -> list:
     _install()
+    _SKIN["id"] = (ctx.skin or {}).get("id")
     P = []
     extra = (ctx.skin or {}).get("extra") or {}
     for name, S, vs, role, bind, tris in sculpts() + skin_extras(extra):
@@ -495,7 +518,8 @@ def model(ctx) -> list:
 # ── build wrappers (this build process only; common/ untouched) ──────────────────────────────────────────────
 # one-sided parts decimate without the X-mirror constraint (it is meaningless off the centre line)
 SYM = ("helm", "visor", "face", "neck", "gorget", "cuirass", "sleeves", "belt", "buckle", "coat", "legs", "boots")
-Q_BASE = 72                # the base colour's WebP quality (the shared default 80 left the GLB over 1172 KiB)
+Q_BASE = 70                # the base colour's WebP quality (the shared default 80 left the GLB over 1172 KiB)
+Q_ORM = 64                 # occlusion / roughness (shared default 72)
 
 
 def _install_build() -> None:
@@ -523,13 +547,13 @@ def _install_build() -> None:
             before = os.path.getsize(path)
             if not node or not os.path.isfile(script):
                 return orig_o(path, out, quantize, fighter)
-            args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE)]
+            args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE), "--q-orm", str(Q_ORM)]
             r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
             if r.returncode != 0:
                 scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
                 return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
             scene.log(r.stdout.strip())
-            return {"ok": True, "before": before, "after": os.path.getsize(out), "q_base": Q_BASE}
+            return {"ok": True, "before": before, "after": os.path.getsize(out), "q_base": Q_BASE, "q_orm": Q_ORM}
         optimize._ardit = True
         export.optimize = optimize
 
@@ -582,7 +606,7 @@ def chain_config(ctx) -> list:
     """the tabard panels: one bone each, hanging with gravity, pushed forward by their own thigh"""
     def push(side):
         def f(p):
-            return 0.9 * max(0.0, p.get(f"thigh.{side}", (0.0,))[0])
+            return min(28.0, 0.5 * max(0.0, p.get(f"thigh.{side}", (0.0,))[0]))      # never flipped up like a board
         return f
     return [anim.ChainCfg(ctx.chains["tabard_l"], gravity=0.8, stiffness=150.0, damping=16.0, inertia=0.5, drive=push("L")),
             anim.ChainCfg(ctx.chains["tabard_r"], gravity=0.8, stiffness=150.0, damping=16.0, inertia=0.5, drive=push("R"))]
@@ -606,6 +630,7 @@ TOPMAP = {                 # up-facing texels: the part's own front paint, depth
     "helm": (2.262, 2.335), "pauldron_R": (1.935, 1.995), "pauldron_L": (1.935, 1.995), "tier_R": (1.70, 1.78),
     "tier_L": (1.70, 1.78), "boots": (0.03, 0.12), "gorget": (1.88, 1.95), "cuirass": (1.70, 1.80),
     "greave_R": (0.45, 0.53), "greave_L": (0.45, 0.53), "bracer_R": (1.40, 1.48), "bracer_L": (1.40, 1.48),
+    "belt": (1.415, 1.475),
 }
 BASE_TONE = {}             # part: (target median hex, hue strength, gamma) after the first look
 # the value cap (brief: no large area lighter than L* 86): albedo luminance above KNEE (L* ~80) is compressed by SLOPE,
@@ -664,17 +689,28 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     out = np.zeros((size, size, 3), dtype=np.float32)
     have = part >= 0
     flat = flat or {}
+    # the concept figure mask: plate pixels outside it are padding (blurred neighbours, often the pale floor or another
+    # part); a texel whose sample lands there takes its own part's nearest paint instead (no bleeding between parts)
+    from common import scene as _sc
+    fig = pj.load_rgb(os.path.join(_sc.CACHE_DIR, "concept", f"{ID}_mask.png"))[..., 0] > 0.5
     fills = {}
     for side in ("front", "back"):
         pid = vis.part[side]
         s = vis.step
         small = plates.img[side][s // 2::s, s // 2::s][:pid.shape[0], :pid.shape[1]]
+        fsmall = fig[s // 2::s, s // 2::s][:pid.shape[0], :pid.shape[1]]
         for k in np.unique(part[have]):
-            valid = pid == k
+            valid = (pid == k) & fsmall
+            if not valid.any():
+                valid = pid == k
             if not valid.any():
                 continue
             iy, ix = pj.nearest_index(valid)
             fills[(side, int(k))] = pj.blur(small[iy, ix], 1.0)
+
+    def off_figure(px, py):
+        H, W = fig.shape
+        return ~fig[np.clip(np.round(py).astype(np.int64), 0, H - 1), np.clip(np.round(px).astype(np.int64), 0, W - 1)]
     idx = np.nonzero(have)
     p = P[idx]
     n = N[idx]
@@ -693,6 +729,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
                     cx[ss_] = float(np.median(p[ss_, 0]))
         else:
             cx[sel] = float(np.median(p[sel, 0]))
+    OWN_IDS = [names.index(nm) for nm in ("spear_head", "spear_shaft", "neck") if nm in names]
     st = np.abs(n[:, 0]) / (np.abs(n[:, 0]) + np.abs(n[:, 1]) + 1e-6)
     ws = _ss(0.55, 0.90, st)
     xs = p[:, 0] - np.sign(p[:, 0] - cx) * SIDE_INSET * ws
@@ -752,6 +789,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         else:
             hidden = ~(p[:, 1] >= np.nan_to_num(dep, nan=-1e9) - eps)
         hidden &= ~(wt > 0.5)
+        hidden |= off_figure(px, py) & ~np.isin(k, OWN_IDS)
         for kk in np.unique(k[hidden]):
             f = fills.get((side, int(kk)))
             if f is None:
@@ -764,7 +802,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         qx, qy = plates.to_px(side, bx[box], zs[box])
         cb = pj.bilinear(plates.img[side], qx, qy)
         _, hid2 = vis.lookup(side, qx, qy)
-        other = hid2 != k[box]
+        other = (hid2 != k[box]) | off_figure(qx, qy)
         for kk in np.unique(k[box][other]):
             f = fills.get((side, int(kk)))
             if f is None:
@@ -822,7 +860,105 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     return out
 
 
+# ── skins (base painting re-coloured by role in the pipeline; the brief's surface marks painted on top here) ─────
+_SKIN = {"id": None}
+LINEWORK = "#E6E0D2"           # Chalkline's chalk line-work (thin lines only; exempt from the L* 86 area rule)
+HOUR_INK = "#4F4A42"           # First Bell's etched hour-marks (carved, never emissive)
+
+
+def _frame_inside(x, z):
+    """distance inside the pavise outline (m, + inside), on the frame's face plane"""
+    return -poly2d(PAV_OUT)(x, z)
+
+
+def _chalk(img_lin, sel, mask, rgb, p):
+    """lay a chalk colour over the masked texels with a dry-chalk grain (coverage 0.72-1.0)"""
+    if not mask.any():
+        return
+    grain = 0.72 + 0.28 * np.clip(0.5 + 0.9 * NOISE(p[mask] * np.array([1.0, 1.0, 1.0]), 70.0), 0, 1)
+    tgt = _lin(_hex(rgb))[None, :]
+    ii = np.nonzero(sel)[0][mask]
+    img_lin[ii] = img_lin[ii] * (1 - grain[:, None]) + tgt * grain[:, None]
+
+
+def _skin_marks(img, maps, names, sid, log=print):
+    """Chalkline: chalk line-work drawn across the pavise frame (two rails + diagonal strokes between them) and the
+    tabard panels (a border and three rising chevrons); First Bell: ten etched hour-marks across the frame (four on
+    each side rail, two on the top), front and back"""
+    P, N, part = maps["P"], maps["N"], maps["part"]
+    have = part >= 0
+    idx = np.nonzero(have)
+    p, n, k = P[idx], N[idx], part[idx]
+    lin = _lin(img[idx])
+    drawn = 0
+    if "pavise_frame" in names:
+        sel = (k == names.index("pavise_frame")) & (np.abs(n[:, 1]) > 0.6)
+        fp = p[sel]
+        d = _frame_inside(fp[:, 0], fp[:, 2])
+        if sid == "ardit_chalkline":
+            rails = (np.abs(d - 0.012) < 0.0038) | (np.abs(d - 0.040) < 0.0038)
+            u = (fp[:, 0] * 0.8 + fp[:, 2]) / 0.075
+            strokes = (np.abs((u % 1.0) - 0.5) < 0.07) & (d > 0.012) & (d < 0.040)
+            m = rails | strokes
+            _chalk(lin, sel, m, LINEWORK, fp)
+            drawn += int(m.sum())
+        elif sid == "ardit_first_bell":
+            m = np.zeros(len(fp), dtype=bool)
+            rails_x = (PAV_OUT[0][0] + PAV_FRAME_W / 2, PAV_OUT[1][0] - PAV_FRAME_W / 2)
+            for xr in rails_x:
+                for zc in (0.78, 1.04, 1.30, 1.56):
+                    m |= (np.abs(fp[:, 2] - zc) < 0.0045) & (np.abs(fp[:, 0] - xr) < 0.019)
+            for xc in (0.52, 0.66):
+                m |= (np.abs(fp[:, 0] - xc) < 0.0045) & (np.abs(fp[:, 2] - (PAV_OUT[0][1] - PAV_FRAME_W / 2)) < 0.019)
+            ink = _lin(_hex(HOUR_INK))[None, :]
+            ii = np.nonzero(sel)[0][m]
+            lin[ii] = lin[ii] * 0.25 + ink * 0.75
+            drawn += int(m.sum())
+    if sid == "ardit_chalkline":
+        for nm, sx in (("tabard_R", -1), ("tabard_L", 1)):
+            if nm not in names:
+                continue
+            sel = (k == names.index(nm)) & (np.abs(n[:, 1]) > 0.5)
+            tp = p[sel]
+            xc = sx * 0.086
+            ax = np.abs(tp[:, 0] - xc)
+            border = ((np.abs(ax - 0.064) < 0.004) & (tp[:, 2] > 0.665)) | ((np.abs(tp[:, 2] - 0.672) < 0.004) & (ax < 0.068))
+            chev = np.zeros(len(tp), dtype=bool)
+            for z0 in (0.76, 0.84, 0.92):
+                chev |= (np.abs(tp[:, 2] - (z0 + 0.0 - ax * 0.55)) < 0.0042) & (ax < 0.050)
+            m = border | chev
+            _chalk(lin, sel, m, LINEWORK, tp)
+            drawn += int(m.sum())
+    out = img.copy()
+    out[idx] = _srgb(lin)
+    log(f"ardit skin marks ({sid}): {drawn} texels")
+    return out
+
+
+def _cap(img):
+    """the value soft-cap (KNEE_Y / SLOPE) over a whole sRGB atlas"""
+    lin = _lin(img)
+    Y = 0.2126 * lin[..., 0] + 0.7152 * lin[..., 1] + 0.0722 * lin[..., 2]
+    Yc = np.where(Y > KNEE_Y, KNEE_Y + (Y - KNEE_Y) * SLOPE, Y)
+    return _srgb(lin * (Yc / np.maximum(Y, 1e-5))[..., None]).astype(np.float32)
+
+
 def _install() -> None:
+    from common.hifi import project
+    if not getattr(project.recolour, "_ardit", False):
+        orig = project.recolour
+
+        def recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
+            out = orig(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
+            if _SKIN["id"] in ("ardit_chalkline", "ardit_first_bell"):
+                out = _skin_marks(out, maps, names, _SKIN["id"], log=log)
+            return _cap(out)
+        recolour._ardit = True
+        project.recolour = recolour
+    _install_paint()
+
+
+def _install_paint() -> None:
     from common.hifi import project
     if getattr(project.paint, "_ardit", False):
         return
@@ -1075,15 +1211,15 @@ def gen_attack1() -> anim.Clip:
 def gen_attack2() -> anim.Clip:
     """a pavise bash: the left shoulder drawn back, then the pane driven face-first into the target at f10 off a step
     of the left foot, the top edge leading; the spear stays upright in the right fist"""
-    wind = pz(lean=0.0, yaw=16.0, drop=0.06, dy=0.04,
-              R=rh(REST_R + np.array([0.03, -0.06, 0.02]), aim=(-0.08, -0.10, 0.99)),
-              L=lh((0.14, 0.08, -0.50), aim=(0.10, 0.12, 0.99), face=_yawd(FRONT, 22.0)))
-    hit = pz(lean=12.0, yaw=-18.0, drop=0.09, dy=-0.10, feet=FEET_BASH,
-             R=rh(REST_R + np.array([0.0, 0.04, 0.0]), aim=(-0.16, 0.06, 0.98)),
-             L=lh((0.02, -0.40, -0.38), aim=(0.0, -0.30, 0.95), face=_yawd(FRONT, -16.0)))
-    fol = pz(lean=14.0, yaw=-22.0, drop=0.10, dy=-0.12, feet=FEET_BASH,
-             R=rh(REST_R + np.array([0.0, 0.05, 0.0]), aim=(-0.18, 0.08, 0.98)),
-             L=lh((0.0, -0.42, -0.36), aim=(0.0, -0.36, 0.93), face=_yawd(FRONT, -20.0)))
+    wind = pz(lean=-2.0, yaw=24.0, drop=0.07, dy=0.06,
+              R=rh(REST_R + np.array([0.04, -0.08, 0.03]), aim=(-0.06, -0.12, 0.99)),
+              L=lh((0.18, 0.14, -0.48), aim=(0.14, 0.18, 0.97), face=_yawd(FRONT, 40.0)))
+    hit = pz(lean=14.0, yaw=-24.0, drop=0.10, dy=-0.12, feet=FEET_BASH,
+             R=rh(REST_R + np.array([0.0, 0.06, 0.0]), aim=(-0.18, 0.10, 0.98)),
+             L=lh((-0.14, -0.44, -0.34), aim=(-0.04, -0.34, 0.94), face=_yawd(FRONT, -22.0), pole=(0.85, 0.3, -0.4)))
+    fol = pz(lean=16.0, yaw=-28.0, drop=0.11, dy=-0.14, feet=FEET_BASH,
+             R=rh(REST_R + np.array([0.0, 0.07, 0.0]), aim=(-0.20, 0.12, 0.97)),
+             L=lh((-0.16, -0.46, -0.32), aim=(-0.04, -0.40, 0.92), face=_yawd(FRONT, -26.0), pole=(0.85, 0.3, -0.4)))
     return strike("attack2", 25, wind, hit, fol)
 
 
@@ -1150,22 +1286,28 @@ def gen_glare() -> anim.Clip:
 
 
 def gen_spire_strike() -> anim.Clip:
-    """cast_a3 Spire Strike, 25 f, impact f10: the pavise swung up overhead in the left fist and turned over (the spire
-    tip pointing down; a tall pale shape over him), the knees bend, and at f10 he drives the spire tip into the ground
-    beside his left foot (the strike point of the VFX, 0.75 m to his left); the pane trembles but stays rigid; back to
-    guard by f25"""
+    """cast_a3 Spire Strike, 25 f, impact f10: the pavise cartwheeled up over his left side in the left fist (lying
+    flat above his head at f5: a tall pale T) and on over until it hangs overhead with the spire tip pointing down; the
+    knees bend and at f10 he drives the spire tip into the ground beside his left foot (the VFX strike point, 0.75 m to
+    his left); the pane trembles but stays rigid; he pulls it up overhead and wheels it back over to guard by f25 (the
+    same path reversed: the pavise never swings through his body)"""
     g = G()
-    up_ = pz(lean=-4.0, yaw=6.0, drop=-0.01, dy=0.03, look=(-10.0, 0.0, 0.0),
+    lean_r = anim.P(spine=(0, 0, 3.0), chest=(0, 0, 4.0))       # the chest tipped to his right (+Z = his right)
+    tee = pz(lean=-2.0, yaw=4.0, drop=-0.01, dy=0.02, look=(-8.0, 0.0, 0.0), extra=lean_r,
              R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
-             L=lh((0.02, -0.26, 0.46), aim=(0.06, -0.08, -0.99), face=(0.0, 1.0, 0.0), pole=(0.8, 0.2, -0.3)))
-    hit = pz(lean=14.0, yaw=8.0, roll=0.0, drop=0.24, dx=0.05, dy=-0.02, look=(4.0, 0.0, 0.0), feet=FEET_WIDE,
+             L=lh((0.16, -0.12, 0.55), aim=(0.995, 0.0, 0.10), face=FRONT, pole=(0.9, 0.1, -0.2)))
+    up_ = pz(lean=-4.0, yaw=6.0, drop=-0.01, dy=0.03, look=(-10.0, 0.0, 0.0), extra=lean_r,
+             R=rh(REST_R + np.array([0.02, -0.04, 0.03]), aim=(-0.10, -0.15, 0.98)),
+             L=lh((0.10, -0.20, 0.54), aim=(0.10, -0.06, -0.99), face=FRONT, pole=(0.9, 0.1, -0.2)))
+    hit = pz(lean=14.0, yaw=8.0, drop=0.24, dx=0.05, dy=-0.02, look=(4.0, 0.0, 0.0), feet=FEET_WIDE,
+             extra=anim.P(spine=(0, 0, -3.0), chest=(0, 0, -4.0)),
              R=rh(REST_R + np.array([0.02, -0.06, 0.06]), aim=(-0.14, -0.20, 0.97)),
-             L=lh((0.22, -0.16, -0.50), aim=(0.04, -0.06, -0.997), face=(0.0, 1.0, 0.0), pole=(0.9, 0.3, -0.1)))
+             L=lh((0.22, -0.16, -0.50), aim=(0.04, -0.06, -0.997), face=FRONT, pole=(0.9, 0.3, -0.1)))
     tremble = anim._with_hips(anim.lerp_pose(hit, up_, -0.03), (0.0, 0.0, -0.01))
-    rise = anim.lerp_pose(hit, g, 0.5)
-    keys = [(0.0, g, "linear"), (0.08, anim._with_hips(g, (0, 0, -0.02)), "inout"), (0.30, up_, "out"),
-            (anim.IMPACT, hit, "accel"), (0.48, tremble, "out"), (0.56, hit, "inout"), (0.78, rise, "inout"),
-            (1.0, g, "settle")]
+    pull = anim._with_hips(anim.lerp_pose(up_, hit, 0.35), (0.0, 0.0, 0.0))
+    keys = [(0.0, g, "linear"), (0.07, anim._with_hips(g, (0, 0, -0.02)), "inout"), (0.20, tee, "inout"),
+            (0.30, up_, "out"), (anim.IMPACT, hit, "accel"), (0.48, tremble, "out"), (0.54, hit, "inout"),
+            (0.66, pull, "inout"), (0.80, tee, "inout"), (1.0, g, "inout")]
     return clip("cast_a3", 25, keys, impact=anim.IMPACT, lags={"head": 1.0})
 
 
@@ -1177,11 +1319,11 @@ def gen_muster() -> anim.Clip:
     g = G()
     step = pz(lean=4.0, drop=0.07, dy=0.06, feet=feet_(l=(0.02, -0.02, 0.0), r=(-0.02, 0.14, 0.0), yr=-6.0),
               R=rh(REST_R + np.array([0.06, -0.06, 0.06]), aim=(-0.2, 0.25, 0.95)),
-              L=lh((-0.24, -0.36, -0.42), aim=(0.0, 0.0, 1.0), face=FRONT))
+              L=lh((-0.30, -0.36, -0.42), aim=(0.0, 0.0, 1.0), face=FRONT))
     tall = pz(lean=-2.0, drop=0.0, dy=0.05, look=(-6.0, 0.0, 0.0), feet=feet_(l=(0.02, -0.02, 0.0), r=(-0.02, 0.14, 0.0),
                                                                                yr=-6.0),
-              R=rh((0.30, -0.40, -0.08), aim=(-0.35, 0.50, 0.79), up=(0.0, -0.85, 0.53), pole=(-0.6, 0.2, -0.8)),
-              L=lh((-0.30, -0.40, -0.24), aim=(0.0, 0.0, 1.0), face=FRONT, pole=(0.8, 0.3, -0.5)))
+              R=rh((0.26, -0.40, -0.10), aim=(-0.38, 0.48, 0.79), up=(0.0, -0.85, 0.53), pole=(-0.6, 0.2, -0.8)),
+              L=lh((-0.36, -0.40, -0.24), aim=(0.0, 0.0, 1.0), face=FRONT, pole=(0.8, 0.3, -0.5)))
     breathe = anim._with_hips(anim.add(tall, anim.P(chest=(-1.0, 0, 0))), (0, 0, 0.004))
     keys = [(0.0, g, "linear"), (0.18, step, "inout"), (anim.IMPACT, tall, "back"), (0.58, breathe, "inout"),
             (0.75, tall, "inout"), (1.0, g, "inout")]
@@ -1299,10 +1441,10 @@ def gen_victory() -> anim.Clip:
     out_ = pz(lean=2.0, yaw=-10.0, drop=0.05, dx=-0.10, feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.14, 0.02, 0.04), yl=-8.0,
                                                                    yr=-20.0),
               L=lh((0.12, -0.10, -0.55), aim=(0.12, 0.0, 0.99), face=_yawd(FRONT, -6.0)))
-    hold = pz(lean=-4.0, yaw=-22.0, drop=0.03, dx=-0.10, look=(-14.0, 6.0, 0.0),
-              feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.16, 0.04, 0.0), yl=-16.0, yr=-28.0),
-              R=rh(REST_R + np.array([0.0, 0.02, 0.0]), aim=(-0.06, 0.04, 0.998)),
-              L=lh((0.14, -0.06, -0.56), aim=(0.20, 0.30, 0.93), face=(0.35, -0.83, 0.43)))
+    hold = pz(lean=-8.0, yaw=-26.0, drop=0.03, dx=-0.10, look=(-26.0, 16.0, 0.0),
+              feet=feet_(l=(-0.04, -0.04, 0.0), r=(-0.16, 0.06, 0.0), yl=-18.0, yr=-30.0),
+              R=rh(REST_R + np.array([0.02, -0.04, 0.02]), aim=(-0.10, -0.06, 0.99)),
+              L=lh((0.14, -0.14, -0.50), aim=(0.26, 0.30, 0.92), face=(-0.45, -0.75, 0.48)))
     keys = [(0.0, g, "linear"), (0.16, behind, "inout"), (0.40, out_, "inout"), (0.66, hold, "out"), (1.0, hold, "linear")]
     base = anim.drag(anim.keyed(keys), 50, {"head": 2.0, "neck": 1.0})
 
