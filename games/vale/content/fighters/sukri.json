@@ -540,7 +540,7 @@
     "icon": "assets/fighters/sukri/icon.png",
     "height": 1.65,
     "scale": 1,
-    "runRefSpeed": 3.6,
+    "runRefSpeed": 3.4,
     "clips": {
       "idle": "idle",
       "run": "run",
@@ -554,10 +554,9 @@
       "recall": "recall",
       "idle_lobby": "idle_lobby",
       "victory": "victory",
-      "crit": "crit",
-      "spawn": "spawn",
-      "stunned": "stunned",
+      "channel": "channel",
       "dash": "dash",
+      "stunned": "stunned",
       "taunt": "taunt"
     },
     "sockets": {
@@ -566,11 +565,14 @@
       "head": "head",
       "hand_r": "hand.R",
       "hand_l": "hand.L",
-      "weapon": "prop.R",
       "weapon_r": "prop.R",
       "weapon_l": "prop.L",
       "foot_r": "foot.R",
-      "foot_l": "foot.L"
+      "foot_l": "foot.L",
+      "weapon": "prop.R",
+      "cup": "x_cup",
+      "cord": "x_cord",
+      "staff_top": "x_staff_top"
     },
     "accentMaterial": "accent"
   },

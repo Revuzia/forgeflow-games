@@ -50,29 +50,29 @@
   },
   "uv_coverage": 0.589,
   "bake": {
-    "base": 2.83,
-    "rough_metal": 2.13,
-    "normal": 1.68,
-    "ao": 2.5,
+    "base": 10.22,
+    "rough_metal": 5.48,
+    "normal": 3.43,
+    "ao": 3.66,
     "normal_fixed_px": 80609,
-    "projection": 39.11,
-    "pack_save": 39.19,
-    "total": 48.44
+    "projection": 102.14,
+    "pack_save": 102.51,
+    "total": 125.77
   },
   "tris": 21228,
   "mesh_top_m": 1.879,
-  "glb_bytes_raw": 2478968,
+  "glb_bytes_raw": 2479224,
   "optimize": {
     "ok": true,
-    "before": 2478968,
-    "after": 1043044
+    "before": 2479224,
+    "after": 1041796
   },
-  "glb_bytes": 1043044,
+  "glb_bytes": 1041796,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_lamplit.glb (1019 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: rishal_lamplit_base 2048x2048 230K, rishal_lamplit_normal 512x512 46K, rishal_lamplit_orm 512x512 72K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_lamplit.glb (1017 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: rishal_lamplit_base 2048x2048 228K, rishal_lamplit_normal 512x512 46K, rishal_lamplit_orm 512x512 72K",
       "  skinned meshes: rishal_accent(414v), rishal_lamplit(19210v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -87,8 +87,8 @@
       "portrait": "art/out/fighters/rishal/rishal_lamplit_portrait.png"
     },
     "seconds": {
-      "splash": 7.6,
-      "portrait": 3.79
+      "splash": 16.46,
+      "portrait": 7.17
     }
   },
   "three_qa": {
@@ -120,24 +120,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/rishal/three_rishal_lamplit.png",
-    "seconds": 7.7,
+    "seconds": 14.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.24,
-      "model": 25.66,
-      "lows_bind": 1.01,
-      "uv": 3.44,
-      "bake": 48.44,
-      "export": 0.06,
-      "optimize": 0.48,
-      "load_test": 0.1,
-      "render": 11.41,
-      "three_qa": 7.86
+      "rig": 0.0,
+      "materials": 0.21,
+      "model": 25.98,
+      "lows_bind": 2.05,
+      "uv": 7.3,
+      "bake": 125.78,
+      "export": 0.23,
+      "optimize": 1.36,
+      "load_test": 0.23,
+      "render": 23.73,
+      "three_qa": 15.28
     },
-    "total_s": 98.97
+    "total_s": 202.47
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

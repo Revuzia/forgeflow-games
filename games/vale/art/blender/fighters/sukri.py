@@ -203,8 +203,11 @@ PALETTE = materials.bible_palette(cloth2="#D3CCBA", wood="#D1C3A4", stone="#B9B4
                                   ink="#17161A", accent="#3F9CFF", glove="#5A5149", rope="#7A6650")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "cup": "x_cup", "cord": "x_cord", "staff_top": "x_staff_top"}
+# (build 9: the bible key at 45 degrees threw the stone plates' zig-zag shadows across the round cream wraps: camo
+# blotches in the splash; a lower key (32 degrees) and more sky fill keep the wraps reading as painted)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 22.0, "portrait_clip": "idle_lobby",
-          "portrait_t": 0.0, "portrait_yaw": 28.0, "icon_yaw": 20.0, "rim_cool": 0.5, "rim_warm": 0.5}
+          "portrait_t": 0.0, "portrait_yaw": 28.0, "icon_yaw": 20.0, "rim_cool": 0.5, "rim_warm": 0.5,
+          "key_el": 30.0, "ambient": 0.85, "sun": 2.7}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -298,6 +301,9 @@ def _relief_at(side, x, z):
     return a * (1 - fv) + b * fv
 
 
+RELIEF_GROOVE, RELIEF_BULGE = 0.0042, 0.0030
+
+
 def painted(gain=1.0, yc=0.02, depth=0.30, extra=None):
     """displacement fn (SDF units: + carves in) from the painted relief: the front map on the front half, the back map
     on the back half (y about yc), fading to nothing where the two meet at the sides"""
@@ -307,7 +313,8 @@ def painted(gain=1.0, yc=0.02, depth=0.30, extra=None):
         wf = ss(0.12 * depth, -0.12 * depth, dy)
         fade = ss(0.08 * depth, 0.40 * depth, np.abs(dy))
         r = _relief_at("front", x, z) * wf + _relief_at("back", x, z) * (1 - wf)
-        out = -gain * r * fade
+        r = np.clip(r, -RELIEF_GROOVE, RELIEF_BULGE)           # (build 7: the 8 mm grooves shaded as camo blotches
+        out = -gain * r * fade                                 #  under the splash's grazing light)
         return out + (extra(P) if extra is not None else 0.0)
     return fn
 
@@ -579,7 +586,7 @@ def sculpts() -> list:
         torso.add(Ellipsoid((sx * 0.300, 0.030, 0.870), (0.170, 0.200, 0.130)), k=0.07)
     torso.add(Ellipsoid((0.0, 0.040, 1.000), (0.200, 0.180, 0.080)), k=0.05)          # the neck under the collar
     torso.inter(HalfSpace((0, 0, 0.455), (0, 0, -1), 2.0), k=0.01)
-    torso.ops = [(op, prim.displaced(painted(1.0, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
+    torso.ops = [(op, prim.displaced(painted(0.8, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in torso.ops]
     part("torso", torso, "cloth", ("weights", "torso"), 1750, uvw=1.1)
 
@@ -620,7 +627,7 @@ def sculpts() -> list:
         sl = np.maximum(sl, z - 0.44)
         return np.maximum(d, -sl)
     skirt = Sculpt("skirt")
-    skirt.add(Fn(skirt_d, (-0.48, -0.38, 0.24), (0.48, 0.38, 0.51)).displaced(painted(0.9, 0.02, 0.33, cloth_noise(0.0015, 10.0)), 0.009), k=0.0)
+    skirt.add(Fn(skirt_d, (-0.48, -0.38, 0.24), (0.48, 0.38, 0.51)).displaced(painted(0.7, 0.02, 0.33, cloth_noise(0.0015, 10.0)), 0.009), k=0.0)
     part("skirt", skirt, "cloth", ("weights", "skirt"), 820, 0.8)
 
     # BLOOMERS: the dark round trousers under the skirt (0.30 m wide per leg at the knee)
@@ -1237,6 +1244,7 @@ SIDE_HI = 1.12
 # build 4: beside the body the painting shows the ARMS (sleeves, the brown bracer, the gloves, the staff), not the
 # wraps: torso / skirt texels out there took that paint as brown smears in three-quarter views; they take the part's
 # own banded tone instead (front cream / back tan blended by the normal)
+FRONT_FLANK = ("torso", "skirt")
 SIDE_X = {"torso": (0.30, 0.36, 0.30, 0.92), "skirt": (0.34, 0.40, 0.30, 0.52)}
 OBLIQUE = {"torso": 0.55, "hood": 0.45, "skirt": 0.45, "sleeve_L": 0.5, "sleeve_R": 0.5, "pants": 0.4, "shins": 0.4}
 DARK_FLOOR, DARK_KNEE = 0.66, 0.86
@@ -1324,6 +1332,12 @@ def _proj_sides(maps, plates, vis, names, eps=0.02, log=print):
         cols[side] = c
     wb = np.clip((n[:, 1] + 0.25) / 0.5, 0, 1)
     wb = wb * wb * (3 - 2 * wb)
+    # build 8: the barrel's flanks (under the arms, seen in the victory / cast poses) took half the back's tan-brown
+    # as blotches: the cream front wraps run round the flanks, the brown back wraps start well behind them
+    for nm_ in FRONT_FLANK:
+        if nm_ in names:
+            m_ = k == names.index(nm_)
+            wb[m_] = ss(0.10, 0.50, n[m_, 1])
     _HID[0] = hid_both
     return idx, k, p, n, cols, wb
 
@@ -1364,6 +1378,11 @@ def _side_fill(lin, k, p, n, names, log):
             x0_, x1_, z0_, z1_ = SIDE_X[nm]
             zone = ss(x0_, x1_, np.abs(p[:, 0])) * ss(z0_, z0_ + 0.04, p[:, 2]) * ss(z1_, z1_ - 0.04, p[:, 2])
             w = np.maximum(w, zone)
+        if nm in ("sleeve_L", "sleeve_R"):
+            # build 9: the model's elbows sit 7 cm under the painted ones: the sleeves' lower ends took the painted
+            # brown bracer; the cream sleeve wraps run down to the model's own bracer
+            zone = ss(0.78, 0.73, p[:, 2]).astype(np.float32)
+            w = np.maximum(w, zone)
         good = sel & (face > 0.78) & ~hid & (zone < 0.05)
         if nm == "hood":
             good &= ~((open_sd(p[:, 0], p[:, 2]) < 0.05) & (p[:, 1] < -0.02))
@@ -1377,7 +1396,7 @@ def _side_fill(lin, k, p, n, names, log):
             continue
         tf = tf if tf is not None else tb
         tb = tb if tb is not None else tf
-        wbb = ss(-0.35, 0.35, n[sel, 1])[:, None]
+        wbb = (ss(0.10, 0.50, n[sel, 1]) if nm in FRONT_FLANK else ss(-0.35, 0.35, n[sel, 1]))[:, None]
         tone = tf * (1 - wbb) + tb * wbb
         ws_ = w[sel][:, None]
         c = lin[sel] * (1 - ws_) + tone * strokes[sel][:, None] * ws_
@@ -1411,7 +1430,7 @@ def _calm(lin, k, p, n, names, log):
             continue
         tf = tf if tf is not None else tb
         tb = tb if tb is not None else tf
-        wbb = ss(-0.35, 0.35, n[sel, 1])[:, None]
+        wbb = (ss(0.10, 0.50, n[sel, 1]) if nm in FRONT_FLANK else ss(-0.35, 0.35, n[sel, 1]))[:, None]
         tone = tf * (1 - wbb) + tb * wbb
         obl = (1 - ss(0.55, 0.95, face[sel])) * fw[sel]
         wo = (OBLIQUE[nm] * obl)[:, None]
@@ -1422,6 +1441,33 @@ def _calm(lin, k, p, n, names, log):
         g = 1 + (r2 / np.maximum(r, 1e-5) - 1) * obl
         lin[sel] = c * g[:, None]
         log(f"  sukri oblique calm {nm}: {100 * float((obl > 0.5).mean()):.0f}% of its texels")
+    return lin
+
+
+def _flank_refill(lin, k, p, n, names, log):
+    """build 9: brown / dark outliers on the barrel's FLANKS (side-facing texels beside the body, where the painting
+    shows arms, fists and the staff) take the part's own front band tone, the painted detail kept as a value ratio"""
+    for nm in ("torso", "skirt"):
+        if nm not in names:
+            continue
+        sel = k == names.index(nm)
+        c = lin[sel]
+        pp, nn = p[sel], n[sel]
+        Y = _Y(c)
+        mx, mn = c.max(1), c.min(1)
+        sat = (mx - mn) / np.maximum(mx, 1e-4)
+        front = (nn[:, 1] < -0.6) & (np.abs(pp[:, 0]) < 0.22) & (Y > 0.01)
+        if front.sum() < 60:
+            continue
+        tone = _band_tone(pp[front, 2], c[front], pp[:, 2], step=0.05)
+        Yt = np.maximum(_Y(tone), 1e-4)
+        flank = ss(0.22, 0.30, np.abs(pp[:, 0])) * ss(0.35, 0.60, np.abs(nn[:, 0])) * ss(0.25, -0.10, nn[:, 1])
+        bad = ((sat > 0.30) | (Y < 0.62 * Yt)) & (flank > 0.05)
+        r = np.clip(Y / Yt, 0.75, 1.12) ** 0.5
+        new = tone * r[:, None]
+        wgt = (flank * bad)[:, None]
+        lin[sel] = c * (1 - wgt) + new * wgt
+        log(f"  sukri flank refill {nm}: {int(bad.sum())} texels")
     return lin
 
 
@@ -1610,6 +1656,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         m = sel(name)
         if m is not None:
             lin[m] = fn(p[m], n[m])
+    lin = _flank_refill(lin, k, p, n, names, log)
     m = sel("hood")
     if m is not None:
         # build 2: the cream linen read bone-white in three: toned to the brief's cloth2 (L* ~80) and warmed a touch

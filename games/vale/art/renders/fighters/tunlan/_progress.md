@@ -49,3 +49,12 @@
   from right three-quarter views; the hat does not fall off in death (rests tilted on its brim over her).
 
 ## FIX PASS 1 (2026-10-28 08:17) — reviewer items 1-9; agent started, read _progress.md
+- 08:32 diagnosis: (1) robe ghosts = plate pixels that are not felt (the concept's wood hands, the extruded
+  backdrop streaks, cuffs) projected onto the skirt/sleeve sides; the back sheet's grey hands come through _match_back as
+  lighter/darker felt. (2) lantern at front-right crosses the mask. (3) hands = 2 touching boxes per finger pair + peg
+  thumb. (4) brim 1.27 m covers the gestures. (6) head-box albedo IS dark walnut (87,66,49): the pale/bluish read is
+  the wood_dark roughness 0.5 catching the sky; the 'Z' = two board-joint capsules that only cut near the top (wedges).
+  Plan: brim -> 1.10 m (rim r 0.55, crown kept), lantern back to the concept's side (x -0.40, y +0.03) as an open
+  ironstone cage round a lampresin bead with a small accent core; crown ring dropped, front lens vent enlarged;
+  4 separate tapered fingers + real thumb + tapered palm; puppeteer guard at the chest; impacts pushed past the brim;
+  plate-pixel 'felt / cream-zone' classification for the cloth projection; matte walnut head + one crack.

@@ -118,7 +118,10 @@ SKINS: list = [
      "parts": {"apron": "#5E646E", "sleeves": "#636A74", "chest_plate": "#6C727C", "cowl": "#D4D1C8",
                "skirt_L": "#5A606A", "skirt_R": "#5A606A", "torso": "#5A606A",
                "pauldron_L": "#949AA2", "lames_L": "#949AA2", "pauldron_R": "#949AA2",
-               "helm": "#CFCCC4", "nape": "#7A7F87", "visor": "#7E858E", "neck": "#3E3A38"},
+               "helm": "#CFCCC4", "nape": "#7A7F87", "visor": "#7E858E", "neck": "#3E3A38",
+               # (FIX ROUND 2: the fins are dawnglass again, not accent; the skin's smoked #A9AEB5 dawnglass took the
+               # front top band from 70.8 to 68.5: they keep a pale chalky smoke glass)
+               "fins": "#C3C7CC"},
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
      # sketches, the nape plates the deep ink, the crest the named #A7A9AC, and the visor and fins frosted to a
      # chalky smoke-grey glass: the role gain alone left the painted lavender-blue visor blue)
@@ -130,7 +133,8 @@ SKINS: list = [
     # (the painting's cowl and sleeves are pale blue linen: their mean moves onto the warm scarf colour, `absolute`)
     {"id": "rishal_lamplit", "extra": {"lamp_cage": True}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
      "absolute": ("cloth2",),
-     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F"},   # (fix pass 5: the scarf a step down again, L* 69: the
+     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F", "fins": "#CDBD9F"},   # (FIX ROUND 2: the fins pale smoked
+     # amber glass: as dawnglass again they took the walnut-dark #A38C6B, the top band 73.6 -> 68.4)   # (fix pass 5: the scarf a step down again, L* 69: the
      # hero light still blew the painted scarf's lit folds out to near white)   # (review: the cowl blew out near white: the scarf a step
      # down, L* 74; fix pass 2: the sleeves keep the base's mid-light step under the scarf, L* 66)
      "palette": {"dawnglass": "#A38C6B", "chalk": "#D5CDBF", "stone": "#BFB09A", "cloth2": "#CFC5B3", "cloth": "#8B7A68",
@@ -568,8 +572,11 @@ def _visor_top_edge(xs):
 #     upright, RIDGE_LEAN), so the chalk dome shows above the band from the game camera;
 #   * the REAR RISE (brief §3: "along the visor's upper edge and back into the crest root"): at each temple the blade
 #     turns up and back into a swept vane (REAR) that runs under the crest's arc along its flank into the crest root,
-#     its face turned up and out, so the ridge's colour reads from behind and from the sides (the band alone measured
-#     0.5 % from behind at the game camera) without the fins
+#     its face turned up and out, so the ridge's colour reads from behind and from the sides without the fins. Lineup
+#     (idle f0, 0 / 90 / 180 / 270): the band + a slim vane 1.60 / 1.66 / 0.65 / 1.84 %; the vane's belly wider and
+#     its tail sloping down-back toward the back camera (the idle's forward lean tips the crown away from it):
+#     2.33 / 2.46 / 1.13 / 2.81 % (accentOk). The bible's >= 1 % from behind is what sets the vane's size: the band
+#     alone cannot be seen from behind (brief §7 routed: the rear rise is part of the ridge now)
 RIDGE_H = (0.017, 0.022)       # the band blade's height over the brow / at the temples
 RIDGE_LEAN = 0.18              # its rise direction (0, RIDGE_LEAN, 1) over the brow (nearly upright)
 RIDGE_T = 0.0060               # thickness at its foot (it thins to ~40 % at the top edge)
@@ -578,9 +585,9 @@ RIDGE_PHI = math.radians(86.0)  # the band blade runs phi -RIDGE_PHI..RIDGE_PHI 
 # the UPPER edge running from the band blade's top at the temple up along the crest's flank just under its arc to the
 # tail, the LOWER edge from the band blade's foot sweeping back under it (the crescent's belly); they meet in the tip
 REAR_UP = ((0.050, 0.010, 1.762), (0.031, 0.045, 1.790), (0.021, 0.090, 1.811), (0.019, 0.140, 1.829),
-           (0.018, 0.192, 1.846), (0.013, 0.236, 1.860))
-REAR_LO = ((0.053, 0.006, 1.740), (0.060, 0.050, 1.765), (0.060, 0.098, 1.772), (0.058, 0.150, 1.782),
-           (0.046, 0.198, 1.806), (0.013, 0.236, 1.860))
+           (0.018, 0.195, 1.845), (0.014, 0.252, 1.858))
+REAR_LO = ((0.053, 0.006, 1.740), (0.059, 0.050, 1.766), (0.058, 0.098, 1.774), (0.058, 0.150, 1.780),
+           (0.052, 0.202, 1.796), (0.014, 0.252, 1.858))
 REAR_T = 0.0034                # the vane's thickness (its edges thin to ~40 %)
 REAR_N = 20                    # sections along the vane
 

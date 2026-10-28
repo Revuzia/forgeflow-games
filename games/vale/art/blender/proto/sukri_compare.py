@@ -34,6 +34,8 @@ def main():
     ap.add_argument("--res", type=int, default=900)
     ap.add_argument("--views", default="front,back,threeq,game")
     ap.add_argument("--albedo", action="store_true", help="flat base colour (emission), suffix _albedo")
+    ap.add_argument("--clip", default="idle")
+    ap.add_argument("--frame", type=int, default=0)
     a = ap.parse_args(scene.script_args())
     bpy.ops.wm.open_mainfile(filepath=os.path.join(scene.CACHE_DIR, "fighters", "sukri.blend"))
     sc = bpy.context.scene
@@ -41,13 +43,13 @@ def main():
         if o.type == "ARMATURE":
             # idle frame 0 (the cup's pendulum settled)
             o.data.pose_position = "POSE"
-            act = bpy.data.actions.get("idle")
+            act = bpy.data.actions.get(a.clip)
             if act is not None:
                 o.animation_data_create()
                 o.animation_data.action = act
                 if getattr(act, "slots", None) and len(act.slots):
                     o.animation_data.action_slot = act.slots[0]
-                sc.frame_set(0)
+                sc.frame_set(a.frame)
             else:
                 o.data.pose_position = "REST"
         if o.type == "MESH":
@@ -135,7 +137,8 @@ def main():
             co.location = p
             look(co, p, (0, 0, 0.85))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
-        sc.render.filepath = os.path.join(OUT, f"compare_{kind}{'_albedo' if a.albedo else ''}.png")
+        tag = "" if a.clip == "idle" and a.frame == 0 else f"_{a.clip}{a.frame}"
+        sc.render.filepath = os.path.join(OUT, f"compare_{kind}{tag}{'_albedo' if a.albedo else ''}.png")
         bpy.ops.render.render(write_still=True)
         scene.log(f"rendered {kind}")
 
