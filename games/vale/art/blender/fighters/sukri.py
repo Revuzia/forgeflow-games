@@ -15,10 +15,11 @@ carved wooden face (0.44 x 0.48 m: almond eye slits, a broad nose, an open smile
 behind the hood's rolled edge with the hood's dark lining round it, two tiers of chunky pale stone plates on each
 shoulder and three rows across the back, cream wraps over a barrel body, a thick dark sash, skirt panels, dark
 bloomers, wrapped shins, big soft boots, dark gloves with sculpted fingers, the pale walking staff in the right hand.
-The brief wins on the hook: the CUP of noon light hangs from the crook on a rigid hook (one pendulum bone, x_cup):
-clear dawnglass (a thick base, six bevelled ribs, a lip) round a glowing core (the accent: visible between the ribs
-and from the game camera through the open ironstone rim band, an accent inlay ring on the rim), at chest height
-0.7 m out to his right; a coil of weighted cord at the left hip (Wrap Cast).
+The brief wins on the hook: the CUP of noon light hangs from the carved head on two rigid cords (one pendulum bone,
+x_cup_hook): a chunky chipped slate rim band over a clear dawnglass cup (painted as glass), one small accent bead in
+the band's open throat (the only emissive piece, brief §7), at chest height 0.7 m out to his right; a coil of weighted
+cord at the left hip (Wrap Cast; the thrown loop rides its own bone, x_cord_swing). Victory / recall lift the cup off
+its hook into the left fist, death lets it fall and roll (location keys on x_cup_hook).
 
 Not in the shared pipeline, implemented here (module-level wrappers; common/ untouched):
   * rig_extras: the right arm re-seated on the staff, prop.R up the shaft, prop.L in the left hand, x_cup (the cup's
@@ -135,12 +136,14 @@ def _right_arm():
 
 E_R, W_R, FO_R = _right_arm()
 
-# THE STAFF (prop.R): the butt beside the right boot, the shaft through the fist, the carved crook head bending OUT
-# (his right) at 1.47-1.55 m, as painted (the painting's top 1.55: under the hood's crown, under the HP bar)
+# THE STAFF (prop.R): the butt beside the right boot, the gnarled shaft through the fist, bowing in toward the hood
+# above the cup, then flaring into the concept's carved head: a flat angular plank leaning OUT (his right) over a
+# lower inner lobe (the notch between them), the cup's cords tied under the plank (fix pass 1: build 9's round knob
+# on a straight pole read as a bone)
 BUTT = np.array([-0.480, -0.075, 0.0])
 STAFF_U = unit(GRIP - BUTT)
 S_BUTT = -float(np.linalg.norm(GRIP - BUTT))       # the butt's place along the shaft (m from the grip)
-S_TOP = 0.655                                      # where the shaft turns into the crook (z ~1.45)
+S_TOP = 0.570                                      # where the shaft flares into the carved head (z ~1.34)
 SHAFT_R = 0.026                                    # 5 cm (brief: 5 cm)
 GRIPS = ((-0.10, 0.11),)                           # the leather wrap round the fist
 SLIDE_LOW = 0.30                                   # slide that puts the fist 0.30 m further up (the staff lowered)
@@ -156,39 +159,40 @@ def _crook_frame():
     return h, STAFF_U
 
 
-# the crook head (out along h, up along the shaft, sideways): the shaft bends out over a carved knuckle into a short
-# squared head that turns down at its end, where the cup's hook hangs (as painted: a forked, bent-over top)
-CROOK_PTS = [(0.000, -0.060, 0.000), (0.000, 0.000, 0.000), (0.010, 0.046, 0.003), (0.044, 0.072, -0.002),
-             (0.082, 0.068, 0.002), (0.106, 0.040, 0.000), (0.110, 0.004, 0.000)]
+HEAD_IN = -0.036                                   # the shaft's top bowed in toward the hood (along h)
+HEAD_ANG = 44.0                                    # the plank leans out from the shaft (deg)
+HEAD_LEN, HEAD_W, HEAD_T = 0.195, 0.046, 0.030     # the plank: length, half width (in the h-u plane), half thickness
 
 
-CROOK_OFF = -0.040                                 # the bent shaft's offset along h at the crook
-
-
-def crook_pts():
+def head_frame():
+    """(base point, plank axis d1, the plank's underside normal e (out and down), side (forward))"""
     h, u = _crook_frame()
     side = unit(np.cross(u, h))
-    top = staff_at(S_TOP) + h * CROOK_OFF
-    return [top + h * a + u * b + side * c for a, b, c in CROOK_PTS]
+    t0 = staff_at(S_TOP) + h * HEAD_IN
+    a = math.radians(HEAD_ANG)
+    d1 = unit(h * math.sin(a) + u * math.cos(a))
+    e = unit(h * math.cos(a) - u * math.sin(a))
+    return t0, d1, e, side
 
 
-CROOK_TIP = crook_pts()[-1]
-HANG = CROOK_TIP - np.array([0.0, 0.0, 0.030])     # the cup's pivot: the hook's ring round the crook's tip
-CROOK_TOP = crook_pts()[3]
+H_T0, H_D1, H_E, H_SIDE = head_frame()
+# the cup's pivot: the cords' knot in the notch under the plank, a little forward of the shaft (the cup clears it)
+HANG = H_T0 + H_D1 * 0.105 + H_E * (HEAD_W + 0.004) + H_SIDE * 0.042
+CROOK_TIP = H_T0 + H_D1 * HEAD_LEN
+CROOK_TOP = H_T0 + H_D1 * HEAD_LEN * 0.6
 
-# THE CUP (on x_cup, hanging straight down from HANG at rest): heights below HANG
-CUP_R = 0.088                                      # the glass body's outer radius (0.176 m across, the painted lid)
-CUP_HOOK = (0.0, 0.100)                            # the rigid iron hook rod: HANG -> 10 cm down (brief)
-CUP_RIM = (0.200, 0.224)                           # the ironstone rim band (top / bottom below HANG)
-CUP_GLASS = (0.224, 0.384)                         # the glass body (top / bottom)
-CUP_BASE = 0.356                                   # the thick glass base's top (2.8 cm of glass)
-CUP_LIP = 0.020                                    # the glass lip ring under the rim band
-CUP_CORE = (0.232, 0.356, CUP_R - 0.010)           # the glowing core: top / bottom below HANG, radius
-RIM_OPEN = 0.068                                   # the rim band's open throat (the core seen from above)
-RIM_OUT = CUP_R + 0.010
-INLAY = (0.074, 0.091)                             # the accent inlay ring on the rim band's top (brief: 2 cm)
-N_RIBS = 8
-RIB_W = 0.0100                                     # the glass ribs' half width (bevelled glass between the core's windows)
+# THE CUP (on x_cup_hook, hanging straight down from HANG at rest; brief §4 + the concept): two brown cords from the
+# knot to a chunky chipped SLATE rim band, a CLEAR dawnglass cup under it (tapered, painted as glass: the pale
+# see-through tone, cool bright edges, a thick bright base), one small accent bead in the band's open throat (the only
+# emissive piece: build 9's glowing core between 8 ribs read as a blue-and-white striped bucket)
+CUP_CORD = 0.130                                   # the knot -> the rim band's top
+CUP_RIM_H = 0.045                                  # the slate rim band's height
+CUP_GLASS_H = 0.150                                # the glass body
+CUP_RT, CUP_RB = 0.079, 0.066                      # the glass's radius at the top / bottom
+RIM_OUT, RIM_IN = 0.093, 0.040                     # the rim band's outer radius / open throat
+BEAD_R = 0.025                                     # the accent bead (5 cm across, its top 1.7 cm over the rim)
+BEAD_DZ = CUP_CORD + 0.008                         # the bead's centre below HANG
+CUP_LEN = CUP_CORD + CUP_RIM_H + CUP_GLASS_H       # the pivot -> the glass base
 
 
 def cup_z(dz):
@@ -202,7 +206,10 @@ PALETTE = materials.bible_palette(cloth2="#D3CCBA", wood="#D1C3A4", stone="#B9B4
                                   cloth="#B8AF9C", leather="#453D35", under="#372F2B", ironstone="#4A4540",
                                   ink="#17161A", accent="#3F9CFF", glove="#5A5149", rope="#7A6650")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
-SOCKETS = {"weapon": "prop.R", "cup": "x_cup", "cord": "x_cord", "staff_top": "x_staff_top"}
+# fix pass 1: `weapon` is the cup's bead (x_cup): every Sukri VFX that content/vfx.json puts on `weapon` (the motes,
+# the bolt, the pull, the ult's gather, the wind-ups) leaves the cup, not the fist half way down the staff; the
+# staff hand stays `weapon_r` (prop.R)
+SOCKETS = {"weapon": "x_cup", "cup": "x_cup", "cord": "x_cord", "staff_top": "x_staff_top"}
 # (build 9: the bible key at 45 degrees threw the stone plates' zig-zag shadows across the round cream wraps: camo
 # blotches in the splash; a lower key (32 degrees) and more sky fill keep the wraps reading as painted)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 22.0, "portrait_clip": "idle_lobby",
@@ -440,6 +447,9 @@ def glove(name, C, a, f, out, bind, tris, curl=1.0, grip=True, s=HS, relaxed=Fal
     S.add(FlatCapsule(C - f * 0.110 * s, C - f * 0.050 * s, 0.036 * s, 0.026 * s, 0.041 * s, 0.028 * s, side=a), k=0.016)
     if grip:
         S.sub(Capsule(C - a * 0.15, C + a * 0.15, SHAFT_R + 0.004), k=0.003)
+    else:
+        # fix pass 1: a closed fist (the fingers curled round nothing left a ring-shaped hole: a claw)
+        S.add(Ellipsoid(C + f * 0.012 * s - out * 0.002 * s, (0.045 * s, 0.026 * s, 0.024 * s), axes=ax), k=0.008)
     S.ops = [(op, prim.displaced(cloth_noise(0.0006, 60.0), 0.0006) if op == "add" else prim, k, tg) for op, prim, k, tg in S.ops]
     return (name, S, 0.45, "glove", bind, tris, 2.0)
 
@@ -472,9 +482,18 @@ def hood_sec(z):
     return hx * np.where(z > DOME_Z0, k, 1.0), hy * np.where(z > DOME_Z0, k, 1.0), yc
 
 
+BACK_ROUND = 0.16       # fix pass 1: the hood's back slopes in toward the crown (from the side build 9 read as a column)
+
+
+def back_k(z):
+    """the back half's depth scale at height z (1 below 1.20, 1 - BACK_ROUND at the crown)"""
+    return 1.0 - BACK_ROUND * ss(1.20, 1.60, np.asarray(z, float))
+
+
 def hood_outer(P):
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
     hx, hy, yc = hood_sec(np.minimum(z, DOME_Z0 + DOME_H - 1e-4))
+    hy = np.where(y > yc, hy * back_k(z), hy)
     hx, hy = np.maximum(hx, 1e-3), np.maximum(hy, 1e-3)
     r = (np.abs(x / hx) ** HOOD_E + np.abs((y - yc) / hy) ** HOOD_E) ** (1.0 / HOOD_E)
     d = (r - 1.0) * np.minimum(np.minimum(hx, hy), 0.30)
@@ -546,7 +565,7 @@ def sculpts() -> list:
     def seam(P):
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
         hx, hy, yc = hood_sec(np.minimum(z, 1.649))
-        yb = yc + hy
+        yb = yc + hy * back_k(np.minimum(z, 1.649))
         return np.maximum(np.hypot(x, (y - yb) * 1.0) - 0.0055, np.maximum(1.10 - z, z - 1.645))
     hood.sub(Fn(seam, (-0.03, 0.10, 1.08), (0.03, 0.40, 1.66)), k=0.006)
     for sx in (-1, 1):
@@ -555,7 +574,7 @@ def sculpts() -> list:
             hx, hy, yc = hood_sec(z)
             a = math.radians(48.0)
             r = 1.0 / ((abs(math.sin(a)) ** HOOD_E + abs(math.cos(a)) ** HOOD_E) ** (1 / HOOD_E))
-            pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(hy) * math.cos(a) * r * 0.985, z))
+            pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(hy * back_k(z)) * math.cos(a) * r * 0.985, z))
         hood.add(Tube(pts, [0.006, 0.010, 0.012, 0.010], k=0.01), k=0.03)
     part("hood", hood, "cloth2", ("weights", "hood"), 2050, uvw=1.3)
 
@@ -685,9 +704,7 @@ def sculpts() -> list:
     out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 720, curl=LEFT_CURL, grip=False, relaxed=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
-    for s in ("L", "R"):
-        out.append(plates_part(f"plates_{s}", SHOULDER_PLATES, 1.0 if s == "L" else -1.0, f"bone:shoulder.{s}", 700))
-    out.append(plates_part("plates_back", BACK_PLATES, 1.0, "bone:chest", 800))
+    out.append(mantle_part(2000))
 
     # THE CORD: a coil of weighted cord at the left hip, on the sash (Wrap Cast leaves from here)
     cord = Sculpt("cord")
@@ -703,6 +720,18 @@ def sculpts() -> list:
     cord.add(Capsule(cc + n * 0.004 + np.array([0.0, 0.0, 0.050]), cc + n * 0.004 + np.array([0.0, 0.0, 0.085]), 0.009), k=0.006)   # tied to the sash
     part("cord", cord, "rope", "bone:hips", 430, 0.5)
 
+    # THE THROWN LOOP (Wrap Cast; fix pass 1): a loop of the weighted cord on its own bone (x_cord_swing, a child of
+    # the left hand). At rest it lies flat INSIDE the barrel, and every clip but cast_a3 keys its scale to 0.001, so
+    # it is never seen; cast_a3 takes it from the belt, whirls it over the head and throws it
+    sw = Sculpt("cord_swing")
+    c0 = SWING_G + np.array([-SWING_R, 0.0, SWING_RISE])
+    sw.add(Torus(c0, SWING_R, 0.0085, axes=sdf.frame((0, 0, 1.0))).displaced(
+        lambda P: 0.0012 * np.sin(np.arctan2(P[:, 1] - c0[1], P[:, 0] - c0[0]) * 40.0), 0.0012), k=0.0)
+    sw.add(Sphere(c0 + np.array([-SWING_R, 0.0, 0.0]), 0.021).displaced(chips(0.002, 25.0), 0.002), k=0.006)   # the weight
+    sw.add(Tube([SWING_G + np.array([0.0, 0.0, -0.02]), SWING_G + np.array([0.006, 0.0, 0.5 * SWING_RISE]),
+                 SWING_G + np.array([0.0, 0.0, SWING_RISE])], [0.0085, 0.0080, 0.0080], k=0.004), k=0.004)   # fist -> loop
+    part("cord_swing", sw, "rope", "bone:x_cord_swing", 420, 0.5)
+
     out.extend(staff_parts())
     out.extend(cup_parts())
     return out
@@ -710,31 +739,74 @@ def sculpts() -> list:
 
 CORD_C = np.array([0.452, 0.080, 0.468])               # the coil hangs at the left hip, behind the hanging arm
 CORD_N = unit(np.array([0.93, 0.36, 0.0]))
+SWING_G = np.array([0.150, 0.060, 0.550])              # the thrown loop's grip end (its bone's head) at rest: inside the
+SWING_R = 0.150                                        # barrel; the loop's radius; the loop rides RISE up the cord from
+SWING_RISE = 0.360                                     # the fist (its centre at SWING_G + (-R, 0, RISE): over the hood)
+SWING_HIDE = (0.001, 0.001, 0.001)
 
-# plates (build 3: big chipped stone shingles placed where the concept paints them (front view x, z), each found on the
-# torso's surface in front / behind and lifted along its own normal; build 2's azimuth placement hugged the narrow upper
-# chest and read as small tiles round the collar): (x, z, front|back, width, height, normal, lift, roll deg)
-SHOULDER_PLATES = [
-    (0.270, 0.952, "f", 0.215, 0.150, (0.20, -0.62, 0.76), 0.034, -6.0),
-    (0.440, 0.938, "f", 0.195, 0.150, (0.62, -0.40, 0.68), 0.030, -14.0),
-    (0.360, 0.848, "f", 0.195, 0.125, (0.40, -0.78, 0.48), 0.012, -8.0),
-    (0.510, 0.832, "f", 0.145, 0.135, (0.86, -0.32, 0.40), 0.004, -12.0),
-    (0.450, 0.932, "b", 0.185, 0.150, (0.62, 0.42, 0.66), 0.030, 12.0),
-    (0.505, 0.832, "b", 0.150, 0.130, (0.86, 0.36, 0.38), 0.004, 10.0),
-    (0.280, 0.950, "b", 0.200, 0.145, (0.22, 0.62, 0.76), 0.034, 6.0),
-]
-BACK_PLATES = [
-    (-0.230, 0.935, "b", 0.215, 0.140, (-0.25, 0.70, 0.67), 0.030, 6.0),
-    (0.010, 0.945, "b", 0.225, 0.140, (0.02, 0.72, 0.69), 0.034, -2.0),
-    (0.240, 0.932, "b", 0.210, 0.140, (0.26, 0.70, 0.66), 0.030, -7.0),
-    (-0.350, 0.838, "b", 0.205, 0.150, (-0.44, 0.79, 0.43), 0.016, 9.0),
-    (-0.125, 0.846, "b", 0.225, 0.145, (-0.13, 0.88, 0.46), 0.016, 2.0),
-    (0.110, 0.842, "b", 0.215, 0.150, (0.11, 0.88, 0.46), 0.016, -4.0),
-    (0.345, 0.834, "b", 0.200, 0.145, (0.43, 0.80, 0.42), 0.016, -10.0),
-    (-0.215, 0.742, "b", 0.200, 0.135, (-0.23, 0.93, 0.30), 0.006, 5.0),
-    (-0.005, 0.728, "b", 0.230, 0.145, (0.00, 0.95, 0.30), 0.006, -1.0),
-    (0.212, 0.744, "b", 0.195, 0.130, (0.23, 0.93, 0.30), 0.006, -6.0),
-]
+# THE STONE MANTLE (fix pass 1: build 9's separate slabs lay as 5 cm tiles on the chest and a 3/4/3 grid on the back:
+# sugar cubes, and they stood off the body as loose boxes when the arms moved). Now ONE chunky shell of stone over both
+# shoulders and the upper back (as painted): two shingled tiers (each tier thickest at its lower edge, so the upper
+# tier steps out over the lower one), split into irregular slabs by carved grooves (the tiers' grooves staggered), the
+# slabs' lower corners chipped up, the whole 3-7 cm thick: the pauldrons stand past the shoulders (+-0.55, the widest
+# point), the front open over the chest. Tier A = the top tier, tier B = the lower one; azimuth 0 = front, + = his left.
+MANTLE_A = np.array([-163.0, -133.0, -101.0, -66.0, -28.0, 28.0, 66.0, 101.0, 133.0, 163.0])
+MANTLE_B = np.array([-156.0, -129.0, -112.0, -84.0, -46.0, 46.0, 84.0, 112.0, 129.0, 156.0])
+MANTLE_TOP = 1.035
+MANTLE_GROOVE = 0.0040                             # half width of the carved grooves between slabs
+
+
+def _slab_jitter(tier, idx, k):
+    rng = np.random.default_rng(1000 + 37 * tier + idx)
+    return rng.uniform(-1.0, 1.0, 4)[k]
+
+
+def mantle_info(P):
+    """per point: (azimuth deg, tier-A slab index, tier-B slab index, zA (the tier step), zB (the bottom edge),
+    the arc distance to the nearest groove of its tier, the shell thickness, in-tier-A flag)"""
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    phi = np.degrees(np.arctan2(x, -(y - 0.03)))
+    rxy = np.hypot(x, y - 0.03)
+    ia = np.searchsorted(MANTLE_A, phi) % len(MANTLE_A)       # 0 = the centre-back slab (wraps), 5 = the front gap
+    ib = np.searchsorted(MANTLE_B, phi) % len(MANTLE_B)
+    da = np.min(np.abs(phi[:, None] - MANTLE_A[None, :]), axis=1)
+    db = np.min(np.abs(phi[:, None] - MANTLE_B[None, :]), axis=1)
+    back = ss(95.0, 135.0, np.abs(phi))
+    jA = np.array([_slab_jitter(0, i, 0) for i in range(len(MANTLE_A))])
+    jB = np.array([_slab_jitter(1, i, 1) for i in range(len(MANTLE_B))])
+    zA = 0.878 - 0.014 * back + 0.012 * jA[ia]
+    zB = 0.792 - 0.040 * back + 0.014 * jB[ib] + 0.010 * ss(150.0, 180.0, np.abs(phi)) * -1.0
+    arcA, arcB = np.radians(da) * rxy, np.radians(db) * rxy
+    # chip each slab's lower corners up (rounded trapezoids, not rectangles)
+    zA = zA + 0.022 * ss(0.050, 0.004, arcA)
+    zB = zB + 0.034 * ss(0.060, 0.004, arcB)
+    inA = z >= zA
+    TA = 0.034 + 0.032 * ss(zA + 0.10, zA, z) + 0.004 * jA[ia]
+    TB = 0.030 + 0.030 * ss(zA, zB + 0.012, z) + 0.004 * jB[ib]
+    T = np.where(inA, TA, TB)
+    arc = np.where(inA, arcA, arcB)
+    return phi, ia, ib, zA, zB, arc, T, inA
+
+
+def mantle_d(P):
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    td = torso_d(P)
+    phi, ia, ib, zA, zB, arc, T, inA = mantle_info(P)
+    rxy = np.hypot(x, y - 0.03)
+    d = np.maximum(td - T, -0.020 - td)                                   # the layer over the torso
+    d = np.maximum(d, np.maximum(zB - z, z - MANTLE_TOP))
+    # the front opening over the chest (tier A from 28 degrees, tier B from 46)
+    gap = np.where(inA, 28.0, 46.0)
+    d = np.maximum(d, np.radians(gap - np.abs(phi)) * rxy)
+    # the carved grooves between the slabs (2.4 cm deep) and along the tier step
+    g = np.maximum(arc - MANTLE_GROOVE, (T - 0.024) - td)
+    d = np.maximum(d, -g)
+    g2 = np.maximum(np.abs(z - zA) - 0.0030, (T - 0.016) - td)
+    return np.maximum(d, -g2)
+
+
+
+
 TORSO_PRIMS = [(Ellipsoid((0.0, 0.020, 0.640), (0.440, 0.320, 0.385)), 0.0),
                (Ellipsoid((0.0, 0.030, 0.860), (0.370, 0.290, 0.190)), 0.08),
                (Ellipsoid((0.300, 0.030, 0.870), (0.170, 0.200, 0.130)), 0.07),
@@ -769,7 +841,7 @@ def torso_surface(az_deg, z, sx=1.0):
     return p, unit(g)
 
 
-PLATE_FRAMES: list = []         # (centre, normal, tangent, bitangent, w, h) of every stone plate (the paint reads them)
+
 
 
 def torso_hit(x, z, side):
@@ -789,36 +861,20 @@ def torso_hit(x, z, side):
     return o + np.array([0.0, sgn * lo, 0.0])
 
 
-def plates_part(name, spec, sx, bind, tris):
-    S = Sculpt(name)
-    for i, (x, zc, side, w, h, nrm, lift, roll) in enumerate(spec):
-        x = sx * x
-        n = unit(np.array([sx * nrm[0], nrm[1], nrm[2]]))
-        sp = torso_hit(x, zc, side)
-        t = unit(np.cross(np.array([0, 0, 1.0]), n))
-        if side == "b":
-            t = -t
-        b = np.cross(n, t)
-        rz = math.radians(sx * roll)
-        t2 = t * math.cos(rz) + b * math.sin(rz)
-        b2 = np.cross(n, t2)
-        c = sp + n * (0.028 + lift)
-        ax = np.stack([t2, b2, n])
-        PLATE_FRAMES.append((c, n, t2, b2, w, h))
-        slab = RoundBox(c, (w * 0.5, h * 0.5, 0.027), 0.014, axes=ax)
-        # (one blended unit per plate: a plate's own back-curve cut must not carve its neighbours); a chunky chipped
-        # outline (low-frequency bites) and fine chips
-        rough = lambda P, s0=i: chips(0.010, 6.5)(P + s0 * 1.7) + chips(0.0035, 19.0)(P)  # noqa: E731
-        S.add(sdf.Blend([("add", slab.displaced(rough, 0.0135), 0.0),
-                         ("sub", Sphere(c - n * 0.80, 0.80 - 0.022), 0.006)]), k=0.0)
-    return (name, S, 0.6, "stone", bind, tris, 1.1)
+def mantle_part(tris=2000):
+    S = Sculpt("plates")
+    lo, hi = (-0.62, -0.42, 0.68), (0.62, 0.45, MANTLE_TOP + 0.02)
+    rough = lambda P: chips(0.010, 6.0)(P) + chips(0.0035, 19.0)(P) + 0.0012 * NOISE(P, 30.0)  # noqa: E731
+    S.add(Fn(mantle_d, lo, hi).displaced(rough, 0.0140), k=0.0)
+    return ("plates", S, 0.6, "stone", ("weights", "plates"), tris, 1.2)
 
 
-# staff knots: (s along the shaft, offset along h, offset sideways, radius): even through the fist, gently gnarled
-# (the shaft above the fist bends back in toward the hood, as painted: the crook's head sits over the shaft's foot)
-STAFF_KNOTS = [(None, 0.0, 0.0, 0.024), (-0.62, 0.004, -0.003, 0.026), (-0.38, -0.004, 0.003, 0.026),
-               (-0.14, 0.0, 0.0, 0.026), (0.14, 0.0, 0.0, 0.026), (0.34, -0.014, -0.004, 0.028),
-               (0.52, -0.032, 0.005, 0.027), (0.62, -0.040, 0.0, 0.029)]
+# staff knots: (s along the shaft, offset along h (out), offset sideways (forward), radius): straight through the fist,
+# GNARLED elsewhere (as painted: a wandering, knotted ash pole), the top bowed in toward the hood under the head
+STAFF_KNOTS = [(None, 0.0, 0.0, 0.024), (-0.66, -0.010, 0.006, 0.025), (-0.48, 0.012, -0.004, 0.027),
+               (-0.30, -0.006, 0.006, 0.026), (-0.14, 0.0, 0.0, 0.026), (0.14, 0.0, 0.0, 0.026),
+               (0.26, 0.010, -0.006, 0.027), (0.38, -0.008, 0.004, 0.026), (0.48, -0.030, -0.004, 0.028),
+               (S_TOP - 0.03, HEAD_IN, 0.0, 0.031)]
 
 
 class FacetTube(Prim):
@@ -875,29 +931,45 @@ def staff_line():
     h, u = _crook_frame()
     side = unit(np.cross(u, h))
     pts, rads = [], []
-    for s, oh, os_, r in STAFF_KNOTS:
-        s = S_BUTT + 0.006 if s is None else s
-        pts.append(staff_at(s) + h * oh + side * os_)
+    for s_, oh, os_, r in STAFF_KNOTS:
+        s_ = S_BUTT + 0.006 if s_ is None else s_
+        pts.append(staff_at(s_) + h * oh + side * os_)
         rads.append(r)
-    cp = crook_pts()
-    for i, p in enumerate(cp[1:]):
-        pts.append(p)
-        rads.append((0.030, 0.034, 0.033, 0.031, 0.029, 0.027)[i])
     return pts, rads
 
 
+def _plank(c, ax_len, ax_w, ax_t, half, r=0.008):
+    return RoundBox(c, half, r, axes=np.stack([unit(ax_len), unit(ax_w), unit(ax_t)]))
+
+
 def staff_parts() -> list:
-    """the staff on prop.R: the pale carved ash shaft and its crook head (one faceted polyline), a carved knuckle
-    under the crook, the ironstone ferrule, the leather grip wrap"""
+    """the staff on prop.R: the gnarled, faceted ash shaft, the carved head (a flat angular plank leaning out over a
+    lower inner lobe, chipped carving planes, the cords' notch under the plank), the ironstone ferrule, the grip"""
     out = []
     h, u = _crook_frame()
     pts, rads = staff_line()
     shaft = Sculpt("staff")
-    shaft.add(FacetTube(pts, rads, n=7, twist=0.6, seed=7, jitter=0.08, ext=0.80, ref=h)
-              .displaced(lambda P: 0.0008 * NOISE(P * np.array([1.0, 1.0, 0.25]), 45.0), 0.0008), k=0.0)
-    shaft.add(Sphere(staff_at(S_TOP - 0.02), 0.034), k=0.02)                    # the knuckle under the crook
+    shaft.add(FacetTube(pts, rads, n=6, twist=0.9, seed=7, jitter=0.12, ext=0.85, ref=h)
+              .displaced(lambda P: 0.0010 * NOISE(P * np.array([1.0, 1.0, 0.25]), 45.0), 0.0010), k=0.0)
+    for s_, r_ in ((-0.40, 0.031), (0.30, 0.030)):                              # two knots on the shaft
+        kp = staff_at(s_) + h * (0.012 if s_ < 0 else -0.010)
+        shaft.add(Ellipsoid(kp + h * 0.010, (0.018, 0.018, 0.026), axes=sdf.frame(u, h)), k=0.012)
+    t0, d1, e, side = H_T0, H_D1, H_E, H_SIDE
+    # the flare from the shaft into the head (wider in the h-u plane than sideways: a carved plank, not a knob)
+    shaft.add(_plank(t0 - u * 0.010 + h * 0.004, u, h, side, (0.050, 0.034, HEAD_T - 0.002), 0.010), k=0.020)
+    # the plank: leaning out, its outer end cut square and a little higher than the inner lobe
+    pc = t0 + d1 * (HEAD_LEN * 0.5)
+    plank = _plank(pc, d1, e, side, (HEAD_LEN * 0.5, HEAD_W, HEAD_T), 0.008)
+    plank = plank.displaced(lambda P: chips(0.0035, 9.0)(P) + 0.0010 * NOISE(P, 40.0), 0.0045)
+    shaft.add(plank, k=0.012)
+    # the inner lobe: a shorter block straight up the shaft's inner side, rounded on top (the notch between)
+    lob = _plank(t0 + u * 0.060 - h * 0.010, u, h, side, (0.052, 0.026, HEAD_T - 0.003), 0.012)
+    shaft.add(lob.displaced(chips(0.0030, 11.0), 0.0035), k=0.012)
+    # carving planes: a bevel off the plank's outer top corner and the notch cut between the lobe and the plank
+    shaft.sub(HalfSpace(t0 + d1 * HEAD_LEN - e * (HEAD_W - 0.012), -unit(d1 - e), 0.3), k=0.004)
+    shaft.sub(Capsule(t0 + u * 0.115 + h * 0.020 - side * 0.05, t0 + u * 0.115 + h * 0.020 + side * 0.05, 0.016), k=0.006)
     shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)
-    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 820, 1.1))
+    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 880, 1.1))
     grip = Sculpt("staff_grip")
     for a_, b_ in GRIPS:
         g0, g1 = staff_at(a_), staff_at(b_)
@@ -913,69 +985,65 @@ def staff_parts() -> list:
 
 
 def cup_parts() -> list:
-    """the cup (rigid on x_cup): an iron hook ring round the crook's tip and a short rod down to the bail, the bail
-    arching to the rim, the ironstone rim band with its open throat, the clear dawnglass body (a thick base, six
-    bevelled ribs, a lip under the rim), the glowing core (accent) inside and an accent inlay ring on the rim"""
+    """the cup (rigid on x_cup_hook): the cords' knot in the head's notch and two brown cords down to the rim, the
+    chunky chipped slate rim band with its open throat, the clear dawnglass body (tapered, a thick base, a lip), the
+    accent bead in the throat on a short cord"""
     out = []
     c = np.array([CUP_C[0], CUP_C[1], 0.0])
     h, u = _crook_frame()
     hp = unit(np.cross(h, (0, 0, 1)))
-    hook = Sculpt("cup_hook")
-    hook.add(Torus(HANG + np.array([0, 0, 0.022]), 0.030, 0.0060, axes=sdf.frame(hp)), k=0.0)
-    hook.add(Capsule(HANG + np.array([0, 0, -0.004]), HANG + np.array([0, 0, -CUP_HOOK[1]]), 0.0065), k=0.004)
-    ztop = cup_z(CUP_RIM[0])
-    bail_top = HANG + np.array([0, 0, -CUP_HOOK[1]])
+    ztop = cup_z(CUP_CORD)
+    zrb = cup_z(CUP_CORD + CUP_RIM_H)
+    zgb = cup_z(CUP_LEN)
+    cords = Sculpt("cup_hook")
+    cords.add(Sphere(HANG + np.array([0, 0, -0.004]), 0.011).displaced(chips(0.0015, 30.0), 0.0015), k=0.0)   # the knot
     for sg in (-1, 1):
-        foot = np.array([c[0], c[1], ztop - 0.006]) + hp * sg * (RIM_OUT - 0.004)
-        mid = 0.5 * (foot + bail_top) + hp * sg * 0.025
-        hook.add(Tube([bail_top, mid, foot], [0.0050, 0.0050, 0.0055], k=0.006), k=0.004)
-    out.append(("cup_hook", hook, 0.4, "ironstone", "bone:x_cup_hook", 300, 0.5))
+        foot = np.array([c[0], c[1], ztop - 0.004]) + hp * sg * (RIM_OUT - 0.016)
+        mid = 0.5 * (foot + HANG) + hp * sg * 0.006
+        cords.add(Tube([HANG + np.array([0, 0, -0.006]), mid, foot], [0.0042, 0.0042, 0.0046], k=0.004), k=0.004)
+    cords.add(Tube([HANG + np.array([0, 0, -0.008]), np.array([c[0], c[1], cup_z(BEAD_DZ) + BEAD_R - 0.002])],
+                   [0.0030, 0.0030], k=0.003), k=0.004)                                  # the bead's cord
+    out.append(("cup_hook", cords, 0.35, "rope", "bone:x_cup_hook", 300, 0.5))
+
+    lo, hi = c + np.array([-0.12, -0.12, zgb - 0.02]), c + np.array([0.12, 0.12, HANG[2] + 0.02])
 
     def rim(P):
         q = P - c
         rr = np.hypot(q[:, 0], q[:, 1])
-        return np.maximum(np.abs(rr - 0.5 * (RIM_OPEN + RIM_OUT)) - 0.5 * (RIM_OUT - RIM_OPEN),
-                          np.abs(P[:, 2] - cup_z(0.5 * (CUP_RIM[0] + CUP_RIM[1]))) - 0.5 * (CUP_RIM[1] - CUP_RIM[0]))
-    lo, hi = c + np.array([-0.12, -0.12, cup_z(CUP_GLASS[1]) - 0.02]), c + np.array([0.12, 0.12, HANG[2] + 0.01])
+        n = 7
+        rng = np.random.default_rng(5)
+        a0 = rng.uniform(0, 2 * np.pi)
+        angs = a0 + 2 * np.pi * np.arange(n) / n + rng.uniform(-0.18, 0.18, n)
+        rad = RIM_OUT * (1 + rng.uniform(-0.06, 0.02, n))
+        outer = np.full(len(P), -1e3)
+        for a_, r_ in zip(angs, rad):
+            outer = np.maximum(outer, q[:, 0] * math.cos(a_) + q[:, 1] * math.sin(a_) - r_ * math.cos(math.pi / n))
+        z = P[:, 2]
+        band = np.maximum(outer, np.maximum(zrb - z, z - ztop))
+        band = np.maximum(band, (z - ztop + 0.012) + (outer + 0.012))           # bevel the top edge
+        return np.maximum(band, RIM_IN - rr)
     rb = Sculpt("cup_rim")
-    rb.add(Fn(lambda P: rim(P) + 0.003, lo, hi).displaced(chips(0.0020, 22.0), 0.0020), k=0.0)
-    out.append(("cup_rim", rb, 0.4, "ironstone", "bone:x_cup_hook", 440, 0.8))
+    rb.add(Fn(rim, lo, hi).displaced(lambda P: chips(0.0040, 14.0)(P) + chips(0.0015, 34.0)(P), 0.0050), k=0.0)
+    out.append(("cup_rim", rb, 0.35, "ironstone", "bone:x_cup_hook", 520, 0.8))
 
     def glass(P):
         q = P - c
         rr = np.hypot(q[:, 0], q[:, 1])
-        th = np.arctan2(q[:, 1], q[:, 0])
-        zt, zb = cup_z(CUP_GLASS[0]), cup_z(CUP_GLASS[1])
         z = P[:, 2]
-        rad = CUP_R - 0.005 * ss(zt, zb, z)                      # a little narrower at the base
-        body = np.maximum(rr - rad, np.maximum(zb - z, z - zt))
-        base = np.maximum(body, z - cup_z(CUP_BASE))
-        lip = np.maximum(np.maximum(body, cup_z(CUP_RIM[1] + CUP_LIP) - z), (RIM_OPEN - 0.002) - rr)
-        seg = 2 * math.pi / N_RIBS
-        ang = (th + seg * 0.5) % seg - seg * 0.5
-        ribs = np.maximum(np.maximum(body, np.abs(ang) * rr - RIB_W), (rad - 0.014) - rr)
-        return np.minimum(np.minimum(base, lip), ribs)
+        zt = zrb + 0.002
+        rad = CUP_RB + (CUP_RT - CUP_RB) * np.clip((z - zgb) / (zt - zgb), 0, 1)
+        # a tapered body with a rounded base edge
+        dr = rr - (rad - 0.012)
+        dz = (zgb + 0.012) - z
+        corner = np.hypot(np.maximum(dr, 0), np.maximum(dz, 0)) + np.minimum(np.maximum(dr, dz), 0) - 0.012
+        return np.maximum(corner, z - zt)
     gl = Sculpt("cup_glass")
     gl.add(Fn(glass, lo, hi), k=0.0)
-    out.append(("cup_glass", gl, 0.35, "dawnglass", "bone:x_cup_hook", 600, 1.0))
+    out.append(("cup_glass", gl, 0.35, "dawnglass", "bone:x_cup_hook", 480, 1.0))
 
-    def core(P):
-        q = P - c
-        rr = np.hypot(q[:, 0], q[:, 1])
-        zt, zb, r = cup_z(CUP_CORE[0]), cup_z(CUP_CORE[1]), CUP_CORE[2]
-        men = zt - 0.008 * (1 - np.clip(rr / r, 0, 1) ** 2)       # a soft meniscus, lower at the centre
-        return np.maximum(rr - r, np.maximum(zb - P[:, 2], P[:, 2] - men))
-
-    def inlay(P):
-        q = P - c
-        rr = np.hypot(q[:, 0], q[:, 1])
-        zt = cup_z(CUP_RIM[0])
-        return np.maximum(np.abs(rr - 0.5 * (INLAY[0] + INLAY[1])) - 0.5 * (INLAY[1] - INLAY[0]),
-                          np.abs(P[:, 2] - (zt + 0.0005)) - 0.0028)
     co = Sculpt("cup_core")
-    co.add(Fn(core, lo, hi), k=0.0)
-    co.add(Fn(inlay, lo, hi), k=0.0)
-    out.append(("cup_core", co, 0.35, "accent", "bone:x_cup_hook", 620, 0.6))
+    co.add(Sphere(np.array([c[0], c[1], cup_z(BEAD_DZ)]), BEAD_R), k=0.0)
+    out.append(("cup_core", co, 0.30, "accent", "bone:x_cup_hook", 200, 0.6))
     return out
 
 
@@ -987,22 +1055,32 @@ def skin_extras(extra: dict) -> list:
     """Stillwater: five rigid reed plates laid in a fan over the hood's dome (0.20 x 0.04 m)"""
     out = []
     if extra.get("reed_plates"):
+        # fix pass 1: a FAN (build 9's five strips ran up the dome side by side: a helmet vent): five tapering reed
+        # blades radiating from a tied root low on the hood's back, spread over the dome
         reeds = Sculpt("reed_plates")
-        for i, ang in enumerate((-36.0, -18.0, 0.0, 18.0, 36.0)):
-            a = math.radians(ang)
-            z0 = 1.56
-            hx, hy, yc = hood_sec(z0)
-            pts = []
-            for z in (1.40, 1.50, 1.58, 1.625):
-                hx, hy, yc = hood_sec(z)
-                r = 1.0 / ((abs(math.sin(a)) ** HOOD_E + abs(math.cos(a)) ** HOOD_E) ** (1 / HOOD_E))
-                pts.append(np.array([float(hx) * math.sin(a) * r * 1.02, float(yc) + float(hy) * math.cos(a) * r * 1.02 + 0.004, z]))
-            for p0, p1 in zip(pts[:-1], pts[1:]):
-                n = unit(np.array([p0[0], p0[1] - 0.0, 0.0]) + np.array([0, 0, 0.6]))
-                t = unit(p1 - p0)
-                w = unit(np.cross(n, t))
-                ax = np.stack([w, t, unit(np.cross(w, t))])
-                reeds.add(RoundBox(0.5 * (p0 + p1), (0.020, 0.5 * float(np.linalg.norm(p1 - p0)) + 0.012, 0.004), 0.003, axes=ax), k=0.006)
+        root = (0.0, 1.235)
+
+        def on_back(x, z, lift=0.006):
+            hx, hy, yc = hood_sec(z)
+            hy = float(hy * back_k(z))
+            u = min(abs(x) / float(hx), 0.98)
+            return np.array([x, float(yc) + hy * (1 - u ** HOOD_E) ** (1 / HOOD_E) + lift, z])
+        for i, ang in enumerate((-56.0, -28.0, 0.0, 28.0, 56.0)):
+            a_ = math.radians(ang)
+            L = 0.215 if i in (1, 2, 3) else 0.190
+            ts = np.linspace(0.035, L, 6)
+            pts = [on_back(root[0] + t * math.sin(a_), root[1] + t * math.cos(a_)) for t in ts]
+            for j, (p0, p1) in enumerate(zip(pts[:-1], pts[1:])):
+                mid = 0.5 * (p0 + p1)
+                hx, hy, yc = hood_sec(mid[2])
+                nrm = unit(np.array([mid[0] / max(float(hx), 1e-3) ** 2, (mid[1] - float(yc)) / max(float(hy), 1e-3) ** 2, 0.25]))
+                t_ = unit(p1 - p0)
+                w_ = unit(np.cross(nrm, t_))
+                nrm = unit(np.cross(t_, w_))
+                half_w = 0.010 + 0.011 * (j + 0.5) / (len(pts) - 1)
+                ax = np.stack([w_, t_, nrm])
+                reeds.add(RoundBox(mid, (half_w, 0.5 * float(np.linalg.norm(p1 - p0)) + 0.010, 0.0045), 0.003, axes=ax), k=0.006)
+        reeds.add(Ellipsoid(on_back(root[0], root[1], 0.010), (0.034, 0.016, 0.022)), k=0.008)      # the tie at the root
         out.append(("reed_plates", reeds, 0.5, "reed", "bone:head", 700, 0.8))
     return out
 
@@ -1021,7 +1099,6 @@ def extra_materials(ctx) -> dict:
 
 def model(ctx) -> list:
     P = []
-    PLATE_FRAMES.clear()
     extra = (ctx.skin or {}).get("extra") or {}
     items = sculpts() + [x + (1.0,) if len(x) == 6 else x for x in skin_extras(extra)]
     if ctx.skin is None:
@@ -1067,8 +1144,15 @@ def rig_extras(ctx) -> None:
     cb.align_roll(V((0.0, -1.0, 0.0)))
     cb.parent = eb["prop.R"]
     cb.use_deform = True
+    sb = eb.new("x_cord_swing")                                  # the thrown loop (cast_a3), on the left hand
+    sb.head = V(tuple(SWING_G))
+    sb.tail = V(tuple(SWING_G + np.array([0.0, 0.0, 0.12])))
+    sb.align_roll(V((0.0, -1.0, 0.0)))
+    sb.parent = eb["hand.L"]
+    sb.use_deform = True
     bpy.ops.object.mode_set(mode="OBJECT")
     arm.pose.bones["x_cup_hook"].rotation_mode = "XYZ"
+    arm.pose.bones["x_cord_swing"].rotation_mode = "XYZ"
     for b in arm.data.bones:
         info.lengths[b.name] = b.length
     info.joints["elbow.R"], info.joints["wrist.R"] = elv, wrv
@@ -1076,7 +1160,7 @@ def rig_extras(ctx) -> None:
     info.joints["palm.R"] = g
     info.joints["forearm_dir.R"] = fo_d
     info.joints["arm_dir.R"] = up_d
-    core_c = np.array([CUP_C[0], CUP_C[1], cup_z(0.5 * (CUP_CORE[0] + CUP_CORE[1]))])
+    core_c = np.array([CUP_C[0], CUP_C[1], cup_z(BEAD_DZ)])
     rig.add_socket(info, "x_cup", "x_cup_hook", tuple(core_c), (0.0, 0.0, -0.06), z_hint=(0, -1, 0))
     rig.add_socket(info, "x_cord", "hips", tuple(CORD_C), (0.0, -0.06, 0.0), z_hint=(0, 0, 1))
     rig.add_socket(info, "x_staff_top", "prop.R", tuple(CROOK_TOP), tuple(STAFF_U * 0.08), z_hint=(0, -1, 0))
@@ -1184,7 +1268,23 @@ def _w_boots(P, J):
     return out
 
 
-WEIGHTS = {"torso": _w_torso, "belt": _w_belt, "hood": _w_hood, "skirt": _w_skirt, "pants": _w_pants,
+def _w_plates(P, J):
+    """fix pass 1: the stone mantle rides the chest, each pauldron a share of its shoulder and (the lower tier's outer
+    part) of the upper arm (build 9 bound the slabs rigidly to the shoulder bones: loose boxes in the death / victory /
+    ult poses)"""
+    x, z = P[:, 0], P[:, 2]
+    ax = np.abs(x)
+    _, _, _, zA, _, _, _, _ = mantle_info(P)
+    sh = 0.55 * ss(0.16, 0.36, ax)
+    arm = 0.30 * ss(0.36, 0.50, ax) * np.where(z < zA, 1.0, 0.35)
+    out = {"chest": np.clip(1 - sh - arm, 0, 1)}
+    for side, m in (("L", (x > 0).astype(float)), ("R", (x <= 0).astype(float))):
+        out[f"shoulder.{side}"] = sh * m
+        out[f"upper_arm.{side}"] = arm * m
+    return out
+
+
+WEIGHTS = {"plates": _w_plates, "torso": _w_torso, "belt": _w_belt, "hood": _w_hood, "skirt": _w_skirt, "pants": _w_pants,
            "shins": _w_shins, "sleeves": _w_sleeves, "boots": _w_boots}
 
 
@@ -1231,8 +1331,15 @@ _pipeline.bind_part = _bind_part
 # colours): the stone plates (their layout is the model's, not the painting's), the staff, the cup, the gloves, the
 # boots, the cord and the hood's dark lining round the face
 PROC = ("staff", "staff_grip", "ferrule", "cup_hook", "cup_rim", "cup_glass", "hand_R", "hand_L", "boots", "cord",
-        "plates_L", "plates_R", "plates_back", "reed_plates")
-HOLD = ("staff", "staff_grip", "ferrule", "cup_hook", "cup_rim", "cup_glass", "reed_plates")   # no height ramp
+        "cord_swing", "plates", "reed_plates")
+HOLD = ("staff", "staff_grip", "ferrule", "cup_hook", "cup_rim", "cup_glass", "reed_plates", "cord_swing")   # no ramp
+# fix pass 1: the cream wraps take a CLEAN tone (the part's own painted tone per height, front / back blended by the
+# normal) times the concept's HIGH-PASS (the painted bands, their lit tops, the dark lines between them, < ~4 cm): the
+# painting's broad shading and the arm / staff paint beside the barrel no longer print as grey-brown camouflage
+# patches (the splash's victory pose shows the flanks); the gain lifts the middle band off the L* 45 floor
+CLEAN = {"torso": 1.05, "skirt": 1.09, "sleeve_L": 1.03, "sleeve_R": 1.03}
+CLEAN_SIGMA = 0.035                                   # m: the high-pass's low-pass
+CLEAN_RANGE = (0.62, 1.32)
 # z / 1.65 -> linear gain: light hood and face, the wraps a step down, dark boots (brief §6)
 VALUE_RAMP = [(0.0, 0.66), (0.06, 0.70), (0.14, 0.78), (0.24, 0.86), (0.34, 0.90), (0.48, 0.93), (0.60, 0.98),
               (0.72, 1.02), (0.85, 1.04), (1.0, 1.05)]
@@ -1287,6 +1394,7 @@ def _lam(n, lo=0.70, k=0.36):
 
 
 _HID = [None]
+_HIDS: dict = {}
 
 
 def _proj_sides(maps, plates, vis, names, eps=0.02, log=print):
@@ -1323,6 +1431,7 @@ def _proj_sides(maps, plates, vis, names, eps=0.02, log=print):
         else:
             hidden = ~(p[:, 1] >= np.nan_to_num(dep, nan=-1e9) - eps)
         hid_both &= hidden
+        _HIDS[side] = hidden
         for kk in np.unique(k[hidden]):
             f = fills.get((side, int(kk)))
             if f is None:
@@ -1471,6 +1580,63 @@ def _flank_refill(lin, k, p, n, names, log):
     return lin
 
 
+def _clean_wraps(lin, k, p, n, names, plates, vis, log):
+    """fix pass 1 (the splash's camouflage): the cream wraps = their own clean painted tone per height (front / back
+    blended by the normal) x the concept's high-pass, measured inside each part's own footprint in each plate"""
+    st, sub = vis.step, 2
+    lw = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    ratio = {}
+    for side in ("front", "back"):
+        pid = vis.part[side]
+        small = plates.img[side][st // 2::st, st // 2::st][:pid.shape[0], :pid.shape[1]]
+        L = (_lin(small.reshape(-1, 3)) @ lw).reshape(small.shape[:2])[::sub, ::sub]
+        pid2 = pid[::sub, ::sub]
+        sig = CLEAN_SIGMA * plates.ppm(side) / (st * sub)
+        for nm in CLEAN:
+            if nm not in names:
+                continue
+            m = (pid2 == names.index(nm)).astype(np.float32)
+            if m.sum() < 30:
+                continue
+            lo = _project.blur(L * m, sig) / np.maximum(_project.blur(m, sig), 1e-3)
+            ratio[(side, nm)] = np.where(m > 0.5, L / np.maximum(lo, 1e-4), 1.0).astype(np.float32)[..., None]
+    hid_both = _HID[0] if _HID[0] is not None and len(_HID[0]) == len(k) else np.zeros(len(k), dtype=bool)
+    for nm, gain in CLEAN.items():
+        if nm not in names:
+            continue
+        sel = k == names.index(nm)
+        if sel.sum() < 50:
+            continue
+        pp, nn, c = p[sel], n[sel], lin[sel]
+        face = np.abs(nn[:, 1])
+        good = (face > 0.80) & ~hid_both[sel] & (_Y(c) > 0.01)
+        gf, gb = good & (nn[:, 1] < 0), good & (nn[:, 1] > 0)
+        tf = _band_tone(pp[gf, 2], c[gf], pp[:, 2], step=0.04) if gf.sum() >= 40 else None
+        tb = _band_tone(pp[gb, 2], c[gb], pp[:, 2], step=0.04) if gb.sum() >= 40 else None
+        if tf is None and tb is None:
+            continue
+        tf = tf if tf is not None else tb
+        tb = tb if tb is not None else tf
+        wbb = (ss(0.10, 0.50, nn[:, 1]) if nm in FRONT_FLANK else ss(-0.35, 0.35, nn[:, 1]))[:, None]
+        tone = tf * (1 - wbb) + tb * wbb
+        r = np.ones(len(pp), dtype=np.float32)
+        for side, w_ in (("front", ss(0.15, -0.15, nn[:, 1])), ("back", ss(-0.15, 0.15, nn[:, 1]))):
+            R = ratio.get((side, nm))
+            if R is None:
+                continue
+            px, py = plates.to_px(side, pp[:, 0], pp[:, 2])
+            rs = _project.bilinear(R, px / (st * sub), py / (st * sub))[:, 0]
+            hs = _HIDS.get(side)
+            if hs is not None and len(hs) == len(k):
+                rs = np.where(hs[sel], 1.0, rs)
+            r = r + (rs - 1.0) * w_
+        fs = ss(0.30, 0.70, face)
+        r = 1.0 + (np.clip(r, *CLEAN_RANGE) - 1.0) * fs
+        lin[sel] = (tone * r[:, None] * gain).astype(np.float32)
+        log(f"  sukri clean wraps {nm}: high-pass {float(np.percentile(r, 5)):.2f}..{float(np.percentile(r, 95)):.2f}")
+    return lin
+
+
 def _staff_local(p):
     """(s along the shaft from the grip, angle round it) of staff texels"""
     q = p - GRIP
@@ -1480,20 +1646,24 @@ def _staff_local(p):
     return s, th
 
 
-def _wood_paint(p, n, hexc="#CBBFA4", dark_hex="#857A66"):
-    """the pale weathered ash staff (as painted: a pale grey-cream with long darker grain streaks running along the
-    shaft, a few knots, grime toward the butt)"""
+def _wood_paint(p, n, hexc="#BBA784", dark_hex="#76644B", light_hex="#D5C6A4"):
+    """the weathered ash staff (as painted; fix pass 1: build 9's pale grey-cream read as bone): a warm tan with long
+    dark grain streaks and pale worn streaks running along the wood, a few dark knots, grime toward the butt"""
     s, th = _staff_local(p)
     base = _lin(_hex(hexc))
     dark = _lin(_hex(dark_hex))
-    grain = np.sin(th * 7.0 + 2.4 * NOISE(p * np.array([1.0, 1.0, 0.10]), 5.0)) * 0.5 + 0.5
-    fine = np.sin(th * 19.0 + 3.0 * NOISE(p * np.array([1.0, 1.0, 0.10]), 9.0)) * 0.5 + 0.5
-    g = 0.55 * grain ** 5 + 0.30 * fine ** 7
-    c = base[None, :] * (1 - 0.32 * g)[:, None] + dark[None, :] * (0.32 * g)[:, None]
-    knots = np.clip(NOISE.ridged(p, 9.0, 2) - 0.62, 0, 1) * 1.8
+    light = _lin(_hex(light_hex))
+    warp = NOISE(p * np.array([1.0, 1.0, 0.10]), 5.0)
+    grain = np.sin(th * 5.0 + 2.6 * warp) * 0.5 + 0.5
+    fine = np.sin(th * 13.0 + 3.0 * NOISE(p * np.array([1.0, 1.0, 0.10]), 9.0)) * 0.5 + 0.5
+    pale = np.sin(th * 7.0 + 1.3 + 2.2 * NOISE(p * np.array([1.0, 1.0, 0.12]), 4.0)) * 0.5 + 0.5
+    g = np.clip(0.75 * grain ** 4 + 0.40 * fine ** 6, 0, 1)
+    w = np.clip(pale ** 6 * 0.55, 0, 1)
+    c = base[None, :] * (1 - 0.45 * g - 0.4 * w)[:, None] + dark[None, :] * (0.45 * g)[:, None] + light[None, :] * (0.4 * w)[:, None]
+    knots = np.clip(NOISE.ridged(p, 9.0, 2) - 0.60, 0, 1) * 2.0
     z = p[:, 2]
-    butt = 0.74 + 0.26 * ss(0.05, 0.60, z)
-    c = c * ((1 - 0.30 * knots) * butt * _lam(n, 0.84, 0.18))[:, None] * (1 + 0.05 * _fbm(p, 30.0))[:, None]
+    butt = 0.72 + 0.28 * ss(0.05, 0.60, z)
+    c = c * ((1 - 0.35 * knots) * butt * _lam(n, 0.82, 0.22))[:, None] * (1 + 0.05 * _fbm(p, 30.0))[:, None]
     return c
 
 
@@ -1549,65 +1719,76 @@ def _cord_paint(p, n):
 
 
 def _cup_hook_paint(p, n):
-    return _stone_paint(p, n, "#3D3A39", 0.10, 0.20)
+    """the cup's cords and knot: a dark brown twisted cord (as painted)"""
+    tw = 0.5 + 0.5 * np.sin(p[:, 2] * 260.0 + 4.0 * NOISE(p, 30.0))
+    return _lin(_hex("#4C3B2F"))[None, :] * (_lam(n, 0.80, 0.30) * (0.86 + 0.20 * tw))[:, None]
+
+
+def _swing_paint(p, n):
+    """the thrown loop: the coil's brown rope (its AO is the barrel's inside: lifted to match in the air)"""
+    tw = 0.5 + 0.5 * np.sin((p[:, 0] + p[:, 1]) * 180.0 + 3.0 * NOISE(p, 20.0))
+    c = _lin(_hex("#7D6852"))[None, :] * (_lam(n, 0.80, 0.30) * (0.82 + 0.26 * tw))[:, None]
+    wt = np.linalg.norm(p - (SWING_G + np.array([-2 * SWING_R, 0.0, SWING_RISE])), axis=1) < 0.026
+    c[wt] = _stone_paint(p[wt], n[wt], "#3F3B39", 0.10)
+    return c * 1.30
 
 
 def _cup_rim_paint(p, n):
-    """the rim band: dark blue-grey slate (as painted on the cup's lid), chalky lit top edge, chipped"""
-    c = _stone_paint(p, n, "#434B57", 0.14, 0.35)
-    chip = np.clip(NOISE.ridged(p, 30.0, 2) - 0.70, 0, 1) * 2.2
-    return c * (1 + 0.35 * chip)[:, None]
+    """the rim band: dark blue-grey SLATE (as painted on the cup's top), big flat chipped facets in two values, a
+    chalky lit top edge, dark chips"""
+    c = _stone_paint(p, n, "#3F4653", 0.10, 0.45)
+    th = np.arctan2(p[:, 1] - CUP_C[1], p[:, 0] - CUP_C[0])
+    facet = 0.90 + 0.18 * (np.sin(th * 3.5 + 1.0) > 0.2)
+    chip = np.clip(NOISE.ridged(p, 30.0, 2) - 0.68, 0, 1) * 2.4
+    top = ss(0.55, 0.90, n[:, 2]) * ss(cup_z(CUP_CORD) - 0.010, cup_z(CUP_CORD) - 0.002, p[:, 2])
+    return c * (facet * (1 + 0.30 * chip) * (1 + 0.35 * top))[:, None]
 
 
 def _glass_paint(p, n):
-    """the clear dawnglass (as painted): a pale cool blue-white, brighter where the glass faces the light, a cool
-    darker band near the base, white glints on the ribs' edges"""
-    base = _lin(_hex("#B9CBD6"))
-    q = p[:, :2] - CUP_C[None, :]
-    rr = np.hypot(q[:, 0], q[:, 1])
+    """the CLEAR dawnglass (fix pass 1, as painted): the pale see-through tone of the scene behind it, cool bright
+    glass edges where the walls turn away (the sides from the front), a bright thick base and a thin bright lip, a
+    soft cool brightening in the upper half (the light inside); never saturated, never emissive"""
+    see = _lin(_hex("#C9C3B6"))
+    cool = _lin(_hex("#B8C9D3"))
+    edge_c = _lin(_hex("#E3ECF0"))
     z = p[:, 2]
-    low = ss(cup_z(CUP_BASE) + 0.03, cup_z(CUP_GLASS[1]), z)
-    rib_edge = ss(CUP_R - 0.016, CUP_R - 0.004, rr) * (1 - ss(0.80, 0.98, np.abs(n[:, 2])))
-    glint = np.clip(n @ unit((-0.3, -0.8, 0.5)), 0, 1) ** 8
-    c = base[None, :] * (_lam(n, 0.80, 0.30) * (1 - 0.18 * low))[:, None]
-    c = c + (0.18 * rib_edge + 0.40 * glint)[:, None] * _lin(_hex("#EEF4F7"))[None, :]
-    return c
+    zt, zb = cup_z(CUP_CORD + CUP_RIM_H), cup_z(CUP_LEN)
+    th = np.arctan2(p[:, 1] - CUP_C[1], p[:, 0] - CUP_C[0])
+    c = see[None, :] * 0.72 + cool[None, :] * 0.28
+    c = c * (_lam(n, 0.86, 0.18) * (1 + 0.04 * _fbm(p, 25.0)))[:, None]
+    inner = ss(zb + 0.04, zt - 0.01, z) * 0.10
+    side_edge = ss(0.62, 0.95, np.abs(n[:, 0])) * 0.55
+    streak = np.exp(-((np.angle(np.exp(1j * (th + 2.05)))) / 0.16) ** 2) * 0.45      # a painted vertical glint
+    base = (1 - ss(zb + 0.012, zb + 0.026, z)) * 0.75
+    lip = ss(zt - 0.010, zt - 0.002, z) * 0.55
+    w = np.clip(inner + side_edge + streak + base + lip, 0, 0.85)[:, None]
+    return c * (1 - w) + edge_c[None, :] * w
 
 
 def _plate_paint(p, n):
-    """the pale stone plates (as painted: a warm pale grey-cream, lit top faces, chalky chipped top edges, a dark
-    painted line round the lower edges and dark undersides, mottled, a few chips and cracks), each read in its frame"""
-    if not PLATE_FRAMES:
-        return _stone_paint(p, n, "#CBC5B4", 0.12, 0.12)
-    C = np.array([f[0] for f in PLATE_FRAMES])
-    d = np.linalg.norm(p[:, None, :] - C[None, :, :], axis=2)
-    near = np.argmin(d, axis=1)
-    out = np.zeros((len(p), 3), dtype=np.float32)
-    base = _lin(_hex("#B9B09C"))
-    chalk = _lin(_hex("#DCD4C2"))
-    line = _lin(_hex("#5E564B"))
-    for i, (c, nn, t, b, w, h) in enumerate(PLATE_FRAMES):
-        m = near == i
-        if not m.any():
-            continue
-        q = p[m] - c
-        u, v = q @ t / (0.5 * w), q @ b / (0.5 * h)
-        facing = n[m] @ nn
-        edge = 1 - ss(0.50, 0.90, facing)                       # the bevelled rims and the slab's thickness
-        top = ss(0.10, 0.80, v) * edge * ss(-0.2, 0.4, n[m, 2])  # the upper rim catches the light: chalky
-        bot = (ss(-0.1, -0.8, v) * edge) + ss(0.25, -0.40, facing)
-        under = ss(0.0, -0.5, n[m, 2]) * edge
-        mott = 1 + 0.12 * _fbm(p[m], 8.0) + 0.06 * _fbm(p[m], 29.0)
-        chip = np.clip(NOISE.ridged(p[m], 20.0, 2) - 0.64, 0, 1) * 2.6
-        crack = np.clip(NOISE.ridged(p[m] * np.array([1.0, 1.0, 2.2]), 7.0, 2) - 0.86, 0, 1) * 6.0
-        tone = 0.93 + 0.12 * math.sin(i * 2.3 + 0.7)            # each slab a slightly different value
-        k = _lam(n[m], 0.74, 0.40) * mott * tone * (1 - 0.18 * chip) * (1 - 0.35 * np.clip(crack, 0, 1))
-        c_ = base[None, :] * k[:, None]
-        c_ = c_ * (1 - 0.45 * top[:, None]) + chalk[None, :] * (0.45 * top * k)[:, None]
-        dk = np.clip(0.55 * bot + 0.45 * under, 0, 0.8)[:, None]
-        c_ = c_ * (1 - dk) + line[None, :] * dk * 0.9
-        out[m] = c_
-    return out
+    """the stone mantle (as painted): a warm greige stone, each slab a slightly different value, chalky lit tops on
+    the shingle steps, dark painted lines in the grooves, along the tier step and round the lower edges, dark
+    undersides, mottled, chipped and cracked (fix pass 1: read from mantle_info, the sculpt's own slab layout)"""
+    phi, ia, ib, zA, zB, arc, T, inA = mantle_info(p)
+    slab = np.where(inA, ia, 20 + ib).astype(np.float64)
+    base = _lin(_hex("#ACA290"))             # (build 9's #B9B09C rendered white)
+    chalk = _lin(_hex("#CDC4AF"))
+    line = _lin(_hex("#564D41"))
+    z = p[:, 2]
+    tone = 0.92 + 0.14 * np.sin(slab * 2.3 + 0.7)
+    mott = 1 + 0.12 * _fbm(p, 8.0) + 0.06 * _fbm(p, 29.0)
+    chip = np.clip(NOISE.ridged(p, 20.0, 2) - 0.64, 0, 1) * 2.6
+    crack = np.clip(NOISE.ridged(p * np.array([1.0, 1.0, 2.2]), 7.0, 2) - 0.86, 0, 1) * 6.0
+    k = _lam(n, 0.74, 0.40) * mott * tone * (1 - 0.18 * chip) * (1 - 0.35 * np.clip(crack, 0, 1))
+    c = base[None, :] * k[:, None]
+    top = ss(0.35, 0.80, n[:, 2])
+    c = c * (1 - 0.45 * top[:, None]) + chalk[None, :] * (0.45 * top * k)[:, None]
+    under = ss(-0.05, -0.55, n[:, 2])
+    groove = 1 - ss(0.004, 0.013, arc)
+    step = (1 - ss(0.003, 0.011, np.abs(z - zA))) * (1 - top)
+    low = 1 - ss(0.004, 0.016, z - zB)
+    dk = np.clip(0.55 * under + 0.60 * groove + 0.50 * step + 0.35 * low, 0, 0.85)[:, None]
+    return c * (1 - dk) + line[None, :] * dk * 0.9
 
 
 def _lining(p, n, lin):  # noqa: C901
@@ -1648,8 +1829,8 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         "cup_hook": _cup_hook_paint, "cup_rim": _cup_rim_paint, "cup_glass": _glass_paint,
         "hand_R": lambda pp, nn: _glove_paint(pp, nn, HAND_R_FRAME, 1.0),
         "hand_L": lambda pp, nn: _glove_paint(pp, nn, HAND_L_FRAME, LEFT_CURL),
-        "boots": _boot_paint, "cord": _cord_paint,
-        "plates_L": _plate_paint, "plates_R": _plate_paint, "plates_back": _plate_paint,
+        "boots": _boot_paint, "cord": _cord_paint, "cord_swing": _swing_paint,
+        "plates": _plate_paint,
         "reed_plates": lambda pp, nn: _stone_paint(pp, nn, "#A6AC8E", 0.08),
     }
     for name, fn in procs.items():
@@ -1657,6 +1838,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         if m is not None:
             lin[m] = fn(p[m], n[m])
     lin = _flank_refill(lin, k, p, n, names, log)
+    lin = _clean_wraps(lin, k, p, n, names, plates, vis, log)
     m = sel("hood")
     if m is not None:
         # build 2: the cream linen read bone-white in three: toned to the brief's cloth2 (L* ~80) and warmed a touch
@@ -1754,16 +1936,52 @@ _bake.bake_asset = _bake_asset
 # (the painted relief's raised band, proto/sukri_relief.py) takes the pale printed rim, the rest the ink.
 WRAP_PARTS = ("torso", "skirt", "sleeve_L", "sleeve_R", "shins")
 SKIN_PARTS = {
+    # fix pass 1: the wraps' LIT FRONT tone goes to the named wet-stone (build 9 matched their median, so the cream
+    # front came out a pale sky blue-grey); the hood and plates a step darker (the top band was 84.2, at the cap)
     "sukri_stillwater": {"torso": "#59666A", "skirt": "#5E6B6E", "sleeve_L": "#5C696D", "sleeve_R": "#5C696D",
-                         "shins": "#7E8886", "hood": "#BAB4A2", "plates_L": "#AAA79C", "plates_R": "#AAA79C",
-                         "plates_back": "#AAA79C", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
-                         "bracer_R": "#3E4446", "pants": "#2E3436", "cord": "#6F7468"},
-    "sukri_shadeprint": {"hood": "#ADA9B6", "plates_L": "#AFACB8", "plates_R": "#AFACB8", "plates_back": "#AFACB8",
-                         "face": "#BDB3A3", "staff": "#C8BFB0", "cup_glass": "#C5CFE0", "belt": "#2E2C36",
-                         "bracer_L": "#34323C", "bracer_R": "#34323C", "pants": "#26252D", "boots": "#2E2C33",
-                         "hand_R": "#3A3842", "hand_L": "#3A3842", "cord": "#5A5566"},
+                         "shins": "#7E8886", "hood": "#ADA896", "plates": "#A29F94", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
+                         "bracer_R": "#3E4446", "pants": "#323A3C", "cord": "#6F7468"},
+    # fix pass 1: the feet band (L* 18) lifted: lighter leggings / boots and pale printed shin wraps; the hood and
+    # plates a step darker
+    "sukri_shadeprint": {"hood": "#A29EAD", "plates": "#A6A3B0",
+                         "face": "#BDB3A3", "staff": "#BFB5A4", "cup_glass": "#C5CFE0", "belt": "#34323D",
+                         "bracer_L": "#383640", "bracer_R": "#383640", "pants": "#3A3843", "boots": "#3F3C46",
+                         "hand_R": "#3E3C46", "hand_L": "#3E3C46", "cord": "#5A5566"},
 }
-PRINT = {"sukri_shadeprint": ("#2B2A33", "#C6C3CE")}       # (ink, light rim)
+FRONT_MED = ("torso", "skirt", "sleeve_L", "sleeve_R")     # matched on their lit front texels
+# Shadeprint (fix pass 1: build 9's thin light lines along the painted grooves read as white pyjama scribbles): the
+# wraps printed in two tones from the painted relief smoothed to band scale: every band's LIT surface in a soft light
+# (the light-rimmed edge), the rest and the grooves in ink; the skirt panels carry a printed light hem; the shin wraps
+# print the other way round (light cloth, ink lines) for the feet band
+PRINT = {"sukri_shadeprint": ("#2B2A33", "#B3AFBE")}       # (ink, light rim)
+PRINT_LIGHT_SHINS = "#ABA7B6"
+_RELIEF_SMOOTH: dict = {}
+
+
+def _relief_smooth_at(side, x, z):
+    if side not in _RELIEF_SMOOTH:
+        R = _relief()
+        A = R[side].astype(np.float32)
+        _RELIEF_SMOOTH[side] = _project.blur(A[..., None], 2.5)[..., 0]
+    R = _relief()
+    A = _RELIEF_SMOOTH[side]
+    m = float(R["m"])
+    u = np.clip((np.asarray(x, float) - float(R["x0"])) / m, 0, A.shape[1] - 1.001)
+    v = np.clip((float(R["z0"]) - np.asarray(z, float)) / m, 0, A.shape[0] - 1.001)
+    i0, j0 = u.astype(np.int64), v.astype(np.int64)
+    fu, fv = u - i0, v - j0
+    a = A[j0, i0] * (1 - fu) + A[j0, i0 + 1] * fu
+    b = A[j0 + 1, i0] * (1 - fu) + A[j0 + 1, i0 + 1] * fu
+    return a * (1 - fv) + b * fv
+
+
+def _skirt_hem(P):
+    """height of the skirt's hem at each texel's angle (skirt_d's zb)"""
+    x, y = P[:, 0], P[:, 1] - 0.020
+    th = np.arctan2(x, -y)
+    ath = np.abs(th)
+    zb = np.where(ath < 0.40, 0.272 + 0.10 * (ath / 0.40) ** 3, np.where(ath < 2.4, 0.318, 0.336))
+    return zb + 0.012 * np.sin(th * 5.0)
 
 
 def _shift_to(c, target_hex, med):
@@ -1794,25 +2012,38 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             lin = _lin(c)
             Y = _Y(lin)
             med = float(np.median(Y[own])) if own.any() else float(np.median(Y))
-            r = np.clip(Y / max(med, 1e-4), 0.45, 1.6) ** 0.6
+            r = np.clip(Y / max(med, 1e-4), 0.55, 1.45) ** 0.40
             P_ = Pm[m]
-            wf = ss(0.02, -0.02, Nm[m][:, 1])
-            def rel_at(dz):
-                return (_relief_at("front", P_[:, 0], P_[:, 2] + dz) * wf
-                        + _relief_at("back", P_[:, 0], P_[:, 2] + dz) * (1 - wf))
-            # a thin printed light line along the upper side of every painted band edge (the groove 1 cm below),
-            # never in the groove itself (skins 2: wide lit crests read as zebra stripes)
-            groove_below = -np.minimum(rel_at(-0.010), rel_at(-0.006))
-            here = -rel_at(0.0)
-            rim = ss(0.0016, 0.0030, groove_below) * (1 - ss(0.0008, 0.0020, here)) * 0.85
-            col = ink[None, :] * (1 - rim[:, None]) + light[None, :] * rim[:, None]
+            wf = ss(0.05, -0.05, Nm[m][:, 1])
+            rel = (_relief_smooth_at("front", P_[:, 0], P_[:, 2]) * wf
+                   + _relief_smooth_at("back", P_[:, 0], P_[:, 2]) * (1 - wf))
+            lit = ss(0.00025, 0.0011, rel)
+            groove = ss(0.0006, 0.0018, -rel)
+            if nm == "shins":
+                pale = _lin(_hex(PRINT_LIGHT_SHINS))
+                k_ = np.clip(0.80 * groove, 0, 0.8)[:, None]
+                col = pale[None, :] * (1 - k_) + ink[None, :] * k_
+                share = float((k_[:, 0] < 0.4).mean())
+            else:
+                w_ = np.clip(lit * 0.90, 0, 0.9)
+                if nm == "skirt":
+                    hem = _skirt_hem(P_)
+                    w_ = np.maximum(w_, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
+                col = ink[None, :] * (1 - w_[:, None]) + light[None, :] * w_[:, None]
+                col = col * (1 - 0.25 * groove)[:, None]
+                share = float((w_ > 0.45).mean())
             out[m] = _srgb(_hi_cap(col * r[:, None]))
-            log(f"  sukri print {nm}: {100 * float((rim > 0.5).mean()):.0f}% light rims")
+            log(f"  sukri print {nm}: {100 * share:.0f}% light")
             continue
         if nm in targets:
             lin = _lin(c[own]) if own.any() else _lin(c)
             Y = _Y(lin)
             mid = (Y > np.quantile(Y, 0.25)) & (Y < np.quantile(Y, 0.9))
+            if nm in FRONT_MED:
+                fr = (Nm[m][own] if own.any() else Nm[m])[:, 1] < -0.55
+                if fr.sum() > 40:
+                    Yf = Y[fr]
+                    mid = fr & (Y > np.quantile(Yf, 0.25)) & (Y < np.quantile(Yf, 0.9))
             med = np.median(lin[mid] if mid.sum() > 20 else lin, axis=0)
             out[m] = _shift_to(c, targets[nm], med)
             log(f"  sukri recolour {nm} -> {targets[nm]}")
@@ -1824,7 +2055,8 @@ _project.recolour = _recolour
 
 
 # ── location tracks (Vashil's / Dunsom's wrappers): the staff slides through the fist ──────────────────────
-LOC_BONES = ("prop.R",)
+LOC_BONES = ("prop.R", "x_cup_hook", "x_cord_swing")
+SCALE_BONES = {"x_cord_swing": SWING_HIDE}           # keyed in EVERY clip (hidden unless the pose says otherwise)
 _orig_basis = anim.Skeleton.basis
 
 
@@ -1856,6 +2088,19 @@ def _write_action(arm, name, poses, bones=None):
             fc.keyframe_points.foreach_set("co", [c for f, v in zip(range(n), vals) for c in (f, v)])
             fc.keyframe_points.foreach_set("interpolation", [1] * n)
             fc.update()
+    for b, hide in SCALE_BONES.items():
+        if b not in arm.data.bones:
+            continue
+        strip = act.layers[0].strips[0]
+        cb = strip.channelbag(act.slots[0], ensure=True)
+        n = len(poses)
+        for i in range(3):
+            fc = anim._new_fcurve(cb, f'pose.bones["{b}"].scale', i, b)
+            vals = [float(p.get(b + "_scale", hide)[i]) for p in poses]
+            fc.keyframe_points.add(n)
+            fc.keyframe_points.foreach_set("co", [c for f, v in zip(range(n), vals) for c in (f, v)])
+            fc.keyframe_points.foreach_set("interpolation", [1] * n)
+            fc.update()
     return act
 
 
@@ -1870,6 +2115,11 @@ def _apply_pose(arm, pose):
         if b in arm.pose.bones:
             loc = pose.get(b + "_loc") if pose else None
             arm.pose.bones[b].location = tuple(loc) if loc is not None else (0.0, 0.0, 0.0)
+            moved = True
+    for b, hide in SCALE_BONES.items():
+        if b in arm.pose.bones:
+            sc_ = pose.get(b + "_scale") if pose else None
+            arm.pose.bones[b].scale = tuple(sc_) if sc_ is not None else hide
             moved = True
     if moved:
         bpy.context.view_layer.update()
@@ -1903,7 +2153,6 @@ def _floor_staff(skel, pose):
 # idle, swinging with the walk, wildly when stunned); an authored "x_cup_hook" key (the taunt's clink) rides on top
 CUP_K, CUP_D, CUP_MAX = 70.0, 7.0, 16.0
 CUP_INERTIA = 0.45
-CUP_LEN = 0.39                             # the pivot -> the glass base
 _orig_sample_clip = anim.sample_clip
 
 
@@ -1967,11 +2216,174 @@ def _hang_cup(skel, poses, loop, limit=CUP_MAX):
     return out
 
 
+# ── the cup off its hook, the thrown loop (fix pass 1) ──────────────────────────────────────────────────
+# x_cup_hook and x_cord_swing take location keys (and the loop scale keys) so a clip can put them anywhere in the
+# world: victory lifts the cup off the hook into the left fist (held by its cords' knot) and offers it, recall holds it
+# in both hands at the face, death lets it fall when the staff goes down and roll to a stop on the floor (build 9:
+# the cup sank through the ground), cast_a3 whirls the cord loop over the head and throws it.
+def _place(skel, pose, bone, Mw):
+    """set `bone`'s rotation + location keys in `pose` so its armature-space matrix is the rigid Mw"""
+    M = skel.fk(pose)
+    par = M[skel.parent[bone]] @ skel.local[bone]
+    B = par.inverted() @ Mw
+    pose[bone] = anim.Skeleton.euler_of(B.to_3x3(), pose.get(bone))
+    pose[bone + "_loc"] = tuple(B.translation)
+    return pose
+
+
+def _blend_m(A, B, t):
+    t = max(0.0, min(1.0, t))
+    q = A.to_quaternion().slerp(B.to_quaternion(), t)
+    return Matrix.Translation(A.translation.lerp(B.translation, t)) @ q.to_matrix().to_4x4()
+
+
+def _frame_m(X, Y, Z, T):
+    m = Matrix.Identity(4)
+    for i, v in enumerate((X, Y, Z)):
+        m[0][i], m[1][i], m[2][i] = v[0], v[1], v[2]
+    m[0][3], m[1][3], m[2][3] = T[0], T[1], T[2]
+    return m
+
+
+def _cup_in_fist(skel, M):
+    """the cup held by its knot in the left fist (the cords down through the fist), hanging plumb"""
+    R = skel.rest["x_cup_hook"].to_3x3()
+    return Matrix.Translation(M["prop.L"].translation + V((0.0, 0.0, 0.006))) @ R.to_4x4()
+
+
+def _cup_floor(skel, pose):
+    """the cup never goes under the floor (any clip): its lowest point lifted to the floor"""
+    M = skel.fk(pose)
+    Mc = M["x_cup_hook"]
+    Y = Mc.to_3x3().col[1].normalized()
+    h = Mc.translation
+    rad = math.sqrt(max(0.0, 1.0 - Y.z * Y.z))
+    low = min((h + Y * CUP_CORD).z - RIM_OUT * rad, (h + Y * (CUP_LEN - 0.012)).z - CUP_RB * rad - 0.012 * abs(Y.z))
+    if low < 0.004:
+        _place(skel, pose, "x_cup_hook", Matrix.Translation(V((0.0, 0.0, 0.004 - low))) @ Mc)
+    return pose
+
+
+def _cup_schedule(skel, poses, clip):
+    n = len(poses)
+    N = max(1, n - 1)
+    name = clip.name
+    if name not in ("victory", "recall", "death"):
+        return poses
+    out = [dict(p) for p in poses]
+    Ms = [skel.fk(p) for p in poses]
+    if name in ("victory", "recall"):
+        t0, t1 = (0.30, 0.38) if name == "victory" else (-1.0, 0.0)
+        for f in range(n):
+            t = f / N
+            if t < t0:
+                continue
+            hang = Ms[f]["x_cup_hook"]
+            w = 1.0 if t >= t1 else anim.EASES["inout"]((t - t0) / (t1 - t0))
+            _place(skel, out[f], "x_cup_hook", _blend_m(hang, _cup_in_fist(skel, Ms[f]), w))
+        return out
+    # death: hangs while the staff goes down, falls when the crook nears the floor, rolls to a stop
+    t0, t1, t2 = 0.36, 0.48, 0.72
+    fl = int(round(0.56 * N))
+    Mf = Ms[fl]
+    crook = Mf["prop.R"] @ (skel.rest["prop.R"].inverted() @ V(tuple(HANG)))
+    ax = Mf["prop.R"].to_3x3().col[1]
+    ax = V((ax.x, ax.y, 0.0))
+    ax = ax.normalized() if ax.length > 1e-4 else V((1.0, 0.0, 0.0))
+    perp = V((-ax.y, ax.x, 0.0))
+    if perp.dot(V((crook.x, crook.y, 0.0))) < 0:
+        perp = -perp                                         # roll away from the body
+    land = V((crook.x, crook.y, 0.0)) + perp * 0.06
+    D = 0.20
+
+    def lying(dist):
+        Y = ax.copy()
+        roll = -dist / RIM_OUT
+        Z = Matrix.Rotation(roll, 3, Y) @ V((0.0, 0.0, 1.0))
+        X = Y.cross(Z)
+        ctr = land + perp * dist + V((0.0, 0.0, RIM_OUT))
+        head = ctr - Y * (CUP_CORD + 0.5 * (CUP_RIM_H + CUP_GLASS_H))
+        return _frame_m(X, Y, Z, head)
+    for f in range(n):
+        t = f / N
+        if t < t0:
+            continue
+        if t < t1:
+            u = (t - t0) / (t1 - t0)
+            M_ = _blend_m(Ms[f]["x_cup_hook"], lying(0.0), u * u)
+        elif t < t2:
+            u = (t - t1) / (t2 - t1)
+            M_ = lying(D * (1 - (1 - u) ** 2))
+        else:
+            M_ = lying(D)
+        _place(skel, out[f], "x_cup_hook", M_)
+    return out
+
+
+SWING_T = (0.10, 0.18, 0.37, 0.40, 0.47)                  # appear, whirl from, throw frame, impact, gone
+
+
+def _swing_schedule(skel, poses, clip):
+    """cast_a3: the left fist takes the loop from the belt, whirls it once over the head, flings it at the impact"""
+    if clip.name != "cast_a3":
+        return poses
+    n = len(poses)
+    N = max(1, n - 1)
+    ta, tw, tt, ti, tg = SWING_T
+    out = [dict(p) for p in poses]
+    fwd = V((0.0, -1.0, 0.0))
+
+    def whirl(phi, G):
+        X = V((math.cos(phi), math.sin(phi), 0.0))
+        Y = V((0.0, 0.0, 1.0))
+        return _frame_m(X, Y, X.cross(Y), G)
+
+    def throw(G):
+        Y = V((0.0, -0.80, 0.60))                          # the cord flung forward and up, the loop open at its end
+        X = V((1.0, 0.0, 0.0))
+        return _frame_m(X, Y, X.cross(Y), G)
+    for f in range(n):
+        t = f / N
+        M = skel.fk(out[f])
+        G = M["prop.L"].translation.copy()
+        phi0 = -0.5 * math.pi
+        if t < ta:
+            Mw, sc_ = whirl(phi0, G), SWING_HIDE
+        elif t < tw:
+            u = (t - ta) / (tw - ta)
+            k_ = 0.35 + 0.65 * u
+            Mw, sc_ = whirl(phi0, G), (k_, 1.0, k_)
+        elif t < tt:
+            u = (t - tw) / (tt - tw)
+            Mw, sc_ = whirl(phi0 + 2 * math.pi * u, G), (1.35, 1.0, 1.35)
+        elif t < ti:
+            u = (t - tt) / (ti - tt)
+            Mw = _blend_m(whirl(phi0 + 2 * math.pi, G), throw(G), u)
+            sc_ = (1.35 + 0.25 * u, 1.0, 1.35 + 0.25 * u)
+        elif t < tg:
+            u = (t - ti) / (tg - ti)
+            Mw = throw(G + fwd * (0.50 * u) + V((0.0, 0.0, 0.10 * u)))
+            k_ = 1.6 + 0.4 * u if u < 0.7 else max(0.001, 1.88 * (1 - (u - 0.7) / 0.3))
+            sc_ = (k_, 1.0 + 0.6 * u if u < 0.7 else max(0.001, k_ / 1.2), k_)
+        else:
+            Mw, sc_ = whirl(phi0, G), SWING_HIDE
+        _place(skel, out[f], "x_cord_swing", Mw)
+        out[f]["x_cord_swing_scale"] = tuple(float(v) for v in sc_)
+    return out
+
+
 def _sample_clip(skel, clip, chains=None):
     poses = _orig_sample_clip(skel, clip, chains)
     poses = [_floor_staff(skel, p) for p in poses]
     lim = 26.0 if clip.name == "stunned" else CUP_MAX
     poses = _hang_cup(skel, poses, clip.loop, lim)
+    if "x_cup_hook" in skel.bones:
+        poses = _cup_schedule(skel, poses, clip)
+        poses = [_cup_floor(skel, p) for p in poses]
+    if "x_cord_swing" in skel.bones:
+        poses = _swing_schedule(skel, poses, clip)
+    if clip.loop and len(poses) > 1:
+        poses[-1] = dict(poses[0])
     return poses
 
 
@@ -1996,9 +2408,10 @@ def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=No
             c = mw @ cb.head
             down = (mw.to_3x3() @ cb.matrix.to_3x3() @ V((0.0, 1.0, 0.0))).normalized()
             if portrait:
-                pts += [c + down * d + V((dx, dy, 0.0)) for dx in (-0.09, 0.09) for dy in (-0.09, 0.09) for d in (0.18, 0.40)]
+                pts += [c + down * d + V((dx, dy, 0.0)) for dx in (-0.09, 0.09) for dy in (-0.09, 0.09)
+                        for d in (CUP_CORD, CUP_LEN)]
             else:
-                pts += [c + down * 0.30 + V((dx, dy, 0.0)) for dx in (-0.05, 0.05) for dy in (-0.05, 0.05)]
+                pts += [c + down * BEAD_DZ + V((dx, dy, 0.0)) for dx in (-0.05, 0.05) for dy in (-0.05, 0.05)]
         for q in pts:
             lo = V((min(lo.x, q.x - 0.04), min(lo.y, q.y - 0.04), min(lo.z, q.z - 0.04) if not portrait else lo.z))
             hi = V((max(hi.x, q.x + 0.04), max(hi.y, q.y + 0.04), max(hi.z, q.z + 0.05)))
@@ -2092,8 +2505,10 @@ BLOCKS = {
     "victory": (GUARD_R, POLE_R, UP, GUARD_L, POLE_L),
     "recall": (GUARD_R, POLE_R, UP, GUARD_L, POLE_L),
 }
-# cadence 1.67: a 12-frame cycle (the short legs' planted foot stays inside their reach at 3.4 m/s)
-RUN_CADENCE = 1.67
+# cadence 1.25: a 16-frame cycle at 3.4 m/s (fix pass 1; build 9's 1.67 = 12 frames, a scurry), contact 0.26 keeps the
+# planted foot's travel (0.47 m) inside the short legs' reach
+RUN_CADENCE = 1.25
+RUN_CONTACT, RUN_BOB, RUN_DROP = 0.26, 0.024, 0.052
 MOTION = anim.motion_profile(weight="medium", weapon="staff", stance="neutral", run_ref_speed=3.4, blocks=BLOCKS,
                              cadence=RUN_CADENCE)
 P_ = anim.P
@@ -2105,7 +2520,7 @@ def _feet(l=(0.0, 0.0, 0.0), r=(0.0, 0.0, 0.0), yl=0.0, yr=0.0, pl=0.0, pr=0.0, 
 
 
 def pose(torso=None, hips=(0.0, 0.0, 0.0), R=GUARD_R, Rp=None, aim=UP, L=GUARD_L, Lp=POLE_L, grip=None,
-         Lpos=None, feet=None, slide=0.0, fk=None) -> dict:
+         Lpos=None, feet=None, slide=0.0, fk=None, aimL=None) -> dict:
     """A full pose: torso rotations (deg), hips_loc offset, the right wrist + staff aim, the left wrist (or `grip`: the
     left hand on the staff at `grip` m from the right fist toward the crook; or `Lpos`: an absolute left-hand target),
     feet, the staff's slide through the fist, FK extras."""
@@ -2127,6 +2542,8 @@ def pose(torso=None, hips=(0.0, 0.0, 0.0), R=GUARD_R, Rp=None, aim=UP, L=GUARD_L
         ik["hand.L"] = HandTarget(pos=tuple(Lpos), pole=tuple(Lp))
     else:
         ik["hand.L"] = HandTarget(rel=tuple(L), pole=tuple(Lp))
+    if aimL is not None:
+        ik["aim.L"] = Aim(tuple(aimL))                  # the fist's hole axis (prop.L +Y): vertical = holding a cord
     p["ik"] = ik
     if fk:
         p.update(P_(**fk))
@@ -2170,7 +2587,12 @@ def clip_overrides(ctx) -> dict:
         """the cup core's world place under pose p, hanging plumb from the hook (as the pendulum hangs it)"""
         r = anim.resolve(skel, dict(p))
         M = skel.fk(r)
-        return M["x_cup_hook"].translation.copy() + V((0.0, 0.0, -0.5 * (CUP_CORE[0] + CUP_CORE[1])))
+        return M["x_cup_hook"].translation.copy() + V((0.0, 0.0, -BEAD_DZ))
+
+    def knot_at(p):
+        """the cords' knot (x_cup_hook's head) in the world under pose p"""
+        r = anim.resolve(skel, dict(p))
+        return skel.fk(r)["x_cup_hook"].translation.copy()
 
     # IDLE: a soft stoop on the staff, breathing, the free hand loose at the belt, the cup's slow swing (the pendulum)
     def idle_s(t):
@@ -2186,7 +2608,14 @@ def clip_overrides(ctx) -> dict:
 
     # RUN: the generator's planted gait at 3.4 m/s (a 12-frame cycle), its swing lifts scaled to the short legs; the
     # staff carried at the right side leaning forward (the cup swinging), the left arm pumping
-    run = anim.gen_run(MOTION)
+    # fix pass 1: a 16-frame cycle (build 9's 12 frames read as a scurry), the same planted reach: shorter contact
+    # (0.26), a gentle 2.4 cm bob, a little lower hips
+    saved = anim.WEIGHTS["medium"]
+    anim.WEIGHTS["medium"] = (saved[0], saved[1], RUN_DROP, RUN_CONTACT, RUN_BOB, saved[5])
+    try:
+        run = anim.gen_run(MOTION)
+    finally:
+        anim.WEIGHTS["medium"] = saved
     LIFT = 0.42
 
     def run_s(t):
@@ -2212,40 +2641,49 @@ def clip_overrides(ctx) -> dict:
         return p
     out["run"] = anim.Clip("run", run.frames, True, run_s, meta=run.meta)
 
+    # fix pass 1: the impacts kept the torso square to the target (build 9 twisted the chest 22-46 degrees and the head
+    # further, the crook came up to the mouth): at most ~10 degrees of chest yaw, the head counter-turned to look at
+    # the target, the staff tipped forward and OUT so the crook and the cup swing out in front (the bolt / mote leaves
+    # the cup: the `weapon` socket is x_cup)
     # ATTACK1: a tap of the staff, the cup flicked forward (the bolt leaves at f8)
-    w1 = pose(torso=dict(chest=(-3, -6, 0), head=(-2, 4, 0)), R=_rel(GUARD_R, (0.0, 0.08, 0.10)), aim=(-0.12, 0.30, 0.95))
-    h1 = pose(torso=dict(hips=(2, 6, 0), spine=(3, 5, 0), chest=(5, 8, 0), head=(-4, -6, 0)), hips=(0, -0.02, -0.01),
-              R=(-0.42, -0.80, -0.30), aim=(-0.08, -0.72, 0.69), L=_rel(GUARD_L, (-0.02, -0.12, 0.02)))
-    f1 = pose(torso=dict(hips=(2, 7, 0), spine=(3, 6, 0), chest=(6, 9, 0), head=(-5, -7, 0)), hips=(0, -0.02, -0.012),
-              R=(-0.41, -0.82, -0.33), aim=(-0.08, -0.78, 0.62), L=_rel(GUARD_L, (-0.02, -0.14, 0.02)))
+    w1 = pose(torso=dict(chest=(-3, -5, 0), head=(-2, 5, 0)), R=_rel(GUARD_R, (0.0, 0.10, 0.10)), aim=(-0.20, 0.30, 0.93))
+    h1 = pose(torso=dict(hips=(2, 2, 0), spine=(3, 2, 0), chest=(5, 4, 0), neck=(-2, -3, 0), head=(-4, -5, 0)),
+              hips=(0, -0.02, -0.01), R=(-0.50, -0.62, -0.20), aim=(-0.30, -0.72, 0.62),
+              L=_rel(GUARD_L, (-0.02, -0.10, 0.02)))
+    f1 = pose(torso=dict(hips=(2, 3, 0), spine=(3, 2, 0), chest=(6, 4, 0), neck=(-2, -3, 0), head=(-5, -5, 0)),
+              hips=(0, -0.02, -0.012), R=(-0.49, -0.64, -0.24), aim=(-0.30, -0.78, 0.55),
+              L=_rel(GUARD_L, (-0.02, -0.12, 0.02)))
     out["attack1"] = anim.Clip("attack1", 20, False, anim.drag(anim.keyed(anim.strike_keys(MOTION, w1, h1, f1, G)),
-                                                               20, {"head": 1.5, "neck": 1.0}), impact=0.4)
+                                                               20, {"head": 1.0, "neck": 0.5}), impact=0.4)
     # ATTACK2: an underhand push of the cup: the staff swung low and back, then pushed forward and up at f8
     k2 = [(0.0, G, "linear"),
-          (0.22, pose(torso=dict(hips=(0, -8, 0), chest=(-2, -12, 0), head=(0, 8, 0)), R=(-0.62, 0.05, -0.70),
+          (0.22, pose(torso=dict(hips=(0, -3, 0), chest=(-2, -5, 0), head=(0, 6, 0)), R=(-0.60, 0.05, -0.70),
                       aim=(-0.32, 0.42, 0.85)), "inout"),
-          (0.32, pose(torso=dict(hips=(0, -9, 0), chest=(-2, -14, 0), head=(0, 9, 0)), R=(-0.62, 0.08, -0.72),
+          (0.32, pose(torso=dict(hips=(0, -4, 0), chest=(-2, -6, 0), head=(0, 7, 0)), R=(-0.60, 0.08, -0.72),
                       aim=(-0.34, 0.46, 0.82)), "out"),
-          (0.40, pose(torso=dict(hips=(3, 10, 0), spine=(3, 8, 0), chest=(5, 12, 0), head=(-3, -8, 0)), hips=(0, -0.03, -0.014),
-                      R=(-0.34, -0.88, -0.42), aim=(0.05, -0.58, 0.81), L=_rel(GUARD_L, (-0.04, -0.20, 0.06))), "accel"),
-          (0.52, pose(torso=dict(hips=(3, 12, 0), spine=(3, 9, 0), chest=(5, 14, 0), head=(-4, -9, 0)), hips=(0, -0.03, -0.016),
-                      R=(-0.32, -0.90, -0.36), aim=(0.08, -0.64, 0.76), L=_rel(GUARD_L, (-0.04, -0.22, 0.06))), "out"),
-          (0.76, pose(torso=dict(chest=(2, 4, 0)), R=_rel(GUARD_R, (0.0, -0.20, 0.06)), aim=(-0.04, -0.22, 0.97)), "inout"),
+          (0.40, pose(torso=dict(hips=(3, 3, 0), spine=(3, 3, 0), chest=(5, 4, 0), neck=(-2, -3, 0), head=(-3, -6, 0)),
+                      hips=(0, -0.03, -0.014), R=(-0.42, -0.72, -0.42), aim=(-0.18, -0.86, 0.47),
+                      L=_rel(GUARD_L, (-0.04, -0.20, 0.06))), "accel"),
+          (0.52, pose(torso=dict(hips=(3, 4, 0), spine=(3, 3, 0), chest=(5, 5, 0), neck=(-2, -3, 0), head=(-4, -7, 0)),
+                      hips=(0, -0.03, -0.016), R=(-0.40, -0.74, -0.36), aim=(-0.16, -0.84, 0.52),
+                      L=_rel(GUARD_L, (-0.04, -0.22, 0.06))), "out"),
+          (0.76, pose(torso=dict(chest=(2, 2, 0)), R=_rel(GUARD_R, (0.0, -0.20, 0.06)), aim=(-0.06, -0.22, 0.97)), "inout"),
           (1.0, G, "settle")]
-    out["attack2"] = clip("attack2", 20, k2, impact=0.4, lags={"head": 1.5, "neck": 1.0})
+    out["attack2"] = clip("attack2", 20, k2, impact=0.4, lags={"head": 1.0, "neck": 0.5})
 
     # CAST_A1 Mote Toss (castTime 0.25 s): the staff swung back low, the cup tipping (a held tilt f3-f8), then the
-    # underhand lob: the staff swings forward and up, the mote leaves the cup at f10; the left hand follows palm-up
-    back = pose(torso=dict(hips=(0, -6, 0), spine=(-2, -4, 0), chest=(-3, -8, 0), head=(-2, 6, 0)), hips=(0, 0.02, -0.02),
+    # underhand lob: the staff swings forward and up so the cup flies out on its hook, the mote leaves the cup at f10;
+    # the left hand follows through palm-up
+    back = pose(torso=dict(hips=(0, -3, 0), spine=(-2, -2, 0), chest=(-3, -4, 0), head=(-2, 6, 0)), hips=(0, 0.02, -0.02),
                 R=(-0.60, 0.04, -0.72), aim=(-0.30, 0.50, 0.81), L=_rel(GUARD_L, (0.02, 0.06, 0.0)))
-    tilt = pose(torso=dict(hips=(0, -4, 0), spine=(-2, -3, 0), chest=(-3, -6, 0), head=(-3, 4, 0)), hips=(0, 0.01, -0.03),
+    tilt = pose(torso=dict(hips=(0, -2, 0), spine=(-2, -2, 0), chest=(-3, -3, 0), head=(-3, 4, 0)), hips=(0, 0.01, -0.03),
                 R=(-0.58, -0.18, -0.70), aim=(-0.26, 0.20, 0.94), L=(0.40, -0.30, -0.55), Lp=(0.8, 0.4, -0.4))
-    lob = pose(torso=dict(hips=(3, 8, 0), spine=(4, 6, 0), chest=(6, 10, 0), neck=(-3, 0, 0), head=(-6, -6, 0)),
-               hips=(0, -0.04, -0.02), R=(-0.36, -0.86, -0.18), aim=(-0.06, -0.86, 0.51),
-               L=(0.18, -0.85, -0.25), Lp=(0.8, 0.3, -0.5), fk=dict(hand_L=(0, 70, 0)), feet=_feet(l=(0.0, -0.08, 0.0), yl=4.0))
-    fol = pose(torso=dict(hips=(3, 9, 0), spine=(4, 7, 0), chest=(6, 12, 0), neck=(-4, 0, 0), head=(-8, -7, 0)),
-               hips=(0, -0.04, -0.025), R=(-0.34, -0.88, -0.05), aim=(-0.05, -0.80, 0.60),
-               L=(0.14, -0.88, -0.10), Lp=(0.8, 0.3, -0.5), fk=dict(hand_L=(0, 80, 0)), feet=_feet(l=(0.0, -0.08, 0.0), yl=4.0))
+    lob = pose(torso=dict(hips=(3, 2, 0), spine=(4, 2, 0), chest=(6, 4, 0), neck=(-3, -3, 0), head=(-6, -5, 0)),
+               hips=(0, -0.04, -0.02), R=(-0.42, -0.80, -0.10), aim=(-0.22, -0.78, 0.59),
+               L=(0.20, -0.80, -0.25), Lp=(0.8, 0.3, -0.5), fk=dict(hand_L=(0, 70, 0)), feet=_feet(l=(0.0, -0.08, 0.0), yl=4.0))
+    fol = pose(torso=dict(hips=(3, 3, 0), spine=(4, 3, 0), chest=(6, 5, 0), neck=(-4, -3, 0), head=(-8, -6, 0)),
+               hips=(0, -0.04, -0.025), R=(-0.40, -0.82, 0.02), aim=(-0.20, -0.72, 0.66),
+               L=(0.16, -0.84, -0.10), Lp=(0.8, 0.3, -0.5), fk=dict(hand_L=(0, 80, 0)), feet=_feet(l=(0.0, -0.08, 0.0), yl=4.0))
     k = [(0.0, G, "linear"), (0.12, back, "inout"), (0.30, tilt, "inout"),
          (0.36, anim.lerp_pose_w(tilt, lob, 0.30, {"hips": 0.6, "spine": 0.5, "hips_loc": 0.5}), "in"),
          (0.40, lob, "accel"), (0.52, anim.lerp_pose(lob, fol, 0.5), "out"), (0.64, fol, "out"),
@@ -2255,13 +2693,13 @@ def clip_overrides(ctx) -> dict:
     # CAST_A2 Draw Near (castTime 0.15 s): the crook thrust out toward the ally with the arm straight (f0-f3, the
     # staff sliding through the fist), then a sharp tug back to the hip at f6 as the ally is pulled in; the left hand
     # opens in welcome; guard by f15. (Self-cast reuses the clip.)
-    reach = pose(torso=dict(hips=(5, 8, 0), spine=(6, 6, 0), chest=(8, 8, 0), neck=(-4, 0, 0), head=(-7, -6, 0)),
+    reach = pose(torso=dict(hips=(5, 3, 0), spine=(6, 3, 0), chest=(8, 4, 0), neck=(-4, -3, 0), head=(-7, -5, 0)),
                  hips=(0, -0.06, -0.03), R=(-0.20, -0.97, -0.05), aim=(-0.02, -0.92, 0.38), slide=0.22,
                  L=(0.45, -0.45, -0.50), Lp=(0.8, 0.4, -0.4), feet=_feet(l=(0.0, -0.10, 0.0), yl=4.0))
-    tug = pose(torso=dict(hips=(-5, -6, 0), spine=(-6, -4, 0), chest=(-8, -6, 0), neck=(2, 0, 0), head=(4, 4, 0)),
+    tug = pose(torso=dict(hips=(-5, -3, 0), spine=(-6, -2, 0), chest=(-8, -3, 0), neck=(2, 2, 0), head=(4, 4, 0)),
                hips=(0, 0.04, -0.03), R=(-0.40, -0.32, -0.45), aim=(-0.06, -0.52, 0.85), slide=0.02,
                L=(0.55, -0.70, -0.10), Lp=(0.8, 0.3, -0.5), fk=dict(hand_L=(0, 75, -10)), feet=_feet(l=(0.0, -0.10, 0.0), yl=4.0))
-    hold = pose(torso=dict(hips=(-3, -5, 0), spine=(-4, -3, 0), chest=(-5, -5, 0), head=(2, 3, 0)), hips=(0, 0.03, -0.025),
+    hold = pose(torso=dict(hips=(-3, -3, 0), spine=(-4, -2, 0), chest=(-5, -3, 0), head=(2, 3, 0)), hips=(0, 0.03, -0.025),
                 R=(-0.40, -0.30, -0.47), aim=(-0.06, -0.48, 0.87), L=(0.55, -0.68, -0.12), Lp=(0.8, 0.3, -0.5),
                 fk=dict(hand_L=(0, 75, -10)), feet=_feet(l=(0.0, -0.10, 0.0), yl=4.0))
     k = [(0.0, G, "linear"), (0.20, reach, "out"), (0.28, reach, "linear"), (0.40, tug, "accel"), (0.56, hold, "out"),
@@ -2269,19 +2707,20 @@ def clip_overrides(ctx) -> dict:
     out["cast_a2"] = clip("cast_a2", 15, k, impact=0.4, lags={"head": 0.5})
 
     # CAST_A3 Wrap Cast (castTime 0.25 s): the staff stays planted; the left hand takes the cord from the belt (f2),
-    # swings it up round over the head once (f4-f8), throws overhand at f10 (a long throwing arm), follow-through down
-    cord_w = tuple(float(v) for v in (CORD_C + np.array([0.04, -0.06, 0.02])))
-    take = pose(torso=dict(hips=(0, 6, 0), spine=(2, 4, 0), chest=(4, 8, 0), head=(4, 4, 0)), hips=(0, 0.0, -0.02),
+    # swings its loop up and round over the head once (f4-f9: x_cord_swing, _swing_schedule), throws overhand at f10
+    # (a long throwing arm, the loop flung out ahead), follow-through down
+    cord_w = tuple(float(v) for v in (CORD_C + np.array([0.02, -0.07, 0.04])))
+    take = pose(torso=dict(hips=(0, 3, 0), spine=(2, 2, 0), chest=(4, 3, 0), head=(6, 4, 0)), hips=(0, 0.0, -0.02),
                 Lpos=cord_w, Lp=(0.9, 0.3, -0.3))
-    up_ = pose(torso=dict(hips=(0, -4, 0), spine=(-2, -4, 0), chest=(-4, -10, -3), head=(-4, -2, 0)), hips=(0, 0.01, -0.01),
-               L=(0.30, 0.05, 0.70), Lp=(0.9, 0.2, 0.3))
-    over = pose(torso=dict(hips=(-2, -10, 0), spine=(-4, -8, 0), chest=(-8, -16, -4), head=(-6, 4, 0)), hips=(0, 0.03, -0.01),
-                L=(0.05, 0.30, 0.92), Lp=(0.9, 0.3, 0.3))
-    throw = pose(torso=dict(hips=(4, 12, 0), spine=(6, 10, 0), chest=(10, 18, 2), neck=(-4, -4, 0), head=(-8, -10, 0)),
-                 hips=(0, -0.05, -0.03), L=(-0.02, -0.96, 0.22), Lp=(0.9, 0.2, 0.3), fk=dict(hand_L=(-10, 0, 0)),
+    up_ = pose(torso=dict(hips=(0, -2, 0), spine=(-2, -2, 0), chest=(-4, -3, -3), head=(-6, 2, 0)), hips=(0, 0.01, -0.01),
+               L=(0.14, -0.04, 0.98), Lp=(0.9, 0.2, 0.3), fk=dict(hand_L=(0, 0, 0)))
+    over = pose(torso=dict(hips=(-2, -3, 0), spine=(-3, -3, 0), chest=(-6, -4, -4), head=(-8, 3, 0)), hips=(0, 0.02, -0.01),
+                L=(0.10, 0.10, 0.98), Lp=(0.9, 0.3, 0.3))
+    throw = pose(torso=dict(hips=(4, 4, 0), spine=(6, 3, 0), chest=(10, 5, 2), neck=(-4, -4, 0), head=(-8, -6, 0)),
+                 hips=(0, -0.05, -0.03), L=(-0.04, -0.94, 0.36), Lp=(0.9, 0.2, 0.3), fk=dict(hand_L=(-10, 0, 0)),
                  feet=_feet(l=(0.0, -0.12, 0.0), yl=6.0))
-    fol = pose(torso=dict(hips=(5, 14, 0), spine=(7, 11, 0), chest=(11, 20, 2), neck=(-4, -6, 0), head=(-8, -12, 0)),
-               hips=(0, -0.05, -0.035), L=(-0.12, -0.78, -0.38), Lp=(0.9, 0.3, -0.2), feet=_feet(l=(0.0, -0.12, 0.0), yl=6.0))
+    fol = pose(torso=dict(hips=(5, 5, 0), spine=(7, 4, 0), chest=(11, 6, 2), neck=(-4, -4, 0), head=(-8, -7, 0)),
+               hips=(0, -0.05, -0.035), L=(-0.08, -0.86, 0.02), Lp=(0.9, 0.3, -0.2), feet=_feet(l=(0.0, -0.12, 0.0), yl=6.0))
     k = [(0.0, G, "linear"), (0.10, take, "out"), (0.20, up_, "inout"), (0.30, over, "inout"),
          (0.35, anim.lerp_pose_w(over, throw, 0.30, {"hips": 0.6, "spine": 0.5, "chest": 0.4}), "in"),
          (0.40, throw, "accel"), (0.52, anim.lerp_pose(throw, fol, 0.5), "out"), (0.64, fol, "out"),
@@ -2334,21 +2773,17 @@ def clip_overrides(ctx) -> dict:
          (0.66, slump, "out"), (0.78, anim.lerp_pose(slump, down, 0.25), "inout"), (0.90, slump, "inout"), (1.0, slump, "linear")]
     out["death"] = clip("death", 50, k)
 
-    # RECALL: the staff drawn in so the cup hangs before his chest, both hands round it (the left cupped under it,
-    # the right steadying the staff), the head bowed to breathe on it (loops)
-    rc0 = pose(torso=dict(spine=(4, 0, 0), chest=(4, 8, 0), neck=(6, 0, 0), head=(10, 8, 0)), R=(-0.12, -0.62, -0.35),
-               aim=(0.42, -0.40, 0.81))
-    cp = cup_at(rc0)
-    cupL = cp + V((0.0, 0.0, -0.21))
-    rc = pose(torso=dict(spine=(4, 0, 0), chest=(4, 8, 0), neck=(6, 0, 0), head=(10, 8, 0)), R=(-0.12, -0.62, -0.35),
-              aim=(0.42, -0.40, 0.81), Lpos=tuple(cupL), Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 60, 20)))
-    scene.log(f"sukri recall: cup core at {tuple(round(v, 3) for v in cp)}")
+    # RECALL (fix pass 1, brief: holds the cup in both hands and breathes on it): the cup off its hook, held by its
+    # knot in the left fist before his chest (_cup_schedule), the right fist with the staff leaned out beside it, the
+    # hood bowed over the cup (loops)
+    rc = pose(torso=dict(spine=(5, 0, 0), chest=(5, 2, 0), neck=(8, 0, 0), head=(14, 3, 0)), R=(0.40, -0.81, -0.09),
+              aim=(-0.35, 0.0, 0.94), slide=-0.12, Lpos=(0.06, -0.34, 0.98), Lp=(0.9, 0.2, -0.3), aimL=(0.0, 0.0, 1.0))
 
     def recall_s(t):
         p = dict(rc)
         b = math.sin(2 * math.pi * 2 * t)
-        p["chest"] = (4 + 0.8 * b, 8, 0)
-        p["head"] = (10 + 1.5 * math.sin(2 * math.pi * t), 8, 0)
+        p["chest"] = (5 + 0.8 * b, 2, 0)
+        p["head"] = (14 + 1.5 * math.sin(2 * math.pi * t), 3, 0)
         return p
     out["recall"] = anim.Clip("recall", 60, True, recall_s)
 
@@ -2412,18 +2847,21 @@ def clip_overrides(ctx) -> dict:
          (0.90, step, "linear"), (1.0, G, "inout")]
     out["idle_lobby"] = anim.Clip("idle_lobby", 120, True, breathe(anim.keyed(k), 0.8, 4))
 
-    # VICTORY (50 f, ends in a hold): he plants the staff, leans it in toward his shoulder so the cup comes round
-    # before him at chest height, and holds his open left hand under it: offering a drink of noon; the hood turned a
-    # quarter toward the cup
-    lean = pose(torso=dict(chest=(-2, 0, 0)), R=_rel(GUARD_R, (0.02, 0.0, -0.04)), aim=UP, hips=(0, 0, -0.01))
-    VT = dict(hips=(2, -6, 0), spine=(3, -8, 0), chest=(4, -12, 0), neck=(2, 6, 0), head=(6, 14, 4))
-    VR, VA, VS = (0.22, -0.78, -0.18), (0.55, -0.50, 0.67), -0.30
-    off0 = pose(torso=VT, R=VR, aim=VA, slide=VS)
-    cpv = cup_at(off0)
-    offer = pose(torso=VT, R=VR, aim=VA, slide=VS, Lpos=tuple(cpv + V((0.03, 0.02, -0.17))),
-                 Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-15, 70, 15)))
-    scene.log(f"sukri victory: cup core at {tuple(round(v, 3) for v in cpv)}")
-    k = [(0.0, G, "linear"), (0.16, lean, "inout"), (0.50, offer, "inout"), (0.70, offer, "linear"), (1.0, offer, "linear")]
+    # VICTORY (50 f, ends in a hold; fix pass 1, brief §8): he brings the crook in before him, lifts the cup off its
+    # hook by the cords' knot (f15-f19: _cup_schedule), sets the staff upright against his right shoulder and holds the
+    # cup out in his left fist at chest height, offering a drink of noon, the hood turned a quarter toward it
+    lean = pose(torso=dict(chest=(-2, 0, 0)), R=_rel(GUARD_R, (0.05, -0.05, 0.0)), aim=UP, hips=(0, 0, -0.01))
+    VT1 = dict(hips=(2, -2, 0), spine=(3, -3, 0), chest=(4, -4, 0), neck=(2, 4, 0), head=(10, 8, 0))
+    VR1, VA1, VS1 = (0.45, -0.66, -0.14), (0.60, -0.22, 0.77), -0.25
+    kn = knot_at(pose(torso=VT1, R=VR1, aim=VA1, slide=VS1))
+    bring = pose(torso=VT1, R=VR1, aim=VA1, slide=VS1, Lpos=tuple(kn + V((0.02, 0.05, -0.07))), Lp=(0.9, 0.2, -0.3),
+                 aimL=(0.0, 0.0, 1.0))
+    VT2 = dict(hips=(2, -3, 0), spine=(3, -3, 0), chest=(4, -4, 0), neck=(2, 6, 0), head=(6, 12, 4))
+    offer = pose(torso=VT2, R=(-0.08, -0.30, -0.05), aim=(-0.05, 0.10, 0.99), slide=-0.10, Lpos=(0.20, -0.36, 1.02),
+                 Lp=(0.9, 0.2, -0.3), aimL=(0.0, 0.0, 1.0))
+    scene.log(f"sukri victory: the knot at {tuple(round(v, 3) for v in kn)} when the left hand takes it")
+    k = [(0.0, G, "linear"), (0.16, lean, "inout"), (0.32, bring, "inout"), (0.40, bring, "linear"),
+         (0.62, offer, "inout"), (0.72, offer, "linear"), (1.0, offer, "linear")]
     vic = anim.keyed(k)
 
     def vic_s(t):

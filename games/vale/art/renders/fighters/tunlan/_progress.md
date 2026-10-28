@@ -95,3 +95,38 @@
 - 09:24 skins s2: noon_fair 917 KiB / lamplit 890 KiB, accent 2.4 %, load OK; lineup: noon_fair bands OK
   (70.4 / 60.0 / 34.8), lamplit top 68.8 (under 70). s3: Lamplit panels golden + brighter (#ECD5A6, cores #F7DEAD,
   crown #E0CCA2, shade only in the last 16 % to the ribs, ribs 1 cm), robe a deeper walnut grey (value 0.80).
+- 09:29 skins s3: noon_fair 21,903 tris / 917 KiB / accent 2.39 %, lamplit 21,223 / 891 KiB / 2.4 %, load OK.
+  lineup_qa FINAL (art/renders/fighters/tunlan/lineup/tunlan_final.*): valueGradientOk + accentOk TRUE for all three
+  (base 70.9 / 58.9 / 34.6, noon_fair 70.4 / 60.0 / 34.8, lamplit 70.0 / 56.6 / 32.7; accent per facing 2.49 / 1.97 /
+  1.19 / 2.13 %, top-half share 1.0); IoU64 max vs dunsom 0.607, vashil 0.591, nurrow 0.509.
+## FIX PASS 1 DONE (09:29) — per item
+ 1 robe ghosts: _plate_classes + _cream_zone: felt parts take only the plate's felt (cream only in the under-robe /
+   collar zone; eroded masks); the wood hands, cuffs, extruded backdrop and the back sheet's grey hands now count as
+   hidden and refill from the nearest felt; skirt side fill widened. Albedo side views clean (no hand patches, no
+   cream bands, no pale sleeve tops); skins inherit it.
+ 2 lantern: back at her right side as painted (x -0.40, y +0.03, a little further out so it clears the mask from the
+   right 3/4 views); open ironstone cage round a smoked amber lampresin bead (procedural, glossy, not emissive) with a
+   3 cm accent core showing at four points; no accent panes; crown ring removed.
+ 3 hands: tapered carved palm (FTaperBox) + four separate tapered fingers (2 mm apart, round joints, rounded tips,
+   middle longest, little shortest) + a real two-segment thumb hanging alongside; puppeteer guard (hands before the
+   chest, palm-down, fingers half-curled) for idle and every clip's rest; attack1's ring pair folded into a fist.
+ 4 gameplay read: hat 1.10 m across (rim r 0.55) + impacts past the brim (attack1/2 wrists 0.74 m ahead, hound snap
+   0.86 m, Hand Shadow out at r ~0.7 with the left hand at the left brim, Lamp Flare arm stretched up through the
+   front brim + the lamp swinging out from her side). Unit sheet: every cast gesture clears the disc.
+ 5 accent: front-brim LAMP SLOT (arc, ironstone grommet) + lantern core only; three QA 2.36 % (top half 100 %),
+   lineup accentOk TRUE for base and both skins (min 1.19 % at the back facing).
+ 6 head: wood_dark roughness 0.84 (and wood 0.68) via extra_materials (the pale/bluish box was sky reflection); the two
+   wedge 'joints' replaced by one thin crack, painted dark; the mask's back rims painted walnut.
+ 7 death: the hat slides off her left as she sinks, lands on its edge, rolls a little and settles beside her propped on
+   the laid-out lantern (hatw_* pose keys -> x_hat location keys via a write_action wrapper; lamp_world); she folds.
+ 8 skins: Lamplit = golden lit-from-within panels with walnut ribs, crown ring, brim band and a walnut rim, a deeper
+   walnut-grey robe; Noon Fair felt plum (authored hue 338 / sat 23 %, value x0.88). Both pass the value gradient.
+ 9 polish: dash = crouch -> glide -> streaming hands -> rise with finger flutter; taunt = ears flop + two hops + head
+   cocks; portrait/icon boxes widened 0.20 m toward the lantern (lantern under the brim beside the mask), mask lift
+   1.07. HP bar: game code anchors it at art height + 0.35 m; the smaller brim reduces the overlap (not removed).
+ Gates: base 21,223 tris / 1145 KiB / load OK / facing +Z / 16 clips / run planted 0.6 %; skins 917 / 891 KiB.
+ art.json == content art block (unchanged: height 2.05, runRefSpeed 3.35); build_content --check OK (nothing missing
+ for tunlan or skins); probe_kits_A 525/0, B 733/0; in game _harness/_shots/art2_tunlan_* and fp1_tunlan_t75_*.
+ Silhouette fit to the concept now IoU 0.826 front / 0.822 back (was 0.85: the smaller hat). Not committed.
+
+## FIX PASS 2 (2026-10-28 09:41) — reviewer items 1-8; agent started, read _progress.md

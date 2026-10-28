@@ -127,8 +127,9 @@ CONE_T = 0.013            # lacquer shell thickness
 # selection ring, a tambourine / bottle cap / dial from above' (accent 3.53 %). Polish: back to the brief's SIX inlays
 # at the fix-pass-3 stations (+-50 / 100 / 150 deg: the front 100 deg bare, a facing cue; six separate marks with long
 # dark iron between, never a ring), each a SLIM glass slip set FLUSH in a thin iron bezel (no domed bead, no setting
-# swelling the rim), 14.8 x 6.4 cm wrapped over the rim's corner (the back pair 18.8 cm; f3: 12.6 x 6.2 domed beads,
-# 2.69 %; the 6.4 cm width wraps over the corner, most of it unseen): the pipeline's accent gate (>= 1.5 % at the game
+# swelling the rim), 14.8 cm long (the back pair 20.7 cm, reaching further down the outer face), lying over the rim's rounded upper-outer corner: ~2.5 cm
+# on the top face (seen from above) and ~1.5 cm down the outer face (the near side, seen by the 52 deg camera); f3: 12.6
+# x 6.2 domed beads on the bevel, 2.69 %. The pipeline's accent gate (>= 1.5 % at the game
 # camera) and lineup_qa's >= 1 % from behind (the back pair carries it) are the floor; the brief's 4 x 1.5 cm x 6 is 0.4 %
 RIM_ANGLES = (50.0, 100.0, 150.0, -150.0, -100.0, -50.0)
 RIM_N = len(RIM_ANGLES)
@@ -185,21 +186,23 @@ def rim_angle_dir(phi_deg):
 INLAY_T, INLAY_B = 0.074, 0.032          # the slips' footprint half-length (along the rim) and half-width
 
 
-INLAY_G = {50.0: 1.0, 100.0: 1.05, 150.0: 1.27}    # the slips' length by station: the back pair longer (seen from
-#                                                     behind they carry the team tint alone)
+INLAY_G = {50.0: (1.0, 1.0), 100.0: (1.05, 1.0), 150.0: (1.40, 1.35)}   # (length, width) by station: the back pair
+#                                     longer and further down the outer face (seen from behind they carry the tint)
 
 
 def inlay_frames():
-    """[(centre, axes rows (tangent, across, bevel normal), half-length)] of the six rim inlays (world, rest)"""
+    """[(centre, axes rows (tangent, across, bevel normal), half-length, half-width)] of the six rim inlays"""
     out = []
     for phi in RIM_ANGLES:
         rd = rim_angle_dir(phi)
         tg = np.cross(V3([0, 0, 1.0]), rd)
-        nrm = unit(rd * 0.55 + V3([0, 0, 1.0]) * 0.83)                 # the rim's upper-outer bevel
+        nrm = unit(rd * 0.55 + V3([0, 0, 1.0]) * 0.83)                 # the rim's upper-outer bevel: the slip lies
+        #                                     over the top face (seen from above) and the outer face (seen on the near
+        #                                     side by the 52 deg camera); top face alone: accent 1.06 %
         n_w, t_w = HAT_R @ nrm, HAT_R @ tg
         b_w = np.cross(n_w, t_w)
         out.append((hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004])), np.stack([unit(t_w), unit(b_w), unit(n_w)]),
-                    INLAY_T * INLAY_G[abs(phi)]))
+                    INLAY_T * INLAY_G[abs(phi)][0], INLAY_B * INLAY_G[abs(phi)][1]))
     return out
 
 
@@ -529,13 +532,14 @@ def sculpts() -> list:
     rim_surf = Lathe(HAT_C, rim_prof, BRIM_R + 0.03, -0.04, 0.03, axes=HAT_AX).displaced(chips(0.003, 30.0), 0.003)
     rim.add(rim_surf, k=0.0)
     glass = Sculpt("hat_inlays")
-    # six slim glass slips set FLUSH in the rim's upper-outer bevel (the colour reads from any angle, from above most):
+    # six slim glass slips set FLUSH over the rim's upper-outer corner (the colour reads from any angle):
     # each the rim's own surface skin inside the slip's footprint, 1.2 mm proud (it follows the rim's curve: an inlay,
     # never a bead); the iron bezel round it is painted (paint_rim: a dark seat line and a lit lip)
     # (p1: a 1.2 mm skin over the uncut rim broke up under the decimated rim: the rim's seat is now carved 4 mm deep
     #  inside the footprint and the glass fills it to 0.8 mm proud)
-    for c_w, ax, it in inlay_frames():
-        foot = Ellipsoid(c_w, (it, INLAY_B, 0.04), axes=ax)
+    for c_w, ax, it, ib in inlay_frames():
+        foot = Ellipsoid(c_w, (it, ib, 0.016 * ib / INLAY_B), axes=ax)          # (shallow: never round the rim's whole
+        #                                                              section; that stalled the decimation)
         rim.sub(RimSeat(rim_surf, foot, -0.0040), k=0.0)
         glass.add(RimSlip(rim_surf, foot, -0.0055, 0.0008), k=0.0)
     part("hat_rim", rim, "ironstone", "bone:x_hat", 1000, 0.5)
@@ -961,6 +965,13 @@ def model(ctx) -> list:
                 low.data.materials.append(ctx.mats[role])
                 mesh.cleanup(low, merge=1e-5, recalc=False, loose=False)
                 P.append(fighter.Part(nm_, high=ob, low=low, bind=bind, uv_weight=uvw))
+            continue
+        if name in ("hat_rim", "hat_inlays"):
+            # (polish) the rim and its inlays decimated WITHOUT the pipeline's X symmetry: the hat is rolled 11.5 deg,
+            # nothing on it mirrors, and the symmetric collapse stalled at 3.6k tris each
+            low = mesh.duplicate(ob, f"{name}_low", ctx.col)
+            mesh.decimate_to(low, tris, symmetric=False)
+            P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
     return P
@@ -1782,11 +1793,11 @@ def _inlay_bezel(p):
         _INLAY_FR.extend(inlay_frames())
     seat = np.zeros(len(p))
     lip = np.zeros(len(p))
-    for c, ax, it in _INLAY_FR:
+    for c, ax, it, ib in _INLAY_FR:
         L = (np.asarray(p, dtype=np.float64) - c) @ ax.T
         near = np.abs(L[:, 2]) < 0.03
-        e = np.sqrt((L[:, 0] / it) ** 2 + (L[:, 1] / INLAY_B) ** 2)
-        dm = (e - 1.0) * INLAY_B
+        e = np.sqrt((L[:, 0] / it) ** 2 + (L[:, 1] / ib) ** 2)
+        dm = (e - 1.0) * ib
         seat = np.maximum(seat, near * _ss(0.0042, 0.0016, dm))
         lip = np.maximum(lip, near * _ss(0.0030, 0.0050, dm) * (1 - _ss(0.0062, 0.0085, dm)))
     return seat, lip

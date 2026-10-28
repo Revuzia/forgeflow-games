@@ -51,14 +51,14 @@
   },
   "uv_coverage": 0.612,
   "bake": {
-    "base": 5.14,
-    "rough_metal": 6.06,
-    "normal": 3.25,
-    "ao": 3.72,
+    "base": 4.44,
+    "rough_metal": 4.27,
+    "normal": 3.19,
+    "ao": 3.06,
     "normal_fixed_px": 55636,
-    "projection": 53.21,
-    "pack_save": 53.39,
-    "total": 71.76
+    "projection": 67.17,
+    "pack_save": 67.5,
+    "total": 82.66
   },
   "tris": 21903,
   "mesh_top_m": 2.05,
@@ -88,8 +88,8 @@
       "portrait": "art/out/fighters/tunlan/tunlan_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 6.08,
-      "portrait": 4.28
+      "splash": 14.21,
+      "portrait": 4.94
     }
   },
   "three_qa": {
@@ -121,24 +121,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/tunlan/three_tunlan_noon_fair.png",
-    "seconds": 10.2,
+    "seconds": 12.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.16,
-      "model": 3.54,
-      "lows_bind": 2.68,
-      "uv": 7.94,
-      "bake": 71.89,
-      "export": 0.08,
-      "optimize": 0.47,
-      "load_test": 0.1,
-      "render": 10.39,
-      "three_qa": 10.46
+      "materials": 0.14,
+      "model": 3.58,
+      "lows_bind": 2.58,
+      "uv": 6.97,
+      "bake": 82.9,
+      "export": 0.18,
+      "optimize": 1.12,
+      "load_test": 0.2,
+      "render": 19.23,
+      "three_qa": 12.72
     },
-    "total_s": 107.77
+    "total_s": 129.68
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

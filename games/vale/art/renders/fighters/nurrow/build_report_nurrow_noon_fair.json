@@ -6,7 +6,7 @@
     "tris_hat_cone": 768,
     "tris_hat_under": 768,
     "tris_hat_rim": 1000,
-    "tris_hat_inlays": 1000,
+    "tris_hat_inlays": 972,
     "tris_hat_knob": 360,
     "tris_head": 800,
     "tris_hat_band": 322,
@@ -31,39 +31,38 @@
     "tris_cape": 1650,
     "tris_grip": 260,
     "tris_blade": 526,
-    "validate_nurrow": "19418->19411",
-    "validate_nurrow_accent": "1000->994"
+    "validate_nurrow": "19418->19411"
   },
-  "uv_coverage": 0.603,
+  "uv_coverage": 0.623,
   "bake": {
-    "base": 2.9,
-    "rough_metal": 2.4,
-    "normal": 1.82,
-    "ao": 2.95,
-    "normal_fixed_px": 45195,
-    "projection": 58.36,
-    "pack_save": 58.53,
-    "total": 68.73
+    "base": 3.62,
+    "rough_metal": 3.61,
+    "normal": 3.16,
+    "ao": 2.74,
+    "normal_fixed_px": 34288,
+    "projection": 49.24,
+    "pack_save": 49.38,
+    "total": 62.66
   },
-  "tris": 21173,
+  "tris": 21151,
   "mesh_top_m": 1.967,
-  "glb_bytes_raw": 2230340,
+  "glb_bytes_raw": 2227412,
   "optimize": {
     "ok": true,
-    "before": 2230340,
-    "after": 1032172
+    "before": 2227412,
+    "after": 1027372
   },
-  "glb_bytes": 1032172,
+  "glb_bytes": 1027372,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_noon_fair.glb (1008 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: nurrow_noon_fair_base 2048x2048 303K, nurrow_noon_fair_normal 512x512 15K, nurrow_noon_fair_orm 256x256 14K",
-      "  skinned meshes: nurrow_accent(381v), nurrow_noon_fair(19393v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_noon_fair.glb (1003 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: nurrow_noon_fair_base 2048x2048 303K, nurrow_noon_fair_normal 512x512 16K, nurrow_noon_fair_orm 256x256 13K",
+      "  skinned meshes: nurrow_accent(391v), nurrow_noon_fair(19181v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 21173; bind-pose bounds (three units, Y up): 1.17 x 1.97 x 0.81; facing (0.00, 1.00); head bone y 1.50; runRefSpeed 3.55",
+      "  tris: 21151; bind-pose bounds (three units, Y up): 1.17 x 1.97 x 0.81; facing (0.00, 1.00); head bone y 1.50; runRefSpeed 3.55",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -73,8 +72,8 @@
       "portrait": "art/out/fighters/nurrow/nurrow_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 9.96,
-      "portrait": 4.73
+      "splash": 8.92,
+      "portrait": 4.64
     }
   },
   "three_qa": {
@@ -84,12 +83,12 @@
       [
         -0.625,
         0,
-        -0.414
+        -0.413
       ],
       [
         0.545,
         1.967,
-        0.396
+        0.397
       ]
     ],
     "facing": [
@@ -97,7 +96,7 @@
       1
     ],
     "headY": 1.5,
-    "accentPct": 1.88,
+    "accentPct": 2.22,
     "accentTopHalfPct": 100,
     "heightPx1080": 105,
     "size": [
@@ -106,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/nurrow/three_nurrow_noon_fair.png",
-    "seconds": 10,
+    "seconds": 8.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.06,
-      "materials": 0.14,
-      "model": 12.04,
+      "rig": 0.08,
+      "materials": 0.21,
+      "model": 10.32,
       "lows_bind": 2.42,
-      "uv": 3.6,
-      "bake": 68.74,
-      "export": 0.1,
-      "optimize": 0.67,
-      "load_test": 0.14,
-      "render": 14.72,
-      "three_qa": 10.23
+      "uv": 3.71,
+      "bake": 62.66,
+      "export": 0.08,
+      "optimize": 0.57,
+      "load_test": 0.1,
+      "render": 13.58,
+      "three_qa": 8.54
     },
-    "total_s": 112.9
+    "total_s": 102.32
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78
