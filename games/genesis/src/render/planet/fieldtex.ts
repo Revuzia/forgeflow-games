@@ -28,7 +28,7 @@
 import { DataTexture, FloatType, NearestFilter, RGBAFormat, ClampToEdgeWrapping } from 'three';
 import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
-import { duneAmpOf, roughOf, surfaceGradients } from '../../sim/grid/surface.ts';
+import { curveMargin, duneAmpOf, MAX_GRAD, roughOf, surfaceGradients } from '../../sim/grid/surface.ts';
 import { CityLights } from './citylights.ts';
 import { BASE_PACK } from '../../data/index.ts';
 
@@ -235,7 +235,13 @@ export class FieldTextures {
           wd[c] = wc;
           d[c * 4 + 3] = wc;
         }
-        // water level with flat shore extrapolation (see header)
+        // water level with flat shore extrapolation (see header). An inland cell (no wet neighbour) sits under its
+        // ground by more than the curved surface can sag below its cells' chord (twice curveMargin at the steepest
+        // gradient: the sag grows from zero at a cell as fast as the margin does): at the 4 m it had, a triangle from
+        // a river's bank cell up a concave cliff (bank 26 m, inland cells 80-115 m) tilted the level's chord up the
+        // cliff while the curved ground dipped 20-30 m under the cells' own heights — a glass pane of water standing
+        // on the cliff with trees inside it (lookdev valley). Nothing else reads an inland cell's level.
+        const inland = 4 + 2 * curveMargin(g, this.pv.params.radius, MAX_GRAD);
         for (let c = 0; c < n; c++) {
           const sc = s ? s[c] : 0;
           if (wd[c] > WET) { wl[c] = sc + wd[c]; continue; }
@@ -244,7 +250,7 @@ export class FieldTextures {
             const o = g.nbr[e];
             if (wd[o] > WET) { sum += (s ? s[o] : 0) + wd[o]; k++; }
           }
-          wl[c] = k > 0 ? Math.min(sum / k, sc - 0.05) : sc - 4;
+          wl[c] = k > 0 ? Math.min(sum / k, sc - 0.05) : sc - inland;
         }
         for (let c = 0; c < n; c++) d[c * 4 + 2] = wl[c];
         break;
