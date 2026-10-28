@@ -33,6 +33,8 @@ def main():
         k, v = kv.split("=")
         R.SPLASH[k] = v if k in ("map", "clip", "portrait_clip") else float(v)
     R._install_paint()
+    if not R._PARTMAP.get("names"):          # the part ids' names (vale_part follows the model's part order)
+        R._PARTMAP["names"] = [s_[0] for s_ in R.sculpts()]
     if hasattr(R, "_install_render"):
         R._install_render()
     sc = bpy.context.scene

@@ -1,0 +1,237 @@
+{
+  "id": "sukri",
+  "fighter": "sukri",
+  "skin": false,
+  "parts": {
+    "tris_hood": 3000,
+    "tris_face": 2600,
+    "tris_torso": 2400,
+    "tris_belt": 900,
+    "tris_skirt": 1500,
+    "tris_pants": 1100,
+    "tris_shins": 1100,
+    "tris_boots": 1200,
+    "tris_sleeve_L": 898,
+    "tris_bracer_L": 700,
+    "tris_sleeve_R": 900,
+    "tris_bracer_R": 700,
+    "tris_hand_R": 1100,
+    "tris_hand_L": 1000,
+    "tris_plates_L": 900,
+    "tris_plates_R": 900,
+    "tris_plates_back": 1300,
+    "tris_cord": 600,
+    "tris_staff": 1300,
+    "tris_staff_grip": 300,
+    "tris_ferrule": 160,
+    "tris_cup_hook": 420,
+    "tris_cup_rim": 700,
+    "tris_cup_glass": 900,
+    "tris_cup_core": 620,
+    "validate_sukri": "26578->26568"
+  },
+  "uv_coverage": 0.596,
+  "bake": {
+    "base": 5.81,
+    "rough_metal": 4.02,
+    "normal": 2.04,
+    "ao": 3.87,
+    "normal_fixed_px": 45988,
+    "projection": 33.68,
+    "pack_save": 33.94,
+    "total": 50.17
+  },
+  "tris": 27188,
+  "mesh_top_m": 1.65,
+  "clips": {
+    "idle": {
+      "frames": 80,
+      "duration_s": 2.6667,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 12,
+      "duration_s": 0.4,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.4,
+      "stride_m": 0.68,
+      "cycle_s": 0.4
+    },
+    "attack1": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 120,
+      "duration_s": 4.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "taunt": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 3270864,
+  "optimize": {
+    "ok": true,
+    "before": 3270864,
+    "after": 1352328
+  },
+  "glb_bytes": 1352328,
+  "three_load_test": {
+    "ok": false,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri.glb (1321 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_base 2048x2048 202K, sukri_normal 512x512 49K, sukri_orm 512x512 74K",
+      "  skinned meshes: sukri(24459v), sukri_accent(312v)",
+      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
+      "  clips: attack1:0.667s/18tr, attack2:0.667s/18tr, cast_a1:0.833s/20tr, cast_a2:0.500s/20tr, cast_a3:0.833s/20tr, cast_ult:1.333s/20tr, channel:1.333s/16tr, dash:0.500s/20tr, death:1.667s/21tr, idle:2.667s/19tr, idle_lobby:4.000s/19tr, recall:2.000s/18tr, run:0.400s/24tr, stunned:1.333s/19tr, taunt:1.500s/16tr, victory:1.667s/19tr",
+      "  tracks checked: 307; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 27188; bind-pose bounds (three units, Y up): 1.45 x 1.68 x 0.79; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
+      "  run: 12 f, planted samples 2, max foot-speed error 0%",
+      "[three] FAIL (2)",
+      "  - GLB is 1321 KiB > budget 1172 KiB",
+      "  - mesh reaches -0.026 m below the ground in the bind pose"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/sukri/splash.png",
+      "portrait": "art/out/fighters/sukri/portrait.png",
+      "icon": "art/out/fighters/sukri/icon.png",
+      "turntable": "art/renders/fighters/sukri/turntable.png"
+    },
+    "seconds": {
+      "splash": 11.64,
+      "portrait": 5.69,
+      "icon": 1.47,
+      "turntable": 5.91
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.833,
+        -0.026,
+        -0.458
+      ],
+      [
+        0.613,
+        1.65,
+        0.33
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.164,
+    "accentPct": 2.18,
+    "accentTopHalfPct": 55.3,
+    "heightPx1080": 87,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 16,
+    "out": "art/renders/fighters/sukri/three_sukri.png",
+    "seconds": 15.7,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/sukri/three_clips_sukri.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.23,
+      "model": 30.6,
+      "lows_bind": 12.86,
+      "uv": 9.45,
+      "bake": 50.39,
+      "clips": 0.21,
+      "export": 1.79,
+      "optimize": 0.95,
+      "load_test": 0.21,
+      "render": 24.8,
+      "three_qa": 37.25,
+      "cache": 0.23
+    },
+    "total_s": 169.05
+  },
+  "run_ref_speed": 3.4,
+  "height_m": 1.56
+}

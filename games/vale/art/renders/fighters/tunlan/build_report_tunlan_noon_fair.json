@@ -51,29 +51,29 @@
   },
   "uv_coverage": 0.634,
   "bake": {
-    "base": 8.14,
-    "rough_metal": 5.61,
-    "normal": 3.87,
-    "ao": 4.34,
+    "base": 4.16,
+    "rough_metal": 3.46,
+    "normal": 2.41,
+    "ao": 3.06,
     "normal_fixed_px": 44703,
-    "projection": 99.35,
-    "pack_save": 99.69,
-    "total": 122.4
+    "projection": 91.19,
+    "pack_save": 91.63,
+    "total": 104.93
   },
   "tris": 22338,
   "mesh_top_m": 2.05,
-  "glb_bytes_raw": 2398280,
+  "glb_bytes_raw": 2371196,
   "optimize": {
     "ok": true,
-    "before": 2398280,
-    "after": 954080
+    "before": 2371196,
+    "after": 940664
   },
-  "glb_bytes": 954080,
+  "glb_bytes": 940664,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan_noon_fair.glb (932 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: tunlan_noon_fair_base 2048x2048 180K, tunlan_noon_fair_normal 512x512 38K, tunlan_noon_fair_orm 512x512 58K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan_noon_fair.glb (919 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: tunlan_noon_fair_base 2048x2048 167K, tunlan_noon_fair_normal 512x512 38K, tunlan_noon_fair_orm 512x512 58K",
       "  skinned meshes: tunlan_accent(267v), tunlan_noon_fair(18289v)",
       "  bones: 45 (root hips spine chest neck head x_hat x_lantern x_lamp shoulderL upper_armL forearmL handL propL x_fa1L x_fa2L x_fa3L x_gesture_l x_fb1L x_fb2L x_fb3L x_ft1L x_ft2L shoulderR upper_armR forearmR handR propR x_fa1R x_fa2R x_fa3R x_gesture_r x_fb1R x_fb2R x_fb3R x_ft1R x_ft2R thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -88,8 +88,8 @@
       "portrait": "art/out/fighters/tunlan/tunlan_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 16.5,
-      "portrait": 6.52
+      "splash": 13.82,
+      "portrait": 5.57
     }
   },
   "three_qa": {
@@ -121,24 +121,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/tunlan/three_tunlan_noon_fair.png",
-    "seconds": 14.7,
+    "seconds": 10.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.08,
-      "model": 2.18,
-      "lows_bind": 3.29,
-      "uv": 11.87,
-      "bake": 122.88,
-      "export": 0.33,
-      "optimize": 1.28,
-      "load_test": 0.26,
-      "render": 23.1,
-      "three_qa": 15.16
+      "materials": 0.13,
+      "model": 4.28,
+      "lows_bind": 2.45,
+      "uv": 6.88,
+      "bake": 105.42,
+      "export": 0.28,
+      "optimize": 1.35,
+      "load_test": 0.33,
+      "render": 19.5,
+      "three_qa": 11.02
     },
-    "total_s": 180.48
+    "total_s": 151.72
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

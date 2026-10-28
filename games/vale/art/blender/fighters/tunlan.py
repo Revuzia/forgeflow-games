@@ -1063,8 +1063,10 @@ HAT_HEX = {"top": "#D4C0A6", "seam": "#94806C", "crown": "#C8B093", "under": "#5
 # the skins' hats (brief §9): Noon Fair's chalk paper with rose-lilac rings and dots (~25 % of the top) and a lilac
 # crown; Lamplit's walnut shade: walnut ribs, rim band and crown round lampresin paper panels lit from within
 HAT_SCHEMES = {
-    "tunlan_noon_fair": {"top": "#D6C8B4", "seam": "#8C7A7E", "crown": "#B48AA6", "under": "#4E3E42", "paint": "#B48AA6"},
-    "tunlan_lamplit": {"top": "#CDB98F", "edge": "#A38C6B", "seam": "#5E4D3E", "crown": "#5E4D3E", "under": "#3E3229"},
+    "tunlan_noon_fair": {"top": "#E0D4C2", "seam": "#8C7A7E", "crown": "#B48AA6", "under": "#4E3E42", "paint": "#B48AA6",
+                         "rim": "#5C4C55"},
+    "tunlan_lamplit": {"top": "#D9C8A2", "edge": "#B8A27E", "seam": "#5E4D3E", "crown": "#CDB98F", "under": "#3E3229",
+                       "rim": "#5E4D3E"},
 }
 
 
@@ -1091,11 +1093,11 @@ def _hat_paint(p, n, hexes=None):
     if "edge" in hx:                                           # Lamplit: paper panels lit from within, walnut ribs
         edge_c = _lin(_hex(hx["edge"]))
         du = np.abs(panel_u - 0.5) * 2                         # 0 at a panel's middle, 1 at its ribs
-        glow = (1 - ss(0.35, 1.0, du)) * ss(0.20, 0.30, r) * (1 - ss(0.50, 0.56, r))
+        glow = (1 - ss(0.70, 1.0, du)) * ss(0.20, 0.26, r) * (1 - ss(0.53, 0.56, r))
         pc = edge_c[None, :] * (1 - glow)[:, None] + top[None, :] * glow[:, None]
-        c = pc * (mott * (0.97 + 0.06 * ss(-0.3, 0.9, n @ KEY)))[:, None]
-        rib = np.exp(-((dth * r) / 0.0105) ** 4) * ss(0.20, 0.23, r)
-        band = ss(0.548, 0.556, r) + (1 - ss(0.208, 0.216, r))
+        c = pc * (mott * (1.02 + 0.06 * ss(-0.3, 0.9, n @ KEY)))[:, None]
+        rib = np.exp(-((dth * r) / 0.0052) ** 4) * ss(0.20, 0.23, r)
+        band = ss(0.574, 0.580, r) + (1 - ss(0.208, 0.216, r)) * ss(CROWN_A[0] - 0.004, CROWN_A[0] + 0.004, r)
         wal = np.clip(rib + band, 0, 1) * ss(0.18, 0.19, r)
         wc = seam_c[None, :] * (mott * (0.9 + 0.2 * ss(-0.3, 0.9, n @ KEY)))[:, None]
         c = c * (1 - wal[:, None]) + wc * wal[:, None]
@@ -1104,7 +1106,7 @@ def _hat_paint(p, n, hexes=None):
         c = c * (1 - 0.08 * ss(0.50, 0.60, r))[:, None]
     if "paint" in hx:                                          # Noon Fair: rose-lilac rings and a dot on every panel
         pnt = _lin(_hex(hx["paint"]))
-        ring = (ss(0.258, 0.264, r) * (1 - ss(0.300, 0.306, r)) + ss(0.476, 0.482, r) * (1 - ss(0.516, 0.522, r)))
+        ring = (ss(0.262, 0.268, r) * (1 - ss(0.296, 0.302, r)) + ss(0.482, 0.488, r) * (1 - ss(0.512, 0.518, r)))
         pcx = (np.floor(tt * kk) + 0.5) / kk - math.pi / SEAMS
         dd = np.hypot(r * np.cos(th) - 0.39 * np.cos(pcx), r * np.sin(th) - 0.39 * np.sin(pcx))
         dot = 1 - ss(0.020, 0.026, dd)
@@ -1150,7 +1152,7 @@ def _iron_paint(p, n, hexc=None, plates=False):
 
 
 def _rim_paint(p, n):
-    c = _iron_paint(p, n, HAT_HEX["rim"], plates=True)
+    c = _iron_paint(p, n, (HAT_SCHEMES.get(_BUILD.get("skin")) or {}).get("rim", HAT_HEX["rim"]), plates=True)
     up = ss(0.3, 0.8, n[:, 2])
     return c * (1 + 0.25 * up)[:, None]
 
@@ -1351,6 +1353,7 @@ def _fill_gutters(arr, valid, iters=40):
 
 
 _orig_recolour = _project.recolour
+BRIEF_CLOTH = "#7C6C66"       # the brief's base felt robe (§5): the skins' cloth hexes (§9) are written against it
 
 
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
@@ -1385,8 +1388,12 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         return out
     # the felt's painted median lands exactly on the skin's cloth colour: its value relationships (folds, light) kept,
     # its chroma replaced (a per-channel gain alone blew the lit sleeves out to a pale wash)
+    # (the painted felt is darker than the brief's base felt #7C6C66, the value the skins' hexes are written against:
+    # the skin's felt keeps the base's painted value x skin / brief-base, in the skin's own chroma)
     med = np.median(felt, axis=0)
     Ymed = float(_Y(med[None, :])[0])
+    k_val = float(_Y(skin_lin[None, :])[0]) / max(float(_Y(_lin(_hex(BRIEF_CLOTH))[None, :])[0]), 1e-4)
+    skin_lin = skin_lin * (Ymed * k_val / max(float(_Y(skin_lin[None, :])[0]), 1e-4))
     gain = np.clip(skin_lin / np.maximum(med, 1e-4), 0.05, 8.0)
     for nm, (m, rose) in wsel.items():
         lc = _lin(img[m])

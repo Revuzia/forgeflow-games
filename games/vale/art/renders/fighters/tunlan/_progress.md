@@ -35,3 +35,15 @@
   Chrome: my own child killed after 25 min idle). Both robes came out a pale wash (per-channel gain off a wrong base
   median): recolour now anchors the felt's painted median on the skin hex and keeps the painted values.
 - Added "weapon": "prop.R" to SOCKETS (the content's standard set). Final build (base + skins, --clip-sheet) started.
+- 2026-10-28 FINAL. Base (full quality, --clip-sheet): 21,658 tris, 1136 KiB, accent 1.9 % (three QA, 91.7 % top half),
+  facing +Z, load test OK (all clips, run planted feet). Skins: tunlan_noon_fair 22,338 tris 919 KiB accent 1.97 %;
+  tunlan_lamplit 21,658 tris 893 KiB accent 1.97 %; both load-test OK. Skin felt recolour anchored on the brief's
+  base felt (#7C6C66) value; skin hats procedural (Noon Fair lilac rings/dots/crown + plum rim; Lamplit walnut ribs,
+  rim and crown ring round lit lampresin panels).
+- lineup_qa (art/renders/fighters/tunlan/lineup/tunlan_final.*): IoU64 vs dunsom 0.565, vashil 0.555, nurrow 0.494;
+  value bands base 70.9/64.0/33.8, noon_fair 71.3/65.2/35.0, lamplit 69.1/62.1/34.1 (lamplit top ~1 under 70).
+- Content: art.json copied into content/fighters/tunlan.json (height 2.05, runRefSpeed 3.35, + lamp / gesture
+  sockets); content/skins/tunlan.json unchanged (paths match). build_content --check OK, nothing missing for tunlan;
+  probe_kits_A 525/0, probe_kits_B 733/0. In game: _harness/_shots/art2_tunlan_{game,close,close2}.png.
+- Open: accent reads near-white in game for the local player (as on peers); the front-right lantern crosses the mask
+  from right three-quarter views; the hat does not fall off in death (rests tilted on its brim over her).

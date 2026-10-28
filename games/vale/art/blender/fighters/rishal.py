@@ -76,7 +76,10 @@ SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x
 # profile behind an oversized visor): the brief's splash, the victory hold (arms crossed behind, chin up, a quarter
 # turn away, the knives sweeping toward screen right), framed like the roster's other victory splashes
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 0.86, "x": 0.64,
-          "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 36.0, "icon_yaw": 20.0}
+          "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 28.0, "icon_yaw": 20.0}
+# (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
+# behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook
+# and under the band, as in the concept's three-quarter
 # (fix pass 5, review: the hero art read as untextured plastic, washed out: the sun 2.4 -> 1.9 and the sky fill
 # x0.5, so the painted values, strokes and carving hold in the light; the icon turned to 28 degrees: from the front
 # the crest stood edge-on over the visor, the review's down-arrow, where the crescent frame and its panes now show)
@@ -510,10 +513,12 @@ VISOR_PROF = np.array([(-0.200, 1.704), (-0.130, 1.708), (-0.090, 1.720), (-0.05
 # beak itself ~5 cm wide at the cheekbones narrowing to its point 2 cm under the chin
 VISOR_FRONT = np.array([(-0.140, 1.820), (-0.084, 1.800), (-0.068, 1.762), (-0.050, 1.736), (-0.028, 1.720),
                         (0.000, 1.714), (0.028, 1.720), (0.050, 1.736), (0.068, 1.762), (0.084, 1.800), (0.140, 1.820),
-                        (0.140, 1.644), (0.070, 1.642), (0.044, 1.638), (0.028, 1.628), (0.019, 1.604),
-                        (0.014, 1.570), (0.009, 1.534), (0.005, 1.506), (0.0, 1.492), (-0.005, 1.506), (-0.009, 1.534),
-                        (-0.014, 1.570), (-0.019, 1.604), (-0.028, 1.628), (-0.044, 1.638), (-0.070, 1.642),
-                        (-0.140, 1.644)])
+                        (0.140, 1.646), (0.070, 1.645), (0.042, 1.641), (0.024, 1.631), (0.015, 1.607),
+                        (0.0105, 1.572), (0.0068, 1.536), (0.0038, 1.508), (0.0, 1.494), (-0.0038, 1.508),
+                        (-0.0068, 1.536), (-0.0105, 1.572), (-0.015, 1.607), (-0.024, 1.631), (-0.042, 1.641),
+                        (-0.070, 1.645), (-0.140, 1.646)])
+# (FIX ROUND 2, verify: the hook still read as a tall slab over the mask in the portrait): the hook ~25 % narrower
+# below the band, so the mouth line's end and the chin show beside it
 
 
 def lens_y(x, z, inset=0.0):
@@ -573,11 +578,11 @@ RIDGE_PHI = math.radians(86.0)  # the band blade runs phi -RIDGE_PHI..RIDGE_PHI 
 # the UPPER edge running from the band blade's top at the temple up along the crest's flank just under its arc to the
 # tail, the LOWER edge from the band blade's foot sweeping back under it (the crescent's belly); they meet in the tip
 REAR_UP = ((0.050, 0.010, 1.762), (0.031, 0.045, 1.790), (0.021, 0.090, 1.811), (0.019, 0.140, 1.829),
-           (0.018, 0.190, 1.843), (0.016, 0.228, 1.853))
-REAR_LO = ((0.053, 0.006, 1.740), (0.061, 0.050, 1.761), (0.052, 0.095, 1.779), (0.046, 0.142, 1.799),
-           (0.036, 0.190, 1.822), (0.016, 0.228, 1.853))
+           (0.018, 0.195, 1.845), (0.014, 0.252, 1.858))
+REAR_LO = ((0.053, 0.006, 1.740), (0.061, 0.050, 1.761), (0.058, 0.098, 1.774), (0.058, 0.150, 1.780),
+           (0.052, 0.202, 1.796), (0.014, 0.252, 1.858))
 REAR_T = 0.0034                # the vane's thickness (its edges thin to ~40 %)
-REAR_N = 28                    # sections along the vane
+REAR_N = 20                    # sections along the vane
 
 
 def band_top(phis):
@@ -609,7 +614,7 @@ def band_top(phis):
     return np.array(out)
 
 
-_PHIS = np.linspace(-RIDGE_PHI, RIDGE_PHI, 37)
+_PHIS = np.linspace(-RIDGE_PHI, RIDGE_PHI, 29)
 RIDGE_PTS = band_top(_PHIS)
 
 
@@ -811,8 +816,8 @@ def crest_inlay_poly():
 # the front at the game camera): pale non-emissive dawnglass again (the concept's ice glass, fin_paint), rooted at the
 # left temple boss under the ridge's rear vane and SPLAYED out to his left and a little lower, so from the front they
 # fan away from the crest toward the pauldron spike instead of standing as a second prong beside it
-FINS = (((0.064, 0.048, 1.738), (0.175, 0.340, 1.840), 0.010, 0.029, (0.50, -0.16, 0.85)),
-        ((0.068, 0.058, 1.714), (0.180, 0.280, 1.768), 0.006, 0.023, (0.58, -0.14, 0.80)))
+FINS = (((0.064, 0.048, 1.738), (0.215, 0.300, 1.805), 0.010, 0.029, (0.50, -0.16, 0.85)),
+        ((0.068, 0.058, 1.714), (0.210, 0.245, 1.745), 0.006, 0.023, (0.58, -0.14, 0.80)))
 # the nape plates: three stacked lames hugging the skull's lower back, each an offset shell of NAPE_E a step further
 # out than the one above, so the back steps down and in toward the neck like a lobster tail: (top z, bottom z, offset)
 NAPE_E = {"c": (0.0, 0.020, 1.640), "r": (0.070, 0.090, 0.095)}
@@ -1179,7 +1184,8 @@ def sculpts() -> list:
     # it: 1.2 cm further forward, a little broader and longer, still 2.5 cm behind the glass)
     face.add(Ellipsoid((0, -0.030, 1.598), (0.056, 0.064, 0.092)), k=0.0)
     face.inter(HalfSpace((0, -0.086, 1.6), (0, -1, 0), 0.5), k=0.012)                             # the flat front
-    face.add(RoundBox((0, -0.082, 1.652), (0.046, 0.010, 0.009), 0.006, axes=sdf.rot_x(-8)), k=0.010)  # the brow
+    # the brow (FIX ROUND 2: 2 cm narrower: its square ends stood out under the band's lower edge as two pegs)
+    face.add(RoundBox((0, -0.082, 1.652), (0.034, 0.010, 0.009), 0.006, axes=sdf.rot_x(-8)), k=0.010)
     # the cheekbones: soft carved swells under the eyes (FIX ROUND 2: the boxed cheek planes stood off the mask's
     # sides as a stub in the portrait)
     for sx in (-1, 1):
@@ -1500,6 +1506,7 @@ def _install_render() -> None:
     def fr(ctx, *a, **k):
         state["on"] = getattr(ctx.spec, "ID", None) == ID
         saved = []
+        glass = _glass_light_on(a[0] if a else k.get("objs", [])) if state["on"] else []
         if state["on"]:
             for mat in bpy.data.materials:
                 if mat.node_tree is None:
@@ -1514,6 +1521,7 @@ def _install_render() -> None:
             state["on"] = False
             for nd, v in saved:
                 nd.inputs["Specular IOR Level"].default_value = v
+            _glass_light_off(glass)
     fr._rishal = True
     render.fighter_renders = fr
     orig_fit = render._fit_camera
@@ -1549,6 +1557,79 @@ def _install_render() -> None:
             clips = dict(clips, splash_hero=_splash_hero(_GUARD["pose"]))
         return clips
     render.fighter_clips = fc
+
+
+# (FIX ROUND 2, verify: in the portrait the mask read as a grey speckled sliver): the visor is see-through dawnglass
+# (painted so in the atlas), but Cycles traced it as an opaque shell 5 cm in front of the mask, so the mask sat in its
+# shadow, lit only by noisy bounce light. For the hero renders only, the visor's faces (vale_part) let shadow and
+# diffuse rays through; camera and glossy rays still see the glass. The game material is untouched.
+HERO_GLASS = ("visor",)
+
+
+def _glass_light_on(objs) -> list:
+    names = _PARTMAP.get("names") or []
+    ids = [names.index(n_) for n_ in HERO_GLASS if n_ in names]
+    undo, done = [], set()
+    if not ids:
+        return undo
+    for ob in objs or []:
+        if getattr(ob, "type", None) != "MESH":
+            continue
+        me = ob.data
+        at = me.attributes.get("vale_part")
+        if at is None or at.domain != "POINT":
+            continue
+        pv = np.empty(len(me.vertices), dtype=np.int64)
+        at.data.foreach_get("value", pv)
+        g = np.isin(pv, ids).astype(np.float32)
+        if not g.any():
+            continue
+        fa = me.attributes.new("rishal_glass", "FLOAT", "POINT")
+        fa.data.foreach_set("value", g)
+        undo.append(("attr", me, None, None, None))
+        for slot in ob.material_slots:
+            m = slot.material
+            if m is None or m.node_tree is None or m.name in done:
+                continue
+            nt = m.node_tree
+            out = next((nd for nd in nt.nodes if nd.type == "OUTPUT_MATERIAL" and nd.is_active_output), None)
+            if out is None or not out.inputs["Surface"].is_linked:
+                continue
+            done.add(m.name)
+            src = out.inputs["Surface"].links[0].from_socket
+            atn = nt.nodes.new("ShaderNodeAttribute")
+            atn.attribute_name = "rishal_glass"
+            lp = nt.nodes.new("ShaderNodeLightPath")
+            mx = nt.nodes.new("ShaderNodeMath")
+            mx.operation = "MAXIMUM"
+            nt.links.new(lp.outputs["Is Shadow Ray"], mx.inputs[0])
+            nt.links.new(lp.outputs["Is Diffuse Ray"], mx.inputs[1])
+            mul = nt.nodes.new("ShaderNodeMath")
+            mul.operation = "MULTIPLY"
+            nt.links.new(atn.outputs["Fac"], mul.inputs[0])
+            nt.links.new(mx.outputs[0], mul.inputs[1])
+            tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+            mix = nt.nodes.new("ShaderNodeMixShader")
+            nt.links.new(mul.outputs[0], mix.inputs[0])
+            nt.links.new(src, mix.inputs[1])
+            nt.links.new(tr.outputs[0], mix.inputs[2])
+            nt.links.new(mix.outputs[0], out.inputs["Surface"])
+            undo.append(("mat", None, nt, (out, src), [atn, lp, mx, mul, tr, mix]))
+    print(f"[rishal] hero renders: the visor lets light through ({len(done)} material(s))")
+    return undo
+
+
+def _glass_light_off(undo) -> None:
+    for kind, me, nt, link, nodes in reversed(undo or []):
+        if kind == "mat":
+            out, src = link
+            nt.links.new(src, out.inputs["Surface"])
+            for nd in nodes:
+                nt.nodes.remove(nd)
+        elif kind == "attr":
+            at = me.attributes.get("rishal_glass")
+            if at is not None:
+                me.attributes.remove(at)
 
 
 def _visor_material(src):
@@ -1700,7 +1781,7 @@ PAINTED = ("knife_blade_R", "knife_blade_L", "knife_grip_R", "knife_grip_L", "kn
            "bracer_R", "bracer_L")
 PROC_HIDDEN = {"face"}          # parts whose texels the painting hides take procedural paint, not the nearest pixel
 FACE_COL = {"lit": "#ECE7DE", "mid": "#D9D2C7", "shade": "#B8AEA2", "cool": "#A9A8A8", "ink": "#4A4644",
-            "carve": "#937C6A", "lip": "#F4EFE6"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
+            "carve": "#957F6E", "lip": "#F4EFE6"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
 # carving; the cool grey shade read as a grey speckled sliver in the portrait's shadow side)
 EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
 HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97A0AA", "ink": "#5E5650",
@@ -1708,7 +1789,8 @@ HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97
 # the warm carved plates of the helm's back and the nape (the painting's back of the head: warm taupe carved stone
 # with dark seams and lit lips)
 # (POLISH: a step lighter, a light warm stone under the white crown, the value lift's top band from behind)
-NAPE_COL = {"lit": "#E4DCD0", "mid": "#D0C6B9", "shade": "#A99D91", "ink": "#4A3F37", "lip": "#ECE5DA"}
+# (FIX ROUND 2, verify: the back facing's top band 67.6, under the bible's 70): a further step lighter
+NAPE_COL = {"lit": "#EAE3D8", "mid": "#DAD1C5", "shade": "#B6AB9E", "ink": "#4A3F37", "lip": "#F0EAE0"}
 # the visor (fix pass 5): ice-blue glass (the fix pass 4 lavender washed out pale lavender in the three QA light),
 # the mask seen through it; the pale cyan rim #C1E9F5 with a dark outline (the concept's)
 # (POLISH: sampled off the painting's visor, L* 67-85: a pale lavender-blue glass #96A3C2 / #ABBFE1 / #89A6CB, the
@@ -2015,7 +2097,7 @@ def face_paint(p, n):
     grey in its turns and under the brow and chin (no warm flesh tones), the concept's carved lines inked with a lit
     lip under each, painterly strokes"""
     C = {k: _hexrgb(h) for k, h in FACE_COL.items()}
-    t = _ss(0.52 + 0.36 * n[:, 2] - 0.30 * np.abs(n[:, 0]) - 0.22 * _ss((1.548 - p[:, 2]) / 0.04))
+    t = _ss(0.60 + 0.30 * n[:, 2] - 0.12 * np.abs(n[:, 0]) - 0.18 * _ss((1.548 - p[:, 2]) / 0.04))
     col = np.where((t < 0.5)[:, None], _mix(C["shade"][None].repeat(len(p), 0), C["mid"][None], t * 2),
                    _mix(C["mid"][None].repeat(len(p), 0), C["lit"][None], t * 2 - 1))
     col = _mix(col, C["cool"][None], _ss(-n[:, 2] - 0.15) * 0.45)
@@ -2026,10 +2108,10 @@ def face_paint(p, n):
     wu = FACE_WRAP_R * np.abs(np.arctan2(p[:, 0], -(p[:, 1] - FACE_WRAP_C)))
     for pts, w in FACE_LINES:
         d, sg = _polyline_dist2(wu, p[:, 2], pts)
-        cut = _ss((w + 0.0005 - d) / 0.0010) * vis
+        cut = _ss((w * 1.35 + 0.0006 - d) / 0.0010) * vis
         col = _mix(col, C["carve"][None], cut * 0.62)
-        lip = _ss((w * 1.1 - np.abs(d - w * 2.1)) / 0.0010) * vis
-        col = _mix(col, C["lip"][None], lip * 0.30)
+        lip = _ss((w * 1.2 - np.abs(d - w * 2.6)) / 0.0010) * vis * (sg < 0)
+        col = _mix(col, C["lip"][None], lip * 0.40)
     # (POLISH: the brief's ink almond recesses, behind the glass): two slanted almonds, the inner corners low, cut
     # deep into the mask with a lit lower lid; seen through the visor they read as eyes in shadow, not an alien face
     for sx in (-1.0, 1.0):
@@ -2240,8 +2322,8 @@ def visor_paint(p, n):
     col = _mix(col, C["outline"][None], np.clip(1 - np.abs(dr - 0.0182) / 0.0012, 0, 1) * side * 0.6)
     col = _mix(col, C["inner"][None], (1 - outer) * 0.85)
     de = _visor_edge(p)
-    col = _mix(col, C["inner_line"][None], np.clip(1 - np.abs(de - 0.0118) / 0.0014, 0, 1) * 0.60)
-    rim = np.clip((0.0105 - de) / 0.0014, 0, 1)
+    col = _mix(col, C["inner_line"][None], np.clip(1 - np.abs(de - 0.0093) / 0.0014, 0, 1) * 0.60)
+    rim = np.clip((0.0080 - de) / 0.0014, 0, 1)        # (FIX ROUND 2: 1.05 -> 0.8 cm, a lighter frame round the hook)
     rim_c = _mix(C["rim"][None].repeat(len(p), 0), C["rim_hi"][None], np.clip((n[:, 2] + 0.1) / 0.6, 0, 1) * 0.8)
     col = _mix(col, rim_c, rim * 0.95)
     col = _mix(col, C["outline"][None], np.clip((0.0026 - de) / 0.0012, 0, 1) * 0.85)
@@ -2282,7 +2364,9 @@ def fin_paint(p, n):
 # like the concept's carved feather: a groove along its spine, barbs cut diagonally toward the tip on its outer half,
 # the lit bevel and the dark outline, painterly strokes along it, chips; the caps get carved rings
 # (POLISH, value lift: the honed stone at the brief's L* 75, the pauldrons and lames carry the top band from above)
-STONE_COL = {"lit": "#D0D6D9", "mid": "#B8C1C7", "shade": "#8D99A2", "groove": "#4E5A64", "edge": "#E0E6E8",
+# (FIX ROUND 2: the shade and the grooves a step lighter - from behind the game camera sees the lames' shaded backs
+# in the top band)
+STONE_COL = {"lit": "#D0D6D9", "mid": "#B8C1C7", "shade": "#9AA5AD", "groove": "#5A6670", "edge": "#E0E6E8",
              "outline": "#3C4650"}
 KNEE_COL = {"lit": "#6E7882", "mid": "#505962", "shade": "#343B42", "carve": "#22272D", "edge": "#86909A"}
 
@@ -2461,7 +2545,8 @@ COAT_COL = {"front": "#A0AEB4", "back": "#A4AFB6", "lining": "#66717A", "trim": 
             "ink": "#363F47"}
 # (POLISH: the painting's hood, lit #A8C7D0 L* 78, shade #899CA6 L* 63; a step lighter than fix pass 5's for the
 # value lift: the cowl is in the top band from every facing)
-COWL_COL = {"front": "#98B6C9", "back": "#B4C9D5", "fold": "#5D7889", "lit": "#BED5E0"}   # (build 1: washed to white)
+COWL_COL = {"front": "#98B6C9", "back": "#C6D7E0", "fold": "#5D7889", "fold_back": "#7E97A6", "lit": "#BED5E0"}   # (build 1: washed to white)
+# (FIX ROUND 2: the hood's back a step lighter, its creases a third shallower behind: the back facing's top band)
 SLEEVE_COL = {"base": "#A2B2BE", "fold": "#72838F"}      # (POLISH, value lift: the concept's light blue sleeves)
 
 
@@ -2521,7 +2606,8 @@ def cowl_paint(p, n):
     col = painted(base, n, p, 0.70, None, 0.025, 140.0, seed=19.0)
     f, depth = cowl_fold(p)
     dk = np.clip(depth / 0.0100, 0, 1)
-    col = _mix(col, C["fold"][None], _ss((0.40 - f) / 0.40) * (0.30 + 0.45 * dk))
+    foldc = _mix(C["fold"][None].repeat(len(p), 0), C["fold_back"][None], fb)
+    col = _mix(col, foldc, _ss((0.40 - f) / 0.40) * (0.30 + 0.45 * dk) * (1.0 - 0.25 * fb))
     col = _mix(col, C["lit"][None], _ss((f - 0.75) / 0.25) * _ss(0.3 + n @ KEY) * (0.15 + 0.25 * dk))
     # the collar's inside (facing the neck) in shadow, its rolled top lit
     rad = np.stack([p[:, 0] - COWL_AX[0], p[:, 1] - COWL_AX[1], np.zeros(len(p))], 1)
@@ -2600,7 +2686,7 @@ PROC_HEAD = {"helm": helm_paint, "nape": nape_paint, "face": face_paint, "visor"
 # tunic and hood, the pale coat front and apron, the mid-grey coat back, the pale carved chest, slate-teal trousers),
 # its painted variation kept (squeezed) and the brown leather straps across it protected (keep_brown)
 # (part, side, luminance squeeze, hue pull, target, keep_brown); side None = all, "front" / "back" = that side's texels
-HARMONIZE = [("torso", None, 0.55, 0.70, "#9AA8B3", True),
+HARMONIZE = [("torso", None, 0.55, 0.70, "#9AA8B3", True), ("torso", "back", 0.50, 0.50, "#A8B4BD", True),
              ("apron", "front", 0.40, 0.35, "#9DADB1", True), ("apron", "back", 0.60, 0.60, "#7E8A90", True),
              ("chest_plate", None, 0.40, 0.30, "#BCB8B0", True),
              ("belt", None, 0.50, 0.70, "#5E4838", False),
@@ -3140,7 +3226,10 @@ def _install_paint() -> None:
 # smears that also stayed put while the skirt swung): AO_INTO_BASE is off (no occlusion multiplied into the painted
 # colour), and the ORM occlusion is rewritten per part when it is saved: the cloth (SOFT_AO) keeps only a faint,
 # heavily smoothed occlusion (the painting carries its folds), the hard parts the usual lifted creases
-SOFT_AO = ("trousers", "skirt_L", "skirt_R", "apron", "torso", "sleeves", "cowl", "chest_plate", "belt", "neck")
+SOFT_AO = ("trousers", "skirt_L", "skirt_R", "apron", "torso", "sleeves", "cowl", "chest_plate", "belt", "neck", "face")
+# (FIX ROUND 2: "face" - the visor's glass shell 5 cm in front of the mask baked as a solid occluder, a dark grainy
+# occlusion that read as a grey speckled mask in the portrait; the glass is see-through, so the mask keeps only the
+# soft term)
 _PARTMAP: dict = {}
 
 

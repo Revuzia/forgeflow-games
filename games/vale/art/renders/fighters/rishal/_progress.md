@@ -331,8 +331,11 @@
   (gap over the lane): RIFT High 74.8 (36.8) -> 80.8 (42.8), Low 76.5 (38.0) -> 82.6 (44.1); BRIDGE High 76.6
   (38.1) -> 82.2 (43.7), Low 77.0 (38.5) -> 83.5 (45.0); FRAY High 70.8 (33.8) -> 78.2 (41.2), Low 71.5 (34.5) ->
   79.6 (42.6); median L* 42-47 -> 54.5-58.5. As a non-local seat (BRIDGE's default roster, the env verify's case:
-  ally / enemy accent colour): High 61.6 (24.6) -> 67.1 (28.6), Low 69.4 -> 77.8 (38.8); in that High frame he
-  stands in shade (p50 27.5 vs 57.5 as the local seat), so it stays under 70 there. Blow-out: his gt90 is 0-0.1 % as
+  ally / enemy accent colour): High 61.6 (24.6) -> 67.1 (28.6), Low 69.4 -> 77.8 (38.8); [CORRECTED in fix round 2:
+  the miss in that High frame is OCCLUSION, not shade: at his own spot he stands ~75 % hidden behind Ervet, 891 px
+  (top-25 60.8) against ~3,300 px a frame as the seated local player, only the crest and fragments showing
+  (verifier's per-spot pass vfy_diag f_rishal, br_dflt_rishal_z.png); with a non-self accent colour seated he reads
+  RIFT 79.6 / 81.6, BRIDGE 79.3 / 81.4, FRAY 78.0 / 79.5 (High / Low), all >= 40.8 over the lane]. Blow-out: his gt90 is 0-0.1 % as
   a non-local seat, 1.1-3.1 % as the local one (the Noonwhite accent over the fins); pooled RIFT gt90 3 % is Tunlan's
   (8 %), not his. The light top / dark feet gradient holds (lineup bands above).
   Open: the brief needs §7 (the fins carry the accent with the ridge fin) and §9 (Chalkline's ink figure, chalk
