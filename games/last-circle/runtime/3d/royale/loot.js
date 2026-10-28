@@ -2418,45 +2418,10 @@ export function update(W, dt) {
   // Distance is 3D on purpose: the old horizontal test called everything under
   // the 240-270 m glider flight path "near".
   const cull = W.lootCull || 150, cull2 = cull * cull;
-  // values(), not entries: `for (const [, it] of map)` builds a [key, value]
-  // array per entry — ~400 a frame here (framecheck heap sampling, 2026-09-30)
-  for (const it of items.values()) {
-    if (it.taken) continue;
-    const dx = it.pos.x - cp.x, dy = it.pos.y - cp.y, dz = it.pos.z - cp.z;
-    const d2 = dx * dx + dy * dy + dz * dz;
-    const vis = d2 < cull2;
-    if (it.vis !== vis) { it.vis = vis; blobShow(it, vis); itemFxShow(it, vis); }   // (the model, bob and spin: visFrame below)
-  }
+  cullItems(cp.x, cp.y, cp.z, cull2);
   maybeSupplyDrop(W, dt);
-
-  // chests: cull the model + ring by distance and hand the shadow back up close
-  const CP = CHEST_P;
-  for (const c of chests.values()) {
-    const cdx = c.pos.x - cp.x, cdy = c.pos.y - cp.y, cdz = c.pos.z - cp.z;
-    const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
-    if (c.supply) {                                  // a landed supply crate: its own mesh (always drawn), only its ring follows the cull
-      if (c.ring >= 0) { const ringOn = d2 < cull2; if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); } }
-      continue;
-    }
-    // Cull the chest MODEL and its ring only. The glow billboard and the light
-    // beam stay lit at any range (the shader fades them) — they are the beacon you
-    // steer the glider toward, and hiding them would make chests unfindable on
-    // descent. Their pulse is in the shader: nothing to animate here any more.
-    const vis = d2 < cull2;
-    if (c.vis !== vis) { c.vis = vis; if (c.vp) c.vp.dirty = true; }
-    if (c.ring >= 0) {
-      const ringOn = d2 < cull2;
-      if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); }
-    }
-    const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
-    if (c.cast !== cast && CP) { c.cast = cast; visRemove(c); visAdd(CP[cast ? 1 : 0], c); }
-  }
-  // death piles: their one ring follows the cull like an item's (the beam and the glow fade in their shaders)
-  if (piles.size && FX.pools) for (const P of piles.values()) {
-    const pdx = P.pos.x - cp.x, pdy = P.pos.y - cp.y, pdz = P.pos.z - cp.z;
-    const vis = pdx * pdx + pdy * pdy + pdz * pdz < cull2;
-    if (P.vis !== vis) { P.vis = vis; poolShow(FX.pools.rings, P.ring, vis); }
-  }
+  cullChests(cp.x, cp.y, cp.z, cull2);
+  if (piles.size && FX.pools) cullPiles(cp.x, cp.y, cp.z, cull2);
   fxFrame(W, dt, cull);
 
   // human interact:
@@ -2531,6 +2496,52 @@ export function update(W, dt) {
   }
   blobFlush();                    // this frame's blob slot changes, one sub-range upload
   fxFlush();                      // ...and the ring / beam / glow slots, one sub-range each
+}
+
+// The per-frame distance culls (release prep): small leaf functions of the camera's coordinates, out of update(). Inside the big update()
+// the d2 arithmetic of every item / chest / pile boxed its doubles (framecheck isla_viva heap sampling: update loot.js 9.4-9.7 MB per 600
+// match frames, the top allocator); a leaf loop of plain locals is optimized on its own and keeps them unboxed. Same tests, same order,
+// same writes: render-only state (vis / ringOn / cast flags, pool slots), no random draw, no sim state.
+// values(), not entries: `for (const [, it] of map)` builds a [key, value] array per entry - ~400 a frame (framecheck heap sampling, 2026-09-30)
+function cullItems(cx, cy, cz, cull2) {
+  for (const it of items.values()) {
+    if (it.taken) continue;
+    const p = it.pos, dx = p.x - cx, dy = p.y - cy, dz = p.z - cz;
+    const vis = dx * dx + dy * dy + dz * dz < cull2;
+    if (it.vis !== vis) { it.vis = vis; blobShow(it, vis); itemFxShow(it, vis); }   // (the model, bob and spin: visFrame below)
+  }
+}
+// chests: cull the model + ring by distance and hand the shadow back up close
+function cullChests(cx, cy, cz, cull2) {
+  const CP = CHEST_P;
+  for (const c of chests.values()) {
+    const p = c.pos, cdx = p.x - cx, cdy = p.y - cy, cdz = p.z - cz;
+    const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
+    if (c.supply) {                                  // a landed supply crate: its own mesh (always drawn), only its ring follows the cull
+      if (c.ring >= 0) { const ringOn = d2 < cull2; if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); } }
+      continue;
+    }
+    // Cull the chest MODEL and its ring only. The glow billboard and the light
+    // beam stay lit at any range (the shader fades them) — they are the beacon you
+    // steer the glider toward, and hiding them would make chests unfindable on
+    // descent. Their pulse is in the shader: nothing to animate here any more.
+    const vis = d2 < cull2;
+    if (c.vis !== vis) { c.vis = vis; if (c.vp) c.vp.dirty = true; }
+    if (c.ring >= 0) {
+      const ringOn = d2 < cull2;
+      if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); }
+    }
+    const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
+    if (c.cast !== cast && CP) { c.cast = cast; visRemove(c); visAdd(CP[cast ? 1 : 0], c); }
+  }
+}
+// death piles: their one ring follows the cull like an item's (the beam and the glow fade in their shaders)
+function cullPiles(cx, cy, cz, cull2) {
+  for (const P of piles.values()) {
+    const p = P.pos, pdx = p.x - cx, pdy = p.y - cy, pdz = p.z - cz;
+    const vis = pdx * pdx + pdy * pdy + pdz * pdz < cull2;
+    if (P.vis !== vis) { P.vis = vis; poolShow(FX.pools.rings, P.ring, vis); }
+  }
 }
 
 const WALK_R = 1.5, WALK_DY = 2.2;
