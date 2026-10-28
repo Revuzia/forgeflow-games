@@ -1417,8 +1417,8 @@ export class CloudPass {
       // base tile 1.2 km (heaps of 80–300 m, clustered by the weather mask), detail 54 m (a finer octave at 16 m near
       // the camera); dense cloud is optically thick (τ ≈ 16 through a 100 m heap): crisp edges, self-shadowed form
       uCloudScale: { value: new Vector4(1 / 1200, 1 / 54, 0.16, 0) },
-      // near heaps' turrets and billows (0, 0 = the smooth domes of before; lookdev A/B in the shot specs)
-      uCloudForm: { value: new Vector4(1, 1, 0, 0) },
+      // near heaps' turrets and billows (0, 0 = the smooth domes; A/B shots set it: render-world ledger, rw20)
+      uCloudForm: { value: new Vector4(0, 0, 0, 0) },
       uStorms: { value: Array.from({ length: MAX_STORMS }, () => new Vector4()) },
       uStormK: { value: Array.from({ length: MAX_STORMS }, () => new Vector4()) },
       uStormT: { value: Array.from({ length: MAX_STORMS }, () => new Vector4()) },
