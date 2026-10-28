@@ -1503,7 +1503,9 @@ SKIN_TONE = {
     # hue 29 -> hue 24 L* 68), so the albedo sits at hue 42 / 36 % to render ~38 / 23 %, a step lighter than the
     # base's ochre crown (~L* 76, never the pass-0 white L* 97: a warm mid tan, the rounded peak unchanged); the hood,
     # cowl and tail carry painted wind-carved sandstone strata (HIGHRIM_STRATA), the skin's own read
-    "ulkro_highrim": {"hood": "#8A7B58", "cowl": "#867655", "hood_tail": "#807152", "sleeves": "#8F8160"},
+    # (skins build 15: #8A7B58 rendered the crown #CEB98F, hue 40 / 31 % / L* 76, a khaki in the shade -> a touch paler
+    # and less saturated: the named sand, not olive)
+    "ulkro_highrim": {"hood": "#918466", "cowl": "#8C7F61", "hood_tail": "#85785B", "sleeves": "#958866"},
     # Long Evening: a dark dusky plum, red-leaning (three.js lifts and blues it: #5C3A57 rendered orchid in the portrait,
     # #5A4054 lavender in three.js)
     "ulkro_long_evening": {"hood": "#4C3344", "cowl": "#483041", "hood_tail": "#452E3E",
@@ -1516,16 +1518,16 @@ HIGHRIM_STRATA = ("hood", "cowl", "hood_tail")
 
 def highrim_strata(p):
     """Highrim's wind-carved sandstone: level layers ~2.8 cm thick, wavy and wind-scoured, each its own value
-    (+-6 %), a few a warmer rose-ochre, a thin darker bedding line between them (multiplier per texel, RGB)"""
+    (+-10 %), nearly half a warmer rose-ochre, a thin darker bedding line between them (multiplier per texel, RGB)"""
     z = p[:, 2] + 0.010 * np.sin(p[:, 0] * 38.0 + 1.3) + 0.006 * np.sin(p[:, 1] * 51.0) + 0.008 * NOISE(p, 7.0)
     ph = z / 0.028
     band = np.floor(ph)
     f = ph - band
-    v = 1.0 + 0.12 * (_hash(band) - 0.5)
+    v = 1.0 + 0.20 * (_hash(band) - 0.5)
     seam = np.exp(-((f - 0.04) / 0.07) ** 2) + np.exp(-((f - 1.04) / 0.07) ** 2)
-    v = v * (1.0 - 0.11 * np.clip(seam, 0, 1)) * (1.0 + 0.03 * NOISE(p * np.array([4.0, 4.0, 0.5]), 9.0))
-    warm = (_hash(band + 17.0) > 0.62)[:, None]
-    tint = np.where(warm, np.array([1.04, 0.99, 0.93]), np.array([1.0, 1.0, 1.0]))
+    v = v * (1.0 - 0.16 * np.clip(seam, 0, 1)) * (1.0 + 0.03 * NOISE(p * np.array([4.0, 4.0, 0.5]), 9.0))
+    warm = (_hash(band + 17.0) > 0.55)[:, None]
+    tint = np.where(warm, np.array([1.06, 0.99, 0.90]), np.array([1.0, 1.0, 1.0]))
     return v[:, None] * tint
 
 

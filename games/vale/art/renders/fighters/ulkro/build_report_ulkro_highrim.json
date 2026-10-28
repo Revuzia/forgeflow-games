@@ -227,30 +227,30 @@
   },
   "uv_coverage": 0.574,
   "bake": {
-    "base": 5.08,
-    "rough_metal": 5.63,
-    "normal": 5.7,
-    "ao": 5.54,
+    "base": 8.02,
+    "rough_metal": 9.88,
+    "normal": 10.14,
+    "ao": 9.56,
     "normal_fixed_px": 21156,
-    "projection": 154.7,
-    "pack_save": 155.81,
-    "total": 178.04
+    "projection": 158.06,
+    "pack_save": 158.69,
+    "total": 197.7
   },
   "tris": 20731,
   "mesh_top_m": 2.023,
-  "glb_bytes_raw": 2317644,
+  "glb_bytes_raw": 2324152,
   "optimize": {
     "ok": true,
-    "before": 2317644,
-    "after": 951408,
+    "before": 2324152,
+    "after": 955848,
     "q_base": 70
   },
-  "glb_bytes": 951408,
+  "glb_bytes": 955848,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_highrim.glb (929 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ulkro_highrim_base 2048x2048 203K, ulkro_highrim_normal 512x512 40K, ulkro_highrim_orm 256x256 26K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_highrim.glb (933 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_highrim_base 2048x2048 207K, ulkro_highrim_normal 512x512 40K, ulkro_highrim_orm 256x256 26K",
       "  skinned meshes: ulkro_accent(187v), ulkro_highrim(19014v)",
       "  bones: 32 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_crest0 x_crest1 x_crest2 x_crest3 x_crest4 x_quiver thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -265,8 +265,8 @@
       "portrait": "art/out/fighters/ulkro/ulkro_highrim_portrait.png"
     },
     "seconds": {
-      "splash": 37.23,
-      "portrait": 14.94
+      "splash": 18.98,
+      "portrait": 7.81
     }
   },
   "three_qa": {
@@ -298,24 +298,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ulkro/three_ulkro_highrim.png",
-    "seconds": 38.6,
+    "seconds": 15.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.67,
-      "model": 9.92,
-      "lows_bind": 6.36,
-      "uv": 8.02,
-      "bake": 178.04,
-      "export": 0.5,
-      "optimize": 6.33,
-      "load_test": 0.75,
-      "render": 52.43,
-      "three_qa": 39.87
+      "materials": 0.49,
+      "model": 8.13,
+      "lows_bind": 4.6,
+      "uv": 15.77,
+      "bake": 197.7,
+      "export": 0.27,
+      "optimize": 1.69,
+      "load_test": 0.3,
+      "render": 26.85,
+      "three_qa": 16.36
     },
-    "total_s": 303.04
+    "total_s": 272.3
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83
