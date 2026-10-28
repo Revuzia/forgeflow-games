@@ -107,6 +107,14 @@ def main():
             co.location = (0, y, 1.06)
             co.rotation_euler = (math.radians(90), 0, 0 if kind == "front" else math.radians(180))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
+        elif kind in ("side_l", "side_r", "skirt_l", "skirt_r"):    # orthographic profiles (paint QA of the sides)
+            cam.type = "ORTHO"
+            cam.ortho_scale = 2.30 if kind.startswith("side") else 1.2
+            cam.sensor_fit = "VERTICAL"
+            x = 6.0 if kind.endswith("_l") else -6.0
+            co.location = (x, 0, 1.06 if kind.startswith("side") else 0.70)
+            co.rotation_euler = (math.radians(90), 0, math.radians(90 if x > 0 else -90))
+            sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
         elif kind in ("threeq", "threeq_l"):
             cam.lens = 70
             p = (-3.4 if kind == "threeq" else 3.4, -6.2, 2.4)

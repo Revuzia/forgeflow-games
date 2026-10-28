@@ -1,0 +1,127 @@
+{
+  "id": "sukri_stillwater",
+  "fighter": "sukri",
+  "skin": true,
+  "parts": {
+    "tris_hood": 2050,
+    "tris_face": 1648,
+    "tris_torso": 1750,
+    "tris_belt": 620,
+    "tris_skirt": 820,
+    "tris_pants": 750,
+    "tris_shins": 750,
+    "tris_boots": 850,
+    "tris_sleeve_L": 620,
+    "tris_bracer_L": 520,
+    "tris_sleeve_R": 620,
+    "tris_bracer_R": 520,
+    "tris_hand_R": 780,
+    "tris_hand_L": 720,
+    "tris_plates_L": 700,
+    "tris_plates_R": 700,
+    "tris_plates_back": 798,
+    "tris_cord": 430,
+    "tris_staff": 820,
+    "tris_staff_grip": 220,
+    "tris_ferrule": 160,
+    "tris_cup_hook": 300,
+    "tris_cup_rim": 440,
+    "tris_cup_glass": 600,
+    "tris_cup_core": 620,
+    "tris_reed_plates": 700,
+    "validate_sukri": "18886->18875"
+  },
+  "uv_coverage": 0.605,
+  "bake": {
+    "base": 16.56,
+    "rough_metal": 10.27,
+    "normal": 7.46,
+    "ao": 5.32,
+    "normal_fixed_px": 62790,
+    "projection": 87.15,
+    "pack_save": 87.48,
+    "total": 127.7
+  },
+  "tris": 19495,
+  "mesh_top_m": 1.65,
+  "glb_bytes_raw": 2777744,
+  "optimize": {
+    "ok": true,
+    "before": 2777744,
+    "after": 1113968
+  },
+  "glb_bytes": 1113968,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_stillwater.glb (1088 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_stillwater_base 2048x2048 269K, sukri_stillwater_normal 512x512 63K, sukri_stillwater_orm 512x512 78K",
+      "  skinned meshes: sukri_accent(263v), sukri_stillwater(19916v)",
+      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 19495; bind-pose bounds (three units, Y up): 1.44 x 1.65 x 0.75; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/sukri/sukri_stillwater_splash.png",
+      "portrait": "art/out/fighters/sukri/sukri_stillwater_portrait.png"
+    },
+    "seconds": {
+      "splash": 13.68,
+      "portrait": 5.08
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.796,
+        0,
+        -0.422
+      ],
+      [
+        0.644,
+        1.65,
+        0.33
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.164,
+    "accentPct": 1.8,
+    "accentTopHalfPct": 56.1,
+    "heightPx1080": 87,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/sukri/three_sukri_stillwater.png",
+    "seconds": 20,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.35,
+      "model": 39.53,
+      "lows_bind": 15.28,
+      "uv": 5.92,
+      "bake": 127.93,
+      "export": 0.17,
+      "optimize": 0.9,
+      "load_test": 0.15,
+      "render": 18.79,
+      "three_qa": 20.44
+    },
+    "total_s": 229.57
+  },
+  "run_ref_speed": 3.4,
+  "height_m": 1.56
+}

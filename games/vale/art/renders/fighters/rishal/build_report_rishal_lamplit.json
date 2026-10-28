@@ -50,14 +50,14 @@
   },
   "uv_coverage": 0.589,
   "bake": {
-    "base": 10.22,
-    "rough_metal": 5.48,
-    "normal": 3.43,
-    "ao": 3.66,
+    "base": 3.68,
+    "rough_metal": 5.1,
+    "normal": 5.31,
+    "ao": 4.3,
     "normal_fixed_px": 80609,
-    "projection": 102.14,
-    "pack_save": 102.51,
-    "total": 125.77
+    "projection": 83.68,
+    "pack_save": 83.88,
+    "total": 102.44
   },
   "tris": 21228,
   "mesh_top_m": 1.879,
@@ -87,8 +87,8 @@
       "portrait": "art/out/fighters/rishal/rishal_lamplit_portrait.png"
     },
     "seconds": {
-      "splash": 16.46,
-      "portrait": 7.17
+      "splash": 18.5,
+      "portrait": 9.32
     }
   },
   "three_qa": {
@@ -120,24 +120,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/rishal/three_rishal_lamplit.png",
-    "seconds": 14.9,
+    "seconds": 26.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.21,
-      "model": 25.98,
-      "lows_bind": 2.05,
-      "uv": 7.3,
-      "bake": 125.78,
-      "export": 0.23,
-      "optimize": 1.36,
-      "load_test": 0.23,
-      "render": 23.73,
-      "three_qa": 15.28
+      "rig": 0.01,
+      "materials": 0.24,
+      "model": 38.92,
+      "lows_bind": 2.95,
+      "uv": 7.15,
+      "bake": 102.45,
+      "export": 0.11,
+      "optimize": 0.92,
+      "load_test": 0.22,
+      "render": 27.91,
+      "three_qa": 27.24
     },
-    "total_s": 202.47
+    "total_s": 208.48
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

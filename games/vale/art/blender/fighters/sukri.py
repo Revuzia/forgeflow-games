@@ -1755,10 +1755,10 @@ _bake.bake_asset = _bake_asset
 WRAP_PARTS = ("torso", "skirt", "sleeve_L", "sleeve_R", "shins")
 SKIN_PARTS = {
     "sukri_stillwater": {"torso": "#59666A", "skirt": "#5E6B6E", "sleeve_L": "#5C696D", "sleeve_R": "#5C696D",
-                         "shins": "#8C9592", "hood": "#CFCABB", "plates_L": "#BDB9AD", "plates_R": "#BDB9AD",
-                         "plates_back": "#BDB9AD", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
+                         "shins": "#7E8886", "hood": "#BAB4A2", "plates_L": "#AAA79C", "plates_R": "#AAA79C",
+                         "plates_back": "#AAA79C", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
                          "bracer_R": "#3E4446", "pants": "#2E3436", "cord": "#6F7468"},
-    "sukri_shadeprint": {"hood": "#B7B4BE", "plates_L": "#BEBBC6", "plates_R": "#BEBBC6", "plates_back": "#BEBBC6",
+    "sukri_shadeprint": {"hood": "#ADA9B6", "plates_L": "#AFACB8", "plates_R": "#AFACB8", "plates_back": "#AFACB8",
                          "face": "#BDB3A3", "staff": "#C8BFB0", "cup_glass": "#C5CFE0", "belt": "#2E2C36",
                          "bracer_L": "#34323C", "bracer_R": "#34323C", "pants": "#26252D", "boots": "#2E2C33",
                          "hand_R": "#3A3842", "hand_L": "#3A3842", "cord": "#5A5566"},
@@ -1797,8 +1797,14 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             r = np.clip(Y / max(med, 1e-4), 0.45, 1.6) ** 0.6
             P_ = Pm[m]
             wf = ss(0.02, -0.02, Nm[m][:, 1])
-            rel = _relief_at("front", P_[:, 0], P_[:, 2]) * wf + _relief_at("back", P_[:, 0], P_[:, 2]) * (1 - wf)
-            rim = ss(0.0006, 0.0016, rel)
+            def rel_at(dz):
+                return (_relief_at("front", P_[:, 0], P_[:, 2] + dz) * wf
+                        + _relief_at("back", P_[:, 0], P_[:, 2] + dz) * (1 - wf))
+            # a thin printed light line along the upper side of every painted band edge (the groove 1 cm below),
+            # never in the groove itself (skins 2: wide lit crests read as zebra stripes)
+            groove_below = -np.minimum(rel_at(-0.010), rel_at(-0.006))
+            here = -rel_at(0.0)
+            rim = ss(0.0016, 0.0030, groove_below) * (1 - ss(0.0008, 0.0020, here)) * 0.85
             col = ink[None, :] * (1 - rim[:, None]) + light[None, :] * rim[:, None]
             out[m] = _srgb(_hi_cap(col * r[:, None]))
             log(f"  sukri print {nm}: {100 * float((rim > 0.5).mean()):.0f}% light rims")

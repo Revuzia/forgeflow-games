@@ -58,3 +58,21 @@
   ironstone cage round a lampresin bead with a small accent core; crown ring dropped, front lens vent enlarged;
   4 separate tapered fingers + real thumb + tapered palm; puppeteer guard at the chest; impacts pushed past the brim;
   plate-pixel 'felt / cream-zone' classification for the cloth projection; matte walnut head + one crack.
+- 08:47 code written (fix pass 1): hat 1.10 m (HAT_R 0.522, RIM_C (0.530, 1.8545), RIM_H z 0.040, EDGE_R 0.509;
+  crown kept), crown_glow removed, front lens vent (VENT_CR 0.426, half 0.150 x 0.060, elliptical grommet), lantern
+  at (-0.40, +0.03) as open cage + lantern_bead (lampresin, procedural amber) + lantern_core (accent, 4 x 3 cm),
+  hands = FTaperBox palm + FINGERS (4 separate tapered) + thumb (u*0.96 - lat*0.22), head crack (one Tube) + wood_dark
+  roughness 0.84 (MATTE via extra_materials), plate felt/cream classification in _proj_sides (+ _cream_zone),
+  puppeteer guard (GUARD_W/F/P), impacts past the brim (attack1/2 wrist y -0.74, a1 snap y -0.86, a2 hand out at
+  r ~0.7, a3 arm up through the front brim + lamp_world swing out), death = hat off (hatw_* keys -> x_hat_loc
+  location keys via write_action wrapper; lantern laid out), recall cups the side lantern, dash/taunt animated,
+  Lamplit hat scheme (walnut ribs/band/rim, lit panel cores), Noon Fair felt chroma x1.9 / value x0.92,
+  portrait/icon boxes widened 0.20 m toward the lantern. Fit: IoU front 0.825 / back 0.820 (was 0.85: smaller hat).
+  Accent estimate (fit tool) 1.32 % (old design 0.78 % -> three QA 1.9 %).
+- 08:47 base build started (--no-skins --clip-sheet), log /tmp/tunlan_build_base.log
+- 08:57 base build fp1-a: 22,863 tris, 1178 KiB (OVER 1172), three accent 1.68 % (top half 99.4 %), load OK
+  otherwise. Albedo views (proto/tunlan_compare.py --albedo, new side_l/side_r views): skirt + sleeve sides clean (no
+  hand ghosts, no backdrop streaks); guard hands read at the chest; death drops the hat beside her; dash/taunt move.
+  Changes for fp1-b: fingers wider (0.033/0.034/0.032/0.029, 2 mm apart, taper 5 %/seg), tris cut (lathes 48 segs,
+  fingers 180, palm 420, boots 1000, robe 1800/1950), wood roughness 0.68 (mask rims caught the sky), mask back rims
+  walnut, attack1 ring pair folded into a fist (the 'sickle').

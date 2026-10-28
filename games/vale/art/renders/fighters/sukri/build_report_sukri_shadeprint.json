@@ -1,0 +1,126 @@
+{
+  "id": "sukri_shadeprint",
+  "fighter": "sukri",
+  "skin": true,
+  "parts": {
+    "tris_hood": 2050,
+    "tris_face": 1648,
+    "tris_torso": 1750,
+    "tris_belt": 620,
+    "tris_skirt": 820,
+    "tris_pants": 750,
+    "tris_shins": 750,
+    "tris_boots": 850,
+    "tris_sleeve_L": 620,
+    "tris_bracer_L": 520,
+    "tris_sleeve_R": 620,
+    "tris_bracer_R": 520,
+    "tris_hand_R": 780,
+    "tris_hand_L": 720,
+    "tris_plates_L": 700,
+    "tris_plates_R": 700,
+    "tris_plates_back": 798,
+    "tris_cord": 430,
+    "tris_staff": 820,
+    "tris_staff_grip": 220,
+    "tris_ferrule": 160,
+    "tris_cup_hook": 300,
+    "tris_cup_rim": 440,
+    "tris_cup_glass": 600,
+    "tris_cup_core": 620,
+    "validate_sukri": "18186->18177"
+  },
+  "uv_coverage": 0.612,
+  "bake": {
+    "base": 11.26,
+    "rough_metal": 8.62,
+    "normal": 3.68,
+    "ao": 4.27,
+    "normal_fixed_px": 60556,
+    "projection": 74.91,
+    "pack_save": 75.27,
+    "total": 104.08
+  },
+  "tris": 18797,
+  "mesh_top_m": 1.65,
+  "glb_bytes_raw": 2754656,
+  "optimize": {
+    "ok": true,
+    "before": 2754656,
+    "after": 1111480
+  },
+  "glb_bytes": 1111480,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_shadeprint.glb (1085 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_shadeprint_base 2048x2048 297K, sukri_shadeprint_normal 512x512 61K, sukri_shadeprint_orm 512x512 77K",
+      "  skinned meshes: sukri_accent(263v), sukri_shadeprint(19061v)",
+      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 18797; bind-pose bounds (three units, Y up): 1.44 x 1.65 x 0.75; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/sukri/sukri_shadeprint_splash.png",
+      "portrait": "art/out/fighters/sukri/sukri_shadeprint_portrait.png"
+    },
+    "seconds": {
+      "splash": 17.18,
+      "portrait": 13.43
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.796,
+        0,
+        -0.422
+      ],
+      [
+        0.644,
+        1.65,
+        0.33
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.164,
+    "accentPct": 1.8,
+    "accentTopHalfPct": 56.1,
+    "heightPx1080": 87,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/sukri/three_sukri_shadeprint.png",
+    "seconds": 22,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.38,
+      "model": 42.02,
+      "lows_bind": 18.41,
+      "uv": 9.46,
+      "bake": 104.56,
+      "export": 0.18,
+      "optimize": 1.34,
+      "load_test": 0.34,
+      "render": 30.71,
+      "three_qa": 22.55
+    },
+    "total_s": 230.46
+  },
+  "run_ref_speed": 3.4,
+  "height_m": 1.56
+}

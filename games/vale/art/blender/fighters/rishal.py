@@ -115,13 +115,15 @@ SKINS: list = [
      # ~20 L* under the base's pale blue (the chalk sketches show white on them), the legs and boots the deep ink;
      # the helm and the scarf chalk-white (the base's are cool white / dusty blue), the visor a smoked grey glass, the
      # pauldrons a light ink-grey so the top quarter holds its value
-     "parts": {"apron": "#5E646E", "sleeves": "#636A74", "chest_plate": "#6C727C", "cowl": "#D4D1C8",
-               "skirt_L": "#5A606A", "skirt_R": "#5A606A", "torso": "#5A606A",
-               "pauldron_L": "#949AA2", "lames_L": "#949AA2", "pauldron_R": "#949AA2",
+     # (FIX ROUND 2: the ink pieces and the pauldrons a hair lighter: with the fins no longer accent the front's top
+     # and middle bands fell to 69.4 / 44.3, under the bible's 70 / 45)
+     "parts": {"apron": "#62686F", "sleeves": "#676E78", "chest_plate": "#72787F", "cowl": "#D4D1C8",
+               "skirt_L": "#5E646E", "skirt_R": "#5E646E", "torso": "#5E646E",
+               "pauldron_L": "#9CA2AA", "lames_L": "#9CA2AA", "pauldron_R": "#9CA2AA",
                "helm": "#CFCCC4", "nape": "#7A7F87", "visor": "#7E858E", "neck": "#3E3A38",
                # (FIX ROUND 2: the fins are dawnglass again, not accent; the skin's smoked #A9AEB5 dawnglass took the
                # front top band from 70.8 to 68.5: they keep a pale chalky smoke glass)
-               "fins": "#C3C7CC"},
+               "fins": "#CDD0D4"},
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
      # sketches, the nape plates the deep ink, the crest the named #A7A9AC, and the visor and fins frosted to a
      # chalky smoke-grey glass: the role gain alone left the painted lavender-blue visor blue)

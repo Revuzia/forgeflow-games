@@ -81,11 +81,11 @@ HAND_DIR["R"] = HAND_DIR["L"] * np.array([-1.0, 1.0, 1.0])
 PALM = 0.190                                        # wrist -> the knuckle line
 FING = (0.106, 0.093, 0.082)                        # finger segment lengths (the bone chains)
 THUMB = (0.094, 0.082)
-FING_W = 0.034                                      # the pair's chain off the hand's centre line
-FING_T = 0.031                                      # finger thickness (palm side to back)
+FING_W = 0.0345                                     # the pair's chain off the hand's centre line
+FING_T = 0.032                                      # finger thickness (palm side to back)
 # the four carved fingers on the two pair chains: (chain, lateral offset off the chain, width, tip length change)
-FINGERS = (("a", -0.0195, 0.030, 0.000), ("a", 0.0165, 0.031, 0.012),      # index, middle
-           ("b", -0.0150, 0.029, -0.004), ("b", 0.0190, 0.026, -0.016))    # ring, little finger
+FINGERS = (("a", -0.0160, 0.033, 0.000), ("a", 0.0195, 0.034, 0.012),      # index, middle (2 mm apart)
+           ("b", -0.0145, 0.032, -0.004), ("b", 0.0180, 0.029, -0.016))    # ring, little finger
 REST_CURL = (3.0, 6.0, 10.0)                        # the painted fingers' gentle curl toward the palm (deg per joint)
 
 
@@ -126,8 +126,8 @@ def finger_chain(side: str, which: str, curl=None):
     A = ARM[side]
     W, u, lat, back = A["wr"], A["u"], A["lat"], A["back"]
     if which == "t":
-        base = W + u * 0.064 - lat * 0.068 + back * 0.010
-        d = unit(u * 0.90 - lat * 0.38 + back * 0.10)
+        base = W + u * 0.078 - lat * 0.066 + back * 0.010
+        d = unit(u * 0.96 - lat * 0.22 + back * 0.12)
         segs, curls = THUMB, (6.0, 10.0)
     else:
         off = -FING_W if which == "a" else FING_W
@@ -202,8 +202,43 @@ LAN_Z = {"roof_top": 1.757, "eave": 1.690, "glass_top": 1.685, "glass_bot": 1.56
          "base_bot": 1.493, "knob": 1.471}
 BEAD_R = 0.040            # the smoked lampresin bead inside the cage; the accent core shows at four points of it
 # the lamp-glass lens in the FRONT brim (accent inside an ironstone grommet): centre radius, half sizes along / across
-VENT_CR = 0.432
-VENT_AX = (0.120, 0.052)
+VENT_CR = 0.418           # the lamp slot's centre radius on the front brim
+VENT_HR, VENT_HT = 0.045, 0.210     # its half width across the brim / half length along it (arc length, round ends)
+
+
+HEAD_CRACK = [(0.058, 1.782), (0.036, 1.738), (0.046, 1.706), (0.016, 1.652), (0.010, 1.612)]   # (x, z) on the back
+
+
+def _slot2d(P, hr, ht, th0=-math.pi / 2, rc=None):
+    """signed 2D distance (plan view) to the lamp slot: an arc band round the brim, rc +- hr across, +- ht of arc
+    length along, fully rounded ends"""
+    rc = VENT_CR if rc is None else rc
+    r = np.hypot(P[:, 0], P[:, 1])
+    dth = (np.arctan2(P[:, 1], P[:, 0]) - th0 + math.pi) % (2 * math.pi) - math.pi
+    q0 = np.abs(dth * rc) - (ht - hr)
+    q1 = np.abs(r - rc)
+    return np.where(q0 > 0, np.hypot(np.maximum(q0, 0), q1), q1) - hr
+
+
+class ArcSlot(Prim):
+    """the lamp slot as a solid: _slot2d in plan, z within +- hz of the hat top (+ dz)"""
+
+    def __init__(self, hr, ht, dz, hz):
+        self.hr, self.ht, self.dz, self.hz = float(hr), float(ht), float(dz), float(hz)
+
+    def bounds(self):
+        a = (self.ht + 0.02) / VENT_CR
+        r0, r1 = VENT_CR - self.hr - 0.01, VENT_CR + self.hr + 0.01
+        xs = r1 * math.sin(a)
+        return (np.array([-xs, -r1, float(hat_top(r1)) + self.dz - self.hz - 0.01]),
+                np.array([xs, -r0 * math.cos(a), float(hat_top(r0)) + self.dz + self.hz + 0.01]))
+
+    def d(self, P):
+        d2 = _slot2d(P, self.hr, self.ht)
+        r = np.hypot(P[:, 0], P[:, 1])
+        dz = np.abs(P[:, 2] - (hat_top(r) + self.dz)) * 0.96 - self.hz
+        o = np.stack([np.maximum(d2, 0), np.maximum(dz, 0)], 1)
+        return np.linalg.norm(o, axis=1) + np.minimum(np.maximum(d2, dz), 0)
 
 
 def _vent_c():
@@ -389,11 +424,11 @@ def hand_parts(side: str) -> list:
                 lx = -lx
             ax_ = np.stack([lx, bx, d])
             L = float(np.linalg.norm(b - a))
-            tp0, tp1 = 1.0 - 0.07 * i, 1.0 - 0.07 * (i + 1)
+            tp0, tp1 = 1.0 - 0.05 * i, 1.0 - 0.05 * (i + 1)
             for _, o, w, dl in fl:
                 Lf = L + (dl if i == nseg - 1 else 0.0)
                 S.add(FTaperBox(a + lx * o + d * 0.0045, ax_, Lf - 0.009, w * 0.5 * tp0, w * 0.5 * tp1,
-                                th * 0.5 * tp0, th * 0.5 * tp1, 0.0085), k=0.0)
+                                th * 0.5 * tp0, th * 0.5 * tp1, 0.0075), k=0.0)
                 if i < nseg - 1:
                     S.add(Capsule(b + lx * (o - w * 0.34), b + lx * (o + w * 0.34), 0.0122 * tp1), k=0.003)   # joint
                 else:
@@ -427,14 +462,12 @@ def sculpts() -> list:
     part("hat_rim", rim, "ironstone", "bone:x_hat", 800, 0.7)
     # the lamp-glass lens in the front brim: an elliptical ironstone grommet round a lens lying proud of the lacquer
     # (the hat's game mesh is a clean lathe; the lens and the grommet sit on it)
-    vc, vn = _vent_c(), _vent_n()
-    fr = sdf.frame(vn, (1.0, 0.0, 0.0))
     vent = Sculpt("vent_ring")
-    vent.add(Ellipsoid(vc + vn * 0.001, (VENT_AX[0] + 0.016, VENT_AX[1] + 0.016, 0.0095), axes=fr), k=0.0)
-    vent.sub(Ellipsoid(vc + vn * 0.001, (VENT_AX[0] + 0.001, VENT_AX[1] + 0.001, 0.030), axes=fr), k=0.002)
+    vent.add(ArcSlot(VENT_HR + 0.014, VENT_HT + 0.014, 0.0010, 0.0090), k=0.0)
+    vent.sub(ArcSlot(VENT_HR + 0.001, VENT_HT + 0.001, 0.0010, 0.0300), k=0.002)
     part("vent_ring", vent, "ironstone", "bone:x_hat", 320, 0.5)
     glow = Sculpt("vent_glow")
-    glow.add(Ellipsoid(vc + vn * 0.001, (VENT_AX[0] - 0.001, VENT_AX[1] - 0.001, 0.0040), axes=fr), k=0.0)
+    glow.add(ArcSlot(VENT_HR - 0.001, VENT_HT - 0.001, 0.0010, 0.0040), k=0.0)
     part("vent_glow", glow, "accent", "bone:x_hat", 140, 0.5)
 
     # ── LANTERN (x_lantern): hook ring + rod, roof, six posts round an open cage, the lampresin bead, base, knob ──
@@ -483,8 +516,7 @@ def sculpts() -> list:
     # one thin crack down the back board (as painted), cut 1.5 mm into the surface along its whole length
     def yb(z):
         return 0.025 + 0.100 + 0.024 * (z - 1.520) / 0.280 + 0.0007
-    crack = [(0.058, 1.782), (0.036, 1.738), (0.046, 1.706), (0.016, 1.652), (0.010, 1.612)]
-    head.sub(Tube([(x, yb(z), z) for x, z in crack], [0.0024, 0.0022, 0.0022, 0.0018, 0.0012]), k=0.001)
+    head.sub(Tube([(x, yb(z), z) for x, z in HEAD_CRACK], [0.0024, 0.0022, 0.0022, 0.0018, 0.0012]), k=0.001)
     part("head", head, "wood_dark", "bone:head", 900)
     mask = Sculpt("mask")
     plate = TaperBox(0.0, -0.100, 1.494, 1.832, 0.108, 0.172, 0.050, 0.050, 0.020)
@@ -528,7 +560,7 @@ def sculpts() -> list:
         top.add(Tube([(sx * 0.070, 0.070, 1.455), (sx * 0.085, -0.040, 1.448), (sx * 0.070, -0.105, 1.39),
                       (sx * 0.010, -0.128, 1.25), (-sx * 0.04, -0.124, 1.17)], [0.018, 0.020, 0.020, 0.016, 0.014], k=0.01), k=0.012)
     top.inter(HalfSpace((0, 0, 1.105), (0, 0, -1), 1.0), k=0.01)
-    part("robe_top", top, "cloth", ("weights", "torso"), 1900)
+    part("robe_top", top, "cloth", ("weights", "torso"), 1800)
     skirt = Sculpt("robe_skirt")
     sk = FlatCapsule((0.0, 0.012, 0.280), (0.0, 0.004, 1.175), 0.240, 0.182, 0.148, 0.116, side=(1, 0, 0))
     skirt.add(sk.displaced(ang_folds(0.012, 7, (0.0, 0.01), zfade=(1.05, 0.30), phase=0.4), 0.012), k=0.0)
@@ -537,7 +569,7 @@ def sculpts() -> list:
     # the outer robe's front edges (her left panel overlaps at x +0.07; the cream under-robe shows between)
     skirt.sub(Tube([(0.072, -0.150, 1.10), (0.075, -0.175, 0.70), (0.080, -0.210, 0.27)], [0.004, 0.004, 0.005]), k=0.003)
     skirt.sub(Tube([(-0.075, -0.145, 1.10), (-0.105, -0.170, 0.70), (-0.120, -0.200, 0.27)], [0.004, 0.004, 0.005]), k=0.003)
-    part("robe_skirt", skirt, "cloth", ("weights", "skirt"), 2050)
+    part("robe_skirt", skirt, "cloth", ("weights", "skirt"), 1950)
     sash = Sculpt("sash")
     sash.add(Torus((0.0, 0.004, 1.165), 0.150, 0.046, axes=np.diag([1.0, 0.150 / 0.122, 1.0]), rz=0.050).displaced(
         lambda P: 0.003 * np.sin(P[:, 2] * 160.0 + 3.0 * NOISE(P, 6.0)), 0.003), k=0.0)
@@ -569,7 +601,7 @@ def sculpts() -> list:
     # ── HANDS (rigid segments on hand / finger bones) ──
     for s in ("R", "L"):
         for name, S, role, bind in hand_parts(s):
-            tris = 460 if name.startswith("palm") else (140 if name.startswith("ft") else 210)
+            tris = 420 if name.startswith("palm") else (130 if name.startswith("ft") else 180)
             part(name, S, role, bind, tris, 0.42)
 
     # ── LEGS + BOOTS ──
@@ -590,7 +622,7 @@ def sculpts() -> list:
         boots.add(Ellipsoid(toe + fwd * 0.005 + np.array([0, 0, 0.004]), (0.048, 0.050, 0.032),
                             axes=sdf.rot_z(math.degrees(math.atan2(fwd[0], -fwd[1])) * -1)), k=0.03)
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", ("weights", "boots"), 1100)
+    part("boots", boots, "leather", ("weights", "boots"), 1000)
     return out
 
 
@@ -678,11 +710,11 @@ def model(ctx) -> list:
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
         if name == "hat":
-            low = lathe_low("hat_low", hat_profile(), ctx.mats[role], ctx.col, 56, octagon_r=CROWN_A[0] + 0.006)
+            low = lathe_low("hat_low", hat_profile(), ctx.mats[role], ctx.col, 48, octagon_r=CROWN_A[0] + 0.006)
             P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         if name == "hat_rim":
-            low = lathe_low("hat_rim_low", rim_profile(), ctx.mats[role], ctx.col, 56)
+            low = lathe_low("hat_rim_low", rim_profile(), ctx.mats[role], ctx.col, 48)
             P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
@@ -708,7 +740,8 @@ def skin_extras(extra: dict) -> list:
     return out
 
 
-MATTE = {"wood_dark": 0.84}   # the walnut head-box: the bible's 0.5 caught the sky (a pale, bluish-edged box in three)
+MATTE = {"wood_dark": 0.84, "wood": 0.68}   # walnut head-box / carved mask + hands: the bible's 0.5 / 0.58 caught the sky
+#                                              (a pale, bluish-edged box and mask rims in three)
 
 
 def _set_rough(m, v):
@@ -1259,8 +1292,8 @@ def _hat_paint(p, n, hexes=None):
     cc = cc * (1 - 0.35 * stepl)[:, None]
     c = c * (1 - cr[:, None]) + cc * cr[:, None]
     # the lens grommet's warm scorch on the lacquer round it
-    ve = np.hypot(p[:, 0] / (VENT_AX[0] + 0.016), (-p[:, 1] - VENT_CR) / (VENT_AX[1] + 0.016))
-    c = c * (1 - 0.22 * np.exp(-((ve - 1.08) / 0.16) ** 2) * (p[:, 1] < 0))[:, None]
+    ve = _slot2d(p, VENT_HR + 0.014, VENT_HT + 0.014)
+    c = c * (1 - 0.22 * np.exp(-((ve - 0.010) / 0.012) ** 2))[:, None]
     # the underside: walnut ring and battens in shade, lighter toward the rim
     ub = 1 + 0.06 * _fbm(p * np.array([1.0, 1.0, 0.2]), 14.0)
     batt = 1 - 0.18 * np.exp(-((dth * r) / 0.010) ** 2)
@@ -1318,6 +1351,14 @@ def _head_paint(p, n):
     band = ss(1.790, 1.798, p[:, 2])
     c = c * (1 - band[:, None]) + band_c[None, :] * (grain * lit)[:, None] * band[:, None]
     c = c * (1 - 0.4 * np.exp(-((p[:, 2] - 1.795) / 0.003) ** 2))[:, None]
+    # the crack down the back board: a thin dark line (the carved groove alone caught the light as a pale glyph)
+    q = np.stack([p[:, 0], p[:, 2]], 1)
+    dmin = np.full(len(p), 1e9)
+    for (x0, z0), (x1, z1) in zip(HEAD_CRACK[:-1], HEAD_CRACK[1:]):
+        a_, b_ = np.array([x0, z0]), np.array([x1, z1])
+        t_ = np.clip(((q - a_) @ (b_ - a_)) / float((b_ - a_) @ (b_ - a_)), 0, 1)
+        dmin = np.minimum(dmin, np.linalg.norm(q - (a_ + t_[:, None] * (b_ - a_)), axis=1))
+    c = c * (1 - 0.65 * np.exp(-(dmin / 0.0032) ** 2) * ss(0.3, 0.6, n[:, 1]))[:, None]
     return c * (1 + 0.15 * ss(0.5, 0.95, np.abs(n[:, 2])))[:, None]
 
 
@@ -1393,6 +1434,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         if m is not None:
             b_ = _lin(np.asarray(rgb, dtype=np.float32))
             lin[m] = b_[None, :] * ((0.82 + 0.26 * ss(-0.2, 0.9, n[m] @ KEY)) * (1 + 0.05 * _fbm(p[m], 30.0)))[:, None]
+    m = sel("mask")                                           # the mask's back rims (seen past the head-box): walnut
+    if m is not None:
+        wbk = ss(0.05, 0.45, n[m, 1])[:, None]
+        lin[m] = lin[m] * (1 - wbk) + _lin(_hex("#5A4434"))[None, :] * wbk
     for name, kf in ROBE_LIFT.items():
         m = sel(name)
         if m is not None:
@@ -2031,7 +2076,7 @@ def strike(name, frames, wind, hit, follow, g=None, lags=None):
 def clip_attack1():
     """a quick two-finger flick of the right hand that throws a bolt of lamplight"""
     g = guard()
-    pt = dict(a=(0, 2, 0), b=(64, 76, 52), t=(30, 34))                     # index pair out, the rest folded
+    pt = dict(a=(0, 2, 0), b=(86, 96, 64), t=(34, 40))                     # index pair out, the rest folded into a fist
     wind = compose(stance_pose(), body(hips=(0, -10, 0), spine=(0, -8, 0), chest=(-2, -12, 0), head=(4, 12, 0)),
                    guard_arms(), ik(wrist("R", -0.30, -0.02, 1.38, (-0.9, 0.2, -0.3)),
                                     orient("R", (-0.55, 0.60, 0.58), (0.55, 0.70, -0.45))),
@@ -2044,7 +2089,7 @@ def clip_attack1():
     fol = compose(stance_pose(), body(hips=(5, 15, 0), spine=(6, 12, 0), chest=(7, 16, 0), head=(-3, -13, 0), fwd=0.055),
                   guard_arms(), ik(wrist("R", -0.10, -0.72, 1.32, (-0.8, 0.3, -0.4)),
                                    orient("R", (0.10, -0.94, -0.30), (0.05, 0.30, -0.95))),
-                  guard_fingers(), fingers("R", a=(8, 10, 8), b=(60, 70, 50), t=(26, 30)))
+                  guard_fingers(), fingers("R", a=(8, 10, 8), b=(84, 94, 62), t=(32, 38)))
     return strike("attack1", 20, wind, hit, fol, g)
 
 
@@ -2103,8 +2148,9 @@ def clip_cast_a1():
 
 
 def clip_cast_a2():
-    """Hand Shadow (25 f, impact f10): the right hand rises, fingers spread wide like a great shadow palm, then closes
-    in a slow grip at f10; the left hand steadies the lamp; recover by f25"""
+    """Hand Shadow (25 f, impact f10): the right hand rises out past the brim, fingers spread wide like a great shadow
+    palm, then closes in a slow grip at f10; the left hand steadies the hat (and its lamp) at the left brim; recover
+    by f25"""
     N = 25
     g = guard()
     # the left hand steadies the hat (and the lamp hanging from it) at the left brim, outside the disc
@@ -2133,8 +2179,9 @@ LAMP_SWING = 48.0         # ... and the lantern's swing out from her side on its
 
 
 def clip_cast_a3():
-    """Lamp Flare (15 f, impact f6): the left hand flicks the hat's front brim up, the lamp swings out on its hook, the
-    figure leans away; the lamp at the end of its swing flares at f6; recover by f15 (the lantern authored: no spring)"""
+    """Lamp Flare (15 f, impact f6): the left hand flicks the hat's front brim up and carries on up past it (the arm
+    stretched above the brim at the flare), the lamp swings out from her side on its hook clear of the brim, the figure
+    leans away; the lamp at the end of its swing flares at f6; recover by f15 (the lantern authored: no spring)"""
     N = 15
     g = guard()
     flick0 = compose(stance_pose(), body(hips=(0, 4, 0), chest=(2, 4, 0), head=(4, 0, 0)),

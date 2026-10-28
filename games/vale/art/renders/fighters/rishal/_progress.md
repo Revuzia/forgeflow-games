@@ -342,3 +342,55 @@
   head and scarf) updated to match; from the front at the game camera the crest + lit fins and the left pauldron
   spike still make a two-group crown (the spike is the brief's); the back facing's top band 67.6; the splash is the
   brief's standing victory hold, not an action shot.
+- 2026-10-28 09:05 CDT: FIX ROUND 2 (verify of the polish: head/visor/face-plate major partly; back value, rabbit-ear V
+  and the BRIDGE note minor). Every head change checked against _design/concept/rishal.webp crops with
+  proto/rishal_head.py (now `--custom name:yaw:pitch` views) and the game-camera lineup.
+  ACCENT (the ridge alone, brief §7): the swept fins are non-emissive pale dawnglass again (fin_paint, a step lighter;
+  the skins give them a pale smoke / pale amber glass via `parts`); the polish's flat 45-degree brim is gone. The ridge
+  is RidgeMesh: a NARROW blade on the visor's real top edge (band_top(), sampled round the lens axis, so it reaches
+  the temples), 1.7 cm over the brow and nearly upright (RIDGE_LEAN 0.18), 2.2 cm at the temples - the chalk dome shows
+  above the band; and the REAR RISE (brief §3 "back into the crest root"): at each temple the blade turns up and back
+  into a crescent vane running under the crest's arc along its flank to the tail (REAR_UP / REAR_LO edge curves).
+  Measured why the rise must be this big: the band + a slim vane gave lineup 1.60 / 1.66 / 0.65 / 1.84 % (the idle's
+  forward lean tips the crown away from the back camera; estimator / lineup at the back ~0.4); with the vane's belly
+  wider and its tail sloping down-back: 2.33 / 2.46 / 1.13 / 2.81 %, accentOk TRUE, 100 % top half; three QA 2.41 %.
+  Look trade-off, open: from the game camera the vanes read as accent flanking the crest's base (front) and as two
+  accent patches either side of the crest on the crown (back); a narrower vane fails the back gate (b1 0.65 %).
+  FINS: rooted at the left temple boss under the vane and splayed out and lower (tips x 0.21, z 1.72-1.78) so from the
+  front they fan toward the pauldron spike rather than standing as a second prong beside the crest.
+  MASK: contour carving in warm chalk (#957F6E cut, lit lip) in the face's own wrap coordinate (brow, an arc under
+  the cheekbone to the jaw's hinge, the cheek plane to the mouth corner, the mouth line, the chin crease, the jaw) -
+  the vertical ink gouges are gone; warmer ivory (FACE_COL) with less side darkening; smooth cheekbone swells
+  instead of the boxed cheek planes and a 2 cm narrower brow box (their ends stood out under the band: the portrait's
+  "stub"); the hook ~25 % narrower below the band; the visor rim 1.05 -> 0.8 cm; "face" in SOFT_AO. The grey speckle
+  in the portrait was the hero renders' Cycles tracing the see-through visor as an opaque shell over the mask: the
+  render wrapper now lets shadow and diffuse rays through the visor's faces (HERO_GLASS, by vale_part) for the hero
+  renders only (game material untouched; three.js already showed the mask lit). Portrait yaw 36 -> the brief's 28:
+  the near cheek, jaw, mouth line and chin show beside the hook (_fit/fr2_concept_vs_portrait.png).
+  VALUE (back facing): helm back plates (NAPE_COL), helm / crest shaded tones, hood back + its creases, the torso's
+  back (HARMONIZE back #A8B4BD), the lames' turned-away stone (_stone n.y term, STONE_COL shade / groove), the back of
+  the neck column a lighter warm tan: top band 67.6 -> 69.3 (without the vanes' accent pixels ~70.3; the accent
+  covers ~13 % of the back's top band at L* ~61). Chalkline's ink pieces and pauldrons a hair lighter (its front top /
+  mid fell to 69.4 / 44.3 when the fins left the accent): 70.2 / 45.1.
+  GATES (final): base three load OK, 20818 tris, 1154 KiB (budget 1172), accent 2.41 %, facing +Z, 17 clips, impacts
+  0.4, mesh top 1.879 (art.json unchanged, content art block == art.json). Skins: chalkline 20818 tris 1001 KiB 2.45 %,
+  lamplit 21228 tris 1017 KiB 2.44 % (three load OK). Lineup (_fit/lineup_fr2_final, idle f0, 0/90/180/270): base top
+  75.5 / 73.9 / 69.3 / 73.9, mid 54.5 / 49.3 / 51.8 / 47.3, feet 30.6 / 28.6 / 22.2 / 26.2, accent 2.33 / 2.46 / 1.13 /
+  2.81 accentOk TRUE valueGradientOk TRUE; chalkline top 70.2 / 67.3 / 61.2 / 68.9, mid 45.1 / 39.0 / 39.6 / 37.3
+  (TRUE / TRUE); lamplit top 70.4 / 68.7 / 67.2 / 69.1, mid 53.5 / 48.7 / 52.1 / 46.1 (TRUE / TRUE); IoU64 vs Kemdo
+  0.577, Nurrow 0.475, Marund 0.258. build_content --check --allow-missing-assets OK (strict lists nothing for
+  rishal); probe_kits_A 525/0, probe_kits_B 733/0. In game (_harness/_shots/art2_rishal_*, t 65; catalog GLB
+  b4ce83bb1811 = art/out md5 76c9e546).
+  VALUE LIFT re-measured (scratch copy of value_probe.mjs, --you rishal, --flash 0; top-25 L* (gap over the lane)):
+  self colour RIFT 80.8 (42.8) / 82.7 (44.2), BRIDGE 82.3 (43.8) / 83.8 (45.3), FRAY 79.5 (42.5) / 81.2 (44.2)
+  (High / Low); with the ally colour on his seat (VP_ALLY_SELF) RIFT 80.0 / 82.1, BRIDGE 80.2 / 82.1, FRAY 79.3 / 81.1,
+  all >= 41.7 over the lane; his gt90 0.07-1.6 % (ally colour), 1.2-2.7 % (Noonwhite self colour). Target met.
+  FOR THE BRIEF OWNER (_design/fighters/rishal.md, not edited here):
+  §7 Accent - the ridge as built: a narrow blade along the visor's upper edge (1.7-2.2 cm) that rises at each temple
+  into a swept crescent vane along the crest's flank into its root; ~2.4 % in the three QA, 1.1-2.8 % per facing at
+  the game camera; the band alone cannot be seen from behind (the bible's >= 1 % per facing sets the vane's size), so
+  either §7 names the rear-rise vanes, or it formally allows the swept fins to carry the accent instead (the polish's
+  solution, 1.2 % from behind) and the vanes go.
+  §9 Chalkline - the table as built (an ink figure under a chalk-white head and scarf): coat / skirt / torso #5E646E,
+  apron #62686F, sleeves #676E78, chest #72787F, pauldrons + lames #9CA2AA, helm #CFCCC4, scarf (cowl) #D4D1C8,
+  visor smoked #7E858E, nape #7A7F87, neck #3E3A38, fins #CDD0D4; Lamplit fins #CDBD9F.

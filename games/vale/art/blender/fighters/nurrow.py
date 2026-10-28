@@ -181,7 +181,7 @@ def rim_angle_dir(phi_deg):
     return V3([math.sin(a), -math.cos(a), 0.0])
 
 
-INLAY_T, INLAY_B = 0.066, 0.029          # the slips' footprint half-length (along the rim) and half-width
+INLAY_T, INLAY_B = 0.074, 0.032          # the slips' footprint half-length (along the rim) and half-width
 
 
 def inlay_frames():
@@ -1193,7 +1193,7 @@ SIDE_INSET = 0.04
 # polish (value probe with the game's character light, rift/bridge/fray: the hat at screen L* 83-87, p25-p75 within
 #   1.6 L*: the lacquer's red channel sat in the tone map's highlight shoulder, so the brushwork flattened into a cream
 #   fill; nurrow top-25 85.8-86.8, above the token band's 85): the lit end of the ramp ~4 L* down (mid 66.8 -> 65,
-#   lit 77.7 -> 74, hi 83.4 -> 79.5; the shade end kept) and the gores' spread up (0.11 -> 0.15)
+#   lit 77.7 -> 74, hi 83.4 -> 79.5; the shade end kept), the gores' spread up (0.11 -> 0.20), seams + pooled lacquer darker
 HAT_COLS = {"deep": "#705A43", "shade": "#967C5A", "mid": "#B59A6C", "lit": "#CBB47A", "hi": "#D7C486",
             "under": "#8F6F56", "under_deep": "#47382C"}    # the underside: the concept's warm ochre-brown lacquer
 #                                                        (its back view, L* 36-53), darker toward the crown
@@ -1313,10 +1313,12 @@ def _lacquer(p, n, q, r, phi):
     # (f5-2: bolder: the f5-1 strokes vanished in the splash's sky light and the 2 mm texels)
     # (f5-3: the strokes +-3.5 L* still vanished in the splash's sky light -> +-6; the gores +-4.5)
     v = 0.36 + 0.56 * t
-    v = v + 0.15 * HAT_OFF[k] + 0.08 * (u - 0.5) * fade
+    sg = 1.0 if _SKIN.get("id") is None else 0.75        # polish: the base's structure wider (the game's light
+    #                                                      compresses the lacquer's top end ~2.5x on screen)
+    v = v + (0.20 if sg == 1.0 else 0.15) * HAT_OFF[k] + 0.10 * sg * (u - 0.5) * fade
     v = v + 0.30 * broad + 0.08 * hair + 0.05 * mott + 0.07 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
     v = v + 0.04 * _ss(0.0, 0.3, r) * (1 - _ss(0.3, 0.55, r))
-    v = v - 0.12 * seam + 0.06 * lip - 0.06 * pool
+    v = v - (0.20 if sg == 1.0 else 0.12) * seam + 0.06 * lip - (0.10 if sg == 1.0 else 0.06) * pool
     rl = r + 0.004 * _streaks(phi, r, 9.0, 1.0, 5.0)
     line = _ss(0.0050, 0.0020, np.abs(rl - 0.875) * BRIM_R)
     line_lit = _ss(0.0035, 0.0012, np.abs(rl - 0.887) * BRIM_R)
