@@ -152,9 +152,13 @@ def hpt(s, a, b, c):
 GRIP_AB = (0.068, 0.036)
 S_BUTT, S_TOP = -0.60, 0.24
 SHAFT_R = 0.020
-HOOK = [(0.0, 0.24), (0.004, 0.300), (0.026, 0.346), (0.070, 0.366), (0.112, 0.346), (0.128, 0.300), (0.117, 0.262)]
-HANG_UK = (0.070, 0.366)          # the hook's top bar: the lamp's pivot (x_lamp's head)
-LAMP_DROP = 0.352                 # the pivot -> the finial's tip
+# fix pass 1: the concept's carved, ANGULAR open loop (not a smooth J): the shaft kinks out, rises to a flat top bar,
+# drops on the far side and stops short of the shaft (open); the lamp hangs from the top bar's far corner
+HOOK = [(0.0, 0.24), (-0.012, 0.300), (-0.004, 0.352), (0.030, 0.398), (0.098, 0.404), (0.132, 0.364),
+        (0.128, 0.318), (0.100, 0.290)]
+HOOK_R = [0.019, 0.018, 0.0175, 0.017, 0.016, 0.0155, 0.0145, 0.013]
+HANG_UK = (0.098, 0.392)          # under the top bar's far corner: the lamp's pivot (x_lamp's head)
+LAMP_DROP = 0.378                 # the pivot -> the finial's tip
 C0 = hpt("R", GRIP_AB[0], GRIP_AB[1], 0.0)
 U0 = HF["R"][2].copy()
 K0 = HF["R"][0].copy()
@@ -166,11 +170,15 @@ def spt(u, k=0.0, v=0.0):
 
 
 HANG0 = spt(HANG_UK[1], HANG_UK[0])
-# the lamp at rest hangs straight down from HANG0 (dz down); its front faces -Y
-LAMP = {"ring": 0.010, "stem": (0.020, 0.046), "knob": 0.048, "cap": (0.052, 0.074), "glass": (0.074, 0.270),
-        "base": (0.270, 0.296), "finial": (0.296, LAMP_DROP)}
-GLASS_R = [(0.074, 0.052), (0.095, 0.064), (0.130, 0.079), (0.170, 0.088), (0.210, 0.089), (0.245, 0.084), (0.270, 0.075)]
-FLAME = (0.198, 0.074, 0.078)     # the core's bulb centre (dz), its radius, the tip's dz (brief: a 12 x 18 cm flame)
+# the lamp at rest hangs straight down from HANG0 (dz down); its front faces -Y. Fix pass 1: a FLAME in clear glass
+# (the review: the 14 x 19 cm core filled the cage and read as a blue potion): a 21 cm open cage of four thin ribs,
+# a 12.6 x 18 cm teardrop flame on a chalk burner with 4 cm of empty glass round it and 4.5 cm above its tip, and
+# a solid glass font bowl under the flame (the glass mass that reads as glass: Stillwater's sea-glass)
+LAMP = {"ring": 0.010, "stem": (0.020, 0.036), "knob": 0.038, "cap": (0.042, 0.066), "glass": (0.066, 0.300),
+        "base": (0.300, 0.326), "finial": (0.326, LAMP_DROP)}
+GLASS_R = [(0.066, 0.058), (0.090, 0.075), (0.130, 0.093), (0.175, 0.103), (0.220, 0.105), (0.262, 0.099), (0.300, 0.086)]
+FLAME = (0.222, 0.063, 0.106)     # the flame's bulb centre (dz), its radius, the tip's dz (brief: a 12 x 18 cm flame)
+FONT = (0.258, 0.300)             # the glass font bowl (dz top, bottom)
 
 
 def lpt(dz, x=0.0, y=0.0):
@@ -188,8 +196,11 @@ PALETTE = materials.bible_palette(cloth2="#D6CCBE", chalk="#D2CDC4", cloth="#6E7
                                   accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_lamp", "visor_top": "x_chimney_top"}
+# fix pass 1: the darker Aubade backdrop (aubade_dusk, this module's plate grade), the warm rim down (it bled over the
+# right edge), a softer sun on the pale linen; the skins pose their own splash (they were the same frame)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "portrait_clip": "idle_lobby", "portrait_t": 0.0,
-          "portrait_yaw": 28.0}
+          "portrait_yaw": 28.0, "icon_yaw": 20.0, "yaw": 24.0, "fill": 0.86, "rim_warm": 0.25, "rim_cool": 0.85,
+          "sun": 2.5, "aubade_dusk": 0.50}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -198,10 +209,12 @@ AO_INTO_BASE = 0.25
 SKINS: list = [
     {"id": "ilsheta_stillwater", "extra": {"reed_plates": True}, "card": {"primary": "#59666A", "secondary": "#8FB3A8"},
      "palette": {"cloth2": "#C4CFD3", "chalk": "#C9CFCB", "cloth": "#59666A", "cloth3": "#434F53", "wood": "#B7A98F",
-                 "lampglass": "#8FB3A8", "reed": "#8E9672"}},
+                 "lampglass": "#8FB3A8", "reed": "#8E9672"},
+     "splash": {"clip": "idle_lobby", "t": 0.60, "yaw": 34.0}},
     {"id": "ilsheta_first_bell", "extra": {"glass_bell": True, "hour_marks": True},
      "card": {"primary": "#3A3633", "secondary": "#CFCAC0"},
-     "palette": {"cloth2": "#CFCAC0", "chalk": "#D4CEBF", "cloth": "#8C8780", "cloth3": "#3A3633"}},
+     "palette": {"cloth2": "#CFCAC0", "chalk": "#D4CEBF", "cloth": "#8C8780", "cloth3": "#3A3633"},
+     "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "fill": 0.84}},
 ]
 SKIN_FLAT = {"reed_plates": "reed", "glass_bell": "dawnglass", "hour_marks": "chalk"}
 HEIGHT = 1.72             # the plates' scale: the chimney's top rim (content art.height)
@@ -210,19 +223,25 @@ NOISE = sdf.Noise(23)
 VOXEL = 0.0058
 
 # ── measured forms (m) ─────────────────────────────────────────────────────────────────────────────────────────
-CHIM_C = (0.0, -0.035)            # the chimney's axis (x, y)
-CHIM_R = [(1.205, 0.098), (1.225, 0.110), (1.255, 0.118), (1.30, 0.120), (1.35, 0.115), (1.40, 0.104), (1.44, 0.093),
-          (1.48, 0.083), (1.52, 0.077), (1.56, 0.074), (1.60, 0.073), (1.64, 0.074), (1.68, 0.078), (1.705, 0.082),
-          (1.72, 0.083)]
-CHIM_TOP = 1.72
-MASK_C = (0.0, -0.083, 1.330)
+# fix pass 1 (the review: an opaque ceramic stovepipe on the hood, the face outside it): THE CHIMNEY IS THE VISOR,
+# one glass body from the chin to the 1.72 rim that holds the face: the flare (0.24 m at the cheek) sits in the hood's
+# opening IN FRONT of the hood with the face painted inside it (the concept paints the mask THROUGH the glass, the
+# projection carries it), its front pushed out into a beak (the facing cue from above); above the hood it narrows to
+# the 0.15 m chimney, painted as clear cool dawnglass (catch-light streaks, darker turning sides, a bright lip)
+CHIM_C = (0.0, -0.046)            # the chimney's axis (x, y)
+CHIM_R = [(1.178, 0.098), (1.200, 0.112), (1.230, 0.119), (1.270, 0.122), (1.320, 0.119), (1.370, 0.110),
+          (1.420, 0.098), (1.460, 0.088), (1.500, 0.080), (1.540, 0.075), (1.580, 0.073), (1.620, 0.073),
+          (1.660, 0.075), (1.690, 0.078), (1.710, 0.082), (1.720, 0.083)]
+CHIM_BEAK = [(1.178, 0.012), (1.230, 0.022), (1.290, 0.024), (1.350, 0.018), (1.420, 0.007), (1.470, 0.0), (1.72, 0.0)]
+CHIM_BOT, CHIM_TOP = 1.178, 1.72
+MASK_C = (0.0, -0.083, 1.330)     # the painted face inside the glass (the concept's mask: the paint's face zone)
 MASK_R = (0.088, 0.062, 0.118)
-# the hood: lofted sections (z, half width, front y, back y); a rounded crown closed by the collar (never a point)
+# the hood: lofted sections (z, half width, front y, back y); a rounded crown hugging the glass (never a point)
 HOOD_S = [(1.165, 0.200, -0.150, 0.205), (1.19, 0.197, -0.152, 0.207), (1.22, 0.182, -0.153, 0.207),
           (1.26, 0.162, -0.153, 0.203), (1.30, 0.146, -0.153, 0.198), (1.34, 0.136, -0.150, 0.190),
           (1.38, 0.128, -0.145, 0.178), (1.42, 0.120, -0.136, 0.160), (1.45, 0.112, -0.126, 0.138),
           (1.47, 0.103, -0.118, 0.114), (1.488, 0.090, -0.110, 0.088), (1.50, 0.078, -0.104, 0.064)]
-HOOD_OPEN = (0.113, 1.312, 0.150)       # the face opening: half width, centre z, half height (front, y < -0.03)
+HOOD_OPEN = (0.124, 1.316, 0.156)       # the face opening: half width, centre z, half height (front, y < -0.03)
 COLLAR = (1.488, 0.091, 0.021)          # z, ring radius, tube radius (the linen roll round the glass)
 # the mantle: a bell shell lofted from sections (z, half width, front y, back y), open at the front and the hem
 MANTLE_S = [(1.16, 0.150, -0.118, 0.140), (1.10, 0.182, -0.136, 0.160), (1.05, 0.206, -0.150, 0.178),
@@ -235,6 +254,8 @@ MANTLE_TOP = 1.155
 HEM_Z = 0.337
 OPEN_W = [(1.16, 0.060), (1.05, 0.070), (0.90, 0.078), (0.70, 0.086), (0.50, 0.096), (0.32, 0.106)]
 FOLD_N, FOLD_PH = 7, 0.55
+MANTLE_BONES = {"x_mantle_l": ((0.115, -0.168, 0.985), (0.245, -0.262, 0.430)),
+                "x_mantle_r": ((-0.115, -0.168, 0.985), (-0.245, -0.262, 0.430))}
 
 
 def _interp(table, z, col):
@@ -288,7 +309,12 @@ def _front_fade(th, lo=0.40, hi=0.75):
 
 
 def mantle_amp(P, th):
-    return 0.020 * ss(0.86, 0.42, P[:, 2]) * _front_fade(th)
+    """the folds: 2 cm below the arms round the front panels, and (fix pass 1: the back was a smooth blank shell) long
+    drape folds down the back from the shoulder blades, as the concept's back view paints them"""
+    z = P[:, 2]
+    low = 0.020 * ss(0.86, 0.42, z) * _front_fade(th)
+    drape = 0.014 * ss(1.10, 0.92, z) * ss(0.10, 0.55, np.sin(th))
+    return np.maximum(low, drape)
 
 
 def hem_z(P):
@@ -325,10 +351,20 @@ def hood_d(P):
     return sdf.smax(d, -tun, 0.010)
 
 
-def chim_prof(r, z):
-    R = _interp(CHIM_R, z, 1)
-    d = np.maximum(r - R, np.maximum(CHIM_R[0][0] - z, z - CHIM_TOP))
-    well = np.maximum(r - (R - 0.0075), 1.668 - z)            # the open top: a 5 cm deep well inside the rim
+CHIM_S = [(z, r, -(r + float(np.interp(z, [b[0] for b in CHIM_BEAK], [b[1] for b in CHIM_BEAK]))), r) for z, r in CHIM_R]
+
+
+def chim_d(P):
+    """the glass: elliptic sections round the axis (the front pushed out into the beak at the face), a rounded chin,
+    the open top a 5 cm deep well inside the rim"""
+    cx, cy = CHIM_C
+    Q = P - np.array([cx, cy, 0.0])
+    z = Q[:, 2]
+    d = loft_d(Q, CHIM_S)
+    d = sdf.smax(d, CHIM_BOT - z, 0.010)
+    d = np.maximum(d, z - CHIM_TOP)
+    r = np.hypot(Q[:, 0], Q[:, 1])
+    well = np.maximum(r - (_interp(CHIM_R, z, 1) - 0.0075), 1.668 - z)
     return np.maximum(d, -well)
 
 
@@ -398,28 +434,12 @@ def sculpts() -> list:
         out.append((name, S, vs, role, bind, tris, uvw))
 
     cx, cy = CHIM_C
-    # THE CHIMNEY VISOR (rigid on the head): a clear glass tube, flared at the face, open at the top
+    # THE CHIMNEY VISOR (rigid on the head): one glass body from the chin to the open rim; the carved chalk face-plate
+    # is the concept's painting seen through the glass (projected onto the glass's front), so the face reads INSIDE it
     ch = Sculpt("chimney")
-    ch.add(Lathe((cx, cy, 0.0), chim_prof, 0.125, CHIM_R[0][0] - 0.01, CHIM_TOP + 0.01), k=0.0)
+    ch.add(Fn(chim_d, (-0.14, -0.22, CHIM_BOT - 0.01), (0.14, 0.10, CHIM_TOP + 0.01)), k=0.0)
     ch.add(Torus((cx, cy, CHIM_TOP - 0.004), 0.080, 0.0055), k=0.003)                     # the rolled lip
-    ch.sub(Ellipsoid((0.0, -0.162, MASK_C[2] + 0.002), (0.094, 0.078, 0.124)), k=0.004)   # the face's window
-    part("chimney", ch, "dawnglass", "bone:head", 1300, 0.6, 1.5)
-    col = Sculpt("collar")
-    zc, Rc, rc = COLLAR
-    col.add(Torus((cx, cy, zc), Rc, rc, rz=rc * 0.9).displaced(lambda P: 0.004 * np.sin(np.arctan2(P[:, 1] - cy, P[:, 0]) * 9
-                                                                                        + 4.0 * NOISE(P, 9.0)), 0.004), k=0.0)
-    part("collar", col, "cloth2", "bone:head", 450, 0.7)
-
-    # THE FACE-PLATE (chalk, carved: almond eyes, a beak keel, soft cheekbones; the swirls are the concept's paint)
-    mk = Sculpt("mask")
-    mk.add(Ellipsoid(MASK_C, MASK_R).displaced(lambda P: -0.0025 * NOISE(P, 16.0), 0.0025), k=0.0)
-    mk.inter(Fn(lambda P: P[:, 1] - (-0.060), (-0.2, -0.2, 1.1), (0.2, 0.2, 1.6)), k=0.008)
-    mk.add(RoundCone((0.0, -0.143, 1.378), (0.0, -0.152, 1.292), 0.010, 0.0085), k=0.014)
-    for sx in (-1, 1):
-        mk.add(Ellipsoid((sx * 0.050, -0.124, 1.300), (0.030, 0.020, 0.034)), k=0.02)
-        mk.add(Capsule((sx * 0.018, -0.141, 1.398), (sx * 0.062, -0.130, 1.392), 0.007), k=0.012)
-        mk.sub(Ellipsoid((sx * 0.041, -0.146, 1.366), (0.026, 0.012, 0.0095), axes=sdf.rot_y(sx * 14)), k=0.004)
-    part("mask", mk, "chalk", "bone:head", 1000, 0.6, 1.6)
+    part("chimney", ch, "dawnglass", "bone:head", 2000, 0.6, 1.9)
 
     # THE HOOD (rounded crown, a soft rim round the face opening) and the neck wrap
     hd = Sculpt("hood")
@@ -455,11 +475,12 @@ def sculpts() -> list:
         e = wr + d2 * 0.010
         down = unit(np.array([0.0, 0.0, -1.0]) - d2 * float(np.array([0, 0, -1.0]) @ d2))
         sv = Sculpt(f"sleeve_{s}")
-        tube = Tube([a, el + down * 0.010, e + down * 0.012], [0.054, 0.060, 0.078], k=0.02)
+        # fix pass 1: wider BELL sleeves (the concept's; they were tight): the cuff opens to 0.19 m with a hanging lip
+        tube = Tube([a, el + down * 0.012, e + down * 0.018], [0.056, 0.066, 0.094], k=0.02)
         sv.add(tube.displaced(wraps(0.0035, 0.05, el - d2 * 0.08, e), 0.0035), k=0.0)
-        sv.add(Ellipsoid((el + e) / 2 + down * 0.032, (0.095, 0.056, 0.064), axes=sdf.frame(down, d2)), k=0.05)
-        sv.add(Torus(e - d2 * 0.012 + down * 0.008, 0.078, 0.012, axes=sdf.frame(d2), rz=0.014), k=0.012)
-        sv.sub(Capsule(e - d2 * 0.075 + down * 0.008, e + d2 * 0.06 + down * 0.008, 0.060), k=0.008)
+        sv.add(Ellipsoid((el + e) / 2 + down * 0.040, (0.100, 0.064, 0.074), axes=sdf.frame(down, d2)), k=0.05)
+        sv.add(Torus(e - d2 * 0.012 + down * 0.016, 0.094, 0.012, axes=sdf.frame(d2), rz=0.014), k=0.012)
+        sv.sub(Capsule(e - d2 * 0.075 + down * 0.016, e + d2 * 0.06 + down * 0.016, 0.076), k=0.008)
         part(f"sleeve_{s}", sv, "cloth2", ("weights", f"sleeve_{s}"), 820, 1.0, 0.9)
 
     # THE DRESS (the slate under-dress seen in the opening: the painted apron and the crossed collar are the concept's
@@ -510,9 +531,12 @@ def sculpts() -> list:
     stf.add(Sphere(spt(S_BUTT + 0.01), 0.023), k=0.01)
     for u in (-0.33, 0.15):
         stf.add(Ellipsoid(spt(u, 0.004, -0.003), (0.026, 0.024, 0.030), axes=np.stack([K0, V0, U0])), k=0.012)
-    stf.add(Tube([spt(u, k) for k, u in HOOK], [0.019, 0.018, 0.017, 0.017, 0.016, 0.0145, 0.013], k=0.008), k=0.01)
-    stf.add(Sphere(spt(HOOK[-1][1] - 0.004, HOOK[-1][0] - 0.004), 0.016), k=0.006)
-    part("staff", stf, "wood", "bone:prop.R", 1100, 0.55, 0.8)
+    stf.add(Tube([spt(u, k) for k, u in HOOK], HOOK_R, k=0.004)
+            .displaced(lambda P: -0.0016 * NOISE.ridged(P, 30.0, 2), 0.002), k=0.01)
+    stf.add(Sphere(spt(HOOK[-1][1] - 0.004, HOOK[-1][0] - 0.004), 0.0145), k=0.006)
+    for (k1, u1), r1 in zip(HOOK[2:6], HOOK_R[2:6]):                 # the carved knuckles at the loop's corners
+        stf.add(Sphere(spt(u1, k1), r1 * 1.18), k=0.006)
+    part("staff", stf, "wood", "bone:prop.R", 1150, 0.55, 0.8)
     ls = Sculpt("lamp_stone")
     hb = unit(K0 * np.array([1.0, 1.0, 0.0]))
     ls.add(Torus(lpt(LAMP["ring"]), 0.013, 0.0042, axes=sdf.frame(hb)), k=0.0)
@@ -524,25 +548,29 @@ def sculpts() -> list:
         return Lathe(lpt(0.0), lambda r, z, z0=z0, z1=z1, r0=r0, r1=r1: np.maximum(
             r - (r0 + (r1 - r0) * np.clip((-z - z0) / (z1 - z0), 0, 1)), np.maximum(-z - z1, z0 + z)) + 0.0,
             max(r0, r1) + 0.01, -z1 - 0.01, -z0 + 0.01)
-    ls.add(disc(*LAMP["cap"], 0.036, 0.046), k=0.006)
-    ls.add(disc(*LAMP["base"], 0.076, 0.066), k=0.006)
-    ls.add(Lathe(lpt(0.0), lambda r, z: np.maximum(r - 0.034 * np.clip((LAMP_DROP + z) / (LAMP_DROP - LAMP["finial"][0]), 0, 1) ** 0.7,
-                                                   np.maximum(-z - LAMP_DROP, LAMP["finial"][0] + z)), 0.04, -LAMP_DROP - 0.01,
+    ls.add(disc(*LAMP["cap"], 0.044, 0.062), k=0.006)
+    ls.add(disc(*LAMP["base"], 0.090, 0.076), k=0.006)
+    ls.add(disc(0.284, 0.302, 0.030, 0.038), k=0.004)                    # the burner cup under the flame
+    ls.add(Lathe(lpt(0.0), lambda r, z: np.maximum(r - 0.036 * np.clip((LAMP_DROP + z) / (LAMP_DROP - LAMP["finial"][0]), 0, 1) ** 0.7,
+                                                   np.maximum(-z - LAMP_DROP, LAMP["finial"][0] + z)), 0.045, -LAMP_DROP - 0.01,
                  -LAMP["finial"][0] + 0.01), k=0.008)
-    part("lamp_stone", ls, "chalk", "bone:x_lamp", 650, 0.5, 0.8)
+    part("lamp_stone", ls, "chalk", "bone:x_lamp", 700, 0.5, 0.8)
     lgl = Sculpt("lamp_glass")
     for i in range(4):
         a = math.radians(45.0 + 90.0 * i)
         pts = [lpt(dz, r * math.sin(a), -r * math.cos(a)) for dz, r in GLASS_R]
-        lgl.add(Tube(pts, [0.0048] * len(pts), k=0.004), k=0.0)
-    for dz, r in (GLASS_R[0], GLASS_R[-1]):
-        lgl.add(Torus(lpt(dz), r, 0.0055), k=0.004)
-    part("lamp_glass", lgl, "lampglass", "bone:x_lamp", 420, 0.5, 0.6)
+        lgl.add(Tube(pts, [0.0042] * len(pts), k=0.004), k=0.0)
+    lgl.add(Torus(lpt(GLASS_R[0][0] + 0.002), GLASS_R[0][1], 0.0050), k=0.004)
+    f0, f1 = FONT
+    lgl.add(Lathe(lpt(0.0), lambda r, z: np.maximum(r - (_interp(GLASS_R, -z, 1) + 0.002), np.maximum(-z - f1, f0 + z)),
+                  0.115, -f1 - 0.01, -f0 + 0.01), k=0.004)                 # the glass font bowl
+    lgl.add(Torus(lpt(f0), _interp(GLASS_R, f0, 1) + 0.002, 0.0048), k=0.004)
+    part("lamp_glass", lgl, "lampglass", "bone:x_lamp", 640, 0.5, 0.7)
     fl = Sculpt("flame")
     fz, fr, ft = FLAME
     fl.add(Sphere(lpt(fz), fr), k=0.0)
-    fl.add(RoundCone(lpt(fz), lpt(ft, 0.004, 0.0), fr * 0.92, 0.005), k=0.02)
-    part("flame", fl, "accent", "bone:x_lamp", 260, 0.5, 0.4)
+    fl.add(RoundCone(lpt(fz - 0.012), lpt(ft, 0.006, 0.0), fr * 0.86, 0.004), k=0.022)
+    part("flame", fl, "accent", "bone:x_lamp", 300, 0.5, 0.4)
     return out
 
 
@@ -551,30 +579,40 @@ def skin_extras(extra: dict) -> list:
     out = []
     cx, cy = CHIM_C
     if extra.get("reed_plates"):
+        # fix pass 1 (the review: six thin prongs read as antennae): EIGHT broad reed leaves (0.11 x 0.05 m) laid
+        # overlapping round the chimney's foot on the hood's crown, leaning out 50 degrees: a reed ruff, low and wide
         rp = Sculpt("reed_plates")
-        for i in range(6):
-            a = math.radians(30.0 + 60.0 * i)
+        zc = 1.492
+        for i in range(8):
+            a = math.radians(22.5 + 45.0 * i)
             r = np.array([math.sin(a), -math.cos(a), 0.0])
-            d = unit(r * math.cos(math.radians(24)) + np.array([0, 0, math.sin(math.radians(24))]))
-            c = np.array([cx, cy, COLLAR[0] + 0.006]) + r * (COLLAR[1] + 0.018) + d * 0.045
-            side = np.cross(d, r)
-            rp.add(RoundBox(c, (0.024, 0.048, 0.0045), 0.0042, axes=np.stack([unit(side), d, unit(np.cross(unit(side), d))])), k=0.0)
-        out.append(("reed_plates", rp, 0.5, "reed", "bone:head", 420, 0.6))
+            d = unit(r * math.cos(math.radians(40)) + np.array([0, 0, math.sin(math.radians(40))]))
+            rc = _interp(CHIM_R, zc, 1) + 0.008
+            c = np.array([cx, cy, zc]) + r * rc + d * 0.050
+            side = unit(np.cross(d, r))
+            nrm = unit(np.cross(side, d))
+            leaf = Ellipsoid(c, (0.028, 0.056, 0.0055), axes=np.stack([side, d, nrm]))
+            rp.add(leaf.displaced(lambda P, c=c, side=side: 0.002 * np.cos((P - c) @ side * 160.0), 0.002), k=0.0)
+            rp.add(Capsule(c - d * 0.048, c + d * 0.050, 0.0036), k=0.003)          # the leaf's midrib
+        out.append(("reed_plates", rp, 0.5, "reed", "bone:head", 700, 0.7))
     if extra.get("glass_bell"):
+        # fix pass 1 (the review: the bell did not show): a 0.08 m dawnglass bell hung from the cap in the clear glass
+        # above the flame, slightly forward, its mouth over the flame's tip (the flame stays visible below it)
         gb = Sculpt("glass_bell")
-        top, bot = LAMP["glass"][0] + 0.010, LAMP["glass"][0] + 0.078
-        gb.add(Lathe(lpt(0.0, 0.0, -0.030), lambda r, z: np.maximum(
-            r - (0.010 + 0.024 * np.clip((-z - top) / (bot - top), 0, 1) ** 1.6), np.maximum(-z - bot, top + z)),
-            0.04, -bot - 0.01, -top + 0.01), k=0.0)
-        gb.add(Sphere(lpt(top - 0.002, 0.0, -0.030), 0.009), k=0.004)
-        out.append(("glass_bell", gb, 0.45, "dawnglass", "bone:x_lamp", 260, 0.5))
+        top, bot = LAMP["glass"][0] + 0.004, LAMP["glass"][0] + 0.084
+        gb.add(Lathe(lpt(0.0, 0.0, -0.022), lambda r, z: np.maximum(
+            r - (0.011 + 0.026 * np.clip((-z - top) / (bot - top), 0, 1) ** 1.5), np.maximum(-z - bot, top + z)),
+            0.045, -bot - 0.01, -top + 0.01), k=0.0)
+        gb.add(Torus(lpt(bot - 0.003, 0.0, -0.022), 0.035, 0.0045), k=0.003)       # the bell's lip
+        gb.add(Sphere(lpt(top - 0.002, 0.0, -0.022), 0.010), k=0.004)
+        out.append(("glass_bell", gb, 0.45, "dawnglass", "bone:x_lamp", 320, 0.5))
     if extra.get("hour_marks"):
         hm = Sculpt("hour_marks")
         for i in range(10):
             th = math.radians(-68.0 + 35.1 * i)
-            z0 = HEM_Z + 0.03
+            z0 = HEM_Z + 0.032
             pts = []
-            for z in (z0, z0 + 0.06):
+            for z in (z0, z0 + 0.075):
                 X, Yf, Yb = _interp(MANTLE_S, z, 1), -_interp(MANTLE_S, z, 2), _interp(MANTLE_S, z, 3)
                 Y = Yf if math.sin(th) < 0 else Yb
                 q = math.hypot(math.cos(th) / X, math.sin(th) / Y)
@@ -582,7 +620,7 @@ def skin_extras(extra: dict) -> list:
                 out_ = -float(fold_disp(p0[None, :], mantle_amp)[0])           # the fold's bulge there
                 r = unit(p0 * np.array([1.0, 1.0, 0.0]))
                 pts.append(p0 + r * (out_ + 0.001))
-            hm.add(Capsule(pts[0], pts[1], 0.0065), k=0.0)
+            hm.add(Capsule(pts[0], pts[1], 0.0085), k=0.0)
         out.append(("hour_marks", hm, 0.5, "chalk", ("weights", "mantle"), 500, 0.6))
     return out
 
@@ -635,6 +673,14 @@ def rig_extras(ctx) -> None:
     rig.add_socket(info, "x_lamp", "prop.R", tuple(HANG0), direction=(0.0, 0.0, -0.10))
     info.armature.data.bones["x_lamp"].use_deform = True          # the lamp's parts are skinned to it
     rig.add_socket(info, "x_chimney_top", "head", (CHIM_C[0], CHIM_C[1], CHIM_TOP), direction=(0.0, 0.0, 0.08))
+    # the brief's two mantle sway bones (fix pass 1: they were never added, so no cast could flare the bell): one bone
+    # per front panel from the chest's front down to the hem, on the spine; +X swings the panel forward, +Z (left) /
+    # -Z (right) flares it out. The clips set them (cast_a3 / cast_ult flare open) and the resolve wrapper adds the
+    # knees' lift to them (a striding knee carries its panel forward instead of poking through it)
+    for nm, (h, t) in MANTLE_BONES.items():
+        rig.add_socket(info, nm, "spine", h, direction=tuple(np.subtract(t, h)))
+        info.armature.data.bones[nm].use_deform = True
+        info.lengths[nm] = info.armature.data.bones[nm].length
 
 
 def chain_config(ctx) -> list:
@@ -676,6 +722,12 @@ def _w_mantle(P, J):
     out = {"chest": wc * k, "spine": ws * k, "hips": wh * k * (1 - th), "thigh.L": wh * k * th * sl,
            "thigh.R": wh * k * th * (1 - sl), "shoulder.L": sh * (x > 0), "shoulder.R": sh * (x <= 0),
            "upper_arm.L": ua * (x > 0), "upper_arm.R": ua * (x <= 0)}
+    # the front panels on their sway bones: within ~60 degrees of the front opening, fading in below the chest
+    dth = np.abs(np.angle(np.exp(1j * (np.arctan2(y, x) + math.pi / 2))))
+    wp = 0.85 * ss(1.30, 0.92, dth) * ss(1.00, 0.80, z)
+    out = {b: w * (1 - wp) for b, w in out.items()}
+    out["x_mantle_l"] = wp * (x > 0)
+    out["x_mantle_r"] = wp * (x <= 0)
     return out
 
 
@@ -784,7 +836,7 @@ _pipeline.bind_part = _bind_part
 # ── paint (project.paint wrapper): the concept projected on everything the concept paints; the props, the gloves
 #    and the lamp painted here (they are held where the concept shows nothing); the mantle's and sleeves' insides
 #    take the dark lining; the visibility maps ignore the props (they must not shadow the paint behind them) ────────
-PROC = ("staff", "lamp_stone", "lamp_glass", "hand_L", "hand_R", "reed_plates", "glass_bell", "hour_marks")
+PROC = ("staff", "lamp_stone", "lamp_glass", "hand_L", "hand_R", "reed_plates", "glass_bell", "hour_marks", "chimney")
 NO_VIS = ("staff", "lamp_stone", "lamp_glass", "flame", "hand_L", "hand_R", "glass_bell")
 LINING = "#2F343D"
 
@@ -830,28 +882,64 @@ def _paint_stone(p, n, pal):
 
 
 def _paint_glass(p, n, pal, key="lampglass"):
-    base = _hex(pal.get(key, PALETTE.get(key, "#BFD3DE")))
-    hi = np.clip(n @ unit([-0.5, -0.7, 0.5]), 0, 1) ** 3
-    c = base * (0.80 + 0.12 * (n[:, 2] * 0.5 + 0.5))[:, None] + hi[:, None] * 0.25
-    return np.clip(c, 0, 1)
+    """the lamp's glass (ribs, rim rings, font bowl) and First Bell's bell: the glass colour, lighter on top, a darker
+    lower edge where the glass thickens, a white catch-light streak down the front-left and a fainter one behind"""
+    base = _lin(_hex(pal.get(key, PALETTE.get(key, "#BFD3DE"))))
+    ax = HANG0 if key == "lampglass" else HANG0
+    th = np.arctan2(p[:, 0] - ax[0], -(p[:, 1] - ax[1]))
+    streak = np.exp(-((th + 0.70) / 0.22) ** 2) + 0.5 * np.exp(-((th - 2.45) / 0.22) ** 2)
+    up = n[:, 2] * 0.5 + 0.5
+    lin = base * (0.70 + 0.30 * up)[:, None]
+    lin = lin * (1.0 - 0.30 * np.clip(-n[:, 2], 0, 1))[:, None]
+    lin = lin + (0.30 * streak * (0.4 + 0.6 * up))[:, None]
+    return _srgb(np.clip(lin, 0, 1))
 
 
-def _paint_chimney(c, p, n):
-    """the projected clear glass, painted on: two vertical catch-light streaks (the concept's), cooler darker sides
-    where the glass turns away, and the open top's inside a deep cool grey (it reads as a hollow tube from above)"""
+def _face_zone(p, n):
+    """the chimney's texels that show the face through the glass: in front, inside the hood's opening"""
+    ow, oz, oh = HOOD_OPEN
+    q = np.hypot(p[:, 0] / (ow * 0.97), (p[:, 2] - oz) / (oh * 0.98))
+    return ss(1.04, 0.86, q) * ss(-0.12, -0.42, n[:, 1]) * ss(1.49, 1.44, p[:, 2])
+
+
+def _paint_chimney(c, p, n, pal=None):
+    """THE GLASS VISOR (fix pass 1). In the hood's opening the projection keeps the concept's face-plate seen through
+    the glass (its carving's contrast raised x1.45, a faint cool cast, a soft diagonal glint across it); everywhere
+    else the glass is painted clear cool dawnglass: the see-through tint lighter toward the rim, the sides turning
+    darker blue-grey (thick glass seen edge-on), two vertical catch-light streaks front and back, a bright rolled lip
+    and the open top's well a deep cool grey (a hollow chimney from the game's camera above)"""
+    pal = pal or PALETTE
     cx, cy = CHIM_C
-    th = np.arctan2(p[:, 0] - cx, -(p[:, 1] - cy))
-    streak = np.exp(-((th + 0.62) / 0.10) ** 2) + 0.55 * np.exp(-((th - 0.42) / 0.07) ** 2)
-    streak = streak * ss(1.44, 1.52, p[:, 2]) * (1.0 - ss(1.69, 1.715, p[:, 2]))
-    side = np.clip(np.abs(np.sin(th)) - 0.55, 0, 1) / 0.45
-    r = np.hypot(p[:, 0] - cx, p[:, 1] - cy)
-    inside = (p[:, 2] > 1.672) & (r < _interp(CHIM_R, p[:, 2], 1) - 0.006) & (n[:, 2] > -0.95)
-    cool = _hex("#8FA3B4")
-    lin = _lin(c)
-    lin = lin * (1 - 0.35 * side[:, None]) + _lin(cool) * (0.35 * side[:, None])
-    lin = lin + 0.22 * streak[:, None]
-    lin[inside] = lin[inside] * 0.60 + _lin(_hex("#7E8E9A")) * 0.25
-    return _srgb(lin)
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    th = np.arctan2(x - cx, -(y - cy))
+    glass = _lin(_hex(pal.get("dawnglass", "#C0D6E8")))
+    edge = _lin(_hex("#7C90A3"))
+    lin = np.repeat(glass[None, :], len(p), 0) * (0.90 + 0.10 * ss(1.48, 1.70, z))[:, None]
+    side = np.clip((np.abs(np.sin(th)) - 0.42) / 0.58, 0, 1) ** 1.3
+    lin = lin * (1 - 0.55 * side[:, None]) + edge * (0.55 * side[:, None])
+    low = ss(1.56, 1.47, z) * 0.30                                     # the hood's shade read through the glass's foot
+    lin = lin * (1 - low[:, None]) + edge * 0.8 * low[:, None]
+    streak = (np.exp(-((th + 0.58) / 0.085) ** 2) + 0.55 * np.exp(-((th - 0.40) / 0.06) ** 2)
+              + 0.75 * np.exp(-((th - (math.pi - 0.58)) / 0.085) ** 2) + 0.4 * np.exp(-((th + math.pi - 0.40) / 0.06) ** 2))
+    streak = streak * ss(1.40, 1.50, z) * (1.0 - ss(1.68, 1.70, z))
+    lin = lin + 0.42 * streak[:, None]
+    lip = ss(1.700, 1.712, z) * (n[:, 2] > -0.3)
+    lin = lin * (1 - lip[:, None]) + _lin(_hex("#EEF4F8")) * lip[:, None]
+    r = np.hypot(x - cx, y - cy)
+    inside = (z > 1.672) & (r < _interp(CHIM_R, z, 1) - 0.006) & (n[:, 2] > -0.95)
+    lin[inside] = _lin(_hex("#5F6F7E")) * (0.85 + 0.25 * ss(1.67, 1.71, z[inside]))[:, None]
+    # the face through the glass
+    wf = _face_zone(p, n)
+    fc = c.copy()
+    qm = np.hypot(x / (MASK_R[0] * 1.05), (z - MASK_C[2]) / (MASK_R[2] * 1.05)) < 1.0
+    if qm.any():
+        m = np.median(fc[qm], axis=0, keepdims=True)
+        fc[qm] = np.clip(m + (fc[qm] - m) * 1.45, 0.0, 1.0)
+    flin = _lin(fc) * 0.92 + glass * 0.06
+    glint = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
+    flin = flin + 0.16 * glint[:, None]
+    lin = lin * (1 - wf[:, None]) + flin * wf[:, None]
+    return _srgb(np.clip(lin, 0, 1))
 
 
 def _paint_glove(p, n, pal):
@@ -934,7 +1022,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         elif nm == "hour_marks":
             out[sel] = _paint_flat(p, n, pal, "chalk")
         elif nm == "chimney":
-            out[sel] = _paint_chimney(out[sel], p, n)
+            out[sel] = _paint_chimney(out[sel], p, n, pal)
         elif nm == "mantle":
             r = unit_rows(np.stack([p[:, 0], p[:, 1], np.zeros(len(p))], 1))
             inward = np.clip((-(n * r).sum(1) - 0.10) / 0.4, 0, 1) * ss(1.05, 0.95, p[:, 2])
@@ -964,14 +1052,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
                 g = c.mean(axis=1, keepdims=True)
                 w = (ss(0.0, 0.05, c[:, 0] - c[:, 2]) * ss(0.55, 0.75, c @ np.array([0.30, 0.59, 0.11])))[:, None]
                 out[sel] = np.clip(g + (c - g) * (1.0 + (k - 1.0) * w), 0.0, 1.0)
-    # the face-plate's carving (the concept's swirls, eyes, keel) read faint under the game's soft light: its paint's
-    # contrast about the plate's own mean is raised x1.45 (the grooves darker, the plate stays chalk)
-    if "mask" in names:
-        sel = have & (part == names.index("mask"))
-        if sel.any():
-            c = out[sel]
-            m = np.median(c, axis=0, keepdims=True)
-            out[sel] = np.clip(m + (c - m) * 1.45, 0.0, 1.0)
+    # (the face-plate's carving contrast x1.45 is in _paint_chimney: the face is painted inside the glass)
     # the top quarter's value (lineup_qa build 4: L* 61 against the bible's 70-85): the head's pale pieces are lifted
     # with a soft knee (the darks and mids most, nothing past L* 88), the mantle's shoulders fading in above 1.0 m
     for nm, amt in LIFT.items():
@@ -986,7 +1067,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     return out
 
 
-LIFT = {"chimney": 12.0, "collar": 12.0, "hood": 12.0, "scarf": 11.0, "mask": 4.0, "mantle": 8.0, "lamp_stone": 0.0}
+LIFT = {"hood": 12.0, "scarf": 11.0, "mantle": 8.0, "lamp_stone": 0.0}
 
 
 def _lift(c, amt):
@@ -998,8 +1079,7 @@ def _lift(c, amt):
     return _srgb(lin * (Y2 / Y)[:, None])
 
 
-WARM = {"hood": 1.6, "collar": 1.6, "scarf": 1.6, "mantle": 1.6, "sleeve_L": 1.6, "sleeve_R": 1.6, "dress": 1.4,
-        "mask": 1.25}
+WARM = {"hood": 1.6, "scarf": 1.6, "mantle": 1.6, "sleeve_L": 1.6, "sleeve_R": 1.6, "dress": 1.4}
 
 
 def _hidden(p, n, plates, vis, eps=0.02):
@@ -1021,6 +1101,10 @@ def _band_fill(col, p, n, nm, plates, vis, step=0.02):
     """occluded texels take the median paint of the part's VISIBLE texels in their band (height for the mantle and
     the scarf, the distance along the arm for a sleeve), front- and back-facing apart, with a little noise"""
     h = ss(0.15, 0.6, _hidden(p, n, plates, vis))
+    # fix pass 1 (the review: a brown smear on the right side panel, a brown hem band, wherever the side turned to the
+    # camera): texels both plates see only edge-on (|n.y| small) carry the plates' streaked silhouette-edge paint, so
+    # they count as hidden too; front and back medians blend across the side instead of meeting at a seam
+    h = np.maximum(h, 0.92 * ss(0.40, 0.16, np.abs(n[:, 1])))
     if nm.startswith("sleeve"):
         s_ = nm[-1]
         coord = (p - side_pt("shoulder", s_)) @ unit(side_pt("wrist", s_) - side_pt("shoulder", s_))
@@ -1031,13 +1115,12 @@ def _band_fill(col, p, n, nm, plates, vis, step=0.02):
     lo = float(coord.min())
     b = np.floor((coord - lo) / step).astype(int)
     nb = int(b.max()) + 1
+    tabs = []
     for back in (False, True):
         side = (n[:, 1] > 0) if back else (n[:, 1] <= 0)
         ok = side & (h < 0.2)
-        if not ok.any():
+        if ok.sum() < 6:
             ok = h < 0.2
-        if not ok.any():
-            continue
         tab = np.full((nb, 3), np.nan)
         for i in np.unique(b[ok]):
             m = ok & (b == i)
@@ -1045,15 +1128,32 @@ def _band_fill(col, p, n, nm, plates, vis, step=0.02):
                 tab[i] = np.median(lin[m], axis=0)
         have_ = ~np.isnan(tab[:, 0])
         if not have_.any():
-            continue
-        idx = np.arange(nb)
-        for c in range(3):
-            tab[:, c] = np.interp(idx, idx[have_], tab[have_, c])
-        tab = (np.roll(tab, 1, 0) + 2 * tab + np.roll(tab, -1, 0)) / 4
-        tab[0], tab[-1] = tab[1], tab[-2]
-        sel = side & (h > 0)
-        fill = tab[b[sel]] * (0.94 + 0.08 * _fbm(p[sel], 18.0))[:, None]
-        out[sel] = lin[sel] * (1 - h[sel, None]) + fill * h[sel, None]
+            tab = np.repeat(np.median(lin, axis=0)[None, :], nb, 0)
+        else:
+            idx = np.arange(nb)
+            for c in range(3):
+                tab[:, c] = np.interp(idx, idx[have_], tab[have_, c])
+            tab = (np.roll(tab, 1, 0) + 2 * tab + np.roll(tab, -1, 0)) / 4
+            tab[0], tab[-1] = tab[1], tab[-2]
+        tabs.append(tab)
+    wb = ss(-0.30, 0.30, n[:, 1])[:, None]
+    med = tabs[0][b] * (1 - wb) + tabs[1][b] * wb                       # the band's own colour at every texel
+    sel = h > 0
+    fill = med[sel] * (0.94 + 0.08 * _fbm(p[sel], 18.0))[:, None]
+    out[sel] = lin[sel] * (1 - h[sel, None]) + fill * h[sel, None]
+    # ghosts left in VISIBLE paint (the scarf's ink blot = the concept's dark neck behind the mask; brown under-arm
+    # smudges): a texel far darker than its band, or a warm brown darker than L* 62, goes most of the way to the band's
+    # colour at its own shade (clamped), so the folds' painted shading stays
+    Y = np.maximum(out @ np.array([0.2126, 0.7152, 0.0722]), 1e-5)
+    Ym = np.maximum(med @ np.array([0.2126, 0.7152, 0.0722]), 1e-5)
+    L = 116 * np.cbrt(Y) - 16
+    Lm = 116 * np.cbrt(Ym) - 16
+    srgb = _srgb(out)
+    warm = ss(0.025, 0.07, srgb[:, 0] - srgb[:, 2]) * ss(62.0, 46.0, L) * ss(6.0, 14.0, Lm - L)
+    dark = ss(26.0, 42.0, Lm - L)
+    w = np.clip(np.maximum(warm * 0.85, dark * 0.9), 0, 1)[:, None]
+    shade = np.clip(Y / Ym, 0.62, 1.0)[:, None]
+    out = out * (1 - w) + med * shade * w
     return _srgb(out)
 
 
@@ -1069,34 +1169,46 @@ _orig_recolour = _project.recolour
 MANTLE_BANDS = ((0.62, 0.82), (0.36, 0.46))     # cloth2 above the first band's top, cloth between, cloth3 under
 
 
+# fix pass 1 (the review: the skins were tints; Stillwater's wet-stone #59666A never showed, First Bell's dark hem
+# barely registered): the mantle and the sleeves are RE-PAINTED in the skin's own gradient, not scaled: each texel
+# takes the skin's colour at its height times its shade relative to the base painting's band colour there (the
+# painted folds and lining kept, the base's cream / slate gone). Stops (height m, role), top down.
+SKIN_GRADE = {
+    "ilsheta_stillwater": [(1.30, "cloth2"), (1.01, "cloth2"), (0.91, "cloth"), (0.50, "cloth"), (0.42, "cloth3"), (0.0, "cloth3")],
+    "ilsheta_first_bell": [(1.30, "cloth2"), (0.80, "cloth2"), (0.68, "cloth"), (0.56, "cloth"), (0.49, "cloth3"), (0.0, "cloth3")],
+}
+
+
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
     skip = set(skip or ()) | set(PROC)
-    graded = {"mantle", "hour_marks"} & set(names)
+    graded = {"mantle", "sleeve_L", "sleeve_R"} & set(names)
     roles2 = {k: (None if k in graded else v) for k, v in roles.items()}
     out = _orig_recolour(img, maps, names, roles2, base_pal, skin_pal, skip=skip, log=log)
-    if "mantle" not in names:
+    stops = SKIN_GRADE.get(_BUILD.get("skin") or "")
+    if not graded or not stops:
         return out
     part = maps["part"]
     iy, ix = _project.nearest_index(part >= 0)
     pid = part[iy, ix]
     Pz = maps["P"][iy, ix][..., 2]
-    m = pid == names.index("mantle")
-    if not m.any():
-        return out
-
-    def gain(r):
-        a, b = skin_pal.get(r, base_pal.get(r)), base_pal.get(r)
-        return np.clip(_lin(_hex(a)) / np.maximum(_lin(_hex(b)), 1e-4), 0.05, 8.0)
-    g2, g1, g3 = gain("cloth2"), gain("cloth"), gain("cloth3")
-    z = Pz[m][:, None]
-    (a0, a1), (b0, b1) = MANTLE_BANDS
-    t_up = ss(a0, a1, z)
-    t_lo = ss(b1, b0, z)
-    g = g1 * (1 - t_up) + g2 * t_up
-    g = g * (1 - t_lo) + g3 * t_lo
-    lin = _lin(img[m])
-    out[m] = _srgb(lin * g)
-    log(f"  recolour mantle graded: cloth2 {np.round(g2, 2).tolist()} cloth {np.round(g1, 2).tolist()} cloth3 {np.round(g3, 2).tolist()}")
+    zs = np.array([s[0] for s in stops])[::-1]
+    cols = np.stack([_lin(_hex(skin_pal.get(r, base_pal.get(r)))) for _, r in stops])[::-1]
+    lum = np.array([0.2126, 0.7152, 0.0722])
+    for nm in sorted(graded):
+        m = pid == names.index(nm)
+        if not m.any():
+            continue
+        z = Pz[m]
+        lin = _lin(img[m])
+        Y = np.maximum(lin @ lum, 1e-5)
+        b = np.floor((z - z.min()) / 0.02).astype(int)
+        ymed = np.zeros(int(b.max()) + 1)
+        for i in np.unique(b):
+            ymed[i] = np.median(Y[b == i])
+        ymed = np.maximum(ymed[b], 1e-4)
+        T = np.stack([np.interp(z, zs, cols[:, c]) for c in range(3)], 1)
+        out[m] = _srgb(T * np.clip(Y / ymed, 0.12, 1.35)[:, None])
+        log(f"  recolour {nm} re-painted on the skin gradient {[(s[0], s[1]) for s in stops]}")
     return out.astype(np.float32)
 
 
@@ -1166,10 +1278,38 @@ def _fit_camera(cam, lo, hi, *a, **k):
     if len(a) >= 5 and abs(a[4] - 1.0) < 1e-6 and hi.z < CHIM_TOP + 0.03:      # aspect 1: the portrait / the icon
         from mathutils import Vector
         hi = Vector((hi.x, hi.y, CHIM_TOP + 0.035))
+        # the icon / portrait keep the lamp below the visor (brief: "the chimney visor with the lamp core below it")
+        lo = Vector((min(lo.x, -0.30), min(lo.y, -0.42), min(lo.z, 1.04)))
     return _orig_fit_camera(cam, lo, hi, *a, **k)
 
 
 _render._fit_camera = _fit_camera
+
+# the splash / portrait backdrop (fix pass 1: the pale figure washed into the pale sky; the brief asks for the darker
+# Aubade backdrop): the painted map plate graded down to a cool dawn dusk (x0.5 value, a slate-blue floor), the
+# subject's side darker still, before the figure is laid over it
+_orig_backdrop = _render.backdrop_plate
+
+
+def _backdrop(cam, cfg, light, w, h, path, fast, paint_r=2):
+    plate = _orig_backdrop(cam, cfg, light, w, h, path, fast, paint_r=paint_r)
+    k = float(cfg.get("aubade_dusk", 0.0) or 0.0)
+    if k <= 0:
+        return plate
+    rgb = plate[..., :3]
+    lum = rgb @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    grey = lum[..., None]
+    rgb = grey + (rgb - grey) * 0.75                                    # a touch less sky blue
+    rgb = rgb * k * np.array([0.84, 0.92, 1.06], np.float32) + np.array([0.040, 0.050, 0.075], np.float32)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    x0 = float(cfg.get("x", 0.72))
+    halo = np.exp(-(((xx / w - x0) / 0.30) ** 2 + ((yy / h - 0.45) / 0.55) ** 2))
+    rgb = rgb * (1.0 - 0.22 * halo[..., None])                          # darker behind the pale figure
+    plate[..., :3] = np.clip(rgb, 0.0, 1.0)
+    return plate
+
+
+_render.backdrop_plate = _backdrop
 
 # ── motion ─────────────────────────────────────────────────────────────────────────────────────────────────────
 # weight light, a focus prop in the right hand (blocks below): the clips are bespoke (clip_overrides); the run's legs
