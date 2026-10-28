@@ -34,7 +34,8 @@ import { accident } from './knowledge.ts';
 import { addFood, bump, landOf, ledger, type HuntParty } from './ledger.ts';
 import { youngFromHunt } from './herding.ts';
 import { statusGain } from './outlets.ts';
-import { itemIdx } from './resources.ts';
+import { itemIdx, pathOptsFor } from './resources.ts';
+import { findPath } from '../grid/pathfind.ts';
 import { fieldCounts } from './crops.ts';
 
 /** how far beyond the territory hunters go for game (m) */
@@ -47,6 +48,7 @@ export const LOAD_KG = 30;
 export const DRESSED = 0.42;
 /** a party gives up after this many days out */
 export const PARTY_DAYS = 4;
+const _route: number[] = [];
 /**
  * LAND round 5 (2026-10-21): a band with hunters enough sends out a second party while the first is away — a party
  * of 2-3 was out ~3 days for one boar (`r5/pprobe.ts`: 13 parties, 7 kills in five years on seed 7), and the other
@@ -447,7 +449,6 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const leg = Math.min(d - edge, reach);
   // a leg's end on dry land: shorter legs where water lies between them and the herd (the route goes round it)
   const here = x.p.cellAt(_p);
-  const G = x.p.grid.pos;
   for (const k of [1, 0.75, 0.5, 0.3]) {
     const f = Math.max(0, Math.min(1, (leg * k) / d));
     const goal = [_p[0] + (_q[0] - _p[0]) * f, _p[1] + (_q[1] - _p[1]) * f, _p[2] + (_q[2] - _p[2]) * f];
@@ -455,29 +456,36 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
     goal[0] /= l; goal[1] /= l; goal[2] /= l;
     let c = x.p.cellAt(goal);
     if (x.p.f.water[c] > 0.6) {
-      // the dry cell beside the leg's end nearest the herd (fix r2 #2: not the first one, and never the hunter's own:
-      // that leg went nowhere)
+      // the nearest dry cell beside the leg's end
       const g = x.p.grid;
-      let dry = -1, best = -Infinity;
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-        const nc = g.nbr[e];
-        if (x.p.f.water[nc] > 0.6 || nc === here) continue;
-        const near = G[nc * 3] * _q[0] + G[nc * 3 + 1] * _q[1] + G[nc * 3 + 2] * _q[2];
-        if (near > best || (near === best && nc < dry)) { best = near; dry = nc; }
-      }
+      let dry = -1;
+      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (x.p.f.water[g.nbr[e]] <= 0.6) { dry = g.nbr[e]; break; }
       if (dry < 0) continue;
       c = dry;
       spotInCell(x.p, c, A.id[s], 0x4b3, goal);
     }
+    // (fix r2 #2) a leg that goes nowhere (the dry cell beside a wet leg's end was the hunter's own, and they stand on
+    // its spot) is no leg: a coastal party re-planned one every five minutes at the shore for half a day
     if (distM(x.p, _p, goal) < 10) continue;
     if (camping(x, s)) A.camp[s] = c;
     return { kind: TASK.hunt, goal, goalCell: c, work: 5, target: h.id, data2: 1 };
   }
-  // (fix r2 #2) no leg takes them nearer: water lies between the party and its game — it turns to other game, else the
-  // hunt is over (keepParty sends them home)
-  const others = parties(st).filter((q) => q !== p).map((q) => q.herd);
-  const g = bestGame(x, st, _p, p.members.length, p.members.length >= 4 && armed(x, st), [...others, p.herd]);
-  if (g) { p.herd = g.id; p.species = g.species; } else p.since = Math.min(p.since, x.tick - PARTY_DAYS * x.day - 1);
+  // (fix r2 #2) water lies across the straight way: the way round it on foot (A*, as a band's leg goes: decide.ts), as far
+  // along it as the daylight allows
+  const opts = pathOptsFor(x, A.species[s]);
+  if (opts.swim < 1) opts.swim = 0;
+  opts.maxExpand = 2500;
+  if (findPath(x.p, here, h.cell, opts, _route) && _route.length) {
+    let c = _route[0];
+    for (let i = 1, walked = x.p.edgeM; i < _route.length && walked + x.p.edgeM <= leg; i++, walked += x.p.edgeM) c = _route[i];
+    if (c !== here) {
+      const goal = spotInCell(x.p, c, A.id[s], 0x4b3, [0, 0, 0]);
+      if (camping(x, s)) A.camp[s] = c;
+      return { kind: TASK.hunt, goal, goalCell: c, work: 5, target: h.id, data2: 1 };
+    }
+  }
+  // no way on now: no leg (the hunter does other work until the next decision; the party lasts its PARTY_DAYS — ending it
+  // here cut short a party whose route round a lake the path search missed: living-land 'tracks game beyond the old reach')
   return null;
 }
 

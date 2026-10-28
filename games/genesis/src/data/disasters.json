@@ -1737,8 +1737,8 @@
     {
      "type": "front",
      "every": 5,
-     "damage": 0.4,
-     "harm": 0.3,
+     "damage": 0.15,
+     "harm": 0.08,
      "coastal": true,
      "wander": 0.3,
      "herds": 0.4
