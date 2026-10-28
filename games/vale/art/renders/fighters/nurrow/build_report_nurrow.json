@@ -35,14 +35,14 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 4.84,
-    "rough_metal": 3.27,
-    "normal": 2.36,
-    "ao": 2.75,
+    "base": 3.1,
+    "rough_metal": 2.56,
+    "normal": 1.61,
+    "ao": 2.05,
     "normal_fixed_px": 34288,
-    "projection": 50.3,
-    "pack_save": 50.48,
-    "total": 63.92
+    "projection": 45.95,
+    "pack_save": 46.07,
+    "total": 55.51
   },
   "tris": 21151,
   "mesh_top_m": 1.967,
@@ -153,17 +153,17 @@
       "impact": 0.4
     }
   },
-  "glb_bytes_raw": 2634964,
+  "glb_bytes_raw": 2632364,
   "optimize": {
     "ok": true,
-    "before": 2634964,
-    "after": 1172012
+    "before": 2632364,
+    "after": 1171436
   },
-  "glb_bytes": 1172012,
+  "glb_bytes": 1171436,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow.glb (1145 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow.glb (1144 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: nurrow_base 2048x2048 238K, nurrow_normal 512x512 16K, nurrow_orm 256x256 13K",
       "  skinned meshes: nurrow(19181v), nurrow_accent(391v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
@@ -182,10 +182,10 @@
       "turntable": "art/renders/fighters/nurrow/turntable.png"
     },
     "seconds": {
-      "splash": 10.0,
-      "portrait": 4.72,
-      "icon": 0.8,
-      "turntable": 4.25
+      "splash": 6.24,
+      "portrait": 2.79,
+      "icon": 1.22,
+      "turntable": 3.6
     }
   },
   "three_qa": {
@@ -217,7 +217,7 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/nurrow/three_nurrow.png",
-    "seconds": 9.7,
+    "seconds": 7.5,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/nurrow/three_clips_nurrow.png"
   },
@@ -225,19 +225,19 @@
     "steps_s": {
       "rig": 0.04,
       "materials": 0.09,
-      "model": 8.67,
-      "lows_bind": 2.15,
-      "uv": 3.66,
-      "bake": 63.92,
-      "clips": 0.22,
-      "export": 1.08,
-      "optimize": 0.71,
+      "model": 7.52,
+      "lows_bind": 1.8,
+      "uv": 3.26,
+      "bake": 55.52,
+      "clips": 0.17,
+      "export": 0.97,
+      "optimize": 0.55,
       "load_test": 0.11,
-      "render": 19.83,
-      "three_qa": 29.06,
-      "cache": 0.12
+      "render": 13.96,
+      "three_qa": 19.9,
+      "cache": 0.08
     },
-    "total_s": 129.71
+    "total_s": 104.0
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78

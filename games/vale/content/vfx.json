@@ -57238,7 +57238,7 @@
     ]
   },
   {
-    "$comment": "T2 · lumen · Sukri a3 wind-up (sukri_wrap_cast, 0.25 s, fitted): the cup motif gathers at weapon in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
+    "$comment": "T2 · lumen · Sukri a3 wind-up (sukri_wrap_cast, 0.25 s, fitted): the cup motif gathers at the left hand (the swung cord) in Sukri's signature, a signature ring at the feet with a closing team edge, an aim glint; the release flares for 0.1 s",
     "id": "sukri_a3_windup",
     "duration": 1.0,
     "teamTint": true,
@@ -57246,7 +57246,7 @@
       {
         "type": "sprite",
         "at": "caster",
-        "socket": "weapon",
+        "socket": "hand_l",
         "texture": "glow",
         "size": [
           [
@@ -57359,7 +57359,7 @@
       {
         "type": "mesh",
         "at": "caster",
-        "socket": "weapon",
+        "socket": "hand_l",
         "follow": true,
         "shape": "orb",
         "scale": [
@@ -57408,7 +57408,7 @@
       {
         "type": "emitter",
         "at": "caster",
-        "socket": "weapon",
+        "socket": "hand_l",
         "rate": 26,
         "duration": 0.92,
         "shape": "sphere",
@@ -57445,7 +57445,7 @@
         "type": "sprite",
         "phase": "release",
         "at": "caster",
-        "socket": "weapon",
+        "socket": "hand_l",
         "texture": "flare",
         "size": [
           1.0,
@@ -57495,7 +57495,7 @@
         "type": "emitter",
         "phase": "release",
         "at": "caster",
-        "socket": "weapon",
+        "socket": "hand_l",
         "count": 8,
         "dir": "forward",
         "spreadDeg": 50,
@@ -57527,7 +57527,7 @@
       {
         "type": "emitter",
         "at": "caster",
-        "socket": "weapon",
+        "socket": "hand_l",
         "delay": 0.86,
         "count": 2,
         "dir": "forward",

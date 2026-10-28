@@ -35,29 +35,29 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 6.08,
-    "rough_metal": 4.56,
-    "normal": 3.33,
-    "ao": 3.72,
+    "base": 3.67,
+    "rough_metal": 2.86,
+    "normal": 1.92,
+    "ao": 2.67,
     "normal_fixed_px": 34289,
-    "projection": 97.14,
-    "pack_save": 97.43,
-    "total": 115.52
+    "projection": 43.26,
+    "pack_save": 43.37,
+    "total": 54.62
   },
   "tris": 21151,
   "mesh_top_m": 1.967,
-  "glb_bytes_raw": 2319276,
+  "glb_bytes_raw": 2326020,
   "optimize": {
     "ok": true,
-    "before": 2319276,
-    "after": 1078160
+    "before": 2326020,
+    "after": 1083544
   },
-  "glb_bytes": 1078160,
+  "glb_bytes": 1083544,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_shadeprint.glb (1053 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: nurrow_shadeprint_base 2048x2048 352K, nurrow_shadeprint_normal 512x512 16K, nurrow_shadeprint_orm 256x256 14K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_shadeprint.glb (1058 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: nurrow_shadeprint_base 2048x2048 359K, nurrow_shadeprint_normal 512x512 16K, nurrow_shadeprint_orm 256x256 13K",
       "  skinned meshes: nurrow_accent(391v), nurrow_shadeprint(19181v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
       "  clips: ",
@@ -72,8 +72,8 @@
       "portrait": "art/out/fighters/nurrow/nurrow_shadeprint_portrait.png"
     },
     "seconds": {
-      "splash": 18.09,
-      "portrait": 12.98
+      "splash": 6.05,
+      "portrait": 4.37
     }
   },
   "three_qa": {
@@ -105,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/nurrow/three_nurrow_shadeprint.png",
-    "seconds": 18,
+    "seconds": 8.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.15,
-      "materials": 0.49,
-      "model": 21.98,
-      "lows_bind": 3.61,
-      "uv": 8.4,
-      "bake": 115.53,
-      "export": 0.25,
-      "optimize": 1.3,
-      "load_test": 0.23,
-      "render": 31.13,
-      "three_qa": 18.44
+      "rig": 0.05,
+      "materials": 0.11,
+      "model": 7.7,
+      "lows_bind": 1.83,
+      "uv": 3.28,
+      "bake": 54.62,
+      "export": 0.05,
+      "optimize": 0.44,
+      "load_test": 0.09,
+      "render": 10.46,
+      "three_qa": 8.29
     },
-    "total_s": 201.57
+    "total_s": 87.03
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78

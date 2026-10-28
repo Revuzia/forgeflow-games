@@ -96,9 +96,9 @@ SKINS: list = [
                  "ironstone": "#4B4955"},
      # fix round 2 (review 7: 'the store art doesn't show the moth: two feathery strokes in the splash, a white cone
      # in the portrait'): its own store lighting and portrait framing (as hesmi_shadeprint). The splash camera DID
-     # frame the near forewing; the screen-left cool kicker's grazing sheen (a Fresnel sheen even on the matte paper:
-     # roughness 0.9 left it) washed the ink to a grey glassy wedge, gone with that kicker off (the warm one keeps the
-     # edge; preview A/B in _progress.md). The hat is rolled 11.5 deg to her right, so the portrait's camera on her
+     # frame the near forewing; the screen-left cool kicker's grazing sheen (a Fresnel sheen: a matte roughness 0.92
+     # on the paper still left it) washed the ink to a grey glassy wedge, gone with that kicker off (the warm one keeps
+     # the edge; previews in _progress.md). The hat is rolled 11.5 deg to her right, so the portrait's camera on her
      # LEFT (yaw 28) saw the cone's left flank edge-on; from her right (-20) the crown faces the camera (2.3x the
      # visible crown: the near forewing, the feelers and the ink-dipped front brim face-on, the mask clear under it).
      # The splash keeps the bible's pose, yaw and hero pitch
@@ -1515,9 +1515,11 @@ def _noon_moths(q, r, phi, ground):
 #    glossy lacquer's mirror of the screen-left kicker washed the near one out to a grey ghost. So: the BRIM DIPPED IN
 #    INK, as the cape is (a wide band from r ~0.75 to the chalk rim, its inner edge scalloped like the moth's wing
 #    margin with a light line following the scallops and a light rule through the band, exactly the cape's dip), the
-#    moth's forewing tips crossing it inside a paper reserve (the woodblock's white line), and the paper / ink hat
-#    MATTE (ROUGH_SKIN: printed paper, not lacquer)
-SHADE_DIP = (0.75, 0.885, 0.032, 26, 1.5)   # the dip's inner edge: r at the front / at the back, the scallops'
+#    moth's forewing tips crossing it inside a paper reserve (the woodblock's white line), light moths printed on the
+#    dip's front; and the store lighting without the screen-left kicker (SKINS: its sheen, not the paint, washed the
+#    wing). The dip is SLANTED (deep at the front, the old thin band at the back): the store cameras see the front
+#    half, the game camera's top band is the hat's back half (lineup f0 top = 99 % hat), so the back stays pale
+SHADE_DIP = (0.79, 0.885, 0.032, 26, 1.5)   # the dip's inner edge: r at the front / at the back, the scallops'
 #                                             depth (r), scallops round, the slant's falloff exponent
 SHADE_RULE = 0.915                   # the light rule through the band (r)
 # small moths printed in LIGHT on the front of the dip (the store cameras' brim face): (phi deg, r, scale, rotation deg)
@@ -2186,8 +2188,7 @@ def nurrow_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed
         out[m] = _srgb(_lin(_hexs(hexc))[None, :] * ratio[:, None]).astype(np.float32)
         log(f"  leg colour {nm}: median -> {hexc}")
     _lift_ao([sel(nm) for nm in AO_FLOOR], list(AO_FLOOR.values()), log)
-    rfl = dict(ROUGH_FLOOR, **ROUGH_SKIN.get(_SKIN.get("id"), {}))
-    _flatten_normal_seams(have, sel("cape"), log, rough_floor=[(sel(nm), v) for nm, v in rfl.items()])
+    _flatten_normal_seams(have, sel("cape"), log, rough_floor=[(sel(nm), v) for nm, v in ROUGH_FLOOR.items()])
     if bleed:
         iy, ix = project.nearest_index(have)
         out = out[iy, ix]
@@ -2283,9 +2284,6 @@ def _lift_ao(masks, floors, log=print):
 
 
 ROUGH_FLOOR = {"boots": 0.74, "pauldron": 0.80}
-# fix round 2: Shadeprint's hat is printed paper, matte (the sandstone role's 0.7 lacquer gloss mirrored the splash's
-# screen-left kicker over the near forewing: a grey ghost of the print)
-ROUGH_SKIN = {"nurrow_shadeprint": {"hat_cone": 0.92, "hat_under": 0.90, "hat_rim": 0.88}}
 #   the waxed-leather role's 0.5 gloss mirrored the splash's bright sky: grey boots; fix pass 4: the wood_dark
 #   pauldron's 0.5 gloss lit a white snow-cap and a pale outer shard in the splash (the sun on the domed cap)
 
@@ -2338,7 +2336,10 @@ def _flatten_normal_seams(have, cape, log=print, rough_floor=()):
         b[~hv] = b[iy, ix][~hv]
         for mk, fl in rough_floor:
             mm = mk[::-1]
-            b[mm, :3] = np.maximum(b[mm, :3], fl)
+            # the ROUGHNESS channel only (R; G is the metallic: fix pass 4's boots / pauldron floor also raised their
+            # metallic to 0.74 / 0.80, metal in a no-metal bible; fix round 2 found it when Shadeprint's paper floor
+            # turned the hat a grey metal at the game camera, lineup top 77 -> 61)
+            b[mm, 0] = np.maximum(b[mm, 0], fl)
         r_.pixels.foreach_set(b.ravel())
         log(f"  roughness margin filled from the islands on {r_.name}: {int((~hv).sum())} texels")
 
@@ -2474,13 +2475,13 @@ SKIN_PARTS = {
                          "boots": ("#4D3B45", 1.0, (0.2, 3.0), True)},
     # Shadeprint (ink and light): ink-lacquered wood, ink leathers, a violet sash (#6A5C96, its sleep's violet), pale
     # chalk linen wraps, ink-violet legs, ink boots, grey-violet carved hands under the pale mask
-    "nurrow_shadeprint": {"pauldron": ("#474354", 0.9, (0.35, 2.6), False), "tassets": ("#474354", 0.9, (0.35, 2.6), False),
+    "nurrow_shadeprint": {"pauldron": ("#504C5D", 0.9, (0.35, 2.6), False), "tassets": ("#504C5D", 0.9, (0.35, 2.6), False),
                           "brooch": ("#3A3646", 0.9, (0.35, 2.6), False), "head": ("#3A3646", 0.9, (0.35, 2.4), False),
                           "belt_strap": ("#6A5C96", 0.8, (0.4, 1.8), False), "belt": ("#2E2C36", 0.9, (0.4, 2.4), False),
-                          "torso": ("#514C5A", 0.9, (0.4, 2.4), False), "straps": ("#2E2C36", 0.9, (0.4, 2.4), False),
-                          "forearm_wraps": ("#C9C6D2", 0.8, (0.45, 1.5), False), "sleeves": ("#55505F", 0.9, (0.4, 2.0), False),
-                          "tabard": ("#575262", 0.95, (0.4, 2.6), False), "hat_band": ("#2E2C36", 0.9, (0.4, 2.2), False),
-                          "hand_L": ("#6E687A", 0.9, (0.4, 2.0), False), "hand_R": ("#6E687A", 0.9, (0.4, 2.0), False),
+                          "torso": ("#5A5563", 0.9, (0.4, 2.4), False), "straps": ("#2E2C36", 0.9, (0.4, 2.4), False),
+                          "forearm_wraps": ("#C9C6D2", 0.8, (0.45, 1.5), False), "sleeves": ("#5C5767", 0.9, (0.4, 2.0), False),
+                          "tabard": ("#625D6C", 0.95, (0.4, 2.6), False), "hat_band": ("#2E2C36", 0.9, (0.4, 2.2), False),
+                          "hand_L": ("#7A7486", 0.9, (0.4, 2.0), False), "hand_R": ("#7A7486", 0.9, (0.4, 2.0), False),
                           "trousers": ("#504C59", 0.85, (0.45, 1.8), 1.3), "legwraps": ("#48474E", 0.8, (0.55, 1.5), 1.3),
                           "boots": ("#413E49", 1.0, (0.2, 3.0), 1.3)},
     #   (the cool violet-greys read darker than the base's warm browns under the game's warm key: lineup f0 feet 18.9
@@ -2489,9 +2490,10 @@ SKIN_PARTS = {
     #   still the darkest cloth under the cowl)
 }
 # per skin: part -> (target median L* of its outer face, outer face only)
-SKIN_VALUE = {"nurrow_shadeprint": {"cape": (47.0, True), "cowl": (56.0, False)}}      # (fix pass 3: 54 / 58 read
+SKIN_VALUE = {"nurrow_shadeprint": {"cape": (48.5, True), "cowl": (59.0, False)}}      # (fix pass 3: 54 / 58 read
 #                                                       white under the game light: 'a white disc over a white cape';
-#   polish 53; fix round 2: 56, the f0 mid band under the ink-dipped front brim, the cape kept at 47)
+#   polish 53 / 47; fix round 2: 59 / 48.5, the f0 mid band under the ink-dipped front brim; the inked hat
+#   brim now parts the cowl from the paper crown)
 
 
 def _install_render() -> None:

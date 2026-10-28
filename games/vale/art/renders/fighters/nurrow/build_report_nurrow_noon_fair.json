@@ -35,24 +35,24 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 3.62,
-    "rough_metal": 3.61,
-    "normal": 3.16,
-    "ao": 2.74,
+    "base": 3.3,
+    "rough_metal": 2.35,
+    "normal": 1.66,
+    "ao": 2.14,
     "normal_fixed_px": 34288,
-    "projection": 49.24,
-    "pack_save": 49.38,
-    "total": 62.66
+    "projection": 42.7,
+    "pack_save": 42.81,
+    "total": 52.38
   },
   "tris": 21151,
   "mesh_top_m": 1.967,
-  "glb_bytes_raw": 2227412,
+  "glb_bytes_raw": 2224812,
   "optimize": {
     "ok": true,
-    "before": 2227412,
-    "after": 1027372
+    "before": 2224812,
+    "after": 1026796
   },
-  "glb_bytes": 1027372,
+  "glb_bytes": 1026796,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -72,8 +72,8 @@
       "portrait": "art/out/fighters/nurrow/nurrow_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 8.92,
-      "portrait": 4.64
+      "splash": 6.26,
+      "portrait": 3.06
     }
   },
   "three_qa": {
@@ -105,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/nurrow/three_nurrow_noon_fair.png",
-    "seconds": 8.3,
+    "seconds": 7.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.08,
-      "materials": 0.21,
-      "model": 10.32,
-      "lows_bind": 2.42,
-      "uv": 3.71,
-      "bake": 62.66,
-      "export": 0.08,
-      "optimize": 0.57,
+      "rig": 0.04,
+      "materials": 0.1,
+      "model": 7.54,
+      "lows_bind": 1.82,
+      "uv": 3.28,
+      "bake": 52.38,
+      "export": 0.07,
+      "optimize": 0.45,
       "load_test": 0.1,
-      "render": 13.58,
-      "three_qa": 8.54
+      "render": 9.34,
+      "three_qa": 7.61
     },
-    "total_s": 102.32
+    "total_s": 82.76
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78
