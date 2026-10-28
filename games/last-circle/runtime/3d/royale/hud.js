@@ -5429,7 +5429,7 @@ function standingRows(W) {
     const a = acts[i];
     if (!a || m.kills[a.id] == null) continue;
     const pl = m.placementOf(a.id);
-    rows.push({ name: a.name || String(a.id), you: a === W.player, kills: m.kills[a.id] || 0, dmg: Math.round(m.damage[a.id] || 0), pl, live: pl == null && m.alive.has(a.id), rank: pl });
+    rows.push({ id: a.id, name: a.name || String(a.id), you: a === W.player, kills: m.kills[a.id] || 0, dmg: Math.round(m.damage[a.id] || 0), pl, live: pl == null && m.alive.has(a.id), rank: pl });
   }
   if (rows.length < 2) return null;
   const unplaced = rows.filter((r) => r.pl == null);
@@ -5486,6 +5486,29 @@ function buildStandings(W, parent) {
   return card;
 }
 
+/** (release blockers) The victory title fitted to its card: the 34 px title steps down (letter spacing with it) until it fits the card's
+ *  content box, at every window size and on every resize while the screen is up; never below 16 px. Touch keeps its own rule
+ *  (TOUCH_CSS sets the title's size with !important) and is left alone. */
+function fitPostTitle(el, box) {
+  if (touchOn) return;
+  el.style.maxWidth = "100%";
+  const fit = () => {
+    if (!el.isConnected) { window.removeEventListener("resize", fit); return; }
+    const cs = getComputedStyle(box);
+    const avail = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    if (!(avail > 0)) return;
+    let fs = 34;
+    el.style.fontSize = fs + "px"; el.style.letterSpacing = "3px";
+    while (fs > 16 && el.scrollWidth > avail + 0.5) {
+      fs -= 1;
+      el.style.fontSize = fs + "px"; el.style.letterSpacing = (3 * fs / 34).toFixed(2) + "px";
+    }
+  };
+  requestAnimationFrame(fit);
+  setTimeout(fit, 0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);      // Orbitron may land after the first fit
+  window.addEventListener("resize", fit);
+}
 export function showPostMatch(W, res) {
   releaseCursor(W);          // the buttons are otherwise unclickable
   hideHUD();
@@ -5501,11 +5524,16 @@ export function showPostMatch(W, res) {
   const box = h("div", null, null, wrap);
   box.className = "lc-gl lc-pm-sum lc-glass-scan";
   box.dataset.lc = "postsum";
+  const tmPM = teamModeOf(W);
   if (res.victory) {
-    h("div", {
+    // (release blockers) a squad wins together: LAST TEAM STANDING in Duos / Trios / Squads, as the in-match announcement says. The title is
+    // fitted to the card (fitPostTitle): at 34 px "LAST ONE STANDING" was wider than the card at 1280 x 720 and clipped at both ends.
+    const ttl = h("div", {
       fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", color: "#ffd54a",
       textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "3px", whiteSpace: "nowrap",
-    }, "LAST ONE STANDING", box).dataset.lc = "posttitle";   // not "VICTORY ROYALE" — Epic Games' phrase
+    }, tmPM !== "solo" ? "LAST TEAM STANDING" : "LAST ONE STANDING", box);   // not "VICTORY ROYALE" — Epic Games' phrase
+    ttl.dataset.lc = "posttitle";
+    fitPostTitle(ttl, box);
     if (!(W.settings && W.settings.flashReduce)) confetti(L);   // LC-43 flash reduction: no confetti
     if (W.hooks && W.hooks.celebrate) W.hooks.celebrate();
   } else {
@@ -5528,7 +5556,16 @@ export function showPostMatch(W, res) {
   const win = h("div", null, "", box); win.className = "lc-winner";
   if (stands) {
     const top = stands._rows[0];
-    if (W.match && W.match.over && top) win.textContent = (top.you ? "You" : top.name) + " won with " + top.kills + (top.kills === 1 ? " kill" : " kills");
+    if (W.match && W.match.over && top) {
+      // (release blockers) in a team mode the winners are a team: "Your squad won with 7 kills" - every member's kills (a dead mate's too)
+      const lead = tmPM !== "solo" && W.actorById ? W.actorById.get(top.id) : null;
+      if (lead && lead.teamId) {
+        let k = 0, mine = false;
+        for (const a of W.actors) if (a && a.teamId === lead.teamId && !a.isDummy) { k += W.match.kills[a.id] || 0; if (a === W.player) mine = true; }
+        const word = tmPM === "duo" ? "duo" : tmPM === "trio" ? "trio" : "squad";
+        win.textContent = (mine ? "Your " + word : top.name + "'s " + word) + " won with " + k + (k === 1 ? " kill" : " kills");
+      } else win.textContent = (top.you ? "You" : top.name) + " won with " + top.kills + (top.kills === 1 ? " kill" : " kills");
+    }
     else if (W.match) win.textContent = W.match.aliveCount() + " still in the circle";
   }
   const grid = h("div", {
