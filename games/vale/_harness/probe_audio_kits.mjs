@@ -1,11 +1,12 @@
 // VALE harness — fighters are told apart by ear (final parity AUD-1): the engine's kit resolver in real matches.
 //
-//   node _harness/probe_audio_kits.mjs [--out <report.json>] [--minutes N] [--seeds 3,5] [--modes rift,fray]
+//   node _harness/probe_audio_kits.mjs [--out <report.json>] [--minutes N] [--seeds 3,5,7,9] [--modes rift,fray]
 //
 // REAL matches (the built catalog in dist-catalog/, LocalMatchHost, bot brains on every seat) drive the REAL engine
 // (src/audio/index.ts) against content/audio.json as it is now; only WebAudio is faked (sources end after their real
-// file's length). The seats hold every fighter with a whole kit (f_<fighter>_<slot> for all ten slots) plus fighters
-// without one (the fallback). One omni listener: the camera on every event's subject, fog lifted (this checks which
+// file's length). The seats hold every fighter with a whole kit (f_<fighter>_<slot> for all ten slots), each run
+// starting where the last one stopped so every kitted fighter is seated (16 kits, 10 seats a run), then fighters
+// without one (the fallback; since AUD-1's second half every fighter has a kit, so K4 has nobody to check). One omni listener: the camera on every event's subject, fog lifted (this checks which
 // cue the engine CHOOSES; fog and earshot are other probes' business). Every cue request is recorded with the event
 // that caused it, and every file the engine fetched.
 // Gates:
@@ -31,7 +32,8 @@ const args = process.argv.slice(2);
 const arg = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = arg('--out', join(HERE, '_reports', 'fw_W3_kits.json'));
 const MINUTES = Number(arg('--minutes', 10));
-const SEEDS = arg('--seeds', '3,5').split(',').map(Number);
+// four seeds: 16 kits rotate through 10 seats a run, and the bots cast some a3s rarely (dunsom, ulkro, vashil)
+const SEEDS = arg('--seeds', '3,5,7,9').split(',').map(Number);
 const MODES = arg('--modes', 'rift,fray').split(',');
 const SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call'];
 
@@ -137,6 +139,7 @@ if (!kitted.length) failures.push('no fighter has a whole kit: the probe is vacu
   report.calls = calls;
 }
 
+let seatOff = 0;                                           // the kitted fighters rotate through the runs' seats
 for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
   const run = `${modeId}#${SEED}`;
   const mode = catalog.modes.find((m) => m.id === modeId);
@@ -145,8 +148,11 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
   const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0));
   const n = mode.teams * mode.perTeam;
   const YOU = Math.min(7, n - 1);
-  // the kitted fighters first (alternating teams), the rest of the seats from the fighters without a kit
-  const order = [...kitted.slice(mi % 2), ...kitted.slice(0, mi % 2), ...bare];
+  // the kitted fighters first (alternating teams; this run starts where the last stopped), the rest of the seats from
+  // the fighters without a kit
+  const k0 = seatOff % Math.max(1, kitted.length);
+  const order = [...kitted.slice(k0), ...kitted.slice(0, k0), ...bare];
+  seatOff += Math.min(n, kitted.length);
   const seats = [];
   for (let i = 0; i < n; i++) {
     const fighter = order[i % order.length];
@@ -305,10 +311,11 @@ for (const m of Object.values(report.modes)) for (const [f, r] of Object.entries
 for (const f of kitted) for (const k of ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3']) if (!cover[f]?.[k]) failures.push(`coverage: ${f} never exercised ${k} (vacuous)`);
 for (const k of ['ult_windup', 'ult_release', 'death']) if (!kitted.some((f) => cover[f]?.[k])) failures.push(`coverage: no kitted fighter exercised ${k} (vacuous)`);
 report.coverage = cover;
+report.k4 = bare.length ? 'checked' : 'vacuous: every fighter has a whole kit (nobody falls back)';
 report.failures = failures;
 report.pass = failures.length === 0;
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(report, null, 1));
-console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : 'PASS: every kitted fighter sounds its own kit (attacks, hits, casts, wind-ups, releases on the sim\'s commit, deaths); round-robin in use; fighters without a kit keep their catalog cues; the lock-in call resolves');
+console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : `PASS: every kitted fighter (${kitted.length}) sounds its own kit (attacks, hits, casts, wind-ups, releases on the sim's commit, deaths); round-robin in use; ${bare.length ? 'fighters without a kit keep their catalog cues' : 'every fighter has a kit (K4 has nobody to check)'}; the lock-in call resolves`);
 console.log(`report → ${OUT}`);
 process.exit(failures.length ? 1 : 0);
