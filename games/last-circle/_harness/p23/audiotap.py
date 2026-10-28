@@ -71,9 +71,20 @@ IMPORT_JS = r"""async () => { const el = [...document.querySelectorAll('script[t
 SETUP_JS = r"""() => { const W = window.__LC__.W, p = W.player, M = W.map, out = [];
   const flat = (x, z, R) => { if (M.queryColliders(x, z, R, out).length) return false; const h0 = M.heightAt(x, z); if (h0 < M.waterY + 1) return false;
     for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; for (const r of [R * 0.5, R]) if (Math.abs(M.heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r) - h0) > 0.9) return false; } return true; };
-  for (let ring = 0; ring < 60; ring++) for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283, r = ring * 12, x = p.pos.x + Math.cos(a) * r, z = p.pos.z + Math.sin(a) * r;
-    if (Math.abs(x) < M.half - 30 && Math.abs(z) < M.half - 30 && flat(x, z, 26)) { window.__P1B__ = { open: { x, z } }; return { x, z }; } }
-  return null; }"""
+  // (R1, harness lane) the WHOLE map on a fixed 6 m grid, not 24 rays around wherever the player landed: the MAP_GEN 7 Savanna (seed 7) has
+  // ~33 grid points that meet the rule (a 26 m collider-free disc, flat within 0.9 m), in a handful of small patches the old rays (157 m
+  // apart at 600 m) all missed. The rule itself is unchanged. Of the points that meet it the one with the most room is taken: the largest
+  // collider-free radius (2 m steps to 120 m), then the flattest, then the nearest to the player - a pure function of the seeded world.
+  const lim = M.half - 30, hits = [];
+  for (let x = -lim; x <= lim; x += 6) for (let z = -lim; z <= lim; z += 6) if (flat(x, z, 26)) hits.push({ x, z });
+  if (!hits.length) return null;
+  const room = (x, z) => { let r = 26; while (r < 120 && !M.queryColliders(x, z, r + 2, out).length) r += 2; return r; };
+  const tilt = (x, z) => { const h0 = M.heightAt(x, z); let m = 0; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283;
+    for (const r of [13, 26]) m = Math.max(m, Math.abs(M.heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r) - h0)); } return m; };
+  for (const h of hits) { h.room = room(h.x, h.z); h.tilt = tilt(h.x, h.z); h.d = Math.hypot(h.x - p.pos.x, h.z - p.pos.z); }
+  hits.sort((a, b) => (b.room - a.room) || (a.tilt - b.tilt) || (a.d - b.d) || (a.x - b.x) || (a.z - b.z));
+  const b = hits[0]; window.__P1B__ = { open: { x: b.x, z: b.z } };
+  return { x: b.x, z: b.z, clearRadius: b.room, tiltM: +b.tilt.toFixed(3), candidates: hits.length, fromPlayerM: Math.round(b.d) }; }"""
 PLACE_JS = r"""([x, z, yaw]) => { const W = window.__LC__.W, p = W.player, M = W.map, T = W.THREE; const y = M.heightAt(x, z);
   p.pos.set(x, y, z); if (p.obj) p.obj.position.set(x, y, z); p.input.yaw = yaw; p.yaw = yaw; p.crouching = false;
   const ey = p._hasEyeY ? p._eyeY : 1.62, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw), cam = W.camera;
@@ -186,8 +197,10 @@ def main():
             s.js(ACTOR_JS)
             spot = s.js(SETUP_JS)
             if not spot:
-                v.cnj("tap", "no open flat spot for the listener")
+                v.cnj("tap", "no open flat spot for the listener (no point of the whole map on a 6 m grid has a 26 m collider-free disc flat within 0.9 m)")
                 return
+            v.data["spot"] = spot
+            v.info("listener spot (26 m collider-free, flat within 0.9 m; the most room on the map)", spot)
             s.js(PLACE_JS, [spot["x"], spot["z"], 0.7])
             wall = s.js(WALL_JS)
             v.data["wall"] = wall

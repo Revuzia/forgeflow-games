@@ -746,16 +746,23 @@ def main():
 
             # ---- deaths ------------------------------------------------------------------------------------------------
             if want("deaths"):
-                b = s.js("""() => { const W = window.__LC__.W; const a = W.actors.find((x) => x.isBot && x.alive && x.inventory && x.inventory.slots.some((q) => q && q.kind === 'weapon'));
-                    if (!a) return null; W.giveItem(a, { kind: 'weapon', id: 'sniper', rarity: 4, mag: 5 }); W.giveItem(a, { kind: 'consumable', id: 'medkit', count: 2 });
-                    return { id: a.id }; }""")
+                # (R1, harness lane) the subject is an armed bot whose bag TAKES the given legendary sniper when one exists (the first armed bot of
+                # the Savanna run had a full bag, so its pile was rightly grey and the colour half of the row tested only "common")
+                b = s.js("""() => { const W = window.__LC__.W, SN = { kind: 'weapon', id: 'sniper', rarity: 4, mag: 5 };
+                    const armed = (x) => x.isBot && x.alive && x.inventory && x.inventory.slots.some((q) => q && q.kind === 'weapon');
+                    const a = W.actors.find((x) => armed(x) && W.wouldAcceptItem(x, SN)) || W.actors.find(armed);
+                    if (!a) return null; const g = W.giveItem(a, SN); W.giveItem(a, { kind: 'consumable', id: 'medkit', count: 2 });
+                    return { id: a.id, sniperGiven: !!g }; }""")
                 if not b:
                     v.cnj("deaths: a killed bot's drops carry ring + glow (+ beam for a weapon)", "no armed bot alive")
                 else:
                     before = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
                     s.js("(id) => { const W = window.__LC__.W; W.killActor(W.actorById.get(id), W.player, 'ar'); }", b["id"])
                     s.step_frames(2, 1 / 60, True)
-                    drops = s.js("""(id) => { const W = window.__LC__.W; return W.debugItems().filter((it) => it.id.indexOf('dd:' + id) === 0).map((it) => { const o = W.debugLootFx(it.id).obj;
+                    # (R1) a drop id is 'dd:<victim>:<k>': match the victim EXACTLY - the bare prefix 'dd:s1' also took bot s18's six drops from an
+                    # earlier death (ashgrid 2026-10-27: 14 "drops", 8 of pile:s1 and 6 of pile:s18, read as markerless members of the wrong pile)
+                    others = s.js("(id) => window.__LC__.W.debugItems().filter((it) => it.id.indexOf('dd:' + id) === 0 && it.id.indexOf('dd:' + id + ':') !== 0).length", b["id"])
+                    drops = s.js("""(id) => { const W = window.__LC__.W; return W.debugItems().filter((it) => it.id.indexOf('dd:' + id + ':') === 0).map((it) => { const o = W.debugLootFx(it.id).obj;
                         return { id: it.id, kind: it.data.kind, did: it.data.id, r: it.data.rarity, ring: o.ring ? o.ring.slot : -1, beam: o.beam ? o.beam.slot : -1, glow: o.glow ? o.glow.slot : -1 }; }); }""", b["id"])
                     after = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
                     # (P2/P3 fix round) LC-27: the drops are ONE death pile - its members carry NO marker of their own; the pile carries one ring +
@@ -769,7 +776,7 @@ def main():
                     okd = bool(drops) and len(drops) >= 2 and not own and bool(pile) and pile["members"] == len(drops) and pile["ring"] >= 0 and pile["glow"] >= 0 \
                         and pile["beam"] >= 0 and pile["best"] == best_r and pile["color"] == pile["want"]
                     v.check("deaths (LC-27): a killed bot's drops form ONE death pile - 0 member markers, one ring + beam + glow in the best dropped gun's rarity colour", okd,
-                            {"drops": drops[:8], "nDrops": len(drops), "membersWithOwnMarker": own[:5], "pile": pile, "liveBefore": before, "liveAfter": after,
+                            {"victim": b, "drops": drops[:8], "nDrops": len(drops), "otherDeathsDropsWithSamePrefix": others, "membersWithOwnMarker": own[:5], "pile": pile, "liveBefore": before, "liveAfter": after,
                              "markerDelta": [a - b_ for a, b_ in zip(after, before)], "bestDroppedRarity": best_r})
 
             # ---- chestview ---------------------------------------------------------------------------------------------

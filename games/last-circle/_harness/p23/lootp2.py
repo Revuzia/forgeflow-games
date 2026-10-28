@@ -116,8 +116,12 @@ def open_drop(s, sp):
     # 2.2 m reach), alive and healed (760 s of fast-forward in a late storm); the state at the hold is recorded (lootp2_all2 10-26: the hold
     # opened nothing - no events, beam still up)
     s.js("([x, y, z]) => { const W = window.__LC__.W, p = W.player; const gy = W.map.heightAt(x + 1.3, z); p.pos.set(x + 1.3, y != null && y > gy ? y : gy, z); p.vel.set(0, 0, 0); p.input.yaw = Math.PI / 2;"
-         " if (p.alive) { p.hp = 100; p.shield = 100; } window.__P23SO__ = []; W.events.on('supplyDropOpened', (a, d) => window.__P23SO__.push(d && d.id)); }", [tgt["x"], tgt.get("y"), tgt["z"]])
+         " if (p.alive) { p.hp = 100; p.shield = 100; } window.__P23SO__ = []; window.__P23SN__ = null; W.events.on('supplyDropOpened', (a, d) => { window.__P23SO__.push(d && d.id); if (d && d.id === window.__P23ST__) window.__P23SN__ = d.n; }); }", [tgt["x"], tgt.get("y"), tgt["z"]])
+    s.js("(id) => { window.__P23ST__ = id; }", tgt["id"])
     n_items0 = s.js("() => window.__LC__.W.debugItems ? window.__LC__.W.debugItems().length : null")
+    # every supply-crate item id already out before the hold (other crates bots opened in the 760 s): only ids NEW after the hold count
+    n_burst0 = s.js("() => { const W = window.__LC__.W; const ids = (W.debugItems ? W.debugItems().map((it) => it.id) : []).concat(W.lootSyncState ? W.lootSyncState().taken : []).filter((t) => t.indexOf('sd:') === 0);"
+                    " window.__P23SB__ = new Set(ids); return ids.length; }")
     s.step_frames(10, 1 / 60)
     s.page.keyboard.down("KeyE")
     s.step_frames(30, 1 / 60)
@@ -127,13 +131,22 @@ def open_drop(s, sp):
     s.step_frames(5 * 60 - 30, 1 / 60)
     s.page.keyboard.up("KeyE")
     s.step_frames(30, 1 / 60)
+    # "its items out" = the crate's OWN burst (ids 'sd:<n>:<i>', loot.js openChest), on the floor or already taken by anyone (lootSyncState().taken).
+    # (R1, harness lane) it was the world's whole item count after vs before: the human stands 1.3 m from the crate holding E, so its walk-over takes
+    # the burst it lands in, and 49 bots loot through the 5 s hold - the same build read +1 (760 vs 759, PASS) on one run and 0 (759 vs 759, FAIL) on
+    # the next (b5f2f976 --rev, 2026-10-28), with the crate opened, its event fired and its beacon gone both times
     r = s.js("""(id) => { const W = window.__LC__.W; const s = (W.supplyDrops || []).find((q) => q.id === id); const o = W.debugLootFx ? (W.debugLootFx(id) || {}).obj : null;
-        const beam = !!(o && o.beam && o.beam.alive);
-        return { opened: !!(s && s.opened), events: window.__P23SO__.slice(), beam, items: W.debugItems ? W.debugItems().length : null }; }""", tgt["id"])
+        const beam = !!(o && o.beam && o.beam.alive), n = window.__P23SN__, pre = n != null ? 'sd:' + n + ':' : null;
+        const mine = (t) => pre && t.indexOf(pre) === 0 && !window.__P23SB__.has(t);
+        const floor = W.debugItems ? W.debugItems().map((it) => it.id).filter(mine) : [];
+        const taken = W.lootSyncState ? W.lootSyncState().taken.filter(mine) : [];
+        return { opened: !!(s && s.opened), events: window.__P23SO__.slice(), beam, items: W.debugItems ? W.debugItems().length : null,
+                 crateN: n, burstOnFloor: floor.length, burstTaken: taken.length, burst: floor.length + taken.length }; }""", tgt["id"])
     r["itemsBefore"] = n_items0
     r["target"] = tgt
     r["atHold"] = held
-    r["ok"] = r["opened"] and tgt["id"] in r["events"] and r["beam"] is False and (r["items"] or 0) > (n_items0 or 0)
+    r["supplyItemsOutBefore"] = n_burst0
+    r["ok"] = r["opened"] and tgt["id"] in r["events"] and r["beam"] is False and (r["burst"] or 0) > 0
     return r
 
 
