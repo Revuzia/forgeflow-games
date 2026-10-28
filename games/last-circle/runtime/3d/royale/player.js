@@ -3658,7 +3658,9 @@ const _camLat = new THREE.Vector3();             // (P23, LC-32) this frame's la
 let _camWallF1 = 1;              // (P23, LC-32) fraction of the LATERAL leg kept (eye -> shoulder pivot)
 const _camWallOff = new THREE.Vector3();         // last frame's pull-in offset (output - free-space position)
 let _camWallF = 1;               // fraction of the free boom kept (1 = nothing in the way)
+let _camWallF3 = 1;              // (R1) fraction of the straight eye -> lens sight line kept (the last cast); eased out like the legs
 let _camWallFocus = null;        // the actor _camWallF belongs to (a focus change resets it)
+let _camWallFocus3 = null;       // the actor _camWallF3 belongs to
 let _camHidden = null;           // the actor whose model the pull-in hid (so a focus change can hand it back)
 let _camClose = false;
 const _cwCols = [];              // own out array for queryColliders (never the shared scratch)
@@ -3782,23 +3784,31 @@ function camWall(W, cam, focus, dt, snapped) {
   let nx = freeB ? cam.position.x : ox + lx * k1 + bx * k2, ny = freeB ? cam.position.y : oy + ly * k1 + by * k2,
     nz = freeB ? cam.position.z : oz + lz * k1 + bz * k2;
   // the straight sight line from the eye must be clear too (a wall the two legs went round)
-  let clipped = false;
+  // (R1, player_camwall deepwood ease-out) this last cut is a FRACTION of the eye -> lens line and it is eased like the legs: it snaps in
+  // on contact and eases out at CAM_EASE_RATE, never past this frame's safe value. It used to be applied raw, so a lens pulled in by the
+  // sight line alone (Deepwood (-143.8, 15.1, -292.9), yaw pi: 2.8 % of the boom) jumped straight back out in ONE frame once the wall cleared.
+  let f3 = 1;
+  const sx = nx - ox, sy = ny - oy, sz = nz - oz, sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
   if (cols && cols.length && (k1 < 0.999 || k2 < 0.999)) {
-    const sx = nx - ox, sy = ny - oy, sz = nz - oz, sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
     if (sl > 0.05) {
       const t3 = camRayHit(cols, ox, oy, oz, sx, sy, sz, CAM_R, 1);
-      if (t3 < 1) {
-        const f3 = Math.max(CAM_MIN_D / sl, t3 - 0.015);
-        nx = ox + sx * f3; ny = oy + sy * f3; nz = oz + sz * f3; clipped = true;
-      }
+      if (t3 < 1) f3 = Math.max(CAM_MIN_D / sl, t3 - 0.015);
     }
   } else if (cols && cols.length) {
     // free boom: the same straight check as the old single cast (an open-field frame changes nothing)
     const t3 = camRayHit(cols, ox, oy, oz, dx, dy, dz, CAM_R, 1);
-    if (t3 < 1) {
-      const f3 = Math.max(CAM_MIN_D / Math.max(len, 1e-3), t3 - 0.015);
-      nx = ox + dx * f3; ny = oy + dy * f3; nz = oz + dz * f3; clipped = true;
-    }
+    if (t3 < 1) f3 = Math.max(CAM_MIN_D / Math.max(len, 1e-3), t3 - 0.015);
+  }
+  if (focus !== _camWallFocus3 || snapped) { _camWallFocus3 = focus; _camWallF3 = f3; }
+  else if (f3 < _camWallF3) _camWallF3 = f3;                                                 // snap IN on contact
+  else if (f3 > _camWallF3) {                                                                // ease OUT, never past the safe fraction
+    _camWallF3 += (f3 - _camWallF3) * Math.min(1, dt * CAM_EASE_RATE);
+    if (f3 - _camWallF3 < 0.002) _camWallF3 = f3;
+  }
+  let clipped = false;
+  if (_camWallF3 < 1) {
+    const k3 = _camWallF3;
+    nx = ox + sx * k3; ny = oy + sy * k3; nz = oz + sz * k3; clipped = true;
   }
   _camWallOff.set(nx - cam.position.x, ny - cam.position.y, nz - cam.position.z);
   cam.position.set(nx, ny, nz);
@@ -3806,7 +3816,7 @@ function camWall(W, cam, focus, dt, snapped) {
   // the target: where the UNSMOOTHED legs (f1, f2) put the lens after the same straight sight-line check - what a snap-in
   // reaches in one frame (on a snap frame k == f and the lens itself is the answer; otherwise one more cast, no new query)
   let tl;
-  if (k1 === f1 && k2 === f2) tl = dl;
+  if (k1 === f1 && k2 === f2 && _camWallF3 === f3) tl = dl;
   else {
     const tx = lx * f1 + bx * f2, ty = ly * f1 + by * f2, tz = lz * f1 + bz * f2;
     tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
@@ -3954,7 +3964,7 @@ function updateCamera(W, dt, alpha) {
   // freefall (open sky; the boom is 9-10 m and nothing but a sky island can be in it).
   if (!firstPerson && !focus.gliding) camWall(W, cam, focus, dt, camSnapped);
   else {
-    _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallF1 = 1; _camWallFocus = focus;
+    _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallF1 = 1; _camWallFocus = focus; _camWallF3 = 1; _camWallFocus3 = focus;
     const st0 = W._camWall; if (st0) { st0.f = 1; st0.target = 1; st0.pulled = false; st0.dist = 0; st0.free = 0; st0.lat = 1; }
   }
   // the body is hidden while the lens is right at the eye (a head filling the screen is worse than
@@ -4861,7 +4871,7 @@ export function disposeMatch(W) {
   R.mats.length = 0;
   PICK_LOG.length = 0;
   // camera wall pull-in state belongs to the match that is ending (its rigs are gone)
-  _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallF1 = 1; _camWallFocus = null; _camClose = false; _camHidden = null; _ditherActor = null;
+  _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallF1 = 1; _camWallFocus = null; _camWallF3 = 1; _camWallFocus3 = null; _camClose = false; _camHidden = null; _ditherActor = null;
   out.tags = tagsMod.disposeMatch().tags;
   CH.list.length = 0;
   if (CH.mesh) {
