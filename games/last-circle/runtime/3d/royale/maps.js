@@ -6384,9 +6384,34 @@ export async function buildMap(W, mapId) {
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
         const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
-        colliders.push(mkCollider("box", it.x + x0, it.x + x1, yLo(ox, oz, ex, ez), it.y + top + pdy, it.z + z0, it.z + z1, -1, kind, idx, hp));
+        const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn);
+        colliders.push(mkCollider("box", it.x + x0, it.x + x1, y0, y1, it.z + z0, it.z + z1, -1, kind, idx, hp));
       }
     }
+  }
+  // (R1 / colliders: collisioncheck phantom-rocks) a rock part whose drawn top is under the step height over the ground it stands on (a 0.5 m stone beside the big
+  // rock of a cluster at the cover / quarry scales 2-2.7) is a STEP - the mover's own rule (player.js blockedF: a box whose top is within STEP_UP of the feet is stepped
+  // onto) - but on a slope the feet beside its downhill side stand lower than the ground under it, so its full-height box was a knee-high wall there with no wall drawn
+  // (deepwood s7, every isolated rock walked at: 17 of 361 walks stopped 0.30-2.1 m from the nearest rock that is not a step). The box top of such a part is held to
+  // HULL_STEP over the lowest ground a capsule can stand on beside it (its box + HULL_RING, 8 points), so it is a step from every side, as drawn. Footprint unchanged
+  // (the AABB of the yawed hull); a part at or over HULL_STEP_PART above its ground keeps its full height (a wall, as drawn). HULL_STEP_PART sits 3 cm over STEP_UP: the
+  // probe reads a part's ground under its drawn band, this under the table hull (0.55: walls kept by a 1-3 cm misread came back as phantoms; 0.61: kept bodies lost their tall box,
+  // collisioncheck clip isla_viva rocks p95 0.12). Not fixed here: the table hull is every vertex of the part, the buried skirt too - at s >= 1.4 it stands 0.16-0.7 m outside
+  // the drawn rock above the ground (an outline per scale in the bake, as the trees' byScale, would close it).
+  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
+  function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn) {
+    let gm = 0;
+    for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
+    gm /= hull.length;
+    if (topY - gm >= HULL_STEP_PART) return topY;
+    let gl = Infinity;
+    const ax = it.x + x0 - HULL_RING, bx = it.x + x1 + HULL_RING, az = it.z + z0 - HULL_RING, bz = it.z + z1 + HULL_RING, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    for (let a = 0; a < 8; a++) {
+      const x = a === 0 || a === 6 || a === 7 ? ax : a === 1 || a === 5 ? mx : bx, z = a < 3 ? az : a === 3 || a === 7 ? mz : bz;
+      const g = heightAt0(x, z);
+      if (g < gl) gl = g;
+    }
+    return Math.max(y0 + 0.05, Math.min(topY, gl + HULL_STEP));
   }
   function mergePartsByMaterial(meshes) {
     const byMat = new Map(), out = [];
