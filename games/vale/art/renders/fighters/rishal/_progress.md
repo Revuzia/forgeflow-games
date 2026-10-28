@@ -394,3 +394,24 @@
   §9 Chalkline - the table as built (an ink figure under a chalk-white head and scarf): coat / skirt / torso #5E646E,
   apron #62686F, sleeves #676E78, chest #72787F, pauldrons + lames #9CA2AA, helm #CFCCC4, scarf (cowl) #D4D1C8,
   visor smoked #7E858E, nape #7A7F87, neck #3E3A38, fins #CDD0D4; Lamplit fins #CDBD9F.
+- 2026-10-28 15:15 CDT: W5b (final parity package: the two open majors in _open.json, then three minors). Every head
+  change checked side by side with the concept crop (proto/rishal_head.py views + the hero portrait).
+  HEAD/VISOR/FACE (major): the concept's THICK pale-blue visor frame (VISOR_RIM 1.65 cm, was 0.8: #A6CBE3, dark outline
+  outside, a fine dark line inside), the hook a step narrower under the band (all frame below it: a pale-blue beak, not
+  a lavender sheet); the ink almonds larger and crisper (EYE_ALMOND) and let through the glass (EYE_SHOW 0.62); the
+  face WHITE carved chalk (FACE_COL mid #D8D6D0), carved planes in the geometry (cheek planes ~53 deg off the front with
+  a crisp cheekbone edge, a jaw plane, a prouder nasal wedge), the contour carving cut in ink with a lit lip (0.72,
+  1.45x wider), a closed mouth, the chin crease short and straight (curving up into the mouth's ends it closed an
+  open-lips outline). A nasal-flank line was tried and dropped (claw marks with the cheek line).
+  ACCENT (major, the reviewer's option 1): REAR_VANES off (no emissive on or along the crest); the swept fins carry the
+  team colour again as thin glass blades splayed OUT from the left temple boss, faces up and back
+  (proto/rishal_accent.py 2.36 / 3.03 / 2.25 / 2.11 % at 0/90/180/270); skins' "fins" part colours dropped (accent).
+  MINORS: VALUE_CAP (a second knee above L* 84: atlas p99 85.2, 0.10 % > 86, was p99 88.5); the pauldron spike ~8 deg
+  lower (tip z 1.672 -> 1.612; the Chalkline spike decals follow LAMES[0]); GLB headroom 18 -> 29 KiB.
+  GATES (build 2, base + skins): rishal 20354 tris 1143 KiB accent 2.28 % (three QA), chalkline 20354 / 986 KiB / 2.29 %,
+  lamplit 20764 / 1027 KiB / 2.28 %, three load OK, faces +Z, mesh top 1.879 (art.json unchanged). lineup
+  (art/renders/lineup/rishal_w5b_b2_skins, 0/90/180/270): base accent 2.16 / 1.59 / 1.81 / 2.23 % accentOk TRUE, top
+  75.2 / 76.0 / 69.7 / 71.8, mid 54.2 / 48.5 / 51.8 / 47.7 valueGradientOk TRUE; chalkline accentOk TRUE, front top 69.9
+  (valueGradientOk FALSE by 0.1 L*: the pale smoke fins left its top band), lamplit TRUE / TRUE. In game:
+  _harness/_shots/fw_W5b_rishal_{game,close,close2}.png (t 65, self seat: the fins take the Noonwhite self tint).
+  Open: brief §7 should name the fins as accent carriers (owner ruling); back top band 69.7; Chalkline front top 69.9.

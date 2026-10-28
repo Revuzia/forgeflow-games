@@ -7,7 +7,7 @@
     "tris_nape": 638,
     "tris_face": 618,
     "tris_visor": 900,
-    "tris_visor_ridge": 808,
+    "tris_visor_ridge": 344,
     "tris_crest": 640,
     "tris_crest_glass": 300,
     "tris_fins": 520,
@@ -44,38 +44,38 @@
     "tris_knife_grip_L": 160,
     "tris_knife_guard_L": 80,
     "tris_knife_blade_L": 300,
-    "validate_rishal": "18810->18798"
+    "validate_rishal": "18550->18538"
   },
-  "uv_coverage": 0.6,
+  "uv_coverage": 0.594,
   "bake": {
-    "base": 5.47,
-    "rough_metal": 4.83,
-    "normal": 2.76,
-    "ao": 3.7,
-    "normal_fixed_px": 82576,
-    "projection": 109.33,
-    "pack_save": 109.68,
-    "total": 126.85
+    "base": 3.67,
+    "rough_metal": 3.72,
+    "normal": 2.34,
+    "ao": 2.38,
+    "normal_fixed_px": 80919,
+    "projection": 48.47,
+    "pack_save": 48.58,
+    "total": 60.8
   },
-  "tris": 20818,
+  "tris": 20354,
   "mesh_top_m": 1.879,
-  "glb_bytes_raw": 2418448,
+  "glb_bytes_raw": 2384224,
   "optimize": {
     "ok": true,
-    "before": 2418448,
-    "after": 1025448
+    "before": 2384224,
+    "after": 1009784
   },
-  "glb_bytes": 1025448,
+  "glb_bytes": 1009784,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (1001 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: rishal_chalkline_base 2048x2048 235K, rishal_chalkline_normal 512x512 45K, rishal_chalkline_orm 512x512 70K",
-      "  skinned meshes: rishal_accent(414v), rishal_chalkline(18548v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (986 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: rishal_chalkline_base 2048x2048 233K, rishal_chalkline_normal 512x512 45K, rishal_chalkline_orm 512x512 71K",
+      "  skinned meshes: rishal_accent(438v), rishal_chalkline(18124v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20818; bind-pose bounds (three units, Y up): 0.77 x 1.88 x 0.61; facing (-0.00, 1.00); head bone y 1.55; runRefSpeed 3.55",
+      "  tris: 20354; bind-pose bounds (three units, Y up): 0.79 x 1.88 x 0.61; facing (-0.00, 1.00); head bone y 1.55; runRefSpeed 3.55",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -85,8 +85,8 @@
       "portrait": "art/out/fighters/rishal/rishal_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 16.37,
-      "portrait": 11.3
+      "splash": 17.09,
+      "portrait": 6.29
     }
   },
   "three_qa": {
@@ -99,7 +99,7 @@
         -0.381
       ],
       [
-        0.432,
+        0.445,
         1.879,
         0.23
       ]
@@ -109,7 +109,7 @@
       1
     ],
     "headY": 1.549,
-    "accentPct": 2.45,
+    "accentPct": 2.29,
     "accentTopHalfPct": 100,
     "heightPx1080": 100,
     "size": [
@@ -118,24 +118,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/rishal/three_rishal_chalkline.png",
-    "seconds": 22.5,
+    "seconds": 9.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.26,
-      "model": 35.95,
-      "lows_bind": 5.02,
-      "uv": 9.16,
-      "bake": 126.85,
-      "export": 0.27,
-      "optimize": 1.29,
-      "load_test": 0.24,
-      "render": 27.74,
-      "three_qa": 23.11
+      "materials": 0.17,
+      "model": 15.05,
+      "lows_bind": 1.11,
+      "uv": 4.43,
+      "bake": 60.8,
+      "export": 0.07,
+      "optimize": 0.72,
+      "load_test": 0.12,
+      "render": 23.42,
+      "three_qa": 10.17
     },
-    "total_s": 229.97
+    "total_s": 116.14
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

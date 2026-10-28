@@ -346,7 +346,7 @@
    refusal caption — fixed heights, so nothing shifts and nothing reaches the clear centre */
 .hud__bottom > .recallbar, .hud__bottom > .respawn, .hud__bottom > .locchip { position: absolute; left: 50%; bottom: calc(196 * var(--px)); transform: translateX(-50%); }
 .dbar__status { top: auto !important; bottom: calc(100% + 4 * var(--px)); z-index: 4; }
-.srow { display: flex; gap: calc(4 * var(--px)); }
+.hud .srow { display: flex; gap: calc(4 * var(--px)); }   /* scoped: the post-game table rows are their own class (client F4) */
 .schip { --k: var(--team-ally); position: relative; display: block; width: calc(26 * var(--px)); height: calc(26 * var(--px)); flex: none; border-radius: 3px; overflow: hidden; background: var(--ink-1);
   box-shadow: 0 0 0 1.5px var(--k), 0 0 0 3px rgba(11, 13, 17, 0.85); transition: opacity var(--dur-fast) linear; }
 .schip.is-bad { --k: var(--team-enemy); }

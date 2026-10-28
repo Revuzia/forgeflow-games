@@ -1401,10 +1401,11 @@ DARK_FLOOR, DARK_KNEE = 0.66, 0.86
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
 LINING_HEX = "#3A2F28"          # fp1-6: a step up (the lining is a big dark area in the middle band from above)
 # (W5b, final parity review originality F9: "Sukri's mask framed in a dark hood" - the near-black lining round the face
-# read as a void, a hooded-figure read): the lining LIFTED to a warm brown linen (L* ~43, was ~20), its deepest
-# fold a little darker, so the hood reads as cloth round a smiling carved face
-LINING_HEX = "#74624F"
-LINING_DEEP = 0.78              # the deepest fold's share of LINING_HEX (was 0.80, the rim's 1.20 kept)
+# read as a void, a hooded-figure read): the lining LIFTED to a warm brown linen (L* ~50, was ~20), so the hood reads
+# as cloth round a smiling carved face (build 1 at #74624F / 0.78: portrait share under L* 20 round the mask only
+# 31.6 -> 28.6 %, the hero light leaves the recess in shadow: a step further)
+LINING_HEX = "#86725E"
+LINING_DEEP = 0.86              # the deepest fold's share of LINING_HEX (was 0.80, the rim's 1.20 kept)
 HOOD_TONE = 0.68
 HOOD_WARM, HOOD_WARM_K = "#D6C6A6", 0.45     # build 3: three rendered the linen a cool bone-white: pulled toward warm cream
 

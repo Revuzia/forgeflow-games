@@ -160,6 +160,42 @@ async function journey(mode) {
       await page.waitForTimeout(1500);
       return await vale(page, (v) => { const pg = v.state.postgame.value; const me = pg.result.players.find((x) => x.player === pg.you); return { reason: pg.result.reason, won: me.won, placement: me.placement, duration: Math.round(pg.result.duration), grants: pg.grants.currency, xp: pg.grants.xp }; });
     });
+    // client F4: the post-game scoreboard is a real table at 1920 and 1280 — every header's x-centre within 4 px of
+    // its cells' in every row, no header wraps, and every owned item shows its painted icon (never a letter)
+    await step('postgame_scoreboard', async () => {
+      await click(page.locator('.scr--postgame [role=tab]', { hasText: /Scoreboard|Hour Board/ }).first());
+      await page.waitForTimeout(700);
+      const out = {};
+      for (const [w, h] of [[1920, 1080], [1280, 720]]) {
+        await page.setViewportSize({ width: w, height: h }); await page.waitForTimeout(500);
+        const m = await page.evaluate(() => {
+          const cx = (e) => { const r = e.getBoundingClientRect(); return (r.left + r.right) / 2; };
+          let worst = 0, rows = 0, tdDisplay = new Set(), wrapped = [], itemsFull = 0, itemsImg = 0, letters = 0;
+          for (const t of document.querySelectorAll('.scr--postgame:not(.is-leaving) .score__table')) {
+            const ths = [...t.querySelectorAll('thead th')];
+            for (const th of ths) { const lh = parseFloat(getComputedStyle(th).lineHeight) || 18; const pad = parseFloat(getComputedStyle(th).paddingTop) + parseFloat(getComputedStyle(th).paddingBottom); if (th.getBoundingClientRect().height > lh * 1.5 + pad) wrapped.push(th.innerText.trim()); }
+            for (const tr of t.querySelectorAll('tbody tr')) {
+              rows++;
+              const tds = [...tr.children];
+              tds.forEach((td, i) => { tdDisplay.add(getComputedStyle(td).display); if (ths[i]) worst = Math.max(worst, Math.abs(cx(ths[i]) - cx(td))); });
+              for (const s of tr.querySelectorAll('.itemslot.is-full')) { itemsFull++; if (s.querySelector('img')) itemsImg++; if ((s.innerText || '').trim()) letters++; }
+            }
+          }
+          return { rows, worstDx: Math.round(worst * 10) / 10, tdDisplay: [...tdDisplay], wrapped, itemsFull, itemsImg, letters };
+        });
+        out[w] = m;
+        await shot(page, `${PREFIX}_${mode}_postgame_scoreboard_${w}`);
+        if (!m.rows) throw new Error(`no scoreboard rows at ${w}`);
+        if (m.worstDx > 4) throw new Error(`header/cell x-centres differ by ${m.worstDx} px at ${w}`);
+        if (m.tdDisplay.some((d) => d !== 'table-cell')) throw new Error(`cells are not table cells at ${w}: ${m.tdDisplay}`);
+        if (m.wrapped.length) throw new Error(`headers wrap at ${w}: ${m.wrapped.join(', ')}`);
+        if (m.letters || m.itemsImg < m.itemsFull) throw new Error(`items without painted icons at ${w}: ${m.itemsImg}/${m.itemsFull} img, ${m.letters} letters`);
+      }
+      await page.setViewportSize({ width: 1920, height: 1080 }); await page.waitForTimeout(400);
+      await click(page.locator('.scr--postgame [role=tab]', { hasText: 'Summary' }).first());
+      await page.waitForTimeout(300);
+      return out;
+    });
     await step('home_again', async () => {
       await click(page.getByRole('button', { name: /Return home/i }).first());
       await page.waitForTimeout(800);

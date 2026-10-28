@@ -32,24 +32,24 @@
   },
   "uv_coverage": 0.596,
   "bake": {
-    "base": 4.59,
-    "rough_metal": 3.14,
-    "normal": 1.66,
-    "ao": 1.77,
+    "base": 7.17,
+    "rough_metal": 8.99,
+    "normal": 6.2,
+    "ao": 6.7,
     "normal_fixed_px": 102520,
-    "projection": 28.85,
-    "pack_save": 29.01,
-    "total": 40.52
+    "projection": 62.27,
+    "pack_save": 62.51,
+    "total": 92.3
   },
   "tris": 18301,
   "mesh_top_m": 1.649,
-  "glb_bytes_raw": 2800672,
+  "glb_bytes_raw": 2802256,
   "optimize": {
     "ok": true,
-    "before": 2800672,
-    "after": 1127996
+    "before": 2802256,
+    "after": 1128244
   },
-  "glb_bytes": 1127996,
+  "glb_bytes": 1128244,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -69,8 +69,8 @@
       "portrait": "art/out/fighters/sukri/sukri_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 7.12,
-      "portrait": 3.22
+      "splash": 7.88,
+      "portrait": 3.31
     }
   },
   "three_qa": {
@@ -102,24 +102,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/sukri/three_sukri_stillwater.png",
-    "seconds": 7,
+    "seconds": 8.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.12,
-      "model": 23.53,
-      "lows_bind": 6.66,
-      "uv": 2.54,
-      "bake": 40.71,
-      "export": 0.1,
+      "materials": 0.18,
+      "model": 48.27,
+      "lows_bind": 14.54,
+      "uv": 3.7,
+      "bake": 92.52,
+      "export": 0.11,
       "optimize": 0.7,
       "load_test": 0.14,
-      "render": 10.37,
-      "three_qa": 7.24
+      "render": 11.22,
+      "three_qa": 8.71
     },
-    "total_s": 92.15
+    "total_s": 180.19
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56

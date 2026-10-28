@@ -14,12 +14,13 @@ import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
 import { Currency } from '../components/Currency.tsx';
 import { Icon } from '../components/Glyphs.tsx';
-import { Portrait } from '../components/Portrait.tsx';
+import { AssetImg, Portrait } from '../components/Portrait.tsx';
 import { RankEmblem } from '../components/RankEmblem.tsx';
 import { Screen } from '../components/Screen.tsx';
 import { roman, SeatMark, seatOf, SideMark } from '../components/Seat.tsx';
 import { EmptyState } from '../components/States.tsx';
 import { Tabs } from '../components/Tabs.tsx';
+import { TipText, useTip } from '../components/Tooltip.tsx';
 import { fmtClock, fmtInt, fmtWait } from '../format.ts';
 import { animateIn, dur, tween } from '../motion.ts';
 import { TOKENS } from '../tokens.ts';
@@ -198,6 +199,9 @@ function LevelBar(p: { g: GrantSummary }): JSX.Element {
 }
 
 // ── scoreboard (team blocks, or the Hour Board in FRAY) ────────────────────────────────────────
+// A real table: every cell stays a table cell (the row class is the post-game's own `pgrow`, never the
+// HUD's flex `.srow`), so each header sits over its column. The player cell holds an inner flex box;
+// items are the painted item icons; the best value of the match carries a noon tick with its tooltip.
 type Col = { key: string; label: string; get: (r: PlayerResult) => number; fmt?: (n: number) => string };
 
 function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JSX.Element {
@@ -227,12 +231,18 @@ function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JS
             {b.title}
             {b.won !== undefined ? <span class="chip chip--line">{b.won ? cv.t('score.team.winner', 'Winners') : cv.t('score.team.loser', 'Defeated')}</span> : null}
           </caption>
+          <colgroup>
+            {p.ffa ? <col class="score__c-place" /> : null}
+            <col class="score__c-player" />
+            {cols.map((c) => <col class={`score__c-num score__c-${c.key}`} />)}
+            <col class="score__c-items" />
+          </colgroup>
           <thead>
             <tr>
-              {p.ffa ? <th class="t-caption">{cv.t('score.col.place', 'Place')}</th> : null}
-              <th class="t-caption score__player">{cv.t('score.col.player', 'Player')}</th>
-              {cols.map((c) => <th class="t-caption num">{c.label}</th>)}
-              <th class="t-caption">{cv.t('score.col.items', 'Items')}</th>
+              {p.ffa ? <th class="t-caption score__place" scope="col">{cv.t('score.col.place', 'Place')}</th> : null}
+              <th class="t-caption score__player" scope="col">{cv.t('score.col.player', 'Player')}</th>
+              {cols.map((c) => <th class="t-caption num score__num" scope="col">{c.label}</th>)}
+              <th class="t-caption score__items" scope="col">{cv.t('score.col.items', 'Items')}</th>
             </tr>
           </thead>
           <tbody>
@@ -241,23 +251,22 @@ function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JS
               const you = r.player === p.me.player;
               const rel = you ? 'self' : p.ffa ? 'enemy' : r.team === p.me.team ? 'ally' : 'enemy';
               return (
-                <tr class={`srow srow--${rel}`}>
-                  {p.ffa ? <td class="num srow__place">{cv.ordinal(r.placement)}</td> : null}
-                  <td class="srow__player">
-                    <Portrait fighter={f} skin={r.skin} size="xs" round={rel === 'ally'} />
-                    {p.ffa ? <SeatMark seat={seatOf(r.player)} you={you} size={14} showNumeral={false} /> : null}
-                    <span class="srow__names"><span class="t-body-s">{you ? cv.t('score.you', 'You') : r.name}{r.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}</span>
-                      <span class="t-caption muted">{f?.name}{r.role ? ` · ${cv.role(r.role)?.name ?? ''}` : ''}{p.ffa ? ` · ${roman(seatOf(r.player))}` : ''}</span></span>
+                <tr class={`pgrow pgrow--${rel}`}>
+                  {p.ffa ? <td class="num pgrow__place">{cv.ordinal(r.placement)}</td> : null}
+                  <td class="pgrow__player">
+                    <div class="pgrow__who">
+                      <Portrait fighter={f} skin={r.skin} size="xs" round={rel === 'ally'} />
+                      {p.ffa ? <SeatMark seat={seatOf(r.player)} you={you} size={14} showNumeral={false} /> : null}
+                      <span class="pgrow__names"><span class="t-body-s">{you ? cv.t('score.you', 'You') : r.name}{r.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}</span>
+                        <span class="t-caption muted">{f?.name}{r.role ? ` · ${cv.role(r.role)?.name ?? ''}` : ''}{p.ffa ? ` · ${roman(seatOf(r.player))}` : ''}</span></span>
+                    </div>
                   </td>
                   {cols.map((c) => {
                     const v = c.get(r);
-                    const isBest = v > 0 && v === best.get(c.key);
-                    return <td class={`num ${isBest ? 'is-best' : ''}`} title={isBest ? cv.t('postgame.stats.best', 'Best in the match') : undefined}>
-                      {isBest ? <span class="besttick" aria-label={cv.t('postgame.stats.best', 'Best in the match')} /> : null}
-                      {c.key === 'kda' ? `${r.kills} / ${r.deaths} / ${r.assists}` : (c.fmt ?? String)(v)}
-                    </td>;
+                    const text = c.key === 'kda' ? `${r.kills} / ${r.deaths} / ${r.assists}` : (c.fmt ?? String)(v);
+                    return <td class="num pgrow__num">{v > 0 && v === best.get(c.key) ? <BestValue text={text} /> : text}</td>;
                   })}
-                  <td class="srow__items">{Array.from({ length: 6 }, (_, i) => { const it = cv.item(r.items[i] ?? null); return <span class={`itemslot ${it ? 'is-full' : ''}`} title={it?.name}>{it ? it.name.slice(0, 1) : ''}</span>; })}</td>
+                  <td class="pgrow__items"><span class="pgrow__itemrow">{Array.from({ length: 6 }, (_, i) => <ItemCell id={r.items[i] ?? null} />)}</span></td>
                 </tr>
               );
             })}
@@ -265,6 +274,27 @@ function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JS
         </table>
       ))}
     </div>
+  );
+}
+
+/** the match's best value in a column: brighter, with a noon tick over it and its tooltip */
+function BestValue(p: { text: string }): JSX.Element {
+  const { cv } = useApp();
+  const label = cv.t('postgame.stats.best', 'Best in the match');
+  const tip = useTip(() => <TipText text={label} />, { place: 'above' });
+  return <span class="bestv" {...tip} tabIndex={0} aria-label={`${p.text}. ${label}`}><i class="bestv__tick" aria-hidden="true" />{p.text}</span>;
+}
+
+/** one item slot: the painted item icon (its name on hover and focus); an empty slot is a quiet well */
+function ItemCell(p: { id: string | null }): JSX.Element {
+  const { cv } = useApp();
+  const it = cv.item(p.id);
+  const tip = useTip(it ? () => <TipText text={it.name} /> : null, { place: 'above' });
+  if (!it) return <span class="itemslot" aria-hidden="true" />;
+  return (
+    <span class="itemslot is-full" {...tip} tabIndex={0} role="img" aria-label={it.name}>
+      <AssetImg src={cv.asset(it.icon)} alt="" fallback={<span class="itemslot__fb" aria-hidden="true" />} />
+    </span>
   );
 }
 

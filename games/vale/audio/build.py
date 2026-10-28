@@ -32,6 +32,11 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              there is no catch-all 'status' role; each control cue lands (its 10 ms RMS envelope within 6 dB of its
              peak by CC_ONSET_MS) and sits >= CC_MIN_DIST_DB from every other control cue and every buff cue by
              1/3-octave spectral distance (ear-level identity, not just a different file name)
+  procs      every fighter passive (content/fighters, read only) whose triggers pay off in damage, a status, a mark
+             or a resource has a rendered proc cue (f_<fighter>_passive, else its present.sfx / hitSfx); every other
+             triggered passive (items, boons, team buffs, units) has a present.sfx / hitSfx or its 'proc.<kind>' role
+  ambience   every map (content/maps, read only) has 4-6 emitters 'ambient.<map>.<source>' → rendered ambience-bus
+             loops: at most one 'bed' (not spatial), every other source an art.ambient group of that map with points
 Deterministic: every random choice is seeded from the cue id (synth.core.rng) and ffmpeg runs
 bitexact, so a rebuild reproduces the same files.
 """
@@ -376,7 +381,136 @@ def band_distance(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.sqrt(np.mean((a_[keep] - b_[keep]) ** 2)))
 
 
+CONTENT = os.path.normpath(os.path.join(HERE, '..', 'content'))
+PAYOFF_OPS = {'damage', 'status', 'mark', 'consumeMark', 'resource'}
+AMB_MIN, AMB_MAX = 4, 6          # ambience emitters per map (final parity AUD-8)
+
+
+def _read(rel: str):
+    with open(os.path.join(CONTENT, rel), encoding='utf8') as f:
+        return json.load(f)
+
+
+def payoff_ops(node) -> set[str]:
+    """Every effect op inside a passive's triggers, nested deliveries (onHit, then, perStack, …) included,
+    that pays off as damage, a status, a mark or a resource."""
+    found: set[str] = set()
+    if isinstance(node, dict):
+        if node.get('op') in PAYOFF_OPS:
+            found.add(node['op'])
+        for k, v in node.items():
+            if k != '$comment':
+                found |= payoff_ops(v)
+    elif isinstance(node, list):
+        for v in node:
+            found |= payoff_ops(v)
+    return found
+
+
 def contract_gates(contract: dict) -> tuple[list[str], dict]:
+    """Every contract gate (see the module doc); returns (failures, report)."""
+    fails, rep = control_gate(contract)
+    pf, prep = proc_gate(contract)
+    af, arep = ambience_gate(contract)
+    rep['procs'] = prep
+    rep['ambience'] = arep
+    return fails + pf + af, rep
+
+
+def proc_gate(contract: dict) -> tuple[list[str], dict]:
+    """procs: every fighter passive with a damage / status / mark / resource payoff has its proc cue
+    (f_<fighter>_passive, else the passive's present.sfx / hitSfx), rendered; every other triggered passive
+    (items, boons, team buffs, units) has a present.sfx / hitSfx or its 'proc.<kind>' role bound."""
+    import glob
+    fails: list[str] = []
+    cues, ev = contract['cues'], contract.get('events', {})
+    rep: dict = {'fighters': {}, 'others': {}}
+
+    def rendered(c: str) -> bool:
+        return all(os.path.exists(out_path(f)) for f in cues[c]['files'])
+
+    for path in sorted(glob.glob(os.path.join(CONTENT, 'fighters', '*.json'))):
+        with open(path, encoding='utf8') as f:
+            fd = json.load(f)
+        p = fd.get('kit', {}).get('passive') or {}
+        ops = sorted(payoff_ops(p.get('triggers', [])))
+        per = f"f_{fd['id']}_passive"
+        pres = p.get('present') or {}
+        c = per if per in cues else pres.get('sfx') or pres.get('hitSfx')
+        rep['fighters'][fd['id']] = {'passive': p.get('id'), 'payoff': ops, 'cue': c}
+        if ops and not c:
+            fails.append(f"procs: {fd['id']}'s passive {p.get('id')} pays off ({', '.join(ops)}) but has no proc cue ({per})")
+        elif c and c not in cues:
+            fails.append(f"procs: {fd['id']}'s proc cue {c} is not in audio.json")
+        elif c and not rendered(c):
+            fails.append(f'procs: {c} is not rendered')
+    others = [('item', p) for it in _read('items.json')['items'] for p in it.get('passives', [])]
+    others += [('boon', b) for b in _read('setup.json').get('boons', [])]
+    others += [('team', p) for tb in _read('team_buffs.json')['teamBuffs'] for p in tb.get('passives', [])]
+    others += [('unit', u['passive']) for u in _read('units.json')['units'] if u.get('passive')]
+    for kind, p in others:
+        if not p.get('triggers'):
+            continue
+        pres = p.get('present') or {}
+        c = pres.get('sfx') or pres.get('hitSfx') or ev.get(f'proc.{kind}')
+        rep['others'][p['id']] = {'kind': kind, 'cue': c}
+        if not c or c not in cues:
+            fails.append(f"procs: the {kind} passive {p['id']} has triggers but no proc cue (present.sfx / hitSfx or 'proc.{kind}')")
+    return fails, rep
+
+
+def ambience_gate(contract: dict) -> tuple[list[str], dict]:
+    """ambience: every map has AMB_MIN..AMB_MAX emitters ('ambient.<map>.<source>'), at most one 'bed' (not
+    spatial); every other source names an art.ambient group of that map with points (spatial cue); every
+    emitter's cue is a rendered loop on the ambience bus; no role names an unknown map."""
+    import glob
+    fails: list[str] = []
+    cues, ev = contract['cues'], contract.get('events', {})
+    maps = {}
+    for path in sorted(glob.glob(os.path.join(CONTENT, 'maps', '*.json'))):
+        with open(path, encoding='utf8') as f:
+            md = json.load(f)
+        maps[md['id']] = (md.get('art') or {}).get('ambient') or {}
+    rep: dict = {}
+    roles = {k: v for k, v in ev.items() if k.startswith('ambient.')}
+    for role in roles:
+        parts = role.split('.')
+        if len(parts) != 3 or parts[1] not in maps:
+            fails.append(f'ambience: {role} names no map (ambient.<map id>.<source>)')
+    for mid, art in maps.items():
+        ems = {k.split('.', 2)[2]: v for k, v in roles.items() if k.split('.')[1] == mid}
+        rows = {}
+        for src, c in ems.items():
+            if src == 'bed':
+                pts = None
+            else:
+                pts = sum(len(e.get('at', [])) for e in art.get('effects', []) if e.get('vfx') == src)
+                pts += sum(len(x.get('spots', [])) for x in art.get('critters', []) if x.get('id') == src)
+                pts += sum(len(x.get('at', [])) for x in art.get('props', [])
+                           if (x.get('fx') or {}).get('vfx') == src or os.path.splitext(os.path.basename(x.get('model', '')))[0] == src)
+            rows[src] = {'cue': c, 'points': pts}
+            d = cues.get(c)
+            if not d:
+                fails.append(f'ambience: {mid}.{src} → {c} is not in audio.json')
+                continue
+            if d.get('bus') != 'ambience' or not d.get('loop'):
+                fails.append(f'ambience: {c} must be a loop on the ambience bus')
+            if src == 'bed' and d.get('spatial'):
+                fails.append(f'ambience: {mid}\'s bed {c} must not be spatial (it is the map-wide floor)')
+            if src != 'bed':
+                if not pts:
+                    fails.append(f'ambience: {mid}.{src} matches no art.ambient group with points in content/maps')
+                if not d.get('spatial'):
+                    fails.append(f'ambience: {c} sounds from points ({mid}.{src}) but is not spatial')
+            if not all(os.path.exists(out_path(f)) for f in d['files']):
+                fails.append(f'ambience: {c} is not rendered')
+        rep[mid] = rows
+        if not AMB_MIN <= len(ems) <= AMB_MAX:
+            fails.append(f'ambience: {mid} has {len(ems)} emitters (want {AMB_MIN}-{AMB_MAX})')
+    return fails, rep
+
+
+def control_gate(contract: dict) -> tuple[list[str], dict]:
     """The control gate (see the module doc); returns (failures, report)."""
     fails: list[str] = []
     ev = contract.get('events', {})
@@ -529,8 +663,19 @@ def print_gates(fails: list[str], rep: dict) -> None:
     for c in rep['buffCues']:
         if c in rep['onsetMs']:
             print(f"  (buff)    {c:12s} lands {rep['onsetMs'][c]:5.1f} ms")
+    pr = rep.get('procs', {})
+    paid = [f for f, x in pr.get('fighters', {}).items() if x['payoff']]
+    print(f"proc gate: {len(pr.get('fighters', {}))} fighter passives ({len(paid)} with a payoff), "
+          f"{len(pr.get('others', {}))} other triggered passives")
+    for f, x in pr.get('fighters', {}).items():
+        print(f"  {f:9s} {x['passive'] or '-':26s} {','.join(x['payoff']) or '-':28s} → {x['cue'] or 'NONE'}")
+    am = rep.get('ambience', {})
+    print(f'ambience gate: {len(am)} maps, {AMB_MIN}-{AMB_MAX} emitters each')
+    for mid, rows in am.items():
+        print(f"  {mid:11s} " + ', '.join(f"{s}→{x['cue']}({'bed' if x['points'] is None else x['points']})" for s, x in rows.items()))
     print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
-                 f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart'))
+                 f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart;'
+                 f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points'))
 
 
 if __name__ == '__main__':

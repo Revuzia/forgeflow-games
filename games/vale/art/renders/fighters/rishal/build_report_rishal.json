@@ -48,14 +48,14 @@
   },
   "uv_coverage": 0.594,
   "bake": {
-    "base": 2.41,
-    "rough_metal": 1.59,
-    "normal": 1.6,
-    "ao": 1.98,
+    "base": 2.49,
+    "rough_metal": 1.71,
+    "normal": 1.48,
+    "ao": 1.84,
     "normal_fixed_px": 80921,
-    "projection": 26.91,
-    "pack_save": 27.0,
-    "total": 34.67
+    "projection": 35.11,
+    "pack_save": 35.21,
+    "total": 42.83
   },
   "tris": 20354,
   "mesh_top_m": 1.879,
@@ -166,13 +166,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2825152,
+  "glb_bytes_raw": 2824556,
   "optimize": {
     "ok": true,
-    "before": 2825152,
-    "after": 1170664
+    "before": 2824556,
+    "after": 1170776
   },
-  "glb_bytes": 1170664,
+  "glb_bytes": 1170776,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -195,10 +195,10 @@
       "turntable": "art/renders/fighters/rishal/turntable.png"
     },
     "seconds": {
-      "splash": 6.66,
-      "portrait": 3.52,
-      "icon": 0.91,
-      "turntable": 3.5
+      "splash": 7.34,
+      "portrait": 4.57,
+      "icon": 1.13,
+      "turntable": 4.75
     }
   },
   "three_qa": {
@@ -230,26 +230,26 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/rishal/three_rishal.png",
-    "seconds": 7,
+    "seconds": 9.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.11,
-      "model": 11.76,
-      "lows_bind": 0.87,
-      "uv": 3.68,
-      "bake": 34.67,
-      "clips": 0.08,
-      "export": 0.66,
-      "optimize": 0.48,
-      "load_test": 0.1,
-      "render": 14.63,
-      "three_qa": 7.19,
-      "cache": 0.05
+      "materials": 0.09,
+      "model": 12.38,
+      "lows_bind": 0.89,
+      "uv": 3.93,
+      "bake": 42.83,
+      "clips": 0.09,
+      "export": 0.83,
+      "optimize": 0.58,
+      "load_test": 0.12,
+      "render": 17.86,
+      "three_qa": 9.88,
+      "cache": 0.08
     },
-    "total_s": 74.31
+    "total_s": 89.57
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

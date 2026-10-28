@@ -127,7 +127,7 @@ export function roleLineup(catalog: CatalogT, modeId: string, seed: number, diff
 // ── one match ───────────────────────────────────────────────────────────────────────────────────
 interface Job { suite: string; mode: string; seed: number; diffs: [string, string]; cut: number }
 type KillerKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'none' | 'other';
-interface FDeath { t: number; p: number; role: string; killer: KillerKind; killerDef: string; assists: number; involved: boolean }
+interface FDeath { t: number; p: number; role: string; mode: string; killer: KillerKind; killerDef: string; assists: number; involved: boolean }
 interface GameRec {
   job: Job; reason: string; dur: number; winner: number; sudden: number; faults: string[];
   seats: { p: number; team: number; fighter: string; role: string; spells: string[] }[];
@@ -154,12 +154,15 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   const n = setup.seats.length;
   const finished = new Set(catalog.items.filter((i) => i.tier === 'core' || i.tier === 'apex').map((i) => i.id));
   const modeTicks: Record<string, number>[] = setup.seats.map(() => ({}));
+  const ctrls: (BotController | null)[] = setup.seats.map(() => null);
+  const modeOf = (p: number): string => (ctrls[p] as unknown as { mode?: string } | null)?.mode ?? '?';
   const factory = createBots(catalog, setup);
   const bots = (seat: SeatSetup, host: Parameters<typeof factory>[1]): BotController | null => {
     const c = factory(seat, host);
     if (!c) return null;
     const think = c.think.bind(c);
     const p = seat.player;
+    ctrls[p] = c;
     c.think = (view: WorldView, pv: PlayerView) => {
       const r = think(view, pv);
       const t = view.time;
@@ -215,7 +218,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
             const pi = w.players.findIndex((p) => p.entity === e.dst);
             const vt = pi >= 0 ? w.players[pi].team : -1;
             const k = killerKind(e.killer, vt);
-            rec.fdeaths.push({ t: e.t, p: pi, role: setup.seats[pi]?.role ?? '', killer: k.kind, killerDef: k.def, assists: e.assists.length, involved: k.credited || e.assists.length > 0 });
+            rec.fdeaths.push({ t: e.t, p: pi, role: setup.seats[pi]?.role ?? '', mode: pi >= 0 ? modeOf(pi) : '?', killer: k.kind, killerDef: k.def, assists: e.assists.length, involved: k.credited || e.assists.length > 0 });
           }
           break;
         }
@@ -390,6 +393,11 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     const mon: Record<string, number> = {};
     for (const g of gs) for (const x of g.fdeaths) if (!x.involved && x.killer === 'monster') mon[x.killerDef] = (mon[x.killerDef] ?? 0) + 1;
     if (Object.keys(mon).length) text.push(`  monster-alone deaths: ${Object.entries(mon).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    const alone: Record<string, number> = {};
+    for (const g of gs) for (const x of g.fdeaths) if (!x.involved && (x.killer === 'minion' || x.killer === 'monster')) {
+      const key = `${x.role}/${x.mode}/${x.t < 840 ? 'lane' : x.t < 1500 ? 'mid' : 'late'}`; alone[key] = (alone[key] ?? 0) + 1;
+    }
+    if (Object.keys(alone).length) text.push(`  alone deaths by role/mode/phase: ${Object.entries(alone).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   }
   detail.laning = lan;
   const both = (f: (L: ReturnType<typeof laningStats>) => boolean): boolean => diffs.length > 0 && diffs.every((d) => f(lan[d]));
