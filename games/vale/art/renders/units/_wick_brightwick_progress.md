@@ -498,3 +498,58 @@ renders `art/renders/units/*brightwick*`.
   Open: the cross-kind relation to the fighters (wick hoods 61-63 against fighters' top quarters 45-65 in the same
   frames) is for the fighter / B5 lanes; the Serenade Low feet 28.3 sits at the 28 target; tris 3981 / 3989 of 4000
   leave little headroom; a small light sliver at the foot of the Aubade rim band at the 52 deg close-up.
+
+## Fix round 7 (verify wave-b, "verify:wick (wave-b-finish)": the Aubade side face blocker, the Serenade O, the 52 deg disc)
+- 2026-10-28 01:15 start. Blocker: from the side at 52 deg the six crown lamps put a LEVEL PAIR (60 / 120 deg) either side
+  of the side spire = two eyes, over the near pauldron's closed accent U round a pale stepped cap = an open mouth (1:1 in a
+  walking wave, both seats, both tints). Minors: the Serenade roll round a near-round opening = lips round an O, a lit
+  sliver in the hollow under the core at 52 deg, the cores flat discs at 52 deg. Close-up tool: proto glbview `--views
+  yaw8` (eye level / 52 deg head / gameplay camera x1 and x3 at every 45 deg facing). In game: review_wick ig.mjs, the
+  brightwick served in the shieldwick slot (same states as the review's frames: before/after pairs), High + Low, seats 0/5.
+- AUBADE CROWN: TEN smaller lamps 36 deg apart (FLAME 5.7 -> 4.3 cm, cups 3.7 -> 2.8 cm, 6-round), one over the arch, one
+  on the nape seam, a chalk spire tower facing each side (90 / 270); square-shaft spires (12 tris). From any facing the
+  ring's near half shows 4-6 evenly spaced lamps on its arc: the inner two always have neighbours at the same spacing
+  (a string of lights, like the Serenade's ten windows), never an isolated level pair. (Rotating six by 30 deg would put a
+  pair over the arch; any equal-height ring has some facing where two lamps are level, so the fix is the spacing.)
+- AUBADE PAULDRON: the inlay a SHORT ARC on the plate's outer edge only (+-40 deg round the outermost point, 5 stations;
+  was front -> outside -> back, 220 deg: a closed U); its painted bezel follows. The cap plate (+ its two points) x0.56
+  linear: found by the cap's outer sheet and theta span (`capm`; the old nearest-mid-surface test handed the cap's
+  outer face to the first lame, so r6's "cap" darkening never reached it). Measured: Blender g3 yaw 90 cup L* median
+  58.4 -> ~47; in game (high s0 t84, the review's face frame) 47.0 -> 36.5 / 47.5 -> 35.4 (p75 56.7 -> 43.7 / 42.6).
+- SERENADE OPENING: the roll is a BROW: round 1.6 cm over the arch's top ~100 deg, falling through the shoulders to a
+  FLAT felt edge down the sides (8 mm across, 3 mm proud: FlatCapsule chain high, a flattened swept low), run round the
+  whole outline (closed, no seam) with a felt-coloured sill run (`_rim_serenade`). The collar's FRONT flattened under the
+  opening (`CollarTorus` / `collar_tube`: front top 1.388 -> 1.345, the sides and back the full roll) and the sill
+  1.370 -> 1.385: a straight band of felt is the arch's sill between the dark opening and the collar, which no longer
+  closes an O under it. The tombstone's bottom corners 4.5 -> 3.4 cm (2 x the corner radius had grown past the box's
+  height under the arch: it pinched the outline at the springing line, a notch / ragged teeth either side).
+- THE LIT SLIVER: it was BASE COLOUR, not light (rough 1 / no normal map / no specular left it; a black base removed it):
+  the decimated hollow floor is one long sliver triangle 3-4 texels wide in UV, wound down, lying exactly on the outline's
+  bottom edge, so its texels missed the ink tests and it sampled the sill's felt. Now (`ink_hollow`) every near-level
+  texel on the floor band inside the outer shell is ink, and (`floor_uv_mask`) the floor triangles' UV footprints + 2 px
+  are inked after the gutter fill (base + the ORM's matte occluded ink: roughness 1, occlusion 0.05). The spill only on
+  walls BEHIND the core (0.40 -> 0.25), none in the pocket under it. `refine_hollow` splits any hood-low chord across the
+  void (0-1 per build now); `snap_hollow` pulls stray vertices out of the void.
+- HOOD LIGHT (both): the halo has its own profile (HALO_BW, registered in wick_common.HALO_PROFILES by name: the shared
+  halo_alpha with its plateau ending at 0.15, so core + halo fall 1.0 / 0.78 / 0.43 / 0.26 / 0.10 / 0 from the centre
+  instead of a flat 0.8 disc to 1.3 x the core) and leans back 30 deg (its lower fall comes forward under the core, where
+  the 52 deg sight line sees it below the brow); 10 round, 6 stations (90 tris). Blender 52 deg close-up, L* from the
+  Serenade core's centre downward every 4 px: before 59 60 60 60 60 61 61 60 58 58 52 41 25 10; after 59 60 60 60 60 60 60
+  58 47 43 39 34 29 24 19 (across every 6 px: before flat 60 then 54 47; after 59 .. 56 49 46 43 39 35 31 27).
+- Budgets: the Aubade hood 440 -> 390, the Serenade hood 310 -> 300 (the crown, the halo stations, the refine).
+- 03:00 FINAL builds (both, clip sheets): Aubade 3961 tris / 343,680 B, Serenade 3970 / 326,632 B; three load test OK,
+  facing +Z, 92 / 91 px at 1080p; QA accent 5.96 % (top half 72.1 %) / 5.96 % (65.2 %); clips idle / run / attack1 /
+  death (+ the stand-ins); attack1 + death ground-solved (body min z 0.000, prop min z >= +0.002 / -0.000).
+  In game (same states as the review; its numbers in brackets): Aubade ally High dE76 49.6 (50.1), hood top quarter 61.9
+  (62.2), p90 63.0; enemy dE 91.0 (90.2); Serenade ally High dE 65.6 (66.4), hood top 61.9 (61.6), p90 65.1 (64.8);
+  Serenade bands top / mid / feet 37.0 / 36.6 / 20.1 High (38.4 / 31.1 / 23.2), 38.4 / 38.2 / 24.5 Low (39.7 / 34.8 / 28.3):
+  the mid is lighter (the felt sill and the lowered collar front replace the dark roll there); Lab marigold share
+  18.6 % High (13.1; the exposed sand felt under the warm sun, authored albedo clamped as before).
+  Evidence: fix_r7_brightwick.jpg (before / after sheet), three_*, three_clips_*, build_report_*; scratchpad bw_r7/: final_<f>_yaw8.png (+ _enemy: eye / 52 deg head / x3 / x1 at 0..315), cmp_a_side_final.png
+  (before / after, yaw 90 / 270 / 135 / 225, x3 + x1), cmp_s_front_x3_x1.png, cmp_s_hollow_final.png, qa_three_head_ba.png,
+  igcrops/z_bw_a_face_t84_x7_before_after.png, z_bw_a_t84_x1_before_after.png, z_bw_s_front_x8_before_after.png,
+  ba_<f>_<tint>_<q>_x4.png, analysis.txt.
+  Open: from the side the Aubade pauldron is still a stepped cup (a lighter lame rim round the darker cap, the short arc
+  under it) - no eyes above it now; the Serenade opening from 52 deg is a dark arch wider than tall (the 52 deg
+  foreshortening of a 19 x 23 cm arch), under its brow roll; a faint lit facet on the upper inner wall in the three QA
+  close-up (hidden by the brow from 52 deg).

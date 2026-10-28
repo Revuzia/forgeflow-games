@@ -58,6 +58,17 @@ painting projected onto the game mesh in the concept's pose, normals + AO baked 
     (+ the Serenade mantle); the reserved marigold band clamped (luminance kept); the Aubade sill sunk 2 cm + inked,
     its hood cap -15 %; the Serenade roll thinned at the sill, the painted spill halved; smaller hood cores and the
     halo's alpha stations in its fall (the shared core + halo). Close-up check: proto/wick_brightwick_glbview.py.
+  * FIX ROUND 7 (verify wave-b: the Aubade read as a FACE from the side; the Serenade opening as lips round an O; the
+    cores flat discs at 52 deg): Aubade crown TEN smaller lamps 36 deg apart (one over the arch, one on the nape seam,
+    a chalk spire facing each side: from any facing 4-6 evenly spaced lamps on the ring's arc, never an isolated level
+    pair); the pauldron inlay a short arc on the plate's outer edge only (+-40 deg, was a 220 deg U) and its cap plate
+    ~12 L* darker (found by the cap's outer sheet). Serenade: the roll a BROW (round over the arch's top, a flat felt
+    edge down the sides, run round the whole outline with a felt sill run), the collar's front flattened under the
+    opening (`CollarTorus`) and the sill 1.5 cm higher (a straight felt sill between the opening and the collar); the
+    rounded box under the arch no longer pinches the outline (corner 3.4 cm). Both: the hollow floor inked in UV
+    (`floor_uv_mask`: its sliver triangles sampled the sill's felt, a lit streak under the core), the hood low's chords
+    across the void split (`refine_hollow`), the spill only behind the core; the halo its own profile (HALO_BW: falls
+    from the centre, no plateau) leaning back 30 deg toward the gameplay camera.
   * Pauldrons ride the shoulder bone RIGIDLY (blended into the upper arm they crumpled in the guard pose).
   * Same job silhouette in both cultures: the same rig, staff layout (right grip 0.40 m from the foot, left grip
     0.72 m above it, lantern at the upper left) and the same clips; hood, crown, pauldrons, trims, lamp differ.

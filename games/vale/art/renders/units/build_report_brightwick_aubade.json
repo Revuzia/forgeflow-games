@@ -38,14 +38,14 @@
   },
   "uv_coverage": 0.712,
   "bake": {
-    "base": 6.23,
-    "rough_metal": 5.89,
-    "normal": 2.15,
-    "ao": 5.53,
+    "base": 2.31,
+    "rough_metal": 2.11,
+    "normal": 1.15,
+    "ao": 1.66,
     "normal_fixed_px": 21467,
-    "projection": 28.15,
-    "pack_save": 35.1,
-    "total": 55.58
+    "projection": 15.15,
+    "pack_save": 19.48,
+    "total": 26.97
   },
   "tris": 3961,
   "mesh_top_m": 1.728,
@@ -153,13 +153,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 863484,
+  "glb_bytes_raw": 863520,
   "optimize": {
     "ok": true,
-    "before": 865124,
-    "after": 343680
+    "before": 865160,
+    "after": 343640
   },
-  "glb_bytes": 343680,
+  "glb_bytes": 343640,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -203,26 +203,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_brightwick_aubade.png",
-    "seconds": 51.9,
+    "seconds": 21.7,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_brightwick_aubade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.43,
-      "model": 14.98,
-      "lows_bind": 0.18,
-      "uv": 17.99,
-      "bake": 55.58,
-      "clips": 1.58,
-      "export": 1.77,
-      "optimize": 1.18,
-      "load_test": 0.41,
-      "three_qa": 93.7,
-      "cache": 0.07
+      "materials": 0.33,
+      "model": 14.58,
+      "lows_bind": 0.13,
+      "uv": 17.68,
+      "bake": 26.97,
+      "clips": 0.86,
+      "export": 1.24,
+      "optimize": 0.74,
+      "load_test": 0.26,
+      "three_qa": 49.74,
+      "cache": 0.05
     },
-    "total_s": 188.0
+    "total_s": 112.66
   },
   "run_ref_speed": 3.3,
   "height_m": 1.6
