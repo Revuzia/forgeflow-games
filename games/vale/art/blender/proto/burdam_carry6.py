@@ -410,7 +410,7 @@ PART_RGB = {"mask": (0.78, 0.65, 0.37), "cowl": (0.31, 0.29, 0.26), "coat": (0.3
 
 def sheet(rows, body, bpart, cnames, pose_cleaver, anchor, out):
     from common import scene
-    cw, chh = 200, 320
+    cw, chh = 260, 320
     views = [("g", 270), ("g", 90), ("g", 0), ("g", 180), ("g", 225), ("g", 45), ("e", 0), ("e", -28)]
     W, H = cw * len(views), chh * len(rows)
     img = np.full((H, W, 4), 1.0, dtype=np.float32)
@@ -425,7 +425,7 @@ def sheet(rows, body, bpart, cnames, pose_cleaver, anchor, out):
             if kind == "g":
                 x, v, dp = game_proj(allP, yd)
                 scale = 1.0
-                ox, oy = cw * vi + cw * 0.5, chh * ri + chh - 40
+                ox, oy = cw * vi + cw * 0.42, chh * ri + chh - 40
             else:
                 x, v, dp = eye_proj(allP, yd)
                 scale = 0.62

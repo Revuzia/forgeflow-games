@@ -79,8 +79,8 @@ HAND_DIR["R"] = HAND_DIR["L"] * np.array([-1.0, 1.0, 1.0])
 PALM = 0.190                                        # wrist -> the knuckle line
 FING = (0.106, 0.093, 0.082)                        # finger segment lengths
 THUMB = (0.082, 0.072)
-FING_W = 0.031                                      # each finger (a pair reads 6.4 cm wide)
-FING_T = 0.033
+FING_W = 0.034                                      # each finger (a pair reads 6.8 cm wide; the four fill the palm)
+FING_T = 0.036
 REST_CURL = (3.0, 6.0, 10.0)                        # the painted fingers' gentle curl toward the palm (deg per joint)
 
 
@@ -125,9 +125,9 @@ def finger_chain(side: str, which: str, curl=None):
         d = unit(u * 0.84 - lat * 0.50 - back * 0.08)
         segs, curls = THUMB, (6.0, 10.0)
     else:
-        off = -0.031 if which == "a" else 0.031
+        off = -FING_W if which == "a" else FING_W
         base = W + u * PALM + lat * off
-        d = unit(u + lat * (-0.03 if which == "a" else 0.05))
+        d = unit(u + lat * (-0.01 if which == "a" else 0.015))
         segs, curls = FING, REST_CURL
     curls = curl or curls
     pts = [base]
@@ -146,8 +146,19 @@ PALETTE = materials.bible_palette(sandstone="#D9CBAA", wood="#CDB892", wood_dark
                                   cloth="#9C6E69", lampresin="#A8916F", ironstone="#4B4140", leather="#5A3E2C",
                                   under="#342C2B", ink="#17161A", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
+# ART 2.0 skins: the projected painting re-coloured part by part (the robe only where it is the rose felt: the cream
+# collar and under-robe keep their colour), the procedural parts (hat, hands, lantern) painted in the skin's own
+# scheme; skin-only extras painted flat (SKIN_FLAT). Palettes: _design/fighters/tunlan.md section 9.
+SKINS: list = [
+    {"id": "tunlan_noon_fair", "extra": {"puppet_rods": True}, "card": {"primary": "#6A4F5E", "secondary": "#E2D6C3"},
+     "palette": {"sandstone": "#E2D6C3", "lilac": "#B48AA6", "cloth": "#85727B", "wood": "#D3C0A0"}},
+    {"id": "tunlan_lamplit", "extra": {}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
+     "palette": {"sandstone": "#5E4D3E", "panel": "#CDB98F", "lampresin": "#A38C6B", "cloth": "#7F6D60", "wood": "#D3C0A0"}},
+]
+SKIN_FLAT = {"rod_0": "wood_dark", "rod_1": "wood_dark", "rodhead_0": "lilac", "rodhead_1": "lilac"}
 SOCKETS = {"lamp": "x_lamp", "hand_gesture_r": "x_gesture_r", "hand_gesture_l": "x_gesture_l"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrait_clip": "idle_lobby", "portrait_t": 0.0,
+          "portrait_yaw": 28.0}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -183,7 +194,7 @@ LAN_APO = 0.068           # the glass prism's apothem (hexagonal)
 LAN_Z = {"roof_top": 1.772, "eave": 1.705, "glass_top": 1.700, "glass_bot": 1.578, "base_top": 1.580,
          "base_bot": 1.508, "knob": 1.486}
 VENT_R = 0.050            # the lamp vent in the brim above the hook (accent disc inside an ironstone grommet)
-GLOW_RING = (0.180, 0.205)   # the lamp-glass ring set into the hat top round the crown (accent), r from / to
+GLOW_RING = (0.182, 0.202)   # the lamp-glass ring set into the hat top round the crown (accent), r from / to
 
 
 def _vent_c():
@@ -313,17 +324,18 @@ def hand_parts(side: str) -> list:
     out = []
     axes = np.stack([lat, back, -u])                     # local x = out, y = back (palm), z = up the hand
     palm = Sculpt(f"palm_{s}")
-    palm.add(RoundBox(W + u * 0.092 + back * 0.002, (0.064, 0.026, 0.084), 0.016, axes=axes).displaced(
+    palm.add(RoundBox(W + u * 0.096 + back * 0.002, (0.068, 0.030, 0.088), 0.016, axes=axes).displaced(
         chips(0.004, 18.0), 0.004), k=0.0)
-    palm.add(Sphere(W + u * 0.004 + back * 0.004, 0.036), k=0.03)                       # the wrist knob
-    palm.add(Capsule(W + u * 0.168 - lat * 0.058 - back * 0.006, W + u * 0.168 + lat * 0.058 - back * 0.006, 0.020), k=0.01)
-    palm.add(RoundBox(W + u * 0.075 - lat * 0.052 + back * 0.004, (0.022, 0.024, 0.040), 0.012, axes=axes), k=0.02)  # thumb mount
-    # carved lines: the back-of-hand plate's border and the knuckle groove
-    palm.sub(Capsule(W + u * 0.150 - lat * 0.07 - back * 0.030, W + u * 0.150 + lat * 0.07 - back * 0.030, 0.0035), k=0.002)
+    palm.add(Sphere(W + u * 0.004 + back * 0.004, 0.040), k=0.03)                       # the wrist knob
+    palm.add(Capsule(W + u * 0.176 - lat * 0.060 - back * 0.004, W + u * 0.176 + lat * 0.060 - back * 0.004, 0.024), k=0.012)
+    palm.add(RoundBox(W + u * 0.078 - lat * 0.056 + back * 0.004, (0.024, 0.027, 0.044), 0.012, axes=axes), k=0.02)  # thumb mount
+    # carved lines: the back-of-hand plate's border, the knuckle groove and the joint pins' heads
+    palm.sub(Capsule(W + u * 0.150 - lat * 0.075 - back * 0.033, W + u * 0.150 + lat * 0.075 - back * 0.033, 0.0035), k=0.002)
+    palm.sub(Capsule(W + u * 0.030 - lat * 0.075 - back * 0.033, W + u * 0.030 + lat * 0.075 - back * 0.033, 0.0030), k=0.002)
     out.append((f"palm_{s}", palm, "wood", f"bone:hand.{s}"))
     for which in ("a", "b", "t"):
         pts = finger_chain(s, which)
-        offs = (-0.0155, 0.0155) if which != "t" else (0.0,)
+        offs = (-FING_W * 0.5, FING_W * 0.5) if which != "t" else (0.0,)
         nseg = len(pts) - 1
         for i in range(nseg):
             S = Sculpt(f"f{which}{i + 1}_{s}")
@@ -333,13 +345,13 @@ def hand_parts(side: str) -> list:
             lx = unit(np.cross(bx, d))
             ax_ = np.stack([lx, bx, d])
             L = float(np.linalg.norm(b - a))
-            taper = 1.0 - 0.10 * i
+            taper = 1.0 - 0.05 * i
             for o in offs:
                 c0 = a + d * (L * 0.5 + 0.001) + lx * o
-                w = (FING_W * 0.5 - 0.0008) * (0.95 if which == "t" else 1.0)
-                S.add(RoundBox(c0, (w * taper, FING_T * 0.5 * taper, L * 0.5 - 0.0045), 0.0070, axes=ax_), k=0.0)
+                w = (FING_W * 0.5 - 0.0006) * (1.0 if which == "t" else 1.0)
+                S.add(RoundBox(c0, (w * taper, FING_T * 0.5 * taper, L * 0.5 - 0.0040), 0.0080, axes=ax_), k=0.0)
                 if i < nseg - 1 or which == "t" and i == 0:
-                    S.add(Capsule(b + lx * (o - w * 0.75), b + lx * (o + w * 0.75), 0.0095 * taper), k=0.003)  # the joint
+                    S.add(Capsule(b + lx * (o - w * 0.80), b + lx * (o + w * 0.80), 0.0115 * taper), k=0.003)  # the joint
                 if i == nseg - 1:
                     S.add(Sphere(b - d * 0.012 + lx * o, w * taper * 0.95), k=0.012)                    # the rounded tip
                 S.sub(Capsule(a + d * (L * 0.30) + lx * (o - w) - bx * 0.018, a + d * (L * 0.30) + lx * (o + w) - bx * 0.018, 0.0022), k=0.001)
@@ -360,29 +372,29 @@ def sculpts() -> list:
     hat.add(Lathe((0, 0, 0), _hat_prof, HAT_R + 0.01, 1.80, 2.0).displaced(seams_fn, 0.0045), k=0.0)
     hat.add(Poly((0, 0, 0), CROWN_A[0], CROWN_Z[0] - 0.02, CROWN_Z[1] + 0.004, 8, 22.5, 0.010), k=0.006)
     hat.add(Poly((0, 0, 0), CROWN_A[1], CROWN_Z[1] - 0.004, CROWN_Z[2], 8, 22.5, 0.012, taper=-0.010), k=0.004)
-    hat.sub(Sphere(_vent_c() + np.array([0, 0, 0.004]), VENT_R), k=0.004)
     g0, g1 = GLOW_RING
-    hat.sub(Lathe((0, 0, 0), lambda r, z: np.maximum(np.abs(r - (g0 + g1) / 2) - (g1 - g0) / 2 - 0.002,
-                                                       np.abs(z - hat_top(r)) - 0.006), g1 + 0.01, 1.9, 2.05), k=0.002)
     part("hat", hat, "sandstone", "bone:x_hat", 3600)
+    # the lamp-glass ring: a band lying 2 mm proud of the lacquer (the hat's game mesh is a clean lathe without the
+    # inlay's groove; the paint draws the groove's dark lip round it)
     ring = Sculpt("crown_glow")
     ring.add(Lathe((0, 0, 0), lambda r, z: np.maximum(np.abs(r - (g0 + g1) / 2) - (g1 - g0) / 2,
-                                                        np.abs(z - (hat_top(r) - 0.006)) - 0.0045), g1 + 0.01, 1.9, 2.05), k=0.0)
-    part("crown_glow", ring, "accent", "bone:x_hat", 400, 0.5)
+                                                        np.abs(z - (hat_top(r) + 0.0008)) - 0.0030), g1 + 0.01, 1.9, 2.05), k=0.0)
+    part("crown_glow", ring, "accent", "bone:x_hat", 260, 0.5)
     rim = Sculpt("hat_rim")
     rim.add(Lathe((0, 0, 0), _rim_prof, 0.66, 1.80, 1.90).displaced(chips(0.003, 10.0), 0.003), k=0.0)
     for i in range(20):                                   # the rim's segment joints (painted as plates)
         a = 2 * math.pi * (i + 0.5) / 20
         c = np.array([math.cos(a) * 0.636, math.sin(a) * 0.636, RIM_C[1]])
         rim.sub(Capsule(c - np.array([0, 0, 0.04]), c + np.array([0, 0, 0.04]), 0.0035), k=0.002)
-    part("hat_rim", rim, "ironstone", "bone:x_hat", 1100, 0.7)
+    part("hat_rim", rim, "ironstone", "bone:x_hat", 800, 0.7)
     vent = Sculpt("vent_ring")
     vc = _vent_c()
-    vent.add(Torus(vc + np.array([0, 0, -0.002]), VENT_R + 0.004, 0.010, axes=sdf.frame((0.27 * unit(vc[:2])[0], 0.27 * unit(vc[:2])[1], 1.0)), rz=0.008), k=0.0)
-    part("vent_ring", vent, "ironstone", "bone:x_hat", 260, 0.5)
+    vn = unit((0.29 * unit(vc[:2])[0], 0.29 * unit(vc[:2])[1], 1.0))       # the hat top's normal there
+    vent.add(Torus(vc + vn * 0.002, VENT_R + 0.006, 0.0085, axes=sdf.frame(vn), rz=0.0065), k=0.0)
+    part("vent_ring", vent, "ironstone", "bone:x_hat", 240, 0.5)
     glow = Sculpt("vent_glow")
-    glow.add(Ellipsoid(vc + np.array([0, 0, -0.010]), (VENT_R - 0.002, VENT_R - 0.002, 0.008)), k=0.0)
-    part("vent_glow", glow, "accent", "bone:x_hat", 120, 0.5)
+    glow.add(Ellipsoid(vc + vn * 0.001, (VENT_R - 0.001, VENT_R - 0.001, 0.0035), axes=sdf.frame(vn)), k=0.0)
+    part("vent_glow", glow, "accent", "bone:x_hat", 100, 0.5)
 
     # ── LANTERN (x_lantern): hook ring + rod, roof, six posts, glass (accent), base, knob ──
     H = HANG
@@ -407,7 +419,7 @@ def sculpts() -> list:
         rr = (LAN_APO + 0.004) / math.cos(math.radians(30.0))
         p = np.array([c[0] + rr * math.cos(a), c[1] + rr * math.sin(a)])
         frame.add(Capsule((p[0], p[1], LAN_Z["glass_bot"] - 0.004), (p[0], p[1], LAN_Z["glass_top"] + 0.002), 0.0095), k=0.003)
-    part("lantern_frame", frame, "ironstone", "bone:x_lantern", 1300, 0.55)
+    part("lantern_frame", frame, "ironstone", "bone:x_lantern", 1050, 0.55)
     glass = Sculpt("lantern_glass")
     glass.add(Poly((c[0], c[1], 0), LAN_APO, LAN_Z["glass_bot"], LAN_Z["glass_top"], 6, 0.0, 0.004), k=0.0)
     part("lantern_glass", glass, "accent", "bone:x_lantern", 160, 0.55)
@@ -420,7 +432,7 @@ def sculpts() -> list:
     head.add(RoundBox((0.0, 0.020, 1.858), (0.150, 0.118, 0.010), 0.006), k=0.0)                          # under the hat
     for sx in (-1, 1):
         head.sub(Capsule((sx * 0.06, 0.142, 1.56), (sx * 0.075, 0.150, 1.79), 0.0035), k=0.002)          # board joints
-    part("head", head, "wood_dark", "bone:head", 1100)
+    part("head", head, "wood_dark", "bone:head", 900)
     mask = Sculpt("mask")
     plate = TaperBox(0.0, -0.100, 1.494, 1.832, 0.108, 0.172, 0.050, 0.050, 0.020)
     mask.add(plate, k=0.0)
@@ -436,7 +448,7 @@ def sculpts() -> list:
     smile = [(-0.068, 1.598), (-0.038, 1.588), (0.0, 1.585), (0.038, 1.588), (0.068, 1.598)]
     mask.sub(Tube([(x, -0.147 + 0.30 * x * x, z) for x, z in smile], [0.0055] * 5), k=0.002)
     mask.add(Ellipsoid((0.0, -0.126, 1.530), (0.066, 0.024, 0.032)), k=0.020)                            # chin
-    part("mask", mask, "wood", "bone:head", 2000, 0.6)
+    part("mask", mask, "wood", "bone:head", 1650, 0.6)
 
     # ── NECK (wrapped) ──
     neck = Sculpt("neck")
@@ -449,13 +461,13 @@ def sculpts() -> list:
     top.add(Ellipsoid((0.0, 0.0, 1.27), (0.168, 0.122, 0.175)), k=0.0)
     top.add(Ellipsoid((0.0, 0.004, 1.37), (0.170, 0.115, 0.080)), k=0.06)
     for sx in (-1, 1):
-        top.add(Sphere((sx * 0.135, 0.016, 1.378), 0.072), k=0.05)
+        top.add(Sphere((sx * 0.130, 0.016, 1.372), 0.066), k=0.05)
     # the crossed collar: the robe's lapels and the cream under-collar as raised bands (her left over her right)
     for sx in (-1, 1):
         top.add(Tube([(sx * 0.070, 0.070, 1.455), (sx * 0.085, -0.040, 1.448), (sx * 0.070, -0.105, 1.39),
                       (sx * 0.010, -0.128, 1.25), (-sx * 0.04, -0.124, 1.17)], [0.018, 0.020, 0.020, 0.016, 0.014], k=0.01), k=0.012)
     top.inter(HalfSpace((0, 0, 1.105), (0, 0, -1), 1.0), k=0.01)
-    part("robe_top", top, "cloth", ("weights", "torso"), 2400)
+    part("robe_top", top, "cloth", ("weights", "torso"), 1900)
     skirt = Sculpt("robe_skirt")
     sk = FlatCapsule((0.0, 0.012, 0.280), (0.0, 0.004, 1.175), 0.240, 0.182, 0.148, 0.116, side=(1, 0, 0))
     skirt.add(sk.displaced(ang_folds(0.012, 7, (0.0, 0.01), zfade=(1.05, 0.30), phase=0.4), 0.012), k=0.0)
@@ -464,7 +476,7 @@ def sculpts() -> list:
     # the outer robe's front edges (her left panel overlaps at x +0.07; the cream under-robe shows between)
     skirt.sub(Tube([(0.072, -0.150, 1.10), (0.075, -0.175, 0.70), (0.080, -0.210, 0.27)], [0.004, 0.004, 0.005]), k=0.003)
     skirt.sub(Tube([(-0.075, -0.145, 1.10), (-0.105, -0.170, 0.70), (-0.120, -0.200, 0.27)], [0.004, 0.004, 0.005]), k=0.003)
-    part("robe_skirt", skirt, "cloth", ("weights", "skirt"), 2600)
+    part("robe_skirt", skirt, "cloth", ("weights", "skirt"), 2050)
     sash = Sculpt("sash")
     sash.add(Torus((0.0, 0.004, 1.165), 0.150, 0.046, axes=np.diag([1.0, 0.150 / 0.122, 1.0]), rz=0.050).displaced(
         lambda P: 0.003 * np.sin(P[:, 2] * 160.0 + 3.0 * NOISE(P, 6.0)), 0.003), k=0.0)
@@ -473,12 +485,12 @@ def sculpts() -> list:
         sash.add(Ellipsoid((-0.035 + sx * 0.040, -0.140, 1.172), (0.034, 0.018, 0.026), axes=sdf.rot_y(sx * 25)), k=0.008)
     sash.add(RoundBox((-0.040, -0.160, 0.995), (0.024, 0.008, 0.150), 0.005, axes=sdf.rot_x(6)), k=0.008)  # the tail
     sash.add(RoundBox((-0.012, -0.156, 1.040), (0.018, 0.007, 0.100), 0.005, axes=sdf.rot_x(5) @ sdf.rot_y(-6)), k=0.006)
-    part("sash", sash, "leather", ("weights", "sash"), 1000)
+    part("sash", sash, "leather", ("weights", "sash"), 850)
     for s, sx in (("R", -1.0), ("L", 1.0)):
         A = ARM[s]
         sh, el, wr = A["sh"], A["el"], A["wr"]
         sl = Sculpt(f"sleeve_{s}")
-        sl.add(FlatCapsule(sh + np.array([sx * -0.01, 0.0, 0.0]), el, 0.072, 0.074, 0.070, 0.072, side=(0, 1, 0)).displaced(
+        sl.add(FlatCapsule(sh + np.array([sx * -0.012, 0.0, -0.006]), el, 0.064, 0.068, 0.068, 0.070, side=(0, 1, 0)).displaced(
             folds(0.006, 30.0, axis=2), 0.006), k=0.0)
         cuff_c = el + (wr - el) * 0.32
         sl.add(RoundCone(el, cuff_c, 0.070, 0.082), k=0.03)
@@ -487,11 +499,11 @@ def sculpts() -> list:
         dfo = unit(wr - el)
         cf.add(Torus(el + (wr - el) * 0.34, 0.072, 0.030, axes=sdf.frame(dfo), rz=0.046).displaced(chips(0.004, 9.0), 0.004), k=0.0)
         cf.sub(Capsule(el + (wr - el) * 0.10, el + (wr - el) * 0.40, 0.050), k=0.01)
-        part(f"cuff_{s}", cf, "cloth2", f"bone:forearm.{s}", 600)
+        part(f"cuff_{s}", cf, "cloth2", f"bone:forearm.{s}", 460)
         wr_ = Sculpt(f"wrap_{s}")
         a0, b0 = el + (wr - el) * 0.25, wr + (wr - el) * 0.02
         wr_.add(RoundCone(a0, b0, 0.050, 0.043).displaced(wraps(0.0045, 0.032, a0, b0), 0.0045), k=0.0)
-        part(f"wrap_{s}", wr_, "leather", f"bone:forearm.{s}", 500)
+        part(f"wrap_{s}", wr_, "leather", f"bone:forearm.{s}", 420)
 
     # ── HANDS (rigid segments on hand / finger bones) ──
     for s in ("R", "L"):
@@ -502,8 +514,8 @@ def sculpts() -> list:
     # ── LEGS + BOOTS ──
     legs = Sculpt("legs")
     for sx in (-1, 1):
-        legs.add(RoundCone((sx * 0.090, 0.004, 0.52), (sx * 0.105, 0.020, 0.13), 0.058, 0.044), k=0.0)
-    part("legs", legs, "under", ("weights", "legs"), 600)
+        legs.add(RoundCone((sx * 0.098, 0.012, 0.34), (sx * 0.105, 0.020, 0.13), 0.050, 0.044), k=0.0)
+    part("legs", legs, "under", ("weights", "legs"), 420)
     boots = Sculpt("boots")
     for sx in (-1, 1):
         ax = np.array([sx * 0.105, 0.020, 0.090])
@@ -517,7 +529,7 @@ def sculpts() -> list:
         boots.add(Ellipsoid(toe + fwd * 0.005 + np.array([0, 0, 0.004]), (0.048, 0.050, 0.032),
                             axes=sdf.rot_z(math.degrees(math.atan2(fwd[0], -fwd[1])) * -1)), k=0.03)
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", ("weights", "boots"), 1300)
+    part("boots", boots, "leather", ("weights", "boots"), 1100)
     return out
 
 
@@ -529,10 +541,10 @@ def hat_profile() -> list:
     pts += [(a1 * 0.55, CROWN_Z[2]), (a1 - 0.012, CROWN_Z[2] - 0.001), (a1 - 0.002, CROWN_Z[2] - 0.006),
             (a1 + 0.004, CROWN_Z[1] + 0.008), (CROWN_A[1] + 0.006, CROWN_Z[1] + 0.001),
             (CROWN_A[0] - 0.010, CROWN_Z[1]), (CROWN_A[0] - 0.002, CROWN_Z[1] - 0.006),
-            (CROWN_A[0] + 0.001, CROWN_Z[1] - 0.018), (CROWN_A[0] + 0.004, float(hat_top(CROWN_A[0] + 0.004)) + 0.002)]
-    for r in (0.20, 0.24, 0.28, 0.32, 0.36, 0.40, 0.44, 0.48, 0.52, 0.56, 0.59):
+            (CROWN_A[0] + 0.001, CROWN_Z[1] - 0.018), (CROWN_A[0] + 0.004, float(hat_top(CROWN_A[0] + 0.004)))]
+    for r in (0.21, 0.27, 0.34, 0.41, 0.48, 0.545, 0.595):
         pts.append((r, float(hat_top(r))))
-    for r in (0.59, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.17):
+    for r in (0.595, 0.50, 0.40, 0.30, 0.21, 0.17):
         pts.append((r, float(hat_under(r))))
     pts.append((0.15, 1.872))
     pts.append((0.0, 1.872))
@@ -584,8 +596,8 @@ def lathe_low(name, profile, mat, col, seg=64, octagon_r=0.0, center=(0.0, 0.0))
 def rim_profile() -> list:
     out = []
     (rc, zc), (hr, hz) = RIM_C, RIM_H
-    for a in range(0, 360, 30):
-        t = math.radians(a + 15)
+    for a in range(0, 360, 45):
+        t = math.radians(a + 22.5)
         cx, cz = math.cos(t), math.sin(t)
         r = rc + (hr - 0.007) * np.sign(cx) + 0.007 * cx
         z = zc + (hz - 0.007) * np.sign(cz) + 0.007 * cz
@@ -594,18 +606,22 @@ def rim_profile() -> list:
     return out
 
 
+_BUILD = {"skin": None}
+
+
 def model(ctx) -> list:
     P = []
+    _BUILD["skin"] = (ctx.skin or {}).get("id")
     for name, S, vs, role, bind, tris in sculpts() + skin_extras((ctx.skin or {}).get("extra") or {}):
         v, q = S.mesh(VOXEL * vs)
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
         if name == "hat":
-            low = lathe_low("hat_low", hat_profile(), ctx.mats[role], ctx.col, 64, octagon_r=CROWN_A[0] + 0.006)
+            low = lathe_low("hat_low", hat_profile(), ctx.mats[role], ctx.col, 56, octagon_r=CROWN_A[0] + 0.006)
             P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         if name == "hat_rim":
-            low = lathe_low("hat_rim_low", rim_profile(), ctx.mats[role], ctx.col, 64)
+            low = lathe_low("hat_rim_low", rim_profile(), ctx.mats[role], ctx.col, 56)
             P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
@@ -613,18 +629,21 @@ def model(ctx) -> list:
 
 
 def skin_extras(extra: dict) -> list:
+    """Noon Fair's two puppet rods tucked through the sash at her left hip: carved sticks 0.45 m, 2 cm thick, each with
+    a small painted paper head above the sash (brief §9; inside the +10 % footprint)"""
     out = []
     if extra.get("puppet_rods"):
-        for i, (dx, ang) in enumerate(((0.0, 14.0), (0.045, 22.0))):
+        for i, (dx, dy, ang) in enumerate(((0.0, 0.0, 10.0), (0.040, 0.030, 20.0))):
+            top = np.array([0.150 + dx, -0.075 + dy, 1.255])
+            d = unit((math.sin(math.radians(ang)) * 0.55, -0.10, -1.0))
             rod = Sculpt(f"rod_{i}")
-            top = np.array([0.165 + dx, -0.060, 1.16])
-            d = unit((math.sin(math.radians(ang)) * 0.6, -0.15, -1.0))
-            rod.add(Capsule(top, top + d * 0.42, 0.010), k=0.0)
-            out.append((f"rod_{i}", rod, "wood_dark", ("weights", "sash"), 120, 0.5))
+            rod.add(Capsule(top - d * 0.02, top + d * 0.43, 0.010), k=0.0)
+            out.append((f"rod_{i}", rod, 0.5, "wood_dark", ("weights", "sash"), 120))
             head = Sculpt(f"rodhead_{i}")
-            head.add(Ellipsoid(top + d * 0.45, (0.032, 0.020, 0.040)), k=0.0)
-            head.add(RoundCone(top + d * 0.45 + np.array([0, 0, 0.03]), top + d * 0.45 + np.array([0.0, 0.0, 0.07]), 0.020, 0.004), k=0.01)
-            out.append((f"rodhead_{i}", head, "lilac", ("weights", "sash"), 200, 0.5))
+            hc = top - d * 0.060
+            head.add(Ellipsoid(hc, (0.030, 0.022, 0.036)), k=0.0)
+            head.add(RoundCone(hc + np.array([0.0, 0.0, 0.026]), hc + np.array([0.008, 0.0, 0.062]), 0.016, 0.003), k=0.008)
+            out.append((f"rodhead_{i}", head, 0.5, "lilac", ("weights", "sash"), 220))
     return out
 
 
@@ -703,7 +722,7 @@ def rig_extras(ctx) -> None:
 def chain_config(ctx) -> list:
     """the lantern hangs on its hook: a damped pendulum about the brim (front-back), kept near plumb"""
     return [anim.ChainCfg(["x_lantern"], gravity=1.0, stiffness=70.0, damping=7.0, inertia=0.5, limit=(-28.0, 28.0),
-                          floor=None)]
+                          floor=0.03)]
 
 
 # ── skin weights (pipeline.bind_part wrapper: ("weights", how)) ────────────────────────────────────────────
@@ -738,9 +757,9 @@ def _w_skirt(P, J):
     """the robe from the sash to the hem: the hips at the waist, each side's leg below (blended across the middle),
     the shins sharing the hem"""
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
-    leg = 0.62 * ss(1.06, 0.60, z)
-    side_l = ss(-0.12, 0.12, x)
-    shin = leg * 0.38 * ss(0.62, 0.28, z) * (0.6 + 0.4 * ss(-0.05, 0.12, -y))
+    leg = 0.78 * ss(1.06, 0.52, z)
+    side_l = ss(-0.10, 0.10, x)
+    shin = leg * 0.50 * ss(0.62, 0.28, z) * (0.6 + 0.4 * ss(-0.05, 0.12, -y))
     th = leg - shin
     sp = 0.3 * ss(1.10, 1.20, z)
     return {"hips": np.clip(1 - leg - sp, 0, 1), "spine": sp, "thigh.L": th * side_l, "thigh.R": th * (1 - side_l),
@@ -844,7 +863,7 @@ _pipeline.bind_part = _bind_part
 from common import bake as _bake  # noqa: E402
 from common.hifi import project as _project  # noqa: E402
 
-PROC = ("hat", "hat_rim", "vent_ring", "lantern_hook", "lantern_frame", "legs")
+PROC = ("hat", "hat_rim", "vent_ring", "lantern_hook", "lantern_frame", "legs", "boots")
 WOOD_PARTS = tuple(f"{nm}_{s}" for s in "LR" for nm in ["palm"] + [f"f{w}{i}" for w, n in (("a", 3), ("b", 3), ("t", 2))
                                                                 for i in range(1, n + 1)])
 CLOTH_PARTS = ("robe_top", "robe_skirt", "sleeve_L", "sleeve_R")
@@ -858,8 +877,9 @@ BACK_DETAIL = 0.6
 # not seen: the head-box's back, under the hat)
 BACK_TARGET = {"head": "#5E4836"}
 # z / 2.05 -> linear gain: light head, darker feet (brief §6: top L* 70-85, middle 45-65, feet 20-35)
-VALUE_RAMP = [(0.0, 0.70), (0.06, 0.74), (0.12, 0.80), (0.20, 0.88), (0.35, 0.98), (0.50, 1.04), (0.62, 1.10),
-              (0.72, 1.12), (0.85, 1.08), (1.0, 1.04)]
+VALUE_RAMP = [(0.0, 0.78), (0.06, 0.80), (0.12, 0.84), (0.20, 0.90), (0.35, 0.98), (0.50, 1.04), (0.62, 1.10),
+              (0.72, 1.10), (0.85, 1.02), (1.0, 0.98)]
+ROBE_LIFT = {"robe_top": 1.14, "robe_skirt": 1.16, "sleeve_L": 1.12, "sleeve_R": 1.12, "sash": 1.22}
 HI_KNEE, HI_TOP = 0.56, 0.68      # linear luminance: a soft shoulder from L* 80 up to ~L* 86 (no large area over 86)
 KEY = unit((-0.40, -0.70, 0.60))  # the painted key light: upper front, her right
 
@@ -1028,12 +1048,21 @@ def _side_fill(lin, k, p, n, names, log):
 
 
 # the hat: pale lacquered paper panels (warm cream, toned under L* 86), darker seams, a lit crown, the walnut underside
-HAT_HEX = {"top": "#D3C3AE", "seam": "#8E7A68", "crown": "#C9B59C", "under": "#5E4A3C", "rim": "#3A302D",
+HAT_HEX = {"top": "#CDB89F", "seam": "#8A735F", "crown": "#C2A98C", "under": "#5E4A3C", "rim": "#3A302D",
            "rim_plate": "#4A3F3B", "iron": "#4B4342", "iron_hi": "#6A625E", "legs": "#2E2523"}
 
 
+# the skins' hats (brief §9): Noon Fair's chalk paper with rose-lilac rings and dots (~25 % of the top) and a lilac
+# crown; Lamplit's walnut shade: walnut ribs, rim band and crown round lampresin paper panels lit from within
+HAT_SCHEMES = {
+    "tunlan_noon_fair": {"top": "#D6C8B4", "seam": "#8C7A7E", "crown": "#B48AA6", "under": "#4E3E42", "paint": "#B48AA6"},
+    "tunlan_lamplit": {"top": "#CDB98F", "edge": "#A38C6B", "seam": "#5E4D3E", "crown": "#5E4D3E", "under": "#3E3229"},
+}
+
+
 def _hat_paint(p, n, hexes=None):
-    hx = dict(HAT_HEX, **(hexes or {}))
+    scheme = HAT_SCHEMES.get(_BUILD.get("skin")) if hexes is None else hexes
+    hx = dict(HAT_HEX, **(scheme or {}))
     r = np.hypot(p[:, 0], p[:, 1])
     th = np.arctan2(p[:, 1], p[:, 0])
     top, seam_c, crown, under = (_lin(_hex(hx[k])) for k in ("top", "seam", "crown", "under"))
@@ -1051,8 +1080,29 @@ def _hat_paint(p, n, hexes=None):
     c = top[None, :] * (mott * brush * shade * lit)[:, None]
     # radial seams (painted dark lines, softened) and a darker band near the rim (the lacquer's worn edge)
     sw = np.exp(-((dth * r) / 0.0055) ** 2) * ss(0.20, 0.24, r) * (1 - ss(0.585, 0.60, r))
-    c = c * (1 - 0.55 * sw)[:, None] + seam_c[None, :] * (0.55 * sw)[:, None]
-    c = c * (1 - 0.12 * ss(0.50, 0.60, r))[:, None]
+    if "edge" in hx:                                           # Lamplit: paper panels lit from within, walnut ribs
+        edge_c = _lin(_hex(hx["edge"]))
+        du = np.abs(panel_u - 0.5) * 2                         # 0 at a panel's middle, 1 at its ribs
+        glow = (1 - ss(0.35, 1.0, du)) * ss(0.20, 0.30, r) * (1 - ss(0.50, 0.56, r))
+        pc = edge_c[None, :] * (1 - glow)[:, None] + top[None, :] * glow[:, None]
+        c = pc * (mott * (0.97 + 0.06 * ss(-0.3, 0.9, n @ KEY)))[:, None]
+        rib = np.exp(-((dth * r) / 0.0105) ** 4) * ss(0.20, 0.23, r)
+        band = ss(0.548, 0.556, r) + (1 - ss(0.208, 0.216, r))
+        wal = np.clip(rib + band, 0, 1) * ss(0.18, 0.19, r)
+        wc = seam_c[None, :] * (mott * (0.9 + 0.2 * ss(-0.3, 0.9, n @ KEY)))[:, None]
+        c = c * (1 - wal[:, None]) + wc * wal[:, None]
+    else:
+        c = c * (1 - 0.55 * sw)[:, None] + seam_c[None, :] * (0.55 * sw)[:, None]
+        c = c * (1 - 0.12 * ss(0.50, 0.60, r))[:, None]
+    if "paint" in hx:                                          # Noon Fair: rose-lilac rings and a dot on every panel
+        pnt = _lin(_hex(hx["paint"]))
+        ring = (ss(0.258, 0.264, r) * (1 - ss(0.300, 0.306, r)) + ss(0.476, 0.482, r) * (1 - ss(0.516, 0.522, r)))
+        pcx = (np.floor(tt * kk) + 0.5) / kk - math.pi / SEAMS
+        dd = np.hypot(r * np.cos(th) - 0.39 * np.cos(pcx), r * np.sin(th) - 0.39 * np.sin(pcx))
+        dot = 1 - ss(0.020, 0.026, dd)
+        wpa = np.clip(ring + dot, 0, 1) * (0.88 + 0.12 * _fbm(p, 30.0))
+        pc = pnt[None, :] * (mott * (0.94 + 0.10 * ss(-0.3, 0.9, n @ KEY)))[:, None]
+        c = c * (1 - wpa[:, None]) + pc * wpa[:, None]
     # the crown cap: a warmer lacquer, facet edges lighter, the step's shadow line
     cr = 1 - ss(CROWN_A[0] - 0.004, CROWN_A[0] + 0.012, r)
     cc = crown[None, :] * (mott * (0.92 + 0.14 * ss(-0.2, 0.9, n @ KEY)))[:, None]
@@ -1097,7 +1147,7 @@ def _rim_paint(p, n):
     return c * (1 + 0.25 * up)[:, None]
 
 
-WOOD_HEX = ("#C2AD93", "#8E765F", "#5B4838")   # the carved hand wood: lit, shade, the joint grooves
+WOOD_HEX = ("#B9A285", "#7E6650", "#4F3E30")   # the carved hand wood (the painted hands' beige): lit, shade, grooves
 
 
 def _wood_paint(p, n, frame=None):
@@ -1107,6 +1157,18 @@ def _wood_paint(p, n, frame=None):
     t = ss(-0.35, 0.85, n @ KEY) * 0.75 + 0.25 * ss(-0.2, 0.9, n[:, 2])
     c = (sh_c[None, :] * (1 - t)[:, None] + lit_c[None, :] * t[:, None]) * g[:, None]
     return c
+
+
+def _boot_paint(p, n):
+    """soft brown ankle boots (the painted #4A3428): a lighter turned cuff, creases over the instep, a dark sole"""
+    base = _lin(_hex("#563C2D"))
+    c = base[None, :] * ((0.80 + 0.30 * ss(-0.2, 0.9, n @ KEY)) * (1 + 0.07 * _fbm(p, 22.0)))[:, None]
+    cuff = ss(0.160, 0.168, p[:, 2]) * (1 - ss(0.195, 0.205, p[:, 2]))
+    c = c * (1 + 0.22 * cuff)[:, None]
+    crease = 0.10 * np.clip(NOISE(p * np.array([6.0, 1.0, 6.0]), 40.0), 0, 1) * (1 - ss(0.05, 0.10, p[:, 2]))
+    c = c * (1 - crease)[:, None]
+    sole = 1 - ss(0.010, 0.020, p[:, 2])
+    return c * (1 - 0.55 * sole)[:, None]
 
 
 def _legs_paint(p, n):
@@ -1133,13 +1195,29 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         return m if m.any() else None
 
     procs = {"hat": _hat_paint, "hat_rim": _rim_paint, "vent_ring": _iron_paint, "lantern_hook": _iron_paint,
-             "lantern_frame": _iron_paint, "legs": _legs_paint}
+             "lantern_frame": _iron_paint, "legs": _legs_paint, "boots": _boot_paint}
     for nm in WOOD_PARTS:
         procs[nm] = _wood_paint
     for name, fn in procs.items():
         m = sel(name)
         if m is not None:
             lin[m] = fn(p[m], n[m])
+    sk = next((x for x in SKINS if x["id"] == _BUILD.get("skin")), None)
+    if sk and "wood" in sk["palette"]:                        # the skin's wood on the procedural hands
+        wg = np.clip(_lin(_hex(sk["palette"]["wood"])) / np.maximum(_lin(_hex(PALETTE["wood"])), 1e-4), 0.2, 5.0)
+        for nm in WOOD_PARTS:
+            m = sel(nm)
+            if m is not None:
+                lin[m] = lin[m] * wg[None, :]
+    for name, rgb in (flat or {}).items():                    # skin-only extras: flat in their role's colour, shaded
+        m = sel(name)
+        if m is not None:
+            b_ = _lin(np.asarray(rgb, dtype=np.float32))
+            lin[m] = b_[None, :] * ((0.82 + 0.26 * ss(-0.2, 0.9, n[m] @ KEY)) * (1 + 0.05 * _fbm(p[m], 30.0)))[:, None]
+    for name, kf in ROBE_LIFT.items():
+        m = sel(name)
+        if m is not None:
+            lin[m] = lin[m] * kf
     # the light-head / dark-feet ramp and the highlight cap (not on the lantern: it hangs at its own height)
     body = np.ones(len(k), dtype=bool)
     for name in ("lantern_hook", "lantern_frame"):
@@ -1186,6 +1264,41 @@ def _fill_gutters(arr, valid, iters=40):
     return a
 
 
+_orig_recolour = _project.recolour
+
+
+def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
+    """a skin from the base painting: the procedural parts are already painted in the skin's scheme (_paint knows the
+    skin); the robe takes the cloth role's change only where it is the rose felt (hue under ~22 deg, saturated), so
+    the cream collar, under-robe and cuff turns keep their colour"""
+    if "palm_L" not in names:
+        return _orig_recolour(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
+    skip = set(skip or ()) | set(PROC) | set(WOOD_PARTS) | set(CLOTH_PARTS)
+    out = _orig_recolour(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
+    if str(base_pal.get("cloth", "")).lower() == str(skin_pal.get("cloth", "")).lower():
+        return out
+    part = maps["part"]
+    iy, ix = _project.nearest_index(part >= 0)
+    pid = part[iy, ix]
+    gain = np.clip(_lin(_hex(skin_pal["cloth"])) / np.maximum(_lin(_hex(base_pal["cloth"])), 1e-4), 0.05, 8.0)
+    for nm in CLOTH_PARTS:
+        if nm not in names:
+            continue
+        m = pid == names.index(nm)
+        c = img[m]
+        mx, mn = c.max(1), c.min(1)
+        sat = (mx - mn) / np.maximum(mx, 1e-4)
+        r_, g_, b_ = c[:, 0], c[:, 1], c[:, 2]
+        hue = np.degrees(np.arctan2(np.sqrt(3) * (g_ - b_), 2 * r_ - g_ - b_)) % 360
+        rose = (1 - ss(18.0, 26.0, np.where(hue > 180, 0.0, hue))) * ss(0.10, 0.20, sat)
+        lc = _lin(c)
+        out[m] = _srgb(lc * (1 + (gain[None, :] - 1) * rose[:, None]))
+        log(f"  tunlan recolour {nm}: cloth {base_pal['cloth']} -> {skin_pal['cloth']} on {100 * float((rose > 0.5).mean()):.0f}% (the felt)")
+    return out
+
+
+_project.recolour = _recolour
+
 _orig_bake_asset = _bake.bake_asset
 
 
@@ -1214,6 +1327,698 @@ def _bake_asset(low, highs, out_dir, name="body", *a, **k):
 _bake.bake_asset = _bake_asset
 
 MOTION = anim.motion_profile(weight="light", weapon="focus", stance="neutral", run_ref_speed=3.35)
+
+# ── the foot roll (Vashil's corrected copy of anim._solve_foot: + pitch = toes up about the heel) ──────────────
+from mathutils import Matrix  # noqa: E402
+
+
+def _solve_foot(skel, pose, M, side, ft):
+    foot, toe = f"foot.{side}", f"toe.{side}"
+    rest_f = skel.rest[foot]
+    ankle0 = rest_f.translation.copy()
+    ball0 = skel.rest[toe].translation.copy()
+    heel0 = ankle0 + V((0, 0, -ankle0.z)) + (ankle0 - ball0) * V((1, 1, 0)) * 0.55
+    off = V(ft.ankle)
+    lat = rest_f.to_3x3().col[0].normalized()
+    rot = Matrix.Rotation(math.radians(ft.yaw), 3, "Z") @ Matrix.Rotation(math.radians(ft.pitch), 3, lat)
+    pivot = (heel0 if ft.pitch > 0 else ball0) + off
+    ankle_t = pivot + rot @ (ankle0 + off - pivot)
+    knee_dir = Matrix.Rotation(math.radians(ft.yaw + ft.knee), 3, "Z") @ V((0, -1, 0))
+    hips_fwd = M["hips"].to_3x3() @ (skel.rest["hips"].to_3x3().inverted() @ V((0, -1, 0)))
+    hips_fwd.z = 0
+    if hips_fwd.length > 1e-4:
+        knee_dir = (knee_dir + hips_fwd.normalized()).normalized()
+    end_frame = rot @ rest_f.to_3x3()
+    skel.solve_two_bone(pose, M, f"thigh.{side}", f"shin.{side}", foot, ankle_t, knee_dir, True, end_frame, ft.weight)
+    t = pose.get(toe, (0.0, 0.0, 0.0))
+    toe_counter = -ft.pitch if ft.pitch < 0 else 0.0
+    pose[toe] = (t[0] + (toe_counter + ft.toe) * ft.weight, t[1], t[2])
+
+
+anim._solve_foot = _solve_foot
+
+
+# ── hand orientation targets (anim.resolve wrapper): 'orient.L' / 'orient.R' in pose['ik'] set the hand's frame ──
+from dataclasses import dataclass  # noqa: E402
+
+
+@dataclass
+class Orient:
+    """the hand's world frame in the CHEST's frame: `fdir` = where the fingers point (the hand bone's +Y), `palm` = the
+    palm's normal (character axes: +X her left, -Y front, +Z up). Solved after the arm IK (minimal: the wrist only)."""
+    fdir: tuple = (0.0, 0.0, -1.0)
+    palm: tuple = (0.0, 1.0, 0.0)
+    weight: float = 1.0
+
+    def lerp(self, o, t):
+        t = max(0.0, min(1.0, t))
+
+        def sl(a, b):
+            a, b = V(a).normalized(), V(b).normalized()
+            if a.dot(b) < -0.999:
+                return tuple((a.lerp(b, t) + a.orthogonal() * 1e-3).normalized())
+            return tuple(a.slerp(b, t))
+        return Orient(sl(self.fdir, o.fdir), sl(self.palm, o.palm), self.weight + (o.weight - self.weight) * t)
+
+    def mirrored(self):
+        return Orient((-self.fdir[0], self.fdir[1], self.fdir[2]), (-self.palm[0], self.palm[1], self.palm[2]), self.weight)
+
+
+_orig_resolve = anim.resolve
+
+
+def _resolve(skel, pose):
+    ik = pose.get("ik") or {}
+    ors = {k: v for k, v in ik.items() if k.startswith("orient.")}
+    pose0 = pose
+    if not ors:
+        return _level_hat(skel, _orig_resolve(skel, pose), pose)
+    pose = dict(pose)
+    pose["ik"] = {k: v for k, v in ik.items() if not k.startswith("orient.")}
+    out = _orig_resolve(skel, pose)
+    M = skel.fk(out)
+    Rc = M["chest"].to_3x3() @ skel.rest["chest"].to_3x3().inverted()
+    for k, o in ors.items():
+        if o.weight <= 1e-3:
+            continue
+        hb = f"hand.{k[-1]}"
+        y = (Rc @ V(o.fdir)).normalized()
+        z = -(Rc @ V(o.palm))
+        z = (z - y * z.dot(y)).normalized()
+        x = y.cross(z).normalized()
+        want = Matrix((x, y, z)).transposed()
+        Ph = (M[skel.parent[hb]] @ skel.local[hb]).to_3x3()
+        e = skel.euler_of(Ph.inverted() @ want, out.get(hb))
+        if o.weight < 1.0:
+            e = tuple(out.get(hb, (0, 0, 0))[i] + (e[i] - out.get(hb, (0, 0, 0))[i]) * o.weight for i in range(3))
+        out[hb] = e
+    return _level_hat(skel, out, pose0)
+
+
+HAT_LEVEL = 0.6           # share of the head's pitch / roll the hat takes back (brief: the disc stays near level)
+
+
+def _level_hat(skel, out, pose):
+    """x_hat counter-turns HAT_LEVEL of the head's tilt (the disc stays near level as she leans; a pose's own
+    'hat_level' (k, 0, 0) overrides it); the authored x_hat tilt (a knocked brim, a bow) applies on top"""
+    if "x_hat" not in skel.rest:
+        return out
+    lv = float((pose.get("hat_level") or (HAT_LEVEL, 0, 0))[0])
+    if lv <= 1e-3:
+        return out
+    from mathutils import Euler, Quaternion
+    M = skel.fk({k: v for k, v in out.items() if k != "x_hat"})
+    R0 = (M[skel.parent["x_hat"]] @ skel.local["x_hat"]).to_3x3()
+    up = R0.col[1].normalized()
+    q = up.rotation_difference(V((0.0, 0.0, 1.0)))
+    ql = Quaternion().slerp(q, min(1.0, lv))
+    B = R0.inverted() @ ql.to_matrix() @ R0
+    a = out.get("x_hat", (0.0, 0.0, 0.0))
+    B = B @ Euler([math.radians(v) for v in a], "XYZ").to_matrix()
+    out["x_hat"] = skel.euler_of(B, a)
+    if pose.get("hat_floor") is not None:
+        # the hat comes to rest ON the ground (death): more leveling until the rim's lowest point clears the floor
+        def lowest(k):
+            qk = Quaternion().slerp(q, min(1.0, k))
+            Bk = R0.inverted() @ qk.to_matrix() @ R0 @ Euler([math.radians(v) for v in a], "XYZ").to_matrix()
+            Mh = (M[skel.parent["x_hat"]] @ skel.local["x_hat"]) @ Bk.to_4x4()
+            return min((Mh @ V((math.cos(t) * RIM_C[0], -0.065, -math.sin(t) * RIM_C[0]))).z
+                       for t in np.linspace(0, 2 * math.pi, 25)), Bk
+        fl = float(pose["hat_floor"][0])
+        z0, Bk = lowest(lv)
+        if z0 < fl:
+            lo_, hi_ = lv, 1.0
+            for _ in range(12):
+                mid = 0.5 * (lo_ + hi_)
+                if lowest(mid)[0] < fl:
+                    lo_ = mid
+                else:
+                    hi_ = mid
+            out["x_hat"] = skel.euler_of(lowest(hi_)[1], a)
+    return out
+
+
+def _resolve_any(skel, pose):
+    ik = pose.get("ik") or {}
+    if any(k.startswith("orient.") for k in ik):
+        return _resolve(skel, pose)
+    return _level_hat(skel, _orig_resolve(skel, pose), pose)
+
+
+anim.resolve = _resolve_any
+
+# ── motion (brief §8): the poses are IK wrists (world places at the rest torso, converted to the chest frame),
+#    hand frames (Orient) and finger curls; the torso / hips / feet as additive layers over the stance ────────────
+P_ = anim.P
+FPS = anim.FPS
+LA = PROPORTIONS["arm"]
+
+
+def wrist(side, x, y, z, pole=None):
+    """the wrist at world (x, y, z) as placed against the REST shoulder (an arm-length rel in the chest frame)"""
+    sh = ARM[side]["sh"]
+    sx = 1.0 if side == "L" else -1.0
+    rel = ((x - sh[0]) / LA, (y - sh[1]) / LA, (z - sh[2]) / LA)
+    return {f"hand.{side}": anim.HandTarget(rel=rel, pole=tuple(pole) if pole else (0.80 * sx, 0.45, -0.40))}
+
+
+def wrist_abs(side, x, y, z, pole=None):
+    """the wrist at an absolute armature-space place (deep leans and the floor: no chest-frame drift)"""
+    sx = 1.0 if side == "L" else -1.0
+    return {f"hand.{side}": anim.HandTarget(pos=(x, y, z), pole=tuple(pole) if pole else (0.80 * sx, 0.45, -0.40))}
+
+
+def orient(side, fdir, palm, w=1.0):
+    return {f"orient.{side}": Orient(tuple(unit(fdir)), tuple(unit(palm)), w)}
+
+
+def fingers(side, a=(18, 22, 22), b=(22, 26, 26), t=(8, 10), sa=0.0, sb=0.0, st=0.0):
+    """finger curls (deg per joint, + toward the palm) and spreads (sa: the index pair toward the thumb side, sb: the
+    ring pair toward the little-finger side, st: the thumb away from the hand)"""
+    z = 1.0 if side == "L" else -1.0
+    out = {}
+    for i in range(3):
+        out[f"x_fa{i + 1}.{side}"] = (a[i], 0.0, z * sa if i == 0 else 0.0)
+        out[f"x_fb{i + 1}.{side}"] = (b[i], 0.0, -z * sb if i == 0 else 0.0)
+    for i in range(2):
+        out[f"x_ft{i + 1}.{side}"] = (t[i], 0.0, z * st if i == 0 else 0.0)
+    return out
+
+
+RELAX = dict(a=(16, 20, 20), b=(20, 24, 24), t=(6, 8))
+HALF = dict(a=(30, 34, 30), b=(36, 40, 34), t=(14, 16))
+OPEN = dict(a=(-4, -2, 0), b=(-4, -2, 0), t=(-6, 0))
+FIST = dict(a=(78, 92, 70), b=(82, 96, 72), t=(30, 40))
+
+
+def both(fn, **kw):
+    return dict(fn("L", **kw), **fn("R", **kw))
+
+
+def body(hips=(0, 0, 0), spine=(0, 0, 0), chest=(0, 0, 0), neck=(0, 0, 0), head=(0, 0, 0), drop=0.0, fwd=0.0, side=0.0,
+         hat=(0, 0, 0)):
+    p = P_(hips=hips, spine=spine, chest=chest, neck=neck, head=head, x_hat=hat)
+    p["hips_loc"] = (side, -fwd, -drop)
+    return p
+
+
+def stance_pose(crouch=1.0, feet=None):
+    st = anim.stance(MOTION, crouch)
+    if feet is not None:
+        st["ik"] = dict(st["ik"], **feet)
+    return st
+
+
+def compose(base, *layers):
+    """base pose (stance) + additive body layers + IK / fingers merged"""
+    out = dict(base)
+    for L in layers:
+        if L is None:
+            continue
+        rot = {k: v for k, v in L.items() if k not in ("ik",) and not k.startswith("x_f")}
+        out = anim.add(out, rot)
+        for k, v in L.items():
+            if k.startswith("x_f"):
+                out[k] = v
+        if "ik" in L:
+            out["ik"] = dict(out.get("ik", {}), **L["ik"])
+    return out
+
+
+def ik(*ds):
+    out = {}
+    for d in ds:
+        out.update(d)
+    return {"ik": out}
+
+
+# guard: the puppeteer's hands — forearms forward at the waist, the hands hanging from the wrists, fingers half-curled
+def guard_arms(k=0.0):
+    return ik(wrist("L", 0.215, -0.27, 1.10 + k), wrist("R", -0.215, -0.27, 1.10 + k),
+              orient("L", (0.10, -0.40, -0.91), (-0.30, 0.85, -0.42)), orient("R", (-0.10, -0.40, -0.91), (0.30, 0.85, -0.42)))
+
+
+def guard_fingers():
+    return dict(fingers("L", **HALF), **fingers("R", a=(26, 30, 28), b=(34, 38, 32), t=(12, 14)))
+
+
+def guard():
+    return compose(stance_pose(), body(head=(4, 0, 0), neck=(2, 0, 0)), guard_arms(), guard_fingers())
+
+
+def clip_idle():
+    g = guard()
+    N = 72
+
+    def sample(t):
+        b = anim.osc(t, 2)
+        s_ = anim.osc(t, 1, 0.1)
+        f1, f2 = anim.osc(t, 2, 0.2), anim.osc(t, 2, 0.45)
+        p = compose(g, body(chest=(1.2 * b, 0, 0), spine=(0.5 * b, 0, 0.6 * s_), neck=(-0.6 * b, 0, 0),
+                            head=(-0.4 * b, 1.5 * s_, 0), hips=(0, 1.0 * s_, -0.8 * s_), side=0.010 * s_, drop=0.003 * b),
+                    ik(wrist("L", 0.215, -0.27, 1.10 + 0.010 * f1), wrist("R", -0.215, -0.27, 1.10 + 0.010 * f2)))
+        # the fingers never quite still: the index pairs drift as if testing a shape
+        for sd, ph in (("L", 0.0), ("R", 0.5)):
+            w = anim.osc(t, 3, ph)
+            base = HALF if sd == "L" else dict(a=(26, 30, 28), b=(34, 38, 32), t=(12, 14))
+            p.update(fingers(sd, a=tuple(v - 6 * w for v in base["a"]), b=base["b"], t=base["t"], sa=3 * w))
+        return p
+
+    return anim.Clip("idle", N, True, sample)
+
+
+def clip_run():
+    base = anim.gen_run(MOTION)
+    N = base.frames
+
+    def sample(t):
+        p = base.sample(t)
+        q = t % 1.0
+        sw = math.cos(2 * math.pi * (q - 0.05))
+        hk = dict(p.get("ik", {}))
+        for sd in ("L", "R"):
+            hk.pop(f"hand.{sd}", None)
+            hk.pop(f"aim.{sd}", None)
+        sx = {"L": 1.0, "R": -1.0}
+        for sd in ("L", "R"):
+            ph = sw if sd == "L" else -sw                                   # + = this hand forward
+            hk.update(wrist(sd, sx[sd] * 0.215, 0.02 - 0.10 * ph, 1.00 + 0.03 * ph, (0.8 * sx[sd], 0.5, -0.3)))
+            hk.update(orient(sd, (sx[sd] * 0.05, 0.45 - 0.15 * ph, -0.89), (sx[sd] * -0.4, 0.75, 0.3)))
+        p["ik"] = hk
+        p = anim.add(p, P_(head=(3, 0, 0), x_hat=(0, 0, 0)))
+        p.update(both(fingers, **RELAX))
+        return p
+
+    c = anim.Clip("run", N, True, sample, meta=base.meta)
+    return c
+
+
+# the strike timing (impact at 40 %) from three blocked poses
+def strike(name, frames, wind, hit, follow, g=None, lags=None):
+    g = g or guard()
+    keys = anim.strike_keys(MOTION, wind, hit, follow, g)
+    fn = anim.keyed(keys)
+    return anim.Clip(name, frames, False, anim.drag(fn, frames, lags or {"head": 1.0}), impact=anim.IMPACT)
+
+
+def clip_attack1():
+    """a quick two-finger flick of the right hand that throws a bolt of lamplight"""
+    g = guard()
+    pt = dict(a=(0, 2, 0), b=(80, 92, 70), t=(36, 40))                     # index pair out, the rest folded
+    wind = compose(stance_pose(), body(hips=(0, -10, 0), spine=(0, -8, 0), chest=(-2, -12, 0), head=(4, 12, 0)),
+                   guard_arms(), ik(wrist("R", -0.30, -0.10, 1.42, (-0.9, 0.2, -0.3)),
+                                    orient("R", (0.15, 0.10, 0.98), (0.35, 0.90, -0.10))),
+                   guard_fingers(), fingers("R", **pt))
+    hit = compose(stance_pose(), body(hips=(3, 12, 0), spine=(4, 10, 0), chest=(5, 14, 0), head=(-2, -12, 0), fwd=0.03),
+                  guard_arms(), ik(wrist("R", -0.12, -0.56, 1.36, (-0.8, 0.3, -0.4)),
+                                   orient("R", (0.05, -0.97, 0.20), (0.0, -0.25, -0.97))),
+                  guard_fingers(), fingers("R", **pt))
+    fol = compose(stance_pose(), body(hips=(4, 15, 0), spine=(5, 12, 0), chest=(6, 16, 0), head=(-2, -13, 0), fwd=0.035),
+                  guard_arms(), ik(wrist("R", -0.06, -0.55, 1.28, (-0.8, 0.3, -0.4)),
+                                   orient("R", (0.15, -0.90, -0.35), (0.10, 0.30, -0.95))),
+                  guard_fingers(), fingers("R", a=(10, 14, 10), b=(70, 84, 64), t=(30, 34)))
+    return strike("attack1", 20, wind, hit, fol, g)
+
+
+def clip_attack2():
+    """a flat-palm push with the left hand, fingers spread: the lamplight shoved forward"""
+    g = guard()
+    wind = compose(stance_pose(), body(hips=(0, 12, 0), spine=(0, 9, 0), chest=(-3, 12, 0), head=(4, -10, 0)),
+                   guard_arms(), ik(wrist("L", 0.24, -0.06, 1.30, (0.9, 0.3, -0.3)),
+                                    orient("L", (0.10, -0.30, 0.95), (-0.10, -0.95, -0.30))),
+                   guard_fingers(), fingers("L", a=(10, 12, 10), b=(12, 14, 10), t=(4, 6)))
+    hit = compose(stance_pose(), body(hips=(3, -12, 0), spine=(4, -10, 0), chest=(5, -14, 0), head=(-2, 10, 0), fwd=0.04),
+                  guard_arms(), ik(wrist("L", 0.10, -0.60, 1.30, (0.8, 0.3, -0.4)),
+                                   orient("L", (0.05, -0.25, 0.97), (0.0, -0.97, 0.25))),
+                  guard_fingers(), fingers("L", a=(-6, -4, 0), b=(-6, -4, 0), t=(-4, 0), sa=8, sb=8, st=12))
+    fol = compose(stance_pose(), body(hips=(4, -14, 0), spine=(5, -12, 0), chest=(6, -16, 0), head=(-2, 12, 0), fwd=0.045),
+                  guard_arms(), ik(wrist("L", 0.08, -0.62, 1.26, (0.8, 0.3, -0.4)),
+                                   orient("L", (0.05, -0.45, 0.89), (0.0, -0.89, 0.45))),
+                  guard_fingers(), fingers("L", a=(4, 6, 4), b=(6, 8, 6), t=(0, 4), sa=6, sb=6, st=8))
+    return strike("attack2", 20, wind, hit, fol, g)
+
+
+# the hound: wrists together before the chest, fingers forward, palms facing, thumbs up as ears, the ring pairs the jaw
+def hound_hands(x=0.040, y=-0.34, z=1.30, jaw=10.0, ears=40.0, snout=0.0, pitch=0.06):
+    d = unit((0.0, -1.0, pitch))
+    return dict(ik(wrist("L", x, y, z, (0.9, 0.3, -0.3)), wrist("R", -x, y, z, (-0.9, 0.3, -0.3)),
+                   orient("L", d, (-1.0, 0.0, 0.0)), orient("R", d, (1.0, 0.0, 0.0))),
+                **fingers("L", a=(snout, 2, 4), b=(4, 6, 6), t=(-10, 0), sb=jaw, st=ears),
+                **fingers("R", a=(snout, 2, 4), b=(4, 6, 6), t=(-10, 0), sb=jaw, st=ears))
+
+
+def clip_cast_a1():
+    """Hound Shadow (30 f, impact f12): the hound's head held breathing, the jaw working; at f12 the jaws snap open and
+    the hands thrust forward as the shadow leaps off the fingers; recover by f30"""
+    N = 30
+    g = guard()
+    st_ = stance_pose(feet={"foot.L": anim.FootTarget((0.03, -0.10, 0.0), 0.0, -4.0)})
+    hold = compose(stance_pose(), body(hips=(-2, -6, 0), spine=(-2, -4, 0), chest=(-4, -6, 0), neck=(4, 4, 0), head=(6, 4, 0)),
+                   hound_hands(z=1.30, y=-0.30, jaw=6))
+    hold2 = compose(stance_pose(), body(hips=(-3, -8, 0), spine=(-3, -5, 0), chest=(-6, -7, 0), neck=(5, 5, 0), head=(7, 5, 0),
+                                        drop=0.01), hound_hands(z=1.32, y=-0.26, jaw=16))
+    snap = compose(st_, body(hips=(8, 6, 0), spine=(8, 4, 0), chest=(8, 6, 0), neck=(-6, -3, 0), head=(-8, -3, 0), fwd=0.10,
+                             drop=0.03), hound_hands(z=1.28, y=-0.64, jaw=34, ears=50, snout=-8, pitch=0.0))
+    fol = compose(st_, body(hips=(9, 7, 0), spine=(9, 5, 0), chest=(9, 7, 0), neck=(-7, -3, 0), head=(-9, -3, 0), fwd=0.11,
+                            drop=0.035), hound_hands(z=1.24, y=-0.66, jaw=24, ears=46, snout=-4, pitch=-0.15))
+    keys = [(0.0, g, "linear"), (0.12, hold, "out"), (0.22, compose(hold, hound_hands(z=1.30, y=-0.30, jaw=18)), "inout"),
+            (0.30, hold2, "inout"), (0.34, compose(hold2, hound_hands(z=1.33, y=-0.24, jaw=4)), "inout"),
+            (anim.IMPACT, snap, anim.snap), (0.50, fol, "out"), (0.66, compose(fol, hound_hands(z=1.22, y=-0.60, jaw=8, ears=30)), "inout"),
+            (0.84, anim.lerp_pose(fol, g, 0.6), "inout"), (1.0, g, "settle")]
+    return anim.Clip("cast_a1", N, False, anim.drag(anim.keyed(keys), N, {"head": 1.0}), impact=anim.IMPACT)
+
+
+def clip_cast_a2():
+    """Hand Shadow (25 f, impact f10): the right hand rises, fingers spread wide like a great shadow palm, then closes
+    in a slow grip at f10; the left hand steadies the lamp; recover by f25"""
+    N = 25
+    g = guard()
+    lamp_l = ik(wrist("L", -0.16, -0.36, 1.36, (0.9, 0.2, -0.4)), orient("L", (-0.70, -0.60, 0.38), (0.0, 0.0, -1.0)))
+    lf = fingers("L", a=(14, 18, 16), b=(16, 20, 18), t=(4, 8))
+    rise = compose(stance_pose(), body(hips=(-2, 8, 0), spine=(-3, 6, 0), chest=(-5, 9, 0), neck=(-3, -4, 0), head=(-6, -6, 0)),
+                   lamp_l, lf, ik(wrist("R", -0.36, -0.48, 1.52, (-0.9, 0.3, -0.2)), orient("R", (-0.25, -0.30, 0.92), (0.0, -0.95, -0.30))),
+                   fingers("R", a=(-8, -4, 0), b=(-8, -4, 0), t=(-10, 0), sa=14, sb=16, st=26))
+    rise2 = compose(rise, ik(wrist("R", -0.38, -0.54, 1.58, (-0.9, 0.3, -0.2))),
+                    fingers("R", a=(-10, -6, -2), b=(-10, -6, -2), t=(-12, 0), sa=18, sb=20, st=30))
+    grip = compose(stance_pose(), body(hips=(4, -4, 0), spine=(4, -3, 0), chest=(5, -5, 0), neck=(-2, 2, 0), head=(-3, 3, 0),
+                                       fwd=0.03, drop=0.02),
+                   lamp_l, lf, ik(wrist("R", -0.34, -0.56, 1.46, (-0.9, 0.3, -0.3)), orient("R", (-0.15, -0.55, 0.82), (0.0, -0.82, -0.55))),
+                   fingers("R", a=(46, 60, 46), b=(50, 64, 50), t=(20, 26), sa=4, sb=4, st=8))
+    fol = compose(grip, body(hips=(1, -1, 0), spine=(1, -1, 0), chest=(2, -2, 0), drop=0.005),
+                  ik(wrist("R", -0.30, -0.50, 1.40, (-0.9, 0.3, -0.3))), fingers("R", **FIST))
+    keys = [(0.0, g, "linear"), (0.08, compose(g, body(drop=0.01, chest=(2, 0, 0))), "inout"), (0.26, rise, "out"),
+            (0.34, rise2, "inout"), (anim.IMPACT, grip, "in"), (0.56, fol, "out"), (0.72, fol, "linear"),
+            (0.86, anim.lerp_pose(fol, g, 0.6), "inout"), (1.0, g, "settle")]
+    return anim.Clip("cast_a2", N, False, anim.drag(anim.keyed(keys), N, {"head": 1.0, "hand.L": 1.0}), impact=anim.IMPACT)
+
+
+HAT_TIP = 12.0            # Lamp Flare: the hat knocked up at the front (deg, x_hat pitch: - = the front brim up)
+LAMP_SWING = 38.0         # ... and the lantern's swing out on its hook (x_lantern, + = outward / forward)
+
+
+def clip_cast_a3():
+    """Lamp Flare (15 f, impact f6): the left hand flicks the hat's front brim up, the lamp swings out on its hook, the
+    figure leans away; the lamp at the end of its swing flares at f6; recover by f15 (the lantern authored: no spring)"""
+    N = 15
+    g = guard()
+    flick0 = compose(stance_pose(), body(hips=(0, 4, 0), chest=(2, 4, 0), head=(4, 0, 0)),
+                     guard_arms(), ik(wrist("L", 0.06, -0.50, 1.62, (0.9, 0.2, -0.3)), orient("L", (-0.30, -0.40, 0.87), (0.0, -0.9, -0.43))),
+                     guard_fingers(), fingers("L", a=(4, 6, 4), b=(10, 12, 10), t=(0, 4)))
+    flick = compose(stance_pose(), body(hips=(-4, -4, 0), spine=(-5, -3, 0), chest=(-7, -4, 0), neck=(-4, 0, 0), head=(-6, -6, 0),
+                                        fwd=-0.04, hat=(-HAT_TIP, 0, 0)),
+                    guard_arms(), ik(wrist("L", 0.10, -0.52, 1.80, (0.9, 0.1, -0.2)), orient("L", (-0.20, -0.30, 0.93), (0.0, -0.93, -0.30))),
+                    guard_fingers(), fingers("L", a=(-4, -2, 0), b=(-2, 0, 0), t=(-4, 0)))
+    flare = compose(stance_pose(), body(hips=(-6, -5, 0), spine=(-7, -4, 0), chest=(-9, -5, 0), neck=(-5, 0, 0), head=(-8, -7, 0),
+                                        fwd=-0.06, drop=0.01, hat=(-HAT_TIP * 0.8, 0, 0)),
+                    guard_arms(), ik(wrist("L", 0.16, -0.44, 1.70, (0.9, 0.2, -0.2))), guard_fingers(),
+                    fingers("L", a=(6, 8, 6), b=(8, 10, 8), t=(0, 4)))
+    keys = [(0.0, g, "linear"), (0.20, flick0, "inout"), (0.30, flick, "out"), (anim.IMPACT, flare, "out"),
+            (0.62, anim.lerp_pose(flare, g, 0.45), "inout"), (1.0, g, "settle")]
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        p = fn(t)
+        f = t * N
+        # the lantern: hangs plumb while the hat tips (+ its own swing out, peaking at the flare, damped after)
+        hat_p = p.get("x_hat", (0, 0, 0))[0]
+        if f < 3.0:
+            sw = 0.0
+        elif f <= 6.0:
+            sw = LAMP_SWING * anim.ease_out((f - 3.0) / 3.0)
+        else:
+            u = (f - 6.0) / (N - 6.0)
+            sw = LAMP_SWING * math.exp(-3.2 * u) * math.cos(2 * math.pi * 0.9 * u * (N - 6.0) / 7.0) * (1 - u)
+        head_p = p.get("head", (0, 0, 0))[0] + p.get("neck", (0, 0, 0))[0] + p.get("chest", (0, 0, 0))[0] + \
+            p.get("spine", (0, 0, 0))[0] + p.get("hips", (0, 0, 0))[0]
+        p["x_lantern"] = (-(hat_p + (1.0 - HAT_LEVEL) * head_p) - sw, 0.0, 0.0)
+        return p
+
+    c = anim.Clip("cast_a3", N, False, sample, impact=anim.IMPACT)
+    c.secondary = False
+    return c
+
+
+def beast_hands(spread=1.0, x=0.70, y=-0.16, z=1.72):
+    """the arms high and wide outside the brim, the hands up and out, fingers spread into horns and claws"""
+    k = spread
+    return dict(ik(wrist("L", x, y, z, (0.5, 0.5, -0.7)), wrist("R", -x, y, z, (-0.5, 0.5, -0.7)),
+                   orient("L", (0.45, -0.25, 0.86), (0.25, -0.95, -0.15)), orient("R", (-0.45, -0.25, 0.86), (-0.25, -0.95, -0.15))),
+                **fingers("L", a=(-6 * k, 14, 30), b=(-4 * k, 18, 34), t=(-10, 10), sa=20 * k, sb=24 * k, st=34 * k),
+                **fingers("R", a=(-6 * k, 14, 30), b=(-4 * k, 18, 34), t=(-10, 10), sa=20 * k, sb=24 * k, st=34 * k))
+
+
+def pounce_hands(y=-0.74, z=1.18, curl=1.0):
+    """the arms swept forward and down at the cone, the hands clawed (absolute places: the torso pitches 30 deg)"""
+    return dict(ik(wrist_abs("L", 0.25, y, z, (0.9, 0.3, -0.2)), wrist_abs("R", -0.25, y, z, (-0.9, 0.3, -0.2)),
+                   orient("L", (0.15, -0.95, 0.27), (0.0, 0.27, 0.96)), orient("R", (-0.15, -0.95, 0.27), (0.0, 0.27, 0.96))),
+                **fingers("L", a=(20 * curl, 34 * curl, 40 * curl), b=(22 * curl, 36 * curl, 42 * curl), t=(4, 18), sa=14, sb=16, st=24),
+                **fingers("R", a=(20 * curl, 34 * curl, 40 * curl), b=(22 * curl, 36 * curl, 42 * curl), t=(4, 18), sa=14, sb=16, st=24))
+
+
+def clip_cast_ult():
+    """Shadow Play (40 f, impact f16): the arms rise high and wide, fingers spreading into a beast's horns and claws,
+    the head back and the hat tipped up (a breathing hold, the fingers moving in turn); at f16 the arms sweep forward
+    and down and the beast fills the cone; hold to f30, then lower"""
+    N = 40
+    g = guard()
+    st_ = stance_pose(feet={"foot.L": anim.FootTarget((0.03, -0.12, 0.0), 0.0, -4.0)})
+    rise = compose(stance_pose(), body(hips=(-4, 0, 0), spine=(-6, 0, 0), chest=(-8, 0, 0), neck=(-6, 0, 0), head=(-10, 0, 0),
+                                       drop=-0.01), beast_hands(0.9))
+    rise2 = compose(stance_pose(), body(hips=(-5, 0, 0), spine=(-7, 0, 0), chest=(-10, 0, 0), neck=(-7, 0, 0), head=(-12, 0, 0),
+                                        drop=-0.015), beast_hands(1.1, x=0.71, z=1.76))
+    hit = compose(st_, body(hips=(12, 0, 0), spine=(10, 0, 0), chest=(10, 0, 0), neck=(-6, 0, 0), head=(-8, 0, 0), fwd=0.08,
+                            drop=0.06), pounce_hands())
+    hold = compose(st_, body(hips=(13, 0, 0), spine=(11, 0, 0), chest=(11, 0, 0), neck=(-7, 0, 0), head=(-9, 0, 0), fwd=0.09,
+                             drop=0.065), pounce_hands(y=-0.76, z=1.12, curl=1.2))
+    keys = [(0.0, g, "linear"), (0.10, compose(g, body(drop=0.015, chest=(4, 0, 0))), "inout"), (0.24, rise, "out"),
+            (0.32, rise2, "inout"), (0.36, compose(rise2, body(chest=(-1, 0, 0))), "inout"), (anim.IMPACT, hit, anim.snap),
+            (0.48, hold, "out"), (0.75, hold, "linear"), (0.88, anim.lerp_pose(hold, g, 0.6), "inout"), (1.0, g, "settle")]
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        p = fn(t)
+        if 0.18 < t < 0.38:                       # the fingers move in turn: the beast's claws flex
+            k = math.sin(math.pi * (t - 0.18) / 0.20)
+            for sd, ph in (("L", 0.0), ("R", 0.33)):
+                for i, w in enumerate("ab"):
+                    nm = f"x_f{w}2.{sd}"
+                    a = p.get(nm, (0, 0, 0))
+                    p[nm] = (a[0] + 14 * k * anim.osc(t, 6, ph + 0.2 * i), a[1], a[2])
+        if 0.48 < t < 0.76:
+            k = math.sin(math.pi * (t - 0.48) / 0.28)
+            p = anim.add(p, P_(chest=(0.8 * k * anim.osc(t, 7), 0, 0)))
+        return p
+
+    return anim.Clip("cast_ult", N, False, anim.drag(sample, N, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+
+
+def clip_death():
+    """she reels, sinks to her knees, bows and folds forward to the ground; the hat tips over her like a lampshade set
+    down, its front brim on the ground; ends at rest"""
+    N = 45
+    g = guard()
+    kneel_feet = anim.feet(l=(0.0, 0.30, 0.04), r=(0.0, 0.32, 0.04), pl=-55, pr=-55, yl=2, yr=-2)
+    recoil = compose(stance_pose(), body(hips=(-6, 6, 0), spine=(-8, 0, 0), chest=(-10, 4, 0), neck=(-6, 0, 0), head=(-10, 6, 0),
+                                         fwd=-0.05),
+                     ik(wrist("L", 0.30, -0.10, 1.10), wrist("R", -0.32, -0.06, 1.05)), both(fingers, **OPEN))
+    g = dict(g, hat_level=(HAT_LEVEL, 0, 0))
+    recoil["hat_level"] = (HAT_LEVEL, 0, 0)
+    sink = compose(stance_pose(feet=kneel_feet), body(hips=(8, 0, 0), spine=(8, 0, 0), chest=(6, 0, 0), neck=(8, 0, 0), head=(10, 0, 0),
+                                                      drop=0.44, fwd=-0.02),
+                   ik(wrist_abs("L", 0.26, -0.20, 0.62), wrist_abs("R", -0.26, -0.20, 0.60)), both(fingers, **RELAX))
+    sink["hat_level"] = (HAT_LEVEL, 0, 0)
+    fold = compose(stance_pose(feet=kneel_feet), body(hips=(24, 0, 0), spine=(20, 0, 0), chest=(14, 0, 0), neck=(8, 0, 0), head=(6, 0, 0),
+                                                      drop=0.48, fwd=0.02),
+                   ik(wrist_abs("L", 0.28, -0.52, 0.10, (0.9, 0.3, 0.2)), wrist_abs("R", -0.28, -0.54, 0.10, (-0.9, 0.3, 0.2)),
+                      orient("L", (0.2, -0.9, -0.38), (0.0, 0.38, -0.9)), orient("R", (-0.2, -0.9, -0.38), (0.0, 0.38, -0.9))),
+                   both(fingers, **RELAX))
+    fold["hat_level"] = (0.55, 0, 0)
+    down = compose(stance_pose(feet=kneel_feet), body(hips=(30, 0, 0), spine=(26, 0, 0), chest=(18, 0, 0), neck=(10, 0, 0), head=(8, 0, 0),
+                                                      drop=0.52, fwd=0.04),
+                   ik(wrist_abs("L", 0.30, -0.62, 0.06, (0.9, 0.3, 0.3)), wrist_abs("R", -0.30, -0.64, 0.06, (-0.9, 0.3, 0.3)),
+                      orient("L", (0.25, -0.96, 0.0), (0.0, 0.0, -1.0)), orient("R", (-0.25, -0.96, 0.0), (0.0, 0.0, -1.0))),
+                   both(fingers, a=(10, 14, 12), b=(12, 16, 14), t=(4, 6)))
+    down["hat_level"] = (0.20, 0, 0)
+    bounce = compose(down, body(chest=(-3, 0, 0), drop=-0.012))
+    bounce["hat_level"] = (0.20, 0, 0)
+    rest = compose(down, body(spine=(2, 0, 0), chest=(2, 0, 0), head=(2, 0, 0), drop=0.006))
+    rest["hat_level"] = (0.20, 0, 0)
+    for k_ in (g, recoil, sink, fold, down, bounce, rest):
+        k_["hat_floor"] = (0.012, 0, 0)
+    keys = [(0.0, g, "linear"), (0.12, recoil, "snap"), (0.40, sink, "inout"), (0.62, fold, "in"), (0.76, down, "in"),
+            (0.84, bounce, "out"), (0.94, rest, "inout"), (1.0, rest, "linear")]
+    return anim.Clip("death", N, False, anim.keyed(keys))
+
+
+def clip_recall():
+    """cups both hands round the lantern and blows it out, a slow breath held; loops"""
+    N = 60
+    base = compose(stance_pose(), body(hips=(0, -10, 0), spine=(2, -8, 0), chest=(3, -10, 0), neck=(6, -16, 0), head=(8, -18, 6)),
+                   ik(wrist_abs("R", -0.50, -0.34, 1.28, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.20, -0.58, 1.28, (0.6, 0.4, -0.6)),
+                      orient("R", (0.30, -0.25, 0.92), (0.70, -0.62, 0.30)), orient("L", (-0.30, 0.25, 0.92), (-0.62, 0.70, 0.30))),
+                   fingers("R", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4),
+                   fingers("L", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4))
+
+    def sample(t):
+        b = anim.osc(t, 2)
+        p = compose(base, body(chest=(1.4 * b, 0, 0), head=(-1.0 * b, 0, 0), neck=(1.0 * anim.osc(t, 1, 0.2), 0, 0)))
+        return p
+
+    return anim.Clip("recall", N, True, sample)
+
+
+def clip_idle_lobby():
+    """mischievous and absorbed: turned to the lamp, she makes shadow animals one after another (a bird, a rabbit, a
+    hound), starts a bigger thing and stops herself, tips the hat back with a grin, and starts again (120 f loop)"""
+    N = 120
+    turn = body(hips=(0, -16, 0), spine=(2, -10, 0), chest=(2, -12, 0), neck=(4, -12, 0), head=(6, -14, 0))
+    g = guard()                                          # (the portrait's frame: facing front)
+    d_bird = unit((0.0, -0.8, 0.6))
+    bird = compose(stance_pose(), turn, ik(wrist("L", -0.04, -0.40, 1.40, (0.9, 0.3, -0.4)), wrist("R", -0.10, -0.40, 1.38, (-0.9, 0.3, -0.4)),
+                                           orient("L", (-0.70, -0.30, 0.65), (0.0, 0.0, -1.0)), orient("R", (0.70, -0.30, 0.65), (0.0, 0.0, -1.0))),
+                   both(fingers, a=(-6, 0, 2), b=(-6, 0, 2), t=(-14, 0), sa=10, sb=12, st=18))
+    rab = compose(stance_pose(), turn, ik(wrist("R", -0.18, -0.46, 1.40, (-0.9, 0.3, -0.3)), orient("R", (0.1, -0.35, 0.93), (0.95, 0.0, -0.3)),
+                                          wrist("L", 0.20, -0.28, 1.12), orient("L", (0.10, -0.40, -0.91), (-0.30, 0.85, -0.42))),
+                  fingers("R", a=(-4, 0, 2), b=(80, 92, 70), t=(40, 40), sa=10), fingers("L", **HALF))
+    hound = compose(stance_pose(), turn, hound_hands(x=-0.03, y=-0.40, z=1.36, jaw=10, ears=40))
+    big = compose(stance_pose(), body(hips=(0, -8, 0), spine=(-2, -4, 0), chest=(-4, -6, 0), neck=(-2, -6, 0), head=(-4, -6, 0)),
+                  beast_hands(0.6, x=0.66, y=-0.24, z=1.64))
+    tip = compose(stance_pose(), turn, body(head=(-6, 0, 0), hat=(-10, 0, 0)),
+                  ik(wrist("L", 0.06, -0.48, 1.70, (0.9, 0.2, -0.3)), orient("L", (-0.3, -0.4, 0.87), (0.0, -0.9, -0.43)),
+                     wrist("R", -0.215, -0.27, 1.12)), fingers("L", a=(4, 6, 4), b=(8, 10, 8), t=(0, 4)), fingers("R", **HALF))
+    keys = [(0.0, g, "linear"), (0.03, g, "linear"), (0.10, bird, "inout"), (0.24, bird, "linear"), (0.31, rab, "inout"),
+            (0.44, rab, "linear"), (0.52, hound, "inout"), (0.64, hound, "linear"), (0.72, big, "inout"), (0.77, big, "linear"),
+            (0.84, tip, "inout"), (0.92, tip, "linear"), (1.0, g, "inout")]
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        p = fn(t)
+        if 0.10 <= t <= 0.24:                      # the bird's wings flap
+            w = anim.osc(t, 5) * math.sin(math.pi * (t - 0.10) / 0.14)
+            for sd in "LR":
+                for g_ in "ab":
+                    nm = f"x_f{g_}1.{sd}"
+                    a = p.get(nm, (0, 0, 0))
+                    p[nm] = (a[0] + 22 * w, a[1], a[2])
+        if 0.30 <= t <= 0.46:                      # the rabbit's ears wiggle
+            w = anim.osc(t, 6) * math.sin(math.pi * (t - 0.30) / 0.16)
+            a = p.get("x_fa1.R", (0, 0, 0))
+            p["x_fa1.R"] = (a[0] + 16 * w, a[1], a[2] - 6 * w)
+        if 0.52 <= t <= 0.66:                      # the hound's jaw
+            w = max(0.0, anim.osc(t, 4)) * math.sin(math.pi * (t - 0.52) / 0.14)
+            for sd, z in (("L", 1.0), ("R", -1.0)):
+                a = p.get(f"x_fb1.{sd}", (0, 0, 0))
+                p[f"x_fb1.{sd}"] = (a[0], a[1], a[2] - z * 20 * w)
+        return p
+
+    return anim.Clip("idle_lobby", N, True, anim.drag(sample, N, {"head": 2.0, "neck": 1.0}, loop=True))
+
+
+def clip_victory():
+    """before the lantern she casts one enormous shadow, a great hound, bows to it (the shadow bows back), and ends
+    with the hat tipped forward and both hands cupped at the chest as if holding a small bird, a quarter turned"""
+    N = 55
+    g = guard()
+    hound_hi = compose(stance_pose(), body(hips=(-3, 0, 0), spine=(-4, 0, 0), chest=(-6, 0, 0), neck=(-4, 0, 0), head=(-8, 0, 0)),
+                       hound_hands(x=0.04, y=-0.46, z=1.52, jaw=22, ears=48, pitch=0.25))
+    bow = compose(stance_pose(), body(hips=(18, 0, 0), spine=(16, 0, 0), chest=(12, 0, 0), neck=(10, 0, 0), head=(12, 0, 0),
+                                      fwd=-0.03, drop=0.02, hat=(6, 0, 0)),
+                  ik(wrist("L", 0.22, -0.30, 0.95), wrist("R", -0.22, -0.30, 0.95),
+                     orient("L", (0.1, -0.3, -0.95), (-0.3, 0.9, -0.3)), orient("R", (-0.1, -0.3, -0.95), (0.3, 0.9, -0.3))),
+                  both(fingers, **RELAX))
+    cup = dict(ik(wrist("L", 0.07, -0.30, 1.24, (0.9, 0.4, -0.3)), wrist("R", -0.05, -0.31, 1.22, (-0.9, 0.4, -0.3)),
+                  orient("L", (-0.75, -0.35, 0.56), (-0.30, -0.10, -0.95)), orient("R", (0.75, -0.35, 0.56), (0.30, -0.10, -0.95))),
+               **both(fingers, a=(28, 36, 30), b=(32, 40, 34), t=(14, 20)))
+    final = compose(stance_pose(), body(hips=(2, -24, 0), spine=(3, -10, 0), chest=(4, -8, 0), neck=(6, 4, 0), head=(10, 6, 2),
+                                        hat=(8, 0, 0)), cup)
+    keys = [(0.0, g, "linear"), (0.20, hound_hi, "out"), (0.36, compose(hound_hi, hound_hands(x=0.04, y=-0.48, z=1.54, jaw=6, ears=44, pitch=0.25)), "inout"),
+            (0.54, bow, "inout"), (0.64, bow, "linear"), (0.84, final, "back"), (1.0, final, "linear")]
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        p = fn(t)
+        if t > 0.86:
+            k = min(1.0, (t - 0.86) / 0.1)
+            p = anim.add(p, P_(chest=(0.8 * k * anim.osc(t, 2), 0, 0)))
+        return p
+
+    return anim.Clip("victory", N, False, anim.drag(sample, N, {"head": 2.0, "neck": 1.0}))
+
+
+def clip_stunned():
+    N = 40
+    g = compose(stance_pose(1.3), body(spine=(10, 0, 0), chest=(10, 0, 0), neck=(10, 0, 0), head=(14, 0, 0)),
+                ik(wrist("L", 0.24, -0.16, 0.98), wrist("R", -0.24, -0.16, 0.98),
+                   orient("L", (0.15, -0.1, -0.98), (-0.4, 0.9, 0.0)), orient("R", (-0.15, -0.1, -0.98), (0.4, 0.9, 0.0))),
+                both(fingers, **RELAX))
+
+    def sample(t):
+        a, b = anim.osc(t, 1), anim.osc(t, 1, 0.25)
+        bob = anim.osc(t, 2, 0.1)
+        return anim.add(g, P_(hips=(0, 0, 4 * a), spine=(3 * b, 0, -3 * a), chest=(3 * b, 0, -3 * a), neck=(6 * b, 0, 6 * a),
+                              head=(8 * b, 4 * a, 8 * a), x_hat=(4 * bob, 0, 3 * a)))
+
+    return anim.Clip("stunned", N, True, sample)
+
+
+def clip_dash():
+    """the glide: a long low lean, the hands trailing behind like sleeves in a wind"""
+    N = 15
+    g = guard()
+    glide = compose(stance_pose(), body(hips=(16, 0, 0), spine=(8, 0, 0), chest=(6, 0, 0), neck=(-10, 0, 0), head=(-12, 0, 0),
+                                        fwd=0.06, drop=0.08),
+                    ik(wrist("L", 0.26, 0.26, 0.98, (0.7, 0.5, 0.2)), wrist("R", -0.26, 0.26, 0.98, (-0.7, 0.5, 0.2)),
+                       orient("L", (0.2, 0.75, -0.63), (-0.3, -0.45, -0.85)), orient("R", (-0.2, 0.75, -0.63), (0.3, -0.45, -0.85))),
+                    both(fingers, a=(6, 8, 8), b=(8, 10, 10), t=(0, 4)))
+    glide["ik"].update(anim.feet(l=(0.03, -0.22, 0.04), r=(-0.03, 0.24, 0.02), pl=6, pr=-24))
+    keys = [(0.0, g, "linear"), (0.28, glide, "snap"), (0.75, glide, "linear"), (1.0, g, "inout")]
+    return anim.Clip("dash", N, False, anim.keyed(keys))
+
+
+def clip_channel():
+    N = 40
+    base = compose(stance_pose(), body(spine=(3, 0, 0), chest=(3, 0, 0), head=(4, 0, 0)), hound_hands(x=0.05, y=-0.34, z=1.24, jaw=4, ears=30))
+
+    def sample(t):
+        b = anim.osc(t, 2)
+        p = compose(base, body(chest=(1.2 * b, 0, 0), head=(-0.8 * b, 0, 0)))
+        w = max(0.0, anim.osc(t, 2, 0.1))
+        for sd, z in (("L", 1.0), ("R", -1.0)):
+            a = p.get(f"x_fb1.{sd}", (0, 0, 0))
+            p[f"x_fb1.{sd}"] = (a[0], a[1], a[2] - z * 12 * w)
+        return p
+
+    return anim.Clip("channel", N, True, sample)
+
+
+def clip_taunt():
+    """a rabbit shadow at the camera: two fingers up as ears, wiggling, the head cocked"""
+    N = 60
+    g = guard()
+    rab = compose(stance_pose(), body(hips=(0, 6, 0), chest=(0, 6, 4), neck=(0, 4, 6), head=(-4, 6, 10)),
+                  ik(wrist("R", -0.10, -0.50, 1.46, (-0.9, 0.3, -0.3)), orient("R", (0.1, -0.30, 0.95), (0.0, -0.95, -0.3)),
+                     wrist("L", 0.215, -0.27, 1.10), orient("L", (0.10, -0.40, -0.91), (-0.30, 0.85, -0.42))),
+                  fingers("R", a=(-4, 0, 2), b=(84, 96, 72), t=(42, 40), sa=12), fingers("L", **HALF))
+    keys = [(0.0, g, "linear"), (0.18, rab, "back"), (0.82, rab, "linear"), (1.0, g, "inout")]
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        p = fn(t)
+        if 0.2 < t < 0.8:
+            w = anim.osc(t, 7) * math.sin(math.pi * (t - 0.2) / 0.6)
+            a = p.get("x_fa2.R", (0, 0, 0))
+            p["x_fa2.R"] = (a[0] + 26 * max(0.0, w), a[1], a[2])
+            p = anim.add(p, P_(head=(0, 0, 3 * w)))
+        return p
+
+    return anim.Clip("taunt", N, False, sample)
+
+
+def clip_overrides(ctx) -> dict:
+    return {"idle": clip_idle(), "run": clip_run(), "attack1": clip_attack1(), "attack2": clip_attack2(),
+            "cast_a1": clip_cast_a1(), "cast_a2": clip_cast_a2(), "cast_a3": clip_cast_a3(), "cast_ult": clip_cast_ult(),
+            "death": clip_death(), "recall": clip_recall(), "idle_lobby": clip_idle_lobby(), "victory": clip_victory(),
+            "stunned": clip_stunned(), "dash": clip_dash(), "channel": clip_channel(), "taunt": clip_taunt()}
 
 
 if __name__ == "__main__":

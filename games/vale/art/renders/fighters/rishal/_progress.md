@@ -308,3 +308,34 @@
   (#6A7680); VALUE: STONE_COL to the brief's L* 75 (lames, left cap), right cap #BDBEBB, sleeves #A2B2BE, cowl
   #98B6C9 / #A8C0CE, chest plate harmonize #BCB8B0, torso #8C9CA8, guards L* 67-78, VALUE_RAMP 1.05-1.10 over the
   shoulders and head, VALUE_KNEE (0.58, 0.40) (knee at L* 81, L* 84 at Y 0.75); Lamplit's cage moved above the fin.
+- 2026-10-28 06:30 CDT: POLISH builds 5-8 (final: base build 8 + skins). After build 5 two in-game reads were fixed:
+  the run's back-swing blades rose behind the shoulders and stood beside the head from the game camera (a V with the
+  crest): they now trail back and DOWN (bb (0.28, 0.90, -0.34)); the ult coil's head less bowed (the crest stood
+  vertical over it); the fin's horns lie further back over the temples (FIN_LEAN_T 2.0); the back-facing pieces a
+  step lighter (coat back #A4AFB6, torso #9AA8B3, hood back #B4C9D5, nape #D0C6B9). Glass Dash holds ONE long stride
+  from the impact to the end (the alternating strides passed through a tucked crouch).
+  GATES (build 8): three load OK, 20404 tris, 1150 KiB (budget 1172), accent 2.45 % in the three QA (100 % top half),
+  facing +Z, 17 clips, impacts at 0.4, run foot error 1.6 %, mesh top 1.879 (art.height 1.88: content art block ==
+  art.json). Skins: chalkline 20404 tris 997 KiB accent 2.55 %, lamplit 20814 tris 1010 KiB accent 2.48 % (three load
+  OK). lineup (_fit/lineup_polish_final, idle f0, 0/90/180/270): base accent 3.21 / 1.19 / 1.23 / 4.21 % accentOk
+  TRUE (was 1.66 / 0.84 / 0.44 / 1.11 FALSE), value top 75.8 / 78.3 / 67.6 / 71.1, mid 55.5 / 48.0 / 49.9 / 46.4,
+  feet 31.1 / 28.7 / 22.2 / 26.3 (was top 71 / 69 / 60 / 67, mid 48 / 40 / 41 / 38: only the back's top band stays
+  2.4 under 70); chalkline top 70.8 / 71.2 / 59.6 / 66.2, mid 45.6 / 38.0 / 37.7 / 36.1 (the ink figure: ~10 L*
+  under base in the middle); lamplit 73.6 / 72.8 / 66.5 / 66.5, mid 54.4 / 47.6 / 50.3 / 45.3. IoU64 vs Kemdo 0.567,
+  Nurrow 0.464, Marund 0.253. build_content --check --allow-missing-assets OK, strict --check lists nothing for
+  rishal; probe_kits_A 525/0, probe_kits_B 733/0. In game (_harness/_shots/art2_rishal_*, t 65): the lavender visor
+  band, the lit fin + fins, the chalk crest and the left spike read under the bar.
+  VALUE LIFT (_harness/value_probe.mjs, report runs rishal_before / rishal_after / rishal_after_ally; `--you rishal`
+  seats him on every map, so he is the local player there and his accent renders Noonwhite, the renderer's self tint,
+  in both runs). Before = the pre-polish GLB (git 5060b5e2) swapped in for the run and restored after. Top-25 L*
+  (gap over the lane): RIFT High 74.8 (36.8) -> 80.8 (42.8), Low 76.5 (38.0) -> 82.6 (44.1); BRIDGE High 76.6
+  (38.1) -> 82.2 (43.7), Low 77.0 (38.5) -> 83.5 (45.0); FRAY High 70.8 (33.8) -> 78.2 (41.2), Low 71.5 (34.5) ->
+  79.6 (42.6); median L* 42-47 -> 54.5-58.5. As a non-local seat (BRIDGE's default roster, the env verify's case:
+  ally / enemy accent colour): High 61.6 (24.6) -> 67.1 (28.6), Low 69.4 -> 77.8 (38.8); in that High frame he
+  stands in shade (p50 27.5 vs 57.5 as the local seat), so it stays under 70 there. Blow-out: his gt90 is 0-0.1 % as
+  a non-local seat, 1.1-3.1 % as the local one (the Noonwhite accent over the fins); pooled RIFT gt90 3 % is Tunlan's
+  (8 %), not his. The light top / dark feet gradient holds (lineup bands above).
+  Open: the brief needs §7 (the fins carry the accent with the ridge fin) and §9 (Chalkline's ink figure, chalk
+  head and scarf) updated to match; from the front at the game camera the crest + lit fins and the left pauldron
+  spike still make a two-group crown (the spike is the brief's); the back facing's top band 67.6; the splash is the
+  brief's standing victory hold, not an action shot.

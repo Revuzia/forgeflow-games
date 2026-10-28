@@ -21,7 +21,8 @@
     "victory": "victory",
     "channel": "channel",
     "dash": "dash",
-    "stunned": "stunned"
+    "stunned": "stunned",
+    "taunt": "taunt"
   },
   "sockets": {
     "origin": "root",

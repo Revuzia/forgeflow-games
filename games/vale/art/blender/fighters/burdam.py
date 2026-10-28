@@ -1106,8 +1106,23 @@ FT = anim.FootTarget
 # haft fully in view (were 0.65 / 1.00); game: the worst facing 980 -> 900 px^2 of blade in view, mean 1339 -> 1307,
 # one pointer facing as before (the 36-degree and steeper picks lost the worst facing to 590-710 behind the bar and
 # name plate, the lobby's own carry to 0 facing W). The tip stands 2.66 m (the yoke 2.19).
-CARRY = dict(rel=(-0.371, 0.435, 0.663), pole=(-1.0, 0.25, -0.3), d=(0.506, 0.723, 0.469), up=(0.197, 0.433, -0.88))
-RUN_REL0 = (-0.371, 0.415, 0.620)      # the run's fist (polish: the idle's, 4 cm lower; was the pass-6 yoke's)
+# FIX ROUND 2 (the verifier: at the GAME camera the polish carry barely changed; walking toward the screen's left the
+# blade lay as a horizontal bar along the health bar, heel and notches under it; judge the carry per facing at the game
+# camera, not by the eye-level angle). The geometry: facing W his right side is the far side, so the fist at head
+# height projects onto the bar whatever the carry; a blade heading to his LEFT comes toward the camera there and
+# its rise cancels on screen (the polish carry: -6 degrees, 74 % of it in the bar's band). Only a blade pointing
+# BACK rises on screen facing W (crossing out of the bar's end instead of lying along it) without losing facing E.
+# proto/burdam_carry6.py --by-game (24 facings, blade px^2 in view after the bar + name plate + body, the share lying
+# in the bar's band, the screen angle), grids over the fist x heading x elevation x roll (~20k carries; the steep
+# 45-60 degree picks lost the W and N facings to the bar + name plate, 270-900 px^2): the fist out and back of the
+# right shoulder at ear height (wrist (-0.60, 0.30, 1.72)), the cleaver heading straight back (88 degrees), 30 up,
+# the flat rolled 5 toward the back. Game camera vs the polish carry: facing W 926 -> 1481 px^2 (lane facings
+# 240-300 min 923 -> 1446), screen angle -6 -> +20 (rising out of the bar's right end; WNW +30), share in the bar's
+# band 0.74 -> 0.42, E 1944 -> 1623 (still a long diagonal), S 1446 -> 1845, N 1118 -> 918 (the worst facing 923 ->
+# 918), mean 1387 -> 1509, no pointer facing, no cleaver point in the head / torso. Eye level: the blade stands
+# behind the right shoulder (front view ~vertical); the select screen / portrait keep the lobby's concept diagonal.
+CARRY = dict(rel=(-0.447, 0.651, 0.33), pole=(-1.0, 0.25, -0.3), d=(0.03, 0.865, 0.5), up=(-0.07, 0.501, -0.863))
+RUN_REL0 = (-0.447, 0.631, 0.256)      # the run's fist (fix round 2: the idle's, 4 cm lower)
 BELT_L = (0.10, -0.16, -0.94)          # the free left fist at the belt
 
 
@@ -1123,6 +1138,7 @@ def carry_up(d) -> tuple:
 
 
 CARRY_ROLL = 25.0          # fix pass 6: the carry's flat rolled from level toward the back (proto/burdam_carry6.py)
+RUN_ROLL = 5.0             # fix round 2: the run's flat as the idle's (roll 5; the steeper back-pointing carry)
 
 
 def carry_flat(d, roll: float = CARRY_ROLL) -> tuple:
@@ -1134,7 +1150,10 @@ def carry_flat(d, roll: float = CARRY_ROLL) -> tuple:
     return tuple(float(x) for x in u * math.cos(r) + np.cross(d, u) * math.sin(r))
 
 
-RUN_D = (0.539, 0.770, 0.342)          # the run's carry (polish: heading 55 / 20 up, the idle's 8 degrees lower: the run's
+RUN_D = (0.031, 0.890, 0.454)          # fix round 2: heading 88 / 27 up (the aim is in world space: the run's lean does not
+                                       # tip it; 24 up rose only +16 / +5 degrees facing W / WSW, the idle's 30 up put the
+                                       # blade's flat into the cowl at mid-stride).
+                                       # Before: (0.539, 0.770, 0.342), the run's carry (polish: heading 55 / 20 up, the idle's 8 degrees lower: the run's
                                        # forward lean tips a back-pointing blade up; fix pass 6 was the yoke's, heading 42 /
                                        # 7 up); fix pass 6: heading 6 degrees further back and 3 lower than
                                        # the idle's, the fist 3-4 cm lower (the run's forward lean tips a back-pointing
@@ -1439,7 +1458,7 @@ def gen_run_carry() -> anim.Clip:
               "run_back": ((r0[0] - 0.02, r0[1] + 0.06, r0[2] - 0.08), c["pole"], d, (0.10, 0.46, -0.76), (0.9, 0.3, -0.2))}
     prof = dict(MOTION, weapon="one_hand", blocks=blocks)
     base = anim.gen_run(prof)
-    up = carry_flat(d)
+    up = carry_flat(d, RUN_ROLL)
 
     def sample(t):
         p = base.sample(t)
@@ -2749,6 +2768,9 @@ STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78}   # forearm plates a step
 STONE_TIERS = ("tier1", "tier2", "tier3", "tier4")
 STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame"))   # plates that tuck under each other (recess paint)
 LEDGER_ROWS = 6                # the cap's top: the brief's ledger relief, one carved row per day (painted grooves)
+CAP_PARTS = ("shoulder_plate", "pauldron_lame")
+CAP_CHROMA = 0.4               # fix round 2: the right cap's stone chroma (x, luminance kept; b* ~+11 -> ~+4): the verifier
+                               # read the lifted cap and cowl as one pale beige family from the front
 
 
 def _nblur(arr: np.ndarray, w: np.ndarray, sigma: float) -> np.ndarray:
@@ -2825,6 +2847,11 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
         col = col * (1 - 0.5 * lip[:, None]) + _hexlin(STONE_CHALK)[None] * 0.5 * lip[:, None]
         rec = np.maximum(rec, cut * 0.85)
     col = col * (1 - 0.78 * rec[:, None]) + _hexlin(STONE_RECESS)[None] * 0.78 * rec[:, None]
+    if nm in CAP_PARTS:
+        # (fix round 2) the right cap a greyer stone than the warm felt beside it, at the same luminance (the value probe
+        # reads L*): the two separate by hue at its edge instead of reading as one pale family
+        Yc = _lum(col)[:, None]
+        col = Yc + (col - Yc) * CAP_CHROMA
     return col * STONE_DARKER.get(nm, 1.0)
 
 
@@ -3285,6 +3312,74 @@ BAR_TOP = None
 
 
 RENDER_SPECULAR = 0.05    # Specular IOR Level of the baked body material in the Blender renders only
+# FIX ROUND 2 (the verifier: in the splash and portrait the five accent diamonds + the pommel gem read as large glossy
+# blue tiles, the loudest element of the frame; in game they are small and team-tinted): in the Blender stills only the
+# accent glass goes matte (roughness 0.25 -> 0.7, no specular sheen of the sky) and its emission drops 0.8 -> 0.35, so
+# the inlays read as set blue stones in the heel instead of lit tiles. The GLB is exported before the renders: the game's
+# accent (and its 1.5-6 % share) is untouched.
+STILL_ACCENT = {"Roughness": 0.7, "Specular IOR Level": 0.1, "Emission Strength": 0.35}
+# FIX ROUND 2 (the verifier: the value lift left the cowl, the right cap and the stack one pale family; in the splash
+# the felt's sunlit top folds passed L* 86, p90 93.5): the splash only takes the felt's painted top light back down
+# (base colour x (1 - SPLASH_COWL_DIM x the COWL_TOP_GAIN ramp on N.z 0.05 -> 0.65), the cowl's texels picked by the
+# mesh's vale_part attribute). The game keeps COWL_TOP_GAIN 1.45 (the RIFT value margin is under 1 L*).
+SPLASH_COWL_DIM = 0.24
+_COWL_DIM = []            # the Value nodes feeding the dim while the renders run (set per still by bible_lights)
+
+
+def _cowl_dim_nodes(m, cowl_id: int):
+    """insert base colour x (1 - k * [part == cowl] * ramp(N.z)) in front of the Principled BSDF's linked base colour;
+    returns (undo, value node) or None"""
+    nt = m.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None or not bsdf.inputs["Base Color"].is_linked:
+        return None
+    link = bsdf.inputs["Base Color"].links[0]
+    src = link.from_socket
+    N = nt.nodes
+    attr = N.new("ShaderNodeAttribute")
+    attr.attribute_type = "GEOMETRY"
+    attr.attribute_name = "vale_part"
+    cmp_ = N.new("ShaderNodeMath")
+    cmp_.operation = "COMPARE"
+    cmp_.inputs[1].default_value = float(cowl_id)
+    cmp_.inputs[2].default_value = 0.5
+    geo = N.new("ShaderNodeNewGeometry")
+    sep = N.new("ShaderNodeSeparateXYZ")
+    rng = N.new("ShaderNodeMapRange")
+    rng.clamp = True
+    rng.inputs["From Min"].default_value = 0.05
+    rng.inputs["From Max"].default_value = 0.65
+    val = N.new("ShaderNodeValue")
+    val.outputs[0].default_value = 0.0
+    m1 = N.new("ShaderNodeMath")
+    m1.operation = "MULTIPLY"
+    m2 = N.new("ShaderNodeMath")
+    m2.operation = "MULTIPLY"
+    one_minus = N.new("ShaderNodeMath")
+    one_minus.operation = "SUBTRACT"
+    one_minus.inputs[0].default_value = 1.0
+    sc = N.new("ShaderNodeVectorMath")
+    sc.operation = "SCALE"
+    L = nt.links
+    L.new(attr.outputs["Fac"], cmp_.inputs[0])
+    L.new(geo.outputs["Normal"], sep.inputs[0])
+    L.new(sep.outputs["Z"], rng.inputs["Value"])
+    L.new(cmp_.outputs[0], m1.inputs[0])
+    L.new(rng.outputs["Result"], m1.inputs[1])
+    L.new(m1.outputs[0], m2.inputs[0])
+    L.new(val.outputs[0], m2.inputs[1])
+    L.new(m2.outputs[0], one_minus.inputs[1])
+    L.new(src, sc.inputs[0])
+    L.new(one_minus.outputs[0], sc.inputs["Scale"])
+    L.remove(link)
+    L.new(sc.outputs["Vector"], bsdf.inputs["Base Color"])
+    made = [attr, cmp_, geo, sep, rng, val, m1, m2, one_minus, sc]
+
+    def undo():
+        for n in made:
+            nt.nodes.remove(n)
+        nt.links.new(src, bsdf.inputs["Base Color"])
+    return undo, val
 
 
 def _install_render_specular() -> None:
@@ -3298,14 +3393,24 @@ def _install_render_specular() -> None:
     orig = render.fighter_renders
 
     def fighter_renders(ctx, objs, P, skin, *a, **kw):
-        saved = []
+        saved, undos, done = [], [], set()
         if getattr(ctx.spec, "ID", None) == ID:
+            cowl_id = [x[0] for x in sculpts()].index("cowl")
             for o in objs:
                 if o.type != "MESH":
                     continue
                 for slot in o.material_slots:
                     m = slot.material
-                    if not m or not m.use_nodes or m.name == "accent":
+                    if not m or not m.use_nodes:
+                        continue
+                    if m.name == "accent":                     # (fix round 2) the stills' matte, dimmer accent glass
+                        for n in m.node_tree.nodes:
+                            if n.type == "BSDF_PRINCIPLED":
+                                for k, v in STILL_ACCENT.items():
+                                    inp = n.inputs.get(k)
+                                    if inp is not None and not inp.is_linked and all(inp is not x for x, _v in saved):
+                                        saved.append((inp, inp.default_value))
+                                        inp.default_value = v
                         continue
                     for n in m.node_tree.nodes:
                         if n.type == "BSDF_PRINCIPLED" and "Specular IOR Level" in n.inputs:
@@ -3313,6 +3418,12 @@ def _install_render_specular() -> None:
                             if not inp.is_linked and all(inp is not x for x, _v in saved):
                                 saved.append((inp, inp.default_value))
                                 inp.default_value = RENDER_SPECULAR
+                    if m.name not in done and o.data.attributes.get("vale_part") is not None:
+                        done.add(m.name)
+                        r = _cowl_dim_nodes(m, cowl_id)
+                        if r is not None:
+                            undos.append(r[0])
+                            _COWL_DIM.append(r[1])
         _RENDERING[0] = getattr(ctx.spec, "ID", None) == ID
         try:
             return orig(ctx, objs, P, skin, *a, **kw)
@@ -3320,6 +3431,9 @@ def _install_render_specular() -> None:
             _RENDERING[0] = False
             for inp, v in saved:
                 inp.default_value = v
+            for u in undos:
+                u()
+            _COWL_DIM.clear()
 
     fighter_renders._burdam = True
     render.fighter_renders = fighter_renders
@@ -3344,6 +3458,10 @@ def _install_portrait_rim() -> None:
     def bible_lights(cam, cfg, light, rim=1.0, scale=1.0, pair=False, target=None):
         if _RENDERING[0] and pair and abs(rim - 0.8) < 1e-6 and abs(scale - 0.8) < 1e-6:
             cfg = dict(cfg, rim_cool=float(cfg.get("rim_cool", 1.0)) * PORTRAIT_RIM_COOL)
+        # (fix round 2) the splash (rim 1.0 / scale 1.6) dims the felt's sunlit tops; every other still renders them as built
+        splash = _RENDERING[0] and pair and abs(rim - 1.0) < 1e-6 and abs(scale - 1.6) < 1e-6
+        for v in _COWL_DIM:
+            v.outputs[0].default_value = SPLASH_COWL_DIM if splash else 0.0
         return orig(cam, cfg, light, rim=rim, scale=scale, pair=pair, target=target)
 
     bible_lights._burdam = True
