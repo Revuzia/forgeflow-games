@@ -64,7 +64,11 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_blade_tip", "notch": "x_notch_mi
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
           # fix pass 8 (the review: the splash mask read two-hued, a lemon face plate on a peach cranium): the warm lamp
           # rim on screen-right washed the cranium's side to L* 83 / b* +27 against the face's 68 / +43; half strength
-          "rim_warm": 0.5}
+          "rim_warm": 0.5,
+          # polish (the value lift): the splash key a step down (3.0 -> 2.6). The lifted top band (the felt's lit folds,
+          # the mask, the pauldron tops) reads at the game's light, where it was the darkest kit; under the splash's
+          # 45-degree sun at full strength a third of the cowl's top folds blew past L* 86
+          "sun": 2.6}
 TEXTURE_SIZE = 2048      # the painted base colour; normal + ORM at 512 (CONTRACT §12 Materials)
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -104,11 +108,15 @@ SKINS: list = [
      # 52: the top and middle bands merged)
      "palette": {"cloth2": "#C6B9A5", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
                  # fix pass 8: the tunic the brief's WARM grey (#58503F read olive-khaki), at the same value
-                 "cloth": "#5D534A", "parchment": "#A3987F", "walnut": "#5A4639"}},
+                 # polish: the board's walnut frame a cooler, darker brown (#5A4639 read pink in the splash's sun)
+                 "cloth": "#5D534A", "parchment": "#A3987F", "walnut": "#4B3E33"}},
 ]
 ALMANAC_C = (-0.282, -0.212, 0.950)       # the board's centre (right hip), its yaw and half-size (m)
 ALMANAC_RZ = -38.0
 ALMANAC_HALF = (0.12, 0.16)
+ALMANAC_PAGE_GAIN = 0.72                  # polish (the review: the board's page blew out to L* ~100 in the splash, it faces
+                                          # the sun square, its rules barely visible): the page two steps under the
+                                          # parchment pauldrons, the rules bolder
 ALMANAC_TABS = ((0.42, 0.0, 0.13), (0.49, 0.01, 0.16), (0.56, 0.0, 0.12))   # ledger tabs: x, drop, length
 SKIN_FLAT = {"reed_plates_R": "reed", "reed_plates_L": "reed", "river_glass_tier1": "dawnglass",
              "river_glass_tier2": "dawnglass", "river_glass_tier3": "dawnglass", "river_bezel_tier1": "ironstone",
@@ -635,7 +643,7 @@ def sculpts() -> list:
     sp.add(Sphere(rc - rn * 0.010, 0.022), k=0.006)                    # ... round a low boss
     # the cap's inner (neck) half rides the clavicle, its outer rim the upper arm (the shared pauldron blend): a
     # raised arm (the shoulder carry) lifts the rim with the sleeve under it instead of poking the sleeve through
-    part("shoulder_plate", sp, "rust", PAULDRON_BIND, 700)
+    part("shoulder_plate", sp, "rust", PAULDRON_BIND, 620)
     fr = Sculpt("fringe")
     # the slatted fringe under the lame, round the front and outer side of the upper arm (rigid on it)
     for i in range(7):
@@ -742,7 +750,7 @@ def sculpts() -> list:
     # tools read the cached build by part index): over the outer upper arm under the cap's rim, rigid on the arm
     lame = Sculpt("pauldron_lame")
     lame.add(Hull(lame_pts(LAME_TOP), k=0.010).displaced(chips(0.006, 7.0), 0.006), k=0.0)
-    part("pauldron_lame", lame, "rust", "bone:upper_arm.R", 320)
+    part("pauldron_lame", lame, "rust", "bone:upper_arm.R", 260)
     return out
 
 
@@ -1092,12 +1100,13 @@ FT = anim.FootTarget
 # horizontal bar at mask height in game; the lobby's concept carry already read): the idle steepened to the concept's
 # diagonal while keeping what the game camera sees (proto/burdam_carry6.py grid over wrist x heading x elevation x
 # roll, eye-level front angle 38-62, ranked by the worst of 24 game facings): the fist up beside the back of the head
-# (wrist (-0.56, 0.16, 1.88)), the cleaver heading 55 degrees back from straight left, 28 up, its flat rolled 20 toward
-# the back. Eye level: the front view 25 -> 48 degrees (brief 55), the select-screen three-quarter 17 -> 34, the heel and
+# (wrist (-0.56, 0.16, 1.88)), the cleaver heading 55 degrees back from straight left, 28 up, its flat rolled 5 toward
+# the back (the grid's roll 20 showed the game camera less of the flat: blade in view mean 1307 -> 1387 px^2 at 5, and the
+# heel's inlays, the accent, 1.28 % -> ~1.45 % in the three QA estimate). Eye level: the front view 25 -> 48 degrees (brief 55), the select-screen three-quarter 17 -> 34, the heel and
 # haft fully in view (were 0.65 / 1.00); game: the worst facing 980 -> 900 px^2 of blade in view, mean 1339 -> 1307,
 # one pointer facing as before (the 36-degree and steeper picks lost the worst facing to 590-710 behind the bar and
 # name plate, the lobby's own carry to 0 facing W). The tip stands 2.66 m (the yoke 2.19).
-CARRY = dict(rel=(-0.371, 0.435, 0.663), pole=(-1.0, 0.25, -0.3), d=(0.506, 0.723, 0.469), up=(-0.027, 0.558, -0.83))
+CARRY = dict(rel=(-0.371, 0.435, 0.663), pole=(-1.0, 0.25, -0.3), d=(0.506, 0.723, 0.469), up=(0.197, 0.433, -0.88))
 RUN_REL0 = (-0.371, 0.415, 0.620)      # the run's fist (polish: the idle's, 4 cm lower; was the pass-6 yoke's)
 BELT_L = (0.10, -0.16, -0.94)          # the free left fist at the belt
 
@@ -2305,7 +2314,8 @@ def blade_rim(lin: np.ndarray, maps: dict, names: list) -> np.ndarray:
 
 
 RUST_PARTS = ("tier1", "tier2", "tier3", "tier4", "shoulder_plate", "pauldron_lame", "vambrace", "strap_plate")
-BLADE_GAIN = 0.62         # the blade's painted value two steps down (linear; L* ~80 -> ~70): the splash's sun and
+BLADE_GAIN = 0.72         # (polish: 0.62 -> 0.72, the value lift: the blade is a third of the top quarter in game)
+                          # the blade's painted value two steps down (linear; L* ~80 -> ~73): the splash's sun and
                           # bloom lifted the flat to L* 86-97 (brief: never above 85); in game it still reads as light stone
 
 # ── post-paint, fix pass 2: the reads the projection alone gets wrong ────────────────────────────────
@@ -2319,17 +2329,20 @@ BLADE_GAIN = 0.62         # the blade's painted value two steps down (linear; L*
 # walks him away from it) the top quarter is the cowl, the crown, both pauldrons and the blade, so those step up; the
 # coat, belt and legs stay dark (the brief's light-top / dark-feet gradient; the review: the coat, the belt, the cowl
 # and the plates sat in one taupe family)
-MASK_FACE = "#CDAF6E"         # the lit face's mean: the concept's ochre-gold lacquer, L* ~73 (polish: was #C6A55E, L* 69;
+MASK_FACE = "#D6BB7A"         # the lit face's mean: the concept's ochre-gold lacquer, L* ~77 (polish: was #C6A55E, L* 69;
                               # the review measured the splash mask L* 65 against the concept's 81; fix pass 5: pale ochre
                               # rendered bone-white in game and the crown read as a bald skull from the top-down camera)
 CROWN_DARK = 0.10             # the crown's lacquer a step darker toward the back (polish: half the pass-5 0.20, the crown is
                               # the top of the figure from the game camera)
-COWL_MEAN = "#9A8670"         # polish: the concept's warm taupe felt a step under the mask (L* ~57, b* ~+15; was #6A5845,
-                              # L* 39: from behind, the RIFT probe's facing, the cowl is most of the top quarter); fix pass 8:
-                              # #4F4943 rendered a cool charcoal, near black round the mask in the portrait
-COWL_TOP_GAIN = 1.0           # polish: linear gain on the felt's upward faces (N.z 0.05 -> 0.65), the game camera's view
-COWL_UNDER_DARK = 0.0         # ... and the darkening of its downward faces
-COAT_TOP_GAIN = 1.30          # polish: the coat's shoulders and upper back a step lighter than its mean (linear gain at
+COWL_MEAN = "#8E7B66"         # polish: the concept's warm taupe felt (L* ~53, b* ~+14; was #6A5845, L* 39: from the RIFT
+                              # probe's spot the cowl is 16 % of his pixels and 40 % of it sits in the top quarter); a
+                              # flat #9A8670 (L* 57) blew the splash's sunlit folds past L* 86 (35 %) and matched the mask,
+                              # so the lift goes to the faces the game camera sees (COWL_TOP_GAIN); fix pass 8: #4F4943
+                              # rendered a cool charcoal, near black round the mask in the portrait
+COWL_TOP_GAIN = 1.45          # polish: linear gain on the felt's upward faces (N.z 0.05 -> 0.65), the game camera's view
+                              # (1.6 measured RIFT 71.8 but the splash's sun put 32 % of the cowl's top folds past L* 86)
+COWL_UNDER_DARK = 0.15        # ... and the darkening of its downward faces (the folds' undersides)
+COAT_TOP_GAIN = 1.45          # polish: the coat's shoulders and upper back a step lighter than its mean (linear gain at
 COAT_TOP_Z = (1.25, 1.58)     # z >= 1.58 m, none below 1.25: the bible's light top, the hem stays the concept's dark felt)
 BELT_MEAN = "#45311F"         # polish: the belt and its buckle strap the darkest leather on the torso (the review: belt L* 43
                               # beside a coat L* 44; the concept's straps sit clearly darker than the felt)
@@ -2725,7 +2738,7 @@ def tally_paint(c: np.ndarray, P: np.ndarray, N: np.ndarray) -> np.ndarray:
 # one above and along every concave crease; the projected painting rides on top as texture only (a third of its
 # value variation). Means a step under the brief's rust (L* 69): lit from above the tops land near the concept's
 # L* 56-62 and the mask stays the brightest value on the figure.
-STONE_TOP = "#B2A592"          # warm grey top faces (L* ~68; polish: was #9E9282, L* 61, the value lift; b* ~+11: three.js's
+STONE_TOP = "#B9AC99"          # warm grey top faces (L* ~71; polish: was #9E9282, L* 61, the value lift; b* ~+11: three.js's
                                # sky light cools a neutral grey); fix pass 8 a step lighter (the stack's splash median L* 47
                                # against the concept's 65)
 STONE_CHALK = "#CEC2AE"        # chalked convex bevels (L* ~79; was #C3B6A2, 75)
@@ -2941,13 +2954,13 @@ def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str, parchm
             t = (p[:, 2] / 0.020) % 1.0
             d = np.minimum(t, 1.0 - t) * 0.020
             zc, hh = ALMANAC_C[2], ALMANAC_HALF[1] - 0.045
-            line = np.clip(1.0 - d / 0.0022, 0.0, 1.0) * (p[:, 2] < zc + hh) * (p[:, 2] > zc - hh)
+            line = np.clip(1.0 - d / 0.0027, 0.0, 1.0) * (p[:, 2] < zc + hh) * (p[:, 2] > zc - hh)
             ax = np.array([np.cos(np.radians(ALMANAC_RZ)), np.sin(np.radians(ALMANAC_RZ))])   # the board's width axis
             along = (p[:, 0] - ALMANAC_C[0]) * ax[0] + (p[:, 1] - ALMANAC_C[1]) * ax[1]
             margin = np.clip(1.0 - np.abs(along + 0.060) / 0.0025, 0.0, 1.0)
             fox = 0.93 + 0.07 * np.sin(p[:, 0] * 90.0 + p[:, 2] * 70.0) * np.sin(p[:, 2] * 45.0 - p[:, 1] * 60.0)
-            out[fc] = out[fc] * fox[:, None]
-            a = (np.maximum(line * 0.65, margin * 0.75))[:, None]
+            out[fc] = out[fc] * fox[:, None] * ALMANAC_PAGE_GAIN
+            a = (np.maximum(line * 0.78, margin * 0.85))[:, None]
             out[fc] = out[fc] * (1 - a) + ink * a
     if "almanac_tabs" in names:
         tb = part == names.index("almanac_tabs")
@@ -3106,8 +3119,11 @@ ARM_BONES = tuple(f"{b}.{s}" for s in "LR" for b in ("shoulder", "upper_arm", "f
 
 
 MATCH_HUE = 0.25          # skin identity roles: share of the painting's own hue variation kept (see recolour)
-BASE_WEBP_Q = 66          # base-colour WebP quality (optimize.mjs default 80): the lifted painting carries more
-                          # shadow detail; the GLB budget (1172 KiB) holds with the painting at q74
+BASE_WEBP_Q = 62          # base-colour WebP quality (optimize.mjs default 80): the lifted painting carries more
+                          # shadow detail; the GLB budget (1172 KiB) holds with the painting at q74 (polish: q66 -> 62
+                          # and the ORM q72 -> 58: the right pauldron, its lame and the value lift's lighter, busier
+                          # painting put the build at 1210 KiB)
+ORM_WEBP_Q = 58
 
 
 def _install_webp_quality() -> None:
@@ -3127,12 +3143,13 @@ def _install_webp_quality() -> None:
         before = os.path.getsize(path)
         if not node or not os.path.isfile(script):
             return orig(path, out, quantize=quantize, fighter=fighter)
-        args = [node, script, path, out, "--fighter", "--q-base", str(BASE_WEBP_Q)] + (["--quantize"] if quantize else [])
+        args = [node, script, path, out, "--fighter", "--q-base", str(BASE_WEBP_Q), "--q-orm", str(ORM_WEBP_Q)] + \
+            (["--quantize"] if quantize else [])
         r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
         if r.returncode != 0:
             scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
             return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
-        scene.log(r.stdout.strip() + f" (burdam: base webp q{BASE_WEBP_Q})")
+        scene.log(r.stdout.strip() + f" (burdam: base webp q{BASE_WEBP_Q}, orm q{ORM_WEBP_Q})")
         return {"ok": True, "before": before, "after": os.path.getsize(out)}
 
     optimize._burdam = True

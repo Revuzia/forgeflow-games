@@ -510,9 +510,9 @@ VISOR_PROF = np.array([(-0.200, 1.704), (-0.130, 1.708), (-0.090, 1.720), (-0.05
 # beak itself ~5 cm wide at the cheekbones narrowing to its point 2 cm under the chin
 VISOR_FRONT = np.array([(-0.140, 1.820), (-0.084, 1.800), (-0.068, 1.762), (-0.050, 1.736), (-0.028, 1.720),
                         (0.000, 1.714), (0.028, 1.720), (0.050, 1.736), (0.068, 1.762), (0.084, 1.800), (0.140, 1.820),
-                        (0.140, 1.644), (0.070, 1.642), (0.046, 1.638), (0.032, 1.626), (0.024, 1.600),
-                        (0.018, 1.566), (0.012, 1.528), (0.006, 1.504), (0.0, 1.490), (-0.006, 1.504), (-0.012, 1.528),
-                        (-0.018, 1.566), (-0.024, 1.600), (-0.032, 1.626), (-0.046, 1.638), (-0.070, 1.642),
+                        (0.140, 1.644), (0.070, 1.642), (0.044, 1.638), (0.028, 1.628), (0.019, 1.604),
+                        (0.014, 1.570), (0.009, 1.534), (0.005, 1.506), (0.0, 1.492), (-0.005, 1.506), (-0.009, 1.534),
+                        (-0.014, 1.570), (-0.019, 1.604), (-0.028, 1.628), (-0.044, 1.638), (-0.070, 1.642),
                         (-0.140, 1.644)])
 
 
@@ -560,7 +560,7 @@ def _visor_top_edge(xs):
 # into the horns over the temples; nothing else on the helm glows (the crest is chalk and pale glass)
 _RX = np.linspace(-0.074, 0.074, 41)
 RIDGE_PTS = [p for p in _visor_top_edge(_RX) if p is not None]
-FIN_H = (0.040, 0.045, 0.054)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
+FIN_H = (0.014, 0.046, 0.058)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
 FIN_LEAN = 1.00                    # the fin leans back: its rise direction (0, FIN_LEAN, 1)
 FIN_T = 0.0075                     # thickness at its foot (it thins to ~40 % at the top edge)
 
@@ -1056,13 +1056,15 @@ def sculpts() -> list:
     # the slim carved stone mask (fix pass 5): flat-fronted and recessed behind the glass, a brow ridge, high flat
     # cheek planes, a narrow nose line, the chin tapering DOWN (not forward: the long forward chin read as a snout)
     face = Sculpt("face")
-    face.add(Ellipsoid((0, -0.020, 1.600), (0.052, 0.060, 0.088)), k=0.0)
-    face.inter(HalfSpace((0, -0.074, 1.6), (0, -1, 0), 0.5), k=0.012)                             # the flat front
-    face.add(RoundBox((0, -0.070, 1.652), (0.044, 0.010, 0.009), 0.006, axes=sdf.rot_x(-8)), k=0.010)  # the brow
+    # (POLISH: side by side with the painting the mask is the long carved face under the hook, not a sliver behind
+    # it: 1.2 cm further forward, a little broader and longer, still 2.5 cm behind the glass)
+    face.add(Ellipsoid((0, -0.030, 1.598), (0.056, 0.064, 0.092)), k=0.0)
+    face.inter(HalfSpace((0, -0.086, 1.6), (0, -1, 0), 0.5), k=0.012)                             # the flat front
+    face.add(RoundBox((0, -0.082, 1.652), (0.046, 0.010, 0.009), 0.006, axes=sdf.rot_x(-8)), k=0.010)  # the brow
     for sx in (-1, 1):                                                                             # cheek planes
-        face.add(RoundBox((sx * 0.032, -0.066, 1.606), (0.016, 0.008, 0.024), 0.006, axes=sdf.rot_z(sx * 18)), k=0.012)
-    face.add(RoundBox((0, -0.078, 1.612), (0.0055, 0.007, 0.026), 0.004), k=0.008)                # the nose line
-    face.add(RoundCone((0, -0.048, 1.548), (0, -0.050, 1.512), 0.026, 0.011), k=0.02)             # the chin, down
+        face.add(RoundBox((sx * 0.034, -0.078, 1.606), (0.017, 0.008, 0.025), 0.006, axes=sdf.rot_z(sx * 18)), k=0.012)
+    face.add(RoundBox((0, -0.090, 1.612), (0.0060, 0.007, 0.027), 0.004), k=0.008)                # the nose line
+    face.add(RoundCone((0, -0.058, 1.548), (0, -0.061, 1.506), 0.028, 0.012), k=0.02)             # the chin, down
     face.inter(HalfSpace((0, 0.02, 1.6), (0, 1, 0), 0.5), k=0.01)
     part("face", face, "chalk", "bone:head", 620, 0.5)
     # the VISOR (the hook): the lens shell (the keeled prow) clipped to the sickle (side) and the band + beak (front)
@@ -1584,7 +1586,7 @@ HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97
 # the warm carved plates of the helm's back and the nape (the painting's back of the head: warm taupe carved stone
 # with dark seams and lit lips)
 # (POLISH: a step lighter, a light warm stone under the white crown, the value lift's top band from behind)
-NAPE_COL = {"lit": "#D4C9BA", "mid": "#B6A999", "shade": "#8B7F73", "ink": "#4A3F37", "lip": "#E2D8CB"}
+NAPE_COL = {"lit": "#E0D7CA", "mid": "#C9BEB0", "shade": "#A3978B", "ink": "#4A3F37", "lip": "#E8E0D4"}
 # the visor (fix pass 5): ice-blue glass (the fix pass 4 lavender washed out pale lavender in the three QA light),
 # the mask seen through it; the pale cyan rim #C1E9F5 with a dark outline (the concept's)
 # (POLISH: sampled off the painting's visor, L* 67-85: a pale lavender-blue glass #96A3C2 / #ABBFE1 / #89A6CB, the
@@ -1899,8 +1901,8 @@ def face_paint(p, n):
     front = _ss((-n[:, 1] + 0.05) / 0.35)
     for pts, w in FACE_LINES:
         d, sg = _polyline_dist2(p[:, 0], p[:, 2], pts)
-        cut = _ss((w + 0.0009 - d) / 0.0012) * front
-        col = _mix(col, C["ink"][None], cut * 0.78)
+        cut = _ss((w * 0.8 + 0.0006 - d) / 0.0010) * front
+        col = _mix(col, C["ink"][None], cut * 0.50)       # (POLISH: carved, not clawed: a softer, finer cut)
         lip = _ss((w * 1.1 - np.abs(d - w * 2.2)) / 0.0011) * front * (sg < 0)
         col = _mix(col, C["lip"][None], lip * 0.35)
     # (POLISH: the brief's ink almond recesses, behind the glass): two slanted almonds, the inner corners low, cut
@@ -2158,7 +2160,7 @@ def fin_paint(p, n):
 # like the concept's carved feather: a groove along its spine, barbs cut diagonally toward the tip on its outer half,
 # the lit bevel and the dark outline, painterly strokes along it, chips; the caps get carved rings
 # (POLISH, value lift: the honed stone at the brief's L* 75, the pauldrons and lames carry the top band from above)
-STONE_COL = {"lit": "#D0D6D9", "mid": "#B3BCC2", "shade": "#7F8B94", "groove": "#4E5A64", "edge": "#E0E6E8",
+STONE_COL = {"lit": "#D0D6D9", "mid": "#B8C1C7", "shade": "#8D99A2", "groove": "#4E5A64", "edge": "#E0E6E8",
              "outline": "#3C4650"}
 KNEE_COL = {"lit": "#6E7882", "mid": "#505962", "shade": "#343B42", "carve": "#22272D", "edge": "#86909A"}
 
@@ -2333,11 +2335,11 @@ def wrap_paint(p, n):
 # sleeves are painted, not projected, in the concept's material colours: painterly key light with cool shadows,
 # strokes along the drape, fold shadows, the coat's hem trim and its darker lining
 TROUSER_COL = {"base": "#5A6A78", "fold": "#3B4652", "lit": "#71818E"}
-COAT_COL = {"front": "#A0AEB4", "back": "#8D99A1", "lining": "#66717A", "trim": "#C3CCCF", "trim_lit": "#D4DCDE",
+COAT_COL = {"front": "#A0AEB4", "back": "#95A1A9", "lining": "#66717A", "trim": "#C3CCCF", "trim_lit": "#D4DCDE",
             "ink": "#363F47"}
 # (POLISH: the painting's hood, lit #A8C7D0 L* 78, shade #899CA6 L* 63; a step lighter than fix pass 5's for the
 # value lift: the cowl is in the top band from every facing)
-COWL_COL = {"front": "#98B6C9", "back": "#96B0C2", "fold": "#5D7889", "lit": "#BED5E0"}   # (build 1: washed to white)
+COWL_COL = {"front": "#98B6C9", "back": "#A8C0CE", "fold": "#5D7889", "lit": "#BED5E0"}   # (build 1: washed to white)
 SLEEVE_COL = {"base": "#A2B2BE", "fold": "#72838F"}      # (POLISH, value lift: the concept's light blue sleeves)
 
 
@@ -3579,7 +3581,7 @@ def _victory(g) -> anim.Clip:
     # right), the HEAD turns the quarter away to his right with the chin up, so the visor's beak points into the frame
     # in profile and the crest, the left spike and both knives (crossed wrists in the small of his back, the blades
     # jutting back past the hips) sweep toward screen right
-    hold = _pose(g, dict(hips=(-6, -8, 0), spine=(-8, -4, 0), chest=(-10, -4, 0), neck=(-8, -12, 0), head=(-16, -16, 0)), (0.0, 0.05, 0.04),
+    hold = _pose(g, dict(hips=(-6, -8, 0), spine=(-8, -4, 0), chest=(-10, -4, 0), neck=(-4, -10, 0), head=(-7, -12, 0)), (0.0, 0.05, 0.04),
                  R=(0.42, 0.46, -0.52), Rp=(-0.9, 0.6, 0.1), Rb=(0.62, 0.68, 0.38),
                  L=(-0.42, 0.46, -0.50), Lp=(0.9, 0.6, 0.1), Lb=(-0.62, 0.68, 0.38),
                  feet=_feet(g, dl=(0.06, -0.04, 0.0), dr=(-0.06, 0.10, 0.0), yr=-40.0, yl=-10.0))

@@ -4,7 +4,7 @@
   "skin": true,
   "parts": {
     "tris_hat": 3960,
-    "tris_hood": 1500,
+    "tris_hood": 1600,
     "tris_mask": 1800,
     "tris_scarf": 1500,
     "tris_coat_top": 1200,
@@ -16,7 +16,7 @@
     "tris_sleeve_L": 800,
     "tris_sleeve_R": 900,
     "tris_hand_R": 1050,
-    "tris_hand_L": 950,
+    "tris_hand_L": 1000,
     "tris_boots": 950,
     "tris_toecaps": 220,
     "tris_crook_shaft": 1300,
@@ -24,40 +24,40 @@
     "tris_crook_ferrule": 160,
     "tris_lantern_ring": 140,
     "tris_lantern_frame": 1200,
-    "tris_lantern_glass": 260,
+    "tris_lantern_glass": 300,
     "tris_lantern_core": 680,
-    "validate_dunsom": "19620->19619"
+    "validate_dunsom": "19810->19806"
   },
-  "uv_coverage": 0.61,
+  "uv_coverage": 0.611,
   "bake": {
-    "base": 8.68,
-    "rough_metal": 6.7,
-    "normal": 4.62,
-    "ao": 5.53,
-    "normal_fixed_px": 65269,
-    "projection": 96.15,
-    "pack_save": 96.72,
-    "total": 122.94
+    "base": 7.91,
+    "rough_metal": 5.18,
+    "normal": 6.48,
+    "ao": 7.33,
+    "normal_fixed_px": 48335,
+    "projection": 99.57,
+    "pack_save": 100.0,
+    "total": 127.62
   },
-  "tris": 22219,
-  "mesh_top_m": 2.06,
-  "glb_bytes_raw": 2460148,
+  "tris": 22406,
+  "mesh_top_m": 2.054,
+  "glb_bytes_raw": 2465452,
   "optimize": {
     "ok": true,
-    "before": 2460148,
-    "after": 983996
+    "before": 2465452,
+    "after": 988140
   },
-  "glb_bytes": 983996,
+  "glb_bytes": 988140,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_highrim.glb (961 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_highrim_base 2048x2048 180K, dunsom_highrim_normal 512x512 45K, dunsom_highrim_orm 512x512 70K",
-      "  skinned meshes: dunsom_accent(324v), dunsom_highrim(18860v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_highrim.glb (965 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_highrim_base 2048x2048 187K, dunsom_highrim_normal 512x512 45K, dunsom_highrim_orm 512x512 70K",
+      "  skinned meshes: dunsom_accent(354v), dunsom_highrim(18682v)",
       "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 22219; bind-pose bounds (three units, Y up): 1.19 x 2.06 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
+      "  tris: 22406; bind-pose bounds (three units, Y up): 1.21 x 2.05 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -67,8 +67,8 @@
       "portrait": "art/out/fighters/dunsom/dunsom_highrim_portrait.png"
     },
     "seconds": {
-      "splash": 16.82,
-      "portrait": 8.7
+      "splash": 16.88,
+      "portrait": 7.7
     }
   },
   "three_qa": {
@@ -76,13 +76,13 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.831,
+        -0.839,
         0,
         -1.032
       ],
       [
-        0.355,
-        2.06,
+        0.373,
+        2.054,
         1.398
       ]
     ],
@@ -91,8 +91,8 @@
       1
     ],
     "headY": 1.683,
-    "accentPct": 1.13,
-    "accentTopHalfPct": 11.2,
+    "accentPct": 1.01,
+    "accentTopHalfPct": 18.5,
     "heightPx1080": 110,
     "size": [
       2400,
@@ -100,31 +100,26 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/dunsom/three_dunsom_highrim.png",
-    "seconds": 25.1,
+    "seconds": 22.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.31,
-      "model": 170.18,
-      "lows_bind": 15.84,
-      "uv": 11.42,
-      "bake": 123.5,
-      "export": 0.29,
-      "optimize": 1.6,
+      "materials": 0.4,
+      "model": 189.97,
+      "lows_bind": 11.6,
+      "uv": 16.46,
+      "bake": 128.02,
+      "export": 0.31,
+      "optimize": 1.2,
       "load_test": 0.28,
-      "render": 25.6,
-      "three_qa": 25.56
+      "render": 24.65,
+      "three_qa": 23.22
     },
-    "total_s": 374.71
+    "total_s": 396.25
   },
   "run_ref_speed": 3.35,
-  "height_m": 1.95,
-  "three_qa_idle": {
-    "accentPct": 2.52,
-    "accentTopHalfPct": 91.6,
-    "out": "art/renders/fighters/dunsom/three_dunsom_highrim.png",
-    "note": "fix pass 1: a skin GLB has no clips, so the build's three_qa (accentPct 1.13) measured its BIND pose, where the crook is turned down 60 deg for art.height; this is the same QA on a copy with the base's clips (art/.cache/tools/dunsom_skin_qa_glb.mjs), i.e. what the game plays"
-  }
+  "height_m": 2.05,
+  "rig_crown_m": 1.95
 }

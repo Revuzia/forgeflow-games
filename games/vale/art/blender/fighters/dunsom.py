@@ -2792,8 +2792,10 @@ def clip_overrides(ctx) -> dict:
     # the right fist is the back hand (toward the butt), the left 0.36 m up the shaft toward the hook; the hands
     # stay before the chest as it turns (left 44 deg at the wind, right 46 at the follow), and at the level mid-sweep
     # the right fist is at the right hip so the butt passes beside it
+    # (fix pass 2: the wind tilted the crook 3 degrees down and hung the lantern 0.13 m off the ground at f10-12: the
+    # wind now carries it 11 degrees up, the fists 4 cm higher; the lantern's base stays >= ~0.45 m all through)
     wind = pose(torso=dict(hips=(6, 16, 0), spine=(4, 12, 0), chest=(5, 16, 0), neck=(0, -6, 0), head=(-2, -14, 0)),
-                hips=(0, 0.02, -0.10), R=(0.22, -0.55, -0.66), aim=(0.83, -0.54, -0.06), slide=S, grip=0.36,
+                hips=(0, 0.02, -0.10), R=(0.22, -0.55, -0.58), aim=(0.80, -0.53, 0.20), slide=S, grip=0.36,
                 feet=_feet(**crouch))
     gather = pose(torso=dict(hips=(3, 8, 0), spine=(2, 6, 0), chest=(3, 8, 0), head=(-1, -6, 0)), hips=(0, 0.01, -0.05),
                   R=(0.10, -0.45, -0.70), aim=(0.55, -0.40, 0.73), slide=S * 0.7, L=left_at(wind), Lp=(0.8, 0.4, -0.4))
