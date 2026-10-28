@@ -15,7 +15,7 @@
     "tris_fingers_L": 640,
     "tris_vambrace": 450,
     "tris_strap_plate": 680,
-    "tris_shoulder_plate": 620,
+    "tris_shoulder_plate": 560,
     "tris_fringe": 300,
     "tris_tier1": 620,
     "tris_tier2": 600,
@@ -29,41 +29,42 @@
     "tris_haft": 480,
     "tris_pommel": 300,
     "tris_pauldron_lame": 260,
+    "tris_pauldron_face": 440,
     "tris_almanac_wood": 420,
     "tris_almanac_face": 140,
     "tris_almanac_tabs": 160,
-    "validate_burdam": "20150->20147"
+    "validate_burdam": "20530->20528"
   },
-  "uv_coverage": 0.611,
+  "uv_coverage": 0.614,
   "bake": {
-    "base": 2.81,
-    "rough_metal": 2.05,
-    "normal": 1.35,
-    "ao": 1.86,
-    "normal_fixed_px": 40405,
-    "projection": 73.94,
-    "pack_save": 74.06,
-    "total": 82.3
+    "base": 4.98,
+    "rough_metal": 3.88,
+    "normal": 2.55,
+    "ao": 3.08,
+    "normal_fixed_px": 38895,
+    "projection": 125.26,
+    "pack_save": 125.47,
+    "total": 140.21
   },
-  "tris": 20787,
+  "tris": 21168,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2662448,
+  "glb_bytes_raw": 2671032,
   "optimize": {
     "ok": true,
-    "before": 2662448,
-    "after": 1022652
+    "before": 2671032,
+    "after": 1028900
   },
-  "glb_bytes": 1022652,
+  "glb_bytes": 1028900,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (999 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_almanac_base 2048x2048 240K, burdam_almanac_normal 512x512 46K, burdam_almanac_orm 512x512 64K",
-      "  skinned meshes: burdam_accent(332v), burdam_almanac(18591v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (1005 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_almanac_base 2048x2048 238K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 65K",
+      "  skinned meshes: burdam_accent(332v), burdam_almanac(18758v)",
       "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20787; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "  tris: 21168; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -73,8 +74,8 @@
       "portrait": "art/out/fighters/burdam/burdam_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 5.61,
-      "portrait": 2.36
+      "splash": 7.17,
+      "portrait": 3.03
     }
   },
   "three_qa": {
@@ -97,7 +98,7 @@
       1
     ],
     "headY": 1.849,
-    "accentPct": 1.47,
+    "accentPct": 1.48,
     "accentTopHalfPct": 30.5,
     "heightPx1080": 116,
     "size": [
@@ -106,24 +107,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_almanac.png",
-    "seconds": 6.7,
+    "seconds": 6.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.13,
-      "model": 3.33,
-      "lows_bind": 2.89,
-      "uv": 3.93,
-      "bake": 82.3,
-      "export": 0.05,
-      "optimize": 0.48,
-      "load_test": 0.09,
-      "render": 8.01,
-      "three_qa": 6.9
+      "materials": 0.36,
+      "model": 8.59,
+      "lows_bind": 5.13,
+      "uv": 5.41,
+      "bake": 140.21,
+      "export": 0.09,
+      "optimize": 0.57,
+      "load_test": 0.12,
+      "render": 10.26,
+      "three_qa": 6.67
     },
-    "total_s": 108.21
+    "total_s": 177.6
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15
