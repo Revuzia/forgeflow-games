@@ -399,11 +399,44 @@ export function relationshipHourly(u: Universe, p: Planet): void {
       const night = sunElevation(u, p, u.tick, st.pos) < -0.03;
       prayersHourly(x, st, night);
       godsFeast(x, st);
+      if (!st.band) duskBell(x, st);
     }
   }
   prophetsHourly(u, p);
   sacredHourly(u, p);
   naturalOmens(u, p);
+}
+
+/** work near home that the evening worship ends: long tasks begun in the afternoon (a craft, a day's foraging or felling) */
+const DUSK_STOP: ReadonlySet<number> = new Set([TASK.wander, TASK.forage, TASK.chop, TASK.quarry, TASK.dig, TASK.fish, TASK.haul, TASK.store,
+  TASK.craft, TASK.build, TASK.repair, TASK.farm, TASK.teach, TASK.learn, TASK.experiment, TASK.chore, TASK.socialize]);
+const _dp = [0, 0, 0];
+/**
+ * (fix r1, stint 5) The day's work ends at dusk for those the evening worship draws (§3.2: attendance ≈ 0.5 faith + 0.3
+ * loyalty, once an evening each). relDecide offers the worship at a person's first decision in the window, so a long task
+ * begun in the afternoon kept them from it: once a farming town's hunters went out for hides as well as meat (fix #11),
+ * its work mix shifted and a faithful town (formula 0.56) sent 22-29 % of its grown where it had sent 26-39 % (6 seeds,
+ * fix/vespers). Those within reach of home, at such work, whose roll draws them (the same roll relDecide makes) put down
+ * their work and decide again: relDecide then sends them to worship unless a need presses.
+ */
+function duskBell(x: PCtx, st: Settlement): void {
+  const u = x.u, A = x.A;
+  const el = sunElevation(u, x.p, x.tick, st.pos);
+  if (!(el > VESPERS_LOW && el < VESPERS_HIGH && sunElevation(u, x.p, x.tick - 20, st.pos) > el)) return;
+  const r = srel(u, x.p.id, st.id);
+  if (!r.vespers || x.tick - r.vespers.t > x.day / 2) r.vespers = { t: x.tick, went: [] };
+  const ev = r.vespers;
+  for (const s of x.ps.members.get(st.id) ?? []) {
+    if (!DUSK_STOP.has(A.task[s]) || A.flags[s] & AgentFlag.child || A.mission[s] || A.camp[s] >= 0) continue;
+    if (ev.went.includes(A.id[s])) continue;
+    const i = s * GODS;
+    const faith = A.faith[i];
+    const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * A.traits[s * NT + TRAIT.piety] * faith);
+    if (hashFloat(A.id[s], ev.t, 0xe7e5) >= attend) continue;
+    A.posAt(s, x.tick, _dp);
+    if (distM(x.p, _dp, st.pos) > st.territory + 300) continue;
+    interrupt(x, s);
+  }
 }
 
 export function relationshipDaily(u: Universe, p: Planet): void {

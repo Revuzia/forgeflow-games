@@ -2432,6 +2432,16 @@ Each confirmed finding, what changed, and how it was verified (before → after 
   7; `fix/seedbound/irondiag-{before,after}.log`). Over seeds 1–12 (`fix/seedbound/iron.ts`; before = this tree with the
   round's hunting, fever and budding reverted, `fix/before/`): before 3 of 12 (4, 7, 9), after 3 of 12 (3, 7, 9) — the
   mechanism holds as often as before. Re-seeded to 9 (holds on both trees, war on day 8 / 11, margin 0.32 / 0.29).
+- `tests/living-integration.test.ts` "evening worship draws the grown at the rate faith and loyalty ask" failed after #11
+  (0.25 against the 0.28 asked). Bisected on copies of `fix/before/` with one switch on (`fix/vespers/vespers.ts`): the
+  hides-driven parties alone reproduce it (folk hunts and the 15 % hunters change nothing in the fixture's 5 days). The
+  cause is in the worship, not the hunt: relDecide offers the evening worship only at a decision taken inside the dusk
+  window, so a craft or a day's foraging begun in the afternoon kept a person from it, and any shift in the work mix moved
+  the rate. Fixed in the sim, not the test: `god/relationship.ts` `duskBell` (hourly, towns) — in the window, adults at
+  near-home work within reach of home whose vespers roll draws them (the same roll) put the work down and decide again.
+  8 seeds (`fix/vespers/multi-before8.log`, `multi-bell.log`): before the round 0.391 0.261 0.283 0.348 0.326 0.315 0.196
+  0.250 (5 of 8 at half the formula or more); with the bell 0.413 0.391 0.337 0.326 0.380 0.391 0.380 0.348 (8 of 8). No
+  new saved state (`r.vespers` already saved). The test is unchanged and passes.
 
 ### 11.3 Not fixed here / left open
 - **14** `src/data/creatures.json` is imported nowhere and not bundled; deleting it is the DOCS lane's (the program rule:
