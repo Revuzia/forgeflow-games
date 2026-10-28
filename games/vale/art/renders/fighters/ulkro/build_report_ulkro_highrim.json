@@ -51,7 +51,6 @@
         "neck",
         "head",
         "shoulder.L",
-        "hand.L",
         "shoulder.R",
         "shin.L",
         "foot.L",
@@ -61,7 +60,32 @@
         "toe.R"
       ]
     },
-    "tris_sash": 650,
+    "tris_sash": 760,
+    "bind_buckle": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_buckle": 160,
     "bind_sleeves": {
       "heat_ok": true,
       "unweighted": 0,
@@ -178,58 +202,60 @@
     },
     "tris_boots": 718,
     "tris_hood": 1750,
-    "tris_hood_tail": 376,
+    "tris_hood_tail": 420,
     "tris_head": 750,
-    "tris_eyeband": 600,
+    "tris_eyeband": 598,
     "tris_cowl": 1050,
-    "tris_plate_R1": 520,
-    "tris_plate_R2": 360,
-    "tris_plate_L1": 520,
-    "tris_plate_L2": 360,
+    "tris_plate_R1": 640,
+    "tris_plate_R2": 420,
+    "tris_plate_L1": 640,
+    "tris_plate_L2": 420,
     "tris_hand_R": 700,
     "tris_hand_L": 650,
     "tris_skirt": 1700,
     "tris_quiver": 650,
-    "tris_quiver_bands": 360,
+    "tris_quiver_bands": 358,
     "tris_crest_shafts": 560,
-    "tris_crest_heads": 700,
-    "tris_crest_inlays": 418,
-    "tris_thrower": 660,
-    "tris_dart_head": 160,
-    "tris_dart_inlay": 90,
-    "validate_ulkro": "19132->19129"
+    "tris_crest_heads": 760,
+    "tris_crest_inlays": 930,
+    "tris_thrower": 760,
+    "tris_dart_shaft": 300,
+    "tris_dart_head": 180,
+    "tris_dart_inlay": 70,
+    "validate_ulkro": "20282->20279",
+    "validate_ulkro_accent": "1000->999"
   },
-  "uv_coverage": 0.578,
+  "uv_coverage": 0.585,
   "bake": {
-    "base": 3.74,
-    "rough_metal": 4.52,
-    "normal": 2.07,
-    "ao": 3.31,
-    "normal_fixed_px": 15322,
-    "projection": 41.77,
-    "pack_save": 41.92,
-    "total": 55.67
+    "base": 3.94,
+    "rough_metal": 2.76,
+    "normal": 2.77,
+    "ao": 3.23,
+    "normal_fixed_px": 21035,
+    "projection": 52.18,
+    "pack_save": 52.45,
+    "total": 65.36
   },
-  "tris": 19637,
-  "mesh_top_m": 2.076,
-  "glb_bytes_raw": 2415456,
+  "tris": 21278,
+  "mesh_top_m": 2.023,
+  "glb_bytes_raw": 2339740,
   "optimize": {
     "ok": true,
-    "before": 2415456,
-    "after": 986484,
+    "before": 2339740,
+    "after": 963856,
     "q_base": 70
   },
-  "glb_bytes": 986484,
+  "glb_bytes": 963856,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_highrim.glb (963 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ulkro_highrim_base 2048x2048 240K, ulkro_highrim_normal 512x512 43K, ulkro_highrim_orm 256x256 28K",
-      "  skinned meshes: ulkro_accent(272v), ulkro_highrim(18997v)",
-      "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart_tip x_quiver thighL shinL footL toeL thighR shinR footR toeR)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_highrim.glb (941 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_highrim_base 2048x2048 204K, ulkro_highrim_normal 512x512 41K, ulkro_highrim_orm 256x256 27K",
+      "  skinned meshes: ulkro_accent(351v), ulkro_highrim(19189v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_quiver thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 19637; bind-pose bounds (three units, Y up): 1.30 x 2.08 x 0.54; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
+      "  tris: 21278; bind-pose bounds (three units, Y up): 1.35 x 2.02 x 0.61; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -239,8 +265,8 @@
       "portrait": "art/out/fighters/ulkro/ulkro_highrim_portrait.png"
     },
     "seconds": {
-      "splash": 5.51,
-      "portrait": 3.73
+      "splash": 8.34,
+      "portrait": 3.15
     }
   },
   "three_qa": {
@@ -248,14 +274,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.591,
+        -0.607,
         0,
-        -0.242
+        -0.304
       ],
       [
-        0.706,
-        2.076,
-        0.303
+        0.741,
+        2.023,
+        0.308
       ]
     ],
     "facing": [
@@ -263,33 +289,33 @@
       1
     ],
     "headY": 1.606,
-    "accentPct": 1.85,
-    "accentTopHalfPct": 81.8,
-    "heightPx1080": 111,
+    "accentPct": 1.56,
+    "accentTopHalfPct": 73.2,
+    "heightPx1080": 108,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/ulkro/three_ulkro_highrim.png",
-    "seconds": 6.9,
+    "seconds": 9.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.23,
-      "model": 2.26,
-      "lows_bind": 2.49,
-      "uv": 3.97,
-      "bake": 55.67,
-      "export": 0.08,
-      "optimize": 0.43,
-      "load_test": 0.09,
-      "render": 9.26,
-      "three_qa": 7.11
+      "materials": 0.4,
+      "model": 5.94,
+      "lows_bind": 2.86,
+      "uv": 6.07,
+      "bake": 65.36,
+      "export": 0.16,
+      "optimize": 0.94,
+      "load_test": 0.2,
+      "render": 11.52,
+      "three_qa": 9.48
     },
-    "total_s": 81.63
+    "total_s": 103.0
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83

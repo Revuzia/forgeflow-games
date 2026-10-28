@@ -70,7 +70,9 @@ PALETTE = materials.bible_palette(sandstone="#A2855E", wood="#CEC5B1", cloth2="#
                                   lacquer="#4B3049")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "dart_tip": "x_dart_tip", "quiver": "x_quiver"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
+# the rims at Kemdo's strengths (FIX PASS 1, review: 'the shin wraps and boots come out near-white'): the splash's
+# low back rims put a grazing white sheen over the dark wraps and boots at full strength
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
@@ -366,7 +368,36 @@ class _Band(sdf.Prim):
 
 # ── the sculpt ──────────────────────────────────────────────────────────────────────────────────────────
 HEAD_C = np.array([0.0, -0.025, 1.69])
-PLATE_Y = (0.112, 0.100)             # the pauldrons' squared front / back edges (top tier, lower tier)
+# the pauldrons (per tier): axis centre x (out from the spine), z, y; outer radius, thickness, the arc's start / end
+# angle from vertical (deg, + = out over the arm), half depth (front-back), edge rounding
+PLATES = {"1": (0.200, 1.300, -0.004, 0.200, 0.021, -15.0, 62.0, 0.116, 0.006),
+          "2": (0.250, 1.240, -0.004, 0.150, 0.019, 28.0, 86.0, 0.104, 0.006)}
+
+
+class _ArcPlate(sdf.Prim):
+    """a curved slab: the shell between two cylinders whose axis runs front-back (Y), cut to an arc of angles
+    (0 = straight up, + = outward on side sx) and a depth band; squared edges with a small rounding"""
+
+    def __init__(self, sx, cx, cz, cy, R, t, a0, a1, hd, rr):
+        self.sx, self.cx, self.cz, self.cy = sx, cx, cz, cy
+        self.R, self.t, self.a0, self.a1, self.hd, self.rr = R, t, math.radians(a0), math.radians(a1), hd, rr
+
+    def bounds(self):
+        e = self.R + 0.02
+        x0 = self.sx * self.cx
+        return np.array([x0 - e, self.cy - self.hd - 0.02, self.cz - e]), np.array([x0 + e, self.cy + self.hd + 0.02, self.cz + e])
+
+    def d(self, P):
+        vx = (P[:, 0] - self.sx * self.cx) * self.sx
+        vz = P[:, 2] - self.cz
+        r = np.hypot(vx, vz)
+        ang = np.arctan2(vx, vz)
+        rr = self.rr
+        dr = np.abs(r - (self.R - self.t * 0.5)) - (self.t * 0.5 - rr)
+        da = (np.maximum(self.a0 - ang, ang - self.a1)) * np.maximum(r, 1e-3) + rr
+        dy = np.abs(P[:, 1] - self.cy) - (self.hd - rr)
+        q = np.stack([dr, da, dy], 1)
+        return np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0) - rr
 HOOD_C = np.array([0.0, 0.005, 1.675])
 BAND_Z, BAND_H = 1.712, 0.021        # the carved eye band's centre height and half height
 BAND_R = (0.090, 0.108)              # its ring radii (x, y) round the head
@@ -455,28 +486,17 @@ def sculpts() -> list:
 
     # SHOULDER PLATES: two pale stone tiers each side, curved shells (the concept's carved pauldrons): the top tier
     # caps the shoulder from the cowl to past the joint, the lower tier hugs the upper arm under it
-    # FIX PASS 1 (review: 'thin caps inside the sleeve silhouette'): broad, thick pauldrons that widen the shoulder line
-    # like the concept: the top tier a 2.4 cm slab from the cowl to 6 cm past the sleeve, its rim flared out; the lower
-    # tier a second slab stepping out beyond it over the upper arm
+    # FIX PASS 1 (review: 'thin caps inside the sleeve silhouette'): the concept's carved stone pauldrons as two real
+    # tiers of curved slabs (cylinder sections arching over the shoulder front to back, 2 cm thick, squared chiselled
+    # edges): the top tier from the cowl to 15 cm out past the joint, the lower tier stepping out beyond it over the arm,
+    # so the shoulder line widens past the sleeves
     for s, sx in (("R", -1), ("L", 1)):
         top = Sculpt(f"plate_{s}1")
-        c1 = np.array([sx * 0.190, -0.004, 1.392])
-        top.add(Ellipsoid(c1, (0.172, 0.146, 0.108)).displaced(chips(0.004, 9.0), 0.004), k=0.0)
-        top.sub(Ellipsoid(c1 + (sx * 0.002, 0.0, -0.016), (0.150, 0.124, 0.092)), k=0.004)
-        top.inter(HalfSpace((sx * 0.22, 0.0, 1.430), (-sx * 0.40, 0.0, -0.917), 0.5), k=0.006)
-        top.inter(HalfSpace((sx * 0.105, 0.0, 1.45), (-sx, 0.0, 0.0), 0.5), k=0.006)
-        top.inter(HalfSpace((0.0, -PLATE_Y[0], 1.40), (0.0, -1.0, 0.12), 0.5), k=0.004)       # squared front edge
-        top.inter(HalfSpace((0.0, PLATE_Y[0], 1.40), (0.0, 1.0, 0.12), 0.5), k=0.004)         # squared back edge
+        top.add(_ArcPlate(sx, *PLATES["1"]).displaced(chips(0.003, 9.0), 0.003), k=0.0)
         part(f"plate_{s}1", top, "stone", ("dblend", f"shoulder.{s}", f"upper_arm.{s}", (sx * 0.16, 0.0, 1.50),
                                             (sx * 0.8, 0.0, -0.6), 0.03, 0.14), 640, vs=0.7)
         low = Sculpt(f"plate_{s}2")
-        c2 = np.array([sx * 0.262, -0.004, 1.322])
-        low.add(Ellipsoid(c2, (0.112, 0.128, 0.104)).displaced(chips(0.004, 9.0), 0.004), k=0.0)
-        low.sub(Ellipsoid(c2 + (sx * 0.0, 0.0, -0.016), (0.092, 0.108, 0.090)), k=0.004)
-        low.inter(HalfSpace((sx * 0.32, 0.0, 1.29), (-sx * 0.70, 0.0, -0.714), 0.5), k=0.006)
-        low.inter(HalfSpace((0.0, 0.0, 1.405), (0.0, 0.0, 1.0), 0.5), k=0.006)
-        low.inter(HalfSpace((0.0, -PLATE_Y[1], 1.33), (0.0, -1.0, 0.0), 0.5), k=0.004)
-        low.inter(HalfSpace((0.0, PLATE_Y[1], 1.33), (0.0, 1.0, 0.0), 0.5), k=0.004)
+        low.add(_ArcPlate(sx, *PLATES["2"]).displaced(chips(0.003, 9.0), 0.003), k=0.0)
         part(f"plate_{s}2", low, "stone", f"bone:upper_arm.{s}", 420, vs=0.7)
 
     # ARMS: pale wrapped sleeves (heat weights), dark bracers, sculpted fists (rigid on the hands)
@@ -751,11 +771,11 @@ class _Inlay(sdf.Prim):
 
     def d(self, P):
         # FIX PASS 1 (review: 'the accent covers almost the whole head, flat saturated gems'): a slim vein inlay along
-        # the leaf's midrib (36 % of the leaf's width at most, 72 % of its length), the pale glass leaf all round it
+        # the leaf's midrib (50 % of the leaf's width at most, 76 % of its length), the pale glass leaf all round it
         q = P - self.b
         s, a, c = q @ self.dv, q @ self.w, q @ self.n
         u = (s - self.L * 0.44) / (self.L * 0.38)
-        half = self.W * 0.42 * np.clip(1 - u * u, 0, 1) ** 0.6
+        half = self.W * 0.50 * np.clip(1 - u * u, 0, 1) ** 0.6
         dx = np.abs(a) - half
         top = self.T + 0.0035                      # 2.3 mm proud of the glass at the leaf's spine (never buried)
         dz = np.maximum(c - top, self.T * 0.3 - c)
@@ -775,7 +795,7 @@ def skin_extras(extra: dict) -> list:
         base = crest_dart(2)[0] - Q_U * 0.0 + nrm * 0.035
         e1 = _n(d0 + d1)
         e2 = np.cross(nrm, e1)
-        half = 0.5 * math.acos(float(np.clip(d0 @ d1, -1, 1))) + math.radians(9)
+        half = 0.5 * math.acos(float(np.clip(d0 @ d1, -1, 1))) + math.radians(4)     # 0.30 m across (brief)
 
         class Fan(sdf.Prim):
             def bounds(self):
@@ -790,7 +810,7 @@ def skin_extras(extra: dict) -> list:
                 ph = np.arctan2(y, x)
                 rib = 0.004 * (np.abs(np.sin(ph * 26.0)) > 0.85)          # the lacquered ribs stand proud
                 da = (np.abs(ph) - half) * r
-                dr = np.maximum(0.20 - r, r - 0.42 - 0.015 * np.cos(ph * 13.0))
+                dr = np.maximum(0.20 - r, r - 0.40 - 0.015 * np.cos(ph * 13.0))
                 dt = np.abs(z) - (0.008 + rib)
                 return np.maximum(np.maximum(da, dr), dt)
         fan.add(Fan(), k=0.0)
@@ -1006,12 +1026,12 @@ TONE = {
     # the target (no off-palette smears), nothing in the marigold band over 40 %
     "hood": ("#826B4F", 0.75, 0.5), "cowl": ("#7F684D", 0.8, 0.5),
     "head": ("#6E6350", 0.85, 0.8), "eyeband": ("#4A382B", 0.85, 0.65),
-    "torso": ("#6A5D4F", 1.0, 0.6), "straps": ("#3F2D22", 0.9, 0.55), "sash": ("#563A2B", 0.9, 0.55),
+    "torso": ("#5E5245", 1.0, 0.6), "straps": ("#3F2D22", 0.9, 0.55), "sash": ("#563A2B", 0.9, 0.55),
     "buckle": ("#4A4540", 0.8, 0.8),
-    "plate_R1": ("#A8977C", 0.8, 0.75), "plate_L1": ("#A8977C", 0.8, 0.75),
-    "plate_R2": ("#9E8D73", 0.8, 0.75), "plate_L2": ("#9E8D73", 0.8, 0.75),
+    "plate_R1": ("#B0A08A", 0.75, 0.75), "plate_L1": ("#B0A08A", 0.75, 0.75),
+    "plate_R2": ("#A69680", 0.75, 0.75), "plate_L2": ("#A69680", 0.75, 0.75),
     "bracers": ("#463830", 0.9, 0.55),
-    "skirt": ("#5E5244", 1.0, 0.6), "quiver": ("#9C8D72", 0.85, 0.65), "quiver_bands": ("#4E3A2A", 0.9, 0.65),
+    "skirt": ("#584C3F", 1.0, 0.6), "quiver": ("#9C8D72", 0.85, 0.65), "quiver_bands": ("#4E3A2A", 0.9, 0.65),
 }
 # side-facing texels of these parts streak (neighbours along Y take one plate pixel): blended into the part's colour
 # with painted breakup; up-facing texels likewise (the hood's crown, the plates' tops, the quiver's mouth)
@@ -1191,19 +1211,22 @@ def paint_shafts(p, n):
 
 
 def plate_rims(name, c, p, n):
-    """the stone plates: a darker chipped rim along every cut edge, an incised line inside it, a dark underside"""
+    """the stone pauldrons: a darker chipped rim along every edge, an incised line inside the outer edge, the
+    underside (facing the shoulder) dark"""
     sx = -1.0 if name.endswith(("R1", "R2")) else 1.0
-    if name.endswith("1"):
-        pp, nn = np.array([sx * 0.20, 0.0, 1.452]), _n([-sx * 0.50, 0.0, -0.866])
-    else:
-        pp, nn = np.array([sx * 0.29, 0.0, 1.33]), _n([-sx * 0.80, 0.0, -0.60])
-    d = (p - pp) @ nn                                                   # 0 at the cut, negative inside the plate
-    rim = 1 - _ss(0.0, 0.012, -d)
-    dy = PLATE_Y[0 if name.endswith("1") else 1] - np.abs(p[:, 1])     # the squared front / back edges
-    rim = np.maximum(rim, 0.8 * (1 - _ss(0.0, 0.010, dy)))
-    line = np.exp(-((d + 0.028) / 0.0022) ** 2)
-    under = _ss(0.1, -0.5, n @ (-nn))                                    # faces turned back into the shell
-    k = (1 - 0.30 * rim) * (1 - 0.32 * line) * (1 - 0.45 * under) * (1 + 0.08 * NOISE(p, 30.0))
+    cx, cz, cy, R, t, a0, a1, hd, rr = PLATES["1" if name.endswith("1") else "2"]
+    vx = (p[:, 0] - sx * cx) * sx
+    vz = p[:, 2] - cz
+    r = np.hypot(vx, vz)
+    ang = np.arctan2(vx, vz)
+    d_end = np.minimum(ang - math.radians(a0), math.radians(a1) - ang) * r      # to the arc's ends
+    d_dep = hd - np.abs(p[:, 1] - cy)                                          # to the front / back edges
+    edge = np.minimum(d_end, d_dep)
+    rim = 1 - _ss(0.0, 0.012, edge)
+    line = np.exp(-((math.radians(a1) - ang) * r - 0.026) ** 2 / 0.0022 ** 2) * (d_dep > 0.01)
+    outn = np.stack([np.sin(ang) * sx, np.zeros_like(ang), np.cos(ang)], 1)
+    under = _ss(0.1, -0.5, (n * outn).sum(1))                                 # faces turned in toward the shoulder
+    k = (1 - 0.32 * rim) * (1 - 0.30 * line) * (1 - 0.45 * under) * (1 + 0.07 * NOISE(p, 30.0))
     return c * k[:, None]
 
 
@@ -1260,6 +1283,19 @@ def paint_glass(p, n):
     return _hl("#9FB4C6") * v[:, None]
 
 
+def paint_eyeband(p, n):
+    """the carved eye band (FIX PASS 1, review: 'the projected swirl carving reads as a walnut / brain'): plain dark
+    carved wood, its incised top line and notches a step darker, the top bevel catching a little light, the eye slit
+    an ink line along the bottom groove; matte"""
+    z = p[:, 2] - BAND_Z
+    carve = _band_carve(p) / 0.0022
+    v = (0.92 + 0.05 * NOISE(p, 40.0)) * (1 - 0.40 * np.clip(carve, 0, 1)) * (1 + 0.12 * _ss(0.010, 0.019, z))
+    v = v * (0.85 + 0.20 * np.clip(-n[:, 1], 0, 1))
+    col = _hl("#4A382B") * v[:, None]
+    slit = np.exp(-((z - (-BAND_H + 0.006)) / 0.0035) ** 2) * (n[:, 1] < 0.2)
+    return col * (1 - slit[:, None]) + _hl("#17161A") * slit[:, None]
+
+
 def paint_tail(p, n):
     """the hood's tail streamer: the hood's ochre a step darker (it must not out-read the hood), soft lengthwise folds,
     the underside and the far end in shade"""
@@ -1282,7 +1318,7 @@ def skirt_fade(c, p, n):
 
 
 PROC = {"legs": paint_legs, "wraps": paint_wraps, "boots": paint_boots, "hand_R": paint_hands, "hand_L": paint_hands,
-        "sleeves": paint_sleeves, "hood_tail": paint_tail, "dart_shaft": paint_dart_shaft,
+        "sleeves": paint_sleeves, "hood_tail": paint_tail, "dart_shaft": paint_dart_shaft, "eyeband": paint_eyeband,
         "thrower": paint_thrower, "crest_shafts": paint_shafts, "crest_heads": paint_glass, "dart_head": paint_glass}
 
 
@@ -1368,8 +1404,11 @@ _install_paint()
 # Highrim a warm mid sandstone (hood and sleeve wraps, darker and warmer than white, L* ~57), Long Evening a red-leaning
 # plum (hue 307 -> renders ~295) and smoked-amber heads.
 SKIN_TONE = {
-    "ulkro_highrim": {"hood": "#9C8768", "cowl": "#988364", "hood_tail": "#917D60", "sleeves": "#958264"},
-    "ulkro_long_evening": {"hood": "#5C3A57", "cowl": "#583855", "hood_tail": "#543450",
+    # Highrim: sandstone, a step greyer than the base's ochre and no lighter (as #9C8768 its lit crown rendered L* 89
+    # at 9 % in the portrait: the whitish hood the brief forbids)
+    "ulkro_highrim": {"hood": "#86745B", "cowl": "#82705A", "hood_tail": "#7C6A53", "sleeves": "#8A7860"},
+    # Long Evening: a dusky plum, a red-leaning hue at 29 % (as #5C3A57 the lit crown rendered orchid, the shade 57 %)
+    "ulkro_long_evening": {"hood": "#5A4054", "cowl": "#563D51", "hood_tail": "#523A4D",
                            "crest_heads": "#957F60", "dart_head": "#957F60"},
 }
 _SKIN = {"id": None}
@@ -1399,8 +1438,9 @@ def _install_recolour() -> None:
             med = np.median(lin[core] if core.sum() > 100 else lin[m], axis=0)
             r = lin[m] / np.maximum(med, 1e-4)
             rl = (_lum(lin[m]) / max(float(_lum(med)), 1e-4))[:, None]
-            r = r * 0.25 + rl * 0.75
-            olin[m] = np.clip(_hl(tones[nm]) * np.clip(r, 0, 4.0), 0, MAX_LIN)
+            r = np.clip(r * 0.25 + rl * 0.75, 0, 4.0) ** 0.85            # the lit crown compressed a little
+            c = _hl(tones[nm]) * r
+            olin[m] = c * np.minimum(1.0, MAX_LIN / np.maximum(c.max(1), 1e-6))[:, None]   # hue-preserving cap
             log(f"  skin tone {nm}: median -> {tones[nm]}")
         return project._srgb(olin).astype(np.float32)
     recolour._ulkro = True
@@ -1822,7 +1862,8 @@ def gen_long_run() -> anim.Clip:
 def gen_death(skel) -> anim.Clip:
     """struck, she staggers back, her knees go and she sits down hard, then rolls onto her back with a twist toward her
     left side (FIX PASS 1: the brief's fall; was face-down): the crest of darts spills sideways along the ground beyond
-    her right shoulder, the thrower flung out flat from her right hand, the head turned away, at rest"""
+    her right shoulder, the thrower flung out flat from her right hand, the head fallen to her left (the hood's tail
+    lies along the ground, never stands up), at rest"""
     g = G()
     hip_h = skel.rest_point("hips").z
     recoil = pz(lean=-12.0, yaw=8.0, drop=0.04, dy=0.06, look=(-14.0, 0.0, 0.0),
@@ -1837,7 +1878,7 @@ def gen_death(skel) -> anim.Clip:
     sit["ik"].update(rh((-0.20, 0.0, -0.34), aim=(0.5, -0.6, -0.6)))
     sit["ik"].update(lh((0.22, 0.06, -0.34)))
     down = anim.merge(anim.arms_relaxed(), anim.P(hips=DEATH_HIPS, spine=(6, 8, 0), chest=(6, 8, 0), neck=(10, 0, 0),
-                                                  head=(8, -38, 0), thigh_L=(14, 0, 8), shin_L=(-26, 0, 0),
+                                                  head=(8, 26, 0), thigh_L=(14, 0, 8), shin_L=(-26, 0, 0),
                                                   foot_L=(20, 0, 0), thigh_R=(0, 0, -8), shin_R=(-8, 0, 0),
                                                   foot_R=(30, 0, 0), upper_arm_L=(-10, 0, 10), forearm_L=(40, 0, 0)))
     down["hips_loc"] = DEATH_LOC(hip_h)
@@ -1845,7 +1886,7 @@ def gen_death(skel) -> anim.Clip:
                   "aim.R": AimRoll(DEATH_AIM_R, 1.0, (0.0, 0.0, 1.0))}
     bounce = anim.add(down, anim.P(spine=(-4, 0, 0), chest=(-4, 0, 0), head=(-5, 0, 0)))
     bounce["hips_loc"] = tuple(a + b for a, b in zip(DEATH_LOC(hip_h), (0.0, 0.0, 0.035)))
-    rest = anim.add(down, anim.P(head=(0, -4, 0)))
+    rest = anim.add(down, anim.P(head=(0, 4, 0)))
     N = 45
     keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.28, stagger, "inout"), (0.46, sit, "in"),
             (0.66, down, "in"), (0.74, bounce, "out"), (0.86, rest, "inout"), (1.0, rest, "linear")]
@@ -1952,8 +1993,8 @@ def gen_victory() -> anim.Clip:
     # palm down and out to her left side, so the eye band shows under it; the head turned to her left horizon
     hold = pz(lean=2.0, yaw=24.0, drop=0.03, look=(-8.0, 26.0, 0.0),
               feet=feet_(l=(0.05, -0.16, 0.0), r=(-0.04, 0.12, 0.0), yl=24.0, yr=0.0),
-              R=rh((-0.04, -0.12, 0.02), aim=(-0.20, 0.45, 0.87), up=(0.0, -0.87, 0.45), pole=(-0.9, 0.2, -0.4)),
-              L=lh((0.02, -0.22, 0.35), pole=(0.9, 0.2, -0.2)))
+              R=rh((-0.04, -0.12, 0.02), aim=(-0.25, 0.70, 0.67), up=(0.0, -0.69, 0.72), pole=(-0.9, 0.2, -0.4)),
+              L=lh((-0.02, -0.17, 0.33), pole=(0.8, 0.0, 0.5)))
     keys = [(0.0, g, "linear"), (0.16, skid, "out"), (0.36, settle, "inout"), (0.62, hold, "out"), (1.0, hold, "linear")]
     base = anim.drag(anim.keyed(keys), 45, {"head": 2.0, "neck": 1.0})
 
