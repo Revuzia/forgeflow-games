@@ -362,10 +362,11 @@ function nearHome(x: PCtx, st: Settlement, pred: (c: number) => boolean, s: numb
   let best = -1, bd = 200;
   for (const k in items) {
     for (const c of items[k]) {
-      if (!pred(c) || reachOf(x, s, st, c) !== REACH_DAY) continue;
+      // distance first (pred and reachOf are pure, so testing them only for a nearer cell picks the same cell)
       _r[0] = P[c * 3]; _r[1] = P[c * 3 + 1]; _r[2] = P[c * 3 + 2];
       const d = distM(x.p, _r, st.pos);
-      if (d < bd) { bd = d; best = c; }
+      if (d >= bd || !pred(c) || reachOf(x, s, st, c) !== REACH_DAY) continue;
+      bd = d; best = c;
     }
   }
   return best;
