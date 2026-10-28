@@ -436,6 +436,33 @@ Without camp water it was 2 deaths and 2611 hours. With camp water it is 0 death
 
 Tests: the pond test fails without camp water and passes with it; the walk-budget test is order-independent.
 
+**Round 3 (2026-10-28, landed 21:08 UTC; ledger `_harness/scratch/living/drought/build/LEDGER.md`).** Two review findings
+fixed:
+- **One camp-water rule** (`decide.ts campBeats`). planDrink, staleDrink and bandStep's recall now use the same test: a
+  drink at a cell is given up for the camp water when the camp water is within 600 m of the body and the cell is more than
+  300 m farther. planDrink's ring and far searches both look no farther than the camp water + 300 m, and the recall acts
+  only on members with water < 0.3. Before, water up a cliff that the rings could see sent a member 1.4 km off; the recall
+  dropped that walk and planDrink picked it again, every hour.
+- **Camp water seen, not only drunk.** Each hour bandStep searches 300 m on foot from the leader's cell. Running water found
+  there becomes the camp water. A band that lay up while its pond filled used to wake to a dry pond and walk 1.5 km away.
+  The memory is still 3 hours. Water that comes back less often is forgotten, and the band goes on to farther water: on
+  the round-2 code, with a 4- or 6-hourly pond, that was the better outcome (seed 11: 1 death against base 9 and 16).
+
+Measured on the same-snapshot base (thirst / cold, alive):
+- Held 1.5 km dust bowl, seeds 1–32: base 381 / 0, 604 alive; round 2 146 / 5, 841 alive; round 3 140 / 5, 846 alive.
+  No seed is worse than round 2 by more than 1.
+- Refilling-pond fixture, seeds 1–8 and 11: 0 deaths, as in base and round 2. Member-hours past 450 m: 2464 / 1488 / 1540.
+- Pond filling every 2 hours (thirst deaths, base / round 2 / round 3): seed 4 at N = 29 0 / 4 / 0 and at N = 30
+  0 / 3 / 0; seed 5 0 / 0 / 0, but the round-2 band went 1455 m from the pond (round 3 505 m, base 435 m); seed 11
+  1 / 1 / 1.
+- Unreachable seep up a cliff by the pond (seed 11): round 2 3 deaths and 12 walks taken up again; round 3 0 and 0.
+- Year-45 band (seed 1, Y45 → Y48): base 9 thirst + 5 starvation in the band; round 3 none in the band. Raftless island:
+  base 27 thirst + 2 starvation; round 3 1 thirst.
+
+Tests: 'seep up a cliff' (no walk taken up again) and 'pond fills only every two hours' (seed 4, N = 29: no thirst death)
+fail on the round-2 code and pass now. Perf (review F2: the search costs 21–38% of throughput in a held dust bowl of 1500
+agents at 1000x and 3000x) is not fixed yet; see the ledger.
+
 ### 2.8 Demography
 Today: no birth spacing (`settlement.ts:913-957`), median interval between a mother's births 0.69 game years,
 under-15 share 0.71 (0.65–0.74) at year 8, growth 10.7 %/year, 6 % (23 of 361) of births die before 15 (20 of
