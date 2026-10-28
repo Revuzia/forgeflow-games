@@ -3152,6 +3152,7 @@ export function showHUD(W) {
 
   R._hudCache = {};
   R.dmgLog = [];            // LC-81: the damage-taken log belongs to this match
+  R.knockCause = null;      // (OD-8) the knock causes too (actor ids repeat across matches)
   // C-MODE / C-DBNO / OD-9: teammates (none in solo: nothing below is built), LC-45 hints + the practice guide
   R._mates = null; R._matesFor = null; R._revive = null; R.bleedRow = null; R._bleedK = ""; R._inStorm = false;
   W._supplyMark = null; W._supplyMarks = [];   // LC-28: a new match starts with no crate marks (match 1's last one used to stay on match 2's map)
@@ -3564,7 +3565,7 @@ export function update(W, dt) {
     let ia = rvT
       ? (rvP > 0 ? "Reviving " + rvN + "…" : (touchOn ? "HOLD USE  ·  Revive " + rvN : "[HOLD " + keyOf(W, "KeyE") + "] Revive " + rvN))
       : hint.type === "chest"
-      ? (hint.progress > 0 ? "Opening…" : (touchOn ? "HOLD USE  ·  Open chest" : "[HOLD " + keyOf(W, "KeyE") + "] Open chest"))
+      ? (hint.progress > 0 ? "Opening…" : (touchOn ? "HOLD USE  ·  Open chest" : "[HOLD " + keyOf(W, "KeyE") + "] " + (hint.supply ? "Open" : "Open chest")))   // (release blockers) a supply crate is named by its pill
       : interactLabel(W, hint.data);
     if (C.ia !== ia) { R.interact.textContent = ia; C.ia = ia; }
   } else if (C.iaOn !== false) { R.interact.style.display = "none"; C.iaOn = false; }
@@ -3642,7 +3643,7 @@ export function update(W, dt) {
         R._lv.set(n.pos.x, n.pos.y + (n.type === "chest" ? 1.0 : 0.55), n.pos.z).project(cam);
         if (R._lv.z > 1 || R._lv.x < -1 || R._lv.x > 1 || R._lv.y < -1 || R._lv.y > 1) continue;
         const isW = n.type === "item" && n.data.kind === "weapon";
-        const txt = n.type === "chest" ? "CHEST"
+        const txt = n.type === "chest" ? (n.supply && !touchOn ? "SUPPLY DROP" : "CHEST")      // (release blockers) the supply crate by name (touch: unchanged)
                   : shortName(n.data) + (isW ? " · " + (K.RARITY[n.data.rarity || 0] || "").toUpperCase() : "");
         let lx = (R._lv.x * 0.5 + 0.5) * sw, ly = (-R._lv.y * 0.5 + 0.5) * sh;   // the pill's bottom-centre
         if (koOn) { ly = koPlace(txt, lx, ly); if (ly === null) continue; }    // under a control: not drawn, slot kept
@@ -4725,6 +4726,9 @@ function wireEvents(W) {
     L2.push({ t: W.t, src: "storm", w: "storm", dmg: +dmg, head: false });
     if (L2.length > 96) L2.splice(0, L2.length - 96);
   });
+  // (release blockers, OD-8) the cause of a knock, per actor: a fall-knocked player who bleeds out with nobody to credit died of the FALL
+  W.events.on("actorDowned", (v, attackerId, weaponId) => { if (v) (R.knockCause || (R.knockCause = new Map())).set(v.id, weaponId || null); });
+  W.events.on("actorRevived", (v) => { if (v && R.knockCause) R.knockCause.delete(v.id); });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     // The killing blow looked identical to chipping someone for 13 — the same
     // white marker. Kill style = red ticks + ring, held, and LATCHED so the
@@ -4737,7 +4741,8 @@ function wireEvents(W) {
     }
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
-    feedRow(killer ? killer.name : null, victim.name, weaponId, victim === W.player || killer === W.player);
+    feedRow(killer ? killer.name : null, victim.name, weaponId, victim === W.player || killer === W.player, deathCause(victim, killer, weaponId) === "fall");
+    if (R.knockCause) R.knockCause.delete(victim.id);
     // YOUR elimination gets a banner + streak escalation (kills used to land silently)
     if (killer === W.player && victim !== W.player) {
       // Bank the elimination's XP NOW. The kills/damage/placement/victory/time
@@ -4888,6 +4893,7 @@ function mkFeedRow() {
 /** killer [silhouette] victim - or "killer > victim . Weapon name" until / unless
  *  the silhouette exists. Written on row reuse and when a silhouette finishes loading. */
 function feedMode(el) {
+  if (el._fell) { el._w.style.display = "none"; el._x.textContent = ""; el._t.textContent = "fell"; return; }      // "<name> fell" (OD-8)
   const u = el._wid ? silFor(_tW, el._wid) : null;
   if (u) {
     if (el._w.src !== u) el._w.src = u;
@@ -4896,19 +4902,32 @@ function feedMode(el) {
     el._w.style.display = "none"; el._x.textContent = "›"; el._t.textContent = el._wn ? "·  " + el._wn : "";
   }
 }
-function feedRow(killerName, victimName, weaponId, mine) {
+function feedRow(killerName, victimName, weaponId, mine, fell) {
   if (!R.feed) return;
   const kids = R.feed.children;
   const el = kids.length < FEED_N ? mkFeedRow() : kids[0];
-  el._k.textContent = killerName || "the Storm";
+  // (release blockers, OD-8) a death nobody is credited with is the storm's - unless it was a FALL: "<name> fell", the victim alone
+  el._fell = !!fell;
+  el._k.textContent = fell ? "" : (killerName || "the Storm");
+  el._k.style.display = fell ? "none" : "";
+  el._x.style.display = fell ? "none" : "";
   el._v.textContent = victimName;
-  el._wid = killerName && weaponId ? weaponId : null;     // the storm has no silhouette
+  el._wid = !fell && killerName && weaponId ? weaponId : null;     // the storm (and a fall) has no silhouette
   el._wn = el._wid ? K.weaponName(el._wid) : "";
   el.className = mine ? "lc-fr me" : "lc-fr";
   feedMode(el);
   if (el.style.display === "none") el.style.display = "";
   el._exp = performance.now() + FEED_MS;
   if (el !== R.feed.lastChild) R.feed.appendChild(el);
+}
+/** (release blockers, OD-8) What ended a life nobody is credited with: "fall" when the killing blow was a fall (player.js kills with the
+ *  weapon id "fall"), or when a fall-knocked player bled out; else "storm" - the card and the feed read every killer-less death as the
+ *  storm, so a fall death said THE STORM GOT YOU. A credited death returns null (the killer is named, as before). */
+function deathCause(victim, killer, weaponId) {
+  if (killer) return null;
+  if (weaponId === "fall") return "fall";
+  if (weaponId === "bleed" && victim && R.knockCause && R.knockCause.get(victim.id) === "fall") return "fall";
+  return "storm";
 }
 function expireFeed(now) {
   if (!R.feed) return;
@@ -5254,7 +5273,7 @@ function showDeath(W, killerId, weaponId) {
     const mine = hit && hit.attackerId === killerId;
     if (mine && hit.isHead) h("span", null, "HEADSHOT", p1).className = "hs";
     if (mine && hit.dist != null) h("span", null, hit.dist + " m", p1);
-  } else h("span", null, "THE STORM GOT YOU", p1).className = "lab";
+  } else h("span", null, deathCause(W.player, killer, weaponId) === "fall" ? "YOU FELL" : "THE STORM GOT YOU", p1).className = "lab";      // OD-8
   if (killer) {
     // how close you came - the single most-wanted number on a death screen
     const dealt = Math.round((killer.dmgFrom && killer.dmgFrom[W.player.id]) || 0);
@@ -5410,7 +5429,7 @@ function standingRows(W) {
     const a = acts[i];
     if (!a || m.kills[a.id] == null) continue;
     const pl = m.placementOf(a.id);
-    rows.push({ name: a.name || String(a.id), you: a === W.player, kills: m.kills[a.id] || 0, dmg: Math.round(m.damage[a.id] || 0), pl, live: pl == null && m.alive.has(a.id), rank: pl });
+    rows.push({ id: a.id, name: a.name || String(a.id), you: a === W.player, kills: m.kills[a.id] || 0, dmg: Math.round(m.damage[a.id] || 0), pl, live: pl == null && m.alive.has(a.id), rank: pl });
   }
   if (rows.length < 2) return null;
   const unplaced = rows.filter((r) => r.pl == null);
@@ -5467,6 +5486,29 @@ function buildStandings(W, parent) {
   return card;
 }
 
+/** (release blockers) The victory title fitted to its card: the 34 px title steps down (letter spacing with it) until it fits the card's
+ *  content box, at every window size and on every resize while the screen is up; never below 16 px. Touch keeps its own rule
+ *  (TOUCH_CSS sets the title's size with !important) and is left alone. */
+function fitPostTitle(el, box) {
+  if (touchOn) return;
+  el.style.maxWidth = "100%";
+  const fit = () => {
+    if (!el.isConnected) { window.removeEventListener("resize", fit); return; }
+    const cs = getComputedStyle(box);
+    const avail = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    if (!(avail > 0)) return;
+    let fs = 34;
+    el.style.fontSize = fs + "px"; el.style.letterSpacing = "3px";
+    while (fs > 16 && el.scrollWidth > avail + 0.5) {
+      fs -= 1;
+      el.style.fontSize = fs + "px"; el.style.letterSpacing = (3 * fs / 34).toFixed(2) + "px";
+    }
+  };
+  requestAnimationFrame(fit);
+  setTimeout(fit, 0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);      // Orbitron may land after the first fit
+  window.addEventListener("resize", fit);
+}
 export function showPostMatch(W, res) {
   releaseCursor(W);          // the buttons are otherwise unclickable
   hideHUD();
@@ -5482,11 +5524,16 @@ export function showPostMatch(W, res) {
   const box = h("div", null, null, wrap);
   box.className = "lc-gl lc-pm-sum lc-glass-scan";
   box.dataset.lc = "postsum";
+  const tmPM = teamModeOf(W);
   if (res.victory) {
-    h("div", {
+    // (release blockers) a squad wins together: LAST TEAM STANDING in Duos / Trios / Squads, as the in-match announcement says. The title is
+    // fitted to the card (fitPostTitle): at 34 px "LAST ONE STANDING" was wider than the card at 1280 x 720 and clipped at both ends.
+    const ttl = h("div", {
       fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", color: "#ffd54a",
       textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "3px", whiteSpace: "nowrap",
-    }, "LAST ONE STANDING", box).dataset.lc = "posttitle";   // not "VICTORY ROYALE" — Epic Games' phrase
+    }, tmPM !== "solo" ? "LAST TEAM STANDING" : "LAST ONE STANDING", box);   // not "VICTORY ROYALE" — Epic Games' phrase
+    ttl.dataset.lc = "posttitle";
+    fitPostTitle(ttl, box);
     if (!(W.settings && W.settings.flashReduce)) confetti(L);   // LC-43 flash reduction: no confetti
     if (W.hooks && W.hooks.celebrate) W.hooks.celebrate();
   } else {
@@ -5509,7 +5556,16 @@ export function showPostMatch(W, res) {
   const win = h("div", null, "", box); win.className = "lc-winner";
   if (stands) {
     const top = stands._rows[0];
-    if (W.match && W.match.over && top) win.textContent = (top.you ? "You" : top.name) + " won with " + top.kills + (top.kills === 1 ? " kill" : " kills");
+    if (W.match && W.match.over && top) {
+      // (release blockers) in a team mode the winners are a team: "Your squad won with 7 kills" - every member's kills (a dead mate's too)
+      const lead = tmPM !== "solo" && W.actorById ? W.actorById.get(top.id) : null;
+      if (lead && lead.teamId) {
+        let k = 0, mine = false;
+        for (const a of W.actors) if (a && a.teamId === lead.teamId && !a.isDummy) { k += W.match.kills[a.id] || 0; if (a === W.player) mine = true; }
+        const word = tmPM === "duo" ? "duo" : tmPM === "trio" ? "trio" : "squad";
+        win.textContent = (mine ? "Your " + word : top.name + "'s " + word) + " won with " + k + (k === 1 ? " kill" : " kills");
+      } else win.textContent = (top.you ? "You" : top.name) + " won with " + top.kills + (top.kills === 1 ? " kill" : " kills");
+    }
     else if (W.match) win.textContent = W.match.aliveCount() + " still in the circle";
   }
   const grid = h("div", {
