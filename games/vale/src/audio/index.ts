@@ -2,6 +2,12 @@
 //
 //   buses       music · sfx · ui · voice · ambience → master → limiter → out (Settings.audio volumes;
 //               `muteInBackground` silences a hidden tab)
+//   alert path  the GATE cues — whatever content binds to the UI roles queue_pop / queue_remind and the event
+//               roles countdown / matchStart — skip the master and join at the limiter through their own
+//               per-bus alert gain: max(ALERT_FLOOR, master × bus). So a match found while the tab is hidden
+//               is still heard (a missed ready check costs a re-queue lockout), the UI slider cannot take it
+//               below the floor (tokens.audio.motif.queuePop.ownSliderWithFloor), and every other cue stays
+//               muted in the background. A master at exactly 0 is the player's explicit full mute and is kept
 //   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices (the quietest-
 //               priority oldest voice is stolen), cooldown (s), loop; files decode lazily on first use,
 //               UI cues preload; an unknown or missing cue is silently ignored (art may still be rendering)
@@ -20,6 +26,9 @@
 //               position relative to YOUR fighter (the camera's subject); ability cues come from the
 //               catalog (`present.sfx` / `hitSfx` / event `sfx`), the rest from the generic set
 //               (c_* combat, m_* match events), so content can re-voice any ability without code.
+//               Team-private comms stay private: a ping sounds only when a player of YOUR team made it, and a
+//               surrender vote / its outcome only for the team voting (the HUD shows neither for the other
+//               team; online play is lockstep, so every client receives every seat's commands).
 // The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
 
 import type { MatchClient } from '../contracts/session.ts';
@@ -30,7 +39,7 @@ type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
 interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[] }
 interface CatalogLike {
-  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>; m4a?: Record<string, string> };
+  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>; ui?: Record<string, string>; m4a?: Record<string, string> };
   fighters: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } }; kit: Record<string, { id: string; present?: { sfx?: string; hitSfx?: string } } | undefined> }[];
   units?: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } } }[];
 }
@@ -54,6 +63,12 @@ const PROBE_MS = 10000;      // the format-deciding .ogg: other loads wait this 
                              // next one probes: a stalled request), and its decode counts as failed if unsettled
                              // this long after the bytes arrived (a hung decoder); neither may mute the game.
                              // Generous: boot can stall the main thread for seconds
+/** the gate roles (see `alert path` in the header): UI roles (audio.ui) and engine event roles (audio.events) */
+const ALERT_UI_ROLES = ['queue_pop', 'queue_remind'];
+const ALERT_EVENT_ROLES = ['countdown', 'matchStart'];
+/** the alert path's lowest gain (linear, −8 dB): the queue pop (−14 LUFS momentary, about −3 dBFS sample peak as
+ *  shipped) then still peaks above −12 dBFS at the output whatever the UI slider says */
+const ALERT_FLOOR = 0.4;
 
 interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; priority: number; started: number }
 
@@ -61,7 +76,12 @@ class Engine implements ValeAudioPort {
   readonly log: string[] = [];
   private ctx: AudioContext | null = null;
   private master!: GainNode;
+  private limiter!: DynamicsCompressorNode;
   private readonly bus = new Map<Bus, GainNode>();
+  /** the alert path, one gain per bus, straight into the limiter (see `alert path` in the header) */
+  private readonly alertBus = new Map<Bus, GainNode>();
+  /** the cue ids content binds to the gate roles */
+  private readonly alertCues: Set<string>;
   private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
   private readonly voices: Voice[] = [];
   private readonly lastPlay = new Map<string, number>();
@@ -97,6 +117,9 @@ class Engine implements ValeAudioPort {
     this.beds = cat.audio.music;
     this.url = url;
     this.alt = cat.audio.m4a ?? {};
+    this.alertCues = new Set([
+      ...ALERT_UI_ROLES.map((r) => cat.audio.ui?.[r]), ...ALERT_EVENT_ROLES.map((r) => this.events[r]),
+    ].filter((id): id is string => !!id));
     this.fmt = initialFormat();
     this.vol = { ...settings };
     for (const f of cat.fighters) {
@@ -119,6 +142,7 @@ class Engine implements ValeAudioPort {
     this.ctx = ctx;
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
+    this.limiter = limiter;
     this.master = ctx.createGain();
     this.master.connect(limiter).connect(ctx.destination);
     this.duckGain = ctx.createGain();
@@ -127,6 +151,12 @@ class Engine implements ValeAudioPort {
       const g = ctx.createGain();
       g.connect(b === 'music' ? this.duckGain : this.master);
       this.bus.set(b, g);
+    }
+    // the alert path joins after the master (the background mute), before the limiter
+    for (const b of BUSES) {
+      const g = ctx.createGain();
+      g.connect(limiter);
+      this.alertBus.set(b, g);
     }
     this.applyVolumes();
     // preload the UI set (they must answer the first click)
@@ -141,8 +171,21 @@ class Engine implements ValeAudioPort {
     const t = this.ctx.currentTime;
     const mute = this.hidden && this.vol.muteInBackground;
     this.master.gain.setTargetAtTime(mute ? 0 : this.vol.master, t, 0.05);
-    for (const b of BUSES) this.bus.get(b)!.gain.setTargetAtTime(this.vol[b], t, 0.05);
+    for (const b of BUSES) {
+      this.bus.get(b)!.gain.setTargetAtTime(this.vol[b], t, 0.05);
+      // never muted in the background; floored; a master at 0 (the player's full mute) is honoured
+      const alert = this.vol.master <= 0 ? 0 : Math.max(ALERT_FLOOR, this.vol.master * this.vol[b]);
+      this.alertBus.get(b)!.gain.setTargetAtTime(alert, t, 0.05);
+    }
   }
+
+  /** dev / harness: the output graph (the probes meter the limiter's output) */
+  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; master: GainNode } | null {
+    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, master: this.master } : null;
+  }
+
+  /** dev / harness: the cue ids on the alert path */
+  get alerts(): string[] { return [...this.alertCues]; }
 
   get format(): 'ogg' | 'm4a' | null { return this.fmt; }
 
@@ -267,7 +310,7 @@ class Engine implements ValeAudioPort {
       g.gain.value = c.gain * att * gainMul;
       let node: AudioNode = src;
       if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
-      node.connect(g).connect(this.bus.get(c.bus)!);
+      node.connect(g).connect((this.alertCues.has(cueId) ? this.alertBus : this.bus).get(c.bus)!);
       const v: Voice = { src, gain: g, cue: cueId, priority: c.priority, started: this.ctx.currentTime };
       this.voices.push(v);
       src.onended = () => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
@@ -436,12 +479,23 @@ class Engine implements ValeAudioPort {
       case 'objective': this.cue(this.ev(e.team === this.myTeam() ? 'objectiveAlly' : 'objectiveEnemy'), null); break;
       case 'wave': if ((e.n as number) <= 1) this.cue(this.ev('waveSpawn'), null); break;
       case 'recall': if (e.player === this.client?.you) this.cue(this.ev(e.state === 'done' ? 'recallDone' : e.state === 'start' ? 'recallStart' : 'recallCancel'), null); break;
-      case 'ping': this.cue(this.ev(`ping.${e.kind as string}`), null); break;
+      case 'ping': {
+        // team-private: only a ping made by a player of your team sounds (the HUD draws only those)
+        const by = this.client?.view.players.find((x) => x.player === e.player);
+        if (!by || by.team !== this.myTeam()) break;
+        this.cue(this.ev(`ping.${e.kind as string}`), null);
+        break;
+      }
       case 'pickup': if (e.player === this.client?.you) this.cue(this.ev('pickup'), null); break;
-      case 'announce':
+      case 'announce': {
+        const key = e.key as string;
         // a personal notice (a denied purchase, a practice reset) is only yours to hear
-        if (/^(shop_denied|practice_reset)$/.test(e.key as string) && e.player !== undefined && e.player !== this.client?.you) break;
-        this.cue(this.ev(/first|ace|objective|structure|inhib|core/i.test(e.key as string) ? 'announceMajor' : 'announceMinor'), null); break;
+        if (/^(shop_denied|practice_reset)$/.test(key) && e.player !== undefined && e.player !== this.client?.you) break;
+        // a team's own business (a surrender vote, its outcome) is only that team's to hear
+        if (/^surrender_/.test(key) && e.team !== this.myTeam()) break;
+        this.cue(this.ev(/first|ace|objective|structure|inhib|core/i.test(key) ? 'announceMajor' : 'announceMinor'), null);
+        break;
+      }
       case 'eliminated': if (e.player === this.client?.you) this.cue(this.ev('eliminated'), null); break;
       case 'suddenDeath': this.cue(this.ev('suddenDeath'), null); break;
       default: break;

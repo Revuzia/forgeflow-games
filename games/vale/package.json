@@ -13,7 +13,8 @@
     "content:check": "node tools/build_content.ts --check",
     "package": "node tools/package_deploy.ts",
     "probe": "node _harness/run_probes.ts",
-    "check": "npm run typecheck && npm run content:check && npm run probe",
+    "secrets": "node tools/secret_scan.ts",
+    "check": "npm run secrets && npm run typecheck && npm run content:check && npm run probe",
     "server": "node server/main.ts"
   },
   "dependencies": {

@@ -58,6 +58,8 @@ loadCatalog().then(
     if (loadAudio) {
       try { audio = (await (await loadAudio()).createAudioEngine?.({ catalog: c.catalog, assetUrl: c.assetUrl, settings: session.profile().settings })) ?? null; }
       catch (e) { console.warn('[vale] audio engine unavailable', e); }
+      // dev: the engine itself for the audio probes (_harness/probe_audio_*.mjs meter its output graph)
+      if (dev && audio) (window as unknown as { __valeAudio?: AudioPort }).__valeAudio = audio;
     }
     let renderer: Parameters<typeof mount>[1]['renderer'] = null;
     const loadRender = Object.values(renderLoaders)[0];

@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE audio vocabulary (content/audio.json). priority: higher wins a voice slot; 10 critical alerts, 9 announcer, 8 enemy threat, 7 own actions, 6 ally/shared combat, 3-5 world. Combat cue priorities assume the local player's own action; the engine may lift an enemy source aimed at you by +1 and drop an ally source by -1. pitchVar is a +/- playback-rate fraction (0.05 ~ +/-0.85 semitone); in-key cues use 0. cooldown is the minimum seconds between two starts of the same cue. Music: one loop per file, length a whole number of 8 s phrases; match beds add the 'intense' layer (same length, bar-aligned), crossfaded by the engine on combat intensity. ui/screens/stings bind the client's own roles (src/ui/audio_kinds.ts) to cues and beds; the build requires every role bound.",
+  "$comment": "VALE audio vocabulary (content/audio.json). priority: higher wins a voice slot; 10 critical alerts, 9 announcer, 8 enemy threat, 7 own actions, 6 ally/shared combat, 3-5 world. Combat cue priorities assume the local player's own action; the engine may lift an enemy source aimed at you by +1 and drop an ally source by -1. pitchVar is a +/- playback-rate fraction (0.05 ~ +/-0.85 semitone); in-key cues use 0. cooldown is the minimum seconds between two starts of the same cue. Music: one loop per file, length a whole number of 8 s phrases; match beds add the 'intense' layer (same length, bar-aligned), crossfaded by the engine on combat intensity. ui/screens/stings bind the client's own roles (src/ui/audio_kinds.ts) to cues and beds; the build requires every role bound. GATE cues: whatever ui.queue_pop, ui.queue_remind, events.countdown and events.matchStart bind rides the engine's alert path (heard in a background tab, floored against the sliders; src/audio/index.ts). Pings: events 'ping.<PingKind>' use the sim's exact PingKind spelling (src/contracts/sim.ts), and only your own team's pings sound.",
   "cues": {
     "ui_hover": {"files": ["assets/audio/ui_hover.ogg"], "bus": "ui", "gain": 0.45, "pitchVar": 0, "maxVoices": 2, "priority": 2, "spatial": false, "loop": false, "cooldown": 0.07},
     "ui_click": {"files": ["assets/audio/ui_click.ogg"], "bus": "ui", "gain": 0.6, "pitchVar": 0.02, "maxVoices": 2, "priority": 4, "spatial": false, "loop": false, "cooldown": 0.03},
@@ -11,6 +11,7 @@
     "ui_slider": {"files": ["assets/audio/ui_slider.ogg"], "bus": "ui", "gain": 0.4, "pitchVar": 0, "maxVoices": 1, "priority": 2, "spatial": false, "loop": false, "cooldown": 0.05},
     "ui_queue_search": {"files": ["assets/audio/ui_queue_search.ogg"], "bus": "ui", "gain": 0.5, "pitchVar": 0, "maxVoices": 1, "priority": 5, "spatial": false, "loop": false, "cooldown": 0.5},
     "ui_queue_pop": {"files": ["assets/audio/ui_queue_pop.ogg"], "bus": "ui", "gain": 1.0, "pitchVar": 0, "maxVoices": 1, "priority": 10, "spatial": false, "loop": false, "cooldown": 1.0},
+    "ui_queue_remind": {"files": ["assets/audio/ui_queue_remind.ogg"], "bus": "ui", "gain": 0.9, "pitchVar": 0, "maxVoices": 1, "priority": 10, "spatial": false, "loop": false, "cooldown": 1.0},
     "ui_accept": {"files": ["assets/audio/ui_accept.ogg"], "bus": "ui", "gain": 0.75, "pitchVar": 0, "maxVoices": 1, "priority": 9, "spatial": false, "loop": false, "cooldown": 0.2},
     "ui_lockin": {"files": ["assets/audio/ui_lockin.ogg"], "bus": "ui", "gain": 0.8, "pitchVar": 0, "maxVoices": 1, "priority": 8, "spatial": false, "loop": false, "cooldown": 0.2},
     "ui_ban": {"files": ["assets/audio/ui_ban.ogg"], "bus": "ui", "gain": 0.7, "pitchVar": 0, "maxVoices": 1, "priority": 7, "spatial": false, "loop": false, "cooldown": 0.2},
@@ -107,13 +108,13 @@
     "structureAllyFall": "m_structure_ally_fall", "structureEnemyFall": "m_structure_enemy_fall", "objectiveAlly": "m_objective_ally", "objectiveEnemy": "m_objective_enemy",
     "waveSpawn": "m_wave_spawn", "recallStart": "m_recall_start", "recallDone": "m_recall_done", "recallCancel": "ui_back",
     "pickup": "m_sunmote", "announceMajor": "m_announce_major", "announceMinor": "m_announce_minor", "eliminated": "m_eliminated",
-    "suddenDeath": "m_sudden_death", "countdown": "m_countdown", "matchStart": "m_match_start", "castMonster": "c_cast_big", "ping.alert": "m_ping_alert", "ping.danger": "m_ping_danger", "ping.onmyway": "m_ping_onmyway",
+    "suddenDeath": "m_sudden_death", "countdown": "m_countdown", "matchStart": "m_match_start", "castMonster": "c_cast_big", "ping.alert": "m_ping_alert", "ping.danger": "m_ping_danger", "ping.onMyWay": "m_ping_onmyway",
     "ping.missing": "m_ping_missing", "ping.assist": "m_ping_assist", "ping.push": "m_ping_push", "ping.vision": "m_ping_vision",
     "ping.objective": "m_ping_objective", "ping.retreat": "m_ping_retreat"
   },
   "ui": {
     "hover": "ui_hover", "click": "ui_click", "confirm": "ui_confirm", "back": "ui_back", "error": "ui_error",
-    "tab": "ui_tab", "toggle": "ui_toggle", "slider": "ui_slider", "queue_search": "ui_queue_search", "queue_pop": "ui_queue_pop",
+    "tab": "ui_tab", "toggle": "ui_toggle", "slider": "ui_slider", "queue_search": "ui_queue_search", "queue_pop": "ui_queue_pop", "queue_remind": "ui_queue_remind",
     "accept": "ui_accept", "lockin": "ui_lockin", "ban": "ui_ban", "hover_fighter": "ui_hover_fighter", "currency_tick": "ui_currency_tick",
     "equip": "ui_equip", "purchase": "ui_purchase", "reward_reveal": "ui_reward_reveal", "level_account": "ui_level_account", "notify": "ui_notify",
     "shop_buy": "ui_shop_buy", "shop_sell": "ui_shop_sell", "shop_undo": "ui_shop_undo"

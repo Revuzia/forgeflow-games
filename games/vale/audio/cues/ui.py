@@ -145,6 +145,21 @@ def ui_queue_pop(v: int):
     return finish(x, hp_hz=40, eq=[('peak', 3000, -1.5, 0.7)])
 
 
+@cue('ui_queue_remind', 'ui', ('m', -17.0), (0.9, 2.4), **UIMOMENT)
+def ui_queue_remind(v: int):
+    """Ready check about to lapse (played 4 s before it does; like the pop it rides the engine's alert path, so
+    a hidden tab hears it): the pop's hourbell asking twice, softer and lower. Two even strikes of the A4+E5
+    fifth (the pop's first two notes, sounded together instead of climbing) 360 ms apart, the second a touch
+    quieter, over a breath of A3 hum; no drum, no glass, so it never reads as a second match found."""
+    L = Layers(2.0)
+    for i, t in enumerate((0.0, 0.36)):
+        L.add(bell('A4', 1.5, 0.72 - 0.06 * i, decay=0.24, bright=0.62, seed=f'qr{i}a'), t, peak_db=-2.0 - 1.5 * i)
+        L.add(bell('E5', 1.4, 0.70 - 0.06 * i, decay=0.20, bright=0.70, seed=f'qr{i}e'), t + 0.008, peak_db=-1.0 - 1.5 * i)
+    L.add(bell('A3', 1.8, 0.5, decay=0.35, bright=0.3, seed='qrh'), 0.0, peak_db=-13)
+    x = room(L.out(), 'hall', wet=0.12)
+    return finish(x, hp_hz=90, eq=[('peak', 3000, -2.5, 0.7)])
+
+
 @cue('ui_accept', 'ui', ('m', -20.0), (0.4, 1.3), **UIMOMENT)
 def ui_accept(v: int):
     """Accept the match: a firm D5+A5 glass dyad over a soft D4 bell, the press tock, a shimmer lift."""

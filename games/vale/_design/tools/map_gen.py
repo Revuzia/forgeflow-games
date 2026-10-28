@@ -234,6 +234,17 @@ def thicket_json(shapes, open_ground, W, H, mirror=True, keep_out=()):
     return res
 
 
+def structure_keep_out(structs, clear=3.0, pad=0.3):
+    """Keep-out discs round every structure: its collision radius (content/units.json) + `clear` m, + `pad` for the
+    disc's polygon chords and the 0.1 m grid. Needlegrass never grows at a tower's foot: brush there hides defenders
+    from attackers while the tower's own team always sees in (src/sim/vision.ts), and it clutters the dive read."""
+    with open(os.path.join(ROOT, 'content', 'units.json')) as f:
+        u = json.load(f)
+    units = u if isinstance(u, list) else u.get('units', u)
+    rad = {x['id']: float(x.get('collisionRadius', 1.0)) for x in units if isinstance(x, dict) and 'id' in x}
+    return [disc(tuple(s['at']), rad.get(s['unit'], 1.0) + clear + pad, res=16) for s in structs]
+
+
 def P(p):
     return [rnd(p[0]), rnd(p[1])]
 
@@ -394,16 +405,18 @@ def build_rift():
     ang_v = math.degrees(math.atan2(n_v[1], n_v[0])) + 90
     tk(ellipse(*offset((p_v, n_v), -4.3), 5.2, 1.7, ang_v))
     # Dialwood mouths
-    tk(ellipse(*polar(CX, CY, 46.0, 57.0), 2.4, 3.4, 30))           # eleven-line mouth on the North road
+    # eleven-line mouth: IN the path's mouth, 5 m back from the North road (at r 46 it stood on the Outer Needle's
+    # foot: final parity env F6), between the Needle's keep-out and the Gloamoths' clearing
+    tk(ellipse(*polar(CX, CY, 41.0, 57.5), 2.4, 3.4, 30))
     tk(ellipse(*polar(CX, CY, 56.0, 32.5), 2.6, 3.0, 50))           # ten-line mouth by the North Lantern
-    tk(ellipse(*polar(CX, CY, RING, 11), 3.0, 2.0, 0))              # hour-ring mouth on the Seat road
+    hr_mouth = polar(CX, CY, RING, 11)                              # hour-ring mouth on the Seat road, 1.5 m into
+    tk(ellipse(hr_mouth[0] - 1.5, hr_mouth[1], 3.0, 2.0, 0))        # the path (off the Seat Outer Needle's foot)
     tk(ellipse(*polar(CX, CY, RING, 66), 2.2, 3.0, -20))            # hour-ring mouth at the pit
     # Seat road verges, both sides, just outside the Seat
     th_m = [ellipse(70.5, CY + 4.4, 4.4, 1.5, 0), ellipse(70.5, CY - 4.4, 4.4, 1.5, 0)]
     keep_out = [disc(c, 3.2) for c in (glasshorn, gloamoths, strays_n, resinback, stilltusks, strays_s,
                                       mpt(glasshorn, W), mpt(gloamoths, W), mpt(strays_n, W), mpt(resinback, W),
                                       mpt(stilltusks, W), mpt(strays_s, W))]
-    thickets = thicket_json(th + th_m, open_ground, W, H, keep_out=keep_out)
 
     # ── lanes (team 0 Aubade → team 1 Serenade) ────────────────────────────────────────────────
     def lane_pts(pts, step):
@@ -458,6 +471,9 @@ def build_rift():
         struct(f"{tag}_bell_needle_north", "needle_bell", team, m((21.5, CY - 3.8)), None, [f"{tag}_seat_lantern"])
         struct(f"{tag}_bell_needle_south", "needle_bell", team, m((21.5, CY + 3.8)), None, [f"{tag}_seat_lantern"])
         struct(f"{tag}_hourbell", "hourbell", team, m(hourbell), None, [f"{tag}_bell_needle_north", f"{tag}_bell_needle_south"])
+
+    # the thickets, cut clear of the camps and of every structure's foot (collision radius + 3 m: no brush at a tower)
+    thickets = thicket_json(th + th_m, open_ground, W, H, keep_out=keep_out + structure_keep_out(S))
 
     # ── camps (UNITS doc §9.3–9.4) ─────────────────────────────────────────────────────────────
     camps = []
@@ -584,7 +600,6 @@ def build_bridge():
 
     th = [ellipse(46.0, CY - SPAN - 0.6, 4.0, 1.9), ellipse(46.0, CY + SPAN + 0.6, 4.0, 1.9),
           ellipse(CX - 6.8, CY - 8.0, 2.6, 1.8, -35), ellipse(CX - 6.8, CY + 8.0, 2.6, 1.8, 35)]
-    thickets = thicket_json(th, open_ground, W, H)
 
     lane = [P((17.0, CY)), P((CX, CY)), P((W - 17.0, CY))]
     S = []
@@ -605,6 +620,7 @@ def build_bridge():
         struct(f"{tag}_span_lantern", "lantern", team, m((29.0, CY - 3.0)), "road_span", [f"{tag}_span_needle_inner"], 240)
         struct(f"{tag}_bell_needle", "needle_bell", team, m((21.5, CY + 3.4)), None, [f"{tag}_span_lantern"])
         struct(f"{tag}_hourbell", "hourbell", team, m((12.5, CY)), None, [f"{tag}_bell_needle"])
+    thickets = thicket_json(th, open_ground, W, H, keep_out=structure_keep_out(S))    # no brush at a tower's foot
 
     pickups = []
     for tag, m in (('a', lambda p: p), ('s', lambda p: mpt(p, W))):

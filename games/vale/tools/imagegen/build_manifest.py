@@ -47,8 +47,18 @@ BANNED = (
     "filigree, no shiny chrome or polished metal armour, no teal-and-gold colour scheme, no red-versus-green."
 )
 FIGURE = (
-    "Characters never show a bare face: each wears a carved stone or wood mask or a glass visor; "
-    "no visible hair; costume of heavy draped cloth, carved stone and wood plates, wrapped leather."
+    "Characters never show a bare face and no visible hair: each named fighter wears exactly the glass visor or "
+    "carved mask of the real character design. Every mask is carved with readable features (a brow ridge, a nose "
+    "keel, a closed mouth line) in warm wood, lacquer or stone; glass visors are clear pale panes. Costume of heavy "
+    "draped cloth, carved stone and wood plates, wrapped leather."
+)
+# VALE sensitivity rule (blocker class anywhere; owner brief + final parity review client F1 / originality F2):
+# appended to EVERY key-art prompt, figures or not. Sign-off: _design/reviews/fixwaves/W2_art_signoff.md.
+SENSITIVITY = (
+    "Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or "
+    "glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no "
+    "tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small "
+    "soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic."
 )
 ICON = (
     "Square game icon, single bold centred subject that reads at 48 pixels, dynamic three-quarter "
@@ -195,34 +205,34 @@ def main() -> None:
                      f"of the two sides clash on a carved dial-stone road at the long hour: cool blue-white morning light "
                      f"from the left (pale chalk spires), warm amber evening light from the right (dark ironstone domes), "
                      f"bright magic of dawnglass shards and ink smoke meeting in the middle. Leave the LEFT third calmer and "
-                     f"darker for UI text; the action sits in the right two thirds. {FIGURE} {WORLD} Style: {PAINT}. {BANNED}",
+                     f"darker for UI text; the action sits in the right two thirds. {FIGURE} {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
                      "content/ui/home/feature.webp", "wide", ref_from=feat.get("art")))
     for t in client["home"].get("tiles", []):
         items.append(rec(f"home_tile_{t['id']}", "keyart",
                          f"Painted card illustration for a game client tile titled '{t['title']}': {t['body']} Simple strong "
-                         f"composition with one focal subject, space at the bottom for a caption. {WORLD} Style: {PAINT}. {BANNED}",
+                         f"composition with one focal subject, space at the bottom for a caption. {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
                          f"content/ui/home/{t['id']}.webp", "landscape", ref_from=t.get("art")))
     for m in load("modes.json", "modes"):
         items.append(rec(f"mode_{m['id']}", "keyart",
                          f"Painted mode-select card art for the game mode {m['name'].upper()}: {m['tagline']} {clean(m['desc'], 300)} "
                          f"A vertical, poster-like composition with a single iconic scene of that battlefield and its scale, "
-                         f"darker lower area for a title. {FIGURE} {WORLD} Style: {PAINT}. {BANNED}",
+                         f"darker lower area for a title. {FIGURE} {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
                          f"content/ui/modes/{m['id']}_card.webp", "portrait", ref_from=m.get("card", {}).get("art")))
     for mp in sorted((CONTENT / "maps").glob("*.json")):
         mm = json.loads(mp.read_text(encoding="utf-8"))
         items.append(rec(f"loading_{mm['id']}", "keyart",
                          f"Wide painted panorama of the battlefield '{mm['name']}': {clean(mm['desc'], 320)} Seen from high and far, "
-                         f"epic scale, no characters in the foreground, used as a loading-screen backdrop. {WORLD} Style: {PAINT}. {BANNED}",
+                         f"epic scale, no characters in the foreground, used as a loading-screen backdrop. {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
                          f"content/ui/loading/{mm['id']}.webp", "wide"))
     items.append(rec("store_banner", "keyart",
                      f"Wide painted banner for an in-game cosmetics store: three masked fighters in alternate outfits posed "
                      f"heroically on a dial-stone terrace at golden hour, strong rim light, celebratory but restrained. "
-                     f"Left third calmer for UI text. {FIGURE} {WORLD} Style: {PAINT}. {BANNED}",
+                     f"Left third calmer for UI text. {FIGURE} {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
                      "content/ui/home/store_banner.webp", "wide"))
     items.append(rec("portal_thumbnail", "keyart",
                      f"Game cover key art for an original lane-battle game titled VALE (do NOT draw the title): a masked hero in "
                      f"the foreground on a carved sundial terrace, a rival behind, dawnglass light and ink smoke clashing, the "
-                     f"fallen stone needle in the distance. {FIGURE} {WORLD} Style: {PAINT}. {BANNED}",
+                     f"fallen stone needle in the distance. {FIGURE} {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
                      "public/thumbnail.png", "landscape"))
 
     # ── 7. painted backdrops for fighter splash composites and menus ──────────────────────────

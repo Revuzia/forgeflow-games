@@ -6,6 +6,11 @@
     python tools/imagegen/run_xai.py --only ability_marund_domefall --force
     python tools/imagegen/run_xai.py --variants 2        # n images per prompt (raw/<id>__1.png, __2.png …)
     python tools/imagegen/run_xai.py --dry-run           # print what would be generated and the cost
+    python tools/imagegen/run_xai.py --only home_feature --force --suffix r2   # keep raw/home_feature__r2.png
+
+Reference images: a record's "refs" (paths under games/vale), its "roster" (fighter ids, or id:skin; built
+into one board of the real models by ref_board.py), or --ref <path> send the request to the edit endpoint
+with those images, so painted fighters stay on-model. --no-refs forces plain text-to-image.
 
 Key: $XAI_API_KEY, else tokens.json {"xai_api_key": …} found at the Forgeflow location
 (<Claude Claw root>/state/.secrets/tokens.json, the same file pipeline/generate_cover.py reads),
@@ -28,6 +33,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RAW = HERE / "raw"
 API = "https://api.x.ai/v1/images/generations"
+EDIT_API = "https://api.x.ai/v1/images/edits"
+VALE = HERE.parent.parent
 
 
 def find_key(explicit: str | None) -> str:
@@ -76,6 +83,44 @@ def call(key: str, prompt: str, n: int, model: str, aspect: str | None = None, r
     raise RuntimeError("xAI returned no image data")
 
 
+def data_uri(path: Path) -> str:
+    import base64
+    mime = "image/jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+
+
+def call_edit(key: str, prompt: str, refs: list[Path], n: int, model: str, aspect: str | None = None,
+              resolution: str | None = None) -> list[bytes]:
+    """Image edit / reference generation: the refs ride along as data URIs (one -> "image", several -> "images").
+    If the endpoint refuses aspect_ratio / resolution, retry once without them (the output then follows the ref)."""
+    import base64
+    imgs = [{"url": data_uri(p), "type": "image_url"} for p in refs]
+    extras = [{k: v for k, v in (("aspect_ratio", aspect), ("resolution", resolution)) if v}, {}]
+    last = None
+    for ex in extras:
+        body = {"model": model, "prompt": prompt, "n": n, "response_format": "b64_json", **ex}
+        if len(imgs) == 1:
+            body["image"] = imgs[0]
+        else:
+            body["images"] = imgs
+        req = urllib.request.Request(EDIT_API, method="POST", data=json.dumps(body).encode("utf-8"),
+                                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=240) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and ex:
+                last = e.read().decode("utf-8", "replace")[:200]
+                print(f"  edit endpoint refused extras {sorted(ex)}: {last}; retrying without them")
+                continue
+            raise
+        out = [base64.b64decode(d["b64_json"]) for d in data.get("data", []) if d.get("b64_json")]
+        out += [fetch(d["url"]) for d in data.get("data", []) if d.get("url") and not d.get("b64_json")]
+        if out:
+            return out
+    raise RuntimeError(f"xAI edit returned no image data {last or ''}")
+
+
 def fetch(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "Forgeflow-Vale/1.0"})
     with urllib.request.urlopen(req, timeout=120) as r:
@@ -89,13 +134,17 @@ def main() -> None:
     ap.add_argument("--variants", type=int, default=1), ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--tokens"), ap.add_argument("--model", default="grok-imagine-image")
     ap.add_argument("--sleep", type=float, default=1.0)
+    ap.add_argument("--ref", action="append", default=[], help="reference image (repeatable); overrides the record's refs")
+    ap.add_argument("--no-refs", action="store_true", help="ignore the record's refs (plain text-to-image)")
+    ap.add_argument("--suffix", help="write raw/<id>__<suffix>.png (keeps earlier attempts; pick it in picks.json)")
     a = ap.parse_args()
 
     man = json.loads((HERE / "manifest.json").read_text(encoding="utf-8"))
     items = [i for i in man["items"]
              if (not a.kind or i["kind"] == a.kind) and (not a.only or i["id"].startswith(a.only))]
     RAW.mkdir(exist_ok=True)
-    todo = [i for i in items if a.force or not (RAW / f"{i['id']}.png").exists()]
+    base = (lambda i: f"{i['id']}__{a.suffix}") if a.suffix else (lambda i: i["id"])
+    todo = [i for i in items if a.force or not (RAW / f"{base(i)}.png").exists()]
     if a.limit:
         todo = todo[: a.limit]
     print(f"{len(todo)} to generate ({len(items)} matched), ~${0.02 * len(todo) * a.variants:.2f}")
@@ -106,12 +155,24 @@ def main() -> None:
     key = find_key(a.tokens)
     ok = fail = 0
     for k, it in enumerate(todo, 1):
+        refs = [Path(r) if Path(r).is_absolute() else VALE / r for r in (a.ref or ([] if a.no_refs else it.get("refs", [])))]
+        if not refs and not a.no_refs and it.get("roster"):   # named roster fighters -> a board of their real models
+            sys.path.insert(0, str(HERE))
+            from ref_board import board
+            refs = [board(it["roster"])]
+        missing = [str(r) for r in refs if not r.exists()]
+        if missing:
+            print(f"[{k}/{len(todo)}] skip {it['id']}: missing refs {missing}")
+            fail += 1
+            continue
         for attempt in range(3):
             try:
-                imgs = call(key, it["prompt"], a.variants, a.model, ASPECT.get(it.get("size", "square"), "1:1"),
-                            None if it["kind"] == "icon" else "2k")
+                aspect = ASPECT.get(it.get("size", "square"), "1:1")
+                res = None if it["kind"] == "icon" else "2k"
+                imgs = (call_edit(key, it["prompt"], refs, a.variants, a.model, aspect, res) if refs
+                        else call(key, it["prompt"], a.variants, a.model, aspect, res))
                 for vi, img in enumerate(imgs):
-                    name = f"{it['id']}.png" if vi == 0 else f"{it['id']}__{vi + 1}.png"
+                    name = f"{base(it)}.png" if vi == 0 else f"{base(it)}__{vi + 1}.png"
                     (RAW / name).write_bytes(img)
                 ok += 1
                 print(f"[{k}/{len(todo)}] ok   {it['id']}")

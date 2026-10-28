@@ -991,7 +991,8 @@ class Longshade(Monster):
     PAL = {"ink": "#141219", "ink_top": "#1E1B28", "ink_under": "#0B0A0F", "rim": "#4C4870", "rim_hi": "#8C88BE",
            "streak": "#2E2A42",
            "hand": "#26222F", "claw": "#35303F", "claw_tip": "#A39CB3", "chalk": "#E4DED0", "chalk_dirt": "#B9B0A0",
-           "groove": "#3B3542", "socket": "#221E29", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E"}
+           "groove": "#3B3542", "socket": "#221E29", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E",
+           "inlay": "#9C7840", "inlay_edge": "#5A4630"}
     # mask frame: centre, lateral, up (along the plate), out (face normal, tilted 20 degrees up)
     MC = np.array([0.0, -1.74, 3.10])
     MU = np.array([0.0, math.sin(math.radians(24)), math.cos(math.radians(24))])
@@ -1216,8 +1217,10 @@ class Longshade(Monster):
             g0, g1 = mc + mu * 0.3 - mx * 0.26 + mn * 0.062, mc + mu * 0.3 + mx * 0.24 + mn * 0.062
             S.sub(Capsule(g0, g1, 0.008), k=0.003)                         # the brow band
             self.grooves.append((g0, g1))
-            pts = [mc + mu * 0.35 + mx * 0.25, mc + mu * 0.24 + mx * 0.24, mc + mu * 0.05 + mx * 0.27, mc - mu * 0.12 + mx * 0.2]
-            for a_, b_ in zip(pts[:-1], pts[1:]):                       # a hairline crack from the chip
+            # a hairline crack from the chip, running OUT to the plate's edge above the eye (it ran down past the
+            # right socket: a third streak under an eye)
+            pts = [mc + mu * 0.35 + mx * 0.25, mc + mu * 0.29 + mx * 0.28, mc + mu * 0.24 + mx * 0.33]
+            for a_, b_ in zip(pts[:-1], pts[1:]):
                 S.sub(Capsule(a_ + mn * 0.08, b_ + mn * 0.08, 0.005), k=0.002)
         return S
 
@@ -1321,7 +1324,9 @@ class Longshade(Monster):
             face = np.clip(N @ mn, 0, 1)
             col = mix_hex(np.tile(c("lamp_edge"), (n, 1)), c("lamp"), sarr(0.3, 0.9, face))
             return col, np.full(n, 0.25)
-        # mask: chalk plate, dark carved grooves, dark sockets, ink tears under the eyes
+        # mask: a chalk DIAL plate: its carved hour-lines fanning from the chin (the gnomon's foot) and the brow band
+        # inlaid in worn brass, dark sockets round the two lamps. (final parity originality F3: the ink tears that
+        # ran down from each socket read as a weeping horror mask; they are gone, the plate reads as a sundial face)
         mc, mu, mn, mx = self.MC, self.MU, self.MN, self.MX
         rel = V - mc
         u, x, o = rel @ mu, rel @ mx, rel @ mn
@@ -1330,16 +1335,13 @@ class Longshade(Monster):
         rough = np.full(n, 0.72)
         if self.grooves:
             _, gd = self._along(V, [(a, b, 1.0) for a, b in self.grooves])
-            g = sarr(0.016, 0.006, gd)
-            col = mix_hex(col, c("groove"), g * 0.85)
+            g = sarr(0.018, 0.007, gd)
+            col = mix_hex(col, c("inlay_edge"), g * 0.8)                 # the groove's shadowed walls
+            col = mix_hex(col, c("inlay"), sarr(0.010, 0.004, gd) * 0.9)  # the brass in its floor
+            rough = rough * (1 - g * 0.5) + 0.45 * g * 0.5
         for e in self.eyes_c:
             d = np.linalg.norm(V - (e + mn * 0.04), axis=1)
             col = mix_hex(col, c("socket"), sarr(0.13, 0.1, d) * (o > -0.02))
-            # an ink tear running down from each socket
-            dx = np.abs((V - e) @ mx)
-            du = (V - e) @ mu
-            tear = sarr(0.035, 0.014, dx) * sarr(-0.1, -0.12, du) * sarr(-0.4, -0.24, du) * (o > 0.0)
-            col = mix_hex(col, c("groove"), tear * 0.6)
         return col, rough
 
     def high_material(self, part, grad):
