@@ -28,6 +28,10 @@ export const CHAR_LIGHT = {
   fill: { luminance: 0.7 },
   knee: [0.25, 0.75] as const,
   unitShare: 0.35,
+  /** a jungle monster's key: its share of the sun (wicks keep 1). Their pale hides lit by the full sun measured top-25
+   *  L* 79.4 / 79.9 on RIFT, over the fighters' 75.7 / 76.0 (value_probe, r12 B5); at this share they sit at or just
+   *  under the fighters, so a camp never outshines the fighters fighting in it */
+  monsterKeyOfSun: 0.82,
 } as const;
 const NOONWHITE = new Color().setStyle('#F4EFE2');
 const _crown = new Color();
@@ -79,6 +83,7 @@ export class Sun {
     W.valeCharRimDir.value.set(C.crown.viewDir[0], C.crown.viewDir[1], C.crown.viewDir[2]).normalize();
     W.valeCharFill.value.copy(NOONWHITE).multiplyScalar(C.fill.luminance / lum(NOONWHITE));
     W.valeCharShape.value.set(C.crown.albedoFloor, C.unitShare, C.knee[0], C.knee[1]);
+    W.valeCharMonster.value = C.monsterKeyOfSun;
   }
 
   /** 0 off · 1 1024² hard · 2 2048² PCF · 3 4096² PCF */

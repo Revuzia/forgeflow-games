@@ -22,7 +22,10 @@
 //   * the eye fill: a soft fill from the camera that lifts the mid-tones the key leaves in its shadow side.
 // A knee fades both out where the world's own light (key, sky, specular) already lights the surface brightly, so
 // pale kits never blow out. Fighters take all of it; wicks and monsters (`unit`) keep the sun as their key and
-// take only a share of the crown, on their darker cloth.
+// take only a share of the crown, on their darker cloth. Jungle monsters (`monster`) take the sun at their own share
+// (`valeCharMonster`, lighting.ts CHAR_LIGHT.monsterKeyOfSun), so their pale hides sit at or just below the
+// fighters' top-25 L* (characters own the top of the value range; a camp never outshines the fighters in it); their
+// own glow (emissive) follows the same share.
 //
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
@@ -53,6 +56,8 @@ export const worldUniforms = {
   valeCharRim: { value: new Vector4(0, 0, 0, 3) },
   valeCharFill: { value: new Color(0, 0, 0) },
   valeCharShape: { value: new Vector4(0.3, 0.35, 0.25, 0.75) },
+  // a jungle monster's share of the sun (its key) and of its own glow; wicks keep both at 1
+  valeCharMonster: { value: 1 },
 };
 
 /** GLSL: the fog-of-war + edge haze functions (shared with custom ShaderMaterials) */
@@ -126,6 +131,7 @@ uniform vec3 valeCharRimDir;
 uniform vec4 valeCharRim;
 uniform vec3 valeCharFill;
 uniform vec4 valeCharShape;
+uniform float valeCharMonster;
 `;
 /** after the material's lights (direct and sky): the character light (noon crown + eye fill), see the header */
 const CHAR_LIGHT = /* glsl */`
@@ -147,6 +153,8 @@ const CHAR_LIGHT = /* glsl */`
   // brightly, so a pale kit never blows out and the lift goes to the mid-tones and the shadow side
   float valeLit = dot( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular, vec3( 0.2126, 0.7152, 0.0722 ) );
   reflectedLight.directDiffuse += valeAdd * ( 1.0 - smoothstep( valeCharShape.z, valeCharShape.w, valeLit ) );
+  // a jungle monster's own glow (a gloamoth's wing, a glasshorn's dawnglass) at the monster's share too, like its key
+  if ( valeCharMode > 1.1 && valeCharMode < 1.5 ) totalEmissiveRadiance *= valeCharMonster;
 }
 #endif
 `;
@@ -158,17 +166,19 @@ export interface WorldPatchOptions {
   fighter?: boolean;
   /** wick / monster shading: the sun stays the key; a share of the character light (`valeCharShape.y`) */
   unit?: boolean;
+  /** a jungle monster: unit shading, the sun at the monster's own share (`valeCharMonster`); implies `unit` */
+  monster?: boolean;
   /** fog of war darkens but does not desaturate (the Standing Shadow keeps its colour) */
   keepColor?: boolean;
 }
 
 const PATCHED = Symbol('valePatched');
 
-/** the fighter key light and its shadow floor, applied where valeCharMode says fighter (2); a wick or monster (1)
- *  keeps the sun exactly (× 1.0) */
+/** the fighter key light and its shadow floor, applied where valeCharMode says fighter (2); a wick (1) keeps the sun
+ *  exactly (× 1.0), a jungle monster (1.25) at its own share (valeCharMonster) */
 const CHAR_LIGHTS_BEGIN = ShaderChunk.lights_fragment_begin
   .split('getDirectionalLightInfo( directionalLight, directLight );')
-  .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tif ( valeCharMode > 1.5 ) { directLight.direction = normalize( valeKeyDir ); directLight.color *= valeCharKey; }')
+  .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tif ( valeCharMode > 1.5 ) { directLight.direction = normalize( valeKeyDir ); directLight.color *= valeCharKey; }\n\t\telse if ( valeCharMode > 1.1 ) directLight.color *= valeCharMonster;')
   .split('directionalLightShadow.shadowIntensity').join('( directionalLightShadow.shadowIntensity * ( valeCharMode > 1.5 ? 0.25 : 1.0 ) )');
 
 /**
@@ -196,14 +206,15 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
   const m = material as Material & { [PATCHED]?: string };
   const fog = opts.fog !== false;
   const fighter = opts.fighter === true;
-  const unit = !fighter && opts.unit === true;
+  const unit = !fighter && (opts.unit === true || opts.monster === true);
+  const monster = unit && opts.monster === true;
   const keep = opts.keepColor === true;
-  const key = `${fog ? 'f' : ''}${fighter ? 'k' : ''}${unit ? 'u' : ''}${keep ? 'c' : ''}`;
+  const key = `${fog ? 'f' : ''}${fighter ? 'k' : ''}${unit ? 'u' : ''}${monster ? 'm' : ''}${keep ? 'c' : ''}`;
   if (m[PATCHED] === key) return;
   m[PATCHED] = key;
   if (!fog && !fighter && !unit) return;
   // fighters and wicks / monsters share one program: which light they take is a uniform (r12 B4 programs)
-  const charMode = { value: fighter ? 2 : unit ? 1 : 0 };
+  const charMode = { value: fighter ? 2 : monster ? 1.25 : unit ? 1 : 0 };
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer) => {
     prev.call(material, shader, renderer);

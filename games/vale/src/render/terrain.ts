@@ -722,7 +722,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     const onRoad = (x: number, y: number): boolean => x > 0.5 && y > 0.5 && x < SX - 0.5 && y < SY - 0.5 && field(F.ld, x, y) < LANE_HALF - 0.42
       && !inWall(x, y) && field(F.wd, x, y) > 0.5 && field(F.td, x, y) > 0.35 && field(F.cd, x, y) > 0.5 && !inPlaza(x, y, 1.2)
       && !(seatV.z > 0 && Math.hypot(x - seatV.x, y - seatV.y) < seatV.z + 1.5);
-    lanes.forEach((l, k) => laneDecals(strokes, l, { half: LANE_HALF - 0.6, every: [2.6, 6.2], seed: 7100 + k * 131, crack: INLAY.lit, chalk: INLAY.mid, pCrack: 0.5, pChalk: 0.2, keep: onRoad }));
+    lanes.forEach((l, k) => laneDecals(strokes, l, { half: LANE_HALF - 0.6, every: [2.6, 6.2], seed: 7100 + k * 131, crack: INLAY.lit, chalk: INLAY.mid, pCrack: 0.45, pChalk: 0.3, keep: onRoad }));
   } else if (surface === 'span') {
     // carved hour-script along every edge of the drop, inside the 0.4 m chalk band
     chasmPolys.forEach((poly, k) => {
@@ -762,6 +762,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       }
     }
     for (const p of map.pickups ?? []) { strokes.circle(p.at as unknown as V2, 0.85, 0.06, INLAY.groove, 0.2); strokes.circle(p.at as unknown as V2, 0.55, 0.04, INLAY.groove, 0.2); }
+    // the painted deck decals (lane polish): hairline cracks in the crazing's groove channel, a walker's chalk in the
+    // free chalk channel; on the deck clear of the drop's band, the Snap, the plazas, the brush and the pickups
+    const onDeck = (x: number, y: number): boolean => x > 1 && x < SX - 1 && field(F.ch, x, y) < -1.0 && field(F.td, x, y) > 0.35 && !inWall(x, y)
+      && !inPlaza(x, y, 1.2) && !(snapAt && Math.hypot(x - snapAt[0], y - snapAt[1]) < snapR + 1.5)
+      && !(map.pickups ?? []).some((pk) => Math.hypot(x - pk.at[0], y - pk.at[1]) < 1.6);
+    lanes.forEach((l, k) => laneDecals(strokes, l, { half: LANE_HALF + 0.6, every: [2.6, 6.0], seed: 8300 + k * 131, crack: INLAY.groove, chalk: INLAY.chalk, pCrack: 0.45, pChalk: 0.32, keep: onDeck }));
   } else {
     // the Noonplate: inlaid hour-lines from the cart ring to every hour-mark, the marks' numerals
     (map.spawns ?? []).forEach((s, k) => {
@@ -799,6 +805,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       }
     }
     for (const p of map.pickups ?? []) { strokes.circle(p.at as unknown as V2, 0.85, 0.2, INLAY.mid, 0.15); strokes.circle(p.at as unknown as V2, 0.45, 0.14, INLAY.chalk, 0.12); }
+    // hairline cracks in the honed slabs (lane polish; the groove channel), laid along rings round the plate, clear of
+    // the hour-marks, the shop ring, the hour-stones, the brush and the rim's inlay course
+    const onPlate = (x: number, y: number): boolean => {
+      const r = Math.hypot(x - plateAt[0], y - plateAt[1]);
+      return r > 5.2 && r < plateR - 1.6 && !inWall(x, y) && field(F.wd, x, y) > 0.4 && field(F.td, x, y) > 0.35
+        && !(map.spawns ?? []).some((s) => Math.hypot(x - s[0], y - s[1]) < 2.6) && !(map.pickups ?? []).some((pk) => Math.hypot(x - pk.at[0], y - pk.at[1]) < 1.4);
+    };
+    [7.6, 12.4, 17.6, 22.4].forEach((rr, k) => {
+      const ring: V2[] = [];
+      for (let i = 0; i <= 96; i++) { const a = (i / 96) * Math.PI * 2 + k * 0.7; ring.push([plateAt[0] + Math.cos(a) * rr, plateAt[1] + Math.sin(a) * rr]); }
+      laneDecals(strokes, ring, { half: 2.0, every: [2.8, 6.5], seed: 9100 + k * 37, crack: INLAY.groove, chalk: null, pCrack: 0.5, pChalk: 0, keep: onPlate });
+    });
   }
   const inlay = bakeInlay(strokes, [SX, SY], 0.125);
   disposables.push(inlay.tex, inlay.fine, inlay.index);

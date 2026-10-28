@@ -102,7 +102,8 @@ def main():
     sc.render.resolution_x = sc.render.resolution_y = a.cell
     sc.render.film_transparent = False
     tgt = Vector(tuple(float(v) for v in a.target.split(",")))
-    views = [("front", 0, 0), ("q3", 35, 5), ("side", 90, 0), ("back", 180, 5), ("q3back", 140, 10), ("game", 25, 52), ("gamef", 0, 52)]
+    views = [("front", 0, 0), ("q3", 35, 5), ("side", 90, 0), ("back", 180, 5), ("q3back", 140, 10), ("game", 25, 52), ("gamef", 0, 52),
+             ("games", 90, 52), ("gameb", 180, 52), ("gamer", 270, 52)]
     if a.views:
         views = [v for v in views if v[0] in a.views.split(",")]
     paths = []

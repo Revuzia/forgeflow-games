@@ -299,8 +299,8 @@ export function laneDecals(set: StrokeSet, path: readonly V2[], o: LaneDecalOpts
         if (okAll(br)) line(br, 0.026, 0.014, o.crack);
       }
     } else if (roll < o.pCrack + o.pChalk && o.chalk !== null) {
-      const ch = o.chalk, w = 0.032 + rnd() * 0.01;
-      if (!okAll([c, [c[0] - 0.7, c[1]], [c[0] + 0.7, c[1]], [c[0], c[1] - 0.7], [c[0], c[1] + 0.7]])) continue;
+      const ch = o.chalk, w = 0.04 + rnd() * 0.012;
+      if (!okAll([c, [c[0] - 0.55, c[1]], [c[0] + 0.55, c[1]], [c[0], c[1] - 0.55], [c[0], c[1] + 0.55]])) continue;
       const kind = Math.floor(rnd() * 5);
       if (kind === 0) {
         // a sketched noon-mark: a wobbly dial, its gnomon line cast toward an hour, hour dashes round it

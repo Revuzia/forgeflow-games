@@ -404,14 +404,15 @@ def blade_ht(u, v):
 # top; per-point thickness (the front face is the deep carved one, 13 cm, the concept's roundel face); the roundel's
 # centre on that face and the face's outward normal. The lame: a second plate over the outer upper arm, tucked under
 # the cap's rim (its top outline; it hangs 7 cm and flares 2 cm out)
-PAULDRON_TOP = [(-0.170, -0.232, 1.776), (-0.340, -0.205, 1.742), (-0.500, -0.165, 1.680), (-0.552, 0.000, 1.668),
-                (-0.500, 0.172, 1.680), (-0.340, 0.214, 1.742), (-0.170, 0.214, 1.776), (-0.350, 0.000, 1.788)]
+PAULDRON_TOP = [(-0.170, -0.232, 1.776), (-0.340, -0.205, 1.745), (-0.528, -0.168, 1.688), (-0.585, 0.000, 1.678),
+                (-0.528, 0.176, 1.688), (-0.340, 0.214, 1.745), (-0.170, 0.214, 1.776), (-0.360, 0.000, 1.792)]
 PAULDRON_THICK = [0.120, 0.130, 0.120, 0.085, 0.085, 0.085, 0.085, None]
 PAULDRON_BEVEL = 0.028
 PAULDRON_ROUNDEL = (-0.405, -0.204, 1.655)
 PAULDRON_FACE_N = (-0.24, -0.97, 0.0)
-LAME_TOP = [(-0.462, -0.150, 1.612), (-0.585, -0.112, 1.590), (-0.628, 0.000, 1.584), (-0.585, 0.112, 1.590),
-            (-0.462, 0.150, 1.612)]
+PAULDRON_BIND = ("dblend", "shoulder.R", "upper_arm.R", (-0.38, 0.0, 1.70), (-1.0, 0.0, -0.25), 0.02, 0.17)
+LAME_TOP = [(-0.470, -0.150, 1.610), (-0.600, -0.112, 1.588), (-0.648, 0.000, 1.582), (-0.600, 0.112, 1.588),
+            (-0.470, 0.150, 1.610)]
 
 
 def pauldron_pts(top, thick, bevel: float = PAULDRON_BEVEL) -> list:
@@ -634,8 +635,7 @@ def sculpts() -> list:
     sp.add(Sphere(rc - rn * 0.010, 0.022), k=0.006)                    # ... round a low boss
     # the cap's inner (neck) half rides the clavicle, its outer rim the upper arm (the shared pauldron blend): a
     # raised arm (the shoulder carry) lifts the rim with the sleeve under it instead of poking the sleeve through
-    part("shoulder_plate", sp, "rust", ("dblend", "shoulder.R", "upper_arm.R", (-0.38, 0.0, 1.70), (-1.0, 0.0, -0.25),
-                                        0.02, 0.17), 700)
+    part("shoulder_plate", sp, "rust", PAULDRON_BIND, 700)
     fr = Sculpt("fringe")
     # the slatted fringe under the lame, round the front and outer side of the upper arm (rigid on it)
     for i in range(7):
@@ -801,7 +801,9 @@ def skin_extras(extra: dict) -> list:
             fr0 = rest_frame(under, root - np.array([sx * 0.02, 0.0]), root + np.array([sx * 0.06, 0.0]), 0.07,
                              lift=0.010)
             reeds.add(slat_box(fr0, 0.0, 0.05, 0.080, 0.016, 0.008, dz=-0.008), k=0.004)   # the lashing at the root
-            out.append((f"reed_plates_{side}", reeds, 0.6, "wood", f"bone:{bone}", 900, "world"))
+            # (polish: the right fan follows the cap's own blend, its outer half rises with the arm like the cap's rim)
+            out.append((f"reed_plates_{side}", reeds, 0.6, "wood", PAULDRON_BIND if side == "R" else f"bone:{bone}", 900,
+                        "world"))
     if extra.get("river_glass"):
         # river-glass shards set into the pauldron tiers' slopes (front and back): long irregular slivers in
         # a thin basalt bezel, laid along each tier's edge; glossy, never emissive. Seated on the CURRENT tier
@@ -1086,8 +1088,17 @@ FT = anim.FootTarget
 # the head: no cleaver point inside the mask / cowl, the yoke 92 with the guard pose), and in game the lane read 1338
 # -> 1431 px^2, the worst facing 1018 -> 980, one pointer facing instead of three. The run keeps the yoke's grip
 # (RUN_REL0, tuned in game). The lobby has no bar: it rests in the concept's steep carry (LOBBY_* below).
-CARRY = dict(rel=(-0.146, 0.482, 0.432), pole=(-1.0, 0.25, -0.3), d=(0.698, 0.674, 0.242), up=(-0.136, 0.456, -0.879))
-RUN_REL0 = (-0.068, 0.367, 0.411)      # the run's fist (the pass-6 yoke's)
+# POLISH PASS (the review: the hook was missing in idle and run, the yoke a flat bar behind the head from the front, a
+# horizontal bar at mask height in game; the lobby's concept carry already read): the idle steepened to the concept's
+# diagonal while keeping what the game camera sees (proto/burdam_carry6.py grid over wrist x heading x elevation x
+# roll, eye-level front angle 38-62, ranked by the worst of 24 game facings): the fist up beside the back of the head
+# (wrist (-0.56, 0.16, 1.88)), the cleaver heading 55 degrees back from straight left, 28 up, its flat rolled 20 toward
+# the back. Eye level: the front view 25 -> 48 degrees (brief 55), the select-screen three-quarter 17 -> 34, the heel and
+# haft fully in view (were 0.65 / 1.00); game: the worst facing 980 -> 900 px^2 of blade in view, mean 1339 -> 1307,
+# one pointer facing as before (the 36-degree and steeper picks lost the worst facing to 590-710 behind the bar and
+# name plate, the lobby's own carry to 0 facing W). The tip stands 2.66 m (the yoke 2.19).
+CARRY = dict(rel=(-0.371, 0.435, 0.663), pole=(-1.0, 0.25, -0.3), d=(0.506, 0.723, 0.469), up=(-0.027, 0.558, -0.83))
+RUN_REL0 = (-0.371, 0.415, 0.620)      # the run's fist (polish: the idle's, 4 cm lower; was the pass-6 yoke's)
 BELT_L = (0.10, -0.16, -0.94)          # the free left fist at the belt
 
 
@@ -1114,7 +1125,9 @@ def carry_flat(d, roll: float = CARRY_ROLL) -> tuple:
     return tuple(float(x) for x in u * math.cos(r) + np.cross(d, u) * math.sin(r))
 
 
-RUN_D = (0.738, 0.664, 0.122)          # the run's carry (fix pass 6): heading 6 degrees further back and 3 lower than
+RUN_D = (0.539, 0.770, 0.342)          # the run's carry (polish: heading 55 / 20 up, the idle's 8 degrees lower: the run's
+                                       # forward lean tips a back-pointing blade up; fix pass 6 was the yoke's, heading 42 /
+                                       # 7 up); fix pass 6: heading 6 degrees further back and 3 lower than
                                        # the idle's, the fist 3-4 cm lower (the run's forward lean tips a back-pointing
                                        # blade up toward the health bar from the camera)
 EDGE_DOWN = (1.0, 0.0, 0.0)            # flat normal for chops in the sagittal plane (the edge leads down)
