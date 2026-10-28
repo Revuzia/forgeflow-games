@@ -207,7 +207,7 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_crook_hook", "lantern": "x_lante
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 24.0, "portrait_yaw": 24.0,
           "icon_yaw": 14.0}
 TEXTURE_SIZE = 2048
-TEXTURE_SIZES = {"normal": 512, "orm": 256}
+TEXTURE_SIZES = {"normal": 512, "orm": 512}      # orm 256 left tiny hat islands' AO dark (specks in three)
 GLB_COMPRESS = True
 ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.25
@@ -573,7 +573,7 @@ def sculpts() -> list:
         caps.inter(HalfSpace(a0 + fwd * 0.135, -fwd, 1.0), k=0.01)
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     caps.inter(HalfSpace((0, 0, 0.006), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", ("weights", "boots"), 950)
+    part("boots", boots, "under", ("weights", "boots"), 950)      # matte (waxed leather caught the sky in the splash)
     part("toecaps", caps, "ironstone", ("weights", "boots"), 220, 0.6)
 
     out.extend(crook_parts())
@@ -1140,7 +1140,7 @@ def _match_back(k, p, cols, wb, names, log):
                 continue
             tf = _band_tone(p[f, 2], fr[f], zs, step=0.04)
         tb = _band_tone(p[b, 2], bk[b], zs, step=0.04)
-        r = np.clip(_Y(bk[sel]) / np.maximum(_Y(tb), 1e-4), 0.35, 1.8) ** BACK_DETAIL
+        r = np.clip(_Y(bk[sel]) / np.maximum(_Y(tb), 1e-4), 0.35, 1.8) ** (0.35 if nm == "hood" else BACK_DETAIL)
         bk[sel] = tf * r[:, None]
         log(f"  dunsom back match {nm}: front band tones x back detail ({int(b.sum())} texels)")
     cols["back"] = _srgb(bk)
@@ -1615,6 +1615,10 @@ def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=No
         for q in pts:
             lo = V((min(lo.x, q.x - 0.06), min(lo.y, q.y - 0.06), lo.z))
             hi = V((max(hi.x, q.x + 0.06), max(hi.y, q.y + 0.06), max(hi.z, q.z + 0.10)))
+        # the shared fit frames the box's height only: a square frame must be as tall as the box is wide
+        w = max(hi.x - lo.x, hi.y - lo.y) * 0.92
+        if aspect <= 1.01 and w > hi.z - lo.z:
+            lo = V((lo.x, lo.y, hi.z - w))
     return _orig_fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center)
 
 
@@ -1723,6 +1727,7 @@ def _spin_feet(deg, lift_l=0.0, lift_r=0.0):
     return out
 
 
+TWIST_BACK = -75.0                        # ... and out-back (idle_lobby: the lantern beside the head)
 TWIST_OUT = -35.0                         # prop.R's twist that turns the hook from out-forward to straight out
 HAT_LEVEL = 0.5                           # share of the body's pitch / roll the hat takes back (brief: the disc level)
 
@@ -1951,12 +1956,12 @@ def clip_overrides(ctx) -> dict:
     out["death"] = clip("death", 50, k)
 
     # RECALL: the crook lifted so the lantern hangs at eye level before him, the left hand cupped under it (loops)
-    up_c = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=(-0.18, -0.70, 0.20),
-                aim=(0.30, -0.25, 0.92))
+    up_c = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=(-0.30, -0.66, 0.20),
+                aim=(0.16, -0.25, 0.95))
     lp = lantern_at(up_c)
     cup = lp + V((0.0, 0.0, -(LAN_BASE[1] + 0.05)))
-    rc = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=(-0.18, -0.70, 0.20),
-              aim=(0.30, -0.25, 0.92), Lpos=tuple(cup), Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 0, 30)))
+    rc = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=(-0.30, -0.66, 0.20),
+              aim=(0.16, -0.25, 0.95), Lpos=tuple(cup), Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 0, 30)))
 
     def recall_s(t):
         p = dict(rc)
@@ -2006,12 +2011,12 @@ def clip_overrides(ctx) -> dict:
 
     # IDLE_LOBBY (120 f, loops): a watchful shepherd: leans on the crook with both hands stacked, lifts the lantern on
     # the hook to look into it, counts under his breath (the head nods in threes), tilts the hat's rim to the sky
-    TW = dict(prop_R=(0, TWIST_OUT, 0))
+    TW = dict(prop_R=(0, TWIST_BACK, 0))          # the hook turned out-back: the lantern beside the head, the face clear
     SR, SA = (-0.02, -0.60, -0.18), (-0.08, -0.10, 0.99)
     stack = pose(torso=dict(hips=(0, -4, 0), spine=(2, -2, 0), chest=(3, -2, 0), head=(2, 4, 0)), hips=(0.0, 0.0, -0.01),
                  R=SR, aim=SA, grip=0.07, fk=TW)
     look = pose(torso=dict(chest=(-2, -4, 0), neck=(-4, -6, 0), head=(-8, -14, 0)), R=(-0.20, -0.60, 0.12),
-                aim=(-0.20, -0.30, 0.93), L=(0.10, -0.40, -0.70), fk=TW)
+                aim=(-0.20, -0.30, 0.93), L=(0.10, -0.40, -0.70), fk=dict(prop_R=(0, -10.0, 0)))
     nod = lambda a: pose(torso=dict(hips=(0, -4, 0), spine=(2, -2, 0), chest=(3, -2, 0), neck=(2 + a, 0, 0), head=(4 + 2 * a, 4, 0)),
                          hips=(0.0, 0.0, -0.01), R=SR, aim=SA, grip=0.07, fk=TW)  # noqa: E731
     sky = pose(torso=dict(hips=(0, -2, 0), spine=(-2, 0, 0), chest=(-4, 0, 0), neck=(-8, 0, 0), head=(-16, 4, 0)),
@@ -2028,7 +2033,7 @@ def clip_overrides(ctx) -> dict:
                  fk=dict(prop_R=(0, TWIST_OUT * 0.5, 0)))
     lift = pose(torso=dict(spine=(-3, 0, 0), chest=(-6, -4, 0), neck=(-4, 0, 0), head=(-10, -6, 0)),
                 R=(-0.30, -0.36, 0.60), aim=(-0.22, -0.08, 0.97), L=(0.20, -0.20, -0.70), fk=dict(prop_R=(0, TWIST_OUT, 0)))
-    brim = (0.04, -0.62, 0.50)
+    brim = (0.40, -0.30, 0.82)                  # the left hand up at the brim's left side (tipping the hat)
     bow = pose(torso=dict(hips=(14, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), neck=(2, 0, 0), head=(0, 0, 0)),
                hips=(0, 0.06, -0.02), R=(-0.42, -0.42, -0.22), aim=(-0.06, -0.05, 1.0), L=brim, Lp=(0.9, 0.2, -0.3),
                fk=dict(hand_L=(0, -20, 10), prop_R=(0, TWIST_OUT, 0)))
