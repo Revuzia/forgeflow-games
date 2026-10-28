@@ -1748,10 +1748,25 @@ _WIDEN = [False]
 PORTRAIT_WIDEN = 0.20      # the head boxes (portrait, icon) reach this much further to her right: the lantern beside the mask
 
 
+# (W5b, final parity review originality F9, "Tunlan demon icon": the 128 px icon was a tight crop of the mask under the
+# brim's dark underside - the brim's shadow sank the eyes into dark sockets under a frowning brow crack, an angry
+# mask): the icon box rises to take in the lampshade hat (brim edge and crown, the portrait's identity) and the
+# camera looks a little down onto it, so the icon reads as the lamp-hat wanderer with the lantern, the calm mask
+# under it (ICON_LIFT m added to the box's top and bottom, ICON_PITCH the camera's pitch, was 3)
+ICON_LIFT = (0.02, 0.12)
+ICON_PITCH = 8.0
+
+
 def _fit_camera(cam, lo, hi, *a, **k):
     if _WIDEN[0] and lo.z > 1.0:
         lo = lo.copy()
         lo.x -= PORTRAIT_WIDEN
+        # the icon's call: pitch 3, fill 0.9 (render.fighter_renders); the portrait's is pitch 6, fill 0.92
+        if len(a) >= 4 and abs(float(a[1]) - 3.0) < 1e-6 and abs(float(a[3]) - 0.9) < 1e-6:
+            hi = hi.copy()
+            lo.z += ICON_LIFT[0]
+            hi.z += ICON_LIFT[1]
+            a = (a[0], ICON_PITCH) + tuple(a[2:])
     return _orig_fit_camera(cam, lo, hi, *a, **k)
 
 

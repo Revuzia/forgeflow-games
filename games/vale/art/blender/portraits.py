@@ -26,6 +26,7 @@ def load_spec(fid: str):
     path = os.path.join(scene.BLENDER_DIR, "fighters", f"{fid}.py")
     s = importlib.util.spec_from_file_location(f"fighter_{fid}", path)
     m = importlib.util.module_from_spec(s)
+    sys.modules[s.name] = m          # (W5b: a fighter module with a @dataclass needs itself in sys.modules)
     s.loader.exec_module(m)
     return m
 

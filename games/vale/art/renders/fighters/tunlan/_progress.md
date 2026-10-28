@@ -165,3 +165,10 @@
   27 cm lens). Lamplit felt on screen now hue 15-21 / 16-22 % (was 247 / 3 %) but the splash still reads beige.
   s2: lens 30 x 12 cm (hr 0.060 / ht 0.150); Lamplit felt #7A5A46 x 0.84 (deeper walnut), panel mid #DDBB86 (39 %
   sat), wider core, edge only at the ribs (top band). Base + skins rebuild.
+- 2026-10-28 14:48 CDT: W5b (final parity review, originality F9, "Tunlan demon icon"): the 128 px icon was a tight crop
+  of the mask under the brim's dark underside (the eyes sunk in the brim's shadow under the forehead crack: a frowning
+  mask). The render wrapper's _fit_camera now raises the ICON box (ICON_LIFT 0.02 / 0.12 m on its bottom / top) and the
+  camera's pitch (3 -> ICON_PITCH 8 deg), so the icon shows the lampshade hat (brim edge, crown and the azure slot),
+  the lantern and the smiling mask under it. Re-rendered from the cache (build.py portraits tunlan --only icon; the
+  10:28 cache = the shipped GLB). art/blender/portraits.py: load_spec registers the module in sys.modules (tunlan's
+  @dataclass failed to load there).
