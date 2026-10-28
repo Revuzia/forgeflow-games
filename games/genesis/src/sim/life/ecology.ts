@@ -242,7 +242,13 @@ function huntPrey(x: PCtx, h: Herd, a: AnimalDef, c: number): void {
       const kills = Math.max(1, Math.min(Math.floor(m * 0.3), Math.floor((massOf(a) * h.count) / (massOf(b) * 4)), Math.floor(m - 2)));
       prey.count = Math.max(0, prey.count - kills);
       h.hunger = clamp01(h.hunger - Math.min(0.9, (kills * massOf(b)) / (h.count * massOf(a) * 0.9)));
-      if (prey.owner >= 0) x.u.emit({ t: 'livestock.killed', planet: x.p.id, a: prey.species, data: { herd: prey.id, by: h.species, settlement: prey.owner } });
+      if (prey.owner >= 0) {
+        x.u.emit({ t: 'livestock.killed', planet: x.p.id, a: prey.species, data: { herd: prey.id, by: h.species, settlement: prey.owner } });
+        // (fix r1 #11) the herders' town marks the pack: its hunters and herders go after it while the trail is fresh
+        // (people/hunt.ts raidingPack; keys of the saved `recent` Record)
+        const own = x.ps.settlement(prey.owner);
+        if (own && own.fallen < 0) { own.recent.raidAt = x.tick; own.recent.raidBy = h.id; }
+      }
     }
   }
   // omnivores fall back on berries and roots

@@ -2352,6 +2352,24 @@ them; on the integrated tree a wrong done (neglect) carries a daughter past 0.6 
 past the line makes about 3 secessions of 8 expected. Meeting 5 of 8 is a balance change (a faster draw, or more neglect)
 for HISTORY's spec, with the 16-run re-measure; the trace is in §10.4, "Why the kin fixture falls short".
 
+**Misses the acceptance table did not carry (fix round 1, 2026-10-28; the review's findings 18, 20, 21, 24).** Measured
+earlier and never re-measured on the integrated tree, or measured and dropped from the table:
+- §3.8 prayer: a quiet town praying and worshipping ≥ 2 % of the time, and ≥ 8 % three days after a tornado. REL's second
+  pass measured 0.004 and 0.070 (§3.8 results); the integrated control sessions read 0.002–0.010 at day 6
+  (`r6/out/god-1..8.json`, case `none`), and the year-50 control towns 0–0.003 (time-weighted over days 0.25–6). The
+  table now has both rows (`integrate/r6/summarize6.ts`; a `tornado` case in `integrate/god.ts`); the cause is the §3.2
+  prayer formula, which REL left to the lead to calibrate (a short daily prayer at home).
+- §1.5 the late eras: 2 seeds × 230 years were asked; one ran (HISTORY's lane tree, before its second pass): medieval at
+  year 177 (90–130 asked), gunpowder, steam, electricity and first orbit not reached by year 230 (§5 results). The second
+  seed never ran and the integrated tree has no measurement past year 50. Re-running both (≈ 2 h of a CPU each, through
+  `_harness/slot.sh`) is open.
+- §1.6 throughput with 1 500 agents: L0 ≥ 450 CPU ticks/s, L1 ≥ 800, L2 ≥ 1 200 asked; PACE measured 422 / 573 / 677 and
+  the review's bench (1 500 clay-age agents) 340–350 / 389–460 / 550–631 on HEAD at machine load 13–16 (+25–30 % per tick
+  at L1/L2 against the tree before the program; L0, which covers every preset from 1x to 300x, unchanged). The gate's
+  throughput floors (`tests/perf.test.ts`) cover a world with no agents. Open.
+- §4.5 ecology: open grassland ≥ 3 % at every year end (1.2–3.1 %) and the dominant-tree mix within 15 % (61–81 %), both
+  unmet on CONTENT's tree (§4 results) and not re-measured since (`content.ts ecology`, 4 seeds × 3 years, no people).
+
 ### 10.7 The gate (seventh pass, 2026-10-27)
 `npm run check` on the final integrated tree (HEAD `ccfcb5c3`; the sim unchanged since the sixth pass's `work.ts` fix at
 13:59), run 18:39–19:23 UTC while the acceptance runs used two of the four cores (`integrate/r6/out/check-7.log`):

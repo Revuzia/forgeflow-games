@@ -6,9 +6,12 @@
 //              gap, drawn from the world's dice) — nursing and weaning, as in every people without contraception
 //   fertility  × clamp(1.5 − children / adults, 0.3, 1): many mouths to feed, fewer births; it rises over the six
 //              years after maturity and wanes after 30; a full store no longer raises it (plentyFactor ≤ 1)
-//   childhood  the hazards of growing up, per year of age: under 1 9 %, 1-5 1.6 %, 5-15 0.3 % (a "childhood fever",
-//              DEATH.childhood); ×2.5 in famine, ×0.8 where herbalism is known, ×0.6 with medicine. Old age no longer
-//              takes children (settlement.ts oldAge).
+//   childhood  the hazards of growing up, per year of age: under 1 7 %, 1-5 1.2 %, 5-15 0.25 % (a "childhood fever",
+//              DEATH.childhood); ×2.5 in famine, ×1.5 while households of the village have no roof (fevers spread in
+//              crowded, cold shelters), ×0.8 where herbalism is known, ×0.6 with medicine. Old age no longer takes
+//              children (settlement.ts oldAge). (fix r1 #13: it was 9 % / 1.6 % / 0.3 % in every year; under-15 deaths
+//              ran at 28 % of births (16-44 %) against 12-25 % over 8 seeds x 50 years, the fever 8-22 of 20-36 a seed —
+//              now it is lighter in a fed, housed village and peaks in famine and crowding.)
 // Why these numbers: an under-15 share of 35-45 % (real pre-modern peoples) goes with growth of ~1.5-3 % a year for a
 // people that matures at 14 and lives ~55 years (stable-population arithmetic: share ≈ (1 − e^(−15r)) / (1 − e^(−55r)),
 // 0.39 at r = 2 %).
@@ -26,7 +29,9 @@ import { worldSalt } from './lifecycle.ts';
 /** a mother's births are at least this many game years apart (her own gap is drawn in [GAP_MIN, GAP_MAX]) */
 export const GAP_MIN = 2.0, GAP_MAX = 3.0;
 /** yearly hazards of childhood by age: under 1, 1 to 5, 5 to 15 */
-export const CHILD_HAZARD = [0.09, 0.016, 0.003] as const;
+export const CHILD_HAZARD = [0.07, 0.012, 0.0025] as const;
+/** (fix r1 #13) × the childhood hazard while households of the village have no roof */
+export const CROWDED_FEVER = 1.5;
 /** fertility wanes from this age (years) to nothing at the species' elder age − 5 */
 export const WANE_FROM = 30;
 /** a young woman's fertility rises from nothing at maturity to full this many years later (first births come at ~18-20) */
@@ -74,9 +79,10 @@ export function ageFertility(age: number, last: number, maturity = 0): number {
 }
 
 /** the yearly hazard of childhood at `age` years in settlement st */
-export function childHazard(x: PCtx, st: Settlement, age: number): number {
+export function childHazard(x: PCtx, st: Settlement, age: number, crowded = false): number {
   let h = age < 1 ? CHILD_HAZARD[0] : age < 5 ? CHILD_HAZARD[1] : CHILD_HAZARD[2];
   if (famine(x, st)) h *= 2.5;
+  if (crowded) h *= CROWDED_FEVER;
   const med = x.rt.byId.get('medicine'), herb = x.rt.byId.get('herbalism');
   if (med !== undefined && libHas(st, med)) h *= 0.6;
   else if (herb !== undefined && libHas(st, herb)) h *= 0.8;
@@ -96,11 +102,12 @@ export function childhood(x: PCtx, st: Settlement, hours: number, die: (x: PCtx,
     (kids ??= []).push(m);
   }
   if (!kids) return;
+  const crowded = st.households.some((h) => h.home < 0 && h.members.length > 0);
   for (const m of kids) {
     if (!A.alive[m]) continue;
     const age = (x.tick - A.birth[m]) / x.year;
     if (age >= Math.min(15, maturity)) continue;
-    const p = chanceIn((childHazard(x, st, age) * 60) / x.year, hours);
+    const p = chanceIn((childHazard(x, st, age, crowded) * 60) / x.year, hours);
     if (hashFloat(A.id[m], x.tick, dice) < p) die(x, m, DEATH.childhood);
   }
 }

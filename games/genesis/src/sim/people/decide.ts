@@ -26,7 +26,7 @@ import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
-import { ROAD_W, SOAK_EXTRA, thirstBudget, waterOnFoot } from './waterway.ts';
+import { ROAD_W, SOAK_EXTRA, TOWN_WALK, thirstBudget, waterOnFoot } from './waterway.ts';
 import { FIRE_BURN, fireDanger, fleeTarget, heat } from './danger.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
 import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
@@ -415,7 +415,7 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   // own water lasts (ROAD_W); a town's drinking list is already sorted by the way from home.
   const w = A.needs[s * NEED_N + WATER];
   if (st && st.band && st.target && w >= ROAD_W) return c < 0 ? null : { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
-  const budget = thirstBudget(w);
+  const budget = st && !st.band ? Math.min(TOWN_WALK, thirstBudget(w)) : thirstBudget(w);
   if (c >= 0 && budget > 0 && !(st && !st.band && st.res && st.res.water.length)) {
     // a ring pick must be within the walk this thirst will risk: else the nearest water on foot, or none
     const r = waterOnFoot(x, A.species[s], here, true);
@@ -429,8 +429,9 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     if (dOk && !(sOk && r.drinkCost > r.soakCost + SOAK_EXTRA)) c = r.drink;
     else if (sOk) return { kind: TASK.drink, goal: spot(x, s, r.soak, 3), goalCell: r.soak, work: 60, data: 3 };
     // nothing within reach: lie up in the shade through the heat of the day (asleep, water is lost at half the rate)
-    // rather than forage in the sun; a band's leader keeps going
-    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && st.band && st.leader === s)) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
+    // rather than forage in the sun; a band's leader keeps going, and townsfolk go on with the day's work (a day worker
+    // carries the skins: waterHere — lying up in a dried town cost the day trips that kept base villagers watered)
+    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && (!st.band || st.leader === s))) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
   }
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };

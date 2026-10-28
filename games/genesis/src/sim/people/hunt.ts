@@ -34,6 +34,8 @@ import { accident } from './knowledge.ts';
 import { addFood, bump, landOf, ledger, type HuntParty } from './ledger.ts';
 import { youngFromHunt } from './herding.ts';
 import { statusGain } from './outlets.ts';
+import { itemIdx } from './resources.ts';
+import { fieldCounts } from './crops.ts';
 
 /** how far beyond the territory hunters go for game (m) */
 export const HUNT_RANGE_M = 2000;
@@ -164,7 +166,21 @@ function itemKg(id: string): number {
 
 /** the share of the food workers who hunt: in a band living off the wild (LIVING §2.1: 15-30 %; round 5: the top of the
  * range, so two parties can be out), and in a farming town (5-15 %) */
-export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.1;
+export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.15;
+/**
+ * (fix r1 #11, the owner's 'hunting/herding where game exists') A farming village went on hunting: for hides and furs as
+ * well as meat, all together in the slack of the farming year, and after the wolves that took its beasts. Before this
+ * a farming town (10 % of its food workers hunters, a party only while the meat in store was under a day a head) all but
+ * stopped hunting after its first decade with herds 150-300 m off (r6 alone runs: 28/27/1/1/1 parties a decade on seed 3;
+ * kills 3.9 per 100 people a year against >= 20, hunted share of food 0.065 against 0.15-0.35; 900 head of village
+ * livestock taken by predators in 8 x 50 years and never answered).
+ *   HIDES_PER_HEAD: below this many hides and furs a head in store the hunters go out though meat is in store.
+ *   FOLK_HUNT_DAYS: a farming town's folk hunt — its hunters with able men and women at home (farmers unless a field is
+ *     ripe, herders, gatherers, crafters, builders) — once in this many days. (A slack-season gate was tried first: with
+ *     fields sown in turn a town always had one ripe or waiting, and seed 3's folk hunt never came — fix/bud/folkdbg.ts.)
+ *   RAID_DAYS: a pack that took the town's beasts is hunted down (hunters and herders) while its trail is this fresh.
+ */
+export const HIDES_PER_HEAD = 0.25, FOLK_HUNT_DAYS = 3, RAID_DAYS = 2;
 
 /** hunters wanted (settlement.ts assignRoles): of `food` food workers, when hunting is known and game is within range */
 export function huntQuota(x: PCtx, st: Settlement, food: number): number {
@@ -228,11 +244,20 @@ export function huntHourly(x: PCtx, st: Settlement): void {
   const k = x.rt.byId.get('hunting');
   if (k === undefined || !libHas(st, k) || st.besieged >= 0) return;
   if (daylightAt(x, st) < 6 * 60) return;
-  if (!famine(x, st) && meatDays(x, st) >= MEAT_DAYS * ((x.ps.members.get(st.id)?.length ?? 0) + st.cohort.n[1])) return;
+  const heads = (x.ps.members.get(st.id)?.length ?? 0) + st.cohort.n[1];
+  // (fix r1 #11) why the spears go out: meat running low or famine, hides and furs wanted, a pack that took the town's
+  // beasts, or a farming town's folk hunt (the last two muster other able adults at home too)
+  const raid = out.length ? null : raidingPack(x, st);
+  const folk = raid === null && !out.length && folkHuntDue(x, st);
+  if (raid === null && !folk && !famine(x, st) && meatDays(x, st) >= MEAT_DAYS * heads && hidesIn(x, st) >= HIDES_PER_HEAD * heads) return;
+  const helpers = raid !== null || folk;
+  const ripe = helpers && fieldCounts(st)[2] > 0;
   const busy = out.length ? partyOut(st) : null;
   const hunters: number[] = [];
   for (const m of x.ps.members.get(st.id) ?? []) {
-    if (A.role[m] !== ROLE.hunter || A.mission[m] || A.flags[m] & AgentFlag.child || A.health[m] < 0.55 || A.camp[m] >= 0) continue;
+    const r = A.role[m];
+    if (!(r === ROLE.hunter || (helpers && (HELPERS.includes(r) || (r === ROLE.farmer && !ripe))))) continue;
+    if (A.mission[m] || A.flags[m] & AgentFlag.child || A.health[m] < 0.55 || A.camp[m] >= 0) continue;
     if (busy && busy.includes(A.id[m])) continue;
     // at home (the party sets out together), not still on the way back with the last kill
     A.posAt(m, x.tick, _p);
@@ -240,8 +265,25 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     hunters.push(m);
   }
   if (hunters.length < PARTY_MIN) return;
-  // the most skilled lead (ties: the elder id)
-  hunters.sort((a, b) => A.skills[b * NS + SKILL.hunt] - A.skills[a * NS + SKILL.hunt] || A.id[a] - A.id[b]);
+  // (a folk hunt is tried once in FOLK_HUNT_DAYS, a pack once: the people were home, with or without game for them)
+  if (folk) st.recent.folkHunt = x.tick;
+  if (raid !== null) { delete st.recent.raidAt; delete st.recent.raidBy; }
+  // the most skilled lead (ties: the elder id); hunters before the others who take up the spear
+  hunters.sort((a, b) => Number(A.role[b] === ROLE.hunter) - Number(A.role[a] === ROLE.hunter) || A.skills[b * NS + SKILL.hunt] - A.skills[a * NS + SKILL.hunt] || A.id[a] - A.id[b]);
+  if (helpers) {
+    // one party, after the pack (when it is game for them: dangerous beasts want four with spears or bows) or the best game
+    const party = hunters.slice(0, PARTY_MAX);
+    const bold = party.length >= 4 && armed(x, st);
+    const g = raid !== null ? (isGame(x, st, raid, bold, true) ? raid : null) : bestGame(x, st, st.pos, party.length, bold);
+    if (!g) return;
+    // they are hunters until the party is home (assignRoles keeps a party out hunting, then gives the roles out again)
+    for (const m of party) A.role[m] = ROLE.hunter;
+    const np: HuntParty = { id: x.tick, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
+    L.party = np;
+    for (const m of party) provision(x, st, m, PARTY_FOOD_DAYS);
+    ledger(x, st).huntTrips++;
+    return;
+  }
   let free = hunters;
   while (out.length < PARTIES_MAX && free.length >= PARTY_MIN) {
     // hunters enough at home for two parties and none out: two parties of 2-3, after two herds (a party of three hunts as
@@ -260,6 +302,36 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     ledger(x, st).huntTrips++;
     free = free.slice(party.length);
   }
+}
+
+/** (fix r1 #11) hides and furs in st's store */
+function hidesIn(x: PCtx, st: Settlement): number {
+  let n = 0;
+  for (const id of ['hide', 'fur']) { const it = itemIdx(x, id); if (it >= 0) n += st.store[it] ?? 0; }
+  return n;
+}
+
+/**
+ * (fix r1 #11) the pack that took st's beasts (life/ecology.ts stamps `recent.raidAt` / `raidBy`), while its trail is
+ * fresh (RAID_DAYS) and it is within the hunters' range; null none (a stale mark is forgotten)
+ */
+function raidingPack(x: PCtx, st: Settlement): Herd | null {
+  const t = st.recent.raidAt;
+  if (t === undefined) return null;
+  if (x.tick - t > RAID_DAYS * x.day) { delete st.recent.raidAt; delete st.recent.raidBy; return null; }
+  const h = x.ps.herd(st.recent.raidBy ?? -1);
+  if (!h || h.count < 1) return null;
+  const P = x.p.grid.pos, hc = h.cell;
+  const d = Math.acos(Math.min(1, P[hc * 3] * st.pos[0] + P[hc * 3 + 1] * st.pos[1] + P[hc * 3 + 2] * st.pos[2])) * x.p.st.radius;
+  return d <= huntRange(st) ? h : null;
+}
+
+/** (fix r1 #11) the roles that join a folk hunt or a hunt for a pack (besides hunters, and farmers with no field ripe) */
+const HELPERS: readonly number[] = [ROLE.herder, ROLE.gatherer, ROLE.crafter, ROLE.builder, ROLE.none];
+
+/** (fix r1 #11) a farming town's folk hunt is due (once in FOLK_HUNT_DAYS) */
+function folkHuntDue(x: PCtx, st: Settlement): boolean {
+  return farming(x, st) && (st.recent.folkHunt === undefined || x.tick - st.recent.folkHunt >= FOLK_HUNT_DAYS * x.day);
 }
 
 /** a party out: the dead and the departed leave it; false when it breaks up (home with its kill, lost, out too long) */

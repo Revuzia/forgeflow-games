@@ -1225,7 +1225,7 @@ export const BUD_POP = 48;
  * adults, leaving at least 28 at home. Nothing new is saved: `recent.budAt` / `recent.bud` are keys of a saved Record.
  */
 function budCheck(x: PCtx, st: Settlement): void {
-  if (st.band || st.fallen >= 0 || st.founded < 0 || x.tick - st.founded < 5 * x.year) return;
+  if (st.band || st.fallen >= 0 || x.tick - st.founded < 5 * x.year) return;
   const members = x.ps.members.get(st.id) ?? [];
   const pop = members.length;
   if (pop < BUD_POP) return;
@@ -1272,8 +1272,16 @@ function budCheck(x: PCtx, st: Settlement): void {
     if (v >= 3.4) sites.push([c, v - d / 1000]);
   }
   sites.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  // (up to six tries, each in a new place: the best few sites often lie together across the same water)
   let site = -1;
-  for (const [c] of sites.slice(0, 4)) if (reachable(x, st, st.cell, c)) { site = c; break; }
+  const bad: number[] = [];
+  for (const [c] of sites) {
+    if (bad.length >= 6) break;
+    const at = cellPos(p, c);
+    if (bad.some((b) => distM(p, cellPos(p, b), at) < 400)) continue;
+    if (reachable(x, st, st.cell, c)) { site = c; break; }
+    bad.push(c);
+  }
   // no ground to be had: they ask again in two years
   st.recent.budAt = site >= 0 ? x.tick : x.tick - 6 * x.year;
   if (site < 0) return;

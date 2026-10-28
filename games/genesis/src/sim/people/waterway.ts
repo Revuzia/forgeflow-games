@@ -208,6 +208,10 @@ export function thirstBudget(w: number): number {
 }
 /** the farthest any thirst walks (thirstBudget at w 0): every search runs to it, each caller compares with its own budget */
 export const MAX_BUDGET = 2 * DAY_WALK;
+/** townsfolk fetch water and dig near home (about 5 hours' walk out at most): striking out for distant water is the
+ * village's decision (settlement.ts abandonCheck: the band walks). Day workers carry skins (decide.ts waterHere); in a
+ * dried town, singles walking a day toward a far soak died on the way where the same folk on day trips lived. */
+export const TOWN_WALK = 2 * WATER_NEAR;
 /** a band member whose band has somewhere to go keeps to the band's road while their water is at least this */
 export const ROAD_W = 0.05;
 /** digging is worth this much walking: real water is preferred unless it is farther than a soak by more than this */

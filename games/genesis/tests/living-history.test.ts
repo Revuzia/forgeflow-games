@@ -18,6 +18,7 @@ import { accident, computeEra, refreshLibrary, inputsSeen } from '../src/sim/peo
 import { histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
 import { politicsDaily, polityOf, plunder } from '../src/sim/people/war.ts';
 import { spawnHerd } from '../src/sim/life/herds.ts';
+import { BUD_POP } from '../src/sim/people/settlement.ts';
 import { newMission, volunteers } from '../src/sim/people/missions.ts';
 import { DWELL, PRACTICE, PRACTICE_USES, eraLabel, inventable, practised } from '../src/sim/people/eras.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
@@ -524,4 +525,50 @@ test('a people that smelts copper and tin has seen both metals: bronze is within
   st.store[it('copper-ore')] = 0;
   if (st.res) delete st.res.items[String(it('copper-ore'))];
   assert.equal(inputsSeen(x, s, st, bronze), false, 'no copper ore: no copper');
+});
+
+// (fix r1 #10/#17) a world left alone stayed one village for 50 years (acceptance §5.1): a village past BUD_POP buds
+test('a village of fifty buds a daughter village a short walk away: young households, whole, in the same polity (fix r1 #10)', () => {
+  // (the n = 64 world of the alone runs: on the small test world, radius 3 km, no site 0.7-2.5 km off can be walked to)
+  const sim = new Sim({ seed: 20261008, scenario: 'sandbox', overrides: { n: 64, vegetation: 1 } });
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 56, era: 'bronze', settled: true });
+  const p = sim.u.planets[0];
+  const ps = p.people;
+  const st = ps.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  const year = Math.round(p.st.orbit.period);
+  // five years old (the gate), a time-lapse speed for the waiting
+  st.founded = sim.u.tick - 6 * year;
+  must(sim, { k: 'time.scale', tps: 3000 });
+  const before = ps.members.get(st.id)!.length;
+  assert.ok(before >= BUD_POP, `a village of ${before}`);
+  let child: Settlement | undefined;
+  for (let d = 0; d < 90 && !child; d++) {
+    sim.step(1440);
+    child = ps.settlements.find((o) => o.parent === st.id && o.fallen < 0);
+  }
+  assert.ok(child, 'a daughter village sets out within 90 days');
+  const A = ps.agents;
+  const kids = ps.members.get(child!.id)!;
+  const adults = kids.filter((s) => !(A.flags[s] & 1)).length;
+  const home = ps.members.get(st.id)!.length;
+  assert.ok(adults >= 10, `at least ten adults leave (${adults})`);
+  assert.ok(home >= 28, `at least 28 stay (${home})`);
+  assert.equal(child!.polity, st.polity, 'the daughter is of the same polity');
+  assert.ok(!kids.some((s) => A.id[s] === st.leader), 'the leader stays');
+  // whole households: nobody of a leaving household stays behind
+  for (const h of child!.households) for (const id of h.members) assert.equal(A.settlement[A.slotOf(id)], child!.id, `household ${h.id} moved whole`);
+  for (const h of st.households) assert.ok(!child!.households.some((q) => q.id === h.id), `household ${h.id} is in one village only`);
+  // where to: 0.7-2.5 km off, and they get there and build
+  const to = child!.target ?? child!.pos;
+  const dist = distM(p, to, st.pos);
+  assert.ok(dist >= 650 && dist <= 2600, `a short walk away (${Math.round(dist)} m)`);
+  const t0 = sim.u.tick;
+  for (let d = 0; d < 12 && child!.band; d++) sim.step(1440);
+  assert.equal(child!.band, false, 'the daughter village is founded');
+  assert.ok(distM(p, child!.pos, st.pos) >= 600, 'a village of its own, not a quarter of the old one');
+  const lines = sim.u.chronicle.filter((c) => c.tick >= t0 - 90 * 1440).map((c) => c.text);
+  assert.ok(lines.some((l) => /daughter village|cleared new ground/.test(l)), `the chronicle tells it: ${lines.slice(-4).join(' | ')}`);
+  // not again for eight years
+  assert.ok(st.recent.budAt !== undefined, 'the village remembers its budding');
 });

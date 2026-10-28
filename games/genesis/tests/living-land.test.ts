@@ -25,7 +25,7 @@ import { herderQuota, herdWork, youngFromHunt } from '../src/sim/people/herding.
 import { stockAt, stockFactor, fishWork, THIN } from '../src/sim/people/fishing.ts';
 import { cropsHourly, farmTask, farmWork, fieldSite, newFieldCell, pruneFields, sowingTime, villageGround, yearPhase } from '../src/sim/people/crops.ts';
 import { seedItems } from '../src/sim/people/decide.ts';
-import { ageFertility, birthGap, childhood, mouths, plentyFactor, spaced } from '../src/sim/people/demography.ts';
+import { ageFertility, birthGap, childhood, childHazard, CHILD_HAZARD, CROWDED_FEVER, mouths, plentyFactor, spaced } from '../src/sim/people/demography.ts';
 import { companyNear, fireless, gatheringsHourly, nextGathering, NEAR_M } from '../src/sim/people/gatherings.ts';
 import { statusDaily, talkOutlet } from '../src/sim/people/outlets.ts';
 import { wantChain, wantPick } from '../src/sim/people/wants.ts';
@@ -841,4 +841,79 @@ test('land: a town that has lost its roofs raises shelter before it mends its st
   sim.step(1440);
   const h = x.ps.building(hut!.id);
   assert.ok(h && (h.delivered > 0 || h.progress > 0), `the hut is being built (delivered ${h?.delivered}, progress ${h?.progress.toFixed(2)})`);
+});
+
+// (fix r1 #11) a farming village went on hunting: hides wanted, the folk hunt, the pack that took its beasts
+test('land: a farming town hunts for hides with meat in store, musters a folk hunt of its able adults, and hunts down the pack that took its beasts (fix r1 #11)', () => {
+  const { sim, st } = village();
+  const x0 = cx(sim);
+  clearWild(x0);
+  const deer = spawnHerd(x0, x0.c.animals.idx('deer'), landAt(x0, st, 500, 800), 10);
+  const adult = adultsOf(sim, st)[0];
+  for (let i = 0; i < 200 && daylightLeft(cx(sim), adult) < 7 * 60; i++) sim.step(15);
+  const x = cx(sim);
+  const A = x.A;
+  const L = landOf(st);
+  const heads = membersOf(sim, st).length;
+  const home = (s: number) => { A.camp[s] = -1; A.trip[s] = 0; A.place(s, st.pos[0], st.pos[1], st.pos[2], x.tick); for (const it of x.info[A.species[s]].foods) A.take(s, it, 1e6); };
+  const able = adultsOf(sim, st).filter((s) => !A.mission[s] && A.health[s] >= 0.55 && A.id[s] !== st.leader);
+  assert.ok(able.length >= 8, 'grown-ups enough');
+  // meat in store for days, no hides: two hunters go out for hides
+  storeAdd(x, st, itemIdx(x, 'meat'), heads * 4);
+  for (const id of ['hide', 'fur']) st.store[itemIdx(x, id)] = 0;
+  for (const s of membersOf(sim, st)) if (A.role[s] === ROLE.hunter) A.role[s] = ROLE.gatherer;
+  for (const s of able.slice(0, 2)) { A.role[s] = ROLE.hunter; home(s); }
+  L.party = null; delete L.more;
+  huntHourly(x, st);
+  assert.equal(parties(st).length, 1, 'hides wanted: a party though meat is in store');
+  // hides enough too: the spears rest (and this town does not farm yet: no folk hunt)
+  L.party = null;
+  storeAdd(x, st, itemIdx(x, 'hide'), heads);
+  for (const s of able.slice(0, 2)) home(s);
+  huntHourly(x, st);
+  assert.equal(parties(st).length, 0, 'meat and hides in store: no party');
+  // a farming town (agriculture known, three fields): the folk hunt — hunters with crafters and builders at home
+  const ag = x.rt.byId.get('agriculture')!;
+  if (!st.library.includes(ag)) { st.library.push(ag); st.library.sort((a, b) => a - b); }
+  while (st.fields.length < 3) st.fields.push(landAt(x, st, 60 + st.fields.length * 30, 400));
+  for (const [i, s] of able.slice(2, 6).entries()) { A.role[s] = i % 2 ? ROLE.crafter : ROLE.builder; home(s); }
+  for (const s of able.slice(0, 2)) home(s);
+  delete st.recent.folkHunt;
+  huntHourly(x, st);
+  const folk = parties(st);
+  assert.equal(folk.length, 1, 'the folk hunt sets out');
+  assert.ok(folk[0].members.length >= 4, `with others than the hunters (${folk[0].members.length})`);
+  assert.ok(folk[0].members.every((id) => A.role[A.slotOf(id)] === ROLE.hunter), 'who carry spears until they are home');
+  assert.equal(folk[0].herd, deer.id, 'after the deer');
+  assert.ok(st.recent.folkHunt === x.tick, 'and the town will not muster again for three days');
+  // a wolf pack took its goats: hunters and herders (armed, four or more) go after that pack, not the deer
+  L.party = null;
+  const wolves = spawnHerd(x, x.c.animals.idx('wolf'), landAt(x, st, 600, 900), 5);
+  storeAdd(x, st, itemIdx(x, 'bronze-spear'), 6);
+  for (const [i, s] of able.slice(0, 6).entries()) { A.role[s] = i < 2 ? ROLE.hunter : ROLE.herder; home(s); }
+  st.recent.raidAt = x.tick; st.recent.raidBy = wolves.id;
+  huntHourly(x, st);
+  const hunt = parties(st);
+  assert.equal(hunt.length, 1, 'a party after the pack');
+  assert.equal(hunt[0].herd, wolves.id, 'the wolves that took the goats');
+  assert.ok(hunt[0].members.length >= 4, 'four or more for dangerous game');
+  assert.equal(st.recent.raidAt, undefined, 'the raid is answered');
+});
+
+// (fix r1 #13) under-15 deaths ran at 28 % of births (16-44 %) against 12-25 %: lighter when fed and housed, peaks in want
+test('land: childhood fevers are lighter in a fed, housed village and peak in crowding and famine (fix r1 #13)', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  const [h0, h1, h2] = CHILD_HAZARD;
+  const to15 = 1 - (1 - h0) * (1 - h1) ** 4 * (1 - h2) ** 10;
+  assert.ok(to15 > 0.1 && to15 < 0.15, `a fed, housed childhood: ${(to15 * 100).toFixed(1)} % die of fever before 15`);
+  for (const age of [0.5, 3, 10]) {
+    const fed = childHazard(x, st, age), crowded = childHazard(x, st, age, true);
+    assert.ok(Math.abs(crowded / fed - CROWDED_FEVER) < 1e-9, `crowded houses: x${CROWDED_FEVER} at age ${age}`);
+  }
+  const fedBaby = childHazard(x, st, 0.5);
+  for (const it of x.info[st.species].foods) st.store[it] = 0;
+  st.recent.famineAt = x.tick;
+  assert.ok(Math.abs(childHazard(x, st, 0.5) / fedBaby - 2.5) < 1e-9, 'famine: the fever peaks (x2.5)');
+  assert.ok(Math.abs(childHazard(x, st, 0.5, true) / fedBaby - 2.5 * CROWDED_FEVER) < 1e-9, 'famine in crowded houses: worse still');
 });
