@@ -32,6 +32,7 @@ import { SceneProbe, attenuate, bodyPoint, hearingRef, toLocal, rotate, rotateIn
 import { Ambience, type PlayOpts } from './ambience.ts';
 import { Emitters } from './emitters.ts';
 import { MusicDirector, type MusicState } from './musicplayer.ts';
+import { STINGERS, pickStinger } from './authored.ts';
 import { FALLBACK, SFX, Sfx } from './sfx.ts';
 import { SpatialOut, soundDelay } from './spatial.ts';
 import { Knob, bq } from './synth.ts';
@@ -105,7 +106,7 @@ export interface AudioState {
   meter: { peak: number; rms: number };
   bank: { ready: number; pending: number; renderMs: number; worker: boolean };
   scene: { planet: number; alt: number; space: number; inAir: number; airless: boolean; day: number; temp: number } | null;
-  events: { heard: number; played: number; dropped: number };
+  events: { heard: number; played: number; dropped: number; stingers: number };
   /** the portal's own mute (null: no portal on this page) */
   portalMuted: boolean | null;
   /** interface cues: played, dropped by the gate or a batch, held while the context opened */
@@ -217,7 +218,7 @@ class AudioEngine implements GenesisAudio {
   private probeT = 1;
   private visible = true;
   private unlockArmed = false;
-  private stats = { heard: 0, played: 0, dropped: 0 };
+  private stats = { heard: 0, played: 0, dropped: 0, stingers: 0 };
   private duckUntil = 0;
   private musicHoldUntil = 0;
   private disposed = false;
@@ -422,7 +423,7 @@ class AudioEngine implements GenesisAudio {
         return pv ? toLocal(pv, this.listener, body) : null;
       },
     }, this.hrtf, this.hrtf ? 10 : 6);
-    this.music = new MusicDirector(ctx, bank, this.duck, this.mus.wetIn, this.rand);
+    this.music = new MusicDirector(ctx, bank, this.duck, this.mus.wetIn, this.rand, this.mus.input);
     // a real context renders its textures in a worker (an offline one — tests, renders — warms synchronously)
     if (owned && typeof Worker !== 'undefined') {
       import('./dspspawn.ts').then((m) => { if (!this.disposed) bank.useWorker(m.spawnDspWorker()); }).catch(() => { /* main-thread pump */ });
@@ -587,6 +588,12 @@ class AudioEngine implements GenesisAudio {
     const now = this.ctx!.currentTime;
     const q = this.queue;
     this.queue = [];
+    // the god's moments (a prayer answered, a prophecy kept, a sign, wrath) get an authored stinger over the music
+    const sting = pickStinger(q);
+    if (sting && this.music?.sting(sting, now)) {
+      this.duckUntil = Math.max(this.duckUntil, now + STINGERS[sting].phrase + 1);
+      this.stats.stingers++;
+    }
     for (const e of q) {
       const spec = cueFor(e);
       if (!spec) continue;

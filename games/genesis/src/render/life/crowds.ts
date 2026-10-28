@@ -17,7 +17,7 @@
 import type { IUniform, Vector3 } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import type { MoverBlock } from '../../sim/types.ts';
-import { AgentFlag, AnimState } from '../../sim/types.ts';
+import { AgentFlag, AgentFlag2, AnimState } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
 import { clothTier, eraIndex, heldForItem, HELD, speciesAt } from './catalog.ts';
@@ -25,6 +25,7 @@ import { BIPED_RIG, HEX_RIG, JELLY_RIG, PLAN, STYLE, bipedMesh, hexMesh, jellyMe
 import { BodyBuckets, bodyMatrix, unpackLinear } from './bodies.ts';
 import type { Buildings } from './buildings.ts';
 import { Boats, vesselOf } from './boats.ts';
+import { CAMP_CELL_M, Camps } from './camps.ts';
 import { AVATAR_STATE } from '../camera/avatar.ts';
 
 // (the far LOD from 60 m, ~22 px tall at 720 p: the mid LOD to 115 m was most of a city view's crowd triangles)
@@ -85,11 +86,14 @@ const _a = new Float32Array(3), _b = new Float32Array(3), _c = new Float32Array(
  * per-tick motion, so a herder standing with the flock leans on the crook instead of walking on the spot, and someone
  * hurrying to shelter runs with their arms over their head while those already there huddle.
  */
-const RANIM = { evacuate: 31, herdStill: 32, huntStill: 33, gameStill: 34, playStill: 35 } as const;
+const RANIM = { evacuate: 31, herdStill: 32, huntStill: 33, gameStill: 34, playStill: 35, ringDance: 36 } as const;
 /** metres per tick under which a person counts as standing */
 const STILL_M = 0.15;
-function livingAnim(anim: number, moving: boolean): number {
+/** of the dancers at a festival or wedding (AgentFlag2.festive), the share in the ring dance (the rest dance freely) */
+const RING_SHARE = 0.65;
+function livingAnim(anim: number, moving: boolean, flags2: number, id: number): number {
   switch (anim) {
+    case AnimState.dance: return (flags2 & AgentFlag2.festive) && hashFloat(id, 91) < RING_SHARE ? RANIM.ringDance : anim;
     case AnimState.shelter: return moving ? RANIM.evacuate : anim;
     case AnimState.herd: return moving ? anim : RANIM.herdStill;
     case AnimState.hunt: return moving ? anim : RANIM.huntStill;
@@ -122,13 +126,30 @@ export class Crowds {
   private pickP = new Float32Array(256 * 4);
   private lastReal = -1;
 
+  /** the camps out at work sites and on trips (AgentFlag2.camp): bedrolls under the sleepers, a fire per cluster */
+  readonly camps: Camps;
+  /** this frame's camp clusters: grid cell key → sleepers' summed unit vectors, count, first sleeper's matrix side */
+  private campCells = new Map<string, { x: number; y: number; z: number; n: number; fx: number; fy: number; fz: number; seed: number }>();
   /** the boats people ride (AgentFlag.boat) */
   readonly boats: Boats;
 
+  /**
+   * scripted captures (like godfx's window.__GENESIS_FX__): AgentFlag2 bits OR-ed onto agents by id, so a shot can
+   * show a camp or a festival's ring dance on a fixture world that does not set them. Reach it from a probe as
+   * window.__GENESIS_LIFE__.all[k].probeFlags2, one crowd per world drawn (empty in play: nothing reads it then).
+   */
+  readonly probeFlags2 = new Map<number, number>();
+
   constructor(shared: Record<string, IUniform>) {
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __GENESIS_LIFE__?: { all: Crowds[] } };
+      (w.__GENESIS_LIFE__ ??= { all: [] }).all.push(this);
+    }
     this.bodies = new BodyBuckets(shared, 'crowds');
     this.boats = new Boats(shared);
     this.bodies.group.add(this.boats.group);
+    this.camps = new Camps(shared);
+    this.bodies.group.add(this.camps.group);
   }
 
   get group() { return this.bodies.group; }
@@ -254,6 +275,8 @@ export class Crowds {
     for (const s of pv.settlements) eraOf.set(s.id, eraIndex(s.era));
     this.bodies.begin();
     this.boats.begin();
+    this.camps.begin();
+    this.campCells.clear();
     const water = pv.fields.get('water');
     const surfaceF = pv.fields.get('surface');
     const cx = camBody.x, cy = camBody.y, cz = camBody.z;
@@ -281,7 +304,8 @@ export class Crowds {
         ux /= ul; uy /= ul; uz /= ul;
         let tr = this.tracks.get(id);
         const i3 = i * 3;
-        const simAnim = livingAnim(A.anim[i], Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M);
+        const f2 = (A.flags2 ? A.flags2[i] : 0) | (this.probeFlags2.size ? this.probeFlags2.get(id) ?? 0 : 0);
+        const simAnim = livingAnim(A.anim[i], Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M, f2, id);
         if (!tr) { tr = { id, anim: simAnim, prev: simAnim, at: -1e9, gx: 0, gy: 0, gz: 0, ground: 0, sx: -2, sy: 0, sz: 0, ox: 0, oy: 0, oz: 0, hd: A.heading[i] }; this.tracks.set(id, tr); }
         if (fresh && simAnim !== tr.anim) { tr.prev = tr.anim; tr.anim = simAnim; tr.at = realTime; }
         // motion smoothing: a new snapshot's disagreement with what was drawn becomes a decaying offset
@@ -357,7 +381,11 @@ export class Crowds {
         if (pin) {
           anim = prevAnim = pin.anim;
           bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale, pin.tumble);
-        } else bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale);
+        } else {
+          // asleep at a camp: a bedroll under them (laid along the sleeping body), and their camp's fire (end of frame)
+          if (!afloat && tr.anim === AnimState.sleep && (f2 & AgentFlag2.camp)) this.campSleeper(id, ux, uy, uz, tr.ground, tr.hd, R);
+          bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale);
+        }
         const blend = Math.min(1, (realTime - tr.at) / BLEND_S);
         this.colours(id, sp, A.tint[i], flags, era, A.species[i]);
         const tool = this.toolFor(tr.anim, A.carry[i], era, flags, id);
@@ -413,7 +441,9 @@ export class Crowds {
       }
       amb++;
     }
+    this.campFires(pv, cx, cy, cz);
     this.boats.end();
+    this.camps.end();
     this.stats.drawn = this.bodies.end();
     this.stats.agents = agents;
     this.stats.ambient = amb;
@@ -480,7 +510,38 @@ export class Crowds {
     void species;
   }
 
-  setShadowCasting(on: boolean): void { this.bodies.setShadowCasting(on); this.boats.setShadowCasting(on); }
-  swapDepth(depth: boolean): void { this.bodies.swapDepth(depth); this.boats.swapDepth(depth); }
-  dispose(): void { this.bodies.dispose(); this.boats.dispose(); }
+  setShadowCasting(on: boolean): void { this.bodies.setShadowCasting(on); this.boats.setShadowCasting(on); this.camps.setShadowCasting(on); }
+  swapDepth(depth: boolean): void { this.bodies.swapDepth(depth); this.boats.swapDepth(depth); this.camps.swapDepth(depth); }
+  dispose(): void {
+    this.bodies.dispose(); this.boats.dispose(); this.camps.dispose();
+    const all = typeof window !== 'undefined' ? (window as unknown as { __GENESIS_LIFE__?: { all: Crowds[] } }).__GENESIS_LIFE__?.all : undefined;
+    if (all && all.includes(this)) all.splice(all.indexOf(this), 1);
+  }
+
+  /** a camp sleeper at unit vector u on ground radius g: their bedroll, and their share of the cluster's fire */
+  private campSleeper(id: number, ux: number, uy: number, uz: number, g: number, hd: number, R: number): void {
+    bodyMatrix(_mat, ux, uy, uz, g, hd, 1);
+    this.camps.add('bedroll', _mat, hashFloat(id, 71));
+    const key = `${Math.round((ux * R) / CAMP_CELL_M)},${Math.round((uy * R) / CAMP_CELL_M)},${Math.round((uz * R) / CAMP_CELL_M)}`;
+    const c = this.campCells.get(key);
+    if (c) { c.x += ux; c.y += uy; c.z += uz; c.n++; return; }
+    // the first sleeper's front (body Z: the side a sleeper on their side faces), 1.4 m out: a lone sleeper's fire
+    this.campCells.set(key, { x: ux, y: uy, z: uz, n: 1, fx: _mat[8], fy: _mat[9], fz: _mat[10], seed: hashFloat(id, 73) });
+  }
+
+  /** one fire per camp cluster: at its sleepers' middle, or (one or two sleepers) beside the first, on the ground */
+  private campFires(pv: PlanetView, cx: number, cy: number, cz: number): void {
+    const R = pv.params.radius;
+    for (const c of this.campCells.values()) {
+      let x = c.x / c.n, y = c.y / c.n, z = c.z / c.n;
+      const off = (c.n < 3 ? 1.4 : 0) / R;
+      x += c.fx * off; y += c.fy * off; z += c.fz * off;
+      const l = Math.hypot(x, y, z) || 1;
+      x /= l; y /= l; z /= l;
+      const g = groundHeight(pv.ground, x, y, z);
+      if (Math.hypot(x * g - cx, y * g - cy, z * g - cz) > LOD_D[LODS - 1] + 200) continue;
+      bodyMatrix(_mat, x, y, z, g, c.seed * Math.PI * 2, 1);
+      this.camps.add('fire', _mat, c.seed);
+    }
+  }
 }

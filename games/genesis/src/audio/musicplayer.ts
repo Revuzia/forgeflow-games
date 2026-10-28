@@ -14,7 +14,7 @@ import { barSeconds, composeBar, describeStyle, orbitalStyle, styleFor, type Mus
 import { buffersFor, playNote, type NoteCtx } from './instruments.ts';
 import type { BufferBank } from './bank.ts';
 import { Knob } from './synth.ts';
-import { AuthoredMusic, type AuthoredState } from './authored.ts';
+import { AuthoredMusic, type AuthoredState, type StingerId } from './authored.ts';
 
 const LOOKAHEAD = 0.6;
 const MAX_POLY = 32;
@@ -162,10 +162,14 @@ export class MusicDirector {
     return s;
   }
 
-  constructor(ctx: BaseAudioContext, bank: BufferBank, dest: AudioNode, wet: AudioNode | null, r: () => number) {
+  /** `stingDest`: where stingers play (past the engine's music duck; defaults to `dest`) */
+  constructor(ctx: BaseAudioContext, bank: BufferBank, dest: AudioNode, wet: AudioNode | null, r: () => number, stingDest?: AudioNode) {
     this.ctx = ctx; this.bank = bank; this.dest = dest; this.wet = wet; this.r = r;
-    this.authored = new AuthoredMusic(ctx, dest);
+    this.authored = new AuthoredMusic(ctx, dest, stingDest);
   }
+
+  /** play an authored stinger (authored.ts); true when it sounds (the caller ducks the music under its phrase) */
+  sting(id: StingerId, now: number): boolean { return this.authored.sting(id, now); }
 
   /** the star's identity seeds the orbital score */
   setStar(name: string): void {

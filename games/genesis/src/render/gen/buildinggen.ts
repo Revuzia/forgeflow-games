@@ -2640,6 +2640,43 @@ export function vesselMesh(kind: 'raft' | 'boat' | 'sail', lod: number): BufferG
   return k.build();
 }
 
+export type CampProp = 'bedroll' | 'fire';
+/**
+ * A camp out at a distant work site or on a hunting trip (AgentFlag2.camp, render/life/camps.ts). bedroll: a hide
+ * spread on the ground with a rolled blanket at the head end, laid along the body frame's X (a sleeper's body lies
+ * along X, head at -X) and centred under them; fire: a small ring of stones round an ember bed, sticks leaning in, a
+ * spare armful of wood beside it (the flames, smoke and light come from the emitter life.ts places on it).
+ */
+export function campMesh(kind: CampProp, lod: number): BufferGeometry {
+  const k = new KitBuilder();
+  const rng = new Rng(kind === 'bedroll' ? 83 : 89);
+  if (kind === 'bedroll') {
+    // the hide, a little wider at the shoulders, its corners curling up
+    const x0 = -1.0, x1 = 1.1, w = 0.42;
+    k.slab([x0, 0.035, -w], [x1, 0.035, -w * 0.85], [x1, 0.035, w * 0.85], [x0, 0.035, w], 0.03, SURF.hide, PART.prop, HIDE, SURF.hide, mulc(HIDE, 0.7), 0.9);
+    for (const sz of [-1, 1]) k.tube([[x0 + 0.05, 0.05, sz * w], [x1 - 0.05, 0.05, sz * w * 0.85]], [0.03, 0.03], 4, SURF.hide, PART.prop, mulc(HIDE, 0.8));
+    // the blanket rolled at the head end, a woollen cover thrown over the legs
+    k.tube([[-0.92, 0.1, -0.3], [-0.92, 0.1, 0.3]], [0.1, 0.1], lod === 0 ? 8 : 5, SURF.cloth, PART.prop, [0.3, 0.22, 0.14], { cap: true });
+    k.slab([0.15, 0.07, -0.4], [1.0, 0.07, -0.36], [1.0, 0.07, 0.38], [0.15, 0.07, 0.42], 0.04, SURF.cloth, PART.prop, [0.24, 0.12, 0.07], SURF.cloth, [0.18, 0.09, 0.05], 0.85);
+    return k.build();
+  }
+  const r = 0.42;
+  stoneRing(k, r, lod === 0 ? 9 : 6, 0.17, STONE, rng, lod);
+  k.cylinder(0, 0, -0.06, 0.035, r * 0.92, r * 0.85, 10, SURF.earth, PART.prop, ASH, { top: true, topSurf: SURF.ember, topPart: PART.hot, topCol: [0.08, 0.03, 0.01] });
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + rng.float() * 0.6;
+    k.tube([[Math.cos(a) * r * 0.8, 0.04, Math.sin(a) * r * 0.8], [Math.cos(a) * 0.05, 0.3, Math.sin(a) * 0.05]], [0.04, 0.03], 5, SURF.bark, PART.hot, [0.05, 0.03, 0.02]);
+  }
+  if (lod === 0) {
+    // the woodpile: a few lengths of branch laid side by side
+    for (let i = 0; i < 4; i++) {
+      const z = 0.75 + i * 0.09, y = 0.045 + (i === 3 ? 0.08 : 0);
+      k.tube([[r + 0.25, y, z - 0.35 + rng.float() * 0.1], [r + 0.95, y, z - 0.3 + rng.float() * 0.1]], [0.045, 0.035], 5, SURF.bark, PART.prop, mulc(WOOD_GREY, 0.85 + rng.float() * 0.3), { cap: true });
+    }
+  }
+  return k.build();
+}
+
 /** shipyard: a slipway with a hull on the stocks (ribs showing), a crane, sheds and timber stacks */
 function shipyard(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng): number {
   const W = spec.w, D = spec.d;

@@ -45,6 +45,8 @@ float animFreq(int a) {
   // the living land's states (play, hunt, herd, carryGame, shelter) and their still / moving variants (crowds.ts RANIM)
   if (a == 26) return 1.3; if (a == 27) return 0.55; if (a == 28) return 0.8; if (a == 29) return 0.75; if (a == 30) return 0.6;
   if (a == 31) return 1.5; if (a == 32) return 0.22; if (a == 33) return 0.3; if (a == 34) return 0.3; if (a == 35) return 1.1;
+  // a festival's ring dance (crowds.ts RANIM.ringDance)
+  if (a == 36) return 0.85;
   return 0.25;
 }
 
@@ -181,6 +183,19 @@ vec3 livingRot(int a, float t, int b, float tool) {
     if (b == 4) r = vec3(-1.85, 0.9, 0.0); if (b == 6) r = vec3(-1.85, -0.9, 0.0);
     if (b == 1) r = vec3(run ? 0.42 : 0.6, run ? 0.08 * s : 0.0, shiver);
     if (b == 2) r = vec3(run ? 0.25 : 0.45, 0.0, 0.0);
+    return r;
+  }
+  if (a == 36) {
+    // a festival's ring dance: arms held out low to the sides (hands joined with the neighbours'), knees lifted and
+    // stamped down in turn, the shoulders bouncing on the beat, the head turned along the ring
+    float lift = pow(max(0.0, s), 1.4), lift2 = pow(max(0.0, -s), 1.4);
+    float bounce = 0.07 * sin(t * 2.0);
+    if (b == 7) r.x = -0.95 * lift; if (b == 9) r.x = -0.95 * lift2;
+    if (b == 8) r.x = 0.06 + 1.45 * lift; if (b == 10) r.x = 0.06 + 1.45 * lift2;
+    if (b == 3) r = vec3(-0.25, 0.0, 1.05 + bounce); if (b == 5) r = vec3(-0.25, 0.0, -1.05 - bounce);
+    if (b == 4 || b == 6) r = vec3(-0.3, 0.0, 0.0);
+    if (b == 1) r = vec3(0.04, 0.0, -0.06 * s);
+    if (b == 2) r = vec3(-0.06 + 0.06 * abs(s), 0.35, 0.0);
     return r;
   }
   return r;
@@ -408,6 +423,7 @@ void rootPose(int a, float t, out vec3 off, out vec3 rot) {
   else if (a == 28 || a == 29) { off.y = 0.02 * cos(2.0 * t) - (a == 29 ? 0.03 : 0.012); off.x = 0.012 * s; }
   else if (a == 30) { off.y = -crouchDrop(1.05); off.x = 0.004 * sin(t * 9.0); }
   else if (a == 31) off.y = 0.05 * abs(s) - 0.05;
+  else if (a == 36) { off.y = 0.04 * abs(s) - 0.01; off.x = 0.05 * s; }
   else off.x = 0.01 * sin(t * 0.37);
 }
 #endif

@@ -6,10 +6,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AUTHORED, ERA_PIECE, TOWN_NEAR, idleWeave, pieceFor, sceneTension, stemLevels, weave, weaveLevel, FADE_IN, OVERRUN } from '../src/audio/authored.ts';
+import { AUTHORED, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, FADE_IN, OVERRUN } from '../src/audio/authored.ts';
 import { MOTIF_HEAD, hasMotifHead, loopSeconds, melodiesOf, partsOf, stemsOf, STEMS, type Piece } from '../src/audio/score/motif.ts';
 import { TITLE } from '../src/audio/score/title.ts';
 import { ERAS } from '../src/audio/score/eras.ts';
+import { STINGERS as STING_SCORES, STINGER_IDS } from '../src/audio/score/stingers.ts';
+import type { SimEvent } from '../src/sim/types.ts';
 import type { AudioScene } from '../src/audio/scene.ts';
 
 const ASSETS = fileURLToPath(new URL('../src/audio/assets/', import.meta.url));
@@ -133,4 +135,46 @@ test('stems follow the scene: daylight cross-fades day and night (equal power), 
   assert.equal(sceneTension(scene({})), 0);
   assert.ok(sceneTension(scene({ town: 0.5, war: true })) > 0.5, 'war near the listener');
   assert.ok(sceneTension(scene({ fire: 1 })) >= 0.8, 'fire');
+});
+
+test('the stingers: each states the motif head, matches its score\'s phrase, ships as a short Opus file', () => {
+  assert.deepEqual(Object.keys(STINGERS).sort(), [...STINGER_IDS].sort());
+  for (const id of STINGER_IDS) {
+    const p = STING_SCORES[id];
+    assert.ok(melodiesOf(p).some(hasMotifHead), `${id}: no melody states the motif head`);
+    assert.ok(Math.abs(STINGERS[id].phrase - loopSeconds(p)) < 1e-9, `${id}: phrase ${STINGERS[id].phrase} vs score ${loopSeconds(p)}`);
+    const file = fileURLToPath(STINGERS[id].url);
+    assert.ok(existsSync(file), `${id}: ${file} missing`);
+    const s = opusSeconds(file);
+    // the phrase plus its reverb tail, never a long cue
+    assert.ok(s >= loopSeconds(p) && s <= loopSeconds(p) + 6, `${id}: ${s.toFixed(2)} s`);
+    assert.ok(statSync(file).size < 80_000, `${id}: ${statSync(file).size} bytes`);
+  }
+});
+
+test('stingers answer the god\'s moments only: its prayers, prophecies, signs and wrath — not nature\'s or a rival\'s', () => {
+  const ev = (t: string, data: Record<string, unknown> = {}): SimEvent => ({ t, data } as unknown as SimEvent);
+  assert.equal(stingerFor(ev('prayer.answered', { settlement: 3, kind: 'rain' })), 'answered');
+  assert.equal(stingerFor(ev('prophet.fulfilled', { prophecy: 1 })), 'fulfilled');
+  assert.equal(stingerFor(ev('omen', { kind: 'rainbow', god: 0 })), 'sign');
+  assert.equal(stingerFor(ev('omen', { kind: 'comet', god: -1 })), null, 'a natural omen');
+  assert.equal(stingerFor(ev('omen', { kind: 'comet', god: 2 })), null, 'a rival god\'s omen');
+  assert.equal(stingerFor(ev('disaster', { kind: 'quake', god: 0, cause: 'god' })), 'wrath');
+  assert.equal(stingerFor(ev('disaster', { kind: 'quake', god: -1, cause: 'nature' })), null);
+  assert.equal(stingerFor(ev('disaster', { kind: 'flood', god: 1, cause: 'god' })), null, 'a rival\'s flood');
+  assert.equal(stingerFor(ev('prayer.raised')), null);
+  // a sign by eclipse spawns a god-sent eclipse in the same tick: the batch is a sign, not wrath
+  assert.equal(pickStinger([ev('disaster', { kind: 'eclipse', god: 0, cause: 'god' }), ev('omen', { kind: 'eclipse', god: 0 })]), 'sign');
+  assert.equal(pickStinger([ev('prayer.answered'), ev('prophet.fulfilled')]), 'fulfilled');
+  assert.equal(pickStinger([ev('birth'), ev('death')]), null);
+});
+
+test('stinger pacing: one gap per stinger, a phrase is cut only by a higher one', () => {
+  const g = new StingerGate();
+  assert.ok(g.admit('answered', 0));
+  assert.ok(!g.admit('answered', 5), 'within its gap');
+  assert.ok(!g.admit('answered', STINGERS.answered.gap - 0.1));
+  assert.ok(g.admit('fulfilled', 1), 'a prophecy kept outranks an answered prayer');
+  assert.ok(!g.admit('wrath', 2), 'wrath does not cut the prophecy\'s phrase');
+  assert.ok(g.admit('wrath', 1 + STINGERS.fulfilled.phrase + 0.01), 'after the phrase it may play');
 });

@@ -8,8 +8,13 @@
 // rises over either with war and disaster; `main` always plays. Buffers are decoded on demand (fetch +
 // decodeAudioData, off the main thread) and only the playing piece and the one fading out are kept. If a file fails
 // to load or decode (an old browser without Opus), the procedural score simply plays on.
+//
+// The STINGERS (score/stingers.ts) mark the moments between the god and the people: a prayer answered, a prophecy
+// fulfilled, a sign sent, the god's wrath. Each is a short phrase on the motif, played once over the music (which the
+// engine ducks under it); they are small, so all four are decoded as soon as the music starts.
 
 import type { AudioScene } from './scene.ts';
+import type { SimEvent } from '../sim/types.ts';
 
 export type StemRole = 'main' | 'day' | 'night' | 'tension';
 
@@ -73,6 +78,72 @@ export const AUTHORED: Record<string, AuthoredPiece> = {
     },
   },
 };
+
+export type StingerId = 'answered' | 'fulfilled' | 'sign' | 'wrath';
+
+export interface Stinger {
+  id: StingerId;
+  url: string;
+  /** the phrase's length, seconds (the file runs on with its reverb tail) */
+  phrase: number;
+  /** linear trim over the music */
+  gain: number;
+  /** real seconds before the same stinger may play again (a second answered prayer in a minute is not news) */
+  gap: number;
+  /** which one wins when two arrive together or one would cut another short */
+  pri: number;
+}
+
+/** the shipped stingers: phrase = 8 beats at the piece's tempo (score/stingers.ts) */
+export const STINGERS: Record<StingerId, Stinger> = {
+  answered: { id: 'answered', url: new URL('./assets/sting-answered.ogg', import.meta.url).href, phrase: 8 * 60 / 92, gain: 0.8, gap: 30, pri: 1 },
+  wrath: { id: 'wrath', url: new URL('./assets/sting-wrath.ogg', import.meta.url).href, phrase: 8 * 60 / 76, gain: 0.85, gap: 20, pri: 2 },
+  sign: { id: 'sign', url: new URL('./assets/sting-sign.ogg', import.meta.url).href, phrase: 8 * 60 / 72, gain: 0.8, gap: 20, pri: 3 },
+  fulfilled: { id: 'fulfilled', url: new URL('./assets/sting-fulfilled.ogg', import.meta.url).href, phrase: 8 * 60 / 80, gain: 0.85, gap: 20, pri: 4 },
+};
+
+/** the player's god (u.god.gods[0]); rival gods and nature send their own disasters and omens unannounced */
+const PLAYER_GOD = 0;
+
+/**
+ * The stinger a sim event calls for (null: none). Only the god's own acts and what the people make of them:
+ * a prayer it answered, a prophecy that came true, a sign it sent (the `omen` the people read: one per town that saw
+ * it), a disaster it sent (nature's and rivals' are only news).
+ */
+export function stingerFor(e: SimEvent): StingerId | null {
+  const d = (e.data ?? {}) as Record<string, unknown>;
+  switch (e.t) {
+    case 'prayer.answered': return 'answered';
+    case 'prophet.fulfilled': return 'fulfilled';
+    case 'omen': return d.god === PLAYER_GOD ? 'sign' : null;
+    case 'disaster': return d.god === PLAYER_GOD && d.cause !== 'nature' ? 'wrath' : null;
+  }
+  return null;
+}
+
+/** of a batch of events (one snapshot), the stinger to play: the highest priority (a sign's eclipse is a sign, not wrath) */
+export function pickStinger(events: readonly SimEvent[]): StingerId | null {
+  let best: StingerId | null = null;
+  for (const e of events) {
+    const id = stingerFor(e);
+    if (id && (!best || STINGERS[id].pri > STINGERS[best].pri)) best = id;
+  }
+  return best;
+}
+
+/** stinger pacing in real time: each its own gap; none cuts a phrase short unless it outranks it */
+export class StingerGate {
+  private last = new Map<StingerId, number>();
+  private playing: { id: StingerId; until: number } | null = null;
+  admit(id: StingerId, now: number): boolean {
+    const s = STINGERS[id];
+    if (now - (this.last.get(id) ?? -Infinity) < s.gap) return false;
+    if (this.playing && now < this.playing.until && STINGERS[this.playing.id].pri >= s.pri) return false;
+    this.last.set(id, now);
+    this.playing = { id, until: now + s.phrase };
+    return true;
+  }
+}
 
 /** the sim's eras (SettlementView.era) → the era piece that sings them */
 export const ERA_PIECE: Record<string, string> = {
@@ -193,7 +264,11 @@ class Voice {
   }
 }
 
-export interface AuthoredState { piece: string | null; phase: Weave['phase']; level: number; ready: string[]; failed: string[] }
+export interface AuthoredState {
+  piece: string | null; phase: Weave['phase']; level: number; ready: string[]; failed: string[];
+  /** stingers decoded, and the last one played (with its audio-clock time) */
+  stingers: { ready: StingerId[]; last: StingerId | null; at: number; played: number };
+}
 
 export class AuthoredMusic {
   private readonly ctx: BaseAudioContext;
@@ -205,8 +280,55 @@ export class AuthoredMusic {
   private level = 0;
   private tension = 0;
   private lastNow = 0;
+  /** where stingers play (after the engine's music duck, so the duck lowers the music under them, not them) */
+  private readonly stingDest: AudioNode;
+  private readonly stingBufs = new Map<StingerId, AudioBuffer>();
+  private stingLoads = false;
+  private readonly gate = new StingerGate();
+  private lastSting: { id: StingerId | null; at: number; played: number } = { id: null, at: 0, played: 0 };
+  private stingVoice: { src: AudioBufferSourceNode; g: GainNode } | null = null;
 
-  constructor(ctx: BaseAudioContext, dest: AudioNode) { this.ctx = ctx; this.dest = dest; }
+  constructor(ctx: BaseAudioContext, dest: AudioNode, stingDest?: AudioNode) { this.ctx = ctx; this.dest = dest; this.stingDest = stingDest ?? dest; }
+
+  /** decode all four stingers (once; ~200 KB of Opus) */
+  private loadStingers(): void {
+    if (this.stingLoads || typeof fetch !== 'function') return;
+    this.stingLoads = true;
+    for (const s of Object.values(STINGERS)) {
+      fetch(s.url)
+        .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
+        .then((ab) => this.ctx.decodeAudioData(ab))
+        .then((buf) => { this.stingBufs.set(s.id, buf); })
+        .catch(() => { /* no stinger: the moment's sound effect still plays */ });
+    }
+  }
+
+  /**
+   * Play a stinger now if it is decoded and its pacing allows; true when it plays (the engine then ducks the music
+   * for its phrase). A stinger that outranks the one sounding cuts it off with a short fade.
+   */
+  sting(id: StingerId, now: number): boolean {
+    const s = STINGERS[id];
+    const buf = this.stingBufs.get(id);
+    if (!s || !buf || !this.gate.admit(id, now)) return false;
+    if (this.stingVoice) {
+      const v = this.stingVoice;
+      v.g.gain.cancelScheduledValues(now);
+      v.g.gain.setTargetAtTime(0, now, 0.12);
+      try { v.src.stop(now + 0.8); } catch { /* already stopped */ }
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const g = this.ctx.createGain();
+    g.gain.value = s.gain;
+    src.connect(g); g.connect(this.stingDest);
+    src.start(now + 0.02);
+    const voice = { src, g };
+    src.onended = () => { try { g.disconnect(); } catch { /* gone */ } if (this.stingVoice === voice) this.stingVoice = null; };
+    this.stingVoice = voice;
+    this.lastSting = { id, at: Math.round(now * 100) / 100, played: this.lastSting.played + 1 };
+    return true;
+  }
 
   private load(url: string): void {
     if (this.loads.has(url) || this.pending.has(url) || typeof fetch !== 'function') return;
@@ -251,6 +373,7 @@ export class AuthoredMusic {
   update(scene: AudioScene | null, now: number, master: number): number {
     const dt = Math.max(0, Math.min(0.5, now - this.lastNow));
     this.lastNow = now;
+    this.loadStingers();
     let want = pieceFor(scene, this.w.piece);
     if (want && this.failed(want)) want = null;
     const bufs = want ? this.ready(want) : null;
@@ -273,7 +396,10 @@ export class AuthoredMusic {
     return this.voice ? weaveLevel(this.w, now) : 0;
   }
 
-  stop(): void { this.voice?.stop(this.ctx.currentTime); this.voice = null; this.w = idleWeave(); }
+  stop(): void {
+    this.voice?.stop(this.ctx.currentTime); this.voice = null; this.w = idleWeave();
+    if (this.stingVoice) { try { this.stingVoice.src.stop(); } catch { /* already stopped */ } this.stingVoice = null; }
+  }
 
   state(): AuthoredState {
     const ready: string[] = [], failed: string[] = [];
@@ -282,6 +408,9 @@ export class AuthoredMusic {
       if (urls.every((u) => this.loads.get(u)?.buf)) ready.push(id);
       if (urls.some((u) => this.loads.get(u)?.failed)) failed.push(id);
     }
-    return { piece: this.w.piece, phase: this.w.phase, level: Math.round(this.level * 1000) / 1000, ready, failed };
+    return {
+      piece: this.w.piece, phase: this.w.phase, level: Math.round(this.level * 1000) / 1000, ready, failed,
+      stingers: { ready: [...this.stingBufs.keys()].sort(), last: this.lastSting.id, at: this.lastSting.at, played: this.lastSting.played },
+    };
   }
 }

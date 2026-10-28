@@ -73,7 +73,7 @@ export class LifeLayer {
    */
   private collectFx(pv: PlanetView, cx: number, cy: number, cz: number, budget: number): void {
     const fire = pv.fields.get('fire');
-    const stamp = `${this.buildings.emittersVersion}|${pv.fieldVersion.get('fire') ?? 0}|${budget}|${this.roads.lampVersion}`;
+    const stamp = `${this.buildings.emittersVersion}|${pv.fieldVersion.get('fire') ?? 0}|${budget}|${this.roads.lampVersion}|${this.crowds.camps.version}`;
     const moved = Math.hypot(cx - this.fxCam[0], cy - this.fxCam[1], cz - this.fxCam[2]);
     if (stamp === this.fxStamp && moved < 150) return;
     this.fxStamp = stamp;
@@ -127,6 +127,13 @@ export class LifeLayer {
     }
     // wildfire: a few flame clusters scattered over every burning cell near the camera, a smoke column per cell
     const lightExtra: LightSource[] = [];
+    // campfires out at work sites and on trips (crowds.ts / camps.ts): a small hearth's flames, embers, smoke and light
+    for (const f of this.crowds.camps.fires) {
+      push(f.x, f.y, f.z, PSYS.flame, 0.32, 0.8, f.seed, 12, 1200);
+      push(f.x, f.y, f.z, PSYS.ember, 0.32, 0.8, f.seed + 0.1, 6, 400);
+      push(f.x, f.y, f.z, PSYS.smoke, 0.35, 0.6, f.seed + 0.2, 8, 1800);
+      lightExtra.push({ x: f.x, y: f.y, z: f.z, kind: EMIT.brazier, power: 0.9, seed: f.seed });
+    }
     if (fire) {
       const treeF = pv.fields.get('tree');
       const rc = Math.hypot(cx, cy, cz) || 1;
