@@ -218,8 +218,9 @@ export class MusicDirector {
 
   update(scene: AudioScene | null, now: number): void {
     const aw = this.authored.update(scene, now, this.master);
-    // the calm follows the speed over a few seconds (a speed step is not a jump cut in the music)
-    const dt = this.lastUpdate < 0 ? 10 : Math.max(0, Math.min(1, now - this.lastUpdate));
+    // the calm follows the speed over a few seconds of the audio clock (a speed step is not a jump cut in the music);
+    // real seconds, not frames: a slow software-rendered frame or a hidden tab still lets it settle on time
+    const dt = this.lastUpdate < 0 ? 10 : Math.max(0, Math.min(30, now - this.lastUpdate));
     this.lastUpdate = now;
     this.calm += (paceCalm(this.speed) - this.calm) * (1 - Math.exp(-dt / 3));
     const calmGain = 1 - (1 - CALM_TRIM.gain) * this.calm;

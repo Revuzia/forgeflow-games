@@ -35,12 +35,19 @@ export const BPART = {
   garment: 20, legwear: 21, sleeve: 22, forearm: 23, haircap: 24, linen: 25,
   // game carried home across the shoulders (a tawny coat, paler under)
   game: 26,
+  // the culture's woven trim (hem bands, necklines, sashes: the settlement's motif in its accent dye) and a headscarf
+  trim: 27, scarf: 28,
 } as const;
 /** instance style bits (render/life/crowds.ts sets them per person) */
 export const STYLE = {
   hairShort: 1, hairLong: 2, tier0: 4, tier1: 8, tier2: 16, tier3: 32, dress: 64, hat: 128, beard: 256, child: 512, bald: 1024,
   // light linen pieces: an apron over a dress, a shirt front in an open coat
   apron: 2048, shirt: 4096,
+  // how the hair is worn (with the short cap): a knot at the nape, two plaits over the shoulders, a headscarf over it
+  bun: 8192, braids: 16384, kerchief: 32768,
+  // the settlement's culture (crowds.ts cultureBits): its trim motif (pat: stripes, zigzag, checks, lozenges) and its
+  // accent dye (dye: madder red, indigo, weld yellow, undyed linen), two bits each
+  pat0: 65536, pat1: 131072, dye0: 262144, dye1: 524288,
 } as const;
 
 export interface Rig { plan: number; pivots: V3[]; parents: number[] }
@@ -254,7 +261,8 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   if (o.tier !== undefined) {
     const tb = TIER_BITS[Math.max(0, Math.min(3, o.tier))];
     b.always = tb;
-    b.possible = tb | STYLE.hairShort | STYLE.hairLong | STYLE.dress | STYLE.hat | STYLE.beard | STYLE.child | STYLE.bald | STYLE.apron | STYLE.shirt;
+    b.possible = tb | STYLE.hairShort | STYLE.hairLong | STYLE.dress | STYLE.hat | STYLE.beard | STYLE.child | STYLE.bald | STYLE.apron | STYLE.shirt
+      | STYLE.bun | STYLE.braids | STYLE.kerchief | STYLE.pat0 | STYLE.pat1 | STYLE.dye0 | STYLE.dye1;
   }
   const S = lod === 0 ? 1 : lod === 1 ? 0.42 : 0.3;
   const seg = (n: number) => Math.max(3, Math.round(n * S));
@@ -301,7 +309,7 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
       if (lod === 0) {
         b.ellipsoid([sx * 0.034, 1.637, 0.088], [0.016, 0.011, 0.008], 8, 5, rigid(2), BPART.white);
         b.ellipsoid([sx * 0.034, 1.637, 0.095], [0.008, 0.008, 0.004], 6, 4, rigid(2), BPART.dark);
-        b.box([sx * 0.036, 1.657, 0.092], [0.02, 0.004, 0.006], 2, BPART.hair, { forbid: STYLE.bald });
+        b.box([sx * 0.036, 1.659, 0.092], [0.019, 0.0028, 0.005], 2, BPART.hair, { forbid: STYLE.bald });
         // the ear: a thin shell set against the skull, its bowl darker inside
         b.ellipsoid([sx * 0.09, 1.627, -0.006], [0.009, 0.029, 0.019], 8, 6, rigid(2), BPART.skin, {}, undefined, (p) => [p[0], p[1], p[2] - (p[1] - 1.627) * 0.18]);
         b.ellipsoid([sx * 0.0955, 1.622, -0.003], [0.005, 0.015, 0.01], 6, 4, rigid(2), BPART.skin, { ao: 0.5 });
@@ -322,8 +330,24 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   }
   // ── hair: a cap leaving the face open; long hair down the back; beard; hat
   if (lod <= 1) {
-    const capKeep = (p: V3) => { const ly = p[1] - hc[1], lz = p[2] - hc[2]; return ly > 0.035 || (lz < -0.01 && ly > -0.07) || (Math.abs(p[0]) > 0.075 && ly > -0.02 && lz < 0.05); };
-    b.ellipsoid([hc[0], hc[1] + 0.008, hc[2] - 0.004], [0.094, 0.12, 0.107], seg(14), seg(10), rigid(2), BPART.hair, { req: STYLE.hairShort | STYLE.hairLong }, capKeep);
+    // the hairline, by the azimuth round the head (0 = the face): a hand's breadth above the brows over the forehead
+    // (at 3 cm every short crop read as a bowl cut), a little higher at the temples, down past the sideburns in front
+    // of the ears to the nape; one smooth curve (three box rules left square tufts at the temples)
+    const sstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const hairline = (th: number) => 0.068 + 0.008 * sstep(0.2, 0.6, th) - 0.1 * sstep(0.75, 1.4, th) - 0.045 * sstep(1.5, 2.3, th);
+    const azi = (p: V3) => Math.abs(Math.atan2(p[0] - hc[0], p[2] - hc[2]));
+    const capKeep = (p: V3) => p[1] - hc[1] > hairline(azi(p));
+    // (and it has volume: lumps of hair over the crown and the back, outward only, so the outline is never a shell;
+    // thinning to the skin along the hairline, not a ledge standing off the forehead)
+    const capLump = (p: V3): V3 => {
+      const dx = p[0] - hc[0], dy = p[1] - hc[1] - 0.008, dz = p[2] - hc[2] + 0.004, a = Math.atan2(dx, dz);
+      // (the lumps fade out toward the crown's pole, where the azimuth is undefined: they folded its fan inside out)
+      const wp = Math.min(1, Math.hypot(dx, dz) / 0.05);
+      let k = 1 + Math.max(0, dy + 0.03) * 0.35 * (0.5 + 0.5 * wp * Math.sin(a * 5 + dy * 31) * Math.sin(a * 3 - dy * 47 + 1));
+      k *= 0.935 + 0.065 * sstep(0, 0.035, p[1] - hc[1] - hairline(azi(p)));
+      return [hc[0] + dx * k, hc[1] + 0.008 + dy * k, hc[2] - 0.004 + dz * k];
+    };
+    b.ellipsoid([hc[0], hc[1] + 0.008, hc[2] - 0.004], [0.094, 0.12, 0.107], seg(24), seg(18), rigid(2), BPART.hair, { req: STYLE.hairShort | STYLE.hairLong, forbid: STYLE.kerchief }, capKeep, capLump);
     // long hair: clumped locks falling from the crown over the nape and down the back (a single slab read as a plank)
     const locks = lod === 0 ? 9 : 5;
     for (let i = 0; i < locks; i++) {
@@ -333,10 +357,16 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
       const w = 0.026 + 0.008 * Math.cos(i * 1.7);
       const x0 = sa * 0.083, z0 = -ca * 0.088 + 0.004;
       const pts: V3[] = [[x0 * 0.85, 1.69, z0 * 0.8], [x0 * 1.08, 1.6, z0 * 1.08 - 0.01], [x0 * 1.2, 1.5, -0.1 - 0.03 * ca], [x0 * 1.35 + u * 0.01, 1.62 - len * 0.82, -0.115 - 0.025 * ca], [x0 * 1.4 + u * 0.02, 1.62 - len, -0.11 - 0.02 * ca]];
-      b.tube(pts, [[w, w * 0.55], [w * 1.15, w * 0.6], [w * 1.1, w * 0.55], [w * 0.8, w * 0.45], [w * 0.25, w * 0.2]], seg(6), (t) => (t < 0.4 ? [2, 2, 1] : [1, 2, Math.min(1, (t - 0.4) * 3)]), BPART.hair, { req: STYLE.hairLong }, false, true, [ca, 0, sa]);
+      b.tube(pts, [[w, w * 0.55], [w * 1.15, w * 0.6], [w * 1.1, w * 0.55], [w * 0.8, w * 0.45], [w * 0.25, w * 0.2]], seg(6), (t) => (t < 0.4 ? [2, 2, 1] : [1, 2, Math.min(1, (t - 0.4) * 3)]), BPART.hair, { req: STYLE.hairLong, forbid: STYLE.kerchief }, false, true, [ca, 0, sa]);
     }
+    hairWays(b, lod, hc, seg);
     if (lod === 0) {
-      b.ellipsoid([hc[0], hc[1] - 0.006, hc[2] + 0.004], [0.091, 0.117, 0.104], 12, 8, rigid(2), BPART.hair, { req: STYLE.beard }, (p) => p[1] - hc[1] < -0.035 && p[2] - hc[2] > 0.0);
+      // the beard: along the jaw and round the chin, fuller and a little pointed below it, and a moustache
+      b.ellipsoid([hc[0], hc[1] - 0.006, hc[2] + 0.004], [0.091, 0.117, 0.104], 14, 10, rigid(2), BPART.hair, { req: STYLE.beard }, (p) => p[1] - hc[1] < -0.035 && p[2] - hc[2] > 0.0, (p) => {
+        const ly = p[1] - hc[1] + 0.006, lz = p[2] - hc[2], c = Math.max(0, -ly - 0.07) * (1 - Math.min(1, Math.abs(p[0]) / 0.07));
+        return [p[0] * (1 - c * 2), p[1] - c * 0.9, p[2] + c * 0.5 + (lz > 0.05 ? 0.004 : 0)];
+      });
+      b.tube([[-0.034, 1.574, 0.089], [-0.016, 1.581, 0.103], [0, 1.583, 0.106], [0.016, 1.581, 0.103], [0.034, 1.574, 0.089]], [[0.004, 0.003], [0.007, 0.005], [0.0075, 0.0055], [0.007, 0.005], [0.004, 0.003]], 5, rigid(2), BPART.hair, { req: STYLE.beard }, true, true);
     }
     // a flat cap / brimmed hat
     b.lathe(0, 0.005, [[0.12, 1.705], [0.122, 1.712], [0.095, 1.716], [0.092, 1.77], [0.07, 1.785], [0.001, 1.79]], seg(14), 2, BPART.cloth2, { req: STYLE.hat });
@@ -444,9 +474,20 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     b.tube([[0, 0.9, 0], [0, 0.935, 0], [0, 0.97, 0]], [[0.196, 0.137], [0.201, 0.14], [0.202, 0.141]], seg(12), rigid(0), BPART.leather, { req: STYLE.tier2 | STYLE.tier3 }, false, false);
     // the dyed hem: a band of the skirt itself, weighted like it (a ring rigid to the pelvis floated off the hem as soon
     // as the skirt followed a stride, and its round section stood off the oval skirt front and back)
+    // (the culture's trim, BPART.trim: its motif woven in its accent dye — crowds.ts cultureBits)
+    // (the tier-2 band stays BPART.cloth2, the trousers' part: the shader tells it from the legs and weaves the motif)
     skirt(0.915, 0.66, 0.184, 0.225, BPART.cloth2, STYLE.tier2, STYLE.dress, 0.35, 0.82, 1, 0.005, 1);
+    skirt(0.915, 0.55, 0.184, 0.245, BPART.trim, STYLE.tier1, STYLE.dress, 0.45, 0.86, 1, 0.005, 1);
+    skirt(0.915, 0.12, 0.184, 0.33, BPART.trim, STYLE.dress, 0, 0.6, 0.93, 1, 0.005, 1);
+    // a woven sash at the waist of the plain tunic and dress (the dyed tiers wear a leather belt)
+    b.tube([[0, 0.912, 0], [0, 0.93, 0], [0, 0.948, 0]], [[0.193, 0.135], [0.197, 0.138], [0.195, 0.136]], seg(12), rigid(0), BPART.trim, { req: STYLE.tier1 }, false, false);
     if (lod === 0) {
-      b.lathe(0, 0.0, [[0.13, 1.4], [0.105, 1.445]], 12, 1, BPART.cloth2, { req: STYLE.tier2 | STYLE.tier3 });
+      b.lathe(0, 0.0, [[0.13, 1.4], [0.105, 1.445]], 12, 1, BPART.trim, { req: STYLE.tier1 | STYLE.tier2 | STYLE.tier3 });
+      // the first peoples' necklace of bone and shell beads (half the cultures: crowds.ts dye0)
+      for (let i = 0; i < 11; i++) {
+        const a = -1.5 + (i / 10) * 3;
+        b.ellipsoid([Math.sin(a) * 0.1, 1.415 + 0.025 * (1 - Math.cos(a)), 0.012 + Math.cos(a) * 0.085], [0.0085, 0.008, 0.0075], 5, 4, rigid(1), i % 3 === 1 ? BPART.horn : BPART.white, { req: STYLE.dye0, forbid: STYLE.tier1 | STYLE.tier2 | STYLE.tier3 });
+      }
       // a satchel strap and buttons on coats
       for (let i = 0; i < 4; i++) b.box([0, 1.08 + i * 0.075, 0.142], [0.008, 0.008, 0.005], 1, BPART.metal, { req: STYLE.tier3 });
     }
@@ -461,6 +502,62 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   // ── held tools and carried things (bone 6 = right forearm / hand; carried loads on the chest, shoulder, head, back)
   if (lod <= 1) tools(b, lod);
   return b.build(BIPED_RIG, 1.75);
+}
+
+/**
+ * How the hair is worn, by culture (crowds.ts styleFor): a knot at the back of the crown (bun), two plaits over the
+ * shoulders tied with the culture's trim (braids), or a headscarf over all of it, framing the face and knotted at the
+ * nape with its tail down the back (kerchief, BPART.scarf: the accent dye, or linen).
+ */
+function hairWays(b: RigBuilder, lod: number, hc: V3, seg: (n: number) => number): void {
+  // bun: a coiled knot on the back of the crown, a smaller twist on it
+  b.ellipsoid([0, hc[1] + 0.022, hc[2] - 0.124], [0.044, 0.041, 0.034], seg(12), seg(9), rigid(2), BPART.hair, { req: STYLE.bun, forbid: STYLE.kerchief });
+  if (lod === 0) b.ellipsoid([0.006, hc[1] + 0.03, hc[2] - 0.15], [0.026, 0.024, 0.017], 8, 6, rigid(2), BPART.hair, { req: STYLE.bun, forbid: STYLE.kerchief });
+  // braids: from behind the ears, down the sides of the neck, over the collarbones onto the chest; the head carries
+  // their top, the chest the rest (they sway with the torso, not through it)
+  const path: V3[] = [[0.084, 1.6, -0.032], [0.1, 1.52, -0.004], [0.122, 1.45, 0.064], [0.116, 1.36, 0.14], [0.11, 1.25, 0.176]];
+  const n = lod === 0 ? 16 : 6;
+  for (const sx of [1, -1]) {
+    const pts: V3[] = [], rad: [number, number][] = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, f = t * (path.length - 1), k = Math.min(path.length - 2, Math.floor(f)), u = f - k;
+      const a = path[k], c = path[k + 1];
+      // (the plait's three strands cross: a lobe every 2.2 cm, each a little to one side, then the other)
+      const lobe = lod === 0 ? (i % 2 === 0 ? 1 : 0.68) : 0.9, side = lod === 0 ? (i % 4 < 2 ? 0.004 : -0.004) : 0;
+      pts.push([sx * (a[0] + (c[0] - a[0]) * u + side), a[1] + (c[1] - a[1]) * u, a[2] + (c[2] - a[2]) * u]);
+      const r = (0.021 - 0.005 * t) * lobe;
+      rad.push([r, r * 0.85]);
+    }
+    const bone = (t: number): [number, number, number] => (t < 0.22 ? [2, 2, 1] : [1, 2, Math.min(1, (t - 0.22) * 2.6)]);
+    b.tube(pts, rad, seg(7), bone, BPART.hair, { req: STYLE.braids, forbid: STYLE.kerchief }, true, false);
+    // a tie of the culture's trim, and the loose ends below it
+    const e = path[path.length - 1];
+    b.tube([[sx * e[0], e[1] + 0.012, e[2]], [sx * e[0], e[1] - 0.008, e[2] + 0.002]], [[0.014, 0.012], [0.014, 0.012]], seg(7), rigid(1), BPART.trim, { req: STYLE.braids, forbid: STYLE.kerchief }, true, true);
+    b.tube([[sx * e[0], e[1] - 0.006, e[2] + 0.002], [sx * (e[0] - 0.002), e[1] - 0.05, e[2] + 0.006]], [[0.012, 0.01], [0.003, 0.003]], seg(6), rigid(1), BPART.hair, { req: STYLE.braids, forbid: STYLE.kerchief }, false, true);
+  }
+  // headscarf: a cloth over the crown, the back and the sides of the head down to the jaw, the face left open; knotted
+  // at the nape, its tail lying down the upper back
+  const lim = (ly: number) => 0.04 - Math.max(0, ly) * 0.4;
+  const keep = (p: V3) => { const ly = p[1] - hc[1], lz = p[2] - hc[2]; return ly > 0.05 || (lz < lim(ly) && ly > -0.095); };
+  // (the cloth falls straight below the ears instead of hugging the jaw)
+  const widen = (x: number, ly: number) => x * (ly < -0.02 ? 1 + (-0.02 - ly) * 0.9 : 1);
+  const sc: V3 = [0, hc[1] + 0.012, hc[2] - 0.006], sr: V3 = [0.101, 0.128, 0.114];
+  b.ellipsoid(sc, sr, seg(16), seg(12), rigid(2), BPART.scarf, { req: STYLE.kerchief }, keep, (p) => [widen(p[0], p[1] - hc[1]), p[1], p[2]]);
+  // its hem rolled back round the face: from under one jaw, up past the temple, across the forehead, down the other side
+  const rim: V3[] = [];
+  const edgeX = (ly: number) => { const dy = hc[1] + ly - sc[1], dz = lim(ly) + hc[2] - sc[2]; return sr[0] * Math.sqrt(Math.max(0, 1 - (dy / sr[1]) ** 2 - (dz / sr[2]) ** 2)); };
+  const rows = lod === 0 ? 7 : 4;
+  for (let i = 0; i <= rows; i++) { const ly = -0.09 + (i / rows) * 0.14; rim.push([widen(edgeX(ly), ly), hc[1] + ly, hc[2] + lim(ly) - 0.004]); }
+  const top = rim[rim.length - 1];
+  const across: V3[] = [];
+  const na = lod === 0 ? 6 : 3;
+  for (let i = 0; i <= na; i++) { const x = top[0] * (1 - (2 * i) / na); const dz = Math.sqrt(Math.max(0, 1 - (x / sr[0]) ** 2 - ((top[1] - sc[1]) / sr[1]) ** 2)); across.push([x, top[1], sc[2] + sr[2] * dz - 0.004]); }
+  // (three pieces, capped, meeting at the temples: one tube turning that corner folded inside out)
+  const rimR = (n: number) => Array.from({ length: n }, () => [0.0085, 0.0085] as [number, number]);
+  for (const piece of [rim, rim.map((p) => [-p[0], p[1], p[2]] as V3).reverse(), across]) b.tube(piece, rimR(piece.length), seg(6), rigid(2), BPART.scarf, { req: STYLE.kerchief }, true, true);
+  const nb = (p: V3): [number, number, number] => { const w = Math.min(1, Math.max(0, (1.56 - p[1]) / 0.1)); return [1, 2, w]; };
+  b.card([0.055, 1.565, -0.108], [-0.055, 1.565, -0.108], [-0.012, 1.43, -0.128], [0.012, 1.43, -0.128], nb, BPART.scarf, { req: STYLE.kerchief });
+  if (lod === 0) b.ellipsoid([0, 1.567, -0.112], [0.028, 0.02, 0.018], 7, 5, rigid(2), BPART.scarf, { req: STYLE.kerchief });
 }
 
 /**

@@ -91,6 +91,12 @@ const RANIM = { evacuate: 31, herdStill: 32, huntStill: 33, gameStill: 34, playS
 const STILL_M = 0.15;
 /** of the dancers at a festival or wedding (AgentFlag2.festive), the share in the ring dance (the rest dance freely) */
 const RING_SHARE = 0.65;
+/**
+ * A settlement's culture as 6 bits from its language (settlements that split keep their kin's look until the language
+ * drifts): bits 0-1 the trim motif, 2-3 the accent dye (STYLE pat / dye), 4-5 how the women wear their hair.
+ */
+export function cultureOf(language: number): number { return Math.floor(hashFloat(language >>> 0, 91) * 64) & 63; }
+
 function livingAnim(anim: number, moving: boolean, flags2: number, id: number): number {
   switch (anim) {
     case AnimState.dance: return (flags2 & AgentFlag2.festive) && hashFloat(id, 91) < RING_SHARE ? RANIM.ringDance : anim;
@@ -198,18 +204,33 @@ export class Crowds {
     return HELD.none;
   }
 
-  /** style bits: hair, clothing tier, dress, hat, beard, child */
-  private styleFor(id: number, flags: number, era: number): number {
+  /**
+   * style bits: hair, clothing tier, dress, hat, beard, child, and the settlement's culture (`cult`, cultureOf): its
+   * trim motif and accent dye, and how its women wear their hair — loose, in two plaits, in a knot, or under a
+   * headscarf (from the woven eras on; elder women cover their hair more often everywhere)
+   */
+  private styleFor(id: number, flags: number, era: number, cult: number): number {
     const tier = clothTier(era);
     const female = (flags & AgentFlag.female) !== 0, child = (flags & AgentFlag.child) !== 0, elder = (flags & AgentFlag.elder) !== 0;
-    let s = [STYLE.tier0, STYLE.tier1, STYLE.tier2, STYLE.tier3][tier];
+    let s: number = [STYLE.tier0, STYLE.tier1, STYLE.tier2, STYLE.tier3][tier];
+    s |= (cult & 15) * STYLE.pat0;
+    const way = (cult >> 4) & 3;
     if (child) s |= STYLE.child;
-    if (female) { s |= hashFloat(id, 11) < 0.88 ? STYLE.hairLong : STYLE.hairShort; if (tier >= 1 && !child && hashFloat(id, 13) < 0.7) s |= STYLE.dress; }
-    else {
+    if (female) {
+      s |= hashFloat(id, 11) < 0.88 ? STYLE.hairLong : STYLE.hairShort;
+      if (tier >= 1 && !child && hashFloat(id, 13) < 0.7) s |= STYLE.dress;
+      const h = hashFloat(id, 37);
+      const covered = tier >= 1 && !child && ((way === 3 && h < 0.7) || (elder && hashFloat(id, 39) < 0.5));
+      if (covered) s = (s & ~STYLE.hairLong) | STYLE.hairShort | STYLE.kerchief;
+      else if ((way === 1 || (way === 3 && tier === 0)) && h < 0.7) s = (s & ~STYLE.hairLong) | STYLE.hairShort | STYLE.braids;
+      else if (way === 2 && !child && h < 0.7) s = (s & ~STYLE.hairLong) | STYLE.hairShort | STYLE.bun;
+    } else {
       if (elder && hashFloat(id, 17) < 0.45) s |= STYLE.bald; else s |= hashFloat(id, 19) < 0.12 ? STYLE.hairLong : STYLE.hairShort;
+      // (where the women knot their hair, some men tie theirs up too)
+      if (way === 2 && !child && !(s & STYLE.bald) && hashFloat(id, 19) < 0.3) s = (s & ~STYLE.hairLong) | STYLE.hairShort | STYLE.bun;
       if (!child && hashFloat(id, 23) < (elder ? 0.7 : 0.35)) s |= STYLE.beard;
     }
-    if (!child && ((tier === 3 && hashFloat(id, 29) < 0.55) || (tier === 2 && hashFloat(id, 31) < 0.12))) s |= STYLE.hat;
+    if (!child && !(s & STYLE.kerchief) && ((tier === 3 && hashFloat(id, 29) < 0.55) || (tier === 2 && hashFloat(id, 31) < 0.12))) s |= STYLE.hat;
     // light linen: aprons over dresses, shirt fronts in open coats (a dark-clothed town still shows its white)
     if (!child && tier >= 2) {
       if ((s & STYLE.dress) && hashFloat(id, 33) < (tier === 3 ? 0.6 : 0.45)) s |= STYLE.apron;
@@ -271,8 +292,8 @@ export class Crowds {
     this.bodies.animTime.value = animTime;
     const A = pv.agents;
     const R = pv.params.radius;
-    const eraOf = new Map<number, number>();
-    for (const s of pv.settlements) eraOf.set(s.id, eraIndex(s.era));
+    const eraOf = new Map<number, number>(), cultOf = new Map<number, number>();
+    for (const s of pv.settlements) { eraOf.set(s.id, eraIndex(s.era)); cultOf.set(s.id, cultureOf(s.language ?? s.id)); }
     this.bodies.begin();
     this.boats.begin();
     this.camps.begin();
@@ -390,7 +411,7 @@ export class Crowds {
         this.colours(id, sp, A.tint[i], flags, era, A.species[i]);
         const tool = this.toolFor(tr.anim, A.carry[i], era, flags, id);
         const cadence = 0.9 + 0.2 * hashFloat(id, 41);
-        const style = this.styleFor(id, flags, era);
+        const style = this.styleFor(id, flags, era, cultOf.get(A.group[i]) ?? cultureOf(A.group[i]));
         for (let q = 0; q < nl; q++) {
           const b = this.bucketFor(A.species[i], _lf[q][0], era);
           const k = this.bodies.push(b);
@@ -433,7 +454,7 @@ export class Crowds {
       const child = (a.flags & AgentFlag.child) !== 0;
       bodyMatrix(_mat, ux, uy, uz, g, heading, (sp.height / 1.72) * (child ? 0.62 : 0.92 + 0.16 * hashFloat(a.id, 15)));
       this.colours(a.id, sp, a.tint, a.flags, era, a.species);
-      const style = this.styleFor(a.id, a.flags, era);
+      const style = this.styleFor(a.id, a.flags, era, cultOf.get(a.settlement) ?? cultureOf(a.settlement));
       for (let q = 0; q < nl; q++) {
         const b = this.bucketFor(a.species, _lf[q][0], era);
         const k = this.bodies.push(b);

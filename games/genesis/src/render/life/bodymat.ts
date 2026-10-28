@@ -687,6 +687,28 @@ varying vec3 vLocal;
 varying float vStyle;
 `;
 
+// the culture's accent dye (STYLE dye bits 18-19: crowds.ts cultureBits): madder red, indigo, weld yellow, undyed linen
+const FRAG_FUNCS = /* glsl */ `
+vec3 dyeOf(int st) {
+  int d = (st >> 18) & 3;
+  return d == 0 ? vec3(0.4, 0.07, 0.045) : d == 1 ? vec3(0.055, 0.085, 0.25) : d == 2 ? vec3(0.52, 0.36, 0.07) : vec3(0.6, 0.57, 0.5);
+}
+// the culture's woven trim at rest-pose point p: the cloth's darker companion as the ground, the settlement's motif in
+// its accent dye — stripes, zigzag, checks or lozenges (STYLE pat bits 16-17), ~2.5 cm a repeat
+vec3 trimOf(vec3 colA, int st, vec3 p, float detail) {
+  float l = dot(colA, vec3(0.3, 0.55, 0.15));
+  vec3 ground = mix(colA * 0.45, vec3(l) * 0.5, 0.45);
+  float mu = atan(p.x, p.z) * 0.18 * 40.0, mv = p.y * 40.0;
+  int pat = (st >> 16) & 3;
+  float m;
+  if (pat == 0) m = step(0.45, abs(sin(mv * 4.7)));
+  else if (pat == 1) m = 1.0 - smoothstep(0.1, 0.22, abs(fract(mv) - abs(fract(mu) - 0.5) * 2.0));
+  else if (pat == 2) m = mod(floor(mu * 2.0) + floor(mv * 2.0), 2.0);
+  else { vec2 c = fract(vec2(mu, mv)) - 0.5; m = 1.0 - step(0.3, abs(c.x) + abs(c.y)); }
+  return mix(ground, dyeOf(st), m * mix(0.55, 1.0, detail));
+}
+`;
+
 const FRAG_PARS = /* glsl */ `
 ${NOISE_GLSL}
 ${ATMO_PARS}
@@ -712,6 +734,7 @@ varying float vStyle;
 varying float vFade;
 // a tailored coat: the clothing colour as heavier wool, a little darker (at × 0.55 a steam-age crowd went black)
 vec3 coatOf(vec3 c) { return c * 0.8 + 0.006; }
+${FRAG_FUNCS}
 float bodyCloudShadow(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
   float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
@@ -733,12 +756,17 @@ const FRAG_SURFACE = /* glsl */ `
   int st = int(vStyle + 0.5);
   float fwL = length(fwidth(vLocal));
   float detail = 1.0 - smoothstep(0.004, 0.02, fwL);
+  // the finest patterns (a weave, single hair strands: ~6 mm) only where they span several pixels, or they alias
+  float fineD = 1.0 - smoothstep(0.0012, 0.003, fwL);
   vec3 alb = vec3(0.5);
   float bRough = 0.8, bMetal = 0.0;
   vec3 bEmit = vec3(0.0);
   float skinK = 0.0;
   // woven cloth and wool: a soft sheen at grazing angles (dark coats keep their form under the sun)
   float clothK = 0.0;
+  // relief drawn as a bump on the normal (FRAG_NORMAL): folds in the cloth, strands in the hair (metres; faded out
+  // with the detail so it never sparkles at a distance)
+  float bumpH = 0.0, bumpK = 0.0;
   if (part == 0) {
     // skin: a little less saturated than the palette (with the grade's saturation it read as flat orange plasticine),
     // matte with a soft sheen, and alive — blood under the cheeks, nose, ears, knuckles and knees, paler palms
@@ -773,19 +801,55 @@ const FRAG_SURFACE = /* glsl */ `
 #endif
     float weave = sin(vLocal.x * 900.0) * sin(vLocal.y * 900.0 + vLocal.z * 600.0);
     float mott = fbm3(vLocal * 22.0);
-    alb = base * (0.9 + 0.08 * weave * detail + 0.12 * mott);
+    alb = base * (0.9 + 0.08 * weave * fineD + 0.12 * mott);
     bRough = 0.9; clothK = 1.0;
 #if PLAN == 0
     if ((st & 4) != 0 && (st & (8 | 16 | 32)) == 0) alb = vec3(0.3, 0.2, 0.12) * (0.75 + 0.4 * mott);
+    // folds: below the waist the cloth hangs in pleats that deepen toward the hem; above the belt it bunches in
+    // horizontal creases; on the chest and back it drapes in long soft folds
+    float fa = atan(vLocal.x, vLocal.z);
+    float sk = smoothstep(0.93, 0.62, vLocal.y);
+    float pleat = sin(fa * 11.0 + 1.7 * snoise(vec3(vLocal.x * 5.0, vLocal.y * 2.5, vLocal.z * 5.0)));
+    // (a few soft, broken creases where a belt or sash gathers it: not on hides, nor on a beltless dress)
+    float bunch = (st & (8 | 16 | 32)) != 0 ? smoothstep(1.03, 0.97, vLocal.y) * smoothstep(0.92, 0.95, vLocal.y) * sin(vLocal.y * 170.0 + fa * 2.0 + 3.0 * snoise(vLocal * 9.0)) * (0.5 + 0.5 * snoise(vec3(fa * 3.0, 0.0, 1.0))) : 0.0;
+    float drape = smoothstep(0.96, 1.06, vLocal.y) * smoothstep(1.44, 1.3, vLocal.y) * sin(fa * 6.0 + vLocal.y * 9.0 + 2.0 * snoise(vLocal * 7.0));
+    float fold = sk * pleat + 0.35 * bunch + 0.3 * drape;
+    alb *= 1.0 - 0.16 * detail * max(0.0, -fold);
+    // the hem: grubby and worn darker over its last hand's breadth (dress, coat tails, tunic skirt)
+    float hemY = (st & 64) != 0 ? 0.12 : (st & 32) != 0 ? 0.5 : (st & 16) != 0 ? 0.66 : 0.55;
+    alb *= mix(vec3(1.0), vec3(0.8, 0.76, 0.7), smoothstep(hemY + 0.08, hemY, vLocal.y) * sk);
+    bumpH = 0.006 * fold; bumpK = detail;
 #endif
   }
   else if (part == 2) {
     // the dyed trim / trousers: a darker, less saturated companion of the main colour
     float l = dot(vColA, vec3(0.3, 0.55, 0.15));
     alb = mix(vColA * 0.45, vec3(l) * 0.5, 0.45) * (0.92 + 0.1 * fbm3(vLocal * 30.0));
+#if PLAN == 0
+    // the dyed tunic's hem band shares this part with the trousers: off the legs (over 11 cm from either thigh's axis)
+    // below the knee-length hem's top it is the band, woven with the culture's motif
+    if (vLocal.y < 0.72 && length(vec2(abs(vLocal.x) - 0.1, vLocal.z)) > 0.113) alb = trimOf(vColA, st, vLocal, detail) * (0.92 + 0.1 * fbm3(vLocal * 30.0));
+#endif
     bRough = 0.9; clothK = 1.0;
   }
+#if PLAN == 0
+  else if (part == 3) {
+    // hair: strands running from the crown down over the head and along the locks, plaits and beard, fine light and
+    // dark ones; the scalp shows along a parting (centred in long hair, to one side in short), not on the bald
+    float ph = atan(vLocal.x, vLocal.z);
+    float sw = 6.0 * snoise(vec3(ph * 2.0, vLocal.y * 9.0, 0.5));
+    float strands = 0.5 + 0.5 * sin(ph * 44.0 + sw);
+    float fine = 0.5 + 0.5 * sin(ph * 130.0 + sw * 2.0 + 3.0 * snoise(vec3(ph * 9.0, vLocal.y * 30.0, 2.0)));
+    alb = vColC * (0.74 + 0.3 * strands * detail + 0.22 * (fine - 0.5) * fineD);
+    float px = vLocal.x - ((st & 2) != 0 ? 0.0 : 0.02);
+    float partL = smoothstep(0.0035, 0.001, abs(px)) * smoothstep(1.7, 1.73, vLocal.y) * step(-0.03, vLocal.z) * fineD;
+    alb = mix(alb, mix(vColB, vColC, 0.4), partL * ((st & (8192 | 16384)) != 0 ? 0.0 : 0.5));
+    bRough = 0.55;
+    bumpH = 0.0012 * strands; bumpK = detail;
+  }
+#else
   else if (part == 3) { alb = vColC * (0.85 + 0.3 * abs(snoise(vec3(vLocal.x * 120.0, vLocal.y * 30.0, vLocal.z * 120.0))) * detail); bRough = 0.6; }
+#endif
   else if (part == 4) { alb = vec3(0.012, 0.01, 0.01); bRough = 0.3; }
   else if (part == 5) { alb = vec3(0.17, 0.1, 0.05) * (0.85 + 0.25 * snoise(vLocal * vec3(8.0, 60.0, 8.0))); bRough = 0.75; }
   else if (part == 6) { alb = vec3(0.32, 0.31, 0.3); bRough = 0.38; bMetal = 0.75; }
@@ -824,7 +888,7 @@ const FRAG_SURFACE = /* glsl */ `
     else if (part == 21) alb = (t2 || t3) ? trouserC : skinC;
     else if (part == 22) alb = t0 ? skinC : t3 ? coatC : vColA;
     else if (part == 23) alb = t3 ? coatC : skinC;
-    else if (part == 24) alb = (st & 3) != 0 ? vColC : skinC;
+    else if (part == 24) alb = (st & 32768) != 0 ? mix(dyeOf(st), vec3(0.55, 0.52, 0.46), 0.18) : (st & 3) != 0 ? vColC : skinC;
     else alb = vec3(0.58, 0.55, 0.48);
     bRough = 0.88;
     clothK = part == 24 || (part == 21 && !(t2 || t3)) || (part == 23 && !t3) ? 0.0 : 1.0;
@@ -833,6 +897,19 @@ const FRAG_SURFACE = /* glsl */ `
     // linen: an apron, a shirt front — off-white, a little greyed and creased
     alb = vec3(0.6, 0.57, 0.5) * (0.88 + 0.14 * fbm3(vLocal * 30.0));
     bRough = 0.85; clothK = 1.0;
+    bumpH = 0.003 * sin(atan(vLocal.x, vLocal.z) * 16.0 + 2.0 * snoise(vLocal * 6.0)) * smoothstep(0.93, 0.6, vLocal.y); bumpK = detail;
+  }
+  else if (part == 27) {
+    // the culture's woven trim (hem bands, necklines, sashes, plait ties): the cloth's darker companion as the ground,
+    // the settlement's motif in its accent dye — stripes, zigzag, checks or lozenges (STYLE pat bits 16-17)
+    alb = trimOf(vColA, st, vLocal, detail) * (0.92 + 0.1 * fbm3(vLocal * 30.0));
+    bRough = 0.88; clothK = 1.0;
+  }
+  else if (part == 28) {
+    // a headscarf: the culture's accent dye a little sun-faded (or linen), soft folds gathered toward the knot
+    alb = mix(dyeOf(st), vec3(0.55, 0.52, 0.46), 0.18) * (0.88 + 0.16 * fbm3(vLocal * 26.0));
+    bRough = 0.9; clothK = 1.0;
+    bumpH = 0.0025 * sin(atan(vLocal.x, vLocal.z) * 9.0 + vLocal.y * 40.0 + 1.5 * snoise(vLocal * 20.0)); bumpK = detail;
   }
 #endif
 #if PLAN == 3 || PLAN == 4 || PLAN == 5 || PLAN == 6 || PLAN == 7
@@ -849,6 +926,19 @@ const FRAG_SURFACE = /* glsl */ `
 #endif
   alb *= vAO;
   diffuseColor.rgb = alb;
+`;
+
+// the cloth folds and hair strands of FRAG_SURFACE as a bump on the shading normal (derivative bump mapping; the
+// height's slope is clamped so a part's edge, where bumpH jumps, never draws a bright seam)
+const FRAG_NORMAL = /* glsl */ `
+  {
+    vec3 bsp = -vViewPosition;
+    vec3 bsx = dFdx(bsp), bsy = dFdy(bsp);
+    vec2 bdh = clamp(vec2(dFdx(bumpH), dFdy(bumpH)), -0.0015, 0.0015) * bumpK;
+    vec3 br1 = cross(bsy, normal), br2 = cross(normal, bsx);
+    float bdet = dot(bsx, br1);
+    if (abs(bdet) > 1e-12) normal = normalize(abs(bdet) * normal - sign(bdet) * (bdh.x * br1 + bdh.y * br2));
+  }
 `;
 
 const FRAG_LIGHT = /* glsl */ `
@@ -885,7 +975,7 @@ const FRAG_AMBIENT = /* glsl */ `
 `;
 
 /** the body shader's own chunks, for a plain-lit preview (the life lane's dev pages): pose + varyings, the surface */
-export const BODY_CHUNKS = { VERT_PARS, VERT_BEGIN, FRAG_SURFACE } as const;
+export const BODY_CHUNKS = { VERT_PARS, VERT_BEGIN, FRAG_SURFACE, FRAG_FUNCS, FRAG_NORMAL } as const;
 
 export interface BodyMaterialOpts { plan: number; rig: Rig; freqK?: number; pitchSwim?: boolean }
 
@@ -924,12 +1014,12 @@ export function makeBodyMaterial(shared: Record<string, IUniform>, animTime: IUn
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = bMetal;')
       // a skinned normal can turn away from the eye where a joint bends hard (blended between two bones): reflected
       // back toward the viewer it shades as the surface it is, instead of a pale Fresnel glow on a bent shin or hem
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  { vec3 vv = normalize(vViewPosition); float nv = dot(normal, vv); if (nv < 0.0) normal = normalize(normal - 1.05 * nv * vv); }')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  { vec3 vv = normalize(vViewPosition); float nv = dot(normal, vv); if (nv < 0.0) normal = normalize(normal - 1.05 * nv * vv); }\n' + FRAG_NORMAL)
       .replace('#include <emissivemap_fragment>', 'totalEmissiveRadiance = bEmit;')
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => `genesis-body-v3-${opts.plan}`;
+  mat.customProgramCacheKey = () => `genesis-body-v4-${opts.plan}`;
   return mat;
 }
 
