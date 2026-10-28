@@ -15,6 +15,11 @@
 //   B2   per quality tier, a layer-only render of the telegraph pass (into an 8-bit target, alpha > 0 counted):
 //        an injected enemy delayed circle (r 3 m, delay 0.6 s) must draw ≥ 5,000 px two frames in, and an own
 //        rect aim (9 × 0.9 m + its range ring) ≥ 20,000 px. Fails below either threshold on any tier.
+//   CONE (combat F1) per tier, the same layer-only render with scene depth held off (geometry only: a unit
+//        standing on a sample cannot hide it): an injected enemy cone (r 7 m, 50°, delay 0.6 s, sampled at
+//        sweep ≈ 0.83, its own frame read back from the director) and own cone aims (5 m 70°, 3.5 m 140°,
+//        9 m 50°). The axis at r/2 must be filled (3×3 mean alpha ≥ 15 of 255); ±90° at r/2, 0.4 m behind the
+//        apex and 0.35 rad past the edge at 0.6 r must be empty (5×5 max alpha 0). Shots: <name>_cone_*.png.
 //   M10  every live, visible fighter / wick / monster carries the 1 px rest outline.
 //   M6   an injected damage event flashes its victim (an enemy fighter, then an enemy wick) on the impact
 //        frame and the flash is gone by 150 ms; render-only (the sim is held, so fog, a death or a wave cannot
@@ -54,15 +59,39 @@ await B((b) => {
   const R = b.renderer;
   b.__nodes = () => { let n = 0; R.scene.traverse(() => n++); return n; };
   /** layer-only render of the telegraph pass into an 8-bit target; px with alpha > 0 */
-  b.__telePx = () => {
+  b.__teleBuf = () => {
     const gl = R.gl;
     const RT = new R.overlay.teleTarget.constructor(1920, 1080);
     gl.setRenderTarget(RT); gl.setClearColor(0x000000, 0); gl.clear(true, true, false);
     const ac = gl.autoClear; gl.autoClear = false; gl.render(R.overlay.teleScene, R.rig.camera); gl.autoClear = ac; gl.setRenderTarget(null);
     const buf = new Uint8Array(1920 * 1080 * 4); gl.readRenderTargetPixels(RT, 0, 0, 1920, 1080, buf);
-    let n = 0; for (let i = 3; i < buf.length; i += 4) if (buf[i] > 0) n++;
     RT.dispose();
-    return n;
+    return buf;
+  };
+  b.__teleCount = (buf) => { let n = 0; for (let i = 3; i < buf.length; i += 4) if (buf[i] > 0) n++; return n; };
+  b.__telePx = () => b.__teleCount(b.__teleBuf());
+  /** combat F1: the telegraph layer (scene depth held off) sampled around a cone (apex x, y; sim dir; r; half-angle):
+   *  3×3 mean and 5×5 max alpha (0..255) at ground points projected through the match camera into the 1920×1080 layer */
+  b.__coneProbe = (x, y, dir, r, ha) => {
+    const uD = R.teles.mesh.material.uniforms.uHasDepth, hd = uD.value;
+    uD.value = 0;
+    let buf; try { buf = b.__teleBuf(); } finally { uD.value = hd; }
+    const cam = R.rig.camera, V = cam.position.constructor;
+    const at = (k, ang, d) => {
+      const v = new V(x + Math.cos(ang) * d, 0.04, y + Math.sin(ang) * d).project(cam);
+      const X = Math.round((v.x * 0.5 + 0.5) * 1920), Y = Math.round((v.y * 0.5 + 0.5) * 1080);   // RT rows run bottom-up
+      let sum = 0, n = 0, max = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const px = X + dx, py = Y + dy;
+        if (px < 0 || px >= 1920 || py < 0 || py >= 1080) continue;
+        const a = buf[(py * 1920 + px) * 4 + 3];
+        max = Math.max(max, a);
+        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { sum += a; n++; }
+      }
+      return { k, mean: n ? Math.round(sum / n) : -1, max, on: n > 0 && v.z < 1 };
+    };
+    return { total: b.__teleCount(buf), pts: [at('axis50', dir, r * 0.5), at('side+90', dir + Math.PI / 2, r * 0.5), at('side-90', dir - Math.PI / 2, r * 0.5),
+      at('behind0.4', dir + Math.PI, 0.4), at('outEdge', dir + ha + 0.35, r * 0.6), at('outEdge-', dir - ha - 0.35, r * 0.6)] };
   };
   b.__me = () => { const v = b.host.view; const p = v.players.find((x) => x.player === 0); return v.entity(p.entity); };
   b.__actors = () => [...R.actors.values()];
@@ -96,6 +125,58 @@ for (const tier of TIERS) {
   console.log('B2', tier, JSON.stringify(r));
   if (r.area < MIN_AREA_PX) fail(`B2 ${tier}: enemy delayed circle drew ${r.area} px (< ${MIN_AREA_PX})`);
   if (r.aim < MIN_AIM_PX) fail(`B2 ${tier}: rect aim drew ${r.aim} px (< ${MIN_AIM_PX})`);
+
+  // ── CONE (combat F1): enemy telegraph mid-sweep, then own aims ─────────────────────────────────
+  const cones = [];
+  const enemyCone = await B((b) => {
+    const R = b.renderer;
+    const me = b.__me();
+    b.focus(me.x, me.y); b.zoom(28.5); b.clearAim();
+    R.director.telegraphs.length = 0;
+    const v = b.host.view;
+    const enemy = v.entities.find((e) => e.kind === 'fighter' && e.team !== me.team);
+    R.injectEvents([{ e: 'area', t: v.time, src: enemy.id, ability: 'regress_cone', x: me.x + 1, y: me.y, shape: { kind: 'cone', radius: 7, angle: 50 * Math.PI / 180 }, delay: 0.6, telegraph: 'everyone' }]);
+    b.frames(30, 1 / 60);                      // sweep ≈ 0.83: the fill has passed r/2, the area has not landed
+    const tl = R.director.telegraphs;
+    for (let i = tl.length - 1; i >= 0; i--) if (tl[i].ability !== 'regress_cone' && !(tl[i].src === enemy.id && tl[i].shape?.kind === 'cone')) tl.splice(i, 1);
+    const t = tl.find((x) => x.shape?.kind === 'cone');
+    if (!t) return { none: true };
+    R.buildTelegraphs();
+    const ha = t.shape.angle / 2;
+    const s = b.__coneProbe(t.x, t.y, t.dir, t.shape.radius, ha);
+    const out = { sweep: +((R.time - t.start) / Math.max(1e-3, t.land - t.start)).toFixed(2) };
+    b.focus(t.x + Math.cos(t.dir) * t.shape.radius * 0.4, t.y + Math.sin(t.dir) * t.shape.radius * 0.4);
+    b.frames(1, 1 / 60);                       // the canvas for the shot
+    return { name: 'enemy_7m_50', apex: [+t.x.toFixed(2), +t.y.toFixed(2)], dir: +t.dir.toFixed(3), r: t.shape.radius, ha, ...out, ...s };
+  });
+  if (tier === 'high' && !enemyCone.none) await shot(page, `${NAME}_cone_enemy`);
+  await B((b) => { b.renderer.director.telegraphs.length = 0; b.frames(1, 1 / 60); });
+  cones.push(enemyCone);
+  for (const [name, rad, ang, dir] of [['aim_5m_70', 5, 70, 0.35], ['aim_3.5m_140', 3.5, 140, -2.2], ['aim_9m_50', 9, 50, 2.9]]) {
+    const r = await B((b, a) => {
+      const R = b.renderer;
+      const me = b.__me();
+      b.focus(me.x, me.y); b.zoom(28.5);
+      R.director.telegraphs.length = 0;
+      R.setAim({ shape: 'cone', x: me.x, y: me.y, dir: a.dir, radius: a.rad, angleDeg: a.ang, range: a.rad, casterX: me.x, casterY: me.y });
+      b.frames(1, 1 / 60);
+      R.director.telegraphs.length = 0; R.buildTelegraphs();
+      return { name: a.name, dir: a.dir, r: a.rad, ha: a.ang * Math.PI / 360, ...b.__coneProbe(me.x, me.y, a.dir, a.rad, a.ang * Math.PI / 360) };
+    }, { name, rad, ang, dir });
+    if (tier === 'high') await shot(page, `${NAME}_cone_${name}`);
+    cones.push(r);
+  }
+  await B((b) => { b.clearAim(); b.frames(1, 1 / 60); });
+  report.tiers[tier].cones = cones;
+  for (const c of cones) {
+    if (c.none) { fail(`CONE ${tier}: the injected enemy cone made no telegraph`); continue; }
+    console.log('CONE', tier, c.name, `total ${c.total}`, c.pts.map((p) => `${p.k}=${p.mean}/${p.max}`).join(' '));
+    for (const p of c.pts) {
+      if (!p.on) { fail(`CONE ${tier} ${c.name}: sample ${p.k} off screen`); continue; }
+      if (p.k === 'axis50' && p.mean < 15) fail(`CONE ${tier} ${c.name}: axis at r/2 empty (mean alpha ${p.mean} < 15)`);
+      if (p.k !== 'axis50' && p.max > 0) fail(`CONE ${tier} ${c.name}: ${p.k} painted (max alpha ${p.max}, must be 0)`);
+    }
+  }
 }
 await B((b) => b.setQuality('high'));
 

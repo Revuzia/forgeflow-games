@@ -70,13 +70,15 @@ export const TELE_FRAG = /* glsl */`
 ${DEPTH_TEST_GLSL}
 varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec3 vColor; varying vec3 vTick;
 float sdBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
-// signed distance to a circular sector (apex at the origin, axis +x)
+// signed distance to a circular sector (apex at the origin, axis +x, half-angle ha); < 0 inside. The side
+// test is the 2D cross c × p: negative while p lies between the axis and the edge ray c = (cos ha, sin ha),
+// positive beside or behind the apex (combat F1: the old operand order painted the cone inside-out)
 float sdSector( vec2 p, float r, float ha ) {
   p.y = abs( p.y );
   vec2 c = vec2( cos( ha ), sin( ha ) );
   float l = length( p ) - r;
   float m = length( p - c * clamp( dot( p, c ), 0.0, r ) );
-  return max( l, m * sign( c.y * p.x - c.x * p.y ) );
+  return max( l, m * sign( c.x * p.y - c.y * p.x ) );
 }
 void main() {
   float shape = vA.w;
