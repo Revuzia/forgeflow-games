@@ -199,7 +199,7 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_lamp", "visor_top": "x_chimney_t
 # fix pass 1: the darker Aubade backdrop (aubade_dusk, this module's plate grade), the warm rim down (it bled over the
 # right edge), a softer sun on the pale linen; the skins pose their own splash (they were the same frame)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "portrait_clip": "idle_lobby", "portrait_t": 0.0,
-          "portrait_yaw": 28.0, "icon_yaw": 20.0, "yaw": 34.0, "fill": 0.86, "rim_warm": 0.25, "rim_cool": 0.85,
+          "portrait_yaw": 28.0, "icon_yaw": 20.0, "yaw": 40.0, "fill": 0.86, "rim_warm": 0.25, "rim_cool": 0.85,
           "sun": 2.5, "aubade_dusk": 0.50}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
@@ -441,7 +441,7 @@ def sculpts() -> list:
     ch = Sculpt("chimney")
     ch.add(Fn(chim_d, (-0.14, -0.22, CHIM_BOT - 0.01), (0.14, 0.10, CHIM_TOP + 0.01)), k=0.0)
     ch.add(Torus((cx, cy, CHIM_TOP - 0.004), 0.080, 0.0055), k=0.003)                     # the rolled lip
-    part("chimney", ch, "dawnglass", "bone:head", 2000, 0.6, 1.9)
+    part("chimney", ch, "dawnglass", "bone:head", 1900, 0.6, 1.9)
 
     # THE HOOD (rounded crown, a soft rim round the face opening) and the neck wrap
     hd = Sculpt("hood")
@@ -601,12 +601,13 @@ def skin_extras(extra: dict) -> list:
         # fix pass 1 (the review: the bell did not show): a 0.08 m dawnglass bell hung from the cap in the clear glass
         # above the flame, slightly forward, its mouth over the flame's tip (the flame stays visible below it)
         gb = Sculpt("glass_bell")
-        top, bot = LAMP["glass"][0] + 0.004, LAMP["glass"][0] + 0.084
-        gb.add(Lathe(lpt(0.0, 0.0, -0.022), lambda r, z: np.maximum(
-            r - (0.011 + 0.026 * np.clip((-z - top) / (bot - top), 0, 1) ** 1.5), np.maximum(-z - bot, top + z)),
-            0.045, -bot - 0.01, -top + 0.01), k=0.0)
-        gb.add(Torus(lpt(bot - 0.003, 0.0, -0.022), 0.035, 0.0045), k=0.003)       # the bell's lip
-        gb.add(Sphere(lpt(top - 0.002, 0.0, -0.022), 0.010), k=0.004)
+        top, bot = LAMP["glass"][0] + 0.004, LAMP["glass"][0] + 0.074
+        bx, by = 0.050, -0.040
+        gb.add(Lathe(lpt(0.0, bx, by), lambda r, z: np.maximum(
+            r - (0.009 + 0.021 * np.clip((-z - top) / (bot - top), 0, 1) ** 1.5), np.maximum(-z - bot, top + z)),
+            0.04, -bot - 0.01, -top + 0.01), k=0.0)
+        gb.add(Torus(lpt(bot - 0.003, bx, by), 0.029, 0.0042), k=0.003)            # the bell's lip
+        gb.add(Sphere(lpt(top - 0.002, bx, by), 0.009), k=0.004)
         out.append(("glass_bell", gb, 0.45, "dawnglass", "bone:x_lamp", 320, 0.5))
     if extra.get("hour_marks"):
         hm = Sculpt("hour_marks")
@@ -916,9 +917,9 @@ def _paint_chimney(c, p, n, pal=None):
     th = np.arctan2(x - cx, -(y - cy))
     glass = _lin(_hex(pal.get("dawnglass", "#C0D6E8")))
     edge = _lin(_hex("#6F8599"))
-    lin = np.repeat(glass[None, :], len(p), 0) * (0.80 + 0.16 * ss(1.48, 1.70, z))[:, None]
-    side = np.clip((np.abs(np.sin(th)) - 0.40) / 0.60, 0, 1) ** 1.2
-    lin = lin * (1 - 0.62 * side[:, None]) + edge * (0.62 * side[:, None])
+    lin = np.repeat(glass[None, :], len(p), 0) * (0.92 + 0.10 * ss(1.48, 1.70, z))[:, None]
+    side = np.clip((np.abs(np.sin(th)) - 0.55) / 0.45, 0, 1) ** 1.2
+    lin = lin * (1 - 0.66 * side[:, None]) + edge * (0.66 * side[:, None])
     low = ss(1.56, 1.47, z) * 0.30                                     # the hood's shade read through the glass's foot
     lin = lin * (1 - low[:, None]) + edge * 0.8 * low[:, None]
     streak = (np.exp(-((th + 0.58) / 0.085) ** 2) + 0.55 * np.exp(-((th - 0.40) / 0.06) ** 2)
@@ -944,6 +945,8 @@ def _paint_chimney(c, p, n, pal=None):
         m = np.median(fc[qm], axis=0, keepdims=True)
         fc[qm] = np.clip(m + (fc[qm] - m) * 1.45, 0.0, 1.0)
     flin = _lin(fc) * 0.92 + glass * 0.06
+    dk = ss(0.10, 0.02, flin @ np.array([0.2126, 0.7152, 0.0722]))[:, None]   # the dark hood behind: glass sheen
+    flin = flin * (1 - 0.30 * dk) + edge * 0.30 * dk
     glint = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
     flin = flin + 0.16 * glint[:, None]
     lin = lin * (1 - wf[:, None]) + flin * wf[:, None]
@@ -1040,6 +1043,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
             w = np.maximum(inward, under)[:, None]
             lin = _lin(out[sel])
             lin = lin * (1 - w) + (lin * 0.35 + _lin(_hex(LINING)) * 0.65) * w
+            lin = lin * (1.0 - 0.22 * ss(0.52, 0.36, p[:, 2]))[:, None]      # the hem's slate deepens (feet band)
             out[sel] = _srgb(lin)
         elif nm in ("sleeve_L", "sleeve_R"):
             s = nm[-1]
@@ -1077,7 +1081,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     return out
 
 
-LIFT = {"hood": 12.0, "scarf": 11.0, "mantle": 8.0, "lamp_stone": 0.0}
+LIFT = {"hood": 15.0, "scarf": 13.0, "mantle": 8.0, "sleeve_L": 5.0, "sleeve_R": 5.0, "lamp_stone": 0.0}
 
 
 def _lift(c, amt):
@@ -1161,6 +1165,8 @@ def _band_fill(col, p, n, nm, plates, vis, step=0.02):
     srgb = _srgb(out)
     warm = ss(0.025, 0.07, srgb[:, 0] - srgb[:, 2]) * ss(62.0, 46.0, L) * ss(6.0, 14.0, Lm - L)
     dark = ss(26.0, 42.0, Lm - L)
+    if nm == "mantle":                                  # the dark rolled hem is the feet band's value, not a ghost
+        dark = dark * ss(HEM_Z + 0.05, HEM_Z + 0.10, p[:, 2])
     w = np.clip(np.maximum(warm * 0.85, dark * 0.9), 0, 1)[:, None]
     shade = np.clip(Y / Ym, 0.62, 1.0)[:, None]
     out = out * (1 - w) + med * shade * w
@@ -1184,14 +1190,14 @@ MANTLE_BANDS = ((0.62, 0.82), (0.36, 0.46))     # cloth2 above the first band's 
 # takes the skin's colour at its height times its shade relative to the base painting's band colour there (the
 # painted folds and lining kept, the base's cream / slate gone). Stops (height m, role), top down.
 SKIN_GRADE = {
-    "ilsheta_stillwater": [(1.30, "cloth2"), (1.01, "cloth2"), (0.91, "cloth"), (0.50, "cloth"), (0.42, "cloth3"), (0.0, "cloth3")],
-    "ilsheta_first_bell": [(1.30, "cloth2"), (0.80, "cloth2"), (0.68, "cloth"), (0.56, "cloth"), (0.49, "cloth3"), (0.0, "cloth3")],
+    "ilsheta_stillwater": [(1.30, "cloth2"), (0.93, "cloth2"), (0.79, "cloth"), (0.56, "cloth"), (0.47, "cloth3"), (0.0, "cloth3")],
+    "ilsheta_first_bell": [(1.30, "cloth2"), (0.93, "cloth2"), (0.80, "cloth"), (0.56, "cloth"), (0.49, "cloth3"), (0.0, "cloth3")],
 }
 
 
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
     skip = set(skip or ()) | set(PROC)
-    graded = {"mantle", "sleeve_L", "sleeve_R"} & set(names)
+    graded = {"mantle", "dress"} & set(names)                # the sleeves keep the hood's pale cloth2 (top quarter)
     roles2 = {k: (None if k in graded else v) for k, v in roles.items()}
     out = _orig_recolour(img, maps, names, roles2, base_pal, skin_pal, skip=skip, log=log)
     stops = SKIN_GRADE.get(_BUILD.get("skin") or "")
@@ -1217,6 +1223,8 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             ymed[i] = np.median(Y[b == i])
         ymed = np.maximum(ymed[b], 1e-4)
         T = np.stack([np.interp(z, zs, cols[:, c]) for c in range(3)], 1)
+        if nm == "dress":                                   # the under-dress: the skin's cloth, flat (no base hue left)
+            T = np.repeat(_lin(_hex(skin_pal.get("cloth", base_pal.get("cloth"))))[None, :], len(z), 0)
         out[m] = _srgb(T * np.clip(Y / ymed, 0.12, 1.35)[:, None])
         log(f"  recolour {nm} re-painted on the skin gradient {[(s[0], s[1]) for s in stops]}")
     return out.astype(np.float32)
@@ -1531,8 +1539,8 @@ K_G = (0.45, -0.89, 0.0)                  # the hook's side at guard: toward her
 # the hook-staff held upright in the right fist at her right side, its hook bending in so the lamp hangs IN FRONT OF
 # HER RIGHT CHEST at the brief's height (pivot ~1.42 m, the flame ~1.20 m), the left hand open beside it, warming at
 # its light (Warm Hands); the bind pose (skins) keeps the staff upright at her side
-G_R = (wr("R", -0.336, -0.166, 1.098, POLE_R), staff_or((0.10, 0.02, 0.99), K_G))
-G_L = (wr("L", 0.010, -0.225, 1.150, POLE_L), hand_or((-0.10, -0.70, 0.70), (-0.96, -0.05, 0.15)))
+G_R = (wr("R", -0.336, -0.141, 1.133, POLE_R), staff_or((0.10, 0.02, 0.99), K_G))
+G_L = (wr("L", 0.010, -0.215, 1.160, POLE_L), hand_or((-0.10, -0.70, 0.70), (-0.96, -0.05, 0.15)))
 
 
 def mant(flare=0.0, fwd=0.0):
@@ -1682,7 +1690,7 @@ def key_poses() -> dict:
     K["v_c"] = guard_pose(torso=T(hips=(4, 0, 0), spine=(4, 0, 0), chest=(4, 0, 0), head=(6, 0, 0)), hips=(0, 0.01, -0.05))
     K["v_up"] = guard_pose(torso=T(hips=(3, 8, 0), spine=(5, 6, 0), chest=(6, 8, 0), neck=(2, -4, 0), head=(10, -6, 4)), hips=(0, -0.01, -0.035),
                            feet=(ft(dy=-0.06, side="L"), FR0),
-                           R=(wr("R", -0.200, -0.300, 1.140, (-0.9, 0.2, -0.4)), staff_or((0.34, -0.50, 0.80), (0.0, -0.83, -0.55))),
+                           R=(wr("R", -0.210, -0.300, 1.060, (-0.9, 0.2, -0.4)), staff_or((0.34, -0.56, 0.76), (0.0, -0.80, -0.60))),
                            L=(wr("L", 0.040, -0.150, 1.060, POLE_L), hand_or((-0.85, -0.25, 0.45), (0.0, 0.95, 0.1))), lamp=(-8, 0, 0),
                            **mant(8.0))
     # recall / stunned / channel / taunt / dash
@@ -1737,9 +1745,9 @@ def clip_overrides(ctx) -> dict:
         ik = {k: v for k, v in p.get("ik", {}).items() if k.startswith("foot")}
         q = t % 1.0
         sw = math.cos(2 * math.pi * (q - 0.03))
-        ik["hand.R"] = wr("R", -0.310, -0.185 - 0.020 * sw, 1.075 + 0.010 * abs(sw), POLE_R)
+        ik["hand.R"] = wr("R", -0.315, -0.165 - 0.020 * sw, 1.105 + 0.010 * abs(sw), POLE_R)
         ik["orient.R"] = staff_or((0.14, 0.06 + 0.03 * sw, 0.99), K_G)
-        ik["hand.L"] = wr("L", 0.030 + 0.010 * sw, -0.220 - 0.015 * sw, 1.120 + 0.012 * abs(sw), POLE_L)
+        ik["hand.L"] = wr("L", 0.030 + 0.010 * sw, -0.210 - 0.015 * sw, 1.140 + 0.012 * abs(sw), POLE_L)
         ik["orient.L"] = hand_or((-0.10, -0.70, 0.70), (-0.96, -0.05, 0.15))
         p["ik"] = ik
         p["lamp"] = (-8.0 + 3.0 * math.sin(4 * math.pi * q), 2.0 * sw, 0.0)

@@ -68,3 +68,25 @@
   edge lines down the flare's sides, a shoulder glint and a chin rim (so the bulb round the face reads as glass).
   Splash yaw 34 (the held-out lamp clear of the face).
 - build FP1-2 (FULL base + skins) starting.
+- 2026-10-28 13:25 build FP1-2 (FULL base + skins): base 18304 tris / 1067 KiB / load OK / accent 1.55 % (top half 79 %);
+  stillwater 19028 / 923 KiB; first_bell 19124 / 918 KiB (bind-pose QA accents 1.50 / 1.32 %). Skins now read as
+  skins (wet-stone mantle + sea-glass font + reed ruff; pale dial-stone over a dark hem with white hour-marks), each
+  splash its own pose. lineup_qa (vs sukri / dunsom / marund IoU64 0.70 / 0.45 / 0.37): base top 65.1 (lower than
+  before: darker glass + the lamp and glove now in the top quarter), bottom 37.3 (the ghost clamp lifted the dark hem),
+  accent top-half 0.51 at facing 0 (was 0.0); stillwater top 57; first_bell mid 68 at the back, accent top-half 0.17
+  (the glass bell over the flame). A small grey triangle on the chimney's back (one bad texel triangle).
+  Batched for FP1-3 (last full build): guard lamp up 3.5 cm and in 2.5 cm (pivot 1.515; fit estimate 1.0 / 0.78 top
+  half at the front facings), glass body brighter (side bands narrower), the dark hood seen through the glass given a
+  sheen, LIFT hood 15 / scarf 13, the hem exempt from the dark-ghost clamp, chimney 1900 tris (re-decimate the bad
+  triangle); Stillwater pale down to 0.93 m, wet stone from 0.79 m; First Bell cloth2 to 0.93 / warm grey from 0.80;
+  the under-dress re-painted flat in the skin's cloth (First Bell's had turned tan); First Bell's bell slimmer, hung
+  front-left of the flame; victory lamp lower + splash yaw 40 (the held lamp clear of the face).
+- build FP1-3 (FULL base + skins) starting.
+- 2026-10-28 13:50 build FP1-3 (FULL): base 18202 tris / 1063 KiB / load OK / accent 1.51 % (top half 89 %); stillwater
+  18926 / 922 KiB; first_bell 19022 / 980 KiB. lineup_qa: base top 67.1 / mid 46.5 / bottom 37.3, accent top-half
+  0.89 at facing 0 (1.0 elsewhere), IoU64 0.70 / 0.45 / 0.37; stillwater top 59.3 (REGRESSION vs 66.0: its sleeves
+  were re-painted wet stone and ride up into the top quarter in idle); first_bell top 66.9 / mid 49.5-65.5.
+  Splash: the held lamp clear of the face. The grey chimney triangle survived the re-decimation (tiny, back side).
+  Batched for FP1-4 (the last full build, for the Stillwater regression + the base feet band): sleeves out of the skin
+  re-paint (pale cloth2), LIFT sleeves 5, the base hem's slate deepened below 0.52 m (x0.78), Stillwater cloth3 from 0.47.
+- build FP1-4 (FULL base + skins) starting.
