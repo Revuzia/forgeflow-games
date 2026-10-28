@@ -212,7 +212,8 @@ def norm64(m: np.ndarray) -> np.ndarray:
 
 
 def same_fighter(a: str, b: str) -> bool:
-    return a.startswith(b + "_") or b.startswith(a + "_") or a == b
+    # fighter ids have no "_", skins are "<fighter>_<skin>": two skins of one fighter are the same fighter too
+    return a.split("_", 1)[0] == b.split("_", 1)[0]
 
 
 def main():

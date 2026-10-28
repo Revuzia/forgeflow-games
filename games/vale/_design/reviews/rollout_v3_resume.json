@@ -1,0 +1,204 @@
+{
+ "saved": "2026-10-28 10:35 CDT, rollout v3 run wf_d32aed47-8f1 stopped while fix1:sukri / fix2:tunlan were in their final rebuilds",
+ "sukri": {
+  "rounds": 1,
+  "prev": {
+   "pass": false,
+   "score": 5,
+   "issues": [
+    {
+     "severity": "major",
+     "what": "The signature cup of noon light reads as a saturated blue-and-white striped bucket or paint can, not the concept's clear glass cup. The concept and brief call for a clear dawnglass cup with a dark ironstone rim band on top and one small azure bead inside (brief \u00a74/\u00a77: about 0.2% accent). The build has 8 opaque white ribs over azure panels plus an azure rim inlay, so the whole cup glows blue and the dark slate rim from the concept is gone. This is the character's hook (brief \u00a71), so the likeness fails on its most important piece. The agent inflated the cup to clear the pipeline's 1.5-6% accent check, but in pipeline.py:384 that check only logs a WARNING and blocks nothing.",
+     "evidence": "Portrait (art/out/fighters/sukri/portrait.png) and splash (art/out/fighters/sukri/splash.png): the cup averages #82b1df at L* 71 over the whole cup. Concept (_design/concept/sukri.webp) shows a clear glass cup, a slate rim band and a small blue bead. build_report_sukri.json gives accentPct 1.86 against the brief's ~0.2%. _progress.md lists this as open issue (2)."
+    },
+    {
+     "severity": "major",
+     "what": "The staff crook reads as a bone, not the concept's carved wooden crook. The top of a straight bone-white pole is a knobby lump like a femur head or a pale fist, and the cup hangs from it on a wire bail. The concept has a gnarled, bent wooden staff whose angular head turns outward, and the cup hangs from a notch in that head. On a gentle Tender with a smiling wooden mask, a bone staff gives a macabre read.",
+     "evidence": "Portrait crook crop (top-left of portrait.png), splash.png at around x 1080 y 330, and the front and 3/4 frames of art/renders/fighters/sukri/turntable.png all show the white knob. Compare the concept staff, which is bent wood with a flat angular head. The staff is also straight where the concept's is gnarled."
+    },
+    {
+     "severity": "major",
+     "what": "The paint on the wraps has camouflage-like blotches. Large irregular grey-brown patches sit over the cream torso, skirt and belt in the splash and the victory pose, and they wipe out the crisp crossing bands that define the concept's torso. The same smears appear on both skin splashes. This is the first-impression image.",
+     "evidence": "art/out/fighters/sukri/splash.png (torso crop from x 960-1520, y 330-850) shows the blotches. They are also visible on the belly in the last frames of the victory row of three_clips_sukri.png and in sukri_stillwater_splash.png and sukri_shadeprint_splash.png. _progress.md open issue (1) confirms they were never fixed."
+    },
+    {
+     "severity": "major",
+     "what": "The stone shoulder cape does not match the concept. The concept has chunky two-tier chipped stone pauldrons that stick out past the shoulders (the widest point, \u00b10.53 m per the agent's own measurements). The model has small flat white rectangular slabs at the collar, like sugar cubes or cardboard, and a regular grid of tiles on the back. In poses that move the arms (death, victory, ult) the slabs poke out as loose boxes.",
+     "evidence": "Shoulder crop from three_sukri.png (close-up row): flat rectangles. turntable.png back frame: a regular 3/4/3 grid of tiles. In death frames 3-8 of three_clips_sukri.png the plates stick out from the right shoulder. Concept front and back show thick, layered, wide pauldrons."
+    },
+    {
+     "severity": "major",
+     "what": "The ability gestures and VFX do not read as the kit. (a) cast_a3 Wrap Cast never shows the cord. No cord leaves the belt coil, there is no loop overhead, and the impact is a plain left-hand punch with the body twisted 90\u00b0, so the brief's silhouette (a thin loop above the head, then a long throwing arm) is missing. (b) Every Sukri VFX spawns at socket 'weapon', which is prop.R, the fist halfway down the staff, rather than at 'cup' (x_cup), which the brief names for the mote, the pull and the ult. Motes and bolts therefore leave his fist, not the cup. The a3 windup sits on the right hand while the throw is left-handed, where it should use 'cord' or hand_l. (c) At impact in attack1, attack2 and cast_a1 the torso twists 60-70\u00b0 and the crook comes up to the mouth with the cup hanging at the chest, so the brief's 'flick of the cup toward the target' does not read, and the face turns away from the target.",
+     "evidence": "In three_clips_sukri.png, row 5 (cast_a3) has no cord at t 0.12-0.4, and rows 1-3 show the twist at t 0.4. content/vfx.json has \"socket\": \"weapon\" for sukri_a1_toss, sukri_a1_windup, sukri_a2_beckon, sukri_a2_windup, sukri_a3_windup, sukri_atk_draw, sukri_atk_shot and sukri_ult_windup. art.json declares cup x_cup and cord x_cord, but no VFX uses them (_progress.md open issue 6)."
+    },
+    {
+     "severity": "major",
+     "what": "The skins break a value band and drift from the brief. Shadeprint fails the feet band: L* 18.0 against the 20-35 band, and its middle band of 45.4 barely clears the 45 floor. Its 'printed light rims' render as thin white scribbles that read like pyjama stripes. Stillwater's hood and plates go almost white (top band 84.2, just under the 85 cap), and its wraps come out a pale sky blue-grey instead of the dark wet-stone #59666A at L* 42. Its five reed strips lie as a parallel grille on the back of the hood, which reads like a helmet vent rather than the fan the brief asks for.",
+     "evidence": "This review's lineup_qa run (art/renders/lineup/review_sukri.json and .png): shadeprint value bands {top 80.6, mid 45.4, bottom 18.0} and stillwater {top 84.2, mid 52.4, bottom 30.2}. three_sukri_stillwater.png close-ups show the parallel grey-green strips on the hood's back. sukri_shadeprint_splash.png shows the white line scribbles over the ink wraps."
+    },
+    {
+     "severity": "major",
+     "what": "The death and victory clips break the props. In death, the bright accent cup sinks through the ground plane for roughly the middle third of the clip and only rests on the floor in the last frame. In victory and recall the cup never leaves the hook: both hands stay on the diagonal staff and the cup dangles at the belly. The brief's 'cup offered in an open hand at chest height' and 'holds the cup in both hands and breathes on it' are not shown, so the splash pose (which is built from victory) loses its story beat.",
+     "evidence": "In three_clips_sukri.png row 9 (death), at t 4/7 only the hook and a sliver of blue are above the floor, and at t 5/7-6/7 the cup is half-buried; it lies on the floor only at t 1. The ends of row 16 (victory) and row 12 (recall) show the cup on the crook. _progress.md open issue (5)."
+    },
+    {
+     "severity": "minor",
+     "what": "Seen from the side or back at gameplay zoom, the hood reads as a tall, flat-fronted near-white column, though the brief says the hood must be a dome and never a cylinder. The side turntable frames show a slab-like hood with a flat front plane. Its value is in range (the back of the hood measures L* 84 in game), and the front lineup reads round, so the IoU checks pass. Watch item: keep the hood cream and dome-shaped, and never let it get taller or more pointed. Nothing reads as a hate or horror symbol right now.",
+     "evidence": "turntable.png frames 3 and 7 (side views). In _harness/_shots/review_sukri_t70_close2.png, from behind, it is a tall white block with diamond tiles. lineup review_sukri: IoU64 against hesmi is 0.558, against ulkro 0.516 and against marund 0.492 (all <= 0.80)."
+    },
+    {
+     "severity": "minor",
+     "what": "The left hand is a half-open claw with a ring-shaped gap instead of the concept's solid mitten fist.",
+     "evidence": "The left hand in the three_sukri.png close-up row and the front turntable frame (bottom right of the body)."
+    },
+    {
+     "severity": "minor",
+     "what": "The run is a fast 12-frame scurry (cycle 0.4 s, about 5 steps per second) instead of the brief's rolling, steady walk-run. Foot error is 0%, but only 2 planted samples.",
+     "evidence": "build_report_sukri.json run: frames 12, cycle_s 0.4, stride_m 0.68. three_load_test log: 'planted samples 2'. _progress.md open issue (4)."
+    },
+    {
+     "severity": "minor",
+     "what": "The accent does not hold up from every side or stay in the top half. Only 55.5% of it sits in the top half (the brief says 100%), and at the 270\u00b0 facing the cup hides behind the body (0.59%). In every game-camera autopilot shot the cup is hidden behind the health bar or the body.",
+     "evidence": "three_qa accentTopHalfPct 55.5. lineup accent per facing is [1.15, 1.74, 1.04, 0.59]%. _harness/_shots/art2_sukri_game.png and review_sukri_t70_*.png show the cup tucked under the HP bar."
+    },
+    {
+     "severity": "minor",
+     "what": "The base middle value band is borderline at L* 46.1 against a floor of 45, because the wraps sit close to the band's lower limit. The face, hood and wrap structure match the concept well from the front: the carved smile, eye slits, cracks and crossing bands are the strongest part of this model.",
+     "evidence": "lineup review_sukri: sukri value bands {top 80.0, mid 46.1, bottom 26.7}. Front view in turntable.png compared with the concept front."
+    }
+   ]
+  }
+ },
+ "tunlan": {
+  "rounds": 2,
+  "prev": {
+   "pass": false,
+   "score": 6.5,
+   "issues": [
+    {
+     "severity": "major",
+     "status": "partly",
+     "what": "1. Robe projection ghosts and streaks. The pale patches on the upper sleeves are gone, but the hand ghosts on the skirt and the candy stripes are still there.",
+     "evidence": "In three_tunlan.png bottom row, the front view (cell 1) and the skirt close-up (cell 7) still show a translucent grey-taupe hand-shaped blotch on the left thigh, in the same place as before but smaller and paler. In cell 3 of the 3/4 view the same blotch sits at mid-thigh. The ORM AO channel extracted from tunlan.glb has dark rounded blobs at the tops of the skirt islands. That suggests the AO was baked with the bind-pose hands hanging at the thighs, so the ghost now comes from AO rather than albedo. The vertical pink/cream striping persists: turntable.png cells 2 and 8 show strong pink/cream bands down the front and side of the robe, cell 7 shows the same, and splash.png still has the cream band with dark-pink streaks. The fix also introduced a ragged, torn-paper boundary between the cream under-robe and the felt, with dark-red specks along it (cell 7, and the front at knee height). The fix pass's Blender albedo views (_fit/compare_side_l_albedo.png, compare_threeq_albedo.png) look clean, but the three.js renders that ship do not. The upper sleeves in the 3/4 view and the skins' shoulders are now clean."
+    },
+    {
+     "severity": "major",
+     "status": "fixed",
+     "what": "2. Lantern was a blue box over the mask.",
+     "evidence": "The lantern now hangs at her right, beside the head, as in the concept: three_tunlan.png cells 1-2, splash.png, portrait.png. It is an open ironstone cage around a smoked amber lampresin bead, the accent is a small blue core, there are no accent panes, and the crown ring is gone. In three_clips_tunlan.png the lantern stays clear of the mask through idle, attack2, all casts, channel, dash, run and recall. It only crosses the side of the head when she turns to profile (attack1 frames 5-7; turntable cell 10), which the concept's side position implies. Minor: the core shows as two blue dots on the sides of the brass-amber ball, so in the portrait and close-ups the bead reads a little like a ball with eyes."
+    },
+    {
+     "severity": "major",
+     "status": "partly",
+     "what": "3. Carved hands. The hand geometry is fixed, but the idle pose and the attack1 hook remain.",
+     "evidence": "Fixed: the hands are now a tapered carved palm, four separate segmented tapered fingers and a real two-segment thumb (three_tunlan.png cells 1-2; both skins' bind-pose close-ups). The cupped hands in splash.png now read as fingers, and the in-game fp1_tunlan_t75_close.png shows two fingered hands below the brim. Not fixed: idle still has horizontal forearms at the sash with the hands hanging straight down at about 90 degrees from the wrist, and the fingers barely curl (REST_CURL 3/6/10 degrees). They are now in front of the belly rather than at the hips, but this is still not the brief's half-curled hands in front of the chest. In the attack1 recovery (clip sheet row 1, frames 6-7) the long index finger still droops into a sickle-like hook longer than the forearm wrap."
+    },
+    {
+     "severity": "major",
+     "status": "fixed",
+     "what": "4. Attacks and casts hidden under the brim at the gameplay camera.",
+     "evidence": "The brim is now 1.10 m (three_qa bindBox \u00b10.55, tunlan.py HAT_R 0.522 / RIM_C 0.530). I rendered a fresh unit sheet with the repo's three_snapshot --unit on the current GLB: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/vf/unit_tunlan_v.png. In it the attack2 palm push, the cast_a1 hound thrust (frames 5-7), the cast_a2 spread hands (t 0.24) and grip, and the cast_ult claws all reach past the disc, and cast_a3 tips the hat back to show the raised arm. She no longer reads as just a gliding disc. Remaining minor point: attack1 at impact is still only a thin pointing arm below the front brim."
+    },
+    {
+     "severity": "minor",
+     "status": "fixed",
+     "what": "5. Lineup accent gate failed.",
+     "evidence": "art/renders/fighters/tunlan/lineup/tunlan_final.json: accentOk=true for the base and both skins. Per facing: 2.49 / 1.97 / 1.19 / 2.13%, top-half share 1.0. three_qa reports 2.36%. The crown ring has been removed. In game the local player's slot still reads near-white (art2_tunlan_close.png); that comes from the shared team tint."
+    },
+    {
+     "severity": "minor",
+     "status": "partly",
+     "what": "6. Head-box paint and back crack.",
+     "evidence": "The head-box is now a matte mid-walnut brown, and the two gouges have been replaced by one crack. In three.js, though, the crack renders as a pale grey, glossy triangular wedge that looks like a shard stuck in the back of the box (three_tunlan.png cell 6), and as a zigzag in the back view (cell 4); it is not dark. The pale bluish sliver along the head-box's left edge is still there in the back close-up."
+    },
+    {
+     "severity": "minor",
+     "status": "fixed",
+     "what": "7. Death clip did not follow the brief.",
+     "evidence": "Clip sheet row 9, turntable cell 12 and the unit sheet's death row: the hat tips, slides off, lands on its edge and settles beside her with the lantern, while she kneels and folds. It reads as a collapse."
+    },
+    {
+     "severity": "minor",
+     "status": "partly",
+     "what": "8. Skins weakly differentiated.",
+     "evidence": "Both skins now pass the value gradient (noon_fair 70.4/60.0/34.8; lamplit 70.0/56.6/32.7). Noon Fair's robe is now plum (hue 326 degrees, 29% saturation in the splash) with a lilac crown and dots. Lamplit has a walnut rim and underside and a ribbed hat. However, the Lamplit splash still reads as monochrome beige-grey. Its robe samples as a neutral grey (hue 247 degrees, 3% saturation) in three_tunlan_lamplit.png, not the warm walnut grey #7F6D60. In the top-down rows the 'lit from within' panels look like cream paper with ribs, not lit."
+    },
+    {
+     "severity": "minor",
+     "status": "partly",
+     "what": "9. Polish items.",
+     "evidence": "Fixed: dash now animates (crouch, glide with a trailing hand, rise; clip sheet row 8). The portrait and icon now show the lantern under the brim beside the mask. Not fixed: the HP bar still touches or overlaps the back of the brim (art2_tunlan_close.png, fp1_tunlan_t75_close.png). Taunt is still near-static: frames 2-7 hold the same rabbit-ear hand with only a slight finger tilt, the feet never leave the ground, and the claimed hops do not show."
+    },
+    {
+     "severity": "minor",
+     "status": "new",
+     "what": "Death end pose: the long hands sink into the floor.",
+     "evidence": "In three_clips_tunlan.png row 9, frames 6-8, and turntable.png cell 12, the forearms stand vertical like table legs and only a small cream stub shows at each wrist. The 0.47 m hands go through the ground plane. They are hidden from the gameplay camera."
+    },
+    {
+     "severity": "minor",
+     "status": "new",
+     "what": "The lamp slot is much larger than the brief's notch.",
+     "evidence": "The accent slot is an arc about 42 cm long on the front brim; the brief asks for a 4 x 1 cm notch. At the gameplay camera it is the dominant mark on the disc (unit sheet; three_tunlan.png row 1) and reads as a white bracket for the local player in game. The accent gate still passes."
+    },
+    {
+     "severity": "minor",
+     "status": "new",
+     "what": "Lineup silhouetteOk=false is a harness artifact, not an art failure.",
+     "evidence": "In tunlan_final.json the only failing pair is tunlan_noon_fair vs tunlan_lamplit (IoU 1.0). same_fighter() in lineup_qa.py does not recognise two skins of the same fighter as one fighter. The same false fail appears in art/renders/lineup/review_sukri.json."
+    }
+   ]
+  },
+  "review0": {
+   "pass": false,
+   "score": 6,
+   "issues": [
+    {
+     "severity": "major",
+     "what": "The robe and sleeves have projection ghosts and streaks: parts of the concept were painted onto the wrong surfaces. The concept's cream hands are baked onto both thighs of the skirt as light or grey hand-shaped patches. The skirt sides carry vertical pink/cream 'candy stripes' smeared from the cream under-robe. The upper sleeves have pale grey patches where the backdrop or cuff colour bled in.",
+     "evidence": "art/renders/fighters/tunlan/three_tunlan.png, bottom row. Idle front: a light cream vertical band sits on the skirt directly under each hanging hand, where the concept's hands overlap the robe. Skirt side close-up (cell 7): translucent grey hand-shaped smears just below the hands, plus pink/cream striping down the whole side. 3/4 view: a clearly lighter pink-grey patch on her right upper sleeve. The same stripes show in the turntable side frames (art/renders/fighters/tunlan/turntable.png, cells 2/3/7) and as a cream band down the robe's side in art/out/fighters/tunlan/splash.png. The pale shoulder patches survive the skin recolours (three_tunlan_noon_fair.png and three_tunlan_lamplit.png front close-ups). In the albedo atlas (tunlan_base inside tunlan.glb) the skirt islands carry cream and grey blobs at their tops."
+    },
+    {
+     "severity": "major",
+     "what": "The lantern reads as a glowing blue box in front of the mask. All six glass panes are the accent material: big flat azure windows that even pick up a sky reflection. The concept has warm amber glass with a tiny blue spark, and the brief asks for a smoked lampresin bead with a 3 cm accent core. The lantern was also moved to her front-right diagonal, so in every right three-quarter view it sits squarely over the face and hides the main character read.",
+     "evidence": "In the three_tunlan.png 3/4 close-up (bottom row, cell 2) the lantern completely covers the mask. Turntable cells 8, 9 and 11 show the same. In three_clips_tunlan.png the lantern is over the face in nearly every frame of idle, attack2, cast_a1, cast_a2, channel, dash and run. In the concept (_design/concept/tunlan.webp) the lantern hangs beside the head at her right, with orange glass. _progress.md confirms the 'front-right diagonal' move and 'lantern glass (6 panes) ... all accent'. Fix: move it back to the concept's side position (or further out on the brim), paint the panes as lampresin, and keep the accent to a small core plus the brim vent, enlarging the vent or crown ring if the accent gate needs it."
+    },
+    {
+     "severity": "major",
+     "what": "The carved hands, a signature piece and the 'second read' in casts, come out as crude paddle mittens: two flat finger-pair slabs with seam lines and a tiny peg thumb sticking out at 45 degrees. The concept has tapered, naturally curved carved fingers and a real thumb. The idle pose makes this worse: the hands hang as limp slabs bent at right angles from horizontal forearms at the belt, where the brief asks for half-curled hands in front of the chest.",
+     "evidence": "three_tunlan.png front and 3/4 close-ups: box-glove hands with peg thumbs, also visible in both skins' A-pose close-ups. The cupped 'small bird' hands in splash.png read as one lumpy block. In game they read as two cream boxes at the hips (my capture _harness/_shots/rv_tunlan_t75_close.png). In attack1 (clip sheet row 1, frames 4-5) the off hand droops into a long sickle-like hook at the thigh, and the pointing finger curls into a hook as long as the forearm."
+    },
+    {
+     "severity": "major",
+     "what": "At the gameplay camera most attacks and casts don't read. The brim is 1.27 m across (bind box \u00b10.635 m; the brief says 1.0 m) and covers the hands through attack1, cast_a1 (Hound Shadow), cast_a2 (Hand Shadow) and cast_a3 (Lamp Flare). Only the ult's raised arms clear the disc. In the ~52 degree view she reads as a gliding disc no matter what she is doing.",
+     "evidence": "I rendered the clips from the high 3/4 camera with the repo's art/tools/three_snapshot.mjs --unit (scratchpad: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/tl/unit_tunlan.png). attack1: only a thin stick shows below the brim at impact. cast_a1: the thrust is mostly hidden under the disc. cast_a2/a3: the hands peek out only at the brim edge. cast_ult frames 2-3 are the only frames with a clear gesture outside the disc. The in-game shots (_harness/_shots/art2_tunlan_close.png and rv_tunlan_t75_close/close2.png) show just the disc with the robe hem and boots below it. Fix: push the impact poses past the brim (hound thrust at least 0.9 m forward, grip hand raised outside the brim at f8-10, the flick arm fully extended), or bring the brim toward 1.1 m."
+    },
+    {
+     "severity": "minor",
+     "what": "The lineup QA accent gate fails, although the progress log reports 1.9%. In game, for the local player, the accent is a near-white speck.",
+     "evidence": "art/renders/fighters/tunlan/lineup/tunlan_final.json: accentOk=false for the base and both skins. Back facing is 0.78%, under the 1.0% minimum; front-facing top-half share is 0.838, under 0.9; the maximum is 1.24%. build_report three_qa says 1.9%. In art2_tunlan_close.png the lantern is a white dot at the brim edge. In the enemy tint (_harness/_shots/value_rift_high_burdam_ver3_f_tunlan.png) the crown ring reads as an orange target ring; the brief asks for the lantern core and the rim notch only."
+    },
+    {
+     "severity": "minor",
+     "what": "The head-box paint is off. The concept's dark walnut head-box (top band and back) is painted pale tan-grey. The back of the head has two sculpted triangular gouges that read as a 'Z' or an angry-face glyph at mid distance, where the concept has one thin crack. Pale bluish slivers run along the head-box edges.",
+     "evidence": "three_tunlan.png bottom row, cells 4 and 6 (back view and back close-up), compared with the back view in _design/concept/tunlan.webp. The edge slivers are also visible beside the mask in the cell 5 face close-up."
+    },
+    {
+     "severity": "minor",
+     "what": "The death clip doesn't follow the brief. The hat never tips off or rolls. The end pose stands the disc on its edge over her folded body, which reads more like hiding than dead.",
+     "evidence": "three_clips_tunlan.png row 9, frames 5-7: the disc is stood up at about 60 degrees with only the boots showing. The same reads from the gameplay camera (unit sheet, death row). _progress.md lists this as open."
+    },
+    {
+     "severity": "minor",
+     "what": "The skins are weakly differentiated. Lamplit, the deluxe skin, reads as a desaturated base: a cream hat top with thin ribs, a rim that is not walnut-dark in the splash, no 'lit from within' panels, and a monochrome beige splash. Both skins fail the lineup value gradient. Noon Fair's robe measures as near-neutral grey-violet rather than plum-grey.",
+     "evidence": "art/out/fighters/tunlan/tunlan_lamplit_splash.png, compared with splash.png. In the top-down rows, three_tunlan_lamplit.png and three_tunlan.png are nearly identical. tunlan_final.json: valueGradientOk=false for both skins (lamplit top 68.5-69.1, under 70; noon_fair mid 67.4 at 270 degrees, over 65). Noon Fair robe sampled at hue 299 degrees / 6% saturation, against the brief's #85727B (332 degrees / 14%). All three splashes use the identical pose and backdrop, which matches Marund's precedent."
+    },
+    {
+     "severity": "minor",
+     "what": "Smaller polish items: the in-game HP bar overlaps the back of the brim; dash and taunt are near-static holds; the portrait and icon mask reads muddy grey, and the icon lacks the brief's lantern-under-brim read.",
+     "evidence": "HP bar: art2_tunlan_close.png and rv_tunlan_t75_close.png. Dash: clip sheet row 8, frames 1-5 identical. Taunt: row 15, the rabbit-ear hand barely moves. Portrait/icon: art/out/fighters/tunlan/portrait.png and icon.png, roughly on par with Marund's. What works: silhouette fit to the concept is IoU 0.85 front/back; IoU against Dunsom/Vashil/Nurrow is 0.565/0.555/0.494; value bands are 70.9/64.0/33.8; run feet are planted (0.6% error); 21,658 tris and 1136 KiB; the load test passes; the a1 hound and ult beast gestures are distinct. New harness shots this review made: _harness/_shots/rv_tunlan_t75_{game,close,close2}.png."
+    }
+   ]
+  }
+ }
+}
