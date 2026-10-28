@@ -190,35 +190,35 @@
     "tris_bell_glass": 360,
     "validate_ardit": "20536->20529"
   },
-  "uv_coverage": 0.603,
+  "uv_coverage": 0.592,
   "bake": {
-    "base": 14.76,
-    "rough_metal": 16.69,
-    "normal": 11.17,
-    "ao": 10.62,
-    "normal_fixed_px": 119562,
-    "projection": 225.28,
-    "pack_save": 226.21,
-    "total": 280.73
+    "base": 14.01,
+    "rough_metal": 11.99,
+    "normal": 7.05,
+    "ao": 10.34,
+    "normal_fixed_px": 113748,
+    "projection": 188.21,
+    "pack_save": 188.97,
+    "total": 233.59
   },
   "tris": 21109,
   "mesh_top_m": 2.476,
-  "glb_bytes_raw": 2474600,
+  "glb_bytes_raw": 2440924,
   "optimize": {
     "ok": true,
-    "before": 2474600,
-    "after": 972044,
+    "before": 2440924,
+    "after": 959684,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 972044,
+  "glb_bytes": 959684,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (949 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_first_bell_base 2048x2048 227K, ardit_first_bell_normal 512x512 37K, ardit_first_bell_orm 512x512 55K",
-      "  skinned meshes: ardit_accent(308v), ardit_first_bell(17801v)",
-      "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (937 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_first_bell_base 2048x2048 219K, ardit_first_bell_normal 512x512 36K, ardit_first_bell_orm 512x512 54K",
+      "  skinned meshes: ardit_accent(302v), ardit_first_bell(17709v)",
+      "  bones: 34 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_l_2 x_tabard_l_3 x_tabard_r_1 x_tabard_r_2 x_tabard_r_3)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
       "  tris: 21109; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
@@ -231,8 +231,8 @@
       "portrait": "art/out/fighters/ardit/ardit_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 35.88,
-      "portrait": 18.33
+      "splash": 23.34,
+      "portrait": 12.7
     }
   },
   "three_qa": {
@@ -255,8 +255,8 @@
       1
     ],
     "headY": 2.025,
-    "accentPct": 1.86,
-    "accentTopHalfPct": 96.5,
+    "accentPct": 1.96,
+    "accentTopHalfPct": 96.7,
     "heightPx1080": 134,
     "size": [
       2400,
@@ -264,24 +264,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_first_bell.png",
-    "seconds": 96.5,
+    "seconds": 52.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.55,
-      "model": 11.36,
-      "lows_bind": 14.48,
-      "uv": 6.93,
-      "bake": 280.75,
-      "export": 0.39,
-      "optimize": 3.64,
-      "load_test": 0.64,
-      "render": 54.48,
-      "three_qa": 97.47
+      "materials": 2.78,
+      "model": 35.06,
+      "lows_bind": 28.43,
+      "uv": 11.22,
+      "bake": 233.62,
+      "export": 0.3,
+      "optimize": 1.68,
+      "load_test": 0.46,
+      "render": 36.17,
+      "three_qa": 53.34
     },
-    "total_s": 471.26
+    "total_s": 404.11
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3
