@@ -121,6 +121,8 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Blind (Co-op):** `draft.pick.blind`; picks reveal together (`draft.pick.blind_revealed`).
 - **Finalize** (15 s): the loadout panel (§3.6) with skin, spells, boons, and the trade list (`draft.trade.*`). A trade is a request the other seat accepts; incoming requests also toast (`toast.trade_incoming`).
 - **Log:** the session's draft log is shown as a quiet one-line ticker (`draft.log.*`).
+- **Music** (AUD-m2): the draft bed hears the phase, whether you must act, and the last `tokens.audio.beds.draft.localUrgencyLastS` (8 s) of a timer you still have to act on (`AudioPort.draft({ phase, mine, urgent })`, null when the draft closes).
+- **Warm-up** (PERF-m1): the first draft state preloads the map, its units and sky; each fighter that locks preloads its model; the loading cards' splashes are fetched when the draft is done (`AppState.warmMatch`). Measured in a real Co-op flow: 35.9 MB of the match's assets arrive during the draft, 13.6 MB on the loading screen (`_harness/_reports/fw_W2_polish_v4_preload.json`).
 - **Leave:** Esc or Back opens the dodge confirm (`draft.leave.*`).
 - **States:** waiting on other seats (`draft.seat.thinking`), bots shown with a bot mark on the seat's role line, an unavailable fighter (`error.draft.unavailable`), reconnect (`state.reconnecting`). A seat's trade request is the swap glyph with its tooltip (`draft.trade.request`).
 - **Finalize panel:** Hour spells and boons sit behind two tabs that count their filled slots (§3.6), so the whole panel fits at 1280 x 720.
@@ -130,10 +132,10 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **FRAY pick** (25 s, `ffa_pick`): the fighter grid with no bans; nine other seat chips along the top show locked fighters as they arrive (`fray.pick.taken`). Your seat chip carries your seat colour and glyph (`fray.seat.you`). If two players lock the same fighter the first lock keeps it (`fray.pick.first_lock`). A seat with nothing left is assigned a random fighter (`fray.pick.none_left`).
 
 ### 3.6 Loadout (finalize panel, and the `loadout` screen)
-- **Shows:** the skin carousel (owned skins; unowned ones are dashed with "In the shop for {price}"), 2 battle-spell slots (5 in FRAY, where there are no boons), 2 boon slots restricted to one path (Shadeline, Warmstone, Hourturn) with the path tabs, and spell and boon tooltips from `setup.json` (`desc`, cooldown line `loadout.cooldown`).
+- **Shows:** the skin carousel (owned skins; unowned ones are dashed with "In the shop for {price}"), 2 Hour spell slots (5 in FRAY, where there are no boons), 2 boon slots restricted to one path (Shadeline, Warmstone, Hourturn) with the path tabs, and spell and boon tooltips from `setup.json` (`desc`, cooldown line `loadout.cooldown`).
 - **Rules shown as text, not hidden:** `loadout.path_one` ("Boons must come from one path."), `loadout.not_here` for a spell or boon outside the mode's pool, `loadout.needs_full` until every slot is filled.
 - **Actions:** `Session.draft({a:'skin'})`, `{a:'loadout'}`, and on the standalone screen `Session.saveLoadout`. `Use last loadout` restores `Profile.loadouts[fighter]`.
-- **Today the finalize timer is the only thing that ends the phase.** Lock in saves and shows `loadout.locked_in`; if SESSION adds an early-out when every human confirms, the button already exists.
+- **Lock in is a ready flag** (client F12). When the session reports `DraftSeat.ready`, Lock in also sends `{a:'ready'}`, each ready seat shows `draft.seat.ready`, and the line reads `draft.finalize.ready_waiting` / `draft.finalize.ready_all`; the session ends finalize after a short grace once every human is ready. A session without the flag keeps `draft.finalize.starting` (the timer ends the phase).
 
 ### 3.7 Loading
 - **Shows:** the map name and flavour line (`loading.title`, `loading.flavour.<mode>`), one tip at a time from `client.tips` (random start, then in order, every 8 s, `loading.tip_n`), a thin progress bar (`loading.progress`), and a chip per seat (up to ten) with a tick as each seat is ready (`loading.seat_ready`).
@@ -144,6 +146,7 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Rewards:** one ledger row per `GrantSummary.lines[].label`, resolved through `grant.<label>`, with the amount in Candles or XP; currency ticks up over 1,200 ms (`ui_currency_tick`); a total; the account level bar (`postgame.level.*`) and `toast.level_up`-style callout on a level change (`ui_level_account`). Nothing granted shows `postgame.rewards.practice`, `postgame.rewards.left` or `postgame.rewards.none`.
 - **Rating** (ranked only): `postgame.rating.change`, `up` / `down`, tier change lines, placement matches `postgame.rating.placing`.
 - **Tabs:** Summary (your stats, `postgame.stats.*`), Scoreboard (§8, or the Hour Board in FRAY), Graph (`goldGraph`, labelled `postgame.graph.title`; above the line your team led).
+- **Recognition** (client F15): the Summary opens with two best-in-match cards (`postgame.best.<stat>.*`: the two stats one player led by the widest margin over the match average, two different players when possible) and, in team modes, the **Lantern nod**: light a lantern for one teammate within 20 s or Skip (`postgame.nod.*`); the nod marks that teammate's Scoreboard row. A post-game reopened from history has no nod. On a short window the band is one row (teammates as portraits).
 - **Next:** Play again (chalk), Choose another mode, Return home. Play again is disabled with `postgame.queue_again_locked` while a lockout runs.
 - **Tone:** defeat is dignified. No red, no mocking sub-lines; the banner uses the same plate as victory with the defeat sting and a held B4.
 - **Sound:** `m_victory_sting` / `m_defeat_sting` / `m_placement_sting` once, then `mus_postgame`; `ui_reward_reveal` as the rewards panel opens.
@@ -159,15 +162,19 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Buy:** confirm modal `shop.confirm.body` ("Buy First Bell Pavise for 2,250 Candles?") with the balance left; after the session confirms, `shop.bought` ("First Bell Pavise is yours. Equip it?") with Equip now / Not now. Sound `ui_purchase`, then `ui_equip` on equip.
 - **Insufficient Candles:** the Buy button stays enabled; the modal `shop.insufficient.*` says how many Candles are missing and offers Play a match. `ui_error`, no charge.
 - **Owned** cards show Owned or Equipped. A failed purchase says `shop.error` and that nothing was charged.
+- **Row shelves** (client F17) fade at the edge they continue past and carry a round chevron there (`shop.rail.prev` / `next`); a chevron scrolls the row by most of its width.
 - **No premium currency in this slice.** No Prisms, no real-money copy anywhere. `shop.earn_hint` says Candles come from playing.
 
 ### 3.11 Profile
 - **Overview:** display name with Change name (`error.rename.*`), level and XP bar, wallet, record (wins and losses), most played fighter, and the browser-storage note. **History:** the last 50 matches (`profile.history.*`), each with result or placement, mode, fighter, T / F / A, length, Candles and rating change. **Rating:** tier emblem, rating, peak, games, next tier, provisional progress.
 - **Reset:** a modal that says exactly what returns to defaults and that it cannot be undone (`profile.reset.*`).
+- **Emblem** (client F17): the avatar is an earned emblem: First lamp from the start, a class mark per class you have won a match with, Tenth hour at level 10, your best ranked tier once placed (`profile.emblem.*`; locked ones show how to earn them). The choice is per device (`UiPrefs.emblem`) until the Profile carries it.
+- **History rows open their post-game** (client F17): the last 20 post-games are kept in this browser (`vale.results.v1`); such a row opens the post-game (`profile.history.open`, `profile.history.open_hint`).
 - **States:** history empty (`profile.history.empty`), rating locked (`profile.rating.locked`) or none (`profile.rating.none`).
 
 ### 3.12 Practice and Custom
 - **Practice:** four switches (infinite Gleam, no cooldowns, training targets 0-20, starting level), `practice.no_rewards`. In match, the practice panel (`practice.panel.*`) offers +5,000 Gleam, level up, refresh cooldowns, toggle cooldowns, place a target, return to life, reset match and a speed control up to 16x.
+- **Damage readout** (gameplay g3): under the speed row, what your fighter dealt: last hit, this burst (hits less than 3 s apart) with its damage per second, the total, and Clear (`practice.panel.dmg.*`). `Full heal` replaces 'Return to life' (it heals while alive too).
 - **Custom:** mode, map, ten seat rows (you, bot, open) with bot difficulty (`custom.difficulty_*`), per-seat fighter or random, `custom.no_rewards`. Start is disabled until you are in a seat (`custom.need_seat`).
 
 ---
