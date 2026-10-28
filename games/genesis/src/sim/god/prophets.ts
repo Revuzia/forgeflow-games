@@ -44,6 +44,8 @@ import { statusGain } from '../people/outlets.ts';
 import { tell } from '../people/story.ts';
 import { agentName, agentRef, settlementRef, vars } from '../people/util.ts';
 import { distM, spotInCell } from '../people/world.ts';
+import { planDrinkNear } from '../people/decide.ts';
+import { bestFood, storeAdd, storeTake } from '../people/store.ts';
 import { fail, ok } from './util.ts';
 import { meansNow, moveSettlement, relOf, relStat, rise, srel } from './regard.ts';
 import { actReaches, PRAYER_WORDS } from './prayers.ts';
@@ -260,7 +262,12 @@ export function prophetsHourly(u: Universe, p: Planet): void {
     // carrying the faith: back home when the stay is over
     if (ph.journey && ph.journey.until <= u.tick) ph.journey = null;
     // preaching: those within earshot grow in faith by the prophet's credibility
-    if (A.task[s] === TASK.preach && heard(u, ph)) preachHour(x, ph, s);
+    if (A.task[s] === TASK.preach && heard(u, ph)) {
+      const n = preachHour(x, ph, s);
+      // the hours preached in the town they carry the faith to, and the people who heard them there
+      const away = ph.journey ? x.ps.settlement(ph.journey.target) : null;
+      if (away && distM(x.p, _p, away.pos) <= away.territory + 100) { relStat(u, 'prophet.awayHours', 1); relStat(u, 'prophet.awayHeard', n); }
+    }
     // an open prayer before them: they foretell its answer (once a prayer, p = 0.5 × credibility)
     const r = srel(u, p.id, ph.settlement);
     for (const pr of r.prayers) {
@@ -274,7 +281,7 @@ export function prophetsHourly(u: Universe, p: Planet): void {
 }
 
 /** one hour of a prophet's preaching: faith (and a little trust and loyalty) by credibility, rivals' hold loosens */
-function preachHour(x: PCtx, ph: ProphetState, s: number): void {
+function preachHour(x: PCtx, ph: ProphetState, s: number): number {
   const A = x.A;
   A.posAt(s, x.tick, _p);
   const c = ph.credibility;
@@ -458,17 +465,47 @@ function martyr(x: PCtx, ph: ProphetState, s: number, st: Settlement): void {
  * A prophet's own task this turn (null: their own life): preaching by day around their needs, at home or in the town
  * they carry the faith to. `pressing` is the decision's most pressing bodily need.
  */
-export function prophetTask(x: PCtx, s: number, st: Settlement | undefined, night: boolean, pressing: number): TaskSpec | null {
+export function prophetTask(x: PCtx, s: number, st: Settlement | undefined, night: boolean, pressing: number, thirsty = false): TaskSpec | null {
   const u = x.u;
   const ph = prophetOf(u, x.p.id, x.A.id[s]);
-  if (!ph || night || pressing >= 1.2 || !heard(u, ph)) return null;
+  if (!ph || !heard(u, ph)) return null;
+  // carrying the faith (fix r1 #16): a stay in the other town, not a commute — every day turn preaching there, water drunk
+  // by that town, food eaten from what they carried (provisionStay), and the night slept there (decide.ts paceSleep camps
+  // them where night finds them, far from their own bed)
+  const away = ph.journey ? x.ps.settlement(ph.journey.target) : null;
+  if (away && away.fallen < 0) {
+    x.A.posAt(s, x.tick, _p);
+    const there = distM(x.p, _p, away.pos) <= away.territory + 100;
+    if (thirsty && there) return planDrinkNear(x, s, -1);
+    if (night || pressing >= 1.2) return null;
+    return preachAt(x, s, away);
+  }
+  if (night || pressing >= 1.2) return null;
   // around their own needs: half the turns
   if (hashFloat(x.A.id[s], x.tick, 0x9a0c) < 0.5) return null;
-  const target = ph.journey ? x.ps.settlement(ph.journey.target) : st;
-  if (!target || target.fallen >= 0) return null;
+  if (!st || st.fallen >= 0) return null;
+  return preachAt(x, s, st);
+}
+
+function preachAt(x: PCtx, s: number, target: Settlement): TaskSpec {
   const t = x.ps.of(target.id).find((b) => b.progress >= 1 && b.damage < 0.9 && x.c.buildings.list[b.type].function === 'temple');
   const at = t ? t.cell : target.cell;
   return { kind: TASK.preach, goal: spotInCell(x.p, at, x.A.id[s], 0x9a0d, [0, 0, 0]), goalCell: at, work: 90, target: t?.id ?? -1, data: target.id };
+}
+
+/** food for `days` taken from the store and carried (what they carry already counts; hunt.ts provisions a party alike) */
+function provisionStay(x: PCtx, st: Settlement, s: number, days: number): void {
+  const A = x.A;
+  const sp = x.info[A.species[s]];
+  let have = 0;
+  for (const it of sp.foods) { const q = A.carried(s, it); if (q > 0) have += q * sp.edible[it]; }
+  if (have >= days * 0.5) return;
+  const f = bestFood(x, st);
+  if (f < 0) return;
+  const got = storeTake(st, f, (days - have) / Math.max(0.05, sp.edible[f]));
+  if (got <= 0) return;
+  const left = A.give(s, f, got);
+  if (left > 0) storeAdd(x, st, f, left);
 }
 
 // ───────────────────────────── commands ─────────────────────────────

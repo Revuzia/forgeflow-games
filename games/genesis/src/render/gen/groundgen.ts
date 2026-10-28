@@ -142,15 +142,23 @@ export function stone(variant: number): BufferGeometry {
 
 // ───────────────────────────── crops, flowers, forest-floor pieces ─────────────────────────────
 
-/** crop types, matching plants.json crops by form: grain (wheat / flax), paddy (rice), stalk (maize) */
-export const CROP_TYPES = ['wheat', 'rice', 'maize', 'flax'] as const;
+/** crop types (plants.json crops: wheat, rice, maize, flax, barley, sorghum, potato, lentil, cotton; the index is
+ *  stored in groundcover's caches: append only) */
+export const CROP_TYPES = ['wheat', 'rice', 'maize', 'flax', 'barley', 'sorghum', 'potato', 'lentil', 'cotton'] as const;
+/** aCard that keeps a part's own hue against the crop's green → gold tint (treegen.ts FRUIT_CARD) */
+const KEEP_HUE = 0.35;
 export type CropType = (typeof CROP_TYPES)[number];
 
 /**
  * A crop clump covering ~0.6 × 0.6 m of a field row, unit height (the instance scales it by the growth stage):
  *   wheat — a dozen stems with drooping ears; rice — a dense tuft of arching blades with panicles;
- *   maize — one tall stalk with long strap leaves, a tassel and a cob; flax — thin stems with small blue flowers.
- * Foliage is solid (aCard 0.5) so the instance tint (green → gold through the season) colours it.
+ *   maize — one tall stalk with long strap leaves, a tassel and a cob; flax — thin stems with small blue flowers;
+ *   barley — shorter stems with nodding ears and long awns; sorghum — two stalks with strap leaves, each crowned by an
+ *   upright compact seed head that ripens rust-red; potato — a low mound of broad compound leaves with white-lilac
+ *   flowers; lentil — a low, fine, bushy tangle of thin stems, tiny leaflets and small pods; cotton — a knee-to-hip
+ *   high bush of broad lobed leaves with bolls that are green while growing and burst white when ripe.
+ * Foliage is solid (aCard 0.5) so the instance tint (green → gold through the season) colours it; vertex colours
+ * shape the hue under that tint (sorghum heads, cotton leaves and bolls), and KEEP_HUE parts keep their own colour.
  */
 export function cropClump(type: CropType, variant: number): BufferGeometry {
   const rng = new Rng(9100 + variant * 29 + type.length * 7);
@@ -186,7 +194,129 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
     }
     for (let i = 0; i < 3; i++) for (let s = 0; s < n; s++) b.idx.push(ring[i][s], ring[i + 1][s], ring[i + 1][s + 1], ring[i][s], ring[i + 1][s + 1], ring[i][s + 1]);
   };
-  if (type === 'maize') {
+  /** multiply the colour of every vertex from n0 on (shapes the hue a part takes under the instance tint) */
+  const mulCol = (n0: number, c: readonly [number, number, number]) => {
+    for (let v = n0; v < b.col.length / 3; v++) { b.col[v * 3] *= c[0]; b.col[v * 3 + 1] *= c[1]; b.col[v * 3 + 2] *= c[2]; }
+  };
+  const nv = () => b.col.length / 3;
+  /** a thin double-sided strip from p along d (awns, small stems) */
+  const strip = (p: readonly number[], dx: number, dy: number, dz: number, len: number, w: number, shade: number, card = 0.5) => {
+    const l = Math.hypot(dx, dy, dz) || 1;
+    dx /= l; dy /= l; dz /= l;
+    const sx = -dz, sz = dx;
+    const a = b.vert(p[0] - sx * w, p[1], p[2] - sz * w, 0, 1, 0, shade, 1, card);
+    const c = b.vert(p[0] + sx * w, p[1], p[2] + sz * w, 0, 1, 0, shade, 1, card);
+    const e = b.vert(p[0] + dx * len, p[1] + dy * len, p[2] + dz * len, 0, 1, 0, shade * 1.1, 1, card);
+    b.idx.push(a, c, e, a, e, c);
+  };
+  /** a flat leaf: a fan of 5 points around its tip direction (cotton's lobed leaves, potato leaflets) */
+  const leaf = (x: number, y: number, z: number, az: number, size: number, tilt: number, shade: number, lobes = 5) => {
+    const ox = Math.cos(az), oz = Math.sin(az);
+    const base = b.vert(x, y, z, 0, 1, 0, shade * 0.8, 0.6, 0.5);
+    const ring: number[] = [];
+    for (let i = 0; i < lobes; i++) {
+      const a = az + ((i / (lobes - 1)) - 0.5) * 2.0;
+      const r = size * (i % 2 ? 0.75 : 1);
+      ring.push(b.vert(x + Math.cos(a) * r * 0.7 + ox * size * 0.35, y + tilt * size - (i % 2 ? 0 : 0.15 * size), z + Math.sin(a) * r * 0.7 + oz * size * 0.35, 0, 1, 0, shade, 1, 0.5));
+    }
+    for (let i = 0; i < lobes - 1; i++) b.idx.push(base, ring[i + 1], ring[i], base, ring[i], ring[i + 1]);
+  };
+  /** a small round boll / pod (8 verts) */
+  const ball = (x: number, y: number, z: number, r: number, c: readonly [number, number, number], card = 0.5) => {
+    const t = b.vert(x, y + r, z, 0, 1, 0, c, 1, card), d = b.vert(x, y - r, z, 0, -1, 0, [c[0] * 0.7, c[1] * 0.7, c[2] * 0.7], 1, card);
+    const ring: number[] = [];
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; ring.push(b.vert(x + Math.cos(a) * r, y, z + Math.sin(a) * r, Math.cos(a), 0, Math.sin(a), c, 1, card)); }
+    for (let i = 0; i < 6; i++) { const j = (i + 1) % 6; b.idx.push(t, ring[j], ring[i], d, ring[i], ring[j]); }
+  };
+  if (type === 'barley') {
+    // shorter and denser than wheat, the ears nod over and bristle with long awns (the beard that reads at a glance)
+    for (let k = 0; k < 6; k++) {
+      const x = (rng.float() - 0.5) * 0.6, z = (rng.float() - 0.5) * 0.6;
+      blade(x, z, 0.3 + rng.float() * 0.2, 0.9 + rng.float() * 0.5, rng.float() * 6.28, 0.028, 0.7, 2);
+    }
+    for (let k = 0; k < 22; k++) {
+      const x = (rng.float() - 0.5) * 0.9, z = (rng.float() - 0.5) * 0.9, az = rng.float() * 6.28;
+      const tip = blade(x, z, 0.78 + rng.float() * 0.2, 0.15 + rng.float() * 0.3, az, 0.013, 0.85, 2);
+      const droop = 0.9 + rng.float() * 0.5;
+      head(tip, 0.075, 0.012, droop, 1.12, 3);
+      // awns fan forward and up from along the ear
+      const ex = tip[0] + Math.cos(droop) * 0.075 * 0.4, ey = tip[1] - Math.sin(droop) * 0.075;
+      for (let a = 0; a < 4; a++) {
+        const t = a / 3;
+        const p = [tip[0] + (ex - tip[0]) * t, tip[1] + (ey - tip[1]) * t, tip[2]];
+        strip(p, Math.cos(az + a) * 0.35 + 0.4, 0.8, Math.sin(az + a) * 0.35, 0.09 + rng.float() * 0.03, 0.0025, 1.15);
+      }
+    }
+  } else if (type === 'sorghum') {
+    for (let s2 = 0; s2 < 2; s2++) {
+      const x = (s2 - 0.5) * 0.28 + (rng.float() - 0.5) * 0.08, z = (rng.float() - 0.5) * 0.12;
+      const h = 0.88 + rng.float() * 0.12;
+      blade(x, z, h, 0.03, rng.float() * 6.28, 0.035, 0.85, 4);
+      for (let k = 0; k < 6; k++) {
+        const y0 = 0.12 + k * 0.11, az = k * 2.4 + rng.float() + s2;
+        const ox = Math.cos(az), oz = Math.sin(az);
+        let pl = -1, pr = -1;
+        for (let i = 0; i <= 4; i++) {
+          const t = i / 4;
+          const cx = x + ox * t * 0.38, cz = z + oz * t * 0.38, y = y0 + 0.16 * t - 0.26 * t * t;
+          const half = 0.032 * Math.sin(Math.PI * (0.1 + 0.8 * t));
+          const L = b.vert(cx - oz * half, y, cz + ox * half, 0, 1, 0, 0.8, 0.3 + 0.7 * t, 0.5);
+          const R = b.vert(cx + oz * half, y, cz - ox * half, 0, 1, 0, 0.8, 0.3 + 0.7 * t, 0.5);
+          if (pl >= 0) b.idx.push(pl, pr, R, pl, R, L, pl, R, pr, pl, L, R);
+          pl = L; pr = R;
+        }
+      }
+      // the seed head: an upright, compact oval panicle, rust-red when ripe (olive green under the young tint)
+      const n0 = nv();
+      head([x, h - 0.02, z], 0.17, 0.05, -1.45, 1.05, 6);
+      mulCol(n0, [1.75, 0.72, 0.5]);
+    }
+  } else if (type === 'potato') {
+    // a low mound: compound leaves arching out of the ridge, leaflets along them, flowers on top
+    for (let k = 0; k < 9; k++) {
+      const az = (k / 9) * 6.28 + rng.float() * 0.5, lean = 0.5 + rng.float() * 0.6, h = 0.6 + rng.float() * 0.35;
+      const tip = blade((rng.float() - 0.5) * 0.12, (rng.float() - 0.5) * 0.12, h, lean, az, 0.02, 0.7, 3);
+      for (let j = 0; j < 3; j++) {
+        const t = 0.45 + j * 0.25;
+        leaf(tip[0] * t, tip[1] * t + 0.02, tip[2] * t, az + (j % 2 ? 0.9 : -0.9), 0.07 + 0.02 * j, 0.25, 0.78, 3);
+      }
+      leaf(tip[0], tip[1], tip[2], az, 0.09, 0.2, 0.82, 5);
+    }
+    for (let k = 0; k < 4; k++) {
+      const a = rng.float() * 6.28, r = rng.float() * 0.12;
+      ball(Math.cos(a) * r, 0.92 + rng.float() * 0.12, Math.sin(a) * r, 0.022, k % 2 ? [6.5, 6.2, 7.5] : [6.8, 5.6, 8], KEEP_HUE);
+    }
+  } else if (type === 'lentil') {
+    // a fine, low, bushy tangle: thin stems, tiny leaflets crowding them, small flat pods
+    for (let k = 0; k < 30; k++) {
+      const x = (rng.float() - 0.5) * 0.8, z = (rng.float() - 0.5) * 0.8, az = rng.float() * 6.28;
+      const tip = blade(x, z, 0.7 + rng.float() * 0.3, 0.35 + rng.float() * 0.6, az, 0.007, 0.8, 2);
+      for (let j = 0; j < 3; j++) {
+        const t = 0.4 + j * 0.25;
+        strip([x + (tip[0] - x) * t, tip[1] * t, z + (tip[2] - z) * t], Math.cos(az + 1.6 * (j % 2 ? 1 : -1)), 0.5, Math.sin(az + 1.6 * (j % 2 ? 1 : -1)), 0.07, 0.012, 0.85);
+      }
+      if (k % 3 === 0) head(tip, 0.035, 0.009, 1.1, 1.15, 3);
+    }
+  } else if (type === 'cotton') {
+    // a bush: a reddish main stem and side branches, broad lobed leaves, bolls (green → burst white under the tint)
+    const n0 = nv();
+    const x0 = (rng.float() - 0.5) * 0.1, z0 = (rng.float() - 0.5) * 0.1;
+    blade(x0, z0, 0.95, 0.05, rng.float() * 6.28, 0.022, 0.6, 3);
+    mulCol(n0, [0.9, 0.55, 0.45]);
+    const leafStart = nv();
+    for (let k = 0; k < 7; k++) {
+      const az = k * 2.4 + rng.float() * 0.5, y = 0.25 + k * 0.1, reach = 0.32 - k * 0.025;
+      const ox = Math.cos(az), oz = Math.sin(az);
+      strip([x0, y, z0], ox, 0.45, oz, reach, 0.006, 0.55);
+      leaf(x0 + ox * reach * 0.6, y + 0.12 * reach, z0 + oz * reach * 0.6, az + 0.6, 0.075, 0.2, 0.8);
+      leaf(x0 + ox * reach * 0.95, y + 0.2 * reach, z0 + oz * reach * 0.95, az - 0.4, 0.085, 0.25, 0.85);
+      // bolls on the outer ends (white = vertex 2.2-3.6 × the ripe tint; green under the young tint)
+      ball(x0 + ox * reach * 1.05, y + 0.28 * reach, z0 + oz * reach * 1.05, 0.032, [2.3, 2.9, 3.5]);
+      if (k % 2) ball(x0 + ox * reach * 0.7 + oz * 0.04, y + 0.2 * reach, z0 + oz * reach * 0.7 - ox * 0.04, 0.028, [2.3, 2.9, 3.5]);
+    }
+    for (let v = leafStart; v < nv(); v++) if (b.col[v * 3 + 2] < 2) { b.col[v * 3] *= 0.85; b.col[v * 3 + 1] *= 0.68; b.col[v * 3 + 2] *= 0.45; }
+    leaf(x0, 0.97, z0, rng.float() * 6.28, 0.07, 0.3, 0.75);
+  } else if (type === 'maize') {
     const x = (rng.float() - 0.5) * 0.15, z = (rng.float() - 0.5) * 0.15;
     blade(x, z, 1.0, 0.04, rng.float() * 6.28, 0.04, 0.9, 4);
     for (let k = 0; k < 7; k++) {
