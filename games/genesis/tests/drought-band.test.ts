@@ -17,6 +17,7 @@ import { abandon } from '../src/sim/people/settlement.ts';
 import { itemIdx } from '../src/sim/people/resources.ts';
 import { ROAD_W, soakable, waterOnFoot } from '../src/sim/people/waterway.ts';
 import { LOAD_KG } from '../src/sim/perf/pace.ts';
+import { distM } from '../src/sim/people/world.ts';
 
 interface DustBowl { sim: Sim; town: Settlement; fellH: number; deaths: Record<string, number>; alive: number; road: { keep: number; drink: number } }
 
@@ -299,4 +300,40 @@ test('the search for water on foot stops at the walk a body will risk, and the a
   }
   assert.ok(found > 0, 'some water or soak is found within two days\' walk');
   assert.equal(b.hash(), a.hash(), 'searching changes nothing in the world');
+});
+
+// the verifiers' 'pond-bare' fixture in miniature: the dust bowl held, the ground bare, and once the town falls a pond at the
+// band's camp that fills every hour and drains in about twenty minutes. Before the camp-water memory (decide.ts bandWater)
+// the parched walked out for water 1.5 km off and the band went with its leader (village sizes 28-32: the camp up to
+// 1541 m from the pond, 746-1195 member-hours beyond 450 m, 0-2 thirst deaths); the game before the drought change stayed
+// within 458 m (150-294 member-hours) and lost no one (_harness/scratch/living/drought/build/LEDGER.md, round 2)
+test('a band in a dust bowl waits at its camp\'s pond that fills and drains, and does not walk off for far water', () => {
+  const { sim, town, dry } = dustBowlStart(11);
+  const p = sim.u.planets[0], ps = p.people, A = ps.agents, f = p.f, g = p.grid;
+  const disc = p.cellsNear(town.pos.slice(), 1500).slice();
+  const deaths: Record<string, number> = {};
+  let pond: number[] = [], at: number[] | null = null, farH = 0, maxD = 0;
+  const q = [0, 0, 0];
+  for (let h = 0; h < 96; h++) {
+    dry(sim);
+    for (const c of disc) if (!p.s.ocean[c]) { f.grass[c] = 0; f.shrub[c] = 0; f.tree[c] = 0; }
+    for (const c of pond) { f.water[c] = 0.3; f.salinity[c] = 0; }
+    sim.step(60);
+    for (const e of sim.drainEvents()) if (e.t === 'death') { const k = String((e.data as { cause?: string } | undefined)?.cause ?? '?'); deaths[k] = (deaths[k] ?? 0) + 1; }
+    const b = ps.settlements.find((s) => s.fallen < 0 && s.band);
+    if (!at && town.fallen >= 0 && b) {
+      pond = [b.cell];
+      for (let e = g.nbrStart[b.cell]; e < g.nbrStart[b.cell + 1]; e++) if (!p.s.ocean[g.nbr[e]]) pond.push(g.nbr[e]);
+      at = b.pos.slice();
+    }
+    if (at && b) {
+      for (const m of ps.members.get(b.id) ?? []) { A.posAt(m, sim.u.tick, q); if (distM(p, q, at) > 450) farH++; }
+      maxD = Math.max(maxD, distM(p, b.pos, at));
+    }
+  }
+  assert.ok(at, 'the dust bowl drives the village out');
+  const tell = `deaths ${JSON.stringify(deaths)}, camp at most ${Math.round(maxD)} m from the pond, ${farH} member-hours beyond 450 m`;
+  assert.equal(deaths.thirst ?? 0, 0, `no one dies of thirst (${tell})`);
+  assert.ok(maxD <= 600, `the band keeps its camp by the pond (${tell})`);
+  assert.ok(farH <= 500, `few walk far from it (${tell})`);
 });

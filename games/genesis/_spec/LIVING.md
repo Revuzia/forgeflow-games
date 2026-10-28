@@ -406,6 +406,34 @@ Y45→Y48, band period) 9 thirst + 4 starvation, 31 alive → 0 + 0, 51 alive; t
 a held 1.5 km dust bowl on a 30-person village, seeds 1–16: 208 → 87 thirst deaths (one trapped-islet seed 17 → 19, chance
 by village size); seed 7's natural drought 0 / 0. Test: `tests/drought-band.test.ts`.
 
+**Round 2 (2026-10-28, after review; the numbers above came from an older base snapshot).** All before-numbers below come
+from a base made from the current tree with only the drought hunks reversed. These changes were made:
+- The search for water on foot stops at the walk the body will risk. Townsfolk search 600; others search by thirst, up to
+  3000. Before this, a dried town spent 56% of the sim at 3000x in this search. The unused second Dijkstra was removed.
+- A long drink walk is given up and re-decided hourly (`staleDrink`) when its spot dries, or when the town's own water is
+  nearer by more than 300 m.
+- The thirst interrupt counts boat casks only afloat, like the needs clamp does.
+- A band member caught by night far from the band makes camp. This gives a fire only where fire-keeping is known.
+- **Camp water** (`decide.ts bandWater`). A band remembers, for 3 hours, the ground water it drank at near its camp. A
+  parched member goes back to that water and lies up beside it until it runs again. It walks to far water only when that
+  water is nearer than the camp water by more than 300 m. `bandStep` calls back members already walking to far water: at
+  time-lapse a walk is lived in legs of hours, too long to wait for the walker's own next look. Without this, a band whose
+  pond filled and drained every hour walked 1.5 km to far water behind its leader.
+
+Measured on the held 1.5 km dust bowl, seeds 1–32, as thirst + cold deaths:
+- Base: 381 + 0, 604 alive.
+- Without camp water: 152 + 5, 833 alive.
+- With camp water: 146 + 5, 841 alive.
+
+Seeds 17 and 25 are worse than base by more than 1 (4 → 6 and 1 → 9). Replicates at village sizes 28–32 show both are
+chance: summed over the replicates, the new code has fewer deaths. Seed 29 has 9 thirst deaths in base and 5 cold deaths
+with the change. That band has no fire-keeping, so a parched walker who drinks far off at night freezes.
+
+On the refilling-pond fixture (seeds 1–8 and 11), base had 0 deaths and 2464 member-hours farther than 450 m from the pond.
+Without camp water it was 2 deaths and 2611 hours. With camp water it is 0 deaths and 1488 hours.
+
+Tests: the pond test fails without camp water and passes with it; the walk-budget test is order-independent.
+
 ### 2.8 Demography
 Today: no birth spacing (`settlement.ts:913-957`), median interval between a mother's births 0.69 game years,
 under-15 share 0.71 (0.65–0.74) at year 8, growth 10.7 %/year, 6 % (23 of 361) of births die before 15 (20 of

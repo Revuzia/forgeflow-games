@@ -21,7 +21,7 @@ import { fireSourceNear, FUEL_TICKS } from './fire.ts';
 import { animalDef, herdPos } from '../life/herds.ts';
 import { distM, spotInCell } from './world.ts';
 import { seedItems, FOOD_SESSION, waterHere, planDrinkNear } from './decide.ts';
-import { moistOf, soakable, soakDraw, soakGain } from './waterway.ts';
+import { WATER_NEAR, drinkAt, moistOf, soakable, soakDraw, soakGain } from './waterway.ts';
 import { emitAt, agentRef } from './util.ts';
 import { missionTaskDone } from './missions.ts';
 import { godHooks } from './hooks.ts';
@@ -43,6 +43,7 @@ import { rise } from '../god/regard.ts';
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
 const _near: number[] = [];
+const _wp = [0, 0, 0];
 
 /** base units a session at full availability yields, by item id */
 const BASE_YIELD: Record<string, number> = {
@@ -89,7 +90,15 @@ export function finishTask(x: PCtx, s: number): boolean {
       return false;
     case TASK.drink: {
       // only where there is water: a drink whose route was blocked ended wherever the walk stopped, and quenched them
-      if (waterHere(x, s)) { A.needs[nb + WATER] = 1; return false; }
+      if (waterHere(x, s)) {
+        A.needs[nb + WATER] = 1;
+        // (a band remembers the ground water it drank at near its camp: decide.ts bandWater)
+        if (st && st.band && drinkAt(x, A.species[s], A.cell[s])) {
+          A.posAt(s, x.tick, _wp);
+          if (distM(x.p, _wp, st.pos) <= WATER_NEAR) { st.recent.wcell = A.cell[s]; st.recent.wseen = x.tick; }
+        }
+        return false;
+      }
       // (LIVING.md §2.7: a soak dug in ground water near the surface (tData 3) — what seeps in within the hour; each drink
       // draws the ground down, and the climate step refills it with rain)
       if (A.tData[s] === 3 && soakable(x, A.cell[s])) { A.needs[nb + WATER] = Math.max(A.needs[nb + WATER], soakGain(x, A.cell[s])); soakDraw(x, A.cell[s]); return false; }

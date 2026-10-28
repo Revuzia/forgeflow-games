@@ -87,8 +87,13 @@ function staleDrink(x: PCtx, s: number): boolean {
   A.posAt(s, x.tick, _p);
   const dg = distM(p, _p, cellPos(p, g, _q));
   if (dg <= WATER_NEAR) return false;
-  if (A.tData[s] === 3 ? !soakable(x, g) : (!waterAtCell(x, s, g) || p.f.fire[g] > FIRE_BURN)) return true;
   const st = x.ps.settlement(A.settlement[s]);
+  // (a band's camp water — bandWater: a walk back to it is not given up because it is dry now; a walk out to a far spot
+  // is given up for it)
+  const m = st && st.band ? bandWater(x, st) : -1;
+  if (m === g) return false;
+  if (A.tData[s] === 3 ? !soakable(x, g) : (!waterAtCell(x, s, g) || p.f.fire[g] > FIRE_BURN)) return true;
+  if (m >= 0 && distM(p, _p, cellPos(p, m, _q)) < dg - WATER_NEAR) return true;
   if (st && !st.band && st.res) {
     for (const w of st.res.water) {
       if (w === g || !waterAtCell(x, s, w) || p.f.fire[w] > FIRE_BURN) continue;
@@ -96,6 +101,16 @@ function staleDrink(x: PCtx, s: number): boolean {
     }
   }
   return false;
+}
+
+/**
+ * The water a band drank at near its camp within the last three hours, or -1 (work.ts records it: st.recent.wcell /
+ * wseen). LIVING.md §2.7: a pond that fills and drains, a seep that runs by night, is gone back to and waited at — the
+ * parched who walked out for water two kilometres off while their camp's pond came back every hour died on the way.
+ */
+export function bandWater(x: PCtx, st: Settlement): number {
+  const c = st.recent.wcell;
+  return c !== undefined && x.tick - (st.recent.wseen ?? -Infinity) < x.day / 8 ? c : -1;
 }
 
 /** a need has turned critical and the current task does not answer it (the agent should decide again now) */
@@ -447,10 +462,21 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     c = r.drink >= 0 && r.drinkCost <= budget ? r.drink : -1;
   }
   if (c < 0 && budget > 0) {
+    // the band's camp water (bandWater: a pond that fills and drains) is gone back to and waited at, unless water or a
+    // soak is found on foot nearer than it by more than WATER_NEAR (the search then looks no farther than that)
+    const m = st && st.band ? bandWater(x, st) : -1;
+    let dm = Infinity;
+    if (m >= 0) { A.posAt(s, x.tick, _p); dm = distM(p, _p, cellPos(p, m, _q)); if (dm > TOWN_WALK) dm = Infinity; }
+    const b = Math.min(budget, dm + WATER_NEAR);
     // nothing found: the nearest water on foot, farther the thirstier; else ground water near the surface, dug as a
     // soak (real water is preferred unless it is farther than the soak by more than the digging is worth)
-    const r = waterOnFoot(x, A.species[s], here, true, budget);
-    const dOk = r.drink >= 0 && r.drinkCost <= budget, sOk = r.soak >= 0 && r.soakCost <= budget;
+    const r = waterOnFoot(x, A.species[s], here, true, b);
+    const dOk = r.drink >= 0 && r.drinkCost <= b, sOk = r.soak >= 0 && r.soakCost <= b;
+    if (dm < Infinity && !dOk && !sOk) {
+      // at the camp's water: lie up beside it until it runs again (asleep, water is lost at half the rate)
+      if (here === m) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 30, target: -1 };
+      return { kind: TASK.drink, goal: spot(x, s, m, 3), goalCell: m, work: 15 };
+    }
     if (dOk && !(sOk && r.drinkCost > r.soakCost + SOAK_EXTRA)) c = r.drink;
     else if (sOk) return { kind: TASK.drink, goal: spot(x, s, r.soak, 3), goalCell: r.soak, work: 60, data: 3 };
     // nothing within reach: lie up in the shade through the heat of the day (asleep, water is lost at half the rate)
