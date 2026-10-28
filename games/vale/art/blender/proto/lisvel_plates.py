@@ -13,7 +13,11 @@ The shared cut (cp.figure_mask) is reused; the clean-up is Lisvel's own (common/
      edge-on), so the painted bow must not ghost onto the tabard behind it in either plate (the back view even paints
      it across her back). The pale, unsaturated pixels of the long horizontal structures in the bow's band (the limbs,
      the faceted grip, the string) are filled column by column from the paint just above and below them.
-  3. THE FLOOR SHADOW and the frame as the shared script (top = the head-wrap crown, 1.85 m = HEIGHT).
+  3. THE FACE-PLATE (front plate): the painting's face carries the painter's lighting (one cheek in shadow) under its
+     incised facet lines; projected onto the sculpted face (which takes its own light) it read as an aged, creased face.
+     Inside the mask's outline the paint is flattened to its chalk tone and the incised lines are kept at half strength
+     (a high-pass of the painting), the small features (lips, nostrils) a little stronger.
+  4. THE FLOOR SHADOW and the frame as the shared script (top = the head-wrap crown, 1.85 m = HEIGHT).
 Writes art/.cache/concept/lisvel_{front,back}.png (edge-padded RGB), lisvel_mask.png, lisvel_plates.json and a
 debug overlay art/renders/fighters/lisvel/_fit/plates_mask.png (cut in colour, removed backdrop red, inpainted bow
 blue).
@@ -176,6 +180,31 @@ def inpaint_columns(im: np.ndarray, hole: np.ndarray, M: np.ndarray) -> np.ndarr
     return np.where(hole[..., None], soft, out), filled
 
 
+def calm_face(im: np.ndarray, meta: dict) -> np.ndarray:
+    """the front face-plate: chalk tone + half-strength incised detail (see 3. above)"""
+    g, t, cx = meta["front"]["ground"], meta["front"]["top"], meta["front"]["cx"]
+    k = (g - t) / HEIGHT
+    H, W, _ = im.shape
+    yy, xx = np.mgrid[0:H, 0:W]
+    x = (xx - cx) / k
+    z = (g - yy) / k
+    # the mask's outline (an ellipse round the face, 7.2 x 10.2 cm), the visor band left as painted
+    e = (x / 0.071) ** 2 + ((z - 1.712) / 0.103) ** 2
+    face = (e < 1.0) & ~((np.abs(z - 1.731) < 0.024) & (np.abs(x) < 0.095))
+    w = nd.gaussian_filter(face.astype(np.float32), 3.0)
+    lum = im.mean(axis=2)
+    low = np.stack([nd.gaussian_filter(im[..., c], 9.0) for c in range(3)], -1)
+    det = im - low
+    sel = face
+    tone = np.median(im[sel & (lum > np.percentile(lum[sel], 40))], axis=0)
+    # lines: the dark high-pass detail at half strength, plus the lower face's features a little more
+    feat = np.clip((1.66 - z) / 0.04, 0, 1) * 0.25
+    out = tone[None, None, :] + det * (0.5 + feat[..., None])
+    # a gentle lit-from-above gradient so the plate is not flat
+    out = out * (0.94 + 0.08 * np.clip((z - 1.61) / 0.2, 0, 1))[..., None]
+    return im * (1 - w[..., None]) + out * w[..., None]
+
+
 def main() -> None:
     src = GAME / "_design" / "concept" / f"{ID}.webp"
     out = ART / ".cache" / "concept"
@@ -201,6 +230,7 @@ def main() -> None:
         meta[side] = {"cx": cx, "ground": ground, "top": top}
     bow = bow_pixels(im, M, meta, lum, sat)
     im2, filled = inpaint_columns(im, bow, M & ~bow)
+    im2 = calm_face(im2, meta)
     keep = nd.binary_erosion(M, iterations=ERODE)
     for side, (x0, x1) in halves:
         g, t = meta[side]["ground"], meta[side]["top"]

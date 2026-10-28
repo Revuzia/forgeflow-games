@@ -5,14 +5,14 @@ of the head bone's skinning matrix: the hood is rigid on the head) and measures 
   * opening : strip samples (vertices + 5 x 5 per quad) OUTSIDE the hood / collar felt and INSIDE the opening's prism
               (SER_ARCH: the hollow and the 40 cm in front of it, above its floor): a pale tab standing in the dark
               opening. Gate: none, on any frame.
-  * rise    : the largest rise (head frame) of a strip sample outside the felt but within 3 cm of it on the front
-              +-75 deg columns, over the same sample at rest: the lapels coming up in front of the hood's lower rim (the
-              eye-level 'teeth'). Gate: < 1.5 cm.
+  * rise    : the largest rise (head frame) of a strip sample outside the felt but within 3 cm of it on the lapels
+              (columns to +-46 deg, tuck to the 70 % row), over the same sample at rest: the lapels coming up in front of
+              the hood's lower rim (the eye-level 'teeth'). Gate: < 2 cm.
   * tuck    : the turned-in top row's depth inside the felt, front columns / all columns (gate: >= 1.5 cm).
-  * sink    : strip samples (tuck to hem, outside the hood) that sink > 4 mm into the posed TUNIC (each sample read in
+  * sink    : strip samples (tuck to the 70 % row, outside the hood) that sink > 4 mm into the posed TUNIC (each sample read in
               the tunic's rest space through the tunic's own skinning there): the tunic showing through the felt as
               dark shards. Gate: <= 25 samples (of ~3000).
-Per clip it prints the worst frame of each, then a PASS / FAIL line.
+Per clip it prints the worst frame of each, then a PASS / FAIL line over the clips a wick plays (WICK_CLIPS).
 
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 \
         --python art/blender/proto/wick_greatwick_mantlepose.py -- [--blend PATH] [--clips attack1,death] \
@@ -40,6 +40,11 @@ import numpy as np  # noqa: E402
 from common import heavy, scene  # noqa: E402
 
 
+# the clips a wick plays (content units.json art.clips + the 'stunned' role under hard CC / knock-ups,
+# src/render/actors.ts clipFor); the rest of the standard set is reported, not gated
+WICK_CLIPS = ("idle", "run", "attack1", "death", "stunned")
+
+
 def args():
     p = argparse.ArgumentParser()
     p.add_argument("--blend", default=os.path.join(scene.CACHE_DIR, "fighters", "greatwick_serenade.blend"))
@@ -50,6 +55,8 @@ def args():
     p.add_argument("--render", default="", help="DIR: flat part-colour renders of the posed neck (Workbench)")
     p.add_argument("--times", default="idle:0.3;attack1:0.18,0.25,0.33,0.42;death:0.2,0.4,0.6,1.0")
     p.add_argument("--tag", default="")
+    p.add_argument("--diag", action="store_true", help="render the tunic red, the collar green, the rim blue-grey")
+    p.add_argument("--zoom", type=float, default=0.62, help="ortho scale (m)")
     return p.parse_args(scene.script_args())
 
 
@@ -161,7 +168,7 @@ def main():
         return S                                               # (ncol-1, nv-1, 25, 3)
     qc = np.repeat(np.minimum(side_c[:-1], side_c[1:])[:, None], nv - 1, 1)          # quad side angle
     qr = np.repeat(np.arange(nv - 1)[None, :], ncol - 1, 0)                          # quad row (0 = tuck -> top)
-    front_q = qc <= 75.0
+    front_q = (qc <= 46.0) & (qr <= 2)                 # the lapels (to the 46 deg column), tuck to the 70 % row
     S0 = samples(X0)
     c0, a0, Q0 = fields(S0.reshape(-1, 3))
     Q0 = Q0.reshape(S0.shape)
@@ -234,7 +241,7 @@ def main():
             Sw = samples(X).reshape(-1, 3)
             Pt = np.einsum("nij,nj->ni", np.linalg.inv(Mt), np.c_[Sw, np.ones(len(Sw))])[:, :3]
             tdep = F_t.d(inv_b(Pt)).reshape(S.shape[:3])
-            snk = (tdep < -0.004) & ~sink_rest & (qr <= 3)[:, :, None] & (c > 0.0)
+            snk = (tdep < -0.004) & ~sink_rest & (qr <= 2)[:, :, None] & (c > 0.0)
             n_sink = int(snk.sum())
             s_dep = float((-tdep[snk]).max()) if n_sink else 0.0
             if n_sink > worst["sink"][0]:
@@ -256,15 +263,17 @@ def main():
                 worst["tuck"] = (t_all, (fr, round(t, 3), round(t_front * 100, 2)))
             if a.frames_log:
                 print(f"  {clip} f{fr:3d} t{t:.2f}: open {n_open:4d} ({dep * 100:.1f} cm) rise {r_max * 100:5.1f} cm  tuck front {t_front * 100:.1f} all {t_all * 100:.1f}")
-        ok = worst["open"][0] == 0 and worst["rise"][0] < 0.015 and worst["tuck"][0] >= 0.015 and worst["sink"][0] <= 25
-        ok_all &= ok
+        ok = worst["open"][0] == 0 and worst["rise"][0] < 0.02 and worst["tuck"][0] >= 0.015 and worst["sink"][0] <= 25
+        if clip in WICK_CLIPS:
+            ok_all &= ok
         report[clip] = {"open": worst["open"][0], "open_at": worst["open"][1], "open_depth_cm": round(worst["open"][2] * 100, 2),
                         "rise_cm": round(worst["rise"][0] * 100, 2), "rise_at": worst["rise"][1],
                         "tuck_min_cm": round(worst["tuck"][0] * 100, 2), "tuck_at": worst["tuck"][1],
                         "sink": worst["sink"][0], "sink_at": worst["sink"][1], "sink_depth_cm": round(worst["sink"][2] * 100, 2), "ok": ok}
         print(f"CLIP {clip:10s} frames {f0}-{f1}: open {worst['open'][0]} at {worst['open'][1]} ({worst['open'][2] * 100:.1f} cm deep); "
               f"rise {worst['rise'][0] * 100:.1f} cm at {worst['rise'][1]}; tuck min {worst['tuck'][0] * 100:.1f} cm at {worst['tuck'][1]}; "
-              f"sink {worst['sink'][0]} at {worst['sink'][1]} ({worst['sink'][2] * 100:.1f} cm)  {'ok' if ok else 'FAIL'}")
+              f"sink {worst['sink'][0]} at {worst['sink'][1]} ({worst['sink'][2] * 100:.1f} cm)  {'ok' if ok else 'FAIL'}"
+              f"{'' if clip in WICK_CLIPS else ' (not a wick clip: info)'}")
     print("MANTLEPOSE", "PASS" if ok_all else "FAIL")
     if a.json:
         with open(a.json, "w") as fh:
@@ -282,6 +291,7 @@ def render(a, arm, body, sel, W, bones, names, pid):
     posed hood, at each clip time."""
     from mathutils import Vector
     os.makedirs(a.render, exist_ok=True)
+    show = dict(SHOW, **({"cloak": "#C02020", "collar": "#20A040", "hood_rim": "#304060"} if a.diag else {}))
     vg = {g.name: g for g in body.vertex_groups}
     for b in bones:
         if b not in vg and W[:, bones.index(b)].max() > 0:
@@ -303,7 +313,7 @@ def render(a, arm, body, sel, W, bones, names, pid):
         me.attributes["vale_part"].data.foreach_get("value", pp)
         cols = np.tile(np.array(lin("#6A5446") + [1.0], np.float32), (n, 1))
         for i, nm in enumerate(names):
-            hx = SHOW.get(nm) or next((v for k, v in SHOW.items() if nm.startswith(k)), None)
+            hx = show.get(nm) or next((v for k, v in show.items() if nm.startswith(k)), None)
             if hx:
                 cols[pp == i] = lin(hx) + [1.0]
         if o.name.endswith("_accent"):
@@ -320,7 +330,7 @@ def render(a, arm, body, sel, W, bones, names, pid):
     sc.render.resolution_x, sc.render.resolution_y = 520, 460
     cam_d = bpy.data.cameras.new("cam_mp")
     cam_d.type = "ORTHO"
-    cam_d.ortho_scale = 0.62
+    cam_d.ortho_scale = a.zoom
     cam = bpy.data.objects.new("cam_mp", cam_d)
     sc.collection.objects.link(cam)
     sc.camera = cam

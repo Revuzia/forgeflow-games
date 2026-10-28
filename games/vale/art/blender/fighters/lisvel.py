@@ -374,18 +374,15 @@ class _VisorBand(sdf.Prim):
         return box
 
 
-MASK_C, MASK_R = np.array([0.0, -0.032, 1.712]), np.array([0.071, 0.082, 0.104])
+MASK_C, MASK_R = np.array([0.0, -0.046, 1.712]), np.array([0.072, 0.060, 0.103])
 
 
 class _VisorShell(sdf.Prim):
-    """the glass visor band laid ON the face-plate (the painting's): a shell 8 mm thick round the face, its front
-    cut flat across the eyes (a straight bar, 9 mm proud of the mask), 4.1 cm tall, its ends tucked under the wrap"""
-    c = np.array([0.0, -0.030, 1.731])
-    RO = np.array([0.084, 0.095, 0.104])
-    RI = np.array([0.074, 0.086, 0.096])
+    """the glass visor band laid ON the face-plate (the painting's, flush): the mask's own surface grown 7 mm, its
+    front cut flat across the eyes (a straight bar), 4.1 cm tall, ending at the mask's sides under the wrap"""
 
     def bounds(self):
-        return np.array([-0.10, -0.135, 1.70]), np.array([0.10, -0.03, 1.76])
+        return np.array([-0.095, -0.135, 1.70]), np.array([0.095, -0.03, 1.76])
 
     @staticmethod
     def _ell(P, c, R):
@@ -395,12 +392,12 @@ class _VisorShell(sdf.Prim):
         return k0 * (k0 - 1.0) / np.maximum(k1, 1e-9)
 
     def d(self, P):
-        outer = np.maximum(self._ell(P, self.c, self.RO), -(P[:, 1] + 0.1215))
-        inner = self._ell(P, self.c, self.RI)
+        dm = self._ell(P, MASK_C, MASK_R)
+        outer = np.maximum(dm - 0.0070, -(P[:, 1] + 0.1120))
         band = np.abs(P[:, 2] - 1.731) - 0.0205
         side = np.abs(P[:, 0]) - 0.090
-        back = P[:, 1] + 0.040
-        return np.maximum(np.maximum(np.maximum(outer, -inner), band), np.maximum(side, back))
+        back = P[:, 1] + 0.055
+        return np.maximum(np.maximum(np.maximum(outer, -(dm + 0.001)), band), np.maximum(side, back))
 
 
 def _with_disp(S: Sculpt, fn, amp):
@@ -492,40 +489,38 @@ def sculpts() -> list:
     wrap.add(Capsule((0.0, 0.03, 1.60), (0.0, 0.02, 1.66), 0.072), k=0.04)                          # the nape
     wrap.sub(Ellipsoid((0.0, -0.118, 1.695), (0.070, 0.075, 0.098)), k=0.014)                        # the face opening
     wrap.inter(HalfSpace((0, 0, 1.585), (0, 0, -1), 1.0), k=0.02)
-    part("wrap", _with_disp(wrap, turban, 0.003), "wrap", "bone:head", 1300, uvw=1.6)
+    part("wrap", _with_disp(wrap, turban, 0.003), "wrap", "bone:head", 1150, uvw=1.6)
 
     # FACE-PLATE (rigid on the head): a carved chalk face, serene: brow, nose, closed lips, chin; the facets are the
     # painting's incised lines
+    # (build 3 portrait: the deep shell with a beak nose, cheekbone knobs and a jutting chin read as an aged face; the
+    # painting's plate is a broad, shallow, serene face: a flatter oval, a soft nose ridge, small closed lips)
     mask = Sculpt("mask")
-    mask.add(Ellipsoid((0.0, -0.032, 1.712), (0.071, 0.082, 0.104)), k=0.0)
-    mask.inter(HalfSpace((0, -0.035, 1.7), (0, 1, 0), 1.0), k=0.012)
-    mask.add(RoundCone((0.0, -0.110, 1.738), (0.0, -0.124, 1.684), 0.011, 0.014), k=0.012)          # nose
-    mask.add(Ellipsoid((0.0, -0.118, 1.676), (0.017, 0.010, 0.008)), k=0.008)                       # nose tip
-    mask.add(Ellipsoid((0.0, -0.109, 1.651), (0.022, 0.008, 0.006)), k=0.006)                       # upper lip
-    mask.add(Ellipsoid((0.0, -0.106, 1.639), (0.019, 0.008, 0.006)), k=0.006)                       # lower lip
-    mask.add(Ellipsoid((0.0, -0.098, 1.620), (0.030, 0.016, 0.014)), k=0.012)                       # chin
-    for sx in (-1, 1):
-        mask.add(Ellipsoid((sx * 0.040, -0.098, 1.690), (0.026, 0.012, 0.018)), k=0.016)           # cheekbones
-    mask.sub(Ellipsoid((0.0, -0.112, 1.645), (0.020, 0.004, 0.0016)), k=0.002)                      # lip line
+    mask.add(Ellipsoid(MASK_C, MASK_R), k=0.0)
+    mask.inter(HalfSpace((0, -0.050, 1.7), (0, 1, 0), 1.0), k=0.012)
+    mask.add(RoundCone((0.0, -0.1020, 1.724), (0.0, -0.1135, 1.684), 0.007, 0.0115), k=0.016)       # nose ridge
+    mask.add(Ellipsoid((0.0, -0.1045, 1.652), (0.017, 0.006, 0.0045)), k=0.006)                     # upper lip
+    mask.add(Ellipsoid((0.0, -0.1025, 1.641), (0.015, 0.006, 0.0045)), k=0.006)                     # lower lip
+    mask.sub(Ellipsoid((0.0, -0.1080, 1.6465), (0.017, 0.003, 0.0012)), k=0.0015)                   # lip line
     part("mask", mask, "chalk", "bone:head", 1100, vs=0.55, uvw=2.4)
     vis = Sculpt("visor")
     vis.add(_VisorShell(), k=0.0)
     part("visor", vis, "dawnglass", "bone:head", 500, vs=0.45, uvw=1.6)
     neck = Sculpt("neck")
-    neck.add(Capsule((0.0, 0.008, 1.52), (0.0, -0.004, 1.632), 0.044), k=0.0)
+    neck.add(Capsule((0.0, 0.012, 1.52), (0.0, 0.002, 1.630), 0.040), k=0.0)
     part("neck", neck, "skin", "bone:neck", 260, vs=0.8)
 
     # COWL (zblend chest -> neck): the pale linen scarf wound round the neck, draped over the upper chest in a soft
     # V and over the shoulders, a wider collar at the back
     cowl = Sculpt("cowl")
-    cowl.add(Torus((0.0, 0.006, 1.580), 0.074, 0.032, axes=np.diag([1.0, 1.08, 1.0]), rz=0.030)
+    cowl.add(Torus((0.0, 0.006, 1.588), 0.070, 0.036, axes=np.diag([1.0, 1.10, 1.0]), rz=0.038)
              .displaced(hfolds(0.006, 70.0, tilt=(0.4, 0.0)), 0.006), k=0.0)
     cowl.add(Ellipsoid((0.0, -0.080, 1.528), (0.130, 0.036, 0.058)).displaced(soft_folds(0.007, 45.0, axis=0), 0.007), k=0.04)
-    cowl.add(Ellipsoid((0.0, 0.065, 1.548), (0.155, 0.060, 0.055)).displaced(hfolds(0.006, 55.0), 0.006), k=0.04)
+    cowl.add(Ellipsoid((0.0, 0.070, 1.535), (0.170, 0.062, 0.075)).displaced(hfolds(0.006, 55.0), 0.006), k=0.04)
     for sx in (-1, 1):
         cowl.add(Ellipsoid((sx * 0.120, 0.0, 1.538), (0.075, 0.085, 0.040), axes=sdf.rot_y(sx * -18)), k=0.04)
     cowl.inter(HalfSpace((0, 0, 1.475), (0, 0, -1), 1.0), k=0.02)
-    part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.54, 1.62), 1000, uvw=1.3)
+    part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.54, 1.62), 900, uvw=1.3)
 
     # TORSO under the tabard (the linen shirt's shoulders and the body): heat weights
     body = Sculpt("body")
@@ -544,12 +539,12 @@ def sculpts() -> list:
     tab.add(Ellipsoid((0.0, 0.002, 1.21), (0.140, 0.104, 0.075)), k=0.06)
     for sx in (-1, 1):
         # the shoulder wing: a stiff flap over the shoulder, turned down and out
-        tab.add(RoundBox((sx * 0.175, 0.006, 1.515), (0.062, 0.100, 0.010), 0.008, axes=sdf.rot_y(sx * 24.0)), k=0.02)
+        tab.add(RoundBox((sx * 0.172, 0.006, 1.508), (0.060, 0.098, 0.008), 0.007, axes=sdf.rot_y(sx * 32.0)), k=0.02)
         # the armhole (the sleeve comes out under the wing)
         tab.sub(Ellipsoid((sx * 0.215, 0.008, 1.405), (0.060, 0.080, 0.090)), k=0.012)
     tab.sub(Ellipsoid((0.0, 0.004, 1.57), (0.085, 0.075, 0.07)), k=0.01)                            # the neck hole
     tab.inter(HalfSpace((0, 0, 1.165), (0, 0, -1), 1.0), k=0.0)
-    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1400, uvw=1.3)
+    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1250, uvw=1.3)
 
     # TABARD SKIRT (analytic hips -> thighs): four panels from the belt to the hem, open at the front and back centre
     # and slit at the sides
@@ -563,7 +558,7 @@ def sculpts() -> list:
     sk.sub(_Slit(0.0, "x", 1.02, 0.008, 0.050, sign=1.0), k=0.004)                                  # back centre
     for sx in (-1, 1):
         sk.sub(_Slit(0.012, "y", 0.98, 0.004, 0.018, sign=sx), k=0.004)                             # side slits
-    part("tabard_skirt", sk, "cloth", "skirt", 1250, uvw=1.2)
+    part("tabard_skirt", sk, "cloth", "skirt", 1100, uvw=1.2)
 
     # LINEN TUNIC (analytic): the pale under-tunic seen between the panels, pointed hems front and back
     tn = Sculpt("tunic")
@@ -586,11 +581,14 @@ def sculpts() -> list:
     part("buckle", bk, "ironstone", "auto", 160, vs=0.4)
     straps = Sculpt("straps")
     for sx in (-1, 1):
-        fr = [(sx * 0.115, -0.070, 1.505), (sx * 0.075, -0.112, 1.43), (0.0, -0.122, 1.335), (-sx * 0.075, -0.118, 1.26),
-              (-sx * 0.118, -0.098, 1.215)]
-        strap(straps, fr, torso_normal, 0.019, 0.0045)
-        bk_ = [(sx * 0.115, 0.075, 1.505), (sx * 0.065, 0.112, 1.41), (-sx * 0.045, 0.114, 1.30), (-sx * 0.12, 0.098, 1.215)]
-        strap(straps, bk_, torso_normal, 0.019, 0.0045)
+        # the painting's broad straps (5 cm), on its own paths (build 4: the painted straps beside the modelled ones
+        # doubled as grey bands on the tabard)
+        fr = [(sx * 0.105, -0.080, 1.52), (sx * 0.050, -0.108, 1.455), (0.0, -0.116, 1.395), (-sx * 0.065, -0.116, 1.31),
+              (-sx * 0.100, -0.110, 1.262), (-sx * 0.128, -0.094, 1.222)]
+        strap(straps, fr, torso_normal, 0.025, 0.0045)
+        bk_ = [(sx * 0.110, 0.084, 1.52), (sx * 0.050, 0.112, 1.465), (0.0, 0.118, 1.415), (-sx * 0.10, 0.114, 1.30),
+               (-sx * 0.13, 0.098, 1.235)]
+        strap(straps, bk_, torso_normal, 0.025, 0.0045)
     part("straps", straps, "leather", "auto", 460, vs=0.7)
 
     # THE BROOCH on the cowl's edge at her right chest: a chalk ring round a glowing glass disc (accent)
@@ -642,7 +640,7 @@ def sculpts() -> list:
                   .displaced(folds(0.004, 30.0, axis=2, phase=sx * 1.7), 0.004), k=0.03)
         boots.add(Torus(knee + (0.0, 0.0, -0.040), 0.057, 0.008, axes=np.diag([1.0, 1.06, 1.0])), k=0.008)     # cuff
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "boots", "auto", 860)
+    part("boots", boots, "boots", "auto", 780)
 
     # QUIVER (rigid on the hips): a brown leather tube with two straps and a rim, five arrows standing in it
     qv = Sculpt("quiver")
@@ -651,7 +649,7 @@ def sculpts() -> list:
     qax = np.stack([Q_W, Q_N, Q_U])
     qv.add(RoundBox(qc, (Q_HW, Q_HD, qL * 0.5), 0.034, axes=qax).displaced(chips(0.002, 12.0), 0.002), k=0.0)
     qv.sub(RoundBox(Q_TOP + Q_U * 0.02, (Q_HW - 0.009, Q_HD - 0.009, 0.06), 0.025, axes=qax), k=0.005)
-    part("quiver", qv, "quiver", "bone:hips", 700)
+    part("quiver", qv, "quiver", "bone:hips", 560)
     qb = Sculpt("quiver_straps")
     for zz in (0.07, 0.30):
         qb.add(RoundBox(Q_TOP - Q_U * zz, (Q_HW + 0.005, Q_HD + 0.005, 0.014), 0.033, axes=qax), k=0.0)
@@ -687,7 +685,7 @@ def sculpts() -> list:
         side = _n(N_REST - tan * (tan @ N_REST))
         up = np.cross(tan, side)
         bow.add(RoundBox((a + b) * 0.5, (0.030, 0.082, 0.022), 0.006, axes=np.stack([side, tan, up])), k=0.008)
-    part("bow", bow, "wood", "bone:prop.L", 1400, vs=0.5, uvw=1.4)
+    part("bow", bow, "wood", "bone:prop.L", 1250, vs=0.5, uvw=1.4)
     grip = Sculpt("bow_grip")
     for sgn in (-1, 1):
         a, b = bow_pt(sgn * 0.002), bow_pt(sgn * 0.075)
@@ -827,7 +825,7 @@ def _install_decimate() -> None:
 
 _install_decimate()
 
-Q_BASE = 64
+Q_BASE = 60
 
 
 def _install_optimize() -> None:
@@ -880,6 +878,44 @@ def _install_art_height() -> None:
 
 
 _install_art_height()
+
+
+def _install_bleed() -> None:
+    """the data maps (ORM 256, normal 512) are baked at 2048 with an 8 px margin and scaled down: the gaps between this
+    fragmented atlas's islands stay black (roughness 0 = glossy, AO 0) and bleed into the islands at three.js's mip
+    levels (pale glossy blotches on the dark leggings in build 2). Every empty texel takes its nearest island's value
+    (wraps bake.bake_asset in this build process only; the files are rewritten and the loaded images reloaded)."""
+    from common import bake
+    orig = bake.bake_asset
+    if getattr(orig, "_lisvel", False):
+        return
+
+    def bake_asset(low, highs, out_dir, *a, **kw):
+        res = orig(low, highs, out_dir, *a, **kw)
+        from common.hifi import project
+        for kind in ("orm", "normal"):
+            path = res["images"].get(kind)
+            if not path:
+                continue
+            full = path if os.path.isabs(path) else os.path.join(scene.GAME_DIR, path)
+            if not os.path.isfile(full):
+                continue
+            img = project.load_rgb(full)
+            sz = img.shape[0]
+            cov = project.rasterize(low, sz, "vale_part")["part"] >= 0
+            cov = cov & ~np.all(img < 0.002, axis=2)
+            iy, ix = project.nearest_index(cov)
+            project.save_rgb(img[iy, ix], full)
+            for im in bpy.data.images:
+                if im.filepath and os.path.abspath(bpy.path.abspath(im.filepath)) == os.path.abspath(full):
+                    im.reload()
+            scene.log(f"bleed {kind}: {int((~cov).sum())} empty texels filled")
+        return res
+    bake_asset._lisvel = True
+    bake.bake_asset = bake_asset
+
+
+_install_bleed()
 
 
 # ── rig ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -992,7 +1028,7 @@ _install_bind()
 TONE = {
     # build 1 in three.js: the pale linen and chalk rendered near-white, the tabard a light sky blue (concept: a mid
     # steel blue, L* ~52) -> every target a step down, the blue a little more saturated (three.js strips ~10 points)
-    "wrap": ("#A9A69F", 0.80, 0.85), "mask": ("#ABA69C", 0.50, 0.85),
+    "wrap": ("#A9A69F", 0.80, 0.85), "mask": ("#B6B1A7", 0.50, 0.85),
     "cowl": ("#A8A59E", 0.80, 0.85), "sleeves": ("#AAA69E", 0.75, 0.85),
     "tabard": ("#4C6272", 0.95, 0.45), "tabard_skirt": ("#465A69", 0.95, 0.45),
     "tunic": ("#7E796F", 0.85, 0.8), "belt": ("#40372F", 0.9, 0.6), "straps": ("#3F3630", 0.9, 0.6),
@@ -1091,8 +1127,8 @@ def paint_visor(p, n):
     v = 0.88 + 0.16 * _ss(-0.012, 0.018, z) + 0.10 * np.exp(-((z - 0.002) / 0.006) ** 2)
     v = v * (1 - 0.30 * _ss(0.55, 0.85, np.abs(ang))) * (1 - 0.18 * _ss(-0.012, -0.020, z))
     col = _hl("#8DBBDC") * v[:, None]
-    frame = _ss(0.016, 0.020, np.abs(z))
-    return col * (1 - frame[:, None]) + _hl("#5E7C93") * frame[:, None]
+    edge = _ss(0.015, 0.0205, np.abs(z))
+    return col * (1 - 0.18 * edge[:, None])
 
 
 def paint_skin(p, n):
@@ -1175,7 +1211,7 @@ def _calm_w(name, lin):
     if name in PALE:
         w = _ss(0.10, 0.22, blue) * _ss(0.15, 0.35, lum / max(med, 1e-4))
     elif name in BLUE:
-        w = _ss(0.16, 0.06, blue) * _ss(1.25, 1.6, lum / max(med, 1e-4))
+        w = _ss(0.14, 0.05, blue) * _ss(1.9, 2.6, lum / max(med, 1e-4)) + _ss(0.30, 0.16, lum / max(med, 1e-4))
     else:
         return np.zeros(len(lin))
     return np.clip(w, 0, 1)
@@ -1216,6 +1252,19 @@ PROC = {"bow": paint_bow, "bow_grip": paint_grip, "bow_caps": paint_caps, "strin
         "rope_bind": paint_rope}
 
 
+_PLATES = {}
+
+
+def _back_plate(p):
+    """the back plate's paint at points p (rest frame)"""
+    from common.hifi import project
+    if "pl" not in _PLATES:
+        _PLATES["pl"] = project.Plates(os.path.join(scene.CACHE_DIR, "concept"), PROJECTION["concept"], HEIGHT)
+    pl = _PLATES["pl"]
+    px, py = pl.to_px("back", p[:, 0], p[:, 2])
+    return project._lin(project.bilinear(pl.img["back"], px, py))
+
+
 def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> np.ndarray:
     from common.hifi import project
     part = maps["part"]
@@ -1241,6 +1290,12 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
         hx, con, des = TONE[name]
         tgt = _hl(hx)
         ref = None
+        if name == "tabard":
+            # up / back-facing texels over the shoulders: the back plate (blue tabard, straps) rather than the front
+            # plate's scarf and sleeve paint that the front/back blend mixed in (build 4: pale patches on the upper back)
+            n_ = N[m]
+            wb = (_ss(-0.35, 0.05, n_[:, 1]) * _ss(0.25, 0.55, n_[:, 2]) * _ss(1.38, 1.44, P[m][:, 2]))[:, None]
+            L[m] = L[m] * (1 - wb) + _back_plate(P[m]) * wb
         if name == "mask":
             ref = (N[m][:, 1] < -0.5) & (np.abs(P[m][:, 0]) < 0.05)
         c = _tone(L[m], tgt, con, des, ref)
@@ -1257,9 +1312,7 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
             w = np.clip(np.maximum(ws, wt) * 0.7, 0, 0.7)[:, None]
             brk = (1 + 0.10 * NOISE(P[m], 10.0) + 0.05 * NOISE(P[m], 35.0)) * (0.90 + 0.14 * np.clip(n_[:, 2], -1, 1))
             c = c * (1 - w) + (tgt * brk[:, None]) * w
-        if name == "mask":
-            c = mask_shade(c, P[m], N[m])
-        elif name == "wrap":
+        if name == "wrap":
             c = wrap_bands(wrap_shade(c, P[m], N[m]), P[m], N[m])
         L[m] = c
         log(f"  tone {name}: -> {hx}")
@@ -1664,7 +1717,9 @@ def shot_arms(draw, elev=0.0, cant=12.0, yaw=-45.0, lean=0.0, reach=0.93, side=0
     c = math.radians(cant)
     up = np.array([-math.sin(c), 0.0, math.cos(c)])
     up = _rz(up, side)
-    rel = chest_rel(d * reach + np.array([0.0, 0.0, -0.03]), yaw, lean)
+    # the bow arm a little above level (build 4: the fist hangs ~7 cm under the wrist, so a level arm put the arrow line
+    # at the chest and the drawing hand at the belt; the anchor belongs under the jaw)
+    rel = chest_rel(d * reach + np.array([0.0, 0.0, 0.17]), yaw, lean)
     out = bowl(rel=rel, aim=tuple(d), up=tuple(up), pole=(0.75, 0.25, -0.6))
     out.update(rh(along=-(BRACE + draw), uoff=uoff, k=k, rel=rel_r, pole=(-0.85, 0.45, 0.15)))
     return out

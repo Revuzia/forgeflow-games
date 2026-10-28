@@ -1371,7 +1371,7 @@ def _match_back(k, p, cols, wb, names, log):
 
 
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
-COAT_LIFT, COAT_DESAT = 1.18, 0.05      # fix pass 1: x1.52 / 22 % read white-washed in three (the concept's mid lavender)
+COAT_LIFT, COAT_DESAT = 1.26, 0.05      # fix pass 1: x1.52 / 22 % read white-washed in three (the concept's mid lavender)
 HOOD_FLOOR = 0.62           # no hood texel darker than this x the lit hood's median (the back sheet paints its back
                             # in the brim's shadow: a black column from behind) except inside the face opening
 HOOD_HEX = "#7A6E86"        # the hood's felt (the coat's lavender): 40 % of its hue / chroma
@@ -1389,8 +1389,8 @@ def _hat_paint(p, n):
     q = p[:, :2] - HAT_C[None, :]
     r = np.hypot(q[:, 0], q[:, 1])
     th = np.arctan2(q[:, 1], q[:, 0])
-    top = _lin(_hex("#B9AEC4"))
-    band_c = _lin(_hex("#8A7D97"))
+    top = _lin(_hex("#C1B7CB"))
+    band_c = _lin(_hex("#9A8EA8"))
     under = _lin(_hex("#5E4A55"))
     up = ss(-0.15, 0.35, n[:, 2])
     zt = hat_top(r)
@@ -1559,7 +1559,11 @@ def _tone_clamp(lin, k, p, n, names, log):
         good = f if nm == "hood" else (ok & (ny < -0.5) if (ok & (ny < -0.5)).sum() >= 40 else ok)
         hue = np.median(c[good], axis=0)
         hue = hue / max(float(_Y(hue[None, :])[0]), 1e-5)
-        tone = hue[None, :] * (_Y(tf) * (1 - 0.05 * wbb))[:, None]
+        # ONE value for the whole part (the median of its texels that face the front plate squarely): the painted
+        # light (the concept's lit shoulders) set pale bands that wrapped round the back as 'frost'; the light-head /
+        # dark-feet ramp and the baked folds give the value structure, the painting only its fold detail (r)
+        yv = float(np.median(Y[f])) if f.sum() >= 40 else float(np.median(Y[ok]))
+        tone = hue[None, :] * (yv * (1 - 0.05 * wbb))[:, None]
         r = Y / np.maximum(_Y(ref), 1e-5)
         r2 = 1 + (r - 1) * keep
         lo_ = np.full(len(r2), lo, dtype=np.float32)

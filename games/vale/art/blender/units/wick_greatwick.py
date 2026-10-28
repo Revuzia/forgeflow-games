@@ -3791,7 +3791,7 @@ def bind_cloak(ctx, obj) -> dict:
 # (fix round 8) the mantle strip's HEAD share per row (rows: tuck, top, 36 %, 70 %, hem, lip) on the front columns,
 # faded to `back` from `front` to `fade` degrees off the front; blended over the torso weighting (w (1 - h) + h head).
 # Tuned on every frame of every clip by proto/wick_greatwick_mantlepose.py (opening / rise / tuck / tunic sink).
-MANTLE_HEAD = {"rows": [1.0, 1.0, 0.6, 0.25, 0.0, 0.0], "front": 60.0, "fade": 90.0, "back": [1.0, 1.0, 0.0, 0.0, 0.0, 0.0]}
+MANTLE_HEAD = {"rows": [1.0, 1.0, 1.0, 0.6, 0.2, 0.2], "front": 60.0, "fade": 90.0, "back": [1.0, 1.0, 0.0, 0.0, 0.0, 0.0]}
 _MANTLE_BIND: dict = {}          # filled by serenade_parts: the strip's model-space grid + its head share per vertex
 
 
@@ -4135,7 +4135,27 @@ def motion_clips(ctx, spec) -> dict:
     # DEATH (60 f): the hammer falls (gravity) and lies on the ground, the wick sits back heavily against its
     # lantern frame and tips back onto it; ends at rest (propped on the lantern, the fists on the ground)
     out["death"] = _death_clip(spec, A, G, GR)
+    if spec.faction == "serenade":
+        out["stunned"] = _stunned_serenade(spec)
     return out
+
+
+def _stunned_serenade(spec):
+    """(fix round 8) The shared stunned slump (anim.gen_stunned: neck 10 + head 14 deg, wobbling to 38 deg over the
+    chest) drove the Serenade's low hood 10 cm into its own chest: the lapels stood up in the opening or, bound to the
+    head, sank into the tunic, leaving a row of small pale teeth under the rim (proto/wick_greatwick_mantlepose.py). The
+    same 34 deg slump and wobble, bent at the WAIST (the spine bone, under the mantle) so the chest, the mantle and the
+    hood sag as one load (chest + neck + head <= 10 deg over the spine)."""
+    prof = spec.MOTION
+    g = anim.guard(prof, 1.3)
+    slump = anim.add(g, _P(spine=(24, 0, 0), chest=(4, 0, 0), neck=(1, 0, 0), head=(2, 0, 0)))
+    slump["ik"] = dict(g["ik"], **anim.arm_block(prof, "stunned")["ik"])
+
+    def sample(t):
+        a, b = anim.osc(t, 1), anim.osc(t, 1, 0.25)
+        return anim.add(slump, _P(hips=(0, 0, 4 * a), spine=(6 * b, 0, -6 * a), chest=(1.5 * b, 0, -1.5 * a),
+                                  neck=(1 * b, 0, 1.5 * a), head=(1.5 * b, 4 * a, 2 * a)))
+    return anim.Clip("stunned", 40, True, sample)
 
 
 def _run_clip(spec, A, d0, GR):
