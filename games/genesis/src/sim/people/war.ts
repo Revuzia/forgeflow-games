@@ -600,6 +600,9 @@ function raidIfDesperate(x: PCtx, st: Settlement): void {
 
 /** the war band reached its target: a fight in the open, or a siege before the walls */
 export function resolveArrival(x: PCtx, m: Mission, from: Settlement, to: Settlement): void {
+  // (fix r2 #5: a war band that arrives after its war ended in a conquest finds a town of its own polity — it goes home.
+  // Kin raids are 'raid' missions inside one polity on purpose: politics.ts kinRaid)
+  if (m.kind === 'war' && from.polity === to.polity) { homeward(x, m, 'conquest'); return; }
   const walls = wallFactor(x, to);
   const att = bandStrength(x, from, slotsOf(x, m));
   const def = defenceStrength(x, to, defenders(x, to), true);
@@ -753,6 +756,8 @@ export function warDone(x: PCtx, m: Mission, from: Settlement, to: Settlement): 
   if (m.phase !== 2) return false;
   if (m.note && m.note !== 'siege') return true;
   if (to.besieged !== m.id) return true;
+  // (fix r2 #5: the town besieged is now of the besiegers' own polity — the siege is over)
+  if (m.kind === 'war' && from.polity === to.polity) { to.besieged = -1; m.note = 'conquest'; return true; }
   if ((x.tick - m.tPhase) % x.day !== 0 || x.tick === m.tPhase) return false;
   m.siege++;
   // batter the walls
@@ -804,9 +809,21 @@ export function conquer(x: PCtx, from: Settlement, to: Settlement, m: Mission | 
   const oldPl = x.ps.polity(old);
   const conqueror = polityOf(x, from);
   if (!conqueror) return;
+  // (fix r2 #5: a town of the conqueror's own polity is not conquered again — its chief kept, nobody flees)
+  if (conqueror.id === old) return;
   const oldName = polityName(x, oldPl);
   to.polity = conqueror.id;
   to.recent.conquered = x.tick;
+  // (fix r2 #5: the war bands between this town and the conqueror's towns — on the road, or camped before the walls —
+  // go home: both ends are one polity now. The war itself may go on with the old polity's other towns; endWar recalls
+  // nothing, so this is done here whether or not it ends)
+  for (const q of x.ps.missions) {
+    if ((q.kind !== 'war' && q.kind !== 'raid') || q.phase >= 3 || (q.from !== to.id && q.to !== to.id) || q === m) continue;
+    const f = x.ps.settlement(q.from), t = x.ps.settlement(q.to);
+    if (!f || !t || f.polity !== t.polity) continue;
+    if (t.besieged === q.id) t.besieged = -1;
+    homeward(x, q, 'conquest');
+  }
   // cultures blend: the conquered take something of the conquerors' ways
   const cc = x.ps.settlement(conqueror.capital) ?? from;
   to.culture.alignment = Math.round((to.culture.alignment * 0.7 + cc.culture.alignment * 0.3) * 1000) / 1000;

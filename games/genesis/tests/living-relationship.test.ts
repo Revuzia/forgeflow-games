@@ -20,7 +20,8 @@ import { hurtPeople, onRoad } from '../src/sim/god/harm.ts';
 import { PRAYER_KINDS } from '../src/sim/god/prayers.ts';
 import { srel } from '../src/sim/god/regard.ts';
 import { OMEN_KINDS } from '../src/sim/god/omens.ts';
-import { beginJourney } from '../src/sim/god/prophets.ts';
+import { beginJourney, exile, prophetOfSettlement } from '../src/sim/god/prophets.ts';
+import { moveHousehold } from '../src/sim/people/culture.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 
@@ -419,6 +420,53 @@ test('relationship: a revolt that casts out a Called chief leaves the town to el
   const came = lune.households.filter((h) => before.has(h.id));
   assert.ok(came.length > 0, 'they came as households (their ids kept)');
   for (const h of came) for (const id of before.get(h.id)!) { const s = A.slotOf(id); if (s >= 0 && !A.mission[s]) assert.ok(h.members.includes(id) && A.settlement[s] === lune.id, `household ${h.id}: ${id} came with them`); }
+});
+
+// (fix r2 #0) a prophet whose household moved (a bud, fear migration, refugees) kept the old town in their record: they
+// foretold to it, it persecuted them, and its revolt 'exiled' them into the town they lived in, listing them there twice
+test('prophets: a prophet whose household moves speaks to the town they live in; the old town cannot cast them out; one voice holds (fix r2 #0)', () => {
+  const sim = pworld(24, 20261008);
+  const st = ppeople(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  const lune = ppeople(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  sim.step(120);
+  const p = sim.u.planets[0], ps = p.people!, A = ps.agents;
+  const x = makeCtx(sim.u, p);
+  const grown = (sid: number, not: number[] = []) => (ps.members.get(sid) ?? []).find((s) => !(A.flags[s] & 1) && A.id[s] !== ps.settlement(sid)!.leader && !not.includes(A.id[s]))!;
+  const pid = A.id[grown(st.id)];
+  const lid = A.id[grown(lune.id)];
+  must(sim, { k: 'prophet.call', agent: pid });
+  must(sim, { k: 'prophet.call', agent: lid });
+  // the prophet's household moves to Lune, as the movers do it (people/culture.ts moveHousehold)
+  moveHousehold(x, st.households.find((h) => h.members.includes(pid))!, st, lune);
+  const s = A.slotOf(pid);
+  assert.equal(A.settlement[s], lune.id);
+  sim.step(61);
+  const ph = rel(sim).prophets.find((q) => q.agent === pid)!;
+  assert.equal(ph.settlement, lune.id, 'the record follows the prophet to the town they live in');
+  assert.equal(ph.journey, null);
+  assert.equal(prophetOfSettlement(sim.u, 0, lune.id)?.agent, lid, 'one voice: Lune\'s own prophet, there first, stays its voice');
+  assert.equal(prophetOfSettlement(sim.u, 0, st.id), undefined, 'the town they left has no prophet now');
+  // only a member can be cast out, and nobody is listed twice
+  exile(x, s, st, lune);
+  ps.addMember(lune.id, s);
+  const once = () => { for (const [sid, l] of ps.members) assert.equal(new Set(l).size, l.length, `settlement ${sid}: nobody listed twice`); };
+  once();
+  assert.equal((ps.members.get(lune.id) ?? []).filter((q) => q === s).length, 1);
+  // the old town turns on the god: its Called are cast out, the prophet who left is not touched again
+  const called = A.id[grown(st.id, [pid])];
+  must(sim, { k: 'agent.make-disciple', id: called });
+  const set = () => { for (const q of ps.members.get(st.id) ?? []) { const i = q * 4; A.faith[i] = 0.8; A.fear[i] = 0.75; A.love[i] = 0.05; A.loyalty[i] = 0.05; } };
+  const day = Math.round(p.st.dayHours * 60);
+  for (let k = 0; k < day + 2 && !rel(sim).stats?.['revolt.exile']; k++) { if (k % 10 === 0) set(); sim.step(1); }
+  assert.equal(rel(sim).stats?.['revolt.exile'], 1, 'the old town revolted');
+  assert.equal(A.settlement[s], lune.id);
+  once();
+  for (const [sid, l] of ps.members) for (const q of l) assert.ok(A.alive[q] && A.settlement[q] === sid, `settlement ${sid}: slot ${q} lives there`);
+  // and a reload lists the same people (CONTRACT §19)
+  const c = Sim.load(sim.save());
+  const cps = c.u.planets[0].people!;
+  for (const [sid, l] of ps.members) assert.deepEqual(cps.members.get(sid) ?? [], l, `settlement ${sid}: the loaded member list`);
+  for (let k = 0; k < 6; k++) { sim.step(60); c.step(60); assert.equal(c.hash(), sim.hash(), `continuous and loaded runs agree (${k + 1} h)`); }
 });
 
 // ───────────────────────────── sacred places and animals ─────────────────────────────

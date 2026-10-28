@@ -1452,7 +1452,7 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
  * (> 1.5 m) are lost (its builders raise new ones about the new heart). The caches that start from the centre (the flow
  * field, the resource lists) are rebuilt; the chronicle tells it. False when there is no dry ground in reach.
  */
-export function moveHeart(x: PCtx, st: Settlement): boolean {
+export function moveHeart(x: PCtx, st: Settlement, why: 'flood' | 'ruin' = 'flood'): boolean {
   const p = x.p, f = p.f;
   const dry = (c: number) => isLand(p, c) && f.water[c] < 0.05 && f.lava[c] <= 0 && !p.s.ocean[c];
   let best = -1, bd = Infinity;
@@ -1477,7 +1477,8 @@ export function moveHeart(x: PCtx, st: Settlement): boolean {
   updateFlow(x, st);
   updateResources(x, st);
   x.ps.version++;
-  tell(x.u, x.p, 'heart.flood', vars(x, st, -1, {}), st, [settlementRef(x, st)]);
+  // (fix r2 #12: a god-sent disaster below full wrath that leaves lava or a pit at the heart moves it too — 'heart.ruin')
+  tell(x.u, x.p, why === 'ruin' ? 'heart.ruin' : 'heart.flood', vars(x, st, -1, {}), st, [settlementRef(x, st)]);
   return true;
 }
 

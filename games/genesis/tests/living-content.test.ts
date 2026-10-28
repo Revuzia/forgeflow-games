@@ -140,6 +140,12 @@ test('content: "a new crop / animal / ore" with no name never makes a placeholde
     assert.ok(!r.ok && String(r.msg).length > 10, `${t} asks: ${r.msg}`);
   }
   assert.ok(!/unicorn|dragon/i.test(String(sim.parse('invent a new animal').msg)), 'the example is a real animal');
+  // (fix r2 #1) a disaster, the weather or a hunt aimed at "the new crops" is that act, never a crop sown
+  for (const [t, want] of [['send locusts to eat the new crops of Lune', 'disaster.spawn'], ['make the river flood the new crops of Lune', 'disaster.spawn'], ['send drought to the new crops of Lune', 'disaster.spawn'], ['make it rain on the new crops at Lune', 'water.rain'], ['send a storm to destroy the new crops of Lune', 'weather.paint'], ['send a storm to destroy a new crop at Lune', 'weather.paint'], ['send wolves to hunt the new animals near Lune', 'life.spawn-animal']] as const) {
+    const r = parse(t);
+    assert.ok(!r.c.some((x) => x.k === 'settlement.introduce') && r.c.some((x) => x.k === want), `${t}: ${JSON.stringify(r.c)} ${r.msg}`);
+  }
+  assert.ok(parse('give Aru a new crop to eat').c.some((x) => x.k === 'settlement.introduce'), 'a new crop asked for is still one');
   // a new tree: the real tree that suits the ground there
   assert.ok(parse('invent a new tree').c.some((x) => x.k === 'life.plant' && x.type === 'tree'));
   // applied, the registries gain nothing called "new …"

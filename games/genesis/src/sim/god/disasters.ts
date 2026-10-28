@@ -51,7 +51,7 @@ import { DEATH, NT } from '../people/defs.ts';
 import { dropItem } from '../people/people.ts';
 import { accident, silence } from '../people/knowledge.ts';
 import { refugees } from '../people/culture.ts';
-import { abandon } from '../people/settlement.ts';
+import { abandon, moveHeart } from '../people/settlement.ts';
 import { seedDisease } from '../life/disease.ts';
 import { blightAt } from '../life/plants.ts';
 import { animalIdx, spawnHerd, habitatFit } from '../life/herds.ts';
@@ -314,7 +314,12 @@ function consequences(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
     const pit = p.f.surface[c] < p.st.seaLevel - 0.2 && (d.st.Wr === undefined || d.st.Wr >= 1);
     // (fix r1 #15: the flood omen, `Om`, never takes a town: it is a sign)
     if ((drowned && !d.st.Om) || p.f.lava[c] > 0.05 || pit) {
-      if ((x.ps.members.get(st.id)?.length ?? 0) > 0) { abandon(x, st, drowned ? 'flood' : 'disaster'); continue; }
+      // (fix r2 #12, LIVING §3.7: below full wrath a god-sent quake, sinkhole or rift that leaves water or lava at the
+      // heart moves the heart to the sound ground in the town's reach, as a flood does (abandonCheck): the town stands.
+      // Nature's and the god's at wrath 1 keep the old rule, and a town with no sound ground in reach still leaves)
+      const spared = d.st.Wr !== undefined && d.st.Wr < 1;
+      if (spared && moveHeart(x, st, drowned && p.f.lava[c] <= 0.05 ? 'flood' : 'ruin')) { delete st.recent.floodSince; }
+      else if ((x.ps.members.get(st.id)?.length ?? 0) > 0) { abandon(x, st, drowned ? 'flood' : 'disaster'); continue; }
     }
     const bs = x.ps.of(st.id).filter((b) => b.progress >= 1);
     if (bs.length < 3) continue;
@@ -649,8 +654,13 @@ function keepWeather(u: Universe, p: Planet, d: DisasterState, kind: string, i: 
   const key = `w${i}`;
   const id = d.st[key];
   const w = id !== undefined ? p.weather.find((x) => x.id === id) : undefined;
-  if (w) { w.pos = [...d.pos]; w.radius = R; w.intensity = clamp(effI(d), 0.2, 3); return; }
-  const nw = paintWeather(u, p, kind, d.pos, R, -1, clamp(effI(d), 0.2, 3), true);
+  // (fix r2 #12, LIVING §3.7: a god-sent heat wave or cold snap kills through the air it heats or chills — needs.ts
+  // thermal stress, never hurtPeople — so the weather's own strength carries the act's lethality: at the law a heat
+  // wave killed 16 of 30 on one seed and 18 of 30 at wrath 0, review-critic/r2/leth.log)
+  const thermal = Math.abs(u.content.weather.find(kind)?.tempDelta ?? 0) >= 6 ? harmScale().L : 1;
+  const I = clamp(effI(d) * thermal, 0.2, 3);
+  if (w) { w.pos = [...d.pos]; w.radius = R; w.intensity = I; return; }
+  const nw = paintWeather(u, p, kind, d.pos, R, -1, I, true);
   if (nw) d.st[key] = nw.id;
 }
 
@@ -809,15 +819,23 @@ function quake(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: Ef
   const ls = num(e, 'landslide') * Math.min(3, sev);
   if (ls > 0) landslides(p, pos, R, ls);
   if (num(e, 'sink') > 0) {
-    brush(u, p, 'lower', pos, R, num(e, 'sink') * Math.sqrt(I));
+    // (fix r2 #12, LIVING §3.7: the pit's reach is the god's reach R(w), as the wreck's already is — at the law the full
+    // 70 m pit drowned the whole heart of a 45 m town and every house in it)
+    brush(u, p, 'lower', pos, R * harmScale().R, num(e, 'sink') * Math.sqrt(I));
     wreckBuildings(u, p, pos, R, 2, 'sinkhole', { flat: true });
     hurtPeople(u, p, pos, R, 1.2, DEATH.disaster, { flat: true, chance: 0.7, salt: 0x51 });
   }
   if (num(e, 'rift') > 0) {
     const b = hashFloat(d.seed, 0x21f) * Math.PI;
     const len = R * 1.1;
+    // (fix r2 #12, LIVING §3.7: below full wrath the god's rift opens beside the place it was aimed at, its wreck reach
+    // plus 60 m to the side, not through its heart — at the law it ran through a 45 m town, ruined 18 of its 19 houses
+    // and left lava at the heart; the shaking still reaches it. Nature's rifts and the god's at wrath 1 keep the line)
+    const ws = harmScale();
+    const off = ws.w !== null && ws.w < 1 ? R * 0.12 * ws.R + 60 : 0;
+    const c0 = off > 0 ? moveBy(pos, bearingDir(pos, b + Math.PI / 2), off, p.st.radius) : pos;
     for (let k = -6; k <= 6; k++) {
-      const at = moveBy(pos, bearingDir(pos, b), (len * k) / 6, p.st.radius);
+      const at = moveBy(c0, bearingDir(c0, b), (len * k) / 6, p.st.radius);
       brush(u, p, 'lower', at, Math.max(p.edgeM * 0.7, R * 0.08), num(e, 'rift') * Math.sqrt(I));
       if (num(e, 'riftLava') > 0 && Math.abs(k) <= 3) brush(u, p, 'paint-material', at, Math.max(p.edgeM * 0.6, R * 0.05), num(e, 'riftLava'), { material: 'lava' });
       wreckBuildings(u, p, at, R * 0.12, 3, 'rift', { flat: true });

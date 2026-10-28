@@ -630,6 +630,8 @@ export class PeopleState {
     const id = this.agents.id[slot];
     let i = l.length;
     while (i > 0 && this.agents.id[l[i - 1]] > id) i--;
+    // (fix r2 #0: a slot is listed once — a duplicate outlived its owner's death and a reload dropped it: CONTRACT §19)
+    if (i > 0 && l[i - 1] === slot) return;
     l.splice(i, 0, slot);
   }
 

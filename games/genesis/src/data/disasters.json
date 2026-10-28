@@ -121,6 +121,7 @@
     2880,
     2880
    ],
+   "minWrath": 0.85,
    "radius": 420,
    "intensity": 1,
    "speed": 0,
@@ -321,6 +322,7 @@
     4320,
     8640
    ],
+   "minWrath": 0.85,
    "radius": 900,
    "intensity": 1,
    "speed": 0,
@@ -1171,6 +1173,7 @@
     120,
     180
    ],
+   "minWrath": 0.85,
    "radius": 500,
    "intensity": 1,
    "speed": 0,
@@ -1303,6 +1306,7 @@
     4320,
     4320
    ],
+   "minWrath": 0.85,
    "radius": 900,
    "intensity": 1,
    "speed": 0,

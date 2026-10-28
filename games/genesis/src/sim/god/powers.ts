@@ -63,6 +63,9 @@ export function gesturePowers(c: Content): Record<string, string[]> {
 export function powersQuery(u: Universe): Record<string, unknown>[] {
   return u.content.powers.list.map((pw) => ({
     ...pw,
+    // (fix r2 #12, LIVING §3.7: a planet-scale disaster needs the wrath slider at huge — the palette says so)
+    ...(pw.command === 'disaster.spawn' && typeof pw.params?.kind === 'string' && u.content.disasters.find(pw.params.kind)?.minWrath !== undefined
+      ? { minWrath: u.content.disasters.find(pw.params.kind)!.minWrath } : {}),
     schema: Object.fromEntries(Object.entries(pw.schema ?? {}).map(([k, s]) => [k, { ...s, values: typeof s.values === 'string' ? registryIds(u, s.values) : s.values }])),
   }));
 }

@@ -24,13 +24,20 @@ function spotFrom(sim: Sim, st: Settlement, dist: number, salt: number): number[
   throw new Error('no land there');
 }
 
+/** outbreaks seen by day(): the settlement, the disease and where it came from (null: it broke out there on its own) */
+const outbreaks: { settlement: number; disease: string; from: number | null }[] = [];
+
 /** step a day in hours, tracking who has had the disease and who died of it */
 function day(sim: Sim, d: number, ever: Set<number>, dead: { n: number }): void {
   const A = sim.u.planets[0].people.agents;
   for (let h = 0; h < 24; h++) {
     sim.step(60);
     for (let s = 0; s < A.hi; s++) if (A.alive[s] && A.disease[s] === d) ever.add(A.id[s]);
-    for (const e of sim.drainEvents()) if (e.t === 'death' && (e.data as { cause?: string })?.cause === 'sickness') dead.n++;
+    for (const e of sim.drainEvents()) {
+      if (e.t === 'death' && (e.data as { cause?: string })?.cause === 'sickness') dead.n++;
+      const od = e.data as { disease?: string; from?: number | null } | undefined;
+      if (e.t === 'plague' && e.ref?.kind === 'settlement' && od?.disease) outbreaks.push({ settlement: e.ref.id, disease: od.disease, from: od.from ?? null });
+    }
   }
 }
 
@@ -55,7 +62,15 @@ test('a plague spreads by contact: through a town, to its neighbour, not to a to
   const inA = [...ever].filter((id) => { const s = x.A.slotOf(id); return s < 0 || x.A.settlement[s] === a.id; }).length;
   assert.ok(inA >= 18, `one case became an epidemic in the town (${inA} had it)`);
   assert.ok(reachedB > 0, 'it reached the neighbouring town');
-  assert.ok(!membersOf(sim, c).some((s) => ever.has(x.A.id[s])) && c.recent.epidemic === undefined, 'the far town was spared');
+  // the far town is spared THE PLAGUE: nobody there ever had it, and anything that broke out there broke out on its own
+  // (fix r2 #13: the old `c.recent.epidemic === undefined` also forbade a spontaneous outbreak of another disease — a
+  // food-borne flux from rotten grain on day 14.9, outbreakDue's roll — which the far town of this setup suffers on most
+  // worlds: 12 world seeds 21-32 (_harness/scratch/living/fix2/plague/{before,live}.log), the old assertion held on 3/12
+  // before fix round 1 and 2/12 after it, while the plague itself reached the far town 0/12 and 0/12, and the near town
+  // 12/12 and 12/12)
+  assert.ok(!membersOf(sim, c).some((s) => ever.has(x.A.id[s])) && c.recent.epidemic !== plague + 1, 'the far town was spared the plague');
+  const inC = outbreaks.filter((o) => o.settlement === c.id);
+  assert.ok(inC.every((o) => o.disease !== 'plague' && o.from === null), `nothing was carried to the far town (${JSON.stringify(inC)})`);
   assert.ok(sim.u.chronicle.some((e) => e.kind === 'plague' && e.text.includes(b.name)), 'the chronicle tells how it came to the neighbour');
   // the inspector sees it
   const q = sim.query('diseases') as { id: string; settlements: { id: number }[] }[];

@@ -64,7 +64,13 @@ test('every disaster kind spawns, is drawn, and changes the world', () => {
   const fails: string[] = [];
   for (const kind of town().sim.u.content.disasters.ids()) {
     const { sim, st } = town();
-    const r = sim.applyNow({ k: 'disaster.spawn', kind, pos: st.pos });
+    // (fix r2 #12, LIVING §3.7: a planet-scale kind is refused at the default wrath — it is sent at its own minWrath)
+    const minW = sim.u.content.disasters.find(kind)?.minWrath;
+    if (minW !== undefined) {
+      const no = sim.applyNow({ k: 'disaster.spawn', kind, pos: st.pos });
+      assert.ok(!no.ok && /wrath/.test(no.msg ?? ''), `${kind} is refused at the law, with the reason (${no.msg})`);
+    }
+    const r = sim.applyNow({ k: 'disaster.spawn', kind, pos: st.pos, ...(minW !== undefined ? { wrath: minW } : {}) });
     assert.ok(r.ok, `${kind}: ${r.msg}`);
     const id = r.created![0].id;
     // it is a live entity with render parameters
@@ -92,7 +98,8 @@ test('a live disaster can be frozen, scaled, moved and cancelled — every kind'
     const { sim, st } = town();
     const p = sim.u.planets[0];
     const before = { dust: p.st.atmosphere.dust, light: p.st.lightScale, gravity: p.st.gravity, magnetism: p.st.magnetism, climate: p.st.climateOffset, activity: sim.u.star.activity, ecc: p.st.orbit.e };
-    const id = must(sim, { k: 'disaster.spawn', kind, pos: st.pos, duration: 5000 }).created![0].id;
+    const minW = sim.u.content.disasters.find(kind)?.minWrath;
+    const id = must(sim, { k: 'disaster.spawn', kind, pos: st.pos, duration: 5000, ...(minW !== undefined ? { wrath: minW } : {}) }).created![0].id;
     sim.step(12);
     const d = sim.u.god.disaster(id)!;
     assert.ok(d, `${kind} is live`);

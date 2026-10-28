@@ -71,6 +71,30 @@ export function prophetOfSettlement(u: Universe, planet: number, sid: number): P
   return u.god.rel?.prophets.find((q) => q.planet === planet && q.settlement === sid);
 }
 
+/**
+ * fix r2 #0: the record follows the person. A prophet whose household moved — a daughter village budding off, fear
+ * migration, refugees, a schism — speaks to the town they now live in; the journey, persecution and silence were the old
+ * town's (prophecies already given stay with the town that heard them). One voice to a town: when the new town already
+ * has a prophet, the one who was there first stays its voice — prophetOfSettlement finds the first in the list, so the
+ * newcomer goes to the end of it (a new call there is refused as before). Run where the prophets are walked each hour and
+ * each day, and on an act (the credit and the blame).
+ */
+export function followHome(x: PCtx, ph: ProphetState, s: number): void {
+  const home = x.A.settlement[s];
+  if (home === ph.settlement || home < 0) return;
+  const R = relOf(x.u);
+  const there = prophetOfSettlement(x.u, x.p.id, home);
+  ph.settlement = home;
+  ph.journey = null;
+  ph.persecution = 0;
+  ph.persecutedAt = -1;
+  ph.silenced = 0;
+  if (there && there !== ph) {
+    const i = R.prophets.indexOf(ph);
+    if (i >= 0) { R.prophets.splice(i, 1); R.prophets.push(ph); }
+  }
+}
+
 /** is the prophet listened to at all (credibility ≥ 0.1, not silenced) */
 export function heard(u: Universe, ph: ProphetState): boolean {
   return ph.credibility >= 0.1 && ph.silenced <= u.tick;
@@ -161,10 +185,11 @@ export function prophetsAct(u: Universe, p: Planet, acts: ActInfo[]): void {
     const hit = acts.find((a) => a.god === 0 && (a.kind === pr.kind || (pr.kind === 'sign' && a.kind === 'sign')) && actReaches(p, st, a));
     if (hit) fulfilled(x, pr, st);
   }
-  for (const ph of R.prophets) {
+  for (const ph of R.prophets.slice()) {
     if (ph.planet !== p.id) continue;
     const s = x.A.slotOf(ph.agent);
     if (s < 0) continue;
+    followHome(x, ph, s);
     x.A.posAt(s, u.tick, _p);
     for (const a of acts) {
       if (a.god !== 0 || !a.pos) continue;
@@ -260,6 +285,7 @@ export function prophetsHourly(u: Universe, p: Planet): void {
     if (ph.planet !== p.id) continue;
     const s = A.slotOf(ph.agent);
     if (s < 0) { died(x, ph); continue; }
+    followHome(x, ph, s);
     // carrying the faith: back home when the stay is over
     if (ph.journey && ph.journey.until <= u.tick) ph.journey = null;
     // preaching: those within earshot grow in faith by the prophet's credibility
@@ -340,6 +366,7 @@ export function prophetsDaily(u: Universe, p: Planet): void {
   for (const ph of R.prophets.slice()) {
     if (ph.planet !== p.id) continue;
     const s = x.A.slotOf(ph.agent);
+    if (s >= 0) followHome(x, ph, s);
     const st = x.ps.settlement(ph.settlement);
     if (s < 0 || !st || st.fallen >= 0) continue;
     // the god's silence while its prophet suffered
@@ -435,6 +462,9 @@ function persecute(x: PCtx, ph: ProphetState, s: number, st: Settlement): void {
 export function exile(x: PCtx, s: number, from: Settlement, to: Settlement): void {
   const A = x.A;
   const id = A.id[s];
+  // (fix r2 #0: only a member can be cast out of a town — a stale prophet record once 'exiled' someone from a town they
+  // had left, into the town they lived in, and listed them there twice)
+  if (A.settlement[s] !== from.id || from.id === to.id) return;
   x.ps.removeMember(from.id, s);
   for (const h of from.households) h.members = h.members.filter((m) => m !== id);
   from.households = from.households.filter((h) => h.members.length > 0);

@@ -407,7 +407,12 @@ export function intentContent(c: ContentClause): boolean {
 // ───────────────────────────── "a new crop", "a new animal", "a new ore" with no name ─────────────────────────────
 
 /** a kind of thing asked for as "new" with no name: never a placeholder made content (no item called "New crop") */
-const UNNAMED_NEW = /\b(?:a |an |some |another )?new (crops?|grains?|vegetables?|plants?|fruit trees?|trees?|fruits?|bush(?:es)?|shrubs?|herbs?|flowers?|grass(?:es)?|animals?|beasts?|creatures?|species of animal|ores?|metals?|minerals?|stones?|rocks?|materials?|substances?|tools?|weapons?|things?|items?|inventions?)\b/;
+// (fix r2 #1: the article is required — "the new crops of Lune" is a place a disaster or the weather is aimed at, never a
+// request for a crop: "send locusts to eat the new crops of Lune" sowed potatoes there)
+const UNNAMED_NEW = /\b(?:a |an |some |another )new (crops?|grains?|vegetables?|plants?|fruit trees?|trees?|fruits?|bush(?:es)?|shrubs?|herbs?|flowers?|grass(?:es)?|animals?|beasts?|creatures?|species of animal|ores?|metals?|minerals?|stones?|rocks?|materials?|substances?|tools?|weapons?|things?|items?|inventions?)\b/;
+
+/** act words that make a clause about something done TO the new thing (a disaster, the weather, a hunt), not a request for it */
+const HARM_ACT = /\b(rain\w*|storms?|stormy|flood\w*|droughts?|locusts?|swarms?|hunt\w*|destroy\w*|burn\w*|ruin\w*|blight\w*|kill\w*|wither\w*|drown\w*|smite|smote|strike|plagues?|famine|tornado\w*|hurricanes?|quakes?|earthquakes?|fires?|hail|frost|snow\w*|lightning|thunder\w*|wolves|wolf|bears?|lions?|pests?)\b/;
 
 /** a real crop that town does not sow yet and that suits its fields best (registry order on ties) */
 export function newCropFor(u: Universe, p: Planet, st: { pos: V3; fields: number[] }): string | null {
@@ -433,6 +438,8 @@ function intentNewKind(c: ContentClause): boolean {
   const m = s.match(UNNAMED_NEW);
   if (!m || !p || /\b(called|named|known as)\b/.test(s)) return false;
   if (!/\b(introduce|invent|create|make|add|give|bring|grow|devise|conjure|send|plant|sow|discover|teach|show|release|breed)\b/.test(s)) return false;
+  // (fix r2 #1: a harm, the weather or a hunt in the clause is the act — "send a storm to destroy a new crop" is a storm)
+  if (HARM_ACT.test(s)) return false;
   const w = m[1];
   if (/^(crop|grain|vegetable)/.test(w)) {
     if (plantWord(u, s)) return false; // "introduce potatoes, a new crop, to Aru": intentPlants

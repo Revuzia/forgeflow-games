@@ -26,6 +26,7 @@ import { meet } from '../people/culture.ts';
 import { spawnDisaster, cancelDisaster, scaleDisaster, moveDisaster, freezeDisaster, effR, planetTraits } from './disasters.ts';
 import { die } from '../people/lifecycle.ts';
 import { hurtPeople, hurtHerds, stripPlants } from './harm.ts';
+import { currentWrath } from './wrath.ts';
 import { godAct } from './belief.ts';
 import { makeItem } from './inventions.ts';
 import { actor, fail, herePos, nearestSettlement, norm, ok, placeName, r3 } from './util.ts';
@@ -98,6 +99,17 @@ function lasting(def: { effectors: { at?: unknown; every?: number; type: string 
  * A random disaster: every kind may come, weighted toward what the place could suffer on its own (a natural kind whose
  * needs the world meets, near what it needs), drawn from the god's own stream (deterministic: the command is logged).
  */
+/**
+ * LIVING §3.7 (fix r2 #12): may the act in progress send this kind? A planet-scale kind (`minWrath`: a falling moon, a
+ * supervolcano, a comet, gravity letting go) wipes out or empties a town at any scaled-down strength, so below its
+ * minWrath the god's cast is refused — survivable by default, total destruction opt-in (the slider at huge, or
+ * "apocalyptic"). Nature's own (no wrath on the stack) are never gated.
+ */
+export function wrathAllows(def: { minWrath?: number }): boolean {
+  const w = currentWrath();
+  return def.minWrath === undefined || w === null || w >= def.minWrath - 1e-9;
+}
+
 export function randomDisaster(u: Universe, p: Planet, pos: V3): string {
   const defs = u.content.disasters.list;
   const tr = planetTraits(u, p);
@@ -105,6 +117,8 @@ export function randomDisaster(u: Universe, p: Planet, pos: V3): string {
     let v = 0.4;
     if (d.natural && d.natural.rate > 0) v += d.natural.needs.every((n) => tr[n]) ? 2 + Math.min(2, d.natural.rate * 2) : 0.2;
     if (['moon-fall', 'rogue-flyby', 'supervolcano', 'ice-age', 'eclipse', 'impact-winter'].includes(d.id)) v *= 0.25;
+    // (fix r2 #12: fate never picks a kind the wrath of the cast does not allow)
+    if (d.minWrath !== undefined && !wrathAllows(d)) v = 0;
     return v;
   });
   void pos;
@@ -187,6 +201,9 @@ export function registerActCommands(r: CommandRegistry): void {
     // 'random': drawn from the god's stream, weighted toward what this place could suffer on its own
     const kind = a.kind === 'random' ? randomDisaster(u, p, pos) : String(a.kind);
     const def0 = u.content.disasters.find(kind);
+    if (def0 && !wrathAllows(def0)) {
+      return fail(`${def0.name} is more than any town survives: it needs the wrath at ${def0.minWrath! >= 0.85 ? 'huge' : 'great'} (${def0.minWrath}) or more — raise the wrath slider, or call it down "apocalyptic".`);
+    }
     // forever (-1): only a disaster that keeps acting can last forever; a one-blow strike (a meteor) falls once
     let life = a.duration as number | undefined;
     let once = '';

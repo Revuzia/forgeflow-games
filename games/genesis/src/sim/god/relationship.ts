@@ -461,8 +461,11 @@ function revolt(x: PCtx, st: Settlement): void {
   const m = meansNow(x, st);
   if (!(m.fear > m.trust + 0.4 && m.loyalty < 0.3)) return;
   const called = u.god.disciples.filter((d) => d.planet === x.p.id && d.god === 0).map((d) => x.A.slotOf(d.agent)).filter((s) => s >= 0 && x.A.settlement[s] === st.id);
-  const ph = prophetOfSettlement(u, x.p.id, st.id);
-  const ps = ph ? x.A.slotOf(ph.agent) : -1;
+  // (fix r2 #0: the prophet only if they live here — a stale record once had this town 'exile' a prophet who had moved)
+  const ph0 = prophetOfSettlement(u, x.p.id, st.id);
+  const ps0 = ph0 ? x.A.slotOf(ph0.agent) : -1;
+  const ph = ps0 >= 0 && x.A.settlement[ps0] === st.id ? ph0 : undefined;
+  const ps = ph ? ps0 : -1;
   const victims = [...called, ...(ps >= 0 && !called.includes(ps) ? [ps] : [])];
   if (!victims.length) return;
   const kill = m.fear > 0.85;

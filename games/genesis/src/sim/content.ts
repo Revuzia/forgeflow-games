@@ -530,6 +530,12 @@ export interface DisasterDef {
   triggers?: string[];
   /** how it comes about on its own: expected events per planet-year where the conditions hold (0 = only by the god) */
   natural?: { rate: number; needs: string[] };
+  /**
+   * LIVING §3.7 (fix r2 #12): a planet-scale kind no wrath scaling makes survivable (a falling moon, a supervolcano, a
+   * comet, gravity letting go) — the god may send it only at a wrath ≥ this (the slider at huge, or "apocalyptic" words);
+   * below it `disaster.spawn` refuses with the reason. Nature's own are not gated.
+   */
+  minWrath?: number;
   synonyms?: string[];
   /** LIVING CONTENT (§4.4): ids it used to have (leviathan → rogue-wave): the registry answers to them */
   aliases?: string[];
