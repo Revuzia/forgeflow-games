@@ -1796,7 +1796,7 @@
      "other": 3591058,
      "lamp": 413,
      "otherShare": 0.59761,
-     "lampShareOfFrame": 0.00007
+     "lampShareOfFrame": 7e-05
     },
     "fighters": {
      "px": 148844,
@@ -2109,7 +2109,7 @@
      "other": 929523,
      "lamp": 101,
      "otherShare": 0.6325,
-     "lampShareOfFrame": 0.00007
+     "lampShareOfFrame": 7e-05
     },
     "fighters": {
      "px": 35024,
@@ -4124,7 +4124,7 @@
      "other": 0,
      "lamp": 150,
      "otherShare": 0,
-     "lampShareOfFrame": 0.00002,
+     "lampShareOfFrame": 2e-05,
      "byClass": {
       "19L": 150
      }
@@ -4452,7 +4452,7 @@
      "other": 0,
      "lamp": 38,
      "otherShare": 0,
-     "lampShareOfFrame": 0.00002,
+     "lampShareOfFrame": 2e-05,
      "byClass": {
       "19L": 38
      }
@@ -6218,7 +6218,7 @@
      "other": 0,
      "lamp": 150,
      "otherShare": 0,
-     "lampShareOfFrame": 0.00002,
+     "lampShareOfFrame": 2e-05,
      "byClass": {
       "19L": 150
      }
@@ -6483,7 +6483,7 @@
      "other": 0,
      "lamp": 38,
      "otherShare": 0,
-     "lampShareOfFrame": 0.00002,
+     "lampShareOfFrame": 2e-05,
      "byClass": {
       "19L": 38
      }
@@ -30751,457 +30751,6 @@
      "groundSat": "0.26 PASS (0.17-0.40; spec 0.22-0.35)",
      "fighterTop25": "81.5 PASS (70-85), over lane 44.5 PASS (>= 30)",
      "fighterBlowout": "above L* 90: 0.68 % of fighter pixels PASS (< 2 %), worst fighter 0.9 %, p99 88.5"
-    },
-    "logs": [
-     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
-    ]
-   }
-  },
-  "r2_wip": {
-   "rift_high": {
-    "tier": "high",
-    "viewport": [
-     1920,
-     1080
-    ],
-    "t": 75,
-    "seed": 7,
-    "spots": [
-     "lane0",
-     "lane1",
-     "lane2",
-     "jungle",
-     "centre",
-     "fight"
-    ],
-    "frame": {
-     "share": 1,
-     "p5": 19,
-     "p50": 61,
-     "p95": 98,
-     "p99": 113,
-     "mean": 61.33,
-     "spread": 79,
-     "lstarP50": 26,
-     "sat": 0.34,
-     "satP50": 0.3
-    },
-    "masks": {
-     "lane": {
-      "share": 0.2728,
-      "p5": 64,
-      "p50": 88,
-      "p95": 100,
-      "p99": 105,
-      "mean": 85.63,
-      "spread": 36,
-      "lstarP50": 38,
-      "sat": 0.35,
-      "satP50": 0.4
-     },
-     "walkable": {
-      "share": 0.3514,
-      "p5": 56,
-      "p50": 88,
-      "p95": 100,
-      "p99": 105,
-      "mean": 85.12,
-      "spread": 44,
-      "lstarP50": 37.5,
-      "sat": 0.33,
-      "satP50": 0.3
-     },
-     "verge": {
-      "share": 0.0453,
-      "p5": 16,
-      "p50": 43,
-      "p95": 83,
-      "p99": 97,
-      "mean": 45.05,
-      "spread": 67,
-      "lstarP50": 17.5,
-      "sat": 0.3,
-      "satP50": 0.3
-     },
-     "jungle": {
-      "share": 0.0278,
-      "p5": 18,
-      "p50": 38,
-      "p95": 77,
-      "p99": 88,
-      "mean": 42.08,
-      "spread": 59,
-      "lstarP50": 15,
-      "sat": 0.33,
-      "satP50": 0.3
-     },
-     "camp": {
-      "share": 0.0416,
-      "p5": 32,
-      "p50": 75,
-      "p95": 90,
-      "p99": 95,
-      "mean": 67.81,
-      "spread": 58,
-      "lstarP50": 32,
-      "sat": 0.24,
-      "satP50": 0.2
-     },
-     "seat": {
-      "share": 0.0786,
-      "p5": 43,
-      "p50": 88,
-      "p95": 101,
-      "p99": 106,
-      "mean": 83.33,
-      "spread": 58,
-      "lstarP50": 37.5,
-      "sat": 0.26,
-      "satP50": 0.3
-     },
-     "shadow": {
-      "share": 0.0051,
-      "p5": 17,
-      "p50": 38,
-      "p95": 47,
-      "p99": 61,
-      "mean": 35.74,
-      "spread": 30,
-      "lstarP50": 15.5,
-      "sat": 0.38,
-      "satP50": 0.3
-     },
-     "brush": {
-      "share": 0.0093,
-      "p5": 10,
-      "p50": 29,
-      "p95": 73,
-      "p99": 81,
-      "mean": 35.16,
-      "spread": 63,
-      "lstarP50": 11,
-      "sat": 0.45,
-      "satP50": 0.4
-     },
-     "grass": {
-      "share": 0.0257,
-      "p5": 19,
-      "p50": 44,
-      "p95": 87,
-      "p99": 99,
-      "mean": 48.49,
-      "spread": 68,
-      "lstarP50": 18.5,
-      "sat": 0.37,
-      "satP50": 0.3
-     },
-     "clutter": {
-      "share": 0.0024,
-      "p5": 18,
-      "p50": 47,
-      "p95": 65,
-      "p99": 68,
-      "mean": 44.6,
-      "spread": 47,
-      "lstarP50": 19.5,
-      "sat": 0.5,
-      "satP50": 0.5
-     },
-     "wallFace": {
-      "share": 0.1132,
-      "p5": 15,
-      "p50": 34,
-      "p95": 52,
-      "p99": 60,
-      "mean": 33.56,
-      "spread": 37,
-      "lstarP50": 13,
-      "sat": 0.15,
-      "satP50": 0.1
-     },
-     "wallLip": {
-      "share": 0.0704,
-      "p5": 27,
-      "p50": 50,
-      "p95": 79,
-      "p99": 94,
-      "mean": 50.35,
-      "spread": 52,
-      "lstarP50": 21,
-      "sat": 0.12,
-      "satP50": 0.1
-     },
-     "wallTop": {
-      "share": 0.0923,
-      "p5": 20,
-      "p50": 48,
-      "p95": 73,
-      "p99": 82,
-      "mean": 46.66,
-      "spread": 53,
-      "lstarP50": 20,
-      "sat": 0.48,
-      "satP50": 0.5
-     },
-     "walls": {
-      "share": 0.1837,
-      "p5": 17,
-      "p50": 40,
-      "p95": 64,
-      "p99": 88,
-      "mean": 40,
-      "spread": 47,
-      "lstarP50": 16,
-      "sat": 0.14,
-      "satP50": 0.1
-     },
-     "edge": {
-      "share": 0.0067,
-      "p5": 40,
-      "p50": 74,
-      "p95": 97,
-      "p99": 102,
-      "mean": 72.55,
-      "spread": 57,
-      "lstarP50": 31.5,
-      "sat": 0.11,
-      "satP50": 0.1
-     },
-     "canopy": {
-      "share": 0.1408,
-      "p5": 15,
-      "p50": 51,
-      "p95": 82,
-      "p99": 91,
-      "mean": 49.85,
-      "spread": 67,
-      "lstarP50": 22,
-      "sat": 0.58,
-      "satP50": 0.6
-     },
-     "rock": {
-      "share": 0.0016,
-      "p5": 17,
-      "p50": 54,
-      "p95": 74,
-      "p99": 100,
-      "mean": 50.35,
-      "spread": 57,
-      "lstarP50": 22.5,
-      "sat": 0.34,
-      "satP50": 0.3
-     },
-     "landmark": {
-      "share": 0.0077,
-      "p5": 14,
-      "p50": 68,
-      "p95": 120,
-      "p99": 123,
-      "mean": 72.14,
-      "spread": 106,
-      "lstarP50": 29,
-      "sat": 0.21,
-      "satP50": 0.2
-     },
-     "water": {
-      "share": 0.0106,
-      "p5": 46,
-      "p50": 69,
-      "p95": 78,
-      "p99": 97,
-      "mean": 65.7,
-      "spread": 32,
-      "lstarP50": 30,
-      "sat": 0.45,
-      "satP50": 0.4
-     },
-     "ground": {
-      "share": 0.4661,
-      "p5": 29,
-      "p50": 84,
-      "p95": 99,
-      "p99": 105,
-      "mean": 77.11,
-      "spread": 70,
-      "lstarP50": 36,
-      "sat": 0.32,
-      "satP50": 0.3
-     }
-    },
-    "env180": {
-     "env": 11725826,
-     "other": 5,
-     "lamp": 0,
-     "otherShare": 0,
-     "lampShareOfFrame": 0,
-     "byClass": {
-      "9": 5
-     }
-    },
-    "fighters": {
-     "px": 151375,
-     "top25": 79.3,
-     "p75": 67,
-     "p50": 45,
-     "p25": 24.5,
-     "p95": 84.5,
-     "p99": 87.5,
-     "gt90": 0.0024,
-     "lumaP95": 211,
-     "overLane": 41.3,
-     "per": {
-      "burdam": {
-       "px": 15079,
-       "top25": 70.9,
-       "p75": 58,
-       "p50": 39,
-       "p25": 16.5,
-       "gt90": 0.0003
-      },
-      "vashil": {
-       "px": 21739,
-       "top25": 82.6,
-       "p75": 75,
-       "p50": 53.5,
-       "p25": 34,
-       "gt90": 0.0004
-      },
-      "marund": {
-       "px": 58040,
-       "top25": 76.5,
-       "p75": 60,
-       "p50": 34,
-       "p25": 17.5,
-       "gt90": 0.0006
-      },
-      "dunsom": {
-       "px": 25501,
-       "top25": 84.2,
-       "p75": 82,
-       "p50": 58,
-       "p25": 42,
-       "gt90": 0
-      },
-      "ervet": {
-       "px": 13910,
-       "top25": 76.8,
-       "p75": 67.5,
-       "p50": 41.5,
-       "p25": 32,
-       "gt90": 0.01
-      },
-      "kemdo": {
-       "px": 12248,
-       "top25": 75.9,
-       "p75": 64.5,
-       "p50": 49,
-       "p25": 35,
-       "gt90": 0.0142
-      },
-      "odrum": {
-       "px": 4858,
-       "top25": 66.1,
-       "p75": 60,
-       "p50": 38.5,
-       "p25": 18,
-       "gt90": 0
-      }
-     },
-     "maxGt90": 0.0142,
-     "medianTop25": 76.5
-    },
-    "wicks": {
-     "px": 86241,
-     "top25": 64.2,
-     "p95": 69.5,
-     "lumaP95": 166
-    },
-    "monsters": {
-     "px": 4900,
-     "top25": 74.8,
-     "p95": 79.5
-    },
-    "structures": {
-     "px": 86349,
-     "top25": 78.2,
-     "p95": 84.5
-    },
-    "perSpot": {
-     "lane0": {
-      "at": [
-       52.3,
-       14.7
-      ],
-      "frameP50": 60,
-      "frameP95": 98,
-      "frameP99": 111,
-      "laneP50": 89
-     },
-     "lane1": {
-      "at": [
-       59.8,
-       55
-      ],
-      "frameP50": 59,
-      "frameP95": 98,
-      "frameP99": 110,
-      "laneP50": 90
-     },
-     "lane2": {
-      "at": [
-       52.3,
-       95.3
-      ],
-      "frameP50": 63,
-      "frameP95": 95,
-      "frameP99": 110,
-      "laneP50": 85
-     },
-     "jungle": {
-      "at": [
-       56.1,
-       30.8
-      ],
-      "frameP50": 48,
-      "frameP95": 88,
-      "frameP99": 116,
-      "laneP50": null
-     },
-     "centre": {
-      "at": [
-       85,
-       55
-      ],
-      "frameP50": 78,
-      "frameP95": 100,
-      "frameP99": 112,
-      "laneP50": 88
-     },
-     "fight": {
-      "at": [
-       89.1,
-       96.4
-      ],
-      "frameP50": 69,
-      "frameP95": 99,
-      "frameP99": 118,
-      "laneP50": 89
-     }
-    },
-    "flash": null,
-    "verdict": {
-     "laneP50": "88 PASS (85-100)",
-     "walkableSpread": "44 PASS (<= 45)",
-     "laneSpread": "36 PASS (<= 45)",
-     "frameP50": "61 PASS (55-75)",
-     "frameP95": "98 PASS (<= 130)",
-     "frameP99": "113 PASS (<= 160)",
-     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
-     "groundSat": "0.32 PASS (0.17-0.40; spec 0.22-0.35)",
-     "fighterTop25": "79.3 PASS (70-85), over lane 41.3 PASS (>= 30)",
-     "fighterBlowout": "above L* 90: 0.24 % of fighter pixels PASS (< 2 %), worst fighter 1.4 %, p99 87.5",
-     "wickTop25": "64.2 (info: <= 65, WICK lane)",
-     "monsterTop25": "74.8 (info)"
     },
     "logs": [
      "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
