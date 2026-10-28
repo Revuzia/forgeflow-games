@@ -6384,91 +6384,34 @@ export async function buildMap(W, mapId) {
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
         const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
-        if (!p.byScale) { pushHullBoxes(kind, it, idx, hp, p.hull, sc, c, sn, it.y + top + pdy, yLo); continue; }
-        colliders.push(mkCollider("box", it.x + x0, it.x + x1, yLo(ox, oz, ex, ez), it.y + top + pdy, it.z + z0, it.z + z1, -1, kind, idx, hp));
+        const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn);
+        colliders.push(mkCollider("box", it.x + x0, it.x + x1, y0, y1, it.z + z0, it.z + z1, -1, kind, idx, hp));
       }
     }
   }
-  // (R1 / colliders: collisioncheck phantom-rocks) a rock part's box(es). Two ways one axis-aligned box of the part's yawed hull did not match the drawn rock:
-  //  1. the AABB of a turned hull stands off its rock at the corners (a 3 m rock at 40 degrees: up to ~0.4 m of box with no rock under it). The part is cut into 1-4 slabs
-  //     along the box's long side, each slab exactly the hull's extent across it (a staircase that covers the hull - nothing drawn is left outside a box - and stands off its
-  //     slanted sides by <= HULL_FIT): the fewest slabs that meet HULL_FIT.
-  //  2. a part whose drawn top is under the step height over the ground it stands on (a 0.5 m stone beside a big rock, at the cover / quarry scales 2-2.7) is a STEP - the
-  //     mover's own rule, player.js blockedIn: a box whose top is within STEP_UP of the feet is stepped onto - but on a slope the feet beside its downhill side are lower than
-  //     the ground under it, so its full-height box was a knee-high wall there (deepwood s7: a walker stopped 0.34-2.1 m from every rock it could not step over). The box top
-  //     of such a part is held to HULL_STEP over the lowest ground a capsule can stand on beside that slab, so it is a step from every side, as drawn.
-  const HULL_FIT = 0.3, HULL_KMAX = 2, HULL_STEP = 0.52, HULL_STEP_PART = 0.61, HULL_RING = 0.5;
-  const _hx = new Float64Array(64), _hz = new Float64Array(64);
-  function pushHullBoxes(kind, it, idx, hp, hull, sc, c, sn, topY, yLo) {
-    const n = Math.min(hull.length, 64);
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, gm = 0;
-    for (let i = 0; i < n; i++) {
-      const u = hull[i][0] * sc, w = hull[i][1] * sc, x = u * c + w * sn, z = -u * sn + w * c;
-      _hx[i] = x; _hz[i] = z;
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
-      gm += heightAt0(it.x + x, it.z + z);
+  // (R1 / colliders: collisioncheck phantom-rocks) a rock part whose drawn top is under the step height over the ground it stands on (a 0.5 m stone beside the big
+  // rock of a cluster at the cover / quarry scales 2-2.7) is a STEP - the mover's own rule (player.js blockedF: a box whose top is within STEP_UP of the feet is stepped
+  // onto) - but on a slope the feet beside its downhill side stand lower than the ground under it, so its full-height box was a knee-high wall there with no wall drawn
+  // (deepwood s7, every isolated rock walked at: 17 of 361 walks stopped 0.30-2.1 m from the nearest rock that is not a step). The box top of such a part is held to
+  // HULL_STEP over the lowest ground a capsule can stand on beside it (its box + HULL_RING, 8 points), so it is a step from every side, as drawn. Footprint unchanged
+  // (the AABB of the yawed hull); a part at or over HULL_STEP_PART above its ground keeps its full height (a wall, as drawn). HULL_STEP_PART sits 3 cm over STEP_UP: the
+  // probe reads a part's ground under its drawn band, this under the table hull (0.55: walls kept by a 1-3 cm misread came back as phantoms; 0.61: kept bodies lost their tall box,
+  // collisioncheck clip isla_viva rocks p95 0.12). Not fixed here: the table hull is every vertex of the part, the buried skirt too - at s >= 1.4 it stands 0.16-0.7 m outside
+  // the drawn rock above the ground (an outline per scale in the bake, as the trees' byScale, would close it).
+  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
+  function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn) {
+    let gm = 0;
+    for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
+    gm /= hull.length;
+    if (topY - gm >= HULL_STEP_PART) return topY;
+    let gl = Infinity;
+    const ax = it.x + x0 - HULL_RING, bx = it.x + x1 + HULL_RING, az = it.z + z0 - HULL_RING, bz = it.z + z1 + HULL_RING, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    for (let a = 0; a < 8; a++) {
+      const x = a === 0 || a === 6 || a === 7 ? ax : a === 1 || a === 5 ? mx : bx, z = a < 3 ? az : a === 3 || a === 7 ? mz : bz;
+      const g = heightAt0(x, z);
+      if (g < gl) gl = g;
     }
-    gm /= n;
-    const stepPart = topY - gm < HULL_STEP_PART;
-    const alongX = x1 - x0 >= z1 - z0, a0 = alongX ? x0 : z0, a1 = alongX ? x1 : z1;
-    const A = alongX ? _hx : _hz, B = alongX ? _hz : _hx;
-    // the hull's [lo, hi] across the slab [s0, s1] of the long axis (convex polygon: vertices inside the slab + its edges' crossings of the slab walls)
-    const span = (s0, s1, out) => {
-      let lo = Infinity, hi = -Infinity;
-      for (let i = 0; i < n; i++) {
-        const j = i + 1 === n ? 0 : i + 1, ai = A[i], aj = A[j], bi = B[i], bj = B[j];
-        if (ai >= s0 - 1e-9 && ai <= s1 + 1e-9) { if (bi < lo) lo = bi; if (bi > hi) hi = bi; }
-        if ((ai - s0) * (aj - s0) < 0) { const b = bi + (bj - bi) * (s0 - ai) / (aj - ai); if (b < lo) lo = b; if (b > hi) hi = b; }
-        if ((ai - s1) * (aj - s1) < 0) { const b = bi + (bj - bi) * (s1 - ai) / (aj - ai); if (b < lo) lo = b; if (b > hi) hi = b; }
-      }
-      out[0] = lo; out[1] = hi;
-    };
-    // the farthest a slab box's corner stands off the hull (0 for a corner on or inside it)
-    const off = (px, pz) => {
-      let inside = true, d = Infinity;
-      for (let i = 0; i < n; i++) {
-        const j = i + 1 === n ? 0 : i + 1, ex = A[j] - A[i], ez = B[j] - B[i], L2 = ex * ex + ez * ez;
-        const cr = ex * (pz - B[i]) - ez * (px - A[i]);
-        if (cr < 0) inside = false;
-        const t = L2 > 1e-12 ? Math.max(0, Math.min(1, ((px - A[i]) * ex + (pz - B[i]) * ez) / L2)) : 0;
-        const qx = A[i] + ex * t - px, qz = B[i] + ez * t - pz, dd = qx * qx + qz * qz;
-        if (dd < d) d = dd;
-      }
-      return inside ? 0 : Math.sqrt(d);
-    };
-    // the inside test wants the hull counter-clockwise in (A, B): a clockwise one (or the x / z swap of alongX = false) is reversed in the scratch first
-    let ar = 0;
-    for (let i = 0; i < n; i++) { const j = i + 1 === n ? 0 : i + 1; ar += A[i] * B[j] - A[j] * B[i]; }
-    if (ar < 0) for (let i = 0, j = n - 1; i < j; i++, j--) { let t = A[i]; A[i] = A[j]; A[j] = t; t = B[i]; B[i] = B[j]; B[j] = t; }
-    const sp = [0, 0];
-    let k = 1;
-    for (; k < (stepPart ? 1 : HULL_KMAX); k++) {
-      let worst = 0;
-      for (let q = 0; q < k && worst <= HULL_FIT; q++) {
-        const s0 = a0 + (a1 - a0) * q / k, s1 = a0 + (a1 - a0) * (q + 1) / k;
-        span(s0, s1, sp);
-        worst = Math.max(worst, off(s0, sp[0]), off(s0, sp[1]), off(s1, sp[0]), off(s1, sp[1]));
-      }
-      if (worst <= HULL_FIT) break;
-    }
-    for (let q = 0; q < k; q++) {
-      const s0 = a0 + (a1 - a0) * q / k, s1 = a0 + (a1 - a0) * (q + 1) / k;
-      span(s0, s1, sp);
-      const bx0 = alongX ? s0 : sp[0], bx1 = alongX ? s1 : sp[1], bz0 = alongX ? sp[0] : s0, bz1 = alongX ? sp[1] : s1;
-      const ox = (bx0 + bx1) / 2, oz = (bz0 + bz1) / 2, ex = (bx1 - bx0) / 2, ez = (bz1 - bz0) / 2, y0 = yLo(ox, oz, ex, ez);
-      let y1 = topY;
-      if (stepPart) {
-        let gl = Infinity;
-        const rx = ex + HULL_RING, rz = ez + HULL_RING;
-        for (let a = 0; a < 8; a++) {
-          const fx = a === 0 || a === 6 || a === 7 ? -1 : a === 2 || a === 3 || a === 4 ? 1 : 0, fz = a < 3 ? -1 : a === 4 || a === 5 || a === 6 ? 1 : 0;
-          const g = heightAt0(it.x + ox + fx * rx, it.z + oz + fz * rz);
-          if (g < gl) gl = g;
-        }
-        y1 = Math.max(y0 + 0.05, Math.min(topY, gl + HULL_STEP));
-      }
-      colliders.push(mkCollider("box", it.x + bx0, it.x + bx1, y0, y1, it.z + bz0, it.z + bz1, -1, kind, idx, hp));
-    }
+    return Math.max(y0 + 0.05, Math.min(topY, gl + HULL_STEP));
   }
   function mergePartsByMaterial(meshes) {
     const byMat = new Map(), out = [];
