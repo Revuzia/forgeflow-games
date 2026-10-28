@@ -55,7 +55,8 @@ def find_key(explicit: str | None) -> str:
 
 # the record's size class -> the API's aspect ratio (same table as queue.py); icons at the default
 # resolution (1024²), everything else at "2k" (16:9 = 2816×1584) so key art and backdrops are not upscaled
-ASPECT = {"square": "1:1", "landscape": "4:3", "wide": "16:9", "portrait": "2:3"}
+# "tile" (Home tiles, shown 16:8) is generated at 4:3 and post.py crops the 2:1 band
+ASPECT = {"square": "1:1", "landscape": "4:3", "tile": "4:3", "wide": "16:9", "portrait": "2:3"}
 
 
 def call(key: str, prompt: str, n: int, model: str, aspect: str | None = None, resolution: str | None = None) -> list[bytes]:
@@ -159,7 +160,7 @@ def main() -> None:
         if not refs and not a.no_refs and it.get("roster"):   # named roster fighters -> a board of their real models
             sys.path.insert(0, str(HERE))
             from ref_board import board
-            refs = [board(it["roster"])]
+            refs = [board(it["roster"], ASPECT.get(it.get("size", "square"), "1:1"))]
         missing = [str(r) for r in refs if not r.exists()]
         if missing:
             print(f"[{k}/{len(todo)}] skip {it['id']}: missing refs {missing}")

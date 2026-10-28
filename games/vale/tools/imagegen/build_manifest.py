@@ -211,7 +211,7 @@ def main() -> None:
         items.append(rec(f"home_tile_{t['id']}", "keyart",
                          f"Painted card illustration for a game client tile titled '{t['title']}': {t['body']} Simple strong "
                          f"composition with one focal subject, space at the bottom for a caption. {WORLD} Style: {PAINT}. {BANNED} {SENSITIVITY}",
-                         f"content/ui/home/{t['id']}.webp", "landscape", ref_from=t.get("art")))
+                         f"content/ui/home/{t['id']}.webp", "tile", ref_from=t.get("art")))
     for m in load("modes.json", "modes"):
         items.append(rec(f"mode_{m['id']}", "keyart",
                          f"Painted mode-select card art for the game mode {m['name'].upper()}: {m['tagline']} {clean(m['desc'], 300)} "
@@ -269,7 +269,7 @@ def main() -> None:
         items.append(rec(f"tex_{tid}", "texture", f"{desc}. {TEXTURE}", f"art/out/textures/{tid}.webp", "square"))
 
     out = {"version": 1, "generator": "xai:grok-imagine-image", "count": len(items),
-           "sizes": {"square": [1024, 1024], "landscape": [1280, 960], "wide": [1920, 1080], "portrait": [768, 1152]},
+           "sizes": {"square": [1024, 1024], "landscape": [1280, 960], "tile": [1280, 640], "wide": [1920, 1080], "portrait": [768, 1152]},
            "items": items}
     (HERE / "manifest.json").write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     kinds: dict[str, int] = {}

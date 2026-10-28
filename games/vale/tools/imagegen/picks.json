@@ -1,5 +1,5 @@
 {
-  "$comment": "Which raw variant ships for each image (default 1 = raw/<id>.png; 2 = raw/<id>__2.png). post.py reads this on every run; --pick on the command line overrides. Picked by eye per the README review rules.",
+  "$comment": "Which raw variant ships for each image (default 1 = raw/<id>.png; 2 = raw/<id>__2.png). post.py reads this on every run; --pick on the command line overrides. Picked by eye per the README review rules. A string value names a kept attempt (raw/<id>__<value>.png, e.g. r3__2 = round 3, variant 2 from run_xai.py --suffix r3 --variants 2). Key art with figures is signed off in _design/reviews/fixwaves/W2_art_signoff.md.",
   "ability_marund_mortar_pail": 2,
   "ability_marund_shoulder_in": 2,
   "ability_nurrow_lull_the_rest": 2,
@@ -26,11 +26,11 @@
   "tex_stone_road_engraved": 2,
   "backdrop_seat_center": 2,
   "backdrop_serenade_dusk": 2,
-  "home_tile_collection_highlight": 2,
+  "home_tile_collection_highlight": "r3__2",
   "loading_map_bridge": 2,
-  "mode_bridge": 2,
-  "store_banner": 2,
-  "mode_fray": 2,
+  "mode_bridge": "r3",
+  "store_banner": "r3__2",
+  "mode_fray": "r5",
   "ability_ervet_shard_kick": 2,
   "ability_ervet_reform": 2,
   "ability_glasshorn_bellow": 2,
@@ -42,5 +42,11 @@
   "concept_wick_shieldwick_aubade": 2,
   "concept_wick_shieldwick_serenade": 2,
   "concept_wick_glimwick_serenade": 2,
-  "concept_wick_greatwick_serenade": 3
+  "concept_wick_greatwick_serenade": 3,
+  "home_feature": "r3__2",
+  "home_tile_ranked_season": "r4__2",
+  "portal_thumbnail": "r5",
+  "mode_rift": "r5",
+  "item_linen_hood": "r4",
+  "ability_tunlan_shadow_play": "r1"
 }

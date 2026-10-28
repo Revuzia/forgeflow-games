@@ -6,8 +6,9 @@
     python tools/imagegen/post.py --pick ability_x=2   # use raw/ability_x__2.png instead of the first variant
     python tools/imagegen/post.py --only concept_wick_   # only ids starting with this prefix (leave other outputs alone)
 
-Per kind:  icon → 256² WebP (centre crop) · keyart/backdrop → cover-crop to the record's size class
-(wide 1920×1080, landscape 1280×960, portrait 768×1152) WebP · texture → square, made SEAMLESS by
+Per kind:  icon → 256² WebP (centre crop) · keyart/backdrop → flat letterbox bars trimmed, then cover-crop to
+the record's size class (wide 1920×1080, landscape 1280×960, tile 1280×640 = the 16:8 Home tile frame,
+portrait 768×1152) WebP · texture → square, made SEAMLESS by
 an offset-and-feather pass, 1024² WebP · concept → PNG copy for the modellers. Requires Pillow + numpy.
 """
 from __future__ import annotations
@@ -25,12 +26,38 @@ VALE = HERE.parent.parent
 RAW = HERE / "raw"
 
 
-def cover(img: Image.Image, w: int, h: int) -> Image.Image:
+def cover(img: Image.Image, w: int, h: int, anchor: tuple[float, float] = (0.5, 0.5)) -> Image.Image:
+    """Scale to cover w x h and crop; anchor (0..1, 0..1) picks which part survives (0.5, 0.5 = centre)."""
     sw, sh = img.size
     s = max(w / sw, h / sh)
     img = img.resize((max(w, round(sw * s)), max(h, round(sh * s))), Image.LANCZOS)
-    x, y = (img.width - w) // 2, (img.height - h) // 2
+    x, y = round((img.width - w) * anchor[0]), round((img.height - h) * anchor[1])
     return img.crop((x, y, x + w, y + h))
+
+
+def trim_bars(img: Image.Image, tol: float = 7.0, min_frac: float = 0.02) -> Image.Image:
+    """Cut flat letterbox / pillarbox bars that a generation sometimes paints round the picture (the reference
+    edit endpoint copies a padded or strip-shaped reference frame). A bar is a run of near-uniform rows or
+    columns touching the edge; runs thinner than min_frac of the side are left alone. Repeats until stable,
+    so a grey frame inside a black band is peeled too."""
+    for _ in range(4):
+        a = np.asarray(img.convert("L")).astype(np.float32)
+        h, w = a.shape
+        rows, cols = a.std(axis=1), a.std(axis=0)
+
+        def run(v: np.ndarray) -> int:
+            n = 0
+            while n < len(v) and v[n] < tol:
+                n += 1
+            return n
+        t, b = run(rows), run(rows[::-1])
+        l, r = run(cols), run(cols[::-1])
+        t, b = (t if t >= h * min_frac else 0), (b if b >= h * min_frac else 0)
+        l, r = (l if l >= w * min_frac else 0), (r if r >= w * min_frac else 0)
+        if not (t or b or l or r):
+            break
+        img = img.crop((l, t, w - r, h - b))
+    return img
 
 
 def seamless(img: Image.Image) -> Image.Image:
@@ -79,7 +106,7 @@ def main() -> None:
             img = seamless(cover(img, 1024, 1024))
         elif k in ("keyart", "backdrop"):
             w, h = sizes[it["size"]]
-            img = cover(img, w, h)
+            img = cover(trim_bars(img), w, h, tuple(it.get("anchor", (0.5, 0.5))))   # record "anchor": [x, y]
         elif k == "concept" and img.width > 2048:   # modelling reference: 2048 wide is plenty
             img = img.resize((2048, round(img.height * 2048 / img.width)), Image.LANCZOS)
         if out.suffix == ".webp":

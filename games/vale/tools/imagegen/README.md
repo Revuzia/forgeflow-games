@@ -41,6 +41,17 @@ The owner is signed in to Grok Imagine in Chrome. Work from `games/vale`.
    - gears, clock hands, gems or glowing runes
    - a muddy silhouette (icons must read at 48 px)
    - anything that resembles a character, icon or splash from an existing game
+   - **sensitivity (blocker class anywhere, `content/ui/**` and `public/` included):** a blank, smooth,
+     cracked or skull-like mask, a hockey or mannequin face, empty or glowing eye holes; animal-ear cowls,
+     full-head cowls, capes, skull plates, horns or demons; a tall, pointed or conical hood (also from
+     behind: a white peaked hood seen from the back is the worst case); a Wick with a face (Wicks have a
+     rounded hood and one central light, no eye pairs, no mouth); an empty hood or cowl with a dark face void;
+     a noose- or gallows-like frame
+   - **unnamed figures:** every figure in key art is a named roster fighter (a manifest record's `roster`);
+     crowds, armies, tiny background people or a duplicated fighter are a reject
+
+   Zoom to the faces (2-3x crops) before deciding; a thumbnail hides these. Record each shipped key-art
+   image in `_design/reviews/fixwaves/W2_art_signoff.md` (file, roster ids shown, checks).
 4. **Keep sets consistent.** Ability icons of one fighter share palette and brushwork. Textures
    must be top-down and flat-lit. Check progress with `python3 tools/imagegen/queue.py status`,
    and commit and push the raw-free outputs at least every 30 images (see step 5).
@@ -49,6 +60,18 @@ The owner is signed in to Grok Imagine in Chrome. Work from `games/vale`.
    WebP and points the content refs at the new files. Then run
    `node tools/build_content.ts --check --allow-missing-assets`, which must say OK. Commit the
    outputs and the updated content JSON and `manifest.json`. Never commit `tools/imagegen/raw/`.
+
+## Key art with fighters: reference boards (xAI edit route)
+A key-art record may carry `"roster": ["ervet", "ardit:chalkline", ...]` (fighter ids, or `id:skin`), set from
+`keyart_subjects.json` by `build_keyart_prompts.py`. `run_xai.py` then builds one board of those real Blender
+models (`ref_board.py`, crops of `art/out/fighters/<id>/splash.png`) and sends it to the edit endpoint with the
+prompt, so the painting is on-model instead of an anonymous masked figure. Every key-art prompt ends with the
+`SENSITIVITY` line of `build_manifest.py`. Keep attempts apart with `--suffix rN` (and `--variants 2`); pick the
+kept one in `picks.json` (e.g. `"home_feature": "r3__2"`). Notes from the 2026-10 repaint: the endpoint keeps the
+reference's frame, so a padded board comes back framed in grey and a long strip comes back letterboxed
+(`post.py` trims flat bars before the cover crop; a record's `"anchor": [x, y]` picks the crop). A back view
+hides a mask, so it suits a masked, unhooded fighter (Burdam on the Ranked stair); never paint a pale hooded
+fighter from behind, because the hood then reads as peaked (Vashil was rejected for this).
 
 ## Optional: the xAI API (much faster)
 If an xAI API key is available on this machine (`$XAI_API_KEY`, or `tokens.json` with

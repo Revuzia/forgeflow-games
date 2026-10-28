@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RAW = HERE / "raw"
-ASPECT = {"square": "1:1", "landscape": "4:3", "wide": "16:9", "portrait": "2:3"}
+ASPECT = {"square": "1:1", "landscape": "4:3", "tile": "4:3", "wide": "16:9", "portrait": "2:3"}
 # the order that gives the biggest visual win first; concept sheets lead because the Blender
 # characters are modelled from them
 ORDER = ["concept", "texture", "backdrop", "keyart", "icon"]
