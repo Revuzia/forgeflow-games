@@ -65,10 +65,11 @@ function dustBowl(seed: number, hours = 144, hold = 96, radius = 1500): DustBowl
   return { sim, town, fellH, deaths, alive, road };
 }
 
-// seed 11 under a held 1.5 km dust bowl: 30 died of thirst before the change (the band roamed and swam blind, carried
-// nothing, searched rings that crossed cliffs); after it, at most 2. (Seed 1 is not here yet: under the held disc it lost 7
-// before the change and 25 after it — open, see _harness/scratch/living/drought/build/LEDGER.md.)
-for (const seed of [11]) {
+// seeds 11 and 16 under a held 1.5 km dust bowl: 30 and 14 died of thirst before the change (the band roamed and swam
+// blind, carried nothing, searched rings that crossed cliffs); after it, at most 2. Over seeds 1-16 the held disc cost
+// 208 to thirst before and 87 after (_harness/scratch/living/drought/build/LEDGER.md). Seed 1 is no test seed: a
+// cliff-ringed plateau whose band has nothing to walk to (7 before, 6 after).
+for (const seed of [11, 16]) {
   test(`a village driven out by a dust bowl walks to water it can reach (seed ${seed})`, () => {
     const r = dustBowl(seed);
     assert.ok(r.fellH >= 0, `seed ${seed}: the dust bowl drives the village out (it fell at h${r.fellH})`);
