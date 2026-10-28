@@ -65,7 +65,12 @@ mantle strip's top is one smooth curve TUCKED into the hood's solid felt (a turn
 hollow), the V notch's edges turned felt (a facing column + gw paint `turn`), the strip bound by its own binder
 (`bind_mantle`: torso + a hem-ward arm share; bone heat dragged the lapels 10-17 cm out of the hood in idle: the
 torn teeth), the pack a flat-faced 3 x 3 x 3 block painted by the sculpt's own normals (`roundbox_flat_low`,
-`field_normals`: the 2 x 2 x 2 block shaded in triangles).
+`field_normals`: the 2 x 2 x 2 block shaded in triangles). Fix round 8 (verify greatwick r1: in attack1's windup and
+the death the torso-bound lapel tops left the tuck and stood as pale pointed tabs on the hood's lower rim and inside the
+opening): the strip's tuck and top rows ride the HEAD all round, as fully as the hood, the lapels' felt rows graded back
+to the torso toward the hem (`mantle_weights`, MANTLE_HEAD); the Serenade death bows the hood half as far over the chest
+and its stunned slump bends at the waist (`_stunned_serenade`): a 24-38 deg bow drove the low hood 10-14 cm into its own
+chest. Checked on every frame of every wick clip against the posed hood and tunic (proto/wick_greatwick_mantlepose.py).
 
 Motion: every clip is checked against the real game mesh skinned in numpy (`_Ground`; probe:
 proto/wick_greatwick_motion.py): the run's planted boots sit exactly on the ground and the bell never cuts it (a

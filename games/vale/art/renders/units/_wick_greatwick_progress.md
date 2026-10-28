@@ -508,3 +508,39 @@ code path changed; its GLB is the r6 one).
   tunic, not a mouth.
 - Review sheet: review_greatwick_r7.jpg (top HEAD r6, bottom r7: eye-level head x3, neck front / 3-4, pack back 3-4
   with and without the sun shadow, game camera x3). paint_greatwick_serenade.png regenerated.
+
+## Fix round 8 (verify greatwick r1, the r7 mantle-binding regression, Serenade) — 2026-10-28
+Scope: art/blender/units/wick_greatwick.py (+ proto/wick_greatwick_mantlepose.py, the posed-mantle clearance check).
+Serenade rebuilt; Aubade untouched (its death bow factor is 1.0 and its stunned is the standard one; GLB is r6/r7's).
+- ROOT CAUSE (measured): the r7 `bind_mantle` left the strip's turned-in tuck row and top row on the torso (chest + a
+  little neck), while the hood is 100 % head. Any head pitch over the chest moved the hood off them: on the cached r7
+  rig, attack1 t 0.37 put 258 strip samples outside the felt INSIDE the opening's prism (4.3 cm deep), death t 0.42
+  put 576 there (10.9 cm deep, the tuck 10.5 cm OUT of the felt), and the shared `stunned` slump (neck 10 + head 14,
+  wobbling to 38 deg over the chest; minions play it under hard CC / knock-ups) 698 (tuck -9.6 cm). The pale tabs.
+- BIND (`mantle_weights`, MANTLE_HEAD): the r7 torso / arm weighting, then a HEAD share blended over it per strip
+  row: the tuck and top rows 1.0 all round (rigid with the hood and the collar, as fully as the hood: the tuck keeps
+  its rest depth, 1.8 cm under the chin, >= 1.6 cm everywhere, on every frame); on the front columns (to 60 deg, faded
+  to the torso by 90) the 36 % row 1.0, the 70 % row 0.6, the hem / lip 0.2, so the lapels go with the chin instead of
+  being swallowed by it. Each strip vertex is matched to its grid point (serenade_parts' _MANTLE_BIND: side angle, row).
+  (Tried and rejected on the clearance check: top rows only (death still 420 samples in the opening, 10 cm); top rows
+  + 36 % row 0.6 (death 302).)
+- MOTION, Serenade only: the death bows the hood half as far over the chest (neck/head pitch x 0.5: land 8 + 9, rest
+  6 + 6 deg; a 34 deg bow drove the low hood's chin 14 cm into its own chest, so head-bound lapels then sank into the
+  tunic: 473 samples, 8.4 cm); resting tilt re-solved 67.3 deg. `_stunned_serenade`: the same slump and wobble bent
+  at the WAIST (spine 24 + 6, chest 4, neck 1, head 2 + small wobble), so chest, mantle and hood sag as one load.
+- CHECK (proto/wick_greatwick_mantlepose.py on the built rig, every frame): opening intrusions / lapel rise near the
+  hood / tuck depth / sink into the tunic. idle 0 / 0.0 cm / 1.6 / 0; run 0 / 0.0 / 1.6 / 0; attack1 0 / 1.7 / 1.6 / 0;
+  death 0 / 1.8 / 1.6 / 0; stunned 0 / 0.8 / 1.6 / 0: PASS (r7: attack1 258, death 576, stunned 698 in the opening).
+  Not wick clips (reported only): cast_ult 82 and recall 64 samples (1.5 cm) in the opening.
+- CLOSE-UPS (EEVEE, Rift sky + sun, accent tinted; r7 GLB from dda0586c vs r8): attack1 t 0.18-0.42 neck front / 3/4 /
+  side and game camera x3 yaw 0 / 315, death t 0.2-1.0 x3 + x1, stunned 0 / 0.5, idle 0.3, run 0.25, ally + enemy.
+  r7's tabs in the opening (attack1 0.33, death 0.6-1.0) are gone: one soft glow in a clean dark opening, the
+  lapels below the rim as at rest. In game (review ig_burst, seat 0 High, t74 burst, the glimwick slot served as
+  greatwick, same sim state as the verifier's r6 / r7 bursts): entity 64 b07-b10 shows no tab in front of the
+  opening's rim any more; the lapels sit below it as in r6 (a lapel edge still shows under the rim's corner in b09).
+- Gates: 3593 tris (cap 3600), GLB 444,324 B; three load test + QA OK, facing +Z, 15 clips, accentPct 5.35 % (64 %
+  top half), mesh top 1.486; body double-sided, metallicFactor 0.
+- Review sheet: review_greatwick_r8.jpg (r7 | r8 pairs: eye-level attack1 neck, game camera x3 attack1 / death ally +
+  enemy, in-game burst r6 / r7 / r8, stunned).
+- Not done (optional minors): the hem-fold glint from the back and the crown band's paint specks (both pre-r7, not
+  visible at game scale); the pane pairs stay a watch item.
