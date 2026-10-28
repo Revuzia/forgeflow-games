@@ -29,3 +29,6 @@
   10 QA: full-figure clip sheet art/renders/fighters/ardit/three_clips_full_ardit.png (three_snapshot --unit, helm visible in every cell; its "+Z" FAIL line is the unit-mode head-bone heuristic, the fighter sheet reports facing [0, 1]); in-game shots _harness/_shots/art2_ardit_t40_{game,close,close2}.png (clear of the curb; t25 ones are behind it again).
   11 Cycles turntable: the back of the pane is still dark in the back views (front-lit sun, the pane's back in its own shadow + baked AO from the handle and arm); three shows it pale. Render-only, left.
   Tools: proto/ardit_probe.py (item positions, fist twist, tabard vs thigh per clip/t), proto/ardit_look.py now simulates the tabard chains.
+
+## FIX PASS 2 (agent 4)
+- 2026-10-28 00:49 CDT (fix pass 2) started: read the 6 review items. Plan: (2) splash/portrait: wrap render.pose_frame in ardit.py so the x_pavise_loc / x_spear_loc slides reach the Blender renders; (1) pauldron tiers + bracers: replace the blotchy projected tan/brown with a clean per-tier tone (keep form); (6) one visor slit (drop the brow bar, visor not wrapped round the corners); (5) tabard panels bend (softer push / two segments); 3, 4 left (brief conflict / render-only).

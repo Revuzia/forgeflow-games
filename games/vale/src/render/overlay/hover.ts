@@ -101,10 +101,6 @@ export class HoverOutline {
     r.autoClear = autoClear;
   }
 
-  /** the hover's programs are the ink programs the actor's outline, flash and shadow already compiled (ink.ts):
-   *  nothing of its own to warm (kept for the renderer's attach hook) */
-  prewarm(_r: WebGLRenderer, _cam: Camera, _scene: Scene, _t: Pick<HoverTarget, 'mask' | 'hull'>): void {}
-
   private restyle(meshes: readonly Mesh[], mat: (m: Mesh) => Material, layer: number): void {
     for (const m of meshes) {
       this.saved.push({ mesh: m, material: m.material, visible: m.visible, layers: m.layers.mask });

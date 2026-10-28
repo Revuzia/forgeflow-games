@@ -26,40 +26,40 @@
     "tris_lantern_frame": 1350,
     "tris_lantern_glass": 220,
     "tris_lantern_core": 420,
-    "tris_almanac_pages": 700,
-    "tris_almanac_cords": 138,
-    "validate_dunsom": "21056->21050"
+    "tris_almanac_pages": 674,
+    "tris_almanac_cords": 146,
+    "validate_dunsom": "21038->21032"
   },
-  "uv_coverage": 0.619,
+  "uv_coverage": 0.601,
   "bake": {
-    "base": 12.04,
-    "rough_metal": 8.95,
-    "normal": 6.87,
-    "ao": 8.07,
-    "normal_fixed_px": 50003,
-    "projection": 140.01,
-    "pack_save": 142.6,
-    "total": 179.69
+    "base": 22.99,
+    "rough_metal": 13.71,
+    "normal": 7.82,
+    "ao": 8.74,
+    "normal_fixed_px": 50339,
+    "projection": 176.22,
+    "pack_save": 176.96,
+    "total": 231.43
   },
-  "tris": 23414,
-  "mesh_top_m": 2.184,
-  "glb_bytes_raw": 2442108,
+  "tris": 23396,
+  "mesh_top_m": 2.182,
+  "glb_bytes_raw": 2440520,
   "optimize": {
     "ok": true,
-    "before": 2442108,
-    "after": 1051884
+    "before": 2440520,
+    "after": 1055804
   },
-  "glb_bytes": 1051884,
+  "glb_bytes": 1055804,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_almanac.glb (1027 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_almanac_base 2048x2048 222K, dunsom_almanac_normal 512x512 44K, dunsom_almanac_orm 512x512 66K",
-      "  skinned meshes: dunsom_accent(220v), dunsom_almanac(19780v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_almanac.glb (1031 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_almanac_base 2048x2048 227K, dunsom_almanac_normal 512x512 43K, dunsom_almanac_orm 512x512 66K",
+      "  skinned meshes: dunsom_accent(220v), dunsom_almanac(19764v)",
       "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 23414; bind-pose bounds (three units, Y up): 1.09 x 2.20 x 0.84; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
+      "  tris: 23396; bind-pose bounds (three units, Y up): 1.09 x 2.18 x 0.84; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -69,8 +69,8 @@
       "portrait": "art/out/fighters/dunsom/dunsom_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 44.81,
-      "portrait": 12.91
+      "splash": 27.67,
+      "portrait": 13.63
     }
   },
   "three_qa": {
@@ -79,12 +79,12 @@
     "bindBox": [
       [
         -0.737,
-        -0.017,
+        0,
         -0.368
       ],
       [
         0.356,
-        2.184,
+        2.182,
         0.471
       ]
     ],
@@ -93,8 +93,8 @@
       1
     ],
     "headY": 1.683,
-    "accentPct": 1.89,
-    "accentTopHalfPct": 66.7,
+    "accentPct": 1.87,
+    "accentTopHalfPct": 66.5,
     "heightPx1080": 117,
     "size": [
       2400,
@@ -102,24 +102,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/dunsom/three_dunsom_almanac.png",
-    "seconds": 48.9,
+    "seconds": 136.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 1.16,
-      "model": 133.46,
-      "lows_bind": 23.87,
-      "uv": 13.26,
-      "bake": 179.75,
-      "export": 1.43,
-      "optimize": 5.02,
-      "load_test": 0.47,
-      "render": 57.82,
-      "three_qa": 49.7
+      "materials": 0.5,
+      "model": 223.62,
+      "lows_bind": 21.91,
+      "uv": 10.95,
+      "bake": 231.5,
+      "export": 0.6,
+      "optimize": 3.03,
+      "load_test": 0.92,
+      "render": 41.4,
+      "three_qa": 137.49
     },
-    "total_s": 466.62
+    "total_s": 672.31
   },
   "run_ref_speed": 3.35,
   "height_m": 1.95

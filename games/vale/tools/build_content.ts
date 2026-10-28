@@ -1078,6 +1078,39 @@ function resolveAssets(refs: Map<string, Seg[][]>, opts: BuildOptions, dg: Diagn
   return found;
 }
 
+// ── 4b. fighter triangle budget (r12 B4) ────────────────────────────────────────────────────────
+/** r12 B4: a fighter model's (and each skin's) triangles: the frame's ≤ 500k triangle budget draws every visible
+ *  fighter twice (main and shadow pass), so ten of them at FIGHTER_TRIS are ~480k before the map, the crowd and the
+ *  effects. Above the budget a warning names the model; above the ceiling (a broken or unreduced export) an error. */
+export const FIGHTER_TRIS = { budget: 24000, ceiling: 40000 } as const;
+
+/** triangles a GLB draws: every node's mesh, each triangle-list primitive (indexed or not) */
+export function glbTriangles(abs: string): number | null {
+  const b = readFileSync(abs);
+  if (b.length < 20 || b.toString('latin1', 0, 4) !== 'glTF') return null;
+  const len = b.readUInt32LE(12);
+  let j: { accessors?: { count: number }[]; meshes?: { primitives: { mode?: number; indices?: number; attributes: Record<string, number> }[] }[]; nodes?: { mesh?: number }[] };
+  try { j = JSON.parse(b.toString('utf8', 20, 20 + len)); } catch { return null; }
+  const acc = j.accessors ?? [];
+  const per = (j.meshes ?? []).map((m) => m.primitives.reduce((t, p) => ((p.mode ?? 4) !== 4 ? t
+    : t + Math.floor((p.indices !== undefined ? acc[p.indices]?.count ?? 0 : acc[p.attributes.POSITION]?.count ?? 0) / 3)), 0));
+  return (j.nodes ?? []).reduce((t, n) => t + (n.mesh !== undefined ? per[n.mesh] ?? 0 : 0), 0);
+}
+
+function checkFighterTriangles(c: CatalogT, assets: Map<string, AssetInfo>, dg: Diagnostics): void {
+  const check = (ref: string, path: Seg[], what: string): void => {
+    const a = assets.get(ref);
+    if (!a || !/\.glb$/i.test(ref)) return;
+    const n = glbTriangles(a.abs);
+    if (n === null || n <= FIGHTER_TRIS.budget) return;
+    const msg = `${what} "${ref}" draws ${n} triangles, over the per-fighter budget of ${FIGHTER_TRIS.budget} (r12 B4: every visible fighter draws twice, main and shadow pass, inside the frame's 500k)`;
+    if (n > FIGHTER_TRIS.ceiling) dg.err(path, `${msg}; the ceiling is ${FIGHTER_TRIS.ceiling}`);
+    else dg.warn(path, msg);
+  };
+  c.fighters.forEach((f, i) => check(f.art.model, ['fighters', i, 'art', 'model'], `fighter ${f.id}: model`));
+  c.skins.forEach((s, i) => { if (s.model) check(s.model, ['skins', i, 'model'], `skin ${s.id}: model`); });
+}
+
 // ── 5. names ────────────────────────────────────────────────────────────────────────────────────
 const NAME_KEYS = new Set(['name', 'title', 'label', 'headline', 'tagline', 'badge']);
 const PROSE_KEYS = new Set(['desc', 'lore', 'job', 'body', 'sub', 'contract', 'note']);
@@ -1225,6 +1258,7 @@ export function buildContent(opts: BuildOptions): BuildResult {
   // assets + names run on raw data too, so one pass shows as many problems as possible
   const refs = collectAssetRefs(data);
   const assets = resolveAssets(refs, opts, dg);
+  if (parsed.success) checkFighterTriangles(parsed.data, assets, dg);
 
   const deny = loadDenyList(opts.designDir);
   for (const w of deny.warnings) dg.fileWarn(displayPath(opts.designDir), w);

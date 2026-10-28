@@ -18,9 +18,13 @@ Where the concept and the brief disagree:
     hanging beside the hood. The crook top stands at ~2.2 m (the painting's 2.17: under the HP bar from either facing).
   * the brief wins on the facing cue: the crook leans a little forward (the fist 0.22 m in front of the shoulder) and
     the hook's plane turns 35 degrees toward the front, so the lantern hangs in front of the hat's disc from above and
-    the mask's beak keel (3.5 cm) marks the front; the lantern is octagonal (0.15 m across, 0.35 m with its roof and
-    base) with its four cardinal panes glowing azure (the `accent`, the painted blue centre pane seen from every
-    side) between amber lampresin panes; it hangs on one pendulum bone x_lantern (amplitude <= 6 degrees).
+    the mask's beak keel (3.5 cm) marks the front; the lantern is octagonal (0.19 m across, 0.41 m with its cupola
+    and base: the painted 0.16 m lantern measured 0.3 % accent) with its four cardinal panes and a glass cupola
+    glowing azure (the `accent`, ~1.9 % at the game camera: the painted blue centre pane between amber lampresin
+    panes, seen from every side and from above); it hangs on one pendulum bone x_lantern (<= 6 degrees off plumb).
+  * the crook is 6 cm thick (brief), the hat's game mesh a clean lathe (hat_low), the hat on x_hat taking back half
+    the body's pitch / roll (the disc stays near level), the boots, trousers, hat, crook, lantern and gloves paint
+    procedurally (the projection sampled the floor round the painted boots and cannot see the hat's top).
 
 Not in the shared pipeline, implemented here (module-level wrappers; common/ untouched):
   * rig_extras: the right arm re-seated on the concept carry, prop.R up the crook, prop.L in the left hand's curl (the

@@ -49,11 +49,11 @@
 //     compile its programs when it is built.
 
 import {
-  type AnimationActionLoopStyles, type AnimationClip, AnimationMixer, BackSide, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
-  CustomBlending, CylinderGeometry, Float32BufferAttribute, FrontSide, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
-  LoopRepeat, Mesh, MeshBasicMaterial, MeshStandardMaterial, NoBlending, NormalBlending, type Object3D, OctahedronGeometry, OneFactor,
-  OneMinusSrcAlphaFactor, PropertyBinding, ShaderMaterial, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
-  Vector3, type WebGLProgramParametersWithUniforms,
+  type AnimationActionLoopStyles, type AnimationClip, AnimationMixer, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
+  CylinderGeometry, Float32BufferAttribute, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
+  LoopRepeat, Mesh, MeshStandardMaterial, NoBlending, NormalBlending, type Object3D, OctahedronGeometry,
+  PropertyBinding, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
+  Vector3,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import type { CatalogT, FighterDefT, UnitDefT } from '../contracts/catalog.ts';
@@ -62,7 +62,7 @@ import { TICK_DT } from '../contracts/sim.ts';
 import type { Assets, LoadedModel } from './assets.ts';
 import { INK, type Palette } from './palette.ts';
 import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake } from './crowd.ts';
-import { flashMaterial, flashU, type FlashU, inkPathOf, type InkPath, inkShadows, outlineMaterial, outlineU, type OutlineU, outlineUniforms, prepassMaterial } from './ink.ts';
+import { flashMaterial, flashU, type FlashU, type InkPath, inkShadows, outlineMaterial, outlineU, type OutlineU, outlineUniforms, prepassMaterial } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
 import { structureMaterial } from './structures.ts';
@@ -1082,10 +1082,6 @@ export class Actor implements CrowdActor {
   hoverTarget(): { model: Object3D; mask: readonly Mesh[]; hull: readonly Mesh[]; px: number; color: Color } | null {
     if (this.hoverPx <= 0 || !this.model || !this.root.visible || this.disposed || this.crowdBake) return null;
     return { model: this.model, mask: this.flashMeshes, hull: this.hullMeshes, px: this.hoverPx, color: this.hoverColor };
-  }
-  /** the prebuilt hover meshes whatever the hover state (renderer: compile the hover programs at attach) */
-  hoverMeshes(): { model: Object3D; mask: readonly Mesh[]; hull: readonly Mesh[] } | null {
-    return this.model && !this.crowdBake && this.hullMeshes.length ? { model: this.model, mask: this.flashMeshes, hull: this.hullMeshes } : null;
   }
   /** the hover rim's width (px, 0 = none) and colour (the crowd draws a crowd unit's rim itself) */
   get hoverWidth(): number { return this.hoverPx; }

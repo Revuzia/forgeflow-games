@@ -121,8 +121,13 @@ PAV_FRAME_W = 0.052                           # the chalk frame's face width
 LINE_W = 0.008                                # the pale glass hairline along the window's edge (frame faces)
 SPIRE_X = 0.640
 DIAMONDS = [((0.630, 2.030), 0.052, 0.105), ((0.668, 1.800), 0.058, 0.118)]   # (centre x, z), half w, half h
+# the lower pauldron tiers: (centre, half size, axes) per side (shared by the sculpt and their paint)
+TIER_BOX = {s_: (np.array([sx_ * 0.470, 0.005, 1.742]), np.array([0.080, 0.185, 0.066]), sdf.rot_y(sx_ * 14))
+            for s_, sx_ in (("R", -1), ("L", 1))}
 INLAY_K = 0.90                                # inlay size / bezel size (the concept's diamonds are mostly glass)
-CROWN_D = (0.060, 0.100)                      # the crown's glass diamond inlay (half width, half length along the facing)
+CROWN_D = (0.076, 0.126)                      # the crown's glass diamond inlay (half width, half length along the facing;
+                                              # fix pass 2: larger, it carries the accent the visor's wraps + brow did)
+VISOR = (0.119, 0.018, 2.236)                 # the visor slit: half width, half height, centre z (the concept: 24 x 3.6 cm)
 
 
 def spear_at(s: float) -> np.ndarray:
@@ -300,22 +305,18 @@ def sculpts() -> list:
     box = RoundBox((HX, 0.0, 2.185), (0.160, 0.170, 0.163), 0.024)
     helm.add(box.displaced(chips(0.008, 8.0), 0.008), k=0.0)
     helm.add(RoundBox((HX, 0.0, 2.302), (0.167, 0.177, 0.046), 0.016).displaced(chips(0.009, 7.0), 0.009), k=0.004)
-    helm.sub(RoundBox((HX, -0.18, 2.233), (0.136, 0.05, 0.032), 0.006), k=0.004)           # the visor band
-    for sx in (-1, 1):                                                                     # its side windows
-        helm.sub(RoundBox((HX + sx * 0.17, -0.105, 2.233), (0.03, 0.055, 0.032), 0.006), k=0.004)
+    # the visor slit: ONE pale slit under the crown ledge, as on the concept (fix pass 2: the 6 cm band wrapped round
+    # the corners plus a brow line read as two stacked saturated bars); the helm's corners stay solid chalk
+    helm.sub(RoundBox((HX, -0.18, VISOR[2]), (VISOR[0] + 0.002, 0.05, VISOR[1] + 0.002), 0.005), k=0.004)
     # the face opening below the visor: the cheek guards' inner edges slant inward toward the chin
     helm.sub(slab([(HX - 0.098, 2.212), (HX + 0.098, 2.212), (HX + 0.084, 1.96), (HX - 0.084, 1.96)], -0.17, 0.07, 0.008), k=0.006)
     helm.add(RoundBox((HX, -0.163, 2.133), (0.022, 0.016, 0.082), 0.008), k=0.006)          # the nasal bar
     helm.add(RoundBox((HX, -0.172, 2.214), (0.050, 0.010, 0.010), 0.006), k=0.006)          # the nasal's brow root
-    helm.sub(RoundBox((HX, -0.178, 2.302), (0.110, 0.012, 0.011), 0.004), k=0.003)          # the brow line's groove
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
     helm.sub(crown_diamond(CROWN_D[0] + 0.010, CROWN_D[1] + 0.016, 2.352, 0.012), k=0.003)   # the crown inlay's pocket
     part("helm", helm, "chalk", "bone:head", 1500)
     visor = Sculpt("visor")
-    visor.add(RoundBox((HX, -0.160, 2.233), (0.134, 0.012, 0.030), 0.006), k=0.0)     # flush with the helm face
-    for sx in (-1, 1):                    # wrapped round the corners (the colour reads from the side facings)
-        visor.add(RoundBox((HX + sx * 0.150, -0.105, 2.233), (0.012, 0.052, 0.030), 0.006), k=0.0)
-    visor.add(RoundBox((HX, -0.172, 2.302), (0.106, 0.006, 0.009), 0.004), k=0.0)      # the brief's brow line (accent)
+    visor.add(RoundBox((HX, -0.160, VISOR[2]), (VISOR[0], 0.012, VISOR[1]), 0.005), k=0.0)    # flush with the helm face
     # a glass diamond set in the flat crown, its long axis along the facing (the Aubade diamond of the spire; the team
     # colour reads from above in every facing, in the top of the figure: review fix 3)
     visor.add(crown_diamond(CROWN_D[0], CROWN_D[1], 2.343, 0.006), k=0.0)
@@ -347,7 +348,8 @@ def sculpts() -> list:
         pu.sub(Capsule((sx * 0.25, -0.225, 1.975), (sx * 0.52, -0.225, 1.955), 0.007), k=0.004)   # the front lip line
         part(f"pauldron_{s}", pu, "stone", f"bone:shoulder.{s}", 560)
         pl = Sculpt(f"tier_{s}")
-        pl.add(RoundBox((sx * 0.470, 0.005, 1.742), (0.080, 0.185, 0.066), 0.030, axes=sdf.rot_y(sx * 14)).displaced(chips(0.008, 8.0), 0.008), k=0.0)
+        tc, th, tr = TIER_BOX[s]
+        pl.add(RoundBox(tuple(tc), tuple(th), 0.030, axes=tr).displaced(chips(0.008, 8.0), 0.008), k=0.0)
         part(f"tier_{s}", pl, "stone", f"bone:upper_arm.{s}", 420)
 
     # TORSO (the blued cuirass, heat weights)
@@ -645,9 +647,10 @@ def rig_extras(ctx) -> None:
         arm.pose.bones[nm].rotation_mode = "XYZ"
     for b in arm.data.bones:
         info.lengths[b.name] = b.length
-    for s, sx in (("l", 1), ("r", -1)):
+    for s, sx in (("l", 1), ("r", -1)):            # two bones each: the panel drapes over a raised knee (fix pass 2)
         ctx.chains[f"tabard_{s}"] = rig.add_chain(info, f"tabard_{s}", "hips",
-                                                  [V((sx * 0.086, -0.27, 1.40)), V((sx * 0.086, -0.345, 0.66))])
+                                                  [V((sx * 0.086, -0.27, 1.40)), V((sx * 0.086, -0.3075, 1.03)),
+                                                   V((sx * 0.086, -0.345, 0.66))])
     rig.add_socket(info, "x_spear_tip", SLIDE["R"], tuple(spear_at(SPEAR_S["tip"])), tuple(SPEAR_U * 0.08), z_hint=(0, -1, 0))
     rig.add_socket(info, "x_pavise_top", SLIDE["L"], (SPIRE_X - 0.01, PAV_Y, 2.15), (0, 0, 0.08), z_hint=(0, -1, 0))
 
@@ -705,8 +708,8 @@ TOPMAP = {                 # up-facing texels: the part's own front paint, depth
     "belt": (1.40, 1.48),
 }
 # part: (target median hex, hue strength, gamma). The painted pauldrons (median ~L* 85) blew out to flat white under
-# the splash's low sun (review fix 5): toned to ~L* 78 with a little more contrast (form); the tiers keep their paint
-# (they sit in the pauldrons' shadow: lifting their brown-grey median turned it peach)
+# the splash's low sun (review fix 5): toned to ~L* 78 with a little more contrast (form); the tiers and bracers are
+# painted procedurally (_tier_paint / _bracer_paint; their SIDEMAP / TOPMAP samples are overwritten)
 BASE_TONE = {nm: ("#C9C8BF", 0.3, 1.12) for nm in ("pauldron_R", "pauldron_L")}
 # the highest plate row a part may sample (m): the sculpted gorget rises 4 cm over the painted one, where the sheet
 # paints the bare neck: sampled there it read as a mouth across the collar
@@ -799,6 +802,80 @@ def _cloth_folds(p, base, axis=2, freq=38.0, amp=0.22):
     b = np.asarray(base, dtype=np.float32)
     f = 0.5 + 0.5 * np.sin(p[:, axis] * freq + 2.2 * NOISE(p, 7.0))
     return np.clip(b[None, :] * (1.0 - amp * 0.5 + amp * f)[:, None], 0, 1)
+
+
+# the lower pauldron tiers and the bracers are PAINTED here, not projected (fix pass 2: the concept paints them in its
+# own light, a cream face over a brown under-shadow; projected onto plates that turn with the arms, that shading read as
+# brown / grey camouflage blotches in the portrait and on every side). Clean chalk plates in the concept's colours: a
+# cream face, a grey-tan bevel round every face, a carved border line (tiers) or carved lames (bracers), chalk cracks
+CHALK_FACE, CHALK_RIM = "#CFCBBF", "#ACA599"
+
+
+def _stone_breakup(p, lin, crack=0.32):
+    """painted chalk: a soft mottle and thin dark cracks (ridged noise)"""
+    mott = 1.0 + 0.045 * NOISE(p, 16.0) + 0.025 * NOISE(p, 43.0)
+    cr = np.clip((NOISE.ridged(p, 19.0, 3) - 0.86) * 7.0, 0, 1)
+    return lin * (mott * (1.0 - crack * cr))[:, None]
+
+
+def _tier_paint(name, p, n):
+    """a lower pauldron tier (a rounded box on the upper arm): the cream face lit a little toward its top, a grey-tan
+    bevel on the rounded edges, a carved border line 3.4 cm inside the front / side / back faces with a lit lip, the top
+    (under the upper plate) and the underside a step darker"""
+    c, h, R = TIER_BOX[name[-1]]
+    q = (p - c) @ R.T
+    nl = n @ R.T
+    ax = np.argmax(np.abs(nl), axis=1)
+    aq = np.abs(q)
+    e = np.ones(len(p))
+    for i, (a_, b_) in enumerate(((1, 2), (0, 2), (0, 1))):
+        m = ax == i
+        e[m] = np.minimum(h[a_] - aq[m, a_], h[b_] - aq[m, b_])
+    e = np.maximum(e, 0.0)
+    k = 0.97 + 0.05 * np.clip(q[:, 2] / h[2], -1, 1)
+    lin = _lin(_hex(CHALK_FACE))[None, :] * k[:, None]
+    rim = (1.0 - _ss(0.014, 0.022, e))[:, None]
+    lin = lin * (1 - rim) + _lin(_hex(CHALK_RIM))[None, :] * rim
+    side = (ax != 2).astype(np.float32)
+    groove = np.exp(-((e - 0.034) / 0.0026) ** 2) * side
+    lip = np.exp(-((e - 0.040) / 0.0030) ** 2) * side
+    lin = lin * (1 - 0.45 * groove)[:, None] * (1 + 0.07 * lip)[:, None]
+    lin = lin * np.where((ax == 2) & (nl[:, 2] > 0), 0.82, np.where((ax == 2) & (nl[:, 2] < 0), 0.80, 1.0))[:, None]
+    return _srgb(_stone_breakup(p, lin))
+
+
+def _bracer_paint(name, p, n):
+    """a bracer (a flattened tube on the forearm): the cream face lit along its top, its carved end rings a grey-tan
+    step with a lit crest, the carved groove by the elbow ring, two painted lame lines arcing round it (the concept's
+    overlapping bands) with a lit lip toward the elbow"""
+    E, W = (E_R, W_R) if name.endswith("R") else (E_L, W_L)
+    sx = -1.0 if name.endswith("R") else 1.0
+    d = (W - E) / np.linalg.norm(W - E)
+    a = E + d * 0.06
+    L = float(np.linalg.norm(W + d * 0.005 - a))
+    rel = p - a
+    s = rel @ d
+    r = rel - np.outer(s, d)
+    out = np.array([sx, -0.35, 0.0])
+    out = out - d * out.dot(d)
+    out /= np.linalg.norm(out)
+    sd = np.cross(d, out)
+    th = np.arctan2(r @ sd, r @ out)
+    k = 0.95 + 0.08 * np.clip(n[:, 2], 0, 1)
+    lin = _lin(_hex(CHALK_FACE))[None, :] * k[:, None]
+    ring = np.clip(np.exp(-((s - 0.025) / 0.017) ** 4) + np.exp(-((s - (L - 0.012)) / 0.017) ** 4), 0, 1)
+    crest = np.exp(-((s - 0.025) / 0.004) ** 2) + np.exp(-((s - (L - 0.012)) / 0.004) ** 2)
+    rc = _lin(_hex(CHALK_RIM))[None, :] * (1 + 0.10 * crest)[:, None]
+    lin = lin * (1 - ring[:, None]) + rc * ring[:, None]
+    g = np.exp(-((s - 0.11) / 0.0035) ** 2)
+    lip = np.zeros(len(p))
+    for f in (0.44, 0.70):
+        s0 = f * L + 0.012 * np.cos(th)
+        g = np.maximum(g, np.exp(-((s - s0) / 0.0026) ** 2))
+        lip = np.maximum(lip, np.exp(-((s - (s0 - 0.007)) / 0.0035) ** 2))
+    lin = lin * (1 - 0.50 * g)[:, None] * (1 + 0.07 * lip)[:, None]
+    lin = lin * (1 - 0.15 * _ss(0.0, -0.8, np.sum(n * (r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6)), axis=1)))[:, None]
+    return _srgb(_stone_breakup(p, lin))
 
 
 def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True, log=print):
@@ -1003,6 +1080,10 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     # own-material parts
     own = {"spear_head": lambda pp, nn: _glass(pp, nn, "#CFE0EA", 1.3), "spear_shaft": lambda pp, nn: _wood(pp),
            "neck": _collar, "pavise_pane": _pane, "pane_line": _line}
+    for nm in ("tier_R", "tier_L"):
+        own[nm] = (lambda nm_: (lambda pp, nn: _tier_paint(nm_, pp, nn)))(nm)
+    for nm in ("bracer_R", "bracer_L"):
+        own[nm] = (lambda nm_: (lambda pp, nn: _bracer_paint(nm_, pp, nn)))(nm)
     for name, fn in own.items():
         if name in names:
             sel = k == names.index(name)
@@ -1353,6 +1434,27 @@ def _install_anim() -> None:
             return act
         write_action._ardit = True
         anim.write_action = write_action
+    if not getattr(anim.apply_pose, "_ardit", False):
+        orig_ap = anim.apply_pose
+
+        def apply_pose(arm, pose):
+            """the shared pose-apply (splash, portrait, icon: render.pose_frame) zeroes every bone's location and keys
+            only the hips', so the items' slides never reached the Blender renders (fix pass 2: the splash pavise
+            floated 0.7 m up, the spear held mid-shaft); the GLB actions carry them through _write_slides"""
+            orig_ap(arm, pose)
+            res = pose
+            if any(k in pose for k in ("pav_w", "spr_w")) and not any(b + "_loc" in pose for b in SLIDE.values()):
+                res = anim.resolve(anim.Skeleton(arm), pose)
+            moved = False
+            for b in SLIDE.values():
+                loc = res.get(b + "_loc")
+                if loc is not None and b in arm.pose.bones:
+                    arm.pose.bones[b].location = tuple(float(c) for c in loc)
+                    moved = True
+            if moved:
+                bpy.context.view_layer.update()
+        apply_pose._ardit = True
+        anim.apply_pose = apply_pose
     if not getattr(anim.secondary_motion, "_ardit", False):
         orig_s = anim.secondary_motion
 

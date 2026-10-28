@@ -1634,7 +1634,11 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     const by: { m: Matrix4; c?: Color }[][] = geos.map(() => []);
     for (const it of items) by[variantOf(it.x, it.y, geos.length)].push(it);
     // props (Dialwood, boulders, stones): 1 m past their bounds (the cull runs every frame for that frame's camera, so
-    // nothing can pop in; the bounds already hold the crowns, sway is ≤ 4 cm)
+    // nothing can pop in; the bounds already hold the crowns, sway is ≤ 4 cm).
+    // r12 B4 Dialwood LOD, decided: a VISIBLE tree keeps its full crown at any distance (lod.dist Infinity). Every
+    // Dialwood variant is under the spec's 750-triangle near budget (tall 674, broad 584, squat 552, lean 540, young
+    // 350: art/out/props/dialwood_*.glb), and at the widest zoom the frame corners lie past 15 m, where a 250-triangle
+    // crown would read as a cut-out on screen; only the trees that just shadow into view take the LOD crown.
     return geos.map((g, i) => chunked(g, sway ? treeMat : propMat, by[i], `${name}_${i}`, shadows, sway ? treeDepth : undefined, 0,
       { margin: 1, lod: sway && shadows ? { geometry: treeLod(g), dist: Infinity } : undefined })).filter((g) => g.children.length > 0);
   };

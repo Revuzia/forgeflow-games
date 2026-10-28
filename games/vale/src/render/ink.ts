@@ -22,7 +22,7 @@
 // does not read never points at a texture unit holding the render target it draws into.
 
 import {
-  BackSide, type BufferGeometry, Color, CustomBlending, DoubleSide, FrontSide, GLSL3, type InstancedMesh, type Material, Matrix4, type Mesh,
+  BackSide, Color, CustomBlending, DoubleSide, FrontSide, GLSL3, type InstancedMesh, Matrix4, type Mesh,
   NormalBlending, type Object3D, OneFactor, OneMinusSrcAlphaFactor, RawShaderMaterial, type Side, type SkinnedMesh, type Texture, Vector2, Vector3,
 } from 'three';
 import { DEPTH_TEST_GLSL } from './overlay/depth.ts';
@@ -425,4 +425,3 @@ export function shellUniforms(o: { center?: boolean; h?: number; inflate?: numbe
   return u;
 }
 
-export type { BufferGeometry, Material };

@@ -656,14 +656,14 @@ class ValeRenderer implements Renderer {
           const def = this.lib.fighter(e.def);
           if (def) {
             a.configureFighter(def);
-            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); this.warmHover(actor); });
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); });
           }
         } else {
           const def = this.lib.unit(e.def);
           if (def) {
             a.configureUnit(def);
             this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => {
-              actor.attach(t, def.art.scale, 'accent'); this.warmHover(actor);
+              actor.attach(t, def.art.scale, 'accent');
               if (def.kind === 'structure' && actor.model) this.structs.attach(actor, def);
             });
           }
@@ -1079,20 +1079,9 @@ class ValeRenderer implements Renderer {
     try { fn(); } finally { this.gl.setRenderTarget(prev); }
   }
 
-  /** the hover pass' programs for this actor's kind of hull (skinned / rigid), compiled at attach, not on first hover */
-  private readonly hoverWarm = new WeakSet<object>();
-  private warmHover(a: Actor): void {
-    const m = a.hoverMeshes();
-    if (!m || a.disposed) return;
-    const key = m.hull[0].geometry;
-    if (this.hoverWarm.has(key)) return;
-    this.hoverWarm.add(key);
-    // the hover pass draws an actor's model as its own root: no lights, no fog (an empty scene matches that)
-    this.asIfComposer(() => this.hoverRim.prewarm(this.gl, this.rig.camera, this.warmScene, m));
-  }
-
-  // (the veils need no warm-up of their own: a veiled body draws with its own program, actors.ts setVeil, and its
-  //  depth prepass with the ink program its outline already compiled)
+  // (neither the hover rim nor the veils need a warm-up of their own: the hover mask and rim, a veil's depth prepass and
+  //  every outline, flash and shadow draw with the ink program of the actor's vertex path (ink.ts), which its outline
+  //  compiles at attach, and a veiled body draws with its own program: actors.ts setVeil)
 
   private drawHover(r: WebGLRenderer, cam: import('three').Camera): void {
     if (this.mode !== 'match' || this.hover === null) return;
