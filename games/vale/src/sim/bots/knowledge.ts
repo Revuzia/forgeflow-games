@@ -134,7 +134,14 @@ function walk(list: readonly EffectT[] | undefined, mult: number, top: boolean, 
         walk(eff.onPass, mult, false, a, depth + 1);
         walk(eff.onArrive, mult, false, a, depth + 1);
         break;
-      case 'blink': if (a.delivery === 'none' && top) { a.delivery = 'blink'; a.blinkDist = eff.distance; } break;
+      case 'blink':
+        // a top-level blink is the ability, even after a zone laid at the caster's feet first (Glint Step's shadow, a
+        // trail left where it started): that zone is not the ability's footprint
+        if (top && (a.delivery === 'none' || (a.delivery === 'zone' && a.areaAt === 'self'))) {
+          if (a.delivery === 'zone') { a.shape = null; a.areaAt = 'point'; a.delay = 0; }
+          a.delivery = 'blink'; a.blinkDist = eff.distance;
+        }
+        break;
       case 'summon': if (a.delivery === 'none' && top) a.delivery = 'summon'; break;
       case 'if': walk(eff.then, mult, top, a, depth + 1); break;
       case 'repeat': walk(eff.effects, mult * eff.count, top, a, depth + 1); break;

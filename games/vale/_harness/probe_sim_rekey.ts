@@ -4,7 +4,7 @@
 //   1. the gauge: no headline number of a battle spell, starter, potion, boots, ward, camp buff, the epic buff or the
 //      BRIDGE start within 10 % of its reference-genre counterpart (LoL used ONLY as a gauge: numbers, never assets)
 //   2. rules that no longer map one-to-one, exercised in the sim:
-//      · default spell pair is not blink + heal; Glint Step is a wall-stopped dash that leaves its shadow
+//      · default spell pair is not blink + heal; Glint Step leaves its shadow behind as a slowing patch
 //      · starters fold into the first Gloam core (foldsInto) — the starter grows into the role's first core
 //      · the dial-slot rule replaces the one-Noonlit cap (two Noonlit items must stand 4+ hours apart)
 //      · Clearglass works on your own side of the Noonline, Resinburn on the enemy side (two-hit ignite)
@@ -65,7 +65,7 @@ const lampSummon = firstOp(lamp.active!.effects, 'summon')!;
 const glassAmt = (buffDef('clearglass').passives[0].triggers[0].effects[0] as Extract<EffectT, { op: 'buff' }>).stats!.haste!;
 const bridge = mode('bridge').rules;
 const ROWS: Row[] = [
-  { sys: 'Glint Step ~ Flash', what: 'distance m', vale: firstOp(glint.effects, 'dash')!.distance, lol: [4] },
+  { sys: 'Glint Step ~ Flash', what: 'distance m', vale: firstOp(glint.effects, 'blink')!.distance, lol: [4] },
   { sys: 'Glint Step ~ Flash', what: 'cooldown s', vale: cd(glint.cooldown), lol: [300] },
   { sys: 'Saplight ~ Heal', what: 'L1 heal (650 hp, full pool)', vale: sapTicks * ((zoneHeal.amount as { targetMaxHp: number }).targetMaxHp * L1_HP), lol: [80] },
   { sys: 'Saplight ~ Heal', what: 'L18 heal (2,500 hp, full pool)', vale: sapTicks * ((zoneHeal.amount as { targetMaxHp: number }).targetMaxHp * 2500), lol: [318] },
@@ -155,11 +155,11 @@ const denied = (ev: SimEvent[]): string | undefined => ofType(ev, 'announce').fi
 const FIGHTERS = catalog.fighters.map((f) => f.id).sort();
 const melee = catalog.fighters.find((f) => f.attack.range < 3)!.id;
 
-section('spells: VALE default pair; Glint Step is a dash that leaves its shadow', () => {
+section('spells: VALE default pair; Glint Step leaves its shadow behind', () => {
   const d = catalog.setup.defaults.spells.map(spell);
-  const json = JSON.stringify(d.map((s) => s.effects));
-  check('default pair has no blink and no heal', !json.includes('"op":"blink"') && !json.includes('"op":"heal"'), catalog.setup.defaults.spells);
-  check('no battle spell blinks', catalog.setup.spells.every((s) => !JSON.stringify(s.effects).includes('"op":"blink"')));
+  const blinks = d.some((s) => JSON.stringify(s.effects).includes('"op":"blink"')), heals = d.some((s) => JSON.stringify(s.effects).includes('"op":"heal"'));
+  check('default pair is not blink + heal', !(blinks && heals), catalog.setup.defaults.spells);
+  check('no default spell heals', !heals);
   const sim = mkSim('rift', [seat(0, 0, melee, ['glint_step', 'glass_pane']), seat(1, 1, FIGHTERS[1])]);
   const bs = sim.world.mapDef.bases;
   const cx = (bs[0].spawn[0] + bs[1].spawn[0]) / 2, cy = (bs[0].spawn[1] + bs[1].spawn[1]) / 2;
@@ -167,8 +167,7 @@ section('spells: VALE default pair; Glint Step is a dash that leaves its shadow'
   const x0 = E(sim).x;
   const ev = cmd(sim, { type: 'cast', slot: 'spell1', x: x0 + 20, y: E(sim).y });
   ev.push(...steps(sim, 0.5));
-  check('Glint Step: a dash event (no blink) and about 5 m travelled', ofType(ev, 'dash').some((x) => x.src === E(sim).id) && !ofType(ev, 'blink').length && E(sim).x - x0 > 3.5,
-    E(sim).x - x0);
+  check('Glint Step: a 4.5 m blink', near(E(sim).x - x0, 4.5, 0.3), E(sim).x - x0);
   check('Glint Step: the shadow zone stays at the start', sim.world.entities.some((z) => z.kind === 'zone' && z.def === 'glint_shadow' && Math.abs(z.x - x0) < 0.6));
 });
 

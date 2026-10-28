@@ -65,6 +65,9 @@ const SUITES = opt('suites', FULL ? 'rift,bridge,mirror' : 'rift').split(',');
 const CUT = Number(opt('cut', FULL ? '0' : '900')) || 0;
 const JOBS = Math.max(1, Math.min(3, Number(opt('jobs', FULL ? '3' : '1'))));
 const RULES = opt('rules', '');
+/** diagnostics only: deep-merge patches into catalog entries by id, e.g. '{"spells":{"glint_step":{...}},"items":{"notched_blade":{...}}}'
+ *  (families: spells = setup.spells, items, units, teamBuffs). A patched run is never a gate result. */
+const PATCH = opt('patch', '');
 const LABEL = opt('label', FULL ? 'full' : 'quick');
 const MIRROR_SEEDS = Number(opt('mirror-seeds', '10'));
 
@@ -76,6 +79,15 @@ function loadCatalog(): CatalogT {
     process.exit(77);
   }
   const c = r.catalog;
+  if (PATCH) {
+    const pt = JSON.parse(PATCH) as Record<string, Record<string, Record<string, unknown>>>;
+    const fam: Record<string, { id: string }[]> = { spells: c.setup.spells, items: c.items, units: c.units, teamBuffs: c.teamBuffs };
+    for (const [f, byId] of Object.entries(pt)) for (const [id, patch] of Object.entries(byId)) {
+      const list = fam[f];
+      const k = list ? list.findIndex((x) => x.id === id) : -1;
+      if (k >= 0) list[k] = deepMerge(list[k] as unknown as Record<string, unknown>, patch) as unknown as { id: string };
+    }
+  }
   if (RULES) {
     const patch = JSON.parse(RULES) as Record<string, unknown>;
     for (const m of c.modes) m.rules = deepMerge(m.rules as unknown as Record<string, unknown>, patch) as unknown as typeof m.rules;
@@ -293,7 +305,7 @@ function runParallel(jobs: Job[], nJobs: number): Promise<GameRec[]> {
   const chunks: Job[][] = Array.from({ length: nJobs }, () => []);
   jobs.forEach((j, i) => chunks[i % nJobs].push(j));
   return Promise.all(chunks.filter((c) => c.length).map((chunk) => new Promise<GameRec[]>((done, fail) => {
-    const pass = RULES ? ['--rules', RULES] : [];
+    const pass = [...(RULES ? ['--rules', RULES] : []), ...(PATCH ? ['--patch', PATCH] : [])];
     const child = spawn(process.execPath, [SELF, '--worker', JSON.stringify(chunk), ...pass], { stdio: ['ignore', 'pipe', 'inherit'] });
     const got: GameRec[] = [];
     let buf = '';

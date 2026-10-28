@@ -297,8 +297,8 @@ section('setup: battle spells', () => {
   check('the spells cover mobility, sustain, offense, jungle, haste, cleanse and shield', Object.values(jobs).every((l) => l.length > 0));
   // W4 re-key (originality F4): VALE's own default pair, never the reference genre's blink + heal
   const defJobs = setup.defaults.spells.map((id) => sp.find((s) => s.id === id)!);
-  check('defaults are not blink + heal (no blink op and no heal in the default pair)', defJobs.every((s) => !effectsJson(s).includes('"op":"blink"')) &&
-    !defJobs.some((s) => effectsJson(s).includes('"op":"heal"')), setup.defaults.spells);
+  const blinks = defJobs.some((s) => effectsJson(s).includes('"op":"blink"')), heals = defJobs.some((s) => effectsJson(s).includes('"op":"heal"'));
+  check('defaults are not blink + heal', !(blinks && heals), setup.defaults.spells);
   check('the jungle spell is RIFT-only', jobs.jungle.every((id) => sp.find((s) => s.id === id)!.pools.join() === 'rift'));
   const n = (p: Pool): number => sp.filter((s) => s.pools.length === 0 || s.pools.includes(p)).length;
   check(`every pool has ≥ 2 spells (rift ${n('rift')}, bridge ${n('bridge')}, fray ${n('fray')}); fray is lighter`, POOLS.every((p) => n(p) >= 2) && n('fray') < n('rift'));
@@ -829,9 +829,8 @@ section('setup: every battle spell does its job', () => {
   {
     const a = spellArena(['glint_step', 'saplight']);
     const x0 = a.e.x;
-    const [r, gev] = castNow(a, SLOT_SPELL1, 0.6, a.e.x - 20, a.e.y);
-    check('Glint Step: dashes 5 m toward the point (a dash, not a blink)', r === 'ok' && near(x0 - a.e.x, 5, 0.3) && ofType(gev, 'dash').some((d) => d.src === a.e.id) &&
-      !ofType(gev, 'blink').length, { r, d: x0 - a.e.x });
+    const [r] = castNow(a, SLOT_SPELL1, 0.1, a.e.x - 20, a.e.y);
+    check('Glint Step: blinks 4.5 m toward the point', r === 'ok' && near(x0 - a.e.x, 4.5, 0.3), { r, d: x0 - a.e.x });
     check('Glint Step: its shadow stays where it started', a.w.entities.some((z) => z.kind === 'zone' && z.def === 'glint_shadow' && near(z.x, x0, 0.5)));
     place(a.sim, 0, 40, 20); a.sim.step();
     place(a.sim, 2, 41.5, 20); a.sim.step();

@@ -18,7 +18,7 @@
 
 | VALE spell | Reads as | Before | After (VALE rule) | Closest gap |
 |---|---|---|---|---|
-| **Glint Step** | Flash | Blink 4.5 m. Cooldown 270 s (Flash: 4 m, 300 s). | **A dash, not a blink.** Up to 5 m toward the point at 22 m/s, and walls stop it. **Your shadow stays where you started** for 2.5 s; an enemy fighter who steps into it is slowed 30 % for 1 s. Cooldown 180 s. | distance +25 % · cooldown −40 % |
+| **Glint Step** | Flash | Blink 4.5 m. Cooldown 270 s (Flash: 4 m, 300 s). | Blink 4.5 m, and **your shadow stays where you stood** for 2.5 s: an enemy fighter who steps into it is slowed 30 % for 1 s. Cooldown 210 s. A wall-stopped 5 m dash was tried first. The bot soak showed bots dying to Wicks while escaping (alone-death rate 9.2 % against 3.0 % with the blink, same seeds), so the step stays a blink and the shadow carries the VALE rule. | distance +13 % · cooldown −30 % |
 | **Saplight** | Heal | Instant heal of 80 + 16/level on yourself and 40 + 8/level on allies within 6 m. Cooldown 220 s (Heal: 80–318, 240 s). | **A pool of stopped sap-light**, 3 m wide, at your feet for 4 s. You and allied fighters standing in it heal 4 % of max health each second. You have to hold the ground to be healed. Cooldown 200 s. | L1 heal +30 % · L18 +26 % · cooldown −17 % |
 | **Hairline** | Ignite | 20 + 8/level true damage, then 20 % armor and resist shred and 35 % weaker healing for 4 s. Cooldown 170 s (Ignite: 180 s, 40 % cut). | Same crack-and-shred rule; it was never a burn. 30 % weaker healing. Cooldown 140 s. | cooldown −22 % · healing cut −25 % |
 | **Hourstrike** | Smite | 450 + 30/level true damage. 2 charges, 95 s recharge. Heals 60 + 6/level (Smite: 600, 2 charges, 90 s). | **The fuller the monster, the harder it lands:** 250 + 15/level **+ 12 % of its current health** as true damage, and you heal 4 % of your max health. It opens a camp; it does not steal one. 3 charges, 70 s recharge. | flat damage −56 % · charges +50 % · recharge −22 % |
@@ -26,7 +26,7 @@
 | **Shake Loose** | Cleanse | Unstoppable 0.5 s, then 50 % tenacity for 3 s. Cooldown 210 s (Cleanse: 65 % for 3 s, 210 s). | Unstoppable for 1 s and +30 % move speed for 2 s. **No tenacity tail.** Cooldown 150 s. | tenacity −100 % · cooldown −29 % |
 | **Glass Pane** | Barrier | Shield of 90 + 20/level for 3 s. Cooldown 160 s (Barrier: 105–411, 2.5 s, 180 s). | **The pane sets.** Shield of 50 + 12/level for 4 s, and enemy fighters within 3 m are slowed 25 % for 1.5 s. Cooldown 130 s. | L1 −41 % · L18 −35 % · duration +60 % · cooldown −28 % |
 | **Calling Bell** | none | Team haste and reveal. | Unchanged; the review found no twin. | — |
-| **Defaults** | Flash + Heal | Glint Step + Saplight (blink + heal). | **Glint Step + Glass Pane**: a dash that leaves its shadow, plus a setting pane. Neither is a blink nor a heal. | — |
+| **Defaults** | Flash + Heal | Glint Step + Saplight (blink + heal). | **Glint Step + Glass Pane**: a step that leaves its shadow, plus a pane that sets. There is no heal in the pair. | — |
 
 ## 2. Starters, potion, boots and ward (`content/items.json`, `content/units.json`)
 
@@ -81,6 +81,21 @@
 
 ---
 
+## Match effect (bot soak, same seeds as the G1 baseline)
+
+`node _harness/probe_sim_bot_soak.ts --full --seeds 10 --diffs adept,veteran --suites rift,bridge --jobs 3 --label rekey3`
+(report: `_harness/_reports/fw_W4_soak_rekey3.txt`), against `fw_W4_soak_g1_final2` on seeds 1–10:
+
+| Measure (RIFT, adept / veteran) | Before re-key | After re-key |
+|---|---|---|
+| Fighter deaths per game | 36.9 / 31.9 | 27.4 / 25.5 |
+| Deaths to Wicks or monsters with no enemy fighter, per game | 2.0 / 1.7 | 2.1 / 2.1 |
+| Same, as a share of all deaths (the G1 gate, ≤ 5 %) | 5.4 % / 5.3 % | 7.7 % / 8.2 % |
+| Solo-laner cs at 10:00 · in-lane share | 59 · 81 % / 57 · 76 % (20 seeds) | 58.6 · 81 % / 58.0 · 77 % |
+| Median length | 27.9 / 26.2 min (20 seeds) | 27.1 / 23.1 min |
+
+The lone deaths per game hardly moved. The share rose because fights kill about a quarter fewer fighters: the escapes now come back sooner and leave a slowing shadow, and Glass Pane slows on cast. The next W4 bot package should re-measure the G1 share with this layer in place. A wall-stopped dash version of Glint Step was measured first (`fw_W4_soak_rekey`, 3.3 lone deaths per game) and dropped. The bots' ability reader now treats a top-level blink as the ability, even when a zone is laid at the caster's feet first (`src/sim/bots/knowledge.ts`). BRIDGE on the same 20 games: median 19.3 min, 18 of 20 in sudden death, against 33 of 40 before. The sudden-death share is gameplay G5, the next package.
+
 ## What changed in code (W4 files only)
 
 - `src/contracts/catalog.ts`:
@@ -93,7 +108,9 @@
 - `src/sim/shop.ts`:
   - `dialClash` and `claimFold`;
   - `needles` access.
-- `src/sim/bots/knowledge.ts`: `buildPlan` respects the dial rule.
+- `src/sim/bots/knowledge.ts`:
+  - `buildPlan` respects the dial rule;
+  - a top-level blink defines the delivery.
 - `src/session/draft.ts`: Lot takes and the burn-down.
 - `src/session/setup.ts`: `needles` added to the rules enum.
 

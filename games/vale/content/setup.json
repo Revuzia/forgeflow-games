@@ -4,10 +4,10 @@
     {
       "id": "glint_step",
       "name": "Glint Step",
-      "desc": "Dash up to 5 m toward the point along a line of stopped light; walls stop you. Your shadow stays where you started for 2.5 s, and enemy fighters who step into it are slowed by 30% for 1 s.",
+      "desc": "Blink up to 4.5 m toward the point. Your shadow stays where you stood for 2.5 s, and enemy fighters who step into it are slowed by 30% for 1 s.",
       "icon": "assets/ui/icons/setup/glint_step.webp",
       "maxRank": 1,
-      "cooldown": 180,
+      "cooldown": 210,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -55,14 +55,9 @@
           }
         },
         {
-          "op": "dash",
-          "mode": "toPoint",
-          "distance": 5,
-          "speed": 22,
-          "present": {
-            "anim": "dash",
-            "vfx": "lib_dash_trail"
-          }
+          "op": "blink",
+          "distance": 4.5,
+          "to": "point"
         }
       ],
       "ai": {
@@ -72,8 +67,8 @@
         ]
       },
       "present": {
-        "vfx": "lib_dash_trail",
-        "sfx": "c_dash"
+        "vfx": "lib_blink",
+        "sfx": "c_blink"
       },
       "pools": [
         "rift",

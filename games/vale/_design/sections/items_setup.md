@@ -5,7 +5,7 @@ What `content/items.json` and `content/setup.json` define, and why. Both are gen
 Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They are references, not copies; every name, effect and number here is our own choice.
 
 > **Re-key, 2026-10-28 (W4, final parity review originality F4). Pending owner sign-off.** The systems layer moved to VALE's own stopped-dial rules, so no battle spell, starter, potion, boots, ward, camp buff or BRIDGE start sits within 10 % of its reference-genre counterpart and no rule maps one to one. The full before/after table with the gauge numbers is `_design/reviews/fixwaves/W4_systems_rekey.md`; `_harness/probe_sim_rekey.ts` measures it (53 headline numbers, none within 10 %) and exercises every new rule in the sim. Headlines:
-> - **Battle spells** are light-and-shadow rules. Glint Step is a 5 m wall-stopped dash that leaves your shadow as a slowing patch (no blink). Saplight is a 3 m pool of sap-light that heals 4 % max health a second to whoever stands in it. Hourstrike hits harder the fuller the monster is (250 + 15/level + 12 % of current health; 3 charges, 70 s). Glass Pane's shield sets with a 3 m slow. **Defaults: Glint Step + Glass Pane** (not blink + heal).
+> - **Battle spells** are light-and-shadow rules. Glint Step (4.5 m, 210 s) leaves your shadow where you stood as a slowing patch. Saplight is a 3 m pool of sap-light that heals 4 % max health a second to whoever stands in it. Hourstrike hits harder the fuller the monster is (250 + 15/level + 12 % of current health; 3 charges, 70 s). Glass Pane's shield sets with a 3 m slow. **Defaults: Glint Step + Glass Pane** (not blink + heal).
 > - **Starters grow** (`ItemDef.foldsInto`): the first Gloam core you buy while carrying a starter folds it in at its full price. Starters are 300–360 Gleam.
 > - **The dial-slot rule** (`ItemDef.dial`) replaces the one-Noonlit cap: each Noonlit item stands at an hour (Seatstone 12, Sunstring 2, Hourcleaver 4, Noonglass 8, Shelter Lamp 10), and two you carry must stand 4 or more hours apart. One to three fit together; same-family pairs (Sunstring + Hourcleaver, Noonglass + Shelter Lamp) never do.
 > - **Potion, ward, boots** re-numbered: Sap Flask 40 Gleam, 150 over 5 s, holds 3; Spare Lamp 60, 3:20, 2 lit, 7.5 m sight, holds 3; Road Sandals 250 (+0.21 m/s), upgrades 800–900 (+0.36 m/s).
@@ -334,7 +334,7 @@ Spells have no cost and one rank. They scale with your level through the `level`
 
 | id | Name | job | effect | cooldown | pools |
 |---|---|---|---|---|---|
-| `glint_step` | Glint Step | mobility | **dash** up to 5 m toward the point (walls stop it); your shadow stays where you started for 2.5 s and slows enemy fighters who step into it by 30 % for 1 s | 180 s | all |
+| `glint_step` | Glint Step | escape | blink up to 4.5 m toward the point; **your shadow stays where you stood** for 2.5 s and slows enemy fighters who step into it by 30 % for 1 s | 210 s | all |
 | `saplight` | Saplight | sustain | a 3 m pool of sap-light at your feet for 4 s: you and allied fighters standing in it heal 4 % of max health each second | 200 s | all |
 | `hairline` | Hairline | offense | an enemy fighter within 6 m takes 20 + 8/level damage that ignores armor and resist, plus 20 % armor and resist shred and 30 % weaker healing for 4 s | 140 s | all |
 | `hourstrike` | Hourstrike | jungle | a monster or Wick (never a fighter) within 5 m takes 250 + 15/level **+ 12 % of its current health** damage that ignores armor and resist (the fuller it is, the harder it lands: an opener, not a finisher); you heal 4 % of max health | 3 charges, one per 70 s (10 s between uses) | RIFT |
@@ -345,7 +345,7 @@ Spells have no cost and one rank. They scale with your level through the `level`
 
 There are 8 spells in RIFT, 7 in BRIDGE and 5 in FRAY (Glint Step, Saplight, Hairline, Running Light, Glass Pane). FRAY drops the team spell, which has no teammates there, the jungle spell, and the cleanse, to keep its loadout short.
 
-**Defaults:** Glint Step and Glass Pane (W4 re-key: VALE's own pair, a shadow-leaving dash and a setting pane; never the genre's blink + heal), both legal in every pool.
+**Defaults:** Glint Step and Glass Pane (W4 re-key: VALE's own pair, a shadow-leaving step and a setting pane; no heal, so never the genre's blink + heal), both legal in every pool.
 
 **Hourstrike is recommended for the Grovehunter, not required.**
 
