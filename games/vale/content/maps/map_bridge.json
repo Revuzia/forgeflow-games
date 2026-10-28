@@ -746,7 +746,7 @@
      "value": 1.0
     }
    ],
-   "colors": {"lane": "#686254", "clearing": "#4B4740", "inscription": "#777469", "laneGrout": "#605A4C", "moss": "#34402F", "cliffFace": "#322F2B", "cliffLip": "#524F45", "edgeLight": "#716D63", "flank": "#272523", "rock": "#33353C", "mist": "#3F4963", "grassRoot": "#2B362C", "grassTip": "#8F986F", "lit": "#FFE2B8", "plazaAubade": "#5F6A6C", "plazaSerenade": "#685A45", "inlayAubade": "#868C91", "inlaySerenade": "#856234"}
+   "colors": {"lane": "#686254", "clearing": "#4B4740", "inscription": "#777469", "laneGrout": "#605A4C", "moss": "#34402F", "cliffFace": "#322F2B", "cliffLip": "#524F45", "edgeLight": "#716D63", "flank": "#272523", "rock": "#33353C", "mist": "#3F4963", "grassRoot": "#2B362C", "grassTip": "#8F986F", "lit": "#FFE2B8", "plazaAubade": "#6B6754", "plazaSerenade": "#685A45", "inlayAubade": "#868C91", "inlaySerenade": "#856234"}
   },
   "ambient": {
    "$comment": "r12 M14 ambient life (see map_rift): the gorge's updraft and wisps and a wheeling flock far below the deck, chalk dust off the broken edges, skinks basking on the carved hour-bands' crowns (off the deck: a one-lane map's walkable edge is its fight), resin lamps and side banners at the Dawn Arch and the Lamp Gate.",

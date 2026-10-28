@@ -1030,6 +1030,10 @@ DESIGNS = {
     ("hourbell", "serenade"): (serenade_hourbell, 2048, 0.76),
 }
 UNITS = ["needle_outer", "needle_inner", "needle_bell", "lantern", "hourbell"]
+# final parity env m1: the Aubade Hourbell stands on the open spawn plaza, the brightest place on the map, and its
+# chalk topped the value range (screen luma p95 225, L* 89.6, over the fighters' 214); its chalk is toned to land
+# about L* 80 there, so the relationship-lit accent stays its bright point (structures stay under the fighters, r12 B5)
+MATS_OVERRIDE = {("hourbell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#C3C0B7")}}
 CULTURES = ["aubade", "serenade"]
 HEIGHT = {"needle_outer": 4.65, "needle_inner": 4.7, "needle_bell": 4.6, "lantern": 4.65, "hourbell": 5.25}
 # the break of the ruin's stump (m above the ground, before its tilt) and the rubble count
@@ -1060,7 +1064,7 @@ def build_one(uid: str, culture: str, fast: bool = False) -> dict:
     scene.reset()
     col = scene.collection(f"{uid}_{culture}")
     fn, size, s = DESIGNS[(uid, culture)]
-    mats_spec = AUBADE_MATS if culture == "aubade" else SERENADE_MATS
+    mats_spec = dict(AUBADE_MATS if culture == "aubade" else SERENADE_MATS, **MATS_OVERRIDE.get((uid, culture), {}))
     name = f"{uid}_{culture}"
     B = K.Build(name, HEIGHT[uid])
     kind, pivot = fn(B)
