@@ -48,14 +48,14 @@
   },
   "uv_coverage": 0.6,
   "bake": {
-    "base": 6.87,
-    "rough_metal": 5.39,
-    "normal": 4.02,
-    "ao": 5.06,
+    "base": 8.55,
+    "rough_metal": 5.04,
+    "normal": 5.17,
+    "ao": 6.21,
     "normal_fixed_px": 93613,
-    "projection": 126.23,
-    "pack_save": 126.5,
-    "total": 148.26
+    "projection": 104.94,
+    "pack_save": 105.25,
+    "total": 130.61
   },
   "tris": 20404,
   "mesh_top_m": 1.879,
@@ -166,13 +166,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2850140,
+  "glb_bytes_raw": 2850044,
   "optimize": {
     "ok": true,
-    "before": 2850140,
-    "after": 1176344
+    "before": 2850044,
+    "after": 1176424
   },
-  "glb_bytes": 1176344,
+  "glb_bytes": 1176424,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -195,10 +195,10 @@
       "turntable": "art/renders/fighters/rishal/turntable.png"
     },
     "seconds": {
-      "splash": 19.15,
-      "portrait": 8.79,
-      "icon": 2.85,
-      "turntable": 7.69
+      "splash": 27.2,
+      "portrait": 10.21,
+      "icon": 2.0,
+      "turntable": 8.98
     }
   },
   "three_qa": {
@@ -221,7 +221,7 @@
       1
     ],
     "headY": 1.549,
-    "accentPct": 2.52,
+    "accentPct": 2.45,
     "accentTopHalfPct": 100,
     "heightPx1080": 100,
     "size": [
@@ -230,27 +230,27 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/rishal/three_rishal.png",
-    "seconds": 19.3,
+    "seconds": 18,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/rishal/three_clips_rishal.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.41,
-      "model": 47.87,
-      "lows_bind": 3.95,
-      "uv": 9.95,
-      "bake": 148.27,
-      "clips": 0.21,
-      "export": 1.73,
-      "optimize": 1.09,
-      "load_test": 0.27,
-      "render": 38.64,
-      "three_qa": 49.24,
-      "cache": 0.24
+      "materials": 0.47,
+      "model": 45.78,
+      "lows_bind": 2.01,
+      "uv": 8.19,
+      "bake": 130.61,
+      "clips": 0.26,
+      "export": 1.95,
+      "optimize": 1.34,
+      "load_test": 0.32,
+      "render": 48.58,
+      "three_qa": 49.37,
+      "cache": 0.14
     },
-    "total_s": 302.02
+    "total_s": 289.21
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

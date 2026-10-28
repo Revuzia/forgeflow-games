@@ -70,49 +70,49 @@
     "tris_quiver_holster": 360,
     "tris_quiver_straps": 420,
     "tris_arrow_shafts": 340,
-    "tris_fletching": 2502,
+    "tris_fletching": 144,
     "tris_bow": 1450,
     "tris_bow_grip": 300,
     "tris_bow_caps": 460,
     "tris_bow_inlays": 420,
     "tris_string": 526,
     "tris_fan_shafts": 220,
-    "tris_fan_fletch": 2046,
+    "tris_fan_fletch": 72,
     "tris_fan_heads": 120,
-    "validate_lisvel": "24098->24090"
+    "validate_lisvel": "19658->19652"
   },
-  "uv_coverage": 0.599,
+  "uv_coverage": 0.607,
   "bake": {
-    "base": 4.65,
-    "rough_metal": 3.29,
-    "normal": 2.6,
-    "ao": 4.06,
-    "normal_fixed_px": 108576,
-    "projection": 13.0,
-    "pack_save": 13.36,
-    "total": 28.16
+    "base": 7.42,
+    "rough_metal": 5.22,
+    "normal": 3.84,
+    "ao": 5.35,
+    "normal_fixed_px": 77633,
+    "projection": 11.92,
+    "pack_save": 12.29,
+    "total": 34.35
   },
-  "tris": 25144,
+  "tris": 20814,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2545992,
+  "glb_bytes_raw": 2169972,
   "optimize": {
     "ok": true,
-    "before": 2545992,
-    "after": 1155044,
+    "before": 2169972,
+    "after": 934984,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 1155044,
+  "glb_bytes": 934984,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (1128 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_almanac_base 2048x2048 149K, lisvel_almanac_normal 512x512 33K, lisvel_almanac_orm 256x256 10K",
-      "  skinned meshes: lisvel_accent(214v), lisvel_almanac(28157v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (913 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_almanac_base 2048x2048 145K, lisvel_almanac_normal 512x512 35K, lisvel_almanac_orm 256x256 10K",
+      "  skinned meshes: lisvel_accent(214v), lisvel_almanac(21348v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 25144; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.45; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
+      "  tris: 20814; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.45; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -122,8 +122,8 @@
       "portrait": "art/out/fighters/lisvel/lisvel_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 16.26,
-      "portrait": 7.09
+      "splash": 31.25,
+      "portrait": 19.79
     }
   },
   "three_qa": {
@@ -155,24 +155,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_almanac.png",
-    "seconds": 16.5,
+    "seconds": 27,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.39,
-      "model": 3.92,
-      "lows_bind": 3.42,
-      "uv": 3.98,
-      "bake": 32.04,
-      "export": 0.38,
-      "optimize": 2.61,
-      "load_test": 0.27,
-      "render": 23.4,
-      "three_qa": 16.95
+      "materials": 0.54,
+      "model": 5.81,
+      "lows_bind": 6.37,
+      "uv": 7.05,
+      "bake": 37.85,
+      "export": 0.12,
+      "optimize": 0.78,
+      "load_test": 0.18,
+      "render": 51.08,
+      "three_qa": 27.9
     },
-    "total_s": 87.6
+    "total_s": 137.9
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

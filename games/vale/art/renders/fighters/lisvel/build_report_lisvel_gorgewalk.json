@@ -84,26 +84,26 @@
   },
   "uv_coverage": 0.586,
   "bake": {
-    "base": 5.6,
-    "rough_metal": 3.88,
-    "normal": 3.18,
-    "ao": 4.62,
-    "normal_fixed_px": 82948,
-    "projection": 11.85,
-    "pack_save": 12.26,
-    "total": 29.82
+    "base": 5.45,
+    "rough_metal": 4.82,
+    "normal": 4.14,
+    "ao": 5.61,
+    "normal_fixed_px": 82951,
+    "projection": 12.71,
+    "pack_save": 13.08,
+    "total": 33.37
   },
   "tris": 22398,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2260344,
+  "glb_bytes_raw": 2260696,
   "optimize": {
     "ok": true,
-    "before": 2260344,
-    "after": 990332,
+    "before": 2260696,
+    "after": 990484,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 990332,
+  "glb_bytes": 990484,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -123,8 +123,8 @@
       "portrait": "art/out/fighters/lisvel/lisvel_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 14.61,
-      "portrait": 6.73
+      "splash": 14.8,
+      "portrait": 5.08
     }
   },
   "three_qa": {
@@ -156,24 +156,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_gorgewalk.png",
-    "seconds": 17.5,
+    "seconds": 12.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.65,
-      "model": 7.17,
-      "lows_bind": 5.34,
-      "uv": 7.8,
-      "bake": 33.3,
-      "export": 0.24,
-      "optimize": 1.2,
-      "load_test": 0.25,
-      "render": 21.4,
-      "three_qa": 17.9
+      "materials": 0.26,
+      "model": 2.86,
+      "lows_bind": 2.64,
+      "uv": 8.76,
+      "bake": 36.29,
+      "export": 0.17,
+      "optimize": 1.03,
+      "load_test": 0.22,
+      "render": 19.93,
+      "three_qa": 12.72
     },
-    "total_s": 95.4
+    "total_s": 84.98
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

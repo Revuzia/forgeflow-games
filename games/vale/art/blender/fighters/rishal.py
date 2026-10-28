@@ -562,6 +562,8 @@ _RX = np.linspace(-0.074, 0.074, 41)
 RIDGE_PTS = [p for p in _visor_top_edge(_RX) if p is not None]
 FIN_H = (0.014, 0.046, 0.058)      # fin height (m) at the horn tips, over the brow, and at the temples (s ~ 0.18)
 FIN_LEAN = 1.00                    # the fin leans back: its rise direction (0, FIN_LEAN, 1)
+FIN_LEAN_T = 2.00                  # ...and lies further back over the temples (in game the upright horns stood up
+#                                    beside the crest from the game camera, a V of "rabbit ears")
 FIN_T = 0.0075                     # thickness at its foot (it thins to ~40 % at the top edge)
 
 
@@ -590,10 +592,11 @@ class FinMesh:
         n = len(P)
         s = np.linspace(0.0, 1.0, n)
         H = fin_height(s)
-        up = unit((0.0, FIN_LEAN, 1.0))
         c0 = np.array([0.0, 0.010, 1.66])
         V, Q = [], []
         for i in range(n):
+            cc = abs(s[i] - 0.5) * 2.0
+            up = unit((0.0, FIN_LEAN + (FIN_LEAN_T - FIN_LEAN) * float(_ss((cc - 0.30) / 0.45)), 1.0))
             t = unit(P[min(i + 1, n - 1)] - P[max(i - 1, 0)])
             o = unit(np.cross(t, up))
             if o.dot(P[i] - c0) < 0:
@@ -3186,7 +3189,9 @@ def _run() -> anim.Clip:
             u = 0.5 - 0.5 * math.cos(math.pi * k)
             r = fwd * (1 - u) + back * u
             pole = (sx * 0.30, 0.90, -0.30) if k < 0.5 else (sx * 0.35, 0.85, 0.20)
-            bf, bb = np.array([sx * 0.12, 0.70, -0.70]), np.array([sx * 0.22, 0.95, 0.20])
+            # (POLISH, in game: on the back swing the blades rose behind the shoulders and stood beside the head
+            # from the game camera, a V of "rabbit ears" with the crest): they trail back and DOWN, level at most
+            bf, bb = np.array([sx * 0.12, 0.70, -0.70]), np.array([sx * 0.28, 0.90, -0.34])
             ik[f"hand.{side}"] = HandTarget(rel=tuple(r), pole=pole)
             ik[f"aim.{side}"] = _blade(bf * (1 - u) + bb * u)
         for side in ("L", "R"):          # a lower knee lift (the generator's swing path lifts the ankle 0.36 m);
@@ -3390,7 +3395,7 @@ def _cast_ult(g) -> anim.Clip:
     """cast_ult Long Glint (35 f, impact f14, castTime 0.2): a still coil, knees low, both knives crossed at the chest
     pointing back, the head down, the shoulders breathing (f0-f12); the burst at f14: full extension, the body near
     horizontal, both knives forward and low, one each side of the line; the skid held, then up"""
-    coil = _pose(g, dict(hips=(16, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), neck=(10, 0, 0), head=(14, 0, 0)), (0.0, 0.04, -0.15),
+    coil = _pose(g, dict(hips=(16, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), neck=(5, 0, 0), head=(7, 0, 0)), (0.0, 0.04, -0.15),
                  # (POLISH, review 3: a knife stood up behind the head, merging with the crest): crossed at the
                  # chest, both blades point back and DOWN past the hips
                  R=(0.52, -0.45, -0.22), Rp=(-0.6, 0.2, -0.7), Rb=(0.40, 0.78, -0.48),

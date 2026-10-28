@@ -74,9 +74,9 @@ PROPORTIONS = rig.proportions(height=1.86, head=0.27, neck=0.06, shoulder_width=
 MATERIAL_SET = "bible"
 # the material roles (the baked base colour is post_paint's; these feed the Blender materials' finish and the accent)
 PALETTE = materials.bible_palette(chalk="#BDB8AD", dawnglass="#A8C3D6", wood="#C6BDAB", cloth2="#ADA8A0",
-                                  stone="#A9B6C0", cloth="#5B6670", leather="#3F3630", under="#262120",
+                                  stone="#A9B6C0", cloth="#66737E", leather="#3F3630", under="#34302E",
                                   ink="#17181B", accent="#3F9CFF", ironstone="#4A4743", skin="#B48F78",
-                                  wrap="#ABA79F", boots="#2C2926", quiver="#5A4A3C", linen="#8A867E", rope="#9A8F7A",
+                                  wrap="#ABA79F", boots="#3A3532", quiver="#5A4A3C", linen="#8A867E", rope="#9A8F7A",
                                   fletching="#A9B6C0")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "arrow_nock": "x_arrow_nock", "bow_tip_l": "x_bow_tip_l", "bow_tip_r": "x_bow_tip_r",
@@ -99,7 +99,7 @@ ART_HEIGHT_PAD = 0.05     # FighterArt.height = mesh top + 5 cm (the HP bar's an
 # the brief's role tables (the Blender materials' finish) and every skin has its own splash composition (review 7)
 SKINS: list = [
     {"id": "lisvel_gorgewalk", "extra": {"rope_bind": True}, "card": {"primary": "#6E747C", "secondary": "#9A8F7A"},
-     "palette": {"wood": "#6E747C", "rope": "#9A8F7A", "ironstone": "#3F4348", "chalk": "#D2D2CE", "cloth": "#56604F",
+     "palette": {"wood": "#6E747C", "rope": "#9A8F7A", "ironstone": "#3F4348", "chalk": "#D2D2CE", "cloth": "#5F6A58",
                  "quiver": "#545A61"},
      "splash": {"map": "map_bridge", "clip": "taunt", "t": 0.32, "yaw": 30.0, "pitch": -6.0}},
     {"id": "lisvel_almanac", "extra": {"page_fletching": True}, "card": {"primary": "#4A4640", "secondary": "#D8CDB4"},
@@ -437,28 +437,20 @@ class _Band(sdf.Prim):
 
 
 class _VisorSlab(sdf.Prim):
-    """the flat dawnglass visor band (brief section 3): seen from above a rounded rectangle whose flat front stands
-    3 cm ahead of the face-plate (the beak and the facing cue) and whose sides curve back into the wrap at the
-    temples; a glass wall 7.6 mm thick and 5 cm tall, the ink recess of the face-plate behind it"""
-    CEN = np.array([0.0, -0.066, VIS_Z])
-    HX, HY, RC, T, H = 0.099, 0.066, 0.058, 0.0038, 0.025
+    """the visor band as an SDF for the fit check (proto/lisvel_fit.py); the build uses the exact strip (visor_mesh)
+    swept along the same path: a glass wall 7.2 mm thick and 5 cm tall, a flat front 3.2 cm ahead of the face"""
 
     def bounds(self):
-        return np.array([-0.115, -0.150, VIS_Z - 0.035]), np.array([0.115, -0.020, VIS_Z + 0.035])
+        return np.array([-0.11, -0.15, VIS_Z - 0.03]), np.array([0.11, -0.02, VIS_Z + 0.03])
 
     def d(self, P):
-        q = P - self.CEN
-        qx = np.abs(q[:, 0]) - (self.HX - self.RC)
-        qy = np.abs(q[:, 1]) - (self.HY - self.RC)
-        sd2 = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - self.RC
-        wall = np.abs(sd2) - self.T
-        band = np.abs(q[:, 2]) - self.H
-        back = P[:, 1] + 0.035
-        # a rounded-edge intersection of the wall and the band (a 1.5 mm round on the glass edges)
-        r = 0.0015
-        ww, bb = wall + r, band + r
-        inter = np.hypot(np.maximum(ww, 0), np.maximum(bb, 0)) + np.minimum(np.maximum(ww, bb), 0) - r
-        return np.maximum(inter, back)
+        x = np.clip(P[:, 0], -0.0999, 0.0999)
+        e = 1e-4
+        sl = (visor_path(x + e) - visor_path(x - e)) / (2 * e)
+        wall = np.abs(P[:, 1] - visor_path(x)) / np.sqrt(1.0 + sl * sl) - VIS_T
+        band = np.abs(P[:, 2] - VIS_Z) - VIS_H
+        ends = np.abs(P[:, 0]) - 0.100
+        return np.maximum(np.maximum(wall, band), ends)
 
 
 class _Limb(sdf.Prim):
@@ -1306,24 +1298,24 @@ _install_bind()
 # folds and forms come through the baked normal map and the AO in the base (AO_INTO_BASE). The skins paint in their
 # own colours (PAINT_SKIN over PAINT_BASE), so the recolour pass leaves them as painted.
 PAINT_BASE = dict(
-    wrap="#ABA79F", mask="#BDB8AD", lip="#AE9F95", recess="#1D2127", glass="#A6C2D6", glass_core="#6D8597",
-    glass_eye="#46596A", cowl="#A9A69F", sleeve="#ADA8A0", shirt="#A39F97", tabard="#5B6670", trim="#878C90",
+    wrap="#B3AFA6", mask="#C4BFB4", lip="#AE9F95", recess="#1D2127", glass="#A6C2D6", glass_core="#6D8597",
+    glass_eye="#46596A", cowl="#B2AEA6", sleeve="#B4AFA6", shirt="#AAA69D", tabard="#66737E", trim="#878C90",
     chevron="#878C90", tunic="#8A867E", belt="#40372F", strap="#3F3630", bracer="#433A34", buckle="#4A4743",
-    legs="#262120", boots="#2C2926", sole="#1B1917", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
+    legs="#34302E", boots="#3A3532", sole="#24211F", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
     quiver_in="#211B17", wood="#C6BDAB", grip="#3E3530", shaft="#BDB29E", fletch="#A9B6C0", string="#CFC8B8",
     rope="#9A8F7A", skin="#B48F78", tab="#3B322C", brooch="#B6B1A6", neck="#8A6A58", ink="#2E2A26",
     fan_shaft="#D2C9B6", fan_fletch="#C4D0D9")
 PAINT_SKIN = {
     # Gorgewalk: the keepers of the Needlespan gorge: slate limbs, gorge-rope bindings and trims, a lichen-moss
     # tabard (hue 92, sat 18 %), a slate quiver with ironstone pins, a stone-grey wrap
-    "lisvel_gorgewalk": dict(wood="#6E747C", tabard="#56604F", trim="#9A8F7A", chevron="#9A8F7A", quiver="#545A61",
-                             holster="#464B51", qstrap="#3F4348", wrap="#A39F94", cowl="#A09C91", fletch="#A49C8A",
+    "lisvel_gorgewalk": dict(wood="#6E747C", tabard="#5F6A58", trim="#9A8F7A", chevron="#9A8F7A", quiver="#545A61",
+                             holster="#464B51", qstrap="#3F4348", wrap="#ABA79C", cowl="#A9A599", fletch="#A49C8A",
                              grip="#5A544B", bracer="#4A443D"),
     # Almanac: a page of the season almanac: parchment limbs ruled in ink, a parchment tabard ruled in ink with an
     # ink border, ink fletching plates, an ink-dark quiver
     "lisvel_almanac": dict(wood="#D0C5AC", tabard="#8C8577", trim="#2E2A26", chevron="#2E2A26", fletch="#2E2A26",
                            fan_fletch="#2E2A26", quiver="#3A3430", holster="#2E2A26", qstrap="#2A2623",
-                           wrap="#B2AC9D", cowl="#AFA99B"),
+                           wrap="#B8B2A3", cowl="#B6B0A2"),
 }
 _SKIN = {"id": None}
 MAX_LIN = 0.60          # no texel lighter than ~L* 81 in the albedo (the brief's L* 86 cap after the top light)

@@ -48,28 +48,28 @@
   },
   "uv_coverage": 0.6,
   "bake": {
-    "base": 7.56,
-    "rough_metal": 9.04,
-    "normal": 4.18,
-    "ao": 7.37,
+    "base": 6.96,
+    "rough_metal": 3.71,
+    "normal": 2.97,
+    "ao": 4.17,
     "normal_fixed_px": 93613,
-    "projection": 139.64,
-    "pack_save": 140.15,
-    "total": 168.9
+    "projection": 75.85,
+    "pack_save": 75.98,
+    "total": 94.06
   },
   "tris": 20404,
   "mesh_top_m": 1.879,
-  "glb_bytes_raw": 2408704,
+  "glb_bytes_raw": 2408612,
   "optimize": {
     "ok": true,
-    "before": 2408704,
-    "after": 1020384
+    "before": 2408612,
+    "after": 1020464
   },
-  "glb_bytes": 1020384,
+  "glb_bytes": 1020464,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (996 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (997 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: rishal_chalkline_base 2048x2048 239K, rishal_chalkline_normal 512x512 44K, rishal_chalkline_orm 512x512 71K",
       "  skinned meshes: rishal_accent(462v), rishal_chalkline(18263v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
@@ -85,8 +85,8 @@
       "portrait": "art/out/fighters/rishal/rishal_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 15.85,
-      "portrait": 8.26
+      "splash": 11.78,
+      "portrait": 5.31
     }
   },
   "three_qa": {
@@ -109,7 +109,7 @@
       1
     ],
     "headY": 1.549,
-    "accentPct": 2.62,
+    "accentPct": 2.55,
     "accentTopHalfPct": 100,
     "heightPx1080": 100,
     "size": [
@@ -118,24 +118,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/rishal/three_rishal_chalkline.png",
-    "seconds": 23.4,
+    "seconds": 19,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.41,
-      "model": 36.29,
-      "lows_bind": 3.55,
-      "uv": 8.45,
-      "bake": 168.91,
-      "export": 0.22,
-      "optimize": 1.36,
-      "load_test": 0.66,
-      "render": 24.28,
-      "three_qa": 23.97
+      "materials": 0.33,
+      "model": 52.08,
+      "lows_bind": 5.75,
+      "uv": 8.93,
+      "bake": 94.07,
+      "export": 0.09,
+      "optimize": 0.5,
+      "load_test": 0.11,
+      "render": 17.12,
+      "three_qa": 19.44
     },
-    "total_s": 268.25
+    "total_s": 198.52
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79
