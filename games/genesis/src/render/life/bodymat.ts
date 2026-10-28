@@ -884,6 +884,9 @@ const FRAG_AMBIENT = /* glsl */ `
   }
 `;
 
+/** the body shader's own chunks, for a plain-lit preview (the life lane's dev pages): pose + varyings, the surface */
+export const BODY_CHUNKS = { VERT_PARS, VERT_BEGIN, FRAG_SURFACE } as const;
+
 export interface BodyMaterialOpts { plan: number; rig: Rig; freqK?: number; pitchSwim?: boolean }
 
 function rigUniforms(rig: Rig, opts: BodyMaterialOpts): Record<string, IUniform> {

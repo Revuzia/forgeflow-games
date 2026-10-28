@@ -162,6 +162,11 @@ vec3 rk_joints(vec3 P, vec3 up, vec3 Nb, float sp, float fw, float tiltK, float 
   vec3 Q = P + vec3(snoise(wp + 3.1), snoise(wp + 7.7), snoise(wp + 12.9)) * (0.2 * sp);
   vec3 J3 = normalize(up + DIP * 0.12);
   vec3 q = vec3(dot(Q, J1), dot(Q, J2), length(Q) + dot(Q, DIP) * 0.12) * inv;
+  // beds of uneven thickness — thin partings between thick massive beds, ~0.6–2.3× the mean — as a monotone remap of
+  // the bedding coordinate (one thickness everywhere stepped every slope like a stair)
+  float bz = q.z;
+  q.z = bz + 0.2 * sin(bz * 2.3 + 1.1) + 0.12 * sin(bz * 0.83 + 4.0);
+  float bedK = 1.0 + 0.46 * cos(bz * 2.3 + 1.1) + 0.0996 * cos(bz * 0.83 + 4.0);
   // courses: each bed's blocks staggered against the next bed's, each column of a bed too
   float bed = floor(q.z);
   q.x += gn_hash13(vec3(bed, 1.7, 3.3));
@@ -169,7 +174,7 @@ vec3 rk_joints(vec3 P, vec3 up, vec3 Nb, float sp, float fw, float tiltK, float 
   q.y += gn_hash13(vec3(bed, colm, 9.1));
   vec3 cell = floor(q);
   vec3 f = fract(q);
-  vec3 dj = min(f, 1.0 - f) / inv;                       // metres to the nearest joint plane of each set
+  vec3 dj = min(f, 1.0 - f) / (inv * vec3(1.0, 1.0, bedK)); // metres to the nearest joint plane of each set
   // each set's trace on the ground: distance along the ground = plane distance ÷ the plane normal's tangent share
   vec3 Ns = vec3(length(J1 - Nb * dot(J1, Nb)), length(J2 - Nb * dot(J2, Nb)), length(J3 - Nb * dot(J3, Nb)));
   vec3 dl = dj / max(Ns, vec3(0.2));
@@ -198,7 +203,7 @@ vec3 rk_joints(vec3 P, vec3 up, vec3 Nb, float sp, float fw, float tiltK, float 
   // normal: the beds' normal J3 on the tread, tilted the other way on the riser so the two average to the slope.
   vec3 tread = Nb - J3;
   tread -= Nb * dot(tread, Nb);
-  float bedW = (1.0 / inv.z) / max(Ns.z, 0.2);
+  float bedW = (1.0 / (inv.z * bedK)) / max(Ns.z, 0.2);
   const float RF = 0.24;
   float rz = smoothstep(RF - 0.04 - fw / bedW, RF + 0.04 + fw / bedW, f.z);
   vec3 stepG = mix(-tread * ((1.0 - RF) / RF), tread, rz);
@@ -503,10 +508,17 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float shrubCap = 0.0;
   // the share of the ground the crowns cover (sand and bare ground lie UNDER the bushes, not over them)
   float shrubCov = 0.0;
+  // a resolved bush's own colour and mask: a bush that stands is a whole bush whatever the cover's weight (the cover
+  // thins the bushes, it does not fade each one into the ground under it — a half-faded crown in a dusting was a
+  // disc of the soil or sand beneath, tan and grey stains in the snow)
+  vec3 shrubCol = vec3(0.0);
+  float shrubBush = 0.0;
+  float shrubRes = 0.0;
   // farmland's own weight: a sown field shows as tilled rows even where little else grows (and covers the sand)
   float fieldW = 0.0;
   if (vegTotal > 0.01) {
     float cold = smoothstep(9.0, -3.0, temp);
+    float vegN = m1 * 0.16 + m2 * 0.12 + snoise(P * 0.21 + warpV) * 0.14;
     // grass
     vec3 lush = vec3(0.06, 0.115, 0.03);
     vec3 dry = vec3(0.23, 0.205, 0.12);
@@ -547,13 +559,19 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // that a dusting of snow turned into a dalmatian print)
       // (and the bushes gather in stands of ~10 m with open ground between: one bush per cell at an even density was a
       // print, not scrub)
-      float keepS = fine ? smoothstep(sv.z - 0.12, sv.z + 0.12, mix(0.3, 1.1, sw) + snoise(P * 0.085 + 1.3) * 0.3) : 1.0;
+      // (and where the cover's own weight is low — a thin scrub on bare ground — there are fewer bushes, each whole)
+      float vegPre = smoothstep(0.1, 0.42, vegTotal + vegN) * (1.0 - steep * 0.8);
+      float keepS = fine ? smoothstep(sv.z - 0.12, sv.z + 0.12, (mix(0.3, 1.1, sw) + snoise(P * 0.085 + 1.3) * 0.3) * mix(0.35, 1.0, vegPre)) : 1.0;
       // (a twiggy fringe on the lobed outline: a clean curve read as a stain)
-      float edgeS = fine ? snoise(P * 0.9 + 3.7) * 0.22 * aaF(fw, 0.6) + snoise(P * 3.9 + 9.1) * 0.07 * aaF(fw, 0.26) : 0.0;
+      // (lobed at ~0.5 m too: a bush is a few masses of twigs, not a disc)
+      float edgeS = fine ? snoise(P * 0.9 + 3.7) * 0.24 * aaF(fw, 0.6) + snoise(P * 1.9 + 6.1) * 0.12 * aaF(fw, 0.4) + snoise(P * 3.9 + 9.1) * 0.07 * aaF(fw, 0.26) : 0.0;
       // each bush its own size (crown radius 0.32–0.62 of a cell) and a CRISP outline, about a pixel and a half wide
       // (a soft 0.15–0.75 ramp drew every crown as a blurred disc: in a dusting of snow, grey smudges of dirty snow in a
       // dot print — the crowns shed their snow by this same mask — instead of white ground and dark bushes)
-      float rS = mix(0.32, 0.62, fract(sv.z * 7.13));
+      // (many small bushes and a few big ones: one size, ~3 m, in every stand printed the land with even dots; the
+      // instanced shrubs are 1–3 m crowns)
+      float rSh = fract(sv.z * 7.13);
+      float rS = mix(0.2, 0.62, rSh * rSh);
       float eS = max(0.05, fw * 0.54);
       float sdS = sv.x + edgeS;
       float blobRaw = (1.0 - smoothstep(rS - eS, rS + eS, sdS)) * keepS;
@@ -564,6 +582,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // snow: a dusting turned every bush into a grey disc — a dalmatian print of dirty-snow stains)
       float shDome = (1.0 - smoothstep(0.0, rS + eS, sdS)) * keepS;
       float shLeaf = fine ? snoise(P * 3.3 + 5.3) * aaF(fw, 0.3) : 0.0;
+      // masses of twigs ~0.75 m across: they hold the snow on their tops and shade each other, and they stay drawn to a
+      // few decimetres a pixel — the stand-in shows from ~120 m (each crown one flat tone there read as a stain)
+      float shLobe = fine ? snoise(P * 1.35 + 2.9) * aaF(fw, 1.4) : 0.0;
       float shAA = aaF(fw, 2.0);
       // within the instanced shrubs' reach (vegetation.ts draws them to 0.45 of the vegetation range) the real bushes
       // stand here: this stand-in hands over to the plain ground beneath them, as the far canopy does to the instanced
@@ -571,12 +592,15 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float standS = uVegFade.x > 1e8 ? 1.0 : smoothstep(uVegFade.y * 0.3, uVegFade.y * 0.44, camDist);
       shrubLocal = mix(0.45 * mix(0.3, 1.1, sw) * sw, blobRaw, shAA) * standS;
       // snow on the top of a crown in patches of ~0.25 m, none on its flanks
-      shrubCap = smoothstep(0.3, 0.8, shDome) * smoothstep(-0.3, 0.25, shLeaf + 0.25 * snoise(P * 7.1 + 2.0) * aaF(fw, 0.14));
+      shrubCap = smoothstep(0.2, 0.75, shDome) * smoothstep(-0.3, 0.3, shLobe * 0.7 + (shLeaf + 0.25 * snoise(P * 7.1 + 2.0) * aaF(fw, 0.14)) * 0.6);
       vec3 shc = mix(vec3(0.045, 0.07, 0.025), vec3(0.09, 0.09, 0.04), cold * 0.5 + sv.z * 0.4);
-      shc *= mix(1.0, 0.7 + 0.45 * shDome + 0.18 * shLeaf, shAA);
+      shc *= mix(1.0, 0.8 + 0.3 * shDome + 0.18 * shLeaf + 0.25 * shLobe, shAA);
       // (far: the same mean tint as before, 0.36 of the cover; near: an opaque crown on the sward between bushes)
       float cover = mix(sw * 0.3575, 1.0, blob) * standS;
       shrubCov = cover;
+      shrubCol = shc;
+      shrubBush = blob * standS;
+      shrubRes = shAA * standS;
       vcol = mix(vcol, shc, cover);
       // (the relief rounds off into the cell border too — a big crown reaching past it was cut there — and has no step
       // at the crown's crisp colour outline: a 0.18 m step over a pixel and a half drew every outline as a lit rim and a
@@ -688,12 +712,12 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // per-cell cover is linear across 50 m triangles: noise in the threshold turns those edges into organic margins.
     // Partial cover is turf broken by small outcrops and bare scars (~5–16 m, crisp-edged), not half the hillside in
     // soft 80 m blotches of rock grey against green — that read as camouflage from 30–60 m up
-    float vegN = m1 * 0.16 + m2 * 0.12 + snoise(P * 0.21 + warpV) * 0.14;
     float vegW = max(smoothstep(0.1, 0.42, vegTotal + vegN) * (1.0 - steep * 0.8), fieldW);
     // (a crown sheds the snow only where it is drawn: bare ground took its shape — sand-coloured discs in the snow)
-    shrubLocal *= vegW;
-    shrubCov *= vegW;
+    shrubLocal *= mix(vegW, 1.0, shrubRes);
+    shrubCov *= mix(vegW, 1.0, shrubRes);
     col = mix(col, vcol, vegW);
+    col = mix(col, shrubCol, shrubBush * (1.0 - vegW));
     bump = mix(bump, vb, vegW);
     rockW *= 1.0 - vegW;
     // (turf is a mat of blades, not a dimpled skin: at 0.45 a low sun drew a hammered-metal egg-crate over every meadow;
@@ -923,7 +947,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // (0.75–0.95 of it shed: at 0.55–0.9 the bushes went grey smudges — dirty snow — rather than dark crowns)
     // (0.85 of it shed on average; up close the top of each crown holds its patches — dark bushes flecked white on top —
     // a flat 75–95 % shed drew every crown as a uniform grey stain)
-    float crownSnow = mix(0.85, 1.0 - 0.85 * shrubCap, aaF(fw, 0.6));
+    float crownSnow = mix(0.85, 1.0 - 0.85 * shrubCap, aaF(fw, 1.4));
     full *= 1.0 - shrubLocal * (1.0 - smoothstep(0.12, 0.42, sd)) * crownSnow;
     float sw = full * (1.0 - smoothstep(0.3, 0.55, slope));
     // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke

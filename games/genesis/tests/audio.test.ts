@@ -643,6 +643,11 @@ test('the living world: signs read by trust or fear, warnings by what is coming;
   }
   // H6: the creature is gone — no recipe, no event, no command makes its sound
   assert.deepEqual(Object.keys(SFX).filter((k) => k.startsWith('creature')), []);
+  // real animals only (LIVING §0): the rogue wave is a wave; no sea-monster moan survives, not even for an old `leviathan`
+  for (const k of ['rogue-wave', 'leviathan']) assert.equal(disasterFamily(k), 'wave', k);
+  assert.ok(!SFX['disaster.leviathan'] && !SFX['bed.moan'], 'no monster cue or moaning bed');
+  assert.ok(!(DISASTER_FAMILIES as readonly string[]).includes('leviathan'));
+  assert.ok(!JSON.stringify(disasterBed('rogue-wave')).includes('moan') && disasterBed('rogue-wave').length > 0);
   for (const t of ['creature.reward', 'creature.punish', 'creature.learned']) assert.equal(cueFor({ t, tick: 0 }), null, t);
   assert.equal(commandCue('creature.adopt'), null);
   assert.equal(commandCue('creature.teach'), null);

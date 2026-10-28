@@ -664,22 +664,26 @@ void main() {
     // line of sight). Isotropic noise on the body position, as the lace above: streaks along the fall line projected the
     // body position on a per-pixel direction at right angles to it — dot(P, side) is ~0 everywhere on a sphere — so the
     // face averaged to one flat white strip, a snowbank on the sea rather than a wall of water
+    // (a bore of fast water over DEEP water — a wave's breaking crest running with its flow, a tidal race — is churned
+    // the same way: the rapids' even white, made for a river's riffles over a bed, drew a wave's whole crest as one
+    // flat sheet across the sea)
+    float churn = max(surge, rapids * smoothstep(3.0, 8.0, vDepth));
     float surgeStreak = 0.5;
-    if (surge > 0.02) {
+    if (churn > 0.02) {
       float stF = snoise(P * 0.45 + vec3(0.0, -uTime * 0.6, 0.3)) * (1.0 - smoothstep(0.4, 1.5, fw));
       float stC = snoise(P * 0.09 + vec3(1.7, uTime * 0.12, 0.0)) * (1.0 - smoothstep(3.0, 12.0, fw));
       float stB = snoise(P * 0.018 + vec3(8.3, 0.0, uTime * 0.02)) * (1.0 - smoothstep(60.0, 220.0, fw));
       surgeStreak = clamp(0.5 + 0.5 * (stF * 0.45 + stC * 0.6 + stB * 0.7), 0.0, 1.0);
-      pat = mix(pat, 0.42 + 0.58 * smoothstep(0.25, 0.7, surgeStreak), surge * 0.85);
+      pat = mix(pat, 0.42 + 0.58 * smoothstep(0.25, 0.7, surgeStreak), churn * 0.85);
     }
     // soft coverage, never saturated white (… except a surge's face, a wall of churned white water)
     float foam = smoothstep(0.05, 0.9, foamAmt * (0.55 + 0.75 * pat)) * mix(0.8, 0.95, surge);
     // (a surge's coverage follows its streaks: through the saturating ramp above the whole face came out one even
     // white — a snowbank on the sea — with no dark water between the streaks of churn)
-    foam = mix(foam, 0.95 * mix(0.3, 1.0, smoothstep(0.3, 0.72, surgeStreak)), smoothstep(0.3, 0.9, surge));
+    foam = mix(foam, 0.95 * mix(0.3, 1.0, smoothstep(0.3, 0.72, surgeStreak)), smoothstep(0.3, 0.9, churn));
     vec3 foamC = vec3(0.85) * (sunCol * max(muS, 0.0) + skyE) / 3.14159;
     // (the churn shades itself: the troughs between a surge's streaks lie in the face's own shadow)
-    foamC *= mix(1.0, 0.7 + 0.3 * smoothstep(0.2, 0.8, surgeStreak), surge);
+    foamC *= mix(1.0, 0.7 + 0.3 * smoothstep(0.2, 0.8, surgeStreak), churn);
     col = mix(col, foamC, foam);
   }
 

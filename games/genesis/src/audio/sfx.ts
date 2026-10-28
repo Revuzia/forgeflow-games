@@ -484,12 +484,6 @@ export const SFX: Record<string, Recipe> = {
     s.nz('pink', 0, 1, 0.8, 1.4, 0.2, ['highpass', 1800]);
     for (let i = 0; i < 4; i++) s.bell('wood', 0.3 + i * 0.4, s.rr(250, 450), 0.3);
   },
-  'disaster.leviathan': (s) => {
-    s.reed(0, 80, 140, 1.6, 0.6, 1.2, 1.4, 0.18, ['lowpass', 700]);
-    s.reed(2.2, 130, 62, 1.8, 0.5, 0.8, 1.6, 0.15, ['lowpass', 600]);
-    s.nz('pink', 0, 1.4, 1.2, 1.8, 0.25, ['lowpass', 600]);
-    s.wet(0.5);
-  },
   'disaster.fog': (s) => {
     for (let i = 0; i < 6; i++) {
       const at = s.rr(0, 2.4);
@@ -1002,7 +996,6 @@ Object.assign(SFX, {
   'bed.whistler': (s: Sfx) => s.tn('sine', 0, s.rr(5000, 7500), s.rr(700, 1100), 1.2, 0.02, 0.2, 0.9, 0.07),
   'bed.crack': (s: Sfx) => { s.nz('white', 0, 0.001, 0.01, 0.05, 0.35, ['highpass', 2000]); s.fm(0, s.rr(1800, 2600), 2.71, 3, 0.2, 0.002, 0, 0.6, 0.07); },
   'bed.creak': (s: Sfx) => s.fm(0, s.rr(60, 120), 1.41, 6, 1, 0.25, 0.3, 0.4, 0.08),
-  'bed.moan': (s: Sfx) => { s.reed(0, s.rr(75, 95), s.rr(130, 160), 1.4, 0.5, 1, 1.2, 0.14, ['lowpass', 700]); s.wet(0.5); },
   'bed.whisper': (s: Sfx) => { s.nz('pink', 0, 0.25, 0.1, 0.45, 0.22, ['bandpass', s.rr(700, 1400), 6]); s.nz('white', 0, 0.12, 0.05, 0.25, 0.09, ['bandpass', s.rr(2500, 4000), 4]); s.wet(0.6); },
   'bed.hoof': (s: Sfx) => { for (let i = 0; i < 4; i++) thud(s, i * s.rr(0.06, 0.12), s.rr(0.2, 0.4), s.rr(0.9, 1.4)); },
   'bed.tinkle': (s: Sfx) => { s.bell('chime', 0, s.rr(2400, 5200), s.rr(0.08, 0.2)); s.wet(0.4); },

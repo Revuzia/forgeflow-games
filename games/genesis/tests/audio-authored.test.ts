@@ -156,7 +156,8 @@ test('stingers answer the god\'s moments only: its prayers, prophecies, signs an
   const ev = (t: string, data: Record<string, unknown> = {}): SimEvent => ({ t, data } as unknown as SimEvent);
   assert.equal(stingerFor(ev('prayer.answered', { settlement: 3, kind: 'rain' })), 'answered');
   assert.equal(stingerFor(ev('prophet.fulfilled', { prophecy: 1 })), 'fulfilled');
-  assert.equal(stingerFor(ev('omen', { kind: 'rainbow', god: 0 })), 'sign');
+  // the people read nature's rainbow as the god's (god 0) — the town's omen cue plays, the stinger does not
+  assert.equal(stingerFor(ev('omen', { kind: 'rainbow', god: 0 })), null, 'a reading is not the act');
   assert.equal(stingerFor(ev('omen', { kind: 'comet', god: -1 })), null, 'a natural omen');
   assert.equal(stingerFor(ev('omen', { kind: 'comet', god: 2 })), null, 'a rival god\'s omen');
   assert.equal(stingerFor(ev('disaster', { kind: 'quake', god: 0, cause: 'god' })), 'wrath');
@@ -168,7 +169,9 @@ test('stingers answer the god\'s moments only: its prayers, prophecies, signs an
   // an unseen sign by comet: the command and the god-sent comet arrive together — a sign
   assert.equal(pickStinger([ev('command', { k: 'god.omen' }), ev('disaster', { kind: 'comet', god: 0, cause: 'god' })]), 'sign');
   // a sign by eclipse spawns a god-sent eclipse in the same tick: the batch is a sign, not wrath
-  assert.equal(pickStinger([ev('disaster', { kind: 'eclipse', god: 0, cause: 'god' }), ev('omen', { kind: 'eclipse', god: 0 })]), 'sign');
+  assert.equal(pickStinger([ev('disaster', { kind: 'eclipse', god: 0, cause: 'god' }), ev('omen', { kind: 'eclipse', god: 0 }), ev('command', { k: 'god.omen' })]), 'sign');
+  // nature's eclipse and the towns' reading of it: news, no stinger
+  assert.equal(pickStinger([ev('disaster', { kind: 'eclipse', god: -1, cause: 'nature' }), ev('omen', { kind: 'eclipse', god: 0 })]), null);
   assert.equal(pickStinger([ev('prayer.answered'), ev('prophet.fulfilled')]), 'fulfilled');
   assert.equal(pickStinger([ev('birth'), ev('death')]), null);
 });

@@ -106,16 +106,17 @@ export const STINGERS: Record<StingerId, Stinger> = {
 const PLAYER_GOD = 0;
 
 /**
- * The stinger a sim event calls for (null: none). Only the god's own acts and what the people make of them:
- * a prayer it answered, a prophecy that came true, a sign it sent (the `omen` the people read: one per town that saw
- * it), a disaster it sent (nature's and rivals' are only news).
+ * The stinger a sim event calls for (null: none). Only the god's own acts: a prayer it answered, a prophecy that came
+ * true, a sign it sent, a disaster it sent (nature's and rivals' are only news). A sign is known by the act itself
+ * (the `god.omen` command: the Signs power, the free text, the Signs panel all send it), never by the people's `omen`
+ * reading: they read nature's rainbows, eclipses and comets as the god's too (god/omens.ts naturalOmens, god 0), and
+ * those must not sound like the god speaking.
  */
 export function stingerFor(e: SimEvent): StingerId | null {
   const d = (e.data ?? {}) as Record<string, unknown>;
   switch (e.t) {
     case 'prayer.answered': return 'answered';
     case 'prophet.fulfilled': return 'fulfilled';
-    case 'omen': return d.god === PLAYER_GOD ? 'sign' : null;
     // the act itself (only the player sends signs): heard even when no town was there to read it
     case 'command': return d.k === 'god.omen' ? 'sign' : null;
     case 'disaster': return d.god === PLAYER_GOD && d.cause !== 'nature' ? 'wrath' : null;

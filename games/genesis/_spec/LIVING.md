@@ -1475,7 +1475,7 @@ the rest of the deer in their own country, as the rule asks). All 7 fail on the 
 made optional (`r2/basetest.sh`, `r2/out/basetest-r2{a,b,c,d}.log`) and pass on the integrated tree.
 
 **Measured** (`r2/spec.ts`: n = 64 sandbox, no people, natural disasters on, 3000x, 30 years; before = `spec-base`, the
-lane's 8 seeds; after = `spec-live-i5`, the integrated tree): *(integrator's runs in progress — results pending)*
+lane's 8 seeds; after = `spec-live-i5`, the integrated tree): *(the integrated tree's runs, tagged `i6`, ended 2026-10-28 04:07 UTC: their rows are in §10.4's queue results)*
 
 ---
 
@@ -1686,7 +1686,7 @@ optional, no bump.
 **Measured** (the kin fixture, `kin.ts`: a capital of 60 and two daughters of 40, bronze-age plains folk 1–3 km apart,
 natural disasters on, 3000x, 20 years, 8 seeds, and its control — the capital relieves every hard time; before = §5.5's
 `v7` runs (the tree of 2026-10-14) and `b2` (the tree of 2026-10-21 02:24, 2 seeds); after = `i5` / `i5c`, the
-integrated tree): *(integrator's runs in progress — results pending)*
+integrated tree): *(the integrated tree's runs, tagged `i6`, ended 2026-10-28 04:07 UTC: their rows are in §10.4's queue results)*
 
 ---
 
@@ -2224,8 +2224,8 @@ eight, `r6/out/summarize-8alone.log`). Firsts are the game year of the first rec
   they worship a little, fear little, and owe nothing to a god that has done nothing; one polity per world, 11 towns
   founded (the 8 first towns and 3 refoundings), 3 fallen (seed 1 twice, seed 7 once), one split (seed 5), no
   secession, war or raid in 50 years without a second town to quarrel with (the kin fixture holds the politics targets).
-- **Count** (`acceptance.json`, all eight 50-year worlds, the 8-seed god sessions and the year-50 sessions run so far):
-  36 targets met, 10 partly, 12 missed, 13 report-only rows (six seeds: 38 / 10 / 10).
+- **Count** (`acceptance.json`, all eight 50-year worlds, the 8-seed god sessions, the year-50 sessions on 8 seeds, the kin fixture and speciation; 2026-10-28 04:07 UTC):
+  37 targets met, 11 partly, 12 missed, 13 report-only rows (with six of the 50-year worlds and two year-50 seeds: 38 / 10 / 10).
 
 **The god's sessions on year-50 towns** (`god.ts`, `FROM=y50`, the biggest town of each 50-year world, natural disasters
 on; all 8 seeds, 96 sessions, none failed, `r6/out/god50-*.json`; the omen pair re-run on the 2026-10-28 tree,
@@ -2248,8 +2248,54 @@ prophecies: 0.33–0.705, ≥ 0.7 on 3 of 8 (seeds 1, 3, 7; 1234 0.66): the four
 script fulfils only its three; credibility follows the record, as §3.8 asks (loyalty gain 0.30–0.67 and trust
 0.56–0.81 are in target on all 8). Neither is a sim fault.
 
-*(the kin fixture, speciation (`-i6`) and the rest of the year-50 sessions: queued, `r6/jobs8.txt`; results to follow.
-The fire, day and plague probes: §10.5, `acceptance.json` "§1.6 PACE daily probe" (met) and §10.2.)*
+*(Queue results, written by `r6/finalize9.mjs` at 2026-10-28 04:07 UTC from `acceptance.json` when `r6/jobs8.txt` (resumed as `r6/jobs9.txt` after a restart) ended —
+the year-50 sessions on 8 seeds, the kin fixture on 8 seeds and its control on 8, speciation without people
+(`content/r2/out/spec-live-i6-*`); numbers as measured, not yet read by an integrator. Whole file: 37 met,
+11 partly, 12 missed, 13 report-only rows.)*
+
+| § | row | target | value | verdict |
+|---|---|---|---|---|
+| §5.1 | kin fixture (a capital of 60, two daughters of 40, 20 years): ≥ 1 secession / ≥ 1 raid or war / ≥ 1 treaty — and the control (the capital relieves every hard time): no secession | ≥ 5 of 8 / ≥ 3 of 8 / ≥ 2 of 8; control ≥ 6 of 8 | {after:{seeds:8, secession:1, raidOrWar:1, treaty:0}, control:{seeds:8, noSecession:8}, before:{v7:{seeds:8, secession:4, raidOrWar:1, treaty:3}, v7control:{seeds:1, noSecession:1}, b2:{seeds:2, secession:2, raidOrWar:0, treaty:2}}} | partly |
+| §4.5 | speciation without people, 30 years (CONTENT r2): new kinds a world-year / first (game year) / deepest lineage / real kinds alive year 1 → 30 / herds of hunters at year 30 | ≤ 0.3 / ≥ 6 / 1 (forms of real kinds only) / report / report | {after:{seeds:[1, 7, 1234, 20261008], perWorldYear:{median:0.15, range:[0.133, 0.2]}, firstYear:{median:8.085, range:[7.46, 9.04]}, maxDepth:1, realAlive:{y1:[21, 23], end:[21, 25]}, huntersEnd:[25, 48], biomesNoHunterEnd:[2, 5]}, before:{seeds:[1, 2, 3, 4, 5, 7, 1234, 20261008], perWorldYear:{median:0.567, range:[0.333, 1.133]}, firstYear:{median:7.335, range:[6.29, 8.88]}, maxDepth:3, realAlive:{y1:[21, 24], end:[11, 16]}, huntersEnd:[1, 5], biomesNoHunterEnd:[8, 11]}} | met |
+| god | [the biggest town of a year-50 world] sessions that ran without an error | all | 96/96 | met |
+| §3.7 | [the biggest town of a year-50 world] storm painted over the town (thunderstorm, intensity 2, 6 h, drifting): awake adults inside or sheltering / outdoor work below the control | ≥ 0.5 / ≥ 60 % below | {sheltering:0.693, shelteringRange:[0.415, 0.916], outdoorBelowControl:0.863, range:[0.572, 1], killed:0.01} | met |
+| §3.7 | [the biggest town of a year-50 world] default meteor on the town (wrath 0.3): killed / buildings standing after the blow / fallen / warning (ticks) / outside the danger radius at the blow | dead 10–35 %; ≥ 60 % standing; never fallen; rebuilding within 10 days; streak ≥ 20 min | {killedMean:0.126, killedRange:[0.068, 0.2], standingMean:0.667, standingRange:[0.222, 0.879], fallen:0, warning:[12, 12], outsideAtBlow:[0.013, 0.103], rebuiltAfterBlow:[6, 0, 0, 0, 0, -6, -5, 7], standingDay10:[0.889, 0.813, 0.879, 0.677, 0.842, 0.759, 0.78, 0.397], killed10Days:[0.068, 0.2]} | **missed** |
+| §3.3 | [the biggest town of a year-50 world] a drought on the town: prayers raised; every prayer answered vs left to lapse — the four values after 6 days (mean of seeds) | answering raises trust and loyalty above ignoring; thirst dead ≤ 10 % | {prayersRaisedPerSeed:{answered:[3, 10, 11, 11, 10, 11, 10, 3], ignored:[1, 4, 4, 5, 2, 4, 3, 3]}, prayerKinds:{rain:34, rebuilding:55, healing:6}, answered:{faith:0.958, fear:0.16, trust:0.878, loyalty:0.374}, ignored:{faith:0.655, fear:0.358, trust:0, loyalty:0.007}, killedMax:0.034} | met |
+| §3.8 | [the biggest town of a year-50 world] prophet, three prophecies fulfilled in 6 days: credibility / loyalty gain / trust (no pinned meter) / praying share | credibility ≥ 0.7; loyalty +0.2; trust ≤ 0.9; praying ≥ 3 % | {credibility:[0.33, 0.705], loyaltyGain:[0.298, 0.665], trust:[0.555, 0.81], faithEnd:[0.75, 0.948], prayShareD6:[0.015, 0.049], worshipGain:[76.27, 478.7], persecuted:[1, 0, 1, 0, 1, 1, 0, 1]} | **missed** |
+| §3.8 | [the biggest town of a year-50 world] prophet, three prophecies failed: credibility / the four values after 6 days | credibility ≤ 0.15 | {credibility:[0, 0], end:{trust:0, loyalty:0.014, faith:0.048}} | met |
+| §3.4 | [the biggest town of a year-50 world] a comet read by the prophet, its meaning made true vs contradicted: prophet credibility / trust / loyalty after 4 days (mean) | fulfilled raises credibility, trust and loyalty above contradicted | {fulfilled:{credibility:0.406, fulfilledN:8, trust:0.241, loyalty:0.148, faith:0.63}, contradicted:{credibility:0.031, failedN:9, trust:0.144, loyalty:0.029, faith:0.415}, prophetReadings:[null, null, healing, null, null, rebuilding, rebuilding, null, null, null, healing, null, null, rebuilding, rebuilding, null]} | met |
+| §4.1 | [the biggest town of a year-50 world] "introduce mithril to Aru": deposit cells / ore in store after 10 days / crafts / goods made of it by day 20 | ≥ 1 / ≥ 10 / ≥ 2 / a tool or building within 20 days | {deposits:[47, 73], oreInStore:[0.71, 98.95], crafts:[5, 5], goodsKinds:[0, 3], store:[{mithril-ore:36.1}, {mithril-ore:0.71, mithril-tools:1}, {mithril-ore:62.09, mithril:7, mithril-tools:7, mithril-blade:7, mithril-ornaments:11.5}, {mithril-ore:39.26}, {mithril-ore:59.04}, {mithril-ore:18.01}, {mithril-ore:20.86, mithril:22, mithril-tools:17, mithril-blade:7.48, mithril-ornaments:17.38}, {mithril-ore:98.95, mithril:7, mithril-tools:16, mithril-blade:9, mithril-ornaments:50}], store20:[{mithril-ore:46.54}, {mithril-ore:0.95, mithril:1, mithril-tools:6, mithril-blade:10, mithril-ornaments:8}, {mithril-ore:85.71, mithril:7, mithril-tools:7, mithril-blade:7, mithril-ornaments:11.5}, {mithril-o | partly |
+| §4.2 | [the biggest town of a year-50 world] an iron vein laid near the town within its work reach: first iron ore in the store (day) before / after the god teaches iron smelting at day 10 | laid; mined once iron is wanted | {ok:8/8, firstOreDay:[null, null, null, null, null, 2.17, null, null], firstOreDayTaught:[11.17, 10.92, 10.29, 10.42, 12.33, null, 10.38, 10.88], storeD10:[{}, {}, {}, {}, {}, {iron-ore:227.02}, {}, {}], storeD15:[{iron-ore:39.94}, {iron-ore:12.43}, {iron-ore:61.13}, {iron-ore:40.45}, {iron-ore:11.26}, {iron-ore:227.02}, {iron-ore:78.43}, {iron-ore:75.49}], veinAtM:[214, 246, 228, 254, 260, 245, 256, 229], veinFlowCost:[223, 200, 190, 210, 222, 222, 208, 191], knowsIronSmelting:[false, false, false, false, false, true, false, false]} | met |
+| §4.3 | [the biggest town of a year-50 world] a new crop (sunroot, no climate named: like wheat) introduced: sown / harvested within 24 days (two game years) | sown and harvested | {taken:8/8, sowings:[28, 13, 9, 19, 17, 28, 17, 5], harvests:[15, 12, 6, 12, 16, 17, 14, 10], store:[{sunroot:433.91}, {sunroot:728.67}, {sunroot:189.96}, {sunroot:1110.65}, {sunroot:348.7}, {sunroot:1502.9}, {sunroot:740.73}, {sunroot:422.25}]} | met |
+
+The kin fixture (`i6`, 8 seeds, 20 years): a secession on 1, a raid or war on 1, a treaty on 0 (≥ 5 / ≥ 3 / ≥ 2 of 8 asked); its control (`i6c`, 8 seeds): no secession on 8 (≥ 6 asked) — partly. Speciation without people (`live-i6`, seeds 1, 7, 1234, 20261008, 30 years): 0.15 new kinds a world-year (median; ≤ 0.3 asked), the first at game year 8.085 (≥ 6 asked), deepest lineage 1 — met.
+
+**Why the kin fixture falls short (read 2026-10-28 by the integrator; `history/out/kin-{v7,i6,i6c}-N.json`, yearly
+rows of grievance, its causes and food a head; a game year is 12 game days).** Not a fault in the politics code: it is
+the price of §5.6's own fix, on a world with few wrongs. (1) **Every secession of the 8-seed `v7` row was carried by the
+everyday.** At the year before each parting the seceding daughter's grievance was distance + tribute + outgrown (+ a
+0.11 feud on seed 2): seed 2 town 3 0.97 (distance 0.65, tribute 0.23, feud 0.11), seed 3 towns 2 and 3 0.62–0.67
+(distance 0.50, tribute 0.17), seed 6 town 2 0.68 (distance 0.50, tribute 0.19), seed 8 towns 2 and 3 0.73–0.85
+(distance, outgrown, tribute) — no famine, no neglect. §5.6 capped exactly these at `POLITICS.ambientCap` 0.45
+(`people/politics.ts:121`, `:181-182`) so that a capital that stands by its daughters keeps them; that is what moved the
+control from 4 / 8 to 8 / 8. (2) **On the integrated tree a daughter crosses 0.6 only over a wrong done, and the wrongs
+come.** Grievance passed 0.6 on 6 of 8 seeds (gMax: seed 1 0.68, 4 1.0, 5 0.87, 6 0.70, 7 0.80, 8 0.91; 5–84 days
+above the line), each time NEGLECT on top of the everyday (a disaster or calamity the capital did not relieve: neglect
+0.22–0.58 of the year-20 grievance on seeds 1, 4–8); the 2 others (seeds 2, 3) stopped at the cap (0.45–0.57: no wrong
+done). No daughter had a famine in 8 seeds (famine days 0 on all; hard days 0–26), the daughters being fed by §2 (food
+in store a head, years 8–20 mean: 5–154 days, 5 of 16 daughters under 30, none hungry long enough for a famine). (3) **The draw past the line is slow by design.**
+The daily chance is 0.02 × min(1, (g − 0.6) / 0.15 + 0.2) × the independence party's strength (≥ 0.5,
+`politics.ts:420-421`): about 0.005 a day at 0.64, 0.013 at 0.73. With the days above the line and the gMax of each seed
+(the grievance taken as evenly spread between 0.6 and gMax, no faction share; `integrate/kinexp.mjs`) the chance of a
+secession is about 0.27 (seed 1), 0.60 (5), 0.36 (6), 0.44 (7), 0.14 (8) — with seed 4's, about 2.8 seceding worlds
+expected of 8; one came
+(seed 4: 26 hard days, neglect, grievance 1.0, a revolt at year 12.7 and a war). A treaty follows only a parting in
+peace (`treaty.parting`), and the one parting was bitter: 0 treaties. Raids are a hungry town's (`POLITICS.raidDays`):
+with fed daughters, 1 world in 8, as on `v7`. **Not re-tuned in this program**: the 5 / 8 row would need the daily
+chance about doubled or neglect made more common, a balance change to settle with HISTORY's spec (§5.1) and re-measure
+(kin fixture and control, 16 runs, ~2.5 h at the time-lapse speeds), not an integration fix.
+
+*(The fire, day and plague probes: §10.5, `acceptance.json` "§1.6 PACE daily probe" (met) and §10.2.)*
 
 ### 10.5 Lightning fires on the as-built world (a known miss, measured)
 - **Target** (§1.4): 2–12 lightning-started fires a world-year on the n = 64 sandbox without people (4 seeds × 2 years),
@@ -2298,6 +2344,13 @@ design-movement/LEDGER.md`, `design-abandonment/LEDGER.md`: the land the band ca
 cliff-bound plateau; the fresh water A* could not reach is across the sea.) Of the seven other 50-year worlds, none lost
 a band to thirst: seed 4 lost one person to thirst (year 37), seed 5 two (year 24), the other five none (§10.4's table;
 `r6/out/alone-live-<seed>.log`).
+
+**The kin fixture's secessions (§5.1; measured on 8 seeds, not changed).** A secession on 1 of 8 seeds, a raid or war on 1,
+a treaty on 0 (≥ 5 / 3 / 2 asked); the control kept its daughters on 8 of 8. The earlier 4-of-8 row was carried by the
+everyday grievances that HISTORY's second pass (§5.6) capped at 0.45 so that a capital which relieves its daughters keeps
+them; on the integrated tree a wrong done (neglect) carries a daughter past 0.6 on 6 of 8 seeds, and the slow daily draw
+past the line makes about 3 secessions of 8 expected. Meeting 5 of 8 is a balance change (a faster draw, or more neglect)
+for HISTORY's spec, with the 16-run re-measure; the trace is in §10.4, "Why the kin fixture falls short".
 
 ### 10.7 The gate (seventh pass, 2026-10-27)
 `npm run check` on the final integrated tree (HEAD `ccfcb5c3`; the sim unchanged since the sixth pass's `work.ts` fix at

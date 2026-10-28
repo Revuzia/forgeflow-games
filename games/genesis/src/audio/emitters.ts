@@ -69,7 +69,8 @@ const DISASTER_BEDS: Record<string, Layer[]> = {
   'acid-rain': [['noise', 'white', 0.3, ['highpass', 5000]], ['loop', 'crackle', 0.3, 1.5, ['highpass', 3500]], ['loop', 'patter', 0.4, 1.1]],
   'glass-storm': [['ev', 'bed.tinkle', 3, 0.6], ['ev', 'bed.zap', 0.5, 0.5], ['noise', 'pink', 0.2, ['bandpass', 2500, 1]]],
   overgrowth: [['ev', 'bed.creak', 0.5, 0.6], ['noise', 'pink', 0.15, ['highpass', 2000], ['gain', 0.2, 0.08]]],
-  leviathan: [['ev', 'bed.moan', 0.12, 0.8], ['ev', 'bed.splash', 0.2, 0.6], ['noise', 'pink', 0.3, ['lowpass', 600], ['gain', 0.1, 0.15]]],
+  // one great wave out of a calm sea: the swell's long surge and its breaking, no flood babble
+  'rogue-wave': [['noise', 'pink', 0.6, ['lowpass', 1000], ['gain', 0.08, 0.25]], ['noise', 'brown', 0.7, ['lowpass', 260]], ['ev', 'bed.splash', 0.25, 0.6]],
   'forgetting-fog': [['ev', 'bed.whisper', 0.9, 0.5], ['noise', 'pink', 0.12, ['lowpass', 500]]],
   stampede: [['ev', 'bed.hoof', 8, 0.6], ['noise', 'brown', 0.6, ['lowpass', 140]], ['noise', 'pink', 0.12, ['highpass', 1500]]],
 };
@@ -79,7 +80,7 @@ const FAMILY_KIND: Record<string, string> = {
   incoming: 'meteor', shower: 'meteor-shower', comet: 'comet', swarm: 'swarm', eruption: 'volcano', quake: 'quake',
   collapse: 'sinkhole', rift: 'rift', wave: 'flood', dry: 'drought', wind: 'tornado', fire: 'wildfire', plague: 'plague',
   blight: 'blight', cosmic: 'solar-flare', cold: 'ice-age', heat: 'heat-wave', gravity: 'gravity-slip', eclipse: 'eclipse',
-  celestial: 'moon-fall', acid: 'acid-rain', glass: 'glass-storm', growth: 'overgrowth', leviathan: 'leviathan',
+  celestial: 'moon-fall', acid: 'acid-rain', glass: 'glass-storm', growth: 'overgrowth',
   fog: 'forgetting-fog', stampede: 'stampede',
 };
 

@@ -48,12 +48,14 @@ export const DISASTER_FAMILY: Record<string, string> = {
   blight: 'blight', infestation: 'swarm', 'solar-flare': 'cosmic', 'impact-winter': 'cold', 'gravity-slip': 'gravity',
   'magnetic-storm': 'cosmic', eclipse: 'eclipse', 'moon-fall': 'celestial', 'rogue-flyby': 'celestial',
   'acid-rain': 'acid', 'ice-age': 'cold', 'heat-wave': 'heat', 'dust-bowl': 'dry', 'glass-storm': 'glass',
-  overgrowth: 'growth', leviathan: 'leviathan', 'forgetting-fog': 'fog', stampede: 'stampede',
+  overgrowth: 'growth', 'forgetting-fog': 'fog', stampede: 'stampede',
+  // a wave, not a sea monster (LIVING §0: real animals only); an old save's or a mod's `leviathan` is the same wave
+  'rogue-wave': 'wave', leviathan: 'wave',
 };
 
 export const DISASTER_FAMILIES = [
   'incoming', 'shower', 'comet', 'swarm', 'eruption', 'quake', 'collapse', 'rift', 'wave', 'dry', 'wind', 'fire', 'plague',
-  'blight', 'cosmic', 'cold', 'heat', 'gravity', 'eclipse', 'celestial', 'acid', 'glass', 'growth', 'leviathan', 'fog',
+  'blight', 'cosmic', 'cold', 'heat', 'gravity', 'eclipse', 'celestial', 'acid', 'glass', 'growth', 'fog',
   'stampede',
 ] as const;
 
