@@ -33,6 +33,8 @@ export const BPART = {
   // garment (hide / tunic / coat), legwear (bare legs / trousers), sleeves, forearms (skin / coat), and a hair cap
   // that is skin on the bald; linen: shirt fronts, aprons, bonnets
   garment: 20, legwear: 21, sleeve: 22, forearm: 23, haircap: 24, linen: 25,
+  // game carried home across the shoulders (a tawny coat, paler under)
+  game: 26,
 } as const;
 /** instance style bits (render/life/crowds.ts sets them per person) */
 export const STYLE = {
@@ -630,6 +632,20 @@ function tools(b: RigBuilder, lod: number): void {
   // spear and staff: upright
   { const e = handle(HELD.spear, 1.95, true, 0.014); b.tube([e, [e[0], e[1] + 0.22, e[2]]], [[0.025, 0.012], [0.001, 0.001]], sides, rigid(6), BPART.stone, { tool: HELD.spear }); }
   handle(HELD.staff, 1.75, true, 0.02);
+  // a shepherd's crook: a long staff, its head bent forward into a hook
+  {
+    const e = handle(HELD.crook, 1.62, true, 0.016);
+    const hook: V3[] = [e, [e[0], e[1] + 0.09, e[2] + 0.01], [e[0], e[1] + 0.15, e[2] + 0.07], [e[0], e[1] + 0.12, e[2] + 0.15], [e[0], e[1] + 0.04, e[2] + 0.165]];
+    b.tube(hook, hook.map((_, i) => [0.016 - i * 0.001, 0.016 - i * 0.001] as [number, number]), sides, rigid(6), BPART.wood, { tool: HELD.crook });
+  }
+  // a hunting bow, braced: at rest it lies fore-and-aft through the hand, its belly up, so the arm raised to aim
+  // stands it upright with the belly toward the archer; the string at the near LOD only
+  {
+    const by = (z: number) => G[1] + 0.13 * (z / 0.62) * (z / 0.62);
+    const limb: V3[] = [-0.62, -0.45, -0.25, 0, 0.25, 0.45, 0.62].map((z) => [G[0], by(z) + (Math.abs(z) < 0.3 ? 0.012 * Math.cos(z * 5) : 0), G[2] + z] as V3);
+    b.tube(limb, limb.map((p) => { const w = Math.abs(p[2]) < 0.1 ? 0.02 : 0.016 - 0.008 * Math.abs(p[2]); return [w, w * 0.7] as [number, number]; }), sides, rigid(6), BPART.wood, { tool: HELD.bow });
+    if (near) b.tube([[G[0], by(-0.6), G[2] - 0.6], [G[0], by(0.6), G[2] + 0.6]], [[0.003, 0.003], [0.003, 0.003]], 3, rigid(6), BPART.white, { tool: HELD.bow });
+  }
   // hammer
   if (near) { const e = handle(HELD.hammer, 0.4, false); b.box([e[0], e[1] + 0.03, e[2]], [0.03, 0.035, 0.07], 6, BPART.metal, { tool: HELD.hammer }); }
   // torch with a flame
@@ -652,6 +668,17 @@ function tools(b: RigBuilder, lod: number): void {
   b.lathe(0, 0.005, [[0.06, 1.745], [0.12, 1.79], [0.135, 1.86], [0.09, 1.935], [0.07, 1.97], [0.08, 1.99]], lod === 0 ? 10 : 6, 2, BPART.clay, { tool: HELD.pot });
   b.ellipsoid([0, 1.2, -0.22], [0.17, 0.2, 0.12], lod === 0 ? 8 : 5, lod === 0 ? 6 : 4, rigid(1), BPART.cloth2, { tool: HELD.bundle });
   if (near) b.ellipsoid([0, 1.13, 0.23], [0.13, 0.11, 0.1], 7, 5, rigid(1), BPART.stone, { tool: HELD.stone });
+  // game across the shoulders (a roe deer or a goat): the body draped behind the neck, the head hanging on the left,
+  // the legs bunched in front of the chest where the hands hold them (the carryGame pose raises the hands there)
+  {
+    const g = { tool: HELD.game };
+    b.ellipsoid([0, 1.53, -0.13], [0.4, 0.12, 0.13], lod === 0 ? 12 : 7, lod === 0 ? 8 : 5, rigid(1), BPART.game, g, undefined, (p) => [p[0], p[1] - 0.25 * p[0] * p[0], p[2]]);
+    b.tube([[0.36, 1.49, -0.1], [0.44, 1.38, -0.04], [0.45, 1.28, 0.0]], [[0.045, 0.045], [0.04, 0.04], [0.035, 0.035]], sides, rigid(1), BPART.game, g, false, false);
+    b.ellipsoid([0.45, 1.24, 0.02], [0.045, 0.09, 0.055], lod === 0 ? 8 : 5, lod === 0 ? 6 : 4, rigid(1), BPART.game, g);
+    for (const [x0, x1] of [[0.27, 0.11], [0.24, 0.07], [-0.3, -0.1], [-0.27, -0.06]] as [number, number][]) {
+      b.tube([[x0, 1.5, -0.04], [x0 * 0.8, 1.42, 0.1], [x1, 1.33, 0.2]], [[0.028, 0.028], [0.02, 0.02], [0.014, 0.014]], lod === 0 ? 5 : 4, rigid(1), BPART.game, g, false, true);
+    }
+  }
 }
 
 // ───────────────────────────── hive hexapod ─────────────────────────────

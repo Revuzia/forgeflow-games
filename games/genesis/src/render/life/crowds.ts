@@ -79,6 +79,26 @@ interface Ambient { ux: number; uy: number; uz: number; vx: number; vy: number; 
 
 const _mat = new Float32Array(16);
 const _a = new Float32Array(3), _b = new Float32Array(3), _c = new Float32Array(3);
+/**
+ * render-only animation ids (bodymat.ts livingRot): the still and moving variants of the living land's states. The sim
+ * says what someone is doing (play, hunt, herd, carryGame, shelter); whether they are on the move comes from their
+ * per-tick motion, so a herder standing with the flock leans on the crook instead of walking on the spot, and someone
+ * hurrying to shelter runs with their arms over their head while those already there huddle.
+ */
+const RANIM = { evacuate: 31, herdStill: 32, huntStill: 33, gameStill: 34, playStill: 35 } as const;
+/** metres per tick under which a person counts as standing */
+const STILL_M = 0.15;
+function livingAnim(anim: number, moving: boolean): number {
+  switch (anim) {
+    case AnimState.shelter: return moving ? RANIM.evacuate : anim;
+    case AnimState.herd: return moving ? anim : RANIM.herdStill;
+    case AnimState.hunt: return moving ? anim : RANIM.huntStill;
+    case AnimState.carryGame: return moving ? anim : RANIM.gameStill;
+    case AnimState.play: return moving ? anim : RANIM.playStill;
+  }
+  return anim;
+}
+
 const CLOTH_FALLBACK = [0x8a6a4a, 0xa0784e, 0x6e5236, 0xb8a888, 0x7a2a22, 0x2a4a6a];
 
 export class Crowds {
@@ -133,7 +153,15 @@ export class Crowds {
 
   /** the tool a person shows: what they carry, else what their work needs */
   private toolFor(anim: number, carry: number, era: number, flags: number, id: number): number {
+    if (anim === AnimState.carryGame || anim === RANIM.gameStill) return HELD.game;
     const held = heldForItem(carry);
+    if (anim === AnimState.hunt || anim === RANIM.huntStill) {
+      // the hunter's own weapon when they carry one; else spears in the old stone age, bows from the late stone age on,
+      // firearms in the industrial eras
+      if (held === HELD.spear || held === HELD.bow || held === HELD.rifle) return held;
+      return era >= 8 ? HELD.rifle : era >= 1 && hashFloat(id, 7) < 0.6 ? HELD.bow : HELD.spear;
+    }
+    if ((anim === AnimState.herd || anim === RANIM.herdStill) && (held === HELD.none || held === HELD.basket)) return HELD.crook;
     if (held !== HELD.none) return held;
     switch (anim) {
       case AnimState.chop: return HELD.axe;
@@ -252,8 +280,10 @@ export class Crowds {
         const ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
         ux /= ul; uy /= ul; uz /= ul;
         let tr = this.tracks.get(id);
-        if (!tr) { tr = { id, anim: A.anim[i], prev: A.anim[i], at: -1e9, gx: 0, gy: 0, gz: 0, ground: 0, sx: -2, sy: 0, sz: 0, ox: 0, oy: 0, oz: 0, hd: A.heading[i] }; this.tracks.set(id, tr); }
-        if (fresh && A.anim[i] !== tr.anim) { tr.prev = tr.anim; tr.anim = A.anim[i]; tr.at = realTime; }
+        const i3 = i * 3;
+        const simAnim = livingAnim(A.anim[i], Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M);
+        if (!tr) { tr = { id, anim: simAnim, prev: simAnim, at: -1e9, gx: 0, gy: 0, gz: 0, ground: 0, sx: -2, sy: 0, sz: 0, ox: 0, oy: 0, oz: 0, hd: A.heading[i] }; this.tracks.set(id, tr); }
+        if (fresh && simAnim !== tr.anim) { tr.prev = tr.anim; tr.anim = simAnim; tr.at = realTime; }
         // motion smoothing: a new snapshot's disagreement with what was drawn becomes a decaying offset
         if (fresh && tr.sx > -1.5) {
           tr.ox = tr.sx - ux; tr.oy = tr.sy - uy; tr.oz = tr.sz - uz;

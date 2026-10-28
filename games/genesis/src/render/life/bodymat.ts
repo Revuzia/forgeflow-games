@@ -42,6 +42,9 @@ float animFreq(int a) {
   if (a == 11) return 0.0; if (a == 12) return 0.6; if (a == 13) return 1.4; if (a == 14) return 0.45; if (a == 15) return 1.3;
   if (a == 16) return 0.55; if (a == 17) return 0.5; if (a == 18) return 0.18; if (a == 19) return 0.35; if (a == 20) return 0.15;
   if (a == 21) return 1.1; if (a == 22) return 0.3; if (a == 23) return 2.2; if (a == 24) return 0.15; if (a == 25) return 0.2;
+  // the living land's states (play, hunt, herd, carryGame, shelter) and their still / moving variants (crowds.ts RANIM)
+  if (a == 26) return 1.3; if (a == 27) return 0.55; if (a == 28) return 0.8; if (a == 29) return 0.75; if (a == 30) return 0.6;
+  if (a == 31) return 1.5; if (a == 32) return 0.22; if (a == 33) return 0.3; if (a == 34) return 0.3; if (a == 35) return 1.1;
   return 0.25;
 }
 
@@ -74,9 +77,118 @@ vec3 carryFore(float tool, float side) {
   if (tool == 12.0) return vec3(-1.5, 0.0, 0.0);
   return vec3(-0.35, 0.0, 0.0);
 }
+// hips sunk into a crouch: the thighs forward by base, the knees folded 1.6x that (the shins lean back 0.6x, the feet
+// stay under the hips); the root drops by what the folded legs lose in height (thigh 0.43 m, shin 0.5 m)
+float crouchDrop(float base) { return 0.93 - 0.43 * cos(base) - 0.5 * cos(0.6 * base); }
+vec3 gaitLegs(int b, float t, float leg, float knee, float base) {
+  float s = sin(t), c = cos(t);
+  if (b == 7) return vec3(-base - leg * s, 0.0, 0.0);
+  if (b == 9) return vec3(-base + leg * s, 0.0, 0.0);
+  if (b == 8) return vec3(0.06 + 1.6 * base + knee * pow(max(0.0, c), 1.5), 0.0, 0.0);
+  if (b == 10) return vec3(0.06 + 1.6 * base + knee * pow(max(0.0, -c), 1.5), 0.0, 0.0);
+  return vec3(0.0);
+}
+// the living land (LIVING §6.3): 26 play (skipping chase) / 35 play in place (hopping, clapping), 27 hunt stalking /
+// 33 hunt aiming and throwing or loosing, 28 herding on the move with the crook / 32 standing with the flock,
+// 29 carrying game across the shoulders / 34 standing with it, 30 sheltering (hunched, arms over the head) /
+// 31 hurrying to shelter (running, arms over the head). Tools: 3 spear, 17 rifle, 19 bow, 20 crook, 21 game.
+vec3 livingRot(int a, float t, int b, float tool) {
+  float s = sin(t), c = cos(t);
+  vec3 r = vec3(0.0);
+  if (a == 26) {
+    r = gaitLegs(b, t, 0.75, 1.35, 0.05);
+    if (b == 3) r = vec3(0.55 * s - 0.45, 0.0, 0.85 + 0.3 * sin(t * 2.0));
+    if (b == 5) r = vec3(-0.55 * s - 0.45, 0.0, -0.85 - 0.3 * sin(t * 2.0));
+    if (b == 4 || b == 6) r = vec3(-0.55, 0.0, 0.0);
+    if (b == 1) r = vec3(0.16, 0.18 * s, 0.0);
+    if (b == 2) r = vec3(-0.18, 0.35 * sin(t * 0.5), 0.0);
+    return r;
+  }
+  if (a == 35) {
+    float clap = pow(max(0.0, sin(t * 2.0)), 6.0);
+    if (b == 7) r.x = -0.55 * max(0.0, s); if (b == 9) r.x = -0.55 * max(0.0, -s);
+    if (b == 8) r.x = 1.1 * max(0.0, s); if (b == 10) r.x = 1.1 * max(0.0, -s);
+    if (b == 3) r = vec3(-1.15, 0.0, 0.45 - 0.5 * clap); if (b == 5) r = vec3(-1.15, 0.0, -0.45 + 0.5 * clap);
+    if (b == 4 || b == 6) r = vec3(-0.55, 0.0, 0.0);
+    if (b == 2) r = vec3(-0.12, 0.2 * sin(t * 0.5), 0.0);
+    return r;
+  }
+  if (a == 27 || a == 33) {
+    // stalking: low, short creeping steps, the head up on the game, the weapon ready; still: the aim, then a quick
+    // throw (the spear) or loose (the bow) every few seconds
+    bool still = a == 33;
+    float th = still ? pow(max(0.0, sin(t)), 10.0) : 0.0;
+    r = still ? gaitLegs(b, 0.0, 0.0, 0.0, 0.5) + (b == 7 ? vec3(-0.25, 0.0, 0.12) : b == 9 ? vec3(0.2, 0.0, -0.12) : vec3(0.0))
+              : gaitLegs(b, t, 0.28, 0.45, 0.55);
+    bool bow = tool == 19.0;
+    float lean = bow ? 0.2 : 0.42;
+    if (b == 1) r = vec3(lean - 0.1 * th, (still ? -0.3 : 0.0) + 0.25 * th, 0.0);
+    if (b == 2) r = vec3(-0.38 + lean * 0.5, still ? 0.25 - 0.2 * th : 0.0, 0.0);
+    if (bow) {
+      // the bow held out level in the right hand (the chest's lean taken back), the left hand drawing the string to
+      // the cheek (angles solved for the hand's place); the loose lets the hand fly back open
+      if (b == 5) r = vec3(-1.57 - lean, 0.0, -0.05);
+      if (b == 6) r = vec3(-0.05, 0.0, 0.0);
+      if (b == 3) r = vec3(-1.45 + 0.2 * th, 0.0, 0.05 + 0.25 * th);
+      if (b == 4) r = vec3(-2.15 + 0.5 * th, -0.7, 0.0);
+    } else if (tool == 17.0) {
+      // a rifle carried sloped on the shoulder
+      if (b == 5) r = vec3(-0.25, 0.0, -0.1); if (b == 6) r = vec3(-0.5, 0.0, 0.0);
+      if (b == 3) r = vec3(-0.5, 0.0, -0.2); if (b == 4) r = vec3(-1.2, 0.0, 0.0);
+    } else {
+      // a spear cocked over the shoulder (elbow high, the hand by the ear, the point forward and a little down); the
+      // thrust drives the arm forward with the shaft kept level (the upper arm and forearm angles sum to the same)
+      if (b == 5) r = vec3(-2.55 + 0.2 * th, 0.0, -0.3);
+      if (b == 6) r = vec3(-2.45 - 0.2 * th, 0.0, 0.0);
+      if (b == 3) r = vec3(-1.15 + 0.4 * th, 0.0, 0.18);
+      if (b == 4) r = vec3(-0.25, 0.0, 0.0);
+    }
+    return r;
+  }
+  if (a == 28 || a == 32) {
+    // herding: walking with the crook (the arm swinging it lightly), the head turning to the flock; standing: leaning
+    // on it, looking about, now and then raising it to turn a stray
+    bool still = a == 32;
+    float raise = still ? smoothstep(0.55, 0.9, sin(t * 0.5)) : 0.0;
+    r = still ? (b == 7 ? vec3(0.03, 0.0, 0.05) : b == 9 ? vec3(-0.05, 0.0, -0.05) : b == 8 || b == 10 ? vec3(0.05, 0.0, 0.0) : vec3(0.0))
+              : gaitLegs(b, t, 0.36, 0.62, 0.0);
+    if (b == 5) r = still ? vec3(-0.22 - 1.2 * raise, 0.0, -0.12 - 0.35 * raise) : vec3(-0.25 + 0.12 * s, 0.0, -0.1);
+    if (b == 6) r = vec3(still ? -0.55 + 0.3 * raise : -0.3, 0.0, 0.0);
+    if (b == 3) r = still ? vec3(0.04 * s, 0.0, 0.1) : vec3(0.4 * s, 0.0, 0.07);
+    if (b == 4) r = vec3(still ? -0.2 : -0.3 - 0.2 * max(0.0, -s), 0.0, 0.0);
+    if (b == 1) r = vec3(0.06, still ? 0.15 * sin(t * 0.7) : 0.06 * s, 0.0);
+    if (b == 2) r = vec3(0.02, 0.55 * sin(t * (still ? 0.9 : 0.23)), 0.0);
+    return r;
+  }
+  if (a == 29 || a == 34) {
+    // game across the shoulders: both hands up at the chest holding its legs; a heavier, shorter stride
+    r = a == 29 ? gaitLegs(b, t, 0.36, 0.6, 0.04) : vec3(0.0);
+    // (solved: the hands meet the bunched legs at the breastbone)
+    if (b == 3) r = vec3(-0.1, 0.0, 0.1); if (b == 5) r = vec3(-0.1, 0.0, -0.1);
+    if (b == 4) r = vec3(-2.15, -0.6, 0.0); if (b == 6) r = vec3(-2.15, 0.6, 0.0);
+    if (b == 1) r = vec3(0.14, a == 29 ? 0.05 * s : 0.0, 0.0);
+    if (b == 2) r = vec3(0.12, 0.0, 0.0);
+    return r;
+  }
+  if (a == 30 || a == 31) {
+    // sheltering: squatting, bent over, both arms wrapped over the head, a shiver; hurrying to shelter: running bent
+    // with the arms over the head
+    bool run = a == 31;
+    r = run ? gaitLegs(b, t, 0.68, 1.25, 0.12) : gaitLegs(b, 0.0, 0.0, 0.0, 1.05);
+    float shiver = run ? 0.0 : 0.03 * sin(t * 9.0);
+    // hands clasped on the top of the head, elbows high and out (solved for the hands' place)
+    if (b == 3) r = vec3(-0.6, 0.0, 2.45 + shiver); if (b == 5) r = vec3(-0.6, 0.0, -2.45 - shiver);
+    if (b == 4) r = vec3(-1.85, 0.9, 0.0); if (b == 6) r = vec3(-1.85, -0.9, 0.0);
+    if (b == 1) r = vec3(run ? 0.42 : 0.6, run ? 0.08 * s : 0.0, shiver);
+    if (b == 2) r = vec3(run ? 0.25 : 0.45, 0.0, 0.0);
+    return r;
+  }
+  return r;
+}
 vec3 jointRot(int a, float t, int b, float tool) {
   float s = sin(t), c = cos(t);
   vec3 r = vec3(0.0);
+  if (a >= 26) return livingRot(a, t, b, tool);
   if (a == 1 || a == 2 || a == 4 || a == 7 || a == 25) {
     bool fast = a == 2 || a == 7;
     // (a walking arm swings ±28°, the elbow bending as it comes forward; at ±18° with a straight elbow arms hung dead)
@@ -289,6 +401,13 @@ void rootPose(int a, float t, out vec3 off, out vec3 rot) {
   else if (a == 9) { off.y = 0.045 * abs(s); rot.y = 0.7 * sin(t * 0.5); }
   else if (a == 21) off.y = 0.06 * max(0.0, s);
   else if (a == 13) rot = vec3(t * 2.0, 0.0, t * 1.3);
+  else if (a == 26) { off.y = 0.075 * abs(s) - 0.03; rot.y = 0.3 * sin(t * 0.37); }
+  else if (a == 35) off.y = 0.07 * abs(s);
+  else if (a == 27) off.y = -crouchDrop(0.55) + 0.008 * cos(2.0 * t);
+  else if (a == 33) off.y = -crouchDrop(0.5);
+  else if (a == 28 || a == 29) { off.y = 0.02 * cos(2.0 * t) - (a == 29 ? 0.03 : 0.012); off.x = 0.012 * s; }
+  else if (a == 30) { off.y = -crouchDrop(1.05); off.x = 0.004 * sin(t * 9.0); }
+  else if (a == 31) off.y = 0.05 * abs(s) - 0.05;
   else off.x = 0.01 * sin(t * 0.37);
 }
 #endif
@@ -673,6 +792,8 @@ const FRAG_SURFACE = /* glsl */ `
   else if (part == 16) { bEmit = mix(vColA, vec3(1.0, 0.8, 0.9), 0.4) * (1.6 + 0.6 * sin(uTime * 1.3)); alb = vColA * 0.2; }
   else if (part == 18) { alb = vec3(0.42, 0.19, 0.08) * (0.9 + 0.1 * snoise(vLocal * 40.0)); bRough = 0.7; }
   else if (part == 19) { alb = vec3(0.3, 0.29, 0.27) * (0.85 + 0.2 * snoise(vLocal * 30.0)); bRough = 0.85; }
+  // game carried home: a tawny coat, paler underneath
+  else if (part == 26) { alb = mix(vec3(0.36, 0.24, 0.13), vec3(0.62, 0.52, 0.4), smoothstep(0.02, -0.06, vLocal.y - 1.5)) * (0.75 + 0.4 * fbm3(vLocal * 40.0)); bRough = 0.95; }
 #if PLAN == 0
   else if (part >= 20 && part <= 24) {
     // the mid / far bipeds (bodygen.ts bipedLow): one mesh for every clothing tier, each piece coloured by the

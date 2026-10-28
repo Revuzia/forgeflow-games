@@ -580,6 +580,8 @@ export function animalIndex(idOrForm: string): number {
 export const HELD = {
   none: 0, axe: 1, hoe: 2, spear: 3, hammer: 4, basket: 5, logs: 6, pot: 7, torch: 8, staff: 9, rod: 10, sword: 11,
   bundle: 12, stone: 13, scroll: 14, sickle: 15, pick: 16, rifle: 17, child: 18,
+  // the living land: a hunting bow, a shepherd's crook, game (a carcass) carried across the shoulders
+  bow: 19, crook: 20, game: 21,
 } as const;
 
 const DEFAULT_ITEMS = ['stone', 'wood', 'berries', 'meat', 'fish', 'grain', 'clay', 'pot', 'water', 'hide', 'flint', 'tool', 'ore', 'bread', 'cloth', 'book'];
@@ -593,7 +595,8 @@ function itemHeldTable(): number[] {
     const ids = l ? l.map((d) => `${str(d.id)} ${strs(d.tags).join(' ')}`) : DEFAULT_ITEMS;
     iCache = ids.map((s) =>
       /axe/.test(s) ? HELD.axe : /hoe|plough|plow|shovel|spade/.test(s) ? HELD.hoe : /spear|lance/.test(s) ? HELD.spear
-        : /hammer|mallet/.test(s) ? HELD.hammer : /sword|blade|dagger/.test(s) ? HELD.sword : /rifle|musket|gun/.test(s) ? HELD.rifle
+        : /hammer|mallet/.test(s) ? HELD.hammer : /sword|blade|dagger/.test(s) ? HELD.sword : /rifle|musket|gun|firearm/.test(s) ? HELD.rifle
+          : /^bow\b|arrow/.test(s) ? HELD.bow : /crook/.test(s) ? HELD.crook
           : /pick/.test(s) ? HELD.pick : /sickle|scythe/.test(s) ? HELD.sickle : /torch|fire/.test(s) ? HELD.torch
             : /book|scroll|tablet|paper/.test(s) ? HELD.scroll : /rod|net/.test(s) ? HELD.rod
               : /wood|log|stick|timber|branch/.test(s) ? HELD.logs : /stone|flint|ore|rock|brick/.test(s) ? HELD.stone

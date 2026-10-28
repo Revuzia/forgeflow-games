@@ -6,7 +6,7 @@
 
 import {
   BufferAttribute, BufferGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh,
-  ShaderMaterial, Vector3, type IUniform,
+  OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, type IUniform,
 } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER } from '../fx/fxcommon.ts';
@@ -53,7 +53,10 @@ void main() {
   // a white wire and every sign's colour was lost)
   float k = (core * 1.05 + glow * 0.5) * along * climb;
   vec3 col = mix(vCol.rgb, vCol.rgb * vCol.rgb, 0.4 * core);
-  gl_FragColor = vec4(col * k * vCol.a * vis * fxDisplay(0.85), 0.0);
+  // (the air round the thread a little veiled: added alone to a bright overcast sky a prophet's thread summed to nothing
+  // — the real-sim prophet shot at four in the afternoon showed no line at all; a faint veil keeps it against white)
+  float veil = clamp(glow * 0.2 + core * 0.08, 0.0, 0.24) * along * min(vCol.a, 1.0) * vis;
+  gl_FragColor = vec4(col * k * vCol.a * vis * fxDisplay(0.85), veil);
 }
 `;
 
@@ -171,7 +174,8 @@ export class Beams {
     this.geo.setIndex(idx);
     const mat = new ShaderMaterial({
       vertexShader: BEAM_VERT, fragmentShader: BEAM_FRAG, uniforms: { ...fx }, transparent: true, depthTest: false, depthWrite: false,
-      side: DoubleSide, ...ADD_LIGHT,
+      // light added over a faint veil (premultiplied: the alpha darkens what is behind, the colour adds)
+      side: DoubleSide, ...ADD_LIGHT, blendDst: OneMinusSrcAlphaFactor,
     });
     this.mesh = new Mesh(this.geo, mat);
     this.mesh.frustumCulled = false; this.mesh.matrixAutoUpdate = false; this.mesh.layers.set(FX_LAYER); this.mesh.renderOrder = 20;

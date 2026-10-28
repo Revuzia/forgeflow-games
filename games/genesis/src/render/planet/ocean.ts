@@ -652,14 +652,24 @@ void main() {
       float streak = smoothstep(0.1, 0.7, snoise(P * 1.2 - vFlow * uTime * 0.9) * 0.5 + 0.5);
       pat = mix(pat, 0.75 + 0.25 * streak, smoothstep(0.06, 0.2, lean));
     }
-    // a surge's face: streaks of white water running down it, churning
+    // a surge's face: streaks of white water running down it, churning — drawn out along the fall line at two scales
+    // (~4.5 m and ~1.1 m across, 25 m / 6 m along it) with dark water showing between them. (Isotropic 1 m churn was
+    // finer than a pixel from the shore: the face averaged to one flat white strip — a snowbank on the sea, not a wall
+    // of water.) The coarse streaks hold out to ~2 m a pixel (a kilometre off), the fine ones to ~0.45 m
+    float surgeStreak = 0.5;
     if (surge > 0.02) {
-      float sk = (snoise(P * 0.9 + surgeDown * uTime * 1.6) * 0.6 + snoise(P * 2.3 - surgeDown * uTime * 2.2) * 0.4 * (1.0 - smoothstep(0.1, 0.5, fw))) * 0.5 + 0.5;
-      pat = mix(pat, 0.7 + 0.3 * smoothstep(0.15, 0.75, sk), surge * 0.8);
+      vec3 sSide = normalize(cross(surgeDown, up) + 1e-5);
+      float sa = dot(P, sSide), sb = dot(P, surgeDown);
+      float stC = snoise(vec3(sa * 0.22, sb * 0.04 - uTime * 0.25, 1.7)) * (1.0 - smoothstep(0.6, 2.2, fw));
+      float stF = snoise(vec3(sa * 0.9, sb * 0.16 - uTime * 0.9, 5.1)) * (1.0 - smoothstep(0.12, 0.45, fw));
+      surgeStreak = clamp(0.5 + 0.5 * (stC * 0.7 + stF * 0.45), 0.0, 1.0);
+      pat = mix(pat, 0.42 + 0.58 * smoothstep(0.25, 0.7, surgeStreak), surge * 0.85);
     }
     // soft coverage, never saturated white (… except a surge's face, a wall of churned white water)
     float foam = smoothstep(0.05, 0.9, foamAmt * (0.55 + 0.75 * pat)) * mix(0.8, 0.95, surge);
     vec3 foamC = vec3(0.85) * (sunCol * max(muS, 0.0) + skyE) / 3.14159;
+    // (the churn shades itself: the troughs between a surge's streaks lie in the face's own shadow)
+    foamC *= mix(1.0, 0.7 + 0.3 * smoothstep(0.2, 0.8, surgeStreak), surge);
     col = mix(col, foamC, foam);
   }
 
