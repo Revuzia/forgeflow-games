@@ -251,6 +251,11 @@ export class Hud {
     row.appendChild(this.achieved);
     time.append(world, cal, speeds, row);
     this.root.appendChild(time);
+    // the world switcher on the right never reaches over the time panel (the site's 888-px frame, seven worlds): it
+    // wraps within what the panel leaves (styles.css .gn-worlds reads --gn-time-r)
+    const timeEdge = () => { const r = time.getBoundingClientRect(); if (r.width > 0) this.root.style.setProperty('--gn-time-r', `${Math.ceil(r.right)}px`); };
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(timeEdge).observe(time);
+    addEventListener('resize', timeEdge);
     // ── top right: worlds strip + worship / belief ──
     const right = el('div', 'gn-topright');
     this.worlds = el('div', 'gn-panel gn-worlds');

@@ -14,6 +14,8 @@ const at = (x: number, y: number, s: number, ...inner: string[]): string => G(`t
 
 // ── primitives (24 × 24) ──
 const ground = P('M3 20.5h18');
+const rogueWave = P('M2.5 19.4c1.4 0 2.2-.9 3.4-.9s2 .9 3.4.9') + P('M9.3 19.4c2.1-1.5 3.1-4.5 3.5-8.3.4-3.8 2.3-6.9 5.5-7.5 1.6-.3 3 .3 3.7 1.4-1.9-.3-3.3.8-3.5 2.6-.2 1.4.5 2.4 1.6 2.8')
+  + P('M21.5 19.4c-1.5-1-2.4-2.8-2.8-5.2') + P('M11.2 5.6l-1.5-.5M12.5 3.4l-1-1.3M15 1.9l-.3-.6') + P('M3 21h18');
 const peak = P('M2.5 19l6.5-10 3.6 5.2 2.6-3.6 6.3 8.4');
 const bigPeak = P('M3.5 19.5L12 6l8.5 13.5');
 const wave = (y: number): string => P(`M3 ${y}c1.5-1.7 3-1.7 4.5 0s3 1.7 4.5 0 3-1.7 4.5 0 3 1.7 4.5 0`);
@@ -263,7 +265,10 @@ const ICONS: Record<string, string> = {
   'd-dust-bowl': P('M2.5 20.5h19') + P('M3.5 16.5c2.6-2.6 6.4-3 9.4-1.4 2.6 1.4 5.2 1 7.6-1') + DOT(6.4, 9.6, 0.9) + DOT(10, 7, 0.9) + DOT(13.6, 9.8, 0.9) + DOT(17.2, 7.2, 0.9) + DOT(19.6, 10.4, 0.9) + DOT(4, 5.6, 0.8),
   'd-glass-storm': windLines + P('M17.4 17.2l1.6-2.6 1.6 2.6zM14.4 20.8l1.2-2 1.2 2zM19.6 21.2l1-1.6 1 1.6z'),
   'd-overgrowth': P('M12 21V9M12 13c-3.6 0-6-2.4-6-6 3.6 0 6 2.4 6 6zM12 11c0-3.2 2.2-5.4 5.4-5.4 0 3.2-2.2 5.4-5.4 5.4z') + P('M4 21c1-3.4 2.6-5.2 5-5.6M20 21c-1-3.4-2.6-5.2-5-5.6M12 9c.2-2.4 1.2-4.2 3-5.6'),
-  'd-leviathan': P('M2.5 17.5c2 0 2.8-1.6 4.4-1.6s2.4 1.6 4.2 1.6 2.4-1.6 4.2-1.6 2.6 1.6 4.2 1.6') + P('M6.4 15.6c.4-5.2 3-8.8 7.2-9.6 2.6-.5 4.8.4 6.2 2.2-2.4-.2-3.8.8-4.2 2.6M15.6 11c1.6-.2 2.8.4 3.6 1.6') + DOT(17.6, 8.8, 0.9) + ground.replace('M3 20.5h18', 'M3 21h18'),
+  // the rogue wave: one wall of water standing far over the low chop, its crest breaking (spray, an open curl)
+  'd-rogue-wave': rogueWave,
+  // (powers.json's 'disaster-leviathan' — the Rogue wave — still names its icon by the old key)
+  'd-leviathan': rogueWave,
   'd-forgetting-fog': fogLines + at(10, -0.5, 0.5, bulb),
   'd-stampede': at(-2.5, 5, 0.6, paw) + at(5, 5, 0.6, paw) + at(12.5, 5, 0.6, paw) + P('M3 3.5l3 2M8.6 3l2.2 2.2M14.6 3l1.8 2.4'),
   stop: P('M8.3 3h7.4L21 8.3v7.4L15.7 21H8.3L3 15.7V8.3z') + P('M8.6 12h6.8'),

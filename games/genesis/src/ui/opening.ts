@@ -150,6 +150,9 @@ export class Opening {
   /** where the whisper suggests setting the people down (the morning side: green, near water, warm enough) */
   private spot: { planet: number; pos: [number, number, number] } | null = null;
   private ring: HTMLDivElement;
+  private ringLabel!: HTMLDivElement;
+  /** where the ring's label was last fitted (it is re-fitted when the ring moves, and a few times a second) */
+  private ringFit = { x: -1e9, y: -1e9, at: 0 };
   private quiet = false;
   private gestureListener: ((e: Event) => void) | null = null;
   /** the opening's clock (real time; a test can hold it and step it, a software-rendered frame takes seconds) */
@@ -170,7 +173,8 @@ export class Opening {
     parent.appendChild(this.card);
     this.root = this.card;
     // the spot the people's whisper points at, ringed on the ground (it never takes a click: the ground under it does)
-    this.ring = h('div', { class: 'gn-open-ring', aria: { hidden: 'true' } }, h('div', { class: 'gn-open-ring-o' }), h('div', { class: 'gn-open-ring-l', text: 'Here: green, near water, warm enough' }));
+    this.ringLabel = h('div', { class: 'gn-open-ring-l', text: 'Here: green, near water, warm enough' });
+    this.ring = h('div', { class: 'gn-open-ring', aria: { hidden: 'true' } }, h('div', { class: 'gn-open-ring-o' }), this.ringLabel);
     this.ring.hidden = true;
     world.appendChild(this.ring);
   }
@@ -563,6 +567,27 @@ export class Opening {
     if (!p) { this.ring.hidden = true; return; }
     this.ring.hidden = false;
     this.ring.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
+    const now = performance.now(), f = this.ringFit;
+    if (Math.abs(p[0] - f.x) > 3 || Math.abs(p[1] - f.y) > 3 || now - f.at > 300) { f.x = p[0]; f.y = p[1]; f.at = now; this.fitRingLabel(p[0], p[1]); }
+  }
+
+  /**
+   * The ring's label never lies over the whisper's words or the power's card (in the site's small frame both can sit
+   * over the spot): under the ring, else over it, else the ring alone — its words are the whisper's too.
+   */
+  private fitRingLabel(x: number, y: number): void {
+    const l = this.ringLabel;
+    const w = l.offsetWidth, ht = l.offsetHeight;
+    const shown = (e: Element | null): e is HTMLElement => !!e && !(e as HTMLElement).hidden && (e as HTMLElement).offsetParent !== null && !e.classList.contains('gn-away');
+    const blocks = [this.card, document.querySelector('.gn-tool')].filter(shown).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const fits = (y0: number): boolean => {
+      const x0 = x - w / 2, x1 = x + w / 2, y1 = y0 + ht;
+      if (x0 < 4 || x1 > innerWidth - 4 || y0 < 4 || y1 > innerHeight - 4) return false;
+      return !blocks.some((r) => x0 < r.right + 8 && x1 > r.left - 8 && y0 < r.bottom + 6 && y1 > r.top - 6);
+    };
+    const where = fits(y + 44) ? 'below' : fits(y - 44 - ht) ? 'above' : 'none';
+    l.classList.toggle('gn-up', where === 'above');
+    l.classList.toggle('gn-off', where === 'none');
   }
 
   private cmd(...cs: Command[]): void {

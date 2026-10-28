@@ -1172,6 +1172,14 @@ export class HandVisual {
     tangentFrame(tu, this.u.uTE1.value, this.u.uTE2.value);
     this.whorl.visible = air && this.u.uWhorlK.value > 0;
     this.tufts.visible = this.u.uTuftK.value > 0.01;
+    // from orbit the shaft is a thin grey needle standing off the limb (behind the title, too): above a few tenths of a
+    // radius (a third of the way out to the disc-filling view) only the glint at its foot and the whorl in the deck say
+    // where the Touch is
+    const orbK = smooth(R * 0.35, R * 0.6, altCam);
+    this.u.uBeamK.value *= 1 - orbK;
+    this.u.uStreakK.value *= 1 - orbK;
+    this.column.visible = orbK < 0.98;
+    this.streaks.visible = orbK < 0.98;
     // the pendulum: pushed by its forward acceleration, damped
     {
       const vf = this.vel.dot(this.fwd);

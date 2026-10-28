@@ -138,9 +138,10 @@ export class WeatherFx {
       if (!this.fall || !ctx.vfx.alive(this.fall)) this.fall = ctx.vfx.emit({ ...def, prewarm: def.life }, ctx.now);
       else ctx.vfx.set(this.fall, def);
       this.fallPower = def.power;
-      // a blizzard at the lens: big flakes out of focus sweeping past, and a sheet of snow streaming along the ground
+      // a blizzard at the lens: flakes out of focus sweeping past (small and faint: big opaque discs read as placeholder
+      // circles, not snow), and a sheet of snow streaming along the ground
       if (driven) {
-        const near = { sys: SYS.snowfall, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * 1.1, ay: wind.y * 1.1, az: wind.z * 1.1, size: 0.22, life: 10, count: Math.round(220 * ctx.q), p0: 3, p1: 2.2, p2: 1, r: 0.95, g: 0.96, b: 1, power: Math.min(1, 0.4 + rate) };
+        const near = { sys: SYS.snowfall, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * 1.1, ay: wind.y * 1.1, az: wind.z * 1.1, size: 0.07, life: 10, count: Math.round(120 * ctx.q), p0: 4, p1: 2.2, p2: 1, r: 0.95, g: 0.96, b: 1, power: Math.min(1, 0.4 + rate) };
         if (!this.nearFlakes || !ctx.vfx.alive(this.nearFlakes)) this.nearFlakes = ctx.vfx.emit({ ...near, prewarm: near.life }, ctx.now); else ctx.vfx.set(this.nearFlakes, near);
         const sheetOn = alt < 40;
         const sheet = { sys: SYS.drift, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * 1.7, ay: wind.y * 1.7, az: wind.z * 1.7, size: 0.24, life: 10, count: Math.round(3200 * ctx.q), p0: 16, p1: Math.max(0.2, alt), r: 0.93, g: 0.95, b: 1, power: sheetOn ? Math.min(1, 0.3 + rate) : 0 };

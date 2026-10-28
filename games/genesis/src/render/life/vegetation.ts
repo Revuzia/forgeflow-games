@@ -611,7 +611,9 @@ export class Vegetation {
         const clump = Math.min(1.6, Math.max(0.15, 1 + 1.1 * pv.noise.noise(dx * fq + 3.3, dy * fq, dz * fq - 1.7)));
         const cover = (under ? at(tree) * 0.7 : isShrub ? at(shrub) : at(tree)) * (under ? 1 : clump);
         if (h3 > cover) return;
-        if (at(water) > 0.05 || at(road) > 0.45 || at(crop) > 0.4 || at(snow) > 1.2 || at(sand) > 0.5) return;
+        // (no tree or bush on a field: the terrain tills its rows from crop ≈ 0.02 and they are plain by ≈ 0.1 — cleared
+        // only above 0.4, palms stood in the furrows of every young field; orchards are trees, not crop)
+        if (at(water) > 0.05 || at(road) > 0.45 || at(crop) > 0.08 || at(snow) > 1.2 || at(sand) > 0.5) return;
         const t = at(temp), m = at(moist), b = at(burnt);
         // species: one of the three cells around the point, chosen by its weight (stands mix along their borders)
         const hs4 = hashFloat(c, i, salt + 6);

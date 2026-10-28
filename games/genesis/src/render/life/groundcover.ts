@@ -275,13 +275,17 @@ export class GroundCover {
         let kind = -1;
         // crops in rows on the fields (the lattice is the rows); the clump's type from the cell's crop species
         let fid = -1;
-        if (cr > 0.4) {
+        // (from the day a field is sown, as the terrain draws its rows: from 0.4 only, most of a live sim's fields — its
+        // crops start at a few hundredths and fill in — were bare furrows with nothing growing in them)
+        if (cr > 0.05) {
           const gh0 = groundHeight(pv.ground, dx, dy, dz);
           fid = fieldId(dx * gh0, dy * gh0, dz * gh0);
           // pasture fields (the terrain's k ≥ 4) are grazed grass, not sown
           if (Math.floor(fid * 5) < 4) {
-            // sown in rows 1.2 m apart (every other lattice row; the row direction turns from field to field)
-            if ((j & 1) !== 0 || r1 > Math.min(1, cr * 1.15)) continue;
+            // sown in rows 1.2 m apart (every other lattice row; the row direction turns from field to field); a young
+            // field's rows already full of seedlings
+            const dens = Math.min(1, Math.max(cr * 1.15, 0.35 * Math.min(1, (cr - 0.05) / 0.09)));
+            if ((j & 1) !== 0 || r1 > dens) continue;
             kind = GK.crop;
           }
         }
@@ -315,7 +319,9 @@ export class GroundCover {
           const sp = PLANT_PROBE.crop.get(sp0) ?? sp0;
           const type = sp >= 0 && sp < CROP_OF.length ? CROP_OF[sp] : 0;
           // record the terrain field's id: its phase through the year and its kind (hay / tilled after harvest)
-          out.push(dx, dy, dz, gh, (hashFloat(c, 3) * 4 | 0) * Math.PI / 2 + (r3 - 0.5) * 0.3, CROP_H[type] * (0.85 + 0.3 * r2), GK.crop, type * 2 + (r3 < 0.5 ? 0 : 1), fid, 0, 0);
+          // (a young crop stands short: its height grows with the sim's crop cover)
+          const grow = 0.3 + 0.7 * Math.min(1, Math.max(0, (cr - 0.05) / 0.45));
+          out.push(dx, dy, dz, gh, (hashFloat(c, 3) * 4 | 0) * Math.PI / 2 + (r3 - 0.5) * 0.3, CROP_H[type] * (0.85 + 0.3 * r2) * grow, GK.crop, type * 2 + (r3 < 0.5 ? 0 : 1), fid, 0, 0);
           continue;
         }
         if (kind === GK.fern) { out.push(dx, dy, dz, gh, yaw, 0.6 + 0.7 * r2, GK.fern, Math.floor(r3 * 2), 0.95, 1.0, 0.9); continue; }
@@ -606,7 +612,8 @@ export class GroundCover {
         if (owner !== c) continue;
         const at = (f: Float32Array | undefined) => (f ? f[h.a] * h.wa + f[h.b] * h.wb + f[h.c] * h.wc : 0);
         const cr = at(crop);
-        if (cr < 0.4 || at(road) > 0.5 || hashFloat(c, k, 22) > Math.min(1, cr * 1.15)) continue;
+        // (the same young-field rule as the near clumps: a field is sown from the day the terrain tills it)
+        if (cr < 0.05 || at(road) > 0.5 || hashFloat(c, k, 22) > Math.min(1, Math.max(cr * 1.15, 0.35 * Math.min(1, (cr - 0.05) / 0.09)))) continue;
         const sp0 = cropSp ? Math.round(cropSp[owner]) : -1;
         const sp = PLANT_PROBE.crop.get(sp0) ?? sp0;
         const type = sp >= 0 && sp < CROP_OF.length ? CROP_OF[sp] : 0;

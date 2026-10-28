@@ -400,7 +400,9 @@ void main() {
     kind = S == 19 ? 7.0 : 5.0;
     if (S == 19) { sz *= 0.6 + 0.8 * r4; }
     // (S 19 with p2: big flakes right at the lens, out of focus — soft discs)
-    if (S == 19 && p2 > 0.5) { kind = 11.0; a *= 0.55; }
+    // (faint, and none in the last metre before the lens: at 0.55 a flake a hand's breadth away filled a fifth of the
+    // frame, and a blizzard read as a screen of opaque white circles)
+    if (S == 19 && p2 > 0.5) { kind = 11.0; a *= 0.3 * smoothstep(0.8, 1.8, length(q)); }
     // (p2: a driven snow — flakes, white and soft, smeared along the gale, not rain's long thin streaks)
     if (S == 16 && p2 > 0.5) { kind = 5.25; sz *= 0.7 + 0.6 * r4; }
   } else if (S == 17) {

@@ -169,11 +169,17 @@ export class Radial {
       const a = -Math.PI / 2 + (i / cats.length) * Math.PI * 2;
       const x = this.cx + Math.cos(a) * R_CAT, y = this.cy + Math.sin(a) * R_CAT;
       const el = h('button', { class: 'gn-rad-cat', title: categoryLabel(c), aria: { label: categoryLabel(c) }, html: categoryIcon(c) });
-      el.append(h('span', { class: 'gn-rad-cl', text: categoryLabel(c) }));
       el.style.left = `${x}px`; el.style.top = `${y}px`;
-      this.root.append(el);
-      this.cats.push({ el, label: null, x, y, cat: c, angle: a });
+      // its name outward from the ring, leaning away from the middle (a dozen names under their buttons ran into
+      // each other); they step back once a category opens its powers — the middle names the one under the pointer
+      const label = h('span', { class: 'gn-rad-clo', text: categoryLabel(c) });
+      const ca = Math.cos(a), sa = Math.sin(a);
+      label.style.left = `${this.cx + ca * (R_CAT + 30)}px`; label.style.top = `${this.cy + sa * (R_CAT + 30)}px`;
+      label.style.transform = `translate(${ca < -0.3 ? '-100%' : ca > 0.3 ? '0' : '-50%'}, ${sa < -0.8 ? '-80%' : sa > 0.8 ? '-20%' : '-50%'})`;
+      this.root.append(el, label);
+      this.cats.push({ el, label, x, y, cat: c, angle: a });
     });
+    this.root.classList.remove('gn-rad-deep');
     this.label(null);
   }
 
@@ -197,6 +203,7 @@ export class Radial {
     if (this.active === cat) return;
     this.active = cat;
     this.activeGroup = null;
+    this.root.classList.add('gn-rad-deep');
     this.clearRing(this.groups, 'gn-rad-gring');
     this.clearRing(this.pows, 'gn-rad-pring');
     for (const s of this.cats) s.el.classList.toggle('gn-on', s.cat === cat);

@@ -679,7 +679,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vec3 rnd = normalize(gn_hash33(vec3(fid * 91.7, 7.3, 3.1)) - 0.5);
       // rows run across a FIXED direction per field (P·rnd: a direction tangent at P itself gives P·d ≡ 0 — every field
       // was a flat sheet with no rows at all)
-      float rows = sin(dot(P, rnd) * 6.2831853 / 1.5) * aaF(fw, 1.5);
+      // (on the undisplaced sphere: the facets' and the ground's relief along rnd's vertical part bent the rows into
+      // wavy sand ripples; a furrow follows its line across the bumps)
+      float rows = sin(dot(up * uRadius, rnd) * 6.2831853 / 1.5) * aaF(fw, 1.5);
       // crop by field & season: tilled → green → ripe/canola → stubble
       float k = floor(fid * 5.0);
       vec3 tilled = vec3(0.13, 0.085, 0.05);

@@ -344,7 +344,9 @@ vec3 lensFlare(vec2 uv, float vis) {
     float disc = smoothstep(r, r * 0.6, length(d));
     float ring = smoothstep(r * 0.15, 0.0, abs(length(d) - r)) * 0.5;
     vec3 tint = 0.5 + 0.5 * cos(6.2831 * (fi * 0.17 + vec3(0.0, 0.33, 0.67)));
-    f += (disc * 0.5 + ring) * tint * (0.008 + 0.004 * fi) * ringK;
+    // (faint: at 0.008–0.028 a low morning sun laid a row of pale discs across the sky and the hills, read as smudges on
+    // the lens rather than flare)
+    f += (disc * 0.5 + ring) * tint * (0.0025 + 0.0012 * fi) * ringK;
   }
   // faint chromatic halo ring around the sun
   vec2 ds = (uv - uSunUV) * vec2(uAspect, 1.0);

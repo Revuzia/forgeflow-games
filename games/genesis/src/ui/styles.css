@@ -123,7 +123,7 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 
 /* ── top-right: worlds strip, worship / belief ── */
 .gn-topright { position: absolute; right: 18px; top: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; transform: scale(var(--gn-ui-scale)); transform-origin: top right; pointer-events: none; }
-.gn-worlds { padding: 8px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: min(720px, 56vw); }
+.gn-worlds { padding: 8px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: min(720px, 56vw, calc((100vw - var(--gn-time-r, 0px) - 34px) / var(--gn-ui-scale))); }
 .gn-worldbtn { display: flex; align-items: center; gap: 7px; padding: 6px 10px 6px 6px; }
 .gn-worldbtn i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset -3px -2px 4px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .12); flex: none; }
 .gn-worldbtn.gn-moonbtn i { width: 10px; height: 10px; }
@@ -341,9 +341,10 @@ body[data-cvd='monochrome'] .gn-toast { --gn-tc: var(--gn-ivory-dim) !important;
   background: radial-gradient(circle at 40% 35%, rgba(36, 42, 62, .95), rgba(12, 15, 25, .92)); border: 1px solid var(--gn-line-2); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); transition: transform .12s, border-color .12s, color .12s; }
 .gn-rad-cat { width: 48px; height: 48px; }
 .gn-rad-cat > .gn-ico { width: 22px; height: 22px; margin: 0 auto; }
+/* (a group's name under its button; the categories' names sit outward from their ring: .gn-rad-clo) */
 .gn-rad-cl { position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%); font: 600 11px var(--gn-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--gn-ivory-dim); white-space: nowrap; text-shadow: 0 1px 4px #000; pointer-events: none; }
+.gn-rad-grp.gn-on .gn-rad-cl { color: var(--gn-gold-hi); }
 .gn-rad-cat.gn-on { border-color: var(--gn-gold); color: var(--gn-gold-hi); box-shadow: 0 0 0 3px rgba(217, 184, 120, .18), 0 6px 18px rgba(0, 0, 0, .5); }
-.gn-rad-cat.gn-on .gn-rad-cl { color: var(--gn-gold-hi); }
 .gn-rad-pow { width: 40px; height: 40px; animation: gnPop .18s ease both; }
 .gn-rad-pow > .gn-ico { width: 19px; height: 19px; margin: 0 auto; }
 @keyframes gnPop { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
@@ -710,7 +711,9 @@ body[data-hand='aim'] #game { cursor: crosshair; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, .5); display: flex; flex-direction: column; gap: 3px; }
 .gn-rad-tip b { font: 600 16px var(--gn-serif); color: var(--gn-gold-hi); }
 .gn-rad-tip span { font: 500 13px/1.35 var(--gn-sans); color: var(--gn-ivory); }
-.gn-rad-cat .gn-rad-cl { opacity: .85; }
+.gn-rad-clo { position: absolute; pointer-events: none; font: 600 11px var(--gn-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--gn-ivory-dim); white-space: nowrap;
+  text-shadow: 0 1px 3px #000, 0 0 8px rgba(0, 0, 0, .9); background: rgba(9, 11, 17, .5); padding: 2px 6px; border-radius: 5px; transition: opacity .12s; }
+.gn-rad.gn-rad-deep .gn-rad-clo { opacity: 0; }
 
 /* ── "do this": nearest matches, the full list behind a toggle ── */
 .gn-ff-sugg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -1002,6 +1005,8 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
   box-shadow: 0 0 18px rgba(243, 223, 174, .35), inset 0 0 14px rgba(243, 223, 174, .2); animation: gnRingPulse 2.6s ease-in-out infinite; }
 .gn-open-ring-l { position: absolute; left: 0; top: 44px; transform: translateX(-50%); white-space: nowrap; font: italic 500 16px var(--gn-serif); color: var(--gn-gold-hi);
   text-shadow: 0 1px 2px rgba(0, 0, 0, .95), 0 0 14px rgba(0, 0, 0, .85); animation: gnFade 1.2s ease both; }
+.gn-open-ring-l.gn-up { top: auto; bottom: 44px; }
+.gn-open-ring-l.gn-off { visibility: hidden; }
 @keyframes gnRingPulse { 0%, 100% { transform: scale(1); opacity: .95; } 50% { transform: scale(1.12); opacity: .6; } }
 body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 
