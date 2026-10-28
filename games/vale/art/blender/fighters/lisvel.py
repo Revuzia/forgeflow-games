@@ -830,8 +830,17 @@ def sculpts() -> list:
     mask.add(Ellipsoid((0.0, -0.043, 1.668), (0.058, 0.0505, 0.062)), k=0.022)
     mask.inter(HalfSpace((0, -0.048, 1.7), (0, 1, 0), 1.0), k=0.012)
     mask.sub(Ellipsoid((0.0, -0.112, VIS_Z + 0.001), (0.078, 0.020, 0.0185)), k=0.006)            # the eye recess
-    mask.add(RoundCone((0.0, -0.0985, 1.712), (0.0, -0.1022, 1.692), 0.0054, 0.0062), k=0.012)    # the nose
-    mask.add(Ellipsoid((0.0, -0.0925, 1.652), (0.0150, 0.0030, 0.0056)), k=0.010)                 # the closed lips
+    # (W5b, final parity review originality F9: "Lisvel's wrapped, featureless head" - under the visor the face read as
+    # a smooth blank egg in the portrait and the icon): a CARVED face plate, the concept's - each cheek a flat plane
+    # turned ~49 deg off the front meeting the front in a crisp edge, a proud carved nose (12 mm off the face, was 6)
+    # with its wings, the carving painted (paint_mask). (A jaw plane cut round the mouth left the lips standing out
+    # as a snout in the look check: no jaw plane; the lips sit 2 mm further back.)
+    for sx in (-1.0, 1.0):
+        mask.inter(HalfSpace((sx * 0.033, -0.098, 1.68), _nrm((sx * 0.75, -0.66, -0.05)), 1.0), k=0.003)
+    mask.add(RoundCone((0.0, -0.1000, 1.716), (0.0, -0.1075, 1.688), 0.0050, 0.0068), k=0.006)    # the nose
+    for sx in (-1.0, 1.0):
+        mask.add(Ellipsoid((sx * 0.0085, -0.1010, 1.6895), (0.0050, 0.0040, 0.0040)), k=0.004)   # its wings
+    mask.add(Ellipsoid((0.0, -0.0905, 1.652), (0.0150, 0.0030, 0.0056)), k=0.010)                 # the closed lips
     part("mask", mask, "chalk", "bone:head", 1100, vs=0.55, uvw=2.4)
     vis = Sculpt("visor")
     vis.add(_VisorSlab(), k=0.0)
@@ -1654,20 +1663,31 @@ def paint_wrap(p, n):
     return C("wrap") * k[:, None]
 
 
+MASK_KEY = np.array([-0.40, -0.72, 0.57]) / np.linalg.norm([-0.40, -0.72, 0.57])
+
+
+def _nrm(v):
+    v = np.asarray(v, dtype=np.float64)
+    return tuple(v / np.linalg.norm(v))
+
+
 def paint_mask(p, n):
     """the calm chalk face-plate (review item 3): an even chalk lit from the front, the ink recess behind the visor,
     closed lips a touch warmer with a soft line curving up at the corners (a slight smile), a soft shadow under the
     nose, two faint incised facet lines on each cheek (the painting's carving), nothing dark at the mouth"""
     x, y, z = p[:, 0], p[:, 1], p[:, 2]
     front = _ss(0.1, 0.9, -n[:, 1])
-    k = (0.86 + 0.14 * front) * (1.0 - 0.10 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
+    # (W5b, originality F9: the carved planes parted by the painting's key from her upper right, so the cheek and jaw
+    # planes and the nose's sides read as cut stone, not a smooth egg)
+    lam = np.clip(n @ MASK_KEY, 0.0, 1.0)
+    k = (0.74 + 0.30 * lam) * (1.0 - 0.10 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
     col = C("mask") * k[:, None]
     # the lips: a soft warm mound and the smile line
     lip = np.exp(-((x / 0.016) ** 2 + ((z - 1.652) / 0.0080) ** 2)) * _ss(-0.086, -0.093, y)
     col = _mix(col, C("lip") * k[:, None], 0.40 * lip)
     line_z = 1.6515 + 0.0030 * (x / 0.0145) ** 2
     mline = np.exp(-((z - line_z) / 0.0015) ** 2) * _ss(0.018, 0.011, np.abs(x)) * _ss(-0.087, -0.093, y)
-    col = col * (1.0 - 0.24 * mline)[:, None]
+    col = col * (1.0 - 0.50 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads)
     # under the nose: one soft broad shade (FIX PASS 2, review item 6: two dark dots at the nose's base)
     ns = np.exp(-((x / 0.014) ** 2 + ((z - 1.681) / 0.006) ** 2)) * _ss(-0.092, -0.101, y)
     col = col * (1.0 - 0.07 * ns)[:, None]
@@ -1675,19 +1695,28 @@ def paint_mask(p, n):
     # and its branches above the visor, from each nose wing out under the visor to the temple, down past the
     # mouth corners to the jaw, along each cheekbone to the jaw's corner, the chin's outline
     fac = np.zeros(len(p))
+    liplit = np.zeros(len(p))
     q = np.stack([x, z], 1)
     for sx in (-1.0, 1.0):
-        for (x0, z0, x1, z1) in ((0.0, 1.760, 0.0, 1.800), (0.0, 1.775, 0.028, 1.792), (0.028, 1.792, 0.050, 1.785),
-                                 (0.012, 1.700, 0.040, 1.708), (0.040, 1.708, 0.062, 1.712),
-                                 (0.014, 1.690, 0.022, 1.662), (0.022, 1.662, 0.030, 1.630),
-                                 (0.046, 1.702, 0.054, 1.668), (0.054, 1.668, 0.044, 1.632),
-                                 (0.030, 1.630, 0.016, 1.616), (0.030, 1.630, 0.044, 1.632)):
+        # (W5b, the look check: inked dark, the near-vertical lines under the visor read as tear streaks - the
+        # horror line): each line its own depth - the horizontal seams and the chin's outline cut clearly, the
+        # nasolabial lines faint, the cheekbone-to-jaw line gone
+        for (x0, z0, x1, z1), wt in (((0.0, 1.760, 0.0, 1.800), 0.75), ((0.0, 1.775, 0.028, 1.792), 0.75),
+                                     ((0.028, 1.792, 0.050, 1.785), 0.75),
+                                     ((0.012, 1.700, 0.040, 1.708), 0.85), ((0.040, 1.708, 0.062, 1.712), 0.85),
+                                     ((0.014, 1.690, 0.022, 1.662), 0.38), ((0.022, 1.662, 0.030, 1.630), 0.38),
+                                     ((0.030, 1.630, 0.016, 1.616), 0.75), ((0.030, 1.630, 0.044, 1.632), 0.75)):
             a, b = np.array([sx * x0, z0]), np.array([sx * x1, z1])
             t = np.clip(((q - a) @ (b - a)) / max((b - a) @ (b - a), 1e-9), 0, 1)
             d = np.linalg.norm(q - (a + np.outer(t, b - a)), axis=1)
-            fac = np.maximum(fac, np.exp(-(d / 0.0016) ** 2))
+            fac = np.maximum(fac, wt * np.exp(-(d / 0.0019) ** 2))
+            # the lit lip beside each cut (on its upper / outer side), so the line reads carved, not drawn
+            lipd = np.linalg.norm(q + np.array([0.0, -0.0032]) - (a + np.outer(t, b - a)), axis=1)
+            liplit = np.maximum(liplit, np.exp(-(lipd / 0.0013) ** 2) * (1.0 - np.exp(-(d / 0.0019) ** 2)))
     fac = fac * _ss(-0.072, -0.088, y)
-    col = col * (1.0 - 0.42 * fac)[:, None]
+    liplit = liplit * _ss(-0.072, -0.088, y)
+    # (W5b: 0.42 -> 0.66, the ink cut: the carving read as faint scratches from the portrait's distance)
+    col = col * (1.0 - 0.66 * fac)[:, None] * (1.0 + 0.16 * liplit)[:, None]
     # the ink recess behind the glass
     rec = _ss(0.0185, 0.0150, np.abs(z - VIS_Z)) * _ss(-0.101, -0.094, y) * _ss(0.082, 0.070, np.abs(x))
     return _mix(col, C("recess"), rec)

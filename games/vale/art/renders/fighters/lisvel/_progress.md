@@ -51,3 +51,13 @@
   7 [minor] bow edge-on at 135/315 deg: not changed (the trade-off of the 50 deg ready yaw that makes the lane facings read; any yaw leaves two facings edge-on).
   8 [minor] Gorgewalk tabard = the brief's #6B7885 (blue-grey, sat 20 %) with the faint lichen mottling (was moss #5F6A58).
   New protos: proto/lisvel_look.py (bind-pose parts vertex-coloured by the build's painters, optional --low decimation, close views + clearance report, ~1 min; _look/look4 neck, look7q quiver, look8 face), proto/lisvel_clash.py (cached build posed at a clip frame, inward rays in the hips' frame, first part hit per ray).
+- 2026-10-28 14:45 CDT: W5b (final parity review, originality F9: "Lisvel's wrapped, featureless head" - under the visor
+  the face read as a smooth blank egg): a CARVED face plate - each cheek a flat plane ~49 deg off the front meeting it
+  in a crisp edge, a proud nose (12 mm off the face, was 6) with its wings, the lips 2 mm further back (a jaw-plane trial
+  left them standing out as a snout: dropped), paint_mask lit plane by plane by the painting's key (MASK_KEY), the
+  horizontal seams and the chin outline cut a clear step deeper with a lit lip, the mouth line 0.24 -> 0.50, the
+  nasolabial lines kept faint and the cheekbone-to-jaw line removed (inked dark, the near-vertical lines under the visor
+  read as tear streaks in the look check: _look/w5b_face1z.png vs w5b_face2.png). Build (base + 2 skins): lisvel 22679
+  tris 1130 KiB accent 1.70 %, almanac 21995 / 940 KiB / 1.85 %, gorgewalk 23579 / 990 KiB / 1.84 %, three load OK,
+  faces +Z, mesh top 1.885 (art.json unchanged). The three QA close-up (three_lisvel.png bottom row, cell 1) now shows
+  the nose and the closed mouth in profile.

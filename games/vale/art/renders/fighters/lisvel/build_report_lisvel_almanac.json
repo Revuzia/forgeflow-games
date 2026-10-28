@@ -81,34 +81,34 @@
     "tris_fan_heads": 120,
     "validate_lisvel": "20110->20105"
   },
-  "uv_coverage": 0.614,
+  "uv_coverage": 0.598,
   "bake": {
-    "base": 7.28,
-    "rough_metal": 3.58,
-    "normal": 3.14,
-    "ao": 4.32,
-    "normal_fixed_px": 85092,
-    "projection": 8.64,
-    "pack_save": 8.9,
-    "total": 27.61
+    "base": 2.05,
+    "rough_metal": 1.63,
+    "normal": 1.41,
+    "ao": 1.57,
+    "normal_fixed_px": 83720,
+    "projection": 4.04,
+    "pack_save": 4.17,
+    "total": 10.93
   },
   "tris": 21995,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2239424,
+  "glb_bytes_raw": 2231428,
   "optimize": {
     "ok": true,
-    "before": 2239424,
-    "after": 962480,
+    "before": 2231428,
+    "after": 962120,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 962480,
+  "glb_bytes": 962120,
   "three_load_test": {
     "ok": true,
     "log": [
       "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (940 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_almanac_base 2048x2048 146K, lisvel_almanac_normal 512x512 38K, lisvel_almanac_orm 256x256 10K",
-      "  skinned meshes: lisvel_accent(214v), lisvel_almanac(21876v)",
+      "  webp: lisvel_almanac_base 2048x2048 145K, lisvel_almanac_normal 512x512 37K, lisvel_almanac_orm 256x256 10K",
+      "  skinned meshes: lisvel_accent(214v), lisvel_almanac(21936v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
@@ -122,8 +122,8 @@
       "portrait": "art/out/fighters/lisvel/lisvel_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 13.68,
-      "portrait": 7.31
+      "splash": 6.12,
+      "portrait": 3.08
     }
   },
   "three_qa": {
@@ -155,24 +155,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_almanac.png",
-    "seconds": 16.1,
+    "seconds": 7.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.43,
-      "model": 8.42,
-      "lows_bind": 3.6,
-      "uv": 7.24,
-      "bake": 30.34,
-      "export": 0.12,
-      "optimize": 0.87,
-      "load_test": 0.22,
-      "render": 21.03,
-      "three_qa": 16.45
+      "rig": 0.0,
+      "materials": 0.24,
+      "model": 3.88,
+      "lows_bind": 1.4,
+      "uv": 3.65,
+      "bake": 12.3,
+      "export": 0.06,
+      "optimize": 0.44,
+      "load_test": 0.1,
+      "render": 9.23,
+      "three_qa": 7.26
     },
-    "total_s": 89.06
+    "total_s": 38.67
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86
