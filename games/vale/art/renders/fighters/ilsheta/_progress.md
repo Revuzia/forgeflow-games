@@ -56,7 +56,7 @@
     death lays the staff down so the lamp rests on the ground, ends bowed forward.
   Fit tool: ilsheta_fit.py --poses now checks every key pose (pivot, flame z, reach, clearances).
 - build FP1-1 (fast base, clip sheet) starting.
-- 2026-10-28 12:55 build FP1-1 (fast base): 18304 tris, 1092 KiB, load OK, accent 1.57 % (three QA, top half 72 %).
+- 2026-10-28 12:35 build FP1-1 (fast base): 18304 tris, 1092 KiB, load OK, accent 1.57 % (three QA, top half 72 %).
   Read: chimney now cool glass with the face inside the flare (portrait / icon / three close), lamp = blue teardrop
   flame in a clear cage, no brown side smear (lobby / victory frames), splash on the dusk backdrop. Clip check
   (ilsheta_clipcheck.py, now also prints the lowest part): a1 long arm OK from the side, a3 arms wide + flare, ult
@@ -68,7 +68,7 @@
   edge lines down the flare's sides, a shoulder glint and a chin rim (so the bulb round the face reads as glass).
   Splash yaw 34 (the held-out lamp clear of the face).
 - build FP1-2 (FULL base + skins) starting.
-- 2026-10-28 13:25 build FP1-2 (FULL base + skins): base 18304 tris / 1067 KiB / load OK / accent 1.55 % (top half 79 %);
+- 2026-10-28 12:47 build FP1-2 (FULL base + skins): base 18304 tris / 1067 KiB / load OK / accent 1.55 % (top half 79 %);
   stillwater 19028 / 923 KiB; first_bell 19124 / 918 KiB (bind-pose QA accents 1.50 / 1.32 %). Skins now read as
   skins (wet-stone mantle + sea-glass font + reed ruff; pale dial-stone over a dark hem with white hour-marks), each
   splash its own pose. lineup_qa (vs sukri / dunsom / marund IoU64 0.70 / 0.45 / 0.37): base top 65.1 (lower than
@@ -82,7 +82,7 @@
   the under-dress re-painted flat in the skin's cloth (First Bell's had turned tan); First Bell's bell slimmer, hung
   front-left of the flame; victory lamp lower + splash yaw 40 (the held lamp clear of the face).
 - build FP1-3 (FULL base + skins) starting.
-- 2026-10-28 13:50 build FP1-3 (FULL): base 18202 tris / 1063 KiB / load OK / accent 1.51 % (top half 89 %); stillwater
+- 2026-10-28 12:56 build FP1-3 (FULL): base 18202 tris / 1063 KiB / load OK / accent 1.51 % (top half 89 %); stillwater
   18926 / 922 KiB; first_bell 19022 / 980 KiB. lineup_qa: base top 67.1 / mid 46.5 / bottom 37.3, accent top-half
   0.89 at facing 0 (1.0 elsewhere), IoU64 0.70 / 0.45 / 0.37; stillwater top 59.3 (REGRESSION vs 66.0: its sleeves
   were re-painted wet stone and ride up into the top quarter in idle); first_bell top 66.9 / mid 49.5-65.5.
@@ -90,3 +90,30 @@
   Batched for FP1-4 (the last full build, for the Stillwater regression + the base feet band): sleeves out of the skin
   re-paint (pale cloth2), LIFT sleeves 5, the base hem's slate deepened below 0.52 m (x0.78), Stillwater cloth3 from 0.47.
 - build FP1-4 (FULL base + skins) starting.
+- 2026-10-28 13:12 build FP1-4 (FULL base + skins) DONE: base 18202 tris / 1062 KiB / load OK / accent 1.51 % (three
+  QA, top half 89 %), faces +Z, 17 clips; stillwater 18926 / 920 KiB, first_bell 19022 / 976 KiB (load OK; bind-pose
+  QA accents 1.50 / 1.41 %). lineup_qa (facing 0): base top 67.0 / mid 46.9 / bottom 36.1, accent 1.67 % with top-half
+  0.89 (1.0 at 90/180/270; was 0.0 / 0.06), IoU64 vs sukri / dunsom / marund 0.70 / 0.45 / 0.37; first_bell
+  66.9 / 48.0 / 33.3; stillwater top 59.2 (the 8 broad reed leaves, L* 61, sit in the top quarter: 66.0 before).
+  Content: art.json == the content art block (unchanged); build_content --check OK (nothing missing); probe_kits_A
+  525/0, probe_kits_B 733/0. In-game shots art2_ilsheta_{game,close,close2} (t 25: close2 behind the lane wall again).
+  Full-build budget used (FP1-2/3/4). Stillwater-only fix (skins-only, one skin): six reed leaves (the brief's count),
+  pale straw tips painted.
+- 2026-10-28 13:30 Stillwater-only rebuild DONE: 18902 tris / 917 KiB / load OK / three QA re-run by hand (the build's
+  Chromium did not start): accent 1.50 % (bind pose). lineup_qa final (facing 0): base 67.0 / 46.9 / 36.1, stillwater
+  63.7 / 43.5 / 33.0, first_bell 66.9 / 48.0 / 33.3; accent top-half 0.89 / 0.89 / 0.87 at facing 0, 1.0 elsewhere;
+  IoU64 max 0.71 (sukri). build_content --check OK. In-game reshoot at t 40: _harness/_shots/art2_ilsheta_t40_*
+  (open ground, feet and hem in view). FIX PASS 1 DONE.
+  Per review item:
+  1 chimney = one glass body holding the painted face (flare 0.24 m, beak forward), cool dawnglass paint with streaks,
+    edge lines, chin rim; collar ring + separate mask removed.  2 lamp at her right chest (flame 1.29 m), teardrop
+    flame in a clear cage + glass font; base accent 1.51 % (three QA).  3 side/hem smear and scarf ink blot gone
+    (_band_fill edge-on fill + ghost clamp).  4 a1 long arm / a2 raised arm, lamp out at her right / a3 arms wide +
+    mantle flare / ult overhead on toes + flare; x_mantle_l/r bones + knee follow.  5 skins re-painted on their own
+    gradients (wet stone; dark hem + hour-marks), sea-glass font, reed ruff, bell, own splash poses.  6 dusk backdrop,
+    warm rim down, icon/portrait keep the lamp under the visor.  8 bell sleeves, angular hook, back drape folds.
+    9 lobby beats, attack1 flick vs attack2 tap, death sets the lamp down.  10 reshoot in open ground.
+  Open (minor): top band under 70 (base 67.0, stillwater 63.7, first_bell 66.9; roster-wide caveat), base bottom 36.1
+  (1.1 over), accent top-half 0.87-0.89 at facing 0 (guide 0.9), the back facing's accent ~0.8-1.1 % (the lamp is in
+  front of her chest, the brief's place); a tiny grey texel triangle on the chimney's back (survived re-decimation);
+  ally/enemy-tinted in-game view not possible with the bench (Ilsheta can only be seat 0 = self).

@@ -581,19 +581,20 @@ def skin_extras(extra: dict) -> list:
     out = []
     cx, cy = CHIM_C
     if extra.get("reed_plates"):
-        # fix pass 1 (the review: six thin prongs read as antennae): EIGHT broad reed leaves (0.11 x 0.05 m) laid
-        # overlapping round the chimney's foot on the hood's crown, leaning out 50 degrees: a reed ruff, low and wide
+        # fix pass 1 (the review: six thin prongs read as antennae): the brief's six reed plates made broad leaves
+        # (0.10 x 0.05 m) laid round the chimney's foot on the hood's crown, leaning out 50 degrees: a low reed ruff
+        # (pale straw tips, painted: the ruff sits in the top quarter, which holds its value)
         rp = Sculpt("reed_plates")
         zc = 1.492
-        for i in range(8):
-            a = math.radians(22.5 + 45.0 * i)
+        for i in range(6):
+            a = math.radians(30.0 + 60.0 * i)
             r = np.array([math.sin(a), -math.cos(a), 0.0])
             d = unit(r * math.cos(math.radians(40)) + np.array([0, 0, math.sin(math.radians(40))]))
             rc = _interp(CHIM_R, zc, 1) + 0.008
             c = np.array([cx, cy, zc]) + r * rc + d * 0.050
             side = unit(np.cross(d, r))
             nrm = unit(np.cross(side, d))
-            leaf = Ellipsoid(c, (0.028, 0.056, 0.0055), axes=np.stack([side, d, nrm]))
+            leaf = Ellipsoid(c, (0.026, 0.052, 0.0055), axes=np.stack([side, d, nrm]))
             rp.add(leaf.displaced(lambda P, c=c, side=side: 0.002 * np.cos((P - c) @ side * 160.0), 0.002), k=0.0)
             rp.add(Capsule(c - d * 0.048, c + d * 0.050, 0.0036), k=0.003)          # the leaf's midrib
         out.append(("reed_plates", rp, 0.5, "reed", "bone:head", 700, 0.7))
@@ -1031,7 +1032,9 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         elif nm in ("hand_L", "hand_R"):
             out[sel] = _paint_glove(p, n, pal)
         elif nm == "reed_plates":
-            out[sel] = _paint_flat(p, n, pal, "reed")
+            rr = np.hypot(p[:, 0] - CHIM_C[0], p[:, 1] - CHIM_C[1])
+            tip = ss(0.09, 0.17, rr)[:, None]
+            out[sel] = _paint_flat(p, n, pal, "reed") * (1 - 0.6 * tip) + _hex("#C9C9A2") * 0.6 * tip
         elif nm == "hour_marks":
             out[sel] = _paint_flat(p, n, pal, "chalk")
         elif nm == "chimney":

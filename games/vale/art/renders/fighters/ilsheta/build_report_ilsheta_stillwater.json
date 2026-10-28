@@ -20,39 +20,39 @@
     "tris_lamp_stone": 700,
     "tris_lamp_glass": 640,
     "tris_flame": 300,
-    "tris_reed_plates": 724,
-    "validate_ilsheta": "18630->18626"
+    "tris_reed_plates": 700,
+    "validate_ilsheta": "18606->18602"
   },
-  "uv_coverage": 0.635,
+  "uv_coverage": 0.632,
   "bake": {
-    "base": 4.31,
-    "rough_metal": 3.13,
-    "normal": 2.26,
-    "ao": 3.26,
-    "normal_fixed_px": 21152,
-    "projection": 22.85,
-    "pack_save": 23.02,
-    "total": 36.17
+    "base": 7.31,
+    "rough_metal": 6.06,
+    "normal": 8.16,
+    "ao": 32.08,
+    "normal_fixed_px": 17383,
+    "projection": 142.72,
+    "pack_save": 144.36,
+    "total": 198.39
   },
-  "tris": 18926,
+  "tris": 18902,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2295080,
+  "glb_bytes_raw": 2277620,
   "optimize": {
     "ok": true,
-    "before": 2295080,
-    "after": 941724
+    "before": 2277620,
+    "after": 938676
   },
-  "glb_bytes": 941724,
+  "glb_bytes": 938676,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_stillwater.glb (920 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_stillwater_base 2048x2048 250K, ilsheta_stillwater_normal 512x512 36K, ilsheta_stillwater_orm 512x512 61K",
-      "  skinned meshes: ilsheta_accent(152v), ilsheta_stillwater(16318v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_stillwater.glb (917 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ilsheta_stillwater_base 2048x2048 252K, ilsheta_stillwater_normal 512x512 34K, ilsheta_stillwater_orm 512x512 60K",
+      "  skinned meshes: ilsheta_accent(152v), ilsheta_stillwater(16231v)",
       "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 18926; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
+      "  tris: 18902; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -62,57 +62,29 @@
       "portrait": "art/out/fighters/ilsheta/ilsheta_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 9.33,
-      "portrait": 3.5
+      "splash": 61.17,
+      "portrait": 49.56
     }
   },
   "three_qa": {
-    "ok": true,
-    "mode": "sheet",
-    "bindBox": [
-      [
-        -0.498,
-        0,
-        -0.378
-      ],
-      [
-        0.502,
-        1.722,
-        0.323
-      ]
-    ],
-    "facing": [
-      0,
-      1
-    ],
-    "headY": 1.238,
-    "accentPct": 1.5,
-    "accentTopHalfPct": 42.9,
-    "heightPx1080": 91,
-    "size": [
-      2400,
-      900
-    ],
-    "clips": 0,
-    "out": "art/renders/fighters/ilsheta/three_ilsheta_stillwater.png",
-    "seconds": 12.8,
-    "exit": 0
+    "ok": false,
+    "skipped": "[three-snap] Chromium did not start"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.14,
-      "model": 3.15,
-      "lows_bind": 3.27,
-      "uv": 7.7,
-      "bake": 36.17,
-      "export": 0.1,
-      "optimize": 0.59,
-      "load_test": 0.12,
-      "render": 12.87,
-      "three_qa": 13.13
+      "rig": 0.01,
+      "materials": 0.7,
+      "model": 6.38,
+      "lows_bind": 5.2,
+      "uv": 13.9,
+      "bake": 198.4,
+      "export": 0.3,
+      "optimize": 1.27,
+      "load_test": 0.36,
+      "render": 110.99,
+      "three_qa": 34.9
     },
-    "total_s": 77.27
+    "total_s": 372.78
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47
