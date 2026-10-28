@@ -281,12 +281,12 @@ def skirts_rift(W, H):
 
 def skirts_fray(C):
     """env F1: the noon fair on the court beyond the rim (brief §2): booths with canvas awnings (<= the rim's 2.4 m) north
-    of the plate, low benches (< 1 m) south of it; between the corner stands, r 34.5 (36 on the diagonals, so the
-    footprint's box stays off the plate)."""
+    of the plate, low benches (< 1 m) south of it; between the corner stands, r 34.5 (33 / 32.6 at 12 and 6 o'clock,
+    in the seat's view; 36 on the diagonals, so the footprint's box stays off the plate)."""
     out = []
     for th in (0, 36, 72, 108, 144, 180, 216, 252, 288, 324):
         hi = th in (0, 36, 72, 288, 324)
-        r = 36.0 if th % 72 == 36 else 34.5
+        r = 36.0 if th % 72 == 36 else {0: 33.0, 180: 32.6}.get(th, 34.5)
         a = math.radians(th)
         at = (C[0] + r * math.sin(a), C[1] - r * math.cos(a))
         c, sn = abs(math.cos(a)), abs(math.sin(a))

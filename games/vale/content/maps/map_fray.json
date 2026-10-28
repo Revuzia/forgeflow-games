@@ -576,10 +576,10 @@
      "id": "skirt_fray_0", "model": "assets/maps/landmarks/skirt_fray.glb",
      "rot": 0,
      "name": "fair booth",
-     "at": [32.0, -2.5],
+     "at": [32.0, -1.0],
      "size": [6.4, 3.8],
      "height": 2.5,
-     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, an unlit lamp post",
      "value": 1.0
     },
     {
@@ -589,7 +589,7 @@
      "at": [53.2, 2.9],
      "size": [7.4, 6.8],
      "height": 2.5,
-     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, an unlit lamp post",
      "value": 1.0
     },
     {
@@ -599,7 +599,7 @@
      "at": [64.8, 21.3],
      "size": [5.6, 7.3],
      "height": 2.5,
-     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, an unlit lamp post",
      "value": 1.0
     },
     {
@@ -659,7 +659,7 @@
      "at": [-0.8, 21.3],
      "size": [5.6, 7.3],
      "height": 2.5,
-     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, an unlit lamp post",
      "value": 1.0
     },
     {
@@ -669,7 +669,7 @@
      "at": [10.8, 2.9],
      "size": [7.4, 6.8],
      "height": 2.5,
-     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, a bench, an unlit lamp post",
+     "note": "off-map skirt (art/blender/maps/skirts.py): a fair booth on the court north of the plate, a setts dais, a counter under a folded canvas awning (<= the rim's 2.4 m), crates, an unlit lamp post",
      "value": 1.0
     }
    ]

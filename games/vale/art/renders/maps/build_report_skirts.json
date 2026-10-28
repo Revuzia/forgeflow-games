@@ -26,15 +26,15 @@
   },
   "skirt_rift_low": {
     "id": "skirt_rift_low",
-    "tris": 16687,
-    "trees": 16,
+    "tris": 23816,
+    "trees": 27,
     "size_m": [
-      22.05,
+      22.04,
       13.9
     ],
     "z": [
       -3.5,
-      3.72
+      3.74
     ],
     "x": [
       -11.02,
@@ -44,10 +44,10 @@
       -7.88,
       6.02
     ],
-    "kb_raw": 1556,
-    "kb": 747,
+    "kb_raw": 1918,
+    "kb": 966,
     "texture": 2048,
-    "buried_faces_dropped": 698
+    "buried_faces_dropped": 704
   },
   "skirt_bridge": {
     "id": "skirt_bridge",
@@ -101,11 +101,11 @@
   },
   "skirt_fray": {
     "id": "skirt_fray",
-    "tris": 1158,
+    "tris": 1054,
     "trees": 0,
     "size_m": [
       6.53,
-      4.71
+      3.8
     ],
     "z": [
       -0.08,
@@ -116,13 +116,13 @@
       3.19
     ],
     "y": [
-      -2.81,
+      -1.9,
       1.9
     ],
-    "kb_raw": 245,
-    "kb": 98,
+    "kb_raw": 236,
+    "kb": 92,
     "texture": 1024,
-    "buried_faces_dropped": 98
+    "buried_faces_dropped": 80
   },
   "skirt_fray_low": {
     "id": "skirt_fray_low",

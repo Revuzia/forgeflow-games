@@ -1551,7 +1551,7 @@
      "size": [18.4, 18.4],
      "height": 8.0,
      "note": "Serenade base, beyond the east edge (art/blender/maps/landmarks_art2.py): a ribbed ironstone dome on a coursed sandstone drum (ironstone bands, twelve round-arched lampresin windows between pilasters), a lampresin oculus (emissive 0.8); its sandstone-flagged court fills the rim 44-66",
-     "value": 0.85
+     "value": 0.62
     },
     {
      "id": "lampwright_stall_a", "model": "assets/maps/landmarks/lampwright_stall.glb",
@@ -1651,7 +1651,8 @@
      "at": [85.0, 3.0],
      "size": [3.0, 1.5],
      "height": 9.0,
-     "note": "upright stele where the Noonline meets the north rim: four battered chalk drums on a dial-stone plinth, XII raised in a sunk panel on its south face, a blued-steel band, a hipped cap under the steel noon ring (art/blender/maps/landmarks_art2.py)"
+     "note": "upright stele where the Noonline meets the north rim: four battered chalk drums on a dial-stone plinth, XII raised in a sunk panel on its south face, a blued-steel band, a hipped cap under the steel noon ring (art/blender/maps/landmarks_art2.py)",
+     "value": 0.6
     },
     {
      "id": "vi_slab", "model": "assets/maps/landmarks/vi_slab.glb",

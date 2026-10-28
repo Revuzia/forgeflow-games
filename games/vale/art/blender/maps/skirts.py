@@ -25,7 +25,7 @@ map's entry turns it (rot 90 = the west bound, -90 = east, 180 = south).
 
 Values: the stone is painted for the map's `propValue.landmark` x the entry's `value` (RIFT trees at the
 scatter's 0.53: the skirt's entries carry value 1.15 = 0.53 / 0.46). Output: art/out/maps/landmarks/<id>.glb,
-report art/renders/maps/build_report_skirts.json, looks art/renders/maps/skirt_<id>.png.
+report art/renders/maps/build_report_skirts.json, looks art/renders/maps/<id>.png (fast builds overwrite them).
 """
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ def terrace_block(B, mat, x0, x1, y0, y1, z0, z1):
 HALF = 11.0
 
 
-def rift_bank(B, rng, trees, steps, walk=(0.6, 4.0), depth_out=16.6, kerb=None, ends=True, spacing=(2.7, 3.7), cushions=7):
+def rift_bank(B, rng, trees, steps, walk=(0.6, 4.0), depth_out=16.6, kerb=None, ends=True, spacing=(2.7, 3.7), cushions=7, rows=1):
     """steps: [(front distance out, top z, tree scale range)] bottom to top. The bound is at local y = -Y0
     (Y0 = the footprint centre's distance out, set by the caller through B.y0)."""
     y0 = -B.y0
@@ -137,11 +137,13 @@ def rift_bank(B, rng, trees, steps, walk=(0.6, 4.0), depth_out=16.6, kerb=None, 
                 coursed_wall(B, rng, "wallstone", yf + 0.55, yb, sx * HALF, -sx * 0.5, max(zb, prev_top - 0.4), top - 0.12, h=0.6, axis="y")
         # its row of Dialwood (the props' own crowns), staggered, kept 0.5 m behind the coping
         lo, hi = sc
-        x = -HALF + rng.uniform(0.8, 2.0)
-        while x < HALF - 0.9:
-            yy = yf + 0.9 + (yb - yf - 1.6) * rng.uniform(0.2, 0.8)
-            trees.append((x, yy, top, rng.uniform(lo, hi), rng.uniform(0, TAU), rng.randrange(5)))
-            x += rng.uniform(*spacing)
+        for row in range(rows):                              # rows > 1: staggered rows across a deep bed
+            x = -HALF + rng.uniform(0.8, 2.0) + row * spacing[0] / 2
+            while x < HALF - 0.9:
+                f = (row + rng.uniform(0.2, 0.8)) / rows
+                yy = yf + 0.9 + (yb - yf - 1.6) * f
+                trees.append((x, yy, top, rng.uniform(lo, hi), rng.uniform(0, TAU), rng.randrange(5)))
+                x += rng.uniform(*spacing)
         for _ in range(cushions):                                   # moss cushions and fallen hour-tick stones
             c = (rng.uniform(-HALF + 0.6, HALF - 0.6), yf + 0.8 + (yb - yf - 1.2) * rng.random(), top)
             if rng.random() < 0.6:
@@ -161,7 +163,8 @@ def skirt_rift(B, rng, trees):
 
 def skirt_rift_low(B, rng, trees):
     B.y0 = 8.5                     # footprint: 3-14 m out (centre 8.5 m)
-    rift_bank(B, rng, trees, [(3.0, 0.4, (0.8, 0.95)), (8.0, 0.9, (0.85, 0.98))], walk=(0.6, 3.0), depth_out=14.0, spacing=(2.2, 3.0), cushions=12)
+    rift_bank(B, rng, trees, [(3.0, 0.4, (0.72, 0.92)), (8.0, 0.9, (0.82, 0.98))], walk=(0.6, 3.0), depth_out=14.0, spacing=(2.6, 3.4),
+              cushions=16, rows=2)
 
 
 # ── BRIDGE: the far banks ───────────────────────────────────────────────────────────────────────────
@@ -262,7 +265,7 @@ def dais(B, rng, hx, hy, steps=((0.0, 0.16), (0.16, 0.3))):
 
 def skirt_fray(B, rng, trees):
     """A fair booth on the court, north of the plate: a stepped setts dais, a timber counter under a folded canvas
-    awning on four posts (<= 2.4 m, the rim's height), crates, a bench, an iron lamp post (unlit at noon)."""
+    awning on four posts (<= 2.45 m, about the rim's height), crates, an iron lamp post (unlit at noon)."""
     z = dais(B, rng, 3.2, 1.9)
     B.add("timber", K.box((0, -0.6, z + 0.45), (2.2, 0.32, 0.45), 0.03))                    # the counter (faces the plate)
     B.add("timber", K.box((0, -0.62, z + 0.93), (2.35, 0.42, 0.04), 0.012))
@@ -283,9 +286,6 @@ def skirt_fray(B, rng, trees):
     B.add("timber", K.box((0, 0, zr + 0.02), (2.55, 0.05, 0.05), 0.01))
     for (x, y) in ((-2.9, 1.2), (-2.5, 1.5), (2.7, 1.3)):
         crate(B, rng, x, y, z, s=rng.uniform(0.24, 0.34))
-    B.add("setts", K.box((1.4, -2.55, 0.22), (1.1, 0.26, 0.06), 0.02))                       # a stone bench before it
-    for sx in (0.55, 2.25):
-        B.add("setts", K.box((sx, -2.55, 0.08), (0.12, 0.2, 0.1), 0.015))
     v, f = K.lathe([(0, 0), (0.14, 0), (0.14, 0.12), (0.05, 0.2), (0.04, 2.0), (0, 2.0)], 8)
     B.add("iron", (K.move(v, (-3.0, -1.6, 0)), f))
     v, f = K.lathe([(0, 2.0), (0.16, 2.0), (0.2, 2.18), (0.12, 2.3), (0, 2.34)], 8, phase=PI / 8)
@@ -452,7 +452,7 @@ def look(name, objs, lo, hi):
     cam.rotation_euler = (focus - cam.location).to_track_quat("-Z", "Y").to_euler()
     sc.camera = cam
     os.makedirs(RENDERS, exist_ok=True)
-    sc.render.filepath = os.path.join(RENDERS, f"skirt_{name}.png")
+    sc.render.filepath = os.path.join(RENDERS, f"{name}.png")
     bpy.ops.render.render(write_still=True)
     for o in (sun, cam):
         bpy.data.objects.remove(o)
