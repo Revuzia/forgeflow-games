@@ -475,9 +475,9 @@ def sculpts() -> list:
     band = Sculpt("eyeband")
     ring = Torus((0.0, HEAD_C[1], BAND_Z), BAND_R[0], 0.011, axes=np.diag([1.0, BAND_R[0] / BAND_R[1], 1.0]), rz=BAND_H)
     band.add(ring.displaced(_band_carve, 0.003), k=0.0)
-    # the beak (FIX PASS 2, review: 'a curved white specular sliver on the eye band' = the old 8-16 mm round keel's
-    # grazing flank catching the sky): a broad, low prow with gentle curvature, still 1.2 cm proud of the band
-    band.add(Ellipsoid((0.0, -0.127, BAND_Z), (0.030, 0.029, BAND_H * 0.92)), k=0.014)
+    # the beak (FIX PASS 2, review: 'a curved white specular sliver on the eye band'): the 8-16 mm round keel's flank
+    # caught the sky behind the camera (a crisp sliver), a broad prow a soft grey spot (build 13); the beak is now the
+    # band's own forward-pointed oval (BAND_R 9.0 x 10.8 cm: its front stands 1.8 cm ahead of a round band), no knob
     band.inter(HalfSpace((0, HEAD_C[1] + 0.035, BAND_Z), (0, 1, 0), 0.4), k=0.01)
     band.sub(Torus((0.0, HEAD_C[1], BAND_Z - BAND_H + 0.006), BAND_R[0] + 0.011, 0.004,
                    axes=np.diag([1.0, BAND_R[0] / BAND_R[1], 1.0]), rz=0.0035), k=0.002)       # the eye slit (ink)

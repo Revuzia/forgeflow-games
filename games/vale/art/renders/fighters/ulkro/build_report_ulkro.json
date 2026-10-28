@@ -225,16 +225,16 @@
     "validate_ulkro": "20284->20281",
     "validate_ulkro_accent": "452->450"
   },
-  "uv_coverage": 0.576,
+  "uv_coverage": 0.574,
   "bake": {
-    "base": 8.39,
-    "rough_metal": 5.52,
-    "normal": 4.83,
-    "ao": 6.93,
-    "normal_fixed_px": 21760,
-    "projection": 136.0,
-    "pack_save": 136.59,
-    "total": 162.77
+    "base": 10.5,
+    "rough_metal": 8.4,
+    "normal": 6.14,
+    "ao": 9.09,
+    "normal_fixed_px": 21157,
+    "projection": 106.59,
+    "pack_save": 106.96,
+    "total": 141.58
   },
   "tris": 20731,
   "mesh_top_m": 2.023,
@@ -339,20 +339,20 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2754776,
+  "glb_bytes_raw": 2760680,
   "optimize": {
     "ok": true,
-    "before": 2754776,
-    "after": 1101324,
+    "before": 2760680,
+    "after": 1105332,
     "q_base": 70
   },
-  "glb_bytes": 1101324,
+  "glb_bytes": 1105332,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro.glb (1076 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ulkro_base 2048x2048 195K, ulkro_normal 512x512 39K, ulkro_orm 256x256 26K",
-      "  skinned meshes: ulkro(19031v), ulkro_accent(187v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro.glb (1079 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_base 2048x2048 198K, ulkro_normal 512x512 40K, ulkro_orm 256x256 26K",
+      "  skinned meshes: ulkro(19014v), ulkro_accent(187v)",
       "  bones: 32 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_crest0 x_crest1 x_crest2 x_crest3 x_crest4 x_quiver thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.667s/21tr, attack2:0.667s/21tr, cast_a1:1.000s/23tr, cast_a2:0.500s/22tr, cast_a3:0.667s/20tr, cast_ult:0.833s/22tr, channel:1.333s/20tr, dash:0.500s/21tr, death:1.500s/30tr, idle:2.400s/20tr, idle_lobby:3.000s/22tr, recall:3.000s/21tr, run:0.733s/22tr, stunned:1.333s/20tr, taunt:2.000s/20tr, victory:1.500s/20tr",
       "  tracks checked: 345; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
@@ -369,10 +369,10 @@
       "turntable": "art/renders/fighters/ulkro/turntable.png"
     },
     "seconds": {
-      "splash": 30.85,
-      "portrait": 12.07,
-      "icon": 3.4,
-      "turntable": 14.95
+      "splash": 18.18,
+      "portrait": 7.82,
+      "icon": 1.6,
+      "turntable": 162.95
     }
   },
   "three_qa": {
@@ -404,27 +404,27 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ulkro/three_ulkro.png",
-    "seconds": 32.1,
+    "seconds": 135.4,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/ulkro/three_clips_ulkro.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.54,
-      "model": 10.8,
-      "lows_bind": 6.91,
-      "uv": 7.07,
-      "bake": 162.78,
-      "clips": 0.54,
-      "export": 4.7,
-      "optimize": 2.06,
-      "load_test": 0.37,
-      "render": 61.44,
-      "three_qa": 70.85,
-      "cache": 0.13
+      "materials": 0.9,
+      "model": 14.52,
+      "lows_bind": 8.37,
+      "uv": 11.17,
+      "bake": 141.58,
+      "clips": 0.31,
+      "export": 1.91,
+      "optimize": 0.98,
+      "load_test": 0.22,
+      "render": 190.72,
+      "three_qa": 265.02,
+      "cache": 0.17
     },
-    "total_s": 328.31
+    "total_s": 636.01
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83

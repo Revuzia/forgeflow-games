@@ -17,10 +17,13 @@ Where the concept and the brief disagree:
   * the brief's hook wins on size: the halo ring is 0.80 m across (the painting's is ~0.62), 2.035 m high, floating
     9 cm over the hood's peak, the seven dawnglass bells hung from it at (i + 0.5) * 360/7 degrees from the front (the
     front stays clear over the visor), three clasps mark the front (one) and the back (two).
-  * the bell clappers are the only accent (brief §7, fix pass 1: the striker core, a ring inlay and clasp windows went
-    beyond the brief): faceted crystal drops (5.5 x 8.8 cm) hung 7.8 cm under each lip on a pale glass rod, so they
-    clear the bells' outlines from the 52 degree game camera (the team tint reads; ~1.6 % of the silhouette); the
-    striker is plain dawnglass.
+  * the bell clappers are the only accent and the only emissive (brief §7 / §11, fix pass 1: the striker core, a ring
+    inlay and clasp windows went beyond the brief; fix pass 2: the wrist bell's drop is plain glass): faceted crystal
+    drops (6.4 x 10.3 cm) hung 7.8 cm under each lip on a pale glass rod, so they clear the bells' outlines from the
+    52 degree game camera (the team tint reads; the three QA gate wants 1.5-6 % of the silhouette, the brief's
+    "0.25 %" beads would not read). The two bells either side of the front strut keep a small clapper in the mouth
+    instead, so no drop hangs over the visor pane in a three-quarter view (fix pass 2). The striker is plain
+    dawnglass. First Bell's ten bells carry smaller drops (DROP_K): its accent stays about the base's.
 
 Not in the shared pipeline, implemented here (module-level wrappers; common/ untouched):
   * the right arm's rest pose (rig_extras re-seats upper_arm.R / forearm.R / hand.R on the concept carry and points
@@ -143,6 +146,7 @@ HALO_RI, HALO_RO, HALO_HZ = 0.335, 0.400, 0.016
 HALO_RM = 0.5 * (HALO_RI + HALO_RO)
 HALO_SEG = 24                                       # carved segments round the band (radial notches)
 FIN_H = 0.075                                       # the front strut's arch finial
+FIN_LEAN = 26.0                                     # degrees the struts lean in toward the head (fix pass 2)
 CLASP_ANG = (0.0, 125.0, -125.0)                    # degrees from the front (-Y) toward the left (+X)
 BELL_H = 0.11
 BELL_TOP = HALO_C[2] - HALO_HZ - 0.016              # the bell crowns hang 1.6 cm under the band (a hook loop)
@@ -151,6 +155,13 @@ BELL_TOP = HALO_C[2] - HALO_HZ - 0.016              # the bell crowns hang 1.6 c
 # clasp windows that went beyond the brief)
 # (sized and hung so the accent clears the bells' outlines from the 52 degree camera: ~1.5 % of the silhouette)
 DROP_W, DROP_UP, DROP_DN, DROP_GAP = 0.0275, 0.022, 0.066, 0.078
+# fix pass 2: the long-hung drops of the two bells either side of the front strut hung over the visor pane in every
+# three-quarter view (splash, compare): the arch point is the face and the facing cue (brief: "the pane is never
+# covered"). Those bells keep a small clapper in the mouth (its girdle just under the lip, no stem); the other
+# drops carry the accent share (DROP_K: their scale per bell count, so First Bell's ten keep about the base's share)
+FRONT_BELL = 40.0                                   # degrees either side of the front
+CLAP_IN = (0.019, 0.013, 0.032, 0.010)              # the mouth clapper: (w, up, dn, gap under the lip)
+DROP_K = {7: 1.17, 10: 0.94}
 _N_BELLS = [7]                                      # the bells on the halo being built (First Bell: 10)
 
 
@@ -538,14 +549,23 @@ def sculpts(n_bells: int = 7) -> list:
     part("boots", boots, "leather", ("weights", "boots"), 850)
 
     # THE ROD (prop.R): gnarled ash, a leather grip under the fist, a chalk collar, the faceted glass striker, a cap
+    # fix pass 2: the gnarled shaft's wobble (6 mm) and girth (+-12 %) poked through the straight swing grip in
+    # ragged patches. Under each grip (and 4 cm either side) the shaft now runs straight and even, and the bends
+    # ease in and out of the grips (the gnarl stays between them and under the head)
+    def free(z):
+        f = 1.0
+        for a_, b_ in (GRIP_CARRY, GRIP_SWING):
+            f = min(f, 1.0 - float(ss(a_ - 0.10, a_ - 0.03, z)) * (1.0 - float(ss(b_ + 0.03, b_ + 0.10, z))))
+        return f
     pts, rads = [], []
-    for i, z in enumerate(np.linspace(0.015, COLLAR[0] + 0.01, 14)):
+    for i, z in enumerate(np.linspace(0.015, COLLAR[0] + 0.01, 30)):
         p = rod_at(z)
-        wob = 0.006 * np.array([math.sin(z * 7.1 + 0.3), math.cos(z * 5.3), 0.0]) if 0.2 < z < 1.0 or z > 1.22 else np.zeros(3)
+        wob = 0.006 * np.array([math.sin(z * 7.1 + 0.3), math.cos(z * 5.3), 0.0]) * float(ss(0.10, 0.25, z))
         if z > 1.30:                                                    # the painted kinks under the head
             wob = wob + 0.010 * np.array([math.sin((z - 1.30) * 22.0), 0.0, 0.0])
-        pts.append(p + wob)
-        rads.append(ROD_R * (1.0 + 0.12 * math.sin(z * 11.0 + 1.0)) * (0.92 if z < 0.1 else 1.0))
+        fz = free(z)
+        pts.append(p + wob * fz)
+        rads.append(ROD_R * (1.0 + 0.12 * math.sin(z * 11.0 + 1.0) * fz) * (0.92 if z < 0.1 else 1.0))
     shaft = Sculpt("rod_shaft")
     shaft.add(Tube(pts, rads, k=0.01).displaced(lambda P: 0.0018 * NOISE(P * np.array([1.0, 1.0, 0.15]), 40.0), 0.0018), k=0.0)
     part("rod_shaft", shaft, "wood", "bone:prop.R", 420, 0.5, uvw=1.1)
@@ -554,7 +574,7 @@ def sculpts(n_bells: int = 7) -> list:
     # swing grip for the two-handed Ring Out sweep and the Morning Toll strike (the fists were on bare wood)
     for z0, z1 in (GRIP_CARRY, GRIP_SWING):
         g0, g1 = rod_at(z0), rod_at(z1)
-        grip.add(Capsule(g0, g1, ROD_R + 0.006).displaced(wraps(0.0022, 0.016, g0, g1), 0.0022), k=0.0)
+        grip.add(Capsule(g0, g1, ROD_R + 0.0065).displaced(wraps(0.0020, 0.016, g0, g1), 0.0020), k=0.0)
     part("rod_grip", grip, "leather", "bone:prop.R", 280, 0.5)
 
     def collar_prof(r, z):
@@ -580,11 +600,13 @@ def sculpts(n_bells: int = 7) -> list:
     wbell = Sculpt("wrist_bell")
     wbell.add(Lathe(wb_top, lambda r, z: bell_prof(r, z, 0.050), 0.03, -0.052, 0.002), k=0.0)
     part("wrist_bell", wbell, "dawnglass", "bone:forearm.L", 160, 0.45)
-    wcl = Sculpt("wrist_clapper")                    # a small crystal drop under the wrist bell's lip
+    # a small glass drop under the wrist bell's lip (fix pass 2: plain dawnglass, not the accent: the halo's
+    # clappers are the only emissive, brief §11)
+    wcl = Sculpt("wrist_clapper")
     cw = wb_top + np.array([0, 0, -0.064])
     wcl.add(Fn(lambda P: drop_d(P, cw, 0.010, 0.008, 0.026), cw - 0.04, cw + 0.04), k=0.0)
     wcl.add(Capsule(wb_top + np.array([0, 0, -0.030]), cw, 0.0025), k=0.002)
-    part("wrist_clapper", wcl, "accent", "bone:forearm.L", 60, 0.45)
+    part("wrist_clapper", wcl, "dawnglass", "bone:forearm.L", 60, 0.45)
 
     out.extend(halo_parts(n_bells))
     return out
@@ -642,36 +664,53 @@ def halo_parts(n_bells: int = 7) -> list:
         # the front strut stands 7 cm over the band, the two back ones 4.5 cm (from the game camera the back of the
         # ring is its screen top, under the HP bar)
         zc, hz = (0.020, 0.053) if ang == 0.0 else (0.006, 0.040)
+        R = sdf.rot_z(-ang)
         c = ring_pt(ang, z=HALO_C[2] + zc)
-        cl.add(RoundBox(c, (0.024, 0.044, hz), 0.008, axes=sdf.rot_z(-ang)).displaced(chips(0.003, 10.0), 0.003), k=0.0)
-        cl.add(RoundBox(c + np.array([0, 0, hz + 0.003]), (0.017, 0.034, 0.008), 0.005, axes=sdf.rot_z(-ang)), k=0.004)
+        # fix pass 2: the struts lean FIN_LEAN degrees in toward the head (a crown's points), their feet on the
+        # band's inner half: when he faces away the front strut is the ring's far side, the screen top under the
+        # HP bar, and the upright finial's point touched the bar; leant in, the point sits ~6 cm nearer the axis
+        lam = math.radians(FIN_LEAN)
+        t_, in_, up_ = R[0], R[1], R[2]
+        R = np.stack([t_, math.cos(lam) * in_ - math.sin(lam) * up_, math.cos(lam) * up_ + math.sin(lam) * in_])
+        c = ring_pt(ang, r=HALO_RM - 0.010, z=HALO_C[2] + zc - 0.004)
+        cl.add(RoundBox(c, (0.024, 0.044, hz), 0.008, axes=R).displaced(chips(0.003, 10.0), 0.003), k=0.0)
+        cl.add(RoundBox(c + R[2] * (hz + 0.003), (0.017, 0.034, 0.008), 0.005, axes=R), k=0.004)
         if ang == 0.0:
             # the front strut ends in a small pointed bell-window arch (the visor's shape): it marks the front from
             # above, and its top is the model's top, so the HP bar hangs clear of the ring (see ART_LIFT)
-            z0 = float(c[2] + 0.062)
-            ta, ra = np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0])
+            ta, ra, ua = R[0], R[1], R[2]
 
-            def fin(P, c=c, z0=z0, ta=ta, ra=ra):
-                t = (P - c) @ ta
-                r = (P - c) @ ra
-                zz = P[:, 2] - z0
+            def fin(P, c=c, ta=ta, ra=ra, ua=ua):
+                q = P - c
+                t = q @ ta
+                r = q @ ra
+                zz = q @ ua - 0.062
                 d = arch_d(t, zz, 0.0, 0.020, FIN_H) - 0.003
                 return np.maximum(np.maximum(d, -zz - 0.012), np.abs(r) - 0.013)
-            cl.add(Fn(fin, c + np.array([-0.04, -0.04, 0.03]), c + np.array([0.04, 0.04, 0.062 + FIN_H + 0.01])), k=0.004)
+            cl.add(Fn(fin, c + np.array([-0.05, -0.05, 0.03]), c + np.array([0.05, 0.10, 0.062 + FIN_H + 0.01])), k=0.004)
     out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 300, 1.0))
     bells, hooks, stems, beads = Sculpt("bells"), Sculpt("bell_hooks"), Sculpt("clapper_stems"), Sculpt("clappers")
+    kd = DROP_K.get(n_bells, 1.0)
+    dw, du, dd = DROP_W * kd, DROP_UP * kd, DROP_DN * kd
     for ang in bell_angles(n_bells):
         top = ring_pt(ang, z=BELL_TOP)
         bells.add(Lathe(top, bell_prof, 0.05, -BELL_H - 0.004, 0.004), k=0.0)
         a = math.radians(ang)
         tang = np.array([math.cos(a), math.sin(a), 0.0])
         hooks.add(Torus(top + np.array([0, 0, 0.012]), 0.0085, 0.0035, axes=sdf.frame(tang)), k=0.0)
+        if abs((ang + 180.0) % 360.0 - 180.0) < FRONT_BELL:
+            # a front bell: the clapper in its mouth, clear of the visor pane (fix pass 2)
+            w_, u_, d_, g_ = CLAP_IN
+            cdrop = top + np.array([0, 0, -BELL_H - g_])
+            beads.add(Fn(lambda P, c=cdrop, a_=a, w_=w_, u_=u_, d_=d_: drop_d(P, c, w_, u_, d_, rot=a_),
+                         cdrop - np.array([0.03, 0.03, d_ + 0.01]), cdrop + np.array([0.03, 0.03, u_ + 0.01])), k=0.0)
+            continue
         bot = top + np.array([0, 0, -BELL_H - DROP_GAP])            # the drop hangs clear of the lip (read from above)
         stems.add(Capsule(top + np.array([0, 0, -0.06]), bot + np.array([0, 0, -0.006]), 0.0050), k=0.0)
-        stems.add(Sphere(bot - np.array([0, 0, 0.002]), 0.008), k=0.003)                  # the drop's cap
-        cdrop = bot - np.array([0.0, 0.0, DROP_UP])
-        beads.add(Fn(lambda P, c=cdrop, a_=a: drop_d(P, c, rot=a_), cdrop - np.array([0.03, 0.03, DROP_DN + 0.01]),
-                     cdrop + np.array([0.03, 0.03, DROP_UP + 0.01])), k=0.0)
+        stems.add(Sphere(bot - np.array([0, 0, 0.002]), 0.008 * kd), k=0.003)             # the drop's cap
+        cdrop = bot - np.array([0.0, 0.0, du])
+        beads.add(Fn(lambda P, c=cdrop, a_=a: drop_d(P, c, dw, du, dd, rot=a_),
+                     cdrop - np.array([0.04, 0.04, dd + 0.01]), cdrop + np.array([0.04, 0.04, du + 0.01])), k=0.0)
     out.append(("bells", bells, 0.5, "dawnglass", "bone:x_halo", 160 * n_bells, 1.2))
     out.append(("bell_hooks", hooks, 0.4, "ironstone", "bone:x_halo", 26 * n_bells, 0.5))
     out.append(("clapper_stems", stems, 0.4, "ironstone", "bone:x_halo", 20 * n_bells, 0.5))
@@ -930,10 +969,13 @@ _pipeline.bind_part = _bind_part
 
 # ── paint (project.paint wrapper) ──────────────────────────────────────────────────────────────────────
 PROC = ("halo_ring", "halo_clasps", "bells", "bell_hooks", "clapper_stems", "rod_shaft", "rod_grip", "rod_collar",
-        "striker", "wrist_cord", "wrist_bell", "visor_glass")
+        "striker", "wrist_cord", "wrist_bell", "wrist_clapper", "visor_glass")
 BACK_MATCH = 0.9           # how far each part's back projection moves onto its front's painted colour
-# z / 2.0 -> linear gain (fix pass 1: steeper at the feet, the light-head / dark-feet read was soft)
-VALUE_RAMP = [(0.0, 0.58), (0.07, 0.64), (0.14, 0.76), (0.25, 0.87), (0.45, 0.95), (0.70, 1.0), (1.0, 1.04)]
+# z / 2.0 -> linear gain (fix pass 1: steeper at the feet, the light-head / dark-feet read was soft; fix pass 2: the
+# bottom quarter of the silhouette still measured L* 39 on the rest render (target 20-35): the lower robe from the
+# hem roll to the shins falls off further, the hem band a little darker; the knees up are unchanged)
+VALUE_RAMP = [(0.0, 0.52), (0.07, 0.56), (0.135, 0.62), (0.20, 0.71), (0.275, 0.85), (0.33, 0.90), (0.45, 0.95),
+              (0.70, 1.0), (1.0, 1.04)]
 HEM_TOP = 0.262            # under the coat's hem roll: the dark slate under-robe (the concept's hem band)
 HEM_HEX = "#3B424B"
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
@@ -1064,17 +1106,41 @@ def _band_tone(z, lin, zq, step=0.03):
     return np.stack([np.interp(zq, cen, med[:, c]) for c in range(3)], 1).astype(np.float32)
 
 
+def _hood_folds(p, n):
+    """fix pass 2: the hood's flanks (edge-on to both plates) painted one flat cream (splash: a blank slab), or broad
+    diagonal planes where the projection blended in. Painted form instead: soft creases fanning from the peak back
+    and down round the skull, each with a lit ridge on its front side, a lighter crown, a darker nape and lower
+    flank (the concept's back view drapes the same way)."""
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    r = np.hypot(y + 0.06, 1.97 - z)
+    th = np.arctan2(y + 0.06, 1.97 - z) + 0.10 * NOISE(p, 4.0) + 0.5 * np.sign(x)
+    u = (th * 8.0 / (2 * math.pi) + 0.15) % 1.0
+    crease = np.exp(-((u - 0.55) / 0.07) ** 2)
+    lit = np.exp(-((u - 0.40) / 0.11) ** 2)
+    amp = ss(0.05, 0.14, r) * (1 - 0.5 * ss(0.30, 0.40, r))
+    k = 1 + amp * (0.075 * lit - 0.15 * crease)
+    k = k * (1 + 0.06 * ss(1.72, 1.93, z))
+    k = k * (1 - 0.14 * ss(0.02, 0.18, y) * ss(1.82, 1.62, z)) * (1 - 0.08 * ss(1.72, 1.58, z))
+    return k * (1 + 0.025 * NOISE(p, 30.0))
+
+
+SIDE_FACE_PART = {"hood": (0.40, 0.85)}   # fix pass 2: the hood's blended band was where its planes streaked
+
+
 def _side_fill(lin, k, p, n, names, log):
     face = np.abs(n[:, 1])
-    w = 1 - ss(SIDE_FACE[0], SIDE_FACE[1], face)
     hid = _HID[0] if _HID[0] is not None and len(_HID[0]) == len(k) else np.zeros(len(k), dtype=bool)
-    w = np.maximum(w, hid.astype(np.float32))
     strokes = 1 + 0.065 * NOISE.fbm(p * np.array([1.0, 1.0, 0.30]), 9.0, 3) + 0.03 * NOISE(p, 30.0)
     for kk in np.unique(k):
         nm = names[kk]
         if nm not in SIDE_PARTS:
             continue
         sel = k == kk
+        f0, f1 = SIDE_FACE_PART.get(nm, SIDE_FACE)
+        w = np.maximum(1 - ss(f0, f1, face), hid.astype(np.float32))
+        if nm == "hood":
+            strokes = strokes.copy()
+            strokes[sel] = _hood_folds(p[sel], n[sel])
         good = sel & (face > 0.78) & ~hid
         if good.sum() < 40:
             continue
@@ -1096,6 +1162,47 @@ def _side_fill(lin, k, p, n, names, log):
         c = c * np.minimum(1.0, cap / np.maximum(Yc, 1e-5))[:, None]
         lin[sel] = c
         log(f"  vashil side fill {nm}: {100 * float((w[sel] > 0.5).mean()):.0f}% of its texels")
+    return lin
+
+
+# fix pass 2: brown diagonal 'zebra' bands on the right chest, the sash's right half and the right upper sleeve.
+# The concept's right sleeve hangs straight beside the body and its diagonal fold strokes cover the chest's and the
+# sash's sides; the model's right arm is bent forward to the rod, so its chest side and sash end stand in front of
+# the sleeve and took the sleeve's strokes. Outside the concept's torso (CALM_X, front-facing texels) the robe top
+# and the sash keep only their own banded tone (from their texels inside the window) with soft brush strokes; on the
+# bent right sleeve the painted fold strokes keep CALM_KEEP of their contrast (its blue-grey lining untouched).
+CALM_X = {"robe_top": (-0.165, 0.150), "sash": (-0.165, 0.150)}
+CALM_KEEP = {"robe_top": 0.0, "sash": 0.0, "sleeve_R": 0.40}
+
+
+def _calm(lin, k, p, n, names, log):
+    hid = _HID[0] if _HID[0] is not None and len(_HID[0]) == len(k) else np.zeros(len(k), dtype=bool)
+    coat = _class_w(_srgb(np.clip(lin, 0, None)))["coat"]
+    strokes = 1 + 0.05 * NOISE.fbm(p * np.array([1.0, 1.0, 0.30]), 9.0, 3) + 0.025 * NOISE(p, 30.0)
+    front = ss(0.20, -0.10, n[:, 1])
+    for kk in np.unique(k):
+        nm = names[kk]
+        if nm not in CALM_KEEP:
+            continue
+        sel = k == kk
+        xs = p[sel, 0]
+        if nm in CALM_X:
+            x0, x1 = CALM_X[nm]
+            out_ = 1 - ss(x0 - 0.02, x0 + 0.01, xs) * ss(x1 + 0.02, x1 - 0.01, xs)
+        else:
+            out_ = np.ones(int(sel.sum()), dtype=np.float32)
+        src = (front[sel] > 0.9) & (coat[sel] > 0.8) & ~hid[sel] & (np.abs(n[sel, 1]) > 0.6)
+        if nm in CALM_X:
+            src &= out_ < 0.05
+        if src.sum() < 40:
+            continue
+        zs = p[sel, 2]
+        c = lin[sel]
+        tone = _band_tone(zs[src], c[src], zs)
+        calmed = tone * strokes[sel][:, None] + (c - tone) * CALM_KEEP[nm]
+        w = (out_ * front[sel] * coat[sel])[:, None]
+        lin[sel] = c * (1 - w) + calmed * w
+        log(f"  vashil calm {nm}: {100 * float((w > 0.5).mean()):.0f}% of its texels")
     return lin
 
 
@@ -1202,7 +1309,9 @@ def _wood_paint(p, n):
     dark = _lin(_hex("#6E5A47"))
     c = base[None, :] * (1 - 0.35 * grain ** 3)[:, None] + dark[None, :] * (0.35 * grain ** 3)[:, None]
     knots = np.clip(NOISE.ridged(p, 11.0, 2) - 0.55, 0, 1) * 1.6
-    return c * (1 - 0.35 * knots)[:, None] * (1 + 0.08 * _fbm(p, 30.0))[:, None]
+    # fix pass 2: the butt darkened by the ground (the pale shaft lit the feet band)
+    butt = 0.58 + 0.42 * ss(0.04, 0.62, p[:, 2])
+    return c * ((1 - 0.35 * knots) * butt)[:, None] * (1 + 0.08 * _fbm(p, 30.0))[:, None]
 
 
 def _leather_paint(p, n, hexc="#4A4440"):
@@ -1261,6 +1370,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     col = cols["front"] * (1 - wb[:, None]) + cols["back"] * wb[:, None]
     lin = _lin(col)
     lin = _side_fill(lin, k, p, n, names, log)
+    lin = _calm(lin, k, p, n, names, log)
 
     def sel(name):
         if name not in names:
@@ -1276,6 +1386,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         "rod_shaft": _wood_paint, "rod_grip": lambda pp, nn: _leather_paint(pp, nn, "#4A4440"),
         "rod_collar": lambda pp, nn: _stone_paint(pp, nn, "#CFC9BA", 0.08), "striker": _striker_paint,
         "wrist_cord": lambda pp, nn: _leather_paint(pp, nn, "#4A4038"), "wrist_bell": None,
+        "wrist_clapper": lambda pp, nn: _stone_paint(pp, nn, "#7F98AD", 0.08),           # pale glass (not the accent)
         "visor_glass": _visor_paint,
     }
     for name, fn in procs.items():

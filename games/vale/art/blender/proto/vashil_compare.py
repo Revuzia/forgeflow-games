@@ -95,12 +95,24 @@ def main():
             co.location = (0, y, 1.17)
             co.rotation_euler = (math.radians(90), 0, 0 if kind == "front" else math.radians(180))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
-        elif kind == "threeq":
+        elif kind in ("threeq", "threeq_l"):
             cam.lens = 70
-            p = (-3.4, -6.2, 2.4)
+            p = (-3.4 if kind == "threeq" else 3.4, -6.2, 2.4)
             co.location = p
             look(co, p, (0, 0, 1.15))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
+        elif kind in ("head_l", "head_r"):           # fix pass 2: the visor / hood flank / bells close-up
+            cam.lens = 85
+            p = (1.75 if kind == "head_l" else -1.75, -4.1, 1.62)
+            co.location = p
+            look(co, p, (0, -0.05, 1.80))
+            sc.render.resolution_x, sc.render.resolution_y = a.res, a.res
+        elif kind == "rod":                          # the rod's grips (fix pass 2)
+            cam.lens = 85
+            p = (-1.6, -4.4, 1.0)
+            co.location = p
+            look(co, p, (-0.47, -0.24, 0.85))
+            sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.5), a.res
         else:
             cam.lens = 150
             p = (0.0, -7.5, 1.15 + 7.5 * math.tan(math.radians(52)))

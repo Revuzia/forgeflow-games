@@ -254,12 +254,13 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--table", action="store_true", help="print model / concept extents per height")
     ap.add_argument("--accent", action="store_true", help="estimate the accent share at the game camera and exit")
+    ap.add_argument("--bells", type=int, default=7, help="bells on the halo (First Bell: 10)")
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.compare:
         compare()
         return
-    parts = vashil.sculpts()
+    parts = vashil.sculpts(a.bells)
     if a.only:
         keep = set(a.only.split(","))
         parts = [p for p in parts if p[0] in keep]
