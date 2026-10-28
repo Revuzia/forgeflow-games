@@ -108,13 +108,15 @@ const MUST = {
   skins: [{ name: 'first skin tile', sel: '.skin' }],
   draft: [{ name: 'fighter cards', sel: '.draft__grid .fcard', all: true }, { name: 'showcase', sel: '.dshow' }, { name: 'phase title', sel: '.phase__title' }, { name: 'seats', sel: '.dteam .seat', all: true }],
   finalize: [{ name: 'fighter name', sel: '.final__who h2' }, { name: 'section heads', sel: '.loadout h3, .loadout [role=tab]', all: true }, { name: 'picks', sel: '.loadout .picks', all: true }, { name: 'seats', sel: '.dteam .seat', all: true }],
+  draft_fray: [{ name: 'fighter cards', sel: '.draft__grid .fcard', all: true }, { name: 'seat chips', sel: '.fseat', all: true }, { name: 'phase title', sel: '.phase__title' }],
+  draft_lot: [{ name: 'your draw', sel: '.lot__draw' }, { name: 'lot cards', sel: '.lotcard', all: true }, { name: 'seats', sel: '.dteam .seat', all: true }],
   loading: [{ name: 'cards', sel: '.pcard', all: true }, { name: 'tip', sel: '.loading__tip' }],
   postgame: [{ name: 'tabs', sel: '.scr--postgame [role=tab]', all: true }],
 };
 
 function fail(screen, w, what, info) { R.failures.push({ screen, w, what, info }); console.log(`  ✗ ${screen} ${w}: ${what} ${JSON.stringify(info).slice(0, 300)}`); }
-async function check(page, screen, w, extra = {}) {
-  const m = await page.evaluate(measure, { must: MUST[screen] ?? [] });
+async function check(page, screen, w, extra = {}, mustKey = screen) {
+  const m = await page.evaluate(measure, { must: MUST[mustKey] ?? [] });
   const row = { ...m, ...extra };
   (R.screens[screen] ??= {})[w] = row;
   if (m.clipped.length) fail(screen, w, `${m.clipped.length} clipped label(s)`, m.clipped.slice(0, 6));
@@ -220,6 +222,8 @@ const draftFixture = (patch) => vale(page, (v, p) => {
   const prev = v.state.draft.value;
   const seats = Array.from({ length: 10 }, (_, i) => ({ player: i, team: i < 5 ? 0 : 1, name: names[i], isBot: i > 0, isYou: i === 0, role: roles[i % 5],
     ...(p.phase === 'finalize' ? { locked: fs[(i * 3 + 1) % fs.length].id, skin: cv.baseSkin(fs[(i * 3 + 1) % fs.length].id)?.id } : {}) }));
+  // an ally already locked (a taken card with its taker's name) and one hovering (the ally intent rim)
+  if (p.phase !== 'finalize') { seats[1].locked = fs[9].id; seats[2].hover = fs[11].id; }
   if (p.hover) seats[0].hover = fs[p.hover].id;
   if (p.lock) { seats[0].locked = fs[p.hover].id; seats[0].skin = cv.baseSkin(fs[p.hover].id)?.id; }
   if (p.phase === 'finalize') { seats[0].locked = fs[p.hover ?? 4].id; seats[0].skin = cv.baseSkin(seats[0].locked)?.id; seats[0].loadout = v.state.profile.value.loadouts[seats[0].locked] ?? { spells: [], boons: [] }; }
@@ -307,6 +311,27 @@ if (want('draft') && which === 'flow') await step('draft_flow', async () => {
   await waitFor(page, (v) => v.router.route.value.screen === 'loading' || !!v.state.match.value, 120000);
   await W(1500);
   await each(async (w) => { await check(page, 'loading', `${w}_flow`); await shot(page, `${PREFIX}_${w}_loading_flow`); });
+});
+
+// ── FRAY pick and the BRIDGE Lot (fixtures, fast): clipped labels and the fold ─────────────────────────────────
+if (want('draft') && which === 'fast') await step('draft_other', async () => {
+  for (const kind of ['fray', 'lot']) {
+    await vale(page, (v, kind) => {
+      const cv = v.cv; const fs = cv.playable(); const roles = cv.rolesOrdered().map((r) => r.id);
+      const mode = kind === 'fray' ? 'fray' : 'bridge';
+      const q = cv.queuesOf(mode)[0];
+      const names = ['You', 'belle_of_noon', 'ines_at_dusk', 'twomark_tess', 'ostler_k', 'dunmoor_ash', 'noor_lampwright', 'lilt_and_tally', 'chalkdust_ines', 'petra_wickwalk'];
+      const seats = Array.from({ length: 10 }, (_, i) => ({ player: i, team: kind === 'fray' ? i : i < 5 ? 0 : 1, name: names[i], isBot: i > 0, isYou: i === 0, ...(kind === 'fray' ? {} : { role: roles[i % 5] }),
+        ...(kind === 'lot' || i % 3 === 1 ? { locked: fs[(i * 3 + 2) % fs.length].id } : {}), rerolls: 1 }));
+      v.state.draft.value = { queue: q.id, mode, phase: kind === 'fray' ? 'pick' : 'bench', turn: kind === 'fray' ? { players: seats.map((x) => x.player), action: 'free' } : null, timer: 18, timerMax: 25, seats,
+        bans: [], bench: kind === 'lot' ? { 0: fs.slice(10, 13).map((f) => f.id), 1: fs.slice(13, 16).map((f) => f.id) } : {}, available: fs.map((f) => f.id), log: ['The Lot is drawn.'], trades: [] };
+      if (v.router.route.value.screen !== 'draft') v.router.reset('draft', {});
+    }, kind);
+    await W(1500);
+    await each(async (w) => { await check(page, 'draft', `${w}_${kind}`, {}, `draft_${kind}`); await shot(page, `${PREFIX}_${w}_draft_${kind}`); });
+  }
+  await vale(page, (v) => { v.state.draft.value = null; v.router.reset('home', {}); });
+  await W(800);
 });
 
 // ── loading (fixture, fast) ─────────────────────────────────────────────────────────────────────────────────

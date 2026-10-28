@@ -438,14 +438,14 @@ function FrayPick(p: { d: DraftState; onLeave: () => void }): JSX.Element {
                 <div class={`fseat ${s.isYou ? 'is-you' : ''} ${s.locked ? 'is-locked' : ''}`} title={`${s.name}${f ? ` · ${f.name}` : ''}`}>
                   <span class="fseat__art">{f ? <Portrait fighter={f} skin={s.skin} size="fill" /> : null}</span>
                   <SeatMark seat={seat} you={s.isYou} size={16} />
-                  <span class="fseat__name t-caption">{s.isYou ? cv.t('common.you', 'You') : s.name}</span>
+                  <span class="fseat__name t-caption">{s.isYou ? cv.t('common.you', 'You') : breakable(s.name)}</span>
                 </div>
               );
             })}
           </div>
         </header>
         <section class="draft__grid draft__grid--ffa stg">
-          <FighterGrid label={cv.t('fray.pick.title', 'Pick your fighter')} size="s" filter={filter} onFilter={setFilter} compactFilters cols={8}
+          <FighterGrid label={cv.t('fray.pick.title', 'Pick your fighter')} size="s" filter={filter} onFilter={setFilter} compactFilters compact cols={8}
             card={(f) => {
               const by = lockedBy.get(f.id);
               const mine = me.locked === f.id;
@@ -460,6 +460,11 @@ function FrayPick(p: { d: DraftState; onLeave: () => void }): JSX.Element {
       </div>
     </Screen>
   );
+}
+
+/** a player name that may wrap at its underscores (the 720p seat chips give names two short lines) */
+function breakable(name: string): (string | JSX.Element)[] {
+  return name.split('_').flatMap((part, i, all) => (i < all.length - 1 ? [`${part}_`, <wbr />] : [part]));
 }
 
 // ── finalize: skin, spells, boons, trades ──────────────────────────────────────────────────────

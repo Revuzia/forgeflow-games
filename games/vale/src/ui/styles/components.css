@@ -115,6 +115,9 @@
   padding: 3px calc(0.5 * var(--u)); border-radius: var(--radius); background: rgba(11, 13, 17, 0.78); color: var(--text-1); }
 .fcard__marks .classmark { display: inline-flex; }
 .fcard--compact .fcard__meta { padding: calc(0.75 * var(--u)) var(--u) var(--u); }
+/* who took it rides the top of the portrait (two lines at most), so a taken card is as tall as the rest */
+.fcard--compact .fcard__taken { position: absolute; z-index: 2; left: 0; right: 0; top: 0; padding: calc(0.5 * var(--u)) var(--u); background: linear-gradient(180deg, rgba(11, 13, 17, 0.88), rgba(11, 13, 17, 0.6));
+  color: var(--text-1); line-height: 1.2; overflow-wrap: anywhere; }
 .roleicon { display: inline-block; flex: none; vertical-align: middle; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
 
 .classmark { display: inline-flex; align-items: center; gap: calc(0.5 * var(--u)); color: inherit; }

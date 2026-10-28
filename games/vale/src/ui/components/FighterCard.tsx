@@ -95,8 +95,9 @@ export function FighterCard(p: FighterCardProps): JSX.Element {
             {role ? <span class="fcard__role">{role.name}</span> : null}
           </span>
         ) : null}
-        {kind === 'taken' && p.locked ? <span class="fcard__taken">{p.locked}</span> : null}
+        {kind === 'taken' && p.locked && !p.compact ? <span class="fcard__taken">{p.locked}</span> : null}
       </span>
+      {kind === 'taken' && p.locked && p.compact ? <span class="fcard__taken">{p.locked}</span> : null}
       {p.selected ? <span class="fcard__tick" aria-hidden="true" /> : null}
     </button>
   );

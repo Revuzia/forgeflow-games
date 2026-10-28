@@ -349,7 +349,8 @@
 .stile:hover, .stile:focus-visible { background: var(--ink-3); box-shadow: var(--ring); }
 .stile.is-selected { background: var(--ink-4); box-shadow: inset 0 0 0 2px var(--chalk); }
 .stile.is-locked { background: transparent; outline: 1px dashed var(--line-2); outline-offset: -1px; color: var(--text-2); }
-.stile__name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a spell or boon name may take two lines beside its icon (the icon is as tall as two lines), never an ellipsis */
+.stile__name { flex: 1; min-width: 0; line-height: 1.2; overflow-wrap: break-word; }
 .stile__lock { width: calc(14px * var(--k)); height: calc(14px * var(--k)); color: var(--text-2); }
 .paths { display: flex; gap: var(--u); flex-wrap: wrap; }
 .pathtab { position: relative; display: inline-flex; align-items: center; gap: var(--u); height: calc(4.5 * var(--u)); padding: 0 calc(1.75 * var(--u)); border-radius: var(--radius); background: var(--ink-2); color: var(--text-2);
@@ -626,6 +627,10 @@
   .fgrid__cards--compact .fcard__portrait { aspect-ratio: 5 / 4; }
   .fgrid__cards--compact { --pa: 0.8; }
   .dshow { padding: calc(2 * var(--u)) calc(2.5 * var(--u)); }
+  /* FRAY pick: the ten seat chips in one row (small art, names on up to two lines), so the grid sits above the fold */
+  .draft__top--ffa .fseats { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: calc(0.75 * var(--u)); }
+  .fseat { padding: calc(0.5 * var(--u)); gap: 2px; }
+  .fseat__name { white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.2; overflow: visible; }
   /* finalize: the job line goes (the showcase said it); the spells' second row stays above the fold */
   .final__job { display: none; }
   .final { gap: calc(1.5 * var(--u)); }
