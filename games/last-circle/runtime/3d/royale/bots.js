@@ -150,6 +150,14 @@ function finishRevive(W, t, by) {
 const hyp = (x, z) => Math.sqrt(x * x + z * z);
 // scratch for per-frame K.moveBasis calls (out-param; older sims ignore it)
 const _mb0 = { fx: 0, fz: 0, rx: 0, rz: 0 }, _mb1 = { fx: 0, fz: 0, rx: 0, rz: 0 };
+/** (release blockers) basisOf(inp, out) with the yaw read HERE: the sim's moveBasis term for term (sin / cos of the same yaw, the same four
+ *  stores), so the numbers are bit-identical; a call that passes the yaw boxes it (a heap number per bot per call while the caller is not
+ *  optimized, or the callee is not inlined - tierprof's first window after the landing). */
+function basisOf(inp, out) {
+  const yaw = inp.yaw, s = Math.sin(yaw), c = Math.cos(yaw);
+  out.fx = -s; out.fz = -c; out.rx = c; out.rz = -s;
+  return out;
+}
 const _eye_actEngage = { x: 0, y: 0, z: 0 }, _eye_fireOnTheMove = { x: 0, y: 0, z: 0 }, _eye_perceive = { x: 0, y: 0, z: 0 }, _eye_underFire = { x: 0, y: 0, z: 0 };   // eyePos scratch per caller (no per-frame allocation)
 
 // First-run protection. BOT_TIER_MIX.standard is [8,12,14,10,5] over 49 bots and
@@ -191,7 +199,7 @@ export function init(W) {
   // 2026-09-30: the first divergence of a seed-1 replay, at t = 25.5 s).
   W.events.on("shotFired", (shooter, weaponId, muzzle) => {
     const p = (shooter && shooter.pos) || muzzle;
-    for (const b of brains) {
+    for (let _i194 = 0, _l194 = brains; _i194 < _l194.length; _i194++) { const b = _l194[_i194];
       if (!b.actor.alive || b.actor === shooter) continue;
       const d = hyp(b.actor.pos.x - p.x, b.actor.pos.z - p.z);
       // (P23) a squadmate's shot is not an enemy to hunt: it is a fight to help with (the assist mark below)
@@ -218,7 +226,7 @@ export function init(W) {
     if (!v || !hasTeam(v) || !info || !info.attackerId) return;
     const att = W.actorById.get(info.attackerId);
     if (!att || sameTeam(v, att)) return;
-    for (const b of brains) {
+    for (let _i221 = 0, _l221 = brains; _i221 < _l221.length; _i221++) { const b = _l221[_i221];
       const a2 = b.actor;
       if (a2 === v || !a2.alive || a2.downed || !sameTeam(a2, v)) continue;
       if (hyp(a2.pos.x - v.pos.x, a2.pos.z - v.pos.z) > 150) continue;
@@ -239,7 +247,7 @@ export function init(W) {
       if (y <= W.map.heightAt(x, z)) break;
     }
     const R = (def.splashR || 4.5) + 2.5;
-    for (const b of brains) {
+    for (let _i242 = 0, _l242 = brains; _i242 < _l242.length; _i242++) { const b = _l242[_i242];
       const a2 = b.actor;
       if (!a2.alive || a2.gliding || a2 === thrower) continue;
       if (hyp(a2.pos.x - lx, a2.pos.z - lz) > R + 4 || Math.abs(a2.pos.y - ly) > 6) continue;
@@ -256,7 +264,7 @@ export function init(W) {
     // (PING / ASSIST chosen: busy false), or - nobody free 1 s after it was placed - sends one busy ack (busy true) and still acks "going"
     // later if a mate frees up inside the ping's 30 s. It used to ack at once while the mate stayed in its fight for the ping's whole life.
     const rec = { t: W.t, owner: owner.id, kind: pg.kind, x: pg.x, z: pg.z, acked: false, busy: false };
-    for (const b of brains) {
+    for (let _i259 = 0, _l259 = brains; _i259 < _l259.length; _i259++) { const b = _l259[_i259];
       const a2 = b.actor;
       if (!a2.alive || a2.downed || !sameTeam(a2, owner)) continue;
       const bb2 = b.bb;
@@ -265,7 +273,7 @@ export function init(W) {
       p.kind = pg.kind === "enemy" ? 2 : 1; p.id = null;
       if (p.kind === 2) {                                   // the enemy nearest the marked spot (within 4 m)
         let bd = 16;
-        for (const t of W.actors) {
+        for (let _i268 = 0, _l268 = W.actors; _i268 < _l268.length; _i268++) { const t = _l268[_i268];
           if (!t.alive || sameTeam(t, owner)) continue;
           const dx = t.pos.x - pg.x, dz = t.pos.z - pg.z, d2 = dx * dx + dz * dz;
           if (d2 < bd) { bd = d2; p.id = t.id; }
@@ -281,7 +289,7 @@ export function init(W) {
   W.events.on("actorRevived", (t) => { if (t) reviving.delete(t.id); });
   W.events.on("actorDied", (v) => { if (v) reviving.delete(v.id); });
   W.events.on("supplyDropLanded", (p) => {
-    for (const b of brains) {
+    for (let _i284 = 0, _l284 = brains; _i284 < _l284.length; _i284++) { const b = _l284[_i284];
       if (!b.actor.alive) continue;
       if (hyp(b.actor.pos.x - p.x, b.actor.pos.z - p.z) < 220) {
         b.bb.supply = { x: p.x, z: p.z, t: b.W.t };
@@ -349,6 +357,64 @@ export function readSkill(W) {
   return Number.isFinite(v) ? Math.min(0.98, Math.max(0.05, v)) : 0.35;
 }
 
+/** (release blockers) The blackboard. It was an object LITERAL of 168 properties, and V8 builds a literal of 128 or more properties in DICTIONARY
+ *  mode: every bot's blackboard was a hash table, every number stored into it a fresh heap box (tierprof, isla_viva: bots.js 21-25 KB of garbage
+ *  per simulated frame right after the landing, act / actEngage / moveToward's timer writes) and every read a hash lookup. A constructor that
+ *  assigns the same fields in the same order with the same start values is a fast in-object shape (Chrome 156: %HasFastProperties true, the
+ *  literal false); Object.keys order, values and readers are unchanged. */
+class Blackboard {
+  constructor() {
+      this.target = null; this.targetSeenT = -99; this.targetPos = null; this.acquireT = 0;
+      this.heard = null; this.lootId = null;
+      this.moveTo = null; this.strafeDir = 1; this.strafeT = 0;
+      this.campSpot = null; this.dropTarget = null; this.chestT = 0; this.chestId = null;
+      this.stuckT = 0; this.lastPos = new THREE.Vector3(); this.burstLeft = 0; this.burstPause = 0;
+      // EVERY field the brain ever writes, present from birth, so all 49
+      // blackboards share one hidden class. They used to grow these on first use,
+      // each bot in its own order: dozens of shapes at every bb.* read, i.e.
+      // megamorphic loads, and a megamorphic load of a number field hands back a
+      // fresh heap box - garbage on every read in actEngage/moveToward/think. Each
+      // start value behaves exactly like the old `undefined` at every reader:
+      // numbers only meet `|| 0` / `|| -99` defaults or `>` tests against W.t >= 0;
+      // the rest only meet truthiness or `== null`. fightTarget, threatFor and
+      // coverState keep `undefined` itself (compared with !== / ===).
+      this.lootType = null; this.supply = null; this.path = null; this.pathGoal = null; this.nextPathT = 0; this.badLoot = null; this.navGX = 0; this.navGZ = 0; this.navT = -99;
+      this.progGoal = null; this.progBest = null; this.progT = 0; this.wallSide = 0; this.detourDir = 0; this.nextJumpT = 0;
+      this.anchor = null; this.anchorT = 0; this.breaks = 0;
+      // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
+      // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
+      // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
+      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0;
+      this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
+      this.slideX = 0; this.slideZ = 0; this.slideUntil = -99; this.slideFlips = 0; this.routeId = null; this.pinX = 0; this.pinZ = 0; this.pinT = 0; this.pinIntent = 0; this.pinN = 0;
+      this.fightTarget = undefined; this.fightT = 0; this.aimHigh = false; this.errPhase = 0; this.closeInUntil = 0;
+      this.avoidId = null; this.avoidUntil = 0; this.swapT = -99; this.healBlockedUntil = 0;
+      this.threatFor = undefined; this.threatT = -99; this.threatAt = null;
+      this.coverState = undefined; this.coverPt = null; this.coverGiveUp = 0; this.coverUntil = 0; this.coverFailUntil = 0; this.coverReflexUntil = 0;
+      this.noRouteT = -99; this.deckT = -99; this.heldN = 0; this.heldT = -99; this.heldAcc = 0;   // (Wave 7, round 2) the last "no route" answer of a path request / the next time a roof exit may be looked for
+      // (Wave 8) indoors: the bot's own room (IND.R index, -1 outdoors) and when / where it was read; the target's room; the doorway an indoor cover
+      // spot is held beside (coverFace: 1 = face that doorway while holding)
+      this.roomI = -1; this.roomT = -99; this.roomX = 0; this.roomZ = 0; this.roomY = 0; this.tRoomI = -1; this.tRoomT = -99; this.coverFace = 0; this.coverFX = 0; this.coverFZ = 0; this.nearLootT = 0;
+      // (Wave 8 fix round, lane K2) standGoal: the moveTo object that is a house loot STAND point (arrive closer: LOOT_STAND_M); solid*: the
+      // inside-a-solid detector's 0.5 s window (escapeSolid)
+      this.standGoal = null; this.solidT = -99; this.solidX = 0; this.solidZ = 0; this.solidN = 0;
+      // (K2, re-run) offFurn*: offFurniture's committed heading (until when, which heading, where the window began, which candidate, for which room);
+      // furn*: the off-the-floor pin detector's 0.5 s window (escapeToWalk)
+      this.offFurnUntil = -99; this.offFurnYaw = 0; this.offFurnX = 0; this.offFurnZ = 0; this.offFurnK = 0; this.offFurnGi = -1; this.furnT = -99; this.furnX = 0; this.furnZ = 0; this.furnN = 0; this.furnD = 0;
+      // (P23) graceMul: the new-player grace of the target at its acquisition (0 = none); assist / ping: a squadmate's fight / ping (C-MODE, C-PING);
+      // danger*: a live grenade's predicted blast (LC-14); nade*: the throw machine (nadeS 0 idle / 1 drawing / 2 aiming, nadeKind 1 frag / 2 smoke);
+      // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
+      this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
+      this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0;
+      this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
+      // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
+      // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
+      this.stormLatch = false; this.boltWaitT = 0;
+
+  }
+}
+
 export function attachBrain(W, actor, nBots) {
   // Seed off the SLOT, not brains.length/W.actors.length: on the hostLost path the
   // roster is already fully built when brains are attached, so a length-derived
@@ -395,52 +461,7 @@ export function attachBrain(W, actor, nBots) {
     tierK: K.BOT_TIERS[tier - 1],
     state: "DROP",
     nextThink: 0,
-    bb: {          // blackboard
-      target: null, targetSeenT: -99, targetPos: null, acquireT: 0,
-      heard: null, lootId: null,
-      moveTo: null, strafeDir: 1, strafeT: 0,
-      campSpot: null, dropTarget: null, chestT: 0, chestId: null,
-      stuckT: 0, lastPos: new THREE.Vector3(), burstLeft: 0, burstPause: 0,
-      // EVERY field the brain ever writes, present from birth, so all 49
-      // blackboards share one hidden class. They used to grow these on first use,
-      // each bot in its own order: dozens of shapes at every bb.* read, i.e.
-      // megamorphic loads, and a megamorphic load of a number field hands back a
-      // fresh heap box - garbage on every read in actEngage/moveToward/think. Each
-      // start value behaves exactly like the old `undefined` at every reader:
-      // numbers only meet `|| 0` / `|| -99` defaults or `>` tests against W.t >= 0;
-      // the rest only meet truthiness or `== null`. fightTarget, threatFor and
-      // coverState keep `undefined` itself (compared with !== / ===).
-      lootType: null, supply: null, path: null, pathGoal: null, nextPathT: 0, badLoot: null, navGX: 0, navGZ: 0, navT: -99,
-      progGoal: null, progBest: null, progT: 0, wallSide: 0, detourDir: 0, nextJumpT: 0,
-      anchor: null, anchorT: 0, breaks: 0,
-      // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
-      // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
-      // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
-      progKind: 0, wallCols: [], wallT: -99, wallX: 0, wallZ: 0,
-      hdX: 0, hdZ: 0, hdT: -99, healSide: 1, hdBadX: 0, hdBadZ: 0, hdBadUntil: 0, unstickT: -99, hdHold: -1,
-      slideX: 0, slideZ: 0, slideUntil: -99, slideFlips: 0, routeId: null, pinX: 0, pinZ: 0, pinT: 0, pinIntent: 0, pinN: 0,
-      fightTarget: undefined, fightT: 0, aimHigh: false, errPhase: 0, closeInUntil: 0,
-      avoidId: null, avoidUntil: 0, swapT: -99, healBlockedUntil: 0,
-      threatFor: undefined, threatT: -99, threatAt: null,
-      coverState: undefined, coverPt: null, coverGiveUp: 0, coverUntil: 0, coverFailUntil: 0, coverReflexUntil: 0,
-      noRouteT: -99, deckT: -99, heldN: 0, heldT: -99, heldAcc: 0,        // (Wave 7, round 2) the last "no route" answer of a path request / the next time a roof exit may be looked for
-      // (Wave 8) indoors: the bot's own room (IND.R index, -1 outdoors) and when / where it was read; the target's room; the doorway an indoor cover
-      // spot is held beside (coverFace: 1 = face that doorway while holding)
-      roomI: -1, roomT: -99, roomX: 0, roomZ: 0, roomY: 0, tRoomI: -1, tRoomT: -99, coverFace: 0, coverFX: 0, coverFZ: 0, nearLootT: 0,
-      // (Wave 8 fix round, lane K2) standGoal: the moveTo object that is a house loot STAND point (arrive closer: LOOT_STAND_M); solid*: the
-      // inside-a-solid detector's 0.5 s window (escapeSolid)
-      standGoal: null, solidT: -99, solidX: 0, solidZ: 0, solidN: 0,
-      // (K2, re-run) offFurn*: offFurniture's committed heading (until when, which heading, where the window began, which candidate, for which room);
-      // furn*: the off-the-floor pin detector's 0.5 s window (escapeToWalk)
-      offFurnUntil: -99, offFurnYaw: 0, offFurnX: 0, offFurnZ: 0, offFurnK: 0, offFurnGi: -1, furnT: -99, furnX: 0, furnZ: 0, furnN: 0, furnD: 0,
-      // (P23) graceMul: the new-player grace of the target at its acquisition (0 = none); assist / ping: a squadmate's fight / ping (C-MODE, C-PING);
-      // danger*: a live grenade's predicted blast (LC-14); nade*: the throw machine (nadeS 0 idle / 1 drawing / 2 aiming, nadeKind 1 frag / 2 smoke);
-      // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
-      graceMul: 0, assist: null, ping: null, pingRec: null, pingGoT: -1, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
-      nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
-      reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, followBack: false, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
-      wantShield: false, shieldScanT: 0, shieldNear: false, shieldGo: null, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, fdA: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
-    },
+    bb: new Blackboard(),          // blackboard (see Blackboard)
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
     pushRoll: (slot * 37 + 11) % 100,
@@ -732,7 +753,7 @@ function leaderOf(W, b) {
   }
   bb.leaderT = W.t;
   let best = null, bh = false, bs = 1e9;
-  for (const t of W.actors) {
+  for (let _i735 = 0, _l735 = W.actors; _i735 < _l735.length; _i735++) { const t = _l735[_i735];
     if (t === a || !t.alive || t.downed || !sameTeam(a, t)) continue;
     const hu = !t.isBot, s = slotOf(t);
     if ((hu && !bh) || (hu === bh && s < bs)) { best = t; bh = hu; bs = s; }
@@ -745,7 +766,7 @@ function leaderOf(W, b) {
 function formIndex(W, a) {
   if (!hasTeam(a)) return 0;
   let k = 0;
-  for (const t of W.actors) if (t !== a && sameTeam(a, t) && t.isBot && slotOf(t) < slotOf(a)) k++;
+  for (let _i748 = 0, _l748 = W.actors; _i748 < _l748.length; _i748++) { const t = _l748[_i748]; if (t !== a && sameTeam(a, t) && t.isBot && slotOf(t) < slotOf(a)) k++; }
   return k + 1;
 }
 
@@ -770,12 +791,13 @@ export function update(W, dt) {
   // (P23, C-MODE) the human's glide start is moved over his landing zone when the lobby ends (player.setDropTarget), AFTER assignDrops
   // placed his squad beside his old spot: on the first drop frame his bot squadmates jump with him again (beside him, at his height)
   if (!squadSnapped && W.phase === "drop") { squadSnapped = true; squadSnap(W); }
-  for (const b of brains) {
+  for (let _i773 = 0, _l773 = brains; _i773 < _l773.length; _i773++) { const b = _l773[_i773];
     const a = b.actor;
     if (!a.alive || a.netRemote) continue;
     // staggered thinking: near bots think fast, far bots slow
     if (now >= b.nextThink) {
-      const near = pp && a.pos.distanceToSquared(pp) < 120 * 120;
+      let near = pp;
+      if (pp) { const nx = a.pos.x - pp.x, ny = a.pos.y - pp.y, nz = a.pos.z - pp.z; near = nx * nx + ny * ny + nz * nz < 120 * 120; }   // Vector3.distanceToSquared, inline
       b.nextThink = now + (near ? 0.15 : 0.4) + b.rng() * 0.08;
       think(W, b);
     }
@@ -864,16 +886,20 @@ function think(W, b) {
   // useConsumable refuses every bandage because bandage cap is 75 and hp is 78,
   // and there is no shield item to fall back to. So test USABILITY, not mere
   // presence — mirroring useConsumable's own cap checks (player.js).
-  const usable = (id) => {
-    const c = K.CONSUMABLES[id];
-    if (!c) return false;
-    return c.heals === "hp" ? a.hp < c.cap : a.shield < c.cap;
-  };
-  const heals = a.inventory.slots.some((s2) => s2 && s2.kind === "consumable" && s2.count > 0 && usable(s2.id));
+  // (release blockers) both tests as plain loops: the usable() closure and the two .some() callbacks were three closures allocated per think
+  // (same answers: the first usable heal / the first loaded gun, holes read as empty slots exactly as .some skipped them)
+  let heals = false, hasFirepower = false;
+  const slots0 = a.inventory.slots;
+  for (let i = 0; i < slots0.length; i++) {
+    const s2 = slots0[i];
+    if (!(s2 && s2.kind === "consumable" && s2.count > 0)) continue;
+    const c = K.CONSUMABLES[s2.id];
+    if (c && (c.heals === "hp" ? a.hp < c.cap : a.shield < c.cap)) { heals = true; break; }
+  }
   // A bot with NOTHING LEFT TO SHOOT must go find ammo/weapons, not dance
   // around a fight it cannot win (owner: "two bots ran and jumped around
   // because they had no bullets rather than looking for chests").
-  const hasFirepower = a.inventory.slots.some((s2) => s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0);
+  for (let i = 0; i < slots0.length; i++) { const s2 = slots0[i]; if (s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0) { hasFirepower = true; break; } }
 
   // hard overrides
   if (inStorm) { if (b.state === "REVIVE") cancelRevive(W, b); b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
@@ -1119,6 +1145,8 @@ function nearestGun(W, a, bb, r) {
   return best;
 }
 
+let _pcS = new Float64Array(64), _pcN = 0;      // perceive's candidates in reach: sd, actor (release blockers: nearest-first sight lines)
+const _pcT = [];
 function perceive(W, b) {
   const a = b.actor, bb = b.bb;
   // current target still valid?
@@ -1136,7 +1164,7 @@ function perceive(W, b) {
     const ct = W.actorById.get(bb.target);
     if (ct && ct.downed && !finisher) { bb.avoidId = ct.id; bb.avoidUntil = W.t + 10; bb.target = null; }
   }
-  for (const t of W.actors) {
+  for (let _i1139 = 0, _l1139 = W.actors; _i1139 < _l1139.length; _i1139++) { const t = _l1139[_i1139];
     if (t === a || !t.alive) continue;
     if (sameTeam(a, t)) continue;                                      // (P23, C-MODE) never a squadmate
     if (bb.avoidId === t.id && W.t < (bb.avoidUntil || 0)) continue;   // fatigue cooldown
@@ -1184,12 +1212,28 @@ function perceive(W, b) {
     // sd < bestD, so one that cannot win needs no march (the same choice as before; losBlocked has no lasting side effect - its
     // collider queries only stamp their own results). It was the costliest call of the think tick (maps.js losBlocked 3.7 KB
     // of garbage a frame on Isla Viva, every candidate in reach every think).
-    if (!(sd < bestD)) continue;
-    const ty = t.pos.y + (t.downed ? 0.4 : 1.2);
-    if (smokeBlocks(W, eye.x, eye.y, eye.z, t.pos.x, ty, t.pos.z)) continue;        // (P23, C-SMOKE) first: no collider query
-    if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, ty, t.pos.z)) continue;
-    bestD = sd; best = t;
+    // (release blockers) ... and the candidates are marched NEAREST-FIRST (by sd): the first one in sight is the one the actor-order walk ended
+    // with (the lowest sd in sight; on a tie the earlier actor - the walk kept the first of equal sd), so the choice is the same, and the sight
+    // lines of the farther candidates behind it are never marched (the walk marched every candidate that beat the best so far: losBlocked's
+    // own garbage was the largest share of the think tick right after the landing, tierprof's first window)
+    if (!(sd < 1e9)) continue;
+    if (_pcN >= _pcS.length) { const g = new Float64Array(_pcS.length * 2); g.set(_pcS); _pcS = g; }
+    _pcS[_pcN] = sd; _pcT[_pcN] = t; _pcN++;
   }
+  for (let left = _pcN; left > 0; left--) {
+    let k = -1, ks = 1e9;
+    for (let i = 0; i < _pcN; i++) { const si = _pcS[i]; if (si < ks) { ks = si; k = i; } }      // strict <: the earliest of equal sd
+    if (k < 0) break;
+    const t = _pcT[k];
+    _pcS[k] = 1e9;                                                                                 // taken
+    const ty = t.pos.y + (t.downed ? 0.4 : 1.2);
+    if (W.smokes && W.smokes.length && smokeBlocks(W, eye.x, eye.y, eye.z, t.pos.x, ty, t.pos.z)) continue;        // (P23, C-SMOKE) first: no collider query
+    if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, ty, t.pos.z)) continue;
+    bestD = ks; best = t;
+    break;
+  }
+  for (let i = 0; i < _pcN; i++) _pcT[i] = null;                                                  // no actor kept past the scan
+  _pcN = 0;
   if (best) {
     if (bb.target !== best.id) { bb.target = best.id; bb.acquireT = W.t; bb.graceMul = graceOf(W, best); }
     // (P23, LC-12) RE-PEEK REACTION. acquireT used to reset only when the target CHANGED, so a man who ducked out of sight and peeked again
@@ -1383,7 +1427,7 @@ function pickLoot(W, a, near) {
   // (Wave 8) CLEAR THE HOUSE: inside a furnished house the loot of that house is worth IND_LOOT_HOUSE points more (its own room IND_LOOT_ROOM): a bot
   // takes what the house holds before it crosses the street for the next one (a candidate's room from roomAt; -1 = no houses / outdoors: no change)
   const myR = IND.H !== null && a.brain ? myRoom(W, a.brain) : -1;
-  for (const n of near) {
+  for (let _i1386 = 0, _l1386 = near; _i1386 < _l1386.length; _i1386++) { const n = _l1386[_i1386];
     let score = 0;
     // Skip anything give() would refuse. Without this a bot at the gun cap kept
     // re-selecting the same weapon, walking to it, being refused, and re-planning
@@ -1515,7 +1559,7 @@ function startHeal(W, a) {
   // 10/s), and a big spent at 0 is the only refill past 50 gone (census: 7-14 bigs a match used from a 0 bar, then the bar sat at 50)
   const order = calm && a.shield < MINI_CAP() ? HEAL_CALM_ORDER : a.shield < 40 ? ["mini_shield", "big_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
   const keep = calm && a.shield >= SHIELD_KEEP && bigCount(a) < 2;      // (fix round) a lone big is kept for the bar under 75 (keepBig)
-  for (const id of order) if (!(keep && id === "big_shield") && W.useConsumable(a, id)) return true;
+  for (let _i1518 = 0, _l1518 = order; _i1518 < _l1518.length; _i1518++) { const id = _l1518[_i1518]; if (!(keep && id === "big_shield") && W.useConsumable(a, id)) return true; }
   return false;
 }
 
@@ -1568,7 +1612,7 @@ function act(W, b, dt) {
         t = ft;
       }
     }
-    steerYaw(a, Math.atan2(-(t.x - a.pos.x), -(t.z - a.pos.z)), dt, 3);
+    (SYQ[0] = Math.atan2(-(t.x - a.pos.x), -(t.z - a.pos.z)), steerYawQ(a, dt, 3));
     inp.mz = 1;
     const d = hyp(t.x - a.pos.x, t.z - a.pos.z);
     inp.sprint = d < 60; // dive
@@ -1618,16 +1662,18 @@ function act(W, b, dt) {
   if (bb.nadeS) throwRun(W, b, dt);
   else switch (b.state) {
     case "ENGAGE": actEngage(W, b, dt); break;
-    case "FLEE": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "HEAL": actHeal(W, b, dt); break;
     case "LOOT": actLoot(W, b, dt); break;
-    case "SUPPLY": actSupply(W, b, dt); fireOnTheMove(W, b, dt); break;
-    case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); fireOnTheMove(W, b, dt); break;
-    case "HUNT": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
-    case "CLOSEIN": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "CAMP": actCamp(W, b, dt); break;
     case "REVIVE": actRevive(W, b, dt); break;
-    case "FOLLOW": case "PING": case "ASSIST": actSquadMove(W, b, dt); fireOnTheMove(W, b, dt); break;
+    // (release blockers) the travelling states share ONE call of each mover and of fireOnTheMove (the same calls, the same order): a state's
+    // first frame of the match used to reach a call site that had never run - an optimized act() thrown away (no feedback) mid-match
+    case "FLEE": case "ROTATE": case "PUSH": case "WANDER": case "HUNT": case "CLOSEIN": case "SUPPLY": case "FOLLOW": case "PING": case "ASSIST":
+      if (b.state === "SUPPLY") actSupply(W, b, dt);
+      else if (b.state === "FOLLOW" || b.state === "PING" || b.state === "ASSIST") actSquadMove(W, b, dt);
+      else actMove(W, b, dt, b.state !== "PUSH" && b.state !== "WANDER");     // sprint: ROTATE, FLEE, HUNT, CLOSEIN
+      fireOnTheMove(W, b, dt);
+      break;
   }
   // (P23, LC-14) a live grenade landing here: get out of its blast (over every state but a revive channel and a throw)
   if (bb.dangerUntil > W.t && !bb.nadeS && !(b.state === "REVIVE" && bb.reviveStarted)) dodgeGrenade(W, b, dt);
@@ -1639,7 +1685,8 @@ function act(W, b, dt) {
 
   // now inp.mx / inp.mz carry this frame's intent: barely moved while TRYING to
   // move => stuck
-  if (_wasStuckPos.distanceToSquared(a.pos) < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt;
+  const sqx = _wasStuckPos.x - a.pos.x, sqy = _wasStuckPos.y - a.pos.y, sqz = _wasStuckPos.z - a.pos.z;     // Vector3.distanceToSquared, inline (a call returns a boxed double)
+  if (sqx * sqx + sqy * sqy + sqz * sqz < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt;
   else bb.stuckT = 0;
 
   // PIN DETECTOR (Wave 5): trying to move for most of a half-second and ending it within 15 cm of where it began. stuckT
@@ -1976,7 +2023,7 @@ function underFire(W, b, dt) {
     bb.threatAt.x = att.pos.x; bb.threatAt.z = att.pos.z;
   }
   const tp = bb.threatAt;
-  steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 4 + (a.tier || 3) * 1.6);
+  (SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), SYQ[1] = 4 + (a.tier || 3) * 1.6, steerYawS(a, dt));
   // can this actually be answered — gun, ammo, reach, and a clear line?
   const slot = a.inventory.slots[a.inventory.active];
   const def = K.WEAPONS[a.weapon && a.weapon.id];
@@ -1985,7 +2032,7 @@ function underFire(W, b, dt) {
   if (dist > (def.falloff ? def.falloff[1] * 1.2 : 40)) return false;
   const eye = eyePos(a, _eye_underFire);
   const ay = att.pos.y + (att.downed ? 0.4 : 1.2);
-  if (smokeBlocks(W, eye.x, eye.y, eye.z, att.pos.x, ay, att.pos.z)) return false;          // (P23, C-SMOKE)
+  if (W.smokes && W.smokes.length && smokeBlocks(W, eye.x, eye.y, eye.z, att.pos.x, ay, att.pos.z)) return false;          // (P23, C-SMOKE)
   if (W.map.losBlocked(eye.x, eye.y, eye.z, att.pos.x, ay, att.pos.z)) return false;
   // answer it. Clearing avoidId matters: fight-fatigue may have just blacklisted
   // this very actor, which would otherwise make the bot ignore the man shooting it.
@@ -2000,11 +2047,13 @@ function underFire(W, b, dt) {
 }
 
 // (Wave 7b, S1) steerYawQ: the same turn with the wanted yaw in SYQ[0] (a call boxes a double argument)
-const SYQ = new Float64Array(1);
+const SYQ = new Float64Array(2);          // [0] the wanted yaw, [1] the turn speed for steerYawS
 function steerYaw(a, want, dt, speed) {
   SYQ[0] = want;
   steerYawQ(a, dt, speed);
 }
+/** (release blockers) steerYawQ with the speed in SYQ[1] too (underFire's tier-scaled turn: a double argument is a heap box per call) */
+function steerYawS(a, dt) { steerYawQ(a, dt, SYQ[1]); }
 function steerYawQ(a, dt, speed) {
   const want = SYQ[0];
   let d = want - a.input.yaw;
@@ -2284,7 +2333,7 @@ function guardMove(W, b, mirror) {
   const mz0 = inp.mz, mx0 = inp.mx;
   const m = Math.sqrt(mz0 * mz0 + mx0 * mx0);
   if (m < 0.1 || !a.onGround) return 0;
-  const B = K.moveBasis(inp.yaw, _mb0);
+  const B = basisOf(inp, _mb0);
   const wx = (B.fx * mz0 + B.rx * mx0) / m, wz = (B.fz * mz0 + B.rz * mx0) / m;
   const list = wallCols(W, b);
   if (!list.length) return 0;
@@ -3808,7 +3857,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
      Savanna: 8 of 80 upper-floor walks failed). The grid certified each leg for a walker that heads straight at the next waypoint, so the
      move direction is that line NOW, expressed in the current yaw's frame (fireOnTheMove's reprojection); the yaw still turns smoothly. */
   if (bb.path && bb.path.nav && !holdStill) {
-    const bq = K.moveBasis(inp.yaw, _mb0), wdx = -Math.sin(want), wdz = -Math.cos(want);
+    const bq = basisOf(inp, _mb0), wdx = -Math.sin(want), wdz = -Math.cos(want);
     inp.mz = wdx * bq.fx + wdz * bq.fz;
     inp.mx = wdx * bq.rx + wdz * bq.rz;
   }
@@ -3942,7 +3991,7 @@ function offFurniture(W, b, dt) {
   SYQ[0] = bb.offFurnYaw; steerYawQ(a, dt, 20);
   // a pocket on the FLOOR is often closed by low pieces (a side table, a chair): pinned there, hop (a 0.85 m table is in reach: then this walks off it)
   if (dy < 0.3 && (bb.stuckT > 0.7 || bb.pinN >= 1) && bb.nextJumpT <= W.t) { a.input.jump = true; bb.nextJumpT = W.t + 0.9; }
-  const B = K.moveBasis(a.input.yaw, _mb0), wdx = -Math.sin(bb.offFurnYaw), wdz = -Math.cos(bb.offFurnYaw);
+  const B = basisOf(a.input, _mb0), wdx = -Math.sin(bb.offFurnYaw), wdz = -Math.cos(bb.offFurnYaw);
   a.input.mz = wdx * B.fx + wdz * B.fz; a.input.mx = wdx * B.rx + wdz * B.rz; a.input.sprint = false;
   return true;
 }
@@ -3975,16 +4024,16 @@ function fireOnTheMove(W, b, dt) {
   const dist = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
   if (dist > (def.falloff ? def.falloff[1] * 1.15 : 30)) return;
   // capture the state's move intent as a WORLD direction before touching yaw
-  const b0 = K.moveBasis(inp.yaw, _mb0);
+  const b0 = basisOf(inp, _mb0);
   const wx = b0.fx * inp.mz + b0.rx * inp.mx, wz = b0.fz * inp.mz + b0.rz * inp.mx;
   const eye = eyePos(a, _eye_fireOnTheMove);
   const aimY = t.pos.y + K.actorHeight(t) * 0.64;
   const gmv = bb.graceMul > 0 && !t.isBot && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4) ? bb.graceMul : 0;   // (P23, LC-96)
   const err = (b.tierK.aimErrDeg * 1.5 * (1 + GRACE_ERR * gmv) * Math.PI) / 180;
   bb.errPhase = (bb.errPhase || b.rng() * 9) + dt * 3.1;
-  steerYaw(a, Math.atan2(-(t.pos.x - eye.x), -(t.pos.z - eye.z)) + Math.sin(bb.errPhase) * err, dt, 10);
+  (SYQ[0] = Math.atan2(-(t.pos.x - eye.x), -(t.pos.z - eye.z)) + Math.sin(bb.errPhase) * err, steerYawQ(a, dt, 10));
   inp.pitch = K.clamp(Math.atan2(aimY - eye.y, dist) + Math.cos(bb.errPhase * 0.83) * err * 0.6, -1.3, 1.3);
-  const b1 = K.moveBasis(inp.yaw, _mb1);
+  const b1 = basisOf(inp, _mb1);
   inp.mz = wx * b1.fx + wz * b1.fz;
   inp.mx = wx * b1.rx + wz * b1.rz;
   inp.fire = true;
@@ -4026,7 +4075,7 @@ function actLoot(W, b, dt) {
   // a bot on the street used to take the gun on a shelf behind the wall. The bot walks to the thing's STAND point (setLootGoal) so the line is clear there.
   const near = nearGoal ? W.nearbyLoot(a.pos, 2.4, 2.2, true) : _noLoot;
   if (bb.roomFor && bb.roomFor === bb.lootId && mt && hyp(mt.x - a.pos.x, mt.z - a.pos.z) < 3.5) makeRoom(W, b);
-  for (const n of near) {
+  for (let _i4029 = 0, _l4029 = near; _i4029 < _l4029.length; _i4029++) { const n = _l4029[_i4029];
     if (n.type === "chest") {
       // chests take a 2s channel — bots obey the same rule as the player
       if (bb.chestId !== n.id) { bb.chestId = n.id; bb.chestT = 0; }
@@ -4325,7 +4374,7 @@ function actHeal(W, b, dt) {
   // (P23, LC-20) a heal popped behind a cover wall stays behind the wall (the wall is why it was safe to start)
   if (bb.coverState === "IN" && bb.coverPt && hyp(bb.coverPt.x - a.pos.x, bb.coverPt.z - a.pos.z) < COVER_ARRIVE + 0.6) {
     a.input.mx = 0; a.input.mz = 0; a.input.sprint = false;
-    if (bb.targetPos) steerYaw(a, Math.atan2(-(bb.targetPos.x - a.pos.x), -(bb.targetPos.z - a.pos.z)), dt, 6);
+    if (bb.targetPos) (SYQ[0] = Math.atan2(-(bb.targetPos.x - a.pos.x), -(bb.targetPos.z - a.pos.z)), steerYawQ(a, dt, 6));
     return;
   }
   // Healing used to zero movement outright, which pinned a bot in the open for
@@ -4356,9 +4405,9 @@ function actHeal(W, b, dt) {
     // free of walls and not toward the threat, and express that WORLD heading in the yaw frame the mover will use.
     const fan = pickRetreat(W, b, wallCols(W, b), ux, uz);
     const face = bb.targetPos ? Math.atan2(dx, dz) : (fan ? Math.atan2(-_gh.x, -_gh.z) : Math.atan2(-ux, -uz));
-    steerYaw(a, face, dt, 8);
+    (SYQ[0] = face, steerYawQ(a, dt, 8));
     if (fan) {
-      const B = K.moveBasis(a.input.yaw, _mb0);
+      const B = basisOf(a.input, _mb0);
       a.input.mz = _gh.x * B.fx + _gh.z * B.fz;              // backing off at the slowed heal speed
       a.input.mx = _gh.x * B.rx + _gh.z * B.rz;
     } else { a.input.mz = 0; a.input.mx = 0; }               // walled in: hold the corner and finish the heal there
@@ -4452,7 +4501,7 @@ function smokeCut(W, b) {
 function downedMate(W, b) {
   const a = b.actor;
   let best = null, bd = REVIVE_SEEK_M;
-  for (const t of W.actors) {
+  for (let _i4455 = 0, _l4455 = W.actors; _i4455 < _l4455.length; _i4455++) { const t = _l4455[_i4455];
     if (t === a || !t.alive || !t.downed || !sameTeam(a, t)) continue;
     const by = reviving.get(t.id);
     if (by && by !== a.id) continue;
@@ -4468,7 +4517,7 @@ function actDowned(W, b, dt) {
   inp.fire = false; inp.sprint = false; inp.ads = false; inp.crouch = false; inp.jump = false; inp.reload = false;
   if (reviving.has(a.id) || a._revivedBy) { inp.mx = 0; inp.mz = 0; return; }     // (a._revivedBy: player.js's channel, a human or a bot on it)
   let best = null, bd = 80;
-  for (const t of W.actors) {
+  for (let _i4471 = 0, _l4471 = W.actors; _i4471 < _l4471.length; _i4471++) { const t = _l4471[_i4471];
     if (t === a || !t.alive || t.downed || !sameTeam(a, t)) continue;
     const d = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
     if (d < bd) { bd = d; best = t; }
@@ -4518,7 +4567,7 @@ function actRevive(W, b, dt) {
     if (!PLAYER_REVIVE(W)) W.events.emit("reviveStart", a, t);       // player.js emits its own when it runs the channel
   }
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.crouch = true;
-  steerYaw(a, Math.atan2(-(t.pos.x - a.pos.x), -(t.pos.z - a.pos.z)), dt, 6);
+  (SYQ[0] = Math.atan2(-(t.pos.x - a.pos.x), -(t.pos.z - a.pos.z)), steerYawQ(a, dt, 6));
   if (d > K.REVIVE_RANGE) { cancelRevive(W, b); return; }               // he crawled off / was pushed past the reach: walk up again
   if ((a.lastDamageT || -99) > bb.reviveHurtT && a.hp + a.shield < 60) {   // shot hard mid-channel: fight first
     cancelRevive(W, b);
@@ -4659,7 +4708,7 @@ function beginThrow(W, b, kind, tx, ty, tz) {
     if (miss > (kind === 1 ? 3.5 : 4.5)) continue;
     // never into its own lap (a frag only): the first bounce must be 6 m+ from the thrower
     if (kind === 1 && hyp(L.x - a.pos.x, L.z - a.pos.z) < 6) return false;
-    if (kind === 1) for (const m of W.actors) {             // ... nor at a squadmate's feet
+    if (kind === 1) for (let _i4662 = 0, _l4662 = W.actors; _i4662 < _l4662.length; _i4662++) { const m = _l4662[_i4662];             // ... nor at a squadmate's feet
       if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - L.x, m.pos.z - L.z) < 6) return false;
     }
     return armThrow(W, b, kind, slot, L, hx, hz, el);
@@ -4679,7 +4728,7 @@ function beginThrow(W, b, kind, tx, ty, tz) {
       if (kind === 1 && hyp(lx - a.pos.x, lz - a.pos.z) < 6) continue;
       if (kind === 1) {
         let mateNear = false;
-        for (const m of W.actors) if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - lx, m.pos.z - lz) < 6) { mateNear = true; break; }
+        for (let _i4682 = 0, _l4682 = W.actors; _i4682 < _l4682.length; _i4682++) { const m = _l4682[_i4682]; if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - lx, m.pos.z - lz) < 6) { mateNear = true; break; } }
         if (mateNear) continue;
         if (W.map.losBlocked(lx, ly + 0.35, lz, tx, ty + 0.9, tz)) continue;     // the burst must reach him (no wall between)
       }
@@ -4708,7 +4757,7 @@ function throwRun(W, b, dt) {
   if (!slot || !(slot.count > 0) || W.t - bb.nadeT > 2.5 || a.healing || a.swimming) { if (bb.nadeS === 1) bb.fdA++; endThrow(W, b); return; }   // (fdA: probe counter, a planned throw that never left the hand)
   if (!w || w.slotRef !== slot) { if (W.t - bb.nadeT > 0.1 && W.equipSlot) W.equipSlot(a, bb.nadeSlot); return; }
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false;
-  steerYaw(a, bb.nadeYaw, dt, 14);
+  (SYQ[0] = bb.nadeYaw, steerYawQ(a, dt, 14));
   inp.pitch = Math.max(-1.3, Math.min(1.3, bb.nadePitch));
   // (the yaw is unbounded - steerYaw wraps the DIFFERENCE, not the angle - so it settles on the heading + 2 pi k; the old one-shot `% 2 pi` gave
   // 2 pi for a yaw a turn or more below the heading (JS % keeps the sign) and the frag never left the hand: g10, Deepwood seed 4, 11 of 11
@@ -4786,7 +4835,7 @@ function dodgeGrenade(W, b, dt) {
   const dx = a.pos.x - bb.dangerX, dz = a.pos.z - bb.dangerZ, d = hyp(dx, dz);
   if (d > bb.dangerR) return;
   const ax = d > 0.05 ? dx / d : 1, az = d > 0.05 ? dz / d : 0;
-  const B = K.moveBasis(inp.yaw, _mb0);
+  const B = basisOf(inp, _mb0);
   inp.mz = ax * B.fx + az * B.fz; inp.mx = ax * B.rx + az * B.rz;
   inp.sprint = true; inp.crouch = false;
   guardMove(W, b, false);
@@ -4796,7 +4845,10 @@ function dodgeGrenade(W, b, dt) {
  *  stands over the terrain. A refused heading is held for 0.6 s and the bot re-plans (a route takes the stairs). */
 function edgeGuard(W, b) {
   const a = b.actor, bb = b.bb, inp = a.input;
-  const B = K.moveBasis(inp.yaw, _mb0);
+  // (release blockers) no held heading and no probe due (3 frames in 4): nothing below can act - the same early return the tests below reach,
+  // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
+  if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
+  const B = basisOf(inp, _mb0);
   let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
   const m = hyp(wx, wz);
   if (m < 0.05) return;
@@ -4826,7 +4878,7 @@ function edgeGuard(W, b) {
   for (let k = 1; k <= kMax; k++) {
     const px = a.pos.x + wx * 0.8 * k, pz = a.pos.z + wz * 0.8 * k;
     let sup;
-    if (elevated) sup = supportAt(W, px, pz, a.pos.y);
+    if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = a.pos.y; supportA(W, SPQ, 0); sup = SPQ[3]; }      // supportAt(W, px, pz, a.pos.y), unboxed
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
     if (W.map.waterY != null && sup < W.map.waterY) sup = W.map.waterY;      // water breaks a fall
     const steep = prev - sup > STEEP_STEP;
@@ -4847,7 +4899,7 @@ function edgeGuard(W, b) {
  *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
 function jumpLandsSafe(W, a) {
   if (!LETHAL_H) return true;
-  const inp = a.input, B = K.moveBasis(inp.yaw, _mb1);
+  const inp = a.input, B = basisOf(inp, _mb1);
   for (let d = 0; d < 2; d++) {
     let wx = d === 0 ? a.vel.x : B.fx * inp.mz + B.rx * inp.mx, wz = d === 0 ? a.vel.z : B.fz * inp.mz + B.rz * inp.mx;
     const m = hyp(wx, wz);
@@ -5100,8 +5152,8 @@ function coverStepQ(W, b, dt, tp, seen) {
     inp.mx = 0; inp.mz = 0; inp.sprint = false;
     // (Wave 8) HOLD THE ROOM: indoors the spot is beside a doorway of the bot's own room and the threat comes through that doorway - face IT (the
     // threat's last position is behind a wall), so the peek / the man stepping through meets a gun already pointing at the opening
-    if (bb.coverFace === 1) steerYaw(a, Math.atan2(-(bb.coverFX - a.pos.x), -(bb.coverFZ - a.pos.z)), dt, 6);
-    else steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 6);
+    if (bb.coverFace === 1) (SYQ[0] = Math.atan2(-(bb.coverFX - a.pos.x), -(bb.coverFZ - a.pos.z)), steerYawQ(a, dt, 6));
+    else (SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), steerYawQ(a, dt, 6));
     // (P23, LC-12) reload behind the wall: a ranged cover hold is the moment to top the magazine up
     if (a.weapon && a.weapon.state === "ready") { const wd = K.WEAPONS[a.weapon.id]; if (wd && wd.mag > 0 && a.weapon.magAmmo < wd.mag * 0.6) inp.reload = true; }
     // (P23, LC-20) ...and to put a cell in: a shield item that still adds, no hit for 0.8 s -> pop it behind the wall and hold the wall until it is in
@@ -5343,7 +5395,7 @@ function actEngage(W, b, dt) {
     const mi = myRoom(W, b), ti = targetRoom(W, b, tp);
     if ((mi >= 0 || ti >= 0) && mi !== ti) {
       MTQ[0] = tp.x; MTQ[1] = tp.z; moveTowardQ(W, b, dt, dist > prefer * 3, tp.y);
-      const B0 = K.moveBasis(inp.yaw, _mb0);
+      const B0 = basisOf(inp, _mb0);
       routeX = B0.fx * inp.mz + B0.rx * inp.mx; routeZ = B0.fz * inp.mz + B0.rz * inp.mx;
       routed = true; nav.st.routedFrames++;
     }
@@ -5408,7 +5460,7 @@ function actEngage(W, b, dt) {
 
   SYQ[0] = wantYaw; steerYawQ(a, dt, 10);
   if (routed) {                                   // (Wave 8) the route's world heading in the new aim yaw's frame
-    const B1 = K.moveBasis(inp.yaw, _mb1);
+    const B1 = basisOf(inp, _mb1);
     inp.mz = routeX * B1.fx + routeZ * B1.fz;
     inp.mx = routeX * B1.rx + routeZ * B1.rz;
   }
@@ -5417,7 +5469,7 @@ function actEngage(W, b, dt) {
   // fire discipline: reaction delay, LOS, range, bursts
   const reacted = sinceAcq > b.tierK.reactionMs / 1000 + gm * GRACE_REACT_S;
   // (P23, LC-14) flush him with a frag (behind cover / camping a room / planted by cover; 9-28 m; tier 2+; one per 9-15 s)
-  if (!bb.nadeS && bb.coverState !== "IN") maybeFrag(W, b, t, seen, dist);
+  if (!bb.nadeS && bb.coverState !== "IN" && !(W.t < bb.nadeCheckT)) maybeFrag(W, b, t, seen, dist);      // (its own first test, here: the call boxes dist)
   const inRange = dist < (def.falloff ? def.falloff[1] * 1.3 : 30);      // fireRangeM(def), inlined          // the same reach ensureGunOut values a gun at
   const canSee = seen;
   inp.ads = dist > 25;
