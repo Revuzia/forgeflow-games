@@ -647,3 +647,23 @@ test('the living world: signs read by trust or fear, warnings by what is coming;
   assert.equal(commandCue('creature.adopt'), null);
   assert.equal(commandCue('creature.teach'), null);
 });
+
+test('a calmer bed at 1x: the procedural score is softer, warmer and its drums held back at the slow speeds', async () => {
+  const { paceCalm, CALM_TRIM } = await import('../src/audio/musicplayer.ts');
+  const { SPEED_PRESETS, TICKS_PER_SECOND_1X } = await import('../src/sim/types.ts');
+  assert.equal(paceCalm(TICKS_PER_SECOND_1X), 1, '1x is the calmest');
+  assert.equal(paceCalm(0), 1, 'paused');
+  assert.equal(paceCalm(2), 1);
+  assert.equal(paceCalm(undefined), 1, 'no speed known: 1x');
+  assert.equal(paceCalm(10), 0, 'time-lapse: the full score');
+  assert.equal(paceCalm(1000), 0);
+  // monotone over the presets: each step up is no calmer
+  const c = SPEED_PRESETS.filter((s) => s > 0).map((s) => paceCalm(s));
+  for (let i = 1; i < c.length; i++) assert.ok(c[i] <= c[i - 1], `preset ${SPEED_PRESETS[i + 1]}`);
+  assert.ok(paceCalm(3) > 0.8 && paceCalm(5) > 0.3 && paceCalm(5) < 0.9, `3x ${paceCalm(3)}, 5x ${paceCalm(5)}`);
+  // softer by 2-3 dB, darker, drums at half — but never silent
+  const db = 20 * Math.log10(CALM_TRIM.gain);
+  assert.ok(db < -2 && db > -3.5, `${db} dB`);
+  assert.ok(CALM_TRIM.tone > 0.4 && CALM_TRIM.tone < 1);
+  assert.ok(CALM_TRIM.perc >= 0.4 && CALM_TRIM.perc < 1);
+});

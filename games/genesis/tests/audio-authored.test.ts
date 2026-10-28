@@ -163,6 +163,10 @@ test('stingers answer the god\'s moments only: its prayers, prophecies, signs an
   assert.equal(stingerFor(ev('disaster', { kind: 'quake', god: -1, cause: 'nature' })), null);
   assert.equal(stingerFor(ev('disaster', { kind: 'flood', god: 1, cause: 'god' })), null, 'a rival\'s flood');
   assert.equal(stingerFor(ev('prayer.raised')), null);
+  assert.equal(stingerFor(ev('command', { k: 'god.omen' })), 'sign', 'the sign itself, even unseen');
+  assert.equal(stingerFor(ev('command', { k: 'miracle.water' })), null);
+  // an unseen sign by comet: the command and the god-sent comet arrive together — a sign
+  assert.equal(pickStinger([ev('command', { k: 'god.omen' }), ev('disaster', { kind: 'comet', god: 0, cause: 'god' })]), 'sign');
   // a sign by eclipse spawns a god-sent eclipse in the same tick: the batch is a sign, not wrath
   assert.equal(pickStinger([ev('disaster', { kind: 'eclipse', god: 0, cause: 'god' }), ev('omen', { kind: 'eclipse', god: 0 })]), 'sign');
   assert.equal(pickStinger([ev('prayer.answered'), ev('prophet.fulfilled')]), 'fulfilled');

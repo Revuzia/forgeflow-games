@@ -501,6 +501,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float shrubLocal = 0.0;
   // and the share of a crown's top that holds the snow (patches on its upper twigs; its flanks and rim shed it)
   float shrubCap = 0.0;
+  // the share of the ground the crowns cover (sand and bare ground lie UNDER the bushes, not over them)
+  float shrubCov = 0.0;
   // farmland's own weight: a sown field shows as tilled rows even where little else grows (and covers the sand)
   float fieldW = 0.0;
   if (vegTotal > 0.01) {
@@ -563,20 +565,25 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float shDome = (1.0 - smoothstep(0.0, rS + eS, sdS)) * keepS;
       float shLeaf = fine ? snoise(P * 3.3 + 5.3) * aaF(fw, 0.3) : 0.0;
       float shAA = aaF(fw, 2.0);
-      shrubLocal = mix(0.45 * mix(0.3, 1.1, sw) * sw, blobRaw, shAA);
+      // within the instanced shrubs' reach (vegetation.ts draws them to 0.45 of the vegetation range) the real bushes
+      // stand here: this stand-in hands over to the plain ground beneath them, as the far canopy does to the instanced
+      // trees (its crowns painted flat on the ground between the real bushes made a dalmatian print of every dusting)
+      float standS = uVegFade.x > 1e8 ? 1.0 : smoothstep(uVegFade.y * 0.3, uVegFade.y * 0.44, camDist);
+      shrubLocal = mix(0.45 * mix(0.3, 1.1, sw) * sw, blobRaw, shAA) * standS;
       // snow on the top of a crown in patches of ~0.25 m, none on its flanks
       shrubCap = smoothstep(0.3, 0.8, shDome) * smoothstep(-0.3, 0.25, shLeaf + 0.25 * snoise(P * 7.1 + 2.0) * aaF(fw, 0.14));
       vec3 shc = mix(vec3(0.045, 0.07, 0.025), vec3(0.09, 0.09, 0.04), cold * 0.5 + sv.z * 0.4);
       shc *= mix(1.0, 0.7 + 0.45 * shDome + 0.18 * shLeaf, shAA);
       // (far: the same mean tint as before, 0.36 of the cover; near: an opaque crown on the sward between bushes)
-      float cover = mix(sw * 0.3575, 1.0, blob);
+      float cover = mix(sw * 0.3575, 1.0, blob) * standS;
+      shrubCov = cover;
       vcol = mix(vcol, shc, cover);
       // (the relief rounds off into the cell border too — a big crown reaching past it was cut there — and has no step
       // at the crown's crisp colour outline: a 0.18 m step over a pixel and a half drew every outline as a lit rim and a
       // dark line, the meandering 'worms' a low sun raked across every shrubby meadow)
       float shH = shDome * smoothstep(0.0, 0.2, sv.y - sv.x);
-      vb += (shH * 0.45 + shLeaf * 0.04 * blob) * shAA * aaF(fw * 2.5, 2.8);
-      vao *= mix(mix(1.0, 0.85, sw), mix(1.0, 0.72 + 0.28 * shDome, blob), shAA);
+      vb += (shH * 0.45 + shLeaf * 0.04 * blob) * shAA * aaF(fw * 2.5, 2.8) * standS;
+      vao *= mix(1.0, mix(mix(1.0, 0.85, sw), mix(1.0, 0.72 + 0.28 * shDome, blob), shAA), standS);
     }
     // forest canopy: crowns as Voronoi domes, gaps dark (where trees are not instanced)
     if (tree > 0.01) {
@@ -685,6 +692,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float vegW = max(smoothstep(0.1, 0.42, vegTotal + vegN) * (1.0 - steep * 0.8), fieldW);
     // (a crown sheds the snow only where it is drawn: bare ground took its shape — sand-coloured discs in the snow)
     shrubLocal *= vegW;
+    shrubCov *= vegW;
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
     rockW *= 1.0 - vegW;
@@ -712,9 +720,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     vec3 sdt = fine ? sandDetail(P, up, fw) : vec3(1.0, 0.0, 0.0);
     scl *= sdt.x;
     if (veryFine && sw > 0.5) s.glint = max(s.glint, sdt.z);
-    col = mix(col, scl, sw);
-    shrubLocal *= 1.0 - sw;
-    bump = mix(bump, sdt.y + m2 * 0.25, sw);
+    // (the bushes stand on the sand: painted over by it, a crown's shed snow showed the sand — tan discs in the snow)
+    float swS = sw * (1.0 - shrubCov);
+    col = mix(col, scl, swS);
+    shrubLocal *= 1.0 - swS;
+    bump = mix(bump, sdt.y + m2 * 0.25, swS);
     rockW *= 1.0 - sw;
     rough = mix(rough, 0.9, sw);
     mk = mix(mk, 0.07, sw);

@@ -800,8 +800,8 @@ export const SFX: Record<string, Recipe> = {
       s.tn('sine', 0, 2400, 900, 2.6, 0.6, 1.4, 0.8, 0.05);
       whoosh(s, 0.8, 2, 0.12, 400, 2600);
     } else {
-      s.nz('pink', 0, 1.2, 0.8, 1.6, 0.25, ['bandpass', 300, 4, 520, 2]);
-      s.tn('sawtooth', 0.2, 73.4, 73.4, 0, 0.8, 1.2, 1.2, 0.03, ['lowpass', 300]);
+      s.nz('pink', 0, 1.2, 0.8, 1.6, 0.5, ['bandpass', 300, 3, 520, 2]);
+      s.tn('sawtooth', 0.2, 73.4, 73.4, 0, 0.8, 1.2, 1.2, 0.06, ['lowpass', 300]);
     }
     s.wet(0.4);
   },

@@ -19,6 +19,19 @@ import { AuthoredMusic, type AuthoredState, type StingerId } from './authored.ts
 const LOOKAHEAD = 0.6;
 const MAX_POLY = 32;
 
+/**
+ * How calm the music bed is at a sim speed (presets = ticks per second; LIVING §0: 1x is slow and realistic): 1 at the
+ * contemplative speeds (paused, 1x, 2x), easing to 0 by the time-lapse speeds (10x and up). At 1 the procedural score
+ * plays softer (−2.5 dB), warmer (its brightness pulled down) and with its drums held back (except a people at war);
+ * the authored pieces, the stingers and the ambience are untouched.
+ */
+export function paceCalm(speed: number | undefined): number {
+  const s = typeof speed === 'number' && Number.isFinite(speed) ? Math.max(0, speed) : 1;
+  return 1 - smoothstep(2, 10, s);
+}
+/** the calm bed's trims: level, brightness (tone cutoff scale) and drum velocity at calm = 1 */
+export const CALM_TRIM = { gain: 0.75, tone: 0.6, perc: 0.5 };
+
 /** reverb send by instrument set: outdoors for the first peoples, halls for organs, a cathedral of space in orbit */
 const WET = [0.22, 0.3, 0.42, 0.3, 0.7];
 
@@ -42,6 +55,8 @@ export class MusicPlayer {
   private live: number[] = [];
   /** current fader target and when it last was non-zero */
   target = 0;
+  /** 0..1 the calm of the bed (paceCalm), set by the director every frame */
+  calm = 0;
   lastHeard = 0;
   disposed = false;
 
@@ -77,13 +92,14 @@ export class MusicPlayer {
   }
 
   /** fade / tone / pan toward the targets, schedule the bars that fall in the lookahead window */
-  update(now: number, gain: number, pan: number, far: number): void {
+  update(now: number, gain: number, pan: number, far: number, calm = 0): void {
     if (this.disposed) return;
     this.target = gain;
+    this.calm = Math.max(0, Math.min(1, calm));
     if (gain > 0.001) this.lastHeard = now;
     this.kFader.set(gain, now, 1.3);
     this.kPan.set(Math.max(-0.6, Math.min(0.6, pan * 0.6)), now, 0.5);
-    this.kTone.set(1400 + 17000 * Math.pow(1 - far, 2), now, 0.8);
+    this.kTone.set((1400 + 17000 * Math.pow(1 - far, 2)) * (1 - (1 - CALM_TRIM.tone) * this.calm), now, 0.8);
     if (gain <= 0.0005 && this.fader.gain.value < 0.002) { this.nextBar = -1; return; }
     if (this.nextBar < 0 || this.nextBar < now - 0.25) this.nextBar = now + 0.08;
     while (this.nextBar < now + LOOKAHEAD) {
@@ -104,6 +120,8 @@ export class MusicPlayer {
     const spb = 60 / s.tempo;
     const now = this.ctx.currentTime;
     this.live = this.live.filter((e) => e > now);
+    // the calm bed holds the drums back (a people at war keeps its war drums)
+    const percV = s.war ? 1 : 1 - (1 - CALM_TRIM.perc) * this.calm;
     for (const ev of composeBar(s, bar)) {
       const t = t0 + ev.t * spb;
       if (t < now) continue;
@@ -111,7 +129,7 @@ export class MusicPlayer {
       if (this.live.length >= MAX_POLY && ev.part !== 'melody' && ev.part !== 'bass') continue;
       // humanise: a few milliseconds of timing and a little velocity
       const jitter = ev.part === 'perc' ? (this.note.r() - 0.5) * 0.008 : (this.note.r() - 0.5) * 0.012;
-      const end = playNote(this.note, ev.inst, Math.max(now, t + jitter), ev.d * spb, ev.midi, ev.v * (0.93 + 0.14 * this.note.r()));
+      const end = playNote(this.note, ev.inst, Math.max(now, t + jitter), ev.d * spb, ev.midi, ev.v * (ev.part === 'perc' ? percV : 1) * (0.93 + 0.14 * this.note.r()));
       if (end > t) this.live.push(end);
     }
   }
@@ -134,6 +152,9 @@ export interface MusicState {
   players: { key: string; gain: number; style: string; bar: number }[];
   /** the authored layer (authored.ts): which piece, its phase and level */
   authored?: AuthoredState;
+  /** 0..1 how calm the procedural bed plays (paceCalm of the sim speed, smoothed) and the speed it follows */
+  calm?: number;
+  speed?: number;
 }
 
 export class MusicDirector {
@@ -180,6 +201,12 @@ export class MusicDirector {
 
   setMaster(x: number): void { this.master = Math.max(0, Math.min(1, x)); }
 
+  /** the sim's speed (ticks per second, 0 = paused): the bed calms at the slow speeds (paceCalm) */
+  private speed = 1;
+  private calm = 1;
+  private lastUpdate = -1;
+  setSpeed(speed: number | undefined): void { if (typeof speed === 'number' && Number.isFinite(speed)) this.speed = speed; }
+
   private orbitalCache: MusicStyle | null = null;
   private orbital(): MusicStyle {
     if (!this.orbitalCache || this.orbitalCache.key !== `orbit:${this.orbitSeed}`) {
@@ -191,6 +218,11 @@ export class MusicDirector {
 
   update(scene: AudioScene | null, now: number): void {
     const aw = this.authored.update(scene, now, this.master);
+    // the calm follows the speed over a few seconds (a speed step is not a jump cut in the music)
+    const dt = this.lastUpdate < 0 ? 10 : Math.max(0, Math.min(1, now - this.lastUpdate));
+    this.lastUpdate = now;
+    this.calm += (paceCalm(this.speed) - this.calm) * (1 - Math.exp(-dt / 3));
+    const calmGain = 1 - (1 - CALM_TRIM.gain) * this.calm;
     const wanted = new Map<string, { gain: number; pan: number; far: number; style: () => MusicStyle }>();
     let loudest = 0;
     if (scene) {
@@ -217,11 +249,11 @@ export class MusicDirector {
         this.players.set(key, p);
       } else p.restyle(style);
       // the orbital score is a bed under the hum of space, not a town's band: it plays softer
-      p.update(now, w.gain * (key === 'orbital' ? 0.5 : 0.85) * this.master * (1 - aw), w.pan, w.far);
+      p.update(now, w.gain * (key === 'orbital' ? 0.5 : 0.85) * calmGain * this.master * (1 - aw), w.pan, w.far, this.calm);
     }
     for (const [key, p] of this.players) {
       if (wanted.has(key)) continue;
-      p.update(now, 0, 0, 1);
+      p.update(now, 0, 0, 1, this.calm);
       if (now - p.lastHeard > 6) { p.dispose(); this.players.delete(key); }
     }
   }
@@ -239,6 +271,6 @@ export class MusicDirector {
       players.push({ key: p.key, gain: Math.round(p.target * 1000) / 1000, style: p.describe(), bar: p.barIndex });
       if (p.target > bg) { bg = p.target; best = `${p.key} · ${p.describe()}`; }
     }
-    return { culture: best, players, authored: this.authored.state() };
+    return { culture: best, players, authored: this.authored.state(), calm: Math.round(this.calm * 1000) / 1000, speed: this.speed };
   }
 }

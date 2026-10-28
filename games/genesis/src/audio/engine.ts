@@ -533,6 +533,7 @@ class AudioEngine implements GenesisAudio {
       this.music!.setMaster(k);
       if (k >= 1) this.musicHoldUntil = 0;
     }
+    this.music!.setSpeed(view.speed);
     this.music!.update(sc, now);
     this.kDuck!.set(now < this.duckUntil ? 0.45 : 1, now, now < this.duckUntil ? 0.12 : 1.2);
     // the hand's air

@@ -116,6 +116,8 @@ export function stingerFor(e: SimEvent): StingerId | null {
     case 'prayer.answered': return 'answered';
     case 'prophet.fulfilled': return 'fulfilled';
     case 'omen': return d.god === PLAYER_GOD ? 'sign' : null;
+    // the act itself (only the player sends signs): heard even when no town was there to read it
+    case 'command': return d.k === 'god.omen' ? 'sign' : null;
     case 'disaster': return d.god === PLAYER_GOD && d.cause !== 'nature' ? 'wrath' : null;
   }
   return null;
