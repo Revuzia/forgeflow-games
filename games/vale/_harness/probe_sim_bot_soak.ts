@@ -21,7 +21,7 @@
 // that owns them lands (and adds its group here).
 //
 //   node _harness/probe_sim_bot_soak.ts                 quick regression gate (npm run probe): RIFT,
-//                                                       6 seeds × adept + veteran, cut at 15:00
+//                                                       8 seeds × adept + veteran, cut at 15:00
 //   node _harness/probe_sim_bot_soak.ts --full          the soak: RIFT 20 seeds × adept + veteran (full
 //                                                       games), BRIDGE 20 × adept + veteran, mirrored
 //                                                       veteran-vs-novice and veteran-vs-adept (10 seeds
@@ -58,7 +58,7 @@ const has = (k: string): boolean => argv.includes(`--${k}`);
 const opt = (k: string, d: string): string => { const i = argv.indexOf(`--${k}`); return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : d; };
 const FULL = has('full');
 const WORKER = opt('worker', '');
-const SEEDS = Number(opt('seeds', FULL ? '20' : '6'));
+const SEEDS = Number(opt('seeds', FULL ? '20' : '8'));
 const SEED0 = Number(opt('seed0', '1'));
 const DIFFS = opt('diffs', 'adept,veteran').split(',');
 const SUITES = opt('suites', FULL ? 'rift,bridge,mirror' : 'rift').split(',');
@@ -406,7 +406,8 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     gates.push({ group: 'laning', item: 'gameplay:G1', label: 'Wicks dying ≤ 14:00 last-hit by fighters', value: vals((L) => pct(L.lastHit)), target: '≥ 50 %', pass: both((L) => L.lastHit >= 0.5), n: rift.length });
     gates.push({ group: 'laning', item: 'gameplay:G1', label: 'solo-laner cs at 10:00', value: vals((L) => L.soloCs10.toFixed(1)), target: '≥ 45', pass: both((L) => L.soloCs10 >= 45), n: rift.length });
     gates.push({ group: 'laning', item: 'gameplay:G1', label: 'laners in lane, 1:00–14:00', value: vals((L) => pct(L.inLane)), target: '≥ 65 %', pass: both((L) => L.inLane >= 0.65), n: rift.length });
-    gates.push({ group: 'laning', item: 'gameplay:G1', label: 'fighter deaths to Wicks/monsters, no enemy fighter', value: vals((L) => pct(L.noFighter)), target: '≤ 5 %', pass: both((L) => L.noFighter <= 0.05), n: rift.length });
+    const cut = rift[0]?.job.cut ?? 0;
+    gates.push({ group: 'laning', item: 'gameplay:G1', label: `fighter deaths to Wicks/monsters, no enemy fighter${cut ? ` (deaths before ${(cut / 60).toFixed(0)}:00 only — the whole-game gate is --full)` : ''}`, value: vals((L) => pct(L.noFighter)), target: '≤ 5 %', pass: both((L) => L.noFighter <= 0.05), n: rift.length });
     // jungle
     const gaps: Record<string, number> = {};
     for (const d of diffs) {

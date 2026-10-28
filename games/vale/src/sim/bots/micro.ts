@@ -420,7 +420,8 @@ export abstract class BotBase {
         const dx = this.safeX - e.x, dy = this.safeY - e.y, d = dhypot(dx, dy) || 1;
         const reach = Math.max(info.dashDist, info.blinkDist, info.range, 3);
         if (info.tk === 'self' || info.tk === 'none') { this.cast(s, info, e, e.x, e.y); return true; }
-        if (d > 3 && chaser) { this.cast(s, info, null, e.x + (dx / d) * reach, e.y + (dy / d) * reach); return true; }
+        // (a dash or blink toward safety: from a fighter on me, or from Wicks/monsters finishing me)
+        if (d > 3 && (chaser || (this.recentDps > 0 && hpF < 0.6))) { this.cast(s, info, null, e.x + (dx / d) * reach, e.y + (dy / d) * reach); return true; }
       }
       if (!(u & (U_OFFENSE | U_GAPCLOSE | U_BUFF))) return false;
     }

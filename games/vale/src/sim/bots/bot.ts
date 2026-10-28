@@ -255,9 +255,10 @@ export class Bot extends BotBase implements BotController {
   private outmatched(): number {
     const e = this.e;
     const inc = Math.max(this.unitDps, this.recentDps);
-    if (inc <= 0 || this.nearE > 0 || this.hpF > 0.55) return 0;
+    if (inc <= 0 || this.nearE > 0) return 0;
     const ttd = (e.hp + e.shield) / inc;
-    if (ttd > 7) return 0;
+    // (a stacked wave can take a full-health fighter in seconds: leave on the time to die alone)
+    if (ttd > (this.hpF > 0.7 ? 6 : 9)) return 0;
     let ttk = Infinity;
     for (const m of this.perc.monsters) {
       if (!m.alive || m.atkTarget !== e.id) continue;
@@ -265,7 +266,8 @@ export class Bot extends BotBase implements BotController {
       for (const a of this.perc.allyFighters) if (a.alive && this.dist2(a, m.x, m.y) <= 10 * 10) dps += this.dpsOn(a, m);
       ttk = Math.min(ttk, (m.hp + m.shield) / Math.max(1, dps));
     }
-    if (ttk < ttd * 0.6) return 0;
+    // (nearly dead, only a monster that is about to fall is worth the last swing)
+    if (ttk < (this.hpF < 0.3 ? Math.min(ttd * 0.6, 2) : ttd * 0.6)) return 0;
     return ttd < 3 ? 0.9 : 0.82;
   }
 
@@ -627,6 +629,22 @@ export class Bot extends BotBase implements BotController {
   private execRetreat(): void {
     this.pMove = true; this.pMoveX = this.safeX; this.pMoveY = this.safeY;
     this.pAggro = 0.5;
+    // shaking off Wicks or monsters (no enemy fighter near): straight away from what is hitting me,
+    // leaning toward safety — the way to my tower can run through the wave
+    if (this.nearE === 0 && this.unitDps > 0) {
+      const e = this.e;
+      let cx = 0, cy = 0, n = 0;
+      for (const u of this.perc.enemyUnits) if (u.alive && u.atkTarget === e.id) { cx += u.x; cy += u.y; n++; }
+      for (const m of this.perc.monsters) if (m.alive && m.atkTarget === e.id) { cx += m.x; cy += m.y; n++; }
+      if (n > 0) {
+        cx /= n; cy /= n;
+        const ax = e.x - cx, ay = e.y - cy, ad = dhypot(ax, ay) || 1;
+        const sx = this.safeX - e.x, sy = this.safeY - e.y, sd = dhypot(sx, sy) || 1;
+        const vx = ax / ad + 0.5 * sx / sd, vy = ay / ad + 0.5 * sy / sd, vd = dhypot(vx, vy) || 1;
+        const tx = e.x + (vx / vd) * 8, ty = e.y + (vy / vd) * 8;
+        if (this.w.nav.walkable(tx, ty)) { this.pMoveX = tx; this.pMoveY = ty; }
+      }
+    }
     // cornered (faster chaser right on me): hit back
     const f = this.nearestEnemyFighter(this.prof.attackRange + 0.5);
     if (f && f.stats.moveSpeed > this.e.stats.moveSpeed + 0.2 && inAttackRange(this.e, f) && f.hp < this.e.hp) this.pFight = f;
@@ -717,6 +735,7 @@ export class Bot extends BotBase implements BotController {
     if (f && this.adv >= 0.45 && this.hpF > 0.4 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = 0.7; }
     // laning: shoving my own lane is not worth tanking its Wicks
     if (!grouped && this.lanePhase() && !this.pSiege) this.shedWicks();
+    else if (!(b && b.rush)) this.waveGuard();
   }
 
   private execDefend(): void {
@@ -735,6 +754,51 @@ export class Bot extends BotBase implements BotController {
       if (s < bs) { bs = s; t = f; }
     }
     if (t && this.adv >= 0.38) { this.pFight = t; this.pDive = false; }
+    this.waveGuard();
+  }
+
+  /**
+   * Away from Wick lines: a fighter with no Wick or tower of its own nearby to take their attention
+   * is the target of every enemy Wick in reach, and they keep it while it stays in reach (a stacked
+   * wave kills a full-health fighter in seconds and body-blocks its way out). So stay out of the
+   * reach of an enemy wave that could kill me within 6 s unless something of mine covers me, and
+   * walk away once Wicks that would finish me within 8 s have turned on me.
+   */
+  private waveGuard(): void {
+    const e = this.e;
+    const ehp = e.hp + e.shield;
+    const R = WICK_REACH + 1.5;
+    let pot = 0, cx = 0, cy = 0, n = 0, near2 = Infinity;
+    for (const u of this.perc.enemyUnits) {
+      if (!u.alive || u.kind !== 'minion' || !u.attackDef) continue;
+      const d2 = this.dist2(u, e.x, e.y);
+      if (d2 > R * R) continue;
+      pot += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
+      cx += u.x; cy += u.y; n++;
+      if (d2 < near2) near2 = d2;
+    }
+    if (n === 0) return;
+    const targeted = this.unitDps > 0;
+    if (targeted ? ehp / this.unitDps >= 8 : pot * 6 <= ehp) return;
+    if (!targeted) {
+      let mine = 0;
+      for (const u of this.perc.allyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, e.x, e.y) <= 9 * 9) mine++;
+      // (a cover that the wave outnumbers dies under it, and then the whole wave turns on me)
+      if (mine >= Math.max(2, Math.ceil(n * 0.6))) return;
+      for (const st of this.perc.allyStructs) if (st.alive && st.attackDef && st.stats.ad > 0 && this.dist2(st, e.x, e.y) <= sq(st.stats.range + st.radius + 2)) return;
+    }
+    cx /= n; cy /= n;
+    const ax = e.x - cx, ay = e.y - cy, ad = dhypot(ax, ay) || 1;
+    const sx = this.safeX - e.x, sy = this.safeY - e.y, sd = dhypot(sx, sy) || 1;
+    const vx = ax / ad + 0.5 * sx / sd, vy = ay / ad + 0.5 * sy / sd, vd = dhypot(vx, vy) || 1;
+    const step = targeted ? 8 : Math.max(0, WICK_REACH + 1 - Math.sqrt(near2));
+    if (step <= 0.3) { if (this.pFarm === 2) this.pFarm = 1; return; }
+    const tx = e.x + (vx / vd) * step, ty = e.y + (vy / vd) * step;
+    if (!this.w.nav.walkable(tx, ty)) return;
+    this.pMove = true; this.pMoveX = tx; this.pMoveY = ty;
+    this.pFarm = targeted ? 0 : 1;
+    this.pSiege = null; this.pMonsters = false;
+    if (this.pFight && this.pFight.kind === 'fighter' && this.pFight.hp > this.pFight.maxHp * 0.25) this.pFight = null;
   }
 
   private execObjective(): void {
