@@ -19,7 +19,7 @@ import { die } from '../src/sim/people/lifecycle.ts';
 import { formCouple } from '../src/sim/people/social.ts';
 import { abandon, assignRoles, oldAge, planConstruction, settlementStep } from '../src/sim/people/settlement.ts';
 import { landOf, ledger, type LedgerYear } from '../src/sim/people/ledger.ts';
-import { HUNT_RANGE_M, carcass, fetchTask, huntEncounter, huntHourly, isGame, huntQuota, parties, partyOf, partyOut } from '../src/sim/people/hunt.ts';
+import { HUNT_RANGE_M, HUNT_TUNE, carcass, fetchTask, huntEncounter, huntHourly, isGame, huntQuota, parties, partyOf, partyOut } from '../src/sim/people/hunt.ts';
 import { daylightLeft } from '../src/sim/perf/pace.ts';
 import { herderQuota, herdWork, youngFromHunt } from '../src/sim/people/herding.ts';
 import { stockAt, stockFactor, fishWork, THIN } from '../src/sim/people/fishing.ts';
@@ -844,7 +844,12 @@ test('land: a town that has lost its roofs raises shelter before it mends its st
 });
 
 // (fix r1 #11) a farming village went on hunting: hides wanted, the folk hunt, the pack that took its beasts
-test('land: a farming town hunts for hides with meat in store, musters a folk hunt of its able adults, and hunts down the pack that took its beasts (fix r1 #11)', () => {
+test('land: a farming town hunts for hides with meat in store, musters a folk hunt of its able adults, and hunts down the pack that took its beasts (fix r1 #11)', (t) => {
+  // (the folk hunt and the pack hunt are off by default since they cut births 30-60 % on the 50-year runs — hunt.ts
+  // HUNT_TUNE; the mechanism is exercised here at the round's settings)
+  const tune = { ...HUNT_TUNE };
+  HUNT_TUNE.folkDays = 3; HUNT_TUNE.raidDays = 2;
+  t.after(() => Object.assign(HUNT_TUNE, tune));
   const { sim, st } = village();
   const x0 = cx(sim);
   clearWild(x0);
@@ -898,6 +903,10 @@ test('land: a farming town hunts for hides with meat in store, musters a folk hu
   assert.equal(hunt[0].herd, wolves.id, 'the wolves that took the goats');
   assert.ok(hunt[0].members.length >= 4, 'four or more for dangerous game');
   assert.equal(st.recent.raidAt, undefined, 'the raid is answered');
+});
+
+test('land: by default a farming town neither musters a folk hunt nor goes after a raiding pack (fix r1, stint 5)', () => {
+  assert.deepEqual(HUNT_TUNE, { folkDays: 0, raidDays: 0 }, 'off until re-tuned (LIVING §11.3)');
 });
 
 // (fix r1 #13) under-15 deaths ran at 28 % of births (16-44 %) against 12-25 %: lighter when fed and housed, peaks in want

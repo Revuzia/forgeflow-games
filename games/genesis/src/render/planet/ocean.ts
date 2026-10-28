@@ -93,7 +93,9 @@ void main() {
 ${TERRAIN_VERT_CORE}
   // the curved ground of surface.ts (tG), so the shoreline is where the water plane meets the same ground the
   // terrain draws: contours, never the straight edges of 50 m sim triangles
-  float depth = tA.z - tG;
+  // (the sheet's own thickness over the ground it is drawn on: the level the vertex core settled on — a cascade's film,
+  // a basin's step — not the cells' linear level, which over a cliff stands metres above that film)
+  float depth = tH - tG;
   vec3 up = normalize(tPos);
   vec4 F = tfInterp(uFieldF, aCells, aMisc.x);
   vec4 M1 = tfInterp(uFieldM1, aCells, aMisc.x);
@@ -590,11 +592,11 @@ void main() {
   float surf = smoothstep(-0.2, 0.6, snoise(vec3(P.x * 0.18, P.y * 0.18 - uTime * 0.25, P.z * 0.18)));
   shore *= mix(0.15, 1.0, surf);
   float crest = smoothstep(0.75, 1.15, vCrest) * calm;
-  // white water only where water really runs: a torrent (over ~4 m/s), or a leaning sheet that is deep and moving (a
-  // cascade); a still sheet on a slope is never painted as rapids, nor the shallow fringe of a river (the cell's speed
+  // white water only where water really runs: a torrent (over ~4 m/s), or a leaning sheet that is moving (a cascade:
+  // its film lies on the rock, a few decimetres to a metre or two thick); a still sheet on a slope is never painted as rapids, nor the shallow fringe of a river (the cell's speed
   // is interpolated right up to its banks). (From 1.3 m/s a broad river 3 m deep — smooth and boiling, not white — was
   // one sheet of foam lace: from 100 m, TV static where the town's lake should be)
-  float rapids = max(smoothstep(3.5, 5.0, flowSpd) * smoothstep(0.4, 1.2, vDepth), smoothstep(0.06, 0.25, lean) * smoothstep(0.5, 2.0, vDepth) * smoothstep(0.3, 1.0, flowSpd));
+  float rapids = max(smoothstep(3.5, 5.0, flowSpd) * smoothstep(0.4, 1.2, vDepth), smoothstep(0.06, 0.25, lean) * smoothstep(0.15, 0.8, vDepth) * smoothstep(0.3, 1.0, flowSpd));
   // a SURGE: the sim moves a tsunami's (or a flood's) volume as a steep bulge of the water level over deep water — the
   // level's own slope (vSurge, before the wind waves ride on it), not the waves'. Its face is a wall of turbulent white
   // water streaked down the slope, foam boiling at its foot; a calm sea's level is flat, a river's barely tilts (the

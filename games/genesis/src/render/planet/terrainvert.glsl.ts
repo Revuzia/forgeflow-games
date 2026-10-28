@@ -75,13 +75,33 @@ void tGround(vec4 cells, float wC, vec3 dir, float detail, float dune, out vec4 
                  max(pb * pc * smoothstep(0.3, 0.7, abs(Ab.z - Ac.z)), pc * pa * smoothstep(0.3, 0.7, abs(Ac.z - Aa.z))));
     if (pair > 0.0) {
       float fa = length(texelFetch(uFieldF, ua, 0).xyz), fb = length(texelFetch(uFieldF, ub, 0).xyz), fc = length(texelFetch(uFieldF, uc, 0).xyz);
-      float act = pair * (1.0 - smoothstep(0.2, 0.4, max(fa * pa, max(fb * pb, fc * pc))));
+      float still = 1.0 - smoothstep(0.2, 0.4, max(fa * pa, max(fb * pb, fc * pc)));
+      float act = pair * still;
       float lo = h;
       lo = mix(lo, min(lo, Aa.z), pa);
       lo = mix(lo, min(lo, Ab.z), pb);
       lo = mix(lo, min(lo, Ac.z), pc);
       float stepped = max(lo, min(h, g + 1.5 * (g - lo)));
       h = mix(h, stepped, act);
+      // A CASCADE: running water dropping metres from one wet cell to the next (a stream over a cliff, a river
+      // falling into the sea). The linear level is the chord between the two levels — over a concave cliff a glass
+      // pane standing tens of metres off the rock, trees inside it. Running water instead lies on its bed: a film
+      // as thick as the shallower cell's water over the ground, down to the lower basin's flat level wherever the
+      // ground dips under it (the plunge pool, the sea the river falls into). Same continuity as the rule above:
+      // per pair of cells, faded with their barycentric say, so both triangles on an edge agree.
+      float drop = max(pa * pb * smoothstep(2.0, 4.0, abs(Aa.z - Ab.z)),
+                   max(pb * pc * smoothstep(2.0, 4.0, abs(Ab.z - Ac.z)), pc * pa * smoothstep(2.0, 4.0, abs(Ac.z - Aa.z))));
+      float run = drop * (1.0 - still);
+      if (run > 0.0) {
+        float thin = A.w;
+        thin = mix(thin, min(thin, Aa.w), pa);
+        thin = mix(thin, min(thin, Ab.w), pb);
+        thin = mix(thin, min(thin, Ac.w), pc);
+        float film = min(A.w, 1.5 * thin + 0.3);
+        // (streams and rivers only: a surge's bulge over the sea is deep water moving fast too, and its level must not
+        // take the sea bed's relief)
+        h = mix(h, max(lo, g + film), run * (1.0 - smoothstep(3.0, 6.0, thin)));
+      }
     }
   }
 #else

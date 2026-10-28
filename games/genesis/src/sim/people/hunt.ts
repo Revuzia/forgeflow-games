@@ -181,6 +181,16 @@ export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.15;
  *   RAID_DAYS: a pack that took the town's beasts is hunted down (hunters and herders) while its trail is this fresh.
  */
 export const HIDES_PER_HEAD = 0.25, FOLK_HUNT_DAYS = 3, RAID_DAYS = 2;
+/**
+ * (fix r1, stint 5) The folk hunt and the hunt for a raiding pack are built but OFF by default (0): on the acceptance
+ * re-run (fix/acc/out vs integrate/r6/out, 4 worlds left alone for 45-50 years) a farming town with them bore 30-60 % fewer
+ * children (births 52/75, 74/125, 57/83, 42/103), its hunters were hurt 2-30x as often (8/4, 48/17, 95/3, 87/5) and a
+ * predator killed 13-14 of them on two worlds (0-1 before): able farmers away on multi-day trips every third day of a
+ * 12-day year, and herders sent after wolf packs. With both off (fix/hv/noboth, seed 2, 25 years) births 37 and the town
+ * at 46 (r6: 38, 49). A re-tune (a folk hunt a year, day trips; a pack hunted by armed hunters only) is open (LIVING §11.3).
+ * Tests turn them on through this object (and restore it); the sim never writes it.
+ */
+export const HUNT_TUNE = { folkDays: 0, raidDays: 0 };
 
 /** hunters wanted (settlement.ts assignRoles): of `food` food workers, when hunting is known and game is within range */
 export function huntQuota(x: PCtx, st: Settlement, food: number): number {
@@ -318,7 +328,7 @@ function hidesIn(x: PCtx, st: Settlement): number {
 function raidingPack(x: PCtx, st: Settlement): Herd | null {
   const t = st.recent.raidAt;
   if (t === undefined) return null;
-  if (x.tick - t > RAID_DAYS * x.day) { delete st.recent.raidAt; delete st.recent.raidBy; return null; }
+  if (HUNT_TUNE.raidDays <= 0 || x.tick - t > HUNT_TUNE.raidDays * x.day) { delete st.recent.raidAt; delete st.recent.raidBy; return null; }
   const h = x.ps.herd(st.recent.raidBy ?? -1);
   if (!h || h.count < 1) return null;
   const P = x.p.grid.pos, hc = h.cell;
@@ -331,7 +341,7 @@ const HELPERS: readonly number[] = [ROLE.herder, ROLE.gatherer, ROLE.crafter, RO
 
 /** (fix r1 #11) a farming town's folk hunt is due (once in FOLK_HUNT_DAYS) */
 function folkHuntDue(x: PCtx, st: Settlement): boolean {
-  return farming(x, st) && (st.recent.folkHunt === undefined || x.tick - st.recent.folkHunt >= FOLK_HUNT_DAYS * x.day);
+  return HUNT_TUNE.folkDays > 0 && farming(x, st) && (st.recent.folkHunt === undefined || x.tick - st.recent.folkHunt >= HUNT_TUNE.folkDays * x.day);
 }
 
 /** a party out: the dead and the departed leave it; false when it breaks up (home with its kill, lost, out too long) */

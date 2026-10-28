@@ -66,6 +66,26 @@ grievances that the HISTORY second pass capped at 0.45, and on the integrated tr
 daughter past 0.6 on 6 of 8 seeds but the daily draw past the line is slow (LIVING §10.4, "Why the kin fixture falls
 short").
 
+**Fix round 1** (2026-10-28, the 25-finding review; LIVING §11, ledger `_harness/scratch/ledgers/fix.md`): fixed and
+tested — the flood omen no longer razes its town; a disaster the god sends fulfils a harm prophecy; save/load after a
+fire lit mid-hour stays identical; an exiled chief is replaced; fear migrants move as whole households; the Touch / the
+Called / Rebuke / Soothe / Ward understood and used in replies, previews and memories; "a new crop / animal / ore"
+gives a real crop or plant or asks for a name; no fantasy compounds ("flying horse" → the horse); the prophet stays in
+the town they carry the faith to; villages of ~50 bud daughter villages 0.7–2.5 km off; lighter childhood fevers; a
+risen prophet waits for the god's next act; evening worship ends near-home work at dusk (`duskBell`); the fresh-town
+prophet row now needs its praying clause (r6 recount 36 met / 12 partly / 12 missed). **Hunting (#11) is only partly
+fixed:** hides parties and 15 % hunters stay; the folk hunt and the pack hunt are off by default (`hunt.ts` HUNT_TUNE)
+after the 50-year re-run showed 30–60 % fewer births and hunters killed by predators with them on; kills stay short of
+§2.1. Also missed and now listed (LIVING §10.6, §11.3): quiet-town prayer (0.008, ≥ 2 %) and after a tornado (0.066,
+≥ 8 %); throughput at 1 500 agents (302 / 414 / 478 CPU ticks/s at L0 / L1 / L2 against 450 / 800 / 1 200); open
+grassland 1.1–2.4 % (≥ 3 %) and tree-mix drift 0.61–0.68 (≤ 0.15); the late eras (one seed: medieval at year 92, in band;
+gunpowder → orbit and the second seed not measured); the fresh-town meteor on seed 1 (10 of 20 standing, 12 on the r6
+tree). `src/data/creatures.json` is imported nowhere; deleting it is the DOCS lane's (hook H6 unchanged). The final
+8-seed acceptance re-run and `npm run check` were launched at 08:57 UTC (`fix/acc2/finish.sh` installs the new table into
+`_harness/scratch/living/acceptance.json` and writes `fix/acc2/FINAL.done`); until then the counts above are the r6 tree's.
+UI hooks from this round (sim side done, nothing new required): new chronicle lines `bud` and `revolt.renounced`; relStats
+`prophet.journeys`, `prophet.awayHours`, `prophet.awayHeard`; free-text previews carry the §3.6 power names.
+
 ## How to run
 
 ```

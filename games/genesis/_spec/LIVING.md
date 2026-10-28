@@ -2420,7 +2420,7 @@ Each confirmed finding, what changed, and how it was verified (before → after 
 | 7 | fantasy compounds ("flying horse", "winged lion", "fire lizard") became species | `life/fauna.ts` `animalWord`: a mythic modifier → kind "fantasy" with the real base ("the nearest real thing is the horse"); size words keep the real animal; lexicon `realAnimals` += real compounds (flying squirrel / fox / fish, fire ant / salamander, horned lizard / owl, giant tortoise / anteater / otter, vampire bat, ghost crab …); plurals (wolves) | `fix/beasts.log`; same test |
 | 16 | the prophet commuted instead of carrying the faith to another town | `god/prophets.ts` `beginJourney`: food for the stay carried from the store; on a journey every day turn preaches at the target town, thirst there is met there, the night is camped there; counters `prophet.journeys`, `prophet.awayHours`, `prophet.awayHeard` | `fix/pilgrim-{20261008,1}-loyal.log`: hours within 300 m of the other town 19 → 158 and 38 → 137, preaching there 4 → 99 and 17 → 59, its faith at day 20–24 0.84–0.89 (before 0.16 / 0.30); test "carrying the faith is a stay" |
 | 10, 17 | a world left alone never formed a second town | `people/settlement.ts` `budCheck` (after the crowding split): a settled town ≥ 5 years old of ≥ 48 people, pressed for land or food (6 % a day) or not (2 %), sends whole young households (≥ 10 adults, ≥ 3 households, ~36 %; the chief's stays) to found a daughter village 0.7–2.5 km away in the same polity (new chronicle line `bud`) | `fix/bud/run-{2,7}.log` from the r6 year-50 saves: a daughter within half a year at 1.1 km, same polity (before: no split below 124 people); test "a village of fifty buds a daughter village"; the 8-seed 50-year re-run is §11.3 |
-| 11 | farming towns stopped hunting; herders ignored predators | `people/hunt.ts`: 15 % hunters in a farming town; parties also when hides and furs run under 0.25 a head; a folk hunt every 3 days (hunters with able adults at home, farmers unless a field is ripe); a pack that took the town's beasts is hunted while its trail is 2 days fresh (`life/ecology.ts` stamps `recent.raidAt`) | `fix/bud/hunt2-{3,1234}.log` from the r6 saves: seed 3 0 → 7–9 kills a year, seed 1234 0–3 → 1–8; test "a farming town hunts for hides …"; the 8-seed re-run is §11.3 |
+| 11 (partly) | farming towns stopped hunting; herders ignored predators | `people/hunt.ts`: 15 % hunters in a farming town; parties also when hides and furs run under 0.25 a head; a folk hunt every 3 days (hunters with able adults at home, farmers unless a field is ripe); a pack that took the town's beasts is hunted while its trail is 2 days fresh (`life/ecology.ts` stamps `recent.raidAt`). **Stint 5: the folk hunt and the pack hunt are OFF by default** (`HUNT_TUNE` 0/0; the test turns them on): with them a town left alone bore 30–60 % fewer children and lost hunters to predators (§11.3) | `fix/bud/hunt2-{3,1234}.log` from the r6 saves: seed 3 0 → 7–9 kills a year, seed 1234 0–3 → 1–8; test "a farming town hunts for hides …"; the 8-seed re-run is §11.3 |
 | 13 | childhood fever above the moderation band | `people/demography.ts`: child hazard 0.09 / 0.016 / 0.003 → 0.07 / 0.012 / 0.0025, × 1.5 while the household has no roof (famine × 2.5 kept) | test "childhood fevers are lighter …"; the 8-seed re-run (deaths under 15 with growth and the under-15 share) is §11.3 |
 | 19 | the fresh-town prophet row was counted met without its praying clause | `integrate/r6/summarize6.ts`: met needs all four clauses, "partial" when only praying fails | recount of the r6 files: 36 met / 12 partly / 12 missed / 13 report (was 37 / 11) |
 | 18 | §3.8 quiet-town and post-tornado prayer had no row | a `tornado` case in `integrate/god.ts`; two rows in `summarize6.ts` | this round's 8 god sessions: quiet 0.008 (0.003–0.011; ≥ 2 % asked), days 1–3 after a tornado 0.066 (0.046–0.089; ≥ 8 %): missed, the §3.2 prayer formula (§10.6) |
@@ -2446,10 +2446,31 @@ Each confirmed finding, what changed, and how it was verified (before → after 
 ### 11.3 Not fixed here / left open
 - **14** `src/data/creatures.json` is imported nowhere and not bundled; deleting it is the DOCS lane's (the program rule:
   no lane deletes a file it did not create). Hook H6 unchanged: `Snapshot.creatures` optional and never sent.
-- **4 / 21** throughput at 1 500 agents: §10.6 (open); re-measure on this tree queued (`fix/perf/`).
-- **20** the late eras: 2 × 230 years on this tree queued (`fix/late230.sh` → `history/out/census-fix230-*`).
-- **24** ecology rows: re-measure queued (`fix/perf/out/ecology-*`).
+- **11 — a regression, and what is left.** The first acceptance re-run (`fix/acc/out/alone-live-{1,2,5,7}.json` against
+  `integrate/r6/out`, years ≤ 45–50) showed the round's hunting cost the people dearly: births 52 / 75, 74 / 125, 57 / 83,
+  42 / 103; hunters hurt 8 / 4, 48 / 17, 95 / 3, 87 / 5; 13–14 killed by predators on two worlds (0–1 before); towns of
+  31 / 33, 51 / 126, 38 / 66, 16 / 63 people at the end. The folk hunt (able farmers away on multi-day trips every third
+  day of a 12-day year) and the herders sent after wolf packs are the new costs; that run was stopped and the two are off
+  by default (`people/hunt.ts` `HUNT_TUNE`). With both off (`fix/hv/noboth`, seed 2, 25 years; `node fix/hv/cmp.cjs`):
+  births 37, 46 people at year 25, 1 hunter hurt (r6: 38, 49, 5) — but 37 hunting trips and 25 kills against r6's 68 and
+  53, so the §2.1 kill and hunted-share targets stay missed. Open: a folk hunt about once a year as day trips, and a pack
+  hunted by armed hunters only, each measured on 8 worlds for births and kills together (variants `fix/hv/folk30`,
+  `fix/hv/nofolk` were left running on seed 2).
+- **4 / 21** throughput at 1 500 agents (`fix/perf/out/bench-L{0,1,2}.log`, this tree, machine load 4–16): L0 3.31 ms a
+  tick (302 CPU ticks/s; ≥ 450 asked), L1 2.42 (414; ≥ 800), L2 2.09 (478; ≥ 1 200) — all three short; the review's
+  HEAD bench gave 2.86–2.95 / 2.31–2.57 / 1.63–1.82 under a different load. Open (§10.6).
+- **20** the late eras: on this tree (before the hunting switch-off) seed 20261008 reached bronze at year 25, iron 58,
+  classical 68, **medieval 92** (90–130 asked; HISTORY's tree: 177) with two towns from year 25 and 7 by year 146
+  (`history/out/census-fix230-20261008.log`). The run was stopped at year 146 to free a slot (4 tickets queued); seed 7
+  and gunpowder → first orbit were not measured. Open.
+- **24** ecology (`fix/perf/out/ecology-a.log`, 3 years, no people): open grassland 1.1–1.5 % (seed 1234) and 1.8–2.4 %
+  (seed 1) against ≥ 3 %; the dominant-tree mix drifts up to 0.68 / 0.61 against ≤ 0.15 — both still missed (seeds
+  20261008 / 7 in `ecology-b.log` when its slot comes).
 - **16 (refinement)**: on the default-seed trace a prophet on a journey still walks home once mid-stay (a `gather` task
   at h54, `fix/journey.log`): 45–48 % of journey hours are away from the target town.
-- The 8-seed acceptance re-run (alone 50 years for #10/#11/#13; god sessions for #5 and #18) is running
-  (`fix/acc/`); its rows replace §10.4's when it finishes.
+- The 8-seed acceptance re-run on the final tree (hunting switch-off and the dusk bell included) was launched at 08:57
+  UTC: `fix/acc2/chain.sh` × 2 (god sessions 1–4 / 5–8, then 50 years alone on 1, 2, 3, 4 / 5, 7, 1234, 20261008) and
+  `fix/acc2/finish.sh`, which summarizes into `fix/acc2/acceptance-fix.json`, installs it as
+  `_harness/scratch/living/acceptance.json` (the r6 table kept as `acceptance.r6.json`), then runs `npm run check` once
+  (`fix/check-final.log`; `fix/acc2/FINAL.done`). Until it lands, §10.4's rows are the r6 tree's; the round's own god
+  sessions (before the switch-off) gave quiet-town prayer 0.008 and post-tornado 0.066 (§11.1 #18).
