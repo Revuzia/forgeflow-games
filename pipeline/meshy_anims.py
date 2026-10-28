@@ -11,6 +11,8 @@ import argparse
 import json
 import time
 import urllib.request
+import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,7 +21,10 @@ CHARS_STATE = ROOT.parent / "state" / "meshy_chars_state.json"
 OUT = ROOT / "games" / "dungeon-forge" / "assets" / "chars" / "meshy"
 
 API = "https://api.meshy.ai"
-KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
+KEY = os.environ.get("MESHY_API_KEY", "").strip()  # from the environment only: never commit a key
+if not KEY:
+    sys.exit("MESHY_API_KEY is not set: export your Meshy API key in this shell first "
+             "(keys are never stored in the repo)")
 
 # per-class clip plan: (clip_name, action_id).  idle 0 = calm neutral standing
 # (fixes the A-pose "arms out" bind pose in the menu preview + escape idle).

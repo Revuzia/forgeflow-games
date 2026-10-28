@@ -15,6 +15,7 @@ Reads the image-to-3d task ids already in state/colosseum_meshy_meshes.json, so
 nothing is regenerated from scratch. Raw meshes are moved to _raw/ first.
 """
 import json, shutil, sys, time, urllib.request, urllib.error
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +23,10 @@ STATE = ROOT.parent / "state" / "colosseum_meshy_meshes.json"
 OUT = ROOT / "games" / "colosseum" / "tools" / "mixamo_meshes"
 RAW = OUT / "_raw"
 API = "https://api.meshy.ai"
-KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
+KEY = os.environ.get("MESHY_API_KEY", "").strip()  # from the environment only: never commit a key
+if not KEY:
+    sys.exit("MESHY_API_KEY is not set: export your Meshy API key in this shell first "
+             "(keys are never stored in the repo)")
 TARGET = 20000          # shipping cast is 11-13k; 20k buys facial fidelity cheaply
 NAMES = ["crupellarius", "dimachaerus", "eques", "hoplomachus", "minotaur",
          "murmillo", "provocator", "retiarius", "scissor", "secutor", "thraex"]

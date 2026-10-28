@@ -21,6 +21,8 @@ import json
 import struct
 import time
 import urllib.request
+import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +31,10 @@ SRC = ROOT / "games" / "thronedrift" / "assets" / "chars" / "meshy"
 OUT = ROOT / "asset_gen" / "meshy_v2_rigs"
 
 API = "https://api.meshy.ai"
-KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
+KEY = os.environ.get("MESHY_API_KEY", "").strip()  # from the environment only: never commit a key
+if not KEY:
+    sys.exit("MESHY_API_KEY is not set: export your Meshy API key in this shell first "
+             "(keys are never stored in the repo)")
 
 # library action ids (docs.meshy.ai/en/api/animation-library):
 # 85 Axe_Stance · 89 Combat_Stance · 11 Idle_02 · 12 Idle_03

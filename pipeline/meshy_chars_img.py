@@ -13,6 +13,7 @@ hands (fingers together, not the splayed claw of the old text-to-3d models).
     python pipeline/meshy_chars_img.py --advance   # one polling pass
 """
 import argparse, base64, json, struct, sys, time, urllib.request, urllib.error
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent           # forgeflow-games
@@ -20,7 +21,10 @@ STATE = ROOT.parent / "state" / "meshy_chars_state.json"
 SRC = ROOT / "games" / "dungeon-forge" / "assets" / "chars" / "_tpose_src"
 OUT = ROOT / "games" / "dungeon-forge" / "assets" / "chars" / "meshy"
 API = "https://api.meshy.ai"
-KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
+KEY = os.environ.get("MESHY_API_KEY", "").strip()  # from the environment only: never commit a key
+if not KEY:
+    sys.exit("MESHY_API_KEY is not set: export your Meshy API key in this shell first "
+             "(keys are never stored in the repo)")
 CLASSES = ["knight", "barbarian", "sorceress", "rogue"]
 ACTIVE = list(CLASSES)  # narrowed by positional CLI args (e.g. `... --run knight`)
 

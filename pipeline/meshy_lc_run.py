@@ -24,6 +24,8 @@ other meshy_* job is live; last-writer-wins clobbers the shared state).
   python pipeline/meshy_lc_run.py --rollout 15 --watch
 """
 import argparse, base64, json, struct, time, urllib.request, urllib.error
+import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,7 +33,10 @@ STATE = ROOT.parent / "state" / "meshy_lc_run_state.json"
 CHARS = ROOT / "games" / "last-circle" / "assets" / "chars" / "meshy"
 OUT = ROOT / "asset_gen" / "lc_run_bakeoff"
 API = "https://api.meshy.ai"
-KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
+KEY = os.environ.get("MESHY_API_KEY", "").strip()  # from the environment only: never commit a key
+if not KEY:
+    sys.exit("MESHY_API_KEY is not set: export your Meshy API key in this shell first "
+             "(keys are never stored in the repo)")
 
 SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"]
 HEIGHTS = {"soldier": 1.85, "athlete": 1.8, "wraith": 1.82, "juggernaut": 1.95, "viper": 1.8}

@@ -10,6 +10,7 @@ Resumable: state in state/colosseum_meshy_meshes.json; finished GLBs land in
 games/colosseum/tools/mixamo_meshes/<name>.glb (tools/ never ships).
 """
 import base64, json, sys, time, urllib.request, urllib.error
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,7 +18,10 @@ STATE = ROOT.parent / "state" / "colosseum_meshy_meshes.json"
 REFS = ROOT / "games" / "colosseum" / "tools" / "mixamo_refs"
 OUT = ROOT / "games" / "colosseum" / "tools" / "mixamo_meshes"
 API = "https://api.meshy.ai"
-KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
+KEY = os.environ.get("MESHY_API_KEY", "").strip()  # from the environment only: never commit a key
+if not KEY:
+    sys.exit("MESHY_API_KEY is not set: export your Meshy API key in this shell first "
+             "(keys are never stored in the repo)")
 NAMES = ["crupellarius", "dimachaerus", "eques", "hoplomachus", "minotaur",
          "murmillo", "provocator", "retiarius", "scissor", "secutor", "thraex"]
 
