@@ -522,8 +522,27 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
       val *= 1.0 + 0.12 * comb * a3;
       tip += max(comb, 0.0) * 0.25 * a3;
     }
+    // blades (~1.5 cm x 20 cm, combed along the same lean): lit blades over darker ones beneath, and the soil showing
+    // in small specks where the sward is thin — only near the eye (nearB), where the tuft cells were the cobbles
+    float nearB2 = sw_aa(fw, 0.03);
+    if (nearB2 > 0.0) {
+      float bA = snoise(PA * vec3(46.0, 4.5, 46.0) + 101.0);
+      float bB = snoise(PB * vec3(46.0, 4.5, 46.0) + 113.0);
+      float bl = mix(bA, bB, lk) * 0.75 + snoise(P * 19.0 + 7.0) * 0.25;
+      float blade = smoothstep(-0.15, 0.55, bl);
+      val *= 1.0 + (0.3 * blade - 0.13) * nearB2;
+      tip += blade * 0.3 * nearB2;
+      gap += (1.0 - blade) * 0.2 * nearB2;
+      float soil = smoothstep(0.42, 0.78, snoise(P * 2.4 + 63.0) * 0.55 + snoise(P * 9.0 + 29.0) * 0.45) * (1.0 - blade * 0.6);
+      val *= 1.0 - 0.22 * soil * nearB2;
+      tip += soil * 0.55 * nearB2;
+    }
   }
-  float a1 = sw_aa(fw, 0.14);
+  // within ~15 m (a few mm a pixel) the sward is BLADES, not tufts: the ~14 cm tuft cells (and the meadow's ~0.35 m
+  // cells, meadowTint) resolved there into a lattice of lit cobbles with dark rims — a teal cellular pavement round
+  // every villager seen from the walk / photo eye. They hand over to combed blades and specks of soil between them
+  float nearB = sw_aa(fw, 0.03);
+  float a1 = sw_aa(fw, 0.14) * (1.0 - 0.85 * nearB);
   if (a1 > 0.0) {
     vec3 fp; float f1, id;
     ff_cells(P * 7.0 + vec3(snoise(P * 1.3 + 4.0), snoise(P * 1.3 + 8.0), snoise(P * 1.3 + 12.0)) * 0.45, fp, f1, id);
@@ -578,10 +597,13 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
     float c1 = smoothstep(0.62, 0.18, f1) - 0.42;
     // (gentle: at ±34 % / ±22 % these two lattices of lit cells with dark rims read from 30–60 m as hammered metal,
     // the scales of a lizard — not a sward, whose texture is fibrous and irregular: swardDetail)
-    g *= 1.0 + (0.14 * c1 + 0.06 * (id - 0.5)) * ff_aa(fw, 0.36);
+    // (both lattices fade out near the eye, within ~15 m: resolved over 20+ px each cell was a cobble — the blades of
+    // swardDetail take over there)
+    float farC = smoothstep(0.006, 0.018, fw);
+    g *= 1.0 + (0.14 * c1 + 0.06 * (id - 0.5)) * ff_aa(fw, 0.36) * farC;
     ff_cells(P * 0.9 + warpV * 0.2 + 17.0, fp, f1, id);
     float c2 = smoothstep(0.66, 0.2, f1) - 0.42;
-    g *= 1.0 + (0.08 * c2 + 0.06 * (id - 0.5)) * ff_aa(fw, 1.1);
+    g *= 1.0 + (0.08 * c2 + 0.06 * (id - 0.5)) * ff_aa(fw, 1.1) * mix(0.4, 1.0, farC);
   }
   float season = (1.0 - autumn) * (1.0 - winter) * (1.0 - cold);
   float patchF = smoothstep(0.55, 0.8, snoise(P * 0.19 + warpV + 21.0) * 0.5 + 0.5) * season * smoothstep(0.3, 0.55, moist) * (1.0 - dryness * 0.5);

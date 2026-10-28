@@ -337,6 +337,7 @@ varying float vSide;
 varying float vZ;
 varying float vRib;
 varying vec3 vLight;
+varying float vWin;
 vec3 helix(float s, float rib) {
   float j = fract(rib * 0.618034 + 0.13);
   // (gathered, the three tether bands reach only from the ground up to the cradle's foot)
@@ -365,6 +366,10 @@ void main() {
   side = sl > 1e-6 ? side / sl : uE1;
   float j = fract(aRib * 0.618034 + 0.13);
   float w = max(uL * 0.028 * (0.6 + 0.8 * j) * (1.0 - 0.35 * uGrasp), length(uCamB - p) * 0.0016);
+  // (gathered, the bands crossing the side of the cradle toward the eye thin to a window, as the wisps do: from a
+  // god's 40 m the bound bands drew a white ring over the held person, who could not be seen at all)
+  float facingB = dot(normalize(p - uCC + 1e-5), normalize(uCamB - uCC + 1e-5));
+  vWin = 1.0 - 0.85 * uGrasp * step(aRib, 5.5) * smoothstep(0.1, 0.7, facingB);
   p += side * aSide * w;
   vS = aS; vSide = aSide; vRib = aRib;
   vLight = touchLight(p);
@@ -385,6 +390,7 @@ varying float vSide;
 varying float vZ;
 varying float vRib;
 varying vec3 vLight;
+varying float vWin;
 void main() {
   float vis = fxSoft(vZ, max(0.3, uL * 0.2));
   if (vis <= 0.0) discard;
@@ -400,7 +406,7 @@ void main() {
   float gust = exp(-dd * dd / mix(0.018 + 0.01 * j, 0.09, wrap)) * mix(smoothstep(0.0, 0.25, c0) * (1.0 - smoothstep(0.7, 1.0, c0)), 1.0, wrap);
   float wisp = smoothstep(0.25, 0.75, 0.5 + 0.5 * sin(vS * 40.0 + j * 20.0 - uFlowPh * 6.0) * cos(vS * 17.0 + j * 9.0));
   float ends = smoothstep(0.0, 0.1, vS) * (1.0 - smoothstep(0.78, 1.0, vS));
-  float k = across * gust * mix(0.35, 1.0, wisp) * ends * uPres * 0.55 * smoothstep(1.0, 4.0, vZ);
+  float k = across * gust * mix(0.35, 1.0, wisp) * ends * uPres * 0.55 * smoothstep(1.0, 4.0, vZ) * vWin;
   vec3 light = uCol * k * uStreakK * (1.0 - 0.85 * uDark) * mix(0.55, 1.0, smoothstep(0.1, 0.5, vS));
   light += uRim * k * uCrackK * 0.4;
   // dust whirled up off the ground (and, when feared, the storm's dark scud all the way up)

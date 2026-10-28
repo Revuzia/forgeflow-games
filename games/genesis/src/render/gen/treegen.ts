@@ -241,7 +241,7 @@ function growBranching(rng: Rng, P: GrowParams): Skeleton {
 // ───────────────────────────── mesh parts ─────────────────────────────
 
 /** a tapered tube along a path, with a rotation-minimising frame (no twisting at bends) */
-function tube(m: MeshBuilder, pts: Vector3[], radii: number[], sides: number, bark: RGB, w0: number, w1: number, aoBase = 0.6): void {
+function tube(m: MeshBuilder, pts: Vector3[], radii: number[], sides: number, bark: RGB, w0: number, w1: number, aoBase = 0.6, ringK?: number[]): void {
   const rings: number[][] = [];
   let u = new Vector3();
   for (let i = 0; i < pts.length; i++) {
@@ -258,7 +258,7 @@ function tube(m: MeshBuilder, pts: Vector3[], radii: number[], sides: number, ba
       const a = (s / sides) * Math.PI * 2;
       const nx = u.x * Math.cos(a) + v.x * Math.sin(a), ny = u.y * Math.cos(a) + v.y * Math.sin(a), nz = u.z * Math.cos(a) + v.z * Math.sin(a);
       // bark streaks: a little per-side variation so trunks are not flat-coloured cylinders
-      const streak = 0.88 + 0.24 * (((s * 7 + i * 3) % 5) / 4);
+      const streak = (0.88 + 0.24 * (((s * 7 + i * 3) % 5) / 4)) * (ringK ? ringK[i] : 1);
       const r = radii[i];
       ring.push(m.vert(p.x + nx * r, p.y + ny * r, p.z + nz * r, nx, ny, nz, bark[0] * ao * streak, bark[1] * ao * streak, bark[2] * ao * streak, w0 + (w1 - w0) * t));
     }
@@ -930,7 +930,21 @@ function palm(lod: number, variant: number): BufferGeometry {
     d.lerp(UP, 0.12).normalize();
     pts.push(pts[i - 1].clone().addScaledVector(d, 0.86 / segs));
   }
-  tube(m, pts, pts.map((_, i) => 0.022 * (1 - 0.3 * (i / segs)) * (i === 0 ? 1.4 : 1)), [7, 5, 4][lod], bark, 0, 0.35, 0.6);
+  // the trunk is RINGED: the scars of fallen fronds, close dark bands between paler, slightly swollen ones (near LODs
+  // split each segment into rings; a smooth grey cylinder read as a lamp post from the walk eye)
+  const sub = [4, 2, 1][lod];
+  const rad = (t: number): number => 0.022 * (1 - 0.3 * t) * (t <= 0 ? 1.4 : 1 + 0.4 * Math.max(0, 1 - t * segs * 1.5));
+  const tp: Vector3[] = [pts[0]], tr: number[] = [rad(0)], tk: number[] = [1];
+  for (let i = 1; i <= segs; i++) {
+    for (let k = 1; k <= sub; k++) {
+      const j = tp.length;
+      tp.push(pts[i - 1].clone().lerp(pts[i], k / sub));
+      const scar = sub > 1 && j % 2 === 1;
+      tr.push(rad((i - 1 + k / sub) / segs) * (scar ? 0.95 : 1.03));
+      tk.push(scar ? 0.7 : 1.1);
+    }
+  }
+  tube(m, tp, tr, [7, 5, 4][lod], bark, 0, 0.35, 0.6, tk);
   const crown = pts[segs].clone();
   const fronds = [11, 8, 6][lod];
   const rows = [3, 2, 1][lod];

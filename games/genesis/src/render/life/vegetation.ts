@@ -74,7 +74,8 @@ function tintFor(leaf: [number, number, number], ref: [number, number, number]):
   const ch = (i: number) => Math.min(1.35, Math.max(0.72, (leaf[i] / ll) / Math.max(1e-4, ref[i] / lr)));
   return [ch(0) * k, ch(1) * k, ch(2) * k];
 }
-const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
+type PlantDef = NonNullable<typeof BASE_PACK.plants>[number];
+function speciesLook(pl: PlantDef): SpeciesLook {
   const f = String(pl.form ?? '');
   const id = String(pl.id ?? '');
   // the plant's form (plants.json) picks its mesh: trees by crown form, shrubs by habit; the fruit trees by species
@@ -99,7 +100,39 @@ const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
   const fs = (pl as { fruit?: { season?: [number, number] } }).fruit?.season;
   const fruit: [number, number] | null = Array.isArray(fs) && fs.length === 2 ? [Number(fs[0]) - 0.08, Number(fs[1]) + 0.03] : null;
   return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous, fruit };
-});
+}
+const BASE_PLANTS = BASE_PACK.plants ?? [];
+const SPECIES: SpeciesLook[] = BASE_PLANTS.map(speciesLook);
+/** listeners told the live plant list (base + added) after setPlantRegistry: ground cover rebuilds its crop table */
+/** the look drawn for plants.json index `i` (base or added; null past the list) */
+export function plantLookOf(i: number): Readonly<SpeciesLook> | null { return SPECIES[i] ?? null; }
+export const PLANT_REGISTRY_LISTENERS: ((plants: readonly PlantDef[]) => void)[] = [];
+let registrySig = '';
+
+/**
+ * H12: the plants the sim knows beyond the base pack (mods, and plants invented in play) — the 'content' query's
+ * `plants` ({ index, ...def }, in the sim's own index order). An invented tree or crop then draws with its own form,
+ * colours, height and fruit instead of a stand-in (the climate's default tree, or wheat), and the vegetation and
+ * ground-cover caches rebuild. Call it again whenever the content changes; an unchanged list is a no-op.
+ */
+export function setPlantRegistry(added: readonly unknown[] | null | undefined): void {
+  const list = BASE_PLANTS.slice() as PlantDef[];
+  for (const e of added ?? []) {
+    const d = e as PlantDef & { index?: unknown };
+    if (!d || typeof d !== 'object' || typeof d.id !== 'string') continue;
+    const i = Number(d.index);
+    if (!Number.isInteger(i) || i < BASE_PLANTS.length || i > 4096) continue;
+    list[i] = d;
+  }
+  for (let i = 0; i < list.length; i++) list[i] ??= BASE_PLANTS[0];
+  const sig = list.slice(BASE_PLANTS.length).map((p) => JSON.stringify(p)).join('\n');
+  if (sig === registrySig) return;
+  registrySig = sig;
+  SPECIES.length = 0;
+  for (const pl of list) SPECIES.push(speciesLook(pl));
+  for (const fn of PLANT_REGISTRY_LISTENERS) fn(list);
+  PLANT_PROBE.version++;
+}
 
 /**
  * Dev / shot probe (window.__GENESIS_LIFE__.plants; empty in play): remap tree and crop species indices at draw time,

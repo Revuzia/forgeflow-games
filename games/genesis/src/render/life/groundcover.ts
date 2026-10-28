@@ -30,7 +30,7 @@ import { treeGeometry } from '../gen/treegen.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import type { BufferGeometry } from 'three';
 import { leafClusterTexture } from '../gen/leaftex.ts';
-import { makeVegMaterial, PLANT_PROBE } from './vegetation.ts';
+import { makeVegMaterial, PLANT_PROBE, PLANT_REGISTRY_LISTENERS } from './vegetation.ts';
 import type { Vector3 } from 'three';
 
 /** floats per cached item: dir xyz, ground radius, yaw, scale, kind, variant, tint r g b (crops: phase, height, -) */
@@ -43,12 +43,17 @@ const KIND_COUNT = 8;
 const KVARS = [VARIANTS, VARIANTS, 5, 2, 2, 2, CROP_TYPES.length * 2, 3];
 /** crop type (CROP_TYPES index) of each plants.json index: by species, else by form (grain → wheat, paddy → rice,
  *  stalk → maize, leafy → potato, bush → cotton) */
-const CROP_OF: number[] = (BASE_PACK.plants ?? []).map((p) => {
+const cropOf = (p: { form?: unknown; id?: unknown }): number => {
   const f = String(p.form ?? ''), id = String(p.id ?? '');
   const byId = CROP_TYPES.findIndex((t) => id === t || id === `wild-${t}`);
   if (byId >= 0) return byId;
   return f === 'paddy' ? 1 : f === 'stalk' ? 2 : f === 'leafy' ? 6 : f === 'bush' ? 8 : 0;
-});
+};
+const CROP_OF: number[] = (BASE_PACK.plants ?? []).map(cropOf);
+// (an invented crop takes the crop form its own form names — setPlantRegistry in vegetation.ts)
+/** the crop form (CROP_TYPES index) drawn for plants.json index `i` */
+export function cropTypeOf(i: number): number { return i >= 0 && i < CROP_OF.length ? CROP_OF[i] : 0; }
+PLANT_REGISTRY_LISTENERS.push((plants) => { CROP_OF.length = 0; for (const p of plants) CROP_OF.push(cropOf(p)); });
 /** clump height (m, full grown) per crop type */
 export const CROP_H = [1.0, 0.95, 2.4, 0.85, 0.85, 2.0, 0.55, 0.42, 1.15];
 /** albedo-scale tints per crop type (the clump's vertex shade is ~0.85): young green, and ripe (gold for the grains,

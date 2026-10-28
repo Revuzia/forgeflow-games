@@ -1182,7 +1182,7 @@ function workshop(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emit
 // a domed hall (earthen, and masons of some cultures), a tiered pagoda with swept eaves (timber) or a cathedral
 // (masonry). Mood dresses it and its grounds (CONTRACT §8.8): a fearful people builds in dark basalt behind a walled
 // precinct with spiked parapets, braziers on the gate, black and red banners, horned skull totems and a stained altar;
-// a benevolent one leaves it open, whitewashed or of warm stone, with gardens, a paved approach lined with lanterns and
+// a benevolent one leaves it open, whitewashed or of warm stone, with gardens, a paved approach lined with lamp posts and
 // an altar heaped with offerings.
 
 // (fearful stone is dark basalt, ~0.08: at 0.05 with a blue cast every fearful temple read as a black void)
@@ -1191,7 +1191,9 @@ const BONE: RGB = [0.6, 0.56, 0.46];
 const BLOOD: RGB = [0.13, 0.012, 0.01];
 const LEAF: RGB = [0.04, 0.075, 0.028];
 // oxblood lacquer (benevolent posts), black lacquer (fearful timber), ochre plaster, a whitewash for trims and walls
-const LACQUER: RGB = [0.25, 0.04, 0.03];
+// (a trusted people's timber is washed in red-yellow ochre, matt — this faith's own colour of earth and fire; an
+// oxblood lacquer on round columns with paper lanterns read as a borrowed East Asian temple)
+const LACQUER: RGB = [0.36, 0.2, 0.095];
 const BLACK_LACQUER: RGB = [0.095, 0.08, 0.066];
 const OCHRE: RGB = [0.5, 0.34, 0.15];
 const WHITEWASH: RGB = [0.7, 0.67, 0.6];
@@ -1240,7 +1242,8 @@ function templeLook(spec: BuildingSpec, L: Look): TempleLook {
     metal: fear ? BRONZE : GOLD,
     cloth: fear ? (spec.style & 1 ? [0.045, 0.04, 0.036] : [0.22, 0.03, 0.02]) : CLOTH[(spec.style + (kind ? 2 : 0)) % CLOTH.length],
     timber: fear ? BLACK_LACQUER : kind ? LACQUER : WOOD_DARK,
-    timberSurf: fear || kind ? SURF.lacquer : SURF.beam,
+    // (the feared temple's timber is tarred, not lacquered: matt, like the rest of this faith's wood)
+    timberSurf: SURF.beam,
   };
 }
 
@@ -1330,30 +1333,44 @@ function bannerPole(k: KitBuilder, x: number, z: number, h: number, col: RGB, T:
 }
 
 /**
- * A framed paper lantern, its shade's foot at (x, y, z): a ribbed, bellied paper shade (PART.lantern: it glows at
- * night) between lacquered wooden rings, a little hood and a hook — not a white box.
+ * A hanging lamp of this faith (it worships light): a shallow beaten-bronze bowl holding a pane of horn round the flame
+ * (PART.lantern: it glows at night), under a small bronze ring, the sky's eye, on a short chain; its foot at (x, y, z).
+ * Wide and low, open to the sky — not a bellied paper lantern.
  */
-function paperLantern(k: KitBuilder, x: number, y: number, z: number, s: number, T: TempleLook, lod: number): void {
-  const r = 0.17 * s, h = 0.44 * s;
-  const paper: RGB = [0.6, 0.44, 0.24];
-  k.cylinder(x, z, y - 0.04 * s, y + 0.01 * s, r * 0.74, r * 0.74, 8, T.timberSurf, PART.prop, T.timber, { bottom: true });
-  k.lathe(x, z, [[r * 0.72, y], [r * 0.96, y + h * 0.2], [r, y + h * 0.5], [r * 0.94, y + h * 0.8], [r * 0.7, y + h]], lod === 0 ? 10 : 6, SURF.plaster, PART.lantern, paper, 0.95, 1);
-  if (lod === 0) for (let i = 0; i < 6; i++) {
-    // the ribs of the frame through the paper
-    const a = (i / 6) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-    k.beam([x + ca * r * 0.74, y + 0.01, z + sa * r * 0.74], [x + ca * r * 1.005, y + h * 0.5, z + sa * r * 1.005], 0.012 * s, 0.012 * s, T.timberSurf, PART.prop, T.timber, 0.9);
-    k.beam([x + ca * r * 1.005, y + h * 0.5, z + sa * r * 1.005], [x + ca * r * 0.72, y + h - 0.01, z + sa * r * 0.72], 0.012 * s, 0.012 * s, T.timberSurf, PART.prop, T.timber, 0.9);
+function skyLamp(k: KitBuilder, x: number, y: number, z: number, s: number, T: TempleLook, lod: number): void {
+  const r = 0.2 * s;
+  const metal: RGB = T.fear ? IRON : BRONZE;
+  const msurf = T.fear ? SURF.iron : SURF.lacquer;
+  // the bowl, flaring to a rolled lip
+  k.lathe(x, z, [[0.03 * s, y], [r * 0.6, y + 0.03 * s], [r * 0.95, y + 0.09 * s], [r, y + 0.12 * s], [r * 0.9, y + 0.125 * s]], lod === 0 ? 10 : 6, msurf, PART.prop, metal, 0.8, 1);
+  // the horn pane round the flame, standing in the bowl
+  k.cylinder(x, z, y + 0.06 * s, y + 0.22 * s, r * 0.55, r * 0.45, lod === 0 ? 8 : 5, SURF.plaster, PART.lantern, [0.62, 0.42, 0.18], {});
+  // three chains up to a ring
+  const top = y + 0.5 * s;
+  if (lod === 0) for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    k.beam([x + Math.cos(a) * r * 0.9, y + 0.12 * s, z + Math.sin(a) * r * 0.9], [x, top, z], 0.008 * s, 0.008 * s, SURF.iron, PART.prop, mulc(metal, 0.7), 0.9);
   }
-  k.cylinder(x, z, y + h - 0.01, y + h + 0.05 * s, r * 0.72, r * 0.72, 8, T.timberSurf, PART.prop, T.timber, {});
-  k.cylinder(x, z, y + h + 0.05 * s, y + h + 0.16 * s, r * 0.95, 0.02, 8, T.timberSurf, PART.prop, T.timber, {});
+  const n = lod === 0 ? 10 : 6, rr = 0.07 * s;
+  const ring: V3[] = [];
+  for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI * 2; ring.push([x + Math.sin(a) * rr, top + rr + Math.cos(a) * rr, z]); }
+  k.tube(ring, ring.map(() => 0.012 * s), 4, msurf, PART.trim, metal);
 }
 
-/** a lantern on a post (benevolent grounds): a paper lantern hung from a bracket; glows at night */
+/** a bronze bell (eave corners of a trusted temple; the wind rings them — the god's weather heard), mouth at y */
+function eaveBell(k: KitBuilder, x: number, y: number, z: number, s: number, lod: number): void {
+  const r = 0.13 * s, h = 0.26 * s;
+  k.lathe(x, z, [[r, y], [r * 0.92, y + h * 0.12], [r * 0.66, y + h * 0.5], [r * 0.56, y + h * 0.85], [r * 0.3, y + h], [0.01, y + h * 1.04]], lod === 0 ? 10 : 6, SURF.lacquer, PART.trim, BRONZE, 0.8, 1);
+  k.cylinder(x, z, y - 0.06 * s, y + 0.02 * s, 0.025 * s, 0.025 * s, 5, SURF.iron, PART.prop, IRON, { bottom: true });
+}
+
+/** a lamp post (benevolent grounds): an ochre post crowned with the sky-ring, a lamp hung from its bracket; glows at night */
 function lanternPost(k: KitBuilder, x: number, z: number, h: number, T: TempleLook, lod: number): void {
   k.cylinder(x, z, -0.3, h + 0.55, 0.07, 0.055, 6, T.timberSurf, PART.prop, T.timber, { top: true });
   k.beam([x, h + 0.5, z], [x + 0.42, h + 0.5, z], 0.06, 0.07, T.timberSurf, PART.prop, T.timber, 0.9);
-  k.beam([x + 0.38, h + 0.47, z], [x + 0.38, h + 0.3, z], 0.015, 0.015, SURF.rope, PART.prop, [0.08, 0.06, 0.04]);
-  paperLantern(k, x + 0.38, h - 0.22, z, 1, T, lod);
+  if (lod === 0) skyRing(k, x, h + 0.78, z, 0.12, T.fear, T.kind, lod);
+  k.beam([x + 0.38, h + 0.47, z], [x + 0.38, h + 0.36, z], 0.012, 0.012, SURF.iron, PART.prop, IRON);
+  skyLamp(k, x + 0.38, h - 0.16, z, 1, T, lod);
 }
 
 /** a shrub (garden): a lumpy mound of leaf clusters, never a turned cone */
@@ -1717,10 +1734,10 @@ function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: 
       k.pop();
     }
     if (T.kind && lod === 0) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      // bells / lanterns hang from the eave corners
+      // bronze bells hang from the eave corners (the wind rings them)
       const x = sx * (e - 0.15), z = sz * (e - 0.15);
-      k.beam([x, ey + 0.08, z], [x, ey - 0.2, z], 0.03, 0.03, SURF.rope, PART.prop, [0.1, 0.08, 0.05]);
-      paperLantern(k, x, ey - 0.62, z, 0.9, T, lod);
+      k.beam([x, ey + 0.08, z], [x, ey - 0.12, z], 0.02, 0.02, SURF.iron, PART.prop, IRON);
+      eaveBell(k, x, ey - 0.4, z, 1, lod);
     }
     s = sNext;
     y = ty - 0.06;

@@ -405,8 +405,8 @@ export function flowerClump(variant: number): BufferGeometry {
 
 /**
  * A fallen branch or rotting log with a couple of broken stubs, half sunk in the litter (unit length): a round,
- * slightly irregular trunk (12 sides, bark ridges as a radius wobble), moss in patches on the upper side, a pale
- * splintered break at the thick end with a darker heart, and a tapering broken tip.
+ * slightly irregular trunk (12 sides, bark ridges as a radius wobble), moss in patches on the upper side, and
+ * square-cut end faces showing end grain (sapwood ring, growth rings, dark heart) with splintered rims.
  */
 export function fallenLog(variant: number): BufferGeometry {
   const rng = new Rng(9700 + variant * 23);
@@ -441,25 +441,31 @@ export function fallenLog(variant: number): BufferGeometry {
   for (let i = 0; i <= 8; i++) pts.push([-0.5 + i * 0.125, r0 * 0.4 + Math.sin(i * 0.8) * 0.008, Math.sin(i * 0.55 + variant) * 0.035]);
   const radii = pts.map((_, i) => r0 * (1 - 0.4 * (i / 8) ** 1.5));
   tubeAt(pts, radii, 0.55, true);
-  // the broken butt: a pale splintered face, darker heartwood, a jagged rim
-  const c0 = pts[0];
-  const centre = b.vert(c0[0] - r0 * 0.15, c0[1], c0[2], -1, 0, 0, [0.12, 0.08, 0.05], 0, 0);
-  const rim: number[] = [];
-  for (let s = 0; s <= sides; s++) {
-    const a = (s / sides) * Math.PI * 2;
-    const jag = (s % 2 ? 0.06 : -0.03) * r0;
-    rim.push(b.vert(c0[0] + jag, c0[1] + Math.cos(a) * radii[0] * 0.97, c0[2] + Math.sin(a) * radii[0] * 0.97, -1, 0, 0, [0.36, 0.29, 0.2], 0, 0));
-  }
-  for (let s = 0; s < sides; s++) b.idx.push(centre, rim[s + 1], rim[s]);
-  // the thin end: a short splintered cone
-  const ce = pts[pts.length - 1];
-  const tip = b.vert(ce[0] + r0 * 0.9, ce[1] + 0.005, ce[2], 1, 0, 0, [0.3, 0.23, 0.16], 0, 0);
-  const er: number[] = [];
-  for (let s = 0; s <= sides; s++) {
-    const a = (s / sides) * Math.PI * 2;
-    er.push(b.vert(ce[0], ce[1] + Math.cos(a) * radii[8], ce[2] + Math.sin(a) * radii[8], 0.4, Math.cos(a), Math.sin(a), [0.17, 0.13, 0.09], 0, 0));
-  }
-  for (let s = 0; s < sides; s++) b.idx.push(er[s], er[s + 1], tip);
+  // both ends are cut across (sawn or snapped square, not sharpened): a flat face with end grain — a pale sapwood
+  // ring, darker growth rings inside it, a dark heart — and a jagged rim of splinters. (The thin end was a cone that
+  // ran out ahead of the log: a pencil point, seen from the walk eye)
+  const endFace = (c: [number, number, number], rad: number, dir: number): void => {
+    const nx = dir;
+    const heart = b.vert(c[0] + dir * rad * 0.04, c[1], c[2], nx, 0, 0, [0.1, 0.065, 0.04], 0, 0);
+    // rings: (fraction of the radius, colour) from the heart out to the bark
+    const rings: [number, [number, number, number]][] = [[0.3, [0.2, 0.14, 0.09]], [0.55, [0.27, 0.2, 0.13]], [0.78, [0.22, 0.16, 0.1]], [0.97, [0.36, 0.29, 0.2]]];
+    let prev: number[] | null = null;
+    for (const [f, col] of rings) {
+      const ring: number[] = [];
+      for (let s = 0; s <= sides; s++) {
+        const a = (s / sides) * Math.PI * 2;
+        // the rim splinters (alternate verts stand proud); the inner rings lie flat
+        const jag = f > 0.9 ? (s % 2 ? 0.05 : -0.025) * rad * dir : 0;
+        const wob = 1 + 0.05 * Math.sin(a * 3 + phase + f * 5);
+        ring.push(b.vert(c[0] + jag, c[1] + Math.cos(a) * rad * f * wob, c[2] + Math.sin(a) * rad * f * wob, nx, 0, 0, col, 0, 0));
+      }
+      if (!prev) { for (let s = 0; s < sides; s++) dir < 0 ? b.idx.push(heart, ring[s + 1], ring[s]) : b.idx.push(heart, ring[s], ring[s + 1]); }
+      else for (let s = 0; s < sides; s++) dir < 0 ? b.idx.push(prev[s], prev[s + 1], ring[s + 1], prev[s], ring[s + 1], ring[s]) : b.idx.push(prev[s], ring[s + 1], prev[s + 1], prev[s], ring[s], ring[s + 1]);
+      prev = ring;
+    }
+  };
+  endFace(pts[0], radii[0], -1);
+  endFace(pts[pts.length - 1], radii[radii.length - 1], 1);
   // broken branch stubs
   for (let k = 0; k < 2; k++) {
     const x = -0.2 + k * 0.35;

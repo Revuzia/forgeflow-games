@@ -272,12 +272,25 @@ void main() {
     float dl = length(L);
     float reach = vP.x;
     if (dl > reach) discard;
-    vec3 N = cross(dSx, dSy);
+    // the normal from THIS pixel's own neighbours in the depth buffer (the smaller one-sided difference on each axis,
+    // so a silhouette is not bridged), not dFdx/dFdy of S: those are one value per 2×2 quad, and over foliage (depth
+    // breaking every few pixels) each quad took its own random normal — a flash lit the canopy as a coarse 2×2
+    // screen-door stipple. rd is linear in the pixel, so dFdx(rd) is exact everywhere
+    vec3 rdx = dFdx(rd), rdy = dFdy(rd);
+    vec3 rR = rd + rdx, rL = rd - rdx, rU = rd + rdy, rD = rd - rdy;
+    vec3 SR = rR * (min(zr, 1e6) / max(-rR.z, 1e-6)), SL = rL * (min(zl, 1e6) / max(-rL.z, 1e-6));
+    vec3 SU = rU * (min(zu, 1e6) / max(-rU.z, 1e-6)), SD = rD * (min(zd, 1e6) / max(-rD.z, 1e-6));
+    vec3 ex = abs(zr - zc) < abs(zc - zl) ? SR - S : S - SL;
+    vec3 ey = abs(zu - zc) < abs(zc - zd) ? SU - S : S - SD;
+    vec3 N = cross(ex, ey);
     float nl = length(N);
-    N = nl > 1e-12 && !edgeQuad ? N / nl : -normalize(S);
+    N = nl > 1e-12 ? N / nl : -normalize(S);
     if (dot(N, S) > 0.0) N = -N;
     vec3 Lv = mat3(transpose(uViewToBody)) * (L / max(dl, 1e-3));
-    float lam = 0.15 + 0.85 * sat(dot(N, Lv));
+    // where the depth is rough at the pixel scale (leaves, needles, grass blades) no single normal is the surface's:
+    // there the light wraps (an even ~0.6) instead of picking lit and dark pixels
+    float rough = smoothstep(0.004, 0.04, bend / max(zc, 1e-3)) * (edgeQuad ? 1.0 : 0.8);
+    float lam = mix(0.15 + 0.85 * sat(dot(N, Lv)), 0.3 + 0.5 * sat(dot(N, Lv) * 0.5 + 0.5), rough);
     float win = 1.0 - (dl * dl) / (reach * reach);
     float E = vP.y / (dl * dl + vP.w * vP.w) * win * win;
     o = vec4(vCol.rgb * E * lam * 0.064, 0.0);

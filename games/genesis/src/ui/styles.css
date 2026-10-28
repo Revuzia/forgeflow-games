@@ -511,8 +511,9 @@ button.gn-chip:hover { border-color: var(--gn-line-gold); color: var(--gn-gold-h
 /* ── windows (chronicle, settings, saves, help, menu) ── */
 .gn-veil { position: absolute; inset: 0; pointer-events: auto; background: radial-gradient(120% 90% at 50% 40%, rgba(4, 6, 10, .35), rgba(4, 6, 10, .7)); animation: gnFade .2s ease both; z-index: 9; }
 .gn-win { position: absolute; display: flex; flex-direction: column; overflow: hidden; z-index: 10; background: linear-gradient(180deg, rgba(16, 20, 33, 0.9), rgba(9, 12, 20, 0.88)); border-color: var(--gn-line-2); }
-.gn-win-center { left: 50%; top: 50%; width: min(760px, calc(100vw - 32px)); max-height: min(820px, calc(100vh - 64px)); transform: translate(-50%, -50%) scale(var(--gn-ui-scale)); transform-origin: center; }
-.gn-win-wide { left: 50%; top: 50%; width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 56px); transform: translate(-50%, -50%) scale(var(--gn-ui-scale)); transform-origin: center; }
+.gn-win-center { left: 50%; top: 50%; width: min(760px, calc((100vw - 32px) / var(--gn-ui-scale))); max-height: min(820px, calc((100vh - 64px) / var(--gn-ui-scale))); transform: translate(-50%, -50%) scale(var(--gn-ui-scale)); transform-origin: center; }
+/* (the window is scaled with the UI: its viewport-bound limits are divided by the scale, or a scaled-up F1 card ran off the screen) */
+.gn-win-wide { left: 50%; top: 50%; width: min(1180px, calc((100vw - 32px) / var(--gn-ui-scale))); max-height: calc((100vh - 56px) / var(--gn-ui-scale)); transform: translate(-50%, -50%) scale(var(--gn-ui-scale)); transform-origin: center; }
 .gn-win-left { left: 18px; top: calc(16px + 158px * var(--gn-ui-scale)); bottom: auto; height: calc((100vh - 34px - 220px * var(--gn-ui-scale)) / var(--gn-ui-scale)); width: min(520px, calc(100vw - 36px)); transform: scale(var(--gn-ui-scale)); transform-origin: top left; }
 .gn-win-menu { width: min(460px, calc(100vw - 32px)); }
 .gn-win-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 12px 18px; border-bottom: 1px solid var(--gn-line); }
@@ -1081,7 +1082,7 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
   .gn-menu-i { width: 18px; height: 18px; }
   .gn-menu-l { font-size: 15.5px; }
   /* (the site's bar sits in the frame's bottom-right corner: windows end above it) */
-  .gn-win-center, .gn-win-wide { max-height: calc(100vh - 58px); top: calc(50% - 21px); }
+  .gn-win-center, .gn-win-wide { max-height: calc((100vh - 58px) / var(--gn-ui-scale)); top: calc(50% - 21px); }
   /* (a window on the left — the chronicle, The god — takes the height over the time panel, ending above the dock) */
   .gn-win-left { top: 8px; height: calc((100vh - 72px) / var(--gn-ui-scale)); }
   .gn-nw-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
