@@ -1,0 +1,129 @@
+{
+  "score": 5,
+  "summary": "Adversarial verification of the originality, legal and sensitivity audit (Ilsheta excluded). Two blockers hold on the current build. (1) The same Meshy API key is hard-coded in 10 tracked pipeline/*.py files of the PUBLIC repo Revuzia/forgeflow-games. It has been on origin/master since 77c4f69d (2026-07-07), and history shows it in 10 commits. No other provider key exists in tracked files or text-file history, and the VALE tree is clean. (2) The home 'Your collection' tile (content/ui/home/collection_highlight.webp, shown on the home screen) paints caped figures in pointed-ear full-head cowls with grimacing skull face plates. That reads as a famous third-party character and breaks the mask/hood sensitivity rule. F3 (Odrum and Longshade masks) is downgraded to major. Odrum's base mask is warm golden ochre (portrait mask saturation 0.46, L* 68) and faithful to the approved concept, so the 'bone-white' claim is refuted. The grey Shadeprint mask (saturation 0.08) and Longshade's chalk plate with ink tears are real near-the-line risks that need an owner call, not clear breaches. F4 (systems layer: battle spells ~ summoner spells, Doran/potion/boots/ward numbers, the one-Noonlit rule, blue/red/Baron analogues, ARAM rules for BRIDGE) and F5 (Ervet's reforged oversized blade ~ Riven; Vashil ~ Brand only weakly) are confirmed as majors. The reviewer overstated F4's 'seven of eight within about 10 %': close numbers hold for about five, not Hairline or Running Light. Minors F6-F9 stand. In F6, BRIDGE turns out to be owner-specified, and F8 has one more instance. Missed, latent: rift_card.webp ships in dist-catalog and shows a single-file lane column of masked figures with eye and mouth holes and spiked crests (a faced 'Wick wave'), but no UI code currently renders mode-card art. content --check passes with 0 warnings.",
+  "gapStatus": [
+    {
+      "id": "B3",
+      "status": "closed",
+      "evidence": "For the originality lens only. I counted 16/16 fighters with <id>.glb, portrait.png, icon.png and splash.png, each with 2 skin GLBs (loop over art/out/fighters/*). No portrait, splash or icon copies a LoL champion. Odrum Shadeprint's mask is a sensitivity risk tracked under F3, now major. Ilsheta's art is excluded (separate fix pass). Art-quality completeness belongs to the art lens."
+    },
+    {
+      "id": "M8",
+      "status": "partly",
+      "evidence": "Confirmed: content/units.json gives shieldwick, glimwick, greatwick and brightwick `art.teamModels` (aubade/serenade). _harness/_shots/final_originality_wick_hoods_aubade.png shows rounded cowls, some with a short finial (not tall or conical), and one central hood light each, with no eye pair or mouth. The value half (hood L* <= 65 below the fighters) was not re-measured; _design/reviews/wave_b_open.json still records RIFT hood values of 64-66."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "verdict": "confirmed",
+      "severity": "blocker",
+      "title": "Live Meshy API key hard-coded in 10 tracked files of a PUBLIC repo",
+      "what": "One Meshy key literal (msy_…) is committed in 10 tracked pipeline scripts. It has been on origin/master of the public repo since 2026-07-07.",
+      "evidence": "From /Users/sitskovich/Developer/forgeflow-games: `git ls-files -z | xargs -0 grep -I -l -E 'msy_[A-Za-z0-9_-]{20,}'` lists pipeline/{colosseum_meshy_meshes:20, colosseum_meshy_remesh:25, meshy_anims:22, meshy_chars:27, meshy_chars_img:23, meshy_enemies:27, meshy_lc_deaths:37, meshy_lc_run:34, meshy_prop_bow:24, meshy_rig_anims_v2:32}.py, with one unique value. `git branch -r --contains 77c4f69d` includes origin/master. `gh repo view --json visibility` returns PUBLIC. Summary in _harness/_reports/final_originality_verify_masks.txt (secret-scan lines).",
+      "gauge": "A publisher-tier product never publishes a working vendor credential. Secrets live in a vault or environment, and public repos are secret-scanned.",
+      "fix": "Revoke and rotate the key in the Meshy dashboard first, since only rotation fixes a public key. Replace the 10 literals with an env/untracked-file loader (the pattern tools/imagegen/run_xai.py already uses). Purge the key from history only with owner approval (filter-repo plus a coordinated force-push). Add a secret-pattern grep to `npm run check` and a pre-commit hook.",
+      "size": "S",
+      "verifierNote": "Reproduced exactly. My broader scan of tracked files (xai-, sk-ant-, sk-, AIza, AKIA, ghp_, github_pat_, hf_, r8_, xox*, PRIVATE KEY) found nothing else; the only other hit is a dummy test token in workers/dyefield-net/test. A `git log --all -G` history scan over text files finds the same key in 10 commits (2026-07-07 to 2026-08-06) and no other provider key. The VALE tree is clean: state/.secrets/tokens.json is git-ignored, and _design/tokens.json holds style tokens. I did not test whether the key is still live, because that would mean using a leaked credential. The key sits outside games/vale, but VALE ships from the same public repo, so blocker severity stands."
+    },
+    {
+      "id": "F2",
+      "verdict": "confirmed",
+      "severity": "blocker",
+      "title": "Home 'Your collection' art shows pointed-ear cowled, caped figures with skull face plates",
+      "what": "content/ui/home/collection_highlight.webp is the home tile (content/client.json:44-50) and ships in dist-catalog (28184e129720-collection_highlight.webp). It paints statues in full-head cowls with two pointed ears and capes, the signature silhouette of a famous third-party character. Their face plates are grimacing skulls, which breaks the no-horror-mask rule, and the pointed ears break the hood rule. No VALE fighter appears. The other key art (feature.webp, store_banner.webp, public/thumbnail.png) shows generic masked men who are not roster fighters. The thumbnail's pale, cracked mask with glowing slit eyes is the closest of these to the blank-mask line.",
+      "evidence": "My 2.2x crop of the source: _harness/_shots/final_originality_verify_coll_heads.png (region x360-920, y200-370 of the 1280x960 source). The full frame clearly shows the caped, ear-cowled figures. In context: _harness/_shots/final_menus_1920x1080_01_home.png, where the 'YOUR COLLECTION' tile shows the eared heads at tile size. The prompt in tools/imagegen/manifest.json (home_tile_collection_highlight) asks for 'a different masked fighter's outfit on a wooden stand'; its negatives say nothing about ears, cowls or skulls.",
+      "gauge": "LoL's client and key art show only its own champions and skins, on-model. Nothing in them resembles another company's character.",
+      "fix": "Repaint the tile as a VALE scene: real skin pieces from the roster (for example Marund's dome hat, Tunlan's lampshade hat, Ervet's dawnglass blade) on stands in a chalk-and-ironstone hall, with no full-head cowls, animal ears, skull plates or capes. Regenerate feature, store_banner and thumbnail with roster portraits as reference images. Add 'no animal ears, no cowls, no skull faces' to the key-art negatives, and a sign-off step that names each figure to a roster id.",
+      "size": "M",
+      "verifierNote": "Reproduced from the source asset, not from the reviewer's crops. The eared cowls are unmistakable even at 1280 px, and the tile is live on the home screen. Blocker on both IP-resemblance and sensitivity grounds. The secondary key art is weaker: carved stone and wood masks or glass visors, which the style bible allows. Only the thumbnail's pale cracked mask is near the line."
+    },
+    {
+      "id": "F3",
+      "verdict": "downgraded",
+      "severity": "major",
+      "title": "Odrum Shadeprint's grey mask and Longshade's tear-streaked chalk plate sit near the horror line (base Odrum mask refuted)",
+      "what": "Odrum's base mask follows the approved concept: golden-ochre carved block, brow slab, big beak nose, dark eye slits, no open mouth. It is not bone-white. The Shadeprint skin re-colours the same carved form to desaturated grey with cracks and black eye slits, which pushes it toward a ghostly read, but its carved brow, beak and cheek planes keep it from being a blank, hockey or slasher mask. Longshade, the epic monster, has a pale chalk plate with two lamp eyes and two ink tear streaks. The eyes are emissive (#FFE9B8), not hollow. The tear streaks are the horror-adjacent element.",
+      "evidence": "_harness/_reports/final_originality_verify_masks.txt: portrait mask region, base L* 68.0 / saturation 0.46, Noon Fair 67.7 / 0.46, Shadeprint 54.9 / 0.08 with 21.6 % of pixels below L* 20. Concept: _design/concept/odrum.webp. Renders: art/renders/fighters/odrum/three_odrum.png and three_odrum_shadeprint.png (bottom-row close-ups, 10-28 11:58 and 12:01). Longshade: _harness/_shots/final_originality_verify_longshade_icon_3x.png and final_originality_verify_longshade_close.png. Design intent at art/blender/units/creatures_b.py:6-8 and :1324 ('chalk plate ... ink tears under the eyes').",
+      "gauge": "VALE's own rule (no horror, hockey or blank-mannequin faces) is stricter than LoL. LoL's broad-audience presentation gives masks readable carved features, and lets epic monsters be menacing without human horror tropes.",
+      "fix": "Shadeprint: keep the ink cloth, but give the mask a warm lacquer (saturation >= 0.25) or amber inlay in the eye slits so they read lit, not hollow. Optionally carve the concept's under-nose V as a closed lip line on both skins. Longshade: remove the tear streaks and keep the lamp eyes, or move to a gnomon or hour-line plate motif, then re-render the icon. Ask the owner to rule on both.",
+      "size": "S",
+      "verifierNote": "Downgraded from blocker. The base-mask half is refuted: the portrait mask is warm ochre (saturation 0.46) and matches the owner-approved concept. The in-engine cream read is already recorded as a minor in art/renders/fighters/odrum/_open.json. 'Hollow ring eyes' for Longshade is inaccurate, since the eyes are emissive lamps. What remains is a subjective near-the-line read, not a reproducible breach. Major, with an owner decision."
+    },
+    {
+      "id": "F4",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "The systems layer reproduces LoL's ruleset under new names",
+      "what": "Battle spells, starters, potion, boots, ward, the one-of-a-class apex rule, the buff camps, the epic objective and the single-lane mode rules each map to a LoL system. Together a LoL player reads them as LoL's layer re-skinned. The owner's rule bars copying LoL abilities and designs.",
+      "evidence": "content/setup.json: glint_step 4.5 m blink, CD 270 (Flash: 300); saplight 80 + 16/level, CD 220 (Heal: 80 base, 240); hourstrike 2 charges, 95 s recharge, true damage to monsters plus a heal (Smite: 2 charges, 90 s); glass_pane 90 + 20/level, 3 s, CD 160 (Barrier: about 105-411, 2.5 s, 180); shake_loose 50 % tenacity for 3 s, CD 210 (Cleanse: 65 % for 3 s, 210); defaults glint_step + saplight. content/items.json: notched_blade 430, +8 attack, +80 health; sap_flask 50, 120 health, holds 5; road_sandals 300; spare_lamp 75, invisible, 3 lit; 'You can carry one Noonlit item' at :1305, :1371, :1459, :1568, :1640. content/team_buffs.json: Clearglass +10 haste and regen, Resinburn burn and slow, The Long Shade +attack, +power and empowered Wicks. content/modes.json bridge: startLevel 3, recall false, shopAccess base_or_dead. content/queues.json bridge_standard: bench 2, rerolls 1. _design/NAMES_NOT_USED.md:160 records a 2026-10-14 retune of three exact matches only.",
+      "gauge": "LoL's summoner spells, starter items, Mythic rule, buff camps and ARAM ruleset are its own. A same-tier MOBA owns its pre-match and economy layer.",
+      "fix": "Re-key the systems to the stopped dial so that none maps one-to-one. Battle spells built on light and shadow rules, with a default pair that is not blink + heal. One starter that grows into the role's first core. Replace the one-Noonlit cap with a dial-slot rule. Map-tied effects for Glasshorn and Resinback. An original draw for BRIDGE instead of bench plus reroll.",
+      "size": "L",
+      "verifierNote": "Reproduced from content, but the 'seven of eight within about 10 %' claim is overstated. Close numbers hold for Glint Step, Saplight, Hourstrike, Glass Pane and Shake Loose (tenacity duration and cooldown). Hairline (an instant 28-164 hit plus a shred) is not within 10 % of Ignite's 70-410 damage over time. Running Light (45 % fading over 6 s) is not Ghost's sustained boost. Calling Bell has no twin. The docs justify a genre-standard layer (items_setup.md cites 'the reference genre'), and MLBB and HoK share most of these jobs. That keeps this a major, not a blocker, but the owner's 'never copy abilities or designs' rule plus exact matches (Clearglass +10 haste, Notched Blade 8/80, potion 50/120/5, boots 300) make it real."
+    },
+    {
+      "id": "F5",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Ervet's ult copies Riven's reforged-blade hook; the ROSTER self-audit omits Riven and Brand",
+      "what": "Ervet breaks her blade (Shatter, Hilt form). In her ult the blade 'reforms oversized: her attacks reach 0.6 m farther and cleave'. A reforged broken blade that gains attack reach is the signature of LoL's Riven ult. Vashil's Hum (an ability marks, a second ability on the marked enemy stuns) together with a fast single-target bolt and a delayed circle echoes Brand's ablaze-into-stun. The trigger is broader (any ability), so this half is weaker. ROSTER §5 lists Kled, Gnar, Jayce, Annie, Seraphine and Darius, never Riven or Brand.",
+      "evidence": "content/fighters/ervet.json kit.a3 'Shatter' and kit.ult 'Whole Again' (text dumped with python from kit.*). content/fighters/vashil.json kit.passive 'Hum', a1 'Peal', a2 'Glass Chime'. `grep -n -i -E 'riven|brand\\b' _design/ROSTER.md` finds no kit comparison; ROSTER.md:507 and :512 list the comparisons it does make. Heat ~ Rumble is acknowledged at ROSTER.md:505.",
+      "gauge": "Each LoL champion owns its signature hook. Gauge-level kinship (dash, shield, a form swap) is fine; a famous single hook is not.",
+      "fix": "Ervet: make the ult payoff the shards, not reach. For example, Shatter's shards fly back to the hilt along lines, damaging and dragging enemies they cross, with no reach bonus. Vashil: change the stun trigger to a group or chord condition, such as two humming enemies within 3 m. Add Riven and Brand, with the differences, to ROSTER §5.",
+      "size": "M",
+      "verifierNote": "The Ervet half alone justifies major: the break-then-reform-with-reach arc is Riven's best-known hook, and it is unacknowledged. The Vashil half on its own would be minor: any-ability trigger, a ring with a quiet centre, a push cone, and a triple-toll ult that is not Brand's bounce. Not a blocker: Ervet's base state is whole, the break is self-chosen, and the ult is a leap-slam with a knock-up."
+    },
+    {
+      "id": "F6",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "'Battle spells' is Mobile Legends' term; RIFT is a recorded owner risk",
+      "what": "The system name 'Battle spells' (strings.en.json:449, :529-530) is exactly MLBB's name for its summoner spells, and the registry does not hold it. RIFT is owner-allowlisted, with its risk recorded.",
+      "evidence": "`grep -c -i 'battle spell' _design/research/protected_names.json` returns 0. _design/names_allowlist.json allows Rift only. protected_names.json:1116-1117 hold 'Bridge of Progress' and 'Butcher's Bridge'.",
+      "gauge": "A same-tier product names its systems and modes in its own world.",
+      "fix": "Rename the system term to an in-world word, and add 'Battle Spell(s)' to protected_names.json other_moba. Optionally note BRIDGE next to RIFT in DESIGN_NOTE §5.",
+      "size": "S",
+      "verifierNote": "Kept as minor with a correction. _design/names_allowlist.json 'why' states that RIFT / BRIDGE / FRAY were owner-specified in the brief, and 'Bridge' alone is a generic word the registry does not deny. So the 'BRIDGE risk unrecorded' part is weak; the battle-spells part holds."
+    },
+    {
+      "id": "F7",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Third-party licence notices are stripped from the bundle and there is no credits page",
+      "what": "The shipped JS carries no licence comments, no notices file is emitted, and there is no credits or licences string or screen. three, preact and @preact/signals are MIT and n8ao is ISC; those licences require the notice to travel with copies. postprocessing is Zlib.",
+      "evidence": "_harness/_prod/dist/assets/*.js (built 10-28 06:13): 0 lines matching '@license|copyright|MIT License'. vite.config.ts has no legalComments or banner option and was last changed 10-20. `grep -c -i 'licen\\|credit' content/strings.en.json` returns 0. Licences read from node_modules/<pkg>/package.json.",
+      "gauge": "LoL ships a third-party and legal notices page in its client.",
+      "fix": "Emit THIRD_PARTY_NOTICES.txt at build time and add a 'Credits & licences' panel under Settings (code libraries plus the OFL fonts).",
+      "size": "S",
+      "verifierNote": "Reproduced on today's prod build output, without rebuilding; the config is unchanged since 10-20."
+    },
+    {
+      "id": "F8",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "The genre words 'gold' and 'jungle' leak into player-facing text",
+      "what": "VALE's own vocabulary (Gleam, Dialwood) is broken in several player-facing strings.",
+      "evidence": "content/strings.en.json:266 'Add gold and levels'. content/client.json:39 (Sparring practice tile, visible in final_menus_1920x1080_01_home.png). content/queues.json:8 'start at level 3 with more gold' (visible in final_menus_1280x720_02_play_rift.png). content/modes.json:8 'hold the jungle'. content/items.json grove_sickle 'For the jungle'. Extra instance the reviewer missed: content/queues.json:135 (practice queue desc 'Add gold').",
+      "gauge": "LoL keeps one consistent vocabulary of its own terms throughout the client.",
+      "fix": "Replace the words with Gleam and Dialwood, and add a content-build lint that rejects the replaced genre words in player-facing strings.",
+      "size": "S",
+      "verifierNote": "Confirmed, plus one more instance. The home feature card already says 'hold the Dialwood', so the modes.json text is simply inconsistent."
+    },
+    {
+      "id": "F9",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Sensitivity watch: hood-shaped icons and blank or uncanny faces near the line",
+      "what": "Linen Hood item icon: an empty, rounded pale hood around a dark void (ghost or reaper read). Hooded Lamp ward icon: an onion-dome cap with a small tip over one blue orb; it reads as a lamp object, not a figure. Lisvel's wrapped, featureless head and Sukri's mask framed in a dark hood are watch items.",
+      "evidence": "_harness/_shots/final_originality_verify_linen_hood.png, final_originality_verify_hooded_lamp_3x.png, _harness/_shots/final_originality_masks_zoom.png (Lisvel, Sukri).",
+      "gauge": "VALE's own rule. LoL items and wards read as objects, not as hooded figures.",
+      "fix": "Linen Hood: paint it folded or on a stand, with no face void. Hooded Lamp: round off the tip. Lisvel: a carved face plate under the visor. Sukri: lift the inside of the hood.",
+      "size": "S",
+      "verifierNote": "None of these crosses the rule; minor is right. The Hooded Lamp's tip is a small finial, not a tall or conical hood."
+    }
+  ],
+  "missed": [
+    "Latent, blocker-class if displayed: content/ui/modes/rift_card.webp (referenced at content/modes.json:14, shipped as dist-catalog/assets/8ccebd0539e2-rift_card.webp) paints a single-file column of identical small figures marching the road, which reads as the lane wave and so as Wicks. They wear masks with eye holes and mouth slits, several with spiked crests. That contradicts 'Wicks have no face' and the Wick design (rounded hood, one central light). Crop: _harness/_shots/final_originality_verify_rift_card_wicks.png. The prompt (tools/imagegen/manifest.json mode_rift) asked for 'tiny masked armies marching on the roads'. No UI code reads modes[].card.art today (ModeDial draws glyphs), so it is not on screen. Regenerate it with real Wick silhouettes, or drop it from the catalog, before any screen uses it."
+  ]
+}

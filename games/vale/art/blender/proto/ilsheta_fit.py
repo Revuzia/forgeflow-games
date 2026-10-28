@@ -220,8 +220,11 @@ def accent_estimate(parts, voxel=0.01, px=0.0186):
         a = int(A[win].sum())
         tot_a += a
         tot_b += len(win)
-        per.append(round(100 * a / len(win), 2))
-    print(f"accent estimate {100 * tot_a / tot_b:.2f}% (per facing {per})")
+        sy_w = sy[win]
+        mid = sy_w.min() + 0.5 * (sy_w.max() - sy_w.min())
+        top = int((A[win] & (sy_w > mid)).sum())
+        per.append((round(100 * a / len(win), 2), round(top / max(a, 1), 2)))
+    print(f"accent estimate {100 * tot_a / tot_b:.2f}% (per facing (pct, top-half share) {per})")
 
 
 def sdf_at(S, P):
@@ -260,41 +263,48 @@ def shift_part(part, off):
     return (name, S2, *rest)
 
 
-def pose_check():
+def pose_check(only=""):
     """each key pose's held staff and hanging lamp against the body at rest (torso unturned): the clearance (m) of the
-    shaft and the lamp from the mantle, scarf, hood, sleeves... and the left hand's reach"""
+    shaft and the lamp from the mantle, scarf, hood, chimney..., the lamp's pivot / flame height and the left hand's
+    reach (fix pass 1: every key pose of ilsheta.key_poses())"""
     I = ilsheta
-    body = {n: S for n, S, *_ in I.sculpts() if n in ("mantle", "scarf", "hood", "dress", "chimney", "collar", "mask")}
-    poses = {}
-    G_R, G_L = I.G_R, I.G_L
-    poses["guard"] = (G_R, G_L)
-    run = ((I.wr("R", -0.400, -0.120, 0.975), I.staff_or((0.18, 0.08, 0.98), (0.20, -0.98, 0.0))),)
-    poses["run"] = run + (G_L,)
-    for name, (R, L) in poses.items():
-        ht, o = R
-        W = I.SHJ["R"] + np.array(ht.rel) * I.LA
-        u = np.cross(np.array(o.fdir), np.array(o.palm))      # u = k x n ... recover u from (k, n = u x k)
-        k = np.array(o.fdir)
-        n = np.array(o.palm)
+    body = {n: S for n, S, *_ in I.sculpts() if n in ("mantle", "scarf", "hood", "dress", "chimney", "sleeve_L", "sleeve_R")}
+    poses = I.key_poses()
+    for name, p in poses.items():
+        if only and name not in only.split(","):
+            continue
+        ik = p.get("ik", {})
+        ht, o = ik.get("hand.R"), ik.get("orient.R")
+        if ht is None or o is None:
+            continue
+        W = (I.SHJ["R"] + np.array(ht.rel) * I.LA) if ht.rel is not None else np.array(ht.pos)
+        k = np.array(o.fdir, float)
+        n = np.array(o.palm, float)
         u = np.cross(k, n)
         C = W + k * I.GRIP_AB[0] + n * I.GRIP_AB[1]
-        pts = [C + u * s for s in np.linspace(I.S_BUTT, I.S_TOP, 25)]
+        pts = np.array([C + u * s for s in np.linspace(I.S_BUTT, I.S_TOP, 25)])
         hang = C + u * I.HANG_UK[1] + k * I.HANG_UK[0]
         lamp = []
         for dz, r in I.GLASS_R:
             for a in np.linspace(0, 2 * np.pi, 12, endpoint=False):
                 lamp.append(hang + np.array([r * np.cos(a), r * np.sin(a), -dz]))
         lamp = np.array(lamp)
-        pts = np.array(pts)
-        print(f"{name}: wrist {W.round(3)} grip {C.round(3)} butt {pts[0].round(3)} hang {hang.round(3)} lamp bottom z {hang[2] - I.LAMP_DROP:.3f}")
+        reachR = np.linalg.norm(W - I.SHJ["R"])
+        line = (f"{name:8s} wristR {W.round(3)} reach {reachR / I.LA:.2f}  pivot {hang.round(3)} flame z "
+                f"{hang[2] - I.FLAME[0]:.3f} lamp bottom {hang[2] - I.LAMP_DROP:+.3f} butt {pts[0].round(2)}")
+        hl = ik.get("hand.L")
+        if hl is not None:
+            WL = (I.SHJ["L"] + np.array(hl.rel) * I.LA) if hl.rel is not None else np.array(hl.pos)
+            line += f"  reachL {np.linalg.norm(WL - I.SHJ['L']) / I.LA:.2f} (L to lamp {np.linalg.norm(WL - (hang - [0, 0, 0.20])):.2f})"
+        print(line)
+        worst = []
         for bn, S in body.items():
             ds = sdf_at(S, pts) - I.SHAFT_R
             dl = sdf_at(S, lamp)
-            print(f"   {bn:8s} shaft clearance {ds.min():+.3f}  lamp clearance {dl.min():+.3f}")
-        if L is not None:
-            hl, ol = L
-            WL = I.SHJ["L"] + np.array(hl.rel) * I.LA
-            print(f"   left wrist {WL.round(3)} reach {np.linalg.norm(WL - I.SHJ['L']):.3f} / arm {I.LA}")
+            if ds.min() < 0.02 or dl.min() < 0.03:
+                worst.append(f"{bn} shaft {ds.min():+.3f} lamp {dl.min():+.3f}")
+        if worst:
+            print("        CLOSE: " + "; ".join(worst))
 
 
 def main():
@@ -309,7 +319,7 @@ def main():
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.poses:
-        pose_check()
+        pose_check(a.only)
         return
     parts = ilsheta.sculpts()
     if a.skin == "stillwater":

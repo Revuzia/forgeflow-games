@@ -28,3 +28,43 @@
   lineup_qa: base top 68.4 / mid 48.5 / bottom 34.6; stillwater 66.0 / 46.0 / 28.6; first_bell 68.3 / 49.4 / 36.7; IoU64 vs sukri 0.69, dunsom 0.42, marund 0.35.
   Content: art.json copied into content/fighters/ilsheta.json (runRefSpeed 3.35, height 1.72, clips, sockets incl. weapon_tip x_lamp / visor_top x_chimney_top); build_content --check OK, nothing missing; probe_kits_A 525/0, probe_kits_B 733/0; in-game shot _harness/_shots/art2_ilsheta_{game,close,close2}.png.
   Open (minor): top value band under 70 (base 1.6, first_bell 1.7 L*; stillwater 4.0 L*); first_bell bottom 36.7 (1.7 over); the lamp hangs at her right side (concept place) rather than the brief's chest place (the chest place hid the accent from the back facings: 0.62 %); no mantle sway bones (the brief's x_mantle_l/r); death ends kneeling, folded over (not lying).
+
+## FIX PASS 1 (review: 6 majors, 5 minors)
+- 2026-10-28 12:10 start. Plan, batched into one build (edits in ilsheta.py unless noted):
+  1 chimney: ONE glass body chin->rim (chim_d: elliptic loft, beak pushed forward at the cheek, CHIM_C y -0.046), the
+    face is the concept's mask projected onto the glass front (_face_zone; carving contrast x1.45, cool cast, glint);
+    the mask part and the collar ring removed; hood opening widened (0.124 x 0.156) so the flare sits in front of the
+    hood; procedural dawnglass paint elsewhere (_paint_chimney: cool see-through, darker edge-on sides, 4 streaks,
+    bright lip, dark well). LIFT on the chimney dropped.
+  2 lamp: guard re-authored so the lamp hangs IN FRONT OF HER RIGHT CHEST, pivot 1.43 / flame 1.21 (was ~1.0 at the
+    hip); the lamp rebuilt: 21.6 cm open cage of 4 thin ribs, a 13 x 19 cm TEARDROP flame on a chalk burner (4 cm of
+    clear cage round it), a glass font bowl under it; fit-tool accent estimate 1.68 % (8 facings, staff excluded).
+  3 paint ghosts: _band_fill treats edge-on texels (|n.y| < 0.4) as hidden (band median fill, front/back blended), and
+    clamps visible ghosts (texels >26 L* under their band, or warm browns under L* 62) to the band colour.
+  4 casts: key_poses() (new): a1 = one long arm (staff thrust out level, lamp 0.65 m out), a2 = one raised arm (lamp
+    hung high before her, left palm up), a3 = arms wide palms out + mantle flare 30-34 deg, ult = both hands overhead
+    on toes (pitch -24, hips +5 cm) then a Y with the lamp high + flare. x_mantle_l/r sway bones added (rig_extras,
+    weights: front panels within ~60 deg of the opening below the chest), the resolve wrapper adds the knees' swing.
+    Left hand sculpted open (flatter fingers) for the pushes / palm-up.
+  5 skins: _recolour re-paints the mantle + sleeves on the skin's own height gradient (SKIN_GRADE: Stillwater wet stone
+    from 0.91 m down, First Bell dark #3A3633 base from 0.49 m down); 8 broad reed leaves round the chimney's foot;
+    a bigger glass bell above the flame; hour-marks 7.5 cm x 8.5 mm; each skin its own splash pose (lobby / ult).
+  6 splash: backdrop graded to an Aubade dusk (_backdrop wrapper, aubade_dusk 0.5), rim_warm 0.25, sun 2.5; icon /
+    portrait boxes extended down to keep the lamp under the visor.
+  8 bell sleeves wider (cuff 0.19 m), angular open-loop hook (HOOK), back drape folds (mantle_amp); staff 0.86 m.
+  9 lobby: four tending beats with bigger sway; attack1 = left-hand flick, attack2 = staff tap with the left arm back;
+    death lays the staff down so the lamp rests on the ground, ends bowed forward.
+  Fit tool: ilsheta_fit.py --poses now checks every key pose (pivot, flame z, reach, clearances).
+- build FP1-1 (fast base, clip sheet) starting.
+- 2026-10-28 12:55 build FP1-1 (fast base): 18304 tris, 1092 KiB, load OK, accent 1.57 % (three QA, top half 72 %).
+  Read: chimney now cool glass with the face inside the flare (portrait / icon / three close), lamp = blue teardrop
+  flame in a clear cage, no brown side smear (lobby / victory frames), splash on the dusk backdrop. Clip check
+  (ilsheta_clipcheck.py, now also prints the lowest part): a1 long arm OK from the side, a3 arms wide + flare, ult
+  overhead on toes + flare; mantle panels follow the knees in run (forward, verified side view).
+  Tuned without a rebuild (clip check on the FP1-1 cache): torso yaw of a1 (left flick) and cast_a1 (right thrust)
+  was reversed -> flipped; cast_a1 aimed front-right, cast_a2's lamp out to her right (not over the face); guard lamp
+  raised to pivot 1.48 / flame 1.26 and drawn in (fit-tool top-half share 0.82-1.0 at the front facings, was 0.23);
+  death ends in a kneeling bow over the set-down lamp. Glass paint: darker cool body + edges, stronger streaks, bright
+  edge lines down the flare's sides, a shoulder glint and a chin rim (so the bulb round the face reads as glass).
+  Splash yaw 34 (the held-out lamp clear of the face).
+- build FP1-2 (FULL base + skins) starting.

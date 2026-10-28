@@ -1,0 +1,253 @@
+{
+ "score": 5.5,
+ "summary": "I tried to refute every blocker and major on the current build (dev server :5190, real Chrome on the GPU). I used two runs of my own; scripts are in _harness/_reports/final_client_v_scripts/.\n- verify_client.mjs drives Home, Play, Collection Skins, a decline, a full RIFT co-op draft, loading, an autopilot match, the post-game and a dodge, at 1920x1080 and 1280x720. Report: _harness/_reports/final_client_v.json.\n- verify_client2.mjs checks escape routes after a dodge and an unreachable server. Report: _harness/_reports/final_client_v2.json.\nShots are in _harness/_shots/final_client_v_*.\n\nResult:\n- Both blockers reproduce.\n- All 7 majors reproduce, and their severities hold.\n- I refuted nothing.\n- Every minor I checked reproduced: F10 two toasts, F11 copy, F12 timers, F13 tick, F16 'CONNECTING…' after 24 s.\n\nCorrections:\n- F1 is wider than reported. The 'Skins in the shop' tile (store_banner.webp) also shows three blank full-face masks, and the feature painting shows five masked figures with glowing blank eyes. That makes 4 of 5 Home paintings; only practice_tool is clean.\n- F4's root cause is mainly a class-name collision: hud.css:349 `.srow { display:flex }` turns the post-game <tr class=\"srow\"> into a flex row, so every <td> computes to display:block.\n- F6's fix must not surface the unused mode cards as they are: bridge_card and fray_card show masked figures too.\n- F9's gauge wording: Riot gives 1280x720 as the client's default window size, not a 'fixed minimum'. That makes the gap stronger.\n- F3: the loading-screen backdrop region the reviewer cited measures p50 104, not 53. The draft-screen backdrop measures p50 47. The card numbers reproduce (p50 205, 55.8% above 200).\n\nThe flow and its speed are at LoL level. The presentation is not, and two blocker-class defects sit on the first screen and on a routine path.",
+ "gapStatus": [
+  {
+   "id": "B3",
+   "status": "closed",
+   "evidence": "Menus side only (Ilsheta's art excluded per brief). All 16 fighters show a portrait in the draft grid at both 1920x1080 and 1280x720 (_harness/_shots/final_client_v_1920_draft_myturn.png, final_client_v_1280_draft_myturn.png). They also show on the loading cards (final_client_v_1920_loading.png) and the Collection Skins tab (final_client_v_1920_collection_skins.png). No glyph placeholder appeared anywhere. The reviewer's DOM audit (final_menus_capture.json fallbacks = 0 on 34 screens) agrees. The quality of that art is F3."
+  },
+  {
+   "id": "M4",
+   "status": "not_measured",
+   "evidence": "Settings slice only, confirmed in content: content/strings.en.json:1394 'Loss-of-control edge' and :1396 'Hit edge' exist under Settings > Accessibility. The in-match parts belong to the HUD lens."
+  },
+  {
+   "id": "m4",
+   "status": "not_measured",
+   "evidence": "Settings slice only: content/strings.en.json:1392 'Screen shake' exists under Accessibility. In-match shake was not measured in this lens."
+  },
+  {
+   "id": "M14",
+   "status": "not_measured",
+   "evidence": "Settings slice only: an 'Ambient life' toggle (content/strings.en.json:1280; src/session/settings.ts:51 default ambientEffects true). In-world ambient life belongs to the environment lens."
+  }
+ ],
+ "findings": [
+  {
+   "id": "F1",
+   "verdict": "confirmed",
+   "severity": "blocker",
+   "size": "M",
+   "title": "Home paintings show blank, horror-reading full-face masks (4 of 5 Home images)",
+   "what": "The sensitivity rule (no masks that read as horror, hockey mask or blank mannequin) is broken on the first screen a player sees.\n- **Ranked season tile:** a figure in a smooth blank mask with frowning eye slits.\n- **Your collection tile:** cowled statues in blank masks with pointed tips.\n- **Skins in the shop tile (missed by the reviewer):** three figures in a carved silver mask, a wooden mask with empty eye holes, and a faceless chrome visor.\n- **Feature painting:** five fighters in carved stone and wooden masks with glowing blank eyes.\nOnly practice_tool.webp is clean. None of these paintings shows a VALE roster fighter.",
+   "evidence": "- Assets: content/ui/home/{ranked_season,collection_highlight,store_banner,feature}.webp, referenced from content/client.json lines 21, 31, 35, 48.\n- They are live on Home: the _harness/_reports/final_client_v.json homeTiles img srcs (feature at 341x192 px, tiles at 201x101 px).\n- Crops: _harness/_shots/final_menus_zoom_ranked_tile_figure.png, final_menus_zoom_collection_tile_statues.png, final_menus_zoom_feature_masks.png, and my new crop _harness/_shots/final_client_v_zoom_store_banner_masks.png (store_banner).\n- In context: _harness/_shots/final_client_v_1920_home.png.",
+   "gauge": "LoL's home and event art shows recognisable champions in their own art, never anonymous masked figures. Apart from the gauge, the owner's rule makes this blocker class anywhere in the game.",
+   "fix": "Repaint all four Home images in VALE's world with named roster fighters showing faces or open helms. Ideas: the Hourbell stair for Ranked; a plinth gallery of real skins for Collection and Shop; the feature with visible faces. Add a sensitivity line to the imagegen checklist for content/ui/** (no full-face blank masks, no pointed or conical hoods, no glowing empty eyes).",
+   "files": "content/ui/home/ranked_season.webp, content/ui/home/collection_highlight.webp, content/ui/home/store_banner.webp, content/ui/home/feature.webp, tools/imagegen prompts",
+   "verifierNote": "Reproduced and widened. The reviewer named 2 tiles and asked for the feature to be reviewed. I add store_banner.webp (the 'Skins in the shop' tile) and confirm that the feature's glowing-eye masks break the same rule. The severity is right: the owner's rule makes it blocker class, and it is on screen 1."
+  },
+  {
+   "id": "F2",
+   "verdict": "confirmed",
+   "severity": "blocker",
+   "size": "S",
+   "title": "Leaving a draft strands the client with no main navigation",
+   "what": "After Esc and then 'Leave draft', the client returns to Play with the correct toast. But state.draft is never cleared, so TopBar stays in flow mode on every menu screen:\n- no nav, wallet or profile chip;\n- only 'RIFT · CO-OP VS BOTS' remains.\nOn Home the 'Pause / Menu' button does nothing, so Settings and Profile cannot be reached until the next match loads or the page is reloaded.",
+   "evidence": "- _harness/_reports/final_client_v.json m.dodge:\n  - navBefore 6;\n  - after 2 s: nav 0, route play, draft true;\n  - after 11 s: nav 0, draft true;\n  - Home after Esc: nav 0, draft true, bar 'VALE RIFT · CO-OP VS BOTS'.\n- _harness/_reports/final_client_v2.json: afterPauseBtn opened no menu, and no Settings button exists.\n- Shots: _harness/_shots/final_client_v_1920_dodge_play_2s.png, final_client_v_1920_dodge_home.png, final_client_v_1920_dodge_pausemenu.png.\n- Cause:\n  - src/ui/app.tsx:268 `flow = ... || !!state.draft.value`;\n  - src/ui/state.ts:166-176: the idle/dodged branch resets the route but not draft;\n  - draft.value is only nulled on 'loading' (state.ts:193).\n- The dodge is emitted from src/session/local_session.ts:301 and :626.",
+   "gauge": "Dodging LoL champion select returns you to the lobby with the full client and a dodge notice. Losing navigation after it reads as a broken client.",
+   "fix": "In AppState.onEvent, clear draft and accepted on every flow-ending queue event (declined, or idle with a reason). Derive the flow chrome from the route definition, not from leftover draft state. Add an e2e 'dodge' journey that asserts 6 .nav__item on Play and Home and that the wallet is visible.",
+   "files": "src/ui/state.ts, src/ui/app.tsx, _harness/e2e.mjs",
+   "verifierNote": "Reproduced independently in two runs. I checked the possible escape hatches: the Home tiles reach only Play, Shop, Practice and Collection (all still in flow chrome), and Pause / Menu is inert on Home. Settings and Profile are therefore really unreachable. Dodging is a supported path with its own confirm modal and lockout, so blocker severity stands, although the fix is S."
+  },
+  {
+   "id": "F3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "XL",
+   "title": "Every fighter image in the client is a bright studio render, not painted art",
+   "what": "The draft grid, finalize, loading cards, Collection, Skins and shop all use in-engine renders over a pale blue-white sky. On loading cards the figure fills only a narrow slice of a wide 336x147 strip. These plates are the brightest things on every menu screen and break the dusk mood. The owner asked for painted art in menus.",
+   "evidence": "Re-measured with `node _harness/_reports/final_menus_scripts/luma.cjs`:\n- final_menus_1920x1080_29_loading.png cards (96,375,1728,147): p50 205, 55.8% of pixels above 200.\n- final_menus_1920x1080_26_draft_myturn.png Ardit cell: p50 196, 47% above 200.\n- The same shot's backdrop (1000,700,500,250): p50 47.\nNew shots: _harness/_shots/final_client_v_1920_loading.png, final_client_v_1280_loading.png, final_client_v_1920_draft_myturn.png, final_client_v_1920_collection_skins.png.",
+   "gauge": "LoL shows painted loading art per skin, and splash art in the store and collection. Characters fill their frame at mid values beneath the UI (r05 [1][24][30]).",
+   "fix": "Add a painted or graded portrait-plate pass to the fighter pipeline (dusk plate per origin, plate p50 about 70–110, at most small highlights above 200). Use 3:5 loading crops with the fighter filling 70–80% of the height. Reuse the plates for grid, Lot, Collection and shop tiles.",
+   "files": "art/blender/fighters/*, art/out/fighters/*, content/fighters/*.json, content/skins/*.json, src/ui/screens/loading.tsx, src/ui/styles/screens.css",
+   "verifierNote": "Reproduced. One number corrected: the backdrop region the reviewer cited (1000,120,880,860 on the loading shot) measures p50 104, not 53. The 53 figure fits the darker draft backdrop (p50 47). The contrast argument holds either way. Major, not blocker: the art exists and reads; it is unpainted and too bright."
+  },
+  {
+   "id": "F4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "S",
+   "title": "Post-game scoreboard columns do not line up, and items render as letters",
+   "what": "Stat values pack left after the names while the headers sit far right. At 720p the values wrap onto a second line and 'T / F / A' wraps vertically. Items show as the first letter of their name although 39 painted item icons exist. The 'best' marker is a bare 2 px bar.",
+   "evidence": "_harness/_reports/final_client_v.json score1920:\n- header 'Lv' cx 1130 against value '12' cx 279, an 851 px offset;\n- 'Items' header cx 1789 against the cell at cx 815;\n- every <td> computes display:block, the player cell display:flex;\n- items render as R F B R G O with img:false.\nscore1280: 'T / F / A' header height 47 px (wrapped).\nShots: _harness/_shots/final_client_v_1920_postgame_scoreboard.png, final_client_v_1280_postgame_scoreboard.png.\nCode:\n- src/ui/styles/hud.css:349 `.srow { display: flex; ... }` (an HUD class reused by the post-game <tr class=\"srow\">);\n- src/ui/styles/screens.css:359 `.srow__player { display:flex }`;\n- src/ui/screens/postgame.tsx:258 `it.name.slice(0, 1)`.",
+   "gauge": "LoL's post-game scoreboard is a clean, aligned table with K/D/A, CS, gold and damage columns and six item icons with tooltips per player.",
+   "fix": "Rename the post-game row class (or scope hud.css .srow under .hud) so the <tr> stays a table row. Put the portrait and names in an inner flex div. Render items with the existing painted icon component. Mark 'best' with a noon tick plus tooltip. Add a harness assertion that header and cell x-centres match within 4 px.",
+   "files": "src/ui/screens/postgame.tsx, src/ui/styles/screens.css, src/ui/styles/hud.css",
+   "verifierNote": "Reproduced. The root cause is wider than the reviewer said. The main cause is the cross-file class collision with hud.css:349, which makes the whole row a flex container; screens.css:359 alone would not move every column. Fixing only the <td> would leave it broken."
+  },
+  {
+   "id": "F5",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "The draft never shows your fighter large and has no lock-in moment",
+   "what": "During pick, hover and lock show only in the 56 px seat portrait and a footer line ('You locked Ervet. Waiting for the others.'). Below the grid the screen is empty and the backdrop stays generic. Finalize shows a ~128 px render. After locking, the player waits for the rest of the 30 s timer with nothing to look at.",
+   "evidence": "_harness/_reports/final_client_v.json:\n- draft1920: gridBottom 588, bigVisuals [] (no img or canvas larger than 200 px), draftHover [];\n- draftTimes: draft entered at 7.2 s, lock at 11.2 s, finalize at 37.3 s.\nShots: _harness/_shots/final_client_v_1920_draft_myturn.png, final_client_v_1920_draft_locked.png, final_client_v_1920_draft_finalize.png.\nCode: src/ui/app.tsx:128-137 (bindRenderer passes only route params; the draft route has no fighter param). src/ui/screens/draft.tsx never calls setParams or setMenuView.",
+   "gauge": "LoL champion select shows the hovered or locked champion's art large and marks lock-in with a flourish and voice line (r05 [19]).",
+   "fix": "Pass the hovered or locked fighter and skin to setMenuView on the draft route (the plinth showcase already exists in render/menu.ts), with a short crossfade. Add an original lock-in beat (gnomon sweep plus a signature pose or line). Fill the empty band with class, role and ability icons.",
+   "files": "src/ui/app.tsx, src/ui/screens/draft.tsx, src/render/menu.ts, content/fighters/*.json",
+   "verifierNote": "Reproduced. In my run the post-lock dead time was 26 s, against the reviewer's 28.7 s. Major is right: this is the anticipation peak of the funnel, and the showcase machinery already exists unused."
+  },
+  {
+   "id": "F6",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "Play screen: painted mode art unused, default queue below the fold, gnomon across the title",
+   "what": "Three problems:\n- **No mode art.** The Mode Dial shows thin glyphs only. No UI code reads ModeDef.card.art, and the backdrop does not change per mode.\n- **Below the fold.** At 1080p the default-selected Co-op card is cut by the footer. At 720p it is not visible at all at entry, so Find match is pressed without seeing the selected queue.\n- **Gnomon across the title.** The gnomon shadow crosses the mode title ('RI•FT').",
+   "evidence": "_harness/_reports/final_client_v.json:\n- play1920: body h 832 against scrollHeight 1369; Co-op card bottom 980 against footer top 976 (after selection scroll); gnomon box x338–525, y203–309 overlaps title box x473–571, y276–324; modeImgs [] and no background-image with modes/.\n- play1280: body 523 against 1149.\nShots: _harness/_shots/final_client_v_1920_play_rift.png, final_client_v_1280_play_rift.png, final_menus_1280x720_02_play_rift.png (unscrolled 720p: Co-op not visible).\nCode: grep for card.art or _card.webp in src/ finds nothing; src/ui/components/ModeDial.tsx has no art reference; content/modes.json:14 declares card.art.",
+   "gauge": "LoL's mode selection shows each map or mode with a large illustration, and queue choice and Find Match fit without scrolling at the default 1280x720 client size.",
+   "fix": "Show a painted mode illustration in the stage columns with a crossfade on gnomon swing. Compact the queue cards so the selected card and Find match fit at 1080p and 720p. End the gnomon at the dial arc, or drop the title 24–32 px. **Caution:** the existing content/ui/modes/{bridge,fray}_card.webp show full-face masked figures (crop: _harness/_shots/final_client_v_zoom_mode_cards_masks.png), so repaint them under the sensitivity rule before surfacing them.",
+   "files": "src/ui/screens/play.tsx, src/ui/components/ModeDial.tsx, src/ui/styles/screens.css, content/ui/modes/*.webp",
+   "verifierNote": "All three sub-claims reproduce. STYLE_BIBLE 'Menu mood' defines the Mode Dial, but nothing there forbids mode illustrations: bible_identity.md §2.9 and VOCAB.md:12 name the mode cards as surfaces. I amended the fix because the shipped mode cards would themselves break the mask rule."
+  },
+  {
+   "id": "F7",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "L",
+   "title": "Home is a static brochure with no progress or reason to come back",
+   "what": "Home shows a fixed headline, one fixed feature and four tiles.\n- Account progress is only the 'LV 1' chip.\n- There is no XP to the next level and no next reward.\n- The first-win bonus is advertised on every queue card, but whether it is still available is never shown.",
+   "evidence": "src/ui/screens/home.tsx (68 lines, no XP, first-win or news). src/session/grants.ts:84 computes first-win from profile.firstWinAt, but nothing surfaces it on Home. _harness/_shots/final_client_v_1920_home.png and final_client_v_1920_home_after.png show the same layout after a won match.",
+   "gauge": "r05 key takeaway 5 and recommendation 4 (sources [2][3]): LoL's 2025 home is the season stage with pass level, XP progress, next reward and missions; news sits in a separate overlay.",
+   "fix": "Add a Home progress band from existing data:\n- level ring with XP to next level and the level-up reward;\n- first-win candle (lit or spent) with time to the UTC reset;\n- last result with a one-click 'Play again';\n- a feature that rotates per content version.",
+   "files": "src/ui/screens/home.tsx, content/client.json, src/session/grants.ts, src/ui/styles/screens.css",
+   "verifierNote": "Reproduced, and the gauge is accurate to r05. It stays major, not minor: the hidden first-win state is a concrete information gap, not only missing live-service content."
+  },
+  {
+   "id": "F8",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "Collection Skins tab is sparse and truncates half the skin names",
+   "what": "- **Sparse layout.** Each fighter row holds 3 cards of about 120 px across a 1728 px row.\n- **Truncated names.** Half the skin names are cut off.\n- **Price line.** The price wraps to 3–4 lines.\n- **Finalize.** The skin strip truncates names the same way, and the BOT chip in seat rows is clipped ('BC', 'BOT' cut) at both sizes.",
+   "evidence": "_harness/_reports/final_client_v.json:\n- skins1920: 16 of the 32 non-base names clipped (e.g. 'Stillwater Cleaver' 104/109 px, 'Gorgewalk Longbow' 104/127 px);\n- skins1280: 21 clipped;\n- finalize1920 and finalize1280: seatNames clipped for 3 bot rows; skin names 'Stillwater Blade' and 'Lamplit Blade' clipped.\nShots: _harness/_shots/final_client_v_1920_collection_skins.png, final_client_v_1280_collection_skins.png, final_client_v_1920_draft_finalize.png, final_client_v_1280_draft_finalize.png.",
+   "gauge": "LoL's collection is a dense grid of large splash tiles with full names, filterable by champion, ownership and tier (r05 [1]).",
+   "fix": "Use a responsive grid of 3:4 tiles (about 6 per row at 1080p, 4 at 720p) with sticky fighter headers. Give names two lines, and show ownership or price as one chip with the tier inside. Move the Bot chip to the role line in seat rows.",
+   "files": "src/ui/screens/collection.tsx, src/ui/components/LoadoutPanel.tsx, src/ui/components/Seat.tsx, src/ui/styles/screens.css",
+   "verifierNote": "Counts reproduce exactly (16 at 1080p, 21 at 720p). Kept at major because the skins surface is the cosmetic storefront's browse view and is broken at the primary resolution."
+  },
+  {
+   "id": "F9",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "1280x720 fit: labels truncate and key content falls under the footer",
+   "what": "At 1280x720:\n- **Draft grid.** Role labels are truncated on 9 of 16 cards.\n- **Finalize.** Boons sit entirely below the fold and the battle-spell list is cut.\n- **Play.** The selected queue is not visible at entry.\n- **Loading.** The tip line runs under the page control bar.\n- **Post-game.** The scoreboard header and values wrap (F4).",
+   "evidence": "_harness/_reports/final_client_v.json:\n- draft1280 roleClipped: 9 entries, 52 px boxes ('Grovehunter' needs 65 px);\n- finalize1280 below: BOONS, SHADELINE, WARMSTONE and HOURTURN at y 692–727, under the footer at 637;\n- loading1280: tip box x64–661, y675–694 overlaps the control buttons x13–129, y682–708.\nShots: _harness/_shots/final_client_v_1280_draft_myturn.png, final_client_v_1280_draft_finalize.png, final_client_v_1280_loading.png, final_client_v_1280_play_rift.png.",
+   "gauge": "Corrected: Riot support gives 1280x720 as the LoL client's default window size. Champion select, loading and store show all their content at that size, and the client also supports smaller sizes such as 1024x576.",
+   "fix": "Add a 720p token set:\n- draft grid with the role as an icon plus tooltip;\n- finalize with spells and boons as tabs;\n- loading tip padded past the control bar;\n- compact queue cards.\nAdd a 720p sweep to CI that fails on clipped labels or text under the footer.",
+   "files": "src/ui/styles/tokens.css, src/ui/styles/screens.css, src/ui/screens/draft.tsx, src/ui/components/FighterGrid.tsx, src/ui/screens/loading.tsx",
+   "verifierNote": "Every sub-claim reproduces. The gauge sentence 'a fixed 1280x720 minimum layout' was inaccurate, so I rewrote it. 1280x720 is LoL's default client size, which makes the gap more important, not less."
+  },
+  {
+   "id": "F10",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Declining the ready check shows two identical toasts",
+   "what": "After Decline, two identical toasts stack. The handler toasts on both 'declined' and 'idle with reason'.",
+   "evidence": "_harness/_reports/final_client_v.json declineToasts: two copies of 'The match was declined. You can queue again in 5 s.' Shot: _harness/_shots/final_client_v_1920_after_decline.png. Code: src/ui/state.ts:166-174. The dodge path shows one toast (final_client_v2.json toasts).",
+   "gauge": "LoL shows a single notice for a declined or failed ready check.",
+   "fix": "Toast only once per flow end, de-duplicated on reason, or only on the terminal idle event.",
+   "files": "src/ui/state.ts",
+   "verifierNote": "Reproduced."
+  },
+  {
+   "id": "F11",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Copy inconsistencies and one LoL-coined term",
+   "what": "- **Spelling mix.** British 'armour' ×7, 'colour' ×5 and 'Centre' sit beside American 'armor' ×113 and 'Armor' ×6.\n- **LoL term.** Kemdo's ult description says 'omnivamp' although the stat is displayed as 'Drain'.\n- **Wrong reason.** The Gleam-lead tab's disabled reason reuses 'No damage was recorded.'\n- **Missing timer.** The Practice setup reuses the draft 'if time runs out' line on a screen with no timer.",
+   "evidence": "- content/fighters/kemdo.json:353 kit.ult.desc '... Kemdo gains {effects.1.stats.omnivamp} omnivamp ...'.\n- content/strings.en.json:923 'stat.omnivamp.name': 'Drain'.\n- src/ui/screens/postgame.tsx:69 reuses state.empty.recap.\n- src/ui/screens/practice.tsx:54 reuses draft.pick.random.\n- Counts from `grep -rhoi armou?r content`.",
+   "gauge": "LoL keeps one stat vocabulary across tooltips, store and client.",
+   "fix": "Pick one spelling. Replace 'omnivamp' with 'Drain'. Add dedicated strings for the graph-empty and practice cases. Lint player copy for raw stat ids.",
+   "files": "content/strings.en.json, content/fighters/kemdo.json, src/ui/screens/postgame.tsx, src/ui/screens/practice.tsx",
+   "verifierNote": "Confirmed. The exact Armor count differs from the reviewer's 41 (I count 113 lower-case plus 6 capitalised in content), but the inconsistency is real."
+  },
+  {
+   "id": "F12",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Draft timers always run to zero, and finalize 'Lock in' does nothing",
+   "what": "Co-op blind pick runs the full 30 s even after every human has locked. Clicking finalize 'Lock in' does not shorten the 10 s finalize.",
+   "evidence": "_harness/_reports/final_client_v.json draftTimes: draft at 7.2 s, my lock at 11.2 s, finalize at 37.3 s (30.1 s after the draft opened), finalize Lock in clicked at 40.4 s, loading at 47.5 s (10.2 s after finalize began).",
+   "gauge": "r05 [14]: Riot tracks lock-in time as a client KPI. Dead waits read as slowness.",
+   "fix": "Bots lock within 3–8 s. End a blind or FFA pick phase as soon as everyone has locked. Make finalize Lock in a ready flag with a short grace period.",
+   "files": "src/session/local_session.ts, src/session/draft_brain.ts, src/ui/screens/draft.tsx",
+   "verifierNote": "Reproduced with independent timings."
+  },
+  {
+   "id": "F13",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Selection tick overlaps the first letter of segmented-control labels",
+   "what": "The selected-segment noon tick is drawn through the first glyph ('|MEDIUM'), and the same happens on the draft filter 'ALL'.",
+   "evidence": "_harness/_shots/final_menus_zoom_segmented_tick.png. The draft filter 'ALL' in _harness/_shots/final_client_v_1920_draft_myturn.png shows the same.",
+   "gauge": "LoL's selected states never overlap label glyphs.",
+   "fix": "Position the tick above the label as the nav does, or inset the label.",
+   "files": "src/ui/styles/components.css",
+   "verifierNote": "Visible in both shots."
+  },
+  {
+   "id": "F14",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Monospace slashed-zero numerals in static prose feel technical",
+   "what": "Static numbers in prose and reward lines ('Win: 100 Candles', 'Plus 4 Candles a minute') use the Mono numeric face with a slashed zero.",
+   "evidence": "src/ui/styles/tokens.css:106 --font-numeric. _harness/_shots/final_client_v_1920_play_rift.png (queue cards).",
+   "gauge": "LoL uses proportional lining figures in prose and keeps fixed-width digits for timers and columns.",
+   "fix": "Scope the Mono face to numbers that change (timers, wallet, live stats, table columns), as STYLE_BIBLE 'Type' already says. Static prose numbers use the body face, with tabular-nums where they need to align.",
+   "files": "src/ui/styles/tokens.css, src/ui/styles/components.css, src/ui/components/Currency.tsx",
+   "verifierNote": "Kept, with the fix narrowed. STYLE_BIBLE 'Type' assigns the Mono face to 'every number that changes', so the wallet and XP stay Mono by design. Only the static prose numbers go against the bible's intent."
+  },
+  {
+   "id": "F15",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "No recognition beat in the post-game",
+   "what": "The post-game goes straight from the banner to the reward ledger. There is no teammate-recognition step and no best-in-match card.",
+   "evidence": "src/ui/screens/postgame.tsx (no vote step; grep for commend or recognition finds nothing). _harness/_shots/final_menus_1920x1080_30_postgame_summary.png.",
+   "gauge": "r05 [28][40]: LoL runs a short timed recognition vote, and Dota stages an MVP screen.",
+   "fix": "Add an original, skippable, timed 'Lantern nod' step and two best-in-match cards.",
+   "files": "src/ui/screens/postgame.tsx, src/session/local_session.ts, content/strings.en.json",
+   "verifierNote": "Code check confirms."
+  },
+  {
+   "id": "F16",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Unreachable server shows 'Connecting…' indefinitely",
+   "what": "With ?server=ws://127.0.0.1:9 the pill still reads CONNECTING… after 24 s. OnlineLink.open() sets 'connecting' on every retry (backoff 1, 2, 4, 8, 15 s), so the 'Offline · vs bots' state is barely ever shown.",
+   "evidence": "_harness/_shots/final_client_v_1920_server_down.png (after 24 s of sampling). src/session/online_link.ts:81 sets connecting on each open; :95 sets offline on close; :11 BACKOFF_S.",
+   "gauge": "LoL surfaces connection loss with a clear status and a reconnect action.",
+   "fix": "After the first failure keep showing Offline while retrying, and switch to 'connecting' only when an attempt is user-initiated. Add a 'Try again' action.",
+   "files": "src/session/online_link.ts, src/ui/app.tsx",
+   "verifierNote": "Reproduced. The cause is more specific than the reviewer said: an offline string exists, but retries overwrite the status straight back to 'connecting'."
+  },
+  {
+   "id": "F17",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "Bare profile, history rows that do not open, hard-cut shop shelves",
+   "what": "- **Profile.** A generic avatar, no icon or banner choice.\n- **History.** Rows do not reopen the post-game.\n- **Shop.** Shelves end in a hard cut.",
+   "evidence": "_harness/_shots/final_menus_1920x1080_15_profile_overview.png, final_menus_1920x1080_34_profile_history_after.png, final_menus_1920x1080_13_shop.png. src/ui/screens/profile.tsx has no row action.",
+   "gauge": "LoL profiles carry an icon, banner and challenges; match-history rows open the full post-game.",
+   "fix": "Add earnable emblems, stored MatchResults that open in the post-game, and shelf edge fades with chevrons.",
+   "files": "src/ui/screens/profile.tsx, src/ui/screens/shop.tsx, src/session, src/ui/styles/screens.css",
+   "verifierNote": "Kept from the reviewer's shots and a code check. Not re-captured."
+  }
+ ],
+ "missed": [
+  "Sensitivity (blocker class), folded into F1: content/ui/home/store_banner.webp, the 'Skins in the shop' Home tile, shows three figures in full-face masks: carved silver, wooden with empty eye holes, and a faceless chrome visor. The reviewer named only ranked_season and collection_highlight. Crop: _harness/_shots/final_client_v_zoom_store_banner_masks.png.",
+  "Latent sensitivity issue (not on screen today, shipped in the catalog): the unused mode cards content/ui/modes/bridge_card.webp and fray_card.webp show full-face masked figures. F6's fix would surface them, so they must be repainted first. Crop: _harness/_shots/final_client_v_zoom_mode_cards_masks.png."
+ ]
+}

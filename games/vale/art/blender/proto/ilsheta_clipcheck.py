@@ -148,8 +148,9 @@ def main():
             st = inside(staff_ids, 0.012)
             lp = inside(lamp_ids, 0.010)
             lo_body = co[isb][:, 2].min()
+            lo_part = order[int(pv[isb][int(np.argmin(co[isb][:, 2]))])]
             lo_lamp = co[np.isin(pv, list(lamp_ids))][:, 2].min()
-            print(f"{c:11s} t {t:.2f} f {f:5.1f}: body low {lo_body:+.3f}  lamp low {lo_lamp:+.3f}  staff~body {st:4d}  lamp~body {lp:4d}")
+            print(f"{c:11s} t {t:.2f} f {f:5.1f}: body low {lo_body:+.3f} ({lo_part})  lamp low {lo_lamp:+.3f}  staff~body {st:4d}  lamp~body {lp:4d}")
             if not a.no_render:
                 for cn, (yaw, pitch) in (("a", (-35.0, 12.0)), ("b", (70.0, 28.0))):
                     place(yaw, pitch)

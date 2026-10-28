@@ -3,9 +3,7 @@
   "fighter": "ilsheta",
   "skin": true,
   "parts": {
-    "tris_chimney": 1300,
-    "tris_collar": 450,
-    "tris_mask": 1000,
+    "tris_chimney": 2000,
     "tris_hood": 2000,
     "tris_neck": 250,
     "tris_scarf": 1450,
@@ -18,43 +16,43 @@
     "tris_boots": 1198,
     "tris_hand_L": 650,
     "tris_hand_R": 650,
-    "tris_staff": 1100,
-    "tris_lamp_stone": 650,
-    "tris_lamp_glass": 420,
-    "tris_flame": 260,
-    "tris_reed_plates": 418,
-    "validate_ilsheta": "18856->18850"
+    "tris_staff": 1150,
+    "tris_lamp_stone": 700,
+    "tris_lamp_glass": 640,
+    "tris_flame": 300,
+    "tris_reed_plates": 724,
+    "validate_ilsheta": "18732->18728"
   },
-  "uv_coverage": 0.626,
+  "uv_coverage": 0.624,
   "bake": {
-    "base": 2.69,
-    "rough_metal": 2.15,
-    "normal": 1.67,
-    "ao": 2.48,
-    "normal_fixed_px": 15953,
-    "projection": 18.42,
-    "pack_save": 18.55,
-    "total": 27.66
+    "base": 3.39,
+    "rough_metal": 2.83,
+    "normal": 1.89,
+    "ao": 2.59,
+    "normal_fixed_px": 19766,
+    "projection": 15.89,
+    "pack_save": 16.02,
+    "total": 26.86
   },
-  "tris": 19110,
+  "tris": 19028,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2256772,
+  "glb_bytes_raw": 2289124,
   "optimize": {
     "ok": true,
-    "before": 2256772,
-    "after": 937480
+    "before": 2289124,
+    "after": 944812
   },
-  "glb_bytes": 937480,
+  "glb_bytes": 944812,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_stillwater.glb (916 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_stillwater_base 2048x2048 272K, ilsheta_stillwater_normal 512x512 31K, ilsheta_stillwater_orm 512x512 58K",
-      "  skinned meshes: ilsheta_accent(132v), ilsheta_stillwater(15611v)",
-      "  bones: 26 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp thighL shinL footL toeL thighR shinR footR toeR)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_stillwater.glb (923 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ilsheta_stillwater_base 2048x2048 251K, ilsheta_stillwater_normal 512x512 35K, ilsheta_stillwater_orm 512x512 61K",
+      "  skinned meshes: ilsheta_accent(152v), ilsheta_stillwater(16394v)",
+      "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19110; bind-pose bounds (three units, Y up): 0.98 x 1.72 x 0.67; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
+      "  tris: 19028; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -64,8 +62,8 @@
       "portrait": "art/out/fighters/ilsheta/ilsheta_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 7.58,
-      "portrait": 2.98
+      "splash": 5.73,
+      "portrait": 2.2
     }
   },
   "three_qa": {
@@ -73,14 +71,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.479,
+        -0.498,
         0,
         -0.378
       ],
       [
-        0.498,
+        0.502,
         1.722,
-        0.295
+        0.323
       ]
     ],
     "facing": [
@@ -88,8 +86,8 @@
       1
     ],
     "headY": 1.238,
-    "accentPct": 1.49,
-    "accentTopHalfPct": 39.1,
+    "accentPct": 1.5,
+    "accentTopHalfPct": 42.9,
     "heightPx1080": 91,
     "size": [
       2400,
@@ -97,24 +95,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_stillwater.png",
-    "seconds": 10.6,
+    "seconds": 6.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
       "materials": 0.15,
-      "model": 3.35,
-      "lows_bind": 4.59,
-      "uv": 7.55,
-      "bake": 27.66,
-      "export": 0.06,
-      "optimize": 0.53,
-      "load_test": 0.12,
-      "render": 10.58,
-      "three_qa": 10.88
+      "model": 3.08,
+      "lows_bind": 2.77,
+      "uv": 5.09,
+      "bake": 26.86,
+      "export": 0.08,
+      "optimize": 0.48,
+      "load_test": 0.09,
+      "render": 7.96,
+      "three_qa": 7.01
     },
-    "total_s": 65.57
+    "total_s": 53.62
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

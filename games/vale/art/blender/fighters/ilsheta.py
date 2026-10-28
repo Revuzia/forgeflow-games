@@ -150,7 +150,7 @@ def hpt(s, a, b, c):
 #    staff frame: origin the grip's centre in the right fist, U up the shaft (the thumb's side), K the hook's side (the
 #    knuckles), V = U x K. Grip in the fist: 6.8 cm along the fingers, 3.6 cm off the palm.
 GRIP_AB = (0.068, 0.036)
-S_BUTT, S_TOP = -0.60, 0.24
+S_BUTT, S_TOP = -0.46, 0.24      # fix pass 1: 0.86 m (was 1.0; the butt went through the bell when the staff tipped)
 SHAFT_R = 0.020
 # fix pass 1: the concept's carved, ANGULAR open loop (not a smooth J): the shaft kinks out, rises to a flat top bar,
 # drops on the far side and stops short of the shaft (open); the lamp hangs from the top bar's far corner
@@ -176,8 +176,8 @@ HANG0 = spt(HANG_UK[1], HANG_UK[0])
 # a solid glass font bowl under the flame (the glass mass that reads as glass: Stillwater's sea-glass)
 LAMP = {"ring": 0.010, "stem": (0.020, 0.036), "knob": 0.038, "cap": (0.042, 0.066), "glass": (0.066, 0.300),
         "base": (0.300, 0.326), "finial": (0.326, LAMP_DROP)}
-GLASS_R = [(0.066, 0.058), (0.090, 0.075), (0.130, 0.093), (0.175, 0.103), (0.220, 0.105), (0.262, 0.099), (0.300, 0.086)]
-FLAME = (0.222, 0.063, 0.106)     # the flame's bulb centre (dz), its radius, the tip's dz (brief: a 12 x 18 cm flame)
+GLASS_R = [(0.066, 0.058), (0.090, 0.076), (0.130, 0.095), (0.175, 0.106), (0.220, 0.108), (0.262, 0.101), (0.300, 0.087)]
+FLAME = (0.222, 0.066, 0.100)     # the flame's bulb centre (dz), its radius, the tip's dz (brief: a 12 x 18 cm flame)
 FONT = (0.258, 0.300)             # the glass font bowl (dz top, bottom)
 
 
@@ -199,7 +199,7 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_lamp", "visor_top": "x_chimney_t
 # fix pass 1: the darker Aubade backdrop (aubade_dusk, this module's plate grade), the warm rim down (it bled over the
 # right edge), a softer sun on the pale linen; the skins pose their own splash (they were the same frame)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "portrait_clip": "idle_lobby", "portrait_t": 0.0,
-          "portrait_yaw": 28.0, "icon_yaw": 20.0, "yaw": 24.0, "fill": 0.86, "rim_warm": 0.25, "rim_cool": 0.85,
+          "portrait_yaw": 28.0, "icon_yaw": 20.0, "yaw": 34.0, "fill": 0.86, "rim_warm": 0.25, "rim_cool": 0.85,
           "sun": 2.5, "aubade_dusk": 0.50}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
@@ -409,13 +409,15 @@ def hand_parts(s: str) -> Sculpt:
         S.add(Tube([hpt(s, 0.018, 0.010, 0.034), hpt(s, 0.044, 0.040, 0.046), hpt(s, 0.072, 0.074, 0.034),
                     hpt(s, 0.092, 0.074, 0.018)], [0.0150, 0.0135, 0.0120, 0.0105], k=0.006), k=0.008)
     else:
-        for c, L, rr in ((0.027, 0.072, 0.0112), (0.009, 0.078, 0.0118), (-0.009, 0.073, 0.0110), (-0.026, 0.058, 0.0098)):
+        # the left hand OPEN (fix pass 1: the curled cup read as a pointing claw in the palms-out push and the
+        # palm-up release): long fingers barely curled, a little spread, the thumb out
+        for c, L, rr in ((0.030, 0.074, 0.0112), (0.010, 0.080, 0.0118), (-0.010, 0.075, 0.0110), (-0.030, 0.060, 0.0098)):
             k0 = np.array([0.080, 0.002])
-            pts = [hpt(s, 0.066, 0.002, c)]
+            pts = [hpt(s, 0.066, 0.002, c * 0.9)]
             ang = 0.0
             cur = k0.copy()
             pts.append(hpt(s, cur[0], cur[1], c))
-            for frac, dang in ((0.42, 14.0), (0.33, 26.0), (0.25, 30.0)):
+            for frac, dang in ((0.42, 6.0), (0.33, 10.0), (0.25, 14.0)):
                 ang += dang
                 cur = cur + L * frac * np.array([math.cos(math.radians(ang)), math.sin(math.radians(ang))])
                 pts.append(hpt(s, cur[0], cur[1], c * (1.0 + 0.25 * (ang / 70.0))))
@@ -524,12 +526,12 @@ def sculpts() -> list:
     for s in "LR":
         part(f"hand_{s}", hand_parts(s), "leather", f"bone:hand.{s}", 650, 0.55, 0.9)
     stf = Sculpt("staff")
-    knots = [(S_BUTT + 0.02, 0.0, 0.0, 0.023), (-0.42, 0.003, -0.003, 0.0205), (-0.24, -0.003, 0.003, 0.0215),
-             (-0.06, 0.0, 0.0, 0.0205), (0.10, 0.003, 0.002, 0.020), (S_TOP, 0.0, 0.0, 0.019)]
+    knots = [(S_BUTT + 0.02, 0.0, 0.0, 0.023), (-0.30, 0.003, -0.003, 0.0205), (-0.16, -0.003, 0.003, 0.0215),
+             (-0.04, 0.0, 0.0, 0.0205), (0.10, 0.003, 0.002, 0.020), (S_TOP, 0.0, 0.0, 0.019)]
     stf.add(Tube([spt(u, k, v) for u, k, v, _ in knots], [r for *_, r in knots], k=0.01)
             .displaced(lambda P: -0.0018 * NOISE.ridged(P, 30.0, 2), 0.002), k=0.0)
     stf.add(Sphere(spt(S_BUTT + 0.01), 0.023), k=0.01)
-    for u in (-0.33, 0.15):
+    for u in (-0.26, 0.15):
         stf.add(Ellipsoid(spt(u, 0.004, -0.003), (0.026, 0.024, 0.030), axes=np.stack([K0, V0, U0])), k=0.012)
     stf.add(Tube([spt(u, k) for k, u in HOOK], HOOK_R, k=0.004)
             .displaced(lambda P: -0.0016 * NOISE.ridged(P, 30.0, 2), 0.002), k=0.01)
@@ -913,16 +915,22 @@ def _paint_chimney(c, p, n, pal=None):
     x, y, z = p[:, 0], p[:, 1], p[:, 2]
     th = np.arctan2(x - cx, -(y - cy))
     glass = _lin(_hex(pal.get("dawnglass", "#C0D6E8")))
-    edge = _lin(_hex("#7C90A3"))
-    lin = np.repeat(glass[None, :], len(p), 0) * (0.90 + 0.10 * ss(1.48, 1.70, z))[:, None]
-    side = np.clip((np.abs(np.sin(th)) - 0.42) / 0.58, 0, 1) ** 1.3
-    lin = lin * (1 - 0.55 * side[:, None]) + edge * (0.55 * side[:, None])
+    edge = _lin(_hex("#6F8599"))
+    lin = np.repeat(glass[None, :], len(p), 0) * (0.80 + 0.16 * ss(1.48, 1.70, z))[:, None]
+    side = np.clip((np.abs(np.sin(th)) - 0.40) / 0.60, 0, 1) ** 1.2
+    lin = lin * (1 - 0.62 * side[:, None]) + edge * (0.62 * side[:, None])
     low = ss(1.56, 1.47, z) * 0.30                                     # the hood's shade read through the glass's foot
     lin = lin * (1 - low[:, None]) + edge * 0.8 * low[:, None]
     streak = (np.exp(-((th + 0.58) / 0.085) ** 2) + 0.55 * np.exp(-((th - 0.40) / 0.06) ** 2)
               + 0.75 * np.exp(-((th - (math.pi - 0.58)) / 0.085) ** 2) + 0.4 * np.exp(-((th + math.pi - 0.40) / 0.06) ** 2))
     streak = streak * ss(1.40, 1.50, z) * (1.0 - ss(1.68, 1.70, z))
-    lin = lin + 0.42 * streak[:, None]
+    lin = lin + 0.55 * streak[:, None]
+    # the flare's own glass (the bulb round the face): two bright edge lines down its sides where it turns away, a
+    # crescent glint on its shoulder where it narrows into the chimney, and a bright rolled rim along the chin
+    fl = ss(1.47, 1.43, z) * ss(1.17, 1.20, z)
+    rim_side = np.exp(-((np.abs(np.sin(th)) - 0.80) / 0.06) ** 2) * (np.cos(th) > -0.2) * fl
+    shoulder = np.exp(-((z - 1.452) / 0.014) ** 2) * np.exp(-((th + 0.25) / 0.55) ** 2) * ss(-0.1, 0.3, n[:, 2])
+    chin = ss(1.200, 1.186, z) * (np.cos(th) > -0.3)
     lip = ss(1.700, 1.712, z) * (n[:, 2] > -0.3)
     lin = lin * (1 - lip[:, None]) + _lin(_hex("#EEF4F8")) * lip[:, None]
     r = np.hypot(x - cx, y - cy)
@@ -939,6 +947,8 @@ def _paint_chimney(c, p, n, pal=None):
     glint = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
     flin = flin + 0.16 * glint[:, None]
     lin = lin * (1 - wf[:, None]) + flin * wf[:, None]
+    lin = lin + (0.50 * rim_side + 0.45 * shoulder)[:, None]
+    lin = lin * (1 - 0.7 * chin[:, None]) + _lin(_hex("#E4EEF4")) * 0.7 * chin[:, None]
     return _srgb(np.clip(lin, 0, 1))
 
 
@@ -1378,7 +1388,25 @@ def _resolve(skel, pose):
     if ors:
         M = skel.fk(out)
     _lamp_plumb(skel, out, pose, M)
+    _panel_follow(skel, out, M)
     return out
+
+
+def _panel_follow(skel, out, M):
+    """the front panels ride on the knees: a thigh swung forward (a stride, a lunge, the kneel) carries its panel
+    forward with it (past 6 degrees, 0.75 of the swing, at most 50), added to the clip's own x_mantle rotation"""
+    if "x_mantle_l" not in skel.rest:
+        return
+    Rs = M["spine"].to_3x3() @ skel.rest["spine"].to_3x3().inverted()
+    Ri = Rs.inverted()
+    for s, nm in (("L", "x_mantle_l"), ("R", "x_mantle_r")):
+        d = Ri @ (M[f"shin.{s}"].translation - M[f"thigh.{s}"].translation)
+        if d.length < 1e-4:
+            continue
+        ang = math.degrees(math.atan2(-d.y, max(-d.z, 1e-4)))
+        lift = min(50.0, max(0.0, ang - 6.0) * 0.75)
+        e = out.get(nm, (0.0, 0.0, 0.0))
+        out[nm] = (e[0] + lift, e[1], e[2])
 
 
 def _lamp_plumb(skel, out, pose, M):
@@ -1498,11 +1526,18 @@ def ft(dx=0.0, dy=0.0, dz=0.0, pitch=0.0, side="L", yaw=None):
 TORSO_G = dict(hips=(1.0, -3.0, 0.0), spine=(2.0, 2.0, 0.0), chest=(2.0, 3.0, 0.0), neck=(-1.0, 0.0, 0.0), head=(-4.0, 2.0, 0.0))
 POLE_R = (-0.9, 0.35, -0.35)
 POLE_L = (0.9, 0.25, -0.45)
-# the guard: the hook-staff upright in the right hand at her side, the lamp hanging from the hook beside her shoulder
-# (the concept's place: it reads from every facing, the brief's chest place hid the accent from behind), the left
-# hand warming at its light (Warm Hands)
-G_R = (wr("R", -0.415, -0.140, 0.948, POLE_R), staff_or((0.20, 0.05, 0.98), (0.20, -0.98, 0.0)))
-G_L = (wr("L", -0.030, -0.215, 1.000, POLE_L), hand_or((0.10, -0.60, 0.80), (-0.92, 0.15, 0.37)))
+K_G = (0.45, -0.89, 0.0)                  # the hook's side at guard: toward her front-left (the lamp before her chest)
+# the guard (fix pass 1: the brief's place, the review: the lamp hung at her right hip, its accent in the bottom half):
+# the hook-staff held upright in the right fist at her right side, its hook bending in so the lamp hangs IN FRONT OF
+# HER RIGHT CHEST at the brief's height (pivot ~1.42 m, the flame ~1.20 m), the left hand open beside it, warming at
+# its light (Warm Hands); the bind pose (skins) keeps the staff upright at her side
+G_R = (wr("R", -0.336, -0.166, 1.098, POLE_R), staff_or((0.10, 0.02, 0.99), K_G))
+G_L = (wr("L", 0.010, -0.225, 1.150, POLE_L), hand_or((-0.10, -0.70, 0.70), (-0.96, -0.05, 0.15)))
+
+
+def mant(flare=0.0, fwd=0.0):
+    """the front panels' sway bones: `flare` (deg) opens both panels outward, `fwd` swings them forward"""
+    return {"x_mantle_l": (fwd, 0.0, flare), "x_mantle_r": (fwd, 0.0, -flare)}
 
 
 def guard_pose(**kw):
@@ -1541,18 +1576,151 @@ def _nudge(p, dR=(0, 0, 0), dL=(0, 0, 0)):
     return out
 
 
+UP_FWD = (0.0, -0.55, 0.835)
+
+
+def key_poses() -> dict:
+    """the clips' key poses (the fit tool's --poses checks the held staff / lamp of each against the body)"""
+    K = {}
+    K["guard"] = guard_pose()
+    # attack1: a small lamp FLICK: the left hand flicks the light out forward (palm out), the staff dips forward
+    K["a1_w"] = guard_pose(torso=T(hips=(0, 6, 0), spine=(-2, 4, 0), chest=(-4, 7, 0), head=(-2, -5, 0)),
+                           R=(wr("R", -0.360, -0.170, 1.070, POLE_R), staff_or((0.0, 0.06, 0.99), K_G)),
+                           L=(wr("L", 0.080, -0.170, 1.120, POLE_L), hand_or((-0.30, -0.20, 0.93), (-0.30, -0.90, 0.10))),
+                           lamp=(10, 0, 0))
+    K["a1_h"] = guard_pose(torso=T(hips=(2, -6, 0), spine=(3, -5, 0), chest=(4, -8, 0), head=(-4, 5, 0)), hips=(0.0, -0.03, -0.040),
+                           R=(wr("R", -0.310, -0.290, 1.060, POLE_R), staff_or((0.30, -0.26, 0.92), K_G)),
+                           L=(wr("L", 0.030, -0.330, 1.140, POLE_L), hand_or((-0.10, -0.95, 0.20), (0.05, -0.30, -0.95))),
+                           lamp=(-14, 0, 0))
+    K["a1_f"] = guard_pose(torso=T(hips=(3, -7, 0), spine=(3, -6, 0), chest=(5, -9, 0), head=(-5, 6, 0)), hips=(0.0, -0.035, -0.042),
+                           R=(wr("R", -0.310, -0.295, 1.055, POLE_R), staff_or((0.30, -0.24, 0.92), K_G)),
+                           L=(wr("L", 0.035, -0.340, 1.130, POLE_L), hand_or((-0.10, -0.95, 0.15), (0.05, -0.35, -0.94))),
+                           lamp=(6, 0, 0))
+    # attack2: a hook-staff TAP: the staff lifted and its hook tapped down at the target, the left arm swung back
+    K["a2_w"] = guard_pose(torso=T(hips=(-2, -4, 0), spine=(-4, -3, 0), chest=(-7, -4, 0), head=(-7, 0, 0)), hips=(0.0, 0.02, -0.02),
+                           R=(wr("R", -0.360, -0.150, 1.160, POLE_R), staff_or((-0.10, 0.14, 0.98), K_G)),
+                           L=(wr("L", 0.240, -0.080, 1.000, POLE_L), hand_or((0.40, -0.20, -0.90), (0.85, 0.30, 0.10))), lamp=(12, 0, 0))
+    K["a2_h"] = guard_pose(torso=T(hips=(4, 4, 0), spine=(5, 3, 0), chest=(7, 4, 0), head=(0, -2, 0)), hips=(0.0, -0.03, -0.050),
+                           R=(wr("R", -0.290, -0.300, 0.990, POLE_R), staff_or((0.36, -0.58, 0.73), (0.30, -0.70, -0.65))),
+                           L=(wr("L", 0.290, 0.090, 0.900, POLE_L), hand_or((0.30, 0.50, -0.80), (0.80, -0.20, 0.30))), lamp=(-18, 0, 0))
+    K["a2_f"] = guard_pose(torso=T(hips=(5, 4, 0), spine=(6, 3, 0), chest=(8, 4, 0), head=(-1, -2, 0)), hips=(0.0, -0.035, -0.052),
+                           R=(wr("R", -0.288, -0.302, 0.985, POLE_R), staff_or((0.36, -0.55, 0.75), (0.30, -0.70, -0.65))),
+                           L=(wr("L", 0.295, 0.095, 0.895, POLE_L), hand_or((0.30, 0.50, -0.80), (0.80, -0.20, 0.30))), lamp=(6, 0, 0))
+    # cast_a1 Glint Bolt: wound in (the staff drawn back to the chest, the left hand at the shutter), then ONE LONG ARM:
+    # the right arm thrust straight out, the staff near level, the lamp hanging at its far end ~0.55 m before her
+    K["c1_w"] = guard_pose(torso=T(hips=(-2, -12, 0), spine=(-3, -8, 0), chest=(-5, -11, 0), head=(-2, 12, 0)), hips=(0.0, 0.03, -0.03),
+                           R=(wr("R", -0.340, -0.170, 1.090, POLE_R), staff_or((-0.04, 0.10, 0.99), K_G)),
+                           L=(wr("L", 0.000, -0.230, 1.160, POLE_L), hand_or((-0.40, -0.50, 0.77), (-0.80, 0.20, 0.30))), lamp=(8, 0, 0))
+    K["c1_h"] = guard_pose(torso=T(hips=(3, 12, 0), spine=(2, 8, 0), chest=(2, 11, 0), head=(-6, -11, 0)), hips=(0.0, -0.08, -0.05),
+                           feet=(ft(dy=-0.18, side="L"), ft(dy=0.04, side="R")),
+                           R=(wr("R", -0.260, -0.270, 1.170, (-0.9, 0.3, -0.4)), staff_or((0.20, -0.70, 0.68), (0.0, -0.69, -0.72))),
+                           L=(wr("L", 0.120, -0.150, 1.080, POLE_L), hand_or((-0.10, -0.60, 0.79), (0.05, -0.80, -0.60))), lamp=(-14, 0, 0))
+    K["c1_f"] = guard_pose(torso=T(hips=(4, 13, 0), spine=(3, 9, 0), chest=(3, 12, 0), head=(-7, -12, 0)), hips=(0.0, -0.085, -0.052),
+                           feet=(ft(dy=-0.18, side="L"), ft(dy=0.04, side="R")),
+                           R=(wr("R", -0.262, -0.275, 1.165, (-0.9, 0.3, -0.4)), staff_or((0.20, -0.68, 0.70), (0.0, -0.71, -0.70))),
+                           L=(wr("L", 0.130, -0.140, 1.060, POLE_L), hand_or((-0.10, -0.60, 0.79), (0.05, -0.80, -0.60))), lamp=(4, 0, 0))
+    # cast_a2 Hung Lamp: ONE RAISED ARM: the right arm reaches up and forward, the staff steep, the lamp hung high
+    # before her on an unseen peg over the ally; the left hand opens upward at her side (up means help)
+    K["c2_w"] = guard_pose(torso=T(hips=(-2, 4, 0), spine=(-4, 3, 0), chest=(-6, 4, 0), neck=(-4, 0, 0), head=(-8, -2, 0)), hips=(0, 0.01, -0.02),
+                           R=(wr("R", -0.300, -0.200, 1.180, POLE_R), staff_or((0.08, -0.05, 0.99), K_G)),
+                           L=(wr("L", 0.150, -0.180, 1.080, POLE_L), hand_or((-0.30, -0.70, 0.65), (0.05, 0.10, 1.0))), lamp=(6, 2, 0))
+    K["c2_h"] = guard_pose(torso=T(hips=(-2, -4, -2), spine=(-4, -3, -3), chest=(-7, -4, -4), neck=(-4, 0, 0), head=(-10, 6, 0)), hips=(0, -0.02, 0.012),
+                           feet=(ft(dy=-0.10, side="L", pitch=-8), ft(side="R", pitch=-14)),
+                           R=(wr("R", -0.330, -0.180, 1.260, (-0.9, 0.0, -0.3)), staff_or((0.05, -0.50, 0.86), (0.0, -0.86, -0.50))),
+                           L=(wr("L", 0.330, -0.120, 1.120, POLE_L), hand_or((0.40, -0.60, 0.70), (0.10, 0.10, 1.0))), lamp=(-10, 2, 0))
+    K["c2_f"] = guard_pose(torso=T(hips=(-2, -5, -2), spine=(-4, -4, -3), chest=(-7, -5, -4), neck=(-4, 0, 0), head=(-10, 7, 0)), hips=(0, -0.02, 0.008),
+                           feet=(ft(dy=-0.10, side="L", pitch=-8), ft(side="R", pitch=-12)),
+                           R=(wr("R", -0.332, -0.178, 1.255, (-0.9, 0.0, -0.3)), staff_or((0.05, -0.48, 0.87), (0.0, -0.87, -0.48))),
+                           L=(wr("L", 0.335, -0.110, 1.140, POLE_L), hand_or((0.40, -0.55, 0.73), (0.10, 0.10, 1.0))), lamp=(4, 1, 0))
+    # cast_a3 Dawnglass Shell: 3 frames cupping the lamp at the chest, then ARMS WIDE, palms out, like opening a pane:
+    # the staff swung out upright at her right, the left palm pushed out, the mantle panels flared open
+    K["c3_c"] = guard_pose(torso=T(hips=(2, 0, 0), spine=(3, 0, 0), chest=(4, 0, 0), head=(5, 0, 0)), hips=(0, 0.0, -0.04),
+                           R=(wr("R", -0.230, -0.240, 1.030, POLE_R), staff_or((0.18, 0.02, 0.98), K_G)),
+                           L=(wr("L", 0.030, -0.255, 1.080, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(3, 0, 0),
+                           **mant(-3.0))
+    K["c3_h"] = guard_pose(torso=T(hips=(-2, 0, 0), spine=(-4, 0, 0), chest=(-8, 0, 0), neck=(-2, 0, 0), head=(-8, 0, 0)), hips=(0, 0.01, -0.02),
+                           feet=(ft(dx=0.03, side="L"), ft(dx=-0.03, side="R")),
+                           R=(wr("R", -0.470, -0.140, 1.090, (-0.6, 0.6, -0.5)), staff_or((0.10, -0.05, 0.99), (0.0, -1.0, 0.0))),
+                           L=(wr("L", 0.470, -0.140, 1.090, (0.6, 0.6, -0.5)), hand_or((0.20, -0.10, 0.97), (0.95, -0.30, -0.05))),
+                           lamp=(-6, -10, 0), **mant(30.0, 4.0))
+    K["c3_f"] = guard_pose(torso=T(hips=(-2, 0, 0), spine=(-4, 0, 0), chest=(-9, 0, 0), neck=(-2, 0, 0), head=(-9, 0, 0)), hips=(0, 0.01, -0.024),
+                           feet=(ft(dx=0.03, side="L"), ft(dx=-0.03, side="R")),
+                           R=(wr("R", -0.480, -0.130, 1.085, (-0.6, 0.6, -0.5)), staff_or((0.12, -0.05, 0.99), (0.0, -1.0, 0.0))),
+                           L=(wr("L", 0.480, -0.130, 1.080, (0.6, 0.6, -0.5)), hand_or((0.22, -0.10, 0.97), (0.95, -0.30, -0.05))),
+                           lamp=(3, 4, 0), **mant(34.0, 5.0))
+    # cast_ult Every Window Lit: gathered low, then BOTH HANDS OVERHEAD on her toes (the staff high, the lamp above her
+    # head), the mantle flaring; the tip circles; at the bloom the arms open wide in a Y, the lamp the star over her
+    toes = (ft(side="L", pitch=-24, dz=0.0), ft(side="R", pitch=-24, dz=0.0))
+    K["u_gat"] = guard_pose(torso=T(hips=(6, 0, 0), spine=(7, 0, 0), chest=(7, 0, 0), neck=(4, 0, 0), head=(9, 0, 0)), hips=(0, 0.01, -0.08),
+                            R=(wr("R", -0.180, -0.250, 0.960, POLE_R), staff_or((0.12, 0.05, 0.99), K_G)),
+                            L=(wr("L", 0.040, -0.250, 0.980, POLE_L), hand_or((-0.40, -0.80, 0.30), (0.05, 0.12, 1.0))), lamp=(4, 0, 0),
+                            **mant(-4.0))
+
+    def raise_(phi, w=1.0):
+        a = math.radians(phi)
+        u = (0.22 + 0.10 * math.sin(a) * w, -0.08 - 0.10 * math.cos(a) * w, 0.97)
+        return guard_pose(torso=T(hips=(-3, 0, 0), spine=(-5, 0, 0), chest=(-9, 0, 0), neck=(-6, 0, 0), head=(-16, 0, 0)),
+                          hips=(0, 0.0, 0.050), feet=toes,
+                          R=(wr("R", -0.250, -0.130, 1.340, (-0.9, 0.0, -0.2)), staff_or(u, (0.45, -0.89, 0.0))),
+                          L=(wr("L", 0.030, -0.140, 1.320, (0.9, 0.0, -0.2)), hand_or((-0.40, -0.10, 0.91), (-0.90, -0.30, 0.20))),
+                          lamp=(-6 * math.cos(a) * w, 6 * math.sin(a) * w, 0), **mant(18.0 + 4.0 * w))
+    K["u_raise"] = raise_(0.0)
+    K["u_star"] = guard_pose(torso=T(hips=(-3, 0, 0), spine=(-6, 0, 0), chest=(-11, 0, 0), neck=(-6, 0, 0), head=(-18, 0, 0)), hips=(0, 0.0, 0.048),
+                             feet=toes, R=(wr("R", -0.290, -0.120, 1.340, (-0.8, 0.2, -0.2)), staff_or((0.10, -0.10, 0.99), (0.45, -0.89, 0.0))),
+                             L=(wr("L", 0.320, -0.100, 1.320, (0.7, 0.4, -0.4)), hand_or((0.55, -0.20, 0.81), (0.60, -0.55, -0.55))),
+                             lamp=(-4, -4, 0), **mant(34.0, 4.0))
+    K["u_star2"] = guard_pose(torso=T(hips=(-3, 0, 0), spine=(-6, 0, 0), chest=(-11, 0, 0), neck=(-6, 0, 0), head=(-17, 0, 0)), hips=(0, 0.0, 0.044),
+                              feet=toes, R=(wr("R", -0.295, -0.120, 1.335, (-0.8, 0.2, -0.2)), staff_or((0.10, -0.10, 0.99), (0.45, -0.89, 0.0))),
+                              L=(wr("L", 0.325, -0.100, 1.310, (0.7, 0.4, -0.4)), hand_or((0.55, -0.20, 0.81), (0.60, -0.55, -0.55))),
+                              lamp=(2, 2, 0), **mant(30.0, 3.0))
+    # the lobby: the lamp drawn in before her (the left hand can reach it), the four tending beats
+    K["lb"] = guard_pose(torso=T(hips=(1, -2, 0), spine=(3, 2, 0), chest=(4, 5, 0), neck=(2, 0, 0), head=(5, 4, 0)), hips=(0, 0.01, -0.024),
+                         R=(wr("R", -0.250, -0.230, 1.020, POLE_R), staff_or((0.20, 0.0, 0.98), (0.55, -0.83, 0.0))))
+    K["lb_up"] = guard_pose(torso=T(hips=(0, -2, 0), spine=(1, 2, 0), chest=(1, 5, 0), neck=(0, 0, 0), head=(2, 6, 0)), hips=(0, 0.01, -0.02),
+                            R=(wr("R", -0.250, -0.240, 1.140, POLE_R), staff_or((0.24, -0.02, 0.97), (0.55, -0.83, 0.0))))
+    # victory: the lamp held out at arm's length toward the camera, the left hand over her chest, a slight bow
+    K["v_c"] = guard_pose(torso=T(hips=(4, 0, 0), spine=(4, 0, 0), chest=(4, 0, 0), head=(6, 0, 0)), hips=(0, 0.01, -0.05))
+    K["v_up"] = guard_pose(torso=T(hips=(3, 8, 0), spine=(5, 6, 0), chest=(6, 8, 0), neck=(2, -4, 0), head=(10, -6, 4)), hips=(0, -0.01, -0.035),
+                           feet=(ft(dy=-0.06, side="L"), FR0),
+                           R=(wr("R", -0.200, -0.300, 1.140, (-0.9, 0.2, -0.4)), staff_or((0.34, -0.50, 0.80), (0.0, -0.83, -0.55))),
+                           L=(wr("L", 0.040, -0.150, 1.060, POLE_L), hand_or((-0.85, -0.25, 0.45), (0.0, 0.95, 0.1))), lamp=(-8, 0, 0),
+                           **mant(8.0))
+    # recall / stunned / channel / taunt / dash
+    K["rc"] = guard_pose(torso=T(hips=(3, 0, 0), spine=(6, 0, 0), chest=(8, 0, 0), neck=(6, 0, 0), head=(14, 0, 0)), hips=(0, 0.01, -0.05),
+                         R=(wr("R", -0.230, -0.220, 0.990, POLE_R), staff_or((0.24, 0.04, 0.97), (0.55, -0.83, 0.0))),
+                         L=(wr("L", 0.030, -0.260, 1.060, POLE_L), hand_or((-0.15, -0.80, 0.55), (-0.95, -0.10, 0.20))), lamp=(2, 0, 0))
+    K["st"] = guard_pose(torso=T(hips=(3, 0, 0), spine=(6, 0, 0), chest=(6, 0, 0), neck=(6, 0, 0), head=(10, 0, 0)), hips=(0, 0.01, -0.06),
+                         R=(wr("R", -0.220, -0.210, 0.980, POLE_R), staff_or((0.26, 0.06, 0.96), (0.55, -0.83, 0.0))),
+                         L=(wr("L", 0.030, -0.250, 1.040, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(4, 0, 0))
+    K["ch"] = guard_pose(torso=T(hips=(0, 0, 0), spine=(-2, 0, 0), chest=(-3, 0, 0), head=(2, 0, 0)),
+                         R=(wr("R", -0.240, -0.250, 1.130, POLE_R), staff_or((0.24, -0.06, 0.97), (0.55, -0.83, 0.0))),
+                         L=(wr("L", 0.040, -0.260, 1.150, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(0, 0, 0))
+    K["tu"] = guard_pose(torso=T(hips=(0, 4, 0), spine=(-2, 4, 0), chest=(-4, 6, 0), neck=(0, -6, 10), head=(-6, -10, 16)),
+                         R=(wr("R", -0.280, -0.200, 1.280, (-0.9, 0.1, -0.3)), staff_or((0.12, -0.08, 0.99), K_G)),
+                         L=(wr("L", 0.160, -0.100, 0.960, POLE_L), hand_or((-0.2, -0.3, -0.93), (0.95, 0.1, 0.1))), lamp=(-4, 3, 0))
+    K["dl"] = guard_pose(torso=T(hips=(14, 0, 0), spine=(8, 0, 0), chest=(6, 0, 0), neck=(-10, 0, 0), head=(-10, 0, 0)), hips=(0, -0.05, -0.07),
+                         feet=(ft(dy=-0.26, dz=0.05, pitch=10, side="L"), ft(dy=0.26, dz=0.02, pitch=-26, side="R")),
+                         R=(wr("R", -0.300, -0.200, 1.000, POLE_R), staff_or((0.16, 0.10, 0.98), K_G)),
+                         L=(wr("L", 0.040, -0.230, 1.020, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(-14, 0, 0),
+                         **mant(4.0, -10.0))
+    return K
+
+
 def clip_overrides(ctx) -> dict:
     osc = anim.osc
     add = anim.add
     P_ = anim.P
     out = {}
-    G = guard_pose()
+    K = key_poses()
+    G = K["guard"]
+    g = G
 
-    # idle: the lamp tended at the chest; breath, a 2-degree shoulder sway, the lamp's slow swing
+    # idle: the lamp tended at the chest; breath, a 2-degree shoulder sway, the lamp's slow swing, the panels breathing
     def idle(t):
         b, s = osc(t, 2), osc(t, 1, 0.1)
         p = add(G, P_(chest=(1.0 * b, 0, 0), spine=(0.4 * b, 0, 1.2 * s), neck=(-0.6 * b, 0, 0), head=(-0.5 * b, 1.4 * s, 0),
-                      shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.2 * b), hips=(0, 1.0 * s, -0.8 * s)))
+                      shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.2 * b), hips=(0, 1.0 * s, -0.8 * s),
+                      x_mantle_l=(0.8 * s, 0, 1.0 * b), x_mantle_r=(-0.8 * s, 0, -1.0 * b)))
         p = _nudge(p, (0.0, 0.0, 0.008 * osc(t, 2, 0.05)), (0.0, 0.0, 0.010 * osc(t, 2, 0.12)))
         p["lamp"] = (2.5 * osc(t, 1, 0.3), 1.5 * osc(t, 1, 0.55), 0.0)
         hx, hy, hz = p["hips_loc"]
@@ -1560,139 +1728,76 @@ def clip_overrides(ctx) -> dict:
         return p
     out["idle"] = anim.Clip("idle", 72, True, idle)
 
-    # run: the generator's legs at 3.35 m/s; the lamp carried close at the chest in both hands, the staff upright
+    # run: the generator's legs at 3.35 m/s; the lamp carried close before her chest, the left hand at its side, the
+    # panels trailing (the striding knee carries its panel: the resolve wrapper)
     base_run = anim.gen_run(MOTION)
-    RUN_R = (-0.400, -0.160, 0.975)
 
     def run(t):
         p = dict(base_run.sample(t))
         ik = {k: v for k, v in p.get("ik", {}).items() if k.startswith("foot")}
         q = t % 1.0
         sw = math.cos(2 * math.pi * (q - 0.03))
-        ik["hand.R"] = wr("R", RUN_R[0], RUN_R[1] - 0.030 * sw, RUN_R[2] + 0.012 * abs(sw), POLE_R)
-        ik["orient.R"] = staff_or((0.18, 0.08 + 0.04 * sw, 0.98), (0.20, -0.98, 0.0))
-        tl = 0.5 + 0.5 * sw                                   # 1 = the left arm forward (the right leg's stride)
-        ik["hand.L"] = wr("L", 0.235 - 0.03 * tl, 0.060 - 0.20 * tl, 0.840 + 0.06 * tl, POLE_L)
-        ik["orient.L"] = hand_or((0.15, -0.30 * tl, -0.95), (-0.90, 0.10, 0.0))
+        ik["hand.R"] = wr("R", -0.310, -0.185 - 0.020 * sw, 1.075 + 0.010 * abs(sw), POLE_R)
+        ik["orient.R"] = staff_or((0.14, 0.06 + 0.03 * sw, 0.99), K_G)
+        ik["hand.L"] = wr("L", 0.030 + 0.010 * sw, -0.220 - 0.015 * sw, 1.120 + 0.012 * abs(sw), POLE_L)
+        ik["orient.L"] = hand_or((-0.10, -0.70, 0.70), (-0.96, -0.05, 0.15))
         p["ik"] = ik
-        p["lamp"] = (-7.0 + 3.0 * math.sin(4 * math.pi * q), 2.0 * sw, 0.0)
+        p["lamp"] = (-8.0 + 3.0 * math.sin(4 * math.pi * q), 2.0 * sw, 0.0)
+        p["x_mantle_l"] = (-6.0, 0.0, 2.0)
+        p["x_mantle_r"] = (-6.0, 0.0, -2.0)
         return p
     out["run"] = anim.Clip("run", base_run.frames, True, run, meta=base_run.meta)
 
-    # attack1: a small lamp flick forward (the left hand flicks the light out)
-    w1 = guard_pose(torso=T(hips=(0, -6, 0), spine=(-2, -4, 0), chest=(-4, -6, 0), head=(-2, 4, 0)),
-                    R=(wr("R", -0.400, -0.060, 0.980, POLE_R), staff_or((0.18, 0.14, 0.97), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.000, -0.160, 1.020, POLE_L), hand_or((-0.2, -0.5, 0.85), (0.1, -0.6, 0.5))), lamp=(10, 0, 0))
-    h1 = guard_pose(torso=T(hips=(2, 6, 0), spine=(2, 4, 0), chest=(3, 6, 0), head=(-4, -4, 0)), hips=(0.0, -0.03, -0.040),
-                    R=(wr("R", -0.350, -0.280, 1.010, POLE_R), staff_or((0.22, -0.22, 0.95), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.020, -0.340, 1.060, POLE_L), hand_or((-0.1, -0.90, 0.40), (0.05, -0.45, -0.10))), lamp=(-14, 0, 0))
-    f1 = guard_pose(torso=T(hips=(3, 7, 0), spine=(3, 5, 0), chest=(4, 7, 0), head=(-5, -5, 0)), hips=(0.0, -0.035, -0.042),
-                    R=(wr("R", -0.345, -0.290, 1.005, POLE_R), staff_or((0.22, -0.20, 0.95), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.025, -0.350, 1.050, POLE_L), hand_or((-0.1, -0.90, 0.35), (0.05, -0.5, -0.15))), lamp=(6, 0, 0))
-    out["attack1"] = strike("attack1", 20, w1, h1, f1)
-    # crit: the same flick, bigger and with a step
-    wc = guard_pose(torso=T(hips=(-2, -10, 0), spine=(-4, -8, 0), chest=(-6, -10, 0), head=(-2, 6, 0)),
-                    R=(wr("R", -0.400, -0.040, 1.000, POLE_R), staff_or((0.15, 0.20, 0.97), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.010, -0.140, 1.060, POLE_L), hand_or((-0.2, -0.4, 0.9), (0.1, -0.6, 0.5))), lamp=(14, 0, 0))
-    hc = guard_pose(torso=T(hips=(5, 10, 0), spine=(4, 6, 0), chest=(4, 8, 0), head=(-6, -6, 0)), hips=(0.0, -0.07, -0.05),
-                    feet=(ft(dy=-0.16, side="L"), FR0),
-                    R=(wr("R", -0.330, -0.330, 1.040, POLE_R), staff_or((0.25, -0.32, 0.91), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.030, -0.370, 1.100, POLE_L), hand_or((-0.1, -0.85, 0.50), (0.05, -0.5, -0.10))), lamp=(-20, 0, 0))
-    fc = guard_pose(torso=T(hips=(6, 11, 0), spine=(5, 7, 0), chest=(5, 9, 0), head=(-7, -7, 0)), hips=(0.0, -0.075, -0.052),
-                    feet=(ft(dy=-0.16, side="L"), FR0),
-                    R=(wr("R", -0.325, -0.340, 1.035, POLE_R), staff_or((0.25, -0.30, 0.92), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.035, -0.380, 1.090, POLE_L), hand_or((-0.1, -0.85, 0.45), (0.05, -0.55, -0.15))), lamp=(8, 0, 0))
+    out["attack1"] = strike("attack1", 20, K["a1_w"], K["a1_h"], K["a1_f"])
+    # crit: the flick, bigger, with a step in
+    wc = anim.lerp_pose(G, K["a1_w"], 1.35)
+    hc = anim.lerp_pose(G, K["a1_h"], 1.25)
+    hc["ik"] = dict(hc["ik"])
+    hc["ik"]["foot.L"] = ft(dy=-0.16, side="L")
+    hc["hips_loc"] = (0.0, -0.07, -0.05)
+    fc = anim.lerp_pose(G, K["a1_f"], 1.25)
+    fc["ik"] = dict(fc["ik"])
+    fc["ik"]["foot.L"] = ft(dy=-0.16, side="L")
+    fc["hips_loc"] = (0.0, -0.075, -0.052)
     out["crit"] = strike("crit", 25, wc, hc, fc)
+    out["attack2"] = strike("attack2", 20, K["a2_w"], K["a2_h"], K["a2_f"])
 
-    # attack2: a hook-staff tap (the hook raised, then tapped down toward the target)
-    w2 = guard_pose(torso=T(hips=(-2, -4, 0), spine=(-4, -2, 0), chest=(-6, -3, 0), head=(-6, 0, 0)), hips=(0.0, 0.02, -0.02),
-                    R=(wr("R", -0.400, -0.080, 1.090, POLE_R), staff_or((0.15, 0.12, 0.98), (0.2, -0.98, 0))), lamp=(10, 0, 0))
-    h2 = guard_pose(torso=T(hips=(3, 4, 0), spine=(3, 3, 0), chest=(4, 4, 0), head=(-2, -2, 0)), hips=(0.0, -0.03, -0.045),
-                    R=(wr("R", -0.340, -0.300, 0.960, POLE_R), staff_or((0.22, -0.48, 0.85), (0.2, -0.98, 0))), lamp=(-18, 0, 0))
-    f2 = guard_pose(torso=T(hips=(4, 4, 0), spine=(4, 3, 0), chest=(5, 4, 0), head=(-3, -2, 0)), hips=(0.0, -0.035, -0.048),
-                    R=(wr("R", -0.338, -0.302, 0.955, POLE_R), staff_or((0.22, -0.44, 0.87), (0.2, -0.98, 0))), lamp=(6, 0, 0))
-    out["attack2"] = strike("attack2", 20, w2, h2, f2)
-
-    # cast_a1 Glint Bolt (25 f, impact f10): the staff thrust out at arm's length, the lamp at its end; the left hand
-    # flicks the shutter; held to f16, drawn back, guard by f25
-    wa = guard_pose(torso=T(hips=(-2, 14, 0), spine=(-3, 8, 0), chest=(-5, 10, 0), head=(-2, -14, 0)), hips=(0.0, 0.03, -0.03),
-                    R=(wr("R", -0.330, -0.060, 1.030, POLE_R), staff_or((0.10, 0.12, 0.99), (0.3, -0.95, 0))),
-                    L=(wr("L", 0.040, -0.220, 1.050, POLE_L), hand_or((-0.4, -0.6, 0.6), (0.1, -0.2, 1.0))), lamp=(10, 0, 0))
-    ha = guard_pose(torso=T(hips=(3, -12, 0), spine=(2, -7, 0), chest=(2, -9, 0), head=(-6, 10, 0)), hips=(0.0, -0.08, -0.05),
-                    feet=(ft(dy=-0.18, side="L", pitch=0.0), ft(dy=0.04, side="R")),
-                    R=(wr("R", -0.110, -0.410, 1.200, (-0.9, 0.3, -0.4)), staff_or((0.05, -0.72, 0.69), (0.45, -0.50, -0.73))),
-                    L=(wr("L", 0.060, -0.350, 1.170, POLE_L), hand_or((-0.2, -0.95, 0.10), (0.05, -0.30, -0.95))), lamp=(-12, 0, 0))
-    fa = guard_pose(torso=T(hips=(4, -13, 0), spine=(3, -8, 0), chest=(3, -10, 0), head=(-7, 11, 0)), hips=(0.0, -0.085, -0.052),
-                    feet=(ft(dy=-0.18, side="L"), ft(dy=0.04, side="R")),
-                    R=(wr("R", -0.110, -0.415, 1.195, (-0.9, 0.3, -0.4)), staff_or((0.05, -0.70, 0.71), (0.45, -0.50, -0.73))),
-                    L=(wr("L", 0.070, -0.330, 1.140, POLE_L), hand_or((-0.2, -0.9, 0.3), (0.05, -0.4, -0.9))), lamp=(4, 0, 0))
-    g = guard_pose()
-    hold_a = anim.lerp_pose(ha, fa, 0.6)
-    keys = [(0.0, g, "linear"), (0.08, anim.lerp_pose(g, wa, -0.1), "inout"), (0.24, wa, "inout"), (0.32, anim.lerp_pose(g, wa, 1.06), "out"),
-            (0.40, ha, "accel"), (0.50, anim.lerp_pose(ha, fa, 0.3), "out"), (0.64, hold_a, "inout"), (0.82, anim.lerp_pose(fa, g, 0.6), "inout"),
-            (1.0, g, "settle")]
+    # cast_a1 Glint Bolt (25 f, impact f10): wound in to f6, the thrust lands at f10 (one long arm, the lamp at its
+    # end), held to f16, drawn back, guard by f25
+    wa, ha, fa = K["c1_w"], K["c1_h"], K["c1_f"]
+    keys = [(0.0, g, "linear"), (0.08, anim.lerp_pose(g, wa, 0.5), "inout"), (0.24, wa, "inout"),
+            (0.40, ha, "accel"), (0.50, anim.lerp_pose(ha, fa, 0.4), "out"), (0.64, fa, "inout"),
+            (0.82, anim.lerp_pose(fa, g, 0.6), "inout"), (1.0, g, "settle")]
     out["cast_a1"] = keyed_clip("cast_a1", 25, keys, lags={"head": 1.5, "neck": 1.0}, impact=anim.IMPACT)
 
-    # cast_a2 Hung Lamp (30 f, impact f12): both arms rise (f0-f9), the hook traces a small arc, at f12 the lamp is
-    # lifted high toward the ally and the left hand opens upward (up means help); raised to f20, guard by f30
-    w2a = guard_pose(torso=T(hips=(-2, 4, 0), spine=(-4, 3, 0), chest=(-6, 4, 0), neck=(-4, 0, 0), head=(-8, -2, 0)), hips=(0, 0.01, -0.02),
-                     R=(wr("R", -0.300, -0.170, 1.260, POLE_R), staff_or((0.12, 0.02, 0.99), (0.30, -0.95, 0))),
-                     L=(wr("L", 0.070, -0.240, 1.150, POLE_L), hand_or((-0.3, -0.7, 0.65), (0.05, 0.1, 1.0))), lamp=(6, 2, 0))
-    h2a = guard_pose(torso=T(hips=(-1, -4, 0), spine=(-4, -3, 0), chest=(-8, -4, 0), neck=(-6, 0, 0), head=(-12, 3, 0)), hips=(0, -0.02, 0.0),
-                     feet=(ft(dy=-0.08, side="L", pitch=-6), ft(side="R", pitch=-10)),
-                     R=(wr("R", -0.260, -0.250, 1.430, (-0.9, 0.0, -0.3)), staff_or((0.12, -0.22, 0.97), (0.35, -0.90, -0.2))),
-                     L=(wr("L", 0.140, -0.200, 1.330, POLE_L), hand_or((-0.10, -0.35, 0.93), (0.1, 0.6, 0.8))), lamp=(-10, 3, 0))
-    f2a = guard_pose(torso=T(hips=(-1, -5, 0), spine=(-4, -4, 0), chest=(-8, -5, 0), neck=(-6, 0, 0), head=(-12, 4, 0)), hips=(0, -0.02, -0.003),
-                     feet=(ft(dy=-0.08, side="L", pitch=-6), ft(side="R", pitch=-8)),
-                     R=(wr("R", -0.265, -0.245, 1.410, (-0.9, 0.0, -0.3)), staff_or((0.12, -0.20, 0.97), (0.35, -0.90, -0.2))),
-                     L=(wr("L", 0.150, -0.180, 1.360, POLE_L), hand_or((-0.05, -0.30, 0.95), (0.1, 0.6, 0.8))), lamp=(4, 1, 0))
-    keys = [(0.0, g, "linear"), (0.07, anim.lerp_pose(g, w2a, -0.08), "inout"), (0.30, w2a, "inout"),
+    # cast_a2 Hung Lamp (30 f, impact f12): both arms rise (f0-f9), the right carries the lamp up and out before her,
+    # at f12 it is hung high and the left hand opens upward; raised to f20, guard by f30
+    w2a, h2a, f2a = K["c2_w"], K["c2_h"], K["c2_f"]
+    keys = [(0.0, g, "linear"), (0.07, anim.lerp_pose(g, w2a, 0.3), "inout"), (0.30, w2a, "inout"),
             (0.40, h2a, "accel"), (0.50, anim.lerp_pose(h2a, f2a, 0.4), "out"), (0.67, f2a, "inout"),
             (0.84, anim.lerp_pose(f2a, g, 0.65), "inout"), (1.0, g, "settle")]
     out["cast_a2"] = keyed_clip("cast_a2", 30, keys, lags={"head": 1.5, "neck": 1.0}, impact=anim.IMPACT)
 
-    # cast_a3 Dawnglass Shell (20 f, impact f8, castTime 0: 3 frames of anticipation): the lamp cupped at the chest,
-    # then both palms push out like opening a pane: arms wide, the bell opening; guard by f20
-    cup = guard_pose(torso=T(hips=(2, 0, 0), spine=(3, 0, 0), chest=(4, 0, 0), head=(4, 0, 0)), hips=(0, 0.0, -0.04),
-                     R=(wr("R", -0.130, -0.285, 0.950, POLE_R), staff_or((0.18, 0.10, 0.98), (0.55, -0.83, 0))),
-                     L=(wr("L", 0.070, -0.330, 1.070, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(3, 0, 0))
-    wide = guard_pose(torso=T(hips=(-2, 0, 0), spine=(-4, 0, 0), chest=(-7, 0, 0), neck=(-2, 0, 0), head=(-6, 0, 0)), hips=(0, 0.01, -0.02),
-                      feet=(ft(dx=0.02, side="L"), ft(dx=-0.02, side="R")),
-                      R=(wr("R", -0.420, -0.150, 1.030, (-0.6, 0.6, -0.5)), staff_or((-0.10, -0.05, 0.99), (0.30, -0.95, 0))),
-                      L=(wr("L", 0.430, -0.150, 1.050, (0.6, 0.6, -0.5)), hand_or((0.10, -0.15, 0.98), (0.75, -0.65, 0.0))), lamp=(-6, -10, 0))
-    wide2 = guard_pose(torso=T(hips=(-2, 0, 0), spine=(-4, 0, 0), chest=(-8, 0, 0), neck=(-2, 0, 0), head=(-7, 0, 0)), hips=(0, 0.01, -0.024),
-                       feet=(ft(dx=0.02, side="L"), ft(dx=-0.02, side="R")),
-                       R=(wr("R", -0.430, -0.140, 1.030, (-0.6, 0.6, -0.5)), staff_or((-0.10, -0.05, 0.99), (0.30, -0.95, 0))),
-                       L=(wr("L", 0.440, -0.140, 1.040, (0.6, 0.6, -0.5)), hand_or((0.12, -0.15, 0.98), (0.75, -0.65, 0.0))), lamp=(3, 4, 0))
-    keys = [(0.0, g, "linear"), (0.15, cup, "out"), (0.40, wide, "accel"), (0.55, wide2, "out"),
-            (0.78, anim.lerp_pose(wide2, g, 0.6), "inout"), (1.0, g, "settle")]
+    # cast_a3 Dawnglass Shell (20 f, impact f8, castTime 0: 3 frames of anticipation): cupped, then arms wide, palms
+    # out, the bell flared open; guard by f20
+    keys = [(0.0, g, "linear"), (0.15, K["c3_c"], "out"), (0.40, K["c3_h"], "accel"), (0.55, K["c3_f"], "out"),
+            (0.78, anim.lerp_pose(K["c3_f"], g, 0.6), "inout"), (1.0, g, "settle")]
     out["cast_a3"] = keyed_clip("cast_a3", 20, keys, lags={"head": 1.0}, impact=anim.IMPACT)
 
-    # cast_ult Every Window Lit (45 f, impact f18): staff and lamp raised overhead in both hands, up on her toes
-    # (f0-f12); the tip circles (f12-f18); at f18 the lamp flares, arms wide, the lamp a star over her head; held to
-    # f30, rest by f45
-    toes = (ft(side="L", pitch=-16, dz=0.0), ft(side="R", pitch=-16, dz=0.0))
-    gat = guard_pose(torso=T(hips=(6, 0, 0), spine=(6, 0, 0), chest=(6, 0, 0), neck=(4, 0, 0), head=(8, 0, 0)), hips=(0, 0.01, -0.07),
-                     R=(wr("R", -0.110, -0.230, 0.900, POLE_R), staff_or((0.10, 0.10, 0.99), (0.5, -0.86, 0))),
-                     L=(wr("L", 0.060, -0.250, 0.940, POLE_L), hand_or((-0.4, -0.8, 0.3), (0.05, 0.12, 1.0))), lamp=(4, 0, 0))
-
+    # cast_ult Every Window Lit (45 f, impact f18): gathered (f3), both hands overhead on her toes (f12), the tip
+    # circles (f12-f17), at f18 the arms open wide with the lamp high (the bloom); held to f30, rest by f45
     def raise_(phi, w=1.0):
+        r = K["u_raise"]
         a = math.radians(phi)
-        u = (0.20 * math.sin(a) * w, -0.20 * math.cos(a) * w, 0.98)
-        return guard_pose(torso=T(hips=(-3, 0, 0), spine=(-5, 0, 0), chest=(-8, 0, 0), neck=(-6, 0, 0), head=(-14, 0, 0)),
-                          hips=(0, 0.0, 0.035), feet=toes,
-                          R=(wr("R", -0.250, -0.170, 1.430, (-0.9, 0.0, -0.2)), staff_or(u, (0.3, -0.95, 0))),
-                          L=(wr("L", -0.020, -0.180, 1.420, (0.9, 0.0, -0.2)), hand_or((-0.3, -0.2, 0.93), (-0.95, -0.15, 0.1))),
-                          lamp=(-6 * math.cos(a) * w, 6 * math.sin(a) * w, 0))
-    star = guard_pose(torso=T(hips=(-3, 0, 0), spine=(-6, 0, 0), chest=(-10, 0, 0), neck=(-6, 0, 0), head=(-16, 0, 0)), hips=(0, 0.0, 0.032),
-                      feet=toes, R=(wr("R", -0.290, -0.140, 1.450, (-0.8, 0.2, -0.2)), staff_or((-0.06, -0.10, 0.99), (0.35, -0.94, 0))),
-                      L=(wr("L", 0.420, -0.110, 1.270, (0.7, 0.4, -0.4)), hand_or((0.6, -0.2, 0.75), (0.55, -0.6, -0.55))), lamp=(-4, -4, 0))
-    star2 = guard_pose(torso=T(hips=(-3, 0, 0), spine=(-6, 0, 0), chest=(-10, 0, 0), neck=(-6, 0, 0), head=(-15, 0, 0)), hips=(0, 0.0, 0.028),
-                       feet=toes, R=(wr("R", -0.295, -0.140, 1.440, (-0.8, 0.2, -0.2)), staff_or((-0.06, -0.10, 0.99), (0.35, -0.94, 0))),
-                       L=(wr("L", 0.425, -0.110, 1.260, (0.7, 0.4, -0.4)), hand_or((0.6, -0.2, 0.75), (0.55, -0.6, -0.55))), lamp=(2, 2, 0))
-    keys = [(0.0, g, "linear"), (0.07, gat, "inout"), (0.27, raise_(0.0), "inout"), (0.31, raise_(90.0), "linear"),
-            (0.35, raise_(180.0), "linear"), (0.38, raise_(270.0, 0.6), "linear"), (0.40, star, "out"), (0.50, star2, "out"),
-            (0.667, star2, "linear"), (0.85, anim.lerp_pose(star2, g, 0.7), "inout"), (1.0, g, "settle")]
+        p = dict(r)
+        p["ik"] = dict(r["ik"])
+        p["ik"]["orient.R"] = staff_or((0.22 + 0.10 * math.sin(a) * w, -0.08 - 0.10 * math.cos(a) * w, 0.97), (0.45, -0.89, 0.0))
+        p["lamp"] = (-6 * math.cos(a) * w, 6 * math.sin(a) * w, 0)
+        return p
+    keys = [(0.0, g, "linear"), (0.07, K["u_gat"], "inout"), (0.27, raise_(0.0), "inout"), (0.31, raise_(90.0), "linear"),
+            (0.35, raise_(180.0), "linear"), (0.38, raise_(270.0, 0.6), "linear"), (0.40, K["u_star"], "out"),
+            (0.50, K["u_star2"], "out"), (0.667, K["u_star2"], "linear"), (0.85, anim.lerp_pose(K["u_star2"], g, 0.7), "inout"),
+            (1.0, g, "settle")]
     base_u = anim.keyed(keys)
 
     def ult(t):
@@ -1703,37 +1808,36 @@ def clip_overrides(ctx) -> dict:
         return p
     out["cast_ult"] = anim.Clip("cast_ult", 45, False, anim.drag(ult, 45, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
 
-    # death (50 f): a stagger, the knees give, she sets the lamp down beside her (the staff's foot on the ground, the
-    # lamp still upright and lit) and folds over her knees to the ground
+    # death (50 f): a stagger, the knees give, she lays the staff down before her so the lamp comes to rest upright on
+    # the ground (held there a beat), then bows over it, head down over her knees (the chimney forward, not sideways)
     hip_h = LAY["hip"][2]
     kneel_feet = (anim.FootTarget((0.03, 0.30, 0.055), -62.0, 4.0), anim.FootTarget((-0.03, 0.31, 0.055), -62.0, -6.0))
     recoil = guard_pose(torso=T(hips=(-5, 6, 0), spine=(-8, 2, 0), chest=(-12, 4, 0), neck=(-8, 0, 0), head=(-16, 6, 0)), hips=(0, 0.05, -0.02),
-                        R=(wr("R", -0.300, -0.220, 0.990, POLE_R), staff_or((0.15, 0.04, 0.99), (0.3, -0.95, 0))),
-                        L=(wr("L", 0.060, -0.140, 1.060, POLE_L), hand_or((-0.6, -0.3, 0.7), (-0.2, 0.9, 0.2))), lamp=(10, -4, 0))
+                        R=(wr("R", -0.300, -0.200, 1.040, POLE_R), staff_or((0.15, 0.04, 0.99), K_G)),
+                        L=(wr("L", 0.080, -0.140, 1.060, POLE_L), hand_or((-0.6, -0.3, 0.7), (-0.2, 0.9, 0.2))), lamp=(10, -4, 0),
+                        **mant(6.0))
     buckle = pose(torso=dict(hips=(6, 4, 0), spine=(8, 0, 0), chest=(8, 0, 0), neck=(6, 0, 0), head=(12, 4, 0)),
                   hips=(0.0, 0.10, -hip_h * 0.40), feet=kneel_feet,
-                  R=(wabs(-0.200, -0.300, 0.620, POLE_R), staff_or((-0.05, -0.15, 0.99), (0.3, -0.95, 0), world=True)),
+                  R=(wabs(-0.220, -0.300, 0.640, POLE_R), staff_or((0.10, -0.30, 0.95), K_G, world=True)),
                   L=(wabs(0.120, -0.200, 0.640, POLE_L), hand_or((-0.3, -0.6, -0.7), (0.1, 0.6, -0.8), world=True)), lamp=(-6, 4, 0))
-    setdown = pose(torso=dict(hips=(10, 2, 0), spine=(16, 0, 0), chest=(16, 0, 0), neck=(10, 0, 0), head=(16, 4, 0)),
+    setdown = pose(torso=dict(hips=(12, 2, 0), spine=(18, 0, 0), chest=(16, 0, 0), neck=(8, 0, 0), head=(14, 2, 0)),
                    hips=(0.0, 0.12, -hip_h * 0.44), feet=kneel_feet,
-                   R=(wabs(-0.240, -0.380, 0.340, POLE_R), staff_or((-0.08, 0.10, 0.99), (0.25, -0.97, 0), world=True)),
-                   L=(wabs(0.120, -0.330, 0.200, POLE_L), hand_or((0.0, -0.8, -0.6), (0.0, 0.5, -0.86), world=True)), lamp=(0, 0, 0))
-    fold = pose(torso=dict(hips=(14, 2, -4), spine=(26, 2, -6), chest=(28, 0, -6), neck=(16, 0, 0), head=(22, 10, 0)),
+                   R=(wabs(-0.200, -0.300, 0.300, POLE_R), staff_or((0.05, -0.90, 0.43), (0.0, -0.43, -0.90), world=True)),
+                   L=(wabs(0.100, -0.320, 0.200, POLE_L), hand_or((0.0, -0.8, -0.6), (0.0, 0.5, -0.86), world=True)), lamp=(0, 0, 0))
+    fold = pose(torso=dict(hips=(16, 0, 0), spine=(28, 0, 0), chest=(26, 0, 0), neck=(14, 0, 0), head=(16, 0, 0)),
                 hips=(0.0, 0.14, -hip_h * 0.52), feet=kneel_feet,
-                R=(wabs(-0.250, -0.400, 0.300, POLE_R), staff_or((-0.10, 0.12, 0.99), (0.25, -0.97, 0), world=True)),
-                L=(wabs(0.140, -0.420, 0.060, POLE_L), hand_or((0.1, -0.95, -0.2), (0.0, 0.2, -0.98), world=True)), lamp=(0, 0, 0))
-    rest = pose(torso=dict(hips=(15, 2, -4), spine=(30, 2, -6), chest=(30, 0, -6), neck=(18, 0, 0), head=(26, 12, 0)),
+                R=(wabs(-0.210, -0.310, 0.260, POLE_R), staff_or((0.05, -0.92, 0.39), (0.0, -0.39, -0.92), world=True)),
+                L=(wabs(0.140, -0.400, 0.060, POLE_L), hand_or((0.1, -0.95, -0.2), (0.0, 0.2, -0.98), world=True)), lamp=(0, 0, 0))
+    rest = pose(torso=dict(hips=(17, 0, 0), spine=(30, 0, 0), chest=(28, 0, 0), neck=(16, 0, 0), head=(20, 0, 0)),
                 hips=(0.0, 0.14, -hip_h * 0.53), feet=kneel_feet,
-                R=(wabs(-0.250, -0.405, 0.290, POLE_R), staff_or((-0.10, 0.12, 0.99), (0.25, -0.97, 0), world=True)),
+                R=(wabs(-0.210, -0.315, 0.250, POLE_R), staff_or((0.05, -0.92, 0.39), (0.0, -0.39, -0.92), world=True)),
                 L=(wabs(0.145, -0.430, 0.045, POLE_L), hand_or((0.1, -0.95, -0.2), (0.0, 0.2, -0.98), world=True)), lamp=(0, 0, 0))
-    keys = [(0.0, g, "linear"), (0.12, recoil, "snap"), (0.36, buckle, "inout"), (0.58, setdown, "inout"),
-            (0.80, fold, "in"), (0.88, anim.lerp_pose(fold, rest, 1.4), "out"), (1.0, rest, "settle")]
+    keys = [(0.0, g, "linear"), (0.12, recoil, "snap"), (0.34, buckle, "inout"), (0.54, setdown, "inout"), (0.68, setdown, "linear"),
+            (0.84, fold, "in"), (0.91, anim.lerp_pose(fold, rest, 1.4), "out"), (1.0, rest, "settle")]
     out["death"] = keyed_clip("death", 50, keys, lags={"head": 2.0, "neck": 1.0})
 
     # recall (60 f loop): she cups the lamp and bows over it
-    rc = guard_pose(torso=T(hips=(3, 0, 0), spine=(5, 0, 0), chest=(6, 0, 0), neck=(6, 0, 0), head=(12, 0, 0)), hips=(0, 0.01, -0.05),
-                    R=(wr("R", -0.130, -0.300, 0.930, POLE_R), staff_or((0.16, 0.10, 0.98), (0.55, -0.83, 0))),
-                    L=(wr("L", 0.065, -0.345, 1.060, POLE_L), hand_or((-0.15, -0.80, 0.55), (-0.95, -0.10, 0.20))), lamp=(2, 0, 0))
+    rc = K["rc"]
 
     def recall(t):
         b = osc(t, 2)
@@ -1743,24 +1847,26 @@ def clip_overrides(ctx) -> dict:
         return p
     out["recall"] = anim.Clip("recall", 60, True, recall)
 
-    # idle_lobby (120 f loop, first = last): she tends the lamp: the cap lifted, the wick trimmed with two fingers, the
-    # lamp cupped against a draught, then she peers at the light, head tilted; a gentle side-to-side sway
-    lb = guard_pose(torso=T(hips=(1, -2, 0), spine=(2, 2, 0), chest=(3, 4, 0), neck=(2, 0, 0), head=(4, 4, 0)), hips=(0, 0.01, -0.024),
-                    R=(wr("R", -0.130, -0.300, 0.900, POLE_R), staff_or((0.16, 0.06, 0.98), (0.55, -0.83, 0))))
-    L_cap = (wr("L", 0.040, -0.360, 1.220, POLE_L), hand_or((-0.30, -0.40, -0.86), (0.0, 0.1, -1.0)))
-    L_trim = (wr("L", 0.060, -0.320, 1.140, POLE_L), hand_or((-0.55, -0.80, -0.10), (0.1, -0.1, -1.0)))
-    L_cup = (wr("L", 0.075, -0.340, 1.090, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20)))
+    # idle_lobby (120 f loop, first = last): she tends the lamp in four beats: draws it in and lifts the cap (the left
+    # fingers at its top), trims the wick (small pinches), cups it against a draught (turned from it, the panels
+    # stirring), then lifts it to her face and peers at the light, the visor tilted; a side-to-side sway throughout
+    lb, lb_up = K["lb"], K["lb_up"]
     L_low = G_L
-    lob = [(0.0, lb, L_low, (0, 0, 0), 0.0), (0.16, lb, L_cap, (2, 0, 0), 4.0), (0.30, lb, L_cap, (0, 0, 0), 6.0),
-           (0.42, lb, L_trim, (-2, 0, 0), 10.0), (0.55, lb, L_trim, (1, 0, 0), 12.0), (0.66, lb, L_cup, (0, 0, 0), 8.0),
-           (0.82, lb, L_cup, (0, -2, 0), -14.0), (1.0, lb, L_low, (0, 0, 0), 0.0)]
+    L_cap = (wr("L", 0.020, -0.290, 1.200, POLE_L), hand_or((-0.30, -0.40, -0.86), (0.0, 0.1, -1.0)))
+    L_trim = (wr("L", 0.010, -0.300, 1.170, POLE_L), hand_or((-0.55, -0.80, -0.10), (0.1, -0.1, -1.0)))
+    L_cup = (wr("L", 0.030, -0.280, 1.100, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20)))
+    L_rest = (wr("L", 0.190, -0.120, 0.930, POLE_L), hand_or((0.10, -0.30, -0.95), (0.90, 0.20, 0.10)))
+    lob = [(0.00, lb, L_low, (0, 0, 0), 0.0, 0.0), (0.12, lb, L_cap, (2, 0, 0), 4.0, 6.0), (0.26, lb, L_cap, (-2, 0, 0), 6.0, 8.0),
+           (0.38, lb, L_trim, (-3, 0, 0), 10.0, 12.0), (0.50, lb, L_trim, (2, 0, 0), 12.0, 12.0),
+           (0.60, lb, L_cup, (0, 4, 0), -6.0, 4.0), (0.70, lb_up, L_rest, (-2, -3, 0), -16.0, 10.0),
+           (0.84, lb_up, L_rest, (2, 2, 0), -18.0, 12.0), (1.00, lb, L_low, (0, 0, 0), 0.0, 0.0)]
     lkeys = []
-    for t0, base, L, lamp, tilt in lob:
+    for t0, base, L, lamp, tilt, nod in lob:
         p = dict(base)
         p["ik"] = dict(base["ik"])
         p["ik"]["hand.L"], p["ik"]["orient.L"] = L
         p["lamp"] = lamp
-        p = add(p, P_(head=(6 if abs(tilt) > 9 else 3, -tilt * 0.4, tilt)))
+        p = add(p, P_(head=(nod, -tilt * 0.5, tilt), neck=(nod * 0.3, 0, tilt * 0.3)))
         lkeys.append((t0, p, "inout"))
     lob_fn = anim.keyed(lkeys)
 
@@ -1768,19 +1874,17 @@ def clip_overrides(ctx) -> dict:
         p = lob_fn(t)
         s = osc(t, 2)
         b = osc(t, 4)
-        p = add(p, P_(hips=(0, 1.5 * s, -2.5 * s), spine=(0.5 * b, -1.0 * s, 1.5 * s), chest=(1.0 * b, 0, 1.0 * s)))
+        trim = math.sin(2 * math.pi * 6 * t) * ss(0.36, 0.40, t) * ss(0.54, 0.50, t)
+        p = add(p, P_(hips=(0, 3.0 * s, -3.5 * s), spine=(0.8 * b, -1.5 * s, 2.0 * s), chest=(1.2 * b, -1.0 * s, 1.5 * s),
+                      x_mantle_l=(1.5 * s, 0, 2.0 + 2.0 * s), x_mantle_r=(-1.5 * s, 0, -2.0 + 2.0 * s)))
+        p = _nudge(p, (0, 0, 0), (0.0, 0.0, 0.012 * trim))
         hx, hy, hz = p["hips_loc"]
-        p["hips_loc"] = (hx + 0.016 * s, hy, hz - 0.004 * abs(s))
+        p["hips_loc"] = (hx + 0.026 * s, hy, hz - 0.006 * abs(s))
         return p
     out["idle_lobby"] = anim.Clip("idle_lobby", 120, True, lobby)
 
-    # victory (60 f, held): the lamp held out at arm's length toward the camera, the other hand over her chest, a
-    # slight bow; the final hold: the lamp out, the head bowed 10 degrees
-    vc = guard_pose(torso=T(hips=(4, 0, 0), spine=(4, 0, 0), chest=(4, 0, 0), head=(6, 0, 0)), hips=(0, 0.01, -0.05))
-    vu = guard_pose(torso=T(hips=(3, 8, 0), spine=(5, 6, 0), chest=(6, 8, 0), neck=(2, -4, 0), head=(10, -6, 4)), hips=(0, -0.01, -0.035),
-                    feet=(ft(dy=-0.06, side="L"), FR0),
-                    R=(wr("R", -0.320, -0.370, 0.900, (-0.9, 0.2, -0.4)), staff_or((0.12, -0.38, 0.92), (0.45, -0.85, -0.2))),
-                    L=(wr("L", 0.035, -0.150, 1.040, POLE_L), hand_or((-0.85, -0.25, 0.45), (0.0, 0.95, 0.1))), lamp=(-8, 0, 0))
+    # victory (60 f, held): the lamp held out at arm's length toward the camera, the left hand over her chest, a bow
+    vc, vu = K["v_c"], K["v_up"]
     vu2 = anim.lerp_pose(vu, vu, 1.0)
     vu2["lamp"] = (0, 0, 0)
     vbase = anim.keyed([(0.0, g, "linear"), (0.18, vc, "inout"), (0.42, vu, "back"), (0.62, vu2, "inout"), (1.0, vu2, "linear")])
@@ -1795,17 +1899,9 @@ def clip_overrides(ctx) -> dict:
         return p
     out["victory"] = anim.Clip("victory", 60, False, victory)
 
-    # dash (15 f): a quick glide, the lamp drawn in, leaning into it
-    dl = guard_pose(torso=T(hips=(14, 0, 0), spine=(8, 0, 0), chest=(6, 0, 0), neck=(-10, 0, 0), head=(-10, 0, 0)), hips=(0, -0.05, -0.07),
-                    feet=(ft(dy=-0.26, dz=0.05, pitch=10, side="L"), ft(dy=0.26, dz=0.02, pitch=-26, side="R")),
-                    R=(wr("R", -0.380, -0.200, 0.990, POLE_R), staff_or((0.16, 0.10, 0.98), (0.2, -0.98, 0))),
-                    L=(wr("L", 0.200, -0.120, 0.900, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(-14, 0, 0))
-    out["dash"] = keyed_clip("dash", 15, [(0.0, g, "linear"), (0.3, dl, "snap"), (0.75, dl, "linear"), (1.0, g, "inout")])
+    out["dash"] = keyed_clip("dash", 15, [(0.0, g, "linear"), (0.3, K["dl"], "snap"), (0.75, K["dl"], "linear"), (1.0, g, "inout")])
 
-    # stunned (40 f loop): the lamp clutched to her chest, the head reeling
-    sl = guard_pose(torso=T(hips=(3, 0, 0), spine=(6, 0, 0), chest=(6, 0, 0), neck=(6, 0, 0), head=(10, 0, 0)), hips=(0, 0.01, -0.06),
-                    R=(wr("R", -0.130, -0.290, 0.920, POLE_R), staff_or((0.20, 0.10, 0.97), (0.55, -0.83, 0))),
-                    L=(wr("L", 0.065, -0.330, 1.030, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(4, 0, 0))
+    sl = K["st"]
 
     def stunned(t):
         a, b = osc(t, 1), osc(t, 1, 0.25)
@@ -1815,22 +1911,15 @@ def clip_overrides(ctx) -> dict:
         return p
     out["stunned"] = anim.Clip("stunned", 40, True, stunned)
 
-    # channel (40 f loop): the lamp held up before her face
-    ch = guard_pose(torso=T(hips=(0, 0, 0), spine=(-2, 0, 0), chest=(-3, 0, 0), head=(-4, 0, 0)),
-                    R=(wr("R", -0.150, -0.320, 1.100, POLE_R), staff_or((0.14, -0.02, 0.99), (0.55, -0.83, 0))),
-                    L=(wr("L", 0.070, -0.360, 1.180, POLE_L), hand_or((-0.10, -0.80, 0.60), (-0.95, -0.10, 0.20))), lamp=(0, 0, 0))
+    chp = K["ch"]
 
     def channel(t):
-        p = add(ch, P_(chest=(1.2 * osc(t, 2), 0, 0), head=(-0.8 * osc(t, 2), 0, 0)))
+        p = add(chp, P_(chest=(1.2 * osc(t, 2), 0, 0), head=(-0.8 * osc(t, 2), 0, 0)))
         p["lamp"] = (2 * osc(t, 1), 1.5 * osc(t, 1, 0.3), 0)
         return p
     out["channel"] = anim.Clip("channel", 40, True, channel)
 
-    # taunt (40 f): the lamp raised, the chimney tilted to it
-    tu = guard_pose(torso=T(hips=(0, 4, 0), spine=(-2, 4, 0), chest=(-4, 6, 0), neck=(0, -6, 10), head=(-6, -10, 16)),
-                    R=(wr("R", -0.150, -0.220, 1.300, (-0.9, 0.1, -0.3)), staff_or((0.18, -0.10, 0.98), (0.55, -0.83, 0))),
-                    L=(wr("L", 0.120, -0.120, 0.960, POLE_L), hand_or((-0.2, -0.3, -0.93), (0.95, 0.1, 0.1))), lamp=(-4, 3, 0))
-    out["taunt"] = keyed_clip("taunt", 40, [(0.0, g, "linear"), (0.30, tu, "back"), (0.75, tu, "linear"), (1.0, g, "inout")],
+    out["taunt"] = keyed_clip("taunt", 40, [(0.0, g, "linear"), (0.30, K["tu"], "back"), (0.75, K["tu"], "linear"), (1.0, g, "inout")],
                               lags={"head": 2.0})
     return out
 

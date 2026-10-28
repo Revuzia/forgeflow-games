@@ -3,9 +3,7 @@
   "fighter": "ilsheta",
   "skin": false,
   "parts": {
-    "tris_chimney": 1300,
-    "tris_collar": 450,
-    "tris_mask": 1000,
+    "tris_chimney": 2000,
     "tris_hood": 2000,
     "tris_neck": 250,
     "tris_scarf": 1450,
@@ -18,24 +16,24 @@
     "tris_boots": 1198,
     "tris_hand_L": 650,
     "tris_hand_R": 650,
-    "tris_staff": 1100,
-    "tris_lamp_stone": 650,
-    "tris_lamp_glass": 420,
-    "tris_flame": 260,
-    "validate_ilsheta": "18438->18432"
+    "tris_staff": 1150,
+    "tris_lamp_stone": 700,
+    "tris_lamp_glass": 640,
+    "tris_flame": 300,
+    "validate_ilsheta": "18008->18004"
   },
-  "uv_coverage": 0.635,
+  "uv_coverage": 0.646,
   "bake": {
-    "base": 3.33,
-    "rough_metal": 3.47,
-    "normal": 1.88,
-    "ao": 2.48,
-    "normal_fixed_px": 17111,
-    "projection": 14.99,
-    "pack_save": 15.15,
-    "total": 26.48
+    "base": 3.49,
+    "rough_metal": 2.18,
+    "normal": 1.7,
+    "ao": 2.89,
+    "normal_fixed_px": 15817,
+    "projection": 13.91,
+    "pack_save": 14.06,
+    "total": 24.54
   },
-  "tris": 18692,
+  "tris": 18304,
   "mesh_top_m": 1.722,
   "clips": {
     "idle": {
@@ -144,23 +142,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2669876,
+  "glb_bytes_raw": 2671704,
   "optimize": {
     "ok": true,
-    "before": 2669876,
-    "after": 1097048
+    "before": 2671704,
+    "after": 1092872
   },
-  "glb_bytes": 1097048,
+  "glb_bytes": 1092872,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta.glb (1071 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_base 2048x2048 275K, ilsheta_normal 512x512 31K, ilsheta_orm 512x512 58K",
-      "  skinned meshes: ilsheta(15249v), ilsheta_accent(132v)",
-      "  bones: 26 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:0.667s/19tr, attack2:0.667s/19tr, cast_a1:0.833s/19tr, cast_a2:1.000s/21tr, cast_a3:0.667s/19tr, cast_ult:1.500s/21tr, channel:1.333s/18tr, crit:0.833s/19tr, dash:0.500s/20tr, death:1.667s/21tr, idle:2.400s/21tr, idle_lobby:4.000s/19tr, recall:2.000s/19tr, run:0.533s/23tr, stunned:1.333s/19tr, taunt:1.333s/19tr, victory:2.000s/19tr",
-      "  tracks checked: 335; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 18692; bind-pose bounds (three units, Y up): 0.98 x 1.72 x 0.67; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta.glb (1067 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ilsheta_base 2048x2048 256K, ilsheta_normal 512x512 32K, ilsheta_orm 512x512 57K",
+      "  skinned meshes: ilsheta(14958v), ilsheta_accent(152v)",
+      "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.667s/21tr, attack2:0.667s/21tr, cast_a1:0.833s/21tr, cast_a2:1.000s/23tr, cast_a3:0.667s/21tr, cast_ult:1.500s/23tr, channel:1.333s/20tr, crit:0.833s/21tr, dash:0.500s/22tr, death:1.667s/23tr, idle:2.400s/23tr, idle_lobby:4.000s/21tr, recall:2.000s/21tr, run:0.533s/25tr, stunned:1.333s/21tr, taunt:1.333s/21tr, victory:2.000s/21tr",
+      "  tracks checked: 369; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 18304; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
       "  run: 16 f, planted samples 2, max foot-speed error 0.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -173,10 +171,10 @@
       "turntable": "art/renders/fighters/ilsheta/turntable.png"
     },
     "seconds": {
-      "splash": 6.76,
-      "portrait": 2.55,
-      "icon": 0.89,
-      "turntable": 3.88
+      "splash": 7.57,
+      "portrait": 5.3,
+      "icon": 0.92,
+      "turntable": 4.74
     }
   },
   "three_qa": {
@@ -184,14 +182,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.479,
+        -0.498,
         0,
         -0.378
       ],
       [
-        0.498,
+        0.502,
         1.722,
-        0.295
+        0.323
       ]
     ],
     "facing": [
@@ -199,8 +197,8 @@
       1
     ],
     "headY": 1.238,
-    "accentPct": 1.61,
-    "accentTopHalfPct": 55.5,
+    "accentPct": 1.55,
+    "accentTopHalfPct": 78.7,
     "heightPx1080": 91,
     "size": [
       2400,
@@ -208,27 +206,27 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/ilsheta/three_ilsheta.png",
-    "seconds": 10.6,
+    "seconds": 7.2,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/ilsheta/three_clips_ilsheta.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.1,
-      "model": 2.03,
-      "lows_bind": 2.78,
-      "uv": 6.44,
-      "bake": 26.48,
-      "clips": 0.1,
-      "export": 0.87,
-      "optimize": 0.69,
-      "load_test": 0.14,
-      "render": 14.14,
-      "three_qa": 25.25,
-      "cache": 0.09
+      "materials": 0.18,
+      "model": 3.95,
+      "lows_bind": 6.34,
+      "uv": 9.93,
+      "bake": 24.54,
+      "clips": 0.12,
+      "export": 1.08,
+      "optimize": 0.58,
+      "load_test": 0.12,
+      "render": 18.59,
+      "three_qa": 34.35,
+      "cache": 0.24
     },
-    "total_s": 79.15
+    "total_s": 100.07
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47
