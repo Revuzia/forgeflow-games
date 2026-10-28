@@ -275,3 +275,28 @@ test('a save in the dust bowl loads and runs on alike (thirsty bodies searching 
   }
   assert.ok(n > 0);
 });
+
+test('the search for water on foot stops at the walk a body will risk, and the answer does not depend on who searched first', () => {
+  const { sim, town, dry } = dustBowlStart(11);
+  for (let h = 0; h < 30; h++) { dry(sim); sim.step(60); }
+  const a = sim, b = Sim.load(sim.save());
+  const p = a.u.planets[0], q = b.u.planets[0];
+  // cells of the dried village and around it (the parched search from where they stand)
+  const cells = p.cellsNear(town.pos.slice(), 1200).filter((c) => !p.s.ocean[c]).slice(0, 40);
+  assert.ok(cells.length >= 20);
+  const pick = (r: { drink: number; drinkCost: number; soak: number; soakCost: number }, budget: number) =>
+    [r.drink >= 0 && r.drinkCost <= budget ? r.drink : -1, r.soak >= 0 && r.soakCost <= budget ? r.soak : -1];
+  let found = 0;
+  for (const c of cells) {
+    // world a: a townsman's short search first, then a parched band member's long one; world b: the other way round
+    const xa = ctx(a), xb = ctx(b);
+    const aShort = waterOnFoot(xa, town.species, c, true, 600), aLong = waterOnFoot(xa, town.species, c, true, 3000);
+    const bLong = waterOnFoot(xb, town.species, c, true, 3000), bShort = waterOnFoot(xb, town.species, c, true, 600);
+    assert.ok(aShort.drink < 0 || aShort.drinkCost <= 600, `the short search stops at its budget (cell ${c}: ${aShort.drinkCost})`);
+    assert.deepEqual(pick(bShort, 600), pick(aShort, 600), `cell ${c}: the same water within 600 whoever searched first`);
+    assert.deepEqual(pick(bLong, 3000), pick(aLong, 3000), `cell ${c}: the same water within 3000 whoever searched first`);
+    if (pick(aLong, 3000)[0] >= 0 || pick(aLong, 3000)[1] >= 0) found++;
+  }
+  assert.ok(found > 0, 'some water or soak is found within two days\' walk');
+  assert.equal(b.hash(), a.hash(), 'searching changes nothing in the world');
+});
