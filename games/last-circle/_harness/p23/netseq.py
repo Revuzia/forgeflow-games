@@ -115,6 +115,11 @@ def host_wait_rates(trace):
     return fps, rate
 
 
+GUARD_JS = r"""(ids) => { const W = window.__LC__.W, k = W.kernel;
+  const g = () => { for (const id of ids) { const a = W.actorById.get(id); if (a && a.alive && !a.downed) { a.hp = Math.max(a.hp, 100); a.shield = Math.max(a.shield || 0, 100); } } };
+  k._updaters.push(g); return ids.filter((id) => { const a = W.actorById.get(id); return a && a.alive; }); }"""
+
+
 def rejoin_setup_miss(trace):
     """a rejoin that missed because the HARNESS never let the host run (D16): the host page drew fewer than WAIT_FPS_MIN frames per wall second
     across the wait (a stalled / starved tab cannot run its watchdog, so it can never see the old page leave). The host is the background page
@@ -140,18 +145,33 @@ def settle(gpg, h_id, ms=6000):
     return gpg.evaluate(SETTLE_JS, [h_id, ms])
 
 
+# which page is in FRONT during a tracked walk. Fix round 2: with the walker (host) in front, the observing guest ran at its background rate and
+# its copy of the host trailed the newest target by metres (base: 8.75-9.37 m of progress on the copy in 4 s while the host walked ~18 m), so
+# a stale target still lay AHEAD of the drawn copy and no injection could pull it back (0.0 m on the base at 600 ms and after-2-newer).
+# The OBSERVER in front draws every target it applies; the walker keeps walking at its background rate (keys reach a background page).
+OBSERVER_FRONT = True
+
+
 def walk_and_track(hpg, gpg, h_id, ms=3000):
     yaw = hpg.evaluate("() => window.__LC__.W.player.input.yaw")
     import math
     dx, dz = -math.sin(yaw), -math.cos(yaw)
+    fjs = "() => window.__LC__.W.kernel.frameNo"
+    (gpg if OBSERVER_FRONT else hpg).bring_to_front()
+    f0 = (time.time(), hpg.evaluate(fjs), gpg.evaluate(fjs))
     hpg.keyboard.down("KeyW")
     tr = gpg.evaluate(TRACK_JS, [h_id, ms, dx, dz])
     hpg.keyboard.up("KeyW")
+    f1 = (time.time(), hpg.evaluate(fjs), gpg.evaluate(fjs))
+    own = hpg.evaluate("([dx, dz]) => { const p = window.__LC__.W.player.pos; return p.x * dx + p.z * dz; }", [dx, dz])
+    dt = max(0.001, f1[0] - f0[0])
     steps = [tr[i - 1] - tr[i] for i in range(1, len(tr))]
     back = max(steps, default=None)
     at = steps.index(back) + 1 if steps else None
     return {"samples": len(tr), "progress": round(tr[-1] - tr[0], 2) if tr else None, "maxBackM": round(back, 3) if back is not None else None,
-            "backSteps>0.05": sum(1 for x in steps if x > 0.05), "atSample": at, "around": tr[max(0, (at or 0) - 4):(at or 0) + 3] if at else None}
+            "backSteps>0.05": sum(1 for x in steps if x > 0.05), "atSample": at, "around": tr[max(0, (at or 0) - 4):(at or 0) + 3] if at else None,
+            "front": "guest" if OBSERVER_FRONT else "host", "hostFps": round((f1[1] - f0[1]) / dt, 1), "guestFps": round((f1[2] - f0[2]) / dt, 1),
+            "copyLagM": round(own - tr[-1], 2) if tr else None}
 
 
 def main():
@@ -183,6 +203,11 @@ def main():
             if not rates["ok"]:
                 v.cnj("pair (the host's match clock >= %.1f x real time, the guest >= %d fps)" % (L.SIM_RATE_MIN, L.PAIR_FPS_MIN), "SETUP missed: the box is starved - %s" % rates)
                 return
+            # SETUP ONLY (release prep): the host tops up both players' hp / shield every frame (p23lib.guard_ids' updater, on the host page,
+            # where both bodies are simulated). Without it a bot could kill the idle guest's body during the walks: then there is no one to
+            # rejoin as (p23_netseq_20261027_192100: s1 dead on the host before the close, rejoin record gone, the new page 'busy' - a setup
+            # miss read as an LC-49 FAIL). Nothing in net.js reads hp.
+            v.info("guard (host page: both players' hp / shield topped up until the end)", {"guard": hpg.evaluate(GUARD_JS, [h_id, g_id])})
             if args.plant:
                 gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])
                 gpg.evaluate("(id) => { window.__P23PB__.id = id; }", h_id)
