@@ -531,6 +531,394 @@ def lamp_gate(B, rng):
     return ztop
 
 
+# ── coursed masonry (the Belfry's stages, the noon stone) ─────────────────────────────────────────
+# a square shaft's four faces: (outward normal, tangent u, turn of K.box), u runs along the tangent
+FACES = {"s": ((0, -1, 0), (1, 0, 0), 0.0), "e": ((1, 0, 0), (0, 1, 0), PI / 2),
+         "n": ((0, 1, 0), (-1, 0, 0), PI), "w": ((-1, 0, 0), (0, -1, 0), -PI / 2)}
+
+
+def pointed(w: float, spring: float, k: float = 1.25, n: int = 7, off: float = 0.0):
+    """The right half of a two-centred pointed arch of span w (each arc's radius k*w, centred on the far
+    side), offset `off` outward from the intrados: [(u, z)] from the springer (u = w/2 + off) up to the apex
+    (u = 0). Returns (points, apex z)."""
+    R = k * w
+    cu = w / 2 - R
+    Ro = R + off
+    ta = math.acos(min(1.0, -cu / Ro))
+    pts = [(cu + Ro * math.cos(ta * i / n), spring + Ro * math.sin(ta * i / n)) for i in range(n + 1)]
+    pts[-1] = (0.0, pts[-1][1])
+    return pts, pts[-1][1]
+
+
+def arch_outline(w: float, spring: float, sill: float, k: float = 1.25, inset: float = 0.0):
+    """The whole opening (sill, jambs, pointed head) as one polygon in (u, z), inset by `inset`."""
+    pts, _ = pointed(w - 2 * inset, spring, k, 8)
+    right = [(u, z) for u, z in pts]
+    left = [(-u, z) for u, z in pts[::-1][1:]]
+    return [(-(w / 2 - inset), sill + inset), (w / 2 - inset, sill + inset)] + right + left
+
+
+def face_arch(B, face, H, T, w, spring, k=1.25, rt=0.34, nv=4, mat="chalk", stud="steel", key_shard=False):
+    """A pointed arch ring of voussoirs (every second proud) with a keystone, in the wall plane of face
+    `face` of a square shaft of half-width H, wall thickness T; a chalk hood moulding over it.
+    Returns (extrados apex z, extrados points of the right half)."""
+    n, t, _ = FACES[face]
+    n, t = np.array(n, float), np.array(t, float)
+    org = tuple(n * (H - T / 2))
+    ins, apex = pointed(w, spring, k, 24)
+    outs, apex_o = pointed(w, spring, k, 24, rt)
+    ins, outs = np.array(ins), np.array(outs)
+    m = len(ins) - 1
+    cut = [int(round(m * i / nv)) for i in range(nv + 1)]
+    cut[-1] = m - 3                                                    # the keystone takes the top
+    for side in (1, -1):
+        for i in range(nv):
+            a, b = cut[i], cut[i + 1]
+            pr = 0.04 if i % 2 else 0.0
+            inner = [(side * ins[j, 0], ins[j, 1]) for j in range(a, b + 1)]
+            outer = [(side * (ins[j, 0] + (outs[j, 0] - ins[j, 0]) * (1 + pr / rt)), ins[j, 1] + (outs[j, 1] - ins[j, 1]) * (1 + pr / rt))
+                     for j in range(b, a - 1, -1)]
+            poly = inner + outer
+            if side < 0:
+                poly = poly[::-1]
+            B.add(mat, K.prism(poly, origin=org, u=tuple(t), v=(0, 0, 1), depth=T + 0.06 + pr, chamfer=0.03))
+    j = cut[-1]
+    key = [(ins[j, 0], ins[j, 1]), (0.0, apex - 0.02), (-ins[j, 0], ins[j, 1]), (-outs[j, 0] - 0.05, outs[j, 1] + 0.05),
+           (-0.2, apex_o + 0.22), (0.2, apex_o + 0.22), (outs[j, 0] + 0.05, outs[j, 1] + 0.05)]
+    B.add(mat, K.prism(key[::-1], origin=org, u=tuple(t), v=(0, 0, 1), depth=T + 0.14, chamfer=0.035))
+    face_pt = n * (H + 0.07)
+    if stud:
+        dia = [(0.11, 0.0), (0.0, 0.14), (-0.11, 0.0), (0.0, -0.14)]
+        B.add(stud, K.prism(dia, origin=tuple(face_pt + np.array([0, 0, apex_o + 0.02])), u=tuple(t), v=(0, 0, 1), depth=0.05, chamfer=0.008))
+    if key_shard:
+        B.add("dawnglass", K.crystal(tuple(n * (H - T / 2) + np.array([0, 0, apex_o + 0.5])), 0.13, 0.34, 0.12, sides=4, band=0.04, phase=PI / 4))
+    # the hood moulding along the extrados (a crisp lit line from the camera)
+    hood, _ = pointed(w, spring, k, 16, rt + 0.04)
+    path = [(-u, z) for u, z in hood] + [(u, z) for u, z in hood[::-1][1:]]
+    nn = tuple(n)
+    B.add(mat, K.sweep([tuple(n * H + t * u + np.array([0, 0, z])) for u, z in path], 0.12, 0.07, out_fn=lambda p, nn=nn: nn, sink=0.03))
+    return apex_o, outs
+
+
+def spandrels(B, face, H, T, w, spring, k, rt, Ws, ztop, mat="chalk"):
+    """The two wall pieces between an arch's extrados and the coursed wall (u in ±Ws, spring..ztop)."""
+    n, t, _ = FACES[face]
+    org = tuple(np.array(n, float) * (H - T / 2))
+    outs, apex_o = pointed(w, spring, k, 14, rt)
+    for side in (1, -1):
+        poly = [(Ws, spring), (Ws, ztop), (0.0, ztop), (0.0, apex_o)] + [(u, z) for u, z in outs[::-1][1:]]
+        poly = [(side * u, z) for u, z in poly]
+        if side > 0:
+            poly = poly[::-1]
+        B.add(mat, K.prism(poly, origin=org, u=t, v=(0, 0, 1), depth=T, chamfer=0.025))
+
+
+def coursed_shaft(B, rng, H, T, zs, mat="chalk", skips=None, faces="sewn", gap=0.014, lmin=1.0, lmax=1.75):
+    """A square shaft of half-width H as a shell of coursed blocks (wall thickness T): course k spans
+    zs[k]..zs[k+1]; corners are bonded (the S/N faces own them on even courses, E/W on odd). skips: face ->
+    [(u0, u1, z0, z1)] openings the blocks leave out (a block that would cross one is cut at its edge)."""
+    skips = skips or {}
+    for k in range(len(zs) - 1):
+        za, zb = zs[k], zs[k + 1]
+        zc, hz = (za + zb) / 2, (zb - za) / 2 - gap / 2
+        for f in faces:
+            n, t, rz = FACES[f]
+            own = (f in "sn") == (k % 2 == 0)
+            lo, hi = (-H, H) if own else (-H + T, H - T)
+            cuts = [(u0, u1) for u0, u1, z0, z1 in skips.get(f, []) if z0 < zc < z1]
+            segs, u = [], lo
+            for u0, u1 in sorted(cuts):
+                if u0 > u:
+                    segs.append((u, u0))
+                u = max(u, u1)
+            if u < hi:
+                segs.append((u, hi))
+            for s0, s1 in segs:
+                if s1 - s0 < 0.12:
+                    continue
+                u, first = s0, True
+                while u < s1 - 0.05:
+                    L = rng.uniform(lmin, lmax) * (0.55 if first and k % 2 else 1.0)
+                    first = False
+                    u1 = min(s1, u + L)
+                    if s1 - u1 < 0.45:
+                        u1 = s1
+                    c = np.array(n, float) * (H - T / 2) + np.array(t, float) * ((u + u1) / 2) + np.array([0, 0, zc])
+                    B.add(mat, K.box(tuple(c), ((u1 - u) / 2 - gap / 2, T / 2, hz), 0.04, rz=rz))
+                    u = u1
+
+
+def courses(z0, z1, h):
+    n = max(1, int(round((z1 - z0) / h)))
+    return [z0 + (z1 - z0) * i / n for i in range(n + 1)]
+
+
+def square_band(B, mat, H, z0, z1, c=0.02):
+    """A square ring band (a steel band, a string course) round a shaft of half-width H."""
+    hz = (z1 - z0) / 2
+    for f in "sn":
+        n, t, rz = FACES[f]
+        B.add(mat, K.box(tuple(np.array(n, float) * (H - 0.04) + np.array([0, 0, (z0 + z1) / 2])), (H + 0.04, 0.08, hz), c, rz=rz))
+    for f in "ew":
+        n, t, rz = FACES[f]
+        B.add(mat, K.box(tuple(np.array(n, float) * (H - 0.04) + np.array([0, 0, (z0 + z1) / 2])), (H - 0.12, 0.08, hz), c, rz=rz))
+
+
+def flags(B, mat, rng, x0, x1, y0, y1, keep=None, z=0.0, size=(1.25, 1.9), gap=0.035, th=0.09):
+    """A flagged floor (random-length flags in running courses along x) over the rectangle, z = its top;
+    keep(x, y) -> False leaves a flag out (under a plinth, beyond an edge)."""
+    y = y0
+    while y < y1 - 0.2:
+        d = min(rng.uniform(*size), y1 - y)
+        if y1 - (y + d) < 0.5:
+            d = y1 - y
+        x = x0 + (rng.uniform(0, 0.6) if rng.random() < 0.5 else 0.0)
+        if x > x0:
+            if keep is None or keep((x0 + x) / 2, y + d / 2):
+                B.add(mat, K.box(((x0 + x) / 2, y + d / 2, z - th / 2), ((x - x0) / 2 - gap / 2, d / 2 - gap / 2, th / 2), 0.025))
+        while x < x1 - 0.2:
+            L = min(rng.uniform(*size) * 1.15, x1 - x)
+            if x1 - (x + L) < 0.5:
+                L = x1 - x
+            if keep is None or keep(x + L / 2, y + d / 2):
+                B.add(mat, K.box((x + L / 2, y + d / 2, z - th / 2 + rng.uniform(-0.012, 0.012)), (L / 2 - gap / 2, d / 2 - gap / 2, th / 2), 0.025))
+            x += L
+        y += d
+
+
+# ── the Glass Belfry (RIFT, Aubade's end, (-5, 55) on the rim, 7 x 7 m, 22 m) ───────────────────────
+def belfry_stage(B, rng, H, T, z0, z1, w, sill, spring, k, rt, glass=False, faces="sewn"):
+    """One stage: coursed walls (stage 1: a shell with a glazed lancet on each face; the upper stages: corner
+    piers carrying open pointed arches), the arch rings, spandrels and a sill per face."""
+    hc = 0.6
+    zs = courses(z0, z1, hc)
+    sp = min(zs, key=lambda z: abs(z - spring))                       # springers and sills on course joints
+    sl = min(zs, key=lambda z: abs(z - sill))
+    _, apex_o = pointed(w, sp, k, 8, rt)
+    ztop = min([z for z in zs if z >= apex_o + 0.3] or [z1])
+    Ws = w / 2 + rt + 0.42
+    skips = {f: [(-w / 2, w / 2, sl, sp), (-Ws, Ws, sp - 1e-3, ztop)] for f in faces}
+    coursed_shaft(B, rng, H, T, zs, skips=skips, faces="sewn")
+    for f in faces:
+        face_arch(B, f, H, T, w, sp, k, rt, key_shard=(f == "s" and glass))
+        spandrels(B, f, H, T, w, sp, k, rt, Ws, ztop)
+        n, t, rz = FACES[f]
+        nv = np.array(n, float)
+        if glass:
+            B.add("chalk", K.box(tuple(nv * (H - T / 2 + 0.06) + np.array([0, 0, sl - 0.07])), (w / 2 + 0.16, T / 2 + 0.06, 0.08), 0.025, rz=rz))
+            org = tuple(nv * (H - T * 0.62))
+            B.add("dawnglass", K.prism(arch_outline(w, sp, sl, k, 0.0), origin=org, u=t, v=(0, 0, 1), depth=0.06))
+            B.add("steel", K.box(tuple(nv * (H - T * 0.55) + np.array([0, 0, (sl + sp) / 2 + 0.3])), (0.05, 0.06, (sp - sl) / 2 + 0.3), 0.012, rz=rz))
+            B.add("steel", K.box(tuple(nv * (H - T * 0.55) + np.array([0, 0, sp])), (w / 2, 0.06, 0.05), 0.012, rz=rz))
+            # the reveal: the opening's sides and soffit read as stone depth (dark core behind the glass)
+        else:
+            B.add("chalk", K.box(tuple(nv * (H - T / 2) + np.array([0, 0, sl + 0.05])), (w / 2 + 0.02, T / 2 + 0.04, 0.06), 0.02, rz=rz))
+    return ztop
+
+
+def glass_belfry(B, rng):
+    # its forecourt on the rim: chalk flags from the rim's lip (sim x = 0, local +5) back to the rim's outer
+    # edge (local -9), ±11 m along it; the plinth's own flags
+    flags(B, "dialstone", rng, -9.0, 4.4, -11.0, 11.0, keep=lambda x, y: not (abs(x) < 4.0 and abs(y) < 4.0), z=0.09)
+    # dial-stone plinth: two steps of dressed slabs
+    for (h, z0, z1) in ((3.75, 0.0, 0.34), (3.35, 0.34, 0.66)):
+        n = 3
+        for i in range(n):
+            for j in range(n):
+                x0, x1 = -h + 2 * h * i / n, -h + 2 * h * (i + 1) / n
+                y0, y1 = -h + 2 * h * j / n, -h + 2 * h * (j + 1) / n
+                B.add("dialstone", K.box(((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), ((x1 - x0) / 2 - 0.012, (y1 - y0) / 2 - 0.012, (z1 - z0) / 2), 0.04))
+    H1, T1 = 2.75, 0.62
+    zb = 0.66
+    B.add("chalk", K.box((0, 0, zb + 0.16), (H1 + 0.16, H1 + 0.16, 0.16), 0.045))                    # base moulding
+    B.add("dialstone", K.box((0, 0, 4.0), (H1 - T1 + 0.02, H1 - T1 + 0.02, 3.2), 0.0))               # the dark core
+    z1 = 7.3
+    belfry_stage(B, rng, H1, T1, zb + 0.32, z1, w=1.5, sill=1.9, spring=4.4, k=1.3, rt=0.36, glass=True)
+    square_band(B, "steel", H1, z1 - 0.32, z1 - 0.12)
+    B.add("chalk", K.box((0, 0, z1 + 0.1), (H1 + 0.24, H1 + 0.24, 0.18), 0.05))                       # cornice
+    # corner buttresses in three set-offs, a pinnacle with a dawnglass shard on each
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            cx, cy = sx * (H1 + 0.08), sy * (H1 + 0.08)
+            for (za, zz, hw) in ((zb, 2.9, 0.5), (2.9, 5.2, 0.42), (5.2, z1 + 0.28, 0.35)):
+                for zz0, zz1 in ((za, (za + zz) / 2), ((za + zz) / 2, zz)):
+                    B.add("chalk", K.box((cx, cy, (zz0 + zz1) / 2), (hw, hw, (zz1 - zz0) / 2 - 0.008), 0.04))
+                B.add("chalk", K.box((cx, cy, zz + 0.05), (hw + 0.05, hw + 0.05, 0.05), 0.02))       # weathering course
+            ST.pinnacle(B, (cx, cy), z1 + 0.33, 1.6, r=0.2, tip=0.5)
+    # stage 2: open pointed arches on corner piers, a newel shaft inside
+    H2, P2 = 2.2, 0.42
+    z2a, z2b = z1 + 0.28, 12.1
+    B.add("dialstone", K.box((0, 0, z2a + 0.06), (H2 - 0.05, H2 - 0.05, 0.06), 0.02))
+    belfry_stage(B, rng, H2, 2 * P2, z2a, z2b, w=2 * (H2 - 2 * P2), sill=z2a, spring=z2a + 2.3, k=1.2, rt=0.3)
+    B.add("chalk", K.lathe(K.chamfer_profile([(0, z2a), (0.42, z2a), (0.42, z2b), (0, z2b)], 0.04), **O8))
+    square_band(B, "steel", H2, z2b - 0.3, z2b - 0.12)
+    B.add("chalk", K.box((0, 0, z2b + 0.1), (H2 + 0.2, H2 + 0.2, 0.16), 0.045))
+    # stage 3: the bell-lantern's open stage
+    H3, P3 = 1.65, 0.32
+    z3a, z3b = z2b + 0.26, 15.6
+    B.add("dialstone", K.box((0, 0, z3a + 0.05), (H3 - 0.05, H3 - 0.05, 0.05), 0.02))
+    belfry_stage(B, rng, H3, 2 * P3, z3a, z3b, w=2 * (H3 - 2 * P3), sill=z3a, spring=z3a + 1.6, k=1.2, rt=0.24)
+    square_band(B, "steel", H3, z3b - 0.26, z3b - 0.1)
+    B.add("chalk", K.box((0, 0, z3b + 0.08), (H3 + 0.16, H3 + 0.16, 0.14), 0.04))
+    # the dawnglass bell-lantern hung from a steel yoke (neutral cool, its own glow node: never a team hue)
+    zc = z3a + 0.25
+    bell = [(0.0, zc + 1.95), (0.22, zc + 1.95), (0.36, zc + 1.7), (0.42, zc + 1.2), (0.55, zc + 0.6), (0.8, zc + 0.22), (0.84, zc + 0.12),
+            (0.6, zc + 0.14), (0.0, zc + 0.3)]
+    B.add("bellglow", K.lathe(bell, 8, phase=PI / 8), node="lantern")
+    for kk in range(8):
+        a = PI / 8 + kk * TAU / 8
+        B.add("steel", K.sweep([((r + 0.02) * math.cos(a), (r + 0.02) * math.sin(a), z) for r, z in bell[1:6]], 0.06, 0.04,
+                               out_fn=lambda p: (p[0], p[1], 0.0), sink=0.01))
+    B.add("steel", K.box((0, 0, zc + 2.05), (H3 - 0.3, 0.07, 0.07), 0.015))
+    B.add("steel", K.lathe([(0, zc + 1.9), (0.26, zc + 1.9), (0.26, zc + 2.0), (0, zc + 2.0)], 12))
+    # the spire: concave, octagonal, steel-ribbed, a dawnglass finial
+    ST.a_spire_cap(B, z3b + 0.22, 21.3, H3 + 0.05, panes=0, ribs=True, finial=0.62, sides=8)
+
+
+# ── the Lamp Dome (RIFT, Serenade's end, (180, 55) on the rim, 18 m across, 8 m) ─────────────────────
+DOME_S = 2.0                     # built at half size with the structures' helpers, then scaled (their mouldings scale)
+
+
+def lamp_dome(B, rng):
+    R = 4.3
+    z = ST.s_foot(B, 0.0, R + 0.1, h=0.34)
+    zs = [z, 0.98, 1.6, 1.98]
+    for i in range(3):
+        za, zb = zs[i], zs[i + 1]
+        ra, rb = R - 0.012 * i, R - 0.012 * (i + 1)
+        B.add("sandstone", K.lathe([(0, za), (ra - 0.015, za), (ra, za + 0.015), (rb, zb - 0.015), (rb - 0.015, zb), (0, zb)], 72))
+    for zz in (0.98, 1.6):
+        B.add("ironstone", ST.ring(R - 0.04, R + 0.05, zz - 0.06, zz + 0.06, 0.012, 72))
+    nw = 12
+    for kk in range(nw):
+        a = PI / nw + kk * TAU / nw
+        ST.s_window(B, a, R - 0.02, 1.08, 0.46, 0.32)
+        ap = kk * TAU / nw                                              # sandstone pilasters between the windows
+        v, f = K.box((R + 0.02, 0, (zs[0] + 1.96) / 2), (0.07, 0.16, (1.96 - zs[0]) / 2), 0.015)
+        B.add("sandblock", (K.rotz(v, ap), f))
+    B.add("ironstone", K.lathe(K.chamfer_profile([(0, 1.96), (R - 0.03, 1.96), (R + 0.16, 2.1), (R + 0.16, 2.2), (0, 2.2)], 0.015), 72))
+    zt = ST.s_dome(B, R + 0.06, 1.62, 2.2, 0.62, ribs=12, rib_phase=0.0, segs=72, rib_mat="sandblock", seams=False)
+    # the oculus: a sandstone curb round a lampresin lens (the only emissive, <= 0.8), an iron ring of hour-lugs
+    B.add("sandblock", ST.ring(0.42, 0.7, zt - 0.04, zt + 0.1, 0.012, 32))
+    B.add("lampglow", K.lathe([(0, zt + 0.02), (0.44, zt + 0.02), (0.3, zt + 0.16), (0, zt + 0.2)], 24), node="lamp")
+    for kk in range(12):
+        a = kk * TAU / 12
+        v, f = K.box((0.76, 0, zt + 0.08), (0.07 if kk % 3 == 0 else 0.045, 0.035, 0.04), 0.008)
+        B.add("iron", (K.rotz(v, a), f))
+    # its footing goes down past the rim's outer edge (the drop to the plain, local z -3.4)
+    B.add("ironstone", K.lathe([(0, -1.75), (R + 0.3, -1.75), (R + 0.3, 0.02), (0, 0.02)], 72))
+
+
+def dome_court(B, rng):
+    """The sandstone court round the Lamp Dome on the rim (built at full size, after the scale)."""
+    flags(B, "sandblock", rng, -4.4, 10.0, -11.0, 11.0, keep=lambda x, y: math.hypot(x, y) > 8.75, z=0.09)
+
+
+# ── the noon stone (RIFT, (85, 3) on the north frame, 3 x 1.5 m, 9 m) ──────────────────────────────────
+def noon_stone(B, rng):
+    B.add("dialstone", K.box((0, 0, 0.17), (1.5, 0.74, 0.17), 0.04))
+    for i, (x0, x1) in enumerate(((-1.3, -0.4), (-0.4, 0.45), (0.45, 1.3))):
+        B.add("dialstone", K.box(((x0 + x1) / 2, 0, 0.47), ((x1 - x0) / 2 - 0.012, 0.6, 0.13), 0.035))
+    # the shaft: four tapering drums of chalk (each its own stone), battered, a moulded base
+    B.add("chalk", K.box((0, 0, 0.72), (1.12, 0.5, 0.12), 0.04))
+    zs = [0.84, 2.55, 4.15, 5.65, 7.0]
+    hw = lambda z: (1.02 - 0.024 * (z - 0.84), 0.44 - 0.01 * (z - 0.84))
+    for za, zb in zip(zs[:-1], zs[1:]):
+        (ax, ay), (bx, by) = hw(za + 0.01), hw(zb - 0.01)
+        r0, r1 = math.hypot(ax, ax), math.hypot(bx, bx)
+        v, f = K.lathe(K.chamfer_profile([(0, za + 0.008), (r0, za + 0.008), (r1, zb - 0.008), (0, zb - 0.008)], 0.05), 4, phase=PI / 4)
+        v = v.copy()
+        zz = (v[:, 2] - za) / (zb - za)
+        v[:, 1] *= (ay + (by - ay) * zz) / (ax + (bx - ax) * zz)
+        B.add("chalk", (v, f))
+    # XII on the south face: a sunk dial-stone panel in a chalk frame, the numerals raised in chalk
+    zp0, zp1 = 3.0, 5.4
+    fy = -hw((zp0 + zp1) / 2)[1] - 0.01
+    B.add("dialstone", K.box((0, fy, (zp0 + zp1) / 2), (0.62, 0.03, (zp1 - zp0) / 2), 0.01))
+    for (cx, cz, hx, hz) in ((0, zp1 + 0.06, 0.74, 0.07), (0, zp0 - 0.06, 0.74, 0.07), (-0.68, (zp0 + zp1) / 2, 0.07, (zp1 - zp0) / 2), (0.68, (zp0 + zp1) / 2, 0.07, (zp1 - zp0) / 2)):
+        B.add("chalk", K.box((cx, fy - 0.02, cz), (hx, 0.05, hz), 0.015))
+    strokes = [((-0.5, zp0 + 0.32), (-0.14, zp1 - 0.32), 0.1), ((-0.14, zp0 + 0.32), (-0.5, zp1 - 0.32), 0.06),
+               ((0.12, zp0 + 0.32), (0.12, zp1 - 0.32), 0.1), ((0.4, zp0 + 0.32), (0.4, zp1 - 0.32), 0.1)]
+    for (a, b, wd) in strokes:
+        a, b = np.array(a), np.array(b)
+        d = (b - a) / np.linalg.norm(b - a)
+        nrm = np.array([-d[1], d[0]]) * wd
+        poly = [tuple(a - nrm), tuple(a + nrm), tuple(b + nrm), tuple(b - nrm)]
+        B.add("chalk", K.prism(poly, origin=(0, fy - 0.035, 0), u=(1, 0, 0), v=(0, 0, 1), depth=0.07, chamfer=0.012))
+    for zz in (zp0 + 0.22, zp1 - 0.22):                                  # serifs: foot and head bars
+        B.add("chalk", K.box((-0.04, fy - 0.035, zz), (0.62, 0.035, 0.035), 0.008))
+    # a blued-steel band, the cornice and a low hipped cap carrying the steel noon ring
+    (cx_, cy_) = hw(6.86)
+    B.add("steel", K.box((0, 0, 6.86), (cx_ + 0.04, cy_ + 0.04, 0.09), 0.02))
+    B.add("chalk", K.box((0, 0, 7.12), (0.98, 0.52, 0.13), 0.04))
+    B.add("chalk", K.box((0, 0, 7.33), (0.88, 0.44, 0.08), 0.03))
+    v, f = K.lathe(K.chamfer_profile([(0, 7.41), (1.12, 7.41), (0.2, 8.15), (0, 8.18)], 0.03), 4, phase=PI / 4)
+    v = v.copy()
+    v[:, 1] *= 0.5
+    B.add("chalk", (v, f))
+    on_y = lambda V: K.move(K.rot(np.asarray(V), (1, 0, 0), PI / 2), (0, 0, 8.62))
+    for rin, rout in ((0.3, 0.44),):
+        v, f = ST.ring(rin, rout, -0.04, 0.04, 0.01, 32)
+        B.add("steel", (on_y(v), f))
+    B.add("steel", K.box((0, 0, 8.22), (0.05, 0.05, 0.1), 0.01))
+    for kk in range(4):
+        a = kk * TAU / 4
+        v, f = K.box((0.37 * math.cos(a), 0, 0.37 * math.sin(a)), (0.03, 0.05, 0.03), 0.006)
+        B.add("steel", (K.move(v, (0, 0, 8.62)), f))
+
+
+# ── the shadow slab (RIFT, Longshade's north choke, (79.4 / 90.6, 19.6), 2 x 3 m, 4 m) ────────────────
+def shadow_slab(B, rng):
+    """A dressed basalt slab leaning toward the Noonline (+x; the east one is the same stone turned 180°),
+    its top dressed in a chalk coping that catches the light (brief: dark basalt with chalk-lit top edges),
+    the shadow's hour-line cut down both broad faces, set in a dial-stone footing."""
+    lean = math.radians(9.0)
+    B.add("dialstone", K.box((-0.25, 0, 0.14), (0.75, 1.45, 0.14), 0.035))
+    th, wd, ht = 0.36, 1.18, 3.55
+
+    def lean_v(v, f):
+        v = K.rot(np.asarray(v), (0, 1, 0), lean)
+        return (K.move(v, (-0.32, 0, 0.12)), f)
+    # the slab in three courses of basalt, the top one cut to a gable; its courses offset like masonry
+    zc = [0.0, 1.25, 2.45, ht]
+    for i in range(3):
+        za, zb = zc[i], zc[i + 1]
+        B.add("basalt", lean_v(*K.box((0, 0, (za + zb) / 2), (th, wd, (zb - za) / 2 - 0.01), 0.05)))
+    # chalk coping: a saddle-backed cap stone along the top, proud on every side
+    sec = [(-th - 0.07, 0.0), (th + 0.07, 0.0), (th + 0.07, 0.1), (0.0, 0.3), (-th - 0.07, 0.1)]
+    v, f = K.prism(sec, origin=(0, 0, ht), u=(1, 0, 0), v=(0, 0, 1), depth=2 * wd + 0.14, chamfer=0.03)
+    B.add("chalk", lean_v(v, f))
+    # chalk quoins up the two ends (the lit edges the camera sees on the south end)
+    for sy in (-1, 1):
+        for i, (za, zb) in enumerate(((0.05, 0.85), (0.85, 1.75), (1.75, 2.65), (2.65, ht - 0.02))):
+            w_ = 0.16 if i % 2 else 0.24
+            B.add("chalk", lean_v(*K.box((0, sy * (wd - w_ + 0.03), (za + zb) / 2), (th + 0.035, w_, (zb - za) / 2 - 0.012), 0.03)))
+    # the shadow's hour-line cut down both broad faces (a steel inlay) and a steel hour-stud on each
+    for sx in (-1, 1):
+        B.add("steel", lean_v(*K.box((sx * (th + 0.012), 0, 1.9), (0.02, 0.045, 1.55), 0.008)))
+        dia = [(0.1, 0.0), (0.0, 0.13), (-0.1, 0.0), (0.0, -0.13)]
+        v, f = K.prism(dia, origin=(sx * (th + 0.02), 0, 3.0), u=(0, 1, 0), v=(0, 0, 1), depth=0.04, chamfer=0.006)
+        B.add("steel", lean_v(v, f))
+    # spalled basalt chips at its foot
+    for c, h in (((0.55, -1.0, 0.1), (0.16, 0.12, 0.1)), ((-0.9, 0.8, 0.08), (0.12, 0.15, 0.08)), ((0.6, 1.2, 0.07), (0.1, 0.1, 0.07))):
+        chunk(B, "basalt", c, h, rng)
+
+
+SLAB_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"],
+             "basalt": dict(hex="#5D5966", chisel=0.9, var=0.09, streaks=0.3, chips=0.6, speckle=0.35, scale=0.55, rough=0.62,
+                            edge_light=(0.06, 0.85, 0.6, 0.1))}
+NOON_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"]}
+BELFRY_MATS = dict(DAWN_MATS)
+DOME_MATS = {
+    "dialstone": DIAL,
+    "sandstone": dict(_SAND, brick=(0.9, 0.42, 0.02), brick_k=0.6),            # the drum: painted coursing about its axis
+    "sandblock": GATE_MATS["sandblock"],
+    "ironstone": _IRON,
+    "iron": GATE_MATS["iron"],
+    "lampresin": ST.SERENADE_MATS["lampresin"],
+}
+
+
 # ── build ────────────────────────────────────────────────────────────────────────────────────────────
 DESIGNS = {
     # id: (builder, material spec, atlas size, AO distance)
@@ -538,7 +926,13 @@ DESIGNS = {
     "snap_stub": (snap_stub, SHAFT_MATS, 1024, 0.6),
     "dawn_arch": (dawn_arch, DAWN_MATS, 2048, 1.0),
     "lamp_gate": (lamp_gate, GATE_MATS, 2048, 1.0),
+    "glass_belfry": (glass_belfry, BELFRY_MATS, 2048, 1.0),
+    "lamp_dome": (lamp_dome, DOME_MATS, 2048, 1.2),
+    "noon_stone": (noon_stone, NOON_MATS, 1024, 0.6),
+    "shadow_slab": (shadow_slab, SLAB_MATS, 1024, 0.5),
 }
+SCALE = {"lamp_dome": DOME_S}
+AFTER = {"lamp_dome": dome_court}            # built after the scale (full-size pieces)
 
 
 def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:

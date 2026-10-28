@@ -308,9 +308,16 @@ if (want('draft') && which === 'flow') await step('draft_flow', async () => {
     const t = page.locator('.scr--draft:not(.is-leaving) .loadout [role=tab]', { hasText: tab }).first();
     if (await t.count()) { await t.click(); await W(400); await each(async (w) => { await check(page, 'finalize', `${w}_${tab.replace(' ', '_').toLowerCase()}`); await shot(page, `${PREFIX}_${w}_draft_finalize_${tab.replace(' ', '_').toLowerCase()}`); }); }
   }
+  // the loading screen lasts only while the match loads: measure at the size the window already has first, then the other
   await waitFor(page, (v) => v.router.route.value.screen === 'loading' || !!v.state.match.value, 120000);
-  await W(1500);
-  await each(async (w) => { await check(page, 'loading', `${w}_flow`); await shot(page, `${PREFIX}_${w}_loading_flow`); });
+  await W(900);
+  for (const [w, h] of [...SIZES].reverse()) {
+    if (await vale(page, (v) => v.router.route.value.screen !== 'loading')) { R.errors.push({ name: 'loading_flow', err: `the match started before the ${w} measurement` }); break; }
+    await vp(w, h);
+    if (await vale(page, (v) => v.router.route.value.screen !== 'loading')) { R.errors.push({ name: 'loading_flow', err: `the match started before the ${w} measurement (not a fit failure; the fast run measures loading at every size)` }); break; }
+    await check(page, 'loading', `${w}_flow`);
+    await shot(page, `${PREFIX}_${w}_loading_flow`);
+  }
 });
 
 // ── FRAY pick and the BRIDGE Lot (fixtures, fast): clipped labels and the fold ─────────────────────────────────

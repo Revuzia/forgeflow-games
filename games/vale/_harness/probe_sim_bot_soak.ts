@@ -153,6 +153,9 @@ interface GameRec {
   objs: { t: number; unit: string; team: number }[];
   buys: { t: number; p: number; item: string }[];
   fin25: number[];
+  /** Gleam earned by play (Player.goldEarned) at min(25:00, end), and Gleam spent on finished items by then */
+  gold25: number[];
+  finSpent25: number[];
   finalItems: string[][];
   goldGraph: number[];
   kills: number[]; deaths: number[]; cs: number[]; levels: number[];
@@ -191,13 +194,19 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     job, reason: 'cut', dur: 0, winner: -1, sudden: -1, faults: [],
     seats: setup.seats.map((s) => ({ p: s.player, team: s.team, fighter: s.fighter, role: s.role ?? '', spells: s.loadout.spells.slice() })),
     wick14: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
-    buys: [], fin25: [], finalItems: [], goldGraph: [], kills: [], deaths: [], cs: [], levels: [],
+    buys: [], fin25: [], gold25: [], finSpent25: [], finalItems: [], goldGraph: [], kills: [], deaths: [], cs: [], levels: [],
   };
   const csNow = new Array<number>(n).fill(0);
   const world = () => sim.world;
   const coreUnit = catalog.modes.find((m) => m.id === job.mode)?.rules.end.coreStructure;
   const levels = () => world().players.map((p) => p.ent?.level ?? 0);
   const finHeld = () => world().players.map((p) => p.items.filter((x) => x && finished.has(x)).length);
+  const costOf = new Map(catalog.items.map((i) => [i.id, i.cost] as const));
+  const at25 = (): void => {
+    rec.fin25 = finHeld();
+    rec.gold25 = world().players.map((p) => p.goldEarned);
+    rec.finSpent25 = world().players.map((p) => p.items.reduce((a, x) => a + (x && finished.has(x) ? costOf.get(x) ?? 0 : 0), 0));
+  };
   const killerKind = (killerId: number, victimTeam: number): { kind: KillerKind; def: string; credited: boolean } => {
     const w = world();
     const k = killerId >= 0 ? w.entity(killerId) ?? null : null;
@@ -211,7 +220,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     [600, () => { rec.cs10 = csNow.slice(); rec.lvl10 = levels(); }],
     [840, () => { rec.cs14 = csNow.slice(); }],
     [900, () => { rec.lvl15 = levels(); }],
-    [1500, () => { rec.fin25 = finHeld(); }],
+    [1500, at25],
   ];
   let si = 0;
   const limit = job.cut > 0 ? job.cut : 3600;
@@ -264,7 +273,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   rec.winner = res ? res.winningTeam : -1;
   rec.goldGraph = res ? res.goldGraph.slice() : [];
   rec.faults = sim.faults.slice(0, 3);
-  if (rec.fin25.length === 0) rec.fin25 = finHeld();
+  if (rec.fin25.length === 0) at25();
   rec.finalItems = w.players.map((p) => p.items.filter((x): x is string => !!x));
   rec.kills = w.players.map((p) => p.kills); rec.deaths = w.players.map((p) => p.deaths);
   rec.cs = w.players.map((p) => p.cs); rec.levels = levels();
@@ -462,6 +471,14 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     gates.push({ group: 'items', item: 'gameplay:G7', label: 'finished items bought at least once', value: `${pct(cover)} (${finIds.filter((id) => bought.has(id)).length}/${finIds.length})`, target: '≥ 80 %', pass: cover >= 0.8, n: fullRift.length });
     gates.push({ group: 'items', item: 'gameplay:G7', label: 'anti-heal item families', value: `${antiHeal.length}${antiHeal.length ? ` (${antiHeal.join(', ')})` : ''}`, target: '≥ 1', pass: antiHeal.length >= 1, n: 0 });
     gates.push({ group: 'items', item: 'gameplay:G7', label: 'fighters whose first two finished items vary', value: `${pct(varied)} of ${eligible.length}`, target: '≥ 50 %', pass: varied >= 0.5, n: fullRift.length });
+    const byRole: Record<string, { fin: number[]; gold: number[]; spent: number[] }> = {};
+    for (const g of fullRift) for (const s of g.seats) {
+      const r = (byRole[`${g.job.diffs[0]} ${s.role}`] ??= { fin: [], gold: [], spent: [] });
+      r.fin.push(g.fin25[s.p] ?? 0); r.gold.push(g.gold25?.[s.p] ?? NaN); r.spent.push(g.finSpent25?.[s.p] ?? NaN);
+    }
+    text.push('', 'items by role at min(25:00, end): finished held · Gleam earned by play · Gleam in finished items');
+    for (const [k, v] of Object.entries(byRole).sort()) text.push(`   ${k.padEnd(20)} ${mean(v.fin).toFixed(2)} · ${mean(v.gold).toFixed(0).padStart(5)} · ${mean(v.spent).toFixed(0).padStart(5)}`);
+    detail.itemsByRole = Object.fromEntries(Object.entries(byRole).map(([k, v]) => [k, { fin: mean(v.fin), gold: mean(v.gold), spent: mean(v.spent) }]));
     text.push('', `items: finished bought ${[...bought.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}; never: ${finIds.filter((id) => !bought.has(id)).join(', ') || '-'}`);
   }
   // ── mirrored difficulty ──

@@ -336,3 +336,76 @@ def at_len(x: np.ndarray, dur: float, fout: float = 0.02) -> np.ndarray:
     k = ns(dur)
     y = x[..., :k].copy()
     return fade(y, 0.0, min(fout, dur * 0.5))
+
+
+# ── fighter home instruments (final parity AUD-1: the signature voices of the per-fighter kits) ──────────
+PANE_R = (1.0, 1.594, 2.136, 2.653, 3.156, 3.652)   # a thick glass pane (a clamped plate's first modes)
+BAR_R = (1.0, 2.756, 5.404, 8.933)                    # a free stone bar (the lithophone)
+
+
+def pane(f: float, dur: float = 0.8, t60: float = 0.7, bright: float = 0.6, r: np.random.Generator | None = None,
+         detune_hz: float = 0.3) -> np.ndarray:
+    """A thick dawnglass pane struck flat: plate modes, darker, denser and shorter than the glass bowl."""
+    r = r or rng(f'pane:{f:.1f}')
+    amps = tuple(a * bright ** min(i, 3) for i, a in enumerate((1.0, 0.7, 0.55, 0.42, 0.3, 0.2)))
+    t60s = tuple(t60 * 0.78 ** i for i in range(len(PANE_R)))
+    return S.partials(f, PANE_R, amps, t60s, dur, r, detune_hz)
+
+
+def litho(f: float, dur: float = 0.9, t60: float = 0.6, r: np.random.Generator | None = None,
+          dark: float = 3000.0) -> np.ndarray:
+    """A struck stone bar: free-bar modes, low-passed — a dark, dry ring with no glass in it."""
+    r = r or rng(f'litho:{f:.1f}')
+    y = S.partials(f, BAR_R, (1.0, 0.45, 0.2, 0.08), (t60, t60 * 0.35, t60 * 0.15, t60 * 0.08), dur, r, 0.2)
+    return norm(lp(y, dark))
+
+
+def clonk(f: float, dur: float = 0.6, t60: float = 0.35, r: np.random.Generator | None = None) -> np.ndarray:
+    """A carved wooden herd bell: the tube's odd modes, rung by a wooden clapper knock on its mouth."""
+    r = r or rng(f'clonk:{f:.1f}')
+    y = hollow(f, dur, t60, r, odd=3, hit_ms=2.0, inharm=0.03)
+    k = S.knock(r, f * 2.1, 0.03, 3, 'wood')
+    out = np.zeros(max(y.size, k.size))
+    out[:y.size] += y
+    out[:k.size] += 0.5 * k
+    return norm(out)
+
+
+def whistle(f0: float, f1: float, dur: float, r: np.random.Generator, vib_hz: float = 5.5, cents: float = 22.0,
+            air: float = 0.18, curve: float = 2.0, env: str = 'breath') -> np.ndarray:
+    """A lark-like whistle: a sine gliding f0 → f1, its vibrato easing in, a breath of air around it."""
+    n = ns(dur)
+    t = np.arange(n) / SR
+    u = t / dur
+    g = (1 - np.exp(-curve * u)) / (1 - np.exp(-curve)) if curve else u
+    vib = 2 ** (cents / 1200 * np.sin(TAU * vib_hz * t) * np.clip(t / 0.06, 0, 1))
+    y = O.sine(np.exp(np.log(f0) + (np.log(f1) - np.log(f0)) * g) * vib, n)
+    y = y + air * norm(F.apply(O.white(n, r), [F.bandpass(float(math.sqrt(f0 * f1)), 2.0)]))
+    envl = (E.stages([(0, 0, 0), (min(0.02, dur * 0.2), 1, -1.5), (dur, 0, 2.0)], n) if env == 'breath'
+            else E.decay(n, dur * 0.7, 0.004))
+    return norm(y * envl)
+
+
+def sear(f: float, dur: float, r: np.random.Generator, index=(6.0, 1.5), ratio: float = 1.41, sizzle: float = 0.35,
+         flicker: float = 9.0) -> np.ndarray:
+    """Burning glass: an inharmonic FM tone whose index falls (a white-hot edge cooling), a sizzle riding it
+    (high noise chopped by a fast flicker)."""
+    n = ns(dur)
+    t = np.arange(n) / SR
+    idx = index[1] + (index[0] - index[1]) * np.exp(-t / max(dur * 0.4, 1e-3))
+    y = O.fm(np.full(n, float(f)), ratio, idx, n)
+    s = F.apply(O.white(n, r), [F.highpass(4500, 0.7), F.lowpass(11000, 0.7)])
+    s = s * (0.6 + 0.4 * np.sin(TAU * flicker * t + r.uniform(0, TAU)))
+    return norm((norm(y) + sizzle * norm(s)) * E.decay(n, dur * 0.8, 0.003))
+
+
+def hiss(r: np.random.Generator, dur: float, f0: float, f1: float, q: float = 1.2, attack: float = 0.015,
+         fall: float = 1.6) -> np.ndarray:
+    """Steam / heat hiss: bright noise through a band-pass gliding f0 → f1."""
+    n = ns(dur)
+    x = O.coloured(n, r, -1.0)
+
+    def gains(t, fr):
+        return F.bp_curve(fr, f0 * (f1 / f0) ** np.clip(t / dur, 0, 1), q, 2)
+
+    return norm(F.stft_filter(x, gains, frame=1024) * E.stages([(0, 0, 0), (attack, 1, -1.0), (dur, 0, fall)], n))
