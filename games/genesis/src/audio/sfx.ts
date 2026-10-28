@@ -256,30 +256,70 @@ const MAJ = [0, 4, 7], MIN = [0, 3, 7], ADD9 = [0, 4, 7, 14];
 // ───────────────────────────── the catalog ─────────────────────────────
 
 export const SFX: Record<string, Recipe> = {
-  // ── the hand ──
+  // ── the Touch (LIVING §3.6: the god's presence as light and weather; it still lifts, places and throws) ──
+  // its acts are air, thunder and light, never flesh. `variant` is how its people see the god (eventmap touchVariant):
+  // 'feared' — storm-dark: lower air, thunder under it; 'trusted' — warm light: brighter air, a glint of glass; '' between
   'hand.grab': (s) => {
-    s.nz('pink', 0, 0.004, 0, 0.1, 0.55, ['bandpass', 900, 1.3]);
-    s.tn('sine', 0, 95, 58, 0.09, 0.002, 0, 0.14, 0.45);
-    s.nz('white', 0.01, 0.01, 0.02, 0.16, 0.12, ['highpass', 3200]);
+    // the air drawn up into the Touch: an in-rushing gust that rises, and a soft low swell as the thing is lifted
+    const feared = s.variant === 'feared', trusted = s.variant === 'trusted';
+    s.nz('pink', 0, 0.16, 0.04, 0.24, 0.42, ['bandpass', feared ? 240 : 380, 1.6, feared ? 850 : trusted ? 1900 : 1400, 0.32]);
+    s.nz('white', 0.07, 0.1, 0, 0.18, trusted ? 0.08 : 0.05, ['highpass', 4200]);
+    s.tn('sine', 0.02, 62, 88, 0.3, 0.09, 0.05, 0.3, 0.3);
+    if (feared) rumble(s, 0, 1.0, 0.3, 110);
+    if (trusted) { s.bell('glass', 0.14, midiHz(88), 0.06); shimmer(s, 0.05, 0.5, 0.025); }
+    s.wet(0.15);
   },
   'hand.whoosh': (s) => {
+    // a throw: a gust that follows the speed; a storm wind when feared, a streak of light when trusted
     const sp = Math.max(5, s.size);
     const k = Math.min(1, sp / 90);
-    whoosh(s, 0, 0.35 + 0.5 * k, 0.35 + 0.55 * k, 250 + 200 * k, 900 + 1800 * k);
+    const low = s.variant === 'feared' ? 0.7 : s.variant === 'trusted' ? 1.2 : 1;
+    whoosh(s, 0, 0.35 + 0.5 * k, 0.35 + 0.55 * k, (250 + 200 * k) * low, (900 + 1800 * k) * low);
+    if (s.variant === 'feared') rumble(s, 0, 0.6 + 0.8 * k, 0.2 + 0.2 * k, 100);
+    if (s.variant === 'trusted') shimmer(s, 0.05, 0.4 + 0.5 * k, 0.03);
   },
   'hand.slap': (s) => {
-    s.nz('white', 0, 0.001, 0, 0.05, 0.95, ['highpass', 1200]);
-    s.tn('sine', 0, 150, 78, 0.06, 0.001, 0, 0.1, 0.65);
-    s.nz('pink', 0.005, 0.004, 0, 0.18, 0.3, ['lowpass', 420]);
-    s.wet(0.12);
+    // a strike of weather, not a blow: the crack of split air, then thunder rolling after it — heavy and long where the
+    // god is feared, a short bright flash where it is trusted
+    const feared = s.variant === 'feared', trusted = s.variant === 'trusted';
+    const depth = feared ? 1.3 : trusted ? 0.55 : 0.85;
+    s.nz('white', 0, 0.001, 0.008, 0.06, 0.7, ['highpass', 2000]);
+    s.nz('white', 0.01, 0.001, 0, 0.14 * depth, 0.3, ['bandpass', 3600, 1.1, 1300, 0.14]);
+    s.tn('sine', 0.015, 64 / Math.sqrt(depth), 33, 0.5 * depth, 0.01, 0.04, 0.75 * depth, 0.42);
+    s.nz('brown', 0.03, 0.08, 0.12 * depth, 1.1 * depth, feared ? 0.6 : 0.42, ['lowpass', 210, 0.8]);
+    if (feared) s.buf(`thunder${Math.floor(s.r() * 3)}`, 0.04, s.rr(1.05, 1.2), 0.45, ['lowpass', 1800]);
+    if (trusted) shimmer(s, 0, 0.5, 0.035);
+    s.wet(feared ? 0.4 : 0.26);
   },
   'hand.stroke': (s) => {
-    s.nz('pink', 0, 0.18, 0.12, 0.5, 0.28, ['bandpass', 520, 0.9, 950, 0.7]);
-    s.pad(0.05, chord(64, MAJ), 0.25, 0.2, 0.8, 0.09);
-    s.wet(0.3);
+    // the Touch passing gently over: a breath of warm air and light (an open chord, no third, so it sits in any mode
+    // the score is in, and a shimmer); where the god is feared, the hush after a storm — a low open fifth under a sigh
+    if (s.variant === 'feared') {
+      s.nz('pink', 0, 0.3, 0.15, 0.7, 0.24, ['bandpass', 360, 0.8, 560, 0.8]);
+      s.pad(0.08, [50, 57, 62], 0.35, 0.2, 1.0, 0.08);
+    } else {
+      const trusted = s.variant === 'trusted';
+      s.nz('pink', 0, 0.18, 0.12, 0.5, 0.22, ['bandpass', 600, 0.9, 1100, 0.7]);
+      s.pad(0.05, trusted ? [62, 69, 76, 81] : [62, 69, 76], 0.25, 0.25, 0.9, 0.09);
+      shimmer(s, 0.1, 0.9, trusted ? 0.03 : 0.018);
+      if (trusted) s.arp('glass', 0.2, [86, 93], 0.14, 0.05);
+    }
+    s.wet(0.35);
   },
-  'hand.place': (s) => { thud(s, 0, 0.42); s.nz('white', 0, 0.003, 0, 0.08, 0.06, ['highpass', 2500]); },
-  'hand.drop': (s) => { whoosh(s, 0, 0.3, 0.25, 700, 300); thud(s, 0.26, 0.4); },
+  'hand.place': (s) => {
+    // set down gently: the thing settles (a soft thud) as the air it was held in sighs away
+    thud(s, 0, 0.36);
+    s.nz('pink', 0, 0.06, 0.02, 0.3, 0.12, ['bandpass', 1100, 1.2, 420, 0.3]);
+    if (s.variant === 'feared') rumble(s, 0.05, 0.9, 0.14, 90);
+    else if (s.variant === 'trusted') s.bell('glass', 0.04, midiHz(93), 0.04);
+  },
+  'hand.drop': (s) => {
+    // let fall: the air it falls through, then the landing
+    whoosh(s, 0, 0.3, 0.25, 700, 300);
+    thud(s, 0.26, 0.4);
+    if (s.variant === 'feared') rumble(s, 0.2, 0.9, 0.16, 90);
+    else if (s.variant === 'trusted') shimmer(s, 0, 0.3, 0.02);
+  },
   lost: (s) => {
     s.tn('sine', 0, 900, 2600, 1.4, 0.05, 0.3, 1.1, 0.22);
     whoosh(s, 0, 1.4, 0.3, 300, 2400);

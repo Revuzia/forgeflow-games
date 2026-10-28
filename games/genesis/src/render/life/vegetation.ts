@@ -99,6 +99,19 @@ const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
   return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous, fruit };
 });
 
+/**
+ * Dev / shot probe (window.__GENESIS_LIFE__.plants; empty in play): remap tree and crop species indices at draw time,
+ * so a scripted shot can show the fruit trees or the newer crops on the lookdev world (whose fields name only a few
+ * species), and pin the year for the fruit season. Bump `version` after a change: the caches rebuild.
+ */
+export const PLANT_PROBE = { tree: new Map<number, number>(), crop: new Map<number, number>(), version: 0, yearFrac: -1 };
+if (typeof window !== 'undefined') {
+  const w = window as unknown as { __GENESIS_LIFE__?: { all: unknown[]; plants?: typeof PLANT_PROBE; plantIds?: string[] } };
+  w.__GENESIS_LIFE__ ??= { all: [] };
+  w.__GENESIS_LIFE__.plants = PLANT_PROBE;
+  w.__GENESIS_LIFE__.plantIds = (BASE_PACK.plants ?? []).map((p) => String(p.id ?? ''));
+}
+
 const VEG_VERT_PARS = /* glsl */ `
 attribute float aWind;
 attribute vec2 aLeafUv;
@@ -581,6 +594,7 @@ export class Vegetation {
         const spf = isShrub ? shrubSp : treeSp;
         let sp = spf ? Math.round(spf[pick]) : -1;
         if (sp < 0 && spf) sp = Math.round(spf[c]);
+        if (!isShrub && PLANT_PROBE.tree.size) sp = PLANT_PROBE.tree.get(sp) ?? sp;
         let look = sp >= 0 && sp < SPECIES.length ? SPECIES[sp] : null;
         if (look && look.layer === 'sea') return; // kelp grows under the sea, placed above
         // a species of the wrong functional type for this layer (a mod, a stale index) is ignored, not obeyed
@@ -630,7 +644,7 @@ export class Vegetation {
       const want = Math.min(2.5, Math.max(0.3, 0.35 + speed / 7));
       WIND_K.value += (want - WIND_K.value) * 0.02;
     }
-    const stamp = `${pv.fieldVersion.get('tree') ?? 0}|${pv.fieldVersion.get('shrub') ?? 0}|${pv.fieldVersion.get('surface') ?? 0}|${pv.fieldVersion.get('burnt') ?? 0}|${pv.fieldVersion.get('treeSpecies') ?? 0}|${this.density}`;
+    const stamp = `${pv.fieldVersion.get('tree') ?? 0}|${pv.fieldVersion.get('shrub') ?? 0}|${pv.fieldVersion.get('surface') ?? 0}|${pv.fieldVersion.get('burnt') ?? 0}|${pv.fieldVersion.get('treeSpecies') ?? 0}|${this.density}|${PLANT_PROBE.version}`;
     // a season step re-tints the instances (autumn colour) without re-scattering them
     const season = Math.floor(this.yearFrac * 48);
     if (season !== this.seasonStep) { this.seasonStep = season; this.lastFrame = -1e9; }
@@ -743,7 +757,7 @@ export class Vegetation {
         const leafless = look?.deciduous && !IS_SHRUB[kind] ? Math.min(1, winterK * (0.7 + 0.6 * ((seed * 9.1) % 1))) : 0;
         // fruit hangs in its season only (a few days' spread from tree to tree)
         const fs = look?.fruit;
-        const yfT = (yfH + ((seed * 7.3) % 1) * 0.03) % 1;
+        const yfT = ((PLANT_PROBE.yearFrac >= 0 ? PLANT_PROBE.yearFrac : yfH) + ((seed * 7.3) % 1) * 0.03) % 1;
         const fruitOff = !fs || (fs[0] <= fs[1] ? yfT < fs[0] || yfT > fs[1] : yfT < fs[0] && yfT > fs[1]);
         // the canopy around it (0..1, carried in the role's fraction: the role is an integer 1..5): under a closed
         // canopy the trunks and lower crown see little sky

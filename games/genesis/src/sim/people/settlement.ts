@@ -296,7 +296,7 @@ export function found(x: PCtx, st: Settlement, c: number, ruinOf: Settlement | n
   if (st.recent.spaceColony !== undefined) delete st.recent.spaceColony;
   else if (ruinOf) tell(x.u, x.p, 'resettle', vars(x, st, -1, { other: ruinOf.name }), st, [settlementRef(x, st)]);
   else if (parent && parent.fallen < 0 && st.recent.colony !== undefined) tell(x.u, x.p, 'colony', vars(x, st, -1, { parent: parent.name, count: members.length }), st, [settlementRef(x, st), settlementRef(x, parent)]);
-  else if (parent && parent.fallen < 0) tell(x.u, x.p, 'split', vars(x, st, -1, { parent: parent.name, count: members.length }), st, [settlementRef(x, st), settlementRef(x, parent)]);
+  else if (parent && parent.fallen < 0) tell(x.u, x.p, st.recent.bud !== undefined ? 'bud' : 'split', vars(x, st, -1, { parent: parent.name, count: members.length }), st, [settlementRef(x, st), settlementRef(x, parent)]);
   else tell(x.u, x.p, 'founding', vars(x, st, -1, { count: members.length }), st, [settlementRef(x, st)]);
   emitSt(x, st, { t: 'settlement.founded', text: st.name, data: { species: x.c.species.list[st.species].id } });
   for (const m of members) { x.A.remember(m, 15, x.tick, st.id); x.A.boat[m] = -1; x.A.flags[m] &= ~AgentFlag.boat; }
@@ -1160,7 +1160,8 @@ function daily(x: PCtx, st: Settlement): void {
   // no water, or no food for days: they walk away
   if (abandonCheck(x, st)) return;
   // crowded and quarrelsome: a split; split down the middle: a schism
-  splitCheck(x, st);
+  // (fix r1 #10/#17: or, before a town ever gets that crowded, young households bud a daughter village nearby)
+  if (!splitCheck(x, st)) budCheck(x, st);
   const schism = schismCandidates(x, st);
   if (schism) {
     const child = splitOff(x, st, schism.leaving, 'schism');
@@ -1193,24 +1194,98 @@ export function updateTerritory(x: PCtx, st: Settlement): void {
   x.p.bump('territory');
 }
 
-function splitCheck(x: PCtx, st: Settlement): void {
+function splitCheck(x: PCtx, st: Settlement): boolean {
   const members = x.ps.members.get(st.id) ?? [];
   const pop = members.length;
   const limit = 70 + 18 * st.era;
-  if (pop < limit) return;
+  if (pop < limit) return false;
   const crowded = foodDays(x, st) < pop * 2 || (st.res?.fertile.length ?? 0) < 2;
-  if (!crowded && hashFloat(st.id, x.tick, worldSalt(x, 0x5b1)) > 0.08) return;
+  if (!crowded && hashFloat(st.id, x.tick, worldSalt(x, 0x5b1)) > 0.08) return false;
   // a third of the households leave, with what they know
   const leaving = st.households.filter((h, i) => i % 3 === 2 && h.members.length > 0);
-  if (!leaving.length) return;
-  splitOff(x, st, leaving, 'crowding');
+  if (!leaving.length) return false;
+  return splitOff(x, st, leaving, 'crowding') !== null;
+}
+
+/** (fix r1 #10/#17) a village this big presses on its land (the young look for ground of their own) */
+export const BUD_POP = 48;
+
+/**
+ * (fix r1 #10/#17, the owner's 'advance as a normal world would' and 'politics from real grievances') Budding: a settled
+ * village of BUD_POP or more, five years old, sends some of its young households out to clear land a short walk away
+ * (0.7-2.5 km): a daughter village of the same people, tongue and polity. That is how farming villages spread (Neolithic
+ * hamlets of a few houses budded daughters a kilometre or two off about once a generation), and it gives a world left
+ * alone the neighbours its trade, quarrels, raids and secessions need. Before this only the crowding split above made a
+ * second town, at 70 + 18 x era people (~124 in the bronze age), which an unattended village growing ~1.5 %/yr reached
+ * at year 125 (acceptance.json §5.1: one settlement at every year end on 8 of 8 seeds).
+ *
+ * Land pressure (free fertile ground near running out, fewer fields than half the households, or thin stores) makes it
+ * likelier on any day (6 % against 2 %); a village buds at most once in eight years. The leavers are whole households
+ * (none with a member away), youngest heads first, never the leader's: about a third of the people and at least ten
+ * adults, leaving at least 28 at home. Nothing new is saved: `recent.budAt` / `recent.bud` are keys of a saved Record.
+ */
+function budCheck(x: PCtx, st: Settlement): void {
+  if (st.band || st.fallen >= 0 || st.founded < 0 || x.tick - st.founded < 5 * x.year) return;
+  const members = x.ps.members.get(st.id) ?? [];
+  const pop = members.length;
+  if (pop < BUD_POP) return;
+  const last = st.recent.budAt;
+  if (last !== undefined && x.tick - last < 8 * x.year) return;
+  if (atWar(x, st)) return;
+  const pressed = (st.res?.fertile.length ?? 0) < 6 || st.fields.length * 2 < st.households.length || foodDays(x, st) < pop * 6;
+  if (hashFloat(st.id, x.tick, worldSalt(x, 0xb0d)) > (pressed ? 0.06 : 0.02)) return;
+  const A = x.A;
+  const cands: { h: Household; n: number; adults: number; oldest: number }[] = [];
+  for (const h of st.households) {
+    if (!h.members.length || h.members.includes(st.leader)) continue;
+    let n = 0, adults = 0, oldest = 0, away = false;
+    for (const id of h.members) {
+      const s = A.slotOf(id);
+      if (s < 0) continue;
+      if (A.settlement[s] !== st.id || A.mission[s]) { away = true; break; }
+      n++;
+      if (!(A.flags[s] & AgentFlag.child)) { adults++; oldest = Math.max(oldest, x.tick - A.birth[s]); }
+    }
+    if (!away && adults > 0) cands.push({ h, n, adults, oldest });
+  }
+  cands.sort((a, b) => a.oldest - b.oldest || a.h.id - b.h.id);
+  const want = Math.round(pop * 0.36);
+  const leaving: Household[] = [];
+  let n = 0, adults = 0;
+  for (const c of cands) {
+    if (n >= want && adults >= 10) break;
+    leaving.push(c.h); n += c.n; adults += c.adults;
+  }
+  if (adults < 10 || leaving.length < 3 || pop - n < 28) return;
+  // the new ground: the best site 0.7-2.5 km off that no other town holds, nearer preferred, that they can walk to
+  const p = x.p;
+  const cells = p.cellsNear(st.pos, 2500).slice().sort((a, b) => a - b);
+  const sites: [number, number][] = [];
+  for (let i = hash32(st.id, x.tick) & 1; i < cells.length; i += 2) {
+    const c = cells[i];
+    if (p.f.territory[c] >= 0) continue;
+    const at = cellPos(p, c);
+    const d = distM(p, at, st.pos);
+    if (d < 700) continue;
+    if (x.ps.settlements.some((o) => o.fallen < 0 && !o.band && o.id !== st.id && distM(p, o.pos, at) < 600)) continue;
+    const v = siteScore(x, st.species, c, st.id);
+    if (v >= 3.4) sites.push([c, v - d / 1000]);
+  }
+  sites.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  let site = -1;
+  for (const [c] of sites.slice(0, 4)) if (reachable(x, st, st.cell, c)) { site = c; break; }
+  // no ground to be had: they ask again in two years
+  st.recent.budAt = site >= 0 ? x.tick : x.tick - 6 * x.year;
+  if (site < 0) return;
+  const child = splitOff(x, st, leaving, 'bud', site);
+  if (child) child.recent.bud = x.tick;
 }
 
 /**
  * Households leave st as a band (crowding, a schism, exile): they take their share of the stores, their knowledge, a
  * drifted tongue, and walk to a good site well away — or, with boats, cross the water to a better one (colonisation).
  */
-export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: string): Settlement | null {
+export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: string, site = -1): Settlement | null {
   const A = x.A;
   const movable = (h: Household) => h.members.filter((id) => { const s = A.slotOf(id); return s >= 0 && A.settlement[s] === st.id && !A.mission[s]; });
   let n = 0;
@@ -1244,9 +1319,10 @@ export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: s
   refreshLibrary(x, st);
   child.era = computeEra(x, child);
   // where to: a good site well away from the parent, by land — or over the water when they have boats and it is better
-  const far = searchSite(x, st.species, st.cell, 9, st.id);
+  // (fix r1 #10/#17: a budding daughter village goes to the ground chosen for it, `site`, on foot)
+  const far = site >= 0 ? { cell: site, score: Infinity } : searchSite(x, st.species, st.cell, 9, st.id);
   let target = far.cell >= 0 && distM(x.p, cellPos(x.p, far.cell), st.pos) > 250 ? far.cell : -1;
-  const boat = bestBoat(x, st);
+  const boat = site >= 0 ? -1 : bestBoat(x, st);
   if (boat >= 0) {
     const over = colonySite(x, st, boat, target >= 0 ? far.score : -Infinity);
     if (over >= 0) {

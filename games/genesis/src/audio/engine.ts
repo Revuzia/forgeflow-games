@@ -27,7 +27,7 @@
 import type { HandView, SimEvent, StarView, UnitVec } from '../sim/types.ts';
 import { BufferBank, PRELOAD } from './bank.ts';
 import { softClipCurve, rng } from './dsp.ts';
-import { CueGate, cueFor, type CueSpec } from './eventmap.ts';
+import { CueGate, cueFor, touchVariant, type CueSpec } from './eventmap.ts';
 import { SceneProbe, attenuate, bodyPoint, hearingRef, toLocal, rotate, rotateInv, type AudioScene, type SceneWorld, type ScenePlanet, type ListenerState } from './scene.ts';
 import { Ambience, type PlayOpts } from './ambience.ts';
 import { Emitters } from './emitters.ts';
@@ -164,25 +164,56 @@ const wallSeconds = (): number => (typeof performance !== 'undefined' ? performa
 
 interface Bus { input: GainNode; vol: GainNode; wetIn: GainNode; wetVol: GainNode; kVol: Knob; kWet: Knob }
 
-/** the god's hand moving through the air: a whoosh that follows its speed */
+/**
+ * the Touch moving through the air: a gust that follows its speed, coloured by how its people see the god — a lower,
+ * darker gust over a distant storm's rumble when they fear it; a brighter one with a high shimmer of light when they
+ * trust it (HandView.regard, eased over a few seconds: a people's view of its god does not flip in a frame)
+ */
 class HandAir {
+  private readonly ctx: BaseAudioContext;
+  private readonly bank: BufferBank;
   private readonly sp: SpatialOut;
   private readonly bp: BiquadFilterNode;
   private readonly kF: Knob;
   private readonly kQ: Knob;
+  /** the gust itself: pink noise through the moving band */
+  private readonly kGust: Knob;
+  /** the storm under a feared Touch: brown noise, low-passed (attached once the bank has rendered it) */
+  private kStorm: Knob | null = null;
+  /** the light of a trusted Touch: white noise, band-passed high (attached once the bank has it) */
+  private kLight: Knob | null = null;
   private last: [number, number, number] | null = null;
   private speed = 0;
+  /** eased regard, −1 feared … +1 trusted */
+  regard = 0;
   constructor(ctx: BaseAudioContext, bank: BufferBank, dest: AudioNode, hrtf: boolean) {
+    this.ctx = ctx; this.bank = bank;
     this.sp = new SpatialOut(ctx, dest, hrtf);
     this.bp = bq(ctx, 'bandpass', 600, 1.2);
-    const buf = bank.need('pink')!;
-    const s = ctx.createBufferSource();
-    s.buffer = buf; s.loop = true;
-    s.start(ctx.currentTime, Math.random() * buf.duration);
-    s.connect(this.bp);
-    this.bp.connect(this.sp.input);
+    const gust = ctx.createGain(); gust.gain.value = 0;
+    this.loop('pink', this.bp);
+    this.bp.connect(gust);
+    gust.connect(this.sp.input);
     this.kF = new Knob(this.bp.frequency);
     this.kQ = new Knob(this.bp.Q);
+    this.kGust = new Knob(gust.gain);
+  }
+  private loop(name: string, into: AudioNode): boolean {
+    const buf = this.bank.need(name);
+    if (!buf) return false;
+    const s = this.ctx.createBufferSource();
+    s.buffer = buf; s.loop = true;
+    s.start(this.ctx.currentTime, Math.random() * buf.duration);
+    s.connect(into);
+    return true;
+  }
+  /** a noise layer through a filter into the Touch's place, silent until set */
+  private layer(name: string, f: BiquadFilterNode): Knob | null {
+    if (!this.bank.has(name)) return null;
+    const g = this.ctx.createGain(); g.gain.value = 0;
+    if (!this.loop(name, f)) return null;
+    f.connect(g); g.connect(this.sp.input);
+    return new Knob(g.gain);
   }
   update(hand: AudioScene['hand'], local: number[] | null, now: number, dt: number): void {
     let v = 0;
@@ -193,10 +224,20 @@ class HandAir {
     } else this.last = null;
     // snapshots move the hand in steps: smooth the speed over ~150 ms
     this.speed += (Math.min(400, v) - this.speed) * (1 - Math.exp(-dt / 0.15));
+    this.regard += ((hand?.regard ?? this.regard) - this.regard) * (1 - Math.exp(-Math.min(dt, 5) / 2.5));
     const k = Math.max(0, Math.min(1, (this.speed - 6) / 60));
-    this.kF.set(260 + Math.min(2600, this.speed * 22) * (hand?.held ? 0.6 : 1), now, 0.08);
+    const fear = Math.max(0, -this.regard), trust = Math.max(0, this.regard);
+    if (hand && fear > 0.05 && !this.kStorm) this.kStorm = this.layer('brown', bq(this.ctx, 'lowpass', 150, 0.8));
+    if (hand && trust > 0.05 && !this.kLight) this.kLight = this.layer('white', bq(this.ctx, 'bandpass', 7200, 2.2));
+    // feared: the gust drops toward a storm's register; trusted: it lifts and opens
+    const tint = 1 - 0.4 * fear + 0.25 * trust;
+    this.kF.set((260 + Math.min(2600, this.speed * 22) * (hand?.held ? 0.6 : 1)) * tint, now, 0.08);
     this.kQ.set(0.8 + 1.5 * k, now, 0.1);
-    this.sp.place(local ?? [0, 0, -1], 0.5 * k * k, now, 0.15, 0.05);
+    this.kGust.set(0.5 * k * k, now, 0.05);
+    // the storm grumbles a little even while the Touch rests and swells as it moves; the light only glints in motion
+    this.kStorm?.set(hand ? fear * fear * (0.06 + 0.4 * k) : 0, now, 0.3);
+    this.kLight?.set(hand ? trust * trust * 0.09 * k : 0, now, 0.15);
+    this.sp.place(local ?? [0, 0, -1], hand && local ? 1 : 0, now, 0.15, 0.05);
   }
 }
 
@@ -652,7 +693,9 @@ class AudioEngine implements GenesisAudio {
         local = undefined;
     }
     const delay = spec.travel && local && dist > 120 && spec.cls === 'world' ? soundDelay(dist) : 0;
-    const end = this.play(spec.cue, { t: now + 0.01 + delay + delayExtra, level, size: spec.size, count, variant: spec.variant, pri: spec.pri, local, spread });
+    // the Touch's acts sound as its people see the god: storm when feared, warm light when trusted
+    const variant = spec.variant || (spec.cue.startsWith('hand.') ? touchVariant(this.view?.hand?.regard ?? this.view?.hand?.alignment) : '');
+    const end = this.play(spec.cue, { t: now + 0.01 + delay + delayExtra, level, size: spec.size, count, variant, pri: spec.pri, local, spread });
     if (!end) return;
     if (spec.cue === 'thunder') this.ambience?.heardThunder();
     // big moments push the music back

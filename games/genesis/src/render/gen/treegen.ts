@@ -332,6 +332,9 @@ interface BroadSpec {
   per: [number, number, number];    // sprays per cluster per LOD
   flat: number;
   leafless?: boolean;
+  /** multiplies the foliage's vertex colour (the olive's silvery grey-green: the species tint alone is clamped near
+   *  the atlas green) */
+  leafMul?: RGB;
 }
 
 function broadSpec(kind: TreeKind): BroadSpec {
@@ -370,13 +373,13 @@ function broadSpec(kind: TreeKind): BroadSpec {
       // a short trunk, wide low limbs and a rounded, fairly dense crown of small leaves (an orchard tree)
       return {
         grow: { forkH: 0.26, trunkR: 0.032, limbs: [3, 5], limbAngle: [38, 60], limbLen: 0.42, childCount: [2, 3], childAngle: [25, 45], lenRatio: 0.66, radiusRatio: 0.58, tropism: 0.12, maxDepth: 3, lateral: 0.6, lean: 0.1, leader: 0.15 },
-        bark: [0.1, 0.08, 0.065], tile: LEAF_TILE.smallSpray, size: [0.12, 0.27, 0.38], per: [8, 5, 4], flat: 0.25,
+        bark: [0.1, 0.08, 0.065], tile: LEAF_TILE.smallSpray, size: [0.13, 0.29, 0.4], per: [10, 6, 5], flat: 0.25,
       };
     case 'olive':
       // a squat, gnarled, leaning trunk (skeletonFor twists it), an open grey-green crown of narrow leaves
       return {
         grow: { forkH: 0.22, trunkR: 0.05, limbs: [3, 4], limbAngle: [28, 52], limbLen: 0.45, childCount: [2, 3], childAngle: [30, 55], lenRatio: 0.62, radiusRatio: 0.55, tropism: 0.05, maxDepth: 3, lateral: 0.6, lean: 0.25, leader: 0.2 },
-        bark: [0.13, 0.12, 0.1], tile: LEAF_TILE.smallSpray, size: [0.1, 0.23, 0.34], per: [6, 4, 3], flat: 0.1,
+        bark: [0.13, 0.12, 0.1], tile: LEAF_TILE.smallSpray, size: [0.1, 0.23, 0.34], per: [7, 5, 4], flat: 0.1, leafMul: [1.3, 0.92, 2.1],
       };
     case 'fig':
       // low, many-limbed and spreading wider than tall, smooth pale grey bark, big leaves held flat
@@ -717,7 +720,7 @@ function gnarl(sk: Skeleton, rng: Rng): void {
 
 /** fruit per kind: colour (albedo), radius as a fraction of the tree's height, fruit per twig, how far below it hangs */
 const FRUIT: Partial<Record<TreeKind, { col: RGB; blush?: RGB; r: number; per: number; hang: number; long?: number }>> = {
-  apple: { col: [0.5, 0.06, 0.03], blush: [0.42, 0.36, 0.06], r: 0.0068, per: 3, hang: 0.012 },
+  apple: { col: [0.5, 0.06, 0.03], blush: [0.42, 0.36, 0.06], r: 0.0082, per: 4, hang: 0.012 },
   olive: { col: [0.07, 0.045, 0.06], blush: [0.2, 0.22, 0.07], r: 0.0032, per: 6, hang: 0.008, long: 1.35 },
   fig: { col: [0.2, 0.09, 0.15], blush: [0.25, 0.3, 0.1], r: 0.005, per: 3, hang: 0.006, long: 1.2 },
 };
@@ -828,6 +831,10 @@ function broadleafTree(kind: TreeKind, lod: number, variant: number): BufferGeom
           cluster(m, rng, tile, at, new Vector3(Math.cos(a), 0.4, Math.sin(a)).normalize(), 2, sk.crownR * 0.75, sk.crown, sk.crownR, 0.5, 0.5, spec.flat);
         }
       }
+    }
+    if (spec.leafMul) {
+      const k = spec.leafMul;
+      for (let v = 0; v < m.card.length; v++) if (m.card[v] >= 0.5) { m.col[v * 3] *= k[0]; m.col[v * 3 + 1] *= k[1]; m.col[v * 3 + 2] *= k[2]; }
     }
     hangFruit(m, rng, kind, sk, lod);
   }
@@ -1000,8 +1007,8 @@ function datePalm(lod: number, variant: number): BufferGeometry {
         const x = p.x + side.x * su * half, y = p.y - Math.abs(su) * drop, z = p.z + side.z * su * half;
         if (dry) {
           // a dry frond: bark-coloured (no foliage tint), hanging against the trunk
-          const sh = 0.8 + 0.3 * t;
-          ids.push(m.vert(x, y, z, out.x * 0.5 + side.x * su * 0.4, 0.4, out.z * 0.5 + side.z * su * 0.4, 0.3 * sh, 0.22 * sh, 0.12 * sh, 0.3 + 0.2 * t, 0, 0, 0));
+          const sh = 0.75 + 0.35 * t;
+          ids.push(m.vert(x, y, z, out.x * 0.5 + side.x * su * 0.4, 0.4, out.z * 0.5 + side.z * su * 0.4, 0.23 * sh, 0.15 * sh, 0.075 * sh, 0.3 + 0.2 * t, 0, 0, 0));
         } else {
           const [u, v] = atlasUV(LEAF_TILE.frond, (su + 1) / 2, t);
           ids.push(m.vert(x, y, z, out.x * 0.3 + side.x * su * 0.5, 0.85, out.z * 0.3 + side.z * su * 0.5, 0.92, 0.95, 0.88, 0.45 + 0.4 * t, u, v, 1));
@@ -1030,7 +1037,7 @@ function datePalm(lod: number, variant: number): BufferGeometry {
   if (lod < 2) {
     // the skirt: dry fronds hanging down the trunk under the crown
     const nd = lod === 0 ? 9 : 6;
-    for (let f = 0; f < nd; f++) frond((f / nd) * Math.PI * 2 + rng.float() * 0.5, -1.25 - rng.float() * 0.2, 0.16 + rng.float() * 0.05, 0.07, lod === 0 ? 2 : 1, true);
+    for (let f = 0; f < nd; f++) frond((f / nd) * Math.PI * 2 + rng.float() * 0.5, -1.05 - rng.float() * 0.25, 0.13 + rng.float() * 0.05, 0.035, lod === 0 ? 2 : 1, true);
     // bunches of dates: a stalk arching out of the crown and a long cluster hanging from it
     const nb = lod === 0 ? 4 + Math.floor(rng.float() * 3) : 3;
     for (let k = 0; k < nb; k++) {

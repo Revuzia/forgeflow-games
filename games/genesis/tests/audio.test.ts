@@ -13,8 +13,8 @@ import {
 } from '../src/audio/music.ts';
 import { foldLoop, peakOf, renderBell, renderCrickets, renderImpulse, renderNoise, renderPluck, softClipCurve, CHIME, hash32 } from '../src/audio/dsp.ts';
 import { SceneProbe, type ScenePlanet, type SceneWorld } from '../src/audio/scene.ts';
-import { CueGate, DISASTER_FAMILIES, MIRACLE_KINDS, commandCue, cueFor, disasterFamily } from '../src/audio/eventmap.ts';
-import { SFX } from '../src/audio/sfx.ts';
+import { CueGate, DISASTER_FAMILIES, MIRACLE_KINDS, commandCue, cueFor, disasterFamily, touchVariant } from '../src/audio/eventmap.ts';
+import { SFX, type Sfx } from '../src/audio/sfx.ts';
 import { disasterBed } from '../src/audio/emitters.ts';
 import { UI_CUE, UI_RATE, UI_SHADOW, UiCueMixer, isUiCue, uiRule } from '../src/audio/uicues.ts';
 import { MuteSync, type PortalControls } from '../src/audio/mutesync.ts';
@@ -671,4 +671,67 @@ test('a calmer bed at 1x: the procedural score is softer, warmer and its drums h
   assert.ok(db < -2 && db > -3.5, `${db} dB`);
   assert.ok(CALM_TRIM.tone > 0.4 && CALM_TRIM.tone < 1);
   assert.ok(CALM_TRIM.perc >= 0.4 && CALM_TRIM.perc < 1);
+});
+
+// ───────────────────────────── the Touch (LIVING §3.6, H7) ─────────────────────────────
+
+/** what a recipe draws, call by call (a recorder in place of the WebAudio builder: no context needed) */
+function drawCue(cue: string, variant: string, size = 40): [string, ...unknown[]][] {
+  const calls: [string, ...unknown[]][] = [];
+  const rec: Record<string | symbol, unknown> = { t: 0, size, count: 1, variant, r: () => 0.5, rr: (a: number, b: number) => (a + b) / 2 };
+  const s = new Proxy(rec, { get: (o, k) => (k in o ? o[k] : (...args: unknown[]) => { calls.push([String(k), ...args]); return 0; }) });
+  SFX[cue](s as unknown as Sfx);
+  return calls;
+}
+/** when a drawn noise / tone ends (nz: at, a, hold, rel; tn: at, f0, f1, gl, a, hold, rel) */
+const endOf = (c: [string, ...unknown[]]): number => {
+  const n = c.slice(1) as number[];
+  return c[0] === 'nz' ? n[1] + n[2] + n[3] + n[4] : c[0] === 'tn' ? n[1] + n[5] + n[6] + n[7] : 0;
+};
+
+test('the Touch is light and weather, never a hand: its acts sound as its people see the god', () => {
+  // the bands of LIVING §3.1
+  assert.equal(touchVariant(-0.6), 'feared');
+  assert.equal(touchVariant(0.6), 'trusted');
+  assert.equal(touchVariant(0.2), '');
+  assert.equal(touchVariant(-0.2), '');
+  assert.equal(touchVariant(undefined), '');
+  assert.equal(touchVariant(Number.NaN), '');
+  const acts = ['hand.grab', 'hand.whoosh', 'hand.slap', 'hand.stroke', 'hand.place', 'hand.drop'];
+  for (const cue of acts) {
+    const [plain, feared, trusted] = ['', 'feared', 'trusted'].map((v) => JSON.stringify(drawCue(cue, v)));
+    assert.notEqual(feared, plain, `${cue}: feared sounds like the plain Touch`);
+    assert.notEqual(trusted, plain, `${cue}: trusted sounds like the plain Touch`);
+    assert.notEqual(feared, trusted, cue);
+    for (const v of ['', 'feared', 'trusted']) assert.ok(drawCue(cue, v).length > 0, `${cue} ${v} is silent`);
+  }
+  for (const v of ['', 'feared', 'trusted']) {
+    const slap = drawCue('hand.slap', v);
+    // a strike of weather: thunder rolls after it (low brown noise for more than half a second) ...
+    assert.ok(slap.some((c) => c[0] === 'nz' && c[1] === 'brown' && endOf(c) > 0.5), `slap ${v}: no thunder roll`);
+    // ... and no flesh: no short mid-pitched thump (the old smack was a 150 Hz sine gone in 0.1 s)
+    assert.ok(!slap.some((c) => c[0] === 'tn' && (c[3] as number) > 120 && endOf(c) < 0.25), `slap ${v}: a smack`);
+  }
+  // heavier when feared, a short bright flash when trusted
+  const longest = (v: string): number => Math.max(...drawCue('hand.slap', v).map(endOf));
+  assert.ok(longest('feared') > longest('') && longest('') > longest('trusted'), 'the strike grows with fear');
+  assert.ok(drawCue('hand.slap', 'feared').some((c) => c[0] === 'buf' && /^thunder\d$/.test(c[1] as string)), 'feared: real thunder');
+  // feared: the storm under it (brown rumble); trusted: light (glass, or a high shimmer)
+  const light = (c: [string, ...unknown[]]): boolean => (c[0] === 'bell' && c[1] === 'glass') || (c[0] === 'arp' && c[1] === 'glass')
+    || (c[0] === 'nz' && c[1] === 'white' && Array.isArray(c[7]) && c[7][0] === 'bandpass' && (c[7][1] as number) >= 6000);
+  for (const cue of ['hand.grab', 'hand.whoosh', 'hand.place', 'hand.drop']) {
+    assert.ok(drawCue(cue, 'feared').some((c) => c[0] === 'nz' && c[1] === 'brown'), `${cue} feared: no storm`);
+    assert.ok(drawCue(cue, 'trusted').some(light), `${cue} trusted: no light`);
+  }
+  // the stroke's warm chord has no third, so it sits in whatever mode the score is in
+  for (const v of ['', 'trusted']) {
+    const pad = drawCue('hand.stroke', v).find((c) => c[0] === 'pad');
+    const pcs = new Set(((pad?.[2] ?? []) as number[]).map((m) => (m - 62 + 120) % 12));
+    assert.ok(pad && !pcs.has(3) && !pcs.has(4), `stroke ${v}: ${[...pcs]}`);
+  }
+  // the scene hears how the people see the god where the Touch is (HandView.regard, else alignment)
+  const hand = { planet: 0, pos: [0, 0, 1] as [number, number, number], alt: 5, held: null, pose: 'open', alignment: 0.1 };
+  assert.equal(listen({ planets: [planet()], hand: { ...hand, regard: -0.8 } }, 20).hand?.regard, -0.8);
+  assert.equal(listen({ planets: [planet()], hand }, 20).hand?.regard, 0.1);
+  assert.equal(listen({ planets: [planet()], hand: { ...hand, regard: 7 } }, 20).hand?.regard, 1);
 });

@@ -91,6 +91,15 @@ export function disasterFamily(kind: string): string {
 /** every miracle the sim knows (god/miracles.ts) */
 export const MIRACLE_KINDS = ['water', 'food', 'heal', 'forest', 'storm', 'fire', 'fireball', 'shield', 'lightning', 'wood', 'fertility', 'calm', 'teach', 'meteor'] as const;
 
+/**
+ * how the Touch's acts sound, by how its people see the god (HandView.regard −1 feared … +1 trusted; the bands of
+ * LIVING §3.1: feared < −0.33 ≤ awed ≤ 0.33 < trusted): storm when feared, warm light when trusted, plain air between
+ */
+export function touchVariant(regard: number | null | undefined): '' | 'feared' | 'trusted' {
+  const r = typeof regard === 'number' && Number.isFinite(regard) ? regard : 0;
+  return r < -0.33 ? 'feared' : r > 0.33 ? 'trusted' : '';
+}
+
 /** the sound of a successful command, by its kind (null: silent, or another event carries its sound) */
 export function commandCue(k: string): { cue: string; gain: number; gap: number; variant: string } | null {
   switch (k) {

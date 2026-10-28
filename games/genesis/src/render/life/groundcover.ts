@@ -30,7 +30,7 @@ import { treeGeometry } from '../gen/treegen.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import type { BufferGeometry } from 'three';
 import { leafClusterTexture } from '../gen/leaftex.ts';
-import { makeVegMaterial } from './vegetation.ts';
+import { makeVegMaterial, PLANT_PROBE } from './vegetation.ts';
 import type { Vector3 } from 'three';
 
 /** floats per cached item: dir xyz, ground radius, yaw, scale, kind, variant, tint r g b (crops: phase, height, -) */
@@ -39,14 +39,23 @@ const VARIANTS = 3;
 /** item kinds */
 const GK = { grass: 0, stone: 1, flower: 2, fern: 3, log: 4, reed: 5, crop: 6, mushroom: 7 } as const;
 const KIND_COUNT = 8;
-/** variants per kind (crops: 4 types × 2) */
-const KVARS = [VARIANTS, VARIANTS, 5, 2, 2, 2, 8, 3];
-/** crop type of each plants.json index (crop forms: grain → wheat / flax, paddy → rice, stalk → maize) */
+/** variants per kind (crops: CROP_TYPES × 2) */
+const KVARS = [VARIANTS, VARIANTS, 5, 2, 2, 2, CROP_TYPES.length * 2, 3];
+/** crop type (CROP_TYPES index) of each plants.json index: by species, else by form (grain → wheat, paddy → rice,
+ *  stalk → maize, leafy → potato, bush → cotton) */
 const CROP_OF: number[] = (BASE_PACK.plants ?? []).map((p) => {
   const f = String(p.form ?? ''), id = String(p.id ?? '');
-  return f === 'paddy' ? 1 : f === 'stalk' ? 2 : id === 'flax' ? 3 : 0;
+  const byId = CROP_TYPES.findIndex((t) => id === t || id === `wild-${t}`);
+  if (byId >= 0) return byId;
+  return f === 'paddy' ? 1 : f === 'stalk' ? 2 : f === 'leafy' ? 6 : f === 'bush' ? 8 : 0;
 });
-const CROP_H = [1.0, 0.95, 2.4, 0.85];
+/** clump height (m, full grown) per crop type */
+export const CROP_H = [1.0, 0.95, 2.4, 0.85, 0.85, 2.0, 0.55, 0.42, 1.15];
+/** albedo-scale tints per crop type (the clump's vertex shade is ~0.85): young green, and ripe (gold for the grains,
+ *  pale straw for maize and barley, buff lentils, the dying yellow-brown haulm of potatoes, cotton's reddening leaves
+ *  — its bolls burst white under the same tint) */
+export const CROP_G0: [number, number, number][] = [[0.08, 0.15, 0.035], [0.08, 0.15, 0.035], [0.08, 0.15, 0.035], [0.08, 0.15, 0.035], [0.09, 0.15, 0.04], [0.075, 0.14, 0.035], [0.06, 0.14, 0.03], [0.085, 0.15, 0.045], [0.08, 0.15, 0.035]];
+export const CROP_G1: [number, number, number][] = [[0.42, 0.31, 0.095], [0.42, 0.31, 0.095], [0.34, 0.29, 0.13], [0.42, 0.31, 0.095], [0.47, 0.37, 0.14], [0.3, 0.26, 0.12], [0.17, 0.13, 0.05], [0.36, 0.3, 0.14], [0.4, 0.31, 0.25]];
 
 // The terrain draws farmland as fields (cells of voronoi3(P · 0.019 + 3.7), ~50 m) each with its own phase through
 // the year and a kind (k = ⌊id · 5⌋: k ≥ 4 pasture); the crops stand in exactly those fields at exactly those stages.
@@ -135,6 +144,7 @@ export class GroundCover {
   readonly farFade: IUniform<{ x: number; y: number }> = { value: { x: FAR_CROP_RANGE * 0.8, y: FAR_CROP_RANGE } };
   private farMeshes: InstancedMesh[] = [];
   private farCache = new Map<number, Float32Array>();
+  private probeV = 0;
   private farLast: [number, number, number] = [1e9, 0, 0];
   private farLastFrame = -1e9;
 
@@ -301,7 +311,8 @@ export class GroundCover {
         const yaw = hashFloat(c, k, 7) * Math.PI * 2;
         const variant = Math.floor(hashFloat(c, k, 8) * VARIANTS) % VARIANTS;
         if (kind === GK.crop) {
-          const sp = cropSp ? Math.round(cropSp[h.wa >= h.wb && h.wa >= h.wc ? h.a : h.wb >= h.wc ? h.b : h.c]) : -1;
+          const sp0 = cropSp ? Math.round(cropSp[h.wa >= h.wb && h.wa >= h.wc ? h.a : h.wb >= h.wc ? h.b : h.c]) : -1;
+          const sp = PLANT_PROBE.crop.get(sp0) ?? sp0;
           const type = sp >= 0 && sp < CROP_OF.length ? CROP_OF[sp] : 0;
           // record the terrain field's id: its phase through the year and its kind (hay / tilled after harvest)
           out.push(dx, dy, dz, gh, (hashFloat(c, 3) * 4 | 0) * Math.PI / 2 + (r3 - 0.5) * 0.3, CROP_H[type] * (0.85 + 0.3 * r2), GK.crop, type * 2 + (r3 < 0.5 ? 0 : 1), fid, 0, 0);
@@ -336,6 +347,8 @@ export class GroundCover {
 
   /** refresh instances around the camera (body frame, m); quick when the camera has not moved */
   update(pv: PlanetView, camBody: Vector3, frame: number): void {
+    // (the dev probe's crop remap: rebuild everything, near and far)
+    if (PLANT_PROBE.version !== this.probeV) { this.probeV = PLANT_PROBE.version; this.cache.clear(); this.stale.clear(); this.farCache.clear(); this.lastFrame = -1e9; this.farLastFrame = -1e9; }
     let stamp = '';
     for (const k of SIG_FIELDS) stamp += (pv.fieldVersion.get(k as never) ?? 0) + '|';
     if (stamp !== this.stamp) {
@@ -411,8 +424,8 @@ export class GroundCover {
           grow *= ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
           const ripe = Math.min(1, Math.max(0, (ph - 0.45) / 0.07));
           // albedo-scale tints (the clump's vertex shade is ~0.85): green, then gold (maize a paler straw)
-          const g0: [number, number, number] = [0.08, 0.15, 0.035];
-          const g1: [number, number, number] = variant >> 1 === 2 ? [0.34, 0.29, 0.13] : [0.42, 0.31, 0.095];
+          const g0 = CROP_G0[variant >> 1] ?? CROP_G0[0];
+          const g1 = CROP_G1[variant >> 1] ?? CROP_G1[0];
           const hay: [number, number, number] = [0.28, 0.24, 0.1];
           const k2 = ph >= 0.7 ? 1 : 0;
           cr = (g0[0] + (g1[0] - g0[0]) * ripe) * (1 - k2) + hay[0] * k2; cg = (g0[1] + (g1[1] - g0[1]) * ripe) * (1 - k2) + hay[1] * k2; cb = (g0[2] + (g1[2] - g0[2]) * ripe) * (1 - k2) + hay[2] * k2;
@@ -594,7 +607,8 @@ export class GroundCover {
         const at = (f: Float32Array | undefined) => (f ? f[h.a] * h.wa + f[h.b] * h.wb + f[h.c] * h.wc : 0);
         const cr = at(crop);
         if (cr < 0.4 || at(road) > 0.5 || hashFloat(c, k, 22) > Math.min(1, cr * 1.15)) continue;
-        const sp = cropSp ? Math.round(cropSp[owner]) : -1;
+        const sp0 = cropSp ? Math.round(cropSp[owner]) : -1;
+        const sp = PLANT_PROBE.crop.get(sp0) ?? sp0;
         const type = sp >= 0 && sp < CROP_OF.length ? CROP_OF[sp] : 0;
         out.push(dx, dy, dz, gh, yaw, fid, type * 2 + (hashFloat(c, k, 24) < 0.5 ? 0 : 1));
       }
@@ -615,8 +629,8 @@ function cropStage(fid: number, yf: number, variant: number): { grow: number; r:
   if (ph < 0.11 || (ph >= 0.7 && k >= 2.5)) return null;
   const grow = ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
   const ripe = Math.min(1, Math.max(0, (ph - 0.45) / 0.07));
-  const g0 = [0.08, 0.15, 0.035];
-  const g1 = variant >> 1 === 2 ? [0.34, 0.29, 0.13] : [0.42, 0.31, 0.095];
+  const g0 = CROP_G0[variant >> 1] ?? CROP_G0[0];
+  const g1 = CROP_G1[variant >> 1] ?? CROP_G1[0];
   const hay = [0.28, 0.24, 0.1];
   const k2 = ph >= 0.7 ? 1 : 0;
   const mixc = (i: number) => (g0[i] + (g1[i] - g0[i]) * ripe) * (1 - k2) + hay[i] * k2;

@@ -370,17 +370,20 @@ export function prophetsDaily(u: Universe, p: Planet): void {
         if (d >= bd || meansNow(x, o).faith > home - 0.1) continue;
         bd = d; best = o;
       }
-      if (best) {
-        const days = 2 + 3 * hashFloat(ph.agent, u.tick, 0x70a8);
-        ph.journey = { target: best.id, until: u.tick + Math.round(days * x.day) };
-        // a stay, not a commute (fix r1 #16): food for the stay from the store, carried — they eat it there
-        provisionStay(x, st, s, Math.min(3, days));
-        relStat(u, 'prophet.journeys', 1);
-        tell(u, p, 'prophet.journey', vars(x, st, s, { other: best.name }), st, [agentRef(x, s), settlementRef(x, best)], 1);
-        interrupt(x, s);
-      }
+      if (best) beginJourney(x, ph, st, s, best, 2 + 3 * hashFloat(ph.agent, u.tick, 0x70a8));
     }
   }
+}
+
+/** the prophet sets out to carry the faith to `to` for `days`: a stay, not a commute (fix r1 #16) — food for the stay from
+ *  the store, carried (they eat it there) */
+export function beginJourney(x: PCtx, ph: ProphetState, st: Settlement, s: number, to: Settlement, days: number): void {
+  const u = x.u;
+  ph.journey = { target: to.id, until: u.tick + Math.round(days * x.day) };
+  provisionStay(x, st, s, Math.min(3, days));
+  relStat(u, 'prophet.journeys', 1);
+  tell(u, x.p, 'prophet.journey', vars(x, st, s, { other: to.name }), st, [agentRef(x, s), settlementRef(x, to)], 1);
+  interrupt(x, s);
 }
 
 /** the ruler against the prophet (LIVING §3.4.6) */

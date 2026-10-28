@@ -20,6 +20,7 @@ import { hurtPeople, onRoad } from '../src/sim/god/harm.ts';
 import { PRAYER_KINDS } from '../src/sim/god/prayers.ts';
 import { srel } from '../src/sim/god/regard.ts';
 import { OMEN_KINDS } from '../src/sim/god/omens.ts';
+import { beginJourney } from '../src/sim/god/prophets.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 
@@ -322,6 +323,56 @@ test('omens: every sign spares the town it is sent to — the flood omen rises a
   assert.ok(made.length >= 7, `made ${made.join(', ')}`);
   assert.ok(st.fallen < 0 && !st.band, `${st.name} still stands after ${made.join(', ')}`);
   assert.ok((p.people!.members.get(st.id) ?? []).length >= n0 - 1, 'the signs took nobody');
+});
+
+// (default seed, other town 2.2 km: the walk out takes ~35 h; then preaching and a night there. 26-day probes on two seeds,
+// review-critic/pilgrim.ts → fix/pilgrim-*-loyal.log: 52-55 % of journey hours at the town, its faith 0.84-0.89 at day 20-24)
+test('prophets: carrying the faith is a stay — the prophet preaches in the other town, sleeps there, and its faith rises (fix r1 #16)', () => {
+  const { sim, st } = town();
+  const u = sim.u, p = u.planets[0], g = p.grid;
+  const dist = (c: number) => Math.acos(Math.max(-1, Math.min(1, g.pos[c * 3] * st.pos[0] + g.pos[c * 3 + 1] * st.pos[1] + g.pos[c * 3 + 2] * st.pos[2]))) * p.st.radius;
+  // a second town of the same people 1.5–3 km off (a day's walk and more at 2 m a minute)
+  let best = -1, bs = -1;
+  for (let c = 0; c < g.count; c++) { if (p.f.water[c] > 0.05) continue; const d = dist(c); if (d < 1500 || d > 3000) continue; if (p.f.fertility[c] > bs) { bs = p.f.fertility[c]; best = c; } }
+  assert.ok(best >= 0, 'a site for the second town');
+  const r2 = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 20, era: 'bronze', settled: true, pos: [g.pos[best * 3], g.pos[best * 3 + 1], g.pos[best * 3 + 2]] });
+  const sid2 = r2.created!.find((e) => e.kind === 'settlement')!.id;
+  sim.step(60);
+  const who = commoner(sim, st);
+  must(sim, { k: 'prophet.call', agent: who });
+  const ph = u.god.rel!.prophets.find((q) => q.agent === who)!;
+  ph.credibility = 0.75;
+  const ps = p.people, A = ps.agents;
+  // a ruler loyal enough not to persecute (persecution is its own test)
+  const loyal = () => { const r = A.slotOf(st.leader); if (r >= 0) A.loyalty[r * GODS] = Math.max(A.loyalty[r * GODS], 0.6); };
+  loyal();
+  const x = makeCtx(u, p);
+  const other = ps.settlement(sid2)!;
+  const f0 = means(sim, sid2).faith;
+  beginJourney(x, ph, st, A.slotOf(who), other, 4);
+  const carried = x.info[A.species[A.slotOf(who)]].foods.reduce((q, it) => q + A.carried(A.slotOf(who), it), 0);
+  let there = 0, nights = 0, hours = 0;
+  const pos = [0, 0, 0];
+  for (let h = 0; h < 4 * 24; h++) {
+    loyal();
+    sim.step(60);
+    const s = A.slotOf(who);
+    if (s < 0) break;
+    hours++;
+    A.posAt(s, u.tick, pos);
+    const near = distM(p, pos, other.pos) <= other.territory + 150;
+    if (near) there++;
+    if (near && (A.task[s] === TASK.sleep || A.task[s] === TASK.camp)) nights++;
+  }
+  const f1 = means(sim, sid2).faith;
+  const stats = u.god.rel!.stats ?? {};
+  // (before the fix: 2–9 % of journey hours near the target, preaching 4–17 hours in 17 days, faith there -0.06…+0.13)
+  assert.ok(carried > 0, 'food for the stay, carried');
+  assert.ok(there >= 18, `a stay in the other town (after the day and a half's walk): ${there} of ${hours} hours`);
+  assert.ok(nights >= 6, `asleep there, not walking home: ${nights} sleeping hours there`);
+  assert.ok((stats['prophet.awayHours'] ?? 0) >= 10, `preached there: ${stats['prophet.awayHours']} hours`);
+  console.log(`journey: ${there}/${hours} h there, ${nights} asleep there, awayHours ${stats['prophet.awayHours']}, faith ${f0.toFixed(3)} → ${f1.toFixed(3)}`);
+  assert.ok(f1 - f0 >= 0.05, `the other town's faith rose: ${f0.toFixed(3)} → ${f1.toFixed(3)}`);
 });
 
 test('prophets: a harm foretold and then sent as a disaster comes true — the meteor strikes later than the command (fix r1 #5)', () => {

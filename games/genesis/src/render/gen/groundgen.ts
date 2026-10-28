@@ -273,14 +273,18 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
     }
   } else if (type === 'potato') {
     // a low mound: compound leaves arching out of the ridge, leaflets along them, flowers on top
-    for (let k = 0; k < 9; k++) {
-      const az = (k / 9) * 6.28 + rng.float() * 0.5, lean = 0.5 + rng.float() * 0.6, h = 0.6 + rng.float() * 0.35;
-      const tip = blade((rng.float() - 0.5) * 0.12, (rng.float() - 0.5) * 0.12, h, lean, az, 0.02, 0.7, 3);
+    // (the leaflets are big: a potato leaf is 20-30 cm on a half-metre plant, and the rows close into one mound)
+    for (let k = 0; k < 10; k++) {
+      const az = (k / 10) * 6.28 + rng.float() * 0.5, lean = 0.55 + rng.float() * 0.6, h = 0.62 + rng.float() * 0.3;
+      const x0 = (rng.float() - 0.5) * 0.14, z0 = (rng.float() - 0.5) * 0.14;
+      const tip = blade(x0, z0, h, lean, az, 0.03, 0.7, 3);
       for (let j = 0; j < 3; j++) {
-        const t = 0.45 + j * 0.25;
-        leaf(tip[0] * t, tip[1] * t + 0.02, tip[2] * t, az + (j % 2 ? 0.9 : -0.9), 0.07 + 0.02 * j, 0.25, 0.78, 3);
+        const t = 0.4 + j * 0.22;
+        const px = x0 + (tip[0] - x0) * t, py = tip[1] * t + 0.02, pz = z0 + (tip[2] - z0) * t;
+        leaf(px, py, pz, az + 1.1, 0.13 + 0.03 * j, 0.25, 0.78, 3);
+        leaf(px, py, pz, az - 1.1, 0.13 + 0.03 * j, 0.25, 0.74, 3);
       }
-      leaf(tip[0], tip[1], tip[2], az, 0.09, 0.2, 0.82, 5);
+      leaf(tip[0], tip[1], tip[2], az, 0.2, 0.15, 0.84, 5);
     }
     for (let k = 0; k < 4; k++) {
       const a = rng.float() * 6.28, r = rng.float() * 0.12;
@@ -288,28 +292,31 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
     }
   } else if (type === 'lentil') {
     // a fine, low, bushy tangle: thin stems, tiny leaflets crowding them, small flat pods
-    for (let k = 0; k < 30; k++) {
-      const x = (rng.float() - 0.5) * 0.8, z = (rng.float() - 0.5) * 0.8, az = rng.float() * 6.28;
-      const tip = blade(x, z, 0.7 + rng.float() * 0.3, 0.35 + rng.float() * 0.6, az, 0.007, 0.8, 2);
-      for (let j = 0; j < 3; j++) {
-        const t = 0.4 + j * 0.25;
-        strip([x + (tip[0] - x) * t, tip[1] * t, z + (tip[2] - z) * t], Math.cos(az + 1.6 * (j % 2 ? 1 : -1)), 0.5, Math.sin(az + 1.6 * (j % 2 ? 1 : -1)), 0.07, 0.012, 0.85);
+    // (pinnate leaves: each stem carries five pairs of small oval leaflets, so the rows close into a soft green carpet)
+    for (let k = 0; k < 34; k++) {
+      const x = (rng.float() - 0.5) * 0.85, z = (rng.float() - 0.5) * 0.85, az = rng.float() * 6.28;
+      const tip = blade(x, z, 0.65 + rng.float() * 0.35, 0.4 + rng.float() * 0.7, az, 0.01, 0.8, 2);
+      for (let j = 0; j < 5; j++) {
+        const t = 0.3 + j * 0.16;
+        const p = [x + (tip[0] - x) * t, tip[1] * t, z + (tip[2] - z) * t];
+        for (const sd of [1, -1]) strip(p, Math.cos(az + 1.3 * sd), 0.45, Math.sin(az + 1.3 * sd), 0.1, 0.028, 0.8 + 0.05 * j);
       }
-      if (k % 3 === 0) head(tip, 0.035, 0.009, 1.1, 1.15, 3);
+      if (k % 3 === 0) head(tip, 0.04, 0.012, 1.1, 1.15, 3);
     }
   } else if (type === 'cotton') {
     // a bush: a reddish main stem and side branches, broad lobed leaves, bolls (green → burst white under the tint)
     const n0 = nv();
     const x0 = (rng.float() - 0.5) * 0.1, z0 = (rng.float() - 0.5) * 0.1;
-    blade(x0, z0, 0.95, 0.05, rng.float() * 6.28, 0.022, 0.6, 3);
-    mulCol(n0, [0.9, 0.55, 0.45]);
+    blade(x0, z0, 0.95, 0.05, rng.float() * 6.28, 0.024, 1.0, 3);
+    mulCol(n0, [1.0, 0.72, 0.55]);
     const leafStart = nv();
     for (let k = 0; k < 7; k++) {
       const az = k * 2.4 + rng.float() * 0.5, y = 0.25 + k * 0.1, reach = 0.32 - k * 0.025;
       const ox = Math.cos(az), oz = Math.sin(az);
       strip([x0, y, z0], ox, 0.45, oz, reach, 0.006, 0.55);
-      leaf(x0 + ox * reach * 0.6, y + 0.12 * reach, z0 + oz * reach * 0.6, az + 0.6, 0.075, 0.2, 0.8);
-      leaf(x0 + ox * reach * 0.95, y + 0.2 * reach, z0 + oz * reach * 0.95, az - 0.4, 0.085, 0.25, 0.85);
+      leaf(x0 + ox * reach * 0.35, y + 0.08 * reach, z0 + oz * reach * 0.35, az - 0.9, 0.11, 0.2, 0.78);
+      leaf(x0 + ox * reach * 0.6, y + 0.12 * reach, z0 + oz * reach * 0.6, az + 0.6, 0.13, 0.2, 0.8);
+      leaf(x0 + ox * reach * 0.95, y + 0.2 * reach, z0 + oz * reach * 0.95, az - 0.4, 0.13, 0.25, 0.85);
       // bolls on the outer ends (white = vertex 2.2-3.6 × the ripe tint; green under the young tint)
       ball(x0 + ox * reach * 1.05, y + 0.28 * reach, z0 + oz * reach * 1.05, 0.032, [2.3, 2.9, 3.5]);
       if (k % 2) ball(x0 + ox * reach * 0.7 + oz * 0.04, y + 0.2 * reach, z0 + oz * reach * 0.7 - ox * 0.04, 0.028, [2.3, 2.9, 3.5]);

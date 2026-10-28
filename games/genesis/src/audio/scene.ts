@@ -141,8 +141,11 @@ export interface AudioScene {
   music: MusicCandidate[];
   /** 0..1 weight of the orbital score */
   orbital: number;
-  /** the god's hand, when it is on this world: listener-local position and distance */
-  hand: { local: [number, number, number]; dist: number; pose: string; held: boolean; body: [number, number, number]; unit: [number, number, number] } | null;
+  /**
+   * the Touch (the god's presence), when it is on this world: listener-local position and distance; `regard` is how
+   * its people see the god, −1 feared … +1 trusted (HandView.regard, LIVING §3.6): its air is storm or light
+   */
+  hand: { local: [number, number, number]; dist: number; pose: string; held: boolean; body: [number, number, number]; unit: [number, number, number]; regard: number } | null;
   /** the shore direction as a body-frame vector (re-projected every frame); null: no water in hearing */
   coastBody: [number, number, number] | null;
 }
@@ -620,7 +623,8 @@ export class SceneProbe {
     const hand = w.hand;
     if (hand && hand.planet === pv.id) {
       const loc = this.localOf(pv, L, hand.pos, Math.max(0, hand.alt));
-      sc.hand = { local: [loc[0], loc[1], loc[2]], dist: loc[3], pose: hand.pose, held: !!hand.held, body: this.lastBody, unit: [hand.pos[0], hand.pos[1], hand.pos[2]] };
+      const regard = Math.max(-1, Math.min(1, hand.regard ?? hand.alignment ?? 0)) || 0;
+      sc.hand = { local: [loc[0], loc[1], loc[2]], dist: loc[3], pose: hand.pose, held: !!hand.held, body: this.lastBody, unit: [hand.pos[0], hand.pos[1], hand.pos[2]], regard };
     }
     emit.sort((a, b) => b.level - a.level);
     if (emit.length > 24) emit.length = 24;

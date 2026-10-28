@@ -28,6 +28,7 @@
     {"id": "hoard", "kind": "discovery", "weight": 1, "text": ["They hid it: {agent} told only {pron2} own of {knowledge}.", "The house of {agent} in {settlement} keeps {knowledge} a secret."]},
     {"id": "founding", "kind": "founding", "weight": 2, "text": ["A band of {people} settled at {settlement}.", "{settlement} was founded by {count} {people}."]},
     {"id": "split", "kind": "diaspora", "weight": 2, "text": ["{count} people left {parent} and founded {settlement}.", "Quarrels split {parent}: the leavers built {settlement}, and their speech began to change."]},
+    {"id": "bud", "kind": "diaspora", "weight": 2, "text": ["Young families of {parent} cleared new ground a short walk away and founded {settlement}: {count} of them.", "{parent} had grown past its land: {count} of its people built {settlement}, a daughter village nearby."]},
     {"id": "fall.starvation", "kind": "fall", "weight": 3, "text": ["{settlement} starved and fell. Its huts stand empty.", "Hunger emptied {settlement}."]},
     {"id": "fall", "kind": "fall", "weight": 3, "text": ["{settlement} fell. Only ruins remain.", "The last of {settlement} are gone ({cause})."]},
     {"id": "abandon", "kind": "diaspora", "weight": 2, "text": ["The {people} of {settlement} abandoned their homes and walked away ({cause})."]},
