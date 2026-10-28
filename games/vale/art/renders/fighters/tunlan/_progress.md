@@ -47,3 +47,5 @@
   probe_kits_A 525/0, probe_kits_B 733/0. In game: _harness/_shots/art2_tunlan_{game,close,close2}.png.
 - Open: accent reads near-white in game for the local player (as on peers); the front-right lantern crosses the mask
   from right three-quarter views; the hat does not fall off in death (rests tilted on its brim over her).
+
+## FIX PASS 1 (2026-10-28 08:17) — reviewer items 1-9; agent started, read _progress.md

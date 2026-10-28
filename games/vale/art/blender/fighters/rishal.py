@@ -578,9 +578,9 @@ RIDGE_PHI = math.radians(86.0)  # the band blade runs phi -RIDGE_PHI..RIDGE_PHI 
 # the UPPER edge running from the band blade's top at the temple up along the crest's flank just under its arc to the
 # tail, the LOWER edge from the band blade's foot sweeping back under it (the crescent's belly); they meet in the tip
 REAR_UP = ((0.050, 0.010, 1.762), (0.031, 0.045, 1.790), (0.021, 0.090, 1.811), (0.019, 0.140, 1.829),
-           (0.018, 0.195, 1.845), (0.014, 0.252, 1.858))
-REAR_LO = ((0.053, 0.006, 1.740), (0.061, 0.050, 1.761), (0.058, 0.098, 1.774), (0.058, 0.150, 1.780),
-           (0.052, 0.202, 1.796), (0.014, 0.252, 1.858))
+           (0.018, 0.192, 1.846), (0.013, 0.236, 1.860))
+REAR_LO = ((0.053, 0.006, 1.740), (0.060, 0.050, 1.765), (0.060, 0.098, 1.772), (0.058, 0.150, 1.782),
+           (0.046, 0.198, 1.806), (0.013, 0.236, 1.860))
 REAR_T = 0.0034                # the vane's thickness (its edges thin to ~40 %)
 REAR_N = 20                    # sections along the vane
 
@@ -816,8 +816,8 @@ def crest_inlay_poly():
 # the front at the game camera): pale non-emissive dawnglass again (the concept's ice glass, fin_paint), rooted at the
 # left temple boss under the ridge's rear vane and SPLAYED out to his left and a little lower, so from the front they
 # fan away from the crest toward the pauldron spike instead of standing as a second prong beside it
-FINS = (((0.064, 0.048, 1.738), (0.215, 0.300, 1.805), 0.010, 0.029, (0.50, -0.16, 0.85)),
-        ((0.068, 0.058, 1.714), (0.210, 0.245, 1.745), 0.006, 0.023, (0.58, -0.14, 0.80)))
+FINS = (((0.064, 0.048, 1.738), (0.215, 0.280, 1.780), 0.010, 0.029, (0.50, -0.16, 0.85)),
+        ((0.068, 0.058, 1.714), (0.210, 0.232, 1.722), 0.006, 0.023, (0.58, -0.14, 0.80)))
 # the nape plates: three stacked lames hugging the skull's lower back, each an offset shell of NAPE_E a step further
 # out than the one above, so the back steps down and in toward the neck like a lobster tail: (top z, bottom z, offset)
 NAPE_E = {"c": (0.0, 0.020, 1.640), "r": (0.070, 0.090, 0.095)}
@@ -1784,13 +1784,14 @@ FACE_COL = {"lit": "#ECE7DE", "mid": "#D9D2C7", "shade": "#B8AEA2", "cool": "#A9
             "carve": "#957F6E", "lip": "#F4EFE6"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
 # carving; the cool grey shade read as a grey speckled sliver in the portrait's shadow side)
 EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
-HELM_COL = {"lit": "#E2DFDA", "mid": "#C9C5BF", "shade": "#9F9A94", "cool": "#97A0AA", "ink": "#5E5650",
+# (FIX ROUND 2: the turned-away tones a step lighter - the back facing's top band sees the helm's shaded side)
+HELM_COL = {"lit": "#E2DFDA", "mid": "#CFCBC5", "shade": "#ABA6A0", "cool": "#A1A9B2", "ink": "#5E5650",
             "keel": "#ECE9E4"}
 # the warm carved plates of the helm's back and the nape (the painting's back of the head: warm taupe carved stone
 # with dark seams and lit lips)
 # (POLISH: a step lighter, a light warm stone under the white crown, the value lift's top band from behind)
 # (FIX ROUND 2, verify: the back facing's top band 67.6, under the bible's 70): a further step lighter
-NAPE_COL = {"lit": "#EAE3D8", "mid": "#DAD1C5", "shade": "#B6AB9E", "ink": "#4A3F37", "lip": "#F0EAE0"}
+NAPE_COL = {"lit": "#EAE3D8", "mid": "#DCD4C9", "shade": "#C0B6AA", "ink": "#4A3F37", "lip": "#F0EAE0"}
 # the visor (fix pass 5): ice-blue glass (the fix pass 4 lavender washed out pale lavender in the three QA light),
 # the mask seen through it; the pale cyan rim #C1E9F5 with a dark outline (the concept's)
 # (POLISH: sampled off the painting's visor, L* 67-85: a pale lavender-blue glass #96A3C2 / #ABBFE1 / #89A6CB, the
@@ -1803,9 +1804,10 @@ VISOR_COL = {"top": "#98AADA", "core": "#7184BE", "low": "#9CC0E2", "streak": "#
 # the glass a clear lavender-blue a step under the chalk (L* ~66), the face seen faintly through it, the thick pale
 # rim (the concept's) setting it off the helm
 # the fins: smooth pale glass like the knives (fix pass 3: the lavender gradient and frayed edges read as feathers)
-FIN_COL = {"root": "#93B1C6", "mid": "#B2CADA", "tip": "#C6D8E4", "spine": "#7896AE", "edge": "#DDE9F0"}
+FIN_COL = {"root": "#A0BCCF", "mid": "#B8CFDE", "tip": "#C8DAE6", "spine": "#86A3B9", "edge": "#DDE9F0"}
+# (FIX ROUND 2: non-emissive pale ice glass again, the concept's, a step lighter at the root and spine)
 # the crest's stone frame (painted: the projection put the painting's sky and fins on the moved crest)
-CREST_COL = {"lit": "#DCDAD4", "mid": "#BCBAB5", "shade": "#8E8D8A", "ink": "#56524D", "edge": "#ECEAE4"}
+CREST_COL = {"lit": "#DCDAD4", "mid": "#C2C0BB", "shade": "#9C9B98", "ink": "#56524D", "edge": "#ECEAE4"}
 VISOR_ROUGH = 0.42        # added to the dawnglass roughness on the visor only (a broad sheen, not a chrome hot spot)
 BOOT_COL = {"upper": "#5E6874", "toe": "#7A8490", "sole": "#232428", "cuff": "#5B4535", "cuff_lit": "#7A5D47",
             "seam": "#2E343B", "strap": "#5E4737"}
@@ -2217,17 +2219,21 @@ def nape_paint(p, n):
 
 
 # (POLISH: the painting's neck is a dark warm carved column, #644B40 / #482F26, never the pale beige of the mask)
-NECK_COL = {"lit": "#8C6E5C", "mid": "#674E41", "shade": "#45332A", "ink": "#271C17"}
+NECK_COL = {"lit": "#8C6E5C", "mid": "#674E41", "shade": "#45332A", "ink": "#271C17", "back": "#8F7564"}
 
 
 def neck_paint(p, n):
     """the neck under the mask (fix pass 5, review: brown projection smudges under the visor): the concept's carved
     warm column, clean: vertical carved ribs round it, lit on the left-front, painterly"""
     C = {k: _hexrgb(h) for k, h in NECK_COL.items()}
-    col = painted(C["mid"], n, p, 0.75, axis=(0, 0, 1), stroke=0.06, f_across=130.0, f_along=25.0, seed=5.0)
+    # (FIX ROUND 2: the back of the column a lighter warm tan: from behind it showed as a dark band under the helm in
+    # the back facing's top band)
+    bk = _ss((n[:, 1] + 0.1) / 0.6)[:, None]
+    base = C["mid"][None] * (1 - bk) + C["back"][None] * bk
+    col = painted(base, n, p, 0.75, axis=(0, 0, 1), stroke=0.06, f_across=130.0, f_along=25.0, seed=5.0)
     ang = np.arctan2(p[:, 0], -(p[:, 1] - 0.006))
     rib = np.abs(((ang / (2 * math.pi / 14.0)) % 1.0) - 0.5) * 2                # 0 on a groove, 1 mid-rib
-    col = _mix(col, C["ink"][None], _ss((0.20 - rib) / 0.10) * 0.70)
+    col = _mix(col, C["ink"][None], _ss((0.20 - rib) / 0.10) * 0.70 * (1.0 - 0.5 * bk[:, 0]))
     col = _mix(col, C["lit"][None], _ss((rib - 0.50) / 0.3) * 0.45 * _ss(n @ KEY + 0.3))
     return col
 
@@ -2372,7 +2378,7 @@ KNEE_COL = {"lit": "#6E7882", "mid": "#505962", "shade": "#343B42", "carve": "#2
 
 
 def _stone(n, C, k_up=0.42):
-    t = np.clip(0.52 + k_up * n[:, 2] - 0.10 * n[:, 1], 0, 1)
+    t = np.clip(0.52 + k_up * n[:, 2] - 0.04 * n[:, 1], 0, 1)     # (FIX ROUND 2: -0.10 -> -0.04 on the backs)
     return np.where((t < 0.5)[:, None], _mix(C["shade"][None].repeat(len(n), 0), C["mid"][None], t * 2),
                     _mix(C["mid"][None].repeat(len(n), 0), C["lit"][None], t * 2 - 1))
 
@@ -2545,7 +2551,7 @@ COAT_COL = {"front": "#A0AEB4", "back": "#A4AFB6", "lining": "#66717A", "trim": 
             "ink": "#363F47"}
 # (POLISH: the painting's hood, lit #A8C7D0 L* 78, shade #899CA6 L* 63; a step lighter than fix pass 5's for the
 # value lift: the cowl is in the top band from every facing)
-COWL_COL = {"front": "#98B6C9", "back": "#C6D7E0", "fold": "#5D7889", "fold_back": "#7E97A6", "lit": "#BED5E0"}   # (build 1: washed to white)
+COWL_COL = {"front": "#98B6C9", "back": "#C6D7E0", "fold": "#5D7889", "fold_back": "#8BA3B1", "lit": "#BED5E0"}   # (build 1: washed to white)
 # (FIX ROUND 2: the hood's back a step lighter, its creases a third shallower behind: the back facing's top band)
 SLEEVE_COL = {"base": "#A2B2BE", "fold": "#72838F"}      # (POLISH, value lift: the concept's light blue sleeves)
 

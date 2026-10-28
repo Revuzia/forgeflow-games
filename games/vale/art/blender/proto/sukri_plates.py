@@ -38,7 +38,8 @@ import concept_plates as cp  # noqa: E402
 
 ID = "sukri"
 HEIGHT = 1.65             # the hood's crown (content art.height)
-ERODE = 4                 # px off the edge (the anti-aliased outline)
+ERODE = 9                 # px off the edge (the anti-aliased outline and the dark contour line inside the halo)
+HALO_PX, HALO_LUM = 16, 228  # the painted white rim light round the silhouette (5-8 px, L > 240) is lighting, not paint
 BG_DIST = 11.0            # RGB distance to the smooth backdrop estimate that still counts as backdrop
 GRAD_MAX = 28.0           # ... and its (smoothed) Sobel gradient ceiling (painted edges stop the fill)
 ISLAND_MIN = 1500         # px: enclosed backdrop islands at least this big leave the figure (below the shoulders)
@@ -141,6 +142,12 @@ def main() -> None:
         m[legs] &= ~((lum[legs, x0:x1] > 205) & (sat[legs, x0:x1] < 0.075))
         fig[:, x0:x1] = nd.binary_opening(m, iterations=1)
     keep = nd.binary_erosion(fig, iterations=ERODE)
+    # the painted rim light: near-white pixels within HALO_PX of the silhouette leave (the padding refills them from
+    # the paint inside); build 3 projected it onto the model's silhouette edges as white streaks down the hood's sides
+    edge_d = nd.distance_transform_edt(fig)
+    halo = (lum > HALO_LUM) & (edge_d < HALO_PX)
+    halo = nd.binary_dilation(halo, iterations=2) & (edge_d < HALO_PX + 2)
+    keep &= ~halo
     _, (iy, ix) = nd.distance_transform_edt(~keep, return_indices=True)
     padded = im[iy, ix]
     soft = np.stack([nd.gaussian_filter(padded[..., c], 5) for c in range(3)], -1)

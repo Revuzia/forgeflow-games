@@ -17,8 +17,9 @@ brim centre (an oblique cone: from the game camera the knob leans the way she fa
 accent, on its own bone (x_hat: it rolls off in `death`); the
 mantle is the concept's long felt cape with ragged points (one x_ chain, 2 sway bones) and a felt cowl with a
 hood lying on the upper back; both hands are carved wood. The brief wins on what is banned and on the accent: the
-concept's blue rim studs (gems) become 21 small accent-glass studs in iron collars on the rim's upper bevel (the
-concept's stud row; the colour reads from any angle, including from above; the only emissive), the brooch's stone a
+concept's blue rim studs (gems) become the brief's SIX accent-glass inlays, slim slips set flush in the rim's upper
+bevel at +-50 / 100 / 150 deg (the front 100 deg bare; the colour reads from any angle, including from above; the
+only emissive), the brooch's stone a
 matte slate stone; the hat's lacquer keeps the concept's ochre hue but its chroma is held at the bible's 40 % cap
 for the marigold band (art/README: team hues stay out of large albedo areas above 40 %).
 
@@ -121,13 +122,14 @@ HAT_UP = HAT_R[:, 2]
 BRIM_R = 0.395            # the cone's outer radius at the brim
 CONE_H = 0.165            # brim plane -> apex (outer surface)
 CONE_T = 0.013            # lacquer shell thickness
-# fix pass 5 (review: 'six 12.6 x 6.2 cm inlays, 3x the brief, glossy blue buttons / a tambourine'): the concept's
-# MANY SMALL studs, 21 glass studs (6.4 x 4.1 cm) in small iron collars round the rim, spaced 18 deg at the sides
-# closing to 12 deg at the back. Their size is the floor lineup_qa leaves (>= 1 % of the silhouette from behind,
-# the bible's accent rule; the brief's 4 x 1.5 cm x 6 is 0.4 %); the front 60 deg stays bare (the idle's front brim
-# drops toward the figure's middle row: the accent's top-half share)
-_RA = (36.0, 54.0, 71.0, 87.0, 102.0, 116.0, 129.0, 141.0, 152.0, 164.0)
-RIM_ANGLES = tuple(a for a in _RA) + tuple(-a for a in _RA) + (180.0,)
+# fix pass 5 (review: 'six 12.6 x 6.2 cm inlays, 3x the brief, glossy blue buttons / a tambourine') went to 21 studs;
+# review 6: 'the rim accent got bigger: a full ring of team-tinted dots, a black-and-white dashed ring like the UI's
+# selection ring, a tambourine / bottle cap / dial from above' (accent 3.53 %). Polish: back to the brief's SIX inlays
+# at the fix-pass-3 stations (+-50 / 100 / 150 deg: the front 100 deg bare, a facing cue; six separate marks with long
+# dark iron between, never a ring), each a SLIM glass slip set FLUSH in a thin iron bezel (no domed bead, no setting
+# swelling the rim), 12.4 x 5.0 cm (f3: 12.6 x 6.2 domed): the floor that the pipeline's accent gate (>= 1.5 % at the
+# game camera) and lineup_qa's (>= 1 % from behind) leave; the brief's 4 x 1.5 cm x 6 is 0.4 %
+RIM_ANGLES = (50.0, 100.0, 150.0, -150.0, -100.0, -50.0)
 RIM_N = len(RIM_ANGLES)
 
 
@@ -177,6 +179,36 @@ def rim_angle_dir(phi_deg):
     """local radial direction at angle phi (0 = the front, -Y local; + toward her left, +X)"""
     a = math.radians(phi_deg)
     return V3([math.sin(a), -math.cos(a), 0.0])
+
+
+INLAY_T, INLAY_B = 0.062, 0.025          # the slips' footprint half-length (along the rim) and half-width
+
+
+def inlay_frames():
+    """[(centre, axes rows (tangent, across, bevel normal))] of the six rim inlays (world, rest)"""
+    out = []
+    for phi in RIM_ANGLES:
+        rd = rim_angle_dir(phi)
+        tg = np.cross(V3([0, 0, 1.0]), rd)
+        nrm = unit(rd * 0.55 + V3([0, 0, 1.0]) * 0.83)                 # the rim's upper-outer bevel
+        n_w, t_w = HAT_R @ nrm, HAT_R @ tg
+        b_w = np.cross(n_w, t_w)
+        out.append((hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004])), np.stack([unit(t_w), unit(b_w), unit(n_w)])))
+    return out
+
+
+class RimSlip(sdf.Prim):
+    """a glass slip set flush in a surface: the surface's own skin (lo..hi from it) inside a footprint"""
+
+    def __init__(self, surf, foot, lo, hi):
+        self.surf, self.foot, self.lo, self.hi = surf, foot, float(lo), float(hi)
+
+    def bounds(self):
+        return self.foot.bounds()
+
+    def d(self, P):
+        dr = self.surf.d(P)
+        return np.maximum(np.maximum(dr - self.hi, self.lo - dr), self.foot.d(P))
 
 
 # ── arm / hand landmarks at rest (match the rig's layout for PROPORTIONS) ───────────────────────────────────
@@ -475,25 +507,16 @@ def sculpts() -> list:
         return np.hypot(np.maximum(q0, 0), np.maximum(q1, 0)) + np.minimum(np.maximum(q0, q1), 0) - cr
 
     rim = Sculpt("hat_rim")
-    rim.add(Lathe(HAT_C, rim_prof, BRIM_R + 0.03, -0.04, 0.03, axes=HAT_AX).displaced(chips(0.003, 30.0), 0.003), k=0.0)
+    rim_surf = Lathe(HAT_C, rim_prof, BRIM_R + 0.03, -0.04, 0.03, axes=HAT_AX).displaced(chips(0.003, 30.0), 0.003)
+    rim.add(rim_surf, k=0.0)
     glass = Sculpt("hat_inlays")
-    # 21 small oval glass studs, each in a raised iron collar that swells the rim (7.6 x 5.2 cm), the glass 6.4 x 4.1 cm
-    # on the rim's upper-outer bevel (the colour reads from any angle, from above most): the concept's stud row
-    for i, phi in enumerate(RIM_ANGLES):
-        rd = rim_angle_dir(phi)
-        tg = np.cross(V3([0, 0, 1.0]), rd)
-        nrm = unit(rd * 0.55 + V3([0, 0, 1.0]) * 0.83)                 # the rim's upper-outer bevel
-        n_w, t_w = HAT_R @ nrm, HAT_R @ tg
-        b_w = np.cross(n_w, t_w)
-        ax = np.stack([unit(t_w), unit(b_w), unit(n_w)])
-        c_w = hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004]))
-        g = 1.0 if abs(phi) < 95.0 else 1.10                  # the back half's studs a step bigger (seen from behind
-        #                                                       the rim's back half carries the accent: >= 1 %)
-        rim.add(Ellipsoid(c_w - n_w * 0.005, (0.038 * g, 0.026 * g, 0.0120), axes=ax), k=0.008)         # the collar
-        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0335 * g, 0.0215 * g, 0.0070), axes=ax), k=0.002)       # its seat
-        glass.add(Ellipsoid(c_w + n_w * 0.0008, (0.032 * g, 0.0205 * g, 0.0075), axes=ax), k=0.0)
-    part("hat_rim", rim, "ironstone", "bone:x_hat", 1250, 0.5)
-    part("hat_inlays", glass, "accent", "bone:x_hat", 720, 0.35)
+    # six slim glass slips set FLUSH in the rim's upper-outer bevel (the colour reads from any angle, from above most):
+    # each the rim's own surface skin inside the slip's footprint, 1.2 mm proud (it follows the rim's curve: an inlay,
+    # never a bead); the iron bezel round it is painted (paint_rim: a dark seat line and a lit lip)
+    for c_w, ax in inlay_frames():
+        glass.add(RimSlip(rim_surf, Ellipsoid(c_w, (INLAY_T, INLAY_B, 0.04), axes=ax), -0.0040, 0.0012), k=0.0)
+    part("hat_rim", rim, "ironstone", "bone:x_hat", 1150, 0.5)
+    part("hat_inlays", glass, "accent", "bone:x_hat", 420, 0.3)
 
     def disc_prof(r, z):
         zc, hz, hr, cr = CONE_H - 0.004, 0.011, 0.037, 0.007
@@ -1150,7 +1173,11 @@ SIDE_INSET = 0.04
 # fix pass 5: the ramp a step deeper (hue 30 -> 46, every step at the cap: L* 40-83; the splash's sky light took the
 #   L* 84-86 lit steps to a cream L* 92 with no structure left; lineup f0 top 75.8 -> the room for it)
 #   and walked by the brushwork (_lacquer): the flat 0.46 + 0.48 t fill read as a cream plastic lampshade
-HAT_COLS = {"deep": "#705A43", "shade": "#967C5A", "mid": "#BA9F70", "lit": "#D6BE81", "hi": "#E3CF8D",
+# polish (value probe with the game's character light, rift/bridge/fray: the hat at screen L* 83-87, p25-p75 within
+#   1.6 L*: the lacquer's red channel sat in the tone map's highlight shoulder, so the brushwork flattened into a cream
+#   fill; nurrow top-25 85.8-86.8, above the token band's 85): the lit end of the ramp ~4 L* down (mid 66.8 -> 65,
+#   lit 77.7 -> 74, hi 83.4 -> 79.5; the shade end kept) and the gores' spread up (0.11 -> 0.15)
+HAT_COLS = {"deep": "#705A43", "shade": "#967C5A", "mid": "#B59A6C", "lit": "#CBB47A", "hi": "#D7C486",
             "under": "#8F6F56", "under_deep": "#47382C"}    # the underside: the concept's warm ochre-brown lacquer
 #                                                        (its back view, L* 36-53), darker toward the crown
 IRON = {"base": "#3D373E", "shade": "#242026", "lit": "#5F5862", "chip": "#8A818C"}
@@ -1269,7 +1296,7 @@ def _lacquer(p, n, q, r, phi):
     # (f5-2: bolder: the f5-1 strokes vanished in the splash's sky light and the 2 mm texels)
     # (f5-3: the strokes +-3.5 L* still vanished in the splash's sky light -> +-6; the gores +-4.5)
     v = 0.36 + 0.56 * t
-    v = v + 0.11 * HAT_OFF[k] + 0.08 * (u - 0.5) * fade
+    v = v + 0.15 * HAT_OFF[k] + 0.08 * (u - 0.5) * fade
     v = v + 0.30 * broad + 0.08 * hair + 0.05 * mott + 0.07 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
     v = v + 0.04 * _ss(0.0, 0.3, r) * (1 - _ss(0.3, 0.55, r))
     v = v - 0.12 * seam + 0.06 * lip - 0.06 * pool
@@ -1566,20 +1593,50 @@ def paint_lining(p, n):
 #                                                     concept's lit tan lining; it carries the front's feet band)
 
 
+_INLAY_FR: list = []
+
+
+def _inlay_bezel(p):
+    """the six inlays' painted iron bezels: (seat, lip) masks, a dark seat line hugging the glass and a lit lip
+    round it (in metres off the slip's footprint edge, measured across the slip)"""
+    if not _INLAY_FR:
+        _INLAY_FR.extend(inlay_frames())
+    seat = np.zeros(len(p))
+    lip = np.zeros(len(p))
+    for c, ax in _INLAY_FR:
+        L = (np.asarray(p, dtype=np.float64) - c) @ ax.T
+        near = np.abs(L[:, 2]) < 0.03
+        e = np.sqrt((L[:, 0] / INLAY_T) ** 2 + (L[:, 1] / INLAY_B) ** 2)
+        dm = (e - 1.0) * INLAY_B
+        seat = np.maximum(seat, near * _ss(0.0042, 0.0016, dm))
+        lip = np.maximum(lip, near * _ss(0.0030, 0.0050, dm) * (1 - _ss(0.0062, 0.0085, dm)))
+    return seat, lip
+
+
 def paint_rim(p, n):
     """the hat's rim: a clean dark matte ironstone ring (Shadeprint: the LIGHT rim of its ink hat, brief §9: chalk on
-    its upper and outer faces round the inlays, the skin's ironstone on the underside)"""
+    its upper and outer faces round the inlays, the skin's ironstone on the underside); each inlay in a painted bezel"""
+    seat, lip = _inlay_bezel(p)
     if _SKIN.get("id") == "nurrow_shadeprint":
-        nl = n @ HAT_R
-        q = hat_local(p)
-        rad = q[:, :2] / (np.linalg.norm(q[:, :2], axis=1, keepdims=True) + 1e-9)
-        outw = nl[:, 0] * rad[:, 0] + nl[:, 1] * rad[:, 1]
-        lam = np.clip(n @ KEY, 0.0, 1.0)
-        chalk = _mix(_hexs("#AFABBA"), _hexs("#D6D3DD"), np.clip(0.35 + 0.6 * lam + 0.05 * NOISE(p, 30.0), 0, 1))
-        under = paint_iron(p, n)
-        w = _ss(-0.55, -0.25, nl[:, 2] + 0.35 * outw)             # the upper / outer faces chalk, the underside ink
-        return _mix(under, chalk, w).astype(np.float32)
-    return paint_iron(p, n, cols=RIM_IRON)
+        col = _paint_rim_shade(p, n)
+        col = _mix(col, _hexs(INK), 0.9 * seat)
+        return _mix(col, _hexs("#E0DDE6"), 0.55 * lip).astype(np.float32)
+    col = paint_iron(p, n, cols=RIM_IRON)
+    col = _mix(col, _hexs("#151216"), 0.85 * seat)
+    return _mix(col, _hexs("#6A626C"), 0.6 * lip).astype(np.float32)
+
+
+def _paint_rim_shade(p, n):
+    """Shadeprint's light rim: chalk on the upper and outer faces, the skin's ink ironstone on the underside"""
+    nl = n @ HAT_R
+    q = hat_local(p)
+    rad = q[:, :2] / (np.linalg.norm(q[:, :2], axis=1, keepdims=True) + 1e-9)
+    outw = nl[:, 0] * rad[:, 0] + nl[:, 1] * rad[:, 1]
+    lam = np.clip(n @ KEY, 0.0, 1.0)
+    chalk = _mix(_hexs("#AFABBA"), _hexs("#D6D3DD"), np.clip(0.35 + 0.6 * lam + 0.05 * NOISE(p, 30.0), 0, 1))
+    under = paint_iron(p, n)
+    w = _ss(-0.55, -0.25, nl[:, 2] + 0.35 * outw)             # the upper / outer faces chalk, the underside ink
+    return _mix(under, chalk, w).astype(np.float32)
 
 
 def paint_knob(p, n):

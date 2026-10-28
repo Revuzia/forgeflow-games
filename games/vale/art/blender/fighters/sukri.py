@@ -188,7 +188,7 @@ RIM_OPEN = 0.068                                   # the rim band's open throat 
 RIM_OUT = CUP_R + 0.010
 INLAY = (0.074, 0.091)                             # the accent inlay ring on the rim band's top (brief: 2 cm)
 N_RIBS = 8
-RIB_W = 0.0060                                     # the glass ribs' half width (bevelled glass between the core's windows)
+RIB_W = 0.0100                                     # the glass ribs' half width (bevelled glass between the core's windows)
 
 
 def cup_z(dz):
@@ -442,7 +442,7 @@ C_L = W_L + FO_L * 0.072 * HS / 1.35 + np.array([0.0, -0.004, 0.0])
 # the hanging left hand: a loose fist, the back of the hand out to his left-front (as painted: the knuckles read from
 # the front)
 HAND_L_FRAME = fist_frame(C_L, (-0.50, -0.866, 0.0), FO_L, (0.866, -0.50, 0.0))
-LEFT_CURL = 0.82
+LEFT_CURL = 1.0                                    # a loose fist (as painted)
 
 
 # ── the hood (a lofted super-ellipse dome, a rounded crown: never a point) ─────────────────────────────────
@@ -471,7 +471,8 @@ def hood_outer(P):
     hx, hy = np.maximum(hx, 1e-3), np.maximum(hy, 1e-3)
     r = (np.abs(x / hx) ** HOOD_E + np.abs((y - yc) / hy) ** HOOD_E) ** (1.0 / HOOD_E)
     d = (r - 1.0) * np.minimum(np.minimum(hx, hy), 0.30)
-    return np.maximum(d, np.maximum(HZ[0] - z, z - (DOME_Z0 + DOME_H)))
+    zbot = HZ[0] + 0.075 * ss(0.14, 0.30, np.abs(x)) * (1 - ss(0.0, 0.20, y))     # the plates show under the sides
+    return np.maximum(d, np.maximum(zbot - z, z - (DOME_Z0 + DOME_H)))
 
 
 # the face opening: the face outline at the top, widening below the cheeks into the dark lining (+-0.29 at 1.06) and
@@ -518,11 +519,11 @@ def sculpts() -> list:
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
         od = open_sd(x, z)
         shell = np.maximum(od - 0.075, np.maximum(rim_y(x, z) - y, y - 0.05))
-        return np.maximum(shell, np.maximum(0.975 - z, z - 1.60))
-    hood.add(Fn(brim, (-0.40, -0.36, 0.95), (0.40, 0.10, 1.62)), k=0.045)
+        return np.maximum(shell, np.maximum(0.975 - z, z - 1.555))
+    hood.add(Fn(brim, (-0.40, -0.36, 0.95), (0.40, 0.10, 1.58)), k=0.05)
     # the cowl over the back plates and round the shoulders (the painted collar drape)
-    hood.add(Ellipsoid((0.0, 0.10, 1.02), (0.43, 0.30, 0.075)), k=0.05)
-    hood.add(Ellipsoid((0.0, 0.17, 1.00), (0.34, 0.20, 0.07)), k=0.04)
+    hood.add(Ellipsoid((0.0, 0.17, 1.035), (0.40, 0.20, 0.072)), k=0.05)            # the cowl over the back plates
+    hood.add(Ellipsoid((0.0, 0.21, 1.005), (0.30, 0.16, 0.06)), k=0.04)
 
     def recess(P):
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
@@ -549,7 +550,7 @@ def sculpts() -> list:
             r = 1.0 / ((abs(math.sin(a)) ** HOOD_E + abs(math.cos(a)) ** HOOD_E) ** (1 / HOOD_E))
             pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(hy) * math.cos(a) * r * 0.985, z))
         hood.add(Tube(pts, [0.006, 0.010, 0.012, 0.010], k=0.01), k=0.03)
-    part("hood", hood, "cloth2", ("weights", "hood"), 2700, uvw=1.3)
+    part("hood", hood, "cloth2", ("weights", "hood"), 2050, uvw=1.3)
 
     # FACE: the big carved wooden face in the opening, 3 cm behind the rim; the painted features carved
     def face_d(P):
@@ -568,7 +569,7 @@ def sculpts() -> list:
     for sx in (-1, 1):
         face.add(Sphere((sx * 0.034, yt - 0.012, NOSE[1] - 0.002), 0.019), k=0.012)
         face.sub(Ellipsoid((sx * 0.020, yt - 0.026, NOSE[1] - 0.016), (0.009, 0.010, 0.006)), k=0.004)
-    part("face", face, "wood", "bone:head", 2200, 0.5, uvw=3.0)
+    part("face", face, "wood", "bone:head", 1650, 0.5, uvw=3.0)
 
     # TORSO: the barrel under the wraps (widest at 0.55 m), the shoulders' mass under the plates
     torso = Sculpt("torso")
@@ -580,7 +581,7 @@ def sculpts() -> list:
     torso.inter(HalfSpace((0, 0, 0.455), (0, 0, -1), 2.0), k=0.01)
     torso.ops = [(op, prim.displaced(painted(1.0, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in torso.ops]
-    part("torso", torso, "cloth", ("weights", "torso"), 2300, uvw=1.1)
+    part("torso", torso, "cloth", ("weights", "torso"), 1750, uvw=1.1)
 
     # BELT: the thick dark sash (7.5 cm) round the waist and a thin strap over it, a knot of torn ends at the front
     BY = 0.75
@@ -597,7 +598,7 @@ def sculpts() -> list:
         return np.minimum(d, d2) * BY
     belt = Sculpt("belt")
     belt.add(Fn(belt_d, (-0.48, -0.34, 0.46), (0.48, 0.38, 0.57)).displaced(wraps(0.0030, 0.030, (0, 0.02, 0.45), (0, 0.02, 0.57), 0.4), 0.003), k=0.0)
-    part("belt", belt, "leather", ("weights", "belt"), 700, 0.6)
+    part("belt", belt, "leather", ("weights", "belt"), 620, 0.6)
 
     # SKIRT: panels under the sash: a long rounded front apron, side flaps, two back panels (slits between)
     def skirt_d(P):
@@ -620,7 +621,7 @@ def sculpts() -> list:
         return np.maximum(d, -sl)
     skirt = Sculpt("skirt")
     skirt.add(Fn(skirt_d, (-0.48, -0.38, 0.24), (0.48, 0.38, 0.51)).displaced(painted(0.9, 0.02, 0.33, cloth_noise(0.0015, 10.0)), 0.009), k=0.0)
-    part("skirt", skirt, "cloth", ("weights", "skirt"), 1150, 0.8)
+    part("skirt", skirt, "cloth", ("weights", "skirt"), 820, 0.8)
 
     # BLOOMERS: the dark round trousers under the skirt (0.30 m wide per leg at the knee)
     pants = Sculpt("pants")
@@ -632,7 +633,7 @@ def sculpts() -> list:
     pants.inter(HalfSpace((0, 0, 0.185), (0, 0, -1), 2.0), k=0.012)
     pants.ops = [(op, prim.displaced(painted(0.8, 0.03, 0.17, cloth_noise(0.003, 8.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in pants.ops]
-    part("pants", pants, "under", ("weights", "pants"), 850)
+    part("pants", pants, "under", ("weights", "pants"), 750)
 
     # SHINS: thick bandage wraps from the bloomers to the boots
     shins = Sculpt("shins")
@@ -641,7 +642,7 @@ def sculpts() -> list:
         shins.add(FlatCapsule(a_, b_, 0.108, 0.104, 0.100, 0.098, side=(1, 0, 0)).displaced(
             painted(1.2, 0.02, 0.10, wraps(0.0020, 0.034, b_, a_, 1.6)), 0.012), k=0.0)
     shins.inter(HalfSpace((0, 0, 0.060), (0, 0, -1), 2.0), k=0.004)      # (inside the boots, never under the ground)
-    part("shins", shins, "cloth2", ("weights", "shins"), 850, 0.8)
+    part("shins", shins, "cloth2", ("weights", "shins"), 750, 0.8)
 
     # BOOTS: soft wide dark leather boots with rounded toes (8 degrees out)
     boots = Sculpt("boots")
@@ -658,7 +659,7 @@ def sculpts() -> list:
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     boots.ops = [(op, prim.displaced(cloth_noise(0.0025, 12.0), 0.0025) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in boots.ops]
-    part("boots", boots, "leather", ("weights", "boots"), 950)
+    part("boots", boots, "leather", ("weights", "boots"), 850)
 
     # SLEEVES (cream wraps over the upper arms), BRACERS (dark leather wraps over the forearms), GLOVES
     for s, sh, el, wr, fo in (("L", SH_L, E_L, W_L, FO_L), ("R", SH_R, E_R, W_R, FO_R)):
@@ -667,19 +668,19 @@ def sculpts() -> list:
         top_ = sh + np.array([sx * 0.006, 0.0, 0.010])
         sl.add(FlatCapsule(top_, el, 0.105, 0.100, 0.090, 0.088, side=(0, 1, 0)).displaced(
             painted(1.0, float(sh[1]), 0.10, wraps(0.0020, 0.036, top_, el, 1.3)), 0.011), k=0.0)
-        part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 700)
+        part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 620)
         br = Sculpt(f"bracer_{s}")
         a_, b_ = el + fo * 0.010, wr - fo * 0.005
         br.add(FlatCapsule(a_, b_, 0.086, 0.082, 0.072, 0.070, side=(0, 1, 0)).displaced(wraps(0.0045, 0.030, a_, b_, 1.8), 0.0045), k=0.0)
         br.add(Torus(b_ - fo * 0.006, 0.070, 0.008, axes=sdf.frame(fo)), k=0.006)
         part(f"bracer_{s}", br, "leather", f"bone:forearm.{s}", 520, 0.7)
-    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 950, curl=1.0, grip=True))
-    out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 900, curl=LEFT_CURL, grip=False, relaxed=True))
+    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 780, curl=1.0, grip=True))
+    out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 720, curl=LEFT_CURL, grip=False, relaxed=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
     for s in ("L", "R"):
-        out.append(plates_part(f"plates_{s}", SHOULDER_PLATES, 1.0 if s == "L" else -1.0, f"bone:shoulder.{s}", 760))
-    out.append(plates_part("plates_back", BACK_PLATES, 1.0, "bone:chest", 1000))
+        out.append(plates_part(f"plates_{s}", SHOULDER_PLATES, 1.0 if s == "L" else -1.0, f"bone:shoulder.{s}", 700))
+    out.append(plates_part("plates_back", BACK_PLATES, 1.0, "bone:chest", 800))
 
     # THE CORD: a coil of weighted cord at the left hip, on the sash (Wrap Cast leaves from here)
     cord = Sculpt("cord")
@@ -693,7 +694,7 @@ def sculpts() -> list:
     cord.add(Tube([tail0, tail0 + np.array([0.004, -0.006, -0.040]), tail0 + np.array([0.0, -0.004, -0.075])], [0.009, 0.0085, 0.008], k=0.004), k=0.004)
     cord.add(Sphere(tail0 + np.array([0.0, -0.004, -0.098]), 0.021), k=0.004)        # the weight
     cord.add(Capsule(cc + n * 0.004 + np.array([0.0, 0.0, 0.050]), cc + n * 0.004 + np.array([0.0, 0.0, 0.085]), 0.009), k=0.006)   # tied to the sash
-    part("cord", cord, "rope", "bone:hips", 520, 0.5)
+    part("cord", cord, "rope", "bone:hips", 430, 0.5)
 
     out.extend(staff_parts())
     out.extend(cup_parts())
@@ -703,20 +704,29 @@ def sculpts() -> list:
 CORD_C = np.array([0.452, 0.080, 0.468])               # the coil hangs at the left hip, behind the hanging arm
 CORD_N = unit(np.array([0.93, 0.36, 0.0]))
 
-# plates (build 2: chunky chipped shingles lying ON the shoulders, found on the torso's own surface; build 1's upright
-# little blocks read as sugar cubes): (azimuth deg (0 front, 90 his left), z, width, height, lift off the surface,
-# kick (deg: the lower edge out)); the shoulder tiers mirror for the right
+# plates (build 3: big chipped stone shingles placed where the concept paints them (front view x, z), each found on the
+# torso's surface in front / behind and lifted along its own normal; build 2's azimuth placement hugged the narrow upper
+# chest and read as small tiles round the collar): (x, z, front|back, width, height, normal, lift, roll deg)
 SHOULDER_PLATES = [
-    (36.0, 0.958, 0.175, 0.140, 0.020, 10.0), (70.0, 0.952, 0.180, 0.145, 0.022, 10.0),
-    (104.0, 0.952, 0.170, 0.140, 0.022, 10.0), (136.0, 0.958, 0.160, 0.135, 0.020, 10.0),
-    (54.0, 0.858, 0.165, 0.125, 0.006, 6.0), (86.0, 0.850, 0.170, 0.130, 0.006, 6.0),
-    (118.0, 0.856, 0.160, 0.125, 0.006, 6.0),
+    (0.270, 0.952, "f", 0.215, 0.150, (0.20, -0.62, 0.76), 0.034, -6.0),
+    (0.440, 0.938, "f", 0.195, 0.150, (0.62, -0.40, 0.68), 0.030, -14.0),
+    (0.360, 0.848, "f", 0.195, 0.125, (0.40, -0.78, 0.48), 0.012, -8.0),
+    (0.510, 0.832, "f", 0.145, 0.135, (0.86, -0.32, 0.40), 0.004, -12.0),
+    (0.450, 0.932, "b", 0.185, 0.150, (0.62, 0.42, 0.66), 0.030, 12.0),
+    (0.505, 0.832, "b", 0.150, 0.130, (0.86, 0.36, 0.38), 0.004, 10.0),
+    (0.280, 0.950, "b", 0.200, 0.145, (0.22, 0.62, 0.76), 0.034, 6.0),
 ]
 BACK_PLATES = [
-    (156.0, 0.905, 0.165, 0.130, 0.018, 8.0), (180.0, 0.910, 0.175, 0.130, 0.018, 8.0), (204.0, 0.905, 0.165, 0.130, 0.018, 8.0),
-    (147.0, 0.800, 0.160, 0.125, 0.008, 5.0), (169.0, 0.802, 0.165, 0.125, 0.008, 5.0),
-    (191.0, 0.802, 0.165, 0.125, 0.008, 5.0), (213.0, 0.800, 0.160, 0.125, 0.008, 5.0),
-    (162.0, 0.705, 0.165, 0.120, 0.000, 3.0), (180.0, 0.700, 0.185, 0.125, 0.000, 3.0), (198.0, 0.705, 0.165, 0.120, 0.000, 3.0),
+    (-0.230, 0.935, "b", 0.215, 0.140, (-0.25, 0.70, 0.67), 0.030, 6.0),
+    (0.010, 0.945, "b", 0.225, 0.140, (0.02, 0.72, 0.69), 0.034, -2.0),
+    (0.240, 0.932, "b", 0.210, 0.140, (0.26, 0.70, 0.66), 0.030, -7.0),
+    (-0.350, 0.838, "b", 0.205, 0.150, (-0.44, 0.79, 0.43), 0.016, 9.0),
+    (-0.125, 0.846, "b", 0.225, 0.145, (-0.13, 0.88, 0.46), 0.016, 2.0),
+    (0.110, 0.842, "b", 0.215, 0.150, (0.11, 0.88, 0.46), 0.016, -4.0),
+    (0.345, 0.834, "b", 0.200, 0.145, (0.43, 0.80, 0.42), 0.016, -10.0),
+    (-0.215, 0.742, "b", 0.200, 0.135, (-0.23, 0.93, 0.30), 0.006, 5.0),
+    (-0.005, 0.728, "b", 0.230, 0.145, (0.00, 0.95, 0.30), 0.006, -1.0),
+    (0.212, 0.744, "b", 0.195, 0.130, (0.23, 0.93, 0.30), 0.006, -6.0),
 ]
 TORSO_PRIMS = [(Ellipsoid((0.0, 0.020, 0.640), (0.440, 0.320, 0.385)), 0.0),
                (Ellipsoid((0.0, 0.030, 0.860), (0.370, 0.290, 0.190)), 0.08),
@@ -755,26 +765,45 @@ def torso_surface(az_deg, z, sx=1.0):
 PLATE_FRAMES: list = []         # (centre, normal, tangent, bitangent, w, h) of every stone plate (the paint reads them)
 
 
+def torso_hit(x, z, side):
+    """the torso's surface point straight in front of (side 'f') / behind ('b') the body at (x, z); beside the body
+    (the ray misses) the point at the torso's widest there"""
+    sgn = -1.0 if side == "f" else 1.0
+    o = np.array([x, 0.03, z])
+    if torso_d(o)[0] > 0:
+        return o
+    lo, hi = 0.0, 0.6
+    for _ in range(40):
+        mid = 0.5 * (lo + hi)
+        if torso_d(o + np.array([0.0, sgn * mid, 0.0]))[0] < 0:
+            lo = mid
+        else:
+            hi = mid
+    return o + np.array([0.0, sgn * lo, 0.0])
+
+
 def plates_part(name, spec, sx, bind, tris):
     S = Sculpt(name)
-    for i, (az, zc, w, h, lift, kick) in enumerate(spec):
-        sp, n = torso_surface(az, zc, sx)
+    for i, (x, zc, side, w, h, nrm, lift, roll) in enumerate(spec):
+        x = sx * x
+        n = unit(np.array([sx * nrm[0], nrm[1], nrm[2]]))
+        sp = torso_hit(x, zc, side)
         t = unit(np.cross(np.array([0, 0, 1.0]), n))
+        if side == "b":
+            t = -t
         b = np.cross(n, t)
-        R_ = _rot(t, -kick)                                 # the lower edge kicks out (shingles)
-        n, b = R_ @ n, R_ @ b
-        rz = math.radians(7.0 * math.sin(i * 2.1 + sx))    # each slab a little askew
+        rz = math.radians(sx * roll)
         t2 = t * math.cos(rz) + b * math.sin(rz)
         b2 = np.cross(n, t2)
-        c = sp + n * (0.024 + lift) - b2 * 0.01
+        c = sp + n * (0.028 + lift)
         ax = np.stack([t2, b2, n])
         PLATE_FRAMES.append((c, n, t2, b2, w, h))
-        slab = RoundBox(c, (w * 0.5, h * 0.5, 0.026), 0.013, axes=ax)
-        # (one blended unit per plate: a plate's own back-curve cut must not carve its neighbours); chunky chipped
+        slab = RoundBox(c, (w * 0.5, h * 0.5, 0.027), 0.014, axes=ax)
+        # (one blended unit per plate: a plate's own back-curve cut must not carve its neighbours); a chunky chipped
         # outline (low-frequency bites) and fine chips
-        rough = lambda P, s0=i: chips(0.009, 7.0)(P + s0 * 1.7) + chips(0.0035, 19.0)(P)  # noqa: E731
-        S.add(sdf.Blend([("add", slab.displaced(rough, 0.0125), 0.0),
-                         ("sub", Sphere(c - n * 0.70, 0.70 - 0.020), 0.006)]), k=0.0)
+        rough = lambda P, s0=i: chips(0.010, 6.5)(P + s0 * 1.7) + chips(0.0035, 19.0)(P)  # noqa: E731
+        S.add(sdf.Blend([("add", slab.displaced(rough, 0.0135), 0.0),
+                         ("sub", Sphere(c - n * 0.80, 0.80 - 0.022), 0.006)]), k=0.0)
     return (name, S, 0.6, "stone", bind, tris, 1.1)
 
 
@@ -861,7 +890,7 @@ def staff_parts() -> list:
               .displaced(lambda P: 0.0008 * NOISE(P * np.array([1.0, 1.0, 0.25]), 45.0), 0.0008), k=0.0)
     shaft.add(Sphere(staff_at(S_TOP - 0.02), 0.034), k=0.02)                    # the knuckle under the crook
     shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)
-    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 1050, 1.1))
+    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 820, 1.1))
     grip = Sculpt("staff_grip")
     for a_, b_ in GRIPS:
         g0, g1 = staff_at(a_), staff_at(b_)
@@ -903,7 +932,7 @@ def cup_parts() -> list:
     lo, hi = c + np.array([-0.12, -0.12, cup_z(CUP_GLASS[1]) - 0.02]), c + np.array([0.12, 0.12, HANG[2] + 0.01])
     rb = Sculpt("cup_rim")
     rb.add(Fn(lambda P: rim(P) + 0.003, lo, hi).displaced(chips(0.0020, 22.0), 0.0020), k=0.0)
-    out.append(("cup_rim", rb, 0.4, "ironstone", "bone:x_cup_hook", 520, 0.8))
+    out.append(("cup_rim", rb, 0.4, "ironstone", "bone:x_cup_hook", 440, 0.8))
 
     def glass(P):
         q = P - c
@@ -921,7 +950,7 @@ def cup_parts() -> list:
         return np.minimum(np.minimum(base, lip), ribs)
     gl = Sculpt("cup_glass")
     gl.add(Fn(glass, lo, hi), k=0.0)
-    out.append(("cup_glass", gl, 0.35, "dawnglass", "bone:x_cup_hook", 760, 1.0))
+    out.append(("cup_glass", gl, 0.35, "dawnglass", "bone:x_cup_hook", 600, 1.0))
 
     def core(P):
         q = P - c
@@ -1205,11 +1234,16 @@ SIDE_PARTS = ("hood", "torso", "belt", "skirt", "pants", "shins", "sleeve_L", "s
 SIDE_FACE = (0.24, 0.60)
 SIDE_FACE_PART = {"hood": (0.30, 0.72), "face": (0.30, 0.70), "torso": (0.28, 0.66)}
 SIDE_HI = 1.12
+# build 4: beside the body the painting shows the ARMS (sleeves, the brown bracer, the gloves, the staff), not the
+# wraps: torso / skirt texels out there took that paint as brown smears in three-quarter views; they take the part's
+# own banded tone instead (front cream / back tan blended by the normal)
+SIDE_X = {"torso": (0.30, 0.36, 0.30, 0.92), "skirt": (0.34, 0.40, 0.30, 0.52)}
 OBLIQUE = {"torso": 0.55, "hood": 0.45, "skirt": 0.45, "sleeve_L": 0.5, "sleeve_R": 0.5, "pants": 0.4, "shins": 0.4}
 DARK_FLOOR, DARK_KNEE = 0.66, 0.86
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
 LINING_HEX = "#2B221D"
-HOOD_TONE = 0.80
+HOOD_TONE = 0.68
+HOOD_WARM, HOOD_WARM_K = "#D6C6A6", 0.45     # build 3: three rendered the linen a cool bone-white: pulled toward warm cream
 
 
 def _hex(h):
@@ -1325,7 +1359,14 @@ def _side_fill(lin, k, p, n, names, log):
         sel = k == kk
         f0, f1 = SIDE_FACE_PART.get(nm, SIDE_FACE)
         w = np.maximum(1 - ss(f0, f1, face), hid.astype(np.float32))
-        good = sel & (face > 0.78) & ~hid
+        zone = np.zeros(len(k), dtype=np.float32)
+        if nm in SIDE_X:
+            x0_, x1_, z0_, z1_ = SIDE_X[nm]
+            zone = ss(x0_, x1_, np.abs(p[:, 0])) * ss(z0_, z0_ + 0.04, p[:, 2]) * ss(z1_, z1_ - 0.04, p[:, 2])
+            w = np.maximum(w, zone)
+        good = sel & (face > 0.78) & ~hid & (zone < 0.05)
+        if nm == "hood":
+            good &= ~((open_sd(p[:, 0], p[:, 2]) < 0.05) & (p[:, 1] < -0.02))
         if good.sum() < 40:
             continue
         zs = p[sel, 2]
@@ -1488,15 +1529,17 @@ def _glass_paint(p, n):
 
 
 def _plate_paint(p, n):
-    """the pale stone plates (as painted: a warm pale grey, lit top faces, chalky chipped top edges, dark lower edges
-    and undersides, mottled with a few chips), each plate read in its own frame"""
+    """the pale stone plates (as painted: a warm pale grey-cream, lit top faces, chalky chipped top edges, a dark
+    painted line round the lower edges and dark undersides, mottled, a few chips and cracks), each read in its frame"""
     if not PLATE_FRAMES:
         return _stone_paint(p, n, "#CBC5B4", 0.12, 0.12)
     C = np.array([f[0] for f in PLATE_FRAMES])
     d = np.linalg.norm(p[:, None, :] - C[None, :, :], axis=2)
     near = np.argmin(d, axis=1)
     out = np.zeros((len(p), 3), dtype=np.float32)
-    base = _lin(_hex("#BDB6A5"))
+    base = _lin(_hex("#B9B09C"))
+    chalk = _lin(_hex("#DCD4C2"))
+    line = _lin(_hex("#5E564B"))
     for i, (c, nn, t, b, w, h) in enumerate(PLATE_FRAMES):
         m = near == i
         if not m.any():
@@ -1504,25 +1547,31 @@ def _plate_paint(p, n):
         q = p[m] - c
         u, v = q @ t / (0.5 * w), q @ b / (0.5 * h)
         facing = n[m] @ nn
-        edge = 1 - ss(0.55, 0.92, facing)                       # the bevelled rims
-        top = ss(0.2, 0.9, v) * edge
-        bot = ss(-0.2, -0.9, v) * edge + ss(0.3, -0.5, facing)
-        mott = 1 + 0.10 * _fbm(p[m], 9.0) + 0.05 * _fbm(p[m], 31.0)
-        chip = np.clip(NOISE.ridged(p[m], 22.0, 2) - 0.66, 0, 1) * 2.5
-        tone = 0.94 + 0.10 * math.sin(i * 2.3)                  # each plate a slightly different value
-        k = _lam(n[m], 0.78, 0.34) * mott * tone * (1 + 0.20 * top) * (1 - 0.38 * bot) * (1 - 0.18 * chip)
-        k = k * (1 - 0.10 * ss(0.6, 1.0, np.abs(u)) * ss(0.6, 1.0, np.abs(v)))
-        out[m] = base[None, :] * k[:, None]
+        edge = 1 - ss(0.50, 0.90, facing)                       # the bevelled rims and the slab's thickness
+        top = ss(0.10, 0.80, v) * edge * ss(-0.2, 0.4, n[m, 2])  # the upper rim catches the light: chalky
+        bot = (ss(-0.1, -0.8, v) * edge) + ss(0.25, -0.40, facing)
+        under = ss(0.0, -0.5, n[m, 2]) * edge
+        mott = 1 + 0.12 * _fbm(p[m], 8.0) + 0.06 * _fbm(p[m], 29.0)
+        chip = np.clip(NOISE.ridged(p[m], 20.0, 2) - 0.64, 0, 1) * 2.6
+        crack = np.clip(NOISE.ridged(p[m] * np.array([1.0, 1.0, 2.2]), 7.0, 2) - 0.86, 0, 1) * 6.0
+        tone = 0.93 + 0.12 * math.sin(i * 2.3 + 0.7)            # each slab a slightly different value
+        k = _lam(n[m], 0.74, 0.40) * mott * tone * (1 - 0.18 * chip) * (1 - 0.35 * np.clip(crack, 0, 1))
+        c_ = base[None, :] * k[:, None]
+        c_ = c_ * (1 - 0.45 * top[:, None]) + chalk[None, :] * (0.45 * top * k)[:, None]
+        dk = np.clip(0.55 * bot + 0.45 * under, 0, 0.8)[:, None]
+        c_ = c_ * (1 - dk) + line[None, :] * dk * 0.9
+        out[m] = c_
     return out
 
 
-def _lining(p, n, lin):
+def _lining(p, n, lin):  # noqa: C901
     """the hood's dark lining round the face (as painted: a deep brown-black, a little warmer and lighter at the
     rim's inner lip): hood texels inside the opening outline and recessed behind the rim"""
     x, y, z = p[:, 0], p[:, 1], p[:, 2]
     od = open_sd(x, z)
     # (build 2: the recess only, y < -0.08: build 1 darkened the hood's BACK inside the face outline, Dunsom's bug)
     inside = ss(0.012, -0.004, od) * ss(-0.020, 0.010, y - rim_y(x, z) - 0.020) * ss(-0.03, -0.085, y)
+    inside = inside * ss(0.40, 0.05, n[:, 0] * np.sign(x))       # (build 3: never the hood's outward-facing sides)
     deep = ss(-0.215, -0.135, y)
     c = _lin(_hex(LINING_HEX))[None, :] * (0.80 + 0.40 * (1 - deep) + 0.08 * _fbm(p, 25.0))[:, None]
     w = inside[:, None]
@@ -1566,7 +1615,8 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         # build 2: the cream linen read bone-white in three: toned to the brief's cloth2 (L* ~80) and warmed a touch
         c = lin[m] * HOOD_TONE
         Y = _Y(c)[:, None]
-        lin[m] = _lining(p[m], n[m], c * 0.9 + Y * _lin(_hex("#D9CDB3"))[None, :] / max(float(_Y(_lin(_hex("#D9CDB3"))[None, :])[0]), 1e-4) * 0.1)
+        warm = _lin(_hex(HOOD_WARM))
+        lin[m] = _lining(p[m], n[m], c * (1 - HOOD_WARM_K) + Y * warm[None, :] / max(float(_Y(warm[None, :])[0]), 1e-4) * HOOD_WARM_K)
     for nm_ in ("shins",):
         m = sel(nm_)
         if m is not None:
@@ -2079,7 +2129,7 @@ def clip_overrides(ctx) -> dict:
                     R=(GUARD_R[0], GUARD_R[1] + 0.02 * s, GUARD_R[2] + 0.008 * b), Rp=POLE_R,
                     aim=(UP[0] + 0.03 * s, UP[1] - 0.02 * s, UP[2]),
                     L=(GUARD_L[0] + 0.012 * s, GUARD_L[1] - 0.012 * b, GUARD_L[2]))
-    out["idle"] = anim.Clip("idle", 80, True, idle_s)
+    out["idle"] = anim.Clip("idle", 64, True, idle_s)
 
     # RUN: the generator's planted gait at 3.4 m/s (a 12-frame cycle), its swing lifts scaled to the short legs; the
     # staff carried at the right side leaning forward (the cup swinging), the left arm pumping
@@ -2256,7 +2306,7 @@ def clip_overrides(ctx) -> dict:
     def channel_s(t):
         b = math.sin(2 * math.pi * 2 * t)
         return anim.add(ch, P_(chest=(1.2 * b, 0, 0), head=(-0.8 * b, 0, 0)))
-    out["channel"] = anim.Clip("channel", 40, True, channel_s)
+    out["channel"] = anim.Clip("channel", 30, True, channel_s)
 
     # DASH: a rolling scurry low over the ground, the staff carried forward, the feet sliding (no step)
     gl = pose(torso=dict(hips=(12, 0, 0), spine=(8, 0, 0), chest=(6, 0, 0), neck=(-8, 0, 0), head=(-8, 0, 0)),
@@ -2279,7 +2329,7 @@ def clip_overrides(ctx) -> dict:
         ik["foot.R"] = FootTarget((0.03 * a, 0.0, 0.0), 0.0, 0.0, 0.0, 0.0, 1.0)
         p["ik"] = ik
         return p
-    out["stunned"] = anim.Clip("stunned", 40, True, stun_s)
+    out["stunned"] = anim.Clip("stunned", 30, True, stun_s)
 
     # TAUNT: raises the cup and clinks it against the staff (a knock twice: a clear glass note), then a slow nod
     tu = pose(torso=dict(chest=(-2, -4, -2), head=(-4, 6, 0)), R=_rel(GUARD_R, (0.04, -0.18, 0.40)), aim=(-0.05, -0.15, 0.99))
