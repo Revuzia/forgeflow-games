@@ -2522,7 +2522,72 @@ export function rotationCover(seed, mapId, env) {
     }
     addC(x, z, 1.4 * s); st.rocks++;
   }
+  const eg = endgameCover(seed, mapId, env, { h, wy, tones, roadNear, relief, coverWithin, addC });
+  if (eg) { for (const q of eg.pieces) pieces.push(q); st.endgame = eg.stats; }
   return { pieces, stats: st };
+}
+
+// ── endgame cover (R1, lane endgame) ─────────────────────────────────────────────────────────────────────────────────────────────────
+// Owner OD-1 places STANDARD mode's circles area-uniform and land-checked (sim/royale.js placeCircle), so the last two circles (c7, r 31.4 m) land anywhere on dry ground - mostly
+// NOT in the towns and endgame villages that were built round the old near-centre finals (citycheck endgame-cover on 200 seeds: 68.5 / 43.5 / 31.0 % of seeds had >= 10 cover pieces in
+// c7, median 69 / 2 / 2 = isla_viva / ashgrid / deepwood). The world now knows its own final circles: the storm plan is a pure function of (seed, mode, half, the land predicate), so the
+// map builds the STANDARD plan from the same Storm (the sim's, window / globalThis FFG.sim.Royale - the one storm.js uses) with the same predicate (terrain > waterY + 0.5 m, storm.js
+// landPredicate) and lays a seeded cluster of ruined walls and squat stone blocks inside c7 - a few in the final circle c8 - in the map's own wall tones: quarter-turn boxes (one exact
+// collider each) drawn in the structure batch the rotation-cover walls use (no new mesh, program or draw call). Quick Match keeps its near-concentric plan (OD-1): its finals stay with the
+// villages; the cluster is part of the WORLD (same seed = same world in every mode). Every draw comes from subRng(seed, "endgame:" + map, ...): the shared stream is never touched.
+export const ENDGAME_COVER = { target: 15, finalTarget: 3, reach: 25.5, finalReach: 7.0, gap: 5.6, tries: 220 };
+export const STORM_HALF_FRAC = 0.98;                       // maps.js returns half: HALF * 0.98 - the storm (storm.js W.map.half) is planned on THAT half
+function stormSim(env) {
+  if (env.sim && typeof env.sim.Storm === "function") return env.sim;
+  const g = typeof globalThis !== "undefined" ? globalThis : null;
+  const R = g && g.FFG && g.FFG.sim && g.FFG.sim.Royale;
+  return R && typeof R.Storm === "function" ? R : null;
+}
+/** the final circles of the STANDARD storm plan of this (seed, map): { c6, c7, c8 } as { x, z, r }, or null without the sim */
+export function endgameCircles(seed, env) {
+  const SIM = stormSim(env);
+  if (!SIM || !(env.half > 0)) return null;
+  const h = env.h, wy = env.waterY;
+  const S = new SIM.Storm({ seed, mode: "standard", half: env.stormHalf != null ? env.stormHalf : env.half * STORM_HALF_FRAC, landAt: (x, z) => h(x, z) > wy + 0.5 });
+  const c = S.circles, n = c.length;
+  if (n < 4) return null;
+  const pick = (k) => ({ x: c[k].x, z: c[k].z, r: c[k].r });
+  return { c6: pick(n - 3), c7: pick(n - 2), c8: pick(n - 1) };
+}
+function endgameCover(seed, mapId, env, K) {
+  const E = endgameCircles(seed, env);
+  if (!E) return null;
+  const P = ENDGAME_COVER, { h, wy, tones, roadNear, relief, coverWithin, addC } = K;
+  const c7 = E.c7, c8 = E.c8, out = [], placed = [];
+  const st = { c7: [r2(c7.x), r2(c7.z), r2(c7.r)], c8: [r2(c8.x), r2(c8.z), r2(c8.r)], tries: 0, wet: 0, blocked: 0, steep: 0, crowded: 0, walls: 0, blocks: 0, inFinal: 0, pieces: 0 };
+  const r = subRng(seed, "endgame:" + mapId, "c7");
+  const clashes = (x, z, ex, ez) => { for (const q of placed) if (Math.abs(q[0] - x) < q[2] + ex + P.gap * 0.5 && Math.abs(q[1] - z) < q[3] + ez + P.gap * 0.5) return true; return false; };
+  for (let k = 0; k < P.tries && st.walls + st.blocks < P.target; k++) {
+    st.tries++;
+    const inF = st.inFinal < P.finalTarget && k % 3 === 0;                   // every third try aims at the final circle until it holds finalTarget pieces
+    const C = inF ? c8 : c7, R = inF ? P.finalReach : P.reach;
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * R, kindRoll = r(), v1 = r(), v2 = r(), v3 = r(), v4 = r();
+    const x = r3(C.x + Math.cos(a) * d), z = r3(C.z + Math.sin(a) * d);
+    if (dist2(x - c7.x, z - c7.z) > P.reach + 1) { st.blocked++; continue; }
+    const g = h(x, z);
+    if (!(g >= wy + 1.0) || h(x + 3, z) < wy + 0.6 || h(x - 3, z) < wy + 0.6 || h(x, z + 3) < wy + 0.6 || h(x, z - 3) < wy + 0.6) { st.wet++; continue; }
+    const block = kindRoll < 0.35;
+    // a ruined wall: a run 3.0-5.2 m x 1.35-2.1 m x 0.5 m; a block: a squat stone block (a fallen ashlar / a cairn) 1.6-2.3 m square, 1.3-1.7 m tall
+    const w = block ? r2(1.6 + v1 * 0.7) : r2(3.0 + v1 * 2.2), hh = block ? r2(1.3 + v2 * 0.4) : r2(1.35 + v2 * 0.75), dd = block ? r2(1.6 + v4 * 0.7) : 0.5, q = v3 < 0.5 ? 0 : 1;
+    const ex = q ? dd / 2 : w / 2, ez = q ? w / 2 : dd / 2;
+    if (!env.free(x, z, Math.max(ex, ez) + 1)) { st.blocked++; continue; }
+    const rn = roadNear(x, z);
+    if (rn.d < rn.hw + 2.5 + Math.max(ex, ez)) { st.blocked++; continue; }
+    if (relief(x, z, ex, ez) > 0.7) { st.steep++; continue; }
+    if (coverWithin(x, z, Math.max(ex, ez) + 1.2) || clashes(x, z, ex, ez)) { st.crowded++; continue; }
+    const tone = tones[Math.floor(v4 * tones.length) % tones.length];
+    out.push({ kind: "wall", x, z, w: block ? w : w, h: hh, d: dd, quarter: q, tone, endgame: 1 });
+    placed.push([x, z, ex, ez]); addC(x, z, Math.max(ex, ez));
+    if (block) st.blocks++; else st.walls++;
+    if (dist2(x - c8.x, z - c8.z) + Math.max(ex, ez) < c8.r) st.inFinal++;
+  }
+  st.pieces = out.length;
+  return { pieces: out, stats: st };
 }
 
 // ── street props (Wave 7, lane 7A): lights, hydrants, benches, planters, parked cars, lot dressing - as DATA, in the layout's own sub-RNG ──────────────────────────
