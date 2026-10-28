@@ -49,6 +49,15 @@ painting projected onto the game mesh in the concept's pose, normals + AO baked 
     the mantle's draped dip + cast shadow, the rolled collar's twist, the ash staff's grain, knots and ferrule.
     Measured IN GAME (render_bench, both seats; scratch harness ig_bw.mjs): accent-vs-surround Lab dE Aubade ally
     47 (min 35), enemy 62; Serenade ally 61, enemy 71 (min 42); hood L* p90 61-64.
+  * FIX ROUND 6 (review r4 major: paint and forms under the Art 2.0 bar): the Serenade capelet a SCALLOPED hem with a
+    U dip to the centre back, its drape folds, hem lobes and low columns sharing one function (`mantle_drape`), its
+    underside in shadow; the coat's folds painted from the sculpt's fold function (`cloak_fold_w`) + long strokes;
+    the pauldron bands clean painted ribbons (edge light, grooves, no cracks / swatch); the sash laid on the coat
+    low's own columns (no notch); the forearm wraps a clean helical BANDAGE SPIRAL (`wrap_mesh`) and the mitts clean
+    lows with a separate thumb lobe; the glimwick DETAIL TRANSFER (`wick_common.detail_ratio`) on the projected parts
+    (+ the Serenade mantle); the reserved marigold band clamped (luminance kept); the Aubade sill sunk 2 cm + inked,
+    its hood cap -15 %; the Serenade roll thinned at the sill, the painted spill halved; smaller hood cores and the
+    halo's alpha stations in its fall (the shared core + halo). Close-up check: proto/wick_brightwick_glbview.py.
   * Pauldrons ride the shoulder bone RIGIDLY (blended into the upper arm they crumpled in the guard pose).
   * Same job silhouette in both cultures: the same rig, staff layout (right grip 0.40 m from the foot, left grip
     0.72 m above it, lantern at the upper left) and the same clips; hood, crown, pauldrons, trims, lamp differ.
@@ -1153,7 +1162,11 @@ def hood_parts(F, aub, part):
     X, Zu, Yo = axes
     v, f = wc.cap_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2], seg=16)
     part("hood_light", ("mesh", v, f), wc.CORE_MAT, "bone:head", None, 0.5)
-    v, f = wc.halo_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2])
+    # (r6, review r4: "the core reads as a flat disc with a crisp outline") the halo's alpha stations (the export writes
+    # the shared profile's alpha at each vertex, linear between rings) moved into the FALL: 0.62 / 0.74 / 0.87 / 1.0
+    # (alpha 0.80 / 0.45 / 0.16 / 0) instead of 0.43 / 0.62 / 0.82 / 1.0 (0.82 / 0.80 / 0.26 / 0: one steep step that
+    # read as the disc's edge); the same 98 triangles, the plateau inside 0.62 stays flat either way
+    v, f = wc.halo_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2], rings=HALO_RINGS_BW)
     part("hood_halo", ("mesh", v, f), wc.HALO_MAT, "bone:head", None, 0.5)
     if aub:
         crown_aubade(F, part, hood)
@@ -1162,6 +1175,7 @@ def hood_parts(F, aub, part):
 
 
 RIM_A = (0.034, 0.011)      # the Aubade carved rim band: width on the cowl, height proud of it (m)
+HALO_RINGS_BW = (0.0, 0.62, 0.74, 0.87, 1.0)     # the hood halo's ring stations (lateral radius / its rim)
 
 
 def rim_band(F, D, width, height, n=17, inner=0.016):
@@ -2183,7 +2197,7 @@ RAMP = {   # value (linear multiplier) by height: light top, dark feet (bible §
     # (fix round 4: in game the Serenade feet read lighter than its top, 30-35 against 26-28) the feet a step darker
     # (r6, review r4: in game top / mid / feet 34 / 31 / 28 on High, 34 / 34 / 33 on Low: flat) the lower coat darker
     # toward the hem (the feet quarter <= L* 28 on screen), the top kept
-    "serenade": [(0.0, 0.24), (0.20, 0.31), (0.45, 0.53), (0.80, 0.84), (1.05, 1.02), (1.35, 1.10), (1.80, 1.16)],
+    "serenade": [(0.0, 0.21), (0.20, 0.28), (0.45, 0.50), (0.80, 0.83), (1.05, 1.02), (1.35, 1.10), (1.80, 1.16)],
 }
 SHADOW_TINT = {"aubade": (-0.10, -0.03, 0.14), "serenade": (0.10, -0.02, -0.14)}
 KEY = np.array((-0.35, -0.60, 0.72)) / np.linalg.norm((-0.35, -0.60, 0.72))   # painted key: front, upper right
@@ -2348,7 +2362,7 @@ def _cloak_serenade(spec, p, g, col):
     # the concept's bands: an ironstone band at 0.245-0.29 and the dark rolled hem edge (r6: darker, the feet band)
     b1 = smooth(0.150, 0.152, z) * (1 - smooth(0.183, 0.187, z))
     b2 = smooth(0.243, 0.247, z) * (1 - smooth(0.288, 0.292, z))
-    col = mix(col, "#3A302A", np.maximum(b1, b2))
+    col = mix(col, "#332A25", np.maximum(b1, b2))
     # the sash's ironstone borders (the light sits in a dark setting: marigold on bare umber felt melts)
     sb = 1 - smooth(SASH_W / 2 + 0.036, SASH_W / 2 + 0.042, np.abs(z - SASH_Z))
     col = mix(col, "#3A302A", sb * 0.95)

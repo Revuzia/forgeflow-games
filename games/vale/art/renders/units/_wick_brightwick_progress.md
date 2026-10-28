@@ -432,3 +432,69 @@ renders `art/renders/units/*brightwick*`.
   In game: Aubade under azure dE76 48.1-50.4, under marigold 86-92; Serenade under azure 62.8-66.8; hood top quarter
   A 63-66, S 61; Serenade top / mid / feet medians 34 / 31 / 28 (High), 34 / 34 / 33 (Low) - was 21-40 over 26-36.
   Open: the Serenade mantle and the collar silhouette are still smooth; the Low-tier gradient is flat, not light-top.
+
+## Fix round 6 (wicks review r4 = review:wick:2, brightwick items; wick_common.py untouched)
+- 2026-10-27 19:00 start. Major: paint + forms under the Art 2.0 / glimwick bar (Serenade cloak a plain tube, the
+  cream mantle a flat slab with a straight hem, crumpled sandstone pauldron bands, a torn notch in the sash at the
+  back, crumpled / faceted Aubade forearm wraps and mitts). Minors: Aubade hood top quarter over L* 65 in game,
+  the hood core a crisp disc, the Serenade light-top / dark-feet gradient flat (Low 34 / 34 / 33), face hints at
+  52 deg (Aubade grey sill block + serrated shelf = a jaw; Serenade thick roll = lips, a lit shard inside), the
+  reserved marigold band, budgets.
+- Close-up tool: `proto/wick_brightwick_glbview.py` (imports a BUILT GLB in EEVEE under the Rift sky + sun, the
+  accent tinted like the game, the halo / core COLOR_0 alpha wired; eye level body + head, 52 deg head + body,
+  the gameplay camera at true 1080p scale, forearms). In game: the review's ig.mjs + analyze.py (Rift seed 7,
+  t 74 / 84 / 99, brightwick served in the shieldwick slot, seats 0 and 5, High 1080p and Low 720p), run under one
+  heavy slot.
+- Changes (wick_brightwick.py only):
+  - Serenade MANTLE: `mantle_hem` a broad U to the centre back (0.950) with SCALLOPS (a lobe under every drape crest
+    at 45 k deg, 1.8 cm, none on the lapels), the bell down to 0.90; the drape (`mantle_drape`, shared by the sculpt
+    and the paint) has its valleys between the lobes; the low's columns on every lobe, cusp and half way (38 x 4 rows
+    + the turned edge, 380 tris); paint: the drape's folds (valley shadow, lit crest), the underside in shadow, the
+    turned edge darker, the shoulders +3 L*; the coat's cast shadow under the scalloped hem deeper; the concept's
+    back plate now carries the capelet (PROJ_PARTS).
+  - Serenade COAT: folds 1.6 -> 1.9 cm and PAINTED from the sculpt's own fold function (`cloak_fold_w`: lit crest,
+    deep valley, opening toward the hem), long vertical brush strokes on the coat and sleeves; the feet ramp
+    0.36 -> 0.21 at the hem, the hem bands #3A302A -> #332A25.
+  - Serenade PAULDRON BANDS: clean ribbons (no edge noise, no cracks): a fall across each band, a worn edge light on
+    its upper edge, a shadowed lower edge, a groove either side; the swatch strokes and the mottle damped on them.
+  - SASH: its stations are the coat low's own columns, found the same way (horizontal rays at the world angles), so
+    its chords run parallel to the coat's: welded, no notch (the old elliptic stations let coat vertices cut it).
+  - FOREARMS (both): a clean helical BANDAGE SPIRAL (`wrap_mesh`: 6 stations a turn, each turn's elbow-side edge
+    5.5 mm proud over the turn before, on a slim core tube; Aubade 3.5 turns, Serenade 2.5) over an SDF high with
+    the same spiral step (normal + paint); MITTS: a rounded-box low projected on its own SDF (48 tris) + a separate
+    THUMB lobe (24 tris, a crease in the high).
+  - DETAIL TRANSFER: `apply_concept` uses the glimwick's `wick_common.detail_ratio` (4.5 cm low-pass, 0.66-1.40,
+    chroma, outliers and tops masked) at DET[role] (cloth 0.72) on the projected parts; unseen texels keep the
+    material swatch.
+  - MARIGOLD BAND (Serenade): `wick_common.clamp_reserved` on the finished base colour (24-50 deg, S <= 0.34, 4 deg
+    feather; the lampresin rims kept), then each texel's luminance restored (the clamp keeps HSV value: the umber
+    came out ~3 L* lighter).
+  - VALUES (Aubade, B5): measured in game, the hood region's brightest quarter is the round linen CAP inside the
+    circlet (sky + sun from 52 deg): the cap -15 %; the circlet + towers #98948A -> #8C887F with a softer worn tip
+    light, the rim #928E85, the pauldron cap plate's top step -11 % and a softer edge light.
+  - FACE HINTS: Aubade sill sunk 2 cm (opening 1.330 -> 1.310, the core 1.413 -> 1.420), the top 1 cm of the sill
+    inked (ORM matte + occluded) and the chin darkened softly into the scarf; Serenade roll thinned to half down the
+    arch's sides (tapered RoundCone chain + a tapered swept low), the painted spill on the hollow's walls halved.
+  - HOOD LIGHT: cores 4.2 -> 3.5 cm (A) and 5.1 -> 3.9 cm (S) across (the shared 2.07 x halo had filled 88 % of the
+    opening, a lit plate); the halo's ring stations moved into the fall (0.62 / 0.74 / 0.87 / 1.0, same 98 tris).
+- 19:45 FINAL builds (both, clip sheets): Aubade 3981 tris / 333 KiB (341,396 B), Serenade 3989 / 321 KiB (328,712 B);
+  three load test OK, facing +Z, 92 / 91 px at 1080p; QA accent 6.96 % (top half 72.7 %) / 5.87 % (64.7 %); attack1 +
+  death ground-solved (body min z 0.000, prop min z >= -0.000 / +0.002).
+  In game (ig.mjs + analyze.py, the review's numbers in brackets):
+  - Aubade hood top quarter 62.2 / 62.7 ally High / Low, 62.5 / 61.4 enemy (65.1 / 65.5 / 66.3 / 65.2), p90 63.1-64.8
+    (66.6-69.8); dE76 accent vs ring 50.1 / 47.5 ally, 90.2 / 83.7 enemy (50.2 / 47.8 / 92.0 / 86.2).
+  - Serenade top / mid / feet 38.4 / 31.1 / 23.2 High, 39.7 / 34.8 / 28.3 Low (34 / 31 / 28, 34 / 34 / 33); hood top
+    quarter 61.6 / 61.1, p90 64.8 / 63.6; dE76 66.4 / 62.2 (66.8 / 62.8); Lab marigold share 13.1 % High, 1.0 % Low
+    (25.5 / 10.2).
+  - Authored base colour (glbtex): Serenade texels in the 25-50 deg band over 0.40 sat 16.2 % -> 10.2 %, those above
+    V 0.35 3.7 % -> 2.9 % (the lampresin rims, the brief's <= 4 %); the rest is near-black ink / walnut where the
+    WebP's chroma noise moves dark texels.
+  - Hood light profile (eye level, L* every 3 px from the core's centre outward): Serenade 59 ... 58 57 54 52 48 45 42
+    38 35 30 26 23 18 (before: a flat 60 to the opening's edge); Aubade 58 ... 56 54 50 47 43 39 35 31 27 23 17 11.
+  Evidence: fix_r6_brightwick.jpg (before | after: Serenade body eye level + 52 deg, Aubade forearms / mitts and the
+  52 deg sill, the hood light ally / enemy, in-game 1080p x4 crops with the hood top-quarter pixels), three_*,
+  three_clips_*, build_report_*.
+  Not applicable: the halo darkening ring on panes (the brightwick lanterns carry no lamp halo).
+  Open: the cross-kind relation to the fighters (wick hoods 61-63 against fighters' top quarters 45-65 in the same
+  frames) is for the fighter / B5 lanes; the Serenade Low feet 28.3 sits at the 28 target; tris 3981 / 3989 of 4000
+  leave little headroom; a small light sliver at the foot of the Aubade rim band at the 52 deg close-up.
