@@ -5,8 +5,9 @@
 
 import type { ComponentChildren, JSX } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { useApp, type TipSpec } from '../app_ctx.ts';
-import { richText, type Seg } from '../format.ts';
+import { rankParts, richText, type Seg, type ValueSeg } from '../format.ts';
 import { fmtNum } from '../format.ts';
 import type { CatalogView } from '../catalog_view.ts';
 
@@ -73,38 +74,76 @@ export function TooltipLayer(): JSX.Element | null {
   );
 }
 
+// ── rank-aware numbers (HUD-5) ─────────────────────────────────────────────────────────────────
+/** where a ranked tooltip stands: the rank you have (0 = not learned) and whether a point can go into it now */
+export interface RankView { rank: number; canLevel?: boolean }
+/** held Shift opens every rank's numbers in a ranked tooltip (the tooltip layer re-renders on it) */
+export const tipAllRanks = signal(false);
+let shiftHooked = false;
+function hookShift(): void {
+  if (shiftHooked || typeof window === 'undefined') return;
+  shiftHooked = true;
+  const set = (on: boolean): void => { if (tipAllRanks.peek() !== on) tipAllRanks.value = on; };
+  addEventListener('keydown', (e) => { if (e.key === 'Shift') set(true); }, true);
+  addEventListener('keyup', (e) => { if (e.key === 'Shift') set(false); }, true);
+  addEventListener('blur', () => set(false));
+}
+
+/** a per-rank number: the rank you have leads (rank 0 shows rank 1, the one you would learn); when a point can go
+ *  in, the next rank follows an arrow; held Shift shows the whole row with yours lit and the others dimmed */
+function RankedNum(p: { ranks: string[]; unit: string; rv: RankView; all: boolean }): JSX.Element {
+  const n = p.ranks.length;
+  const cur = Math.max(0, Math.min(n - 1, p.rv.rank - 1));
+  if (p.all) {
+    return <span class="rk rk--all">{p.ranks.map((x, i) => <>{i ? <span class="rk__sep">/</span> : null}<span class={i === cur ? 'rk__cur' : 'rk__dim'}>{x}</span></>)}{p.unit}</span>;
+  }
+  const next = p.rv.canLevel && p.rv.rank >= 1 && cur + 1 < n ? p.ranks[cur + 1] : null;
+  return <span class="rk"><span class="rk__cur">{p.ranks[cur]}{p.unit}</span>{next ? <span class="rk__next"> → {next}{p.unit}</span> : null}</span>;
+}
+
 // ── rich text ──────────────────────────────────────────────────────────────────────────────────
-export function RichSegs(p: { segs: Seg[] }): JSX.Element {
+export function RichSegs(p: { segs: Seg[]; rv?: RankView; all?: boolean }): JSX.Element {
+  const num = (s: ValueSeg): JSX.Element | string => (p.rv && s.ranks ? <RankedNum ranks={s.ranks} unit={s.unit ?? ''} rv={p.rv} all={!!p.all} /> : s.text);
   return (
     <span class="rich">
       {p.segs.map((s) => s.kind === 'text' ? s.text : s.kind === 'kw' ? <span class={`rich__k rich__k--${s.tone}`}>{s.text}</span> : (
         <span class={`rich__v rich__v--${s.tone} ${s.missing ? 'rich__v--missing' : ''}`}>
-          <span class="rich__n">{s.tone === 'heal' ? '+' : ''}{s.text}</span>
+          <span class="rich__n">{s.tone === 'heal' ? '+' : ''}{num(s)}</span>
           {s.ratios.length ? <span class="rich__r"> ({s.ratios.map((r, i) => <span class={`rich__ratio rich__ratio--${r.tone}`}>{i ? ', ' : ''}{r.text}</span>)})</span> : null}
         </span>
       ))}
     </span>
   );
 }
-export function RichDesc(p: { record: unknown; desc: string }): JSX.Element {
+export function RichDesc(p: { record: unknown; desc: string; rv?: RankView; all?: boolean }): JSX.Element {
   const { cv } = useApp();
-  return <RichSegs segs={richText(cv, p.record, p.desc)} />;
+  return <RichSegs segs={richText(cv, p.record, p.desc)} rv={p.rv} all={p.all} />;
 }
 
 type AbilityLike = { name: string; desc: string; cooldown?: number | number[]; cost?: number | number[]; costKind?: string; icon?: string; targeting?: { range?: number } };
-const rankedText = (v: number | number[] | undefined, unit: string): string | null => {
+/** a cooldown / cost line: one number, or (with a rank view) the rank you have first */
+function statNum(v: number | number[] | undefined, unit: string, rv: RankView | undefined, all: boolean): JSX.Element | string | null {
   if (v === undefined) return null;
   const a = Array.isArray(v) ? v : [v];
   if (a.every((x) => x === 0)) return null;
-  return (a.every((x) => x === a[0]) ? fmtNum(a[0]) : a.map(fmtNum).join('/')) + unit;
-};
+  if (a.every((x) => x === a[0])) return fmtNum(a[0]) + unit;
+  const rp = rankParts(a, '');
+  if (rv && rp) return <RankedNum ranks={rp.ranks} unit={unit} rv={rv} all={all} />;
+  return a.map(fmtNum).join('/') + unit;
+}
 
-/** ability / spell / passive / boon tooltip body */
-export function AbilityTip(p: { record: AbilityLike; slotLabel?: string; keyLabel?: string; kind?: string; resourceName?: string; cv?: CatalogView }): JSX.Element {
+/** ability / spell / passive / boon tooltip body. `rank` (the HUD's own slots) makes every per-rank number lead
+ *  with the rank you have; held Shift shows the whole row (HUD-5) */
+export function AbilityTip(p: { record: AbilityLike; slotLabel?: string; keyLabel?: string; kind?: string; resourceName?: string; cv?: CatalogView; rank?: RankView }): JSX.Element {
+  const { cv } = useApp();
   const r = p.record;
-  const cd = rankedText(r.cooldown, ' s');
-  const cost = r.costKind === 'none' ? null : rankedText(r.cost, r.costKind === 'hp' ? ' Health' : p.resourceName ? ` ${p.resourceName}` : '');
+  if (p.rank) hookShift();
+  const all = !!p.rank && tipAllRanks.value;
+  const cd = statNum(r.cooldown, ' s', p.rank, all);
+  const cost = r.costKind === 'none' ? null : statNum(r.cost, r.costKind === 'hp' ? ' Health' : p.resourceName ? ` ${p.resourceName}` : '', p.rank, all);
   const range = r.targeting?.range ? `${fmtNum(r.targeting.range)} m` : null;
+  const segs = richText(cv, r, r.desc);
+  const ranked = !!p.rank && (segs.some((s) => s.kind === 'value' && !!s.ranks) || [r.cooldown, r.costKind === 'none' ? undefined : r.cost].some((v) => Array.isArray(v) && !!rankParts(v, '')));
   return (
     <div class="tipx">
       <div class="tipx__head">
@@ -114,12 +153,13 @@ export function AbilityTip(p: { record: AbilityLike; slotLabel?: string; keyLabe
       {p.slotLabel || p.kind ? <div class="t-caption tipx__kind">{p.slotLabel ?? p.kind}</div> : null}
       {(cd || cost || range) ? (
         <div class="tipx__stats">
-          {cd ? <span><span class="t-caption">Cooldown</span> <span class="num">{cd}</span></span> : null}
-          {cost ? <span><span class="t-caption">Cost</span> <span class="num">{cost}</span></span> : null}
-          {range ? <span><span class="t-caption">Range</span> <span class="num">{range}</span></span> : null}
+          {cd ? <span><span class="t-caption">{cv.t('tip.cooldown', 'Cooldown')}</span> <span class="num">{cd}</span></span> : null}
+          {cost ? <span><span class="t-caption">{cv.t('tip.cost', 'Cost')}</span> <span class="num">{cost}</span></span> : null}
+          {range ? <span><span class="t-caption">{cv.t('tip.range', 'Range')}</span> <span class="num">{range}</span></span> : null}
         </div>
       ) : null}
-      <p class="t-body-s tipx__desc"><RichDesc record={r} desc={r.desc} /></p>
+      <p class="t-body-s tipx__desc"><RichSegs segs={segs} rv={p.rank} all={all} /></p>
+      {ranked ? <p class="t-caption tipx__ranks">{all ? cv.t('tip.ranks_all', 'Every rank, yours lit.') : cv.t('tip.ranks_hint', 'Hold Shift for every rank.')}</p> : null}
     </div>
   );
 }

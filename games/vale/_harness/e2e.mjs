@@ -5,7 +5,8 @@
 // Per mode: Home → Play → pick the mode on the Mode Dial → a queue → Find match → Ready → draft /
 // assignment / pick (real clicks) → loading → the match (your seat on the dev autopilot at time scale
 // --speed, so it reaches a REAL win condition; a few real inputs are sent in-match first) → the end
-// banner → post-game with grants → Home. All modes share one profile, so after the last one the
+// banner → post-game with grants → its Scoreboard tab at 1920 and 1280 (client F4: every header's x-centre within 4 px of
+// its cells, no header wraps, painted item icons) → Home. All modes share one profile, so after the last one the
 // Candles earned buy a skin in the Shop and it is equipped (one STORE journey at the end). Screenshots per step go to
 // _harness/_shots/e2e_<mode>_<nn>_<step>.png; a JSON report to _harness/_reports/e2e.json.
 // --audio m4a opens the game with ?audio=m4a (the CONTRACT §11 format fallback forced); match_live reports the

@@ -127,6 +127,13 @@
 .tipx__desc { color: var(--text-1); }
 .tipx__sub { color: var(--text-3); }
 .tipx--plain { gap: 2px; }
+/* HUD-5: per-rank numbers lead with the rank you have; held Shift shows the row, yours lit and the rest dimmed */
+.rk__cur { font-weight: 700; }
+.tipx__stats .rk__cur, .rich__v--plain .rk__cur { color: var(--chalk-hi); }
+.rk__dim { opacity: 0.42; font-weight: 500; }
+.rk__sep { opacity: 0.42; }
+.rk__next { opacity: 0.66; font-weight: 500; }
+.tipx__ranks { color: var(--text-3); }
 
 .rich__v { white-space: nowrap; }
 .rich__n { font-family: var(--font-numeric); font-weight: 700; font-variant-numeric: tabular-nums; }

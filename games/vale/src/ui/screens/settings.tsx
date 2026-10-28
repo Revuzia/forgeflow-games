@@ -315,7 +315,7 @@ function Access(p: { s: Settings; set: SetFn }): JSX.Element {
 }
 
 function Gameplay(p: { s: Settings; set: SetFn }): JSX.Element {
-  const { cv } = useApp();
+  const { cv, state } = useApp();
   const g = p.s.gameplay;
   const toggles = ['showDamageNumbers', 'showAllyIndicators', 'healthBarTicks'] as const;
   return (
@@ -325,6 +325,9 @@ function Gameplay(p: { s: Settings; set: SetFn }): JSX.Element {
           <Toggle id={`g-${k}`} label={cv.t(`settings.gameplay.${k}.label`, k)} checked={g[k]} onChange={(v) => p.set('gameplay', { [k]: v } as Partial<Settings['gameplay']>)} />
         </Row>
       ))}
+      <Row id="g-ledger" label={cv.t('settings.gameplay.hudLedger.label', 'Your ledger line')} desc={cv.t('settings.gameplay.hudLedger.desc', '')}>
+        <Toggle id="g-ledger" label={cv.t('settings.gameplay.hudLedger.label', 'Your ledger line')} checked={state.prefs.value.hudLedger !== false} onChange={(v) => state.setPrefs({ hudLedger: v })} />
+      </Row>
       <Row id="g-side" label={cv.t('settings.gameplay.minimapSide.label', 'Minimap side')} desc={cv.t('settings.gameplay.minimapSide.desc', '')}>
         <Segmented size="s" label={cv.t('settings.gameplay.minimapSide.label', 'Minimap side')} value={g.minimapSide} options={opts(cv, 'gameplay.minimapSide', ['right', 'left'] as const)} onChange={(v) => p.set('gameplay', { minimapSide: v })} />
       </Row>

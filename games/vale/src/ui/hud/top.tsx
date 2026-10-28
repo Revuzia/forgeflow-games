@@ -1,5 +1,6 @@
 // VALE HUD — the top of the screen: the sky strip (720 × 48, top centre: takedowns and structures per
-// side, the clock, objective chips with return rings; FRAY: the time left and "First to 12"; pregame
+// side, the clock, objective chips with return rings and, under its right end, your own ledger line — T/F/A
+// and Wicks, HUD-4; FRAY: the time left and "First to 12"; pregame
 // countdown; sudden death in HARM), the announcer banner under it (two lines, minor 2.4 s / major
 // 3.6 s, a queue of 2; it is also the subtitle; takedown banners carry the two fighters as 48 px round
 // portraits in their relationship rings, the fallen one cut by the 30° shadow line, in over 70 ms,
@@ -17,7 +18,7 @@ import { SeatGlyph } from '../components/Glyphs.tsx';
 import { fmtClock, fmtInt } from '../format.ts';
 import { put, REL_VAR, setCls, setVar, useHud, useViewKey, useWriter } from './ctx.ts';
 import { SideGlyph } from './glyphs.tsx';
-import type { KillRow, Who } from './model.ts';
+import type { Cause, KillRow, Who } from './model.ts';
 
 // ── sky strip ────────────────────────────────────────────────────────────────────────────────────
 export function SkyStrip(): JSX.Element {
@@ -54,6 +55,7 @@ export function SkyStrip(): JSX.Element {
         {clock}
         <span class="sky__side t-caption">{limit && !pre ? cv.t('hud.fray.clock', 'Ends at {t}', { t: fmtClock(limit) }) : ''}</span>
         {v.suddenDeath ? <span class="sky__sd t-label">{cv.t('hud.sudden_death', 'Sudden death')}</span> : null}
+        <div class="sky__under"><span /><span /><span class="sky__under-r"><SkyLedger /></span></div>
       </header>
     );
   }
@@ -74,8 +76,40 @@ export function SkyStrip(): JSX.Element {
         <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}>{b?.structuresDestroyed ?? 0}<StructGlyph /></span>
         <span class="sky__mark" style={{ color: REL_VAR.enemy }}><SideGlyph team={b?.team ?? 1} size={14} /></span>
       </div>
-      <ObjectiveChips />
+      <div class="sky__under"><span /><ObjectiveChips /><span class="sky__under-r"><SkyLedger /></span></div>
     </header>
+  );
+}
+
+/** HUD-4: your own ledger, always on — a quiet Mono line docked under the sky strip's right end: takedowns /
+ *  falls / assists and Wicks (FRAY: no Wicks). It re-renders only when one of those numbers changes (B4); the
+ *  per-minute rate lives in its tooltip, refreshed by the writer once a second. Settings › Gameplay hides it
+ *  (a per-device HUD preference). */
+export function SkyLedger(): JSX.Element | null {
+  const { cv, state } = useApp();
+  const { model } = useHud();
+  const el = useRef<HTMLSpanElement>(null);
+  useViewKey(() => { const p = model.me; return p ? `${p.kills}/${p.deaths}/${p.assists}|${Math.floor(p.cs)}` : ''; });
+  const rate = useRef('');
+  useWriter(() => {
+    const p = model.me, t = model.view.time;
+    if (!p || !el.current || model.ffa) return;
+    const r = t >= 60 ? (p.cs / (t / 60)).toFixed(1) : '';
+    if (r === rate.current) return;
+    rate.current = r;
+    el.current.title = r ? cv.t('hud.ledger.rate', '{n} Wicks a minute', { n: r }) : '';
+  });
+  const p = model.me;
+  if (!p || state.prefs.value.hudLedger === false) return null;
+  const tfa = `${p.kills}/${p.deaths}/${p.assists}`;
+  const wicks = fmtInt(Math.floor(p.cs));
+  const label = model.ffa ? cv.t('hud.ledger.aria_ffa', 'Your takedowns, falls and assists: {tfa}', { tfa })
+    : cv.t('hud.ledger.aria', 'Your takedowns, falls and assists: {tfa}. Wicks: {n}', { tfa, n: wicks });
+  return (
+    <span ref={el} class="skyledger num" role="status" aria-live="off" aria-label={label}>
+      <span class="skyledger__k">{cv.t('hud.ledger.tfa', 'T/F/A')}</span><span class="skyledger__v">{tfa}</span>
+      {model.ffa ? null : <><span class="skyledger__sep" aria-hidden="true">·</span><span class="skyledger__k">{cv.t('hud.ledger.wicks', 'Wicks')}</span><span class="skyledger__v">{wicks}</span></>}
+    </span>
   );
 }
 const StructGlyph = (): JSX.Element => <svg class="sky__sg" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l3.5 9h-7z" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>;
@@ -94,7 +128,7 @@ function ObjectiveChips(): JSX.Element | null {
   const { model } = useHud();
   useViewKey(() => [...objectivesByUnit(model.view.objectives).values()].map((o) => `${o.unit}:${o.alive ? 1 : 0}`).join(','));
   const objs = [...objectivesByUnit(model.view.objectives).values()];
-  if (!objs.length) return null;
+  if (!objs.length) return <span />;
   return (
     <div class="sky__objs" aria-label={cv.t('hud.objectives', 'Objectives')}>
       {objs.map((o) => <ObjChip unit={o.unit} key={o.unit} />)}
@@ -191,20 +225,42 @@ export function KillFeed(): JSX.Element {
     </ol>
   );
 }
+/** one kill-feed row (HUD-6). Fighter rows are pictographic — killer or cause, the arrow, the fallen fighter's chip
+ *  — and never repeat a name the chip already shows; the full sentence is the row's aria-label. Team rows
+ *  (structure lost, objective taken, wipe) keep their sentence beside the side mark. */
 function KillFeedRow(p: { r: KillRow }): JSX.Element {
+  const { cv } = useApp();
   const r = p.r;
+  const arrow = r.kind === 'takedown' || r.kind === 'objective' || (r.kind === 'fell' && !!r.cause);
+  const words = r.kind === 'structure' || r.kind === 'objective' || r.kind === 'wipe';
   return (
     <li class={`krow plate ${r.mine ? 'is-mine' : ''} krow--${r.kind}`} aria-label={r.text}>
       {r.killer ? <WhoChip w={r.killer} /> : null}
-      {r.kind === 'takedown' || r.kind === 'objective' ? (
+      {r.cause ? <CauseChip c={r.cause} /> : null}
+      {arrow ? (
         <span class="krow__act" aria-hidden="true">
           <svg viewBox="0 0 20 12"><path d="M1 6h13M10 1.5l6 4.5-6 4.5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
           {r.assists.length ? <span class="krow__assists">{r.assists.slice(0, 4).map((a) => <WhoDot w={a} />)}</span> : null}
         </span>
       ) : null}
       {r.victim ? <WhoChip w={r.victim} down={r.kind !== 'structure' && r.kind !== 'wipe'} /> : null}
-      {r.kind !== 'takedown' ? <span class="krow__text t-caption">{r.text}</span> : null}
+      {words ? <span class="krow__text t-caption" aria-hidden="true">{r.text}</span> : null}
+      {r.kind === 'out' ? <span class="krow__tag t-caption" aria-hidden="true">{cv.t('killfeed.tag.out', 'Out')}</span> : null}
+      {r.kind === 'fell' && !r.cause ? <span class="krow__tag t-caption" aria-hidden="true">{cv.t('killfeed.tag.fell', 'Fell')}</span> : null}
     </li>
+  );
+}
+/** what a fighter fell to: a drawn mark in its relationship colour and the unit's name (structure, camp, Wicks) */
+function CauseChip(p: { c: Cause }): JSX.Element {
+  return (
+    <span class={`kcause kcause--${p.c.kind}`} style={{ '--c': REL_VAR[p.c.rel] } as CSSProperties} aria-hidden="true">
+      <svg class="kcause__glyph" viewBox="0 0 16 16">
+        {p.c.kind === 'structure' ? <path d="M8 1.5l4.2 12H3.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+          : p.c.kind === 'monster' ? <rect x="3" y="3" width="10" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            : <><circle cx="5" cy="9" r="2.4" fill="currentColor" /><circle cx="11" cy="9" r="2.4" fill="currentColor" /><circle cx="8" cy="4.5" r="2.4" fill="currentColor" /></>}
+      </svg>
+      <span class="kcause__name t-caption">{p.c.name}</span>
+    </span>
   );
 }
 function WhoChip(p: { w: Who; down?: boolean }): JSX.Element {

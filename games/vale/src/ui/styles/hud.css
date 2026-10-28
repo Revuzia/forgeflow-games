@@ -1,5 +1,5 @@
 /* VALE HUD — the match screen (STYLE_BIBLE "HUD density"; client_hud). Sizes are the bible's 1080p
- * numbers × --hs (viewport factor × Settings.access.hudScale). Always-on ≤ 11 % of the screen; the
+ * numbers × --hs (HUD viewport factor --hvk, floored at 0.8 below 1080p (HUD-9), × Settings.access.hudScale). Always-on ≤ 11 % of the screen; the
  * centre 40 % × 50 % holds no HUD. Plates are ink-2 at 94 %; relationship colour lives in rings, bars,
  * frames and marks only (self Noonwhite · ally azure · enemy marigold · neutral dialstone). Numbers that
  * change are Mono. Cooldowns are ink shadows sweeping clockwise from 12 o'clock. Nothing pulses
@@ -14,7 +14,7 @@
 .hudsurface.cur-aim { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%230B0D11' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23EDE6D6' stroke-width='2'/%3E%3Cpath d='M16 3v6M16 23v6M3 16h6M23 16h6' stroke='%23EDE6D6' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair; }
 .hudsurface.cur-attackMove { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%230B0D11' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23FF9A1F' stroke-width='2' stroke-dasharray='4 3'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23FF9A1F'/%3E%3C/svg%3E") 16 16, crosshair; }
 
-.hud { --hs: calc(var(--vk, 1) * var(--hk, 1)); --px: calc(1px * var(--hs)); --edge: calc(16 * var(--px));
+.hud { --hs: calc(var(--hvk, var(--vk, 1)) * var(--hk, 1)); --px: calc(1px * var(--hs)); --edge: calc(16 * var(--px));
   position: absolute; inset: 0; z-index: 2; pointer-events: none; user-select: none; -webkit-user-select: none; }
 .hud > *, .hud__top > *, .hud__tr > *, .hud__bl > *, .hud__bottom > * { pointer-events: auto; }
 .hud__top, .hud__tr, .hud__bl, .hud__bottom, .hud__map { pointer-events: none !important; }
@@ -69,7 +69,17 @@
 .sky--ffa { grid-template-columns: 1fr auto 1fr; }
 .sky--ffa .sky__side { color: var(--text-2); }
 .sky--ffa .sky__side:last-of-type { text-align: right; }
-.sky__objs { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); display: flex; gap: calc(8 * var(--px)); margin-top: calc(4 * var(--px)); }
+/* under the strip: objective chips centred, your ledger line at the right end (HUD-4); a grid, so a wide chip row
+   pushes the ledger out rather than under it */
+.sky__under { position: absolute; left: calc(40 * var(--px)); right: calc(40 * var(--px)); top: 100%; margin-top: calc(4 * var(--px)); display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; column-gap: calc(10 * var(--px)); pointer-events: none; }
+.sky__under-r { justify-self: end; }
+.sky__objs { display: flex; gap: calc(8 * var(--px)); pointer-events: auto; }
+.skyledger { display: inline-flex; align-items: baseline; gap: calc(5 * var(--px)); white-space: nowrap; padding: calc(2 * var(--px)) calc(8 * var(--px)); border-radius: 999px;
+  background: rgba(17, 20, 26, 0.72); font-size: max(12px, calc(13 * var(--px))); line-height: 1.25; pointer-events: auto; }
+.skyledger__k { color: var(--text-3); }
+.skyledger__v { color: var(--text-1); margin-right: calc(2 * var(--px)); }
+.skyledger__sep { color: var(--text-3); margin: 0 calc(2 * var(--px)); }
 .objchip { display: inline-flex; align-items: center; gap: calc(6 * var(--px)); padding: calc(3 * var(--px)) calc(8 * var(--px)) calc(3 * var(--px)) calc(4 * var(--px));
   background: rgba(17, 20, 26, 0.86); border-radius: 999px; color: var(--text-2); }
 .objchip.is-up { color: var(--text-1); }
@@ -119,6 +129,11 @@
 .krow__act svg { width: calc(20 * var(--px)); height: calc(12 * var(--px)); }
 .krow__assists { display: flex; gap: 2px; }
 .krow__text { color: var(--text-2); max-width: calc(260 * var(--px)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* HUD-6: what a fighter fell to — a drawn mark in its relationship colour and the unit's name; short tags for Out / Fell */
+.kcause { display: inline-flex; align-items: center; gap: calc(5 * var(--px)); color: var(--c); }
+.kcause__glyph { width: calc(18 * var(--px)); height: calc(18 * var(--px)); flex: none; filter: drop-shadow(0 1px 0 rgba(11, 13, 17, 0.7)); }
+.kcause__name { color: var(--text-2); max-width: calc(130 * var(--px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.krow__tag { color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--font-heading); font-weight: 600; }
 @keyframes krow-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 .who { display: inline-flex; align-items: center; gap: calc(6 * var(--px)); color: var(--c); }
 .who__face { width: calc(26 * var(--px)); height: calc(26 * var(--px)); border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px var(--c); flex: none; }
@@ -180,7 +195,7 @@
 
 /* ── left edge: ally frames ───────────────────────────────────────────────────────────────────── */
 .allies { position: absolute; left: var(--edge); top: 50%; transform: translateY(-62%); display: flex; flex-direction: column; gap: calc(8 * var(--px)); }
-.afr { display: flex; align-items: center; gap: calc(8 * var(--px)); width: calc(168 * var(--px)); height: calc(52 * var(--px)); padding: 0 calc(8 * var(--px)) 0 calc(6 * var(--px)); text-align: left; }
+.afr { display: flex; align-items: center; gap: calc(7 * var(--px)); width: calc(168 * var(--px)); height: calc(52 * var(--px)); padding: 0 calc(8 * var(--px)) 0 calc(6 * var(--px)); text-align: left; }
 .afr:hover { background: var(--plate-bg-raised); }
 .afr.is-dead .afr__face { filter: grayscale(1) brightness(0.55); }
 .afr__face { position: relative; width: calc(40 * var(--px)); height: calc(40 * var(--px)); border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--team-ally), 0 0 0 3px var(--ink-0); }
@@ -189,14 +204,16 @@
   font-size: 12px; display: grid; place-items: center; }
 .afr__respawn { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(16 * var(--px)); font-weight: 700; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
 .afr__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(3 * var(--px)); }
-.afr__name { display: flex; align-items: center; gap: 4px; color: var(--text-1); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.afr__name { display: block; color: var(--text-1); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-heading); font-stretch: 88%; font-weight: 500; letter-spacing: 0.005em; }
 .afr__hp, .afr__res { display: block; position: relative; height: calc(7 * var(--px)); background: var(--ink-0); border-radius: 1px; overflow: hidden; }
 .afr__hp i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--team-ally); }
 .afr__res { height: calc(3 * var(--px)); }
 .afr__res i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--res); }
 .afr__res--none { background: transparent; }
-.afr__ult { width: calc(8 * var(--px)); height: calc(8 * var(--px)); transform: rotate(45deg); box-shadow: inset 0 0 0 1.5px var(--line-2); flex: none; }
-.afr__ult.is-ready { background: var(--chalk); box-shadow: none; }
+/* HUD-9: the ultimate tick and the role dot sit on the face's ring, so the name gets the body's full width */
+.afr__ult { position: absolute; right: -3px; top: -3px; width: calc(9 * var(--px)); height: calc(9 * var(--px)); transform: rotate(45deg); background: var(--ink-0); box-shadow: inset 0 0 0 1.5px var(--line-2); }
+.afr__ult.is-ready { background: var(--chalk); box-shadow: 0 0 0 1.5px var(--ink-0); }
+.afr__role { position: absolute; left: -3px; bottom: -3px; width: calc(10 * var(--px)); height: calc(10 * var(--px)); border-radius: 50%; box-shadow: 0 0 0 2px var(--ink-0); }
 
 /* ── bottom left: the feed ────────────────────────────────────────────────────────────────────── */
 .hud__bl { position: absolute; left: var(--edge); bottom: calc(150 * var(--px)); width: calc(420 * var(--px)); }
@@ -297,7 +314,7 @@
 @keyframes lvl-bob { from { transform: translate(-50%, 0); } to { transform: translate(-50%, -3px); } }
 
 .dbars { display: flex; flex-direction: column; justify-content: space-between; }
-.hpbar { position: relative; height: calc(16 * var(--px)); background: #07090C; border-radius: 2px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
+.hpbar { position: relative; height: max(13px, calc(16 * var(--px))); background: #07090C; border-radius: 2px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
 .hpbar__trail { position: absolute; left: 0; top: 0; bottom: 0; background: var(--dmg-trail); opacity: 0.9; }
 .hpbar__fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #8CF0B2 0%, #63D88B 38%, #3EA867 62%, #2E8A52 100%); }
 .hpbar__fill::after { content: ''; position: absolute; left: 0; right: 0; top: 1px; height: 35%; background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0)); }
@@ -306,7 +323,7 @@
   background: repeating-linear-gradient(90deg, transparent 0 calc(var(--t1) - 1px), rgba(7, 9, 12, calc(0.55 * var(--show1))) calc(var(--t1) - 1px) var(--t1)),
               repeating-linear-gradient(90deg, transparent 0 calc(var(--t2) - 2px), rgba(7, 9, 12, 0.85) calc(var(--t2) - 2px) var(--t2)); }
 /* the numbers ride above the carved frame (z 2), whose inner lip shades the bar's top edge */
-.hpbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: calc(16 * var(--px)); font-size: calc(13 * var(--px)); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.hpbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: max(13px, calc(16 * var(--px))); font-size: max(12px, calc(13 * var(--px))); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 .hpbar__num .quiet { color: rgba(255, 255, 255, 0.72); font-weight: 500; }
 /* quiet regeneration readouts at the bars' right ends (r12 m1) */
 .hpbar__regen { position: absolute; z-index: 3; right: calc(6 * var(--px)); top: 0; bottom: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.74); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
@@ -437,11 +454,17 @@
 .hscore__block--ally .hscore__table td:first-child { box-shadow: inset 2px 0 0 var(--team-ally); }
 .hscore__block--enemy .hscore__table td:first-child { box-shadow: inset 2px 0 0 var(--team-enemy); }
 .hscore__player { display: flex; align-items: center; gap: calc(8 * var(--px)); }
-.hscore__face { width: calc(28 * var(--px)); height: calc(28 * var(--px)); border-radius: 50%; overflow: hidden; flex: none; }
+/* HUD-7: 32 px faces with the respawn count over a fallen one, 24 px item and spell glyphs */
+.hscore__facewrap { position: relative; width: calc(32 * var(--px)); height: calc(32 * var(--px)); flex: none; }
+.hscore__face { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; flex: none; }
+.hscore__facewrap.is-down .hscore__face { filter: grayscale(1) brightness(0.5); }
+.hscore__resp { position: absolute; inset: 0; display: grid; place-items: center; font-size: max(12px, calc(15 * var(--px))); font-weight: 700; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0), 0 0 3px var(--ink-0); }
+.hscore__spells { display: inline-flex; gap: 2px; vertical-align: middle; }
+.hscore__spell { position: relative; width: calc(24 * var(--px)); height: calc(24 * var(--px)); border-radius: 3px; overflow: hidden; background: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-1); }
 .hscore__names { display: flex; flex-direction: column; line-height: 1.2; }
 .hscore__names .chip { margin-left: 6px; }
 .hscore__items { display: inline-flex; gap: 2px; }
-.hscore__item { position: relative; width: calc(22 * var(--px)); height: calc(22 * var(--px)); border-radius: 2px; background: var(--ink-1); overflow: hidden; }
+.hscore__item { position: relative; width: calc(24 * var(--px)); height: calc(24 * var(--px)); border-radius: 2px; background: var(--ink-1); overflow: hidden; }
 .hscore__down { color: var(--text-2); }
 .hscore__seat { display: inline-flex; align-items: center; gap: 4px; }
 
@@ -503,7 +526,9 @@
 .lshop__tag { text-align: left; padding: calc(6 * var(--px)) calc(10 * var(--px)); border-radius: var(--radius); color: var(--text-2); font-size: max(12px, calc(13 * var(--px))); }
 .lshop__tag:hover { background: var(--ink-3); color: var(--text-1); }
 .lshop__tag.is-on { color: var(--text-1); background: var(--ink-3); box-shadow: inset 2px 0 0 var(--chalk); }
-.lshop__grid { overflow-y: auto; padding: calc(10 * var(--px)) calc(14 * var(--px)); display: flex; flex-direction: column; gap: calc(14 * var(--px)); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.lshop__grid { overflow-y: auto; padding: calc(10 * var(--px)) calc(14 * var(--px)) calc(28 * var(--px)); display: flex; flex-direction: column; gap: calc(14 * var(--px)); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+  /* HUD-11: the last row fades out over 24 px instead of being cut through its prices; the bottom padding lets it scroll clear */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24 * var(--px)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24 * var(--px)), transparent); }
 .lshop__sech { display: flex; align-items: center; gap: 8px; color: var(--text-2); margin-bottom: calc(6 * var(--px)); }
 .lshop__sec--suggest { padding: calc(8 * var(--px)); background: rgba(191, 211, 230, 0.05); border-radius: var(--radius); }
 .lshop__tiles { display: flex; flex-wrap: wrap; gap: calc(8 * var(--px)); }
@@ -554,12 +579,20 @@
 .wmark--attack { width: 52px; height: 52px; border-color: var(--team-enemy); }
 .wping { position: absolute; left: 0; top: 0; width: 0; height: 0; color: var(--team-ally); will-change: transform, opacity; }
 .wping.is-harm { color: var(--team-enemy); }
-.wping__ripple { position: absolute; left: -22px; top: -9px; width: 44px; height: 18px; border-radius: 50%; border: 2px solid currentColor; animation: wping-ripple 1000ms linear infinite; }
-.wping__glyph { position: absolute; left: -17px; top: -52px; width: 34px; height: 34px; display: grid; place-items: center; background: rgba(11, 13, 17, 0.78); border-radius: 50%;
-  box-shadow: 0 0 0 2px currentColor; animation: announce-in var(--dur-base) var(--ease-dawn) both; }
-.wping__glyph svg { width: 24px; height: 24px; }
-.wping__who { position: absolute; left: 0; top: -74px; transform: translateX(-50%); white-space: nowrap; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
-@keyframes wping-ripple { from { transform: scale(0.5); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+/* HUD-11: a world ping reads on any ground — two rings in the ping's colour open outward on the ground (each with an
+   ink keyline), a chalk stem lifts the glyph to a 56 px disc: ink, a ring in the ping's colour, a chalk ring and an
+   ink keyline outside it. Reduce motion: one still ring. */
+.wping__ring { position: absolute; left: -36px; top: -14px; width: 72px; height: 28px; border-radius: 50%; border: 3px solid currentColor;
+  box-shadow: 0 0 0 1.5px rgba(11, 13, 17, 0.75), inset 0 0 0 1.5px rgba(11, 13, 17, 0.6); animation: wping-ring 1200ms cubic-bezier(0.2, 0.6, 0.3, 1) infinite; }
+.wping__ring--late { animation-delay: 600ms; }
+.wping__stem { position: absolute; left: -1.5px; top: -40px; width: 3px; height: 40px; background: var(--chalk); box-shadow: 0 0 0 1.5px rgba(11, 13, 17, 0.8); border-radius: 2px; }
+.wping__glyph { position: absolute; left: -28px; top: -96px; width: 56px; height: 56px; display: grid; place-items: center; background: rgba(11, 13, 17, 0.88); border-radius: 50%; border: 2.5px solid currentColor;
+  box-shadow: 0 0 0 3px var(--chalk), 0 0 0 5px rgba(11, 13, 17, 0.92), 0 6px 14px rgba(0, 0, 0, 0.45); animation: wping-in 260ms var(--ease-dawn) both; }
+.wping__glyph svg { width: 32px; height: 32px; }
+.wping.is-self .wping__glyph { box-shadow: 0 0 0 3px var(--team-self), 0 0 0 5px rgba(11, 13, 17, 0.92), 0 6px 14px rgba(0, 0, 0, 0.45); }
+.wping__who { position: absolute; left: 0; top: -124px; transform: translateX(-50%); white-space: nowrap; color: var(--text-1); padding: 0 6px; border-radius: var(--radius); background: rgba(11, 13, 17, 0.72); text-shadow: 0 1px 2px var(--ink-0); }
+@keyframes wping-ring { from { transform: scale(0.35); opacity: 1; } 70% { opacity: 0.7; } to { transform: scale(1.7); opacity: 0; } }
+@keyframes wping-in { from { opacity: 0; transform: translateY(14px) scale(0.7); } to { opacity: 1; transform: none; } }
 
 .pwheel { position: fixed; z-index: 9; width: 0; height: 0; pointer-events: none !important; }
 .pwheel__dial { position: absolute; left: -120px; top: -120px; width: 240px; height: 240px; overflow: visible; }
@@ -578,7 +611,8 @@
 .hedge--key { box-shadow: inset 0 0 0 calc(3 * var(--px)) var(--team-enemy), inset 0 0 0 calc(4 * var(--px)) rgba(11, 13, 17, 0.6); }
 .hedge--ink { background: radial-gradient(ellipse 72% 68% at 50% 50%, transparent 48%, rgba(5, 6, 8, 0.75) 80%, rgba(5, 6, 8, 0.96) 100%); }
 
-.reduce-motion .aslot__lvl, .reduce-motion .wping__ripple { animation: none !important; }
+.reduce-motion .aslot__lvl, .reduce-motion .wping__ring, .reduce-motion .wping__glyph { animation: none !important; }
+.reduce-motion .wping__ring--late { display: none; }
 .reduce-motion .dledger, .reduce-motion .tplate { animation: rm-fade 120ms linear both !important; }
 .reduce-motion .locchip, .reduce-motion .locchip.is-out, .reduce-motion .announce.is-kill { animation: rm-fade 120ms linear both !important; }
 .reduce-motion .locchip.is-out { animation-direction: reverse !important; }

@@ -9,6 +9,7 @@ import { useRef } from 'preact/hooks';
 import type { PlayerView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { Portrait } from '../components/Portrait.tsx';
+import { TipText, useTip } from '../components/Tooltip.tsx';
 import { fmtWait } from '../format.ts';
 import { put, setW, useHud, useViewKey, useWriter } from './ctx.ts';
 
@@ -49,20 +50,23 @@ function AllyFrame(p: { p: PlayerView }): JSX.Element {
   const dead = !e || !e.alive;
   const ultReady = ultOf();
   const role = cv.role(p.p.role);
+  // HUD-9: the full name (and fighter, role, ultimate) on hover and focus
+  const tip = useTip(() => <TipText text={p.p.name} sub={[f?.name, role?.name, ultReady ? cv.t('hud.ally.ult_ready', 'Ultimate ready') : null].filter(Boolean).join(' · ')} />, { place: 'right' });
   return (
-    <button type="button" class={`afr plate ${dead ? 'is-dead' : ''}`} aria-label={`${p.p.name}, ${f?.name ?? ''}`}
+    <button type="button" class={`afr plate ${dead ? 'is-dead' : ''}`} aria-label={`${p.p.name}, ${f?.name ?? ''}`} {...tip}
       onClick={() => { if (e) { r.camera?.setMode(r.camera.mode === 'locked' ? 'locked' : 'free'); r.camera?.focusOn(e.x, e.y); } }}>
       <span class="afr__face">
         <Portrait fighter={f} skin={p.p.skin} size="fill" round />
         <span class="afr__lvl num">{e?.level ?? 1}</span>
         {dead ? <span class="afr__respawn num" ref={respawn} /> : null}
+        {role ? <span class="afr__role" style={{ background: role.color }} aria-hidden="true" /> : null}
+        <span class={`afr__ult ${ultReady ? 'is-ready' : ''}`} aria-hidden="true" />
       </span>
       <span class="afr__body">
-        <span class="afr__name t-caption">{role ? <span class="roledot" style={{ background: role.color }} /> : null}{p.p.name}</span>
+        <span class="afr__name t-caption">{p.p.name}</span>
         <span class="afr__hp"><i ref={hpEl} /></span>
         {res && res.model !== 'none' ? <span class="afr__res" style={{ '--res': res.color } as CSSProperties}><i ref={resEl} /></span> : <span class="afr__res afr__res--none" />}
       </span>
-      <span class={`afr__ult ${ultReady ? 'is-ready' : ''}`} title={cv.t('hud.slot.ult', 'Ultimate')} aria-hidden="true" />
     </button>
   );
 }

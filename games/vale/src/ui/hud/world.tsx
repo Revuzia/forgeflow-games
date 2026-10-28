@@ -128,7 +128,8 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
           const el = document.createElement('span');
           const harm = pg.kind === 'danger' || pg.kind === 'retreat';
           el.className = `wping ${harm ? 'is-harm' : ''} ${pg.self ? 'is-self' : ''}`;
-          el.innerHTML = `<span class="wping__ripple"></span><span class="wping__glyph">${PING_SVG[pg.kind] ?? ''}</span>${pg.self ? '' : `<span class="wping__who t-caption"></span>`}`;
+          // HUD-11: two ground rings that open outward, a stem, and the glyph lifted on a 56 px chalk-ringed disc
+          el.innerHTML = `<span class="wping__ring"></span><span class="wping__ring wping__ring--late"></span><span class="wping__stem"></span><span class="wping__glyph">${PING_SVG[pg.kind] ?? ''}</span>${pg.self ? '' : `<span class="wping__who t-caption"></span>`}`;
           const who = el.querySelector('.wping__who');
           if (who) who.textContent = v.players[pg.player]?.name ?? '';
           host.appendChild(el);

@@ -190,6 +190,9 @@ function useRootStyle(): void {
       const ui = Math.min(hi, Math.max(lo, s.access.uiScale));
       const vk = Math.min(innerWidth / 1920, innerHeight / 1080);
       html.style.setProperty('--vk', vk.toFixed(4));
+      // HUD-9: the match HUD's viewport factor floors at 0.8 below 1080p (1280 × 720 keeps 30 px items and 51 px
+      // abilities), unless the window is too small for the 0.8 layout itself (then it follows the window)
+      html.style.setProperty('--hvk', Math.max(vk, Math.min(0.8, innerWidth / 1600, innerHeight / 900)).toFixed(4));
       html.style.setProperty('--k', (ui * Math.min(1.25, Math.max(0.8, vk))).toFixed(4));
       if (s.access.colorblind === 'off') html.removeAttribute('data-cvd'); else html.setAttribute('data-cvd', s.access.colorblind);
       const rm = s.access.reduceMotion || mq.matches;

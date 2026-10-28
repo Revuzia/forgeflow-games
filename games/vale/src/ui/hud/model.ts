@@ -21,7 +21,11 @@ import { fmtInt } from '../format.ts';
 
 export type Rel = 'self' | 'ally' | 'enemy' | 'neutral';
 export interface Who { name: string; fighter?: string; skin?: string; player?: PlayerId; rel: Rel; seat?: number; team?: number }
-export interface KillRow { id: number; at: number; kind: 'takedown' | 'fell' | 'structure' | 'objective' | 'wipe' | 'out'; killer?: Who; victim?: Who; assists: Who[]; text: string; mine: boolean }
+/** what a fighter fell to when no fighter took them down (HUD-6: the kill feed draws it as a glyph, not a sentence) */
+export interface Cause { kind: 'structure' | 'monster' | 'wicks'; name: string; rel: Rel }
+export interface KillRow { id: number; at: number; kind: 'takedown' | 'fell' | 'structure' | 'objective' | 'wipe' | 'out'; killer?: Who; victim?: Who; assists: Who[];
+  /** the full sentence: the row's aria-label, and its visible words only where no chip already says them */
+  text: string; mine: boolean; cause?: Cause }
 export interface Banner { id: number; title: string; sub: string; major: boolean; ms: number; tone: 'own' | 'foe' | 'plain';
   /** kill banners: the fighter who scored (a) and the one who fell (b), shown as round portraits */
   a?: Who; b?: Who }
@@ -375,11 +379,14 @@ export class HudModel {
           const vp = v.players[ev.victim];
           const d = vp ? deaths.get(vp.entity) : undefined;
           const k = d && d.killer >= 0 ? v.entity(d.killer) : undefined;
-          const text = k?.kind === 'structure' ? this.cv.t('killfeed.fell_to_structure', '{victim} fell to a {structure}', { victim: this.nameOf(ev.victim), structure: this.unitName(k.def) })
+          const text = k?.kind === 'structure' ? this.cv.t('killfeed.fell_to_structure', '{victim} fell to the {structure}', { victim: this.nameOf(ev.victim), structure: this.unitName(k.def) })
             : k?.kind === 'monster' ? this.cv.t('killfeed.fell_to_monster', '{victim} fell to the {unit}', { victim: this.nameOf(ev.victim), unit: this.unitName(k.def) })
               : k?.kind === 'minion' ? this.cv.t('killfeed.fell_to_wicks', '{victim} fell to the Wicks', { victim: this.nameOf(ev.victim) })
                 : this.cv.t('killfeed.fell', '{victim} fell', { victim: this.nameOf(ev.victim) });
-          this.killRow({ kind: 'fell', victim, assists: [], text, mine });
+          const cause: Cause | undefined = k?.kind === 'structure' ? { kind: 'structure', name: this.unitName(k.def), rel: this.relOfTeam(k.team) }
+            : k?.kind === 'monster' ? { kind: 'monster', name: this.unitName(k.def), rel: 'neutral' }
+              : k?.kind === 'minion' ? { kind: 'wicks', name: this.cv.t('killfeed.cause.wicks', 'Wicks'), rel: this.relOfTeam(k.team) } : undefined;
+          this.killRow({ kind: 'fell', victim, assists: [], text, mine, cause });
         }
         this.checkWipe();
         break;

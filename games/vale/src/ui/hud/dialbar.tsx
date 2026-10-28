@@ -228,7 +228,7 @@ function slotState(model: HudModel, index: AbilityIndex, slot: SlotT, spell: boo
 
 function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
   const { cv } = useApp();
-  const { model, input, index, key } = useHud();
+  const { model, input, index, key, client } = useHud();
   const spell = p.slot === 'spell1' || p.slot === 'spell2';
   const ult = p.slot === 'ult';
   const get = (): SlotState => slotState(model, index, p.slot, spell);
@@ -262,11 +262,13 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
   const f = cv.fighter(me?.fighter);
   const res = cv.resource(f?.resource);
   const aiming = input.aiming.value?.slot === p.slot;
+  const q = cv.queue(client.setup.queue);
+  const ultLevels = (q ? cv.rulesOf(q) : cv.mode(client.setup.mode)?.rules)?.abilityRanks.ultLevels ?? [];
   const tip = useTip(def ? () => (
     <div class="tipx tipx--ability">
-      <AbilityTip record={{ ...def, targeting: { ...def.targeting, range: reachOf(def) } }} keyLabel={key(p.slot)} kind={`${cv.t(`hud.slot.${p.slot}`, p.slot)}${av && !spell ? ` · ${cv.t('hud.ability.rank', 'Rank {n} of {max}', { n: av.rank, max: av.maxRank })}` : ''}`} resourceName={res?.name} />
-      {av?.canLevel ? <p class="t-caption tipx__hint">{cv.t('hud.ability.level_up', 'Level up')} · <span class="keycap">Ctrl</span> + <span class="keycap">{key(p.slot)}</span></p> : null}
-      {av && av.rank <= 0 && !spell ? <p class="t-caption tipx__hint">{cv.t('hud.skill_point', 'Level up an ability')}</p> : null}
+      <AbilityTip record={{ ...def, targeting: { ...def.targeting, range: reachOf(def) } }} keyLabel={key(p.slot)} kind={`${cv.t(`hud.slot.${p.slot}`, p.slot)}${av && !spell ? ` · ${cv.t('hud.ability.rank', 'Rank {n} of {max}', { n: av.rank, max: av.maxRank })}` : ''}`} resourceName={res?.name}
+        rank={av && !spell ? { rank: av.rank, canLevel: av.canLevel } : undefined} />
+      {av && !spell ? <RankHint av={av} ult={ult} levelKey={key(p.slot)} level={model.body?.level ?? 1} ultLevels={ultLevels} /> : null}
     </div>
   ) : null, { place: 'above', wide: true });
 
@@ -302,6 +304,22 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
       ) : null}
     </div>
   );
+}
+
+/** the line under a slot's tooltip (HUD-5): how to put a point in now; a locked ultimate says the level it opens at
+ *  (never "Level up an ability" while it cannot be learned); an unlearned basic ability says where your next point goes */
+// (rendered in the tooltip layer, outside the HUD's context: everything it needs comes in as props)
+function RankHint(p: { av: AbilityView; ult: boolean; levelKey: string; level: number; ultLevels: readonly number[] }): JSX.Element | null {
+  const { cv } = useApp();
+  const av = p.av;
+  if (av.canLevel) return <p class="t-caption tipx__hint">{cv.t('hud.ability.level_up', 'Level up')} · <span class="keycap">Ctrl</span> + <span class="keycap">{p.levelKey}</span></p>;
+  if (av.rank >= av.maxRank) return null;
+  if (p.ult) {
+    const at = p.ultLevels[av.rank];
+    if (at !== undefined && p.level < at) return <p class="t-caption tipx__hint">{cv.t(av.rank <= 0 ? 'hud.ability.locked' : 'hud.ability.next_rank_at', 'Unlocks at level {n}', { n: at })}</p>;
+    return null;
+  }
+  return av.rank <= 0 ? <p class="t-caption tipx__hint">{cv.t('hud.ability.unlearned', 'Not learned yet. Put your next skill point here.')}</p> : null;
 }
 
 // ── bars ─────────────────────────────────────────────────────────────────────────────────────────

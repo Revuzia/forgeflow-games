@@ -17,7 +17,7 @@ export type QueueEvt = Extract<SessionEvent, { type: 'queue' }>;
 export interface Toast { id: number; text: string; tone: 'info' | 'ok' | 'warn' | 'error'; action?: { label: string; run: () => void }; ms: number }
 export type FrayColors = 'standard' | 'stamp' | 'simple';
 /** UI-only preferences that have no Settings field yet (requested in the lane report), per device */
-export interface UiPrefs { frayColors: FrayColors | 'auto'; seenScreens: string[]; lastMode?: string; lastQueue?: string; roles?: [string?, string?] }
+export interface UiPrefs { frayColors: FrayColors | 'auto'; seenScreens: string[]; lastMode?: string; lastQueue?: string; roles?: [string?, string?]; /** HUD-4: the sky strip's ledger line (shown unless false) */ hudLedger?: boolean }
 
 const PREFS_KEY = 'vale.ui.v1';
 /** seconds left on an unanswered ready check when the reminder (queue_remind) sounds and the notification is raised again */

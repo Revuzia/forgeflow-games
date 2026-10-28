@@ -14,8 +14,10 @@ import { SeatGlyph } from '../components/Glyphs.tsx';
 import { roman } from '../components/Seat.tsx';
 import { fmtInt, fmtWait } from '../format.ts';
 import { REL_VAR, useHud, useViewKey } from './ctx.ts';
-import { ItemGlyph, SideGlyph } from './glyphs.tsx';
+import { AbilityGlyph, ItemGlyph, SideGlyph } from './glyphs.tsx';
 import { rankFray } from './top.tsx';
+import type { CatalogView } from '../catalog_view.ts';
+import type { AbilityIndex } from '../../input/index.ts';
 
 // ── scoreboard ───────────────────────────────────────────────────────────────────────────────────
 export function Scoreboard(): JSX.Element | null {
@@ -39,7 +41,7 @@ export function Scoreboard(): JSX.Element | null {
         <table class="hscore__table">
           <thead><tr>
             <th>{cv.t('hourboard.col.place', 'Place')}</th><th>{cv.t('hourboard.col.seat', 'Seat')}</th><th class="l">{cv.t('hourboard.col.player', 'Player')}</th>
-            <th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('hourboard.col.lives', 'Lives')}</th><th>{cv.t('hourboard.col.takedowns', 'Takedowns')}</th>
+            <th>{cv.t('score.col.spells', 'Spells')}</th><th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('hourboard.col.lives', 'Lives')}</th><th>{cv.t('hourboard.col.takedowns', 'Takedowns')}</th>
             <th>{cv.t('score.col.kda', 'T / F / A')}</th><th>{cv.t('score.col.damage', 'Damage')}</th><th class="l">{cv.t('score.col.items', 'Items')}</th>
           </tr></thead>
           <tbody>{rows.map((p, i) => <FrayRow p={p} place={p.placement ?? i + 1} />)}</tbody>
@@ -66,7 +68,7 @@ export function Scoreboard(): JSX.Element | null {
           </div>
           <table class="hscore__table">
             <thead><tr>
-              <th class="l">{cv.t('score.col.player', 'Player')}</th><th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('score.col.kda', 'T / F / A')}</th>
+              <th class="l">{cv.t('score.col.player', 'Player')}</th><th>{cv.t('score.col.spells', 'Spells')}</th><th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('score.col.kda', 'T / F / A')}</th>
               <th>{cv.t('score.col.cs', 'Wicks')}</th><th>{cv.t('score.col.gold', 'Gleam')}</th><th>{cv.t('score.col.damage', 'Damage')}</th><th class="l">{cv.t('score.col.items', 'Items')}</th>
             </tr></thead>
             <tbody>{blk.list.map((p) => <TeamRow p={p} enemy={blk.rel === 'enemy'} />)}</tbody>
@@ -81,16 +83,33 @@ export function Scoreboard(): JSX.Element | null {
 function rowKey(model: ReturnType<typeof useHud>['model'], p: PlayerView): string {
   const e = model.view.entity(p.entity);
   const dead = !e || !e.alive;
-  return `${e?.level ?? ''}|${p.kills}/${p.deaths}/${p.assists}|${Math.round(p.cs)}|${Math.round(p.gold)}|${Math.round(p.damageToFighters)}|${p.items.join(',')}|${dead ? Math.ceil(p.respawnIn) : -1}|${p.lives ?? ''}|${Math.round(p.score ?? 0)}|${p.placement ?? ''}`;
+  return `${e?.level ?? ''}|${p.kills}/${p.deaths}/${p.assists}|${Math.round(p.cs)}|${Math.round(p.gold)}|${Math.round(p.damageToFighters)}|${p.items.join(',')}|${dead ? Math.ceil(p.respawnIn) : -1}|${p.lives ?? ''}|${Math.round(p.score ?? 0)}|${p.placement ?? ''}|${spellIds(p).join(',')}`;
+}
+const spellIds = (p: PlayerView): string[] => (['spell1', 'spell2'] as const).map((sl) => p.abilities.find((a) => a.slot === sl)?.id ?? '');
+/** HUD-7: the player's two battle spells (glyphs only: no cooldowns, so the board never leaks an enemy's timers) */
+function Spells(p: { p: PlayerView }): JSX.Element {
+  const { cv } = useApp();
+  const { index } = useHud();
+  return (
+    <td class="hscore__spellcell"><span class="hscore__spells">{spellIds(p.p).map((id) => {
+      const def = index.get(id || null);
+      return <span class="hscore__spell" title={def?.name}>{def ? <AbilityGlyph def={def} src={cv.asset(def.icon)} spell /> : null}</span>;
+    })}</span></td>
+  );
 }
 function PlayerCell(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { model } = useHud();
   const f = cv.fighter(p.p.fighter);
   const role = cv.role(p.p.role);
+  const e = model.view.entity(p.p.entity);
+  const down = (!e || !e.alive) && p.p.respawnIn > 0;
   return (
     <td class="l hscore__player">
-      <Portrait fighter={f} skin={p.p.skin} size="fill" round class="hscore__face" />
+      <span class={`hscore__facewrap ${down ? 'is-down' : ''}`}>
+        <Portrait fighter={f} skin={p.p.skin} size="fill" round class="hscore__face" />
+        {down ? <span class="hscore__resp num" title={cv.t('hud.dead.respawn', 'Back in {t}', { t: `${Math.ceil(p.p.respawnIn)} s` })}>{Math.ceil(p.p.respawnIn)}</span> : null}
+      </span>
       <span class="hscore__names">
         <span class="t-body-s">{p.p.player === model.you ? `${p.p.name}` : p.p.name}{p.p.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}</span>
         <span class="t-caption muted">{f?.name}{role ? ` · ${role.name}` : ''}</span>
@@ -111,13 +130,13 @@ function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
   return (
     <tr class={`${you ? 'is-you' : ''} ${dead ? 'is-dead' : ''} ${p.enemy ? 'is-enemy' : 'is-ally'}`}>
       <PlayerCell p={p.p} />
+      <Spells p={p.p} />
       <td class="num">{e?.level ?? '—'}</td>
       <td class="num">{p.p.kills} / {p.p.deaths} / {p.p.assists}</td>
       <td class="num">{fmtInt(p.p.cs)}</td>
       <td class="num">{p.enemy ? '—' : fmtInt(p.p.gold)}</td>
       <td class="num">{fmtInt(p.p.damageToFighters)}</td>
       <Items p={p.p} />
-      {dead && p.p.respawnIn > 0 ? <td class="num hscore__down">{Math.ceil(p.p.respawnIn)}</td> : <td />}
     </tr>
   );
 }
@@ -136,6 +155,7 @@ function FrayRow(p: { p: PlayerView; place: number }): JSX.Element {
       <td class="num">{p.place}</td>
       <td><span class="hscore__seat"><SeatGlyph seat={seat} size={14} color={color} keyline={!you} /><span class="num t-caption">{roman(seat)}</span></span></td>
       <PlayerCell p={p.p} />
+      <Spells p={p.p} />
       <td class="num">{e?.level ?? '—'}</td>
       <td><span class="frow__lives">{Array.from({ length: lives }, (_, k) => <i class={k < (p.p.lives ?? 0) ? 'is-on' : ''} />)}</span></td>
       <td class="num">{fmtInt(p.p.score ?? 0)}</td>
@@ -183,7 +203,7 @@ export function DeathRecap(): JSX.Element | null {
           <ol class="recap__rows">
             {sources.map((s) => {
               const f = cv.fighter(s.def);
-              const abil = [...s.abilities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => (id ? index.get(id)?.name ?? id : cv.t('recap.basic', 'Basic attack')));
+              const abil = [...new Set([...s.abilities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => (id ? sourceName(cv, index, id) : cv.t('recap.basic', 'Basic attack'))))];
               return (
                 <li class="rrow">
                   <span class="rrow__face">{f ? <Portrait fighter={f} size="fill" round /> : <span class="recap__unit" />}</span>
@@ -209,6 +229,27 @@ export function DeathRecap(): JSX.Element | null {
       ) : <p class="t-body-s muted">{cv.t('recap.none', 'No damage was recorded.')}</p>}
     </section>
   );
+}
+
+/** HUD-6: a damage source id in display words — an ability or battle spell or item active (the ability index), an
+ *  item, a setup boon, or a passive (fighter, item, unit, team buff) — and a neutral phrase before a raw id ever shows */
+const sourceNames = new WeakMap<object, Map<string, string>>();
+export function sourceName(cv: CatalogView, index: AbilityIndex, id: string): string {
+  const hit = index.get(id)?.name;
+  if (hit) return hit;
+  let m = sourceNames.get(cv.c);
+  if (!m) {
+    m = new Map();
+    const put = (x: { id: string; name: string } | undefined): void => { if (x && !m!.has(x.id)) m!.set(x.id, x.name); };
+    for (const it of cv.c.items) { put(it); for (const ps of it.passives) put(ps); }
+    for (const b of cv.c.setup.boons) put(b);
+    for (const sp of cv.c.setup.spells) put(sp);
+    for (const f of cv.c.fighters) put(f.kit.passive);
+    for (const u of cv.c.units) put(u.passive);
+    for (const tb of cv.c.teamBuffs) for (const ps of tb.passives) put(ps);
+    sourceNames.set(cv.c, m);
+  }
+  return m.get(id) ?? cv.t('recap.other', 'Other effects');
 }
 
 function groupLog(log: readonly DamageLogEntry[]): Source[] {

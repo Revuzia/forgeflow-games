@@ -172,13 +172,14 @@ Mapped to the bible's HUD density table (1080p; scale with `access.hudScale`). S
 | Dial Bar | bottom centre | 640 x 132 | 4.07% | yes | yes | yes |
 | Minimap | bottom right (swappable left) | 352 x 198 · 384 x 96 · 232 disc | 3.36 · 1.78 · 2.60% | 3.36 | 1.78 | 2.60 |
 | Sky strip | top centre | 720 x 48 | 1.67% | yes | yes | yes |
+| Ledger line | under the sky strip, right end | about 200 x 20 (FRAY 110 x 20) | 0.19% (FRAY 0.11%) | yes | yes | yes |
 | Ally frames | left edge | 4 x 168 x 52 | 1.69% | yes | yes | no |
 | Hour Board | top right | 220 x 236 | 2.50% | no | no | yes |
-| **Always-on total** | | | | **10.79%** | **9.20%** | **10.84%** |
+| **Always-on total** | | | | **10.98%** | **9.39%** | **10.95%** |
 | Kill feed (3 rows) | top right (FRAY: under the Hour Board) | contextual | 1.46% | peak | peak | peak |
 | Announcer | under the strip | about 480 x 75 | 1.73% | peak | peak | peak |
 | Feed (chat region) | bottom left | about 360 x 154 | 2.67% | peak | peak | peak |
-| **Peak total** | | | | 16.65% | 15.06% | 16.70% |
+| **Peak total** | | | | 16.84% | 15.25% | 16.81% |
 
 The always-on total stays at or under 11%, the peak under 17%. The centre 40% x 50% of the screen holds no HUD. The bible's chat region has no chat in this slice (the session has no chat bind), so the bottom-left box is the **feed**: ally pings, shop refusals, first-run hints (`hint.*`), surrender votes. Same size, same budget.
 
@@ -188,7 +189,7 @@ The always-on total stays at or under 11%, the peak under 17%. The centre 40% x 
 - **Gleam** as a Mono number beside the bars (`PlayerView.gold`), `hud.gleam_tip` on hover.
 - **Abilities:** a1, a2, a3 at 64 px and the ultimate at 76 px, each with the key chip (from `settings.controls.binds`), rank pips (`AbilityView.rank / maxRank`), cost, and a clockwise cooldown shadow from 12 o'clock with the remaining seconds in 22/700 Mono. A `canLevel` ability shows a chalk "+" and `hud.ability.level_up`. Not enough resource tints the cost HARM; silence draws a diagonal bar. Recast windows show a ring (`hud.ability.recast`).
 - **Battle spells:** two 48 px slots. **Items:** 3 x 2 grid, each with a number key chip and a cooldown shadow for actives (`itemCooldowns`).
-- **Tooltips** (hover or focus, 150 ms): name, cooldown, cost, range in metres, rank line, `desc`. At most two sentences of explanation; numbers carry units.
+- **Tooltips** (hover or focus, 150 ms): name, cooldown, cost, range in metres, rank line, `desc`. At most two sentences of explanation; numbers carry units. Every per-rank number leads with the rank you have (rank 0 shows rank 1, the one you would learn), with `→ next` when a point can go in now; held Shift shows the whole row with yours lit and the rest dimmed (`tip.ranks_hint`). The line under it says how to level now (`hud.ability.level_up`), the level a locked ultimate opens at (`hud.ability.locked`, `hud.ability.next_rank_at`) or that a basic ability is not learned yet (`hud.ability.unlearned`) — never "Level up an ability" while it cannot be learned (HUD-5).
 
 ### 4.3 Minimap
 - RIFT 352 x 198 (three roads and the noon line), BRIDGE 384 x 96 (the span and the Snap), FRAY a 232 px disc (the plate, ten hour-marks on the rim). It sits bottom right and can swap left (`gameplay.minimapSide`); `access.minimapScale` resizes it.
@@ -201,13 +202,14 @@ The always-on total stays at or under 11%, the peak under 17%. The centre 40% x 
 - **BRIDGE:** takedowns and structures, clock, the Mending Sunmote timers.
 - **FRAY:** `Ends at {t}` and the first-to-12 line (`hud.fray.first_to`); no team score.
 - Pregame: `hud.pregame` replaces the clock; the strip shows the countdown with `m_countdown` in the last 5 s.
+- **Ledger line** (HUD-4), under the strip's right end, on a quiet ink pill in Mono 13: your own `T/F/A 1/0/2 · Wicks 46` (`hud.ledger.*`; FRAY shows T/F/A only). The tooltip gives Wicks a minute. It re-renders only when one of those numbers changes (`useViewKey`, r12 B4) and sits in a grid with the objective chips, so a wide chip row pushes it out instead of overlapping it. Settings › Gameplay › `Your ledger line` hides it (a per-device HUD preference, `UiPrefs.hudLedger`).
 
 ### 4.5 Ally frames and the Hour Board
-- **Ally frames** (RIFT, BRIDGE): the four other seats, 168 x 52 each: round portrait, level, HP bar over a thin resource bar, an ultimate-ready tick, and the respawn timer when down (`hud.dead.respawn`). Ordered by role; a click centres the camera on that ally. `gameplay.showAllyIndicators` hides them.
+- **Ally frames** (RIFT, BRIDGE): the four other seats, 168 x 52 each: round portrait, level, HP bar over a thin resource bar, an ultimate-ready tick, and the respawn timer when down (`hud.dead.respawn`). The ultimate tick and the role dot sit on the portrait's ring, so the name gets the body's full width (every bot name fits at 1080p); hover or focus shows the full name, fighter, role and `hud.ally.ult_ready` (HUD-9). Ordered by role; a click centres the camera on that ally. `gameplay.showAllyIndicators` hides them.
 - **Hour Board** (FRAY): §9.
 
 ### 4.6 Kill feed, announcer, feed
-- **Kill feed** (3 rows, newest on top, 6 s): `killfeed.*` lines with portrait chips and the side or seat mark. Your own rows get the Noonwhite double frame. Wording is takedown and fall, never kill or slain; the one plain label that stays is Death recap, because players look for it.
+- **Kill feed** (3 rows, newest on top, 6 s): `killfeed.*` lines with portrait chips and the side or seat mark. Your own rows get the Noonwhite double frame. Fighter rows are pictographic: killer (or what they fell to: a structure, camp or the Wicks, as a drawn mark with the unit's name) → arrow → the fallen fighter's chip; a name a chip shows is never repeated in words, and the full sentence is the row's aria-label. FRAY eliminations read chip + `killfeed.tag.out`. Team rows (structure lost, objective taken, lamps out) keep their sentence (HUD-6). Wording is takedown and fall, never kill or slain; the one plain label that stays is Death recap, because players look for it.
 - **Announcer banner** under the sky strip: two lines (title in h1 24/28, sub in body-s). Minor events show 2.4 s, major 3.6 s, one at a time with a queue of 2. Lookup and texts are in §6. It is also the subtitle (`access.subtitles`).
 - **Feed** (bottom left): up to 5 lines for 6 s each. Contents: ally ping log lines, `announce.shop_denied.*` refusals, `hint.*` first-run hints, surrender votes.
 
@@ -222,7 +224,7 @@ The always-on total stays at or under 11%, the peak under 17%. The centre 40% x 
 - **Pregame:** shopping, ability levelling and pings allowed; movement dropped. `hud.pregame_shop`.
 - **Recall:** a ring fills around the portrait over the recall time; `hud.recall_progress`; `m_recall_start`, then `m_recall_done`. Cancel shows `hud.recall_cancelled`. BRIDGE has no recall (`hud.no_recall`).
 - **Down:** the Dial Bar dims to 60%, a respawn ring with `hud.dead.respawn` replaces the portrait ring, the death recap (§7) opens, and shopping is allowed where the mode allows it (`hud.dead.shop`, BRIDGE and FRAY rules). Allies' frames keep updating.
-- **Shop** (RIFT at base, BRIDGE at base or while down, FRAY at a Lampwright cart): a panel left of centre with search, suggested items, the component tree and buy / sell / undo (`hud.shopui.*`); refusals show as a feed line and `ui_error`.
+- **Shop** (RIFT at base, BRIDGE at base or while down, FRAY at a Lampwright cart): a panel left of centre with search, suggested items, the component tree and buy / sell / undo (`hud.shopui.*`); refusals show as a feed line and `ui_error`. The tile list's last row fades out over 24 px and scrolls clear of the fade, never cut through its prices (HUD-11).
 - **Surrender vote** (RIFT 12:00, BRIDGE 8:00; 4 of 5): a plate under the announcer with the tally (`hud.surrender.tally`), Yes and No keys; result lines `surrender_passed` / `surrender_failed`.
 - **In-match menu** (Esc): Resume, Settings, Leave match (`hud.menu.leave_confirm` states that leaving counts as a loss and earns nothing).
 
@@ -231,6 +233,8 @@ The always-on total stays at or under 11%, the peak under 17%. The centre 40% x 
 ## 5. Ping language
 
 Nine pings, one per `PingKind`. There is no chat in this slice, so pings are the whole team vocabulary. Names are original and plain (they do not repeat the reference games' wording).
+
+In the world (HUD-11) a ping reads on any ground, bright structure stone included: two rings in the ping's colour open outward on the ground (each with an ink keyline, 600 ms apart), a chalk stem lifts the glyph onto a 56 px disc — ink, a ring in the ping's colour, a chalk ring and an ink keyline outside it — with the sender's name over it. Reduce motion keeps one still ring.
 
 | Kind | Name | Meaning | Marker (24 px, ally colour, drawn once on the ground and once on the minimap) | Cue |
 |---|---|---|---|---|
@@ -308,7 +312,7 @@ The announcer has tonal stingers, no voice, so the banner and the feed carry the
 Opens 1.2 s after your fighter falls (never during the final-blow effect), anchored left of centre so the centre 40% x 50% stays free, 360 px wide. It never blocks the shop or the map and closes on respawn, Esc or its Close button.
 
 - **Header:** `recap.taken_down_by` ("Taken down by Longshade") or `recap.fell_to` for a structure or Wick; the killer's portrait; `recap.respawn` countdown.
-- **Body:** `recap.window` ("Damage taken in the last 15 s"), then one row per source from `SimApi.damageLog(player)` grouped by source: portrait, name, ability (or `recap.basic`), a stacked bar by damage type, the total, and `recap.ago` for the last hit. Rows sort by total, largest first. A grand `recap.total` closes the list.
+- **Body:** `recap.window` ("Damage taken in the last 15 s"), then one row per source from `SimApi.damageLog(player)` grouped by source: portrait, name, ability (or `recap.basic`), a stacked bar by damage type, the total, and `recap.ago` for the last hit. Source ids resolve through abilities, battle spells, item actives, items, setup boons and every passive (fighter, item, unit, team buff), then `recap.other`; a raw id never shows (HUD-6). Rows sort by total, largest first. A grand `recap.total` closes the list.
 - **Damage types:** physical (Chalkstone, upright numerals), magic (Orchid-rose, oval chip), piercing (ink with a halo, "Ignores armor and resist"); each with its `dmg.<type>_tip`. Piercing is the wording for damage that ignores armor and resist; the phrase "true damage" is never shown.
 - **One tip line** from the dominant type: `recap.tip.phys`, `.magic`, `.pierce`, `.mixed`, plus `recap.tip.burst` when the whole sum landed inside 2 s. Factual, never a verdict.
 - **Empty:** `recap.none` (a structure or a self-inflicted fall).
@@ -321,9 +325,10 @@ Opens 1.2 s after your fighter falls (never during the final-blow effect), ancho
 Hold the scoreboard key (default Tab) in a match, or open the Scoreboard tab post-game. Not always-on, so it may cover the centre while held.
 
 - **Team modes:** two blocks of five rows, Aubade on the left or top as on the map for spectators, "Your team" above "The other team" for players (`score.team.*`). Block header: kills and structures down for the team, and the Gleam lead for you.
-- **Columns** (`score.col.*`): Player (portrait, name, bot tag), Fighter, Role (RIFT), Lv, T / F / A (takedowns, falls, assists), Wicks, Gleam, Items (6 slots), and on hover Damage, Taken, Healing, Streak, Bounty. Hover and focus show the stat tooltips (`stat.<key>.name` and `.tip`).
+- **Columns** (`score.col.*`): Player (32 px portrait with the respawn count over a fallen one, name, bot tag), Fighter, Role (RIFT), Spells (the two battle-spell glyphs, no cooldowns), Lv, T / F / A (takedowns, falls, assists), Wicks, Gleam, Items (6 slots), and on hover Damage, Taken, Healing, Streak, Bounty. Hover and focus show the stat tooltips (`stat.<key>.name` and `.tip`).
 - **Rows:** your row has the double frame, allies rounded ends, enemies chevron ends. Down players dim to 60% with their respawn timer. Fog rules apply: enemy items and levels are shown as last seen, enemy Gleam is hidden (a dash).
-- **Post-game** adds the finished stats (damage, healing, structure damage, items) and marks the best in the match per column with a chalk hour-tick.
+- **Items** are 24 px painted icons (HUD-7).
+- **Post-game** adds the finished stats (damage, healing, structure damage, items) and marks the best in the match per column with a chalk noon tick and its tooltip (`postgame.stats.best`). It is a real table: fixed shared column widths, every header centred over its column (e2e asserts x-centres within 4 px at 1920 and 1280), painted item icons with their names on hover (client F4).
 - **FRAY:** the Hour Board (§9) opens expanded with the full columns instead of two blocks.
 
 ---

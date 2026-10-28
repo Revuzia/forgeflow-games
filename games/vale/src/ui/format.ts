@@ -50,7 +50,12 @@ export function fmtWhen(iso: string, now = Date.now()): string {
 // fractions of keys like `power`/`percent`/`*Pct` print as %, durations get " s", distances " m".
 
 export type DmgTone = 'physical' | 'magic' | 'true' | 'heal' | 'shield' | 'plain';
-export interface ValueSeg { kind: 'value'; text: string; ratios: { text: string; tone: DmgTone }[]; tone: DmgTone; missing?: boolean }
+export interface ValueSeg {
+  kind: 'value'; text: string; ratios: { text: string; tone: DmgTone }[]; tone: DmgTone; missing?: boolean;
+  /** HUD-5: a value that changes with the ability's rank — each rank's number (no unit) and the shared unit, so a
+   *  tooltip can lead with the rank you have */
+  ranks?: string[]; unit?: string;
+}
 export type KwTone = 'cc' | 'slow' | 'physical' | 'magic' | 'true' | 'heal' | 'shield' | 'state';
 export type Seg = { kind: 'text'; text: string } | ValueSeg | { kind: 'kw'; text: string; tone: KwTone };
 
@@ -122,14 +127,19 @@ function unitFor(key: string, n: number): string {
   return fmtNum(n);
 }
 function ranked(v: unknown, key: string): string {
+  const r = rankParts(v, key);
+  if (r) return r.ranks.join('/') + r.unit;
   if (typeof v === 'number') return unitFor(key, v);
-  if (Array.isArray(v)) {
-    const nums = v.filter((x): x is number => typeof x === 'number');
-    if (nums.every((x) => x === nums[0])) return unitFor(key, nums[0] ?? 0);
-    const unit = unitFor(key, nums[0] ?? 0).replace(/^[-\d.,]+/, '');
-    return nums.map((x) => unitFor(key, x).replace(unit, '')).join('/') + unit;
-  }
+  if (Array.isArray(v)) { const n = v.find((x): x is number => typeof x === 'number'); return unitFor(key, n ?? 0); }
   return '';
+}
+/** a per-rank value split into its numbers and unit (null when it does not change with rank) */
+export function rankParts(v: unknown, key: string): { ranks: string[]; unit: string } | null {
+  if (!Array.isArray(v)) return null;
+  const nums = v.filter((x): x is number => typeof x === 'number');
+  if (nums.length < 2 || nums.every((x) => x === nums[0])) return null;
+  const unit = unitFor(key, nums[0] ?? 0).replace(/^[-\d.,]+/, '');
+  return { ranks: nums.map((x) => unitFor(key, x).replace(unit, '')), unit };
 }
 
 const RATIO_LABEL: Record<string, [string, string, DmgTone]> = {
@@ -165,9 +175,11 @@ export function richText(cv: CatalogView, record: unknown, desc: string): Seg[] 
       const pc = s.perCounter as { per: number } | undefined, pm = s.perMark as { per: number } | undefined;
       if (pc) ratios.push({ text: `× ${fmtNum(pc.per)} per stack`, tone: 'plain' });
       if (pm) ratios.push({ text: `× ${fmtNum(pm.per)} per mark`, tone: 'plain' });
-      out.push({ kind: 'value', text: ranked(s.base, f.key), ratios, tone });
+      const rp = rankParts(s.base, f.key);
+      out.push({ kind: 'value', text: ranked(s.base, f.key), ratios, tone, ...(rp ? { ranks: rp.ranks, unit: rp.unit } : {}) });
     } else {
-      out.push({ kind: 'value', text: ranked(v, f.key) || String(v), ratios: [], tone });
+      const rp = rankParts(v, f.key);
+      out.push({ kind: 'value', text: ranked(v, f.key) || String(v), ratios: [], tone, ...(rp ? { ranks: rp.ranks, unit: rp.unit } : {}) });
     }
   }
   if (last < desc.length) keywordSegs(desc.slice(last), out);
