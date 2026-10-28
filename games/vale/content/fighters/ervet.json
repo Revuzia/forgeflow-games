@@ -127,7 +127,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "ervet_a3_shatter",
+                    "vfx": "lib_burst_lumen",
                     "hitVfx": "lib_hit_magic"
                   }
                 }

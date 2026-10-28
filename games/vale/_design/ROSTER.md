@@ -29,7 +29,7 @@ Every kit below can be built with the EffectT ops that already exist. No kit nee
 | 12 | `lisvel` | Lisvel | Aubade | Slinger | Shaftlight / Lampglass | Light | ranged 5.9 m, phys | phys | 1 | Shoots from far back and leaves lines of morning light her team can run along. |
 | 13 | `ulkro` | Ulkro | Hourless | Slinger | Shaftlight / Grovehunter | Tally | ranged 5.4 m, phys | phys | 3 | Never stops moving: every stride she runs loads her next throw. |
 | 14 | `tunlan` | Tunlan | Serenade | Caster | Dialcross / Shaftlight | Heat | ranged 5.2 m, magic | magic | 2 | Throws lamp-shadows of beasts over the enemy line and sends them running. |
-| 15 | `vashil` | Vashil | Aubade | Caster | Dialcross / Shaftlight | Light | ranged 5.3 m, magic | magic | 1 | Rings wide notes over the enemy front line; anyone struck by two of them stops cold. |
+| 15 | `vashil` | Vashil | Aubade | Caster | Dialcross / Shaftlight | Light | ranged 5.3 m, magic | magic | 1 | Rings wide notes over the enemy front line; two humming enemies who stand close form a chord and stop cold. |
 | 16 | `sukri` | Sukri | Hourless | Tender | Lampglass / none | Light | ranged 5.0 m, magic | magic | 2 | Draws a caught ally back to the group; when he falls low, nobody beside him can be touched for a breath. |
 
 UI tags are `Name · Class` (for example "Ardit · Plinth"). The short collection title in each entry below is the `title` field. It shows as a small italic line under the fighter's name on the Collection page, never as a "the [Adjective] [Noun]" epithet.
@@ -317,12 +317,13 @@ How to read each entry:
 **Hook at 96 px:** a 1.6 m translucent blade. In Hilt form it becomes a short jagged stub, a deliberately different read. The accent is in the crossguard.
 **Weapon:** greatsword, `two_hand`. Hilt form reuses the `two_hand` clips with the jab cast clip.
 
-Two forms: `passive.forms.hilt` holds the hilt kit for a1–a3; `passive.forms.great` is the ultimate's oversized blade.
+Two forms: `passive.forms.hilt` holds the hilt kit for a1–a3; `passive.forms.great` (*Whole Again*) is the ultimate's six seconds of whole blade. Neither form lengthens her reach (W4 re-key, originality F5, 2026-10-28).
 
 - **Passive: Dawnglass Edge.** Her attacks deal +2% of her max health as magic damage.
   - Whole: +15 armor and magic resist.
   - Hilt: +20% move speed and +30% attack speed, but −15 armor and magic resist.
-  - [DSL: trigger `attackHit` → `damage magic {maxHp:0.02}`; stats on the passive; `forms.hilt.stats`]
+  - **Lodged shards:** her attack on an enemy carrying one of her lodged shards tears it out. It bursts for 20 + 6 per level (+3% bonus health) magic damage and a 30% slow for 1 s, on that enemy and everyone within 1.75 m of it.
+  - [DSL: trigger `attackHit` → `damage magic {maxHp:0.02}`; trigger `attackHit` with `cond targetHasMark ervet_lodged` → `consumeMark` → `area` circle 1.75 at hit; stats on the passive; `forms.hilt.stats`]
 - **A1: Heavy Arc** (whole) / **Quick Jab** (hilt).
   - Heavy Arc sweeps 3.5 m, 140°: magic damage and a 25% slow.
   - Quick Jab dashes 3 m and stops at the first enemy for magic damage.
@@ -333,10 +334,10 @@ Two forms: `passive.forms.hilt` holds the hilt kit for a1–a3; `passive.forms.g
   - Shatter smashes the blade into the ground: magic damage within 3 m and a 40% slow. It leaves a shard field for 2 s that slows by 20%, and switches her to Hilt for up to 6 s.
   - Reform restores the blade early, dealing magic damage within 2 m.
   - [DSL: `form hilt duration:6`; Reform is `form hilt`, which toggles back to whole]
-- **Ultimate: Whole Again** (100 / 85 / 70 s). Leaps up to 6 m, and the blade reforms oversized as she lands.
-  - Enemies within 3.5 m take magic damage and are airborne for 0.75 s.
-  - For 6 s her attacks cleave in a 120° arc and reach 0.6 m farther.
-  - [DSL: `dash` toPoint → onArrive `area` → `displace airborne_in_place`; `form great duration:6` (`attackRange` +0.6); trigger `attackHit` with `cond inForm great` → `area` cone]
+- **Ultimate: Whole Again** (100 / 85 / 70 s). Leaps up to 6 m and calls every shard of the blade home as she lands. **The payoff is the shards, not reach.**
+  - The shards fly in from 4.5 m: every enemy they cross takes magic damage, is dragged 2 m toward her (0.6 s) and keeps a lodged shard for 6 s.
+  - The blade is whole again for 6 s at its usual 2.0 m reach. Each of her attacks tears one lodged shard out (passive), so the ult rewards turning from target to target, not standing in place with a longer sword.
+  - [DSL: `dash` toPoint → onArrive `area` circle 4.5 → `damage`, `displace pull 2`, `mark ervet_lodged 6s`; `form great duration:6` (no `attackRange`); passive `attackHit` → `consumeMark ervet_lodged`]
 **Presentation:** `lib_cone_sweep` · `lib_shield_up` · `lib_shard_volley` · `lib_burst_lumen` · `lib_leap` · ult `ervet_ult_whole` · `c_swing_heavy`.
 **Skins:**
 - *Stillwater Blade* (standard). A river-glass blade `#8FB3A8` (hue 162) and wet-stone armour `#4D5A5C`.
@@ -418,16 +419,16 @@ Two forms: `passive.forms.hilt` holds the hilt kit for a1–a3; `passive.forms.g
 
 ### 15 · Vashil · Caster (`vashil`)
 **Title:** Bell ringer · **Origin:** Aubade (he) · **Position:** `dialcross` / `shaftlight` · `res_light` · ranged 5.3 m magic · kit magic · difficulty 1 · bot `artillery`, 7 · palette `#E1DCCF` / `#A7B5C2`
-**Job:** Rings wide notes over the enemy front line; anyone struck by two of them stops cold.
+**Job:** Rings wide notes over the enemy front line; two humming enemies who stand close form a chord and stop cold.
 **Silhouette (line + disc, 2.05 m):** tall and straight, with a halo of seven small glass bells on a chalk ring above his visor, and a long striking rod.
 **Hook at 96 px:** the 0.8 m bell halo is a bright ring above the head. The accent is in the clappers.
 **Weapon:** striking rod, `staff`.
-- **Passive: Hum** (**unique: a two-note stun**). His abilities leave enemies humming for 3 s. Hitting a humming enemy fighter with another ability stuns them for 0.75 s and clears the hum, once per 8 s per enemy.
-  - [DSL: trigger A `abilityHit` with `cond targetHasMark hum` and `perTargetCooldown` 8 → `consumeMark` → `status stun`; trigger B `abilityHit` with `cond not targetHasMark hum` → `mark hum 3s`]
+- **Passive: Hum** (**unique: a chord stun**). His abilities leave enemy fighters humming for 3 s. The stun needs a **chord**: when an ability strikes a humming enemy while another humming enemy stands within 3.5 m of it, every humming enemy within 3.5 m of the struck one is stunned for 1 s, stops humming and cannot hum again for 8 s. A lone humming enemy struck again is slowed 35% for 1.25 s and keeps humming; one enemy alone is never stunned by Hum (W4 re-key, originality F5, 2026-10-28).
+  - [DSL: trigger A `abilityHit` with `cond all(targetHasMark hum, not hushed, markedNear hum 3.5 m)` → `area` circle 3.5 at hit → `consumeMark` → `status stun 1`, `mark hushed 8s`; trigger B (lone) → `status slow`, re-`mark hum`; trigger C `not hum, not hushed` → `mark hum 3s`. `markedNear` is the condition W4 added for this.]
 - **A1: Peal.** After 0.4 s a ring of sound lands at a point up to 9 m away. Enemies between 1.5 m and 3.5 m from its centre take magic damage and are slowed 30%; the centre stays quiet. [DSL: `area` ring `{radius:3.5, inner:1.5}`, delay 0.4]
 - **A2: Glass Chime.** A fast chime-bolt reaching 9 m: magic damage to the first enemy. [DSL: `projectile`]
 - **A3: Ring Out.** Swings the rod: enemies in a 3.5 m, 90° cone take magic damage and are pushed back 2 m. [DSL: `area` cone → `displace` knockback]
-- **Ultimate: Morning Toll** (100 / 85 / 70 s). Tolls a great bell over a 4.5 m area up to 9 m away, three times 0.75 s apart. Each toll deals magic damage, and the second toll stuns through Hum. [DSL: `repeat` 3, interval 0.75 → `area` circle 4.5 at point]
+- **Ultimate: Morning Toll** (100 / 85 / 70 s). Tolls a great bell over a 4.5 m area up to 9 m away, three times 0.75 s apart. Each toll deals magic damage and hums everyone it strikes, so two enemies caught together chord on the second toll; a lone target is never stunned. [DSL: `repeat` 3, interval 0.75 → `area` circle 4.5 at point]
 **Presentation:** `lib_ring_pulse` · `lib_bolt_lumen` · `lib_cone_sweep` · `lib_stun_ring` · ult `vashil_ult_toll` · `c_cast_lumen`.
 **Skins:**
 - *Chalkline Bells* (standard). An ink-grey robe `#3A3F47` with chalk line-work; the bells stay clear glass.
@@ -471,12 +472,12 @@ Two forms: `passive.forms.hilt` holds the hilt kit for a1–a3; `passive.forms.g
 | 7 | Hesmi | directional shadow strip that topples (`zone rect` + `onExpire`) | `attackHit` vs Shaded → % max-hp damage | great shard: stun + huge shadow field | stun, knockback | lunge | Stand Firm and her shadows |
 | 8 | Kemdo | cooling on demand (`costKind:'none'`, castable overheated) | `takedown` → vent all Heat | burning spot that follows one enemy (`zone follow`, true damage) | knockback | dash | Cooling Kill chains fights |
 | 9 | Ardit | disarm | `statusApplied` disarm → stacking armor/resist | follow aura: allies buffed, entering enemies disarmed | airborne, disarm | run | Glare and Muster |
-| 10 | Ervet | breaks her weapon into a second kit (`form`) | `attackHit` → % own max-hp magic; per-form stats | leap slam + oversized-blade form | airborne | jab dash, leap | two speeds for duels |
+| 10 | Ervet | breaks her weapon into a second kit (`form`) | `attackHit` → % own max-hp magic; per-form stats; lodged shards torn out | leap that calls the shards home (drag + lodged shards) | airborne (drag) | jab dash, leap | two speeds for duels |
 | 11 | Nurrow | sleeps everyone except the target (`mark` + `if not`) | `takedown` → sleep nearby enemies | lunge + sleep everyone near the target but the target | sleep, silence | lunge ×2 | Quiet Kill |
 | 12 | Lisvel | piercing shots that leave ally haste lines | `abilityHit` → stacking attack range | broad shaft + haste corridor | none (slows) | backstep | lines speed her too |
 | 13 | Ulkro | distance run charges the throw (`moveDistance` counter) | `moveDistance` → Run-up stacks | running form auto-fires darts per 3 m | none (slow, reveal) | leap | kiting |
 | 14 | Tunlan | fear shapes thrown by a lamp | `abilityHit`, per-target cooldown → slow | cone fear | fear, stun, knockback | none | Shadow Play |
-| 15 | Vashil | two-note stun (Hum) | `abilityHit` → hum mark / stun | three tolls on one area | stun, knockback | none | Peal and Toll zone |
+| 15 | Vashil | chord stun (Hum: two humming enemies close together) | `abilityHit` → hum mark / chord stun / lone slow | three tolls on one area | stun (group only), slow, knockback | none | Peal and Toll zone |
 | 16 | Sukri | pulls an ally to safety (`displace pull` on ally) | `lowHp` → group untargetable 1 s | team-wide gather + shields | root | none | self-shield, Spare Hour |
 
 Checks:
@@ -504,12 +505,12 @@ The mechanics used are public systems: dash, skillshot, slow, stun, shield, root
 | Hesmi | **Trundle** (LoL), **Earthshaker** (Dota), **Ornn** (LoL) | **Trundle:** his pillar blocks movement and slows nearby units. **Earthshaker:** Fissure makes an impassable line and stuns. **Ornn:** makes terrain pillars. Hesmi's shard blocks nothing. It throws a directional shadow that slows and marks, and later topples along that shadow (a delayed stun). Her passive pays off in her own shade. |
 | Kemdo | **Rumble** (LoL), **Huskar** (Dota), **Phoenix** (Dota) | **Rumble:** high Heat empowers his spells, and overheating silences him while empowering his attacks. **Huskar:** abilities cost health. **Phoenix:** Sun Ray is a beam. Kemdo has no empowered Heat state at all. Vent is a free cooldown that dumps Heat and works while overheated, takedowns cool her, and her ultimate pins a burning spot to one enemy. |
 | Ardit | **Leona** (LoL), **Keeper of the Light** (Dota), **Alistar** (LoL) | **Leona:** her kit is a stun-on-attack shield, Zenith Blade and Solar Flare. **Keeper of the Light:** Blinding Light knocks back and causes misses. **Alistar:** Headbutt and Pulverize. Ardit's control is disarm in a cone. His dash knocks up the first fighter, and his ultimate is an aura that disarms enemies as they enter. There is no stun-on-attack and no delayed sun-burst. |
-| Ervet | **Kled** (LoL), **Gnar** (LoL), **Jayce** (LoL) | **Kled:** loses and regains his mount. **Gnar:** transforms when his rage fills. **Jayce:** switches between melee and ranged at will. Ervet breaks her own weapon on purpose, both her forms are melee, the reform is timed or manual, and her ultimate is a leap slam that oversizes the blade. |
+| Ervet | **Riven** (LoL), **Kled** (LoL), **Gnar** (LoL), **Jayce** (LoL) | **Riven:** her ultimate reforges her broken blade, and the reforged blade's signature is longer reach on her attacks and abilities plus a ranged wave. That reach hook was in Ervet's first ult (the blade reformed oversized with +0.6 m reach) and was cut on 2026-10-28 (final parity review, originality F5). Ervet's reformed blade keeps its usual 2.0 m reach and fires no wave; the payoff is the shards: they fly home from 4.5 m, drag enemies 2 m toward her and stay lodged, and her attacks tear them out as bursts around each target. Riven's broken blade is lore only, while Ervet's break is a playable second kit (Hilt). **Kled:** loses and regains his mount. **Gnar:** transforms when his rage fills. **Jayce:** switches between melee and ranged at will. Ervet breaks her own weapon on purpose, both her forms are melee, and the reform is timed or manual. |
 | Nurrow | **Lillia** (LoL), **Zoe** (LoL), **Naga Siren** (Dota), **Mordekaiser** (LoL) | **Lillia and Zoe:** their sleeps add bonus true damage to the hit that wakes the target. **Naga Siren:** her song sleeps everyone around her. **Mordekaiser:** isolates a 1v1 in another realm. Nurrow's sleeps give no wake bonus, and her ultimate sleeps everyone around a target **except** the target. That isolates the target without a separate realm. |
 | Lisvel | **Ashe** (LoL), **Ezreal** (LoL), **Varus** (LoL) | **Ashe:** Volley, Hawkshot reveal and a global stun arrow. **Ezreal:** a long Trueshot Barrage line. **Varus:** a charged piercing shot. Lisvel's piercing shots leave speed lines for allies, and her ultimate is a lasting haste corridor. She has no stun arrow, no reveal shot and no frost slow. |
 | Ulkro | **Gyrocopter** (Dota), **Zeri** (LoL), **Hoodwink** (Dota) | **Gyrocopter:** Rocket Barrage fires on a timer. **Zeri:** her ultimate chains attacks while she runs fast. **Hoodwink:** a nimble ranged hunter. Ulkro's charge comes from **distance run**, spent in one long throw. Her ultimate fires per 3 m travelled, not per second. |
 | Tunlan | **Fiddlesticks** (LoL), **Dark Willow** (Dota), **Vex** (LoL) | **Fiddlesticks:** fear tied to his scarecrow effigies. **Dark Willow:** Bramble Maze roots and Terrorize fears around a point. **Vex:** a fear passive. Tunlan's fears are a line and a cone cast from her own lamp. Her hand turns fear into a stun, and she runs on Heat. I deliberately did not give her a root zone, to keep her away from Dark Willow. |
-| Vashil | **Annie** (LoL), **Seraphine** (LoL), **Darius** (LoL) | **Annie:** stuns on every fourth spell she casts. **Seraphine:** her shield-and-haste A3 was the risk; I dropped that tool for Ring Out. **Darius:** his Decimate hits hardest at its edge, like a ring. Vashil's stun needs two hits on the same enemy within 3 s, with an 8 s lockout per enemy. His Peal is a ring cast at range, and his ultimate tolls three times on one area. |
+| Vashil | **Brand** (LoL), **Annie** (LoL), **Seraphine** (LoL), **Darius** (LoL) | **Brand:** one spell sets a single enemy ablaze, and a second spell on that same ablaze enemy stuns it, with a fast single-target bolt and a delayed circle in the kit. Vashil's first Hum (any two ability hits on one enemy stun it) echoed that hook and was re-keyed on 2026-10-28 (final parity review, originality F5). Hum now stuns only through a **chord**: two humming enemies within 3.5 m of each other, stunned together. A single enemy struck twice is only slowed, there is no burn, and nothing spreads from one enemy to the next. **Annie:** stuns on every fourth spell she casts. **Seraphine:** her shield-and-haste A3 was the risk; I dropped that tool for Ring Out. **Darius:** his Decimate hits hardest at its edge, like a ring. His Peal is a ring cast at range, and his ultimate tolls three times on one area. |
 | Sukri | **Kalista** (LoL), **Thresh** (LoL), **Kindred** (LoL) | **Kalista:** her ultimate pulls only her bound ally. **Thresh:** his lantern needs the ally to click it. **Kindred:** Lamb's Respite is a zone where nobody can die. Sukri pulls any ally with a point-click shield, his ultimate gathers the whole team, and Spare Hour is a 1 s untargetable burst at his own low health, not a no-death zone. |
 
 Ability, passive, title and skin names were written for this game and checked (section 6). I renamed four of them on the way:
