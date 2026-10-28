@@ -91,6 +91,13 @@ export function init(W) {
     }, 2400);
   };
   W.events.on("useConsumable", (a, id) => useConsumable(W, a, id));
+  // (R1, tierprof kb [isla_viva low]) EVERY held-weapon object carries burstLeft from the moment it is equipped. weapons.js grew it on the
+  // FIRST burst shot of the match (wpn.burstLeft = n - 1): that store transitioned the shared weapon hidden class, which every optimized
+  // function reading a.weapon depended on as STABLE, so one burst deoptimized ~15 hot functions at once (V8 log: "dependent prototype
+  // chain changed" on animate, selectClip, isPistol, chooseGun, actEngage, coverStepQ, underFire, weapons update, hud update ... at the
+  // same microsecond, inside the measured window) and they ran unoptimized - allocating a heap box per double - while they re-tiered.
+  // 0 reads exactly like the old undefined at every reader ((wpn.burstLeft || 0) > 0, burstLeft = 0 on a swap).
+  W.events.on("weaponEquipped", (a, w) => { if (w && w.burstLeft === undefined) w.burstLeft = 0; });
   // (P23, LC-14) every throw plays the toss on the thrower's upper body; a quick throw gets its previous slot back
   W.events.on("grenadeThrown", (a) => onThrown(W, a));
   // (P23, LC-59 / OD-7) the local player's own BIG-MAP pin placed during the drop is the landing waypoint
@@ -126,7 +133,9 @@ export function createActor(W, opts) {
       active: 0,
       ammo: Object.assign({ light: 0, medium: 0, shells: 0, heavy: 0, grenades: 0 }, K.START_LOADOUT.ammo),
     },
-    weapon: { id: K.START_LOADOUT.weapon, rarity: 0, magAmmo: K.WEAPONS[K.START_LOADOUT.weapon].mag, state: "ready", cd: 0, reloadT: 0 },
+    // (R1, tierprof kb) the SAME shape weapons.js equipSlot builds (same 7 fields, same order, slotRef null = "no slot", as every reader tests it)
+    // plus burstLeft (below): see the weaponEquipped hook in init
+    weapon: { id: K.START_LOADOUT.weapon, rarity: 0, magAmmo: K.WEAPONS[K.START_LOADOUT.weapon].mag, state: "ready", cd: 0, reloadT: 0, slotRef: null },
     aimErr: 0, lastShotT: -9, lastDamageT: -9, lastAttacker: null,
     healing: null,           // {id, tLeft}
     obj: new THREE.Group(), rig: null, nameTag: null, weaponMesh: null,
