@@ -130,7 +130,9 @@ function afterAct(u: Universe, p: Planet, cmd: Command, res: CommandResult, a: A
   if (!list.length) return;
   answerPrayers(u, p, list);
   prophetsAct(u, p, list);
-  relentDroughts(u, p, list);
+  // (a disaster freed, frozen or moved answers a rain prayer — actsOf — but is no rain falling: freezing the god's own
+  // drought must not end it)
+  if (!cmd.k.startsWith('disaster.')) relentDroughts(u, p, list);
 }
 
 /** (fix r3 #13, owner decision 3: survivable by default; answered prayers) the god's own rain inside its own drought: the

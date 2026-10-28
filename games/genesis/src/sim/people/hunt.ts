@@ -24,7 +24,7 @@ import { DEATH, INV, MEMK, NS, NT, ROLE, SKILL, TASK, TRAIT } from './defs.ts';
 import { animalDef, herdPos } from '../life/herds.ts';
 import { sacredAnimal } from './culture.ts';
 import { libHas, libraryEffect } from './knowledge.ts';
-import { distM, offsetPoint, spotInCell } from './world.ts';
+import { cellPos, distM, offsetPoint, spotInCell } from './world.ts';
 import { bestFood, foodDays, storeAdd, storeAny, storeTake } from './store.ts';
 import { practise, die } from './lifecycle.ts';
 import { camping, daylightLeft, endTrip, walkRate, walkTicks } from '../perf/pace.ts';
@@ -225,7 +225,15 @@ export const HIDES_PER_HEAD = 0.25, FOLK_HUNT_DAYS = 3, RAID_DAYS = 2;
  * at 46 (r6: 38, 49). A re-tune (a folk hunt a year, day trips; a pack hunted by armed hunters only) is open (LIVING §11.3).
  * Tests turn them on through this object (and restore it); the sim never writes it.
  */
-export const HUNT_TUNE = { folkDays: 0, raidDays: 0 };
+export const HUNT_TUNE = { folkDays: 0, raidDays: 0, armedOnly: false, folkReach: 0 };
+/**
+ * (fix r3 #9/#15) the re-tune LIVING §11.3 names, built behind the same object and OFF until its 8-seed alone gate holds
+ * (births, hunter injuries, kills, livestock lost, against the round-3 alone runs; _harness/scratch/living/fix3/hv/):
+ *   armedOnly: the party after a raiding pack is the town's hunters and soldiers only (no herders, gatherers or farmers);
+ *   folkReach: a folk hunt is a day trip — game farther than this many metres from home is let be (the try still counts)
+ *     and the party carries one day's food, not PARTY_FOOD_DAYS.
+ * The variant run sets { folkDays: <a year in days>, raidDays: 2, armedOnly: true, folkReach: 700 }.
+ */
 
 /** hunters wanted (settlement.ts assignRoles): of `food` food workers, when hunting is known and game is within range */
 export function huntQuota(x: PCtx, st: Settlement, food: number): number {
@@ -301,7 +309,8 @@ export function huntHourly(x: PCtx, st: Settlement): void {
   const hunters: number[] = [];
   for (const m of x.ps.members.get(st.id) ?? []) {
     const r = A.role[m];
-    if (!(r === ROLE.hunter || (helpers && (HELPERS.includes(r) || (r === ROLE.farmer && !ripe))))) continue;
+    const helper = raid !== null && HUNT_TUNE.armedOnly ? r === ROLE.soldier : HELPERS.includes(r) || (r === ROLE.farmer && !ripe);
+    if (!(r === ROLE.hunter || (helpers && helper))) continue;
     if (A.mission[m] || A.flags[m] & AgentFlag.child || A.health[m] < 0.55 || A.camp[m] >= 0) continue;
     if (busy && busy.includes(A.id[m])) continue;
     // at home (the party sets out together), not still on the way back with the last kill
@@ -321,11 +330,13 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     const bold = party.length >= 4 && armed(x, st);
     const g = raid !== null ? (isGame(x, st, raid, bold, true) ? raid : null) : gameOnFoot(x, st, st.pos, party.length, bold);
     if (!g) return;
+    const day = folk && HUNT_TUNE.folkReach > 0;
+    if (day && distM(x.p, cellPos(x.p, g.cell, _q), st.pos) > HUNT_TUNE.folkReach) return;
     // they are hunters until the party is home (assignRoles keeps a party out hunting, then gives the roles out again)
     for (const m of party) A.role[m] = ROLE.hunter;
     const np: HuntParty = { id: x.tick, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
     L.party = np;
-    for (const m of party) provision(x, st, m, PARTY_FOOD_DAYS);
+    for (const m of party) provision(x, st, m, day ? 1 : PARTY_FOOD_DAYS);
     ledger(x, st).huntTrips++;
     return;
   }

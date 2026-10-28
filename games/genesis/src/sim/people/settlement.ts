@@ -462,7 +462,12 @@ export function settlementStep(x: PCtx, st: Settlement): void {
 }
 
 /** a wandering band: the leader picks a site, the band walks there, and settles */
-const _bw = [0, 0, 0], _bp = [0, 0, 0], _bg = [0, 0, 0];
+const _bw = [0, 0, 0], _bp = [0, 0, 0], _bg = [0, 0, 0], _bt = [0, 0, 0];
+/** (fix r3 #17) a cell within `m` metres of a live town other than `st` (a budding daughter's own rule, BUD_APART) */
+function nearTown(x: PCtx, st: Settlement, c: number, m: number): boolean {
+  cellPos(x.p, c, _bt);
+  return x.ps.settlements.some((o) => o.fallen < 0 && !o.band && o.id !== st.id && distM(x.p, o.pos, _bt) < m);
+}
 function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const A = x.A;
   const members = x.ps.members.get(st.id) ?? [];
@@ -490,6 +495,24 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
       if (distM(x.p, _bp, _bw) < distM(x.p, _bp, cellPos(x.p, g, _bg)) - WATER_NEAR) interrupt(x, m);
     }
   }
+  // (fix r3 #17) a budding daughter keeps the bud's own rule wherever the band ends up: a band that lost the ground
+  // chosen for it re-searched around where it stood — beside its mother — and a seed-1 daughter was founded 101 m from
+  // her (siteScore's keep-away is a soft 260 m): no site within BUD_APART of a live town, and a bud that has found no
+  // free ground in BUD_HOME days goes home to its mother (they ask again at her next bud check)
+  const bud = st.recent.bud !== undefined;
+  if (!st.target && bud && x.tick - st.recent.bud! > BUD_HOME * x.day && st.recent.kin === undefined) {
+    const mother = st.parent >= 0 ? x.ps.settlement(st.parent) : undefined;
+    if (mother && mother.fallen < 0 && !mother.band) {
+      st.target = [mother.pos[0], mother.pos[1], mother.pos[2]];
+      st.recent.kin = mother.id;
+      st.recent.godSite = x.tick; // (a place chosen for them: not given up for its site score)
+      st.recent.tgtAt = x.tick;
+      st.recent.tgtBest = Math.round(distM(x.p, at, st.target));
+      st.pos = [at[0], at[1], at[2]];
+      st.cell = here;
+      return;
+    }
+  }
   if (!st.target) {
     // sites the band found it cannot walk to (across a lake, up a cliff), gave up on or fled are passed over for ten
     // days; the expired marks are forgotten (a band wandering for weeks would otherwise carry them all in its save)
@@ -498,7 +521,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
     // (LIVING.md §2.7: the band judges by the land it can WALK to within three days (waterway.ts) — a site or a bearing
     // across the sea or up a cliff is passed over, not swum for blind)
     waterReach(x, st, here, 3 * DAY_WALK);
-    const skip = (c: number) => skip0(c) || reachCost(x, c) === Infinity;
+    const skip = (c: number) => skip0(c) || reachCost(x, c) === Infinity || (bud && nearTown(x, st, c, BUD_APART));
     let site = searchSite(x, st.species, here, 3, st.id, skip);
     // nothing good within sight: scouts range out over a kilometre before the band moves on blind
     if (!(site.cell >= 0 && site.score >= 3.2)) site = scoutFar(x, st, at, skip);
@@ -552,7 +575,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const roaming = st.recent.roam !== undefined;
   // (a place the god chose is kept unless it floods: the god's word outweighs the band's judgement of the site)
   const godSite = st.recent.godSite !== undefined;
-  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && siteScore(x, st.species, tc, st.id) < 3.2);
+  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && (siteScore(x, st.species, tc, st.id) < 3.2 || (bud && nearTown(x, st, tc, BUD_APART))));
   if (leadD < (st.recent.tgtBest ?? Infinity) - 30) { st.recent.tgtBest = Math.round(leadD); st.recent.tgtAt = x.tick; }
   const stuck = x.tick - (st.recent.tgtAt ?? x.tick) > 3 * x.day;
   // a bearing is judged again every six hours: given up when the band can no longer walk to it (LIVING.md §2.7)
@@ -576,9 +599,12 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   if (near >= members.length * 0.5 || (leadD < 60 && near * 3 >= members.length)) {
     // (LIVING LAND: drought refugees join their kin — abandon)
     const kin = st.recent.kin !== undefined ? x.ps.settlement(st.recent.kin) : undefined;
-    if (kin && kin.fallen < 0 && !kin.band) { joinKin(x, st, kin); return; }
+    if (kin && kin.fallen < 0 && !kin.band) { joinKin(x, st, kin, bud ? 'bud.home' : 'abandon.joined'); return; }
     const v = siteScore(x, st.species, tc, st.id);
-    if (v >= 3.2 || godSite || (v > 1 && x.tick - (st.recent.wander ?? x.tick) > 3 * x.day)) {
+    // (fix r3 #17: a bud never founds where it wandered inside another town's BUD_APART)
+    const crowded = bud && !godSite && nearTown(x, st, tc, BUD_APART);
+    if (crowded && !roaming) st.recent[`u${tc}`] = x.tick;
+    if (!crowded && (v >= 3.2 || godSite || (v > 1 && x.tick - (st.recent.wander ?? x.tick) > 3 * x.day))) {
       // ruins of a fallen settlement here?
       const ruin = x.ps.settlements.find((o) => o.fallen >= 0 && distM(x.p, o.pos, st.target!) < 120);
       delete st.recent.tgtAt; delete st.recent.tgtBest; delete st.recent.roam;
@@ -1223,6 +1249,10 @@ function splitCheck(x: PCtx, st: Settlement): boolean {
 
 /** (fix r1 #10/#17) a village this big presses on its land (the young look for ground of their own) */
 export const BUD_POP = 48;
+/** (fix r3 #17) a daughter village stands at least this far from every live town (budCheck's rule, kept by the band) */
+export const BUD_APART = 600;
+/** (fix r3 #17) days a budding band looks for free ground before it goes home to its mother */
+export const BUD_HOME = 12;
 
 /**
  * (fix r1 #10/#17, the owner's 'advance as a normal world would' and 'politics from real grievances') Budding: a settled
@@ -1281,7 +1311,7 @@ function budCheck(x: PCtx, st: Settlement): void {
     const at = cellPos(p, c);
     const d = distM(p, at, st.pos);
     if (d < 700) continue;
-    if (x.ps.settlements.some((o) => o.fallen < 0 && !o.band && o.id !== st.id && distM(p, o.pos, at) < 600)) continue;
+    if (x.ps.settlements.some((o) => o.fallen < 0 && !o.band && o.id !== st.id && distM(p, o.pos, at) < BUD_APART)) continue;
     const v = siteScore(x, st.species, c, st.id);
     if (v >= 3.4) sites.push([c, v - d / 1000]);
   }
@@ -1632,7 +1662,7 @@ function kinWithWater(x: PCtx, st: Settlement): Settlement | null {
 }
 
 /** LIVING LAND: a band of drought refugees arrives at its kin: its people, households and what they carry join them */
-function joinKin(x: PCtx, band: Settlement, kin: Settlement): void {
+function joinKin(x: PCtx, band: Settlement, kin: Settlement, line = 'abandon.joined'): void {
   const A = x.A;
   for (const s of (x.ps.members.get(band.id) ?? []).slice()) {
     x.ps.removeMember(band.id, s);
@@ -1643,7 +1673,7 @@ function joinKin(x: PCtx, band: Settlement, kin: Settlement): void {
   for (const h of band.households) kin.households.push({ id: h.id, members: h.members.slice(), home: -1 });
   band.households = [];
   for (let i = 0; i < band.store.length; i++) if (band.store[i] > 0) storeAdd(x, kin, i, band.store[i]);
-  tell(x.u, x.p, 'abandon.joined', vars(x, kin, -1, { other: band.name }), kin, [settlementRef(x, kin)], 1);
+  tell(x.u, x.p, line, vars(x, kin, -1, { other: band.name }), kin, [settlementRef(x, kin)], 1);
   fall(x, band, 'joined');
 }
 

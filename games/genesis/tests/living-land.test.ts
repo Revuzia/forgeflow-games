@@ -19,7 +19,7 @@ import { die } from '../src/sim/people/lifecycle.ts';
 import { formCouple } from '../src/sim/people/social.ts';
 import { abandon, assignRoles, oldAge, planConstruction, settlementStep } from '../src/sim/people/settlement.ts';
 import { landOf, ledger, type LedgerYear } from '../src/sim/people/ledger.ts';
-import { HUNT_RANGE_M, HUNT_TUNE, carcass, fetchTask, huntEncounter, huntHourly, isGame, huntQuota, parties, partyOf, partyOut } from '../src/sim/people/hunt.ts';
+import { HUNT_RANGE_M, HUNT_TUNE, carcass, fetchTask, huntEncounter, huntHourly, isGame, huntQuota, onFoot, parties, partyOf, partyOut } from '../src/sim/people/hunt.ts';
 import { daylightLeft } from '../src/sim/perf/pace.ts';
 import { herderQuota, herdWork, youngFromHunt } from '../src/sim/people/herding.ts';
 import { stockAt, stockFactor, fishWork, THIN } from '../src/sim/people/fishing.ts';
@@ -60,6 +60,25 @@ function landAt(x: PCtx, st: Settlement, lo: number, hi: number): number {
     if (d < lo || d > hi) continue;
     const v = p.f.grass[c] + p.f.shrub[c] - Math.abs(d - (lo + hi) / 2) / 1000;
     if (v > bv) { bv = v; best = c; }
+  }
+  return best;
+}
+
+/** (fix r3 #7) the hunting tests' village: the default one (20261008) stands on a spit whose only land past 500 m lies
+ * across the sea — its hunters swam to it; this one has land on foot all round (fix3/seeds: 94/101 cells at 1.2-1.7 km) */
+const HUNT_SEED = 3;
+
+/** (fix r3 #7) landAt for game: a land cell the town's hunters can WALK to (this village stands on a bay: the land the
+ * plain landAt picked for the hunting tests' herds lay across 6-78 m of open sea, reached only by swimming) */
+function gameLandAt(x: PCtx, st: Settlement, lo: number, hi: number): number {
+  const p = x.p;
+  let best = -1, bv = -1;
+  for (let c = 0; c < p.count; c++) {
+    if (!isLand(p, c) || p.f.water[c] > 0.05) continue;
+    const d = distM(p, cellPos(p, c), st.pos);
+    if (d < lo || d > hi) continue;
+    const v = p.f.grass[c] + p.f.shrub[c] - Math.abs(d - (lo + hi) / 2) / 1000;
+    if (v > bv && onFoot(x, st, st.pos, c)) { bv = v; best = c; }
   }
   return best;
 }
@@ -114,12 +133,12 @@ test('land: the ledger keeps the books of a settlement-year and query ledger rea
 // ───────────────────────────── hunting ─────────────────────────────
 
 test('land: a hunting party tracks game beyond the old reach, camps, stalks it, makes a kill and carries the meat home', () => {
-  const { sim, st } = village();
+  const { sim, st } = village('bronze', HUNT_SEED);
   const x = cx(sim);
   clearWild(x);
   for (const it of x.c.itemsByTag.get('meat') ?? []) st.store[it] = 0;
   // a herd of deer 1.2-1.7 km out: past the 7 cells (~1 050 m at this grid) hunters used to reach, within the 2 km beyond
-  const c = landAt(x, st, 1200, 1700);
+  const c = gameLandAt(x, st, 1200, 1700);
   assert.ok(c >= 0, 'land for the deer');
   const deer = x.c.animals.idx('deer');
   const h = spawnHerd(x, deer, c, 10);
@@ -689,13 +708,13 @@ test('land: the day\'s news feeds curiosity — a talk with someone who lived th
 });
 
 test('land: hunters muster at home and take the trip\'s food — two parties after two herds when there are hunters enough', () => {
-  const { sim, st } = village();
+  const { sim, st } = village('bronze', HUNT_SEED);
   const x0 = cx(sim);
   clearWild(x0);
   for (const it of x0.c.itemsByTag.get('meat') ?? []) st.store[it] = 0;
   const deer = x0.c.animals.idx('deer');
-  spawnHerd(x0, deer, landAt(x0, st, 500, 800), 10);
-  spawnHerd(x0, deer, landAt(x0, st, 900, 1400), 10);
+  spawnHerd(x0, deer, gameLandAt(x0, st, 500, 800), 10);
+  spawnHerd(x0, deer, gameLandAt(x0, st, 900, 1400), 10);
   // a morning (six hours and more of daylight to walk out in)
   const adult = adultsOf(sim, st)[0];
   for (let i = 0; i < 200 && daylightLeft(cx(sim), adult) < 7 * 60; i++) sim.step(15);
@@ -850,10 +869,10 @@ test('land: a farming town hunts for hides with meat in store, musters a folk hu
   const tune = { ...HUNT_TUNE };
   HUNT_TUNE.folkDays = 3; HUNT_TUNE.raidDays = 2;
   t.after(() => Object.assign(HUNT_TUNE, tune));
-  const { sim, st } = village();
+  const { sim, st } = village('bronze', HUNT_SEED);
   const x0 = cx(sim);
   clearWild(x0);
-  const deer = spawnHerd(x0, x0.c.animals.idx('deer'), landAt(x0, st, 500, 800), 10);
+  const deer = spawnHerd(x0, x0.c.animals.idx('deer'), gameLandAt(x0, st, 500, 800), 10);
   const adult = adultsOf(sim, st)[0];
   for (let i = 0; i < 200 && daylightLeft(cx(sim), adult) < 7 * 60; i++) sim.step(15);
   const x = cx(sim);
@@ -893,7 +912,7 @@ test('land: a farming town hunts for hides with meat in store, musters a folk hu
   assert.ok(st.recent.folkHunt === x.tick, 'and the town will not muster again for three days');
   // a wolf pack took its goats: hunters and herders (armed, four or more) go after that pack, not the deer
   L.party = null;
-  const wolves = spawnHerd(x, x.c.animals.idx('wolf'), landAt(x, st, 600, 900), 5);
+  const wolves = spawnHerd(x, x.c.animals.idx('wolf'), gameLandAt(x, st, 600, 900), 5);
   storeAdd(x, st, itemIdx(x, 'bronze-spear'), 6);
   for (const [i, s] of able.slice(0, 6).entries()) { A.role[s] = i < 2 ? ROLE.hunter : ROLE.herder; home(s); }
   st.recent.raidAt = x.tick; st.recent.raidBy = wolves.id;
@@ -903,10 +922,35 @@ test('land: a farming town hunts for hides with meat in store, musters a folk hu
   assert.equal(hunt[0].herd, wolves.id, 'the wolves that took the goats');
   assert.ok(hunt[0].members.length >= 4, 'four or more for dangerous game');
   assert.equal(st.recent.raidAt, undefined, 'the raid is answered');
+  // (fix r3 #9/#15, the re-tune variant, off by default) armed only: the herders stay with the flock; the same four as
+  // soldiers go with the hunters
+  HUNT_TUNE.armedOnly = true;
+  L.party = null;
+  for (const [i, s] of able.slice(0, 6).entries()) { A.role[s] = i < 2 ? ROLE.hunter : ROLE.herder; home(s); }
+  st.recent.raidAt = x.tick; st.recent.raidBy = wolves.id;
+  huntHourly(x, st);
+  const herders = able.slice(2, 6).map((s) => A.id[s]);
+  assert.ok(!parties(st).some((q) => q.members.some((id) => herders.includes(id))), 'armed only: the herders stay with the flock');
+  L.party = null;
+  for (const [i, s] of able.slice(0, 6).entries()) { A.role[s] = i < 2 ? ROLE.hunter : ROLE.soldier; home(s); }
+  st.recent.raidAt = x.tick; st.recent.raidBy = wolves.id;
+  huntHourly(x, st);
+  assert.equal(parties(st).length, 1, 'hunters and soldiers go after the pack');
+  assert.equal(parties(st)[0].herd, wolves.id, 'the pack');
+  assert.ok(parties(st)[0].members.length >= 4, 'four or more, armed');
+  // a day-trip folk hunt lets game beyond its reach be (the try still counts: the town musters again in folkDays)
+  L.party = null;
+  HUNT_TUNE.folkReach = 100;
+  for (const [i, s] of able.slice(0, 6).entries()) { A.role[s] = i < 2 ? ROLE.hunter : i % 2 ? ROLE.crafter : ROLE.builder; home(s); }
+  wolves.count = 0;
+  delete st.recent.folkHunt;
+  huntHourly(x, st);
+  assert.equal(parties(st).length, 0, 'the deer 500-800 m off is beyond a day trip of 100 m');
+  assert.equal(st.recent.folkHunt, x.tick, 'the folk hunt was tried');
 });
 
 test('land: by default a farming town neither musters a folk hunt nor goes after a raiding pack (fix r1, stint 5)', () => {
-  assert.deepEqual(HUNT_TUNE, { folkDays: 0, raidDays: 0 }, 'off until re-tuned (LIVING §11.3)');
+  assert.deepEqual(HUNT_TUNE, { folkDays: 0, raidDays: 0, armedOnly: false, folkReach: 0 }, 'off until re-tuned (LIVING §11.3)');
 });
 
 // (fix r1 #13) under-15 deaths ran at 28 % of births (16-44 %) against 12-25 %: lighter when fed and housed, peaks in want
@@ -981,16 +1025,17 @@ test('land: game across the sea is not hunted by swimming — no party after it,
     assert.ok(!wetBetween(x, aru.pos, t.goal) || t.goalCell !== across, 'no straight leg over the water to the herd');
     assert.ok(distM(x.p, aru.pos, t.goal) >= 10, 'no leg of no length (fix r2 #2)');
   }
-  // a day on: nobody of Aru without a boat stands in water deeper than wading
-  let wet = 0;
+  // a day on: nobody of Aru on a hunt and without a boat stands in the sea or in water deeper than wading (an Aru herder
+  // walking the flock through 9-26 m of water is the same fault in herding: LIVING §12.3, not this test's)
+  const wet: string[] = [];
   for (let i = 0; i < 48; i++) {
     sim.step(30);
     const xa = cx(sim);
     for (const s of xa.ps.members.get(aru.id) ?? []) {
-      if (!xa.A.alive[s] || xa.A.boat[s] >= 0) continue;
+      if (!xa.A.alive[s] || xa.A.boat[s] >= 0 || xa.A.task[s] !== TASK.hunt) continue;
       const c = xa.A.cell[s];
-      if (xa.p.f.water[c] > 3 || (xa.p.s.ocean[c] && xa.p.f.water[c] > 0.6)) wet++;
+      if (xa.p.f.water[c] > 3 || (xa.p.s.ocean[c] && xa.p.f.water[c] > 0.6)) wet.push(`${xa.A.id[s]}:task${xa.A.task[s]}:d${xa.p.f.water[c].toFixed(1)}`);
     }
   }
-  assert.equal(wet, 0, 'nobody of Aru at sea');
+  assert.equal(wet.length, 0, `no hunter of Aru at sea (${wet.slice(0, 12).join(' ')})`);
 });

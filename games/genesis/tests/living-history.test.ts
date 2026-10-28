@@ -18,7 +18,7 @@ import { accident, computeEra, refreshLibrary, inputsSeen } from '../src/sim/peo
 import { histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
 import { politicsDaily, polityOf, plunder, conquer, resolveArrival, secede } from '../src/sim/people/war.ts';
 import { spawnHerd } from '../src/sim/life/herds.ts';
-import { BUD_POP } from '../src/sim/people/settlement.ts';
+import { BUD_POP, BUD_APART, BUD_HOME, splitOff } from '../src/sim/people/settlement.ts';
 import { newMission, volunteers } from '../src/sim/people/missions.ts';
 import { DWELL, PRACTICE, PRACTICE_USES, eraLabel, inventable, practised } from '../src/sim/people/eras.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
@@ -622,6 +622,44 @@ test('a village of fifty buds a daughter village a short walk away: young househ
   assert.ok(lines.some((l) => /daughter village|cleared new ground/.test(l)), `the chronicle tells it: ${lines.slice(-4).join(' | ')}`);
   // not again for eight years
   assert.ok(st.recent.budAt !== undefined, 'the village remembers its budding');
+});
+
+// (fix r3 #17) a budding band that lost the ground chosen for it re-searched around where it stood — beside its mother —
+// and founded there (seed 1: a daughter 101 m from her mother, their buildings 9 m apart; before this fix the probe
+// fix3/budnear.ts founded this one 168 m off): the bud's own rule holds wherever the band ends up, and a bud that finds
+// no free ground goes home
+test('a budding band that loses its ground never founds within 600 m of a town, and one that finds none goes home (fix r3 #17)', () => {
+  const sim = new Sim({ seed: 20261008, scenario: 'sandbox', overrides: { n: 64, vegetation: 1 } });
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 56, era: 'bronze', settled: true });
+  const p = sim.u.planets[0];
+  const ps = p.people;
+  const st = ps.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  sim.step(1440);
+  const leave = () => st.households.filter((h) => h.members.length && !h.members.includes(st.leader)).slice(0, 4);
+  // (a) the target is lost at once: the band re-searches from its mother's door
+  const a = splitOff(makeCtx(sim.u, p), st, leave(), 'bud', st.cell)!;
+  a.recent.bud = sim.u.tick;
+  a.target = null;
+  for (let d = 0; d < 20 && a.band && a.fallen < 0; d++) sim.step(1440);
+  if (a.fallen < 0) {
+    assert.equal(a.band, false, 'the daughter is founded (or went home)');
+    for (const o of ps.settlements) if (o.fallen < 0 && !o.band && o.id !== a.id) {
+      assert.ok(distM(p, o.pos, a.pos) >= BUD_APART, `${a.name} stands ${Math.round(distM(p, o.pos, a.pos))} m from ${o.name}`);
+    }
+  }
+  // (b) a bud out past BUD_HOME days with its ground lost goes home to its mother, and the chronicle says so
+  const n0 = ps.members.get(st.id)!.length;
+  const b = splitOff(makeCtx(sim.u, p), st, leave(), 'bud', st.cell)!;
+  const went = ps.members.get(b.id)!.length;
+  b.recent.bud = sim.u.tick - (BUD_HOME + 1) * makeCtx(sim.u, p).day;
+  b.target = null;
+  const c0 = sim.u.chronicle.length;
+  for (let i = 0; i < 40 && b.fallen < 0; i++) sim.step(120);
+  assert.ok(b.fallen >= 0, 'the band went home');
+  assert.ok(ps.members.get(st.id)!.length >= n0 - 2, `its people are back in ${st.name} (${ps.members.get(st.id)!.length} of ${n0}; ${went} left)`);
+  const told = sim.u.chronicle.slice(c0).map((e) => e.text);
+  assert.ok(told.some((t) => /found no free ground and came home/.test(t)), told.join(' | '));
 });
 
 // (fix r2 #7) a disaster that ruins half a town sends some households to their kin: the chronicle tells of the ruin,
