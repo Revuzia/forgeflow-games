@@ -780,7 +780,9 @@ def build_fray():
         "landmarks": [
             landmark("lampwright_cart", "Lampwright's cart", C, (2.6, 2.6), 3.0, "the shared shop: a two-wheeled stall (body 3 m) with a thin lamp mast; its 1.3 m footprint is a wall"),
             *[landmark(f"hour_mark_{k + 1}", f"hour-mark {k + 1}", clock(26.0, 36 * k), (2.4, 2.4), 0.02, "flush carved numeral, lit in its seat colour", flush=True) for k in range(10)],
-            *[landmark(f"hour_stone_{k + 1}", "hour-stone", clock(19.5, 36 * k + 18), (1.8, 1.8), 1.2, "low carved block (a wall)") for k in range(10)],
+            *[landmark(f"hour_stone_{k + 1}", "hour-stone", clock(19.5, 36 * k + 18), (1.8, 1.8), 1.2,
+                       "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses",
+                       model="assets/maps/landmarks/hour_stone.glb", rot=162.0 - 36 * k) for k in range(10)],
             landmark("fair_stand_nw", "fair stand", (4.0, 4.0), (6, 6), 3.0, "stepped stone terrace of the Shadowless Noon fair, pale, inside the glare"),
             landmark("fair_stand_ne", "fair stand", (W - 4.0, 4.0), (6, 6), 3.0, "as NW"),
             landmark("fair_stand_sw", "fair stand", (4.0, H - 4.0), (6, 6), 1.0, "south of the plate: kept low"),

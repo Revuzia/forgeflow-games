@@ -466,7 +466,7 @@
      "at": [38.0, 13.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_2", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 126.0,
@@ -474,7 +474,7 @@
      "at": [47.8, 20.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_3", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 90.0,
@@ -482,7 +482,7 @@
      "at": [51.5, 32.0],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_4", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 54.0,
@@ -490,7 +490,7 @@
      "at": [47.8, 43.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_5", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 18.0,
@@ -498,7 +498,7 @@
      "at": [38.0, 50.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_6", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -18.0,
@@ -506,7 +506,7 @@
      "at": [26.0, 50.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_7", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -54.0,
@@ -514,7 +514,7 @@
      "at": [16.2, 43.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_8", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -90.0,
@@ -522,7 +522,7 @@
      "at": [12.5, 32.0],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_9", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -126.0,
@@ -530,7 +530,7 @@
      "at": [16.2, 20.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "hour_stone_10", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -162.0,
@@ -538,7 +538,7 @@
      "at": [26.0, 13.5],
      "size": [1.8, 1.8],
      "height": 1.2,
-     "note": "low carved block (a wall)"
+     "note": "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
     },
     {
      "id": "fair_stand_nw", "model": "assets/maps/landmarks/fair_stand_high.glb",

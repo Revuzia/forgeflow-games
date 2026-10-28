@@ -945,13 +945,13 @@ def hour_stone(B, rng):
     hx, hy = HOUR_HALF
     m = 0.17
     # the footing course: proud on every side
-    B.add("hourbasalt", K.box((0, 0, 0.13), (hx + m + 0.06, hy + m + 0.06, 0.15), 0.05))
+    B.add("hourface", K.box((0, 0, 0.13), (hx + m + 0.06, hy + m + 0.06, 0.15), 0.05))
     # the monolith: an octagon in plan (corners cut 0.32 m), 0.26 -> 1.08
     ax, ay = hx + m, hy + m
     c = 0.32
     plan = [(-ax + c, -ay), (ax - c, -ay), (ax, -ay + c), (ax, ay - c), (ax - c, ay), (-ax + c, ay), (-ax, ay - c), (-ax, -ay + c)]
     v, f = K.prism(plan, origin=(0, 0, 0.27), u=(1, 0, 0), v=(0, 1, 0), depth=0.82, chamfer=0.035, center=False)
-    B.add("hourbasalt", (v, f))
+    B.add("hourface", (v, f))
     # the cap stone: proud 4 cm, a 7 cm chamfer all round its top edge (the chalked lip catches the noon sun)
     cx, cy, cc = ax + 0.04, ay + 0.04, c + 0.03
     cap = [(-cx + cc, -cy), (cx - cc, -cy), (cx, -cy + cc), (cx, cy - cc), (cx - cc, cy), (-cx + cc, cy), (-cx, cy - cc), (-cx, -cy + cc)]
@@ -967,13 +967,19 @@ def hour_stone(B, rng):
     B.add("hourchalk", K.box((0, 0, 1.252), (0.055, cy - 0.2, 0.012), 0.006))
     # spalled chips at the foot (the camera side and one end)
     for cc_, h in (((1.4, -(hy + m + 0.32), 0.07), (0.12, 0.1, 0.07)), ((-(hx + m + 0.3), 0.4, 0.06), (0.1, 0.13, 0.06))):
-        chunk(B, "hourbasalt", cc_, h, rng)
+        chunk(B, "hourface", cc_, h, rng)
 
 
+# values on screen (brief §3, FRAY's overhead noon sun): lit top L* 20-28, faces 12-18, chalk edge light <= 48. The
+# sun lights the cap's top and barely the walls, so the monolith and footing are painted ~3x the cap's albedo (same
+# basalt, a lighter wash) and the chalk is a toned chalk; all of it a neutral, slightly warm grey (a cool basalt goes
+# navy under the noon grade)
 HOUR_MATS = {
-    "hourbasalt": dict(hex="#48454E", chisel=0.9, var=0.07, streaks=0.25, chips=0.55, speckle=0.35, scale=0.5, rough=0.64,
+    "hourbasalt": dict(hex="#4B4846", chisel=0.9, var=0.07, streaks=0.25, chips=0.55, speckle=0.35, scale=0.5, rough=0.64,
                        edge_light=(0.06, 0.9, 0.65, 0.1)),
-    "hourchalk": dict(CHALK, hex="#9E998E", streaks=0.2, chips=0.3, edge_light=(0.02, 0.3, 0.4, 0.05)),
+    "hourface": dict(hex="#7F7B77", chisel=0.9, var=0.07, streaks=0.35, chips=0.55, speckle=0.35, scale=0.5, rough=0.66,
+                     edge_light=(0.05, 0.6, 0.65, 0.1)),
+    "hourchalk": dict(CHALK, hex="#87837A", streaks=0.2, chips=0.3, edge_light=(0.02, 0.3, 0.4, 0.05)),
 }
 
 
