@@ -26,7 +26,7 @@ import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
-import { ROAD_W, SOAK_EXTRA, TOWN_WALK, thirstBudget, waterOnFoot } from './waterway.ts';
+import { ROAD_W, SOAK_EXTRA, TOWN_WALK, WATER_NEAR, soakable, thirstBudget, waterOnFoot } from './waterway.ts';
 import { FIRE_BURN, fireDanger, fleeTarget, heat } from './danger.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
 import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
@@ -76,6 +76,28 @@ export function onDue(x: PCtx, s: number): void {
   decide(x, s);
 }
 
+/**
+ * A thirsty body's walk to water beyond WATER_NEAR that is no longer worth finishing: its spot has dried (a rain pool, a
+ * pulse of seep — the parched walked 700 m to a cell dry for ten hours and died on the way back), or the town's own water
+ * is back nearer (a band that founded its town by water while members still walked off to a far spot). LIVING.md §2.7.
+ */
+function staleDrink(x: PCtx, s: number): boolean {
+  const A = x.A, p = x.p, g = A.gcell[s];
+  if (g < 0 || g === bodyCell(x, s)) return false;
+  A.posAt(s, x.tick, _p);
+  const dg = distM(p, _p, cellPos(p, g, _q));
+  if (dg <= WATER_NEAR) return false;
+  if (A.tData[s] === 3 ? !soakable(x, g) : (!waterAtCell(x, s, g) || p.f.fire[g] > FIRE_BURN)) return true;
+  const st = x.ps.settlement(A.settlement[s]);
+  if (st && !st.band && st.res) {
+    for (const w of st.res.water) {
+      if (w === g || !waterAtCell(x, s, w) || p.f.fire[w] > FIRE_BURN) continue;
+      if (distM(p, _p, cellPos(p, w, _q)) < dg - WATER_NEAR) return true;
+    }
+  }
+  return false;
+}
+
 /** a need has turned critical and the current task does not answer it (the agent should decide again now) */
 function urgent(x: PCtx, s: number): boolean {
   const A = x.A;
@@ -85,9 +107,12 @@ function urgent(x: PCtx, s: number): boolean {
   if (k !== TASK.flee && fireDanger(x.p, A.cell[s]) >= 1) return true;
   const N = A.needs, nb = s * NEED_N;
   const sp = x.info[A.species[s]];
-  if (sp.needW[WATER] > 0 && N[nb + WATER] < 0.12 && k !== TASK.drink && A.boat[s] < 0) return true;
+  // (a boat's casks serve only afloat — LIVING.md §2.7: a band carries its raft over dry land)
+  if (sp.needW[WATER] > 0 && N[nb + WATER] < 0.12 && k !== TASK.drink && !(A.boat[s] >= 0 && x.p.f.water[A.cell[s]] > 0.6)) return true;
   // on a long way to a drinking place with water right here after all: drink now
   if (k === TASK.drink && N[nb + WATER] < 0.2 && A.gcell[s] !== A.cell[s] && waterHere(x, s)) return true;
+  // a long walk to water is judged again on the way (LIVING.md §2.7)
+  if (k === TASK.drink && N[nb + WATER] < 0.3 && staleDrink(x, s)) return true;
   if (sp.needW[FOOD] > 0 && N[nb + FOOD] < 0.06 && k !== TASK.eat && k !== TASK.forage && k !== TASK.fish && k !== TASK.hunt && k !== TASK.store) return true;
   if (sp.needW[WARMTH] > 0 && N[nb + WARMTH] < 0.1 && lastStress > 0.3 && k !== TASK.warm && k !== TASK.sleep && k !== TASK.camp && k !== TASK.flee) return true;
   return false;
@@ -418,13 +443,13 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   const budget = st && !st.band ? Math.min(TOWN_WALK, thirstBudget(w)) : thirstBudget(w);
   if (c >= 0 && budget > 0 && !(st && !st.band && st.res && st.res.water.length)) {
     // a ring pick must be within the walk this thirst will risk: else the nearest water on foot, or none
-    const r = waterOnFoot(x, A.species[s], here, true);
+    const r = waterOnFoot(x, A.species[s], here, true, budget);
     c = r.drink >= 0 && r.drinkCost <= budget ? r.drink : -1;
   }
   if (c < 0 && budget > 0) {
     // nothing found: the nearest water on foot, farther the thirstier; else ground water near the surface, dug as a
     // soak (real water is preferred unless it is farther than the soak by more than the digging is worth)
-    const r = waterOnFoot(x, A.species[s], here, true);
+    const r = waterOnFoot(x, A.species[s], here, true, budget);
     const dOk = r.drink >= 0 && r.drinkCost <= budget, sOk = r.soak >= 0 && r.soakCost <= budget;
     if (dOk && !(sOk && r.drinkCost > r.soakCost + SOAK_EXTRA)) c = r.drink;
     else if (sOk) return { kind: TASK.drink, goal: spot(x, s, r.soak, 3), goalCell: r.soak, work: 60, data: 3 };
@@ -564,6 +589,10 @@ function planSleep(x: PCtx, s: number, st: Settlement | undefined, night: boolea
     if (fireB) return { kind: TASK.sleep, goal: spotNear(x, s, fireB.pos, 3 + hashFloat(A.id[s], 3) * 4), goalCell: fireB.cell, work: dur, target: -1 };
     return { kind: TASK.sleep, goal: spot(x, s, st.cell, 5), goalCell: st.cell, work: dur, target: -1 };
   }
+  // a band member night caught far from the band (a long walk to water in a dust bowl) sleeps at a camp of their own — a
+  // camp fire where fire is kept, as townsfolk far from home do (perf/pace.ts paceSleep): the parched who walked out
+  // drank, lay down alone in the open and froze (LIVING.md §2.7)
+  if (st && st.band && night && distM(x.p, _p, st.pos) > WATER_NEAR) return { kind: TASK.camp, goal: null, goalCell: A.cell[s], work: dur, target: -1 };
   return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: dur, target: -1 };
 }
 

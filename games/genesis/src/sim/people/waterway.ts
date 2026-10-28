@@ -21,32 +21,27 @@ export const WATER_NEAR = 300;
 
 export interface WaterReach {
   from: number;
-  /** reached cells, in the order they were settled (cheapest first) */
-  cells: number[];
   /** the drinking spots reached, cheapest walk from `from` first */
   water: number[];
-  /** the walk from `from` to each of `water` */
-  waterCost: number[];
-  /** the budget cut the search (false: the whole walkable region was reached — an island, a cliff-bound plateau) */
-  open: boolean;
 }
 
 /** one search's answer for a thirsty body: the nearest drinking spot and the nearest soak on foot (-1: none) */
 export interface WaterOnFoot { drink: number; drinkCost: number; soak: number; soakCost: number; }
 
-// Within a world, reachCost/toWater read the reach of the LAST waterReach call (callers use them right after it, within
-// one band step); waterOnFoot has its own arrays, so a body's search never clobbers a band's reach.
+// Within a world, reachCost reads the reach of the LAST waterReach call (callers use it right after it, within one band
+// step); waterOnFoot has its own arrays, so a body's search never clobbers a band's reach.
 interface Scratch {
   n: number;
-  g: Float64Array; tw: Float64Array;
-  stamp: Uint32Array; closed: Uint32Array; wstamp: Uint32Array; wclosed: Uint32Array;
+  g: Float64Array;
+  stamp: Uint32Array; closed: Uint32Array;
   gen: number;
   last: WaterReach | null;
   lastKey: string;
   fg: Float64Array; fstamp: Uint32Array; fclosed: Uint32Array;
   fgen: number;
   memoTick: number;
-  memo: Map<string, WaterOnFoot>;
+  /** this tick's searches: the answer and the budget it was searched to */
+  memo: Map<string, { r: WaterOnFoot; budget: number }>;
 }
 const _scratch = new WeakMap<object, Scratch>();
 function scratchOf(x: PCtx): Scratch {
@@ -54,7 +49,7 @@ function scratchOf(x: PCtx): Scratch {
   let s = _scratch.get(x.p);
   if (!s || s.n !== n) {
     s = {
-      n, g: new Float64Array(n), tw: new Float64Array(n), stamp: new Uint32Array(n), closed: new Uint32Array(n), wstamp: new Uint32Array(n), wclosed: new Uint32Array(n),
+      n, g: new Float64Array(n), stamp: new Uint32Array(n), closed: new Uint32Array(n),
       gen: 0, last: null, lastKey: '', fg: new Float64Array(n), fstamp: new Uint32Array(n), fclosed: new Uint32Array(n), fgen: 0, memoTick: -1, memo: new Map(),
     };
     _scratch.set(x.p, s);
@@ -115,8 +110,8 @@ function optsOf(x: PCtx, st: Settlement): { swim: number; fly: boolean } {
 }
 
 /**
- * The water band `st` can walk to from cell `from` within `budget` (walking cost), and the walk from every reached cell
- * to its nearest water (`toWater`). Cached for the tick (several callers in one band step).
+ * The water band `st` can walk to from cell `from` within `budget` (walking cost); reachCost then gives the walk to any
+ * reached cell. Cached for the tick (several callers in one band step).
  */
 export function waterReach(x: PCtx, st: Settlement, from: number, budget = DAY_WALK): WaterReach {
   const S = scratchOf(x);
@@ -126,20 +121,17 @@ export function waterReach(x: PCtx, st: Settlement, from: number, budget = DAY_W
   if (S.last && S.lastKey === key) return S.last;
   const p = x.p, g = p.grid, geo = p.geo, R = p.st.radius;
   S.gen = (S.gen + 1) >>> 0;
-  if (S.gen === 0) { S.stamp.fill(0); S.closed.fill(0); S.wstamp.fill(0); S.wclosed.fill(0); S.gen = 1; }
+  if (S.gen === 0) { S.stamp.fill(0); S.closed.fill(0); S.gen = 1; }
   const gen = S.gen;
-  const _g = S.g, _tw = S.tw, _stamp = S.stamp, _closed = S.closed, _wstamp = S.wstamp, _wclosed = S.wclosed;
-  const cells: number[] = [];
-  const water: number[] = [], waterCost: number[] = [];
-  let open = false;
+  const _g = S.g, _stamp = S.stamp, _closed = S.closed;
+  const water: number[] = [];
   _hn = 0;
   _stamp[from] = gen; _g[from] = 0; push(from, 0);
   while (_hn > 0) {
     const c = pop();
     if (_closed[c] === gen) continue;
     _closed[c] = gen;
-    cells.push(c);
-    if (drinkAt(x, st.species, c)) { water.push(c); waterCost.push(Math.round(_g[c])); }
+    if (drinkAt(x, st.species, c)) water.push(c);
     const gc = _g[c];
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
       const n = g.nbr[e];
@@ -147,28 +139,11 @@ export function waterReach(x: PCtx, st: Settlement, from: number, budget = DAY_W
       const k = stepFactor(p, c, n, o.swim, o.fly);
       if (k === Infinity) continue;
       const ng = gc + geo.len[e] * R * k;
-      if (ng > budget) { open = true; continue; }
+      if (ng > budget) continue;
       if (_stamp[n] !== gen || ng < _g[n]) { _stamp[n] = gen; _g[n] = ng; push(n, ng); }
     }
   }
-  // the walk from each reached cell to its nearest reached water (walking toward the water: o -> c costs stepFactor(o, c))
-  _hn = 0;
-  for (const w of water) { _wstamp[w] = gen; _tw[w] = 0; push(w, 0); }
-  while (_hn > 0) {
-    const c = pop();
-    if (_wclosed[c] === gen) continue;
-    _wclosed[c] = gen;
-    const gc = _tw[c];
-    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-      const n = g.nbr[e];
-      if (_closed[n] !== gen || _wclosed[n] === gen) continue;
-      const k = stepFactor(p, n, c, o.swim, o.fly);
-      if (k === Infinity) continue;
-      const ng = gc + geo.len[e] * R * k;
-      if (_wstamp[n] !== gen || ng < _tw[n]) { _wstamp[n] = gen; _tw[n] = ng; push(n, ng); }
-    }
-  }
-  S.last = { from, cells, water, waterCost, open };
+  S.last = { from, water };
   S.lastKey = key;
   return S.last;
 }
@@ -177,11 +152,6 @@ export function waterReach(x: PCtx, st: Settlement, from: number, budget = DAY_W
 export function reachCost(x: PCtx, c: number): number {
   const S = _scratch.get(x.p);
   return S && S.closed[c] === S.gen ? S.g[c] : Infinity;
-}
-/** after waterReach (in world x): the walk from reached cell c to its nearest reached water (Infinity: none, or c not reached) */
-export function toWater(x: PCtx, c: number): number {
-  const S = _scratch.get(x.p);
-  return S && S.closed[c] === S.gen && S.wclosed[c] === S.gen ? S.tw[c] : Infinity;
 }
 
 /** water that lasts at cell c (fresh surface water at or beside it, a well that draws) — not a rain pool or wet ground */
@@ -206,7 +176,7 @@ export function thirstBudget(w: number): number {
   if (w >= 0.3) return 0;
   return DAY_WALK * (1 + Math.min(1, (0.3 - w) / 0.3));
 }
-/** the farthest any thirst walks (thirstBudget at w 0): every search runs to it, each caller compares with its own budget */
+/** the farthest any thirst walks (thirstBudget at w 0) */
 export const MAX_BUDGET = 2 * DAY_WALK;
 /** townsfolk fetch water and dig near home (about 5 hours' walk out at most): striking out for distant water is the
  * village's decision (settlement.ts abandonCheck: the band walks). Day workers carry skins (decide.ts waterHere); in a
@@ -255,17 +225,20 @@ function drinkAtCell(x: PCtx, melt: boolean, c: number): boolean {
 }
 
 /**
- * The nearest water (and soak, when `soak`) the people of `species` can walk to from cell `from` within MAX_BUDGET
- * walking cost: a Dijkstra over route planning's step costs (cliffs and — for those who cannot swim well — the sea stop
- * it), ties by cell index. One search serves every thirsty body in the same cell this tick (memo keyed by tick, not hour:
- * the fields it reads change within an hour, and a loaded copy starts with an empty memo).
+ * The nearest water (and soak, when `soak`) the people of `species` can walk to from cell `from` within `budget` walking
+ * cost: a Dijkstra over route planning's step costs (cliffs and — for those who cannot swim well — the sea stop it), ties
+ * by cell index. The search stops at the caller's budget (a dried town's every thirsty body searching two days' walk out
+ * cost 56% of the sim at 3000x). One search serves every thirsty body in the same cell this tick (memo keyed by tick, not
+ * hour: the fields it reads change within an hour, and a loaded copy starts with an empty memo); a search to a larger
+ * budget answers a smaller one — callers compare costs with their own budget, and the nearest drink and soak within a
+ * budget are the same whichever search found them, so what a body does never depends on who searched first.
  */
-export function waterOnFoot(x: PCtx, species: number, from: number, soak: boolean): WaterOnFoot {
+export function waterOnFoot(x: PCtx, species: number, from: number, soak: boolean, budget = MAX_BUDGET): WaterOnFoot {
   const S = scratchOf(x);
   if (S.memoTick !== x.tick) { S.memoTick = x.tick; S.memo.clear(); }
   const key = `${species}:${from}:${soak ? 1 : 0}`;
   const hit = S.memo.get(key);
-  if (hit) return hit;
+  if (hit && hit.budget >= budget) return hit.r;
   const p = x.p, g = p.grid, geo = p.geo, R = p.st.radius;
   S.fgen = (S.fgen + 1) >>> 0;
   if (S.fgen === 0) { S.fstamp.fill(0); S.fclosed.fill(0); S.fgen = 1; }
@@ -291,10 +264,10 @@ export function waterOnFoot(x: PCtx, species: number, from: number, soak: boolea
       const k = stepFactor(p, c, n, swim, o.fly);
       if (k === Infinity) continue;
       const ng = gc + geo.len[e] * R * k;
-      if (ng > MAX_BUDGET) continue;
+      if (ng > budget) continue;
       if (_stamp[n] !== gen || ng < _g[n]) { _stamp[n] = gen; _g[n] = ng; push(n, ng); }
     }
   }
-  S.memo.set(key, r);
+  S.memo.set(key, { r, budget });
   return r;
 }
