@@ -16,7 +16,8 @@ Part HUMAN (PRACTICE, Isla Viva seed 4242, kernel loop frozen, frames stepped, t
 h metres above open, flat ground (nothing within 4 m) with zero velocity and stepped until grounded; hp / shield before and after, every
 'fallDamage' event. Heights 1, 3, 4, 6, 10 (shield 100 and shield 0), 15, 17, then 22 (lethal) last (D2). 10 REAL Space jumps on the same ground.
 A 20 m drop into deep water.
-Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m, three 15 m and three 22 m over open ground - the same rule
+Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m, three 15 m and three 22 m over open, flat ground (each moved to
+the nearest spot that passes the human's flat-ground rule first) - the same rule
 (10 m costs 35-40, 15 m = the human's, 22 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
 Part LIP (a QUICK match on Isla Viva seed 77): bots-avoid's falsifier - a dry 10 hp bot provoked by an enemy 9 m behind it on a plateau flees
 toward a >= 7 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
@@ -195,9 +196,21 @@ def part_human(s, v, args):
 BOT_DROP_JS = r"""([hs]) => {
   const W = window.__LC__.W, M = W.map, P = window.__H_PUMP__;
   const bots = W.actors.filter((a) => a.isBot && a.alive && a.onGround && !a.gliding).slice(0, hs.length);
+  // OPEN, FLAT ground under each bot (release prep): the human's SPOT_JS rule (+- 0.25 m over 6 m, no collider over the ground within 5 m). A bot
+  // keeps steering in the air (~3 m in a 10 m fall), and a bot lifted over a slope landed lower than it was lifted: Savanna seed 77 s5, lifted
+  // 10 m at (-773, 32), fell 10.47 m downhill = 41-42 hp, which is the curve at 10.5 m, not a 10 m drop. Each bot moves to the nearest such spot
+  // (setup only; `moved` = how far); none within 150 m leaves it where it stands (`flat` false).
+  const wy = M.waterY;
+  const flatOk = (x, z) => { const h = M.heightAt(x, z); if (h < wy + 1) return false;
+    for (const [dx, dz] of [[3, 0], [-3, 0], [0, 3], [0, -3], [2, 2], [-2, -2], [2, -2], [-2, 2], [6, 0], [-6, 0], [0, 6], [0, -6]]) if (Math.abs(M.heightAt(x + dx, z + dz) - h) > 0.25) return false;
+    for (const c of M.queryColliders(x, z, 6, [])) { if (c.dead) continue; if (c.maxY > h + 0.2 && c.minX < x + 5 && c.maxX > x - 5 && c.minZ < z + 5 && c.maxZ > z - 5) return false; }
+    return true; };
+  const near = (x0, z0) => { for (let r = 0; r <= 150; r += 3) for (let k = 0; k < (r ? 24 : 1); k++) { const a = k / 24 * Math.PI * 2, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r;
+    if (Math.abs(x) < 760 && Math.abs(z) < 760 && flatOk(x, z)) return { x, z, r }; } return null; };
   const out = [];
-  bots.forEach((b, i) => { const h = hs[i]; const g = M.heightAt(b.pos.x, b.pos.z); b.hp = 100; b.shield = 0; b.pos.y = g + h; b.vel.set(0, 0, 0); b.onGround = false;
-    out.push({ id: b.id, h, g }); });
+  bots.forEach((b, i) => { const h = hs[i]; const sp = near(b.pos.x, b.pos.z); if (sp) { b.pos.x = sp.x; b.pos.z = sp.z; }
+    const g = M.heightAt(b.pos.x, b.pos.z); b.hp = 100; b.shield = 0; b.pos.y = g + h; b.vel.set(0, 0, 0); b.onGround = false; if (b.obj) b.obj.position.copy(b.pos);
+    out.push({ id: b.id, h, g, flat: !!sp, moved: sp ? sp.r : null }); });
   const gl = new Set(), fd = new Map(); W.events.on('fallDamage', (a, d) => { if (a) fd.set(a.id, (fd.get(a.id) || 0) + (+d || 0)); });
   for (let f = 0; f < 360; f++) { P.step(1, 1 / 60, false); for (const o of out) { const b = W.actorById.get(o.id); if (b && b.gliding) gl.add(o.id); } }
   return out.map((o) => { const b = W.actorById.get(o.id); return Object.assign(o, { hp: b.hp, alive: !!b.alive, onGround: !!b.onGround, canopy: gl.has(o.id), fallDmg: fd.get(o.id) || 0 }); }); }"""
@@ -228,7 +241,7 @@ def part_bots(s, v, args):
     ok20 = len(twenty) == 3 and all((not r["alive"]) or (r["canopy"] and r["fallDmg"] == 0) for r in twenty)
     ok = len(ten) == 3 and all(TEN_LO <= x <= TEN_HI for x in ten) and ok15 and ok20
     v.check("bots-rule (bots: 10 m costs %d-%d, 15 m = the human's 15 m +- 4 hp, %d m kills unless the bot opened its canopy mid-air)" % (TEN_LO, TEN_HI, DEAD_H), ok,
-            {"tenLost": ten, "fifteenLost": fif, "human15": h15,
+            {"tenLost": ten, "fifteenLost": fif, "human15": h15, "flat": [r.get("flat") for r in rows], "movedM": [r.get("moved") for r in rows],
              "twenty": [{"alive": r["alive"], "canopy": r["canopy"], "fallDmg": round(r["fallDmg"], 2)} for r in twenty]}, "same rule as the human")
     # bots avoid lethal drops: 180 s of play, count deaths whose damage came from a fall
     av = s.js("""() => { const W = window.__LC__.W, C = window.__LC__; const deaths = [], falls = [];

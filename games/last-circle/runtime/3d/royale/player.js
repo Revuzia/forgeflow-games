@@ -106,7 +106,7 @@ const ACTOR_DOUBLES = ["yaw", "pitch", "hp", "shield", "downedAt", "aimErr", "la
   "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw",
   // P23/player (parity P2-A + P3): DBNO, air / landing, slide, locomotion warp, turn-in-place, throw overlay
   "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd", "_slideTs",
-  "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV"];
+  "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV", "_glideLandT"];
 export function createActor(W, opts) {
   const a = {
     id: opts.id, name: opts.name, isBot: !!opts.isBot,
@@ -176,8 +176,9 @@ export function createActor(W, opts) {
     // _reviveOf / _reviveT = THIS actor's revive channel on a teammate (id, seconds held); _revivedBy = who is reviving it
     downed: false, downedHp: 0, downedT: 0, knocks: 0, _knockedBy: null, _reviveOf: null, _reviveT: 0, _revivedBy: null,
     // air / landing (LC-30, C-FALL): time off the ground, highest feet height, whether it left by a jump, the landing
-    // kind (0 none, 1 soft, 2 hard) and until when it plays / staggers, the impact speed of the last fall
-    _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0,
+    // kind (0 none, 1 soft, 2 hard) and until when it plays / staggers, the impact speed of the last fall, the W.t of the
+    // last glide / canopy touchdown (C-FALL settle, see LAND_SETTLE_S)
+    _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0, _glideLandT: -1e9,
     // slide (LC-21): seconds into the slide (-1 = none), speed, direction, cooldown clock
     _slideT: -1, _slideV: 0, _slideDx: 0, _slideDz: 0, _slideCd: 0, _crouchPrev: false,
     // slide clip (LC-21): its play rate for this slide, the slide count and the slide the clip was started for
@@ -2469,6 +2470,7 @@ function glideStep(W, a, inp, dt) {
     removeChute(a);
     a.chuteToggled = false;
     a._airT = 0; a._jumped = false;                   // (P23, C-FALL) a canopy / glide touchdown is never a fall
+    a._glideLandT = W.t;                              // ... nor is stepping straight off the spot it set down on (LAND_SETTLE_S)
     W.events.emit("landed", a);
   }
   clampToMap(W, a);
@@ -4077,6 +4079,8 @@ function dbnoBleed(a) {
 // C-FALL defaults, in THIS game's gravity (22 m/s^2): a 4.2 m drop lands at 13.6 m/s (no damage), 10 m at 21.0 m/s (~42 hp),
 // 15 m at 25.7 m/s (~88 hp), 20 m at 29.7 m/s (~135 hp: lethal through any hp). Shield never absorbs it (PUBG).
 const FALL_SAFE_V_DEF = 13.6, FALL_PER_V_DEF = 2.1, LAND_STAGGER_DEF = 0.4, LAND_STAGGER_SPEED = 0.35, HARD_LAND_V = 16;
+// C-FALL settle: a fall that starts within this long of a glide / canopy touchdown belongs to that touchdown (no damage)
+const LAND_SETTLE_S = 1.0;
 // LC-21 slide: entry speed 9.5 m/s, exponential friction tau 1.04 s (4.4 m/s at 0.80 s), ends at 4.3 m/s (the crouch walk),
 // 1.1 s at most; needs a sprint of > 6.5 m/s; 0.6 s before the next one; a little steering.
 const SLIDE_PEAK = 9.5, SLIDE_TAU = 1.04, SLIDE_END_V = 4.3, SLIDE_MAX_S = 1.1, SLIDE_MIN_V = 6.5, SLIDE_CD_S = 0.6, SLIDE_STEER = 1.1;
@@ -4238,9 +4242,14 @@ function completeRevive(W, a, t) {
 // ── C-FALL + LC-30 landing ─────────────────────────────────────────────────────────────────────────────────────────────
 /** A real fall touched down at vertical speed v (m/s). wet = the ground there is under water (no damage, as a water landing). */
 function landed(W, a, v, wet) {
+  // C-FALL "no fall damage on a glide / parachute landing": a fall that LEFT the ground within LAND_SETTLE_S of a glide / canopy
+  // touchdown is the end of that landing, not a new fall (release prep: bot s29, Isla Viva seed 7, set its canopy down on a
+  // roof lip 6.8 m up, stepped off it 0.33 s later and took 20 hp). The descent could have gone on by canopy to the ground, so
+  // the settle gives nothing a glide did not. Left the ground at W.t - a._airT (the air clock counts from the take-off).
+  const settle = W.t - a._airT - a._glideLandT <= LAND_SETTLE_S;
   a._airT = 0; a._jumped = false; a._fallV = v;
   let dmg = 0;
-  if (!wet && !a.isDummy) dmg = fallHurt(W, a, v);
+  if (!wet && !a.isDummy && !settle) dmg = fallHurt(W, a, v);
   if (!a.alive) return;
   const hard = !wet && (v > HARD_LAND_V || dmg >= 5);
   if (hard) {

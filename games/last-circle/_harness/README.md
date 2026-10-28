@@ -792,3 +792,10 @@ python _harness/gate.py --disk --no-node --negative-controls --only placementche
 python _harness/interiorcheck.py --disk --source match --maps isla_viva --plant grass-on-floor --houses 4 --camwall-houses 0 --shot-houses 0 --no-walk   # must FAIL grass-indoors
 python _harness/mobile.py --disk --map ashgrid --devices pixel7 --plant chest-through-wall                                                              # must FAIL the USE row
 ```
+
+## Release prep (2026-10-27, int-p23)
+
+| gate | change | why | result |
+|---|---|---|---|
+| p23_fall glide | none to the gate; the game: player.js `landed()` treats a fall that LEFT the ground within `LAND_SETTLE_S` (1.0 s) of a glide / canopy touchdown (`a._glideLandT`, set in glideStep) as the end of that touchdown, no damage | bot s29 (Isla Viva seed 7 standard) set its canopy down on a roof lip 6.8 m over the terrain at W.t 20.33, stepped off it 0.33 s later and took 20 hp at 21.47 (traced tick by tick): the row's own rule counts any fallDamage within 2 s of a glide end as the touchdown | glide 0 events at landing, 50 glides ended (was 1 event, s29 20 hp) |
+| p23_fall bots-rule | BOT_DROP_JS moves each lifted bot to the nearest spot that passes the human's own flat-open-ground rule (+- 0.25 m over 6 m, no collider within 5 m) before the lift; detail prints `flat` / `movedM` | the docstring always said "over open ground", the setup never ensured it: a bot steers ~3 m in the air during a 10 m fall, and Savanna seed 77 s5 lifted over a slope fell 10.47 m = 41-42 hp, the curve at 10.5 m (`K.fallDamage(sqrt(44 x 10.47))` = 41). Bar unchanged (35-40) | 10 m 38 / 38 / 38, 15 m 71 / 71 / 71 (human 71), 22 m canopy 3 / 3; p23_fall 19 / 19 twice |
