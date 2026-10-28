@@ -5,9 +5,9 @@
 // shadow-line wipe to the post-game), and the practice tools (practice queue only).
 
 import type { CSSProperties, JSX } from 'preact';
-import { useMemo, useReducer } from 'preact/hooks';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks';
 import type { DamageLogEntry } from '../../contracts/session.ts';
-import type { PlayerView } from '../../contracts/sim.ts';
+import type { PlayerView, SimEvent } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { Portrait } from '../components/Portrait.tsx';
 import { SeatGlyph } from '../components/Glyphs.tsx';
@@ -231,7 +231,7 @@ export function DeathRecap(): JSX.Element | null {
   );
 }
 
-/** HUD-6: a damage source id in display words — an ability or battle spell or item active (the ability index), an
+/** HUD-6: a damage source id in display words — an ability, Hour spell or item active (the ability index), an
  *  item, a setup boon, or a passive (fighter, item, unit, team buff) — and a neutral phrase before a raw id ever shows */
 const sourceNames = new WeakMap<object, Map<string, string>>();
 export function sourceName(cv: CatalogView, index: AbilityIndex, id: string): string {
@@ -306,7 +306,7 @@ export function PracticePanel(): JSX.Element | null {
         <button type="button" class="hbtn" onClick={() => act('resetCooldowns')}>{cv.t('practice.panel.reset_cooldowns', 'Refresh cooldowns')}</button>
         <button type="button" class="hbtn" onClick={() => act('toggleCooldowns')}>{cv.t('practice.panel.toggle_cooldowns', 'No cooldowns')}</button>
         <button type="button" class="hbtn" onClick={() => act('spawnDummy')}>{cv.t('practice.panel.spawn_dummy', 'Place a training target')}</button>
-        <button type="button" class="hbtn" onClick={() => act('heal')}>{cv.t('practice.panel.heal', 'Return to life')}</button>
+        <button type="button" class="hbtn" onClick={() => act('heal')}>{cv.t('practice.panel.heal', 'Full heal')}</button>
         <button type="button" class="hbtn" onClick={() => act('resetMatch')}>{cv.t('practice.panel.reset_match', 'Reset match')}</button>
       </div>
       <div class="ptools__speed" role="radiogroup" aria-label={cv.t('practice.panel.speed', 'Speed')}>
@@ -317,6 +317,53 @@ export function PracticePanel(): JSX.Element | null {
           </button>
         ))}
       </div>
+      <DamageReadout />
     </section>
+  );
+}
+
+/** gameplay g3: what your fighter dealt, read from the match's damage events (UI only): the last hit, the current burst
+ *  (hits with no gap longer than BURST_GAP_S, sim time) and its damage per second, and the total since Clear. Shields
+ *  that soaked a hit count: the readout is damage dealt, not health lost. */
+const BURST_GAP_S = 3;
+interface Readout { last: number; crit: boolean; burst: number; from: number; to: number; total: number; hits: number }
+const NO_READOUT: Readout = { last: 0, crit: false, burst: 0, from: 0, to: 0, total: 0, hits: 0 };
+function DamageReadout(): JSX.Element {
+  const { cv } = useApp();
+  const { client, model } = useHud();
+  const [r, setR] = useState<Readout>(NO_READOUT);
+  const cur = useRef<Readout>(NO_READOUT);
+  useEffect(() => client.onEvents((evs: SimEvent[]) => {
+    const me = model.body?.id;
+    if (me === undefined) return;
+    let x = cur.current, changed = false;
+    for (const ev of evs) {
+      if (ev.e !== 'damage' || ev.src !== me || ev.dst === me) continue;
+      const amt = ev.amount + (ev.shielded ?? 0);
+      if (amt <= 0) continue;
+      const fresh = x.hits === 0 || ev.t - x.to > BURST_GAP_S;
+      x = { last: amt, crit: ev.crit, burst: (fresh ? 0 : x.burst) + amt, from: fresh ? ev.t : x.from, to: ev.t, total: x.total + amt, hits: x.hits + 1 };
+      changed = true;
+    }
+    if (changed) { cur.current = x; setR(x); }
+  }), [client]);
+  const span = r.to - r.from;
+  const dps = r.hits > 1 && span > 0.05 ? r.burst / span : r.burst;
+  const cell = (k: string, f: string, v: string, hot?: boolean): JSX.Element => (
+    <div class="ptools__stat"><dt class="t-caption muted">{cv.t(`practice.panel.dmg.${k}`, f)}</dt><dd class={`num ${hot ? 'is-crit' : ''}`}>{v}</dd></div>
+  );
+  return (
+    <div class="ptools__dmg" aria-live="off">
+      <div class="ptools__dmghead">
+        <span class="t-caption">{cv.t('practice.panel.dmg.title', 'Damage you dealt')}</span>
+        <button type="button" class="hbtn hbtn--s" disabled={r.hits === 0} onClick={() => { cur.current = NO_READOUT; setR(NO_READOUT); }}>{cv.t('practice.panel.dmg.clear', 'Clear')}</button>
+      </div>
+      <dl class="ptools__stats">
+        {cell('last', 'Last hit', r.hits ? fmtInt(Math.round(r.last)) : '—', r.crit)}
+        {cell('burst', 'This burst', r.hits ? fmtInt(Math.round(r.burst)) : '—')}
+        {cell('dps', 'Per second', r.hits ? fmtInt(Math.round(dps)) : '—')}
+        {cell('total', 'Total', r.hits ? fmtInt(Math.round(r.total)) : '—')}
+      </dl>
+    </div>
   );
 }

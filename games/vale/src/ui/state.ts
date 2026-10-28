@@ -17,9 +17,21 @@ export type QueueEvt = Extract<SessionEvent, { type: 'queue' }>;
 export interface Toast { id: number; text: string; tone: 'info' | 'ok' | 'warn' | 'error'; action?: { label: string; run: () => void }; ms: number }
 export type FrayColors = 'standard' | 'stamp' | 'simple';
 /** UI-only preferences that have no Settings field yet (requested in the lane report), per device */
-export interface UiPrefs { frayColors: FrayColors | 'auto'; seenScreens: string[]; lastMode?: string; lastQueue?: string; roles?: [string?, string?]; /** HUD-4: the sky strip's ledger line (shown unless false) */ hudLedger?: boolean }
+export interface UiPrefs { frayColors: FrayColors | 'auto'; seenScreens: string[]; lastMode?: string; lastQueue?: string; roles?: [string?, string?]; /** HUD-4: the sky strip's ledger line (shown unless false) */ hudLedger?: boolean;
+  /** client F17: the profile emblem you chose (an id from profile.tsx emblemsOf; per device until the Profile carries it) */ emblem?: string }
 
 const PREFS_KEY = 'vale.ui.v1';
+/** client F17: the last RESULTS_CAP post-games, kept on this device so a match-history row reopens its post-game */
+const RESULTS_KEY = 'vale.results.v1';
+export const RESULTS_CAP = 20;
+export interface StoredResult { result: MatchResult; grants: GrantSummary; you: PlayerId; at: string }
+function loadResults(): StoredResult[] {
+  try { const raw = localStorage.getItem(RESULTS_KEY); const v = raw ? JSON.parse(raw) as unknown : []; return Array.isArray(v) ? v as StoredResult[] : []; }
+  catch { return []; }
+}
+function saveResults(list: StoredResult[]): void {
+  try { localStorage.setItem(RESULTS_KEY, JSON.stringify(list.slice(0, RESULTS_CAP))); } catch { /* full or blocked storage: the history still lists the match */ }
+}
 /** seconds left on an unanswered ready check when the reminder (queue_remind) sounds and the notification is raised again */
 export const READY_REMIND_S = 4;
 /** how long the end banner holds over the last frame before the shadow-line wipe to the post-game */
@@ -241,6 +253,7 @@ export class AppState {
         if (me && e.result.reason !== 'abandon') this.sound.sting(ffa ? 'placement' : me.won ? 'victory' : 'defeat');
         const show = (): void => {
           batch(() => { this.postgame.value = { result: e.result, grants: e.grants, you: e.you }; this.match.value = null; this.loading.value = null; this.queue.value = null; this.ending.value = false; });
+          this.keepResult({ result: e.result, grants: e.grants, you: e.you, at: new Date().toISOString() });
           this.renderer?.setScene?.('menu');
           r.reset('postgame', {}, 'wipe');
         };
@@ -285,6 +298,23 @@ export class AppState {
         if (url) { const img = new Image(); img.decoding = 'async'; img.src = url; }
       }
     }
+  }
+
+  // ── client F17: stored post-games (this device) ─────────────────────────────────────────────────
+  private results: StoredResult[] = loadResults();
+  private keepResult(r: StoredResult): void {
+    this.results = [r, ...this.results.filter((x) => x.result.matchId !== r.result.matchId)].slice(0, RESULTS_CAP);
+    saveResults(this.results);
+  }
+  /** the stored post-game of a match, if this device kept it */
+  storedResult(matchId: string): StoredResult | undefined { return this.results.find((x) => x.result.matchId === matchId); }
+  /** reopen a stored post-game (from the match history): the post-game screen, without the nod step */
+  openResult(matchId: string): boolean {
+    const r = this.storedResult(matchId);
+    if (!r) return false;
+    this.postgame.value = { result: r.result, grants: r.grants, you: r.you };
+    this.router.go('postgame', { from: 'history' });
+    return true;
   }
 
   private readyLine(e: QueueEvt, key: string, fallback: string): string {

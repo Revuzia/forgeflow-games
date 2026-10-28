@@ -5,6 +5,11 @@
 // Tabs: Summary · Scoreboard · Gleam lead (the per-minute graph, from your side). Defeat is dignified:
 // same plate, no red. CTA Play again (disabled with the reason during a lockout); Choose another mode
 // and Return home beside it.
+// Recognition (client F15): the Summary opens with two best-in-match cards (the two stats where one player led the
+// match by the widest margin over the match's average: damage to fighters, damage taken, healing, structure damage,
+// takedowns + assists, Wicks) and, in team modes with a teammate, the Lantern nod: light a lantern for one teammate in
+// NOD_S seconds, or skip. A nod marks that teammate's scoreboard row for the rest of this post-game (the session's
+// half records it). A post-game reopened from the match history skips the nod.
 
 import type { JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
@@ -16,6 +21,7 @@ import { Currency } from '../components/Currency.tsx';
 import { Icon } from '../components/Glyphs.tsx';
 import { AssetImg, Portrait } from '../components/Portrait.tsx';
 import { RankEmblem } from '../components/RankEmblem.tsx';
+import { Ring } from '../components/Ring.tsx';
 import { Screen } from '../components/Screen.tsx';
 import { roman, SeatMark, seatOf, SideMark } from '../components/Seat.tsx';
 import { EmptyState } from '../components/States.tsx';
@@ -31,6 +37,9 @@ export function PostgameScreen(p: { params: Record<string, string> }): JSX.Eleme
   const { cv, state, router, sound } = useApp();
   const pg = state.postgame.value;
   const tab = p.params.tab ?? 'summary';
+  const fromHistory = p.params.from === 'history';
+  // client F15: the teammate you lit a lantern for (kept while this post-game is open)
+  const [nod, setNod] = useState<number | null>(null);
   const res = pg?.result;
   const me = res?.players.find((x) => x.player === pg!.you);
   const mode = cv.mode(res?.mode);
@@ -70,8 +79,9 @@ export function PostgameScreen(p: { params: Record<string, string> }): JSX.Eleme
           { id: 'graph', label: cv.t('postgame.tab.graph', 'Gleam lead'), disabled: res.goldGraph.length < 2 ? cv.t('postgame.graph.empty', 'The match ended too soon to chart the Gleam lead.') : undefined },
         ]} />
         <div class="pg__body">
+          {tab === 'summary' ? <Recognition res={res} me={me} ffa={ffa} nod={nod} onNod={setNod} skipNod={fromHistory} /> : null}
           {tab === 'summary' ? <Summary res={res} grants={pg.grants} me={me} /> : null}
-          {tab === 'scoreboard' ? <Scoreboard res={res} me={me} ffa={ffa} /> : null}
+          {tab === 'scoreboard' ? <Scoreboard res={res} me={me} ffa={ffa} nod={nod} /> : null}
           {tab === 'graph' ? <GoldGraph res={res} me={me} ffa={ffa} /> : null}
         </div>
       </div>
@@ -87,6 +97,116 @@ function Banner(p: { text: string; caps: boolean }): JSX.Element {
       { duration: dur('reward'), easing: TOKENS.motion.ease.dawn, fill: 'backwards' });
   }, []);
   return <h1 ref={el} class={`t-display-xl pg__title ${p.caps ? 'is-caps' : ''}`}>{p.text}</h1>;
+}
+
+// ── recognition (client F15): best-in-match cards and the Lantern nod ───────────────────────────
+/** the stats a best-in-match card can name; `lead` is how far the leader stands above the match's average */
+const BEST_STATS: { key: string; get: (r: PlayerResult) => number; label: string; title: string }[] = [
+  { key: 'damage', get: (r) => r.damageToFighters, label: 'Most damage to fighters', title: 'Brightest hand' },
+  { key: 'taken', get: (r) => r.damageTaken, label: 'Most damage taken', title: 'Unmoved stone' },
+  { key: 'healing', get: (r) => r.healing, label: 'Most healing', title: 'Kept the lamps lit' },
+  { key: 'structures', get: (r) => r.structureDamage, label: 'Most structure damage', title: 'Needle breaker' },
+  { key: 'takedowns', get: (r) => r.kills + r.assists, label: 'Most takedowns and assists', title: 'In every fight' },
+  { key: 'wicks', get: (r) => r.cs, label: 'Most Wicks', title: 'Long harvest' },
+];
+/** the two cards: per stat the leader and its lead over the mean (leader / mean), the two widest leads, two different
+ *  players when the match allows it; a stat nobody scored in never shows */
+export function bestInMatch(res: MatchResult): { key: string; player: PlayerResult; value: number; lead: number }[] {
+  const n = res.players.length;
+  if (n < 2) return [];
+  const leads = BEST_STATS.map((s) => {
+    const vals = res.players.map(s.get);
+    const mean = vals.reduce((a, b) => a + b, 0) / n;
+    let i = 0;
+    for (let j = 1; j < n; j++) if (vals[j] > vals[i]) i = j;
+    return { key: s.key, player: res.players[i], value: vals[i], lead: mean > 0 ? vals[i] / mean : 0 };
+  }).filter((x) => x.value > 0).sort((a, b) => b.lead - a.lead);
+  const first = leads[0];
+  if (!first) return [];
+  const second = leads.find((x) => x !== first && x.player.player !== first.player.player) ?? leads[1];
+  return second ? [first, second] : [first];
+}
+
+/** the nod window (seconds) */
+const NOD_S = 20;
+
+function Recognition(p: { res: MatchResult; me: PlayerResult; ffa: boolean; nod: number | null; onNod: (player: number) => void; skipNod: boolean }): JSX.Element | null {
+  const { cv, sound } = useApp();
+  const cards = bestInMatch(p.res);
+  const mates = p.ffa ? [] : p.res.players.filter((r) => r.team === p.me.team && r.player !== p.me.player);
+  const [open, setOpen] = useState(!p.skipNod && mates.length > 0 && p.nod === null);
+  const [left, setLeft] = useState(NOD_S);
+  useEffect(() => {
+    if (!open) return;
+    const t0 = performance.now();
+    const id = setInterval(() => {
+      const l = NOD_S - (performance.now() - t0) / 1000;
+      if (l <= 0) { setOpen(false); clearInterval(id); } else setLeft(l);
+    }, 250);
+    return () => clearInterval(id);
+  }, [open]);
+  if (!cards.length && !mates.length) return null;
+  const nodTo = p.nod !== null ? p.res.players.find((r) => r.player === p.nod) : undefined;
+  const give = (r: PlayerResult): void => { sound.play('confirm'); p.onNod(r.player); setOpen(false); };
+  const statOf = (key: string): (typeof BEST_STATS)[number] => BEST_STATS.find((s) => s.key === key)!;
+  return (
+    <section class="pgrec stg" aria-label={cv.t('postgame.best.title', 'Best in the match')}>
+      {cards.map((c) => {
+        const s = statOf(c.key);
+        const you = c.player.player === p.me.player;
+        const rel = you ? 'self' : p.ffa ? 'enemy' : c.player.team === p.me.team ? 'ally' : 'enemy';
+        return (
+          <article class={`pgbest plate pgbest--${rel}`}>
+            <span class="pgbest__art"><Portrait fighter={cv.fighter(c.player.fighter)} skin={c.player.skin} size="fill" /></span>
+            <span class="pgbest__text">
+              <span class="t-label pgbest__kick"><i class="bestv__tick" aria-hidden="true" />{cv.t(`postgame.best.${c.key}.title`, s.title)}</span>
+              <span class="t-body-l pgbest__who">{you ? cv.t('score.you', 'You') : c.player.name}</span>
+              <span class="t-caption muted">{cv.fighter(c.player.fighter)?.name}</span>
+              <span class="t-body-s pgbest__stat">{cv.t(`postgame.best.${c.key}.label`, s.label)} · <span class="fig">{fmtInt(c.value)}</span></span>
+            </span>
+          </article>
+        );
+      })}
+      {mates.length ? (
+        <article class={`pgnod plate ${open ? 'is-open' : 'is-closed'}`} aria-live="polite">
+          {open ? (
+            <>
+              <div class="pgnod__head">
+                <Ring size={40} stroke={3} timer={{ left, max: NOD_S }} tone="chalk" label={`${Math.ceil(left)} s`} />
+                <div class="stack stack--s">
+                  <span class="t-label">{cv.t('postgame.nod.title', 'Lantern nod')}</span>
+                  <span class="t-caption muted">{cv.t('postgame.nod.prompt', 'Light a lantern for the teammate who carried the hour.')}</span>
+                </div>
+                <Button variant="quiet" size="s" cue="back" onPress={() => setOpen(false)}>{cv.t('postgame.nod.skip', 'Skip')}</Button>
+              </div>
+              <div class="pgnod__mates" role="group" aria-label={cv.t('postgame.nod.title', 'Lantern nod')}>
+                {mates.map((r) => (
+                  <button type="button" class="pgnod__mate" onClick={() => give(r)} title={r.name} aria-label={cv.t('postgame.nod.give', 'Light a lantern for {name}', { name: r.name })}>
+                    <Portrait fighter={cv.fighter(r.fighter)} skin={r.skin} size="xs" round />
+                    <span class="t-caption pgnod__name">{r.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p class="t-body-s pgnod__done">{nodTo ? <><LanternMark label="" />{cv.t('postgame.nod.given_to', 'You lit a lantern for {name}.', { name: nodTo.name })}</> : cv.t('postgame.nod.none', 'No lantern lit this time.')}</p>
+          )}
+        </article>
+      ) : null}
+    </section>
+  );
+}
+
+/** a small lit lantern: the nod's mark (VALE's own: a flame over a lamp base in a ring, never a thumb or a star) */
+function LanternMark(p: { label: string }): JSX.Element {
+  return (
+    <svg class="lmark" viewBox="0 0 16 16" role={p.label ? 'img' : undefined} aria-label={p.label || undefined} aria-hidden={p.label ? undefined : 'true'}>
+      {p.label ? <title>{p.label}</title> : null}
+      <circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.2" />
+      <path d="M8 3.6c1.6 1.8 2.4 3.2 2.4 4.6A2.4 2.4 0 0 1 5.6 8.2C5.6 6.8 6.4 5.4 8 3.6z" fill="currentColor" />
+      <path d="M6 11.6h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+    </svg>
+  );
 }
 
 // ── summary: rewards, level, rating, your match ────────────────────────────────────────────────
@@ -204,7 +324,7 @@ function LevelBar(p: { g: GrantSummary }): JSX.Element {
 // items are the painted item icons; the best value of the match carries a noon tick with its tooltip.
 type Col = { key: string; label: string; get: (r: PlayerResult) => number; fmt?: (n: number) => string };
 
-function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JSX.Element {
+function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean; nod?: number | null }): JSX.Element {
   const { cv } = useApp();
   const cols: Col[] = [
     { key: 'level', label: cv.t('score.col.level', 'Lv'), get: (r) => r.level },
@@ -257,7 +377,7 @@ function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JS
                     <div class="pgrow__who">
                       <Portrait fighter={f} skin={r.skin} size="xs" round={rel === 'ally'} />
                       {p.ffa ? <SeatMark seat={seatOf(r.player)} you={you} size={14} showNumeral={false} /> : null}
-                      <span class="pgrow__names"><span class="t-body-s">{you ? cv.t('score.you', 'You') : r.name}{r.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}</span>
+                      <span class="pgrow__names"><span class="t-body-s">{you ? cv.t('score.you', 'You') : r.name}{r.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}{p.nod === r.player ? <LanternMark label={cv.t('postgame.nod.given_to', 'You lit a lantern for {name}.', { name: r.name })} /> : null}</span>
                         <span class="t-caption muted">{f?.name}{r.role ? ` · ${cv.role(r.role)?.name ?? ''}` : ''}{p.ffa ? ` · ${roman(seatOf(r.player))}` : ''}</span></span>
                     </div>
                   </td>

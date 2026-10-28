@@ -5,11 +5,12 @@
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
-import type { LedgerEntry, MatchHistoryEntry } from '../../contracts/session.ts';
+import type { LedgerEntry, MatchHistoryEntry, Profile } from '../../contracts/session.ts';
+import type { CatalogView } from '../catalog_view.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
 import { Currency } from '../components/Currency.tsx';
-import { Icon } from '../components/Glyphs.tsx';
+import { ClassGlyph, classShapeOf, Icon } from '../components/Glyphs.tsx';
 import { confirmDialog } from '../components/Modal.tsx';
 import { Portrait } from '../components/Portrait.tsx';
 import { RankEmblem } from '../components/RankEmblem.tsx';
@@ -17,6 +18,7 @@ import { Screen, Section } from '../components/Screen.tsx';
 import { EmptyState } from '../components/States.tsx';
 import { Tabs } from '../components/Tabs.tsx';
 import { fmtClock, fmtInt, fmtSigned, fmtWhen } from '../format.ts';
+import { RESULTS_CAP } from '../state.ts';
 
 const xpToNext = (level: number): number => 100 + 25 * (level - 1);   // CONTRACT §7 grants
 
@@ -95,6 +97,8 @@ function Overview(): JSX.Element {
   const owned = profile.owned.filter((o) => o.kind === 'skin' && cv.skin(o.ref)?.tier !== 'base').length;
   const total = cv.c.skins.filter((s) => s.tier !== 'base').length;
   const ledger = [...profile.ledger].reverse().slice(0, 6);
+  const emblems = emblemsOf(cv, profile);
+  const chosen = emblems.find((e) => e.id === state.prefs.value.emblem && e.earned) ?? emblems[0];
   const reset = (): void => {
     void confirmDialog(overlay, {
       title: cv.t('profile.reset.title', 'Reset your profile'), body: cv.t('profile.reset.body', "This returns your Candles, skins, history and settings to a new account's. It cannot be undone."),
@@ -104,7 +108,7 @@ function Overview(): JSX.Element {
   return (
     <div class="prof">
       <section class="prof__id plate pad-l stg">
-        <span class="prof__avatar"><Icon name="user" size={40} /></span>
+        <span class={`prof__avatar emb emb--${chosen.kind}`} title={chosen.name}>{chosen.draw(56)}</span>
         <div class="stack stack--s prof__idtext">
           <h2 class="t-display-m">{profile.identity.displayName}</h2>
           <span class="t-label muted">{cv.t('profile.level', 'Level {n}', { n: profile.level })}</span>
@@ -113,6 +117,7 @@ function Overview(): JSX.Element {
           </div>
           <span class="t-caption muted fig">{cv.t('profile.xp', '{xp} of {next} XP to level {n}', { xp: fmtInt(profile.xp), next: fmtInt(need), n: profile.level + 1 })}</span>
         </div>
+        <EmblemPicker list={emblems} chosen={chosen.id} onPick={(id) => state.setPrefs({ emblem: id })} />
       </section>
       <div class="prof__grid">
         <Section title={cv.t('profile.wallet', 'Wallet')} class="plate pad-l">
@@ -162,21 +167,26 @@ function History(): JSX.Element {
         <tbody>{h.map((m) => <HistRow m={m} />)}</tbody>
       </table>
       {h.length >= 50 ? <p class="t-caption muted">{cv.t('profile.history.capped', 'Showing your last {n} matches.', { n: 50 })}</p> : null}
+      <p class="t-caption muted">{cv.t('profile.history.open_hint', 'Select one of your last {n} matches to see its full summary. They are kept in this browser.', { n: RESULTS_CAP })}</p>
     </div>
   );
 }
 
 function HistRow(p: { m: MatchHistoryEntry }): JSX.Element {
-  const { cv } = useApp();
+  const { cv, state } = useApp();
   const m = p.m;
+  // client F17: a match this device kept opens its post-game (Enter or a click on the row)
+  const kept = !!state.storedResult(m.matchId);
+  const open = (): void => { if (kept) state.openResult(m.matchId); };
   const mode = cv.mode(m.mode);
   const q = cv.queue(m.queue);
   const ffa = cv.isFfa(mode);
   const f = cv.fighter(m.fighter);
   const candles = Object.values(m.grants.currency).reduce((a, b) => a + b, 0);
   return (
-    <tr class={`hrow ${ffa ? 'is-place' : m.won ? 'is-win' : 'is-loss'}`}>
-      <td><span class="hrow__res t-label">{ffa ? cv.t('profile.history.placed', '{ord} of {total}', { ord: cv.ordinal(m.placement), total: cv.seatsOf(mode) }) : m.won ? cv.t('profile.history.won', 'Victory') : cv.t('profile.history.lost', 'Defeat')}</span>
+    <tr class={`hrow ${ffa ? 'is-place' : m.won ? 'is-win' : 'is-loss'} ${kept ? 'is-kept' : ''}`} onClick={kept ? open : undefined}>
+      <td>{kept ? <button type="button" class="hrow__open" onClick={(e) => { e.stopPropagation(); open(); }} aria-label={cv.t('profile.history.open', 'Open the summary of this match')}><span class="hrow__res t-label">{ffa ? cv.t('profile.history.placed', '{ord} of {total}', { ord: cv.ordinal(m.placement), total: cv.seatsOf(mode) }) : m.won ? cv.t('profile.history.won', 'Victory') : cv.t('profile.history.lost', 'Defeat')}</span><Icon name="arrow" size={14} /></button>
+        : <span class="hrow__res t-label">{ffa ? cv.t('profile.history.placed', '{ord} of {total}', { ord: cv.ordinal(m.placement), total: cv.seatsOf(mode) }) : m.won ? cv.t('profile.history.won', 'Victory') : cv.t('profile.history.lost', 'Defeat')}</span>}
         {m.ratingDelta !== undefined ? <span class="t-caption muted"> {cv.t('profile.history.rating_delta', 'Rating {delta}', { delta: fmtSigned(m.ratingDelta) })}</span> : null}</td>
       <td><span class="row row--s row--nowrap"><Portrait fighter={f} skin={m.skin} size="xs" /><span class="t-body-s">{f?.name}</span></span></td>
       <td class="t-body-s">{mode?.name}<span class="muted"> · {q?.name}</span></td>
@@ -229,5 +239,77 @@ function Rating(): JSX.Element {
         </div>
       </section>
     </div>
+  );
+}
+
+// ── client F17: earnable emblems ──────────────────────────────────────────────────────────────────
+/** an emblem: what the avatar shows. Earned from the profile itself (never bought): the First lamp from the start, a
+ *  class mark for each class you have won a match with, the Tenth hour at level 10, and your best ranked tier once
+ *  placed. The choice is kept per device (UiPrefs.emblem) until the Profile carries it. */
+export interface Emblem { id: string; kind: 'lamp' | 'class' | 'hour' | 'rank'; name: string; how: string; earned: boolean; draw: (px: number) => JSX.Element }
+
+export function emblemsOf(cv: CatalogView, profile: Profile): Emblem[] {
+  const out: Emblem[] = [{ id: 'lamp', kind: 'lamp', name: cv.t('profile.emblem.lamp', 'First lamp'), how: cv.t('profile.emblem.lamp_how', 'Yours from the start.'), earned: true, draw: (px) => <LampEmblem px={px} /> }];
+  const won = new Set(profile.history.filter((h) => h.won).map((h) => cv.fighter(h.fighter)?.class).filter((c): c is string => !!c));
+  for (const c of cv.c.classes) {
+    const shape = classShapeOf(c.shape, c.name);
+    out.push({ id: `class:${c.id}`, kind: 'class', name: cv.t('profile.emblem.class', '{cls} mark', { cls: c.name }), how: cv.t('profile.emblem.class_how', 'Win a match as a {cls}.', { cls: c.name }), earned: won.has(c.id),
+      draw: (px) => (shape ? <ClassGlyph shape={shape} size={Math.round(px * 0.6)} /> : <LampEmblem px={px} />) });
+  }
+  out.push({ id: 'hour10', kind: 'hour', name: cv.t('profile.emblem.hour10', 'Tenth hour'), how: cv.t('profile.emblem.hour10_how', 'Reach level 10.'), earned: profile.level >= 10, draw: (px) => <HourEmblem px={px} hour={10} /> });
+  const tiers = Object.values(profile.ratings).map((r) => cv.ratingTier(r)).filter((t): t is NonNullable<typeof t> => !!t).sort((a, b) => b.minRating - a.minRating);
+  const best = tiers[0];
+  out.push({ id: 'rank', kind: 'rank', name: best ? best.name : cv.t('profile.emblem.rank', 'Ranked tier'), how: cv.t('profile.emblem.rank_how', 'Finish your ranked placement matches.'), earned: !!best,
+    draw: (px) => <RankEmblem tier={best} provisional={!best} size={Math.round(px * 0.8)} /> });
+  return out;
+}
+
+function EmblemPicker(p: { list: Emblem[]; chosen: string; onPick: (id: string) => void }): JSX.Element {
+  const { cv, sound } = useApp();
+  const n = p.list.filter((e) => e.earned).length;
+  return (
+    <div class="emblems" role="radiogroup" aria-label={cv.t('profile.emblem.title', 'Emblem')}>
+      <span class="t-label muted emblems__head">{cv.t('profile.emblem.title', 'Emblem')} <span class="fig">{cv.t('profile.emblem.count', '{n} of {m} earned', { n, m: p.list.length })}</span></span>
+      <div class="emblems__row" data-arrownav="grid">
+        {p.list.map((e) => (
+          <button type="button" role="radio" data-nav="" aria-checked={p.chosen === e.id} aria-disabled={e.earned ? undefined : 'true'}
+            class={`emb emb--${e.kind} emblems__opt ${p.chosen === e.id ? 'is-selected' : ''} ${e.earned ? '' : 'is-locked'}`}
+            title={`${e.name} · ${e.how}`} aria-label={`${e.name}. ${e.earned ? '' : e.how}`}
+            onClick={() => { if (!e.earned) { sound.play('error', 200); return; } sound.play('equip'); p.onPick(e.id); }}>
+            {e.draw(32)}
+            {e.earned ? null : <span class="emblems__lock"><Icon name="lock" size={12} /></span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** the First lamp: a lit lamp in a ring (VALE's own mark) */
+function LampEmblem(p: { px: number }): JSX.Element {
+  const s = `calc(${p.px}px * var(--k))`;
+  return (
+    <svg viewBox="0 0 32 32" style={{ width: s, height: s }} aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="1.6" opacity="0.55" />
+      <path d="M11 13h10l-1.6 9h-6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+      <path d="M13 13c0-2 1.3-3.4 3-3.4s3 1.4 3 3.4" fill="none" stroke="currentColor" stroke-width="1.6" />
+      <path d="M16 15.2c1.1 1.2 1.6 2.1 1.6 3a1.6 1.6 0 0 1-3.2 0c0-.9.5-1.8 1.6-3z" fill="var(--res-tally)" />
+      <path d="M12.5 24.5h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+    </svg>
+  );
+}
+
+/** an hour emblem: the dial with its gnomon on that hour */
+function HourEmblem(p: { px: number; hour: number }): JSX.Element {
+  const s = `calc(${p.px}px * var(--k))`;
+  const a = ((p.hour % 12) / 12) * Math.PI * 2;
+  const x = 16 + Math.sin(a) * 9.5, y = 16 - Math.cos(a) * 9.5;
+  return (
+    <svg viewBox="0 0 32 32" style={{ width: s, height: s }} aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="1.6" />
+      {Array.from({ length: 12 }, (_, i) => { const t = (i / 12) * Math.PI * 2; return <line x1={16 + Math.sin(t) * 11.5} y1={16 - Math.cos(t) * 11.5} x2={16 + Math.sin(t) * 13} y2={16 - Math.cos(t) * 13} stroke="currentColor" stroke-width={i === 0 ? 2 : 1} />; })}
+      <line x1="16" y1="16" x2={x} y2={y} stroke="var(--res-tally)" stroke-width="2.2" stroke-linecap="round" />
+      <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+    </svg>
   );
 }

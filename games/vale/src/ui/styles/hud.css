@@ -501,6 +501,13 @@
 .ptools__grid { display: grid; grid-template-columns: 1fr 1fr; gap: calc(6 * var(--px)); }
 .ptools__grid .hbtn { white-space: normal; height: auto; min-height: calc(32 * var(--px)); padding: calc(4 * var(--px)) calc(8 * var(--px)); text-align: center; }
 .ptools__speed { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+/* gameplay g3: the damage readout under the speed row — four Mono numbers in a 2 x 2 ledger, a crit last hit in chalk */
+.ptools__dmg { display: flex; flex-direction: column; gap: calc(4 * var(--px)); padding-top: calc(6 * var(--px)); border-top: 1px solid var(--line-1); }
+.ptools__dmghead { display: flex; align-items: center; justify-content: space-between; }
+.ptools__stats { display: grid; grid-template-columns: 1fr 1fr; gap: calc(4 * var(--px)) calc(10 * var(--px)); margin: 0; }
+.ptools__stat { display: flex; align-items: baseline; justify-content: space-between; gap: calc(6 * var(--px)); }
+.ptools__stat dd { margin: 0; font-size: calc(15 * var(--px)); }
+.ptools__stat dd.is-crit { color: var(--chalk); }
 
 .endban { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); z-index: 8; display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--px));
   padding: calc(28 * var(--px)) 0; pointer-events: none !important; }

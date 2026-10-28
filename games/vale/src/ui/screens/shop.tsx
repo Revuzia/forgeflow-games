@@ -7,6 +7,7 @@
 // currency, no real-money copy anywhere.
 
 import type { JSX } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { SkinDefT } from '../../contracts/catalog.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
@@ -17,8 +18,10 @@ import { HourTicks } from '../components/Plate.tsx';
 import { Portrait, StageArt } from '../components/Portrait.tsx';
 import { Screen } from '../components/Screen.tsx';
 import { EmptyState } from '../components/States.tsx';
+import { Icon } from '../components/Glyphs.tsx';
 import type { OfferT, ShelfT } from '../catalog_view.ts';
 import { fmtInt } from '../format.ts';
+import { reducedMotion } from '../motion.ts';
 
 const TIER_TICKS: Record<SkinDefT['tier'], number> = { base: 1, standard: 2, deluxe: 3, legend: 4 };
 
@@ -148,12 +151,46 @@ function Shelf(p: { shelf: ShelfT; selected?: string; owned: (o: OfferT) => bool
   return (
     <section class={`shelf shelf--${p.shelf.layout} stg`} aria-label={p.shelf.name}>
       <h2 class="t-h2 shelf__title">{p.shelf.name}<span class="t-caption muted fig">{offers.length}</span></h2>
-      {offers.length === 0 ? <EmptyState compact text={cv.t('state.empty.shelf', 'Nothing on this shelf yet.')} /> : (
+      {offers.length === 0 ? <EmptyState compact text={cv.t('state.empty.shelf', 'Nothing on this shelf yet.')} /> : p.shelf.layout === 'row' ? (
+        <Rail label={p.shelf.name}>
+          {offers.map((o) => <OfferCard o={o} hero={false} selected={p.selected === o.sku} owned={p.owned(o)} equipped={p.equipped(o)} onPick={() => p.onPick(o)} />)}
+        </Rail>
+      ) : (
         <div class="shelf__cards" data-arrownav="grid">
           {offers.map((o, i) => <OfferCard o={o} hero={p.shelf.layout === 'hero' && i === 0} selected={p.selected === o.sku} owned={p.owned(o)} equipped={p.equipped(o)} onPick={() => p.onPick(o)} />)}
         </div>
       )}
     </section>
+  );
+}
+
+/** client F17: a row shelf that runs past the screen fades at the edge it continues past and carries a chevron there;
+ *  a chevron scrolls the row by most of its width (smooth unless motion is reduced) */
+function Rail(p: { label: string; children: JSX.Element[] }): JSX.Element {
+  const { cv } = useApp();
+  const el = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ l: false, r: false });
+  useEffect(() => {
+    const e = el.current;
+    if (!e) return;
+    const upd = (): void => { const l = e.scrollLeft > 2, r = e.scrollLeft + e.clientWidth < e.scrollWidth - 2; setMore((m) => (m.l === l && m.r === r ? m : { l, r })); };
+    upd();
+    e.addEventListener('scroll', upd, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(upd) : null;
+    ro?.observe(e);
+    return () => { e.removeEventListener('scroll', upd); ro?.disconnect(); };
+  }, []);
+  const go = (dir: -1 | 1): void => {
+    const e = el.current;
+    if (!e) return;
+    e.scrollBy({ left: dir * Math.max(120, e.clientWidth * 0.8), behavior: reducedMotion.peek() ? 'auto' : 'smooth' });
+  };
+  return (
+    <div class={`rail ${more.l ? 'has-more-l' : ''} ${more.r ? 'has-more-r' : ''}`}>
+      <div ref={el} class="shelf__cards rail__track" data-arrownav="grid">{p.children}</div>
+      {more.l ? <button type="button" class="rail__chev rail__chev--l" aria-label={cv.t('shop.rail.prev', 'Earlier in {shelf}', { shelf: p.label })} onClick={() => go(-1)}><Icon name="chevron" size={20} /></button> : null}
+      {more.r ? <button type="button" class="rail__chev rail__chev--r" aria-label={cv.t('shop.rail.next', 'More in {shelf}', { shelf: p.label })} onClick={() => go(1)}><Icon name="chevron" size={20} /></button> : null}
+    </div>
   );
 }
 

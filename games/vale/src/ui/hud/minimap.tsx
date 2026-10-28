@@ -3,7 +3,7 @@
 // minimap.png when the art exists, else drawn FROM THE MAP JSON (walls, thickets, roads, bases, shops,
 // the noon line; FRAY's plate with ten hour-marks on the rim). Fog of war from your team's vision grid
 // (unseen cells darkened). Marks keep their shape in every palette: structures by side (▲ spire, ◠
-// dome) in relationship colour, Wicks as dots, monsters and objectives as neutral squares with their
+// dome) in relationship colour, Wicks as 2.2·k dots on a 1 px ink keyline (HUD-3), monsters and objectives as neutral squares with their
 // return timers, fighters as round portraits (r12 m3: the fighter's icon clipped to a 13·k radius circle,
 // ≈ 26 px on the 352 px map, preloaded with the match; the palette disc only when no icon exists) in
 // their relationship ring (ally plain, enemy notched + heading wedge, you a Noonwhite ring + gnomon
@@ -355,7 +355,14 @@ function drawDynamic(ctx: CanvasRenderingContext2D, f: Fit, c: Record<string, st
         ctx.fill(); ctx.stroke();
         break;
       }
-      case 'minion': { const s = 1.7 * k; ctx.fillStyle = rel(e); ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); break; }
+      // HUD-3: Wicks are 2.2·k dots (≈ 4.4 px across at 352 px) on a 1 px ink keyline, so a wave reads over the light road
+      // band and in fog
+      case 'minion': {
+        const s = 2.2 * k;
+        ctx.fillStyle = c.ink0; ctx.beginPath(); ctx.arc(x, y, s + f.dpr, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = rel(e); ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
       case 'monster': { const s = 2.6 * k; ctx.fillStyle = c.neutral; ctx.fillRect(x - s, y - s, 2 * s, 2 * s); break; }
       case 'ward': case 'summon': { const s = 2.4 * k; ctx.fillStyle = rel(e); ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.fill(); break; }
       case 'pickup': { const s = 2 * k; ctx.strokeStyle = c.chalk; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.stroke(); break; }
