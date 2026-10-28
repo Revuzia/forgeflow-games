@@ -6,7 +6,9 @@
 #   setsid nohup _harness/slot.sh node _harness/shots.mjs spec.json --port=5199 > out.log 2>&1 &
 # Fairness: each job takes a numbered ticket and only the oldest live ticket may take a free slot (a retry-every-5-s
 # scramble let a chain that started its next job the moment one ended win slot after slot over jobs waiting for 15 min).
-# Tickets and slot records of dead processes are swept. The job cannot raise its own priority (setpriv drops
+# Long jobs (GENESIS_SLOT_CLASS=long, or a `timeout` of an hour or more, or a sim run of 20+ game years) queue among
+# themselves and may hold at most N-1 slots, so one slot always stays free for short jobs (two 3-hour 50-year runs
+# had left every shot run and probe funnelling through one slot). Tickets and slot records of dead processes are swept. The job cannot raise its own priority (setpriv drops
 # CAP_SYS_NICE: renicing to a negative niceness starves everyone else); `slot.sh --status` prints who holds and who waits. Returns the job's exit status.
 set -u
 N=${GENESIS_SLOTS:-3}
@@ -20,9 +22,19 @@ if [ "${1:-}" = "--status" ]; then
 fi
 [ $# -gt 0 ] || { echo "usage: slot.sh <command...> | --status" >&2; exit 2; }
 
+# the job's class: long jobs may not take the last slot
+class=${GENESIS_SLOT_CLASS:-}
+if [ -z "$class" ]; then
+  class=short
+  args=" $* "
+  if [[ $args =~ \ timeout\ ([0-9]+)\  ]] && [ "${BASH_REMATCH[1]}" -ge 3600 ]; then class=long; fi
+  if [[ $args =~ alone\.ts\ [0-9]+\ ([0-9]+)\  ]] && [ "${BASH_REMATCH[1]}" -ge 20 ]; then class=long; fi
+fi
+top=$N; [ "$class" = long ] && [ "$N" -gt 1 ] && top=$((N - 1))
+
 # a ticket: the next number under a lock
 ticket=$( { flock 8; n=$(cat "$DIR/counter" 2>/dev/null || echo 0); echo $((n + 1)) >"$DIR/counter"; echo $((n + 1)); } 8>"$DIR/counter.lock" )
-echo "$$ $(date -u +%FT%TZ) $*" >"$DIR/wait/$ticket"
+echo "$$ $(date -u +%FT%TZ) [$class] $*" >"$DIR/wait/$ticket"
 trap 'rm -f "$DIR/wait/$ticket"' EXIT
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
@@ -32,10 +44,11 @@ while true; do
   head=""
   for t in $(ls "$DIR/wait" | sort -n); do
     pid=$(cut -d' ' -f1 "$DIR/wait/$t" 2>/dev/null)
-    if alive "$pid"; then head=$t; break; else rm -f "$DIR/wait/$t"; fi
+    if ! alive "$pid"; then rm -f "$DIR/wait/$t"; continue; fi
+    if grep -q " \[$class\] " "$DIR/wait/$t" 2>/dev/null; then head=$t; break; fi
   done
   if [ "$head" = "$ticket" ]; then
-    for i in $(seq 1 "$N"); do
+    for i in $(seq 1 "$top"); do
       exec {fd}>"$DIR/slot.$i"
       if flock -n "$fd"; then
         rm -f "$DIR/wait/$ticket"
@@ -49,6 +62,6 @@ while true; do
       exec {fd}>&-
     done
   fi
-  if [ "$said" = 0 ]; then echo "slot.sh: ticket #$ticket waiting for one of $N slots (slot.sh --status to see the queue)" >&2; said=1; fi
+  if [ "$said" = 0 ]; then echo "slot.sh: $class ticket #$ticket waiting for one of $top slots (slot.sh --status to see the queue)" >&2; said=1; fi
   sleep 2
 done
