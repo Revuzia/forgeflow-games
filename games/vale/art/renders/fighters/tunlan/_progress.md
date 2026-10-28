@@ -76,3 +76,22 @@
   Changes for fp1-b: fingers wider (0.033/0.034/0.032/0.029, 2 mm apart, taper 5 %/seg), tris cut (lathes 48 segs,
   fingers 180, palm 420, boots 1000, robe 1800/1950), wood roughness 0.68 (mask rims caught the sky), mask back rims
   walnut, attack1 ring pair folded into a fist (the 'sickle').
+- 09:05 base fp1-b: 21,587 tris, 1147 KiB, three accent 1.68 % (top 99.4 %), load OK (run planted 0.6 %).
+  lineup_qa (art/renders/lineup/tunlan_fp1_base.*): bands f0 70.9 / 59.8 / 34.7 OK; accent 1.85 / 1.45 / 0.89 / 1.49 %
+  (back facing under 1.0) -> the lens became an arc LAMP SLOT along the front brim (ArcSlot / _slot2d: r 0.418 +-
+  0.045, +-0.21 m of arc, round ends, ironstone grommet): fit-tool estimate min facing 1.25 (lens 0.88 -> lineup 0.89).
+  IoU64 max vs dunsom 0.607, vashil 0.588, nurrow 0.51. Unit sheet (gameplay-high camera, three_snapshot --unit on a
+  copy): attack2 / a1 thrust / a2 hands / a3 arm / ult all clear the brim; death drops the hat beside her.
+  Head crack painted dark in _head_paint (HEAD_CRACK). Base rebuild fp1-c started.
+- 09:11 base fp1-c: 21,223 tris, 1145 KiB, three accent 2.36 % (top half 100 %), load OK. Skins build started (log /tmp/tunlan_build_skins.log).
+- 09:19 skins s1: noon_fair 21,903 tris 918 KiB accent 2.39 %, lamplit 21,223 / 890 KiB / 2.4 %, load OK.
+  lineup_qa (art/renders/lineup/tunlan_fp1.*): accentOk TRUE for base + both skins (1.19-2.49 %, top half 1.0);
+  base bands f0 70.9 / 58.9 / 34.6 OK; noon_fair bottom 35.2 (over by 0.2); lamplit top 58.7 (the 5 cm walnut brim
+  band + wide ribs). IoU64 max dunsom 0.607 / vashil 0.591 / nurrow 0.509. In game (_harness/_shots/art2_tunlan_* and
+  fp1_tunlan_t75_*): the lamp slot reads as a bright arc at the front brim, the guard hands show below the brim.
+  content: art.json == content art block (unchanged); build_content --check OK (nothing missing for tunlan); kits A 525/0,
+  B 733/0. s2: Lamplit panels brighter (#E4D0A6, cores #F0DCB4, the #A38C6B shade only at the ribs), ribs 1.2 cm,
+  brim band 1.6 cm; felt Noon Fair chroma 1.7 / value 0.88, Lamplit 0.9 / 0.92 (a deeper walnut grey). Skins rebuild s2.
+- 09:24 skins s2: noon_fair 917 KiB / lamplit 890 KiB, accent 2.4 %, load OK; lineup: noon_fair bands OK
+  (70.4 / 60.0 / 34.8), lamplit top 68.8 (under 70). s3: Lamplit panels golden + brighter (#ECD5A6, cores #F7DEAD,
+  crown #E0CCA2, shade only in the last 16 % to the ribs, ribs 1 cm), robe a deeper walnut grey (value 0.80).

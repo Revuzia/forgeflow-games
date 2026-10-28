@@ -127,8 +127,9 @@ CONE_T = 0.013            # lacquer shell thickness
 # selection ring, a tambourine / bottle cap / dial from above' (accent 3.53 %). Polish: back to the brief's SIX inlays
 # at the fix-pass-3 stations (+-50 / 100 / 150 deg: the front 100 deg bare, a facing cue; six separate marks with long
 # dark iron between, never a ring), each a SLIM glass slip set FLUSH in a thin iron bezel (no domed bead, no setting
-# swelling the rim), 12.4 x 5.0 cm (f3: 12.6 x 6.2 domed): the floor that the pipeline's accent gate (>= 1.5 % at the
-# game camera) and lineup_qa's (>= 1 % from behind) leave; the brief's 4 x 1.5 cm x 6 is 0.4 %
+# swelling the rim), 14.8 x 6.4 cm wrapped over the rim's corner (the back pair 18.8 cm; f3: 12.6 x 6.2 domed beads,
+# 2.69 %; the 6.4 cm width wraps over the corner, most of it unseen): the pipeline's accent gate (>= 1.5 % at the game
+# camera) and lineup_qa's >= 1 % from behind (the back pair carries it) are the floor; the brief's 4 x 1.5 cm x 6 is 0.4 %
 RIM_ANGLES = (50.0, 100.0, 150.0, -150.0, -100.0, -50.0)
 RIM_N = len(RIM_ANGLES)
 
@@ -184,8 +185,12 @@ def rim_angle_dir(phi_deg):
 INLAY_T, INLAY_B = 0.074, 0.032          # the slips' footprint half-length (along the rim) and half-width
 
 
+INLAY_G = {50.0: 1.0, 100.0: 1.05, 150.0: 1.27}    # the slips' length by station: the back pair longer (seen from
+#                                                     behind they carry the team tint alone)
+
+
 def inlay_frames():
-    """[(centre, axes rows (tangent, across, bevel normal))] of the six rim inlays (world, rest)"""
+    """[(centre, axes rows (tangent, across, bevel normal), half-length)] of the six rim inlays (world, rest)"""
     out = []
     for phi in RIM_ANGLES:
         rd = rim_angle_dir(phi)
@@ -193,7 +198,8 @@ def inlay_frames():
         nrm = unit(rd * 0.55 + V3([0, 0, 1.0]) * 0.83)                 # the rim's upper-outer bevel
         n_w, t_w = HAT_R @ nrm, HAT_R @ tg
         b_w = np.cross(n_w, t_w)
-        out.append((hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004])), np.stack([unit(t_w), unit(b_w), unit(n_w)])))
+        out.append((hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004])), np.stack([unit(t_w), unit(b_w), unit(n_w)]),
+                    INLAY_T * INLAY_G[abs(phi)]))
     return out
 
 
@@ -528,8 +534,8 @@ def sculpts() -> list:
     # never a bead); the iron bezel round it is painted (paint_rim: a dark seat line and a lit lip)
     # (p1: a 1.2 mm skin over the uncut rim broke up under the decimated rim: the rim's seat is now carved 4 mm deep
     #  inside the footprint and the glass fills it to 0.8 mm proud)
-    for c_w, ax in inlay_frames():
-        foot = Ellipsoid(c_w, (INLAY_T, INLAY_B, 0.04), axes=ax)
+    for c_w, ax, it in inlay_frames():
+        foot = Ellipsoid(c_w, (it, INLAY_B, 0.04), axes=ax)
         rim.sub(RimSeat(rim_surf, foot, -0.0040), k=0.0)
         glass.add(RimSlip(rim_surf, foot, -0.0055, 0.0008), k=0.0)
     part("hat_rim", rim, "ironstone", "bone:x_hat", 1000, 0.5)
@@ -1621,8 +1627,14 @@ SHADE_FORE = (0.135, -0.058, 0.150, 0.056, -30.0)
 SHADE_HIND = (0.080, 0.070, 0.084, 0.062, 40.0)
 
 
+SHADE_MOTH_AT = (0.0, -0.050, 1.24)      # its centre offset (forward = -Y) and scale: the wings spread over the
+#                                          front brim, which the splash / portrait see (and the game camera's facing cue)
+
+
 def _shade_moth(X):
     """the great ink moth: ink (0..1) and its light print (eyespots, a margin line, veins, wing-dust)"""
+    ox, oy, sc = SHADE_MOTH_AT
+    X = (np.asarray(X, dtype=np.float64) - np.array([ox, oy])) / sc
     ink = np.zeros(len(X))
     light = np.zeros(len(X))
     for sx in (-1.0, 1.0):
@@ -1770,10 +1782,10 @@ def _inlay_bezel(p):
         _INLAY_FR.extend(inlay_frames())
     seat = np.zeros(len(p))
     lip = np.zeros(len(p))
-    for c, ax in _INLAY_FR:
+    for c, ax, it in _INLAY_FR:
         L = (np.asarray(p, dtype=np.float64) - c) @ ax.T
         near = np.abs(L[:, 2]) < 0.03
-        e = np.sqrt((L[:, 0] / INLAY_T) ** 2 + (L[:, 1] / INLAY_B) ** 2)
+        e = np.sqrt((L[:, 0] / it) ** 2 + (L[:, 1] / INLAY_B) ** 2)
         dm = (e - 1.0) * INLAY_B
         seat = np.maximum(seat, near * _ss(0.0042, 0.0016, dm))
         lip = np.maximum(lip, near * _ss(0.0030, 0.0050, dm) * (1 - _ss(0.0062, 0.0085, dm)))
@@ -2554,9 +2566,9 @@ SKIN_PARTS = {
     "nurrow_shadeprint": {"pauldron": ("#3A3646", 0.9, (0.35, 2.6), False), "tassets": ("#3A3646", 0.9, (0.35, 2.6), False),
                           "brooch": ("#3A3646", 0.9, (0.35, 2.6), False), "head": ("#3A3646", 0.9, (0.35, 2.4), False),
                           "belt_strap": ("#6A5C96", 0.8, (0.4, 1.8), False), "belt": ("#2E2C36", 0.9, (0.4, 2.4), False),
-                          "torso": ("#38343F", 0.9, (0.4, 2.4), False), "straps": ("#2E2C36", 0.9, (0.4, 2.4), False),
+                          "torso": ("#433F4B", 0.9, (0.4, 2.4), False), "straps": ("#2E2C36", 0.9, (0.4, 2.4), False),
                           "forearm_wraps": ("#C9C6D2", 0.8, (0.45, 1.5), False), "sleeves": ("#46414F", 0.9, (0.4, 2.0), False),
-                          "tabard": ("#33303C", 0.95, (0.4, 2.6), False), "hat_band": ("#2E2C36", 0.9, (0.4, 2.2), False),
+                          "tabard": ("#4A4553", 0.95, (0.4, 2.6), False), "hat_band": ("#2E2C36", 0.9, (0.4, 2.2), False),
                           "hand_L": ("#6E687A", 0.9, (0.4, 2.0), False), "hand_R": ("#6E687A", 0.9, (0.4, 2.0), False),
                           "trousers": ("#504C59", 0.85, (0.45, 1.8), 1.3), "legwraps": ("#48474E", 0.8, (0.55, 1.5), 1.3),
                           "boots": ("#413E49", 1.0, (0.2, 3.0), 1.3)},
@@ -2564,7 +2576,7 @@ SKIN_PARTS = {
     #   at the base's luminance -> x1.3)
 }
 # per skin: part -> (target median L* of its outer face, outer face only)
-SKIN_VALUE = {"nurrow_shadeprint": {"cape": (47.0, True), "cowl": (51.0, False)}}      # (fix pass 3: 54 / 58 read
+SKIN_VALUE = {"nurrow_shadeprint": {"cape": (47.0, True), "cowl": (53.0, False)}}      # (fix pass 3: 54 / 58 read
 #                                                       white under the game light: 'a white disc over a white cape')
 
 

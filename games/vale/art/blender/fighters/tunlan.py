@@ -1231,7 +1231,7 @@ HAT_SCHEMES = {
                          "rim": "#5C4C55"},
     # Lamplit: dark walnut ribs, brim band, crown ring and rim round lampresin panels lit from within (a warm hot core
     # in each panel fading to the named #A38C6B at its ribs)
-    "tunlan_lamplit": {"top": "#D8C196", "edge": "#A38C6B", "glow": "#EFD7A4", "seam": "#4E3D2F", "crown": "#CDB98F",
+    "tunlan_lamplit": {"top": "#ECD5A6", "edge": "#A38C6B", "glow": "#F7DEAD", "seam": "#4E3D2F", "crown": "#E0CCA2",
                        "under": "#3E3229", "rim": "#46362A", "rim_hi": "#6E5641"},
 }
 
@@ -1262,12 +1262,12 @@ def _hat_paint(p, n, hexes=None):
         rr = (r - 0.20) / (EDGE_R - 0.03 - 0.20)               # 0 at the crown band, 1 at the brim band
         # each panel a paper lantern lit from within: a warm hot core low in the panel, the shaded lampresin at its ribs
         core = np.exp(-(du / 0.55) ** 2) * np.exp(-((rr - 0.42) / 0.40) ** 2)
-        lit_t = np.clip(1 - ss(0.45, 1.0, du), 0, 1)
+        lit_t = np.clip(1 - ss(0.84, 1.0, du), 0, 1)
         pc = edge_c[None, :] * (1 - lit_t)[:, None] + top[None, :] * lit_t[:, None]
         pc = pc * (1 - core)[:, None] + glow_c[None, :] * core[:, None]
         c = pc * (mott * (1.0 + 0.05 * ss(-0.3, 0.9, n @ KEY)))[:, None]
-        rib = np.exp(-((dth * r) / 0.0095) ** 4) * ss(0.20, 0.23, r)
-        band = ss(EDGE_R - 0.050, EDGE_R - 0.044, r) + (1 - ss(0.222, 0.230, r)) * ss(CROWN_A[0] - 0.004, CROWN_A[0] + 0.004, r)
+        rib = np.exp(-((dth * r) / 0.0050) ** 4) * ss(0.20, 0.23, r)
+        band = ss(EDGE_R - 0.016, EDGE_R - 0.012, r) + (1 - ss(0.212, 0.218, r)) * ss(CROWN_A[0] - 0.004, CROWN_A[0] + 0.004, r)
         wal = np.clip(rib + band, 0, 1) * ss(0.18, 0.19, r)
         wc = seam_c[None, :] * (mott * (0.9 + 0.2 * ss(-0.3, 0.9, n @ KEY)))[:, None]
         c = c * (1 - wal[:, None]) + wc * wal[:, None]
@@ -1551,7 +1551,7 @@ def _fill_gutters(arr, valid, iters=40):
 
 _orig_recolour = _project.recolour
 BRIEF_CLOTH = "#7C6C66"       # the brief's base felt robe (§5): the skins' cloth hexes (§9) are written against it
-SKIN_FELT = {"tunlan_noon_fair": (1.9, 0.92), "tunlan_lamplit": (1.25, 1.0)}   # (chroma gain, value gain)
+SKIN_FELT = {"tunlan_noon_fair": (1.7, 0.88), "tunlan_lamplit": (0.9, 0.80)}   # (chroma gain, value gain)
 
 
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
