@@ -58,7 +58,11 @@ The owner is signed in to Grok Imagine in Chrome. Work from `games/vale`.
 5. **Post-process.** Run `python3 tools/imagegen/post.py --apply-refs` (use
    `--pick <id>=2` for variants). This crops, resizes, makes the textures seamless, converts to
    WebP and points the content refs at the new files. Then run
-   `node tools/build_content.ts --check --allow-missing-assets`, which must say OK. Commit the
+   `node tools/build_content.ts --check --allow-missing-assets`, which must say OK. Item and ability icons then get
+   the HUD-1 ledger-family grade: `~/Developer/forgeflow-games/.venv/bin/python3 tools/imagegen/icon_grade.py`
+   (crops to the subject, repaints the ink-blue ground in the item's ledger family or the fighter's signature hue,
+   lifts the subject; families in `src/ui/hud/icon_families.json`), measured by `node _harness/icon_probe.mjs`
+   (p50 >= 60 and p95 >= 190 at 38 and 40 px, no ground shared across families). Commit the
    outputs and the updated content JSON and `manifest.json`. Never commit `tools/imagegen/raw/`.
 
 ## Key art with fighters: reference boards (xAI edit route)
