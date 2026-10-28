@@ -21,6 +21,7 @@ import { fireSourceNear, FUEL_TICKS } from './fire.ts';
 import { animalDef, herdPos } from '../life/herds.ts';
 import { distM, spotInCell } from './world.ts';
 import { seedItems, FOOD_SESSION, waterHere, planDrinkNear } from './decide.ts';
+import { moistOf, soakable, soakDraw, soakGain } from './waterway.ts';
 import { emitAt, agentRef } from './util.ts';
 import { missionTaskDone } from './missions.ts';
 import { godHooks } from './hooks.ts';
@@ -89,6 +90,9 @@ export function finishTask(x: PCtx, s: number): boolean {
     case TASK.drink: {
       // only where there is water: a drink whose route was blocked ended wherever the walk stopped, and quenched them
       if (waterHere(x, s)) { A.needs[nb + WATER] = 1; return false; }
+      // (LIVING.md §2.7: a soak dug in ground water near the surface (tData 3) — what seeps in within the hour; each drink
+      // draws the ground down, and the climate step refills it with rain)
+      if (A.tData[s] === 3 && soakable(x, A.cell[s])) { A.needs[nb + WATER] = Math.max(A.needs[nb + WATER], soakGain(x, A.cell[s])); soakDraw(x, A.cell[s]); return false; }
       // the spot was out of reach: the nearest other one, else home's best drinking spot (sorted by the way from home:
       // reachable from there), once (tData 1 = already a second try). (LIVING LAND §2.7: the settlement looks again for
       // where the water is — its list is refreshed at the next settlement step)
@@ -224,6 +228,8 @@ export function eat(x: PCtx, s: number, st: Settlement | undefined, fromStore: b
     const units = Math.min(have, need / per);
     A.take(s, it, units);
     need -= units * per;
+    // (a thirsty eater takes water from what they eat: fruit, roots, raw meat and fish, milk — LIVING.md §2.7)
+    if (A.needs[nb + WATER] < 0.3) A.needs[nb + WATER] = Math.min(1, A.needs[nb + WATER] + units * per * moistOf(x.c.items.list[it].id));
   }
   if (fromStore && st && need > 0.02) {
     for (let guard = 0; guard < 6 && need > 0.02; guard++) {
@@ -233,6 +239,7 @@ export function eat(x: PCtx, s: number, st: Settlement | undefined, fromStore: b
       const units = storeTake(st, it, Math.min(need / per, storeHas(st, it)));
       if (units <= 0) break;
       need -= units * per;
+      if (A.needs[nb + WATER] < 0.3) A.needs[nb + WATER] = Math.min(1, A.needs[nb + WATER] + units * per * moistOf(x.c.items.list[it].id));
     }
   }
   A.needs[nb + FOOD] = Math.min(1, 1 - Math.max(0, need));

@@ -26,6 +26,7 @@ import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
+import { ROAD_W, SOAK_EXTRA, thirstBudget, waterOnFoot } from './waterway.ts';
 import { FIRE_BURN, fireDanger, fleeTarget, heat } from './danger.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
 import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
@@ -168,7 +169,8 @@ export function decide(x: PCtx, s: number): void {
   const N = A.needs;
   const sp = x.info[A.species[s]];
   // a boat carries water casks: no rowing back to the shore for a drink
-  if (A.boat[s] >= 0 && N[nb + WATER] < 0.75) N[nb + WATER] = 0.75;
+  // (only afloat: a band carrying a raft on dry land drank from its casks forever — LIVING.md §2.7)
+  if (A.boat[s] >= 0 && x.p.f.water[body] > 0.6 && N[nb + WATER] < 0.75) N[nb + WATER] = 0.75;
   const child = (A.flags[s] & AgentFlag.child) !== 0;
   const elder = (A.flags[s] & AgentFlag.elder) !== 0;
   const night = isNight(x, s);
@@ -408,6 +410,28 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   // nothing known: search around, farther the thirstier
   const melt = x.info[A.species[s]].def.habitat.includes('cold');
   if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
+  // LIVING.md §2.7 (a dust bowl): a thirsty body goes to water it can WALK to (waterway.ts) — the rings above count water
+  // across a strait or below a cliff, which the walk never reaches. A band member keeps to the band's road while their
+  // own water lasts (ROAD_W); a town's drinking list is already sorted by the way from home.
+  const w = A.needs[s * NEED_N + WATER];
+  if (st && st.band && st.target && w >= ROAD_W) return c < 0 ? null : { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
+  const budget = thirstBudget(w);
+  if (c >= 0 && budget > 0 && !(st && !st.band && st.res && st.res.water.length)) {
+    // a ring pick must be within the walk this thirst will risk: else the nearest water on foot, or none
+    const r = waterOnFoot(x, A.species[s], here, true);
+    c = r.drink >= 0 && r.drinkCost <= budget ? r.drink : -1;
+  }
+  if (c < 0 && budget > 0) {
+    // nothing found: the nearest water on foot, farther the thirstier; else ground water near the surface, dug as a
+    // soak (real water is preferred unless it is farther than the soak by more than the digging is worth)
+    const r = waterOnFoot(x, A.species[s], here, true);
+    const dOk = r.drink >= 0 && r.drinkCost <= budget, sOk = r.soak >= 0 && r.soakCost <= budget;
+    if (dOk && !(sOk && r.drinkCost > r.soakCost + SOAK_EXTRA)) c = r.drink;
+    else if (sOk) return { kind: TASK.drink, goal: spot(x, s, r.soak, 3), goalCell: r.soak, work: 60, data: 3 };
+    // nothing within reach: lie up in the shade through the heat of the day (asleep, water is lost at half the rate)
+    // rather than forage in the sun; a band's leader keeps going
+    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && st.band && st.leader === s)) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
+  }
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
 }
@@ -422,8 +446,9 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
 export function waterHere(x: PCtx, s: number, at = -1): boolean {
   const A = x.A;
   // a boat carries casks, a caravan or war band its skins — and a worker out for the day or on a trip theirs (perf/pace.ts)
-  if (A.boat[s] >= 0 || A.mission[s] || A.trip[s] > x.tick) return true;
+  // (the casks only afloat: a band carrying a raft over dry land is not watered by it — LIVING.md §2.7)
   const c = at >= 0 ? at : bodyCell(x, s);
+  if ((A.boat[s] >= 0 && x.p.f.water[c] > 0.6) || A.mission[s] || A.trip[s] > x.tick) return true;
   if (x.p.f.precip[c] > 1 && x.p.f.precipType[c] === 1) return true;
   // the cell or one beside it (cells are ~50 m across: water in the next one is a few steps away)
   if (waterAtCell(x, s, c)) return true;

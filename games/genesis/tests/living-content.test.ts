@@ -12,7 +12,7 @@ import type { Herd } from '../src/sim/people/state.ts';
 import { readSave, SaveWriter, SAVE_MAJOR } from '../src/sim/core/serialize.ts';
 import { animalDef, guildTargets, habitatFit, herdArrivals, landGame, landHunter, MAX_LAND_HERDS, reindexHerds, spawnHerd } from '../src/sim/life/herds.ts';
 import { ecoDaily, FORM_GAP_YEARS, ISO_RANGE_M, isoDaysOf, LINEAGE_YEARS, lineageRested, mayDiverge, newHome, preyOf, speciate } from '../src/sim/life/ecology.ts';
-import { animalWord, IDS_14 } from '../src/sim/life/fauna.ts';
+import { animalWord, IDS_14, nearestReal } from '../src/sim/life/fauna.ts';
 import { plantYield, seasonPhase } from '../src/sim/life/plants.ts';
 import { availability, itemIdx } from '../src/sim/people/resources.ts';
 import { suitability } from '../src/sim/fields/vegetation.ts';
@@ -117,6 +117,50 @@ test('content: free text — the CONTENT phrases of §5.3 resolve as meant', () 
     const r = parse(t);
     assert.ok(want(r.c, r.msg), `"${t}" → ${JSON.stringify(r.c.map((x) => ({ ...x, pos: x.pos ? 'v3' : undefined })))} | ${r.msg}`);
   }
+});
+
+test('content: "a new crop / animal / ore" with no name never makes a placeholder thing; myth words on real animals map to the real one', () => {
+  const w = twoTowns();
+  const sim = w.sim;
+  const c = sim.u.content;
+  const items0 = c.items.list.length, recipes0 = c.recipes.list.length;
+  const parse = (t: string) => { const r = sim.parse(t); return { c: (r.resolved ?? []) as Record<string, unknown>[], msg: String(r.msg ?? '') }; };
+  // a new crop for a named town: a real crop it does not sow yet, that suits its fields
+  const crop = parse('introduce a new crop to Aru');
+  const intro = crop.c.find((x) => x.k === 'settlement.introduce');
+  assert.ok(intro && typeof intro.crop === 'string' && c.plants.get(String(intro.crop)).type === 'crop' && intro.settlement === w.st.id, `${JSON.stringify(crop.c)} ${crop.msg}`);
+  const sown = new Set(w.st.fields.map((f) => sim.u.planets[0].f.cropSpecies[f]).filter((s) => s >= 0).map((s) => c.plants.list[s].id));
+  assert.ok(!sown.has(String(intro.crop)), `a crop they do not sow yet (${intro.crop}; sown ${[...sown]})`);
+  // asked, not invented: no town, an animal, an ore, a tool
+  for (const t of ['introduce a new crop', 'invent a new animal', 'add a new ore', 'invent a new metal', 'invent a new tool', 'create a new animal near Aru']) {
+    const r = sim.parse(t);
+    const ks = (r.resolved ?? []).map((x) => x as Record<string, unknown>);
+    // (a command with nothing filled in is the ask's stub, not a thing made)
+    assert.ok(!ks.some((x) => (x.k === 'content.item' && x.name !== undefined) || (x.k === 'settlement.introduce' && x.substance !== undefined) || (typeof x.name === 'string' && /^new\b/.test(x.name))), `${t}: ${JSON.stringify(ks)} ${r.msg}`);
+    assert.ok(!r.ok && String(r.msg).length > 10, `${t} asks: ${r.msg}`);
+  }
+  assert.ok(!/unicorn|dragon/i.test(String(sim.parse('invent a new animal').msg)), 'the example is a real animal');
+  // a new tree: the real tree that suits the ground there
+  assert.ok(parse('invent a new tree').c.some((x) => x.k === 'life.plant' && x.type === 'tree'));
+  // applied, the registries gain nothing called "new …"
+  for (const t of ['introduce a new crop to Aru', 'give Lune a new crop', 'invent a new animal', 'add a new ore', 'invent a new tree']) sim.applyNow({ k: 'freeform', text: t });
+  assert.ok(!c.items.list.some((d) => /^new-/.test(d.id)) && !c.recipes.list.some((d) => /^new-/.test(d.id)), c.items.list.filter((d) => /^new-/.test(d.id)).map((d) => d.id).join(','));
+  assert.equal(c.items.list.length, items0);
+  assert.equal(c.recipes.list.length, recipes0);
+  // myth words on a real animal: the nearest real kind, said so; the real compounds stay real; a size word is the animal itself
+  for (const t of ['flying horse', 'winged lion', 'fire lizard', 'two-headed dog', 'dire wolf']) assert.equal(animalWord(c, t).kind, 'fantasy', t);
+  for (const t of ['flying squirrel', 'fire ant', 'horned owl', 'giant tortoise', 'vampire bat', 'spotted owl']) assert.equal(animalWord(c, t).kind, 'real', t);
+  assert.deepEqual(animalWord(c, 'giant wolves'), { kind: 'base', id: 'wolf' });
+  const ps = sim.u.planets[0].people;
+  const n0 = ps.species.length;
+  const fh = sim.applyNow({ k: 'content.animal', name: 'flying horse', count: 4 });
+  assert.ok(fh.ok && /no flying horses in a real world/i.test(String(fh.msg)), fh.msg);
+  assert.ok(/no werewolves in a real world/.test(nearestReal('werewolf', c.animals.get('wolf'))));
+  const inv = parse('invent a winged horse');
+  assert.ok(inv.c.some((x) => x.k === 'content.animal') && !inv.c.some((x) => x.k === 'content.item'), JSON.stringify(inv.c));
+  sim.applyNow({ k: 'freeform', text: 'invent a winged horse' });
+  sim.applyNow({ k: 'content.animal', name: 'giant wolf' });
+  assert.ok(!ps.species.slice(n0).some((d) => /flying|winged|giant/i.test(d.def.name)), ps.species.slice(n0).map((d) => d.def.name).join(','));
 });
 
 // ───────────────────────────── materials and ores ─────────────────────────────

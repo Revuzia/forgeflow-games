@@ -28,6 +28,7 @@ import { ruin } from './buildings.ts';
 import { distM, spotInCell } from './world.ts';
 import { focusPeople } from './cohorts.ts';
 import { animalDef, animalIdx, reindexHerds } from '../life/herds.ts';
+import { animalPlural } from '../life/fauna.ts';
 import { introduceSpecies, plural } from '../life/ecology.ts';
 import { seedDisease } from '../life/disease.ts';
 import { declareWar, makePeace, polityName, polityOf, relationOf, ensureRelation } from './war.ts';
@@ -171,9 +172,9 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     if (habitatFit(x, sp, c) <= 0) return fail(`${def.name} cannot live there.`);
     // a species new to this world is an invasive one: no enemies, fast breeding for a few years
     const fresh = x.ps.eco.seen[String(sp)] === undefined;
-    const h = fresh && !def.domestic ? introduceSpecies(x, sp, c, a.count as number, 'by the hand of the god') : spawnHerd(x, sp, c, a.count as number);
+    const h = fresh && !def.domestic ? introduceSpecies(x, sp, c, a.count as number, "by the god's Touch") : spawnHerd(x, sp, c, a.count as number);
     if (!h) return fail(`${def.name} cannot live there.`);
-    return ok(`A herd of ${a.count} ${def.name.toLowerCase()} appears.`, [{ kind: 'animal', id: h.id, planet: p.id }]);
+    return ok(`A herd of ${a.count} ${a.count === 1 ? def.name.toLowerCase() : animalPlural(def.name)} appears.`, [{ kind: 'animal', id: h.id, planet: p.id }]);
   }, { desc: 'Make animals', category: 'Life', params: { species: { type: 'enum', values: animalIds, required: true }, count: { type: 'int', min: 1, max: 100000, default: 8 }, pos: pos(true) } });
 
   r.register('life.cull', ({ u, p }, a) => {

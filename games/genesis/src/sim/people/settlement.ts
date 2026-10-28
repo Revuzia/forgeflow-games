@@ -11,7 +11,7 @@ import type { Settlement, Cohort } from './state.ts';
 import { AgentFlag, BuildingFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { ERAS } from '../content.ts';
-import { DEATH, NS, NT, ROLE, SKILL, TRAIT } from './defs.ts';
+import { DEATH, INV, NS, NT, ROLE, SKILL, TRAIT } from './defs.ts';
 import { birth, die, ageHazard, spawnAgent, insertSorted, worldSalt } from './lifecycle.ts';
 import { accident, computeEra, hiveShare, learn, libHas, refreshLibrary } from './knowledge.ts';
 import { planBuilding, canBuild, decayBuildings, hearthAccidents, reviseSite, ruin, styleOf } from './buildings.ts';
@@ -42,6 +42,8 @@ import { findPath } from '../grid/pathfind.ts';
 import { pathOptsFor } from './resources.ts';
 import { recountShelters } from './tasks.ts';
 import { planetLevel } from '../perf/lapse.ts';
+import { DAY_WALK, lastingWater, reachCost, waterReach } from './waterway.ts'; // LIVING.md §2.7: the water a band can walk to
+import { LOAD_KG } from '../perf/pace.ts';
 // SIM perf push 3 — the coarse settlement step of the peoples' time-lapse (perf/plapse.ts)
 import { chanceIn, dueIn, hourly, settleHours } from '../perf/plapse.ts';
 import { fireSeen } from './firewatch.ts'; // LIVING PACE: a fire seen is a fire learned
@@ -478,7 +480,11 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
     // sites the band found it cannot walk to (across a lake, up a cliff), gave up on or fled are passed over for ten
     // days; the expired marks are forgotten (a band wandering for weeks would otherwise carry them all in its save)
     for (const k of Object.keys(st.recent)) if (k.charCodeAt(0) === 117 /* u */ && /^u\d+$/.test(k) && x.tick - st.recent[k] >= 10 * x.day) delete st.recent[k];
-    const skip = (c: number) => { const t = st.recent[`u${c}`]; return t !== undefined && x.tick - t < 10 * x.day; };
+    const skip0 = (c: number) => { const t = st.recent[`u${c}`]; return t !== undefined && x.tick - t < 10 * x.day; };
+    // (LIVING.md §2.7: the band judges by the land it can WALK to within three days (waterway.ts) — a site or a bearing
+    // across the sea or up a cliff is passed over, not swum for blind)
+    waterReach(x, st, here, 3 * DAY_WALK);
+    const skip = (c: number) => skip0(c) || reachCost(x, c) === Infinity;
     let site = searchSite(x, st.species, here, 3, st.id, skip);
     // nothing good within sight: scouts range out over a kilometre before the band moves on blind
     if (!(site.cell >= 0 && site.score >= 3.2)) site = scoutFar(x, st, at, skip);
@@ -500,7 +506,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
       for (let k = 0; k < 12; k++) {
         offsetPoint(at, 8 * x.p.edgeM, base + k * (Math.PI / 6), x.p.st.radius, out);
         const o = x.p.cellAt(out);
-        if (!isLand(x.p, o) || f.water[o] >= 0.15 || f.lava[o] > 0) continue;
+        if (!isLand(x.p, o) || f.water[o] >= 0.15 || f.lava[o] > 0 || reachCost(x, o) === Infinity) continue;
         let promise = k === 0 ? 0.3 : 0;
         let n = 0;
         const look = (q: number) => {
@@ -535,7 +541,14 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && siteScore(x, st.species, tc, st.id) < 3.2);
   if (leadD < (st.recent.tgtBest ?? Infinity) - 30) { st.recent.tgtBest = Math.round(leadD); st.recent.tgtAt = x.tick; }
   const stuck = x.tick - (st.recent.tgtAt ?? x.tick) > 3 * x.day;
-  if (spoilt || stuck) {
+  // a bearing is judged again every six hours: given up when the band can no longer walk to it (LIVING.md §2.7)
+  let lost = false;
+  if (roaming && x.tick - (st.recent.wjudged ?? -1e9) >= x.day / 4) {
+    st.recent.wjudged = x.tick;
+    waterReach(x, st, here, 3 * DAY_WALK);
+    lost = reachCost(x, tc) === Infinity;
+  }
+  if (spoilt || stuck || lost) {
     if (!roaming) st.recent[`u${tc}`] = x.tick;
     delete st.recent.godSite;
     st.target = null;
@@ -1421,23 +1434,28 @@ export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {
   }
   band.households = st.households.map((h) => ({ id: h.id, members: h.members.slice(), home: -1 }));
   st.households = [];
-  // carry food: each takes a share of what is left
-  const sp = x.info[st.species];
-  for (const it of sp.foods) {
-    let q = st.store[it] ?? 0;
-    if (q <= 0) continue;
-    const share = q / Math.max(1, members.length);
-    for (const s of members) { const left = A.give(s, it, share); q -= share - left; }
-    st.store[it] = Math.max(0, Math.round(q * 1000) / 1000);
-  }
+  // carry food: the foods that feed most first, a share each, up to a load each (LIVING.md §2.7: hands already full of
+  // stone and flint carried a little bread away from a town in a dust bowl and left 342 maize in its ruins)
+  carryOut(x, st, members);
   st.cohort = newCohort(st.cohort.skill);
   refreshLibrary(x, band);
   band.era = computeEra(x, band);
+  // the town's boats go with its people (bandStep sails them where the way crosses water); a town with none that knows
+  // raft-making lashes one from its store when no lasting water is left within three days' walk — an island town in a
+  // dust bowl (seed 1, year 46) had 150 wood and 38 cordage in its ruins and the mainland 470 m off (LIVING.md §2.7)
+  for (const it of x.c.itemsByTag.get('boat') ?? []) if ((st.store[it] ?? 0) >= 1) { const n = Math.floor(st.store[it]); band.store[it] = (band.store[it] ?? 0) + n; st.store[it] -= n; }
+  const raft = itemIdx(x, 'raft'), wood = itemIdx(x, 'wood'), cord = itemIdx(x, 'cordage'), raftMaking = x.rt.byId.get('raft-making');
+  if (bestBoat(x, band) < 0 && raft >= 0 && wood >= 0 && cord >= 0 && raftMaking !== undefined && libHas(band, raftMaking) && (st.store[wood] ?? 0) >= 4 && (st.store[cord] ?? 0) >= 2) {
+    const R = waterReach(x, band, st.cell, 3 * DAY_WALK);
+    if (!R.water.some((c) => lastingWater(x, c))) { st.store[wood] -= 4; st.store[cord] -= 2; band.store[raft] = 1; }
+  }
   // the place that failed them is not chosen again for a while (a flooded town's band re-founded in its own drowned
   // ruins the next day), nor its neighbourhood when the water took it
   band.recent[`u${st.cell}`] = x.tick;
   if (cause === 'flood') { const g = x.p.grid; for (let e = g.nbrStart[st.cell]; e < g.nbrStart[st.cell + 1]; e++) band.recent[`u${g.nbr[e]}`] = x.tick; }
-  const skip = (c: number) => band.recent[`u${c}`] !== undefined || (cause === 'flood' && x.p.f.water[c] > 0.05);
+  // the people leaving judge their next place by what they can walk to (waterway.ts; with the boats and raft they have)
+  waterReach(x, band, st.cell, 3 * DAY_WALK);
+  const skip = (c: number) => band.recent[`u${c}`] !== undefined || (cause === 'flood' && x.p.f.water[c] > 0.05) || reachCost(x, c) === Infinity;
   const far = searchSite(x, st.species, st.cell, 9, st.id, skip);
   band.target = far.cell >= 0 && far.cell !== st.cell && far.score >= 3.2 ? cellPos(x.p, far.cell) as [number, number, number] : null;
   // (LIVING LAND §2.7: a town the drought drove out goes to its kin within 3 km where the water still runs — they take
@@ -1453,6 +1471,36 @@ export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {
   tell(x.u, x.p, `abandon.${cause}`, vars(x, st, -1, { cause }), st, [settlementRef(x, st)]);
   fall(x, st, cause);
   return band;
+}
+
+/**
+ * What the people leaving a town carry (LIVING.md §2.7): the hands' non-food goods (stone, flint, wood) go back into the
+ * old store, then the foods that feed most (quantity x edible) first, a share each, up to a load each (LOAD_KG).
+ */
+function carryOut(x: PCtx, st: Settlement, members: number[]): void {
+  const A = x.A, sp = x.info[st.species], items = x.c.items.list;
+  const kinds = sp.foods.filter((it) => (st.store[it] ?? 0) > 0.01).sort((a, b) => st.store[b] * sp.edible[b] - st.store[a] * sp.edible[a] || a - b);
+  if (!kinds.length || !members.length) return;
+  for (const s of members) {
+    for (let k = 0; k < INV; k++) {
+      const it = A.invItem[s * INV + k];
+      if (it < 0 || sp.edible[it] > 0) continue;
+      st.store[it] = (st.store[it] ?? 0) + A.invQty[s * INV + k];
+      A.invItem[s * INV + k] = -1; A.invQty[s * INV + k] = 0;
+    }
+  }
+  const kg = (s: number) => { let w = 0; for (let k = 0; k < INV; k++) { const it = A.invItem[s * INV + k]; if (it >= 0) w += A.invQty[s * INV + k] * (items[it].weight ?? 1); } return w; };
+  for (const it of kinds) {
+    let q = st.store[it];
+    const share = q / members.length, wt = Math.max(0.05, items[it].weight ?? 1);
+    for (const s of members) {
+      const take = Math.min(share, Math.max(0, (LOAD_KG - kg(s)) / wt));
+      if (take <= 0.01) continue;
+      const left = A.give(s, it, take);
+      q -= take - left;
+    }
+    st.store[it] = Math.max(0, Math.round(q * 1000) / 1000);
+  }
 }
 
 /** LIVING LAND: fresh water to drink at cell c for the people of st now (the cell or one beside it; snow for the cold) */

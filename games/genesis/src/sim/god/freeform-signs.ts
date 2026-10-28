@@ -27,6 +27,7 @@ import { prayersOf, PRAYER_WORDS } from './prayers.ts';
 import { prophetOf } from './prophets.ts';
 import { wrathWords, WRATHFUL } from './wrath.ts';
 import { bearingDir, moveBy } from './util.ts';
+import { DISCIPLE_MODES } from './disciples.ts';
 
 interface LiveName { name: string; kind: string; id: number; planet: number; pos?: V3 }
 
@@ -102,6 +103,11 @@ function daysOf(c: SignClause): number {
   return 2;
 }
 
+/** the standing order named in s ("preach", "farming", "as missionaries"), as god/freeform.ts reads it for the old words */
+function calledMode(s: string): (typeof DISCIPLE_MODES)[number] | undefined {
+  return DISCIPLE_MODES.find((m) => has(s, m) || has(s, m + 's') || has(s, m + 'ing') || (m === 'missionary' && has(s, 'convert', 'missionaries')) || (m === 'farm' && has(s, 'farming')) || (m === 'build' && has(s, 'building')));
+}
+
 /** a real animal named in s (content animals, by name or id, singular or plural) */
 function animalIn(u: Universe, s: string): string | null {
   let best: string | null = null, bl = 0;
@@ -161,10 +167,20 @@ export function intentSigns(c: SignClause): boolean {
     c.add({ k: 'prophet.foretell', agent: who.id, what, days: daysOf(c), planet: who.planet }, `foretell ${what}`);
     return true;
   }
-  // ── the Called: "make Hesh one of the Called", "call Hesh to me" ──
-  if (/\bone of the called\b|\bthe called\b/.test(f) || (person && /\bcall\s+[a-z' -]+\s+to\s+(me|my service|the god|serve)\b/.test(f))) {
+  // ── orders to the Called: "charge the Called to preach", "order my called to farm", "the Called: build" (no person named;
+  //    the old words, "tell my disciples to farm", are freeform.ts's) ──
+  const mode = calledMode(f);
+  if (!person && /\b(the|my|your) called\b/.test(f) && !/\bone of the called\b/.test(f) && (mode || /\b(charge|order|command|tell|bid|send|instruct|have|set)\b/.test(f))) {
+    if (!mode) return c.ask('Charge the Called to do what? (worship, farm, build, teach, preach, or go as missionaries).');
+    if (!u.god.disciples.some((d) => d.god === 0)) { cx.asked.push({ k: 'disciple.order', mode }); return c.ask('None are Called yet ("make Hesh one of the Called").'); }
+    c.add({ k: 'disciple.order', mode, ...(mods.place?.settlement !== undefined && mode === 'missionary' ? { target: mods.place.settlement } : {}) }, `the Called: ${mode}`);
+    mods.place = null;
+    return true;
+  }
+  // ── the Called: "make Hesh one of the Called", "call Hesh to me", "call Hesh" (the name alone: "call Aru Lune" renames) ──
+  if (/\bone of the called\b|\bthe called\b/.test(f) || (person && (/\bcall\s+[a-z' -]+\s+to\s+(me|my service|the god|serve)\b/.test(f) || f.trim() === `call ${person.name.toLowerCase()}`))) {
     if (!person) { cx.asked.push({ k: 'agent.make-disciple' }); return c.ask('Call whom? Name a person ("make Hesh one of the Called").'); }
-    c.add({ k: 'agent.make-disciple', id: person.id, mode: 'preach', planet: person.planet }, 'one of the Called');
+    c.add({ k: 'agent.make-disciple', id: person.id, mode: mode ?? 'preach', planet: person.planet }, 'one of the Called');
     return true;
   }
   // ── a prophet: "make Hesh my prophet", "make a prophet in Aru" ──

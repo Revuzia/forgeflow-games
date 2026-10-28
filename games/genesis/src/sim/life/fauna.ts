@@ -62,6 +62,15 @@ export function animalSingular(w: string): string {
 /** words of an animal's name that do not say which animal it is ('wild horse', 'golden eagle', 'harbour seal') */
 const GENERIC = new Set(['wild', 'golden', 'harbour', 'harbor', 'red', 'honey', 'kept', 'desert', 'grey', 'gray', 'common', 'great', 'black', 'white', 'brown', 'snow', 'sea', 'mountain', 'giant', 'little', 'lesser', 'greater', 'musk']);
 
+/** words that make a real animal a creature of myth ("winged horse", "fire lizard", "two-headed dog") — no real world has them */
+// (only words no real animal's common name is built on, or whose real compounds the lexicon lists: vampire bat, ghost crab)
+const MYTHIC = new Set(['winged', 'flying', 'fire', 'flame', 'flaming', 'fiery', 'fire-breathing', 'dire', 'hell', 'hellish', 'demon', 'demonic',
+  'ghost', 'ghostly', 'shadow', 'spectral', 'phantom', 'undead', 'vampire', 'vampiric', 'two-headed', 'three-headed', 'many-headed',
+  'headed', 'headless', 'horned', 'magic', 'magical', 'enchanted', 'immortal', 'talking', 'invisible', 'celestial', 'unholy',
+  'lava', 'mechanical', 'robot', 'robotic', 'cyborg', 'mutant', 'radioactive', 'laser', 'alien']);
+/** size words that do not change which animal it is ("giant wolves" are wolves, at a wolf's size) */
+const SIZE_WORDS = new Set(['giant', 'huge', 'enormous', 'gigantic', 'colossal', 'massive', 'monstrous', 'mega', 'big', 'large', 'great', 'tiny', 'small', 'little']);
+
 /** is word w (singular) the base animal a under another name: its head word is one of a's own name words */
 function sameKind(w: string, a: AnimalDef): boolean {
   const head = animalSingular(w.split(' ').pop() ?? w);
@@ -91,12 +100,18 @@ export function animalWord(c: Content, word: string): AnimalWord {
     if (f && c.animals.has(f)) return { kind: 'fantasy', word: w, id: c.animals.canonical(f) };
     if (L.none.has(w)) return { kind: 'none', word: w };
   }
-  // the last word of a longer name ("giant tortoise", "spotted owl", "snow dragon")
+  // the last word of a longer name ("spotted owl", "snow dragon"; the real compounds with a mythic-sounding word —
+  // flying squirrel, fire ant, horned owl, giant tortoise — are in the lexicon's realAnimals and were found above)
   const words = raw.split(' ');
   if (words.length > 1) {
     const tail = animalWord(c, words[words.length - 1]);
     if (tail.kind === 'real' || tail.kind === 'base') {
       const base = tail.kind === 'real' ? tail.base : tail.id;
+      const mods = words.slice(0, -1);
+      // a mythic word on a real animal ("flying horse", "winged lion", "fire lizard"): no such thing; its nearest real kind
+      if (mods.some((m) => MYTHIC.has(m))) return { kind: 'fantasy', word: raw, id: base };
+      // a size word only ("giant wolf", "huge bears"): the real animal at its real size
+      if (mods.every((m) => SIZE_WORDS.has(m))) return tail;
       return { kind: 'real', name: animalSingular(raw), base, size: tail.kind === 'real' ? tail.size : undefined };
     }
     if (tail.kind === 'fantasy') return { kind: 'fantasy', word: raw, id: tail.id };
@@ -112,9 +127,18 @@ export function noSuchAnimal(word: string): string {
 
 /** the words for a fantasy noun given its nearest real kind */
 export function nearestReal(word: string, a: AnimalDef): string {
+  return `There are no ${animalPlural(word)} in a real world; the nearest real thing is the ${a.name.toLowerCase()}.`;
+}
+
+/** english plural of an animal word ("wolf" → "wolves", "werewolf" → "werewolves", "wild horse" → "wild horses", "ox" → "oxen") */
+export function animalPlural(word: string): string {
   const one = animalSingular(word);
-  const many = /(s|x|ch|sh)$/.test(one) ? `${one}es` : /[^aeiou]y$/.test(one) ? `${one.slice(0, -1)}ies` : `${one}s`;
-  return `There are no ${many} in a real world; the nearest real thing is the ${a.name.toLowerCase()}.`;
+  const words = one.split(' ');
+  const last = words.pop() ?? one;
+  const IRREG: Record<string, string> = { ox: 'oxen', mouse: 'mice', goose: 'geese', louse: 'lice', sheep: 'sheep', deer: 'deer', fish: 'fish', moose: 'moose', bison: 'bison', cattle: 'cattle', 'fish-shoal': 'fish' };
+  // (wolf → wolves, calf → calves, elf → elves, dwarf → dwarves; knife-like "fe" → "ves")
+  const lastMany = IRREG[last] ?? (/(lf|rf|af)$/.test(last) ? `${last.slice(0, -1)}ves` : /fe$/.test(last) ? `${last.slice(0, -2)}ves` : /(s|x|ch|sh)$/.test(last) ? `${last}es` : /[^aeiou]y$/.test(last) ? `${last.slice(0, -1)}ies` : `${last}s`);
+  return [...words, lastMany].join(' ');
 }
 
 // ───────────────────────────── content ids in saves ─────────────────────────────

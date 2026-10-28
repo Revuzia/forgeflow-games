@@ -556,6 +556,38 @@ test('restyle: the Touch, sigils, the Called and rival epithets; regard on the T
   assert.ok(!powers.some((pw) => /black ?& ?white|creature/i.test(`${pw.name} ${pw.desc}`)));
 });
 
+test('restyle words: the new names are understood, the old ones still are, and the replies use the new ones', () => {
+  const { sim, st, lune, hesh } = twoTowns();
+  const OLD = /\b(hand|hands|disciples?|gestures?)\b/i;
+  const r = (t: string) => { const x = sim.parse(t); return { x, ks: (x.resolved ?? []).map((c) => c.k), msg: String(x.msg ?? '') }; };
+  // the Touch's verbs by their §3.6 names, and the previews named after the powers
+  for (const [t, k] of [['rebuke Hesh', 'hand.slap'], ['slap Hesh', 'hand.slap'], ['soothe Hesh', 'hand.stroke'], ['lift Hesh', 'hand.grab'], ['grab Hesh', 'hand.grab'], ['shield Aru', 'miracle.shield']] as const) {
+    const a = r(t);
+    assert.ok(a.x.ok && a.ks.includes(k), `${t}: ${a.ks} ${a.msg}`);
+    assert.ok(!OLD.test(a.msg) && !/→ (grab|slap|stroke|throw)\b|shield miracle/.test(a.msg), `${t} previews the new name: ${a.msg}`);
+  }
+  // "call Hesh" is a Call; "call Aru Lune" is still a rename
+  assert.ok(r('call Hesh').x.resolved?.some((c) => c.k === 'agent.make-disciple' && c.id === hesh), r('call Hesh').msg);
+  assert.ok(!r('call Aru Lune').ks.includes('agent.make-disciple'), r('call Aru Lune').msg);
+  // orders to the Called: none yet → a reply in the new words
+  const none = r('charge the Called to preach');
+  assert.ok(/None are Called yet/.test(none.msg) && !OLD.test(none.msg), none.msg);
+  assert.ok(!OLD.test(r('order my disciples to preach').msg), 'the old words get the new reply');
+  must(sim, { k: 'agent.make-disciple', id: hesh });
+  const mem = (sim.query('agent', { id: hesh }) as { memories?: { text: string }[] }).memories ?? [];
+  assert.ok(mem.some((m) => m.text === 'was Called by the god') && !mem.some((m) => OLD.test(m.text)), JSON.stringify(mem));
+  for (const [t, mode] of [['charge the Called to preach', 'preach'], ['Charge the Called to farm', 'farm'], ['order the called to build', 'build'], ['tell my called to teach', 'teach'], ['the called: worship', 'worship'], ['order my disciples to preach', 'preach']] as const) {
+    const a = r(t);
+    assert.ok(a.x.ok && a.x.resolved?.some((c) => c.k === 'disciple.order' && c.mode === mode), `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`);
+    assert.ok(!OLD.test(a.msg), `${t}: ${a.msg}`);
+  }
+  const what = r('Charge the Called');
+  assert.ok(/to do what/.test(what.msg) && !what.ks.includes('agent.make-disciple'), what.msg);
+  // the town lifted by the Touch, in the reply
+  const lifted = sim.applyNow({ k: 'settlement.move', settlement: lune.id, to: st.pos, mode: 'lift' });
+  assert.ok(lifted.ok && /The Touch lifts/.test(String(lifted.msg)) && !OLD.test(String(lifted.msg)), String(lifted.msg));
+});
+
 test('free text: the god speaks of prophets, signs, prayers and its own wrath', () => {
   const { sim, hesh } = twoTowns();
   const k = (t: string) => { const r = sim.parse(t); return { r, ks: (r.resolved ?? []).map((c) => c.k) }; };

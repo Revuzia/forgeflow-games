@@ -46,7 +46,12 @@ const LODS = 3;
 const REC = 10;
 
 /** plant species render data from the base content pack (indices match the sim's species fields) */
-interface SpeciesLook { kind: number; layer: 'tree' | 'shrub' | 'sea'; hMin: number; hMax: number; tint: [number, number, number]; autumn: [number, number, number] | null; deciduous: boolean }
+interface SpeciesLook {
+  kind: number; layer: 'tree' | 'shrub' | 'sea'; hMin: number; hMax: number; tint: [number, number, number]; autumn: [number, number, number] | null; deciduous: boolean;
+  /** when its fruit hangs (plants.json fruit.season, fractions of the local year; the fruit is shown from a little
+   *  before it ripens), or null: no fruit drawn */
+  fruit: [number, number] | null;
+}
 const srgbToLin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 function hexLin(h: string | undefined, fallback: [number, number, number]): [number, number, number] {
   if (!h || !/^#[0-9a-f]{6}$/i.test(h)) return fallback;
@@ -70,8 +75,9 @@ function tintFor(leaf: [number, number, number], ref: [number, number, number]):
 const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
   const f = String(pl.form ?? '');
   const id = String(pl.id ?? '');
-  // the plant's form (plants.json) picks its mesh: trees by crown form, shrubs by habit
-  const kind = f === 'conifer' || f === 'spruce' ? K('conifer') : f === 'birch' ? K('birch') : f === 'palm' ? K('palm')
+  // the plant's form (plants.json) picks its mesh: trees by crown form, shrubs by habit; the fruit trees by species
+  const kind = id === 'apple' ? K('apple') : id === 'olive' ? K('olive') : id === 'fig' ? K('fig') : id === 'date-palm' ? K('datepalm')
+    : f === 'conifer' || f === 'spruce' ? K('conifer') : f === 'birch' ? K('birch') : f === 'palm' ? K('palm')
     : f === 'acacia' || id === 'kapok' ? K('tropical') : f === 'baobab' ? K('baobab') : f === 'mangrove' ? K('mangrove')
       : f === 'willow' ? K('willow') : f === 'kelp' ? K('kelp') : f === 'cactus' ? K('cactus')
         : pl.type === 'tree' ? K('broadleaf')
@@ -88,7 +94,9 @@ const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
     aT = [Math.min(4, (autumn[0] / lumOf(autumn)) / (ref[0] / lumOf(ref)) * k), Math.min(4, (autumn[1] / lumOf(autumn)) / (ref[1] / lumOf(ref)) * k), Math.min(4, (autumn[2] / lumOf(autumn)) / (ref[2] / lumOf(ref)) * k)];
   }
   const [h0, h1] = pl.height ?? [8, 20];
-  return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous };
+  const fs = (pl as { fruit?: { season?: [number, number] } }).fruit?.season;
+  const fruit: [number, number] | null = Array.isArray(fs) && fs.length === 2 ? [Number(fs[0]) - 0.08, Number(fs[1]) + 0.03] : null;
+  return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous, fruit };
 });
 
 const VEG_VERT_PARS = /* glsl */ `
@@ -150,9 +158,12 @@ const LEAF_ALPHA = /* glsl */ `
     if (vLod.y < 0.0) lch = 1.0 - lch;
     if (vCard > 0.25 ? lch > vLod.x : (vLod.y > 0.0 ? vLod.x < 0.5 : vLod.x <= 0.5)) discard;
   }
-  if (vCard > 0.25 && vExtra.z > 0.0) {
+  // vExtra.z: leaf loss 0..1, plus 2 when the tree's fruit is out of season (fruit: aCard 0.35, treegen FRUIT_CARD)
+  float leafLoss = vExtra.z > 1.5 ? vExtra.z - 2.0 : vExtra.z;
+  if (vExtra.z > 1.5 && vCard > 0.3 && vCard < 0.4) discard;
+  if (vCard > 0.25 && leafLoss > 0.0) {
     float lh = fract(sin(dot(floor(vLocalP * 9.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-    if (lh < vExtra.z) discard;
+    if (lh < leafLoss) discard;
   }
   if (vCard > 0.5) {
     vec4 lt = texture(uLeafTex, vLeafUv);
@@ -316,7 +327,8 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
   vColor = vec4(1.0);
   vColor.xyz *= color.xyz;
 #ifdef USE_INSTANCING_COLOR
-  float leafy = max(step(0.25, aCard), step(0.05, aCard) * step(aCard, 0.2));
+  // (fruit, aCard 0.35, keeps its own hue like bark: red apples, white cotton bolls)
+  float leafy = max(step(0.25, aCard), step(0.05, aCard) * step(aCard, 0.2)) * (1.0 - step(0.3, aCard) * step(aCard, 0.4));
   vColor.xyz *= mix(vec3(dot(instanceColor.xyz, vec3(0.3, 0.55, 0.15))), instanceColor.xyz, leafy);
 #endif`)
       .replace('#include <project_vertex>', `#include <project_vertex>\n  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n  vCloudSh = vegCloudShadowV(vBodyPos, uSunDirBody);\n  vLeaf = step(0.25, aCard);\n  vLeafUv = aLeafUv;\n  vCard = aCard;\n  vLocalY = position.y;\n  vCrown = aCrown;`);
@@ -729,11 +741,15 @@ export class Vegetation {
         // char from the scar of a past fire, or the fire burning here now
         const charA = Math.min(0.9, Math.max(burntF ? (pv.grid.sample(burntF, ux0, uy0, uz0) - 0.15) * 1.6 : 0, fireF ? pv.grid.sample(fireF, ux0, uy0, uz0) * 0.85 : 0, 0));
         const leafless = look?.deciduous && !IS_SHRUB[kind] ? Math.min(1, winterK * (0.7 + 0.6 * ((seed * 9.1) % 1))) : 0;
+        // fruit hangs in its season only (a few days' spread from tree to tree)
+        const fs = look?.fruit;
+        const yfT = (yfH + ((seed * 7.3) % 1) * 0.03) % 1;
+        const fruitOff = !fs || (fs[0] <= fs[1] ? yfT < fs[0] || yfT > fs[1] : yfT < fs[0] && yfT > fs[1]);
         // the canopy around it (0..1, carried in the role's fraction: the role is an integer 1..5): under a closed
         // canopy the trunks and lower crown see little sky
         const canopy = treeF ? Math.min(1, Math.max(0, (pv.grid.sample(treeF, ux0, uy0, uz0) - 0.3) / 0.5)) : 0;
         for (const [b, role] of bB ? [[bA, ra], [bB, rb]] as const : [[bA, ra]] as const) {
-          b.extra.setXYZW(b.count, snowA, kind === K('burnt') ? 0 : charA, leafless, role + canopy * 0.4);
+          b.extra.setXYZW(b.count, snowA, kind === K('burnt') ? 0 : charA, leafless + (fruitOff ? 2 : 0), role + canopy * 0.4);
           b.mesh.setColorAt(b.count, _c);
           b.mesh.setMatrixAt(b.count++, _m);
         }

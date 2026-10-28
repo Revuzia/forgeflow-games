@@ -159,7 +159,7 @@ export function registerCivicCommands(r: CommandRegistry): void {
     tell(u, p, 'moved.god', vars(x, st, -1, { text: `The god lifted ${st.name}, houses, hearths and people, and set it down ${Math.round(dist)} m away.` }), st, [settlementRef(x, st)], 3);
     godAct(u, p, from, 600, { wonder: 0.8, harm: 0.15 }, g);
     godAct(u, p, st.pos, 600, { wonder: 0.6 }, g);
-    return ok(`The hand lifts ${st.name} — ${n.buildings} buildings and ${n.people} people — and sets it down ${dest} (${Math.round(dist)} m away).`, [settlementRef(x, st)]);
+    return ok(`The Touch lifts ${st.name} — ${n.buildings} buildings and ${n.people} people — and sets it down ${dest} (${Math.round(dist)} m away).`, [settlementRef(x, st)]);
   }, {
     desc: 'Move a settlement: lifted whole by the Touch, or its people sent walking to found it anew', category: 'Peoples',
     params: { settlement: { type: 'any', required: true }, to: { type: 'pos', desc: 'the new place (or pos)' }, pos: aPos, mode: { type: 'enum', values: ['lift', 'migrate'], default: 'lift' } },

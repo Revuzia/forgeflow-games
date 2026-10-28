@@ -22,9 +22,17 @@ import { Rng } from '../../sim/core/rng.ts';
 import { atlasUV, LEAF_TILE } from './leaftex.ts';
 
 export type TreeKind = 'conifer' | 'broadleaf' | 'birch' | 'tropical' | 'palm' | 'dead' | 'shrub'
-  | 'baobab' | 'mangrove' | 'willow' | 'cactus' | 'burnt' | 'kelp' | 'berrybush' | 'fern' | 'heather' | 'sage' | 'reed';
+  | 'baobab' | 'mangrove' | 'willow' | 'cactus' | 'burnt' | 'kelp' | 'berrybush' | 'fern' | 'heather' | 'sage' | 'reed'
+  | 'apple' | 'olive' | 'fig' | 'datepalm';
+/** (new kinds are appended: the vegetation cache stores kind indices) */
 export const TREE_KINDS: TreeKind[] = ['conifer', 'broadleaf', 'birch', 'tropical', 'palm', 'dead', 'shrub',
-  'baobab', 'mangrove', 'willow', 'cactus', 'burnt', 'kelp', 'berrybush', 'fern', 'heather', 'sage', 'reed'];
+  'baobab', 'mangrove', 'willow', 'cactus', 'burnt', 'kelp', 'berrybush', 'fern', 'heather', 'sage', 'reed',
+  'apple', 'olive', 'fig', 'datepalm'];
+/**
+ * aCard of fruit (apples, olives, figs, dates; crop bolls and flowers in groundgen.ts): the vegetation shader keeps
+ * its own hue (the instance tint only scales its brightness) and hides it out of season (vegetation.ts LEAF_ALPHA).
+ */
+export const FRUIT_CARD = 0.35;
 /** the kinds drawn by the shrub layer (shorter view range, understorey rules) */
 export const SHRUB_KINDS: TreeKind[] = ['shrub', 'berrybush', 'fern', 'heather', 'sage', 'reed'];
 
@@ -358,6 +366,24 @@ function broadSpec(kind: TreeKind): BroadSpec {
         grow: { forkH: 0.38, trunkR: 0.026, limbs: [3, 4], limbAngle: [25, 45], limbLen: 0.38, childCount: [2, 3], childAngle: [25, 45], lenRatio: 0.66, radiusRatio: 0.6, tropism: 0.15, maxDepth: 3, lateral: 0.5, lean: 0.12, leader: 0.4 },
         bark: [0.1, 0.095, 0.088], tile: LEAF_TILE.spray, size: [0, 0, 0], per: [0, 0, 0], flat: 0, leafless: true,
       };
+    case 'apple':
+      // a short trunk, wide low limbs and a rounded, fairly dense crown of small leaves (an orchard tree)
+      return {
+        grow: { forkH: 0.26, trunkR: 0.032, limbs: [3, 5], limbAngle: [38, 60], limbLen: 0.42, childCount: [2, 3], childAngle: [25, 45], lenRatio: 0.66, radiusRatio: 0.58, tropism: 0.12, maxDepth: 3, lateral: 0.6, lean: 0.1, leader: 0.15 },
+        bark: [0.1, 0.08, 0.065], tile: LEAF_TILE.smallSpray, size: [0.12, 0.27, 0.38], per: [8, 5, 4], flat: 0.25,
+      };
+    case 'olive':
+      // a squat, gnarled, leaning trunk (skeletonFor twists it), an open grey-green crown of narrow leaves
+      return {
+        grow: { forkH: 0.22, trunkR: 0.05, limbs: [3, 4], limbAngle: [28, 52], limbLen: 0.45, childCount: [2, 3], childAngle: [30, 55], lenRatio: 0.62, radiusRatio: 0.55, tropism: 0.05, maxDepth: 3, lateral: 0.6, lean: 0.25, leader: 0.2 },
+        bark: [0.13, 0.12, 0.1], tile: LEAF_TILE.smallSpray, size: [0.1, 0.23, 0.34], per: [6, 4, 3], flat: 0.1,
+      };
+    case 'fig':
+      // low, many-limbed and spreading wider than tall, smooth pale grey bark, big leaves held flat
+      return {
+        grow: { forkH: 0.16, trunkR: 0.04, limbs: [4, 5], limbAngle: [46, 70], limbLen: 0.45, childCount: [2, 3], childAngle: [28, 50], lenRatio: 0.66, radiusRatio: 0.6, tropism: 0.1, maxDepth: 3, lateral: 0.5, lean: 0.08, leader: 0.1 },
+        bark: [0.19, 0.18, 0.165], tile: LEAF_TILE.spray, size: [0.16, 0.32, 0.44], per: [6, 4, 4], flat: 0.45,
+      };
     default: // broadleaf: oak / beech / kapok / willow / baobab / mangrove
       return {
         grow: { forkH: 0.34, trunkR: 0.03, limbs: [3, 4], limbAngle: [26, 48], limbLen: 0.38, childCount: [2, 3], childAngle: [25, 48], lenRatio: 0.68, radiusRatio: 0.6, tropism: 0.3, maxDepth: 3, lateral: 0.55, lean: 0.08, leader: 0.35 },
@@ -661,6 +687,7 @@ function skeletonFor(kind: TreeKind, variant: number): Skeleton {
   let s = skeletons.get(key);
   if (!s) {
     s = growBranching(new Rng(5000 + variant * 31 + kind.length * 977), broadSpec(kind).grow);
+    if (kind === 'olive') gnarl(s, new Rng(5300 + variant * 17));
     skeletons.set(key, s);
   }
   return s;
@@ -672,6 +699,79 @@ function skeletonFor(kind: TreeKind, variant: number): Skeleton {
  *   LOD1 — limbs to depth 2; each depth-2 branch carries one larger cluster over the centroid of its twigs
  *   LOD2 — trunk + main limbs (3-sided); each limb carries a few big sprays over its whole sub-crown
  */
+/** an old olive's trunk: twisted off its axis, swollen in knots, flaring wide into the ground */
+function gnarl(sk: Skeleton, rng: Rng): void {
+  const t = sk.root;
+  const ph = rng.float() * 6.28;
+  for (let i = 2; i < t.pts.length; i++) {
+    const k = i / (t.pts.length - 1);
+    t.pts[i].x += Math.sin(ph + k * 5.5) * 0.035 * k;
+    t.pts[i].z += Math.cos(ph * 1.3 + k * 4.2) * 0.03 * k;
+    t.radii[i] *= 0.9 + 0.45 * rng.float();
+  }
+  t.radii[0] *= 1.7;
+  t.radii[1] *= 1.35;
+  // the first limbs leave the knotted trunk thick
+  for (const c of t.children) c.radii[0] = Math.max(c.radii[0], t.radii[t.radii.length - 1] * 0.8);
+}
+
+/** fruit per kind: colour (albedo), radius as a fraction of the tree's height, fruit per twig, how far below it hangs */
+const FRUIT: Partial<Record<TreeKind, { col: RGB; blush?: RGB; r: number; per: number; hang: number; long?: number }>> = {
+  apple: { col: [0.5, 0.06, 0.03], blush: [0.42, 0.36, 0.06], r: 0.0068, per: 3, hang: 0.012 },
+  olive: { col: [0.07, 0.045, 0.06], blush: [0.2, 0.22, 0.07], r: 0.0032, per: 6, hang: 0.008, long: 1.35 },
+  fig: { col: [0.2, 0.09, 0.15], blush: [0.25, 0.3, 0.1], r: 0.005, per: 3, hang: 0.006, long: 1.2 },
+};
+
+/** a small fruit: a faceted ball (6 or 12 verts), slightly elongated downward for olives and figs */
+function fruitBall(m: MeshBuilder, c: Vector3, r: number, col: RGB, lod: number, long = 1): void {
+  const ids: number[] = [];
+  const top = m.vert(c.x, c.y + r, c.z, 0, 1, 0, col[0] * 0.8, col[1] * 0.8, col[2] * 0.8, 0.6, 0, 0, FRUIT_CARD);
+  const n = lod === 0 ? 5 : 4;
+  const rings = lod === 0 ? [0.35, -0.45] : [0];
+  for (const ry of rings) {
+    const rr = Math.sqrt(1 - ry * ry);
+    for (let s = 0; s < n; s++) {
+      const a = (s / n) * Math.PI * 2 + ry;
+      const nx = Math.cos(a) * rr, nz = Math.sin(a) * rr;
+      ids.push(m.vert(c.x + nx * r, c.y + ry * r * long, c.z + nz * r, nx, ry, nz, col[0], col[1], col[2], 0.6, 0, 0, FRUIT_CARD));
+    }
+  }
+  const bot = m.vert(c.x, c.y - r * long, c.z, 0, -1, 0, col[0] * 0.7, col[1] * 0.7, col[2] * 0.7, 0.6, 0, 0, FRUIT_CARD);
+  const R = rings.length;
+  for (let s = 0; s < n; s++) {
+    const s1 = (s + 1) % n;
+    m.tri(top, ids[s1], ids[s]);
+    for (let k = 0; k < R - 1; k++) {
+      const a = ids[k * n + s], b = ids[k * n + s1], cc = ids[(k + 1) * n + s], d = ids[(k + 1) * n + s1];
+      m.tri(a, b, d); m.tri(a, d, cc);
+    }
+    m.tri(bot, ids[(R - 1) * n + s], ids[(R - 1) * n + s1]);
+  }
+}
+
+/** fruit hanging at the twig tips, just outside the sprays (LOD 0 all twigs, LOD 1 fewer, bigger: still a speckle) */
+function hangFruit(m: MeshBuilder, rng: Rng, kind: TreeKind, sk: Skeleton, lod: number): void {
+  const f = FRUIT[kind];
+  if (!f || lod > 1) return;
+  let top = 0;
+  for (let i = 1; i < m.pos.length; i += 3) top = Math.max(top, m.pos[i]);
+  const r = f.r * top * (lod === 1 ? 1.7 : 1);
+  for (let ti = 0; ti < sk.tips.length; ti++) {
+    if (lod === 1 && ti % 2) continue;
+    const t = sk.tips[ti];
+    const n = lod === 1 ? Math.max(1, Math.round(f.per / 2)) : f.per;
+    for (let k = 0; k < n; k++) {
+      // around the twig's outer end, out toward the crown's surface where it can be seen
+      const out = t.pos.clone().sub(sk.crown).setY(0).normalize();
+      const p = t.pos.clone().addScaledVector(t.dir, 0.02 + rng.float() * 0.03).addScaledVector(out, 0.015 + rng.float() * 0.02)
+        .add(new Vector3((rng.float() - 0.5) * 0.06, -f.hang - rng.float() * 0.03, (rng.float() - 0.5) * 0.06));
+      const b = f.blush && rng.float() < 0.35 ? f.blush : f.col;
+      const j = 0.85 + rng.float() * 0.3;
+      fruitBall(m, p, r * (0.85 + rng.float() * 0.3), [b[0] * j, b[1] * j, b[2] * j], lod, f.long ?? 1);
+    }
+  }
+}
+
 function broadleafTree(kind: TreeKind, lod: number, variant: number): BufferGeometry {
   const spec = broadSpec(kind);
   const sk = skeletonFor(kind, variant);
@@ -729,6 +829,7 @@ function broadleafTree(kind: TreeKind, lod: number, variant: number): BufferGeom
         }
       }
     }
+    hangFruit(m, rng, kind, sk, lod);
   }
   m.normalize();
   return m.build();
@@ -865,6 +966,93 @@ function palm(lod: number, variant: number): BufferGeometry {
   return m.build();
 }
 
+/**
+ * Date palm (Phoenix dactylifera): a straight, thick trunk knobbled with the stubs of old leaf bases, a dense crown of
+ * stiff, ascending feather fronds in tiers (the lowest arching down), a skirt of dry brown fronds hanging under it,
+ * and — in season — heavy amber bunches of dates on long stalks below the crown (FRUIT_CARD).
+ */
+function datePalm(lod: number, variant: number): BufferGeometry {
+  const rng = new Rng(7700 + variant * 11);
+  const m = new MeshBuilder();
+  const bark: RGB = [0.2, 0.15, 0.1];
+  const lean = deviate(UP, 0.02 + rng.float() * 0.05, rng.float() * 6.28);
+  const segs = [16, 8, 4][lod];
+  const pts: Vector3[] = [new Vector3(0, -0.05, 0)];
+  for (let i = 1; i <= segs; i++) pts.push(pts[i - 1].clone().addScaledVector(lean, 0.8 / segs));
+  // leaf-base stubs: the radius steps out and in every segment (LOD 0: the stubs read as a cross-hatched trunk)
+  const radii = pts.map((_, i) => 0.019 * (1 - 0.18 * (i / segs)) * (i === 0 ? 1.5 : 1) * (lod === 0 && i > 0 && i % 2 ? 1.14 : 1));
+  tube(m, pts, radii, [8, 6, 4][lod], bark, 0, 0.25, 0.6);
+  const crown = pts[segs].clone();
+  // a short cone of frond bases capping the trunk
+  tube(m, [crown.clone().addScaledVector(lean, -0.03), crown.clone().addScaledVector(lean, 0.025)], [0.026, 0.012], [7, 5, 4][lod], [0.26, 0.2, 0.12], 0.25, 0.3, 0.7);
+  const frond = (a: number, rise: number, len: number, width: number, rows: number, dry: boolean): void => {
+    const out = new Vector3(Math.cos(a), 0, Math.sin(a));
+    const side = new Vector3(-Math.sin(a), 0, Math.cos(a));
+    const ids: number[] = [];
+    for (let r = 0; r <= rows; r++) {
+      const t = r / rows;
+      // stiff: nearly straight along its rise, bending down only toward the tip
+      const hor = Math.cos(rise) * t * len, up = Math.sin(rise) * t * len - t * t * t * len * (dry ? 0.1 : 0.32);
+      const p = crown.clone().addScaledVector(out, hor).add(new Vector3(0, up, 0));
+      const half = width * 0.5 * Math.sin(Math.PI * (0.12 + 0.82 * t));
+      const drop = half * 0.55;
+      for (const su of [-1, 0, 1]) {
+        const x = p.x + side.x * su * half, y = p.y - Math.abs(su) * drop, z = p.z + side.z * su * half;
+        if (dry) {
+          // a dry frond: bark-coloured (no foliage tint), hanging against the trunk
+          const sh = 0.8 + 0.3 * t;
+          ids.push(m.vert(x, y, z, out.x * 0.5 + side.x * su * 0.4, 0.4, out.z * 0.5 + side.z * su * 0.4, 0.3 * sh, 0.22 * sh, 0.12 * sh, 0.3 + 0.2 * t, 0, 0, 0));
+        } else {
+          const [u, v] = atlasUV(LEAF_TILE.frond, (su + 1) / 2, t);
+          ids.push(m.vert(x, y, z, out.x * 0.3 + side.x * su * 0.5, 0.85, out.z * 0.3 + side.z * su * 0.5, 0.92, 0.95, 0.88, 0.45 + 0.4 * t, u, v, 1));
+        }
+      }
+    }
+    for (let r = 0; r < rows; r++) {
+      const i0 = r * 3, i1 = (r + 1) * 3;
+      for (let c = 0; c < 2; c++) {
+        m.tri(ids[i0 + c], ids[i0 + c + 1], ids[i1 + c + 1]);
+        m.tri(ids[i0 + c], ids[i1 + c + 1], ids[i1 + c]);
+      }
+    }
+  };
+  // three tiers: upper fronds stand up (~60°), the middle spread out, the lowest arch below the horizontal
+  const tiers: [number, number, number][] = [[1.05, 7, 0.3], [0.45, 8, 0.36], [-0.2, 7, 0.34]];
+  const keep = [1, 0.75, 0.55][lod];
+  const rows = [4, 2, 1][lod];
+  tiers.forEach(([rise, n, len], ti) => {
+    const nn = Math.max(4, Math.round(n * keep));
+    for (let f = 0; f < nn; f++) {
+      const a = (f / nn) * Math.PI * 2 + ti * 0.45 + rng.float() * 0.3;
+      frond(a, rise + (rng.float() - 0.5) * 0.25, len * (0.9 + rng.float() * 0.2), 0.15 + rng.float() * 0.03, rows, false);
+    }
+  });
+  if (lod < 2) {
+    // the skirt: dry fronds hanging down the trunk under the crown
+    const nd = lod === 0 ? 9 : 6;
+    for (let f = 0; f < nd; f++) frond((f / nd) * Math.PI * 2 + rng.float() * 0.5, -1.25 - rng.float() * 0.2, 0.16 + rng.float() * 0.05, 0.07, lod === 0 ? 2 : 1, true);
+    // bunches of dates: a stalk arching out of the crown and a long cluster hanging from it
+    const nb = lod === 0 ? 4 + Math.floor(rng.float() * 3) : 3;
+    for (let k = 0; k < nb; k++) {
+      const a = (k / nb) * Math.PI * 2 + rng.float() * 0.6;
+      const o = new Vector3(Math.cos(a), 0, Math.sin(a));
+      const s0 = crown.clone().add(new Vector3(0, -0.01, 0)).addScaledVector(o, 0.015);
+      const s1 = s0.clone().addScaledVector(o, 0.05).add(new Vector3(0, -0.02, 0));
+      tube(m, [s0, s1], [0.004, 0.003], 3, [0.42, 0.3, 0.1], 0.3, 0.4, 0.9);
+      const cl = s1.clone().add(new Vector3(0, -0.045, 0));
+      const col: RGB = rng.float() < 0.5 ? [0.55, 0.2, 0.035] : [0.6, 0.38, 0.05];
+      if (lod === 0) {
+        for (let j = 0; j < 9; j++) {
+          const ja = j * 2.4, jr = 0.012 * (1 - j / 12);
+          fruitBall(m, cl.clone().add(new Vector3(Math.cos(ja) * jr, 0.035 - j * 0.0075, Math.sin(ja) * jr)), 0.011, col, 1, 1.4);
+        }
+      } else fruitBall(m, cl, 0.022, col, 1, 2.2);
+    }
+  }
+  m.normalize();
+  return m.build();
+}
+
 function shrub(lod: number, variant: number): BufferGeometry {
   const rng = new Rng(4000 + variant * 3);
   const m = new MeshBuilder();
@@ -897,6 +1085,7 @@ export function treeGeometry(kind: TreeKind, lod: number, variant = 0): BufferGe
   switch (kind) {
     case 'conifer': g = conifer(lod, variant); break;
     case 'palm': g = palm(lod, variant); break;
+    case 'datepalm': g = datePalm(lod, variant); break;
     case 'shrub': g = shrub(lod, variant); break;
     case 'baobab': g = baobab(lod, variant); break;
     case 'cactus': g = cactus(lod, variant); break;

@@ -146,7 +146,7 @@ test('what the words cannot do (or lack a target for) is said plainly, with what
     ['possess', /whom/i, 'agent.possess'], ['move the sun', /what hour/i, 'time.set-hour'], ['make a disciple', /whom/i, 'agent.make-disciple'],
     ['make the planet bigger', /cannot be made bigger/i], ['give the world rings', /rings/i],
     ['move the tornado to Lune', /no tornado/i, 'disaster.spawn'], ['tilt the world', /how far/i],
-    ['smite the wicked', /whom|who|which/i], ['tell my disciples to farm', /no disciples/i, 'disciple.order'],
+    ['smite the wicked', /whom|who|which/i], ['tell my disciples to farm', /none are called/i, 'disciple.order'], // (the restyle: the reply names the Called)
   ];
   for (const [text, re, hint] of cases) {
     const r = sim.parse(text);

@@ -27,6 +27,7 @@ import { animalSingular, animalWord, nearestReal, noSuchAnimal } from '../life/f
 import { guessMaterial, MATERIAL_KINDS } from './materials.ts';
 import { slug } from './runtime.ts';
 import { cellPos3, norm } from './util.ts';
+import { suitability } from '../fields/vegetation.ts';
 
 interface LiveName { name: string; kind: string; id: number; planet: number; pos?: V3 }
 
@@ -400,5 +401,66 @@ function intentPeopleAndRiders(c: ContentClause): boolean {
 export function intentContent(c: ContentClause): boolean {
   if (!c.cx.p) return false;
   if (has(c.s, 'prophet', 'sacred', 'holy', 'omen', 'sign')) return false;
-  return intentPeopleAndRiders(c) || intentSeedOre(c) || intentMaterial(c) || intentPlants(c) || intentAnimals(c);
+  return intentNewKind(c) || intentPeopleAndRiders(c) || intentSeedOre(c) || intentMaterial(c) || intentPlants(c) || intentAnimals(c);
+}
+
+// ───────────────────────────── "a new crop", "a new animal", "a new ore" with no name ─────────────────────────────
+
+/** a kind of thing asked for as "new" with no name: never a placeholder made content (no item called "New crop") */
+const UNNAMED_NEW = /\b(?:a |an |some |another )?new (crops?|grains?|vegetables?|plants?|fruit trees?|trees?|fruits?|bush(?:es)?|shrubs?|herbs?|flowers?|grass(?:es)?|animals?|beasts?|creatures?|species of animal|ores?|metals?|minerals?|stones?|rocks?|materials?|substances?|tools?|weapons?|things?|items?|inventions?)\b/;
+
+/** a real crop that town does not sow yet and that suits its fields best (registry order on ties) */
+export function newCropFor(u: Universe, p: Planet, st: { pos: V3; fields: number[] }): string | null {
+  const t = u.content.plantTable;
+  const f = p.f;
+  const sown = new Set<number>();
+  for (const c of st.fields) if (f.cropSpecies[c] >= 0) sown.add(f.cropSpecies[c]);
+  const at = st.fields.length ? st.fields : [p.cellAt(st.pos)];
+  let best = -1, bv = 0.15;
+  u.content.plants.list.forEach((d, sp) => {
+    if (d.type !== 'crop' || sown.has(sp)) return;
+    let v = 0;
+    for (const c of at) v += suitability(p, t, sp, c);
+    v /= at.length;
+    if (v > bv + 1e-9) { bv = v; best = sp; }
+  });
+  return best >= 0 ? u.content.plants.list[best].id : null;
+}
+
+function intentNewKind(c: ContentClause): boolean {
+  const { s, cx, mods } = c;
+  const { u, p } = cx;
+  const m = s.match(UNNAMED_NEW);
+  if (!m || !p || /\b(called|named|known as)\b/.test(s)) return false;
+  if (!/\b(introduce|invent|create|make|add|give|bring|grow|devise|conjure|send|plant|sow|discover|teach|show|release|breed)\b/.test(s)) return false;
+  const w = m[1];
+  if (/^(crop|grain|vegetable)/.test(w)) {
+    if (plantWord(u, s)) return false; // "introduce potatoes, a new crop, to Aru": intentPlants
+    const st = mods.place?.settlement !== undefined ? p.people?.settlement(mods.place.settlement) : null;
+    if (!st) { cx.asked.push({ k: 'settlement.introduce' }); return c.ask('Introduce which crop, and to whom? Name a real one ("introduce potatoes to Aru") or a new one ("invent a new crop called sunroot").'); }
+    const crop = newCropFor(u, p, st);
+    if (!crop) return c.ask(`Every crop that would grow at ${st.name} is theirs already. Name a new one ("invent a new crop called sunroot").`);
+    c.add({ k: 'settlement.introduce', settlement: st.id, crop }, `introduce ${u.content.plants.get(crop).name.toLowerCase()}`);
+    return true;
+  }
+  if (/^(plant|fruit|tree|bush|shrub|herb|flower|grass)/.test(w)) {
+    if (plantWord(u, s)) return false;
+    const type = /^(fruit|tree)/.test(w) ? 'tree' : /^(bush|shrub)/.test(w) ? 'shrub' : 'grass';
+    const st = mods.place?.settlement !== undefined ? p.people?.settlement(mods.place.settlement) : null;
+    const pos = st ? besideTown(p, st as unknown as { pos: V3 }, st.id + 7) : placeOf(c);
+    // the real plant of that kind that best suits the ground there (life.plant picks it)
+    c.add({ k: 'life.plant', type, radius: 250, ...(pos ? { pos: norm(pos) } : {}) }, `the ${type === 'grass' ? 'plants' : `${type}s`} that suit the ground`);
+    return true;
+  }
+  if (/^(animal|beast|creature|species)/.test(w)) {
+    if (u.content.animals.list.some((a) => has(s, a.name.toLowerCase(), `${a.name.toLowerCase()}s`))) return false;
+    cx.asked.push({ k: 'content.animal' });
+    return c.ask('Which animal? This is a real world: name a real one ("introduce zebras", "release wolves near Aru").');
+  }
+  if (/^(ore|metal|mineral|stone|rock|material|substance)/.test(w)) {
+    cx.asked.push({ k: 'content.material' });
+    return c.ask(`Name it: "invent a new ${/^(ore|metal)/.test(w) ? 'metal' : /^(stone|rock)/.test(w) ? 'stone' : 'material'} called orichalcum", or lay a known one ("lay iron ore near Aru").`);
+  }
+  cx.asked.push({ k: 'content.item' });
+  return c.ask('Invent what? Name it ("invent a plough", "invent the wheel", "invent a new tool called the sickle").');
 }

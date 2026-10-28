@@ -476,10 +476,14 @@
       "punch",
       "punish",
       "cuff",
-      "swat"
+      "swat",
+      "rebuke",
+      "chastise",
+      "reprove"
     ],
     "stroke": [
       "stroke",
+      "soothe",
       "pet",
       "pat",
       "caress",
@@ -2061,6 +2065,23 @@
     "must"
   ],
   "realAnimals": {
+    "flying squirrel": "rabbit",
+    "flying fox": "red-junglefowl",
+    "flying fish": "fish-shoal",
+    "fire ant": "locust-swarm",
+    "fire salamander": "desert-lizard",
+    "horned lizard": "desert-lizard",
+    "horned viper": "desert-lizard",
+    "horned owl": "golden-eagle",
+    "great horned owl": "golden-eagle",
+    "bearded dragon": "desert-lizard",
+    "giant tortoise": ["desert-lizard", 0.7],
+    "giant anteater": ["rabbit", 0.6],
+    "giant otter": ["fox", 0.5],
+    "vampire bat": "red-junglefowl",
+    "vampire squid": "fish-shoal",
+    "ghost crab": "shellfish",
+    "ghost bat": "red-junglefowl",
     "aardvark": "rabbit",
     "adder": "desert-lizard",
     "african elephant": [

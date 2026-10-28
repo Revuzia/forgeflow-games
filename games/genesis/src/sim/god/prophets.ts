@@ -363,7 +363,11 @@ export function prophetsDaily(u: Universe, p: Planet): void {
         bd = d; best = o;
       }
       if (best) {
-        ph.journey = { target: best.id, until: u.tick + Math.round((2 + 3 * hashFloat(ph.agent, u.tick, 0x70a8)) * x.day) };
+        const days = 2 + 3 * hashFloat(ph.agent, u.tick, 0x70a8);
+        ph.journey = { target: best.id, until: u.tick + Math.round(days * x.day) };
+        // a stay, not a commute (fix r1 #16): food for the stay from the store, carried — they eat it there
+        provisionStay(x, st, s, Math.min(3, days));
+        relStat(u, 'prophet.journeys', 1);
         tell(u, p, 'prophet.journey', vars(x, st, s, { other: best.name }), st, [agentRef(x, s), settlementRef(x, best)], 1);
         interrupt(x, s);
       }

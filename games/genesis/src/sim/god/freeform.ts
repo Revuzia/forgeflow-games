@@ -53,6 +53,7 @@ import { intentHistory } from './freeform-history.ts';
 import { TEMPERAMENTS } from './rivals.ts';
 import { ACTS } from './possess.ts';
 import { DISCIPLE_MODES } from './disciples.ts';
+import { animalWord } from '../life/fauna.ts';
 import { GOD_ROLES } from './civic.ts';
 import { BEARINGS } from './shaping.ts';
 import { ROLE } from '../people/defs.ts';
@@ -755,7 +756,8 @@ export function parseFreeform(u: Universe, reg: CommandRegistry, text: string): 
 function canDo(u: Universe): string {
   const cats = new Map<string, string[]>();
   for (const pw of u.content.powers.list) { const l = cats.get(pw.category) ?? []; if (l.length < 4) l.push(pw.name.toLowerCase()); cats.set(pw.category, l); }
-  return `I can: ${[...cats.entries()].map(([c, l]) => `${c.toLowerCase()} (${l.join(', ')}…)`).join('; ')} — and "set <law> to <value>" for any law of the world.`;
+  // (the 'Hand' category id is internal: the player knows it as the Touch, §3.6)
+  return `I can: ${[...cats.entries()].map(([c, l]) => `${c === 'Hand' ? 'the Touch' : c.toLowerCase()} (${l.join(', ')}…)`).join('; ')} — and "set <law> to <value>" for any law of the world.`;
 }
 
 function normalize(t: string): string {
@@ -886,7 +888,7 @@ function coerceValue(s: string): unknown {
 function question(c: Command, param: string, label: string): string {
   const k = c.k;
   const Q: Record<string, string> = {
-    id: k.startsWith('agent.') || k.startsWith('possess.') ? `${label} — whom? Name a person (${({ 'agent.make-disciple': '"make Hesh a disciple"', 'agent.kill': '"smite Hesh"', 'agent.possess': '"possess Hesh"', 'agent.move': '"move Hesh to Lune"', 'agent.silence': '"silence Hesh"', 'agent.teach': '"teach Hesh bronze"', 'agent.rename': '"rename Hesh to Asha"', 'agent.role': '"make Hesh the chief"', 'agent.transform': '"turn Hesh into a frog"', 'agent.age': '"make Hesh younger"' } as Record<string, string>)[k] ?? `"${label.toLowerCase().split(' ')[0]} Hesh"`}) or click one.` : `${label} — which one? Name it.`,
+    id: k.startsWith('agent.') || k.startsWith('possess.') ? `${label} — whom? Name a person (${({ 'agent.make-disciple': '"make Hesh one of the Called"', 'agent.kill': '"smite Hesh"', 'agent.possess': '"possess Hesh"', 'agent.move': '"move Hesh to Lune"', 'agent.silence': '"silence Hesh"', 'agent.teach': '"teach Hesh bronze"', 'agent.rename': '"rename Hesh to Asha"', 'agent.role': '"make Hesh the chief"', 'agent.transform': '"turn Hesh into a frog"', 'agent.age': '"make Hesh younger"' } as Record<string, string>)[k] ?? `"${label.toLowerCase().split(' ')[0]} Hesh"`}) or click one.` : `${label} — which one? Name it.`,
     items: 'Give what? ("give Aru 20 bread", "give Lune a telescope")',
     settlement: 'Which settlements? Name them ("make Aru and Lune allies", "merge Aru into Lune").',
     other: 'With whom? Name the other settlement ("make peace between Aru and Lune").',
@@ -896,7 +898,7 @@ function question(c: Command, param: string, label: string): string {
     degrees: 'Tilt the world how far? ("tilt the world 30 degrees", "remove the tilt", "tilt it more").',
     speed: 'How fast should time run? ("speed 10", "run at 1000x", "pause", "resume").',
     cmd: 'Change the past how? ("two days ago, send a meteor at Aru").',
-    name: k === 'content.animal' ? 'Invent which animal? Name it ("unicorns", "release dragons").' : k === 'content.weather' ? 'Invent which weather? ("rain frogs", "a rain of honey").' : k === 'content.idea' ? 'Invent which idea? ("invent telepathy").' : k === 'settlement.rename' || k === 'agent.rename' ? 'Rename to what? ("rename Aru to Bright Haven").' : 'Invent what? Name it ("invent chocolate").',
+    name: k === 'content.animal' ? 'Which animal? This is a real world: name a real one ("introduce zebras", "release wolves near Aru").' : k === 'content.weather' ? 'Invent which weather? ("rain frogs", "a rain of honey").' : k === 'content.idea' ? 'Invent which idea? ("invent telepathy").' : k === 'settlement.rename' || k === 'agent.rename' ? 'Rename to what? ("rename Aru to Bright Haven").' : 'Invent what? Name it ("invent chocolate").',
     species: k === 'world.seed-species' ? 'Seed which kind of life? ("seed plains folk on Rust").' : 'Which kind? ("plant oak", "send wolves").',
     path: 'Set which law? ("set gravity to 3", "set the day length to 30").',
     value: 'Set it to what? ("set gravity to 3").',
@@ -2127,7 +2129,7 @@ function intentLand(c: Clause): boolean {
       if (!known) { cx.made.add(id); c.add({ k: 'content.item', name: thing, tags: tagsOf(cx.L, thing) }, `invent ${thing}`); }
       const st = here ? nearestSettlement(p, here, 4000) : null;
       if (st) c.add({ k: 'settlement.gift', settlement: st.id, items: { [id]: 60 } }, `${thing} for ${st.name}`);
-      else c.add({ k: 'hand.grab', item: id, qty: 60 }, `${thing} in the hand`);
+      else c.add({ k: 'hand.grab', item: id, qty: 60 }, `${thing} into the Touch`);
       return true;
     }
     if (/\bice\b/.test(thing)) { c.add({ k: 'terrain.paint-material', material: 'ice', depth: 2, radius: Math.round(400 * (mods.size ?? 1)) }, 'the water freezes'); return true; }
@@ -2306,7 +2308,7 @@ function intentPerson(c: Clause): boolean {
   if (/\brelease\b|\blet (him|her|them)? ?go\b|\bput (him|her|them) down\b|\bset (him|her|them) down\b|\bfree\b/.test(s)) {
     if (u.god.isHeld('agent', id)) { c.add({ k: 'hand.place' }, `set ${nm} down`); return true; }
     cx.asked.push({ k: 'agent.possess', id, on: false, planet: pl });
-    return c.ask(`${nm} is free already: not in your hand, not possessed.`);
+    return c.ask(`${nm} is free already: not held by your Touch, not possessed.`);
   }
   // orders: "tell Hesh to farm", "order my disciple to preach in Lune", "send Hesh as a missionary to Lune"
   const mode = DISCIPLE_MODES.find((m) => has(s, m) || has(s, m + 's') || has(s, m + 'ing') || (m === 'missionary' && has(s, 'missionaries', 'convert')) || (m === 'farm' && has(s, 'farming')) || (m === 'build' && has(s, 'building')));
@@ -2315,7 +2317,7 @@ function intentPerson(c: Clause): boolean {
     const ownSt = p?.people ? makeCtx(u, p).A.settlement[makeCtx(u, p).A.slotOf(id)] : -1;
     const tgt = target !== undefined && target !== ownSt ? { target } : {};
     if (isDisciple && mode) c.add({ k: 'disciple.order', id, mode, ...tgt, planet: pl }, `${nm}: ${mode}`);
-    else c.add({ k: 'agent.make-disciple', id, mode: mode ?? 'preach', ...tgt, planet: pl }, 'disciple');
+    else c.add({ k: 'agent.make-disciple', id, mode: mode ?? 'preach', ...tgt, planet: pl }, 'one of the Called');
     return true;
   }
   // a role: "make Hesh the chief of Aru", "crown Hesh", "make Hesh a priest"
@@ -2343,18 +2345,19 @@ function intentPerson(c: Clause): boolean {
     return true;
   }
   if (verb(cx, s, 'heal') || verb(cx, s, 'cure')) { c.add({ k: 'agent.heal', id, planet: pl }, 'heal'); return true; }
-  if (verb(cx, s, 'slap')) { c.add({ k: 'hand.slap', target: { kind: 'agent', id }, planet: pl }, 'slap'); return true; }
-  if (verb(cx, s, 'stroke') || /\bsoothe\b/.test(s)) { c.add({ k: 'hand.stroke', target: { kind: 'agent', id }, planet: pl }, 'stroke'); return true; }
+  // (no hard-coded label: the preview shows the power's §3.6 name — Rebuke, Soothe, Hurl, Lift)
+  if (verb(cx, s, 'slap')) { c.add({ k: 'hand.slap', target: { kind: 'agent', id }, planet: pl }); return true; }
+  if (verb(cx, s, 'stroke') || /\bsoothe\b/.test(s)) { c.add({ k: 'hand.stroke', target: { kind: 'agent', id }, planet: pl }); return true; }
   if (verb(cx, s, 'throw')) {
     const to = destOf() ?? mods.toward?.pos ?? null;
     const sea = /\b(sea|ocean|water|lake)\b/.test(s) && p ? nearestPlaceKind(u, p, who.pos ?? [0, 0, 1], /\blake\b/.test(s) ? 'lake' : 'sea') : null;
     mods.place = null;
     if (!u.god.isHeld('agent', id)) c.add({ k: 'hand.grab', target: { kind: 'agent', id }, planet: pl }, `pick up ${nm}`);
-    c.add({ k: 'hand.throw', ...((sea ?? to) ? { toward: sea ?? to } : {}) }, 'throw');
+    c.add({ k: 'hand.throw', ...((sea ?? to) ? { toward: sea ?? to } : {}) });
     return true;
   }
   if (/\b(fly|soar|float|levitate|rise into the air)\b/.test(s)) { c.add({ k: 'hand.grab', target: { kind: 'agent', id }, planet: pl }, `${nm} rises into the air`); return true; }
-  if (verb(cx, s, 'grab')) { c.add({ k: 'hand.grab', target: { kind: 'agent', id }, planet: pl }, 'grab'); return true; }
+  if (verb(cx, s, 'grab')) { c.add({ k: 'hand.grab', target: { kind: 'agent', id }, planet: pl }); return true; }
   if (/\b(move|send|teleport|carry|put|set|take|bring|place|transport|relocate|drop)\b/.test(s)) {
     const to = destOf();
     if (!to) return c.ask(`Move ${nm} where? ("move ${nm} to Lune", "teleport ${nm} to the coast").`);
@@ -2417,7 +2420,7 @@ function intentSettlement(c: Clause): boolean {
       if (to && base && /\b(coast|shore|beach)\b/.test(t[0]) && !dirW) to = nearestPlaceKind(u, p, base, 'coast') ?? to;
     } else if (mods.place?.here) to = mods.place.pos ?? null;
     if (!to) return c.ask(`Move ${subj.name.replace(/\b\w/g, (m) => m.toUpperCase())} where? ("move it to the coast", "move it next to Lune", "make them migrate north").`);
-    c.add({ k: 'settlement.move', settlement: subj.id, to, mode: migrate ? 'migrate' : 'lift' }, migrate ? 'they set out for a new home' : 'the hand lifts the town');
+    c.add({ k: 'settlement.move', settlement: subj.id, to, mode: migrate ? 'migrate' : 'lift' }, migrate ? 'they set out for a new home' : 'the Touch lifts the town');
     return true;
   }
   if (sid === undefined) return false;
@@ -2543,7 +2546,7 @@ function intentSomeone(c: Clause): boolean {
   if (who < 0) return c.ask(`There is no one ${st ? `in ${st.name}` : 'there'} to ${want}.`);
   const o = { planet: p.id };
   if (want === 'possess') c.add({ k: 'agent.possess', id: who, on: true, ...o }, 'possess');
-  else if (want === 'disciple') c.add({ k: 'agent.make-disciple', id: who, mode: DISCIPLE_MODES.find((m) => has(s, m) || has(s, m + 's')) ?? 'preach', ...o }, 'disciple');
+  else if (want === 'disciple') c.add({ k: 'agent.make-disciple', id: who, mode: DISCIPLE_MODES.find((m) => has(s, m) || has(s, m + 's')) ?? 'preach', ...o }, 'one of the Called');
   else if (want === 'inspire') c.add({ k: 'agent.inspire', id: who, ...o }, 'inspire');
   else c.add({ k: 'agent.silence', id: who, ...o }, 'silence');
   return true;
@@ -2580,13 +2583,13 @@ function intentHand(c: Clause): boolean {
   const { s, cx, mods } = c;
   const { u, p } = cx;
   const kinds: [RegExp, string][] = [[/\b(rock|rocks|boulder|boulders|stone|stones)\b/, 'rock'], [/\b(tree|trees)\b/, 'tree'], [/\b(person|man|woman|child|someone|villager|somebody)\b/, 'agent'], [/\b(hut|house|building|shrine)\b/, 'building'], [/\b(animal|sheep|cow|deer|beast)\b/, 'animal']];
-  const intoHand = /\b(in|into|to|for) (my|the) hand\b|\bthe hand\b.*\b(a|an|some)\b|\bin my palm\b/.test(c.full) || /\bgive the hand\b/.test(c.full);
+  const intoHand = /\b(in|into|to|for) (my|the) (hand|touch)\b|\bthe (hand|touch)\b.*\b(a|an|some)\b|\bin my palm\b/.test(c.full) || /\bgive the (hand|touch)\b/.test(c.full);
   // "conjure 20 bread into my hand", "give the hand a rock"
   if (intoHand && /\b(conjure|give|put|place|bring|summon|make|create|fill)\b/.test(s)) {
     const item = findNoun(u.content, p, s, ['item']);
     const k = kinds.find(([re]) => re.test(s));
-    if (item && !k) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, `${item.text} into the hand`);
-    else c.add({ k: 'hand.grab', kind: k ? k[1] : 'rock' }, `${k ? k[1] : 'a rock'} into the hand`);
+    if (item && !k) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, `${item.text} into the Touch`);
+    else c.add({ k: 'hand.grab', kind: k ? k[1] : 'rock' }, `${k ? k[1] : 'a rock'} into the Touch`);
     return true;
   }
   if (verb(cx, s, 'throw')) {
@@ -2598,8 +2601,8 @@ function intentHand(c: Clause): boolean {
     const held = u.god.hand(0)?.held;
     mods.place = null;
     if (k && (!held || !/\b(it|that|this)\b/.test(s))) c.add({ k: 'hand.grab', kind: k[1] }, `pick up a ${k[1]}`);
-    else if (item && !held) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, `${item.text} into the hand`);
-    c.add({ k: 'hand.throw', ...((sea ?? to?.pos) ? { toward: sea ?? to!.pos } : {}), ...(mods.nums[0] && !item ? { speed: mods.nums[0] } : {}) }, 'throw');
+    else if (item && !held) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, `${item.text} into the Touch`);
+    c.add({ k: 'hand.throw', ...((sea ?? to?.pos) ? { toward: sea ?? to!.pos } : {}), ...(mods.nums[0] && !item ? { speed: mods.nums[0] } : {}) });
     mods.place = null;
     return true;
   }
@@ -2607,15 +2610,15 @@ function intentHand(c: Clause): boolean {
     const item = findNoun(u.content, p, s, ['item']);
     const k = kinds.find(([re]) => re.test(s));
     if (item && !k) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, 'conjure into the Touch');
-    else c.add({ k: 'hand.grab', ...(k ? { kind: k[1] } : {}) }, 'grab');
+    else c.add({ k: 'hand.grab', ...(k ? { kind: k[1] } : {}) });
     return true;
   }
   if (/^(drop it|let go|let it go|release it|drop|let go of it|drop that)$/.test(s)) { c.add({ k: 'hand.drop' }, 'drop'); return true; }
   if (/^(put it down|set it down|place it|put (him|her|them) down|set (him|her|them) down)/.test(s)) { c.add({ k: 'hand.place' }, 'set down'); return true; }
-  if (verb(cx, s, 'slap') && !findNoun(u.content, p, s, ['disaster'])) { c.add({ k: 'hand.slap' }, 'slap'); return true; }
+  if (verb(cx, s, 'slap') && !findNoun(u.content, p, s, ['disaster'])) { c.add({ k: 'hand.slap' }); return true; }
   if (verb(cx, s, 'stroke') && !findNoun(u.content, p, s, ['disaster'])) {
     if (mods.place?.settlement !== undefined && /\b(people|everyone|town|village|all)\b/.test(s)) { c.add({ k: 'life.bless' }, 'comfort them all'); return true; }
-    c.add({ k: 'hand.stroke' }, 'stroke');
+    c.add({ k: 'hand.stroke' });
     return true;
   }
   return false;
@@ -2951,8 +2954,11 @@ function intentIdeas(c: Clause): boolean {
     if (noun) {
       const k = findNoun(u.content, p, noun, ['recipe']) ?? recipeOf(cx, noun);
       if (k) { c.add({ k: mods.place?.settlement !== undefined ? 'settlement.teach' : 'idea.teach', knowledge: k.id }, 'teach'); return true; }
-      if (/^(an? )?(animal|beast|creature)$/.test(noun)) return c.ask('Invent which animal? Name it ("unicorns", "release dragons").');
+      if (/^(an? )?(animal|beast|creature)$/.test(noun)) return c.ask('Which animal? This is a real world: name a real one ("introduce zebras", "release wolves near Aru").');
       if (/^(an? )?(idea|thing|weather|rain|item)$/.test(noun)) return c.ask(`Invent what? Name it ("invent telepathy", "introduce chocolate", "rain frogs").`);
+      // an animal ("invent a zebra", "invent a winged horse"): content.animal makes only real animals (life/fauna.ts)
+      const aw = animalWord(u.content, noun).kind;
+      if (aw === 'real' || aw === 'fantasy' || aw === 'base') { c.add({ k: 'content.animal', name: singular(noun.replace(/^(an?|the|some) /, '')), ...(mods.qty && mods.qty > 1 ? { count: Math.round(mods.qty) } : {}) }, `a new animal: ${noun}`); return true; }
       if (!plausibleNew(cx, noun)) return false;
       const abstract = isAbstract(L, noun);
       const id = slug(noun);
@@ -2968,7 +2974,7 @@ function intentIdeas(c: Clause): boolean {
     }
   }
   const introV = verb(cx, s, 'introduce');
-  if (introV && !/\bthe hand\b/.test(s)) {
+  if (introV && !/\bthe (hand|touch)\b/.test(s)) {
     const noun = findNoun(u.content, p, s, ['law', 'species', 'disease', 'animal', 'plant', 'recipe', 'item']);
     const qty = mods.qty ?? (mods.one ? 1 : undefined);
     if (noun) {
@@ -3015,6 +3021,9 @@ function plausibleNew(cx: PCtx2, noun: string): boolean {
   if (!words.length) return false;
   if (cx.live.some((l) => wordAt(noun, l.name) >= 0)) return false;
   if (cx.L.creatureWords.includes(noun)) return false;
+  // a kind, not a name: "a new crop", "new animal", "ore" never become a thing called "New crop" (freeform-content.ts
+  // intentNewKind answers them with a real one or asks for the name)
+  if ((words.length === 1 || (words.length === 2 && /^(new|another|other)$/.test(words[0]))) && /^(crop|grain|vegetable|plant|tree|fruit|bush|shrub|herb|flower|grass|animal|beast|creature|species|ore|metal|mineral|stone|rock|material|substance|tool|weapon|thing|item|invention)(s|es)?$/.test(words[words.length - 1])) return false;
   const verbs = new Set(Object.values(cx.L.verbs).flat().filter((v) => !v.includes(' ')));
   const head = words[words.length - 1];
   if (verbs.has(words[0]) || verbs.has(head)) return false;
@@ -3032,7 +3041,7 @@ function intentMiracle(c: Clause): boolean {
   const { s } = c;
   if (!has(s, 'miracle', 'miracles', 'cast', 'conjure a', 'perform', 'work a')) return false;
   const mk = MIRACLES.slice().sort((a, b) => b.length - a.length).find((m) => has(s, m) || has(s, plural(m)) || has(s, m + 's'));
-  if (mk) { c.add({ k: `miracle.${mk}` }, `${mk} miracle`); return true; }
+  if (mk) { c.add({ k: `miracle.${mk}` }, powerName(c.cx.u.content, { k: `miracle.${mk}` }) ?? `${mk} sigil`); return true; }
   return false;
 }
 
@@ -3210,7 +3219,10 @@ function intentInvent(c: Clause): boolean {
   const sing = singular(obj.split(' ').pop() ?? obj);
   const id = slug(obj);
   cx.made.add(id);
-  if ((L.animalish.has(sing) || L.animalish.has(obj)) && !L.creatureWords.includes(sing)) { c.add({ k: 'content.animal', name: singular(obj), ...(mods.qty ? { count: mods.qty } : {}) }, `a new animal: ${obj}`); return true; }
+  // an animal word (real, or a myth with a real nearest kind: "invent a winged horse") is content.animal, which makes only
+  // real animals (life/fauna.ts animalWord) — never an item called "Winged horse"
+  const aw = animalWord(cx.u.content, obj).kind;
+  if (((L.animalish.has(sing) || L.animalish.has(obj)) && !L.creatureWords.includes(sing)) || aw === 'real' || aw === 'fantasy' || aw === 'base') { c.add({ k: 'content.animal', name: singular(obj), ...(mods.qty ? { count: mods.qty } : {}) }, `a new animal: ${obj}`); return true; }
   if (isAbstract(L, obj)) { c.add({ k: 'content.idea', name: obj, effect: effectOf(L, obj), mult: 1.4 }, `invent the idea of ${obj}`); return true; }
   c.add({ k: 'content.item', name: obj, tags: tagsOf(L, obj) }, `invent ${obj}`);
   c.add({ k: 'settlement.introduce', item: id }, 'set it among them');
@@ -3257,12 +3269,13 @@ function intentPlain(c: Clause): boolean {
     c.add({ k: 'belief.sway', feeling, everywhere: true }, `everyone: ${feeling}`);
     return true;
   }
-  // orders to the god's disciples ("tell my disciples to farm", "send my disciple to preach in Lune")
+  // orders to the Called in the old words ("tell my disciples to farm", "send my disciple to preach in Lune"; the new
+  // words, "charge the Called to preach", are freeform-signs.ts's)
   if (/\bdisciples?\b/.test(s) && (verb(cx, s, 'order') || /\b(go|should|must)\b/.test(s))) {
     const mode = DISCIPLE_MODES.find((m) => has(s, m) || has(s, m + 's') || has(s, m + 'ing') || (m === 'missionary' && has(s, 'convert', 'missionaries')) || (m === 'farm' && has(s, 'farming')) || (m === 'build' && has(s, 'building')));
-    if (!mode) return c.ask('What should your disciples do? (worship, farm, build, teach, preach, or go as missionaries).');
-    if (!u.god.disciples.some((d) => d.god === 0)) { cx.asked.push({ k: 'disciple.order', mode }); return c.ask('You have no disciples yet ("make Hesh a disciple").'); }
-    c.add({ k: 'disciple.order', mode, ...(mods.place?.settlement !== undefined && mode === 'missionary' ? { target: mods.place.settlement } : {}) }, `your disciples: ${mode}`);
+    if (!mode) return c.ask('Charge the Called to do what? (worship, farm, build, teach, preach, or go as missionaries).');
+    if (!u.god.disciples.some((d) => d.god === 0)) { cx.asked.push({ k: 'disciple.order', mode }); return c.ask('None are Called yet ("make Hesh one of the Called").'); }
+    c.add({ k: 'disciple.order', mode, ...(mods.place?.settlement !== undefined && mode === 'missionary' ? { target: mods.place.settlement } : {}) }, `the Called: ${mode}`);
     mods.place = null;
     return true;
   }
@@ -3546,7 +3559,7 @@ function byNoun(cx: PCtx2, n: Found, s: string, mods: Mods, making: boolean): [C
       if (pl?.type === 'tree' && has(s, 'forest', 'woods', 'grove')) return [{ k: 'life.forest', species: n.id }, `forest of ${n.id}`];
       return [{ k: 'life.plant', species: n.id }, `plant ${n.id}`];
     }
-    case 'miracle': return [{ k: `miracle.${n.id}` }, `${n.id} miracle`];
+    case 'miracle': return [{ k: `miracle.${n.id}` }, powerName(cx.u.content, { k: `miracle.${n.id}` }) ?? `${n.id} sigil`];
     case 'biome': {
       // a biome undone is not a biome painted: "make the desert bloom", "melt the ice", "make the ocean boil"
       if (/\b(bloom|melt|boil|drain|dry up|green|vanish|recede|shrink|retreat)\b/.test(s)) return null;
@@ -3574,7 +3587,7 @@ function byNoun(cx: PCtx2, n: Found, s: string, mods: Mods, making: boolean): [C
       const st = cx.p && mods.place?.pos ? nearestSettlement(cx.p, mods.place.pos, 1500) : null;
       const qty = Math.round(mods.qty ?? (mods.one ? 1 : 10));
       if (st || mods.place?.settlement !== undefined) return [{ k: 'settlement.gift', items: { [n.id]: qty } }, `give ${n.id}`];
-      return [{ k: 'hand.grab', item: n.id, qty }, `${n.id} into the hand`];
+      return [{ k: 'hand.grab', item: n.id, qty }, `${n.id} into the Touch`];
     }
     default: return null;
   }

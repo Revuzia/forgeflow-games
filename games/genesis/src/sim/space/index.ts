@@ -211,7 +211,7 @@ export function registerSpaceCommands(r: CommandRegistry): void {
     if (!def || !FLIGHT.has(sh.phase) || sh.phase === 'lost' || sh.phase === 'landed') return fail(`${sh.name} is not in the sky.`);
     const n = sh.crew.length;
     lose(u, sh, def, sh.phase === 'stranded' ? 'transfer' : sh.phase);
-    sh.cause = 'the hand of the god';
+    sh.cause = "the god's Touch";
     return ok(`${sh.name} is struck from the sky${n ? `, and ${n} with it` : ''}.`);
   }, { desc: 'Strike a ship from the sky', category: 'Worlds', params: { ship: { type: 'any', desc: 'ship id or name; default: the one ship in the sky (else the newest)' } } });
   r.register('star.flare', ({ u, cmd }, a) => {
