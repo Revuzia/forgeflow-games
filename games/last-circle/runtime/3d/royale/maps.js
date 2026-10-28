@@ -5661,8 +5661,16 @@ export async function buildMap(W, mapId) {
   // R1 (lane endgame, perf_district endgame view): a portal was FOUR draw calls (two rings + the double-sided transparent swirl, which three draws back then front) and an
   // endgame camera on an OD-1 circle sees 4-6 of them across the map (16-24 calls). The two rings of every portal are now two InstancedMeshes for the whole map (static, opaque:
   // the same pixels) and the flat swirl is drawn in one pass (forceSinglePass: a disc has no faces behind its own); each swirl stays its own mesh so the transparent sort is per portal.
+  // The instanced rings draw only the portals in the view (each mesh compacts its instance list against the camera's frustum before it draws: ~12 sphere tests a frame), so a view
+  // that saw two portals does not draw the triangles of all twelve.
   let _pGeo = null, _pMat = null, _pRings = null;
-  const P_RINGS_MAX = 32;
+  const P_RINGS_MAX = 32, _pAll = [], _pFr = new THREE.Frustum(), _pPV = new THREE.Matrix4(), _pSph = new THREE.Sphere(new THREE.Vector3(), 1.75);
+  function portalCull(renderer, scene, camera) {
+    _pPV.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _pFr.setFromProjectionMatrix(_pPV);
+    let n = 0;
+    for (const m of _pAll) { _pSph.center.setFromMatrixPosition(m); if (_pFr.intersectsSphere(_pSph)) this.setMatrixAt(n++, m); }
+    if (n !== this.count || n) { this.count = n; this.instanceMatrix.needsUpdate = true; }
+  }
   function addPortal(px, py, pz, faceYaw) {
     if (!_pGeo) {
       _pGeo = {
@@ -5676,15 +5684,14 @@ export async function buildMap(W, mapId) {
         swirl: new THREE.MeshBasicMaterial({ color: 0x9fefff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
       };
       _pRings = [new THREE.InstancedMesh(_pGeo.ring, _pMat.ring, P_RINGS_MAX), new THREE.InstancedMesh(_pGeo.ring2, _pMat.ring2, P_RINGS_MAX)];
-      for (const im of _pRings) { im.count = 0; im.name = "portal-rings"; im.castShadow = false; im.receiveShadow = false; g.add(im); }
+      for (const im of _pRings) { im.count = 0; im.name = "portal-rings"; im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; im.onBeforeRender = portalCull; g.add(im); }
     }
     const grp = new THREE.Group();
     grp.position.set(px, py + 1.8, pz);
     grp.rotation.y = faceYaw;
     grp.updateMatrix();
-    if (_pRings[0].count < P_RINGS_MAX) {
-      for (const im of _pRings) { im.setMatrixAt(im.count, grp.matrix); im.count++; im.instanceMatrix.needsUpdate = true; im.boundingSphere = null; }
-    } else { grp.add(new THREE.Mesh(_pGeo.ring, _pMat.ring)); grp.add(new THREE.Mesh(_pGeo.ring2, _pMat.ring2)); }
+    if (_pAll.length < P_RINGS_MAX) _pAll.push(grp.matrix.clone());
+    else { grp.add(new THREE.Mesh(_pGeo.ring, _pMat.ring)); grp.add(new THREE.Mesh(_pGeo.ring2, _pMat.ring2)); }
     grp.add(new THREE.Mesh(_pGeo.swirl, _pMat.swirl));
     g.add(grp);
     portals.push({ x: px, y: py, z: pz, obj: grp, kind: _pKind });
