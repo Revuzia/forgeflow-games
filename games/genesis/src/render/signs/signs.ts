@@ -249,9 +249,13 @@ export class SignsLayer {
           for (const s of pv.settlements) if (s.prophet && s.prophet.agent === id) { cred = s.prophet.credibility; break; }
           const k = 0.35 + 0.65 * clamp01(cred);
           // the thread: up from the head into the sky, long enough to be found from the god's height
-          const len = Math.max(22, Math.min(520, dist * 0.42));
+          // (and long enough to stand clear of a town's trees: at 0.42 of the view distance a prophet under palms from 85 m
+          // had a 35 m thread whose bright foot was hidden in the canopy and whose faded top read as nothing by day —
+          // the v8-real-prophet-day shot; some 0.35 m wide so its glow keeps a few pixels at the god's working height)
+          // (from afar back to 0.42: a thread most of the view tall stood off into space)
+          const len = Math.max(36, Math.min(520, dist * (0.8 - 0.38 * smooth(150, 500, dist))));
           // (from the god's height a little brighter: it is how they are found among a town's specks)
-          M.beams.add(_c.copy(head).addScaledVector(up, 0.15), up, len, 0.14, PROPHET_COL[0], PROPHET_COL[1], PROPHET_COL[2], 1.25 * k * (1 + 0.7 * smooth(120, 400, dist)), cam, id * 0.37);
+          M.beams.add(_c.copy(head).addScaledVector(up, 0.15), up, len, Math.max(0.14, Math.min(0.5, dist * 0.004)), PROPHET_COL[0], PROPHET_COL[1], PROPHET_COL[2], 1.25 * k * (1 + 0.7 * smooth(120, 400, dist)), cam, id * 0.37);
           // a slow ring of motes over the head (near), a point of light at the head from afar
           if (dist < 220) {
             const e = tangent(up, _e), n = _n.crossVectors(up, e);
@@ -265,7 +269,7 @@ export class SignsLayer {
             }
           }
           // a soft light round the head (near), a point of light marking them from afar
-          M.glints.add(head.x + up.x * 0.1, head.y + up.y * 0.1, head.z + up.z * 0.1, Math.max(0.55, dist * 0.007), PROPHET_COL[0], PROPHET_COL[1], PROPHET_COL[2], (0.35 + 0.5 * smooth(120, 300, dist)) * k);
+          M.glints.add(head.x + up.x * 0.1, head.y + up.y * 0.1, head.z + up.z * 0.1, Math.max(0.55, dist * 0.009), PROPHET_COL[0], PROPHET_COL[1], PROPHET_COL[2], (0.6 + 0.3 * smooth(120, 300, dist)) * k);
           // a little light falling on them (and on those round them)
           const L = decal(DECAL.light, [_g.x, _g.y, _g.z], 8);
           L.cr = PROPHET_COL[0]; L.cg = PROPHET_COL[1]; L.cb = PROPHET_COL[2]; L.p0 = 8; L.p1 = 140 * k; L.p2 = 3.2; L.p3 = 1.4;

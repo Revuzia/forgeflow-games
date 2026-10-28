@@ -400,8 +400,12 @@ export function registerOmenCommands(r: CommandRegistry): void {
     const at: V3 = st && typeof a.settlement === 'number' && !placed ? [st.pos[0], st.pos[1], st.pos[2]] : a.pos ? norm(a.pos) : st ? [st.pos[0], st.pos[1], st.pos[2]] : herePos(u, p);
     const kind = (typeof a.kind === 'string' ? a.kind : fitting(u, p, st, at)) as OmenKind | null;
     if (!kind) return fail('No sign fits this world now.');
+    // the same sign again within ten days is weather to the town it was sent to: no wonder either (integration
+    // 2026-10-28: once the sign stood over the named town, the wonder witnessed there moved faith on every repeat)
+    const last = st ? srel(u, p.id, st.id).omens[kind] : undefined;
+    const stale = last !== undefined && u.tick - last < QUIET_DAYS * Math.max(60, Math.round(p.st.dayHours * 60));
     const res = makeOmen(u, p, kind, st, at, g);
-    if (res.ok) godAct(u, p, at, 600, { wonder: 0.25 }, g);
+    if (res.ok && !stale) godAct(u, p, at, 600, { wonder: 0.25 }, g);
     return res;
   }, {
     desc: 'Send a sign: an eclipse, a comet, a rainbow, lightning on one tree, an aurora, red rain, the sun standing still, the sacred animal, a spring', category: 'Signs',

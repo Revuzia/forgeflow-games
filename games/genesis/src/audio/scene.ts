@@ -10,13 +10,13 @@
 // crackle, lava rumble, crowd murmur by town size, space hum in orbit, and silence-with-heartbeat on an airless world.
 //
 // It also lists the point sources worth placing in 3D (fires, crowds, lava, storms seen from outside, every live
-// disaster, the creature, ships on the pad or in flight, herds) in LISTENER-LOCAL coordinates (x right, y up, the camera
+// disaster, ships on the pad or in flight, herds) in LISTENER-LOCAL coordinates (x right, y up, the camera
 // looks down −z: exactly WebAudio's default listener frame), and the cultures whose music should play, weighted by
 // proximity. The probe is sized by altitude: a walker hears what is within tens of metres, a god hovering over a town
 // hears the town.
 
 import type {
-  CreatureView, DisasterView, FieldName, HandView, MoverBlock, PlanetParams, SettlementView, ShipView, StarView, WeatherView,
+  DisasterView, FieldName, HandView, MoverBlock, PlanetParams, SettlementView, ShipView, StarView, WeatherView,
 } from '../sim/types.ts';
 import { SettlementFlag } from '../sim/types.ts';
 import { groundHeight, type GroundSource } from '../sim/grid/surface.ts';
@@ -49,7 +49,6 @@ export interface ScenePlanet {
 export interface SceneWorld {
   planets: ScenePlanet[];
   ships?: ShipView[];
-  creatures?: CreatureView[];
   hand?: HandView | null;
   star?: StarView;
   speed?: number;
@@ -83,13 +82,13 @@ export interface SceneLayers {
   quake: number;
 }
 
-export type EmitterKind = 'fire' | 'crowd' | 'lava' | 'disaster' | 'storm' | 'creature' | 'ship' | 'herd';
+export type EmitterKind = 'fire' | 'crowd' | 'lava' | 'disaster' | 'storm' | 'ship' | 'herd';
 
 export interface SceneEmitter {
   /** stable identity across probes ('fire:1203', 'st:4', 'dis:9', …) */
   key: string;
   kind: EmitterKind;
-  /** disaster / weather kind, crowd work kind ('stone' | 'metal' | 'machine'), ship phase, herd voice, creature body */
+  /** disaster / weather kind, crowd work kind ('stone' | 'metal' | 'machine'), ship phase, herd voice */
   sub: string;
   /** listener-local position (m) at probe time */
   local: [number, number, number];
@@ -98,9 +97,9 @@ export interface SceneEmitter {
   dist: number;
   /** 0..1 audible level at the listener (attenuation already applied) */
   level: number;
-  /** kind-specific magnitude: fire cluster size, population, disaster intensity, creature height, herd count */
+  /** kind-specific magnitude: fire cluster size, population, disaster intensity, herd count */
   size: number;
-  /** kind-specific extra: creature anim, ship progress, disaster progress, herd nocturnal flag */
+  /** kind-specific extra: ship progress, disaster progress, herd nocturnal flag */
   param: number;
   /** 0..1: the listener is inside it (envelops rather than points) */
   spread: number;
@@ -582,13 +581,6 @@ export class SceneProbe {
       const lvl = carrier * clamp01(0.35 + 0.65 * Math.min(1.5, d.intensity)) * Math.max(inside, attenuate(loc[3], ref(60 + d.radius)));
       if (lvl > 0.01) emit.push({ key: `dis:${d.id}`, kind: 'disaster', sub: d.kind, local: [loc[0], loc[1], loc[2]], body: this.lastBody, dist: loc[3], level: clamp01(lvl), size: d.intensity, param: d.progress, spread: inside });
       if (DISASTER_QUAKE.has(d.kind) && !d.frozen) lay.quake = Math.max(lay.quake, clamp01(d.intensity) * Math.max(inside, attenuate(gd, d.radius * 2)) * (d.kind === 'quake' || d.kind === 'sinkhole' ? 1 : 0.6));
-    }
-    // the creature(s)
-    for (const c of w.creatures ?? []) {
-      if (c.planet !== pv.id) continue;
-      const loc = this.localOf(pv, L, c.pos, c.height * 0.5);
-      const lvl = Math.max(inAir, 0.2) * clamp01(0.35 + c.height / 25) * attenuate(loc[3], ref(25 + c.height * 2));
-      if (lvl > 0.01) emit.push({ key: `cr:${c.id}`, kind: 'creature', sub: c.body, local: [loc[0], loc[1], loc[2]], body: this.lastBody, dist: loc[3], level: clamp01(lvl), size: c.height, param: c.anim, spread: 0 });
     }
     // ships on this world: building, fuelling, the launch itself, the descent
     for (const s of w.ships ?? []) {

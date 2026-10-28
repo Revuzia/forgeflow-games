@@ -2105,7 +2105,12 @@ migration test on a save of the previous 1.5 build, and ran the whole suite agai
   0.12, 0.03 vs 0.03). Test: `tests/living-integration.test.ts` "a sign sent to a named town stands over that town …"
   (fails without the fix: the comet read 6959 m off). The probe also fulfils a prophet's own reading of the comet
   (healing, rebuilding, warmth, protection) with the act that answers it (before: a rainbow, which cannot). Both omen
-  cases were re-run on all 16 worlds (`r6/out/god-omen-i9.log`, `god50-omen-i9.log`). No saved state changed.
+  cases were re-run on all 16 worlds (`r6/out/god-omen-i9.log`, `god50-omen-i9.log`): 8-seed means, fresh towns
+  credibility 0.475 vs 0.05, trust 0.28 vs 0.22, loyalty 0.19 vs 0.09; year-50 towns 0.41 vs 0.03, 0.24 vs 0.14, 0.15
+  vs 0.03 (both met). The gate then caught a follow-on (`tests/living-relationship.test.ts` "a rainbow a day is
+  weather"): with the sign over the town, the wonder `god.omen` adds for the god's act (`godAct`, 600 m) was witnessed
+  there and moved faith on a repeat inside the ten quiet days; a sign the town had of that kind within ten days now adds
+  no wonder either. No saved state changed.
 
 ### 10.3 The acceptance suite (how it ran)
 All on the final integrated tree, two processes at a time on the shared 4-core machine (`r6/jobs.txt`, run by
@@ -2223,19 +2228,25 @@ eight, `r6/out/summarize-8alone.log`). Firsts are the game year of the first rec
   36 targets met, 10 partly, 12 missed, 13 report-only rows (six seeds: 38 / 10 / 10).
 
 **The god's sessions on year-50 towns** (`god.ts`, `FROM=y50`, the biggest town of each 50-year world, natural disasters
-on; so far seeds 20261008 and 7, 24 sessions, none failed; the other six run after their worlds): meteor 11.7 %
-killed, fear 0.02 → 0.40, trust → 0; drought answered faith 0.11 → 0.94, trust → 0.82, loyalty → 0.29; drought
-ignored trust → 0, fear → 0.38; prophet fulfilled trust 0.73, loyalty 0.48 vs failed faith 0.08; omen fulfilled vs
-contradicted trust 0.14 / 0.15, loyalty 0.12 / 0.02; the storm 77 % sheltering. Two rows missed on these older,
-larger towns (both met on the 30-person bronze town above): the meteor left 48 % of buildings standing (28–68 %; ≥ 60 %
-asked), killed 6.8 % on one seed (10–35 %) and on that seed nothing was rebuilt within 10 days — these worlds are dry
-fire country by year 50 (§10.5) and the blast lit them: 166 and 15 fires started on the first day, 53 and 43
-buildings collapsed (seeds 20261008 and 7, `r6/out/god50-*.json` "meteor" d1; the 6.8 % killed — 5 of 73 — is
-under the 10–35 % band with as few people outside the danger radius at the blow, 1–7 %, as on the bronze town:
-not traced); and seed 20261008's prophet ended at credibility 0.335
-(≥ 0.7; seed 7's 0.705): the session used the town's own risen prophet, who had made a fourth prophecy of its own that
-failed (`stats`: prophecies 4, fulfilled 3, failed 1) — the script fulfils only the three it asks for. Neither is a
-sim fault; both rows are re-read when the other six year-50 sessions have run.
+on; all 8 seeds, 96 sessions, none failed, `r6/out/god50-*.json`; the omen pair re-run on the 2026-10-28 tree,
+`r6/out/god50-omen-i9.log`): the storm 69 % sheltering (42–92 %), outdoor work 86 % below the control; the meteor
+killed 12.6 % (6.8–20 %), fear 0.02 → 0.38, trust → 0; drought answered faith 0.05 → 0.96, trust → 0.88, loyalty →
+0.37 vs ignored trust → 0, fear → 0.28 (thirst dead ≤ 3.4 %); prophet fulfilled trust 0.70, loyalty 0.46 vs failed
+faith 0.05 (credibility 0 on all 8); omen fulfilled vs contradicted credibility 0.41 / 0.03, trust 0.24 / 0.14,
+loyalty 0.15 / 0.03 (met; before the §10.2 fix "a sign sent to a named town stands over that town" the sign landed
+at the camera focus and fulfilled nothing: trust 0.11 vs 0.13, missed); an iron vein mined once iron is taught 8/8,
+sunroot sown and harvested 8/8, mithril partly (ore in the store 8/8, goods made of it by day 20 on 4/8). Two rows
+missed on these older, larger towns (both met on the 30-person bronze town above). (1) The meteor: 66.7 % of buildings
+standing on average and the town never fell, but 6 of 8 seeds ≥ 60 % (per seed 20261008 0.68, 7 0.28, 1234 0.81,
+1 0.22, 2 0.88, 3 0.84, 4 0.81, 5 0.82): seed 1 is a 9-building town (2 left, 8 again by day 10), seed 7 lost 42 of
+58 (23 by day 10); these worlds are dry fire country by year 50 (§10.5) and the blast lights them (seeds 20261008 and
+7: 166 and 15 fires on the first day, 53 and 43 buildings collapsed); killed under 10 % on three seeds (6.8, 9.3,
+9.1 %) with few outside the danger radius at the blow (1–10 %). (2) The prophet's credibility after three fulfilled
+prophecies: 0.33–0.705, ≥ 0.7 on 3 of 8 (seeds 1, 3, 7; 1234 0.66): the four lowest (20261008 0.335, 2 0.49, 5
+0.52, 4 0.33) each made prophecies of their own that failed (`stats` made/fulfilled/failed 4/3/1, 4/3/1, 4/3/1,
+6/3/2) — a prophet reads omens and foretells by itself (`god/omens.ts` readOmen, p = 0.5 × credibility) and the
+script fulfils only its three; credibility follows the record, as §3.8 asks (loyalty gain 0.30–0.67 and trust
+0.56–0.81 are in target on all 8). Neither is a sim fault.
 
 *(the kin fixture, speciation (`-i6`) and the rest of the year-50 sessions: queued, `r6/jobs8.txt`; results to follow.
 The fire, day and plague probes: §10.5, `acceptance.json` "§1.6 PACE daily probe" (met) and §10.2.)*

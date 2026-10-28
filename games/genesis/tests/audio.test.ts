@@ -379,6 +379,10 @@ test('every event the sim emits maps to a sound the catalog has (or deliberately
     'contact', 'conversion', 'worship', 'rival.act', 'ship.orbit', 'ship.transfer', 'arrival', 'colony', 'ship.outpost',
     'ship.lost', 'ship.home', 'ship.program', 'ship.refused', 'ship.spoiled', 'ship.recalled', 'ship.stranded',
     'world.cracked', 'world.erased', 'world.abandoned',
+    // the living world (LIVING §3.4, §3.7)
+    'prayer.raised', 'prayer.answered', 'prayer.lapsed', 'prophet.called', 'prophet.foretold', 'prophet.fulfilled',
+    'prophet.failed', 'prophet.died', 'prophet.persecuted', 'prophet.abandoned', 'omen', 'sacred.place', 'sacred.animal',
+    'warning', 'evacuate', 'shelter',
   ];
   for (const t of types) {
     const c = cueFor({ t, tick: 0, a: 3, text: t === 'age' ? 'golden' : 'accepted', data: { kind: 'meteor', k: 'hand.grab', how: 'experiment' } });
@@ -386,6 +390,7 @@ test('every event the sim emits maps to a sound the catalog has (or deliberately
     assert.ok(SFX[c!.cue], `${t} → ${c!.cue} has no recipe`);
   }
   assert.equal(cueFor({ t: 'no-such-event', tick: 0 }), null);
+  assert.equal(cueFor({ t: 'warning.end', tick: 0 }), null, 'the disaster itself follows');
   assert.equal(cueFor({ t: 'command', tick: 0, data: { k: 'focus' } }), null);
   assert.equal(cueFor({ t: 'chronicle', tick: 0, a: 1 }), null);
   assert.ok(cueFor({ t: 'chronicle', tick: 0, a: 3 }));
@@ -619,4 +624,26 @@ test('the engine mirrors the portal\'s mutechange and pushes its own mute to it 
   } finally {
     if (had) g.window = prev; else delete g.window;
   }
+});
+
+test('the living world: signs read by trust or fear, warnings by what is coming; no creature is heard (H6)', () => {
+  const omen = (reading: string) => cueFor({ t: 'omen', tick: 0, text: 'comet', data: { kind: 'comet', reading, god: 0 } })!;
+  assert.equal(omen('trusted').variant, 'trusted');
+  assert.equal(omen('feared').variant, 'feared');
+  assert.notEqual(omen('trusted').key, omen('feared').key, 'a trusting and a fearful town are two different sounds');
+  for (const kind of ['volcano', 'tsunami', 'meteor', 'hurricane', 'plague']) {
+    const c = cueFor({ t: 'warning', tick: 0, a: 30, data: { kind, id: 1 } })!;
+    assert.equal(c.cue, 'warning');
+    assert.equal(c.variant, kind);
+    assert.ok(SFX.warning, 'a warning recipe');
+  }
+  // prophets, prayers, sacred places and the god's settings sound through the events they raise, not twice
+  for (const k of ['prophet.call', 'prophet.foretell', 'prophet.abandon', 'prayer.answer', 'place.sacred', 'god.omen', 'god.wrath']) {
+    assert.equal(commandCue(k), null, k);
+  }
+  // H6: the creature is gone — no recipe, no event, no command makes its sound
+  assert.deepEqual(Object.keys(SFX).filter((k) => k.startsWith('creature')), []);
+  for (const t of ['creature.reward', 'creature.punish', 'creature.learned']) assert.equal(cueFor({ t, tick: 0 }), null, t);
+  assert.equal(commandCue('creature.adopt'), null);
+  assert.equal(commandCue('creature.teach'), null);
 });

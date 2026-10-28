@@ -9,7 +9,7 @@
 
 import type { BufferBank } from './bank.ts';
 import { BELL_BASE, PLUCKS, pluckRoot } from './bank.ts';
-import { DISASTER_FAMILIES } from './eventmap.ts';
+import { DISASTER_FAMILIES, disasterFamily } from './eventmap.ts';
 import { bq, bufSrc, envelope, glide, midiHz, osc, reedWave } from './synth.ts';
 import type { Voice, VoicePool } from './voices.ts';
 
@@ -218,7 +218,7 @@ export class Sfx {
     return e;
   }
 
-  /** a bird / creature syrinx tone */
+  /** a bird's syrinx tone */
   reed(at: number, f0: number, f1: number, gl: number, a: number, hold: number, rel: number, peak: number, f?: Filt): number {
     return this.tn(reedWave(this.ctx), at, f0, f1, gl, a, hold, rel, peak, f);
   }
@@ -554,7 +554,6 @@ export const SFX: Record<string, Recipe> = {
       case 'tree': s.bell('wood', 0, 160, 0.7 * k); s.nz('pink', 0, 0.01, 0.1, 0.8, 0.35 * k, ['highpass', 1500]); thud(s, 0.05, 0.5 * k, 0.8); break;
       case 'building': thud(s, 0, 0.8 * k, 0.6); crackleBurst(s, 0.02, 1.2, 0.5 * k, ['lowpass', 2500]); s.buf('hail', 0.05, 0.5, 0.4 * k, ['lowpass', 1800], 1.2); break;
       case 'agent': thud(s, 0, 0.5 * k, 1.3); s.choir(0.02, 180, 0.25, 0.04, [600, 1000]); break;
-      case 'creature': thud(s, 0, 0.9 * k, 0.5); rumble(s, 0.05, 1, 0.3 * k, 120); break;
       default: thud(s, 0, 0.45 * k, 1.1);
     }
   },
@@ -692,6 +691,134 @@ export const SFX: Record<string, Recipe> = {
   'world.abandoned': (s) => { s.nz('pink', 0, 1, 0.5, 2, 0.25, ['bandpass', 400, 6, 250, 2.5]); s.arp('glass', 0.6, [76, 72], 0.5, 0.14); s.wet(0.6); },
   'chronicle.great': (s) => { s.bell('toll', 0, 98, 0.32, ['lowpass', 1400]); s.wet(0.6); },
 
+  // ── the god and the people (LIVING §3.4, §3.7): prayers, prophets, signs, sacred places, warnings, shelter ──
+  // (voices in the game's key, D; the music's stingers mark the great moments, these are the towns' own sounds)
+  // a town at prayer: voices rising together, unison then the fifth, a third voice when the need is urgent
+  prayer: (s) => {
+    s.choir(0, 146.8, 2.6, 0.05, [450, 850]);
+    s.choir(0.3, 220, 2.3, 0.04, [450, 850]);
+    if (s.size > 0.6) s.choir(0.6, 293.7, 2.0, 0.035, [600, 1000]);
+    s.bell('chime', 0.4, midiHz(81), 0.06);
+    s.wet(0.6);
+  },
+  // answered: the voices open into D major and a run of chimes
+  'prayer.answered': (s) => {
+    for (const [hz, i] of [[146.8, 0], [185, 1], [220, 2], [293.7, 3]] as [number, number][]) s.choir(i * 0.05, hz, 1.8, 0.04, [700, 1150]);
+    s.arp('chime', 0.15, [74, 78, 81, 86], 0.09, 0.14);
+    s.wet(0.6);
+  },
+  // unanswered: the voices sink to the minor and two chimes fall away
+  'prayer.lapsed': (s) => {
+    s.choir(0, 220, 1.6, 0.04, [450, 800]);
+    s.choir(0.05, 174.6, 1.6, 0.035, [450, 800]);
+    s.bell('chime', 0.5, midiHz(77), 0.08, ['lowpass', 2000]);
+    s.bell('chime', 0.85, midiHz(74), 0.06, ['lowpass', 1600]);
+    s.wet(0.6);
+  },
+  // a prophet called: one voice rises out of the town on the motif's first leap (D → A) over a low bell
+  'prophet.called': (s) => {
+    s.bell('toll', 0, 146.8, 0.12, ['lowpass', 1200]);
+    s.choir(0, 293.7, 0.7, 0.06, [600, 1000]);
+    s.choir(0.65, 440, 1.6, 0.065, [700, 1150]);
+    shimmer(s, 0.5, 1.2, 0.02);
+    s.wet(0.6);
+  },
+  // a prophecy spoken: the voice intones the motif's head (D A G A C) over a drone
+  'prophet.foretold': (s) => {
+    s.tn('sawtooth', 0, 73.4, 73.4, 0, 0.3, 2.2, 0.8, 0.025, ['lowpass', 400]);
+    const head = [62, 69, 67, 69, 72], durs = [0.45, 0.15, 0.15, 0.15, 0.9];
+    let t = 0.1;
+    head.forEach((m, i) => { s.choir(t, midiHz(m), durs[i] + 0.08, 0.055, [600, 1000]); t += durs[i]; });
+    s.wet(0.6);
+  },
+  // a prophecy fulfilled: the town's acclaim, a bell and voices in D major
+  'prophet.fulfilled': (s) => {
+    s.bell('toll', 0, 146.8, 0.2, ['lowpass', 1800]);
+    for (const [hz, i] of [[293.7, 0], [370, 1], [440, 2]] as [number, number][]) s.choir(0.1 + i * 0.04, hz, 2.0, 0.045, [700, 1150]);
+    s.buf('murmur2', 0.2, 1.15, 0.14, ['bandpass', 900, 0.8], 1.6);
+    s.wet(0.55);
+  },
+  // a prophecy failed: the voice breaks off and falls hollow
+  'prophet.failed': (s) => {
+    s.choir(0, 293.7, 0.5, 0.05, [600, 1000]);
+    s.pluck('pizz', 0.45, 57, 0.3, ['lowpass', 900]);
+    s.pluck('pizz', 0.75, 50, 0.3, ['lowpass', 700]);
+    thud(s, 0.75, 0.18, 1.3);
+    s.wet(0.45);
+  },
+  // a prophet dies: a toll, a lament falling a third
+  'prophet.died': (s) => {
+    s.bell('toll', 0, 146.8, 0.3, ['lowpass', 1100]);
+    s.choir(0.4, 220, 1.4, 0.04, [450, 800]);
+    s.choir(1.6, 174.6, 1.8, 0.04, [450, 800]);
+    s.wet(0.65);
+  },
+  // a prophet persecuted: a crowd's angry roar, stones thrown
+  'prophet.persecuted': (s) => {
+    s.buf('murmur2', 0, 0.8, 0.24, ['lowpass', 1400], 1.4);
+    for (let i = 0; i < 3; i++) thud(s, 0.3 + i * 0.27 + s.r() * 0.08, 0.22, 1.1);
+    s.tn('sawtooth', 0, 98, 92, 1.2, 0.2, 0.6, 0.6, 0.04, ['lowpass', 500]);
+    s.wet(0.35);
+  },
+  // the call withdrawn: the leap back down (A → D) in fading glass
+  'prophet.abandoned': (s) => { s.arp('glass', 0, [81, 74], 0.4, 0.14, ['lowpass', 3000]); s.nz('pink', 0, 0.4, 0.2, 1.2, 0.05, ['lowpass', 900]); s.wet(0.6); },
+  // a sign seen: the town's hush of awe — warm and rising where they trust the god, a low uneasy cluster where they fear it
+  omen: (s) => {
+    shimmer(s, 0, 1.6, 0.025);
+    if (s.variant === 'feared') {
+      s.choir(0.2, 146.8, 2.0, 0.04, [400, 750]);
+      s.choir(0.25, 155.6, 2.0, 0.03, [400, 750]);
+      s.bell('toll', 0.1, 110, 0.12, ['lowpass', 900]);
+    } else {
+      s.choir(0.2, 220, 2.0, 0.04, [600, 1000]);
+      s.choir(0.35, 329.6, 1.8, 0.035, [600, 1000]);
+      s.arp('glass', 0.1, [86, 93], 0.3, 0.1);
+    }
+    s.buf('murmur2', 0.3, 0.9, 0.08, ['bandpass', 700, 0.8], 1.4);
+    s.wet(0.65);
+  },
+  // a place made holy: a temple bell and voices on D with the dorian sixth
+  'sacred.place': (s) => {
+    s.bell('toll', 0, 146.8, 0.2, ['lowpass', 2000]);
+    s.pad(0.1, [50, 57, 62, 66, 71], 0.8, 1.2, 2.4, 0.12);
+    for (const [hz, i] of [[293.7, 0], [370, 1], [493.9, 2]] as [number, number][]) s.choir(0.3 + i * 0.1, hz, 2.0, 0.035, [600, 1000]);
+    s.wet(0.65);
+  },
+  // an animal held sacred: a herder's horn call far off (a fourth), a soft chime
+  'sacred.animal': (s) => { s.horn(0, 220, 0.5, 0.1, 0.5); s.horn(0.55, 293.7, 1.2, 0.1, 0.5); s.arp('chime', 0.9, [81, 86], 0.18, 0.1); s.wet(0.55); },
+  // a disaster's warning phase: the land before the blow — the ground grumbles before a quake or an eruption, the sea
+  // draws back hissing before a wave, a high whistle before a strike from the sky, a low moan of wind before the rest
+  warning: (s) => {
+    const fam = disasterFamily(s.variant);
+    if (fam === 'eruption' || fam === 'quake' || fam === 'collapse' || fam === 'rift') {
+      rumble(s, 0, 2.6, 0.45, 70);
+      s.nz('brown', 0.4, 0.8, 0.6, 1.4, 0.25, ['lowpass', 140]);
+    } else if (fam === 'wave') {
+      s.nz('pink', 0, 1.2, 0.8, 1.5, 0.3, ['bandpass', 1200, 0.7, 500, 2.5]);
+      s.nz('brown', 0, 1, 1, 1.5, 0.2, ['lowpass', 180]);
+    } else if (fam === 'incoming' || fam === 'shower' || fam === 'comet' || fam === 'celestial') {
+      s.tn('sine', 0, 2400, 900, 2.6, 0.6, 1.4, 0.8, 0.05);
+      whoosh(s, 0.8, 2, 0.12, 400, 2600);
+    } else {
+      s.nz('pink', 0, 1.2, 0.8, 1.6, 0.25, ['bandpass', 300, 4, 520, 2]);
+      s.tn('sawtooth', 0.2, 73.4, 73.4, 0, 0.8, 1.2, 1.2, 0.03, ['lowpass', 300]);
+    }
+    s.wet(0.4);
+  },
+  // the town warned: an alarm bell rung fast, people calling
+  evacuate: (s) => {
+    for (let i = 0; i < 6; i++) s.bell('toll', i * 0.36, 392, 0.16 - i * 0.012, ['lowpass', 2600]);
+    s.buf('murmur2', 0.1, 1.25, 0.2, ['bandpass', 1000, 0.8], 2.2);
+    s.wet(0.35);
+  },
+  // the people take shelter: hurried feet, doors and shutters, the crowd going in
+  shelter: (s) => {
+    for (let i = 0; i < 5; i++) s.bell('wood', 0.1 + i * 0.28 + s.r() * 0.1, s.rr(140, 220), s.rr(0.12, 0.22));
+    for (let i = 0; i < 6; i++) thud(s, i * 0.17 + s.r() * 0.05, 0.08, 1.6);
+    s.buf('murmur2', 0, 1.2, 0.16, ['bandpass', 900, 0.8], 1.4);
+    s.wet(0.3);
+  },
+
   // ── the god's other acts ──
   shape: (s) => {
     const up = !/lower|dig|crater|sea/.test(s.variant);
@@ -714,15 +841,6 @@ export const SFX: Record<string, Recipe> = {
   touch: (s) => { s.tn('sine', 0, 520, 520, 0, 0.005, 0.03, 0.25, 0.12); s.bell('chime', 0.02, midiHz(91), 0.06); s.wet(0.3); },
   decree: (s) => { s.bell('toll', 0, 293.7, 0.2, ['lowpass', 2200]); s.wet(0.4); },
   idea: (s) => { s.arp('glass', 0, [84, 89], 0.12, 0.2); s.wet(0.45); },
-  'creature.adopt': (s) => { s.reed(0, 140, 200, 0.5, 0.1, 0.3, 0.5, 0.15, ['lowpass', 1500]); s.arp('chime', 0.5, [79, 84], 0.15, 0.18); s.wet(0.35); },
-  'creature.call': (s) => s.reed(0, 160, 120, 0.4, 0.05, 0.15, 0.3, 0.12, ['lowpass', 1400]),
-  'creature.happy': (s) => {
-    // a purr (low tone, fast amplitude flutter) and a rising coo
-    s.vib(0, 70, 24, 40, 0.1, 0.6, 0.3, 0.2, 'sawtooth', ['lowpass', 400]);
-    s.reed(0.3, 300, 520, 0.4, 0.05, 0.2, 0.3, 0.1, ['lowpass', 2500]);
-  },
-  'creature.hurt': (s) => { s.reed(0, 700, 300, 0.25, 0.01, 0.05, 0.25, 0.18, ['lowpass', 3000]); s.nz('white', 0, 0.002, 0, 0.08, 0.15, ['bandpass', 1500]); },
-  'creature.learned': (s) => { s.reed(0, 300, 600, 0.3, 0.03, 0.1, 0.25, 0.1, ['lowpass', 2500]); s.bell('chime', 0.25, midiHz(88), 0.15); s.wet(0.4); },
   rewind: (s) => {
     s.nz('pink', 0, 0.9, 0, 0.05, 0.45, ['bandpass', 300, 1.6, 4000, 0.9]);
     for (let i = 0; i < 10; i++) s.nz('white', i * 0.08, 0.001, 0.005, 0.02, 0.12, ['highpass', 2500]);
@@ -879,7 +997,7 @@ Object.assign(SFX, {
   'herd.ray': (s: Sfx) => s.nz('pink', 0, 0.6, 0.4, 0.8, 0.12, ['bandpass', 380, 2, 520, 1.5]),
   'herd.chitter': (s: Sfx) => { for (let i = 0; i < 6; i++) s.fm(i * 0.045, s.rr(2200, 2700), 1.7, 4, 1, 0.002, 0.01, 0.03, 0.08); },
   'herd.swarm': (s: Sfx) => { for (let i = 0; i < 3; i++) { const f = s.rr(190, 260); s.tn('sawtooth', 0, f, f, 0, 0.3, 0.5, 0.5, 0.04, ['lowpass', 1300]); } },
-  // events inside the disaster / creature / ship beds
+  // events inside the disaster / ship beds
   'bed.whistle': (s: Sfx) => { const f = s.rr(1800, 3000); s.tn('sine', 0, f, f * 0.22, 1.4, 0.05, 0.4, 0.8, 0.12); s.nz('pink', 0, 0.6, 0.3, 0.6, 0.12, ['bandpass', f * 0.7, 3, f * 0.2, 1.2]); },
   'bed.whistler': (s: Sfx) => s.tn('sine', 0, s.rr(5000, 7500), s.rr(700, 1100), 1.2, 0.02, 0.2, 0.9, 0.07),
   'bed.crack': (s: Sfx) => { s.nz('white', 0, 0.001, 0.01, 0.05, 0.35, ['highpass', 2000]); s.fm(0, s.rr(1800, 2600), 2.71, 3, 0.2, 0.002, 0, 0.6, 0.07); },

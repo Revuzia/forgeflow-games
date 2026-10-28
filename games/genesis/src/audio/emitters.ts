@@ -1,4 +1,4 @@
-// GENESIS — point sources in 3D (CONTRACT §17: spatial fires, crowds, storms, impacts, launches, the creature). The
+// GENESIS — point sources in 3D (CONTRACT §17: spatial fires, crowds, storms, impacts, launches, herds). The
 // probe (scene.ts) lists what could be heard; this pool keeps the loudest few alive as continuous voices placed with
 // HRTF panners, re-placed every frame from their body-frame positions (the camera turns and the world spins between
 // probes), fading in when they enter the budget and out when they leave it.
@@ -6,9 +6,9 @@
 // Each kind has a recipe of layers — looping textures, filtered noise, oscillators with slow LFOs — and events played
 // through the shared voice budget into the emitter's own spatial input: a town's murmur over the work of its era
 // (knapping, anvils, machines), a fire's crackle over its roar, a storm wall's rain and its thunder, every disaster
-// kind (a tornado's howl, a swarm's buzz, a volcano's booms, a leviathan's moans, the forgetting fog's whispers…), the
-// creature's footsteps, growls and breath by what it is doing, a rocket's roar on the ascent, a herd's calls by its
-// species' voice (owls and howls at night).
+// kind (a tornado's howl, a swarm's buzz, a volcano's booms, the deep's moans, the forgetting fog's whispers…), a
+// rocket's roar on the ascent, a herd's calls by its species' voice (owls and howls at night). (No creature: LIVING §3.5,
+// hook H6 — the god is heard through the Touch, its signs and its people.)
 
 import type { AudioScene, EmitterKind, SceneEmitter } from './scene.ts';
 import type { AmbienceHost } from './ambience.ts';
@@ -16,7 +16,6 @@ import type { BufferBank } from './bank.ts';
 import { disasterFamily } from './eventmap.ts';
 import { SpatialOut } from './spatial.ts';
 import { bq, bufSrc, Knob, osc } from './synth.ts';
-import { AnimState } from '../sim/types.ts';
 
 export interface EmitterHost extends AmbienceHost {
   /** listener-local [x, y, z, d] of a body-frame point on a planet, with the current frames (null: planet gone) */
@@ -89,7 +88,7 @@ export function disasterBed(kind: string): Layer[] {
 }
 
 /** loudness of a kind at level 1 */
-const KIND_GAIN: Record<EmitterKind, number> = { fire: 0.8, crowd: 0.5, lava: 0.7, storm: 0.6, creature: 0.9, ship: 1, herd: 0.75, disaster: 0.85 };
+const KIND_GAIN: Record<EmitterKind, number> = { fire: 0.8, crowd: 0.5, lava: 0.7, storm: 0.6, ship: 1, herd: 0.75, disaster: 0.85 };
 
 class EmitterVoice {
   readonly key: string;
@@ -178,9 +177,6 @@ class EmitterVoice {
         return this.layers([['loop', 'lava', 0.75], ['noise', 'brown', 0.55, ['lowpass', 85, 0.9], ['gain', 0.17, 0.2]]]);
       case 'storm':
         return this.layers([['noise', 'pink', 0.45, ['lowpass', 1400, 0.6]], ['noise', 'brown', 0.6, ['lowpass', 160]], ['loop', 'patter', 0.2, 0.9, ['lowpass', 2500]], ['ev', 'thunder', 0.07, 0.6]]);
-      case 'creature':
-        // breath (a snore when it sleeps); steps and voice come from the tick
-        return this.layers([['noise', 'pink', 0.12, ['bandpass', 340, 2], ['gain', 0.25, 0.1]]]);
       case 'ship':
         switch (this.sub) {
           case 'ascent': case 'descent':
@@ -239,18 +235,7 @@ class EmitterVoice {
       if (r() < rate * dt) this.host.play(cue, { t: now + 0.03, dest: this.sp.input, level, size, variant, pri: 2 });
     };
     for (const ev of this.evs) fire(ev.cue, ev.rate, ev.level, this.size);
-    if (this.kind === 'creature') {
-      const a = this.param;
-      const h = this.size;
-      const step = a === AnimState.walk ? 1.5 : a === AnimState.run || a === AnimState.flee ? 2.8 : a === AnimState.dance ? 2.2
-        : a === AnimState.work || a === AnimState.build || a === AnimState.chop || a === AnimState.dig ? 0.8 : 0;
-      fire('bed.step', step, 0.9, h);
-      if (a === AnimState.fight) fire('bed.growl', 0.7, 0.9, h);
-      else if (a === AnimState.eat || a === AnimState.graze) fire('bed.munch', 0.6, 0.7, h);
-      else if (a === AnimState.cheer || a === AnimState.dance) fire('creature.happy', 0.2, 0.6, h);
-      else if (a === AnimState.mourn) fire('bed.moan', 0.08, 0.4, h);
-      else if (a !== AnimState.sleep) fire('creature.call', 0.05, 0.6, h);
-    } else if (this.kind === 'herd') {
+    if (this.kind === 'herd') {
       const nocturnal = this.param > 0;
       const awake = nocturnal ? night : 1 - 0.7 * night;
       const rate = (0.05 + 0.035 * Math.log2(1 + this.size)) * awake;

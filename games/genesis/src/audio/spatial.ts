@@ -1,5 +1,5 @@
-// GENESIS — spatial audio (CONTRACT §17: PannerNode / HRTF for fires, crowds, storms, impacts, launches, the
-// creature). The listener stays at the origin facing −z with +y up (WebAudio's default frame) and every source is
+// GENESIS — spatial audio (CONTRACT §17: PannerNode / HRTF for fires, crowds, storms, impacts, launches,
+// herds). The listener stays at the origin facing −z with +y up (WebAudio's default frame) and every source is
 // moved into camera space instead (scene.ts computes listener-local positions), so a camera 10⁷ m from the star never
 // feeds huge coordinates to the panner. The panner only places the DIRECTION (its rolloff is off); distance is
 // heard through our own gain (scene.ts `attenuate`, sized by altitude), an air-absorption lowpass that darkens far

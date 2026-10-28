@@ -102,7 +102,6 @@ export function commandCue(k: string): { cue: string; gain: number; gap: number;
     case 'planet.remove-air': return { cue: 'air.drain', gain: 1, gap: 1, variant: '' };
     case 'time.rewind': case 'time.edit-past': return { cue: 'rewind', gain: 1, gap: 0.5, variant: '' };
     case 'world.birth': case 'world.moon-add': return { cue: 'world.birth', gain: 1, gap: 1, variant: k };
-    case 'creature.adopt': return { cue: 'creature.adopt', gain: 1, gap: 1, variant: '' };
     case 'fire.extinguish': return { cue: 'steam', gain: 0.9, gap: 0.3, variant: '' };
     case 'fire.ignite': case 'fire.firestorm': return { cue: 'fire.ignite', gain: 0.9, gap: 0.3, variant: '' };
     case 'focus': case 'time.scale': case 'time.speed': case 'time.step': case 'time.set-hour': return null;
@@ -120,9 +119,11 @@ export function commandCue(k: string): { cue: string; gain: number; gap: number;
     case 'agent': case 'disciple': return { cue: 'touch', gain: 0.7, gap: 0.2, variant: rest };
     case 'settlement': case 'set': case 'rival': case 'ship': case 'belief': return { cue: 'decree', gain: 0.7, gap: 0.4, variant: rest };
     case 'idea': case 'content': return { cue: 'idea', gain: 0.8, gap: 0.4, variant: rest };
-    case 'creature': return { cue: 'creature.call', gain: 0.7, gap: 0.4, variant: rest };
     // disasters and miracles are heard from their own events; meta / time / possess are silent bookkeeping
-    case 'disaster': case 'miracle': case 'meta': case 'time': case 'possess': case 'hand': case 'fire': return null;
+    // (no creature: LIVING §3.5 / H6 — a stray `creature.*` command from an old save is silent); prophets, prayers,
+    // sacred places and the god's settings (wrath, a sign) are heard from the events they raise
+    case 'disaster': case 'miracle': case 'meta': case 'time': case 'possess': case 'hand': case 'fire': case 'creature':
+    case 'prophet': case 'prayer': case 'place': case 'god': return null;
   }
   return { cue: 'decree', gain: 0.6, gap: 0.4, variant: k };
 }
@@ -154,9 +155,6 @@ export function cueFor(e: SimEvent): CueSpec | null {
     case 'fireball': return spec('fireball', 'world', { size: num(e.a, 40), reach: 2500, travel: true, gap: 0.1, pri: 8 });
     case 'shield': return spec('shield', 'god', { size: num(e.a, 60), gap: 0.3 });
     case 'gift': return spec(str(e.text) === 'accepted' ? 'gift' : 'gift.refused', 'god', { gap: 0.4 });
-    case 'creature.reward': return spec('creature.happy', 'god', { gap: 0.4 });
-    case 'creature.punish': return spec('creature.hurt', 'god', { gap: 0.4 });
-    case 'creature.learned': return spec('creature.learned', 'god', { gap: 1 });
     case 'rewind': return spec('rewind', 'god', { gap: 0.5 });
     case 'command': {
       const c = commandCue(str(d.k));
@@ -233,6 +231,31 @@ export function cueFor(e: SimEvent): CueSpec | null {
     case 'world.erased': return spec('world.erased', 'news', { gap: 2, pri: 10, gain: 1.2 });
     case 'world.abandoned': return spec('world.abandoned', 'news', { gap: 4 });
     case 'chronicle': return num(e.a) >= 3 ? spec('chronicle.great', 'news', { gap: 6, gain: 0.6 }) : null;
+
+    // ── the god and the people (LIVING §3.4, §3.7): heard at the town, softly from afar; the great moments also get
+    //    an authored stinger in the music (authored.ts stingerFor) ──
+    case 'prayer.raised': return spec('prayer', 'news', { gain: 0.55, gap: 6, size: num(d.urgency, 0.5), pri: 4 });
+    case 'prayer.answered': return spec('prayer.answered', 'news', { gain: 0.7, gap: 3, pri: 6 });
+    case 'prayer.lapsed': return spec('prayer.lapsed', 'news', { gain: 0.5, gap: 6, pri: 3 });
+    case 'prophet.called': return spec('prophet.called', 'news', { gain: 0.7, gap: 4, pri: 6 });
+    case 'prophet.foretold': return spec('prophet.foretold', 'news', { gain: 0.7, gap: 4, pri: 6, variant: str(d.kind) });
+    case 'prophet.fulfilled': return spec('prophet.fulfilled', 'news', { gain: 0.75, gap: 4, pri: 7 });
+    case 'prophet.failed': return spec('prophet.failed', 'news', { gain: 0.6, gap: 4, pri: 5 });
+    case 'prophet.died': return spec('prophet.died', 'news', { gain: 0.65, gap: 4, pri: 5 });
+    case 'prophet.persecuted': return spec('prophet.persecuted', 'news', { gain: 0.6, gap: 6, pri: 5 });
+    case 'prophet.abandoned': return spec('prophet.abandoned', 'news', { gain: 0.55, gap: 4, pri: 4 });
+    case 'omen': {
+      const reading = str(d.reading) === 'feared' ? 'feared' : 'trusted';
+      return spec('omen', 'news', { gain: 0.65, gap: 3, pri: 6, variant: reading, key: `omen:${reading}` });
+    }
+    case 'sacred.place': return spec('sacred.place', 'news', { gain: 0.7, gap: 4, pri: 6, variant: str(d.kind) });
+    case 'sacred.animal': return spec('sacred.animal', 'news', { gain: 0.6, gap: 6, pri: 5, variant: str(d.animal) });
+    case 'warning': {
+      const kind = str(d.kind);
+      return spec('warning', 'news', { gain: 0.8, gap: 3, pri: 7, reach: 2500, variant: kind, key: `warning:${kind}` });
+    }
+    case 'evacuate': return spec('evacuate', 'news', { gain: 0.65, gap: 5, pri: 6 });
+    case 'shelter': return spec('shelter', 'news', { gain: 0.55, gap: 6, pri: 4 });
   }
   return null;
 }
