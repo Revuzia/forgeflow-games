@@ -11,6 +11,7 @@
 // (units standing on a ring hide it; a cliff hides a telegraph behind it), so the pass works no
 // matter which ping-pong buffer holds the graded image.
 
+import { overlayMaterial } from './program.ts';
 import {
   type Camera, Color, HalfFloatType, Mesh, OrthographicCamera, PlaneGeometry, type PerspectiveCamera, Scene,
   ShaderMaterial, type Texture, Vector2, WebGLRenderTarget, type WebGLRenderer, CustomBlending, OneFactor,
@@ -48,6 +49,10 @@ float valeVisible( float biasM ) {
 }
 `;
 
+/** the telegraph target composited over the graded buffer (premultiplied) */
+export const COMPOSITE_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4( position.xy, 0.0, 1.0 ); }';
+export const COMPOSITE_FRAG = 'uniform sampler2D tTele; varying vec2 vUv; void main(){ gl_FragColor = texture2D( tTele, vUv ); }';
+
 export class OverlayContext {
   readonly scene = new Scene();
   readonly teleScene = new Scene();
@@ -60,10 +65,7 @@ export class OverlayContext {
   constructor() {
     this.scene.matrixWorldAutoUpdate = true;
     this.teleTarget = new WebGLRenderTarget(4, 4, { type: HalfFloatType, depthBuffer: false, stencilBuffer: false, magFilter: LinearFilter, minFilter: LinearFilter });
-    const mat = new ShaderMaterial({
-      uniforms: { tTele: { value: this.teleTarget.texture } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4( position.xy, 0.0, 1.0 ); }',
-      fragmentShader: 'uniform sampler2D tTele; varying vec2 vUv; void main(){ gl_FragColor = texture2D( tTele, vUv ); }',
+    const mat = overlayMaterial('composite', { tTele: { value: this.teleTarget.texture } }, {
       depthTest: false, depthWrite: false, transparent: true,
       blending: CustomBlending, blendEquation: AddEquation, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor,
       blendEquationAlpha: AddEquation, blendSrcAlpha: OneFactor, blendDstAlpha: OneMinusSrcAlphaFactor,

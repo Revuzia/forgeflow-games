@@ -159,7 +159,7 @@
     },
     "tris_boots": 1000,
     "tris_helm": 1500,
-    "tris_visor": 220,
+    "tris_visor": 320,
     "tris_face": 600,
     "tris_gorget": 760,
     "tris_pauldron_R": 560,
@@ -188,18 +188,18 @@
     "tris_inlays": 260,
     "validate_ardit": "20016->20009"
   },
-  "uv_coverage": 0.599,
+  "uv_coverage": 0.593,
   "bake": {
-    "base": 11.29,
-    "rough_metal": 8.87,
-    "normal": 5.61,
-    "ao": 6.66,
-    "normal_fixed_px": 117540,
-    "projection": 119.29,
-    "pack_save": 119.75,
-    "total": 153.01
+    "base": 8.62,
+    "rough_metal": 6.69,
+    "normal": 4.4,
+    "ao": 5.09,
+    "normal_fixed_px": 117869,
+    "projection": 101.42,
+    "pack_save": 101.8,
+    "total": 127.17
   },
-  "tris": 20489,
+  "tris": 20589,
   "mesh_top_m": 2.476,
   "clips": {
     "idle": {
@@ -302,25 +302,25 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2937692,
+  "glb_bytes_raw": 2949716,
   "optimize": {
     "ok": true,
-    "before": 2937692,
-    "after": 1148908,
+    "before": 2949716,
+    "after": 1152144,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 1148908,
+  "glb_bytes": 1152144,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1122 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_base 2048x2048 243K, ardit_normal 512x512 36K, ardit_orm 512x512 53K",
-      "  skinned meshes: ardit(17199v), ardit_accent(258v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1125 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_base 2048x2048 239K, ardit_normal 512x512 36K, ardit_orm 512x512 54K",
+      "  skinned meshes: ardit(17349v), ardit_accent(308v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
       "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.667s/23tr, cast_a2:1.000s/22tr, cast_a3:0.833s/23tr, cast_ult:1.333s/22tr, channel:1.333s/22tr, dash:0.500s/23tr, death:1.667s/23tr, idle:2.667s/22tr, idle_lobby:4.000s/22tr, recall:3.000s/23tr, run:0.800s/24tr, stunned:1.333s/22tr, taunt:1.667s/22tr, victory:1.667s/25tr",
       "  tracks checked: 364; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20489; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
+      "  tris: 20589; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
       "  run: 24 f, planted samples 6, max foot-speed error 1%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -333,10 +333,10 @@
       "turntable": "art/renders/fighters/ardit/turntable.png"
     },
     "seconds": {
-      "splash": 19.62,
-      "portrait": 9.11,
-      "icon": 3.26,
-      "turntable": 13.74
+      "splash": 12.49,
+      "portrait": 6.61,
+      "icon": 1.56,
+      "turntable": 8.12
     }
   },
   "three_qa": {
@@ -359,8 +359,8 @@
       1
     ],
     "headY": 2.025,
-    "accentPct": 1.39,
-    "accentTopHalfPct": 89,
+    "accentPct": 1.9,
+    "accentTopHalfPct": 95.8,
     "heightPx1080": 134,
     "size": [
       2400,
@@ -368,27 +368,27 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ardit/three_ardit.png",
-    "seconds": 80.1,
+    "seconds": 20.1,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/ardit/three_clips_ardit.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.35,
-      "model": 10.76,
-      "lows_bind": 15.39,
-      "uv": 11.28,
-      "bake": 153.02,
-      "clips": 0.59,
-      "export": 3.37,
-      "optimize": 1.48,
-      "load_test": 0.35,
-      "render": 46.02,
-      "three_qa": 199.28,
-      "cache": 0.22
+      "materials": 0.33,
+      "model": 10.12,
+      "lows_bind": 10.25,
+      "uv": 9.24,
+      "bake": 127.18,
+      "clips": 0.54,
+      "export": 2.54,
+      "optimize": 1.36,
+      "load_test": 0.29,
+      "render": 28.93,
+      "three_qa": 52.58,
+      "cache": 0.19
     },
-    "total_s": 442.23
+    "total_s": 243.64
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

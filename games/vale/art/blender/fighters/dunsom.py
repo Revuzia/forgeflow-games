@@ -981,7 +981,7 @@ PROC = ("hat", "boots", "trousers", "crook_shaft", "crook_grip", "crook_ferrule"
         "hand_R", "hand_L", "toecaps", "buckle", "almanac_pages", "almanac_cords")
 BACK_MATCH = 0.85
 # z / 2.0 -> linear gain: the light head (hat, mask) and the darker coat skirt toward the boots (brief §6)
-VALUE_RAMP = [(0.0, 0.60), (0.08, 0.64), (0.15, 0.70), (0.25, 0.78), (0.35, 0.88), (0.50, 0.96), (0.70, 1.0), (1.0, 1.03)]
+VALUE_RAMP = [(0.0, 0.66), (0.08, 0.70), (0.15, 0.75), (0.25, 0.82), (0.35, 0.90), (0.50, 0.97), (0.70, 1.0), (1.0, 1.03)]
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
 SIDE_PARTS = ("hood", "scarf", "coat_top", "belt", "skirt", "under_robe", "trousers", "sleeve_L", "sleeve_R", "boots",
               "mask")
@@ -990,7 +990,7 @@ SIDE_FACE_PART = {"hood": (0.35, 0.80), "mask": (0.30, 0.70)}
 SIDE_HI = 1.15
 BACK_PARTS = ("hood", "scarf", "coat_top", "belt", "skirt", "sleeve_L", "sleeve_R", "trousers", "boots")
 OBLIQUE = {"coat_top": 0.65, "skirt": 0.45, "sleeve_L": 0.55, "sleeve_R": 0.60, "scarf": 0.40, "hood": 0.45}
-DARK_FLOOR, DARK_KNEE = 0.62, 0.86
+DARK_FLOOR, DARK_KNEE = 0.70, 0.88
 
 
 def _hex(h):
@@ -1201,6 +1201,7 @@ def _match_back(k, p, cols, wb, names, log):
 
 
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
+COAT_LIFT, COAT_DESAT = 1.52, 0.22
 HOOD_FLOOR = 0.62           # no hood texel darker than this x the lit hood's median (the back sheet paints its back
                             # in the brim's shadow: a black column from behind) except inside the face opening
 HOOD_HEX = "#7A6E86"        # the hood's felt (the coat's lavender): 40 % of its hue / chroma
@@ -1216,7 +1217,7 @@ def _hat_paint(p, n):
     q = p[:, :2] - HAT_C[None, :]
     r = np.hypot(q[:, 0], q[:, 1])
     th = np.arctan2(q[:, 1], q[:, 0])
-    top = _lin(_hex("#ACA2B6"))
+    top = _lin(_hex("#B8AEC2"))
     under = _lin(_hex("#5E4A55"))
     up = ss(-0.15, 0.35, n[:, 2])
     zt = hat_top(r)
@@ -1281,7 +1282,7 @@ def _glove_paint(p, n, frame, curl):
 def _boot_paint(p, n):
     """plain dark-brown leather boots (the projection sampled the pale floor round the painted boots): lit tops and
     shins, a darker sole edge, creases over the instep, the turned top band"""
-    base = _lin(_hex("#3B2B27"))
+    base = _lin(_hex("#4A3631"))
     z = p[:, 2]
     crease = np.clip(np.sin(z * 260.0 + 3.0 * NOISE(p, 12.0)), 0, 1) ** 6 * ss(0.05, 0.08, z) * (1 - ss(0.12, 0.16, z))
     sole = 1 - ss(0.006, 0.020, z)
@@ -1363,6 +1364,14 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         pp = p[m]
         sd = face_sd(pp[:, 0], pp[:, 2])
         lin[m] = lin[m] * (1 - 0.35 * ss(-0.012, 0.0, sd))[:, None]
+    # lineup_qa (the game's chain) measured the middle band at L* 36.8 (bible 45-65) and the grade pushes the painted
+    # lavender toward violet: the coat's cloth parts are lifted (COAT_LIFT, linear) and eased 20 % toward grey
+    for name in ("coat_top", "skirt", "sleeve_L", "sleeve_R", "hood"):
+        m = sel(name)
+        if m is not None:
+            c = lin[m]
+            Y = _Y(c)[:, None]
+            lin[m] = (c * (1 - COAT_DESAT) + Y * COAT_DESAT) * COAT_LIFT
     # the light-head / dark-feet ramp and the highlight cap (not on the crook / lantern: held at any height)
     body = np.ones(len(k), dtype=bool)
     for name in ("crook_shaft", "crook_grip", "crook_ferrule", "lantern_ring", "lantern_frame", "lantern_glass",

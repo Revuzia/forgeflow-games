@@ -39,7 +39,8 @@ import { Sun } from './lighting.ts';
 import { MenuWorld } from './menu.ts';
 import { BAR_KIND, BarLayer, type BarSpec, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
-import { HoverOutline, hoverRimUniforms, MASK_FRAG, RIM_FRAG } from './overlay/hover.ts';
+import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
+import { inkShadows } from './ink.ts';
 import { CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { TELE_SHAPE, TelegraphLayer, type TeleSpec } from './overlay/telegraphs.ts';
@@ -230,7 +231,7 @@ class ValeRenderer implements Renderer {
   private readonly teles = new TelegraphLayer();
   private readonly hoverRim = new HoverOutline(INK.ink0);
   /** instanced, GPU-skinned units (UnitDef.art.instanced: the Wicks; crowd.ts) */
-  private readonly crowd = new CrowdLayer(outlineUniforms.uOutlineRes, { maskFrag: MASK_FRAG, rimFrag: RIM_FRAG, rimUniforms: hoverRimUniforms });
+  private readonly crowd = new CrowdLayer(outlineUniforms.uOutlineRes, { rimUniforms: hoverRimUniforms });
   private aim: AimSpec | null = null;
   private hover: EntityId | null = null;
   private target: EntityId | null = null;
@@ -451,7 +452,6 @@ class ValeRenderer implements Renderer {
       for (const o of this.ambientPending.splice(0)) this.warmAmbient(o);
       this.lib.warmAll();
       this.structs.warmAll(this.actors.values());
-      for (const a of this.actors.values()) this.warmVeil(a);
     });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
@@ -463,9 +463,10 @@ class ValeRenderer implements Renderer {
     this.ambient.configure(this.ambientOn, this.q.tier);
     this.scene.add(this.ambient.group);
     this.scene.add(this.terrain.group);
+    inkShadows(this.terrain.group);
     this.loadTerrainTextures(map, gen);
-    void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) this.terrain.setProps(p ?? {}); });
-    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) this.terrain.group.add(o); });
+    void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); } });
+    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); this.terrain.group.add(o); } });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;
@@ -477,6 +478,7 @@ class ValeRenderer implements Renderer {
       });
       if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
       this.mapScene = root;
+      inkShadows(root);
       this.scene.add(root);
     });
     // fog of war for the local team (spectators: off)
@@ -649,7 +651,7 @@ class ValeRenderer implements Renderer {
           const def = this.lib.fighter(e.def);
           if (def) {
             a.configureFighter(def);
-            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); this.warmHover(actor); this.warmVeil(actor); });
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); this.warmHover(actor); });
           }
         } else {
           const def = this.lib.unit(e.def);
@@ -949,7 +951,11 @@ class ValeRenderer implements Renderer {
     this.terrain?.update(this.time);
     this.vfx.update(d);
     this.buildOverlay(view);
+    // r12 B4 programs: every shadow caster draws its depth through the ink programs (ink.ts); the places that add
+    // casters assign them, this sweep (two a second) catches any other
+    if (--this.shadowSweep <= 0) { this.shadowSweep = 30; inkShadows(this.scene); }
   }
+  private shadowSweep = 0;
 
   /** r12 B4: the terrain's instanced scatter keeps only the cells this frame's camera can show or shadow into */
   private readonly cullView: CullView = { frustum: _cullFrustum, fx: 0, fz: 0, sdx: 0, sdz: 0, version: 0 };
@@ -1080,21 +1086,8 @@ class ValeRenderer implements Renderer {
     this.asIfComposer(() => this.hoverRim.prewarm(this.gl, this.rig.camera, this.warmScene, m));
   }
 
-  /** the veil's programs (see-through body, depth copy: actors.ts setVeil) for this fighter template, compiled against
-   *  the match's final environment at attach, not on the first stealth or untargetable moment */
-  private readonly veilWarm = new WeakSet<object>();
-  private warmVeil(a: Actor): void {
-    if (!this.envReady || a.disposed || a.kind !== 'fighter') return;
-    const m = a.hoverMeshes();
-    if (!m) return;
-    const key = m.hull[0].geometry;
-    if (this.veilWarm.has(key)) return;
-    this.veilWarm.add(key);
-    const was = a.veil;
-    a.setVeil(2);
-    this.asIfComposer(() => void this.gl.compileAsync(a.root, this.rig.camera, this.scene).catch(() => undefined));
-    a.setVeil(was);
-  }
+  // (the veils need no warm-up of their own: a veiled body draws with its own program, actors.ts setVeil, and its
+  //  depth prepass with the ink program its outline already compiled)
 
   private drawHover(r: WebGLRenderer, cam: import('three').Camera): void {
     if (this.mode !== 'match' || this.hover === null) return;

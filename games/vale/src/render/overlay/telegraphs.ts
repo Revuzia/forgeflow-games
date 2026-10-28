@@ -17,7 +17,8 @@ import {
   type Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, MaxEquation, Mesh,
   OneFactor, PlaneGeometry, ShaderMaterial,
 } from 'three';
-import { DEPTH_TEST_GLSL, overlayUniforms } from './context.ts';
+import { DEPTH_TEST_GLSL } from './context.ts';
+import { overlayAttrs, overlayMaterial } from './program.ts';
 
 export const TELE_SHAPE = { circle: 0, ring: 1, cone: 2, rect: 3 } as const;
 
@@ -40,7 +41,7 @@ export interface TeleSpec {
 
 const MAX = 128;
 
-const VERT = /* glsl */`
+export const TELE_VERT = /* glsl */`
 attribute vec4 aA;      // x, z, dir, shape
 attribute vec4 aB;      // radius, inner, halfAngle, length
 attribute vec4 aC;      // width, fill, edge, edgePx
@@ -65,7 +66,7 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * vec4( w.x, 0.04, w.y, 1.0 );
 }`;
 
-const FRAG = /* glsl */`
+export const TELE_FRAG = /* glsl */`
 ${DEPTH_TEST_GLSL}
 varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec3 vColor; varying vec3 vTick;
 float sdBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
@@ -160,12 +161,9 @@ export class TelegraphLayer {
     const mk = (size: number): InstancedBufferAttribute => { const a = new InstancedBufferAttribute(new Float32Array(MAX * size), size); a.setUsage(DynamicDrawUsage); return a; };
     this.aA = mk(4); this.aB = mk(4); this.aC = mk(4); this.aD = mk(4); this.aColor = mk(3); this.aTick = mk(3);
     this.attrs = [this.aA, this.aB, this.aC, this.aD, this.aColor, this.aTick];
-    this.geo.setAttribute('aA', this.aA); this.geo.setAttribute('aB', this.aB); this.geo.setAttribute('aC', this.aC);
-    this.geo.setAttribute('aD', this.aD); this.geo.setAttribute('aColor', this.aColor); this.geo.setAttribute('aTick', this.aTick);
+    overlayAttrs(this.geo, 'tele', { aA: this.aA, aB: this.aB, aC: this.aC, aD: this.aD, aColor: this.aColor, aTick: this.aTick });
     this.geo.instanceCount = 0;
-    const mat = new ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uSceneDepth: overlayUniforms.uSceneDepth, uHasDepth: overlayUniforms.uHasDepth, uResolution: overlayUniforms.uResolution, uNear: overlayUniforms.uNear, uFar: overlayUniforms.uFar },
+    const mat = overlayMaterial('tele', {}, {
       // the quad's local (u, v) maps onto world (x, z) without the y flip rings.ts applies, which mirrors
       // the winding: seen from above it is a back face. The shapes are SDFs in world space, so both faces
       // draw the same decal; DoubleSide keeps any aim direction from culling it (r12 B2: 0 px drawn).

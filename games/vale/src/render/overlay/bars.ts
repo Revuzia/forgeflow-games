@@ -56,7 +56,7 @@ const ROW_H = 36;          // atlas px per name row (2× of 14 + outline room)
 const DIGIT_ROW_Y = NAME_ROWS * ROW_H;
 const DIGIT_W = 28, DIGIT_H = 36;
 
-const VERT = /* glsl */`
+export const BAR_VERT = /* glsl */`
 attribute vec3 aAnchor;
 attribute vec4 aBox;      // quad w, quad h (ref px), y offset (ref px), kind
 attribute vec4 aHp;       // hp, trail, shieldEnd, total hp (for ticks)
@@ -81,7 +81,7 @@ void main() {
   vBox = aBox; vHp = aHp; vRes = aRes; vCol = aCol; vResCol = aResCol; vSeat = aSeat; vMisc = aMisc;
 }`;
 
-const FRAG = /* glsl */`
+export const BAR_FRAG = /* glsl */`
 uniform float uPxScale;
 varying vec2 vP;
 varying vec4 vBox; varying vec4 vHp; varying vec4 vRes; varying vec4 vCol; varying vec4 vResCol; varying vec4 vSeat; varying vec4 vMisc;
@@ -228,7 +228,7 @@ void main() {
   gl_FragColor = vec4( acc.rgb, acc.a * vResCol.a );
 }`;
 
-const LABEL_VERT = /* glsl */`
+export const LABEL_VERT = /* glsl */`
 attribute vec3 aAnchor;
 attribute vec4 aRect;     // offset x, offset y (ref px, centre), w, h (ref px)
 attribute vec4 aUv;       // u0, v0, u1, v1
@@ -245,7 +245,7 @@ void main() {
   vUv = mix( aUv.xy, aUv.zw, position.xy + 0.5 );
   vTint = aTint;
 }`;
-const LABEL_FRAG = /* glsl */`
+export const LABEL_FRAG = /* glsl */`
 uniform sampler2D uAtlas;
 varying vec2 vUv; varying vec4 vTint;
 void main() {
@@ -287,12 +287,9 @@ export class BarLayer {
       aAnchor: attr(MAX, 3), aBox: attr(MAX, 4), aHp: attr(MAX, 4), aRes: attr(MAX, 4), aCol: attr(MAX, 4),
       aResCol: attr(MAX, 4), aSeat: attr(MAX, 4), aMisc: attr(MAX, 4),
     };
-    for (const [k, v] of Object.entries(this.a)) this.geo.setAttribute(k, v);
+    overlayAttrs(this.geo, 'bar', this.a);
     this.geo.instanceCount = 0;
-    const mat = new ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG, uniforms: this.uniforms,
-      transparent: true, depthTest: false, depthWrite: false, blending: NormalBlending,
-    });
+    const mat = overlayMaterial('bar', this.uniforms, { transparent: true, depthTest: false, depthWrite: false, blending: NormalBlending });
     this.mesh = new Mesh(this.geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 20;
@@ -312,13 +309,9 @@ export class BarLayer {
     this.lgeo.index = quad.index;
     this.lgeo.setAttribute('position', quad.getAttribute('position'));
     this.la = { aAnchor: attr(MAX, 3), aRect: attr(MAX, 4), aUv: attr(MAX, 4), aTint: attr(MAX, 4) };
-    for (const [k, v] of Object.entries(this.la)) this.lgeo.setAttribute(k, v);
+    overlayAttrs(this.lgeo, 'label', this.la);
     this.lgeo.instanceCount = 0;
-    const lmat = new ShaderMaterial({
-      vertexShader: LABEL_VERT, fragmentShader: LABEL_FRAG,
-      uniforms: { uPxScale: this.uniforms.uPxScale, uResolution: overlayUniforms.uResolution, uAtlas: { value: this.atlas } },
-      transparent: true, depthTest: false, depthWrite: false, blending: NormalBlending,
-    });
+    const lmat = overlayMaterial('label', { uPxScale: this.uniforms.uPxScale, uAtlas: { value: this.atlas } }, { transparent: true, depthTest: false, depthWrite: false, blending: NormalBlending });
     this.labels = new Mesh(this.lgeo, lmat);
     this.labels.frustumCulled = false;
     this.labels.renderOrder = 21;

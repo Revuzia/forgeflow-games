@@ -27,7 +27,7 @@
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
 import {
-  Color, type DataTexture, type Material, ShaderChunk, Texture, Vector2, Vector3, Vector4,
+  Color, type DataTexture, type Material, NoBlending, NormalBlending, ShaderChunk, Texture, Vector2, Vector3, Vector4,
   type WebGLProgramParametersWithUniforms,
 } from 'three';
 
@@ -119,6 +119,7 @@ const VERT_MAIN = /* glsl */`
 `;
 
 const CHAR_PARS = /* glsl */`
+uniform float valeCharMode;
 uniform vec3 valeKeyDir;
 uniform float valeCharKey;
 uniform vec3 valeCharRimDir;
@@ -135,12 +136,13 @@ const CHAR_LIGHT = /* glsl */`
   float valeRim = pow( 1.0 - valeNdV, valeCharRim.a ) * valeUp * valeUp;
   float valeLa = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
   vec3 valeAlb = min( diffuseColor.rgb * ( max( valeLa, valeCharShape.x ) / max( valeLa, 0.02 ) ), vec3( 1.0 ) );
-  #ifdef VALE_CHAR_UNIT
-  // wicks and monsters keep the sun as their key: a share of the crown, on their darker cloth only (a pale hood takes none)
-  vec3 valeAdd = valeCharShape.y * ( 1.0 - smoothstep( 0.05, 0.16, valeLa ) ) * valeCharRim.rgb * valeRim * valeAlb;
-  #else
-  vec3 valeAdd = valeCharRim.rgb * valeRim * valeAlb + valeCharFill * ( 0.4 + 0.6 * valeNdV ) * material.diffuseColor;
-  #endif
+  vec3 valeAdd;
+  if ( valeCharMode < 1.5 ) {
+    // wicks and monsters keep the sun as their key: a share of the crown, on their darker cloth only (a pale hood takes none)
+    valeAdd = valeCharShape.y * ( 1.0 - smoothstep( 0.05, 0.16, valeLa ) ) * valeCharRim.rgb * valeRim * valeAlb;
+  } else {
+    valeAdd = valeCharRim.rgb * valeRim * valeAlb + valeCharFill * ( 0.4 + 0.6 * valeNdV ) * material.diffuseColor;
+  }
   // the knee: the character light fades where the world's light (key, sky, specular) already lights the surface
   // brightly, so a pale kit never blows out and the lift goes to the mid-tones and the shadow side
   float valeLit = dot( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular, vec3( 0.2126, 0.7152, 0.0722 ) );
@@ -162,6 +164,33 @@ export interface WorldPatchOptions {
 
 const PATCHED = Symbol('valePatched');
 
+/** the fighter key light and its shadow floor, applied where valeCharMode says fighter (2); a wick or monster (1)
+ *  keeps the sun exactly (× 1.0) */
+const CHAR_LIGHTS_BEGIN = ShaderChunk.lights_fragment_begin
+  .split('getDirectionalLightInfo( directionalLight, directLight );')
+  .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tif ( valeCharMode > 1.5 ) { directLight.direction = normalize( valeKeyDir ); directLight.color *= valeCharKey; }')
+  .split('directionalLightShadow.shadowIntensity').join('( directionalLightShadow.shadowIntensity * ( valeCharMode > 1.5 ? 0.25 : 1.0 ) )');
+
+/**
+ * r12 B4 programs: a material that can turn see-through (the veils, actors.ts; the structure fade, structures.ts) draws
+ * opaque WITHOUT three's OPAQUE define: NoBlending (no blend, the alpha written as is: nothing downstream reads the
+ * scene's alpha), so its see-through state (veilOn: NormalBlending, transparent, both sides in one pass over the depth
+ * prepass) keys the very same program. Only opaque, normally blended materials change.
+ */
+export function opaqueVeilable(m: Material): void {
+  if (!m.transparent && m.blending === NormalBlending) m.blending = NoBlending;
+}
+/** see-through at `opacity` (a material opaqueVeilable made: one pass for both sides, the same program) */
+export function veilOn(m: Material, opacity: number, depthWrite: boolean): void {
+  if (m.blending === NoBlending) { m.blending = NormalBlending; m.forceSinglePass = true; }
+  m.transparent = true; m.opacity = opacity; m.depthWrite = depthWrite;
+}
+/** back to opaque */
+export function veilOff(m: Material): void {
+  if (m.forceSinglePass && m.blending === NormalBlending) m.blending = NoBlending;
+  m.transparent = false; m.opacity = 1; m.depthWrite = true;
+}
+
 /** Patch a material in place (idempotent). Keeps any existing onBeforeCompile. */
 export function patchWorldMaterial(material: Material, opts: WorldPatchOptions = {}): void {
   const m = material as Material & { [PATCHED]?: string };
@@ -173,10 +202,13 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
   if (m[PATCHED] === key) return;
   m[PATCHED] = key;
   if (!fog && !fighter && !unit) return;
+  // fighters and wicks / monsters share one program: which light they take is a uniform (r12 B4 programs)
+  const charMode = { value: fighter ? 2 : unit ? 1 : 0 };
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer) => {
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, worldUniforms);
+    shader.uniforms.valeCharMode = charMode;
     if (fog) {
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>\n${VERT_PARS}`)
@@ -185,24 +217,17 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
         .replace('#include <common>', `#include <common>\n${keep ? '#define VALE_KEEP_COLOR\n' : ''}varying vec3 vValeWorld;\n${WORLD_FOG_PARS}`)
         .replace('#include <opaque_fragment>', `outgoingLight = valeApplyWorldFog( outgoingLight, vValeWorld );\n#include <opaque_fragment>`);
     }
-    if (fighter) {
-      // the one directional light (the sun) becomes the fighter's view-space key at valeCharKey × its colour;
-      // its shadow keeps ≥ 75 % of the key
-      const lights = ShaderChunk.lights_fragment_begin
-        .split('getDirectionalLightInfo( directionalLight, directLight );')
-        .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.direction = normalize( valeKeyDir );\n\t\tdirectLight.color *= valeCharKey;')
-        .split('directionalLightShadow.shadowIntensity').join('( directionalLightShadow.shadowIntensity * 0.25 )');
+    if (fighter || unit) {
+      // a fighter's one directional light (the sun) becomes its view-space key at valeCharKey × its colour, its shadow
+      // keeping ≥ 75 % of the key; wicks and monsters keep the sun (CHAR_LIGHTS_BEGIN). Both take the character light.
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${CHAR_PARS}`)
-        .replace('#include <lights_fragment_begin>', lights)
-        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
-    } else if (unit) {
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n#define VALE_CHAR_UNIT\n${CHAR_PARS}`)
+        .replace('#include <lights_fragment_begin>', CHAR_LIGHTS_BEGIN)
         .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
     }
   };
   const prevKey = material.customProgramCacheKey;
-  material.customProgramCacheKey = () => `${prevKey.call(material)}|vale:${key}`;
+  const progKey = `${fog ? 'f' : ''}${fighter || unit ? 'x' : ''}${keep ? 'c' : ''}`;
+  material.customProgramCacheKey = () => `${prevKey.call(material)}|vale:${progKey}`;
   material.needsUpdate = true;
 }

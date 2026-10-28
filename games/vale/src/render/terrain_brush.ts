@@ -19,7 +19,7 @@
 //           stays put), one wind direction for the map. The trees' shadow depth material runs the same code,
 //           so the shadows sway with the crowns.
 
-import { MeshDepthMaterial, Vector4, type WebGLProgramParametersWithUniforms } from 'three';
+import { Vector4 } from 'three';
 
 export const BRUSH_SLOTS = 16;
 /** r12 M11 brush numbers: metres, seconds, alpha */
@@ -217,15 +217,25 @@ export const TREE_SWAY_MAIN = /* glsl */`
 }
 #endif`;
 
-/** a shadow depth material that runs the same vertex motion (customDepthMaterial of the instanced meshes) */
-export function motionDepthMaterial(pars: string, main: string, uniforms: Record<string, { value: unknown }>, key: string): MeshDepthMaterial {
-  const m = new MeshDepthMaterial();
-  m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${pars}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${main}`);
-  };
-  m.customProgramCacheKey = () => key;
-  return m;
+// ── ambient props: cloth sway (ambient.ts; here so the ink shadow program can run it too) ─────────────────────────
+/** the cloth sway's constants (≤ 0.5 Hz, tokens vfx.tiers.T0): two partials, the free edge lags the attached one */
+export const CLOTH = { hz: [0.23, 0.41] as const, w: [0.75, 0.25] as const, lag: 2.1, across: 0.3 } as const;
+export const CLOTH_PARS = /* glsl */`
+attribute float _sway;
+uniform float uAmbT;
+uniform float uSwayAmp;`;
+export const CLOTH_MAIN = /* glsl */`
+#ifdef USE_INSTANCING
+{
+  vec3 ip = instanceMatrix[3].xyz;
+  float ph = 6.2831853 * fract( sin( dot( ip.xz, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+  float w = _sway;
+  float t = uAmbT * 6.2831853;
+  float a = ${f(CLOTH.w[0])} * sin( ${f(CLOTH.hz[0])} * t + ph - ${f(CLOTH.lag)} * w ) + ${f(CLOTH.w[1])} * sin( ${f(CLOTH.hz[1])} * t + ph * 1.7 - ${f(CLOTH.lag * 1.6)} * w );
+  float b = sin( ${f(CLOTH.hz[1])} * t + ph * 2.3 - ${f(CLOTH.lag)} * w );
+  float amp = uSwayAmp * w;
+  // the cloth swings out of its plane (local z), a little across it, and lifts as it swings
+  transformed += vec3( ${f(CLOTH.across)} * b * amp, -0.35 * a * a * amp * w, a * amp );
 }
+#endif`;
+// (the shadow depth of the swaying casters is the ink program's rigid path with uSway set: ink.ts swayDepth)

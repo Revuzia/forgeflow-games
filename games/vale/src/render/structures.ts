@@ -30,14 +30,15 @@
 
 import {
   Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, LatheGeometry, type Material, Matrix4, Mesh,
-  MeshBasicMaterial, type MeshStandardMaterial, NormalBlending, type Object3D, type PerspectiveCamera, Quaternion,
-  ShaderMaterial, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
+  MeshBasicMaterial, type MeshStandardMaterial, type Object3D, type PerspectiveCamera, Quaternion,
+  type RawShaderMaterial, type ShaderMaterial, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import type { UnitDefT } from '../contracts/catalog.ts';
 import type { EntityView, SimEvent, WorldView } from '../contracts/sim.ts';
 import type { Actor } from './actors.ts';
 import type { VfxSystem } from './vfx/system.ts';
-import { patchWorldMaterial } from './world_material.ts';
+import { footMaterial, glazeMaterial, INK_FOOT_H, prepassMaterial, shellUniforms } from './ink.ts';
+import { patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
 
 /** occlusion fade: alpha of the faded part, its band above the plinth (m), fade in / out (s), share of the unit's
  *  body rays the fade-able part must block to turn the fade on / keep it on */
@@ -100,7 +101,7 @@ interface Struct {
   clones: Material[];
   upperMats: Material[];
   depth: Mesh[];
-  depthMat: MeshBasicMaterial | null;
+  depthMat: RawShaderMaterial | null;
   trans: boolean;
   /** the upper's rest matrix in the root's space (the occluder proxy's frame; the falling top's proxy rides on it) */
   upRest: Matrix4;
@@ -123,7 +124,7 @@ interface Struct {
   /** the protected shell: the foot ring, the glaze over the upper's meshes, their shared material */
   shell: Mesh | null;
   skins: Mesh[];
-  skinMat: ShaderMaterial | null;
+  skinMat: RawShaderMaterial | null;
   /** meshes the glaze leaves out (cracks, the animated core) */
   noSkin: Set<Object3D>;
   shellK: number;
@@ -183,8 +184,23 @@ function meshes(node: Object3D): Mesh[] {
   return out;
 }
 
-/** see-through by height on top of the world patch: alpha × (1 → uSfA across [uSfY0, uSfY1]) × uSfAlpha; below uSfClip discarded */
+/** the see-through uniforms of a part that never fades (the plinth, the ruin, the base's hour-ticks): an exact no-op */
+const SF_OFF: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 } };
+const sfPatched = new WeakSet<Material>();
+
+/** a structure template's world material (actors.ts ModelLibrary, before its warm-up compile): the see-through code,
+ *  never fading, so the program the warm-up builds is the one every part of the structure draws with */
+export function structureMaterial(mat: Material): void {
+  if ((mat as MeshStandardMaterial).isMeshStandardMaterial) patchStructure(mat, SF_OFF);
+}
+
+/** see-through by height on top of the world patch: alpha × (1 → uSfA across [uSfY0, uSfY1]) × uSfAlpha; below uSfClip
+ *  discarded. r12 B4 programs: EVERY material of a structure carries it (SF_OFF where nothing fades) and draws opaque
+ *  without the OPAQUE define (world_material.ts opaqueVeilable), so the faded upper, its plinth and its ruin are one
+ *  program per kind of material, faded or not. */
 function patchStructure(mat: Material, u: Uniforms): void {
+  if (sfPatched.has(mat)) return;
+  sfPatched.add(mat);
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh: WebGLProgramParametersWithUniforms, r) => {
     prev.call(mat, sh, r);
@@ -200,85 +216,9 @@ diffuseColor.a *= mix( 1.0, uSfA, smoothstep( uSfY0, uSfY1, vValeWorld.y ) ) * u
   mat.needsUpdate = true;
 }
 
-/** the shell's foot ring: an open band on the plinth (y 0 → FOOT_H) of twelve hour-ticks, the quarters taller */
-const FOOT_H = 0.5;
-const FOOT_VERT = /* glsl */`
-varying vec3 vN;
-varying vec3 vV;
-varying vec3 vP;
-void main() {
-  vec4 wp = modelMatrix * vec4( position, 1.0 );
-  vP = position;
-  vN = normalize( mat3( modelMatrix ) * normal );
-  vV = normalize( cameraPosition - wp.xyz );
-  gl_Position = projectionMatrix * viewMatrix * wp;
-}`;
-const FOOT_FRAG = /* glsl */`
-uniform vec3 uColor;
-uniform float uK;
-uniform float uFlash;
-uniform float uTime;
-varying vec3 vN;
-varying vec3 vV;
-varying vec3 vP;
-void main() {
-  float f = 1.0 - abs( dot( normalize( vN ), normalize( vV ) ) );
-  float rim = pow( f, 2.0 );
-  float ang = atan( vP.z, vP.x );
-  float k = fract( ang / 6.2831853 * 12.0 + 0.5 );
-  float q = step( 0.5, fract( ( ang / 6.2831853 * 12.0 + 0.5 ) / 3.0 + 0.17 ) );
-  float tick = ( 1.0 - smoothstep( 0.035, 0.06, abs( k - 0.5 ) ) ) * ( 1.0 - smoothstep( mix( 0.26, 0.4, q ), mix( 0.34, 0.48, q ), vP.y ) );
-  float foot = 1.0 - smoothstep( 0.0, 0.06, vP.y );
-  float top = 1.0 - smoothstep( 0.0, 0.18, ${FOOT_H.toFixed(2)} - vP.y );
-  float pulse = 0.85 + 0.15 * sin( uTime * 2.1 - ang * 2.0 );
-  float a = ( 0.05 + 0.18 * rim ) * ( 1.0 - 0.8 * top ) + 0.5 * tick * pulse + 0.42 * foot;
-  a = clamp( a * uK + uFlash * ( 0.2 + 0.4 * rim ), 0.0, 0.7 );
-  gl_FragColor = vec4( uColor * ( 0.8 + 0.3 * rim + 0.4 * tick + uFlash ), a );
-}`;
-/** the glaze: the tower's own surface pushed out along smoothed normals (no seams at hard edges) */
-const SKIN_VERT = /* glsl */`
-attribute vec3 aSmooth;
-uniform float uInflate;
-varying vec3 vN;
-varying vec3 vV;
-varying vec3 vW;
-void main() {
-  vec4 wp = modelMatrix * vec4( position, 1.0 );
-  vec3 sn = normalize( mat3( modelMatrix ) * aSmooth );
-  wp.xyz += sn * uInflate;
-  vW = wp.xyz;
-  vN = sn;
-  vV = cameraPosition - wp.xyz;
-  gl_Position = projectionMatrix * viewMatrix * wp;
-}`;
-const SKIN_FRAG = /* glsl */`
-uniform vec3 uColor;
-uniform float uK;
-uniform float uFlash;
-uniform float uTime;
-uniform vec3 uCenter;
-uniform float uH;
-uniform float uSfY0;
-uniform float uSfY1;
-uniform float uSfA;
-varying vec3 vN;
-varying vec3 vV;
-varying vec3 vW;
-void main() {
-  float f = 1.0 - abs( dot( normalize( vN ), normalize( vV ) ) );
-  float rim = pow( f, 2.2 );
-  vec3 q = vW - uCenter;
-  float ang = atan( q.z, q.x );
-  // the shield's 45-degree hatch, wrapped round the tower's axis (arc length + height)
-  float hatch = smoothstep( 0.84, 0.96, fract( ( ang * max( length( q.xz ), 0.35 ) + q.y ) * 2.4 ) );
-  // a band of light rising slowly up the tower
-  float band = exp( -pow( ( fract( q.y / uH * 0.5 - uTime * 0.12 ) - 0.5 ) * 9.0, 2.0 ) );
-  float a = 0.045 + 0.34 * rim + 0.1 * hatch * ( 0.5 + rim ) + 0.09 * band * ( 0.4 + rim );
-  a = a * uK + uFlash * ( 0.2 + 0.4 * rim );
-  // the occlusion fade thins the glaze with the tower
-  a *= mix( 1.0, uSfA, smoothstep( uSfY0, uSfY1, vW.y ) );
-  gl_FragColor = vec4( uColor * ( 0.8 + 0.4 * rim + uFlash ), clamp( a, 0.0, 0.6 ) );
-}`;
+/** the shell's foot ring: an open band on the plinth (y 0 → FOOT_H) of twelve hour-ticks, the quarters taller; it and
+ *  the glaze draw with the ink program's rigid path (ink.ts glaze / foot) */
+const FOOT_H = INK_FOOT_H;
 
 export class StructureFx {
   private readonly host: StructHost;
@@ -336,7 +276,7 @@ export class StructureFx {
     // the upper's see-through clones (accent clones are the actor's own: patched in place), and its depth prepass
     if (upper) {
       const cl = new Map<Material, Material>();
-      const depthMat = new MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      const depthMat = prepassMaterial('rigid');
       depthMat.name = 'vale_struct_depth';
       s.depthMat = depthMat;
       for (const m of meshes(upper)) {
@@ -363,6 +303,13 @@ export class StructureFx {
         s.depth.push(d);
       }
     }
+    // every other world material of the structure (plinth, ruin, the base's hour-ticks) carries the see-through code
+    // too, never fading: the same program as the upper's, faded or not (patchStructure)
+    model.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh || m.userData.valeOutline) return;
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if ((mat as MeshStandardMaterial).isMeshStandardMaterial) patchStructure(mat, SF_OFF);
+    });
     // a gate replacing the ruin it left (it respawned): it rises out of its plinth
     const v = a.view;
     if (v) {
@@ -423,7 +370,7 @@ export class StructureFx {
     for (const d of s.depth) d.visible = true;
     const ok = this.host.compile(a.root);
     this.setTransparent(s, was);
-    for (const d of s.depth) d.visible = s.fade > 0.001;
+    for (const d of s.depth) d.visible = s.trans && !d.parent?.userData.sfGone;
     s.dmg.forEach((d, k) => { if (d) d.visible = dmgVis[k]; });
     s.shell!.visible = shellVis;
     s.skins.forEach((m, k) => { m.visible = skinVis[k]; });
@@ -719,11 +666,7 @@ export class StructureFx {
     const rf = (s.occ?.foot ?? s.radius) + 0.12;
     const prof = [new Vector2(rf, 0), new Vector2(rf, FOOT_H * 0.5), new Vector2(rf, FOOT_H)];
     const geo = new LatheGeometry(prof, 48);
-    const mat = new ShaderMaterial({
-      vertexShader: FOOT_VERT, fragmentShader: FOOT_FRAG, transparent: true, depthWrite: false, side: DoubleSide, blending: NormalBlending,
-      uniforms: { uColor: { value: new Color() }, uK: { value: 0 }, uFlash: { value: 0 }, uTime: { value: 0 } },
-    });
-    mat.name = 'vale_struct_shell';
+    const mat = footMaterial(shellUniforms());
     const m = new Mesh(geo, mat);
     m.name = 'vale_struct_shell';
     m.userData.valeOutline = true;
@@ -735,15 +678,7 @@ export class StructureFx {
     s.shell = m;
     // the glaze: every stone of the upper (cracks and the animated core left out), its surface pushed out
     if (!s.upper) return;
-    const sm = new ShaderMaterial({
-      vertexShader: SKIN_VERT, fragmentShader: SKIN_FRAG, transparent: true, depthWrite: false, blending: NormalBlending,
-      uniforms: {
-        uColor: { value: new Color() }, uK: { value: 0 }, uFlash: { value: 0 }, uTime: { value: 0 }, uInflate: { value: SKIN_INFLATE },
-        uCenter: { value: new Vector3() }, uH: { value: Math.max(1, s.top - s.plinth) },
-        uSfY0: s.u.uSfY0, uSfY1: s.u.uSfY1, uSfA: s.u.uSfA,
-      },
-    });
-    sm.name = 'vale_struct_skin';
+    const sm = glazeMaterial(shellUniforms({ center: true, h: Math.max(1, s.top - s.plinth), inflate: SKIN_INFLATE, fade: { uSfY0: s.u.uSfY0, uSfY1: s.u.uSfY1, uSfA: s.u.uSfA } }));
     s.skinMat = sm;
     for (const src of meshes(s.upper)) {
       if (s.noSkin.has(src)) continue;
@@ -837,12 +772,15 @@ export class StructureFx {
     s.u.uSfA.value = 1 - (1 - STRUCT_FADE.alpha) * smooth(0, 1, s.fade);
     const trans = on || (s.dieT >= 0 && s.u.uSfAlpha.value < 0.999);
     if (trans !== s.trans) this.setTransparent(s, trans);
-    for (const d of s.depth) d.visible = on && !d.parent?.userData.sfGone;
+    // whenever it is see-through (the fade, or the fallen top sinking away): one pass for both sides, so the depth
+    // prepass keeps it to its nearest surface
+    for (const d of s.depth) d.visible = trans && !d.parent?.userData.sfGone;
   }
 
   private setTransparent(s: Struct, on: boolean): void {
     s.trans = on;
-    for (const m of s.upperMats) { m.transparent = on; m.depthWrite = !on; }
+    // the same program either way (patchStructure): only the blend and the depth write change
+    for (const m of s.upperMats) { if (on) veilOn(m, m.opacity, false); else veilOff(m); }
   }
 
   /** harness: every structure's presentation state */

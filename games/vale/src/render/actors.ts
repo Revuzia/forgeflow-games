@@ -51,7 +51,7 @@
 import {
   type AnimationActionLoopStyles, type AnimationClip, AnimationMixer, BackSide, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
   CustomBlending, CylinderGeometry, Float32BufferAttribute, FrontSide, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
-  LoopRepeat, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending, type Object3D, OctahedronGeometry, OneFactor,
+  LoopRepeat, Mesh, MeshBasicMaterial, MeshStandardMaterial, NoBlending, NormalBlending, type Object3D, OctahedronGeometry, OneFactor,
   OneMinusSrcAlphaFactor, PropertyBinding, ShaderMaterial, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
   Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
@@ -61,9 +61,11 @@ import type { EntityView, SimEvent, TeamId } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import type { Assets, LoadedModel } from './assets.ts';
 import { INK, type Palette } from './palette.ts';
-import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake, VICTIM_FLASH_GLSL } from './crowd.ts';
+import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake } from './crowd.ts';
+import { flashMaterial, flashU, type FlashU, inkPathOf, type InkPath, inkShadows, outlineMaterial, outlineU, type OutlineU, outlineUniforms, prepassMaterial } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
-import { patchWorldMaterial } from './world_material.ts';
+import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
+import { structureMaterial } from './structures.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
 /** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
@@ -154,7 +156,7 @@ function formKey(o: Object3D): string {
 /** glow cards, flames and other see-through parts get no ink outline */
 function outlinable(m: Mesh): boolean {
   const mats = Array.isArray(m.material) ? m.material : [m.material];
-  return mats.some((x) => !x.transparent && x.blending === NormalBlending && x.depthWrite !== false) && !!m.geometry.getAttribute('position');
+  return mats.some((x) => !x.transparent && (x.blending === NormalBlending || x.blending === NoBlending) && x.depthWrite !== false) && !!m.geometry.getAttribute('position');
 }
 
 /**
@@ -279,73 +281,8 @@ function hullPlan(scene: Object3D): HullPart[] {
   return parts;
 }
 
-/** CSS-pixel viewport the outline widths are measured in (the renderer keeps it current) */
-export const outlineUniforms = { uOutlineRes: { value: new Vector2(1920, 1080) } };
-
-function outlineMaterial(): MeshBasicMaterial {
-  const mat = new MeshBasicMaterial({
-    color: 0x000000, side: BackSide, transparent: true, opacity: 0.6, depthWrite: false, fog: false,
-    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
-  });
-  const u = { uOutlinePx: { value: 1 }, uOutlineRes: outlineUniforms.uOutlineRes };
-  mat.userData.px = u.uOutlinePx;
-  mat.onBeforeCompile = (sh: WebGLProgramParametersWithUniforms) => {
-    Object.assign(sh.uniforms, u);
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uOutlinePx; uniform vec2 uOutlineRes;')
-      .replace('#include <project_vertex>', `#include <project_vertex>
-{
-  #ifdef USE_SKINNING
-  vec3 vn = normalize( normalMatrix * objectNormal );
-  #else
-  vec3 vn = normalize( normalMatrix * normal );
-  #endif
-  vec2 dir = normalize( ( projectionMatrix * vec4( vn, 0.0 ) ).xy + 1e-5 );
-  gl_Position.xy += dir * uOutlinePx * 2.0 / uOutlineRes * gl_Position.w;
-}`);
-  };
-  mat.customProgramCacheKey = () => 'vale_outline_v2';
-  return mat;
-}
-
-const FLASH_VERT = /* glsl */`
-#include <common>
-#include <skinning_pars_vertex>
-varying vec3 vN;
-varying vec3 vV;
-void main() {
-  #include <beginnormal_vertex>
-  #include <skinbase_vertex>
-  #include <skinnormal_vertex>
-  #include <defaultnormal_vertex>
-  #include <begin_vertex>
-  #include <skinning_vertex>
-  #include <project_vertex>
-  vN = transformedNormal;
-  vV = -mvPosition.xyz;
-}`;
-const FLASH_FRAG = /* glsl */`
-uniform vec3 uFlashColor;
-uniform vec3 uFlashRim;
-uniform float uFlashK;
-uniform float uFlashInk;
-varying vec3 vN;
-varying vec3 vV;
-${VICTIM_FLASH_GLSL}
-void main() {
-  if ( uFlashK <= 0.002 ) discard;
-  gl_FragColor = valeVictimFlash( vN, vV, uFlashColor, uFlashRim, uFlashK, uFlashInk );
-}`;
-
-function flashMaterial(): ShaderMaterial {
-  return new ShaderMaterial({
-    vertexShader: FLASH_VERT, fragmentShader: FLASH_FRAG,
-    uniforms: { uFlashColor: { value: new Color() }, uFlashRim: { value: new Color() }, uFlashK: { value: 0 }, uFlashInk: { value: 0 } },
-    side: FrontSide, transparent: true, depthWrite: false, depthTest: true, fog: false,
-    blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: OneFactor, blendDstAlpha: OneMinusSrcAlphaFactor,
-    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
-  });
-}
+/** CSS-pixel viewport the outline widths are measured in (ink.ts; the renderer keeps it current) */
+export { outlineUniforms };
 
 export interface ActorOptions {
   dev: boolean;
@@ -367,7 +304,7 @@ export class ModelLibrary {
   /** called once per template when it is built (the renderer uploads its textures and compiles its programs
    *  then, at load, instead of on the frame the unit first walks into view) */
   onReady: ((scene: Object3D, crowd: CrowdBake | null, again: boolean) => void) | null = null;
-  private readonly built: { t: Template; accentName: string; char: CharLight }[] = [];
+  private readonly built: { t: Template; accentName: string; char: CharLight; structure: boolean }[] = [];
 
   constructor(catalog: CatalogT, assets: Assets, opts: ActorOptions) {
     this.assets = assets;
@@ -418,6 +355,8 @@ export class ModelLibrary {
       for (const mat of mats) {
         if (this.patched.has(mat)) continue;
         this.patched.add(mat);
+        // opaque without the OPAQUE define: a veil or the structure fade then keys the same program (world_material.ts)
+        opaqueVeilable(mat);
         if (mat.name === accentName) continue; // patched per actor clone
         patchWorldMaterial(mat, char);
       }
@@ -459,12 +398,15 @@ export class ModelLibrary {
     return p;
   }
 
-  private ready(t: Template | null, accentName: string, char: CharLight): Template | null {
+  private ready(t: Template | null, accentName: string, char: CharLight, structure = false): Template | null {
     if (t && !this.built.some((b) => b.t === t)) {
       // skinned parts: a bind-pose bounding sphere per clone (three would otherwise skin every vertex on the CPU
       // to compute it the first time the part is sorted; the actor cull and the hover pick never use it)
       t.scene.traverse((o) => { const m = o as SkinnedMesh; if (m.isSkinnedMesh && !m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); });
-      const b = { t, accentName, char };
+      const b = { t, accentName, char, structure };
+      // a structure's materials carry the occlusion fade's code from the start (structures.ts): the warm-up builds the
+      // program the structure draws with, faded or not
+      if (structure) t.scene.traverse((o) => { const m = o as Mesh; if (m.isMesh) for (const x of Array.isArray(m.material) ? m.material : [m.material]) if (x.name !== accentName) structureMaterial(x); });
       this.built.push(b);
       this.warm(b, false);
     }
@@ -474,7 +416,7 @@ export class ModelLibrary {
   /** every template built so far, warmed again (the match's lighting and environment are part of a program's key) */
   warmAll(): void { for (const b of this.built) this.warm(b, true); }
 
-  private warm(b: { t: Template; accentName: string; char: CharLight }, again: boolean): void {
+  private warm(b: { t: Template; accentName: string; char: CharLight; structure: boolean }, again: boolean): void {
     const t = b.t;
     // actors draw a per-actor PATCHED clone of the accent, never the template's own: the warm-up compiles that
     // variant (one clone kept per template so its program stays alive), not the unpatched one
@@ -482,7 +424,7 @@ export class ModelLibrary {
     t.scene.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh || Array.isArray(m.material) || m.material.name !== b.accentName) return;
-      if (!t.warmAccent) { const c = (m.material as MeshStandardMaterial).clone(); patchWorldMaterial(c, b.char); t.warmAccent = c; }
+      if (!t.warmAccent) { const c = (m.material as MeshStandardMaterial).clone(); patchWorldMaterial(c, b.char); if (b.structure) structureMaterial(c); t.warmAccent = c; }
       swaps.push([m, m.material]);
       m.material = t.warmAccent;
     });
@@ -513,7 +455,7 @@ export class ModelLibrary {
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
-    })().then((t) => this.ready(t, 'accent', charLight(def.kind)));
+    })().then((t) => this.ready(t, 'accent', charLight(def.kind), def.kind === 'structure'));
     this.templates.set(key, p);
     return p;
   }
@@ -601,9 +543,11 @@ export class Actor implements CrowdActor {
   private glow = ACCENT_REST;
   private sockets = new Map<string, Object3D>();
   private socketNames: Record<string, string> = {};
-  // outline hull + hit flash (prebuilt hidden in attach; style changes never touch the scene graph)
-  private outlineMat: MeshBasicMaterial | null = null;
-  private flashMat: ShaderMaterial | null = null;
+  // outline hull + hit flash (prebuilt hidden in attach; style changes never touch the scene graph). The ink programs
+  // (ink.ts): one material per vertex path the hull parts take, every one driven by the same uniforms
+  private outlineU: OutlineU | null = null;
+  private flashU: FlashU | null = null;
+  private readonly inkMats: Material[] = [];
   private readonly hullMeshes: Mesh[] = [];
   private readonly flashMeshes: Mesh[] = [];
   private outlinePx = -1;
@@ -723,6 +667,8 @@ export class Actor implements CrowdActor {
     this.model = model;
     this.baseScale = s;
     this.buildHull(model, t);
+    // the clone's shadow casters draw their depth through the ink programs (customDepthMaterial does not survive a clone)
+    inkShadows(model);
     this.root.add(model);
     if (t.clips.size > 0) this.mixer = new AnimationMixer(model);
     for (const [k, bone] of Object.entries(this.socketNames)) {
@@ -978,13 +924,19 @@ export class Actor implements CrowdActor {
   private buildHull(model: Object3D, t: Template): void {
     if (!t.hull.length) return;
     const cm = meshesOf(model);
-    this.outlineMat = outlineMaterial();
-    this.flashMat = flashMaterial();
+    const ou = (this.outlineU = outlineU()), fu = (this.flashU = flashU());
+    const mats: Partial<Record<InkPath, [Material, Material]>> = {};
+    const inkFor = (path: InkPath): [Material, Material] => {
+      let m = mats[path];
+      if (!m) { m = mats[path] = [outlineMaterial(path, ou), flashMaterial(path, fu)]; this.inkMats.push(...m); }
+      return m;
+    };
     for (const part of t.hull) {
       const lead = cm[part.lead];
       if (!lead) continue;
+      const pair = inkFor(part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid');
       for (const flash of [false, true]) {
-        const mat = flash ? this.flashMat : this.outlineMat;
+        const mat = flash ? pair[1] : pair[0];
         let copy: Mesh;
         if (part.skinned && (lead as SkinnedMesh).isSkinnedMesh) {
           const sm = lead as SkinnedMesh;
@@ -1026,7 +978,7 @@ export class Actor implements CrowdActor {
 
   /** outline style: `px` ≤ 0 hides it; colour linear; opacity 0..1. Cheap to call every frame. */
   setOutline(px: number, color: Color, opacity = 1): void {
-    if (!this.outlineMat && !this.crowdBake) return;
+    if (!this.outlineU && !this.crowdBake) return;
     if (px === this.outlinePx && opacity === this.outlineOpacity && color.equals(this.outlineColor)) return;
     this.outlinePx = px; this.outlineOpacity = opacity; this.outlineColor.copy(color);
     this.applyOutline();
@@ -1042,7 +994,7 @@ export class Actor implements CrowdActor {
   /** depth-only copies of the body (the hull geometry), drawn last among the opaque: the see-through body then
    *  shows only its nearest surface (no inner layers, no sorting artefacts) */
   private readonly veilDepth: Mesh[] = [];
-  private veilDepthMat: MeshBasicMaterial | null = null;
+  private readonly veilDepthMats: Material[] = [];
   /** 0 none · 1 invisible (seen by allies: 35 % body, no ink outline) · 2 untargetable (60 % body, dawnglass rim) */
   get veil(): 0 | 1 | 2 { return this.veilMode; }
   setVeil(mode: 0 | 1 | 2): void {
@@ -1054,9 +1006,8 @@ export class Actor implements CrowdActor {
     const prepass = this.veilDepth.length > 0;
     for (const m of this.veilDepth) m.visible = on;
     const accent = new Set<Material>(this.accent);
-    const see = (c: Material, base: number): void => {
-      c.transparent = true; c.opacity = base * k; c.depthWrite = !prepass;
-    };
+    // see-through on the very program the body draws with (world_material.ts veilOn: the body is opaqueVeilable)
+    const see = (c: Material, base: number): void => veilOn(c, base * k, !prepass);
     this.model.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh || m.userData.valeOutline) return;
@@ -1083,8 +1034,7 @@ export class Actor implements CrowdActor {
       m.material = Array.isArray(base) ? base.map(swap) : swap(base);
     });
     for (const a of this.accent) {
-      if (on) see(a, 1); else { a.transparent = false; a.opacity = 1; a.depthWrite = true; }
-      a.needsUpdate = true;
+      if (on) see(a, 1); else veilOff(a);
     }
     this.applyOutline();
   }
@@ -1092,14 +1042,15 @@ export class Actor implements CrowdActor {
   /** the depth prepass of the veil: one depth-only copy per hull part, bound to the body's skeleton */
   private buildVeilDepth(model: Object3D, t: Template): void {
     const cm = meshesOf(model).filter((m) => !m.userData.valeOutline);
-    const mat = new MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-    mat.name = 'vale_veil_depth';
-    this.veilDepthMat = mat;
+    const mats: Partial<Record<InkPath, Material>> = {};
     for (const part of t.hull) {
       const lead = cm[part.lead];
       if (!lead) continue;
+      const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';
+      let mat = mats[path];
+      if (!mat) { mat = mats[path] = prepassMaterial(path); this.veilDepthMats.push(mat); }
       let copy: Mesh;
-      if (part.skinned && (lead as SkinnedMesh).isSkinnedMesh) {
+      if (path === 'skin') {
         const sm = lead as SkinnedMesh;
         const c = new SkinnedMesh(part.geometry, mat);
         c.bind(sm.skeleton, sm.bindMatrix);
@@ -1122,7 +1073,7 @@ export class Actor implements CrowdActor {
 
   /** hover rim (drawn by overlay/hover.ts in the overlay pass, on top of the rest ink): px ≤ 0 = none; colour linear */
   setHover(px: number, color: Color | null): void {
-    this.hoverPx = this.outlineMat || this.crowdBake ? Math.max(0, px) : 0;
+    this.hoverPx = this.outlineU || this.crowdBake ? Math.max(0, px) : 0;
     if (color) this.hoverColor.copy(color);
   }
   private hoverPx = 0;
@@ -1141,22 +1092,22 @@ export class Actor implements CrowdActor {
   get hoverTint(): Color { return this.hoverColor; }
 
   private applyOutline(): void {
-    const mat = this.outlineMat;
-    if (!mat) return;
+    const u = this.outlineU;
+    if (!u) return;
     // veils: an unseen unit has no ink edge (the ground shows through it); an untargetable one a dawnglass rim
     const veil = this.veilMode;
     const px = veil === 1 ? 0 : veil === 2 && this.outlinePx > 0 ? Math.max(VEIL_RIM_PX, this.outlinePx) : this.outlinePx;
     const on = px > 0;
-    (mat.userData.px as { value: number }).value = Math.max(0, px);
-    if (veil === 2) mat.color.copy(VEIL_RIM); else mat.color.copy(this.outlineColor);
-    mat.opacity = on ? (veil === 2 ? VEIL_RIM_ALPHA : this.outlineOpacity) : 0;
+    u.uPx.value = Math.max(0, px);
+    if (veil === 2) u.uColor.value.copy(VEIL_RIM); else u.uColor.value.copy(this.outlineColor);
+    u.uAlpha.value = on ? (veil === 2 ? VEIL_RIM_ALPHA : this.outlineOpacity) : 0;
     const vis = on || this.warm > 0;
     for (const m of this.hullMeshes) m.visible = vis;
   }
 
   /** victim flash at strength k (≈ 0.45 basic … 1.0 ultimate): `rim` set = the Shade treatment (ink body, rim colour) */
   flash(k: number, color: Color, rim: Color | null = null): void {
-    const fm = this.flashMat;
+    const fm = this.flashU;
     if ((!fm && !this.crowdBake) || !(k > 0)) return;
     // a weaker hit never cuts a stronger flash short
     const cur = this.flashT >= 0 ? this.flashK0 * Math.exp(-this.flashT / FLASH_TAU) : 0;
@@ -1167,9 +1118,9 @@ export class Actor implements CrowdActor {
     if (rim) this.flashRim.copy(rim);
     this.setFlashK(k);
     if (fm) {
-      (fm.uniforms.uFlashColor.value as Color).copy(color);
-      fm.uniforms.uFlashInk.value = rim ? 1 : 0;
-      if (rim) (fm.uniforms.uFlashRim.value as Color).copy(rim);
+      fm.uFlashColor.value.copy(color);
+      fm.uFlashInk.value = rim ? 1 : 0;
+      if (rim) fm.uFlashRim.value.copy(rim);
       for (const m of this.flashMeshes) m.visible = true;
     }
   }
@@ -1179,11 +1130,11 @@ export class Actor implements CrowdActor {
   private readonly flashRim = new Color();
   private setFlashK(k: number): void {
     this.flashK = k;
-    if (this.flashMat) this.flashMat.uniforms.uFlashK.value = k;
+    if (this.flashU) this.flashU.uFlashK.value = k;
   }
   /** a flash that started this frame or the last few: scale it (FeelL.hitFlash); false when none is live */
   boostFlash(mult: number): boolean {
-    if (this.flashT < 0 || this.flashT > 0.05 || (!this.flashMat && !this.crowdBake)) return false;
+    if (this.flashT < 0 || this.flashT > 0.05 || (!this.flashU && !this.crowdBake)) return false;
     this.flashK0 = Math.min(1.2, this.flashK0 * mult);
     this.setFlashK(this.flashK0 * Math.exp(-this.flashT / FLASH_TAU));
     return true;
@@ -1252,9 +1203,8 @@ export class Actor implements CrowdActor {
     this.model?.traverse((o) => { const sm = o as SkinnedMesh; if (sm.isSkinnedMesh) sm.skeleton.dispose(); });
     for (const m of this.accent) m.dispose();
     for (const m of this.veilMats.values()) m.dispose();
-    this.veilDepthMat?.dispose();
-    this.outlineMat?.dispose();
-    this.flashMat?.dispose();   // hull geometry belongs to the template's plan and stays
+    for (const m of this.veilDepthMats) m.dispose();
+    for (const m of this.inkMats) m.dispose();   // hull geometry belongs to the template's plan and stays
     this.root.removeFromParent();
   }
 }

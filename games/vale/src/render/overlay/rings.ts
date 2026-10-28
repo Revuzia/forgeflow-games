@@ -15,13 +15,14 @@ import {
   type Color, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, NormalBlending,
   PlaneGeometry, ShaderMaterial,
 } from 'three';
-import { DEPTH_TEST_GLSL, overlayUniforms } from './context.ts';
+import { DEPTH_TEST_GLSL } from './context.ts';
+import { overlayAttrs, overlayMaterial } from './program.ts';
 
 export const RING = { self: 0, ally: 1, enemy: 2, neutral: 3, range: 4 } as const;
 
 const MAX = 256;
 
-const VERT = /* glsl */`
+export const RING_VERT = /* glsl */`
 attribute vec4 aRing;     // x, z, radius, facing (radians, sim convention)
 attribute vec4 aStyle;    // code, alpha, emphasis, y
 attribute vec3 aColor;
@@ -34,7 +35,7 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
 }`;
 
-const FRAG = /* glsl */`
+export const RING_FRAG = /* glsl */`
 ${DEPTH_TEST_GLSL}
 varying vec2 vLocal; varying float vR; varying vec4 vStyle; varying vec3 vColor; varying float vFacing;
 void main() {
@@ -98,15 +99,10 @@ export class RingLayer {
     this.geo.setAttribute('position', quad.getAttribute('position'));
     const mk = (size: number): InstancedBufferAttribute => { const a = new InstancedBufferAttribute(new Float32Array(MAX * size), size); a.setUsage(DynamicDrawUsage); return a; };
     this.aRing = mk(4); this.aStyle = mk(4); this.aColor = mk(3);
-    this.geo.setAttribute('aRing', this.aRing);
-    this.geo.setAttribute('aStyle', this.aStyle);
-    this.geo.setAttribute('aColor', this.aColor);
+    overlayAttrs(this.geo, 'ring', { aRing: this.aRing, aStyle: this.aStyle, aColor: this.aColor });
     this.geo.instanceCount = 0;
-    const mat = new ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uSceneDepth: overlayUniforms.uSceneDepth, uHasDepth: overlayUniforms.uHasDepth, uResolution: overlayUniforms.uResolution, uNear: overlayUniforms.uNear, uFar: overlayUniforms.uFar },
-      transparent: true, depthTest: false, depthWrite: false, blending: NormalBlending,
-    });
+    // the overlay pass' one program (program.ts); the scene-depth uniforms are every overlay material's
+    const mat = overlayMaterial('ring', {}, { transparent: true, depthTest: false, depthWrite: false, blending: NormalBlending });
     this.mesh = new Mesh(this.geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;

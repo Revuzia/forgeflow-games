@@ -35,10 +35,11 @@
 // particles; own T1 at 85 %; quality changes particle DENSITY only.
 
 import {
-  AddEquation, BufferAttribute, BufferGeometry, Color, CustomBlending, DynamicDrawUsage, Euler, Group, HalfFloatType, InstancedBufferAttribute,
-  InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, OneFactor, type PerspectiveCamera, PlaneGeometry, PointLight, Quaternion, Scene,
-  ShaderMaterial, type Texture, Vector2, Vector3, type WebGLRenderer, WebGLRenderTarget,
+  AddEquation, BufferAttribute, BufferGeometry, Color, CustomBlending, DynamicDrawUsage, Euler, GLSL3, Group, HalfFloatType, InstancedBufferAttribute,
+  InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, OneFactor, type PerspectiveCamera, PlaneGeometry, PointLight, Quaternion, RawShaderMaterial, Scene,
+  type ShaderMaterial, type Texture, Vector2, Vector3, type WebGLRenderer, WebGLRenderTarget,
 } from 'three';
+import { uberAttrs } from '../uber.ts';
 import type { VfxDefT } from '../../contracts/catalog.ts';
 import { VfxTextures } from './atlas.ts';
 import { type ColorRef, evalCurve, GradientPool } from './curves.ts';
@@ -47,8 +48,7 @@ import {
   parseDef, type RibbonL, SHAPE, type ShockwaveL,
 } from './defs.ts';
 import {
-  BEAM_FRAG, BEAM_VERT, DECAL_FRAG, DECAL_VERT, DISTORT_FRAG, DISTORT_VERT, MESH_FRAG, MESH_VERT, PARTICLE_FRAG, PARTICLE_VERT, PREMUL,
-  RIBBON_FRAG, RIBBON_VERT, RING_FRAG, RING_VERT, vfxUniforms,
+  PREMUL, VFX_KIND, VFX_KINDS, VFX_PROGRAM, vfxUniforms,
 } from './shaders.ts';
 import { screenFx, screenUniforms } from './screen.ts';
 import { buildShape, SHAPE_KIND, VFX_SHAPES } from './shapes.ts';
@@ -242,8 +242,12 @@ function mkAttr(n: number, size: number): InstancedBufferAttribute {
 function flush(attrs: (InstancedBufferAttribute | BufferAttribute)[], n: number): void {
   for (const a of attrs) { a.clearUpdateRanges(); a.addUpdateRange(0, Math.max(1, n) * a.itemSize); a.needsUpdate = true; }
 }
-function material(vert: string, frag: string, extra: Record<string, { value: unknown }> = {}, side = 0): ShaderMaterial {
-  return new ShaderMaterial({ vertexShader: vert, fragmentShader: frag, uniforms: { ...vfxUniforms, ...extra }, ...PREMUL, side: side as 0 });
+/** a VFX draw's material: the one VFX program (shaders.ts VFX_PROGRAM, r12 B4), its kind picked by uUberKind */
+function material(kind: keyof typeof VFX_KIND, extra: Record<string, { value: unknown }> = {}, side = 0, state: Partial<ShaderMaterial> = PREMUL): RawShaderMaterial {
+  return new RawShaderMaterial({
+    glslVersion: GLSL3, vertexShader: VFX_PROGRAM.vert, fragmentShader: VFX_PROGRAM.frag,
+    uniforms: { ...vfxUniforms, uShapeKind: { value: 0 }, ...extra, uUberKind: { value: VFX_KIND[kind] } }, ...state, side: side as 0,
+  });
 }
 
 // cheap smooth 3D noise field for turbulence (deterministic, allocation-free)
@@ -339,8 +343,8 @@ export class VfxSystem {
     {
       const geo = instGeo();
       const aPos = mkAttr(P_MAX, 4), aCol = mkAttr(P_MAX, 4), aVel = mkAttr(P_MAX, 4), aTex = mkAttr(P_MAX, 4), aPar = mkAttr(P_MAX, 4), aRim = mkAttr(P_MAX, 4);
-      for (const [k, a] of Object.entries({ aPos, aCol, aVel, aTex, aPar, aRim })) geo.setAttribute(k, a);
-      const mesh = new Mesh(geo, material(PARTICLE_VERT, PARTICLE_FRAG));
+      uberAttrs(geo, VFX_KINDS.particle, { aPos, aCol, aVel, aTex, aPar, aRim });
+      const mesh = new Mesh(geo, material('particle'));
       mesh.frustumCulled = false; mesh.renderOrder = 12;
       this.scene.add(mesh);
       this.pDraw = { geo, mesh, aPos, aCol, aVel, aTex, aPar, aRim };
@@ -350,12 +354,12 @@ export class VfxSystem {
       const geo = new BufferGeometry();
       const mk = (n: number): BufferAttribute => { const a = new BufferAttribute(new Float32Array(max * n), n); a.setUsage(DynamicDrawUsage); return a; };
       const pos = mk(3), col = mk(4), uv = mk(4), prm = mk(4), rim = mk(4);
-      geo.setAttribute('position', pos); geo.setAttribute('aCol', col); geo.setAttribute('aUv', uv); geo.setAttribute('aPrm', prm); geo.setAttribute('aRimC', rim);
+      geo.setAttribute('position', pos); uberAttrs(geo, VFX_KINDS.ribbon, { aCol: col, aUv: uv, aPrm: prm, aRimC: rim });
       const idx: number[] = [];
       for (let t = 0; t < RIB_MAX; t++) for (let k = 0; k < RIB_PTS - 1; k++) { const b = (t * RIB_PTS + k) * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
       geo.setIndex(idx);
       geo.setDrawRange(0, 0);
-      const mesh = new Mesh(geo, material(RIBBON_VERT, RIBBON_FRAG, {}, 2));
+      const mesh = new Mesh(geo, material('ribbon', {}, 2));
       mesh.frustumCulled = false; mesh.renderOrder = 10;
       this.scene.add(mesh);
       this.ribDraw = { mesh, geo, pos, col, uv, prm, rim };
@@ -372,8 +376,8 @@ export class VfxSystem {
       geo.setIndex(idx);
       geo.instanceCount = 0;
       const aA = mkAttr(BEAM_MAX, 4), aB = mkAttr(BEAM_MAX, 4), aC = mkAttr(BEAM_MAX, 4), aD = mkAttr(BEAM_MAX, 4), aE = mkAttr(BEAM_MAX, 4);
-      for (const [k, a] of Object.entries({ aA, aB, aC, aD, aE })) geo.setAttribute(k, a);
-      const mesh = new Mesh(geo, material(BEAM_VERT, BEAM_FRAG, {}, 2));
+      uberAttrs(geo, VFX_KINDS.beam, { aA, aB, aC, aD, aE });
+      const mesh = new Mesh(geo, material('beam', {}, 2));
       mesh.frustumCulled = false; mesh.renderOrder = 12;
       this.scene.add(mesh);
       this.beamDraw = { mesh, geo, aA, aB, aC, aD, aE };
@@ -382,8 +386,8 @@ export class VfxSystem {
     {
       const geo = instGeo();
       const aPos = mkAttr(RING_MAX, 4), aSty = mkAttr(RING_MAX, 4), aCol = mkAttr(RING_MAX, 4), aMisc = mkAttr(RING_MAX, 4);
-      for (const [k, a] of Object.entries({ aPos, aSty, aCol, aMisc })) geo.setAttribute(k, a);
-      const mesh = new Mesh(geo, material(RING_VERT, RING_FRAG, {}, 2));
+      uberAttrs(geo, VFX_KINDS.ring, { aPos, aSty, aCol, aMisc });
+      const mesh = new Mesh(geo, material('ring', {}, 2));
       mesh.frustumCulled = false; mesh.renderOrder = 9;
       this.scene.add(mesh);
       this.ringDraw = { mesh, geo, aPos, aSty, aCol, aMisc };
@@ -392,8 +396,8 @@ export class VfxSystem {
     {
       const geo = instGeo();
       const aPos = mkAttr(DECAL_MAX, 4), aRot = mkAttr(DECAL_MAX, 4), aCol = mkAttr(DECAL_MAX, 4), aMisc = mkAttr(DECAL_MAX, 4), aRimC = mkAttr(DECAL_MAX, 4);
-      for (const [k, a] of Object.entries({ aPos, aRot, aCol, aMisc, aRimC })) geo.setAttribute(k, a);
-      const mesh = new Mesh(geo, material(DECAL_VERT, DECAL_FRAG, {}, 2));
+      uberAttrs(geo, VFX_KINDS.decal, { aPos, aRot, aCol, aMisc, aRimC });
+      const mesh = new Mesh(geo, material('decal', {}, 2));
       mesh.frustumCulled = false; mesh.renderOrder = 8;
       this.scene.add(mesh);
       this.decalDraw = { mesh, geo, aPos, aRot, aCol, aMisc, aRimC };
@@ -406,11 +410,8 @@ export class VfxSystem {
       // distortion sprites: signed UV offsets summed into a half-float target (additive, no clamp)
       const geo = instGeo();
       const aPos = mkAttr(DISTORT_MAX, 4), aPar = mkAttr(DISTORT_MAX, 4), aAx = mkAttr(DISTORT_MAX, 4);
-      for (const [k, a] of Object.entries({ aPos, aPar, aAx })) geo.setAttribute(k, a);
-      const mat = new ShaderMaterial({
-        vertexShader: DISTORT_VERT, fragmentShader: DISTORT_FRAG, uniforms: { ...vfxUniforms }, transparent: true, depthWrite: false, depthTest: false,
-        blending: CustomBlending, blendEquation: AddEquation, blendSrc: OneFactor, blendDst: OneFactor, side: 2,
-      });
+      uberAttrs(geo, VFX_KINDS.distort, { aPos, aPar, aAx });
+      const mat = material('distort', {}, 2, { transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendEquation: AddEquation, blendSrc: OneFactor, blendDst: OneFactor });
       const mesh = new Mesh(geo, mat);
       mesh.frustumCulled = false;
       this.distortScene.add(mesh);
@@ -1312,8 +1313,8 @@ export class VfxSystem {
     const name = VFX_SHAPES[shape];
     const geo = buildShape(name);
     const aColor = mkAttr(MESH_PER_SHAPE, 4), aRimC = mkAttr(MESH_PER_SHAPE, 4), aEdge = mkAttr(MESH_PER_SHAPE, 4), aNoise = mkAttr(MESH_PER_SHAPE, 4), aDiss = mkAttr(MESH_PER_SHAPE, 4), aMisc = mkAttr(MESH_PER_SHAPE, 4);
-    for (const [k, a] of Object.entries({ aColor, aRimC, aEdge, aNoise, aDiss, aMisc })) geo.setAttribute(k, a);
-    const mat = material(MESH_VERT, MESH_FRAG, { uShapeKind: { value: SHAPE_KIND[name] ?? 0 } }, 2);
+    uberAttrs(geo, VFX_KINDS.mesh, { aColor, aRimC, aEdge, aNoise, aDiss, aMisc });
+    const mat = material('mesh', { uShapeKind: { value: SHAPE_KIND[name] ?? 0 } }, 2);
     const mesh = new InstancedMesh(geo, mat, MESH_PER_SHAPE);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.frustumCulled = false;

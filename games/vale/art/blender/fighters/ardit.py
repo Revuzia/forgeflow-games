@@ -122,7 +122,7 @@ LINE_W = 0.008                                # the pale glass hairline along th
 SPIRE_X = 0.640
 DIAMONDS = [((0.630, 2.030), 0.052, 0.105), ((0.668, 1.800), 0.058, 0.118)]   # (centre x, z), half w, half h
 INLAY_K = 0.90                                # inlay size / bezel size (the concept's diamonds are mostly glass)
-GIRDLE = 0.024                                # the glass band round each diamond's edge (half thickness, m)
+CROWN_D = (0.060, 0.100)                      # the crown's glass diamond inlay (half width, half length along the facing)
 
 
 def spear_at(s: float) -> np.ndarray:
@@ -217,6 +217,19 @@ def _band(c, a, b, hz, r):
     return Fn(d, lo, hi)
 
 
+def crown_diamond(hw, hl, zc, half_t):
+    """a diamond slab lying in the crown's plane (x across, y along the facing) about height zc"""
+    f = poly2d([(HX, -hl), (HX + hw, 0.0), (HX, hl), (HX - hw, 0.0)])
+    lo, hi = (HX - hw - 0.01, -hl - 0.01, zc - half_t - 0.01), (HX + hw + 0.01, hl + 0.01, zc + half_t + 0.01)
+
+    def d(P):
+        dp = f(P[:, 0], P[:, 1])
+        dz = np.abs(P[:, 2] - zc) - half_t
+        q = np.stack([np.maximum(dp, 0), np.maximum(dz, 0)], 1)
+        return np.linalg.norm(q, axis=1) + np.minimum(np.maximum(dp, dz), 0)
+    return Fn(d, lo, hi)
+
+
 def diamond(c, hw, hh, y0, half_t, round_=0.006):
     x, z = c
     return slab([(x, z + hh), (x + hw, z), (x, z - hh), (x - hw, z)], y0, half_t, round_)
@@ -294,13 +307,19 @@ def sculpts() -> list:
     helm.sub(slab([(HX - 0.098, 2.212), (HX + 0.098, 2.212), (HX + 0.084, 1.96), (HX - 0.084, 1.96)], -0.17, 0.07, 0.008), k=0.006)
     helm.add(RoundBox((HX, -0.163, 2.133), (0.022, 0.016, 0.082), 0.008), k=0.006)          # the nasal bar
     helm.add(RoundBox((HX, -0.172, 2.214), (0.050, 0.010, 0.010), 0.006), k=0.006)          # the nasal's brow root
+    helm.sub(RoundBox((HX, -0.178, 2.302), (0.110, 0.012, 0.011), 0.004), k=0.003)          # the brow line's groove
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
+    helm.sub(crown_diamond(CROWN_D[0] + 0.010, CROWN_D[1] + 0.016, 2.352, 0.012), k=0.003)   # the crown inlay's pocket
     part("helm", helm, "chalk", "bone:head", 1500)
     visor = Sculpt("visor")
     visor.add(RoundBox((HX, -0.160, 2.233), (0.134, 0.012, 0.030), 0.006), k=0.0)     # flush with the helm face
     for sx in (-1, 1):                    # wrapped round the corners (the colour reads from the side facings)
         visor.add(RoundBox((HX + sx * 0.150, -0.105, 2.233), (0.012, 0.052, 0.030), 0.006), k=0.0)
-    part("visor", visor, "accent", "bone:head", 220, 0.6)
+    visor.add(RoundBox((HX, -0.172, 2.302), (0.106, 0.006, 0.009), 0.004), k=0.0)      # the brief's brow line (accent)
+    # a glass diamond set in the flat crown, its long axis along the facing (the Aubade diamond of the spire; the team
+    # colour reads from above in every facing, in the top of the figure: review fix 3)
+    visor.add(crown_diamond(CROWN_D[0], CROWN_D[1], 2.343, 0.006), k=0.0)
+    part("visor", visor, "accent", "bone:head", 320, 0.6)
     face = Sculpt("face")
     face.add(Ellipsoid((HX, -0.02, 2.11), (0.118, 0.132, 0.120)), k=0.0)
     face.add(RoundBox((HX, -0.115, 2.035), (0.060, 0.035, 0.035), 0.030), k=0.03)            # the chin
@@ -489,8 +508,6 @@ def sculpts() -> list:
     for (cx, cz), hw, hh in DIAMONDS:
         for sgn in (-1, 1):
             inl.add(diamond((cx, cz), hw * INLAY_K, hh * INLAY_K, PAV_Y + sgn * (PAV_T + 0.006), 0.006, 0.003), k=0.0)
-        # the glass core shows as a band round the diamond's edge (the colour reads from the side and from above)
-        inl.add(diamond((cx, cz), hw + 0.006, hh + 0.011, PAV_Y, GIRDLE, 0.003), k=0.0)
     part("inlays", inl, "accent", "bone:x_pavise", 260, 0.5)
     return out
 
@@ -687,9 +704,10 @@ TOPMAP = {                 # up-facing texels: the part's own front paint, depth
     "greave_R": (0.45, 0.53), "greave_L": (0.45, 0.53), "bracer_R": (1.40, 1.48), "bracer_L": (1.40, 1.48),
     "belt": (1.40, 1.48),
 }
-# part: (target median hex, hue strength, gamma). The painted pauldrons / tiers (median ~L* 85) blew out to flat white
-# under the splash's low sun (review fix 5): toned to ~L* 78 with a little more contrast (form)
-BASE_TONE = {nm: ("#C4C3BA", 0.0, 1.15) for nm in ("pauldron_R", "pauldron_L", "tier_R", "tier_L")}
+# part: (target median hex, hue strength, gamma). The painted pauldrons (median ~L* 85) blew out to flat white under
+# the splash's low sun (review fix 5): toned to ~L* 78 with a little more contrast (form); the tiers keep their paint
+# (they sit in the pauldrons' shadow: lifting their brown-grey median turned it peach)
+BASE_TONE = {nm: ("#C9C8BF", 0.3, 1.12) for nm in ("pauldron_R", "pauldron_L")}
 # the highest plate row a part may sample (m): the sculpted gorget rises 4 cm over the painted one, where the sheet
 # paints the bare neck: sampled there it read as a mouth across the collar
 ZMAX = {"gorget": 1.93}

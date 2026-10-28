@@ -72,7 +72,8 @@ import {
 import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep, WallMesh, WK } from './terrain_walls.ts';
 import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
 import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
-import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, motionDepthMaterial, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
+import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
+import { INK_SWAY, swayDepth } from './ink.ts';
 import { CellInstances, type CullView, decimate, splitGeometry } from './instance_cull.ts';
 
 type V2 = readonly [number, number];
@@ -400,30 +401,24 @@ export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Prom
  *  masked vertex only goes down to roughness 0.75 and there is no clearcoat lobe any more: the old lacquer
  *  (0.42 + a clearcoat) made one wet hot spot per crown. The Dialwood props carry a mask of 0 since M11.
  *  `sway`: the Dialwood's crowns move (terrain_brush.ts TREE_SWAY_MAIN: tip ≤ 4 cm at 0.2–0.4 Hz, per-tree
- *  phase, weighted by height); rocks and stones never do. One program per kind, no extra draws. */
+ *  phase, weighted by height); rocks and stones never do. `quad`: the quadrant tint (the Dialwood's).
+ *  r12 B4: ONE program for every kind: the sway and the tint are uniforms (rocks: no sway, a tint of exactly 1). */
 function propMaterial(sway = false, quad: QuadUniforms | null = null): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
-  const u = { uSwayT: worldUniforms.valeTime };
+  const u = { uSwayT: worldUniforms.valeTime, uSwayOn: { value: sway ? 1 : 0 }, ...(quad ?? NO_QUAD) };
   m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+    Object.assign(shader.uniforms, u);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 #ifdef USE_COLOR_ALPHA
   roughnessFactor = mix( roughnessFactor, 0.75, clamp( vColor.a, 0.0, 1.0 ) );
 #endif`);
-    if (sway) {
-      Object.assign(shader.uniforms, u);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\n${TREE_SWAY_PARS}`)
-        .replace('#include <begin_vertex>', `#include <begin_vertex>\n${TREE_SWAY_MAIN}`);
-    }
-    if (quad) {
-      Object.assign(shader.uniforms, quad);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\n${QUAD_TINT_GLSL}`)
-        .replace('#include <color_vertex>', `#include <color_vertex>\n${QUAD_TINT_VERT}`);
-    }
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${TREE_SWAY_PARS}\nuniform float uSwayOn;\n${QUAD_TINT_GLSL}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nif ( uSwayOn > 0.5 ) {\n${TREE_SWAY_MAIN}\n}`)
+      .replace('#include <color_vertex>', `#include <color_vertex>\n${QUAD_TINT_VERT}`);
   };
-  m.customProgramCacheKey = () => (sway ? 'vale_prop_matte_sway_v3' : 'vale_prop_matte_v3') + (quad ? '_q' : '');
+  m.customProgramCacheKey = () => 'vale_prop_matte_v4';
   return m;
 }
 
@@ -472,6 +467,11 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
  *  colour is taken at unit luminance and scaled so its largest channel departs from 1 by exactly `strength` (default
  *  0.04: the ±4 % hue tint), so the value bands hold; a map without one gets the identity. */
 type QuadUniforms = { uQuadNW: { value: Color }; uQuadNE: { value: Color }; uQuadSW: { value: Color }; uQuadSE: { value: Color }; uQuadC: { value: Vector3 } };
+/** no quadrant tint: four white corners and a centre so far away both blends are exactly 1 (a × 1.0 that changes no bit) */
+const NO_QUAD: QuadUniforms = {
+  uQuadNW: { value: new Color(1, 1, 1) }, uQuadNE: { value: new Color(1, 1, 1) }, uQuadSW: { value: new Color(1, 1, 1) }, uQuadSE: { value: new Color(1, 1, 1) },
+  uQuadC: { value: new Vector3(-1e6, -1e6, 1) },
+};
 function quadUniforms(v: unknown): QuadUniforms {
   const q = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   const k = typeof q.strength === 'number' && Number.isFinite(q.strength) ? Math.max(0, Math.min(0.1, q.strength)) : 0.04;
@@ -1249,7 +1249,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
   grassMat.customProgramCacheKey = () => 'vale_grass_v4';
   patchWorldMaterial(grassMat);
-  const grassDepth = motionDepthMaterial(GRASS_VERT_PARS, GRASS_VERT_MAIN, grassU, 'vale_grass_depth_v1');
+  const grassDepth = swayDepth(INK_SWAY.grass, grassU, 'vale_grass_depth');
   const grassItems: { m: Matrix4; c: Color }[] = [];
   {
     const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
@@ -1611,7 +1611,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   // the Dialwood sway (r12 M11): its own program, and a shadow depth material running the same motion
   const treeMat = propMaterial(true, quadU);
   patchWorldMaterial(treeMat);
-  const treeDepth = motionDepthMaterial(TREE_SWAY_PARS, TREE_SWAY_MAIN, { uSwayT: worldUniforms.valeTime }, 'vale_tree_sway_depth_v1');
+  const treeDepth = swayDepth(INK_SWAY.tree, { uSwayT: worldUniforms.valeTime }, 'vale_tree_sway_depth');
   disposables.push(propMat, treeMat, treeDepth);
   /** a spot's variant is a hash of its position: stable across quality changes */
   const variantOf = (x: number, y: number, n: number): number => Math.floor(hash2(x * 1.7, y * 2.3) * n) % n;

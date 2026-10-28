@@ -5,6 +5,7 @@
 // `vfxSoft(m)` gives soft-particle fades (depth difference / m) and hides fragments behind the scene.
 
 import { AddEquation, CustomBlending, OneFactor, OneMinusSrcAlphaFactor, type Texture, Vector2 } from 'three';
+import { type UberKind, uberProgram } from '../uber.ts';
 
 /** uniforms shared by reference by every VFX material (updated once per frame) */
 export const vfxUniforms = {
@@ -483,3 +484,20 @@ void main() {
 export const FULLSCREEN_VERT = /* glsl */`
 varying vec2 vUv;
 void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4( position.xy, 1.0, 1.0 ); }`;
+
+// ── the VFX pass as ONE program (r12 B4 "≤ 40 shader programs"; uber.ts) ────────────────────────────────────────
+/** uUberKind of each VFX draw */
+export const VFX_KIND = { particle: 0, ribbon: 1, beam: 2, ring: 3, decal: 4, mesh: 5, distort: 6 } as const;
+/** every kind's own code (above, unchanged) and the order its attributes take the generic slots */
+export const VFX_KINDS: Record<keyof typeof VFX_KIND, UberKind> = {
+  particle: { vert: PARTICLE_VERT, frag: PARTICLE_FRAG, attrs: ['aPos', 'aCol', 'aVel', 'aTex', 'aPar', 'aRim'] },
+  ribbon: { vert: RIBBON_VERT, frag: RIBBON_FRAG, attrs: ['aCol', 'aUv', 'aPrm', 'aRimC'] },
+  beam: { vert: BEAM_VERT, frag: BEAM_FRAG, attrs: ['aA', 'aB', 'aC', 'aD', 'aE'] },
+  ring: { vert: RING_VERT, frag: RING_FRAG, attrs: ['aPos', 'aSty', 'aCol', 'aMisc'] },
+  decal: { vert: DECAL_VERT, frag: DECAL_FRAG, attrs: ['aPos', 'aRot', 'aCol', 'aMisc', 'aRimC'] },
+  mesh: { vert: MESH_VERT, frag: MESH_FRAG, attrs: ['aColor', 'aRimC', 'aEdge', 'aNoise', 'aDiss', 'aMisc'] },
+  distort: { vert: DISTORT_VERT, frag: DISTORT_FRAG, attrs: ['aPos', 'aPar', 'aAx'] },
+};
+const ORDER = Object.keys(VFX_KIND) as (keyof typeof VFX_KIND)[];
+/** the one VFX program (vertex + fragment source; the manual depth test declared once) */
+export const VFX_PROGRAM = uberProgram(ORDER.map((k) => VFX_KINDS[k]), [DEPTH]);

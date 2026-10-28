@@ -40,7 +40,8 @@ import {
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import type { MapDefT, VfxDefT } from '../contracts/catalog.ts';
-import { motionDepthMaterial } from './terrain_brush.ts';
+import { INK_SWAY, inkShadows, shadowDepth, swayDepth } from './ink.ts';
+import { CLOTH_MAIN, CLOTH_PARS } from './terrain_brush.ts';
 import { CURVE_N, evalCurve, type Gradient } from './vfx/curves.ts';
 import { type EmitterL, parseDef } from './vfx/defs.ts';
 import { patchWorldMaterial, WORLD_FOG_PARS, worldUniforms } from './world_material.ts';
@@ -361,6 +362,7 @@ class Critter {
     this.root = cloneSkinned(scene);
     this.root.scale.setScalar(spec.scale);
     this.root.traverse((o) => { const m = o as Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    inkShadows(this.root);
     this.mixer = new AnimationMixer(this.root);
     this.act = {};
     for (const name of ['idle', 'flee', 'settle'] as const) {
@@ -570,52 +572,29 @@ function turnTo(a: number, b: number, k: number): number {
 }
 
 // ── props: cloth sway ────────────────────────────────────────────────────────────────────────────
-/** the cloth sway's constants (≤ 0.5 Hz, tokens vfx.tiers.T0): two partials, the free edge lags the attached one */
-export const CLOTH = { hz: [0.23, 0.41] as const, w: [0.75, 0.25] as const, lag: 2.1, across: 0.3 } as const;
-const f = (x: number): string => x.toFixed(4);
-const CLOTH_PARS = /* glsl */`
-attribute float _sway;
-uniform float uAmbT;
-uniform float uSwayAmp;`;
-const CLOTH_MAIN = /* glsl */`
-#ifdef USE_INSTANCING
-{
-  vec3 ip = instanceMatrix[3].xyz;
-  float ph = 6.2831853 * fract( sin( dot( ip.xz, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
-  float w = _sway;
-  float t = uAmbT * 6.2831853;
-  float a = ${f(CLOTH.w[0])} * sin( ${f(CLOTH.hz[0])} * t + ph - ${f(CLOTH.lag)} * w ) + ${f(CLOTH.w[1])} * sin( ${f(CLOTH.hz[1])} * t + ph * 1.7 - ${f(CLOTH.lag * 1.6)} * w );
-  float b = sin( ${f(CLOTH.hz[1])} * t + ph * 2.3 - ${f(CLOTH.lag)} * w );
-  float amp = uSwayAmp * w;
-  // the cloth swings out of its plane (local z), a little across it, and lifts as it swings
-  transformed += vec3( ${f(CLOTH.across)} * b * amp, -0.35 * a * a * amp * w, a * amp );
-}
-#endif`;
+/** the cloth sway's constants (≤ 0.5 Hz, tokens vfx.tiers.T0; terrain_brush.ts, which the ink shadow program shares) */
+export { CLOTH } from './terrain_brush.ts';
 
 /** `fill`: an emissive floor (a share of the cloth's own albedo) standing in for the sky and ground bounce a hung cloth
- *  takes: under the Noonplate's 86° sun a vertical pennant gets almost no direct light and would read near black */
-function clothMaterial(amp: number, value: number, fill = 0): { mat: MeshStandardMaterial; depth: Material | null } {
+ *  takes: under the Noonplate's 86° sun a vertical pennant gets almost no direct light and would read near black.
+ *  r12 B4: one program for every prop: the sway and the fill are uniforms (0 = none, an exact no-op), and the shadow is
+ *  the ink program's (ink.ts) running the same sway. `own`: the depth material is this prop's (dispose it with the prop). */
+function clothMaterial(amp: number, value: number, fill = 0): { mat: MeshStandardMaterial; depth: Material; own: boolean } {
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: DoubleSide });
   mat.color.setScalar(value);
   const u = { uAmbT: worldUniforms.valeTime, uSwayAmp: { value: amp }, uClothFill: { value: fill } };
-  if (amp > 0 || fill > 0) {
-    mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-      Object.assign(shader.uniforms, u);
-      if (amp > 0) {
-        shader.vertexShader = shader.vertexShader
-          .replace('#include <common>', `#include <common>\n${CLOTH_PARS}`)
-          .replace('#include <begin_vertex>', `#include <begin_vertex>\n${CLOTH_MAIN}`);
-      }
-      if (fill > 0) {
-        shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform float uClothFill;')
-          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uClothFill;');
-      }
-    };
-    mat.customProgramCacheKey = () => `vale_amb_cloth_v2_${amp > 0 ? 's' : ''}${fill > 0 ? 'f' : ''}`;
-  }
+  mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+    Object.assign(shader.uniforms, u);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${CLOTH_PARS}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${CLOTH_MAIN}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uClothFill;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uClothFill;');
+  };
+  mat.customProgramCacheKey = () => 'vale_amb_cloth_v3';
   patchWorldMaterial(mat);
-  return { mat, depth: amp > 0 ? motionDepthMaterial(CLOTH_PARS, CLOTH_MAIN, u, 'vale_amb_cloth_depth_v1') : null };
+  return amp > 0 ? { mat, depth: swayDepth(INK_SWAY.cloth, u, 'vale_amb_cloth_depth'), own: true } : { mat, depth: shadowDepth('rigid', true), own: false };
 }
 
 // ── the layer ────────────────────────────────────────────────────────────────────────────────────
@@ -729,12 +708,12 @@ export class AmbientLayer {
       if (!geo) continue;
       const g = geo as BufferGeometry;
       if (!g.getAttribute('_sway')) g.setAttribute('_sway', new BufferAttribute(new Float32Array(g.getAttribute('position').count), 1));
-      const { mat, depth } = clothMaterial(p.sway, p.value, p.fill);
+      const { mat, depth, own } = clothMaterial(p.sway, p.value, p.fill);
       this.propMats.push(mat);
-      if (depth) this.propMats.push(depth);
+      if (own) this.propMats.push(depth);
       const im = new InstancedMesh(g, mat, p.at.length);
       im.name = 'vale_ambient_props';
-      if (depth) im.customDepthMaterial = depth;
+      im.customDepthMaterial = depth;
       im.castShadow = true; im.receiveShadow = true;
       const q = new Matrix4(), s = new Vector3(p.scale, p.scale, p.scale);
       p.at.forEach(([x, y, rot], i) => {

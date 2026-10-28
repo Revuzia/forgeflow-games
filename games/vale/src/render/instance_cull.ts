@@ -19,6 +19,7 @@ import {
   BufferAttribute, BufferGeometry, DynamicDrawUsage, type Frustum, InstancedBufferAttribute, InstancedMesh, type Material, type Matrix4,
   Sphere, type Color,
 } from 'three';
+import { shadowDepth } from './ink.ts';
 
 export interface CullView {
   frustum: Frustum;
@@ -130,7 +131,8 @@ export class CellInstances {
       im.visible = false;
       im.frustumCulled = false;                     // culled here, per cell
       im.castShadow = this.shadows; im.receiveShadow = true;
-      if (o.depth) im.customDepthMaterial = o.depth;
+      // the shadow pass draws through the ink program (ink.ts), never three's MeshDepthMaterial variants
+      im.customDepthMaterial = o.depth ?? shadowDepth('rigid', true);
       im.renderOrder = o.renderOrder ?? 0;
       const split: Split = { main: 0, all: 0 };
       im.userData.split = split;

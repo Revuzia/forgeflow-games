@@ -16,13 +16,14 @@
 // The hovered unit's rim draws from a one-instance copy (overlay/hover.ts). Presentation only.
 
 import {
-  type AnimationClip, AnimationMixer, BackSide, type BufferGeometry, Color, CustomBlending, DataTexture, DoubleSide, DynamicDrawUsage,
+  type AnimationClip, AnimationMixer, BackSide, type BufferGeometry, Color, DataTexture, DynamicDrawUsage,
   FloatType, FrontSide, Group, InstancedBufferAttribute, InstancedBufferGeometry, LoopOnce, LoopRepeat, type Material, Matrix4,
-  Mesh, MeshDepthMaterial, MeshStandardMaterial, NearestFilter, NormalBlending, type Object3D, OneFactor, OneMinusSrcAlphaFactor,
-  Quaternion, RGBAFormat, ShaderMaterial, type Skeleton, type SkinnedMesh, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
+  Mesh, type MeshStandardMaterial, NearestFilter, type Object3D,
+  Quaternion, type RawShaderMaterial, RGBAFormat, type Skeleton, type SkinnedMesh, type Vector2, Vector3, type WebGLProgramParametersWithUniforms,
   type Camera, type Scene, type WebGLRenderer,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
@@ -247,35 +248,9 @@ export class BakedMixer {
 }
 
 // ── shaders ───────────────────────────────────────────────────────────────────────────────────────────
-/** the crowd's vertex prelude: per-instance affine, two baked rows and their blend, glow, style */
-export const CROWD_VERT_PARS = /* glsl */`
-uniform highp sampler2D uCrowdBake;
-uniform mat4 uCrowdBind;
-attribute vec4 skinIndex;
-attribute vec4 skinWeight;
-attribute vec4 aCrowdM0;
-attribute vec4 aCrowdM1;
-attribute vec4 aCrowdM2;
-attribute vec4 aCrowdAnim;   // rowA, rowB, weight of A, accent glow
-attribute vec4 aCrowdStyle;  // outline px, flash k, flash ink, -
-mat4 valeCrowdBone( float row, float bone ) {
-  ivec2 c = ivec2( int( bone ) * 3, int( row ) );
-  vec4 r0 = texelFetch( uCrowdBake, c, 0 );
-  vec4 r1 = texelFetch( uCrowdBake, c + ivec2( 1, 0 ), 0 );
-  vec4 r2 = texelFetch( uCrowdBake, c + ivec2( 2, 0 ), 0 );
-  return transpose( mat4( r0, r1, r2, vec4( 0.0, 0.0, 0.0, 1.0 ) ) );
-}
-mat4 valeCrowdSkin( float row ) {
-  return skinWeight.x * valeCrowdBone( row, skinIndex.x ) + skinWeight.y * valeCrowdBone( row, skinIndex.y )
-       + skinWeight.z * valeCrowdBone( row, skinIndex.z ) + skinWeight.w * valeCrowdBone( row, skinIndex.w );
-}
-mat4 valeCrowdMatrix() {
-  mat4 s = valeCrowdSkin( aCrowdAnim.x );
-  if ( aCrowdAnim.z < 0.999 ) s = s * aCrowdAnim.z + valeCrowdSkin( aCrowdAnim.y ) * ( 1.0 - aCrowdAnim.z );
-  mat4 inst = transpose( mat4( aCrowdM0, aCrowdM1, aCrowdM2, vec4( 0.0, 0.0, 0.0, 1.0 ) ) );
-  return inst * s * uCrowdBind;
-}
-`;
+// The crowd's vertex prelude (CROWD_VERT_PARS) and the victim flash live with the ink programs (ink.ts): the outline,
+// flash, hover mask and rim and the shadow of every crowd set are ink materials of its `crowd` path (one program).
+export { CROWD_VERT_PARS, VICTIM_FLASH_GLSL };
 
 /** patch a built-in material (standard / depth) so a plain Mesh draws as the crowd (world space out) */
 function patchCrowd(mat: Material, bake: CrowdBake, bind: Matrix4, glow: boolean): void {
@@ -299,79 +274,6 @@ function patchCrowd(mat: Material, bake: CrowdBake, bind: Matrix4, glow: boolean
   mat.customProgramCacheKey = () => `${prevKey.call(mat)}|vale_crowd${glow ? 'g' : ''}`;
   mat.needsUpdate = true;
 }
-
-/** the victim flash shading (actors.ts uses the same function on per-actor hulls) */
-export const VICTIM_FLASH_GLSL = /* glsl */`
-vec4 valeVictimFlash( vec3 n, vec3 v, vec3 color, vec3 rimColor, float k, float ink ) {
-  float ndv = abs( dot( normalize( n ), normalize( v ) ) );
-  float rim = pow( 1.0 - ndv, 2.0 );
-  if ( ink < 0.5 ) {
-    // light: added (premultiplied, alpha 0), rim-weighted so the silhouette lights first
-    return vec4( color * k * ( 0.25 + 0.75 * rim ), 0.0 );
-  }
-  // Shade (true damage, value-inverted): the body drops to ink, the rim rings noonwhite
-  float halo = smoothstep( 0.3, 0.75, rim );
-  float a = clamp( k * mix( 1.6, 2.0, halo ), 0.0, mix( 0.85, 0.95, halo ) );
-  return vec4( mix( color, rimColor, halo ) * a, a );
-}
-`;
-
-const OUTLINE_VERT = /* glsl */`
-#include <common>
-${CROWD_VERT_PARS}
-uniform vec2 uOutlineRes;
-void main() {
-  mat4 valeK = valeCrowdMatrix();
-  float px = aCrowdStyle.x;
-  vec4 mv = viewMatrix * valeK * vec4( position, 1.0 );
-  gl_Position = projectionMatrix * mv;
-  if ( px <= 0.0 ) { gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 ); return; }
-  vec3 vn = normalize( mat3( viewMatrix ) * mat3( valeK ) * normal );
-  vec2 dir = normalize( ( projectionMatrix * vec4( vn, 0.0 ) ).xy + 1e-5 );
-  gl_Position.xy += dir * px * 2.0 / uOutlineRes * gl_Position.w;
-}`;
-const OUTLINE_FRAG = /* glsl */`
-uniform vec3 uColor;
-uniform float uOpacity;
-void main() { gl_FragColor = vec4( uColor, uOpacity ); }`;
-
-const FLASH_VERT = /* glsl */`
-#include <common>
-${CROWD_VERT_PARS}
-attribute vec3 aCrowdFlash;   // flash colour
-attribute vec3 aCrowdFlashRim;
-varying vec3 vN; varying vec3 vV; varying vec3 vC; varying vec3 vR; varying vec2 vK;
-void main() {
-  if ( aCrowdStyle.y <= 0.002 ) { gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 ); return; }
-  mat4 valeK = valeCrowdMatrix();
-  vec4 mv = viewMatrix * valeK * vec4( position, 1.0 );
-  gl_Position = projectionMatrix * mv;
-  vN = mat3( viewMatrix ) * mat3( valeK ) * normal;
-  vV = -mv.xyz;
-  vC = aCrowdFlash; vR = aCrowdFlashRim; vK = aCrowdStyle.yz;
-}`;
-const FLASH_FRAG = /* glsl */`
-${VICTIM_FLASH_GLSL}
-varying vec3 vN; varying vec3 vV; varying vec3 vC; varying vec3 vR; varying vec2 vK;
-void main() { gl_FragColor = valeVictimFlash( vN, vV, vC, vR, vK.x, vK.y ); }`;
-
-/** the one-instance hover copy's vertex programs (overlay/hover.ts supplies the fragments and uniforms) */
-const HOVER_MASK_VERT = /* glsl */`
-#include <common>
-${CROWD_VERT_PARS}
-void main() { gl_Position = projectionMatrix * viewMatrix * valeCrowdMatrix() * vec4( position, 1.0 ); }`;
-const HOVER_RIM_VERT = /* glsl */`
-#include <common>
-${CROWD_VERT_PARS}
-uniform float uPx;
-uniform vec2 uOutlineRes;
-void main() {
-  mat4 valeK = valeCrowdMatrix();
-  gl_Position = projectionMatrix * viewMatrix * valeK * vec4( position, 1.0 );
-  vec3 vn = normalize( mat3( viewMatrix ) * mat3( valeK ) * normal );
-  vec2 dir = normalize( ( projectionMatrix * vec4( vn, 0.0 ) ).xy + 1e-5 );
-  gl_Position.xy += dir * uPx * 2.0 / uOutlineRes * gl_Position.w;
-}`;
 
 // ── the per-frame instance writer ───────────────────────────────────────────────────────────────────
 /** what the crowd reads from an actor (render/actors.ts Actor) */
@@ -461,7 +363,8 @@ class CrowdSet {
   readonly group = new Group();
   readonly bake: CrowdBake;
   readonly buf = new InstanceBuffer(32);
-  private readonly outlineMat: ShaderMaterial;
+  /** the rest ink's colour and alpha (one per set: every hull part's outline shares them) */
+  private readonly outlineU = { uColor: { value: new Color() }, uAlpha: { value: 0.6 } };
   private readonly flashMeshes: Mesh[] = [];
   private readonly accentMats: MeshStandardMaterial[] = [];
   private anyFlash = false;
@@ -487,35 +390,20 @@ class CrowdSet {
       }
       patchCrowd(mat, bake, p.bind, p.accent);
       const mesh = new Mesh(this.buf.view(p.geometry), mat);
-      const depth = new MeshDepthMaterial();
-      patchCrowd(depth, bake, p.bind, false);
-      mesh.customDepthMaterial = depth;
+      mesh.customDepthMaterial = crowdDepth(bake.texture, p.bind);
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
       mesh.name = `crowd_part_${p.accent ? 'accent' : 'body'}`;
       this.group.add(mesh);
     }
-    this.outlineMat = new ShaderMaterial({
-      vertexShader: OUTLINE_VERT, fragmentShader: OUTLINE_FRAG,
-      uniforms: { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: bake.hull[0]?.bind ?? new Matrix4() }, uOutlineRes: outlineRes, uColor: { value: new Color() }, uOpacity: { value: 0.6 } },
-      side: BackSide, transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
-    });
     for (const h of bake.hull) {
-      const om = this.outlineMat.clone();
-      om.uniforms.uCrowdBind = { value: h.bind };
-      om.uniforms.uColor = this.outlineMat.uniforms.uColor;
-      om.uniforms.uOpacity = this.outlineMat.uniforms.uOpacity;
-      om.uniforms.uOutlineRes = outlineRes;
+      // the rest ink (per-instance width, collapsed when 0) and the victim flash (per-instance, while one flashes)
+      const bk = { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: h.bind } };
+      const om = inkMaterial('crowd', INK.outline, { side: BackSide, blend: 'normal', depthWrite: false, offset: [1, 2], uniforms: { ...bk, ...this.outlineU, uOutlineRes: outlineRes } });
       const o = new Mesh(this.buf.view(h.geometry), om);
       o.frustumCulled = false; o.matrixAutoUpdate = false; o.renderOrder = 1; o.name = 'crowd_outline';
       this.group.add(o);
-      const fm = new ShaderMaterial({
-        vertexShader: FLASH_VERT, fragmentShader: FLASH_FRAG,
-        uniforms: { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: h.bind } },
-        side: FrontSide, transparent: true, depthWrite: false, depthTest: true, fog: false,
-        blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: OneFactor, blendDstAlpha: OneMinusSrcAlphaFactor,
-        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
-      });
+      const fm = inkMaterial('crowd', INK.flash, { side: FrontSide, blend: 'premul', depthWrite: false, offset: [-1, -2], uniforms: { ...bk, ...flashU() } });
       const f = new Mesh(this.buf.view(h.geometry), fm);
       f.frustumCulled = false; f.matrixAutoUpdate = false; f.renderOrder = 2; f.name = 'crowd_flash';
       this.flashMeshes.push(f);
@@ -530,8 +418,8 @@ class CrowdSet {
     if (b.count >= b.cap) b.grow(b.cap * 2);
     const o = a.restOutline, f = a.flashState;
     if (!this.colorSet && o.px > 0) {
-      (this.outlineMat.uniforms.uColor.value as Color).copy(o.color);
-      this.outlineMat.uniforms.uOpacity.value = o.opacity;
+      this.outlineU.uColor.value.copy(o.color);
+      this.outlineU.uAlpha.value = o.opacity;
       this.colorSet = true;
     }
     const flash = f.k > 0.002;
@@ -547,7 +435,6 @@ class CrowdSet {
 
   dispose(): void {
     // the instanced views share the template's attributes: only the materials and instance buffers are ours
-    this.outlineMat.dispose();
     this.group.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh) return;
@@ -564,18 +451,14 @@ class CrowdSolo {
   readonly buf = new InstanceBuffer(1);
   readonly mask: Mesh[] = [];
   readonly hull: Mesh[] = [];
-  readonly maskMat: ShaderMaterial;
-  readonly rimMat: ShaderMaterial;
-  constructor(bake: CrowdBake, maskFrag: string, rimFrag: string, rimUniforms: Record<string, { value: unknown }>, outlineRes: { value: Vector2 }) {
-    this.maskMat = new ShaderMaterial({
-      vertexShader: HOVER_MASK_VERT, fragmentShader: maskFrag, uniforms: { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: bake.hull[0].bind } },
-      side: DoubleSide, depthTest: false, depthWrite: false, fog: false,
-    });
-    this.rimMat = new ShaderMaterial({
-      vertexShader: HOVER_RIM_VERT, fragmentShader: rimFrag,
-      uniforms: { ...rimUniforms, uCrowdBake: { value: bake.texture }, uCrowdBind: { value: bake.hull[0].bind }, uOutlineRes: outlineRes },
-      side: BackSide, transparent: true, depthTest: false, depthWrite: false, fog: false, blending: NormalBlending,
-    });
+  readonly maskMat: RawShaderMaterial;
+  readonly rimMat: RawShaderMaterial;
+  constructor(bake: CrowdBake, rimUniforms: Record<string, { value: unknown }>) {
+    // the crowd path's ink mask and rim (overlay/hover.ts sets the rim's width, colour and mask)
+    const { uPx, uMask, uColor, uAlpha, ...depth } = rimUniforms;
+    const h = hoverMaterials('crowd', { uPx, uMask, uColor, uAlpha } as RimU, depth, { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: bake.hull[0].bind } });
+    this.maskMat = h.mask;
+    this.rimMat = h.rim;
     for (const h of bake.hull) {
       const m = new Mesh(this.buf.view(h.geometry), this.maskMat);
       m.frustumCulled = false; m.matrixAutoUpdate = false; m.visible = false;
@@ -590,7 +473,7 @@ class CrowdSolo {
 
 export interface CrowdHoverTarget {
   model: Object3D; mask: readonly Mesh[]; hull: readonly Mesh[]; px: number; color: Color;
-  maskMat: Material; rimMat: ShaderMaterial;
+  maskMat: Material; rimMat: RawShaderMaterial;
 }
 
 /** every crowd set of a match (renderer-owned; its group lives in the match scene) */
@@ -601,9 +484,9 @@ export class CrowdLayer {
   /** never-drawn sets that hold each bake's compiled programs across matches (warm()) */
   private readonly warmSets = new Map<number, CrowdSet>();
   private readonly outlineRes: { value: Vector2 };
-  private readonly hover: { maskFrag: string; rimFrag: string; rimUniforms: () => Record<string, { value: unknown }> };
+  private readonly hover: { rimUniforms: () => Record<string, { value: unknown }> };
 
-  constructor(outlineRes: { value: Vector2 }, hover: { maskFrag: string; rimFrag: string; rimUniforms: () => Record<string, { value: unknown }> }) {
+  constructor(outlineRes: { value: Vector2 }, hover: { rimUniforms: () => Record<string, { value: unknown }> }) {
     this.outlineRes = outlineRes;
     this.hover = hover;
     this.group.name = 'vale_crowd';
@@ -634,7 +517,7 @@ export class CrowdLayer {
 
   private solo(bake: CrowdBake): CrowdSolo {
     let s = this.solos.get(bake.id);
-    if (!s) { s = new CrowdSolo(bake, this.hover.maskFrag, this.hover.rimFrag, this.hover.rimUniforms(), this.outlineRes); this.solos.set(bake.id, s); }
+    if (!s) { s = new CrowdSolo(bake, this.hover.rimUniforms()); this.solos.set(bake.id, s); }
     return s;
   }
 
