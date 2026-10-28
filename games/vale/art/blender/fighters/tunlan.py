@@ -203,10 +203,16 @@ LAN_Z = {"roof_top": 1.757, "eave": 1.690, "glass_top": 1.685, "glass_bot": 1.56
 BEAD_R = 0.040            # the smoked lampresin bead inside the cage; the accent core shows at four points of it
 # the lamp-glass lens in the FRONT brim (accent inside an ironstone grommet): centre radius, half sizes along / across
 VENT_CR = 0.418           # the lamp slot's centre radius on the front brim
-VENT_HR, VENT_HT = 0.045, 0.210     # its half width across the brim / half length along it (arc length, round ends)
+# its half width across the brim / half length along it (arc length, round ends): fix pass 2 cut the 42 cm arc (a
+# white bracket over the disc in game) to a 25 x 10 cm lamp lens, the brief's notch kept as large as the 1.5 % accent
+# gate needs
+VENT_HR, VENT_HT = 0.052, 0.125
 
 
 HEAD_CRACK = [(0.058, 1.782), (0.036, 1.738), (0.046, 1.706), (0.016, 1.652), (0.010, 1.612)]   # (x, z) on the back
+# the skirt's front edges (x, y, z, top down): her left panel's edge and her right's; the cream under-robe between them
+SKIRT_EDGE = {"L": ((0.072, -0.150, 1.10), (0.075, -0.175, 0.70), (0.080, -0.210, 0.27)),
+              "R": ((-0.075, -0.145, 1.10), (-0.105, -0.170, 0.70), (-0.120, -0.200, 0.27))}
 
 
 def _slot2d(P, hr, ht, th0=-math.pi / 2, rc=None):
@@ -504,7 +510,7 @@ def sculpts() -> list:
     part("lantern_bead", bead, "lampresin", "bone:x_lantern", 220, 0.45)
     core = Sculpt("lantern_core")
     for dx, dy in ((0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)):
-        core.add(Sphere(bc + np.array([dx, dy, 0.0]) * (BEAD_R - 0.008), 0.0160), k=0.0)
+        core.add(Sphere(bc + np.array([dx, dy, 0.0]) * (BEAD_R - 0.008), 0.0185), k=0.0)
     part("lantern_core", core, "accent", "bone:x_lantern", 160, 0.4)
 
     # ── HEAD (head): the walnut head-box with its crown band; the pale carved mask on its front ──
@@ -513,10 +519,8 @@ def sculpts() -> list:
     head.add(RoundBox((0.0, 0.020, 1.826), (0.168, 0.132, 0.036), 0.016), k=0.012)                      # crown band
     head.sub(Capsule((-0.18, 0.02, 1.795), (0.18, 0.02, 1.795), 0.0045), k=0.002)                         # band seam
     head.add(RoundBox((0.0, 0.020, 1.858), (0.150, 0.118, 0.010), 0.006), k=0.0)                          # under the hat
-    # one thin crack down the back board (as painted), cut 1.5 mm into the surface along its whole length
-    def yb(z):
-        return 0.025 + 0.100 + 0.024 * (z - 1.520) / 0.280 + 0.0007
-    head.sub(Tube([(x, yb(z), z) for x, z in HEAD_CRACK], [0.0024, 0.0022, 0.0022, 0.0018, 0.0012]), k=0.001)
+    # the crack down the back board is PAINTED only (_head_paint): a 1.5 mm groove made the 900-tri low fold into a
+    # tilted sliver that caught the sky in three (a pale glossy 'shard' on the back of the box)
     part("head", head, "wood_dark", "bone:head", 900)
     mask = Sculpt("mask")
     plate = TaperBox(0.0, -0.100, 1.494, 1.832, 0.108, 0.172, 0.050, 0.050, 0.020)
@@ -566,9 +570,10 @@ def sculpts() -> list:
     skirt.add(sk.displaced(ang_folds(0.012, 7, (0.0, 0.01), zfade=(1.05, 0.30), phase=0.4), 0.012), k=0.0)
     skirt.inter(HalfSpace((0, 0, 0.238), (0, 0, -1), 2.0), k=0.012)
     skirt.inter(HalfSpace((0, 0, 1.20), (0, 0, 1), 2.0), k=0.01)
-    # the outer robe's front edges (her left panel overlaps at x +0.07; the cream under-robe shows between)
-    skirt.sub(Tube([(0.072, -0.150, 1.10), (0.075, -0.175, 0.70), (0.080, -0.210, 0.27)], [0.004, 0.004, 0.005]), k=0.003)
-    skirt.sub(Tube([(-0.075, -0.145, 1.10), (-0.105, -0.170, 0.70), (-0.120, -0.200, 0.27)], [0.004, 0.004, 0.005]), k=0.003)
+    # the outer robe's front edges (her left panel overlaps at x +0.07; the cream under-robe shows between; the paint's
+    # panel edges follow these grooves, SKIRT_EDGE)
+    skirt.sub(Tube(list(SKIRT_EDGE["L"]), [0.004, 0.004, 0.005]), k=0.003)
+    skirt.sub(Tube(list(SKIRT_EDGE["R"]), [0.004, 0.004, 0.005]), k=0.003)
     part("robe_skirt", skirt, "cloth", ("weights", "skirt"), 1950)
     sash = Sculpt("sash")
     sash.add(Torus((0.0, 0.004, 1.165), 0.150, 0.046, axes=np.diag([1.0, 0.150 / 0.122, 1.0]), rz=0.050).displaced(
@@ -718,6 +723,7 @@ def model(ctx) -> list:
             P.append(fighter.Part(name, high=ob, low=low, bind=bind))
             continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
+    _BUILD["names"] = [p.name for p in P]
     return P
 
 
@@ -1231,8 +1237,10 @@ HAT_SCHEMES = {
                          "rim": "#5C4C55"},
     # Lamplit: dark walnut ribs, brim band, crown ring and rim round lampresin panels lit from within (a warm hot core
     # in each panel fading to the named #A38C6B at its ribs)
-    "tunlan_lamplit": {"top": "#ECD5A6", "edge": "#A38C6B", "glow": "#F7DEAD", "seam": "#4E3D2F", "crown": "#E0CCA2",
-                       "under": "#3E3229", "rim": "#46362A", "rim_hi": "#6E5641"},
+    # (fix pass 2: golden panels lit from the middle out, the light falling off over most of the panel's width to a warm
+    # tan, the named #A38C6B only at the ribs; the rim the brief's walnut #5E4D3E, which also carries the top band)
+    "tunlan_lamplit": {"top": "#ECD5A6", "edge": "#A38C6B", "mid": "#D2B387", "glow": "#F2D49A", "seam": "#4E3D2F",
+                       "crown": "#E0CCA2", "under": "#3E3229", "rim": "#5E4D3E", "rim_hi": "#7E6650"},
 }
 
 
@@ -1258,14 +1266,20 @@ def _hat_paint(p, n, hexes=None):
     sw = np.exp(-((dth * r) / 0.0055) ** 2) * ss(0.20, 0.24, r) * (1 - ss(EDGE_R - 0.018, EDGE_R - 0.004, r))
     if "edge" in hx:                                           # Lamplit: paper panels lit from within, walnut ribs
         edge_c, glow_c = _lin(_hex(hx["edge"])), _lin(_hex(hx.get("glow", hx["top"])))
+        mid_c = _lin(_hex(hx.get("mid", hx["top"])))
         du = np.abs(panel_u - 0.5) * 2                         # 0 at a panel's middle, 1 at its ribs
-        rr = (r - 0.20) / (EDGE_R - 0.03 - 0.20)               # 0 at the crown band, 1 at the brim band
-        # each panel a paper lantern lit from within: a warm hot core low in the panel, the shaded lampresin at its ribs
-        core = np.exp(-(du / 0.55) ** 2) * np.exp(-((rr - 0.42) / 0.40) ** 2)
-        lit_t = np.clip(1 - ss(0.84, 1.0, du), 0, 1)
-        pc = edge_c[None, :] * (1 - lit_t)[:, None] + top[None, :] * lit_t[:, None]
-        pc = pc * (1 - core)[:, None] + glow_c[None, :] * core[:, None]
-        c = pc * (mott * (1.0 + 0.05 * ss(-0.3, 0.9, n @ KEY)))[:, None]
+        rr = np.clip((r - 0.20) / (EDGE_R - 0.03 - 0.20), 0, 1)   # 0 at the crown band, 1 at the brim band
+        # each panel a paper lantern lit from within: the hot golden core along its middle, the light falling off over
+        # most of its width (a falloff only at the rim sat under the highlight cap and read as flat cream paper), a
+        # brighter ring across the middle of the shade, dimmer toward the crown and the brim; the named lampresin edge
+        # #A38C6B against the ribs
+        across = np.cos(np.clip(du, 0, 1) * math.pi / 2) ** 1.4
+        along = 0.70 + 0.30 * np.exp(-((rr - 0.45) / 0.40) ** 2)
+        g_ = np.clip(across * along, 0, 1)
+        pc = mid_c[None, :] * (1 - g_)[:, None] + glow_c[None, :] * g_[:, None]
+        e_ = ss(0.80, 1.0, du)
+        pc = pc * (1 - e_)[:, None] + edge_c[None, :] * e_[:, None]
+        c = pc * (mott * (1.0 + 0.04 * ss(-0.3, 0.9, n @ KEY)))[:, None]
         rib = np.exp(-((dth * r) / 0.0050) ** 4) * ss(0.20, 0.23, r)
         band = ss(EDGE_R - 0.016, EDGE_R - 0.012, r) + (1 - ss(0.212, 0.218, r)) * ss(CROWN_A[0] - 0.004, CROWN_A[0] + 0.004, r)
         wal = np.clip(rib + band, 0, 1) * ss(0.18, 0.19, r)
@@ -1358,7 +1372,9 @@ def _head_paint(p, n):
         a_, b_ = np.array([x0, z0]), np.array([x1, z1])
         t_ = np.clip(((q - a_) @ (b_ - a_)) / float((b_ - a_) @ (b_ - a_)), 0, 1)
         dmin = np.minimum(dmin, np.linalg.norm(q - (a_ + t_[:, None] * (b_ - a_)), axis=1))
-    c = c * (1 - 0.65 * np.exp(-(dmin / 0.0032) ** 2) * ss(0.3, 0.6, n[:, 1]))[:, None]
+    back = ss(0.3, 0.6, n[:, 1])
+    c = c * (1 - 0.30 * np.exp(-(dmin / 0.0085) ** 2) * back)[:, None]          # the split's shadowed lips
+    c = c * (1 - 0.82 * np.exp(-(dmin / 0.0034) ** 2) * back)[:, None]          # the dark crack itself
     return c * (1 + 0.15 * ss(0.5, 0.95, np.abs(n[:, 2])))[:, None]
 
 
@@ -1395,6 +1411,96 @@ def _legs_paint(p, n):
     return base[None, :] * (1 + 0.08 * _fbm(p, 30.0) + 0.10 * ss(0.0, 0.9, n @ KEY))[:, None]
 
 
+# ── the skirt, painted from the plate's TONES (fix pass 2): projected, the skirt's sides took the plate's vertical
+#    brush lines and the soft cream/felt boundary as pink/cream candy stripes, a torn-paper panel edge with dark-red
+#    specks, and the hands' ghost; now the felt and the cream under-robe take the plate's colour per height, the panel
+#    is bounded by the sculpted front edges (SKIRT_EDGE grooves), and the form comes from the key light, the sculpt's
+#    own folds (ang_folds, same noise) and a fine vertical felt grain ─────────────────────────────────────────────
+SKIRT_FOLDS = dict(amp=0.012, n=7, c=(0.0, 0.01), zfade=(1.05, 0.30), phase=0.4)    # = the sculpt's ang_folds
+
+
+def _edge_x(side, z):
+    pts = SKIRT_EDGE[side]
+    zs = np.array([q[2] for q in pts[::-1]])
+    xs = np.array([q[0] for q in pts[::-1]])
+    return np.interp(z, zs, xs)
+
+
+def _skirt_tones(plates):
+    """(z grid, felt, cream) in linear light: the plate's front felt (both panels, |x| 0.12-0.22) and the cream
+    under-robe between the edges (the sash tail's columns skipped) per 2 cm of height, smoothed"""
+    felt_m, cream_m = _plate_classes(plates)["front"]
+    img = plates.img["front"]
+    Hh, Ww = felt_m.shape
+    zs = np.arange(0.22, 1.16, 0.02)
+    tones = {"felt": [], "cream": []}
+    for z in zs:
+        xf = np.concatenate([np.linspace(-0.22, -0.12, 48), np.linspace(0.12, 0.22, 48)])
+        xr, xl = float(_edge_x("R", z)), float(_edge_x("L", z))
+        xc = np.linspace(xr + 0.016, xl - 0.016, 64)
+        if z > 0.72:
+            xc = xc[(xc < -0.100) | (xc > -0.012)]
+        for key, xs_, mk in (("felt", xf, felt_m), ("cream", xc, cream_m)):
+            px, py = plates.to_px("front", xs_, np.full_like(xs_, z))
+            for dz in (-2, 0, 2):                            # three rows per sample
+                ix = np.clip(np.round(px).astype(np.int64), 0, Ww - 1)
+                iy = np.clip(np.round(py).astype(np.int64) + dz, 0, Hh - 1)
+                ok = mk[iy, ix]
+                if dz == -2:
+                    acc = [img[iy[ok], ix[ok]]]
+                else:
+                    acc.append(img[iy[ok], ix[ok]])
+            c = np.concatenate(acc)
+            tones[key].append(np.median(_lin(c), 0) if len(c) >= 6 else np.full(3, np.nan, np.float32))
+    out = []
+    for key in ("felt", "cream"):
+        a = np.array(tones[key], dtype=np.float32)
+        good = ~np.isnan(a[:, 0])
+        for ch in range(3):
+            a[:, ch] = np.interp(zs, zs[good], a[good, ch])
+        k = np.array([1, 2, 3, 2, 1], np.float32) / 9.0
+        a = np.stack([np.convolve(np.pad(a[:, ch], 2, mode="edge"), k, mode="valid") for ch in range(3)], 1)
+        out.append(a)
+    return zs, out[0], out[1]
+
+
+def _skirt_paint(p, n, plates, log=print):
+    zs, felt_t, cream_t = _skirt_tones(plates)
+    z = p[:, 2]
+    felt = np.stack([np.interp(z, zs, felt_t[:, c]) for c in range(3)], 1)
+    cream = np.stack([np.interp(z, zs, cream_t[:, c]) for c in range(3)], 1)
+    # the key light, normalised to the front (the plate's tone is the lit front), and the sculpt's folds: ridges a
+    # little lighter, valleys darker (the same ang_folds field the high sculpt was displaced by)
+    def lam(nn):
+        return 0.84 + 0.24 * ss(-0.45, 0.85, nn @ KEY)
+    s = lam(n) / float(lam(np.array([[0.0, -1.0, 0.0]]))[0])
+    f = SKIRT_FOLDS
+    th = np.arctan2(p[:, 1] - f["c"][1], p[:, 0] - f["c"][0])
+    u = th * f["n"] + f["phase"] + 0.9 * NOISE(p, 2.5)
+    za = np.clip((f["zfade"][0] - z) / (f["zfade"][0] - f["zfade"][1]), 0.1, 1.0)
+    fold = -(np.abs(np.sin(u)) * 2.0 - 1.0) * za                     # +1 ridge, -1 valley
+    grain = 1 + 0.035 * NOISE(p * np.array([9.0, 9.0, 0.35]), 14.0) + 0.025 * _fbm(p, 9.0)
+    felt_c = felt * (s * (1 + 0.06 * fold) * grain)[:, None]
+    # the cream under-robe between the robe's front edges, on the front only; its own two soft folds
+    xr, xl = _edge_x("R", z), _edge_x("L", z)
+    front = ss(0.25, -0.05, n[:, 1]) * (p[:, 1] < -0.02)
+    inside = ss(xr - 0.0025, xr + 0.0025, p[:, 0]) * (1 - ss(xl - 0.0025, xl + 0.0025, p[:, 0])) * front
+    w_ = np.maximum(xl - xr, 1e-3)
+    q = (p[:, 0] - xr) / w_
+    soft = 1 - 0.07 * np.exp(-((q - 0.36 - 0.03 * NOISE(p, 3.0)) / 0.06) ** 2) \
+        - 0.05 * np.exp(-((q - 0.72 - 0.03 * NOISE(p + 3.1, 3.0)) / 0.05) ** 2)
+    d_edge = np.minimum(np.abs(p[:, 0] - xr), np.abs(p[:, 0] - xl))
+    shadow = 1 - 0.20 * np.exp(-d_edge / 0.010)                       # the felt panels' edge shades the cream
+    cream_c = cream * (s * soft * shadow * (1 + 0.025 * _fbm(p, 12.0)))[:, None]
+    # the felt's front edge: a dark seam line just outside the cream (the painted robe edge), front only
+    seam = np.exp(-((d_edge - 0.004) / 0.0045) ** 2) * (1 - inside) * front
+    felt_c = felt_c * (1 - 0.40 * seam)[:, None]
+    c = felt_c * (1 - inside)[:, None] + cream_c * inside[:, None]
+    hem = 1 - 0.14 * (1 - ss(0.245, 0.275, z))                        # the hem's turned edge, a touch darker
+    log(f"  tunlan skirt: painted from the plate's tones ({100 * float((inside > 0.5).mean()):.0f}% cream panel)")
+    return c * hem[:, None]
+
+
 def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True, log=print):
     if "hat" not in names or "palm_L" not in names:
         return _orig_paint(maps, plates, vis, names, tops=tops, flat=flat, eps=eps, bleed=bleed, log=log)
@@ -1422,6 +1528,9 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         m = sel(name)
         if m is not None:
             lin[m] = fn(p[m], n[m])
+    m = sel("robe_skirt")
+    if m is not None:
+        lin[m] = _skirt_paint(p[m], n[m], plates, log)
     sk = next((x for x in SKINS if x["id"] == _BUILD.get("skin")), None)
     if sk and "wood" in sk["palette"]:                        # the skin's wood on the procedural hands
         wg = np.clip(_lin(_hex(sk["palette"]["wood"])) / np.maximum(_lin(_hex(PALETTE["wood"])), 1e-4), 0.2, 5.0)
@@ -1436,6 +1545,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
             lin[m] = b_[None, :] * ((0.82 + 0.26 * ss(-0.2, 0.9, n[m] @ KEY)) * (1 + 0.05 * _fbm(p[m], 30.0)))[:, None]
     m = sel("mask")                                           # the mask's back rims (seen past the head-box): walnut
     if m is not None:
+        # its edge faces (the plate's thickness, seen past the head-box's sides from behind: a pale sliver) in the
+        # carved wood's shade, its back rims walnut
+        wsd = (ss(-0.42, -0.12, n[m, 1]) * ss(0.55, 0.85, np.abs(n[m, 0])) * (1 - ss(0.05, 0.45, n[m, 1])))[:, None]
+        lin[m] = lin[m] * (1 - wsd) + _lin(_hex(WOOD_HEX[1]))[None, :] * 0.85 * wsd
         wbk = ss(0.05, 0.45, n[m, 1])[:, None]
         lin[m] = lin[m] * (1 - wbk) + _lin(_hex("#5A4434"))[None, :] * wbk
     for name, kf in ROBE_LIFT.items():
@@ -1551,7 +1664,10 @@ def _fill_gutters(arr, valid, iters=40):
 
 _orig_recolour = _project.recolour
 BRIEF_CLOTH = "#7C6C66"       # the brief's base felt robe (§5): the skins' cloth hexes (§9) are written against it
-SKIN_FELT = {"tunlan_noon_fair": (1.7, 0.88), "tunlan_lamplit": (0.9, 0.80)}   # (chroma gain, value gain)
+SKIN_FELT = {"tunlan_noon_fair": (1.7, 0.88), "tunlan_lamplit": (1.0, 0.92)}   # (chroma gain, value gain)
+# the felt's target colour where the skin's cloth hex reads wrong on screen: Lamplit's #7F6D60 (24 % sat) came out a
+# neutral blue-grey under the sky ambient (hue 247, 3 %); a warmer walnut (hue 23, 35 % sat: outside the marigold band)
+SKIN_FELT_HEX = {"tunlan_lamplit": "#7E6352"}
 
 
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
@@ -1567,7 +1683,7 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
     part = maps["part"]
     iy, ix = _project.nearest_index(part >= 0)
     pid = part[iy, ix]
-    skin_lin = _lin(_hex(skin_pal["cloth"]))
+    skin_lin = _lin(_hex(SKIN_FELT_HEX.get(_BUILD.get("skin"), skin_pal["cloth"])))
     wsel, felt = {}, []
     for nm in CLOTH_PARTS:
         if nm not in names:
@@ -1656,13 +1772,92 @@ def _fighter_renders(ctx, objs, P, skin, *a, **k):
 
 _render.fighter_renders = _fighter_renders
 
+# the health bar (src/render/actors.ts: art height + 0.35 m, the 15 px bar centred there): from the 52 degree camera the
+# 1.10 m brim's far edge (r 0.55, z 1.89) projects ABOVE an anchor at 2.05 + 0.35 m, so the bar sat on the back of
+# the brim. At 2.50 (+22 %, inside the content's 25 %) the bar's lower edge clears the far rim by ~5 px at 1080p.
+ART_HEIGHT = 2.50
+_orig_art_fragment = _pipeline.art_fragment
+
+
+def _art_fragment(spec, clips_info, mesh_top=None):
+    frag = _orig_art_fragment(spec, clips_info, mesh_top)
+    if getattr(spec, "ID", None) == ID:
+        frag["height"] = ART_HEIGHT
+    return frag
+
+
+_pipeline.art_fragment = _art_fragment
+
 _orig_bake_asset = _bake.bake_asset
 
 
+AO_AWAY = WOOD_PARTS + ("wrap_L", "wrap_R", "cuff_L", "cuff_R")
+AO_SHIFT = 1.0            # m: the rigid hands, wraps and cuffs stand this far out to her sides for the AO bake only
+
+
+def _ao_hands_away(low, k):
+    """the AO is baked on the bind pose, where the 0.47 m hands hang beside the thighs: their occlusion printed a
+    hand-shaped ghost on the skirt (and darkened its sides under the wraps), which the game never shows (the hands
+    are held before the chest). The rigid hands, wraps and cuffs move AO_SHIFT out to her sides for the AO pass
+    (bake.bake_asset selects [low] alone for it) and come back before the paint reads the mesh (base_fn)."""
+    names = _BUILD.get("names") or []
+    me = low.data
+    if "vale_part" not in me.attributes or not names:
+        return None
+    pv = np.empty(len(me.vertices), dtype=np.int64)
+    me.attributes["vale_part"].data.foreach_get("value", pv)
+    shift = np.zeros((len(pv), 3), dtype=np.float32)
+    for nm in AO_AWAY:
+        if nm in names:
+            shift[pv == names.index(nm), 0] = AO_SHIFT if nm.endswith("_L") else -AO_SHIFT
+    if not shift.any():
+        return None
+    st = {"on": False, "done": False}
+
+    def move(sign):
+        co = np.empty(len(me.vertices) * 3, dtype=np.float32)
+        me.vertices.foreach_get("co", co)
+        me.vertices.foreach_set("co", (co.reshape(-1, 3) + shift * sign).ravel())
+        me.update()
+        st["on"] = sign > 0
+
+    orig_sel = _bake.scene.select_only
+
+    def select_only(objs, *aa, **kk):
+        if list(objs) == [low] and not st["on"] and not st["done"]:
+            move(+1.0)
+            st["done"] = True
+            scene.log(f"tunlan AO: {int((shift[:, 0] != 0).sum())} hand / wrap / cuff vertices moved {AO_SHIFT} m out")
+        return orig_sel(objs, *aa, **kk)
+
+    bf = k.get("base_fn")
+
+    def base_fn(lo, sz):
+        if st["on"]:
+            move(-1.0)
+        return bf(lo, sz)
+
+    if bf is not None:
+        k["base_fn"] = base_fn
+
+    def restore():
+        _bake.scene.select_only = orig_sel
+        if st["on"]:
+            move(-1.0)
+
+    _bake.scene.select_only = select_only
+    return restore
+
+
 def _bake_asset(low, highs, out_dir, name="body", *a, **k):
-    """the ORM's empty gutters (roughness 0: a mirror round every island at the game camera's mips) take their
-    island's roughness / AO (Dunsom's fix)"""
-    res = _orig_bake_asset(low, highs, out_dir, name, *a, **k)
+    """the hands out of the AO (_ao_hands_away); the ORM's empty gutters (roughness 0: a mirror round every island at
+    the game camera's mips) take their island's roughness / AO (Dunsom's fix)"""
+    restore = _ao_hands_away(low, k) if str(name).startswith(ID) else None
+    try:
+        res = _orig_bake_asset(low, highs, out_dir, name, *a, **k)
+    finally:
+        if restore is not None:
+            restore()
     path = (res.get("images") or {}).get("orm")
     if not str(name).startswith(ID) or not path:
         return res
@@ -1726,6 +1921,7 @@ class Orient:
     fdir: tuple = (0.0, 0.0, -1.0)
     palm: tuple = (0.0, 1.0, 0.0)
     weight: float = 1.0
+    world: bool = False      # fdir / palm in the armature's (world) axes instead of the chest's (a body folded to the floor)
 
     def lerp(self, o, t):
         t = max(0.0, min(1.0, t))
@@ -1735,10 +1931,12 @@ class Orient:
             if a.dot(b) < -0.999:
                 return tuple((a.lerp(b, t) + a.orthogonal() * 1e-3).normalized())
             return tuple(a.slerp(b, t))
-        return Orient(sl(self.fdir, o.fdir), sl(self.palm, o.palm), self.weight + (o.weight - self.weight) * t)
+        return Orient(sl(self.fdir, o.fdir), sl(self.palm, o.palm), self.weight + (o.weight - self.weight) * t,
+                      self.world if t < 0.5 else o.world)
 
     def mirrored(self):
-        return Orient((-self.fdir[0], self.fdir[1], self.fdir[2]), (-self.palm[0], self.palm[1], self.palm[2]), self.weight)
+        return Orient((-self.fdir[0], self.fdir[1], self.fdir[2]), (-self.palm[0], self.palm[1], self.palm[2]), self.weight,
+                      self.world)
 
 
 _orig_resolve = anim.resolve
@@ -1759,8 +1957,9 @@ def _resolve(skel, pose):
         if o.weight <= 1e-3:
             continue
         hb = f"hand.{k[-1]}"
-        y = (Rc @ V(o.fdir)).normalized()
-        z = -(Rc @ V(o.palm))
+        R_ = Matrix.Identity(3) if o.world else Rc
+        y = (R_ @ V(o.fdir)).normalized()
+        z = -(R_ @ V(o.palm))
         z = (z - y * z.dot(y)).normalized()
         x = y.cross(z).normalized()
         want = Matrix((x, y, z)).transposed()
@@ -1921,8 +2120,8 @@ def wrist_abs(side, x, y, z, pole=None):
     return {f"hand.{side}": anim.HandTarget(pos=(x, y, z), pole=tuple(pole) if pole else (0.80 * sx, 0.45, -0.40))}
 
 
-def orient(side, fdir, palm, w=1.0):
-    return {f"orient.{side}": Orient(tuple(unit(fdir)), tuple(unit(palm)), w)}
+def orient(side, fdir, palm, w=1.0, world=False):
+    return {f"orient.{side}": Orient(tuple(unit(fdir)), tuple(unit(palm)), w, world)}
 
 
 def fingers(side, a=(18, 22, 22), b=(22, 26, 26), t=(8, 10), sa=0.0, sb=0.0, st=0.0):
@@ -1987,11 +2186,13 @@ def ik(*ds):
 
 # guard: the puppeteer's hands — held before the chest, the hands reaching forward palm-down, the fingers half-curled
 # as if they held a marionette's strings (brief §8: "both hands held loosely in front of the chest, about to shape")
-GUARD_W = (0.170, -0.250, 1.240)          # her left wrist (the right mirrored in x)
-GUARD_F = (-0.10, -0.88, -0.46)           # the left hand's fingers: forward, a little down and in
-GUARD_P = (-0.10, 0.44, -0.89)            # its palm: down
-GF_L = dict(a=(34, 38, 30), b=(40, 44, 36), t=(14, 16))
-GF_R = dict(a=(28, 34, 28), b=(38, 42, 34), t=(12, 14))
+# (fix pass 2: the wrists lifted to the chest and the hands pitched UP from them, so the half-curled fingers arch
+# forward over the chest instead of hanging off the wrists at 90 degrees)
+GUARD_W = (0.165, -0.215, 1.315)          # her left wrist (the right mirrored in x)
+GUARD_F = (-0.16, -0.90, 0.40)            # the left hand: forward, rising ~24 deg, a little in
+GUARD_P = (-0.34, -0.33, -0.88)           # its palm: down and in (the backs of the hands up, toward the camera)
+GF_L = dict(a=(20, 28, 24), b=(26, 34, 28), t=(10, 14), sa=4)
+GF_R = dict(a=(12, 20, 18), b=(24, 32, 26), t=(8, 12), sa=8)
 
 
 def guard_wrist(side, dz=0.0, dy=0.0, dx=0.0):
@@ -2088,8 +2289,10 @@ def clip_attack1():
                   guard_fingers(), fingers("R", **pt))
     fol = compose(stance_pose(), body(hips=(5, 15, 0), spine=(6, 12, 0), chest=(7, 16, 0), head=(-3, -13, 0), fwd=0.055),
                   guard_arms(), ik(wrist("R", -0.10, -0.72, 1.32, (-0.8, 0.3, -0.4)),
-                                   orient("R", (0.10, -0.94, -0.30), (0.05, 0.30, -0.95))),
-                  guard_fingers(), fingers("R", a=(8, 10, 8), b=(84, 94, 62), t=(32, 38)))
+                                   orient("R", (0.10, -0.96, 0.10), (0.05, -0.10, -0.99))),
+                  guard_fingers(), fingers("R", a=(46, 58, 44), b=(84, 94, 62), t=(32, 38)))
+    # (fix pass 2: after the flick the pointing pair snaps back into the fist and the hand stays level, so the
+    # recovery never droops the 0.28 m fingers into a sickle hook)
     return strike("attack1", 20, wind, hit, fol, g)
 
 
@@ -2289,14 +2492,18 @@ def clip_death():
                    ik(wrist_abs("L", 0.26, -0.20, 0.62), wrist_abs("R", -0.26, -0.20, 0.60)), both(fingers, **RELAX))
     fold = compose(stance_pose(feet=kneel_feet), body(hips=(24, 0, 0), spine=(20, 0, 0), chest=(14, 0, 0), neck=(8, 0, 0), head=(6, 0, 0),
                                                       drop=0.48, fwd=0.02),
-                   ik(wrist_abs("L", 0.28, -0.52, 0.10, (0.9, 0.3, 0.2)), wrist_abs("R", -0.28, -0.54, 0.10, (-0.9, 0.3, 0.2)),
-                      orient("L", (0.2, -0.9, -0.38), (0.0, 0.38, -0.9)), orient("R", (-0.2, -0.9, -0.38), (0.0, 0.38, -0.9))),
+                   ik(wrist_abs("L", 0.28, -0.52, 0.12, (0.9, 0.3, 0.2)), wrist_abs("R", -0.28, -0.54, 0.12, (-0.9, 0.3, 0.2)),
+                      orient("L", (0.20, -0.80, -0.56), (0.0, 0.57, -0.82), world=True),
+                      orient("R", (-0.20, -0.80, -0.56), (0.0, 0.57, -0.82), world=True)),
                    both(fingers, **RELAX))
+    # the end: the hands laid FLAT on the floor before her, palms down, fingers forward (world-frame hands: in the
+    # chest's frame the folded torso pitched them 70 degrees into the ground)
     down = compose(stance_pose(feet=kneel_feet), body(hips=(30, 0, 0), spine=(26, 0, 0), chest=(18, 0, 0), neck=(10, 0, 0), head=(8, 0, 0),
                                                       drop=0.52, fwd=0.04),
-                   ik(wrist_abs("L", 0.30, -0.62, 0.06, (0.9, 0.3, 0.3)), wrist_abs("R", -0.30, -0.64, 0.06, (-0.9, 0.3, 0.3)),
-                      orient("L", (0.25, -0.96, 0.0), (0.0, 0.0, -1.0)), orient("R", (-0.25, -0.96, 0.0), (0.0, 0.0, -1.0))),
-                   both(fingers, a=(10, 14, 12), b=(12, 16, 14), t=(4, 6)))
+                   ik(wrist_abs("L", 0.30, -0.60, 0.075, (0.9, 0.3, 0.3)), wrist_abs("R", -0.30, -0.62, 0.075, (-0.9, 0.3, 0.3)),
+                      orient("L", (0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True),
+                      orient("R", (-0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True)),
+                   both(fingers, a=(2, 4, 4), b=(4, 6, 6), t=(0, 4)))
     bounce = compose(down, body(chest=(-3, 0, 0), drop=-0.012))
     rest = compose(down, body(spine=(2, 0, 0), chest=(2, 0, 0), head=(2, 0, 0), drop=0.006))
     body_fn = anim.keyed([(0.0, g, "linear"), (0.12, recoil, "snap"), (0.40, sink, "inout"), (0.62, fold, "in"),
@@ -2506,22 +2713,52 @@ def clip_taunt():
                   ik(wrist("R", *RW, (-0.9, 0.3, -0.3)), orient("R", (0.1, -0.30, 0.95), (0.0, -0.95, -0.3)),
                      guard_wrist("L"), guard_orient("L")),
                   fingers("R", a=(-4, 0, 2), b=(70, 82, 60), t=(38, 40), sa=12), fingers("L", **GF_L))
-    keys = [(0.0, g, "linear"), (0.18, rab, "back"), (0.82, rab, "linear"), (1.0, g, "inout")]
+    keys = [(0.0, g, "linear"), (0.14, rab, "back"), (0.86, rab, "linear"), (1.0, g, "inout")]
     fn = anim.keyed(keys)
+    HOPS = ((0.34, 0.52, -0.16), (0.58, 0.76, 0.04))          # (take-off, landing, the rabbit's x at landing)
 
     def sample(t):
         p = fn(t)
-        if 0.18 < t < 0.82:
-            env = math.sin(math.pi * (t - 0.18) / 0.64)
-            w = anim.osc(t, 7)
-            # the ears (the index + middle pair) flop down and spring up, the rabbit hops twice, the head cocks in time
+        if not 0.14 < t < 0.86:
+            return p
+        env = math.sin(math.pi * (t - 0.14) / 0.72)
+        p["ik"] = dict(p.get("ik", {}))
+        # 1) the ears: the index flops down and springs up, then the middle, out of step (big, readable flops)
+        w1, w2 = anim.osc(t, 5), anim.osc(t, 5, 0.22)
+        if t < 0.34 or t > 0.76:
             a1, a2 = p.get("x_fa1.R", (0, 0, 0)), p.get("x_fa2.R", (0, 0, 0))
-            p["x_fa1.R"] = (a1[0] + 34 * max(0.0, w) * env, a1[1], a1[2] + 8 * w * env)
-            p["x_fa2.R"] = (a2[0] + 40 * max(0.0, w) * env, a2[1], a2[2])
-            hop = abs(math.sin(2 * math.pi * 2 * (t - 0.18) / 0.64)) * env
-            p["ik"] = dict(p.get("ik", {}))
-            p["ik"].update(wrist("R", RW[0], RW[1], RW[2] + 0.06 * hop, (-0.9, 0.3, -0.3)))
-            p = anim.add(p, P_(head=(0, 0, 5 * w * env), chest=(0, 0, 2 * w * env)))
+            p["x_fa1.R"] = (a1[0] + 62 * max(0.0, w1) * env, a1[1], a1[2] + 10 * w1 * env)
+            p["x_fa2.R"] = (a2[0] + 48 * max(0.0, w2) * env, a2[1], a2[2])
+        # 2) two real hops: she squats, springs (both feet off the ground, toes pointed), the rabbit bounding along
+        #    an arc in front of her, lands and squashes
+        rx, lift, squat = RW[0], 0.0, 0.0
+        for i, (t0, t1, x1) in enumerate(HOPS):
+            x0 = RW[0] if i == 0 else HOPS[i - 1][2]
+            if t0 - 0.06 <= t < t0:                          # the crouch before the spring
+                squat = 0.045 * math.sin(math.pi * (t - (t0 - 0.06)) / 0.12)
+            if t0 <= t <= t1:
+                u = (t - t0) / (t1 - t0)
+                lift = 0.11 * math.sin(math.pi * u)
+                rx = x0 + (x1 - x0) * float(ss(0.0, 1.0, u))
+            elif t > t1:
+                rx = x1
+            if t1 < t <= t1 + 0.06:                          # the landing squash
+                squat = 0.05 * math.sin(math.pi * (t - t1) / 0.06)
+        rz = RW[2] + 0.16 * (lift / 0.11 if lift > 0 else 0.0) ** 0.8
+        p["ik"].update(wrist("R", rx, RW[1], rz, (-0.9, 0.3, -0.3)))
+        if lift > 0:                                       # the ears stream back in the air
+            a1, a2 = p.get("x_fa1.R", (0, 0, 0)), p.get("x_fa2.R", (0, 0, 0))
+            p["x_fa1.R"] = (a1[0] - 10 * lift / 0.11, a1[1], a1[2])
+            p["x_fa2.R"] = (a2[0] - 12 * lift / 0.11, a2[1], a2[2])
+        for fk in ("foot.L", "foot.R"):
+            ft = p["ik"].get(fk)
+            if ft is not None and lift > 0:
+                p["ik"][fk] = anim.FootTarget((ft.ankle[0], ft.ankle[1], ft.ankle[2] + lift), ft.pitch - 22.0 * lift / 0.11,
+                                              ft.yaw, ft.toe, ft.knee, ft.weight)
+        p = anim.add(p, P_(head=(-4 * lift / 0.11, 0, 6 * w1 * env), chest=(-3 * lift / 0.11, 0, 2 * w1 * env),
+                           hips=(2 * squat / 0.05, 0, 0)))
+        hl = p.get("hips_loc", (0.0, 0.0, 0.0))
+        p["hips_loc"] = (hl[0], hl[1], hl[2] + lift - squat)
         return p
 
     return anim.Clip("taunt", N, False, sample)

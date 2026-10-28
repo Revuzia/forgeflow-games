@@ -190,8 +190,10 @@ CUP_RIM_H = 0.045                                  # the slate rim band's height
 CUP_GLASS_H = 0.150                                # the glass body
 CUP_RT, CUP_RB = 0.079, 0.066                      # the glass's radius at the top / bottom
 RIM_OUT, RIM_IN = 0.093, 0.040                     # the rim band's outer radius / open throat
-BEAD_R = 0.025                                     # the accent bead (5 cm across, its top 1.7 cm over the rim)
-BEAD_DZ = CUP_CORD + 0.008                         # the bead's centre below HANG
+BEAD_R = 0.028                                     # the accent bead (5.6 cm across, its top 2.4 cm over the rim)
+BEAD_DZ = CUP_CORD + 0.004                         # the bead's centre below HANG
+INLAY = (0.058, 0.066, 0.003)                       # a thin accent inlay ring set into the band's top (brief §4):
+INLAY_ON = False                                   # off (fp1-2: with the bead it read as a blue lid from above)
 CUP_LEN = CUP_CORD + CUP_RIM_H + CUP_GLASS_H       # the pivot -> the glass base
 
 
@@ -220,7 +222,7 @@ TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
 ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.25
-ATLAS_SOFTEN = 0.45
+ATLAS_SOFTEN = 0.55
 
 # ART 2.0 skins (brief §9): each part moves onto the skin's colours (_recolour below, the painting's values kept)
 SKINS: list = [
@@ -576,7 +578,7 @@ def sculpts() -> list:
             r = 1.0 / ((abs(math.sin(a)) ** HOOD_E + abs(math.cos(a)) ** HOOD_E) ** (1 / HOOD_E))
             pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(hy * back_k(z)) * math.cos(a) * r * 0.985, z))
         hood.add(Tube(pts, [0.006, 0.010, 0.012, 0.010], k=0.01), k=0.03)
-    part("hood", hood, "cloth2", ("weights", "hood"), 2050, uvw=1.3)
+    part("hood", hood, "cloth2", ("weights", "hood"), 1900, uvw=1.3)
 
     # FACE: the big carved wooden face in the opening, 3 cm behind the rim; the painted features carved
     def face_d(P):
@@ -595,7 +597,7 @@ def sculpts() -> list:
     for sx in (-1, 1):
         face.add(Sphere((sx * 0.034, yt - 0.012, NOSE[1] - 0.002), 0.019), k=0.012)
         face.sub(Ellipsoid((sx * 0.020, yt - 0.026, NOSE[1] - 0.016), (0.009, 0.010, 0.006)), k=0.004)
-    part("face", face, "wood", "bone:head", 1650, 0.5, uvw=3.0)
+    part("face", face, "wood", "bone:head", 1520, 0.5, uvw=3.0)
 
     # TORSO: the barrel under the wraps (widest at 0.55 m), the shoulders' mass under the plates
     torso = Sculpt("torso")
@@ -607,7 +609,7 @@ def sculpts() -> list:
     torso.inter(HalfSpace((0, 0, 0.455), (0, 0, -1), 2.0), k=0.01)
     torso.ops = [(op, prim.displaced(painted(0.8, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in torso.ops]
-    part("torso", torso, "cloth", ("weights", "torso"), 1750, uvw=1.1)
+    part("torso", torso, "cloth", ("weights", "torso"), 1640, uvw=1.1)
 
     # BELT: the thick dark sash (7.5 cm) round the waist and a thin strap over it, a knot of torn ends at the front
     BY = 0.75
@@ -685,7 +687,7 @@ def sculpts() -> list:
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     boots.ops = [(op, prim.displaced(cloth_noise(0.0025, 12.0), 0.0025) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in boots.ops]
-    part("boots", boots, "leather", ("weights", "boots"), 850)
+    part("boots", boots, "leather", ("weights", "boots"), 760)
 
     # SLEEVES (cream wraps over the upper arms), BRACERS (dark leather wraps over the forearms), GLOVES
     for s, sh, el, wr, fo in (("L", SH_L, E_L, W_L, FO_L), ("R", SH_R, E_R, W_R, FO_R)):
@@ -704,7 +706,7 @@ def sculpts() -> list:
     out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 720, curl=LEFT_CURL, grip=False, relaxed=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
-    out.append(mantle_part(2000))
+    out.append(mantle_part(1560))
 
     # THE CORD: a coil of weighted cord at the left hip, on the sash (Wrap Cast leaves from here)
     cord = Sculpt("cord")
@@ -718,7 +720,7 @@ def sculpts() -> list:
     cord.add(Tube([tail0, tail0 + np.array([0.004, -0.006, -0.040]), tail0 + np.array([0.0, -0.004, -0.075])], [0.009, 0.0085, 0.008], k=0.004), k=0.004)
     cord.add(Sphere(tail0 + np.array([0.0, -0.004, -0.098]), 0.021), k=0.004)        # the weight
     cord.add(Capsule(cc + n * 0.004 + np.array([0.0, 0.0, 0.050]), cc + n * 0.004 + np.array([0.0, 0.0, 0.085]), 0.009), k=0.006)   # tied to the sash
-    part("cord", cord, "rope", "bone:hips", 430, 0.5)
+    part("cord", cord, "rope", "bone:hips", 330, 0.5)
 
     # THE THROWN LOOP (Wrap Cast; fix pass 1): a loop of the weighted cord on its own bone (x_cord_swing, a child of
     # the left hand). At rest it lies flat INSIDE the barrel, and every clip but cast_a3 keys its scale to 0.001, so
@@ -730,7 +732,7 @@ def sculpts() -> list:
     sw.add(Sphere(c0 + np.array([-SWING_R, 0.0, 0.0]), 0.021).displaced(chips(0.002, 25.0), 0.002), k=0.006)   # the weight
     sw.add(Tube([SWING_G + np.array([0.0, 0.0, -0.02]), SWING_G + np.array([0.006, 0.0, 0.5 * SWING_RISE]),
                  SWING_G + np.array([0.0, 0.0, SWING_RISE])], [0.0085, 0.0080, 0.0080], k=0.004), k=0.004)   # fist -> loop
-    part("cord_swing", sw, "rope", "bone:x_cord_swing", 420, 0.5)
+    part("cord_swing", sw, "rope", "bone:x_cord_swing", 240, 0.5)
 
     out.extend(staff_parts())
     out.extend(cup_parts())
@@ -781,8 +783,9 @@ def mantle_info(P):
     zA = zA + 0.022 * ss(0.050, 0.004, arcA)
     zB = zB + 0.034 * ss(0.060, 0.004, arcB)
     inA = z >= zA
-    TA = 0.034 + 0.032 * ss(zA + 0.10, zA, z) + 0.004 * jA[ia]
-    TB = 0.030 + 0.030 * ss(zA, zB + 0.012, z) + 0.004 * jB[ib]
+    sho = ss(0.28, 0.42, np.abs(x)) * (1 - ss(0.25, 0.45, (y - 0.03) / np.maximum(rxy, 1e-3)))   # the pauldrons
+    TA = 0.040 + 0.036 * ss(zA + 0.10, zA, z) + 0.005 * jA[ia] + 0.018 * sho
+    TB = 0.034 + 0.034 * ss(zA, zB + 0.012, z) + 0.005 * jB[ib] + 0.016 * sho
     T = np.where(inA, TA, TB)
     arc = np.where(inA, arcA, arcB)
     return phi, ia, ib, zA, zB, arc, T, inA
@@ -799,7 +802,7 @@ def mantle_d(P):
     gap = np.where(inA, 28.0, 46.0)
     d = np.maximum(d, np.radians(gap - np.abs(phi)) * rxy)
     # the carved grooves between the slabs (2.4 cm deep) and along the tier step
-    g = np.maximum(arc - MANTLE_GROOVE, (T - 0.024) - td)
+    g = np.maximum(arc - MANTLE_GROOVE, (T - 0.028) - td)
     d = np.maximum(d, -g)
     g2 = np.maximum(np.abs(z - zA) - 0.0030, (T - 0.016) - td)
     return np.maximum(d, -g2)
@@ -1003,7 +1006,7 @@ def cup_parts() -> list:
         cords.add(Tube([HANG + np.array([0, 0, -0.006]), mid, foot], [0.0042, 0.0042, 0.0046], k=0.004), k=0.004)
     cords.add(Tube([HANG + np.array([0, 0, -0.008]), np.array([c[0], c[1], cup_z(BEAD_DZ) + BEAD_R - 0.002])],
                    [0.0030, 0.0030], k=0.003), k=0.004)                                  # the bead's cord
-    out.append(("cup_hook", cords, 0.35, "rope", "bone:x_cup_hook", 300, 0.5))
+    out.append(("cup_hook", cords, 0.35, "rope", "bone:x_cup_hook", 170, 0.5))
 
     lo, hi = c + np.array([-0.12, -0.12, zgb - 0.02]), c + np.array([0.12, 0.12, HANG[2] + 0.02])
 
@@ -1021,10 +1024,14 @@ def cup_parts() -> list:
         z = P[:, 2]
         band = np.maximum(outer, np.maximum(zrb - z, z - ztop))
         band = np.maximum(band, (z - ztop + 0.012) + (outer + 0.012))           # bevel the top edge
+        groove = np.maximum(np.abs(rr - 0.5 * (INLAY[0] + INLAY[1])) - 0.5 * (INLAY[1] - INLAY[0]) - 0.001,
+                            (ztop - INLAY[2]) - z)
+        if INLAY_ON:
+            band = np.maximum(band, -groove)                                  # the inlay's channel
         return np.maximum(band, RIM_IN - rr)
     rb = Sculpt("cup_rim")
     rb.add(Fn(rim, lo, hi).displaced(lambda P: chips(0.0040, 14.0)(P) + chips(0.0015, 34.0)(P), 0.0050), k=0.0)
-    out.append(("cup_rim", rb, 0.35, "ironstone", "bone:x_cup_hook", 520, 0.8))
+    out.append(("cup_rim", rb, 0.35, "ironstone", "bone:x_cup_hook", 400, 0.8))
 
     def glass(P):
         q = P - c
@@ -1039,11 +1046,19 @@ def cup_parts() -> list:
         return np.maximum(corner, z - zt)
     gl = Sculpt("cup_glass")
     gl.add(Fn(glass, lo, hi), k=0.0)
-    out.append(("cup_glass", gl, 0.35, "dawnglass", "bone:x_cup_hook", 480, 1.0))
+    out.append(("cup_glass", gl, 0.35, "dawnglass", "bone:x_cup_hook", 340, 1.0))
 
     co = Sculpt("cup_core")
     co.add(Sphere(np.array([c[0], c[1], cup_z(BEAD_DZ)]), BEAD_R), k=0.0)
-    out.append(("cup_core", co, 0.30, "accent", "bone:x_cup_hook", 200, 0.6))
+
+    def inlay(P):
+        q = P - c
+        rr = np.hypot(q[:, 0], q[:, 1])
+        return np.maximum(np.abs(rr - 0.5 * (INLAY[0] + INLAY[1])) - 0.5 * (INLAY[1] - INLAY[0]),
+                          np.abs(P[:, 2] - (ztop - INLAY[2] + 0.001)) - 0.0035)
+    if INLAY_ON:
+        co.add(Fn(inlay, lo, hi), k=0.0)
+    out.append(("cup_core", co, 0.30, "accent", "bone:x_cup_hook", 160, 0.6))
     return out
 
 
@@ -1337,7 +1352,7 @@ HOLD = ("staff", "staff_grip", "ferrule", "cup_hook", "cup_rim", "cup_glass", "r
 # normal) times the concept's HIGH-PASS (the painted bands, their lit tops, the dark lines between them, < ~4 cm): the
 # painting's broad shading and the arm / staff paint beside the barrel no longer print as grey-brown camouflage
 # patches (the splash's victory pose shows the flanks); the gain lifts the middle band off the L* 45 floor
-CLEAN = {"torso": 1.05, "skirt": 1.09, "sleeve_L": 1.03, "sleeve_R": 1.03}
+CLEAN = {"torso": 1.10, "skirt": 1.13, "sleeve_L": 1.07, "sleeve_R": 1.07}
 CLEAN_SIGMA = 0.035                                   # m: the high-pass's low-pass
 CLEAN_RANGE = (0.62, 1.32)
 # z / 1.65 -> linear gain: light hood and face, the wraps a step down, dark boots (brief §6)
@@ -1748,9 +1763,9 @@ def _glass_paint(p, n):
     """the CLEAR dawnglass (fix pass 1, as painted): the pale see-through tone of the scene behind it, cool bright
     glass edges where the walls turn away (the sides from the front), a bright thick base and a thin bright lip, a
     soft cool brightening in the upper half (the light inside); never saturated, never emissive"""
-    see = _lin(_hex("#C9C3B6"))
-    cool = _lin(_hex("#B8C9D3"))
-    edge_c = _lin(_hex("#E3ECF0"))
+    see = _lin(_hex("#A9A69D"))            # (build fp1-1: #C9C3B6 lit up as a white paper cup)
+    cool = _lin(_hex("#9DB0BC"))
+    edge_c = _lin(_hex("#E0EAEF"))
     z = p[:, 2]
     zt, zb = cup_z(CUP_CORD + CUP_RIM_H), cup_z(CUP_LEN)
     th = np.arctan2(p[:, 1] - CUP_C[1], p[:, 0] - CUP_C[0])
@@ -1771,9 +1786,9 @@ def _plate_paint(p, n):
     undersides, mottled, chipped and cracked (fix pass 1: read from mantle_info, the sculpt's own slab layout)"""
     phi, ia, ib, zA, zB, arc, T, inA = mantle_info(p)
     slab = np.where(inA, ia, 20 + ib).astype(np.float64)
-    base = _lin(_hex("#ACA290"))             # (build 9's #B9B09C rendered white)
-    chalk = _lin(_hex("#CDC4AF"))
-    line = _lin(_hex("#564D41"))
+    base = _lin(_hex("#BBAF95"))             # (build 9's #B9B09C rendered white; fp1-1's #ACA290 a cool grey)
+    chalk = _lin(_hex("#D8CCB1"))
+    line = _lin(_hex("#594D3E"))
     z = p[:, 2]
     tone = 0.92 + 0.14 * np.sin(slab * 2.3 + 0.7)
     mott = 1 + 0.12 * _fbm(p, 8.0) + 0.06 * _fbm(p, 29.0)
@@ -1787,7 +1802,7 @@ def _plate_paint(p, n):
     groove = 1 - ss(0.004, 0.013, arc)
     step = (1 - ss(0.003, 0.011, np.abs(z - zA))) * (1 - top)
     low = 1 - ss(0.004, 0.016, z - zB)
-    dk = np.clip(0.55 * under + 0.60 * groove + 0.50 * step + 0.35 * low, 0, 0.85)[:, None]
+    dk = np.clip(0.45 * under + 0.50 * groove + 0.40 * step + 0.30 * low, 0, 0.80)[:, None]
     return c * (1 - dk) + line[None, :] * dk * 0.9
 
 
@@ -1939,11 +1954,11 @@ SKIN_PARTS = {
     # fix pass 1: the wraps' LIT FRONT tone goes to the named wet-stone (build 9 matched their median, so the cream
     # front came out a pale sky blue-grey); the hood and plates a step darker (the top band was 84.2, at the cap)
     "sukri_stillwater": {"torso": "#59666A", "skirt": "#5E6B6E", "sleeve_L": "#5C696D", "sleeve_R": "#5C696D",
-                         "shins": "#7E8886", "hood": "#ADA896", "plates": "#A29F94", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
+                         "shins": "#7E8886", "hood": "#A39E8C", "plates": "#9C998E", "cup_glass": "#8FB3A8", "belt": "#3E4446", "bracer_L": "#3E4446",
                          "bracer_R": "#3E4446", "pants": "#323A3C", "cord": "#6F7468"},
     # fix pass 1: the feet band (L* 18) lifted: lighter leggings / boots and pale printed shin wraps; the hood and
     # plates a step darker
-    "sukri_shadeprint": {"hood": "#A29EAD", "plates": "#A6A3B0",
+    "sukri_shadeprint": {"hood": "#A29EAD", "plates": "#B0ADBA",
                          "face": "#BDB3A3", "staff": "#BFB5A4", "cup_glass": "#C5CFE0", "belt": "#34323D",
                          "bracer_L": "#383640", "bracer_R": "#383640", "pants": "#3A3843", "boots": "#3F3C46",
                          "hand_R": "#3E3C46", "hand_L": "#3E3C46", "cord": "#5A5566"},
@@ -1953,7 +1968,7 @@ FRONT_MED = ("torso", "skirt", "sleeve_L", "sleeve_R")     # matched on their li
 # wraps printed in two tones from the painted relief smoothed to band scale: every band's LIT surface in a soft light
 # (the light-rimmed edge), the rest and the grooves in ink; the skirt panels carry a printed light hem; the shin wraps
 # print the other way round (light cloth, ink lines) for the feet band
-PRINT = {"sukri_shadeprint": ("#2B2A33", "#B3AFBE")}       # (ink, light rim)
+PRINT = {"sukri_shadeprint": ("#383744", "#9E9AAC")}       # (ink, light rim: fp1-3 a softer pair, less zebra)
 PRINT_LIGHT_SHINS = "#ABA7B6"
 _RELIEF_SMOOTH: dict = {}
 
@@ -1962,7 +1977,7 @@ def _relief_smooth_at(side, x, z):
     if side not in _RELIEF_SMOOTH:
         R = _relief()
         A = R[side].astype(np.float32)
-        _RELIEF_SMOOTH[side] = _project.blur(A[..., None], 2.5)[..., 0]
+        _RELIEF_SMOOTH[side] = _project.blur(A[..., None], 4.0)[..., 0]
     R = _relief()
     A = _RELIEF_SMOOTH[side]
     m = float(R["m"])
@@ -2028,7 +2043,7 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
                 w_ = np.clip(lit * 0.90, 0, 0.9)
                 if nm == "skirt":
                     hem = _skirt_hem(P_)
-                    w_ = np.maximum(w_, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
+                    w_ = np.maximum(w_ * 0.55, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
                 col = ink[None, :] * (1 - w_[:, None]) + light[None, :] * w_[:, None]
                 col = col * (1 - 0.25 * groove)[:, None]
                 share = float((w_ > 0.45).mean())
@@ -2776,8 +2791,8 @@ def clip_overrides(ctx) -> dict:
     # RECALL (fix pass 1, brief: holds the cup in both hands and breathes on it): the cup off its hook, held by its
     # knot in the left fist before his chest (_cup_schedule), the right fist with the staff leaned out beside it, the
     # hood bowed over the cup (loops)
-    rc = pose(torso=dict(spine=(5, 0, 0), chest=(5, 2, 0), neck=(8, 0, 0), head=(14, 3, 0)), R=(0.40, -0.81, -0.09),
-              aim=(-0.35, 0.0, 0.94), slide=-0.12, Lpos=(0.06, -0.34, 0.98), Lp=(0.9, 0.2, -0.3), aimL=(0.0, 0.0, 1.0))
+    rc = pose(torso=dict(spine=(5, 0, 0), chest=(5, 2, 0), neck=(8, 0, 0), head=(14, 3, 0)), R=(0.12, -0.62, -0.12),
+              aim=(-0.10, 0.02, 0.99), slide=-0.10, Lpos=(0.08, -0.36, 0.96), Lp=(0.9, 0.2, -0.3), aimL=(0.0, 0.0, 1.0))
 
     def recall_s(t):
         p = dict(rc)
@@ -2857,7 +2872,7 @@ def clip_overrides(ctx) -> dict:
     bring = pose(torso=VT1, R=VR1, aim=VA1, slide=VS1, Lpos=tuple(kn + V((0.02, 0.05, -0.07))), Lp=(0.9, 0.2, -0.3),
                  aimL=(0.0, 0.0, 1.0))
     VT2 = dict(hips=(2, -3, 0), spine=(3, -3, 0), chest=(4, -4, 0), neck=(2, 6, 0), head=(6, 12, 4))
-    offer = pose(torso=VT2, R=(-0.08, -0.30, -0.05), aim=(-0.05, 0.10, 0.99), slide=-0.10, Lpos=(0.20, -0.36, 1.02),
+    offer = pose(torso=VT2, R=(-0.08, -0.30, -0.05), aim=(-0.05, 0.10, 0.99), slide=-0.10, Lpos=(0.34, -0.41, 0.96),
                  Lp=(0.9, 0.2, -0.3), aimL=(0.0, 0.0, 1.0))
     scene.log(f"sukri victory: the knot at {tuple(round(v, 3) for v in kn)} when the left hand takes it")
     k = [(0.0, G, "linear"), (0.16, lean, "inout"), (0.32, bring, "inout"), (0.40, bring, "linear"),

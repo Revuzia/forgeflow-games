@@ -85,8 +85,9 @@ AO_INTO_BASE = 0.25
 # ART 2.0 skins (brief §9): the projected painting re-coloured part by part (pipeline -> project.recolour, wrapped
 # here: the painted hat / rim / knob are painted in the skin's own colours instead), plus painted skin details:
 # Noon Fair's lacquer moths ringing the chalky hat and the half-lids painted over the mask's closed lids; Shadeprint's
-# printed pale cone (a leafy branch's shadow printed in light-ribbed ink) under an ink brim band and a light rim, the
-# light-rimmed hem. Both keep the base legs (brief §9 changes no `under` / `cloth2`). No extra geometry (brief).
+# pale paper cone printed with one great ink moth (light-printed details) inside an ink brim band and a chalk light
+# rim, the cape dipped in the same ink with small ink moths flying up its back. Both re-dress the body part by part
+# (SKIN_PARTS; legs and boots keep the base's L*). No extra geometry (brief).
 SKINS: list = [
     {"id": "nurrow_noon_fair", "extra": {}, "card": {"primary": "#6A4F5E", "secondary": "#E2D6C3"},
      "palette": {"sandstone": "#E2D6C3", "moth": "#B48AA6", "wood": "#D3C0A0", "cloth": "#8C7886"}},
@@ -1488,147 +1489,17 @@ def _noon_moths(q, r, phi, ground):
     return col
 
 
-# ── Shadeprint (fix pass 5; review: 'the store says an ink hat with a light rim; the model is a white cone with a
-#    grey leaf print; at game zoom it and Noon Fair are both pale discs'): the snuffer DIPPED IN INK. The crown is
-#    the named ink #2B2A33, its wash running down the slope in ragged radial brush strokes through a violet-grey
-#    (the skin's violet shadows) into the pale lavender-chalk paper, which keeps the top band's L* 70 floor; a
-#    leafy branch printed in LIGHT across the ink crown, small ink sprigs printed on the pale; the light rim. From
-#    the game camera: a dark ink cap (round the forward apex) ringed by pale paper and a light rim ──
-SHADE_STEMS = (                                   # printed branches (hat-local, upright, metres): light on the ink crown
-    ((0.110, 0.030), (0.060, -0.040), (-0.010, -0.075), (-0.085, -0.070), (-0.125, -0.020)),
-    ((-0.03, 0.115), (0.03, 0.090), (0.075, 0.105)),
-)
-SHADE_SPRIGS = (                                  # ink sprigs on the pale paper
-    ((0.225, -0.170), (0.255, -0.215), (0.300, -0.235)),
-    ((-0.250, 0.150), (-0.290, 0.175), (-0.318, 0.215)),
-    ((-0.215, -0.215), (-0.250, -0.255), (-0.262, -0.300)),
-    ((0.270, 0.180), (0.310, 0.170), (0.335, 0.130)),
-)
-SHADE_CROWN = 0.39                                # the ink crown's radius (normalised; its wash runs to ~0.6; f5-2
-#                                                   lineup f0 top 75.1 with 0.33: the room for more ink)
-
-
-def _leaf_print(X, stems, n_leaf, lf, rib_w=0.0011):
-    """a printed leafy branch: stem + leaves (crisp lens shapes), the midrib mask"""
-    ink = np.zeros(len(X))
-    rib = np.zeros(len(X))
-    for bi, pts in enumerate(stems):
-        dist, par, tan, total = _polyline_dist(X, pts)
-        wst = 0.0040 - 0.0018 * par
-        ink = np.maximum(ink, _ss(wst + 0.0010, wst - 0.0004, dist))
-        pts_ = np.asarray(pts)
-        seg = pts_[1:] - pts_[:-1]
-        Ls = np.linalg.norm(seg, axis=1)
-        cum = np.concatenate([[0.0], np.cumsum(Ls)])
-        nl = n_leaf[bi] if isinstance(n_leaf, (list, tuple)) else n_leaf
-        for k in range(nl):
-            tk = (k + 0.6) / (nl + 0.3)
-            a_ = tk * cum[-1]
-            j = int(np.clip(np.searchsorted(cum, a_) - 1, 0, len(seg) - 1))
-            B = pts_[j] + seg[j] * (a_ - cum[j]) / Ls[j]
-            T = seg[j] / Ls[j]
-            side = 1 if k % 2 == 0 else -1
-            ang = math.radians(side * (40.0 + 10.0 * math.sin(k * 1.7)))
-            D = np.array([T[0] * math.cos(ang) - T[1] * math.sin(ang), T[0] * math.sin(ang) + T[1] * math.cos(ang)])
-            Nn = np.array([-D[1], D[0]])
-            Lf = lf * (1.0 - 0.3 * tk) * (0.9 + 0.2 * abs(math.sin(k * 2.3)))
-            Wf = 0.19 * Lf
-            d = X - B
-            a = d @ D
-            b = d @ Nn - side * 0.12 * (a ** 2) / Lf
-            s_ = np.clip(a / Lf, 0.0, 1.0)
-            half = Wf * np.sin(math.pi * s_) ** 0.75
-            inside = (a > 0) & (a < Lf)
-            leaf = np.where(inside, _ss(half + 0.0010, half - 0.0005, np.abs(b)), 0.0)
-            ink = np.maximum(ink, leaf)
-            mr = np.where(inside & (s_ > 0.08) & (s_ < 0.86), _ss(rib_w * 2.0, rib_w, np.abs(b)), 0.0)
-            rib = np.maximum(rib, mr * leaf)
-    return ink, rib
-
-
-def _shade_ink(q, r, phi, L):
-    """Shadeprint's ink: the crown wash (1 = ink), ragged radial strokes down the slope"""
-    s1 = _streaks(phi, r, 7.0, 2.0, 41.0)
-    s2 = _streaks(phi, r, 24.0, 1.2, 17.0)
-    edge = SHADE_CROWN + 0.08 * (0.5 + s1) + 0.025 * s2 + 0.03 * np.sin(phi * 3.0 + 0.7)
-    drip = np.clip((s2 - 0.30) / 0.25, 0, 1) * np.clip((s1 + 0.05) / 0.4, 0, 1)           # a few strokes run longer
-    edge = edge + 0.08 * drip
-    wash = _ss(edge + 0.09, edge - 0.06, r) * (0.9 + 0.1 * (0.5 + 0.5 * s2))
-    return np.clip(wash, 0.0, 1.0)
-
-
-# polish (review 6: 'Shadeprint reads as a white plate with a ragged ink blotch on the crown, closer to a stain or
-#   smear than a printed ink design, weaker than the standard Noon Fair'): the ink is now a DESIGNED woodblock print,
-#   every edge crisp: a spray of seven ink leaves round the knob, longest at the front and swept forward (as if by her
-#   lunge: the ink mass leans the way she faces, the facing cue the base takes from the knob), each with a
-#   light-printed midrib and veins, on the pale paper; a crisp ink brim band with a light rule printed through it,
-#   inside the chalk light rim; four small ink sprigs on the paper. The ink stays ~ 20 % of the cone (the top band's
-#   L* 70 floor; the old wash: 22 %)
-SHADE_LEAVES = ((0.0, 0.235, 0.036), (40.0, 0.200, 0.033), (-40.0, 0.205, 0.033), (88.0, 0.160, 0.029),
-                (-88.0, 0.165, 0.029), (138.0, 0.118, 0.025), (-138.0, 0.114, 0.025))   # (phi deg, length, half-width)
-SHADE_CURL = 0.30                                 # the leaves' forward sweep (x their length at the tip)
+# ── Shadeprint. Fix pass 5 dipped the crown in a ragged ink wash; review 6: 'a white plate with a ragged ink blotch on
+#    the crown, closer to a stain or smear than a printed ink design, weaker than the standard Noon Fair; the body a
+#    grey-lilac recolour'. Polish: a DESIGNED woodblock print, every edge crisp, on the pale lavender-chalk paper (which
+#    keeps the top band's L* 70 floor; a mostly-ink hat fails it, brief §9): ONE GREAT INK MOTH (the moth's shadow on
+#    the lamp-snuffer) across the crown and the front brim (the knob its thorax, its head and feathered feelers toward
+#    her front: a facing cue; the splash and portrait see its wings on the near brim), printed through in light
+#    (a margin line, veins, wing-dust, the forewings' tip bars, the hindwings' eyespots); a crisp ink brim band with a
+#    light rule, the chalk light rim, the ink underside. (Previewed and dropped in proto/nurrow_hatpaint.py: a 7-leaf
+#    rosette = a cannabis leaf; a cloud collar = a dark octagonal frame; a willow sprig = 'a white cone with a leaf
+#    print' again.) The cape is dipped in the same ink (nurrow_recolour) ──
 SHADE_BAND = (0.890, 0.925, 0.9075)                # the ink brim band (inner, outer r) and its light rule's radius
-
-
-def _shade_rosette(X):
-    """the crisp ink leaf spray round the knob: ink (0..1) and the light-printed midribs / veins (0..1)"""
-    ink = _ss(0.050, 0.046, np.linalg.norm(X, axis=1))                    # the ink collar round the knob
-    vein = np.zeros(len(X))
-    for i, (ph, Lf, Wf) in enumerate(SHADE_LEAVES):
-        a = math.radians(ph)
-        D = np.array([math.sin(a), -math.cos(a)])                          # outward (0 = the front, -Y)
-        Nn = np.array([-D[1], D[0]])
-        B = D * 0.030
-        d = X - B
-        u = d @ D
-        s_ = np.clip(u / Lf, 0.0, 1.0)
-        w = d @ Nn + np.sign(ph) * SHADE_CURL * Lf * s_ ** 2                 # the axis swept toward the front
-        half = Wf * np.sin(math.pi * np.clip(s_ * 0.94 + 0.06, 0, 1)) ** 0.8 * (1.0 - 0.25 * s_)
-        inside = (u > -0.004) & (u < Lf)
-        leaf = np.where(inside, _ss(half + 0.0012, half - 0.0006, np.abs(w)), 0.0)
-        ink = np.maximum(ink, leaf)
-        rib = np.where(inside & (s_ > 0.10) & (s_ < 0.88), _ss(0.0019, 0.0009, np.abs(w)), 0.0)
-        side_v = np.zeros(len(X))
-        for k in range(4):                                                  # paired side veins, 50 deg to the tip
-            s0 = 0.20 + 0.17 * k
-            for sg in (-1.0, 1.0):
-                dist = np.abs((u - s0 * Lf) - 0.84 * sg * w) * 0.77
-                along = (sg * w > 0.002) & (sg * w < half * 0.8)
-                side_v = np.maximum(side_v, np.where(along & inside, _ss(0.0013, 0.0006, dist), 0.0))
-        vein = np.maximum(vein, np.maximum(rib, 0.8 * side_v) * leaf)
-    return np.clip(ink, 0, 1), np.clip(vein, 0, 1)
-
-
-SHADE_MOTIF = os.environ.get("NURROW_SHADE_MOTIF", "moth")
-SHADE_STARS = ((22.5, 0.860, 1.0), (67.5, 0.872, 0.75), (112.5, 0.858, 0.9), (157.5, 0.870, 0.7), (-157.5, 0.861, 1.0),
-               (-112.5, 0.873, 0.8), (-67.5, 0.859, 0.85), (-22.5, 0.871, 0.7))   # between the lobes       # (phi deg, r, size): light stars printed in the ink
-SHADE_WILLOW = ((0.205, 0.215), (0.120, 0.120), (0.030, 0.045), (-0.060, -0.030), (-0.150, -0.130), (-0.215, -0.235))
-
-
-def _shade_cloud(q, r, phi):
-    """the night-ink cloud collar round the brim: eight cloud-head lobes (a round head flanked by two small curls)
-    reaching in toward the pale crown from a crisp ink brim band; ink (0..1), the lobes' light inline, light stars"""
-    N = 8
-    f = (phi + math.pi) / (2 * math.pi) * N + 0.5                              # a lobe centred on the front (phi 0)
-    u = (f - np.floor(f) - 0.5) * 2.0                                         # -1 .. 1 across one lobe's cell
-    main = np.sqrt(np.clip(1.0 - (u / 0.50) ** 2, 0, 1))
-    side = np.sqrt(np.clip(1.0 - ((np.abs(u) - 0.66) / 0.24) ** 2, 0, 1))
-    k = np.floor(f).astype(int) % N
-    H = np.where(k == N // 2, 0.165, 0.135)                                   # the front lobe reaches furthest
-    lobe = np.maximum(H * main, 0.055 * side)
-    edge = 0.888 - lobe
-    ink = _ss(edge - 0.003, edge + 0.002, r)
-    inl = _ss(0.0034, 0.0014, np.abs(r - (edge + 0.040)) * BRIM_R) * _ss(0.25, 0.6, main) * _ss(0.0, 0.03, lobe - 0.04)
-    X = q[:, :2]
-    star = np.zeros(len(r))
-    for (ph, rr, sz) in SHADE_STARS:
-        a = math.radians(ph)
-        c = np.array([math.sin(a), -math.cos(a)]) * rr * BRIM_R
-        d = X - c
-        ad = np.abs(d)
-        s4 = (ad[:, 0] * ad[:, 1]) ** 0.5 * 2.2 + np.maximum(ad[:, 0], ad[:, 1]) * 0.55     # a four-point star
-        star = np.maximum(star, _ss(0.0075 * sz, 0.0050 * sz, s4))
-    return ink, inl, star
 
 
 # the moth's shadow (Shadeprint): one great moth printed in ink across the crown, the knob its thorax, its head and
@@ -1692,11 +1563,6 @@ def _shade_moth(X):
     return np.clip(ink, 0, 1), np.clip(light, 0, 1)
 
 
-def _shade_willow(X):
-    """an ink willow sprig across the crown: ink (0..1) and its light midribs"""
-    return _leaf_print(X, (SHADE_WILLOW,), [11], 0.105, rib_w=0.0012)
-
-
 def paint_hat(p, n):
     """the lacquered cone, painted: the shared brushwork (_lacquer) on the skin's ground, then the skin's paint"""
     sid = _SKIN.get("id")
@@ -1727,27 +1593,9 @@ def paint_hat(p, n):
         grain_ = 0.92 + 0.08 * NOISE(p, 140.0) + 0.04 * L["broad"]                 # the block's grain in the ink
         ink = _hexs(INK) * (grain_ * (0.95 + 0.10 * t))[:, None]
         lightp = _mix(_hexs("#BDB9C9"), _hexs("#D6D3DD"), np.clip(0.3 + 0.6 * t, 0, 1))
-        if SHADE_MOTIF == "moth":
-            lv, vein = _shade_moth(X)
-            col = _mix(col, ink, 0.97 * lv)
-            col = _mix(col, lightp, 0.88 * vein * lv)                                 # printed in light on the ink
-        elif SHADE_MOTIF == "cloud":
-            lv, vein, star = _shade_cloud(q, r, phi)
-            col = _mix(col, ink, 0.97 * lv)
-            col = _mix(col, lightp, 0.85 * vein * lv)                                 # the clouds' light inline
-            col = _mix(col, lightp, 0.95 * star * lv)                                 # light stars in the night ink
-        elif SHADE_MOTIF == "willow":
-            lv, vein = _shade_willow(X)
-            col = _mix(col, ink, 0.97 * lv)
-            col = _mix(col, lightp, 0.85 * vein)
-        else:
-            lv, vein = _shade_rosette(X)
-            col = _mix(col, ink, 0.97 * lv)
-            col = _mix(col, lightp, 0.85 * vein)                                      # printed in light on the ink
-        if SHADE_MOTIF not in ("cloud", "moth"):
-            sp, srib = _leaf_print(X, SHADE_SPRIGS, 3, 0.040)
-            col = _mix(col, ink, 0.92 * sp * (1 - lv))                                 # small ink sprigs on the paper
-            col = _mix(col, lightp, 0.75 * srib * (1 - lv))
+        lv, vein = _shade_moth(X)
+        col = _mix(col, ink, 0.97 * lv)
+        col = _mix(col, lightp, 0.88 * vein * lv)                                     # printed in light on the ink
         r0, r1, rr = SHADE_BAND
         band = _ss(r0 - 0.003, r0 + 0.002, r) * (1 - _ss(r1 - 0.002, r1 + 0.003, r))
         rule = _ss(0.0034, 0.0016, np.abs(r - rr) * BRIM_R)

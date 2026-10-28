@@ -3,7 +3,7 @@
   "portrait": "assets/fighters/tunlan/portrait.png",
   "splash": "assets/fighters/tunlan/splash.png",
   "icon": "assets/fighters/tunlan/icon.png",
-  "height": 2.05,
+  "height": 2.5,
   "scale": 1,
   "runRefSpeed": 3.35,
   "clips": {

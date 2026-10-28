@@ -34,7 +34,7 @@
     "weapon_l": "prop.L",
     "foot_r": "foot.R",
     "foot_l": "foot.L",
-    "weapon": "prop.R",
+    "weapon": "x_cup",
     "cup": "x_cup",
     "cord": "x_cord",
     "staff_top": "x_staff_top"

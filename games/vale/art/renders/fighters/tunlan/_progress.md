@@ -130,3 +130,18 @@
  Silhouette fit to the concept now IoU 0.826 front / 0.822 back (was 0.85: the smaller hat). Not committed.
 
 ## FIX PASS 2 (2026-10-28 09:41) — reviewer items 1-8; agent started, read _progress.md
+- 10:20 diagnosis: (1) three.js with normal + AO maps stripped still shows the stripes -> they are in the albedo: the
+  projected skirt (plate brush lines + the soft cream/felt edge stretched round the sides); the hand ghost is the AO
+  bake (bind-pose hands at the thighs; 25 % of it is in the base too). (6) the head 'shard' is geometry: the 1.5 mm crack
+  groove folds the 900-tri low into a tilted sliver (pale in three with or without the normal map); the pale sliver on
+  the box's edge is the mask's pale side faces seen past the box from behind. (HP bar) the 1.10 m brim's far edge
+  projects above an anchor at 2.05 + 0.35 m from the 52 deg camera.
+- 10:20 code (fix pass 2): skirt painted from the plate's TONES (_skirt_tones / _skirt_paint: felt + cream per 2 cm of
+  height, panel bounded by the SKIRT_EDGE grooves, key light + the sculpt's own ang_folds + felt grain, dark seam at the
+  panel edge, hem); AO bake with the rigid hands / wraps / cuffs moved 1 m out (_ao_hands_away, select_only hook,
+  restored before the paint); head crack painted only (no groove), darker; mask side faces in wood shade; lamp slot
+  25 x 10 cm (VENT_HR/HT 0.052 / 0.125), lantern core 1.85 cm; guard: wrists at the chest (0.165, -0.215, 1.315),
+  hands pitched up 24 deg, half-curled (GF 12-34 deg); attack1 follow folds the pointing pair; death end hands flat on
+  the floor (Orient world=True); taunt with two real hops (feet off the ground) + bigger ear flops; ART_HEIGHT 2.50
+  (art_fragment wrapper); Lamplit felt target #7E6352 (SKIN_FELT_HEX), golden panel glow over the whole panel width,
+  rim #5E4D3E. Base build started (log /tmp/tunlan_fp2_base.log).
