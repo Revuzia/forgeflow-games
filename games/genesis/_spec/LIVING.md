@@ -466,13 +466,23 @@ Tests: 'seep up a cliff' (no walk taken up again) and 'pond fills only every two
 fail on the round-2 code and pass now. npm run check on the landed code (21:47 UTC): 577 of 578 pass; the one failure
 ('a material the god introduces to a town ... mines it') also fails on the live tree with every drought hunk removed, so it
 is not from this change. Perf (review F2: the search costs 21–38% of throughput in a held dust bowl of 1500
-agents at 1000x and 3000x) is not fixed. All of the gap is the per-body search, which base does not have. About 98% of
+agents at 1000x and 3000x) is not fixed. Measured on the landed code against the same-snapshot base, both worlds stepped
+in one process in alternating 60-tick chunks so that both see the same machine load (`build/r3/p/perfpair.ts`, two runs
+per level, `build/r3/out/pp5.log`), throughput change at equal agents:
+- 3000x: LEAD −9% / −4%, DRY (the day the towns fall) −21% / −22%, DRY2 −32% / −31%.
+- 1000x: LEAD −6% / 0%, DRY −24% / −21%, DRY2 −26% / −22%.
+- IDLE (no bowl) varies by ±6% between runs, which is the noise floor of this measurement.
+
+All of the gap is the per-body search, which base does not have. About 98% of
 its cost comes from parched band members (water < 0.1). Water also comes and goes within the hour: in the held bowl, 16%
 of the searches from a cell where a band-mate had found nothing in the last hour found water. Three ways to share or skip the search were measured:
 - An hourly look by the band: 30% fewer cells searched, but 2 more thirst deaths.
 - Each body skipping a recent fruitless search: at most 31% fewer cells, but a quarter of the skipped searches would have
   found water.
 - An exact same-tick proof: it never fired.
+- An exact per-search cache of what depends only on the cell entered (fresh water nearby; the water, snow, sand, fire and
+  road terms of the step cost): bit-identical answers, but no faster (`build/r3/p/wbench.ts`: ratio 0.97–1.17 by run
+  order). The search already costs about 0.26 ms for 1–3 km of dry ground.
 
 The 5% target means searching less, and that gives back the lives the search saves.
 
