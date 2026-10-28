@@ -102,10 +102,10 @@ def main():
             look(co, p, (0, 0, 1.15))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
         elif kind in ("head_l", "head_r"):           # fix pass 2: the visor / hood flank / bells close-up
-            cam.lens = 85
-            p = (1.75 if kind == "head_l" else -1.75, -4.1, 1.62)
+            cam.lens = 120
+            p = (1.75 if kind == "head_l" else -1.75, -4.1, 1.95)
             co.location = p
-            look(co, p, (0, -0.05, 1.80))
+            look(co, p, (0, -0.05, 1.72))
             sc.render.resolution_x, sc.render.resolution_y = a.res, a.res
         elif kind == "rod":                          # the rod's grips (fix pass 2)
             cam.lens = 85

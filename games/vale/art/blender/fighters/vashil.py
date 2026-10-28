@@ -160,13 +160,27 @@ DROP_W, DROP_UP, DROP_DN, DROP_GAP = 0.0275, 0.022, 0.066, 0.078
 # covered"). Those bells keep a small clapper in the mouth (its girdle just under the lip, no stem); the other
 # drops carry the accent share (DROP_K: their scale per bell count, so First Bell's ten keep about the base's share)
 FRONT_BELL = 40.0                                   # degrees either side of the front
-CLAP_IN = (0.019, 0.013, 0.032, 0.010)              # the mouth clapper: (w, up, dn, gap under the lip)
+CLAP_IN = (0.017, 0.012, 0.028, 0.008)              # the mouth clapper: (w, up, dn, gap under the lip)
+# and those two hang higher and a little smaller (the high notes of a graduated chime): crowns set into the band's
+# underside, 10 cm tall, so their lips sit over the visor's arch point in a level three-quarter view
+FRONT_BELL_H, FRONT_BELL_UP = 0.100, 0.024
 DROP_K = {7: 1.17, 10: 0.94}
 _N_BELLS = [7]                                      # the bells on the halo being built (First Bell: 10)
 
 
 def bell_angles(n=7):
     return [(i + 0.5) * 360.0 / n for i in range(n)]
+
+
+def is_front_bell(ang):
+    return abs((ang + 180.0) % 360.0 - 180.0) < FRONT_BELL
+
+
+def bell_geo(ang):
+    """(crown point, height) of the bell at `ang` degrees from the front"""
+    if is_front_bell(ang):
+        return ring_pt(ang, z=BELL_TOP + FRONT_BELL_UP), FRONT_BELL_H
+    return ring_pt(ang, z=BELL_TOP), BELL_H
 
 
 def ring_pt(deg, r=HALO_RM, z=None):
@@ -575,6 +589,8 @@ def sculpts(n_bells: int = 7) -> list:
     for z0, z1 in (GRIP_CARRY, GRIP_SWING):
         g0, g1 = rod_at(z0), rod_at(z1)
         grip.add(Capsule(g0, g1, ROD_R + 0.0065).displaced(wraps(0.0020, 0.016, g0, g1), 0.0020), k=0.0)
+        for e in (g0 + ROD_U * 0.006, g1 - ROD_U * 0.006):                      # a binding at each end (fix pass 2)
+            grip.add(Torus(e, ROD_R + 0.0062, 0.0042, axes=sdf.frame(ROD_U)), k=0.002)
     part("rod_grip", grip, "leather", "bone:prop.R", 280, 0.5)
 
     def collar_prof(r, z):
@@ -693,18 +709,18 @@ def halo_parts(n_bells: int = 7) -> list:
     kd = DROP_K.get(n_bells, 1.0)
     dw, du, dd = DROP_W * kd, DROP_UP * kd, DROP_DN * kd
     for ang in bell_angles(n_bells):
-        top = ring_pt(ang, z=BELL_TOP)
-        bells.add(Lathe(top, bell_prof, 0.05, -BELL_H - 0.004, 0.004), k=0.0)
+        top, bh = bell_geo(ang)
+        bells.add(Lathe(top, lambda r, z, bh=bh: bell_prof(r, z, bh), 0.05, -bh - 0.004, 0.004), k=0.0)
         a = math.radians(ang)
         tang = np.array([math.cos(a), math.sin(a), 0.0])
-        hooks.add(Torus(top + np.array([0, 0, 0.012]), 0.0085, 0.0035, axes=sdf.frame(tang)), k=0.0)
-        if abs((ang + 180.0) % 360.0 - 180.0) < FRONT_BELL:
-            # a front bell: the clapper in its mouth, clear of the visor pane (fix pass 2)
+        if is_front_bell(ang):
+            # a front bell (fix pass 2): set into the band (no hook), the clapper in its mouth, clear of the visor
             w_, u_, d_, g_ = CLAP_IN
-            cdrop = top + np.array([0, 0, -BELL_H - g_])
+            cdrop = top + np.array([0, 0, -bh - g_])
             beads.add(Fn(lambda P, c=cdrop, a_=a, w_=w_, u_=u_, d_=d_: drop_d(P, c, w_, u_, d_, rot=a_),
                          cdrop - np.array([0.03, 0.03, d_ + 0.01]), cdrop + np.array([0.03, 0.03, u_ + 0.01])), k=0.0)
             continue
+        hooks.add(Torus(top + np.array([0, 0, 0.012]), 0.0085, 0.0035, axes=sdf.frame(tang)), k=0.0)
         bot = top + np.array([0, 0, -BELL_H - DROP_GAP])            # the drop hangs clear of the lip (read from above)
         stems.add(Capsule(top + np.array([0, 0, -0.06]), bot + np.array([0, 0, -0.006]), 0.0050), k=0.0)
         stems.add(Sphere(bot - np.array([0, 0, 0.002]), 0.008 * kd), k=0.003)             # the drop's cap
@@ -974,8 +990,8 @@ BACK_MATCH = 0.9           # how far each part's back projection moves onto its 
 # z / 2.0 -> linear gain (fix pass 1: steeper at the feet, the light-head / dark-feet read was soft; fix pass 2: the
 # bottom quarter of the silhouette still measured L* 39 on the rest render (target 20-35): the lower robe from the
 # hem roll to the shins falls off further, the hem band a little darker; the knees up are unchanged)
-VALUE_RAMP = [(0.0, 0.52), (0.07, 0.56), (0.135, 0.62), (0.20, 0.71), (0.275, 0.85), (0.33, 0.90), (0.45, 0.95),
-              (0.70, 1.0), (1.0, 1.04)]
+VALUE_RAMP = [(0.0, 0.52), (0.07, 0.56), (0.135, 0.58), (0.20, 0.60), (0.275, 0.72), (0.33, 0.83), (0.40, 0.91),
+              (0.45, 0.95), (0.70, 1.0), (1.0, 1.04)]
 HEM_TOP = 0.262            # under the coat's hem roll: the dark slate under-robe (the concept's hem band)
 HEM_HEX = "#3B424B"
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
@@ -1113,14 +1129,14 @@ def _hood_folds(p, n):
     flank (the concept's back view drapes the same way)."""
     x, y, z = p[:, 0], p[:, 1], p[:, 2]
     r = np.hypot(y + 0.06, 1.97 - z)
-    th = np.arctan2(y + 0.06, 1.97 - z) + 0.10 * NOISE(p, 4.0) + 0.5 * np.sign(x)
-    u = (th * 8.0 / (2 * math.pi) + 0.15) % 1.0
-    crease = np.exp(-((u - 0.55) / 0.07) ** 2)
-    lit = np.exp(-((u - 0.40) / 0.11) ** 2)
-    amp = ss(0.05, 0.14, r) * (1 - 0.5 * ss(0.30, 0.40, r))
-    k = 1 + amp * (0.075 * lit - 0.15 * crease)
-    k = k * (1 + 0.06 * ss(1.72, 1.93, z))
-    k = k * (1 - 0.14 * ss(0.02, 0.18, y) * ss(1.82, 1.62, z)) * (1 - 0.08 * ss(1.72, 1.58, z))
+    th = np.arctan2(y + 0.06, 1.97 - z) + 0.12 * NOISE(p, 4.0) + 0.5 * np.sign(x)
+    u = (th * 10.0 / (2 * math.pi) + 0.15) % 1.0
+    crease = np.exp(-((u - 0.56) / 0.06) ** 2)
+    lit = np.exp(-((u - 0.40) / 0.12) ** 2)
+    amp = ss(0.05, 0.13, r) * (1 - 0.4 * ss(0.30, 0.42, r))
+    k = 1 + amp * (0.10 * lit - 0.30 * crease)
+    k = k * (1 + 0.07 * ss(1.72, 1.93, z)) * (1 + 0.08 * ss(0.03, -0.05, y))      # lit crown, lit front edge
+    k = k * (1 - 0.14 * ss(0.0, 0.18, y)) * (1 - 0.10 * ss(1.74, 1.58, z))         # the back and the lower flank
     return k * (1 + 0.025 * NOISE(p, 30.0))
 
 
@@ -1172,7 +1188,13 @@ def _side_fill(lin, k, p, n, names, log):
 # and the sash keep only their own banded tone (from their texels inside the window) with soft brush strokes; on the
 # bent right sleeve the painted fold strokes keep CALM_KEEP of their contrast (its blue-grey lining untouched).
 CALM_X = {"robe_top": (-0.165, 0.150), "sash": (-0.165, 0.150)}
-CALM_KEEP = {"robe_top": 0.0, "sash": 0.0, "sleeve_R": 0.40}
+CALM_KEEP = {"robe_top": 0.0, "sash": 0.0, "sleeve_R": 0.40, "sleeve_L": 0.35}
+CALM_Z = {"sleeve_L": 1.20}     # only above this height (the painted lames' shadow strokes on the upper sleeve)
+# and wherever a cloth surface turns away from the plates (|normal.y| 0.95 -> 0.55) the painted fold strokes stretch
+# into bands seen from a three-quarter view: there they ease toward the part's own banded tone (OBLIQUE: how far, at
+# fully oblique) and no coat texel falls darker than DARK_FLOOR x its band tone (soft knee from DARK_KNEE)
+OBLIQUE = {"robe_top": 0.75, "sash": 0.75, "sleeve_L": 0.60, "sleeve_R": 0.65, "cowl": 0.50, "skirt": 0.45}
+DARK_FLOOR, DARK_KNEE = 0.64, 0.86
 
 
 def _calm(lin, k, p, n, names, log):
@@ -1191,6 +1213,8 @@ def _calm(lin, k, p, n, names, log):
             out_ = 1 - ss(x0 - 0.02, x0 + 0.01, xs) * ss(x1 + 0.02, x1 - 0.01, xs)
         else:
             out_ = np.ones(int(sel.sum()), dtype=np.float32)
+        if nm in CALM_Z:
+            out_ = out_ * ss(CALM_Z[nm] - 0.03, CALM_Z[nm] + 0.03, p[sel, 2])
         src = (front[sel] > 0.9) & (coat[sel] > 0.8) & ~hid[sel] & (np.abs(n[sel, 1]) > 0.6)
         if nm in CALM_X:
             src &= out_ < 0.05
@@ -1203,6 +1227,34 @@ def _calm(lin, k, p, n, names, log):
         w = (out_ * front[sel] * coat[sel])[:, None]
         lin[sel] = c * (1 - w) + calmed * w
         log(f"  vashil calm {nm}: {100 * float((w > 0.5).mean()):.0f}% of its texels")
+    coat = _class_w(_srgb(np.clip(lin, 0, None)))["coat"]
+    face = np.abs(n[:, 1])
+    for kk in np.unique(k):
+        nm = names[kk]
+        if nm not in OBLIQUE:
+            continue
+        sel = k == kk
+        c = lin[sel]
+        zs = p[sel, 2]
+        good = (face[sel] > 0.85) & (coat[sel] > 0.8) & ~hid[sel]
+        gf, gb = good & (n[sel, 1] < 0), good & (n[sel, 1] > 0)
+        tf = _band_tone(zs[gf], c[gf], zs) if gf.sum() >= 40 else None
+        tb = _band_tone(zs[gb], c[gb], zs) if gb.sum() >= 40 else None
+        if tf is None and tb is None:
+            continue
+        tf = tf if tf is not None else tb
+        tb = tb if tb is not None else tf
+        wbb = ss(-0.35, 0.35, n[sel, 1])[:, None]
+        tone = tf * (1 - wbb) + tb * wbb
+        obl = (1 - ss(0.55, 0.95, face[sel])) * coat[sel]
+        wo = (OBLIQUE[nm] * obl)[:, None]
+        c = c * (1 - wo) + (tone * strokes[sel][:, None] + (c - tone) * 0.35) * wo
+        r = _Y(c) / np.maximum(_Y(tone), 1e-5)
+        D = DARK_KNEE - DARK_FLOOR
+        r2 = np.where(r < DARK_KNEE, DARK_KNEE - D * (1 - np.exp(-(DARK_KNEE - r) / D)), r)
+        g = 1 + (r2 / np.maximum(r, 1e-5) - 1) * obl
+        lin[sel] = c * g[:, None]
+        log(f"  vashil oblique calm {nm}: {100 * float((obl > 0.5).mean()):.0f}% of its texels")
     return lin
 
 
@@ -1396,11 +1448,17 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         if name == "bells":
             # each texel's own bell: the nearest bell axis
             angs = bell_angles(_N_BELLS[0])
-            tops_ = np.array([ring_pt(a, z=BELL_TOP) for a in angs])
+            geo = [bell_geo(a) for a in angs]
+            tops_ = np.array([g[0] for g in geo])
+            hs_ = np.array([g[1] for g in geo])
             pp = p[m]
             d = np.linalg.norm((pp[:, None, :2] - tops_[None, :, :2]), axis=2)
             j = np.argmin(d, axis=1)
-            lin[m] = _glass_paint(pp, n[m], tops_[j], np.array([0.0, 0.0, 1.0]), BELL_H)
+            res = np.zeros((len(pp), 3), dtype=np.float32)
+            for jj in np.unique(j):
+                q = j == jj
+                res[q] = _glass_paint(pp[q], n[m][q], tops_[jj], np.array([0.0, 0.0, 1.0]), float(hs_[jj]))
+            lin[m] = res
         elif name == "wrist_bell":
             top = W_L + np.array([0.048, -0.012, -0.040])
             lin[m] = _glass_paint(p[m], n[m], top, np.array([0.0, 0.0, 1.0]), 0.05)

@@ -70,13 +70,13 @@ import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep
 import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
 import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
 import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, motionDepthMaterial, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
+import { CellInstances, type CullView } from './instance_cull.ts';
 
 type V2 = readonly [number, number];
 type Poly = readonly V2[];
 
 const LANE_HALF = 3.6;
 const MARGIN = 60;
-const CHUNK = 24;
 
 // ── deterministic random / noise ─────────────────────────────────────────────────────────────────
 function mulberry(seed: number): () => number {
@@ -236,30 +236,6 @@ function shapeOf(poly: Poly): Shape {
   return new Shape(pts);
 }
 
-/** instanced scatter split into CHUNK-sized cells so each cell frustum-culls on its own */
-function chunked(geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true,
-  depth?: Material, renderOrder = 0): Group {
-  const g = new Group();
-  g.name = name;
-  const buckets = new Map<string, { m: Matrix4; c?: Color }[]>();
-  for (const it of items) {
-    const key = `${Math.floor(it.m.elements[12] / CHUNK)}:${Math.floor(it.m.elements[14] / CHUNK)}`;
-    let b = buckets.get(key);
-    if (!b) { b = []; buckets.set(key, b); }
-    b.push(it);
-  }
-  for (const list of buckets.values()) {
-    const im = new InstancedMesh(geo, mat, list.length);
-    list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (it.c) im.setColorAt(i, it.c); });
-    im.castShadow = shadows; im.receiveShadow = true;
-    if (depth) im.customDepthMaterial = depth;
-    im.renderOrder = renderOrder;
-    im.computeBoundingSphere();
-    g.add(im);
-  }
-  return g;
-}
-
 // ── palette (tokens.json colors.terrain-ref + bible valueLstar), overridable by map.art.terrain.colors ─
 interface TerrainColors {
   lane: string; laneGrout: string; verge: string; jungle: string; moss: string; earth: string; clearing: string; inscription: string;
@@ -349,6 +325,9 @@ export interface TerrainBuild {
   setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void;
   /** standing height at a map point: a cliff block's top inside a wall polygon, else 0 */
   groundAt(x: number, y: number): number;
+  /** r12 B4: the instanced scatter (grass, Dialwood, rocks, clutter) keeps only the cells the camera can show or
+   *  shadow into (instance_cull.ts); call once a frame after the camera moved (null: draw every cell) */
+  cull(view: CullView | null): void;
   update(time: number): void;
   dispose(): void;
 }
@@ -533,6 +512,25 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const thicketBoxes = thickets.map(bbox);
   const lanes = map.lanes.map((l) => l.path.map((p) => [p[0], p[1]] as V2));
   const disposables: { dispose(): void }[] = [];
+  /** r12 B4: every instanced scatter set, culled per 4 m cell to the view (+ 4 m) and its shadow reach each frame */
+  const culls = new Set<CellInstances>();
+  const chunked = (geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true,
+    depth?: Material, renderOrder = 0, lod: { geometry: BufferGeometry; dist: number } | null = null): Group => {
+    const g = new Group();
+    g.name = name;
+    if (!items.length) return g;
+    const ci = new CellInstances(geo, mat, items, { name, shadows, depth, renderOrder, lod });
+    g.add(ci.mesh);
+    if (ci.lodMesh) g.add(ci.lodMesh);
+    g.userData.cull = ci;
+    culls.add(ci);
+    return g;
+  };
+  /** drop a scatter part's instance sets (setScatter rebuilds) */
+  const unchunk = (g: Group): void => {
+    const ci = g.userData.cull as CellInstances | undefined;
+    if (ci) { culls.delete(ci); ci.dispose(); }
+  };
   const lin = (hex: string): Color => new Color().setStyle(hex);
   const pv = propValueOf(tr);
   // r12 B5: the painted edge light (the cap course's chamfer, the hour-band ticks, the gorge's lit lip) never
@@ -1580,7 +1578,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const setScatter = (level: 0 | 1 | 2, ao?: boolean): void => {
     scatterLevel = level;
     if (ao !== undefined) grassAO.value = ao ? 1 : 0;
-    for (const g of scatterParts) { scatterGroup.remove(g); g.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); }); }
+    for (const g of scatterParts) { scatterGroup.remove(g); unchunk(g); }
     scatterParts = [];
     // level 0 keeps a sparse tree line so cliff tops never read as empty slabs
     const keepT = level === 0 ? 0.35 : level === 1 ? 0.7 : 1;
@@ -1722,8 +1720,11 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       const out = gorge ? x < 0 || x > SX : x < 0 || x > SX || y < 0 || y > SY;
       return out ? RH : 0;                                                   // the carved rim round the plate
     },
+    cull(view: CullView | null): void { for (const c of culls) c.cull(view); },
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {
+      for (const c of culls) c.dispose();
+      culls.clear();
       group.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); });
       for (const d of disposables) d.dispose();
     },

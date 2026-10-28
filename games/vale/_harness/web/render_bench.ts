@@ -11,7 +11,7 @@
 //     cb      off | deutan | protan | tritan
 //     you     fighter id for seat 0 (your seat), e.g. you=marund
 //
-// window.__VALE_BENCH__: { ready, stats(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
+// window.__VALE_BENCH__: { ready, stats(), timing(), profile(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
 //   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station) }
 
 import type { CatalogT } from '../../src/contracts/catalog.ts';
@@ -100,6 +100,8 @@ function ff(host: LocalMatchHost, seconds: number): void {
 }
 
 let manual = qs.get('manual') === '1';
+/** per-frame main-thread cost of the live loop (ms): the match pump (sim) and renderer.render (perf_1080.mjs) */
+const timing = { pump: [] as number[], render: [] as number[] };
 function loop(renderer: Renderer, host: LocalMatchHost | null): void {
   let last = performance.now();
   const tick = (): void => {
@@ -108,7 +110,9 @@ function loop(renderer: Renderer, host: LocalMatchHost | null): void {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     host?.pump(dt);
+    const t1 = performance.now();
     renderer.render(dt);
+    if (timing.pump.length < 20000) { timing.pump.push(t1 - now); timing.render.push(performance.now() - t1); }
     const s = renderer.stats();
     if (!hud.classList.contains('off')) hud.textContent = `${s.mode} ${s.tier}  ${s.fps.toFixed(0)} fps  ${s.frameMs.toFixed(1)} ms cpu\ncalls ${s.calls} (scene ${s.sceneCalls})  tris ${(s.triangles / 1000).toFixed(0)}k\nscale ${s.renderScale} dpr ${s.pixelRatio.toFixed(2)}  ${s.width}×${s.height}\nactors ${s.actors}  vfx ${s.vfx}  particles ${s.particles}  tele ${s.telegraphs}${host ? `\nmatch ${host.view.time.toFixed(1)} s` : ''}`;
     requestAnimationFrame(tick);
@@ -125,6 +129,10 @@ function install(renderer: Renderer, host: LocalMatchHost | null, catalog: Catal
     renderer,
     host,
     stats: () => renderer.stats(),
+    /** the live loop's per-frame pump / render ms since the last call (reset = true clears them) */
+    timing: (reset = true) => { const r = { pump: timing.pump.slice(), render: timing.render.slice() }; if (reset) timing.pump.length = timing.render.length = 0; return r; },
+    /** draw calls and triangles of the next frame by group (renderer.profile) */
+    profile: () => renderer.profile?.() ?? Promise.resolve(null),
     /** render n frames of dt seconds each (pumping the match) — use with ?manual=1 */
     frames: (n = 1, dt = 1 / 30): ReturnType<Renderer['stats']> => {
       for (let i = 0; i < n; i++) { host?.pump(dt); renderer.render(dt); }

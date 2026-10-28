@@ -54,6 +54,8 @@ import { StructureFx } from './structures.ts';
 import { AmbientLayer, type AmbientStats } from './ambient.ts';
 import { ATLAS_GRID } from './vfx/atlas.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
+import { FrameProfiler, type ProfileRoot, type RenderProfile } from './profile.ts';
+import type { CullView } from './instance_cull.ts';
 
 export interface RendererOptions {
   /** dev-only fallbacks (proof mannequin, debug geometry). Default: dev build AND ?dev=1 */
@@ -133,6 +135,8 @@ export interface Renderer {
   /** harness seam (VFX gallery): spawn a def at ground (x, y); with `to` a test mover travels there over
    *  `travel` s and path / ribbon layers follow it */
   vfxTest(id: string, x: number, y: number, o?: { to?: [number, number]; travel?: number; tier?: 0 | 1 | 2 | 3 | 4; dir?: number; scale?: number; color?: string; anchor?: 'origin' | 'target' | 'path' | 'ground'; phase?: 'main' | 'windup' }): boolean;
+  /** harness seam (r12 B4 perf gate): draw calls and triangles of the next match frame, by group and pass */
+  profile?(): Promise<RenderProfile>;
   /** the VFX ids the renderer knows */
   vfxIds(): string[];
   /** a def's duration, span and whether it rides a path (projectiles, dashes) */
@@ -145,6 +149,7 @@ const _v = new Vector3();
 const _v2 = new Vector3();
 const _ndc = new Vector2();
 const _frustum = new Frustum();
+const _cullFrustum = new Frustum();
 const _m4 = new Matrix4();
 const _sphere = new Sphere();
 const _rest = { self: new Color(), ally: new Color(), enemy: new Color(), neutral: new Color() };
@@ -902,7 +907,10 @@ class ValeRenderer implements Renderer {
     info.reset();
     const timed = this.dyn.enabled && this.mode === 'match';
     if (timed) this.gpuTimer.begin();
+    const prof = this.profileWaiters.length > 0 && this.mode === 'match';
+    if (prof) this.profiler.begin(this.gl, this.profileRoots());
     this.post.render(d);
+    if (prof) { const r = this.profiler.end(this.gl)!; for (const w of this.profileWaiters.splice(0)) w(r); }
     if (timed) this.gpuTimer.end();
     this.sceneCalls = info.render.calls;
     this.sceneTris = info.render.triangles;
@@ -932,11 +940,24 @@ class ValeRenderer implements Renderer {
     // fog of war
     this.fog.update(view, this.palette.viewer.team, d);
     this.sun.fit(this.rig.camera);
+    this.cullScatter();
     this.feedBrush(d);
     this.feedAmbient(d);
     this.terrain?.update(this.time);
     this.vfx.update(d);
     this.buildOverlay(view);
+  }
+
+  /** r12 B4: the terrain's instanced scatter keeps only the cells this frame's camera can show or shadow into */
+  private readonly cullView: CullView = { frustum: _cullFrustum, fx: 0, fz: 0, sdx: 0, sdz: 0 };
+  private cullScatter(): void {
+    if (!this.terrain) return;
+    const cam = this.rig.camera, v = this.cullView;
+    _cullFrustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    v.fx = this.rig.focus.x; v.fz = this.rig.focus.z;
+    const sh = this.sun.shadowsOn;
+    v.sdx = sh ? this.shadowDir.x : 0; v.sdz = sh ? this.shadowDir.y : 0;
+    this.terrain.cull(v);
   }
 
   // ── picking ────────────────────────────────────────────────────────────────────────────────────
@@ -1115,6 +1136,37 @@ class ValeRenderer implements Renderer {
   }
 
   injectEvents(events: SimEvent[]): void { for (const e of events) this.pending.push(e); }
+
+  // ── profile (harness seam, profile.ts) ─────────────────────────────────────────────────────────
+  private readonly profiler = new FrameProfiler();
+  private readonly profileWaiters: ((p: RenderProfile) => void)[] = [];
+  profile(): Promise<RenderProfile> { return new Promise((res) => this.profileWaiters.push(res)); }
+
+  /** the frame's drawables by group; the whole scene first (`other`), every specific root after it (its hooks win) */
+  private profileRoots(): ProfileRoot[] {
+    const under = (o: import('three').Object3D, top: import('three').Object3D): import('three').Object3D => {
+      let c = o;
+      while (c.parent && c.parent !== top) c = c.parent;
+      return c;
+    };
+    const SCATTER = 'vale_scatter';
+    const scatterOf = (n: string): string => (n.startsWith('vale_trees') || n === 'vale_trunks' || n === 'vale_canopies' ? 'canopy' : n.startsWith('vale_clutter') ? 'clutter' : 'rocks');
+    const roots: ProfileRoot[] = [{ root: this.scene, group: 'other' }];
+    if (this.terrain) {
+      roots.push({
+        root: this.terrain.group,
+        group: (o, top) => (top.name === 'vale_needlegrass' ? 'grass' : top.name === SCATTER ? scatterOf(under(o, top).name) : top.name.startsWith('vale_') ? 'terrain' : 'landmarks'),
+        part: (o, top) => (top.name === SCATTER ? under(o, top).name : top.name || top.type),
+      });
+    }
+    if (this.mapScene) roots.push({ root: this.mapScene, group: 'terrain' });
+    if (this.ambient) roots.push({ root: this.ambient.group, group: 'ambient' });
+    roots.push({ root: this.crowd.group, group: 'actors', part: () => 'crowd' });
+    for (const a of this.actors.values()) roots.push({ root: a.root, group: 'actors', part: () => a.kind });
+    roots.push({ root: this.vfx.scene, group: 'vfx' });
+    roots.push({ root: this.overlay.scene, group: 'overlay' }, { root: this.overlay.teleScene, group: 'overlay' });
+    return roots;
+  }
 
   dispose(): void {
     this.teardownMatch();

@@ -271,6 +271,7 @@ export class MenuWorld {
     this.sun.configure({ sunDir: [x * c - z * s, y, x * s + z * c], sunColor: MENU_SUN.color, sunIntensity: MENU_SUN.intensity });
     this.sun.fit(this.camera);
     this.terrain?.update(this.elapsed);
+    this.terrain?.cull(null);                // the menu's free camera: every scatter cell (instance_cull.ts)
     this.bdUniforms.uTime.value = this.elapsed;
     this.bdUniforms.uPan.value.lerp(this.panTo, 1 - Math.exp(-dt * 3));
     if (this.plinth) this.plinth.visible = !!this.showcase && !this.model;
