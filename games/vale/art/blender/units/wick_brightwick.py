@@ -2906,10 +2906,12 @@ def ink_hollow(spec, P, N, col, with_mask=False):
     to_c = lc[None] - P
     to_c /= np.linalg.norm(to_c, axis=1, keepdims=True) + 1e-9
     face = np.clip((N * to_c).sum(1), 0.0, 1.0) ** 0.6
-    back = smooth(lc[1] - 0.025, lc[1] + 0.020, P[:, 1])
+    # (r7: the halo carries the falloff now; the side walls level with the core caught the spill as a lit diagonal
+    # facet in the QA close-up) only the walls BEHIND the core take it, and less of it (0.40 -> 0.25)
+    back = smooth(lc[1] - 0.005, lc[1] + 0.035, P[:, 1])
     # (r6, review r4: "a lit diagonal shard of inner wall shows inside the hollow": the painted spill lit the walls
     # beside the core as grey planes; the halo carries the falloff now) the spill halved: the pocket stays ink
-    spill = face * back / (1.0 + (dist / 0.060) ** 2) * 0.40
+    spill = face * back / (1.0 + (dist / 0.060) ** 2) * 0.25
     # (r7) none in the POCKET under the core (the floor and the low walls behind it): it stays ink, matte and occluded in
     # the ORM (roughness 1, occlusion 0.05): no lit face under the light from the 52 deg camera
     spill = spill * smooth(lc[2] - 1.6 * lr[2], lc[2] - 0.4 * lr[2], P[:, 2])

@@ -38,14 +38,14 @@
   },
   "uv_coverage": 0.691,
   "bake": {
-    "base": 4.94,
-    "rough_metal": 3.79,
-    "normal": 1.87,
-    "ao": 2.36,
+    "base": 8.77,
+    "rough_metal": 6.81,
+    "normal": 3.13,
+    "ao": 3.43,
     "normal_fixed_px": 21306,
-    "projection": 27.85,
-    "pack_save": 33.24,
-    "total": 46.74
+    "projection": 31.98,
+    "pack_save": 39.83,
+    "total": 64.06
   },
   "tris": 3970,
   "mesh_top_m": 1.715,
@@ -153,13 +153,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 836792,
+  "glb_bytes_raw": 836736,
   "optimize": {
     "ok": true,
-    "before": 838432,
-    "after": 326632
+    "before": 838376,
+    "after": 326528
   },
-  "glb_bytes": 326632,
+  "glb_bytes": 326528,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -203,26 +203,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_brightwick_serenade.png",
-    "seconds": 25.3,
+    "seconds": 25.2,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_brightwick_serenade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.31,
-      "model": 12.42,
-      "lows_bind": 0.12,
-      "uv": 20.32,
-      "bake": 46.74,
-      "clips": 1.08,
-      "export": 1.28,
-      "optimize": 0.86,
-      "load_test": 0.38,
-      "three_qa": 64.67,
-      "cache": 0.1
+      "materials": 1.05,
+      "model": 22.9,
+      "lows_bind": 0.16,
+      "uv": 28.17,
+      "bake": 64.06,
+      "clips": 1.07,
+      "export": 2.13,
+      "optimize": 0.94,
+      "load_test": 0.3,
+      "three_qa": 55.38,
+      "cache": 0.09
     },
-    "total_s": 148.35
+    "total_s": 176.33
   },
   "run_ref_speed": 3.3,
   "height_m": 1.6

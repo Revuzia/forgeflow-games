@@ -177,7 +177,7 @@ def _elbow(sh, wr, l1, l2, pole):
 
 
 EL_R = _elbow(SH_R, WR_R, UA, FA, (-0.7, 0.6, -0.4))
-EL_L = _elbow(SH_L, WR_L, UA, FA, (0.9, 0.3, -0.3))
+EL_L = _elbow(SH_L, WR_L, UA, FA, (0.75, 0.55, -0.35))
 L_ARM = UA + FA
 
 # THE QUIVER: a leather tube at the right hip, slightly tilted (mouth in, bottom out), arrows standing in it
@@ -246,7 +246,7 @@ def turban(P):
     ph = (q[:, 2] + 0.035 * np.sin(th) + 0.012 * NOISE(P, 9.0)) / 0.026
     f = ph - np.floor(ph)
     seam = np.exp(-((f - 0.05) / 0.09) ** 2) + np.exp(-((f - 1.05) / 0.09) ** 2)
-    return 0.0028 * seam - 0.0010 * np.sin(np.pi * f)
+    return 0.0038 * seam - 0.0012 * np.sin(np.pi * f)
 
 
 def chips(amp, freq):
@@ -374,6 +374,35 @@ class _VisorBand(sdf.Prim):
         return box
 
 
+MASK_C, MASK_R = np.array([0.0, -0.032, 1.712]), np.array([0.071, 0.082, 0.104])
+
+
+class _VisorShell(sdf.Prim):
+    """the glass visor band laid ON the face-plate (the painting's): a shell 8 mm thick round the face, its front
+    cut flat across the eyes (a straight bar, 9 mm proud of the mask), 4.1 cm tall, its ends tucked under the wrap"""
+    c = np.array([0.0, -0.030, 1.731])
+    RO = np.array([0.084, 0.095, 0.104])
+    RI = np.array([0.074, 0.086, 0.096])
+
+    def bounds(self):
+        return np.array([-0.10, -0.135, 1.70]), np.array([0.10, -0.03, 1.76])
+
+    @staticmethod
+    def _ell(P, c, R):
+        q = (P - c) / R
+        k0 = np.linalg.norm(q, axis=1)
+        k1 = np.linalg.norm(q / R, axis=1)
+        return k0 * (k0 - 1.0) / np.maximum(k1, 1e-9)
+
+    def d(self, P):
+        outer = np.maximum(self._ell(P, self.c, self.RO), -(P[:, 1] + 0.1215))
+        inner = self._ell(P, self.c, self.RI)
+        band = np.abs(P[:, 2] - 1.731) - 0.0205
+        side = np.abs(P[:, 0]) - 0.090
+        back = P[:, 1] + 0.040
+        return np.maximum(np.maximum(np.maximum(outer, -inner), band), np.maximum(side, back))
+
+
 def _with_disp(S: Sculpt, fn, amp):
     S2 = Sculpt(S.name)
     for op, prim, k, tag in S.ops:
@@ -463,7 +492,7 @@ def sculpts() -> list:
     wrap.add(Capsule((0.0, 0.03, 1.60), (0.0, 0.02, 1.66), 0.072), k=0.04)                          # the nape
     wrap.sub(Ellipsoid((0.0, -0.118, 1.695), (0.070, 0.075, 0.098)), k=0.014)                        # the face opening
     wrap.inter(HalfSpace((0, 0, 1.585), (0, 0, -1), 1.0), k=0.02)
-    part("wrap", _with_disp(wrap, turban, 0.003), "wrap", "bone:head", 1500, uvw=1.6)
+    part("wrap", _with_disp(wrap, turban, 0.003), "wrap", "bone:head", 1300, uvw=1.6)
 
     # FACE-PLATE (rigid on the head): a carved chalk face, serene: brow, nose, closed lips, chin; the facets are the
     # painting's incised lines
@@ -478,9 +507,9 @@ def sculpts() -> list:
     for sx in (-1, 1):
         mask.add(Ellipsoid((sx * 0.040, -0.098, 1.690), (0.026, 0.012, 0.018)), k=0.016)           # cheekbones
     mask.sub(Ellipsoid((0.0, -0.112, 1.645), (0.020, 0.004, 0.0016)), k=0.002)                      # lip line
-    part("mask", mask, "chalk", "bone:head", 1300, vs=0.55, uvw=2.4)
+    part("mask", mask, "chalk", "bone:head", 1100, vs=0.55, uvw=2.4)
     vis = Sculpt("visor")
-    vis.add(_VisorBand((0.0, 0.0, 1.731), 0.112, 0.0055, 0.0205, 52.0), k=0.0)
+    vis.add(_VisorShell(), k=0.0)
     part("visor", vis, "dawnglass", "bone:head", 500, vs=0.45, uvw=1.6)
     neck = Sculpt("neck")
     neck.add(Capsule((0.0, 0.008, 1.52), (0.0, -0.004, 1.632), 0.044), k=0.0)
@@ -489,14 +518,14 @@ def sculpts() -> list:
     # COWL (zblend chest -> neck): the pale linen scarf wound round the neck, draped over the upper chest in a soft
     # V and over the shoulders, a wider collar at the back
     cowl = Sculpt("cowl")
-    cowl.add(Torus((0.0, 0.004, 1.582), 0.078, 0.040, axes=np.diag([1.0, 1.08, 1.0]), rz=0.036)
+    cowl.add(Torus((0.0, 0.006, 1.580), 0.074, 0.032, axes=np.diag([1.0, 1.08, 1.0]), rz=0.030)
              .displaced(hfolds(0.006, 70.0, tilt=(0.4, 0.0)), 0.006), k=0.0)
-    cowl.add(Ellipsoid((0.0, -0.075, 1.535), (0.125, 0.050, 0.060)).displaced(soft_folds(0.008, 45.0, axis=0), 0.008), k=0.04)
+    cowl.add(Ellipsoid((0.0, -0.080, 1.528), (0.130, 0.036, 0.058)).displaced(soft_folds(0.007, 45.0, axis=0), 0.007), k=0.04)
     cowl.add(Ellipsoid((0.0, 0.065, 1.548), (0.155, 0.060, 0.055)).displaced(hfolds(0.006, 55.0), 0.006), k=0.04)
     for sx in (-1, 1):
         cowl.add(Ellipsoid((sx * 0.120, 0.0, 1.538), (0.075, 0.085, 0.040), axes=sdf.rot_y(sx * -18)), k=0.04)
     cowl.inter(HalfSpace((0, 0, 1.475), (0, 0, -1), 1.0), k=0.02)
-    part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.54, 1.62), 1200, uvw=1.3)
+    part("cowl", cowl, "cloth2", ("zblend", "chest", "neck", 1.54, 1.62), 1000, uvw=1.3)
 
     # TORSO under the tabard (the linen shirt's shoulders and the body): heat weights
     body = Sculpt("body")
@@ -506,7 +535,7 @@ def sculpts() -> list:
     body.add(Ellipsoid((0.0, 0.008, 1.00), (0.150, 0.105, 0.10)), k=0.06)
     for sx in (-1, 1):
         body.add(Sphere((sx * 0.180, 0.008, 1.455), 0.058), k=0.05)
-    part("body", body, "cloth2", "auto", 900)
+    part("body", body, "cloth2", "auto", 500)
 
     # TABARD (heat weights above the belt): steel-blue chest panels with stiff shoulder wings
     tab = Sculpt("tabard")
@@ -520,36 +549,36 @@ def sculpts() -> list:
         tab.sub(Ellipsoid((sx * 0.215, 0.008, 1.405), (0.060, 0.080, 0.090)), k=0.012)
     tab.sub(Ellipsoid((0.0, 0.004, 1.57), (0.085, 0.075, 0.07)), k=0.01)                            # the neck hole
     tab.inter(HalfSpace((0, 0, 1.165), (0, 0, -1), 1.0), k=0.0)
-    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1600, uvw=1.3)
+    part("tabard", _with_disp(tab, soft_folds(0.003, 30.0, axis=0), 0.003), "cloth", "auto", 1400, uvw=1.3)
 
     # TABARD SKIRT (analytic hips -> thighs): four panels from the belt to the hem, open at the front and back centre
     # and slit at the sides
     sk = Sculpt("tabard_skirt")
-    shell = FlatCapsule((0.0, 0.002, 1.20), (0.0, 0.004, 0.76), 0.142, 0.106, 0.178, 0.132, side=(1, 0, 0))
+    shell = FlatCapsule((0.0, 0.002, 1.20), (0.0, 0.004, 0.76), 0.142, 0.106, 0.196, 0.146, side=(1, 0, 0))
     sk.add(shell.displaced(folds(0.006, 26.0, axis=0, phase=0.4, zfade=(1.05, 0.8)), 0.006), k=0.0)
-    sk.sub(FlatCapsule((0.0, 0.002, 1.25), (0.0, 0.004, 0.70), 0.130, 0.094, 0.166, 0.120, side=(1, 0, 0)), k=0.003)
+    sk.sub(FlatCapsule((0.0, 0.002, 1.25), (0.0, 0.004, 0.70), 0.130, 0.094, 0.184, 0.134, side=(1, 0, 0)), k=0.003)
     sk.inter(HalfSpace((0, 0, 1.19), (0, 0, 1), 1.0), k=0.0)
     sk.inter(_HemCut(_tabard_hem), k=0.004)
     sk.sub(_Slit(0.0, "x", 1.13, 0.012, 0.055, sign=-1.0), k=0.004)                                 # front centre
     sk.sub(_Slit(0.0, "x", 1.02, 0.008, 0.050, sign=1.0), k=0.004)                                  # back centre
     for sx in (-1, 1):
         sk.sub(_Slit(0.012, "y", 0.98, 0.004, 0.018, sign=sx), k=0.004)                             # side slits
-    part("tabard_skirt", sk, "cloth", "skirt", 1500, uvw=1.2)
+    part("tabard_skirt", sk, "cloth", "skirt", 1250, uvw=1.2)
 
     # LINEN TUNIC (analytic): the pale under-tunic seen between the panels, pointed hems front and back
     tn = Sculpt("tunic")
-    tsh = FlatCapsule((0.0, 0.002, 1.16), (0.0, 0.004, 0.74), 0.132, 0.098, 0.160, 0.118, side=(1, 0, 0))
+    tsh = FlatCapsule((0.0, 0.002, 1.16), (0.0, 0.004, 0.74), 0.132, 0.098, 0.180, 0.130, side=(1, 0, 0))
     tn.add(tsh.displaced(folds(0.005, 34.0, axis=0, phase=1.1), 0.005), k=0.0)
-    tn.sub(FlatCapsule((0.0, 0.002, 1.20), (0.0, 0.004, 0.70), 0.122, 0.088, 0.150, 0.108, side=(1, 0, 0)), k=0.003)
+    tn.sub(FlatCapsule((0.0, 0.002, 1.20), (0.0, 0.004, 0.70), 0.122, 0.088, 0.170, 0.120, side=(1, 0, 0)), k=0.003)
     tn.inter(HalfSpace((0, 0, 1.12), (0, 0, 1), 1.0), k=0.0)
     tn.inter(_HemCut(_tunic_hem), k=0.004)
-    part("tunic", tn, "linen", "skirt", 1000, uvw=1.0)
+    part("tunic", tn, "linen", "skirt", 700, uvw=1.0)
 
     # BELTS + STRAPS (heat weights): the waist belt, the quiver belt slanting to the right hip, the crossed straps
     belt = Sculpt("belt")
     belt.add(_Band((0.0, 0.002, 1.212), 0.150, 0.114, 0.008, 0.022, rr=0.004), k=0.0)
     belt.add(_Band((0.0, 0.004, 1.128), 0.158, 0.122, 0.007, 0.018, rr=0.004, slope=0.20, front_dip=0.012), k=0.0)
-    part("belt", belt, "leather", "auto", 700)
+    part("belt", belt, "leather", "auto", 520)
     bk = Sculpt("buckle")
     c = np.array([0.050, -0.122, 1.212])
     bk.add(Torus(c, 0.020, 0.0045, axes=np.stack([[1, 0, 0], [0, 0, 1], [0, -1, 0]]).astype(float), rz=0.0035), k=0.0)
@@ -562,7 +591,7 @@ def sculpts() -> list:
         strap(straps, fr, torso_normal, 0.019, 0.0045)
         bk_ = [(sx * 0.115, 0.075, 1.505), (sx * 0.065, 0.112, 1.41), (-sx * 0.045, 0.114, 1.30), (-sx * 0.12, 0.098, 1.215)]
         strap(straps, bk_, torso_normal, 0.019, 0.0045)
-    part("straps", straps, "leather", "auto", 600, vs=0.7)
+    part("straps", straps, "leather", "auto", 460, vs=0.7)
 
     # THE BROOCH on the cowl's edge at her right chest: a chalk ring round a glowing glass disc (accent)
     br, brg = Sculpt("brooch"), Sculpt("brooch_glass")
@@ -579,7 +608,7 @@ def sculpts() -> list:
         sl.add(FlatCapsule(sh, el, 0.060, 0.058, 0.054, 0.052, side=(1, 0, 0)).displaced(folds(0.005, 60.0, axis=2), 0.005), k=0.0)
         sl.add(Sphere(el, 0.054), k=0.03)
         sl.add(FlatCapsule(el, el + (wr - el) * 0.35, 0.052, 0.050, 0.046, 0.044, side=(1, 0, 0)), k=0.02)
-    part("sleeves", sl, "cloth2", "auto", 1100)
+    part("sleeves", sl, "cloth2", "auto", 1000)
     brc = Sculpt("bracers")
     for el, wr in ((EL_R, WR_R), (EL_L, WR_L)):
         a, b = el + (wr - el) * 0.22, wr + (wr - el) * 0.05
@@ -595,12 +624,12 @@ def sculpts() -> list:
     legs = Sculpt("legs")
     for sx in (-1, 1):
         hip, knee, ank = np.array([sx * 0.095, 0.005, 0.95]), np.array([sx * 0.121, -0.012, 0.503]), np.array([sx * 0.145, 0.02, 0.09])
-        legs.add(FlatCapsule(hip + (0, 0, 0.05), knee + (0, 0, 0.04), 0.075, 0.080, 0.056, 0.060, side=(1, 0, 0))
+        legs.add(FlatCapsule(hip + (0, 0, 0.05), knee + (0, 0, 0.04), 0.066, 0.074, 0.054, 0.058, side=(1, 0, 0))
                  .displaced(folds(0.004, 40.0, axis=2, phase=sx), 0.004), k=0.0)
         legs.add(Ellipsoid(knee + (0.0, -0.004, 0.02), (0.052, 0.056, 0.06)), k=0.04)
         legs.add(FlatCapsule(knee, ank + (0, 0, 0.12), 0.046, 0.050, 0.038, 0.042, side=(1, 0, 0)), k=0.02)
-    legs.add(Ellipsoid((0.0, 0.01, 0.94), (0.15, 0.10, 0.09)), k=0.05)
-    part("legs", legs, "under", "auto", 800)
+    legs.add(Ellipsoid((0.0, 0.01, 0.94), (0.125, 0.092, 0.08)), k=0.05)
+    part("legs", legs, "under", "auto", 620)
     boots = Sculpt("boots")
     for sx in (-1, 1):
         to = math.radians(sx * 8.0)
@@ -613,7 +642,7 @@ def sculpts() -> list:
                   .displaced(folds(0.004, 30.0, axis=2, phase=sx * 1.7), 0.004), k=0.03)
         boots.add(Torus(knee + (0.0, 0.0, -0.040), 0.057, 0.008, axes=np.diag([1.0, 1.06, 1.0])), k=0.008)     # cuff
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "boots", "auto", 1000)
+    part("boots", boots, "boots", "auto", 860)
 
     # QUIVER (rigid on the hips): a brown leather tube with two straps and a rim, five arrows standing in it
     qv = Sculpt("quiver")
@@ -646,7 +675,7 @@ def sculpts() -> list:
             p0 = tip - d * 0.085
             fl.add(_Vane(p0, d, vd, 0.072, 0.017, 0.0016), k=0.0)
     part("arrow_shafts", shafts, "wood", "bone:hips", 300, vs=0.45)
-    part("fletching", fl, "fletching", "bone:hips", 600, vs=0.40)
+    part("fletching", fl, "fletching", "bone:hips", 420, vs=0.6)
 
     # THE BOW (prop.L): pale ash limbs with a flat faceted grip, glass tip caps with accent inlays, the string
     bow = Sculpt("bow")
@@ -658,7 +687,7 @@ def sculpts() -> list:
         side = _n(N_REST - tan * (tan @ N_REST))
         up = np.cross(tan, side)
         bow.add(RoundBox((a + b) * 0.5, (0.030, 0.082, 0.022), 0.006, axes=np.stack([side, tan, up])), k=0.008)
-    part("bow", bow, "wood", "bone:prop.L", 1700, vs=0.5, uvw=1.4)
+    part("bow", bow, "wood", "bone:prop.L", 1400, vs=0.5, uvw=1.4)
     grip = Sculpt("bow_grip")
     for sgn in (-1, 1):
         a, b = bow_pt(sgn * 0.002), bow_pt(sgn * 0.075)
@@ -688,19 +717,27 @@ def sculpts() -> list:
     # the fingers, fletched
     fan, fanf = Sculpt("fan_shafts"), Sculpt("fan_fletch")
     for ang in (-16.0, 0.0, 16.0):
-        d = _n(np.array([0.0, 0.0, 1.0]) * math.cos(math.radians(ang)) + U_REST * math.sin(math.radians(ang)) * -1.0)
-        base = PINCH_R - d * 0.10 + np.array([0.0, 0.0, 0.0])
-        tip = PINCH_R + d * 0.42
+        d = fan_dir(ang)
+        base = PINCH_R - d * 0.03
+        tip = PINCH_R + d * 0.45
         fan.add(Capsule(base, tip, 0.0045), k=0.0)
         fan.add(RoundCone(tip, tip + d * 0.045, 0.009, 0.002), k=0.004)                            # the head
-        e1 = _n(np.cross(d, [0.0, -1.0, 0.0]))
+        e1 = _n(np.cross(d, [0.0, 0.0, 1.0]))
         for j in range(3):
             a = math.radians(30.0 + j * 120.0)
             vd = e1 * math.cos(a) + np.cross(d, e1) * math.sin(a)
             fanf.add(_Vane(base, d, vd, 0.07, 0.016, 0.0016), k=0.0)
-    part("fan_shafts", fan, "wood", "bone:x_fan", 260, vs=0.45)
-    part("fan_fletch", fanf, "fletching", "bone:x_fan", 300, vs=0.40)
+    part("fan_shafts", fan, "wood", "bone:x_fan", 190, vs=0.5)
+    part("fan_fletch", fanf, "fletching", "bone:x_fan", 200, vs=0.6)
     return out
+
+
+FAN_AXIS = np.array([0.0, -1.0, 0.0])                  # the fan's axis at bind (forward from the right hand)
+
+
+def fan_dir(ang):
+    a = math.radians(ang)
+    return _n(FAN_AXIS * math.cos(a) + U_REST * math.sin(a))
 
 
 class _Vane(sdf.Prim):
@@ -771,7 +808,7 @@ def extra_materials(ctx) -> dict:
 
 # ── decimation: the shared collapse keeps X symmetry, which stalls on one-sided parts ─────────────────────────────
 ASYM = ("quiver", "arrow_", "fletching", "hand_", "brooch", "buckle", "belt", "bow", "string", "fan_", "rope_bind",
-        "sleeves", "bracers")
+        "sleeves", "bracers", "tunic", "tabard_skirt")
 
 
 def _install_decimate() -> None:
@@ -790,7 +827,7 @@ def _install_decimate() -> None:
 
 _install_decimate()
 
-Q_BASE = 70
+Q_BASE = 64
 
 
 def _install_optimize() -> None:
@@ -953,12 +990,19 @@ _install_bind()
 # per-texel ratios to the part's median (linear light), so every part lands on the concept's colour for its material
 # with its painted folds and wear. Pale parts sit a step under the concept's lit values (three.js lifts pale albedo).
 TONE = {
-    "wrap": ("#B4B1AA", 0.80, 0.85), "mask": ("#AFA99F", 0.85, 0.8),
-    "cowl": ("#B3B0A8", 0.80, 0.85), "sleeves": ("#B7B3AB", 0.75, 0.85),
-    "tabard": ("#647A8A", 0.95, 0.55), "tabard_skirt": ("#5B6F7E", 0.95, 0.55),
-    "tunic": ("#8C877E", 0.85, 0.8), "belt": ("#4C423B", 0.9, 0.6), "straps": ("#4A403A", 0.9, 0.6),
-    "boots": ("#3B3734", 0.9, 0.7), "quiver": ("#5E4A3A", 0.9, 0.6), "quiver_straps": ("#3F3631", 0.9, 0.6),
+    # build 1 in three.js: the pale linen and chalk rendered near-white, the tabard a light sky blue (concept: a mid
+    # steel blue, L* ~52) -> every target a step down, the blue a little more saturated (three.js strips ~10 points)
+    "wrap": ("#A9A69F", 0.80, 0.85), "mask": ("#ABA69C", 0.50, 0.85),
+    "cowl": ("#A8A59E", 0.80, 0.85), "sleeves": ("#AAA69E", 0.75, 0.85),
+    "tabard": ("#4C6272", 0.95, 0.45), "tabard_skirt": ("#465A69", 0.95, 0.45),
+    "tunic": ("#7E796F", 0.85, 0.8), "belt": ("#40372F", 0.9, 0.6), "straps": ("#3F3630", 0.9, 0.6),
+    "boots": ("#2D2A28", 0.9, 0.7), "quiver": ("#56402F", 0.9, 0.6), "quiver_straps": ("#352D28", 0.9, 0.6),
 }
+# the material classes the projection must not carry onto a part (the plates paint the neighbouring material where
+# the model's part stands: the sleeves' white on the tabard's shoulder wings and back, the tabard's blue on the cowl's
+# hem): such texels are calmed to the part's own colour
+PALE = ("wrap", "cowl", "sleeves", "mask", "tunic")
+BLUE = ("tabard", "tabard_skirt")
 # side-facing texels of these parts streak (neighbours along Y take one plate pixel): blended into the part's colour
 # with painted breakup; up-facing texels likewise
 SIDE_PARTS = ("wrap", "cowl", "sleeves", "tabard", "tabard_skirt", "tunic", "belt", "straps", "boots", "quiver",
@@ -1057,8 +1101,8 @@ def paint_skin(p, n):
 
 
 def paint_neck(p, n):
-    v = (0.70 + 0.25 * np.clip(-n[:, 1], 0, 1)) * (0.75 + 0.25 * _ss(1.53, 1.60, p[:, 2]))
-    return _hl("#9C7864") * v[:, None]
+    v = (0.55 + 0.25 * np.clip(-n[:, 1], 0, 1)) * (0.70 + 0.25 * _ss(1.53, 1.60, p[:, 2]))
+    return _hl("#8A6A58") * v[:, None]
 
 
 def paint_legs(p, n):
@@ -1066,7 +1110,7 @@ def paint_legs(p, n):
     v = v * (0.82 + 0.24 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
     knee = np.exp(-((p[:, 2] - 0.52) / 0.06) ** 2) * (n[:, 1] < 0.1)
     v = v * (1 + 0.12 * knee)
-    return _hl("#322A27") * v[:, None]
+    return _hl("#241E1C") * v[:, None]
 
 
 def paint_bracers(p, n):
@@ -1123,6 +1167,32 @@ def paint_rope(p, n):
     return _hl("#9A8F7A") * v[:, None]
 
 
+def _calm_w(name, lin):
+    """0..1 per texel: how far a texel's projected paint belongs to another material class"""
+    lum = _lum(lin)
+    med = float(np.median(lum))
+    blue = (lin[:, 2] - lin[:, 0]) / np.maximum(lum, 1e-3)
+    if name in PALE:
+        w = _ss(0.10, 0.22, blue) * _ss(0.15, 0.35, lum / max(med, 1e-4))
+    elif name in BLUE:
+        w = _ss(0.16, 0.06, blue) * _ss(1.25, 1.6, lum / max(med, 1e-4))
+    else:
+        return np.zeros(len(lin))
+    return np.clip(w, 0, 1)
+
+
+def wrap_bands(c, p, n):
+    """the turban's wound bands: a darker seam between bands (the sculpt's turban() phase), each band its own value"""
+    q = p - HEAD_C
+    th = np.arctan2(q[:, 0], q[:, 1])
+    ph = (q[:, 2] + 0.035 * np.sin(th) + 0.012 * NOISE(p, 9.0)) / 0.026
+    f = ph - np.floor(ph)
+    seam = np.exp(-((f - 0.05) / 0.07) ** 2) + np.exp(-((f - 1.05) / 0.07) ** 2)
+    band = _hash(np.floor(ph)) - 0.5
+    k = (1 - 0.34 * np.clip(seam, 0, 1)) * (1 + 0.08 * band) * (1 + 0.05 * np.sin(np.pi * f))
+    return c * k[:, None]
+
+
 def mask_shade(c, p, n):
     """the face-plate under the wrap: lit straight ahead, a step darker at the sides and under the brow"""
     front = _ss(0.2, 0.85, -n[:, 1])
@@ -1174,6 +1244,11 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
         if name == "mask":
             ref = (N[m][:, 1] < -0.5) & (np.abs(P[m][:, 0]) < 0.05)
         c = _tone(L[m], tgt, con, des, ref)
+        cw = _calm_w(name, L[m])
+        if cw.any():
+            brk0 = (1 + 0.08 * NOISE(P[m], 10.0) + 0.04 * NOISE(P[m], 35.0)) * (0.92 + 0.12 * np.clip(N[m][:, 2], -1, 1))
+            c = c * (1 - cw[:, None]) + (tgt * brk0[:, None]) * cw[:, None]
+            log(f"  calm {name}: {int((cw > 0.5).sum())} texels of another material")
         if name in SIDE_PARTS:
             n_ = N[m]
             side = np.abs(n_[:, 0]) / (np.abs(n_[:, 0]) + np.abs(n_[:, 1]) + 1e-6)
@@ -1185,7 +1260,7 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
         if name == "mask":
             c = mask_shade(c, P[m], N[m])
         elif name == "wrap":
-            c = wrap_shade(c, P[m], N[m])
+            c = wrap_bands(wrap_shade(c, P[m], N[m]), P[m], N[m])
         L[m] = c
         log(f"  tone {name}: -> {hx}")
     L = np.clip(L, 0.0, None)
@@ -1397,7 +1472,7 @@ def _install_solvers() -> None:
             q = cur.to_quaternion().slerp(end.to_quaternion(), k)
             cur = q.to_matrix()
         if ht.fdir is not None:
-            fan_local = skel.rest[hnd].to_3x3().inverted() @ V((0.0, 0.0, 1.0))
+            fan_local = skel.rest[hnd].to_3x3().inverted() @ V(tuple(FAN_AXIS))
             have = (cur @ fan_local).normalized()
             cur = have.rotation_difference(V(ht.fdir).normalized()).to_matrix() @ cur
         pose[hnd] = skel.euler_of(Ph.inverted() @ cur, pose.get(hnd))
@@ -1848,7 +1923,7 @@ def gen_death(skel) -> anim.Clip:
                                                   upper_arm_L=(30, 0, 30), forearm_L=(20, 0, 0),
                                                   upper_arm_R=(40, 0, -10), forearm_R=(30, 0, 0)))
     down["hips_loc"] = (-0.32, 0.10, -hip_h + 0.17)
-    down["ik"] = {"aim.L": AimRoll((0.0, -0.95, 0.30), 1.0, (0.0, 0.25, 0.97))}
+    down["ik"] = {"aim.L": AimRoll((0.25, -0.97, -0.05), 1.0, (0.97, 0.25, 0.0))}      # the bow fallen flat
     down["_str"] = (0.0, 0.0, 0.0)
     down["_fan"] = (0.0, 0.0, 0.0)
     bounce = anim._with_hips(anim.add(down, anim.P(spine=(-3, 0, 0), chest=(-3, 0, 0))), (0.0, 0.0, 0.03))
@@ -1937,7 +2012,8 @@ def gen_idle_lobby() -> anim.Clip:
     return anim.Clip("idle_lobby", N, True, sample)
 
 
-SALUTE = chest_rel((np.array([-0.035, -0.115, 1.735]) - SH_R) / L_ARM)
+SALUTE = chest_rel((np.array([-0.118, -0.080, 1.770]) - SH_R) / L_ARM)    # the wrist at her right temple, the
+                                                                          # flat hand over the brow (the visor clear)
 
 
 def gen_victory() -> anim.Clip:
@@ -2026,6 +2102,11 @@ def model(ctx) -> list:
     extra = (ctx.skin or {}).get("extra") or {}
     items = sculpts() + skin_extras(extra)
     for name, S, vs, role, bind, tris, uvw in items:
+        if name == "string":
+            low = string_mesh(ctx.col)
+            low.data.materials.append(ctx.mats[role])
+            P.append(fighter.Part(name, low=low, bind=bind, uv_weight=uvw))
+            continue
         if extra.get("page_fletching") and name in ("fletching", "fan_fletch"):
             S = page_fletching(name)
         v, q = S.mesh(VOXEL * vs)
@@ -2033,6 +2114,31 @@ def model(ctx) -> list:
         ob.data.materials.append(ctx.mats[role])
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind, uv_weight=uvw))
     return P
+
+
+def string_mesh(col, sides=5, rings=26, r=0.0046):
+    """the bow string as a thin tube built ring by ring (tip -> nock -> tip): a decimated capsule collapses into long
+    triangles that span the nock and open into a sheet when the string is drawn"""
+    import bmesh
+    from common import mesh as _mesh
+    bm = bmesh.new()
+    pts = [STRING_A + (S0 - STRING_A) * (i / rings) for i in range(rings)] + \
+          [S0 + (STRING_B - S0) * (i / rings) for i in range(rings + 1)]
+    ax = _n(STRING_B - STRING_A)
+    e1 = _n(np.cross(ax, D_REST))
+    e2 = np.cross(ax, e1)
+    ringv = []
+    for c in pts:
+        ringv.append([bm.verts.new(tuple(c + r * (math.cos(2 * math.pi * k / sides) * e1 + math.sin(2 * math.pi * k / sides) * e2)))
+                      for k in range(sides)])
+    for i in range(len(ringv) - 1):
+        a, b = ringv[i], ringv[i + 1]
+        for k in range(sides):
+            bm.faces.new((a[k], a[(k + 1) % sides], b[(k + 1) % sides], b[k]))
+    bm.faces.new(list(reversed(ringv[0])))
+    bm.faces.new(ringv[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh.bm_to_obj(bm, "string_low", col)
 
 
 def page_fletching(name: str) -> Sculpt:
@@ -2050,9 +2156,9 @@ def page_fletching(name: str) -> Sculpt:
                 S.add(RoundBox(c, (0.0015, 0.040, 0.015), 0.001, axes=np.stack([np.cross(d, vd), d, vd])), k=0.0)
     else:
         for ang in (-16.0, 0.0, 16.0):
-            d = _n(np.array([0.0, 0.0, 1.0]) * math.cos(math.radians(ang)) - U_REST * math.sin(math.radians(ang)))
-            base = PINCH_R - d * 0.10
-            e1 = _n(np.cross(d, [0.0, -1.0, 0.0]))
+            d = fan_dir(ang)
+            base = PINCH_R - d * 0.03
+            e1 = _n(np.cross(d, [0.0, 0.0, 1.0]))
             for j in range(2):
                 a = math.radians(30.0 + j * 90.0)
                 vd = e1 * math.cos(a) + np.cross(d, e1) * math.sin(a)

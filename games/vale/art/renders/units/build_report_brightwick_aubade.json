@@ -3,10 +3,10 @@
   "fighter": "brightwick_aubade",
   "skin": false,
   "parts": {
-    "tris_hood": 402,
+    "tris_hood": 392,
     "tris_hood_rim": 150,
     "tris_hood_light": 48,
-    "tris_hood_halo": 108,
+    "tris_hood_halo": 90,
     "tris_crown": 248,
     "tris_crown_cups": 180,
     "tris_crown_lamps": 240,
@@ -34,20 +34,20 @@
     "tris_lantern_bezel": 72,
     "tris_lantern_roof": 72,
     "tris_lantern_light": 24,
-    "validate_brightwick_aubade": "3328->3327"
+    "validate_brightwick_aubade": "3318->3317"
   },
-  "uv_coverage": 0.706,
+  "uv_coverage": 0.712,
   "bake": {
-    "base": 2.74,
-    "rough_metal": 2.78,
-    "normal": 1.43,
-    "ao": 1.85,
-    "normal_fixed_px": 20865,
-    "projection": 23.4,
-    "pack_save": 30.69,
-    "total": 39.78
+    "base": 6.23,
+    "rough_metal": 5.89,
+    "normal": 2.15,
+    "ao": 5.53,
+    "normal_fixed_px": 21467,
+    "projection": 28.15,
+    "pack_save": 35.1,
+    "total": 55.58
   },
-  "tris": 3989,
+  "tris": 3961,
   "mesh_top_m": 1.728,
   "clips": {
     "idle": {
@@ -153,23 +153,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 860612,
+  "glb_bytes_raw": 863484,
   "optimize": {
     "ok": true,
-    "before": 862412,
-    "after": 341664
+    "before": 865124,
+    "after": 343680
   },
-  "glb_bytes": 341664,
+  "glb_bytes": 343680,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/brightwick_aubade.glb (334 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: brightwick_aubade_base 1024x1024 77K, brightwick_aubade_normal 256x256 14K, brightwick_aubade_orm 256x256 8K",
-      "  skinned meshes: brightwick_aubade(3963v), brightwick_aubade_accent_1(33v), brightwick_aubade_accent_2(61v), brightwick_aubade_accent_3(322v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/brightwick_aubade.glb (336 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: brightwick_aubade_base 1024x1024 79K, brightwick_aubade_normal 256x256 14K, brightwick_aubade_orm 256x256 8K",
+      "  skinned meshes: brightwick_aubade(3961v), brightwick_aubade_accent_1(33v), brightwick_aubade_accent_2(51v), brightwick_aubade_accent_3(322v)",
       "  bones: 25 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR x_hem_1)",
       "  clips: attack1:1.000s/22tr, attack2:0.333s/21tr, cast_a1:0.333s/21tr, cast_a2:0.333s/21tr, cast_a3:0.333s/21tr, cast_ult:0.333s/21tr, channel:0.200s/21tr, dash:0.200s/21tr, death:1.600s/24tr, idle:3.000s/21tr, idle_lobby:0.200s/21tr, recall:0.200s/21tr, run:0.600s/23tr, stunned:0.200s/21tr, victory:0.200s/21tr",
       "  tracks checked: 321; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3989; bind-pose bounds (three units, Y up): 1.03 x 1.73 x 1.68; facing (0.00, 1.00); head bone y 1.34; runRefSpeed 3.3",
+      "  tris: 3961; bind-pose bounds (three units, Y up): 1.03 x 1.73 x 1.68; facing (0.00, 1.00); head bone y 1.34; runRefSpeed 3.3",
       "  run: 18 f, planted samples 4, max foot-speed error 1%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -203,26 +203,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_brightwick_aubade.png",
-    "seconds": 34.6,
+    "seconds": 51.9,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_brightwick_aubade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.65,
-      "model": 18.28,
-      "lows_bind": 0.11,
-      "uv": 18.34,
-      "bake": 39.78,
-      "clips": 1.73,
-      "export": 2.76,
-      "optimize": 0.9,
-      "load_test": 0.32,
-      "three_qa": 81.1,
-      "cache": 0.1
+      "rig": 0.0,
+      "materials": 0.43,
+      "model": 14.98,
+      "lows_bind": 0.18,
+      "uv": 17.99,
+      "bake": 55.58,
+      "clips": 1.58,
+      "export": 1.77,
+      "optimize": 1.18,
+      "load_test": 0.41,
+      "three_qa": 93.7,
+      "cache": 0.07
     },
-    "total_s": 164.3
+    "total_s": 188.0
   },
   "run_ref_speed": 3.3,
   "height_m": 1.6

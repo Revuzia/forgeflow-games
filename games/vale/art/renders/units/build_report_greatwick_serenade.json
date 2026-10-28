@@ -59,14 +59,14 @@
   },
   "uv_coverage": 0.685,
   "bake": {
-    "base": 2.61,
-    "rough_metal": 2.06,
-    "normal": 1.27,
-    "ao": 1.22,
+    "base": 6.54,
+    "rough_metal": 4.84,
+    "normal": 2.36,
+    "ao": 2.85,
     "normal_fixed_px": 33333,
-    "projection": 9.69,
-    "pack_save": 9.77,
-    "total": 17.28
+    "projection": 18.61,
+    "pack_save": 18.76,
+    "total": 36.58
   },
   "tris": 3593,
   "mesh_top_m": 1.486,
@@ -165,10 +165,10 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1272716,
+  "glb_bytes_raw": 1272576,
   "optimize": {
     "ok": true,
-    "before": 1276648,
+    "before": 1276512,
     "after": 443992,
     "metallic_zero": 2
   },
@@ -216,26 +216,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_serenade.png",
-    "seconds": 20.6,
+    "seconds": 28.2,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_greatwick_serenade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.31,
-      "model": 38.58,
-      "lows_bind": 0.06,
-      "uv": 7.12,
-      "bake": 17.28,
-      "clips": 26.35,
-      "export": 2.89,
-      "optimize": 0.93,
-      "load_test": 0.27,
-      "three_qa": 43.83,
-      "cache": 0.13
+      "rig": 0.01,
+      "materials": 0.43,
+      "model": 45.79,
+      "lows_bind": 0.1,
+      "uv": 15.09,
+      "bake": 36.58,
+      "clips": 35.9,
+      "export": 2.21,
+      "optimize": 1.48,
+      "load_test": 0.36,
+      "three_qa": 72.74,
+      "cache": 0.16
     },
-    "total_s": 137.83
+    "total_s": 210.97
   },
   "run_ref_speed": 3.2,
   "height_m": 1.215

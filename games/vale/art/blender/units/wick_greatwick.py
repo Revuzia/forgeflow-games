@@ -1957,6 +1957,11 @@ def serenade_parts(L: dict) -> list:
         felt[i_ * (nv_ - 1) * 2 + 2:i_ * (nv_ - 1) * 2 + 8] = True    # rows top..hem of the real columns
     if np.einsum("ij,ij->i", nrm_[felt], radial[felt]).sum() < 0:
         mF = mF[:, ::-1].copy()
+    # (fix round 8) the binder's grid: every strip vertex's model-space rest point, its side angle and its row
+    side_g = np.array([m_side(m_cols[0])] + [m_side(c_) for c_ in m_cols] + [m_side(m_cols[-1])], float)
+    _MANTLE_BIND.clear()
+    _MANTLE_BIND.update({"V": np.asarray(mantle_tf(mV), float), "side": np.repeat(side_g, nv_),
+                         "row": np.tile(np.arange(nv_), len(cols_V))})
     scene.log(f"greatwick mantle low: {len(m_cols)} columns + 2 facings, tops {tops.min():.3f}-{tops.max():.3f} "
               f"(max step {np.abs(np.diff(tops)).max() * 100:.1f} cm), tuck {min(tuck_in) * 100:.1f}-"
               f"{max(tuck_in) * 100:.1f} cm inside the hood, {len(mF)} tris")
@@ -3784,56 +3789,89 @@ def bind_cloak(ctx, obj) -> dict:
 
 
 # (fix round 8) the mantle strip's HEAD share per row (rows: tuck, top, 36 %, 70 %, hem, lip) on the front columns,
-# faded to `back` from `front` to `fade` degrees off the front; blended over the torso weighting (w (1 - h) + h head)
-MANTLE_HEAD = {"rows": [1.0, 1.0, 0.0, 0.0, 0.0, 0.0], "front": 60.0, "fade": 90.0, "back": [0.0] * 6}
+# faded to `back` from `front` to `fade` degrees off the front; blended over the torso weighting (w (1 - h) + h head).
+# Tuned on every frame of every clip by proto/wick_greatwick_mantlepose.py (opening / rise / tuck / tunic sink).
+MANTLE_HEAD = {"rows": [1.0, 1.0, 0.6, 0.25, 0.0, 0.0], "front": 60.0, "fade": 90.0, "back": [1.0, 1.0, 0.0, 0.0, 0.0, 0.0]}
 _MANTLE_BIND: dict = {}          # filled by serenade_parts: the strip's model-space grid + its head share per vertex
 
 
-def mantle_head_share(side, row, cfg=None):
-    """Head weight of a mantle strip vertex at `side` degrees from the front, grid `row` (MANTLE_HEAD layout)."""
+def mantle_head_share(side, row, cfg=None, key="rows", back_key="back"):
+    """Head (or, key 'neck', neck) weight of a mantle strip vertex at `side` degrees from the front, grid `row`."""
     cfg = cfg or MANTLE_HEAD
     side = np.asarray(side, float)
     row = np.asarray(row, int)
-    fr = np.asarray(cfg["rows"], float)[row]
-    bk = np.asarray(cfg.get("back", [0.0] * 6), float)[row]
+    fr = np.asarray(cfg[key], float)[row]
+    bk = np.asarray(cfg.get(back_key, [0.0] * 6), float)[row]
     u = _smooth01((side - cfg["front"]) / max(cfg["fade"] - cfg["front"], 1e-6))
     return fr + (bk - fr) * u
+
+
+def _sstep(a, b, x):
+    t = np.clip((np.asarray(x, float) - a) / (b - a), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def mantle_weights(P, joints, side, row, cfg=None) -> dict:
+    """The Serenade mantle strip's skin weights (bone -> per-vertex array) at model-space rest points P, for the rig's
+    joint heights `joints` (pelvis, spine1, neck_base, shoulder z) and each point's strip grid side angle / row.
+    (fix round 7) the cloak's hips / spine / chest by height (the hem moves with the tunic under it), a little neck at
+    the tucked top, an arm share over the shoulders growing toward the hem (shoulder <= 0.22, upper arm <= 0.38).
+    (fix round 8) the HEAD share (MANTLE_HEAD) blended over it: the tuck and top rows on the head all round, as fully
+    as the hood (the edge cannot leave the hood or the collar felt whatever the head does), the front columns' felt
+    rows graded back to the torso toward the hem (the lapels go with the chin)."""
+    cfg = cfg or MANTLE_HEAD
+    P = np.asarray(P, float)
+    z_hip, z_sp, z_ch, z_sh = joints
+    z = P[:, 2]
+    t1 = _sstep(z_hip + 0.02, z_sp, z)
+    t2 = _sstep(z_sp, z_ch - 0.03, z)
+    fx = _sstep(0.12, 0.28, np.abs(P[:, 0]))
+    w_up = 0.38 * fx * _sstep(z_sh + 0.10, z_sh - 0.08, z)
+    w_sh = 0.22 * fx * _sstep(z_sh + 0.12, z_sh - 0.01, z)
+    w_nk = 0.35 * _sstep(z_ch - 0.01, z_ch + 0.04, z)
+    keep = 1.0 - w_up - w_sh - w_nk
+    left = P[:, 0] > 0
+    zero = np.zeros(len(P))
+    w = {"hips": (1 - t1) * keep, "spine": t1 * (1 - t2) * keep, "chest": t2 * keep, "neck": w_nk,
+         "upper_arm.L": np.where(left, w_up, zero), "shoulder.L": np.where(left, w_sh, zero),
+         "upper_arm.R": np.where(left, zero, w_up), "shoulder.R": np.where(left, zero, w_sh)}
+    hh = mantle_head_share(side, row, cfg)
+    hn = mantle_head_share(side, row, cfg, "neck", "neck_back") if "neck" in cfg else zero
+    w = {k: v_ * (1.0 - hh - hn) for k, v_ in w.items()}
+    w["head"] = hh
+    w["neck"] = w["neck"] + hn
+    return w
 
 
 def bind_mantle(ctx, obj) -> dict:
     """(fix round 7) The Serenade mantle: a felt cape ON the torso. Bone heat gave its front columns 25-31 % forearm and
     37-42 % upper arm, so the hammer grip dragged the lapels' tops 10-17 cm down out of the hood in idle (the torn
-    teeth by the chin). Now: the cloak's hips / spine / chest by height (the hem moves with the tunic under it), a
-    little neck at the tucked top (it follows the hood's foot), and over the shoulders an arm share that grows toward
-    the hem (shoulder <= 0.22, upper arm <= 0.38: the sleeves come out under it), never at the top edge, no forearm."""
+    teeth by the chin): now `mantle_weights` (no forearm, never an arm share at the top edge). (fix round 8: the
+    torso-bound lapel tops left the tuck whenever the hood pitched or lifted over the chest, attack1's windup and the
+    death: pale pointed tabs on the hood's lower rim and inside the opening) + the head share, each vertex matched to
+    its strip grid point (serenade_parts' _MANTLE_BIND) for its side angle and row."""
     from common import mesh
     arm = ctx.info.armature
     info = ctx.info
     obj.vertex_groups.clear()
-    names = ("hips", "spine", "chest", "neck", "shoulder.L", "upper_arm.L", "shoulder.R", "upper_arm.R")
+    names = ("hips", "spine", "chest", "neck", "head", "shoulder.L", "upper_arm.L", "shoulder.R", "upper_arm.R")
     G = {b: obj.vertex_groups.new(name=b) for b in names}
-    z_hip = info.j("pelvis").z
-    z_sp = info.j("spine1").z
-    z_ch = info.j("neck_base").z
-    z_sh = info.side("shoulder", "L").z
-    for v in obj.data.vertices:
-        p = obj.matrix_world @ v.co
-        t1 = mesh.smoothstep(z_hip + 0.02, z_sp, p.z)
-        t2 = mesh.smoothstep(z_sp, z_ch - 0.03, p.z)
-        w = {"hips": 1 - t1, "spine": t1 * (1 - t2), "chest": t2}
-        fx = mesh.smoothstep(0.12, 0.28, abs(p.x))
-        w_up = 0.38 * fx * mesh.smoothstep(z_sh + 0.10, z_sh - 0.08, p.z)
-        w_sh = 0.22 * fx * mesh.smoothstep(z_sh + 0.12, z_sh - 0.01, p.z)
-        w_nk = 0.35 * mesh.smoothstep(z_ch - 0.01, z_ch + 0.04, p.z)
-        keep = 1.0 - w_up - w_sh - w_nk
-        w = {k: v_ * keep for k, v_ in w.items()}
-        s = "L" if p.x > 0 else "R"
-        w[f"upper_arm.{s}"] = w_up
-        w[f"shoulder.{s}"] = w_sh
-        w["neck"] = w_nk
-        for k, val in w.items():
-            if val > 1e-3:
-                G[k].add([v.index], val, "REPLACE")
+    joints = (info.j("pelvis").z, info.j("spine1").z, info.j("neck_base").z, info.side("shoulder", "L").z)
+    mw = np.array(obj.matrix_world)
+    co = np.array([tuple(v.co) for v in obj.data.vertices], float) @ mw[:3, :3].T + mw[:3, 3]
+    gV = _MANTLE_BIND["V"]
+    d2 = ((co[:, None, :] - gV[None, :, :]) ** 2).sum(-1)
+    gi = d2.argmin(1)
+    miss = float(np.sqrt(d2.min(1).max()))
+    if miss > 0.002:
+        raise RuntimeError(f"bind_mantle: strip vertex {miss * 100:.1f} cm off its grid point")
+    W = mantle_weights(co, joints, _MANTLE_BIND["side"][gi], _MANTLE_BIND["row"][gi])
+    scene.log(f"greatwick mantle bind: joints {np.round(joints, 3).tolist()}, head share front rows "
+              f"{np.round(mantle_head_share(15.0, np.arange(6)), 2).tolist()}, side 90 "
+              f"{np.round(mantle_head_share(90.0, np.arange(6)), 2).tolist()}")
+    for b, arr in W.items():
+        for i in np.nonzero(arr > 1e-3)[0]:
+            G[b].add([int(i)], float(arr[i]), "REPLACE")
     mesh.add_armature_modifier(obj, arm)
     mesh.parent_keep(obj, arm)
     mesh.limit_weights(obj)
@@ -4434,6 +4472,10 @@ def _death_clip(spec, A, G, GR):
     tp = L["topple"]
     py_, pz_ = tp["pivot"]
     pel = np.array([0.0, 0.0, L["hip"] + 0.015])
+    # (fix round 8) the hood's forward bow over the chest (neck + head pitch): the Serenade's low hood sits ON its
+    # mantle, its chin in the lapels' V: a 24-34 deg bow drove the chin 14 cm into the chest and stood the lapels up in
+    # the opening (or, bound to the head, sank them into the tunic): half the bow there
+    bow = 0.5 if spec.faction == "serenade" else 1.0
 
     def tilt(theta, extra=None, hips_d=(0.0, 0.0, 0.0), ik=None):
         th = math.radians(theta)
@@ -4462,7 +4504,7 @@ def _death_clip(spec, A, G, GR):
         rest_ = ~GR.sel(*LANTERN_PARTS, *HAMMER_PARTS, "sleeve", "mitt", "boot", "legs")
 
         def f(th):
-            pose = anim.resolve(GR.skel, tilt(th, anim.merge(legs_lie, _P(neck=(12, 0, 0), head=(12, -8, 0))), ik=flop))
+            pose = anim.resolve(GR.skel, tilt(th, anim.merge(legs_lie, _P(neck=(12 * bow, 0, 0), head=(12 * bow, -8, 0))), ik=flop))
             return float(GR.points(pose, lant)[:, 2].min()) - float(GR.points(pose, rest_)[:, 2].min())
         lo, hi = 40.0, 100.0
         if f(lo) * f(hi) > 0:
@@ -4483,13 +4525,13 @@ def _death_clip(spec, A, G, GR):
                    (0.0, 0.03, -0.01), dict(feet_ik))
     # the sit: knees give (feet still planted), the body drops 5-9 cm and leans back onto its back hem
     sink = -0.08 if spec.faction == "aubade" else -0.11
-    sit = tilt(16.0, _P(spine=(-5, 0, 0), neck=(7, 0, 0), head=(9, 0, 0)), (0, 0.0, sink), dict(feet_ik))
-    tip = tilt(lie * 0.55, anim.merge(legs_tip, _P(spine=(-2, 0, 0), neck=(10, 0, 0), head=(12, 4, 0))), (0, 0, 0))
+    sit = tilt(16.0, _P(spine=(-5, 0, 0), neck=(7 * bow, 0, 0), head=(9 * bow, 0, 0)), (0, 0.0, sink), dict(feet_ik))
+    tip = tilt(lie * 0.55, anim.merge(legs_tip, _P(spine=(-2, 0, 0), neck=(10 * bow, 0, 0), head=(12 * bow, 4, 0))), (0, 0, 0))
     # (fix 5) the lantern lands AT the resting tilt (an over-tilt to lie + 2.5 pivoted the body on the lantern and
     # lifted it 2.5 cm for a frame: a hop), then one small rock back onto the hem and down again
-    land = tilt(lie, anim.merge(legs_lie, _P(neck=(16, 0, 0), head=(18, 6, 0))), (0, 0, 0.0))
-    bounce = tilt(lie - 2.0, anim.merge(legs_lie, _P(neck=(10, 0, 0), head=(10, -4, 0))), (0, 0, 0.0))
-    rest = tilt(lie, anim.merge(legs_lie, _P(neck=(12, 0, 0), head=(12, -8, 0))), (0, 0, 0.0))
+    land = tilt(lie, anim.merge(legs_lie, _P(neck=(16 * bow, 0, 0), head=(18 * bow, 6, 0))), (0, 0, 0.0))
+    bounce = tilt(lie - 2.0, anim.merge(legs_lie, _P(neck=(10 * bow, 0, 0), head=(10 * bow, -4, 0))), (0, 0, 0.0))
+    rest = tilt(lie, anim.merge(legs_lie, _P(neck=(12 * bow, 0, 0), head=(12 * bow, -8, 0))), (0, 0, 0.0))
     G_body = dict(G)
     G_body["ik"] = dict(feet0_of(G))
     keys = [(0.0, G_body, "linear"), (0.06, recoil, "out"), (0.17, sit, "in"), (0.30, tip, "in"),

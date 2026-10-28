@@ -1,0 +1,16 @@
+[
+  {
+    "id": "lisvel_gorgewalk",
+    "fighter": "lisvel",
+    "model": "assets/fighters/lisvel/lisvel_gorgewalk.glb",
+    "portrait": "assets/fighters/lisvel/lisvel_gorgewalk_portrait.png",
+    "splash": "assets/fighters/lisvel/lisvel_gorgewalk_splash.png"
+  },
+  {
+    "id": "lisvel_almanac",
+    "fighter": "lisvel",
+    "model": "assets/fighters/lisvel/lisvel_almanac.glb",
+    "portrait": "assets/fighters/lisvel/lisvel_almanac_portrait.png",
+    "splash": "assets/fighters/lisvel/lisvel_almanac_splash.png"
+  }
+]

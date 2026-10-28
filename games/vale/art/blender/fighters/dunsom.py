@@ -184,14 +184,14 @@ HOOK_TOP = hook_pts()[4]
 # lampresin panes, the cold azure core showing through a lancet window in the middle of EVERY pane (amber all round
 # it: 'warm lantern, cold heart') and out through eight vents pierced in the cap, so the team colour reads from the
 # 52 degree game camera at every facing without a glass dome (the gate: 1.5-6 % of the silhouette)
-LAN_A = 0.106                                      # body apothem (the bands' faces): 0.21 m across
-LAN_GLASS = 0.098
-LAN_ROOF = (0.046, 0.106, 0.120, 0.026)            # the cap: apex / eave below HANG, eave / apex apothems
-LAN_EAVE = (0.104, 0.118, 0.122)                   # the eave lip: top / bottom below HANG, apothem
-LAN_BODY = (0.132, 0.318)                          # the panes: from / to below HANG
-LAN_BASE = (0.332, 0.368)
-WIN_W, WIN_LO, WIN_SPRING, WIN_TOP = 0.025, 0.308, 0.178, 0.146   # the lancet: half width, bottom / spring / apex
-VENT = (0.034, 0.110, 0.011, 0.027, 0.009)        # roof vents: r from / to, half width in / out, depth
+LAN_A = 0.112                                      # body apothem (the bands' faces): 0.22 m across
+LAN_GLASS = 0.104
+LAN_ROOF = (0.046, 0.106, 0.126, 0.026)            # the cap: apex / eave below HANG, eave / apex apothems
+LAN_EAVE = (0.104, 0.118, 0.128)                   # the eave lip: top / bottom below HANG, apothem
+LAN_BODY = (0.132, 0.322)                          # the panes: from / to below HANG
+LAN_BASE = (0.336, 0.372)
+WIN_W, WIN_LO, WIN_SPRING, WIN_TOP = 0.031, 0.311, 0.180, 0.144   # the lancet: half width, bottom / spring / apex
+VENT = (0.030, 0.116, 0.013, 0.033, 0.009)        # roof vents: r from / to, half width in / out, depth
 
 
 def lan_z(dz):
@@ -1429,8 +1429,8 @@ def _wood_paint(p, n):
     running ALONG the shaft (not round it), darker carving cuts where the planes meet (the facet edges catch less
     light: n's curvature from the bake does the rest), a few knots, a little grime toward the butt"""
     s, th = _crook_local(p)
-    base = _lin(_hex("#B7AEA0"))
-    dark = _lin(_hex("#7D7468"))
+    base = _lin(_hex("#BFB6A8"))
+    dark = _lin(_hex("#837A6E"))
     grain = np.sin(th * 9.0 + 2.2 * NOISE(p * np.array([1.0, 1.0, 0.12]), 5.0)) * 0.5 + 0.5
     fine = np.sin(th * 23.0 + 3.0 * NOISE(p * np.array([1.0, 1.0, 0.10]), 9.0)) * 0.5 + 0.5
     g = 0.55 * grain ** 4 + 0.30 * fine ** 6
@@ -1518,12 +1518,15 @@ def _belt_paint(p, n):
 # part's own banded tone (median colour per 3 cm band, front and back apart, blended by the normal) x its painted
 # value relative to that tone, the contrast eased (keep) and clamped (lo, hi): the painted folds stay, the projection's
 # outliers (glove / crook / backdrop texels, the back sheet's rim strokes, hidden fills) cannot survive in value or hue
-TONE_CLAMP = {"coat_top": (0.78, 1.14, 0.75), "skirt": (0.86, 1.10, 0.60), "sleeve_L": (0.80, 1.12, 0.70),
-              "sleeve_R": (0.80, 1.12, 0.70), "hood": (0.70, 1.12, 0.75), "scarf": (0.70, 1.16, 0.85),
+TONE_CLAMP = {"coat_top": (0.80, 1.07, 0.55), "skirt": (0.86, 1.07, 0.55), "sleeve_L": (0.80, 1.07, 0.55),
+              "sleeve_R": (0.80, 1.07, 0.55), "hood": (0.72, 1.08, 0.65), "scarf": (0.72, 1.12, 0.80),
               "under_robe": (0.70, 1.25, 0.70)}
 
 
 def _tone_clamp(lin, k, p, n, names, log):
+    """(see above) the absolute tone is the FRONT's (texels squarely facing the front plate, banded every 6 cm): the
+    back sheet's rim strokes and the shoulder tops that see neither plate cannot set a paler band (the 'frost'); each
+    texel's detail is measured against its own side's band"""
     for kk in np.unique(k):
         nm = names[kk]
         if nm not in TONE_CLAMP:
@@ -1538,22 +1541,26 @@ def _tone_clamp(lin, k, p, n, names, log):
         if nm == "hood":              # one felt tone all round (front / back apart left a darker 'ghost' column behind)
             f = b = ok & (ny > -0.30)
         else:
-            f, b = ok & (ny < 0.0), ok & (ny >= 0.0)
-        tf = _band_tone(zs[f], c[f], zs) if f.sum() >= 40 else None
-        tb = _band_tone(zs[b], c[b], zs) if b.sum() >= 40 else None
+            f, b = ok & (ny < -0.6), ok & (ny > 0.6)
+            if f.sum() < 40:
+                f = ok & (ny < 0.0)
+            if b.sum() < 40:
+                b = ok & (ny >= 0.0)
+        tf = _band_tone(zs[f], c[f], zs, step=0.06) if f.sum() >= 40 else None
+        tb = _band_tone(zs[b], c[b], zs, step=0.06) if b.sum() >= 40 else None
         if tf is None and tb is None:
             continue
         tf = tf if tf is not None else tb
         tb = tb if tb is not None else tf
-        wbb = ss(-0.35, 0.35, ny)[:, None]
-        tone = tf * (1 - wbb) + tb * wbb
+        wbb = ss(-0.35, 0.35, ny)
+        ref = tf * (1 - wbb[:, None]) + tb * wbb[:, None]
         # one hue for the whole part (its well-lit front median's chroma): the bands keep only their VALUE (a warm rim
         # stroke or a glove-tinted band left a pink stripe round the back of the coat)
         good = f if nm == "hood" else (ok & (ny < -0.5) if (ok & (ny < -0.5)).sum() >= 40 else ok)
         hue = np.median(c[good], axis=0)
         hue = hue / max(float(_Y(hue[None, :])[0]), 1e-5)
-        tone = hue[None, :] * _Y(tone)[:, None]
-        r = Y / np.maximum(_Y(tone), 1e-5)
+        tone = hue[None, :] * (_Y(tf) * (1 - 0.05 * wbb))[:, None]
+        r = Y / np.maximum(_Y(ref), 1e-5)
         r2 = 1 + (r - 1) * keep
         lo_ = np.full(len(r2), lo, dtype=np.float32)
         if nm == "coat_top":          # the painted dark V between the lapels (under the scarf) keeps its depth
@@ -2748,7 +2755,7 @@ def clip_overrides(ctx) -> dict:
     T_HAT0, T_HAT1 = 0.40, 0.64
     hit = pose(torso=dict(hips=(-3, 2, 0), spine=(-3, 0, 2), chest=(-4, 2, 3), neck=(-2, 0, 0), head=(-6, 4, 4)),
                hips=(0, 0.03, -0.02))
-    kfeet = _feet(l=(-0.06, 0.26, 0.04), r=(0.06, 0.28, 0.04), yl=4.0, yr=-6.0, pl=-62.0, pr=-62.0)
+    kfeet = _feet(l=(-0.06, 0.33, 0.04), r=(0.06, 0.35, 0.04), yl=4.0, yr=-6.0, pl=-62.0, pr=-62.0)   # boots clear of the coat
     limp_R = (-0.10, -0.20, -0.96)
     let_go = pose(torso=dict(hips=(2, 2, 2), spine=(6, 0, 3), chest=(8, 2, 4), neck=(6, 0, 0), head=(10, 4, 4)),
                   hips=(0.01, 0.03, -0.10), R=limp_R, aim=None, L=(0.10, -0.12, -0.92))

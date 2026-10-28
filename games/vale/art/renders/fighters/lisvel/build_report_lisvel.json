@@ -1,0 +1,479 @@
+{
+  "id": "lisvel",
+  "fighter": "lisvel",
+  "skin": false,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "forearm.L",
+        "hand.L",
+        "forearm.R",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_body": 498,
+    "bind_tabard": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "neck",
+        "head",
+        "forearm.L",
+        "hand.L",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_tabard": 1400,
+    "bind_belt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "shoulder.L",
+        "hand.L",
+        "shoulder.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_belt": 520,
+    "bind_buckle": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_buckle": 160,
+    "bind_straps": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "head",
+        "hand.L",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_straps": 460,
+    "bind_brooch": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_brooch": 200,
+    "bind_brooch_glass": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_brooch_glass": 120,
+    "bind_sleeves": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "hand.L",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_sleeves": 1000,
+    "bind_bracers": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_bracers": 700,
+    "bind_legs": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "foot.L",
+        "toe.L",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_legs": 620,
+    "bind_boots": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R"
+      ]
+    },
+    "tris_boots": 856,
+    "tris_wrap": 1300,
+    "tris_mask": 1098,
+    "tris_visor": 498,
+    "tris_neck": 258,
+    "tris_cowl": 1000,
+    "tris_tabard_skirt": 1250,
+    "tris_tunic": 2254,
+    "tris_hand_L": 700,
+    "tris_hand_R": 600,
+    "tris_quiver": 700,
+    "tris_quiver_straps": 400,
+    "tris_arrow_shafts": 300,
+    "tris_fletching": 852,
+    "tris_bow": 1400,
+    "tris_bow_grip": 398,
+    "tris_bow_caps": 500,
+    "tris_bow_inlays": 360,
+    "tris_string": 526,
+    "tris_fan_shafts": 190,
+    "tris_fan_fletch": 200,
+    "validate_lisvel": "20574->20561"
+  },
+  "uv_coverage": 0.564,
+  "bake": {
+    "base": 7.28,
+    "rough_metal": 4.74,
+    "normal": 3.91,
+    "ao": 5.21,
+    "normal_fixed_px": 70432,
+    "projection": 103.62,
+    "pack_save": 104.03,
+    "total": 125.53
+  },
+  "tris": 21305,
+  "mesh_top_m": 1.884,
+  "clips": {
+    "idle": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 18,
+      "duration_s": 0.6,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.35,
+      "stride_m": 1.005,
+      "cycle_s": 0.6
+    },
+    "attack1": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 35,
+      "duration_s": 1.1667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 120,
+      "duration_s": 4.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 10,
+      "duration_s": 0.3333,
+      "loop": true,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "taunt": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 3137204,
+  "optimize": {
+    "ok": true,
+    "before": 3137204,
+    "after": 1271996,
+    "q_base": 64
+  },
+  "glb_bytes": 1271996,
+  "three_load_test": {
+    "ok": false,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel.glb (1242 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_base 2048x2048 219K, lisvel_normal 512x512 59K, lisvel_orm 256x256 29K",
+      "  skinned meshes: lisvel(22943v), lisvel_accent(246v)",
+      "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver)",
+      "  clips: attack1:0.667s/23tr, attack2:0.667s/23tr, cast_a1:0.833s/24tr, cast_a2:0.500s/24tr, cast_a3:0.667s/21tr, cast_ult:1.167s/24tr, channel:1.333s/23tr, dash:0.333s/22tr, death:1.500s/23tr, idle:3.000s/21tr, idle_lobby:4.000s/21tr, recall:3.000s/22tr, run:0.600s/23tr, stunned:1.333s/21tr, taunt:2.000s/21tr, victory:1.667s/23tr",
+      "  tracks checked: 359; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 21305; bind-pose bounds (three units, Y up): 1.52 x 1.88 x 0.81; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
+      "  run: 18 f, planted samples 2, max foot-speed error 0%",
+      "[three] FAIL (1)",
+      "  - GLB is 1242 KiB > budget 1172 KiB"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/lisvel/splash.png",
+      "portrait": "art/out/fighters/lisvel/portrait.png",
+      "icon": "art/out/fighters/lisvel/icon.png",
+      "turntable": "art/renders/fighters/lisvel/turntable.png"
+    },
+    "seconds": {
+      "splash": 33.91,
+      "portrait": 11.01,
+      "icon": 1.7,
+      "turntable": 10.85
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.698,
+        0,
+        -0.15
+      ],
+      [
+        0.817,
+        1.884,
+        0.659
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.628,
+    "accentPct": 1.56,
+    "accentTopHalfPct": 58.2,
+    "heightPx1080": 100,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 16,
+    "out": "art/renders/fighters/lisvel/three_lisvel.png",
+    "seconds": 30.7,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/lisvel/three_clips_lisvel.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.64,
+      "model": 4.78,
+      "lows_bind": 7.21,
+      "uv": 6.37,
+      "bake": 125.53,
+      "clips": 0.38,
+      "export": 2.81,
+      "optimize": 1.72,
+      "load_test": 0.35,
+      "render": 57.64,
+      "three_qa": 86.33,
+      "cache": 0.18
+    },
+    "total_s": 294.07
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 1.86
+}
