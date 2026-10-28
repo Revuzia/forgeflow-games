@@ -113,7 +113,9 @@ const ACTOR_DOUBLES = ["yaw", "pitch", "hp", "shield", "downedAt", "aimErr", "la
   "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw",
   // P23/player (parity P2-A + P3): DBNO, air / landing, slide, locomotion warp, turn-in-place, throw overlay
   "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd", "_slideTs",
-  "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV", "_glideLandT"];
+  "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV", "_glideLandT",
+  // R1 (tierprof kb): the grown fields above that hold fractions
+  "_heat", "_armYawOff", "_audRlT"];
 export function createActor(W, opts) {
   const a = {
     id: opts.id, name: opts.name, isBot: !!opts.isBot,
@@ -200,6 +202,12 @@ export function createActor(W, opts) {
     _throwT: 0, _throwStart: -1, _throwOv: false,
     // waypoint auto-glide on (LC-59); a death that finished a downed actor (C-DBNO)
     _autoGlide: false, _downedDeath: false,
+    // (R1, tierprof kb [isla_viva low]) the fields the other modules still GREW on an actor, born here so the 50 actors keep ONE hidden class: a landed
+    // isla_viva match had 6 actor shapes (V8 polymorphism limit 4: every actor field access megamorphic, every double read through it a fresh heap box)
+    // because weapons.js grew _heat / _rcN / _rc / _rcBase on the first shots (humans) and _hvRig / _hvObj / _hvLB on the first hit test, animate grew
+    // _armYawOff and audio.js _audRlT, each in its own order. Every start value reads exactly like the old undefined: _heat / _rcN / _armYawOff /
+    // _audRlT only meet `|| 0` or truthiness, _rcBase / _rc `== null`, _hvRig / _hvObj / _hvLB `===` against a live rig / object3D (never null).
+    _heat: 0, _rcN: 0, _rc: null, _rcBase: null, _hvRig: null, _hvObj: null, _hvLB: null, _armYawOff: 0, _audRlT: 0,
   };
   // (Wave 8, lane I2) the number fields that ever hold a FRACTION are double fields from birth: a double stored, then the start value put back (the
   // values are exactly the ones above). Born as small integers they were Smi fields, and the first fraction ANY actor stored into one (a timer += dt, a yaw)
@@ -207,7 +215,10 @@ export function createActor(W, opts) {
   // until re-optimized (framecheck isla_viva: thousands of map deprecations, in bursts through the measured window). Now that happens here, once.
   for (let i = 0; i < ACTOR_DOUBLES.length; i++) { const k = ACTOR_DOUBLES[i], v = a[k]; a[k] = 0.5; a[k] = v; }
   { const I = a.input; I.mx = 0.5; I.mx = 0; I.mz = 0.5; I.mz = 0; I.yaw = 0.5; I.yaw = 0; I.pitch = 0.5; I.pitch = 0; }
-  { const w = a.weapon; w.cd = 0.5; w.cd = 0; w.reloadT = 0.5; w.reloadT = 0; }
+  { const w = a.weapon; w.cd = 0.5; w.cd = 0; w.reloadT = 0.5; w.reloadT = 0; w.burstLeft = 0; }
+  // (R1) the start slot takes the shape a picked-up weapon slot reaches once weapons.js equipSlot writes its cd (loot.js builds the same 4 fields, then cd
+  // is grown on the first swap): the transition exists from the lobby on, not first taken mid-match. cd 0 reads like undefined (`slot.cd || 0`).
+  { const s0 = a.inventory.slots[0]; s0.cd = 0.5; s0.cd = 0; }      // a double field from birth (equipSlot stores fractions: no map deprecation)
   a.obj.name = "actor_" + a.id;
   // yaw outermost: the dive / canopy tilts (syncObj) pitch and roll about the BODY's own axes
   a.obj.rotation.order = "YXZ";
@@ -2254,8 +2265,13 @@ function stepActor(W, a, dt) {
   const terrH = MV[7];                                   // W.map.heightAt(a.pos.x, a.pos.z), unboxed (see groundF)
   const deepWater = terrH < wy - K.PLAYERK.swimDepth;
   const wasSwimming = a.swimming;
-  a.swimming = deepWater && a.pos.y <= wy + 0.3;
-  a.inWater = a.pos.y < wy + 0.25 && terrH < wy;
+  // (R1, tierprof kb) every compare and multiply of this block runs on EVERY tick (same results: `&&` of two booleans, x * 1 === x): a compare / multiply
+  // that only ran on the rare side of a `&&` or `?:` had no type feedback until the first actor waded, crouched, healed or staggered, and that first
+  // time threw the optimized stepActor away mid-match (V8 log: deopt "Insufficient type feedback" at the wading `spd * 0.55` and at `terrH < wy`,
+  // 10-14 s after the landing - inside tierprof's measured window), back through the tiers that box every double
+  const nearTop = a.pos.y <= wy + 0.3, belowTop = a.pos.y < wy + 0.25, wetGround = terrH < wy;
+  a.swimming = deepWater && nearTop;
+  a.inWater = belowTop && wetGround;
   if (a.swimming !== wasSwimming) W.events.emit("swimState", a, a.swimming);
 
   // desired horizontal velocity (local axes → world by yaw)
@@ -2286,12 +2302,13 @@ function stepActor(W, a, dt) {
   const spd = a.swimming
     ? (sprinting ? K.MOVE.swimSprint : K.MOVE.swim)
     : inp.ads ? K.MOVE.ads : (sprinting && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
-  let wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
-  if (a.crouching) wspd *= K.CROUCH.speedMult;
-  if (healingNow) wspd *= K.HEAL.speedMult;                   // heals cost tempo
+  const crouchK = K.CROUCH.speedMult, healK = K.HEAL.speedMult;
+  let wspd = spd * ((a.inWater && !a.swimming) ? 0.55 : 1);   // wading is slow
+  wspd *= a.crouching ? crouchK : 1;
+  wspd *= healingNow ? healK : 1;                            // heals cost tempo
   // (P23) C-DBNO crawl speed; C-FALL landing stagger; a revive channel holds the reviver still
   if (a.downed) wspd = K.DBNO_CRAWL != null ? K.DBNO_CRAWL : DBNO_CRAWL_DEF;
-  if (W.t < a._landT) wspd *= LAND_STAGGER_SPEED;
+  wspd *= W.t < a._landT ? LAND_STAGGER_SPEED : 1;
   if (!a.downed && reviveStep(W, a, inp, dt)) wspd = 0;
   const GB = K.moveBasis(a.yaw, _mb);
   const dx = GB.rx * inp.mx + GB.fx * inp.mz, dz = GB.rz * inp.mx + GB.fz * inp.mz;
@@ -2971,8 +2988,12 @@ function addTwistY(b, v) {
  *  bit: nothing re-keyed it), last frame's addition is taken back first; a re-keyed bone just gets the new one. */
 function addLeanTwist(b, dx, dy) {
   const ud = b.userData, r = b.rotation;
-  if (ud._ltX !== undefined && r.x === ud._ltX && r.y === ud._ltY && r.z === ud._ltZ) { r.x -= ud._ltDX; r.y -= ud._ltDY; }
-  r.x += dx; r.y += dy;
+  // (R1, tierprof kb) every read and compare runs on every call (same values: x - 0 === x): read behind the `&&` they had no type feedback until a
+  // frozen clip first left a bone un-keyed, which threw the optimized caller away inside tierprof's measured window
+  const lx = ud._ltX, ly = ud._ltY, lz = ud._ltZ, ldx = ud._ltDX, ldy = ud._ltDY;
+  const sx = r.x === lx, sy = r.y === ly, sz = r.z === lz;
+  const same = lx !== undefined && sx && sy && sz;
+  r.x = (r.x - (same ? ldx : 0)) + dx; r.y = (r.y - (same ? ldy : 0)) + dy;
   ud._ltDX = dx; ud._ltDY = dy; ud._ltX = r.x; ud._ltY = r.y; ud._ltZ = r.z;
 }
 const TURN_START = 0.9, TURN_START_COMBAT = 0.3, TURN_MAX = 1.9, TURN_RATE = 1.35, TURN_RATE_COMBAT = 2.0;
@@ -4511,7 +4532,7 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
     // `att` is resolved once by the friendly-fire guard above — this used to
     // re-look it up, and two bindings of the same name in one function is how a
     // later edit ends up reading the wrong one.
-    victim.dmgFrom = victim.dmgFrom || {};
+    victim.dmgFrom = victim.dmgFrom || Object.create(null);   // (R1) a dictionary: actor-id keys never grow a hidden-class chain
     victim.dmgFrom[attackerId] = (victim.dmgFrom[attackerId] || 0) + res.dealt;
     victim.lastHit = {
       attackerId, weaponId, isHead,
@@ -4560,7 +4581,7 @@ function hurtDowned(W, victim, dmg, attackerId, weaponId, isHead, att) {
   if (attackerId) { victim.lastAttacker = attackerId; victim.lastHurtByActorT = W.t; }
   W.match.recordDamage(attackerId, dealt);
   if (attackerId) {
-    victim.dmgFrom = victim.dmgFrom || {};
+    victim.dmgFrom = victim.dmgFrom || Object.create(null);   // (R1) a dictionary: actor-id keys never grow a hidden-class chain
     victim.dmgFrom[attackerId] = (victim.dmgFrom[attackerId] || 0) + dealt;
     victim.lastHit = { attackerId, weaponId, isHead, dist: att ? Math.round(att.pos.distanceTo(victim.pos)) : null,
       attHp: att ? Math.max(0, Math.round(att.hp)) : null, attShield: att ? Math.max(0, Math.round(att.shield)) : null };
