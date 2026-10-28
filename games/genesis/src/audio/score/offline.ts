@@ -462,9 +462,9 @@ export function voice(inst: Inst, n: Note, r: () => number): Stereo {
     case 'pad': return pad(n, r, 0.6, false);
     case 'organ': return pad(n, r, 0.6, true);
     case 'timpani': return drum(n, 'timpani', 0.7);
-    case 'framedrum': return drum(n, 'framedrum', 0.7);
+    case 'framedrum': return drum(n, 'framedrum', 1.2);
     case 'lowdrum': return drum(n, 'lowdrum', 0.8);
-    case 'shaker': return shaker(n, 0.5);
+    case 'shaker': return shaker(n, 1.5);
     case 'swell': return swell(n, 0.6);
   }
 }
@@ -687,13 +687,18 @@ export function gainDb(st: Stereo, db: number): void {
 }
 
 /**
- * A lookahead peak limiter (stereo-linked): the gain never exceeds what the loudest sample in the next `look` seconds
- * allows, ramps down over the lookahead (no clicks) and recovers with `release`. Returns the deepest reduction (dB).
+ * A lookahead peak limiter's gain curve (stereo-linked): the gain never exceeds what the loudest sample of any `keys`
+ * signal in the next `look` seconds allows, ramps down over the lookahead (no clicks) and recovers with `release`.
+ * Several keys (every mix of a piece's stems) give one curve that, applied to each stem, keeps every mix under the ceiling.
  */
-export function limit(st: Stereo, ceilingDb: number, look = 0.004, release = 0.15, circular = true): number {
-  const n = st.L.length, c = Math.pow(10, ceilingDb / 20), la = Math.max(1, Math.round(look * SR));
+export function limiterGain(keys: Stereo[], ceilingDb: number, look = 0.004, release = 0.15, circular = true): Float32Array {
+  const n = keys[0].L.length, c = Math.pow(10, ceilingDb / 20), la = Math.max(1, Math.round(look * SR));
   const need = new Float32Array(n);
-  for (let i = 0; i < n; i++) { const a = Math.max(Math.abs(st.L[i]), Math.abs(st.R[i])); need[i] = a > c ? c / a : 1; }
+  for (let i = 0; i < n; i++) {
+    let a = 0;
+    for (const k of keys) a = Math.max(a, Math.abs(k.L[i]), Math.abs(k.R[i]));
+    need[i] = a > c ? c / a : 1;
+  }
   const at = (i: number): number => (circular ? need[(i % n + n) % n] : i < n ? need[i] : 1);
   // lookahead minimum (monotone deque), then a moving average over the same window
   const h = new Float32Array(n);
@@ -712,15 +717,34 @@ export function limit(st: Stereo, ceilingDb: number, look = 0.004, release = 0.1
     out[i] = Math.min(h[i], acc / Math.min(i + 1, la));
   }
   const rc = 1 - Math.exp(-1 / (release * SR));
-  let g = 1, deepest = 1;
+  const g = new Float32Array(n);
+  let x = 1;
   for (let i = 0; i < n; i++) {
     const t = out[i];
-    g = t < g ? t : g + (t - g) * rc;
-    if (g > t) g = t;
-    if (g < deepest) deepest = g;
-    st.L[i] *= g; st.R[i] *= g;
+    x = t < x ? t : x + (t - x) * rc;
+    if (x > t) x = t;
+    g[i] = x;
   }
+  return g;
+}
+
+/** multiply a signal by a gain curve; returns the deepest reduction (dB) */
+export function applyGain(st: Stereo, g: Float32Array): number {
+  let deepest = 1;
+  for (let i = 0; i < st.L.length; i++) { st.L[i] *= g[i]; st.R[i] *= g[i]; if (g[i] < deepest) deepest = g[i]; }
   return 20 * Math.log10(deepest);
+}
+
+/** a lookahead peak limiter on one signal (see limiterGain); returns the deepest reduction (dB) */
+export function limit(st: Stereo, ceilingDb: number, look = 0.004, release = 0.15, circular = true): number {
+  return applyGain(st, limiterGain([st], ceilingDb, look, release, circular));
+}
+
+/** the sum of signals (a new buffer) */
+export function sum(parts: Stereo[], gains?: number[]): Stereo {
+  const n = parts[0].L.length, out = stereo(n);
+  parts.forEach((p, k) => mix(out, p, gains?.[k] ?? 1));
+  return out;
 }
 
 export interface EqBand { type: 'peak' | 'high' | 'low'; f: number; g: number; q?: number }

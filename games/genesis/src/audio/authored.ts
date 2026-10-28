@@ -35,7 +35,55 @@ export const AUTHORED: Record<string, AuthoredPiece> = {
     id: 'title', loop: 40 * 4 * 60 / 70, passes: 1, rest: 75, gain: 0.85,
     stems: { main: new URL('./assets/title.ogg', import.meta.url).href },
   },
+  // the era pieces (score/eras.ts): loop = bars × beats per bar × 60 / bpm, exactly as rendered
+  'era-stone': {
+    id: 'era-stone', loop: 16 * 4 * 60 / 66, passes: 2, rest: 80, gain: 0.85,
+    stems: {
+      main: new URL('./assets/era-stone-main.ogg', import.meta.url).href,
+      day: new URL('./assets/era-stone-day.ogg', import.meta.url).href,
+      night: new URL('./assets/era-stone-night.ogg', import.meta.url).href,
+      tension: new URL('./assets/era-stone-tension.ogg', import.meta.url).href,
+    },
+  },
+  'era-bronze': {
+    id: 'era-bronze', loop: 20 * 4 * 60 / 84, passes: 2, rest: 80, gain: 0.85,
+    stems: {
+      main: new URL('./assets/era-bronze-main.ogg', import.meta.url).href,
+      day: new URL('./assets/era-bronze-day.ogg', import.meta.url).href,
+      night: new URL('./assets/era-bronze-night.ogg', import.meta.url).href,
+      tension: new URL('./assets/era-bronze-tension.ogg', import.meta.url).href,
+    },
+  },
+  'era-medieval': {
+    id: 'era-medieval', loop: 32 * 3 * 60 / 105, passes: 2, rest: 80, gain: 0.85,
+    stems: {
+      main: new URL('./assets/era-medieval-main.ogg', import.meta.url).href,
+      day: new URL('./assets/era-medieval-day.ogg', import.meta.url).href,
+      night: new URL('./assets/era-medieval-night.ogg', import.meta.url).href,
+      tension: new URL('./assets/era-medieval-tension.ogg', import.meta.url).href,
+    },
+  },
+  'era-engines': {
+    id: 'era-engines', loop: 24 * 4 * 60 / 96, passes: 2, rest: 80, gain: 0.85,
+    stems: {
+      main: new URL('./assets/era-engines-main.ogg', import.meta.url).href,
+      day: new URL('./assets/era-engines-day.ogg', import.meta.url).href,
+      night: new URL('./assets/era-engines-night.ogg', import.meta.url).href,
+      tension: new URL('./assets/era-engines-tension.ogg', import.meta.url).href,
+    },
+  },
 };
+
+/** the sim's eras (SettlementView.era) → the era piece that sings them */
+export const ERA_PIECE: Record<string, string> = {
+  stone: 'era-stone', fire: 'era-stone', clay: 'era-stone',
+  bronze: 'era-bronze', iron: 'era-bronze', classical: 'era-bronze',
+  medieval: 'era-medieval', gunpowder: 'era-medieval',
+  steam: 'era-engines', electric: 'era-engines', space: 'era-engines',
+};
+
+/** how close a town's music must be (its weight in the scene) before its era's piece is the one that plays */
+export const TOWN_NEAR = 0.15;
 
 /** seconds over which a piece fades in / out at the edges of an appearance */
 export const FADE_IN = 3;
@@ -43,11 +91,17 @@ export const FADE_OUT = 6;
 /** an appearance runs this far past its last loop (the folded reverb tail plays out over the quiet intro) */
 export const OVERRUN = 4;
 
-/** which authored piece the scene calls for (null: the procedural score alone) */
-export function pieceFor(scene: AudioScene | null): string | null {
+/**
+ * Which authored piece the scene calls for (null: the procedural score alone). `current` (the piece playing or resting)
+ * holds on a little past the thresholds that started it, so a camera hovering at the edge does not restart it.
+ */
+export function pieceFor(scene: AudioScene | null, current: string | null = null): string | null {
   if (!scene) return null;
   const town = scene.music[0]?.weight ?? 0;
-  if (scene.orbital >= 0.35 && town < 0.15 && AUTHORED.title) return 'title';
+  const hold = (k: string): number => (current === k ? 0.6 : 1);
+  if (current === 'title' ? scene.orbital >= 0.25 && town < TOWN_NEAR * 1.6 : scene.orbital >= 0.35 && town < TOWN_NEAR) return AUTHORED.title ? 'title' : null;
+  const id = ERA_PIECE[scene.music[0]?.culture.era ?? ''];
+  if (id && AUTHORED[id] && town >= TOWN_NEAR * hold(id)) return id;
   return null;
 }
 
@@ -197,7 +251,7 @@ export class AuthoredMusic {
   update(scene: AudioScene | null, now: number, master: number): number {
     const dt = Math.max(0, Math.min(0.5, now - this.lastNow));
     this.lastNow = now;
-    let want = pieceFor(scene);
+    let want = pieceFor(scene, this.w.piece);
     if (want && this.failed(want)) want = null;
     const bufs = want ? this.ready(want) : null;
     const next = weave(this.w, want, now, !!bufs);

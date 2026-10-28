@@ -122,8 +122,12 @@ export function toNotes(ns: BeatNote[], bpm: number): Note[] {
   return ns.map((n) => ({ t: n.b * k, d: n.d * k, midi: n.midi, v: n.v, pan: n.pan }));
 }
 
-/** a part of a piece, written in beats */
-export interface ScorePart { inst: Inst; notes: BeatNote[]; gain: number; send: number; pan: number; role?: 'melody' | 'harmony' | 'rhythm' | 'colour' }
+/** the stems an era piece ships as (authored.ts plays them sample-locked: day/night cross-fade, tension rises over) */
+export type Stem = 'main' | 'day' | 'night' | 'tension';
+export const STEMS: Stem[] = ['main', 'day', 'night', 'tension'];
+
+/** a part of a piece, written in beats; `stem` (default 'main') is the stem it renders into */
+export interface ScorePart { inst: Inst; notes: BeatNote[]; gain: number; send: number; pan: number; role?: 'melody' | 'harmony' | 'rhythm' | 'colour'; stem?: Stem }
 
 export interface Piece {
   id: string;
@@ -137,8 +141,30 @@ export interface Piece {
 
 export function loopSeconds(p: Piece): number { return p.bars * p.beatsPerBar * 60 / p.bpm; }
 
-export function partsOf(p: Piece): Part[] {
-  return p.parts.map((sp) => ({ inst: sp.inst, notes: toNotes(sp.notes, p.bpm), gain: sp.gain, send: sp.send, pan: sp.pan }));
+/** the piece's parts in seconds; with `stem`, only the parts of that stem */
+export function partsOf(p: Piece, stem?: Stem): Part[] {
+  return p.parts.filter((sp) => !stem || (sp.stem ?? 'main') === stem)
+    .map((sp) => ({ inst: sp.inst, notes: toNotes(sp.notes, p.bpm), gain: sp.gain, send: sp.send, pan: sp.pan }));
+}
+
+/** the stems a piece has (a piece with no stem marks is one 'main' stem) */
+export function stemsOf(p: Piece): Stem[] {
+  return STEMS.filter((s) => p.parts.some((sp) => (sp.stem ?? 'main') === s));
+}
+
+/** a repeating rhythm: every bar from `fromBar` for `bars` bars, hits [beat, midi, velocity] scaled by `vel` */
+export function pulse(fromBar: number, bars: number, beatsPerBar: number, hits: [number, number, number][], vel: number | ((b: number) => number) = 1, d = 1): BeatNote[] {
+  const out: BeatNote[] = [];
+  for (let i = 0; i < bars; i++) {
+    const t0 = (fromBar - 1 + i) * beatsPerBar;
+    for (const [b, midi, v] of hits) out.push({ b: t0 + b, d, midi, v: v * (typeof vel === 'number' ? vel : vel(t0 + b)) });
+  }
+  return out;
+}
+
+/** each melody part's line (time order): what the motif test reads */
+export function melodiesOf(p: Piece): number[][] {
+  return p.parts.filter((sp) => sp.role === 'melody').map((sp) => [...sp.notes].sort((a, b) => a.b - b.b).map((n) => n.midi));
 }
 
 /** a ramp of velocity between two beats */
