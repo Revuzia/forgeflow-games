@@ -10,7 +10,8 @@ short room. By damage type:
 Casts: Lumen rises into glass; Shade inhales, then a hollow low tone and bubbling ink.
 Big moments: hourbell + frame drum + stone rumble.
 Cues that fire constantly (swings, light hits, bolts, whooshes, wick deaths) are short, carry a broad
-dip around 3.3 kHz and a soft top so a teamfight of them never stabs.
+dip around 3.3 kHz and a soft top so a teamfight of them never stabs, and ship RR round-robin variants (variant 0
+is the original take; the others re-seed its noise and grains).
 Loudness (max momentary, asset level, before the cue gain): air -21..-19, hits -17..-14, casts
 -19..-16, big -14..-12; the zone loop is integrated -22.
 """
@@ -41,6 +42,7 @@ HITK = dict(tail_floor_db=-48.0, clip_drive=1.6, max_gr_db=6.0)
 CASTK = dict(tail_floor_db=-50.0, fade_out=0.025)
 BIGK = dict(tail_floor_db=-54.0, fade_out=0.04, clip_drive=1.4, max_gr_db=6.0)
 SOFT_TOP = [('peak', 3300, -3.0, 0.8), ('high', 9000, -3.0)]     # frequent cues
+RR = 3                      # round-robin variants for every cue that can fire more than once a second (build.py kit gate)
 
 
 def woomf(dur: float, f0: float, f1: float, peak_at: float) -> np.ndarray:
@@ -62,7 +64,7 @@ def daze(f: float, dur: float, vib_hz: float, cents: float, t60: float, ratio: f
 
 
 # ── swings and shots ─────────────────────────────────────────────────────────────────────────────
-@cue('c_swing_light', 'combat', ('m', -20.0), AIR, **AIRK)
+@cue('c_swing_light', 'combat', ('m', -20.0), AIR, variants=RR, **AIRK)
 def c_swing_light(v: int):
     """Light swing (fires constantly, minions too): a quick airy pass rising to 1.7 kHz and gone in 170 ms."""
     r = R('c_swing_light', v=v)
@@ -72,7 +74,7 @@ def c_swing_light(v: int):
     return finish(L.out(), hp_hz=150, eq=SOFT_TOP)
 
 
-@cue('c_swing_heavy', 'combat', ('m', -18.0), AIR, **AIRK)
+@cue('c_swing_heavy', 'combat', ('m', -18.0), AIR, variants=RR, **AIRK)
 def c_swing_heavy(v: int):
     """Heavy swing: a slower, lower pass with body (a low woomf) and cloth, peaking at 140 ms."""
     r = R('c_swing_heavy', v=v)
@@ -96,7 +98,7 @@ def c_shot_bow(v: int):
     return finish(L.out(), hp_hz=70, eq=SOFT_TOP)
 
 
-@cue('c_shot_bolt_lumen', 'combat', ('m', -19.0), AIR, **AIRK)
+@cue('c_shot_bolt_lumen', 'combat', ('m', -19.0), AIR, variants=RR, **AIRK)
 def c_shot_bolt_lumen(v: int):
     """Light bolt (casters, Glimwicks): a glass 'zing' falling A6 → A5, an E6 glint, a little air."""
     r = R('c_shot_bolt_lumen', v=v)
@@ -108,7 +110,7 @@ def c_shot_bolt_lumen(v: int):
     return finish(room(L.out(), 'tiny', wet=0.08), hp_hz=180, eq=SOFT_TOP + [('peak', 1500, 1.5, 1.0)])
 
 
-@cue('c_shot_bolt_shade', 'combat', ('m', -19.0), AIR, **AIRK)
+@cue('c_shot_bolt_shade', 'combat', ('m', -19.0), AIR, variants=RR, **AIRK)
 def c_shot_bolt_shade(v: int):
     """Shade bolt: an inky 'fwum' (breath falling 1.8 kHz → 450 Hz) over a hollow falling tone and a bubble."""
     r = R('c_shot_bolt_shade', v=v)
@@ -120,7 +122,7 @@ def c_shot_bolt_shade(v: int):
     return finish(room(L.out(), 'tiny', wet=0.1), hp_hz=60, lp_hz=9000, eq=SOFT_TOP)
 
 
-@cue('c_thrown', 'combat', ('m', -19.0), AIR, **AIRK)
+@cue('c_thrown', 'combat', ('m', -19.0), AIR, variants=RR, **AIRK)
 def c_thrown(v: int):
     """Thrown weapon or stone: a spinning whoosh (24 → 15 Hz rotation) with a wooden release tick."""
     r = R('c_thrown', v=v)
@@ -133,7 +135,7 @@ def c_thrown(v: int):
     return finish(L.out(), hp_hz=90, eq=SOFT_TOP)
 
 
-@cue('c_proj_whoosh', 'combat', ('m', -21.0), AIR, **AIRK)
+@cue('c_proj_whoosh', 'combat', ('m', -21.0), AIR, variants=RR, **AIRK)
 def c_proj_whoosh(v: int):
     """Generic projectile in flight (every projectile, minions included): a soft mid pass with a
     falling Doppler-ish band, nothing above 6 kHz."""
@@ -143,7 +145,7 @@ def c_proj_whoosh(v: int):
 
 
 # ── hits ─────────────────────────────────────────────────────────────────────────────────────────
-@cue('c_hit_phys_light', 'combat', ('m', -18.5), HIT, **HITK)
+@cue('c_hit_phys_light', 'combat', ('m', -18.5), HIT, variants=RR, **HITK)
 def c_hit_phys_light(v: int):
     """Physical light hit (the most frequent sound in the game): a short wooden knock with a mid thwack
     over a saturated 230 → 100 Hz body, a few chips. Knock-led so it reads on laptop speakers; soft-topped."""
@@ -158,7 +160,7 @@ def c_hit_phys_light(v: int):
     return finish(room(L.out(), 'tiny', wet=0.1), hp_hz=55, eq=SOFT_TOP)
 
 
-@cue('c_hit_phys_heavy', 'combat', ('m', -16.5), HIT, **HITK)
+@cue('c_hit_phys_heavy', 'combat', ('m', -16.5), HIT, variants=RR, **HITK)
 def c_hit_phys_heavy(v: int):
     """Physical heavy hit: stone-led. A deep 150 → 45 Hz body, two stone knocks, crunch, a spray of
     opaque chips and a short stone room."""
@@ -175,7 +177,7 @@ def c_hit_phys_heavy(v: int):
     return finish(room(L.out(), 'stone', wet=0.12), hp_hz=35, eq=[('peak', 3300, -2.5, 0.8), ('high', 9000, -2)])
 
 
-@cue('c_hit_magic', 'combat', ('m', -18.0), HIT, **HITK)
+@cue('c_hit_magic', 'combat', ('m', -18.0), HIT, variants=RR, **HITK)
 def c_hit_magic(v: int):
     """Magic hit: a struck E6 glass ping and an A5 FM shimmer (index 3 → 0) over a soft body, a puff
     of light and a few glass bits."""
@@ -189,7 +191,7 @@ def c_hit_magic(v: int):
     return finish(room(L.out(), 'glass', wet=0.12), hp_hz=120, eq=[('peak', 3300, -2.5, 0.8), ('high', 9000, -2)])
 
 
-@cue('c_hit_true', 'combat', ('m', -16.0), HIT, **HITK)
+@cue('c_hit_true', 'combat', ('m', -16.0), HIT, variants=RR, **HITK)
 def c_hit_true(v: int):
     """True damage: a hollow tube pop on A3 with a sub knock, then the tube's own ring played
     backwards, swelling for 220 ms and cut off: the inverted swell no armour stops."""
@@ -205,7 +207,7 @@ def c_hit_true(v: int):
     return finish(room(L.out(), 'small', wet=0.08), hp_hz=50, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('c_crit', 'combat', ('m', -15.5), HIT, **HITK)
+@cue('c_crit', 'combat', ('m', -15.5), HIT, variants=RR, **HITK)
 def c_crit(v: int):
     """Critical strike: the heavy hit doubled at the front (a 'kr-rack' of two snaps), a deeper body, a
     glass crack and a short E6/B6 ring so it reads as a different, better hit."""
@@ -226,7 +228,7 @@ def c_crit(v: int):
     return finish(room(L.out(), 'stone', wet=0.13), hp_hz=35, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_monster_hit', 'combat', ('m', -19.0), HIT, **HITK)
+@cue('c_monster_hit', 'combat', ('m', -19.0), HIT, variants=RR, **HITK)
 def c_monster_hit(v: int):
     """Hitting a camp monster (and its death): a thick-hide slap and clay thud, no chips, muffled top."""
     r = R('c_monster_hit', v=v)
@@ -239,7 +241,7 @@ def c_monster_hit(v: int):
     return finish(room(L.out(), 'small', wet=0.08), hp_hz=40, lp_hz=6000)
 
 
-@cue('c_needle_hit', 'combat', ('m', -15.5), HIT, **HITK)
+@cue('c_needle_hit', 'combat', ('m', -15.5), HIT, variants=RR, **HITK)
 def c_needle_hit(v: int):
     """A Needle's (tower's) bolt landing on you: a deep stone thud and crack, then a searing sizzle of
     focused sunlight with a ringing A5. The sizzle tail is the tower's signature."""
@@ -254,7 +256,7 @@ def c_needle_hit(v: int):
     return finish(room(L.out(), 'stone', wet=0.1), hp_hz=40, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_needle_shot', 'combat', ('m', -17.0), (0.25, 0.8), **HITK)
+@cue('c_needle_shot', 'combat', ('m', -17.0), (0.25, 0.8), variants=RR, **HITK)
 def c_needle_shot(v: int):
     """A Needle (tower) fires: the stone housing thunks, a lance of light zings down from A7 to A5 and the
     Bell Needle's metal-glass rings once. Heavier than any fighter bolt: a tower is a threat."""
@@ -455,7 +457,7 @@ def c_shield(v: int):
     return finish(room(L.out(), 'glass', wet=0.14), hp_hz=100, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_heal', 'combat', ('m', -19.0), CAST, **CASTK)
+@cue('c_heal', 'combat', ('m', -19.0), CAST, variants=RR, **CASTK)
 def c_heal(v: int):
     """Heal (up means help): no strike at all. A D minor triad of bowed dawnglass (D5 F5 A5) swells in
     over 220 ms and lets go, breath rising under it and a few sparks floating up. Soft enough to repeat."""
@@ -502,7 +504,7 @@ def c_stun(v: int):
     return finish(room(L.out(), 'small', wet=0.1), hp_hz=50, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_slow', 'combat', ('m', -19.0), CAST, **CASTK)
+@cue('c_slow', 'combat', ('m', -19.0), CAST, variants=RR, **CASTK)
 def c_slow(v: int):
     """Slow: a glass tone sagging D6 → D5 like a tape slowing, a viscous breath closing down, sticky ink."""
     r = R('c_slow', v=v)
@@ -514,7 +516,7 @@ def c_slow(v: int):
     return finish(room(L.out(), 'small', wet=0.1), hp_hz=60, lp_hz=9000, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('c_root', 'combat', ('m', -17.5), CAST, **CASTK)
+@cue('c_root', 'combat', ('m', -17.5), CAST, variants=RR, **CASTK)
 def c_root(v: int):
     """Root: the ground grabs (a low wooden knock and thud), roots creak (a stick-slip train of wood
     clicks slowing down) and small vines snap, over a little earth rumble."""
@@ -747,7 +749,7 @@ def c_death_shatter(v: int):
     return finish(room(L.out(), 'glass', wet=0.15), hp_hz=40, eq=[('peak', 3300, -3, 0.8)])
 
 
-@cue('c_wick_die', 'combat', ('m', -20.0), (0.15, 0.45), **AIRK)
+@cue('c_wick_die', 'combat', ('m', -20.0), (0.15, 0.45), variants=RR, **AIRK)
 def c_wick_die(v: int):
     """A Wick (minion lamp) dies: its flame snuffed (a short 'ffp' of breath and a puff), the lamp glass
     tinkling. Small, soft, frequent."""

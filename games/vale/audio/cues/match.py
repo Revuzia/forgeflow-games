@@ -153,13 +153,15 @@ def m_recall_done(v: int):
     return finish(room(L.out(), 'plate', wet=0.18), hp_hz=100, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_gleam', 'match', ('m', -21.0), (0.1, 0.4), **EVTK)
+@cue('m_gleam', 'match', ('m', -21.0), (0.1, 0.4), variants=3, **EVTK)
 def m_gleam(v: int):
     """Gleam earned (every last hit): two quick glints of light, A5 then D6, 35 ms apart, like small coins
-    of glass. Pitched low enough that a farming lane of them never tires the ear."""
+    of glass. Pitched low enough that a farming lane of them never tires the ear. Three round-robin takes (a wave
+    cleared at once earns several in a second): the same notes, each glass struck anew, the gap 30-40 ms."""
+    k = '' if v == 0 else f'v{v}'
     L = Layers(0.3)
-    L.add(glass('A5', 0.24, 0.8, decay=0.07, bright=0.7, seed='gl1'), 0.0, peak_db=0)
-    L.add(glass('D6', 0.22, 0.75, decay=0.06, bright=0.65, seed='gl2'), 0.035, peak_db=-2)
+    L.add(glass('A5', 0.24, 0.8, decay=0.07, bright=0.7, seed=f'gl1{k}'), 0.0, peak_db=0)
+    L.add(glass('D6', 0.22, 0.75, decay=0.06, bright=0.65, seed=f'gl2{k}'), (0.035, 0.03, 0.04)[v % 3], peak_db=-2)
     return finish(spread(L.out(), 0.3), hp_hz=400, eq=[('peak', 3300, -3, 0.8), ('high', 8000, -3)])
 
 
