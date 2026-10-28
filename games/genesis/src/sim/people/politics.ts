@@ -99,6 +99,8 @@ export const POLITICS = {
   tributeDays: 3, tributeShare: 0.1, tribute: 0.004,
   /** a hard time: under this many days of food a head; the capital has food to spare above this */
   leanDays: 1, spareDays: 4, judgeDays: 2, famine: 0.45, aid: 0.15, aidP: 0.2,
+  /** a daughter this young (game years since founding) is always relieved and never blames its mother for a famine */
+  youngYears: 2,
   feud: 0.12,
   /** a day's walk (game minutes of walking × BASE_WALK) and the grievance a day for each day beyond it */
   dayWalkMin: 600, distance: 0.002,
@@ -251,13 +253,17 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   if (h.famine >= 0 && !h.judged) {
     if (spare) h.spare = true;
     // the capital's own choice: a generous leader sends food sooner
+    // (fix r2 #14: a daughter village in its first two years is the mother's own children — relieved whenever the mother
+    // has food to spare, and not held to blame against her when it is not: on seed 5 a bud that starved within a week
+    // of leaving turned on its mother — four raids, a revolt, two conquests, 25 dead in war)
+    const young = d.founded >= 0 && x.tick - d.founded < G.youngYears * x.year;
     if (spare && h.aid < h.famine - x.day) {
       const gen = Math.max(0.1, 0.5 + leaderTrait(x, cap, TRAIT.sociability) - 0.6 * leaderTrait(x, cap, TRAIT.aggression));
-      if (hashFloat(cap.id, d.id, x.tick, worldSalt(x, 0xa1d)) < G.aidP * gen) sendAid(x, cap, d, h.hard === 'disaster' ? 'disaster' : 'famine');
+      if (young || hashFloat(cap.id, d.id, x.tick, worldSalt(x, 0xa1d)) < G.aidP * gen) sendAid(x, cap, d, h.hard === 'disaster' ? 'disaster' : 'famine');
     }
     if (x.tick - h.famine >= G.judgeDays * x.day) {
       h.judged = true;
-      if (h.spare && h.aid < h.famine - x.day) {
+      if (h.spare && h.aid < h.famine - x.day && !young) {
         const famine = h.hard !== 'disaster';
         addG(h, famine ? 'famine' : 'neglect', famine ? G.famine : G.neglect);
         tell(x.u, x.p, famine ? 'grievance.famine' : 'grievance.neglect', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);

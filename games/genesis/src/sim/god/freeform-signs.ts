@@ -148,8 +148,24 @@ export function intentSigns(c: SignClause): boolean {
   }
   if (!p) return false;
   const person = live(c, f, ['agent']);
-  // ── abandon a prophet ──
-  if (/\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/.test(f) && (has(f, 'prophet') || (person && prophetOf(u, p.id, person.id)))) {
+  // (fix r2 #21) ── the Touch laid on a person or a town: which of its acts ("touch Hesh" was read as "torch") ──
+  if (/^(?:please )?(?:touch|(?:use|lay|put) (?:the|my|your) touch on)\b/.test(f.trim()) && (person || mods.place?.settlement !== undefined)) {
+    const w0 = person ? person.name : mods.place?.label ?? 'them';
+    const who = w0 === 'them' ? w0 : w0.replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
+    return c.ask(`Touch ${who} how? Lift, Rebuke or Soothe ("lift ${who}", "rebuke ${who}", "soothe ${who}").`);
+  }
+  // (fix r2 #21) ── a negation never does the act it negates: "make Hesh stop being a prophet", "Hesh is no longer my
+  //    prophet" abandon the prophet; "Hesh is no longer one of the Called" is never a call ──
+  const NEG = /\b(stop(?:s|ped)? being|no longer|not|never|un-?make|strip|remove|depose|dismiss|release|free)\b[^,.;]*\b/;
+  if (new RegExp(`${NEG.source}prophets?\\b`).test(f)) {
+    const agent = person ? person.id : u.god.rel?.prophets.find((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement))?.agent;
+    if (agent === undefined) { cx.asked.push({ k: 'prophet.abandon' }); return c.ask('Abandon which prophet? Name them ("abandon the prophet Hesh").'); }
+    c.add({ k: 'prophet.abandon', agent, planet: person?.planet ?? p.id }, 'abandon the prophet');
+    return true;
+  }
+  if (new RegExp(`${NEG.source}(?:one of )?the called\\b`).test(f)) return c.ask('The Called serve the god until they die: none is sent back ("charge the Called to farm" sets them other work).');
+  // ── abandon a prophet ("abandon Hesh", "forsake Hesh": the command says so when Hesh is not the god's prophet) ──
+  if (/\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/.test(f) && (has(f, 'prophet') || person)) {
     // (a person named: the command says so when they are not the god's prophet)
     const agent = person ? person.id : u.god.rel?.prophets.find((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement))?.agent;
     if (agent === undefined) { cx.asked.push({ k: 'prophet.abandon' }); return c.ask('Abandon which prophet? Name them ("abandon the prophet Hesh").'); }
@@ -222,7 +238,16 @@ export function intentSigns(c: SignClause): boolean {
     c.add({ k: 'god.omen', kind: 'eclipse', ...(mods.place?.settlement !== undefined ? { settlement: mods.place.settlement } : mods.place?.pos ? { pos: mods.place.pos } : {}), planet: p.id }, 'the sun darkens (an omen)');
     return true;
   }
-  if (/\bcomet\b/.test(f) && /\b(sky|pass|passing|passes|omen|sign|portent|show)\b/.test(f) && !/\b(strike|hit|crash|fall on|at)\b/.test(f)) {
+  // (fix r2 #21) a sign by its own name, or any act "as a sign" / "sparing": "send a sparing flood to Aru", "send red rain on
+  // Aru", "strike lightning near Aru as a sign" are omens (no deaths), never the disaster or plain rain
+  const asSign = /\bas an? (sign|omen|portent|warning|wonder)\b|\bsparing\b|\bharmless(ly)?\b|\bthat (spares|harms) no ?one\b/.test(f);
+  const OMEN_WORD: [RegExp, string][] = [[/\b(red|blood|bloody)[ -]rain\b|\brain of blood\b/, 'red-rain'], [/\bfloods?\b|\bwaters? rise\b/, 'flood'], [/\brainbow\b/, 'rainbow'], [/\blightning\b/, 'lightning'], [/\baurora\b|\bnorthern lights\b/, 'aurora'], [/\bcomet\b/, 'comet']];
+  const ow = OMEN_WORD.find(([re]) => re.test(f));
+  if (ow && (asSign || (ow[1] === 'red-rain' && mods.place?.settlement !== undefined))) {
+    c.add({ k: 'god.omen', kind: ow[1], ...(mods.place?.settlement !== undefined ? { settlement: mods.place.settlement } : mods.place?.pos ? { pos: mods.place.pos } : {}), planet: p.id }, `${ow[1].replace('-', ' ')} (an omen)`);
+    return true;
+  }
+  if (/\bcomet\b/.test(f) && /\b(sky|pass|passing|passes|omen|sign|portent|show|over|above|across)\b/.test(f) && !/\b(strike|hit|crash|fall on|at)\b/.test(f)) {
     c.add({ k: 'god.omen', kind: 'comet', ...(mods.place?.settlement !== undefined ? { settlement: mods.place.settlement } : {}), planet: p.id }, 'a comet passes (an omen)');
     return true;
   }

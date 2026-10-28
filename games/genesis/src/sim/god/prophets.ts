@@ -47,7 +47,7 @@ import { distM, spotInCell } from '../people/world.ts';
 import { planDrinkNear } from '../people/decide.ts';
 import { bestFood, storeAdd, storeTake } from '../people/store.ts';
 import { fail, ok } from './util.ts';
-import { meansNow, moveSettlement, relOf, relStat, rise, srel } from './regard.ts';
+import { meansNow, moveSettlement, relOf, relStat, rise, riseTrust, srel } from './regard.ts';
 import { actReaches, PRAYER_WORDS } from './prayers.ts';
 import { addSacredPlace, foundShrine, sacredNear } from './sacred.ts';
 
@@ -324,7 +324,7 @@ function preachHour(x: PCtx, ph: ProphetState, s: number): number {
     const k = c * (1 - 0.7 * other);
     // (faith and trust taper near the top: god/regard.ts rise — no pinned meter, LIVING §3.8)
     A.faith[i] = rise(A.faith[i], 0.04 * k);
-    A.love[i] = rise(A.love[i], 0.008 * k);
+    A.love[i] = riseTrust(A.love[i], 0.008 * k);
     A.loyalty[i] = Math.min(1, A.loyalty[i] + 0.012 * k);
     for (let g = 1; g < GODS; g++) { A.loyalty[i + g] *= 1 - 0.02 * c; A.faith[i + g] *= 1 - 0.01 * c; }
     A.flags[o] |= AgentFlag.sees_god;

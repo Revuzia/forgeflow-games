@@ -153,6 +153,17 @@ test('content: "a new crop / animal / ore" with no name never makes a placeholde
   assert.ok(!c.items.list.some((d) => /^new-/.test(d.id)) && !c.recipes.list.some((d) => /^new-/.test(d.id)), c.items.list.filter((d) => /^new-/.test(d.id)).map((d) => d.id).join(','));
   assert.equal(c.items.list.length, items0);
   assert.equal(c.recipes.list.length, recipes0);
+  // (fix r2 #17) "teach <town> to <verb> <noun>": the craft that exists, never a material or an idea named for the phrase
+  const ores0 = c.ores.list.length;
+  for (const [t, want] of [['teach Aru to smelt iron', 'iron-smelting'], ['teach Aru to herd goats', 'animal-husbandry'], ['teach Aru to tan hides', 'tanning'], ['show Aru how to smelt copper', 'copper-smelting'], ['teach Aru to cut wood', 'woodcutting'], ['teach Aru to make rope', 'rope-making'], ['teach Aru to keep sheep', 'animal-husbandry'], ['teach Aru to milk goats', 'dairy']] as const) {
+    const r = parse(t);
+    assert.ok(r.c.some((x) => x.k === 'settlement.teach' && x.knowledge === want) && !r.c.some((x) => String(x.k).startsWith('content.')), `${t}: ${JSON.stringify(r.c)} ${r.msg}`);
+    sim.applyNow({ k: 'freeform', text: t });
+  }
+  assert.equal(c.items.list.length, items0, c.items.list.slice(items0).map((d) => d.id).join(','));
+  assert.equal(c.recipes.list.length, recipes0, c.recipes.list.slice(recipes0).map((d) => d.id).join(','));
+  assert.equal(c.ores.list.length, ores0);
+  assert.ok(parse('introduce mithril to Aru').c.some((x) => x.k === 'content.material'), 'a material named and shown is still made');
   // myth words on a real animal: the nearest real kind, said so; the real compounds stay real; a size word is the animal itself
   for (const t of ['flying horse', 'winged lion', 'fire lizard', 'two-headed dog', 'dire wolf']) assert.equal(animalWord(c, t).kind, 'fantasy', t);
   for (const t of ['flying squirrel', 'fire ant', 'horned owl', 'giant tortoise', 'vampire bat', 'spotted owl']) assert.equal(animalWord(c, t).kind, 'real', t);

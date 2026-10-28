@@ -98,6 +98,7 @@
     {"id": "leader.heir", "kind": "people", "weight": 1, "text": ["{agent} took {pron2} parent's place as {title} of {settlement}."]},
     {"id": "schism", "kind": "split", "weight": 2, "text": ["A schism split {settlement} over {cause}: {count} of the {faction} walked out to found their own place."]},
     {"id": "diaspora.refugees", "kind": "diaspora", "weight": 2, "text": ["{count} of {settlement} fled to {other} rather than live under the conquerors."]},
+    {"id": "diaspora.ruin", "kind": "diaspora", "weight": 2, "text": ["{count} of {settlement} left their ruined homes for their kin at {other}."]},
     {"id": "age.golden", "kind": "golden-age", "weight": 3, "text": ["The golden age of {settlement} began: its people grew in number, wealth and knowledge."]},
     {"id": "age.golden.end", "kind": "golden-age", "weight": 2, "text": ["The golden age of {settlement} came to an end."]},
     {"id": "age.dark", "kind": "dark-age", "weight": 3, "text": ["A dark age fell on {settlement}: {cause}."]},

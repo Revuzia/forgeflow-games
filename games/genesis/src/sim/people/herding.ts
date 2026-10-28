@@ -26,6 +26,7 @@ import { emitSt, settlementRef, vars } from './util.ts';
 import { addFood, bump, landOf, ledger } from './ledger.ts';
 import { carcass, huntRange } from './hunt.ts';
 import { cohortTotal } from './cohorts.ts';
+import { sacredAnimal } from './culture.ts';
 
 /** what a head of livestock gives a day, × its animals.json product quantity (milk is the daily yield of a dairy beast,
  * eggs a hen's lay; wool and the like are the year's clip, spread over the year) */
@@ -171,6 +172,17 @@ export function herdWork(x: PCtx, s: number, st: Settlement | undefined): void {
   // 16 head kept for five years and not one eaten). Dogs are kept, not eaten.
   const keep = Math.max(6, Math.round(cap * 0.6));
   const increase = a.id !== 'dog' && h.count >= keep + 1 && hashFloat(h.id, x.tick, 0xb07d) < days;
+  // (fix r2 #18, LIVING §3.4.7: a sacred herd is never slaughtered — kept, milked and shorn; what the pens cannot hold is
+  // let go to graze wild, two head at a time, so the herd stays bounded)
+  if (sacredAnimal(x, st, h.species)) {
+    const over = h.count > cap ? Math.min(2, Math.floor(h.count - cap)) : 0;
+    if (over > 0 && h.count - over >= 1) {
+      h.count -= over;
+      const wild = x.ps.herds.find((o) => o.owner < 0 && o.species === h.species && o.cell === h.cell);
+      if (wild) wild.count += over; else spawnHerd(x, h.species, h.cell, over);
+    }
+    return;
+  }
   const cull = h.count > cap ? Math.min(2, Math.floor(h.count - cap)) : lean || increase ? 1 : 0;
   if (cull > 0) slaughter(x, st, h, a, cull);
 }

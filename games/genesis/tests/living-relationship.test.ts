@@ -497,6 +497,27 @@ test('sacred: a hallowed place is kept by the nearest town; a real animal made s
 
 // ───────────────────────────── wrath, warnings, evacuation, shelter ─────────────────────────────
 
+// (fix r2 #18) a sacred herded species was culled for its increase like any other: 11 sacred goats eaten in 24 days
+test('sacred: a sacred herd is never slaughtered — kept, milked, its surplus let go wild (fix r2 #18)', () => {
+  const { sim, st } = town();
+  const p = sim.u.planets[0], ps = p.people!;
+  assert.ok(sim.applyNow({ k: 'freeform', text: 'give Aru goats' }).ok);
+  must(sim, { k: 'settlement.sacred', settlement: st.id, animal: 'goat' });
+  const goat = sim.u.content.animals.idx('goat');
+  const kept = () => ps.herds.filter((h) => h.owner === st.id && h.species === goat).reduce((a, h) => a + h.count, 0);
+  assert.ok(kept() >= 4, `a herd of goats (${kept()})`);
+  must(sim, { k: 'time.scale', scale: 1000 });
+  const wild0 = ps.herds.filter((h) => h.owner < 0 && h.species === goat).reduce((a, h) => a + h.count, 0);
+  for (let d = 0; d < 24; d++) sim.step(1440);
+  let eaten = 0;
+  for (const row of landOf(st).ledger) eaten += row.slaughter?.goat ?? 0;
+  assert.equal(eaten, 0, 'no sacred goat slaughtered');
+  const pens = ps.of(st.id).filter((b) => b.progress >= 1 && !(b.flags & 2) && sim.u.content.buildings.list[b.type].function === 'pen').length;
+  assert.ok(kept() <= 8 + pens * 10 + 2, `the herd stays within what the pens hold (${kept()}, pens ${pens})`);
+  const wild = ps.herds.filter((h) => h.owner < 0 && h.species === goat).reduce((a, h) => a + h.count, 0);
+  assert.ok(kept() >= 8 || wild >= wild0, `kept ${kept()}, wild ${wild0} -> ${wild}`);
+});
+
 test('wrath: a law at 0.3 by default; the meteor at the law leaves the town standing, at wrath 1 it is today\'s ruin', () => {
   assert.equal(lethality(0), 0.1);
   assert.equal(reach(0), 0.6);
@@ -685,6 +706,21 @@ test('restyle words: the new names are understood, the old ones still are, and t
   // the town lifted by the Touch, in the reply
   const lifted = sim.applyNow({ k: 'settlement.move', settlement: lune.id, to: st.pos, mode: 'lift' });
   assert.ok(lifted.ok && /The Touch lifts/.test(String(lifted.msg)) && !OLD.test(String(lifted.msg)), String(lifted.msg));
+  // (fix r2 #21) the Touch by its own name asks which act; abandoning and negation never call; sparing acts are signs
+  for (const t of ['touch Hesh', 'touch Aru', 'use the Touch on Hesh']) {
+    const a = r(t);
+    assert.ok(!a.x.ok && /Lift, Rebuke or Soothe/.test(a.msg) && !/torch/.test(a.msg), `${t}: ${a.msg}`);
+  }
+  for (const t of ['abandon Hesh', 'forsake Hesh', 'make Hesh stop being a prophet', 'Hesh is no longer my prophet']) {
+    const a = r(t);
+    assert.ok(a.ks.includes('prophet.abandon') && !a.ks.includes('prophet.call'), `${t}: ${a.ks} ${a.msg}`);
+  }
+  assert.ok(!r('Hesh is no longer one of the Called').ks.includes('agent.make-disciple'), 'a negation never calls');
+  for (const [t, kind] of [['send a sparing flood to Aru', 'flood'], ['send red rain on Aru', 'red-rain'], ['send a comet over Aru', 'comet'], ['strike lightning near Aru as a sign', 'lightning']] as const) {
+    const a = r(t);
+    assert.ok(a.x.resolved?.some((c) => c.k === 'god.omen' && c.kind === kind) && !a.ks.includes('disaster.spawn'), `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`);
+  }
+  assert.ok(r('send a flood to Aru').ks.includes('disaster.spawn') && r('drop a comet on Aru').ks.includes('disaster.spawn'), 'the disasters are still the disasters');
 });
 
 test('free text: the god speaks of prophets, signs, prayers and its own wrath', () => {

@@ -100,6 +100,16 @@ export function rise(v: number, d: number): number {
   return clamp01(v + d * Math.min(1, (1 - v) / RISE_TAPER));
 }
 
+/** (fix r2 #8/#19) trust's taper is steeper than faith's: over its upper half a gain shrinks with ((1 − v) / RISE_TAPER) to
+ *  this power. Trust is the slow-built half of the bond (owner: "they build their relationship with the god"): seven
+ *  prayers answered in eight days after a meteor took mean trust to 0.93 (review-owner/loop.ts 'answered', seeds 1/2),
+ *  and a drought answered over six days to 0.95–0.97 (god50 sessions) */
+export const TRUST_TAPER_EXP = 1.5;
+export function riseTrust(v: number, d: number): number {
+  if (d <= 0) return clamp01(v + d);
+  return clamp01(v + d * Math.min(1, Math.pow(Math.max(0, 1 - v) / RISE_TAPER, TRUST_TAPER_EXP)));
+}
+
 /**
  * A person the relationship has not touched yet (born, spawned, come back from a cohort, a crew member landed): their
  * faith and loyalty are set from what they hold — faith = min(1, trust + fear), loyalty = 0.5 × trust (the 1.4 save
@@ -374,7 +384,7 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const rt = sid >= 0 ? kT.get(sid) ?? 1 : Math.min(1, 0.35 / Math.max(0.35, Math.abs(_d[j * 5 + 2])));
     A.faith[i] = rise(A.faith[i], _d[j * 5]);
     A.fear[i] = clamp01(A.fear[i] + _d[j * 5 + 1] * rf);
-    A.love[i] = rise(A.love[i], _d[j * 5 + 2] * rt);
+    A.love[i] = riseTrust(A.love[i], _d[j * 5 + 2] * rt);
     A.loyalty[i] = clamp01(A.loyalty[i] + _d[j * 5 + 3]);
     A.flags[s] |= AgentFlag.sees_god;
     // a strong sight is remembered: a miracle, or a fright
@@ -404,7 +414,7 @@ export function moveSettlement(x: PCtx, st: Settlement, d: { faith?: number; fea
     const i = s * GODS + g;
     if (d.faith) A.faith[i] = rise(A.faith[i], d.faith);
     if (d.fear) A.fear[i] = clamp01(A.fear[i] + d.fear);
-    if (d.trust) A.love[i] = rise(A.love[i], d.trust);
+    if (d.trust) A.love[i] = riseTrust(A.love[i], d.trust);
     if (d.loyalty) A.loyalty[i] = clamp01(A.loyalty[i] + d.loyalty);
   }
 }

@@ -173,3 +173,20 @@ test('natural disasters come on their own where the conditions hold, at sane rat
   quiet.step(5 * 1440);
   assert.equal(quiet.u.god.stats.natural ?? 0, 0, 'disasters.natural = 0: none');
 });
+
+// (fix r2 #12) survivable by default: the riskiest ordinary Disasters powers, cast on the heart of a 30-person bronze
+// town at the default wrath (the law), leave most of its people alive and the town standing. Measured on 4 cached
+// n = 64 towns for all 35 kinds (LIVING §3.7 'every Disasters power'); here the kinds that killed or felled before.
+test('survivable by default: meteor, rift, sinkhole, heat wave and tornado at the law kill at most 35 % and never fell the town', () => {
+  for (const kind of ['meteor', 'rift', 'sinkhole', 'heat-wave', 'tornado']) {
+    const { sim, st } = town();
+    const p = sim.u.planets[0];
+    const ps = p.people;
+    const ids0 = (ps.members.get(st.id) ?? []).map((s) => ps.agents.id[s]);
+    must(sim, { k: 'disaster.spawn', kind, pos: st.pos });
+    sim.step(2880);
+    const dead = ids0.filter((id) => ps.agents.slotOf(id) < 0).length;
+    assert.ok(dead / ids0.length <= 0.35, `${kind}: ${dead}/${ids0.length} dead at the law`);
+    assert.ok(st.fallen < 0 && (ps.members.get(st.id)?.length ?? 0) > 0, `${kind}: the town stands`);
+  }
+});

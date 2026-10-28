@@ -141,6 +141,9 @@ export function bestGame(x: PCtx, st: Settlement, from: ArrayLike<number>, n: nu
   for (const h of x.ps.herds) {
     if (!isGame(x, st, h, bold, hungry) || (skip && skip.includes(h.id))) continue;
     const hc = h.cell;
+    // (fix r2 #2) game standing in water (a herd at the shore's edge cell) is not walked to: a coastal party sent after
+    // it stood at the shore re-planning a leg of no length every few minutes
+    if (x.p.f.water[hc] > 0.6 || x.p.s.ocean[hc]) continue;
     const dHome = Math.acos(Math.min(1, P[hc * 3] * st.pos[0] + P[hc * 3 + 1] * st.pos[1] + P[hc * 3 + 2] * st.pos[2])) * R;
     if (dHome > range) continue;
     const d = Math.acos(Math.min(1, P[hc * 3] * from[0] + P[hc * 3 + 1] * from[1] + P[hc * 3 + 2] * from[2])) * R;
@@ -443,6 +446,8 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   if (reach < 40) return null;
   const leg = Math.min(d - edge, reach);
   // a leg's end on dry land: shorter legs where water lies between them and the herd (the route goes round it)
+  const here = x.p.cellAt(_p);
+  const G = x.p.grid.pos;
   for (const k of [1, 0.75, 0.5, 0.3]) {
     const f = Math.max(0, Math.min(1, (leg * k) / d));
     const goal = [_p[0] + (_q[0] - _p[0]) * f, _p[1] + (_q[1] - _p[1]) * f, _p[2] + (_q[2] - _p[2]) * f];
@@ -450,17 +455,29 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
     goal[0] /= l; goal[1] /= l; goal[2] /= l;
     let c = x.p.cellAt(goal);
     if (x.p.f.water[c] > 0.6) {
-      // the nearest dry cell beside the leg's end
+      // the dry cell beside the leg's end nearest the herd (fix r2 #2: not the first one, and never the hunter's own:
+      // that leg went nowhere)
       const g = x.p.grid;
-      let dry = -1;
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (x.p.f.water[g.nbr[e]] <= 0.6) { dry = g.nbr[e]; break; }
+      let dry = -1, best = -Infinity;
+      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+        const nc = g.nbr[e];
+        if (x.p.f.water[nc] > 0.6 || nc === here) continue;
+        const near = G[nc * 3] * _q[0] + G[nc * 3 + 1] * _q[1] + G[nc * 3 + 2] * _q[2];
+        if (near > best || (near === best && nc < dry)) { best = near; dry = nc; }
+      }
       if (dry < 0) continue;
       c = dry;
       spotInCell(x.p, c, A.id[s], 0x4b3, goal);
     }
+    if (distM(x.p, _p, goal) < 10) continue;
     if (camping(x, s)) A.camp[s] = c;
     return { kind: TASK.hunt, goal, goalCell: c, work: 5, target: h.id, data2: 1 };
   }
+  // (fix r2 #2) no leg takes them nearer: water lies between the party and its game — it turns to other game, else the
+  // hunt is over (keepParty sends them home)
+  const others = parties(st).filter((q) => q !== p).map((q) => q.herd);
+  const g = bestGame(x, st, _p, p.members.length, p.members.length >= 4 && armed(x, st), [...others, p.herd]);
+  if (g) { p.herd = g.id; p.species = g.species; } else p.since = Math.min(p.since, x.tick - PARTY_DAYS * x.day - 1);
   return null;
 }
 

@@ -24,6 +24,7 @@ import { DWELL, PRACTICE, PRACTICE_USES, eraLabel, inventable, practised } from 
 import { landOf } from '../src/sim/people/ledger.ts';
 import { ERAS } from '../src/sim/content.ts';
 import { NT, TRAIT } from '../src/sim/people/defs.ts';
+import { BuildingFlag } from '../src/sim/types.ts';
 
 const ctx = (sim: Sim): PCtx => makeCtx(sim.u, sim.u.planets[0]);
 const k = (x: PCtx, id: string): number => x.rt.byId.get(id)!;
@@ -233,6 +234,9 @@ test('a famine the capital did not relieve while it had food to spare becomes a 
     POLITICS.aidP = 0; // (the capital never thinks of it on its own here)
     const { sim, cap, d } = kinTowns();
     const x = ctx(sim);
+    // (fix r2 #14: a daughter in its first POLITICS.youngYears is always relieved and never blames its mother — this
+    // case is an established daughter, founded three years ago; the young one is the next test)
+    d.founded = x.tick - 3 * x.year;
     feed(x, cap, 20);
     starve(x, d);
     const c0 = sim.u.chronicle.length;
@@ -241,6 +245,16 @@ test('a famine the capital did not relieve while it had food to spare becomes a 
     assert.ok((h.why.famine ?? 0) >= POLITICS.famine * 0.95, JSON.stringify(h));
     assert.ok(h.grievance >= POLITICS.famine * 0.9, `grievance ${h.grievance}`);
     assert.ok(sim.u.chronicle.slice(c0).some((e) => /went hungry|No bread/.test(e.text)), 'chronicled');
+    // (fix r2 #14) a young daughter (founded this year) in the same famine: the mother sends food unasked, no grievance
+    const { sim: s1, cap: c1, d: d1 } = kinTowns();
+    const x1 = ctx(s1);
+    assert.ok(x1.tick - d1.founded < POLITICS.youngYears * x1.year, 'a young daughter');
+    feed(x1, c1, 20);
+    starve(x1, d1);
+    days(x1, 3, () => starve(x1, d1));
+    const h1 = histOf(x1, d1);
+    assert.ok(h1.aid >= 0, `the mother sent food (${JSON.stringify(h1)})`);
+    assert.equal(h1.why.famine ?? 0, 0, 'a young daughter does not blame its mother');
     // the same famine with the capital's food sent: no grievance for it
     const { sim: s2, cap: c2, d: d2 } = kinTowns();
     const x2 = ctx(s2);
@@ -435,6 +449,7 @@ test('a disaster on a daughter that the capital, with food to spare, left unreli
     POLITICS.aidP = 0; // (the capital never thinks of it on its own here)
     const { sim, cap, d } = kinTowns();
     const x = ctx(sim);
+    d.founded = x.tick - 3 * x.year; // (an established daughter: a young one is always relieved — fix r2 #14)
     feed(x, cap, 20);
     feed(x, d, 20);
     // a flood over the daughter (not the capital, 1.1–1.7 km away): a hard time though its granary is full
@@ -463,6 +478,7 @@ test('a disaster on a daughter that the capital, with food to spare, left unreli
     // a day of calamity deaths (fire, drowning ...) in the town's books is a hard time with no disaster seen over it
     const { sim: s3, cap: c3, d: d3 } = kinTowns();
     const x3 = ctx(s3);
+    d3.founded = x3.tick - 3 * x3.year;
     feed(x3, c3, 20);
     feed(x3, d3, 20);
     days(x3, 1);
@@ -606,4 +622,19 @@ test('a village of fifty buds a daughter village a short walk away: young househ
   assert.ok(lines.some((l) => /daughter village|cleared new ground/.test(l)), `the chronicle tells it: ${lines.slice(-4).join(' | ')}`);
   // not again for eight years
   assert.ok(st.recent.budAt !== undefined, 'the village remembers its budding');
+});
+
+// (fix r2 #7) a disaster that ruins half a town sends some households to their kin: the chronicle tells of the ruin,
+// never of "conquerors" who were not there (the refugees line was the conquest's own)
+test('history: households that leave a town a disaster ruined are told as leaving their ruined homes, not as fleeing conquerors', () => {
+  const { sim, cap } = kinTowns();
+  const p = sim.u.planets[0];
+  for (const b of p.people.of(cap.id)) if (b.progress >= 1) b.flags |= BuildingFlag.ruined;
+  const c0 = sim.u.chronicle.length;
+  const id = must(sim, { k: 'disaster.spawn', kind: 'quake', pos: cap.pos, duration: 20 }).created![0].id;
+  for (let i = 0; i < 40 && sim.u.god.disaster(id); i++) sim.step(10);
+  assert.ok(!sim.u.god.disaster(id), 'the quake is over');
+  const told = sim.u.chronicle.slice(c0).map((e) => e.text);
+  assert.ok(!told.some((t) => /conquerors/.test(t)), told.join(' | '));
+  assert.ok(told.some((t) => /left their ruined homes for their kin at/.test(t)), told.join(' | '));
 });

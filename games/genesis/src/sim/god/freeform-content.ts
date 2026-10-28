@@ -177,6 +177,9 @@ function intentMaterial(c: ContentClause): boolean {
   const giveV = /\b(introduce|give|bring|gift|offer|show|reveal|teach)\b/.exec(s);
   if (giveV && mods.place?.settlement !== undefined) {
     const rest = s.slice(giveV.index + giveV[0].length).replace(/\b(to|for|unto)\b\s*$/, '').replace(/^\s*(them|the people|us)\s+/, '').replace(/\b(the people of|the town of)\b/g, '').trim();
+    // (fix r2 #17) "teach Aru to smelt iron", "show Aru how to tan hides": a craft taught (intentIdeas), never a material
+    // named for a verb phrase ("Smelt iron is a new metal")
+    if (/^(teach|show|reveal)$/.test(giveV[1]) && /^(them |the people |us )?(how )?to [a-z]/.test(rest)) return false;
     const words = rest.replace(/\b(\d+|a|an|some|the|of|to|and|lots|many|few|several|dozen|hundred)\b/g, ' ').replace(/\s+/g, ' ').trim();
     if (words && !u.content.items.has(slug(words)) && !u.content.recipes.has(slug(words)) && !u.content.plants.has(slug(words)) && materialLike(u, words) && animalWord(u.content, words).kind === 'none') {
       const id = slug(words);

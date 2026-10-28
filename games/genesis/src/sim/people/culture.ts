@@ -168,7 +168,7 @@ export function moveHousehold(x: PCtx, h: Household, from: Settlement, to: Settl
  * Some of a conquered (or ruined) settlement will not stay: a share of its households walk to the nearest settlement
  * of their old polity (else of their own kind). Returns how many left.
  */
-export function refugees(x: PCtx, st: Settlement, oldPolity: number): number {
+export function refugees(x: PCtx, st: Settlement, oldPolity: number, cause: 'conquest' | 'disaster' = 'conquest'): number {
   const A = x.A;
   let dest: Settlement | null = null, bd = Infinity;
   for (const o of x.ps.settlements) {
@@ -180,7 +180,8 @@ export function refugees(x: PCtx, st: Settlement, oldPolity: number): number {
   const leaving = st.households.filter((h, i) => h.members.length > 0 && hash32(h.id, st.id, x.tick, 0x4ef) % 4 === 0 && i >= 0);
   let n = 0;
   for (const h of leaving) n += moveHousehold(x, h, st, dest);
-  if (n >= 3) tell(x.u, x.p, 'diaspora.refugees', vars(x, st, -1, { other: dest.name, count: n }), dest, [settlementRef(x, st), settlementRef(x, dest)], 2);
+  // (fix r2 #7) a disaster's ruin is told as such, never as flight from conquerors that were not there
+  if (n >= 3) tell(x.u, x.p, cause === 'disaster' ? 'diaspora.ruin' : 'diaspora.refugees', vars(x, st, -1, { other: dest.name, count: n }), dest, [settlementRef(x, st), settlementRef(x, dest)], 2);
   return n;
 }
 

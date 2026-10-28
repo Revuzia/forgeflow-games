@@ -325,7 +325,7 @@ function consequences(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
     if (bs.length < 3) continue;
     const ruined = bs.filter((b) => b.flags & BuildingFlag.ruined).length;
     if (ruined / bs.length >= 0.5) {
-      const n = refugees(x, st, st.polity);
+      const n = refugees(x, st, st.polity, 'disaster');
       if (n > 0) accident(x, st, 'refugees', st.cell);
     }
     if (ruined > 0) { st.recent.rebuild = x.tick; accident(x, st, 'rebuild', st.cell); }
@@ -819,11 +819,15 @@ function quake(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: Ef
   const ls = num(e, 'landslide') * Math.min(3, sev);
   if (ls > 0) landslides(p, pos, R, ls);
   if (num(e, 'sink') > 0) {
-    // (fix r2 #12, LIVING §3.7: the pit's reach is the god's reach R(w), as the wreck's already is — at the law the full
-    // 70 m pit drowned the whole heart of a 45 m town and every house in it)
-    brush(u, p, 'lower', pos, R * harmScale().R, num(e, 'sink') * Math.sqrt(I));
-    wreckBuildings(u, p, pos, R, 2, 'sinkhole', { flat: true });
-    hurtPeople(u, p, pos, R, 1.2, DEATH.disaster, { flat: true, chance: 0.7, salt: 0x51 });
+    // (fix r2 #12, LIVING §3.7: the pit is the harm — its radius scales by the god's reach R(w) and lethality L(w), 29 m
+    // at the law, the full 70 m at wrath 1 and for nature's; and below full wrath it opens a cell's width off the place
+    // aimed at, at the edge of the town, not under its heart: a town of 30 keeps 17 of its 20 houses in its heart cell,
+    // and the pit there filled from the spring overnight and drowned 15 of them)
+    const wsk = harmScale();
+    const sat = wsk.w !== null && wsk.w < 1 ? moveBy(pos, bearingDir(pos, hashFloat(d.seed, 0x51b) * 2 * Math.PI), p.edgeM * 1.2, p.st.radius) : pos;
+    brush(u, p, 'lower', sat, R * wsk.R * wsk.L, num(e, 'sink') * Math.sqrt(I));
+    wreckBuildings(u, p, sat, R * wsk.L, 2, 'sinkhole', { flat: true });
+    hurtPeople(u, p, sat, R * wsk.L, 1.2, DEATH.disaster, { flat: true, chance: 0.7, salt: 0x51 });
   }
   if (num(e, 'rift') > 0) {
     const b = hashFloat(d.seed, 0x21f) * Math.PI;

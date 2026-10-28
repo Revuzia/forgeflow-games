@@ -911,7 +911,7 @@ function question(c: Command, param: string, label: string): string {
     mode: 'What should they do? (worship, farm, build, teach, preach, or go as a missionary).',
     biome: 'Paint which land? ("turn the land around Aru into desert").',
     law: 'Which law? (peace, worship, learning, labour, hospitality, tradition, war, no fire, no hunting, sharing).',
-    miracle: 'Which miracle? (water, food, heal, forest, storm, fire, fireball, shield, lightning, wood, fertility, calm, teach, meteor).',
+    miracle: 'Which sigil? (rain, food, heal, forest, storm, fire, fireball, ward, lightning, wood, fertility, calm, teach, meteor).',
     from: 'Blow from where? ("make the wind blow from the east").',
     act: 'Do what? (gather, wood, fish, hunt, build, pray, preach, teach, eat, drink, sleep, dance, fight, rest, explore).',
   };
@@ -2255,6 +2255,23 @@ function recipeOf(cx: PCtx2, s: string): Found | null {
   return null;
 }
 
+/** (fix r2 #17) a craft named by an infinitive verb and its object: "to smelt tin" -> tin-smelting, "to cut wood" ->
+ *  woodcutting, "to build houses" -> house-building, "to make rope" -> rope-making, "to roast fish" -> fish-roasting.
+ *  A recipe whose id holds the object's stem and the verb's -ing form; the simplest such craft wins. */
+function craftOfPhrase(cx: PCtx2, s: string): string | null {
+  const m = s.match(/\bto ([a-z]+) (?:the |their |some |a |an )?([a-z]+)/);
+  if (!m) return null;
+  const v = m[1], n = singular(m[2]);
+  if (n.length < 3) return null;
+  const ing = /e$/.test(v) && !/ee$/.test(v) ? `${v.slice(0, -1)}ing` : /^[^aeiou]*[aeiou][bdgklmnprt]$/.test(v) ? `${v}${v.slice(-1)}ing` : `${v}ing`;
+  const R = cx.u.content.recipes.list;
+  const hit = R.filter((q) => {
+    const id = q.id;
+    return (id.includes(n) || id.includes(m[2])) && (id.includes(ing) || id.includes(`-${v}`) || id.startsWith(`${v}-`));
+  }).sort((a, b) => (a.knowledge?.length ?? 0) - (b.knowledge?.length ?? 0) || R.indexOf(a) - R.indexOf(b));
+  return hit.length ? hit[0].id : null;
+}
+
 function intentPerson(c: Clause): boolean {
   const { s, cx, mods, full } = c;
   const { u, p } = cx;
@@ -2930,7 +2947,14 @@ function intentIdeas(c: Clause): boolean {
       return true;
     }
     // "teach everyone to read" -> writing; "teach them to count" -> numbers ...
-    const verbIdea: [RegExp, string][] = [[/\b(read|write|reading|writing|letters)\b/, 'writing'], [/\b(count|counting|numbers|arithmetic)\b/, 'counting'], [/\b(farm|farming|plough|sow)\b/, 'agriculture'], [/\b(make fire|light fires|fire)\b/, 'fire-making'], [/\b(fish|fishing)\b/, 'fishing'], [/\b(hunt|hunting)\b/, 'hunting'], [/\b(sail|sailing|boats?)\b/, 'boatbuilding'], [/\b(heal|healing|medicine)\b/, 'herbalism'], [/\b(pray|praying|worship)\b/, 'religion']];
+    // (fix r2 #17) "teach Aru to smelt tin / cut wood / build houses / make rope": the craft named by its verb and object
+    const crafted = craftOfPhrase(cx, s);
+    if (crafted) {
+      if (mods.place?.settlement !== undefined && !force) c.add({ k: 'settlement.teach', knowledge: crafted }, 'teach');
+      else c.add({ k: 'idea.teach', knowledge: crafted, ...(force ? { force: true } : {}) }, 'teach');
+      return true;
+    }
+    const verbIdea: [RegExp, string][] = [[/\b(tame|taming)\b.*\bdogs?\b|\bdogs?\b.*\btame/, 'dog-taming'], [/\b(herd|herding|shepherd\w*|tame|taming|domesticate\w*|keep|raise|rear|breed)\b.*\b(animals?|beasts|goats?|sheep|cattle|cows?|oxen|pigs?|swine|horses?|herds?|flocks?|livestock|llamas?|alpacas?|yaks?|camels?|donkeys?|reindeer|buffalo|chickens?|geese|ducks?)\b|\b(herd|herding|husbandry|shepherding|livestock)\b/, 'animal-husbandry'], [/\b(milk|milking|dairy|cheese|butter)\b/, 'dairy'], [/\b(tan|tanning|cure (hides|skins|leather)|leather)\b/, 'tanning'], [/\b(hides?|skins?|pelts?)\b/, 'hide-working'], [/\b(brew|brewing|beer|ale|mead)\b/, 'brewing'], [/\b(bake|baking|bread)\b/, 'baking'], [/\b(irrigate|irrigation|canals?|ditches)\b/, 'irrigation'], [/\b(ride|riding)\b/, 'horse-riding'], [/\b(sew|sewing|tailor\w*|clothes|clothing)\b/, 'tailoring'], [/\b(spin|spinning|weave|weaving|loom)\b/, 'weaving'], [/\b(dig|digging) wells?\b|\bwells?\b/, 'well-digging'], [/\b(mine|mining)\b/, 'mining'], [/\b(cook|cooking)\b/, 'cooking'], [/\b(read|write|reading|writing|letters)\b/, 'writing'], [/\b(count|counting|numbers|arithmetic)\b/, 'counting'], [/\b(farm|farming|plough|sow)\b/, 'agriculture'], [/\b(make fire|light fires|fire)\b/, 'fire-making'], [/\b(fish|fishing)\b/, 'fishing'], [/\b(hunt|hunting)\b/, 'hunting'], [/\b(sail|sailing|boats?)\b/, 'boatbuilding'], [/\b(heal|healing|medicine)\b/, 'herbalism'], [/\b(pray|praying|worship)\b/, 'religion']];
     const vi = verbIdea.find(([re]) => re.test(s));
     if (vi && u.content.recipes.find(vi[1])) {
       if (mods.place?.settlement !== undefined && !force) c.add({ k: 'settlement.teach', knowledge: vi[1] }, 'teach');
