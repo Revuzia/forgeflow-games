@@ -225,13 +225,15 @@ Blockers come first, then majors ordered by how much they hurt a player's abilit
   4. Acceptance, measured in the harness with VFX and UI hidden:
      - lane p50 85–100;
      - walkable p95 − p5 ≤ 45;
-     - frame p50 55–75, p95 ≤ 130, p99 ≤ 160;
+     - frame p50 55–75 (FRAY: ≤ 90, see the deviation below), p95 ≤ 130, p99 ≤ 160;
      - no environment pixel above 180, except authored lamp emissives covering ≤ 2 % of pixels;
-     - fighters keep tokens `fighter.valueLstar` top25 at 70–85 (≥ 30 L* above lane);
+     - fighters keep tokens `fighter.valueLstar` top25 at 70–85 (≥ 30 L* above lane), with under 2 % of fighter pixels above L* 90;
      - wick hoods L* ≤ 65;
      - a T4 flash raises the fight-area mean by ≥ 2.0×.
+     - **FRAY deviation (justified, round 2):** the Noonplate is one open plate, so its floor is the lane and fills about 86 % of every FRAY frame. Held in its band (L* 34–40, luma ≈ 80–95, the same band as the other maps' lanes), the plate sets the frame median (measured 85), so frame p50 55–75 and lane p50 85–100 cannot both hold. FRAY gates frame p50 ≤ 90 instead. Every other gate is unchanged, so the top of the range still belongs to characters, effects and UI (tokens `grade.maps.fray.frameLuma`).
   5. Re-run readability on all three maps at 720p Low, the camera sign-off tier.
-- **Files:** _design/tokens.json, content/maps/map_rift.json, content/maps/map_bridge.json, content/maps/map_fray.json, src/render/terrain.ts, src/render/terrain_glsl.ts, art/out/grade/vale_grade_01.cube, tools/terrain_textures.py
+  6. Characters carry their own light rather than the world getting brighter (round 2, tokens `grade.fighterLight.rig`, src/render/lighting.ts `CHAR_LIGHT`). It is a camera-following shading term on character materials only: a top-and-back Fresnel crown with a value floor so dark kits read, plus a soft eye fill. A knee fades it out where the world's light is already bright. Wicks and monsters take only a faint crown on dark cloth. No light object or shadow map is added, and environment, VFX and HUD pixels are untouched.
+- **Files:** _design/tokens.json, content/maps/map_rift.json, content/maps/map_bridge.json, content/maps/map_fray.json, src/render/terrain.ts, src/render/terrain_glsl.ts, art/out/grade/vale_grade_01.cube, tools/terrain_textures.py, src/render/lighting.ts, src/render/world_material.ts
 
 ### M1. Ground warnings start too late, are too short, or are hidden from enemies (major, M)
 - **LoL bar:**

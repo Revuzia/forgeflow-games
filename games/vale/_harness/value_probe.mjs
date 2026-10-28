@@ -3,7 +3,8 @@
 // gameplay camera over named spots, VFX and UI hidden, fog of war off (every region lit: the authored values,
 // the strict case). Per map and tier it reports, from the DISPLAY pixels (sRGB 8-bit, what a capture measures):
 //
-//   frame      Rec.709 luma (0-255) p5 / p50 / p95 / p99 of the whole frame
+//   frame      Rec.709 luma (0-255) p5 / p50 / p95 / p99 of the whole frame (FRAY gates p50 <= 90, not 55-75: its
+//              plate is the lane and fills ~86 % of the frame; tokens grade.maps.fray.frameLuma, r12 B5.4)
 //   masks      the same per region, from a CLASS PASS: the scene drawn again into an 8-bit target with every
 //              material's fragment output replaced by its region id — the ground's from the terrain's OWN baked
 //              region fields (uSplat / uSplat2: lane, camp room, brush, Standing Shadow, Fallen Shaft; plazas,
@@ -23,7 +24,8 @@
 //              lamp emissives (landmark emissive materials, the ground's lit inlays) and everything else
 //   fighters   CIE L* of the fighter pixels: top-25 % (mean of the pixels at or above the 75th percentile), p75,
 //              middle-50 and the gap to the lane's L* p50, pooled and per fighter (one extra spot on every live
-//              fighter with art; a fighter still on the dev mannequin is left out); wicks and structures for information
+//              fighter with art; a fighter still on the dev mannequin is left out); blow-out: p99 and the share of
+//              fighter pixels above L* 90 (gt90, pooled and per fighter); wicks, monsters and structures for information
 //   flash      a T4 ultimate landing (injected area event of a real ultimate, the director's own path: its VFX
 //              and the default impact envelope) at your fighter: the mean luma of the 3.5 m impact disc on
 //              screen, before vs the brightest frame of the next 0.8 s (sim held, VFX on, UI hidden)
@@ -409,9 +411,12 @@ function summarise(spots, C, fspots = {}) {
   const wick = pool(hists, [String(C.wick)]);
   const structure = pool(hists, [String(C.structure)]);
   const laneL = masks.lane?.lstarP50 ?? null;
+  const monster = pool(hists, [String(C.monster)]);
+  /** share of an L* histogram (0.5 steps) above L* `v` */
+  const above = (h, v) => { let n = 0, t = 0; h.forEach((c, i) => { t += c; if (i * 0.5 > v) n += c; }); return t ? +(n / t).toFixed(4) : 0; };
   const fig = fighter && {
     px: fighter.n, top25: topMean(fighter.lstar, 0.75, 0.5), p75: pct(fighter.lstar, 0.75, 0.5), p50: pct(fighter.lstar, 0.5, 0.5), p25: pct(fighter.lstar, 0.25, 0.5),
-    p95: pct(fighter.lstar, 0.95, 0.5), lumaP95: pct(fighter.luma, 0.95),
+    p95: pct(fighter.lstar, 0.95, 0.5), p99: pct(fighter.lstar, 0.99, 0.5), gt90: above(fighter.lstar, 90), lumaP95: pct(fighter.luma, 0.95),
   };
   if (fig && laneL != null) fig.overLane = +(fig.top25 - laneL).toFixed(1);
   // per fighter (pooled over the spots it appears in)
@@ -423,7 +428,8 @@ function summarise(spots, C, fspots = {}) {
       const o = (per[def] ??= { n: 0, lstar: null });
       o.n += e.n; o.lstar = add(o.lstar, e.lstar);
     }
-    fig.per = Object.fromEntries(Object.entries(per).filter(([, o]) => o.n >= 400).map(([d, o]) => [d, { px: o.n, top25: topMean(o.lstar, 0.75, 0.5), p75: pct(o.lstar, 0.75, 0.5), p50: pct(o.lstar, 0.5, 0.5), p25: pct(o.lstar, 0.25, 0.5) }]));
+    fig.per = Object.fromEntries(Object.entries(per).filter(([, o]) => o.n >= 400).map(([d, o]) => [d, { px: o.n, top25: topMean(o.lstar, 0.75, 0.5), p75: pct(o.lstar, 0.75, 0.5), p50: pct(o.lstar, 0.5, 0.5), p25: pct(o.lstar, 0.25, 0.5), gt90: above(o.lstar, 90) }]));
+    fig.maxGt90 = Math.max(0, ...Object.values(fig.per).map((o) => o.gt90));
     const tops = Object.values(fig.per).map((o) => o.top25).sort((a, b) => a - b);
     fig.medianTop25 = tops.length ? tops[Math.floor(tops.length / 2)] : null;
   }
@@ -433,6 +439,7 @@ function summarise(spots, C, fspots = {}) {
       byClass: Object.fromEntries([...new Set(hists.flatMap((h) => Object.keys(h)).filter((k) => k.startsWith('env180_')))].map((k) => [k.slice(7), pool(hists, [k])?.n ?? 0])) },
     fighters: fig,
     wicks: wick && { px: wick.n, top25: topMean(wick.lstar, 0.75, 0.5), p95: pct(wick.lstar, 0.95, 0.5), lumaP95: pct(wick.luma, 0.95) },
+    monsters: monster && { px: monster.n, top25: topMean(monster.lstar, 0.75, 0.5), p95: pct(monster.lstar, 0.95, 0.5) },
     structures: structure && { px: structure.n, top25: topMean(structure.lstar, 0.75, 0.5), p95: pct(structure.lstar, 0.95, 0.5) },
     perSpot: Object.fromEntries(Object.entries(spots).map(([k, s]) => {
       const f = s.hist.frame; const ln = s.hist[String(C.lane)];
@@ -441,19 +448,22 @@ function summarise(spots, C, fspots = {}) {
   };
 }
 
-function verdict(s, flash) {
+function verdict(s, flash, map) {
   const ok = (c) => (c ? 'PASS' : 'FAIL');
   const v = {};
   if (s.masks.lane) v.laneP50 = `${s.masks.lane.p50} ${ok(s.masks.lane.p50 >= 85 && s.masks.lane.p50 <= 100)} (85-100)`;
   if (s.masks.walkable) v.walkableSpread = `${s.masks.walkable.spread} ${ok(s.masks.walkable.spread <= 45)} (<= 45)`;
   if (s.masks.lane) v.laneSpread = `${s.masks.lane.spread} ${ok(s.masks.lane.spread <= 45)} (<= 45)`;
-  v.frameP50 = `${s.frame.p50} ${ok(s.frame.p50 >= 55 && s.frame.p50 <= 75)} (55-75)`;
+  // FRAY: the plate is the lane and fills ~86 % of the frame, so its median follows the plate (tokens grade.maps.fray.frameLuma)
+  v.frameP50 = map === 'fray' ? `${s.frame.p50} ${ok(s.frame.p50 <= 90)} (<= 90, FRAY: follows the plate)` : `${s.frame.p50} ${ok(s.frame.p50 >= 55 && s.frame.p50 <= 75)} (55-75)`;
   v.frameP95 = `${s.frame.p95} ${ok(s.frame.p95 <= 130)} (<= 130)`;
   v.frameP99 = `${s.frame.p99} ${ok(s.frame.p99 <= 160)} (<= 160)`;
   v.env180 = `other ${(s.env180.otherShare * 100).toFixed(3)} % of env, lamps ${(s.env180.lampShareOfFrame * 100).toFixed(3)} % of frame ${ok(s.env180.otherShare <= 0.0005 && s.env180.lampShareOfFrame <= 0.02)}`;
   if (s.masks.ground) v.groundSat = `${s.masks.ground.sat} ${ok(s.masks.ground.sat >= 0.17 && s.masks.ground.sat <= 0.40)} (0.17-0.40; spec 0.22-0.35)`;
   if (s.fighters) v.fighterTop25 = `${s.fighters.top25} ${ok(s.fighters.top25 >= 70 && s.fighters.top25 <= 85)} (70-85), over lane ${s.fighters.overLane} ${ok((s.fighters.overLane ?? 99) >= 30)} (>= 30)`;
+  if (s.fighters) v.fighterBlowout = `above L* 90: ${(s.fighters.gt90 * 100).toFixed(2)} % of fighter pixels ${ok(s.fighters.gt90 < 0.02)} (< 2 %), worst fighter ${(s.fighters.maxGt90 * 100).toFixed(1)} %, p99 ${s.fighters.p99}`;
   if (s.wicks) v.wickTop25 = `${s.wicks.top25} (info: <= 65, WICK lane)`;
+  if (s.monsters) v.monsterTop25 = `${s.monsters.top25} (info)`;
   if (flash) v.flash = `${flash.ratio}x ${ok(flash.ratio >= 2.0)} (>= 2.0x)`;
   return v;
 }
@@ -493,7 +503,7 @@ for (const map of MAPS) for (const tier of TIERS) {
     let flash = null;
     if (FLASH) flash = await V((v) => v.flash('marund_domefall', 'marund_ult_domefall', 3.5));
     const s = summarise(res, C, fres);
-    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, flash, verdict: verdict(s, flash), logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
+    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, flash, verdict: verdict(s, flash, map), logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
     report.runs[TAG][`${map}_${tier}`] = out;
     report.generated = new Date().toISOString();
     writeFileSync(REPORT, JSON.stringify(report, null, 1));

@@ -7,6 +7,7 @@
 // shadow texels, so the map never shimmers while the camera pans. PCF (r186: Vogel-disk PCF) from
 // High up; tier 1 is 1024² "hard" (radius 0.5), tier 0 has no sun shadows (blob contact shadows
 // carry grounding then). Fighters soften what they receive in world_material.ts (≥ 75 % in shadow).
+// Characters also carry their own light (CHAR_LIGHT below, world_material.ts): no light object, no shadow map.
 
 import {
   BasicShadowMap, Color, DirectionalLight, Matrix4, Object3D, PCFShadowMap, type PerspectiveCamera,
@@ -16,17 +17,22 @@ import { worldUniforms } from './world_material.ts';
 
 export interface SunSpec { sunDir: readonly [number, number, number]; sunColor: string; sunIntensity: number }
 
-/** tokens.json `grade.fighterLight` (key) and `grade.fighterLight.rig` (the character light, world_material.ts): the key's
- *  share of the sun; the noon crown (view-space direction, Fresnel power, radiance as luminance in linear light, its hue
- *  Noonwhite leaned toward the sun's colour, the albedo value floor); the eye fill (luminance, Noonwhite); the wick and
- *  monster share. The same on every map: a character reads alike wherever it stands. */
+/** tokens.json `grade.fighterLight` (the key) and `grade.fighterLight.rig` (the character light, world_material.ts):
+ *  the key's share of the sun; the noon crown (view-space direction, Fresnel power, radiance as luminance in linear light,
+ *  its hue Noonwhite leaned toward the sun's colour, the albedo value floor); the eye fill (luminance, Noonwhite); the
+ *  knee (the light fades out as the world's own light on the surface rises through this linear luminance range); the
+ *  wick and monster share of the crown. The same on every map: a character reads alike wherever it stands. */
 export const CHAR_LIGHT = {
   keyOfSun: 0.9,
-  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 0.9, sunHue: 0.5, albedoFloor: 0.22 },
-  fill: { luminance: 0.12 },
-  unitShare: 0.3,
+  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3 },
+  fill: { luminance: 0.7 },
+  knee: [0.25, 0.75] as const,
+  unitShare: 0.35,
 } as const;
-const NOONWHITE = '#F4EFE2';
+const NOONWHITE = new Color().setStyle('#F4EFE2');
+const _crown = new Color();
+const _sunHue = new Color();
+const lum = (c: Color): number => Math.max(1e-4, 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b);
 
 const CEILING = 6;
 const QUANT = 2;
@@ -67,14 +73,12 @@ export class Sun {
     // the character light: crown and fill radiance set here as luminance (hue only from Noonwhite and the sun)
     const W = worldUniforms, C = CHAR_LIGHT;
     W.valeCharKey.value = C.keyOfSun;
-    const lum = (c: Color): number => Math.max(1e-4, 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b);
-    const noon = new Color().setStyle(NOONWHITE);
-    const crown = noon.clone().lerp(new Color().setStyle(spec.sunColor), C.crown.sunHue);
+    const crown = _crown.copy(NOONWHITE).lerp(_sunHue.setStyle(spec.sunColor), C.crown.sunHue);
     crown.multiplyScalar(C.crown.luminance / lum(crown));
     W.valeCharRim.value.set(crown.r, crown.g, crown.b, C.crown.power);
     W.valeCharRimDir.value.set(C.crown.viewDir[0], C.crown.viewDir[1], C.crown.viewDir[2]).normalize();
-    W.valeCharFill.value.copy(noon).multiplyScalar(C.fill.luminance / lum(noon));
-    W.valeCharShape.value.set(C.crown.albedoFloor, C.unitShare, 50, 51);
+    W.valeCharFill.value.copy(NOONWHITE).multiplyScalar(C.fill.luminance / lum(NOONWHITE));
+    W.valeCharShape.value.set(C.crown.albedoFloor, C.unitShare, C.knee[0], C.knee[1]);
   }
 
   /** 0 off · 1 1024² hard · 2 2048² PCF · 3 4096² PCF */

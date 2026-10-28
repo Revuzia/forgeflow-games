@@ -20,7 +20,9 @@
 //     from the camera), so a character's upper outline lifts off the ground under it. Its albedo carries a
 //     value floor (hue kept), so a dark kit's edge reads as well as a pale one's;
 //   * the eye fill: a soft fill from the camera that lifts the mid-tones the key leaves in its shadow side.
-// Fighters take all of it; wicks and monsters (`unit`) take a smaller share and keep the sun as their key.
+// A knee fades both out where the world's own light (key, sky, specular) already lights the surface brightly, so
+// pale kits never blow out. Fighters take all of it; wicks and monsters (`unit`) keep the sun as their key and
+// take only a share of the crown, on their darker cloth.
 //
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
@@ -45,11 +47,12 @@ export const worldUniforms = {
   valeKeyDir: { value: new Vector3(-0.5, 0.7071, 0.5).normalize() },
   valeCharKey: { value: 0.9 },
   // the character light (lighting.ts CHAR_LIGHT): crown direction (view space), crown radiance (rgb, linear) and
-  // Fresnel power (a), eye-fill radiance, and x = the crown's albedo value floor, y = the wick/monster share
+  // Fresnel power (a), eye-fill radiance, and x = the crown's albedo value floor, y = the wick/monster share,
+  // zw = the knee (linear luminance of the world's light on the surface where the character light starts / ends fading)
   valeCharRimDir: { value: new Vector3(0, 0.8, -0.6).normalize() },
   valeCharRim: { value: new Vector4(0, 0, 0, 3) },
   valeCharFill: { value: new Color(0, 0, 0) },
-  valeCharShape: { value: new Vector4(0.2, 0.3, 50, 51) },
+  valeCharShape: { value: new Vector4(0.3, 0.35, 0.25, 0.75) },
 };
 
 /** GLSL: the fog-of-war + edge haze functions (shared with custom ShaderMaterials) */
@@ -134,7 +137,7 @@ const CHAR_LIGHT = /* glsl */`
   vec3 valeAlb = min( diffuseColor.rgb * ( max( valeLa, valeCharShape.x ) / max( valeLa, 0.02 ) ), vec3( 1.0 ) );
   #ifdef VALE_CHAR_UNIT
   // wicks and monsters keep the sun as their key: a share of the crown, on their darker cloth only (a pale hood takes none)
-  vec3 valeAdd = valeCharShape.y * ( 1.0 - smoothstep( 0.12, 0.3, valeLa ) ) * valeCharRim.rgb * valeRim * valeAlb;
+  vec3 valeAdd = valeCharShape.y * ( 1.0 - smoothstep( 0.05, 0.16, valeLa ) ) * valeCharRim.rgb * valeRim * valeAlb;
   #else
   vec3 valeAdd = valeCharRim.rgb * valeRim * valeAlb + valeCharFill * ( 0.4 + 0.6 * valeNdV ) * material.diffuseColor;
   #endif
@@ -183,7 +186,7 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
         .replace('#include <opaque_fragment>', `outgoingLight = valeApplyWorldFog( outgoingLight, vValeWorld );\n#include <opaque_fragment>`);
     }
     if (fighter) {
-      // the one directional light (the sun) becomes the fighter's view-space key at 0.9 × its colour;
+      // the one directional light (the sun) becomes the fighter's view-space key at valeCharKey × its colour;
       // its shadow keeps ≥ 75 % of the key
       const lights = ShaderChunk.lights_fragment_begin
         .split('getDirectionalLightInfo( directionalLight, directLight );')
