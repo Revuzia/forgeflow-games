@@ -11,7 +11,7 @@
 //   no item or ability ground within 30 (L1) of the old shared navy (13,20,32).
 //   fill = share of pixels more than 60 (L1) from that ground (the review's subject-coverage measure), reported.
 // Also lists every item, ability, spell and boon whose icon is missing (the HUD draws its fallback glyph; the
-// art is generated in a later pass). Exit 1 on any failure. Report: _harness/_reports/fw_W2_icon_probe.json.
+// art is generated in a later pass), and every item that borrows another item's painting (with the family it shows). Exit 1 on any failure. Report: _harness/_reports/fw_W2_icon_probe.json.
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -141,6 +141,13 @@ R.summary.families = Object.fromEntries(fams.map((f) => [f, Object.values(R.item
 // ── missing art (fallback glyph until the generation pass) ───────────────────────────────────────
 const have = (ref) => !!ref && existsSync(join(VALE, 'content/ui', ref.replace(/^assets\/ui\//, '')));
 for (const it of items) if (!have(it.icon)) R.missing.push({ kind: 'item', id: it.id, icon: it.icon ?? null });
+// an item that borrows another item's painting (a placeholder until its own is generated): listed, and flagged when the
+// painting's ground is another ledger family's (the HUD then shows the wrong family colour for it)
+const byId = Object.fromEntries(items.map((it) => [it.id, it]));
+R.borrowed = items.filter((it) => it.icon && have(it.icon) && it.icon.split('/').pop().replace(/\.\w+$/, '') !== it.id).map((it) => {
+  const owner = byId[it.icon.split('/').pop().replace(/\.\w+$/, '')];
+  return { id: it.id, icon: it.icon, family: familyOf(it), paintedFamily: owner ? familyOf(owner) : null };
+});
 for (const fn of readdirSync(famDir).filter((x) => x.endsWith('.json'))) {
   const d = JSON.parse(readFileSync(join(famDir, fn), 'utf8'));
   for (const k of Object.values(d.kit)) if (k?.id && !have(k.icon)) R.missing.push({ kind: 'ability', id: k.id, icon: k.icon ?? null });
@@ -155,6 +162,7 @@ for (const [kind, s] of Object.entries(R.summary)) if (kind !== 'families') for 
 console.log('families', JSON.stringify(R.summary.families), 'centroids', JSON.stringify(centroid));
 console.log('closest grounds across families', JSON.stringify(minPair));
 console.log(`missing icons (fallback glyph): ${R.missing.length ? R.missing.map((m) => `${m.kind}:${m.id}`).join(', ') : 'none'}`);
+if (R.borrowed.length) console.log(`items borrowing another item's painting (need their own): ${R.borrowed.length} — ${R.borrowed.map((b) => `${b.id}${b.paintedFamily && b.paintedFamily !== b.family ? ` [${b.family} on ${b.paintedFamily} ground]` : ''}`).join(', ')}`);
 if (R.failures.length) {
   console.log(`FAIL ${R.failures.length}`);
   for (const f of R.failures.slice(0, 25)) console.log('  ✗', JSON.stringify(f));
