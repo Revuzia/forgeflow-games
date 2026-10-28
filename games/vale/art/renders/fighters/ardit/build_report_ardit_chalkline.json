@@ -188,31 +188,31 @@
   },
   "uv_coverage": 0.617,
   "bake": {
-    "base": 12.2,
-    "rough_metal": 6.19,
-    "normal": 5.77,
-    "ao": 5.44,
+    "base": 4.68,
+    "rough_metal": 3.89,
+    "normal": 2.18,
+    "ao": 4.06,
     "normal_fixed_px": 139518,
-    "projection": 60.32,
-    "pack_save": 60.61,
-    "total": 91.69
+    "projection": 54.03,
+    "pack_save": 54.37,
+    "total": 69.34
   },
   "tris": 20151,
   "mesh_top_m": 2.476,
-  "glb_bytes_raw": 2429484,
+  "glb_bytes_raw": 2435848,
   "optimize": {
     "ok": true,
-    "before": 2429484,
-    "after": 955180,
+    "before": 2435848,
+    "after": 957324,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 955180,
+  "glb_bytes": 957324,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_chalkline.glb (933 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_chalkline_base 2048x2048 241K, ardit_chalkline_normal 512x512 36K, ardit_chalkline_orm 512x512 55K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_chalkline.glb (935 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_chalkline_base 2048x2048 243K, ardit_chalkline_normal 512x512 36K, ardit_chalkline_orm 512x512 55K",
       "  skinned meshes: ardit_accent(360v), ardit_chalkline(16907v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise_top shoulderR upper_armR forearmR handR propR x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
       "  clips: ",
@@ -227,8 +227,8 @@
       "portrait": "art/out/fighters/ardit/ardit_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 10.19,
-      "portrait": 6.45
+      "splash": 17.37,
+      "portrait": 8.04
     }
   },
   "three_qa": {
@@ -260,24 +260,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_chalkline.png",
-    "seconds": 11.3,
+    "seconds": 17.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.21,
-      "model": 5.08,
-      "lows_bind": 9.2,
-      "uv": 13.02,
-      "bake": 91.69,
-      "export": 0.16,
-      "optimize": 0.73,
-      "load_test": 0.13,
-      "render": 16.68,
-      "three_qa": 11.62
+      "materials": 0.1,
+      "model": 3.18,
+      "lows_bind": 3.37,
+      "uv": 3.03,
+      "bake": 69.35,
+      "export": 0.17,
+      "optimize": 1.02,
+      "load_test": 0.28,
+      "render": 25.47,
+      "three_qa": 17.53
     },
-    "total_s": 148.61
+    "total_s": 123.54
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

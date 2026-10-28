@@ -65,10 +65,12 @@ PROPORTIONS = rig.proportions(height=2.30, head=0.32, neck=0.07, shoulder_width=
                               ankle_height=0.13, spine_curve=0.0, stance=0.065, toe_out_deg=11.0, knee_bend=0.016,
                               a_pose_deg=78.0, arm_forward_deg=4.0, elbow_bend_deg=20.0, shoulder_drop=0.135)
 MATERIAL_SET = "bible"
-PALETTE = materials.bible_palette(chalk="#D2CFC6", stone="#C9C6BE", cloth="#6F86A3", cloth2="#D9D6CE",
-                                  dawnglass="#B8D0E2", leather="#3F3632", ironstone="#3D434B", under="#2F2C2B",
+# the concept's own painted medians per role (sampled on the sheet): the albedo is the projected painting, so these
+# are what a skin's role gain is measured against (skin hex / role hex = the painted median moved onto the skin colour)
+PALETTE = materials.bible_palette(chalk="#D4D7CE", stone="#C5C8BF", cloth="#6A7B8C", cloth2="#C9CBC6",
+                                  dawnglass="#B8D0E2", leather="#383130", ironstone="#33353A", under="#2F2C2B",
                                   wood="#A88B68", sandstone="#B98E6E", ink="#17181B", accent="#3F9CFF",
-                                  gauntlet="#5E6F86")
+                                  gauntlet="#59636C")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_spear_tip", "spear_tip": "x_spear_tip", "pavise_top": "x_pavise_top"}
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
@@ -628,11 +630,14 @@ SIDEMAP = {"helm": (0.42, "back"), "pauldron_R": (0.50, "wrap"), "pauldron_L": (
 PAIRS = ("boots", "legs", "sleeves")
 TOPMAP = {                 # up-facing texels: the part's own front paint, depth (y) mapped onto this z band
     "helm": (2.262, 2.335), "pauldron_R": (1.935, 1.995), "pauldron_L": (1.935, 1.995), "tier_R": (1.70, 1.78),
-    "tier_L": (1.70, 1.78), "boots": (0.03, 0.12), "gorget": (1.88, 1.95), "cuirass": (1.70, 1.80),
+    "tier_L": (1.70, 1.78), "boots": (0.03, 0.12), "gorget": (1.86, 1.925), "cuirass": (1.70, 1.80),
     "greave_R": (0.45, 0.53), "greave_L": (0.45, 0.53), "bracer_R": (1.40, 1.48), "bracer_L": (1.40, 1.48),
     "belt": (1.40, 1.48),
 }
 BASE_TONE = {}             # part: (target median hex, hue strength, gamma) after the first look
+# the highest plate row a part may sample (m): the sculpted gorget rises 4 cm over the painted one, where the sheet
+# paints the bare neck: sampled there it read as a mouth across the collar
+ZMAX = {"gorget": 1.93}
 # the value cap (brief: no large area lighter than L* 86): albedo luminance above KNEE (L* ~80) is compressed by SLOPE,
 # so the concept's lit chalk crown (median L* 87) lands near L* 84 and its brightest licks near L* 88
 KNEE_Y, SLOPE = 0.56, 0.55
@@ -777,6 +782,10 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         f = np.clip((p[sel, 1] - y0) / max(1e-6, y1 - y0), 0, 1)
         zt = z1 - f * (z1 - z0)
         zs[sel] = zs[sel] * (1 - wt[sel]) + zt * wt[sel]
+    for name, zmax in ZMAX.items():
+        if name in names:
+            sel = k == names.index(name)
+            zs[sel] = np.minimum(zs[sel], zmax)
     soft = {s_: pj.blur(plates.img[s_], 2.5) for s_ in ("front", "back")}
     cols, bcols = {}, {}
     for side in ("front", "back"):
@@ -943,13 +952,51 @@ def _cap(img):
     return _srgb(lin * (Yc / np.maximum(Y, 1e-5))[..., None]).astype(np.float32)
 
 
+def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
+    """the shared role recolour (skin / base per channel, linear light) made hue-aware: a part's painting mixes its
+    role colour with other paint (the coat carries the concept's white under-skirt hem, the cuirass its pale seams), and
+    a per-channel gain turns those whites peach (review lesson: material colours). Each texel takes the full role gain
+    in proportion to how much it shares the base role colour's chroma; neutral paint takes only the luminance ratio."""
+    from common.hifi import project as pj
+    part = maps["part"]
+    iy, ix = pj.nearest_index(part >= 0)
+    pid = part[iy, ix]
+    lin = _lin(img)
+    out = lin.copy()
+    skip = skip or set()
+    lum = lambda c: 0.2126 * c[..., 0] + 0.7152 * c[..., 1] + 0.0722 * c[..., 2]  # noqa: E731
+    for i, n in enumerate(names):
+        r = roles.get(n)
+        if n in skip or not r or r == "accent" or r not in skin_pal or r not in base_pal:
+            continue
+        if str(base_pal[r]).lower() == str(skin_pal[r]).lower():
+            continue
+        B, S = _lin(_hex(base_pal[r])), _lin(_hex(skin_pal[r]))
+        gain = np.clip(S / np.maximum(B, 1e-4), 0.05, 8.0)
+        yg = float(np.clip(lum(S) / max(1e-4, lum(B)), 0.05, 8.0))
+        m = pid == i
+        c = lin[m]
+        cy = np.maximum(lum(c), 1e-4)[:, None]
+        dt = c / cy - 1.0                                   # the texel's chroma (0 = neutral)
+        db = B / max(1e-4, float(lum(B))) - 1.0             # the role colour's chroma
+        nb = float(np.linalg.norm(db))
+        if nb < 0.06:                                       # a near-neutral role (chalk, stone): plain gain
+            w = np.ones((len(c), 1), dtype=np.float32)
+        else:
+            nt = np.linalg.norm(dt, axis=1)
+            cos = (dt @ db) / np.maximum(nt * nb, 1e-6)
+            w = (np.clip(nt / nb, 0, 1) * np.clip(cos, 0, 1))[:, None]
+        out[m] = c * (gain[None, :] * w + yg * (1 - w))
+        log(f"  recolour {n} ({r}): {base_pal[r]} -> {skin_pal[r]}, gain {np.round(gain, 2).tolist()}, "
+            f"luminance {yg:.2f}, role share {float(w.mean()):.2f}")
+    return _srgb(out).astype(np.float32)
+
+
 def _install() -> None:
     from common.hifi import project
     if not getattr(project.recolour, "_ardit", False):
-        orig = project.recolour
-
         def recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
-            out = orig(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
+            out = _recolour(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
             if _SKIN["id"] in ("ardit_chalkline", "ardit_first_bell"):
                 out = _skin_marks(out, maps, names, _SKIN["id"], log=log)
             return _cap(out)

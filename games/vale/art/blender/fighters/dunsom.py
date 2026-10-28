@@ -175,11 +175,11 @@ HOOK_TOP = hook_pts()[5]
 # blue pane per side measured 0.3 %)
 LAN_A = 0.095                                      # body apothem (the posts' faces)
 LAN_GLASS = 0.088
-LAN_CUP = (0.090, 0.068)                           # the cupola: centre below HANG, radius
+LAN_CUP = (0.094, 0.080)                           # the cupola: centre below HANG, radius
 LAN_EAVE = (0.080, 0.106, 0.106)                   # the eave ring: top / bottom below HANG, bottom apothem
 LAN_BODY = (0.115, 0.330)                          # the panes: from / to below HANG
 LAN_BASE = (0.342, 0.392)
-PANE_W, PANE_H = 0.0255, 0.094                     # the core's half width / half height in each pane
+PANE_W, PANE_H = 0.0300, 0.096                     # the core's half width / half height in each pane
 
 
 def lan_z(dz):
@@ -204,8 +204,8 @@ PALETTE = materials.bible_palette(cloth2="#CAC5D4", sandstone="#C28C44", wood="#
                                   ironstone="#444048", ink="#17181B", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_crook_hook", "lantern": "x_lantern", "ferrule": "x_crook_foot"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 24.0, "portrait_yaw": -22.0,
-          "icon_yaw": -14.0}
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 24.0, "portrait_yaw": 24.0,
+          "icon_yaw": 14.0}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
@@ -431,9 +431,9 @@ def sculpts() -> list:
         band = 0.0022 * np.exp(-((r - 0.322) / 0.0055) ** 2) * (z > zm)
         return (d - band) * 0.93
     hat = Sculpt("hat")
-    hat.add(Lathe((HAT_C[0], HAT_C[1], 0.0), hat_prof, HAT_R + 0.01, 1.90, 2.08).displaced(felt(0.0016, 26.0), 0.0016), k=0.0)
+    hat.add(Lathe((HAT_C[0], HAT_C[1], 0.0), hat_prof, HAT_R + 0.01, 1.90, 2.08).displaced(felt(0.0007, 18.0), 0.0007), k=0.0)
     hat.add(Sphere((HAT_C[0], HAT_C[1], 2.032), 0.026), k=0.03)
-    part("hat", hat, "cloth2", "bone:head", 2300, 0.6, uvw=1.5)
+    part("hat", hat, "cloth2", "bone:x_hat", 2300, 0.6, uvw=1.5)
 
     # HOOD: a lavender column from under the hat to the scarf, framing the mask (the painted outline cut out in
     # front, a rolled edge round it); rigid on the head above the chin, blending to the neck and chest below
@@ -680,8 +680,8 @@ def lantern_parts() -> list:
     gl.add(Fn(lambda P: octa(P, c, LAN_GLASS, zb1, zb0), lo, hi), k=0.0)
     out.append(("lantern_glass", gl, 0.45, "lampresin", "bone:x_lantern", 220, 0.8))
     core = Sculpt("lantern_core")
-    for i in range(8):
-        a = math.radians(45.0 * i)
+    for i in range(4):
+        a = math.radians(90.0 * i)
         n = np.array([math.cos(a), math.sin(a), 0.0])
         t = np.array([-math.sin(a), math.cos(a), 0.0])
         pc = c + n * (LAN_GLASS + 0.0015) + np.array([0, 0, 0.5 * (zb0 + zb1)])
@@ -765,8 +765,15 @@ def rig_extras(ctx) -> None:
     lb.align_roll(V((0.0, -1.0, 0.0)))
     lb.parent = eb["prop.R"]
     lb.use_deform = True
+    hb = eb.new("x_hat")                                         # deforming: the hat stays near level (see level())
+    hb.head = V((HAT_C[0], HAT_C[1], 1.96))
+    hb.tail = V((HAT_C[0], HAT_C[1], 2.06))
+    hb.align_roll(V((0.0, -1.0, 0.0)))
+    hb.parent = eb["head"]
+    hb.use_deform = True
     bpy.ops.object.mode_set(mode="OBJECT")
     arm.pose.bones["x_lantern"].rotation_mode = "XYZ"
+    arm.pose.bones["x_hat"].rotation_mode = "XYZ"
     for b in arm.data.bones:
         info.lengths[b.name] = b.length
     info.joints["elbow.R"], info.joints["wrist.R"] = elv, wrv
@@ -1105,26 +1112,44 @@ def _calm(lin, k, p, n, names, log):
     return lin
 
 
-def _match_back(k, cols, wb, names, log):
-    """the back sheet is painted in shadow: per cloth part, the back projection's median moves onto the front's"""
+BACK_DETAIL = 0.65          # how much of the back sheet's own value variation (its fold strokes) survives
+
+
+def _match_back(k, p, cols, wb, names, log):
+    """The back sheet is lit differently (in shadow at the centre, a hot rim on the sides): a plain gain (build 2)
+    turned its rim strokes into white smears. Per cloth part, each back texel takes the FRONT's banded tone at its
+    height times its own value relative to the back's band (BACK_DETAIL of the contrast): the back keeps its painted
+    folds in the front's colour. The hood (its front is mostly the face opening) takes the hood's felt tone, a little
+    darker under the brim."""
     fr, bk = _lin(cols["front"]), _lin(cols["back"])
+    hood_lin = _lin(_hex(HOOD_HEX))
     for kk in np.unique(k):
-        if names[kk] not in BACK_PARTS:
+        nm = names[kk]
+        if nm not in BACK_PARTS:
             continue
         sel = k == kk
-        f = sel & (wb < 0.25) & (_Y(fr) > 0.012)
-        b = sel & (wb > 0.75) & (_Y(bk) > 0.008)
-        if f.sum() < 150 or b.sum() < 150:
+        zs = p[sel, 2]
+        b = sel & (wb > 0.6) & (_Y(bk) > 0.004)
+        if b.sum() < 150:
             continue
-        mf = np.median(fr[f], axis=0)
-        mb = np.median(bk[b], axis=0)
-        gain = np.clip(mf / np.maximum(mb, 1e-4), 0.75, 2.2) ** BACK_MATCH
-        bk[sel] = bk[sel] * gain
-        log(f"  dunsom back match {names[kk]}: gain {np.round(gain, 2).tolist()}")
+        if nm == "hood":
+            tf = hood_lin[None, :] * (1 - 0.30 * ss(1.78, 1.94, zs))[:, None]
+        else:
+            f = sel & (wb < 0.25) & (_Y(fr) > 0.012)
+            if f.sum() < 150:
+                continue
+            tf = _band_tone(p[f, 2], fr[f], zs, step=0.04)
+        tb = _band_tone(p[b, 2], bk[b], zs, step=0.04)
+        r = np.clip(_Y(bk[sel]) / np.maximum(_Y(tb), 1e-4), 0.35, 1.8) ** BACK_DETAIL
+        bk[sel] = tf * r[:, None]
+        log(f"  dunsom back match {nm}: front band tones x back detail ({int(b.sum())} texels)")
     cols["back"] = _srgb(bk)
 
 
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
+HOOD_FLOOR = 0.62           # no hood texel darker than this x the lit hood's median (the back sheet paints its back
+                            # in the brim's shadow: a black column from behind) except inside the face opening
+HOOD_HEX = "#7A6E86"        # the hood's felt (the coat's lavender): 40 % of its hue / chroma
 
 
 def _lam(n, lo=0.70, k=0.36):
@@ -1137,13 +1162,13 @@ def _hat_paint(p, n):
     q = p[:, :2] - HAT_C[None, :]
     r = np.hypot(q[:, 0], q[:, 1])
     th = np.arctan2(q[:, 1], q[:, 0])
-    top = _lin(_hex("#C9BFD0"))
-    under = _lin(_hex("#6B5562"))
+    top = _lin(_hex("#ACA2B6"))
+    under = _lin(_hex("#5E4A55"))
     up = ss(-0.15, 0.35, n[:, 2])
     zt = hat_top(r)
     on_top = ss(zt - HAT_T * 0.75, zt - HAT_T * 0.35, p[:, 2]) * up
     brush = 1 + 0.045 * NOISE(np.stack([th * 3.0, r * 18.0, p[:, 2] * 0.0], 1), 1.0) + 0.03 * _fbm(p, 22.0)
-    c = top[None, :] * (brush * (0.90 + 0.14 * ss(0.30, 0.05, r)) * (0.94 + 0.10 * ss(-0.2, 0.8, n @ KEY)))[:, None]
+    c = top[None, :] * (brush * (0.86 + 0.20 * ss(0.32, 0.04, r)) * (0.90 + 0.14 * ss(-0.2, 0.8, n @ KEY)))[:, None]
     band = np.exp(-((r - 0.322) / 0.006) ** 2)
     stitch = (np.sin(th * 0.5 * 2 * math.pi * HAT_R / 0.012) > 0.3) * np.exp(-((r - 0.322) / 0.0025) ** 2)
     c = c * (1 - 0.10 * band - 0.10 * stitch)[:, None]
@@ -1161,8 +1186,8 @@ def _wood_paint(p, n):
     h, u = _hook_frame()
     th = np.arctan2(q @ np.cross(u, h), q @ h)
     grain = np.sin(th * 3.0 + s * 11.0 + 2.6 * NOISE(p * np.array([1, 1, 0.2]), 6.0)) * 0.5 + 0.5
-    base = _lin(_hex("#AE9F8E"))
-    dark = _lin(_hex("#6F6052"))
+    base = _lin(_hex("#8E7F70"))
+    dark = _lin(_hex("#54473C"))
     c = base[None, :] * (1 - 0.38 * grain ** 3)[:, None] + dark[None, :] * (0.38 * grain ** 3)[:, None]
     knots = np.clip(NOISE.ridged(p, 10.0, 2) - 0.55, 0, 1) * 1.6
     z = p[:, 2]
@@ -1225,7 +1250,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     size = maps["size"]
     out = np.zeros((size, size, 3), dtype=np.float32)
     idx, k, p, n, cols, wb = _proj_sides(maps, plates, vis, names, eps, log)
-    _match_back(k, cols, wb, names, log)
+    _match_back(k, p, cols, wb, names, log)
     col = cols["front"] * (1 - wb[:, None]) + cols["back"] * wb[:, None]
     lin = _lin(col)
     lin = _side_fill(lin, k, p, n, names, log)
@@ -1257,8 +1282,15 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     if m is not None:
         pp = p[m]
         sd = face_sd(pp[:, 0], pp[:, 2])
-        inner = ss(0.012, -0.004, sd) * ss(-0.10, -0.05, pp[:, 1])
-        lin[m] = lin[m] * (1 - 0.55 * inner)[:, None]
+        inner = ss(0.004, -0.006, sd) * ss(-0.10, -0.05, pp[:, 1])
+        c = lin[m]
+        Y = _Y(c)
+        fl = HOOD_FLOOR * float(_Y(_lin(_hex(HOOD_HEX))[None, :])[0])
+        lift = np.where(Y < fl, (fl - (fl - Y) * 0.35) / np.maximum(Y, 1e-4), 1.0)
+        lift = 1 + (np.minimum(lift, 3.0) - 1) * (1 - inner)
+        tone = _lin(_hex(HOOD_HEX))[None, :] * Y[:, None] / max(float(_Y(_lin(_hex(HOOD_HEX))[None, :])[0]), 1e-4)
+        c = c * 0.6 + tone * 0.4
+        lin[m] = c * (lift * (1 - 0.40 * inner))[:, None]
     m = sel("mask")
     if m is not None:
         pp = p[m]
@@ -1326,7 +1358,9 @@ def _refill(out, maps, names, log):
         c = out[own]
         mx, mn = c.max(1), c.min(1)
         sat = (mx - mn) / np.maximum(mx, 1e-3)
-        warm = (c[:, 0] > c[:, 2] + 0.06) & (sat > 0.32)
+        warm = ((c[:, 0] > c[:, 2] + 0.06) & (sat > 0.32)) | ((c[:, 0] > c[:, 2] + 0.025) & (sat > 0.18))
+        Yc = c @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+        warm |= (Yc > 1.35 * float(np.median(Yc))) & (c[:, 0] >= c[:, 2] - 0.005)
         if not warm.any():
             continue
         bad = np.zeros_like(own)
@@ -1689,6 +1723,23 @@ def _spin_feet(deg, lift_l=0.0, lift_r=0.0):
     return out
 
 
+TWIST_OUT = -35.0                         # prop.R's twist that turns the hook from out-forward to straight out
+HAT_LEVEL = 0.5                           # share of the body's pitch / roll the hat takes back (brief: the disc level)
+
+
+def level(fn):
+    """the hat's disc stays near level: x_hat takes back HAT_LEVEL of the summed hips..head pitch and roll (the brim
+    tilts half as far as the head through bows, kneels and stuns)"""
+    def sample(t):
+        p = dict(fn(t))
+        sx = sum(p.get(b, (0.0, 0.0, 0.0))[0] for b in ("hips", "spine", "chest", "neck", "head"))
+        sz = sum(p.get(b, (0.0, 0.0, 0.0))[2] for b in ("hips", "spine", "chest", "neck", "head"))
+        h = p.get("x_hat", (0.0, 0.0, 0.0))
+        p["x_hat"] = (h[0] - HAT_LEVEL * sx, h[1], h[2] - HAT_LEVEL * sz)
+        return p
+    return sample
+
+
 def clip_overrides(ctx) -> dict:
     """Brief §8: four distinct ability gestures, bespoke basics, impact at exactly 40 % of attacks / casts.
       attack1   a crook flick forward (25 f, f10)            attack2  a back-handed flick across (25 f, f10)
@@ -1805,15 +1856,15 @@ def clip_overrides(ctx) -> dict:
     # stay before the chest as it turns (left 44 deg at the wind, right 46 at the follow), and at the level mid-sweep
     # the right fist is at the right hip so the butt passes beside it
     wind = pose(torso=dict(hips=(6, 16, 0), spine=(4, 12, 0), chest=(5, 16, 0), neck=(0, -6, 0), head=(-2, -14, 0)),
-                hips=(0, 0.02, -0.10), R=(0.22, -0.55, -0.72), aim=(0.80, -0.50, -0.33), slide=S, grip=0.36,
+                hips=(0, 0.02, -0.10), R=(0.22, -0.55, -0.72), aim=(0.80, -0.53, -0.22), slide=S, grip=0.36,
                 feet=_feet(**crouch))
     gather = pose(torso=dict(hips=(3, 8, 0), spine=(2, 6, 0), chest=(3, 8, 0), head=(-1, -6, 0)), hips=(0, 0.01, -0.05),
                   R=(0.10, -0.45, -0.70), aim=(0.55, -0.40, 0.73), slide=S * 0.7, L=left_at(wind), Lp=(0.8, 0.4, -0.4))
     hit = pose(torso=dict(hips=(8, 0, 0), spine=(6, 0, 0), chest=(7, -2, 0), neck=(-2, 0, 0), head=(-4, 2, 0)),
-               hips=(0, -0.03, -0.13), R=(-0.12, -0.42, -0.82), aim=(0.12, -0.98, -0.10), slide=S, grip=0.36,
+               hips=(0, -0.03, -0.11), R=(-0.12, -0.42, -0.80), aim=(0.12, -0.99, -0.06), slide=S, grip=0.36,
                feet=_feet(**crouch))
     fol = pose(torso=dict(hips=(6, -16, 0), spine=(5, -12, 0), chest=(6, -18, 0), neck=(0, 6, 0), head=(-2, 14, 0)),
-               hips=(0, -0.02, -0.11), R=(0.20, -0.60, -0.70), aim=(-0.85, -0.45, -0.20), slide=S, grip=0.36,
+               hips=(0, -0.02, -0.11), R=(0.20, -0.60, -0.70), aim=(-0.85, -0.48, -0.14), slide=S, grip=0.36,
                feet=_feet(**crouch))
     rel_ = pose(torso=dict(hips=(1, -6, 0), chest=(2, -5, 0), head=(-1, 4, 0)), R=(-0.30, -0.45, -0.25),
                 aim=(-0.20, -0.25, 0.95), slide=S * 0.3, L=(0.18, -0.35, -0.85))
@@ -1889,10 +1940,10 @@ def clip_overrides(ctx) -> dict:
     let_go = pose(torso=dict(hips=(-2, 4, 2), spine=(6, 0, 3), chest=(8, 4, 4), neck=(6, 0, 0), head=(10, 6, 4)),
                   hips=(0.02, 0.04, -0.12), R=(-0.30, -0.42, -0.55), aim=(0.22, -0.10, 0.97), L=(0.14, -0.15, -0.88),
                   slide=0.25)
-    kneel = pose(torso=dict(hips=(6, 4, 0), spine=(8, 0, 3), chest=(10, 4, 4), neck=(10, 0, 0), head=(14, 8, 6)),
+    kneel = pose(torso=dict(hips=(6, 4, 0), spine=(7, 0, 3), chest=(7, 4, 4), neck=(5, 0, 0), head=(8, 8, 6)),
                  hips=(0.02, 0.05, -(hip_h - 0.62)), R=(-0.05, -0.62, -0.72), aim=(0.40, -0.10, 0.91), L=(-0.02, -0.50, -0.80),
                  feet=kfeet, slide=0.68)
-    slump = pose(torso=dict(hips=(10, 4, 0), spine=(12, 0, 3), chest=(12, 4, 5), neck=(12, 0, 0), head=(16, 10, 8)),
+    slump = pose(torso=dict(hips=(8, 4, 0), spine=(9, 0, 3), chest=(8, 4, 5), neck=(6, 0, 0), head=(8, 10, 8)),
                  hips=(0.02, 0.07, -(hip_h - 0.60)), R=(-0.03, -0.62, -0.76), aim=(0.42, -0.08, 0.90), L=(-0.04, -0.52, -0.84),
                  feet=kfeet, slide=0.70)
     k = [(0.0, G, "linear"), (0.12, sway, "inout"), (0.30, let_go, "inout"), (0.55, kneel, "in"),
@@ -1955,14 +2006,16 @@ def clip_overrides(ctx) -> dict:
 
     # IDLE_LOBBY (120 f, loops): a watchful shepherd: leans on the crook with both hands stacked, lifts the lantern on
     # the hook to look into it, counts under his breath (the head nods in threes), tilts the hat's rim to the sky
+    TW = dict(prop_R=(0, TWIST_OUT, 0))
+    SR, SA = (-0.02, -0.60, -0.18), (-0.08, -0.10, 0.99)
     stack = pose(torso=dict(hips=(0, -4, 0), spine=(2, -2, 0), chest=(3, -2, 0), head=(2, 4, 0)), hips=(0.0, 0.0, -0.01),
-                 R=(-0.12, -0.62, -0.20), aim=(-0.06, -0.12, 0.99), grip=0.05)
+                 R=SR, aim=SA, grip=0.07, fk=TW)
     look = pose(torso=dict(chest=(-2, -4, 0), neck=(-4, -6, 0), head=(-8, -14, 0)), R=(-0.20, -0.60, 0.12),
-                aim=(-0.10, -0.40, 0.91), L=(0.10, -0.40, -0.70))
+                aim=(-0.20, -0.30, 0.93), L=(0.10, -0.40, -0.70), fk=TW)
     nod = lambda a: pose(torso=dict(hips=(0, -4, 0), spine=(2, -2, 0), chest=(3, -2, 0), neck=(2 + a, 0, 0), head=(4 + 2 * a, 4, 0)),
-                         hips=(0.0, 0.0, -0.01), R=(-0.12, -0.62, -0.20), aim=(-0.06, -0.12, 0.99), grip=0.05)  # noqa: E731
+                         hips=(0.0, 0.0, -0.01), R=SR, aim=SA, grip=0.07, fk=TW)  # noqa: E731
     sky = pose(torso=dict(hips=(0, -2, 0), spine=(-2, 0, 0), chest=(-4, 0, 0), neck=(-8, 0, 0), head=(-16, 4, 0)),
-               R=(-0.12, -0.62, -0.20), aim=(-0.06, -0.12, 0.99), grip=0.05)
+               R=SR, aim=SA, grip=0.07, fk=TW)
     k = [(0.0, stack, "linear"), (0.10, stack, "linear"), (0.20, look, "inout"), (0.32, look, "linear"),
          (0.40, stack, "inout"), (0.46, nod(6), "inout"), (0.50, nod(0), "inout"), (0.54, nod(6), "inout"),
          (0.58, nod(0), "inout"), (0.62, nod(6), "inout"), (0.66, stack, "inout"), (0.76, sky, "inout"),
@@ -1971,13 +2024,14 @@ def clip_overrides(ctx) -> dict:
 
     # VICTORY (60 f, ends in a hold): plants the crook, lifts the lantern high on the hook, then bows deeply from the
     # waist with the left hand on the hat's brim, the crook upright beside him: a shepherd's bow to the flock
-    plant = pose(torso=dict(chest=(-2, 0, 0)), R=(GUARD_R[0], GUARD_R[1], GUARD_R[2] - 0.08), aim=UP, hips=(0, 0, -0.01))
+    plant = pose(torso=dict(chest=(-2, 0, 0)), R=(GUARD_R[0], GUARD_R[1], GUARD_R[2] - 0.08), aim=UP, hips=(0, 0, -0.01),
+                 fk=dict(prop_R=(0, TWIST_OUT * 0.5, 0)))
     lift = pose(torso=dict(spine=(-3, 0, 0), chest=(-6, -4, 0), neck=(-4, 0, 0), head=(-10, -6, 0)),
-                R=(-0.18, -0.40, 0.62), aim=(-0.10, -0.10, 0.99), L=(0.20, -0.20, -0.70))
+                R=(-0.30, -0.36, 0.60), aim=(-0.22, -0.08, 0.97), L=(0.20, -0.20, -0.70), fk=dict(prop_R=(0, TWIST_OUT, 0)))
     brim = (0.04, -0.62, 0.50)
     bow = pose(torso=dict(hips=(14, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), neck=(2, 0, 0), head=(0, 0, 0)),
-               hips=(0, 0.06, -0.02), R=(-0.10, -0.62, -0.12), aim=UP, L=brim, Lp=(0.9, 0.2, -0.3),
-               fk=dict(hand_L=(0, -20, 10)))
+               hips=(0, 0.06, -0.02), R=(-0.42, -0.42, -0.22), aim=(-0.06, -0.05, 1.0), L=brim, Lp=(0.9, 0.2, -0.3),
+               fk=dict(hand_L=(0, -20, 10), prop_R=(0, TWIST_OUT, 0)))
     k = [(0.0, G, "linear"), (0.14, plant, "inout"), (0.30, lift, "inout"), (0.45, lift, "linear"),
          (0.62, anim.lerp_pose(lift, bow, 0.5), "inout"), (0.80, bow, "out"), (1.0, bow, "linear")]
     vic = anim.keyed(k)
@@ -1989,6 +2043,8 @@ def clip_overrides(ctx) -> dict:
             p["chest"] = tuple(np.add(p["chest"], (0.6 * b, 0, 0)))
         return p
     out["victory"] = anim.Clip("victory", 60, False, vic_s)
+    for c in out.values():
+        c.sample = level(c.sample)
     return out
 
 

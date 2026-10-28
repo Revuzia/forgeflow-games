@@ -190,31 +190,31 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 5.1,
-    "rough_metal": 3.81,
-    "normal": 2.5,
-    "ao": 3.04,
+    "base": 19.14,
+    "rough_metal": 11.42,
+    "normal": 13.97,
+    "ao": 9.59,
     "normal_fixed_px": 139542,
-    "projection": 32.13,
-    "pack_save": 32.28,
-    "total": 46.91
+    "projection": 188.58,
+    "pack_save": 189.22,
+    "total": 243.81
   },
   "tris": 20471,
   "mesh_top_m": 2.476,
-  "glb_bytes_raw": 2498460,
+  "glb_bytes_raw": 2498268,
   "optimize": {
     "ok": true,
-    "before": 2498460,
-    "after": 979736,
+    "before": 2498268,
+    "after": 978768,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 979736,
+  "glb_bytes": 978768,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (957 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_first_bell_base 2048x2048 251K, ardit_first_bell_normal 512x512 37K, ardit_first_bell_orm 512x512 57K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (956 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_first_bell_base 2048x2048 250K, ardit_first_bell_normal 512x512 37K, ardit_first_bell_orm 512x512 57K",
       "  skinned meshes: ardit_accent(360v), ardit_first_bell(17228v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise_top shoulderR upper_armR forearmR handR propR x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
       "  clips: ",
@@ -229,8 +229,8 @@
       "portrait": "art/out/fighters/ardit/ardit_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 8.82,
-      "portrait": 6.45
+      "splash": 34.13,
+      "portrait": 23.77
     }
   },
   "three_qa": {
@@ -262,24 +262,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_first_bell.png",
-    "seconds": 9.1,
+    "seconds": 55.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
+      "rig": 0.01,
       "materials": 0.27,
-      "model": 3.3,
-      "lows_bind": 3.4,
-      "uv": 3.62,
-      "bake": 46.91,
-      "export": 0.06,
-      "optimize": 0.53,
-      "load_test": 0.11,
-      "render": 15.3,
-      "three_qa": 9.36
+      "model": 7.07,
+      "lows_bind": 11.49,
+      "uv": 5.77,
+      "bake": 243.82,
+      "export": 0.26,
+      "optimize": 4.81,
+      "load_test": 0.29,
+      "render": 58.11,
+      "three_qa": 56.17
     },
-    "total_s": 83.03
+    "total_s": 388.37
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

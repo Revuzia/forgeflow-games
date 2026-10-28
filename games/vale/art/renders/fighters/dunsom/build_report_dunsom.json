@@ -26,20 +26,20 @@
     "tris_lantern_frame": 1350,
     "tris_lantern_glass": 220,
     "tris_lantern_core": 420,
-    "validate_dunsom": "20430->20427"
+    "validate_dunsom": "20430->20426"
   },
   "uv_coverage": 0.599,
   "bake": {
-    "base": 11.75,
-    "rough_metal": 8.66,
-    "normal": 4.23,
-    "ao": 7.15,
-    "normal_fixed_px": 16105,
-    "projection": 74.3,
-    "pack_save": 74.59,
-    "total": 106.71
+    "base": 21.41,
+    "rough_metal": 13.43,
+    "normal": 5.16,
+    "ao": 13.2,
+    "normal_fixed_px": 17318,
+    "projection": 165.6,
+    "pack_save": 166.07,
+    "total": 220.96
   },
-  "tris": 20847,
+  "tris": 20846,
   "mesh_top_m": 2.184,
   "clips": {
     "idle": {
@@ -142,23 +142,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2522700,
+  "glb_bytes_raw": 2450972,
   "optimize": {
     "ok": true,
-    "before": 2522700,
-    "after": 1071040
+    "before": 2450972,
+    "after": 1035324
   },
-  "glb_bytes": 1071040,
+  "glb_bytes": 1035324,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom.glb (1046 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_base 2048x2048 181K, dunsom_normal 512x512 42K, dunsom_orm 256x256 25K",
-      "  skinned meshes: dunsom(18550v), dunsom_accent(228v)",
-      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:0.833s/17tr, attack2:0.833s/17tr, cast_a1:1.000s/20tr, cast_a2:1.167s/20tr, cast_a3:0.667s/19tr, cast_ult:1.500s/19tr, channel:1.333s/15tr, dash:0.500s/21tr, death:1.667s/21tr, idle:2.400s/18tr, idle_lobby:4.000s/19tr, recall:2.000s/17tr, run:0.667s/24tr, stunned:1.333s/19tr, taunt:1.500s/16tr, victory:2.000s/19tr",
-      "  tracks checked: 301; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 20847; bind-pose bounds (three units, Y up): 1.09 x 2.20 x 0.84; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom.glb (1011 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_base 2048x2048 154K, dunsom_normal 512x512 41K, dunsom_orm 256x256 24K",
+      "  skinned meshes: dunsom(17929v), dunsom_accent(220v)",
+      "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.833s/18tr, attack2:0.833s/18tr, cast_a1:1.000s/21tr, cast_a2:1.167s/21tr, cast_a3:0.667s/20tr, cast_ult:1.500s/20tr, channel:1.333s/16tr, dash:0.500s/22tr, death:1.667s/22tr, idle:2.400s/19tr, idle_lobby:4.000s/21tr, recall:2.000s/18tr, run:0.667s/25tr, stunned:1.333s/20tr, taunt:1.500s/17tr, victory:2.000s/21tr",
+      "  tracks checked: 319; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 20846; bind-pose bounds (three units, Y up): 1.09 x 2.20 x 0.84; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "  run: 20 f, planted samples 4, max foot-speed error 1.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -171,10 +171,10 @@
       "turntable": "art/renders/fighters/dunsom/turntable.png"
     },
     "seconds": {
-      "splash": 24.16,
-      "portrait": 7.75,
-      "icon": 1.75,
-      "turntable": 9.47
+      "splash": 32.9,
+      "portrait": 23.37,
+      "icon": 13.37,
+      "turntable": 14.0
     }
   },
   "three_qa": {
@@ -197,8 +197,8 @@
       1
     ],
     "headY": 1.683,
-    "accentPct": 2.17,
-    "accentTopHalfPct": 63.3,
+    "accentPct": 1.94,
+    "accentTopHalfPct": 67.1,
     "heightPx1080": 117,
     "size": [
       2400,
@@ -206,7 +206,7 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/dunsom/three_dunsom.png",
-    "seconds": 17.3,
+    "seconds": 31.5,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/dunsom/three_clips_dunsom.png"
   },
@@ -214,19 +214,19 @@
     "steps_s": {
       "rig": 0.0,
       "materials": 0.19,
-      "model": 66.26,
-      "lows_bind": 9.3,
-      "uv": 11.4,
-      "bake": 106.71,
-      "clips": 0.19,
-      "export": 2.92,
-      "optimize": 1.88,
-      "load_test": 0.3,
-      "render": 43.28,
-      "three_qa": 39.73,
-      "cache": 0.25
+      "model": 73.5,
+      "lows_bind": 6.86,
+      "uv": 23.9,
+      "bake": 220.98,
+      "clips": 0.65,
+      "export": 6.67,
+      "optimize": 1.56,
+      "load_test": 0.45,
+      "render": 83.87,
+      "three_qa": 146.47,
+      "cache": 0.45
     },
-    "total_s": 282.49
+    "total_s": 565.62
   },
   "run_ref_speed": 3.35,
   "height_m": 1.95
