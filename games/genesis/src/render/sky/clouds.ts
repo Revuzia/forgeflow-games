@@ -252,7 +252,6 @@ uniform highp sampler3D uCloudDetail;
 uniform highp sampler3D uCloudCurl;
 uniform vec3 uCloudWind;     // body-frame noise offset (m)
 uniform vec4 uCloudScale;    // x = 1/base tile (1/m), y = 1/detail tile, z = extinction of dense cloud (1/m), w = coverage bias
-uniform vec4 uCloudForm;     // near heaps' form: x = turrets (tops of uneven height), y = extra cauliflower billows (0, 0: smooth domes)
 uniform vec4 uStorms[8];     // weather systems of the cloud planet: xyz = body-frame centre, w = angular radius (rad)
 uniform vec4 uStormK[8];     // x = strength 0..1, y = spin sense (+1 counter-clockwise from above), z = style, w = cos(reach)
 uniform vec4 uStormT[8];     // xyz = body-frame unit tangent the system's tail / front trails toward (against its motion)
@@ -442,11 +441,6 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   // (stratiform decks undulate more and hang ragged scud: a dead-flat grey ceiling read as a painted plane)
   float base = mix(0.05, 0.1, ctype) + (n.b - 0.6) * mix(0.09, 0.03, ctype);
   float top = mix(0.2, 0.62, ctype) * (0.7 + 0.6 * n.g);
-  // a heap seen from under it is a cluster of TURRETS — towers of ~75–150 m (the base texture's finer Worley octaves),
-  // each topping out at its own height — not one dome of a single height (from the ground: a white bun, a cotton
-  // ball). Near heaps only: from orbit the masses' own lumps carry the form (cl_far branch below)
-  float nearW = 1.0 - cl_far;
-  top *= 1.0 + uCloudForm.x * 0.55 * ((0.55 * n.b + 0.45 * n.a) - 0.6) * smoothstep(0.3, 0.8, ctype) * nearW;
   top = mix(top, 0.9 + 0.1 * (n.g - 0.6), colm);
   // anvil: a flat-bottomed shelf under the top of the shell, spreading far wider than the towers
   if (anvil > 0.0) {
@@ -496,8 +490,7 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   // (far away, inside a mass, the heaps merge into its deck: the threshold opens a little further, so a mass seen from
   // orbit is a body of cloud with a knobbly top, not a cluster of separate heaps)
   lo = 1.0 - mix(0.85, 1.05, cl_far) * cov;
-  // (near heaps billow deeper: each turret a knot of rounded lobes with shaded creases between them)
-  return shape * bottom * upper - bil * (0.14 + 0.08 * uCloudForm.y * nearW);
+  return shape * bottom * upper - bil * 0.14;
 }
 // coverage-faithful threshold with a NARROW ramp: a cumulus goes from clear air to its dense interior within a few
 // metres (a ramp of 0.12 over a heap's gentle field gradient made 20–40 m translucent fringes: soft, out-of-focus
@@ -1398,7 +1391,6 @@ export class CloudPass {
   /** shared with terrain / water / tree materials for cloud shadows */
   readonly shared: {
     uCloudBase: IUniform; uCloudDetail: IUniform; uCloudCurl: IUniform; uCloudWind: IUniform<Vector3>; uCloudScale: IUniform<Vector4>;
-    uCloudForm: IUniform<Vector4>;
     uStorms: IUniform<Vector4[]>; uStormK: IUniform<Vector4[]>; uStormT: IUniform<Vector4[]>; uStormN: IUniform<number>; uGlobalBands: IUniform<number>;
     uCloudShadowMap: IUniform<Texture>; uCloudShadowK: IUniform<number>;
   };
@@ -1417,8 +1409,6 @@ export class CloudPass {
       // base tile 1.2 km (heaps of 80–300 m, clustered by the weather mask), detail 54 m (a finer octave at 16 m near
       // the camera); dense cloud is optically thick (τ ≈ 16 through a 100 m heap): crisp edges, self-shadowed form
       uCloudScale: { value: new Vector4(1 / 1200, 1 / 54, 0.16, 0) },
-      // near heaps' turrets and billows (0, 0 = the smooth domes; A/B shots set it: render-world ledger, rw20)
-      uCloudForm: { value: new Vector4(0, 0, 0, 0) },
       uStorms: { value: Array.from({ length: MAX_STORMS }, () => new Vector4()) },
       uStormK: { value: Array.from({ length: MAX_STORMS }, () => new Vector4()) },
       uStormT: { value: Array.from({ length: MAX_STORMS }, () => new Vector4()) },
@@ -1429,7 +1419,7 @@ export class CloudPass {
     };
     const field = {
       uCloudBase: this.shared.uCloudBase, uCloudDetail: this.shared.uCloudDetail, uCloudCurl: this.shared.uCloudCurl,
-      uCloudWind: this.shared.uCloudWind, uCloudScale: this.shared.uCloudScale, uCloudForm: this.shared.uCloudForm, uStorms: this.shared.uStorms,
+      uCloudWind: this.shared.uCloudWind, uCloudScale: this.shared.uCloudScale, uStorms: this.shared.uStorms,
       uStormK: this.shared.uStormK, uStormT: this.shared.uStormT, uStormN: this.shared.uStormN, uGlobalBands: this.shared.uGlobalBands,
     };
     this.wxMat = passMaterial(WX_FRAG, { ...field, uCoverage: { value: null }, uFace: { value: 0 }, uSize: { value: this.wxSize }, uMidR: { value: 3300 } });
@@ -1556,8 +1546,6 @@ export class CloudPass {
     for (let i = 0; i < this.shared.uStormN.value; i++) key += `|${S[i].x.toFixed(4)},${S[i].y.toFixed(4)},${S[i].z.toFixed(4)},${S[i].w.toFixed(4)},${K[i].x.toFixed(3)},${K[i].z}`;
     // (UI lane, additive) the coverage bias (uCloudScale.w — the map overlays thin the clouds with it) re-bakes too
     key += `|cb${this.shared.uCloudScale.value.w.toFixed(2)}`;
-    const fm = this.shared.uCloudForm.value;
-    key += `|cf${fm.x.toFixed(2)},${fm.y.toFixed(2)}`;
     this.wxAge++;
     if (key === this.wxKey) return false;
     if (!force && this.wxKey !== '' && this.wxAge < minFrames) return false;
