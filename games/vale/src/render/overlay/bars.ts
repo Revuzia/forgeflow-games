@@ -20,7 +20,8 @@ import {
   CanvasTexture, Color, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, LinearFilter,
   LinearMipmapLinearFilter, Mesh, NormalBlending, PlaneGeometry, ShaderMaterial, SRGBColorSpace,
 } from 'three';
-import { overlayUniforms } from './context.ts';
+import { overlayUniforms } from './depth.ts';
+import { overlayAttrs, overlayMaterial } from './program.ts';
 
 export const BAR_KIND = { fighter: 0, minion: 1, structure: 2, monster: 3 } as const;
 export const SHAPE = { self: 0, ally: 1, enemy: 2, neutral: 3 } as const;

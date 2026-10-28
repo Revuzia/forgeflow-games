@@ -389,11 +389,16 @@ class ValeRenderer implements Renderer {
     this.applySize();
   }
 
+  private aoEased = false;
   private applySize(): void {
     const dpr = Math.min(typeof devicePixelRatio === 'number' ? devicePixelRatio : 1, this.q.maxDpr);
     const pr = Math.max(0.25, dpr * this.dyn.scale);
     this.gl.setPixelRatio(pr);
-    this.post.setAoLow(this.dyn.scale < 0.9 - 1e-3);
+    // r12 B4: AO eases off while dynamic resolution holds the scale down, with hysteresis (on at ≤ 0.85, off again at
+    // ≥ 0.95: a scale settling on a 0.05 step never flips it every second)
+    const sc = this.dyn.scale;
+    if (sc < 0.88 - 1e-3) this.aoEased = true; else if (sc > 0.95 - 1e-3) this.aoEased = false;
+    this.post.setAoLow(this.aoEased);
     this.post.setSize(this.cssW, this.cssH);
   }
 

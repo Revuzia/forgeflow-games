@@ -136,8 +136,8 @@ BUTT = np.array([-0.375, -0.085, 0.0])
 CROOK_U = unit(GRIP - BUTT)
 S_BUTT = -float(np.linalg.norm(GRIP - BUTT))       # the butt's place along the shaft (m from the grip)
 S_TOP = 0.70                                       # where the shaft turns into the hook (z ~2.02)
-SHAFT_R = 0.027                                    # 5.4 cm (brief: 6 cm, 5 px at 1080p)
-HOOK_R = 0.030
+SHAFT_R = 0.030                                    # 6 cm (brief: 6 cm, 5 px at 1080p)
+HOOK_R = 0.032
 HOOK_YAW = 35.0                                    # the hook's plane: out (his right) turned 35 degrees to the front
 GRIPS = ((-0.09, 0.12), (-0.46, -0.27))            # the leather wraps: the rest grip, the low grip (two-handed holds)
 SLIDE2 = 0.365                                     # slide that puts the right fist on the low wrap
@@ -611,6 +611,7 @@ def crook_parts() -> list:
     shaft = Sculpt("crook_shaft")
     shaft.add(Tube(pts, rads, k=0.012).displaced(lambda P: 0.0020 * NOISE(P * np.array([1.0, 1.0, 0.18]), 36.0), 0.0020), k=0.0)
     shaft.add(Sphere(HOOK_TIP + u * -0.004, HOOK_R + 0.006), k=0.012)          # the carved knob at the hook's tip
+    shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)              # the butt sits on the ground (load test)
     out.append(("crook_shaft", shaft, 0.5, "wood", "bone:prop.R", 1050, 1.1))
     grip = Sculpt("crook_grip")
     for a_, b_ in GRIPS:
@@ -1194,7 +1195,12 @@ def _match_back(k, p, cols, wb, names, log):
                 continue
             tf = _band_tone(p[f, 2], fr[f], zs, step=0.04)
         tb = _band_tone(p[b, 2], bk[b], zs, step=0.04)
-        r = np.clip(_Y(bk[sel]) / np.maximum(_Y(tb), 1e-4), 0.35, 1.8) ** (0.35 if nm == "hood" else BACK_DETAIL)
+        r = np.clip(_Y(bk[sel]) / np.maximum(_Y(tb), 1e-4), 0.35, 1.8) ** BACK_DETAIL
+        if nm == "hood":
+            # the painted hood is a narrower column with its own brim shadow (a ghost head inside the model's wider
+            # hood from behind): plain felt with soft vertical folds instead
+            pp = p[sel]
+            r = 1 + 0.07 * np.sin(np.arctan2(pp[:, 0] - MX, pp[:, 1] - 0.02) * 7.0 + 2.0 * NOISE(pp, 4.0)) + 0.03 * NOISE(pp, 25.0)
         bk[sel] = tf * r[:, None]
         log(f"  dunsom back match {nm}: front band tones x back detail ({int(b.sum())} texels)")
     cols["back"] = _srgb(bk)

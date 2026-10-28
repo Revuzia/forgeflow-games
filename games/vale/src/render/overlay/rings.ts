@@ -15,7 +15,7 @@ import {
   type Color, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, NormalBlending,
   PlaneGeometry, ShaderMaterial,
 } from 'three';
-import { DEPTH_TEST_GLSL } from './context.ts';
+import { DEPTH_TEST_GLSL } from './depth.ts';
 import { overlayAttrs, overlayMaterial } from './program.ts';
 
 export const RING = { self: 0, ally: 1, enemy: 2, neutral: 3, range: 4 } as const;

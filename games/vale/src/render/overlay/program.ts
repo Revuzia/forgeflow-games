@@ -7,10 +7,14 @@
 
 import { GLSL3, RawShaderMaterial, type ShaderMaterialParameters } from 'three';
 import { type UberKind, uberAttrs, uberProgram } from '../uber.ts';
-import { COMPOSITE_FRAG, COMPOSITE_VERT, DEPTH_TEST_GLSL, overlayUniforms } from './context.ts';
+import { DEPTH_TEST_GLSL, overlayUniforms } from './depth.ts';
 import { BAR_FRAG, BAR_VERT, LABEL_FRAG, LABEL_VERT } from './bars.ts';
 import { RING_FRAG, RING_VERT } from './rings.ts';
 import { TELE_FRAG, TELE_VERT } from './telegraphs.ts';
+
+/** the telegraph target composited over the graded buffer (premultiplied) */
+export const COMPOSITE_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4( position.xy, 0.0, 1.0 ); }';
+export const COMPOSITE_FRAG = 'uniform sampler2D tTele; varying vec2 vUv; void main(){ gl_FragColor = texture2D( tTele, vUv ); }';
 
 export const OVERLAY_KIND = { composite: 0, ring: 1, bar: 2, label: 3, tele: 4 } as const;
 type Kind = keyof typeof OVERLAY_KIND;

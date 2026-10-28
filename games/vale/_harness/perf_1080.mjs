@@ -1,7 +1,7 @@
 // VALE harness — the 1080p60 check: the real renderer in real Chrome (GPU, 1920×1080, DPR 1) for each
 // quality preset, the camera on the densest fight of a live RIFT match, frame times from rAF.
 //   VALE_HEADED=1 node _harness/perf_1080.mjs [--prod] [--t 600] [--sec 8] [--q low,medium,high,ultra] [--seed 7]
-//                                             [--out _harness/_reports/perf_1080.json] [--no-build] [--keys]
+//                                             [--out _harness/_reports/perf_1080.json] [--no-build] [--keys] [--wait-idle <min>]
 // Writes the report (default _harness/_reports/perf_1080.json) and prints one line per preset.
 //
 // --prod is the r12 B4 GATE: a production build of the bench (vite build into _harness/_prod/dist, gitignored),
@@ -10,12 +10,17 @@
 // frame (renderer.render, mean and p95) and the sim pump's, draw calls, programs and triangles per group
 // (grass, canopy, terrain, clutter, rocks, landmarks, actors, VFX, ambient, overlay, post: Renderer.profile; main and
 // shadow pass apart), the live programs (and how many the frame bound), the 5 worst frames, and
-// exits non-zero on a miss of the hard budgets:
+// exits non-zero on a miss of the hard budgets (counts, the same on any machine):
 //   High (and Low, as a ceiling): ≤ 500k triangles a frame (every pass, shadows included), ≤ 450 draw calls,
-//   ≤ 40 programs, renderer CPU ≤ 6 ms a frame.
-// The frame-time targets (High avg ≥ 60 fps, p95 ≤ 16.7 ms, p99 ≤ 25 ms; Low p95 ≤ 16.7 ms) are checked only on
-// an idle machine — 1-min load average < 3 and no heavy slot held by anyone else (art/blender/common/heavy.py
-// status), before AND after the window — and are otherwise reported as "not measured: machine busy".
+//   ≤ 40 programs.
+// The timing targets — renderer CPU ≤ 6 ms a frame (mean; High and Low), High avg ≥ 60 fps, p95 ≤ 16.7 ms,
+// p99 ≤ 25 ms, Low p95 ≤ 16.7 ms — are checked only on an idle machine: 1-min load average < 3 and no heavy slot held
+// by anyone else (art/blender/common/heavy.py status), before AND after the window. Otherwise they are reported as
+// "not measured: machine busy" (renderer.render wraps the GL submission, so a GPU another process holds reads as
+// CPU time: the same build read 7.6 and 2.5 ms minutes apart under load).
+// --wait-idle <min>: wait up to <min> minutes for such a window (polled every 10 s, before the browser opens, so the
+// bench's own page does not count against it) and measure again while a window was busy; the last idle
+// measurement (else the last one) is reported.
 // --no-build reuses the last _harness/_prod/dist. --keys keeps every program's three cache key in the report.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -35,9 +40,10 @@ const SEED = Number(opt('seed', 7));
 const OUT = resolve(ROOT, opt('out', '_harness/_reports/perf_1080.json'));
 const PROD_DIR = join(HERE, '_prod', 'dist');
 
-/** the hard budgets (High; Low is held to the same ceiling) and the frame-time targets (idle machine only) */
-const BUDGET = { tris: 500000, draws: 450, programs: 40, cpuMs: 6 };
-const TARGET = { high: { fps: 60, p95Ms: 16.7, p99Ms: 25 }, low: { p95Ms: 16.7 } };
+/** the hard budgets (counts; High, Low held to the same ceiling) and the timing targets (idle machine only) */
+const BUDGET = { tris: 500000, draws: 450, programs: 40 };
+const TARGET = { high: { fps: 60, p95Ms: 16.7, p99Ms: 25, cpuMs: 6 }, low: { p95Ms: 16.7, cpuMs: 6 } };
+const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
 function heavyOthers() {
@@ -97,72 +103,98 @@ const out = {
   gpu: null, build: PROD ? 'prod' : 'dev', viewport: '1920x1080', dpr: 1, mode: 'rift', seed: SEED, matchTime: T, seconds: SEC,
   at: new Date().toISOString(), budgets: { ...BUDGET, targets: TARGET }, presets: {}, pass: true,
 };
-try {
-  for (const q of PRESETS) {
-    const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${q}&t=${T}&seed=${SEED}&dev=1&hud=1`, { wait: false, hmr: false });
-    try {
-      await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
-      const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
-      if (err) throw new Error(`bench failed: ${err}`);
-      out.gpu ??= await page.evaluate(() => {
-        const gl = document.createElement('canvas').getContext('webgl2');
-        const ext = gl?.getExtension('WEBGL_debug_renderer_info');
-        return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null;
-      });
-      await page.waitForTimeout(4000);                                        // models, textures, shader warm-up
-      await page.evaluate(() => { const b = window.__VALE_BENCH__; const f = b.fight(); if (f) b.focus(f.x, f.y); });
-      await page.waitForTimeout(1500);
-      const before = machine();
-      await page.evaluate(() => window.__VALE_BENCH__.timing(true));
-      const r = await page.evaluate((sec) => new Promise((res) => {
-        const d = []; let last = performance.now(); const end = last + sec * 1000;
-        const tick = (now) => { d.push(now - last); last = now; if (now < end) requestAnimationFrame(tick); else res(d); };
-        requestAnimationFrame(tick);
-      }), SEC);
-      const tm = await page.evaluate(() => window.__VALE_BENCH__.timing(true));
-      const after = machine();
-      const stats = await page.evaluate(() => window.__VALE_BENCH__.stats());
-      const prof = await page.evaluate(() => window.__VALE_BENCH__.profile());
-      const ft = stat(r), cpu = stat(tm.render), sim = stat(tm.pump);
-      const avg = ft.mean;
-      const groups = prof ? Object.fromEntries(Object.entries(prof.groups).filter(([, g]) => g.calls + g.shadowCalls > 0).map(([k, g]) => [k, sumGroup(g)])) : null;
-      const detail = prof ? Object.fromEntries(Object.entries(prof.detail).slice(0, 40).map(([k, g]) => [k, sumGroup(g)])) : null;
-      const res = {
-        fps: +(1000 / avg).toFixed(1), avgMs: avg, p95Ms: ft.p95, p99Ms: ft.p99, frames: r.length,
-        worstMs: r.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
-        worstCpuMs: tm.render.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
-        cpuMs: cpu, simMs: sim,
-        draws: prof?.total.calls ?? stats.sceneCalls, tris: prof?.total.tris ?? stats.sceneTriangles, programs: stats.programs, programsDrawn: prof?.programsDrawn ?? null,
-        groups, detail, programList: prof?.programs.map((p) => (args.includes('--keys') ? p : { type: p.type, name: p.name, used: p.used })) ?? null, stats,
-        machine: { before, after, idle: before.idle && after.idle },
-      };
-      // ── the gate
-      const misses = [];
-      if (res.tris > BUDGET.tris) misses.push(`triangles ${res.tris} > ${BUDGET.tris}`);
-      if (res.draws > BUDGET.draws) misses.push(`draws ${res.draws} > ${BUDGET.draws}`);
-      if (res.programs > BUDGET.programs) misses.push(`programs ${res.programs} > ${BUDGET.programs}`);
-      if (cpu.mean > BUDGET.cpuMs) misses.push(`renderer CPU ${cpu.mean} ms > ${BUDGET.cpuMs} ms`);
-      const tg = TARGET[q];
-      if (tg && !res.machine.idle) res.frameTargets = `not measured: machine busy (load ${before.load}/${after.load}${before.heavy.length || after.heavy.length ? `; ${[...new Set([...before.heavy, ...after.heavy])].join('; ')}` : ''})`;
-      else if (tg) {
-        const fm = [];
-        if (tg.fps && res.fps < tg.fps) fm.push(`fps ${res.fps} < ${tg.fps}`);
-        if (tg.p95Ms && res.p95Ms > tg.p95Ms) fm.push(`p95 ${res.p95Ms} ms > ${tg.p95Ms}`);
-        if (tg.p99Ms && res.p99Ms > tg.p99Ms) fm.push(`p99 ${res.p99Ms} ms > ${tg.p99Ms}`);
-        res.frameTargets = fm.length ? `MISS: ${fm.join(', ')}` : 'pass';
-        misses.push(...fm);
-      }
-      res.misses = misses;
-      res.pass = misses.length === 0;
-      if (PROD && !res.pass) out.pass = false;
-      res.errors = logs.filter((l) => !/favicon/.test(l)).slice(0, 20);
-      out.presets[q] = res;
-      const gs = groups ? Object.entries(groups).sort((a, b) => b[1].tris - a[1].tris).map(([k, g]) => `${k} ${(g.tris / 1000).toFixed(0)}k/${g.calls}`).join(' ') : '';
-      console.log(`${q.padEnd(7)} ${res.fps} fps  avg ${res.avgMs} p95 ${res.p95Ms} p99 ${res.p99Ms} ms  cpu ${cpu.mean} (p50 ${cpu.p50} p95 ${cpu.p95}) ms  sim ${sim.mean} ms  draws ${res.draws}  programs ${res.programs} (${res.programsDrawn} drawn)  tris ${(res.tris / 1000).toFixed(0)}k  [${gs}]`);
-      console.log(`        load ${before.load}→${after.load}  ${res.frameTargets ?? ''}  ${PROD ? (res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`) : ''}`);
-    } finally {
-      await browser.close();
+/** one preset's measurement (its own browser) */
+async function measure(q) {
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${q}&t=${T}&seed=${SEED}&dev=1&hud=1`, { wait: false, hmr: false });
+  try {
+    await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+    const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
+    if (err) throw new Error(`bench failed: ${err}`);
+    out.gpu ??= await page.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+      return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null;
+    });
+    await page.waitForTimeout(4000);                                        // models, textures, shader warm-up
+    await page.evaluate(() => { const b = window.__VALE_BENCH__; const f = b.fight(); if (f) b.focus(f.x, f.y); });
+    await page.waitForTimeout(1500);
+    const before = machine();
+    await page.evaluate(() => window.__VALE_BENCH__.timing(true));
+    const r = await page.evaluate((sec) => new Promise((res) => {
+      const d = []; let last = performance.now(); const end = last + sec * 1000;
+      const tick = (now) => { d.push(now - last); last = now; if (now < end) requestAnimationFrame(tick); else res(d); };
+      requestAnimationFrame(tick);
+    }), SEC);
+    const tm = await page.evaluate(() => window.__VALE_BENCH__.timing(true));
+    const after = machine();
+    const stats = await page.evaluate(() => window.__VALE_BENCH__.stats());
+    const prof = await page.evaluate(() => window.__VALE_BENCH__.profile());
+    const ft = stat(r), cpu = stat(tm.render), sim = stat(tm.pump);
+    const avg = ft.mean;
+    const groups = prof ? Object.fromEntries(Object.entries(prof.groups).filter(([, g]) => g.calls + g.shadowCalls > 0).map(([k, g]) => [k, sumGroup(g)])) : null;
+    const detail = prof ? Object.fromEntries(Object.entries(prof.detail).slice(0, 40).map(([k, g]) => [k, sumGroup(g)])) : null;
+    const res = {
+      fps: +(1000 / avg).toFixed(1), avgMs: avg, p95Ms: ft.p95, p99Ms: ft.p99, frames: r.length,
+      worstMs: r.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
+      worstCpuMs: tm.render.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
+      cpuMs: cpu, simMs: sim,
+      draws: prof?.total.calls ?? stats.sceneCalls, tris: prof?.total.tris ?? stats.sceneTriangles, programs: stats.programs, programsDrawn: prof?.programsDrawn ?? null,
+      groups, detail, programList: prof?.programs.map((p) => (args.includes('--keys') ? p : { type: p.type, name: p.name, used: p.used })) ?? null, stats,
+      machine: { before, after, idle: before.idle && after.idle },
+    };
+    // ── the gate
+    const misses = [];
+    if (res.tris > BUDGET.tris) misses.push(`triangles ${res.tris} > ${BUDGET.tris}`);
+    if (res.draws > BUDGET.draws) misses.push(`draws ${res.draws} > ${BUDGET.draws}`);
+    if (res.programs > BUDGET.programs) misses.push(`programs ${res.programs} > ${BUDGET.programs}`);
+    const tg = TARGET[q];
+    if (tg && !res.machine.idle) res.frameTargets = `not measured: machine busy (load ${before.load}/${after.load}${before.heavy.length || after.heavy.length ? `; ${[...new Set([...before.heavy, ...after.heavy])].join('; ')}` : ''})`;
+    else if (tg) {
+      const fm = [];
+      if (tg.fps && res.fps < tg.fps) fm.push(`fps ${res.fps} < ${tg.fps}`);
+      if (tg.p95Ms && res.p95Ms > tg.p95Ms) fm.push(`p95 ${res.p95Ms} ms > ${tg.p95Ms}`);
+      if (tg.p99Ms && res.p99Ms > tg.p99Ms) fm.push(`p99 ${res.p99Ms} ms > ${tg.p99Ms}`);
+      if (tg.cpuMs && cpu.mean > tg.cpuMs) fm.push(`renderer CPU ${cpu.mean} ms > ${tg.cpuMs} ms`);
+      res.frameTargets = fm.length ? `MISS: ${fm.join(', ')}` : 'pass';
+      misses.push(...fm);
     }
+    res.misses = misses;
+    res.pass = misses.length === 0;
+    res.errors = logs.filter((l) => !/favicon/.test(l)).slice(0, 20);
+    const gs = groups ? Object.entries(groups).sort((a, b) => b[1].tris - a[1].tris).map(([k, g]) => `${k} ${(g.tris / 1000).toFixed(0)}k/${g.calls}`).join(' ') : '';
+    console.log(`${q.padEnd(7)} ${res.fps} fps  avg ${res.avgMs} p95 ${res.p95Ms} p99 ${res.p99Ms} ms  cpu ${cpu.mean} (p50 ${cpu.p50} p95 ${cpu.p95}) ms  sim ${sim.mean} ms  draws ${res.draws}  programs ${res.programs} (${res.programsDrawn} drawn)  tris ${(res.tris / 1000).toFixed(0)}k  [${gs}]`);
+    console.log(`        load ${before.load}→${after.load}  ${res.frameTargets ?? ''}  ${PROD ? (res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`) : ''}`);
+    return res;
+  } finally {
+    await browser.close();
+  }
+}
+
+/** wait (≤ `sec` seconds, polled every 10 s) for an idle machine; true when one came */
+async function waitIdle(sec) {
+  const end = Date.now() + sec * 1000;
+  for (;;) {
+    const m = machine();
+    if (m.idle) return true;
+    if (Date.now() >= end) return false;
+    console.log(`        waiting for an idle machine: load ${m.load}${m.heavy.length ? `; ${m.heavy.join('; ')}` : ''}`);
+    await new Promise((r) => setTimeout(r, 10000));
+  }
+}
+
+try {
+  const deadline = Date.now() + WAIT_IDLE_S * 1000;
+  for (const q of PRESETS) {
+    let res = null;
+    for (;;) {
+      if (WAIT_IDLE_S > 0) await waitIdle(Math.max(0, (deadline - Date.now()) / 1000));
+      const r = await measure(q);
+      if (!res || r.machine.idle || !res.machine.idle) res = r;
+      if (res.machine.idle || WAIT_IDLE_S <= 0 || Date.now() >= deadline) break;
+      console.log(`        ${q}: the window was busy, measuring again`);
+    }
+    if (PROD && !res.pass) out.pass = false;
+    out.presets[q] = res;
   }
 } finally {
   await stopServer();

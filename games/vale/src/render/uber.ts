@@ -74,11 +74,12 @@ const itemName = (x: string): string => /^(?:const\s+)?\w+\s+(\w+)/.exec(x)?.[1]
 
 /** add a header's items to `into` once each (the same name with another body is an error) */
 function addItems(into: Map<string, string>, src: string): void {
+  const norm = (x: string): string => x.replace(/\s+/g, ' ');
   for (const x of items(src)) {
-    const n = itemName(x), norm = x.replace(/\s+/g, ' ');
+    const n = itemName(x);
     const was = into.get(n);
-    if (was === undefined) into.set(n, norm);
-    else if (was !== norm) throw new Error(`uber: ${n} is defined twice differently`);
+    if (was === undefined) into.set(n, x);
+    else if (norm(was) !== norm(x)) throw new Error(`uber: ${n} is defined twice differently`);
   }
 }
 

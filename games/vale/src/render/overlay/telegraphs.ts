@@ -17,7 +17,7 @@ import {
   type Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, MaxEquation, Mesh,
   OneFactor, PlaneGeometry, ShaderMaterial,
 } from 'three';
-import { DEPTH_TEST_GLSL } from './context.ts';
+import { DEPTH_TEST_GLSL } from './depth.ts';
 import { overlayAttrs, overlayMaterial } from './program.ts';
 
 export const TELE_SHAPE = { circle: 0, ring: 1, cone: 2, rect: 3 } as const;

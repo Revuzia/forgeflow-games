@@ -396,6 +396,9 @@ export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Prom
   return any ? out : null;
 }
 
+/** r12 B4.4: the share of Needlegrass blades the Low tier keeps in every thicket (deterministic, spread evenly) */
+export const GRASS_KEEP_LOW = 0.6;
+
 /** the material every scatter prop draws with (instanced, vertex-coloured), MATTE (r12 M11): roughness 0.86 (bark,
  *  stone, fan plates alike). COLOR_0's alpha is still read as the gloss mask (the props lane's interface), but a
  *  masked vertex only goes down to roughness 0.75 and there is no clearcoat lobe any more: the old lacquer
@@ -1273,7 +1276,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       }
     });
   }
-  if (grassItems.length) group.add(chunked(clump, grassMat, grassItems, 'vale_needlegrass', true, grassDepth, 2));
+  // r12 B4.4: blades per thicket capped by tier (setScatter: Low keeps a deterministic 60 %, every thicket alike)
+  let grassPart: Group | null = null;
+  let grassKeep = 0;
+  const setGrass = (keep: number): void => {
+    if (keep === grassKeep || !grassItems.length) return;
+    grassKeep = keep;
+    if (grassPart) { group.remove(grassPart); unchunk(grassPart); }
+    const items = keep >= 1 ? grassItems : grassItems.filter((_, i) => (i * 0.618034) % 1 < keep);
+    grassPart = chunked(clump, grassMat, items, 'vale_needlegrass', true, grassDepth, 2);
+    group.add(grassPart);
+  };
+  setGrass(1);
   disposables.push(clump, grassMat, grassDepth);
 
   // ── Standing Shadow + Fallen Shaft (terrain marks from the map's terrain block) ────────────────
@@ -1643,6 +1657,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const setScatter = (level: 0 | 1 | 2, ao?: boolean): void => {
     scatterLevel = level;
     if (ao !== undefined) grassAO.value = ao ? 1 : 0;
+    setGrass(level === 0 ? GRASS_KEEP_LOW : 1);
     for (const g of scatterParts) { scatterGroup.remove(g); unchunk(g); }
     scatterParts = [];
     // level 0 keeps a sparse tree line so cliff tops never read as empty slabs

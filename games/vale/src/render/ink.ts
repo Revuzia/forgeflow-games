@@ -25,7 +25,7 @@ import {
   BackSide, type BufferGeometry, Color, CustomBlending, DoubleSide, FrontSide, GLSL3, type InstancedMesh, type Material, Matrix4, type Mesh,
   NormalBlending, type Object3D, OneFactor, OneMinusSrcAlphaFactor, RawShaderMaterial, type Side, type SkinnedMesh, type Texture, Vector2, Vector3,
 } from 'three';
-import { DEPTH_TEST_GLSL } from './overlay/context.ts';
+import { DEPTH_TEST_GLSL } from './overlay/depth.ts';
 import { CLOTH_MAIN, CLOTH_PARS, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
 
 /** the pass a material draws (uniform uInkMode) */

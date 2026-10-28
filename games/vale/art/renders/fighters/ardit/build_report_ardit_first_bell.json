@@ -76,7 +76,10 @@
         "neck",
         "head",
         "shoulder.L",
+        "hand.L",
         "shoulder.R",
+        "forearm.R",
+        "hand.R",
         "shin.L",
         "foot.L",
         "toe.L",
@@ -85,7 +88,7 @@
         "toe.R"
       ]
     },
-    "tris_belt": 560,
+    "tris_belt": 558,
     "bind_coat": {
       "heat_ok": true,
       "unweighted": 0,
@@ -101,7 +104,6 @@
         "upper_arm.R",
         "forearm.R",
         "hand.R",
-        "shin.L",
         "foot.L",
         "toe.L",
         "shin.R",
@@ -157,7 +159,7 @@
     },
     "tris_boots": 1000,
     "tris_helm": 1500,
-    "tris_visor": 120,
+    "tris_visor": 320,
     "tris_face": 600,
     "tris_gorget": 760,
     "tris_pauldron_R": 560,
@@ -168,7 +170,7 @@
     "tris_bracer_L": 420,
     "tris_fist_R": 580,
     "tris_fist_L": 520,
-    "tris_buckle": 220,
+    "tris_buckle": 320,
     "tris_tabard_R": 420,
     "tris_tabard_L": 420,
     "tris_greave_R": 560,
@@ -179,47 +181,47 @@
     "tris_spear_collar": 360,
     "tris_spear_head": 220,
     "tris_pavise_frame": 820,
-    "tris_pavise_pane": 160,
-    "tris_pane_line": 420,
+    "tris_pavise_pane": 260,
+    "tris_pane_line": 360,
     "tris_pavise_handle": 220,
     "tris_spire": 520,
-    "tris_inlays": 160,
-    "tris_bell_bail": 120,
-    "tris_bell_glass": 200,
-    "validate_ardit": "19778->19771"
+    "tris_inlays": 260,
+    "tris_bell_bail": 160,
+    "tris_bell_glass": 360,
+    "validate_ardit": "20536->20529"
   },
-  "uv_coverage": 0.623,
+  "uv_coverage": 0.603,
   "bake": {
-    "base": 19.14,
-    "rough_metal": 11.42,
-    "normal": 13.97,
-    "ao": 9.59,
-    "normal_fixed_px": 139542,
-    "projection": 188.58,
-    "pack_save": 189.22,
-    "total": 243.81
+    "base": 14.76,
+    "rough_metal": 16.69,
+    "normal": 11.17,
+    "ao": 10.62,
+    "normal_fixed_px": 119562,
+    "projection": 225.28,
+    "pack_save": 226.21,
+    "total": 280.73
   },
-  "tris": 20471,
+  "tris": 21109,
   "mesh_top_m": 2.476,
-  "glb_bytes_raw": 2498268,
+  "glb_bytes_raw": 2474600,
   "optimize": {
     "ok": true,
-    "before": 2498268,
-    "after": 978768,
+    "before": 2474600,
+    "after": 972044,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 978768,
+  "glb_bytes": 972044,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (956 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_first_bell_base 2048x2048 250K, ardit_first_bell_normal 512x512 37K, ardit_first_bell_orm 512x512 57K",
-      "  skinned meshes: ardit_accent(360v), ardit_first_bell(17228v)",
-      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise_top shoulderR upper_armR forearmR handR propR x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_first_bell.glb (949 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_first_bell_base 2048x2048 227K, ardit_first_bell_normal 512x512 37K, ardit_first_bell_orm 512x512 55K",
+      "  skinned meshes: ardit_accent(308v), ardit_first_bell(17801v)",
+      "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20471; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
+      "  tris: 21109; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -229,8 +231,8 @@
       "portrait": "art/out/fighters/ardit/ardit_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 34.13,
-      "portrait": 23.77
+      "splash": 35.88,
+      "portrait": 18.33
     }
   },
   "three_qa": {
@@ -253,8 +255,8 @@
       1
     ],
     "headY": 2.025,
-    "accentPct": 1.91,
-    "accentTopHalfPct": 50.8,
+    "accentPct": 1.86,
+    "accentTopHalfPct": 96.5,
     "heightPx1080": 134,
     "size": [
       2400,
@@ -262,24 +264,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_first_bell.png",
-    "seconds": 55.1,
+    "seconds": 96.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.27,
-      "model": 7.07,
-      "lows_bind": 11.49,
-      "uv": 5.77,
-      "bake": 243.82,
-      "export": 0.26,
-      "optimize": 4.81,
-      "load_test": 0.29,
-      "render": 58.11,
-      "three_qa": 56.17
+      "materials": 0.55,
+      "model": 11.36,
+      "lows_bind": 14.48,
+      "uv": 6.93,
+      "bake": 280.75,
+      "export": 0.39,
+      "optimize": 3.64,
+      "load_test": 0.64,
+      "render": 54.48,
+      "three_qa": 97.47
     },
-    "total_s": 388.37
+    "total_s": 471.26
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

@@ -84,7 +84,7 @@ AO_INTO_BASE = 0.25
 # palettes: _design/fighters/ardit.md section 9 (identity hexes stepped by band where the brief says so)
 SKINS: list = [
     {"id": "ardit_chalkline", "extra": {}, "card": {"primary": "#3A3F47", "secondary": "#E6E0D2"},
-     "palette": {"chalk": "#BDBFC2", "stone": "#A9AEB5", "cloth": "#5C636D", "ironstone": "#3A3F47",
+     "palette": {"chalk": "#AEB2B8", "stone": "#A9AEB5", "cloth": "#4F5660", "ironstone": "#3A3F47",
                  "under": "#2E3238", "gauntlet": "#4A5059", "cloth2": "#40454D", "leather": "#34363A"}},
     {"id": "ardit_first_bell", "extra": {"bell": True}, "card": {"primary": "#4A4640", "secondary": "#D8D2C4"},
      "palette": {"chalk": "#D8D2C4", "stone": "#CFC8BA", "cloth": "#7A6F62", "ironstone": "#38363A",
@@ -1047,7 +1047,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
 # ── skins (base painting re-coloured by role in the pipeline; the brief's surface marks painted on top here) ─────
 _SKIN = {"id": None}
 LINEWORK = "#E6E0D2"           # Chalkline's chalk line-work (thin lines only; exempt from the L* 86 area rule)
-HOUR_INK = "#4F4A42"           # First Bell's etched hour-marks (carved, never emissive)
+HOUR_INK = "#3B3731"           # First Bell's etched hour-marks (carved, never emissive)
 
 
 def _frame_inside(x, z):
@@ -1113,15 +1113,15 @@ def _skin_marks(img, maps, names, sid, log=print):
                 m = np.zeros(len(q), dtype=bool)
                 for xr in rails_x:
                     for zc in (0.80, 1.06, 1.32, 1.58):
-                        m |= (np.abs(q[:, 2] - zc) < 0.0085) & (np.abs(q[:, 0] - xr) < reach)
+                        m |= (np.abs(q[:, 2] - zc) < 0.013) & (np.abs(q[:, 0] - xr) < reach)
                 for xc in (0.47, 0.75):
-                    m |= (np.abs(q[:, 0] - xc) < 0.0085) & (np.abs(q[:, 2] - ztop) < reach)
+                    m |= (np.abs(q[:, 0] - xc) < 0.013) & (np.abs(q[:, 2] - ztop) < reach)
                 return m
             ink = _lin(_hex(HOUR_INK))[None, :]
             for sl, q, reach in ((sel, fp, PAV_FRAME_W / 2 + 0.004), (rim, rp, PAV_FRAME_W / 2 + 0.012)):
                 m = marks(q, reach)
                 ii = np.nonzero(sl)[0][m]
-                lin[ii] = lin[ii] * 0.18 + ink * 0.82
+                lin[ii] = lin[ii] * 0.10 + ink * 0.90
                 drawn += int(m.sum())
     if sid == "ardit_chalkline":
         for nm, sx in (("tabard_R", -1), ("tabard_L", 1)):
@@ -1143,6 +1143,14 @@ def _skin_marks(img, maps, names, sid, log=print):
             cp = p[sel]
             m = (np.abs(cp[:, 2] - 0.845) < 0.0048) | (np.abs(cp[:, 2] - 0.875) < 0.0035)
             _chalk(lin, sel, m, LINEWORK, cp)
+            drawn += int(m.sum())
+        if "helm" in names:                          # the helm: a drawn border on its side / back faces, a ring round it
+            sel = k == names.index("helm")
+            hp_ = p[sel]
+            q = hp_ - np.array([HX, 0.0, 2.185])
+            m = _box_border(q, (0.160, 0.170, 0.163), 0.034, 0.0045) & (q[:, 1] > -0.15)
+            m |= (np.abs(hp_[:, 2] - 2.180) < 0.0045) & (np.abs(n[sel][:, 2]) < 0.5)
+            _chalk(lin, sel, m, LINEWORK, hp_)
             drawn += int(m.sum())
         for s_, sx in (("R", -1), ("L", 1)):         # a drawn border on every face of the square pauldrons
             nm = f"pauldron_{s_}"

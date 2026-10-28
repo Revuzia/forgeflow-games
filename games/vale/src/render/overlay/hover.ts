@@ -16,7 +16,7 @@ import {
   type Camera, type Color, type Material, type Mesh, type Object3D, RedFormat, type RawShaderMaterial, type Scene,
   UnsignedByteType, WebGLRenderTarget, type WebGLRenderer, NearestFilter, Color as ThreeColor,
 } from 'three';
-import { overlayUniforms } from './context.ts';
+import { overlayUniforms } from './depth.ts';
 import { hoverMaterials, inkPathOf, type InkPath, type RimU } from '../ink.ts';
 
 /** camera layers the restyled hull copies render on (the match camera only ever draws layer 0) */

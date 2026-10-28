@@ -76,7 +76,10 @@
         "neck",
         "head",
         "shoulder.L",
+        "hand.L",
         "shoulder.R",
+        "forearm.R",
+        "hand.R",
         "shin.L",
         "foot.L",
         "toe.L",
@@ -85,7 +88,7 @@
         "toe.R"
       ]
     },
-    "tris_belt": 560,
+    "tris_belt": 558,
     "bind_coat": {
       "heat_ok": true,
       "unweighted": 0,
@@ -101,7 +104,6 @@
         "upper_arm.R",
         "forearm.R",
         "hand.R",
-        "shin.L",
         "foot.L",
         "toe.L",
         "shin.R",
@@ -157,7 +159,7 @@
     },
     "tris_boots": 1000,
     "tris_helm": 1500,
-    "tris_visor": 120,
+    "tris_visor": 320,
     "tris_face": 600,
     "tris_gorget": 760,
     "tris_pauldron_R": 560,
@@ -168,7 +170,7 @@
     "tris_bracer_L": 420,
     "tris_fist_R": 580,
     "tris_fist_L": 520,
-    "tris_buckle": 220,
+    "tris_buckle": 320,
     "tris_tabard_R": 420,
     "tris_tabard_L": 420,
     "tris_greave_R": 560,
@@ -179,45 +181,45 @@
     "tris_spear_collar": 360,
     "tris_spear_head": 220,
     "tris_pavise_frame": 820,
-    "tris_pavise_pane": 160,
-    "tris_pane_line": 420,
+    "tris_pavise_pane": 260,
+    "tris_pane_line": 360,
     "tris_pavise_handle": 220,
     "tris_spire": 520,
-    "tris_inlays": 160,
-    "validate_ardit": "19458->19451"
+    "tris_inlays": 260,
+    "validate_ardit": "20016->20009"
   },
-  "uv_coverage": 0.617,
+  "uv_coverage": 0.593,
   "bake": {
-    "base": 4.68,
-    "rough_metal": 3.89,
-    "normal": 2.18,
-    "ao": 4.06,
-    "normal_fixed_px": 139518,
-    "projection": 54.03,
-    "pack_save": 54.37,
-    "total": 69.34
+    "base": 9.52,
+    "rough_metal": 9.11,
+    "normal": 5.35,
+    "ao": 6.87,
+    "normal_fixed_px": 117869,
+    "projection": 126.44,
+    "pack_save": 126.9,
+    "total": 158.67
   },
-  "tris": 20151,
+  "tris": 20589,
   "mesh_top_m": 2.476,
-  "glb_bytes_raw": 2435848,
+  "glb_bytes_raw": 2444244,
   "optimize": {
     "ok": true,
-    "before": 2435848,
-    "after": 957324,
+    "before": 2444244,
+    "after": 956000,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 957324,
+  "glb_bytes": 956000,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_chalkline.glb (935 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_chalkline_base 2048x2048 243K, ardit_chalkline_normal 512x512 36K, ardit_chalkline_orm 512x512 55K",
-      "  skinned meshes: ardit_accent(360v), ardit_chalkline(16907v)",
-      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise_top shoulderR upper_armR forearmR handR propR x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_chalkline.glb (934 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_chalkline_base 2048x2048 228K, ardit_chalkline_normal 512x512 36K, ardit_chalkline_orm 512x512 54K",
+      "  skinned meshes: ardit_accent(308v), ardit_chalkline(17349v)",
+      "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_r_1)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20151; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
+      "  tris: 20589; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -227,8 +229,8 @@
       "portrait": "art/out/fighters/ardit/ardit_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 17.37,
-      "portrait": 8.04
+      "splash": 29.32,
+      "portrait": 15.34
     }
   },
   "three_qa": {
@@ -251,8 +253,8 @@
       1
     ],
     "headY": 2.025,
-    "accentPct": 1.92,
-    "accentTopHalfPct": 50.8,
+    "accentPct": 1.88,
+    "accentTopHalfPct": 96.6,
     "heightPx1080": 134,
     "size": [
       2400,
@@ -260,24 +262,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_chalkline.png",
-    "seconds": 17.1,
+    "seconds": 34.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.1,
-      "model": 3.18,
-      "lows_bind": 3.37,
-      "uv": 3.03,
-      "bake": 69.35,
-      "export": 0.17,
-      "optimize": 1.02,
-      "load_test": 0.28,
-      "render": 25.47,
-      "three_qa": 17.53
+      "rig": 0.01,
+      "materials": 0.36,
+      "model": 12.94,
+      "lows_bind": 14.67,
+      "uv": 9.6,
+      "bake": 158.68,
+      "export": 0.26,
+      "optimize": 1.45,
+      "load_test": 0.35,
+      "render": 44.75,
+      "three_qa": 35.2
     },
-    "total_s": 123.54
+    "total_s": 278.4
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3
