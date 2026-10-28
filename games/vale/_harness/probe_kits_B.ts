@@ -398,7 +398,8 @@ section('ervet', () => {
     step(a, 6.2);
     check('Hilt reverts by itself after 6 s', a.me.form === null && a.me.slots[SLOT_INDEX.a1]!.id === 'ervet_heavy_arc', a.me.form);
   }
-  { // ultimate Whole Again: leap, area damage + airborne, oversized blade (great form): +0.6 m reach and a 120 degree cleave on attacks
+  { // ultimate Whole Again (W4 originality F5): leap, the shards fly home (damage, a drag, a lodged shard), the blade whole at its USUAL reach;
+    // her attacks tear lodged shards out in a 1.75 m burst around the target (full checks: _harness/probe_sim_kit_hooks.ts)
     const a = arena('ervet', { foes: [8, 12, 8.4], foeDy: [0, 0, 1.2] });
     const [foe, far, side] = a.foes;
     const { res, evs } = cast(a, 'ult', { x: 16, y: Y }, 1.2);
@@ -406,12 +407,12 @@ section('ervet', () => {
     check('Whole Again: leap (dash event) lands near the point', ofType(evs, 'dash').some((d) => d.src === a.me.id) && near(a.me.x, 16, 0.6), a.me.x);
     check('Whole Again: magic damage and airborne within 3.5 m, none at 6 m', dmgOn(evs, 'ervet_whole_again', foe, 'magic').length === 1 && statusOn(evs, foe, 'airborne') && dmgOn(evs, 'ervet_whole_again', far).length === 0);
     check('Whole Again: the bespoke ervet_ult_whole preset reaches the presentation', ofType(evs, 'area').some((x) => x.vfx === 'ervet_ult_whole'));
-    check('Whole Again: great form, attack reach 2.6 m', a.me.form === 'great' && near(a.me.stats.range, 2.6, 0.01), [a.me.form, a.me.stats.range]);
+    check('Whole Again: great form, attack reach unchanged at 2 m (no reach bonus)', a.me.form === 'great' && near(a.me.stats.range, 2, 0.01), [a.me.form, a.me.stats.range]);
     foe.statuses.length = 0; side.statuses.length = 0;
     issueAttack(a.w, a.me, foe);
     const hits = step(a, 2.5);
-    check('Great Blade: the attack cleaves a secondary target in the arc (phys)', dmgOn(hits, 'ervet_dawnglass_edge', side, 'phys').length >= 1);
-    check('Great Blade: the primary target is not hit twice (no cleave damage on it)', dmgOn(hits, 'ervet_dawnglass_edge', foe, 'phys').length === 0 && dmgOn(hits, 'ervet_dawnglass_edge', foe, 'magic').length >= 1);
+    check('Whole Again: the attack tears the lodged shard out, bursting on a target 1.2 m away (magic)', dmgOn(hits, 'ervet_dawnglass_edge', side, 'magic').length >= 1);
+    check('Whole Again: no phys cleave (no reach or arc on attacks); the target takes the 2% hit and the burst', dmgOn(hits, 'ervet_dawnglass_edge', side, 'phys').length === 0 && dmgOn(hits, 'ervet_dawnglass_edge', foe, 'magic').length >= 2);
     step(a, 6);
     check('Great Blade: ends after 6 s, reach back to 2 m', a.me.form === null && near(a.me.stats.range, 2, 0.01), [a.me.form, a.me.stats.range]);
   }
@@ -682,22 +683,23 @@ section('tunlan', () => {
 
 // ── 15 · Vashil (Caster, res_light) ────────────────────────────────────────────────────────────────
 section('vashil', () => {
-  { // passive Hum: ability one hums an enemy fighter 3 s; ability two inside it stuns 0.75 s and ends the hum; lockout 8 s
+  { // passive Hum (W4 originality F5): abilities hum an enemy fighter 3 s; the stun needs a CHORD (another humming enemy within 3.5 m),
+    // a lone humming enemy struck again is slowed and keeps humming; chorded enemies are hushed 8 s (pairs: _harness/probe_sim_kit_hooks.ts)
     const a = arena('vashil', { foes: [5] });
     const [foe] = a.foes;
     const c1 = cast(a, 'a2', { x: 20, y: Y }, 0.8);
     check('Hum: Glass Chime hits and leaves the enemy humming', dmgOn(c1.evs, 'vashil_glass_chime', foe, 'magic').length === 1 && markStacks(foe, 'vashil_hum', a.me) === 1 && !statusOn(c1.evs, foe, 'stun'));
     refresh(a);
     const c2 = cast(a, 'a2', { x: 20, y: Y }, 0.8);
-    const stun = statusEvs(c2.evs, foe, 'stun');
-    check('Hum: a second ability hit stuns for 0.75 s and ends the hum', stun.length === 1 && near(stun[0].duration, 0.75, 0.05) && markStacks(foe, 'vashil_hum', a.me) === 0, stun.length);
-    check('Hum: the stunned enemy is locked out of humming for 8 s', markStacks(foe, 'vashil_hushed', a.me) === 1);
+    check('Hum: a lone humming enemy struck again is slowed, not stunned, and keeps humming', statusEvs(c2.evs, foe, 'stun').length === 0 &&
+      statusOn(c2.evs, foe, 'slow') && markStacks(foe, 'vashil_hum', a.me) === 1 && markStacks(foe, 'vashil_hushed', a.me) === 0);
     refresh(a);
     const c3 = cast(a, 'a2', { x: 20, y: Y }, 0.8);
-    check('Hum: a third hit inside the lockout neither stuns nor hums', !statusOn(c3.evs, foe, 'stun') && markStacks(foe, 'vashil_hum', a.me) === 0);
-    step(a, 8.2); refresh(a);
+    check('Hum: a third lone hit still never stuns', !statusOn(c3.evs, foe, 'stun'));
+    step(a, 3.2); refresh(a);
+    check('Hum: the hum fades 3 s after the last hit', markStacks(foe, 'vashil_hum', a.me) === 0);
     const c4 = cast(a, 'a2', { x: 20, y: Y }, 0.8);
-    check('Hum: after 8 s the enemy hums again', markStacks(foe, 'vashil_hum', a.me) === 1 && dmgOn(c4.evs, 'vashil_glass_chime', foe).length === 1);
+    check('Hum: the enemy hums again on the next hit', markStacks(foe, 'vashil_hum', a.me) === 1 && dmgOn(c4.evs, 'vashil_glass_chime', foe).length === 1);
   }
   { // A1 Peal: a ring from 1.5 m to 3.5 m around the point; the centre stays quiet
     const a = arena('vashil', { foes: [7, 9.5, 12], foeDy: [0, 0, 0] });
@@ -716,7 +718,7 @@ section('vashil', () => {
     check('Ring Out: casts', res === 'ok', res);
     check('Ring Out: magic damage and a knockback of about 2 m in the cone, nothing behind', dmgOn(evs, 'vashil_ring_out', foe, 'magic').length === 1 && foe.x > x0 + 1.5 && dmgOn(evs, 'vashil_ring_out', behind).length === 0, [x0, foe.x]);
   }
-  { // Ultimate Morning Toll: three tolls 0.75 s apart over 4.5 m; the second stuns through Hum
+  { // Ultimate Morning Toll: three tolls 0.75 s apart over 4.5 m; a lone target hums but never chords (pairs: probe_sim_kit_hooks.ts)
     const a = arena('vashil', { foes: [8, 14], foeDy: [0, 0] });
     const [foe, far] = a.foes;
     const { res, evs } = cast(a, 'ult', { x: 18, y: Y }, 3.4);
@@ -725,7 +727,7 @@ section('vashil', () => {
     check('Morning Toll: three tolls of magic damage', hits.length === 3, hits.length);
     check('Morning Toll: the tolls are 0.75 s apart', hits.length === 3 && near(hits[1].t - hits[0].t, 0.75, 0.1) && near(hits[2].t - hits[1].t, 0.75, 0.1), hits.map((h) => h.t));
     const stuns = statusEvs(evs, foe, 'stun');
-    check('Morning Toll: exactly one stun, on the second toll (through Hum)', stuns.length === 1 && stuns[0].t > hits[0].t && stuns[0].t <= hits[1].t + 0.1, stuns.map((s) => s.t));
+    check('Morning Toll: a lone target is never stunned (the stun needs a chord)', stuns.length === 0, stuns.map((s) => s.t));
     check('Morning Toll: each toll carries vashil_ult_toll', ofType(evs, 'area').filter((x) => x.ability === 'vashil_morning_toll' && x.vfx === 'vashil_ult_toll').length === 3);
     check('Morning Toll: the enemy outside 4.5 m is untouched', dmgOn(evs, 'vashil_morning_toll', far).length === 0);
   }
