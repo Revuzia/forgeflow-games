@@ -23,13 +23,13 @@ import type { FxCtx } from './disasters.ts';
 import { clamp01, smooth } from './fxcommon.ts';
 import { CAMERA_NOW } from '../camera/common.ts';
 
-interface WDef { particles: string; fog: number; lightning: number; tint: [number, number, number] | null; airless: boolean; wind: number }
+interface WDef { particles: string; fog: number; lightning: number; tint: [number, number, number] | null; airless: boolean; wind: number; cloud: number }
 const DEFS = new Map<string, WDef>(
-  ((BASE_PACK as unknown as { weather?: { id: string; render?: { particles?: string; fog?: number; lightning?: number; skyTint?: number[] | null; airless?: boolean; wind?: number } }[] }).weather ?? [])
+  ((BASE_PACK as unknown as { weather?: { id: string; render?: { particles?: string; fog?: number; lightning?: number; skyTint?: number[] | null; airless?: boolean; wind?: number; cloud?: number } }[] }).weather ?? [])
     .map((w) => [w.id, {
       particles: w.render?.particles ?? 'none', fog: Number(w.render?.fog ?? 0), lightning: Number(w.render?.lightning ?? 0),
       tint: Array.isArray(w.render?.skyTint) ? [w.render!.skyTint![0], w.render!.skyTint![1], w.render!.skyTint![2]] as [number, number, number] : null,
-      airless: !!w.render?.airless, wind: Number(w.render?.wind ?? 0),
+      airless: !!w.render?.airless, wind: Number(w.render?.wind ?? 0), cloud: Number(w.render?.cloud ?? 0),
     }]),
 );
 
@@ -45,6 +45,8 @@ const FALL: Record<number, { sys: number; speed: number; size: number; col: [num
 };
 
 const _u = new Vector3(), _w = new Vector3(), _p = new Vector3();
+/** what falls from a deck thick enough to put the sun out */
+const WET = new Set(['drizzle', 'rain', 'heavy-rain', 'storm-rain', 'snow', 'blizzard', 'hail', 'blood']);
 
 export class WeatherFx {
   private fall = 0;
@@ -61,6 +63,10 @@ export class WeatherFx {
   /** rain on the lens, eased */
   private lens = 0;
   local = { precip: 0, type: 0, fog: 0, lightning: 0 };
+  /** the storm overhead (eased), for the cloud-shadow uniforms (GodFx: uOvercastC/K): its body-frame centre, cos of
+   *  its reach, strength over its footprint, and the strength at the camera */
+  readonly overcast = { k: 0, c: new Vector3(0, 1, 0), cosR: 1, cam: 0 };
+  private ovWant = { k: 0, c: new Vector3(0, 1, 0), cosR: 1 };
 
   update(ctx: FxCtx): void {
     const pv = ctx.pv;
@@ -92,14 +98,33 @@ export class WeatherFx {
         if (d.particles === 'ash') { precip = 3 * w; type = 4; }
       }
     };
+    // the wet system the camera is under (rain, snow, hail, a thunderstorm): its deck puts the sun out over its footprint
+    const ow = this.ovWant;
+    ow.k = 0;
+    const wetness = (d: WDef | undefined): number => !d || d.airless ? 0
+      : smooth(0.7, 1, d.cloud) * (WET.has(d.particles) ? 0.75 + 0.25 * Math.min(1, d.lightning * 2) : 0.45);
     for (const ws of pv.weather) {
       const d = Math.acos(Math.max(-1, Math.min(1, u.x * ws.pos[0] + u.y * ws.pos[1] + u.z * ws.pos[2]))) * R;
-      consider(ws.kind, ws.intensity * (1 - smooth(ws.radius * 0.6, ws.radius * 1.15, d)));
+      const w = ws.intensity * (1 - smooth(ws.radius * 0.6, ws.radius * 1.15, d));
+      consider(ws.kind, w);
+      const ok = Math.min(1, ws.intensity * 0.8) * wetness(DEFS.get(ws.kind)) * (w > 0 ? 1 : 0);
+      if (ok > ow.k) {
+        const l = Math.hypot(ws.pos[0], ws.pos[1], ws.pos[2]) || 1;
+        ow.k = ok; ow.c.set(ws.pos[0] / l, ws.pos[1] / l, ws.pos[2] / l); ow.cosR = Math.cos(Math.min(Math.PI, (ws.radius * 1.1) / R));
+      }
     }
     if (pv.params.globalWeather) consider(pv.params.globalWeather, 1);
     void wsum;
     // fog from the cloud deck at the ground in heavy weather
     const low = 1 - smooth(500, 900, alt);
+    // a planet-wide storm, or the sim's own deck thick and raining over the camera: the sky round the eye (under it only)
+    {
+      const cfo = pv.fields.get('cloud');
+      const cc = cfo ? pv.grid.sample(cfo, u.x, u.y, u.z) : 0;
+      const gk = pv.params.globalWeather ? wetness(DEFS.get(pv.params.globalWeather)) : 0;
+      const fk = Math.max(gk, smooth(0.5, 0.95, cc) * (0.35 + 0.65 * smooth(0.5, 6, precip))) * low;
+      if (fk > ow.k) { ow.k = fk; ow.c.copy(u); ow.cosR = Math.cos(Math.min(Math.PI, 3500 / R)); }
+    }
     this.local = { precip, type, fog, lightning: light };
     // ── precipitation round the camera ──
     const f = FALL[type];
@@ -107,7 +132,8 @@ export class WeatherFx {
     // fading tail, not weather — wet weather needs cloud over the camera (blown sand and ash need none)
     const cf = pv.fields.get('cloud');
     const skyK = type === 7 || type === 4 ? 1 : cf ? smooth(0.12, 0.35, pv.grid.sample(cf, u.x, u.y, u.z)) : 1;
-    const rate = f ? clamp01(precip / (type === 2 ? 4 : type === 4 ? 3 : 8)) * low * skyK : 0;
+    // (a heavy storm overhead rains as a curtain, whatever trace the precipitation field has reached yet)
+    const rate = f ? clamp01(Math.max(precip / (type === 2 ? 4 : type === 4 ? 3 : 8), type === 1 ? ow.k * 0.85 : 0)) * low * skyK : 0;
     if (f && rate > 0.04 && pv.params.atmosphere.pressure > 0.02) {
       // a driven snow (a blizzard) streaks along the wind; a quiet one tumbles (a different system: its own emitter)
       // (a blizzard's own system, or snow heavy enough to be one, wherever its cell reaches the camera)
@@ -128,7 +154,7 @@ export class WeatherFx {
       // the weather's haze is the rain)
       const B = type === 2 || type === 4 ? 13 : type === 7 ? 30 : 16;
       // (a blizzard drives far more snow past the eye than a quiet snowfall drifts down)
-      const count = Math.round((driven ? 20000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate));
+      const count = Math.round((driven ? 20000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate) * (type === 1 ? 1 + 0.9 * smooth(0.5, 1, rate) : 1));
       const def = {
         sys: driven ? SYS.precip : f.sys, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * windK, ay: wind.y * windK, az: wind.z * windK,
         size: driven ? 0.045 : f.size * (type === 1 && precip > 15 ? 1.4 : 1), life: 10, count, p0: driven ? 9 : B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1), p2: driven ? 1 : 0,
@@ -172,7 +198,14 @@ export class WeatherFx {
     if (this.lens < 0.01 && wantLens === 0) this.lens = 0;
     ctx.screen.lens = this.lens;
     // ── fog and tint (eased) ──
-    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0) * low;
+    // (the storm the camera is under, eased: its footprint for the cloud shadows, its strength here for the sky and haze)
+    const ov = this.overcast, ek = Math.min(1, ctx.ease * 0.6 + 0.01);
+    const camK = ow.k * smooth(ow.cosR, ow.cosR + (1 - ow.cosR) * 0.5, u.dot(ow.c));
+    if (ow.k > 0.01) { if (ov.k < 0.02) ov.c.copy(ow.c); else ov.c.lerp(ow.c, ek).normalize(); ov.cosR += (ow.cosR - ov.cosR) * ek; }
+    ov.k += (ow.k - ov.k) * ek;
+    ov.cam += (camK - ov.cam) * ek;
+    if (ov.k < 0.004 && ow.k === 0) ov.k = 0;
+    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0, 0.3 * ov.cam) * low;
     this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.ease * 0.8 + 0.02);
     if (this.fogK > 0.005) {
       const sunEl = u.dot(ctx.sunDirBody);
@@ -187,6 +220,8 @@ export class WeatherFx {
     const tgt = tintW > 0 ? _p.set(tint.x / tintW, tint.y / tintW, tint.z / tintW) : _p.set(1, 1, 1);
     this.tint.lerp(_p.set(1 + (tgt.x - 1) * tw, 1 + (tgt.y - 1) * tw, 1 + (tgt.z - 1) * tw), Math.min(1, ctx.ease * 0.8 + 0.02));
     ctx.screen.tintSky.multiply(this.tint);
+    // (under the deck the sky is its grey underside, not the blue beyond it)
+    if (ov.cam > 0.01) { const o = ov.cam * low; ctx.screen.tintSky.multiply(_p.set(1 - 0.34 * o, 1 - 0.33 * o, 1 - 0.3 * o)); }
     ctx.screen.tintGround.multiply(_p.set(1 + (this.tint.x - 1) * 0.3, 1 + (this.tint.y - 1) * 0.3, 1 + (this.tint.z - 1) * 0.3));
     // ── lightning in the storm cells round the camera ──
     if (light > 0.05 && pv.params.atmosphere.pressure > 0.05 && ctx.now > this.next) {

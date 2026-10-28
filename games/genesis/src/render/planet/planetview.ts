@@ -43,6 +43,8 @@ export interface PlanetFrameContext {
   yearFrac: number;
   /** the camera's projection matrix (water SSR reprojection) */
   proj: Matrix4;
+  /** the view's height in CSS pixels (herds keep a readable size on screen) */
+  viewH?: number;
   /** near-camera grass and stones (quality) */
   grass: boolean;
   /** life layer: sim-paced animation clock (s), point-light and particle budgets (quality) */
@@ -226,6 +228,7 @@ export class PlanetVisual {
     this.life.update({
       pv, camBody: this.camBody, frame: ctx.frame, time: ctx.time, animTime: ctx.animTime ?? ctx.time, primary: ctx.primary,
       shadows: ctx.primary && ctx.shadows, lightBudget: ctx.lightBudget ?? 8, particleBudget: ctx.particleBudget ?? 20000, crowdDensity: ctx.vegDensity,
+      pxPerRad: ctx.viewH ? 0.5 * ctx.viewH * ctx.proj.elements[5] : 0,
     });
     (u.uVegFade.value as { x: number; y: number }).x = veg.group.visible ? veg.fade.value.x : 1e9;
     (u.uVegFade.value as { x: number; y: number }).y = veg.group.visible ? veg.fade.value.y : 1e9 + 1;

@@ -120,7 +120,8 @@ float cloudShadowAt(vec3 P, vec3 sunB) {
   float dens = cloudDensityAt(q, 0.35, cs.x, cs.y, false);
   float thick = (uCloudShell.y - uCloudShell.x) * 0.55;
   // (skylight still reaches a cloud's shadow, and the crisp cell edges of the clouds blur in their shadows)
-  return max(exp(-dens * thick * 0.7), 0.3);
+  // (under a storm overhead the floor goes too: the sky's own light only, ~10 % of the sun)
+  return max(exp(-dens * thick * 0.7), 0.3 * (1.0 - 0.65 * overcastAt(q)));
 }
 
 // perturb a view-space normal by the screen-space gradient of a height field (metres)

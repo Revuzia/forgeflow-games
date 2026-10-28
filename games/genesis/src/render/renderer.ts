@@ -299,7 +299,7 @@ export class Renderer {
         sunE: this.godfx.tintSun(_sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), isPrimary), time, K, frame: this.frameNo,
         budget: this.cutFrames > 0 ? Math.max(q.patchBudget, 320) : q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
         vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity, proj: cam.projectionMatrix, grass: q.grass,
-        lightBudget: q.lightBudget, particleBudget: q.particleBudget,
+        lightBudget: q.lightBudget, particleBudget: q.particleBudget, viewH: this.cssH,
       });
       // brush preview: a ground decal of the god layer (fx/decals.ts), not the terrain's own ring
       const u = vis.uniforms;

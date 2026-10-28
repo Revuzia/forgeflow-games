@@ -53,8 +53,9 @@ export function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: 
   }
 }
 
-/** distance-readability growth for land beasts (see update): from HERD_D0 metres, (d / HERD_D0)^HERD_K, capped */
-export const HERD_D0 = 110, HERD_K = 0.6, HERD_MAX = 2.6;
+/** distance-readability growth for land beasts (see update): from HERD_D0 metres, (d / HERD_D0)^HERD_K, and at least
+ *  HERD_MIN_PX (CSS px, body length) on screen from HERD_NEAR metres out; capped at HERD_MAX */
+export const HERD_D0 = 80, HERD_K = 0.7, HERD_MAX = 2.6, HERD_MIN_PX = 6, HERD_NEAR = 60;
 /** forms that keep their size at any distance: swimmers, fliers, swarms and shell beds */
 const UNSCALED = new Set(['fish', 'whale', 'ray', 'bird', 'gull', 'vulture', 'duck', 'locust', 'bees', 'shells']);
 
@@ -123,6 +124,9 @@ export class Animals {
     _a[0] = _b[0]; _a[1] = _b[1]; _a[2] = _b[2];
   }
 
+  /** screen pixels (CSS) per radian at the view centre (life.ts, from the camera): 0 unknown */
+  pxPerRad = 0;
+
   update(pv: PlanetView, camBody: Vector3, ticksSinceSnap: number, animTime: number, realTime: number, perches?: (x: number, y: number, z: number, r: number, max: number) => number[]): void {
     this.bodies.group.visible = this.enabled;
     if (!this.enabled) return;
@@ -183,7 +187,15 @@ export class Animals {
         // herds must read at gameplay distance (150-400 m: a sheep is 3-6 px there, a speck lost in the grass): land
         // beasts grow slowly past HERD_D0 (x1.4 at 200 m, x1.8 at 300 m, at most x2.6), never within it, so up close
         // every animal keeps its real size
-        const grow = d > HERD_D0 && !UNSCALED.has(look.form) ? Math.min(HERD_MAX, Math.pow(d / HERD_D0, HERD_K)) : 1;
+        // (at 140 m a 1.2 m sheep was a 2-3 px speck lost among the shrub dots: past HERD_NEAR a beast is also kept at
+        // HERD_MIN_PX on screen — on a large screen that is little or no growth, on a small one more — eased in over 40 m)
+        let grow = 1;
+        if (d > HERD_NEAR && !UNSCALED.has(look.form)) {
+          const byDist = d > HERD_D0 ? Math.pow(d / HERD_D0, HERD_K) : 1;
+          const px = this.pxPerRad > 0 ? (look.size * (M.scale[i] || 1) * 1.4 * this.pxPerRad) / d : Infinity;
+          const byScreen = 1 + Math.max(0, HERD_MIN_PX / px - 1) * Math.min(1, (d - HERD_NEAR) / 40);
+          grow = Math.min(HERD_MAX, Math.max(byDist, byScreen));
+        }
         const size = (look.size / unitSize(look)) * (M.scale[i] || 1) * grow;
         const cadence = Math.max(0.35, Math.min(2.5, Math.pow(1.0 / Math.max(0.05, look.size), 0.45))) * (0.9 + 0.2 * hashFloat(id, 7));
         const blend = Math.min(1, (realTime - tr.at) / 0.35);

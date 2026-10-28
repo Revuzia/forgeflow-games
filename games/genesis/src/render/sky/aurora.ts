@@ -28,6 +28,7 @@ varying vec2 vUV;
 varying float vZ;
 varying vec3 vB;
 varying float vFold;
+varying float vFacing;
 void main() {
   float u = aUV.x, v = aUV.y;
   float lon = u * 6.2831853;
@@ -49,6 +50,8 @@ void main() {
   vUV = vec2(u, v);
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vZ = -mv.z;
+  // which side of the limb this point of the curtain stands on, seen from the camera (> 0 in front of the disc)
+  vFacing = dot(normalize(mat3(modelViewMatrix) * p), normalize(-mv.xyz));
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -58,10 +61,12 @@ ${NOISE_GLSL}
 ${FX_DEPTH_GLSL}
 uniform float uK;
 uniform vec3 uSunDirBody;
+uniform float uFar;     // 0 under the air … 1 from orbit
 varying vec2 vUV;
 varying float vZ;
 varying vec3 vB;
 varying float vFold;
+varying float vFacing;
 void main() {
   float vis = fxSoft(vZ, 30.0);
   if (vis <= 0.0) discard;
@@ -70,16 +75,22 @@ void main() {
   // vertical rays: high-frequency streaks along the curtain, flickering and drifting
   float rays = 0.55 + 0.45 * snoise(vec3(u * 900.0, uFxTime * 0.35, 1.0));
   rays *= 0.6 + 0.4 * snoise(vec3(u * 140.0 + uFxTime * 0.05, v * 2.0, 4.0));
+  // (from orbit the rays are finer than a pixel and the sheets thin: the curtain read as blocky green bars — out
+  // there it is a soft glowing band)
+  rays = mix(rays, 0.62, uFar * 0.85);
   // brightness bands along the oval
   float band = smoothstep(-0.2, 0.7, snoise(vec3(u * 18.0 - uFxTime * 0.02, 0.0, 7.0)));
   // a sharp lower edge, a long fade upward
-  float prof = smoothstep(0.0, 0.06, v) * pow(1.0 - v, 1.6);
+  float prof = smoothstep(0.0, mix(0.06, 0.35, uFar), v) * pow(1.0 - v, mix(1.6, 2.8, uFar));
   vec3 green = vec3(0.12, 1.0, 0.42), red = vec3(0.9, 0.15, 0.35), violet = vec3(0.45, 0.2, 0.9);
   vec3 c = mix(green, red, smoothstep(0.35, 0.85, v));
   c = mix(c, violet, smoothstep(0.0, 0.05, v) * (1.0 - smoothstep(0.05, 0.12, v)) * 0.4);
   // only where the sun is down (at this point of the air)
   float night = smoothstep(0.08, -0.12, dot(normalize(vB), uSunDirBody));
-  float k = prof * rays * (0.35 + 0.65 * band) * uK * night * vis;
+  // (from orbit, the sheets standing past the limb — off the night limb, or the far pole's oval under a lit day disc —
+  // read as bars and a green smear on black space: they fade there; the oval over the disc stays)
+  float limb = mix(1.0, 0.15 + 0.85 * smoothstep(-0.25, 0.12, vFacing), uFar);
+  float k = prof * rays * (0.35 + 0.65 * band) * uK * night * vis * limb;
   gl_FragColor = vec4(c * k * 2.2 * fxDisplay(0.55), 0.0);
 }
 `;
@@ -148,6 +159,8 @@ export class Aurora {
   /** the poleward oval's (fainter) strength */
   private uK2: IUniform = { value: 0 };
   level = 0;
+  /** the camera's distance from the planet's centre (m; GodFx, each frame) */
+  camR = 0;
   private shared: Record<string, IUniform>;
   private glow: Mesh;
   private glowU: Record<string, IUniform>;
@@ -157,7 +170,7 @@ export class Aurora {
     this.group.name = 'aurora';
     this.group.matrixAutoUpdate = false;
     this.shared = shared;
-    this.u = { uR0: { value: 3300 }, uR1: { value: 3800 }, uK: { value: 0 }, uTilt: { value: new Vector3(0.12, 1, 0.05) } };
+    this.u = { uR0: { value: 3300 }, uR1: { value: 3800 }, uK: { value: 0 }, uTilt: { value: new Vector3(0.12, 1, 0.05) }, uFar: { value: 0 } };
     const N = 384, M = 6;
     const pos = new Float32Array((N + 1) * (M + 1) * 3);
     const uv = new Float32Array((N + 1) * (M + 1) * 2);
@@ -203,6 +216,9 @@ export class Aurora {
     this.uK2.value = this.level * 0.55;
     this.u.uR0.value = radius + airTop * 0.55;
     this.u.uR1.value = radius + airTop * 1.35;
+    // (GodFx sets camR, the camera's distance from the planet's centre, before this)
+    const x = Math.max(0, Math.min(1, (this.camR - radius * 1.15) / (radius * 0.45)));
+    this.u.uFar.value = x * x * (3 - 2 * x);
     for (const m of this.curtains) m.visible = this.level > 0.01;
     // the airglow shell (any world with air): a thin layer high in it
     this.glow.visible = hasAir;

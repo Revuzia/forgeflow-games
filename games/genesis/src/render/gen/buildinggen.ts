@@ -943,8 +943,13 @@ function tent(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): numbe
 /** round hut: daub / wattle wall with a door, a conical thatch roof with a deep eave, a top knot */
 function hut(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]): number {
   const hv = spec.hv ?? 0;
-  const R = Math.min(spec.w, spec.d) / 2 * (0.85 + [0, -0.06, 0.05, -0.03, 0.03, -0.08][hv % 6]);
-  const wallH = 1.7 + [0, 0.15, -0.12, 0.25, 0.05, -0.05][hv % 6];
+  // (the art review: a stone-age camp's huts stood ~5 m, 3-4 times the people round them — giant ringed cones, like
+  // concrete. A first people's hut is low: a knee-to-chest-high wall of wattle and a steep straw cone, ~3.3 m at the
+  // knot, ~4 m across; later round houses grow)
+  const early = spec.era <= 1;
+  const R0 = Math.min(spec.w, spec.d) / 2 * (0.85 + [0, -0.06, 0.05, -0.03, 0.03, -0.08][hv % 6]);
+  const R = early ? Math.min(R0, 1.85 + 0.12 * (hv % 3)) : R0;
+  const wallH = early ? 1.05 + [0, 0.1, -0.06, 0.14, 0.04, -0.03][hv % 6] : 1.7 + [0, 0.15, -0.12, 0.25, 0.05, -0.05][hv % 6];
   const sides = spec.lod === 0 ? 18 : 10;
   const T = 0.25;
   // wall: two arcs leaving a door gap at +Z (angle π/2)
@@ -969,9 +974,26 @@ function hut(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]
     k.beam([ca * (R - T / 2), -0.2, sa * (R - T / 2)], [ca * (R - T / 2), wallH, sa * (R - T / 2)], T + 0.04, 0.14, SURF.bark, PART.frame, WOOD_DARK, 0.8);
   }
   k.quad([-0.45, 0, R - 0.5], [0.45, 0, R - 0.5], [0.45, wallH - 0.1, R - 0.5], [-0.45, wallH - 0.1, R - 0.5], SURF.hide, PART.door, mulc(HIDE, 0.4), 0.4);
-  const top = coneRoof(k, R, wallH, R * [1.15, 1.32, 1.02, 1.22, 1.4, 1.08][hv % 6], [0.85, 0.7, 0.95, 0.8, 0.75, 1.0][hv % 6], L.roof, sides);
+  const rise = early ? [1.05, 1.15, 0.98, 1.1, 1.2, 1.0][hv % 6] : [1.15, 1.32, 1.02, 1.22, 1.4, 1.08][hv % 6];
+  const over = early ? [0.6, 0.5, 0.7, 0.55, 0.5, 0.65][hv % 6] : [0.85, 0.7, 0.95, 0.8, 0.75, 1.0][hv % 6];
+  // (an early roof is fresher straw, warmer: the weathered grey of a hall's old thatch read as concrete on a small cone)
+  const roof = early ? { ...L.roof, col: mixc(L.roof.col, [0.42, 0.32, 0.17], 0.45) } : L.roof;
+  const top = coneRoof(k, R, wallH, R * rise, over, roof, sides);
   // the top knot of bound straw
-  if (spec.lod === 0) k.lathe(0, 0, [[0.28, top - 0.3], [0.2, top], [0.05, top + 0.35]], 8, SURF.thatch, PART.roof, mulc(L.roof.col, 0.75), 0.8, 1);
+  if (spec.lod === 0) k.lathe(0, 0, [[0.28, top - 0.3], [0.2, top], [0.05, top + 0.35]], 8, SURF.thatch, PART.roof, mulc(roof.col, 0.75), 0.8, 1);
+  // the rafters' ends crossing out of the knot, and bundles of straw lashed over the cone — a hand-made outline
+  if (early && spec.lod === 0) {
+    const n = 4 + (hv % 2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.4 + hv;
+      k.tube([[Math.cos(a) * 0.32, top - 0.45, Math.sin(a) * 0.32], [-Math.cos(a) * 0.12, top + 0.55 + 0.12 * ((i + hv) % 3), -Math.sin(a) * 0.12]], [0.04, 0.025], 4, SURF.bark, PART.frame, WOOD_GREY);
+    }
+    const yE = wallH - over * rise;
+    for (const f of [0.3, 0.62]) {
+      const t = Math.pow(f, 1 / 0.92), yy = yE + (top - 0.35 - yE) * f, rr = (R + over) * (1 - t) + 0.04 * t + 0.08;
+      k.lathe(0, 0, [[rr, yy - 0.035], [rr + 0.02, yy], [rr, yy + 0.035]], sides, SURF.rope, PART.roof, [0.11, 0.08, 0.05], 0.85, 0.85);
+    }
+  }
   // a smoke hole: hearth smoke seeps through the thatch
   em.push({ p: [0, top - 0.1, 0], kind: EMIT.smoke, size: 0.25 });
   void rng;

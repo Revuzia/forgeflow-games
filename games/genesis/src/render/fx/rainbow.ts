@@ -6,12 +6,14 @@
 // its top above the horizon, gone with the sun above 42°), and only where the rain of a `rainbow` weather lies along
 // the view ray — the shower's column, between the camera and whatever stands behind it (a hill in front cuts it).
 // A full-screen pass in the FX layer: per pixel, the ray's angle to the antisolar point picks the colour; a short march
-// along the ray through the showers' columns picks how much of the bow is there. ONE-ONE light.
+// along the ray through the showers' columns picks how much of the bow is there. Light added over a veil (premultiplied:
+// the bow replaces a share of the haze behind it).
 
 import { BufferAttribute, BufferGeometry, Matrix3, Matrix4, Mesh, ShaderMaterial, Vector3, Vector4, type IUniform } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { ATMO_PARS } from '../shaders/atmosphere.glsl.ts';
-import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
+import { CustomBlending, OneFactor, OneMinusSrcAlphaFactor, ZeroFactor } from 'three';
+import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 
 const MAX_BOWS = 4;
 
@@ -98,7 +100,12 @@ void main() {
   c += vec3(0.16) * (1.0 - smoothstep(30.0, 40.6, ang)) * smoothstep(10.0, 30.0, ang);
   // lit by the sun through the air at the camera
   vec3 sunL = uSunE * sunTransmittance(length(uCamB), dot(up, uSunDirBody));
-  gl_FragColor = vec4(sunL * c * k * sunUp * 0.09, 0.0);
+  // (a sign must read: over a bright milky haze a bow only ADDED to the sky was a faint arc of near-white. The drops
+  // turn the light back out of the haze behind them too: the bow takes the place of a share of it — its own colour,
+  // saturated — and Alexander's band between the bows is darker than the sky on either side, as it is in life)
+  float alex = smoothstep(42.4, 43.6, ang) * (1.0 - smoothstep(49.4, 50.4, ang));
+  float veil = clamp(k * sunUp * (pri * 0.3 + sec * 0.1 + alex * 0.16), 0.0, 0.34);
+  gl_FragColor = vec4(sunL * c * k * sunUp * 0.12, veil);
 }
 `;
 
@@ -123,7 +130,8 @@ export class Rainbow {
       uBow: { value: Array.from({ length: MAX_BOWS }, () => new Vector4()) }, uBowK: { value: new Array(MAX_BOWS).fill(0) },
     };
     for (const k of Object.keys(shared)) if (!(k in uniforms)) uniforms[k] = shared[k];
-    this.mat = new ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT });
+    this.mat = new ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, transparent: true, depthTest: false, depthWrite: false,
+      blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: ZeroFactor, blendDstAlpha: OneFactor });
     this.mesh = new Mesh(geo, this.mat);
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;

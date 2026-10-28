@@ -233,13 +233,23 @@ export const CLOUD_DENSITY_GLSL = /* glsl */ `
 #define GENESIS_CLOUDDENS
 uniform samplerCube uCloudShadowMap;
 uniform float uCloudShadowK;
+// the storm the camera stands under (fx/weatherfx.ts): xyz its body-frame unit centre, w cos(its angular reach); K its
+// strength. A painted thunderstorm's deck is a few cells of the baked cube: under it the sun went on shining and the
+// shadows stayed crisp. Under the storm the sun is put out (~15 % left) and the land lies in its flat grey light.
+uniform vec4 uOvercastC;
+uniform float uOvercastK;
 #ifndef GENESIS_CLFP
 #define GENESIS_CLFP
 float cl_fp = -1.0;
 #endif
+float overcastAt(vec3 pb) {
+  if (uOvercastK <= 0.0) return 0.0;
+  float c = dot(normalize(pb), uOvercastC.xyz);
+  return uOvercastK * smoothstep(uOvercastC.w, mix(uOvercastC.w, 1.0, 0.5), c);
+}
 float cloudDensityAt(vec3 pb, float hf, float cov, float storm, bool detail) {
   float tau = textureLod(uCloudShadowMap, pb, 0.0).r;
-  return (1.0 - exp(-tau * 0.3)) * uCloudShadowK;
+  return max((1.0 - exp(-tau * 0.3)) * uCloudShadowK, uCloudShadowK * 2.6 * overcastAt(pb));
 }
 #endif
 `;
@@ -539,10 +549,14 @@ float cloudDetailed(vec3 pb, float hf, float cov, float storm, float ctype, floa
     float d4 = cl_tex(uCloudDetail, dq * 0.42 + vec3(0.21, 0.83, 0.57), 64.0 * 0.42 * uCloudScale.y).g;
     vv -= (mix(d3, 1.0 - d3, bill) * 0.15 + mix(d4, 1.0 - d4, bill) * 0.07) * cl_far;
   }
-  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.07, cl_far)) : 0.0;
+  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.1, cl_far)) : 0.0;
   // ... and its thin parts are thin: density grows with the square of the cover toward the margins, so a far cloud's
   // fringe is translucent veil over the ground (τ ≈ 1 a few pixels in) and only its core is opaque white
-  c *= mix(1.0, c, cl_far * 0.6);
+  c *= mix(1.0, c, cl_far * 0.75);
+  // ... and round the masses a thin veil (the art review, at High from orbit: hard-edged cotton-ball clumps on a clear
+  // sea): the field just under the threshold is thin cloud the ground shows through, fading out over the margin, so a
+  // mass melts into the sky round it (not inside a storm system's clean-edged towers and bands)
+  if (cl_far > 0.0 && v > 0.0) c = max(c, 0.12 * cl_far * smoothstep(lo - 0.13, lo + 0.03, vv) * (1.0 - smoothstep(0.3, 0.7, storm)));
   // ... and a mass is not of one thickness: thinner streaks and pockets (~30–250 m, the fBm again) let the sea and
   // the land show through as grey, so from orbit a mass has an inner texture instead of one flat white
   if (cl_far > 0.0 && c > 0.0) {
@@ -1392,7 +1406,7 @@ export class CloudPass {
   readonly shared: {
     uCloudBase: IUniform; uCloudDetail: IUniform; uCloudCurl: IUniform; uCloudWind: IUniform<Vector3>; uCloudScale: IUniform<Vector4>;
     uStorms: IUniform<Vector4[]>; uStormK: IUniform<Vector4[]>; uStormT: IUniform<Vector4[]>; uStormN: IUniform<number>; uGlobalBands: IUniform<number>;
-    uCloudShadowMap: IUniform<Texture>; uCloudShadowK: IUniform<number>;
+    uCloudShadowMap: IUniform<Texture>; uCloudShadowK: IUniform<number>; uOvercastC: IUniform<Vector4>; uOvercastK: IUniform<number>;
   };
 
   constructor() {
@@ -1416,6 +1430,7 @@ export class CloudPass {
       uGlobalBands: { value: 0 },
       uCloudShadowMap: { value: this.shRT.texture },
       uCloudShadowK: { value: 0.0078 },
+      uOvercastC: { value: new Vector4(0, 1, 0, 1) }, uOvercastK: { value: 0 },
     };
     const field = {
       uCloudBase: this.shared.uCloudBase, uCloudDetail: this.shared.uCloudDetail, uCloudCurl: this.shared.uCloudCurl,

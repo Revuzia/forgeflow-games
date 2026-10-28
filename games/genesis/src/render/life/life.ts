@@ -30,6 +30,8 @@ export interface LifeFrameContext {
   lightBudget: number;
   particleBudget: number;
   crowdDensity: number;
+  /** screen pixels (CSS) per radian at the view centre: herds keep a readable size (animals.ts) */
+  pxPerRad?: number;
 }
 
 export class LifeLayer {
@@ -215,6 +217,7 @@ export class LifeLayer {
     this.crowds.setShadowCasting(ctx.shadows);
     this.crowds.update(pv, c, tick - pv.paramsTick, this.animClock + 1000, ctx.time, this.buildings);
     this.animals.setShadowCasting(ctx.shadows);
+    this.animals.pxPerRad = ctx.pxPerRad ?? 0;
     this.animals.update(pv, c, tick - pv.paramsTick, this.animClock + 1000, ctx.time, (x, y, z, r, max) => this.buildings.perchesNear(x, y, z, r, max));
     this.collectFx(pv, c.x, c.y, c.z, ctx.particleBudget);
     // point lights: night at the camera from the sun's elevation there

@@ -21,7 +21,7 @@
 // layer's animation clock): an explosion photographed while paused stays frozen mid-burst. `advance(s)` moves it for
 // scripted captures (window.__GENESIS_FX__.advance). The Touch animates in real time (it is the player's, paused or not).
 
-import { Group, Matrix3, Quaternion, Vector2, Vector3, type IUniform, type PerspectiveCamera, type Scene, type WebGLRenderer, type WebGLRenderTarget } from 'three';
+import { Group, Matrix3, Quaternion, Vector2, Vector3, type Vector4, type IUniform, type PerspectiveCamera, type Scene, type WebGLRenderer, type WebGLRenderTarget } from 'three';
 import type { PlanetView, WorldView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import type { PlanetVisual } from '../planet/planetview.ts';
@@ -302,6 +302,13 @@ export class GodFx {
     M.throws.update(M.flights, pv, this.clock, vis.camBody, cam.fov, this.viewH, this.decals, this.hand.light);
     M.disasters.update(pv.disasters, ctx);
     M.weather.update(ctx);
+    // the storm overhead puts the sun out over its footprint (sky/clouds.ts overcastAt: every material's cloud shadow)
+    {
+      const U = vis.uniforms as unknown as Record<string, { value: unknown } | undefined>;
+      const oc = U.uOvercastC?.value as Vector4 | undefined, okU = U.uOvercastK;
+      const ov = M.weather.overcast;
+      if (oc && okU) { oc.set(ov.c.x, ov.c.y, ov.c.z, ov.cosR); okU.value = ov.k; }
+    }
     M.miracles.update(ctx);
     M.sigils.update(this.lastReal, this.decals);
     M.rainbow.update(pv, vis.camBody, cam.projectionMatrixInverse, viewToBody(vis), ctx.cloudBase ?? pv.params.radius + 260, ctx.ease);
@@ -334,6 +341,7 @@ export class GodFx {
     let wAur = 0;
     for (const w of pv.weather) { const a = AURORA_WEATHER.get(w.kind); if (a) wAur = Math.max(wAur, a * w.intensity); }
     if (pv.params.globalWeather && AURORA_WEATHER.has(pv.params.globalWeather)) wAur = Math.max(wAur, AURORA_WEATHER.get(pv.params.globalWeather)!);
+    M.aurora.camR = vis.camBody.length();
     M.aurora.update(pv.params.radius, vis.atmo.thickness, pv.params.magnetism ?? 0, view.star.activity ?? 0, this.auroraBoost.boost + wAur * 2.5, vis.atmo.has, ctx.ease);
     // ── the eclipse: the sun dims with the covered share; a partial eclipse only a little darker to the eye (the
     // exposure adapts, as eyes do — held down by half a stop), totality truly dark (held down three stops) with a

@@ -217,7 +217,9 @@ void main() {
   float sunSide = clamp(0.5 + 0.5 * vSide * vSunX, 0.0, 1.0);
   float shade = (0.45 + 0.65 * sunSide * sunSide) * (0.75 + 0.5 * dn2) * mix(0.7, 1.0, smoothstep(0.55, 0.15, vT));
   // a storm cloud's own albedo, lit by the sun and the sky (slate, darker than the land it shades — never a void)
-  vec3 dc = vec3(0.3, 0.31, 0.345) * vLight * shade;
+  // (0.3 read as pale smoke, not a storm; the black pit was the shadow decals, not this body: dark slate aloft,
+  // lighter scud and rain at the foot)
+  vec3 dc = mix(vec3(0.12, 0.125, 0.145), vec3(0.22, 0.23, 0.255), smoothstep(0.55, 0.95, vT)) * vLight * shade;
   // (a flicker now and then lights a stretch of the storm from inside — a stretch, softly: lit whole and full, the dark
   // column became a white bar)
   float fseed = floor(uTouchT * 9.0);
