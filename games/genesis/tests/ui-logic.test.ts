@@ -45,6 +45,13 @@ test('sigils: every sigil is recognised drawn larger, smaller, tilted, backwards
     }
   }
   assert.ok(ok / n >= 0.95, `recognised ${ok}/${n}: ${misses.join(', ')}`);
+  // a bare circle or oval (LIVING §3.6: no sigil is a bare primitive) casts nothing that looks like one: not plenty
+  for (const [rx, ry] of [[100, 100], [92, 92], [100, 80]]) {
+    for (const dir of [1, -1]) {
+      const circle = Array.from({ length: 48 }, (_, i) => { const t = dir * (i / 47) * Math.PI * 2 - Math.PI / 2; return [500 + rx * Math.cos(t), 400 + ry * Math.sin(t)] as Pt; });
+      assert.equal(u.recognize(circle), null, `a ${rx}x${ry} oval is no sigil`);
+    }
+  }
   // a loop at either end of a level line, the two diagonals: orientation matters
   assert.equal(u.recognize(SIGILS.ripple)?.name, 'ripple');
   assert.equal(u.recognize(SIGILS.log)?.name, 'log');

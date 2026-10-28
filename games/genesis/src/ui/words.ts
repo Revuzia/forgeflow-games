@@ -159,3 +159,18 @@ export function tollOf(text: string): { dead: number; ruined: number } {
   if (!dead && /\b(strike|struck) .* down\b|\bkills? (him|her|them)\b/i.test(text)) dead = 1;
   return { dead, ruined };
 }
+
+/** a skill id (sim content SKILLS) → the master's name: gather → "gatherer" */
+const MASTER_NOUNS: Record<string, string> = {
+  gather: 'gatherer', hunt: 'hunter', fish: 'fisher', farm: 'farmer', herd: 'herder', craft: 'crafter', smith: 'smith',
+  build: 'builder', cook: 'cook', heal: 'healer', lore: 'keeper of lore', sail: 'sailor', fight: 'fighter',
+};
+
+/** a person's mastered skills as words: ['gather'] → "master gatherer"; ['hunt', 'fish'] → "master hunter and fisher" */
+export function masteryWords(skills: readonly string[]): string {
+  // (a skill a mod adds reads "master of <skill>")
+  const nouns = skills.map((k) => MASTER_NOUNS[k] ?? `of ${k.replace(/[_-]+/g, ' ')}`);
+  if (!nouns.length) return '';
+  const list = nouns.length === 1 ? nouns[0] : `${nouns.slice(0, -1).join(', ')} and ${nouns[nouns.length - 1]}`;
+  return `master ${list}`;
+}

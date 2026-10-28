@@ -157,7 +157,9 @@ export class TsunamiCrest {
   /** the crest's points this frame (body m) and the outward direction there: GodFx's spray rides them */
   readonly crest: { p: Vector3; out: Vector3; land: number }[] = [];
 
-  constructor(fx: Record<string, IUniform>, shared: Record<string, IUniform>) {
+  /** `played`: never look for the front in the sim's fields — play one from offshore at once (a rogue wave's lone wall) */
+  constructor(fx: Record<string, IUniform>, shared: Record<string, IUniform>, played = false) {
+    this.synthetic = played;
     for (let i = 0; i < BINS; i++) this.bins.push({ r: 0, rMeas: 0, speed: 20, level: 0, land: 0, valid: false, seen: -1e9 });
     const n = BINS * NP;
     this.geo.setAttribute('position', new BufferAttribute(new Float32Array(n * 3), 3));

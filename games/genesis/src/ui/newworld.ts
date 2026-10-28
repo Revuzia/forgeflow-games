@@ -174,6 +174,7 @@ export class NewWorld {
   private modsEl: HTMLDivElement;
   private beginBtn: HTMLButtonElement;
   private noteEl: HTMLDivElement;
+  private descEl!: HTMLDivElement;
   private spec: CustomSpec = { star: 'G', worlds: [{ kind: 'terran', species: 'plains-folk', era: 'stone' }, { kind: 'desert', species: 'hive', era: 'stone' }] };
   private lib: PackEntry[] = [];
   private ticked = new Set<string>();
@@ -194,7 +195,9 @@ export class NewWorld {
     const seedRow = h('div', { class: 'gn-nw-seed' },
       h('label', { class: 'gn-field-l', text: 'Seed' }), this.seedIn, dice,
       h('span', { class: 'gn-set-note', text: 'The same seed and the same acts make the same world.' }));
-    this.panel.body.append(this.cardsEl, this.customEl, h('div', { class: 'gn-nw-foot' }, seedRow, this.modsEl, h('div', { class: 'gn-nw-go' }, this.noteEl, this.beginBtn)));
+    // (the chosen card's whole description: a short frame clamps the cards' to two lines — styles.css shows this there)
+    this.descEl = h('div', { class: 'gn-nw-desc', role: 'status', aria: { live: 'polite' } });
+    this.panel.body.append(this.cardsEl, this.customEl, h('div', { class: 'gn-nw-foot' }, this.descEl, seedRow, this.modsEl, h('div', { class: 'gn-nw-go' }, this.noteEl, this.beginBtn)));
     this.panel.onOpen = () => void this.refresh();
   }
 
@@ -240,11 +243,14 @@ export class NewWorld {
     // with your own system open, the cards step back to a row of names (its worlds need the room)
     this.cardsEl.classList.toggle('gn-compact', this.choice === 'custom');
     const here = this.deps.world().scenario;
+    clear(this.descEl);
     for (const c of this.cards()) {
       const stay = this.fromOpening && c.id === here;
-      const b = h('button', { class: `gn-nw-card${c.id === this.choice ? ' gn-on' : ''}`, role: 'option', aria: { selected: String(c.id === this.choice) }, data: { id: c.id } },
+      const desc = stay ? 'You are here: stay, and go on as you were.' : c.desc;
+      if (c.id === this.choice) { clear(this.descEl); this.descEl.append(h('b', { text: c.name }), document.createTextNode(` — ${desc}`)); }
+      const b = h('button', { class: `gn-nw-card${c.id === this.choice ? ' gn-on' : ''}`, role: 'option', title: desc, aria: { selected: String(c.id === this.choice) }, data: { id: c.id } },
         h('span', { class: 'gn-nw-ic', html: icon(c.icon) }),
-        h('span', { class: 'gn-nw-ct' }, h('span', { class: 'gn-nw-name', text: c.name }), h('small', { text: stay ? 'You are here: stay, and go on as you were.' : c.desc })));
+        h('span', { class: 'gn-nw-ct' }, h('span', { class: 'gn-nw-name', text: c.name }), h('small', { text: desc })));
       b.addEventListener('click', () => { this.choice = c.id; host.sound('ui.tick'); this.render(); });
       b.addEventListener('dblclick', () => { this.choice = c.id; void this.begin(); });
       this.cardsEl.append(b);

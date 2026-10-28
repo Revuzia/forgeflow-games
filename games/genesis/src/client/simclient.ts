@@ -190,6 +190,13 @@ export class SimClient {
   snapshotHz = 0;
   private hzWindowStart = 0;
   private wantFull = false;
+  /** snapshot requests sent and replies received (the worker answers in order) */
+  private sent = 0;
+  private got = 0;
+  /** the last setSpeed: the requests already sent then (their replies predate it), the speed, when */
+  private speedAt = -1;
+  private speedWant = 0;
+  private speedSetAt = 0;
 
   async start(o: SimClientOptions): Promise<void> {
     const sink: SnapshotSink = (s) => this.receive(s);
@@ -241,6 +248,7 @@ export class SimClient {
     await new Promise<void>((ok) => {
       const prev = this.view.snapshots;
       const check = () => (this.view.snapshots > prev ? ok() : setTimeout(check, 10));
+      this.sent++;
       this.backend!.requestSnapshot(true);
       this.inFlight = true;
       check();
@@ -258,6 +266,7 @@ export class SimClient {
   fresh(): Promise<void> {
     if (!this.backend) return Promise.resolve();
     const after = performance.now();
+    this.sent++;
     this.backend.requestSnapshot(this.wantFull);
     this.wantFull = false;
     this.inFlight = true;
@@ -268,6 +277,14 @@ export class SimClient {
 
   private receive(s: Snapshot): void {
     const now = performance.now();
+    this.got++;
+    // a reply to a request sent before the last setSpeed still carries the old speed (the worker answers in order):
+    // keep the speed asked for, or the optimistic clock (and the site's Pause, which reads it) would jump back. Every
+    // later reply reflects the new speed; the 3 s bound only matters if a reply was lost on the way.
+    if (this.speedAt >= 0) {
+      if (this.got <= this.speedAt && now - this.speedSetAt < 3000) s.speed = this.speedWant;
+      else this.speedAt = -1;
+    }
     this.view.apply(s, now);
     this.inFlight = false;
     if (this.freshWaiters.length) {
@@ -289,6 +306,7 @@ export class SimClient {
     this.lastRequest = now;
     this.requestedAt = now;
     this.inFlight = true;
+    this.sent++;
     this.backend.requestSnapshot(this.wantFull);
     this.wantFull = false;
   }
@@ -299,6 +317,10 @@ export class SimClient {
   setSpeed(x: number): void {
     this.backend?.setSpeed(x);
     this.view.speedChanged(x); // optimistic: the clock reacts this frame, the snapshot confirms
+    // (replies still on their way were asked for before this speed: receive() keeps x over what they say)
+    this.speedAt = this.sent;
+    this.speedWant = x;
+    this.speedSetAt = performance.now();
   }
   async step(ticks: number): Promise<number> {
     if (!this.backend) return this.view.snapTick;

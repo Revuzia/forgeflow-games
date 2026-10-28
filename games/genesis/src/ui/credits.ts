@@ -1,7 +1,8 @@
 // GENESIS — credits and licences (the title's "Credits & licences", the game menu's): who made the game, and every
 // third-party work shipped inside it with its notice and licence text, as the licences require — three.js (MIT), the
 // Cormorant Garamond and Inter fonts (SIL Open Font License 1.1, packaged by Fontsource), and Vite's small runtime
-// helper (MIT). The licence texts are the packages' own files, read at build time and loaded only when this window opens.
+// helper (MIT), and the webgl-noise simplex GLSL (MIT, Ashima Arts / Stefan Gustavson). The licence texts are the
+// packages' own files, read at build time and loaded only when this window opens (webgl-noise's is quoted below).
 
 import { Panel } from './panel.ts';
 import { h, clear } from './dom.ts';
@@ -9,6 +10,28 @@ import { h, clear } from './dom.ts';
 interface Work { name: string; what: string; licence: string; notice: string; url: string; text: () => Promise<string> }
 
 const raw = (m: Promise<{ default: string }>): Promise<string> => m.then((x) => x.default).catch(() => '');
+
+/** webgl-noise ships no npm package here (its GLSL is adapted in render/shaders/noise.glsl.ts), so its notice is quoted */
+const WEBGL_NOISE_LICENSE = `Copyright (C) 2011 by Ashima Arts (Simplex noise)
+Copyright (C) 2011-2016 by Stefan Gustavson (Classic noise and others)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.`;
 
 const WORKS: Work[] = [
   {
@@ -29,6 +52,11 @@ const WORKS: Work[] = [
     name: 'Vite', what: 'the build: a small module-preload helper ships inside the game', licence: 'MIT License',
     notice: 'Copyright (c) 2019-present, VoidZero Inc. and Vite contributors', url: 'https://vite.dev',
     text: () => raw(import('../../node_modules/vite/LICENSE.md?raw')).then((t) => t.split(/\n#{1,2} /)[0].replace(/^# Vite core license\s*/, '').trim()),
+  },
+  {
+    name: 'webgl-noise', what: 'the simplex noise in the terrain, cloud and water shaders (its mod289 / permute / taylorInvSqrt helpers)', licence: 'MIT License',
+    notice: 'Copyright (C) 2011 Ashima Arts (simplex noise), Copyright (C) 2011–2016 Stefan Gustavson; author Ian McEwan', url: 'https://github.com/stegu/webgl-noise',
+    text: () => Promise.resolve(WEBGL_NOISE_LICENSE),
   },
 ];
 
@@ -53,7 +81,7 @@ export class Credits {
       h('div', { class: 'gn-cr-game' },
         h('div', { class: 'gn-cr-mark', text: 'GENESIS' }),
         h('p', { text: 'A ForgeFlow game. Light a star, breathe air onto a dead world, pour seas, seed life — and watch a people find their own way.' }),
-        h('p', { class: 'gn-cr-dim', text: 'Everything you see and hear is made in code as you play: the worlds and their weather, their peoples and animals, the light, the sound and the music. No art, sound or music by others is used.' })),
+        h('p', { class: 'gn-cr-dim', text: 'The worlds and their weather, their peoples and animals, the light and the sound are made in code as you play. The music was composed for GENESIS and rendered from its own scores: the title theme “First Light”, a piece for each age of the people (stone, bronze, the middle ages, engines) with its day, night and tension voices, and four short calls between the god and the people (a prayer answered, a prophecy fulfilled, a sign, wrath). No art, sound or music by others is used.' })),
       h('div', { class: 'gn-set-h', text: 'Third-party software and fonts' }));
     for (const w of WORKS) {
       const pre = h('pre', { class: 'gn-cr-text', text: 'Reading the licence…' });

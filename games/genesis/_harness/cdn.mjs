@@ -90,8 +90,14 @@ for (const url of [entry, `${entry}?scenario=sandbox`]) {
   await page.goto(url, { waitUntil: 'load' });
   const ready = await page.waitForFunction(() => !!window.__GENESIS__, null, { timeout: 60_000 }).then(() => page.evaluate(() => Promise.race([window.__GENESIS__.ready.then(() => true), new Promise((ok) => setTimeout(() => ok(false), 90_000))]))).catch(() => false);
   const t0 = await page.evaluate(() => Number(window.__GENESIS__?.state?.().tick ?? -1)).catch(() => -1);
-  await page.waitForTimeout(4000);
-  const t1 = await page.evaluate(() => Number(window.__GENESIS__?.state?.().tick ?? -1)).catch(() => -1);
+  // (state().tick refreshes per rendered frame, and a software renderer can take 10-60 s a frame: wait for two more
+  // frames, then poll up to 120 s for the tick to move, instead of a fixed 4 s that fails a healthy build)
+  await page.evaluate(() => Promise.race([window.__GENESIS__?.frames?.(2), new Promise((ok) => setTimeout(ok, 90_000))])).catch(() => {});
+  let t1 = await page.evaluate(() => Number(window.__GENESIS__?.state?.().tick ?? -1)).catch(() => -1);
+  for (const until = Date.now() + 120_000; ready && t1 <= t0 && Date.now() < until; ) {
+    await page.waitForTimeout(3000);
+    t1 = await page.evaluate(() => Number(window.__GENESIS__?.state?.().tick ?? -1)).catch(() => -1);
+  }
   loads.push({ url, ready, tick0: t0, tick1: t1 });
   await page.screenshot({ path: join(GAME, '_shots', `cdn-smoke-${loads.length}.png`) }).catch(() => {});
 }

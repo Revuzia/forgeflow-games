@@ -17,8 +17,8 @@ import type { UiHost } from './host.ts';
 import type { ModLibrary } from './mods.ts';
 import { ver } from './mods.ts';
 import { Panel } from './panel.ts';
-import { h, clear, download } from './dom.ts';
-import { savedWorldFromText } from './embed.ts';
+import { h, clear, download, isEmbedded } from './dom.ts';
+import { savedWorldFromText, openInTab } from './embed.ts';
 import { icon } from './icons.ts';
 
 export interface PackRef { id: string; name: string; version: string }
@@ -299,11 +299,11 @@ export class Saves {
   }
 
   /** a problem (or an outcome) shown at the top of the panel, with a way forward when there is one */
-  private alert(kind: 'bad' | 'ok', msg: string, act?: { label: string; run(): void }): void {
+  private alert(kind: 'bad' | 'ok' | 'info', msg: string, act?: { label: string; run(): void }): void {
     clear(this.alertEl);
     this.alertEl.hidden = false;
     this.alertEl.className = `gn-saves-alert gn-saves-${kind}`;
-    this.alertEl.append(h('span', { class: 'gn-saves-ai', html: icon(kind === 'bad' ? 'close' : 'check') }), h('span', { class: 'gn-saves-am', text: msg }));
+    this.alertEl.append(h('span', { class: 'gn-saves-ai', html: icon(kind === 'bad' ? 'close' : kind === 'info' ? 'download' : 'check') }), h('span', { class: 'gn-saves-am', text: msg }));
     if (act) this.alertEl.append(h('button', { class: 'gn-btn', text: act.label, on: { click: () => act.run() } }));
   }
 
@@ -475,8 +475,21 @@ export class Saves {
     if (!r) { this.alert('bad', 'That save is gone.'); return; }
     const packs = r.packJson ?? [];
     // always a bundle: the packs it needs (if any), and its name, date, summary and picture — an import reads as it did
-    download(this.fileName(r, 'genesis'), bundle(r.bytes, packs, { name: r.name, thumb: r.thumb, calendar: r.calendar, summary: r.summary, world: r.world }), 'application/octet-stream');
-    this.alert('ok', `Exported ${r.name}${packs.length ? ` with the pack${packs.length > 1 ? 's' : ''} it needs` : ''}.`);
+    const name = this.fileName(r, 'genesis');
+    const blob = new Blob([bundle(r.bytes, packs, { name: r.name, thumb: r.thumb, calendar: r.calendar, summary: r.summary, world: r.world })], { type: 'application/octet-stream' });
+    download(name, blob, blob.type);
+    const withPacks = packs.length ? ` with the pack${packs.length > 1 ? 's' : ''} it needs` : '';
+    if (isEmbedded()) this.sentFromFrame(name, blob, `${r.name}${withPacks}`);
+    else this.alert('ok', `Exported ${r.name}${withPacks}.`);
+  }
+
+  /**
+   * Inside the site's frame a download may be dropped without a word (its sandbox has no allow-downloads): say it was
+   * an attempt, and keep the way out (the file in a new tab) in the window until the player dismisses it.
+   */
+  private sentFromFrame(name: string, blob: Blob, what: string): void {
+    this.alert('info', `Sent ${what} to your downloads. If nothing arrived, the site’s frame blocked it: open it in a new tab and keep that page (Ctrl+S); Import reads it back.`,
+      { label: 'Open in a new tab', run: () => { void openInTab({ name, blob, type: blob.type }).then((ok) => { if (!ok) this.alert('bad', 'The browser would not open a new tab either: allow pop-ups for this site, or play GENESIS on its own page to export.'); }); } });
   }
 
   /** the world as it is now, straight to a file (when the browser keeps nothing) */
@@ -488,7 +501,10 @@ export class Saves {
     const packs = this.deps.packs().filter((p) => need.has(p.id));
     const d = this.describe(hdr.tick);
     const thumb = await this.deps.thumb().catch(() => null);
-    download(this.fileName({ name: d.calendar, world: d.world }, 'genesis'), bundle(bytes, packs, { name: d.calendar, thumb, calendar: d.calendar, summary: d.summary, world: d.world }), 'application/octet-stream');
+    const name = this.fileName({ name: d.calendar, world: d.world }, 'genesis');
+    const blob = new Blob([bundle(bytes, packs, { name: d.calendar, thumb, calendar: d.calendar, summary: d.summary, world: d.world })], { type: 'application/octet-stream' });
+    download(name, blob, blob.type);
+    if (isEmbedded()) this.sentFromFrame(name, blob, 'the world as it is now');
   }
 
   /** a file from outside: read it, keep it (with the packs it carries), open it */

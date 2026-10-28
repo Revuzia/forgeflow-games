@@ -1,13 +1,22 @@
 {
   "title": "GENESIS",
-  "short_description": "GENESIS — a multi-planet living-world god game. Light a star, breathe air onto a dead world, pour seas, seed life, and watch a people find their own way from stone toward the stars.",
-  "description": "You poured water on a dead rock. Now they have a word for you.\n\nGENESIS is a god game on worlds small enough to hold: planets a few kilometres across, true to scale for the people who live on them, orbiting a real star. Breathe air onto an airless world and watch the limb turn blue; pour seas and they find the low places; seed life and it spreads only where water and warmth allow. Drop a people onto the land and they notice, experiment, learn, forget, build, quarrel and leave — while a real simulation runs underneath, whether you act or not.\n\nThe sky is physical: sunsets redden because the light crosses more air, clouds are volumetric and drift where the weather says, the sea reflects the land and the clouds and turns turquoise over sand. Zoom continuously from the whole system down to two metres above the grass.",
-  "genre": "simulation",
+  "short_description": "GENESIS — a living-world god game on small planets. Breathe air onto a dead world, pour seas, seed life, set down a people — and become the god they pray to, fear, trust or forsake.",
+  "description": "You poured water on a dead rock. Now they have a word for you.\n\nGENESIS is a god game on worlds small enough to hold: planets a few kilometres across, true to scale for the people who live on them, orbiting a real star. Breathe air onto an airless world and watch the limb turn blue; pour seas and they find the low places; seed life and it spreads only where water and warmth allow. Set a people down on the land and they live off it: they gather, hunt real animals, farm, build, learn and forget, quarrel and move on, while a real simulation runs underneath whether you act or not.\n\nThey notice you. Every town holds its own faith, fear, trust and loyalty toward its god, and remembers what you did. They pray, and you can answer. Raise a prophet and foretell what you will do, then make it true; send signs (an eclipse, a comet, a rainbow) that a trusting town reads as favour and a fearful one as anger; hallow springs, groves and peaks and the animals they hold sacred. Your presence on the land is the Touch, warm light where they trust you and storm-dark where they fear you: it lifts, sets down and hurls. Miracles are cast by drawing sigils, or simply by saying what you want in words.\n\nDisasters are yours to send, and the wrath slider sets how hard they fall: survivable by default, so storms and floods build fear, trust and loyalty rather than ending the story. Time runs slow and real at 1x, and steps up to deep time-lapse when you want to watch eras pass.",
+  "genre": "strategy",
   "sub_genre": "god-game",
   "difficulty": "easy",
-  "controls_keyboard": "Left-drag turn the world · wheel descend / rise · right-drag turn and tilt · WASD / arrows pan · Q / E turn · R / F tilt · G system view · V free-fly (WASD, Space / C up and down) · P pause · , / . slower / faster · [ / ] brush size · H hide the interface",
-  "controls_gamepad": "Not yet supported",
-  "tags": ["god-game", "simulation", "sandbox", "planets", "space", "procedural", "3d", "living-world"],
-  "art_direction": "Studio-grade real-time look on tiny planets: a physically based sky with Rayleigh and Mie scattering and orange sunsets, volumetric clouds, layered procedural terrain (rock strata, grass by moisture and season, sand ripples, snow), leafy instanced forests, a refractive sea with foam and screen-space reflections, AgX tone mapping with bloom and god rays. Interface: dark glass panels with fine ivory and gold accents, a serif display face for titles.",
+  "controls_keyboard": "Drag the land: turn the world · wheel: descend / rise · right-drag: turn and tilt · W A S D pan · Z / X turn · R / F tilt · click: inspect · drag someone: the Touch lifts them (flick to hurl) · E lift / set down · hold G (or middle-drag) and draw a sigil · hold Q: radial menu · / every power · Enter say it in words · 1–0 speed (1× … 3000×) · Space pause · F4 The god (prayers, prophets, wrath) · F7 send a sign · C chronicle · M system view · K walk among them · P photo mode · H hide the interface · F1 every control",
+  "controls_gamepad": "Standard-mapping pad · left stick: cursor (push to the edge to pan) · right stick: turn and tilt the view · RB (hold) descend · LB (hold) rise · Back camera modes · Up faster · Down slower · Y command palette · X do this · RS (hold) radial menu · LT (hold) draw a sigil · A use the power at the cursor · B cancel / back · RT (hold) the Touch / use · LS lift what is under the Touch / set it down · Right next map overlay · Left previous map overlay · Start game menu · photo mode and walking have their own buttons (F1 lists them)",
+  "tags": [
+    "god-game",
+    "simulation",
+    "sandbox",
+    "living-world",
+    "planets",
+    "prophets",
+    "3d",
+    "procedural"
+  ],
+  "art_direction": "Painterly-real small planets under a physically based sky: Rayleigh and Mie scattering with orange sunsets, volumetric clouds that follow the weather, layered terrain (rock strata, grass by moisture and season, sand, snow), leafy instanced forests, a refractive sea with foam, AgX tone mapping with bloom and god rays. Life-size real animals and small, readable people in their towns. The god appears only as light and weather (the Touch): warm gold when trusted, storm-dark when feared. Interface: dark glass panels with fine ivory and gold accents, a serif display face for titles, original sigil glyphs. Music: an authored score (title theme, era pieces, stingers).",
   "mobile_support": "none"
 }

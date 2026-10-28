@@ -13,6 +13,7 @@ import {
 } from 'three';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
+import { syncPlanetVisuals } from './planet/planetsync.ts';
 import { SunShadows } from './planet/lights.ts';
 import { makeWaterSceneUniforms } from './planet/ocean.ts';
 import { PATCH_RES } from './planet/chunks.ts';
@@ -232,23 +233,14 @@ export class Renderer {
   private cutFrames = 0;
 
   private syncPlanets(view: WorldView): void {
-    const seen = new Set<number>();
-    for (const pv of view.planets) {
-      seen.add(pv.id);
-      let vis = this.planets.get(pv.id);
-      if (!vis) {
-        vis = new PlanetVisual(pv, { clouds: this.clouds, shadows: this.shadows, waterScene: this.waterScene });
-        this.planets.set(pv.id, vis);
-        this.scene.add(vis.group);
-      }
-      vis.sync(pv);
-    }
-    for (const [id, vis] of this.planets) {
-      if (seen.has(id)) continue;
-      this.scene.remove(vis.group);
-      vis.dispose();
-      this.planets.delete(id);
-    }
+    // a planet view replaced under the same id (a save loaded in place) gets a fresh visual (planetsync.ts)
+    const rebuilt = syncPlanetVisuals(this.planets, view.planets, {
+      make: (pv) => new PlanetVisual(pv, { clouds: this.clouds, shadows: this.shadows, waterScene: this.waterScene }),
+      added: (vis) => { this.scene.add(vis.group); },
+      removed: (vis) => { this.scene.remove(vis.group); },
+    });
+    // a world that replaced another one under the same id: last frame's image (cloud history, reflections) was of it
+    if (rebuilt.length) this.cut();
   }
 
   /** project a system-frame point to CSS pixels (null if behind the camera) */

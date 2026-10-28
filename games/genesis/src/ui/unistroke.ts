@@ -33,6 +33,28 @@ function pathLength(p: Pt[]): number {
   return d;
 }
 
+/**
+ * A stroke that comes back to where it began with nearly the same distance from its middle all the way round: a circle
+ * or a plain oval, drawn either way and from any point. Every sigil that closes (the knot) passes through its middle,
+ * and the almond ones have points, so none of them is one.
+ */
+export function isBareLoop(points: Pt[]): boolean {
+  const len = pathLength(points);
+  if (len <= 0) return false;
+  const a = points[0], b = points[points.length - 1];
+  if (Math.hypot(b[0] - a[0], b[1] - a[1]) / len > 0.12) return false;
+  const r = resample(points, 48);
+  let cx = 0, cy = 0;
+  for (const [x, y] of r) { cx += x; cy += y; }
+  cx /= r.length; cy /= r.length;
+  const d = r.map(([x, y]) => Math.hypot(x - cx, y - cy));
+  const mean = d.reduce((s, v) => s + v, 0) / d.length;
+  if (mean <= 0) return false;
+  const sd = Math.sqrt(d.reduce((s, v) => s + (v - mean) ** 2, 0) / d.length);
+  // (round to an oval 2:1 or so; it must also turn about once — a loop drawn twice round is still a bare loop)
+  return sd / mean < 0.2 && len / (2 * Math.PI * mean) < 2.4;
+}
+
 export function resample(points: Pt[], n = N): Pt[] {
   if (points.length < 2) return Array.from({ length: n }, () => [points[0]?.[0] ?? 0, points[0]?.[1] ?? 0] as Pt);
   const I = pathLength(points) / (n - 1);
@@ -184,8 +206,10 @@ export const SIGILS: Record<string, Pt[]> = {
     quad([0, -28], [70, -34], [62, -98]), quad([62, -98], [10, -92], [0, -58])),
   // a figure-eight drawn once
   knot: Array.from({ length: 65 }, (_, i) => { const t = (i / 64) * Math.PI * 2; return [62 * Math.sin(2 * t), -100 * Math.sin(t)] as Pt; }),
-  // a U, then a handle looping over its top
-  basket: join(smooth([[-92, -8], [-70, 62], [0, 84], [70, 62], [92, -8]]), smooth([[92, -8], [62, -70], [0, -100], [-62, -70], [-92, -8]])),
+  // a U, then a handle looping over its top: in along the right rim (a cusp), a narrower, taller arch over the top, down
+  // inside the left rim and a small inward tick — it never closes into an oval (a bare circle casts nothing)
+  basket: join(smooth([[-92, -8], [-70, 62], [0, 84], [70, 62], [92, -8]]), poly([[92, -8], [50, -8]], 6),
+    smooth([[50, -8], [52, -64], [26, -108], [-26, -108], [-52, -64], [-50, -8]]), poly([[-50, -8], [-28, 10]], 4)),
   // an almond outline, then a short stroke out of its tip
   seed: join(quad([0, -88], [80, -8], [0, 72]), quad([0, 72], [-80, -8], [0, -88]), poly([[0, -88], [14, -136]], 8)),
   // a long level stroke ending in a small loop (end grain)
@@ -232,7 +256,7 @@ export const VARIANTS: Record<string, Pt[][]> = {
 };
 
 /** closed sigils: also stored from other starting points */
-const CLOSED = new Set(['knot', 'basket']);
+const CLOSED = new Set(['knot']);
 
 function rotateStart(p: Pt[], frac: number): Pt[] {
   // drop the duplicated closing point, rotate the list, close again
@@ -271,6 +295,8 @@ export class Unistroke {
    */
   recognize(points: Pt[], allowed?: ReadonlySet<string>): Recognition | null {
     if (points.length < 5 || pathLength(points) < 20) return null;
+    // a bare loop (a circle or an oval, LIVING §3.6) is no sigil: it would only ever be the nearest closed glyph
+    if (isBareLoop(points)) return null;
     const cand = normalize(points);
     // a line is straight: a stroke that wanders (a zigzag of any count, a scribble) is never one, however thin
     const straight = Math.hypot(points[points.length - 1][0] - points[0][0], points[points.length - 1][1] - points[0][1]) / pathLength(points);

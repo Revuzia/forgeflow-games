@@ -13,7 +13,8 @@
 // its date, and the last few stay in a strip on the panel.
 
 import type { PhotoLens, UiHost } from './host.ts';
-import { h, clear, download } from './dom.ts';
+import { h, clear, download, isEmbedded } from './dom.ts';
+import { openInTab } from './embed.ts';
 import { icon } from './icons.ts';
 import { slider, toggle } from './panel.ts';
 
@@ -244,8 +245,10 @@ export class Photo {
     this.mark.classList.add('gn-on');
   }
 
-  private say(t: string): void {
-    this.status.textContent = t;
+  private say(t: string, act?: { label: string; run(): void }): void {
+    clear(this.status);
+    this.status.append(document.createTextNode(t));
+    if (act) this.status.append(' ', h('button', { class: 'gn-btn gn-ph-open', text: act.label, on: { click: () => act.run() } }));
   }
 
   // ───────────────────────────── the panel ─────────────────────────────
@@ -470,7 +473,13 @@ export class Photo {
       void this.flash.offsetWidth;
       this.flash.classList.add('gn-on');
       this.host.sound('photo.shutter');
-      this.say(`Saved ${name}`);
+      // (inside the site's frame the download may be dropped without a word: say it was tried, keep the way out here)
+      if (isEmbedded()) {
+        this.say(`Sent ${name} to your downloads. If nothing arrived, the site’s frame blocked it:`, {
+          label: 'Open in a new tab',
+          run: () => { void openInTab({ name, blob, type: 'image/png' }).then((ok) => { if (!ok) this.say('The browser would not open a new tab either: allow pop-ups for this site, or play GENESIS on its own page.'); }); },
+        });
+      } else this.say(`Saved ${name}`);
       return name;
     } catch (e) {
       this.say(`The picture could not be taken: ${e instanceof Error ? e.message : String(e)}`);

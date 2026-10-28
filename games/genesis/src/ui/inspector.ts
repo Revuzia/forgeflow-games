@@ -24,6 +24,7 @@ import type { InspectRef } from './host.ts';
 import type { Power, PowerBook } from './powers.ts';
 import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
+import { masteryWords } from './words.ts';
 import { slider, toggle } from './panel.ts';
 import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, type ProphetRow } from './living.ts';
 import { AgentFlag, AgentFlag2 } from '../sim/types.ts';
@@ -424,7 +425,7 @@ export class Inspector {
     const flags: string[] = [];
     if (d.sick && !this.gone) flags.push(`sick: ${str(d.sick)}`);
     const master = Array.isArray(d.master) ? (d.master as string[]) : [];
-    if (master.length) flags.push(`master of ${master.join(', ')}`);
+    if (master.length) flags.push(masteryWords(master));
     const f2 = num((d.live as Rec | null)?.flags2);
     const prophet = d.prophet as ProphetRow | null;
     if (prophet && !prophet.abandoned) flags.push('your prophet');

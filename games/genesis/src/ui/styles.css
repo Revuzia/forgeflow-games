@@ -99,7 +99,8 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-world-kind { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--gn-ivory-dim); }
 .gn-cal { margin-top: 4px; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--gn-ivory); letter-spacing: 0.04em; }
 .gn-cal .gn-sep { color: var(--gn-gold); opacity: 0.7; margin: 0 2px; }
-.gn-cal .gn-clock { font-family: var(--gn-mono); font-size: 12.5px; color: var(--gn-gold-hi); margin-left: auto; }
+.gn-cal .gn-clock { font-family: var(--gn-mono); font-size: 12.5px; color: var(--gn-gold-hi); margin-left: auto; white-space: nowrap; }
+.gn-cal .gn-clock-day { font-size: 9.5px; color: var(--gn-ivory-faint); margin-left: 1px; letter-spacing: 0; }
 .gn-sky { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 2px; transform: translateY(1px); box-shadow: 0 0 8px currentColor; }
 .gn-speeds { margin-top: 10px; display: flex; align-items: center; }
 /* the speed presets as one segmented row (eleven of them since the living-world pace: pause, 1× … 3000×) */
@@ -808,6 +809,8 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-linkbtn { pointer-events: auto; cursor: pointer; background: none; border: 0; padding: 0 2px; font: inherit; color: var(--gn-gold-hi); text-decoration: underline; text-underline-offset: 3px; }
 .gn-nw-foot { position: sticky; bottom: 0; margin: 14px -18px 0; padding: 12px 18px 14px; background: linear-gradient(180deg, rgba(9, 12, 20, .9), rgba(9, 12, 20, .98) 14px); display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--gn-line); }
 .gn-nw-seed { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gn-nw-desc { display: none; font: 500 12px/1.35 var(--gn-sans); color: var(--gn-ivory-dim); }
+.gn-nw-desc b { font: 600 13.5px var(--gn-serif); color: var(--gn-gold-hi); }
 .gn-nw-seed .gn-field-l { font: 600 11px var(--gn-sans); letter-spacing: .24em; text-transform: uppercase; color: var(--gn-gold); }
 .gn-nw-seed .gn-seed { width: 140px; font-family: var(--gn-mono); letter-spacing: .06em; }
 .gn-nw-seed .gn-set-note { margin: 0 0 0 6px; }
@@ -869,6 +872,9 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-saves-ai { width: 15px; height: 15px; flex: none; }
 .gn-saves-bad .gn-saves-ai { color: var(--gn-bad); }
 .gn-saves-ok .gn-saves-ai { color: var(--gn-good); }
+.gn-saves-info { border-color: var(--gn-line-gold); background: rgba(217, 184, 120, .06); }
+.gn-saves-info .gn-saves-ai { color: var(--gn-gold); }
+.gn-saves-info .gn-saves-am { flex: 1; }
 .gn-saves-am { flex: 1; }
 .gn-saves-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .gn-saves-auto { display: inline-flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: .04em; font: 500 12px var(--gn-sans); color: var(--gn-ivory-dim); }
@@ -965,6 +971,7 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-ph-shutter { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-size: 12.5px; letter-spacing: .18em; text-transform: uppercase; }
 .gn-ph-shutter span { width: 16px; height: 16px; }
 .gn-ph-status { font: italic 500 13px var(--gn-serif); color: var(--gn-ivory-dim); min-height: 1em; word-break: break-word; }
+.gn-ph-status .gn-ph-open { font: 500 12px var(--gn-sans); font-style: normal; padding: 3px 9px; margin-left: 4px; vertical-align: baseline; }
 .gn-ph-strip { display: flex; gap: 5px; overflow-x: auto; }
 .gn-ph-strip:empty { display: none; }
 .gn-ph-shot { pointer-events: auto; cursor: pointer; padding: 0; border: 1px solid var(--gn-line); border-radius: 5px; background: none; overflow: hidden; flex: none; }
@@ -1076,6 +1083,8 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
   .gn-nw-name { font-size: 17px; }
   .gn-nw-ct small { font-size: 11.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .gn-nw-foot { margin-top: 8px; padding: 8px 18px 10px; gap: 6px; }
+  .gn-nw-desc:not(:empty) { display: block; }
+  .gn-nw-seed .gn-set-note { display: none; }
   .gn-win-head { padding: 7px 10px 6px 14px; gap: 9px; }
   .gn-win-icon { width: 20px; height: 20px; }
   .gn-win-title { font-size: 19px; }

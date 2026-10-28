@@ -211,10 +211,13 @@ void main() {
   float dn3 = 0.5 + 0.5 * snoise(vec3(s * 0.9 - uTouchT * 0.7, 3.3, 9.1));
   float edgeR = 0.42 + 0.3 * dn3 + 0.16 * dn2;
   float dbody = 1.0 - smoothstep(edgeR - 0.32, edgeR + 0.04, x);
-  float dk = uDark * dbody * env * (0.7 + 0.3 * dn) * 0.95;
+  // (thinner at the foot, where it meets the canopy or the street: there the storm is scud and rain, not a wall —
+  // at 0.95 over its 0.05 albedo the foot punched a black hole into the trees under it)
+  float dk = uDark * dbody * env * (0.7 + 0.3 * dn) * mix(0.9, 0.6, smoothstep(0.6, 0.95, vT));
   float sunSide = clamp(0.5 + 0.5 * vSide * vSunX, 0.0, 1.0);
-  float shade = (0.35 + 0.75 * sunSide * sunSide) * (0.75 + 0.5 * dn2) * mix(0.6, 1.0, smoothstep(0.55, 0.15, vT));
-  vec3 dc = vec3(0.05, 0.05, 0.058) * vLight * shade;
+  float shade = (0.45 + 0.65 * sunSide * sunSide) * (0.75 + 0.5 * dn2) * mix(0.7, 1.0, smoothstep(0.55, 0.15, vT));
+  // a storm cloud's own albedo, lit by the sun and the sky (slate, darker than the land it shades — never a void)
+  vec3 dc = vec3(0.3, 0.31, 0.345) * vLight * shade;
   // (a flicker now and then lights a stretch of the storm from inside — a stretch, softly: lit whole and full, the dark
   // column became a white bar)
   float fseed = floor(uTouchT * 9.0);
@@ -228,7 +231,7 @@ void main() {
   vec3 c = (light + flick) * fxDisplay(0.6);
   // a dense shaft of lit air veils what is behind it a little (premultiplied over): over a blue sky a purely added
   // gold light summed to grey-white, and the regard's colour was lost
-  float veil = clamp((core * 0.4 + body * 0.28) * env * uBeamK, 0.0, 0.5) * (1.0 - uDark);
+  float veil = clamp((core * 0.4 + body * 0.28) * env * uBeamK, 0.0, 0.38) * (1.0 - uDark);
   gl_FragColor = vec4((c + dc * dk) * vis, max(dk, veil) * vis);
 }
 `;
@@ -277,7 +280,7 @@ void main() {
   float dens = smoothstep(0.38, 0.78, arms * 0.85 + n * 0.5) * ring;
   float a = dens * uWhorlK * uPres * vis * mix(0.85, 0.95, uDark);
   // seen from below: shaded undersides, brighter where the arm thins (light through it); storm-dark when feared
-  vec3 cloud = vLight * mix(0.62, 0.16, uDark) * (0.65 + 0.35 * n) + vLight * 0.3 * (1.0 - dens) * (1.0 - uDark);
+  vec3 cloud = vLight * mix(0.62, 0.3, uDark) * (0.65 + 0.35 * n) + vLight * 0.3 * (1.0 - dens) * (1.0 - uDark);
   // the eye: light pouring through; the arms' inner edges gilded (cold-rimmed when feared)
   float eye = 1.0 - smoothstep(0.0, 0.3, r);
   float edge = exp(-pow((r - 0.22) / 0.08, 2.0)) * (0.3 + 0.7 * dens);
@@ -1049,8 +1052,9 @@ export class HandVisual {
     const grasp = W.lift;
     this.grasp = grasp;
     this.u.uGrasp.value = grasp;
-    // (a trusted god's shaft is warm daylight let down to them: stronger than an awed god's pale one)
-    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.35 * ck) * (1 - 0.3 * feared) * (1 + 0.7 * trusted);
+    // (a trusted god's shaft is warm daylight let down to them: stronger than an awed god's pale one — but at 1.7x, with
+    // its veil and bloom, from 110 m it washed a quarter of the frame to a gold haze and hid the land under it)
+    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.35 * ck) * (1 - 0.3 * feared) * (1 + 0.4 * trusted);
     this.u.uGroundK.value = Math.min(1, 0.16 + 0.75 * W.point + 0.45 * W.soothe + 0.3 * ck);
     this.u.uFlashK.value = rk * 1.2;
     this.u.uStreakK.value = Math.max(0.08, 0.32 + 0.4 * grasp + 0.35 * W.reach - 0.2 * W.soothe - 0.25 * W.point + 1.1 * rk + 0.3 * ck);
@@ -1159,7 +1163,7 @@ export class HandVisual {
     this.u.uGripT.value = lenTop / Math.max(1e-3, lenTop + lenBot);
     // (the strip is wider than the light in it: the beam's soft falloff needs the room; a feared god's downdraft is
     // a broad column of dark cloud)
-    const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.4 * trusted * (1 - grasp)) * (1 - 0.55 * farK);
+    const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.2 * trusted * (1 - grasp)) * (1 - 0.55 * farK);
     this.u.uWTop.value = Math.max(L * 1.1, topH * 0.06) * (1 + 0.4 * W.soothe - 0.35 * W.point) * wk;
     this.u.uWGrip.value = L * (0.3 - 0.1 * grasp - 0.17 * W.point + 0.2 * W.soothe + 0.25 * rk) * wk;
     this.u.uWGround.value = L * (0.42 + 0.55 * W.soothe - 0.3 * W.point) * wk;
@@ -1338,7 +1342,7 @@ export class HandVisual {
       gl.ax = this.fwd.x; gl.ay = this.fwd.y; gl.az = this.fwd.z;
       // (deep enough to read through the tone curve and the eye's adaptation: at 0.3 it was a 10 % dimming on screen)
       gl.p0 = R; gl.p1 = R; gl.p2 = 0.9;
-      gl.ca = 0.5 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
+      gl.ca = 0.42 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
       // (a deep slab: on a hillside the gloom lies over the slope above and below the Touch's foot)
       gl.q0 = Math.max(4, R * 0.45);
       f.decals.add(gl);
@@ -1365,7 +1369,9 @@ export class HandVisual {
     sh.ax = sb.x; sh.ay = sb.y; sh.az = sb.z;
     sh.p0 = along; sh.p1 = across; sh.p2 = 0.85;
     const dens = Math.min(1, this.u.uTuftK.value);
-    sh.ca = (0.12 + 0.45 * feared + 0.1 * grasp) * dens * this.presence * smooth(0.04, 0.2, el);
+    // (under a feared god it lies inside the gloom above: the two stacked must leave the land at least half its light —
+    // stacked at full strength they left it under 30 %, a black pit in the trees)
+    sh.ca = (0.12 + 0.45 * feared + 0.1 * grasp) * dens * this.presence * smooth(0.04, 0.2, el) * (1 - 0.6 * feared);
     sh.q0 = Math.max(2, L * 0.6);
     f.decals.add(sh);
   }

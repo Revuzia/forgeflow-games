@@ -139,10 +139,10 @@
   </div>
 </div>
 
-<!-- ForgeFlow shared controls bar (bottom-right: Fullscreen, Mute, Pause, Report Bug). GAME_CONFIG must exist BEFORE the
+<!-- ForgeFlow shared controls bar (bottom-right: Fullscreen, Mute, Pause). GAME_CONFIG must exist BEFORE the
      script loads. touch:false = desktop god game (touch is out of scope, CONTRACT §16); fs_hotkey:false = F tilts the
-     camera here (the bar's Fullscreen button still works). Page-level script, runs before any game code. -->
-<script>window.GAME_CONFIG = { touch: false, fs_hotkey: false, mute_hotkey: false };</script>
+     camera here (the bar's Fullscreen button still works); hide_bug_button: GENESIS has no bug-report hook (window.__AUDIT__), so the bar shows no button that could only say "not available". Page-level script, runs before any game code. -->
+<script>window.GAME_CONFIG = { touch: false, fs_hotkey: false, mute_hotkey: false, hide_bug_button: true };</script>
 <script src="./game_controls.js?v=3.1"></script>
 <script>
   // Boot guard (classic script, runs before the module graph): if the module graph fails to load or throws before

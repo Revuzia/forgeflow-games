@@ -26,6 +26,7 @@ import { CameraRig } from './render/camera/rig.ts';
 import { newInput, type InputState } from './render/camera/common.ts';
 import { detectQuality, isQualityName, QUALITY, type QualityName } from './render/quality.ts';
 import { pick, rayDirection, type PickHit } from './render/picking.ts';
+import { setOrePalette } from './render/planet/fieldtex.ts';
 import type { GenesisAudio } from './audio/engine.ts';
 import { Shell } from './ui/shell.ts';
 import type { GroundHit, InspectRef, UiHost, CameraHost, CameraModeName, PhotoLens } from './ui/host.ts';
@@ -609,7 +610,11 @@ export class App implements UiHost {
     this.powers.setCommands(cmds);
     // (what a disaster left unset becomes; the ores and plants a vein or an invented plant can be: the god's own too)
     this.powers.setDisasterKinds(kinds);
-    if (Array.isArray(ores)) this.powers.setRegistry('ores', (ores as { id?: unknown }[]).map((o) => String(o.id ?? '')).filter(Boolean));
+    if (Array.isArray(ores)) {
+      this.powers.setRegistry('ores', (ores as { id?: unknown }[]).map((o) => String(o.id ?? '')).filter(Boolean));
+      // (the outcrops' colours in content order, so a vein of an invented material crops out in its own colour)
+      setOrePalette((ores as { id?: unknown; color?: unknown }[]).map((o) => ({ id: typeof o.id === 'string' ? o.id : undefined, color: typeof o.color === 'string' ? o.color : undefined })));
+    }
     void plants;
   }
 

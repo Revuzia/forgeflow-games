@@ -50,7 +50,8 @@ export function touchLook(regard: number): TouchLook {
   lr += (0.62 - lr) * feared; lg += (0.74 - lg) * feared; lb += (1.0 - lb) * feared;
   return {
     light: [lr, lg, lb], rim: [0.5, 0.68, 1.0], dark: 0.92 * feared, trusted, feared,
-    cloud: 0.86 - 0.74 * feared + 0.06 * trusted,
+    // (slate, not coal: at 0.12 the storm's wisps read as soot blots on sunlit trees)
+    cloud: 0.86 - 0.68 * feared + 0.06 * trusted,
     // (arcs a second or so apart: a storm that crackles now and then, dark between — lit half the time it read pale)
     crackle: feared > 0.3 ? 0.4 + 1.2 * (feared - 0.3) / 0.7 : 0,
   };

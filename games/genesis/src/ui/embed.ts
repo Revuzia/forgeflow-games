@@ -78,12 +78,17 @@ export class TimeGuard {
     if (d.speed() === 0 && this.siteSpeed > 0) d.setSpeed(this.siteSpeed);
   }
 
+  /**
+   * The player set the speed themselves (the HUD's buttons, a speed key, the pad's D-pad): the pause is theirs to keep
+   * or not, and the site's Pause no longer owns it. Only an explicit action lets go — never the speed a snapshot
+   * reports, which can lag a request (a snapshot asked for before setSpeed(0) still says the old speed).
+   */
+  playerSpeed(): void { this.sitePaused = false; }
+
   /** every frame: the site's pause lasts while the menu (or a window opened from it) is up */
   frame(): void {
     if (!this.sitePaused) return;
     const d = this.deps;
-    // the player set time running themselves: the pause is theirs to keep or not
-    if (d.speed() > 0) { this.sitePaused = false; return; }
     if (!d.windowOpen() && !d.titleOpen()) this.resume();
   }
 

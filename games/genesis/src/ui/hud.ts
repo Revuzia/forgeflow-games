@@ -115,6 +115,9 @@ const HINTS_KEY = 'genesis.hints.learnt.v1';
 /** the presets the quiet HUD keeps (the opening): pause, the slow real 1×, and a few steps toward the time-lapse */
 const QUIET_SPEEDS = new Set<number>([0, 1, 10, 100, 1000]);
 
+/** a day length in hours as the clock says it: 30 → "30", 26.5 → "26.5" */
+export function fmtDayHours(h: number): string { return String(Math.round(h * 10) / 10); }
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -175,6 +178,7 @@ export class Hud {
   private hint: HTMLDivElement;
   private dev: HTMLDivElement | null = null;
   private lastText = '';
+  private lastClock = '';
   private v2 = new Vector2();
   private actions: HudActions;
   private speedIds: Record<number, string> = Object.fromEntries(SPEED_PRESETS.map((x) => [x, x === 0 ? 'time.pause' : `time.speed${x}`]));
@@ -652,7 +656,19 @@ export class Hud {
       const mm = Math.floor((hour - hh) * 60);
       const text = `Year ${cal.year}<span class="gn-sep">·</span>${cal.season}<span class="gn-sep">·</span>Day ${cal.day}`;
       if (text !== this.lastText) { this.calText.innerHTML = text; this.lastText = text; }
-      this.clock.textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      // (a world whose day is not 24 hours counts its own hours: 24:41 on a 30-hour day is late evening, not a bug —
+      // the clock says so with a small "/30 h" and its title)
+      const dh = pv.params.dayHours;
+      const odd = Math.abs(dh - 24) > 0.05;
+      const clockText = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}${odd ? `|${fmtDayHours(dh)}` : ''}`;
+      if (clockText !== this.lastClock) {
+        this.lastClock = clockText;
+        this.clock.textContent = clockText.split('|')[0]!;
+        if (odd) this.clock.append(el('small', 'gn-clock-day', `/${fmtDayHours(dh)} h`));
+        this.clock.title = odd
+          ? `The local hour where you look. A day on this world is ${fmtDayHours(dh)} hours, so its clock runs from 00:00 to ${fmtDayHours(dh)}:00.`
+          : 'The local hour where you look';
+      }
       // the sky's colour at that hour, in the planet's own day
       const t = hour / pv.params.dayHours * 24;
       const day = t > 6 && t < 18;

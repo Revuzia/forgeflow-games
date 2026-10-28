@@ -20,6 +20,8 @@
 //   hurricane         its spiral is the cloud pass's (a storm cell added at once); spray over the sea under its eye wall
 //   tsunami           the wave's front as a breaking wall of water (render/fx/tsunami.ts: crest, curling lip, white
 //                     water, foam behind, the drawdown ahead, a muddy bore on land), spray blown off its crest
+//   rogue wave        a lone wall of water from offshore onto the coast (the tsunami crest played short), again and
+//                     again along the shore as the wave wanders
 //   flood             spray thrown along the moving water front (from the water and flow fields)
 //   wildfire / storm  smoke columns, embers, heat light and an orange sky near a firestorm (flames: the fire field)
 //   plague / blight   a low green-grey haze gathered in the streets round the sick (by area, strongest at dusk), flies,
@@ -30,8 +32,8 @@
 //   gravity slip      rocks and dust lifting off the ground
 //   eclipse           the occluder, the corona, the land darkening
 //   rift / sinkhole   glowing cracks venting steam; a pit
-//   acid rain, ice age, heat wave, drought, dust bowl, impact winter, glass storm, overgrowth, leviathan, forgetting
-//   fog, stampede, rogue flyby — tints, frost, cracks, blowing dust, bolts on the dunes, pollen, a serpent's back,
+//   acid rain, ice age, heat wave, drought, dust bowl, impact winter, glass storm, overgrowth, forgetting
+//   fog, stampede, rogue flyby — tints, frost, cracks, blowing dust, bolts on the dunes, pollen,
 //   a fog bank, a dust cloud, a dark world sliding past
 //   WARNINGS (LIVING §3.7, hook H5: DisasterView.params.warning — the god's disasters give the people a chance):
 //   volcano           rumbling: smoke and steam standing from the summit and thickening as the eruption nears,
@@ -160,7 +162,6 @@ export class DisasterFx {
   private transients: Transient[] = [];
   private fx: Record<string, IUniform>;
   private shared: Record<string, IUniform>;
-  private serpentMat: MeshStandardMaterial | null = null;
   private rogueMat: MeshStandardMaterial | null = null;
 
   constructor(fx: Record<string, IUniform>, shared: Record<string, IUniform>) {
@@ -773,8 +774,11 @@ export class DisasterFx {
         ctx.screen.fogCol.set(0.5, 0.49, 0.55).multiplyScalar(0.25);
         break;
       }
+      case 'rogue-wave':
       case 'leviathan': {
-        this.serpent(st, ctx, g, u, P.height ?? 40, P.length ?? 120, k);
+        // (a real wave, not a creature: 'leviathan' is the sim's old alias of the rogue wave — a mod still naming it
+        // gets the same wall of water)
+        this.rogueWave(st, ctx, u, P.height ?? 30, P.length ?? 120, I, k, far);
         break;
       }
       case 'rogue-flyby': {
@@ -1100,31 +1104,36 @@ export class DisasterFx {
     for (let j = i; j < 24; j++) { this.stopEm(st, `spray${j}`, ctx); this.stopEm(st, `mist${j}`, ctx); }
   }
 
-  /** a sea serpent's back: dark arches rising and sinking along its way, spray where they break the water */
-  private serpent(st: DState, ctx: FxCtx, g: Vector3, u: Vector3, h: number, len: number, k: number): void {
-    if (!this.serpentMat) this.serpentMat = makePropMaterial(this.shared, { key: 'serpent', roughness: 0.35 });
-    let humps = st.extra.humps as Mesh[] | undefined;
-    if (!humps) {
-      humps = [];
-      const geo = archGeo();
-      for (let i = 0; i < 5; i++) { const m = new Mesh(geo, this.serpentMat); m.matrixAutoUpdate = false; m.frustumCulled = false; m.layers.enable(1); humps.push(m); this.group.add(m); }
-      st.extra.humps = humps;
-      st.meshes.push({ obj: humps[0], dispose: () => { for (const m of humps!) this.group.remove(m); geo.dispose(); } });
+  /**
+   * a rogue wave: a wall of water far taller than the swell, running in from the open sea onto the coast where the
+   * disaster is (the tsunami's crest, render/fx/tsunami.ts, played as a single short front: its ~80° arc from a few
+   * hundred metres offshore). The sim's wave runs along the coast for a day or two; each wall spends itself on the
+   * shore, and the next rises from wherever the wave has wandered to.
+   */
+  private rogueWave(st: DState, ctx: FxCtx, u: Vector3, height: number, len: number, I: number, k: number, far: boolean): void {
+    let tc = st.extra.crest as TsunamiCrest | undefined;
+    const bornAt = (st.extra.crestAt as number | undefined) ?? -1e9;
+    // the last wall broke on the shore (its front is spent) and has had a breath of calm: the next one
+    if (tc && tc.crest.length === 0 && ctx.now - bornAt > 6) {
+      const old = tc;
+      const i = st.meshes.findIndex((m) => m.obj === old.mesh);
+      if (i >= 0) st.meshes.splice(i, 1);
+      this.group.remove(old.mesh);
+      old.dispose();
+      tc = undefined;
     }
-    const ax = bearing(u, fxHash(st.id, 9) * 6.283, _w);
-    for (let i = 0; i < humps.length; i++) {
-      const ph = ctx.now * 0.8 - i * 0.9;
-      const rise = Math.sin(ph) * 0.5 + 0.2;
-      const p = _a.copy(g).addScaledVector(ax, (i - 2) * len * 0.25).addScaledVector(u, (rise - 0.5) * h * 0.5);
-      const s = h * 0.35 * k;
-      frameAt(p, u, s, _m);
-      // orient the arch along the way
-      const x = _b.crossVectors(u, ax).normalize();
-      _m.makeBasis(ax.clone().multiplyScalar(s), u.clone().multiplyScalar(s), x.multiplyScalar(s * 0.5)).setPosition(p);
-      humps[i].matrix.copy(_m); humps[i].matrixWorldNeedsUpdate = true;
-      humps[i].visible = k > 0.02;
+    if (!tc) {
+      tc = new TsunamiCrest(this.fx, this.shared, true);
+      st.extra.crest = tc;
+      st.extra.crestAt = ctx.now;
+      this.group.add(tc.mesh);
+      const t2 = tc;
+      st.meshes.push({ obj: t2.mesh, dispose: () => t2.dispose() });
     }
-    this.em(st, 'spray', { sys: SYS.spray, x: g.x, y: g.y, z: g.z, ax: ax.x, ay: ax.y, az: ax.z, size: 4, life: 2.4, count: Math.round(200 * ctx.q), p0: len * 0.6, p1: 8, r: 0.88, g: 0.91, b: 0.93, power: k }, ctx);
+    // (a lone wave a few times the swell, not a tsunami's whole raised sea: its reach is the wave's own length)
+    const H = Math.max(8, height * Math.sqrt(Math.max(0.2, I)));
+    tc.update(ctx.pv, u, H, Math.max(len * 3, 400), k, ctx.now, ctx.ease, ctx.camBody, ctx.sunE);
+    this.crestSpray(st, ctx, tc.crest, H, far);
   }
 
   /** a dark world sliding past in the sky */
@@ -1153,7 +1162,6 @@ export class DisasterFx {
   dispose(): void {
     for (const st of this.states.values()) for (const m of st.meshes) m.dispose();
     this.states.clear();
-    this.serpentMat?.dispose();
     this.rogueMat?.dispose();
   }
 }
@@ -1168,33 +1176,5 @@ export function frameAt(p: Vector3, up: Vector3, s: number, out: Matrix4): Matri
   return out.makeBasis(x.multiplyScalar(s), y.multiplyScalar(s), z.multiplyScalar(s)).setPosition(p);
 }
 const _fx = new Vector3(), _fy = new Vector3(), _fz = new Vector3();
-
-/** an arch (a half torus) of unit radius standing on y = 0 along x */
-function archGeo(): BufferGeometry {
-  const pos: number[] = [], col: number[] = [], idx: number[] = [];
-  const S = 24, T = 12;
-  for (let i = 0; i <= S; i++) {
-    const a = (i / S) * Math.PI;
-    const cx = -Math.cos(a), cy = Math.sin(a);
-    const rr = 0.32 * (0.6 + 0.4 * Math.sin(a));
-    for (let j = 0; j <= T; j++) {
-      const b = (j / T) * Math.PI * 2;
-      const nx = Math.cos(b) * -Math.cos(a), ny = Math.cos(b) * Math.sin(a), nz = Math.sin(b);
-      pos.push(cx + nx * rr, cy + ny * rr, nz * rr);
-      const back = ny > 0 ? 0.04 : 0.09;
-      col.push(back * 0.7, back * 0.8, back * 0.75);
-    }
-  }
-  for (let i = 0; i < S; i++) for (let j = 0; j < T; j++) {
-    const a = i * (T + 1) + j, b = a + T + 1;
-    idx.push(a, b, a + 1, b, b + 1, a + 1);
-  }
-  const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-  g.setAttribute('color', new BufferAttribute(new Float32Array(col), 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
-}
 
 export type { Decal, Dome };

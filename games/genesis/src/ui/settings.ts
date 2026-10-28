@@ -34,7 +34,7 @@ export class Settings {
   constructor(parent: HTMLElement, deps: SettingsDeps) {
     this.deps = deps;
     this.host = deps.host;
-    this.panel = new Panel(parent, { name: 'settings', title: 'Settings', subtitle: 'the look, the sound, the hands', icon: 'settings', place: 'center', veil: true });
+    this.panel = new Panel(parent, { name: 'settings', title: 'Settings', subtitle: 'the look, the sound, the keys', icon: 'settings', place: 'center', veil: true });
     this.tabs = h('div', { class: 'gn-tabs gn-tabs-sticky', role: 'tablist' });
     this.content = h('div', { class: 'gn-set-content' });
     this.panel.body.append(this.tabs, this.content);
