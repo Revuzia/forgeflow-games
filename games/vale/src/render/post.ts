@@ -25,6 +25,11 @@
 //
 // The grade (tone map + LUT + vignette) and the overlay are identical on every tier; tiers only
 // change AO, bloom, AA, distortion and resolution. The identity LUT stands in until `map.art.lut` loads.
+//
+// GPU MEMORY (perf PERF-M1): the chain is built once per quality, never per scene. A scene switch (match setup, the
+// return to the menu) only re-points the passes at the new scene and camera; a quality change disposes every pass
+// this chain built (render targets, materials, the bloom mip chain, SMAA's lookup textures, N8AO's targets and
+// full-screen quads) before it builds the new set. The overlay and VFX passes are the chain's own and survive both.
 // The exposure envelope and the death grade run on every tier (they are game information, and cheap:
 // a few ALU per pixel, early-out when idle).
 
@@ -156,6 +161,11 @@ export class PostChain {
   private lutEffect: LUT3DEffect | null = null;
   private quality: PostQuality = { ao: 1, bloom: true, aa: 'smaa', tier: 'high' };
   aoPass: N8AOPostPass | null = null;
+  /** the passes build() made (re-pointed on a scene switch, disposed on a quality change) */
+  private renderPass: RenderPass | null = null;
+  private gradePass: EffectPass | null = null;
+  private aaPass: EffectPass | null = null;
+  private builtOrtho = false;
   /** r12 B4: AO eased (one denoise pass) while dynamic resolution holds the scale down (renderer.applySize) */
   private aoLow = false;
   private width = 1;
@@ -175,10 +185,23 @@ export class PostChain {
     this.build();
   }
 
+  /** perf PERF-M1: re-point the built passes (no new targets, materials or programs). Only a change of camera kind
+   *  rebuilds: N8AO compiles the projection kind into its programs */
   setScene(scene: Scene, camera: Camera): void {
     this.scene = scene;
     this.camera = camera;
-    this.build();
+    const ortho = (camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera === true;
+    if (!this.renderPass || ortho !== this.builtOrtho) { this.build(); return; }
+    this.renderPass.mainScene = scene;
+    this.renderPass.mainCamera = camera;
+    if (this.aoPass) {
+      const ao = this.aoPass as N8AOPostPass & { scene: Scene; camera: Camera; firstFrame?: () => void };
+      ao.scene = scene;
+      ao.camera = camera;
+      ao.firstFrame?.();
+    }
+    if (this.gradePass) this.gradePass.mainCamera = camera;
+    if (this.aaPass) this.aaPass.mainCamera = camera;
   }
 
   /** the locked grade; null = identity until the art lane's .cube exists */
@@ -209,12 +232,20 @@ export class PostChain {
 
   render(dt: number): void { this.composer.render(dt); }
 
+  /** every pass this chain built, freed (the overlay and VFX passes are kept: they are re-added) */
+  private disposeBuilt(): void {
+    for (const p of this.composer.passes) if (p !== this.overlay && p !== this.vfx) disposePass(p);
+    this.renderPass = null; this.gradePass = null; this.aaPass = null; this.aoPass = null; this.lutEffect = null;
+  }
+
   private build(): void {
     const c = this.composer;
+    this.disposeBuilt();
     c.removeAllPasses();
     const q = this.quality;
-    c.addPass(new RenderPass(this.scene, this.camera));
-    this.aoPass = null;
+    this.builtOrtho = (this.camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera === true;
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    c.addPass(this.renderPass);
     if (q.ao > 0) {
       const ao = new N8AOPostPass(this.scene, this.camera, this.width, this.height);
       ao.autoDetectTransparency = false;
@@ -247,15 +278,27 @@ export class PostChain {
     effects.push(this.lutEffect);
     effects.push(new GradeEffect());
     effects.push(new VignetteEffect({ offset: 0.35, darkness: 0.25 }));
-    c.addPass(new EffectPass(this.camera, ...effects));
+    this.gradePass = new EffectPass(this.camera, ...effects);
+    c.addPass(this.gradePass);
     c.addPass(this.overlay);
     if (q.aa === 'off') {
       c.addPass(new CopyPass());
     } else {
       const preset = q.tier === 'ultra' ? SMAAPreset.ULTRA : q.tier === 'high' ? SMAAPreset.HIGH : SMAAPreset.MEDIUM;
-      c.addPass(new EffectPass(this.camera, new SMAAEffect({ preset })));
+      this.aaPass = new EffectPass(this.camera, new SMAAEffect({ preset }));
+      c.addPass(this.aaPass);
     }
   }
 
   dispose(): void { this.composer.dispose(); this.identity.dispose(); }
+}
+
+/** free one built pass: Pass.dispose frees its render targets, materials, textures, sub-passes and (EffectPass) its
+ *  effects; N8AO's full-screen quads hold their own materials outside that shallow search, so they go explicitly */
+function disposePass(p: Pass): void {
+  p.dispose();
+  for (const v of Object.values(p as unknown as Record<string, unknown>)) {
+    const q = v as { _mesh?: unknown; dispose?: () => void } | null;
+    if (q && typeof q === 'object' && q._mesh && typeof q.dispose === 'function') q.dispose();
+  }
 }

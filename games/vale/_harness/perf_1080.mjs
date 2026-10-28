@@ -26,6 +26,13 @@
 // real client's path into a match with dynamic resolution ON — 16 s of the Home menu (its 30 fps idle cap from 4 s),
 // then the RIFT match at High. Hard check (any machine): the menu never moves the render scale (it stays 1.0).
 // Idle machine only: after the window the match renders at High's own scale, 1.0 (else "not measured: machine busy").
+// memory (perf PERF-M1, part of --prod; --no-mem skips it, --mem-cycles <n> sets the rebuilds, default 4; --mem-only
+// runs it alone): the IDENTICAL RIFT match (same fighters, map, seed) torn down to the menu and set up again n times
+// in one page (a fresh host each time, fast-forwarded to the same t: the deterministic sim gives the same state, so
+// content caches fill once). Every texture / geometry / material / render target three uploads is tracked through its 'dispose'
+// listener (live = on the GPU). Hard checks (any machine): at every menu after the 2nd, the live render targets and
+// renderer.info geometries and textures are <= their menu_2 values (menu_1 may still be filling caches); macOS only
+// (`footprint`): the GPU process grows <= 3 % from menu_2 to the last menu.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -48,7 +55,11 @@ const PROD_DIR = join(HERE, '_prod', 'dist');
 const BUDGET = { tris: 500000, draws: 450, programs: 40 };
 const TARGET = { high: { fps: 60, p95Ms: 16.7, p99Ms: 25, cpuMs: 6 }, low: { p95Ms: 16.7, cpuMs: 6 } };
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
-const DYN = PROD && !args.includes('--no-dyn');
+const MEM_ONLY = args.includes('--mem-only');
+const DYN = PROD && !MEM_ONLY && !args.includes('--no-dyn');
+const MEM = (PROD || MEM_ONLY) && !args.includes('--no-mem');
+const MEM_CYCLES = Math.max(2, Number(opt('mem-cycles', 4)));
+const MEM_GPU_GROWTH = 0.03;
 const DYN_SEC = Number(opt('dyn-sec', 60)), DYN_MENU_S = 16;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
@@ -215,6 +226,91 @@ async function dynres() {
   }
 }
 
+/** a process's physical footprint in MB (macOS `footprint`), null elsewhere */
+function footprintMb(pid) {
+  try {
+    const s = execFileSync('footprint', ['-p', String(pid)], { encoding: 'utf8', timeout: 30000 });
+    const m = /Footprint:\s+([\d.]+)\s+(MB|GB|KB)/.exec(s);
+    return m ? Math.round(Number(m[1]) * (m[2] === 'GB' ? 1024 : m[2] === 'KB' ? 1 / 1024 : 1)) : null;
+  } catch { return null; }
+}
+
+/** perf PERF-M1: rebuild the identical match MEM_CYCLES times (see the header) */
+async function memory() {
+  const { browser, context, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=120&seed=${SEED}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+  try {
+    await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+    const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
+    if (err) throw new Error(`bench failed: ${err}`);
+    const cdp = await context.newCDPSession(page);
+    const bcdp = await browser.newBrowserCDPSession();
+    // three registers a 'dispose' listener on every texture / geometry / material / render target it uploads and
+    // removes it when that object is disposed: registered minus removed is what the GPU still holds
+    await page.evaluate(() => {
+      const b = window.__VALE_BENCH__;
+      let p = b.renderer.scene; while (p && !Object.prototype.hasOwnProperty.call(p, 'addEventListener')) p = Object.getPrototypeOf(p);
+      const add = p.addEventListener, rem = p.removeEventListener;
+      const live = new Map(); window.__memLive = live; window.__memCycle = 0;
+      const kind = (o) => (o.isWebGLRenderTarget || o.isRenderTarget ? 'target' : o.isTexture ? 'texture' : o.isBufferGeometry ? 'geometry' : o.isMaterial ? 'material' : null);
+      p.addEventListener = function (type, fn) {
+        if (type === 'dispose') { const k = kind(this); if (k && !live.has(this)) live.set(this, { k, c: window.__memCycle }); }
+        return add.call(this, type, fn);
+      };
+      p.removeEventListener = function (type, fn) {
+        const r = rem.call(this, type, fn);
+        if (type === 'dispose' && live.has(this)) { const l = this._listeners?.dispose; if (!l || l.length === 0) live.delete(this); }
+        return r;
+      };
+      window.__memSnap = () => {
+        const by = { target: 0, texture: 0, geometry: 0, material: 0 }, kept = {};
+        for (const [o, m] of live) {
+          by[m.k]++;
+          if (m.c >= 2) { const d = `c${m.c} ` + (m.k === 'target' ? `target ${o.width}x${o.height}` : m.k === 'geometry' ? `geometry ${o.type} v${o.attributes?.position?.count ?? 0}` : `${m.k} ${o.type ?? o.constructor?.name ?? ''} ${o.name ?? ''}`); kept[d] = (kept[d] ?? 0) + 1; }
+        }
+        return { by, kept };
+      };
+    });
+    const sample = async (tag) => {
+      for (let i = 0; i < 2; i++) { await cdp.send('HeapProfiler.collectGarbage').catch(() => {}); await page.waitForTimeout(250); }
+      const r = await page.evaluate(() => { const s = window.__VALE_BENCH__.renderer.stats(); return { geometries: s.geometries, textures: s.textures, programs: s.programs, ...window.__memSnap() }; });
+      const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
+      const gpu = ps.find((x) => x.type === 'GPU');
+      const s = { tag, geometries: r.geometries, textures: r.textures, programs: r.programs, targets: r.by.target, tracked: r.by, gpuProcMb: gpu ? footprintMb(gpu.id) : null, kept: r.kept };
+      console.log(`mem     ${tag.padEnd(7)} targets ${s.targets}  geometries ${s.geometries}  textures ${s.textures}  programs ${s.programs}  materials ${r.by.material}  GPU process ${s.gpuProcMb ?? '-'} MB`);
+      return s;
+    };
+    const cycles = [];
+    await page.evaluate(() => window.__VALE_BENCH__.frames(60, 1 / 30));
+    cycles.push(await sample('match_0'));
+    for (let c = 1; c <= MEM_CYCLES + 1; c++) {
+      await page.evaluate((k) => { window.__memCycle = k; const b = window.__VALE_BENCH__; b.renderer.setScene('menu'); for (let i = 0; i < 30; i++) b.renderer.render(1 / 30); }, c);
+      await page.waitForTimeout(1500);
+      cycles.push(await sample(`menu_${c}`));
+      if (c > MEM_CYCLES) break;
+      await page.evaluate(() => window.__VALE_BENCH__.rebuild());
+      await page.waitForTimeout(5000);                                    // models, textures, landmarks land
+      await page.evaluate(() => window.__VALE_BENCH__.frames(90, 1 / 30));
+      await page.waitForTimeout(1000);
+      await page.evaluate(() => window.__VALE_BENCH__.frames(30, 1 / 30));
+      cycles.push(await sample(`match_${c}`));
+    }
+    const menus = cycles.filter((x) => x.tag.startsWith('menu_'));
+    const base = menus[1], last = menus[menus.length - 1];
+    const misses = [];
+    for (const m of menus.slice(2)) {
+      for (const k of ['targets', 'geometries', 'textures']) if (m[k] > base[k]) misses.push(`${m.tag} ${k} ${m[k]} > menu_2 ${base[k]}`);
+    }
+    const growth = base.gpuProcMb && last.gpuProcMb ? +((last.gpuProcMb - base.gpuProcMb) / base.gpuProcMb).toFixed(4) : null;
+    if (growth !== null && growth > MEM_GPU_GROWTH) misses.push(`GPU process +${(growth * 100).toFixed(1)} % from menu_2 to ${last.tag} (> ${MEM_GPU_GROWTH * 100} %)`);
+    for (const x of cycles) if (x !== last) delete x.kept;
+    const res = { cycles: MEM_CYCLES, timeline: cycles, gpuGrowth: growth, keptAtLastMenu: last.kept, misses, pass: misses.length === 0, errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 10) };
+    console.log(`mem     ${MEM_CYCLES} rebuilds: menu_2 → ${last.tag}: targets ${base.targets}→${last.targets}, geometries ${base.geometries}→${last.geometries}, textures ${base.textures}→${last.textures}, GPU process ${base.gpuProcMb ?? '-'}→${last.gpuProcMb ?? '-'} MB${growth === null ? '' : ` (${growth >= 0 ? '+' : ''}${(growth * 100).toFixed(1)} %)`}  ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
+    return res;
+  } finally {
+    await browser.close();
+  }
+}
+
 /** wait (≤ `sec` seconds, polled every 10 s) for an idle machine; true when one came */
 async function waitIdle(sec) {
   const end = Date.now() + sec * 1000;
@@ -229,7 +325,7 @@ async function waitIdle(sec) {
 
 try {
   const deadline = Date.now() + WAIT_IDLE_S * 1000;
-  for (const q of PRESETS) {
+  for (const q of MEM_ONLY ? [] : PRESETS) {
     let res = null;
     for (;;) {
       if (WAIT_IDLE_S > 0) await waitIdle(Math.max(0, (deadline - Date.now()) / 1000));
@@ -246,10 +342,14 @@ try {
     out.dynres = await dynres();
     if (!out.dynres.pass) out.pass = false;
   }
+  if (MEM) {
+    out.memory = await memory();
+    if (!out.memory.pass) out.pass = false;
+  }
 } finally {
   await stopServer();
 }
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(out, null, 1));
 console.log(`GPU: ${out.gpu}  → ${OUT}`);
-if (PROD) { console.log(out.pass ? 'GATE PASS' : 'GATE FAIL'); if (!out.pass) process.exitCode = 1; }
+if (PROD || MEM_ONLY) { console.log(out.pass ? 'GATE PASS' : 'GATE FAIL'); if (!out.pass) process.exitCode = 1; }

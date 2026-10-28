@@ -334,6 +334,17 @@ class InstanceBuffer {
     }
     for (const g of this.geos) g.instanceCount = this.count;
   }
+  /** perf PERF-M1: free the instanced views (their vertex-array states and this buffer's GPU attributes). three frees
+   *  the buffers of EVERY attribute a disposed geometry holds, so the template's shared attributes and index are taken
+   *  off each view first: the template keeps its buffers for the next match */
+  dispose(): void {
+    for (const g of this.geos) {
+      for (const k of Object.keys(g.attributes)) if (!(ATTRS as readonly string[]).includes(k)) g.deleteAttribute(k);
+      g.setIndex(null);
+      g.dispose();
+    }
+    this.geos.length = 0;
+  }
 }
 
 const _inst = new Matrix4();
@@ -445,6 +456,7 @@ class CrowdSet {
       (m.material as Material).dispose();
       m.customDepthMaterial?.dispose();
     });
+    this.buf.dispose();
     this.group.removeFromParent();
   }
 }

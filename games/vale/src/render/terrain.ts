@@ -461,6 +461,8 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(valued) : valued(mesh.material);
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) patchWorldMaterial(mat);
     });
+    // perf PERF-M1: the copies are this landmark's own: Terrain.dispose frees them (the terrain group holds the landmark)
+    if (own.size) (o.userData as { valeOwnMaterials?: Material[] }).valeOwnMaterials = [...own.values()];
     out.push(o);
   }));
   return out;
@@ -1638,6 +1640,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   disposables.push(clutterGeo.moss, clutterGeo.leaf, clutterGeo.pebble, clutterGeo.tuft, clutterMat);
   let scatterParts: Group[] = [];
   let props: Partial<Record<TerrainPropRole, BufferGeometry[]>> = {};
+  const disposeProps = (p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void => {
+    for (const list of Object.values(p)) for (const g of list ?? []) g.dispose();
+  };
   // r12 B4: a role the map names authored props for waits for them (setProps) instead of scattering the procedural
   // stand-ins for the first frames: their programs never compile and nothing pops; a role whose GLBs all fail
   // falls back to the stand-ins once setProps arrives without it
@@ -1814,6 +1819,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       for (const r of TERRAIN_TEX_ROLES) { const x = t[r]; if (x) tex[r].value = x; }
     },
     setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void {
+      // perf PERF-M1: the prop geometries are this terrain's own (loadTerrainProps clones and merges them)
+      if (p !== props) disposeProps(props);
       props = p;
       awaiting.clear();
       setScatter(scatterLevel);
@@ -1840,7 +1847,15 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     dispose(): void {
       for (const c of culls) c.dispose();
       culls.clear();
-      group.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); });
+      group.traverse((o) => {
+        if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose();
+        // a landmark's own value-scaled material copies (loadTerrainLandmarks); its geometry and the rest of its
+        // materials are the asset cache's
+        const own = (o.userData as { valeOwnMaterials?: Material[] }).valeOwnMaterials;
+        if (own) { for (const m of own) m.dispose(); own.length = 0; }
+      });
+      disposeProps(props);
+      props = {};
       for (const d of disposables) d.dispose();
     },
   };

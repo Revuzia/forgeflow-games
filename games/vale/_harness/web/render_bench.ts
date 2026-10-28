@@ -16,7 +16,10 @@
 //             scale the menu left
 //
 // window.__VALE_BENCH__: { ready, stats(), timing(), profile(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
-//   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station) }
+//   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station), rebuild() }
+//   rebuild()  a NEW host for the identical match (same setup and seed, fast-forwarded to the same `t`, so the same sim
+//              state: the deterministic sim) and renderer.setScene on it — the real client's next match, minus any
+//              difference in content (perf_1080 --prod's memory step, perf PERF-M1)
 
 import type { CatalogT } from '../../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent } from '../../src/contracts/sim.ts';
@@ -107,13 +110,17 @@ async function main(): Promise<void> {
   }
 
   const setup = buildSetup(catalog, qs.get('mode'), Number(qs.get('seed') ?? 7));
-  const host = new LocalMatchHost(catalog, setup, 0, { bots: createBots(catalog, setup), autopilot: true, maxTimeScale: 16, pregameSeconds: 0 });
-  host.start();
-  await renderer.preload(setup, (p) => { hud.textContent = `loading ${(p * 100) | 0}%`; });
   const ffTo = Number(qs.get('t') ?? 0);
+  const makeHost = (): LocalMatchHost => {
+    const h = new LocalMatchHost(catalog, setup, 0, { bots: createBots(catalog, setup), autopilot: true, maxTimeScale: 16, pregameSeconds: 0 });
+    h.start();
+    return h;
+  };
+  const host = makeHost();
+  await renderer.preload(setup, (p) => { hud.textContent = `loading ${(p * 100) | 0}%`; });
   if (ffTo > 0) ff(host, ffTo);
   renderer.setScene(host);
-  install(renderer, host, catalog);
+  install(renderer, host, catalog, () => { const h = makeHost(); if (ffTo > 0) ff(h, ffTo); return h; });
   loop(renderer, host);
 }
 
@@ -146,14 +153,14 @@ function loop(renderer: Renderer, host: LocalMatchHost | null): void {
   requestAnimationFrame(tick);
 }
 
-function install(renderer: Renderer, host: LocalMatchHost | null, catalog: CatalogT): void {
+function install(renderer: Renderer, host: LocalMatchHost | null, catalog: CatalogT, makeHost?: () => LocalMatchHost): void {
   const view = () => host?.view;
   const you = () => { const v = view(); const p = v?.players.find((x) => x.player === 0); return p ? v!.entity(p.entity) : undefined; };
   const api = {
     ready: true,
     catalog,
     renderer,
-    host,
+    get host() { return host; },
     stats: () => renderer.stats(),
     /** the render scale the menu phase left (?menufirst), null without one */
     menuScale: () => menuScale,
@@ -215,6 +222,13 @@ function install(renderer: Renderer, host: LocalMatchHost | null, catalog: Catal
       renderer.setAim({ shape: 'cone', x: x - 4, y: y + 2.6, dir: -0.3, radius: 4.5, angleDeg: 70, range: 6, casterX: x - 4, casterY: y + 2.6 });
     },
     clearAim: () => renderer.setAim(null),
+    /** the identical match again on a fresh host (see the header); false without a match */
+    rebuild: (): boolean => {
+      if (!makeHost) return false;
+      host = makeHost();
+      renderer.setScene(host);
+      return true;
+    },
     hover: (id: number | null) => renderer.setHover(id),
     pick: (x: number, y: number) => renderer.pickEntity(x, y),
     ground: (x: number, y: number) => renderer.pickGround(x, y),
