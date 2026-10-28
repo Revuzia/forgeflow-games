@@ -3,76 +3,74 @@
   "fighter": "vashil",
   "skin": true,
   "parts": {
-    "tris_hood": 1500,
+    "tris_hood": 1400,
     "tris_visor_frame": 698,
     "tris_visor_glass": 500,
     "tris_mask": 1000,
     "tris_neckwrap": 350,
-    "tris_cowl": 1650,
+    "tris_cowl": 1500,
     "tris_pauldron_R1": 400,
     "tris_pauldron_R2": 400,
     "tris_pauldron_R3": 400,
     "tris_pauldron_L1": 400,
     "tris_pauldron_L2": 400,
     "tris_pauldron_L3": 400,
-    "tris_robe_top": 1298,
+    "tris_robe_top": 1200,
     "tris_sash": 800,
-    "tris_skirt": 2400,
+    "tris_skirt": 2150,
     "tris_sleeve_L": 1100,
     "tris_sleeve_R": 1200,
     "tris_wrap_L": 500,
     "tris_wrap_R": 500,
     "tris_hand_R": 800,
-    "tris_hand_L": 800,
+    "tris_hand_L": 760,
+    "tris_finger_L": 160,
     "tris_boots": 850,
     "tris_rod_shaft": 420,
-    "tris_rod_grip": 218,
+    "tris_rod_grip": 280,
     "tris_rod_collar": 300,
     "tris_striker": 300,
-    "tris_striker_core": 160,
     "tris_wrist_cord": 160,
     "tris_wrist_bell": 160,
     "tris_wrist_clapper": 60,
-    "tris_halo_ring": 1100,
-    "tris_halo_inlay": 498,
+    "tris_halo_ring": 1300,
     "tris_halo_clasps": 300,
-    "tris_clasp_windows": 72,
-    "tris_bells": 1598,
-    "tris_bell_hooks": 260,
+    "tris_bells": 1600,
+    "tris_bell_hooks": 276,
     "tris_clapper_stems": 200,
-    "tris_clappers": 500,
-    "validate_vashil": "23362->23360"
+    "tris_clappers": 400,
+    "validate_vashil": "23164->23160"
   },
-  "uv_coverage": 0.617,
+  "uv_coverage": 0.581,
   "bake": {
-    "base": 6.09,
-    "rough_metal": 5.88,
-    "normal": 5.63,
-    "ao": 4.91,
-    "normal_fixed_px": 18113,
-    "projection": 58.66,
-    "pack_save": 58.83,
-    "total": 81.64
+    "base": 9.85,
+    "rough_metal": 8.11,
+    "normal": 7.01,
+    "ao": 8.66,
+    "normal_fixed_px": 22492,
+    "projection": 248.67,
+    "pack_save": 249.66,
+    "total": 284.0
   },
-  "tris": 24650,
-  "mesh_top_m": 2.105,
-  "glb_bytes_raw": 2403724,
+  "tris": 23620,
+  "mesh_top_m": 2.119,
+  "glb_bytes_raw": 2475848,
   "optimize": {
     "ok": true,
-    "before": 2403724,
-    "after": 1060224
+    "before": 2475848,
+    "after": 1099376
   },
-  "glb_bytes": 1060224,
+  "glb_bytes": 1099376,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil_first_bell.glb (1035 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: vashil_first_bell_base 2048x2048 242K, vashil_first_bell_normal 512x512 41K, vashil_first_bell_orm 256x256 23K",
-      "  skinned meshes: vashil_accent(675v), vashil_first_bell(20374v)",
-      "  bones: 26 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_rod_head thighL shinL footL toeL thighR shinR footR toeR)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil_first_bell.glb (1074 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: vashil_first_bell_base 2048x2048 248K, vashil_first_bell_normal 512x512 49K, vashil_first_bell_orm 256x256 24K",
+      "  skinned meshes: vashil_accent(252v), vashil_first_bell(21770v)",
+      "  bones: 30 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL x_index1L x_index2L x_sleeveL_1 shoulderR upper_armR forearmR handR propR x_rod_head x_sleeveR_1 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 24650; bind-pose bounds (three units, Y up): 0.99 x 2.11 x 0.82; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
+      "  tris: 23620; bind-pose bounds (three units, Y up): 0.98 x 2.12 x 0.81; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -82,8 +80,8 @@
       "portrait": "art/out/fighters/vashil/vashil_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 9.21,
-      "portrait": 4.1
+      "splash": 38.04,
+      "portrait": 16.42
     }
   },
   "three_qa": {
@@ -93,12 +91,12 @@
       [
         -0.565,
         -0.005,
-        -0.426
+        -0.419
       ],
       [
-        0.424,
-        2.105,
-        0.395
+        0.415,
+        2.119,
+        0.391
       ]
     ],
     "facing": [
@@ -106,33 +104,33 @@
       1
     ],
     "headY": 1.642,
-    "accentPct": 1.99,
-    "accentTopHalfPct": 97.5,
-    "heightPx1080": 113,
+    "accentPct": 2.21,
+    "accentTopHalfPct": 99.9,
+    "heightPx1080": 114,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/vashil/three_vashil_first_bell.png",
-    "seconds": 10.1,
+    "seconds": 53.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.14,
-      "model": 7.69,
-      "lows_bind": 4.48,
-      "uv": 6.27,
-      "bake": 81.65,
-      "export": 0.06,
-      "optimize": 0.45,
-      "load_test": 0.1,
-      "render": 13.34,
-      "three_qa": 10.43
+      "rig": 0.01,
+      "materials": 0.22,
+      "model": 11.76,
+      "lows_bind": 13.81,
+      "uv": 9.61,
+      "bake": 284.02,
+      "export": 0.41,
+      "optimize": 3.26,
+      "load_test": 0.54,
+      "render": 54.56,
+      "three_qa": 54.39
     },
-    "total_s": 124.79
+    "total_s": 432.8
   },
   "run_ref_speed": 3.35,
   "height_m": 1.9

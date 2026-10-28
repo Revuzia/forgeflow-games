@@ -175,7 +175,7 @@ ART_HEIGHT_PAD = 0.04       # FighterArt.height = mesh top + 4 cm (the HP bar's 
 DART_R = 0.0135
 HEAD_L, HEAD_W, HEAD_T = 0.17, 0.037, 0.0065         # the leaf head: length, half width, half thickness
 CREST_HEAD_TWIST = (-28.0, 14.0, -12.0, 26.0, 0.0)
-LAID_HEAD = 1.25                                      # the laid dart's head scale (the widest single read, chest height)   # each crest leaf's face turned about its shaft (deg)
+LAID_HEAD = 1.40                                      # the laid dart's head scale (the widest single read, chest height)   # each crest leaf's face turned about its shaft (deg)
 
 
 def crest_dart(i):
@@ -1404,13 +1404,16 @@ _install_paint()
 # Highrim a warm mid sandstone (hood and sleeve wraps, darker and warmer than white, L* ~57), Long Evening a red-leaning
 # plum (hue 307 -> renders ~295) and smoked-amber heads.
 SKIN_TONE = {
-    # Highrim: sandstone, a step greyer than the base's ochre and no lighter (as #9C8768 its lit crown rendered L* 89
-    # at 9 % in the portrait: the whitish hood the brief forbids)
-    "ulkro_highrim": {"hood": "#86745B", "cowl": "#82705A", "hood_tail": "#7C6A53", "sleeves": "#8A7860"},
-    # Long Evening: a dusky plum, a red-leaning hue at 29 % (as #5C3A57 the lit crown rendered orchid, the shade 57 %)
-    "ulkro_long_evening": {"hood": "#5A4054", "cowl": "#563D51", "hood_tail": "#523A4D",
+    # Highrim: a warm rose sandstone, a step warmer and darker than the base's ochre and as saturated (three.js strips
+    # ~12 points: as #9C8768 the lit crown rendered L* 89 at 9 % in the portrait, as #86745B a pale cream in three.js,
+    # the whitish hood the brief forbids)
+    "ulkro_highrim": {"hood": "#7A6450", "cowl": "#76604C", "hood_tail": "#705B48", "sleeves": "#86705A"},
+    # Long Evening: a dark dusky plum, red-leaning (three.js lifts and blues it: #5C3A57 rendered orchid in the portrait,
+    # #5A4054 lavender in three.js)
+    "ulkro_long_evening": {"hood": "#4C3344", "cowl": "#483041", "hood_tail": "#452E3E",
                            "crest_heads": "#957F60", "dart_head": "#957F60"},
 }
+SKIN_REF = {"hood_tail": "#86704F", "sleeves": "#8A7A62", "crest_heads": "#9FB4C6", "dart_head": "#9FB4C6"}
 _SKIN = {"id": None}
 
 
@@ -1434,11 +1437,12 @@ def _install_recolour() -> None:
             if nm not in tones:
                 continue
             m = pid == i
-            core = m & (part >= 0)
-            med = np.median(lin[core] if core.sum() > 100 else lin[m], axis=0)
-            r = lin[m] / np.maximum(med, 1e-4)
-            rl = (_lum(lin[m]) / max(float(_lum(med)), 1e-4))[:, None]
-            r = np.clip(r * 0.25 + rl * 0.75, 0, 4.0) ** 0.85            # the lit crown compressed a little
+            # relative to the colour the BASE painted this part onto (its TONE / procedural base), so the skin keeps
+            # the base's own light and shade exactly (a median over the hood's dark inside lifted the outside)
+            ref = _hl(SKIN_REF.get(nm) or TONE[nm][0])
+            r = lin[m] / np.maximum(ref, 1e-4)
+            rl = (_lum(lin[m]) / max(float(_lum(ref)), 1e-4))[:, None]
+            r = np.clip(r * 0.25 + rl * 0.75, 0, 4.0)
             c = _hl(tones[nm]) * r
             olin[m] = c * np.minimum(1.0, MAX_LIN / np.maximum(c.max(1), 1e-6))[:, None]   # hue-preserving cap
             log(f"  skin tone {nm}: median -> {tones[nm]}")

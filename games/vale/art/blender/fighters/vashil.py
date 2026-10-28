@@ -136,7 +136,8 @@ STRIKER = (1.645, 1.765)                            # the glass block (12 cm, br
 COLLAR = (1.605, 1.645)
 
 # the halo (rigid on x_halo, a child of the head): 0.80 m across, floating 9 cm over the hood's peak
-HALO_C = np.array([0.0, 0.02, 2.035])
+# (fix pass 1: centred 3.5 cm further forward and 1 cm lower, its far edge was meeting the HP bar in play)
+HALO_C = np.array([0.0, -0.015, 2.025])
 # fix pass 1: a flat carved chalk band (6.5 cm wide, 3.2 cm thick, brief "3 cm thick"), not a thin tube
 HALO_RI, HALO_RO, HALO_HZ = 0.335, 0.400, 0.016
 HALO_RM = 0.5 * (HALO_RI + HALO_RO)
@@ -637,9 +638,9 @@ def halo_parts(n_bells: int = 7) -> list:
     out.append(("halo_ring", ring, 0.55, "chalk", "bone:x_halo", 1300, 1.4))
     cl = Sculpt("halo_clasps")
     for ang in CLASP_ANG:
-        c = ring_pt(ang, z=HALO_C[2] + 0.020)                  # the posts stand 7 cm over the band (concept)
-        cl.add(RoundBox(c, (0.024, 0.044, 0.053), 0.008, axes=sdf.rot_z(-ang)).displaced(chips(0.003, 10.0), 0.003), k=0.0)
-        cl.add(RoundBox(c + np.array([0, 0, 0.056]), (0.017, 0.034, 0.008), 0.005, axes=sdf.rot_z(-ang)), k=0.004)
+        c = ring_pt(ang, z=HALO_C[2] + 0.028)                  # the struts: 14 cm tall (brief), 9 cm over the band
+        cl.add(RoundBox(c, (0.024, 0.044, 0.060), 0.008, axes=sdf.rot_z(-ang)).displaced(chips(0.003, 10.0), 0.003), k=0.0)
+        cl.add(RoundBox(c + np.array([0, 0, 0.063]), (0.017, 0.034, 0.008), 0.005, axes=sdf.rot_z(-ang)), k=0.004)
     out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 300, 1.0))
     bells, hooks, stems, beads = Sculpt("bells"), Sculpt("bell_hooks"), Sculpt("clapper_stems"), Sculpt("clappers")
     for ang in bell_angles(n_bells):
@@ -1430,13 +1431,19 @@ def _classes(c):
     return {"band": band, "panel": panel, "coat": ~band & ~panel}
 
 
-def _class_w(c):
-    """soft class weights (coat, panel, band) summing to 1: no texel-by-texel flicker on the boundaries"""
+def _class_w(c, P=None, part=None):
+    """soft class weights (coat, panel, band) summing to 1: no texel-by-texel flicker on the boundaries. The
+    painted cream sits near blue-red -0.06, the blue-grey panel near +0.04; on the skirt the recessed front panel
+    is also found by its place (the concept's strokes blur its edges)"""
     lin = _lin(c)
     Y = _Y(lin)
     blue = c[:, 2] - c[:, 0]
     wb = ss(0.085, 0.055, Y)
-    wp = ss(0.015, 0.050, blue) * ss(0.46, 0.34, Y) * (1 - wb)
+    wp = ss(-0.030, 0.015, blue) * ss(0.56, 0.42, Y)
+    if part == "skirt" and P is not None:
+        geo = ss(0.098, 0.082, np.abs(P[:, 0] + 0.010)) * ss(-0.12, -0.17, P[:, 1]) * ss(HEM_TOP, HEM_TOP + 0.02, P[:, 2])
+        wp = np.maximum(wp * 0.7, geo)
+    wp = wp * (1 - wb)
     return {"coat": np.clip(1 - wb - wp, 0, 1), "panel": wp, "band": wb}
 
 
@@ -1503,7 +1510,7 @@ def _linework(P, part):
         for cu, h in sp:                                                            # spire sketches over the line
             uu = (u - cu + C / 2) % C - C / 2
             d = np.minimum(d, _spire_d(uu, z, 0.0, 0.345, h))
-        ub = (u - C / 2) % C - C / 2                                                # 0 at the back centre
+        ub = u % C - C / 2                                                          # 0 at the back centre
         sun = np.abs(np.hypot(ub, z - 0.64) - 0.055)                                 # the sun rising on the back
         a = np.arctan2(z - 0.64, ub)
         k = np.round(a / (math.pi / 6)) * (math.pi / 6)
@@ -1541,7 +1548,7 @@ def _dial(P, part):
         return np.zeros(len(P), dtype=np.float32)
     u, z, th = _robe_chart(P)
     C = 2 * math.pi * ROBE_R
-    ub = (u - C / 2) % C - C / 2
+    ub = u % C - C / 2                                                              # 0 at the back centre
     zc = 0.40
     rr = np.hypot(ub, z - zc)
     a = np.arctan2(z - zc, ub)
@@ -1585,7 +1592,7 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         c = out[m]
         cr = CLASS_ROLE.get(nm)
         if cr:
-            W = _class_w(c)
+            W = _class_w(c, Pm[m], nm)
             acc = np.zeros_like(c)
             wsum = np.zeros(len(c), dtype=np.float32)
             for cname, role in cr.items():
@@ -1759,10 +1766,10 @@ _BUILD: dict = {}
 # ── art.json height (pipeline.art_fragment wrapper) ──────────────────────────────────────────────────────
 # The game hangs the HP bar at art.height + 0.35 m over the feet. The halo is a 0.80 m disc 2.05 m up: from the 52
 # degree game camera its far edge projects like a point 0.5 m higher, over the bar's anchor (2.45 m with art.height
-# = the mesh top 2.10), so the ring met the bar (fix pass 1). The clasp posts now stand 7 cm over the band (the
-# concept's brackets; mesh top 2.13) and art.height reads 5 cm over the mesh top (the load test's tolerance is
-# 6 cm): the bar sits ~0.08 m higher, a few px clear of the ring.
-ART_LIFT = 0.05           # the load test allows art.height within 0.06 m of the model's top
+# = the mesh top 2.10), so the ring met the bar (fix pass 1). The ring now sits 3.5 cm further forward and 1 cm
+# lower (its far edge lifts less), the struts are the brief's 14 cm (mesh top ~2.13) and art.height reads 5.5 cm
+# over the mesh top (the load test's tolerance is 6 cm): the bar clears the ring by a few px.
+ART_LIFT = 0.055          # the load test allows art.height within 0.06 m of the model's top
 _orig_art_fragment = _pipeline.art_fragment
 
 
