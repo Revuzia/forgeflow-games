@@ -16,7 +16,7 @@
 //               or the sfx pool at MAX_SFX_VOICES, frees the lowest-priority, oldest voice, never one that
 //               outranks the newcomer (then the newcomer is the one dropped)
 //   threat      every control status has its own cue (content binds 'status.<kind>'; no catch-all, so an unbound
-//               kind is silent), played on fighters only, +YOU_CC_DB when you are the one controlled; every enemy
+//               kind is silent), played on fighters only, +3 dB (YOU_CC_GAIN) when an enemy controls YOU; every enemy
 //               fighter's ultimate wind-up adds the shared shade-breath swell (enemyUltWindup) at the caster
 //   format      every cue / bed ships as Ogg Opus with an AAC .m4a sibling (catalog audio.m4a). The session
 //               decodes .ogg; the first .ogg that fails to decode (or canPlayType saying no Ogg Opus, or the
