@@ -198,6 +198,7 @@
     {"id": "pilgrimage", "kind": "god", "weight": 1, "text": ["Pilgrims from {settlement} walked to the sacred {place}.", "{count} of {settlement} went on pilgrimage to the {place}."]},
     {"id": "revolt.exile", "kind": "god", "weight": 2, "text": ["The people of {settlement}, more afraid of the god than trusting, drove out its prophet and the Called."]},
     {"id": "revolt.killed", "kind": "god", "weight": 3, "text": ["In terror of the god, {settlement} killed its prophet and the Called."]},
+    {"id": "revolt.renounced", "kind": "god", "weight": 2, "text": ["The people of {settlement}, more afraid of the god than trusting, renounced its prophet and the Called; with nowhere to send them, they let them stay, unheard."]},
     {"id": "migration.fear", "kind": "diaspora", "weight": 2, "text": ["{count} of {settlement} could bear the god's anger no longer and left for {other}."]},
     {"id": "evacuate", "kind": "disaster", "weight": 2, "text": ["{settlement} fled before the {disaster}.", "The people of {settlement} left their homes ahead of the {disaster}."]},
     {"id": "warning.volcano", "kind": "disaster", "weight": 2, "text": ["The mountain above {settlement} rumbles and smokes.", "The ground under {settlement} trembles and the hill breathes smoke."]},

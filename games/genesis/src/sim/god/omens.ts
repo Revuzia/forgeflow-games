@@ -262,6 +262,23 @@ function fitting(u: Universe, p: Planet, st: Settlement | null, at: ArrayLike<nu
   return order[0] ?? null;
 }
 
+/**
+ * fix r1 #15: where the flood omen's water rises — the lowest dry-land cell in a ring just outside the town's heart
+ * (water runs downhill, so the heart stays dry wherever the town is not itself the low point; settlement.ts's
+ * `recent.omenFlood` covers that case). Ties go to the lower cell index; with no town named, the god's own point.
+ */
+function omenFloodAt(p: Planet, st: Settlement | null, at: V3, R: number): V3 {
+  if (!st) return at;
+  const inner = Math.max(st.territory * 0.6, R * 1.2), outer = st.territory + R;
+  let best = -1, bh = Infinity;
+  for (const c of p.cellsNear(st.pos, outer)) {
+    if (p.s.ocean[c] || distM(p, cellPos3(p, c), st.pos) < inner) continue;
+    const h = p.f.surface[c];
+    if (h < bh || (h === bh && c < best)) { bh = h; best = c; }
+  }
+  return best < 0 ? at : cellPos3(p, best);
+}
+
 /** make an omen (the god.omen command and the free text "send a sign to Aru") */
 function makeOmen(u: Universe, p: Planet, kind: OmenKind, st: Settlement | null, at: V3, god: number): CommandResult {
   const x = p.people ? makeCtx(u, p) : null;
@@ -283,8 +300,16 @@ function makeOmen(u: Universe, p: Planet, kind: OmenKind, st: Settlement | null,
     }
     case 'flood': {
       if (!x) return fail('There is nobody here to see it.');
-      const d = spawnDisaster(u, p, 'flood', { pos: at, radius: 200, intensity: 0.4, life: 360, god, cause: 'god', quiet: true });
+      // (fix r1 #15: "a flood without deaths" — a sign, not the disaster. It used to be a 200 m flood on the heart that
+      // drowned the town's centre for half a day, so every town sent it fell. Now the water rises in the low ground in a
+      // ring outside the heart, smaller and shorter; the disaster is marked `Om` (no harm, no wreck, no crop loss, no
+      // drowned-town consequence: disasters.ts) and the towns it touches are stamped `recent.omenFlood` for a day, so
+      // abandonCheck does not count it as their place failing them: settlement.ts)
+      const R = 120;
+      const d = spawnDisaster(u, p, 'flood', { pos: omenFloodAt(p, st, at, R), radius: R, intensity: 0.25, life: 240, god, cause: 'god', quiet: true });
       if (typeof d === 'string') return fail(d);
+      d.st.Om = 1;
+      for (const s of x.ps.settlements) if (s.fallen < 0 && distM(p, s.pos, d.pos) <= s.territory + R * 3) s.recent.omenFlood = u.tick;
       readOmen(u, p, 'flood', at, 300, god);
       return ok(`The waters rise around ${where}, and fall again.`, [{ kind: 'disaster', id: d.id, planet: p.id }]);
     }

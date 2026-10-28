@@ -175,6 +175,14 @@ export function beginAct(u: Universe | null, o: { key: string; god: number; natu
   return ctx;
 }
 
+/**
+ * fix r1 #5: told when a god's act that is not a command (a disaster, a thrown thing: keys `d…`, `pr…`) first comes
+ * to harm a settlement, so a prophecy of harm the god then makes true is fulfilled and prayers are answered as for a
+ * command's act (god/relationship.ts sets it; commands go through its own afterAct). Deduplicated by the act's key in
+ * the settlement's saved `acts`, so it needs no state of its own.
+ */
+export const actHooks: { harm: ((u: Universe, planet: number, sid: number, god: number) => void) | null } = { harm: null };
+
 /** close the act: each settlement that saw it remembers it (merged into the record of the same act) */
 export function endAct(u: Universe | null, ctx: ActCtx): void {
   const i = stack.lastIndexOf(ctx);
@@ -182,12 +190,15 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
   if (!u || !ctx.seen.size && !Object.keys(ctx.dead).length) return;
   if (ctx.killed) ctx.store.killed = 1;
   const keys = new Set<string>([...ctx.seen.keys(), ...Object.keys(ctx.dead)]);
+  const delayed = !ctx.natural && ctx.key.charCodeAt(0) !== 99 /* c: a command, afterAct's */ && actHooks.harm !== null;
+  let harmed: [number, number][] | null = null;
   for (const k of [...keys].sort()) {
     const seen = ctx.seen.get(k);
     const [pl, sid] = k.split(':').map(Number);
     const r = srel(u, pl, sid);
     const dead = ctx.dead[k] ?? 0;
     const kind = ctx.killed || dead > 0 ? 'harm' : seen?.kind ?? 'harm';
+    if (delayed && kind === 'harm' && !r.acts.some((q) => q.key === ctx.key && q.kind === 'harm')) (harmed ??= []).push([pl, sid]);
     const last = r.acts.length ? r.acts[r.acts.length - 1] : null;
     if (last && last.key === ctx.key) {
       last.dead += dead;
@@ -200,6 +211,7 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
     r.acts.push(rec);
     if (r.acts.length > 12) r.acts.splice(0, r.acts.length - 12);
   }
+  if (harmed) for (const [pl, sid] of harmed) actHooks.harm!(u, pl, sid, ctx.god);
 }
 
 /** a person was killed by the act in progress (god/harm.ts) */

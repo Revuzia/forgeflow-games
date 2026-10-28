@@ -267,7 +267,8 @@ function stepOne(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): vo
     });
     updateParams(u, p, d, def);
     // sustained fear near it, hourly
-    if (d.age % 60 === 0 && def.witness?.harm) godAct(u, p, d.pos, effR(d) * 1.6, { harm: def.witness.harm * 0.25 }, Math.max(0, d.god));
+    // (fix r1 #15: an omen's flood, `Om`, is read as a sign by omens.ts readOmen, not as sustained harm)
+    if (d.age % 60 === 0 && def.witness?.harm && !d.st.Om) godAct(u, p, d.pos, effR(d) * 1.6, { harm: def.witness.harm * 0.25 }, Math.max(0, d.god));
     if (d.life > 0 && d.age >= d.life) finish(u, p, d, def);
   }
 }
@@ -311,7 +312,8 @@ function consequences(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
     // (LIVING §3.7: below full wrath a dry pit does not drive them out — they rebuild around the crater; water and lava
     // still do. Nature's impacts and the god's at wrath 1 keep the old rule)
     const pit = p.f.surface[c] < p.st.seaLevel - 0.2 && (d.st.Wr === undefined || d.st.Wr >= 1);
-    if (drowned || p.f.lava[c] > 0.05 || pit) {
+    // (fix r1 #15: the flood omen, `Om`, never takes a town: it is a sign)
+    if ((drowned && !d.st.Om) || p.f.lava[c] > 0.05 || pit) {
       if ((x.ps.members.get(st.id)?.length ?? 0) > 0) { abandon(x, st, drowned ? 'flood' : 'disaster'); continue; }
     }
     const bs = x.ps.of(st.id).filter((b) => b.progress >= 1);
@@ -556,7 +558,7 @@ function area(u: Universe, p: Planet, d: DisasterState, e: EffectorDef, i: numbe
     if (moist !== 1) { f.moisture[c] *= Math.pow(moist, w); f.humidity[c] *= Math.pow(moist, w * 0.5); }
     if (aq) f.aquifer[c] = Math.max(0, f.aquifer[c] - aq * w);
     if (drain && !p.s.ocean[c] && f.water[c] > 0) { const v = f.water[c] * Math.min(1, drain * w); f.water[c] -= v; removedWater += v * p.cellArea[c]; }
-    if (veg) {
+    if (veg && !d.st.Om) {
       if (veg.crop) f.crop[c] *= 1 - Math.min(1, veg.crop * w);
       if (veg.grass) f.grass[c] *= 1 - Math.min(1, veg.grass * w);
       if (veg.shrub) f.shrub[c] *= 1 - Math.min(1, veg.shrub * w);
@@ -612,6 +614,8 @@ function area(u: Universe, p: Planet, d: DisasterState, e: EffectorDef, i: numbe
     triggers(u, p, d, defOf(u, d), R, ['lightning', 'lightning-dune']);
   }
   if (typeof e.weather === 'string' && p.airy) keepWeather(u, p, d, e.weather, i, R);
+  // (fix r1 #15: the flood omen, `Om`, harms nobody — "a flood without deaths" — and wrecks nothing)
+  if (d.st.Om) return;
   if (num(e, 'harm') > 0) hurtPeople(u, p, d.pos, R, num(e, 'harm') * I, e.weather === 'heatwave' ? DEATH.heat : DEATH.disaster, { flat: true, chance: 0.5, salt: d.age, fear: 0.05 });
   if (num(e, 'damage') > 0) wreckBuildings(u, p, d.pos, R, num(e, 'damage') * I, d.kind, { flat: true });
   if (num(e, 'herds') > 0) hurtHerds(u, p, d.pos, R, num(e, 'herds') * I);

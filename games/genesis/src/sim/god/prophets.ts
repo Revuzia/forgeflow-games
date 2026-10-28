@@ -422,6 +422,9 @@ export function exile(x: PCtx, s: number, from: Settlement, to: Settlement): voi
   x.ps.removeMember(from.id, s);
   for (const h of from.households) h.members = h.members.filter((m) => m !== id);
   from.households = from.households.filter((h) => h.members.length > 0);
+  // (fix r1 #1: a chief cast out is no longer the chief there — the town elects one of its own: settlement.ts)
+  if (from.leader === id) from.leader = 0;
+  A.flags[s] &= ~AgentFlag.leader;
   A.settlement[s] = to.id;
   A.home[s] = -1;
   x.ps.addMember(to.id, s);

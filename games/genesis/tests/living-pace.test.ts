@@ -19,6 +19,8 @@ import { FIRE_SEEN_M } from '../src/sim/people/firewatch.ts';
 import { planetArrays } from '../src/sim/world/planet.ts';
 import { Hasher } from '../src/sim/core/hash.ts';
 import { world, must, people, ctx, adultsOf } from './helpers/peoples.ts';
+import { twoTowns } from './helpers/god.ts';
+import type { Settlement } from '../src/sim/people/state.ts';
 
 // ───────────────────────────── the clock and the speed steps ─────────────────────────────
 
@@ -317,4 +319,29 @@ test('fire: a fire seen within 2 km is a fire learned (the wildfire accident: a 
   burnAt(nearCell);
   sim.step(120);
   assert.ok(st.recent.wildfire !== undefined, 'a fire 1.5 km off is seen: someone goes for a brand');
+});
+
+test('fire: a fire lit between two towns\' staggered hourly steps is seen alike after a save and load (fix r1 #0)', () => {
+  // (the burning cells used to be gathered once a game hour, by the first town to ask; a game loaded mid-hour gathered
+  // them again from a fire field that had moved on, and the second town saw a fire the continuous run never showed it)
+  const { sim, st, lune } = twoTowns();
+  const p = sim.u.planets[0], g = p.grid;
+  const minute = (id: number) => (((-7 * id) % 60) + 60) % 60; // settlement.ts: each town's minute of the hour
+  const [first, second] = minute(st.id) < minute(lune.id) ? [st, lune] : [lune, st];
+  const H0 = Math.ceil((sim.u.tick + 1) / 60) * 60 + 60;
+  const dist = (c: number, s: Settlement) => distM(p, [g.pos[c * 3], g.pos[c * 3 + 1], g.pos[c * 3 + 2]], s.pos);
+  let cell = -1;
+  for (let c = 0; c < g.count && cell < 0; c++) if (p.f.water[c] <= 0.05 && p.f.tree[c] >= 0.2 && dist(c, second) > 800 && dist(c, second) < 1800 && dist(c, first) > 300) cell = c;
+  assert.ok(cell >= 0, 'a wood within sight of the second town');
+  sim.step(H0 + minute(first.id) + 2 - sim.u.tick); // the first town's step of this hour has run
+  must(sim, { k: 'fire.ignite', pos: [g.pos[cell * 3], g.pos[cell * 3 + 1], g.pos[cell * 3 + 2]], radius: 80 });
+  const loaded = Sim.load(sim.save());
+  assert.equal(loaded.hash(), sim.hash());
+  const T = H0 + minute(second.id) + 2;
+  sim.step(T - sim.u.tick); loaded.step(T - loaded.u.tick);
+  const seen = (s: Sim) => s.u.planets[0].people.settlement(second.id)!.recent.wildfire;
+  assert.equal(seen(loaded), seen(sim), 'the second town sees the same fires');
+  assert.equal(loaded.hash(), sim.hash(), 'after the second town\'s step');
+  sim.step(600); loaded.step(600);
+  assert.equal(loaded.hash(), sim.hash(), '+600 ticks');
 });

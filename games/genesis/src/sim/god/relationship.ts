@@ -30,6 +30,7 @@ import { DEATH, GODS, NT, ROLE, TASK, TRAIT } from '../people/defs.ts';
 import { FAITH, NEED_N } from '../people/needs.ts';
 import { godHooks } from '../people/hooks.ts';
 import { die } from '../people/lifecycle.ts';
+import { moveHousehold } from '../people/culture.ts';
 import { interrupt } from '../people/people.ts';
 import { storeTake, foodDays } from '../people/store.ts';
 import { cohortTotal } from '../people/cohorts.ts';
@@ -39,7 +40,7 @@ import { distM, spotInCell, sunElevation } from '../people/world.ts';
 import { stormSeverity, planShelter, planEvacuate, OUTDOOR, stormBreaks } from '../people/shelter.ts';
 import { strikeHooks } from '../fields/weather.ts';
 import { actor, fail, ok } from './util.ts';
-import { bindUniverse, beginAct, currentAct, endAct, freshen, meansNow, moveSettlement, noteDeath, regardOf, relOf, relStat, srel, type ActCtx } from './regard.ts';
+import { actHooks, bindUniverse, beginAct, currentAct, endAct, freshen, meansNow, moveSettlement, noteDeath, regardOf, relOf, relStat, srel, type ActCtx } from './regard.ts';
 import { castWarning, currentWrath, lethality, popWrath, pushWrath, reach, ruination, wrathLaw, wrathOf, WRATHFUL } from './wrath.ts';
 import { answerPrayers, canonicalAnswer, hardshipOf, prayersHourly, prayersOf } from './prayers.ts';
 import { exile, prophetOf, prophetOfSettlement, prophetTask, prophetsAct, prophetsDaily, prophetsHourly, prophetsQuery, registerProphetCommands } from './prophets.ts';
@@ -103,7 +104,22 @@ export function registerRelationship(r: CommandRegistry): void {
   godHooks.templeWanted = templeWanted;
   godHooks.harmScale = () => { const w = currentWrath(); return w === null ? null : { L: lethality(w), R: reach(w), B: ruination(w) }; };
   godHooks.noteDeath = noteDeath;
+  actHooks.harm = delayedHarm;
   if (!strikeHooks.includes(lightningFear)) strikeHooks.push(lightningFear);
+}
+
+/**
+ * fix r1 #5: a god's disaster or thrown thing that comes to harm a town after the command that sent it (a meteor
+ * strikes, a quake shakes) is a harmful act there: it fulfils a prophecy of harm and answers prayers as a command's
+ * harm does (LIVING §3.4: "for harm, a harmful act"). Told once per act and settlement by regard.ts endAct.
+ */
+function delayedHarm(u: Universe, pl: number, sid: number, god: number): void {
+  const p = u.planets.find((q) => q.id === pl);
+  const st = p?.people?.settlement(sid);
+  if (!p || !st || st.fallen >= 0) return;
+  const list: ActInfo[] = [{ kind: 'harm', planet: pl, pos: [st.pos[0], st.pos[1], st.pos[2]], radius: 0, god, settlement: sid }];
+  answerPrayers(u, p, list);
+  prophetsAct(u, p, list);
 }
 
 /** what the act was, and what it does to prayers, prophecies, omens and sacred animals */
@@ -430,8 +446,10 @@ function revolt(x: PCtx, st: Settlement): void {
     if (kill || !to) relOf(u).prophets = relOf(u).prophets.filter((q) => q !== ph);
     else ph.settlement = to.id;
   }
-  relStat(u, kill ? 'revolt.killed' : 'revolt.exile');
-  tell(u, x.p, kill ? 'revolt.killed' : 'revolt.exile', vars(x, st), st, [settlementRef(x, st)], kill ? 3 : 2);
+  // (fix r1 #2: with no other town of their kind to drive them to, the people renounce them and they stay)
+  const how = kill ? 'revolt.killed' : to ? 'revolt.exile' : 'revolt.renounced';
+  relStat(u, how);
+  tell(u, x.p, how, vars(x, st), st, [settlementRef(x, st)], kill ? 3 : 2);
 }
 
 /** fear > 0.7 and trust < 0.2 for 3 days: 10–30 % of the households leave, away from the last harm */
@@ -456,13 +474,10 @@ function fearMigration(x: PCtx, st: Settlement): void {
   if (!dest) return;
   const share = 0.1 + 0.2 * hashFloat(st.id, u.tick, 0xf1ee);
   const hh = st.households.filter((h) => h.members.length && hashFloat(h.id, u.tick, 0xf1ef) < share);
+  // (fix r1 #2: a household leaves as one family, as refugees do — it used to go person by person, each into a
+  // household of one, so partners arrived apart and every fragment counted as homeless)
   let n = 0;
-  for (const h of hh) for (const id of h.members.slice()) {
-    const s = x.A.slotOf(id);
-    if (s < 0 || x.A.mission[s]) continue;
-    exile(x, s, st, dest);
-    n++;
-  }
+  for (const h of hh) n += moveHousehold(x, h, st, dest);
   if (!n) return;
   relStat(u, 'migration.fear', n);
   tell(u, x.p, 'migration.fear', vars(x, st, -1, { count: n, other: dest.name }), st, [settlementRef(x, st), settlementRef(x, dest)], 2);

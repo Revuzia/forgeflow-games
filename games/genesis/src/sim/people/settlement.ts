@@ -436,7 +436,8 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   burnHearths(x, st, 60 * H);
   refreshLibrary(x, st);
   hiveShare(x, st);
-  if (!st.leader || x.A.slotOf(st.leader) < 0) electLeader(x, st);
+  // (fix r1 #1: a leader who is no longer a member — cast out, fled, gone with a split — is replaced like a dead one)
+  { const ls = st.leader ? x.A.slotOf(st.leader) : -1; if (ls < 0 || x.A.settlement[ls] !== st.id) electLeader(x, st); }
   if (dueIn(hour + st.id, rp, H)) assignRoles(x, st);
   // the work lists (saved) are revised every few hours, staggered between settlements
   if (dueIn(hour + st.id, 3 * rp, H)) planJobs(x, st);
@@ -463,7 +464,8 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const members = x.ps.members.get(st.id) ?? [];
   if (!members.length) return;
   let lead = A.slotOf(st.leader);
-  if (lead < 0) { electLeader(x, st); lead = A.slotOf(st.leader); }
+  if (lead < 0 || A.settlement[lead] !== st.id) { electLeader(x, st); lead = A.slotOf(st.leader); }
+  if (lead >= 0 && A.settlement[lead] !== st.id) lead = -1;
   if (lead < 0) return;
   // colonists with boats sail where the way crosses water
   const boat = bestBoat(x, st);
@@ -1298,7 +1300,11 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
     built++;
     if (f.water[b.cell] > 0.5) drowned++;
   }
-  const flooded = f.water[st.cell] > 0.6 || (built >= 2 && drowned * 2 > built);
+  // (fix r1 #15: the god's flood omen is a sign, not the place failing them — for a day after it (`recent.omenFlood`,
+  // stamped by god/omens.ts) its water does not count)
+  const omen = st.recent.omenFlood !== undefined && x.tick - st.recent.omenFlood < x.day;
+  if (!omen && st.recent.omenFlood !== undefined) delete st.recent.omenFlood;
+  const flooded = !omen && (f.water[st.cell] > 0.6 || (built >= 2 && drowned * 2 > built));
   // (its own key, LIVING integration 2026-10-20: `recent.flood` is also the cooldown stamp of the 'flood' discovery
   // accident (knowledge.ts accident), which fires every few hours while water stands at the centre and kept restarting
   // this timer — a town lived 4.6 days in a 5 m crater lake before it was let go)

@@ -6,8 +6,12 @@
 // the brand a flame to light a hearth from for three days: people/fire.ts fireSourceNear). Until the living-world
 // program only fire inside the settlement's own flow cells counted: 2 of 8 peoples left alone knew fire-keeping by year 8.
 //
-// The burning cells of a planet are gathered once per game hour (a pure function of the fire field at that hour) and
-// each settlement looks for the nearest within reach. Nothing here is state: a load recomputes the same list.
+// The burning cells of a planet are gathered once per tick in which a settlement asks (a pure function of the fire
+// field at that tick) and each settlement looks for the nearest within reach. Nothing here is state: a load recomputes
+// the same list. (fix r1 #0: it used to be kept for the whole game hour, filled by the first settlement to ask; a game
+// loaded mid-hour refilled it later from a fire field that had moved on, and the staggered settlements after the save
+// point saw other fires than in the continuous run — the hashes parted. Settlements step hourly with a stagger, so a
+// tick's list serves the few that share it.)
 
 import type { PCtx } from './ctx.ts';
 import type { Settlement } from './state.ts';
@@ -20,20 +24,19 @@ export const FIRE_SEEN_M = 2000;
 const VISIBLE = 0.08;
 
 interface Burning {
-  hour: number;
+  tick: number;
   cells: Int32Array;
   n: number;
 }
 const byPlanet = new WeakMap<Planet, Burning>();
 
-/** the burning cells of planet p this hour */
+/** the burning cells of planet p at this tick */
 function burning(x: PCtx): Burning {
   const p = x.p;
-  const hour = Math.floor(x.tick / 60);
   let b = byPlanet.get(p);
-  if (!b) { b = { hour: -1, cells: new Int32Array(p.count), n: 0 }; byPlanet.set(p, b); }
-  if (b.hour === hour) return b;
-  b.hour = hour;
+  if (!b) { b = { tick: -1, cells: new Int32Array(p.count), n: 0 }; byPlanet.set(p, b); }
+  if (b.tick === x.tick) return b;
+  b.tick = x.tick;
   b.n = 0;
   const n = collectFlags(p.s.fAct, b.cells, p.count);
   const f = p.f.fire;

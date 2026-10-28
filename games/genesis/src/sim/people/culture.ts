@@ -21,7 +21,7 @@
 //   readings   a settlement that saw the god act tells what it made of it ("They call it a blessing").
 
 import type { PCtx } from './ctx.ts';
-import type { Settlement } from './state.ts';
+import type { Household, Settlement } from './state.ts';
 import type { Planet } from '../world/planet.ts';
 import { AgentFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
@@ -131,6 +131,40 @@ function seafaring(x: PCtx, st: Settlement): boolean {
 // ───────────────────────────── refugees ─────────────────────────────
 
 /**
+ * fix r1 #1/#2: move a household to another settlement as one family. Its members who can go (alive, not away on a
+ * mission) go together and keep the household's id; any left behind keep the household at home and those who go
+ * found a new one. A leader who goes is no longer the leader of the town they left (it elects one of its own:
+ * settlement.ts). Returns the number moved.
+ */
+export function moveHousehold(x: PCtx, h: Household, from: Settlement, to: Settlement): number {
+  const A = x.A;
+  const go: number[] = [], stay: number[] = [];
+  for (const id of h.members) { const s = A.slotOf(id); if (s >= 0) (A.mission[s] ? stay : go).push(id); }
+  if (!go.length) return 0;
+  for (const id of go) {
+    const s = A.slotOf(id);
+    x.ps.removeMember(from.id, s);
+    if (from.leader === id) from.leader = 0;
+    A.flags[s] &= ~AgentFlag.leader;
+    A.settlement[s] = to.id;
+    A.home[s] = -1;
+    x.ps.addMember(to.id, s);
+    A.remember(s, MEMK.exiled, x.tick, from.id);
+    interrupt(x, s);
+  }
+  if (stay.length) {
+    h.members = stay;
+    const hid = x.u.ids.alloc('household');
+    to.households.push({ id: hid, members: go, home: -1 });
+    for (const id of go) A.household[A.slotOf(id)] = hid;
+  } else {
+    from.households = from.households.filter((o) => o !== h);
+    to.households.push({ id: h.id, members: go, home: -1 });
+  }
+  return go.length;
+}
+
+/**
  * Some of a conquered (or ruined) settlement will not stay: a share of its households walk to the nearest settlement
  * of their old polity (else of their own kind). Returns how many left.
  */
@@ -145,21 +179,7 @@ export function refugees(x: PCtx, st: Settlement, oldPolity: number): number {
   if (!dest) return 0;
   const leaving = st.households.filter((h, i) => h.members.length > 0 && hash32(h.id, st.id, x.tick, 0x4ef) % 4 === 0 && i >= 0);
   let n = 0;
-  for (const h of leaving) {
-    for (const id of h.members) {
-      const s = A.slotOf(id);
-      if (s < 0 || A.mission[s]) continue;
-      x.ps.removeMember(st.id, s);
-      A.settlement[s] = dest.id;
-      A.home[s] = -1;
-      x.ps.addMember(dest.id, s);
-      A.remember(s, MEMK.exiled, x.tick, st.id);
-      interrupt(x, s);
-      n++;
-    }
-    st.households = st.households.filter((o) => o !== h);
-    dest.households.push({ id: h.id, members: h.members.slice(), home: -1 });
-  }
+  for (const h of leaving) n += moveHousehold(x, h, st, dest);
   if (n >= 3) tell(x.u, x.p, 'diaspora.refugees', vars(x, st, -1, { other: dest.name, count: n }), dest, [settlementRef(x, st), settlementRef(x, dest)], 2);
   return n;
 }

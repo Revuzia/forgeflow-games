@@ -8,8 +8,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
 import { town, twoTowns, must, standing } from './helpers/god.ts';
+import { world as pworld, people as ppeople } from './helpers/peoples.ts';
 import { GODS, TASK } from '../src/sim/people/defs.ts';
-import { AgentFlag2 } from '../src/sim/types.ts';
+import { AgentFlag, AgentFlag2 } from '../src/sim/types.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
 import { distM } from '../src/sim/people/world.ts';
 import { sacredAnimal } from '../src/sim/people/culture.ts';
@@ -18,6 +19,7 @@ import { spawnDisaster, AIRBURST_W } from '../src/sim/god/disasters.ts';
 import { hurtPeople, onRoad } from '../src/sim/god/harm.ts';
 import { PRAYER_KINDS } from '../src/sim/god/prayers.ts';
 import { srel } from '../src/sim/god/regard.ts';
+import { OMEN_KINDS } from '../src/sim/god/omens.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 
@@ -284,6 +286,88 @@ test('omens: a rainbow over the town is read (by its prophet), moves faith and t
   assert.ok(Math.abs(means(sim, st.id).faith - m2.faith) < 1e-6, 'a rainbow a day is weather');
   // a sign chosen to fit the world when none is named
   assert.ok(sim.applyNow({ k: 'god.omen', settlement: st.id }).ok);
+});
+
+test('omens: every sign spares the town it is sent to — the flood omen rises and falls without taking it (fix r1 #15)', () => {
+  // (the flood omen used to be a 200 m flood on the heart: every town it was sent to fell within half a day)
+  {
+    const { sim, st } = town();
+    const p = sim.u.planets[0];
+    const n0 = (p.people!.members.get(st.id) ?? []).length;
+    const m0 = means(sim, st.id);
+    const r = sim.applyNow({ k: 'god.omen', settlement: st.id, kind: 'flood' });
+    assert.ok(r.ok, r.msg);
+    assert.ok(means(sim, st.id).faith > m0.faith + 0.05, 'the flood is read as a sign: faith rises');
+    assert.ok(srelOf(sim, st.id).acts.some((a) => a.kind === 'omen:flood'));
+    sim.step(60 * 18);
+    assert.ok(st.fallen < 0 && !st.band, `${st.name} still stands`);
+    assert.ok((p.people!.members.get(st.id) ?? []).length >= n0, 'nobody left or died of it');
+    assert.ok(p.f.water[st.cell] < 0.6, `the heart stays dry (${p.f.water[st.cell].toFixed(2)})`);
+    assert.ok(!sim.u.chronicle.some((e) => e.text.includes(`${st.name} fell`)));
+  }
+  // every other kind: the ones the world allows are made, read, and leave the town standing
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const n0 = (p.people!.members.get(st.id) ?? []).length;
+  const made: string[] = [];
+  for (const kind of OMEN_KINDS) {
+    const m0 = means(sim, st.id);
+    const r = sim.applyNow({ k: 'god.omen', settlement: st.id, kind });
+    if (!r.ok) continue; // (no rainbow at night, no aurora without a magnetic field)
+    made.push(kind);
+    assert.ok(means(sim, st.id).faith >= m0.faith, `${kind}: faith does not fall`);
+    sim.step(60 * 2);
+  }
+  sim.step(60 * 12);
+  assert.ok(made.length >= 7, `made ${made.join(', ')}`);
+  assert.ok(st.fallen < 0 && !st.band, `${st.name} still stands after ${made.join(', ')}`);
+  assert.ok((p.people!.members.get(st.id) ?? []).length >= n0 - 1, 'the signs took nobody');
+});
+
+test('prophets: a harm foretold and then sent as a disaster comes true — the meteor strikes later than the command (fix r1 #5)', () => {
+  // (a disaster kills in its own step, after the command that sent it: the prophecy used to fail as if the god did nothing)
+  const { sim, st } = town();
+  const who = commoner(sim, st);
+  must(sim, { k: 'prophet.call', agent: who });
+  must(sim, { k: 'prophet.foretell', agent: who, what: 'harm', days: 2 });
+  const c0 = rel(sim).prophets.find((q) => q.agent === who)!.credibility;
+  sim.step(360);
+  must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: st.pos });
+  const ph = () => rel(sim).prophets.find((q) => q.agent === who);
+  for (let i = 0; i < 12 && !(ph()?.fulfilled ?? 0); i++) sim.step(120);
+  const p = ph();
+  assert.ok(p && p.fulfilled >= 1, `fulfilled ${p?.fulfilled} failed ${p?.failed}`);
+  assert.ok(p.credibility > c0 && p.credibility > 0.3, `credibility ${c0} → ${p.credibility}`);
+  assert.equal(rel(sim).stats?.['prophecies.failed'] ?? 0, 0);
+});
+
+test('relationship: a revolt that casts out a Called chief leaves the town to elect one of its own; fear migrants leave as families (fix r1 #1, #2)', () => {
+  const sim = pworld(24, 20261008);
+  const st = ppeople(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  const lune = ppeople(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  sim.step(120);
+  const p = sim.u.planets[0], ps = p.people!, A = ps.agents;
+  const chief = A.slotOf(st.leader);
+  must(sim, { k: 'agent.make-disciple', id: st.leader });
+  // a town that fears its god and does not trust it (cast out, not killed: fear ≤ 0.85)
+  const set = () => { for (const s of ps.members.get(st.id) ?? []) { const i = s * 4; A.faith[i] = 0.8; A.fear[i] = 0.75; A.love[i] = 0.05; A.loyalty[i] = 0.05; } };
+  set();
+  const day = Math.round(p.st.dayHours * 60);
+  for (let k = 0; k < day + 2 && A.settlement[chief] === st.id; k++) { sim.step(1); if (k % 10 === 0) set(); }
+  assert.equal(A.settlement[chief], lune.id, 'the Called chief was driven out to the other town');
+  assert.equal(rel(sim).stats?.['revolt.exile'], 1);
+  sim.step(day);
+  const ls = A.slotOf(st.leader);
+  assert.ok(ls >= 0 && A.settlement[ls] === st.id, `${st.name} is led by one of its own (leader ${st.leader})`);
+  assert.ok(!(A.flags[chief] & AgentFlag.leader), 'the exile leads nobody');
+  // fear migration: fear 0.8, trust 0.1 for three days — the households that leave arrive whole
+  const before = new Map(st.households.map((h) => [h.id, h.members.slice()]));
+  const set2 = () => { for (const s of ps.members.get(st.id) ?? []) { const i = s * 4; A.fear[i] = 0.8; A.love[i] = 0.1; A.loyalty[i] = 0.5; } };
+  for (let k = 0; k < 6 * 24 && !(rel(sim).stats?.['migration.fear']); k++) { set2(); sim.step(60); }
+  assert.ok((rel(sim).stats?.['migration.fear'] ?? 0) > 0, 'some households left in fear');
+  const came = lune.households.filter((h) => before.has(h.id));
+  assert.ok(came.length > 0, 'they came as households (their ids kept)');
+  for (const h of came) for (const id of before.get(h.id)!) { const s = A.slotOf(id); if (s >= 0 && !A.mission[s]) assert.ok(h.members.includes(id) && A.settlement[s] === lune.id, `household ${h.id}: ${id} came with them`); }
 });
 
 // ───────────────────────────── sacred places and animals ─────────────────────────────
