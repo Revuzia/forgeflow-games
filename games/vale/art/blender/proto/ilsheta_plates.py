@@ -15,7 +15,11 @@ painted ones leave the plates: where the staff crosses the body (front: the dres
 mantle's left panel) its band is in-painted across (each band pixel interpolates the paint just outside the band
 on both sides, perpendicular to the shaft, so the vertical panel edges carry through); where it and the lamp hang
 off the body they leave the figure (front: the hook and the lamp at her left; back: the same seen from behind and
-the shaft's foot between the boots).
+the shaft's foot between the boots). Build 3: the band crossed the mantle's left panel and sleeve diagonally and its
+across-the-band blend left a muddy brown stripe there, the lamp's blue glow padded the sleeve's top: the sheet is
+near-symmetric, so every prop-covered pixel whose MIRROR (about the figure's axis) is clean takes the mirrored paint
+and figure state (the sleeve's top behind the lamp comes back); only pixels near the axis (the shaft's foot between
+the boots) keep the across-the-band blend.
 Frame: `top` = the chimney's top rim (1.72 m, the brief's height and content art.height), `ground` = the boot
 soles, `cx` = the body's axis (the median mid-point of the largest run per row through the hood and the scarf).
 Writes art/.cache/concept/ilsheta_{front,back}.png (edge-padded RGB), ilsheta_mask.png, ilsheta_plates.json and
@@ -134,6 +138,38 @@ def inpaint_band(im, fig, line, hw):
     return out, fill, drop
 
 
+MIRROR_CX = {"front": 551.75, "back": 1476.75}     # the axes the frame below measures (stable across runs)
+MIRROR_HW = 31.0                                    # the shaft plus its painted glow
+
+
+def mirror_props(im, fig, removed_polys, H, W):
+    """prop-covered pixels take their mirror's paint and figure state where the mirror is prop-free"""
+    d, *_ = band_frame((H, W), STAFF_F, MIRROR_HW)
+    region = {"front": d <= MIRROR_HW, "back": np.zeros((H, W), bool)}
+    for side in ("front", "back"):
+        for poly in removed_polys[side]:
+            region[side] |= poly_mask((H, W), poly)
+    out, fig2 = im.copy(), fig.copy()
+    done = np.zeros((H, W), bool)
+    for side, (x0, x1) in (("front", (0, W // 2)), ("back", (W // 2, W))):
+        R = region[side].copy()
+        R[:, :x0] = False
+        R[:, x1:] = False
+        ys, xs = np.nonzero(R)
+        mx = np.round(2 * MIRROR_CX[side] - xs).astype(int)
+        ok = (mx >= x0) & (mx < x1)
+        ok[ok] &= ~R[ys[ok], mx[ok]]
+        ys, xs, mx = ys[ok], xs[ok], mx[ok]
+        out[ys, xs] = im[ys, mx]
+        fig2[ys, xs] = fig[ys, mx]
+        done[ys, xs] = True
+    # feather the seam 3 px into the clean paint
+    edge = nd.binary_dilation(done, iterations=3) & ~done & fig2
+    soft = np.stack([nd.gaussian_filter(out[..., c], 1.5) for c in range(3)], -1)
+    out[edge] = soft[edge]
+    return out, fig2, done
+
+
 def figure_mask(im: np.ndarray):
     M0 = cp.figure_mask(im)
     bg = backdrop(im, M0)
@@ -165,13 +201,17 @@ def main() -> None:
     meta = {"size": [W, H], "id": ID}
     halves = (("front", (0, W // 2)), ("back", (W // 2, W)))
     removed = np.zeros_like(fig)
-    # the off-body staff, hook and lamp leave first (the frame's crown and axis must not see them)
+    # prop-covered paint mirrored from the clean side first; then the rest of the props leave the figure
+    im, fig, mirrored = mirror_props(im, fig, REMOVE, H, W)
     for side, _ in halves:
         for poly in REMOVE[side]:
-            pm = poly_mask((H, W), poly)
+            pm = poly_mask((H, W), poly) & ~mirrored
             removed |= pm & fig
             fig &= ~pm
-    im, filled, drop = inpaint_band(im, fig, STAFF_F, STAFF_HW)
+    im2, filled, drop = inpaint_band(im, fig, STAFF_F, STAFF_HW)
+    im = np.where(mirrored[..., None], im, im2)
+    filled &= ~mirrored
+    drop &= ~mirrored
     removed |= drop & fig
     fig &= ~drop
     # backdrop pockets the painted staff walled off (between the hook and the hood) open to the border again

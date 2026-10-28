@@ -268,7 +268,7 @@ def pose_check():
     poses = {}
     G_R, G_L = I.G_R, I.G_L
     poses["guard"] = (G_R, G_L)
-    run = ((I.wr("R", -0.118, -0.262, 0.965), I.staff_or((0.12, 0.16, 0.98), (0.55, -0.83, 0.0))),)
+    run = ((I.wr("R", -0.400, -0.120, 0.975), I.staff_or((0.18, 0.08, 0.98), (0.20, -0.98, 0.0))),)
     poses["run"] = run + (G_L,)
     for name, (R, L) in poses.items():
         ht, o = R
