@@ -176,5 +176,172 @@
     "fix": "Win back about 20 KB before the paint pass. Drop the normal map from 512 to 256 on the props, or raise the webp compression on the 1024 base colour by one step."
    }
   ]
+ },
+ "verify:wick (wave-b-finish)": {
+  "pass": false,
+  "score": 6.8,
+  "measured": "I measured everything myself on the HEAD GLBs: commits d85aedda and 99148b6c, with the module and GLBs in b9087db8 and a47a3d68. No wick file is modified in the working tree. I did not edit any project file.\n\nAll evidence is under /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/verify/wick_gb/. The key sheet is verify_sheet_wick_gb.png.\n\nCHECKS\n- typecheck OK.\n- probe: 40/40 pass (118.6 s).\n- build_content --check: OK, 60 warnings, none for wicks.\n- Logs are in logs/.\n\nGATES (my own parse of the GLBs, tools/glbstat.py)\n- greatwick: Aubade 3459 tris, 464,800 B; Serenade 3525 tris, 440,588 B (limit 3600).\n- brightwick: Aubade 3981 tris, 341,396 B; Serenade 3989 tris, 328,712 B (limit 4000).\n- All are under 500 KB.\n- All four GLBs carry idle/run/attack1/death, and the body material is double-sided.\n- Pipeline accentPct is 5.50 / 5.36 (greatwick) and 6.96 / 5.87 (brightwick).\n\nIN GAME\n- Setup: the review's ig.mjs, wrapped in heavy.py, one run at a time. Rift seed 7, t74/84/99, zoom 28.5, High 1080p and Low 720p, seats 0 and 5. greatwick was served in the glimwick slot and brightwick in the shieldwick slot, exactly as in r4. That makes the r4 frames (review_wick_r4/ig_swap) same-state before/after pairs.\n- Output: ig/, analysis.txt, igcrops/ (sheet_*, ba_sheet_* before|after x3, hood_*, z_*).\n\nHood top-quarter L\\* (cap 65), High / Low:\n\n| Kind | Ally | Enemy |\n|---|---|---|\n| greatwick Aubade | 60.1 / 61.6 | 63.7 / 64.7 (p90 66.1 on Low) |\n| greatwick Serenade | 56.9 / 58.9 | 61.8 / 63.4 |\n| brightwick Aubade | 62.2 / 62.7 (p90 63.1\u201364.8) | 62.5 / 61.4 |\n| brightwick Serenade | 61.6 / 61.1 | |\n\n- brightwick Serenade top/mid/bottom L\\*: 38.4 / 31.1 / 23.2 (High) and 39.7 / 34.8 / 28.3 (Low).\n- dE76 accent vs ring: 47.5\u201390.2. Every team read holds.\n- Fighters' top quarter in the same frames: 45.3\u201371.3 (burdam 45\u201353, kemdo 47\u201352, vashil/dunsom 50\u201361).\n- Authored albedo (glb_tex.txt), marigold band >40 % saturation with V >0.35: greatwick Serenade 0.3 %, brightwick Serenade 2.8 %.\n\nCLOSE-UPS\n- Blender EEVEE (Rift sky + sun, accent tinted as in game) via tools/glbview.py, a copy of proto/wick_brightwick_glbview.py with the heights as parameters.\n- Views: eye level, 52\u00b0, the lantern, and the game camera at x3. Glimwick reference renders are in close_ref/ for comparison (cmp_ref_*_q34.png).\n\nNOT IN THIS LANE\n- The glimwick-only and shieldwick-only minors of review:wick:2 belong to other lanes, so I did not verify them.\n\nVERDICT\n- The brightwick major is fixed.\n- The greatwick major is mostly fixed at the gameplay camera. At eye level the Serenade mantle edge is still torn and ragged.\n- Most minors are fixed.\n- New blocker-class issue: from the side, the brightwick Aubade reads as a face (two crown lamps as eyes, the pauldron cup as an open mouth). It shows at 1:1 in a walking wave. It was already there in r4, so it is not a regression.",
+  "issues": [
+   {
+    "severity": "blocker",
+    "status": "new",
+    "what": "brightwick Aubade from the side at the 52\u00b0 camera reads as a face.\n- Two crown-ring lamps sit side by side at the hood's \u00b190\u00b0 side and read as two eyes.\n- Directly below them, the near pauldron cup reads as an open mouth: a closed blue U rim round a pale stepped cap.\n- It shows at 1:1 in a wave walking along the lane, both seats and both tints, and at x3 in the game-camera renders at yaw 90 and 270.\n- It breaks brief \u00a70.2 (two bright points read as eyes).\n- It is not a regression: it is identical in the r4 captures (review_wick_r4/ig_swap/high_s0_t84_A.png) and was not listed before.",
+    "where": "art/blender/units/wick_brightwick.py (Aubade crown lamp placement on the circlet; pauldron cap plate and its accent rim).\nEvidence: verify/wick_gb/igcrops/z_bw_a_back34_x1.png (1:1, high s0 t84), z_bw_a_back34_x8.png, close/s_bw_a_side_game3.png, close/s_brightwick_aubade_game3.png (yaw 90/270), igcrops/ba_sheet_brightwick_aubade_enemy_high.png (tile 1).",
+    "fix": "Re-phase the crown lamps so a spike, not a lamp pair, faces each side: with 6 lamps at 60\u00b0, the 60/120 pair flanks the side centre. Rotate the ring by 30\u00b0, or use 8 lamps or fewer and smaller ones.\nBreak the pauldron's closed accent U: run it as a short arc on the outer edge only. Darken the pale stepped cap inside it by about 10\u201315 L* so it stops reading as teeth.\nRe-check at yaw 90/270 at the game camera x1 and x3, and in ig.mjs seat 0, t84."
+   },
+   {
+    "severity": "major",
+    "status": "partly",
+    "what": "greatwick forms and paint (Serenade yoke/mantle/pack shards, crumpled hammer bands, faceted drum, smeary paint).\nFixed:\n- The drum is round.\n- The lid caret is gone; in game only the knob dot remains.\n- The hammer bands are clean rings.\n- The black spike under the chin is gone.\n- At the 52\u00b0 gameplay camera and at x3 game scale the mantle, yoke and pack read clean.\n- The paint sits at about the glimwick level in close-ups.\nStill open:\n- At eye level, the Serenade mantle's top edge is still a sawtooth of pale torn-paper teeth left of the hood and on both sides of the open V under the chin. These are the exact torn-paper shards the issue named.\n- From the back 3/4, the pack shows triangular light/dark facet patches.\n- The builder says the concept-detail coverage is modest (5\u201324 % of a part's texels).",
+    "where": "art/blender/units/wick_greatwick.py (Serenade mantle open radial strip: per-column top 'highest row whose ray finds felt'; pack block).\nEvidence: verify/wick_gb/close/z_gw_s_neck_x3.png, z_gw_s_yoke.png (vs review_wick_r4/close/greatwick_serenade_eye.png), z_gw_s_b52_yoke.png (52\u00b0 clean), igcrops/z_gw_s_lid_x8_before_after.png, close/s_greatwick_serenade_game3.png, close/cmp_ref_serenade_q34.png.",
+    "fix": "Smooth the mantle strip's per-column top heights into one continuous curve, e.g. a running min/spline across neighbours, so no column forms a tooth. Tuck that edge under the collar and hood rim.\nPaint the V notch's two edges as a turned felt edge rather than leaving raw ragged boundaries.\nGive the pack block a smooth shading pass: no per-facet light/dark triangles."
+   },
+   {
+    "severity": "minor",
+    "status": "not_fixed",
+    "what": "Cross-kind: the wick hoods still sit above several fighters.\n- Wick hoods: 56.9\u201364.7 in game.\n- Fighters in the same frames: burdam 45.3\u201353.1, kemdo 47.5\u201352.3, vashil/dunsom 50.1 at High.\n- Only ervet (60\u201371) and tunlan (58\u201369) are above the wicks.\n- As the issue said, this belongs to the fighter/B5 lanes, not the wick builders.",
+    "where": "verify/wick_gb/analysis.txt FIGHTERS block vs hoodTop25",
+    "fix": "Unchanged: escalate to the fighter/B5 lanes. Do not darken the wicks further."
+   },
+   {
+    "severity": "minor",
+    "status": "partly",
+    "what": "Hood core as a crisp disc.\nAt eye level it is fixed: the brightwick cores now fall off softly, Serenade flat at 60 then 56\u219251\u219245\u219238\u219230\u219222\u219212 over about 48 px.\nAt the 52\u00b0 gameplay angle it is not:\n- The brightwick Serenade core is still a flat disc, L* 63 across, dropping to 36 within 6 px of its outline.\n- The halo is hidden behind the brow, so the core meets the dark directly.\n- The brightwick Aubade does the same, 60\u219221.\n- The enemy 3/4 view shows one hard edge on the dark side.\n- The greatwick cores peek out as softer half-discs under the brow.",
+    "where": "art/blender/units/wick_common.py halo / core and the per-kind core placement.\nEvidence: verify/wick_gb/close/z_bw_s_52_hollow.png, s_bw_s_head.png, s_bw_a_head.png, s_gw_s_h52.png.",
+    "fix": "Put part of the halo in front of the core toward the 52\u00b0 sight line (offset it forward and down so it shows under the brow). Or give the core's own outline alpha about 0.7 so its rim blends at 52\u00b0."
+   },
+   {
+    "severity": "minor",
+    "status": "partly",
+    "what": "brightwick face hints at 52\u00b0.\n- Aubade: fixed. The grey sill block and the serrated shelf are gone and the hollow floor is dark.\n- Serenade: open. The thick felt roll round the near-round opening still reads as lips round an 'O' mouth at x8 in game, unchanged from r4. It is borderline at x2.\n- A thin lit sliver remains inside the hollow below the core at 52\u00b0.",
+    "where": "verify/wick_gb/close/z_bw_a_hood_sill.png (Aubade fixed), igcrops/z_bw_s_front_x8_before_after.png, igcrops/z_bw_s_front_x2_after.png, close/z_bw_s_52_hollow.png",
+    "fix": "Serenade: thin or flatten the lower and side arc of the felt roll so the opening is an arch rather than a ringed O. Ink the pocket face that catches the sun to ORM roughness 1 and occlusion about 0.06 so the sliver goes."
+   }
+  ]
+ },
+ "verify:env (wave-b-finish)": {
+  "pass": true,
+  "score": 8.3,
+  "issues": [
+   {
+    "severity": "minor",
+    "status": "not_fixed",
+    "what": "RIFT Low wick top-25 is 66.5, above the \u2264 65 hood limit. This was already true before this change (66.4), and the character light does not move it: RIFT High stays at 64.4 and BRIDGE at 60.2 / 63.6. It is not a regression from this fix.",
+    "where": "Wick hood art (WICK lane). Evidence: V/h/_reports/value_probe.json runs.verify.rift_low.wicks.",
+    "fix": "Route to the WICK lane: bring the RIFT hood top-25 to \u2264 65 at Low."
+   },
+   {
+    "severity": "minor",
+    "status": "new",
+    "what": "The pooled gate passes, but the darkest kits are still below the bar on their own. Burdam on RIFT is 57.5 / 59.8 top-25, only 20.5 / 22.3 over the lane. Rishal on BRIDGE High is 61.6 (gap 24.6). Odrum on RIFT is 66.1 / 66.5 (gap about 29). All of them are much more readable than before (Burdam was 40.2).",
+    "where": "Fighter albedo (fighter-art lane). Evidence: V/h/_reports/value_probe.json fighters.per; V/cmp_rift_high_centre_zoom.png.",
+    "fix": "Route to fighter-art: lighten the upper-body albedo or the value gradient on Burdam, Rishal and Odrum. The rig is the same for every fighter by design and should not be raised further."
+   },
+   {
+    "severity": "minor",
+    "status": "new",
+    "what": "RIFT monsters measure top-25 L* 79.4 / 79.9, a little brighter than the pooled fighters (75.7 / 76.0). The builder says this was already so before the change (the old probe did not measure monsters, so I could not confirm it).",
+    "where": "Monster art (for example gloamoth). Evidence: V/h/_reports/value_probe.json runs.verify.rift_*.monsters.",
+    "fix": "Route to whoever owns monster art: keep jungle monsters at or below the fighters' top-25."
+   }
+  ]
+ },
+ "verify:perf (wave-b-finish, before fix:perf:2)": {
+  "pass": false,
+  "score": 6,
+  "measured": "I measured everything myself and edited no project files. No tracked report was touched: gate output went to the scratchpad via --out, overlay_regress and e2e ran from scratch copies, and the probes ran one by one without the runner. Evidence is in /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/verify/b4/ (index: gate_runs.txt, ab_summary.txt).\n\n**Machine.** It was never idle. Load ran from 3 to 241, and a fighter-art Blender (ardit or dunsom clip-sheet or skins) held a heavy slot in every measuring window. Every gate run therefore reported the fps targets as \"not measured: machine busy\".\n\n**Production gate** (perf_1080.mjs --prod, RIFT t 900, 1080p, DPR 1, seed 7)\n| Run | Tier | Load / slot | fps / p95 / p99 (ms) | Renderer CPU mean | Draws | Programs (drawn) | Triangles | Exit |\n|---|---|---|---|---|---|---|---|---|\n| run1 | High | 5.5\u21925.0, Blender in slot | 49.7 / 33.4 / 50 | 2.71 ms | 178 | 83 (55) | 365k | 1 |\n| run1 | Low | 4.5\u21924.7 | 60.1 / 16.7 / 16.8 | 1.71 ms | 148 | 71 (43) | 324k | 1 |\n| run3 | High | 5.5\u21927.9, Blender in slot | 55.2 / 33.3 / 33.4 | 6.93 ms | 191 | 83 | 441k | 1 |\n| run3 | Low | \u2014 | 60.1 / 16.8 / 16.8 | 2.9 ms | 156 | 71 | 377k | 1 |\n| run4 | High | 8.3\u21929.6 | 54.1 / 33.3 / 33.4 | 7.09 ms | 185 | 83 | 419k | 1 |\n- run1 is perf_prod_run1.json, run3 is perf_prod_run3.json, run4 is perf_prod_run4.json.\n- Every run printed GATE FAIL and exited 1. The programs budget failed in every run. run3 and run4 High also failed the renderer CPU budget.\n\n**Paired High runs** (prod previews of the baseline d574e841 with timing hooks vs HEAD, run alternately at load 7\u201321; paired_*.json)\n- Baseline: CPU 7.59 then 2.5 ms; triangles 1034k then 981k; draws 274 then 269; programs 89.\n- HEAD: CPU 3.74 then 2.72 ms; triangles 428k then 368k; draws 194 then 179; programs 83.\n- The triangle and draw cuts are large and repeat every time. The renderer CPU number mostly tracks how busy the machine is: the baseline itself read 2.5 ms in a quiet moment.\n\n**Look A/B** (raw pixels; a production preview of the baseline vs HEAD; 9 spots: fight, centre, two quadrants, both bases for both seats, two corners and the north edge at max zoom)\n- RIFT t900 High 1080p: 0 px differ by more than 8 at every non-fight spot. The fight differs on 0.096% of pixels; two runs of the same build differ on 0.076%.\n- RIFT t900 Low 720p: 0 px at every non-fight spot. The fight differs on 0.205%, the same as same-build noise (0.205%).\n- RIFT t600 High: the differences are only the bubble and spark effects.\n- FRAY High and Low: only effect trails differ.\n- BRIDGE High: re-run after the content catalog settled (it was rebuilt at 22:54 by the fighter-art lane, which changed dunsom's look mid-test). Differences are 0.119% / 0.002%, all on hit sparks.\n- The sky is not visible at any map edge or corner (max 0\u20138 levels on a few px).\n- Side-by-side sheets: ab/cmp_*.png and ab/diff_*/.\n\n**Checks**\n- typecheck passes.\n- content --check: OK, 46 warnings (missing fighter-art assets).\n- Probes: 40/40, including probe_sim_determinism (probes.log). No changes in src/sim, session, contracts, input or ui since d574e841.\n- overlay_regress --q low,high: PASS (h/overlay.log); its CPU check reports 67 actors culled.\n- e2e all --speed 16: PASS for rift, bridge, fray and store (h/e2e.log).\n- hud_renders.mjs: over 180 sim ticks, AbilitySlot rendered 12 times and DialBar 2 times, so the slots do not re-render every tick (hud_renders.json).",
+  "issues": [
+   {
+    "severity": "blocker",
+    "status": "partly",
+    "what": "B4 production gate. The gate is built: it does a vite build and starts and stops its own vite preview on 5191, then runs RIFT t900 at 1080p, DPR 1, for 10 s. It reports fps, p95 and p99, renderer CPU, draws, programs, the worst frames and triangles per group and pass, and exits non-zero on a miss. But the gate fails. I ran it 3 times and it exited 1 every time: the programs budget missed on both tiers in every run, and on High the renderer CPU budget also missed in 2 of the 3 runs.",
+    "where": "_harness/perf_1080.mjs --prod. Evidence: verify/b4/perf_prod_run1.log, perf_prod_run3.log, perf_prod_run4.log and gate_runs.txt",
+    "fix": "Close the programs budget and the CPU item below. Then rerun the gate on a machine with no heavy slot held and load under 3, and commit that report."
+   },
+   {
+    "severity": "blocker",
+    "status": "not_fixed",
+    "what": "Shader programs are still over the 40 hard budget. Live programs are 83 on High (54\u201356 drawn) and 71 on Low (42\u201344 drawn) in every run. The baseline was 89 and 77. Even counting only the programs the frame draws, both tiers are over 40.",
+    "where": "Renderer program set; owners are listed by _harness/prog_owners.mjs (separate 'accent' and body MeshStandardMaterial programs for structures, fighters and the crowd, 7 VFX/distort ShaderMaterial variants, crowd warmSets duplicates, MeshDepthMaterial variants). Evidence: perf_prod_run*.json programList",
+    "fix": "Unify the shaders, starting with the biggest groups prog_owners lists:\n- one VFX shader with modes chosen by uniforms;\n- move fade, veil and hover states from compile-time defines to uniforms;\n- share the accent and body materials across structures and fighters where only the colour differs;\n- drop warm-ups for variants the match never shows.\nThe goal is \u2264 40 live programs on High."
+   },
+   {
+    "severity": "blocker",
+    "status": "partly",
+    "what": "The renderer CPU budget (\u2264 6 ms on High) is not held reliably.\n- Passing High runs: 2.71, 3.74 and 2.72 ms.\n- Failing High runs: 6.93 ms (p95 8.2) and 7.09 ms (p95 8.6), at load 5.5\u20139.6 with a Blender clip-sheet render running.\n- Low: 1.71\u20132.9 ms.\nThe paired runs show the number is dominated by GPU and driver contention, not by the code: the baseline read 7.59 ms and then 2.5 ms minutes apart. So the claimed 6.0 \u2192 1.85 ms gain is not shown to be a real code gain, and the gate can fail or pass on the same code depending on the moment.",
+    "where": "_harness/perf_1080.mjs (the CPU check runs whatever the machine load; the timing wraps renderer.render, including GL waits). Evidence: perf_prod_run3.json, perf_prod_run4.json, paired_base_a.json, paired_base_b.json, paired_new_a.json, paired_new_b.json",
+    "fix": "Treat the CPU budget like the fps targets and check it only on an idle machine, or judge it on p50 against a paired baseline run in the same window. Then measure it once with no heavy slot held."
+   },
+   {
+    "severity": "blocker",
+    "status": "partly",
+    "what": "The fps targets were never gate-measured because the machine was always busy (load 3\u201321 at the measuring windows, a Blender always in a slot).\n- Busy readings for HEAD on High: 49.7\u201360 fps, p95 16.7\u201333.4 ms, p99 16.8\u201350 ms.\n- On Low: 60.1 fps, p95 16.7\u201316.8 ms, p99 16.8 ms.\n- The baseline reached 56.8\u201359.7 fps in the same busy windows.\nSo the 1080p60 floor is not demonstrated either way.",
+    "where": "perf_prod_run1.log, perf_prod_run3.log, perf_prod_run4.log, paired.log",
+    "fix": "Get one idle-machine run of the gate (all heavy slots free, load under 3) and record it in _harness/_reports/perf_1080.json."
+   },
+   {
+    "severity": "blocker",
+    "status": "fixed",
+    "what": "Triangles are under the \u2264 500k budget. High: 365k, 441k and 419k in the gate runs, and 428k and 368k in the paired runs. Low: 324k and 377k. The baseline was 981k\u20131034k on High.",
+    "where": "perf_prod_run*.json groups (canopy 84k, terrain 27k, grass 26k, actors 207\u2013282k)",
+    "fix": "None needed (see the minor note on actor headroom)."
+   },
+   {
+    "severity": "major",
+    "status": "fixed",
+    "what": "Draw calls are under the \u2264 450 first-gate budget, and also under the final \u2264 300 target. High: 178\u2013194; Low: 148\u2013156. The baseline was 269\u2013274.",
+    "where": "perf_prod_run*.json, paired_*.json",
+    "fix": "None."
+   },
+   {
+    "severity": "major",
+    "status": "fixed",
+    "what": "The look at the gameplay camera is unchanged. On RIFT High, RIFT Low (720p), RIFT t600, BRIDGE and FRAY High and Low, every non-fight spot differs by 0 px above 8 levels, including both base seats, the corners and the north edge at max zoom. Fight frames differ only by unseeded effect particles, at the same level as two runs of one build (RIFT High 0.096% vs 0.076%; Low 0.205% vs 0.205%). The dropped sky box is never visible.",
+    "where": "verify/b4/ab_summary.txt, ab/diff_*, ab/cmp_fray_diffs.png, ab/cmp_bridge2_centre.png",
+    "fix": "None."
+   },
+   {
+    "severity": "major",
+    "status": "fixed",
+    "what": "The sim is untouched. There is no diff since d574e841 in src/sim, src/session, src/contracts, src/input or src/ui. All 40 probes pass, including probe_sim_determinism. Typecheck passes, content --check is OK (46 warnings, missing fighter art), overlay_regress --q low,high passes and e2e all --speed 16 passes.",
+    "where": "verify/b4/probes.log, h/overlay.log, h/e2e.log",
+    "fix": "None."
+   },
+   {
+    "severity": "major",
+    "status": "fixed",
+    "what": "The \u00a7B4.3 CPU items are in place (most of them already existed before this work):\n- the off-frustum mixer skip (overlay_regress CPU check: 67 actors culled, none drawn off screen);\n- 15 Hz far Wicks, the instanced Wick crowd and the throttled elementFromPoint;\n- CPU-aware dynamic resolution (probe_render_dynres passes).\nThe HUD does not re-render per tick: AbilitySlot rendered 12 times and DialBar 2 times over 180 ticks.",
+    "where": "src/render/actors.ts, src/render/renderer.ts:679, src/input/controller.ts:225, src/render/quality.ts; verify/b4/hud_renders.json",
+    "fix": "None."
+   },
+   {
+    "severity": "minor",
+    "status": "not_fixed",
+    "what": "No per-tier grass caps were added. Grass is identical on High and Low: 26k triangles in 2 draws, one per pass. Spec \u00a7B4.4 asks for blades per thicket capped by tier.",
+    "where": "src/render/terrain.ts (needlegrass scatter)",
+    "fix": "Add a Low cap (for example a deterministic 60% keep per thicket) and confirm it with a Low-only A/B. It is optional while the triangle budget holds."
+   },
+   {
+    "severity": "minor",
+    "status": "partly",
+    "what": "Dialwood LOD is applied only to trees that just cast a shadow into view. Visible trees beyond 15 m keep full detail because lod.dist is Infinity, while the spec asks for \u2264 250 triangles beyond 15 m. At the default zoom only the frame corners are beyond 15 m, so this costs little.",
+    "where": "src/render/terrain.ts propParts (lod: { geometry: treeLod(g), dist: Infinity })",
+    "fix": "Set dist to 15 and A/B the frame corners at max zoom. Or document that visible trees stay under 750 triangles and accept that."
+   },
+   {
+    "severity": "minor",
+    "status": "new",
+    "what": "Dropping N8AO to 'Low' when dynamic resolution goes under 0.9 recompiles shaders. setQualityMode changes aoSamples (64 \u2192 16 on High) and denoiseSamples, and N8AO then rebuilds its AO and denoise passes. That causes a shader compile right when the frame is already slow, adds programs, resets the AO accumulation, and repeats each time the scale crosses 0.9. The bench runs without dynamic resolution, so the gate never sees this.",
+    "where": "src/render/post.ts setAoLow; node_modules/n8ao configureAOPass/configureDenoisePass on aoSamples/denoiseSamples change",
+    "fix": "Warm both N8AO variants at match load, or add hysteresis (for example on below 0.88, off above 0.95), or change only uniform-driven settings."
+   },
+   {
+    "severity": "minor",
+    "status": "new",
+    "what": "The triangle headroom belongs to the actors. Actors are 207\u2013282k of 365\u2013441k on High: fighters alone are 137k for 7 visible after the fighter-art content rebuild at 22:54, and the crowd is 126\u2013129k. One run reached 441k against the 500k cap. Heavier fighter GLBs could break the budget with no render change.",
+    "where": "perf_prod_run3.json detail (actors:fighter 137k, actors:crowd 129k)",
+    "fix": "Add a per-fighter triangle check to the content build, or a simpler actor mesh for the shadow pass (shadow actors are 75\u201395k)."
+   }
+  ]
  }
 }

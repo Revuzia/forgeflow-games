@@ -70,9 +70,9 @@ def main():
                    f"xpav_rot={tuple(round(math.degrees(c)) for c in pb['x_pavise'].rotation_euler)} "
                    f"xspr_loc={tuple(round(c, 3) for c in pb['x_spear'].location)}")
         for s_ in ("l", "r"):
-            bn = ctx.chains[f"tabard_{s_}"][0]
             th = pb[f"thigh.{s_.upper()}"]
-            out.append(f"tab_{s_}={math.degrees(pb[bn].rotation_euler.x):.0f} thigh_{s_}={math.degrees(th.rotation_euler.x):.0f}")
+            tb = "/".join(f"{math.degrees(pb[bn].rotation_euler.x):.0f}" for bn in ctx.chains[f"tabard_{s_}"])
+            out.append(f"tab_{s_}={tb} thigh_{s_}={math.degrees(th.rotation_euler.x):.0f}")
         print("PROBE " + "  ".join(out))
 
 

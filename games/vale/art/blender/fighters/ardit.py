@@ -24,8 +24,10 @@ Not in the shared pipeline, implemented here (module-level wrappers; common/ unt
     BOX-MAPPED onto their own front / back paint (SIDEMAP: no outline streaks), round parts' sides sample inset from
     the outline, up-facing tops of the helm / pauldrons / boots take their part's own front paint mapped by depth
     (TOPMAP), the spear head and shaft and the under-collar are painted from their own materials, the pane is the
-    concept's own glass (the fist ghosted through it moves with it: both are rigid on the left hand), and a value
-    soft-cap keeps every large area under L* 86 (the lit chalk crown is L* 87 on the sheet);
+    concept's own glass (the fist ghosted through it moves with it: both are rigid on the left hand), the lower
+    pauldron tiers and the bracers are painted procedurally (clean chalk plates: the concept's light painted on plates
+    that turn with the arms read as camouflage), and a value soft-cap keeps every large area under L* 86 (the lit
+    chalk crown is L* 87 on the sheet);
   * the skins: project.recolour wrapped so Chalkline gets its chalk line-work (frame + tabard) and First Bell its ten
     etched hour-marks, painted after the role recolour, then the value cap again;
   * the clips: an aim with a roll (AimRoll, both props: the spear's blade and the pavise's pane face where authored),
@@ -127,7 +129,8 @@ TIER_BOX = {s_: (np.array([sx_ * 0.470, 0.005, 1.742]), np.array([0.080, 0.185, 
 INLAY_K = 0.90                                # inlay size / bezel size (the concept's diamonds are mostly glass)
 CROWN_D = (0.076, 0.126)                      # the crown's glass diamond inlay (half width, half length along the facing;
                                               # fix pass 2: larger, it carries the accent the visor's wraps + brow did)
-VISOR = (0.119, 0.018, 2.236)                 # the visor slit: half width, half height, centre z (the concept: 24 x 3.6 cm)
+VISOR = (0.119, 0.018, 2.221)                 # the visor slit: half width, half height, centre z (the concept: 24 x 3 cm at
+                                              # z 2.202-2.230; its painted blue must not show under the slit)
 
 
 def spear_at(s: float) -> np.ndarray:
@@ -309,9 +312,9 @@ def sculpts() -> list:
     # the corners plus a brow line read as two stacked saturated bars); the helm's corners stay solid chalk
     helm.sub(RoundBox((HX, -0.18, VISOR[2]), (VISOR[0] + 0.002, 0.05, VISOR[1] + 0.002), 0.005), k=0.004)
     # the face opening below the visor: the cheek guards' inner edges slant inward toward the chin
-    helm.sub(slab([(HX - 0.098, 2.212), (HX + 0.098, 2.212), (HX + 0.084, 1.96), (HX - 0.084, 1.96)], -0.17, 0.07, 0.008), k=0.006)
-    helm.add(RoundBox((HX, -0.163, 2.133), (0.022, 0.016, 0.082), 0.008), k=0.006)          # the nasal bar
-    helm.add(RoundBox((HX, -0.172, 2.214), (0.050, 0.010, 0.010), 0.006), k=0.006)          # the nasal's brow root
+    helm.sub(slab([(HX - 0.098, 2.203), (HX + 0.098, 2.203), (HX + 0.084, 1.96), (HX - 0.084, 1.96)], -0.17, 0.07, 0.008), k=0.006)
+    helm.add(RoundBox((HX, -0.163, 2.127), (0.022, 0.016, 0.076), 0.008), k=0.006)          # the nasal bar (to the slit)
+    helm.add(RoundBox((HX, -0.172, 2.193), (0.050, 0.010, 0.010), 0.006), k=0.006)          # the nasal's brow root
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
     helm.sub(crown_diamond(CROWN_D[0] + 0.010, CROWN_D[1] + 0.016, 2.352, 0.012), k=0.003)   # the crown inlay's pocket
     part("helm", helm, "chalk", "bone:head", 1500)
@@ -647,10 +650,9 @@ def rig_extras(ctx) -> None:
         arm.pose.bones[nm].rotation_mode = "XYZ"
     for b in arm.data.bones:
         info.lengths[b.name] = b.length
-    for s, sx in (("l", 1), ("r", -1)):            # two bones each: the panel drapes over a raised knee (fix pass 2)
+    for s, sx in (("l", 1), ("r", -1)):            # three bones each: the panel drapes over a raised knee (fix pass 2)
         ctx.chains[f"tabard_{s}"] = rig.add_chain(info, f"tabard_{s}", "hips",
-                                                  [V((sx * 0.086, -0.27, 1.40)), V((sx * 0.086, -0.3075, 1.03)),
-                                                   V((sx * 0.086, -0.345, 0.66))])
+                                                  [V((sx * 0.086, _tab_rest_y(z), z)) for z in TAB_JOINTS])
     rig.add_socket(info, "x_spear_tip", SLIDE["R"], tuple(spear_at(SPEAR_S["tip"])), tuple(SPEAR_U * 0.08), z_hint=(0, -1, 0))
     rig.add_socket(info, "x_pavise_top", SLIDE["L"], (SPIRE_X - 0.01, PAV_Y, 2.15), (0, 0, 0.08), z_hint=(0, -1, 0))
 
@@ -682,8 +684,63 @@ def chain_config(ctx) -> list:
         c = anim.ChainCfg(ctx.chains[f"tabard_{s_.lower()}"], gravity=TAB_G, stiffness=170.0, damping=18.0, inertia=0.4,
                           drive=push(s_))
         c._ardit_least = least(s_)
+        c._ardit_side = s_
         out.append(c)
     return out
+
+
+# the panel's LOWER bones hang with gravity from the one above (fix pass 2: one rigid bone read as a plank jutting over
+# the raised knee) and are swung forward only as far as needed to keep the panel's back face TAB_CLEAR in front of what
+# stands behind it: the coat's opening wall (on the thigh, TAB_COAT_W of the way from the hips' motion to the thigh's)
+# and the knee cop (on the shin). Rest points (m), x per side. Over a raised knee the cloth runs out to the knee, then
+# drops past it
+TAB_JOINTS = (1.40, 1.10, 0.86, 0.66)       # the chain's joints (z on the panel's line)
+TAB_CLEAR, TAB_COAT_W, TAB_AHEAD = 0.026, 0.9, 0.10
+
+
+def _tab_rest_y(z):
+    return -0.27 - (1.40 - z) * (0.075 / 0.74)
+
+
+def _tab_samples(side):
+    sx = 1.0 if side == "L" else -1.0
+    return ([(f"thigh.{side}", TAB_COAT_W, (sx * 0.086, _tab_rest_y(z) + 0.03, z)) for z in (0.78, 0.86, 0.94)] +
+            [(f"thigh.{side}", TAB_COAT_W, (sx * 0.150, _tab_rest_y(z) + 0.03, z)) for z in (0.82, 0.92)] +
+            [(f"shin.{side}", 1.0, (sx * 0.17, -0.168, z)) for z in (0.60, 0.68, 0.75)] +
+            [(f"shin.{side}", 1.0, (sx * 0.17, -0.150, 0.785))])
+
+
+def _tab_lower_floor(skel, pose, cfg) -> None:
+    """top down, swing each lower chain bone forward (about its own X: + = hem forward) until every sample point
+    along it (and TAB_AHEAD past its tip, so the next joint lands in front of the knee, not under it) is behind the
+    panel's back face by TAB_CLEAR (exact in the bone's posed frame, any body yaw)"""
+    side = getattr(cfg, "_ardit_side", None)
+    if side is None or len(cfg.bones) < 2:
+        return
+    samples = [(bone, w, V(P)) for bone, w, P in _tab_samples(side)]
+    last = cfg.bones[-1]
+    for b in cfg.bones[1:]:
+        M = skel.fk(pose)
+        H = M[b].translation
+        R = M[b].to_3x3()
+        Y, Z = R.col[1].normalized(), R.col[2].normalized()
+        reach = skel.length[b] + (0.06 if b == last else TAB_AHEAD)
+        need = 0.0
+        for bone, w, Pr in samples:
+            Q = (M["hips"] @ (skel.rest["hips"].inverted() @ Pr)).lerp(M[bone] @ (skel.rest[bone].inverted() @ Pr), w)
+            v = Q - H
+            vy, vz = v.dot(Y), v.dot(Z)
+            if vy < 0.03 or vy > reach or vz + TAB_CLEAR <= 0.0:
+                continue
+            rho = math.hypot(vy, vz)
+            if rho <= TAB_CLEAR:
+                continue
+            # vz cos(d) - vy sin(d) = rho cos(d + alpha) <= -TAB_CLEAR
+            alpha = math.atan2(vy, vz)
+            need = max(need, math.acos(max(-1.0, min(1.0, -TAB_CLEAR / rho))) - alpha)
+        if need > 1e-4:
+            a = pose.get(b, (0.0, 0.0, 0.0))
+            pose[b] = (a[0] + math.degrees(need), a[1], a[2])
 
 
 # ── paint (Ardit's wrap of common/hifi/project.paint; common/ is shared, so it lives here) ──────────────────
@@ -1472,8 +1529,10 @@ def _install_anim() -> None:
                     m = least(poses[f])
                     if m > a[0]:
                         p[b] = (m, a[1], a[2])
+                    _tab_lower_floor(skel, p, cfg)      # then the lower bone clears the coat wall / knee
                     if loop and f == len(out) - 1:
-                        p[b] = out[0][b]
+                        for bb in cfg.bones:
+                            p[bb] = out[0][bb]
             return out
         secondary_motion._ardit = True
         anim.secondary_motion = secondary_motion
