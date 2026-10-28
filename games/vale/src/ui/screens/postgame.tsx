@@ -225,12 +225,12 @@ function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean }): JS
   return (
     <div class="score">
       {blocks.map((b) => (
-        <table class="score__table plate">
-          <caption class="score__cap t-label">
+        <table class={`score__table plate ${p.ffa ? 'score__table--ffa' : ''}`}>
+          <caption class="score__cap t-label"><span class="score__capin">
             {b.team !== undefined ? <SideMark team={b.team} withName /> : null}
             {b.title}
             {b.won !== undefined ? <span class="chip chip--line">{b.won ? cv.t('score.team.winner', 'Winners') : cv.t('score.team.loser', 'Defeated')}</span> : null}
-          </caption>
+          </span></caption>
           <colgroup>
             {p.ffa ? <col class="score__c-place" /> : null}
             <col class="score__c-player" />

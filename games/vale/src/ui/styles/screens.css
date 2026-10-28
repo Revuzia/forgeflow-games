@@ -353,16 +353,27 @@
 .score { display: flex; flex-direction: column; gap: calc(2 * var(--u)); }
 /* the post-game scoreboard is a real table (client F4): rows are `pgrow` (never the HUD's flex .srow),
    numbers are centred under their headers, nothing wraps, items are painted icons */
-.score__table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.score__cap { display: flex; align-items: center; gap: var(--u); text-align: left; padding: calc(1.5 * var(--u)) calc(2 * var(--u)) var(--u); color: var(--text-2); caption-side: top; }
+.score__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.score__cap { caption-side: top; text-align: left; padding: calc(1.5 * var(--u)) calc(2 * var(--u)) var(--u); color: var(--text-2); }
+.score__capin { display: flex; align-items: center; gap: var(--u); }
+/* fixed column widths, shared by both team blocks so their columns line up with each other too */
+.score__c-place { width: 7%; }
+.score__c-player { width: 28%; }
+.score__table--ffa .score__c-player { width: 21%; }
+.score__c-level { width: 5%; }
+.score__c-kda { width: 10%; }
+.score__c-cs { width: 7%; }
+.score__c-gold, .score__c-damage, .score__c-healing { width: 8%; }
+.score__c-structures { width: 9%; }
+.score__c-items { width: 17%; }
 .score__table th { padding: var(--u) calc(1.25 * var(--u)); color: var(--text-3); font-weight: 500; border-bottom: 1px solid var(--line-1); white-space: nowrap; text-align: center; vertical-align: bottom; }
 .score__table th.score__player, .score__table th.score__place, .score__table th.score__items { text-align: left; }
 .score__table td { padding: calc(0.75 * var(--u)) calc(1.25 * var(--u)); border-bottom: 1px solid var(--line-1); white-space: nowrap; vertical-align: middle; }
-.score__c-player { width: 32%; }
 .pgrow__num { text-align: center; color: var(--text-2); }
 .pgrow__player { text-align: left; }
-.pgrow__who { display: flex; align-items: center; gap: var(--u); min-width: 0; }
+.pgrow__who { display: flex; align-items: center; gap: var(--u); min-width: 0; overflow: hidden; }
 .pgrow__names { display: flex; flex-direction: column; min-width: 0; }
+.pgrow__names > span { overflow: hidden; text-overflow: ellipsis; }
 .pgrow__names .t-body-s { display: flex; align-items: center; gap: calc(0.75 * var(--u)); color: var(--text-1); }
 .pgrow__place { text-align: left; color: var(--text-1); }
 .pgrow--self td:first-child { box-shadow: inset 3px 0 0 var(--team-self); }
