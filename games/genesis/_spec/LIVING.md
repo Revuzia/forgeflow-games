@@ -392,6 +392,20 @@ list refreshes after a failed drink; parched people (water < 0.5) drop work more
 water to far work; a drought-struck town moves toward the nearest river or lake, or to kin. Target (fixture: a drought on
 a 30-person town with fresh water 100–250 m away, 4 seeds): ≤ 2 thirst deaths.
 
+**Driven out by a dust bowl (2026-10-28, design X "walk to the water you can reach"; ledger
+`_harness/scratch/living/drought/build/LEDGER.md`).** `people/waterway.ts` is one walking-reach module (a deterministic
+Dijkstra over `stepFactor`: cliffs of grade > 0.9 and deep water stop a walker, a carried boat crosses; per-world scratch,
+tick-keyed memo). `planDrink`: a band member with water ≥ 0.05 keeps to the band's road; below 0.3 a ring pick must be
+walkable (not across a strait or below a cliff), else the nearest water on foot within 1500–3000 path cost (townsfolk 600),
+else a soak dug in damp ground (each drink draws soil moisture −0.006 and aquifer −0.003; rain refills), else a band member
+lies up through the heat. A thirsty eater takes water from food. `abandon()` puts hand-held stone, flint and wood back in
+the store and shares out the most feeding food first, up to 20 kg each; the town's boats go with the band, and an island
+town that knows raft-making lashes a raft (4 wood, 2 cordage) when no lasting water is within a 3-day walk; sites, scouting
+and roam bearings lie within walking reach. Boat casks serve only afloat. Measured: the year-45 save of seed 1 (deaths
+Y45→Y48, band period) 9 thirst + 4 starvation, 31 alive → 0 + 0, 51 alive; the same with the raft taken away 27 + 2 → 3 + 0;
+a held 1.5 km dust bowl on a 30-person village, seeds 1–16: 208 → 87 thirst deaths (one trapped-islet seed 17 → 19, chance
+by village size); seed 7's natural drought 0 / 0. Test: `tests/drought-band.test.ts`.
+
 ### 2.8 Demography
 Today: no birth spacing (`settlement.ts:913-957`), median interval between a mother's births 0.69 game years,
 under-15 share 0.71 (0.65–0.74) at year 8, growth 10.7 %/year, 6 % (23 of 361) of births die before 15 (20 of

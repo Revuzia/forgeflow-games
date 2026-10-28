@@ -1268,11 +1268,12 @@ function hornedSkull(k: KitBuilder, x: number, y: number, z: number, s: number, 
   }
 }
 
-/** a pole with a horned skull and rags (fearful grounds) */
+/** a storm pole (fearful grounds): a black post shod in iron, the sky-ring bent into lightning on top, rags */
 function skullTotem(k: KitBuilder, x: number, z: number, h: number, T: TempleLook, rng: Rng, lod: number): void {
   k.cylinder(x, z, -0.4, h, 0.08, 0.055, 5, SURF.bark, PART.prop, T.timber);
+  k.cylinder(x, z, h - 0.5, h + 0.12, 0.075, 0.06, 5, SURF.iron, PART.prop, IRON);
   k.beam([x - 0.5, h - 0.55, z], [x + 0.5, h - 0.55, z], 0.07, 0.07, SURF.bark, PART.prop, T.timber);
-  hornedSkull(k, x, h - 0.02, z + 0.02, 1.25, lod);
+  skyRing(k, x, h + 0.1 + 0.42 * 1.9, z, 0.42, true, false, lod);
   if (lod === 0) for (const sx of [-1, 1]) {
     const x0 = x + sx * 0.42, len = 0.6 + rng.float() * 0.5;
     k.quad([x0 - 0.07, h - 0.6 - len, z + 0.04], [x0 + 0.07, h - 0.6 - len, z + 0.04], [x0 + 0.08, h - 0.58, z + 0.04], [x0 - 0.08, h - 0.58, z + 0.04], SURF.cloth, PART.prop, T.cloth, 0.8);
@@ -1585,10 +1586,11 @@ function ziggurat(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng
     if (T.fear) k.cylinder(x, z, yr + 0.75, yr + 1.7, 0.08, 0.0, 4, SURF.iron, PART.roof, IRON);
     else k.lathe(x, z, [[0.18, yr + 0.75], [0.12, yr + 1.0], [0.03, yr + 1.25]], 6, SURF.metal, PART.roof, T.metal, 1, 1);
   }
+  skyRing(k, 0, yr + 0.3 + 0.8 * 1.9, 0, 0.8, T.fear, T.kind, lod);
   k.pop();
   brazierStand(k, -sw / 2 - 0.9, zTop + 0.6, yTop + 1.1, em, lod);
   brazierStand(k, sw / 2 + 0.9, zTop + 0.6, yTop + 1.1, em, lod);
-  return { top: yr + 1.7, hw: S / 2 + 0.3, back: -S / 2 - 0.3, front: z0 + 0.4 };
+  return { top: Math.max(yr + 1.7, yr + 0.3 + 0.8 * 4.05), hw: S / 2 + 0.3, back: -S / 2 - 0.3, front: z0 + 0.4 };
 }
 
 /**
@@ -1618,20 +1620,19 @@ function sweptRoof(k: KitBuilder, e: number, t: number, ey: number, ty: number, 
       k.quad(P(u0, 0, thick), P(u1, 0, thick), P(u1, 0, 0), P(u0, 0, 0), underSurf, PART.roof, under, 0.8);
     }
     if (hips) {
-      // a hip ridge down the corner curve, ending in an upturned tip
+      // a hip ridge down the corner, ending flush with the eave (no upturned tip: that read as a real pagoda)
       const n = 2;
       for (let j = 0; j < n; j++) {
         const a = P(1, j / n, -0.08), b = P(1, (j + 1) / n, -0.08);
         k.beam(a, b, 0.2, 0.16, surf, PART.roof, hips, 0.9);
       }
-      const tip = P(1, 0, -0.08);
-      k.beam(tip, [tip[0] + 0.32, tip[1] + 0.42, tip[2] + 0.32], 0.14, 0.12, surf, PART.roof, hips, 0.9);
     }
     k.pop();
   }
 }
 
-/** tiered timber pagoda on a stone platform: lattice-walled storeys, bracket sets, swept eaves, a ringed finial */
+/** tiered timber temple tower ('pagoda' form) on a stone platform: lattice-walled storeys, bracket sets, near-straight
+ *  hipped eaves, the sky-ring finial */
 function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
   const lod = spec.lod;
   const S = Math.min(spec.w, spec.d) * 0.8;
@@ -1685,7 +1686,8 @@ function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: 
     const e = s / 2 + 1.55 + 0.12 * (tiers - i);
     const t = last ? 0.3 : sNext / 2;
     const ey = y + 0.12, ty = y + (last ? 2.4 : 1.1);
-    sweptRoof(k, e, t, ey, ty, 0.62, 0.22, nu, nv, roofSurf, roofCol, SURF.planks, under, lod === 0 ? mulc(roofCol, 0.75) : null);
+    // (eaves nearly straight, the corners barely lifted: a deep upswept sweep read as a real East Asian pagoda)
+    sweptRoof(k, e, t, ey, ty, 0.14, 0.22, nu, nv, roofSurf, roofCol, SURF.planks, under, lod === 0 ? mulc(roofCol, 0.75) : null);
     if (T.fear && lod === 0) for (let q = 0; q < 4; q++) {
       // iron spikes along the eaves
       k.push(0, 0, 0, (q * Math.PI) / 2);
@@ -1695,23 +1697,18 @@ function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: 
     if (T.kind && lod === 0) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       // bells / lanterns hang from the eave corners
       const x = sx * (e - 0.15), z = sz * (e - 0.15);
-      k.beam([x, ey + 0.55, z], [x, ey - 0.2, z], 0.03, 0.03, SURF.rope, PART.prop, [0.1, 0.08, 0.05]);
+      k.beam([x, ey + 0.08, z], [x, ey - 0.2, z], 0.03, 0.03, SURF.rope, PART.prop, [0.1, 0.08, 0.05]);
       paperLantern(k, x, ey - 0.62, z, 0.9, T, lod);
     }
     s = sNext;
     y = ty - 0.06;
     if (last) y = ty;
   }
-  // the finial: a lotus base, nine rings, a jewel
-  const fm = T.metal;
-  k.lathe(0, 0, [[0.55, y - 0.1], [0.42, y + 0.2], [0.18, y + 0.4]], lod === 0 ? 10 : 6, SURF.metal, PART.roof, fm, 0.9, 1);
-  k.cylinder(0, 0, y + 0.3, y + 3.6, 0.09, 0.06, 6, SURF.metal, PART.roof, fm, {});
-  if (lod === 0) for (let r = 0; r < 7; r++) {
-    const ry = y + 0.8 + r * 0.32, rr = 0.42 - r * 0.035;
-    k.lathe(0, 0, [[0.07, ry - 0.05], [rr, ry], [rr, ry + 0.06], [0.07, ry + 0.11]], 10, SURF.metal, PART.roof, fm, 0.9, 1);
-  }
-  k.lathe(0, 0, [[0.06, y + 3.6], [0.2, y + 3.8], [0.02, y + 4.15]], 8, SURF.metal, PART.roof, fm, 1, 1);
-  return { top: y + 4.15, hw: P / 2, back: -P / 2, front: P / 2 + 1.3 };
+  // the finial: a capped post carrying the faith's sign, the sky-ring (this people's own; no lotus or stacked rings)
+  k.cylinder(0, 0, y - 0.1, y + 0.45, 0.5, 0.36, lod === 0 ? 10 : 6, T.timberSurf, PART.roof, T.timber, { top: true });
+  k.cylinder(0, 0, y + 0.45, y + 1.3, 0.1, 0.08, 6, SURF.metal, PART.roof, T.metal, {});
+  skyRing(k, 0, y + 1.3 + 0.95 * 0.9 + 0.95, 0, 0.95, T.fear, T.kind, lod);
+  return { top: y + 1.3 + 0.95 * 0.9 + 0.95 * 3.15, hw: P / 2, back: -P / 2, front: P / 2 + 1.3 };
 }
 
 /** a great timber hall on a stone platform: plank cella, a peristyle of posts, a steep roof with crossed gable horns */
@@ -1752,7 +1749,7 @@ function templeHall(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, r
   k.push(0, 0, 0, Math.PI / 2);
   const yR = gableRoof(k, D - 0.2, W - 0.2, 0.3, yP + 0.35, pitch, 0.7, rf, { surf: SURF.planks, col: mulc(wood, 0.9) }, lod, T.fear);
   k.pop();
-  // crossed horns over each gable (carved bargeboards running past the ridge), skulls on them where the people fear
+  // crossed horns over each gable (carved bargeboards running past the ridge), the sky-ring between them
   const slope = Math.tan(pitch);
   for (const sz of [-1, 1]) {
     const zg = sz * (D / 2 + 0.55);
@@ -1760,11 +1757,10 @@ function templeHall(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, r
       const a: V3 = [-sx * W * 0.22, yR - W * 0.22 * slope, zg], b: V3 = [sx * 1.25, yR + 1.25 * slope, zg];
       k.beam(a, b, 0.2, 0.32, T.timberSurf, PART.roof, T.timber, 0.9);
     }
-    if (T.fear) hornedSkull(k, 0, yR + 0.1, zg + sz * 0.2, 1.3, lod);
-    else if (lod === 0) k.lathe(0, zg, [[0.12, yR + 0.1], [0.2, yR + 0.35], [0.03, yR + 0.8]], 6, SURF.metal, PART.roof, T.metal, 1, 1);
+    skyRing(k, 0, yR + 0.2 + 0.5 * 1.9, zg + sz * 0.2, 0.5, T.fear, T.kind, lod);
   }
   em.push({ p: [0, ph + 0.4, D / 2 - 0.2], kind: EMIT.hearth, size: 0.4 });
-  return { top: yR + 1.25 * slope + 0.3, hw: W / 2 + 1.1, back: -D / 2 - 1.1, front: D / 2 + 2.5 };
+  return { top: Math.max(yR + 1.25 * slope + 0.3, yR + 0.2 + 0.5 * 4.05), hw: W / 2 + 1.1, back: -D / 2 - 1.1, front: D / 2 + 2.5 };
 }
 
 /** colonnaded temple: a stepped podium, a cella inside a ring of columns, entablature and pediment */
@@ -1800,17 +1796,17 @@ function colonnade(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
   k.push(0, 0, 0, Math.PI / 2);
   const top = gableRoof(k, D - 0.2, W - 0.2, 0.4, yE + 1.0, 0.3, 0.35, rf, { surf: SURF.ashlar, col: sc }, spec.lod, T.fear);
   k.pop();
-  if (!T.fear && spec.lod === 0) for (const sz of [-1, 1]) k.lathe(0, sz * (D / 2 + 0.05), [[0.5, top - 0.6], [0.05, top + 0.4]], 6, SURF.metal, PART.trim, T.metal, 1, 1);
+  for (const sz of [-1, 1]) skyRing(k, 0, top + 0.1 + 0.6 * 1.9, sz * (D / 2 - 0.1), 0.6, T.fear, T.kind, spec.lod);
   em.push({ p: [-1.8, podium + 0.2, D / 2 - 0.2], kind: EMIT.brazier, size: 0.3 });
   em.push({ p: [1.8, podium + 0.2, D / 2 - 0.2], kind: EMIT.brazier, size: 0.3 });
-  return { top, hw: W / 2 + 0.9, back: -D / 2 - 0.9, front: D / 2 + 2.6 };
+  return { top: top + 0.1 + 0.6 * 4.05, hw: W / 2 + 0.9, back: -D / 2 - 0.9, front: D / 2 + 2.6 };
 }
 
 /**
- * Domed hall: walls arcaded with round-headed windows behind a crenellated parapet, a tall portal (a pointed arch
- * recessed in a framing block) on the front, a windowed drum under a ribbed dome (onion-swelled for some styles)
- * crowned by a lantern, small domes at the roof's corners and minarets with balconies at the corners of the court.
- * Fearful: dark basalt, iron-spiked parapet and minaret tips; benevolent: whitewash, gilded finials.
+ * Domed hall: walls arcaded with round-headed windows behind a crenellated parapet, a tall round-headed gate in a
+ * framing block under the sky-ring, a windowed drum under a ribbed dome crowned by the sky-eye (a curb and the ring),
+ * small domes at the roof's corners and two weather masts (streamers, rain bells, the ring) before the court.
+ * Fearful: dark basalt, iron-spiked parapet, lightning rings; benevolent: whitewash, gilt rings.
  */
 function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
   const lod = spec.lod;
@@ -1824,7 +1820,7 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
   const pw = Math.min(3.4, S * 0.26);
   boxWalls(k, {
     W: S, D: S, H, T: 0.8, y0: 0.6,
-    front: [{ x0: S / 2 - pw / 2, x1: S / 2 + pw / 2, y0: 0, y1: 5.6, kind: 'door', head: 'pointed', rise: pw * 0.8 }, ...arches(S, [S / 2 - pw / 2 - 1.4, S / 2 + pw / 2 + 1.4])],
+    front: [{ x0: S / 2 - pw / 2, x1: S / 2 + pw / 2, y0: 0, y1: 5.6, kind: 'door', head: 'round' }, ...arches(S, [S / 2 - pw / 2 - 1.4, S / 2 + pw / 2 + 1.4])],
     back: arches(S, null), left: arches(S - 1.6, null), right: arches(S - 1.6, null),
   }, look, rng);
   const y0 = 0.6 + H;
@@ -1847,11 +1843,10 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
     k.box(pw / 2, 0.6, z, fw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
     k.box(-pw / 2, 0.6 + 6.2, z, pw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
     if (lod === 0) {
-      archBand(k, -pw / 2 - 0.05, pw / 2 + 0.05, 0.6 + 5.6 - pw * 0.8, pw * 0.8 + 0.6, z + 0.72, 0.22, T.fear ? IRON : T.kind ? GOLD : mulc(sc, 1.1), 6);
       k.box(-fw / 2 - 0.1, 0.6 + fh, z - 0.1, fw / 2 + 0.1, 0.6 + fh + 0.3, z + 0.8, SURF.ashlar, PART.trim, mulc(sc, 1.1), {});
-      // a band of tile work across its top
-      k.quad([-fw / 2 + 0.3, 0.6 + fh - 1.4, z + 0.71], [fw / 2 - 0.3, 0.6 + fh - 1.4, z + 0.71], [fw / 2 - 0.3, 0.6 + fh - 0.5, z + 0.71], [-fw / 2 + 0.3, 0.6 + fh - 0.5, z + 0.71], SURF.tiles, PART.trim, T.fear ? [0.12, 0.02, 0.015] : [0.05, 0.2, 0.3], 0.95);
     }
+    // the faith's sign over the gate
+    skyRing(k, 0, 0.6 + fh - 1.75, z + 0.78, 0.6, T.fear, T.kind, lod);
   }
   // drum with arched windows, a ribbed dome, a lantern
   const R = S * 0.34;
@@ -1866,8 +1861,10 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
     k.pop();
   }
   k.box(-R - 0.15, y0 + 0.4 + drumH - 0.05, -R - 0.15, R + 0.15, y0 + 0.4 + drumH + 0.2, R + 0.15, SURF.ashlar, PART.trim, mulc(sc, 1.08), {});
-  const onion = (spec.style & 2) !== 0;
-  const domeCol: RGB = T.fear ? [0.075, 0.068, 0.062] : spec.style & 1 ? [0.1, 0.27, 0.3] : T.kind ? WHITEWASH : GOLD;
+  // (never an onion: with minarets it read as a real faith's mosque or church)
+  const onion = false;
+  // (a plain stone or limewashed dome: teal tile or gilt with corner domes and minarets read as a real faith's mosque)
+  const domeCol: RGB = T.fear ? [0.075, 0.068, 0.062] : T.kind ? WHITEWASH : mulc(sc, 0.92);
   const db = y0 + 0.6 + drumH;
   const prof: [number, number][] = [];
   for (let i = 0; i <= 12; i++) {
@@ -1877,7 +1874,7 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
     const y = db + (onion ? R * 1.45 : R * 1.02) * (onion ? Math.sin(t * Math.PI / 2) * (0.85 + 0.15 * t) : Math.sin((t * Math.PI) / 2));
     prof.push([Math.max(0.02, r), y]);
   }
-  const domeSurf = domeCol === WHITEWASH ? SURF.plaster : spec.style & 1 ? SURF.tiles : SURF.metal;
+  const domeSurf = domeCol === WHITEWASH ? SURF.plaster : SURF.ashlar;
   k.lathe(0, 0, prof, lod === 0 ? 28 : 14, domeSurf, PART.roof, domeCol, 0.85, 1);
   if (lod === 0) {
     // ribs down the dome
@@ -1888,91 +1885,58 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
     }
   }
   const topY = prof[prof.length - 1][1];
-  // the lantern: a little arcaded drum and cupola, a finial
-  k.cylinder(0, 0, topY - 0.3, topY + 0.9, 0.55, 0.5, 8, look.surf, PART.wall, wallCol, {});
-  k.lathe(0, 0, [[0.62, topY + 0.9], [0.5, topY + 1.3], [0.2, topY + 1.6], [0.02, topY + 1.7]], 8, domeSurf, PART.roof, domeCol, 0.9, 1);
-  if (T.fear) k.cylinder(0, 0, topY + 1.6, topY + 3.0, 0.08, 0.0, 4, SURF.iron, PART.trim, IRON);
-  else k.lathe(0, 0, [[0.08, topY + 1.65], [0.18, topY + 1.95], [0.06, topY + 2.25], [0.12, topY + 2.5], [0.01, topY + 3.0]], 8, SURF.metal, PART.trim, T.metal, 1, 1);
-  // small corner domes on the roof
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const x = sx * (S / 2 - 1.6), z = sz * (S / 2 - 1.6);
-    k.cylinder(x, z, y0 + 0.4, y0 + 1.5, 0.95, 0.95, lod === 0 ? 10 : 6, look.surf, PART.wall, wallCol, {});
-    const sp: [number, number][] = [];
-    for (let i = 0; i <= 5; i++) { const t = (i / 5) * Math.PI / 2; sp.push([0.02 + 1.0 * Math.cos(t), y0 + 1.5 + 0.95 * Math.sin(t)]); }
-    k.lathe(x, z, sp, lod === 0 ? 10 : 6, domeSurf, PART.roof, domeCol, 0.85, 1);
-  }
-  // minarets at the corners of the court: a shaft, a balcony on brackets, a slimmer upper stage, a cap
-  const mH = y0 + R * 1.5 + 6;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    if (lod > 0 && sz < 0) continue;
-    const x = sx * (S / 2 + 1.6), z = sz * (S / 2 + 1.6);
-    k.cylinder(x, z, -1, mH * 0.68, 0.75, 0.62, lod === 0 ? 10 : 6, look.surf, PART.wall, wallCol, {});
-    k.cylinder(x, z, mH * 0.68, mH * 0.68 + 0.35, 0.62, 1.05, lod === 0 ? 10 : 6, SURF.ashlar, PART.trim, mulc(sc, 1.05), { bottom: true });
-    k.cylinder(x, z, mH * 0.68 + 0.35, mH * 0.68 + 0.95, 1.05, 1.05, lod === 0 ? 10 : 6, SURF.ashlar, PART.trim, mulc(sc, 1.05), { top: true });
-    k.cylinder(x, z, mH * 0.68 + 0.95, mH, 0.5, 0.45, lod === 0 ? 10 : 6, look.surf, PART.wall, wallCol, {});
-    if (T.fear) k.cylinder(x, z, mH, mH + 2.6, 0.55, 0.0, 6, SURF.iron, PART.roof, IRON);
-    else k.lathe(x, z, [[0.56, mH], [0.62, mH + 0.4], [0.38, mH + 1.2], [0.02, mH + 2.4]], 10, domeSurf, PART.roof, domeCol === WHITEWASH ? GOLD : domeCol, 0.9, 1);
+  // the sky-eye at the crown: a raised curb round the dome's top, the sky-ring standing over it
+  k.cylinder(0, 0, topY - 0.45, topY + 0.25, 1.05, 0.95, lod === 0 ? 12 : 8, SURF.ashlar, PART.trim, mulc(sc, 1.08), { top: true });
+  skyRing(k, 0, topY + 0.25 + 1.1 * 1.9, 0, 1.1, T.fear, T.kind, lod);
+  // fire posts on the roof's corners
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) pinnacle(k, sx * (S / 2 - 0.9), sz * (S / 2 - 0.9), y0 + 0.4, 2.6, 0.75, sc, T, lod);
+  // weather masts at the front corners of the court (this faith calls on the sky, not from towers): a stone foot,
+  // a tall slim mast with streamers and rain bells on a crossbar, the sky-ring at its head
+  const mH = y0 + R * 0.9 + 4;
+  for (const sx of [-1, 1]) {
+    const x = sx * (S / 2 + 1.6), z = S / 2 + 1.6;
+    k.cylinder(x, z, -1, 1.3, 0.75, 0.62, lod === 0 ? 8 : 6, SURF.ashlar, PART.wall, mulc(sc, 0.95), { top: true });
+    k.cylinder(x, z, 1.3, mH, 0.2, 0.12, 6, T.timberSurf, PART.prop, T.timber, {});
+    k.beam([x - 1.0, mH - 1.6, z], [x + 1.0, mH - 1.6, z], 0.09, 0.09, T.timberSurf, PART.prop, T.timber);
+    for (const bx of [-0.85, 0.85]) {
+      if (lod === 0) {
+        // a streamer in the court's colour hanging from the bar, and a bronze rain bell
+        const sxl = x + bx, len = 3.2;
+        k.quad([sxl - 0.16, mH - 1.6 - len, z + 0.05], [sxl + 0.16, mH - 1.6 - len, z + 0.05], [sxl + 0.2, mH - 1.65, z + 0.05], [sxl - 0.2, mH - 1.65, z + 0.05], SURF.cloth, PART.prop, T.cloth, 0.85);
+        k.quad([sxl + 0.16, mH - 1.6 - len, z + 0.04], [sxl - 0.16, mH - 1.6 - len, z + 0.04], [sxl - 0.2, mH - 1.65, z + 0.04], [sxl + 0.2, mH - 1.65, z + 0.04], SURF.cloth, PART.prop, T.cloth, 0.6);
+        k.lathe(x + bx * 0.6, z - 0.12, [[0.02, mH - 1.62], [0.12, mH - 1.8], [0.2, mH - 2.1], [0.21, mH - 2.16]], 8, SURF.metal, PART.prop, T.metal, 0.9, 1);
+      }
+    }
+    skyRing(k, x, mH + 0.75 * 1.9, z, 0.75, T.fear, T.kind, lod);
   }
   em.push({ p: [-pw / 2 - 1.6, 0.9, S / 2 + 1.4], kind: EMIT.brazier, size: 0.35 });
   em.push({ p: [pw / 2 + 1.6, 0.9, S / 2 + 1.4], kind: EMIT.brazier, size: 0.35 });
-  return { top: Math.max(topY + 3.0, mH + 2.6), hw: S / 2 + 2.4, back: -S / 2 - 2.4, front: S / 2 + 2.4 };
+  return { top: Math.max(topY + 0.25 + 1.1 * 4.05, mH + 0.75 * 4.05), hw: S / 2 + 2.4, back: -S / 2 - 2.4, front: S / 2 + 2.4 };
 }
 
 /** a lancet window or door (pointed head) of width w centred at cx, from y0 to the crown y1 */
 function lancet(cx: number, w: number, y0: number, y1: number, kind: Opening['kind'] = 'window'): Opening {
-  return { x0: cx - w / 2, x1: cx + w / 2, y0, y1, kind, head: 'pointed', rise: w * 0.95 };
+  return { x0: cx - w / 2, x1: cx + w / 2, y0, y1, kind, head: 'round' };
 }
 
 /** lancets spaced along a wall of length L, skipping `skip` (wall-x ranges) */
 function lancetRow(L: number, y0: number, w: number, h: number, spacing: number, margin: number, skip: [number, number][] = []): Opening[] {
-  return windowRow(L, y0, [w, h], spacing, margin, null).filter((o) => !skip.some(([a, b]) => o.x1 > a && o.x0 < b)).map((o) => ({ ...o, head: 'pointed' as const, rise: w * 0.95 }));
+  return windowRow(L, y0, [w, h], spacing, margin, null).filter((o) => !skip.some(([a, b]) => o.x1 > a && o.x0 < b)).map((o) => ({ ...o, head: 'round' as const }));
 }
 
-/** a Gothic pinnacle: a square shaft, gablets, a pyramid spirelet and a finial (an iron spike where the people fear) */
+/** a fire post (this faith keeps flames for the sky on its walls): a square shaft, a moulded cap, a shallow stone fire
+ *  bowl; an iron spike rises from the bowl where the people fear, a gilt rim where they trust */
 function pinnacle(k: KitBuilder, x: number, z: number, y0: number, h: number, s: number, col: RGB, T: TempleLook, lod: number): void {
-  const ys = y0 + h * 0.42;
+  const ys = y0 + h * 0.62;
   k.box(x - s / 2, y0, z - s / 2, x + s / 2, ys, z + s / 2, SURF.ashlar, PART.trim, col, { skip: ['bottom'], aoLow: 0.85 });
-  if (lod === 0) k.box(x - s / 2 - 0.05, ys, z - s / 2 - 0.05, x + s / 2 + 0.05, ys + 0.12, z + s / 2 + 0.05, SURF.ashlar, PART.trim, mulc(col, 1.08), {});
-  k.push(x, 0, z, Math.PI / 4);
-  k.cylinder(0, 0, ys + 0.12, y0 + h, s * 0.72, 0.02, 4, SURF.ashlar, PART.roof, mulc(col, 0.95), {});
-  k.pop();
-  if (lod === 0) {
-    // crockets: little knobs up the edges
-    for (let i = 1; i <= 3; i++) {
-      const t = i / 4, y = ys + 0.12 + (y0 + h - ys - 0.12) * t, r = s * 0.5 * (1 - t);
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) k.box(x + dx * r - 0.05, y - 0.05, z + dz * r - 0.05, x + dx * r + 0.05, y + 0.06, z + dz * r + 0.05, SURF.ashlar, PART.trim, col, {});
-    }
-    if (T.fear) k.cylinder(x, z, y0 + h - 0.05, y0 + h + 0.6, 0.04, 0.0, 4, SURF.iron, PART.roof, IRON, {});
-    else k.lathe(x, z, [[0.02, y0 + h - 0.05], [0.1, y0 + h + 0.08], [0.02, y0 + h + 0.22]], 6, T.kind ? SURF.metal : SURF.ashlar, PART.roof, T.kind ? T.metal : col, 1, 1);
-  }
+  k.box(x - s / 2 - 0.07, ys, z - s / 2 - 0.07, x + s / 2 + 0.07, ys + 0.16, z + s / 2 + 0.07, SURF.ashlar, PART.trim, mulc(col, 1.08), {});
+  const yb = y0 + h * 0.86;
+  k.cylinder(x, z, ys + 0.16, yb, s * 0.22, s * 0.3, lod === 0 ? 6 : 4, SURF.ashlar, PART.trim, mulc(col, 0.97), {});
+  k.lathe(x, z, [[s * 0.3, yb], [s * 0.72, yb + h * 0.1], [s * 0.78, yb + h * 0.14], [s * 0.5, yb + h * 0.12]], lod === 0 ? 8 : 5, T.kind ? SURF.metal : SURF.ashlar, PART.trim, T.kind ? T.metal : mulc(col, 1.05), 0.9, 1);
+  if (lod === 0 && T.fear) k.cylinder(x, z, yb + h * 0.1, y0 + h + 0.4, 0.05, 0.0, 4, SURF.iron, PART.roof, IRON, {});
 }
 
-/**
- * A flying buttress in the plane z: a straight sloping top from the pier (xP, ytP) to the wall (xW, ytW) over a
- * quarter arch springing from the pier, `t` thick.
- */
-function flyer(k: KitBuilder, xP: number, ytP: number, xW: number, ytW: number, z: number, t: number, col: RGB, n: number): void {
-  const ybP = ytP - 2.3, ybW = ytW - 0.75;
-  const top = (s: number): [number, number] => [xP + (xW - xP) * s, ytP + (ytW - ytP) * s];
-  const bot = (s: number): [number, number] => { const ph = (s * Math.PI) / 2; return [xW + (xP - xW) * Math.cos(ph), ybP + (ybW - ybP) * Math.sin(ph)]; };
-  const sgn = Math.sign(xW - xP) || 1;
-  for (let i = 0; i < n; i++) {
-    const s0 = i / n, s1 = (i + 1) / n;
-    const [tx0, ty0] = top(s0), [tx1, ty1] = top(s1), [bx0, by0] = bot(s0), [bx1, by1] = bot(s1);
-    // the two faces
-    for (const [zz, f] of [[z + t / 2, 1], [z - t / 2, -1]] as const) {
-      const a: V3 = [bx0, by0, zz], b: V3 = [bx1, by1, zz], c: V3 = [tx1, ty1, zz], d: V3 = [tx0, ty0, zz];
-      if (f * sgn > 0) k.quad(a, b, c, d, SURF.ashlar, PART.wall, col, 0.85); else k.quad(b, a, d, c, SURF.ashlar, PART.wall, col, 0.85);
-    }
-    // top coping and the arch's soffit
-    const tq: [V3, V3, V3, V3] = [[tx0, ty0, z + t / 2], [tx1, ty1, z + t / 2], [tx1, ty1, z - t / 2], [tx0, ty0, z - t / 2]];
-    const bq: [V3, V3, V3, V3] = [[bx0, by0, z - t / 2], [bx1, by1, z - t / 2], [bx1, by1, z + t / 2], [bx0, by0, z + t / 2]];
-    if (sgn > 0) { k.quad(tq[0], tq[1], tq[2], tq[3], SURF.ashlar, PART.wall, mulc(col, 1.05), 0.95); k.quad(bq[0], bq[1], bq[2], bq[3], SURF.ashlar, PART.wall, col, 0.55); }
-    else { k.quad(tq[1], tq[0], tq[3], tq[2], SURF.ashlar, PART.wall, mulc(col, 1.05), 0.95); k.quad(bq[1], bq[0], bq[3], bq[2], SURF.ashlar, PART.wall, col, 0.55); }
-  }
-}
-
-/** a rose window facing +Z on the plane z: a disc of glass, a moulded stone ring, spokes of tracery and a hub */
+/** a sky-eye window facing +Z on the plane z: a disc of glass, a moulded stone ring, an inner ring, three rays above */
 function roseWindow(k: KitBuilder, cx: number, cy: number, z: number, r: number, col: RGB, lod: number, seed: number): void {
   const n = lod === 0 ? 16 : 8;
   const c = k.vert(cx, cy, z, 0, 0, 1, SURF.glass, PART.glass, GLASS, 1, seed);
@@ -1984,31 +1948,26 @@ function roseWindow(k: KitBuilder, cx: number, cy: number, z: number, r: number,
     const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
     k.beam([cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, z + 0.08], [cx + Math.cos(a1) * r, cy + Math.sin(a1) * r, z + 0.08], ring, 0.22, SURF.ashlar, PART.trim, mulc(col, 1.06), 0.9);
   }
-  if (lod > 0) return;
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    k.beam([cx + Math.cos(a) * r * 0.22, cy + Math.sin(a) * r * 0.22, z + 0.05], [cx + Math.cos(a) * r * 0.95, cy + Math.sin(a) * r * 0.95, z + 0.05], 0.08, 0.1, SURF.ashlar, PART.trim, col, 0.9);
-    // the cusped inner ring
-    const b = a + Math.PI / 12;
-    k.beam([cx + Math.cos(a) * r * 0.6, cy + Math.sin(a) * r * 0.6, z + 0.05], [cx + Math.cos(b + Math.PI / 12) * r * 0.6, cy + Math.sin(b + Math.PI / 12) * r * 0.6, z + 0.05], 0.07, 0.08, SURF.ashlar, PART.trim, col, 0.9);
+  // the faith's sign carved round it: three rays rising from the rim, the middle tallest (no spokes, no tracery)
+  for (const j of [-1, 0, 1]) {
+    const a = Math.PI / 2 + j * 0.42, len = r * (j === 0 ? 0.75 : 0.5);
+    k.beam([cx + Math.cos(a) * (r + 0.1), cy + Math.sin(a) * (r + 0.1), z + 0.08], [cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len), z + 0.08], 0.26, 0.22, SURF.ashlar, PART.trim, mulc(col, 1.06), 0.9);
   }
-  k.box(cx - r * 0.17, cy - r * 0.17, z, cx + r * 0.17, cy + r * 0.17, z + 0.14, SURF.ashlar, PART.trim, col, { skip: ['nz'] });
-}
-
-/** an arch drawn as a band of beams along a pointed curve (archivolts, the outline of a gablet), in the plane z */
-function archBand(k: KitBuilder, x0: number, x1: number, ys: number, h: number, z: number, w: number, col: RGB, n: number): void {
-  const left = archHalf(x0, x1, ys, h, n);
-  const right = left.map(([x, y]) => [x0 + x1 - x, y] as [number, number]).reverse();
-  const pts = [[x0, ys - 0.01] as [number, number], ...left, ...right.slice(1)];
-  for (let i = 0; i < pts.length - 1; i++) k.beam([pts[i][0], pts[i][1], z], [pts[i + 1][0], pts[i + 1][1], z], w, w * 0.9, SURF.ashlar, PART.trim, col, 0.88);
+  if (lod > 0) return;
+  // an inner ring: the eye the sky looks through
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+    k.beam([cx + Math.cos(a0) * r * 0.5, cy + Math.sin(a0) * r * 0.5, z + 0.05], [cx + Math.cos(a1) * r * 0.5, cy + Math.sin(a1) * r * 0.5, z + 0.05], 0.12, 0.12, SURF.ashlar, PART.trim, col, 0.9);
+  }
 }
 
 /**
- * Cathedral (Gothic): a cross plan — a tall nave with clerestory lancets over lean-to aisles, a transept with rose
- * windows in its gables, a polygonal apse of tall lancets — buttress piers along the aisles carrying flying buttresses to
- * the nave wall and crowned with pinnacles, and a west front of twin towers (belfries, spires on some) round a deep
- * portal of stepped arches under a rose window. Fearful peoples raise it in dark basalt with iron spikes; benevolent
- * ones in warm limestone with gilded finials.
+ * Sky hall (the form keeps the name 'cathedral'; it is NOT a Gothic church, no cross plan, spires or rose windows): a
+ * long hall, a tall nave with round-headed clerestory windows over lean-to aisles and a polygonal apse; a round sky-eye
+ * drum rises through the ridge, open to the sky and crowned with the sky-ring; buttress piers along the aisles carry
+ * fire posts; the front has twin flat-topped towers, each crowned with the ring, round a portal under a sky-eye window.
+ * Fearful peoples raise it in dark basalt with iron-spiked posts and lightning rings; benevolent ones in warm limestone
+ * with gilt rings and fire bowls.
  */
 function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
   const lod = spec.lod;
@@ -2062,38 +2021,19 @@ function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
   k.push(0, 0, 0, Math.PI / 2);
   const yR = gableRoof(k, naveLen, naveW, 0.8, naveH + ph, 0.98, 0.35, rf, { surf: SURF.ashlar, col: sc }, lod, T.fear);
   k.pop();
-  // transept: arms out past the aisles, gable ends with rose windows, lancets in the long walls
-  const tW = W + 5.2, trH = naveH - 0.6;
-  k.push(0, 0, zc);
-  boxWalls(k, {
-    W: tW, D: transD, H: trH, T: 0.8, y0: ph,
-    front: [lancet(tW / 2 - (W / 2 + 1.3), 1.1, 2.0, 8.0), lancet(tW / 2 + (W / 2 + 1.3), 1.1, 2.0, 8.0)],
-    back: [lancet(tW / 2 - (W / 2 + 1.3), 1.1, 2.0, 8.0), lancet(tW / 2 + (W / 2 + 1.3), 1.1, 2.0, 8.0)],
-    left: [lancet((transD - 1.6) / 2, 1.0, 1.8, 6.6)],
-    right: [lancet((transD - 1.6) / 2, 1.6, 1.2, 6.0, 'door')],
-  }, look, rng);
-  const yTR = gableRoof(k, tW, transD, 0.8, trH + ph, 0.98, 0.35, rf, { surf: SURF.ashlar, col: sc }, lod, T.fear);
-  for (const sx of [-1, 1]) {
-    k.push(sx * (tW / 2 + 0.01), 0, 0, sx * Math.PI / 2);
-    roseWindow(k, 0, ph + trH - 0.6, 0, Math.min(1.9, transD * 0.27), sc, lod, rng.float());
-    k.pop();
-  }
-  k.pop();
-  // the crossing: a slender lead flèche, or a square lantern tower
-  if (spec.style & 2) {
-    const cs = naveW * 0.8;
-    k.box(-cs / 2, yR - 1.2, zc - cs / 2, cs / 2, yR + 4.2, zc + cs / 2, SURF.ashlar, PART.wall, sc, { skip: ['bottom'] });
-    if (lod === 0) for (let q = 0; q < 4; q++) {
-      k.push(0, 0, zc, (q * Math.PI) / 2);
-      for (const dx of [-0.8, 0.8]) k.quad([dx - 0.35, yR + 1.4, cs / 2 + 0.01], [dx + 0.35, yR + 1.4, cs / 2 + 0.01], [dx + 0.35, yR + 3.5, cs / 2 + 0.01], [dx - 0.35, yR + 3.5, cs / 2 + 0.01], SURF.glass, PART.glass, GLASS, 1, rng.float());
+  // the sky-eye over the hall: a round drum rising through the ridge, a ring of tall windows, open to the sky at the top
+  // behind a moulded curb, the sky-ring standing over it
+  {
+    const dr = naveW * 0.46, dTop = yR + 4.6;
+    k.cylinder(0, zc, yR - 1.6, dTop, dr, dr * 0.94, lod === 0 ? 16 : 10, SURF.ashlar, PART.wall, sc, {});
+    k.cylinder(0, zc, dTop, dTop + 0.45, dr * 1.04, dr * 1.04, lod === 0 ? 16 : 10, SURF.ashlar, PART.trim, mulc(sc, 1.08), { top: true });
+    if (lod === 0) for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      k.push(Math.sin(a) * (dr * 0.97 + 0.02), 0, zc + Math.cos(a) * (dr * 0.97 + 0.02), a);
+      k.quad([-0.32, yR + 0.9, 0], [0.32, yR + 0.9, 0], [0.32, yR + 3.5, 0], [-0.32, yR + 3.5, 0], SURF.glass, PART.glass, GLASS, 1, rng.float());
       k.pop();
     }
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) pinnacle(k, sx * (cs / 2 - 0.3), zc + sz * (cs / 2 - 0.3), yR + 4.2, 2.6, 0.5, sc, T, lod);
-  } else {
-    k.push(0, 0, zc, Math.PI / 8);
-    k.cylinder(0, 0, yR - 0.4, yR + 2.2, 0.95, 0.85, 8, SURF.metal, PART.roof, roofCol, {});
-    k.cylinder(0, 0, yR + 2.2, yR + 10.5, 0.95, 0.03, 8, SURF.metal, PART.roof, roofCol, {});
-    k.pop();
+    skyRing(k, 0, dTop + 0.45 + 1.2 * 1.9, zc, 1.2, T.fear, T.kind, lod);
   }
   // the apse: a half polygon of tall lancets under a half cone
   const ar = naveW / 2, aH = naveH - 1.6, na = 5;
@@ -2122,7 +2062,7 @@ function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
     k.triangle([x0 * o, ph + aH, zE + (z0 - zE) * o], [x1 * o, ph + aH, zE + (z1 - zE) * o], [0, apexY, zE], rf.surf, PART.roof, roofCol, 0.9);
     k.triangle([x1 * o, ph + aH - 0.2, zE + (z1 - zE) * o], [x0 * o, ph + aH - 0.2, zE + (z0 - zE) * o], [0, apexY - 0.2, zE], SURF.planks, PART.roof, WOOD_DARK, 0.4);
   }
-  // buttress piers along the aisles, flying buttresses to the nave wall, pinnacles on the piers
+  // buttress piers along the aisles, a fire post on each
   for (let i = 0; i <= nb; i++) {
     const z = zA0 + i * bay;
     if (i === nb && z > zA1 - 0.5) continue;
@@ -2132,14 +2072,11 @@ function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
       // a weathered offset halfway up
       if (lod === 0) k.box(Math.min(x0, sx * (W / 2 + 1.3)), -1, z - 0.5, Math.max(x0, sx * (W / 2 + 1.3)), ph + aisleH * 0.45, z + 0.5, SURF.ashlar, PART.wall, mulc(sc, 0.93), { skip: ['bottom'], aoLow: 0.55 });
       pinnacle(k, sx * (W / 2 + 0.55), z, ph + aisleH + 2.6, 3.2, 0.62, sc, T, lod);
-      if (lod === 0) flyer(k, sx * (W / 2 + 0.1), ph + aisleH + 2.4, sx * (naveW / 2 + 0.02), ph + naveH - 1.0, z, 0.42, mulc(sc, 1.02), 5);
-      else k.beam([sx * (W / 2 + 0.1), ph + aisleH + 1.8, z], [sx * naveW / 2, ph + naveH - 1.4, z], 0.4, 0.6, SURF.ashlar, PART.wall, sc, 0.9);
     }
   }
   // the west front: twin towers round the portal, belfries, spires on some, the rose window between them
   const tH = naveH + 8.5, belfry = 5.2;
   const tz = zW - tw / 2 + 0.6;
-  const spires = (spec.style & 1) === 0 || T.fear;
   for (const sx of [-1, 1]) {
     const tx = sx * (naveW / 2 + tw / 2 - 0.3);
     k.push(tx, 0, tz);
@@ -2153,39 +2090,21 @@ function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
       pinnacle(k, cx * (tw / 2 - 0.2), cz * (tw / 2 - 0.2), ph + tH, 3.0, 0.55, sc, T, lod);
     }
     k.box(-tw / 2 - 0.1, ph + tH, -tw / 2 - 0.1, tw / 2 + 0.1, ph + tH + 0.25, tw / 2 + 0.1, SURF.ashlar, PART.trim, mulc(sc, 1.06), {});
-    if (spires) {
-      k.push(0, 0, 0, Math.PI / 8);
-      k.cylinder(0, 0, ph + tH + 0.25, ph + tH + 14, tw * 0.46, 0.04, 8, rf.surf, PART.roof, T.fear ? [0.055, 0.05, 0.046] : mulc(sc, 0.9), {});
-      k.pop();
-      if (lod === 0) {
-        if (T.fear) k.cylinder(0, 0, ph + tH + 13.8, ph + tH + 15.6, 0.07, 0.0, 4, SURF.iron, PART.roof, IRON, {});
-        else { k.beam([0, ph + tH + 13.8, 0], [0, ph + tH + 15.4, 0], 0.1, 0.1, SURF.metal, PART.roof, T.metal, 1); k.beam([-0.45, ph + tH + 14.9, 0], [0.45, ph + tH + 14.9, 0], 0.09, 0.09, SURF.metal, PART.roof, T.metal, 1); }
-      }
-    } else {
-      k.quad([-tw / 2, ph + tH + 0.25, tw / 2], [tw / 2, ph + tH + 0.25, tw / 2], [tw / 2, ph + tH + 0.25, -tw / 2], [-tw / 2, ph + tH + 0.25, -tw / 2], rf.surf, PART.roof, roofCol, 0.8);
-    }
+    k.quad([-tw / 2, ph + tH + 0.25, tw / 2], [tw / 2, ph + tH + 0.25, tw / 2], [tw / 2, ph + tH + 0.25, -tw / 2], [-tw / 2, ph + tH + 0.25, -tw / 2], rf.surf, PART.roof, roofCol, 0.8);
+    skyRing(k, 0, ph + tH + 0.25 + 1.1 * 1.9, 0, 1.1, T.fear, T.kind, lod);
     k.pop();
   }
-  // the portal: stepped archivolts round the door, a gablet over it; the rose window above
+  // the portal: jamb shafts under a moulded lintel, the sky-eye window above
   const zf = zW + 0.02;
   if (lod === 0) {
-    for (let i = 1; i <= 3; i++) {
-      const e = i * 0.22;
-      archBand(k, -portalW / 2 - e, portalW / 2 + e, portalH - portalW * 0.95, portalW * 0.95 + e * 0.9, zf + 0.06 * i, 0.2, mulc(sc, 1.04 + 0.02 * i), 6);
-    }
-    // jamb shafts under the archivolts
-    for (let i = 1; i <= 3; i++) for (const sx of [-1, 1]) k.cylinder(sx * (portalW / 2 + i * 0.22), zf + 0.06 * i, 0, portalH - portalW * 0.95, 0.1, 0.1, 6, SURF.ashlar, PART.trim, mulc(sc, 1.04 + 0.02 * i), {});
-    const gy = portalH - 0.2, gw = portalW / 2 + 1.0;
-    k.beam([-gw, gy, zf + 0.3], [0, gy + 1.9, zf + 0.3], 0.28, 0.3, SURF.ashlar, PART.trim, mulc(sc, 1.08), 0.9);
-    k.beam([gw, gy, zf + 0.3], [0, gy + 1.9, zf + 0.3], 0.28, 0.3, SURF.ashlar, PART.trim, mulc(sc, 1.08), 0.9);
-    pinnacle(k, -gw - 0.15, zf + 0.3, gy - 0.6, 2.2, 0.36, sc, T, lod);
-    pinnacle(k, gw + 0.15, zf + 0.3, gy - 0.6, 2.2, 0.36, sc, T, lod);
+    for (let i = 1; i <= 3; i++) for (const sx of [-1, 1]) k.cylinder(sx * (portalW / 2 + i * 0.22), zf + 0.06 * i, 0, portalH, 0.1, 0.1, 6, SURF.ashlar, PART.trim, mulc(sc, 1.04 + 0.02 * i), {});
+    k.box(-portalW / 2 - 1.0, portalH, zf, portalW / 2 + 1.0, portalH + 0.5, zf + 0.4, SURF.ashlar, PART.trim, mulc(sc, 1.08), {});
   }
   roseWindow(k, 0, ph + portalH + 3.6, zf, Math.min(2.2, naveW * 0.3), sc, lod, rng.float());
   // steps before the portal
   for (let i = 0; i < 3; i++) k.box(-portalW / 2 - 0.8 - 0.3 * (2 - i), -1, zW + 0.3, portalW / 2 + 0.8 + 0.3 * (2 - i), ph * (i + 1) / 3, zW + 0.3 + 0.4 * (3 - i), SURF.ashlar, PART.plinth, mulc(sc, 0.95), { skip: ['bottom'], aoLow: 0.7 });
   em.push({ p: [-portalW / 2 - 1.2, 0.9, zW + 1.2], kind: EMIT.brazier, size: 0.3 });
-  return { top: ph + tH + (spires ? 15.6 : 3.2), hw: W / 2 + 2.6, back: zE - ar - 0.6, front: zW + 1.6 };
+  return { top: Math.max(ph + tH + 0.25 + 1.1 * 4.05, yR + 5.05 + 1.2 * 4.05), hw: W / 2 + 2.6, back: zE - ar - 0.6, front: zW + 1.6 };
 }
 
 /** library: a columned portico, steps, a pediment, tall windows (domed in later eras) */

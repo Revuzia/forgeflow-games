@@ -145,6 +145,9 @@ export class Crowds {
    * window.__GENESIS_LIFE__.all[k].probeFlags2, one crowd per world drawn (empty in play: nothing reads it then).
    */
   readonly probeFlags2 = new Map<number, number>();
+  /** scripted captures: a sim AnimState by agent id drawn in place of the agent's own (hunt, herd, play, shelter...
+   *  on a fixture world that never sets them); empty in play */
+  readonly probeAnim = new Map<number, number>();
 
   constructor(shared: Record<string, IUniform>) {
     if (typeof window !== 'undefined') {
@@ -326,7 +329,7 @@ export class Crowds {
         let tr = this.tracks.get(id);
         const i3 = i * 3;
         const f2 = (A.flags2 ? A.flags2[i] : 0) | (this.probeFlags2.size ? this.probeFlags2.get(id) ?? 0 : 0);
-        const simAnim = livingAnim(A.anim[i], Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M, f2, id);
+        const simAnim = livingAnim(this.probeAnim.size ? this.probeAnim.get(id) ?? A.anim[i] : A.anim[i], Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M, f2, id);
         if (!tr) { tr = { id, anim: simAnim, prev: simAnim, at: -1e9, gx: 0, gy: 0, gz: 0, ground: 0, sx: -2, sy: 0, sz: 0, ox: 0, oy: 0, oz: 0, hd: A.heading[i] }; this.tracks.set(id, tr); }
         if (fresh && simAnim !== tr.anim) { tr.prev = tr.anim; tr.anim = simAnim; tr.at = realTime; }
         // motion smoothing: a new snapshot's disagreement with what was drawn becomes a decaying offset

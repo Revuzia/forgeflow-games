@@ -53,6 +53,11 @@ export function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: 
   }
 }
 
+/** distance-readability growth for land beasts (see update): from HERD_D0 metres, (d / HERD_D0)^HERD_K, capped */
+export const HERD_D0 = 110, HERD_K = 0.6, HERD_MAX = 2.6;
+/** forms that keep their size at any distance: swimmers, fliers, swarms and shell beds */
+const UNSCALED = new Set(['fish', 'whale', 'ray', 'bird', 'gull', 'vulture', 'duck', 'locust', 'bees', 'shells']);
+
 /** mesh length / height the generator builds at, to scale to the content size */
 function unitSize(look: AnimalLook): number {
   switch (look.form) {
@@ -175,7 +180,11 @@ export class Animals {
         if (d > range) continue;
         // (the far LOD from 85 m: a beast is ~14 px long there)
         const lod = d < 45 ? 0 : d < 85 ? 1 : 2;
-        const size = (look.size / unitSize(look)) * (M.scale[i] || 1);
+        // herds must read at gameplay distance (150-400 m: a sheep is 3-6 px there, a speck lost in the grass): land
+        // beasts grow slowly past HERD_D0 (x1.4 at 200 m, x1.8 at 300 m, at most x2.6), never within it, so up close
+        // every animal keeps its real size
+        const grow = d > HERD_D0 && !UNSCALED.has(look.form) ? Math.min(HERD_MAX, Math.pow(d / HERD_D0, HERD_K)) : 1;
+        const size = (look.size / unitSize(look)) * (M.scale[i] || 1) * grow;
         const cadence = Math.max(0.35, Math.min(2.5, Math.pow(1.0 / Math.max(0.05, look.size), 0.45))) * (0.9 + 0.2 * hashFloat(id, 7));
         const blend = Math.min(1, (realTime - tr.at) / 0.35);
         // (antlers, a bull moose's palms and a lion's mane are drawn on males only)
