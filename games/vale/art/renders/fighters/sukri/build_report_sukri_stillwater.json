@@ -5,12 +5,12 @@
   "parts": {
     "tris_hood": 1900,
     "tris_face": 1520,
-    "tris_torso": 1640,
+    "tris_torso": 1600,
     "tris_belt": 620,
-    "tris_skirt": 820,
-    "tris_pants": 750,
-    "tris_shins": 750,
-    "tris_boots": 758,
+    "tris_skirt": 790,
+    "tris_pants": 720,
+    "tris_shins": 720,
+    "tris_boots": 730,
     "tris_sleeve_L": 620,
     "tris_bracer_L": 520,
     "tris_sleeve_R": 620,
@@ -18,48 +18,48 @@
     "tris_hand_R": 780,
     "tris_hand_L": 720,
     "tris_plates": 2422,
-    "tris_cord": 330,
-    "tris_cord_swing": 240,
-    "tris_staff": 880,
+    "tris_cord": 300,
+    "tris_cord_swing": 210,
+    "tris_staff": 850,
     "tris_staff_grip": 220,
     "tris_ferrule": 160,
     "tris_cup_hook": 170,
     "tris_cup_rim": 400,
     "tris_cup_glass": 340,
     "tris_cup_core": 160,
-    "tris_reed_plates": 698,
-    "validate_sukri": "18398->18384"
+    "tris_reed_plates": 700,
+    "validate_sukri": "18152->18141"
   },
-  "uv_coverage": 0.593,
+  "uv_coverage": 0.596,
   "bake": {
-    "base": 6.1,
-    "rough_metal": 6.12,
-    "normal": 4.89,
-    "ao": 6.79,
-    "normal_fixed_px": 100370,
-    "projection": 68.28,
-    "pack_save": 68.6,
-    "total": 92.83
+    "base": 4.59,
+    "rough_metal": 3.14,
+    "normal": 1.66,
+    "ao": 1.77,
+    "normal_fixed_px": 102520,
+    "projection": 28.85,
+    "pack_save": 29.01,
+    "total": 40.52
   },
-  "tris": 18544,
-  "mesh_top_m": 1.647,
-  "glb_bytes_raw": 2805908,
+  "tris": 18301,
+  "mesh_top_m": 1.649,
+  "glb_bytes_raw": 2800672,
   "optimize": {
     "ok": true,
-    "before": 2805908,
-    "after": 1131164
+    "before": 2800672,
+    "after": 1127996
   },
-  "glb_bytes": 1131164,
+  "glb_bytes": 1127996,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_stillwater.glb (1105 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: sukri_stillwater_base 2048x2048 265K, sukri_stillwater_normal 512x512 69K, sukri_stillwater_orm 512x512 85K",
-      "  skinned meshes: sukri_accent(82v), sukri_stillwater(20551v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_stillwater.glb (1102 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_stillwater_base 2048x2048 259K, sukri_stillwater_normal 512x512 70K, sukri_stillwater_orm 512x512 86K",
+      "  skinned meshes: sukri_accent(82v), sukri_stillwater(20638v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_cord_swing shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 18544; bind-pose bounds (three units, Y up): 1.43 x 1.65 x 0.73; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
+      "  tris: 18301; bind-pose bounds (three units, Y up): 1.43 x 1.65 x 0.73; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -69,8 +69,8 @@
       "portrait": "art/out/fighters/sukri/sukri_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 16.07,
-      "portrait": 6.22
+      "splash": 7.12,
+      "portrait": 3.22
     }
   },
   "three_qa": {
@@ -84,7 +84,7 @@
       ],
       [
         0.644,
-        1.647,
+        1.649,
         0.33
       ]
     ],
@@ -94,7 +94,7 @@
     ],
     "headY": 1.164,
     "accentPct": 0.19,
-    "accentTopHalfPct": 57.7,
+    "accentTopHalfPct": 62.5,
     "heightPx1080": 87,
     "size": [
       2400,
@@ -102,24 +102,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/sukri/three_sukri_stillwater.png",
-    "seconds": 13.9,
+    "seconds": 7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 1.32,
-      "model": 60.1,
-      "lows_bind": 6.75,
-      "uv": 2.67,
-      "bake": 93.12,
-      "export": 0.23,
-      "optimize": 1.37,
-      "load_test": 0.23,
-      "render": 22.35,
-      "three_qa": 14.29
+      "rig": 0.0,
+      "materials": 0.12,
+      "model": 23.53,
+      "lows_bind": 6.66,
+      "uv": 2.54,
+      "bake": 40.71,
+      "export": 0.1,
+      "optimize": 0.7,
+      "load_test": 0.14,
+      "render": 10.37,
+      "three_qa": 7.24
     },
-    "total_s": 202.65
+    "total_s": 92.15
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56

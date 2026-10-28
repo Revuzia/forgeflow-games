@@ -996,7 +996,7 @@ def model(ctx) -> list:
 # head's crisp cracks) costs more bytes at the default q80 than the 1172 KiB budget leaves ──
 from common import export as _export  # noqa: E402
 
-Q_BASE = 66
+Q_BASE = 63                          # (polish 10-28: the paler, less saturated painting compresses ~35 KB larger: q66 -> 1171 KiB)
 _optimize0 = _export.optimize
 
 
@@ -1242,9 +1242,9 @@ _paint0 = project.paint
 KEY_LIGHT = unit((-0.45, -0.55, 0.70))                    # the concept's key: upper left of the front view
 BACK_KEY = unit((-0.35, 0.60, 0.72))                      # a second key over the back (the back view's light)
 SHEEN = unit((-0.2, -0.45, 0.87))
-# (value lift, 10-28: the bar a step paler and greyer, L* 66 -> 73 and sat 37 -> 27 %, so it parts from the
+# (value lift, 10-28: the bar a step paler and greyer, L* 66 -> 75 and sat 37 -> 24 %, so it parts from the
 # desaturated golden jars by value and hue, and the top band reads light from every side; brief wood L* 70)
-WALNUT = "#C8B092"                                        # oiled pale walnut (the concept's bar): warm, under 40 % sat
+WALNUT = "#CBB69A"                                        # oiled pale walnut (the concept's bar): warm, under 40 % sat
 WALNUT_GRAIN = "#7D5F44"                                  # its darker grain lines and knots
 # the yoke's props are not painted on the concept at the yoke's built length: they paint procedurally, in the
 # concept's palette and light (oiled pale walnut, wound leather, glossy amber lampresin)
@@ -1281,25 +1281,29 @@ DESPECKLE = ("cap", "mask", "coat", "straps", "belt", "skirt", "trousers", "boot
 #  * the marigold band (brief sections 0 and 5: every large area inside hue 25-50 deg stays under 40 % saturation,
 #    Dusk marigold #FF9A1F is the enemy colour): the review measured the jars #B57F3C / #A67538 (hue 33, sat 66-67 %)
 #    and the mask #A97B3E (sat 64 %) in game. The golden ochre is now a PALE golden ochre: the mask, fists and jars
-#    at 32-38 % saturation, the hue nudged from marigold's 33 deg to 36-38 deg (golden, not orange), lighter so the
-#    ochre still reads warm-gold and not khaki (the sixth review's complaint about the fists). The jars keep the most
-#    chroma of the three (38 %, a glaze) and sit a step under the mask in value; small areas (the lampresin in the
-#    mouths, the amber end caps, the incised lines) keep their richer colour.
+#    at 36-38.5 % saturation, the hue nudged from marigold's 33 deg to 36 deg (golden, not orange; at 40 deg and
+#    these saturations it turns khaki, the sixth review's complaint about the fists), a step lighter so the ochre
+#    still reads warm-gold. The jars keep the most chroma of the three (38.5 %, a glaze) and sit a step under the mask
+#    in value (lighter jars read cream in game: the first tries, #C4A77A and #BB9E73); small areas (glaze runs from
+#    the lip, the lampresin in the mouths, the amber end caps, the incised lines) keep a richer golden ochre.
 #  * the value lift (Wave B environment verify): with the shared character light Odrum measured top-25 L* 66 on
 #    RIFT, 62 on FRAY (seen from behind) -> the head, cap, jars, fists and the bar a clear step lighter (mask L* 62 ->
-#    74, cap 45 -> 62, jars 58 -> 70, bar 66 -> 73) and the jerkin lifted by height toward the shoulders (COAT_LIFT);
+#    70, cap 45 -> 66, jars 58 -> 65, bar 66 -> 75) and the jerkin lifted by height toward the shoulders (COAT_LIFT);
 #    the skirt, trousers and boots are untouched (the dark-feet end of the gradient)
-TONE = {"mask": ("#CCB289", 0.08), "cap": ("#AC9177", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
+TONE = {"mask": ("#C3A77E", 0.04), "cap": ("#B19C86", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
         "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#382B22", 0.30), "boots": ("#2C2018", 0.35)}
-POT_GLAZE = "#C4A77A"                     # the jars' pale golden-ochre glaze (L* 70, hue 37, sat 38 %; was #C07E32)
-POT_RIM = "#D0B890"                       # the carved window collar and the band: a lighter, carved ochre
-POT_LIP = "#CAAC81"                       # the rolled lip
-FIST = "#C6AD83"                          # the carved ochre fists: the mask's ochre (the concept paints them alike)
+POT_GLAZE = "#B69B70"                     # the jars' golden-ochre glaze (L* 65, hue 36, sat 38.5 %; was #C07E32)
+GLAZE_RUN = "#A87C40"                     # ... its runs down from the lip: deeper and richer (L* 55, sat 62 %, small)
+GLAZE_RUNS = 9                            # runs per jar
+GLAZE_RUN_W = 0.70                        # their opacity over the glaze
+POT_RIM = "#CCB289"                       # the carved window collar and the band: a lighter, carved ochre
+POT_LIP = "#C2A478"                       # the rolled lip
+FIST = "#BEA275"                          # the carved ochre fists: the mask's ochre (the concept paints them alike)
 # the jerkin's top light (value lift): each coat texel's luminance x the gain at its rest height (1.0 at the belt,
-# the shoulders and upper back ~1.7x: chocolate felt L* 34 under the belt -> ~44 on the shoulders), mixed this much
+# the shoulders and upper back 2.0x: chocolate felt L* 34 under the belt -> ~47 on the shoulders), mixed this much
 # toward its own grey as it lifts (felt sun-faded on the shoulders under the yoke, not copper)
-COAT_LIFT = ((1.08, 1.0), (1.20, 1.22), (1.32, 1.50), (1.42, 1.70))
-COAT_FADE = 0.22
+COAT_LIFT = ((1.08, 1.0), (1.20, 1.28), (1.32, 1.66), (1.42, 2.0))
+COAT_FADE = 0.25
 
 
 def _hex(h):
@@ -1454,6 +1458,19 @@ def _procedural(kind, name, P, N):
         # foot read as raw clay and flashed white whenever a jar tipped)
         col = _hex(POT_GLAZE)[None, :] * ((1.0 + 0.045 * NOISE(P, 7.0) + 0.02 * NOISE(P, 32.0))
                                           * (1.0 + 0.07 * _smooth(0.13, 0.21, zu) - 0.16 * _smooth(0.05, 0.0, zu)))[:, None]
+        # glaze runs (polish 10-28): a richer, deeper golden ochre that ran down from the lip over the shoulder and
+        # pooled in drops (narrow, ~7 % of the jar: the golden read in small areas while the large body stays under
+        # 40 % saturation; and the jar is no longer one flat colour in close-ups)
+        ang_j = np.arctan2(P[:, 1] - POT_Y, P[:, 0] - px)
+        rng = np.random.default_rng(5 if side == "R" else 9)
+        run = np.zeros(len(P))
+        for th, hw, zend in zip(rng.uniform(-math.pi, math.pi, GLAZE_RUNS), rng.uniform(0.045, 0.075, GLAZE_RUNS),
+                                rng.uniform(0.120, 0.200, GLAZE_RUNS)):
+            da = np.abs(np.arctan2(np.sin(ang_j - th), np.cos(ang_j - th)))
+            z_ = zend + 0.004 * NOISE(P, 30.0)
+            w_ = hw * (1.0 + 0.9 * np.exp(-((zu - z_ - 0.006) / 0.008) ** 2))       # the drop at the run's end
+            run = np.maximum(run, _smooth(w_, w_ * 0.55, da) * _smooth(z_ - 0.004, z_ + 0.004, zu) * (zu < 0.236))
+        col = col * (1.0 - GLAZE_RUN_W * run[:, None]) + _hex(GLAZE_RUN)[None, :] * (GLAZE_RUN_W * run[:, None])
         bandm = (zu > BAND_Z[0] - 0.001) & (zu < BAND_Z[1] + 0.001)                # the carved shoulder band
         col[bandm] = col[bandm] * 0.45 + _hex(POT_RIM)[None, :] * 0.55
         for zl in (BAND_Z[0] - 0.0035, BAND_Z[1] + 0.0035):                        # its two incised lines

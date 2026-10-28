@@ -634,7 +634,7 @@ def sculpts() -> list:
     torso.inter(HalfSpace((0, 0, 0.455), (0, 0, -1), 2.0), k=0.01)
     torso.ops = [(op, prim.displaced(painted(0.8, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in torso.ops]
-    part("torso", torso, "cloth", ("weights", "torso"), 1640, uvw=1.1)
+    part("torso", torso, "cloth", ("weights", "torso"), 1600, uvw=1.1)   # fp2: 1640 (GLB size)
 
     # BELT: the thick dark sash (7.5 cm) round the waist and a thin strap over it, a knot of torn ends at the front
     BY = 0.75
@@ -674,7 +674,7 @@ def sculpts() -> list:
         return np.maximum(d, -sl)
     skirt = Sculpt("skirt")
     skirt.add(Fn(skirt_d, (-0.48, -0.38, 0.24), (0.48, 0.38, 0.51)).displaced(painted(0.7, 0.02, 0.33, cloth_noise(0.0015, 10.0)), 0.009), k=0.0)
-    part("skirt", skirt, "cloth", ("weights", "skirt"), 820, 0.8)
+    part("skirt", skirt, "cloth", ("weights", "skirt"), 790, 0.8)   # fp2: 820 (GLB size)
 
     # BLOOMERS: the dark round trousers under the skirt (0.30 m wide per leg at the knee)
     pants = Sculpt("pants")
@@ -686,7 +686,7 @@ def sculpts() -> list:
     pants.inter(HalfSpace((0, 0, 0.185), (0, 0, -1), 2.0), k=0.012)
     pants.ops = [(op, prim.displaced(painted(0.8, 0.03, 0.17, cloth_noise(0.003, 8.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in pants.ops]
-    part("pants", pants, "under", ("weights", "pants"), 750)
+    part("pants", pants, "under", ("weights", "pants"), 720)   # fp2: 750 (GLB size)
 
     # SHINS: thick bandage wraps from the bloomers to the boots
     shins = Sculpt("shins")
@@ -695,7 +695,7 @@ def sculpts() -> list:
         shins.add(FlatCapsule(a_, b_, 0.108, 0.104, 0.100, 0.098, side=(1, 0, 0)).displaced(
             painted(1.2, 0.02, 0.10, wraps(0.0020, 0.034, b_, a_, 1.6)), 0.012), k=0.0)
     shins.inter(HalfSpace((0, 0, 0.060), (0, 0, -1), 2.0), k=0.004)      # (inside the boots, never under the ground)
-    part("shins", shins, "cloth2", ("weights", "shins"), 750, 0.8)
+    part("shins", shins, "cloth2", ("weights", "shins"), 720, 0.8)   # fp2: 750 (GLB size)
 
     # BOOTS: soft wide dark leather boots with rounded toes (8 degrees out)
     boots = Sculpt("boots")
@@ -712,7 +712,7 @@ def sculpts() -> list:
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     boots.ops = [(op, prim.displaced(cloth_noise(0.0025, 12.0), 0.0025) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in boots.ops]
-    part("boots", boots, "leather", ("weights", "boots"), 760)
+    part("boots", boots, "leather", ("weights", "boots"), 730)   # fp2: 760 (GLB size)
 
     # SLEEVES (cream wraps over the upper arms), BRACERS (dark leather wraps over the forearms), GLOVES
     for s, sh, el, wr, fo in (("L", SH_L, E_L, W_L, FO_L), ("R", SH_R, E_R, W_R, FO_R)):
@@ -733,7 +733,7 @@ def sculpts() -> list:
     out.append(glove("hand_L", *HAND_L_FRAME, "bone:hand.L", 720, curl=LEFT_CURL, grip=False, relaxed=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
-    out.append(mantle_part(1470))                       # fix pass 2: 1560 -> 1470 (GLB headroom)
+    out.append(mantle_part(1560))
 
     # THE CORD: a coil of weighted cord at the left hip, on the sash (Wrap Cast leaves from here)
     cord = Sculpt("cord")
@@ -747,7 +747,7 @@ def sculpts() -> list:
     cord.add(Tube([tail0, tail0 + np.array([0.004, -0.006, -0.040]), tail0 + np.array([0.0, -0.004, -0.075])], [0.009, 0.0085, 0.008], k=0.004), k=0.004)
     cord.add(Sphere(tail0 + np.array([0.0, -0.004, -0.098]), 0.021), k=0.004)        # the weight
     cord.add(Capsule(cc + n * 0.004 + np.array([0.0, 0.0, 0.050]), cc + n * 0.004 + np.array([0.0, 0.0, 0.085]), 0.009), k=0.006)   # tied to the sash
-    part("cord", cord, "rope", "bone:hips", 330, 0.5)
+    part("cord", cord, "rope", "bone:hips", 300, 0.5)   # fp2: 330 (GLB size)
 
     # THE THROWN LOOP (Wrap Cast; fix pass 1): a loop of the weighted cord on its own bone (x_cord_swing, a child of
     # the left hand). At rest it lies flat INSIDE the barrel, and every clip but cast_a3 keys its scale to 0.001, so
@@ -999,7 +999,7 @@ def staff_parts() -> list:
     shaft.sub(HalfSpace(t0 + d1 * HEAD_LEN - e * (HEAD_W - 0.012), -unit(d1 - e), 0.3), k=0.004)
     shaft.sub(Capsule(t0 + u * 0.115 + h * 0.020 - side * 0.05, t0 + u * 0.115 + h * 0.020 + side * 0.05, 0.016), k=0.006)
     shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)
-    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 880, 1.1))
+    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 850, 1.1))   # fp2: 880 (GLB size)
     grip = Sculpt("staff_grip")
     for a_, b_ in GRIPS:
         g0, g1 = staff_at(a_), staff_at(b_)
@@ -2899,8 +2899,10 @@ def clip_overrides(ctx) -> dict:
     # swings its loop up and round over the head once (f4-f9: x_cord_swing, _swing_schedule), throws overhand at f10
     # (a long throwing arm, the loop flung out ahead), follow-through down
     cord_w = tuple(float(v) for v in (CORD_C + np.array([0.02, -0.07, 0.04])))
+    # fix pass 2: the cord target as a shoulder-relative reach (an absolute Lpos does not blend with the rel targets
+    # either side of it: HandTarget.lerp switches at 50 %, so the hand jumped 0.85 m f3 -> f4)
     take = pose(torso=dict(hips=(0, 3, 0), spine=(2, 2, 0), chest=(4, 3, 0), head=(6, 4, 0)), hips=(0, 0.0, -0.02),
-                Lpos=cord_w, Lp=(0.9, 0.3, -0.3))
+                L=tuple(float(v) for v in (np.array(cord_w) - SH_L) / ARM), Lp=(0.9, 0.3, -0.3))
     up_ = pose(torso=dict(hips=(0, -2, 0), spine=(-2, -2, 0), chest=(-4, -3, -3), head=(-6, 2, 0)), hips=(0, 0.01, -0.01),
                L=(0.14, -0.04, 0.98), Lp=(0.9, 0.2, 0.3), fk=dict(hand_L=(0, 0, 0)))
     over = pose(torso=dict(hips=(-2, -3, 0), spine=(-3, -3, 0), chest=(-6, -4, -4), head=(-8, 3, 0)), hips=(0, 0.02, -0.01),

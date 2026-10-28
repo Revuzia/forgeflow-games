@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ilsheta_stillwater",
+    "fighter": "ilsheta",
+    "model": "assets/fighters/ilsheta/ilsheta_stillwater.glb",
+    "portrait": "assets/fighters/ilsheta/ilsheta_stillwater_portrait.png",
+    "splash": "assets/fighters/ilsheta/ilsheta_stillwater_splash.png"
+  },
+  {
+    "id": "ilsheta_first_bell",
+    "fighter": "ilsheta",
+    "model": "assets/fighters/ilsheta/ilsheta_first_bell.glb",
+    "portrait": "assets/fighters/ilsheta/ilsheta_first_bell_portrait.png",
+    "splash": "assets/fighters/ilsheta/ilsheta_first_bell_splash.png"
+  }
+]
