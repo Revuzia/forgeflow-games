@@ -37,6 +37,14 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              triggered passive (items, boons, team buffs, units) has a present.sfx / hitSfx or its 'proc.<kind>' role
   ambience   every map (content/maps, read only) has 4-6 emitters 'ambient.<map>.<source>' → rendered ambience-bus
              loops: at most one 'bed' (not spatial), every other source an art.ambient group of that map with points
+  instant    (final parity AUD-m1) every recipe flagged `instant` (a cue for an instant event: a blink, a level-up, a
+             respawn, a summon, a pickup, a ping …) lands on its frame: its first sample within 20 dB of its peak comes
+             by INSTANT_MS (the 5 ms codec lead included); swells belong to deliberate wind-ups only
+  impact     (final parity AUD-4) the impacts read on a laptop: every IMPACT_CUES file and every control-status cue loses
+             at most LAPTOP_MAX_LU of max momentary loudness through a 4th-order 220 Hz high-pass (a small speaker's
+             roll-off); the hits and the crit carry a contact transient (> 2 kHz share of the first 30 ms after the
+             -40 dB onset >= TRANSIENT_MIN, the frequent hits <= TRANSIENT_SOFT_TOP: a soft top), the crit sharper
+             than either hit on average, and stun / root an attack edge
   kits       fighter identity (final parity AUD-1): every fighter has its whole kit f_<fighter>_<slot> (attack_swing,
              attack_hit, a1, a2, a3, ult_windup, ult_release, passive, death, call), rendered; resolved as the engine
              does (kit cue, else the catalog's present, else the generic role), no attack or ult cue is shared by two
@@ -209,6 +217,10 @@ def render(cid: str, files: list[str]) -> list[dict]:
             row['seam'] = seam_ratio(dec)
             if row['seam'] > 6.0:
                 flags.append('SEAM')
+        if spec.instant:
+            row['on20'] = env_onset_ms(dec, -20.0)
+            if row['on20'] > INSTANT_MS:
+                flags.append(f"LATE{row['on20']:.0f}ms")
         row.update(m4a_kb=os.path.getsize(m4a) / 1024, m4a_got=float(measure(dm, kind, spec.loop)),
                    m4a_tp=float(L.true_peak(dm, circular=spec.loop)), m4a_len=int(dm.shape[1]))
         if row['m4a_len'] != dec.shape[1]:
@@ -420,10 +432,89 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     pf, prep = proc_gate(contract)
     af, arep = ambience_gate(contract)
     kf, krep = kit_gate(contract)
+    xf, xrep = impact_gate(contract, rep.get('controlKinds', []), rep.get('bound', {}))
     rep['procs'] = prep
     rep['ambience'] = arep
     rep['kits'] = krep
-    return fails + pf + af + kf, rep
+    rep['impact'] = xrep
+    return fails + pf + af + kf + xf, rep
+
+
+# ── instant cues and impacts on a laptop (final parity AUD-m1, AUD-4) ────────────────────────────────
+INSTANT_MS = 15.0        # an instant event's cue: first sample within 20 dB of its peak by this (5 ms lead included)
+LAPTOP_MAX_LU = 3.0      # max momentary loudness lost through a 4th-order 220 Hz high-pass
+IMPACT_CUES = ('c_hit_phys_light', 'c_hit_phys_heavy', 'c_hit_true', 'c_crit', 'c_slam', 'c_monster_hit')
+TRANSIENT_MIN = {'c_hit_phys_light': 0.07, 'c_hit_phys_heavy': 0.07, 'c_crit': 0.07, 'c_stun': 0.015, 'c_root': 0.015}
+TRANSIENT_SOFT_TOP = 0.30    # … and at most this for the frequent hits (the documented soft top)
+SOFT_TOP_CUES = ('c_hit_phys_light', 'c_hit_phys_heavy')
+
+
+def env_onset_ms(x: np.ndarray, rel_db: float) -> float:
+    """ms from the file's start (codec lead included) until the sample envelope (max |x| over channels) first comes
+    within `rel_db` of its peak."""
+    e = np.max(np.abs(stereo(x)), axis=0)
+    return float(np.argmax(e > e.max() * 10 ** (rel_db / 20)) / SR * 1000.0)
+
+
+def transient_share(x: np.ndarray, lo: float = 2000.0, win: float = 0.03) -> float:
+    """Share of power above `lo` in the first `win` s after the -40 dB onset (rectangular window, mid channel)."""
+    e = np.max(np.abs(stereo(x)), axis=0)
+    i = int(np.argmax(e > e.max() * 0.01))
+    m = stereo(x).mean(axis=0)[i:i + ns_(win)]
+    P = np.abs(np.fft.rfft(m)) ** 2
+    f = np.fft.rfftfreq(m.size, 1 / SR)
+    return float(P[f >= lo].sum() / (P[f > 20].sum() + 1e-30))
+
+
+def laptop_loss(x: np.ndarray) -> float:
+    """LU of max momentary loudness lost through a 4th-order Butterworth 220 Hz high-pass (a laptop speaker)."""
+    from synth import filters as F
+    y = F.apply(stereo(x), [F.highpass(220.0, 0.5412), F.highpass(220.0, 1.3066)])
+    return float(L.max_momentary(x) - L.max_momentary(y))
+
+
+def impact_gate(contract: dict, ctrl: list[str], bound: dict) -> tuple[list[str], dict]:
+    """The instant and impact gates (see the module doc) over the shipped files; returns (failures, report)."""
+    fails: list[str] = []
+    cues = contract['cues']
+    rep: dict = {'instant': {}, 'laptop': {}, 'transient': {}}
+
+    def files(c: str) -> list[np.ndarray]:
+        out = []
+        for ref in cues.get(c, {}).get('files', []):
+            path = out_path(ref)
+            if not os.path.exists(path):
+                fails.append(f'impact: {c} is not rendered ({path})')
+                continue
+            out.append(decode(path))
+        return out
+    for c in sorted(k for k, sp in REGISTRY.items() if sp.instant and k in cues):
+        on = [env_onset_ms(x, -20.0) for x in files(c)]
+        rep['instant'][c] = round(max(on), 1) if on else None
+        if on and max(on) > INSTANT_MS:
+            fails.append(f"instant: {c} is an instant event's cue but reaches -20 dB of its peak at {max(on):.0f} ms (> {INSTANT_MS:g} ms)")
+    ctrl_cues = sorted({bound[k] for k in ctrl if bound.get(k) in cues})
+    for c in list(IMPACT_CUES) + [x for x in ctrl_cues if x not in IMPACT_CUES]:
+        xs = files(c)
+        if not xs:
+            continue
+        loss = [laptop_loss(x) for x in xs]
+        rep['laptop'][c] = round(max(loss), 2)
+        if max(loss) > LAPTOP_MAX_LU:
+            fails.append(f'impact: {c} loses {max(loss):.1f} LU through a 220 Hz laptop roll-off (> {LAPTOP_MAX_LU:g})')
+        if c in TRANSIENT_MIN:
+            hf = [transient_share(x) for x in xs]
+            rep['transient'][c] = {'min': round(min(hf), 3), 'mean': round(float(np.mean(hf)), 3), 'max': round(max(hf), 3)}
+            if min(hf) < TRANSIENT_MIN[c]:
+                fails.append(f'impact: {c} has {min(hf):.3f} of its first 30 ms above 2 kHz (< {TRANSIENT_MIN[c]:g}): no contact transient')
+            if c in SOFT_TOP_CUES and max(hf) > TRANSIENT_SOFT_TOP:
+                fails.append(f'impact: {c} has {max(hf):.3f} of its first 30 ms above 2 kHz (> {TRANSIENT_SOFT_TOP:g}): the soft top is gone')
+    tr = rep['transient']
+    if 'c_crit' in tr and any(h in tr for h in SOFT_TOP_CUES):
+        top = max(tr[h]['mean'] for h in SOFT_TOP_CUES if h in tr)
+        if tr['c_crit']['mean'] <= top:
+            fails.append(f"impact: c_crit's contact ({tr['c_crit']['mean']:.3f}) is not sharper than the hits' ({top:.3f})")
+    return fails, rep
 
 
 # ── fighter identity (final parity AUD-1) ────────────────────────────────────────────────────────
@@ -853,10 +944,16 @@ def print_gates(fails: list[str], rep: dict) -> None:
         near = '  '.join(f"{s.replace('attack_', 'atk_').replace('ult_', 'u_')} {kr['nearest'].get(f'{f}.{s}', ['-', float('nan')])[1]:5.1f}"
                          for s in ID_SLOTS)
         print(f"  {f:9s} {x['kit']:2d}/{len(KIT_SLOTS)}  nearest dB: {near}")
+    ip = rep.get('impact', {})
+    late = {c: v for c, v in ip.get('instant', {}).items() if v is not None}
+    print(f"instant gate: {len(late)} instant cues, slowest {max(late.values(), default=0):.1f} ms to -20 dB (<= {INSTANT_MS:g})")
+    print(f"impact gate: laptop loss (<= {LAPTOP_MAX_LU:g} LU) " + ', '.join(f'{c} {v:.1f}' for c, v in ip.get('laptop', {}).items()))
+    print('  contact > 2 kHz in 30 ms: ' + ', '.join(f"{c} {v['min']:.3f}-{v['max']:.3f}" for c, v in ip.get('transient', {}).items()))
     print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
                  f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart;'
                  f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points;'
-                 f' every fighter a whole kit of its own, >= {ID_MIN_DIST_DB:g} dB from the others; fast cues >= {RR_MIN} variants'))
+                 f' every fighter a whole kit of its own, >= {ID_MIN_DIST_DB:g} dB from the others; fast cues >= {RR_MIN} variants;'
+                 f' instant cues land <= {INSTANT_MS:g} ms; impacts lose <= {LAPTOP_MAX_LU:g} LU on a laptop, with a contact transient'))
 
 
 if __name__ == '__main__':

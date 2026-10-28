@@ -36,22 +36,21 @@ STINGK = dict(tail_floor_db=-56.0, fade_out=0.06)
 
 
 # ── events about you ─────────────────────────────────────────────────────────────────────────────
-@cue('m_level_up', 'match', ('m', -18.0), (0.8, 2.2), **EVTK)
+@cue('m_level_up', 'match', ('m', -18.0), (0.8, 2.2), instant=True, **EVTK)
 def m_level_up(v: int):
-    """Level up (tokens: E5-B4 on dawnglass): a shimmer drawn in, then E5 falling to B4, lit from above
-    by a soft E6 shimmer and a rising sparkle."""
+    """Level up (tokens: E5-B4 on dawnglass): E5 struck on the level's frame, falling to B4, lit from above
+    by a soft E6 shimmer and a rising sparkle (an instant event: no pre-roll, final parity AUD-m1)."""
     r = R('m_level_up')
-    L = Layers(1.5)
-    L.add(rev(shimmer('B5', 0.18, 0.6, decay=0.15, seed='lu'), 0.02), 0.0, peak_db=-12)
-    L.add(glass('E5', 1.3, 0.9, decay=0.45, bright=0.85, seed='lu1'), 0.12, peak_db=0)
-    L.add(glass('B4', 1.3, 0.85, decay=0.5, bright=0.8, seed='lu2'), 0.26, peak_db=-1)
-    L.add(shimmer('E6', 1.0, 0.5, decay=0.6, index=2.0, seed='lu'), 0.12, peak_db=-12)
-    L.add(S.sparkle(r, 0.5, 10, 88, 100, t60=0.12, rise=True), 0.12, peak_db=-15)
-    L.add(S.thump(0.25, 200, 110, 0.02, 0.15, 1.2), 0.12, peak_db=-14)
+    L = Layers(1.4)
+    L.add(glass('E5', 1.3, 0.9, decay=0.45, bright=0.85, seed='lu1'), 0.0, peak_db=0)
+    L.add(glass('B4', 1.3, 0.85, decay=0.5, bright=0.8, seed='lu2'), 0.14, peak_db=-1)
+    L.add(shimmer('E6', 1.0, 0.5, decay=0.6, index=2.0, seed='lu'), 0.0, peak_db=-12)
+    L.add(S.sparkle(r, 0.5, 10, 88, 100, t60=0.12, rise=True), 0.0, peak_db=-15)
+    L.add(S.thump(0.25, 200, 110, 0.02, 0.15, 1.2), 0.0, peak_db=-14)
     return finish(room(L.out(), 'plate', wet=0.18), hp_hz=90, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_takedown', 'match', ('m', -16.0), (0.6, 1.8), **EVTK)
+@cue('m_takedown', 'match', ('m', -16.0), (0.6, 1.8), instant=True, **EVTK)
 def m_takedown(v: int):
     """You took a fighter down: a punch, a bright A4 hourbell and an E6 glass 'ching' a beat after, with
     shards flying. Satisfying, quick, unmistakably yours."""
@@ -66,7 +65,7 @@ def m_takedown(v: int):
     return finish(room(L.out(), 'plate', wet=0.15), hp_hz=40, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('m_ally_down', 'match', ('m', -18.0), (0.8, 2.4), **EVTK)
+@cue('m_ally_down', 'match', ('m', -18.0), (0.8, 2.4), instant=True, **EVTK)
 def m_ally_down(v: int):
     """An ally fell: a soft, darkened D4 bell with a B4 glass above it and breath falling away."""
     L = Layers(1.6)
@@ -77,7 +76,7 @@ def m_ally_down(v: int):
     return finish(room(L.out(), 'hall', wet=0.12), hp_hz=60, lp_hz=8000)
 
 
-@cue('m_self_down', 'match', ('m', -16.0), (1.5, 3.2), **EVTK)
+@cue('m_self_down', 'match', ('m', -16.0), (1.5, 3.2), instant=True, **EVTK)
 def m_self_down(v: int):
     """You died: a muffled blow, a low D3 bell whose brightness closes as the world goes dark, a held B4
     glass (the defeat colour), breath falling from 2.4 kHz to 180 Hz and two slow heartbeats."""
@@ -91,22 +90,18 @@ def m_self_down(v: int):
     return finish(room(L.out(), 'hall', wet=0.16), hp_hz=35, lp_hz=7000)
 
 
-@cue('m_respawn', 'match', ('m', -18.0), (1.0, 2.4), **EVTK)
+@cue('m_respawn', 'match', ('m', -18.0), (1.0, 2.4), instant=True, **EVTK)
 def m_respawn(v: int):
-    """Respawn: light gathering (a glass chord drawn in backwards and breath rising) that strikes
-    D5-A5-D6 forward, with an A5 shimmer and sparkle. Re-lit."""
+    """Respawn: re-lit on the frame you are back (an instant event, final parity AUD-m1): D5-A5-D6 struck
+    forward in quick succession, a breath of light rising through them, an A5 shimmer and sparkle."""
     r = R('m_respawn')
-    L = Layers(1.6)
-    ch = Layers(0.6)
-    for i, note in enumerate(('D5', 'A5')):
-        ch.add(glass(note, 0.6, 0.7, decay=0.35, seed=f'rs{i}'), 0.0, peak_db=-2 * i)
-    L.add(rev(ch.out(), 0.05), 0.0, peak_db=-5)
-    L.add(breath(0.5, 400, 3500, shape='swell', q=1.4, seed='rs', vel=0.6), 0.0, peak_db=-11)
-    t = 0.5
+    L = Layers(1.2)
+    L.add(breath(0.45, 600, 3500, shape='swell', q=1.4, seed='rs', vel=0.6), 0.0, peak_db=-13)
+    t = 0.0
     for i, (note, g) in enumerate((('D5', 0), ('A5', -2), ('D6', -5))):
-        L.add(glass(note, 1.2, 0.85, decay=0.45, bright=0.8, seed=f'rf{i}'), t + 0.01 * i, peak_db=g, pan=(-0.2, 0.2, 0.0)[i])
+        L.add(glass(note, 1.2, 0.85, decay=0.45, bright=0.8, seed=f'rf{i}'), t + 0.05 * i, peak_db=g, pan=(-0.2, 0.2, 0.0)[i])
     L.add(shimmer('A5', 1.0, 0.6, decay=0.6, index=2.5, seed='rs'), t, peak_db=-10)
-    L.add(S.sparkle(r, 0.6, 12, 86, 102, t60=0.14, rise=True), t - 0.05, peak_db=-15)
+    L.add(S.sparkle(r, 0.6, 12, 86, 102, t60=0.14, rise=True), t, peak_db=-15)
     L.add(S.thump(0.2, 180, 100, 0.015, 0.12, 1.2), t, peak_db=-14)
     return finish(room(L.out(), 'plate', wet=0.18), hp_hz=100, eq=[('peak', 3300, -2, 0.8)])
 
@@ -139,21 +134,22 @@ def m_recall_start(v: int):
     return finish(room(L.out(), 'glass', wet=0.12), hp_hz=120, eq=[('peak', 3000, -2.5, 0.8)])
 
 
-@cue('m_recall_done', 'match', ('m', -19.0), (0.8, 2.0), **EVTK)
+@cue('m_recall_done', 'match', ('m', -19.0), (0.8, 2.0), instant=True, **EVTK)
 def m_recall_done(v: int):
-    """Home: a breath rushing in, then a D5-A5-E6 glass bloom with an A6 shimmer and sparkle settling."""
+    """Home, on the frame you arrive (an instant event, final parity AUD-m1): a D5-A5-E6 glass bloom with an A6
+    shimmer and sparkle settling, the breath of the trip exhaling under it."""
     r = R('m_recall_done')
-    L = Layers(1.4)
-    L.add(breath(0.25, 500, 3000, shape='swell', q=1.4, seed='rd'), 0.0, peak_db=-8)
+    L = Layers(1.2)
+    L.add(breath(0.3, 3000, 600, shape='breath', q=1.4, seed='rd', peak_at=0.02), 0.0, peak_db=-10)
     for i, note in enumerate(('D5', 'A5', 'E6')):
-        L.add(glass(note, 1.1, 0.8, decay=0.4, seed=f'rd{i}'), 0.22 + 0.01 * i, peak_db=-2 * i, pan=(-0.25, 0.25, 0.0)[i])
-    L.add(shimmer('A6', 0.8, 0.5, decay=0.5, index=2.0, seed='rd'), 0.22, peak_db=-13)
-    L.add(drum('D2', 0.4, 'ghost', seed='rd', dur=0.4, t60=0.25), 0.22, peak_db=-12)
-    L.add(S.sparkle(r, 0.6, 10, 86, 100, t60=0.14, decay_level=1.2), 0.25, peak_db=-15)
+        L.add(glass(note, 1.1, 0.8, decay=0.4, seed=f'rd{i}'), 0.01 * i, peak_db=-2 * i, pan=(-0.25, 0.25, 0.0)[i])
+    L.add(shimmer('A6', 0.8, 0.5, decay=0.5, index=2.0, seed='rd'), 0.0, peak_db=-13)
+    L.add(drum('D2', 0.4, 'ghost', seed='rd', dur=0.4, t60=0.25), 0.0, peak_db=-12)
+    L.add(S.sparkle(r, 0.6, 10, 86, 100, t60=0.14, decay_level=1.2), 0.03, peak_db=-15)
     return finish(room(L.out(), 'plate', wet=0.18), hp_hz=100, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_gleam', 'match', ('m', -21.0), (0.1, 0.4), variants=3, **EVTK)
+@cue('m_gleam', 'match', ('m', -21.0), (0.1, 0.4), variants=3, instant=True, **EVTK)
 def m_gleam(v: int):
     """Gleam earned (every last hit): two quick glints of light, A5 then D6, 35 ms apart, like small coins
     of glass. Pitched low enough that a farming lane of them never tires the ear. Three round-robin takes (a wave
@@ -165,16 +161,16 @@ def m_gleam(v: int):
     return finish(spread(L.out(), 0.3), hp_hz=400, eq=[('peak', 3300, -3, 0.8), ('high', 8000, -3)])
 
 
-@cue('m_sunmote', 'match', ('m', -19.0), (0.5, 1.6), **EVTK)
+@cue('m_sunmote', 'match', ('m', -19.0), (0.5, 1.6), instant=True, **EVTK)
 def m_sunmote(v: int):
-    """Sunmote picked up: a warm rush in and three glass notes climbing D5-A5-D6 over a soft harp D4,
-    with an A6 shimmer: light poured into you."""
-    L = Layers(1.0)
-    L.add(breath(0.16, 600, 3000, shape='swell', q=1.4, seed='sm', vel=0.6), 0.0, peak_db=-10)
-    L.add(harp('D4', 0.8, 0.5, bright=0.4, seed='sm'), 0.06, peak_db=-12)
+    """Sunmote picked up: three glass notes climbing D5-A5-D6 from the pickup's frame over a soft harp D4, a warm
+    rush rising with them, an A6 shimmer: light poured into you (an instant event, final parity AUD-m1)."""
+    L = Layers(0.9)
+    L.add(breath(0.16, 600, 3000, shape='swell', q=1.4, seed='sm', vel=0.6), 0.0, peak_db=-14)
+    L.add(harp('D4', 0.8, 0.5, bright=0.4, seed='sm'), 0.0, peak_db=-12)
     for i, note in enumerate(('D5', 'A5', 'D6')):
-        L.add(glass(note, 0.8, 0.8, decay=0.25, seed=f'sm{i}'), 0.06 + 0.05 * i, peak_db=-1 - 0.5 * i, pan=-0.2 + 0.2 * i)
-    L.add(shimmer('A6', 0.6, 0.5, decay=0.4, index=2.0, seed='sm'), 0.16, peak_db=-12)
+        L.add(glass(note, 0.8, 0.8, decay=0.25, seed=f'sm{i}'), 0.05 * i, peak_db=-1 - 0.5 * i, pan=-0.2 + 0.2 * i)
+    L.add(shimmer('A6', 0.6, 0.5, decay=0.4, index=2.0, seed='sm'), 0.1, peak_db=-12)
     return finish(room(L.out(), 'glass', wet=0.14), hp_hz=100, eq=[('peak', 3300, -2, 0.8)])
 
 
@@ -190,7 +186,7 @@ def m_enemy_windup(v: int):
 
 
 # ── pings (ui bus) ───────────────────────────────────────────────────────────────────────────────
-@cue('m_ping_alert', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_alert', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_alert(v: int):
     """Ping 'look here': ONE bright A6 glass strike with an FM glint, echoing left-right twice."""
     L = Layers(0.5)
@@ -201,7 +197,7 @@ def m_ping_alert(v: int):
     return finish(x, hp_hz=300, eq=[('peak', 3300, -3, 0.8)])
 
 
-@cue('m_ping_danger', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_danger', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_danger(v: int):
     """Ping 'danger': THREE fast pulses of a dissonant F5+B5 FM dyad over a clay knock. Urgent, rough."""
     r = R('m_ping_danger')
@@ -215,7 +211,7 @@ def m_ping_danger(v: int):
     return finish(room(L.out(), 'small', wet=0.08), hp_hz=90, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('m_ping_onmyway', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_onmyway', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_onmyway(v: int):
     """Ping 'on my way': a quick FOUR-note dial-harp run up D5-E5-G5-A5 with air moving past."""
     r = R('m_ping_onmyway')
@@ -227,7 +223,7 @@ def m_ping_onmyway(v: int):
     return finish(room(L.out(), 'wood', wet=0.1), hp_hz=150, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_ping_missing', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_missing', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_missing(v: int):
     """Ping 'enemy missing': a question. G5 glass, then a tone that bends up C6 → D6 and fades into a
     shade breath (they went into the dark)."""
@@ -238,7 +234,7 @@ def m_ping_missing(v: int):
     return finish(room(L.out(), 'glass', wet=0.12), hp_hz=200, lp_hz=8000, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_ping_assist', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_assist', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_assist(v: int):
     """Ping 'assist me': TWO hourbells rising D5 → A5, a call for help that carries."""
     L = Layers(1.1)
@@ -248,7 +244,7 @@ def m_ping_assist(v: int):
     return finish(room(L.out(), 'plate', wet=0.12), hp_hz=200, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_ping_push', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_push', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_push(v: int):
     """Ping 'push': a frame-drum march, tek-tek-DOUM, with a D5 harp and A5 glass on the downbeat."""
     L = Layers(0.7)
@@ -260,20 +256,20 @@ def m_ping_push(v: int):
     return finish(room(L.out(), 'small', wet=0.1), hp_hz=50, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_ping_vision', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_vision', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_vision(v: int):
-    """Ping 'vision': light opening like an eye. A shimmer drawn in backwards blooms on G#6 (the Lydian
-    colour), a D6 glass under it and a little sparkle."""
+    """Ping 'vision': light opening like an eye, on the ping's frame (final parity AUD-m1). A fast FM glint
+    opening upward G#5 → G#6 into a bloom on G#6 (the Lydian colour), a D6 glass under it and a little sparkle."""
     r = R('m_ping_vision')
-    L = Layers(0.8)
-    L.add(rev(shimmer('G#6', 0.2, 0.6, decay=0.2, index=2.5, seed='pv'), 0.02), 0.0, peak_db=-5)
-    L.add(shimmer('G#6', 0.6, 0.8, decay=0.4, index=3.0, seed='pvx'), 0.19, peak_db=0)
-    L.add(glass('D6', 0.6, 0.7, decay=0.25, seed='pv'), 0.19, peak_db=-5)
-    L.add(S.sparkle(r, 0.35, 6, 90, 100, t60=0.1, pcs=(2, 8, 9)), 0.2, peak_db=-15)
+    L = Layers(0.7)
+    L.add(fm_tone(hz('G#5'), hz('G#6'), 0.06, ratio=3.5, i0=0.6, i1=2.2, t60=0.08, curve=-1.5), 0.0, peak_db=-4)
+    L.add(shimmer('G#6', 0.6, 0.8, decay=0.4, index=3.0, seed='pvx'), 0.035, peak_db=0)
+    L.add(glass('D6', 0.6, 0.7, decay=0.25, seed='pv'), 0.0, peak_db=-5)
+    L.add(S.sparkle(r, 0.35, 6, 90, 100, t60=0.1, pcs=(2, 8, 9)), 0.04, peak_db=-15)
     return finish(room(L.out(), 'glass', wet=0.14), hp_hz=300, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_ping_objective', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_objective', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_objective(v: int):
     """Ping 'objective': ONE open fifth, D4+A4, struck on the hourbell over a doum, a D5 glass on top."""
     L = Layers(1.3)
@@ -284,7 +280,7 @@ def m_ping_objective(v: int):
     return finish(room(L.out(), 'plate', wet=0.12), hp_hz=50, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_ping_retreat', 'ping', ('m', -18.0), PING, **PINGK)
+@cue('m_ping_retreat', 'ping', ('m', -18.0), PING, instant=True, **PINGK)
 def m_ping_retreat(v: int):
     """Ping 'retreat': THREE notes falling fast, A5-E5-A4 (glass on bell), a breath swept down under them."""
     L = Layers(0.9)

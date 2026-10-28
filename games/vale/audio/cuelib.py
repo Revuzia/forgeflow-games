@@ -36,6 +36,7 @@ class CueSpec:
     clip_drive: float = 1.0               # >1 = soft-clip density before the limiter
     loop: bool = False
     max_gr_db: float = 9.0                # limiter reduction we accept before reporting
+    instant: bool = False                 # a cue for an instant event: lands on its frame (build.py INSTANT gate)
     notes: str = ''
     extra: dict = field(default_factory=dict)
 

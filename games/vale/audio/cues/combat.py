@@ -301,17 +301,18 @@ def c_cast_lumen(v: int):
     return finish(room(L.out(), 'glass', wet=0.12), hp_hz=200, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_cast_shade', 'combat', ('m', -18.5), CAST, **CASTK)
+@cue('c_cast_shade', 'combat', ('m', -18.5), CAST, instant=True, **CASTK)
 def c_cast_shade(v: int):
-    """Shade cast: an inhale (breath swelling 400 → 1600 Hz), then a hollow D3 tube, bubbling ink and the
-    exhale falling away. Out means harm: it ends lower than it began."""
+    """Shade cast, on the cast's frame (final parity AUD-m1): a snatched inhale (breath 400 → 1600 Hz in 12 ms)
+    straight into a hollow D3 tube, bubbling ink and the exhale falling away. Out means harm: it ends lower than it
+    began."""
     r = R('c_cast_shade', v=v)
-    L = Layers(0.7)
-    L.add(breath(0.2, 400, 1600, shape='swell', q=2.0, seed=f'cs{v}', peak_at=0.19), 0.0, peak_db=-4, width=0.6)
-    L.add(hollow(hz('D3'), 0.45, 0.35, r), 0.18, peak_db=0)
-    L.add(ink(r, 0.35, 6, 150, 500, 0.08, wash=0.3), 0.18, peak_db=-7)
-    L.add(breath(0.28, 1400, 300, shape='breath', q=1.8, seed=f'cs{v}x', peak_at=0.03), 0.18, peak_db=-7, width=0.6)
-    L.add(S.thump(0.2, 110, 55, 0.02, 0.15, 1.6), 0.18, peak_db=-8)
+    L = Layers(0.55)
+    L.add(breath(0.03, 400, 1600, shape='swell', q=2.0, seed=f'cs{v}', peak_at=0.012), 0.0, peak_db=-6, width=0.6)
+    L.add(hollow(hz('D3'), 0.45, 0.35, r), 0.006, peak_db=0)
+    L.add(ink(r, 0.35, 6, 150, 500, 0.08, wash=0.3), 0.006, peak_db=-7)
+    L.add(breath(0.28, 1400, 300, shape='breath', q=1.8, seed=f'cs{v}x', peak_at=0.03), 0.006, peak_db=-7, width=0.6)
+    L.add(S.thump(0.2, 110, 55, 0.02, 0.15, 1.6), 0.006, peak_db=-8)
     return finish(room(L.out(), 'stone', wet=0.1), hp_hz=50, lp_hz=8000)
 
 
@@ -344,7 +345,7 @@ def c_cast_big(v: int):
     return finish(room(L.out(), 'stone', wet=0.14), hp_hz=40, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_dash', 'combat', ('m', -18.0), AIR, **AIRK)
+@cue('c_dash', 'combat', ('m', -18.0), AIR, instant=True, **AIRK)
 def c_dash(v: int):
     """Dash: a fast whoosh swept up to 2.4 kHz and back, the push-off scraping stone, a foot plant."""
     r = R('c_dash', v=v)
@@ -356,17 +357,17 @@ def c_dash(v: int):
     return finish(room(L.out(), 'tiny', wet=0.07), hp_hz=60, eq=SOFT_TOP)
 
 
-@cue('c_blink', 'combat', ('m', -18.0), (0.2, 0.8), **CASTK)
+@cue('c_blink', 'combat', ('m', -18.0), (0.2, 0.8), instant=True, **CASTK)
 def c_blink(v: int):
-    """Blink: an E6 glass note drawn in backwards (you vanish), a zip of FM upward, a small air pop and a
-    B5 glass note forward (you appear)."""
+    """Blink, on the frame you move (an instant event, final parity AUD-m1): an air pop and an E6 glass tick where
+    you vanish, a zip of FM upward and a B5 glass note forward where you appear, 60 ms later."""
     r = R('c_blink', v=v)
-    L = Layers(0.45)
-    L.add(rev(glass('E6', 0.18, 0.7, decay=0.1, bright=0.7, seed=f'bl{v}'), 0.01), 0.0, peak_db=-4)
-    L.add(fm_tone(900, 3500, 0.1, ratio=3.5, i0=2.0, i1=0.3, curve=-1.0, env='swell'), 0.08, peak_db=-9)
-    L.add(S.thump(0.08, 400, 200, 0.006, 0.04, 1.2), 0.18, peak_db=-10)
-    L.add(S.burst(r, 0.03, 2000, 8000, 0.015), 0.18, peak_db=-14)
-    L.add(glass('B5', 0.3, 0.75, decay=0.12, bright=0.7, seed=f'bl{v}x'), 0.18, peak_db=-1)
+    L = Layers(0.4)
+    L.add(S.thump(0.06, 500, 250, 0.005, 0.03, 1.2), 0.0, peak_db=-8)
+    L.add(glass('E6', 0.12, 0.7, decay=0.05, bright=0.7, seed=f'bl{v}'), 0.0, peak_db=-3)
+    L.add(fm_tone(900, 3500, 0.06, ratio=3.5, i0=2.0, i1=0.3, curve=-1.0, env='swell'), 0.0, peak_db=-9)
+    L.add(S.burst(r, 0.03, 2000, 8000, 0.015), 0.06, peak_db=-14)
+    L.add(glass('B5', 0.3, 0.75, decay=0.12, bright=0.7, seed=f'bl{v}x'), 0.06, peak_db=-1)
     return finish(room(L.out(), 'glass', wet=0.12), hp_hz=150, eq=[('peak', 3300, -2.5, 0.8)])
 
 
@@ -675,18 +676,15 @@ def c_silence(v: int):
     return finish(room(L.out(), 'small', wet=0.06), hp_hz=80, eq=[('peak', 3300, -2.5, 0.8)])
 
 
-@cue('c_summon', 'combat', ('m', -18.0), (0.5, 1.5), **CASTK)
+@cue('c_summon', 'combat', ('m', -18.0), (0.5, 1.5), instant=True, **CASTK)
 def c_summon(v: int):
-    """Summon: a glass chord gathers backwards out of the air and pops into being (a body, a puff, an A5
-    glass strike and a muffled D3 bell), sparkle rising off it."""
+    """Summon, on the frame it appears (an instant event, final parity AUD-m1): it pops into being (a body, a
+    puff, an A5 glass strike and a muffled D3 bell), a D5 glass a breath after, sparkle rising off it."""
     r = R('c_summon', v=v)
-    L = Layers(1.1)
-    ch = Layers(0.4)
-    ch.add(glass('D5', 0.4, 0.7, decay=0.25, seed=f'su{v}'), 0.0, peak_db=0)
-    ch.add(glass('A5', 0.4, 0.6, decay=0.22, seed=f'su{v}x'), 0.0, peak_db=-2)
-    L.add(rev(ch.out(), 0.02), 0.0, peak_db=-6)
-    L.add(breath(0.3, 300, 1800, shape='swell', q=1.4, seed=f'su{v}', vel=0.6), 0.0, peak_db=-11, width=0.6)
-    t = 0.3
+    L = Layers(0.9)
+    L.add(glass('D5', 0.5, 0.7, decay=0.25, seed=f'su{v}'), 0.05, peak_db=-6)
+    L.add(breath(0.3, 1800, 500, shape='breath', q=1.4, seed=f'su{v}', vel=0.6, peak_at=0.02), 0.0, peak_db=-13, width=0.6)
+    t = 0.0
     L.add(S.thump(0.25, 220, 80, 0.015, 0.15, 2.0), t, peak_db=-3)
     L.add(S.burst(r, 0.04, 1500, 8000, 0.02), t, peak_db=-13)
     L.add(lp(bell('D3', 1.0, 0.7, decay=0.12, bright=0.5, seed=f'su{v}'), 2000), t, peak_db=-7)
