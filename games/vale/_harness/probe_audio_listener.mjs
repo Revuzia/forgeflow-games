@@ -4,8 +4,9 @@
 //
 // A REAL RIFT match (the built catalog in dist-catalog/, LocalMatchHost, bot brains on EVERY seat, yours too, so your
 // fighter lanes, fights and dies) drives the REAL engine (src/audio/index.ts) against content/audio.json as it is now.
-// Only WebAudio is faked (Node has none): every voice the engine starts is read back from its graph (gain, pan,
-// low-pass), so a cue's placement is attributed to the SimEvent that caused it. Three listeners hear the same match:
+// Only WebAudio is faked (Node has none): sources end after their real file's length (read from the shipped .ogg), so
+// the voice pool fills and frees as in a browser, and every voice the engine starts is read back from its graph (gain,
+// pan, low-pass), so a cue's placement is attributed to the SimEvent that caused it. Three listeners hear the same match:
 //   spectate  the camera as a player drives it: on your fighter while it lives; while it is dead the camera is free
 //             and sits on the fight (the centroid of the last 1.5 s of fighter-vs-fighter damage, anywhere)
 //   scout     hold-to-scout at its far edge: the camera 40 m east of your LIVING fighter (beyond the 30 m roll-off)
@@ -21,7 +22,7 @@
 // Exit 0 = A–D hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_listener.json.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -32,8 +33,8 @@ const args = process.argv.slice(2);
 const arg = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = arg('--out', join(HERE, '_reports', 'fw_W3_listener.json'));
 const BASELINE = arg('--baseline', null);
-const MINUTES = Number(arg('--minutes', 14));
-const SEED = Number(arg('--seed', 11));
+const MINUTES = Number(arg('--minutes', 20));
+const SEED = Number(arg('--seed', 3));
 const FIGHT_R = 8, AWARE_R = 10, SCOUT_DX = 40;
 
 // ── a minimal fake WebAudio + DOM (the engine only builds a graph and starts sources) ─────────────────────
@@ -44,7 +45,7 @@ class Node {
   disconnect() { this.outs = []; }
 }
 class FakeCtx {
-  constructor() { this.state = 'running'; this.currentTime = 0; this.destination = new Node(this, 'destination'); this.started = []; }
+  constructor() { this.state = 'running'; this.currentTime = 0; this.destination = new Node(this, 'destination'); this.started = []; this.live = []; }
   createGain() { return new Node(this, 'gain'); }
   createStereoPanner() { const n = new Node(this, 'panner'); n.pan = new Param(0); return n; }
   createBiquadFilter() { const n = new Node(this, 'biquad'); n.type = 'lowpass'; n.frequency = new Param(350); n.Q = new Param(1); return n; }
@@ -56,9 +57,15 @@ class FakeCtx {
   createBufferSource() {
     const n = new Node(this, 'source');
     n.playbackRate = new Param(1);
-    n.start = () => { this.started.push(n); };
-    n.stop = () => {};
+    n.start = () => { n.endAt = this.currentTime + (n.loop ? 1e9 : (n.buffer?.duration ?? 1)); this.started.push(n); this.live.push(n); };
+    n.stop = (t = this.currentTime) => { n.endAt = Math.min(n.endAt ?? Infinity, t); };
     return n;
+  }
+  advance(dt) {
+    this.currentTime += dt;
+    const keep = [];
+    for (const n of this.live) { if (n.endAt <= this.currentTime) n.onended?.(); else keep.push(n); }
+    this.live = keep;
   }
   decodeAudioData() { return Promise.resolve({ duration: 1, length: 48000, sampleRate: 48000 }); }
   resume() { return Promise.resolve(); }
@@ -82,6 +89,22 @@ try { catalog = Catalog.parse(raw); } catch { catalog = raw; }                 /
 const strip = (o) => (Array.isArray(o) ? o.map(strip) : o && typeof o === 'object'
   ? Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('$')).map(([k, v]) => [k, strip(v)])) : o);
 const audio = AudioDef.parse(strip(JSON.parse(readFileSync(join(ROOT, 'content', 'audio.json'), 'utf8'))));
+
+// every shipped cue's real length (Ogg: the last page's granule minus the OpusHead pre-skip, at 48 kHz)
+function oggSeconds(path) {
+  try {
+    const fd = openSync(path, 'r');
+    const size = fstatSync(fd).size;
+    const head = Buffer.alloc(Math.min(size, 512)); readSync(fd, head, 0, head.length, 0);
+    const tail = Buffer.alloc(Math.min(size, 65536)); readSync(fd, tail, 0, tail.length, size - tail.length);
+    closeSync(fd);
+    const pre = head.readUInt16LE(head.indexOf('OpusHead') + 10);
+    const last = tail.lastIndexOf('OggS');
+    return Number(tail.readBigUInt64LE(last + 6) - BigInt(pre)) / 48000;
+  } catch { return 1; }
+}
+const DUR = {};
+for (const c of Object.values(audio.cues)) for (const f of c.files) DUR[f] = oggSeconds(join(ROOT, 'audio', 'out', f.replace(/^assets\/audio\//, '')));
 
 const { LocalMatchHost } = await import('../src/session/match_host.ts');
 const { createBots } = await import('../src/sim/bots/index.ts');
@@ -117,11 +140,11 @@ const youEnt = () => view.entity(view.players.find((p) => p.player === YOU).enti
 
 // ── engines: each hears the same match through its own listener; every started voice is read back ───────
 const SETTINGS = { audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true } };
-const FAKE_BUF = { duration: 1, length: 48000, sampleRate: 48000 };
 function rig(name, create, focus) {
   const eng = create({ catalog: { ...catalog, audio }, assetUrl: (r) => r, settings: SETTINGS });
   if (focus) eng.listener(focus);
-  eng.buffer = () => ({ then: (f) => { f(FAKE_BUF); return { catch() {} }; } });   // voices start inside cue(): attributable
+  // voices start inside cue() (attributable), with the real file's length
+  eng.buffer = (file) => ({ then: (f) => { f({ duration: DUR[file] ?? 1, length: 48000, sampleRate: 48000 }); return { catch() {} }; } });
   const rows = [];
   let cur = null;
   const last = new Map();
@@ -199,7 +222,7 @@ for (let i = 0; i < ticks && !host.ended; i++) {
   if (y && !y.alive) { deadTicks++; if (wasAlive) deaths++; }
   wasAlive = !!y?.alive;
   host.pump(1 / 30);
-  for (const r of rigs) if (r.eng.ctx) r.eng.ctx.currentTime += 1 / 30;
+  for (const r of rigs) r.eng.ctx?.advance(1 / 30);
 }
 
 // ── gates ────────────────────────────────────────────────────────────────────────────────────────────────
