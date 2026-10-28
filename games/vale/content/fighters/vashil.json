@@ -6,7 +6,7 @@
   "role": "dialcross",
   "secondaryRole": "shaftlight",
   "resource": "res_light",
-  "job": "Rings wide notes over the enemy front line; anyone struck by two of them stops cold.",
+  "job": "Rings wide notes over the enemy front line; two humming enemies who stand close form a chord and stop cold.",
   "difficulty": 1,
   "lore": "Vashil keeps seven small bells on a chalk ring above his visor and strikes them with a rod as long as his arm. Every one of them is tuned a little wrong on purpose. A bell struck once makes people turn. A bell struck twice makes them stop. He learned this in the Glass Belfry, ringing the morning change for a valley that never found its morning, and the only third stroke he rings is the one that ends the fight. He is polite, quick and a little early to everything. His bells are early too.",
   "tags": [
@@ -55,7 +55,7 @@
       "id": "vashil_hum",
       "name": "Hum",
       "icon": "assets/ui/icons/abilities/vashil_hum.webp",
-      "desc": "Vashil's abilities leave an enemy fighter humming for 3 s. Hitting a humming enemy with another ability stuns them for 0.75 s and ends the hum, and that enemy cannot hum again for 8 s.",
+      "desc": "Vashil's abilities leave an enemy fighter humming for 3 s. When an ability strikes a humming enemy while another humming enemy stands within 3.5 m of it, the two notes chord: every humming enemy within 3.5 m of the struck one is stunned for 1 s and stops humming, and cannot hum again for 8 s. A lone humming enemy struck again is slowed by 35% for 1.25 s and keeps humming.",
       "triggers": [
         {
           "on": "abilityHit",
@@ -77,27 +77,125 @@
                   "kind": "targetHasMark",
                   "mark": "vashil_hushed"
                 }
+              },
+              {
+                "kind": "markedNear",
+                "mark": "vashil_hum",
+                "radius": 3.5,
+                "min": 1
               }
             ]
           },
           "effects": [
             {
-              "op": "consumeMark",
-              "mark": "vashil_hum",
-              "perStack": [
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 3.5
+              },
+              "at": "hit",
+              "delay": 0,
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "onHit": [
                 {
-                  "op": "status",
-                  "status": "stun",
-                  "duration": 0.75,
-                  "to": "hit"
+                  "op": "if",
+                  "cond": {
+                    "kind": "all",
+                    "conds": [
+                      {
+                        "kind": "targetHasMark",
+                        "mark": "vashil_hum"
+                      },
+                      {
+                        "kind": "not",
+                        "cond": {
+                          "kind": "targetHasMark",
+                          "mark": "vashil_hushed"
+                        }
+                      }
+                    ]
+                  },
+                  "then": [
+                    {
+                      "op": "consumeMark",
+                      "mark": "vashil_hum",
+                      "perStack": [
+                        {
+                          "op": "status",
+                          "status": "stun",
+                          "duration": 1,
+                          "to": "hit"
+                        }
+                      ],
+                      "to": "hit"
+                    },
+                    {
+                      "op": "mark",
+                      "mark": "vashil_hushed",
+                      "duration": 8,
+                      "stacks": 1,
+                      "max": 1,
+                      "to": "hit"
+                    }
+                  ]
                 }
               ],
+              "present": {
+                "vfx": "vashil_passive_hum"
+              }
+            }
+          ]
+        },
+        {
+          "on": "abilityHit",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "cond": {
+            "kind": "all",
+            "conds": [
+              {
+                "kind": "targetHasMark",
+                "mark": "vashil_hum"
+              },
+              {
+                "kind": "not",
+                "cond": {
+                  "kind": "targetHasMark",
+                  "mark": "vashil_hushed"
+                }
+              },
+              {
+                "kind": "not",
+                "cond": {
+                  "kind": "markedNear",
+                  "mark": "vashil_hum",
+                  "radius": 3.5,
+                  "min": 1
+                }
+              }
+            ]
+          },
+          "effects": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.25,
+              "power": 0.35,
               "to": "hit"
             },
             {
               "op": "mark",
-              "mark": "vashil_hushed",
-              "duration": 8,
+              "mark": "vashil_hum",
+              "duration": 3,
               "stacks": 1,
               "max": 1,
               "to": "hit"
@@ -403,7 +501,7 @@
       "id": "vashil_morning_toll",
       "name": "Morning Toll",
       "icon": "assets/ui/icons/abilities/vashil_morning_toll.webp",
-      "desc": "Vashil tolls a great bell over a 4.5 m area up to 9 m away, three times, 0.75 s apart. Each toll deals {effects.0.effects.0.onHit.0.amount} magic damage, and the second toll stuns through Hum.",
+      "desc": "Vashil tolls a great bell over a 4.5 m area up to 9 m away, three times, 0.75 s apart. Each toll deals {effects.0.effects.0.onHit.0.amount} magic damage and hums everyone it strikes, so two enemies caught together chord on the second toll.",
       "maxRank": 3,
       "cooldown": [
         100,

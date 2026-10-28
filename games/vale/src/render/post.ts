@@ -42,6 +42,7 @@ import {
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
 import { MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
+import { setFogGrade } from './world_material.ts';
 
 export interface PostQuality {
   ao: 0 | 1 | 2;
@@ -182,6 +183,7 @@ export class PostChain {
     this.vfx = vfxDraw ? new VfxPass(vfxDraw, () => this.camera) : null;
     this.identity = LookupTexture.createNeutral(33);
     this.lutTex = this.identity;
+    setFogGrade(this.identity);
     this.build();
   }
 
@@ -204,9 +206,12 @@ export class PostChain {
     if (this.aaPass) this.aaPass.mainCamera = camera;
   }
 
-  /** the locked grade; null = identity until the art lane's .cube exists */
+  /** the locked grade; null = identity until the art lane's .cube exists. The fog of war solves its display value
+   *  against this grade (env F3: world_material.ts setFogGrade) */
   setLUT(lut: Texture | null): void {
-    this.lutTex = lut ?? this.identity;
+    const next = lut ?? this.identity;
+    if (next !== this.lutTex) setFogGrade(next);
+    this.lutTex = next;
     if (this.lutEffect) this.lutEffect.lut = this.lutTex;
   }
 

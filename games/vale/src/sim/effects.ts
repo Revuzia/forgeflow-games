@@ -145,6 +145,8 @@ export function onEffectHit(w: World, ctx: EffectCtx, unit: Entity): void {
 }
 
 // ── conditions ──────────────────────────────────────────────────────────────────────────────────
+/** markedNear's own query buffer (a condition can be evaluated inside an area's iteration) */
+const NEAR_SCRATCH: Entity[] = [];
 export function evalCondition(w: World, c: ConditionT, ctx: EffectCtx): boolean {
   const t = ctx.hit ?? ctx.target;
   switch (c.kind) {
@@ -156,6 +158,17 @@ export function evalCondition(w: World, c: ConditionT, ctx: EffectCtx): boolean 
     case 'targetIs': return !!t && matchesFilter(w, ctx.caster, t, c.filter, false);
     case 'inForm': return ctx.caster.form === c.form;
     case 'chance': return w.rng.combat.chance(c.p);
+    case 'markedNear': {
+      if (!t) return false;
+      const n = w.query(t.x, t.y, c.radius, NEAR_SCRATCH);
+      let found = 0;
+      for (let i = 0; i < n; i++) {
+        const u = NEAR_SCRATCH[i];
+        if (u === t || !u.alive) continue;
+        if (markStacks(u, c.mark, ctx.caster) > 0 && ++found >= (c.min ?? 1)) break;
+      }
+      return found >= (c.min ?? 1);
+    }
     case 'not': return !evalCondition(w, c.cond, ctx);
     case 'all': for (const x of c.conds) if (!evalCondition(w, x, ctx)) return false; return true;
     case 'any': for (const x of c.conds) if (evalCondition(w, x, ctx)) return true; return false;

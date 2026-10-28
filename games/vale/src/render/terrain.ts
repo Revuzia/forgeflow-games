@@ -1347,9 +1347,10 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         .replace('#include <common>', `#include <common>\n${SHADOW_PARS_GLSL}\n${NOISE_GLSL}\n${TERRAIN_HELPERS_GLSL}`)
         .replace('#include <map_fragment>', SHADOW_MAIN_GLSL)
         .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, sHeight, 1.0 );')
-        // keeps its colour under fog of war, and enough value that the colour still reads: lifted where unseen
-        // before the world fog darkens it (it lands near L* 14 instead of 6), so it never reads as fog itself
-        .replace('#include <opaque_fragment>', 'outgoingLight *= 1.0 + 0.6 * ( 1.0 - valeVision( vValeWorld.xz ) );\n#include <opaque_fragment>');
+        // keeps its colour under fog of war, and enough value that the colour still reads: its own, lighter fog (display
+        // value ×0.9: it lands near L* 14, never at 6), so it never reads as fog itself (env F3: the world fog's
+        // per-material multiplier, valeFogLocal, now that the fog solves the display value)
+        .replace('#include <opaque_fragment>', 'valeFogLocal = 0.9;\n#include <opaque_fragment>');
     };
     mat.customProgramCacheKey = () => 'vale_shadow_v4';
     patchWorldMaterial(mat, { keepColor: true });

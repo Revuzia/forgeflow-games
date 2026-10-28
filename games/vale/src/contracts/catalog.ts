@@ -94,6 +94,9 @@ export const Condition: z.ZodType<ConditionT, unknown> = z.lazy(() => z.discrimi
   z.object({ kind: z.literal('targetIs'), filter: TargetFilter }).strict(),
   z.object({ kind: z.literal('inForm'), form: Id }).strict(),
   z.object({ kind: z.literal('chance'), p: z.number().min(0).max(1) }).strict(),
+  /** W4 (originality F5, Vashil's chord): at least `min` OTHER units within `radius` m of the hit unit carry `mark`
+   *  from this caster (the hit unit itself never counts) */
+  z.object({ kind: z.literal('markedNear'), mark: Id, radius: z.number().positive(), min: z.number().int().positive().default(1) }).strict(),
   z.object({ kind: z.literal('not'), cond: Condition }).strict(),
   z.object({ kind: z.literal('all'), conds: z.array(Condition) }).strict(),
   z.object({ kind: z.literal('any'), conds: z.array(Condition) }).strict(),
@@ -103,6 +106,7 @@ export type ConditionT =
   | { kind: 'targetHasMark'; mark: string; min?: number } | { kind: 'targetHasStatus'; status: z.infer<typeof StatusKind> }
   | { kind: 'counterAtLeast'; counter: string; n: number } | { kind: 'targetIs'; filter: z.infer<typeof TargetFilter> }
   | { kind: 'inForm'; form: string } | { kind: 'chance'; p: number }
+  | { kind: 'markedNear'; mark: string; radius: number; min?: number }
   | { kind: 'not'; cond: ConditionT } | { kind: 'all'; conds: ConditionT[] } | { kind: 'any'; conds: ConditionT[] };
 
 // ── presentation hints carried by sim records (sim ignores them; it echoes ids in events) ─────────

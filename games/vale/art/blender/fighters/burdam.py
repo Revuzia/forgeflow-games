@@ -409,18 +409,62 @@ def blade_ht(u, v):
 
 
 # the right pauldron (polish pass): the cap's top outline (x, y, z) from the neck round the shoulder, a low crown on
-# top; per-point thickness (the front face is the deep carved one, 13 cm, the concept's roundel face); the roundel's
-# centre on that face and the face's outward normal. The lame: a second plate over the outer upper arm, tucked under
-# the cap's rim (its top outline; it hangs 7 cm and flares 2 cm out)
-PAULDRON_TOP = [(-0.170, -0.232, 1.776), (-0.340, -0.205, 1.745), (-0.528, -0.168, 1.688), (-0.585, 0.000, 1.678),
-                (-0.528, 0.176, 1.688), (-0.340, 0.214, 1.745), (-0.170, 0.214, 1.776), (-0.360, 0.000, 1.792)]
-PAULDRON_THICK = [0.120, 0.130, 0.120, 0.085, 0.085, 0.085, 0.085, None]
+# top; per-point thickness. The lame: a second plate over the outer upper arm, tucked under the cap's rim (its top
+# outline; it hangs LAME_DROP and flares LAME_FLARE out).
+# W5b (the verifier: from the front the cap still read as a short grey roll / bolster with a knob at its end, its
+# 12-13 cm front face half under the carry fist; the concept paints a broad layered plate with a carved roundel, the
+# fringe below): the cap is now the DOME over the shoulder top (its front pulled back), and a separate broad FRONT
+# PLATE (part pauldron_face) stands in front of it where the concept paints it (measured on the plates' 5 cm grid:
+# x -0.49..-0.20, top 1.78, bottom 1.59 inside, its outer corner flared down over the arm at 1.68): a flat chamfered
+# slab, its face 0.33 m across and 0.20-0.24 m tall, tilted 13 degrees back (corners below on its outer face: inner-top
+# under the cowl, outer-top, the outer flare, inner-bottom), its top edge standing 3-5 cm proud of the dome (a layered
+# plate, not a roll), the carved roundel (12 cm) on the flat face's visible centre. The cowl overlaps its inner end, as
+# in the concept. The lame flares further over the arm under the flare; the fringe stands off the sleeve below it.
+PAULDRON_TOP = [(-0.170, -0.150, 1.790), (-0.340, -0.140, 1.772), (-0.530, -0.115, 1.700), (-0.585, 0.000, 1.678),
+                (-0.528, 0.176, 1.688), (-0.340, 0.214, 1.745), (-0.170, 0.214, 1.776), (-0.360, 0.010, 1.798)]
+PAULDRON_THICK = [0.090, 0.090, 0.080, 0.085, 0.085, 0.085, 0.085, None]
 PAULDRON_BEVEL = 0.028
-PAULDRON_ROUNDEL = (-0.405, -0.204, 1.655)
-PAULDRON_FACE_N = (-0.24, -0.97, 0.0)
 PAULDRON_BIND = ("dblend", "shoulder.R", "upper_arm.R", (-0.38, 0.0, 1.70), (-1.0, 0.0, -0.25), 0.02, 0.17)
+PAULDRON_FACE = [(-0.205, -0.150, 1.795), (-0.465, -0.130, 1.785), (-0.535, -0.159, 1.640), (-0.235, -0.205, 1.555)]
+PAULDRON_FACE_T = 0.050          # the slab's thickness behind its face
+PAULDRON_FACE_BEVEL = 0.018      # the chamfer round the face
+# hidden points behind the slab (its back joined to the dome, the shoulder and the chest: its edges never float)
+PAULDRON_FACE_FILL = [(-0.210, -0.100, 1.780), (-0.450, -0.080, 1.745), (-0.500, -0.100, 1.630), (-0.240, -0.130, 1.560)]
+# the plate rides the clavicle; only its outer flare follows the upper arm part way (a raised arm lifts it instead of
+# poking the sleeve through), the roundel stays rigid
+PAULDRON_FACE_BIND = ("dblend", "shoulder.R", "upper_arm.R", (-0.40, 0.0, 1.70), (-1.0, 0.0, -0.25), 0.05, 0.20)
 LAME_TOP = [(-0.470, -0.150, 1.610), (-0.600, -0.112, 1.588), (-0.648, 0.000, 1.582), (-0.600, 0.112, 1.588),
             (-0.470, 0.150, 1.610)]
+LAME_DROP, LAME_FLARE = 0.072, 0.032
+
+
+def face_frame() -> tuple:
+    """the front plate's roundel centre (on the face, 55 % out from the neck, half way down) and the face's normal"""
+    IT, OT, OB, IB = (np.array(p, dtype=np.float64) for p in PAULDRON_FACE)
+    n = np.cross(OT - IT, IB - IT)
+    n /= np.linalg.norm(n)
+    c = 0.5 * ((IT + 0.55 * (OT - IT)) + (IB + 0.55 * (OB - IB)))
+    return c + n * 0.002, n
+
+
+PAULDRON_ROUNDEL, PAULDRON_FACE_N = (tuple(float(x) for x in v) for v in face_frame())
+
+
+def face_pts(corners=PAULDRON_FACE, T: float = PAULDRON_FACE_T, bevel: float = PAULDRON_FACE_BEVEL,
+             fill=PAULDRON_FACE_FILL) -> list:
+    """the front plate's hull: the face's corners inset by the bevel in its plane, the full outline the bevel behind
+    it, the outline T behind (the slab's back) and the hidden fill points"""
+    Q = np.asarray(corners, dtype=np.float64)
+    n = np.asarray(PAULDRON_FACE_N, dtype=np.float64)
+    c = Q.mean(axis=0)
+    out = []
+    for q in Q:
+        d = q - c
+        L = max(float(np.linalg.norm(d)), 1e-6)
+        out.append(c + d * (max(L - bevel, 0.3 * L) / L))
+        out.append(q - n * bevel * 0.85)
+        out.append(q - n * T)
+    return out + [np.asarray(f, dtype=np.float64) for f in fill]
 
 
 def pauldron_pts(top, thick, bevel: float = PAULDRON_BEVEL) -> list:
@@ -443,7 +487,7 @@ def pauldron_pts(top, thick, bevel: float = PAULDRON_BEVEL) -> list:
     return out
 
 
-def lame_pts(top, drop: float = 0.072, flare: float = 0.022, bevel: float = 0.02) -> list:
+def lame_pts(top, drop: float = LAME_DROP, flare: float = LAME_FLARE, bevel: float = 0.02) -> list:
     """the lame's hull: its top outline (inset by the bevel toward the arm's axis), and the outline dropped `drop`
     and pushed `flare` out from the upper arm's axis (x -0.43, y 0)"""
     out = []
@@ -638,23 +682,21 @@ def sculpts() -> list:
     # tucks under the cowl), a deep carved front face with the concept's roundel, a second plate (the lame) over the
     # outer upper arm under the cap's rim (it rides the arm like tiers 3-4), and the slatted fringe under that. The
     # stack stays the bigger, stepped shoulder; this one is ONE domed plate: the asymmetry reads from above
+    # W5b: the cap is the dome over the shoulder top (the roundel moved to the front plate, pauldron_face below)
     sp = Sculpt("shoulder_plate")
     sp.add(Hull(pauldron_pts(PAULDRON_TOP, PAULDRON_THICK), k=0.012).displaced(chips(0.007, 6.5), 0.007), k=0.0)
-    rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N)
-    rn = rn / np.linalg.norm(rn)
-    rax = sdf.frame(rn, (1.0, 0.0, 0.0))                              # rows: across, up the face, out of the face
-    sp.add(Torus(rc, 0.046, 0.0105, axes=rax), k=0.005)               # the carved roundel: a raised ring
-    sp.add(Sphere(rc - rn * 0.010, 0.022), k=0.006)                    # ... round a low boss
     # the cap's inner (neck) half rides the clavicle, its outer rim the upper arm (the shared pauldron blend): a
     # raised arm (the shoulder carry) lifts the rim with the sleeve under it instead of poking the sleeve through
-    part("shoulder_plate", sp, "rust", PAULDRON_BIND, 620)
+    part("shoulder_plate", sp, "rust", PAULDRON_BIND, 560)
     fr = Sculpt("fringe")
-    # the slatted fringe under the lame, round the front and outer side of the upper arm (rigid on it)
+    # the slatted fringe under the lame, round the front and outer side of the upper arm (rigid on it). W5b: 15 cm
+    # slats (z 1.39-1.54) standing 2.5-4 cm off the sleeve, so ~12 cm hang clear below the lame (at the old radius
+    # they sat half inside the sleeve)
     for i in range(7):
         a = -78.0 + i * 21.0                                           # around the arm's outer side, front -> back
-        x = -0.430 - 0.150 * math.cos(math.radians(a))
-        y = -0.005 + 0.150 * math.sin(math.radians(a))
-        fr.add(RoundBox((x, y, 1.462 - 0.010 * (i % 2)), (0.011, 0.024, 0.066), 0.006,
+        x = -0.462 - 0.160 * math.cos(math.radians(a))
+        y = -0.005 + 0.160 * math.sin(math.radians(a))
+        fr.add(RoundBox((x, y, 1.468 - 0.010 * (i % 2)), (0.011, 0.024, 0.075), 0.006,
                         axes=rot(ry=8.0, rz=-a)), k=0.0)
     part("fringe", fr, "leather", "bone:upper_arm.R", 300, 0.7)
 
@@ -755,6 +797,15 @@ def sculpts() -> list:
     lame = Sculpt("pauldron_lame")
     lame.add(Hull(lame_pts(LAME_TOP), k=0.010).displaced(chips(0.006, 7.0), 0.006), k=0.0)
     part("pauldron_lame", lame, "rust", "bone:upper_arm.R", 260)
+    # W5b: the right pauldron's broad FRONT PLATE (see PAULDRON_FACE), last so earlier part ids stay put: a flat
+    # chamfered slab with the carved roundel (a 12 cm raised ring round a low boss) on its face
+    pf = Sculpt("pauldron_face")
+    pf.add(Hull(face_pts(), k=0.010).displaced(chips(0.006, 6.5), 0.006), k=0.0)
+    rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N)
+    rax = sdf.frame(rn, (1.0, 0.0, 0.0))                              # rows: across, up the face, out of the face
+    pf.add(Torus(rc, 0.050, 0.011, axes=rax), k=0.005)                # the carved roundel: a raised ring
+    pf.add(Sphere(rc - rn * 0.012, 0.026), k=0.006)                    # ... round a low boss
+    part("pauldron_face", pf, "rust", PAULDRON_FACE_BIND, 440)
     return out
 
 
@@ -797,7 +848,8 @@ def skin_extras(extra: dict) -> list:
                 under, bone, sx = [parts_by["tier1"], parts_by["tier2"]], "shoulder.L", 1.0
                 root, fans, Ls = np.array([0.47, 0.0]), (-26.0, 0.0, 26.0), (0.32, 0.36, 0.32)
             else:
-                under, bone, sx = [parts_by["cowl"], parts_by["coat"], parts_by["shoulder_plate"]], "shoulder.R", -1.0
+                under, bone, sx = ([parts_by["cowl"], parts_by["coat"], parts_by["shoulder_plate"]]
+                                   + ([parts_by["pauldron_face"]] if "pauldron_face" in parts_by else [])), "shoulder.R", -1.0
                 root, fans, Ls = np.array([-0.32, 0.0]), (24.0, 0.0, -24.0), (0.30, 0.33, 0.30)
             for k, (fan, Lp) in enumerate(zip(fans, Ls)):
                 dxy = np.array([sx * math.cos(math.radians(fan)), math.sin(math.radians(fan))])
@@ -1700,7 +1752,15 @@ def clip_overrides(ctx) -> dict:
     # at the front of the right hip, the forearm level, the haft clear of it), then unslung onto the shoulder: the
     # stamped slab never sweeps back through the coat (the pass-7 hold -> out_right route met it)
     ult_rec = chop_poses(R, G, 0.0)[3]
+    # W5b (the verifier: fix round 2's back-pointing carry swept the haft and pommel through the coat's back in the
+    # wind-up's first in-betweens, f3-f4 41 verts against the earlier 13): the cleaver first lifts UP and OUT of the
+    # carry (the fist rises beside the back of the right shoulder, the blade steepens while it still points back),
+    # then swings into the cocked reach; the torso and the left arm keep their own timing (ULT_LIFT)
+    lift = anim.lerp_pose(G, reach, ULT_LIFT["body"])
+    lift["ik"] = dict(lift["ik"], **one(ULT_LIFT["rel"], ULT_LIFT["d"], carry_flat(ULT_LIFT["d"], ULT_LIFT["roll"]),
+                                        pole=ULT_LIFT["pole"]))
     out["cast_ult"] = clip("cast_ult", 45, [(0.0, G, "linear"), (0.04, anim.lerp_pose(G, reach, -0.06), "inout"),
+                                            (ULT_LIFT["t"], lift, "inout"),
                                             (0.13, reach, "out"), (0.29, reach2, "inout"), (0.36, drop, "in"),
                                             (I, stamp, "accel"),
                                             (0.47, anim._with_hips(stamp, (0, 0.01, -0.012)), "out"),
@@ -2043,6 +2103,13 @@ ULT_REACH = (0.95, -0.22, 0.02)        # the Settled Account reach (chest frame,
                                        # arm straight at shoulder height (fix pass 8: was (0.86, -0.36, 0.22), the
                                        # hand by the ear)
 ULT_CLAW = (0.0, -28.0, 0.0)           # prop.L: the reaching fingers a little curled
+# W5b: cast_ult's lift out of the carry (t: clip time of the key; body: how far the torso / left arm are toward the
+# reach there; rel / d / roll / pole: the right fist (chest frame, arm lengths), the blade axis and its flat roll)
+ULT_LIFT = dict(t=0.09, body=0.4, rel=(-0.62, 0.35, 0.58), d=(0.0, 0.72, 0.69), roll=5.0, pole=(-1.0, 0.25, -0.3))
+# (picked by a sweep on the cached build, torso hits f2-f6: the fist out and up beside the back of the right shoulder,
+# the blade still straight back but 44 degrees up (the carry's 30): f3 / f4 41 / 41 -> 0 / 0, f5 28 -> 20; a blade
+# that leans out or steepens toward the reach (50 degrees) before the fist leaves the shoulder drives the pommel
+# through the coat's back, 50-180 verts)
 VIC_HOST = (0.36, -0.68, -0.60)        # the left hand held out to his front-left at the waist, arm long; fix pass 5:
                                        # more forward and lower (out to the side the tiers on the upper arm swung out
                                        # with it and met the vambrace: one pale sleeve from shoulder to wrist)
@@ -2092,7 +2159,7 @@ LIFT_ALPHA = 0.62
 LIFT_MAX = 2.6
 LIFT_SKIP = ("mask",) + CLEAVER
 GRADED = ("cowl", "trousers", "boots", "tier1", "tier2", "tier3", "tier4", "shoulder_plate", "pauldron_lame", "vambrace",
-          "strap_plate", "belt",
+          "strap_plate", "belt", "pauldron_face",
           "coat", "skirt", "tally")
 
 
@@ -2336,7 +2403,8 @@ def blade_rim(lin: np.ndarray, maps: dict, names: list) -> np.ndarray:
     return out
 
 
-RUST_PARTS = ("tier1", "tier2", "tier3", "tier4", "shoulder_plate", "pauldron_lame", "vambrace", "strap_plate")
+RUST_PARTS = ("tier1", "tier2", "tier3", "tier4", "shoulder_plate", "pauldron_lame", "vambrace", "strap_plate",
+              "pauldron_face")
 BLADE_GAIN = 0.72         # (polish: 0.62 -> 0.72, the value lift: the blade is a third of the top quarter in game)
                           # the blade's painted value two steps down (linear; L* ~80 -> ~73): the splash's sun and
                           # bloom lifted the flat to L* 86-97 (brief: never above 85); in game it still reads as light stone
@@ -2770,9 +2838,9 @@ STONE_RECESS = "#3E2D21"       # rust-brown recesses and creases (L* ~20)
 STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78}   # forearm plates a step down: the vambrace never merges with the
                                # pauldron into one pale sleeve (polish: the right pauldron is the stack's stone now, no step)
 STONE_TIERS = ("tier1", "tier2", "tier3", "tier4")
-STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame"))   # plates that tuck under each other (recess paint)
+STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame", "pauldron_face"))   # plates that tuck under each other (recess paint)
 LEDGER_ROWS = 6                # the cap's top: the brief's ledger relief, one carved row per day (painted grooves)
-CAP_PARTS = ("shoulder_plate", "pauldron_lame")
+CAP_PARTS = ("shoulder_plate", "pauldron_lame", "pauldron_face")
 CAP_CHROMA = 0.4               # fix round 2: the right cap's stone chroma (x, luminance kept; b* ~+11 -> ~+4): the verifier
                                # read the lifted cap and cowl as one pale beige family from the front
 
@@ -2803,6 +2871,10 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
         # the scarf): the top tier's steep neck-side faces are the concept's LIGHT top of the stack, not side bands
         inward = np.clip((-Nm[:, 0] - 0.15) / 0.35, 0.0, 1.0) * np.clip((nz + 0.25) / 0.35, 0.0, 1.0)
         top = np.maximum(np.clip((nz - 0.15) / 0.35, 0.0, 1.0), inward)
+    if nm == "pauldron_face":
+        # W5b: the front plate's broad face is the concept's lit carved face (the top stone), not a dark side band
+        fn = np.asarray(PAULDRON_FACE_N, dtype=np.float64)
+        top = np.maximum(top, np.clip((Nm @ fn - 0.70) / 0.20, 0.0, 1.0) * 0.85)
     base = _hexlin(STONE_SIDE)[None] * (1 - top[:, None]) + _hexlin(STONE_TOP)[None] * top[:, None]
     base = base * np.clip(1.0 + 0.35 * np.minimum(nz, 0.0), 0.55, 1.0)[:, None]          # undersides darker
     # the painting's own value variation (scratches, stains, the concept's cracks), a third of it
@@ -2826,28 +2898,31 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
     rec = np.clip(np.maximum(occ * (1.0 - 0.5 * chalk), crease), 0.0, 1.0)
     if nm == "tier1":
         rec = rec * (1.0 - 0.7 * top)                  # (the light top keeps its value where it meets the felt)
-    if nm == "shoulder_plate":
-        # the carved work painted as well as sculpted (the game mesh keeps ~700 triangles of the cap: the relief
-        # softens, the paint keeps it): the roundel's two cut rings and its boss on the deep front face, and the
-        # ledger rows across the cap's top (the brief: one carved row per day), each a dark cut with a chalked lip
-        rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N, dtype=np.float64)
-        rn /= np.linalg.norm(rn)
-        ax = sdf.frame(rn, (1.0, 0.0, 0.0))
-        q = Pm - rc
-        r = np.hypot(q @ ax[0], q @ ax[1])
-        face = np.clip((Nm @ rn - 0.35) / 0.3, 0.0, 1.0) * (np.abs(q @ rn) < 0.035)
+    if nm in ("shoulder_plate", "pauldron_face"):
+        # the carved work painted as well as sculpted (the game mesh keeps a few hundred triangles of each plate: the
+        # relief softens, the paint keeps it): the roundel's two cut rings and its boss on the front plate's face
+        # (W5b: 12 cm, on the flat face), and the ledger rows across the cap's top (the brief: one carved row per day),
+        # each a dark cut with a chalked lip
         cut = np.zeros(len(Pm))
-        for rr, hw in ((0.031, 0.0045), (0.064, 0.0050)):
-            cut = np.maximum(cut, np.clip(1.0 - np.abs(r - rr) / hw, 0.0, 1.0))
-        lip = np.clip(1.0 - np.abs(r - 0.047) / 0.009, 0.0, 1.0) * 0.8 + np.clip(1.0 - r / 0.016, 0.0, 1.0) * 0.6
-        # ledger rows: grooves across the top running out from the neck (constant y), spaced over its depth
-        topw = np.clip((nz - 0.5) / 0.25, 0.0, 1.0) * (Pm[:, 0] < -0.22)
-        ys = np.linspace(-0.15, 0.15, LEDGER_ROWS)
-        dy = np.min(np.abs(Pm[:, 1][:, None] - ys[None]), axis=1)
-        row = np.clip(1.0 - dy / 0.0045, 0.0, 1.0) * topw
-        rowlip = np.clip(1.0 - np.abs(dy - 0.0085) / 0.004, 0.0, 1.0) * topw
-        cut = np.maximum(cut * face, row)
-        lip = np.maximum(lip * face, rowlip * 0.6)
+        lip = np.zeros(len(Pm))
+        if nm == "pauldron_face":
+            rc, rn = np.array(PAULDRON_ROUNDEL), np.array(PAULDRON_FACE_N, dtype=np.float64)
+            rn /= np.linalg.norm(rn)
+            ax = sdf.frame(rn, (1.0, 0.0, 0.0))
+            q = Pm - rc
+            r = np.hypot(q @ ax[0], q @ ax[1])
+            face = np.clip((Nm @ rn - 0.35) / 0.3, 0.0, 1.0) * (np.abs(q @ rn) < 0.035)
+            for rr, hw in ((0.031, 0.0045), (0.069, 0.0055)):
+                cut = np.maximum(cut, np.clip(1.0 - np.abs(r - rr) / hw, 0.0, 1.0))
+            lip = np.clip(1.0 - np.abs(r - 0.050) / 0.010, 0.0, 1.0) * 0.8 + np.clip(1.0 - r / 0.018, 0.0, 1.0) * 0.6
+            cut, lip = cut * face, lip * face
+        else:
+            # ledger rows: grooves across the top running out from the neck (constant y), spaced over its depth
+            topw = np.clip((nz - 0.5) / 0.25, 0.0, 1.0) * (Pm[:, 0] < -0.22)
+            ys = np.linspace(-0.12, 0.15, LEDGER_ROWS)
+            dy = np.min(np.abs(Pm[:, 1][:, None] - ys[None]), axis=1)
+            cut = np.clip(1.0 - dy / 0.0045, 0.0, 1.0) * topw
+            lip = np.clip(1.0 - np.abs(dy - 0.0085) / 0.004, 0.0, 1.0) * topw * 0.6
         col = col * (1 - 0.5 * lip[:, None]) + _hexlin(STONE_CHALK)[None] * 0.5 * lip[:, None]
         rec = np.maximum(rec, cut * 0.85)
     col = col * (1 - 0.78 * rec[:, None]) + _hexlin(STONE_RECESS)[None] * 0.78 * rec[:, None]

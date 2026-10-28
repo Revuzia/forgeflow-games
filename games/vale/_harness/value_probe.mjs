@@ -31,7 +31,13 @@
 //              screen, before vs the brightest frame of the next 0.8 s (sim held, VFX on, UI hidden)
 //
 //   node _harness/value_probe.mjs [--maps rift,bridge,fray] [--tiers high,low] [--tag before] [--t 75]
-//                                 [--seed 7] [--shots 1] [--flash 1] [--masks 0] [--you burdam] [--fshots 0]
+//                                 [--seed 7] [--shots 1] [--flash 1] [--masks 0] [--you burdam] [--fshots 0] [--fog 0|1|only]
+//
+//   fog        (--fog 1 adds it, --fog only runs nothing else) env F3, the fog of war A/B: at every spot the same frame
+//              twice, fog off and fully unseen (the vision texture held at 0: every pixel at the fog's full strength),
+//              sim held; per class pixel (eroded, lit luma >= 20) the DISPLAY luma ratio unseen / lit. Gate: the lane
+//              (FRAY: the Noonplate) and the jungle floor at p50 0.50-0.60 (tokens grade.fogOfWar.valueMul 0.55); every
+//              other class (walls, scatter, landmarks and lamps, the Standing Shadow and its fogged L*) is reported
 //
 //   --you     pins seat 0's fighter (the bench's `you=`): measure a fighter the map's default seat roster leaves out
 //             (e.g. FRAY has no Burdam); other seats keep the default roster
@@ -59,6 +65,10 @@ const FLASH = opt('flash', '1') === '1';
 const MASKS = opt('masks', '0') === '1';
 const YOU = opt('you', '');
 const FSHOTS = opt('fshots', '0') === '1';
+const FOG = opt('fog', '0');
+const FOG_ONLY = FOG === 'only';
+/** env F3: the unseen / lit display ratio band (tokens grade.fogOfWar.valueMul 0.55) */
+const FOG_BAND = [0.5, 0.6];
 const RES = { high: [1920, 1080], low: [1280, 720], medium: [1920, 1080], ultra: [1920, 1080] };
 
 // ── in-page probe (installed once per page as window.__VP__) ──────────────────────────────────────────
@@ -82,6 +92,13 @@ function install() {
     R.fog.enabled = false;
   };
   const showVfx = () => { R.vfx.draw = vfxDraw; R.vfx.group.visible = true; };
+  // env F3 fog A/B: the vision texture held at 0 after every update (every pixel fully unseen) while forced
+  let forceUnseen = false;
+  const fogUpdate = R.fog.update.bind(R.fog);
+  R.fog.update = (view, team, dt) => {
+    fogUpdate(view, team, dt);
+    if (forceUnseen && R.fog.tex) { R.fog.bytes.fill(0); R.fog.cur.fill(0); R.fog.tex.needsUpdate = true; }
+  };
   // ── class ids ──
   const C = {
     sky: 0, lane: 1, verge: 2, jungle: 3, camp: 4, brush: 5, plaza: 6, shadow: 7, outside: 8, seat: 9,
@@ -337,6 +354,39 @@ function install() {
       }
       return m;
     },
+    /** env F3: the same frame lit and fully unseen; per class (eroded) the display luma ratio of every pixel lit at
+     *  luma >= 20 (400 bins over 0-2), the unseen L* and the summed lumas. Leaves the frame unseen (fogOff()) */
+    fogAB: (x, y) => {
+      b.focus(x, y); b.zoom(28.5);
+      R.vfx.clear(); fx.reset();
+      R.fog.enabled = false; forceUnseen = false;
+      settle(12);
+      const lit = readFrame();
+      const cls = classPass();
+      R.fog.enabled = true; forceUnseen = true;
+      settle(12);
+      const dark = readFrame();
+      const { w, h } = lit, A = lit.buf, D = dark.buf, K = cls.buf;
+      const H = {};
+      const get = (c) => (H[c] ??= { n: 0, ratio: new Float64Array(400), lstar: new Float64Array(201), litSum: 0, darkSum: 0 });
+      for (let yy = 1; yy < h - 1; yy++) for (let xx = 1; xx < w - 1; xx++) {
+        const i = (yy * w + xx) * 4;
+        const La = 0.2126 * A[i] + 0.7152 * A[i + 1] + 0.0722 * A[i + 2];
+        if (La < 20) continue;
+        const Ld = 0.2126 * D[i] + 0.7152 * D[i + 1] + 0.0722 * D[i + 2];
+        const bin = Math.min(399, Math.floor((Ld / La) * 200));
+        const ls = Math.min(200, Math.max(0, Math.round(lstarOf(D[i], D[i + 1], D[i + 2]) * 2)));
+        const all = get('frame'); all.n++; all.ratio[bin]++; all.lstar[ls]++; all.litSum += La; all.darkSum += Ld;
+        const c = K[i];
+        if (K[i - 4] !== c || K[i + 4] !== c || K[i - w * 4] !== c || K[i + w * 4] !== c) continue;
+        const e = get(c); e.n++; e.ratio[bin]++; e.lstar[ls]++; e.litSum += La; e.darkSum += Ld;
+      }
+      const out = {};
+      for (const [k, v] of Object.entries(H)) out[k] = { n: v.n, ratio: Array.from(v.ratio), lstar: Array.from(v.lstar), litSum: v.litSum, darkSum: v.darkSum };
+      return out;
+    },
+    /** the fog A/B leaves the frame unseen (for its screenshot): back to lit */
+    fogOff: () => { R.fog.enabled = false; forceUnseen = false; settle(4); },
     /** a T4 ultimate landing at your fighter: mean luma of the impact disc, before and over 0.8 s */
     flash: (ability, vfx, radius) => {
       const me = b.you();
@@ -454,6 +504,34 @@ function summarise(spots, C, fspots = {}) {
   };
 }
 
+/** env F3: pool the fog A/B histograms over the spots, per class name */
+function summariseFog(perSpot, C) {
+  const names = Object.fromEntries(Object.entries(C).map(([k, v]) => [String(v), k]));
+  const pooled = {};
+  for (const h of Object.values(perSpot)) for (const [k, e] of Object.entries(h)) {
+    const name = k === 'frame' ? 'frame' : names[k] ?? `c${k}`;
+    const o = (pooled[name] ??= { n: 0, ratio: null, lstar: null, litSum: 0, darkSum: 0 });
+    o.n += e.n; o.ratio = add(o.ratio, e.ratio); o.lstar = add(o.lstar, e.lstar); o.litSum += e.litSum; o.darkSum += e.darkSum;
+  }
+  const rp = (hist, p) => { const n = hist.reduce((a, b) => a + b, 0); let acc = 0; for (let i = 0; i < hist.length; i++) { acc += hist[i]; if (acc >= p * n) return +((i + 0.5) / 200).toFixed(3); } return 2; };
+  const out = {};
+  for (const [k, o] of Object.entries(pooled)) {
+    if (o.n < 200) continue;
+    out[k] = { px: o.n, p25: rp(o.ratio, 0.25), p50: rp(o.ratio, 0.5), p75: rp(o.ratio, 0.75), meanRatio: +(o.darkSum / o.litSum).toFixed(3), unseenLstarP50: pct(o.lstar, 0.5, 0.5) };
+  }
+  return out;
+}
+
+function fogVerdict(f) {
+  const v = {};
+  for (const k of ['lane', 'jungle']) {
+    const e = f[k];
+    if (!e) continue;
+    v[`fog_${k}`] = `p50 ${e.p50} ${e.p50 >= FOG_BAND[0] && e.p50 <= FOG_BAND[1] ? 'PASS' : 'FAIL'} (${FOG_BAND[0]}-${FOG_BAND[1]})`;
+  }
+  return v;
+}
+
 function verdict(s, flash, map) {
   const ok = (c) => (c ? 'PASS' : 'FAIL');
   const v = {};
@@ -493,6 +571,27 @@ for (const map of MAPS) for (const tier of TIERS) {
     const C = await V((v) => v.C);
     const spots = await V((v) => v.spots());
     await V((v) => v.prep());
+    let fog = null;
+    if (FOG === '1' || FOG_ONLY) {
+      const per = {};
+      for (const [k, at] of Object.entries(spots)) {
+        per[k] = await V((v, a) => v.fogAB(a[0], a[1]), at);
+        if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}_unseen`);
+        await V((v) => v.fogOff());
+        if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}_lit`);
+      }
+      fog = summariseFog(per, C);
+      const fv = fogVerdict(fog);
+      console.log(`\n${map} ${tier} [${TAG}] fog A/B (unseen / lit display luma, p50 [p25-p75], mean, unseen L* p50)`);
+      for (const [k, e] of Object.entries(fog)) console.log(`  ${k.padEnd(9)} ${String(e.px).padStart(8)} px  p50 ${e.p50} [${e.p25}-${e.p75}]  mean ${e.meanRatio}  L* ${e.unseenLstarP50}`);
+      for (const [k, v] of Object.entries(fv)) console.log(`  ${k}: ${v}`);
+      if (FOG_ONLY) {
+        report.runs[TAG][`${map}_${tier}`] = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(spots), fog, verdict: fv, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
+        report.generated = new Date().toISOString();
+        writeFileSync(REPORT, JSON.stringify(report, null, 1));
+        continue;
+      }
+    }
     const res = {};
     for (const [k, at] of Object.entries(spots)) {
       const m = await V((v, a) => v.measureAt(a.at[0], a.at[1], a.mask), { at, mask: MASKS });
@@ -510,7 +609,7 @@ for (const map of MAPS) for (const tier of TIERS) {
     let flash = null;
     if (FLASH) flash = await V((v) => v.flash('marund_domefall', 'marund_ult_domefall', 3.5));
     const s = summarise(res, C, fres);
-    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, flash, verdict: verdict(s, flash, map), logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
+    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, flash, fog, verdict: { ...verdict(s, flash, map), ...(fog ? fogVerdict(fog) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
     report.runs[TAG][`${map}_${tier}`] = out;
     report.generated = new Date().toISOString();
     writeFileSync(REPORT, JSON.stringify(report, null, 1));

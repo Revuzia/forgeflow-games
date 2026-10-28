@@ -8,12 +8,13 @@ content/maps/map_rift.json `art.terrain.landmarks` (the renderer places each at 
   lamp_dome          Serenade base: a low banded ironstone dome on a sandstone drum, a lampresin oculus
   lampwright_stall   the shop kiosk: a spire-roofed stall with a counter and hanging lamps
   shadow_slab        a leaning basalt slab with a chalk-lit top edge (Longshade's north choke)
-  shaft_drum         a lying drum of the fallen needle, two carved hour-bands, its broken face south
   numeral_xi/ii/vii/iiii   the dial's numerals, giant, half-buried and tilted (the jungle callouts)
   noon_stone         the XII stele on the north rim        vi_slab   the VI slab lying flat in the south
 Surfacing as structures.py (SDF volumes per material, painted tiling textures × vertex light). Glass glows
 neutral (never a relationship colour: the Hourbell carries that). Blender (x, y, z) = sim (x, -y, height)
 local to each landmark; +Y (Blender) is north. Output: art/out/maps/landmarks/<id>.glb.
+The Shaft drum, the Snap stubs, the Dawn Arch and the Lamp Gate are Art 2.0 builds now (env F1):
+art/blender/maps/landmarks_art2.py (structure_kit's painted, baked stone).
 """
 from __future__ import annotations
 
@@ -211,18 +212,6 @@ def shadow_slab() -> dict:
     return {"basalt": b}
 
 
-def shaft_drum() -> dict:
-    st, iron = Sculpt("chalk"), Sculpt("ironstone")
-    ax = sdf.rot_x(90)
-    st.add(Lathe((0, 0, 1.1), lambda r, z: np.maximum(r - 1.1, np.abs(z) - 3.0), 1.15, -3.1, 3.1, axes=ax).displaced(S.chip(0.04, 0.9), 0.04), k=0.0)
-    # broken face south (-Y): ragged
-    st.sub(Ellipsoid((0, -3.3, 1.1), (1.4, 0.7, 1.4)).displaced(lambda P: 0.25 * sdf.Noise(5).ridged(P, 1.4, 3), 0.25), k=0.1)
-    for y in (-1.2, 1.6):
-        iron.add(Torus((0, y, 1.1), 1.12, 0.09, axes=ax, rz=0.12), k=0.0)
-    st.inter(HalfSpace((0, 0, -0.02), (0, 0, -1), 10), k=0.0)
-    return {"chalk": st, "ironstone": iron}
-
-
 def noon_stone() -> dict:
     st = Sculpt("chalk")
     st.add(S.TaperBox(0.0, 8.2, 1.4, 1.1, r=0.1), k=0.0)
@@ -242,71 +231,6 @@ def vi_slab() -> dict:
         st.sub(Capsule((a[0], a[1], 1.08), (b[0], b[1], 1.08), 0.12), k=0.02)
     st.inter(HalfSpace((0, 0, -0.02), (0, 0, -1), 10), k=0.0)
     return {"chalk": st}
-
-
-# ── BRIDGE ───────────────────────────────────────────────────────────────────────────────────────
-class _EllipseBand(sdf.Prim):
-    """The upper half of an elliptical band in the y/z plane (semi-axes a, b about z0), half-thickness t,
-    half-width w in x: an arch ring."""
-
-    def __init__(self, a, b, t, w, z0):
-        self.a, self.b, self.t, self.w, self.z0 = a, b, t, w, z0
-
-    def bounds(self):
-        return np.array([-self.w - 0.1, -self.a - self.t - 0.1, self.z0 - 0.1]), np.array([self.w + 0.1, self.a + self.t + 0.1, self.z0 + self.b + self.t + 0.1])
-
-    def d(self, P):
-        y, z = P[:, 1], P[:, 2] - self.z0
-        e = np.sqrt((y / self.a) ** 2 + (z / self.b) ** 2)
-        ee = np.maximum(e, 1e-6)
-        g = np.sqrt((y / (self.a * self.a * ee)) ** 2 + (z / (self.b * self.b * ee)) ** 2)
-        ring = np.abs((e - 1) / np.maximum(g, 1e-6)) - self.t
-        return np.maximum(np.maximum(ring, np.abs(P[:, 0]) - self.w), -z)
-
-
-def dawn_arch() -> dict:
-    """Aubade's end of the Bridge: chalk piers carrying a low elliptical arch, its underside a band of dawnglass."""
-    chalk, glass = Sculpt("chalk"), Sculpt("glass")
-    H0, A, B = 6.2, 10.4, 4.4
-    for sy in (-1, 1):
-        chalk.add(S.TaperBox(0.0, H0, 1.35, 1.15, r=0.08, c=(0, sy * 11.0)).displaced(S.chip(0.03, 0.9), 0.03), k=0.0)
-        chalk.add(RoundBox((0, sy * 11.0, 0.35), (1.75, 1.75, 0.35), 0.08), k=0.04)            # plinth
-        chalk.add(RoundBox((0, sy * 11.0, H0), (1.5, 1.5, 0.22), 0.06), k=0.03)                # impost cap
-    chalk.add(_EllipseBand(A + 0.15, B + 0.15, 0.62, 1.1, H0).displaced(S.chip(0.03, 0.9), 0.03), k=0.05)
-    chalk.add(RoundBox((0, 0, H0 + B + 0.5), (1.25, 0.65, 0.85), 0.08), k=0.04)                # keystone
-    glass.add(_EllipseBand(A - 0.72, B - 0.72, 0.2, 0.72, H0), k=0.0)                           # the dawnglass intrados
-    return {"chalk": chalk, "glass": glass}
-
-
-def lamp_gate() -> dict:
-    """Serenade's end: a low banded ironstone gate between two drum towers, a resin lamp over the opening."""
-    iron, chalk, resin = Sculpt("ironstone"), Sculpt("chalk"), Sculpt("resin")
-    for sy in (-1, 1):
-        cy = sy * 9.4
-        iron.add(Lathe((0, cy, 0), lambda r, z: np.maximum(r - 2.3, np.maximum(-z, z - 5.8)), 2.4, -0.1, 5.9).displaced(S.chip(0.03, 0.9), 0.03), k=0.0)
-        iron.add(Ellipsoid((0, cy, 5.8), (2.45, 2.45, 1.0)), k=0.1)                               # low dome cap
-        for z in (1.5, 3.2, 4.9):
-            chalk.add(Torus((0, cy, z), 2.33, 0.13, rz=0.11), k=0.0)                              # chalk courses
-        resin.add(RoundBox((0, cy - sy * 0.0, 4.05), (2.35, 0.32, 0.38), 0.12), k=0.0)            # a lit slit round the drum
-        iron.sub(RoundBox((0, cy, 4.05), (2.4, 0.3, 0.36), 0.12), k=0.02)
-    iron.add(RoundBox((0, 0, 1.9), (1.45, 7.4, 1.9), 0.1).displaced(S.chip(0.03, 0.9), 0.03), k=0.08)
-    iron.sub(Ellipsoid((0, 0, 0.6), (2.0, 2.2, 2.5)), k=0.05)                                     # the gate opening
-    chalk.add(RoundBox((0, 0, 3.85), (1.55, 7.5, 0.16), 0.05), k=0.0)                             # coping
-    chalk.add(_EllipseBand(2.25, 2.0, 0.18, 1.5, 1.0), k=0.0)                                     # chalk arch round the opening
-    chalk.add(RoundBox((0, 0, 4.45), (0.62, 0.62, 0.55), 0.08), k=0.02)                           # lamp housing
-    resin.add(Ellipsoid((0, 0, 4.5), (0.68, 0.46, 0.38)), k=0.0)
-    return {"ironstone": iron, "chalk": chalk, "resin": resin}
-
-
-def snap_stub() -> dict:
-    """A short drum of the snapped shaft, lying along y; the break faces -Y (turn it 180 for its twin)."""
-    st, iron = Sculpt("chalk"), Sculpt("ironstone")
-    ax = sdf.rot_x(90)
-    st.add(Lathe((0, 0, 1.2), lambda r, z: np.maximum(r - 1.2, np.abs(z) - 2.0), 1.25, -2.1, 2.1, axes=ax).displaced(S.chip(0.04, 0.9), 0.04), k=0.0)
-    st.sub(Ellipsoid((0, -2.3, 1.2), (1.55, 0.85, 1.55)).displaced(lambda P: 0.28 * sdf.Noise(9).ridged(P, 1.5, 3), 0.28), k=0.1)
-    iron.add(Torus((0, 1.0, 1.2), 1.22, 0.09, axes=ax, rz=0.12), k=0.0)
-    st.inter(HalfSpace((0, 0, -0.02), (0, 0, -1), 10), k=0.0)
-    return {"chalk": st, "ironstone": iron}
 
 
 # ── FRAY ─────────────────────────────────────────────────────────────────────────────────────────
@@ -361,9 +285,8 @@ def fair_stand(tiers: int, step: float) -> dict:
 
 DESIGNS = {
     "glass_belfry": (belfry, 16000, 0.06), "lamp_dome": (lamp_dome, 14000, 0.07), "lampwright_stall": (stall, 3000, 0.04),
-    "shadow_slab": (shadow_slab, 1500, 0.05), "shaft_drum": (shaft_drum, 3500, 0.05), "noon_stone": (noon_stone, 3000, 0.05),
+    "shadow_slab": (shadow_slab, 1500, 0.05), "noon_stone": (noon_stone, 3000, 0.05),
     "vi_slab": (vi_slab, 1500, 0.04),
-    "dawn_arch": (dawn_arch, 9000, 0.06), "lamp_gate": (lamp_gate, 12000, 0.06), "snap_stub": (snap_stub, 2500, 0.045),
     "lampwright_cart": (lampwright_cart, 4000, 0.025), "hour_stone": (hour_stone, 700, 0.03),
     "fair_stand_high": (lambda: fair_stand(3, 1.0), 2000, 0.05), "fair_stand_low": (lambda: fair_stand(2, 0.5), 1500, 0.05),
     "numeral_xi": (lambda: numeral("XI"), 5000, 0.045), "numeral_ii": (lambda: numeral("II"), 3500, 0.045),

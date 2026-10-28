@@ -4,7 +4,8 @@
 // HUD-4: the sky strip's ledger line must be on screen and render at most once per change of its numbers (exit 1).
 //   VALE_URL=http://localhost:<port> node _harness/hud_renders.mjs [--at <s>]   (dev server; prints JSON)
 import { open, vale, waitFor } from './pw.mjs';
-const { browser, page } = await open('/?dev=1&autopilot=match&speed=1');
+// hmr: false — edits other lanes make to the shared checkout mid-run must not reload the page under the measurement
+const { browser, page } = await open('/?dev=1&autopilot=match&speed=1', { hmr: false });
 const frames = () => page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { timeout: 60000 });
 const click = async (l) => { await l.waitFor({ state: 'visible', timeout: 20000 }); await frames(); await l.click({ timeout: 20000 }); };
 await page.waitForTimeout(2000);

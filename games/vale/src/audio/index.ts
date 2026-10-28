@@ -57,7 +57,8 @@
 //               energy, capped at full; panned toward them), so the sound sits where the look sits and follows
 //               any move of the art. <source> 'bed' is the map-wide bed (not spatial). One voice per emitter,
 //               started at a random point of its loop when the match attaches, faded out when it detaches;
-//               the whole bus is ducked up to AMB_DUCK_DB as the combat intensity rises
+//               the whole bus is ducked up to AMB_DUCK_DB under a FIGHT (fighter-vs-fighter damage near the
+//               listener or your living fighter; a wave being cleared does not duck the world)
 // The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
 
 import type { MatchClient } from '../contracts/session.ts';
@@ -85,9 +86,9 @@ interface CatalogLike {
   maps?: { id: string; art?: { ambient?: AmbientLike } }[];
 }
 type PassiveKind = 'fighter' | 'item' | 'boon' | 'team' | 'unit';
-/** what became of a proc: played, held back by its owner's window or the cue's own cooldown / voices, out of
+/** what became of a proc: played, held back by its owner's window, the cue's own cooldown or its voices, out of
  *  earshot, fogged, or `unbound` (no cue anywhere: the one outcome the probes fail on) */
-type ProcOutcome = 'played' | 'throttled' | 'cooldown' | 'culled' | 'unseen' | 'unbound' | 'off';
+type ProcOutcome = 'played' | 'throttled' | 'cooldown' | 'voices' | 'culled' | 'unseen' | 'unbound' | 'off';
 /** one ambience emitter (see `ambience` in the header) */
 interface Emitter {
   role: string; cue: string; def: CueDef; pts: { x: number; y: number }[];
@@ -133,9 +134,11 @@ const PROC_PERIODIC_S = 6;   // … and a periodic one (an aura's tick, a run-up
 const PERIODIC_ON = new Set(['interval', 'moveDistance']);
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
-const AMB_DUCK_DB = 6;       // the ambience bus under a fight: full duck at combat intensity AMB_DUCK_FULL
-const AMB_DUCK_FROM = 0.2;   // (a minion skirmish, below this, does not duck it)
+const AMB_DUCK_DB = 6;       // the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
+const AMB_DUCK_FROM = 0.2;   // … none below this (a lone poke); the heat counts fighter-vs-fighter damage only
 const AMB_DUCK_FULL = 0.6;
+const FIGHT_HIT = 0.12;      // fight heat per fighter-vs-fighter hit near the listener (or your living fighter) …
+const FIGHT_DECAY = 0.15;    // … cooling per second
 const AMB_FADE_S = 1.5;      // emitters fade in on attach, out on detach
 const PROBE_MS = 10000;      // the format-deciding .ogg: other loads wait this long for its request (then the
                              // next one probes: a stalled request), and its decode counts as failed if unsettled
@@ -185,6 +188,8 @@ class Engine implements ValeAudioPort {
   private off: (() => void) | null = null;
   private readonly abilitySfx = new Map<string, { sfx?: string; hitSfx?: string }>();
   private intensity = 0;
+  /** fighter-vs-fighter damage near the listener only (the ambience duck; `intensity` also counts wave fights) */
+  private fight = 0;
   private combat = false;
   private calmFor = 0;
   private tick: number | null = null;
@@ -195,7 +200,7 @@ class Engine implements ValeAudioPort {
   /** `${passive}:${owner}` → ctx time of its last sounding proc */
   private readonly procLast = new Map<string, number>();
   /** dev / probes: every proc's outcome, counted */
-  readonly procStats: Record<ProcOutcome, number> = { played: 0, throttled: 0, cooldown: 0, culled: 0, unseen: 0, unbound: 0, off: 0 };
+  readonly procStats: Record<ProcOutcome, number> = { played: 0, throttled: 0, cooldown: 0, voices: 0, culled: 0, unseen: 0, unbound: 0, off: 0 };
   private readonly maps = new Map<string, AmbientLike | undefined>();
   /** the attached match's ambience emitters (built on attach, voiced once the context runs) */
   private amb: Emitter[] = [];
@@ -287,8 +292,8 @@ class Engine implements ValeAudioPort {
   }
 
   /** dev / harness: the output graph (the probes meter the limiter's output) */
-  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; master: GainNode } | null {
-    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, master: this.master } : null;
+  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; master: GainNode; bus: Record<Bus, GainNode> } | null {
+    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, master: this.master, bus: Object.fromEntries(this.bus) as Record<Bus, GainNode> } : null;
   }
 
   /** dev / harness: the cue ids on the alert path */
@@ -381,9 +386,9 @@ class Engine implements ValeAudioPort {
 
   /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around the listener (see `listener` in the
    *  header). A looping cue stops after `hold` seconds (a zone's delay + life), else after LOOP_DEFAULT_S.
-   *  Returns what became of it ('none': no such cue; 'off': no running context) */
+   *  Returns what became of it ('none': no such cue; 'off': no running context; 'voices': every voice outranks it) */
   private cue(cueId: string | undefined, pos: { x: number; y: number } | null, gainMul = 1, hold = 0, o: CueOpts = {}):
-    'played' | 'cooldown' | 'culled' | 'none' | 'off' {
+    'played' | 'cooldown' | 'voices' | 'culled' | 'none' | 'off' {
     if (!cueId) return 'none';
     const c = this.cues[cueId];
     if (!c) return 'none';
@@ -399,8 +404,8 @@ class Engine implements ValeAudioPort {
     }
     // voice limits (see `priority` in the header): the cue's own maxVoices, then the sfx pool
     const prio = c.priority + (o.lift ?? 0);
-    if (!this.makeRoom(this.voices.filter((v) => v.cue === cueId), c.maxVoices, prio)) return 'cooldown';
-    if (c.bus === 'sfx' && !this.makeRoom(this.voices.filter((v) => v.bus === 'sfx'), MAX_SFX_VOICES, prio)) return 'cooldown';
+    if (!this.makeRoom(this.voices.filter((v) => v.cue === cueId), c.maxVoices, prio)) return 'voices';
+    if (c.bus === 'sfx' && !this.makeRoom(this.voices.filter((v) => v.bus === 'sfx'), MAX_SFX_VOICES, prio)) return 'voices';
     this.lastPlay.set(cueId, now);
     const file = c.files[Math.floor(Math.random() * c.files.length)];
     void this.buffer(file).then((buf) => {
@@ -494,7 +499,7 @@ class Engine implements ValeAudioPort {
     this.off?.();
     this.off = null;
     this.client = client;
-    this.intensity = 0; this.combat = false; this.calmFor = 0;
+    this.intensity = 0; this.fight = 0; this.combat = false; this.calmFor = 0;
     this.lastT = client ? client.view.time : null;
     this.procLast.clear();
     this.stopAmbience();
@@ -557,7 +562,7 @@ class Engine implements ValeAudioPort {
       em.lpf.frequency.setTargetAtTime(pl.lpf || 20000, t, 0.35);
     }
     if (this.ambDuck) {
-      const k = Math.max(0, Math.min(1, (this.intensity - AMB_DUCK_FROM) / (AMB_DUCK_FULL - AMB_DUCK_FROM)));
+      const k = Math.max(0, Math.min(1, (this.fight - AMB_DUCK_FROM) / (AMB_DUCK_FULL - AMB_DUCK_FROM)));
       this.ambDuck.gain.setTargetAtTime(Math.pow(10, -AMB_DUCK_DB * k / 20), t, k > 0 ? 0.4 : 1.5);
     }
   }
@@ -703,7 +708,9 @@ class Engine implements ValeAudioPort {
       case 'attack': this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw); break;
       case 'damage': {
         const p = at(dst);
-        if (near(p)) this.intensity = Math.min(1, this.intensity + (src?.kind === 'fighter' && dst?.kind === 'fighter' ? 0.12 : 0.02));
+        const duel = src?.kind === 'fighter' && dst?.kind === 'fighter';
+        if (near(p)) this.intensity = Math.min(1, this.intensity + (duel ? 0.12 : 0.02));
+        if (near(p) && duel) this.fight = Math.min(1, this.fight + FIGHT_HIT);
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
         if (e.ability) break;
         if (e.crit) this.cue(this.ev('crit'), p, 1, 0, aw);
@@ -794,6 +801,7 @@ class Engine implements ValeAudioPort {
     }
     this.lastT = view ? view.time : null;
     this.intensity = Math.max(0, this.intensity - dt * 0.12);
+    this.fight = Math.max(0, this.fight - dt * FIGHT_DECAY);
     this.syncAmbience();
     const b = this.bed;
     if (!b || !this.ctx || !b.layer) return;
@@ -812,13 +820,14 @@ class Engine implements ValeAudioPort {
 }
 
 /** the points of one art.ambient group (see `ambience` in the header): an effect by its vfx id, a critter by its
- *  id, a prop by its fx's vfx id or its model's file name (without .glb) */
+ *  id, a prop by its fx's vfx id or its model's file name (without .glb, and without the content build's
+ *  content-address prefix: content's assets/props/ambient/bunting.glb ships as assets/<hash>-bunting.glb) */
 function ambientPoints(art: AmbientLike | undefined, source: string): { x: number; y: number }[] {
   const at: number[][] = [];
   for (const e of art?.effects ?? []) if (e.vfx === source) at.push(...e.at);
   for (const c of art?.critters ?? []) if (c.id === source) at.push(...c.spots);
   for (const p of art?.props ?? []) {
-    const file = p.model.slice(p.model.lastIndexOf('/') + 1).replace(/\.glb$/, '');
+    const file = p.model.slice(p.model.lastIndexOf('/') + 1).replace(/\.glb$/, '').replace(/^[0-9a-f]{12}-/, '');
     if (p.fx?.vfx === source || file === source) at.push(...p.at);
   }
   return at.filter((a) => Number.isFinite(a[0]) && Number.isFinite(a[1])).map((a) => ({ x: a[0], y: a[1] }));

@@ -53,7 +53,8 @@ async function journey(mode) {
   const steps = [];
   let n = 0;
   if (!session) {
-    session = await open(`/?dev=1&autopilot=match&speed=${speed}${audioFmt ? `&audio=${audioFmt}` : ''}`);
+    // hmr: false — other lanes' edits to the shared checkout must not reload the page under a journey
+    session = await open(`/?dev=1&autopilot=match&speed=${speed}${audioFmt ? `&audio=${audioFmt}` : ''}`, { hmr: false });
     session.audioFetches = { ogg: 0, m4a: 0 };
     session.page.on('request', (q) => { const m = /\.(ogg|m4a)$/.exec(new URL(q.url()).pathname); if (m) session.audioFetches[m[1]]++; });
   }

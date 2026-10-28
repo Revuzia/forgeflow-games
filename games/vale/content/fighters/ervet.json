@@ -53,7 +53,7 @@
       "id": "ervet_dawnglass_edge",
       "name": "Dawnglass Edge",
       "icon": "assets/ui/icons/abilities/ervet_dawnglass_edge.webp",
-      "desc": "Ervet's attacks deal an extra 2% of her max Health as magic damage. With the blade whole she has +15 armor and magic resist; in Hilt form she has 15 less than her base armor and resist, but moves 20% faster and attacks 30% faster (reach 1.7 m).",
+      "desc": "Ervet's attacks deal an extra 2% of her max Health as magic damage. With the blade whole she has +15 armor and magic resist; in Hilt form she has 15 less than her base armor and resist, but moves 20% faster and attacks 30% faster (reach 1.7 m). Her attack on an enemy carrying a lodged shard tears it out: it bursts for 20 + 6 per level (+3% bonus Health) magic damage and slows by 30% for 1 s, to that enemy and everyone within 1.75 m of it.",
       "stats": {
         "armor": 15,
         "resist": 15
@@ -75,48 +75,61 @@
         },
         {
           "on": "attackHit",
+          "filter": {
+            "enemies": true,
+            "fighters": true,
+            "minions": true,
+            "monsters": true,
+            "summons": false
+          },
           "cond": {
-            "kind": "inForm",
-            "form": "great"
+            "kind": "targetHasMark",
+            "mark": "ervet_lodged"
           },
           "effects": [
             {
-              "op": "mark",
-              "mark": "ervet_cleaved",
-              "duration": 0.5,
-              "stacks": 1,
-              "max": 1,
-              "to": "hit"
-            },
-            {
-              "op": "area",
-              "shape": {
-                "kind": "cone",
-                "radius": 3.5,
-                "angleDeg": 120
-              },
-              "at": "self",
-              "onHit": [
+              "op": "consumeMark",
+              "mark": "ervet_lodged",
+              "to": "hit",
+              "perStack": [
                 {
-                  "op": "if",
-                  "cond": {
-                    "kind": "not",
-                    "cond": {
-                      "kind": "targetHasMark",
-                      "mark": "ervet_cleaved"
-                    }
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 1.75
                   },
-                  "then": [
+                  "at": "hit",
+                  "delay": 0,
+                  "filter": {
+                    "enemies": true,
+                    "fighters": true,
+                    "minions": true,
+                    "monsters": true,
+                    "summons": true
+                  },
+                  "onHit": [
                     {
                       "op": "damage",
                       "amount": {
-                        "base": 0,
-                        "ad": 0.6
+                        "base": 20,
+                        "level": 6,
+                        "bonusHp": 0.03
                       },
-                      "type": "phys",
+                      "type": "magic",
+                      "to": "hit"
+                    },
+                    {
+                      "op": "status",
+                      "status": "slow",
+                      "duration": 1,
+                      "power": 0.3,
                       "to": "hit"
                     }
-                  ]
+                  ],
+                  "present": {
+                    "vfx": "ervet_a3_shatter",
+                    "hitVfx": "lib_hit_magic"
+                  }
                 }
               ]
             }
@@ -370,8 +383,7 @@
           }
         },
         "great": {
-          "name": "Great Blade",
-          "attackRange": 2.6
+          "name": "Whole Again"
         }
       },
       "present": {
@@ -634,7 +646,7 @@
       "id": "ervet_whole_again",
       "name": "Whole Again",
       "icon": "assets/ui/icons/abilities/ervet_whole_again.webp",
-      "desc": "Ervet leaps up to 6 m. Where she lands, enemies within 3.5 m take {effects.0.onArrive.0.onHit.0.amount} magic damage and are knocked airborne for 0.75 s, and the blade reforms oversized for 6 s: her attacks reach 0.6 m farther and cleave a 120° arc.",
+      "desc": "Ervet leaps up to 6 m and calls every shard home. As she lands, enemies within 4.5 m take {effects.0.onArrive.0.onHit.0.amount} magic damage, are dragged 2 m toward her and each keeps a lodged shard for 6 s. The blade is whole again for 6 s at its usual reach; her attacks tear lodged shards out (see Dawnglass Edge).",
       "maxRank": 3,
       "cooldown": [
         100,
@@ -648,7 +660,7 @@
         "range": 6,
         "indicator": {
           "kind": "circle",
-          "radius": 3.5
+          "radius": 4.5
         }
       },
       "castTime": 0.3,
@@ -663,7 +675,7 @@
               "op": "area",
               "shape": {
                 "kind": "circle",
-                "radius": 3.5
+                "radius": 4.5
               },
               "at": "self",
               "onHit": [
@@ -683,9 +695,17 @@
                 },
                 {
                   "op": "displace",
-                  "mode": "airborne_in_place",
-                  "distance": 0,
-                  "duration": 0.75,
+                  "mode": "pull",
+                  "distance": 2,
+                  "duration": 0.6,
+                  "to": "hit"
+                },
+                {
+                  "op": "mark",
+                  "mark": "ervet_lodged",
+                  "duration": 6,
+                  "stacks": 1,
+                  "max": 1,
                   "to": "hit"
                 }
               ],

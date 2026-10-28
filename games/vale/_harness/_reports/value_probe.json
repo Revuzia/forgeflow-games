@@ -84434,9 +84434,623 @@
      "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
     ]
    }
+  },
+  "fw_W1_fog1": {
+   "rift_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "fog": {
+     "lane": {
+      "px": 2841773,
+      "p25": 0.532,
+      "p50": 0.537,
+      "p75": 0.542,
+      "meanRatio": 0.537,
+      "unseenLstarP50": 20
+     },
+     "verge": {
+      "px": 447885,
+      "p25": 0.527,
+      "p50": 0.537,
+      "p75": 0.547,
+      "meanRatio": 0.536,
+      "unseenLstarP50": 9
+     },
+     "jungle": {
+      "px": 310136,
+      "p25": 0.532,
+      "p50": 0.537,
+      "p75": 0.547,
+      "meanRatio": 0.537,
+      "unseenLstarP50": 7
+     },
+     "camp": {
+      "px": 450452,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.543,
+      "unseenLstarP50": 16.5
+     },
+     "brush": {
+      "px": 78531,
+      "p25": 0.477,
+      "p50": 0.502,
+      "p75": 0.517,
+      "meanRatio": 0.499,
+      "unseenLstarP50": 5.5
+     },
+     "wallFace": {
+      "px": 1230177,
+      "p25": 0.527,
+      "p50": 0.537,
+      "p75": 0.547,
+      "meanRatio": 0.533,
+      "unseenLstarP50": 6
+     },
+     "wallLip": {
+      "px": 821819,
+      "p25": 0.532,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.538,
+      "unseenLstarP50": 10
+     },
+     "wallTop": {
+      "px": 1138001,
+      "p25": 0.522,
+      "p50": 0.532,
+      "p75": 0.542,
+      "meanRatio": 0.528,
+      "unseenLstarP50": 9
+     },
+     "canopy": {
+      "px": 1402577,
+      "p25": 0.492,
+      "p50": 0.512,
+      "p75": 0.527,
+      "meanRatio": 0.51,
+      "unseenLstarP50": 10
+     },
+     "rock": {
+      "px": 19078,
+      "p25": 0.463,
+      "p50": 0.487,
+      "p75": 0.507,
+      "meanRatio": 0.486,
+      "unseenLstarP50": 7.5
+     },
+     "grass": {
+      "px": 244962,
+      "p25": 0.432,
+      "p50": 0.463,
+      "p75": 0.497,
+      "meanRatio": 0.466,
+      "unseenLstarP50": 6.5
+     },
+     "clutter": {
+      "px": 25953,
+      "p25": 0.468,
+      "p50": 0.512,
+      "p75": 0.527,
+      "meanRatio": 0.5,
+      "unseenLstarP50": 8
+     },
+     "wick": {
+      "px": 111666,
+      "p25": 0.468,
+      "p50": 0.512,
+      "p75": 0.547,
+      "meanRatio": 0.513,
+      "unseenLstarP50": 17
+     },
+     "structure": {
+      "px": 114371,
+      "p25": 0.492,
+      "p50": 0.512,
+      "p75": 0.532,
+      "meanRatio": 0.512,
+      "unseenLstarP50": 23.5
+     },
+     "frame": {
+      "px": 11788574,
+      "p25": 0.522,
+      "p50": 0.537,
+      "p75": 0.542,
+      "meanRatio": 0.533,
+      "unseenLstarP50": 13.5
+     },
+     "landmark": {
+      "px": 83976,
+      "p25": 0.532,
+      "p50": 0.542,
+      "p75": 0.542,
+      "meanRatio": 0.538,
+      "unseenLstarP50": 18
+     },
+     "monster": {
+      "px": 4330,
+      "p25": 0.163,
+      "p50": 0.338,
+      "p75": 0.542,
+      "meanRatio": 0.36,
+      "unseenLstarP50": 17.5
+     },
+     "shadow": {
+      "px": 117310,
+      "p25": 0.882,
+      "p50": 0.887,
+      "p75": 0.897,
+      "meanRatio": 0.889,
+      "unseenLstarP50": 13.5
+     },
+     "seat": {
+      "px": 1950258,
+      "p25": 0.537,
+      "p50": 0.537,
+      "p75": 0.542,
+      "meanRatio": 0.537,
+      "unseenLstarP50": 19.5
+     },
+     "water": {
+      "px": 18059,
+      "p25": 0.482,
+      "p50": 0.502,
+      "p75": 0.522,
+      "meanRatio": 0.504,
+      "unseenLstarP50": 10
+     },
+     "fighter": {
+      "px": 33720,
+      "p25": 0.487,
+      "p50": 0.527,
+      "p75": 0.547,
+      "meanRatio": 0.53,
+      "unseenLstarP50": 23
+     }
+    },
+    "verdict": {
+     "fog_lane": "p50 0.537 PASS (0.5-0.6)",
+     "fog_jungle": "p50 0.537 PASS (0.5-0.6)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "rift_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "fog": {
+     "lane": {
+      "px": 705287,
+      "p25": 0.537,
+      "p50": 0.537,
+      "p75": 0.542,
+      "meanRatio": 0.539,
+      "unseenLstarP50": 20
+     },
+     "verge": {
+      "px": 127142,
+      "p25": 0.537,
+      "p50": 0.547,
+      "p75": 0.547,
+      "meanRatio": 0.545,
+      "unseenLstarP50": 8.5
+     },
+     "jungle": {
+      "px": 86711,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 7.5
+     },
+     "camp": {
+      "px": 111762,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.547,
+      "meanRatio": 0.548,
+      "unseenLstarP50": 17
+     },
+     "brush": {
+      "px": 34992,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.552,
+      "meanRatio": 0.545,
+      "unseenLstarP50": 8
+     },
+     "wallFace": {
+      "px": 343187,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.546,
+      "unseenLstarP50": 7
+     },
+     "wallLip": {
+      "px": 200232,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.548,
+      "unseenLstarP50": 11.5
+     },
+     "wallTop": {
+      "px": 487912,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.542,
+      "unseenLstarP50": 11
+     },
+     "canopy": {
+      "px": 164910,
+      "p25": 0.527,
+      "p50": 0.532,
+      "p75": 0.537,
+      "meanRatio": 0.534,
+      "unseenLstarP50": 11.5
+     },
+     "rock": {
+      "px": 3590,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 13.5
+     },
+     "grass": {
+      "px": 32388,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.552,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 11
+     },
+     "wick": {
+      "px": 26485,
+      "p25": 0.522,
+      "p50": 0.542,
+      "p75": 0.578,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 20
+     },
+     "structure": {
+      "px": 27514,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.548,
+      "unseenLstarP50": 30.5
+     },
+     "frame": {
+      "px": 3058582,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 14.5
+     },
+     "monster": {
+      "px": 1044,
+      "p25": 0.188,
+      "p50": 0.393,
+      "p75": 0.568,
+      "meanRatio": 0.396,
+      "unseenLstarP50": 20
+     },
+     "landmark": {
+      "px": 21137,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.547,
+      "meanRatio": 0.545,
+      "unseenLstarP50": 17
+     },
+     "shadow": {
+      "px": 30757,
+      "p25": 0.882,
+      "p50": 0.887,
+      "p75": 0.897,
+      "meanRatio": 0.888,
+      "unseenLstarP50": 14
+     },
+     "seat": {
+      "px": 484138,
+      "p25": 0.542,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.543,
+      "unseenLstarP50": 20
+     },
+     "water": {
+      "px": 4261,
+      "p25": 0.502,
+      "p50": 0.522,
+      "p75": 0.532,
+      "meanRatio": 0.521,
+      "unseenLstarP50": 14
+     },
+     "fighter": {
+      "px": 8097,
+      "p25": 0.527,
+      "p50": 0.542,
+      "p75": 0.557,
+      "meanRatio": 0.547,
+      "unseenLstarP50": 25.5
+     }
+    },
+    "verdict": {
+     "fog_lane": "p50 0.537 PASS (0.5-0.6)",
+     "fog_jungle": "p50 0.542 PASS (0.5-0.6)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "fray_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "fog": {
+     "lane": {
+      "px": 17667379,
+      "p25": 0.537,
+      "p50": 0.537,
+      "p75": 0.542,
+      "meanRatio": 0.538,
+      "unseenLstarP50": 19.5
+     },
+     "brush": {
+      "px": 129151,
+      "p25": 0.492,
+      "p50": 0.517,
+      "p75": 0.532,
+      "meanRatio": 0.517,
+      "unseenLstarP50": 7.5
+     },
+     "wallLip": {
+      "px": 1049487,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.542,
+      "unseenLstarP50": 11.5
+     },
+     "grass": {
+      "px": 173086,
+      "p25": 0.427,
+      "p50": 0.458,
+      "p75": 0.482,
+      "meanRatio": 0.458,
+      "unseenLstarP50": 9
+     },
+     "landmark": {
+      "px": 464823,
+      "p25": 0.532,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.54,
+      "unseenLstarP50": 21.5
+     },
+     "lamp": {
+      "px": 679,
+      "p25": 0.547,
+      "p50": 0.552,
+      "p75": 0.557,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 40.5
+     },
+     "frame": {
+      "px": 25979936,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.54,
+      "unseenLstarP50": 19
+     },
+     "wallFace": {
+      "px": 447244,
+      "p25": 0.517,
+      "p50": 0.522,
+      "p75": 0.537,
+      "meanRatio": 0.522,
+      "unseenLstarP50": 3.5
+     },
+     "wallTop": {
+      "px": 5740976,
+      "p25": 0.547,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.548,
+      "unseenLstarP50": 19.5
+     },
+     "fighter": {
+      "px": 19224,
+      "p25": 0.463,
+      "p50": 0.537,
+      "p75": 0.603,
+      "meanRatio": 0.527,
+      "unseenLstarP50": 24.5
+     },
+     "actor": {
+      "px": 5958,
+      "p25": 0.378,
+      "p50": 0.487,
+      "p75": 0.512,
+      "meanRatio": 0.464,
+      "unseenLstarP50": 15
+     }
+    },
+    "verdict": {
+     "fog_lane": "p50 0.537 PASS (0.5-0.6)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "fray_low": {
+    "tier": "low",
+    "viewport": [
+     1280,
+     720
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "fog": {
+     "lane": {
+      "px": 4396613,
+      "p25": 0.537,
+      "p50": 0.542,
+      "p75": 0.542,
+      "meanRatio": 0.542,
+      "unseenLstarP50": 19.5
+     },
+     "brush": {
+      "px": 40350,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.547,
+      "unseenLstarP50": 12.5
+     },
+     "wallLip": {
+      "px": 254575,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.548,
+      "unseenLstarP50": 12.5
+     },
+     "grass": {
+      "px": 24807,
+      "p25": 0.527,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.54,
+      "unseenLstarP50": 9.5
+     },
+     "landmark": {
+      "px": 116466,
+      "p25": 0.542,
+      "p50": 0.547,
+      "p75": 0.547,
+      "meanRatio": 0.547,
+      "unseenLstarP50": 22.5
+     },
+     "frame": {
+      "px": 6546582,
+      "p25": 0.542,
+      "p50": 0.542,
+      "p75": 0.547,
+      "meanRatio": 0.544,
+      "unseenLstarP50": 19
+     },
+     "wallFace": {
+      "px": 147646,
+      "p25": 0.517,
+      "p50": 0.522,
+      "p75": 0.532,
+      "meanRatio": 0.526,
+      "unseenLstarP50": 3.5
+     },
+     "wallTop": {
+      "px": 1420965,
+      "p25": 0.547,
+      "p50": 0.547,
+      "p75": 0.552,
+      "meanRatio": 0.55,
+      "unseenLstarP50": 19.5
+     },
+     "fighter": {
+      "px": 4494,
+      "p25": 0.497,
+      "p50": 0.552,
+      "p75": 0.627,
+      "meanRatio": 0.55,
+      "unseenLstarP50": 25
+     },
+     "actor": {
+      "px": 1224,
+      "p25": 0.517,
+      "p50": 0.537,
+      "p75": 0.547,
+      "meanRatio": 0.505,
+      "unseenLstarP50": 35.5
+     }
+    },
+    "verdict": {
+     "fog_lane": "p50 0.542 PASS (0.5-0.6)"
+    },
+    "logs": [
+     "[error] Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   }
   }
  },
- "generated": "2026-10-28T20:10:10.688Z",
+ "generated": "2026-10-28T20:31:52.207Z",
  "caveats": [
   "FRAY: the honed plate is ~86 % of every FRAY frame, so the frame median follows the plate band (L* 34-40 = luma 80-95); frame p50 55-75 cannot hold together with the plate band there.",
   "fighters: top-25 % L* is the fighter art and light rig (unchanged by this rebase, +0.5 L* from the LUT pivot); it measures 59-67, under tokens fighter.valueLstar.top25 70-85, so the >= 30 L* gap over the lane holds only where the fighter art is bright enough.",

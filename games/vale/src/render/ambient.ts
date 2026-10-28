@@ -187,11 +187,15 @@ void main() {
   vec4 t = texture2D( uAtlas, vUv );
   float a = t.a * vCol.a;
   if ( a < 0.002 ) discard;
-  // the world's fog of war dims the ambient like the ground under it (value x0.55 display = x0.268 linear); below the
-  // ground (a gorge) it thins into the drop's own mist (~0.06 / m, the gorge's density)
-  float vis = mix( 0.268, 1.0, valeVision( vWorld.xz ) ) * exp( 0.06 * min( vWorld.y + 1.0, 0.0 ) );
-  if ( vMode < 0.5 ) gl_FragColor = vec4( vCol.rgb * ( 0.3 + 0.7 * t.r ) * a * vis, 0.0 );
-  else gl_FragColor = vec4( vCol.rgb * ( 0.72 + 0.28 * t.r ) * a * vis, a );
+  // the world's fog of war dims the ambient like the ground under it: the world's own function (valeFogShade, the
+  // display value x0.55 and saturation x0.4; no tint shift: these are light over the ground, not a surface); below
+  // the ground (a gorge) it thins into the drop's own mist (~0.06 / m, the gorge's density)
+  float vis = valeVision( vWorld.xz );
+  float drop = exp( 0.06 * min( vWorld.y + 1.0, 0.0 ) );
+  vec3 col = vCol.rgb * ( vMode < 0.5 ? 0.3 + 0.7 * t.r : 0.72 + 0.28 * t.r );
+  if ( vis < 0.999 ) col = mix( valeFogShade( col, valeFogValue, 0.4, 0.0 ), col, vis );
+  if ( vMode < 0.5 ) gl_FragColor = vec4( col * a * drop, 0.0 );
+  else gl_FragColor = vec4( col * a * drop, a );
 }`;
 
 interface Emitter { row: number; x: number; y: number; z: number; yaw: number; scale: number; count: number; reach: number; first: number; def: string }

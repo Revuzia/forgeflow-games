@@ -514,10 +514,11 @@ def _weather(mat, hexcol: str, streaks: float, chips: float, height: float):
     g.link(c, sock)
 
 
-def _masonry(mat, brick: tuple, strength: float):
+def _masonry(mat, brick: tuple, strength: float, mirror_y: float = 0.0):
     """Coursed masonry painted on near-vertical faces: a Brick texture in (arc length around Z, height)
     coordinates (the seam sits on +X, away from the camera side), dark mortar joints and a value per
-    stone; faded out on tops (|normal z| > 0.7)."""
+    stone; faded out on tops (|normal z| > 0.7). `mirror_y` > 0: the arc length is taken about the axis
+    at (0, sign(y) * mirror_y) instead (two drum towers mirrored across y = 0 share one material)."""
     if strength <= 0:
         return
     bw, bh, mortar = brick
@@ -528,10 +529,13 @@ def _masonry(mat, brick: tuple, strength: float):
     src = sock.links[0].from_socket
     sep = g.n("ShaderNodeSeparateXYZ")
     g.link(g.obj, sep.inputs[0])
+    ys = sep.outputs["Y"]
+    if mirror_y:
+        ys = g.math("SUBTRACT", ys, g.math("MULTIPLY", g.math("SIGN", ys), mirror_y))
     nx = g.math("MULTIPLY", sep.outputs["X"], -1.0)
-    ny = g.math("MULTIPLY", sep.outputs["Y"], -1.0)
+    ny = g.math("MULTIPLY", ys, -1.0)
     ang = g.math("ARCTAN2", ny, nx)
-    rad = g.math("MAXIMUM", g.math("SQRT", g.math("ADD", g.math("POWER", sep.outputs["X"], 2.0), g.math("POWER", sep.outputs["Y"], 2.0))), 0.25)
+    rad = g.math("MAXIMUM", g.math("SQRT", g.math("ADD", g.math("POWER", sep.outputs["X"], 2.0), g.math("POWER", ys, 2.0))), 0.25)
     u = g.math("MULTIPLY", ang, rad)
     cv = g.n("ShaderNodeCombineXYZ")
     g.link(u, cv.inputs[0])
@@ -557,6 +561,26 @@ def _masonry(mat, brick: tuple, strength: float):
     g.link(c, sock)
 
 
+def _edge_ink(mat, hexcol: str, radius: float, chalk: float, ink: float, ink_dist: float):
+    """Landmark-scale edge language (map landmarks read from 28 m, where the bible's 2 cm chalk is a pixel):
+    a wide chalked rim on convex edges (a Bevel mask of `radius`, occluded edges excluded) and ink in the joints
+    and recesses (AO over `ink_dist`), mixed over the painted colour."""
+    g = M.G.__new__(M.G)
+    g.mat, g.nt, g.x, g._coord, g._geo = mat, mat.node_tree, -4000, None, None
+    g.bsdf = mat.node_tree.nodes.get("BSDF")
+    sock = g.bsdf.inputs["Base Color"]
+    c = sock.links[0].from_socket
+    ao = g.ao(distance=ink_dist, samples=12)
+    if ink > 0:
+        k = g.math("MULTIPLY", g.ramp(ao, [(0.25, 1.0), (0.8, 0.0)]), ink)
+        c = g.mix(c, M.shade_hex(hexcol, 0.22, 1.05), k)
+    if chalk > 0:
+        e = M.edge_mask(g, radius, 4.0, samples=12)
+        convex = g.ramp(g.ao(distance=radius * 1.5, samples=8), [(0.7, 0.0), (0.95, 1.0)])
+        c = g.mix(c, M.shade_hex(hexcol, 1.32, 0.55), g.math("MULTIPLY", g.math("MULTIPLY", e, convex), chalk))
+    g.link(c, sock)
+
+
 def paint_set(spec: dict, height: float) -> dict:
     """Build the structure's painted materials. spec: name -> dict(kind, hex, rough, var, streaks,
     chips, chisel, speckle, veins, scale). kind: stone | glass | accent."""
@@ -574,7 +598,9 @@ def paint_set(spec: dict, height: float) -> dict:
                               speckle=s.get("speckle", 0.0), veins=s.get("veins", 0.0), scale=s.get("scale", 0.6))
             _weather(m, s["hex"], s.get("streaks", 0.35), s.get("chips", 0.45), height)
             if s.get("brick"):
-                _masonry(m, s["brick"], s.get("brick_k", 0.6))
+                _masonry(m, s["brick"], s.get("brick_k", 0.6), s.get("brick_mirror_y", 0.0))
+            if s.get("edge_light"):                          # landmarks: (radius m, chalk, ink, ink distance m)
+                _edge_ink(m, s["hex"], *s["edge_light"])
         if kind != "accent":
             _var_multiply(m, s.get("var", 0.07))
         out[name] = m

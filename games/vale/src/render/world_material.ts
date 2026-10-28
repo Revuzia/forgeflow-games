@@ -5,6 +5,15 @@
 //   * fog of war: the local team's vision grid (R8, smoothed over time by fog.ts) — outside vision
 //     value ×0.55, saturation ×0.4 and a 15 % shift toward the fog tint #2A3140, with a crisp edge.
 //     Identical on every quality tier (it is competitive information).
+//     ×0.55 is what the DISPLAY shows (tokens grade.fogOfWar.valueMul; env F3). The fog is applied here, in the linear
+//     HDR working space, but the post chain then tone-maps (Khronos PBR Neutral, whose toe is quadratic below 0.08) and
+//     grades (the map's LUT), so no constant linear factor lands on ×0.55: the old ×0.268 (0.55^2.2) displayed
+//     ×0.21-0.32. valeFogShade() solves the factor per fragment instead: the lit colour's display luma through a mirror
+//     of the post chain's tone map, sRGB and the LUT's grey-axis response (valeFogGrade, setFogGrade() from post.ts
+//     whenever the LUT changes), × 0.55, back through the inverse grade, then the Neutral toe solved exactly for the
+//     scale of the desaturated, tinted colour. Every patched material (ground, walls, scatter, landmarks, the cart,
+//     ambient props, units) and the ambient particles run that one function; a material may set its own display
+//     multiplier for unseen ground through `valeFogLocal` (the gorge drop ×0.75, the Standing Shadow ×0.9).
 //   * map-edge haze: outside the playable bounds only (world space, NEVER camera distance — the
 //     bible bans camera-distance fog), fading to the map's fog colour.
 // FIGHTER materials replace the sun's direction with their own key (view-space azimuth 225°, elevation
@@ -30,9 +39,76 @@
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
 import {
-  Color, type DataTexture, type Material, NoBlending, NormalBlending, ShaderChunk, Texture, Vector2, Vector3, Vector4,
-  type WebGLProgramParametersWithUniforms,
+  ClampToEdgeWrapping, Color, DataTexture, DataUtils, HalfFloatType, LinearFilter, type Material, NoBlending, NormalBlending, RGBAFormat,
+  ShaderChunk, Texture, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
 } from 'three';
+
+/** knots of the grade response table (valeFogGrade): the LUT's own grid (33³) */
+const GRADE_KNOTS = 33;
+const LUMA = [0.2126, 0.7152, 0.0722] as const;
+
+/** the grade's grey-axis response, 33 × 1 RGBA half float: rgb = the LUT's output per channel at grey input i / 32
+ *  (display in → display out); a = the inverse of its grey display luma (display luma i / 32 → the grey input giving
+ *  it). Identity until setFogGrade() sees the map's LUT. */
+const fogGrade = (() => {
+  const t = new DataTexture(new Uint16Array(GRADE_KNOTS * 4), GRADE_KNOTS, 1, RGBAFormat, HalfFloatType);
+  t.magFilter = LinearFilter; t.minFilter = LinearFilter;
+  t.wrapS = t.wrapT = ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.name = 'vale_fog_grade';
+  return t;
+})();
+
+/**
+ * env F3: calibrate the fog of war against the grade the post chain applies (post.ts calls it whenever its LUT
+ * changes; null = the identity LUT). Reads the LUT's grey diagonal (the nodes a tetrahedral lookup interpolates
+ * between on that axis), per channel, and inverts its grey display luma, into valeFogGrade.
+ */
+export function setFogGrade(lut: Texture | null): void {
+  const N = GRADE_KNOTS;
+  const img = (lut?.image ?? null) as { data?: ArrayLike<number>; width?: number; height?: number; depth?: number } | null;
+  const n = img?.width ?? 0;
+  const data = img?.data;
+  const lutDomain = lut as (Texture & { domainMin?: Vector3; domainMax?: Vector3 }) | null;
+  const ok = !!data && n >= 2 && img?.height === n && (img?.depth ?? n) === n && data.length >= n * n * n * 3;
+  const ch = ok ? Math.round(data.length / (n * n * n)) : 4;
+  const scale = ok && data instanceof Uint8Array ? 1 / 255 : 1;
+  const dMin = lutDomain?.domainMin?.x ?? 0, dMax = lutDomain?.domainMax?.x ?? 1;
+  /** the LUT's output channel c at grey input v (display, 0-1) */
+  const grey = (v: number, c: number): number => {
+    if (!ok) return v;
+    const u = Math.min(1, Math.max(0, (v - dMin) / Math.max(1e-6, dMax - dMin))) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(u)), f = u - i;
+    const at = (k: number): number => Number(data[((k * n + k) * n + k) * ch + c]) * scale;
+    return at(i) * (1 - f) + at(i + 1) * f;
+  };
+  const lumaAt = (v: number): number => LUMA[0] * grey(v, 0) + LUMA[1] * grey(v, 1) + LUMA[2] * grey(v, 2);
+  // the forward grey display luma on a fine grid, inverted by a monotone walk (a LUT is monotone on its grey axis;
+  // any flat or folded stretch is skipped, so the inverse never steps back)
+  const FINE = 1024;
+  const xs: number[] = [], ys: number[] = [];
+  for (let k = 0; k <= FINE; k++) {
+    const v = k / FINE, y = lumaAt(v);
+    if (!ys.length || y > ys[ys.length - 1] + 1e-7) { xs.push(v); ys.push(y); }
+  }
+  const inv = (d: number): number => {
+    if (d <= ys[0]) return xs[0] * (ys[0] > 0 ? d / ys[0] : 0);
+    if (d >= ys[ys.length - 1]) return xs[xs.length - 1];
+    let lo = 0, hi = ys.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ys[m] <= d) lo = m; else hi = m; }
+    return xs[lo] + ((d - ys[lo]) / (ys[hi] - ys[lo])) * (xs[hi] - xs[lo]);
+  };
+  const out = fogGrade.image.data as Uint16Array;
+  for (let i = 0; i < N; i++) {
+    const v = i / (N - 1);
+    out[i * 4] = DataUtils.toHalfFloat(grey(v, 0));
+    out[i * 4 + 1] = DataUtils.toHalfFloat(grey(v, 1));
+    out[i * 4 + 2] = DataUtils.toHalfFloat(grey(v, 2));
+    out[i * 4 + 3] = DataUtils.toHalfFloat(inv(v));
+  }
+  fogGrade.needsUpdate = true;
+}
+setFogGrade(null);
 
 /** uniforms shared (by reference) by every patched material */
 export const worldUniforms = {
@@ -41,6 +117,10 @@ export const worldUniforms = {
   valeFogTexel: { value: new Vector2(0.02, 0.02) },   // one grid cell in uv
   valeFogOn: { value: 0 },
   valeFogTint: { value: new Color().setStyle('#2A3140') },
+  // env F3: the display value multiplier for unseen ground (tokens grade.fogOfWar.valueMul) and the grade response
+  // the fog solves against (setFogGrade)
+  valeFogValue: { value: 0.55 },
+  valeFogGrade: { value: fogGrade as Texture },
   valeBounds: { value: new Vector4(0, 0, 100, 100) }, // minX, minZ, maxX, maxZ (playable)
   valeEdgeColor: { value: new Color().setStyle('#8E9AA6') },
   valeEdgeRange: { value: new Vector2(4, 18) },       // haze starts / is full this far outside the bounds
@@ -67,10 +147,14 @@ uniform vec2 valeFogScale;
 uniform vec2 valeFogTexel;
 uniform float valeFogOn;
 uniform vec3 valeFogTint;
+uniform float valeFogValue;
+uniform sampler2D valeFogGrade;
 uniform vec4 valeBounds;
 uniform vec3 valeEdgeColor;
 uniform vec2 valeEdgeRange;
 uniform float valeEdgeOn;
+// a material's own display multiplier for its unseen fragments (>= 0 replaces valeFogValue; set before the fog runs)
+float valeFogLocal = -1.0;
 float valeVision( vec2 xz ) {
   if ( valeFogOn < 0.5 ) return 1.0;
   vec2 uv = xz * valeFogScale;
@@ -81,21 +165,61 @@ float valeVision( vec2 xz ) {
   // crisp, but not blocky: the grid is 2 m; the edge resolves over ~0.6 m
   return smoothstep( 0.38, 0.62, v );
 }
-// value x0.55 is a DISPLAY-space figure: 0.55^2.2 = 0.268 in the linear working space
+// the post chain's tone map (post.ts: ToneMappingEffect NEUTRAL, Khronos PBR Neutral, exposure 1), mirrored
+vec3 valeToneNeutral( vec3 c ) {
+  float x = min( c.r, min( c.g, c.b ) );
+  c -= x < 0.08 ? x - 6.25 * x * x : 0.04;
+  float peak = max( c.r, max( c.g, c.b ) );
+  if ( peak < 0.76 ) return c;
+  float np = 1.0 - 0.0576 / ( peak - 0.52 );
+  c *= np / peak;
+  return mix( c, vec3( np ), 1.0 - 1.0 / ( 0.15 * ( peak - np ) + 1.0 ) );
+}
+vec4 valeGradeAt( float e ) { return texture( valeFogGrade, vec2( clamp( e, 0.0, 1.0 ) * ( 32.0 / 33.0 ) + 0.5 / 33.0, 0.5 ) ); }
+// the scale k with tone-mapped luma( ( 1 - ta ) k g + ta tint ) = Lf, (gj, tj) the darkest channel: below the Neutral's
+// compression the tone map subtracts that channel's toe offset (x - 6.25 x^2 under 0.08, else 0.04) from every
+// channel, so the luma is a quadratic in k (a linear one above the toe)
+float valeFogSolve( float lum, float gj, float tj, float ta, float lt, float Lf ) {
+  float A = ( 1.0 - ta ) * gj, B = ta * tj;
+  float a = 6.25 * A * A, b = ( 1.0 - ta ) * lum - A + 12.5 * A * B, c0 = lt - B + 6.25 * B * B - Lf;
+  float kt = a > 1e-10 ? ( -b + sqrt( max( b * b - 4.0 * a * c0, 0.0 ) ) ) / ( 2.0 * a ) : -c0 / max( b, 1e-8 );
+  float kl = ( Lf - lt + 0.04 ) / max( ( 1.0 - ta ) * lum, 1e-8 );
+  return A * kt + B < 0.08 ? kt : kl;
+}
+// the unseen colour of a lit linear colour c: saturation x sat, ta of the way toward the fog tint, its scale solved so
+// the DISPLAY luma (after tone map, sRGB and the grade) is mul x the lit one's (env F3; the header)
+vec3 valeFogShade( vec3 c, float mul, float sat, float ta ) {
+  const vec3 W = vec3( 0.2126, 0.7152, 0.0722 );
+  c = max( c, vec3( 0.0 ) );
+  float lum = dot( c, W );
+  vec3 g = mix( vec3( lum ), c, sat );
+  vec3 t = clamp( valeToneNeutral( c ), 0.0, 1.0 );
+  vec3 e = mix( t * 12.92, 1.055 * pow( t, vec3( 1.0 / 2.4 ) ) - 0.055, step( 0.0031308, t ) );
+  float dC = dot( vec3( valeGradeAt( e.r ).r, valeGradeAt( e.g ).g, valeGradeAt( e.b ).b ), W );
+  float ef = valeGradeAt( mul * dC ).a;
+  float Lf = ef <= 0.04045 ? ef / 12.92 : pow( ( ef + 0.055 ) / 1.055, 2.4 );
+  float lt = ta * dot( valeFogTint, W );
+  // the darkest channel: the lit colour's first, then the tinted result's own (the tint is bluest, it can reorder them)
+  int j = c.r <= c.g && c.r <= c.b ? 0 : ( c.g <= c.b ? 1 : 2 );
+  float k = valeFogSolve( lum, g[ j ], valeFogTint[ j ], ta, lt, Lf );
+  vec3 h = ( 1.0 - ta ) * max( k, 0.0 ) * g + ta * valeFogTint;
+  int j2 = h.r <= h.g && h.r <= h.b ? 0 : ( h.g <= h.b ? 1 : 2 );
+  if ( j2 != j ) k = valeFogSolve( lum, g[ j2 ], valeFogTint[ j2 ], ta, lt, Lf );
+  // never brighter than lit
+  return ( 1.0 - ta ) * clamp( k, 0.0, 1.0 ) * g + ta * valeFogTint;
+}
 vec3 valeApplyWorldFog( vec3 c, vec3 wp ) {
   float vis = valeVision( wp.xz );
-  float lum = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-  #ifdef VALE_KEEP_COLOR
-  vec3 fogged = c * 0.268;
-  #else
-  vec3 fogged = mix( vec3( lum ), c, 0.4 ) * 0.268;
-  #endif
-  float tl = max( dot( valeFogTint, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 );
-  #ifndef VALE_KEEP_COLOR
-  // 15 % toward the fog tint (absolute, so the darkest stone keeps a readable floor)
-  fogged = mix( fogged, valeFogTint, 0.15 );
-  #endif
-  c = mix( fogged, c, vis );
+  if ( vis < 0.999 ) {
+    float mul = valeFogLocal >= 0.0 ? valeFogLocal : valeFogValue;
+    #ifdef VALE_KEEP_COLOR
+    vec3 fogged = valeFogShade( c, mul, 1.0, 0.0 );
+    #else
+    // saturation x0.4, 15 % toward the fog tint (absolute, so the darkest stone keeps a readable floor)
+    vec3 fogged = valeFogShade( c, mul, 0.4, 0.15 );
+    #endif
+    c = mix( fogged, c, vis );
+  }
   if ( valeEdgeOn > 0.5 ) {
     vec2 d2 = max( valeBounds.xy - wp.xz, wp.xz - valeBounds.zw );
     float d = max( max( d2.x, d2.y ), 0.0 );

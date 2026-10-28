@@ -909,10 +909,11 @@ vec3 valeGorgeMist( vec3 c, vec3 wp ) {
   return mix( c, mc, m );
 }
 `;
-/** before the world fog (insert ahead of <opaque_fragment>): stone below the deck is lifted where it is unseen,
- *  so the fog of war's value ×0.55 lands at ≈ ×0.75 on the drop — it stays a drop, never a black void */
+/** before the world fog (insert ahead of <opaque_fragment>): stone below the deck takes a lighter fog of war, the
+ *  display value ×0.55 easing to ×0.75 on the drop (the world fog's own per-material multiplier, valeFogLocal; env
+ *  F3: the fog solves the display value, so the old linear lift is gone) — it stays a drop, never a black void */
 export const gorgeFogLift = (wp: string): string => /* glsl */`
-if ( uMistK > 0.0 ) outgoingLight *= 1.0 + 2.0 * smoothstep( -0.2, -2.5, ${wp}.y ) * ( 1.0 - valeVision( ${wp}.xz ) );
+if ( uMistK > 0.0 ) valeFogLocal = mix( valeFogValue, 0.75, smoothstep( -0.2, -2.5, ${wp}.y ) );
 `;
 export const gorgeMistApply = (wp: string): string => /* glsl */`
 if ( uMistK > 0.0 ) gl_FragColor.rgb = valeGorgeMist( gl_FragColor.rgb, ${wp} );
