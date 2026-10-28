@@ -2412,8 +2412,11 @@ export function layoutMap(seed, mapId, pois, heightFn, waterY, opts) {
   const links = opts.links === false ? [] : waterY > -100 ? buildLinksWater(towns, S, waterY) : buildLinks(towns, S, waterY);     // (Wave 7b: a map with water routes its links round it)
   const all = towns.concat(comp.sites);
   const ent = all.reduce((a, T) => a + T.stats.enterable, 0), bld = all.reduce((a, T) => a + T.stats.buildings, 0);
-  return { v: VERSION, mapId, seed, towns, compounds: comp.sites, links, stats: { towns: towns.length, compounds: comp.sites.length, enterable: ent, buildings: bld, compoundFill: comp.stats } };
+  const out = { v: VERSION, mapId, seed, towns, compounds: comp.sites, links, stats: { towns: towns.length, compounds: comp.sites.length, enterable: ent, buildings: bld, compoundFill: comp.stats } };
+  lastLayout = { key: mapId + "|" + seed, L: out, pois };                  // (R1 endgame: rotationCover's endgame cluster reads the mill valley's real parts from it - see endgameCover)
+  return out;
 }
+let lastLayout = null;                                                      // the layout of the map being built (maps.js lays out, then asks rotationCover, in one buildMap)
 
 /** counts of one layout */
 export function summarize(L) {
@@ -2522,7 +2525,13 @@ export function rotationCover(seed, mapId, env) {
     }
     addC(x, z, 1.4 * s); st.rocks++;
   }
-  const eg = endgameCover(seed, mapId, env, { h, wy, tones, roadNear, relief, coverWithin, addC });
+  // (the endgame cluster's own test: a HARD piece - a rock outcrop, a wall, a wreck, a building: radius >= 1 m in the hash; a tree trunk is < 1 m - within R m of the centre)
+  const hardWithin = (x, z, R) => {
+    const i0 = Math.floor((x - R) / B), i1 = Math.floor((x + R) / B), j0 = Math.floor((z - R) / B), j1 = Math.floor((z + R) / B);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const l = hash.get(key(i, j)); if (!l) continue; for (const c of l) if (c[2] >= 1 && dist2(c[0] - x, c[1] - z) < R) return true; }
+    return false;
+  };
+  const eg = endgameCover(seed, mapId, env, { h, wy, tones, roadNear, relief, coverWithin, hardWithin, addC });
   if (eg) { for (const q of eg.pieces) pieces.push(q); st.endgame = eg.stats; }
   return { pieces, stats: st };
 }
@@ -2535,7 +2544,7 @@ export function rotationCover(seed, mapId, env) {
 // landPredicate) and lays a seeded cluster of ruined walls and squat stone blocks inside c7 - a few in the final circle c8 - in the map's own wall tones: quarter-turn boxes (one exact
 // collider each) drawn in the structure batch the rotation-cover walls use (no new mesh, program or draw call). Quick Match keeps its near-concentric plan (OD-1): its finals stay with the
 // villages; the cluster is part of the WORLD (same seed = same world in every mode). Every draw comes from subRng(seed, "endgame:" + map, ...): the shared stream is never touched.
-export const ENDGAME_COVER = { target: 15, finalTarget: 3, reach: 25.5, finalReach: 7.0, gap: 5.6, tries: 220 };
+export const ENDGAME_COVER = { target: 15, finalTarget: 3, reach: 25.5, finalReach: 7.0, gap: 5.6, clear: 8.6, tries: 260 };
 export const STORM_HALF_FRAC = 0.98;                       // maps.js returns half: HALF * 0.98 - the storm (storm.js W.map.half) is planned on THAT half
 function stormSim(env) {
   if (env.sim && typeof env.sim.Storm === "function") return env.sim;
@@ -2557,10 +2566,43 @@ export function endgameCircles(seed, env) {
 function endgameCover(seed, mapId, env, K) {
   const E = endgameCircles(seed, env);
   if (!E) return null;
-  const P = ENDGAME_COVER, { h, wy, tones, roadNear, relief, coverWithin, addC } = K;
+  const P = ENDGAME_COVER, { h, wy, tones, roadNear, relief, coverWithin, hardWithin, addC } = K;
   const c7 = E.c7, c8 = E.c8, out = [], placed = [];
   const st = { c7: [r2(c7.x), r2(c7.z), r2(c7.r)], c8: [r2(c8.x), r2(c8.z), r2(c8.r)], tries: 0, wet: 0, blocked: 0, steep: 0, crowded: 0, walls: 0, blocks: 0, inFinal: 0, pieces: 0 };
   const r = subRng(seed, "endgame:" + mapId, "c7");
+  // env.free() keeps out of every POI disc and every compound's bounding rectangle WHOLE. Two of those are mostly open land: a grid town's POI disc beyond its street grid (Savanna's
+  // Downtown is a 150 m disc, Rubble Row 110 m - c7 landed in their outskirts on 3 of the first 30 OD-1 seeds) and the mill valley (Deepwood: the mill's compound bounds are one rectangle
+  // round its every piece - the river runs diagonally through ~370 x 360 m of the map's middle - so a final circle there, 12 of the first 20 seeds' misses, had only the mill's own log
+  // piles and boulders 14-110 m from the river). There the cluster keeps off what the ground really holds instead: every town's street blocks, every other compound, the mill's plots and
+  // retaining walls, its bridge and approaches, the water mill and its free pieces, and any POI that is not a towngen town (a wreck, temples, a lookout: built elsewhere) - plus, as
+  // everywhere, the roads, the water, slopes and the cover already standing. Only with this build's own layout (same map and seed: lastLayout).
+  const LL = lastLayout && lastLayout.key === mapId + "|" + seed ? lastLayout : null;
+  const inR = (q, x, z, pad) => x > q[0] - pad && x < q[2] + pad && z > q[1] - pad && z < q[3] + pad;
+  const layoutFree = !LL ? null : (() => {
+    const towns = LL.L.towns, all = towns.concat(LL.L.compounds), byId = new Map(towns.map((T) => [T.id, T]));
+    const mill = towns.find((T) => T.kind === "mill" && T.mill && T.compound && T.compound.bounds && T.parcels.length) || null;
+    const foot = [], parts = [];
+    for (const T of all) {
+      for (const b of T.blocks) foot.push([b.cx - HP - 5, b.cz - HP - 5, b.cx + HP + 5, b.cz + HP + 5]);
+      if (T !== mill && T.compound && T.compound.bounds && T.parcels.length) { const q = T.compound.bounds; foot.push([q[0] - 6, q[1] - 6, q[2] + 6, q[3] + 6]); }
+      for (const p of T.parcels) if (p.building) { const a = p.building.aabb; foot.push([a[0] - 5, a[1] - 5, a[2] + 5, a[3] + 5]); }
+    }
+    if (mill) {
+      const M = mill.mill;
+      for (const pl of M.plots) parts.push([pl.rect[0] - 5, pl.rect[1] - 5, pl.rect[2] + 5, pl.rect[3] + 5]);
+      for (const wl of M.walls) { const hx = wl.axis === 0 ? wl.len / 2 : wl.th / 2, hz = wl.axis === 0 ? wl.th / 2 : wl.len / 2; parts.push([wl.x - hx - 2, wl.z - hz - 2, wl.x + hx + 2, wl.z + hz + 2]); }
+      const d = M.deck; parts.push(M.axis === 0 ? [d[0] - 10, d[1] - 24, d[2] + 10, d[3] + 24] : [d[0] - 24, d[1] - 10, d[2] + 24, d[3] + 10]);
+      for (const q of M.pieces) parts.push([q.x - 3.5, q.z - 3.5, q.x + 3.5, q.z + 3.5]);
+      if (M.wheel) parts.push([M.wheel.rect[0] - 3, M.wheel.rect[1] - 3, M.wheel.rect[2] + 3, M.wheel.rect[3] + 3]);
+    }
+    const pois = LL.pois || [];
+    return (x, z, pad) => {
+      for (const p of pois) if (dist2(p.x - x, p.z - z) < p.r + pad) { const T = byId.get(p.id); if (!T || !(T.blocks.length || T === mill)) return false; }      // a POI towngen did not lay out as a grid town / the mill: hands off
+      if (foot.some((q) => inR(q, x, z, pad)) || parts.some((q) => inR(q, x, z, pad))) return false;
+      return true;
+    };
+  })();
+  const freeAt = (x, z, pad) => env.free(x, z, pad) || (layoutFree ? layoutFree(x, z, pad) : false);
   const clashes = (x, z, ex, ez) => { for (const q of placed) if (Math.abs(q[0] - x) < q[2] + ex + P.gap * 0.5 && Math.abs(q[1] - z) < q[3] + ez + P.gap * 0.5) return true; return false; };
   for (let k = 0; k < P.tries && st.walls + st.blocks < P.target; k++) {
     st.tries++;
@@ -2575,17 +2617,19 @@ function endgameCover(seed, mapId, env, K) {
     // a ruined wall: a run 3.0-5.2 m x 1.35-2.1 m x 0.5 m; a block: a squat stone block (a fallen ashlar / a cairn) 1.6-2.3 m square, 1.3-1.7 m tall
     const w = block ? r2(1.6 + v1 * 0.7) : r2(3.0 + v1 * 2.2), hh = block ? r2(1.3 + v2 * 0.4) : r2(1.35 + v2 * 0.75), dd = block ? r2(1.6 + v4 * 0.7) : 0.5, q = v3 < 0.5 ? 0 : 1;
     const ex = q ? dd / 2 : w / 2, ez = q ? w / 2 : dd / 2;
-    if (!env.free(x, z, Math.max(ex, ez) + 1)) { st.blocked++; continue; }
+    if (!freeAt(x, z, Math.max(ex, ez) + 1)) { st.blocked++; continue; }
     const rn = roadNear(x, z);
     if (rn.d < rn.hw + 2.5 + Math.max(ex, ez)) { st.blocked++; continue; }
     if (relief(x, z, ex, ez) > 0.7) { st.steep++; continue; }
-    if (coverWithin(x, z, Math.max(ex, ez) + 1.2) || clashes(x, z, ex, ez)) { st.crowded++; continue; }
+    // open ground only: no hard cover (rocks, walls, wrecks, buildings - placed before the cluster) within P.clear m, nothing at all against the piece, and the cluster's own gap
+    if (hardWithin(x, z, P.clear) || coverWithin(x, z, Math.max(ex, ez) + 1.2) || clashes(x, z, ex, ez)) { st.crowded++; continue; }
     const tone = tones[Math.floor(v4 * tones.length) % tones.length];
-    out.push({ kind: "wall", x, z, w: block ? w : w, h: hh, d: dd, quarter: q, tone, endgame: 1 });
-    placed.push([x, z, ex, ez]); addC(x, z, Math.max(ex, ez));
+    out.push({ kind: "wall", x, z, w, h: hh, d: dd, quarter: q, tone, endgame: 1 });
+    placed.push([x, z, ex, ez]);
     if (block) st.blocks++; else st.walls++;
     if (dist2(x - c8.x, z - c8.z) + Math.max(ex, ez) < c8.r) st.inFinal++;
   }
+  for (const q of placed) addC(q[0], q[1], Math.max(q[2], q[3]));        // (registered after the loop: the cluster's own spacing is P.gap, not the hard-cover clearance)
   st.pieces = out.length;
   return { pieces: out, stats: st };
 }
