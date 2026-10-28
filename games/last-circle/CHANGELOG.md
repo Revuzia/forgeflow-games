@@ -3,6 +3,70 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-27 — Wave 8 + parity waves P1 / P2 / P3: team modes, revives, fall damage, grenades, new guns, furnished houses (?v= set at deploy)
+
+One release for four waves of work: Wave 8 (furnished interiors) and the parity waves P1, P2 and P3 (what the big battle royales do that we did
+not). Every map's world and loot changed, so `MAP_GEN_VERSION` is 7 (Wave 8's 6 never shipped): an older page and this one cannot share a squad
+room, and the lobby says so. Plan `_spec/parity_2026-10/PLAN.md`; the owner's calls are in `_spec/parity_2026-10/OWNER_DECISIONS.md` (OD-1..OD-16).
+Phones are unchanged (no new touch controls, same phone visuals).
+
+**Play with a team**
+- Four modes on the main menu: **Solo, Duos, Trios and Squads**. In a team mode the empty seats are filled with **bot teammates**; they follow you,
+  fight beside you, show their health in the squad panel and wear a team-coloured name tag.
+- **Knock-and-revive (team modes only)**: a lethal hit knocks you down instead of killing you while a teammate is still up. You crawl and bleed out
+  slowly; a teammate holds **E** beside you to bring you back. When the whole team is down, the team is out. Solo is unchanged: you die.
+- **Pings**: middle mouse marks a spot or an enemy for the team (on screen, on the compass and on the big map). On the drop, a pin on the big map
+  steers your glide there.
+
+**Fights**
+- **Fall damage**: drops up to about 4 m are free, 10 m costs about 38 hp, 15 m about 72, and a fall of about 19-20 m kills from full health.
+  Armour never takes fall damage, water and parachute / glider landings are always free (also stepping straight off a roof you just glided onto),
+  and a hard landing staggers you for 0.4 s. Bots play by the same rule and do not walk off deadly drops.
+- **Grenades**: a **frag** (throw it, it bounces and goes off) and a **smoke** grenade (a thick cloud that blocks sight, for you and for the bots).
+  Both are found on the floor and in chests.
+- **Three new guns**: the **Marksman Rifle** (hard-hitting semi-auto, 10 rounds), the **Light Machine Gun** (75 rounds, slow to reload) and the
+  **Burst Rifle** (three-round bursts). All use medium ammo.
+- Recoil follows a learnable pattern per gun, shots spread a little more while you keep firing, and hits, shield hits and a breaking shield each
+  have their own sound and marker.
+- **Supply drops** fall from the sky as the storm closes (follow the beacon, hold E to open; better loot inside). A player who dies leaves a
+  **death pile**: everything they carried in one spot with one marker in the colour of the best item in it. Bots loot shields from piles too.
+- Loot depends on where you land: busy named places hold better loot, and one hot zone per match is marked on the big map.
+
+**Movement and look**
+- Slide out of a sprint (crouch while sprinting), turn on the spot, crouch-walk and strafe with proper animations, a falling pose and a hard-landing
+  pose. Every new move is a Mixamo animation.
+- **Furnished houses** (Wave 8): every building you can enter on all three maps has real rooms - beds, kitchens, bathrooms, sofas, shelves, desks,
+  stairs between floors - and bots find their way through them.
+- The towns got their own character: Savanna's Container Yard and Old Mall, Deepwood's Logging Camp woodyards and a fire lookout tower, rock and
+  ruin cover between the towns, smoother roads, launch portals on the ground, livelier water, trees that move in the wind and dirt and wear on walls.
+
+**Settings**
+- **Graphics: LOW, MEDIUM, HIGH and ULTRA**, picked for your machine on first start and changeable any time.
+- The settings menu has tabs (**Game, Video, Audio, Controls, Accessibility**), every key can be **rebound**, and there are **colour-blind modes**
+  (Protan, Deutan, Tritan, with a strength slider) that also recolour the HUD's enemy, damage and squad colours.
+
+**Bots**
+- Better bots: they back off to heal, use cover, throw frags and smoke, get out of a grenade's way, revive their team, and walk the
+  furnished houses, stairs and top floors (rooms reached: ground floors 360 / 360, upper floors 239 / 240 in the nav test).
+
+**Sound**
+- Guns sound different near, at middle distance and far away; new sounds for the three new guns; hurt, knocked, revive and death voices (three
+  voices); footsteps that match the ground (new: sand, dirt, water and metal, beside grass, wood, concrete and snow).
+
+**Performance**
+- The per-frame memory churn of the busiest map (Isla Viva) went from 94 KB to 79 KB per frame in the last pass (limit 100). Drop and match frames
+  stay within the triangle and draw-call bars on all three maps.
+
+**Owner follow-ups (decided, not fixed in this release)**
+- **OD-14**: Deepwood's Logging Camp brick wall reads only +12 % contrast where the bar is +30 % (every other wall passes). Accepted for this
+  release; raised to +30 % (or the industry norm) right after it is live.
+- **OD-16**: bots' median shield 600 s into a match is 25 (the bar is 75, kept). Accepted for this release; the next wave adds the shield
+  economy: bots go for big shields inside the next circle beyond their 60 m search, and supply drops carry more big shields.
+- **OD-15** (the next wave, right after this release is live): the facade fix above plus bullet drop, scope glint and zoom steps, doors on
+  houses (bots use them too), cascaded shadows on High / Ultra and more character variety from the existing skins, a hard-landing consequence and
+  terminal velocity, diving underwater, ziplines, and an inventory screen where you can drop items. Not in it: armour or boost items, gamepad, a
+  bigger online relay.
+
 ## 2026-10-19 — Wave 7b: themed towns on Isla Viva and Deepwood, and the endgame areas (?v=1792458191)
 
 Plan `_spec/world_2026-10/PLAN.md`, Wave 7b. Three stages, each independently verified; the final run of `gate.py --disk --negative-controls` on
