@@ -18,6 +18,11 @@
 // >= 0.5 to the `head` bone and weights the normals 0.5: the same simplification as _lod1.mjs (the simplifier rescales
 // positions to their own box first, so dequantized or not gives the same collapses).
 //
+// What it buys (perf_1080 --prod --match-only, one build, seed 7, the LOD1 GLBs served in place of the 10 base GLBs,
+// so body, hull, flash and x-ray all draw it; _harness/_reports/integ_chars_r1_lod1_ab.txt): match peak 1,045,468 ->
+// 906,950 triangles, seconds over 500k 43 -> 22, the peak frame's fighters 346,453 -> 232,288. The 500k gate still
+// needs the crowd (334k at that frame) and more cut on the engine side.
+//
 // main() is the check: for every fighter/skin GLB (textures dropped in memory, which leaves the geometry untouched),
 // GLTFLoader.parse in Node, faceLockedLodIndex on the body, and the result compared with _lod1.mjs's faceLockedLod on
 // the same file: the unit, the body and LOD1 triangle counts, and every head-locked triangle kept.
