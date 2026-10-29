@@ -1,0 +1,87 @@
+{
+ "fighter": "odrum",
+ "score": 6,
+ "summary": "Verified score 6/10. Odrum is not on par: three majors are confirmed open (M1 yoke read, M2 cap and jerkin read as skin, M4 splash), M3 is downgraded to minor, and there is no blocker. The build is unchanged since the reviewer's capture: odrum.glb 10-28 11:58, Shadeprint 14:25, splashes 10-29 00:13, and the match frames are from 10-29 09:49. So I re-measured the reviewer's raw 1080p frames with my own boxes and re-ran FK on the GLB rather than queue a new GPU run. Everything is in _harness/_reports/closing_odrum_verify_measure.txt.\n\nM1 CONFIRMED, and it is structural. Idle and run carry the yoke square across the shoulders (yaw 0.8 and 1.1 deg median). Every RIFT lane runs along map x, which is screen-horizontal: road_seat is at 0 deg for 131 m, and the middle 12 segments of road_high and road_low are within 20 deg. So lane travel and lane trades turn the bar onto the depth axis, where it projects as a 134 px vertical pole. Two of the three sampled Odrums read that way 78-80 % of the time.\n\nM2 CONFIRMED on two other frames. Cap HSV 25 / 0.30-0.31 at L* 72-76; the shoulder is #D6AB89. Both sit in the light-skin range. The reviewer's 'satin sheen' wording is not supported: the low-roughness ORM texels are the empty atlas gutter.\n\nM3 DOWNGRADED to minor. The glide reproduces exactly (attack2 toe.L moves 24 cm out and back at a constant 2.1 cm height). But the missing lift is 3-4 px over 0.1 s at the gameplay camera, the run is clean, and the same metric is as large or larger on Ervet, Hesmi, Burdam and Nurrow.\n\nM4 CONFIRMED. One SPLASH dict serves all skins (odrum.py:144). The figure carries visible grain at 1:1, the same pattern confirmed as major for the 10 other closing fighters.\n\nSensitivity check:\n- The cap is a low dome with a nub, not a hood.\n- The base mask has carved brow, nose and cheek planes with ink eye holes (on brief, not horror, hockey or mannequin).\n- Shadeprint's honey inlays render dim (L* 12-19) but visible, as approved in owner ruling 2.\n- The death pose is clean.\n\nNo blocker was missed.\n\nThe reviewer's minors after M4 were cut off in the text handed to me and were not verified. The cross-lane first-frame camera-jump pop is outside fighter art; I did not verify it.",
+ "gapStatus": [
+  {
+   "id": "1. Golden-ochre identity diluted to cream / pale tan (mask and jars)",
+   "status": "open",
+   "evidence": "The GLB is unchanged since 10-28 11:58, so nothing could have changed. My own mask box on closing_odrum_match_self.png (944,452-956,460) is #C4A785, L* 70.1, HSV sat 0.33; the reviewer's on the jumpA3 frame is #DCBF95. Both are well off the concept's golden ochre #B4884E. I agree with still_open."
+  },
+  {
+   "id": "2. Cap dome and lifted shoulders read pinkish / salmon under the warm light",
+   "status": "open",
+   "evidence": "Reproduced on two frames the reviewer did not sample:\n- match_self cap #DCB498 (HSV 25 / 0.31);\n- match_ally cap #D0AB91 (25 / 0.30), shoulder #D6AB89 (26 / 0.36), coat #AB7D63 (22 / 0.42).\n\nTONE cap #9E8872 and COAT_FADED #95806D are unchanged (odrum.py:1298, 1317). Escalated to major in odrum-M2, which I confirm."
+  },
+  {
+   "id": "3. Skins inherit COAT_LIFT (Shadeprint upper body paler)",
+   "status": "partly",
+   "evidence": "The cause remains: odrum.py:1849-1859 applies COAT_LIFT to sel('coat') for every skin, and the Shadeprint GLB has not been rebuilt since 10-28 14:25. The player-visible symptom the item was raised for, a pale Shadeprint chest in the splash, has eased: p50 L* 53.6 with 0 % above L* 86 (closing_odrum_splash_mask.txt), against 66 and 17 % at the time of the item. So I mark this partly rather than still open."
+  },
+  {
+   "id": "4. lineup_qa valueGradientOk false (top 63.2 < 70, feet 16.4 < 20)",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json (10-29 01:03): odrum f0 is 63.2 / 48.8 / 16.4, valueGradientOk false.\n\nContext:\n- 13 of 20 entries fail the gate in that run, so it is a roster-wide gate issue.\n- The in-match top-25 L* of 76.1-81.4 passes.\n- At f90 and f270 the bottom band rises to 34-43 because the near jar sits at the feet, a side effect of M1.\n\nThis is not player-visible on its own."
+  },
+  {
+   "id": "5. Splash only: mask lit planes near the Noonwhite range",
+   "status": "closed",
+   "evidence": "Same box (1095,185, 60x70), measured with sample.mjs:\n- current art/out/fighters/odrum/splash.png: mean L* 69.1, p90 75;\n- d92d353f polish splash: mean L* 78.6, p90 90.\n\nThis matches the reviewer's 0 % above L* 86. Fixed."
+  }
+ ],
+ "findings": [
+  {
+   "id": "odrum-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The yoke reads as a vertical pole through the body for most of a RIFT match, not the brief's horizontal balance-scale read",
+   "what": "The brief's silhouette hook (§1) is a 2.2 m bar level across the shoulders: 'the widest horizontal read in the roster', a balance scale at 64 px.\n\nIn idle and run the bar stays square to the shoulders. Every RIFT lane runs left-right on screen. So whenever Odrum walks or trades along a lane, the bar lies along the screen's depth axis and projects as a pole of about 134 px running vertically through his 101 px body:\n- the near jar sits by his feet;\n- the far end and jar rise behind the cap toward the overhead bar.\n\nThe scale read appears only when he faces up or down the screen.",
+   "evidence": "**Yoke yaw (my FK, closing_odrum_verify_measure.txt §2):** idle median 0.8 deg and run 1.1 deg from the shoulder line.\n\n**Lane headings (content/maps/map_rift.json):** road_seat is 0 deg along x; the middle 12 segments of road_high and road_low are within 20 deg of x. facing.mjs puts facing 0 at a bar 81-89 deg from screen-horizontal.\n\n**Facing sample (closing_odrum_yoke_facing.json, recomputed):**\n- bar within 30 deg of vertical: id1 80.5 %, id8 78.2 %, id2 11.5 % (wandering the curved end of road_high);\n- all rows 56.8-57.8 %; horizontal read 15.5-17 %.\n\n**Lineup (integ_chars_p2.json):** heightPx is 158-159 at f90/f270 against 113 at f0. Every one of his highest IoU pairs peaks at the side facings: Ulkro 0.646, Dunsom 0.608 and Kemdo 0.595 at 270, against 0.34-0.48 at 0 and 180. So he becomes less distinct exactly when the bar turns vertical.\n\n**Shots:** _harness/_shots/closing_odrum_verify_1to1.png (three 1:1 match crops, all vertical pole), closing_odrum_m2_actions.png, closing_odrum_three_skins_facings.png (columns 3 and 7).",
+   "gauge": "Riot builds a champion's signature prop read at the fixed high three-quarter camera for the directions the champion actually travels. A long carried weapon is angled so the silhouette stays recognisable walking left or right along a lane, not only when facing the camera. VALE now delivers the brief's signature read only about one sixth of match time.",
+   "fix": "The reviewer's fix is sound and VALE's own: a porter's diagonal rest carry. The bar rides one shoulder yawed 45-60 deg off the shoulder line, front end low and forward, rear end high behind the opposite shoulder, with the jars on shortened cords.\n\nRe-author from the new GRIP0/AX0:\n- the idle, run, recall and stunned carry;\n- the cast entries and exits.\n\nThen:\n- re-run proto/odrum_clipcheck.py (jar-to-leg clearance 8 cm or more);\n- re-run facing.mjs, targeting a vertical share under 25 %;\n- check that the far jar stays below the overhead HP bar;\n- amend brief §1 and §8.",
+   "files": "art/blender/fighters/odrum.py (GRIP0/WRIST0/AX0 ~2225; idle/run/recall/stunned/lobby builders ~2404); _design/fighters/odrum.md §1, §8; art/blender/fighters/proto/odrum_clipcheck.py",
+   "size": "L",
+   "verifierNote": "I tried to refute this and could not. The idle and run bar is genuinely square to the shoulders (my FK), and the RIFT lane geometry makes the vertical read the dominant one by construction. Two corrections to the reviewer's wording:\n- **'End-on' is a misnomer.** The bar is not foreshortened to a point; it projects at about 79 % of its length as a vertical pole. The read is still lost.\n- **The attack share is modelled, not measured.** facing.mjs assumes a square bar in every state, while the real attack clips yaw it 16-24 deg median. The idle and move rows (71 % of samples) are exact, so the headline holds.\n\nIt stays major because it is the brief's one stated silhouette hook, in the game's main map and main heading."
+  },
+  {
+   "id": "odrum-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "At the gameplay camera the felt cap reads as a bald pink scalp and the lifted jerkin as bare pink skin",
+   "what": "From the 52 deg camera the cap dome is the largest surface on top of the figure. It renders a peach skin tone above the cream mask box, so the head reads as a bald head behind a box.\n\nThe value-lifted shoulders, sleeves and upper jerkin render in the same skin-tone salmon. At gameplay size the upper body reads bare rather than clothed in heavy felt, which contradicts the brief's full covering ('no bare face, no hair').",
+   "evidence": "Reviewer: jumpA3 frame cap #E7BD9E (HSV 25 / 0.32, L* 79.5), coat_sh #97725F, skirt #A26F57.\n\nMy own boxes on two other frames (closing_odrum_verify_measure.txt §1):\n\n| Frame | Region | Hex | HSV hue | Sat | L* |\n|---|---|---|---|---|---|\n| match_self | cap | #DCB498 | 25 | 0.31 | 76 |\n| match_ally | cap | #D0AB91 | 25 | 0.30 | 72.5 |\n| match_ally | shoulder | #D6AB89 | 26 | 0.36 | 73 |\n| match_ally | coat | #AB7D63 | 22 | 0.42 | |\n\nThese sit in the light-skin range.\n\nShots: _harness/_shots/closing_odrum_verify_x3.png (three 3x crops), closing_odrum_match_material_x3.png.\n\nSource: TONE cap #9E8872 (odrum.py:1298). The odrum.py:1311-1313 comment records that the lifted chocolate 'read salmon-pink in game'; COAT_FADE is 0.45 toward #95806D (1316-1317).",
+   "gauge": "In LoL, cloth and headwear read as cloth at the gameplay camera, through fold value breakup and a hue clearly away from the skin range. A hat never reads as a scalp, and a clothed champion never reads bare-shouldered.",
+   "fix": "Keep every L* and change hue, chroma and breakup only.\n\n**Cap:**\n- TONE cap to hue 34-37, sat 0.20 or less (oat felt);\n- a darker stitched-panel band (6-8 L*) radiating from the nub.\n\n**Coat:**\n- COAT_FADED to hue 30-32;\n- COAT_FADE 0.45 -> 0.65;\n- a fold-cavity term of 8-12 L* on the jerkin and skirt folds.\n\n**Check:** re-sample a fresh match frame with closing_odrum_tools/sample.mjs. Target cap and coat HSV hue of 28 or more, coat sat 0.35 or less.",
+   "files": "art/blender/fighters/odrum.py (TONE 1298; COAT_LIFT/COAT_FADE/COAT_FADED 1313-1317; coat lift and felt-nap passes 1847-1866)",
+   "size": "M",
+   "verifierNote": "Reproduced independently on frames the reviewer did not sample. I keep it major, not minor:\n- the cap is the top-most and most-seen surface from the high camera;\n- the skin read contradicts a brief requirement;\n- it matches the material-read majors confirmed for Burdam, Lisvel and Hesmi.\n\nOne part is not supported: 'satin sheen'. The 27.8 % of ORM texels at roughness < 0.1 are the empty gutter between UV islands (closing_odrum_verify_atlas.png, panel 2); the coat islands are rough. The fix is cheap (S-M); the albedo, not the shared light, is where it belongs, because the author's own comment shows the warm light was already known."
+  },
+  {
+   "id": "odrum-M3",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Feet glide flat on the floor in attack2, three casts and victory (no lift on the step-ins)",
+   "what": "feet_from only offsets the ankle goal, and the keyed interpolation moves it linearly. So step-ins skate with no lift:\n- **attack2:** the left toe goes from z 15 to 39 cm in frames 8-10 and back in frames 14-19, at a constant height of 2.1 cm.\n- **cast_a1, cast_ult and victory:** similar 16-20 cm glides.\n- **cast_a2 (Swing Out):** the whirl drags both feet about 94 cm along the floor.",
+   "evidence": "My FK of art/out/fighters/odrum/odrum.glb (closing_odrum_verify_measure.txt §4-5):\n- attack2 toe.L per frame: y 2.1 cm throughout, z 15 -> 39 -> 15 cm;\n- on-floor glide (toe and heel within 1.5 cm of floor): attack2 48 cm, cast_a1 32, cast_a2 94, cast_ult 40, victory 16; attack1 0; run clean.\n\nThe same metric on other final GLBs:\n- Ervet: attack2 56;\n- Hesmi: attack1 67, attack2 59, cast_a1 108;\n- Burdam: attack1 40, cast_a1 88;\n- Lisvel: attack2 38;\n- Nurrow: cast_ult 82;\n- Kemdo, Tunlan and Marund are clean on attacks.\n\nSource: odrum.py:2319 (feet_from); 2506 lunge = feet_from(g, dl=(0, -0.24, 0)).",
+   "gauge": "In LoL, idles and runs keep hard foot contact, and step-in attacks are short, fast repositions. A missing 6-8 cm lift on a 0.1 s step is not something a player sees at the gameplay camera, but a long flat drag through a spin is a polish miss.",
+   "fix": "Give feet_from transitions a lift arc (6-8 cm, heel first, about 60 % of the move), plant by the impact frame, and pivot Swing Out on the lead toe with the trail foot in two lifted steps.\n\nBetter as one roster task: add the on-floor glide gate (no more than 2 cm of horizontal toe travel while within 1.5 cm of floor height) to every fighter's clipcheck, since Hesmi, Ervet, Burdam, Lisvel and Nurrow fail it too.",
+   "files": "art/blender/fighters/odrum.py (feet_from 2319; attack2 ~2480-2520; cast_a1 step_in ~2544; cast_ult feet_throw ~2750; cast_a2 whirl; victory foot_fwd ~2900); art/blender/fighters/proto/odrum_clipcheck.py",
+   "size": "M",
+   "verifierNote": "The measurement reproduces exactly, but the severity does not hold up:\n- **Small on screen.** The missing lift is 6-8 cm, which is 3-4 px at 50.5 px/m, over a 3-frame step. The hips lunge 17 cm with the foot, so it reads as a lunge.\n- **The most-seen loop is clean.** Run slides at most 10 % at contact.\n- **It is roster-wide.** Odrum's values are mid-pack, and five other verified fighters show equal or larger glide without a major.\n- **The gauge is overstated.** 'Feet never slide' holds for LoL idles and runs, not every attack reposition.\n\nThe Swing Out drag is the most visible part; it is kept as a minor."
+  },
+  {
+   "id": "odrum-M4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splash and portraits are grainy static model renders; all three skin splashes share one victory pose and composition",
+   "what": "Base, Noon Fair and Shadeprint splashes use one camera, one victory hold (fist on hip) and one figure placement; only the plate and palette change.\n\nThe 3D figure carries visible stipple grain against a clean painted plate, so it reads as a render pasted on a backdrop. None of the kit fantasy (resin pour, the amber lob, the windmill) appears in any splash.",
+   "evidence": "**Shots (viewed):**\n- _harness/_shots/closing_odrum_splashes3.png: identical pose and framing on all three;\n- closing_odrum_splash_1to1.png: grain on the mask, jar and coat;\n- closing_odrum_verify_shadeprint_face.png: portrait grain, base vs Shadeprint.\n\n**Config:**\n- odrum.py:144 is the single SPLASH dict {clip: victory, t: 0.92, fill: 0.86, x: 0.70, yaw: 30};\n- art/out/fighters/odrum/skins.json only swaps file paths.\n\n**Grain** (closing_odrum_splash_grain.txt): figure high-pass RMS 6.8-9.4 against a plate of 0.28-0.36.",
+   "gauge": "A LoL splash is a clean painted illustration of the champion's fantasy in a dynamic pose. Every skin gets its own composition, pose and scene.",
+   "fix": "Give each skin its own SPLASH entry: clip, frame, yaw, pitch and plate. For example:\n- base: the Amber Hour throw at its impact frame, with the bar mid-swing;\n- Noon Fair: a festival carry;\n- Shadeprint: the ink-pot pour.\n\nRender the figure clean (more samples or a denoise pass), then add a paint-over or edge-light pass so the figure matches the plate's finish.",
+   "files": "art/blender/fighters/odrum.py (SPLASH line 144, skin loop); art/blender plates/splash compositor; art/out/fighters/odrum/*splash.png, *portrait.png",
+   "size": "M",
+   "verifierNote": "Confirmed by direct viewing and the config. This is a roster-wide hero-render pipeline gap, confirmed as major for all 10 other closing fighters, and it counts against Odrum the same way. The reviewer's gauge text was cut off in the handoff; the gauge above is mine."
+  }
+ ],
+ "missed": []
+}

@@ -1,0 +1,162 @@
+{
+ "fighter": "rishal",
+ "score": 6.5,
+ "summary": "Verified the Rishal art review against the served build. The catalog (schema-1/2026.10.1) serves rishal.glb c0befd21, rishal_chalkline.glb 3bf9945e and rishal_lamplit.glb c1d663b7, which are byte-identical to art/out. The served card webps match the Oct 29 PNGs (MAD 1.1-1.5/255). Rishal is not on par: score 6.5 (below 8) with three majors confirmed and none refuted. M1 is confirmed. art/blender/fighters/rishal.py:79 has one SPLASH (victory, t 0.92) and no skin overrides it. Flat figure patches carry high-pass RMS 4.1-6.2 against 0.23-0.65 on the plate, so grain is visible at 1:1. W5b_verify2 already logged the card-floor veil that flattens these splashes. M2 is confirmed by my own parse of the GLB: recall is a 2.00 s clip with at most 1.84 degrees of joint rotation and no translation, and channel peaks at 1.69 degrees. actors.ts:128 loops recall for the 7 s recall (modes.json:28). M3 is confirmed. Lamplit (1,500 candles, store.json:30) shares the base rig, clips, silhouette and card pose. Its only geometry is the crest lamp cage. vfx.json has no skin overrides at all. The portrait's 'lampresin' visor reads dark violet-grey (L* 18.9, chroma 7.6, hue 299), not amber. In LoL terms that is a chroma (a recolour), not a top-tier skin. All six minors are kept. No sensitivity problem was found: the helm is hard armour with a crescent crest (no hood); the face plate is a calm carved-chalk face with ink brow, nose and mouth lines (not blank, not horror, not a hockey mask); the visor is a side blade, not a beak. Leftovers: 4 closed and 3 open, and all 7 statuses are confirmed.",
+ "gapStatus": [
+  {
+   "id": "major: head, visor and face plate miss the concept (beige mannequin egg face, unreadable eye recesses, tall lavender shield visor)",
+   "status": "closed",
+   "evidence": "_harness/_shots/closing_rishal_vfy_visor_base_vs_lamplit_x3.png (crop 190,50-330,290 of the base and Lamplit portrait.png, x3): the face plate is grey carved chalk with ink brow, eye, nose and mouth lines, and the visor is a framed side blade. It does not read as a mannequin egg. Residuals are logged elsewhere: the dowel neck (m5), the face darker than the chest in the portrait (M1) and the white helm egg at the gameplay camera (m1)."
+  },
+  {
+   "id": "major: saturated rear-rise vanes make a blue mohawk along the crest",
+   "status": "closed",
+   "evidence": "The GLB has one accent mesh (rishal_accent, material accent). In _harness/_shots/closing_rishal_t160_enemy_pair_x3.png and closing_rishal_t95_ally_head_x6.png the fins come off the left temple and nothing glows along the crest. In art/renders/lineup/integ_chars_p2.json the accent is 1.59-2.23 % of the silhouette, all of it in the top half."
+  },
+  {
+   "id": "minor: albedo crown over the L* 86 line (p99 88.5)",
+   "status": "closed",
+   "evidence": "I decoded the served GLB's 2048x2048 base atlas myself (_harness/_reports/closing_rishal_vfy_measure.txt). Over all texels: L* p99 85.3, 0.12 % above 86 and 0.00 % above 90. This matches the reviewer's 85.3."
+  },
+  {
+   "id": "minor: back facing's top band is under 70",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json, fighters/rishal, facings.180.valueBands.top is 69.7. The front facing reads 75.2 and valueGradientOk is true. It is a 0.3 L* miss of no visual consequence."
+  },
+  {
+   "id": "minor: crest plus pauldron spike make a rabbit-ear V from camera-facing angles",
+   "status": "open",
+   "evidence": "In _harness/_shots/closing_rishal_t160_enemy_pair_x3.png, both enemy Rishals show the crest, the white pauldron spike and the marigold fin as two or three prongs over a white ovoid helm. Logged as m1."
+  },
+  {
+   "id": "minor: painted back strap has ragged, speckled edges and grey smear",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_rishal_backstrap_x2.png is a crop of art/renders/fighters/rishal/three_rishal.png, rendered Oct 28 14:57, one minute after the current 14:56 GLB. The strap edges are still torn and speckled, with grey patches. Logged as m5."
+  },
+  {
+   "id": "minor: GLB headroom down to 18 KiB",
+   "status": "closed",
+   "evidence": "art/out/fighters/rishal/rishal.glb is 1,170,776 B (1,143.3 KiB), 28.7 KiB under the 1,172 KiB three_load_test budget (art/README.md:25). The served catalog copy 3826250ca976-rishal.glb has the same md5."
+  }
+ ],
+ "findings": [
+  {
+   "id": "rishal-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splashes and portraits are grainy static model renders in one victory stand for all three skins, with the face in shadow",
+   "what": "The three splashes and three portraits are path-traced model renders composited on painted plates.\n- Pose: one 'victory' hold, one yaw and one framing for base, Chalkline and Lamplit.\n- Grain: the figure is visibly noisy, while the plate is clean.\n- Values: flattened. The face sits in shadow and is not the focal value: in the splash the tabard is the brightest area, and the legs read L* 40 instead of the brief's dark band.\n- Feet: clumpy pale blobs.\n- Portrait: the visor and face plate (L* 41.7) are darker than the chest (L* 61.3), and a bare brown striated neck shows where brief §4 promises a chalk gorget.",
+   "evidence": "Reviewer's measurements:\n- _harness/_reports/closing_rishal_card_grain.txt: splash figure high-pass RMS 5.2-10.2; plate 0.21-0.61; portrait face plate L* 41.7 against chest 61.3.\n- _harness/_reports/closing_rishal_skin_mad.txt: Chalkline vs base figure MAD 14.7/255 (splash) and 15.9/255 (portrait).\n- Shots: _harness/_shots/closing_rishal_splashes_3up.png, closing_rishal_portraits_3up.png, closing_rishal_splash_legs_x2.png.\n\nVerifier re-measure:\n- _harness/_reports/closing_rishal_vfy_grain.txt: flat figure patches (wing 1110,180-1150,210 and helm 1015,95-1040,120) read hpRMS 4.1-6.2 on all three skins. Busy plate regions read 0.23-0.65 (spires 100,100-400,400; ground 200,700-600,850).\n- _harness/_shots/closing_rishal_vfy_splash_upper_1x.png: the speckle is visible at 1:1.\n- art/blender/fighters/rishal.py:79 has a single SPLASH dict, and no skin in SKINS (:100) overrides it.\n- _design/reviews/fixwaves/W5b_verify2.json regressions[0] logs that the card floor cut Chalkline's p5-p95 contrast from 101 to 80.",
+   "gauge": "A recent LoL champion ships a painted illustration per skin, each with its own composition and action pose, a lit focal face or weapon, and no render noise. The loading-screen and portrait crops are framed from that painting.",
+   "fix": "Give each card its own VALE moment, finished as a painting:\n- Base: mid Glint Cut, with a glass track across the Aubade spires.\n- Chalkline: sprinting along a spire wall beside a child's chalk runner.\n- Lamplit: crouched on a dusk-side dome rail, with the smoked visor catching lamp light.\n\nFinish: render at 2x and denoise so the figure's hpRMS is under 1.5; key the visor and face plate as the brightest value (L* 70 or more); keep legs and boots at L* 20-35; hand-paint over edges, feet and glass; model the brief's chalk gorget.",
+   "files": "art/blender/fighters/rishal.py (SPLASH :79, PORTRAIT_TIGHTEN/PORTRAIT_X :88, gorget), art/blender/common/plates.py, art/blender/portraits.py, art/out/fighters/rishal/{splash,portrait,rishal_chalkline_*,rishal_lamplit_*}.png",
+   "size": "L",
+   "verifierNote": "Confirmed. The served webps match the PNGs (MAD 1.1-1.5/255), so these are the shipped cards. Grain holds on flat patches, not only on ink-lined boxes, so it is render noise and not detail. The single shared pose is in source. Severity matches the roster verdicts (ardit, ervet, kemdo, nurrow M1)."
+  },
+  {
+   "id": "rishal-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Recall (7 s) and channel are frozen poses with no motion",
+   "what": "The recall clip is a 2 s loop of one held pose with a ±1.5-degree chest breath. It loops through the whole 7 s recall. The brief's beat ('presses the two knives together ... bows his head') is one static pose, not a performance. The channel clip is the same kind of held pose.",
+   "evidence": "Verifier's own parse of the served GLB (_harness/_reports/closing_rishal_vfy_measure.txt, node _harness/_reports/closing_rishal_vfy_clipdev.mjs art/out/fighters/rishal/rishal.glb):\n- recall: 2.00 s, max joint rotation 1.84 degrees (shoulder.L), translation 0.\n- channel: 1.33 s, 1.69 degrees, translation 0.\n- For comparison, idle reaches 25 degrees (head) and taunt 176 degrees.\n\nSource:\n- art/blender/fighters/rishal.py:3739-3751: _recall is a static _pose plus anim.osc(t, 2) on chest, neck and shoulders.\n- src/render/actors.ts:128: recall is in LOOPING; :917 maps the recall state to this clip.\n- content/modes.json:28: recallTime 7.\n\nReviewer: _harness/_reports/closing_rishal_anim_measure.txt (recall peakSpeed 0.002 m/frame); _harness/_shots/closing_rishal_clip_recall_x2.png (8 identical frames).",
+   "gauge": "Every LoL champion has a bespoke recall animation over the 8 s base recall that performs the character, with anticipation, a flourish and a settle timed to the channel. A frozen loop reads as a missing animation.",
+   "fix": "Author a 210-frame recall fitted to the dial clock:\n1. He spins the right knife into a forward grip and taps the two glass tips together.\n2. He drops into a sprinter's set with the knives along his forearms and his head bowed, breathes, and glances once over his shoulder.\n3. He rises onto his toes.\n4. The blades cross before the visor as the dawnglass column gathers.\n\nPlay it fitted, not looped, with a held last pose. Give channel a 40-frame loop with breathing, a knife-tip tremor and a weight shift.",
+   "files": "art/blender/fighters/rishal.py (_recall :3739, _channel :3754), src/render/actors.ts (:117-128, :917), art/out/fighters/rishal/*.glb",
+   "size": "M",
+   "verifierNote": "Confirmed independently: I decoded the sampler data, so this does not rest on the reviewer's FK. No Rishal ability defines a channel (the only 'channel' in content/fighters/rishal.json is the art clip map at :495), so the channel half is low-traffic. The recall alone carries the major, matching the dunsom, ilsheta, marund and nurrow verdicts."
+  },
+  {
+   "id": "rishal-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The 1,500-candle Lamplit deluxe is a palette swap plus an 8 cm lamp cage; Chalkline's 'ink-gray steel' does not read on its cards",
+   "what": "Lamplit Visor (deluxe, 1,500 candles) has the base silhouette, rig, clips and splash pose. It adds no VFX, sound or animation change. Its only added geometry is a crest lamp cage of 8 cm or less, which does not read at the gameplay camera. The store promises a 'smoked lampresin visor', but in the portrait the visor reads dark violet-grey, not amber. Chalkline's store copy promises 'Ink-gray steel', but on the cards its armour sits within a few L* of base.",
+   "evidence": "Content and source:\n- content/store.json:30: sku_rishal_lamplit costs 1,500 candles; Chalkline (:29) costs 600.\n- content/skins/rishal.json: Lamplit is tier 'deluxe'.\n- content/vfx.json has no skin overrides of any kind.\n- art/blender/fighters/rishal.py:136: Lamplit is extra lamp_cage plus a palette.\n- Verifier parse: both skin GLBs carry 0 animations and the base's 27 joints.\n\nGameplay camera: art/renders/lineup/rishal_w5b_b2_skins.png shows identical silhouettes, with Lamplit a warm-beige recolour.\n\nVisor: _harness/_shots/closing_rishal_vfy_visor_base_vs_lamplit_x3.png. The Lamplit visor glass box 235,160-262,195 reads L* 18.9, chroma 7.6, hue 299; the named lampresin is #A38C6B (35 degrees, 34 %).\n\nChalkline: the reviewer's _harness/_reports/closing_rishal_card_grain.txt gives chest pad L* 47.1 against 48.3 (splash), and the figure MAD is 14.7/255.",
+   "gauge": "A LoL skin around the 1,350 RP tier brings new model pieces, a re-themed VFX set and its own splash. A pure recolour is what LoL sells as a chroma (about 290 RP), not as a top-tier skin.",
+   "fix": "Within the owner ruling (skins keep the silhouette class and accent locations):\n- Surface: carved-walnut inlay and glossy lampresin glazing on the pauldrons, crest and forearm guards, with no outline change.\n- Lamp bead: move it to the crest root as a glossy, non-emissive bead with a baked warm interior, so the top camera reads it.\n- VFX: add a skin override set in vfx.json (an engine feature that does not exist yet) that turns the glass tracks amber, keeping the signature release ring and the team edge.\n- Card: its own splash pose (M1).\n\nChalkline: either push the coat and legs to the named ink-grey or change the store copy. Alternatively, reprice Lamplit to the standard tier.",
+   "files": "art/blender/fighters/rishal.py (SKINS :100, lamp_cage :1502), content/vfx.json + a skin-override path in src/render/vfx, content/skins/rishal.json, content/store.json:30, art/out/fighters/rishal/rishal_lamplit.glb + cards",
+   "size": "L",
+   "verifierNote": "Confirmed. Owner ruling 'skins change material and palette but not silhouette' allows this kind of skin but does not set the deluxe content bar. The Lamplit visor's promised material does not land on the card, and nothing else separates a 1,500-candle skin from a recolour. Severity matches burdam M4, hesmi M4 and kemdo M5. Partial credit: Lamplit does read as a distinct warm palette at the gameplay camera, and it has its own dusk plate."
+  },
+  {
+   "id": "rishal-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "At the gameplay camera the head reads as a white egg under a three-prong 'rabbit-ear' V; the self accent disappears",
+   "what": "From the 52-degree gameplay camera the helm's back and top are one near-white ovoid. The crest, the vertical left pauldron spike and the temple fins rise above it as ear-like prongs. For the local player the accent is Noonwhite (src/render/palette.ts:5), which has no hue offset against an L* 80-86 helm, so the self Rishal shows no accent. The selection ring still marks self.",
+   "evidence": "_harness/_shots/closing_rishal_t160_enemy_pair_x3.png, closing_rishal_t160_self_head_x6.png, closing_rishal_t95_ally_head_x6.png; _harness/_shots/closing_rishal_vfy_close4_x1.5.png (crops of the four close frames).",
+   "gauge": "LoL heads are designed for the top-down camera, with a clear value break between helm, face and crest. Facing reads from the head shape alone.",
+   "fix": "Give the helm a mid-slate cap and nape plate (cloth #74808C, about L* 53) so the white crest and fins read against it. Lower or angle the pauldron spike out of the crest's line. Give the self accent a value or outline offset on pale-helmed fighters.",
+   "files": "art/blender/fighters/rishal.py (helm/nape paint, pauldron spike), src/render/palette.ts",
+   "size": "M",
+   "verifierNote": "Confirmed from the match frames. It is minor because team colour, the ring and the silhouette still identify him."
+  },
+  {
+   "id": "rishal-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The brief's knife guard and two-plate crest are not delivered",
+   "what": "The brief (§4) asks for two stacked 36 cm stone crest plates and an ironstone guard on each knife. The model ships a single hollow crescent crest frame, and the knives show no readable guard.",
+   "evidence": "_design/fighters/rishal.md:60 (crest), :64 (knife guard), :187 (checklist). The single crescent is visible in _harness/_shots/closing_rishal_three_head_x2.png and closing_rishal_vfy_visor_base_vs_lamplit_x3.png.",
+   "gauge": "A LoL champion model matches its own published concept.",
+   "fix": "Either model the second plate and the guard, or update the brief to the shipped crescent.",
+   "files": "art/blender/fighters/rishal.py (crest, knife props), _design/fighters/rishal.md §4",
+   "size": "S",
+   "verifierNote": "Kept as a brief-compliance minor."
+  },
+  {
+   "id": "rishal-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Blades pass into the thigh, tabard and hips; a foot goes 21 cm through the floor in death",
+   "what": "The reverse-grip knife tips pass into the body in run (12 of 17 frames over 5 % of blade vertices), attack2 (11 of 21), idle_lobby and victory. In death the right toe drops to -0.21 m on f25-28.",
+   "evidence": "_harness/_reports/closing_rishal_blade_penetration.txt, closing_rishal_blade_clip.txt, closing_rishal_anim_measure.txt (death f27 toe.R -0.211); _harness/_shots/closing_rishal_clip_run_x2.png.",
+   "gauge": "LoL clips keep weapons clear of the body and contacts on the floor in all gameplay clips.",
+   "fix": "Rotate the hand or prop by 10-15 degrees outward in run and attack2. Clamp the toe height in the death fall.",
+   "files": "art/blender/fighters/rishal.py (run, attack2, idle_lobby, victory, death)",
+   "size": "S",
+   "verifierNote": "Kept. It is brief and small at the gameplay camera."
+  },
+  {
+   "id": "rishal-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The tabard is skinned to the legs with no secondary motion",
+   "what": "The skeleton has 27 joints and no cloth, tabard, scarf or crest chain. The tabard stretches with the thighs, and the brief's one-bone x_scarf is absent.",
+   "evidence": "Verifier GLB parse (_harness/_reports/closing_rishal_vfy_measure.txt): joints are root, hips, spine, chest, neck, head, x_visor_ridge, the arm, hand and prop chains, and the leg chains only. _design/fighters/rishal.md:62 asks for x_scarf.",
+   "gauge": "LoL cloth panels lag and settle after the body.",
+   "fix": "Add two-bone tabard flaps and the x_scarf with baked lag (2-3 frames) in run, dash and attacks.",
+   "files": "art/blender/fighters/rishal.py (rig, clips)",
+   "size": "M",
+   "verifierNote": "Kept as minor. The tabard is short (brief: 'short cool-slate tabard'), so the read costs less than the long coats on burdam and nurrow."
+  },
+  {
+   "id": "rishal-m5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Model finish: ragged back strap, residual metalness, bare dowel neck",
+   "what": "The painted back strap has torn, speckled edges. About 9-11 % of ORM texels carry metalness above 0.1 (almost all under 0.3), against the brief's non-metal rule. The neck shows as a brown striated dowel where the brief has a chalk gorget.",
+   "evidence": "_harness/_shots/closing_rishal_backstrap_x2.png; verifier ORM decode: metal over 0.1 on 9.3 % of all texels, over 0.3 on 0.1 % (_harness/_reports/closing_rishal_vfy_measure.txt); the neck is visible in _harness/_shots/closing_rishal_three_head_x2.png and closing_rishal_vfy_visor_base_vs_lamplit_x3.png.",
+   "gauge": "LoL texture finish has clean strap and trim edges and no stray material channels.",
+   "fix": "Repaint the strap mask, zero the metal channel on the body, and model the gorget.",
+   "files": "art/blender/fighters/rishal.py (strap paint, ORM install, gorget)",
+   "size": "S",
+   "verifierNote": "Kept. I measured metalness above 0.1 on 9.3 % of all texels, against the reviewer's 11 % (probably over covered texels only). Either way the values are low."
+  },
+  {
+   "id": "rishal-m6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The model carries none of his crimson signature and sits in the roster's cool grey cluster",
+   "what": "Rishal's VFX signature is crimson #B3004A, but the model is cool grey-white: mean hue 265, chroma 9.1, the same cluster as Ardit, Ervet and Ilsheta.",
+   "evidence": "_harness/_reports/closing_rishal_roster_colour.txt; content/fighters/rishal.json:533 (vfx.signature #B3004A), :529 (palette.primary #9AA6B4).",
+   "gauge": "LoL champions usually carry their kit colour somewhere on the model.",
+   "fix": "Add a small crimson cue that is not accent, for example the hilt wraps or a scarf stripe, under the 40 % saturation cap.",
+   "files": "art/blender/fighters/rishal.py (palette), _design/fighters/rishal.md §5",
+   "size": "S",
+   "verifierNote": "Kept as minor. The model's grey palette is what content and the brief specify, so this is a design gap, not a defect. It matches the ilsheta and kemdo verdicts."
+  }
+ ],
+ "missed": []
+}
