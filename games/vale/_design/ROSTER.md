@@ -590,7 +590,7 @@ Draw Near and Gather In apply airborne to allies, which interrupts a windup they
 Disarm, sleep, fear and untargetable have no `lib_*` status preset. Each fighter uses an optional bespoke `<id>_<slot>_<word>` preset as VOCAB allows. If LEAD prefers shared presets, `lib_disarm`, `lib_sleep`, `lib_fear` and `lib_untargetable` would need a VOCAB note.
 
 ### 7.6 SESSION
-At 16 fighters, BRIDGE deals the whole roster every match (§2.2). Add the constrained-random check before launch, or drop `bench.size` to 2 to keep a free pool of 2 for rerolls.
+At 16 fighters, BRIDGE deals the whole roster every match (§2.2). Add the constrained-random check before launch, or drop `bench.size` to 2 to leave 2 fighters undealt (the Lot has no redraws since the W4 re-key: `rerolls: 0`).
 
 ### 7.7 ART silhouette pairs to test first (IoU ≤ 0.80 at 64 px)
 
