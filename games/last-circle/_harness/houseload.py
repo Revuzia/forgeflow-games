@@ -6,6 +6,8 @@ batch per material per district (12-16 calls)" and "Wave 8 verify: framecheck qu
     python _harness/houseload.py --disk --maps ashgrid --baseline 9115494d
     python _harness/houseload.py --disk --maps deepwood --plant query-flood      # control: every queryColliders result carries 64 extra colliders -> the collider rows FAIL
     python _harness/houseload.py --disk --maps deepwood --plant district-split   # control: 20 extra meshes in the first town district -> district-calls FAILS
+    python _harness/houseload.py --disk --maps deepwood --plant look-flood       # control (R3): hasCollidersNear reads its whole r-list -> collider-load FAILS
+    python _harness/houseload.py --disk --maps deepwood --plant look-true        # control (R3): hasCollidersNear always true -> collider-load FAILS
     python _harness/houseload.py --rev 9115494d --baseline 9115494d --maps ashgrid   # the same build twice: the collider rows read x1.000 (the battery is exact)
 
 framecheck counts queryColliders CALLS per frame (<= 150). It never counted what a call RETURNS: maps.js queryColliders hands back the colliders of the grid
@@ -51,6 +53,11 @@ Rows (per map):
 Plants (--plant, applied to the CANDIDATE page after the match is loaded, never a file; only the designated rows count):
   query-flood          the wrapped queryColliders appends 64 dead, far-away dummy colliders to every result   -> collider-load, collider-load-frame FAIL
   district-split       20 extra 1-triangle meshes tagged with the first district id                         -> district-calls FAILS
+  look-flood           (R3) W.map.hasCollidersNear builds the r-list and reads all of it (same answers, no early exit) -> collider-load FAILS (look reads)
+  look-true            (R3) W.map.hasCollidersNear always answers true                                         -> collider-load FAILS (wrong answers)
+R3 (gates): each band is evaluated with the module constants its file declares (bots.js WALL_BAND_UP / WALL_REUSE_DY / NAV_STEP_UP, player.js STEP_UP), an
+infinite band edge is issued as such (wallCols' -Infinity), player.js supportA / supportAt are followed into supportBand (the r2-movers query), and the
+look measure counts the reads of the REAL hasCollidersNear (a c.dead read tap) instead of a replica's, a wrong answer failing the row.
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -70,7 +77,9 @@ GATE = "houseload"
 RATIO_MAX = 1.25            # the same tolerance perf_district gives triangles: x1.25 of the build that is live
 QC_CALLS_MAX = 150          # framecheck's queryColliders calls per match frame
 DISTRICT_CALLS_MAX = 16     # plan section 3 WAVE 8, lane 8B: "batch per material per district (12-16 calls)"
-PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district-split": {"district-calls"}}
+PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district-split": {"district-calls"},
+              # (R3) the look measure's own controls: hasCollidersNear builds and scans the whole r-list (same answers, the list's cost), or answers true
+              "look-flood": {"collider-load"}, "look-true": {"collider-load"}}
 FRAMES = 600
 
 WRAP_JS = r"""(plant) => {
@@ -80,6 +89,11 @@ WRAP_JS = r"""(plant) => {
   const st = M.__hl = { on: false, calls: 0, ret: 0, b: {} };
   const dummies = [];
   if (plant === 'query-flood') for (let i = 0; i < 64; i++) dummies.push({ kind: 'box', minX: 9e5 + i, maxX: 9e5 + i + 0.1, minY: -9e5, maxY: -9e5 + 0.1, minZ: 9e5, maxZ: 9e5 + 0.1, dir: -1, prop: null, idx: -1, hp: 0, dead: true, _qs: 0 });
+  // (R3) look plants: W.map.hasCollidersNear broken the two ways the look measure must see - it floods (builds the r-list and reads all of it, no
+  // early exit: the same answer at the old list's cost) or always answers true (a wrong answer wherever the square is empty)
+  if (plant === 'look-flood' && M.hasCollidersNear) M.hasCollidersNear = function (x, z, r) { const l = q.call(M, x, z, r, []); let any = false;
+    for (let i = 0; i < l.length; i++) { const c = l[i]; if (!c.dead && c.maxX >= x - r && c.minX <= x + r && c.maxZ >= z - r && c.minZ <= z + r) any = true; } return any; };
+  if (plant === 'look-true' && M.hasCollidersNear) M.hasCollidersNear = function () { return true; };
   M.queryColliders = function (x, z, r, out) {
     let res = q.apply(this, arguments);
     if (dummies.length) { if (Object.isFrozen(res)) res = res.slice(); for (const d of dummies) res.push(d); }
@@ -100,10 +114,10 @@ BATTERY_JS = r"""([pts, Q]) => {
   const fp = pts || ((M.city && M.city.footprints) || []).map((a) => [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2]);
   const out = { points: fp.length, q: {}, notes: [] };
   const DT = 1 / 60, h = K.PLAYERK.height, reach = K.MOVE.sprint * DT * Math.SQRT2;
-  const fn = (pre, exprs, tag) => { try { return new Function('K', 'reach', 'a', 'x', 'z', 'y', 'h', 'dt', (pre || '') + '\n; return [' + exprs.join(', ') + '];'); }
+  const fn = (pre, exprs, tag) => { try { return new Function('K', 'reach', 'a', 'x', 'z', 'y', 'h', 'dt', 'g', (pre || '') + '\n; return [' + exprs.join(', ') + '];'); }
                                     catch (e) { out.notes.push(tag + ': not evaluable (' + e.message + ') - unbanded'); return null; } };
   // the occAny / hasCollidersNear scan (maps.js: cells of CELL m, x-major, entries in collider order; stop at the first live collider meeting the square)
-  let occ = null;
+  let occ = null, tapN = 0;
   const occReads = (x, z, r) => {
     if (!occ) { const C = M.city ? (M.houses && M.houses.length ? 4 : 8) : 16, cells = new Map();
       (M.colliders || []).forEach((c) => { for (let i = Math.floor(c.minX / C); i <= Math.floor(c.maxX / C); i++) for (let j = Math.floor(c.minZ / C); j <= Math.floor(c.maxZ / C); j++) {
@@ -120,31 +134,68 @@ BATTERY_JS = r"""([pts, Q]) => {
   for (const q of Q) {
     const rF = fn('', [q.r], q.key + ' radius');
     const vars = q.sites.map((st) => ({ st, f: st.band ? fn(st.pre, st.band, q.key + ' band ' + st.at) : null }));
-    const ns = [], rs = new Set(); let banded = 0, occBad = 0;
+    const ns = [], rs = new Set(); let banded = 0, occBad = 0, occReadDiff = 0, emptyN = 0, emptyBad = 0;
+    // (R3) the read tap for the look measure: c.dead on every collider becomes a counting accessor for the length of this query's points, then the
+    // plain data property is put back (the match measurement below runs on untouched colliders). A non-configurable collider = no tap (the replica's
+    // count, noted)
+    let tap = false; const tapped = [];
+    if (q.mode === 'occ') {
+      tap = true;
+      for (const c of (M.colliders || [])) { const d = Object.getOwnPropertyDescriptor(c, 'dead');
+        if (Object.isFrozen(c) || (d && !d.configurable)) { tap = false; break; }
+        const v0 = c.dead; tapped.push([c, d, v0]); let cur = v0;
+        Object.defineProperty(c, 'dead', { get() { tapN++; return cur; }, set(nv) { cur = nv; }, enumerable: true, configurable: true }); }
+      if (!tap) out.notes.push(q.key + ': a collider is frozen / non-configurable - its reads are the replica\'s count');
+    }
+    try {
     for (const p of fp) {
       const x = p[0], z = p[1], H = M.houseAt ? M.houseAt(x, z) : null, y = H ? H.y : M.heightAt(x, z);
       const a = { pos: { x, y, z }, vel: { x: 0, y: 0, z: 0 }, onGround: true };
-      let r = q.r0; try { if (rF) r = rF(K, reach, a, x, z, y, h, DT)[0]; } catch (e) {}
+      const g = M.heightAt(x, z);        // (R3) the terrain under the point: player.js supportBand's MV[7] (groundF)
+      let r = q.r0; try { if (rF) r = rF(K, reach, a, x, z, y, h, DT, g)[0]; } catch (e) {}
       rs.add(+r.toFixed(3));
       let worst = 0;
       for (const v of vars) {
         let n;
         if (q.mode === 'occ') {
+          // (R3) the REAL W.map.hasCollidersNear is called and its reads are counted (every collider entry it inspects reads c.dead: the tap below);
+          // the replica's answer is the truth it must give (== a live collider meets the square). A flooding or always-true hasCollidersNear now
+          // shows: more reads, or a wrong answer (occMismatch: the row FAILS)
           const [reads, any] = occReads(x, z, r);
-          if (any !== M.hasCollidersNear(x, z, r)) occBad++;
-          n = reads;
+          tapN = 0;
+          const real = M.hasCollidersNear(x, z, r);
+          if (any !== real) occBad++;
+          n = tap ? tapN : reads;
+          if (tap && tapN !== reads) occReadDiff++;
         } else {
-          let b = null; try { if (v.f) b = v.f(K, reach, a, x, z, y, h, DT); } catch (e) { b = null; if (!v.err) { v.err = 1; out.notes.push(q.key + ' band ' + v.st.at + ': ' + e.message + ' - unbanded'); } }
-          if (b && isFinite(b[0]) && isFinite(b[1])) { banded++; n = M.queryColliders(x, z, r, [], b[0], b[1]).length; }
+          let b = null; try { if (v.f) b = v.f(K, reach, a, x, z, y, h, DT, g); } catch (e) { b = null; if (!v.err) { v.err = 1; out.notes.push(q.key + ' band ' + v.st.at + ': ' + e.message + ' - unbanded'); } }
+          // (R3) a band edge may be infinite (bots.js wallCols asks [-Infinity, feet + 12.8]); only a NaN / missing edge is unevaluable
+          if (b && typeof b[0] === 'number' && typeof b[1] === 'number' && !isNaN(b[0]) && !isNaN(b[1])) { banded++; n = M.queryColliders(x, z, r, [], b[0], b[1]).length; }
           else n = M.queryColliders(x, z, r, []).length;
         }
         if (n > worst) worst = n;
       }
       ns.push(worst);
     }
+    // (R3) the look's answer where it must be FALSE: every footprint centre has a collider within 16 m, so an always-true hasCollidersNear answered
+    // right at all of them. Points 40 m out from each centre (8 directions) whose square the scan finds empty, up to 400: the real answer must be
+    // false there. Not part of the read counts (those stay on the footprint centres).
+    if (q.mode === 'occ') {
+      outer: for (const p of fp) for (let k = 0; k < 8; k++) {
+        const x = p[0] + Math.cos(k * Math.PI / 4) * 40, z = p[1] + Math.sin(k * Math.PI / 4) * 40;
+        if (occReads(x, z, q.r0)[1]) continue;
+        emptyN++; if (M.hasCollidersNear(x, z, q.r0) !== false) emptyBad++;
+        if (emptyN >= 400) break outer;
+      }
+      if (!emptyN) out.notes.push(q.key + ': no empty probe point found (the false answer is unchecked)');
+    }
+    } finally {
+      for (const [c, d, v0] of tapped) { const cur = c.dead; delete c.dead; if (d) Object.defineProperty(c, 'dead', Object.assign({}, d, { value: cur })); else if (cur !== undefined) c.dead = cur; }
+    }
     ns.sort((a, b) => a - b);
     const sum = ns.reduce((a, b) => a + b, 0);
-    out.q[q.key] = { mode: q.mode, r: [...rs].slice(0, 4), sites: q.sites.map((st) => st.at + (st.band ? ' band' : '')), bandedQueries: banded, occMismatch: q.mode === 'occ' ? occBad : null,
+    out.q[q.key] = { mode: q.mode, r: [...rs].slice(0, 4), sites: q.sites.map((st) => st.at + (st.band ? ' band' : '')), bandedQueries: banded, occMismatch: q.mode === 'occ' ? occBad + emptyBad : null, occEmptyChecked: q.mode === 'occ' ? emptyN : null,
+                     occTap: q.mode === 'occ' ? tap : null, occReadsVsReplica: q.mode === 'occ' ? occReadDiff : null,
                      n: ns.length, mean: ns.length ? +(sum / ns.length).toFixed(2) : null, p95: ns.length ? ns[Math.min(ns.length - 1, Math.floor(ns.length * 0.95))] : null, max: ns.length ? ns[ns.length - 1] : null };
   }
   out.pts = pts ? null : fp;
@@ -266,6 +317,7 @@ def call_sites(rev):
     B, P = _code(_src(rev, "runtime/3d/royale/bots.js")), _code(_src(rev, "runtime/3d/royale/player.js"))
     if not B or not P:
         raise C.HarnessError("houseload: cannot read bots.js / player.js of %s" % (rev or "the working copy"))
+    KB, KP = _module_consts(B), _module_consts(P)      # (R3) each file's own module constants, for the bands its call sites issue
     Q, proof = [], {}
     # look-around: occAny(W, a.pos.x, a.pos.z, 16) delegating to map.hasCollidersNear, else the old r 16 list
     occ_body = _body(B, "occAny") or ""
@@ -281,8 +333,8 @@ def call_sites(rev):
     wqr = wq.group(1) if wq else "2.4"
     st = _qc_sites(_body(B, "wallCols"), r"WALL_QR")
     Q.append({"key": "steer", "mode": "list", "r": wqr, "r0": float(wqr),
-              "sites": [{"at": "bots.js wallCols r WALL_QR", "band": (x[1] if x[1] else None), "pre": ""} for x in st] or [{"at": "bots.js wallCols (not found: unbanded)", "band": None, "pre": ""}]})
-    proof["steer"] = "wallCols r WALL_QR=%s: %s" % (wqr, ", ".join("band %s" % (b,) if b else "unbanded" for _, b in st) or "call not found - unbanded")
+              "sites": [{"at": "bots.js wallCols r WALL_QR", "band": (x[1] if x[1] else None), "pre": _const_pre(KB, x[1] or [])} for x in st] or [{"at": "bots.js wallCols (not found: unbanded)", "band": None, "pre": ""}]})
+    proof["steer"] = "wallCols r WALL_QR=%s: %s" % (wqr, ", ".join(("band %s%s" % (b, _pre_note(_const_pre(KB, b)))) if b else "unbanded" for _, b in st) or "call not found - unbanded")
     # move: player.js tick's moveCols(W, a.pos.x, a.pos.z, reach[, yLo, yHi]) -> moveCols' queryColliders(x, z, <radius with reach>, _moveCols[, y0, y1])
     mc = _qc_sites(_body(P, "moveCols"), r".*reach.*")
     rexpr = mc[0][0] if mc else "Math.max(K.PLAYERK.radius + 0.4, 0.6) + K.PLAYERK.radius + reach"
@@ -293,17 +345,94 @@ def call_sites(rev):
         y0n, y1n = call.group(1), call.group(2)
         d = re.search(r"const dyT = [^;]*\b%s = [^;]*;" % re.escape(y0n), P)
         if d:
-            band, pre = [y0n, y1n], d.group(0)
+            band, pre = [y0n, y1n], _const_pre(KP, [d.group(0)]) + d.group(0)
     Q.append({"key": "move", "mode": "list", "r": rexpr, "r0": 1.489, "sites": [{"at": "player.js tick moveCols", "band": band, "pre": pre}]})
     proof["move"] = "moveCols r %s, %s" % (rexpr, "band %s from `%s`" % (band, pre) if band else "unbanded")
     # support: the r 0.6 probes (player.js supportA / supportAt, bots.js insideSolid / obstacleAt) - the worst site per point
     sup = []
-    for f, code in (("supportA", P), ("supportAt", P), ("insideSolid", B), ("obstacleAt", B)):
-        for _, b in _qc_sites(_body(code, f), r"0\.6"):
-            sup.append({"at": "%s r 0.6" % f, "band": b if b else None, "pre": ""})
+    for f, code, kc in (("supportA", P, KP), ("supportAt", P, KP), ("insideSolid", B, KB), ("obstacleAt", B, KB)):
+        # the band's locals are the battery's own (insideSolid `const h = K.PLAYERK.height` = h, the feet = y); module constants come from the file
+        body = _body(code, f) or ""
+        for _, b in _qc_sites(body, r"0\.6"):
+            sup.append({"at": "%s r 0.6" % f, "band": b if b else None, "pre": _const_pre(kc, b or [])})
+        if body and not _qc_sites(body, r"0\.6"):
+            sup.extend(_mv_helper_sites(code, kc, f, body))
     Q.append({"key": "support", "mode": "list", "r": "0.6", "r0": 0.6, "sites": sup or [{"at": "support r 0.6 (no site found: unbanded)", "band": None, "pre": ""}]})
-    proof["support"] = ", ".join("%s %s" % (x["at"], "band %s" % (x["band"],) if x["band"] else "unbanded") for x in sup) or "no site found - unbanded"
+    proof["support"] = ", ".join("%s %s" % (x["at"], ("band %s%s" % (x["band"], _pre_note(x["pre"]))) if x["band"] else "unbanded") for x in sup) or "no site found - unbanded"
     return Q, proof
+
+
+def _module_consts(code):
+    """(R3) the module-level `const NAME = expr[, NAME2 = expr2];` declarations of a source file (comments already stripped): {NAME: expr text}.
+    Top level only (the line starts with `const` / `export const`, no indentation): the constants a call site's band reads."""
+    import re
+    out = {}
+    for m in re.finditer(r"(?m)^(?:export )?const ([^\n]*?);[ \t]*$", code):
+        depth, cur, parts = 0, "", []
+        for ch in m.group(1):
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+            if ch == "," and depth == 0:
+                parts.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        parts.append(cur)
+        for part in parts:
+            mm = re.fullmatch(r"\s*([A-Za-z_$][\w$]*)\s*=\s*(.+?)\s*", part, flags=re.S)
+            if mm:
+                out.setdefault(mm.group(1), mm.group(2))
+    return out
+
+
+def _const_pre(consts, texts):
+    """(R3) the declarations a band's expressions need: every UPPER_CASE module constant they name (and the constants those name), in dependency
+    order, as `const NAME = expr;`, so the battery evaluates each band exactly as the call site computes it. r2-harness read the call but not the
+    module's constants ('WALL_BAND_UP is not defined', 'NAV_STEP_UP is not defined'): every banded movers query was measured unbanded."""
+    import re
+    order, seen = [], set()
+
+    def need(text, depth=0):
+        for name in re.findall(r"\b[A-Z][A-Z0-9_]*\b", text or ""):
+            if name in seen or name not in consts or depth > 8:
+                continue
+            seen.add(name)
+            need(consts[name], depth + 1)
+            order.append(name)
+    for t in texts:
+        need(t)
+    return "".join("const %s = %s;\n" % (n, consts[n]) for n in order)
+
+
+def _mv_helper_sites(code, consts, f, body):
+    """(R3) r2-movers moved player.js supportA / supportAt's query into a helper: `MV[2] = x; MV[3] = z; MV[4] = y; supportBand(W);` and supportBand
+    issues `queryColliders(MV[2], MV[3], 0.6, _supCols, MV[7], MV[4] + STEP_UP)` after groundF(W) wrote MV[7] = the terrain under (MV[2], MV[3]).
+    The r2 battery only looked inside supportA / supportAt, found no r 0.6 call and dropped both sites. Here every helper `name(W)` the function
+    calls that holds an r 0.6 query is a site; its MV slots are bound from the caller's own `MV[i] = <x|z|y>;` writes, MV[7] from groundF
+    (`MV[7] = W.map.heightAt(MV[2], MV[3])`, the battery's g). A slot neither source binds leaves the band unevaluable (noted, unbanded)."""
+    import re
+    out = []
+    binds = {int(i): v for i, v in re.findall(r"\bMV\[(\d)\]\s*=\s*([xyz])\s*;", body)}
+    gf = _body(code, "groundF") or ""
+    for name in dict.fromkeys(re.findall(r"\b([A-Za-z_]\w*)\(W\)", body)):
+        hb = _body(code, name) or ""
+        for _, b in _qc_sites(hb, r"0\.6"):
+            bind = dict(binds)
+            if re.search(r"\bgroundF\(W\)", hb) and re.search(r"MV\[7\]\s*=\s*W\.map\.heightAt\(MV\[2\],\s*MV\[3\]\)", gf):
+                bind[7] = "g"
+            used = sorted(set(int(i) for i in re.findall(r"\bMV\[(\d)\]", " ".join(b or []))))
+            if b and all(i in bind for i in used):
+                mv = "const MV = [%s];\n" % ", ".join(bind.get(i, "NaN") for i in range(8))
+                out.append({"at": "%s -> %s r 0.6" % (f, name), "band": b, "pre": _const_pre({k: e for k, e in consts.items() if k != "MV"}, b) + mv})
+            else:
+                out.append({"at": "%s -> %s r 0.6" % (f, name), "band": b or None, "pre": "" if not b else "throw new Error('MV slot %s not bound');" % [i for i in used if i not in bind]})
+    return out
+
+
+def _pre_note(pre):
+    return (" with `%s`" % " ".join(pre.split())) if pre else ""
 
 
 def measure(args, label, map_id, rev, plant, Q, pts=None):
@@ -367,21 +496,31 @@ def main_fn(v, args):
         else:
             rows = {}
             ok = True
+            over = []          # (R3) which query is over the bar (the row names it: a plant must be caught by ITS measure)
             bad_occ = [k for k, e in cb["q"].items() if e.get("occMismatch")]
             for r in ("look", "steer", "move", "support"):
                 c, b = cb["q"][r], bb["q"][r]
                 rm = c["mean"] / b["mean"] if b["mean"] else (1.0 if not c["mean"] else 99.0)
                 rows[r] = {"query": "%s r %s" % (c["mode"], c["r"]), "baseQuery": "%s r %s" % (b["mode"], b["r"]), "sites": c["sites"], "bandedQueries": c["bandedQueries"],
                            "mean": c["mean"], "baseMean": b["mean"], "ratio": round(rm, 3), "p95": c["p95"], "baseP95": b["p95"], "max": c["max"], "baseMax": b["max"]}
+                if c.get("mode") == "occ":
+                    rows[r]["realReadsTapped"], rows[r]["pointsWhereRealReadsDifferFromReplica"] = c.get("occTap"), c.get("occReadsVsReplica")
+                    rows[r]["wrongAnswers"], rows[r]["emptyPointsChecked"] = c.get("occMismatch"), c.get("occEmptyChecked")
+                if rm > RATIO_MAX:
+                    over.append("%s mean x%.3f" % (r, rm))
                 ok = ok and rm <= RATIO_MAX
                 if r in ("look", "steer"):
                     rp = c["p95"] / b["p95"] if b["p95"] else (1.0 if not c["p95"] else 99.0)
                     rows[r]["p95ratio"] = round(rp, 3)
+                    if rp > RATIO_MAX:
+                        over.append("%s p95 x%.3f" % (r, rp))
                     ok = ok and rp <= RATIO_MAX
             if bad_occ:
-                v.cnj("collider-load [%s]" % m, "the occAny replica disagrees with W.map.hasCollidersNear at %s points: cannot count its reads" % {k: cb["q"][k]["occMismatch"] for k in bad_occ})
+                # (R3) W.map.hasCollidersNear gave a WRONG answer (not "== a live collider meets the square") at these points: the look is broken - FAIL
+                chk("collider-load [%s]" % m, False, {"wrongAnswers": {k: cb["q"][k]["occMismatch"] for k in bad_occ}, "overBar": over, "points": cb["points"], "byQuery": rows, "notes": cb["notes"]},
+                    expect="W.map.hasCollidersNear answers as the scan's truth at every footprint centre, and the collider counts <= x%.2f" % RATIO_MAX)
             else:
-                chk("collider-load [%s]" % m, ok, {"points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
+                chk("collider-load [%s]" % m, ok, {"overBar": over, "points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
                     expect="look (bots' look-around) and steer mean and p95, move and support mean: colliders <= x%.2f the baseline (%s, its own call sites) at the same %d footprint centres" % (RATIO_MAX, bsha[:8], cb["points"]))
         cm, bm = cand["match"], base["match"]
         rr = cm["retPerFrame"] / bm["retPerFrame"] if bm["retPerFrame"] else 99.0
