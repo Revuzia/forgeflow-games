@@ -58,6 +58,8 @@ Plants (--plant, applied to the CANDIDATE page after the match is loaded, never 
 R3 (gates): each band is evaluated with the module constants its file declares (bots.js WALL_BAND_UP / WALL_REUSE_DY / NAV_STEP_UP, player.js STEP_UP), an
 infinite band edge is issued as such (wallCols' -Infinity), player.js supportA / supportAt are followed into supportBand (the r2-movers query), and the
 look measure counts the reads of the REAL hasCollidersNear (a c.dead read tap) instead of a replica's, a wrong answer failing the row.
+Under --plant the collider-load row judges only the queries that plant breaks (query-flood: steer/move/support; look-*: look), so a control is caught by
+ITS measure, never by a row that is red for another reason.
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -80,6 +82,9 @@ DISTRICT_CALLS_MAX = 16     # plan section 3 WAVE 8, lane 8B: "batch per materia
 PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district-split": {"district-calls"},
               # (R3) the look measure's own controls: hasCollidersNear builds and scans the whole r-list (same answers, the list's cost), or answers true
               "look-flood": {"collider-load"}, "look-true": {"collider-load"}}
+# (R3) under a plant the collider-load row is judged on the queries that plant breaks ONLY: the steer query is over the bar on the R3 head (game work,
+# bots.js wallCols), so judging the whole row would let a control "fail" on steer while its own measure saw nothing. Without --plant: all four queries.
+PLANT_QUERIES = {"query-flood": ("steer", "move", "support"), "look-flood": ("look",), "look-true": ("look",)}
 FRAMES = 600
 
 WRAP_JS = r"""(plant) => {
@@ -497,7 +502,8 @@ def main_fn(v, args):
             rows = {}
             ok = True
             over = []          # (R3) which query is over the bar (the row names it: a plant must be caught by ITS measure)
-            bad_occ = [k for k, e in cb["q"].items() if e.get("occMismatch")]
+            judged = PLANT_QUERIES.get(plant, ("look", "steer", "move", "support")) if plant else ("look", "steer", "move", "support")
+            bad_occ = [k for k, e in cb["q"].items() if e.get("occMismatch") and k in judged]
             for r in ("look", "steer", "move", "support"):
                 c, b = cb["q"][r], bb["q"][r]
                 rm = c["mean"] / b["mean"] if b["mean"] else (1.0 if not c["mean"] else 99.0)
@@ -508,19 +514,19 @@ def main_fn(v, args):
                     rows[r]["wrongAnswers"], rows[r]["emptyPointsChecked"] = c.get("occMismatch"), c.get("occEmptyChecked")
                 if rm > RATIO_MAX:
                     over.append("%s mean x%.3f" % (r, rm))
-                ok = ok and rm <= RATIO_MAX
+                ok = ok and (rm <= RATIO_MAX or r not in judged)
                 if r in ("look", "steer"):
                     rp = c["p95"] / b["p95"] if b["p95"] else (1.0 if not c["p95"] else 99.0)
                     rows[r]["p95ratio"] = round(rp, 3)
                     if rp > RATIO_MAX:
                         over.append("%s p95 x%.3f" % (r, rp))
-                    ok = ok and rp <= RATIO_MAX
+                    ok = ok and (rp <= RATIO_MAX or r not in judged)
             if bad_occ:
                 # (R3) W.map.hasCollidersNear gave a WRONG answer (not "== a live collider meets the square") at these points: the look is broken - FAIL
-                chk("collider-load [%s]" % m, False, {"wrongAnswers": {k: cb["q"][k]["occMismatch"] for k in bad_occ}, "overBar": over, "points": cb["points"], "byQuery": rows, "notes": cb["notes"]},
+                chk("collider-load [%s]" % m, False, {"wrongAnswers": {k: cb["q"][k]["occMismatch"] for k in bad_occ}, "overBar": over, "judgedQueries": list(judged), "points": cb["points"], "byQuery": rows, "notes": cb["notes"]},
                     expect="W.map.hasCollidersNear answers as the scan's truth at every footprint centre, and the collider counts <= x%.2f" % RATIO_MAX)
             else:
-                chk("collider-load [%s]" % m, ok, {"overBar": over, "points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
+                chk("collider-load [%s]" % m, ok, {"overBar": over, "judgedQueries": list(judged), "points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
                     expect="look (bots' look-around) and steer mean and p95, move and support mean: colliders <= x%.2f the baseline (%s, its own call sites) at the same %d footprint centres" % (RATIO_MAX, bsha[:8], cb["points"]))
         cm, bm = cand["match"], base["match"]
         rr = cm["retPerFrame"] / bm["retPerFrame"] if bm["retPerFrame"] else 99.0
