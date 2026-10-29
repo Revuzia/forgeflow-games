@@ -45,7 +45,8 @@
 //               browser never fetches both formats of a cue unless its .ogg failed. MP4 edit lists trim the AAC
 //               priming, so a .m4a starts sample-aligned with its .ogg and loops / beds decode to its exact
 //               length: loop points are format-independent (audio/aac.py; Safari pads a one-shot's end to a
-//               whole 1024-sample frame of silence, inaudible)
+//               whole 1024-sample frame of silence, inaudible). AAC decodes several times slower than Opus in
+//               Safari (a 160 s bed ~10-20 s), so a bed's main stem also ships as .m4a PIECES (see `music`)
 //   music       MusicDef beds crossfade (1.2 s). The main stem starts as soon as IT decodes (a slow layer never
 //               holds the bed back); each layer joins phase-locked to the main stem at the next bar once its own
 //               file is in. A layer's id gives its role: 'stem…' loops on its own length, always on (the menu's
@@ -55,7 +56,14 @@
 //               calls musicPhase() for a bed, the bed walks its phases itself on the old through-composed arc
 //               (AUTO_PHASE_S: the first phase layer from 16 s, the last from 80 s); any other layer is
 //               the combat layer, faded by the match's combat intensity (enter above 0.6, leave below 0.35
-//               after 8 s, quantised to the bar). duck() pulls the bed −8 dB under a moment (the ready check)
+//               after 8 s, quantised to the bar). duck() pulls the bed −8 dB under a moment (the ready check).
+//               'seg_<s>' layers are the main stem's .m4a pieces, for the .m4a path only (the .ogg path never
+//               fetches one): <s> = where the piece starts on the bed's timeline (audio/build_music.py cuts them
+//               from the same master: 16 s first, then doubling to 64 s, each running on SEG_OVERLAP_S into the
+//               next). There the main stem plays piece by piece, the first starting the bed and each next one
+//               cross-fading in over the run-on of the one before; once all are in they are stitched into one
+//               buffer (the run-ons cross-faded) that takes over at the last piece's start and loops; only then
+//               do the layers start decoding. The stitched stem is kept, so the bed's next start is immediate
 //   listener    spatial cues are heard from the CAMERA's ground focus (CONTRACT §11 'listener at the camera
 //               target'; listener(): the renderer's focus, wired in boot/main.ts; without one, your fighter):
 //               full volume within LISTEN_INNER_M (the whole screen at default zoom), rolled off to silence
@@ -145,6 +153,12 @@ interface AnnItem { cue: string; band: number; rank: number; key: string; t: num
 /** a bed layer (see `music` in the header) */
 type LayerRole = 'combat' | 'stem' | 'phase' | 'urgency';
 interface BedLayer { id: string; role: LayerRole; file: string; gain: GainNode; src: AudioBufferSourceNode | null; buf: AudioBuffer | null }
+/** the playing bed: `t0` = when its main stem started at position 0 (ctx time; null until it decodes), `len` its loop
+ *  length; `pieces` = the .m4a path's piece sources until the stitched main stem takes over (see `music`) */
+interface Bed { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; t0: number | null; len: number; gain: GainNode;
+  layers: BedLayer[]; pieces: { src: AudioBufferSourceNode; gain: GainNode }[] }
+/** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
+interface BedPiece { at: number; file: string }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
   statuses?: readonly { kind: string; src?: number }[] }
 /** a spatial cue's placement around the listener */
@@ -203,6 +217,7 @@ const ANN_CUT_S = 0.15;      // … with this fade
 const ANN_TAIL_S = 0.6;      // the next line may start this long before the playing file ends (its ring-out) …
 const ANN_MIN_S = 0.6;       // … but never sooner than this after it started
 const AUTO_PHASE_S = [16, 80];   // a bed's phases walk themselves (first, last phase layer) until musicPhase() drives them
+const SEG_OVERLAP_S = 0.05;  // a main stem's .m4a piece runs on this far into the next (audio/build_music.py PIECE_OVERLAP_S)
 const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
@@ -273,8 +288,7 @@ class Engine implements ValeAudioPort {
   private fmt: 'ogg' | 'm4a' | null;
   /** the first .ogg decode while the format is undecided; other loads wait for it */
   private probe: Promise<void> | null = null;
-  /** the playing bed: `t0` = when its main stem started (ctx time; null until it decodes), `pos(t)` its loop position */
-  private bed: { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; t0: number | null; len: number; gain: GainNode; layers: BedLayer[] } | null = null;
+  private bed: Bed | null = null;
   private wantBed: string | null = null;
   /** musicPhase() / musicUrgency() (see `music` in the header) */
   private phase: string | null = null;
@@ -645,7 +659,9 @@ class Engine implements ValeAudioPort {
     gain.gain.value = 0;
     gain.connect(this.bus.get('music')!);
     let combat = false;
-    const layers: BedLayer[] = def.layers.map((l) => {
+    const pieces: BedPiece[] = def.layers.filter((l) => l.id.startsWith('seg_'))
+      .map((l) => ({ at: Number(l.id.slice('seg_'.length)), file: l.file })).sort((a, b) => a.at - b.at);
+    const layers: BedLayer[] = def.layers.filter((l) => !l.id.startsWith('seg_')).map((l) => {
       const g = ctx.createGain();
       g.gain.value = 0;
       g.connect(gain);
@@ -655,32 +671,168 @@ class Engine implements ValeAudioPort {
       if (role === 'combat') combat = true;
       return { id: l.id, role, file: l.file, gain: g, src: null, buf: null };
     });
-    const bed = { id, def, main: null as AudioBufferSourceNode | null, t0: null as number | null, len: 0, gain, layers };
+    const bed: Bed = { id, def, main: null, t0: null, len: 0, gain, layers, pieces: [] };
     this.bed = bed;
-    // the main stem starts as soon as it decodes; each layer joins when both it and the main stem are in
-    void this.buffer(def.file).then((main) => {
-      if (this.bed !== bed || !main || !this.ctx) return;
-      const t0 = this.ctx.currentTime + 0.05;
-      const s = this.ctx.createBufferSource();
-      s.buffer = main; s.loop = true;
-      s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? main.duration;
-      s.connect(gain); s.start(t0);
-      bed.main = s; bed.t0 = t0; bed.len = Math.max(0.001, s.loopEnd - s.loopStart);
-      gain.gain.setTargetAtTime(def.gain, t0, XFADE_S / 3);
-      for (const l of layers) if (l.buf) this.startLayer(bed, l);
-    });
-    for (const l of layers) {
-      void this.buffer(l.file).then((buf) => {
-        if (this.bed !== bed || !buf || !this.ctx) return;
-        l.buf = buf;
-        if (bed.t0 !== null) this.startLayer(bed, l);
-      });
+    // each layer joins when both it and the main stem are in
+    const loadLayers = (): void => {
+      for (const l of layers) {
+        void this.buffer(l.file).then((buf) => {
+          if (this.bed !== bed || !buf || !this.ctx) return;
+          l.buf = buf;
+          if (bed.t0 !== null) this.startLayer(bed, l);
+        });
+      }
+    };
+    // the .m4a path plays a main stem it has not decoded yet piece by piece; the layers wait for the decoder
+    if (this.fmt === 'm4a' && pieces.length > 1 && pieces[0].at === 0 && !this.buffers.has(def.file)) {
+      void this.playPieces(bed, pieces).then(loadLayers);
+      return;
     }
+    // the main stem starts as soon as it decodes
+    void this.buffer(def.file).then((main) => {
+      if (this.bed === bed && main) this.loopMain(bed, main);
+    });
+    loadLayers();
+  }
+
+  /** the main stem starts looping now (position 0), the bed fading in */
+  private loopMain(bed: Bed, main: AudioBuffer): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const def = bed.def;
+    const t0 = ctx.currentTime + 0.05;
+    const s = ctx.createBufferSource();
+    s.buffer = main; s.loop = true;
+    s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? main.duration;
+    s.connect(bed.gain); s.start(t0);
+    bed.main = s; bed.t0 = t0; bed.len = Math.max(0.001, s.loopEnd - s.loopStart);
+    bed.gain.gain.setTargetAtTime(def.gain, t0, XFADE_S / 3);
+    for (const l of bed.layers) if (l.buf) this.startLayer(bed, l);
+  }
+
+  /** the .m4a path's main stem (see `music` in the header): the pieces decode one after another, each plays from its
+   *  place on the bed's timeline as soon as it is in (the first starts the bed), and once all are in they are stitched
+   *  into one buffer that takes over at the last piece's start and loops. A piece that fails hands over to the
+   *  whole .m4a, wherever the bed has got to */
+  private async playPieces(bed: Bed, pieces: BedPiece[]): Promise<void> {
+    const bufs: AudioBuffer[] = [];
+    let prev: GainNode | null = null;
+    for (let i = 0; i < pieces.length; i++) {
+      const buf = this.ctx ? await this.decode(this.ctx, pieces[i].file) : null;
+      if (this.bed !== bed || !this.ctx) return;
+      if (!buf) {
+        const whole = await this.buffer(bed.def.file);
+        if (this.bed === bed && whole) this.takeOver(bed, whole, prev);
+        return;
+      }
+      bufs.push(buf);
+      if (i < pieces.length - 1) prev = this.playPiece(bed, buf, pieces[i].at, prev);
+    }
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const whole = this.stitch(ctx, bufs, pieces);
+    this.buffers.set(bed.def.file, Promise.resolve(whole));
+    this.takeOver(bed, whole, prev, pieces[pieces.length - 1].at);
+  }
+
+  /** one piece on the bed's timeline at `at` s: it cross-fades in over the run-on of the piece before (`prev`, faded
+   *  out under it); a piece decoded after its time joins at once where the timeline is. Returns its gain */
+  private playPiece(bed: Bed, buf: AudioBuffer, at: number, prev: GainNode | null): GainNode {
+    const ctx = this.ctx!;
+    const g = ctx.createGain();
+    g.connect(bed.gain);
+    const s = ctx.createBufferSource();
+    s.buffer = buf;
+    s.connect(g);
+    const now = ctx.currentTime;
+    if (bed.t0 === null) {                                  // the first piece: the bed starts
+      bed.t0 = now + 0.05;
+      s.start(bed.t0);
+      bed.gain.gain.setTargetAtTime(bed.def.gain, bed.t0, XFADE_S / 3);
+    } else this.joinAt(g, s, bed.t0 + at, 0, prev);
+    bed.pieces.push({ src: s, gain: g });
+    return g;
+  }
+
+  /** start `s` (gain `g`) at context time `t` from offset `pos` of its buffer, cross-fading in over the run-on of
+   *  `prev`; when `t` has passed, at once from where the bed's timeline is (`pos` + the delay; `wrap` folds it into a
+   *  loop) with a short fade, `prev` fading out under it */
+  private joinAt(g: GainNode, s: AudioBufferSourceNode, t: number, pos: number, prev: GainNode | null, wrap?: (p: number) => number): void {
+    const now = this.ctx!.currentTime;
+    if (t >= now + 0.02) {
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(1, t + SEG_OVERLAP_S);
+      if (prev) { prev.gain.setValueAtTime(1, t); prev.gain.linearRampToValueAtTime(0, t + SEG_OVERLAP_S); }
+      s.start(t, pos);
+      return;
+    }
+    const at = now + 0.05;
+    const p = pos + (at - t);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(1, at + 0.03);
+    if (prev) { prev.gain.cancelScheduledValues(at); prev.gain.setValueAtTime(prev.gain.value, at); prev.gain.linearRampToValueAtTime(0, at + 0.03); }
+    s.start(at, wrap ? wrap(p) : Math.min(p, Math.max(0, (s.buffer?.duration ?? 0) - 0.001)));
+  }
+
+  /** the stitched (or whole) main stem takes over from the pieces and loops: at bed position `at` when that is still
+   *  ahead, else at once where the timeline is */
+  private takeOver(bed: Bed, buf: AudioBuffer, prev: GainNode | null, at?: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (bed.t0 === null) { this.loopMain(bed, buf); return; }        // no piece ever played
+    const def = bed.def;
+    const g = ctx.createGain();
+    g.connect(bed.gain);
+    const s = ctx.createBufferSource();
+    s.buffer = buf; s.loop = true;
+    s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? buf.duration;
+    s.connect(g);
+    const end = s.loopEnd, len = Math.max(0.001, end - s.loopStart);
+    const wrap = (p: number): number => (p < end ? p : def.loopStart + ((p - end) % len));
+    const now = ctx.currentTime;
+    const t = at === undefined ? now : bed.t0 + at;
+    const late = t < now + 0.02;
+    this.joinAt(g, s, t, t - bed.t0, late ? null : prev, wrap);
+    if (late) {                                             // every piece still sounding (or still to come) yields now
+      for (const p of bed.pieces) {
+        p.gain.gain.cancelScheduledValues(now);
+        p.gain.gain.setTargetAtTime(0, now + 0.05, 0.01);
+        try { p.src.stop(now + 0.15); } catch { /* not started */ }
+      }
+    }
+    bed.main = s; bed.len = len;
+    for (const l of bed.layers) if (l.buf) this.startLayer(bed, l);
+  }
+
+  /** the pieces as one loop, the way audio/build_music.py `stitch` QAs them: each piece's run-on cross-fades
+   *  (linear) into the head of the next, the last one's into the loop's head */
+  private stitch(ctx: AudioContext, bufs: AudioBuffer[], pieces: BedPiece[]): AudioBuffer {
+    const sr = ctx.sampleRate;
+    const ov = Math.max(1, Math.round(SEG_OVERLAP_S * sr));
+    const starts = pieces.map((p) => Math.round(p.at * sr));
+    const last = bufs.length - 1;
+    const n = Math.max(starts[last] + 1, starts[last] + bufs[last].length - ov);
+    const ch = Math.max(...bufs.map((b) => b.numberOfChannels));
+    const out = ctx.createBuffer(ch, n, sr);
+    for (let c = 0; c < ch; c++) {
+      const o = out.getChannelData(c);
+      for (let i = 0; i <= last; i++) {
+        const d = bufs[i].getChannelData(Math.min(c, bufs[i].numberOfChannels - 1));
+        const s0 = starts[i];
+        const m = Math.min(d.length, (i < last ? starts[i + 1] : n) - s0 + ov);    // body + run-on
+        const head = i > 0 ? Math.min(ov, m) : 0;
+        for (let j = 0; j < head; j++) { const w = (j + 0.5) / ov; o[s0 + j] = o[s0 + j] * (1 - w) + d[j] * w; }
+        const inLoop = Math.min(m, n - s0);
+        if (inLoop > head) o.set(d.subarray(head, inLoop), s0 + head);
+        for (let j = inLoop; j < m; j++) { const k = s0 + j - n; const w = (k + 0.5) / ov; o[k] = d[j] * (1 - w) + o[k] * w; }
+      }
+    }
+    return out;
   }
 
   /** a layer joins its bed (see `music` in the header): a stem loops on its own from now; a synced layer starts on
    *  the main stem's next bar (or with the main stem, when both decoded together) at the main stem's loop position */
-  private startLayer(bed: NonNullable<Engine['bed']>, l: BedLayer): void {
+  private startLayer(bed: Bed, l: BedLayer): void {
     const ctx = this.ctx;
     if (!ctx || !l.buf || l.src || bed.t0 === null) return;
     const s = ctx.createBufferSource();
@@ -731,7 +883,7 @@ class Engine implements ValeAudioPort {
     this.bed = null;
     const t = this.ctx.currentTime;
     b.gain.gain.setTargetAtTime(0, t, XFADE_S / 3);
-    for (const s of [b.main, ...b.layers.map((l) => l.src)]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
+    for (const s of [b.main, ...b.pieces.map((p) => p.src), ...b.layers.map((l) => l.src)]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
   }
 
   // ── the announcer (see `announcer` in the header) ─────────────────────────────────────────────────

@@ -6,7 +6,8 @@
 // Protection: a structure whose `requires` list names a structure that is still alive is
 // protected: untargetable (an 'untargetable' status with no end, so attacks, filters and
 // abilities skip it) and invulnerable. Protection is recomputed whenever a structure falls or
-// respawns. In sudden death no structure is protected.
+// respawns. Protection holds in sudden death too (W4 gameplay G5): a core never falls with its chain
+// standing; sudden death brings the Gorge Wind instead (below).
 //
 // Towers (targetRules 'tower'): the AI (every tick) keeps a valid target in attack range; it picks
 // by priority (default: an enemy that hurt an allied fighter standing within callForHelpRange of
@@ -27,6 +28,10 @@
 // every multiple of `every` s and gone at `until`. Ringshade (rules.ringshade): damage from fighters and
 // their summons to a listed structure is scaled by how many of the striker's Wicks stand in its shadow
 // ring (attack range + radius): × mult with none, rising evenly to × 1 at `wicks`; off in sudden death.
+//
+// Gorge Wind (rules.gorgeWind, W4 gameplay G5; its steps are World.gorgeWind, raised by modes/match.ts): with
+// s steps up, damage dealt by Wicks is × (1 + s × wickDamage) and damage taken by structures × (1 + s ×
+// structureTaken) — the stalled match breaks its chains down in order instead of skipping them.
 
 import { TICK_HZ } from '../../contracts/sim.ts';
 import { addShield } from '../combat.ts';
@@ -85,7 +90,6 @@ export function spawnStructures(w: World): void {
 
 /** is a structure entry currently protected by its `requires` */
 export function isProtected(w: World, entry: StructEntry): boolean {
-  if (w.suddenDeath) return false;
   const st = w.ext[KEY] as StructsState;
   for (const id of entry.def.requires) {
     const r = st.byId.get(id);
@@ -181,6 +185,16 @@ function ringshadeMult(w: World, src: Entity | null, dst: Entity, raw: number): 
   return raw * (rs.mult + (1 - rs.mult) * Math.min(1, n / rs.wicks));
 }
 
+function gorgeWindMult(w: World, src: Entity | null, dst: Entity, raw: number): number {
+  const gw = w.rules.gorgeWind;
+  const s = w.gorgeWind;
+  if (!gw || s <= 0) return raw;
+  let m = 1;
+  if (src && src.kind === 'minion') m *= 1 + s * gw.wickDamage;
+  if (dst.kind === 'structure') m *= 1 + s * gw.structureTaken;
+  return raw * m;
+}
+
 // ── falling / respawning ────────────────────────────────────────────────────────────────────────
 function onDeath(w: World, victim: Entity, killer: Entity | null): void {
   if (victim.kind !== 'structure') return;
@@ -214,5 +228,6 @@ export function installStructures(w: World): void {
   w.hooks.death.push((ww, victim, killer) => onDeath(ww, victim, killer));
   w.hooks.modifyDamage.push(rampMult);
   w.hooks.modifyDamage.push((ww, src, dst, raw) => ringshadeMult(ww, src, dst, raw));
+  w.hooks.modifyDamage.push((ww, src, dst, raw) => gorgeWindMult(ww, src, dst, raw));
   w.hooks.damage.push((ww, src, dst, _a, info) => rampTrack(ww, src, dst, info));
 }

@@ -241,7 +241,8 @@ VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_crook_hook", "lantern": "x_lantern", "ferrule": "x_crook_foot"}
 # fix pass 1: the splash's warm / cool rim kickers (1500 W x 1.6^2, grazing from behind) blew the dark boots' tops to
 # cream and the toe caps to white, and frosted the shoulders: half strength for this figure
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 24.0, "portrait_yaw": 24.0,
+# (final parity client F3: fill 0.84 -> 0.90, the figure at 0.81 of the splash's height, 0.68 of W2's loading card)
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.90, "yaw": 24.0, "portrait_yaw": 24.0,
           "icon_yaw": 14.0, "rim_cool": 0.5, "rim_warm": 0.5}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}      # orm 256 left tiny hat islands' AO dark (specks in three)

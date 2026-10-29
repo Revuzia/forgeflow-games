@@ -72,7 +72,8 @@ VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "dart_tip": "x_dart_tip", "quiver": "x_quiver"}
 # the rims at Kemdo's strengths (FIX PASS 1, review: 'the shin wraps and boots come out near-white'): the splash's
 # low back rims put a grazing white sheen over the dark wraps and boots at full strength
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45}
+# (final parity client F3: fill 0.88 -> 0.94, the figure at 0.81 of the splash's height, 0.68 of W2's loading card)
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True

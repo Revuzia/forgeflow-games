@@ -68,7 +68,9 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
           # polish (the value lift): the splash key a step down (3.0 -> 2.6). The lifted top band (the felt's lit folds,
           # the mask, the pauldron tops) reads at the game's light, where it was the darkest kit; under the splash's
           # 45-degree sun at full strength a third of the cowl's top folds blew past L* 86
-          "sun": 2.6}
+          "sun": 2.6,
+          # final parity client F3: the figure at 0.81 of the splash's height (0.68 of W2's loading card) -> ~0.86
+          "fill": 0.94}
 TEXTURE_SIZE = 2048      # the painted base colour; normal + ORM at 512 (CONTRACT §12 Materials)
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True

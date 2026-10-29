@@ -24,8 +24,10 @@
 // blocks new votes for SURRENDER_COOLDOWN s. Announce keys: 'surrender_vote' (params yes, no,
 // needed), 'surrender_failed', 'surrender_passed'.
 // Sudden death (rules.suddenDeathAt): WorldView.suddenDeath, 'suddenDeath' event + announce
-// 'sudden_death'; from then on respawn timers ×1.5 (units/fighters.ts) and no structure is
-// protected (units/structures.ts).
+// 'sudden_death'; from then on respawn timers × tuning.suddenDeathRespawnMult (units/fighters.ts).
+// Structures keep their protection (W4 gameplay G5); with rules.gorgeWind the Gorge Wind rises one
+// step at suddenDeathAt and one more every `every` s up to `maxSteps` (WorldView.gorgeWind; its
+// damage terms are units/structures.ts).
 
 import { TICK_DT, type Command, type MatchResult, type PlayerId, type PlayerResult, type TeamId } from '../../contracts/sim.ts';
 import type { Player } from '../entity.ts';
@@ -115,7 +117,10 @@ export function teamViewSystem(w: World): void {
 export function suddenDeathSystem(w: World): void {
   const m = matchOf(w);
   const at = w.rules.suddenDeathAt;
-  if (m.suddenDeathDone || at === undefined || w.phase !== 'live' || w.time + 1e-9 < at) return;
+  if (at === undefined || w.phase !== 'live' || w.time + 1e-9 < at) return;
+  const gw = w.rules.gorgeWind;
+  if (gw) w.gorgeWind = Math.min(gw.maxSteps, 1 + Math.floor((w.time - at + 1e-9) / gw.every));
+  if (m.suddenDeathDone) return;
   m.suddenDeathDone = true;
   w.suddenDeath = true;
   w.emit({ e: 'suddenDeath', t: w.time });

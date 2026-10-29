@@ -85,7 +85,8 @@ VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "blade_tip": "x_blade_tip", "crossguard": "x_crossguard"}
 # the victory hold: the blade planted at a long diagonal toward the frame centre, the mantle turned a quarter
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.96, "yaw": 24.0, "pitch": -3.0, "sun": 1.45,
-          "rim_cool": 0.35, "rim_warm": 0.5, "fill": 0.86}
+          "rim_cool": 0.35, "rim_warm": 0.5,
+          "fill": 0.91}           # final parity client F3: 0.86 -> 0.91 (the figure at 0.82 of the height, 0.69 of the card)
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}       # the ORM at 256: its roughness is per material
 GLB_COMPRESS = True

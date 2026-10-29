@@ -174,6 +174,8 @@ export interface WorldView {
   readonly teams: readonly TeamView[];
   readonly objectives: readonly ObjectiveTimerView[];
   readonly suddenDeath: boolean;
+  /** W4 (gameplay G5), additive: steps the Gorge Wind has risen in sudden death (rules.gorgeWind); 0 before it */
+  readonly gorgeWind: number;
   readonly result: MatchResult | null;
   entity(id: EntityId): EntityView | undefined;
   /** fog of war: vision grid for a team (1 byte per nav cell, 0 = unseen, 255 = seen). Cells are map.navCell * 4 metres. */

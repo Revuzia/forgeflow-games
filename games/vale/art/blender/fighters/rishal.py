@@ -75,7 +75,8 @@ SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x
 # (POLISH, review 3: the splash_hero crouch-lunge read stiff and confusing, the near knife hidden, the face in hard
 # profile behind an oversized visor): the brief's splash, the victory hold (arms crossed behind, chin up, a quarter
 # turn away, the knives sweeping toward screen right), framed like the roster's other victory splashes
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 0.86, "x": 0.64,
+# (final parity client F3: fill 0.86 -> 0.90, the figure at 0.83 of the splash's height, 0.70 of W2's loading card)
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 0.90, "x": 0.64,
           "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 28.0, "icon_yaw": 20.0}
 # (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
 # behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook

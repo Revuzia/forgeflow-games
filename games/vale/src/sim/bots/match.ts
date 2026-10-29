@@ -16,6 +16,7 @@ import type { Entity } from '../entity.ts';
 import type { Knowledge, StructInfo } from './knowledge.ts';
 import { IncomingIndex, rebuildPerception, TeamPerc, telegraphFromEvent, type Telegraph } from './perception.ts';
 import { TEAM_THINK_TICKS, TeamBrain } from './team.ts';
+import { teamDifficulty } from './difficulty.ts';
 
 export class BotMatch {
   readonly k: Knowledge;
@@ -52,7 +53,7 @@ export class BotMatch {
     for (let t = 0; t < w.teams.length; t++) {
       const tp = new TeamPerc(t, lanes);
       this.percs.push(tp);
-      this.brains.push(this.k.ffa || this.k.kind === 'practice' ? null : new TeamBrain(t, this.k, tp, this.structDownAt));
+      this.brains.push(this.k.ffa || this.k.kind === 'practice' ? null : new TeamBrain(t, this.k, tp, this.structDownAt, teamDifficulty(this.k.setup.seats, t)));
     }
   }
 

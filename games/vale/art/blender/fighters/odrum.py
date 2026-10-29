@@ -139,7 +139,10 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_sling_pouch", "pot_l": "x_pot_l"
 # value read (light sandstone head, mid jerkin) and at the full hero sun the sandstone burnt to cream
 # (polish 10-28: 2.6 -> 2.25 with the value lift: the lighter head, cap and jars read L* 84-92 in the hero key at 2.6,
 # the cap near the reserved Noonwhite; the game's read is unchanged by this)
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.78, "pitch": 1.0, "yaw": 30.0, "sun": 2.25}
+# (final parity client F3: fill 0.78 -> 0.86 and the box centre at 70 % across: the figure stood at 0.77 of the
+# splash's height, 0.64 of W2's loading card; now in the cast's 0.82-0.89 band with both jars inside the frame)
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.86, "x": 0.70, "pitch": 1.0, "yaw": 30.0,
+          "sun": 2.25}
 HERO_SPEC = 0.0                       # the hero renders' specular level (see _install_render)
 HERO_FILL = 0.55                      # ... and the sky fill under the map's (see _install_render): the shading carries
 TEXTURE_SIZE = 2048

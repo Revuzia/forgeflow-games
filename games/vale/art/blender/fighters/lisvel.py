@@ -81,7 +81,11 @@ PALETTE = materials.bible_palette(chalk="#BDB8AD", dawnglass="#A8C3D6", wood="#C
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "arrow_nock": "x_arrow_nock", "bow_tip_l": "x_bow_tip_l", "bow_tip_r": "x_bow_tip_r",
            "weapon_tip": "x_arrow_nock", "quiver": "x_quiver"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "pitch": -2.0, "rim_cool": 0.35, "rim_warm": 0.45,
+# (final parity client F3: the loading card's 3:5 crop wants the figure at 0.83-0.95 of the splash's height; it stood
+# at 0.82 here, 0.80 in Almanac (whose box takes in the drawn bow's thin tips) and 0.73 in Gorgewalk: fill 0.88 ->
+# 0.93 / 0.95, Gorgewalk keeps 0.88 now that its tapped bow tip under the ground no longer stretches the fit)
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 22.0, "pitch": -2.0, "rim_cool": 0.35,
+          "rim_warm": 0.45,
           "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
@@ -101,10 +105,10 @@ SKINS: list = [
     {"id": "lisvel_gorgewalk", "extra": {"rope_bind": True}, "card": {"primary": "#6E747C", "secondary": "#9A8F7A"},
      "palette": {"wood": "#6E747C", "rope": "#9A8F7A", "ironstone": "#3F4348", "chalk": "#D2D2CE", "cloth": "#6B7885",
                  "quiver": "#545A61"},
-     "splash": {"map": "map_bridge", "clip": "taunt", "t": 0.32, "yaw": 30.0, "pitch": -6.0}},
+     "splash": {"map": "map_bridge", "clip": "taunt", "t": 0.32, "yaw": 30.0, "pitch": -6.0, "fill": 0.88}},
     {"id": "lisvel_almanac", "extra": {"page_fletching": True}, "card": {"primary": "#4A4640", "secondary": "#D8CDB4"},
      "palette": {"wood": "#D8CDB4", "fletching": "#2E2A26", "cloth": "#8C8577", "quiver": "#3A3430"},
-     "splash": {"map": "map_fray", "clip": "cast_a3", "t": 0.44, "yaw": 14.0, "pitch": -4.0}},
+     "splash": {"map": "map_fray", "clip": "cast_a3", "t": 0.44, "yaw": 14.0, "pitch": -4.0, "fill": 0.95}},
 ]
 SKIN_FLAT = {}
 
@@ -2299,7 +2303,12 @@ def _install_renders() -> None:
     orig_turn = render.turntable
 
     def posed_bounds(objs):
-        return orig_bounds([o for o in objs if o.name != LIGHTLINE])
+        # nothing under the ground plane counts (final parity client F3): the Gorgewalk splash's taunt taps the bow's
+        # lower tip 0.26 m into the floor, where the shadow catcher hides it, and that tip stretched the camera fit
+        # (the figure stood at 0.73 of the splash's height, its feet at 0.81)
+        lo, hi = orig_bounds([o for o in objs if o.name != LIGHTLINE])
+        lo.z = max(lo.z, 0.0)
+        return lo, hi
 
     def turntable(ctx, P, chains, fast):
         ln = bpy.data.objects.get(LIGHTLINE)

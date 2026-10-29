@@ -384,10 +384,14 @@ export class Bot extends BotBase implements BotController {
       }
       else if (b.stage) consider('push', hpF > 0.5 ? 0.66 : 0.4);
       else if (b.window && b.siege && hpF > 0.4 && (!this.jungle || b.phase !== 'early')) consider('push', 0.72);
+      // (a lead to press, W4 G3: the tiers that convert leads group on the siege without a won fight)
+      else if (b.press && b.siege && hpF > 0.5 && (!this.jungle || b.phase !== 'early')) consider('push', 0.62);
       else if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
       else if (b.group && follow && (!this.jungle || b.phase === 'late')) consider('push', 0.56);
       // (laning: shove my own lane only while no enemy fighter is there to farm it under its tower)
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
+      // (sent to answer a threatened road, W4 G3: before the plan, not before my life)
+      if (b.answer.has(this.player) && hpF > 0.4) consider('defend', 0.8);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
       let global = 0;
       for (let i = 0; i < b.defend.length; i++) global = Math.max(global, b.defend[i]);
@@ -757,7 +761,9 @@ export class Bot extends BotBase implements BotController {
     const b = this.brain;
     if (!b) { this.execLane(); return; }
     let x = b.baseX, y = b.baseY, best = b.baseThreat;
-    if (this.lane >= 0 && b.defend[this.lane] > 0.05) { x = b.defendX[this.lane]; y = b.defendY[this.lane]; best = 2; }
+    const ans = b.answer.get(this.player);
+    if (ans !== undefined) { x = b.answerX[ans]; y = b.answerY[ans]; best = 3; }
+    else if (this.lane >= 0 && b.defend[this.lane] > 0.05) { x = b.defendX[this.lane]; y = b.defendY[this.lane]; best = 2; }
     for (let i = 0; i < b.defend.length; i++) if (b.defend[i] > best) { best = b.defend[i]; x = b.defendX[i]; y = b.defendY[i]; }
     this.pMove = true; this.pMoveX = x; this.pMoveY = y;
     this.pFarm = 2; this.pAggro = 0.75;

@@ -14,6 +14,11 @@
 //   * gank: a visible enemy fighter overextended in a lane where the team has a laner (junglers);
 //   * camp memory: when each camp should be up (first spawn, then seen empty / seen cleared);
 //   * focus: each bot publishes its fight target, so teammates can focus fire.
+//   * tier (W4 gameplay G3, difficulty.ts teamDifficulty): a window (a won fight) and a defend call are
+//     published only once they have held macroDelay s; a team that convertsLeads also presses a Gleam
+//     lead of leadGleam (Σ goldEarned, public) into a grouped siege while it is not short of bodies
+//     (`press`: from the mid game on RIFT, at once on one road), and keeps a won fight's window open
+//     while two fallen enemies still have long respawn clocks (public) even as the rest come back.
 
 import type { EntityId, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import type { Entity } from '../entity.ts';
@@ -21,6 +26,7 @@ import type { World } from '../world.ts';
 import { lanePoint, progress, fromProgress, proj, type CampInfo, type Knowledge, type StructInfo } from './knowledge.ts';
 import type { TeamPerc } from './perception.ts';
 import { dhypot, sq } from '../dmath.ts';
+import { DIFFICULTIES, type DifficultyProfile } from './difficulty.ts';
 
 export interface LaneAssign { lane: number; jungle: boolean; support: boolean }
 
@@ -97,6 +103,17 @@ export class TeamBrain {
   rush = false;
   /** a won fight: the enemy is short of bodies — take structures now */
   window = false;
+  /** a lead to press (tiers that convertsLeads): group and siege without waiting for a won fight */
+  press = false;
+  /** the fighter sent to answer a threatened road: player → lane (RIFT, from the mid game) */
+  readonly answer = new Map<PlayerId, number>();
+  /** where each lane's answer goes */
+  readonly answerX: Float64Array;
+  readonly answerY: Float64Array;
+  /** the tier the team plays at (macro knobs) */
+  readonly diff: DifficultyProfile;
+  /** since when each published condition has held (macroDelay) */
+  private readonly since = new Map<string, number>();
   /** endgame, not committed yet: gather at the group point, do not start on the gates */
   stage = false;
   groupX = 0; groupY = 0;
@@ -115,12 +132,13 @@ export class TeamBrain {
   /** enemy towers (non-respawning, non-core structures) still standing */
   towersLeft = 0;
 
-  constructor(team: number, k: Knowledge, perc: TeamPerc, downAt: ReadonlyMap<string, number> = new Map()) {
-    this.team = team; this.k = k; this.perc = perc; this.downAt = downAt;
+  constructor(team: number, k: Knowledge, perc: TeamPerc, downAt: ReadonlyMap<string, number> = new Map(), diff: DifficultyProfile = DIFFICULTIES.adept) {
+    this.team = team; this.k = k; this.perc = perc; this.downAt = downAt; this.diff = diff;
     const n = k.lanes.length;
     this.push = new Float64Array(n); this.defend = new Float64Array(n);
     this.defendX = new Float64Array(n); this.defendY = new Float64Array(n);
     this.defendFighters = new Int32Array(n); this.laners = new Int32Array(n);
+    this.answerX = new Float64Array(n); this.answerY = new Float64Array(n);
     this.campReady = new Float64Array(k.camps.length);
     for (const c of k.camps) this.campReady[c.index] = c.firstSpawn;
     this.assignLanes();
@@ -163,9 +181,62 @@ export class TeamBrain {
     // (one fallen Needle is a lane lost, not the end of laning: 'mid' from 10:00 or the second)
     this.phase = now >= 1200 || avgLv >= 12 ? 'late' : now >= 600 || ownLost + enemyLost >= 2 ? 'mid' : 'early';
     this.thinkDefend(w);
+    this.delayDefend(now);
     this.thinkSiege(w, aa - ae, lvA - lvE, enemyLost);
     this.thinkObjective(w, aa, ae);
     this.thinkGank(w);
+    this.thinkAnswers(w);
+  }
+
+  /**
+   * From the mid game (RIFT): a road under threat — a dive or a stacked wave at one of our structures
+   * (published defend calls, so after macroDelay), or, for a tier that readsWaves, five or more enemy Wicks
+   * deep in our half with fewer of ours to meet them — gets one fighter (two for a dive by two or more): the
+   * nearest healthy ones, the road's own laner first when it is not much farther. The rest keep the plan.
+   */
+  private thinkAnswers(w: World): void {
+    this.answer.clear();
+    const k = this.k, tp = this.perc, now = w.time;
+    if (k.kind !== 'rift' || this.phase === 'early' || this.rush) return;
+    for (const l of k.lanes) {
+      const i = l.index;
+      let need = 0, x = 0, y = 0;
+      if (this.defend[i] > 0.05) { need = this.defendFighters[i] >= 2 ? 2 : 1; x = this.defendX[i]; y = this.defendY[i]; }
+      const deep = this.diff.readsWaves && tp.enemyN[i] >= 5 && tp.enemyFront[i] < l.length * 0.45 && tp.ownN[i] <= tp.enemyN[i] - 3;
+      if (this.held(`wave${i}`, deep, now) && need === 0) {
+        need = 1;
+        lanePoint(l, fromProgress(l, this.team, Math.max(0, tp.enemyFront[i] - 4)));
+        x = proj.x; y = proj.y;
+      }
+      if (need === 0) continue;
+      this.answerX[i] = x; this.answerY[i] = y;
+      // already there
+      let there = 0;
+      for (const f of tp.allyFighters) if (f.alive && sq(f.x - x) + sq(f.y - y) <= 20 * 20) there++;
+      if (there >= need) continue;
+      for (let n = there; n < need; n++) {
+        let best: PlayerId = -1, bd = Infinity;
+        for (const p of w.players) {
+          if (!p || p.team !== this.team || this.answer.has(p.player)) continue;
+          const e = p.ent;
+          if (!e || !e.alive || e.hp < e.maxHp * 0.4) continue;
+          const a = this.assign.get(p.player);
+          const own = !!a && a.lane === i && !a.jungle;
+          const dd = Math.sqrt(sq(e.x - x) + sq(e.y - y)) * (own ? 0.67 : 1);
+          if (dd < bd) { bd = dd; best = p.player; }
+        }
+        if (best < 0) break;
+        this.answer.set(best, i);
+      }
+    }
+  }
+
+  /** macroDelay: true once `cond` has held for the tier's delay (resets the moment it fails) */
+  private held(key: string, cond: boolean, now: number): boolean {
+    if (!cond) { this.since.delete(key); return false; }
+    let t = this.since.get(key);
+    if (t === undefined) { t = now; this.since.set(key, t); }
+    return now - t + 1e-9 >= this.diff.macroDelay;
   }
 
   private structAlive(w: World, s: StructInfo): boolean {
@@ -222,12 +293,26 @@ export class TeamBrain {
     void k;
   }
 
+  /** macroDelay on defend calls: a threat is answered once it has held the tier's delay */
+  private delayDefend(now: number): void {
+    if (this.diff.macroDelay <= 0) return;
+    for (let i = 0; i < this.defend.length; i++) {
+      if (!this.held(`def${i}`, this.defend[i] > 0.05, now)) { this.defend[i] = 0; this.defendFighters[i] = 0; }
+    }
+    if (!this.held('base', this.baseThreat > 0.05, now)) this.baseThreat = 0;
+  }
+
   structInfoOf(e: Entity): StructInfo | undefined {
     for (const s of this.k.structs) if (Math.abs(s.x - e.x) < 0.5 && Math.abs(s.y - e.y) < 0.5 && s.team === e.team) return s;
     return undefined;
   }
 
   private respawning(s: StructInfo): boolean { return s.respawns; }
+  /** is the enemy structure of this map entry standing (as far as the team's perception holds it) */
+  private structAliveInfo(s: StructInfo): boolean {
+    for (const e of this.perc.enemyStructs) if (e.alive && Math.abs(e.x - s.x) < 0.5 && Math.abs(e.y - s.y) < 0.5) return true;
+    return false;
+  }
 
   private thinkSiege(w: World, aliveDiff: number, levelDiff: number, enemyLost: number): void {
     const k = this.k, tp = this.perc;
@@ -238,8 +323,21 @@ export class TeamBrain {
     }
     const single = k.kind === 'bridge' || k.kind === 'brawl';
     let group = single;
-    this.window = aliveDiff >= 2 || (this.aliveEnemies <= 1 && this.aliveAllies >= 2);
-    if (this.window) group = true;
+    const now0 = w.time, d = this.diff;
+    let won = aliveDiff >= 2 || (this.aliveEnemies <= 1 && this.aliveAllies >= 2);
+    // (a tier that converts leads reads the scoreboard's respawn clocks: a body up with two enemies down for
+    // 15 s more is still a won fight)
+    if (d.convertsLeads && !won && aliveDiff >= 1) {
+      let long = 0;
+      for (const p of w.players) if (p && p.team !== this.team && p.ent && !p.ent.alive && p.respawnIn >= 15) long++;
+      won = long >= 2;
+    }
+    this.window = this.held('window', won, now0);
+    // a lead to press: the scoreboard's Gleam (two-team modes)
+    let lead = 0;
+    for (const t of w.teams) lead += t.team === this.team ? t.gold : -t.gold;
+    this.press = this.held('press', d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam && aliveDiff >= 0 && (single || this.phase !== 'early'), now0);
+    if (this.window || this.press) group = true;
     if (k.kind === 'rift') {
       if (this.phase === 'late') group = true;
       else if (this.phase === 'mid') group = (enemyLost > 0 && aliveDiff >= 1) || aliveDiff >= 2 || levelDiff >= 8 || w.time >= 900;
@@ -247,9 +345,11 @@ export class TeamBrain {
     // choose the siege target among open enemy structures
     let best: Entity | null = null, bestInfo: StructInfo | undefined, bestScore = -Infinity;
     let towersLeft = 0;
+    // (only towers that can be hit count: a tower held behind a standing gate — a Bell Needle behind its
+    // Lantern — is reached through that gate, so the gate is the next target, not a dead end; W4 G5)
     for (const e of tp.enemyStructs) {
       const info = this.structInfoOf(e);
-      if (info && !info.isCore && !this.respawning(info)) towersLeft++;
+      if (info && !info.isCore && !this.respawning(info) && e.targetable) towersLeft++;
     }
     this.towersLeft = towersLeft;
     // the team's centre of mass (living fighters)
@@ -279,7 +379,16 @@ export class TeamBrain {
     // clock is running) or the core is open.
     this.stage = false;
     this.rush = false;
-    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0));
+    // (a tower opened by a fallen gate — a Bell Needle behind its Lantern — is part of the endgame too: it
+    // must fall before the gate relights)
+    let opened = false;
+    if (bestInfo && !bestInfo.isCore && !bestInfo.respawns) {
+      for (const id of bestInfo.requires) {
+        const g = k.structs.find((st) => st.id === id);
+        if (g && g.respawns && this.downAt.has(g.id) && !this.structAliveInfo(g)) { opened = true; break; }
+      }
+    }
+    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0) || opened);
     if (endgame) {
       group = true;
       let gatesTotal = 0, gatesUp = 0;

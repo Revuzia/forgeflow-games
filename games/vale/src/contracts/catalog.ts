@@ -598,6 +598,14 @@ export const RulesParams = z.object({
    *  non-objective camp while it trails the team's highest-level fighter, the grove pays it up to
    *  `perMonster` XP of the bank. Two-team modes only. Absent = off. */
   groveTithe: z.object({ share: z.number().min(0).max(1), perMonster: z.number().nonnegative(), bankMax: z.number().nonnegative() }).strict().optional(),
+  /** W4 (gameplay G5), additive: the Gorge Wind, what sudden death (suddenDeathAt) brings. Structures KEEP their
+   *  `requires` protection (a core never falls with its chain standing); instead the wind rises one step at
+   *  suddenDeathAt and one more every `every` s, at most `maxSteps`. Per step, damage dealt by Wicks is
+   *  + `wickDamage` (× (1 + steps × wickDamage)) and damage taken by structures + `structureTaken` — the wind
+   *  lends the waves weight and wears the Needles thin, so a stalled match breaks down its chain in order.
+   *  Respawns run × tuning.suddenDeathRespawnMult. Absent = sudden death only slows respawns. */
+  gorgeWind: z.object({ every: z.number().positive(), maxSteps: z.number().int().positive(), wickDamage: z.number().nonnegative(),
+    structureTaken: z.number().nonnegative() }).strict().optional(),
   /** CHANGED(SIM), additive: balance knobs the sim used to hard-code. Every key is optional; an
    *  omitted key keeps the CONTRACT §5.5/§5.6 default shown in brackets. Queues override key by key. */
   tuning: z.object({

@@ -91,7 +91,8 @@ const uniformsOf = (o: Record<string, Uniform>): Map<string, Uniform> => new Map
  *  raised to the display gamma (≈ 2.2) so a ×1.45 hold reads ×1.45 on screen below the tone curve's shoulder, and the
  *  peak saturates toward the stopped-sun white only inside the area (never full-screen white).
  *  combat F4: the light pours onto the GROUND. A pixel whose scene point stands above it (rebuilt from the stable depth:
- *  0.15 → 0.45 m up eases in; bodies, structures, props) takes at most LIFT_BODY_CAP and keeps its colour, so the struck
+ *  0.05 → 0.2 m up eases in, walkable ground is y = 0; bodies down to the ankles, structures, props) takes at most
+ *  LIFT_BODY_CAP and keeps its colour, so the struck
  *  unit reads as a silhouette inside the light instead of going white. Only lit pixels above the cap read the depth. */
 class ExposureEffect extends Effect {
   private readonly cam: () => Camera;
@@ -121,7 +122,7 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     float z = texture2D( uLiftDepth, uv ).r;
     vec4 v = uLiftInvProj * vec4( vec3( uv, z ) * 2.0 - 1.0, 1.0 );
     vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
-    float body = smoothstep( 0.15, 0.45, w.y ) * step( z, 0.99999 );
+    float body = smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 );
     lift = mix( lift, ${(LIFT_BODY_CAP - 1).toFixed(3)}, body );
     desat *= 1.0 - body;
   }

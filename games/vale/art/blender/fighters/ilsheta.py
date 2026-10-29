@@ -216,7 +216,8 @@ SKINS: list = [
     {"id": "ilsheta_first_bell", "extra": {"glass_bell": True, "hour_marks": True},
      "card": {"primary": "#3A3633", "secondary": "#CFCAC0"},
      "palette": {"cloth2": "#CFCAC0", "chalk": "#D4CEBF", "cloth": "#8C8780", "cloth3": "#3A3633"},
-     "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "fill": 0.84}},
+     # (final parity client F3: fill 0.84 -> 0.90, the figure at 0.81 of the splash's height, 0.68 of W2's card)
+     "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "fill": 0.90}},
 ]
 SKIN_FLAT = {"reed_plates": "reed", "glass_bell": "dawnglass", "hour_marks": "chalk"}
 HEIGHT = 1.72             # the plates' scale: the chimney's top rim (content art.height)

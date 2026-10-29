@@ -259,6 +259,8 @@ export interface StructInfo {
   readonly respawns: boolean;
   /** seconds until it comes back (0: never) */
   readonly respawnTime: number;
+  /** map structure ids that protect it while they stand (MapDef structure `requires`) */
+  readonly requires: readonly string[];
 }
 export interface CampInfo {
   readonly id: string; readonly index: number; readonly x: number; readonly y: number;
@@ -704,7 +706,7 @@ export function buildKnowledge(catalog: CatalogT, setup: MatchSetup, idx?: Catal
       structs.push({
         id: st.id, unit: st.unit, team: st.team, x: st.at[0], y: st.at[1], lane, s, attacks,
         range: u?.attack?.range ?? 0, radius: u?.collisionRadius ?? 1, isCore: core !== undefined && (st.unit === core || st.id === core),
-        respawns: st.respawn !== undefined && st.respawn > 0, respawnTime: st.respawn ?? 0,
+        respawns: st.respawn !== undefined && st.respawn > 0, respawnTime: st.respawn ?? 0, requires: st.requires ?? [],
       });
     }
   }

@@ -188,6 +188,7 @@ export class World implements WorldView {
   teams: TeamState[] = [];
   objectives: ObjectiveTimerView[] = [];
   suddenDeath = false;
+  gorgeWind = 0;
   result: MatchResult | null = null;
 
   // internal ---------------------------------------------------------------------------------

@@ -214,7 +214,8 @@ VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "x_cup", "cup": "x_cup", "cord": "x_cord", "staff_top": "x_staff_top"}
 # (build 9: the bible key at 45 degrees threw the stone plates' zig-zag shadows across the round cream wraps: camo
 # blotches in the splash; a lower key (32 degrees) and more sky fill keep the wraps reading as painted)
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.84, "yaw": 22.0, "portrait_clip": "idle_lobby",
+# (final parity client F3: fill 0.84 -> 0.90, the figure at 0.82 of the splash's height, 0.69 of W2's loading card)
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.90, "yaw": 22.0, "portrait_clip": "idle_lobby",
           "portrait_t": 0.0, "portrait_yaw": 28.0, "icon_yaw": 20.0, "rim_cool": 0.5, "rim_warm": 0.5,
           "key_el": 30.0, "ambient": 0.85, "sun": 2.7}
 TEXTURE_SIZE = 2048

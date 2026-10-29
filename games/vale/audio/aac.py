@@ -49,12 +49,30 @@ def encode_m4a(x: np.ndarray, m4a: str, kbps: int, loop: bool = False) -> None:
         y = np.concatenate([tiled[:, -LEAD:], xs, tiled[:, :TAIL]], axis=1)
     else:
         y = np.concatenate([np.zeros((ch, LEAD)), xs], axis=1)
+    _encode(y, m4a, kbps)
+    _trim(m4a, LEAD, n)
+
+
+def encode_m4a_piece(x: np.ndarray, start: int, length: int, m4a: str, kbps: int) -> None:
+    """One PIECE of a looping bed (the .m4a path decodes a long bed piece by piece, build_music.py `pieces`):
+    samples [start, start + length) of the loop x (circular: the last piece's run-on wraps to the loop's head),
+    encoded like a loop — the LEAD before it and TAIL after it are real neighbouring music the edit list trims —
+    so the piece decodes to exactly `length` samples with the codec's edges in trimmed context."""
+    xs = np.asarray(x, np.float64)
+    xs = xs[None, :] if xs.ndim == 1 else xs
+    y = np.take(xs, np.arange(start - LEAD, start + length + TAIL), axis=1, mode='wrap')
+    _encode(y, m4a, kbps)
+    _trim(m4a, LEAD, length)
+
+
+def _encode(y: np.ndarray, m4a: str, kbps: int) -> None:
+    """(ch, n) float at 48 kHz → AAC-LC .m4a (ABR kbps), untrimmed (the caller sets the edit list)"""
+    ch = y.shape[0]
     os.makedirs(os.path.dirname(m4a) or '.', exist_ok=True)
     cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'f32le', '-ar', str(SR), '-ac', str(ch), '-i', '-',
            '-map_metadata', '-1', '-c:a', 'aac', '-b:a', f'{kbps}k', '-ac', str(ch), '-ar', str(SR),
            '-fflags', '+bitexact', '-flags:a', '+bitexact', '-movflags', '+faststart', '-f', 'ipod', m4a]
     subprocess.run(cmd, input=np.ascontiguousarray(y.T, '<f4').tobytes(), check=True)
-    _trim(m4a, LEAD, n)
 
 
 _CONTAINERS = {b'moov', b'trak', b'mdia', b'edts'}
