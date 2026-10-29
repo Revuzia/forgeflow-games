@@ -494,13 +494,16 @@ export class GroundCover {
           const k = Math.floor(fid * 5);
           // (a wild stand is never tilled or cut: between its seasons last year's dry stalks stand)
           if (!wildS && (ph < 0.11 || (ph >= 0.7 && k >= 2.5))) continue;
-          grow *= wildS && (ph < 0.15 || ph >= 0.7) ? 0.62 : ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
+          // (a wild stand's new shoots come up through last year's straw: the straw fades out as the green grows past
+          // it, instead of the stand dropping at once from standing straw to ankle-high sprouts that read as any sward)
+          const wildNew = wildS && ph >= 0.15 && ph < 0.45 ? Math.min(1, (ph - 0.15) / 0.12) : 1;
+          grow *= wildS && (ph < 0.15 || ph >= 0.7) ? 0.62 : ph < 0.15 ? 0.1 : ph < 0.45 ? Math.max(0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24), 0.62 * (1 - wildNew)) : ph < 0.7 ? 1 : 0.16;
           const ripe = Math.min(1, Math.max(0, (ph - 0.45) / 0.07));
           // albedo-scale tints (the clump's vertex shade is ~0.85): green, then gold (maize a paler straw)
           const g0 = CROP_G0[variant >> 1] ?? CROP_G0[0];
           const g1 = CROP_G1[variant >> 1] ?? CROP_G1[0];
           const hay: [number, number, number] = [0.28, 0.24, 0.1];
-          const k2 = ph >= 0.7 || (wildS && ph < 0.15) ? 1 : 0;
+          const k2 = ph >= 0.7 || (wildS && ph < 0.15) ? 1 : 1 - wildNew;
           cr = (g0[0] + (g1[0] - g0[0]) * ripe) * (1 - k2) + hay[0] * k2; cg = (g0[1] + (g1[1] - g0[1]) * ripe) * (1 - k2) + hay[1] * k2; cb = (g0[2] + (g1[2] - g0[2]) * ripe) * (1 - k2) + hay[2] * k2;
         } else if (kind === GK.flower) { if (bloom <= 0.01) continue; grow = bloom; }
         else if (kind === GK.mushroom && !fungi) continue;
