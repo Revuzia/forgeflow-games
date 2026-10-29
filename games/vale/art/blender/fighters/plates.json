@@ -1,5 +1,5 @@
 {
- "_doc": "Painted dusk plates behind every fighter image (final parity client F3, art half): art/blender/common/plates.py. A fighter listed under `fighters` renders portrait.png / splash.png (and every <skin>_portrait.png / <skin>_splash.png) over a painted plate cut from art/out/backdrops/<src>.webp and graded to dusk for its origin (spec.ORIGIN), with the subject lit to match (key / fill / rims). A skin line (the skin id after '<fighter>_') may pick its own painting under `lines`; the origin grade and light stay. Keys and defaults: plates.DEFAULTS. Re-render: python3 art/build.py portraits <id> --only splash,portrait (base) and --skins (every skin, from its GLB). Re-compose from the kept subject passes without Blender: python3 art/blender/common/plates.py compose [sids]; measure: python3 art/blender/common/plates.py measure (gate: the 3:5 loading crop and the draft-cell crop at p50 70-110 luma, at most a small share above 200).",
+ "_doc": "Painted dusk plates behind every fighter image (final parity client F3, art half): art/blender/common/plates.py. A fighter listed under `fighters` renders portrait.png / splash.png (and every <skin>_portrait.png / <skin>_splash.png) over a painted plate cut from art/out/backdrops/<src>.webp and graded to dusk for its origin (spec.ORIGIN), with the subject lit to match (key / fill / rims). A skin line (the skin id after '<fighter>_') may pick its own painting under `lines`; the origin grade and light stay. Keys and defaults: plates.DEFAULTS (splash_lift: the splash plate's median target over `median`, by painting: 0.02 on every painting but the bright Aubade dawn, so the larger figures of the reframed splashes keep the loading card's p50 >= 70). Re-render: python3 art/build.py portraits <id> --only splash,portrait (base) and --skins (every skin, from its GLB). Re-compose from the kept subject passes without Blender: python3 art/blender/common/plates.py compose [sids]; measure: python3 art/blender/common/plates.py measure (gate: the 3:5 loading crop and the draft-cell crop at p50 70-110 luma, at most a small share above 200).",
  "defaults": {
   "sub_floor": 0.29,
   "sub_floor_p": 0.32,
@@ -23,7 +23,8 @@
    "fill": 0.58,
    "fill_tint": "#B3C1DE",
    "rim_cool": 1.6,
-   "rim_warm": 0.95
+   "rim_warm": 0.95,
+   "splash_lift": 0.0
   },
   "serenade": {
    "src": "serenade_dusk",
@@ -42,7 +43,8 @@
    "fill": 0.58,
    "fill_tint": "#C9BBB4",
    "rim_cool": 0.95,
-   "rim_warm": 1.6
+   "rim_warm": 1.6,
+   "splash_lift": 0.02
   },
   "hourless": {
    "src": "needle_gorge",
@@ -61,43 +63,54 @@
    "fill": 0.58,
    "fill_tint": "#BDB7CC",
    "rim_cool": 1.35,
-   "rim_warm": 1.35
+   "rim_warm": 1.35,
+   "splash_lift": 0.02
   }
  },
  "lines": {
   "chalkline": {
-   "src": "aubade_dawn"
+   "src": "aubade_dawn",
+   "splash_lift": 0.0
   },
   "first_bell": {
-   "src": "aubade_dawn"
+   "src": "aubade_dawn",
+   "splash_lift": 0.0
   },
   "lamplit": {
-   "src": "serenade_dusk"
+   "src": "serenade_dusk",
+   "splash_lift": 0.02
   },
   "long_evening": {
-   "src": "serenade_dusk"
+   "src": "serenade_dusk",
+   "splash_lift": 0.02
   },
   "gorgewalk": {
-   "src": "needle_gorge"
+   "src": "needle_gorge",
+   "splash_lift": 0.02
   },
   "shadeprint": {
-   "src": "needle_gorge"
+   "src": "needle_gorge",
+   "splash_lift": 0.02
   },
   "noon_fair": {
-   "src": "noonplate"
+   "src": "noonplate",
+   "splash_lift": 0.02
   },
   "stillwater": {
-   "src": "dialwood"
+   "src": "dialwood",
+   "splash_lift": 0.02
   },
   "highrim": {
    "src": "seat_center",
    "median": 0.35,
-   "floor": 0.16
+   "floor": 0.16,
+   "splash_lift": 0.02
   },
   "almanac": {
    "src": "seat_center",
    "median": 0.35,
-   "floor": 0.16
+   "floor": 0.16,
+   "splash_lift": 0.02
   }
  },
  "fighters": {

@@ -20,11 +20,14 @@ composed over it exactly as render.splash_post does (light wrap, bloom, vignette
 The raw subject passes (straight RGBA, display sRGB, before the post) are kept in art/.cache/fighters/plates/, so
 the plates are re-graded without Blender:
     python3 art/blender/common/plates.py compose [sids] [--preview]
-    python3 art/blender/common/plates.py measure [sids] [--preview]
+    python3 art/blender/common/plates.py measure [sids] [--preview] [--box 0.84]
+    python3 art/blender/common/plates.py frame [sids] [--box 0.84]
 `measure` reads the shipped (or preview) images and reports the two crops the client shows: the 3:5 loading card
 (object-position 86 % 50 % of the splash) and the draft cell (the portrait at 50 % 20 %), p50 / p95 / share > 200
 by Rec. 709 luma (the same measure as _harness/_reports/final_menus_scripts/luma.cjs). Gate: p50 70-110, at most
-a small share above 200.
+a small share above 200. `frame` reports the figure's height (subject alpha > 0.6, head to feet) in the loading card
+and where its top sits in the plate (gate: 0.70-0.80 of the card). `--box h`: the card shows the plate in its lower
+h (W2's screens.css .pcard__art, 0.84), so the window is 0.6 / h wide instead of 3:5.
 """
 from __future__ import annotations
 
@@ -59,6 +62,8 @@ DEFAULTS = {
     "dof": 2.2,                 # defocus sigma at 1600 px (splash); the portrait's long lens:
     "dof_p": 4.5,               # sigma at 512 px
     "median": 0.27,             # display luma median of the plate before the LUT (the LUT is near identity there)
+    "splash_lift": 0.0,         # ... plus this for the splash only (a darker painting under a larger figure: the card
+                                #     crop keeps its p50 >= 70 without lifting the portrait cells)
     "tint": "#A0A8C8",          # linear multiply, normalised to luma 1
     "sat": 0.85,
     "top": 0.42,                # darkening toward the top edge (the card fades into the UI ink above the plate)
@@ -408,7 +413,8 @@ def plate(p: dict, kind: str, w: int, h: int) -> np.ndarray:
     lin = lin * M
     # expose to the target median (display luma), then the low-sun glow on the origin's side
     med = float(np.median(lin @ Y709))
-    lin = lin * (float(_dec(np.float32(p["median"]))) / max(1e-5, med))
+    target = float(p["median"]) + (float(p.get("splash_lift", 0.0)) if kind == "splash" else 0.0)
+    lin = lin * (float(_dec(np.float32(target))) / max(1e-5, med))
     gx, gy, gr, gk = (float(v) for v in p["glow"])
     if kind != "splash":
         gr, gk = gr * 1.5, gk * 0.6
@@ -551,10 +557,12 @@ def stats(rgb: np.ndarray) -> dict:
             "over200": round(float((L > 200).mean()) * 100, 1)}
 
 
-def card_crop(splash: np.ndarray, pos_x: float = 0.86) -> np.ndarray:
-    """The loading card: a 3:5 window of the splash at object-position 86 % 50 % (loading.tsx CARD_CROP)."""
+def card_crop(splash: np.ndarray, pos_x: float = 0.86, aspect: float = 0.6) -> np.ndarray:
+    """The loading card: a 3:5 window of the splash at object-position 86 % 50 % (loading.tsx CARD_CROP). `aspect`
+    (w / h of the window): W2's card shows the plate in its lower `box` of a 3:5 card (screens.css .pcard__art,
+    84 % today), i.e. a 0.6 / box window (`--box <h>` on measure / frame)."""
     h, w = splash.shape[:2]
-    cw = int(round(h * 3 / 5))
+    cw = int(round(h * aspect))
     x0 = int(round(pos_x * (w - cw)))
     return splash[:, x0:x0 + cw]
 
@@ -571,7 +579,7 @@ def cell_crop(portrait: np.ndarray, aspect: float = 1.0, pos_y: float = 0.20) ->
     return portrait[:, x0:x0 + cw]
 
 
-def measure(sel: list[str], preview: bool = False) -> list[dict]:
+def measure(sel: list[str], preview: bool = False, aspect: float = 0.6) -> list[dict]:
     rows = []
     for sid in sel:
         sp, pp = image_path(sid, "splash", preview), image_path(sid, "portrait", preview)
@@ -579,7 +587,7 @@ def measure(sel: list[str], preview: bool = False) -> list[dict]:
         if os.path.isfile(sp):
             s = load_image(sp)[..., :3]
             r["splash"] = stats(s)
-            r["card"] = stats(card_crop(s))
+            r["card"] = stats(card_crop(s, aspect=aspect))
         if os.path.isfile(pp):
             r["cell"] = stats(cell_crop(load_image(pp)[..., :3]))
         rows.append(r)
@@ -589,7 +597,10 @@ def measure(sel: list[str], preview: bool = False) -> list[dict]:
 def main(argv: list[str]) -> int:
     cmd = argv[0] if argv else "measure"
     preview = "--preview" in argv
+    box = float(argv[argv.index("--box") + 1]) if "--box" in argv else None     # W2's plate height in the card
+    argv = [a for i, a in enumerate(argv) if not (i and argv[i - 1] == "--box")]
     sel = [a for a in argv[1:] if not a.startswith("--")] or sids()
+    aspect = 0.6 / box if box else 0.6
     if cmd == "compose":
         for sid in sel:
             for kind in ("splash", "portrait"):
@@ -597,7 +608,7 @@ def main(argv: list[str]) -> int:
                 print(f"[plates] {sid} {kind}: {os.path.relpath(out, GAME_DIR) if out else 'no raw pass'}")
         cmd = "measure"
     if cmd == "measure":
-        rows = measure(sel, preview)
+        rows = measure(sel, preview, aspect)
         bad = 0
         for r in rows:
             line = f"  {r['sid']:<22}"
@@ -616,18 +627,20 @@ def main(argv: list[str]) -> int:
         return 1 if bad else 0
     if cmd == "frame":                        # the figure's height in the 3:5 loading card (from the kept raw passes)
         fr = []
+        bh = box or 0.84                          # the plate covers the card's lower 84 % (screens.css .pcard__art)
         for sid in sel:
             rp = raw_path(sid, "splash", preview)
             if not os.path.isfile(rp):
                 continue
-            a = card_crop(load_image(rp))[..., 3]
+            a = card_crop(load_image(rp), aspect=aspect)[..., 3]
             rows = np.where((a > 0.6).any(axis=1))[0]
             if len(rows):
-                f = (rows[-1] - rows[0] + 1) / a.shape[0] * 0.84      # the plate covers the card's lower 84 %
-                fr.append((sid, round(float(f), 3)))
+                f = (rows[-1] - rows[0] + 1) / a.shape[0] * bh
+                fr.append((sid, round(float(f), 3), round(float(rows[0] / a.shape[0]), 3)))
         v = sorted(x[1] for x in fr)
-        for sid, f in fr:
-            print(f"  {sid:<22} figure {f:.3f} of the card height{'' if 0.70 <= f <= 0.80 else ' (outside 0.70-0.80)'}")
+        for sid, f, top in fr:
+            print(f"  {sid:<22} figure {f:.3f} of the card height, its top at {top:.3f} of the plate"
+                  f"{'' if 0.70 <= f <= 0.80 else ' (outside 0.70-0.80)'}")
         if v:
             print(f"[plates] {len(v)} splashes: figure p50 {v[len(v) // 2]:.3f}, range {v[0]:.3f}-{v[-1]:.3f}, "
                   f"in 0.70-0.80: {sum(0.70 <= x <= 0.80 for x in v)}")
