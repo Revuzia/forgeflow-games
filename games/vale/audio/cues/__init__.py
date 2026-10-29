@@ -8,7 +8,7 @@ content/audio.json with cuelib.REGISTRY:
     kits_a.py  f_<fighter>_<slot> the whole per-fighter kits, first half (ardit … lisvel)
     kits_b.py  f_<fighter>_<slot> the whole per-fighter kits, second half (marund … vashil)
     kits_c.py  f_<fighter>_hit / _dash (ability impacts, dashes) and the identity pass (contact, voicing) over the kits
-    world.py   amb_* the maps' ambience loops (bus ambience; content binds ambient.<map>.<source>)
+    world.py   amb_* the maps' ambience loops (bus ambience; content lists them in audio.ambience.<map>)
 
 The stings on the music bus (m_victory_sting, m_defeat_sting, m_placement_sting) and the beds are
 the music build's, not this package's.

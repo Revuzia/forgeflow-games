@@ -1,5 +1,5 @@
 """World ambience (bus `ambience`): the seamless loops the engine places at a map's art.ambient points
-(content binds 'ambient.<map id>.<source>'; src/audio/index.ts `ambience`). All original synthesis, in the
+(content lists audio.ambience.<map id> = [{source, cue}]; src/audio/index.ts `ambience`). All original synthesis, in the
 Vale's own fiction (_design/WORLD.md):
 
     RIFT     amb_rift_air       the valley's breeze over the carved hour-lines (the map-wide bed)

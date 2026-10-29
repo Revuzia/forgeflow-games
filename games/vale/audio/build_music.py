@@ -31,9 +31,9 @@ QA per bed stem (decoded OGG)
            running on PIECE_OVERLAP_S into the next for the engine's cross-fade (it hides the edges a browser's
            resampler leaves on every decode at a context rate other than 48 kHz). A piece is
            cut from the whole .m4a's own AAC frames (aac.cut_m4a: no re-encode, so it decodes to the whole's samples
-           and no piece starts on a cold encoder). content lists them as layers 'seg_<start s>' →
-           assets/audio/<main>_seg<start s>.m4a (the build stops with the exact entries when content and the plan
-           differ). QA against the whole .m4a's decode: every piece decodes to its exact length and to the whole's
+           and no piece starts on a cold encoder). content lists them as the bed's pieces {at: <start s>, file:
+           assets/audio/<main>_seg<start s>.m4a} (older content: layers 'seg_<start s>'; the build stops with the
+           exact entries when content and the plan differ). QA against the whole .m4a's decode: every piece decodes to its exact length and to the whole's
            samples (PIECE_EXACT_DB), and stitched the way the engine stitches them the loop is the whole's within
            25 ms of every joint, the wrap included. The waveforms are compared below PIECE_SPLIT_HZ; above it AAC's noise substitution
            draws new noise in every decode (a piece decoded from mid-stream gets other noise than the whole), so
@@ -197,9 +197,16 @@ def piece_plan(n: int) -> list[tuple[int, int]]:
 
 
 def piece_layers(main_ref: str, plan: list[tuple[int, int]]) -> list[dict]:
-    """the audio.json layer entries for a plan: id seg_<start s> → <main>_seg<start s>.m4a"""
+    """the audio.json `pieces` entries for a plan: at <start s>, file <main>_seg<start s>.m4a"""
     base = main_ref[:-len('.ogg')]
-    return [dict(id=f'seg_{s // SR:03d}', file=f'{base}_seg{s // SR:03d}.m4a') for s, _ in plan]
+    return [dict(at=s // SR, file=f'{base}_seg{s // SR:03d}.m4a') for s, _ in plan]
+
+
+def listed_pieces(mdef: dict) -> list[dict]:
+    """the pieces content lists for a bed: `pieces`, else the older 'seg_<start s>' layers"""
+    if mdef.get('pieces'):
+        return [dict(at=p['at'], file=p['file']) for p in mdef['pieces']]
+    return [dict(at=int(l['id'][len('seg_'):]), file=l['file']) for l in mdef.get('layers', []) if l['id'].startswith('seg_')]
 
 
 def stitch(pieces: list[np.ndarray], plan: list[tuple[int, int]], n: int, ov: int) -> np.ndarray:
@@ -224,12 +231,12 @@ def build_pieces(bid: str, mdef: dict) -> dict | None:
     n = whole.shape[1]
     plan = piece_plan(n)
     want = piece_layers(mdef['file'], plan)
-    have = [l for l in mdef.get('layers', []) if l['id'].startswith('seg_')]
+    have = listed_pieces(mdef)
     if have != want:
         if not want:
-            raise SystemExit(f"content/audio.json music.{bid}: a main stem this short is one piece; drop its seg_ layers")
-        raise SystemExit(f"content/audio.json music.{bid}: the main stem's .m4a pieces must be listed as these layers "
-                         f"(after the others):\n{json.dumps(want, indent=1)}")
+            raise SystemExit(f"content/audio.json music.{bid}: a main stem this short is one piece; drop its pieces")
+        raise SystemExit(f"content/audio.json music.{bid}: the main stem's .m4a pieces must be listed as these pieces:"
+                         f"\n{json.dumps(want, indent=1)}")
     if not plan:
         return None
     ov = int(round(PIECE_OVERLAP_S * SR))
@@ -256,7 +263,7 @@ def build_pieces(bid: str, mdef: dict) -> dict | None:
         dec.append(d)
         m = min(body, d.shape[1])
         ref = whole[:, s:s + m]
-        rows.append(dict(id=l['id'], path=os.path.relpath(path, GAME), start_s=s / SR, seconds=ln / SR,
+        rows.append(dict(id=f"seg_{l['at']:03d}", path=os.path.relpath(path, GAME), start_s=s / SR, seconds=ln / SR,
                          samples=d.shape[1], want=body, kb=os.path.getsize(path) / 1024,
                          lf_db=rel(low(d[:, :m] - ref), low(ref)), hf_db=hf(d[:, :m], ref)))
     y = stitch(dec, plan, n, ov)

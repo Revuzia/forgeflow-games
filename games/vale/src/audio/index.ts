@@ -67,8 +67,9 @@
 //               (AUTO_PHASE_S: the first phase layer from 16 s, the last from 80 s); any other layer is
 //               the combat layer, faded by the match's combat intensity (enter above 0.6, leave below 0.35
 //               after 8 s, quantised to the bar). duck() pulls the bed −8 dB under a moment (the ready check).
-//               'seg_<s>' layers are the main stem's .m4a pieces, for the .m4a path only (the .ogg path never
-//               fetches one): <s> = where the piece starts on the bed's timeline (audio/build_music.py cuts them
+//               The bed's `pieces` ({ at, file }; older content: 'seg_<at>' layers) are the main stem's .m4a pieces,
+//               for the .m4a path only (the .ogg path never fetches one): `at` = where the piece starts on the bed's
+//               timeline (audio/build_music.py cuts them
 //               from the same master: 16 s first, then doubling to 64 s, each running on SEG_OVERLAP_S into the
 //               next). There the main stem plays piece by piece, the first starting the bed and each next one
 //               cross-fading in over the run-on of the one before; once all are in they are stitched into one
@@ -116,7 +117,8 @@
 //               without a delivery (no 'hit') is voiced by the proc that follows it in the same tick. A periodic
 //               trigger (interval, moveDistance) reminds at most every PROC_PERIODIC_S per owner, the rest at most
 //               every PROC_GAP_S per passive and owner. `procStats` counts what became of every proc (dev / probes)
-//   ambience    the map's world: content binds 'ambient.<map id>.<source>' → a looping cue on the ambience bus.
+//   ambience    the map's world: content's audio.ambience[<map id>] lists { source, cue } → a looping cue on the
+//               ambience bus (older content: events 'ambient.<map id>.<source>' → cue; the emitter keeps that label).
 //               <source> names an art.ambient group of that map (an effect's vfx, a critter id, a prop's fx vfx
 //               or its model's file name): the loop sounds from EVERY point of the group, heard from the
 //               listener (full within AMB_INNER_M of a point, silent past AMB_HEAR_M; nearby points add up by
@@ -133,7 +135,8 @@ import type { AudioPort, DraftMusicState } from '../ui/audio_port.ts';
 
 type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
-interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[] }
+interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[];
+  pieces?: { at: number; file: string }[] }
 interface PresentLike { sfx?: string; hitSfx?: string }
 /** an ability as the audio reads it: its present, and what makes its wind-up a T3 threat (see `threat` in the header) */
 interface AbilityLike { id: string; present?: PresentLike; castTime?: number; effects?: unknown[] }
@@ -145,7 +148,8 @@ interface AmbientLike {
   props?: { model: string; at: number[][]; fx?: { vfx: string } }[];
 }
 interface CatalogLike {
-  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>; ui?: Record<string, string>; m4a?: Record<string, string> };
+  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>;
+    ambience?: Record<string, { source: string; cue: string }[]>; ui?: Record<string, string>; m4a?: Record<string, string> };
   fighters: { id: string; attack?: { present?: PresentLike };
     kit: Record<string, (AbilityLike & { forms?: Record<string, { kit?: Record<string, AbilityLike | undefined> }> }) | undefined> }[];
   units?: { id: string; attack?: { present?: PresentLike }; passive?: PassiveLike }[];
@@ -317,6 +321,8 @@ class Engine implements ValeAudioPort {
   /** engine event role → cue id (content/audio.json `events`) */
   private readonly events: Record<string, string>;
   private readonly beds: Record<string, MusicDefT>;
+  /** map id → its ambience emitters (content/audio.json `ambience`; see `ambience` in the header) */
+  private readonly ambienceOf: Record<string, { source: string; cue: string }[]>;
   private readonly url: (ref: string) => string;
   /** .ogg ref → its .m4a sibling (catalog audio.m4a, written by the content build) */
   private readonly alt: Record<string, string>;
@@ -385,6 +391,7 @@ class Engine implements ValeAudioPort {
     this.cues = cat.audio.cues;
     this.events = cat.audio.events ?? {};
     this.beds = cat.audio.music;
+    this.ambienceOf = cat.audio.ambience ?? {};
     this.url = url;
     this.alt = cat.audio.m4a ?? {};
     this.alertCues = new Set([
@@ -727,8 +734,10 @@ class Engine implements ValeAudioPort {
     gain.gain.value = 0;
     gain.connect(this.bus.get('music')!);
     let combat = false;
-    const pieces: BedPiece[] = def.layers.filter((l) => l.id.startsWith('seg_'))
-      .map((l) => ({ at: Number(l.id.slice('seg_'.length)), file: l.file })).sort((a, b) => a.at - b.at);
+    // the main stem's .m4a pieces: `pieces`, else the old 'seg_<s>' layers (see `music` in the header)
+    const pieces: BedPiece[] = (def.pieces?.length ? def.pieces.map((q) => ({ at: q.at, file: q.file }))
+      : def.layers.filter((l) => l.id.startsWith('seg_')).map((l) => ({ at: Number(l.id.slice('seg_'.length)), file: l.file })))
+      .sort((a, b) => a.at - b.at);
     const layers: BedLayer[] = def.layers.filter((l) => !l.id.startsWith('seg_')).map((l) => {
       const g = ctx.createGain();
       g.gain.value = 0;
@@ -1057,16 +1066,18 @@ class Engine implements ValeAudioPort {
   listener(focus: (() => { x: number; y: number } | null) | null): void { this.focus = focus; }
 
   // ── ambience (see `ambience` in the header) ──────────────────────────────────────────────────────
-  /** the emitters content binds for a map: 'ambient.<map>.<source>' → a looping ambience cue */
+  /** the emitters content binds for a map: audio.ambience[map] = [{ source, cue }] → a looping ambience cue (the old
+   *  'ambient.<map>.<source>' events when content lists none); each is labelled 'ambient.<map>.<source>' */
   private emitters(ctx: AudioContext, map: string): Emitter[] {
     const art = this.maps.get(map);
     const out: Emitter[] = [];
     const pre = `ambient.${map}.`;
-    for (const [role, cue] of Object.entries(this.events)) {
-      if (!role.startsWith(pre)) continue;
+    const bound = this.ambienceOf[map]?.length ? this.ambienceOf[map]
+      : Object.entries(this.events).filter(([role]) => role.startsWith(pre)).map(([role, cue]) => ({ source: role.slice(pre.length), cue }));
+    for (const { source, cue } of bound) {
+      const role = pre + source;
       const def = this.cues[cue];
       if (!def || !def.loop || def.bus !== 'ambience') continue;
-      const source = role.slice(pre.length);
       const pts = source === 'bed' ? [] : ambientPoints(art, source);
       if (source !== 'bed' && !pts.length) continue;               // a group the map does not have: nothing to place
       const gain = ctx.createGain(); gain.gain.value = 0;

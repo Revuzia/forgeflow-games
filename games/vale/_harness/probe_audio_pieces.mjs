@@ -120,7 +120,9 @@ const oggs = [...Object.values(audio.cues).flatMap((c) => c.files), ...Object.va
 audio.m4a = Object.fromEntries(oggs.map((f) => [f, f.replace(/\.ogg$/, '.m4a')]));
 const bdef = audio.music[BED];
 if (!bdef) { console.log(`FAIL: no bed ${BED}`); process.exit(1); }
-const pieces = bdef.layers.filter((l) => l.id.startsWith('seg_')).map((l) => ({ at: Number(l.id.slice(4)), file: l.file })).sort((a, b) => a.at - b.at);
+// the bed's `pieces` (older content: its 'seg_<s>' layers)
+const pieces = (bdef.pieces?.length ? bdef.pieces.map((p) => ({ at: p.at, file: p.file }))
+  : bdef.layers.filter((l) => l.id.startsWith('seg_')).map((l) => ({ at: Number(l.id.slice(4)), file: l.file }))).sort((a, b) => a.at - b.at);
 const layers = bdef.layers.filter((l) => !l.id.startsWith('seg_'));
 const wholeRef = audio.m4a[bdef.file];
 const { createAudioEngine } = await import('../src/audio/index.ts');

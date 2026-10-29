@@ -30,7 +30,7 @@
 //   C4  draft(s) (AudioPort.draft, the draft screen): s.phase 'ban' | 'pick' | 'finalize' drives the shipped draft bed's
 //       phase layers and s.urgent its urgency layer, whether it comes before or after music('mus_draft'); draft(null)
 //       hands the bed back to its own walk
-//   C5  the .ogg path never fetches a main stem's .m4a piece ('seg_*' layers; probe_audio_pieces covers the .m4a path)
+//   C5  the .ogg path never fetches a main stem's .m4a piece (a bed's `pieces`; probe_audio_pieces covers the .m4a path)
 // Exit 0 = all hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_announcer.json.
 
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
@@ -429,7 +429,7 @@ if (draft?.layers.some((l) => l.id.startsWith('phase_'))) {
 } else failures.push('C3: content has no draft bed with phase layers');
 
 // C5 — the .ogg path never fetches a piece
-const pieceRefs = new Set(Object.values(audio.music).flatMap((m) => m.layers.filter((l) => l.id.startsWith('seg_')).map((l) => l.file)));
+const pieceRefs = new Set(Object.values(audio.music).flatMap((m) => [...(m.pieces ?? []).map((p) => p.file), ...m.layers.filter((l) => l.id.startsWith('seg_')).map((l) => l.file)]));
 report.C5 = { format: eng.format, pieces: pieceRefs.size, piecesFetched: FETCHED.filter((u) => pieceRefs.has(u)).length };
 if (!pieceRefs.size) failures.push('C5: content lists no .m4a pieces');
 if (report.C5.piecesFetched) failures.push(`C5: the .ogg path fetched ${report.C5.piecesFetched} pieces`);

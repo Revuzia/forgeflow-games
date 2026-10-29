@@ -6,7 +6,7 @@
 // REAL engine (src/audio/index.ts) against content/audio.json as it is now; only WebAudio is faked. The engine is
 // ticked at its own 4 Hz, heard from your fighter (no renderer), so the emitters follow you down your lane.
 // Gates, per map:
-//   A1  the map's emitters ('ambient.<map>.<source>', 4-6) are built and every one starts its loop on the ambience
+//   A1  the map's emitters (audio.ambience.<map>: [{ source, cue }], 4-6; labelled 'ambient.<map>.<source>') are built and every one starts its loop on the ambience
 //       bus (ambience cues in the engine's cue log > 0)
 //   A2  the bed is at full the whole match; at least one positional emitter is heard (> -20 dB) along the way
 //   A3  placement (engine ambPlace): on any point of an emitter's group it plays at full; 40 m clear of every point
@@ -139,7 +139,9 @@ for (const modeId of ['rift', 'bridge', 'fray']) {
   eng.ensure();
   eng.attach(host);
   host.start();
-  const bound = Object.keys(audio.events).filter((k) => k.startsWith(`ambient.${mode.map}.`));
+  // audio.ambience[map] (the old 'ambient.<map>.<source>' events while content still carries them)
+  const bound = audio.ambience?.[mode.map]?.length ? audio.ambience[mode.map].map((e) => `ambient.${mode.map}.${e.source}`)
+    : Object.keys(audio.events).filter((k) => k.startsWith(`ambient.${mode.map}.`));
   const series = {};                                   // role → att samples
   const model = [];                                    // laning: the ambience bus LUFS (model, duck included)
   let samples = 0, ducked = 0;

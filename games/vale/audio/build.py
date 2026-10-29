@@ -35,7 +35,7 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
   procs      every fighter passive (content/fighters, read only) whose triggers pay off in damage, a status, a mark
              or a resource has a rendered proc cue (f_<fighter>_passive, else its present.sfx / hitSfx); every other
              triggered passive (items, boons, team buffs, units) has a present.sfx / hitSfx or its 'proc.<kind>' role
-  ambience   every map (content/maps, read only) has 4-6 emitters 'ambient.<map>.<source>' → rendered ambience-bus
+  ambience   every map (content/maps, read only) has 4-6 emitters audio.ambience.<map> [{source, cue}] → rendered ambience-bus
              loops: at most one 'bed' (not spatial), every other source an art.ambient group of that map with points
   instant    (final parity AUD-m1) every recipe flagged `instant` (a cue for an instant event: a blink, a level-up, a
              respawn, a summon, a pickup, a ping …) lands on its frame: its first sample within 20 dB of its peak comes
@@ -818,9 +818,10 @@ def proc_gate(contract: dict) -> tuple[list[str], dict]:
 
 
 def ambience_gate(contract: dict) -> tuple[list[str], dict]:
-    """ambience: every map has AMB_MIN..AMB_MAX emitters ('ambient.<map>.<source>'), at most one 'bed' (not
-    spatial); every other source names an art.ambient group of that map with points (spatial cue); every
-    emitter's cue is a rendered loop on the ambience bus; no role names an unknown map."""
+    """ambience: every map has AMB_MIN..AMB_MAX emitters (audio.ambience.<map> = [{source, cue}]; older content:
+    events 'ambient.<map>.<source>'), at most one 'bed' (not spatial), no source twice; every other source names an
+    art.ambient group of that map with points (spatial cue); every emitter's cue is a rendered loop on the ambience
+    bus; no entry names an unknown map."""
     import glob
     fails: list[str] = []
     cues, ev = contract['cues'], contract.get('events', {})
@@ -830,13 +831,28 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
             md = json.load(f)
         maps[md['id']] = (md.get('art') or {}).get('ambient') or {}
     rep: dict = {}
-    roles = {k: v for k, v in ev.items() if k.startswith('ambient.')}
-    for role in roles:
-        parts = role.split('.')
-        if len(parts) != 3 or parts[1] not in maps:
+    bound: dict[str, list[tuple[str, str]]] = {}
+    for mid, lst in (contract.get('ambience') or {}).items():
+        bound[mid] = [(e['source'], e['cue']) for e in lst]
+    for role, c in ev.items():                       # the old binding, read while content still carries it
+        if not role.startswith('ambient.'):
+            continue
+        parts = role.split('.', 2)
+        if len(parts) != 3:
             fails.append(f'ambience: {role} names no map (ambient.<map id>.<source>)')
+            continue
+        if parts[1] in (contract.get('ambience') or {}):
+            fails.append(f'ambience: {role} doubles audio.ambience.{parts[1]} (move it there)')
+            continue
+        bound.setdefault(parts[1], []).append((parts[2], c))
+    for mid in bound:
+        if mid not in maps:
+            fails.append(f'ambience: audio.ambience.{mid} names no map in content/maps')
     for mid, art in maps.items():
-        ems = {k.split('.', 2)[2]: v for k, v in roles.items() if k.split('.')[1] == mid}
+        pairs = bound.get(mid, [])
+        ems = dict(pairs)
+        if len(ems) != len(pairs):
+            fails.append(f'ambience: {mid} lists a source twice')
         rows = {}
         for src, c in ems.items():
             if src == 'bed':
