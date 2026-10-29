@@ -36,7 +36,7 @@ import { Rng, stream } from '../sim/rng.ts';
 import { BOTS_LINK, type PickLoadout } from './bots_link.ts';
 import { isPlayable } from './roster.ts';
 import { iso, RealClock, type Clock } from './clock.ts';
-import { DraftHost, type DraftSeatInit, type PickProtocol } from './draft.ts';
+import { bansForRoster, DraftHost, type DraftSeatInit, type PickProtocol } from './draft.ts';
 import { createFallbackDraftBrain, type DraftBrainFactory } from './draft_brain.ts';
 import { equipSkin as equip, ownsSkin, purchase as buy, type PurchaseResult } from './economy.ts';
 import { applyGrants, grantsDisabled } from './grants.ts';
@@ -349,9 +349,11 @@ export class LocalSession implements Session {
       : pd.protocol === 'role_preset' ? draft?.finalizeSeconds ?? DRAFT_DEFAULTS.presetFinalize : draft?.finalizeSeconds ?? DRAFT_DEFAULTS.finalize;
     const skinCache = new Map<string, string[]>();
     const loadCache = new Map<string, LoadoutChoice>();
+    const pool = fighterPool(this.catalog);
     const host = new DraftHost({
-      queue: queue.id, mode: pd.mode.id, protocol: pd.protocol, seats, pool: fighterPool(this.catalog),
-      bansPerTeam: pd.protocol === 'draft' ? draft?.bansPerTeam ?? 0 : 0,
+      queue: queue.id, mode: pd.mode.id, protocol: pd.protocol, seats, pool,
+      // G8: the ban count follows the playable roster (queue.draft.bansByRoster; content keeps bansPerTeam equal to it)
+      bansPerTeam: pd.protocol === 'draft' ? bansForRoster(draft, pool.length) : 0,
       timers: { ban: draft?.banSeconds ?? DRAFT_DEFAULTS.ban, pick: draft?.pickSeconds ?? DRAFT_DEFAULTS.pick, bench: draft?.pickSeconds ?? DRAFT_DEFAULTS.bench, finalize },
       bench: queue.bench ?? { size: 0, rerolls: 0 },
     }, stream(this.draftRng.nextU32(), 'host'), {

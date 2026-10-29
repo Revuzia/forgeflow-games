@@ -122,6 +122,9 @@ export interface DraftSeat {
   rerolls?: number;
   /** CHANGED(W4), additive: BRIDGE Lot swaps this seat has left (absent = no limit) */
   swaps?: number;
+  /** CHANGED(W4), additive (client F12): finalize / trade / done only — this seat is ready (a human sent { a: 'ready' };
+   *  a bot has finished its skin and loadout). Absent in the other phases */
+  ready?: boolean;
 }
 export interface DraftState {
   queue: string; mode: string;
@@ -141,7 +144,10 @@ export interface DraftState {
 export type DraftAction =
   | { a: 'hover'; fighter: string } | { a: 'lock' } | { a: 'ban'; fighter: string } | { a: 'skin'; skin: string }
   | { a: 'loadout'; loadout: LoadoutChoice } | { a: 'benchSwap'; fighter: string } | { a: 'reroll' }
-  | { a: 'tradeRequest'; with: PlayerId } | { a: 'tradeAccept'; with: PlayerId };
+  | { a: 'tradeRequest'; with: PlayerId } | { a: 'tradeAccept'; with: PlayerId }
+  /** CHANGED(W4), additive (client F12): finalize Lock in — this seat is ready; once every seat is, the finalize
+   *  timer drops to a short grace (draft.ts READY_GRACE) */
+  | { a: 'ready' };
 
 // ── the live match as the client sees it ─────────────────────────────────────────────────────────
 export interface MatchClient {

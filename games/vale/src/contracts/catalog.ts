@@ -636,8 +636,12 @@ export const QueueDef = z.object({
   kind: z.enum(['standard', 'quick', 'ranked', 'coop', 'custom', 'practice']),
   rules: RulesParams.partial().default({}),     // overrides layered on ModeDef.rules
   pick: z.enum(['draft', 'blind', 'random_bench', 'ffa_pick', 'role_preset']).optional(),
+  /** bansByRoster (W4 gameplay G8, r03 §1.6): the ban count as a function of the playable roster: each step gives the bans
+   *  per team from that roster size up (ascending). bansPerTeam must equal the step for today's roster (bansForRoster in
+   *  session/draft.ts; probe_sim_draft_pace lints it), so every reader of bansPerTeam stays right as the roster grows */
   draft: z.object({ bansPerTeam: z.number().int().nonnegative(), pickSeconds: z.number(), banSeconds: z.number(),
-    finalizeSeconds: z.number() }).strict().optional(),
+    finalizeSeconds: z.number(),
+    bansByRoster: z.array(z.object({ roster: z.number().int().nonnegative(), bans: z.number().int().nonnegative() }).strict()).optional() }).strict().optional(),
   /** random_bench (BRIDGE's Lot). W4 re-key (originality F4): `swaps` = how many fighters a seat may take from its team's
    *  Lot (absent = no limit); `fade` = every `fade` s of the window the Lot's first fighter goes back to the gorge */
   bench: z.object({ size: z.number().int().nonnegative(), rerolls: z.number().int().nonnegative(),

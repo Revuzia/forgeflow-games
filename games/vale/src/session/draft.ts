@@ -25,10 +25,15 @@
 //   ffa_pick      everyone picks at once, no duplicates (first lock wins); then finalize.
 // FINALIZE: `finalizeSeconds` to change skin (owned skins only for the human) and loadout; trades
 // between locked teammates (tradeRequest → the other seat's tradeAccept swaps fighters; bots accept
-// at once). 'done' ends the draft; final() is the line-up.
+// at once). Lock in is a ready flag ({ a: 'ready' }, DraftSeat.ready; client F12): a seat with a brain
+// shows ready once it has nothing left to do (or has used its acts); when every person (seat without a
+// brain) is ready the timer drops to READY_GRACE s. 'done' ends the draft; final() is the line-up.
 //
 // Bot pacing: a seat with a brain first acts 0.4–2.5 s into a phase/turn, then every 0.3–0.9 s
-// (1 s after a null), at most MAX_BOT_ACTS times per phase/turn.
+// (1 s after a null), at most MAX_BOT_ACTS times per phase/turn. A bot's lock waits until its
+// lockAfter (BOT_LOCK_MIN to BOT_LOCK_MAX − 0.9 s into the phase/turn, never later than 1 s before
+// the timer runs out), so bots lock like people do: within 3–8 s, never at the buzzer (client F12). A blind or
+// FFA pick phase ends the moment every seat has locked; a seat without a brain never holds bots up.
 
 import type { DraftAction, DraftPhase, DraftSeat, DraftState } from '../contracts/session.ts';
 import type { LoadoutChoice, PlayerId } from '../contracts/sim.ts';
@@ -37,6 +42,25 @@ import type { DraftBrain } from './draft_brain.ts';
 
 export type PickProtocol = 'draft' | 'blind' | 'role_preset' | 'random_bench' | 'ffa_pick';
 export const MAX_BOT_ACTS = 8;
+/** client F12: bots lock 3–8 s into a pick phase/turn; finalize ends READY_GRACE s after everyone is ready */
+export const BOT_LOCK_MIN = 3;
+export const BOT_LOCK_MAX = 8;
+export const READY_GRACE = 1.5;
+
+/**
+ * W4 gameplay G8 (r03 §1.6): bans per team for a roster of `roster` playable fighters, from a queue's draft.bansByRoster
+ * steps (the highest step at or below the roster); without steps, draft.bansPerTeam. The steps follow r03's comfort
+ * target R ≥ 2C (C = 2 × team size + all bans) from 28 fighters up, and hold one ban per team below that (the worst-case
+ * gate C ≤ R still holds at 16: 12 ≤ 16). Content keeps draft.bansPerTeam equal to this for today's roster.
+ */
+export function bansForRoster(draft: { bansPerTeam: number; bansByRoster?: { roster: number; bans: number }[] } | undefined, roster: number): number {
+  if (!draft) return 0;
+  const steps = draft.bansByRoster;
+  if (!steps || steps.length === 0) return draft.bansPerTeam;
+  let bans = steps[0].bans;
+  for (const s of steps) if (roster >= s.roster) bans = s.bans;
+  return bans;
+}
 
 export interface DraftSeatInit {
   player: PlayerId; team: number; name: string; isBot: boolean; isYou: boolean;
@@ -82,6 +106,10 @@ interface Seat {
   swaps: number;
   brain: DraftBrain | null;
   botNextAt: number; botActs: number;
+  /** a bot's earliest lock in this phase/turn (s into it) */
+  lockAfter: number;
+  /** finalize: Lock in pressed (humans) / nothing left to do (bots) */
+  ready: boolean;
 }
 interface BanSlot { team: number; player: PlayerId; fighter: string | null; done: boolean }
 
@@ -115,7 +143,7 @@ export class DraftHost {
     this.cfg = cfg; this.rng = rng; this.hooks = hooks;
     this.seats = [...cfg.seats].sort((a, b) => a.player - b.player).map((init) => ({
       init, rerolls: cfg.protocol === 'random_bench' ? cfg.bench.rerolls : 0, swaps: cfg.bench.swaps ?? Infinity,
-      brain: hooks.brain(init), botNextAt: 0, botActs: 0,
+      brain: hooks.brain(init), botNextAt: 0, botActs: 0, lockAfter: 0, ready: false,
     }));
     for (const s of this.seats) this.byPlayer.set(s.init.player, s);
     for (const t of this.teams()) this.bench.set(t, []);
@@ -195,6 +223,7 @@ export class DraftHost {
       if (s.locked !== undefined && lockVisible) { d.locked = s.locked; if (s.skin !== undefined) d.skin = s.skin; }
       if (s.loadout !== undefined && ally(s)) d.loadout = { spells: [...s.loadout.spells], boons: [...s.loadout.boons] };
       if (this.cfg.protocol === 'random_bench' && ally(s)) { d.rerolls = s.rerolls; if (Number.isFinite(s.swaps)) d.swaps = s.swaps; }
+      if (this._phase === 'finalize' || this._phase === 'trade' || this._phase === 'done') d.ready = s.ready || this._phase === 'done';
       return d;
     });
     const bans = this.bansRevealed || vs === null
@@ -337,6 +366,13 @@ export class DraftHost {
         this.swap(o, s);
         return { ok: true };
       }
+      case 'ready': {
+        if (this._phase !== 'finalize') return { ok: false, reason: 'phase' };
+        if (!s.locked) return { ok: false, reason: 'not_locked' };
+        s.ready = true;
+        this.checkReady();
+        return { ok: true };
+      }
       default: return { ok: false, reason: 'unknown_action' };
     }
   }
@@ -399,7 +435,20 @@ export class DraftHost {
     for (const s of this.seats) {
       s.botActs = 0;
       s.botNextAt = this.rng.range(0.4, Math.max(0.5, Math.min(2.5, this.timerMax * 0.4)));
+      s.lockAfter = 0;
+      if (s.brain && phase === 'pick' && !s.locked) {
+        // the last re-hover before a lock costs at most one act interval (0.9 s), so the lock itself lands by BOT_LOCK_MAX
+        const hi = Math.max(0.5, Math.min(BOT_LOCK_MAX - 0.9, this.timerMax - 1));
+        s.lockAfter = this.rng.range(Math.min(BOT_LOCK_MIN, hi), hi);
+      }
     }
+  }
+
+  /** finalize: when every person is ready, the rest of the timer shrinks to READY_GRACE. Bots never hold it up: a bot
+   *  that has not sent its skin or loadout yet gets the same defaults its brain would choose (hooks.skins / loadout) */
+  private checkReady(): void {
+    if (this._phase !== 'finalize' || !this.seats.every((s) => s.ready || s.brain)) return;
+    if (this.timer > READY_GRACE) this.timer = READY_GRACE;
   }
 
   private buildBans(): void {
@@ -539,13 +588,25 @@ export class DraftHost {
   private runBots(): void {
     const serial = this.serial;
     for (const s of this.seats) {
-      if (!s.brain || this._done || this.serial !== serial) return;
+      if (this._done || this.serial !== serial) return;
+      // a seat without a brain (a person) never stops the bots after it from acting (client F12: with the human
+      // in seat 0, bots used to sit idle until every timer ran out)
+      if (!s.brain) continue;
+      if (this._phase === 'finalize' && !s.ready && s.botActs >= MAX_BOT_ACTS) { s.ready = true; this.checkReady(); continue; }
       if (this.phaseElapsed < s.botNextAt || s.botActs >= MAX_BOT_ACTS) continue;
       let a: DraftAction | null = null;
-      try { a = s.brain.act(this.view(s.init.player), s.init.player); } catch { s.brain = null; continue; }
-      if (!a) { s.botNextAt = this.phaseElapsed + 1; continue; }
+      try { a = s.brain.act(this.view(s.init.player), s.init.player); } catch { s.brain = null; s.ready = true; this.checkReady(); continue; }
+      if (!a) {
+        s.botNextAt = this.phaseElapsed + 1;
+        if (this._phase === 'finalize' && !s.ready) { s.ready = true; this.checkReady(); }
+        continue;
+      }
+      // people take a few seconds to commit: a bot's lock waits for its lockAfter
+      if (a.a === 'lock' && this.phaseElapsed < s.lockAfter) { s.botNextAt = s.lockAfter; continue; }
       s.botActs++;
-      s.botNextAt = this.phaseElapsed + this.rng.range(0.3, 0.9);
+      // past its lockAfter a bot that had to re-hover (its pick was taken) commits quickly
+      const late = this._phase === 'pick' && s.lockAfter > 0 && this.phaseElapsed >= s.lockAfter && a.a === 'hover';
+      s.botNextAt = this.phaseElapsed + (late ? this.rng.range(0.1, 0.3) : this.rng.range(0.3, 0.9));
       this.apply(s, a);
     }
   }
