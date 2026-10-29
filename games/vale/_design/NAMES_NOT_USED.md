@@ -74,7 +74,7 @@ The "Clarity" proposal (`bible_clarity.md`) set the Vale in a chalk valley held 
 | Tarnhallow | its west base |
 | Haarwyrm · Driftkites | its late siege objective and its stacking objective |
 | Haar Hollow · Kiteford · Ennerdown · Gorsemoor | places |
-| Glint | its in-match currency (VALE uses the word only inside the battle spell Glint Step) |
+| Glint | its in-match currency (VALE uses the word only inside the Hour spell Glint Step) |
 | KEELBREAK | its RIFT fallback name, kept on record (see "Rift" above) |
 
 ### Candidates rejected while naming the world
@@ -139,7 +139,7 @@ Vanguard and Warden, the other two replaced role names, are already in the regis
 | jungle · brush | allowed | **Dialwood** · **Needlegrass** |
 | the reference epic monsters and buff camps | denied names | **Longshade**, **Sunsplinter**, **Glasshorn**, **Resinback** |
 | the reference team names | Radiant and Dire denied; Team Order and Team Chaos listed | **Aubade** and **Serenade** |
-| the eleven reference summoner spells | Flash and Smite denied; the rest exact-name entries | battle spells: Glint Step, Saplight, Hairline, Hourstrike, Running Light, Shake Loose, Glass Pane, Calling Bell |
+| the eleven reference summoner spells | Flash and Smite denied; the rest exact-name entries | Hour spells: Glint Step, Saplight, Hairline, Hourstrike, Running Light, Shake Loose, Glass Pane, Calling Bell |
 | runes, rune trees, keystones | Rune(s) denied; tree names exact-name entries | **boons** (9) and **paths**: Shadeline, Warmstone, Hourturn |
 | map pickups called runes | denied | **Sunmotes** |
 | the phrase for armor-ignoring damage | a protected skin line and trademark | "damage that ignores armor and resist" (`items_setup.md`) |
@@ -157,10 +157,12 @@ Vanguard and Warden, the other two replaced role names, are already in the regis
 | Dart · Drive | each sits inside a longer protected ability or item name |
 | Wayfarer | it sits inside a protected skin-line phrase |
 
-**Battle-spell tuning changed** (the 2026-10-14 adversarial review): the eight battle spells cover the genre's usual
+**Hour-spell tuning changed** (the 2026-10-14 adversarial review): the eight Hour spells cover the genre's usual
 jobs, but three matched a reference game's numbers exactly, so they were retuned: Hourstrike's charge returns every
 95 s with a 10 s lockout (was 90 s / 15 s), Glass Pane's 90 + 20 per level shield lasts 3 s on 160 s (was 2.5 s on
-180 s), Hairline is 170 s with a 35% healing cut (was 180 s / 40%).
+180 s), Hairline is 170 s with a 35% healing cut (was 180 s / 40%). The 2026-10-28 systems re-key (final parity review originality F4,
+`_design/reviews/fixwaves/W4_systems_rekey.md`, signed off) then rebuilt all eight as light-and-shadow rules, so these
+numbers are history; the live values are in `content/setup.json`.
 
 ---
 
