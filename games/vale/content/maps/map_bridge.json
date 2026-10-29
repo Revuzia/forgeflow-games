@@ -486,6 +486,7 @@
    "snap": {"at": [78, 22], "radius": 12},
    "gorge": {"axisY": 22, "deckHalf": 7, "depth": 36, "bandHeight": 1.0, "note": "the deck strip is axisY ± deckHalf; chasm-wall vertices strictly inside it are the carved hour-band notches"},
    "plazas": [{"at": [10, 22], "radius": 13, "side": 0}, {"at": [146, 22], "radius": 13, "side": 1}],
+   "minimapBounds": [-6, -1.67, 162, 45.67],
    "surface": "span",
    "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
    "props": { "$comment": "scatter props (art/blender/props/scatter.py; read check art/renders/props/scatter_bridge.png). No trees on the span. Needle-stone fragments, cool pale chalk-grey with chalk-inlaid grooves so they read on the warm deck and both terraces (brief \u00a75: \u2264 0.8 m, on the stubs, the deck's broken edges and the gorge lip, never on the open deck). rock: a drum sector with its hour-band and a broken slab (\u2264 0.58 m authored, \u2264 0.8 m at the terrain's rock scale); stone: a chip and a grooved shard (\u2264 0.85 m authored, \u2264 0.36 m at the stone scale). They render where render/terrain.ts places rock / stone spots", "tree": [], "rock": ["assets/props/needle_drum.glb", "assets/props/needle_slab.glb"], "stone": ["assets/props/needle_chip.glb", "assets/props/needle_shard.glb"] },

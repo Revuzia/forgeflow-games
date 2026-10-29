@@ -719,6 +719,10 @@ def build_bridge():
     terrain = {
         "$comment": "the walls of Needlespan are the gorge: render them as a drop, never as cliffs rising from the span",
         "wallStyle": "gorge",
+        # the painted minimap's rectangle (art/blender/maps/minimap_pad_paint.py; src/ui/hud/minimap.tsx minimapBounds): the map
+        # plus 6 m per side in x, and 1.67 m in y to keep the 1100 x 310 image (and the HUD strip's aspect), so the base
+        # plazas (r 13 at x 10 / W - 10) and the base terraces that reach past the map's x edges are drawn whole (hud HUD-3)
+        "minimapBounds": [-6, -1.67, int(W) + 6, round(H + 1.67, 2)],
         "landmarks": [
             landmark("dawn_arch", "Dawn Arch", (-4.0, CY), (3, 26.1), 13.7, "Aubade end: a four-centred pointed arch of chalk voussoirs on coursed piers, dawnglass in its head under a steel dial rose, beyond the west edge (art/blender/maps/landmarks_art2.py)"),
             landmark("lamp_gate", "Lamp Gate", (W + 4.0, CY), (5, 27), 7.0, "Serenade end: low banded ironstone gate between ochre sandstone drum towers under ribbed domes, one lampresin lamp on its keystone (art/blender/maps/landmarks_art2.py)"),
