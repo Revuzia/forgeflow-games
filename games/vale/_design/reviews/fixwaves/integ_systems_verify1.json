@@ -1,0 +1,114 @@
+{
+ "lane": "systems",
+ "round": 1,
+ "verifier": "Adversarial verifier for integration lane systems, round 1, 2026-10-29. I re-measured everything at HEAD b51a1c74 (= origin; no lane file changed while I measured). The lane's working tree was clean. I did not take the engineers' reports on trust.",
+ "pass": true,
+ "summary": "Lane systems passes round 1. Both major items, done:5 and gameplay:G3, are met. I re-ran both full soaks myself at HEAD, and both exit 0 with every enforced gate passing.\n- Veteran vs novice: 39/40 (seeds 1-20) and 38/40 (seeds 21-40). The bar is 34/40.\n- Veteran vs adept: 34/40 and 32/40. The bar is 26/40.\n- Holdout seeds 41-80, which the lane never tuned on: 73/80 vs novice and 65/80 vs adept.\nThe novice change touches only perception and execution knobs (difficulty.ts). The thinkAnswers additions read only visible enemy Wicks (perception.ts:110-115).\nFRAY G6 and G9 now pass with a margin:\n- Lull gate: 96/94 % on seeds 1-100 and 94/94 % on seeds 21-120.\n- On unseen seeds 601-800: 95.0 / 93.5 %, and the worst 100-seed window is 91 % at both tiers.\n- Placements: 4.14-6.82, 4.19-6.73 and 4.18-6.76 on those three seed sets.\nOther checks:\n- typecheck exit 0.\n- content:check OK. Its one warning is the map_fray 'centre', which is the world lane's file and is handed off.\n- Lane probes: 42/42 PASS, including determinism, rekey, practice, fray 34/34 and draft_pace 28/28.\n- RIFT, BRIDGE and mirror results are byte-identical to the engineers' full1 / full21 runs.\nOne minor item fails: systems-18. Its evidence is wrong. On seeds 1-20, HEAD still never buys callstone, needlefall or watchbell: 28/31, the same as verify2, not the 30/31 the claim gives for both sets. Seeds 21-40 give 30/31 (callstone never bought). The 80 % gate still passes.\nsystems-07 passes for the contract. Profile.emblem does not survive a profile reload, because src/session/profile_store.ts normalizeCurrent drops it. That file is not this lane's, and the lane handed the fix to the client lane correctly.\nSensitivity: this lane produced no image, model or render. It changed copy only in skins (text), so there was nothing to view.\nThe stitch lead:icons-repoint is scheduled for run 2, after the client lane paints the icons. It is out of scope for this round and not judged here.",
+ "commands": [
+  "node _harness/probe_sim_bot_soak.ts --full --label integ_systems_v1_full1 -> exit 0, 360 matches in 240 s, 0 bot faults, every enforced gate PASS (_harness/_reports/fw_W4_soak_integ_systems_v1_full1.txt/.json). Diff vs the engineers' fw_W4_soak_integ_systems_full1.txt: only the FRAY lines differ (50 -> 100 seeds, the toll change); every RIFT / BRIDGE / mirror line is identical",
+  "node _harness/probe_sim_bot_soak.ts --full --seed0 21 --label integ_systems_v1_full21 -> exit 0, every enforced gate PASS (_harness/_reports/fw_W4_soak_integ_systems_v1_full21.txt/.json); RIFT / BRIDGE / mirror identical to fw_W4_soak_integ_systems_full21.txt",
+  "node _harness/probe_sim_bot_soak.ts --suites mirror --seed0 41 --mirror-seeds 40 --jobs 3 --label integ_systems_v1_mirror41 -> exit 0; veteran beats novice 73/80, adept 65/80 (_harness/_reports/fw_W4_soak_integ_systems_v1_mirror41.txt)",
+  "node _harness/probe_sim_bot_soak.ts --suites fray --seed0 601 --fray-seeds 200 --jobs 3 --label integ_systems_v1_fray601 -> exit 0; unseen seeds 601-800: lull OK adept 190/200, veteran 187/200; placement 4.18-6.76 (_harness/_reports/fw_W4_soak_integ_systems_v1_fray601.txt); worst 100-seed window 91/100 both tiers (python3 -I over the JSON with the soak's own lull rule, probe_sim_bot_soak.ts:640-654; _harness/_reports/integ_systems_v1_fray_windows.txt)",
+  "npx tsc --noEmit -p tsconfig.json (tsc 7.0.2) -> exit 0",
+  "npm run content:check (no --allow-missing-assets) -> OK, 1 warning: content/maps/map_fray.json $.desc 'centre' [pending copy fix]; copy lint errors on any other hit in shipped content, so roles / classes / setup / skins / modes / queues / fighters are clean",
+  "node _harness/run_probes.ts --only probe_sim --only probe_session --only probe_items --only probe_kits --only probe_content -> 42 passed, 0 failed (_harness/_reports/integ_systems_v1_probes.txt); standalone: probe_sim_fray 34/34, probe_sim_draft_pace 28/28, probe_sim_practice 39/39",
+  "node <scratchpad>/session_extras_v1.ts (verifier scratch, harness() from _harness/fixtures/session_fixture.ts) -> reconnect no-op without a link and 1 retryNow call with a fake link; nod false with no match; setEmblem on the profile and in the stored JSON; setEmblem('') clears; Profile.emblem after a reload from the same store: undefined (_harness/_reports/integ_systems_v1_session_extras.txt)",
+  "git diff 34fd7185^ HEAD -- content/items.json src/sim -> empty (the systems-18 experiment is fully backed out; only a comment re-wrap in probe_sim_bot_soak.ts remains)",
+  "git show --name-only over the lane's commits a5d8c275 2553dcdf e12e4755 e92fd984 4229bc69 0a48b1f4 e8e97ff0 b51a1c74 and wip syncs f3d464ff 8c4e5c5c 057403c8 34fd7185 -> every path is inside the lane's file list",
+  "git diff 30744dd5 HEAD -- src/sim | grep for Math.random / Date / performance.now / enum / namespace -> none; no content id literals added in src/"
+ ],
+ "items": [
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "My full soaks at HEAD:\n- Seeds 1-20: veteran beats novice 39/40 (97.5 %) and adept 34/40 (85.0 %). fw_W4_soak_integ_systems_v1_full1.txt, exit 0.\n- Seeds 21-40: veteran beats novice 38/40 (95.0 %) and adept 32/40 (80.0 %). fw_W4_soak_integ_systems_v1_full21.txt, exit 0.\nThe criterion was 34/40 vs novice on seeds 21-40, keeping 34/40 or more on seeds 1-20 and 26/40 or more vs adept on both sets. All of it is met.\nHoldout seeds 41-80 (not tuned on): 73/80 vs novice and 65/80 vs adept (fw_W4_soak_integ_systems_v1_mirror41.txt). This exactly reproduces the engineers' 73/80.\nThe change is clean:\n- difficulty.ts:86-93: only novice's perception and execution knobs changed. No stat, Gleam or rule key exists in DifficultyProfile (difficulty.ts:30-77).\n- team.ts:210-247 thinkAnswers reads TeamPerc enemyN / enemyFront. Those count only enemy Wicks with visibleMask on this team (perception.ts:110-115), so it does not cheat.\nNo other gate moved: laning, jungle, structures, items, bridge and pace all PASS. The veteran's first structure is 10.4 / 10.6 min."
+  },
+  {
+   "id": "gameplay:G3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same runs as done:5.\n- Novice half: 39/40 and 38/40 (bar 85 %).\n- Adept half: 34/40 and 32/40 (bar 65 %), and 65/80 on holdout seeds 41-80.\nThe veteran macro still reads only its own team, its own structures and perceived enemy units (perception.ts:110-115; team.ts:210-247)."
+  },
+  {
+   "id": "systems-04",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Code:\n- src/contracts/session.ts:231 has `reconnect?(): void`.\n- src/session/local_session.ts:171 has `reconnect(): void { this.opts.online?.retryNow(); }`.\n- OnlineLink.retryNow is at online_link.ts:54.\n- The UI calls it when present (app.tsx:395-396).\nMy scratch check: with no link it is a no-op that does not throw. With a fake link, it calls retryNow exactly once (_harness/_reports/integ_systems_v1_session_extras.txt)."
+  },
+  {
+   "id": "systems-05",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The current content reads:\n- modes[0].desc: 'hold the Dialwood and its prizes'.\n- queues[0]: 'more Gleam'; queues[7]: 'Add Gleam, levels'.\n- roles[2]: 'center road'; roles[4]: 'leaves the Gleam'.\n- classes[5]: 'favor'.\n- kemdo ult: '{effects.1.stats.omnivamp} Drain'.\n- dunsom and vashil a1: 'center'.\n- setup.json $comment: '2 Hour spells'.\n`npm run content:check` copy-lints every shipped content file, and any hit not on the pending list is an error. It is OK with one warning, the map_fray.json desc 'centre'. That file is the world lane's and is handed off correctly."
+  },
+  {
+   "id": "systems-06",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Confirmed already in the tree.\n- Contract: DraftAction {a:'ready'} and DraftSeat.ready (session.ts:136-161).\n- Ready is set in finalize, trade and done (draft.ts:226).\n- checkReady cuts the timer to READY_GRACE = 1.5 s (draft.ts:48, :447-451).\n- Blind and ffa_pick go to finalize once every seat has locked (draft.ts:168, :407).\n- Bot lock window: BOT_LOCK_MIN/MAX 3-8 s (draft.ts:46-47, :441-442).\nprobe_sim_draft_pace 28/28 PASS, e.g. 'blind seat 0 seed 1: 9 bot locks in 3-8.15 s (3.6-7.2 s), finalize at 7.2 s' and 'ffa seed 1: 9 bot locks in 3.6-7.1 s'."
+  },
+  {
+   "id": "systems-07",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Contract:\n- session.ts adds Settings.video.dynamicResolution?, Settings.audio.mono? and softenLoud?, Profile.emblem?, MatchHistoryEntry.nod?, Session.nod? and Session.setEmblem?.\n- normalizeSettings writes all three settings fields (settings.ts:116, :122).\nLocalSession.nod (local_session.ts:758-768) checks the match, the player and the team, and allows one nod per match. setEmblem is at :771-776.\nMy scratch check: nod is false with no match, and setEmblem is on the profile and in the stored JSON.\nCaveat: Profile.emblem is dropped on a reload. A new session on the same MemoryProfileStore reads emblem = undefined, because profile_store.ts:162-171 normalizeCurrent does not carry it. profile_store.ts is not in this lane's file list, and the lane's client handoff states exactly this fix. The UI still keeps UiPrefs.emblem, so players see no regression."
+  },
+  {
+   "id": "systems-08",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Confirmed already in the tree.\n- Contract: sim.ts:66-69 has toggleWaves, toggleStructures, teleport, dummyStats, resetMeter and clearDummies, and sim.ts:45-46 has setup.practice.sparring {fighter, difficulty}.\n- Implementation: practice.ts:150-178.\n- Sparring at queue time: local_session.ts:430-431.\nprobe_sim_practice 39/39 PASS. The sparring partner is a setup choice made at queue time, not a spawnSparring command. W4_verify1 already accepted that as gameplay:g3 sim-half pass."
+  },
+  {
+   "id": "systems-09",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "`git diff 30744dd5 HEAD -- content/skins` shows only desc text: grey->gray, armour->armor, colours->colors and honour->honor in ardit, burdam, ervet, ilsheta, lisvel, rishal, sukri and vashil. No stat or other field changed, so cosmetics stay stat-free.\ncontent:check copy lint has no skin hit (the only warning is map_fray). `grep -rniE 'grey|armour|colour|honour|centre|favour' content/skins` finds none."
+  },
+  {
+   "id": "systems-10",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "catalog.ts:726 has AudioDef.ambience: z.record(Id, z.array({source, cue}.strict())).default({}). It is additive. content/audio.json still uses the events path, and src/audio does not read the new field yet; the handoff to the audio lane is correct.\ntypecheck 0, content:check OK, probe_content_* PASS.\nI did not re-run the probe_audio_listener seat-7 analysis. The engineer's YOU = 8 suggestion is an observation for the audio lane, not this item's criterion."
+  },
+  {
+   "id": "systems-11",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "catalog.ts:717 has MusicDef.pieces: z.array({at >= 0, file: AssetRef}.strict()).default([]). It is additive.\ncollectAssetRefs (build_content.ts:1016-1028) walks every 'assets/' string, so files in pieces are covered.\nThe audio engine still uses its own bed.pieces, built from layers (src/audio/index.ts:821). The move is handed off to the audio lane."
+  },
+  {
+   "id": "gameplay:g3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The sim and session half is present and verified: probe_sim_practice 39/39, with the same contract lines as systems-08.\nThe UI half is the client lane's file. src/ui/hud/panels.tsx:298 still sends only the 7 old actions, and no 'toggleWaves', 'teleport' or 'dummyStats' appears under src/ui. The client handoff that lists them is accurate."
+  },
+  {
+   "id": "gameplay:G6",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Games with no 90 s lull while 3+ seats are in, adept / veteran:\n- Seeds 1-100: 96/100 and 94/100 (v1_full1).\n- Seeds 21-120: 94/100 and 94/100 (v1_full21).\n- Unseen seeds 601-800: 190/200 and 187/200. The worst 100-seed window is 91/100 at both tiers (_harness/_reports/integ_systems_v1_fray_windows.txt).\nThe bar is 85 % on at least 100 games a tier (FRAY_MIN_GAMES = 100). That matches the fix hint, so the gate was not loosened.\nCode: match.ts noonTollSystem / noonTollOn, with the seats and quiet options. noonToll is set only in FRAY (modes.json:150), so RIFT and BRIDGE are byte-identical to before.\nprobe_sim_fray 34/34 includes the quiet and seats checks. Determinism PASS.\nFRAY length is still 9.4-9.7 min against the 8-11 min target."
+  },
+  {
+   "id": "gameplay:G9",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Pooled placement band (gate 3.5-7.5, at least 100 games a fighter, 16/16 fighters):\n- Seeds 1-100: lisvel 4.14 to odrum 6.82.\n- Seeds 21-120: burdam 4.19 to odrum 6.73.\n- Unseen seeds 601-800: lisvel 4.18 to sukri 6.76 (250 games each).\nHesmi is now 4.42 / 4.55 / 4.66, against 3.38 at verify2.\nThe weights are modes.json fighterWeights rishal taken 1.08, marund and hesmi taken 1.12, all within the ±25 % rule. ROSTER §2.3 and modes_economy.md state them."
+  },
+  {
+   "id": "systems-18",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "The claim's current figure is wrong. On seeds 1-20, HEAD buys 28/31 finished items. callstone, needlefall and watchbell are never bought: the same three, and the same 28/31 W4 verify2 flagged (fw_W4_soak_integ_systems_v1_full1.txt, and the engineers' own fw_W4_soak_integ_systems_full1.txt). Only seeds 21-40 reach 30/31 (callstone never bought; v1_full21).\nThe build-plan experiment that reached 31/31 is fully backed out (`git diff 34fd7185^ HEAD -- content/items.json src/sim` is empty).\nThe 80 % gate still passes, so this is a minor regression left as it was, not a blocker.",
+   "fixHint": "Make callstone, needlefall and watchbell each bought at least once on seeds 1-20 (back to 29/31 or more there, 31/31 ideally) without moving the near-limit gates. BRIDGE median must stay at 15 min or more (it is 15.5) and RIFT adept p90 at 32 min or less (it is 29.0). Change the bots' build plan, not item stats. Example: give needlefall and watchbell a situational slot (watchbell as the support answer only when 2+ burst threats exist, scored in src/sim/bots/knowledge.ts) and leave callstone's engage weight alone. The x1.06 Callstone weight is what slowed BRIDGE to 14.8 min in p2_final1. Re-run both full soaks."
+  },
+  {
+   "id": "lead-10",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The skip is justified. The item's own lane is 'lead', and server/room.ts is not in the systems lane's file list.\nThe handoff is accurate:\n- room.ts:197 still passes `protocol === 'draft' ? draftCfg?.bansPerTeam ?? 0 : 0`.\n- bansForRoster is exported at draft.ts:56.\n- local_session.ts:356-360 already uses bansForRoster(draft, pool.length).\nContent keeps bansPerTeam equal to the roster step (probe_sim_draft_pace: 'bansPerTeam 1 = bansForRoster(16) 1'), so nothing changes online yet."
+  }
+ ],
+ "regressions": []
+}
