@@ -102,11 +102,12 @@ e2e flow / practice / store, the 720 sweep, `perf_1080 --prod` (all presets), `v
 beat. It also closed the handoffs nobody took: the profile emblem survives a reload, the BRIDGE minimap's edge
 seam, Ervet's ult blade ghost at the blade's own size, the match LOD's UV weight (Burdam's pauldron roundel),
 the muffled ability hit, the RIFT Low flash (2.05x) and Tunlan's ult beat, and three world moments that had no
-look: the Noon Toll's light, the Dawn Seal's shatter at 7:00 and the Gorge Wind's gust.
+look: the Noon Toll's light, the Dawn Seal's shatter at 7:00 and the Gorge Wind's gust; the director also plays a
+trigger's own proc look (Resinburn's ignite).
 
-Performance: `perf_1080 --prod` holds 60 fps at High and Low (p95 16.8 ms, 0 dropped) and the whole-match peak
-is 479k triangles, 40 programs and 273 draws against the 500k / 40 / 450 budget
-(`_harness/_reports/integ_lead_perf_1080.json`).
+Performance: `perf_1080 --prod` holds 60 fps at High, Medium and Low (p95 16.8 ms, 0 dropped; Ultra, not gated,
+reads 49 fps) and the whole-match peak is 479k triangles, 40 programs and 273 draws against the 500k / 40 / 450
+budget; memory grows 1.4 % over 4 rebuilds (`_harness/_reports/integ_lead_final_perf_1080.json`).
 
 ## Open items (as of the run-2 gate; see `open_in` in the status record)
 
