@@ -12,7 +12,8 @@
 // The showcase (client F5): under the team draft's grid your hovered or locked fighter stands large — the painted plate,
 // name, title, class, role and kit — crossfading as you hover. Locking in strikes noon (VALE's own beat: the gnomon on
 // the plate's dial swings clockwise to 12, the ring closes, the plate comes up to full light) and the fighter's call
-// plays (UiSound.lockCall: the lockin role with the engine's AudioPort.fighterCall riding on it). A timeout lock gets the beat too.
+// plays (LockCall → UiSound.lockCall: the lockin role with the engine's AudioPort.fighterCall riding on it; on the screen, so
+// the last pick, which closes the board into Finalize, sounds too). A timeout lock gets the beat too.
 // Fit (client F9): the draft grid's cards are compact (class and role as marks on the portrait), finalize puts Hour
 // spells and boons behind tabs, and the seat's Bot chip rides the role line.
 // Music (audio AUD-m2): the draft bed hears the phase, whether you have to act, and the last
@@ -105,6 +106,7 @@ export function DraftScreen(): JSX.Element {
   return (
     <>
       <DraftMusic d={d} />
+      <LockCall d={d} view={view} />
       {view === 'team' ? <TeamDraft d={d} onLeave={leave} /> : null}
       {view === 'lot' ? <LotView d={d} onLeave={leave} /> : null}
       {view === 'ffa' ? <FrayPick d={d} onLeave={leave} /> : null}
@@ -119,6 +121,23 @@ function DraftMusic(p: { d: DraftState }): null {
   const m = draftMusicOf(p.d);
   useEffect(() => { sound.draftMusic(m); }, [m.phase, m.mine, m.urgent]);
   useEffect(() => () => sound.draftMusic(null), []);
+  return null;
+}
+
+/** the lock-in sound (audio AUD-1): the lockin role with the fighter's call riding on it (UiSound.lockCall), when the
+ *  session confirms your pick on a pick board (a press or the timer's own lock). It lives on the screen, not on the
+ *  board: the draft's last pick closes the board into Finalize in the same update, and that pick still sounds. The
+ *  Lot's draws and swaps are not a lock-in, and a screen that opens on a fighter already locked plays nothing. */
+function LockCall(p: { d: DraftState; view: View }): null {
+  const { sound } = useApp();
+  const locked = p.d.seats.find((s) => s.isYou)?.locked;
+  const prev = useRef<{ locked: string | undefined; view: View } | null>(null);
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = { locked, view: p.view };
+    if (!was || !locked || was.locked === locked || (was.view !== 'team' && was.view !== 'ffa')) return;
+    sound.lockCall(locked);
+  }, [locked, p.view]);
   return null;
 }
 
@@ -179,18 +198,16 @@ function TeamColumn(p: { d: DraftState; team: number; rel: 'ally' | 'enemy'; hid
   );
 }
 
-/** the lock-in beat: when the session confirms your lock (a press or the timer's own lock), the fighter's call plays
- *  and the showcase strikes noon for BEAT_MS. Returns whether the beat is running. */
+/** the lock-in beat: when the session confirms your lock (a press or the timer's own lock), the showcase strikes noon
+ *  for BEAT_MS (the sound is LockCall's, on the screen). Returns whether the beat is running. */
 const BEAT_MS = 1200;
 function useLockBeat(locked: string | undefined): boolean {
-  const { sound } = useApp();
   const prev = useRef(locked);
   const [beat, setBeat] = useState(false);
   useEffect(() => {
     const was = prev.current;
     prev.current = locked;
     if (!locked || was === locked) return;
-    sound.lockCall(locked);
     setBeat(true);
     const t = setTimeout(() => setBeat(false), reducedMotion.peek() ? 200 : BEAT_MS);
     return () => clearTimeout(t);
