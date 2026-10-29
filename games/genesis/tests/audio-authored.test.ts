@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AUTHORED, AuthoredMusic, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, weaveGains, FADE_IN, FADE_OUT, OVERRUN } from '../src/audio/authored.ts';
+import { AUTHORED, AuthoredMusic, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, weaveGains, FADE_IN, FADE_OUT, OVERRUN, HOLD_MAX } from '../src/audio/authored.ts';
+import { MATCH, gatedLoudness, lufsOf, matchTrim, type Trim } from '../src/audio/loudness.ts';
 import { MOTIF_HEAD, hasMotifHead, loopSeconds, melodiesOf, partsOf, stemsOf, STEMS, type Piece } from '../src/audio/score/motif.ts';
 import { TITLE } from '../src/audio/score/title.ts';
 import { ERAS } from '../src/audio/score/eras.ts';
@@ -218,4 +219,95 @@ test('the hand-over between a piece and the procedural score is slow and equal-p
   }
   assert.deepEqual(weaveGains(-1), weaveGains(0));
   assert.deepEqual(weaveGains(2), weaveGains(1));
+});
+
+test('loudness gating follows BS.1770: silent and far-quieter blocks do not drag a sparse score down (fix r3 #14)', () => {
+  const e = (lufs: number): number => 10 ** ((lufs + 0.691) / 10);
+  assert.ok(Math.abs(lufsOf(e(-23)) - -23) < 1e-9);
+  assert.equal(gatedLoudness([]), null);
+  assert.equal(gatedLoudness([0, 0, e(-80)]), null, 'all under the absolute gate');
+  const steady = Array.from({ length: 50 }, () => e(-24));
+  assert.ok(Math.abs(gatedLoudness(steady)! - -24) < 1e-9);
+  // a score that rests half its bars: the rests (silence, or 20 LU down) are gated out, the playing bars count
+  const sparse = [...steady, ...Array.from({ length: 50 }, (_, i) => (i % 2 ? 0 : e(-44)))];
+  assert.ok(Math.abs(gatedLoudness(sparse)! - -24) < 1e-9, `sparse ${gatedLoudness(sparse)}`);
+  // blocks 4 LU under the mean are within the relative gate and count
+  const mixed = [...Array.from({ length: 10 }, () => e(-20)), ...Array.from({ length: 10 }, () => e(-24))];
+  const want = lufsOf((e(-20) + e(-24)) / 2);
+  assert.ok(Math.abs(gatedLoudness(mixed)! - want) < 1e-9);
+});
+
+test('a piece is trimmed to arrive a little over the score it takes over from, within the review\'s 3 LU (fix r3 #14)', () => {
+  assert.ok(MATCH.over >= 0 && MATCH.over <= 2, `over ${MATCH.over} LU`);
+  // calibrated in the lab (src/audio/loudness.ts MATCH): the dry meter reads the rendered score within ~0.3 LU
+  assert.ok(Math.abs(MATCH.wet) <= 0.5, `wet ${MATCH.wet} LU`);
+  assert.ok(MATCH.secs >= 10 && MATCH.secs < HOLD_MAX, 'a town\'s score is measured within the first appearance\'s wait');
+  assert.deepEqual(matchTrim(null, 0.48), { trim: 0.48, measured: false, proc: null }, 'unmeasured: the fixed trim');
+  for (const proc of [-30, -27, -24, -21, -18]) {
+    const t = matchTrim(proc, 0.48);
+    assert.ok(t.measured);
+    const piece = MATCH.authored + 20 * Math.log10(t.trim);
+    const gap = piece - (proc + MATCH.wet);
+    assert.ok(Math.abs(gap - MATCH.over) < 1e-9, `score ${proc} LUFS: the piece sits ${gap.toFixed(2)} LU over it`);
+  }
+  // a near-silent score never makes the piece vanish; a loud one never pushes it past its mastered level
+  assert.equal(matchTrim(-60, 0.48).trim, MATCH.min);
+  assert.equal(matchTrim(-8, 0.48).trim, MATCH.max);
+  assert.ok(MATCH.max <= 1 && MATCH.min >= 0.1);
+  // the fixed fallbacks (a town not yet measured, the title's first appearance at the opening) stay in range
+  for (const p of Object.values(AUTHORED)) assert.ok(p.gain >= MATCH.min && p.gain <= MATCH.max, `${p.id} gain ${p.gain}`);
+});
+
+test('arriving at a town, its piece waits for the town\'s score to be measured, then plays at the matched trim; the title never waits', async () => {
+  const param = (): AudioParam => ({ value: 0, setTargetAtTime() { return this; }, cancelScheduledValues() { return this; } }) as unknown as AudioParam;
+  const node = (): Record<string, unknown> => ({ connect() {}, disconnect() {} });
+  const ctx = {
+    currentTime: 0,
+    createGain: () => ({ ...node(), gain: param() }),
+    createBufferSource: () => ({ ...node(), buffer: null, loop: false, loopStart: 0, loopEnd: 0, start() {}, stop() {} }),
+    decodeAudioData: () => Promise.resolve({ duration: 999 }),
+  } as unknown as BaseAudioContext;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) })) as unknown as typeof fetch;
+  const settle = async (): Promise<void> => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0)); };
+  try {
+    const town = scene({ town: 0.5, era: 'bronze' });
+    // not measured yet: the town's own score plays; after HOLD_MAX the piece comes in at its fixed trim
+    let measured = false;
+    const asked: string[] = [];
+    const trimFor = (piece: string): Trim => { asked.push(piece); return measured ? matchTrim(-26, AUTHORED[piece].gain) : matchTrim(null, AUTHORED[piece].gain); };
+    const m = new AuthoredMusic(ctx, node() as unknown as AudioNode);
+    m.update(town, 0, 1, trimFor);
+    await settle();
+    m.update(town, 1, 1, trimFor);
+    assert.equal(m.state().phase, 'idle', 'the stems are ready, yet the piece waits for the town\'s score');
+    m.update(town, HOLD_MAX - 1, 1, trimFor);
+    assert.equal(m.state().phase, 'idle');
+    m.update(town, HOLD_MAX + 0.1, 1, trimFor);
+    assert.equal(m.state().phase, 'play', 'the wait is bounded');
+    assert.deepEqual(m.state().trim, { trim: AUTHORED['era-bronze'].gain, measured: false, proc: null });
+    // measured: the piece starts as soon as the measurement is in, at the matched trim, held for the appearance
+    const m2 = new AuthoredMusic(ctx, node() as unknown as AudioNode);
+    measured = false;
+    m2.update(town, 0, 1, trimFor);
+    await settle();
+    m2.update(town, 5, 1, trimFor);
+    assert.equal(m2.state().phase, 'idle');
+    measured = true;
+    m2.update(town, 14, 1, trimFor);
+    assert.equal(m2.state().phase, 'play');
+    const t = m2.state().trim!;
+    assert.ok(t.measured && Math.abs(t.trim - Math.round(matchTrim(-26, 1).trim * 1000) / 1000) < 1e-9 && t.proc === -26, JSON.stringify(t));
+    measured = false;
+    m2.update(town, 30, 1, trimFor);
+    assert.deepEqual(m2.state().trim, t, 'never re-trimmed mid-appearance');
+    // the title opens the game: no wait, whatever the measurement
+    const m3 = new AuthoredMusic(ctx, node() as unknown as AudioNode);
+    m3.update(scene({ orbital: 1 }), 0, 1, trimFor);
+    await settle();
+    m3.update(scene({ orbital: 1 }), 0.5, 1, trimFor);
+    assert.equal(m3.state().piece, 'title');
+    assert.equal(m3.state().phase, 'play');
+    assert.equal(m3.state().trim?.trim, AUTHORED.title.gain);
+  } finally { globalThis.fetch = realFetch; }
 });

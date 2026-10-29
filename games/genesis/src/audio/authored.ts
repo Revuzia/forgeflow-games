@@ -15,6 +15,7 @@
 
 import type { AudioScene } from './scene.ts';
 import type { SimEvent } from '../sim/types.ts';
+import type { Trim } from './loudness.ts';
 
 export type StemRole = 'main' | 'day' | 'night' | 'tension';
 
@@ -28,11 +29,11 @@ export interface AuthoredPiece {
   /** seconds the procedural score plays between appearances */
   rest: number;
   /**
-   * Linear trim that sets the piece's loudness against the procedural score it alternates with (fix r3 #14): the
-   * stems are mastered to about -16 LUFS, the procedural score plays far below that, so at gain 0.85 a piece came in
-   * 8-12 LU louder than the music it took over from. Measured through the real engine at 1x (lab weave renders,
-   * ffmpeg ebur128, gated): the trims put each piece about 1 LU over its procedural score (tests/audio-authored.test.ts
-   * pins them to those measurements).
+   * Fallback linear trim, used when the score a piece takes over from has not been measured yet (the title's first
+   * appearance as the game opens; a town after HOLD_MAX). Every other appearance takes the trim matched to the
+   * metered loudness of that score (loudness.ts, fix r3 #14: a fixed trim was 6 LU under one town's score and 9 LU
+   * over another's). These fallbacks were measured through the real engine at 1x against a bronze town and the
+   * orbital score (lab weave renders, ffmpeg ebur128): about 1 LU over.
    */
   gain: number;
 }
@@ -183,6 +184,12 @@ export const FADE_OUT = 10;
  * quiet intro of the next pass (where the folded reverb tail plays out).
  */
 export const OVERRUN = 8;
+/**
+ * At a town the first appearance waits (at most this many seconds) until the town's own score has been heard long
+ * enough to measure (loudness.ts): the town's tune first, then the theme, at a level matched to it. The title theme
+ * never waits (it opens the game).
+ */
+export const HOLD_MAX = 30;
 
 /**
  * Which authored piece the scene calls for (null: the procedural score alone). `current` (the piece playing or resting)
@@ -265,8 +272,10 @@ class Voice {
   private readonly ctx: BaseAudioContext;
   readonly fader: GainNode;
   private readonly stems = new Map<StemRole, { src: AudioBufferSourceNode; g: GainNode }>();
-  constructor(ctx: BaseAudioContext, dest: AudioNode, piece: AuthoredPiece, bufs: Map<StemRole, AudioBuffer>, when: number) {
-    this.ctx = ctx; this.piece = piece;
+  /** this appearance's trim (loudness.ts matchTrim, else the piece's fixed gain), held for the whole appearance */
+  readonly trim: number;
+  constructor(ctx: BaseAudioContext, dest: AudioNode, piece: AuthoredPiece, bufs: Map<StemRole, AudioBuffer>, when: number, trim = piece.gain) {
+    this.ctx = ctx; this.piece = piece; this.trim = trim;
     this.fader = ctx.createGain();
     this.fader.gain.value = 0;
     this.fader.connect(dest);
@@ -284,7 +293,7 @@ class Voice {
     }
   }
   set(level: number, stems: Record<StemRole, number>, now: number): void {
-    this.fader.gain.setTargetAtTime(level * this.piece.gain, now, 0.25);
+    this.fader.gain.setTargetAtTime(level * this.trim, now, 0.25);
     for (const [role, s] of this.stems) s.g.gain.setTargetAtTime(stems[role], now, role === 'tension' ? 1.2 : 2.5);
   }
   stop(now: number): void {
@@ -297,6 +306,8 @@ class Voice {
 
 export interface AuthoredState {
   piece: string | null; phase: Weave['phase']; level: number; ready: string[]; failed: string[];
+  /** the playing appearance's trim, whether it was matched to a measured score, and that score's LUFS */
+  trim: Trim | null;
   /** stingers decoded, and the last one played (with its audio-clock time) */
   stingers: { ready: StingerId[]; last: StingerId | null; at: number; played: number };
 }
@@ -308,6 +319,10 @@ export class AuthoredMusic {
   private readonly pending = new Set<string>();
   private w: Weave = idleWeave();
   private voice: Voice | null = null;
+  private trimNow: Trim | null = null;
+  /** the piece the scene has wanted since `wantSince` (the first appearance's hold at a town) */
+  private wanted: string | null = null;
+  private wantSince = 0;
   private level = 0;
   private tension = 0;
   private lastNow = 0;
@@ -404,18 +419,24 @@ export class AuthoredMusic {
    * calm bed's level, so a piece and the procedural score keep the balance their trims set at every speed).
    * Returns how much of the music the authored piece holds now (0..1, its share: weaveGains turns it into the faders).
    */
-  update(scene: AudioScene | null, now: number, master: number): number {
+  update(scene: AudioScene | null, now: number, master: number, trimFor?: (piece: string) => Trim): number {
     const dt = Math.max(0, Math.min(0.5, now - this.lastNow));
     this.lastNow = now;
     this.loadStingers();
     let want = pieceFor(scene, this.w.piece);
     if (want && this.failed(want)) want = null;
+    if (want !== this.wanted) { this.wanted = want; this.wantSince = now; }
     const bufs = want ? this.ready(want) : null;
-    const next = weave(this.w, want, now, !!bufs);
+    // arriving at a town, its piece waits for the town's score to be measured (HOLD_MAX at most); a return after a
+    // rest needs no wait (the rest measured it)
+    const hold = !!want && want !== 'title' && !!trimFor && (this.w.piece !== want || this.w.phase === 'idle') && now - this.wantSince < HOLD_MAX && !trimFor(want).measured;
+    const next = weave(this.w, want, now, !!bufs && !hold);
     if (next.phase === 'play' && (this.w.phase !== 'play' || this.w.since !== next.since)) {
-      // a new appearance: start the stems together at the loop's top
+      // a new appearance: start the stems together at the loop's top, at a trim fixed for the whole appearance
       this.voice?.stop(now);
-      this.voice = bufs ? new Voice(this.ctx, this.dest, AUTHORED[next.piece!], bufs, now + 0.05) : null;
+      const piece = AUTHORED[next.piece!];
+      this.trimNow = trimFor ? trimFor(piece.id) : { trim: piece.gain, measured: false, proc: null };
+      this.voice = bufs ? new Voice(this.ctx, this.dest, piece, bufs, now + 0.05, this.trimNow.trim) : null;
       if (this.voice) this.release(next.piece);
     }
     this.w = next;
@@ -424,7 +445,7 @@ export class AuthoredMusic {
     this.tension += (target - this.tension) * (1 - Math.exp(-dt / (target > this.tension ? 1.5 : 8)));
     this.level = weaveGains(weaveLevel(this.w, now)).authored * Math.max(0, Math.min(1, master));
     if (this.voice) {
-      if (this.w.phase !== 'play' && this.level <= 0) { this.voice.stop(now); this.voice = null; }
+      if (this.w.phase !== 'play' && this.level <= 0) { this.voice.stop(now); this.voice = null; this.trimNow = null; }
       else this.voice.set(this.level, stemLevels(scene, this.tension), now);
     }
     return this.voice ? weaveLevel(this.w, now) : 0;
@@ -444,6 +465,7 @@ export class AuthoredMusic {
     }
     return {
       piece: this.w.piece, phase: this.w.phase, level: Math.round(this.level * 1000) / 1000, ready, failed,
+      trim: this.trimNow && { trim: Math.round(this.trimNow.trim * 1000) / 1000, measured: this.trimNow.measured, proc: this.trimNow.proc == null ? null : Math.round(this.trimNow.proc * 10) / 10 },
       stingers: { ready: [...this.stingBufs.keys()].sort(), last: this.lastSting.id, at: this.lastSting.at, played: this.lastSting.played },
     };
   }

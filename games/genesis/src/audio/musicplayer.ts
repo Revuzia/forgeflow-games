@@ -14,7 +14,8 @@ import { barSeconds, composeBar, describeStyle, orbitalStyle, styleFor, type Mus
 import { buffersFor, playNote, type NoteCtx } from './instruments.ts';
 import type { BufferBank } from './bank.ts';
 import { Knob } from './synth.ts';
-import { AuthoredMusic, weaveGains, type AuthoredState, type StingerId } from './authored.ts';
+import { AUTHORED, AuthoredMusic, weaveGains, type AuthoredState, type StingerId } from './authored.ts';
+import { MATCH, ProcMeter, matchTrim, type Trim } from './loudness.ts';
 
 const LOOKAHEAD = 0.6;
 const MAX_POLY = 32;
@@ -61,6 +62,8 @@ export class MusicPlayer {
   private bar = 0;
   private nextBar = -1;
   get barIndex(): number { return this.bar; }
+  /** the fader's current value (its automation, not the target) */
+  get level(): number { return this.fader.gain.value; }
   private live: number[] = [];
   /** current fader target and when it last was non-zero */
   target = 0;
@@ -164,6 +167,8 @@ export interface MusicState {
   /** 0..1 how calm the procedural bed plays (paceCalm of the sim speed, smoothed) and the speed it follows */
   calm?: number;
   speed?: number;
+  /** the procedural scores' metered loudness (LUFS at their nominal faders) and seconds measured (loudness.ts) */
+  proc?: { key: string; lufs: number | null; secs: number }[];
 }
 
 export class MusicDirector {
@@ -179,6 +184,10 @@ export class MusicDirector {
   private styles = new Map<string, MusicStyle>();
   /** the authored pieces, woven with the procedural players (they take what the authored piece leaves) */
   private readonly authored: AuthoredMusic;
+  /** the players' sum, metered while it holds the music alone: the pieces' trims are matched to it (loudness.ts) */
+  private readonly meter: ProcMeter;
+  /** the score a piece would take over from now: the nearest town's key ('orbital' for the title) */
+  private context: string | null = null;
 
   /** styles are pure functions of the culture: cache them by everything styleFor reads */
   private styleOf(c: MusicCandidate['culture']): MusicStyle {
@@ -196,7 +205,18 @@ export class MusicDirector {
   constructor(ctx: BaseAudioContext, bank: BufferBank, dest: AudioNode, wet: AudioNode | null, r: () => number, stingDest?: AudioNode) {
     this.ctx = ctx; this.bank = bank; this.dest = dest; this.wet = wet; this.r = r;
     this.authored = new AuthoredMusic(ctx, dest, stingDest);
+    this.meter = new ProcMeter(ctx, dest);
   }
+
+  /**
+   * The trim for a new appearance of `piece` (fix r3 #14): matched to the loudness metered for the score it takes
+   * over from (the title: the orbital score; an era piece: the nearest town's), else the piece's fixed trim.
+   */
+  readonly trimFor = (piece: string): Trim => {
+    const key = piece === 'title' ? 'orbital' : this.context;
+    const m = key ? this.meter.loudness(key) : null;
+    return matchTrim(m && m.secs >= MATCH.secs ? m.lufs : null, AUTHORED[piece]?.gain ?? 0.5);
+  };
 
   /** play an authored stinger (authored.ts); true when it sounds (the caller ducks the music under its phrase) */
   sting(id: StingerId, now: number): boolean { return this.authored.sting(id, now); }
@@ -234,7 +254,8 @@ export class MusicDirector {
     const calmGain = 1 - (1 - CALM_TRIM.gain) * this.calm;
     // the authored piece's share of the music; both layers take the calm's level trim, and the procedural players fade
     // by the equal-power complement of the piece (authored.ts weaveGains)
-    const aw = this.authored.update(scene, now, this.master * calmGain);
+    this.context = scene?.music[0]?.key ?? null;
+    const aw = this.authored.update(scene, now, this.master * calmGain, this.trimFor);
     const rest = weaveGains(aw).procedural;
     const wanted = new Map<string, { gain: number; pan: number; far: number; style: () => MusicStyle }>();
     let loudest = 0;
@@ -258,7 +279,7 @@ export class MusicDirector {
       let p = this.players.get(key);
       const style = w.style();
       if (!p) {
-        p = new MusicPlayer(this.ctx, this.bank, this.dest, this.wet, key, style, this.r);
+        p = new MusicPlayer(this.ctx, this.bank, this.meter.input, this.wet, key, style, this.r);
         this.players.set(key, p);
       } else p.restyle(style);
       p.update(now, w.gain * (key === 'orbital' ? ORBITAL_GAIN : TOWN_GAIN) * calmGain * this.master * rest, w.pan, w.far, this.calm);
@@ -268,6 +289,22 @@ export class MusicDirector {
       p.update(now, 0, 0, 1, this.calm);
       if (now - p.lastHeard > 6) { p.dispose(); this.players.delete(key); }
     }
+    if (aw <= 0) this.measure(now);
+  }
+
+  /**
+   * Meter the procedural score while it holds the music alone: a reading counts for the loudest player when it carries
+   * nearly all of the sum (one town, or the orbital score: not two towns at once) and has played past its sparse
+   * intro bars; it is normalised by the players' faders relative to their nominal levels (TOWN_GAIN / ORBITAL_GAIN).
+   */
+  private measure(now: number): void {
+    let u2 = 0, top: MusicPlayer | null = null, topU = 0;
+    for (const p of this.players.values()) {
+      const u = p.level / (p.key === 'orbital' ? ORBITAL_GAIN : TOWN_GAIN);
+      u2 += u * u;
+      if (u > topU) { topU = u; top = p; }
+    }
+    if (top && topU > 0.1 && topU * topU >= 0.8 * u2 && top.barIndex >= 3) this.meter.sample(top.key, u2, now);
   }
 
   stop(): void {
@@ -283,6 +320,6 @@ export class MusicDirector {
       players.push({ key: p.key, gain: Math.round(p.target * 1000) / 1000, style: p.describe(), bar: p.barIndex });
       if (p.target > bg) { bg = p.target; best = `${p.key} · ${p.describe()}`; }
     }
-    return { culture: best, players, authored: this.authored.state(), calm: Math.round(this.calm * 1000) / 1000, speed: this.speed };
+    return { culture: best, players, authored: this.authored.state(), calm: Math.round(this.calm * 1000) / 1000, speed: this.speed, proc: this.meter.state() };
   }
 }
