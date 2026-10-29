@@ -98,9 +98,9 @@ then `audio/out/` (`assets/audio/x.ogg` → `audio/out/x.ogg`); see the header o
 for every published content change. Check a name against the originality deny-list with
 `node tools/names_check.ts "Some Name"`; rejected names are logged in `_design/NAMES_NOT_USED.md`.
 
-While fighter, skin and monster art is still being made, the build fails on the missing asset files.
-Add `--allow-missing-assets` (`npm run content -- --allow-missing-assets`) to report them as
-warnings and leave those refs as they are.
+Every asset the catalog references now exists, so the strict build passes (`npm run content:check`:
+0 warnings, 2026-10-29). While new art is still being made, add `--allow-missing-assets`
+(`npm run content -- --allow-missing-assets`) to report missing files as warnings and leave those refs as they are.
 
 ## Run in development
 
@@ -126,6 +126,7 @@ npm run preview                 # http://localhost:5191, also serves /catalog/* 
 npm run build && npm run content && npm run package     # → deploy/ (= dist/ + dist-catalog/ as deploy/catalog/)
 ```
 
+Nothing is uploaded or published until the owner gives the release go-ahead (`HANDOFF.md`).
 `deploy/` is what the R2 uploader ships. `tools/package_deploy.ts` refuses to assemble it if
 `index.html` is missing, source maps slipped in, or a catalog does not match its manifest hash.
 
@@ -153,9 +154,9 @@ node _harness/perf_1080.mjs     # frame times at 1920×1080 per quality preset (
 A probe is a standalone `node _harness/probe_<name>.ts`: exit 0 = PASS, 77 = SKIP (with a reason),
 anything else = FAIL. Engine probes use synthetic fixtures under `_harness/fixtures/` (placeholder
 `fx_*` ids); the content probes (`probe_items`, `probe_kits_A`, `probe_kits_B`, `probe_maps`,
-`probe_content_ids`) also read the real `content/` records. Until the remaining art lands,
-`npm run content:check` (and so `npm run check`) fails on missing asset files; run
-`node tools/build_content.ts --check --allow-missing-assets` instead.
+`probe_content_ids`) also read the real `content/` records. If a lane is mid-way through new art,
+`npm run content:check` (and so `npm run check`) fails on its missing asset files; run
+`node tools/build_content.ts --check --allow-missing-assets` to see everything else.
 
 ## Layout and ownership
 

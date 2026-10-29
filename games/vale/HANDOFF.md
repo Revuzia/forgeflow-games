@@ -1,175 +1,196 @@
-# VALE — handoff and resume guide (2026-10-13)
+# VALE — handoff and resume guide (2026-10-29)
 
-Read this first when resuming VALE in any session, whether the cloud container or the owner's PC.
-Branch: `claude/youthful-ramanujan-gdud5w`. Spine: `_spec/CONTRACT.md`. Look and feel:
-`_design/STYLE_BIBLE.md` (law). World and names: `_design/WORLD.md`. Asset paths and ids:
-`_design/VOCAB.md`.
+Read this first when you resume VALE in any session. Branch: `claude/youthful-ramanujan-gdud5w`.
+Spine: `_spec/CONTRACT.md` (layout §1, lane ownership §14). Look and feel: `_design/STYLE_BIBLE.md` (law).
+World and names: `_design/WORLD.md`. Asset paths and ids: `_design/VOCAB.md`. What VALE is and why:
+`_design/DESIGN_NOTE.md`. Names VALE chose not to use: `_design/NAMES_NOT_USED.md`.
 
-## Where every lane stands
+## What VALE is
 
-| Lane | State | Proof |
+VALE is an original 3D lane-brawler for Forgeflow Games, set on a great carved sundial whose needle fell.
+Aubade (west, chalk and dawnglass) and Serenade (east, ironstone and lampresin) fight over the stopped hours.
+There are 16 fighters in six classes and three modes. RIFT is 5v5 on three roads, about 25 minutes. BRIDGE
+is 5v5 on one road over a gorge, with fighters dealt by lot. FRAY is a ten-fighter free-for-all of about
+10 minutes. Bots fill every empty seat, and there are practice and custom games and an online server.
+
+The stack is a Three.js WebGL2 client with Preact signals for the UI, a zod content catalog that ships
+apart from the client, and a deterministic 30 Hz sim. 3D art is procedural Blender (Art 2.0), audio is
+synthesized with numpy, and the painted 2D is generated from VALE's own prompts.
+
+The catalog holds 16 fighters, 48 skins, 57 items, 8 Hour spells, 9 boons, 24 unit types, 3 maps,
+3 modes, 8 queues and 1,536 UI strings. `npm run content:check` passes strict with 0 warnings
+(2026-10-29).
+
+## Rules every session follows
+
+- **Originality.** League of Legends is only a gauge of quality and polish. Never copy a LoL champion,
+  ability, item, effect, icon, UI layout, rule, number or name. Every fix is VALE's own
+  (`STYLE_BIBLE.md`, `WORLD.md`). Check new names with `node tools/names_check.ts "Name"` (`--prose` for
+  copy). Never save a LoL image into the repo, and never download video.
+- **Sensitivity (blocker class).**
+  - No tall, pointed or conical hoods.
+  - No mask or face that reads as horror, a hockey mask, a plague-doctor beak or a blank mannequin.
+  - Wicks have no face: no eye-like light pair and no mouth.
+- **Owner rulings** (`_design/reviews/fixwaves/owner_rulings.md`) are binding. The owner delegated these
+  calls: decide by industry standard and record the call there. Nothing is pending owner input.
+- **No deploy.** No Cloudflare, no upload and no publishing of any kind until the owner gives the release
+  go-ahead. Work goes to git only. `npm run package` may assemble `deploy/` locally, but nothing ships.
+- **Secrets.** Never print, echo or log a key or token. Images go through `tools/imagegen/run_xai.py`,
+  which reads its key itself. `npm run secrets` (`tools/secret_scan.ts`, binary files included) runs
+  inside `npm run check`.
+- **Code.**
+  - Erasable TypeScript only: no enum, namespace, parameter properties or decorators.
+  - The sim is deterministic: no `Math.random`, `Date` or wall clock in `src/sim`; use the sim's RNG.
+  - Sim and presentation stay separate.
+  - No content ids hard-coded in `src/` (`probe_content_ids`).
+  - Cosmetics never change stats (`probe_sim_skin_neutral`).
+- **Machine (10-core / 16 GB Mac, shared by parallel agents).**
+  - Blender, harness Chrome (`_harness/pw.mjs`) and three_snapshot share 3 machine-wide heavy slots
+    (`/tmp/vale_heavy`). "[heavy] ... waiting" is normal: wait, and never kill or bypass the queue.
+  - Run ad-hoc heavy commands through `python3 art/blender/common/heavy.py run -- <cmd>`.
+  - Run at most 3 node sim processes at once.
+  - Long runs go in the background with a log and a bounded poll.
+  - Reap orphans after a kill: `tools/reap_orphans.sh`.
+- **Git.**
+  - In a multi-lane run, commit only your own paths and push.
+  - Never force-push, stash, restore or reset other lanes' files.
+  - `tools/wip_sync.sh` makes a "vale wip sync" safety commit every 20 minutes in long sessions.
+
+## Where it stands (2026-10-29)
+
+The final LoL-parity review (2026-10-28, gauge only) scored combat 6, HUD 7, environment 6.5, performance 6.5,
+client 5.5, audio 4, originality 5 and gameplay 4. It found 8 blockers, 33 majors and 51 polish items:
+`_design/reviews/final_parity_review.md` and `final_parity_open.json`. Six fix waves and two integration
+runs followed.
+
+**The status record is `_design/reviews/final_parity_open.json`.** Every finding and polish item carries
+`status`, `status_evidence`, `status_history` and, while open, `open_in`. Each wave carries `done_status`.
+`verifier_open` lists leftovers that are not findings, and `observations` holds open notes. The status is
+as of the run-2 start:
+- all 8 blockers and all 33 majors are done;
+- 35 polish items are done and 9 are done but unverified;
+- 7 are partly done, and their open halves are run-2 items.
+
+| Wave | Verdict | Notes |
 |---|---|---|
-| Research | Done: 11 cited notes + protected-names registry (3,590 names) | `_design/research/` |
-| Style bible, world, tokens | Done ("The Stopped Dial") | `_design/STYLE_BIBLE.md`, `WORLD.md`, `tokens.json` |
-| Content | Done: 16 fighters / 48 skins / 39 items / 8 spells + 9 boons / 24 units / 3 maps / 3 modes / 8 queues / store / client / 1,371 strings; catalog builds clean, assets pending | `node tools/build_content.ts --check --allow-missing-assets` |
-| Sim (deterministic, Rift/Bridge/Fray rules, practice) | Done + reviewed | `node _harness/run_probes.ts` |
-| Session (queue, ready check, draft/Lot/pick, match host, grants, Glicko-2, store, equip, profile) | Done | `probe_session_*` |
-| Bots (utility AI + draft brain) | Built; its own probes and review still to do | `src/sim/bots/`, `probe_session_botslane` |
-| Renderer (post stack, sky, fog of war, actors, overlay, menu scene) | Core done; typecheck clean at last full run | `_harness/web/render_bench.html` |
-| VFX engine v2 + bespoke effects | Done: v2 runtime (post pass, soft depth), 50 lib_* + bespoke effects for all 16 fighters (162 defs in content/vfx.json); passives fire on the sim `proc` event | `node _harness/vfx_gallery.mjs <prefix>` |
-| Client UI (15 screens, components) | Done to first pass | `npm run dev` → http://localhost:5190 |
-| HUD + input + end-to-end flow | Done: DONE journey passes in real Chrome (RIFT, BRIDGE, FRAY, shop buy + equip) | `node _harness/e2e.mjs all` |
-| Audio (numpy synthesis + WebAudio engine) | Done: 91 cues + 7 beds (3 with combat layers) + 3 stings, Ogg Opus; runtime with event roles in `audio.events` | `audio/build.py`, `audio/build_music.py` |
-| Art pipeline v1 (rig, clips, bake, export, parts library, template) | Done, but the owner rejected the mannequin look | `art/README.md` |
-| Art 2.0 characters: SDF-sculpted volumes fitted to the concept sheet, base colour = the concept painting projected occlusion-aware onto the game mesh | Marund DONE as a full fighter, AWAITING OWNER SIGN-OFF (`art/renders/_art2/marund_signoff.jpg`); 15 fighters to go | `python3 art/build.py fighter marund --no-skins` |
-| Skies (4) + locked LUT grade | Done | `art/out/maps/*/sky.hdr`, `art/out/grade/` |
-| Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Done: 202 images (Grok in Chrome + xAI API for the last 14) | `tools/imagegen/README.md` |
-| Units, structures, monsters, map scenes, menu scene (Blender) | Done: structures, Wicks, pickups/ward/post, scatter props, 18 landmarks on all 3 maps, menu painted set, all 10 monsters (`creatures.py`, `creatures_b.py`) and every unit icon | `art/blender/{units,props,maps}/`, `_harness/shot_map.mjs --nofog --at x,y` |
-| Design note, names-not-used doc, README, game_meta, thumbnail | Done (`_design/DESIGN_NOTE.md`, `_design/NAMES_NOT_USED.md`, `public/game_meta.json`); 1080p60 check done | `_harness/perf_1080.mjs` |
+| W1 engine (render, VFX, perf, build hygiene) | pass, round 2 | Cones fill correctly, recall VFX holds, one ult beat per cast, dynres and leak gates hold, and the key is out of git. |
+| W2 client front door and HUD | pass, round 2 | Sensitive art repainted, nav after a dodge, 720p sweep clean, icon families, and the ledger re-renders only on change. |
+| W3 audio | pass, round 2 | Team-private pings, kit identity gates (>= 8 dB), enemy T3 wind-up swell, ambience bus. Three kit-hit regressions were re-confirmed in run 2. |
+| W4 gameplay, bots and systems | round 2 failed done:5 only; closed in integration run 1 | Bot laning gates, Dawn Seal, the BRIDGE pacing and the systems re-key (owner ruling 4, `probe_sim_rekey` 10 % gate). |
+| W5a world art | pass, round 2 | Thickets clear of structures, Art 2.0 landmarks, dressed off-map skirts at about 13k tris, and Longshade without tears. |
+| W5b character art | round 2 failed on W2 CSS handoffs; closed in integration run 1 | Face chips (min pair 59.5 at 26 px), dusk plates, Odrum amber mask, Rishal accent, Burdam pauldron. |
 
-Typecheck, content check (`--allow-missing-assets` until the remaining fighters/monsters land) and all 37 probes are green.
+Integration run 1 (`fixwaves/integration_plan.json`, verdicts `fixwaves/integ_<lane>_verify<n>.json`):
 
-## Owner's quality bar (2026-10-13)
+| Lane | Verdict |
+|---|---|
+| chars | Partly, on one item. Per-fighter budget and LOD1 recipe met, but the renderer does not draw LOD1 yet, so the match peak is 1,031,094 tris against a 500k budget. Moved to engine-lod in run 2. |
+| client | Pass, round 2. 18 new item paintings passed sensitivity on the second grade. |
+| engine | Partly. 14 of 15 items pass. combat:F4's lift cap drops the value_probe RIFT Low flash to 1.94x (gate >= 2.0x). |
+| lead | Pass. obs-01 and the lead-02 doc gap were fixed in run 2. |
+| systems | Pass. Veteran beats novice 39/40 and 38/40 and adept 34/40 and 32/40; FRAY G6 and G9 hold. systems-18 failed. |
+| world | Pass, except world-05 (minimap padding skipped on a false premise). |
+| audio | Never verified, because its verifier stalled. Run 2 re-confirms every claim (audio-r1-confirm). |
 
-The owner compared the current characters, scenery, menus and copy with League of Legends and
-found them well short. Goals:
+**Integration run 2** (`fixwaves/integration_plan_run2.json`) is in progress across lanes engine, client,
+audio, world, chars, systems and lead. Its commits are titled `vale integ <lane>: ...` and its verdicts
+will be `fixwaves/integ_<lane>_verify<n>.json`.
 
-- **3D characters:** Art 2.0 in Blender, no external 3D generators. Hero-quality sculpted forms,
-  real cloth folds, and hand-painted baked textures.
-- **Spell VFX:** quality on par with top shipped lane-brawlers, but 100% original in look.
-- **Menus:** painted art, motion, and rich copy.
-- **Scenery:** painted terrain, landmarks and lighting.
+Performance: `perf_1080 --prod` holds 60 fps at High and Low (p99 16.8 ms,
+`_harness/_reports/integ_world_ver1_perf_1080.json`). The whole-match peak of 1.03 M triangles and 41
+programs fails the 500k / 40 budget (`integ_engine_v1_perf_1080.json`), and the fighter LOD port fixes it.
 
-Originality rules still hold: nothing copied from any game.
+## Open items (as of this refresh; see `open_in` in the status record)
 
-## Resume order (each step leaves the tree typechecking and probes green)
-1. Fix the paused typecheck errors, then finish the HUD, input and end-to-end flow. Done means
-   Play → queue → draft → match → postgame → shop → equip works in the browser for RIFT, BRIDGE
-   and FRAY.
-2. Finish the VFX engine and gallery, then rewrite the `lib_*` presets. After that, write bespoke
-   VFX for every ability: 16 fighters × 5.
-3. Prove Art 2.0 on Marund and get the owner to sign off on the side-by-side comparison. Then roll
-   it out to the 15 remaining fighters and 45 skins.
-4. Run the image pack (`tools/imagegen/README.md`) and wire the icons, key art and terrain
-   textures in.
-5. Build units, structures, monsters and the 3 map scenes plus the menu scene with Art 2.0 methods
-   and the painted textures.
-6. Audio: render every cue and music bed, then build the runtime engine.
-7. Copy pass: ability tooltips with keyword and scaling highlighting, lore, home and store copy.
-8. Write the design note, the names-not-used doc, README, game_meta.json and the thumbnail.
-   Then run the full end-to-end play-through and review, and push.
+**Major (run 2):**
+- engine-lod: draw the authored fighter LOD1 in the main pass. Target match peak <= 500k tris and <= 40
+  programs (PERF-m5, lead:fighter-tris).
+- world-pad, world-05 and client-hud3: pad the RIFT minimap so both plaza discs fit (HUD-3).
+- systems-r2-icons and hud:HUD-1-seam: point the 18 new items at their own paintings.
+- audio-r1-confirm: re-measure the run-1 audio claims (AUD-4 contact, kit-hit soft top, hit-sfx semantics,
+  dash spread).
 
-## Art 2.0 method (proved on Marund, 2026-10-14)
-1. Concept sheet (front + back, painted) -> projection plates: `python3 art/tools/concept_plates.py <id>
-   --height <m> [--erase-saturated-above <m>]` (repo venv: numpy, Pillow, scipy). Writes
-   `art/.cache/concept/<id>_{front,back}.png` + `_plates.json`. Erase details the model builds as
-   geometry (Marund's painted gem rings -> real windows).
-2. Fit the forms on a 10 cm grid over the concept and write `art/blender/fighters/<id>.py`: numpy SDF
-   parts (`common/hifi/sdf.py`), one Part per binding, a rig fitted to the anatomy, `PROJECTION = {...}`.
-   Check the fit with the silhouette overlay (see `art/blender/proto/marund_v2.py`, the proof script).
-3. Near-flat tops that the game camera sees (a cap crown) get a top plate (`proto/marund_cap_top.py`).
-4. `python3 art/build.py fighter <id> --no-skins --clip-sheet` with PATH incl. /opt/homebrew/bin and
-   CHROME=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome. Gates: three load test OK,
-   <= 1.2 MB, accent 2-6 %, facing +Z. Copy `art/out/fighters/<id>/art.json` into the content `art`.
-5. Skins: palette swaps cannot repaint a painting; each skin needs its own painted concept (Grok/xAI)
-   and the same projection. Splashes: the pipeline's splash works but its backdrop is procedural;
-   composite over the painted backdrops (`art/out/backdrops/`) instead.
+**Minor (run 2):**
+- combat:F4: the VFX lift cap against the flash gate.
+- originality F6 wording leftovers: client-r1h-12, engine-index-comment, systems-setup-wording, plus the
+  comment handoffs from lead-02.
+- originality F8 UI half: client-r2-08.
+- Practice panel UI (g3): client-1b-16 and client-r2-07.
+- Profile emblem and nod wiring: client-1b-14 and client-1b-15.
+- e2e store journey (wallet 598 against a 600 skin).
+- systems-18: callstone, needlefall and watchbell are never bought by bots.
+- W4 copy and VFX/audio follow-ups for Dawn Seal, Gorge Wind, Noon Toll and the Lot.
 
-## Session log: owner's Mac, 2026-10-14
-- Later on 10-14: bespoke VFX for all 16 fighters committed; passives show via a presentation-only sim
-  `proc` event (CONTRACT §5.1). Landmarks: `art/blender/maps/landmarks.py` (18 GLBs) placed by the renderer
-  from `map.art.terrain.landmarks[].model` on the ground there (cliff tops, the rim), scatter kept out of
-  their footprint, a landmark covering a whole wall polygon replaces its block; numerals laid back 52 deg to
-  read from the camera. Fallen Shaft water and the Standing Shadow pit re-surfaced. Audio cue ids moved out
-  of `src/` into `audio.events` (probe_content_ids was failing). 14 more painted icons via xAI (Ervet's hilt
-  form, monster abilities). Tooltip keywords highlighted. Monsters: an agent is building the four quadruped
-  camps (`art/blender/units/creatures.py`, progress in `art/renders/units/_creatures_progress.md`).
-- Step 4 engine: the v2 VFX runtime (src/render/vfx/system.ts) replaces v1; VFX draw in a post pass after AO
-  (soft depth, bloom, grade); the content build validates the v2 vocabulary (CONTRACT §9.5); authoring kit
-  tools/vfx/ (vfxkit.py, lib_defs.py = the 50 lib_*, bespoke/<fighter>.py, build_vfx.py → content/vfx.json);
-  gallery: node _harness/vfx_gallery.mjs [prefix] (contact sheets at the real camera).
-- Step 5 so far: painted terrain textures + vertex-painted scatter props (art/blender/props/scatter.py), the
-  five structures (art/blender/units/structures.py), the four Wicks on the fighter pipeline
-  (art/blender/units/wicks.py, spec.KIND), the menu's painted set (client.menuScene.backdrop) with a live 3D
-  showcase on a plinth. Still to do: monsters (10), pickups/ward/sparring post, map landmarks (Glass Belfry,
-  Lamp Dome, numerals, noon stone, fallen drum), the Blender menu scene.
-- Step 6 runtime: src/audio/index.ts (WebAudio engine; silent until cues render). Still to do: the 94 cue
-  recipes + 6 beds (audio/cuelib.py, bedlib.py exist; no cue is defined yet) and an audio build → audio/out.
-- Step 1 DONE: the HUD stylesheet leaked into the menus (`.shop`/`.score`/`.hrow`/`.stile` clashed with
-  the Shop and post-game screens) -> HUD classes renamed; full e2e PASS (rift/bridge/fray/store);
-  menus get an ink scrim over the live scene.
-- Art 2.0 proved on Marund end to end (sculpt, projection paint, rig, 15 clips, GLB 1.16 MB, in game).
-- Next: owner sign-off on Marund -> roll out to the other 15 fighters (+ skin concepts), then VFX
-  (step 4), map scenes + menu scene (step 5: the placeholder low-poly scenery is now the weakest read).
+**Observation, not in any plan.** The first team to take Longshade wins almost every RIFT bot game: 46/46,
+46/47 and 61/62 in the HEAD soaks, and 34/35 in W4's run. It closes games a median 1-2 minutes later, and
+the taker was usually already ahead. It is the deciding lever for tier separation and probably too strong.
+Owner: systems (tempo).
 
-### Adversarial review (10-14, `_harness/_reports/adversarial_review.md`, git-ignored)
-0 blockers, 6 major, 14 minor, 8 nits. Fixed: all 6 majors (GPU bone-texture leak, world/status VFX
-never played in the shipped boot, audio leaking hidden units, Ctrl+W tab close, the Play funnel), and
-F07 F08 F10 F11 F12 F14 F16 F17 F18 F20 F21-F25 F27 F28. Not a bug: F15 (the self-cast row exists), F19
-(FRAY 9.3 min over 10 seeds), F26 (normal tab wrap). F09 partly: the Draft board holds through its exit and
-screens cut away into a match; still open: the ready modal over the leaving queue screen, practice's
-brief draft screen. Open: F13 UI/menu cue ids are built from a fixed
-vocabulary in code (all exist; a build check tying UiCueKind to audio.cues would harden it).
-
-### Pacing (10-14, `node _harness/pacing.ts --seeds 10`: all-bot matches on the real catalog, ~2 s each)
-RIFT mean 24.8 min (19-31; target about 25) · FRAY 9.3 (6-11; target 8-11) · BRIDGE 21.3 (16-28; target 14-20,
-card said about 17). 10-20: fixed with the respawn ramp (the lever: short respawns let the losing team
-stall the one road). BRIDGE respawn 8 s + 2 s/level (max 40), ×1.45 from 9:00, sudden death 16:00 with
-respawns ×3 -> mean 19.0 (14.1-22.9, 20 seeds; was 25.2, 17.7-53.2). Card now "about 19 min".
-`pacing.ts --rules '<json>'` tries rule changes without editing content.
-
-### Art 2.0 rollout prep (10-14, waiting on the owner's sign-off)
-- Skins: `pipeline.build` re-colours the projected painting per part (skin role / base role per channel,
-  `project.recolour`); skin-only extras paint flat via `spec.SKIN_FLAT`. Proven on Marund's two skins
-  (`art/renders/_art2/marund_skins.jpg`). Copy each fighter's skin palettes from `_design/fighters/<id>.md` §9.
-- Concept plates exist for all 16 (`art/.cache/concept/`, not committed; rerun `concept_plates.py <id> --height
-  <content art.height>`). Fix before projecting: pale background kept between the legs (Ardit, Dunsom, Lisvel,
-  Tunlan, Sukri) and pale cloth cut as background (Ilsheta's and Sukri's hoods/backs): tune per fighter
-  (threshold / erode / erase options) and check `<id>_mask.png`.
-- Build env: `export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:$PATH` first, or the GLB is not
-  optimised (over budget), renders are not denoised and the three.js QA is skipped.
-
-## Session log: owner's Mac, 2026-10-13 (paused by the owner mid-run)
-Done and pushed:
-- Toolchain on the Mac (Homebrew, Node 22, Python, ffmpeg, gh, Blender 5.2.2); Cycles on Metal
-  (`scene.cycles_device`, `VALE_CYCLES_DEVICE=CPU` forces CPU).
-- Match HUD assembled (`src/ui/hud/index.tsx`, `shop.tsx`, `world.tsx`, `styles/hud.css`); input in
-  the capture phase; end-banner hold + match-end sting; base shop radius 9 m.
-- HUD art kit 1: `art/blender/ui/hud_kit.py` (Dial Bar, minimap frames, sky strip, 9-slice plate →
-  `src/ui/art/hud/*.webp`, positions → `src/ui/hud/frame_layout.ts`) and painted minimaps
-  `art/blender/ui/minimap_paint.py` → `art/out/maps/<id>/minimap.png`.
-- Dev autopilot (`?dev=1&autopilot=1|match&speed=16&autoflow=1`) and `_harness/e2e.mjs` +
-  `_harness/pw.mjs` (playwright-core driving the installed Chrome, GPU). RIFT journey passes through
-  post-game; the shop step fails because post-game has no nav (go Home first, then Shop).
-- Image pack: 39/39 item icons generated in Grok Imagine (Chrome) and wired; visual prompts for the
-  16 concepts, 39 items, 80 abilities, 22 setup/team-buff icons (`tools/imagegen/*_subjects.json`,
-  `build_*_prompts.py`). Ability icons: 1/80 (ardit_turned_blades) in `tools/imagegen/raw/`.
-
-Resume:
-1. Grok in Chrome: the owner's weekly SuperGrok limit was at ~68% (resets Oct 15, 2:01 PM). Owner's
-   rule: generate in Grok until 90%, then do the rest with the xAI API (`run_xai.py`, needs
-   `XAI_API_KEY` set by the owner). Grok loop: `queue.py next --kind icon`, Quality 2.0, ×4, 1:1,
-   pick by eye (no gems, gold, runes, modern looks), download as `~/Downloads/vale_<id>.jpg`,
-   `queue.py ingest <id> <file>`, then `post.py --apply-refs` and a content build.
-2. Then finish step 1: e2e shop/equip step, BRIDGE and FRAY journeys, draft pick by click.
+**Done but unverified** (code cites the finding; spot-check in a re-review): HUD-5, HUD-7, HUD-9,
+HUD-11 and client F10, F13, F14, F16, F17.
 
 ## Running it
-```
+
+```sh
+export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:$PATH
+export CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 cd games/vale && npm install
-node tools/build_content.ts --allow-missing-assets   # content build → dist-catalog/
-npm run dev                                           # client at http://localhost:5190 (?dev=1 for debug)
-node _harness/run_probes.ts                           # all probes
-python3 art/build.py <target>                         # Blender builds; auto-detects /Applications/Blender.app (or set $BLENDER)
+npm run content                         # content/ -> dist-catalog/ (the dev server serves it); after any content change
+npm run dev -- --port 5190              # http://localhost:5190 (?dev=1 debug tools); harnesses expect :5190
+npm run check                           # secrets + typecheck + content:check + every _harness/probe_*.ts (48)
+npm run build                           # client -> dist/ (no content; ships apart from the catalog)
+npm run server                          # online server, ws :8787 (deterministic lockstep)
 ```
 
-## Environment notes
-- **Cloud container:** 4 CPUs, no GPU. Cycles runs on CPU only and there is no EEVEE.
-  Screenshots use headless Chromium with SwiftShader (slow, around 12 fps; perf numbers there
-  are not representative). xAI is blocked unless the owner allows `api.x.ai` and adds
-  `XAI_API_KEY`.
-- **Owner's Mac:** a real GPU (Cycles on Metal and EEVEE, true WebGL 1080p60 checks), and Blender
-  (install it if missing; `art/build.py` auto-detects `/Applications/Blender.app`). Chrome has the
-  Claude extension, and the owner is signed in to Grok Imagine for 2D images
-  (`tools/imagegen/README.md`).
-- **Usage:** session limits have interrupted agent work several times. Keep agents small and
-  resume-aware, and checkpoint-commit often.
+Harnesses run in real Chrome on the GPU through `_harness/pw.mjs`, which takes a heavy slot. Reports go to
+`_harness/_reports/` and shots to `_harness/_shots/`; both are git-ignored.
+
+| What | Command |
+|---|---|
+| Full journey (RIFT, BRIDGE, FRAY, store) | `node _harness/e2e.mjs all` |
+| 1080p frame times + match peak | `node _harness/perf_1080.mjs --prod` (perf gates use --prod) |
+| 720p clipping sweep | `npm run sweep:720` |
+| Value / readability bands per map | `node _harness/value_probe.mjs` |
+| Bot soak (laning, jungle, difficulty, BRIDGE, FRAY gates) | `node _harness/probe_sim_bot_soak.ts --full --jobs 3` (quick mode runs in `npm run probe`) |
+| All-bot pacing | `node _harness/pacing.ts --seeds 10` |
+| Swing VFX follows the played clip | `node _harness/probe_swing_clip.mjs --fighter hesmi` |
+| Kit hues in play | `node _harness/probe_kit_hue.mjs --live` |
+| Icons at HUD size | `node _harness/icon_probe.mjs` |
+
+Notes for re-reviewers:
+- The final review's attack-pose tool, `_harness/_reports/final_combat_tools/pose.mjs` (git-ignored), now
+  tracks the striking socket of the played clip. It reads that socket from the swing VFX's clip-filtered
+  layers. Hesmi's attack2, which her crits also play, strikes with the LEFT fist: weapon_l -> prop.L.
+  Pass `--fighters hesmi --frames 100 --no-recall` to catch both swings.
+- The engine harness `probe_swing_clip.mjs` gates the same split.
+
+Art and audio:
+- Blender 5.2 headless:
+  `/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python <script>`,
+  queued through `art/blender/common/heavy.py`.
+- `python3 art/build.py fighter <id>` builds a fighter (`--no-skins`, `--clip-sheet`). Gates: three.js load
+  test, <= 1.2 MB, accent 2-6 %, 10-25k tris (CONTRACT §12).
+- The Python venv is `~/Developer/forgeflow-games/.venv/bin/python3`.
+- Audio builds with `python3 audio/build.py --gates` and `audio/build_music.py`, into `audio/out/`.
+- Painted 2D: `tools/imagegen/README.md`. Generate only with `run_xai.py`, and check every image by eye
+  for sensitivity before it ships.
+
+## Art 2.0 method (how every fighter is built)
+
+1. Concept sheet (front and back, painted) to projection plates:
+   `python3 art/tools/concept_plates.py <id> --height <m>` -> `art/.cache/concept/` (not committed).
+2. Fit the forms on a 10 cm grid in `art/blender/fighters/<id>.py`. Use numpy SDF parts
+   (`common/hifi/sdf.py`), one Part per binding, a rig fitted to the anatomy and `PROJECTION = {...}`.
+   Check the fit with the silhouette overlay.
+3. Build with `python3 art/build.py fighter <id>`, then copy `art/out/fighters/<id>/art.json` into the
+   content `art`.
+4. Skins need their own painted concept and the same projection. Skins change material and palette, never
+   silhouette or accent placement (owner rulings 2 and 3).
+5. Splashes and portraits are painted dusk plates over VALE's own backdrops
+   (`art/blender/common/plates.py`, `art/blender/fighters/plates.json`).
+
+## History
+
+Earlier session logs (10-13 / 10-14: Art 2.0 proof on Marund, the VFX v2 runtime, the adversarial
+review, BRIDGE pacing) live in git: `git show 09156280:games/vale/HANDOFF.md`. The wave plans and verdicts
+are in `_design/reviews/fixwaves/`.

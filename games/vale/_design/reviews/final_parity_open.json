@@ -1803,7 +1803,8 @@
    "status_evidence": "W5b_verify1 pass: Spot-check. I did not re-capture; instead I re-derived per-frame steps from W5b's in-game pose capture, _harness/_reports/fw_W5b_hesmi_attack_pose.json: - attack1: right fist holds f11-f15 (5 frames, <= 0.044 m/frame), strikes f16-f17 (0.39 + 1.72 = 2.11 m), damage at f18, follow-through f18-f21;",
    "status_history": [
     "W5b_verify1: pass"
-   ]
+   ],
+   "reviewer_note": "Re-measuring Hesmi's swings: her attack2 (which her crits also play) strikes with the LEFT fist (weapon_l -> prop.L). The final review's pose tool (_harness/_reports/final_combat_tools/pose.mjs, git-ignored) now tracks the played clip's striking socket from the swing VFX's clip-filtered layers; --fighters hesmi --frames 100 --no-recall catches both swings: attack1 R fist 3.80 m to impact, attack2 L fist 3.29 m (R 1.58 m) (_harness/_reports/integ_lead_hesmi_pose.txt). The engine gate is _harness/probe_swing_clip.mjs."
   },
   {
    "dim": "combat",
