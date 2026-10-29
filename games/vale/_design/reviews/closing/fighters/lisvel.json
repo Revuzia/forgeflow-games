@@ -1,0 +1,149 @@
+{
+ "fighter": "lisvel",
+ "score": 6,
+ "summary": "I verified the Lisvel art review against the current build. lisvel.glb is unchanged since dac993eb, and the Oct 29 splashes are the current ones. Lisvel is NOT ON PAR: the score is 6/10 and four majors are confirmed open. There is no blocker.\n\nM1 (head and face) is confirmed. The visor is an opaque, flat slab: no glass read and none of the ink recess the brief (lisvel.md:56) puts behind the glass. The chip and portrait have no eye or glint cue. One correction: the visor end overshoots the wrap silhouette by 3-4 px at 1x, not about 6 px.\n\nM2 (splash and portraits) is confirmed. My own 3x3 high-pass measurement gives figure 2.6-7.6 against plate 0.23-0.24, and the figure never goes above luma 198. All three portraits share one pose.\n\nM3 (materials) is confirmed, with a corrected cause. The normal and ORM sizes are a roster budget: normal is 512 on 16/16 fighters, ORM 256 on 6/16. LoL's material identity lives in the hand-painted diffuse, and Lisvel's albedo is already 2048. The real gap is the painting. In the same renderer and budget, Ervet and Nurrow show painted plates, trims and fold shading, while Lisvel reads as clay.\n\nM4 (motion life) is confirmed, but narrower:\n- Backstep's dash clip animates 4 of 22 channels, the fewest in the roster (peers 18-24). It holds the apex at hips 1.235 m (rest 0.945 m) and drops about 29 cm into idle through a 0.1 s crossfade, with no landing.\n- There are no cloth joints, although the brief specifies x_tabard bones. Five peers have cloth joints.\n- Two sub-claims are overstated. idle_lobby is not frozen (14/21 channels animate; the head turns 64 degrees and the chest 20). The ult hold is a normal 0.23 s beat.\n- The static-hip recall is shared by five other fighters.\n\nAll four minors stand.\n\nLeftovers: the snout (17) is closed. The visor (16) is partly closed: the eye-ovals were fixed earlier and the slab and overshoot remain. The other five are still open.\n\nSensitivity is clear on all three skins:\n- The wrap is a rounded crown, not a tall or pointed hood. The pointed shapes in the splash backgrounds are architecture.\n- The carved plate shows a nose and a closed smile, so it is neither horror, a hockey mask nor a blank mannequin.\n- Watch item: a grey plate with no visible eyes is the closest part of the fighter to the owner ruling that faces read as alive. M1's fix (glass that shows the eyes behind it, a warmer plate) also takes care of it.\n\nNo harness or Blender run was needed: the GLB predates the reviewer's fresh Oct 29 in-match capture and is unchanged. No tracked file changed.",
+ "gapStatus": [
+  {
+   "id": "13. Fragmented smart-UV atlas",
+   "status": "open",
+   "evidence": "build_report_lisvel.json uv_coverage 0.604. The albedo extracted from the GLB (_harness/_shots/closing_lisvel_verify_albedo_vs_ervet.png, left) still has confetti island bands along the top and right. This is a common/ unwrap shared with the roster."
+  },
+  {
+   "id": "15. Accent well short of 'all in the top half'; lineup_qa accentOk=false",
+   "status": "open",
+   "evidence": "build_report_lisvel.json three_qa accentPct 1.7, accentTopHalfPct 62.9. This is unchanged, and it is the accepted level-guard trade-off."
+  },
+  {
+   "id": "16. Visor reads as an opaque flat plank; its ends float past the temples",
+   "status": "partly",
+   "evidence": "The eye-ovals were removed in an earlier wave. What remains is an opaque pale-blue slab with no gloss or recess (three_lisvel.png cell 5; reviewer material_values: visor hpRMS 0.60, p5-max 171-194).\n\nThe overshoot measured on portrait.png is 3-4 px at 1x, not the reviewer's ~6 px: the wrap's left silhouette is at x 194-195 against the visor end at x 191 (_harness/_reports/closing_lisvel_verify.txt). The overshoot is partly the brief's own 3 cm forward 'beak' (lisvel.md:56)."
+  },
+  {
+   "id": "17. In the 3/4 close-up the face reads snout-like",
+   "status": "closed",
+   "evidence": "three_lisvel.png bottom-row cell 5 (current GLB) and portrait.png show a human profile with a proud nose and a closed, slightly smiling mouth. There is no muzzle read (_harness/_shots/closing_lisvel_three_face.png, _harness/_shots/closing_lisvel_verify_portraits3.png)."
+  },
+  {
+   "id": "18. Bow edge-on (vertical staff) in the diagonal facings",
+   "status": "open",
+   "evidence": "three_lisvel.png row 0, cells 4 and 8, still show the bow as a vertical line. This is the accepted 50-degree ready-yaw trade-off."
+  },
+  {
+   "id": "Faint pale faceted shards on the skirt's top just under the lower belt",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_lisvel_three_back.png, left cell: pale jagged facets under the lower belt are still visible. They are low contrast and do not show in the match frames."
+  },
+  {
+   "id": "Gorgewalk now shares the base's body colours almost exactly",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_lisvel_verify_portraits3.png shows the base, Gorgewalk and Almanac side by side. The torso and wrap read the same, and only the bow and quiver change. The reviewer's torso MAD is 3.6/255 for Gorgewalk (_harness/_reports/closing_lisvel_skin_portrait_mad.txt)."
+  }
+ ],
+ "findings": [
+  {
+   "id": "lisvel-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Head and face read as a bandaged egg with an opaque slab over the eyes; no living cue at chip, portrait or splash size",
+   "what": "The head is a thin-striped chalk wrap around a smooth dome, with a flat, uniformly lit pale-blue band over the eyes.\n\nThe brief's dawnglass, with ink recesses behind it, never reads: the band is opaque, has no highlight, and nothing shows through it. Below it, a grey carved plate with a small closed smile is the only expression.\n\nAt chip size (26-96 px) the face is a pale head with a blue bar. In the splash the salute hand covers it. From the gameplay camera the head is a near-white ball.\n\nThe face stays within the sensitivity rules: a nose and mouth read, and nothing reads as horror. It is still the weakest face in the 2D art.",
+   "evidence": "Viewed: art/out/fighters/lisvel/portrait.png, icon.png, three_lisvel.png cell 5, _harness/_shots/closing_lisvel_portrait_face3x.png, closing_lisvel_three_face.png, closing_lisvel_chips_vs_peers.png and closing_lisvel_verify_portraits3.png.\n\nReviewer's visor values: hpRMS 0.60, luma p5 171 to max 194, with no gloss and no dark recess (_harness/_reports/closing_lisvel_material_values.txt).\n\nMy silhouette scan of portrait.png puts the visor end at x 191 against the wrap at x 194-195, an overshoot of 3-4 px at 1x (_harness/_reports/closing_lisvel_verify.txt).",
+   "gauge": "A recent LoL champion keeps a readable focal point on the face even when it is masked or visored: a lit glint, readable eyes or a clear expression at portrait and splash size. The head also carries a designed shape that reads from the top-down camera.",
+   "fix": "These keep the brief: a flat band, no bare face, no hair, and only the tip-cap inlays emit.\n- Give the visor a glossy dawnglass look: a painted sky streak along the top edge and a darker band behind it, so the brief's ink recess and two carved closed eyelids read through it. Real partial transparency is optional.\n- Tuck the band ends within the wrap's silhouette, apart from the forward beak.\n- Break the egg with broader folded wrap bands and a short knot or tail at the nape.\n- Warm the face plate toward the brief's chalk.\n- Re-render the icon, portrait and splash afterwards.",
+   "files": "art/blender/fighters/lisvel.py (visor, wrap, face plate, PAINT_BASE/PAINT_SKIN); art/out/fighters/lisvel/*.glb, icon.png, *portrait.png, *splash.png",
+   "size": "M",
+   "verifierNote": "Confirmed as a major. The visor overshoot is overstated: it is 3-4 px at 1x rather than ~6 px, and part of it is the brief's forward beak. The core defect is reproduced in every cited image: an opaque slab, no recess read and no eye or glint cue.\n\nThis is not a blocker. The nose and smile read at 512 px, so the face is not blank, horror or a hockey mask. It is still the nearest thing in the fighter to owner_rulings.md's 'faces read as alive' line; compare ruling 2, where a grey mask without lit eyes reads as blank. The fix closes that risk."
+  },
+  {
+   "id": "lisvel-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splash and portraits are grainy static model renders on painted plates; stiff poses, and one portrait pose for all skins",
+   "what": "All three splashes are a Cycles render of the game model composited onto a painted plate:\n- The figure carries visible grain, and nothing on it goes above luma 198.\n- The base splash is an upright victory stand with straight legs and the salute hand covering the face.\n- Gorgewalk is a knock-kneed, slouched taunt frame.\n- Almanac stands straight holding the arrow fan.\n\nThe three portraits are one pose, one camera and one crop.",
+   "evidence": "My 3x3 high-pass RMS on splash.png (_harness/_reports/closing_lisvel_verify.txt):\n- figure: sleeve 4.92, tabard 7.63, legging 2.58\n- painted plate: sky 0.24, ground 0.23\n- figure box (1000-1480 x 80-840) max luma 198\n\nThis reproduces the reviewer's 5x5 values (closing_lisvel_splash_grain_flat.txt).\n\nViewed: splash.png and _harness/_shots/closing_lisvel_verify_skin_splashes.png (Gorgewalk and Almanac). _harness/_shots/closing_lisvel_verify_portraits3.png shows the three portraits with identical silhouettes.",
+   "gauge": "A LoL splash is a fully painted illustration: a designed action pose that sells the kit, directional key and rim light with specular pop, and the face as the focal point. Every skin gets its own composition and portrait crop.",
+   "fix": "- Denoise the subject pass and add a paint-over grade with a dawn key light, a cool rim and glass highlights at luma 230 or more.\n- Pose each splash on a VALE beat: the base on the Dawn Line release with the bow on a long diagonal and the line of light running out of frame; Gorgewalk braced on a rope bridge; Almanac drawing the page-fletched fan.\n- Give each skin its own portrait crop with the recurve limb in frame.",
+   "files": "art/blender/portraits.py, art/blender/fighters/plates.json, art/blender/fighters/lisvel.py (SPLASH and the per-skin splash specs), art/out/fighters/lisvel/*splash.png, *portrait.png",
+   "size": "L",
+   "verifierNote": "Confirmed with my own measurement. The pipeline is shared by the roster (the Ardit verifier confirmed the same major), but measured against the gauge the problem holds for this fighter too. The poses follow the brief's own SPLASH spec (lisvel.md:178), which shows the cause is the spec."
+  },
+  {
+   "id": "lisvel-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Every material reads as one matte clay: plaster sleeves, rubber straps, opaque glass, an ash bow with no grain",
+   "what": "The brief names distinct materials: linen, felt tabard, leather, ash wood and glossy dawnglass. In every close view they read as smooth painted clay:\n- the sleeves are uniform pale cylinders;\n- the straps are dark tubes with no edge or stitching;\n- the bow has no grain or worn bevel;\n- the visor and caps have no reflection.\n\nThe cause is the albedo painting, not texture resolution. Peers in the same renderer and texture budget carry painted plates, trims, scale patterns and fold shading; Lisvel's albedo islands are mostly flat tone fills.",
+   "evidence": "_harness/_shots/closing_lisvel_verify_peers_close.png gives the three_*.png close-up row for Lisvel, Ervet, Ilsheta and Nurrow (same three.js renderer). _harness/_shots/closing_lisvel_verify_albedo_vs_ervet.png compares the albedos extracted from the GLBs, both 2048.\n\nReviewer's values: sleeve hpRMS 2.7, face plate p5-p95 153-176, visor 171-194 (closing_lisvel_material_values.txt).\n\nThe texture budget is roster-wide:\n- normal 512 on 16/16 fighters\n- ORM 256 on 6/16 (ervet, kemdo, lisvel, nurrow, ulkro, vashil)\n- ORM 512 on the other 10\n(_harness/_reports/closing_lisvel_verify.txt)",
+   "gauge": "LoL champion textures are hand-painted per material in the diffuse: wood grain and worn edges, cloth folds and seams, leather stitching and scuffs, and painted reflections on glass. LoL relies on that diffuse, not on normal or ORM resolution, so each material reads at splash, Collection and portrait size.",
+   "fix": "Paint the materials in the 2048 albedo through the procedural painters:\n- ash limbs: grain along the limb, growth lines near the grip, pale worn bevels;\n- linen: fold shadows gathering into the bracers and a 2-3 % weave breakup;\n- leather: a lit top edge, stitched border and scuffs where the quiver rubs;\n- felt tabard: a nap and a darker hem;\n- dawnglass: a painted horizon reflection and a lower roughness on the accent/glass parts.\n\nBaking normal and ORM at 1024 is optional and secondary.",
+   "files": "art/blender/fighters/lisvel.py (PROC, PAINT_BASE, PAINT_SKIN), art/out/fighters/lisvel/lisvel*.glb",
+   "size": "L",
+   "verifierNote": "Confirmed as a major, with the cause corrected. The reviewer's '512 normal / 256 ORM' argument is a shared roster budget and not why Lisvel reads as clay; Ervet and Nurrow read richer under the same budget. The defect is specific to this fighter's painting and can be fixed within budget."
+  },
+  {
+   "id": "lisvel-M4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "No secondary motion and a Backstep that hangs at its apex and pops down with no landing (static recall body)",
+   "what": "Only the shooting and run clips carry weight.\n\n**Backstep.** The dash clip holds the hop apex with almost no motion: hips at 1.235 m against 0.945 m at rest, a 3 cm bob, about 1 degree of rotation, and 4 of 22 channels animated.\n- actors.ts:914 and :1005 stretch it over the 0.19 s dash (3 m at 16 m/s).\n- At the end, :974 crossfades to idle in 0.1 s.\n- The cast follow-through (:954) resumes only from a cast straight into idle, so cast_a2's own landing (hips down to 88 cm at f11) never plays.\n- Result: a hang, then a 29 cm drop in 100 ms with no compression.\n\n**Cloth.** There are no cloth joints. The brief (lisvel.md:61) gives each tabard panel an x_tabard bone; the GLB has none, so nothing in the costume lags or settles.\n\n**Recall.** 6 of 22 channels animate and the hips are static through the 7 s RIFT recall. Five other fighters share the static hips, and the dial VFX carries the moment.",
+   "evidence": "My raw-channel scan (_harness/_reports/closing_lisvel_verify.txt; tools in _harness/_reports/closing_lisvel_verify_tools/):\n- Lisvel dash: 4/22 channels moving. Peers: ardit 18/27, ervet 24/26, nurrow 21/25, ulkro 18/21, vashil 21/21, ilsheta 22/22, sukri 20/21, odrum 20/21.\n- Dash window: max translation 3.00 cm, max rotation about 0.96 degrees.\n- Recall: 6/22 channels moving, hips translation range 0.\n- Cloth joints: lisvel has only x_bow_tip_l/r, x_string, x_arrow_nock, x_fan and x_quiver. Ardit has x_tabard_*, ervet x_cape/x_tabard, nurrow x_cape/x_tabard, vashil x_sleeve*, ilsheta x_mantle_*.\n\nContent: content/fighters/lisvel.json a2 has castTime 0.1, then a dash of 3 m at speed 16 with present.anim 'dash'.",
+   "gauge": "A LoL champion's mobility spell has takeoff, airborne and landing beats, so the landing sells the weight. Cloth, hair or straps carry lagged secondary motion on nearly every champion. The recall plays a full-body sequence.",
+   "fix": "- Author the dash clip as a full arc on normalised dash time: takeoff from cast_a2's apex, drift back with the bow raised, and a landing crouch at about 85 % with a settle.\n- Or let the actor play cast_a2's tail after a dash ends.\n- Add the brief's two x_tabard bones, with a 2-3 frame lag keyed into run, attacks, dash and death.\n- Give the recall a breathing weight shift: hips 1-2 cm, chest sway, and the bow hand counting the dawn motif.",
+   "files": "art/blender/fighters/lisvel.py (rig extras, ANIM dash/recall), art/out/fighters/lisvel/lisvel.glb, optionally src/render/actors.ts (dash-end follow-through)",
+   "size": "M",
+   "verifierNote": "Confirmed as a major, but narrower than the review. Two sub-claims are overstated:\n- idle_lobby is not frozen. 14/21 channels animate, the head turns 64 degrees, the chest 20 degrees and the hips rotate about 6 degrees. Only hip translation is 0, the same as ervet and vashil.\n- The ult 'dead hold' is not a defect on its own. The right hand settles until about f17, so the still part is about f18-f26: 0.3 s of clip time, or about 0.23 s at the 0.35 s cast pace (actors.ts IMPACT_AT 0.4). That is a normal hold beat.\n\nThe static-hip recall is roster-wide (ardit, ulkro, vashil, ilsheta and sukri are the same), so it carries less weight. The fighter-specific core stands and is enough for a major: the least-animated dash in the roster with no landing, on the escape tool used every 8-10 s, plus a costume with no secondary motion against a brief that called for tabard bones."
+  },
+  {
+   "id": "lisvel-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The bow sinks into the floor in the lobby, taunt and death",
+   "what": "Skinned prop.L vertices go below y=0 in three places:\n- idle_lobby (Collection plinth): down to -14.6 cm\n- taunt: down to -25.6 cm\n- the death hips: -16 cm",
+   "evidence": "_harness/_reports/closing_lisvel_floor_clip.txt. _harness/_shots/closing_lisvel_clips_lobby_f0_3x.png shows the lower limb and tip cap vanishing at the feet.",
+   "gauge": "LoL showcase and emote poses keep props on or above the ground plane.",
+   "fix": "Raise the lower limb or cant the bow in idle_lobby and taunt. Lift the death pelvis to rest on the ground.",
+   "files": "art/blender/fighters/lisvel.py (ANIM idle_lobby, taunt, death)",
+   "size": "S",
+   "verifierNote": "Kept. The frame confirms it."
+  },
+  {
+   "id": "lisvel-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Each auto-attack whips the bow about 1.9 m in the first two frames",
+   "what": "attack1/attack2 move the bow tip 109+80 cm and 123+92 cm in f0-f2. The 0.06 s attack crossfade (actors.ts:974) only partly smooths this.",
+   "evidence": "_harness/_reports/closing_lisvel_clip_starts.txt and closing_lisvel_clip_motion.txt (bowtipL 32.7 and 24.0 m/s at f0-f1).",
+   "gauge": "LoL attack starts blend from the idle hold without a visible snap of the weapon.",
+   "fix": "Start the attack clips from the idle bow hold and reach the draw by about f3.",
+   "files": "art/blender/fighters/lisvel.py (ANIM attack1/attack2)",
+   "size": "S",
+   "verifierNote": "Kept."
+  },
+  {
+   "id": "lisvel-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The skins are weak: Gorgewalk's body is almost the base's, and both read only through the bow and quiver",
+   "what": "The Gorgewalk torso MAD from the base is 3.6/255 and Almanac's 10.9/255. The wrap, visor and tunic are unchanged.",
+   "evidence": "_harness/_reports/closing_lisvel_skin_portrait_mad.txt and _harness/_shots/closing_lisvel_verify_portraits3.png.",
+   "gauge": "A LoL skin reads as itself at a glance in its portrait and splash.",
+   "fix": "Give each skin a material story on the wrap and tabard while keeping silhouette and accent placement (owner ruling: skins change material and palette): rope-bound weathered linen for Gorgewalk, and inked page-paper bands for Almanac.",
+   "files": "art/blender/fighters/lisvel.py (SKINS)",
+   "size": "S",
+   "verifierNote": "Kept."
+  },
+  {
+   "id": "lisvel-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The portrait loses the bow: only a vertical pale stick with the tip cap shows",
+   "what": "The recurve, Lisvel's strongest hook, appears in the portrait only as a straight upright limb at the right edge.",
+   "evidence": "art/out/fighters/lisvel/portrait.png and _harness/_shots/closing_lisvel_verify_portraits3.png.",
+   "gauge": "A LoL portrait crop includes the champion's signature weapon shape.",
+   "fix": "Re-pose or re-crop the portrait so the recurve limb arcs through the frame (folds into M2).",
+   "files": "art/blender/fighters/lisvel.py (portrait_clip/portrait_t/portrait_yaw)",
+   "size": "S",
+   "verifierNote": "Kept. The brief only asks for 'the near bow tip cap', so this is a gauge gap, not a brief deviation."
+  }
+ ],
+ "missed": []
+}

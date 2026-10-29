@@ -1,0 +1,149 @@
+{
+  "fighter": "kemdo",
+  "score": 6.5,
+  "summary": "Verified 6.5/10 (reviewer 6). Kemdo is not on par: three majors are still open. They are splash and portrait art (M3), no secondary motion on the knee-length tunic (M4), and a featured deluxe skin that is only a recolour (M5). I downgraded two majors to minor. M1: the lens hides under her own bar about a quarter of the time, at some facings, which is the same tier as dunsom-lantern-nameplate and hesmi-m3. M2: the model has no signature-hue zone, but her kit carries the hue, she separates from the lane by 46 L*, and her silhouette is distinct (IoU64 at most 0.66). This matches ilsheta-no-own-hue. Fresh evidence: three_snapshot sheet of the current GLB (_harness/_shots/closing_kemdo_verify_sheet.png: crown 2.121 m, 114 px at 1080p, accent 1.92 %). I also measured lens-under-bar coverage per clip over 16 facings, from GLB socket sampling and the game camera's projection (_harness/_reports/closing_kemdo_verify_lens_bar.txt). Sensitivity: no blocker. The hood crown is a round 4.2 cm cap (kemdo.py:1421), and the portrait and icon show catch-lit living eyes. I add one minor the reviewer missed (kemdo-v1). At the 1:1 gameplay camera, facing the viewer, the pale brow eave over the dark slit reads as a mouth-like stripe with no visible eyes. It is not horror, hockey-mask or blank-mannequin, and the HUD portrait reads alive, so it is not a blocker. I could not see the reviewer's minors m1, m2, m4 and m5 in the hand-off because it was truncated. They are kept unverified. m3 and m6 are verified below. Side note, not scored: the reviewer's own ORM read (_harness/_reports/closing_kemdo_orm.txt) shows metalness above 0.05 on 30 % of covered texels (max 0.38). The body material's metallicFactor is 1 and the renderer applies no fighter override. The brief says metalness is 0 everywhere. I have not checked whether this has any visual effect.",
+  "gapStatus": [
+    {
+      "id": "_progress.md Open: art.json height 2.43 (glaive tip) against the brief's 2.10 hood crown",
+      "status": "closed",
+      "evidence": "art/out/fighters/kemdo/art.json height 2.12. Fresh three_snapshot bindBox top 2.121 m, heightPx1080 114 (closing_kemdo_verify_sheet.png run log). Side effect: the bar anchor fell from 2.78 m to 2.47 m (src/render/actors.ts:705), which raised idle lens-under-bar coverage from 0.17 to 0.24 mean (_harness/_reports/closing_kemdo_verify_lens_bar.txt). See kemdo-M1."
+    },
+    {
+      "id": "_progress.md Open: Highrim is subtle by its brief palette",
+      "status": "partly",
+      "evidence": "The portraits differ clearly: hood dE 18.3, wrap 14.0, chest 18.7 (_harness/_reports/closing_kemdo_skin_delta.txt). At the game camera the hood reads whiter (closing_kemdo_skins_gamecam_x2.png). The splash and showcase differ little: lens dE 0.9, frame 2.0, robe 4.8 (closing_kemdo_showcase_figs.png). See kemdo-m3."
+    },
+    {
+      "id": "_progress.md Kept: pauldron on the LEFT (concept) while the brief weights the wraps to the right",
+      "status": "open",
+      "evidence": "art/blender/fighters/kemdo.py:1532 'PAULDRON (left shoulder)'. _design/fighters/kemdo.md:31 and :61 still say the wraps are 10 % heavier on the right (weapon side). The brief and the model disagree, so one of them needs updating."
+    },
+    {
+      "id": "_progress.md: recall keeps <= 5 glaive vertices in the body ('bowing over the lens')",
+      "status": "open",
+      "evidence": "Viewed _harness/_shots/closing_kemdo_clip_recall_x2.png. In frames 1-2 the lens frame's rim passes through the front of the hood at face height. This is a 7 s loop that players watch on every recall."
+    },
+    {
+      "id": "W5b_verify1 sensitivity watch item 3: Kemdo's hood comes to a small peak in the chip",
+      "status": "closed",
+      "evidence": "art/blender/fighters/kemdo.py:1421: the RoundCone ends in a 0.042 m cap at z 2.070 (top 2.112), 1 cm above the hood ellipsoid's 2.102. Fresh gameplay-camera sheet: the crown is round at every facing (_harness/_shots/closing_kemdo_verify_sheet.png row 1; closing_kemdo_verify_gamecam_faces_x4.png panel 4, the back view). The chip is round too (closing_kemdo_roster_chips_48_32_x2.png)."
+    },
+    {
+      "id": "integ_chars lineup flags: valueGradientOk false and accentOk false for kemdo",
+      "status": "open",
+      "evidence": "art/renders/lineup/integ_chars_p2.json (Oct 29 01:03, after the current GLB): top band 55.3 / 50.0 / 63.7 / 61.5 by facing against 70-85; accent 0.18 % at facing 270 (gate minimum 1 %), accentOk false. In match the value read passes (top-25 L* 84.5, _harness/_reports/closing_kemdo_m2_t70_kemdo_1_measure.json). See kemdo-m6."
+    },
+    {
+      "id": "r12 M12.4 (fighter model signature-hue zone 15-25 % of the silhouette), Kemdo's share",
+      "status": "open",
+      "evidence": "Signature-zone share 0.2-3.4 % of the figure (_harness/_reports/closing_kemdo_m2_hue_gt90.txt). The kit half of M12 is met roster-wide (final_parity_open.json r12 M12 'partly'). See kemdo-M2 (downgraded to minor)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "kemdo-M3",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Splash and portrait are grainy model renders on soft plates, in one pose for all three skins",
+      "what": "All three splashes are the same 3D victory hold (fist on hip, glaive raised, the same framing) composited onto painted plates. The figure carries per-pixel sampling grain the plate does not have. The figure is lit flat rather than by the plate's low sun. The brief's hero beat is missing: the lens tilted into the sun, the forearm shading the eyes, a boot on a low stone (kemdo.md:127, :175). The portraits are grainy too. The lens survives only as a cut sliver at the left edge, while the brief asks for 'the lens catching light at the edge' (kemdo.md:176).",
+      "evidence": "Viewed _harness/_shots/closing_kemdo_splashes_3up.png (same pose and framing x3), closing_kemdo_splash_grain_fig_vs_plate_x4.png (grain on the skirt, none on the plate) and closing_kemdo_portraits_3up.png (grain on the robe, lens sliver at the left edge). Reviewer metric: _harness/_reports/closing_kemdo_splash_grain.txt, figure high-pass sigma 7.3-10.6 against plate 0.7-2.2. Files: art/out/fighters/kemdo/{splash,kemdo_highrim_splash,kemdo_long_evening_splash,portrait}.png, Oct 29 00:16, current.",
+      "gauge": "A LoL splash is one painted image: figure and backdrop share brushwork and light. Each skin gets its own composition and story beat.",
+      "fix": "As the reviewer proposes: render the subject pass with more samples plus a denoiser, then run the plate's softening and paint pass over the figure, gated so the figure residual is at most 2x the plate's. Light the figure from the plate's sun with a warm rim. Author one pose per skin. Base: the brief's lens-to-the-sun hold. Highrim: a crouch at the rim edge under hard noon light. Long Evening: the lens held low in festival lantern light. Move the portrait camera so the lens rim enters the frame edge and catches light.",
+      "size": "M",
+      "files": "art/blender/common/plates.py; art/blender/fighters/plates.json; art/blender/fighters/kemdo.py (SPLASH/PORTRAIT, victory clip, per-skin splash pose)",
+      "verifierNote": "Confirmed. The grain metric compares a detailed figure with a soft plate, so the ratio overstates the gap. The visible grain in the crops stands on its own, and so do the identical pose and the brief mismatch. This matches ardit-M1, burdam-M3, ervet-M1, hesmi-M3 and dunsom-splash-single-pose, all confirmed major."
+    },
+    {
+      "id": "kemdo-M4",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "No secondary motion: the knee-length tunic skirt is skinned rigidly to the thighs",
+      "what": "The rig has 27 joints and no baked cloth chain. The knee-length tunic's front and back panels are skinned to the thighs. In the run the front panel lifts and splits with each knee like trousers. It never trails or settles after the dash, the Vent stamp or the ult lift.",
+      "evidence": "node art/tools/inspect_glb.mjs art/out/fighters/kemdo/kemdo.glb --json: 27 joints, and the only x_ joints are the sockets x_blade_tip, x_lens and x_vent_chest. The same tool shows ardit has x_tabard_l/r_1-3 and vashil has x_sleeveL/R_1, so the pipeline supports baked chains. Viewed _harness/_shots/closing_kemdo_clip_run_x2.png: frames 2-3, the front panel follows the raised thigh.",
+      "gauge": "LoL champions' skirts, sashes and hanging cloth lag, overshoot and settle on every stop, dash and cast. That follow-through is much of the weight read at the gameplay camera.",
+      "fix": "Add baked 2-bone spring chains for the tunic's front and back panels (e.g. x_robe_f_1..2, x_robe_b_1..2). Bake them into every clip with 2-4 frames of lag and overshoot on run contacts, the a2 skid, the a3 stamp and the ult lift. The shoulder wraps (kemdo.md:61) and Long Evening's tassel plates (kemdo.md:157: 'rigid with no sway bones') stay rigid unless the brief is changed. Cloth simulation is banned (STYLE_BIBLE.md:10), so use bone chains only. Update kemdo.md section 4.",
+      "size": "L",
+      "files": "art/blender/fighters/kemdo.py (rig, weights, clip bake); _design/fighters/kemdo.md",
+      "verifierNote": "Confirmed, with the scope narrowed to the tunic skirt. The brief makes the tassels and shoulder wraps rigid, and the cowl is a short drape with no tail, so I dropped those parts. Major stands on the knee-length garment. This matches ardit-M3 (tabard) and burdam-M5 (coat). hesmi-m2 was minor because she has no long garment."
+    },
+    {
+      "id": "kemdo-M5",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "The featured 1,500-candle deluxe skin is a recolour plus four small tassel plates, with no effect tint and the base splash pose",
+      "what": "Long Evening Lens sits on the store's featured hero shelf at the deluxe price. In play it is the base mesh, rig and clips with a lilac-white robe, plum shins and lacing, a lilac lens and four 5 x 12 cm lacquer tassel plates. It has the same material set (body + accent) and no vfxTint, so the kit's effects are unchanged. Its splash reuses the base pose (see kemdo-M3).",
+      "evidence": "content/store.json:20 (1,500 candles) and :41 (featured shelf). inspect_glb: kemdo_long_evening.glb has materials accent + body, 27 joints, 18,809 tris against base 18,389 (+420 for the tassels, kemdo.py:1848). content/skins/kemdo.json: no vfxTint. Four other deluxe skins on the roster carry one (hesmi/nurrow/sukri shadeprint, odrum shadeprint, tunlan lamplit). Visual: _harness/_shots/closing_kemdo_showcase_figs.png, closing_kemdo_skins_gamecam_x2.png.",
+      "gauge": "A LoL skin at the top regular price tier brings its own visual effects, a re-themed model and its own splash. Recolours sit at the cheapest tier.",
+      "fix": "Within owner ruling 'skins change material and palette but not silhouette or accent placement' (owner_rulings.md:7): give Long Evening a real material re-theme. That means lacquered plum wraps, painted festival-lantern motifs on the cowl and frame wraps, and a frame that clearly reads smoked amber. Add a lilac/plum vfxTint outside the reserved bands, and route it to her kit's element layers so the deluxe tier changes her effects. Give it its own splash pose (kemdo-M3).",
+      "size": "M",
+      "files": "art/blender/fighters/kemdo.py (SKINS, paint); content/skins/kemdo.json (vfxTint); content/vfx.json (kemdo defs' element layers); _design/fighters/kemdo.md section 9",
+      "verifierNote": "Confirmed major. One sub-claim is refuted: 'plum appears only on the shins' does not contradict the description. The brief defines the identity plum as the bound shins and the lacing (kemdo.md:157), and the shins are the wraps. Unlike burdam-M4, the skin is easy to tell from base (lens dE 18.2, shins 24.4, purple tassels) and changes more than the standard Highrim. It is still a recolour with no effect and no pose of its own at the deluxe price on the featured shelf. This matches burdam-M4 and hesmi-M4."
+    },
+    {
+      "id": "kemdo-M1",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "At some facings the lens and its ring pass under her own overhead bar, about a quarter of idle and run frames",
+      "what": "In idle the lens centre sits at 1.98-2.00 m, 0.6 m to her right and 0.24 m forward. The bar plate is anchored at art.height + 0.35 = 2.47 m. When she faces away from the camera or to her left, the disc projects into the bar plate or level chip. The run carry holds the lens 0.7 m forward at 1.77 m, so it goes under the bar whenever she runs up-screen. Over 16 facings, half the disc is covered in 23 % of idle cases (three quarters in 12 %), 26 % of run, 15-17 % of attacks and 31 % of Vent, and never in dash.",
+      "evidence": "_harness/_reports/closing_kemdo_verify_lens_bar.txt, produced by closing_kemdo_verify_lens.mjs (x_lens sampled from the GLB through three's AnimationMixer) and closing_kemdo_verify_cover.py (game-camera projection from src/render/camera.ts:18, bar box measured on closing_kemdo_m2_t150_kemdo_1_A.png, anchor src/render/actors.ts:705). In the reviewer's 5 frames (closing_kemdo_m2_all_x2.png), panel 2 is fully hidden, panel 3 about half, panel 5 only a corner under the chip, and panels 1 and 4 are clear.",
+      "gauge": "In LoL, tall weapons touch or pass behind a champion's overhead bar at some facings, and the bar sits per champion above the head. LoL has no body-borne team cue: team lives in the bar, the ring and indicators, and VALE has those too (bar colour, the team-coloured ring).",
+      "fix": "Re-key guard, idle and stunned so the lens sits at or below about 1.85 m and further to the weapon side. The facing-away cases come from the lens's forward offset, so also do one of two things. (a) Set a per-fighter bar clearance: anchor = max(hood crown, idle lens top) + 0.35 m, an art.json field read in configureFighter. (b) Add the reviewer's bar-overlap QA, measured over 8 facings, with a target of 10 % or less of idle and run cases with half the disc covered.",
+      "size": "M",
+      "files": "art/blender/fighters/kemdo.py (guard/idle keys); src/render/actors.ts:705 (optional per-fighter bar clearance); art/tools/three_snapshot.mjs (overlap check)",
+      "verifierNote": "Downgraded from major to minor, for four reasons. (1) 'Covered in 3 of 5 frames' overstates it: only 1 of the 5 is fully hidden. (2) 'Only the run carry keeps it clear' is wrong: the run is covered as often as idle. (3) The team-read argument is not a LoL gauge. (4) dunsom-lantern-nameplate and hesmi-m3, the same class of issue, were ruled minor. The art.json height fix lowered the bar 0.31 m and raised idle coverage from 0.17 to 0.24 mean."
+    },
+    {
+      "id": "kemdo-M2",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "The model carries none of her signature hue; she separates from the beige lane by value only",
+      "what": "Every large area is desaturated sand at the lane's hue: figure HSV hue p50 32.7 against ground 32.6 degrees. Her signature #F2896C (H13) covers 0.2-3.4 % of the figure, against r12 M12.4's 15-25 % model zone. Her roster median colour is dE 2.4 from Sukri's.",
+      "evidence": "Reproduced from _harness/_reports/closing_kemdo_m2_t70_kemdo_1_measure.json (the clean frame): figure top-25 L* 84.5 against lane p50 38.1, median dE76 14.1, 22 % of figure pixels within 8 L* of the ground. Signature zone: closing_kemdo_m2_hue_gt90.txt. Silhouette: art/renders/lineup/integ_chars_p2.json IoU64 max 0.661 (Ervet), Sukri 0.577.",
+      "gauge": "r12 M12: a champion owns a signature hue that the kit repeats, and the model wears it.",
+      "fix": "Kept from the reviewer: a kiln-coral 'scorch' zone (H 10-16, outside every reserved band; sat 0.45-0.55, L* 55-70) on the waist wrap, cowl lining and lens-frame bands. Add darker sear rings, target 15-20 % of the silhouette, and carry it through both skins. Record it in kemdo.md sections 5-6.",
+      "size": "M",
+      "files": "art/blender/fighters/kemdo.py (palette roles, paint, SKINS); _design/fighters/kemdo.md sections 5-6, 9",
+      "verifierNote": "Downgraded from major to minor. The numbers reproduce, but four facts limit the impact. (1) Her kit VFX carry the signature, which is where r12 M12 puts it first, and the M12 content half is met. (2) Value separation from the lane is strong (top-25 46 L* above the lane). (3) Her silhouette is distinct from every fighter, so the colour match with Sukri does not make them confusable. (4) The neutral sand is the brief's palette plan (kemdo.md section 5). This matches ilsheta-no-own-hue (minor). M12.4's model zone is open across the roster."
+    },
+    {
+      "id": "kemdo-m3",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Highrim reads close to base outside the portrait",
+      "what": "The standard Highrim skin differs strongly in the portrait, where the hood, wrap and chest are paler. In the splash and showcase the lens, frame and robe barely change.",
+      "evidence": "_harness/_reports/closing_kemdo_skin_delta.txt: splash lens dE 0.9, frame 2.0, pauldron 2.0, robe 4.8; portrait hood 18.3, chest 18.7. Viewed closing_kemdo_showcase_figs.png (middle) and closing_kemdo_skins_gamecam_x2.png: in game the white hood is the visible change.",
+      "gauge": "A LoL standard-tier skin is recognisable at a glance in play and in the store.",
+      "fix": "Push the brief's wind-scoured frame (#CDBB9C) with a visible grain relief and a paler ash haft, so the glaive changes as well as the hood.",
+      "size": "S",
+      "files": "art/blender/fighters/kemdo.py (SKINS highrim); _design/fighters/kemdo.md section 9",
+      "verifierNote": "Confirmed as minor. It follows the brief's subtle palette, and the hood change is visible at the game camera."
+    },
+    {
+      "id": "kemdo-m6",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "The lineup QA still flags Kemdo's value gradient and edge-on accent, and disagrees with the in-match read",
+      "what": "integ_chars_p2 has valueGradientOk false (top band 50-64 against 70-85) and accentOk false (0.18 % at facing 270, where the lens is edge-on). In match, the figure's top quarter reaches L* 84.5 and the accent reads at 1.92 % on average.",
+      "evidence": "art/renders/lineup/integ_chars_p2.json (kemdo entry). The fresh three_snapshot log for closing_kemdo_verify_sheet.png gives accentPct 1.92 and accentTopHalfPct 100. Also closing_kemdo_m2_t70_kemdo_1_measure.json.",
+      "gauge": "Gates should agree with what the player sees. A shipping champion does not carry standing QA failures.",
+      "fix": "Either make the band metric match the in-match one (top quartile rather than the area median) or lift the hood and cowl tops. Give the frame's side face a thin accent strip so the edge-on facing keeps at least 1 % accent.",
+      "size": "S",
+      "files": "art/tools/lineup_qa (band metric); art/blender/fighters/kemdo.py (frame accent)",
+      "verifierNote": "Confirmed as minor."
+    },
+    {
+      "id": "kemdo-v1",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Verifier-added: at the gameplay camera the brow eave over the dark slit reads as a mouth-like stripe with no visible eyes",
+      "what": "When she faces the viewer at 1:1 game-camera scale, the face is about 12 px. The pale carved brow eave sits over the dark eye slit and the pale wrap, and from 52 degrees above it reads as a pale band over a dark gap, like a grin. No eye or glint resolves. The portrait and icon show catch-lit living eyes.",
+      "evidence": "_harness/_shots/closing_kemdo_verify_gamecam_faces_x4.png: 4x and 1x crops of row 1 (the gameplay camera at 1080p pixel scale) of the fresh _harness/_shots/closing_kemdo_verify_sheet.png (node art/tools/three_snapshot.mjs art/out/fighters/kemdo/kemdo.glb), facings 0 and 45. Compare closing_kemdo_portrait_faces_x3.png and closing_kemdo_icon_sizes.png, where the eyes are alive.",
+      "gauge": "A masked or hooded LoL champion keeps a readable eye line at the gameplay camera, a glint or a lit slit, so the face reads as someone looking, never as teeth.",
+      "fix": "Seat two small glossy, non-emissive eye glints in the slit so the key light catches them from the 52-degree camera. Darken the underside of the eave by about 10 L* so it reads as a brow, not a pale tooth band. Lower the wrap's top edge 1 cm so the dark band reads as shadow under the brow.",
+      "size": "S",
+      "files": "art/blender/fighters/kemdo.py (face sculpt, eyeslit paint); portraits and icon unchanged",
+      "verifierNote": "Not a blocker, and minor rather than hesmi-M1's major. There is no horror trope, hockey mask or blank mannequin. The HUD portrait and icon read alive. The face is only visible when she faces the camera. The owner standard 'faces read as alive and readable from the gameplay camera' is still only partly met in the game view."
+    }
+  ],
+  "missed": []
+}
