@@ -60,6 +60,7 @@
 // naming is a warning) · presentation rules (r12: delayed areas that hurt enemies are telegraphed to
 // everyone and warn >= 0.6 s; fighter VFX signatures in range and apart) · required fighter clips (§12) · every fighter has a base
 // skin in store.starterOwnership · every asset ref resolves · deny-listed names (tools/names_check.ts)
+// · player copy (src/ui/copy_lint.ts: VALE's words, American spelling, stat display names; COPY_LINT_PENDING warns)
 // · item recipes (component costs ≤ total, no cycles) · kit completeness (passive + a1 a2 a3 ult,
 // each with icon, non-blank desc, ai hint) · map coordinates inside the map · nav grid size ·
 // UnitDef.behavior against the sim's vocabulary (src/sim/units/behavior_keys.ts: known keys for the
@@ -81,6 +82,7 @@ import { VFX_SHAPES } from '../src/render/vfx/shapes.ts';
 import { SCREEN_MUSIC_KINDS, STING_KINDS, UI_CUE_KINDS, UI_CUE_KINDS_OPTIONAL } from '../src/ui/audio_kinds.ts';
 import { MANIFEST_FORMAT, MANIFEST_PRODUCT, type CatalogManifest, type ManifestHistoryEntry } from '../src/contracts/manifest.ts';
 import { checkNames, DEFAULT_DESIGN_DIR, formatHit, loadDenyList, type NameInput, type TextKind } from './names_check.ts';
+import { formatCopyHit, lintPlayerCopy } from '../src/ui/copy_lint.ts';
 import { MIGRATIONS, type CatalogData, type MigrationRegistry } from './schema_migrations.ts';
 
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -292,7 +294,14 @@ function jsonFilesIn(dir: string, dg: Diagnostics): string[] {
   return out;
 }
 
-interface Loaded { raw: Record<string, unknown>; version: unknown }
+/** families the player-copy lint skips: engine data, never shown as text (strings.en.json is linted as the strings table) */
+const COPY_LINT_SKIP = new Set(['vfx', 'audio', 'strings']);
+interface Loaded {
+  raw: Record<string, unknown>;
+  version: unknown;
+  /** every parsed source file outside COPY_LINT_SKIP, by its path relative to the content dir (the player-copy lint) */
+  files: Record<string, unknown>;
+}
 function loadSources(contentDir: string, builtAt: string, dg: Diagnostics): Loaded | null {
   if (!existsSync(contentDir) || !statSync(contentDir).isDirectory()) {
     dg.fileErr(displayPath(contentDir), 'content directory not found');
@@ -316,6 +325,8 @@ function loadSources(contentDir: string, builtAt: string, dg: Diagnostics): Load
   dg.origins.builtAt = { whole: { file: '(build)', prefix: ['builtAt'] } };
 
   const raw: Record<string, unknown> = { schema: SCHEMA_VERSION, version, builtAt };
+  const files: Record<string, unknown> = {};
+  const keepForLint = (fam: Family, abs: string, v: unknown): void => { if (!COPY_LINT_SKIP.has(fam.key)) files[relative(contentDir, abs).replace(/\\/g, '/')] = v; };
   for (const fam of FAMILIES) {
     const abs = join(contentDir, fam.path);
     const file = displayPath(abs);
@@ -324,6 +335,7 @@ function loadSources(contentDir: string, builtAt: string, dg: Diagnostics): Load
       if (!existsSync(abs)) { dg.fileErr(file, `missing (catalog.${fam.key})`); dg.missing.add(fam.key); continue; }
       const v = readJsonFile(abs, dg);
       if (v === undefined) { dg.missing.add(fam.key); continue; }
+      keepForLint(fam, abs, v);
       if (fam.shape === 'object') { raw[fam.key] = v; continue; }
       const u = unwrapArray(v, [fam.key, fam.path.replace(/\.json$/, '')], file, dg);
       if (!u) { dg.missing.add(fam.key); continue; }
@@ -337,6 +349,7 @@ function loadSources(contentDir: string, builtAt: string, dg: Diagnostics): Load
     for (const f of jsonFilesIn(abs, dg)) {
       const v = readJsonFile(f, dg);
       if (v === undefined) continue;
+      keepForLint(fam, f, v);
       const fileD = displayPath(f);
       const stem = basename(f, '.json');
       if (fam.shape === 'recordPerFile') {
@@ -357,7 +370,7 @@ function loadSources(contentDir: string, builtAt: string, dg: Diagnostics): Load
     raw[fam.key] = items;
     dg.origins[fam.key] = { whole: { file: file + '/', prefix: [] }, items: origins };
   }
-  return { raw, version };
+  return { raw, version, files };
 }
 
 // ── 2. zod → diagnostics ────────────────────────────────────────────────────────────────────────
@@ -1285,6 +1298,53 @@ function collectNames(data: Record<string, unknown>): { inputs: NameInput[]; pat
   return { inputs, paths };
 }
 
+// ── 5b. player copy ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Copy-lint hits that are known and routed to the lane that owns the file (integration_plan systems-10: modes / queues /
+ * roles / classes / fighter kit copy; systems-14: skin desc spelling). Each one is reported as a warning; the entry
+ * goes stale (harmlessly) once that copy is fixed. Keys are `<file relative to content/>$<json path>|<word>`. In the
+ * project's own content/ a hit that is NOT listed here is an error, so no new copy can regress; any other --content tree
+ * (the probe fixtures, whose placeholder text never reaches a player) gets warnings. Delete an entry once its fix lands.
+ */
+const COPY_LINT_PENDING: ReadonlySet<string> = new Set([
+  'roles.json$[2].contract|centre',
+  'roles.json$[4].contract|gold',
+  'classes.json$[5].desc|favour',
+  'skins/ardit.json$[1].desc|grey',
+  'skins/ardit.json$[2].desc|armour',
+  'skins/burdam.json$[1].desc|armour',
+  'skins/ervet.json$[1].desc|colours',
+  'skins/ervet.json$[1].desc|armour',
+  'skins/ervet.json$[2].desc|armour',
+  'skins/ilsheta.json$[2].desc|honour',
+  'skins/lisvel.json$[1].desc|grey',
+  'skins/rishal.json$[0].desc|grey',
+  'skins/rishal.json$[1].desc|grey',
+  'skins/rishal.json$[2].desc|armour',
+  'skins/sukri.json$[1].desc|colours',
+  'skins/vashil.json$[1].desc|grey',
+  'maps/map_fray.json$.desc|centre',
+]);
+
+function copyLint(files: Record<string, unknown>, strings: Record<string, string>, contentDir: string, dg: Diagnostics): void {
+  const shipped = resolve(contentDir) === resolve(PROJECT_ROOT, 'content');
+  for (const h of lintPlayerCopy(files, strings)) {
+    let rel: string, at: string;
+    if (h.path.startsWith('strings.')) { rel = 'strings.en.json'; at = fmtPath([h.path.slice('strings.'.length)]); }
+    else {
+      const i = h.path.indexOf(':');
+      const rest = h.path.slice(i + 1);
+      rel = h.path.slice(0, i);
+      at = `$${rest.startsWith('[') ? '' : '.'}${rest}`;
+    }
+    const msg = formatCopyHit({ ...h, path: 'copy lint' });
+    const file = displayPath(join(contentDir, rel));
+    if (shipped && COPY_LINT_PENDING.has(`${rel}${at}|${h.word}`)) dg.fileWarn(file, `${msg} [pending copy fix]`, at);
+    else if (shipped) dg.fileErr(file, msg, at);
+    else dg.fileWarn(file, msg, at);
+  }
+}
+
 // ── 6. emit catalogs + manifest ─────────────────────────────────────────────────────────────────
 function readPrevManifest(outDir: string, dg: Diagnostics): CatalogManifest | null {
   const file = join(outDir, 'manifest.json');
@@ -1413,6 +1473,11 @@ export function buildContent(opts: BuildOptions): BuildResult {
     const { inputs, paths } = collectNames(data);
     for (const h of checkNames(inputs, deny)) dg.err(paths[Number(h.path)], `deny-listed name: ${formatHit(h)}`);
   }
+
+  // player copy (src/ui/copy_lint.ts; originality F6 / F8, client F11): VALE's own words where the genre has its own,
+  // American spelling, stat display names instead of raw stat ids. Every content file but vfx / audio, plus every
+  // strings.en.json value. A hit on COPY_LINT_PENDING is a warning until its routed copy fix lands; any other hit fails
+  copyLint(loaded.files, isObj(raw.strings) ? raw.strings as Record<string, string> : {}, opts.contentDir, dg);
 
   // counts (from whatever we have)
   const len = (v: unknown): number => Array.isArray(v) ? v.length : isObj(v) ? Object.keys(v).length : 0;
