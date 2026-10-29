@@ -25,12 +25,13 @@
   },
   "excluded": "Ilsheta art (own fix pass); recorded leftovers art/renders/fighters/*/_open.json and _design/reviews/wave_b_open.json",
   "prerequisite": "Owner rotates the Meshy key before any wave.",
-  "status_as_of": "2026-10-29 (integration run 2 in progress; HEAD 935ae297)",
+  "status_as_of": "2026-10-29 (integration run 2 verdicts and the integration gate applied)",
   "status_sources": [
    "_design/reviews/fixwaves/<wave>_verify<n>.json (W1-W5b)",
    "_design/reviews/fixwaves/integ_<lane>_verify<n>.json (integration run 1)",
    "_design/reviews/fixwaves/integration_plan_run2.json lanes.lead (W4 handoffs lead-r2-03/05/06/07)",
-   "_design/reviews/fixwaves/integ2_<lane>_verify<n>.json (integration run 2; applied to the entries in status_updates)"
+   "_design/reviews/fixwaves/integ2_<lane>_verify<n>.json (integration run 2; applied to the entries in status_updates)",
+   "_harness/_reports/integ_lead_* (integration run 2 gate: typecheck, content:check, probe, build, e2e flow / practice / store, sweep_720, perf_1080 --prod, value_probe, icon_probe, audio gates, bot soak quick)"
   ],
   "status_legend": {
    "done": "the latest verifier item passes (or both halves of a split finding pass)",
@@ -41,16 +42,16 @@
   "prerequisite_status": "closed by the owner",
   "status_counts": {
    "findings_done": 43,
-   "polish_done": 35,
+   "polish_done": 41,
    "polish_done_unverified": 9,
-   "polish_partly": 7
+   "polish_partly": 1
   },
   "status_counts_by_severity": {
    "finding/blocker/done": 9,
    "finding/major/done": 34,
-   "polish/minor/done": 35,
+   "polish/minor/done": 41,
    "polish/minor/done_unverified": 9,
-   "polish/minor/partly": 7
+   "polish/minor/partly": 1
   },
   "status_counts_note": "Counts are entries: audio AUD-2 (W2 UI half, W3 engine half) and client F3 (W2 UI half, W5 art half) are listed in two waves, so 9 blocker and 34 major entries cover the 8 blocker and 33 major findings.",
   "status_updates": [
@@ -68,6 +69,24 @@
      "verifier_open[obs-ranked-ban-docs] (new)"
     ],
     "note": "Other entries still read as of status_as_of; integ2 verdicts for other lanes are not yet applied."
+   },
+   {
+    "date": "2026-10-29",
+    "source": "integration run 2 gate (integ2_<lane>_verify<n>.json for every lane, plus the gate's own re-runs and fixes)",
+    "entries": [
+     "polish[combat F4] (partly)",
+     "polish[HUD-3]",
+     "polish[PERF-m5]",
+     "polish[AUD-4]",
+     "polish[originality F6]",
+     "polish[originality F8]",
+     "polish[g3]",
+     "verifier_open[4 audio regressions, handoff:W2-copy, e2e:store, client-14, world-05, lead:fighter-tris / chars-04, value_probe RIFT Low flash, obs-ranked-ban-docs]",
+     "verifier_open[combat:F4 (Hesmi first beat)] (new)",
+     "verifier_open[engine-r2 optional world looks] (new)",
+     "observations[balance:longshade-closer]"
+    ],
+    "note": "Every integ2 verdict is now applied."
    }
   ]
  },
@@ -1745,13 +1764,14 @@
    "verdict": "downgraded",
    "wave": "W1",
    "status": "partly",
-   "status_evidence": "Box-white gate met (integ_engine_verify1: Kemdo 0.023, Rishal 0.202, Tunlan 0.219, Hesmi 0.281), but the VFX lift cap (8b417c56) dims the ult impact ground effects: value_probe RIFT Low flash 1.94x against >= 2.0x. Open in run 2.",
+   "status_evidence": "Integration run 2 gate (76af05c1): Tunlan's Shadow Play throws the lamp's flash down the cone and its ink fades in after it; Hesmi's Felled Shard and Marund's Domefall light their floors. probe_combat_polish ult (fw_W1_combat_polish_integ_lead_f4_3.json): core on the first beat Kemdo x2.32, Rishal x2.36, Tunlan x2.06 -> x2.34 (ground x2.39), Hesmi x2.21 -> x2.26 (ground x2.08, < 2.3); box white Kemdo 0.025, Rishal 0.21, Tunlan 0.165, Hesmi 0.278 (all <= 0.35); the lift adds <= 0.031 on every body. value_probe RIFT flash High 2.17x, Low 1.93x -> 2.05x (gate >= 2.0x; integ_lead_f4_1). Open: Hesmi's first-beat core (2.26 vs 2.3); a lit floor and a delayed ink ring did not move it (+0.05), the great shadow zone's ink under the strike is the likely limiter.",
    "status_history": [
     "W1_verify1: partly",
-    "integ_engine_verify1: partly"
+    "integ_engine_verify1: partly",
+    "integ2_engine_verify1: fail; integration run 2 gate: partly (Tunlan and the RIFT Low flash pass, Hesmi x2.26)"
    ],
    "open_in": [
-    "integration_plan_run2.json engine combat:F4"
+    "none planned: Hesmi's ult first-beat core x2.26 < 2.3 (the next engine VFX pass)"
    ]
   },
   {
@@ -1867,16 +1887,12 @@
    ],
    "verdict": "downgraded",
    "wave": "W5 (minimap art) + W2 (minimap.tsx)",
-   "status": "partly",
-   "status_evidence": "Wick dots and the bounds-aware minimap are in (src/ui/hud/minimap.tsx:61-76 minimapBounds/fitMap, :375-381). The plaza discs are still clipped on the live 1x minimap until the world lane pads RIFT minimap.png and writes art.terrain.minimapBounds (integ_world_verify1 world-05 fail: skip premise false).",
+   "status": "done",
+   "status_evidence": "Both plaza discs fit the live minimap on RIFT and BRIDGE (integ2_world_verify1 world-pad and world-05 pass); the fog now carries into the minimapBounds margin (4422272f, live margin luma 46 -> 27 on unseen sides); the BRIDGE minimap's map-edge seam is feathered (31c05be0: per-column |dLuma| west 4.68/23.6 -> 3.13/12.1, east 4.87/19.1 -> 2.69/7.8). Wick dots 2.2*k on a 1 px keyline.",
    "status_history": [
     "W5a_verify1: partly",
-    "integ_client_verify1: partly"
-   ],
-   "open_in": [
-    "integration_plan_run2.json world world-pad",
-    "integration_plan_run2.json world world-05",
-    "integration_plan_run2.json client stitch client-hud3"
+    "integ_client_verify1: partly",
+    "integ2_world_verify1: pass (world-pad, world-05); integration run 2 gate: seam and fog margin closed"
    ]
   },
   {
@@ -2237,14 +2253,12 @@
    ],
    "verdict": "confirmed",
    "wave": "W1",
-   "status": "partly",
-   "status_evidence": "Per-fighter budget met (48 GLBs 16,340-23,579 tris) and the LOD1 recipe exists (avg body 19,653 -> 11,916), but the renderer does not draw it: perf_1080 --prod match peak 1,031,094 tris / 41 programs (integ_engine_v1_perf_1080.json; integ_chars_verify2 partly). Open as the run-2 engine LOD port.",
+   "status": "done",
+   "status_evidence": "The match draws the fighters' face-locked LOD1 (engine-lod, integ2_engine_verify2 pass: perf_1080 --prod match peak 483,341 tris, 40 programs, 273 draws). Integration run 2 gate perf_1080 --prod (all presets, LOD1 with the UV weight 60): GATE PASS, match peak 479k tris, 40 programs, 273 draws; High 60.1 fps p95 16.8 ms 254k tris 174 draws 37 programs; memory +1.3 % over 4 rebuilds (_harness/_reports/integ_lead_perf_1080.json).",
    "status_history": [
     "W1_verify1: partly",
-    "integ_chars_verify1: partly"
-   ],
-   "open_in": [
-    "integration_plan_run2.json engine engine-lod"
+    "integ_chars_verify1: partly",
+    "integ2_engine_verify2: pass (engine-lod); integration run 2 gate: perf_1080 --prod GATE PASS"
    ]
   },
   {
@@ -2490,13 +2504,11 @@
    ],
    "verdict": "downgraded",
    "wave": "W3",
-   "status": "partly",
-   "status_evidence": "W3_verify1 partly: library hits fixed (HF 0.080-0.104, laptop loss <= 2.94 LU), but W3_verify2 found the kit hits that replaced them regress (ability-hit contact 0.004-0.048 vs floor 0.07; attack-hit soft top over). Integration run 1 claimed done but the audio verifier stalled; run 2 re-confirms.",
+   "status": "done",
+   "status_evidence": "integ2_audio_verify1 audio-r1-confirm pass: worst kit laptop loss 2.47 LU, phys kit contact floor 0.088 (f_ulkro_hit), soft top 0.240, nearest dash pair 8.46 dB; audio/build.py --gates PASS again in the integration run 2 gate (_harness/_reports/integ_lead_audio_gates.log: impacts lose <= 2.9 LU with a contact transient).",
    "status_history": [
-    "W3_verify1: partly"
-   ],
-   "open_in": [
-    "integration_plan_run2.json audio audio-r1-confirm"
+    "W3_verify1: partly",
+    "integ2_audio_verify1: pass (audio-r1-confirm)"
    ]
   },
   {
@@ -2632,13 +2644,10 @@
    "files": [],
    "verdict": "confirmed",
    "wave": "W2",
-   "status": "partly",
-   "status_evidence": "Registry and lead docs done: protected_names.json:3401-3402 holds Battle Spell(s) (integ_lead_verify1), DESIGN_NOTE, README and NAMES_NOT_USED say Hour spells (02d56942); player strings say Hour spells (strings.en.json loadout.spells). Leftovers: fallback strings, comments and game_meta in other lanes, open in run 2.",
-   "status_history": [],
-   "open_in": [
-    "integration_plan_run2.json client client-r1h-12",
-    "integration_plan_run2.json engine engine-index-comment",
-    "integration_plan_run2.json systems systems-setup-wording"
+   "status": "done",
+   "status_evidence": "Registry and docs as before (protected_names.json:3401-3402, DESIGN_NOTE, README, NAMES_NOT_USED say Hour spells). Run 2 closed the leftovers: client-r1h-12 pass (integ2_client_verify1), engine-index-comment pass (integ2_engine_verify1), systems-setup-wording pass (integ2_systems_verify1); the last code comments say Hour spell (bca963da client, 31bad684 engine).",
+   "status_history": [
+    "integ2_client_verify1 / integ2_engine_verify1 / integ2_systems_verify1: pass"
    ]
   },
   {
@@ -2673,14 +2682,12 @@
    "files": [],
    "verdict": "confirmed",
    "wave": "W2 (strings, client.json) + W4 (queues, modes, items)",
-   "status": "partly",
-   "status_evidence": "Queues, modes and items half W4_verify1 pass (systems-05 confirmed by integ_systems_verify1: modes[0].desc, queues Gleam). UI half (shop TAG_LABEL jungle -> Dialwood and other UI strings) is open in run 2.",
+   "status": "done",
+   "status_evidence": "Queues, modes and items half W4_verify1 pass; UI half client-r2-08 pass (integ2_client_verify1: src/ui/hud/shop.tsx:31 TAG_LABEL jungle 'Dialwood', the practice strings say Gleam).",
    "status_history": [
     "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (queues, modes, items half)",
-    "W4_verify1: pass"
-   ],
-   "open_in": [
-    "integration_plan_run2.json client client-r2-08"
+    "W4_verify1: pass",
+    "integ2_client_verify1: pass (client-r2-08)"
    ]
   },
   {
@@ -2850,17 +2857,14 @@
    ],
    "verdict": "confirmed",
    "wave": "W4 (sim) + W2 (panel UI)",
-   "status": "partly",
-   "status_evidence": "Sim and session half pass (integ_systems_verify1: probe_sim_practice 39/39; sim.ts:66-69 toggleWaves, toggleStructures, teleport, dummyStats, resetMeter, clearDummies). The practice panel UI half is a client item in run 2.",
+   "status": "done",
+   "status_evidence": "Sim half as before (probe_sim_practice). UI half: integ2_client_verify1 left client-r2-07 / client-1b-16 partly only because BRIDGE practice hung at loading; systems d0ddcb7e builds the practice catalog per mode and keeps the bots factory inside the try (probe_sim_practice 44/44), and the gate fixed the e2e teleport race (f9c74407). Integration run 2 gate: node _harness/e2e.mjs practice PASS (practice_rift: Wicks/Structures off, armor 120, targets 3 -> 0 -> 1, teleport 2.5 m on try 1, meter 53 -> Clear 0; practice_bridge: loads map_bridge, bar 'BRIDGE · Practice'; _harness/_reports/integ_lead_e2e_practice.json); the setup screen fades its bottom edge at 1280x720 (Screen.tsx:68 sfade is-more-b; integ_lead_practice720.json).",
    "status_history": [
     "W2_verify1: partly",
     "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (sim half)",
     "W4_verify1: pass",
-    "integ_systems_verify1: pass"
-   ],
-   "open_in": [
-    "integration_plan_run2.json client client-1b-16",
-    "integration_plan_run2.json client client-r2-07"
+    "integ_systems_verify1: pass",
+    "integ2_client_verify1: partly (BRIDGE hang); integration run 2 gate: e2e practice PASS after d0ddcb7e"
    ]
   },
   {
@@ -2931,37 +2935,37 @@
   {
    "id": "regression:kit-ability-hit-contact",
    "lane": "audio",
-   "status": "open",
-   "evidence": "W3_verify2 fail; run-1 audio claims done, never verified (the audio verifier stalled).",
-   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+   "status": "done",
+   "evidence": "W3_verify2 fail; run-1 audio claims done, never verified (the audio verifier stalled). Run 2: integ2_audio_verify1 audio-r1-confirm pass (phys contact floor 0.088, soft top 0.240, nearest dash pair 8.46 dB; hitSfx semantics hold).",
+   "open_in": "done in run 2 (integ2_audio_verify1)"
   },
   {
    "id": "regression:kit-attack-hit-soft-top",
    "lane": "audio",
-   "status": "open",
-   "evidence": "W3_verify2 fail; same as above.",
-   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+   "status": "done",
+   "evidence": "W3_verify2 fail; same as above. Run 2: integ2_audio_verify1 audio-r1-confirm pass (phys contact floor 0.088, soft top 0.240, nearest dash pair 8.46 dB; hitSfx semantics hold).",
+   "open_in": "done in run 2 (integ2_audio_verify1)"
   },
   {
    "id": "regression:hitsfx-semantics",
    "lane": "audio",
-   "status": "open",
-   "evidence": "W3_verify2 partly; same as above.",
-   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+   "status": "done",
+   "evidence": "W3_verify2 partly; same as above. Run 2: integ2_audio_verify1 audio-r1-confirm pass (phys contact floor 0.088, soft top 0.240, nearest dash pair 8.46 dB; hitSfx semantics hold).",
+   "open_in": "done in run 2 (integ2_audio_verify1)"
   },
   {
    "id": "audio-09 (own dashes near-identical by spectrum)",
    "lane": "audio",
-   "status": "open",
-   "evidence": "W3 regression note; run-1 claims done, unverified.",
-   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+   "status": "done",
+   "evidence": "W3 regression note; run-1 claims done, unverified. Run 2: integ2_audio_verify1 audio-r1-confirm pass (phys contact floor 0.088, soft top 0.240, nearest dash pair 8.46 dB; hitSfx semantics hold).",
+   "open_in": "done in run 2 (integ2_audio_verify1)"
   },
   {
    "id": "handoff:W2-copy",
    "lane": "client",
-   "status": "open",
-   "evidence": "W4_verify1 fail: strings.en.json still said structures lose protection in sudden death and the old Lot prompt.",
-   "open_in": "integration_plan_run2.json client client-r2-09"
+   "status": "done",
+   "evidence": "W4_verify1 fail: strings.en.json still said structures lose protection in sudden death and the old Lot prompt. Run 2: client-r2-09 pass (integ2_client_verify1).",
+   "open_in": "done in run 2 (integ2_client_verify1)"
   },
   {
    "id": "hud:HUD-1-seam",
@@ -2973,37 +2977,37 @@
   {
    "id": "e2e:store",
    "lane": "client",
-   "status": "open",
-   "evidence": "integ_client_verify1 partly: e2e all exits 1 on the store journey only (wallet 598 vs cheapest skin 600).",
-   "open_in": "integration_plan_run2.json client e2e:store"
+   "status": "done",
+   "evidence": "integ_client_verify1 partly: e2e all exits 1 on the store journey only (wallet 598 vs cheapest skin 600). Run 2: e2e:store pass (integ2_client_verify1); the integration gate re-ran node _harness/e2e.mjs store: PASS (integ_lead_e2e_store.json).",
+   "open_in": "done in run 2 (integ2_client_verify1)"
   },
   {
    "id": "client-14",
    "lane": "client",
-   "status": "open",
-   "evidence": "integ_client_verify1 partly: client half of HUD-3 done; waits on the world padding.",
-   "open_in": "integration_plan_run2.json world world-pad; client stitch client-hud3"
+   "status": "done",
+   "evidence": "integ_client_verify1 partly: client half of HUD-3 done; waits on the world padding. Run 2: world-pad and world-05 pass (integ2_world_verify1); fog margin 4422272f; BRIDGE seam 31c05be0.",
+   "open_in": "done in run 2 (4422272f, 31c05be0)"
   },
   {
    "id": "world-05",
    "lane": "world",
-   "status": "open",
-   "evidence": "integ_world_verify1 fail: skipped on a false premise (the client reads minimapBounds since 61fe088f).",
-   "open_in": "integration_plan_run2.json world world-05"
+   "status": "done",
+   "evidence": "integ_world_verify1 fail: skipped on a false premise (the client reads minimapBounds since 61fe088f). Run 2: world-05 pass (integ2_world_verify1).",
+   "open_in": "done in run 2 (integ2_world_verify1)"
   },
   {
    "id": "lead:fighter-tris / chars-04",
    "lane": "engine",
-   "status": "open",
-   "evidence": "integ_chars_verify2 partly: per-fighter budget and LOD1 recipe met, renderer does not use LOD1; match peak 1,031,094 tris > 500k.",
-   "open_in": "integration_plan_run2.json engine engine-lod"
+   "status": "done",
+   "evidence": "integ_chars_verify2 partly: per-fighter budget and LOD1 recipe met, renderer does not use LOD1; match peak 1,031,094 tris > 500k. Run 2: engine-lod pass (integ2_engine_verify2: match peak 483,341 tris, 40 programs); gate perf_1080 --prod match peak 479k (integ_lead_perf_1080.json).",
+   "open_in": "done in run 2 (c981a3b1, integ2_engine_verify2)"
   },
   {
    "id": "regression: value_probe RIFT Low flash 1.94x",
    "lane": "engine",
-   "status": "open",
-   "evidence": "integ_engine_verify1 regression from the combat:F4 VFX lift cap (8b417c56).",
-   "open_in": "integration_plan_run2.json engine combat:F4"
+   "status": "done",
+   "evidence": "integ_engine_verify1 regression from the combat:F4 VFX lift cap (8b417c56). Run 2 gate (76af05c1): value_probe --maps rift flash High 2.17x, Low 2.05x (>= 2.0x).",
+   "open_in": "done in run 2 (76af05c1)"
   },
   {
    "id": "systems-18",
@@ -3029,9 +3033,23 @@
   {
    "id": "obs-ranked-ban-docs",
    "lane": "lead",
+   "status": "done",
+   "evidence": "integ2_lead_verify1 fail (spot check): docs said Ranked uses 2 bans a team, content has 1 at 16 fighters (queues.rift_ranked.draft.bansByRoster). Integration run 2 stitch: DESIGN_NOTE.md :29 and :69 and ROSTER.md §2.1 now say Draft and Ranked use 1 ban a team at 16 fighters (C = 12, the last picker chooses from 5) and the ladder 2/3/4/5 at 28/32/36/40; DESIGN_NOTE §1's BRIDGE row and :69 also follow the W4 re-key (level 2, 1,050 Gleam, sudden death at 21:00, the burning Lot of 3 with one take, Needle shops). Open: _design/sections/modes_economy.md:117 ('Ranked uses 2 bans per team, so C = 14'), a systems file. Run 2 gate: modes_economy.md §4 and its queue table say Draft and Ranked use 1 ban a team at 16 fighters with bansByRoster 2/3/4/5 at 28/32/36/40 (a026db1b).",
+   "open_in": "done in run 2 (32d916d2, a026db1b)"
+  },
+  {
+   "id": "combat:F4 (Hesmi first beat)",
+   "lane": "engine",
    "status": "partly",
-   "evidence": "integ2_lead_verify1 fail (spot check): docs said Ranked uses 2 bans a team, content has 1 at 16 fighters (queues.rift_ranked.draft.bansByRoster). Integration run 2 stitch: DESIGN_NOTE.md :29 and :69 and ROSTER.md §2.1 now say Draft and Ranked use 1 ban a team at 16 fighters (C = 12, the last picker chooses from 5) and the ladder 2/3/4/5 at 28/32/36/40; DESIGN_NOTE §1's BRIDGE row and :69 also follow the W4 re-key (level 2, 1,050 Gleam, sudden death at 21:00, the burning Lot of 3 with one take, Needle shops). Open: _design/sections/modes_economy.md:117 ('Ranked uses 2 bans per team, so C = 14'), a systems file.",
-   "open_in": "handoff to systems: modes_economy.md:116-117"
+   "evidence": "Integration run 2 gate: Hesmi's Felled Shard first-beat core x2.26 (ground x2.08) < 2.3 after a lit floor (76af05c1); Kemdo, Rishal, Tunlan pass and the RIFT Low flash is 2.05x (fw_W1_combat_polish_integ_lead_f4_3.json, value_probe integ_lead_f4_1).",
+   "open_in": "none planned (next engine VFX pass)"
+  },
+  {
+   "id": "engine-r2 optional world looks",
+   "lane": "engine",
+   "status": "partly",
+   "evidence": "Integration run 2 gate: engine-r2-05 the Noon Toll shows (6deaaeb6: a noon column on each fighter still standing for the reveal, a chime over the plate; FRAY bench 6 columns for 6 fighters); engine-r2-03 half: the Dawn Seal's end sheds the seal from every standing sealed Needle (RIFT bench 6 for 6 at 420 s), the shield shimmer was already the generic lib_shield_up; engine-r2-04 half: each Gorge Wind step sends a gust across the viewer's screen (both in the commit after 6deaaeb6; _harness/_reports/integ_lead_world_moments.json). Not done: the dawnglass glaze on sealed Needles while shielded and the crack overlay while the wind blows (structures.ts), engine-r2-02's optional Lampblack soot ring (needs an aura-occupancy flag in EntityView), and engine-r2-01's nit that vashil_passive_chord draws rings only, with no line joining the two enemies.",
+   "open_in": "none planned (optional polish)"
   }
  ],
  "observations": [
@@ -3042,7 +3060,8 @@
    "status": "open",
    "what": "The first team to take Longshade wins almost every RIFT bot game, so Longshade is the deciding lever for tier separation and is probably too strong.",
    "evidence": "W4: 34/35 in fw_W4_soak_tj_full1. Re-counted at HEAD from the integ_systems_verify1 soak JSONs (games[].objs, first longshade kill vs winner): full1 46/46, full21 46/47, mirror41 61/62. The game ends a median 59-124 s after that first take, and the taker already led on structures lost in about 70 % of those games, so it closes games more than it turns them.",
-   "owner_lane": "systems"
+   "owner_lane": "systems",
+   "status_evidence": "Integration run 2 (systems 8ce5fc59): measured and kept under ruling 4. At HEAD the first taker wins 50/50 RIFT soak games on seeds 1-20 and 50/50 on 21-40; --patch diagnostics show any Wick empowerment saturates the conversion (buff emptied 36/50, Wicks at 60 % 48/50, every number halved 47/50), and tier separation does not depend on it (veteran vs novice 37/40, vs adept 33/40 with the buff emptied). The open lever is the defenders' answer to an empowered wave (bots), recorded in _design/sections/modes_economy.md §9."
   }
  ]
 }

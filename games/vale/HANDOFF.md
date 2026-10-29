@@ -56,7 +56,7 @@ The catalog holds 16 fighters, 48 skins, 57 items, 8 Hour spells, 9 boons, 24 un
   - Never force-push, stash, restore or reset other lanes' files.
   - `tools/wip_sync.sh` makes a "vale wip sync" safety commit every 20 minutes in long sessions.
 
-## Where it stands (2026-10-29)
+## Where it stands (2026-10-29, after integration run 2)
 
 The final LoL-parity review (2026-10-28, gauge only) scored combat 6, HUD 7, environment 6.5, performance 6.5,
 client 5.5, audio 4, originality 5 and gameplay 4. It found 8 blockers, 33 majors and 51 polish items:
@@ -66,67 +66,62 @@ runs followed.
 **The status record is `_design/reviews/final_parity_open.json`.** Every finding and polish item carries
 `status`, `status_evidence`, `status_history` and, while open, `open_in`. Each wave carries `done_status`.
 `verifier_open` lists leftovers that are not findings, and `observations` holds open notes. The status is
-as of the run-2 start:
+as of the run-2 integration gate (`meta.status_as_of`; every integ2 verdict applied):
 - all 8 blockers and all 33 majors are done;
-- 35 polish items are done and 9 are done but unverified;
-- 7 are partly done, and their open halves are run-2 items.
+- 41 polish items are done and 9 are done but unverified;
+- 1 is partly done: combat F4, Hesmi's ult first beat (core x2.26 against 2.3).
 
 | Wave | Verdict | Notes |
 |---|---|---|
 | W1 engine (render, VFX, perf, build hygiene) | pass, round 2 | Cones fill correctly, recall VFX holds, one ult beat per cast, dynres and leak gates hold, and the key is out of git. |
 | W2 client front door and HUD | pass, round 2 | Sensitive art repainted, nav after a dodge, 720p sweep clean, icon families, and the ledger re-renders only on change. |
-| W3 audio | pass, round 2 | Team-private pings, kit identity gates (>= 8 dB), enemy T3 wind-up swell, ambience bus. Three kit-hit regressions were re-confirmed in run 2. |
+| W3 audio | pass, round 2; kit-hit regressions closed in run 2 | Team-private pings, kit identity gates (>= 8 dB), enemy T3 wind-up swell, ambience bus. The three kit-hit regressions and the dash spread pass on re-measure (`fixwaves/integ2_audio_verify1.json` audio-r1-confirm: phys contact floor 0.088, soft top 0.240, nearest dash pair 8.46 dB). |
 | W4 gameplay, bots and systems | round 2 failed done:5 only; closed in integration run 1 | Bot laning gates, Dawn Seal, the BRIDGE pacing and the systems re-key (owner ruling 4, `probe_sim_rekey` 10 % gate). |
 | W5a world art | pass, round 2 | Thickets clear of structures, Art 2.0 landmarks, dressed off-map skirts at about 13k tris, and Longshade without tears. |
 | W5b character art | round 2 failed on W2 CSS handoffs; closed in integration run 1 | Face chips (min pair 59.5 at 26 px), dusk plates, Odrum amber mask, Rishal accent, Burdam pauldron. |
 
-Integration run 1 (`fixwaves/integration_plan.json`, verdicts `fixwaves/integ_<lane>_verify<n>.json`):
+Integration run 1 (`fixwaves/integration_plan.json`, verdicts `fixwaves/integ_<lane>_verify<n>.json`) left the
+fighter LOD port, the minimap padding and the audio re-confirmation to run 2.
+
+Integration run 2 (`fixwaves/integration_plan_run2.json`, verdicts `fixwaves/integ2_<lane>_verify<n>.json`):
 
 | Lane | Verdict |
 |---|---|
-| chars | Partly, on one item. Per-fighter budget and LOD1 recipe met, but the renderer does not draw LOD1 yet, so the match peak is 1,031,094 tris against a 500k budget. Moved to engine-lod in run 2. |
-| client | Pass, round 2. 18 new item paintings passed sensitivity on the second grade. |
-| engine | Partly. 14 of 15 items pass. combat:F4's lift cap drops the value_probe RIFT Low flash to 1.94x (gate >= 2.0x). |
-| lead | Pass. obs-01 and the lead-02 doc gap were fixed in run 2. |
-| systems | Pass. Veteran beats novice 39/40 and 38/40 and adept 34/40 and 32/40; FRAY G6 and G9 hold. systems-18 failed. |
-| world | Pass, except world-05 (minimap padding skipped on a false premise). |
-| audio | Never verified, because its verifier stalled. Run 2 re-confirms every claim (audio-r1-confirm). |
+| audio | Pass. audio-r1-confirm holds; the Ringshade-muffled blow now sounds in real matches (the sim's `shaded`). |
+| chars | Pass. Ervet's Whole Again form at the blade's own size; the match LOD1 checked on all 16 fighters. |
+| client | Round 1 failed on one regression (BRIDGE practice never loaded); fixed by systems d0ddcb7e, and the gate's e2e practice passes. |
+| engine | Pass, round 2. engine-lod: the match draws the fighters' face-locked LOD1; the crowd's team accents draw whole. |
+| lead | Pass. The status record and this file; the ranked-ban docs follow content (1 ban a team at 16 fighters). |
+| systems | Pass. The 18 new items point at their own paintings; bots buy 31/31 finished items. |
+| world | Pass. Both minimaps carry a margin so the plaza discs fit. |
 
-**Integration run 2** (`fixwaves/integration_plan_run2.json`) is in progress across lanes engine, client,
-audio, world, chars, systems and lead. Its commits are titled `vale integ <lane>: ...` and its verdicts
-will be `fixwaves/integ_<lane>_verify<n>.json`.
+The integration gate (commits `vale integ gate: ...`, reports `_harness/_reports/integ_lead_*`) ran the whole
+build on the integrated tree: typecheck 0, strict `content:check` 0 warnings, `npm run probe` 48/48, build,
+e2e flow / practice / store, the 720 sweep, `perf_1080 --prod` (all presets), `value_probe`, `icon_probe`,
+`audio/build.py --gates`, the node audio probes and the bot-soak quick gate: all pass except combat F4's Hesmi
+beat. It also closed the handoffs nobody took: the profile emblem survives a reload, the BRIDGE minimap's edge
+seam, Ervet's ult blade ghost at the blade's own size, the match LOD's UV weight (Burdam's pauldron roundel),
+the muffled ability hit, the RIFT Low flash (2.05x) and Tunlan's ult beat, and three world moments that had no
+look: the Noon Toll's light, the Dawn Seal's shatter at 7:00 and the Gorge Wind's gust.
 
-Performance: `perf_1080 --prod` holds 60 fps at High and Low (p99 16.8 ms,
-`_harness/_reports/integ_world_ver1_perf_1080.json`). The whole-match peak of 1.03 M triangles and 41
-programs fails the 500k / 40 budget (`integ_engine_v1_perf_1080.json`), and the fighter LOD port fixes it.
+Performance: `perf_1080 --prod` holds 60 fps at High and Low (p95 16.8 ms, 0 dropped) and the whole-match peak
+is 479k triangles, 40 programs and 273 draws against the 500k / 40 / 450 budget
+(`_harness/_reports/integ_lead_perf_1080.json`).
 
-## Open items (as of this refresh; see `open_in` in the status record)
+## Open items (as of the run-2 gate; see `open_in` in the status record)
 
-**Major (run 2):**
-- engine-lod: draw the authored fighter LOD1 in the main pass. Target match peak <= 500k tris and <= 40
-  programs (PERF-m5, lead:fighter-tris).
-- world-pad, world-05 and client-hud3: pad the RIFT minimap so both plaza discs fit (HUD-3).
-- systems-r2-icons and hud:HUD-1-seam: point the 18 new items at their own paintings. Closed in run 2:
-  icon_probe borrowed 0 (integ2_systems_verify1, integ2_client_verify1 pass).
-- audio-r1-confirm: re-measure the run-1 audio claims (AUD-4 contact, kit-hit soft top, hit-sfx semantics,
-  dash spread).
+- combat F4: Hesmi's Felled Shard first-beat core x2.26 (ground x2.08) against 2.3. Kemdo, Rishal and Tunlan
+  pass, box white <= 0.35 on all four, and the RIFT Low flash is 2.05x. A lit floor and a delayed ink ring did
+  not move it; the great shadow zone under the strike is the likely limiter (next engine VFX pass).
+- Optional world looks not yet built: the dawnglass glaze on sealed RIFT Outer Needles while shielded and the
+  structures' crack overlay while the Gorge Wind blows (`src/render/structures.ts`; the seal's shatter at 7:00,
+  the gust on each wind step and the Noon Toll's light are in), the Lampblack soot ring (needs an
+  aura-occupancy flag in EntityView), and a line joining the two enemies in Vashil's chord.
 
-**Minor (run 2):**
-- combat:F4: the VFX lift cap against the flash gate.
-- originality F6 wording leftovers: client-r1h-12, engine-index-comment, systems-setup-wording, plus the
-  comment handoffs from lead-02.
-- originality F8 UI half: client-r2-08.
-- Practice panel UI (g3): client-1b-16 and client-r2-07.
-- Profile emblem and nod wiring: client-1b-14 and client-1b-15.
-- e2e store journey (wallet 598 against a 600 skin).
-- systems-18: callstone, needlefall and watchbell are never bought by bots. Closed in run 2: 31/31
-  finished items bought on seeds 1-20 and 21-40 (integ2_systems_verify1 pass).
-- W4 copy and VFX/audio follow-ups for Dawn Seal, Gorge Wind, Noon Toll and the Lot.
-
-**Observation, not in any plan.** The first team to take Longshade wins almost every RIFT bot game: 46/46,
-46/47 and 61/62 in the HEAD soaks, and 34/35 in W4's run. It closes games a median 1-2 minutes later, and
-the taker was usually already ahead. It is the deciding lever for tier separation and probably too strong.
-Owner: systems (tempo).
+**Observation, not in any plan.** The first team to take Longshade wins almost every RIFT bot game (50/50 on
+seeds 1-20 and 21-40 at HEAD). Systems measured it in run 2 (8ce5fc59) and kept the numbers under ruling 4:
+any Wick empowerment saturates the conversion, and tier separation does not depend on it. The open lever is
+the defenders' answer to an empowered wave (bots), recorded in `_design/sections/modes_economy.md` §9.
 
 **Done but unverified** (code cites the finding; spot-check in a re-review): HUD-5, HUD-7, HUD-9,
 HUD-11 and client F10, F13, F14, F16, F17.

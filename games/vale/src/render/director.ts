@@ -542,11 +542,13 @@ export class Director {
           break;
         }
         case 'proc': {
-          // a fighter passive fired: its own look on the subject (else on the owner). Periodic triggers
-          // (interval, moveDistance) show at most every 6 s per owner so an aura reminds, never nags;
+          // a passive fired (a fighter's, an item's or a team buff's): the trigger's own look (Trigger.present, the
+          // event's `vfx`; e.g. Resinburn's ignite), else a fighter passive's look, on the subject (else on the owner).
+          // Periodic triggers (interval, moveDistance) show at most every 6 s per owner so an aura reminds, never nags;
           // the rest at most every 0.4 s per passive and subject.
           const info = this.passives.has(ev.ability) ? this.abilities.get(ev.ability) : undefined;
-          if (!info?.vfx) break;
+          const look = ev.vfx && this.vfx.has(ev.vfx) ? ev.vfx : info?.vfx;
+          if (!look) break;
           const periodic = ev.on === 'interval' || ev.on === 'moveDistance';
           const subj = ev.dst ?? ev.src;
           const key = periodic ? `${ev.ability}:${ev.src}` : `${ev.ability}:${subj}`;
@@ -556,7 +558,7 @@ export class Director {
           this.passiveLast.set(key, now);
           this.host.bodyPos(subj, B);
           if (!this.host.bodyPos(ev.src, A)) A.copy(B);
-          this.fire(info.vfx, ev.src, 1, { origin: A, target: B, ground: B, targetId: subj, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
+          this.fire(look, ev.src, 1, { origin: A, target: B, ground: B, targetId: subj, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
           break;
         }
         case 'damage': {
