@@ -1455,7 +1455,7 @@
   "settings.credits.use.heading": "Headings, labels and prose figures",
   "settings.credits.use.body": "Body text",
   "settings.credits.use.numeric": "Timers and live numbers",
-  "settings.credits.use.mesh": "Compressed 3D models",
+  "settings.credits.use.mesh": "Compressed 3D models and their detail levels",
   "settings.credits.open_file": "Open {file}",
   "settings.controls.binds.title": "Keys",
   "settings.controls.binds.desc": "Click a key, then press the key or mouse button you want.",
