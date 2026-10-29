@@ -10,6 +10,7 @@ hud (BLEEDING OUT, [HOLD E] Revive), loot (downed gate). The gate reads only the
     python _harness/p23/dbno.py --disk --plant no-bleed             # K.DBNO_BLEED_HPS = 0 - MUST FAIL (bleed / bleed-out rows)
     python _harness/p23/dbno.py --disk --plant revive-quick         # K.REVIVE_S = 1 - MUST FAIL (5 s channel row)
     python _harness/p23/dbno.py --lanes all                         # validation: every lane's work served over the base
+    python _harness/p23/dbno.py --disk --parts human2 --control h2-short-hold  # E released after 3 s of GAME time - MUST FAIL (human2 revive row)
 
 Part SOLO (STANDARD, solo, Savanna seed 7): W.match.mode 'solo', every actor its own team; a lethal hit on the human kills it (never downed);
   120 s of the match through fastForward: 0 'actorDowned' events (solo play unchanged).
@@ -30,7 +31,8 @@ Part BOT (STANDARD, duo, Savanna seed 7): the human and its bot teammate are mov
   team-elim    a TRIO match (seed 11): two members knocked stay downed while the third is up; the third knocked -> all three die
 Part HUMAN2 (two pages, the squad relay stand-in of squadguard_live, a REAL duo match on both): the guest is knocked on its own page; the host
   sees the guest's body downed within 1 s; the guest crawls (real W) and the host sees it move; the host (teleported 1.2 m away) holds real E
-  5.3 s; the guest ends revived on 30 hp on its page and up on the host's; the per-tick 'state' message is the same size downed as up (+-4 B).
+  until its sim completes the revive (cap 5 s / host sim rate + 1.5 s real) and the channel took 5.0 +- 0.25 s of the host's GAME time;
+  the guest ends revived on 30 hp on its page and up on the host's; the per-tick 'state' message is the same size downed as up (+-4 B).
 """
 from __future__ import annotations
 
@@ -374,13 +376,52 @@ def part_human2(args, v):
         hpg.wait_for_timeout(500)
         vis = {k: pg.evaluate("() => document.visibilityState") for k, pg in (("host", hpg), ("guest", gpg))}
         v.info("human2: page visibility during the revive", vis)
+        # R2 (harness): the row judges a real E hold of 5 s of GAME time, not 5.6 s of wall time. reviveStep (player.js) adds the frame dt to
+        # _reviveT, so on a loaded box (host clock 0.877-0.983 x real, R1 player lane) a fixed 5.6 s real hold ran out at reviveT 4.57-5.00 -
+        # a coin flip on head and base alike. Now E is held until the host's sim completes the revive, or until the cap (5 s / the host's sim
+        # rate measured live over the hold) + 1.5 s real = 1.5 s real after the host's clock has run REVIVE_S since E went down (the rate is
+        # read live because it moves during the hold: r2 run 1 read 0.857 before it and the channel reached only 3.4 s in 7.4 s real);
+        # 30 s real absolute. The channel's game time (reviveStart -> actorRevived on the host's clock) is judged: REVIVE_S +- 0.25 s.
+        hpg.evaluate("""(gid) => { const W = window.__LC__.W, p = W.player; const Q = window.__P23H2__ = { start: null, done: null, cancels: 0 };
+            W.events.on('reviveStart', (a, b) => { if (a === p && b && b.id === gid && Q.start == null) Q.start = W.t; });
+            W.events.on('reviveCancel', (a, b) => { if (a === p && Q.done == null) Q.cancels++; });
+            W.events.on('actorRevived', (t, a) => { if (a === p && t && t.id === gid && Q.done == null) Q.done = W.t; }); }""", g_id)
+        h_rate = L.sim_rates(hpg, secs=1.5)[0]
+        rs_h = hpg.evaluate("() => window.__LC__.W.SIM.REVIVE_S")
+        short = getattr(args, "control", None) == "h2-short-hold"     # planted control: E released after 3 s of game time - MUST FAIL
+        poll_js = "() => { const Q = window.__P23H2__, W = window.__LC__.W; return { t: W.t, start: Q.start, done: Q.done }; }"
         hpg.keyboard.down("KeyE")
-        hpg.wait_for_timeout(5600)
+        t_e = time.time()
+        g0 = hpg.evaluate("() => window.__LC__.W.t")
+        reach_t, why, q = None, "abs-cap", None
+        while time.time() - t_e < 30.0:
+            q = hpg.evaluate(poll_js)
+            now = time.time()
+            if short and q["start"] is not None and q["t"] - q["start"] >= 3.0:
+                why = "control-3s"
+                break
+            if not short and q["done"] is not None:
+                why = "revived"
+                break
+            if q["t"] - g0 >= rs_h and reach_t is None:
+                reach_t = now
+            if not short and reach_t is not None and now - reach_t >= 1.5:
+                why = "cap"
+                break
+            hpg.wait_for_timeout(50)
+        held_s = round(time.time() - t_e, 2)
         hpg.keyboard.up("KeyE")
+        hold_rate = round((q["t"] - g0) / max(0.001, held_s), 3) if q else None
+        cap_s = round(rs_h / hold_rate + 1.5, 2) if hold_rate else None
+        h2q = hpg.evaluate("() => { const Q = window.__P23H2__, W = window.__LC__.W; return { start: Q.start, done: Q.done, cancels: Q.cancels, reviveT: W.player._reviveT }; }")
+        game_s = round(h2q["done"] - h2q["start"], 3) if h2q["start"] is not None and h2q["done"] is not None else None
         rev = SQ.wait(gpg, "() => { const p = window.__LC__.W.player; return p.alive && !p.downed ? { hp: p.hp } : null; }", 4, 0.1)
         hup = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.alive && !a.downed; }", 3, 0.1, g_id)
-        v.check("human2: the host's real 5 s E revives the guest: 30 hp on its page, up on the host's", bool(rev) and abs(rev["hp"] - 30) <= 1 and bool(hup),
-                {"guest": rev, "hostSeesUp": hup}, "hp 30, up")
+        v.check("human2: the host's real 5 s E revives the guest: 30 hp on its page, up on the host's", bool(rev) and abs(rev["hp"] - 30) <= 1 and bool(hup)
+                and game_s is not None and abs(game_s - rs_h) <= 0.25,
+                {"guest": rev, "hostSeesUp": hup, "channelGameS": game_s, "K.REVIVE_S": rs_h, "hostSimRateBefore": h_rate, "hostSimRateHold": hold_rate, "capRealS": cap_s,
+                 "heldRealS": held_s, "released": why, "host": h2q, "control": "h2-short-hold" if short else None},
+                "revive completes; channel 5.0 +- 0.25 s of game time; hp 30, up")
         v.check("human2: per-tick 'state' message the same size downed as up (+-4 B)", up_b is not None and dn_b is not None and abs(dn_b - up_b) <= 4,
                 {"upBytes": up_b and round(up_b, 1), "downedBytes": dn_b and round(dn_b, 1), "upKeys": up_k, "downedKeys": dn_k}, "+-4 B (both still)")
         for rec in (hrec, grec):
@@ -393,6 +434,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
     ap.add_argument("--parts", default="solo,bot,human2")
+    ap.add_argument("--control", default=None, choices=["h2-short-hold"],
+                    help="harness-side planted control (this gate must then FAIL): h2-short-hold = the host releases E after 3 s of game time")
     args = L.parse(ap)
     parts = set(args.parts.split(","))
     os.makedirs(os.path.join(C.REPORTS, "p23_shots"), exist_ok=True)
