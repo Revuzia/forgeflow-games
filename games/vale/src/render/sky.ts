@@ -26,6 +26,9 @@ export class Sky {
   private last: { scene: Scene; hdr: Texture | null; env: number; bg: number } | null = null;
   private readonly onRestored = (): void => {
     const l = this.last;
+    // the old target's GL objects died with the context: drop it undisposed (its dispose would ask the restored context
+    // to delete objects it never had, a warning per object)
+    this.envRT = null;
     if (l) this.apply(l.scene, l.hdr, l.env, l.bg);
   };
 

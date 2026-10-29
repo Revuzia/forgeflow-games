@@ -25,6 +25,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
+import { lodIndex } from './lod.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
 export const BAKE_HZ = 60;
@@ -404,7 +405,12 @@ class CrowdSet {
         mat.customProgramCacheKey = p.material.customProgramCacheKey;
       }
       patchCrowd(mat, bake, p.bind, p.accent);
-      const mesh = new Mesh(this.buf.view(p.geometry), mat);
+      // perf PERF-m5: the body and accent draw through the same sub-pixel LOD as the hull (lod.ts LOD.hull: half the
+      // triangles within 6 mm; crowd units are Wicks and small monsters, ~70 px tall at the lane camera)
+      const pv = this.buf.view(p.geometry);
+      const partLod = lodIndex(p.geometry, 'hull');
+      if (partLod) { pv.userData.fullIndex = p.geometry.index; pv.setIndex(partLod); }
+      const mesh = new Mesh(pv, mat);
       mesh.customDepthMaterial = crowdDepth(bake.texture, p.bind);
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
@@ -415,11 +421,17 @@ class CrowdSet {
       // the rest ink (per-instance width, collapsed when 0) and the victim flash (per-instance, while one flashes)
       const bk = { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: h.bind } };
       const om = inkMaterial('crowd', INK.outline, { side: BackSide, blend: 'normal', depthWrite: false, offset: [1, 2], uniforms: { ...bk, ...this.outlineU, uOutlineRes: outlineRes } });
-      const o = new Mesh(this.buf.view(h.geometry), om);
+      // perf PERF-m5: the hull draws through its LOD (half the triangles, within 6 mm: lod.ts LOD.hull)
+      const hullLod = lodIndex(h.geometry, 'hull');
+      const hv = this.buf.view(h.geometry);
+      if (hullLod) { hv.userData.fullIndex = h.geometry.index; hv.setIndex(hullLod); }
+      const o = new Mesh(hv, om);
       o.frustumCulled = false; o.matrixAutoUpdate = false; o.renderOrder = 1; o.name = 'crowd_outline';
       this.group.add(o);
       const fm = inkMaterial('crowd', INK.flash, { side: FrontSide, blend: 'premul', depthWrite: false, offset: [-1, -2], uniforms: { ...bk, ...flashU() } });
-      const f = new Mesh(this.buf.view(h.geometry), fm);
+      const fv = this.buf.view(h.geometry);
+      if (hullLod) { fv.userData.fullIndex = h.geometry.index; fv.setIndex(hullLod); }
+      const f = new Mesh(fv, fm);
       f.frustumCulled = false; f.matrixAutoUpdate = false; f.renderOrder = 2; f.name = 'crowd_flash';
       this.flashMeshes.push(f);
       this.group.add(f);

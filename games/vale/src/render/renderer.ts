@@ -51,6 +51,7 @@ import { BAR_KIND, BarLayer, type BarSpec, CC_PLATE, GLYPH, SHAPE } from './over
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
 import { inkShadows } from './ink.ts';
+import { lodReady, lodSwitch, shadowLods } from './lod.ts';
 import { CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
@@ -218,6 +219,8 @@ class ValeRenderer implements Renderer {
   private readonly opts: RendererOptions;
   private q: ResolvedQuality;
   private readonly dyn = new DynamicResolution();
+  /** harness seam (perf PERF-m5, _harness/probe_lod.mjs): the shadow LOD switch (lod.ts) */
+  readonly lodSwitch = lodSwitch;
   /** rebuilt on a restored context (its queries and extension belonged to the lost one) */
   private gpuTimer: GpuTimer;
   // perf PERF-m4: GPU context loss
@@ -1045,7 +1048,8 @@ class ValeRenderer implements Renderer {
     this.buildOverlay(view);
     // r12 B4 programs: every shadow caster draws its depth through the ink programs (ink.ts); the places that add
     // casters assign them, this sweep (two a second) catches any other
-    if (--this.shadowSweep <= 0) { this.shadowSweep = 30; inkShadows(this.scene); }
+    // perf PERF-m5: every new shadow caster also gets its shadow LOD (lod.ts; at most 4 ms of simplifying a sweep)
+    if (--this.shadowSweep <= 0) { this.shadowSweep = 30; inkShadows(this.scene); shadowLods(this.scene, 4); }
   }
   private shadowSweep = 0;
 
@@ -1128,6 +1132,8 @@ class ValeRenderer implements Renderer {
   private warmed = new WeakSet<import('three').Object3D>();
   private warmTemplate(root: import('three').Object3D, programs = true, again = false): void {
     const gl = this.gl;
+    // perf PERF-m5: the template's shadow LODs, built once and shared by every clone (a no-op until lodReady)
+    shadowLods(root);
     if (!again) {
       if (this.warmed.has(root)) return;
       this.warmed.add(root);
@@ -1248,6 +1254,7 @@ class ValeRenderer implements Renderer {
     const teams = isFfaMode(mode) ? null : [...setup.seats.map((s) => s.team), ...(map?.structures.map((s) => s.team) ?? [])];
     const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units, teams);
     const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r));
+    jobs.push(lodReady);                                                   // perf PERF-m5: the simplifier's WASM
     if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); for (const r of AmbientLayer.refs(map)) jobs.push(this.assets.model(r)); }
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
     // unit templates too (per side): their textures upload and their programs compile behind the loading screen

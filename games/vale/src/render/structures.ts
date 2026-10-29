@@ -37,7 +37,7 @@ import type { UnitDefT } from '../contracts/catalog.ts';
 import type { EntityView, SimEvent, WorldView } from '../contracts/sim.ts';
 import type { Actor } from './actors.ts';
 import type { VfxSystem } from './vfx/system.ts';
-import { footMaterial, glazeMaterial, INK_FOOT_H, prepassMaterial, shellUniforms } from './ink.ts';
+import { footMaterial, glazeMaterial, INK_FOOT_H, prepassMaterial, shadowDepth, shellUniforms } from './ink.ts';
 import { patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
 
 /** occlusion fade: alpha of the faded part, its band above the plinth (m), fade in / out (s), share of the unit's
@@ -362,6 +362,10 @@ export class StructureFx {
     const shellVis = s.shell!.visible;
     const skinVis = s.skins.map((m) => m.visible);
     const dmgVis = s.dmg.map((d) => d?.visible ?? false);
+    // perf PERF-m5: the ruin too (hidden until the collapse: three compiles only what is visible, so its program
+    // was built at the first fallen structure)
+    const ruinVis = s.ruin?.visible ?? false;
+    if (s.ruin) s.ruin.visible = true;
     s.shell!.visible = true;
     for (const m of s.skins) m.visible = true;
     for (const d of s.dmg) if (d) d.visible = true;
@@ -372,6 +376,7 @@ export class StructureFx {
     this.setTransparent(s, was);
     for (const d of s.depth) d.visible = s.trans && !d.parent?.userData.sfGone;
     s.dmg.forEach((d, k) => { if (d) d.visible = dmgVis[k]; });
+    if (s.ruin) s.ruin.visible = ruinVis;
     s.shell!.visible = shellVis;
     s.skins.forEach((m, k) => { m.visible = skinVis[k]; });
     if (ok) { this.warmedKeys.add(key); s.warmed = true; }
@@ -492,6 +497,9 @@ export class StructureFx {
         stone.name = 'vale_struct_chip';
         stone.userData.valeOutline = true;
         stone.castShadow = true; stone.receiveShadow = false;
+        // perf PERF-m5: the ink depth program every rigid caster uses (else three compiles MeshDepthMaterial at the
+        // first chip, 10+ minutes into a match)
+        stone.customDepthMaterial = shadowDepth('rigid');
         stone.matrixAutoUpdate = false;
         stone.matrix.makeTranslation(-c.x, -c.y, -c.z).multiply(rel);
         const g = new Group();

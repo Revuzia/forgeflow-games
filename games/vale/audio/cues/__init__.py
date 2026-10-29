@@ -7,6 +7,7 @@ content/audio.json with cuelib.REGISTRY:
     fighters.py f_<fighter>_passive (the passive procs) and the generic c_proc_* procs
     kits_a.py  f_<fighter>_<slot> the whole per-fighter kits, first half (ardit … lisvel)
     kits_b.py  f_<fighter>_<slot> the whole per-fighter kits, second half (marund … vashil)
+    kits_c.py  f_<fighter>_hit / _dash (ability impacts, dashes) and the identity pass (contact, voicing) over the kits
     world.py   amb_* the maps' ambience loops (bus ambience; content binds ambient.<map>.<source>)
 
 The stings on the music bus (m_victory_sting, m_defeat_sting, m_placement_sting) and the beds are
@@ -18,4 +19,5 @@ from . import match  # noqa: F401
 from . import fighters  # noqa: F401
 from . import kits_a  # noqa: F401
 from . import kits_b  # noqa: F401
+from . import kits_c  # noqa: F401  (after kits_a / kits_b: it wraps their identity cues)
 from . import world  # noqa: F401

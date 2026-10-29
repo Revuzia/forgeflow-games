@@ -8,13 +8,15 @@
 //             caster's onBeforeShadow / onAfterShadow, so the main pass never sees it. three keys its vertex-array
 //             state by (geometry, program) and re-binds when the index differs, and the depth programs never draw
 //             the main pass, so the swap costs no re-binding per frame.
-//   hull      the crowd's rest-outline hull (crowd.ts) draws through a LOD of half the triangles held within 6 mm
-//             (under half a pixel at the closest zoom: a Wick is ~70 px tall for ~1.1 m).
+//   hull      the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body, accent and rest-outline
+//             hull through one LOD of half the triangles held within 6 mm (under half a pixel at the closest zoom: a
+//             Wick is ~70 px tall for ~1.1 m), the same index for all three so the ink hull keeps hugging the body.
+//             Fighters and structures keep their full meshes in the main pass.
 //
 // A mesh with several material groups keeps its full index (a LOD would cross the group ranges). Until the WASM is
 // ready (a few ms after boot; the loading screen awaits `lodReady`) nothing is simplified and every mesh draws whole.
 
-import { BufferAttribute, type BufferGeometry, type Camera, type Group, type Material, type Mesh, type Object3D, type Scene, type WebGLRenderer } from 'three';
+import { BufferAttribute, type BufferGeometry, type Camera, type Group, type Material, type Mesh, type Object3D, type WebGLRenderer } from 'three';
 import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
 
 export const LOD = {
@@ -86,17 +88,28 @@ export function lodIndex(g: BufferGeometry, kind: Key): BufferAttribute | null {
 }
 
 // ── the shadow swap ─────────────────────────────────────────────────────────────────────────────
+/** harness seam (_harness/probe_lod.mjs A/B): false draws every shadow caster whole */
+export const lodSwitch = { shadow: true };
 const shadowLod = new WeakMap<BufferGeometry, BufferAttribute>();
 let swapped: { g: BufferGeometry; index: BufferAttribute | null } | null = null;
 
 function beforeShadow(_r: WebGLRenderer, _o: Object3D, _c: Camera, _s: Camera, g: BufferGeometry, _m: Material, _grp: Group | null): void {
-  const l = shadowLod.get(g);
+  const l = lodSwitch.shadow ? shadowLod.get(g) : undefined;
   if (!l) return;
   swapped = { g, index: g.index };
   g.index = l;
 }
-function afterShadow(_r: WebGLRenderer, _o: Object3D, _c: Camera, _s: Camera, g: BufferGeometry): void {
+function afterShadow(_r: WebGLRenderer, _o: Object3D, _c: Camera, _s: Camera, g: BufferGeometry, _m?: Material, _grp?: Group | null): void {
   if (swapped && swapped.g === g) { g.index = swapped.index; swapped = null; }
+}
+
+type ShadowHook = (r: WebGLRenderer, o: Object3D, c: Camera, s: Camera, g: BufferGeometry, m: Material, grp: Group | null) => void;
+/** install the swap, chained after a hook the mesh already has (instance_cull.ts sets the instance count there) */
+function hook(m: Mesh): void {
+  const own = (k: 'onBeforeShadow' | 'onAfterShadow'): ShadowHook | null => (Object.prototype.hasOwnProperty.call(m, k) ? (m[k] as ShadowHook) : null);
+  const ob = own('onBeforeShadow'), oa = own('onAfterShadow');
+  m.onBeforeShadow = ob ? function (this: Mesh, ...a: Parameters<ShadowHook>) { ob.apply(this, a); beforeShadow(...a); } : beforeShadow;
+  m.onAfterShadow = oa ? function (this: Mesh, ...a: Parameters<ShadowHook>) { afterShadow(...a); oa.apply(this, a); } : afterShadow;
 }
 
 const hooked = new WeakSet<Object3D>();
@@ -114,28 +127,12 @@ export function shadowLods(root: Object3D, budgetMs = Infinity): void {
     if (performance.now() - t0 > budgetMs) return;
     hooked.add(m);
     const g = m.geometry;
-    if (!g || shadowLod.has(g)) { if (g && shadowLod.has(g)) { m.onBeforeShadow = beforeShadow; m.onAfterShadow = afterShadow; } return; }
-    const l = lodIndex(g, 'shadow');
-    if (!l) return;
-    shadowLod.set(g, l);
-    m.onBeforeShadow = beforeShadow;
-    m.onAfterShadow = afterShadow;
+    if (!g) return;
+    if (!shadowLod.has(g)) {
+      const l = lodIndex(g, 'shadow');
+      if (!l) return;
+      shadowLod.set(g, l);
+    }
+    hook(m);
   });
-}
-
-/** the triangles a scene's shadow casters draw whole vs through their LOD (harness: _harness/probe_lod.mjs) */
-export function shadowLodStats(scene: Scene): { casters: number; lod: number; trisFull: number; trisLod: number } {
-  const r = { casters: 0, lod: 0, trisFull: 0, trisLod: 0 };
-  scene.traverseVisible((o) => {
-    const m = o as Mesh;
-    if (!m.isMesh || !m.castShadow || !m.geometry) return;
-    r.casters++;
-    const g = m.geometry;
-    const full = (g.index ? g.index.count : g.getAttribute('position')?.count ?? 0) / 3;
-    const l = shadowLod.get(g);
-    r.trisFull += full;
-    r.trisLod += l ? l.count / 3 : full;
-    if (l) r.lod++;
-  });
-  return r;
 }

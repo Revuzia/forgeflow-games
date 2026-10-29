@@ -9,8 +9,10 @@
 // sample nothing. restoreContext() -> 'restoring', then 'ok' once the programs are rebuilt (frames drawn meanwhile).
 // The same view and VFX again -> shot B. Checks (exit 1 on a miss):
 //   * viewState goes ok -> lost -> restoring -> ok (the HUD's 'Restoring the view' plate follows it)
-//   * no console warning or error from the GPU timer or anything else after the restore (the old build logged a
-//     'getQueryParameter: object does not belong to this context' warning every frame)
+//   * no console warning or error over 120 frames after the restore (the old build logged a 'getQueryParameter: object
+//     does not belong to this context' warning every frame from its GPU timer). Reported, not gated: three's own
+//     dispose listeners of objects first drawn before the loss still delete their old buffers once when such an
+//     object is disposed after it ('delete: object does not belong to this context', one per buffer, never per frame)
 //   * the GPU timer measures again on the new context (stats().gpuMs a number) and the render scale is the one it had
 //   * the restored frame matches the first: mean luma within 3 %, mean absolute pixel difference <= 4 levels
 //     (an un-rebaked sky PMREM leaves the world lit by the sun alone; an un-regenerated VFX atlas draws no particles)
@@ -122,14 +124,18 @@ try {
     await page.waitForTimeout(50);
   }
   rep.restoreMs = okAfter;
-  await B((b) => { for (let i = 0; i < 60; i++) b.renderer.render(1 / 60); });
+  const warnOk = logs.length;
+  await B((b) => { for (let i = 0; i < 120; i++) b.renderer.render(1 / 60); });
+  const warnFrames = logs.length;
   rep.after = await scene('after');
   const fileC = await shot(page, 'fw_W1_ctxloss_c_restored');
   rep.views = await page.evaluate(() => window.__views);
   rep.holdLeftMs = await B((b) => Math.max(0, Math.round(b.renderer.dynHoldUntil - performance.now())));
   rep.logsBefore = logs.slice(0, warnBefore).filter((l) => !/favicon/.test(l)).slice(0, 10);
   rep.logsWhileLost = logs.slice(warnBefore, warnLost).slice(0, 10);
-  rep.logsAfterRestore = logs.slice(warnLost).slice(0, 20);
+  rep.logsWhileRestoring = logs.slice(warnLost, warnOk).slice(0, 20);
+  rep.logsOver120Frames = logs.slice(warnOk, warnFrames).slice(0, 20);
+  rep.logsOnDispose = logs.slice(warnFrames).slice(0, 20);
   rep.logCountAfterRestore = logs.length - warnLost;
   rep.compare = compare(fileA, fileC);
 
@@ -138,7 +144,11 @@ try {
   c.viewSequence = { got: seq, pass: /ok>lost>restoring>ok$/.test(seq) };
   c.lostState = { got: rep.during.view, dynSampled: rep.during.dynFrames, pass: rep.during.view === 'lost' && rep.during.dynFrames === 0 };
   c.restored = { ms: okAfter, pass: okAfter !== null };
-  c.consoleAfterRestore = { count: rep.logCountAfterRestore, pass: rep.logCountAfterRestore === 0 };
+  const stale = (l) => /delete: object does not belong to this context/.test(l);
+  c.consoleAfterRestore = {
+    restoring: rep.logsWhileRestoring.length, frames: rep.logsOver120Frames.length, onDispose: rep.logsOnDispose.length,
+    pass: rep.logsWhileRestoring.filter((l) => !stale(l)).length === 0 && rep.logsOver120Frames.length === 0 && rep.logsOnDispose.every(stale),
+  };
   c.gpuTimer = { before: rep.before.gpuMs, after: rep.after.gpuMs, pass: rep.before.gpuMs === null || typeof rep.after.gpuMs === 'number' };
   c.scale = { before: rep.before.scale, after: rep.after.scale, pass: rep.before.scale === rep.after.scale };
   c.programs = { before: rep.before.programs, after: rep.after.programs, pass: rep.after.programs >= Math.floor(rep.before.programs * 0.9) };
