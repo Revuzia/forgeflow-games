@@ -10,7 +10,7 @@
 //             delayed area (fx_seer_starfall) and skillshot projectiles to dodge
 //   items     tiered recipes with tags (attack/crit/onhit/magic/defense/sustain/support/haste/speed/
 //             jungle/vision), boots, consumables with actives, a pool-restricted item
-//   setup     battle spells with ai hints (escape/gapclose, heal, execute, a monster-only smite,
+//   setup     Hour spells with ai hints (escape/gapclose, heal, execute, a monster-only smite,
 //             a haste), boons on three paths
 //   modes     fx_rift_mode (3 lanes + jungle, roles on) · fx_bridge_mode (one lane, buy on death /
 //             at base, no recall) · fx_fray_mode (FFA, shared shop, 2 lives, its own item pool) ·
@@ -216,7 +216,7 @@ export const BOT_ITEMS: Raw[] = [
   item('fx_rift_only', { tier: 'basic', cost: 300, stats: { ad: 25, ap: 30, hp: 150 }, pools: ['fx_pool'], tags: ['attack', 'magic', 'defense'] }),
 ];
 
-// ── battle spells + boons ───────────────────────────────────────────────────────────────────────
+// ── Hour spells + boons ─────────────────────────────────────────────────────────────────────────
 export const BOT_SPELLS: Raw[] = [
   ability('fx_spell_blink', [{ op: 'blink', distance: 5 }], { cooldown: 60, maxRank: 1, targeting: { kind: 'point', range: 5 }, ai: { use: ['escape', 'gapclose'] } }),
   ability('fx_spell_heal', [{ op: 'heal', amount: { base: 120, level: 15 }, to: 'self' }],

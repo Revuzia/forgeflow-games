@@ -3,7 +3,7 @@
     {
       "id": "fx_spell_a",
       "name": "Fixture Spell A",
-      "desc": "Placeholder battle spell.",
+      "desc": "Placeholder Hour spell.",
       "icon": "assets/ui/fx_icon.png",
       "cooldown": 180,
       "cost": 0,
@@ -27,7 +27,7 @@
     {
       "id": "fx_spell_b",
       "name": "Fixture Spell B",
-      "desc": "Placeholder battle spell.",
+      "desc": "Placeholder Hour spell.",
       "icon": "assets/ui/fx_icon.png",
       "cooldown": 180,
       "cost": 0,
