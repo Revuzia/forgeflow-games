@@ -4,8 +4,8 @@ What `content/items.json` and `content/setup.json` define, and why. Both are gen
 
 Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They are references, not copies; every name, effect and number here is our own choice.
 
-> **Re-key, 2026-10-28 (W4, final parity review originality F4). Pending owner sign-off.** The systems layer moved to VALE's own stopped-dial rules, so no battle spell, starter, potion, boots, ward, camp buff or BRIDGE start sits within 10 % of its reference-genre counterpart and no rule maps one to one. The full before/after table with the gauge numbers is `_design/reviews/fixwaves/W4_systems_rekey.md`; `_harness/probe_sim_rekey.ts` measures it (53 headline numbers, none within 10 %) and exercises every new rule in the sim. Headlines:
-> - **Battle spells** are light-and-shadow rules. Glint Step (4.5 m, 210 s) leaves your shadow where you stood as a slowing patch. Saplight is a 3 m pool of sap-light that heals 4 % max health a second to whoever stands in it. Hourstrike hits harder the fuller the monster is (250 + 15/level + 12 % of current health; 3 charges, 70 s). Glass Pane's shield sets with a 3 m slow. **Defaults: Glint Step + Glass Pane** (not blink + heal).
+> **Re-key, 2026-10-28 (W4, final parity review originality F4). Signed off 2026-10-28 (owner ruling 4, `_design/reviews/fixwaves/owner_rulings.md`).** The systems layer moved to VALE's own stopped-dial rules, so no Hour spell, starter, potion, boots, ward, camp buff or BRIDGE start sits within 10 % of its reference-genre counterpart and no rule maps one to one. The full before/after table with the gauge numbers is `_design/reviews/fixwaves/W4_systems_rekey.md`; `_harness/probe_sim_rekey.ts` measures it (63 headline numbers with the G7 economy rows, none within 10 %) and exercises every new rule in the sim. Headlines:
+> - **Hour spells** are light-and-shadow rules. Glint Step (4.5 m, 210 s) leaves your shadow where you stood as a slowing patch. Saplight is a 3 m pool of sap-light that heals 4 % max health a second to whoever stands in it. Hourstrike hits harder the fuller the monster is (250 + 15/level + 12 % of current health; 3 charges, 70 s). Glass Pane's shield sets with a 3 m slow. **Defaults: Glint Step + Glass Pane** (not blink + heal).
 > - **Starters grow** (`ItemDef.foldsInto`): the first Gloam core you buy while carrying a starter folds it in at its full price. Starters are 300–360 Gleam.
 > - **The dial-slot rule** (`ItemDef.dial`) replaces the one-Noonlit cap: each Noonlit item stands at an hour (Seatstone 12, Sunstring 2, Hourcleaver 4, Noonglass 8, Shelter Lamp 10), and two you carry must stand 4 or more hours apart. One to three fit together; same-family pairs (Sunstring + Hourcleaver, Noonglass + Shelter Lamp) never do.
 > - **Potion, ward, boots** re-numbered: Sap Flask 40 Gleam, 150 over 5 s, holds 3; Spare Lamp 60, 3:20, 2 lit, 7.5 m sight, holds 3; Road Sandals 250 (+0.21 m/s), upgrades 800–900 (+0.36 m/s).
@@ -481,9 +481,9 @@ A full build is 11,550–12,500 Gleam, so most matches (22–28 min) end on thre
 
 ## 7. The setup layer (`setup.json`)
 
-Before a match each player takes **two battle spells** and, in RIFT and BRIDGE, **two boons from one path**. That's the whole pre-match layer. It has no pages, tiers or secondary trees, and it takes about 10 seconds in the loadout screen.
+Before a match each player takes **two Hour spells** and, in RIFT and BRIDGE, **two boons from one path**. That's the whole pre-match layer. It has no pages, tiers or secondary trees, and it takes about 10 seconds in the loadout screen.
 
-### 7.1 Battle spells (`spellSlots: 2`)
+### 7.1 Hour spells (`spellSlots: 2`)
 
 Spells have no cost and one rank. They scale with your level through the `level` ratio. Ability haste never shortens them (CONTRACT §5.3).
 
@@ -547,7 +547,7 @@ Path colours sit at least 60 RGB units away from every readability colour and fr
 | support income | quest-style support item *(r02 §1)* | Tenders live on passive Gleam and assists; the Lampglass path is the cheapest, and Almslamp adds 35 Gleam per takedown (W4 G7) |
 | single-lane mode | no starters, buy only when dead, mode-only spells *(r03 §2.1)* | BRIDGE: no starters, base or dead shopping, no jungle spell; no mode-only gap-closer (r03 lists the reference's as protected) |
 | FFA mode | item drops that favour trailing players *(r03 §4a)* | FRAY: finished pieces at one cart, Gleam Sunmotes (flat 120 matters more to a trailing player) |
-| battle spells | two long-cooldown utility spells, a forced jungle spell *(r02 §11)* | two slots, 90–300 s; the jungle spell is optional (§7.1) |
+| Hour spells | two long-cooldown utility spells, a forced jungle spell *(r02 §11)* | two slots, 90–300 s; the jungle spell is optional (§7.1) |
 | pre-match passives | primary + secondary tree, keystones, shards *(r02 §11)* | two boons from one of three paths |
 
 ## 9. Verification
@@ -632,7 +632,7 @@ The probe keeps its own stub maps, so the item checks don't depend on another la
      - `res` stats raise the max of Heat and Tally bars too, so items avoid `res`.
      - A positive `resource` op adds Heat to a Heat fighter. This also affects the Mending Sunmote grant in `units.json` (60 + 12 % pool), which today fills a Heat bar.
      - The request: `res` and `resource` should apply only to `pool` resources, or `resource` should vent Heat.
-  2. *A real cleanse* needs an optional `AbilityDef` flag that lets a battle spell be cast while stunned, together with a status-removal op. Shake Loose would then become a full cleanse.
+  2. *A real cleanse* needs an optional `AbilityDef` flag that lets an Hour spell be cast while stunned, together with a status-removal op. Shake Loose would then become a full cleanse.
   3. *A crit trigger condition* (`attackHit` with `crit`) and *a damage-taken amplifier op* would allow richer crit and offensive designs. Neither is needed now.
 - **MAPS / BOTS (found while testing)**
   - *The problem.* On the real `map_rift` and `map_bridge`, the base shop circle (radius 3 m) sits 7.6–7.9 m from both the spawn point and the fountain circle. `shopAccess: base` needs the fighter inside that circle, and the bots never walk to it: in a 7-minute RIFT run on the real map no bot bought anything, not even its starter. A human must also walk about 8 m after every recall before shopping.

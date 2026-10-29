@@ -9,7 +9,7 @@
 //     lane they sit on, camps (objective flag), pickups, bases, shops;
 //   * per fighter: ai.style, preferredRange, comboOrder, ranged-ness, the stat its kit scales
 //     with (damage type for itemization), its retreat threshold and level-up order;
-//   * per ability (any castable record: kit, recast, form, battle spell, item active): its AiHint
+//   * per ability (any castable record: kit, recast, form, Hour spell, item active): its AiHint
 //     decoded to bit flags, and the geometry of its delivery (projectile speed/width/range, area
 //     shape/anchor/delay, dash/blink distance) and damage terms, read from the effect DSL.
 

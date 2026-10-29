@@ -16,7 +16,7 @@
 //     * Fray (ffa_pick): pick freely, never a fighter another seat already locked;
 //     * finalize: a skin (pickSkin) and a loadout (pickLoadout); trade requests are accepted.
 //   pickLoadout(catalog, fighter, pool, role?) → LoadoutChoice
-//     battle spells by their ai.use against the fighter's style (escape for squishy ranged styles,
+//     Hour spells by their ai.use against the fighter's style (escape for squishy ranged styles,
 //     gap-closers for divers, heals for sustain/wardens, executes for burst), honouring the setup
 //     pools and slot counts; spells that cannot target fighters (monster-only smites) only for a
 //     jungle role. Boons by how much their stat block is worth to the style, preferring one path.

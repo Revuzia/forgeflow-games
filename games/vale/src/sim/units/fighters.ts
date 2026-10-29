@@ -1,7 +1,7 @@
 // VALE sim — seat fighters: spawning, XP and levels, respawn timers, recall, fountain, shop zone
 // (CONTRACT §5.4, §5.6).
 //
-// Spawning goes through core spawnFighter (stats, kit, battle spells, boons, resource pool, team
+// Spawning goes through core spawnFighter (stats, kit, Hour spells, boons, resource pool, team
 // buffs). Seats of one team stand on a small ring around their base spawn so they do not start
 // stacked. The resource models live in core and are only listed here for reference:
 //   pool  regenerates (regen + regenPerLevel); `res` costs are paid from it

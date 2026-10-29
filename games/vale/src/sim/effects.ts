@@ -11,7 +11,7 @@
 // Scaling: `base[rank-1]` (Ranked arrays shorter than the rank repeat their last value) plus each
 // ratio × the CASTER's stat, except `target*` ratios which read the unit the effect applies to.
 // `perCounter` / `perMark` multiply the whole value by (stacks × per).
-// Rank: abilities use their rank; battle spells and item actives use min(level, maxRank);
+// Rank: abilities use their rank; Hour spells and item actives use min(level, maxRank);
 // passives, boons and item/team passives use the owner's level (see CONTRACT CHANGED(SIM) §5.3).
 //
 // Defaults worth knowing: filters default to enemies + fighters/minions/monsters/summons (never

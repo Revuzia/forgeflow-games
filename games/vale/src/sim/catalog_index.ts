@@ -30,7 +30,7 @@ export interface CatalogIndex {
   readonly resources: ReadonlyMap<string, ResourceDefT>;
   readonly skins: ReadonlyMap<string, SkinDefT>;
   readonly roles: ReadonlyMap<string, RoleDefT>;
-  /** every castable record by id: kits, recasts, form kits, item actives, battle spells, unit abilities */
+  /** every castable record by id: kits, recasts, form kits, item actives, Hour spells, unit abilities */
   readonly abilities: ReadonlyMap<string, AbilityCoreT>;
   /** every passive record by id: kit passives, item passives, boons, team-buff passives, unit passives */
   readonly passives: ReadonlyMap<string, PassiveDefT>;

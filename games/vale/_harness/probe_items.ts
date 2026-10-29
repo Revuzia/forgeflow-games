@@ -10,7 +10,7 @@
 //   3. pools     rift / bridge / fray non-empty; bridge has no starters or jungle items; fray is the
 //                lighter loadout (no wards, no starters, no Gloam/Noonlit, recipes one step deep, every
 //                piece under 2,500 Gleam); rift/bridge pools are closed under components
-//   4. setup     8-ish battle spells with the required jobs (blink, heal, offense, jungle, haste, cleanse,
+//   4. setup     8-ish Hour spells with the required jobs (blink, heal, offense, jungle, haste, cleanse,
 //                shield), cooldowns 90-300 s, 3 paths x 3 boons, 2 + 2 slots, defaults valid, fray lighter
 //   5. builds    a full build per class (Plinth, Breaker, Striker, Slinger, Caster, Tender) per pool:
 //                in pool, 6 slots, one boots upgrade, one Noonlit in rift/bridge, the class's stats covered
@@ -284,9 +284,9 @@ section('pools', () => {
 
 // ── 4. setup layer ───────────────────────────────────────────────────────────────────────────────
 const effectsJson = (s: { effects: unknown }): string => JSON.stringify(s.effects);
-section('setup: battle spells', () => {
+section('setup: Hour spells', () => {
   const sp = setup.spells;
-  check('7-9 battle spells, 2 slots', sp.length >= 7 && sp.length <= 9 && setup.spellSlots === 2);
+  check('7-9 Hour spells, 2 slots', sp.length >= 7 && sp.length <= 9 && setup.spellSlots === 2);
   const cdBad = sp.filter((s) => { const cd = s.charges ? (Array.isArray(s.charges.recharge) ? s.charges.recharge[0] : s.charges.recharge) : (Array.isArray(s.cooldown) ? s.cooldown[0] : s.cooldown); return cd < (s.charges ? 60 : 90) || cd > 300; });
   check('every spell recovers in 90-300 s (charges: the recharge, 60-300 s)', cdBad.length === 0, cdBad.map((s) => s.id));
   check('spells cost nothing and have one rank', sp.every((s) => s.costKind === 'none' && s.maxRank === 1));
@@ -950,7 +950,7 @@ function spellArena(spells: [string, string], boons: string[] = [], c: Cls = 'br
   run(sim, 0.4);
   return { sim, w: sim.world, e: E(sim), foe: E(sim, 1), ally: E(sim, 2) };
 }
-section('setup: every battle spell does its job', () => {
+section('setup: every Hour spell does its job', () => {
   const healOf = (ev: SimEvent[], dst: Entity): number[] => ofType(ev, 'heal').filter((h) => h.dst === dst.id).map((h) => h.amount);
   {
     const a = spellArena(['glint_step', 'saplight']);

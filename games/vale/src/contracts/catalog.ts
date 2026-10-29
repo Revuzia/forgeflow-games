@@ -439,7 +439,7 @@ export const ItemDef = z.object({
 }).strict();
 
 export const SetupDef = z.object({
-  /** activated battle spells (same DSL as abilities; slots spell1/spell2) */
+  /** activated Hour spells (same DSL as abilities; slots spell1/spell2) */
   // CHANGED(TOOLS): .extend() instead of .and() — a zod 4 intersection only rejects a key that BOTH
   // sides reject, and the plain right-hand object accepts anything, so unknown keys passed silently.
   spells: z.array(AbilityDef.extend({ pools: z.array(Id).default([]) })).min(2),

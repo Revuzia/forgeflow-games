@@ -1,6 +1,6 @@
 // VALE sim — ability slots and the cast pipeline (CONTRACT §5.2, §5.3; catalog AbilityDef).
 //
-// One pipeline for fighter abilities (a1..ult), battle spells (spell1/spell2) and item actives
+// One pipeline for fighter abilities (a1..ult), Hour spells (spell1/spell2) and item actives
 // (item1..6):
 //   validate (rank > 0, not busy, CC gates, cooldown/charges/recast lock, cost, target filter +
 //   visibility) → out of range? remember the cast as an ORDER_CAST and walk into range →
@@ -35,7 +35,7 @@ export type CastResult = 'ok' | 'moving' | 'no_slot' | 'dead' | 'rank' | 'busy' 
 export const MAX_CHANNEL_TICKS_PER_STEP = 16;
 
 // ── slot setup ──────────────────────────────────────────────────────────────────────────────────
-/** kit a1..ult + battle spells (`spells[k]` → spell1/spell2; null leaves the slot empty) */
+/** kit a1..ult + Hour spells (`spells[k]` → spell1/spell2; null leaves the slot empty) */
 export function setupFighterSlots(w: World, e: Entity, spells: readonly (string | null)[]): void {
   const f = e.fighter;
   if (!f) return;

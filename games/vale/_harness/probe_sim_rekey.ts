@@ -1,7 +1,7 @@
 // probe (lane W4, originality F4): the systems layer re-keyed to VALE's own stopped-dial rules, on the REAL catalog
 // (built in memory from content/) and the real maps. Before/after table and owner sign-off:
 // _design/reviews/fixwaves/W4_systems_rekey.md.
-//   1. the gauge: no headline number of a battle spell, starter, potion, boots, ward, camp buff, the epic buff, the
+//   1. the gauge: no headline number of an Hour spell, starter, potion, boots, ward, camp buff, the epic buff, the
 //      BRIDGE start or the economy and finished line (block 7: passive Gleam, Wick bounties, the Gloam/Noonlit price
 //      band, Lampblack, Quarry Pick) within 10 % of its reference-genre counterpart (LoL used ONLY as a gauge: numbers, never assets)
 //   2. rules that no longer map one-to-one, exercised in the sim:

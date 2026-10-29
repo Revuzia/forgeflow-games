@@ -14,7 +14,7 @@
 
 ---
 
-## 1. Battle spells (`content/setup.json`)
+## 1. Hour spells (`content/setup.json`)
 
 | VALE spell | Reads as | Before | After (VALE rule) | Closest gap |
 |---|---|---|---|---|
@@ -133,7 +133,7 @@ The lone deaths per game hardly moved. The share rose because fights kill about 
 
 | Block | Decision | Note |
 |---|---|---|
-| 1 · Battle spells and defaults | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 1 · Hour spells and defaults | ☑ approve ☐ change | ruling 4, 2026-10-28 |
 | 2 · Starters, potion, boots, ward | ☑ approve ☐ change | ruling 4, 2026-10-28 |
 | 3 · Dial-slot rule | ☑ approve ☐ change | ruling 4, 2026-10-28 |
 | 4 · Camp buffs and the Long Shade | ☑ approve ☐ change | ruling 4, 2026-10-28 |

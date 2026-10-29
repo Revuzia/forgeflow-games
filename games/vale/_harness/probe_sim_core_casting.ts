@@ -1,6 +1,6 @@
 // probe (lane SIM): cast pipeline — validation, ranks/level-up rules, cooldown haste, costs by
 // costKind (pool/hp/heat), move-into-range, windup + cancels, channels, recast windows, charges,
-// battle spells and item actives through the same pipeline, and every passive trigger kind.
+// Hour spells and item actives through the same pipeline, and every passive trigger kind.
 import { ability, buildCatalog, fighter, item, passive } from './fixtures/catalog_fixture.ts';
 import { addUnit, check, fighterEnt, finish, makeWorld, near, ofType, section, stepN, stepSec } from './fixtures/sim_fixture.ts';
 import type { SimEvent } from '../src/contracts/sim.ts';
@@ -227,7 +227,7 @@ section('heat resource', () => {
   check('heat decays after decayDelay', c.res < 60 && c.res > 0, c.res);
 });
 
-section('battle spells + item actives', () => {
+section('Hour spells + item actives', () => {
   const w = W([{ fighter: 'fx_fighter_a', team: 0, x: 10, y: 10 }, { fighter: 'fx_fighter_b', team: 1, x: 40, y: 50 }]);
   const a = A(w);
   check('spell slots from loadout', a.slots[4]!.id === 'fx_spell_blink' && a.slots[5]!.id === 'fx_spell_heal' && w.players[0].abilities.length === 6);
@@ -235,7 +235,7 @@ section('battle spells + item actives', () => {
   stepN(w, 1);
   let ev = capture(w, () => tryCast(w, a, 4, 20, 10));
   check('spell cast through the pipeline (blink)', ofType(ev, 'cast').some((c) => c.slot === 'spell1') && ofType(ev, 'blink').length === 1);
-  check('haste does not shorten battle spells', near(a.slots[4]!.cooldown, 100));
+  check('haste does not shorten Hour spells', near(a.slots[4]!.cooldown, 100));
   applyStatus(w, a, a, 'silence', 1);
   setLevel(w, a, 2);
   a.hp = 500;

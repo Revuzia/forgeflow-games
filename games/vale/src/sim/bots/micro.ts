@@ -7,7 +7,7 @@
 //   1. dodge: telegraphed delayed areas, visible enemy skillshots and enemy zones — gated by the
 //      bot's sampled reaction delay and its difficulty's dodge chance (rolled once per stimulus);
 //      sidesteps out of the shape, or uses an escape ability when walking cannot make it (veteran);
-//   2. abilities, battle spells and item actives, driven by each record's AiHint: use tags,
+//   2. abilities, Hour spells and item actives, driven by each record's AiHint: use tags,
 //      minTargets, castWhenSelfHpBelow / castWhenTargetHpBelow, leadTarget (intercept prediction +
 //      difficulty aim error), ally-targeted heals/shields by lowest hp;
 //   3. attacks: focus target (kiting / orb-walking for ranged styles vs. shorter-ranged targets),
@@ -767,7 +767,7 @@ export abstract class BotBase {
   /**
    * An enemy Wick that the hits already coming at it will finish before my basic attack could land:
    * a damaging ability that kills it and lands first takes the last hit — only with resource to
-   * spare (never the ultimate, a dash or a battle spell).
+   * spare (never the ultimate, a dash or an Hour spell).
    */
   private secureLastHit(): boolean {
     const e = this.e;
