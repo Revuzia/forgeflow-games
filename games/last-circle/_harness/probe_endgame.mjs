@@ -202,7 +202,13 @@ function millRecord(M, plant) {
     mx /= sw; mz /= sw;
     let cxx = 0, czz = 0, cxz = 0; for (const c of slabs) { const a = (c.maxX - c.minX) * (c.maxZ - c.minZ); const [x, z] = mid(c); cxx += a * (x - mx) * (x - mx); czz += a * (z - mz) * (z - mz); cxz += a * (x - mx) * (z - mz); }
     let ux, uz;
-    if (slabs.length === 1 || cxx + czz < 1e-6) { const c = slabs[0]; if (c.maxX - c.minX >= c.maxZ - c.minZ) { ux = 1; uz = 0; } else { ux = 0; uz = 1; } }
+    // (R2) the axis is the MAIN DECK's own long extent (the cluster's largest walkable slab, ramps excepted): an area-weighted PCA of slab MIDDLES let a few
+    // small wet run-out strips set it (R1 endgame lane, deepwood s18 before the deck fix: 3 strips of 2.3-2.9 m2 tilted it 14.5 deg and read a width of 13.6 m
+    // for an 8.5 m deck). The PCA is kept only for a main deck that is square within 5 % (no long side to read).
+    const decks = slabs.filter((c) => !isRamp(c));
+    const main = (decks.length ? decks : slabs).reduce((best, c) => ((c.maxX - c.minX) * (c.maxZ - c.minZ) > (best.maxX - best.minX) * (best.maxZ - best.minZ) ? c : best));
+    const lx = main.maxX - main.minX, lz = main.maxZ - main.minZ;
+    if (Math.abs(lx - lz) > 0.05 * Math.max(lx, lz) || slabs.length === 1 || cxx + czz < 1e-6) { if (lx >= lz) { ux = 1; uz = 0; } else { ux = 0; uz = 1; } }
     else { const th = 0.5 * Math.atan2(2 * cxz, cxx - czz); ux = Math.cos(th); uz = Math.sin(th); }
     // the bridge is walked on its slabs: if the PCA is ambiguous (a square cluster) prefer the slab layout's longer bbox side
     let tmin = 1e9, tmax = -1e9, smin = 1e9, smax = -1e9;

@@ -378,32 +378,49 @@ def part_human2(args, v):
         v.info("human2: page visibility during the revive", vis)
         # R2 (harness): the row judges a real E hold of 5 s of GAME time, not 5.6 s of wall time. reviveStep (player.js) adds the frame dt to
         # _reviveT, so on a loaded box (host clock 0.877-0.983 x real, R1 player lane) a fixed 5.6 s real hold ran out at reviveT 4.57-5.00 -
-        # a coin flip on head and base alike. Now: the host's own clock is read just before the hold, E is held until the host's sim completes
-        # the revive or a cap of 5 s / that rate + 1.5 s real, and the channel's game time (reviveStart -> actorRevived on the host) is judged.
+        # a coin flip on head and base alike. Now E is held until the host's sim completes the revive, or until the cap (5 s / the host's sim
+        # rate measured live over the hold) + 1.5 s real = 1.5 s real after the host's clock has run REVIVE_S since E went down (the rate is
+        # read live because it moves during the hold: r2 run 1 read 0.857 before it and the channel reached only 3.4 s in 7.4 s real);
+        # 30 s real absolute. The channel's game time (reviveStart -> actorRevived on the host's clock) is judged: REVIVE_S +- 0.25 s.
         hpg.evaluate("""(gid) => { const W = window.__LC__.W, p = W.player; const Q = window.__P23H2__ = { start: null, done: null, cancels: 0 };
             W.events.on('reviveStart', (a, b) => { if (a === p && b && b.id === gid && Q.start == null) Q.start = W.t; });
             W.events.on('reviveCancel', (a, b) => { if (a === p && Q.done == null) Q.cancels++; });
             W.events.on('actorRevived', (t, a) => { if (a === p && t && t.id === gid && Q.done == null) Q.done = W.t; }); }""", g_id)
         h_rate = L.sim_rates(hpg, secs=1.5)[0]
         rs_h = hpg.evaluate("() => window.__LC__.W.SIM.REVIVE_S")
-        cap_s = rs_h / max(0.2, h_rate) + 1.5
         short = getattr(args, "control", None) == "h2-short-hold"     # planted control: E released after 3 s of game time - MUST FAIL
+        poll_js = "() => { const Q = window.__P23H2__, W = window.__LC__.W; return { t: W.t, start: Q.start, done: Q.done }; }"
         hpg.keyboard.down("KeyE")
         t_e = time.time()
-        if short:
-            SQ.wait(hpg, "() => { const Q = window.__P23H2__; return Q.start != null && window.__LC__.W.t - Q.start >= 3.0; }", cap_s, 0.05)
-        else:
-            SQ.wait(hpg, "() => window.__P23H2__.done != null", cap_s, 0.05)
+        g0 = hpg.evaluate("() => window.__LC__.W.t")
+        reach_t, why, q = None, "abs-cap", None
+        while time.time() - t_e < 30.0:
+            q = hpg.evaluate(poll_js)
+            now = time.time()
+            if short and q["start"] is not None and q["t"] - q["start"] >= 3.0:
+                why = "control-3s"
+                break
+            if not short and q["done"] is not None:
+                why = "revived"
+                break
+            if q["t"] - g0 >= rs_h and reach_t is None:
+                reach_t = now
+            if not short and reach_t is not None and now - reach_t >= 1.5:
+                why = "cap"
+                break
+            hpg.wait_for_timeout(50)
         held_s = round(time.time() - t_e, 2)
         hpg.keyboard.up("KeyE")
+        hold_rate = round((q["t"] - g0) / max(0.001, held_s), 3) if q else None
+        cap_s = round(rs_h / hold_rate + 1.5, 2) if hold_rate else None
         h2q = hpg.evaluate("() => { const Q = window.__P23H2__, W = window.__LC__.W; return { start: Q.start, done: Q.done, cancels: Q.cancels, reviveT: W.player._reviveT }; }")
         game_s = round(h2q["done"] - h2q["start"], 3) if h2q["start"] is not None and h2q["done"] is not None else None
         rev = SQ.wait(gpg, "() => { const p = window.__LC__.W.player; return p.alive && !p.downed ? { hp: p.hp } : null; }", 4, 0.1)
         hup = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.alive && !a.downed; }", 3, 0.1, g_id)
         v.check("human2: the host's real 5 s E revives the guest: 30 hp on its page, up on the host's", bool(rev) and abs(rev["hp"] - 30) <= 1 and bool(hup)
                 and game_s is not None and abs(game_s - rs_h) <= 0.25,
-                {"guest": rev, "hostSeesUp": hup, "channelGameS": game_s, "K.REVIVE_S": rs_h, "hostSimRate": h_rate, "capRealS": round(cap_s, 2),
-                 "heldRealS": held_s, "host": h2q, "control": "h2-short-hold" if short else None},
+                {"guest": rev, "hostSeesUp": hup, "channelGameS": game_s, "K.REVIVE_S": rs_h, "hostSimRateBefore": h_rate, "hostSimRateHold": hold_rate, "capRealS": cap_s,
+                 "heldRealS": held_s, "released": why, "host": h2q, "control": "h2-short-hold" if short else None},
                 "revive completes; channel 5.0 +- 0.25 s of game time; hp 30, up")
         v.check("human2: per-tick 'state' message the same size downed as up (+-4 B)", up_b is not None and dn_b is not None and abs(dn_b - up_b) <= 4,
                 {"upBytes": up_b and round(up_b, 1), "downedBytes": dn_b and round(dn_b, 1), "upKeys": up_k, "downedKeys": dn_k}, "+-4 B (both still)")
