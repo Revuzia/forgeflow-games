@@ -4,7 +4,7 @@
 //               volumes; `muteInBackground` silences a hidden tab). The limiter (a compressor) can overshoot on a
 //               fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing passes
 //               −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both speakers
-//               carry everything: one-sided hearing, a single earbud); `soften` puts a gentle compressor before
+//               carry everything: one-sided hearing, a single earbud); `softenLoud` puts a gentle compressor before
 //               the limiter (SOFT_*: about 6 dB off the loudest transients, quiet sounds untouched)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
 //               VOICE_DUCK_DB lower and the sfx bus SFX_DUCK_DB lower, except threats to your fighter (the
@@ -52,7 +52,8 @@
 //               file is in. A layer's id gives its role: 'stem…' loops on its own length, always on (the menu's
 //               independent stems, tokens.audio.beds.menu.stemsS); 'phase_<p>' follows musicPhase() (the draft:
 //               every phase layer up to and including <p>, in content order, fades in on the next bar);
-//               'urgency' follows musicUrgency() (your last seconds to pick, fast in and out); until the client
+//               'urgency_…' follows musicUrgency() (your last seconds to pick, fast in and out); draft(s) drives both from
+//               the draft screen (s.phase 'ban' | 'pick' | 'finalize' → the 'phase_<p>' layers, s.urgent); until the client
 //               calls musicPhase() for a bed, the bed walks its phases itself on the old through-composed arc
 //               (AUTO_PHASE_S: the first phase layer from 16 s, the last from 80 s); any other layer is
 //               the combat layer, faded by the match's combat intensity (enter above 0.6, leave below 0.35
@@ -113,7 +114,7 @@
 
 import type { MatchClient } from '../contracts/session.ts';
 import type { SimEvent } from '../contracts/sim.ts';
-import type { AudioPort } from '../ui/audio_port.ts';
+import type { AudioPort, DraftMusicState } from '../ui/audio_port.ts';
 
 type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
@@ -145,9 +146,9 @@ interface Emitter {
   src: AudioBufferSourceNode | null; gain: GainNode; pan: StereoPannerNode; lpf: BiquadFilterNode;
   att: number; panV: number; lpfV: number; started: boolean;
 }
-/** Settings.audio; `mono` and `soften` are the accessibility options (absent: off) */
+/** Settings.audio; `mono` and `softenLoud` are the accessibility options (absent: off; session/settings.ts) */
 interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean;
-  mono?: boolean; soften?: boolean }
+  mono?: boolean; softenLoud?: boolean }
 /** one announcer line waiting for the voice bus (see `announcer` in the header) */
 interface AnnItem { cue: string; band: number; rank: number; key: string; t: number; born: number }
 /** a bed layer (see `music` in the header) */
@@ -179,8 +180,11 @@ export interface ValeAudioPort extends AudioPort {
   /** the draft's phase (the bed's 'phase_<p>' layers, see `music` in the header); null: the main stem alone. Reset
    *  when the bed changes, so call it after music() */
   musicPhase(phase: string | null): void;
-  /** your own last seconds to act in the draft (tokens.audio.beds.draft.localUrgencyLastS): the 'urgency' layer */
+  /** your own last seconds to act in the draft (tokens.audio.beds.draft.localUrgencyLastS): the 'urgency_…' layer */
   musicUrgency(on: boolean): void;
+  /** the draft as the music hears it (AudioPort.draft): phase <p> = the bed's 'phase_<p>' layers (none for the bans),
+   *  urgent = the 'urgency_…' layer; kept across bed changes until draft(null), so the order against music() is free */
+  draft(s: DraftMusicState | null): void;
   readonly log: string[];
   /** the session's file format: null until the first .ogg decodes (or fails) */
   readonly format: 'ogg' | 'm4a' | null;
@@ -217,7 +221,7 @@ const ANN_CUT_S = 0.15;      // … with this fade
 const ANN_TAIL_S = 0.6;      // the next line may start this long before the playing file ends (its ring-out) …
 const ANN_MIN_S = 0.6;       // … but never sooner than this after it started
 const AUTO_PHASE_S = [16, 80];   // a bed's phases walk themselves (first, last phase layer) until musicPhase() drives them
-const SEG_OVERLAP_S = 0.05;  // a main stem's .m4a piece runs on this far into the next (audio/build_music.py PIECE_OVERLAP_S)
+const SEG_OVERLAP_S = 0.03;  // a main stem's .m4a piece runs on this far into the next (audio/build_music.py PIECE_OVERLAP_S)
 const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
@@ -295,6 +299,8 @@ class Engine implements ValeAudioPort {
   private urgent = false;
   /** musicPhase() was called for this bed (else the bed walks its own phases, AUTO_PHASE_S) */
   private phaseDriven = false;
+  /** the draft's last state (draft()), null outside the draft */
+  private draftS: DraftMusicState | null = null;
   // the announcer (see `announcer` in the header)
   private annQ: AnnItem[] = [];
   private annNow: { item: AnnItem; voice: Voice | null; until: number } | null = null;
@@ -448,7 +454,7 @@ class Engine implements ValeAudioPort {
     this.threat.gain.setTargetAtTime(this.vol.sfx, t, 0.05);
     // accessibility (see `buses`): mono sums to one channel the speakers up-mix; soften re-wires its compressor in
     this.out.channelCount = this.vol.mono ? 1 : 2;
-    const soften = !!this.vol.soften;
+    const soften = !!this.vol.softenLoud;
     if (soften !== this.softOn) {
       this.softOn = soften;
       this.master.disconnect();
@@ -553,6 +559,12 @@ class Engine implements ValeAudioPort {
 
   musicUrgency(on: boolean): void { this.urgent = on; this.bedRoles(); }
 
+  draft(s: DraftMusicState | null): void {
+    this.draftS = s;
+    this.phase = s ? s.phase : null; this.urgent = !!s?.urgent; this.phaseDriven = !!s;
+    this.bedRoles();
+  }
+
   duck(on: boolean): void {
     if (!this.ctx) return;
     this.duckGain.gain.setTargetAtTime(on ? Math.pow(10, -8 / 20) : 1, this.ctx.currentTime, 0.15);
@@ -561,7 +573,8 @@ class Engine implements ValeAudioPort {
   music(id: string | null): void {
     if (id === this.wantBed) return;
     this.wantBed = id;
-    this.phase = null; this.urgent = false; this.phaseDriven = false;
+    const d = this.draftS;                                  // the draft's state outlives a bed change (see draft())
+    this.phase = d ? d.phase : null; this.urgent = !!d?.urgent; this.phaseDriven = !!d;
     if (!this.ctx) return;
     this.stopBed();
     if (id) this.startBed(id);
@@ -666,7 +679,7 @@ class Engine implements ValeAudioPort {
       g.gain.value = 0;
       g.connect(gain);
       // the first layer with no other role is the combat layer (see `music` in the header)
-      const role: LayerRole = l.id.startsWith('stem') ? 'stem' : l.id.startsWith('phase_') ? 'phase' : l.id === 'urgency' ? 'urgency'
+      const role: LayerRole = l.id.startsWith('stem') ? 'stem' : l.id.startsWith('phase_') ? 'phase' : l.id.startsWith('urgency_') ? 'urgency'
         : combat ? 'stem' : 'combat';
       if (role === 'combat') combat = true;
       return { id: l.id, role, file: l.file, gain: g, src: null, buf: null };
@@ -805,13 +818,13 @@ class Engine implements ValeAudioPort {
   }
 
   /** the pieces as one loop, the way audio/build_music.py `stitch` QAs them: each piece's run-on cross-fades
-   *  (linear) into the head of the next, the last one's into the loop's head */
+   *  (linear) into the head of the next; the last piece ends at the loop's end */
   private stitch(ctx: AudioContext, bufs: AudioBuffer[], pieces: BedPiece[]): AudioBuffer {
     const sr = ctx.sampleRate;
     const ov = Math.max(1, Math.round(SEG_OVERLAP_S * sr));
     const starts = pieces.map((p) => Math.round(p.at * sr));
     const last = bufs.length - 1;
-    const n = Math.max(starts[last] + 1, starts[last] + bufs[last].length - ov);
+    const n = starts[last] + bufs[last].length;
     const ch = Math.max(...bufs.map((b) => b.numberOfChannels));
     const out = ctx.createBuffer(ch, n, sr);
     for (let c = 0; c < ch; c++) {
@@ -819,12 +832,10 @@ class Engine implements ValeAudioPort {
       for (let i = 0; i <= last; i++) {
         const d = bufs[i].getChannelData(Math.min(c, bufs[i].numberOfChannels - 1));
         const s0 = starts[i];
-        const m = Math.min(d.length, (i < last ? starts[i + 1] : n) - s0 + ov);    // body + run-on
+        const m = Math.min(d.length, (i < last ? starts[i + 1] + ov : n) - s0, n - s0);    // body (+ run-on)
         const head = i > 0 ? Math.min(ov, m) : 0;
         for (let j = 0; j < head; j++) { const w = (j + 0.5) / ov; o[s0 + j] = o[s0 + j] * (1 - w) + d[j] * w; }
-        const inLoop = Math.min(m, n - s0);
-        if (inLoop > head) o.set(d.subarray(head, inLoop), s0 + head);
-        for (let j = inLoop; j < m; j++) { const k = s0 + j - n; const w = (k + 0.5) / ov; o[k] = d[j] * (1 - w) + o[k] * w; }
+        if (m > head) o.set(d.subarray(head, m), s0 + head);
       }
     }
     return out;

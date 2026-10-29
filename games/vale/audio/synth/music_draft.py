@@ -3,11 +3,11 @@ together and follow the DRAFT (final parity AUD-m2; tokens.audio.beds.draft phas
 'finalise: drums', localUrgencyLastS 8). The engine plays the main stem and fades the others in on the next bar:
 
   main         bans      pad, D pedal bass, tolling low bells, breath, far glass harmonics (always on)
-  phase_picks  picks     the dial-harp pulse (8ths, one chord a bar), the escapement "pick clock", the motif's head as a
+  phase_pick   picks     the dial-harp pulse (8ths, one chord a bar), the escapement "pick clock", the motif's head as a
                          question in glass
-  phase_final  finalise  frame drums + stone kick, the lamp-drone pluck bass, the motif's core (A4 E5 D5 B4) left
+  phase_finalize finalise  frame drums + stone kick, the lamp-drone pluck bass, the motif's core (A4 E5 D5 B4) left
                          WITHOUT an ending: the map will finish it (on top of picks)
-  urgency      your own last seconds to pick: the escapement in 16ths with accents and a breath rising into every
+  urgency_local  your own last seconds to pick: the escapement in 16ths with accents and a breath rising into every
                          other bar; unpitched, so it sits on any chord
 
 D Dorian; the Lydian glow (E/D, G#) lights the last bar before the loop. −3 dB dip at 1–4 kHz for the UI. Until the
@@ -129,6 +129,6 @@ def build() -> tuple[dict, dict]:
     u.bus_db['breath'] = 2.0
     _finish(u)
 
-    return ({'main': m.render(), 'phase_picks': p.render(), 'phase_final': f.render(), 'urgency': u.render()},
-            {'bpm': BPM, 'loop': LOOP, 'layers': ['phase_picks', 'phase_final', 'urgency'], 'mode_violations': bad,
+    return ({'main': m.render(), 'phase_pick': p.render(), 'phase_finalize': f.render(), 'urgency_local': u.render()},
+            {'bpm': BPM, 'loop': LOOP, 'layers': ['phase_pick', 'phase_finalize', 'urgency_local'], 'mode_violations': bad,
              'clashes': clashes, 'form': '12 bars (32 s): main = bans drone; layers picks / final / urgency follow the draft'})

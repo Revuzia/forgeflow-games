@@ -26,16 +26,19 @@ QA per bed stem (decoded OGG)
   mode     share of pitch-class energy inside D Dorian + G# (+ F# for the bright beds)
   m4a      the .m4a decode: sample count equal to the .ogg's, LUFS / true peak, and the same seam test
   pieces   the main stem's .m4a PIECES (the .m4a path decodes a long bed piece by piece and starts on the first, so
-           Safari's slow AAC decode never holds the music back; src/audio/index.ts `format`): 16 s first, then
-           doubling to at most 64 s, a remainder under 16 s joined to the piece before it, each carrying
-           PIECE_OVERLAP_S of the music after it (the last: of the loop's head) for the engine's cross-fade.
-           content lists them as layers 'seg_<start s>' → assets/audio/<main>_seg<start s>.m4a (the build stops
-           with the exact entries when content and the plan differ). QA: every piece decodes to its exact length;
-           stitched the way the engine stitches them, the pieces' error against the master within 25 ms of every
-           joint (the wrap included) is at most PIECE_EDGE_DB over the whole .m4a's error in the same window, and
-           their overall SNR is within 1 dB of the whole .m4a's
-    --pieces-only  re-render and re-master the beds and write ONLY the pieces (the shipped .ogg / .m4a stay
-           byte-for-byte; the QA's whole-.m4a comparison then also proves the render still matches them)
+           Safari's slow AAC decode never holds the music back; src/audio/index.ts `music`): 16 s first, then
+           doubling to at most 64 s, a remainder under 16 s joined to the piece before it, each but the last
+           running on PIECE_OVERLAP_S into the next for the engine's cross-fade (it hides the edges a browser's
+           resampler leaves on every decode at a context rate other than 48 kHz). A piece is
+           cut from the whole .m4a's own AAC frames (aac.cut_m4a: no re-encode, so it decodes to the whole's samples
+           and no piece starts on a cold encoder). content lists them as layers 'seg_<start s>' →
+           assets/audio/<main>_seg<start s>.m4a (the build stops with the exact entries when content and the plan
+           differ). QA against the whole .m4a's decode: every piece decodes to its exact length and to the whole's
+           samples (PIECE_EXACT_DB), and stitched the way the engine stitches them the loop is the whole's within
+           25 ms of every joint, the wrap included. The waveforms are compared below PIECE_SPLIT_HZ; above it AAC's noise substitution
+           draws new noise in every decode (a piece decoded from mid-stream gets other noise than the whole), so
+           there the 1/3-octave band energies are compared (PIECE_HF_DB)
+    --pieces-only  only cut the pieces from the shipped .m4a files (no render, no encode)
 Stings: length, max short-term LUFS (target −16), true peak (≤ −1.0 dBTP decoded), mode share (+ the .m4a's).
 """
 from __future__ import annotations
@@ -73,8 +76,10 @@ LAYER_KBPS = 96              # the combat layers are mostly drums and bass: Opus
 AAC_KBPS = {'main': 160, 'layer': 128, 'sting': 160}     # the .m4a siblings (AAC-LC ABR)
 PIECE_FIRST_S = 16           # the main stem's .m4a pieces: the first (what the .m4a path waits for) …
 PIECE_MAX_S = 64             # … then doubling up to this
-PIECE_OVERLAP_S = 0.05       # each piece runs on this far into the next (src/audio/index.ts SEG_OVERLAP_S)
-PIECE_EDGE_DB = 3.0          # QA: the error near a joint over the whole .m4a's error there
+PIECE_OVERLAP_S = 0.03       # each piece runs on this far into the next (src/audio/index.ts SEG_OVERLAP_S)
+PIECE_EXACT_DB = -60.0       # QA: a piece's (and a joint's) error below PIECE_SPLIT_HZ against the whole .m4a's decode
+PIECE_SPLIT_HZ = 3500.0      # above this AAC's noise substitution (PNS) draws its noise afresh in every decode, so
+PIECE_HF_DB = (1.0, 2.0)     # there the 1/3-octave band energies must match instead: over a piece, within 25 ms of a joint
 BRIGHT = DORIAN_G + (6,)
 
 
@@ -199,66 +204,78 @@ def piece_layers(main_ref: str, plan: list[tuple[int, int]]) -> list[dict]:
 
 def stitch(pieces: list[np.ndarray], plan: list[tuple[int, int]], n: int, ov: int) -> np.ndarray:
     """the pieces as ONE loop, the way src/audio/index.ts stitches them: each piece's run-on cross-fades
-    (linear, ov samples) into the head of the next; the last one's run-on into the loop's head"""
+    (linear, ov samples) into the head of the next; the last piece ends at the loop's end"""
     out = np.zeros((2, n))
     w = (np.arange(ov) + 0.5) / ov
     for i, ((s, ln), p) in enumerate(zip(plan, pieces)):
-        body = p[:, :ln]
+        body = p[:, :ln + (ov if i < len(plan) - 1 else 0)]
         if i == 0:
-            out[:, s:s + ln] = body
+            out[:, s:s + body.shape[1]] = body
         else:
             out[:, s:s + ov] = out[:, s:s + ov] * (1 - w) + body[:, :ov] * w
-            out[:, s + ov:s + ln] = body[:, ov:]
-        run = p[:, ln:ln + ov]
-        if i < len(plan) - 1:
-            out[:, s + ln:s + ln + run.shape[1]] = run
-        else:                                    # the wrap: the loop's head fades in under the run-on
-            out[:, :run.shape[1]] = run * (1 - w[:run.shape[1]]) + out[:, :run.shape[1]] * w[:run.shape[1]]
+            out[:, s + ov:s + body.shape[1]] = body[:, ov:]
     return out
 
 
-def build_pieces(mdef: dict, x: np.ndarray, whole: np.ndarray) -> dict | None:
-    """write the main stem's pieces (x: the mastered main stem; whole: its shipped .m4a, decoded) and QA them"""
-    n = x.shape[1]
+def build_pieces(bid: str, mdef: dict) -> dict | None:
+    """cut the main stem's pieces from its shipped .m4a and QA them against that file's decode"""
+    whole_path = aac.m4a_path(out_path(mdef['file']))
+    whole = io.decode(whole_path)
+    n = whole.shape[1]
     plan = piece_plan(n)
     want = piece_layers(mdef['file'], plan)
     have = [l for l in mdef.get('layers', []) if l['id'].startswith('seg_')]
     if have != want:
         if not want:
-            raise SystemExit(f"content/audio.json music.{mdef.get('_id')}: a main stem this short is one piece; drop its seg_ layers")
-        raise SystemExit(f"content/audio.json music.{mdef.get('_id')}: the main stem's .m4a pieces must be listed as "
-                         f"these layers (after the others):\n{json.dumps(want, indent=1)}")
+            raise SystemExit(f"content/audio.json music.{bid}: a main stem this short is one piece; drop its seg_ layers")
+        raise SystemExit(f"content/audio.json music.{bid}: the main stem's .m4a pieces must be listed as these layers "
+                         f"(after the others):\n{json.dumps(want, indent=1)}")
     if not plan:
         return None
     ov = int(round(PIECE_OVERLAP_S * SR))
+    def rel(e: np.ndarray, r: np.ndarray) -> float:
+        return 20 * math.log10(float(np.sqrt(np.mean(e ** 2))) / (float(np.sqrt(np.mean(r ** 2))) + 1e-12) + 1e-12)
+
+    def low(x: np.ndarray) -> np.ndarray:              # zero-phase brick-wall below PIECE_SPLIT_HZ (QA only)
+        X = np.fft.rfft(x, axis=1)
+        X[:, np.fft.rfftfreq(x.shape[1], 1 / SR) > PIECE_SPLIT_HZ] = 0
+        return np.fft.irfft(X, n=x.shape[1], axis=1)
+
+    def hf(a: np.ndarray, b: np.ndarray) -> float:     # rms dB difference of the 1/3-octave bands above the split
+        keep = _EDGES[:-1] >= PIECE_SPLIT_HZ
+        ea, eb = (_logbands(np.asarray(v).sum(axis=0))[keep] for v in (a, b))
+        floor = max(ea.max(), eb.max()) - 50.0          # bands 50 dB under the loudest are the codec's empty top
+        return float(np.sqrt(np.mean((np.maximum(ea, floor) - np.maximum(eb, floor)) ** 2)))
+
     dec, rows = [], []
-    for (s, ln), l in zip(plan, want):
+    for i, ((s, ln), l) in enumerate(zip(plan, want)):
         path = out_path(l['file'])
-        aac.encode_m4a_piece(x, s, ln + ov, path, AAC_KBPS['main'])
+        body = ln + (ov if i < len(plan) - 1 else 0)
+        aac.cut_m4a(whole_path, s, body, path)
         d = io.decode(path)
         dec.append(d)
+        m = min(body, d.shape[1])
+        ref = whole[:, s:s + m]
         rows.append(dict(id=l['id'], path=os.path.relpath(path, GAME), start_s=s / SR, seconds=ln / SR,
-                         samples=d.shape[1], want=ln + ov, kb=os.path.getsize(path) / 1024))
+                         samples=d.shape[1], want=body, kb=os.path.getsize(path) / 1024,
+                         lf_db=rel(low(d[:, :m] - ref), low(ref)), hf_db=hf(d[:, :m], ref)))
     y = stitch(dec, plan, n, ov)
-    m = min(n, whole.shape[1])
-    ep, ew = y[:, :m] - x[:, :m], whole[:, :m] - x[:, :m]
-    rms = lambda e: float(np.sqrt(np.mean(e ** 2)) + 1e-12)          # noqa: E731
-    h = int(0.025 * SR)
+    h, wide = int(0.025 * SR), int(0.25 * SR)
     joints = []
     for s, _ in plan:
-        idx = np.arange(s - h, s + h)
-        a, b = rms(np.take(ep, idx, axis=1, mode='wrap')), rms(np.take(ew, idx, axis=1, mode='wrap'))
-        joints.append(dict(at_s=s / SR, err_db=20 * math.log10(a / b)))
-    snr = lambda e: 20 * math.log10(rms(x[:, :m]) / rms(e))          # noqa: E731
-    r = dict(pieces=rows, overlap_s=PIECE_OVERLAP_S, joints=joints, snr_pieces=snr(ep), snr_whole=snr(ew),
-             kb=sum(q['kb'] for q in rows))
-    r['ok'] = bool(all(q['samples'] == q['want'] for q in rows) and sum(ln for _, ln in plan) == n
-                   and all(j['err_db'] <= PIECE_EDGE_DB for j in joints) and r['snr_pieces'] >= r['snr_whole'] - 1.0)
+        idx = np.arange(s - wide, s + wide)
+        a, r = np.take(y, idx, axis=1, mode='wrap'), np.take(whole, idx, axis=1, mode='wrap')
+        mid = slice(wide - h, wide + h)
+        joints.append(dict(at_s=s / SR, lf_db=rel(low(a - r)[:, mid], low(r)[:, mid]), hf_db=hf(a[:, mid], r[:, mid])))
+    r = dict(pieces=rows, overlap_s=PIECE_OVERLAP_S, joints=joints, lf_db=rel(low(y - whole), low(whole)),
+             kb=sum(q['kb'] for q in rows), whole_kb=os.path.getsize(whole_path) / 1024)
+    r['ok'] = bool(all(q['samples'] == q['want'] and q['lf_db'] <= PIECE_EXACT_DB and q['hf_db'] <= PIECE_HF_DB[0] for q in rows)
+                   and sum(ln for _, ln in plan) == n and all(j['lf_db'] <= PIECE_EXACT_DB and j['hf_db'] <= PIECE_HF_DB[1] for j in joints))
     return r
 
 
 # ── beds ─────────────────────────────────────────────────────────────────────────────────────────
-def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool, pieces_only: bool = False) -> dict:
+def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool) -> dict:
     spec = bedlib.REGISTRY.get(bid)
     if spec is None:
         raise SystemExit(f'{bid}: no composition registered (audio/music/__init__.py)')
@@ -278,7 +295,7 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool, pieces_
     # pre-level every stem 3 dB above its target so bedlib's fixed-threshold glue compressor sees the same
     # input level on every bed (it then only moves loud moments by a dB or two)
     pre = {}
-    for k in ['main'] + ([] if pieces_only else want_layers):
+    for k in ['main'] + want_layers:
         tgt = spec.main_lufs if k == 'main' else spec.layer_lufs
         pre[k] = stems[k] * db(tgt + 3.0 - L.integrated(stems[k], circular=True))
     mastered, minfo = bedlib.master_bed(pre, spec)
@@ -287,9 +304,6 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool, pieces_
         paths[l['id']] = out_path(l['file'])
     allowed = BRIGHT if 'rift' in bid else DORIAN_G
     rep = dict(id=bid, seconds=n / SR, render_s=t_render, meta={k: v for k, v in meta.items() if k != 'chords'}, stems={})
-    if pieces_only:
-        rep['pieces'] = build_pieces({**mdef, '_id': bid}, mastered['main'], io.decode(aac.m4a_path(paths['main'])))
-        return rep
     decoded = {}
     for k, x in mastered.items():
         wav = os.path.join(tmp, f'{bid}_{k}.wav')
@@ -310,7 +324,7 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool, pieces_
                           tp=L.true_peak(ym, circular=True), seam=seam_qa(ym, bar_s)))
         rep['stems'][k] = r
         if k == 'main':
-            rep['pieces'] = build_pieces({**mdef, '_id': bid}, x, ym)
+            rep['pieces'] = build_pieces(bid, mdef)
     if len(decoded) > 1:
         main = decoded['main']
         for k, y in decoded.items():
@@ -327,10 +341,10 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool, pieces_
 
 def print_pieces(r: dict) -> None:
     print(f"  pieces   {'PASS' if r['ok'] else 'CHECK'}: " + '  '.join(
-        f"{q['id']} {q['seconds']:.0f} s {'=' if q['samples'] == q['want'] else '≠'}" for q in r['pieces'])
-        + f"   {r['kb']:.0f} kB, run-on {r['overlap_s'] * 1000:.0f} ms")
-    print('           joint error vs the whole .m4a (dB): ' + ' '.join(f"{j['at_s']:.0f}s {j['err_db']:+.1f}" for j in r['joints'])
-          + f"   SNR pieces {r['snr_pieces']:.1f} dB, whole {r['snr_whole']:.1f} dB")
+        f"{q['id']} {q['seconds']:.0f} s {'=' if q['samples'] == q['want'] else '≠'} {q['lf_db']:.0f} dB / {q['hf_db']:.2f}" for q in r['pieces'])
+        + f"   {r['kb']:.0f} kB (whole {r['whole_kb']:.0f} kB), run-on {r['overlap_s'] * 1000:.0f} ms")
+    print(f'           stitched vs the whole .m4a (error < {PIECE_SPLIT_HZ / 1000:.1f} kHz re its level / bands above, dB): '
+          + ' '.join(f"{j['at_s']:.0f}s {j['lf_db']:.0f} / {j['hf_db']:.2f}" for j in r['joints']) + f"   overall {r['lf_db']:.0f}")
 
 
 def print_bed(rep: dict) -> None:
@@ -422,7 +436,14 @@ def main() -> None:
     t_all = time.time()
     with tempfile.TemporaryDirectory() as tmp:
         for bid, mdef in beds.items():
-            rep = build_bed(bid, mdef, a.kbps, tmp, a.keep_wav, a.pieces_only)
+            if a.pieces_only:
+                rep = dict(id=bid, pieces=build_pieces(bid, mdef))
+                print(f'\n■ {bid}')
+                if rep['pieces']:
+                    print_pieces(rep['pieces'])
+                report['beds'].append(rep)
+                continue
+            rep = build_bed(bid, mdef, a.kbps, tmp, a.keep_wav)
             print_bed(rep)
             for r in rep['stems'].values():
                 r.pop('bp', None)

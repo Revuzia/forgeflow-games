@@ -339,8 +339,8 @@
       {"id": "stem_b", "file": "assets/audio/music/mus_menu_stem_b.ogg"}, {"id": "stem_c", "file": "assets/audio/music/mus_menu_stem_c.ogg"},
       {"id": "seg_000", "file": "assets/audio/music/mus_menu_seg000.m4a"}, {"id": "seg_016", "file": "assets/audio/music/mus_menu_seg016.m4a"}, {"id": "seg_048", "file": "assets/audio/music/mus_menu_seg048.m4a"}]},
     "mus_draft": {"file": "assets/audio/music/mus_draft.ogg", "bpm": 90, "loopStart": 0, "gain": 0.8, "layers": [
-      {"id": "phase_picks", "file": "assets/audio/music/mus_draft_picks.ogg"}, {"id": "phase_final", "file": "assets/audio/music/mus_draft_final.ogg"},
-      {"id": "urgency", "file": "assets/audio/music/mus_draft_urgency.ogg"},
+      {"id": "phase_pick", "file": "assets/audio/music/mus_draft_picks.ogg"}, {"id": "phase_finalize", "file": "assets/audio/music/mus_draft_final.ogg"},
+      {"id": "urgency_local", "file": "assets/audio/music/mus_draft_urgency.ogg"},
       {"id": "seg_000", "file": "assets/audio/music/mus_draft_seg000.m4a"}, {"id": "seg_016", "file": "assets/audio/music/mus_draft_seg016.m4a"}]},
     "mus_match_rift": {"file": "assets/audio/music/mus_match_rift.ogg", "bpm": 120, "loopStart": 0, "gain": 0.75, "layers": [{"id": "intense", "file": "assets/audio/music/mus_match_rift_intense.ogg"},
       {"id": "seg_000", "file": "assets/audio/music/mus_match_rift_seg000.m4a"}, {"id": "seg_016", "file": "assets/audio/music/mus_match_rift_seg016.m4a"}, {"id": "seg_048", "file": "assets/audio/music/mus_match_rift_seg048.m4a"}, {"id": "seg_112", "file": "assets/audio/music/mus_match_rift_seg112.m4a"}]},
