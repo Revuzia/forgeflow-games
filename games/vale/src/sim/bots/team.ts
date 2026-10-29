@@ -512,11 +512,6 @@ export class TeamBrain {
     let cx = 0, cy = 0, cn = 0;
     for (const f of this.perc.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
     if (cn > 0) { cx /= cn; cy /= cn; }
-    // (objectiveSense with convertsLeads: a Gleam lead of leadGleam (public) is converted through a long objective too,
-    // at even numbers — the lead is what makes the long take safe)
-    let lead = 0;
-    for (const t of w.teams) lead += t.team === this.team ? t.gold : -t.gold;
-    const ahead = d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam;
     for (const c of this.k.camps) {
       if (!c.objective) continue;
       const ready = this.campReady[c.index];
@@ -531,9 +526,9 @@ export class TeamBrain {
         const long = ttk > 15, up = aa >= ae + 1;
         const near = cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 50 * 50;
         if (alive) {
-          // a long objective only with a fighter more or a lead to convert; none the team cannot take in 40 s; at even
-          // numbers a short one only when the team is near (no road is under threat here: that returned above)
-          desire = ttk > 40 ? 0 : up ? 0.75 : aa >= ae && this.phase !== 'early' && (long ? ahead : near) ? d.objectiveEven : 0;
+          // a long objective only with a fighter more; none the team cannot take in 40 s; at even numbers a short one
+          // only when the team is near (no road is under threat here: that returned above)
+          desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' && near ? d.objectiveEven : 0;
           // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
           if (this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
           if (d.contests && aa >= ae) {
@@ -547,7 +542,7 @@ export class TeamBrain {
           if (this.campOn[c.index] >= 0 && now - this.campOn[c.index] > Math.max(25, Math.min(ttk, 40) * 1.8) && hpF > 0.3) {
             this.campBlock[c.index] = now + 60; this.campOn[c.index] = -1; desire = 0;
           }
-        } else desire = aa >= ae && (near || up || (long && ahead)) ? 0.4 : 0;
+        } else desire = aa >= ae && (near || up) ? 0.4 : 0;
         // (one call at a time: the camp the team is already on keeps it against an equal one — no walking back and forth)
         if (desire > 0 && prev === c) desire = Math.max(desire, Math.min(0.8, desire + 0.06));
       } else if (alive) {
