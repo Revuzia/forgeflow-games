@@ -129,6 +129,8 @@ export class LocalSession implements Session {
   private partyBots: PartyMember[] = [];
   private lastReq: QueueRequest | null = null;
   private pending: Pending | null = null;
+  /** the match the post-game shows: who played on which team (nod checks a teammate) */
+  private lastPlayed: { matchId: string; you: PlayerId; teams: Map<PlayerId, number> } | null = null;
   private draftHost: DraftHost | null = null;
   private draftTimer: (() => void) | null = null;
   private host: HostLike | null = null;
@@ -165,6 +167,8 @@ export class LocalSession implements Session {
 
   /** the online link's state (UI: online/offline, players, tickets per queue); null without a link */
   online(): OnlineInfo | null { return this.opts.online ? this.opts.online.info() : null; }
+  /** the offline bar's Try again: the link tries now (no-op without a link, or while it is online) */
+  reconnect(): void { this.opts.online?.retryNow(); }
 
   // ── profile plumbing ─────────────────────────────────────────────────────────────────────────
   private ctx(): ProfileContext {
@@ -564,6 +568,7 @@ export class LocalSession implements Session {
       this.p.history.unshift(entry);
       if (this.p.history.length > HISTORY_CAP) this.p.history.length = HISTORY_CAP;
     }
+    this.lastPlayed = { matchId: result.matchId, you: pd.you, teams: new Map(result.players.map((x) => [x.player, x.team] as const)) };
     this.persist();
     this.host?.dispose();
     this.host = null;
@@ -748,6 +753,27 @@ export class LocalSession implements Session {
   }
 
   rename(name: string): void { this.idp.rename(name); }
+
+  /** client F15: a Lantern nod for a teammate of the match just played, kept on its history entry (one per match) */
+  nod(matchId: string, player: PlayerId): boolean {
+    const lp = this.lastPlayed;
+    if (!lp || lp.matchId !== matchId || player === lp.you) return false;
+    const team = lp.teams.get(player);
+    if (team === undefined || team !== lp.teams.get(lp.you)) return false;
+    const entry = this.p.history.find((h) => h.matchId === matchId);
+    if (!entry || entry.nod !== undefined) return false;
+    entry.nod = player;
+    this.persist();
+    return true;
+  }
+
+  /** client F17: the emblem the avatar shows ('' clears it; which emblems are earned is the UI's rule) */
+  setEmblem(emblem: string): void {
+    const id = typeof emblem === 'string' ? emblem.trim().slice(0, 64) : '';
+    if ((this.p.emblem ?? '') === id) return;
+    if (id) this.p.emblem = id; else delete this.p.emblem;
+    this.persist();
+  }
 
   resetProfile(): void {
     if (this._phase !== 'idle' && this._phase !== 'postgame') { this.error('profile: cannot reset during a queue, draft or match'); return; }

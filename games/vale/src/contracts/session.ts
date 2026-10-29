@@ -51,14 +51,22 @@ export interface MatchHistoryEntry {
   matchId: string; at: string; queue: string; mode: string; fighter: string; skin: string;
   won: boolean; placement: number; kills: number; deaths: number; assists: number; cs: number; duration: number;
   grants: GrantSummary; ratingDelta?: number;
+  /** CHANGED(SESSION), additive (client F15): the teammate you lit a Lantern nod for after this match (Session.nod) */
+  nod?: PlayerId;
 }
 export interface Settings {
   video: { preset: 'low' | 'medium' | 'high' | 'ultra' | 'custom'; renderScale: number; shadows: 0 | 1 | 2 | 3; ao: 0 | 1 | 2; bloom: boolean;
     antialias: 'off' | 'smaa' | 'msaa'; particles: 0 | 1 | 2; scatter: 0 | 1 | 2; fpsCap: 0 | 30 | 60 | 120 | 144; maxDpr: number; fullscreen: boolean;
     /** CHANGED(RENDER), r12 M14, default true: the T0 ambient life (motes, flames, critters; ambient.ts). Not on the
      *  ladder: a preset never changes it; its density follows the tier. A stored profile without it reads true */
-    ambientEffects: boolean };
-  audio: { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean };
+    ambientEffects: boolean;
+    /** CHANGED(SESSION), additive optional (perf PERF-M2 step 5), default true: the renderer lowers its render scale for
+     *  a moment when frames run long. session/settings.ts normalizeSettings always writes it; absent reads true */
+    dynamicResolution?: boolean };
+  audio: { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean;
+    /** CHANGED(SESSION), additive optional (audio AUD-m4), both default false: the mix summed to mono after the master /
+     *  a lower limiter with gentle compression for loud transients. normalizeSettings always writes them; absent reads false */
+    mono?: boolean; softenLoud?: boolean };
   controls: { binds: Record<string, string>; quickCast: boolean; cameraLock: boolean; edgePan: boolean; panSpeed: number; attackMoveOnClick: boolean; selfCastModifier: string };
   access: { colorblind: 'off' | 'deutan' | 'protan' | 'tritan'; uiScale: number; hudScale: number; minimapScale: number; reduceMotion: boolean; screenShake: number; subtitles: boolean;
     /** CHANGED(UI), r12 M4 §5, both default false: a 150 ms HARM screen-edge mark when you lose control /
@@ -81,6 +89,9 @@ export interface Profile {
   settings: Settings;
   seenCatalogVersion?: string;
   tutorialsSeen: string[];
+  /** CHANGED(SESSION), additive (client F17): the emblem the avatar shows (an id from the UI's earnable emblems;
+   *  Session.setEmblem). Absent: the UI's default */
+  emblem?: string;
 }
 export interface ProfileStore {
   load(): Profile | null;
@@ -215,6 +226,14 @@ export interface Session {
   playAgain?(): void;
   /** CHANGED(SESSION), additive: the game-server link (CONTRACT §7.2); null/absent = offline build */
   online?(): OnlineInfo | null;
+  /** CHANGED(SESSION), additive optional (W2 flow-blockers): try the game-server link again now (the offline bar's Try
+   *  again). Without it the UI dispatches the page-level retry event the link also listens for */
+  reconnect?(): void;
+  /** CHANGED(SESSION), additive optional (client F15): record a Lantern nod for a teammate in this match's history entry.
+   *  False when the match is not in the history, the player is not your teammate, or the entry already has a nod */
+  nod?(matchId: string, player: PlayerId): boolean;
+  /** CHANGED(SESSION), additive optional (client F17): keep the chosen emblem on the profile (Profile.emblem); '' clears it */
+  setEmblem?(emblem: string): void;
 }
 
 /** the online link as the UI shows it */

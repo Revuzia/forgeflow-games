@@ -203,7 +203,9 @@ export class TeamBrain {
    * our structures (published defend calls), or four or more enemy Wicks deep in our half with two fewer of ours
    * to meet them — gets one fighter (two for a dive by two or more or a wave six ahead): the nearest ones above
    * 60 % health, never the grovehunter, the road's own laner first when it is not much farther. The rest keep
-   * the plan.
+   * the plan. (Integ done:5: a stack five or more over ours is read as it crosses the river, a stack eight over ours
+   * at a structure gets two, and a big stack with no Needle of ours left in its way is met behind the Lantern it
+   * walks into.)
    */
   private thinkAnswers(w: World): void {
     this.answer.clear();

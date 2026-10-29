@@ -78,13 +78,16 @@ export interface DifficultyProfile {
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   // (W4 G3 refix: novice is a beginner's opponent — slower to see, aim, last-hit and combo, and slower to act on the
-  // team's calls — so a veteran's play shows in the result; still perception and execution only)
+  // team's calls — so a veteran's play shows in the result; still perception and execution only. Integ done:5: one
+  // step further on the same knobs — later reactions, wider aim, more missed last hits, rarer dodges and kites, noisier
+  // reads, slower combos, staying in a losing fight longer and answering the team's calls later — took veteran from
+  // 129/160 to 150/160 mirrored games over seeds 1-80; no stat, Gleam or rule changes)
   novice: {
-    id: 'novice', reaction: 0.55, reactionJitter: 0.15, aimErrorDeg: 15, leadSkill: 0.25,
-    lastHitSigma: 0.2, lastHitMiss: 0.38, dodgeChance: 0.1, kiteSkill: 0.1,
-    intentFollow: 0.5, recallBias: -0.12, retreatBias: -0.08, knowsCooldowns: false,
-    decisionNoise: 0.14, focusDiscipline: 0.15, abilityEvery: 0.65,
-    macroDelay: 8, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
+    id: 'novice', reaction: 0.7, reactionJitter: 0.2, aimErrorDeg: 20, leadSkill: 0.15,
+    lastHitSigma: 0.25, lastHitMiss: 0.45, dodgeChance: 0.05, kiteSkill: 0.05,
+    intentFollow: 0.5, recallBias: -0.12, retreatBias: -0.12, knowsCooldowns: false,
+    decisionNoise: 0.2, focusDiscipline: 0.1, abilityEvery: 0.85,
+    macroDelay: 10, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
   },
   adept: {
