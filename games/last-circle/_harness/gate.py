@@ -40,7 +40,7 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
 allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
 kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout, loot_beams_rings
-(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles), sky_lowtier (one-layer-broken); the Wave-5 gates:
+(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles, bird-split), sky_lowtier (one-layer-broken); the Wave-5 gates:
 placementcheck (y-only-recentre, perimeter-drop, tree-float, stack-float: the built map is mutated in memory; and the Wave-4 commit itself), collisioncheck served from the
 Wave-4 commit (--rev 7f6a9fb2), navcheck (nav-l3, raw-strafe, heal-yaw: bots.js / ffg_royale3d.js served patched by a page route), worldcheck
 (the Wave-4 commit, stale-table, rng-shift: scratch copies), worldlive (the Wave-4 commit; ramp-sides-open: player.js served patched);
@@ -422,6 +422,8 @@ NEGATIVE = [
     ("sky_probe-plant-fog-flat", "new/sky_probe.py", ["--plant", "fog-flat"], 1800),
     ("sky_probe-plant-no-rng-burn", "new/sky_probe.py", ["--plant", "no-rng-burn"], 1800),
     ("sky_probe-plant-no-handles", "new/sky_probe.py", ["--plant", "no-handles"], 1800),
+    ("sky_probe-plant-bird-split", "new/sky_probe.py", ["--plant", "bird-split"], 1800),
+    ("stormfx_storm-plant-no-streaks", "new/stormfx_storm.py", ["--plant", "no-streaks"], 5400),
     ("sky_lowtier-plant-one-layer-broken", "new/sky_lowtier.py", ["--plant", "one-layer-broken"], 1800),
     # Wave-5 lane 5D. placementcheck: the BUILT map is mutated in memory (rocks back on their Wave-4 offset, the 0.35 m perimeter drop
     # back, one tree lifted 0.30 m); collisioncheck: the Wave-4 commit itself is served (pinned: `--rev` in the extra args makes run_gate

@@ -21,6 +21,10 @@ difference is the storm effect. Judges:
               renderOrder 5; warmObjects(W) returns the wall and the bolt pool
 
   python _harness/new/stormfx_storm.py --disk [--quick]        exit 0 pass / 1 fail / 2 could-not-judge
+  python _harness/new/stormfx_storm.py --disk --plant no-streaks   control: the streaks drawn as plain curtain - the streak rows MUST fail
+
+  (R2) the A/B views' wall points count a point hidden when ANY drawn surface stands > 0.5 m in front of it (the scene's own depth, SF.sceneDepth),
+  not only colliders (map.losBlocked) and the terrain: the phase6/near view looked at the wall through a tree canopy in 5 of its 11 rows (R1).
 """
 from __future__ import annotations
 
@@ -80,6 +84,12 @@ def main(v, args):
         M["warmObjects"] = warm_ok
         v.check("storm.warmObjects(W) returns the wall and the bolt pool, both in the scene graph",
                 bool(warm_ok) and warm_ok["n"] == 2 and warm_ok["inScene"], warm_ok)
+
+        if getattr(args, "plant", None) == "no-streaks":
+            # control (R2): the streaks drawn as plain curtain (glow x1, haze not thinned) - the streak rows of every view MUST fail
+            M["plant"] = s.js("""() => { const u = window.__LC__.W.stormCtl.wall.material.uniforms; u.uStreakGain.value = 1; u.uStreakGainHi.value = 1; u.uStreakAlpha.value = 1;
+              return { uStreakGain: u.uStreakGain.value, uStreakGainHi: u.uStreakGainHi.value, uStreakAlpha: u.uStreakAlpha.value }; }""")
+            v.info("PLANTED no-streaks (the streak rows must FAIL)", M["plant"])
 
         regions = [("phase2", 2), ("phase6", 6)]
         results = {}
@@ -155,7 +165,8 @@ def main(v, args):
                 tag = "%s_%s" % (rname, vname)
                 L.save_png(url_on, os.path.join(out_dir, "storm_%s_on.png" % tag))
                 L.save_png(url_off, os.path.join(out_dir, "storm_%s_off.png" % tag))
-                pts = s.js("() => window.__SF__.wallPoints(0, 60, 31, 0.4)")
+                # (R2) depthOcc: a wall point hidden by ANY drawn surface (a tree canopy, a floating island - no collider) is not visible: every row measures wall
+                pts = s.js("() => window.__SF__.wallPoints(0, 60, 31, 0.4, true)")
                 band = L.region_stats(on, off, pts["pts"], pts["w"], pts["h"], 0, 10, EXCL)
                 curt = L.region_stats(on, off, pts["pts"], pts["w"], pts["h"], 10, 60, EXCL)
                 # streaks: per image ROW inside the 10-60 m region, distinct peaks of the A/B luma delta above a 31 px running
@@ -163,13 +174,13 @@ def main(v, args):
                 n_pk, row_counts = L.row_peaks(on, off, pts["pts"], pts["w"], pts["h"], 10, 60, 4.0, EXCL)
                 base = float(curt["meanAbsDelta"]) if curt else 0.0
                 rres[vname] = {"band": band, "curtain": curt, "streakPeaks": n_pk, "streakRowCounts": row_counts[:40], "curtainBaseDelta": base, "bloomExtra": bloom_x,
-                               "distToWallMin": min([p[4] for p in pts["pts"] if p[3]] or [0])}
+                               "distToWallMin": min([p[4] for p in pts["pts"] if p[3]] or [0]), "occluded": {"losBlocked": pts.get("losBlocked"), "depthBlocked": pts.get("depthBlocked")}}
                 M["regions"][rname][vname] = rres[vname]
                 # whole-frame diff image for the eye
                 d = np.clip(np.abs(on - off) * 4, 0, 255)
                 L.save_png(d, os.path.join(out_dir, "storm_%s_diff4x.png" % tag))
                 print("  %s %-8s band %s curtain %s peaks %d" % (rname, vname, band and {k: (round(vv, 3) if isinstance(vv, float) else vv) for k, vv in band.items()},
-                                                               curt and {k: (round(vv, 3) if isinstance(vv, float) else vv) for k, vv in curt.items()}, n_pk), flush=True)
+                                                               curt and {k: (round(vv, 3) if isinstance(vv, float) else vv) for k, vv in curt.items()}, n_pk), "rows", row_counts, "occluded", rres[vname]["occluded"], flush=True)
             results[rname] = rres
 
             # ── wall alone over black / white: alpha cap + emission glare ratios (near view when we have it) ──
@@ -386,5 +397,6 @@ if __name__ == "__main__":
     ap.add_argument("--map", default="isla_viva")
     ap.add_argument("--shots", default=os.path.join(SCRATCH, "shots"))
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--plant", default=None, choices=["no-streaks"], help="control: no-streaks = streak gain 1 / haze not thinned -> the streak rows MUST fail")
     args = ap.parse_args()
     sys.exit(common.run_gate("stormfx_storm", lambda v: main(v, args), args))
