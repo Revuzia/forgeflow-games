@@ -57,7 +57,7 @@ IMPK = dict(tail_floor_db=-48.0, clip_drive=1.5, max_gr_db=6.0)      # mastering
 DASHK = dict(tail_floor_db=-48.0, fade_out=0.02)
 
 CONTACT_SHARE = 0.11         # a kit hit's > 2 kHz share of its first 30 ms (the build gate's floor: 0.07) …
-CONTACT_TOP = 0.24           # … and at most this, measured mastered (the build gate's soft top for frequent hits: 0.30)
+CONTACT_TOP = 0.24           # … a take above this once mastered is tamed to 0.22 (the build gate's soft top for frequent hits: 0.30)
 CONTACT_WIN = 0.03
 CONTACT_SPLIT_HZ = 2000.0
 LAPTOP_SOLVE_LU = 2.4        # the body pass: loss through a 220 Hz roll-off (the build gate: 3 LU)
@@ -297,10 +297,10 @@ VOICING: dict[str, dict | tuple] = {
     'f_vashil_attack_swing': {'peaks': ((500, 6.0, 1.4),)},
     'f_vashil_ult_release': {'hp': 280, 'peaks': ((315, 6.0, 1.4),)},
     'f_ardit_hit': {'hp': 400, 'lp': 1200, 'peaks': ((500, 6.0, 1.4),)},
-    'f_burdam_hit': {'hp': 400},
+    'f_burdam_hit': ({'hp': 400}, {'hp': 280}),
     'f_dunsom_hit': {'peaks': ((1250, -9.0, 1.4),)},
     'f_ervet_hit': {'hp': 280},
-    'f_hesmi_hit': {'hp': 800},
+    'f_hesmi_hit': ({'hp': 800}, {'hp': 400, 'lp': 1200, 'peaks': ((500, 6.0, 1.4),)}),
     'f_ilsheta_hit': {'lp': 8000, 'peaks': ((800, -9.0, 1.4),)},
     'f_marund_hit': {'hp': 280, 'peaks': ((1250, -9.0, 1.4),)},
     'f_odrum_hit': {'hp': 800, 'lp': 5000, 'peaks': ((800, -9.0, 1.4),)},
