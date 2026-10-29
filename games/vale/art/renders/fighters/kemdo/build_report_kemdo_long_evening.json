@@ -5,7 +5,7 @@
   "parts": {
     "tris_hood": 1400,
     "tris_face": 700,
-    "tris_brow": 520,
+    "tris_brow": 518,
     "tris_head_core": 260,
     "tris_shirt": 850,
     "tris_sleeves": 600,
@@ -20,7 +20,7 @@
     "tris_panel": 520,
     "tris_lining": 160,
     "tris_trousers": 698,
-    "tris_boots": 996,
+    "tris_boots": 998,
     "tris_forearms": 700,
     "tris_vambrace": 620,
     "tris_vambrace_straps": 240,
@@ -38,32 +38,32 @@
     "tris_tassel_plates": 420,
     "validate_kemdo": "18520->18509"
   },
-  "uv_coverage": 0.573,
+  "uv_coverage": 0.618,
   "bake": {
-    "base": 4.24,
-    "rough_metal": 4.13,
-    "normal": 2.43,
-    "ao": 3.19,
-    "normal_fixed_px": 14567,
-    "projection": 137.93,
-    "pack_save": 138.42,
-    "total": 152.68
+    "base": 11.13,
+    "rough_metal": 9.54,
+    "normal": 5.17,
+    "ao": 4.81,
+    "normal_fixed_px": 15571,
+    "projection": 142.65,
+    "pack_save": 143.24,
+    "total": 174.73
   },
   "tris": 18809,
   "mesh_top_m": 2.121,
-  "glb_bytes_raw": 2369196,
+  "glb_bytes_raw": 2294284,
   "optimize": {
     "ok": true,
-    "before": 2369196,
-    "after": 1028460
+    "before": 2294284,
+    "after": 986228
   },
-  "glb_bytes": 1028460,
+  "glb_bytes": 986228,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_long_evening.glb (1004 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: kemdo_long_evening_base 2048x2048 279K, kemdo_long_evening_normal 512x512 50K, kemdo_long_evening_orm 256x256 29K",
-      "  skinned meshes: kemdo_accent(149v), kemdo_long_evening(19013v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_long_evening.glb (963 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_long_evening_base 2048x2048 267K, kemdo_long_evening_normal 512x512 51K, kemdo_long_evening_orm 256x256 27K",
+      "  skinned meshes: kemdo_accent(149v), kemdo_long_evening(18022v)",
       "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
@@ -77,8 +77,8 @@
       "portrait": "art/out/fighters/kemdo/kemdo_long_evening_portrait.png"
     },
     "seconds": {
-      "splash": 30.62,
-      "portrait": 7.81
+      "splash": 24.8,
+      "portrait": 14.7
     }
   },
   "three_qa": {
@@ -110,24 +110,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/kemdo/three_kemdo_long_evening.png",
-    "seconds": 16.9,
+    "seconds": 31.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.23,
-      "model": 13.27,
-      "lows_bind": 4.98,
-      "uv": 2.84,
-      "bake": 152.69,
-      "export": 0.22,
-      "optimize": 3.93,
-      "load_test": 0.71,
-      "render": 38.61,
-      "three_qa": 17.25
+      "rig": 0.01,
+      "materials": 0.51,
+      "model": 55.1,
+      "lows_bind": 23.84,
+      "uv": 8.03,
+      "bake": 174.74,
+      "export": 0.26,
+      "optimize": 2.01,
+      "load_test": 0.36,
+      "render": 39.73,
+      "three_qa": 32.51
     },
-    "total_s": 234.93
+    "total_s": 338.3
   },
   "run_ref_speed": 3.45,
   "height_m": 2.1

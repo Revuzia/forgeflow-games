@@ -120,15 +120,18 @@ def fan_leaf(L: float, spread: float, K: int = 6, pleat: float = 0.015, droop: f
 
 
 def fan_plate(L: float, spread: float, K: int = 6, crimp: float = 0.12, pleat: float = 0.02, droop: float = 0.08,
-              curl: float = 0.06, round_: float = 0.30) -> Part:
+              curl: float = 0.06, round_: float = 0.30, midrib: float = 0.0, ridge: float = 0.5) -> Part:
     """The Dialwood fan leaf as a crimped, pleated plate: apex (the stem) at the origin, opening along +Y, top
     facing +Z; the apex and K+1 points on the leading edge, K triangles (K even). The edge alternates RIB
     (odd points: full length, raised by `pleat`) and VALLEY (even points, the two corners among them: drawn
     in by `crimp`, lowered), so the outline is a lobed fan (three lobes at K = 6), never a polygon disc, and
     every wedge runs from a rib to a valley: the painter strokes it light-to-dark like a brushed hour-line.
     `droop` bends the tip down along the axis, `curl` the corners down, `round_` draws the corners in.
+    `midrib` (0 < f < 1; 0 = none, the old K-triangle plate): one more vertex on the middle rib, f of the way from
+    the stem to its tip, raised `ridge` × the pleat over the plate: the two middle wedges split there (K + 2
+    triangles), so the painter can lay a MIDRIB vein down the leaf (attribute vein = 1 on that vertex).
     Attributes: u (0 stem → 1 edge), lobe (+1 rib, -1 valley, 0 stem), corner (1 on the two corners),
-    side (-1 … 1 across the fan)."""
+    side (-1 … 1 across the fan), vein (1 on the midrib vertex)."""
     a = np.linspace(-spread / 2, spread / 2, K + 1)
     w = np.abs(a) / (spread / 2)
     rib = (np.arange(K + 1) % 2 == 1)
@@ -137,13 +140,27 @@ def fan_plate(L: float, spread: float, K: int = 6, crimp: float = 0.12, pleat: f
     x, y = L * prof * np.sin(a), L * prof * np.cos(a)
     z = pleat * L * lobe * (0.6 + 0.4 * (1 - w)) - droop * L * (y / L) ** 2 - curl * L * (x / L) ** 2
     P = np.vstack([[0.0, 0.0, 0.0], np.column_stack([x, y, z])])
-    F = np.array([[0, i + 2, i + 1] for i in range(K)])
+    F = [[0, i + 2, i + 1] for i in range(K)]
+    u = [0.0] + [1.0] * (K + 1)
+    lob = [0.0] + list(lobe)
+    corner = [0.0] + list(((np.arange(K + 1) == 0) | (np.arange(K + 1) == K)).astype(float))
+    side = [0.0] + list(a / (spread / 2))
+    vein = [0.0] * (K + 2)
+    if midrib > 0 and K % 2 == 0:
+        c = K // 2 + 1                               # the middle rib's tip (P index)
+        yc = midrib * P[c, 1]
+        m = np.array([0.0, yc, midrib * P[c, 2] + ridge * pleat * L - droop * L * ((yc / L) ** 2 - midrib * (P[c, 1] / L) ** 2)])
+        P = np.vstack([P, m])
+        mi = len(P) - 1
+        # the two wedges on the middle rib, (0, c, c-1) and (0, c+1, c), split at the midrib vertex
+        F = [f for f in F if not (f[0] == 0 and c in f[1:])]
+        F += [[0, mi, c - 1], [mi, c, c - 1], [0, c + 1, mi], [mi, c + 1, c]]
+        u.append(midrib); lob.append(1.0); corner.append(0.0); side.append(0.0); vein.append(1.0)
+    F = np.asarray(F)
     fn = face_normals(P, F)
     F[fn[:, 2] < 0] = F[fn[:, 2] < 0][:, [0, 2, 1]]
-    u = np.concatenate([[0.0], np.ones(K + 1)])
-    corner = np.concatenate([[0.0], (np.arange(K + 1) == 0) | (np.arange(K + 1) == K)]).astype(float)
-    return Part(P, F, None, u=u, lobe=np.concatenate([[0.0], lobe]), corner=corner,
-                side=np.concatenate([[0.0], a / (spread / 2)]))
+    return Part(P, F, None, u=np.asarray(u), lobe=np.asarray(lob), corner=np.asarray(corner), side=np.asarray(side),
+                vein=np.asarray(vein))
 
 
 # ── faceted tubes (trunk, limbs, roots) ──────────────────────────────────────────────────────────

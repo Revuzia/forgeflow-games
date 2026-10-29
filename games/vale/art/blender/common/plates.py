@@ -99,6 +99,11 @@ DEFAULTS = {
     # the figure keeps its depth)
     "card_lo_q": None, "card_lo": 0.31, "card_rows": [0.06, 0.80], "card_box": 0.84, "card_pos": 0.86,
     "toe_pv": 0.55, "toe_chroma": 0.5, "toe_left": 0.45,
+    # ... and the toe's black anchor (integration pass, chars-12: the toe lifted every splash's black point, p1 +28,
+    # a grey veil over the full splash): below `toe_foot` (display luma) the lift eases down to `toe_black` of itself
+    # at black, so the card window's mid-darks still reach `card_lo` while the deepest shadows stay deep. The
+    # defaults (1.0 / 0.0) are the old toe.
+    "toe_black": 1.0, "toe_foot": 0.0,
 }
 
 
@@ -520,12 +525,17 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
     return comp
 
 
-def _toe(rgb: np.ndarray, s: float, pv: float, chroma: float, wx: np.ndarray | None = None) -> np.ndarray:
+def _toe(rgb: np.ndarray, s: float, pv: float, chroma: float, wx: np.ndarray | None = None,
+         black: float = 1.0, foot: float = 0.0) -> np.ndarray:
     """Lift the darks of display rgb: luma L -> L + s (pv - L)^2 / pv below `pv` (x `wx` per column); `chroma` of
-    the lift scales the colour, the rest is added neutral (a very dark pixel only gets the neutral part)."""
+    the lift scales the colour, the rest is added neutral (a very dark pixel only gets the neutral part). With
+    `foot` > 0 the lift eases (smoothstep) from `black` of itself at L 0 to all of it at L `foot`."""
     L = np.maximum(rgb @ Y709, 1e-4)
     d = np.clip(pv - L, 0.0, None)
     lift = s * d * d / pv
+    if foot > 0.0:
+        t = np.clip(L / foot, 0.0, 1.0)
+        lift = lift * (black + (1.0 - black) * t * t * (3 - 2 * t))
     if wx is not None:
         lift = lift * wx
     Lp = L + lift
@@ -547,7 +557,8 @@ def card_floor(comp: np.ndarray, p: dict) -> tuple[np.ndarray, float]:
     win, wwx = comp[r0:r1, x0:x0 + cw, :3], wx[:, x0:x0 + cw]
     q, lo_t = float(p["card_lo_q"]), float(p["card_lo"])
     pv, ch = float(p["toe_pv"]), float(p["toe_chroma"])
-    qv = lambda s: float(np.quantile(_toe(win, s, pv, ch, wwx) @ Y709, q))  # noqa: E731
+    tb, tf = float(p.get("toe_black", 1.0)), float(p.get("toe_foot", 0.0))
+    qv = lambda s: float(np.quantile(_toe(win, s, pv, ch, wwx, tb, tf) @ Y709, q))  # noqa: E731
     if qv(0.0) >= lo_t:
         return comp, 0.0
     lo, hi = 0.0, 1.5
@@ -555,7 +566,7 @@ def card_floor(comp: np.ndarray, p: dict) -> tuple[np.ndarray, float]:
         m = 0.5 * (lo + hi)
         lo, hi = (m, hi) if qv(m) < lo_t else (lo, m)
     out = comp.copy()
-    out[..., :3] = _toe(comp[..., :3], hi, pv, ch, wx)
+    out[..., :3] = _toe(comp[..., :3], hi, pv, ch, wx, tb, tf)
     return out, hi
 
 

@@ -81,14 +81,20 @@ TINT_W = 0.6                   # the variant's hue drift
 BARK = [(0.00, "#1E1813"), (0.30, "#33281E"), (0.60, "#503F30"), (0.85, "#6C5643"), (1.00, "#857059")]
 MOSS = hexc("#4A5C3A")
 
-K_LEAF = 6                     # triangles per leaf (three lobes)
+K_LEAF = 6                     # triangles per leaf (three lobes); + 2 where the leaf carries a midrib
+MIDRIB = 0.5                   # the midrib vertex: this far from the stem along the middle rib (env F5)
+TREE_TRIS = 740                # midribs go to the longest leaves first while the tree stays under this (budget 750)
 DOME_W, CROWN_W, OWN_W = 0.45, 0.35, 0.42   # shading normal: pad dome · whole crown · the leaf's own facet
 RIB_T = 0.22                   # rib normals tilt out along the leaf, valleys in: the lacquer streaks per pleat
 LAYER = 0.032                  # leaves nearer the tree's axis ride up to 2× this higher (m): the shingle
 UPSTREAM = 0.44                # the stems' spread sits this far (× pad radius) toward the tree's axis
 GAP = 0.045                    # the outer ring's stems ride this far over the cushion
-STEM = 0.12                    # value: stem → tip ramp on every leaf
-STROKE = 0.035                 # value: rib light / valley dark
+STEM = 0.20                    # value: stem → tip ramp on every leaf (env F5: 0.12 → 0.20, the plates read painted)
+STROKE = 0.06                  # value: rib light / valley dark (env F5: 0.035 → 0.06)
+VEIN = 0.07                    # value: the midrib vein's light stroke down the middle rib (env F5)
+CAV_D = 0.26                   # cavity between plates (env F5): occlusion against every plate within this (m) ...
+CAV_K = 0.40                   # ... darkens a leaf by up to this (linear ×) where it tucks under the ring above
+LIFT = 0.0                     # value: a leaf's whole stroke (keeps the canopy band with the stronger brushwork)
 PAD_TONE = 0.06                # value step between pads
 BLUR = 0.10                    # the value field's softness (m)
 PLATE_SCALE = 0.15             # every plate scaled ±15 % (r12 M11)
@@ -108,9 +114,11 @@ def _ell_normal(P: np.ndarray, c, r) -> np.ndarray:
     return g / np.maximum(np.linalg.norm(g, axis=1, keepdims=True), 1e-9)
 
 
-def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator) -> list[Part]:
+def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator, rib_min: float = math.inf) -> list[Part]:
     """The cushion and its rosette, built round the origin, then squashed, turned, tipped and moved to the
-    pad's place. Leaves carry dome / own normals separately (blended once the crown's form is known)."""
+    pad's place. Leaves carry dome / own normals separately (blended once the crown's form is known). A leaf
+    at least `rib_min` long carries a midrib vertex (kit.fan_plate midrib; no RNG drawn, so the layout is the
+    same with or without)."""
     r, h = pad.r, pad.h
     kappa = math.tan(pad.tilt) / (2 * r)                 # dome z = z0 − κ ρ²: slope tan(tilt) at ρ = r
     z0 = h + GAP
@@ -197,8 +205,9 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator)
         ax = ax2 / np.linalg.norm(ax2)
         leaf = fan_plate(L, spread * rng.uniform(0.94, 1.06), K=K_LEAF, crimp=rng.uniform(0.10, 0.16),
                          pleat=rng.uniform(0.012, 0.018), droop=kappa * L, curl=kappa * L * 0.5,
-                         round_=rng.uniform(0.22, 0.32))
+                         round_=rng.uniform(0.22, 0.32), midrib=MIDRIB if L >= rib_min else 0.0)
         part = leaf.transformed(frame(apex, ax, nz))
+        part.A["leafL"] = np.full(len(part.P), L)
         # the dome normal at each vertex (local, before the pad's transform)
         Q = part.P
         nd = np.column_stack([2 * kappa * Q[:, 0], 2 * kappa * Q[:, 1], np.ones(len(Q))])
@@ -236,6 +245,18 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator)
 
 
 def build_tree(spec: TreeSpec) -> Part:
+    """The tree, with a midrib on as many leaves as TREE_TRIS allows, the longest first (the same layout as a
+    tree without: the midrib draws no RNG)."""
+    t = _build_tree(spec, math.inf)
+    first = (t.A["kind"] == 1) & (t.A["u"] == 0)                  # one stem vertex per leaf
+    lens = np.sort(t.A["leafL"][first])[::-1]
+    room = max(0, (TREE_TRIS - t.tris) // 2)
+    if room == 0:
+        return t
+    return _build_tree(spec, 0.0 if room >= len(lens) else float(lens[room - 1]))
+
+
+def _build_tree(spec: TreeSpec, rib_min: float) -> Part:
     rng = np.random.default_rng(spec.seed)
     spine = np.asarray(spec.spine, float)
     parts: list[Part] = []
@@ -244,7 +265,7 @@ def build_tree(spec: TreeSpec) -> Part:
         k = int(np.clip(np.searchsorted(spine[:, 2], zc), 1, len(spine) - 1))
         f = (zc - spine[k - 1, 2]) / max(spine[k, 2] - spine[k - 1, 2], 1e-6)
         txy = spine[k - 1, :2] * (1 - f) + spine[k, :2] * f if zc <= spine[-1, 2] else spine[-1, :2]
-        parts += build_pad(pi, pad, txy, rng)
+        parts += build_pad(pi, pad, txy, rng, rib_min)
     # trunk: six facets, a flare ring at the foot that alternates root buttress and hollow
     n_s = len(spine)
     rad = spec.r0 * np.linspace(1.0, 0.42, n_s) ** 1.2
@@ -341,6 +362,11 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     O = P + N * np.where(leafy, 0.06, 0.012)[:, None]
     ao = occ.ao(O, N, rays=32, dist=1.0, eps=0.0)
     sky = occ.sky(O, N, rays=24, cone_deg=60.0, dist=12.0, eps=0.0)
+    # cavity between plates (env F5): occlusion against EVERY plate, cushion and limb within CAV_D, cast round each
+    # plate's own surface normal (not the crown-blended shading normal): dark where a stem tucks under the ring above
+    # and in the pleat valleys, open on the tips that lie over the next ring
+    Ng = smooth_normals(P, t.F)
+    cav = Occluder(P, t.F, ground=False).ao(P + Ng * 0.006, Ng, rays=24, dist=CAV_D, eps=0.0)
     col = np.zeros((len(P), 3))
     gloss = np.zeros(len(P))
     z = P[:, 2]
@@ -367,6 +393,8 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     lit = smooth(0.25, 0.85, sky) * smooth(-0.1, 0.7, N[:, 2])
     v += np.where(leaf, STEM * (u - 0.62) * (0.45 + 0.55 * lit), 0.0)
     v += np.where(leaf, STROKE * lobe * u * (0.35 + 0.65 * lit) + 0.025 * (lid - 0.5), 0.0)
+    vein = A.get("vein", np.zeros(len(P)))
+    v += np.where(leaf, VEIN * vein * (0.4 + 0.6 * lit) + LIFT, 0.0)            # the midrib: a light stroke stem → tip
     v = np.where(core, v - 0.11, v)                               # the cushions: inner foliage, deeper in shade (the gaps read as depth)
     c = ramp(np.clip(v, 0, 1), LEAF)
     # leaf hue at the same value (yellow-green / blue-green / olive / fresh / jade), mixed per leaf
@@ -388,6 +416,7 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     w = np.clip(0.58 * hgt + 0.24 * open_ + 0.18 * smooth(0.15, 0.8, sky), 0, 1)
     w = np.where(core, 0.6 * w, w)
     g = GRAD_LO + (1 - GRAD_LO) * smooth(0.0, 1.0, w)
+    g *= 1.0 - CAV_K * (1.0 - smooth(0.2, 0.95, cav)) * np.where(leaf, 1.0, 0.5)      # cavity between plates (env F5)
     c = _lin2srgb(srgb2lin(np.clip(c, 0, 1)) * g[:, None])
     col[leafy] = c[leafy]
     # no lacquer (r12 M11): the gloss mask stays 0 on plates, cushions and bark alike — matte paint only

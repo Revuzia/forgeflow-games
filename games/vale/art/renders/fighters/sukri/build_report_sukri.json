@@ -29,16 +29,16 @@
     "tris_cup_core": 160,
     "validate_sukri": "17452->17443"
   },
-  "uv_coverage": 0.59,
+  "uv_coverage": 0.6,
   "bake": {
-    "base": 7.25,
-    "rough_metal": 6.16,
-    "normal": 2.48,
-    "ao": 2.59,
-    "normal_fixed_px": 106050,
-    "projection": 23.36,
-    "pack_save": 23.5,
-    "total": 43.29
+    "base": 17.34,
+    "rough_metal": 13.14,
+    "normal": 6.45,
+    "ao": 5.83,
+    "normal_fixed_px": 103630,
+    "projection": 75.95,
+    "pack_save": 76.33,
+    "total": 120.78
   },
   "tris": 17603,
   "mesh_top_m": 1.649,
@@ -143,19 +143,19 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3038116,
+  "glb_bytes_raw": 3025284,
   "optimize": {
     "ok": true,
-    "before": 3038116,
-    "after": 1194688
+    "before": 3025284,
+    "after": 1187536
   },
-  "glb_bytes": 1194688,
+  "glb_bytes": 1187536,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri.glb (1167 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: sukri_base 2048x2048 197K, sukri_normal 512x512 68K, sukri_orm 512x512 85K",
-      "  skinned meshes: sukri(19829v), sukri_accent(82v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri.glb (1160 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_base 2048x2048 192K, sukri_normal 512x512 68K, sukri_orm 512x512 85K",
+      "  skinned meshes: sukri(19761v), sukri_accent(82v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_cord_swing shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
       "  clips: attack1:0.667s/20tr, attack2:0.667s/20tr, cast_a1:0.833s/21tr, cast_a2:0.500s/21tr, cast_a3:0.833s/23tr, cast_ult:1.333s/21tr, channel:1.000s/17tr, dash:0.500s/21tr, death:1.667s/23tr, idle:2.133s/20tr, idle_lobby:4.000s/20tr, recall:2.000s/21tr, run:0.533s/25tr, stunned:1.000s/20tr, taunt:1.500s/18tr, victory:1.667s/22tr",
       "  tracks checked: 333; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
@@ -172,10 +172,10 @@
       "turntable": "art/renders/fighters/sukri/turntable.png"
     },
     "seconds": {
-      "splash": 6.02,
-      "portrait": 2.54,
-      "icon": 0.62,
-      "turntable": 4.13
+      "splash": 16.31,
+      "portrait": 9.47,
+      "icon": 16.34,
+      "turntable": 33.37
     }
   },
   "three_qa": {
@@ -207,26 +207,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/sukri/three_sukri.png",
-    "seconds": 9.1,
+    "seconds": 31.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.22,
-      "model": 22.01,
-      "lows_bind": 7.36,
-      "uv": 6.97,
-      "bake": 43.41,
-      "clips": 0.11,
-      "export": 0.77,
-      "optimize": 0.54,
-      "load_test": 0.1,
-      "render": 13.35,
-      "three_qa": 9.27,
-      "cache": 0.18
+      "rig": 0.01,
+      "materials": 0.33,
+      "model": 120.17,
+      "lows_bind": 13.63,
+      "uv": 5.26,
+      "bake": 121.15,
+      "clips": 0.33,
+      "export": 2.3,
+      "optimize": 1.4,
+      "load_test": 0.28,
+      "render": 75.83,
+      "three_qa": 31.98,
+      "cache": 0.51
     },
-    "total_s": 104.35
+    "total_s": 373.25
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56
