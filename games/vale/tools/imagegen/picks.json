@@ -13,7 +13,7 @@
   "boon_long_stride": 2,
   "buff_splinters": 2,
   "spell_calling_bell": 2,
-  "spell_glass_pane": 2,
+  "spell_glass_pane": "r2",
   "concept_burdam": 2,
   "concept_ervet": 2,
   "concept_hesmi": 2,
@@ -58,5 +58,10 @@
   "item_watchbell": "r2",
   "item_shadowpin": "r2",
   "item_lampblack_edge": "r2",
-  "item_resin_maul": "r2"
+  "item_resin_maul": "r2",
+  "spell_glint_step": "r2__2",
+  "spell_saplight": "r2",
+  "spell_hourstrike": "r3",
+  "buff_clearglass": "r2",
+  "buff_resinburn": "r2__2"
 }
