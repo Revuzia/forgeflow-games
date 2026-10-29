@@ -10,10 +10,10 @@
 // the open-source code and typefaces with their licenses (ui/credits.ts) and the full notices file when the build has it.
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { Settings } from '../../contracts/session.ts';
 import { defaultSettings, type AudioSettings, type VideoSettings } from '../../session/settings.ts';
-import { CREDITS, NOTICES_FILE, type CreditEntry } from '../credits.ts';
+import { creditRows, NOTICES_FILE, NOTICES_JSON, parseNotices, type CreditEntry, type NoticeRow } from '../credits.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
 import { KeybindCapture } from '../components/KeybindCapture.tsx';
@@ -359,17 +359,31 @@ function Gameplay(p: { s: Settings; set: SetFn }): JSX.Element {
 }
 
 
-/** Settings › Credits (originality F7): the open-source code and typefaces VALE ships, each with its license and copyright
- *  line; "Show the full license texts" opens THIRD_PARTY_NOTICES.txt when the build carries it */
+/** Settings › Credits (originality F7): the open-source code and typefaces VALE ships, each with its version, license
+ *  and copyright line. The list is the build's own third_party_notices.json (credits.ts merges in names, uses and
+ *  copyright lines; the curated list stands in when the JSON cannot be read); "Show the full license texts" opens
+ *  THIRD_PARTY_NOTICES.txt in place and a link opens the file itself */
 function Credits(): JSX.Element {
   const { cv } = useApp();
+  const base = import.meta.env.BASE_URL ?? '/';
   const [notices, setNotices] = useState<{ state: 'closed' | 'loading' | 'missing' } | { state: 'open'; text: string }>({ state: 'closed' });
+  const [bundled, setBundled] = useState<NoticeRow[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    // the dev server answers an unknown path with the app's index.html, so only a JSON body counts
+    fetch(`${base}${NOTICES_JSON}`)
+      .then((r) => (r.ok && /json/i.test(r.headers.get('content-type') ?? '') ? r.json() : Promise.reject(new Error('missing'))))
+      .then((raw: unknown) => { if (live) setBundled(parseNotices(raw)); })
+      .catch(() => { /* the curated list stands */ });
+    return () => { live = false; };
+  }, []);
+  const rows = creditRows(bundled);
   const T = (k: string, f: string, v?: Record<string, string | number>): string => cv.t(`settings.credits.${k}`, f, v);
   const open = (): void => {
     if (notices.state === 'open') { setNotices({ state: 'closed' }); return; }
     setNotices({ state: 'loading' });
     // the dev server answers an unknown path with the app's index.html, so only a plain-text body counts
-    fetch(`${import.meta.env.BASE_URL ?? '/'}${NOTICES_FILE}`)
+    fetch(`${base}${NOTICES_FILE}`)
       .then((r) => (r.ok && !/html/i.test(r.headers.get('content-type') ?? '') ? r.text() : Promise.reject(new Error('missing'))))
       .then((text) => setNotices(text.trim() ? { state: 'open', text } : { state: 'missing' }))
       .catch(() => setNotices({ state: 'missing' }));
@@ -378,13 +392,13 @@ function Credits(): JSX.Element {
     <div class="credits__group stg">
       <h2 class="t-label muted credits__head">{kind === 'code' ? T('code', 'Code') : T('type', 'Typefaces')}</h2>
       <ul class="credits__list">
-        {CREDITS.filter((c) => c.kind === kind).map((c) => (
-          <li class="credits__row">
-            <span class="credits__name t-body">{c.name}</span>
-            <span class="credits__use t-caption muted">{T(`use.${c.use}`, c.use)}</span>
+        {rows.filter((c) => c.kind === kind).map((c) => (
+          <li class="credits__row" key={c.pkg} data-pkg={c.pkg}>
+            <span class="credits__name t-body">{c.name}{c.version ? <span class="credits__ver t-caption muted num"> {c.version}</span> : null}</span>
+            <span class="credits__use t-caption muted">{c.use ? T(`use.${c.use}`, c.use) : c.pkg}</span>
             <span class="chip chip--line credits__lic t-caption">{c.license}</span>
             <span class="credits__notice t-caption muted">{c.notice}</span>
-            <a class="credits__link t-caption" href={c.url} target="_blank" rel="noopener noreferrer">{T('project', 'Project page')}</a>
+            {c.url ? <a class="credits__link t-caption" href={c.url} target="_blank" rel="noopener noreferrer">{T('project', 'Project page')}</a> : <span class="credits__link" />}
           </li>
         ))}
       </ul>
@@ -400,6 +414,7 @@ function Credits(): JSX.Element {
       {group('type')}
       <div class="credits__notices stg">
         <Button variant="secondary" size="s" onPress={open}>{notices.state === 'open' ? T('hide_notices', 'Hide the full license texts') : T('show_notices', 'Show the full license texts')}</Button>
+        <a class="credits__link credits__file t-caption" href={`${base}${NOTICES_FILE}`} target="_blank" rel="noopener noreferrer">{T('open_file', 'Open {file}', { file: NOTICES_FILE })}</a>
         {notices.state === 'loading' ? <span class="t-caption muted">{cv.t('state.loading', 'Loading…')}</span> : null}
         {notices.state === 'missing' ? <span class="t-caption muted">{T('notices_missing', 'The full license texts ship with the game as {file}.', { file: NOTICES_FILE })}</span> : null}
         {notices.state === 'open' ? <pre class="credits__text t-caption" tabIndex={0}>{notices.text}</pre> : null}
