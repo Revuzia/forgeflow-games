@@ -56,7 +56,7 @@ function AllyFrame(p: { p: PlayerView }): JSX.Element {
     <button type="button" class={`afr plate ${dead ? 'is-dead' : ''}`} aria-label={`${p.p.name}, ${f?.name ?? ''}`} {...tip}
       onClick={() => { if (e) { r.camera?.setMode(r.camera.mode === 'locked' ? 'locked' : 'free'); r.camera?.focusOn(e.x, e.y); } }}>
       <span class="afr__face">
-        <Portrait fighter={f} skin={p.p.skin} size="fill" round />
+        <Portrait kind="chip" fighter={f} skin={p.p.skin} size="fill" round />
         <span class="afr__lvl num">{e?.level ?? 1}</span>
         {dead ? <span class="afr__respawn num" ref={respawn} /> : null}
         {role ? <span class="afr__role" style={{ background: role.color }} aria-hidden="true" /> : null}

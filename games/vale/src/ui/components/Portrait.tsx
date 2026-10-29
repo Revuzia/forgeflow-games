@@ -51,18 +51,23 @@ export function PortraitFrame(p: { fighter: FighterDefT | undefined; splash?: bo
   );
 }
 
-/** the fighter's (or skin's) portrait or splash */
-export function Portrait(p: { fighter: FighterDefT | undefined; skin?: string; class?: string; size?: 'xs' | 's' | 'm' | 'l' | 'fill'; kind?: 'portrait' | 'splash'; position?: string; round?: boolean; style?: CSSProperties }): JSX.Element {
+/** the fighter's (or skin's) portrait or splash, or (kind 'chip', hud HUD-2) the fighter's face chip: the head-and-
+ *  shoulders icon on its ink ground that reads apart from every other fighter's at 26-48 px (art.icon, the same art the
+ *  minimap draws), falling back to the skin's portrait. HUD faces (ally frames, target plate, scoreboard, recap, banners,
+ *  kill feed) use the chip; the chip is the fighter's identity, so a skin keeps its fighter's chip */
+export function Portrait(p: { fighter: FighterDefT | undefined; skin?: string; class?: string; size?: 'xs' | 's' | 'm' | 'l' | 'fill'; kind?: 'portrait' | 'splash' | 'chip'; position?: string; round?: boolean; style?: CSSProperties }): JSX.Element {
   const { cv } = useApp();
   const f = p.fighter;
   const s = cv.skin(p.skin) ?? (f ? cv.baseSkin(f.id) : undefined);
-  const ref = p.kind === 'splash' ? (s?.splash ?? f?.art.splash) : (s?.portrait ?? f?.art.portrait);
+  const portrait = s?.portrait ?? f?.art.portrait;
+  const chip = p.kind === 'chip' ? cv.asset(f?.art.icon) : null;
+  const src = chip ?? cv.asset(p.kind === 'splash' ? (s?.splash ?? f?.art.splash) : portrait);
   const style = { '--pal-a': f?.palette.primary ?? '#2C333F', '--pal-b': f?.palette.secondary ?? '#8F8A80', ...p.style } as CSSProperties;
   return (
-    <span class={`portrait portrait--${p.size ?? 'm'} ${p.round ? 'portrait--round' : ''} ${p.class ?? ''}`} style={style}>
-      <AssetImg src={cv.asset(ref)} alt={f ? `${f.name}${s && s.tier !== 'base' ? ` · ${s.name}` : ''}` : ''}
+    <span class={`portrait portrait--${p.size ?? 'm'} ${p.round ? 'portrait--round' : ''} ${chip ? 'portrait--chip' : ''} ${p.class ?? ''}`} style={style}>
+      <AssetImg src={src} alt={f ? `${f.name}${s && s.tier !== 'base' ? ` · ${s.name}` : ''}` : ''}
         fallback={<PortraitFrame fighter={f} splash={p.kind === 'splash'} />}
-        position={p.position ?? (p.kind === 'splash' ? '70% 30%' : '50% 20%')} />
+        position={p.position ?? (p.kind === 'splash' ? '70% 30%' : chip ? '50% 50%' : '50% 20%')} />
     </span>
   );
 }

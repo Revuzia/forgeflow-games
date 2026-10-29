@@ -107,7 +107,7 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
   return (
     <td class="l hscore__player">
       <span class={`hscore__facewrap ${down ? 'is-down' : ''}`}>
-        <Portrait fighter={f} skin={p.p.skin} size="fill" round class="hscore__face" />
+        <Portrait kind="chip" fighter={f} skin={p.p.skin} size="fill" round class="hscore__face" />
         {down ? <span class="hscore__resp num" title={cv.t('hud.dead.respawn', 'Back in {t}', { t: `${Math.ceil(p.p.respawnIn)} s` })}>{Math.ceil(p.p.respawnIn)}</span> : null}
       </span>
       <span class="hscore__names">
@@ -189,7 +189,7 @@ export function DeathRecap(): JSX.Element | null {
   return (
     <section class="recap plate plate--raised" aria-label={cv.t('recap.title', 'Death recap')}>
       <header class="recap__head">
-        <span class="recap__face">{killerF ? <Portrait fighter={killerF} size="fill" round /> : <span class="recap__unit" />}</span>
+        <span class="recap__face">{killerF ? <Portrait kind="chip" fighter={killerF} size="fill" round /> : <span class="recap__unit" />}</span>
         <span class="recap__titles">
           <span class="t-caption muted">{cv.t('recap.title', 'Death recap')}</span>
           <span class="t-h2">{rc.killerName ? (rc.structure ? cv.t('recap.fell_to', 'Fell to {name}', { name: rc.killerName }) : cv.t('recap.taken_down_by', 'Taken down by {name}', { name: rc.killerName })) : cv.t('hud.dead.title', 'Down')}</span>
@@ -206,7 +206,7 @@ export function DeathRecap(): JSX.Element | null {
               const abil = [...new Set([...s.abilities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => (id ? sourceName(cv, index, id) : cv.t('recap.basic', 'Basic attack'))))];
               return (
                 <li class="rrow">
-                  <span class="rrow__face">{f ? <Portrait fighter={f} size="fill" round /> : <span class="recap__unit" />}</span>
+                  <span class="rrow__face">{f ? <Portrait kind="chip" fighter={f} size="fill" round /> : <span class="recap__unit" />}</span>
                   <span class="rrow__body">
                     <span class="rrow__line"><span class="t-body-s">{s.name}</span><span class="num t-body-s rrow__total">{fmtInt(s.total)}</span></span>
                     <span class="rrow__bar" aria-hidden="true">

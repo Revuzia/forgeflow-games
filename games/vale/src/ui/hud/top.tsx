@@ -191,7 +191,7 @@ function AnnounceFace(p: { w: Who | undefined; down?: boolean }): JSX.Element {
   const color = model.ffa && w.rel !== 'self' && w.seat ? `var(--seat-${w.seat})` : REL_VAR[w.rel];
   return (
     <span class={`aface aface--${w.rel} ${p.down ? 'is-down' : ''}`} style={{ '--c': color } as CSSProperties} aria-hidden="true">
-      <span class="aface__img">{f ? <Portrait fighter={f} skin={w.skin} size="fill" round /> : null}</span>
+      <span class="aface__img">{f ? <Portrait kind="chip" fighter={f} skin={w.skin} size="fill" round /> : null}</span>
       {p.down ? <span class="aface__cut" /> : null}
     </span>
   );
@@ -272,7 +272,7 @@ function WhoChip(p: { w: Who; down?: boolean }): JSX.Element {
   const color = model.ffa && p.w.rel !== 'self' && p.w.seat ? `var(--seat-${p.w.seat})` : REL_VAR[p.w.rel];
   return (
     <span class={`who who--${p.w.rel} ${p.down ? 'is-down' : ''}`} style={{ '--c': color } as CSSProperties}>
-      {f ? <Portrait fighter={f} skin={p.w.skin} size="fill" round class="who__face" /> : p.w.team !== undefined ? <span class="who__mark"><SideGlyph team={p.w.team} size={12} /></span> : null}
+      {f ? <Portrait kind="chip" fighter={f} skin={p.w.skin} size="fill" round class="who__face" /> : p.w.team !== undefined ? <span class="who__mark"><SideGlyph team={p.w.team} size={12} /></span> : null}
       {model.ffa && p.w.seat ? <span class="who__seat"><SeatGlyph seat={p.w.seat} size={10} color={color} /></span> : null}
       {f ? <span class="who__name t-caption">{p.w.rel === 'self' ? cv.t('killfeed.you', 'You') : p.w.name}</span> : null}
     </span>
@@ -281,7 +281,7 @@ function WhoChip(p: { w: Who; down?: boolean }): JSX.Element {
 function WhoDot(p: { w: Who }): JSX.Element {
   const { cv } = useApp();
   const f = cv.fighter(p.w.fighter);
-  return <span class={`whodot who--${p.w.rel}`} style={{ '--c': REL_VAR[p.w.rel] } as CSSProperties}>{f ? <Portrait fighter={f} skin={p.w.skin} size="fill" round /> : null}</span>;
+  return <span class={`whodot who--${p.w.rel}`} style={{ '--c': REL_VAR[p.w.rel] } as CSSProperties}>{f ? <Portrait kind="chip" fighter={f} skin={p.w.skin} size="fill" round /> : null}</span>;
 }
 
 // ── FRAY Hour Board ──────────────────────────────────────────────────────────────────────────────

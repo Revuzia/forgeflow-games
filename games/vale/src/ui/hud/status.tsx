@@ -214,7 +214,7 @@ export function TargetPlate(): JSX.Element | null {
   return (
     <section class={`tplate tplate--${rel}`} style={{ '--c': color } as CSSProperties} aria-label={cv.t('hud.target', 'Target')}>
       <span class="tplate__face">
-        {f ? <Portrait fighter={f} skin={pv?.skin} size="fill" round /> : (
+        {f ? <Portrait kind="chip" fighter={f} skin={pv?.skin} size="fill" round /> : (
           <span class={`tplate__mark tplate__mark--${e.kind}`}>{e.kind === 'structure' ? <SideGlyph team={e.team} size={22} /> : <i />}</span>
         )}
         {e.kind === 'fighter' || e.kind === 'monster' ? <span class="tplate__lvl num">{e.level}</span> : null}
