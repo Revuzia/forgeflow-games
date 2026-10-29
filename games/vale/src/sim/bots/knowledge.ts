@@ -494,10 +494,24 @@ export interface ItemRole {
   readonly needsHold: boolean;
   readonly hardOnly: boolean;
   readonly support: boolean;
+  /** the active holds enemies hard (a stun, root, taunt, … or a displacement on them): an engage a front line wants */
+  readonly engage: boolean;
+  /** reveals enemy fighters around you (status 'reveal' on them): a lookout against divers and burst coming out of cover */
+  readonly reveals: boolean;
   readonly armor: number;
   readonly resist: number;
 }
 const roleCache = new WeakMap<ItemDefT, ItemRole>();
+/** an effect tree applies hard CC (HARD_CC or a displacement) to someone other than the caster */
+function holdsHard(v: unknown, depth = 0): boolean {
+  if (depth > 24 || !v || typeof v !== 'object') return false;
+  if (Array.isArray(v)) return v.some((x) => holdsHard(x, depth + 1));
+  const o = v as Record<string, unknown>;
+  if (o.op === 'status' && o.to !== 'self' && typeof o.status === 'string' && HARD_CC.has(o.status)) return true;
+  if (o.op === 'displace' && o.to !== 'self') return true;
+  for (const k in o) if (k !== 'present' && k !== 'ai' && holdsHard(o[k], depth + 1)) return true;
+  return false;
+}
 export function itemRole(it: ItemDefT): ItemRole {
   let r = roleCache.get(it);
   if (r) return r;
@@ -522,6 +536,8 @@ export function itemRole(it: ItemDefT): ItemRole {
     tankBreak: (it.stats.armorPenPct ?? 0) > 0 || (it.stats.magicPenPct ?? 0) > 0 || /"targetMaxHp"|"targetCurrentHp"/.test(fx),
     burstWard, needsHold, hardOnly,
     support: it.tags.includes('support'),
+    engage: !!it.active && holdsHard(it.active.effects),
+    reveals: /"op":"status","status":"reveal"/.test(fx),
     armor: it.stats.armor ?? 0, resist: it.stats.resist ?? 0,
   };
   roleCache.set(it, r);
@@ -580,6 +596,11 @@ export function situational(it: ItemDefT, prof: FighterProfile, er: EnemyRead, s
   if (r.burstWard) m *= er.n === 0 ? 1 : er.threats >= 2.5 ? (prof.squishy ? 1.7 : 1.2) : er.threats >= 1.5 ? (prof.squishy ? 1.45 : 1.15) : er.threats >= 1 ? 1.05 : 0.85;
   const def = r.armor + r.resist;
   if (def > 0 && er.n > 0) m *= 1 + 0.5 * ((r.resist - r.armor) / def) * (er.magic - 0.5);
+  // a front line that starts fights values an active that holds enemies (integ systems-18: Callstone's taunt was
+  // always a few points behind Seatstone's shield and never bought)
+  if (r.engage && (prof.style === 'frontline' || prof.style === 'warden' || prof.style === 'diver')) m *= 1.06;
+  // a lookout (reveal) is worth more against a team that dives or bursts from cover (integ systems-18: Watchbell)
+  if (r.reveals && er.n > 0) m *= er.threats >= 1.5 ? 1.15 : 0.95;
   // the Lampglass path: support pieces first; counters and defence stay possible; damage pieces almost never
   if (support) m *= r.support ? 2 : (r.antiHeal || r.burstWard) ? 0.9 : it.tags.includes('attack') ? 0.25 : it.tags.includes('defense') ? 0.8 : 0.45;
   else if (r.support) m *= 0.75;
@@ -614,6 +635,8 @@ export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterP
   if (er.healers >= 2) kinds.push((r) => r.antiHeal);
   if (er.tanks >= 2) kinds.push((r) => r.tankBreak);
   if (er.threats >= 1.5 && prof.squishy) kinds.push((r) => r.burstWard);
+  // (the Lampglass path's answer to divers and burst: a lookout that shows them coming, integ systems-18)
+  if (er.threats >= 1.5 && support) kinds.push((r) => r.reveals);
   const answers = kinds.map((kind) => finished.find((it) => kind(itemRole(it)) && ok(it) && score(it) >= 0.7 * score(finished[0])))
     .filter((it): it is ItemDefT => !!it).sort((a, b) => score(b) - score(a));
   for (const it of answers) { if (core.length >= 3) break; if (ok(it)) take(it); }

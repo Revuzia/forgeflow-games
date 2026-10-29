@@ -20,8 +20,8 @@
 //   fray       (gameplay:G6, G9) FRAY on the bots' own loadouts, 10 distinct fighters a game (rotated by seed): ≥ 85 %
 //                             of games have no stretch of 90 s or more without a fighter death while 3+ seats are still in
 //                             (from the first death on, ≥ FRAY_MIN_GAMES games a difficulty; the opening is reported) · every
-//                             fighter's mean placement 3.5–7.5
-//                             over all its FRAY games (difficulties pooled, ≥ FRAY_MIN_PER_FIGHTER games; each difficulty reported)
+//                             fighter's mean placement 3.5–7.5 over all its FRAY games (difficulties pooled, ≥ FRAY_MIN_PER_FIGHTER
+//                             games; each difficulty reported)
 //   credit     (gameplay:g1)  report: fighter deaths finished by a Wick, Needle or monster that are credited to an
 //                             enemy fighter (death.by) vs executed
 //   pace       (gameplay:g2)  RIFT length per difficulty: adept p90 ≤ 32 min (full games only)
