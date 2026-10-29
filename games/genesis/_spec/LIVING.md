@@ -465,7 +465,10 @@ Measured on the same-snapshot base (thirst / cold, alive):
 Tests: 'seep up a cliff' (no walk taken up again) and 'pond fills only every two hours' (seed 4, N = 29: no thirst death)
 fail on the round-2 code and pass now. npm run check on the landed code (21:47 UTC): 577 of 578 pass; the one failure
 ('a material the god introduces to a town ... mines it') also fails on the live tree with every drought hunk removed, so it
-is not from this change. Perf (review F2: the search costs 21–38% of throughput in a held dust bowl of 1500
+is not from this change. *(Since then: fix round 3 re-seeded that test (seed 2 → 14, same assertion; §13.2) and the gate
+went green with the drought code in: `fix3/check/check-r3b.log` 578 / 578, "EXIT 0 02:08" 2026-10-29, the drought files
+unchanged through the run (`drought/build` FINISH-CK2 block); later gates: round 4 591 / 591, the reconciler 599 / 599.)*
+Perf (review F2: the search costs 21–38% of throughput in a held dust bowl of 1500
 agents at 1000x and 3000x) is not fixed. Measured on the landed code against the same-snapshot base, both worlds stepped
 in one process in alternating 60-tick chunks so that both see the same machine load (`build/r3/p/perfpair.ts`, two runs
 per level, `build/r3/out/pp5.log`), throughput change at equal agents:
