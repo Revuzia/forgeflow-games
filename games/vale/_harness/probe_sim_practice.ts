@@ -9,6 +9,7 @@ import { tryCast } from '../src/sim/abilities.ts';
 import { dealDamage, killEntity } from '../src/sim/combat.ts';
 import { dummyUnitId } from '../src/sim/modes/practice.ts';
 import { harness, lastOf } from './fixtures/session_fixture.ts';
+import { BOTS_LINK } from '../src/session/bots_link.ts';
 
 const cat = matchCatalog();
 const seats = [{ fighter: 'fx_brawler', team: 0, controller: 'human' as const }, { fighter: 'fx_brawler', team: 1 }];
@@ -147,6 +148,41 @@ section('the lab, session half (g3): a sparring fighter and another mode', () =>
     sp.controller === 'bot' && sp.fighter === 'fx_ranger' && sp.botDifficulty === 'veteran', setup?.seats);
   check('practice.mode: the other core mode on its own map; the sim gets waves:false only (mode/sparring stay in the session)', setup?.mode === 'fx_s_bridge' && setup?.map === 'fx_lane_map' &&
     JSON.stringify(setup?.practice) === JSON.stringify({ waves: false }), [setup?.mode, setup?.map, setup?.practice]);
+  // INTEG2 (client handoff): the setup must also BUILD — world.ts resolveRules refuses the practice queue (mode
+  // fx_s_rift) on fx_s_bridge unless the session runs it on a catalog whose practice queue belongs to that mode
+  const errs = h.events.filter((e) => e.type === 'error').map((e) => (e as { message: string }).message);
+  const m = h.session.currentMatch();
+  check('practice.mode: the World builds (a host, still loading, no error) on the other mode', h.session.phase === 'loading' && !!m && errs.length === 0,
+    { phase: h.session.phase, host: !!m, errs });
+  check('the raw catalog alone refuses that setup (why the session derives one)', (() => {
+    try { createSim(h.catalog, setup!, { pregameSeconds: 0 }); return false; } catch (err) { return /belongs to mode/.test(String(err)); }
+  })());
+  if (m) {
+    h.session.matchReady();
+    for (let i = 0; i < 40 && m.view.time < 3; i++) { m.pump(0.25); }
+    const sparring = m.view.entities.find((e) => e.kind === 'fighter' && e.team !== m.view.entities.find((x) => x.owner === 0 && x.kind === 'fighter')?.team);
+    check('…and runs: mode, queue, map, time past 3 s, the sparring fighter on the field', h.session.phase === 'match' && m.view.mode === 'fx_s_bridge' &&
+      m.view.queue === 'fx_s_practice' && m.view.map === 'fx_lane_map' && m.view.time >= 3 && !!sparring,
+      { phase: h.session.phase, mode: m.view.mode, queue: m.view.queue, map: m.view.map, time: m.view.time, sparring: !!sparring });
+  }
+  // a throw while the match is built (the bots factory, as BOTS_LINK did on BRIDGE practice) ends in 'idle' + an
+  // error, never a stuck 'loading'; the next queue is accepted
+  const link = BOTS_LINK as { bots: typeof BOTS_LINK.bots };
+  const realBots = link.bots;
+  link.bots = () => { throw new Error('probe: the bots factory refused'); };
+  const h3 = harness({ autopilot: false, bots: undefined });
+  try {
+    h3.session.queue({ queue: 'fx_s_practice', practice: { mode: 'fx_s_bridge' }, preset: { fighter: 'fx_brawler' } });
+    h3.clock.advanceUntil(() => !!lastOf(h3, 'error') || h3.session.phase === 'loading' || h3.session.phase === 'match', 15_000);
+  } finally { link.bots = realBots; }
+  const e3 = lastOf(h3, 'error');
+  check('a throw while building the match: back to idle with "match: could not start", no host',
+    h3.session.phase === 'idle' && !!e3 && /match: could not start \(probe: the bots factory refused\)/.test(e3.message) && h3.session.currentMatch() === null,
+    { phase: h3.session.phase, err: e3?.message });
+  h3.session.queue({ queue: 'fx_s_practice', practice: { mode: 'fx_s_bridge' }, preset: { fighter: 'fx_brawler' } });
+  h3.clock.advanceUntil(() => h3.session.phase === 'loading', 15_000);
+  check('…and the next practice queue loads (the real bots factory on fx_s_bridge)', h3.session.phase === 'loading' && !!h3.session.currentMatch() &&
+    h3.session.currentMatch()!.view.mode === 'fx_s_bridge', { phase: h3.session.phase });
   const h2 = harness({ autopilot: false });
   h2.session.queue({ queue: 'fx_s_practice', practice: { mode: 'fx_s_fray' }, preset: { fighter: 'fx_brawler' } });
   h2.clock.advanceUntil(() => h2.session.phase === 'loading', 15_000);

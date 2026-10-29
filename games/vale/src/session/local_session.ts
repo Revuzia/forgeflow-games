@@ -409,7 +409,12 @@ export class LocalSession implements Session {
     } else if (queue.kind === 'practice') {
       // W4 g3: practise in another mode on its own map — a two-team mode whose end is the core, so a lone seat never ends it
       const alt = req.practice?.mode ? findMode(this.catalog, req.practice.mode) : undefined;
-      if (alt && alt.teams === 2 && alt.rules.end.kind === 'core') { mode = alt; map = alt.map; }
+      if (alt && alt.teams === 2 && alt.rules.end.kind === 'core' && alt.id !== mode.id) {
+        mode = alt; map = alt.map;
+        // the sim resolves its rules by (setup.mode, setup.queue) and refuses a queue of another mode: practise on a
+        // derived catalog whose practice queue belongs to this mode (as a custom lobby does, setup.ts customCatalog)
+        simCatalog = customCatalog(this.catalog, queue, mode, undefined);
+      }
       protocol = req.preset && isPlayable(this.catalog, req.preset.fighter) ? 'role_preset' : 'blind';
     }
     const simQueue = findQueue(simCatalog, queue.id)!;
@@ -523,9 +528,10 @@ export class LocalSession implements Session {
     this.readyEarly = false;
     this.emit({ type: 'loading', setup, progress: 0 });
     const free = pd.queue.kind === 'practice' || pd.queue.kind === 'custom' || this.opts.dev === true;
-    const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, setup) ?? null;
     let host: LocalMatchHost;
     try {
+      // inside the try: the bots factory reads the rules too, and a throw there must not strand the session in 'loading'
+      const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, setup) ?? null;
       host = new LocalMatchHost(pd.simCatalog, setup, pd.you, {
         bots, pregameSeconds: this.opts.pregameSeconds, maxTimeScale: free ? MAX_TIME_SCALE : 1, autopilot: this.autopilot('match'),
         onEnd: (r) => { if (this.host === host) this.finishMatch(r, false); },
@@ -702,15 +708,24 @@ export class LocalSession implements Session {
         this._phase = 'loading';
         this.readyEarly = false;
         this.emit({ type: 'loading', setup: m.setup, progress: 0 });
-        const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, m.setup) ?? null;
         const link = this.opts.online!;
-        const host = new LockstepMatchHost(pd.simCatalog, m.setup, m.you, link, {
-          bots, autopilot: this.autopilot('match'),
-          pilot: this.autopilot('match') ? (this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, m.setup) ?? null) : null,
-          onEnd: (r) => { if (this.host === host) this.finishMatch(r, false); },
-          onForfeit: () => { if (this.host === host) this.finishMatch(forfeitResult(m.setup, host.view, m.you), true); },
-          onStall: () => { if (this.host === host) { this.error('online: the connection to the match was lost'); this.finishMatch(forfeitResult(m.setup, host.view, m.you), true); } },
-        });
+        let host: LockstepMatchHost;
+        try {
+          const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, m.setup) ?? null;
+          host = new LockstepMatchHost(pd.simCatalog, m.setup, m.you, link, {
+            bots, autopilot: this.autopilot('match'),
+            pilot: this.autopilot('match') ? (this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, m.setup) ?? null) : null,
+            onEnd: (r) => { if (this.host === host) this.finishMatch(r, false); },
+            onForfeit: () => { if (this.host === host) this.finishMatch(forfeitResult(m.setup, host.view, m.you), true); },
+            onStall: () => { if (this.host === host) { this.error('online: the connection to the match was lost'); this.finishMatch(forfeitResult(m.setup, host.view, m.you), true); } },
+          });
+        } catch (err) {
+          // as offline (enterLoading): never left in 'loading' with no host; the server's seat is given up
+          link.send({ t: 'leave' });
+          this.onlineFlow = false; this.netDraft = null; this.netSeat = null; this.pending = null; this._phase = 'idle';
+          this.error(`match: could not start (${err instanceof Error ? err.message : String(err)})`);
+          return;
+        }
         this.host = host;
         this.emit({ type: 'loading', setup: m.setup, progress: 1 });
         if (this.readyEarly && this.host === host) { this.readyEarly = false; this.matchReady(); }
