@@ -6426,7 +6426,7 @@ export async function buildMap(W, mapId) {
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
         const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
-        const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn);
+        const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn, pk);
         colliders.push(mkCollider("box", it.x + x0, it.x + x1, y0, y1, it.z + z0, it.z + z1, -1, kind, idx, hp));
       }
     }
@@ -6440,12 +6440,20 @@ export async function buildMap(W, mapId) {
   // probe reads a part's ground under its drawn band, this under the table hull (0.55: walls kept by a 1-3 cm misread came back as phantoms; 0.61: kept bodies lost their tall box,
   // collisioncheck clip isla_viva rocks p95 0.12). Not fixed here: the table hull is every vertex of the part, the buried skirt too - at s >= 1.4 it stands 0.16-0.7 m outside
   // the drawn rock above the ground (an outline per scale in the bake, as the trees' byScale, would close it).
+  // (R3 / rocks: rocksweep deepwood s2026 rock 43, 7 sprints 0.68-1.18 m inside the drawn rock) the MEAN ground under the table hull is not the ground the drawn top
+  // stands on: on a steep slope (deepwood s2026 rock 43, gradient 0.58, ring ground spanning 2.06 m) the hull mean sits on the uphill skirt, so a part drawn 0.79 m over the
+  // ground right under its own peak read 0.46 m "over its ground", was taken for a step, and its box top dropped 1.01 m - to 0.50 m UNDER the ground at its own centre: a
+  // buried box, and a drawn rock with no wall. A part is a step only if its drawn top is under HULL_STEP_PART over the ground under its PEAK as well (the drawn top is AT
+  // the peak: that is where a walker meets it); otherwise it keeps its full height, as before a89bee66. (No peak in the table: the box centre.)
   const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
-  function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn) {
+  function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn, pk) {
     let gm = 0;
     for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
     gm /= hull.length;
     if (topY - gm >= HULL_STEP_PART) return topY;
+    const pu = pk ? pk[0] * sc : 0, pw = pk ? pk[1] * sc : 0;
+    const gp = pk ? heightAt0(it.x + pu * c + pw * sn, it.z - pu * sn + pw * c) : heightAt0(it.x + (x0 + x1) / 2, it.z + (z0 + z1) / 2);
+    if (topY - gp >= HULL_STEP_PART) return topY;
     let gl = Infinity;
     const ax = it.x + x0 - HULL_RING, bx = it.x + x1 + HULL_RING, az = it.z + z0 - HULL_RING, bz = it.z + z1 + HULL_RING, mx = (ax + bx) / 2, mz = (az + bz) / 2;
     for (let a = 0; a < 8; a++) {
