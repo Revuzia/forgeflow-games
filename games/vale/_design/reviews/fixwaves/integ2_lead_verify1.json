@@ -1,0 +1,88 @@
+{
+ "lane": "lead",
+ "round": 1,
+ "run": "integration run 2",
+ "verifier": "adversarial verifier, integration run 2 lane lead, round 1 (2026-10-29)",
+ "pass": true,
+ "summary": "Lane lead passes round 1 of integration run 2. The one major item, lead-parity-open, holds on re-measurement. The status record is strictly additive: 0 original fields changed against 724e78ca^. All 94 entries (43 findings, 51 polish) carry status, evidence and history, and every status agrees with the latest wave or integration verdict. The Longshade flag re-counts exactly: 46/46, 46/47 and 61/62. HANDOFF.md covers every asked section, and all the commands and files it cites exist. lead-r2-03/05/06/07 are recorded as asked. lead-02 passes: NAMES_NOT_USED and the fixtures are clean, the 4 fixture probes pass, names_check behaves as claimed, and every remaining 'battle spell' hit is covered by a run-2 item or a handoff. obs-01 was correct at its commit; strings have since drifted to 1,574 through another lane's sync. lead-hesmi-harness reproduces byte-identically on real Chrome (attack2 tracks weapon_l, L 3.29 m vs R 1.58 m). Strict content:check (0 warnings) and typecheck pass. Two minor notes: the pre-existing ranked-ban doc drift in lead-owned DESIGN_NOTE:29/:69 and ROSTER.md:41-43 is untracked (fail, not a regression), and the record needs a refresh at run-2 close.",
+ "items": [
+  {
+   "id": "lead-parity-open",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-measured at HEAD. Additive: a recursive compare of _design/reviews/final_parity_open.json against 724e78ca^ finds 0 changed or missing fields (original keys meta/scores/r12/waves/polish intact; new verifier_open, observations). All 43 finding entries (9 blocker + 34 major entries for the 8 + 33 findings; AUD-2 and client F3 sit in two waves) and all 51 polish items carry status, status_evidence and status_history; every 'partly' entry has open_in. My count: findings 43 done; polish 35 done, 9 done_unverified, 7 partly, matching meta.status_counts. I cross-checked every status against the latest verdicts (W1-W5b verify1/2, integ_*_verify1/2): no entry is marked done whose latest verifier item fails; each wave's done_status matches (e.g. W4 done:5 -> integ_systems_verify1 pass, W5 done:5 -> integ_client_verify1 pass). Spot-checked the done_unverified file:line evidence: Tooltip.tsx:77-80 (HUD-5 rank-aware), panels.tsx:89-96 (HUD-7 spells cell), hud.css:466-467 (32 px faces), state.ts:109/:215-228 (F10 one notice per flow end), components.css:215 (F13 tick): all present. Longshade observation re-counted from fw_W4_soak_integ_systems_v1_{full1,full21,mirror41}.json (games[].objs first longshade vs winner): 46/46, 46/47, 61/62; per-pairing median gap 59-124 s; taker led on structures lost in 33/46, 33/47, 52/62 (72/70/84 %). HANDOFF.md (a7938922, 196 lines) covers what VALE is, binding rules incl. no deploy, wave and integration-run-1 tables, open items, run/build/probe commands and Art 2.0; every referenced script/file exists (tools/reap_orphans.sh, art/build.py, audio/build.py, _harness/probe_kit_hue.mjs, icon_probe.mjs, pacing.ts, ...; 48 _harness/probe_*.ts as stated; npm scripts sweep:720/server/package exist; git show 09156280:games/vale/HANDOFF.md resolves); its perf line matches integ_world_ver1_perf_1080.json (prod, High 60.1 fps / Low 60 fps, p99 16.8). README drops the stale caveat; my strict `npm run content:check` exits 0 with 0 warnings (_harness/_reports/integ2_lead_v1_content_check.txt). Commits 724e78ca, a7938922 on origin. Minor accuracy notes are listed as separate items below (ranked-ban doc drift untracked; record is as of run-2 start).",
+   "fixHint": ""
+  },
+  {
+   "id": "lead-r2-03",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "final_parity_open.json W4 findings: G4 history 'W4 handoff lead-r2-03 (fw_W4_soak_tj_full1): done, median first structure 10.2 / 10.5 min'; G2 'done, level gap 0.69 / 0.61, grovehunter deaths 2.7 vs 3.1 and 1.8 vs 2.5'; G1 'partly ... 4.9 % adept / 5.6 % veteran ... 21 veteran cases: 5 Longshade, 15 Wicks'. G1 final status done is right: W4_verify2 gameplay:G1 pass, and the HEAD soak fw_W4_soak_integ_systems_v1_full1.txt:78 'PASS [laning] ... adept 2.7 % / veteran 1.8 %'."
+  },
+  {
+   "id": "lead-r2-05",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "G5 history 'done, BRIDGE 8/40 sudden death, 0 chain skips, median 16.4 min'; G3 'partly, veteran beats adept 17/20, novice only 14/20'; G2 side effect '2.275 vs 2.25'; G1 'veteran alone-deaths rose to 6.6 %'. G3 done is right (integ_systems_verify1 gameplay:G3 pass; HEAD soak :87-88 39/40 vs novice, 34/40 vs adept). Balance flag recorded in observations[balance:longshade-closer] with owner_lane systems; my re-count reproduces 46/46, 46/47, 61/62 (see lead-parity-open)."
+  },
+  {
+   "id": "lead-r2-06",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Every named entry carries the 'W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20)' history line: gameplay G6, G8, G9, g1, g2, g3 '(sim half)', client F11 '(kemdo half)', client F12 '(session half)', originality F8 '(queues, modes, items half)', combat m-1 '(wind-up half)'. Final statuses follow the latest verdicts: G6/G9 done (integ_systems_verify1 pass), g3 and originality F8 partly with open_in client-1b-16/client-r2-07 and client-r2-08."
+  },
+  {
+   "id": "lead-r2-07",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "refix1 entries sit between W4_verify1 and W4_verify2 in time order: done:2 ['W4_verify1: fail','W4 handoff lead-r2-07 ... done','W4_verify2: pass'], G1, G2, done:5 ('partly, seeds 21-40 32/40 vs novice (80 %) and 30/40 vs adept'), G3 (incl. 'novice bots weakened by perception and execution only (affects the co-op vs novice queue)'), G6 ('FRAY veteran lull 42/50 on seeds 21+'), G9 ('Hesmi 3.38'), and G5 'BRIDGE 14.8 min in r1_full21 fixed by 298533c8; BRIDGE-only re-runs 15.5 / 16.1 min'."
+  },
+  {
+   "id": "lead-02",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "_design/NAMES_NOT_USED.md:77 'the Hour spell Glint Step', :142 'Hour spells: Glint Step, ...', :160 'Hour-spell tuning changed ... the eight Hour spells' (02d56942). Fixtures: bots_fixture.ts:13,:219 and content_min/setup.json:6,:30 say Hour spell(s) (f7f5d457); I re-ran probe_content_build 126/126, probe_content_ids 1250 ids 0 hits, probe_maps 102/102, probe_schema_negotiation 41/41, all exit 0 (_harness/_reports/integ2_lead_v1_fixture_probes.log). names_check: plain exit 0; 'Battle Spells' exit 1; --prose 'the Hour spell Glint Step and the eight Hour spells' exit 0; --prose 'the battle spell Glint Step' exit 1 (_harness/_reports/integ2_lead_v1_names.txt). Repo-wide grep -i 'battle[ -]?spell': every remaining hit outside history/review quotes is covered by a run-2 item or the sent handoffs — client-r1h-12 (LoadoutPanel, loadout.tsx:2, dialbar.tsx:3, public/game_meta.json:8), engine-index-comment (index.html:12), systems-setup-wording, and the lead handoffs (panels.tsx:89, catalog_view.ts:141, hud.css:303, build_manifest.py:181/185, build_ability_prompts.py:2, build_content.ts now :569, CONTRACT.md:268/272/767). W4_systems_rekey.md has no hit (192656b3). Only lead-owned leftover: _design/research/r11_protected_names.md:315, a historical research note, not in the fix hint."
+  },
+  {
+   "id": "obs-01",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "DESIGN_NOTE.md:31 reads '57 items (20 core, 15 basic, 11 apex, 4 starters, 4 boots, 3 consumables)'; items.json tiers counted: core 20, basic 15, apex 11, starter 4, boots 4, consumable 3. Other counts on the line match my content:check (16 fighters, 48 skins, 8 spells, 9 boons, 3 paths, 24 units, 5 team buffs, 7 ranks). The '1,536 UI strings' was right at 4434f346; HEAD now has 1,574 because another lane's wip sync 1d6261e2 added strings after the lead's commit, so this is drift from concurrent work, not a miss (HANDOFF.md says 1,536 too).",
+   "fixHint": "At run-2 close, refresh the strings count in DESIGN_NOTE.md:31 and HANDOFF.md ('What VALE is') from `npm run content:check` (1,574 at this verification)."
+  },
+  {
+   "id": "lead-hesmi-harness",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Reproduced on real Chrome GPU: `node _harness/_reports/final_combat_tools/pose.mjs --fighters hesmi --frames 100 --no-recall --out _harness/_reports/integ2_lead_v1_pose` (log _harness/_reports/integ2_lead_v1_pose.log). Strike map read from content/vfx.json hesmi_atk_swing: {attack1: weapon_tip, crit: weapon_tip, attack2: weapon_l}; no other fighter has clip-split sockets. Events attack@25/damage@36 (attack1, sock weapon_tip: travel R 3.80 m, L 1.35 m) and attack@69/damage@80 (attack2, sock weapon_l: travel L 3.29 m, R 1.58 m); `tip` equals the clip's socket at both impacts. Byte-identical numbers to the engineer's integ_lead_pose/pose.json. HANDOFF.md 'Notes for re-reviewers' and the combat:m-2 reviewer_note record it. Sensitivity: hesmi_hit_f36.png looked at: no hood, mask or face issue."
+  },
+  {
+   "id": "obs-ranked-ban-docs",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Spot check, not a plan item and not a regression (pre-existing since W4 G8). W4_verify1 recorded doc drift: ranked bans. content/queues.json rift_ranked has draft.bansPerTeam 1 with bansByRoster (1 below 28 fighters), so with 16 fighters Ranked uses 1 ban a team. Lead-owned docs still say 2: _design/DESIGN_NOTE.md:29 'Ranked (2 bans a team, Glicko-2)', :69 'Ranked 2 (C = 14)', and _design/ROSTER.md:41-43 'rift_ranked: 2 bans per team ... C = 2·5 + 4 = 14'; systems' _design/sections/modes_economy.md:117 too. The status record names it only inside G8's status_evidence ('Doc regression: _design/ROSTER.md:41-43 ...') while G8 is done with no open_in, and neither verifier_open nor HANDOFF.md's open items list it; no run-2 item covers it.",
+   "fixHint": "Lead: edit DESIGN_NOTE.md:29 to 'Ranked (1 ban a team below 28 fighters, rising with the roster; Glicko-2)' and :69 to 'Draft and Ranked use 1 ban a team (C = 12) at 16 fighters; bansByRoster raises it to 2/3/4/5 at 28/32/36/40', and fix ROSTER.md:41-43 the same way (C = 12, last picker chooses from 5). Hand off modes_economy.md:117 to systems. Add a verifier_open entry for it (or open_in on G8) until done."
+  },
+  {
+   "id": "obs-status-as-of",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not a defect of the package, a note for run-2 close. The record is 'as of run-2 start (HEAD 935ae297)'. Since then integ2_audio_verify1.json (untracked, written during this verification) passes audio-r1-confirm (contact floor 0.088, soft top 0.240, nearest dash pair 8.46 dB), so verifier_open's four audio regressions and AUD-4 'partly' are stale; similarly world-pad/client-hud3 and others will land. HANDOFF.md's W3 row 'Three kit-hit regressions were re-confirmed in run 2' was written before any audio verdict existed.",
+   "fixHint": "After the run-2 verdicts land, re-run the status pass: move audio regression:* and audio-09 to done (integ2_audio_verify1), update AUD-4, HUD-3, PERF-m5, combat F4, originality F6/F8, g3 from integ2_*_verify*.json, bump status_as_of, and reword the HANDOFF W3 row to cite the verdict."
+  }
+ ],
+ "regressions": [
+  "None in the lead lane. typecheck exit 0, 0 errors (_harness/_reports/integ2_lead_v1_typecheck.txt); strict content:check exit 0, 0 warnings (integ2_lead_v1_content_check.txt); fixture probes 4/4 PASS.",
+  "Not a regression (pre-existing W4 G8 doc drift, untracked): DESIGN_NOTE.md:29/:69, ROSTER.md:41-43 and modes_economy.md:117 say Ranked uses 2 bans; content has 1 at 16 fighters. See obs-ranked-ban-docs."
+ ],
+ "checks": {
+  "typecheck": "npm run typecheck exit 0, 0 errors (_harness/_reports/integ2_lead_v1_typecheck.txt)",
+  "content_check": "npm run content:check (strict) exit 0, 0 warnings; fighters 16, skins 48, items 57, units 24, strings 1574 (_harness/_reports/integ2_lead_v1_content_check.txt)",
+  "fixture_probes": "probe_content_build 126/126, probe_content_ids 0 hits, probe_maps 102/102, probe_schema_negotiation 41/41 (_harness/_reports/integ2_lead_v1_fixture_probes.log)",
+  "names_check": "_harness/_reports/integ2_lead_v1_names.txt",
+  "pose_rerun": "_harness/_reports/integ2_lead_v1_pose.log, _harness/_reports/integ2_lead_v1_pose/pose.json",
+  "status_record_additive": "recursive compare vs git show 724e78ca^:games/vale/_design/reviews/final_parity_open.json: 0 diffs",
+  "longshade_recount": "fw_W4_soak_integ_systems_v1_{full1,full21,mirror41}.json: 46/46, 46/47, 61/62",
+  "commits_on_origin": "724e78ca, a7938922, 02d56942, f7f5d457, 4434f346 all on origin/claude/youthful-ramanujan-gdud5w"
+ }
+}
