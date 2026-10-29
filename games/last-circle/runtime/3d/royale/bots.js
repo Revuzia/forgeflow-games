@@ -413,7 +413,7 @@ class Blackboard {
       // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
       // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
       // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
-      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0;
+      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0; this.wallLo = 0; this.wallHi = 0; this.wallAny = false;
       // (R2 movers) trap*: the loop breaker's anchor / clock / recent trips; esc*: the committed break-out goal (see trapBreak)
       this.trapX = 0; this.trapZ = 0; this.trapT = -99; this.trapN = 0; this.trapLastT = -99; this.escX = 0; this.escZ = 0; this.escUntil = -99;
       this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
@@ -437,7 +437,7 @@ class Blackboard {
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
       this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
-      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
       // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
       // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
@@ -1742,6 +1742,9 @@ function act(W, b, dt) {
   // (P23, LC-14) a live grenade landing here: get out of its blast (over every state but a revive channel and a throw)
   if (bb.dangerUntil > W.t && !bb.nadeS && !(b.state === "REVIVE" && bb.reviveStarted)) dodgeGrenade(W, b, dt);
   // (P23, C-FALL) never walk off a drop that would kill (only when the sim has fall damage)
+  // (R3 steer) a real flight (falling past 4 m/s) re-arms the probe for the frame it lands: p23_fall lips, isla_viva seed 77, s11 at 10 hp landed
+  // on a 0.5 m bump between two faces at a sprint, the probe was not due on the two frames it stood there, and it ran off the second face
+  if (!a.onGround && a.vel.y < -4) bb.edgeAir = true;
   if (LETHAL_H && (a.onGround || W.t < bb.edgeBanUntil) && (inp.mz || inp.mx)) edgeGuard(W, b);
   // ...and in a real fall (2 m+ of drop already under it, no canopy) it drops straight: air control steered by the state's goal carried bots
   // downhill onto lower ground (p23_fall: a 10 m lift cost 53.9 hp, the human's curve says 41.4)
@@ -2414,34 +2417,98 @@ const WALL_LOOK = 0.9;            // metres ahead the steering probes
 const WALL_REUSE_S = 0.1;         // a held collider list stays valid this long (sim time) ...
 const WALL_REUSE_M = 0.45;        // ... and while the bot has moved less than this
 const WALL_QR = 2.4;              // list radius: capsule 0.45 + look 0.9 + margin 0.3 + the reuse drift, with slack
-// (R2 movers, item 2) the list's vertical band: its readers take nothing above the feet + 12 m (roofedForJump's slab reach; underCeiling 6 m, the wall /
-// ramp probes about 3.5 m), so the list is asked for [-inf, feet + WALL_BAND_UP + WALL_REUSE_DY] and is re-asked once the feet have RISEN more than
-// WALL_REUSE_DY since (a jump, a stair). No lower limit: a probe past a ledge reads the floor below it.
-const WALL_BAND_UP = 12.0;
-const WALL_REUSE_DY = 0.8;
+// (R3 steer) the list's vertical band is the bot's OWN storey: [feet - WALL_BAND_DN, feet + WALL_BAND_UP]. R2's band ran from
+// -Infinity to feet + 12.8 m, so in a furnished two- or three-storey house a ground-floor bot was handed the walls, slabs and furniture of every storey
+// above it (houseload collider-load, steer query: x1.9-2.1 of the live build). Its readers take far less: headingBlocked the floor tops in (feet, feet + 1]
+// and the walls meeting (floor + 0.55, floor + 2.0) - on a flat floor [feet, feet + 2]; rampLegBlocked the floor and the ramps one step either side of
+// its march. roofedForJump (to 12 m) and underCeiling (to 6 m) ask their own point query (no steering reads that far up). The band the list was asked
+// for is held (bb.wallLo / wallHi): each reader checks that what it is about to read lies inside it and re-asks a wider list (wallColsSpan) when it does
+// not - a climb, a fall, a floor under a lip, terrain rising under a probe. A banded answer is the unbanded one in the same order minus colliders
+// outside the band, and every reader's test refuses a collider outside the span it checked, so every answer is what the -Infinity band gave.
+const WALL_REUSE_DY = 0.8;           // the list is re-asked once the feet have RISEN more than this since (a jump, a stair) - R2's rule, kept: the
+                                     // list's order follows where it was asked, so it is asked exactly when it always was
+const WALL_BAND_DN = 1.0;            // feet - 1 m
+const WALL_BAND_UP = 2.35;           // the flat-floor reach (feet + 2) and 0.35 m of climb; past that the reader widens the list (wallColsSpan). Under the
+                                     // 2.4 m lintels / ceiling beams of a housegen storey (seed 7, the houseload points: [feet - 1, feet + 2.35] is 15.2 / 13.1
+                                     // / 14.1 colliders a list on isla_viva / ashgrid / deepwood, [.., feet + 2.8] 16.7 / 14.7 / 15.7, R2's band 26-29)
+const _wspan = new Float64Array(2);   // wallColsSpan's [lo, hi] (a call with double arguments boxes them)
 const FIGHT_UNSTICK_S = 0.8;      // pinned this long with a move intent in ENGAGE / HEAL -> recover (the hard breaker skips them)
 const FIGHT_UNSTICK_GAP_S = 1.6;
 const _wq = [];                   // queryColliders out-param scratch
+const _rfq = [];                  // (R3 steer) roofedForJump / underCeiling's point query scratch
 const _wn = { x: 0, z: 0 };       // wall face normal scratch
 const _gh = { x: 0, z: 0 };       // heading scratch
 
-/** This bot's colliders within WALL_QR of it. ONE queryColliders per bot per 0.1 s of sim time (the budget is <= 150 a frame):
- *  every probe of the frame, any number of headings, reads the held list. queryColliders hands back every collider of the
- *  16 m cells its box touches, so the list is cut down to those within reach. A pure function of sim state (the clock is W.t). */
+/** This bot's colliders within WALL_QR of it, in the band [feet - WALL_BAND_DN, feet + WALL_BAND_UP]. ONE queryColliders per bot per 0.1 s of sim
+ *  time (the budget is <= 150 a frame): every probe of the frame, any number of headings, reads the held list - re-asked when the bot has moved
+ *  WALL_REUSE_M or risen WALL_REUSE_DY (R2's rule); a reader whose reach leaves the band held widens it (wallColsSpan). queryColliders hands back every
+ *  collider of the cells its box touches, so the list is cut down to those within reach. A pure function of sim state (the clock is W.t). */
 function wallCols(W, b) {
   const a = b.actor, bb = b.bb, list = bb.wallCols;
   const dx = a.pos.x - bb.wallX, dz = a.pos.z - bb.wallZ;
   if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M && a.pos.y <= bb.wallY + WALL_REUSE_DY) return list;
-  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq, -Infinity, a.pos.y + WALL_BAND_UP + WALL_REUSE_DY);
-  const x0 = a.pos.x - WALL_QR, x1 = a.pos.x + WALL_QR, z0 = a.pos.z - WALL_QR, z1 = a.pos.z + WALL_QR;
+  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq, a.pos.y - WALL_BAND_DN, a.pos.y + WALL_BAND_UP);
+  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z; bb.wallY = a.pos.y; bb.wallLo = a.pos.y - WALL_BAND_DN; bb.wallHi = a.pos.y + WALL_BAND_UP;
+  return wallFill(W, b, got);
+}
+/** (R3 steer) A reader needs [_wspan[0], _wspan[1]] and the band held does not cover it: the list re-asked at the SAME point it was asked at (so it is
+ *  the held list with the colliders of the wider band put back in their places - the order a first-hit reader breaks ties by is unchanged) for that span
+ *  joined with the band held. The same list object, refilled in place: a caller's reference stays good. The ask clock is not reset. */
+function wallColsSpan(W, b) {
+  const bb = b.bb;
+  if (_wspan[0] < bb.wallLo) bb.wallLo = _wspan[0];
+  if (_wspan[1] > bb.wallHi) bb.wallHi = _wspan[1];
+  const got = W.map.queryColliders(bb.wallX, bb.wallZ, WALL_QR, _wq, bb.wallLo, bb.wallHi);
+  nav.st.wallSpan++;
+  return wallFill(W, b, got);
+}
+function wallFill(W, b, got) {
+  const bb = b.bb, list = bb.wallCols;
+  const x0 = bb.wallX - WALL_QR, x1 = bb.wallX + WALL_QR, z0 = bb.wallZ - WALL_QR, z1 = bb.wallZ + WALL_QR;
   let n = 0;                       // (Wave 8) by index, the length set once (see wallAheadQ)
   for (let i = 0; i < got.length; i++) {
     const c = got[i];
     if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list[n++] = c;
   }
   if (list.length !== n) list.length = n;
-  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z; bb.wallY = a.pos.y;
+  // (R3 steer) is ANY collider (any height) in the list's square? false = the -Infinity band's list would be empty too, so guardMove's "nothing
+  // near: the heading is free" exit stays exact (without it every fighting bot in the open ran the probe every frame: tierprof kb)
+  bb.wallAny = n > 0 || W.map.hasCollidersNear(bb.wallX, bb.wallZ, WALL_QR);
   return list;
+}
+/** (R3 steer) Every ramp of the map in a 4 m grid, at any height (rampLegBlocked's "is a ramp near this leg" must not depend on the list's band), and
+ *  the deepest a ramp's underside reaches below its low edge (RAMP_THICK / 2 along the slab's normal: rampBlocks' wedge), for its band check. */
+const RG = { map: null, cells: new Map(), under: 0 };
+const RG_CELL = 4;
+function rampGrid(W) {
+  if (RG.map === W.map) return RG;
+  RG.map = W.map; RG.cells = new Map(); RG.under = 0;
+  const cols = W.map.colliders || [];
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.kind !== "ramp") continue;
+    const along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+    const k = (c.maxY - c.minY) / Math.max(0.01, along), u = K.RAMP_THICK * 0.5 * Math.sqrt(1 + k * k);
+    if (u > RG.under) RG.under = u;
+    for (let cx = Math.floor(c.minX / RG_CELL); cx <= Math.floor(c.maxX / RG_CELL); cx++) for (let cz = Math.floor(c.minZ / RG_CELL); cz <= Math.floor(c.maxZ / RG_CELL); cz++) {
+      const key = (cx + 8192) * 16384 + (cz + 8192);
+      let l = RG.cells.get(key); if (!l) RG.cells.set(key, l = []); l.push(c);
+    }
+  }
+  return RG;
+}
+/** Is a live ramp of the map (any height) within the box [x0, x1] x [z0, z1]? The box comes in RGB (a call with double arguments boxes them). */
+const RGB = new Float64Array(4);
+function rampNear(W) {
+  const G = rampGrid(W);
+  if (!G.cells.size) return false;
+  const x0 = RGB[0], x1 = RGB[1], z0 = RGB[2], z1 = RGB[3];
+  for (let cx = Math.floor(x0 / RG_CELL); cx <= Math.floor(x1 / RG_CELL); cx++) for (let cz = Math.floor(z0 / RG_CELL); cz <= Math.floor(z1 / RG_CELL); cz++) {
+    const l = G.cells.get((cx + 8192) * 16384 + (cz + 8192));
+    if (!l) continue;
+    for (let i = 0; i < l.length; i++) { const c = l[i]; if (!c.dead && c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) return true; }
+  }
+  return false;
 }
 
 const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with double arguments boxes them: framecheck allocation)
@@ -2453,23 +2520,36 @@ const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with doubl
  *  underside are refused by the second half, rampLegBlocked, which asks the mover's own rule (the heal pocket fix: a heading
  *  into a stair's side read free here while player.js blocked it). Returns the blocking collider or null. Everything inline:
  *  this runs for every fighting bot every frame. */
-function headingBlocked(W, list, a) {
+function headingBlocked(W, list, b) {
+  const a = b.actor, bb = b.bb;
   const px = a.pos.x + _hd.x * WALL_LOOK, pz = a.pos.z + _hd.z * WALL_LOOK, y0 = a.pos.y;
+  // (R3 steer) the band: the floor test takes tops in (feet, feet + 1], the wall test spans meeting (floor + 0.55, floor + 2) - a list without the
+  // colliders it would read (the feet fell under the band, or the floor ahead is higher than the band reaches) is widened first
+  if (y0 < bb.wallLo || y0 + 2.0 > bb.wallHi) { _wspan[0] = y0; _wspan[1] = y0 + 2.0; wallColsSpan(W, b); }
   GA[0] = px; GA[1] = pz; groundA(W, GA, 0);
   let s = GA[2];
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
-    const top = c.kind === "ramp" ? rampTopAt(c, px, pz) : c.maxY;
+    let top = c.maxY;
+    if (c.kind === "ramp") {          // rampTopAt(c, px, pz), inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
+      let f;
+      if (c.dir === 0) f = (px - c.minX) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 1) f = (c.maxX - px) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 2) f = (pz - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+      else f = (c.maxZ - pz) / Math.max(0.01, c.maxZ - c.minZ);
+      top = c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);
+    }
     if (top > s && top <= y0 + NAV_STEP_UP + (c.kind === "ramp" ? NAV_RAMP_EXTRA : 0)) s = top;
   }
   const fy = s > y0 ? s : y0;
+  if (fy + 2.0 > bb.wallHi) { _wspan[0] = y0; _wspan[1] = fy + 2.0; wallColsSpan(W, b); }
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || c.kind === "ramp" || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
     if (c.minY < fy + 2.0 && c.maxY > fy + 0.55) return c;
   }
-  return rampLegBlocked(W, list, a);
+  return rampLegBlocked(W, list, b);
 }
 
 /** (heal pocket fix) The RAMP half of headingBlocked: does walking WALL_LOOK m along _hd run into a ramp's SIDE or UNDERSIDE?
@@ -2484,30 +2564,47 @@ function headingBlocked(W, list, a) {
  *  use, applied along the heading. Returns the blocking ramp or null. Cheap exit when no ramp is near the leg. */
 const RBQ = new Float64Array(6);          // K.rampBlocksA's numbers [x, z, yd, h, r, stepUp] (unboxed: Wave 7b, S1)
 const RAMP_STEP = 0.15;                  // march step (the mover moves < 0.1 m a tick; 0.15 m reads a stair's side the same)
-function rampLegBlocked(W, list, a) {
+function rampLegBlocked(W, list, b) {
+  const a = b.actor, bb = b.bb;
   const ax = a.pos.x, az = a.pos.z, ex = ax + _hd.x * WALL_LOOK, ez = az + _hd.z * WALL_LOOK;
   const rr = K.PLAYERK.radius, hh = K.PLAYERK.height;
   const x0 = (ax < ex ? ax : ex) - rr - 0.3, x1 = (ax < ex ? ex : ax) + rr + 0.3, z0 = (az < ez ? az : ez) - rr - 0.3, z1 = (az < ez ? ez : az) + rr + 0.3;
-  let near = false;
-  for (let i = 0; i < list.length; i++) {
-    const c = list[i];
-    if (c.kind === "ramp" && !c.dead && c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) { near = true; break; }
-  }
-  if (!near) return null;
+  // (R3 steer) "a ramp near the leg" at ANY height (the map's ramp grid): the list holds only the band's ramps, and a march that climbs or drops reads
+  // ramps outside it (each step widens the list first when it does)
+  RGB[0] = x0; RGB[1] = x1; RGB[2] = z0; RGB[3] = z1;
+  if (!rampNear(W)) return null;
+  const under = RG.under;
   const n = Math.ceil(WALL_LOOK / RAMP_STEP);
   let y = a.pos.y, ox = ax, oz = az;
   for (let k = 1; k <= n; k++) {
     const x = ax + (ex - ax) * k / n, z = az + (ez - az) * k / n;
     // the floor under this step: player.js supportIn over the held list
     GA[0] = x; GA[1] = z; groundA(W, GA, 0);
+    // (R3 steer) a top over the band cannot be <= y + step if the band reaches y + step; a top under the band cannot beat a floor found inside it
+    if (y + NAV_STEP_UP > bb.wallHi) { _wspan[0] = bb.wallLo; _wspan[1] = y + NAV_STEP_UP; wallColsSpan(W, b); }
     let s = GA[2];
-    for (let i = 0; i < list.length; i++) {
-      const c = list[i];
-      if (c.dead || x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
-      const top = c.kind === "ramp" ? rampTopAt(c, x, z) : c.maxY;
-      if (top <= y + NAV_STEP_UP && top > s) s = top;
+    for (let pass = 0; pass < 2; pass++) {
+      s = GA[2];
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c.dead || x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+        let top = c.maxY;
+        if (c.kind === "ramp") {          // rampTopAt(c, x, z), inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
+          let f;
+          if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX);
+          else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+          else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+          else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+          top = c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);
+        }
+        if (top <= y + NAV_STEP_UP && top > s) s = top;
+      }
+      if (s >= bb.wallLo || pass) break;
+      _wspan[0] = GA[2]; _wspan[1] = bb.wallHi; wallColsSpan(W, b);     // the step went off a lip under the band: down to the terrain, once
     }
     const yd = s > y ? s : y;
+    // (R3 steer) a ramp blocks where its underside (>= minY - under) is under the head (yd + h) and its walk line over yd + step (so its top is > yd >= the band's floor)
+    if (yd + hh + under > bb.wallHi) { _wspan[0] = bb.wallLo; _wspan[1] = yd + hh + under; wallColsSpan(W, b); }
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       if (c.kind !== "ramp" || c.dead) continue;
@@ -2552,16 +2649,16 @@ function guardMove(W, b, mirror) {
   const B = basisOf(inp, _mb0);
   const wx = (B.fx * mz0 + B.rx * mx0) / m, wz = (B.fz * mz0 + B.rz * mx0) / m;
   const list = wallCols(W, b);
-  if (!list.length) return 0;
+  if (!list.length && !b.bb.wallAny) return 0;            // (R3 steer) nothing at any height in the list's square (see wallFill)
   _hd.x = wx; _hd.z = wz;
-  const hit = headingBlocked(W, list, a);
+  const hit = headingBlocked(W, list, b);
   if (!hit) return 0;
   let mode = 3, hx = 0, hz = 0;
   // 2. mirrored strafe
   if (mirror && mx0 !== 0 && Math.abs(mx0) > 0.1) {
     const mxx = (B.fx * mz0 - B.rx * mx0) / m, mzz = (B.fz * mz0 - B.rz * mx0) / m;
     _hd.x = mxx; _hd.z = mzz;
-    if (!headingBlocked(W, list, a)) { mode = 1; hx = mxx; hz = mzz; bb.strafeDir = -bb.strafeDir; bb.strafeT = Math.max(bb.strafeT, 0.5); }
+    if (!headingBlocked(W, list, b)) { mode = 1; hx = mxx; hz = mzz; bb.strafeDir = -bb.strafeDir; bb.strafeT = Math.max(bb.strafeT, 0.5); }
   }
   // 3. the wall tangent
   if (mode === 3) {
@@ -2578,8 +2675,8 @@ function guardMove(W, b, mirror) {
     if (Math.abs(kept) > 0.5) side = kept;
     if (side < 0) { tx = -tx; tz = -tz; }
     _hd.x = tx; _hd.z = tz;
-    if (!headingBlocked(W, list, a)) { mode = 2; hx = tx; hz = tz; }
-    else { _hd.x = -tx; _hd.z = -tz; if (!headingBlocked(W, list, a)) { mode = 2; hx = -tx; hz = -tz; } }
+    if (!headingBlocked(W, list, b)) { mode = 2; hx = tx; hz = tz; }
+    else { _hd.x = -tx; _hd.z = -tz; if (!headingBlocked(W, list, b)) { mode = 2; hx = -tx; hz = -tz; } }
     if (mode === 2) {
       // PING-PONG: a slide that has to reverse (the wall ended in a corner) twice inside a few seconds is a bot walking back
       // and forth along a wall with its goal on the far side of it - net displacement ~0 over 3 s although it never stops
@@ -2602,7 +2699,11 @@ function guardMove(W, b, mirror) {
  *  dodge hop is an outdoor move: under a low ceiling the head meets the slab and a capsule jammed under it is blocked in every
  *  direction, and under a high one it is a bot pogo-ing in a house (the plan: "no random fight hop under a roof"). */
 function roofedForJump(W, b) {
-  const a = b.actor, list = wallCols(W, b);
+  // (R3 steer) its own query, the test's own box and band (the 0.45 margin, 1-12 m over the feet): the steering list holds one storey. wallCols is
+  // still asked here first - the held list is re-asked where and when it always was (its order is the order of that ask)
+  wallCols(W, b);
+  const a = b.actor, list = W.map.queryColliders(a.pos.x, a.pos.z, 0.45, _rfq, a.pos.y + 1.0, a.pos.y + 12.0);
+  nav.st.roofQ++;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -3126,7 +3227,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3492,8 +3593,8 @@ function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
 export function debugNav() {
   return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth,
     // (Wave 7b, S1) the heal / fight steering probes, for the probes only: headingBlocked's two halves along a world heading (hx, hz)
-    headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b.actor); },
-    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b.actor); },
+    headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b); },
+    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b); },
     // (Wave 8) the room graph, for the probes: where a point is (house, room, storey) and the brain's own room
     roomAt: (W, x, y, z) => { const i = roomAt(W, x, y, z); return i < 0 ? null : { house: IND.R[i].h.id, room: IND.R[i].r.id, kind: IND.R[i].r.kind, floor: IND.R[i].f, index: i }; },
     indoors: () => ({ houses: IND.H ? IND.H.length : 0, rooms: IND.R.length, built: IND.built }),
@@ -3828,7 +3929,9 @@ function tallWallAt(W, x, z, y, hop) {
 /** Is the bot's own spot under a ceiling: a slab or a wide box whose footprint holds the bot's centre, from 1.8 m (its head) to 6 m over its feet. roofedForJump's test also counts
  *  a thin wall a storey up that the bot's 0.45 m margin touches - which is what a bot on the outer ledge of a wall top has over its head, and it is NOT under a roof. */
 function underCeiling(W, b) {
-  const a = b.actor, list = wallCols(W, b);
+  wallCols(W, b);                                        // (R3 steer) as roofedForJump: its own point query, the held list asked as it always was
+  const a = b.actor, list = W.map.queryColliders(a.pos.x, a.pos.z, 0, _rfq, a.pos.y + 1.8, a.pos.y + 6.0);
+  nav.st.roofQ++;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -4669,7 +4772,7 @@ function pickRetreat(W, b, list, ux, uz) {
   const gi = IND.H !== null ? myRoom(W, b) : -1;
   if (W.t - bb.hdT < 0.6 && bb.hdX * ux + bb.hdZ * uz > -0.17) {
     _hd.x = bb.hdX; _hd.z = bb.hdZ;
-    if (!headingBlocked(W, list, a) && !(gi >= 0 && retreatPocket(IND.R[gi], a, bb.hdX, bb.hdZ))) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
+    if (!headingBlocked(W, list, b) && !(gi >= 0 && retreatPocket(IND.R[gi], a, bb.hdX, bb.hdZ))) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
   }
   const side = bb.healSide;
   for (let k = 0; k < RETREAT_FAN.length; k++) {
@@ -4678,7 +4781,7 @@ function pickRetreat(W, b, list, ux, uz) {
     const hx = ux * c - uz * s, hz = ux * s + uz * c;
     if (W.t < bb.hdBadUntil && hx * bb.hdBadX + hz * bb.hdBadZ > 0.9) continue;    // the heading a pin just proved wrong
     _hd.x = hx; _hd.z = hz;
-    if (headingBlocked(W, list, a)) continue;
+    if (headingBlocked(W, list, b)) continue;
     if (gi >= 0 && retreatPocket(IND.R[gi], a, hx, hz)) continue;
     // a REVERSAL of the retreat inside a second (the way it was going just closed): hold the corner instead of pacing - for at most
     // HEAL_HOLD_S. (Wave 7b, S1) The hold renewed itself (it set hdT, which re-armed the 1 s window on every frame of the hold), so a healer
@@ -5072,10 +5175,12 @@ function edgeGuard(W, b) {
   const wyE = W.map.waterY;          // (R1, tierprof kb) read on every call: read only inside the probe loop it had no type feedback when the loop first ran
   // (release blockers) no held heading and no probe due (3 frames in 4): nothing below can act - the same early return the tests below reach,
   // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
+  if (bb.edgeAir && a.onGround) { bb.edgeAir = false; bb.edgeT = W.t; }
+  if (W.t < bb.edgeWalkUntil) inp.sprint = false;       // (R3 steer) a slope this bot may walk down but not sprint down: walked until the next look says otherwise
   if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
   const B = basisOf(inp, _mb0);
   let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
-  const m = hyp(wx, wz);
+  const m = Math.sqrt(wx * wx + wz * wz);         // hyp, inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
   if (m < 0.05) return;
   wx /= m; wz /= m;
   // (a held heading holds the jump too, and holds in the air: stub duo 10-26, Isla seed 2, a camper held at a 10 m lip hopped - the state's step
@@ -5085,7 +5190,7 @@ function edgeGuard(W, b) {
   // (the probe interval and the look-ahead scale with the speed: at a sprint's ~8 m/s a 0.25 s probe let the bot travel 2 m between looks, and the
   // lip of a face first seen in the 4th sample was already under its feet at the next look - stub duo 10-26, Isla seed 2: s11 fleeing at 20 hp
   // found the face at 0.8 m, too late to stop, and fell 10 m; s43 following at 30 hp crossed a slope break at speed, flew, and met the face airborne)
-  const spd = hyp(a.vel.x, a.vel.z);
+  const spd = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z);
   bb.edgeT = W.t + (spd > 4 ? 0.15 : 0.25);
   const lim = walkDrop(a);
   if (!(lim < 1e6)) return;
@@ -5116,9 +5221,63 @@ function edgeGuard(W, b) {
       return;
     }
     if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
-    if (runTop === runTop ? !steep : k >= win) break;                         // a face is followed while it goes on down; the window ends the look
+    // a face is followed while it goes on down; the window ends the look. (R3 steer) A face that ends INSIDE the window does not end the look: s11
+    // (isla_viva seed 77, 10 hp) saw a 1.5 m face at 0.8 m, stopped looking at its foot, and the 5.8 m face 2 m further on was never measured
+    if (runTop === runTop && !steep) { if (k >= win) break; runTop = NaN; }
+    else if (runTop !== runTop && k >= win) break;
     prev = sup;
   }
+  // (R3 steer) THE FLIGHTS THIS HEADING MAKES, on the terrain (a deck keeps the sampled rule above: each of its samples is a collider query).
+  // Downhill faster than gravity pulls the capsule down, the mover leaves the ground (player.js: feet more than 0.1 m over the support after a
+  // tick), and a flight lands at the speed of a fall from where it left: its drop is judged by the same curve as any drop (walkDrop). A sprint
+  // down a 45-degree face flies ~5.8 m (2 u^2 tan^2 / g), a walk 3.3 m - so the sampled rule above (a face is steeper than 48 degrees) passed
+  // slopes a sprinting wounded bot fell down. Checked only where the ground within 16 m falls more than lim below the feet (no flight can drop
+  // further than the ground does); a heading that flies too far at the sprint but not at the walk is walked, else it is held like a lip.
+  if (elevated) return;
+  // (the water level as a plain double: a phi of the map's tagged waterY and a typed-array read boxed every sample - tierprof kb, edgeGuard 0.3 -> 1.5 KB/frame)
+  const wyF = wyE != null ? +wyE : -1e9;
+  let minG = a.pos.y;
+  for (let k = 1; k <= 20; k++) {
+    GA[0] = a.pos.x + wx * 0.8 * k; GA[1] = a.pos.z + wz * 0.8 * k; groundA(W, GA, 0);
+    const gk = GA[2] < wyF ? wyF : GA[2];
+    if (gk < minG) minG = gk;
+  }
+  if (a.pos.y - minG <= lim) return;
+  const sprintNow = inp.sprint && inp.mz > 0.5, walkV = K.MOVE.walk, uT = sprintNow ? K.MOVE.sprint : walkV;
+  FLQ[0] = wx; FLQ[1] = wz; FLQ[2] = spd > uT ? spd : uT; FLQ[3] = lim; FLQ[4] = win * 0.8;
+  if (flightSafe(W, a)) return;
+  if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.6; nav.st.edgeSlows++; return; } }
+  bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
+  inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
+  bb.nextPathT = 0;
+  nav.st.edgeHolds++; nav.st.edgeFlights++;
+}
+/** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
+ *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
+ *  landing's drop (from where the flight left the ground: a fall from rest) against lim. Walks dmax of ground, plus every flight that starts on it.
+ *  false = a flight lands from higher than lim. Numbers in, a boolean out (no boxed double crosses the call). */
+const FLQ = new Float64Array(5);
+function flightSafe(W, a) {
+  const wx = FLQ[0], wz = FLQ[1], u = FLQ[2], lim = FLQ[3], dmax = FLQ[4], wy0 = W.map.waterY, wy = wy0 != null ? +wy0 : -1e9;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), dt = 1 / 30, step = u * dt;
+  let x = a.pos.x, z = a.pos.z, y = a.pos.y, vy = 0, top = y, d = 0, air = false;
+  for (let n = 0; n < 150; n++) {
+    x += wx * step; z += wz * step; d += step;
+    GA[0] = x; GA[1] = z; groundA(W, GA, 0);
+    const sup = GA[2] < wy ? wy : GA[2];
+    if (!air) {
+      if (sup - y > 1.0) return true;                     // rising ground the legs do not climb in a step: the walk stops here
+      if (y - sup <= 0.1) { y = sup; if (d >= dmax) return true; continue; }
+      air = true; vy = 0; top = y;
+    }
+    vy += g * dt; y -= vy * dt;
+    if (y <= sup) {
+      if (top - sup > lim) return false;
+      y = sup; vy = 0; air = false;
+      if (d >= dmax) return true;
+    }
+  }
+  return true;
 }
 /** (C-FALL) a fight's hop lands where it was: no ground more than 2.5 m lower along the run or the strafe within a hop's 4.5 m (stub duo 10-26,
  *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
