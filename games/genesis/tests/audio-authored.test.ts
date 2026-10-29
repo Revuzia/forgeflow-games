@@ -14,6 +14,7 @@ import { ERAS } from '../src/audio/score/eras.ts';
 import { STINGERS as STING_SCORES, STINGER_IDS } from '../src/audio/score/stingers.ts';
 import type { SimEvent } from '../src/sim/types.ts';
 import type { AudioScene } from '../src/audio/scene.ts';
+import { DIRECT_LEVEL, SFX, directLevel, type Sfx } from '../src/audio/sfx.ts';
 
 const ASSETS = fileURLToPath(new URL('../src/audio/assets/', import.meta.url));
 const SCORES: Piece[] = [TITLE, ...ERAS];
@@ -311,3 +312,66 @@ test('arriving at a town, its piece waits for the town\'s score to be measured, 
     assert.equal(m3.state().trim?.trim, AUTHORED.title.gain);
   } finally { globalThis.fetch = realFetch; }
 });
+
+// ───────────────────────────── the opening's ignition (fix r4 #12) ─────────────────────────────
+
+/**
+ * The ignition through the real engine and mix chain (glue compressor, limiter, soft clipper), music held as in the
+ * opening, ambience as at orbit: _harness/scratch/audio/lab.mjs scenes 'ign-levels' and 'ign-repeat' (44.1 kHz), ffmpeg
+ * ebur128 over the 12.5 s from the cue. level -> [integrated LUFS, true peak dBFS, short-term max LUFS]; at 0.25 the
+ * loudest / highest of five draws (the crack's peak moves with the noise's draw). Measured with the recipe as it is now
+ * (its sub-bass 6 dB down); change the recipe or the level outside this table and re-measure.
+ */
+const IGN_LAB: [number, number, number, number][] = [
+  [1, -12.4, -2.0, -11.3], [0.4, -18.7, -4.0, -16.6], [0.28, -20.3, -5.8, -19.1], [0.25, -20.9, -6.7, -19.4], [0.2, -22.0, -7.7, -20.7],
+];
+/** the lab against the built game (the old recipe at level 1: lab -11.9 / -2.0 / -10.2, game -12.2 / -1.7 / -10.9) */
+const LAB_TO_GAME = { lufs: -0.3, peak: 0.3 };
+/** the opening's music after the ignition in the built game (r4first.webm: 33-93 s, 100-220 s) */
+const GAME_MUSIC = [-22.6, -20.9];
+
+test('the opening\'s ignition lands just over the music that rises out of it and peaks under -6 dBFS (fix r4 #12)', () => {
+  const lv = directLevel('ignition');
+  assert.equal(lv, DIRECT_LEVEL.ignition);
+  assert.equal(directLevel('whisper'), 1, 'other cues play at their own level');
+  const at = (level: number, col: 1 | 2 | 3): number => {
+    const rows = [...IGN_LAB].sort((p, q) => p[0] - q[0]);
+    assert.ok(level >= rows[0][0] && level <= rows.at(-1)![0], `level ${level} is outside the measured range: re-measure (lab.mjs ign-levels)`);
+    for (let i = 1; i < rows.length; i++) {
+      const [a, b] = [rows[i - 1], rows[i]];
+      if (level <= b[0]) { const k = Math.log(level / a[0]) / Math.log(b[0] / a[0]); return a[col] + (b[col] - a[col]) * k; }
+    }
+    return rows.at(-1)![col];
+  };
+  const game = (level: number) => ({ lufs: at(level, 1) + LAB_TO_GAME.lufs, peak: at(level, 2) + LAB_TO_GAME.peak, short: at(level, 3) + LAB_TO_GAME.lufs });
+  const g = game(lv);
+  for (const m of GAME_MUSIC) {
+    assert.ok(g.lufs - m <= 3, `the ignition ${g.lufs.toFixed(1)} LUFS is ${(g.lufs - m).toFixed(1)} LU over the music (${m})`);
+    assert.ok(g.lufs - m >= -2, `the ignition ${g.lufs.toFixed(1)} LUFS is lost under the music (${m})`);
+  }
+  assert.ok(g.peak <= -6, `true peak ${g.peak.toFixed(1)} dBFS`);
+  assert.ok(g.short <= -18, `short-term max ${g.short.toFixed(1)} LUFS`);
+  // the review's finding, as measured: at full level it stood ~10 LU over the game, near clipping
+  const old = game(1);
+  assert.ok(old.lufs - GAME_MUSIC[0] > 9 && old.peak > -3);
+  // the cue is the one measured: the crescendo (a roar that swells for seconds), the crack at 2.5 s (a bright noise
+  // burst), the chord's bloom, and the sub-bass (tones under 40 Hz, brown rumble) at the level the table was taken at
+  const calls: [string, ...unknown[]][] = [];
+  const rec: Record<string | symbol, unknown> = { t: 0, size: 1, count: 1, variant: '', r: () => 0.5, rr: (a: number, b: number) => (a + b) / 2 };
+  SFX.ignition(new Proxy(rec, { get: (o, k) => (k in o ? o[k] : (...args: unknown[]) => { calls.push([String(k), ...args]); return 0; }) }) as unknown as Sfx);
+  const n = (c: [string, ...unknown[]], i: number): number => c[i] as number;
+  assert.ok(calls.some((c) => c[0] === 'tn' && n(c, 5) >= 2), 'the crescendo');
+  assert.ok(calls.some((c) => c[0] === 'nz' && c[1] === 'white' && n(c, 2) === 2.5 && n(c, 3) < 0.01), 'the crack');
+  assert.ok(calls.some((c) => c[0] === 'pad'), 'the bloom');
+  const sub = calls.filter((c) => (c[0] === 'tn' && Math.min(n(c, 3), n(c, 4)) < 40) || (c[0] === 'nz' && c[1] === 'brown'));
+  const subPeak = sub.reduce((t, c) => t + (c[0] === 'tn' ? n(c, 9) : n(c, 6)), 0);
+  assert.equal(sub.length, 3);
+  assert.ok(Math.abs(subPeak - 0.715) < 1e-9, `sub-bass peaks ${subPeak} (measured at 0.715): re-measure`);
+  // the game plays it at that level: the opening names none, the engine's direct path falls back to DIRECT_LEVEL
+  const engine = readFileSync(fileURLToPath(new URL('../src/audio/engine.ts', import.meta.url)), 'utf8');
+  assert.match(engine, /gain: o\.level \?\? directLevel\(name\)/);
+  assert.match(engine, /if \(name === 'ignition'\) \{\s*this\.musicHoldUntil = now \+ 9;/, 'the music is still held under it');
+  const opening = readFileSync(fileURLToPath(new URL('../src/ui/opening.ts', import.meta.url)), 'utf8');
+  assert.match(opening, /this\.host\.sound\('ignition'\)/);
+});
+
