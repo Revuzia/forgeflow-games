@@ -43,7 +43,7 @@ CENSUS_JS = r"""() => { const W = window.__LC__.W, mem = W.kernel && W.kernel.re
   const q = (n) => document.querySelectorAll('[data-lc="' + n + '"]').length;
   const progs = W.kernel && W.kernel.renderer && W.kernel.renderer.info.programs ? W.kernel.renderer.info.programs.length : null;
   return { dom: document.getElementsByTagName('*').length, textures: mem.textures, geometries: mem.geometries, programs: progs,
-           anims: document.getAnimations().length, phase: W.phase, map: W.mapId, death: q('death'), post: q('post'), bars: q('bars'), wcard: q('wcard'), feed: q('feed') }; }"""
+           anims: document.getAnimations().length, phase: W.phase, map: W.mapId, seed: W.seed, death: q('death'), post: q('post'), bars: q('bars'), wcard: q('wcard'), feed: q('feed') }; }"""
 
 # Pins the die roll of the NEXT click (the real "Find a new match" button): hud.js randomMap() reads Math.random() synchronously inside that click's handler, so a
 # one-shot override installed in the capture phase of the click event and removed by a 0 ms timeout (after the handler returned) is seen by nothing else.
@@ -184,11 +184,14 @@ def main():
                 cl = s.js(CENSUS_JS)
                 census.append(cl)
                 v.info("round %d lobby after '%s'" % (rnd, want), cl)
+                # R3 re-check: the lobby ends by itself ~3.4 s after it appears (hud.js FILL_MS 700 + three 900 ms countdown steps), so NO extra page
+                # round-trip may sit between this census and the guard call below - the seed is read inside CENSUS_JS, and the pin-consumption reads
+                # are made after the guard call and Enter (pin_reads).
+                pin_reads = []
                 if want == "Find a new match" and args.find_map != "random":
-                    v.info("round %d: the pinned die roll was consumed by the click (Math.random reads inside it)" % rnd, s.safe_js("() => window.__HC_PIN__"))
+                    pin_reads.append(("round %d: the pinned die roll was consumed by the click (Math.random reads inside it)" % rnd, "() => window.__HC_PIN__"))
                 if want == "Run it back" and args.again_seed == "same":
-                    v.info("round %d: the pinned seed roll was consumed by the click; the lobby's seed" % rnd, s.safe_js("() => ({ pin: window.__HC_PINA__, seed: window.__LC__.W.seed })"))
-                cl["seed"] = s.safe_js("() => window.__LC__.W.seed")
+                    pin_reads.append(("round %d: the pinned seed roll was consumed by the click; the lobby's seed (read in the census: %s)" % (rnd, cl.get("seed")), "() => window.__HC_PINA__"))
                 if rnd < args.rounds:
                     s.js("() => { window.__H_GUARD_N__ = {}; }")      # fresh per-phase frame counts for this round
                     lobby_phase = s.phase()
@@ -196,6 +199,9 @@ def main():
                     s.page.keyboard.press("Enter")
                     s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
                     s.guard_player(True)
+                for label, js in pin_reads:
+                    v.info(label, s.safe_js(js))
+                if rnd < args.rounds:
                     land = s.land(120, protect=True)
                     seen = s.js("() => Object.assign({}, window.__H_GUARD_N__ || {})")
                     guard_runs.append({"round": rnd + 1, "guardCallBeforeEnter": guard_call, "phaseAtThatCall": lobby_phase, "framesPerPhase": seen, "alive": land.get("alive"), "phase": land.get("phase")})
