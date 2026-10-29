@@ -502,7 +502,9 @@ export class GroundCover {
           // albedo-scale tints (the clump's vertex shade is ~0.85): green, then gold (maize a paler straw)
           const g0 = CROP_G0[variant >> 1] ?? CROP_G0[0];
           const g1 = CROP_G1[variant >> 1] ?? CROP_G1[0];
-          const hay: [number, number, number] = [0.28, 0.24, 0.1];
+          // (a wild stand's standing straw is weathered and bleached a pale tan: in the field's dull hay tint the
+          // dormant stands vanished into the sward for half the year)
+          const hay: [number, number, number] = wildS ? [0.46, 0.39, 0.22] : [0.28, 0.24, 0.1];
           const k2 = ph >= 0.7 || (wildS && ph < 0.15) ? 1 : 1 - wildNew;
           cr = (g0[0] + (g1[0] - g0[0]) * ripe) * (1 - k2) + hay[0] * k2; cg = (g0[1] + (g1[1] - g0[1]) * ripe) * (1 - k2) + hay[1] * k2; cb = (g0[2] + (g1[2] - g0[2]) * ripe) * (1 - k2) + hay[2] * k2;
         } else if (kind === GK.flower) { if (bloom <= 0.01) continue; grow = bloom; }
