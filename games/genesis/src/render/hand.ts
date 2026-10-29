@@ -203,7 +203,9 @@ void main() {
   float env = top * below * uPres;
   // (kept below the tone curve's shoulder: brighter, the shaft burned to white and lost its regard's colour)
   float k = (core * 0.5 + body * 0.24) * rays * env * uBeamK;
-  vec3 light = uCol * k * (1.0 - 0.8 * uDark);
+  // (feared, the light down the column is all but gone between arcs: at 0.2 of it the storm's shaft still read as a
+  // pale beam at the god's 45 m view — toggled off, the pale shaft went with it)
+  vec3 light = uCol * k * (1.0 - 0.95 * uDark);
   // a rebuke: the shaft blazes cold white for a moment
   light += vec3(0.75, 0.85, 1.0) * (core * 1.6 + body * 0.4) * env * uFlashK;
   // storm-dark: a churning downdraft of dark cloud, occluding — billows bulging out of a ragged edge, lit on its sun
@@ -553,7 +555,9 @@ void main() {
   // its own light inside the cloud: strongest at its heart and through the thin parts (warm gold; a cold glimmer when
   // feared, flaring with each arc)
   float thin = 1.0 - dens;
-  vec3 inner = uCol * vCore * (0.45 + 1.2 * thin) * uGlowK * (1.0 - 0.85 * uDark) * mix(0.8, 1.3, vG);
+  // (a feared god's cloud has no steady light inside, only the arcs' flicker: the cold glow through its thin wisps,
+  // even at 0.15, lit the cradle round the held one as a pale blue-white puff — toggled off, the puff went dark)
+  vec3 inner = uCol * vCore * (0.45 + 1.2 * thin) * uGlowK * (1.0 - 0.98 * uDark) * mix(0.8, 1.3, vG);
   inner += uRim * (uCrackK * (0.08 + 0.35 * vCore) + uDark * 0.04 * vCore) * (0.5 + thin);
   float a = clamp(dens * vA * 0.82, 0.0, 1.0) * vis;
   gl_FragColor = vec4((lit + inner * fxDisplay(0.6)) * a, a * 0.92);

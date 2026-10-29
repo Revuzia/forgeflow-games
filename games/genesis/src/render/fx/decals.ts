@@ -309,8 +309,13 @@ void main() {
     // where AgX takes every hue to white: the strike frame read as frost), and the additive part only lifts black
     // ground to a dim lit floor (added uncapped, a white light with no albedo in it, it laid a milky veil over the
     // whole hillside by day).
-    if (uGroup > 1.5) o = vec4(vec3(1.0) + min(A * (expo() / 0.18), vec3(3.5)), 1.0);
-    else o = vec4(min(A * 0.35, vec3(0.05 / max(expo(), 1e-4))), 0.0);
+    // (each cap scales the light as a whole, keeping its hue: capped per channel, a strong orange light hit the cap in
+    // all three and turned white — a volcano's glow at night lit its mountain as a white glare disc)
+    vec3 Am = A * (expo() / 0.18);
+    float mx = max(Am.r, max(Am.g, Am.b));
+    float mx2 = max(A.r, max(A.g, A.b)) * 0.35;
+    if (uGroup > 1.5) o = vec4(vec3(1.0) + Am * min(1.0, 3.5 / max(mx, 1e-6)), 1.0);
+    else o = vec4(A * 0.35 * min(1.0, (0.05 / max(expo(), 1e-4)) / max(mx2, 1e-12)), 0.0);
   } else if (t == 11) {
     // a path ahead (a front's heading): chevrons marching along the axis
     float L = vP.x, W = vP.y;

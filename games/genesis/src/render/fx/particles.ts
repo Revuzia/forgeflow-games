@@ -197,17 +197,20 @@ void main() {
     float k = column ? 0.6 : 1.0;
     float rise = column
       ? (stack ? 2.6 : 3.2) * tSec * (1.0 - 0.3 * age) * (0.85 + 0.3 * r3) * (0.7 + 0.3 * min(size, 4.0) / 4.0)
-      : (1.0 - exp(-tSec * 0.35)) / 0.35 * (0.8 + 0.4 * r3) * (0.6 + 0.4 * size);
+      // (a hearth's warm smoke keeps rising slowly all its life: stalled at ~3 m and carried 20-30 m downwind it lay over
+      // the town as a flat white ribbon at the god's 60 m view)
+      : ((1.0 - exp(-tSec * 0.35)) / 0.35 + 0.85 * tSec) * (0.8 + 0.4 * r3) * (0.6 + 0.4 * size);
     p += up * (rise + size * 0.3);
     // the plume bends over downwind as it rises (the wind grows with height)
-    p += iWind * tSec * (column ? 0.35 + 0.45 * age : 0.55 + 0.25 * r2);
+    p += iWind * tSec * (column ? 0.35 + 0.45 * age : 0.3 + 0.2 * r2);
     p += side * (0.15 + 0.6 * age) * size * k * r2;
     p += (e1 * sin(tSec * 0.7 + r1 * 10.0) + e2 * cos(tSec * 0.5 + r3 * 10.0)) * 0.3 * age * (column ? 2.0 : k);
     sz = (stack ? 0.9 : wild ? 1.0 : 0.35) * size + (stack ? 7.0 : wild ? 10.0 : 2.6) * age * (0.7 + 0.6 * r1) * (0.5 + 0.5 * power);
     // a fire's column is dense at its root and stays thick a long way up before it thins out
     float a = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(stack || wild ? 0.55 : 0.45, 1.0, age));
     // (a hearth's chimney: a thin blue-grey wisp, not cotton-wool puffs over every roof)
-    float dens = stack ? 0.92 : wild ? 0.85 : 0.15;
+    // (and it thins as it spreads, so the far end of the plume is a haze, not a band)
+    float dens = stack ? 0.92 : wild ? 0.85 : 0.15 * (1.0 - 0.6 * smoothstep(0.15, 0.8, age));
     // burning thatch and timber: dark brown-grey to near black, greyer and paler as it cools and spreads
     vec3 sc = stack ? vec3(0.045, 0.041, 0.038) : wild ? vec3(0.06, 0.055, 0.05) : vec3(0.34, 0.35, 0.38);
     // (a grass fire's smoke greys as it spreads, but not to white: at 0.17 its old puffs read as steam by day)

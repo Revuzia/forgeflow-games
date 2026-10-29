@@ -110,7 +110,9 @@ export class WeatherFx {
       consider(ws.kind, w);
       // (the deck darkens ahead of the rain: a storm the god has just painted starts at a quarter of its strength, and the
       // town under its first rain kept crisp sun shadows for a minute — clouds gather before they pour)
-      const ok = Math.min(1, Math.pow(ws.intensity * 0.8, 0.6)) * wetness(DEFS.get(ws.kind)) * (w > 0 ? 1 : 0);
+      // (and once it rains at all the deck is closed: at 0.8 I^0.6 a storm just painted at envelope 0.25 still let crisp
+      // shadows through for its first minute at 1x, the cast moment itself)
+      const ok = Math.min(1, Math.max(Math.pow(ws.intensity * 0.8, 0.6), 0.95 * smooth(0.04, 0.25, ws.intensity))) * wetness(DEFS.get(ws.kind)) * (w > 0 ? 1 : 0);
       if (ok > ow.k) {
         const l = Math.hypot(ws.pos[0], ws.pos[1], ws.pos[2]) || 1;
         ow.k = ok; ow.c.set(ws.pos[0] / l, ws.pos[1] / l, ws.pos[2] / l); ow.cosR = Math.cos(Math.min(Math.PI, (ws.radius * 1.1) / R));
@@ -211,14 +213,19 @@ export class WeatherFx {
     ov.k += (ow.k - ov.k) * ek;
     ov.cam += (camK - ov.cam) * ek;
     if (ov.k < 0.004 && ow.k === 0) ov.k = 0;
-    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0, 0.3 * ov.cam) * low;
+    // (the haze under a storm deck is felt down among things; from the god's regional height (200-1000 m of air along
+    // every ray) the same density laid a milky white veil over the view — a tsunami's drawback, a meteor's strike and
+    // the land itself washed out — so it thins with the camera's height; a real fog or dust storm stays)
+    const hazeK = 0.3 * ov.cam * (1 - 0.8 * smooth(40, 300, alt));
+    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0, hazeK) * low;
     this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.ease * 0.8 + 0.02);
     if (this.fogK > 0.005) {
       const sunEl = u.dot(ctx.sunDirBody);
       const day = smooth(-0.12, 0.3, sunEl);
       // (blood rain hangs a red haze: on the grey-blue rain haze its sky tint was washed out, and the sign read as drizzle)
       const base = type === 7 ? [0.62, 0.5, 0.36] : type === 4 ? [0.4, 0.38, 0.36] : type === 6 ? [0.66, 0.3, 0.25] : [0.62, 0.66, 0.72];
-      const lum = (ctx.sunE.y / 8) * (0.55 * day) + 0.004;
+      // (under the deck the haze is lit by the grey day under it, not the full sun: lit as white it bleached the view)
+      const lum = (ctx.sunE.y / 8) * (0.55 * day) * (1 - 0.4 * ov.cam) + 0.004;
       ctx.screen.fogCol.set(base[0] * lum, base[1] * lum, base[2] * lum);
       ctx.screen.fogDensity = Math.max(ctx.screen.fogDensity, this.fogK * 0.011 * (1 + gust * 1.2));
       ctx.screen.fogScale = 140;
