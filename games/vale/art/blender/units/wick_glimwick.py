@@ -2496,8 +2496,8 @@ class Glimwick(wc.Wick):
         self.TEXTURE_SIZES = {"normal": 512, "orm": 256}      # 512: the folds / piping / stole edges read
         if faction == "aubade":
             # (integration pass, wickTop25 RIFT Low over the 65 cap) the baked chalk pieces (knob, finial, crook, brace,
-            # lamp posts and caps) at the hood rim's chalk, #D6D3CA -> #C2BEB3 (L* 85 -> 77); this instance only
-            self.PALETTE["chalk"] = "#C2BEB3"
+            # lamp posts and caps) at the shieldwick's stole chalk, #D6D3CA -> #B8B4AA (L* 85 -> 73); this instance only
+            self.PALETTE["chalk"] = "#B8B4AA"
         self._parts = parts_for(faction)
         concept, h, grade = PLATES[faction]
         proj = wc.graded_projection(concept, h, tag="glim", **grade)

@@ -112,6 +112,9 @@ DASH_AIR = {'ardit': (500, 1800), 'burdam': (220, 900), 'dunsom': (700, 2400), '
             'hesmi': (260, 1000), 'ilsheta': (900, 3000), 'kemdo': (1500, 6000), 'lisvel': (1100, 4200),
             'marund': (240, 800), 'nurrow': (600, 2000), 'odrum': (400, 1500), 'rishal': (2000, 8000),
             'sukri': (1000, 3600), 'tunlan': (300, 1200), 'ulkro': (700, 2600), 'vashil': (800, 3200)}
+# … and its signature instrument's level in it (dB re the rush: DASH_SIG_DB unless the fighter's own is set)
+DASH_SIG_DB = -5.0
+DASH_SIG: dict[str, float] = {}
 # a physical fighter's contact: the escapement tick's two resonances (its own pair in 2-6 kHz). The casters' hits keep
 # their own onsets (they replaced the bright c_hit_magic, which had no floor to hold); only the soft top applies to them
 CONTACT = {'ardit': (3000.0, 4600.0), 'burdam': (2200.0, 3300.0), 'ervet': (4200.0, 6000.0), 'hesmi': (2000.0, 2900.0),
@@ -378,7 +381,7 @@ def _make_dash(fid: str):
         lo, hi = DASH_AIR[fid]
         L = Layers(0.45)
         L.add(S.whoosh(r, 0.28, lo, lo * 1.4, q=1.2, peak_at=0.28, f_mid=hi, low_body=0.3), 0.0, peak_db=0, width=0.6)
-        L.add(at_len(_sig(fid, v, 0.4), 0.3), 0.0, peak_db=-5)
+        L.add(at_len(_sig(fid, v, 0.4), 0.3), 0.0, peak_db=DASH_SIG.get(fid, DASH_SIG_DB))
         L.add(S.knock(r, max(180.0, lo * 0.6), 0.04, 4, 'wood'), 0.0, peak_db=-4)      # the push-off: it lands on its frame
         L.add(breath(0.2, hi, lo, shape='breath', q=2.0, seed=f'{cid}b', peak_at=0.05, vel=0.7), 0.0, peak_db=-12, width=0.5)
         return _fin(room(L.out(), ROOMS[fid], wet=0.08), hp_hz=max(80.0, lo * 0.4), eq=SOFT_TOP)

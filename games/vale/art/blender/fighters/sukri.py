@@ -336,9 +336,22 @@ EYES = ((-0.121, 1.333), (0.117, 1.333))
 EYE_W, EYE_H = 0.062, 0.023              # almond half width / half height
 MOUTH = (1.166, 1.130, 0.116)            # the smile: top line at x 0, the lower arc's bottom, half width
 NOSE = (1.392, 1.226)                    # bridge top, tip
-GRAIN = ((-0.125, 1.50, 1.36), (-0.098, 1.50, 1.40), (0.100, 1.48, 1.37), (0.118, 1.47, 1.40),
-         (-0.062, 1.30, 1.18), (-0.172, 1.29, 1.10), (0.064, 1.30, 1.20), (0.170, 1.27, 1.12),
-         (-0.110, 1.12, 1.07), (0.110, 1.11, 1.06))          # painted vertical cracks: (x, z top, z bottom)
+GRAIN_PAINTED = ((-0.125, 1.50, 1.36), (-0.098, 1.50, 1.40), (0.100, 1.48, 1.37), (0.118, 1.47, 1.40),
+                 (-0.062, 1.30, 1.18), (-0.172, 1.29, 1.10), (0.064, 1.30, 1.20), (0.170, 1.27, 1.12),
+                 (-0.110, 1.12, 1.07), (0.110, 1.11, 1.06))  # the concept's painted vertical cracks: (x, z top, z bottom)
+# integration pass (W5b verify, sensitivity: "grain streaks run straight down from both eyes" - read as tear streaks on
+# the largest face of the loading row): no crack touches an eye. The forehead cracks stop at the brow ridge's top
+# (1.44), the two inner under-eye cracks are gone, the two outer cheek cracks start 9 cm under the eyes (1.21); the
+# chin cracks stay. GRAIN_CLEAN: the painted spans the paint wipes too (_face_clean), so relief and paint agree.
+GRAIN = ((-0.125, 1.50, 1.44), (-0.098, 1.50, 1.45), (0.100, 1.48, 1.44), (0.118, 1.47, 1.45),
+         (-0.172, 1.21, 1.10), (0.170, 1.20, 1.12),
+         (-0.110, 1.12, 1.07), (0.110, 1.11, 1.06))          # the carved vertical cracks: (x, z top, z bottom)
+GRAIN_CLEAN = ((-0.125, 1.45, 1.34), (-0.098, 1.46, 1.38), (0.100, 1.45, 1.35), (0.118, 1.46, 1.38),
+               (-0.062, 1.31, 1.17), (0.064, 1.31, 1.19), (-0.172, 1.31, 1.20), (0.170, 1.29, 1.19))
+GRAIN_CLEAN_R = (0.009, 0.016)           # the wipe's full / zero radius round a painted span (m)
+# ... and the eye slits take a warm inlaid amber (non-emissive, the floor lit honey, the walls deeper) in place of the
+# hollow dark holes (as Odrum Shadeprint's lacquer mask); every skin keeps it (_recolour restores it)
+EYE_INLAY, EYE_INLAY_DEEP = "#D8A35C", "#9A6434"
 
 
 def face_sd(x, z):
@@ -402,6 +415,70 @@ def face_relief(P):
     brow = ss(1.352, 1.366, z) * ss(1.420, 1.380, z) * (1 - ss(0.17, 0.20, np.abs(x)))
     cheek = np.exp(-(((np.abs(x) - 0.12) / 0.07) ** 2 + ((z - 1.22) / 0.07) ** 2))
     return r + 0.005 * brow + 0.006 * cheek + 0.0010 * NOISE(P * np.array([4.0, 1.0, 0.6]), 30.0)
+
+
+def _crack_dist(x, z, spans):
+    """distance (m) in the face plane to the nearest vertical span (x, z top, z bottom), the cracks' wobble kept"""
+    d = np.full(np.shape(x), 1e3)
+    for gx, z0, z1 in spans:
+        wob = 0.004 * np.sin(z * 60.0 + gx * 40.0)
+        dz = np.maximum(np.maximum(z - z0, z1 - z), 0.0)
+        d = np.minimum(d, np.hypot(x - gx - wob, dz))
+    return d
+
+
+def eye_inlay(p):
+    """(mask, depth 0 lip .. 1 floor) of the face texels in the eye slits (the carved recess, front-facing side)"""
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    dep = np.clip((y - face_front(x, z)) / 0.026, 0.0, 1.0)
+    return (eye_sd(x, z) < 0.0015) & (dep > 0.25), dep
+
+
+def _face_clean(p, n, lin, cell=0.0025, sigma=3.0):
+    """wipe the painted grain cracks' spans that touched the eyes (GRAIN_CLEAN): a texel there darker than the clean
+    wood around it (the face's front texels off the spans, the recesses and the nose, averaged in the face plane
+    within ~7 mm) takes that wood's colour; lighter grain and the broad painted shading stay"""
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    front = n[:, 1] < -0.2
+    sd = face_front(x, z) - y                                     # > 0: in front of the face shield (the nose)
+    rec = (eye_sd(x, z) < 0.006) | (mouth_sd(x, z) < 0.006) | (sd > 0.003) | (y - face_front(x, z) > 0.004)
+    dist = _crack_dist(x, z, GRAIN_CLEAN)
+    wcap = 1.0 - ss(GRAIN_CLEAN_R[0], GRAIN_CLEAN_R[1], dist)
+    src = front & ~rec & (dist > GRAIN_CLEAN_R[1]) & (_crack_dist(x, z, GRAIN) > 0.008)
+    tgt = front & ~rec & (wcap > 0.01)
+    if src.sum() < 200 or not tgt.any():
+        return lin, 0
+    x0, z0 = -0.26, 1.00
+    nx, nz = int(0.52 / cell) + 2, int(0.58 / cell) + 2
+    ix = np.clip(((x - x0) / cell).astype(int), 0, nx - 1)
+    iz = np.clip(((z - z0) / cell).astype(int), 0, nz - 1)
+    S = np.zeros((nz, nx, 4))
+    np.add.at(S, (iz[src], ix[src]), np.concatenate([lin[src], np.ones((int(src.sum()), 1))], 1))
+    R = int(math.ceil(3 * sigma))
+    k = np.exp(-0.5 * (np.arange(-R, R + 1) / sigma) ** 2)
+    Sp = np.pad(S, ((R, R), (R, R), (0, 0)))
+    S = sum(k[i] * Sp[i:i + nz] for i in range(len(k)))
+    S = sum(k[i] * S[:, i:i + nx] for i in range(len(k)))
+    have = S[..., 3] > 1e-3
+    mean = S[..., :3] / np.maximum(S[..., 3:], 1e-6)
+    C = mean[iz[tgt], ix[tgt]].astype(np.float32)
+    ok = have[iz[tgt], ix[tgt]]
+    Yt, Yc = _Y(lin[tgt]), np.maximum(_Y(C), 1e-5)
+    w = (wcap[tgt] * ss(0.98, 0.82, Yt / Yc) * ok)[:, None].astype(np.float32)
+    out = lin.copy()
+    out[tgt] = lin[tgt] * (1 - w) + C * w
+    return out, int((w[:, 0] > 0.3).sum())
+
+
+def _inlay_paint(p, lin):
+    m, dep = eye_inlay(p)
+    if not m.any():
+        return lin, 0
+    a0, a1 = _lin(_hex(EYE_INLAY_DEEP)), _lin(_hex(EYE_INLAY))
+    t = ss(0.25, 0.85, dep[m])[:, None]
+    out = lin.copy()
+    out[m] = a0[None, :] * (1 - t) + a1[None, :] * t
+    return out, int(m.sum())
 
 
 def finger_pts(C, a, f, out, i, s=HS, curl=1.0):
@@ -1962,6 +2039,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     m = sel("face")
     if m is not None:
         pp = p[m]
+        cl, ncl = _face_clean(pp, n[m], lin[m])
+        cl, nin = _inlay_paint(pp, cl)
+        lin[m] = cl
+        log(f"sukri paint: face grain wiped on {ncl} texels round the eyes, {nin} eye-inlay texels")
         sd = face_sd(pp[:, 0], pp[:, 2])
         lin[m] = lin[m] * (1 - 0.30 * ss(-0.014, 0.0, sd))[:, None]
     # the light-head / dark-feet ramp and the highlight cap (not on the staff / cup: held at any height)
@@ -2214,6 +2295,7 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             log(f"  sukri print {nm}: {100 * share:.0f}% light")
             continue
         if nm in targets:
+            keep = eye_inlay(Pm[m])[0] if nm == "face" else None   # the warm eye inlay is never recoloured
             lin = _lin(c[own]) if own.any() else _lin(c)
             Y = _Y(lin)
             mid = (Y > np.quantile(Y, 0.25)) & (Y < np.quantile(Y, 0.9))
@@ -2225,7 +2307,10 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
                     Yf = Y[fr]
                     mid = fr & (Y > np.quantile(Yf, 0.25)) & (Y < np.quantile(Yf, 0.9))
             med = np.median(lin[mid] if mid.sum() > 20 else lin, axis=0)
-            out[m] = _shift_to(c, targets[nm], med)
+            sh = _shift_to(c, targets[nm], med)
+            if keep is not None and keep.any():
+                sh[keep] = c[keep]
+            out[m] = sh
             log(f"  sukri recolour {nm} -> {targets[nm]}")
     return out.astype(np.float32)
 

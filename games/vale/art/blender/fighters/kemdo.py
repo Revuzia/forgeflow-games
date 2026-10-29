@@ -1413,10 +1413,13 @@ def sculpts() -> list:
     def part(name, S, role, bind, tris, vs=1.0, uvw=1.0):
         out.append((name, S, vs, role, bind, tris, uvw))
 
-    # HOOD (rigid on the head): a peaked hood with a deep face opening and a thick rim
+    # HOOD (rigid on the head): a softly crowned hood with a deep face opening and a thick rim
+    # (integration pass, W5b verify sensitivity watch item 3: "Kemdo's hood comes to a small peak in the chip"; the
+    # sensitivity rule: no tall, pointed or conical hood): the crown's cone ends in a 4.2 cm round cap (was 8 mm, a
+    # point) at the same top (2.112: art.height, the hood crown, unchanged), leaning forward a little less
     hood = Sculpt("hood")
     hood.add(Ellipsoid((0, 0.02, 1.93), (0.138, 0.175, 0.172)), k=0.0)
-    hood.add(RoundCone((0, 0.035, 2.0), (0, 0.005, 2.104), 0.075, 0.008), k=0.05)
+    hood.add(RoundCone((0, 0.035, 2.0), (0, 0.012, 2.070), 0.075, 0.042), k=0.05)
     hood.add(Ellipsoid((0, 0.03, 1.80), (0.16, 0.18, 0.07)), k=0.07)
     hood.sub(Ellipsoid((0, -0.185, 1.885), (0.104, 0.12, 0.158)), k=0.02)
     hood.add(Torus((0, -0.118, 1.885), 0.112, 0.016, axes=sdf.frame((0, -1, 0.12), (1, 0, 0)) * np.array([[1.0], [0.72], [1.0]]),

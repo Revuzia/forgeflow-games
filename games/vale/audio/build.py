@@ -52,8 +52,8 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              release) sit >= ID_MIN_DIST_DB apart by BOTH 1/3-octave measures: from ID_FROM_HZ (125 Hz) up over the
              round-robin-averaged spectrum (a laptop plays no sub band, so none carries identity), and the
              confusability of the closest pair of takes (STFT, 125 Hz - 16 kHz, re the strongest band, -40 dB floor:
-             the final review's measure); every fighter has its own ability impact (hit, held to the same distance)
-             and dash, shared with no one;
+             the final review's measure); every fighter has its own ability impact and dash (hit, dash: held to the
+             same distance), shared with no one;
              the kits' attack swings, attack hits, ult releases and ability hits (LAPTOP_SLOTS) lose <= LAPTOP_MAX_LU on
              a laptop, a physical fighter's attack hit and ability hit (CONTACT_SLOTS: they replace the library's
              c_hit_phys_* on every auto and ability) has a contact (>= KIT_TRANSIENT_MIN) and no fighter's passes the
@@ -528,7 +528,7 @@ def impact_gate(contract: dict, ctrl: list[str], bound: dict) -> tuple[list[str]
 KIT_SLOTS = ('attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash')
 ID_SLOTS = ('attack_swing', 'attack_hit', 'ult_windup', 'ult_release')     # the sounds a player tells fighters apart by
 OWN_SLOTS = ('hit', 'dash')    # a fighter's own ability impact and dash: never shared, never the library's
-DIST_SLOTS = ID_SLOTS + ('hit',)   # … and the ability impact is told apart by ear like the attack and the ult
+DIST_SLOTS = ID_SLOTS + OWN_SLOTS  # … and the ability impact and the dash are told apart by ear like the attack and the ult
 ID_MIN_DIST_DB = 8.0     # 1/3-octave distance between two fighters' cues in the same identity slot, by BOTH measures:
 ID_FROM_HZ = 125.0       # … the bands from here up (a laptop speaker plays nothing below; sub bands cannot carry identity)
 CONFUSE_BANDS = 125.0 * 2.0 ** (np.arange(0, 22) / 3.0)   # … and per take, 125 Hz - 16 kHz (the final review's measure)
@@ -621,9 +621,9 @@ def _hit_sfx(node, out: set[str]) -> None:
 def kit_gate(contract: dict) -> tuple[list[str], dict]:
     """kits: every fighter has its whole kit (f_<fighter>_<slot> for every KIT_SLOTS slot, rendered); no identity cue
     (attack swing / hit, ult wind-up / release) nor own cue (ability hit, dash) is shared by two fighters or with a
-    unit; two fighters' cues in the same identity slot sit >= ID_MIN_DIST_DB apart by BOTH measures (1/3-octave
-    distance from ID_FROM_HZ up over the take-averaged spectrum, and the confusability distance of the closest pair of
-    takes, 125 Hz - 16 kHz); every kit attack swing, attack hit, ult release and ability hit loses <= LAPTOP_MAX_LU
+    unit; two fighters' cues in the same identity slot (the own ability hit and dash included: DIST_SLOTS) sit >=
+    ID_MIN_DIST_DB apart by BOTH measures (1/3-octave distance from ID_FROM_HZ up over the take-averaged spectrum, and
+    the confusability distance of the closest pair of takes, 125 Hz - 16 kHz); every kit attack swing, attack hit, ult release and ability hit loses <= LAPTOP_MAX_LU
     through the 220 Hz laptop roll-off, a physical fighter's attack hit and ability hit carry a contact (>=
     KIT_TRANSIENT_MIN of their first 30 ms above 2 kHz, every take) and no kit attack or ability hit passes
     TRANSIENT_SOFT_TOP; every cue that can fire more than once a second (fighters' and units' attacks and hits, every ability hit,

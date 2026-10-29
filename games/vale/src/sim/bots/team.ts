@@ -401,6 +401,7 @@ export class TeamBrain {
       else if (this.phase === 'mid') group = (enemyLost > 0 && aliveDiff >= 1) || aliveDiff >= 2 || levelDiff >= 8 || w.time >= 900;
     }
     // choose the siege target among open enemy structures
+    const prevSiege = this.siege;
     let best: Entity | null = null, bestInfo: StructInfo | undefined, bestScore = -Infinity;
     let towersLeft = 0;
     // (only towers that can be hit count: a tower held behind a standing gate — a Bell Needle behind its
@@ -426,6 +427,9 @@ export class TeamBrain {
         const l = info.lane >= 0 ? k.lanes[info.lane] : null;
         const p = l ? progress(l, this.team, info.s) / l.length : 1;
         score = 100 - p * 50 + (l ? tp.ownN[l.index] * 2 : 0) - (e.hp / Math.max(1, e.maxHp)) * 10;
+        // (objectiveSense, W4 G3 refix: the tower the team is already on keeps it — a group that turns to another road
+        // whenever a wave count changes walks the map instead of taking towers)
+        if (d.objectiveSense && e === prevSiege) score += 15;
       }
       if (score > bestScore) { bestScore = score; best = e; bestInfo = info; }
     }
@@ -501,7 +505,9 @@ export class TeamBrain {
     for (let i = 0; i < this.defend.length; i++) { if (this.defend[i] >= 0.7) return; threat = Math.max(threat, this.defend[i]); }
     const now = w.time, d = this.diff, sense = d.objectiveSense;
     // (objectiveSense: a road with a stacked enemy wave deep in our half is a threat too — no waiting at a door then)
-    if (sense) for (const l of this.k.lanes) if (this.perc.enemyN[l.index] >= 6 && this.perc.enemyFront[l.index] < l.length * 0.45 && this.perc.ownN[l.index] <= 1) threat = Math.max(threat, 0.5);
+    if (sense) for (const l of this.k.lanes) if (this.perc.enemyN[l.index] >= 5 && this.perc.enemyFront[l.index] < l.length * 0.5 && this.perc.ownN[l.index] <= this.perc.enemyN[l.index] - 3) threat = Math.max(threat, 0.5);
+    // (objectiveSense: a road under threat comes first — Wicks crashing into an empty base end games, a camp does not)
+    if (sense && threat >= 0.3) return;
     // (objectiveSense: where the team is — an even-numbers call is for a camp on its way, not one across the map)
     let cx = 0, cy = 0, cn = 0;
     for (const f of this.perc.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }

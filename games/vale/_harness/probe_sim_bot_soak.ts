@@ -13,7 +13,8 @@
 //                             counts as later than all; enforced only with ≥ 16 RIFT games per difficulty —
 //                             the 8-seed quick run reports it)
 //   difficulty (gameplay:G3)  veteran beats novice ≥ 85 %, adept ≥ 65 % of mirrored games (each seed
-//                             played twice with the sides swapped)
+//                             played twice with the sides swapped; 20 seeds = 40 games a tier, enforced only
+//                             with ≥ MIRROR_MIN_GAMES games a tier — judge it on two seed sets, --seed0 1 and 21)
 //   bridge     (gameplay:G5)  ≤ 25 % of games end in sudden death · 0 cores fall with a structure they
 //                             require still standing · median length 15–18 min
 //   fray       (gameplay:G6, G9) FRAY on the bots' own loadouts, 10 distinct fighters a game (rotated by seed): ≥ 85 %
@@ -35,7 +36,7 @@
 //                                                       8 seeds × adept + veteran, cut at 15:00
 //   node _harness/probe_sim_bot_soak.ts --full          the soak: RIFT 20 seeds × adept + veteran (full
 //                                                       games), BRIDGE 20 × adept + veteran, mirrored
-//                                                       veteran-vs-novice and veteran-vs-adept (10 seeds
+//                                                       veteran-vs-novice and veteran-vs-adept (20 seeds
 //                                                       × 2 sides each), FRAY 50 × adept + veteran, 3 workers
 //   flags: --seeds N · --seed0 N · --diffs adept,veteran · --suites rift,bridge,mirror,fray · --cut <s>
 //          --fray-seeds N (default 50: the 85 % lull gate needs more than 30 games to stop flipping on noise)
@@ -63,7 +64,9 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28)
+const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace', 'difficulty']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28); difficulty: W4 refix round 1 (2026-10-29)
+/** the mirrored-difficulty bars need this many games a tier before they fail the probe (fewer: report only) */
+const MIRROR_MIN_GAMES = 40;
 /** a fighter's FRAY placement band is enforced on its mean over every FRAY game it played (both difficulties pooled:
  *  a placement's spread is ~2.8, so ~30 games a difficulty leave ±0.5 of noise per fighter), with at least this many */
 const FRAY_MIN_PER_FIGHTER = 40;
@@ -89,7 +92,7 @@ const RULES = opt('rules', '');
  *  (families: spells = setup.spells, items, units, teamBuffs). A patched run is never a gate result. */
 const PATCH = opt('patch', '');
 const LABEL = opt('label', FULL ? 'full' : 'quick');
-const MIRROR_SEEDS = Number(opt('mirror-seeds', '10'));
+const MIRROR_SEEDS = Number(opt('mirror-seeds', '20'));
 
 // ── catalog ─────────────────────────────────────────────────────────────────────────────────────
 function loadCatalog(): CatalogT {
@@ -578,7 +581,8 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     for (const g of gs) for (const s of g.seats) { if (g.job.diffs[s.team] === 'veteran') k.vet += g.kills[s.p]; else k.weak += g.kills[s.p]; }
     text.push('', `mirror veteran vs ${weak}: veteran wins ${vetWins}/${gs.length}; kills per game ${(k.vet / gs.length).toFixed(1)} vs ${(k.weak / gs.length).toFixed(1)}; median length ${median(gs.map((g) => g.dur / 60)).toFixed(1)} min`);
     const target = weak === 'novice' ? 0.85 : 0.65;
-    gates.push({ group: 'difficulty', item: 'gameplay:G3', label: `veteran beats ${weak} (mirrored)`, value: `${vetWins}/${gs.length} (${pct(vetWins / gs.length)})`, target: `≥ ${target * 100} %`, pass: vetWins / gs.length >= target, n: gs.length });
+    const fewM = gs.length < MIRROR_MIN_GAMES;
+    gates.push({ group: 'difficulty', item: 'gameplay:G3', label: `veteran beats ${weak} (mirrored)${fewM ? ` (fewer than ${MIRROR_MIN_GAMES} games: report only)` : ''}`, value: `${vetWins}/${gs.length} (${pct(vetWins / gs.length)})`, target: `≥ ${target * 100} %`, pass: vetWins / gs.length >= target, n: gs.length, reportOnly: fewM });
   }
   // ── BRIDGE ──
   const br = games.filter((g) => g.job.suite === 'bridge');
