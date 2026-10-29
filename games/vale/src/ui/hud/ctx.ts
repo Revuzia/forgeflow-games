@@ -7,7 +7,7 @@
 // the HUD's rAF loop and once after every render of the widget. `put` / `setVar` / `setW` skip the DOM
 // write when the value did not change, so a quiet tick costs a few comparisons per widget.
 
-import { createContext } from 'preact';
+import { Component, createContext, createElement, type ComponentType, type FunctionComponent, type VNode } from 'preact';
 import { useContext, useEffect, useLayoutEffect, useReducer, useRef } from 'preact/hooks';
 import type { Signal } from '@preact/signals';
 import type { MatchClient } from '../../contracts/session.ts';
@@ -61,6 +61,20 @@ export function useViewKey(key: () => string | number): void {
     const k = fn.current();
     if (k !== last.current) { last.current = k; bump(0); }
   }), [model]);
+}
+
+/** a prop-less widget that renders only on its own state (its `useViewKey` bumps and the signals it reads),
+ *  never because its parent re-rendered: memo() without preact/compat (whose global option hooks would
+ *  change every form control in the app). The HUD context value is stable per match (index.tsx), so the
+ *  context never forces it either. HUD-4: the sky strip re-renders on its own score key and with the HUD
+ *  root (the cursor class); the ledger line inside it must not. */
+export function pinned(c: FunctionComponent): ComponentType {
+  class Pinned extends Component {
+    shouldComponentUpdate(): boolean { return false; }
+    render(): VNode { return createElement(c, null); }
+  }
+  (Pinned as unknown as { displayName: string }).displayName = `Pinned(${c.displayName || c.name})`;
+  return Pinned;
 }
 
 /** a DOM writer for a widget's continuous values: once per new sim tick, and after each of its renders */

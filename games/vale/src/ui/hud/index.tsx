@@ -50,7 +50,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
   const { cv, state, overlay, sound, session } = app;
   const client = p.client;
   const surface = useRef<HTMLDivElement>(null);
-  const r = (state.renderer ?? {}) as InputRenderer;
+  const r = useMemo(() => (state.renderer ?? {}) as InputRenderer, [state.renderer]);
 
   const built = useMemo(() => {
     const model = new HudModel(client, cv);
@@ -139,10 +139,12 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
   // first in the capture phase); the scoreboard never needs Esc (it is held)
   useEsc(() => { if (shopOpen.value) { shopOpen.value = false; return true; } return false; });
 
-  const ctx: HudCtx = {
+  // one context value per match: a new object per HUD render would force every useHud() consumer to
+  // re-render, pinned ones included (HUD-4)
+  const ctx = useMemo((): HudCtx => ({
     client, model, input, index, r, shopOpen, board, statsOpen, mapShape,
     key: (action: string) => keyShort(input.keymap.code(action as Action)),
-  };
+  }), [client, model, input, index, r, shopOpen, board, statsOpen, mapShape]);
   const side = state.settings.value.gameplay.minimapSide;
   const cursor = input.cursor.value;
   return (

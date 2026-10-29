@@ -16,7 +16,7 @@ import { Portrait } from '../components/Portrait.tsx';
 import { roman } from '../components/Seat.tsx';
 import { SeatGlyph } from '../components/Glyphs.tsx';
 import { fmtClock, fmtInt } from '../format.ts';
-import { put, REL_VAR, setCls, setVar, useHud, useViewKey, useWriter } from './ctx.ts';
+import { pinned, put, REL_VAR, setCls, setVar, useHud, useViewKey, useWriter } from './ctx.ts';
 import { SideGlyph } from './glyphs.tsx';
 import type { Cause, KillRow, Who } from './model.ts';
 
@@ -55,7 +55,7 @@ export function SkyStrip(): JSX.Element {
         {clock}
         <span class="sky__side t-caption">{limit && !pre ? cv.t('hud.fray.clock', 'Ends at {t}', { t: fmtClock(limit) }) : ''}</span>
         {v.suddenDeath ? <span class="sky__sd t-label">{cv.t('hud.sudden_death', 'Sudden death')}</span> : null}
-        <div class="sky__under"><span /><span /><span class="sky__under-r"><SkyLedger /></span></div>
+        <div class="sky__under"><span /><span /><span class="sky__under-r"><LedgerSlot /></span></div>
       </header>
     );
   }
@@ -76,7 +76,7 @@ export function SkyStrip(): JSX.Element {
         <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}>{b?.structuresDestroyed ?? 0}<StructGlyph /></span>
         <span class="sky__mark" style={{ color: REL_VAR.enemy }}><SideGlyph team={b?.team ?? 1} size={14} /></span>
       </div>
-      <div class="sky__under"><span /><ObjectiveChips /><span class="sky__under-r"><SkyLedger /></span></div>
+      <div class="sky__under"><span /><ObjectiveChips /><span class="sky__under-r"><LedgerSlot /></span></div>
     </header>
   );
 }
@@ -112,6 +112,8 @@ export function SkyLedger(): JSX.Element | null {
     </span>
   );
 }
+/** the ledger as the sky strip mounts it: renders on its own numbers only (B4 / HUD-4) */
+const LedgerSlot = pinned(SkyLedger);
 const StructGlyph = (): JSX.Element => <svg class="sky__sg" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l3.5 9h-7z" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>;
 
 /** one chip per objective unit kind (camps of the same unit share a chip: the soonest one) */
