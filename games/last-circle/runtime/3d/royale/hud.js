@@ -297,6 +297,7 @@ html.lc-touch .lc-circ-l { display: none; } html.lc-touch .lc-circ-s { display: 
 .lc-dp .hs { font-size: ${MINFS(10)}; font-weight: 900; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; background: #ffc83d; color: #1a1204; }
 .lc-dp.rc { color: #cfe4ff; }
 .lc-dp .lab-s { display: none; }
+.lc-rs { display: contents; }
 /* R1 (hud_checks: with the LC-81 recap row the desktop banner was 148 px tall at 1280x720 / 1366x768, bar 120 and <= 12 % of the
    screen; with a second damage source 122 px): desktop only (html:not(.lc-touch)) the rows are tighter - a 20 / 22 px title,
    15 px pill lines with a slim HEADSHOT tag (it set the pill's height: 26 px), 2 px gaps, a slimmer MATCH STATS pill - so all four
@@ -308,6 +309,18 @@ html:not(.lc-touch) .lc-d2 { gap: 2px 12px; }
 html:not(.lc-touch) .lc-dp { padding: 1px 12px; line-height: 15px; }
 html:not(.lc-touch) .lc-dp .hs { line-height: 12px; padding: 1px 6px; }
 html:not(.lc-touch) .lc-dbtn { padding: 2px 14px; }
+/* R2 (4+ damage sources: the LAST 10 S row is three names + weapons + "+N more", ~950 px at full length, so inside the 680 px banner of a
+   1280 x 720 screen the names - the only shrinkable items - were squeezed to 0 px): the recap's sources are wrapping groups. A name is never
+   shrunk (an ellipsis only past 150 px); a group is at most 255 px, and only its "149 (Grenade Launcher x2)" text ellipsizes to fit. Label +
+   3 groups + "+N more" <= 60 + 3 x 255 + 50 + gaps, so the row wraps to at most TWO lines (line 2 <= 255 + 255 + 50 + 2 x 14 = 588 px of the
+   622 px pill at 1280; the banner keeps its anchor and stays <= 120 px). The "·" separators give way to a wider gap (a wrapped line never
+   starts with one); a 2-line pill takes a 10 px radius (a 1-line pill is 17 px tall, so it still renders round) */
+html:not(.lc-touch) [data-lc=deathrecap] .lc-dp { flex-wrap: wrap; justify-content: center; column-gap: 14px; row-gap: 0; border-radius: 10px; }
+html:not(.lc-touch) .lc-rs { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: min(255px, 100%); }
+html:not(.lc-touch) .lc-rs .sep { display: none; }
+html:not(.lc-touch) .lc-rs b { flex: 0 0 auto; max-width: 150px; }
+html:not(.lc-touch) .lc-rs .rd { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+html:not(.lc-touch) .lc-rs .hs { flex: 0 0 auto; }
 /* ---- post-match: summary + standings ---- */
 .lc-pm { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 18px; width: min(1000px, calc(100% - 32px)); max-height: calc(100% - 28px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 4px; }
 .lc-pm-sum { flex: 1 1 360px; max-width: 440px; padding: 28px 30px 24px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; overflow: hidden; }
@@ -5316,12 +5329,15 @@ function showDeath(W, killerId, weaponId) {
     const d3 = h("div", null, null, box); d3.className = "lc-d2"; d3.dataset.lc = "deathrecap";
     const p3 = h("div", null, null, d3); p3.className = "lc-dp rc";
     h("span", null, "LAST 10 S", p3).className = "lab";
+    // R2: each source is one .lc-rs group (display: contents by default = the flat row it always was); desktop and tablets lay the groups
+    // out as wrapping units so a long recap goes to a second line with every name whole instead of squeezing the names to 0 px
     rec.slice(0, 3).forEach((r, i) => {
-      if (i) h("span", null, "·", p3).className = "lab";
-      const nm = h("b", null, r.name, p3);
+      const g = h("span", null, null, p3); g.className = "lc-rs";
+      if (i) h("span", null, "·", g).className = "lab sep";
+      const nm = h("b", null, r.name, g);
       if (r.src === W.player.id) nm.style.color = "#ffb36a";
-      h("span", null, r.dmg + (r.what ? " " + r.what : ""), p3);
-      if (r.heads) h("span", null, r.heads + " HS", p3).className = "hs";
+      h("span", null, r.dmg + (r.what ? " " + r.what : ""), g).className = "rd";
+      if (r.heads) h("span", null, r.heads + " HS", g).className = "hs";
     });
     if (rec.length > 3) h("span", null, "+" + (rec.length - 3) + " more", p3).className = "lab";
     R._deathRecap = rec;
