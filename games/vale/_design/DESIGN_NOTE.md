@@ -74,7 +74,7 @@ Eleven notes in `_design/research/` were written on 2026-10-07, before any conte
 
 **Found.** Keep the centre clear and the edges dense; colour shows allegiance, shape and position show identity; health in fixed units; structured pings with rate limits; explain every death; the camera is a fairness system (§0). Map geometry should give both teams the same view depth (§9a.8).
 
-**Decided.** The bible's HUD budget: Dial Bar bottom centre, minimap bottom right and swappable (`gameplay.minimapSide`), sky strip on top, always-on HUD ≤ 11% of the screen and nothing in the centre 40% × 50%. Health ticks every 100 HP, heavy every 1,000. A fixed 52° camera with a 26° vertical field of view and the same zoom range for everyone, and every team map attacks along the screen horizontal, mirrored across the noon line (STYLE_BIBLE "In-game camera"). Pings: a wheel on G, at most 5 per 4 s per seat (CONTRACT §5.1, `src/input/controller.ts`), one sound per ping kind (`content/audio.json`), off in FRAY. A death recap sits in the HUD (`src/ui/hud/panels.tsx`).
+**Decided.** The bible's HUD budget: Dial Bar bottom centre, minimap bottom right and swappable (`gameplay.minimapSide`), sky strip on top, always-on HUD ≤ 14% of the screen (the shipped kit's frame boxes, hud HUD-8) and nothing in the centre 40% × 50%. Health ticks every 100 HP, heavy every 1,000. A fixed 52° camera with a 26° vertical field of view and the same zoom range for everyone, and every team map attacks along the screen horizontal, mirrored across the noon line (STYLE_BIBLE "In-game camera"). Pings: a wheel on G, at most 5 per 4 s per seat (CONTRACT §5.1, `src/input/controller.ts`), one sound per ping kind (`content/audio.json`), off in FRAY. A death recap sits in the HUD (`src/ui/hud/panels.tsx`).
 
 ### r05 · Client flow and menu craft (`r05_client_flow_menu_craft.md`)
 
@@ -234,13 +234,13 @@ Pitch 52°, vertical field of view 26° (44.6° horizontal at 16:9), distance 28
 
 | Element | Where | Size at 1080p |
 |---|---|---|
-| Dial Bar | bottom centre | 640 × 132 |
-| Minimap RIFT · BRIDGE · FRAY | bottom right (swappable) | 352 × 198 · 384 × 96 · 232 disc |
-| Sky strip (score, clock, objectives) | top centre | 720 × 48 |
+| Dial Bar (frame box: upper arc and portrait slab) | bottom centre | 776 × 160 |
+| Minimap RIFT · BRIDGE · FRAY | bottom right (swappable) | 352 × 228 · 384 × 108 · 232 disc |
+| Sky strip (score, clock, objectives) · ledger line | top centre · under its right end | 760 × 56 · 200 × 20 (FRAY 110 × 20) |
 | Ally frames · Hour Board | left edge · top right | 4 × 168 × 52 · 220 × 236 |
-| Overhead bar | head + 0.35 m, fixed screen size | HP 82 × 9 over resource 82 × 4; ticks every 100 HP, heavy every 1,000 |
+| Overhead bar | head + 0.35 m, fixed screen size | HP 104 × 10 over resource 104 × 4; ticks every 100 HP, heavy every 1,000 |
 
-Always-on HUD ≤ 11% of the screen (RIFT 10.79%, BRIDGE 9.20%, FRAY 10.84%) and peak ≤ 17%; the centre 40% × 50% holds no HUD. Cooldowns are ink shadows sweeping clockwise from 12 o'clock. Enemy telegraph fill 16 → 30% with a 90% edge, ally edges at 45%, overlaps capped at 40%; telegraphs are never white, never pulse above 2 Hz and look the same on every tier. Damage numbers show only your own hits and heals of ≥ 5% max HP, merged per 0.5 s, at most 8 on screen.
+Always-on HUD ≤ 14% of the screen (RIFT 13.79%, BRIDGE 11.92%, FRAY 13.25%) and peak < 20% (RIFT 19.65%), measured on the shipped kit (`_design/sections/client_hud.md` §4.1); the centre 40% × 50% holds no HUD. Cooldowns are ink shadows sweeping clockwise from 12 o'clock. Enemy telegraph fill 16 → 30% with a 90% edge, ally edges at 45%, overlaps capped at 40%; telegraphs are never white, never pulse above 2 Hz and look the same on every tier. Damage numbers show only your own hits and heals of ≥ 5% max HP, merged per 0.5 s, at most 8 on screen.
 
 ### 4.7 Look rules
 

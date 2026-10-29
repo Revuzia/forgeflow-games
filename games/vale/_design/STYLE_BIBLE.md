@@ -98,15 +98,15 @@ You see yourself in Noonwhite with your glyph; your seat colour lines your bar p
 
 | Element | Where | Size (1080p) | Screen share |
 |---|---|---|---|
-| Dial Bar | bottom centre | 640×132 | 4.07% |
-| Minimap RIFT · BRIDGE · FRAY | bottom right (swappable) | 352×198 · 384×96 · 232 disc | 3.36 · 1.78 · 2.60% |
-| Sky strip: score, clock, objectives | top centre | 720×48 | 1.67% |
+| Dial Bar (frame box: upper arc and portrait slab) | bottom centre | 776×160 | 5.99% |
+| Minimap RIFT · BRIDGE · FRAY | bottom right (swappable) | 352×228 · 384×108 · 232 disc | 3.87 · 2.00 · 2.60% |
+| Sky strip: score, clock, objectives · ledger line | top centre · under its right end | 760×56 · 200×20 (FRAY 110×20) | 2.05 · 0.19% (FRAY 0.11) |
 | Ally frames (team modes) · Hour Board (FRAY) | left edge · top right | 4×168×52 · 220×236 | 1.69 · 2.50% |
-| Kill feed (3 rows) · announcer · chat | top right · under strip · bottom left | contextual | 1.46 · 1.73 · 2.67% |
+| Kill feed (3 rows) · announcer · feed (the chat region) | top right · under strip · bottom left | contextual | 1.46 · 1.73 · 2.67% |
 | Overhead bar | head + 0.35 m, fixed screen size | fighter HP 104×10 over resource 104×4, level chip 22, 80% ink plate · Wick 58×5 · monster 104×8 · structure 220×16 | ticks every 100 HP, heavy every 1,000; structures every 25% |
 | Telegraph | overlay pass, 1 px dark outer keyline | enemy fill 16 → 30%, edge 90%, 3 px · ally edge 45% · own aim 12% / 90% at 2.5 px, keyline 55%, range ring 45% | overlaps MAX-capped at 40% |
 
-- **Always-on ≤ 11%** (RIFT 10.79, BRIDGE 9.20, FRAY 10.84); **peak ≤ 17%** (16.65). The centre 40% × 50% holds no HUD.
+- **Always-on ≤ 14%** (RIFT 13.79, BRIDGE 11.92, FRAY 13.25); **peak < 20%** (RIFT 19.65, BRIDGE 17.78, FRAY 19.11). The centre 40% × 50% holds no HUD. Sizes are the shipped kit's frame boxes (`src/ui/hud/frame_layout.ts`, measured live, client_hud §4.1, hud HUD-8); a new always-on element fits inside these totals or takes its pixels from an existing box.
 - Dial Bar: portrait with level ring, HP over resource, Gleam; items 3×2, abilities 64 px, ultimate 76, spells 48. Cooldowns are ink shadows sweeping clockwise from 12 o'clock.
 - Bars: lost HP flashes white for ~4 frames, then the Noonwhite damage trail (150 ms hold, 450 ms out); hatched shield; your own fill is Sap (the Dial Bar's HP) so your trail reads. Enemy Wick bars always show; allied ones when damaged or targeted.
 - Status: your buffs then debuffs ride over the Dial Bar (26 px chips, ink time sweep, Mono stacks; azure keyline helps, HARM keyline + corner wedge harms); loss of control names itself in a chip over the bar with its seconds; slots you cannot cast are darkened with an ember wash and the status mark; a refused press says why for 1.2 s.
