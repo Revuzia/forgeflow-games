@@ -530,7 +530,7 @@ export class Toasts {
         if (now - (this.lastRefusal.get(rk) ?? -1e9) < BURST_MS * 4) return;
         this.lastRefusal.set(rk, now);
         const reach = typeof e.a === 'number' && e.a > 0 ? ` It holds ${e.a >= 1000 ? `${Math.round(e.a / 100) / 10} km` : `${Math.round(e.a)} m`} out now.` : '';
-        this.show({ kind: 'god', title: `The ${kind} draws back · ${view.planet(planet)?.name ?? ''}`, text: `The ${kind} draws back from the rain.${reach}`, date, at, select: e.ref ? { ...e.ref, planet } : null, planet });
+        this.show({ kind: 'god', title: `${cap(kind)} eases · ${view.planet(planet)?.name ?? ''}`, text: `The ${kind} draws back from the rain.${reach}`, date, at, select: e.ref ? { ...e.ref, planet } : null, planet });
         return;
       }
       case 'ore.seeded': {
