@@ -2254,7 +2254,7 @@
    "verdict": "confirmed",
    "wave": "W1",
    "status": "done",
-   "status_evidence": "The match draws the fighters' face-locked LOD1 (engine-lod, integ2_engine_verify2 pass: perf_1080 --prod match peak 483,341 tris, 40 programs, 273 draws). Integration run 2 gate perf_1080 --prod (all presets, LOD1 with the UV weight 60): GATE PASS, match peak 479k tris, 40 programs, 273 draws; High 60.1 fps p95 16.8 ms 254k tris 174 draws 37 programs; memory +1.3 % over 4 rebuilds (_harness/_reports/integ_lead_perf_1080.json).",
+   "status_evidence": "The match draws the fighters' face-locked LOD1 (engine-lod, integ2_engine_verify2 pass: perf_1080 --prod match peak 483,341 tris, 40 programs, 273 draws). Integration run 2 gate perf_1080 --prod (all presets, LOD1 with the UV weight 60): GATE PASS, match peak 479k tris, 40 programs, 273 draws; High 60.1 fps p95 16.8 ms 254k tris 174 draws 37 programs; memory +1.3 % over 4 rebuilds (_harness/_reports/integ_lead_perf_1080.json; re-run after every gate change, integ_lead_final_perf_1080.json: the same peak, GATE PASS).",
    "status_history": [
     "W1_verify1: partly",
     "integ_chars_verify1: partly",
