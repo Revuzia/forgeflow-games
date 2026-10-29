@@ -2,7 +2,7 @@
 
 Identity: Lumen glass in three states. Whole: long clean arcs of cold glass light. Broken: a burst and a
 field of splinters (opaque glass chunks, twinkling glints, a frosted floor). Great: the blade reforms out of
-the splinters, oversized. Where Ardit is a pane (flat planes, warm sun, caustics), Ervet is the blade
+the splinters at its own size (ervet.md: the blade must not grow). Where Ardit is a pane (flat planes, warm sun, caustics), Ervet is the blade
 (arcs, splinters, fracture, cold DAWNGLASS → team). Shards thrown outward are harm; flakes rising are her guard.
 
 Anchors (src/render/director.ts): Heavy Arc, Shatter, Reform and the Whole Again landing are areas at her feet
@@ -192,11 +192,13 @@ def defs() -> list:
                  comment="T3 · Lumen · Whole Again leap: launch flash, dust, glass chunks and a ring; a glass-light streak along the arc "
                          "sheds splinters and side-streaks. Timed bursts"))
 
-    # ── ult · Whole Again, the landing: the blade reforms oversized, 3.5 m (area, T4) ───────────────────────
+    # ── ult · Whole Again, the landing: the blade reforms whole at its own size, 3.5 m (area, T4) ──────────
+    # the glass blade ghost is her blade's own length (1.31 m; scale 1.3 x stretch 0.52 = ~0.15 m wide), never larger
+    # (integration run 2: the oversized 3.4 m ghost read as the cut 'oversized blade')
     D.append(vfx("ervet_ult_whole", 1.5,
                  flash(4, at="ground", scale=1.7),
-                 mesh("origin", "blade", [[0, 2.6], [0.15, 3.4], [1, 3.5]], 0.6, color=[[0, WHITE], [0.3, GLASS], [1, "team"]], alpha=[[0, 1], [0.6, 0.9], [1, 0]],
-                      emissive=12, rim="team", rim_emissive=6.0, rotate=[-90, 0, 0], stretch=[3.4, 1, 1], offset=[0.6, 0.35, 0],
+                 mesh("origin", "blade", [[0, 1.0], [0.15, 1.28], [1, 1.32]], 0.6, color=[[0, WHITE], [0.3, GLASS], [1, "team"]], alpha=[[0, 1], [0.6, 0.9], [1, 0]],
+                      emissive=12, rim="team", rim_emissive=6.0, rotate=[-90, 0, 0], stretch=[0.52, 1, 1], offset=[0.6, 0.68, 0],
                       dissolve=[[0, 0], [0.55, 0.05], [1, 1]], edge="team", edge_emissive=8.0, noise=0.4, noise_scale=3.0),
                  shockwave("ground", radius=(0.15, 1.0), width=(0.7, 0.12), life=0.4, emissive=10, sharp=2.2, fit=True),
                  shockwave("ground", color=GLASS, radius=(0.1, 0.85), width=(0.35, 0.06), life=0.55, emissive=6.0, delay=0.08, alpha=(0.8, 0.5, 0), fit=True),
@@ -211,7 +213,7 @@ def defs() -> list:
                  dust("ground", 12, size=1.4, speed=(2.5, 4.5), radius=0.8, delay=0.12),
                  light("ground", "team", 26, 10, 0.5),
                  shake(0.7),
-                 comment="T4 · Lumen · Whole Again landing: a white core, the oversized blade slams down whole (white-hot glass to team, "
+                 comment="T4 · Lumen · Whole Again landing: a white core, her blade slams down whole at its own size (white-hot glass to team, "
                          "dissolving at its edge), a team ring to 3.5 m and an upright ring burst, a storm of splinters and glass chunks, "
                          "the floor frosts and cracks, dust settles"))
 
@@ -229,9 +231,9 @@ def defs() -> list:
                  L("decal", at="ground", shape="line", style="light", length=4.5, width=0.12, radius=1.0, life=0.5, color=GLASS,
                    alpha=[0.6, 0.4, 0], emissive=2.0, fit=True, secondary=True),
                  # whole again at the hilt as they arrive
-                 mesh("origin", "blade", [[0, 2.6], [0.15, 3.3], [1, 3.4]], 0.6, color=[[0, WHITE], [0.3, GLASS], [1, "team"]],
+                 mesh("origin", "blade", [[0, 1.0], [0.15, 1.26], [1, 1.3]], 0.6, color=[[0, WHITE], [0.3, GLASS], [1, "team"]],
                       alpha=[[0, 0], [0.2, 0], [0.32, 1], [0.7, 0.9], [1, 0]], emissive=12, rim="team", rim_emissive=6.0, rotate=[-90, 0, 0],
-                      stretch=[3.4, 1, 1], offset=[0.6, 0.35, 0], dissolve=[[0, 1], [0.32, 0.05], [0.7, 0.05], [1, 1]], edge="team",
+                      stretch=[0.52, 1, 1], offset=[0.6, 0.68, 0], dissolve=[[0, 1], [0.32, 0.05], [0.7, 0.05], [1, 1]], edge="team",
                       edge_emissive=8.0, noise=0.4, noise_scale=3.0),
                  flash(3, at="origin", color=GLASS, scale=0.9, delay=0.3, light=False),
                  # the edge the shards came from, then the ring closing in behind them (the pull)
@@ -245,7 +247,7 @@ def defs() -> list:
                  dust("ground", 10, size=1.3, speed=(1.5, 3.5), radius=0.8, delay=0.1),
                  light("ground", "team", 24, 10, 0.5),
                  comment="T4 · Lumen · Whole Again (re-keyed): a white core, then every shard flies home along straight lines from the "
-                         "4.5 m ring into her hilt (the pull), the oversized blade condenses whole as they arrive, a ring closes in behind "
+                         "4.5 m ring into her hilt (the pull), her blade condenses whole at its own size as they arrive, a ring closes in behind "
                          "them, the floor frosts"))
 
     # ── passive · Dawnglass Edge: a lodged shard torn out, bursting 1.75 m round the target (area at the hit, T2) ─────

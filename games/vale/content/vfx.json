@@ -27688,7 +27688,7 @@
     ]
   },
   {
-    "$comment": "T4 · Lumen · Whole Again (re-keyed): a white core, then every shard flies home along straight lines from the 4.5 m ring into her hilt (the pull), the oversized blade condenses whole as they arrive, a ring closes in behind them, the floor frosts",
+    "$comment": "T4 · Lumen · Whole Again (re-keyed): a white core, then every shard flies home along straight lines from the 4.5 m ring into her hilt (the pull), her blade condenses whole at its own size as they arrive, a ring closes in behind them, the floor frosts",
     "id": "ervet_ult_shards_home",
     "duration": 1.5,
     "teamTint": true,
@@ -27820,19 +27820,19 @@
         "scale": [
           [
             0,
-            2.6
+            1.0
           ],
           [
             0.15,
-            3.3
+            1.26
           ],
           [
             1,
-            3.4
+            1.3
           ]
         ],
         "stretch": [
-          3.4,
+          0.52,
           1,
           1
         ],
@@ -27906,7 +27906,7 @@
         ],
         "offset": [
           0.6,
-          0.35,
+          0.68,
           0
         ]
       },
@@ -28191,7 +28191,7 @@
     ]
   },
   {
-    "$comment": "T4 · Lumen · Whole Again landing: a white core, the oversized blade slams down whole (white-hot glass to team, dissolving at its edge), a team ring to 3.5 m and an upright ring burst, a storm of splinters and glass chunks, the floor frosts and cracks, dust settles",
+    "$comment": "T4 · Lumen · Whole Again landing: a white core, her blade slams down whole at its own size (white-hot glass to team, dissolving at its edge), a team ring to 3.5 m and an upright ring burst, a storm of splinters and glass chunks, the floor frosts and cracks, dust settles",
     "id": "ervet_ult_whole",
     "duration": 1.5,
     "teamTint": true,
@@ -28212,19 +28212,19 @@
         "scale": [
           [
             0,
-            2.6
+            1.0
           ],
           [
             0.15,
-            3.4
+            1.28
           ],
           [
             1,
-            3.5
+            1.32
           ]
         ],
         "stretch": [
-          3.4,
+          0.52,
           1,
           1
         ],
@@ -28286,7 +28286,7 @@
         ],
         "offset": [
           0.6,
-          0.35,
+          0.68,
           0
         ]
       },
