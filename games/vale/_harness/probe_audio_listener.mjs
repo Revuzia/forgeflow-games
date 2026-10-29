@@ -120,7 +120,9 @@ if (BASELINE) {
 const mode = catalog.modes.find((m) => m.id === 'rift');
 const queue = catalog.queues.find((q) => q.mode === mode.id && q.kind === 'standard') ?? catalog.queues.find((q) => q.mode === mode.id);
 const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0));
-const YOU = 7;
+// your seat: 8 (rishal, shaftlight with the content catalog) dies often enough that gate A has a fight to hear
+// (5/7/6 deaths in 17 min on seeds 3/5/7); seat 7 (hesmi, a dialcross plinth) survives too well (2/0/2), so A was empty
+const YOU = 8;
 const seats = [];
 for (let i = 0; i < mode.teams * mode.perTeam; i++) {
   const fighter = catalog.fighters[(i * 7 + 3) % catalog.fighters.length].id;
