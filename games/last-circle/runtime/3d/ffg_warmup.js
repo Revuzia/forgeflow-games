@@ -231,9 +231,53 @@ function synthDepthReps(scene, camera, vsm, reps) {
   return res;
 }
 
+// ── the link-readiness wait (R1 boot): three's compileAsync, made safe against a teardown ────────────────────────────
+// WHY (sky_lowtier boot row, both verifier runs): renderer.compileAsync polls every material it compiled until its program
+// reports ready, from a setTimeout three owns and nobody can cancel. A tier change in a match re-runs this warm-up
+// (ffg_royale3d rewarmRoute); when the next match starts while that poll is still pending, teardownMatch disposes the old
+// match's materials: properties.get(disposed material) comes back empty, so three's poll reads undefined.isReady() and
+// throws (an uncaught page error at three.module.js checkMaterialsReady), and a program released by that dispose is
+// queried after gl.deleteProgram (GL_INVALID_VALUE: glGetProgramiv: Program object expected). The same compile() runs
+// here, but the wait is ours: a material disposed during the wait, one whose program is gone, or one whose program was
+// destroyed leaves the set instead of being queried; the wait is bounded (an optimisation only, never a hang).
+const READY_POLL_MS = 10, READY_MAX_MS = 20000;
+
+function compileAndWait(renderer, scene, camera, stats) {
+  if (typeof renderer.compile !== "function") return Promise.resolve();
+  const materials = renderer.compile(scene, camera);
+  const props = renderer.properties;
+  if (!(materials instanceof Set) || !props || typeof props.has !== "function") return Promise.resolve();
+  const pending = new Set(materials);
+  const onDispose = (ev) => { const m = ev && ev.target; if (m) { pending.delete(m); stats.readyDropped++; m.removeEventListener("dispose", onDispose); } };
+  for (const m of pending) m.addEventListener("dispose", onDispose);
+  const parallel = !!(renderer.extensions && renderer.extensions.get && renderer.extensions.get("KHR_parallel_shader_compile"));
+  const t0 = performance.now();
+  return new Promise((resolve) => {
+    const finish = () => { for (const m of pending) m.removeEventListener("dispose", onDispose); pending.clear(); resolve(); };
+    const check = () => {
+      try {
+        for (const m of pending) {
+          // has() first: get() would re-create an empty entry for a material three already forgot
+          const prog = props.has(m) ? props.get(m).currentProgram : undefined;
+          if (!prog || prog.program === undefined || typeof prog.isReady !== "function") { pending.delete(m); m.removeEventListener("dispose", onDispose); stats.readyDropped++; continue; }
+          if (prog.isReady()) { pending.delete(m); m.removeEventListener("dispose", onDispose); }
+        }
+      } catch (e) { stats.readyError = String(e && e.message || e); finish(); return; }
+      if (pending.size === 0) { finish(); return; }
+      if (performance.now() - t0 > READY_MAX_MS) { stats.readyTimedOut = pending.size; finish(); return; }
+      setTimeout(check, READY_POLL_MS);
+    };
+    // three's order: query right away when the status can be read without blocking, else give the driver a moment first
+    if (parallel) check(); else setTimeout(check, READY_POLL_MS);
+  });
+}
+
 /**
  * @param kernel   Kernel3D (renderer, scene, camera, optional composer)
- * @param opts     { extras?: Object3D[] }
+ * @param opts     { extras?: Object3D[], alive?: () => boolean }
+ *                 alive: checked after the (async) link wait; false = the scene this warm-up was for is gone (a teardown
+ *                 ran meanwhile), so the real frame of step 3 is skipped (stats.aborted) instead of drawing whatever the
+ *                 scene holds now.
  * @returns stats  { ms, target, forced, extras, skinBounds, depthVariants, programs: {before, afterCompile, afterRender} }
  *                 (depthVariants = depth signatures given their own depth material for the warm frame; absent without a shadow pass)
  */
@@ -243,7 +287,8 @@ export async function warmup(kernel, opts) {
   const composer = kernel.composer || null;
   const extras = (opts.extras || []).filter((o) => o && o.isObject3D);
   const t0 = performance.now();
-  const stats = { ms: 0, target: composer ? "composer" : "canvas", forced: 0, extras: extras.length, programs: { before: progCount(renderer), afterCompile: 0, afterRender: 0 } };
+  const alive = typeof opts.alive === "function" ? opts.alive : null;
+  const stats = { ms: 0, target: composer ? "composer" : "canvas", forced: 0, extras: extras.length, readyDropped: 0, programs: { before: progCount(renderer), afterCompile: 0, afterRender: 0 } };
 
   const prevTarget = renderer.getRenderTarget();
   const prevAutoClear = renderer.autoClear;
@@ -267,13 +312,21 @@ export async function warmup(kernel, opts) {
   scene.traverse((o) => { if (o.isSkinnedMesh === true && o.boundingSphere === null) { o.computeBoundingSphere(); stats.skinBounds++; } });
   try {
     renderer.setRenderTarget(composer ? composer.readBuffer : null);
-    ready = renderer.compileAsync ? renderer.compileAsync(scene, camera) : (renderer.compile(scene, camera), Promise.resolve());
+    ready = compileAndWait(renderer, scene, camera, stats);
   } finally {
     renderer.setRenderTarget(prevTarget);
     restore(st);
   }
   try { await ready; } catch (e) { /* an optimisation only — never block a match start on it */ }
   stats.programs.afterCompile = progCount(renderer);
+  if (alive && !alive()) {
+    // the scene was torn down (or a new match started building) during the wait: no frame of a scene this warm-up was not for
+    stats.aborted = true;
+    stats.programs.afterRender = progCount(renderer);
+    stats.ms = Math.round((performance.now() - t0) * 10) / 10;
+    kernel.lastWarmup = stats;
+    return stats;
+  }
 
   // 3: one real frame (synchronous), 4: exact restore.
   st = force(scene, extras);

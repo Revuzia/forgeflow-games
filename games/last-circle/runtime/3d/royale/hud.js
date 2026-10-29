@@ -297,6 +297,17 @@ html.lc-touch .lc-circ-l { display: none; } html.lc-touch .lc-circ-s { display: 
 .lc-dp .hs { font-size: ${MINFS(10)}; font-weight: 900; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; background: #ffc83d; color: #1a1204; }
 .lc-dp.rc { color: #cfe4ff; }
 .lc-dp .lab-s { display: none; }
+/* R1 (hud_checks: with the LC-81 recap row the desktop banner was 148 px tall at 1280x720 / 1366x768, bar 120 and <= 12 % of the
+   screen; with a second damage source 122 px): desktop only (html:not(.lc-touch)) the rows are tighter - a 20 / 22 px title,
+   15 px pill lines with a slim HEADSHOT tag (it set the pill's height: 26 px), 2 px gaps, a slimmer MATCH STATS pill - so all four
+   rows (title, killer, YOU DEALT, LAST 10 S) fit in ~100 px inside the same signed-off spot (the band's top, centred) */
+html:not(.lc-touch) .lc-death { gap: 2px; padding: 5px 16px 6px; }
+html:not(.lc-touch) .lc-dt, html:not(.lc-touch) .lc-dn { font-size: 20px; line-height: 22px; }
+html:not(.lc-touch) .lc-d1 { gap: 12px; }
+html:not(.lc-touch) .lc-d2 { gap: 2px 12px; }
+html:not(.lc-touch) .lc-dp { padding: 1px 12px; line-height: 15px; }
+html:not(.lc-touch) .lc-dp .hs { line-height: 12px; padding: 1px 6px; }
+html:not(.lc-touch) .lc-dbtn { padding: 2px 14px; }
 /* ---- post-match: summary + standings ---- */
 .lc-pm { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 18px; width: min(1000px, calc(100% - 32px)); max-height: calc(100% - 28px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 4px; }
 .lc-pm-sum { flex: 1 1 360px; max-width: 440px; padding: 28px 30px 24px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; overflow: hidden; }
@@ -708,6 +719,15 @@ html.lc-touch [data-lc=perf] { top: 16px !important; right: calc(var(--lc-sr) + 
   html.lc-touch .lc-d2 { gap: 2px 8px !important; }
   html.lc-touch .lc-dp { padding: 0 8px !important; line-height: 18px !important; }
   html.lc-touch .lc-dp .hs { line-height: 14px !important; padding: 1px 5px !important; }
+}
+/* R1 (hud_checks tab7 1024x600: the LC-81 recap row took the banner to 180..299, 16 px into the reticle arms at 283): on a SHORT
+   tablet the recap row folds away as it does on a phone (the killer row above already names the killer, the weapon and the
+   headshot) and the pill lines are 16 px: 180..~271. At least 900 px wide as well, so no phone matches it in either orientation
+   (on its side a phone is <= 520 px tall, upright < 900 px wide): every phone rule and size is untouched */
+@media (min-height: 520.5px) and (max-height: 760px) and (min-width: 900px) {
+  html.lc-touch [data-lc=deathrecap] { display: none !important; }
+  html.lc-touch [data-lc=death] { padding: 2px 12px 3px !important; }
+  html.lc-touch .lc-dp { line-height: 16px !important; }
 }
 /* a phone on its side (<= 520 px tall): a compact top stack, the quest card
    off (dailies still pay out and flash), the left column under the minimap
