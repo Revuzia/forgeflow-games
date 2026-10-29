@@ -1,0 +1,100 @@
+{
+ "fighter": "ulkro",
+ "score": 6.5,
+ "summary": "Not ON PAR (6.5/10). Three majors are confirmed (splash, secondary motion, form finish), one major is downgraded to minor (skins), and one minor is added (face). There is no sensitivity blocker.\n\nWhat holds:\n- The silhouette hook is real. Max IoU64 against any other fighter is 0.646 (Odrum), from art/renders/lineup/integ_chars_p2.json.\n- She separates from the lane by value: figure L* p50 66 against lane 39 (_harness/_reports/closing_ulkro_lane_sep.json).\n- The run has the second-longest stride for her height.\n\nSensitivity is clean:\n- The hood is a rounded cowl that sits close to the head. Its RoundCone tip tops out at 1.860 m, against the ellipsoid crown at 1.843 m (art/blender/fighters/ulkro.py:452-454). The model is rounder than the concept's peaked hood (_design/concept/ulkro.webp). In the match frames it reads as a dome (closing_ulkro_game_red_t150_x4.png).\n- The face is a canon Hourless wrap (WORLD.md:43). It is cloth with folds and a nose bump, not a hockey mask or a mannequin.\n\nWhat I measured myself:\n- Independent GLB skinning (_harness/_reports/closing_ulkro_verify_glb.txt) reproduces the death hold exactly: 682 body verts below -3 cm, shin.R -0.202 m, foot.R -0.205 m.\n- The GLB has 32 joints. Its only x_ channels are x_dart scale (attacks, cast_a1) and x_crest0-4 (death).\n- Splash grain: figure 4.7 against plate 0.5-0.6 (_harness/_reports/closing_ulkro_verify_splash_grain.txt).\n\nSeverity corrections:\n- M4 drops to minor. Skins as palette/material swaps are the owner's binding ruling. Highrim's game-camera delta sits mid-roster (p50 dE 6.8; ardit, ervet, sukri, tunlan and vashil are lower, per _harness/_reports/closing_ulkro_verify_skin_delta_roster.txt). Long Evening's brief never asks for a vfxTint, and 11 of 16 deluxe skins have none. The splash reuse is already counted in M1.\n- Within M3, the pauldron colour is on-brief: stone #B3AEA2 is L*71 at 9 %, and the match measures L*70-75 at 10-12 %. The concept's quiver is itself a pale wrapped flat case. Those two sub-claims are refuted; the wraps, boots, glass and smudges stand.\n- Within M2, the 20 cm death sink is roster-wide: 10 of 16 death holds sink 10 cm or more, and Ulkro is mid-pack (_harness/_reports/closing_ulkro_verify_death_floor_roster.txt). Alone it would be a minor. M2 stands on the rigid knee-length skirt, which boards over the thigh in the run, matching kemdo-M4, ardit-M3 and nurrow-M3.",
+ "gapStatus": [
+  {
+   "id": "Secondary clips: darts do not spill in death; run thigh shows over the skirt",
+   "status": "partly",
+   "evidence": "The reviewer's 'still_open' understates this; it is half fixed.\n- Fixed: death keys translation and rotation on x_crest0-4 (_harness/_reports/closing_ulkro_verify_glb.txt), and the darts lie along the ground in closing_ulkro_clip_death_end_x4.png.\n- Open: the run has no x_ channels, and the front skirt panel still boards up over the dark thigh (closing_ulkro_clip_run_x3.png, bottom row).\n- The death floor sink is real (-0.205 m) but roster-wide, so it is tracked under M2."
+  },
+  {
+   "id": "Splash pauldrons backlit into dark brown boards",
+   "status": "partly",
+   "evidence": "The dark brown-board read is gone, as the reviewer concedes. The W5b regrade of 10-29 00:14 leaves the plates purple-grey at L* 33-39 (closing_ulkro_splash_measure.txt), and the raised arms hide most of them (closing_ulkro_splash_upper_3skins_x1.5.png). That is better than the original defect but still dark against the pale-stone brief, so 'partly' rather than 'still_open'."
+  },
+  {
+   "id": "Pauldrons in the three.js views are thinner and mid-grey compared with the concept's broad pale plates",
+   "status": "open",
+   "evidence": "ulkro.glb is unchanged since 10-27 20:55, and the front close of three_ulkro.png samples L* 61-63. In the match they render at L* 70-75 and saturation 10-12 %. That matches the brief's stone #B3AEA2 (L* 71, 9 %), so the colour part is on-brief. The thin-plate form against the concept's broad two-tier plates remains."
+  },
+  {
+   "id": "Highrim hood and sleeves lean olive-khaki in shade",
+   "status": "closed",
+   "evidence": "Confirmed fixed. The three.js Highrim sleeve is #9A927E (hue 43, 18 %). The re-graded Highrim splash sleeves sample hue 29-37, a warm sand, not olive (closing_ulkro_splash_measure.txt; closing_ulkro_skins_close.png)."
+  },
+  {
+   "id": "Accent 0.48% is under the pipeline's 1.5% warning floor (warning only, gates pass)",
+   "status": "open",
+   "evidence": "Confirmed:\n- build_report_ulkro.json three_qa.accentPct is 0.48;\n- integ_chars_p2.json gives ulkro accentPctMax 0.16 with accentOk false (and valueGradientOk false).\n\nThe brief itself budgets 'about 0.3%' (_design/fighters/ulkro.md:103), so the low accent is a brief-level choice, not a build regression. Team identity in the match still comes from the ring and the bar."
+  }
+ ],
+ "findings": [
+  {
+   "id": "ULK-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splash and portraits are grainy model renders on painted plates, in one stiff frontal stand reused by all three skins",
+   "what": "All three splashes are the same frontal victory stand, framed the same way: parallel legs, one hand at the brow, the crest fanning to screen-left although the brief asks for screen-right. The figure is a Cycles render on a painted plate. Its grain, ring wraps, bulb boots and smeared projected tunic strokes do not match the plate's brushwork. The portraits are one pose recoloured on three plates.",
+   "evidence": "Re-measured on art/out/fighters/ulkro/*splash.png (10-29 00:14):\n- figure interior high-pass sigma 4.73-4.76, against plate sky 0.54-0.64;\n- luma max 204-207 (_harness/_reports/closing_ulkro_verify_splash_grain.txt).\n\nA grid scan shows figure cells at 4-9 and plate cells at 0.2-1.0.\n\nViewed: _harness/_shots/closing_ulkro_splashes_3up.png (same pose and framing three times), closing_ulkro_splash_torso_legs_x3.png (smears, ring wraps, bulb boots) and closing_ulkro_portraits_3up.png.\n\nThe brief's 'toward screen-right' is at _design/fighters/ulkro.md:176.",
+   "gauge": "A LoL champion's splash is a bespoke painted illustration with a staged action beat. Figure and backdrop share light and brushwork, and each skin has its own composition, with portraits cut from it.",
+   "fix": "- Stage the Run-up release on the high rim at dusk: low stride, thrower drawn back, the laid dart's dawnglass catching the sun as the key light.\n- Light the figure from the plate's sun, denoise the figure pass and add a painted-over pass.\n- Give each skin its own composition: Highrim on a side-lit strata cliff at noon; Long Evening with the lacquer fan backlit by festival lanterns.\n- Cut each skin's portrait from its own splash pass, and turn the crest to screen-right.",
+   "files": "art/blender/fighters/ulkro.py (SPLASH, per-skin splash poses), art/blender/common/plates.py, art/blender/common/render.py, art/out/fighters/ulkro/*splash.png, *portrait.png",
+   "size": "L",
+   "verifierNote": "Reproduced: the grain gap is 7-8x, all three cards share one pose, and the crest faces screen-left against the brief. The pipeline is roster-wide, but every other closing verifier confirmed this as a major for their fighter (ardit-M1, kemdo-M3, nurrow-M1, rishal-M1, tunlan-C3), so severity holds."
+  },
+  {
+   "id": "ULK-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "No secondary motion: the knee-length skirt boards up over the thigh in the run, and the hood-tail and sash are rigid; the death hold sinks the right leg 20 cm",
+   "what": "The rig has 32 joints and no cloth chains. The only x_ channels are x_dart scale and the death-only x_crest0-4.\n- The knee-length skirt is skinned to the thighs, so in the run the front panel lifts as a rigid board and the dark thigh shows across it.\n- The 0.38 m hood-tail ribbon and the sash never lag or settle.\n- The held death frame sinks shin.R and foot.R about 0.20 m into the floor, and mid-fall the laid dart reaches 0.27 m below ground.",
+   "evidence": "Independent probe (_harness/_reports/closing_ulkro_verify_glb.txt; scratchpad glbskin.py, linear-blend skinning, quantization aware):\n- death t=1.50 s: 682 verts below -3 cm, shin.R -0.202, foot.R -0.205, thigh.R -0.107, hips -0.067;\n- t=0.75 s: x_dart -0.267;\n- run: the body stays within -0.004 m of the ground and has no x_ channels.\n\nThe runtime holds the last death frame (src/render/actors.ts:1008-1009, clampWhenFinished), and there is no procedural cloth in src.\n\nShots: _harness/_shots/closing_ulkro_clip_run_x3.png (bottom row boarding) and closing_ulkro_clip_death_end_x4.png (stub right boot).\n\nRoster: 10 of 16 base GLBs sink 10 cm or more in their death hold (_harness/_reports/closing_ulkro_verify_death_floor_roster.txt).",
+   "gauge": "On a LoL champion, a long skirt, sash or hood-tail lags, overshoots and settles on stops, dashes and death, and stays in front of the legs in the run. Death poses rest on the ground.",
+   "fix": "- Add baked two-bone chains for the front and back skirt (x_skirt_f_1-2, x_skirt_b_1-2), the hood-tail (x_tail_1-2) and the sash tongue.\n- Drive them in the clip writer with a 2-4 frame lag and a damped overshoot, scaled up on Bound, dash, stops and death.\n- Weight the front skirt to its own chain, not to the thighs.\n- Re-key the death end with the right knee bent onto the floor.\n- Add a pipeline gate that fails a clip when the lowest skinned body vertex is below -0.02 m.",
+   "files": "art/blender/fighters/ulkro.py (rig extras, skirt weights, clip_overrides run/death), art/blender/common/anim.py, art/blender/common/pipeline.py, art/out/fighters/ulkro/*.glb",
+   "size": "L",
+   "verifierNote": "Confirmed as a major, resting on the rigid knee-length skirt boarding in the run (the same class as kemdo-M4, ardit-M3 and nurrow-M3).\n\nTwo mitigations:\n- The brief itself asks for the hood-tail to be a rigid shell (ulkro.md:56, ulkro.py:461-463), so the tail is a gauge gap rather than an off-brief defect.\n- The 20 cm death sink is roster-wide (Ulkro is mid-pack, below ardit, ervet, marund and nurrow), and other verifiers rated it minor alone (ervet-m1, rishal-m3, nurrow-m3)."
+  },
+  {
+   "id": "ULK-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Form and material finish: ribbed-tube sleeve and shin wraps, sole-less bulb boots, matte frosted dart heads, projected smudges on the tunic",
+   "what": "- The sleeve and shin wraps are uniform horizontal rings that read as corrugated tubes. The concept draws overlapping diagonal bands.\n- The boots are smooth bulbs with no sole, where the concept has shaped suede boots.\n- The dawnglass leaf heads are frosted and matte, although the brief says dawnglass is glossy.\n- The tunic carries projected dark strokes that ignore its folds.\n- The quiver is a flat pale board with dark brush strokes and no bindings or lip.\n\nAll of this shows on the menu-stage 3D showcase and in every splash.",
+   "evidence": "Viewed:\n- _harness/_shots/closing_ulkro_three_row3a.png and closing_ulkro_three_row3b.png (crops of art/renders/fighters/ulkro/three_ulkro.png, 10-27 21:01, after the GLB): ring wraps, board quiver, bulb boots;\n- closing_ulkro_splash_torso_legs_x3.png.\n\nAgainst the concept (_design/concept/ulkro.webp): diagonal wraps and soled boots.\n\nBrief: dawnglass is 'glossy but never emissive' (ulkro.md:7, :81).\n\nThe menu stage shows the 3D fighter large (src/ui/components/Portrait.tsx:112, src/ui/screens/draft.tsx:12).",
+   "gauge": "A LoL in-game model keeps crisp hand-painted form at close and gameplay range: wraps drawn as overlapping bands, boots with soles, glass with a tight specular that reads as glass even when small.",
+   "fix": "- Re-sculpt the sleeve and shin wraps as overlapping diagonal bands of varied width, with tucked ends.\n- Give the boots a shaped toe, a sole welt one value darker and suede breakup.\n- Give the dawnglass a tight gloss lobe and a thin bright rim.\n- Replace the projected tunic strokes with fold-aligned paint.\n- Give the quiver case cord bindings, a stitched lip and fold-aligned linen paint instead of brush smears.",
+   "files": "art/blender/fighters/ulkro.py (sleeves/shins/boots/quiver sculpts, paint wrappers, crest_heads material), art/out/fighters/ulkro/*.glb",
+   "size": "L",
+   "verifierNote": "Partly refuted, severity kept.\n- Pauldron colour: refuted. The match pauldron at L* 70-75 and 10-12 % saturation is the brief's stone #B3AEA2 (L* 71, 9 %, ulkro.md:80). It is pale stone on purpose, not a grey-box defect; only the thin plate form departs from the concept.\n- Quiver shape: refuted. The concept's quiver is itself a pale linen-wrapped flat case (back view), not a tube. Only its finish (smears, no bindings) is at fault. The brief's 'leather tube' contradicts the concept.\n- What stands: wraps, boots, glass and smudges on four limbs and the tunic. They are prominent in the splash and on the 3D menu stage, so this stays a major (as burdam-M2, hesmi-M2 and lisvel-M3 were), though it is the most borderline of the three."
+  },
+  {
+   "id": "ULK-M4",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Skins are modest: Highrim is a paler sand, and Long Evening has no effect tint",
+   "what": "Highrim (standard) shifts the hood and sleeves to a paler cream sand and adds painted strata. At the gameplay camera it reads beside the base, but it is hard to name alone.\n\nLong Evening (deluxe) adds:\n- a plum hood that is plainly distinct;\n- amber heads;\n- a 0.30 m lacquer fan.\nIt has no vfxTint.",
+   "evidence": "_harness/_reports/closing_ulkro_verify_skin_delta_roster.txt (gameplay-camera row of three_<id>.png, dE76 over figure pixels):\n- Ulkro standard: p50 6.8, 31 % of pixels above dE 10;\n- deluxe: p50 8.0, 22 % above dE 20.\n\nRoster standard-skin p50 runs 1.2-10.0, and Ardit, Ervet, Sukri, Tunlan and Vashil are lower than Ulkro.\n\nvfxTint appears only in hesmi, nurrow, odrum, sukri and tunlan (content/skins/*.json). The Long Evening brief (_design/fighters/ulkro.md:156-170) does not ask for one.\n\nShot: _harness/_shots/closing_ulkro_skins_gamecam_x2.png.",
+   "gauge": "A LoL skin is nameable at the gameplay camera, and higher-tier skins usually recolour their effects.",
+   "fix": "- Highrim: push the hood and sleeves to the named #CDBB9C with the wind-carved strata at a stronger value step, so the skin reads at the game camera.\n- Long Evening: add a VALE-own vfxTint outside the reserved hue bands, for example a dusk plum, so its darts and Run-up trail carry the festival colour.\n- The splash work is tracked under M1.",
+   "files": "content/skins/ulkro.json, art/blender/fighters/ulkro.py (HIGHRIM_STRATA, skin palettes), _design/fighters/ulkro.md §9",
+   "size": "M",
+   "verifierNote": "Downgraded to minor.\n- owner_rulings.md:7 binds skins to material and palette changes, so 'only a recolour' is the standard, not a defect.\n- Highrim's delta is mid-roster, and Long Evening is clearly distinct by its plum hood and fan.\n- The missing vfxTint is not in the brief and is shared by 11 of 16 deluxe skins.\n- The splash and portrait reuse is double-counted with M1."
+  },
+  {
+   "id": "ULK-V1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Verifier-added: the face has no living cue: an opaque wooden band over a linen wrap, a grin-like stripe at the game camera",
+   "what": "The eye slit is a matte ink line along the band's bottom groove (ulkro.py:482-484, :1376-1378). In the portrait (shown in the HUD all match), the 128 px icon and the 48 and 26 px chips, the face is a brown bar over a pale wrapped oval, with no eye, glint or readable slit.\n\nFrom the 52 degree camera, facing 0, the band, the dark gap and the pale wrap form a pale stripe between dark arcs that reads like a grin. That is not horror, a hockey mask or a mannequin; the wrap has folds and a nose.",
+   "evidence": "Shots:\n- _harness/_shots/closing_ulkro_verify_face_close.png (three.js close and portrait);\n- closing_ulkro_verify_icon_chips_x3.png (128/48/26 px);\n- closing_ulkro_verify_gamecam_face_x6.png (crops of three_ulkro.png row 1; panel 1 shows the grin stripe).\n\nThe concept (_design/concept/ulkro.webp) also shows the band with no eyes, so the face follows the concept.",
+   "gauge": "A masked or wrapped LoL champion still reads as someone looking at you at icon size: a lit or catch-lit eye line in the slit.",
+   "fix": "- Open the slit into a slightly wider dark recess, about 8 mm.\n- Put a warm honey-amber catch-light behind it, as owner ruling 2 does for Odrum's mask, so the eye line reads at 26-128 px.\n- Tuck the wrap's top edge up under the band to close the dark gap that makes the grin stripe at the game camera.",
+   "files": "art/blender/fighters/ulkro.py (eyeband sculpt :476-485, carved-band paint :1376-1380, face wrap), art/out/fighters/ulkro/portrait.png, icon.png",
+   "size": "S",
+   "verifierNote": "Minor, not major and not a blocker. It follows the approved concept, so it is treated like dunsom's face (downgraded) rather than hesmi-M1, where the model departed from its concept. Its game-camera read matches kemdo-v1, which was rated minor. It is the one sensitivity-adjacent item the reviewer did not weigh against the 'faces read as alive' ruling (owner_rulings.md:6)."
+  }
+ ],
+ "missed": []
+}

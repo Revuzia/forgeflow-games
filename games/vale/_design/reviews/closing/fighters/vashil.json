@@ -1,0 +1,100 @@
+{
+ "fighter": "vashil",
+ "score": 5.5,
+ "summary": "Verified 5.5/10, NOT ON PAR. The blocker and all three majors hold on the current build. The GLBs are unchanged since 17da036d (vashil.glb md5 066ff3f8...).\n\n- VAS-B1 (blocker, confirmed, with the geometry claim corrected). The crown is not a sharp ogive. It is a narrow round tip: a circle of about 7.3 cm radius fits the top 5 cm. The roster's other hooded or wrapped heads are 3 to 9 times blunter (Lisvel 10.7-14.5 cm, Ilsheta 38 cm, Sukri 37-54 cm, Hesmi 19-63 cm). The source keeps the point on purpose ('a low rounded cowl with a soft point', vashil.py:263). The front rim is a pointed arch that rises to that tip. In my own real-Chrome captures it reads as a pale soft-peaked cowl on a pale floor-length robe: walking straight away at the default 28.5 m camera, and at 3/4 behind in the reviewer's frames. Owner ruling 5 removed even a ward's pointed finial under this rule, and the key-art lane rejected four Vashil images for the same peak, so the binding rule applies.\n- VAS-M1 (major, confirmed). In recall no node moves more than 2.4 cm over the loop.\n- VAS-M2 (major, confirmed by an in-game capture). With his autopilot off, I made him cast Peal and Morning Toll in a live RIFT match, at 60 Hz display frames. Peal's halo and body jump in one display frame (12 to 13), then stand nearly still for about 6 frames. Morning Toll slams in one to two frames, holds a bent pose with zero motion for about 16 frames, then snaps upright. Correction: Peal has a small recoil at clip f14-f16, so 'no follow-through' overstates it. The ult's still hold is also what the brief literally asks for ('Hold f16-f30'), but the gauge wants a moving hold.\n- VAS-M3 (major, confirmed). The three cards share one pose and crop, the portrait yaw is 2 degrees against the brief's 28 (vashil.py:200), and render speckle is plain at 3x.\n\nLeftovers: all five are still open, because the GLB is unchanged. The ring still touches the bar's lower frame by 0-1 px. Only VAS-m5 of the reviewer's minors reached me in readable form (the minor list was truncated), and I keep it. I found no missed sensitivity blocker: the face is a glass-visored helm with a carved plate, no eye-like pairs, and the Wicks near him show one central light. Out of lane (engine): I reproduced the one-frame actor drop right after a camera focus jump (closing_vashil_burst_t150_0.png: bars drawn, bodies missing).",
+ "gapStatus": [
+  {
+   "id": "7. Halo: thin tube, milky bells, saturated clappers, the ring touching the HP bar",
+   "status": "open",
+   "evidence": "vashil.glb is unchanged since 17da036d (md5 066ff3f8...). The bar anchor is unchanged: src/render/actors.ts:705, barHeight = artHeight + 0.35. In _harness/_shots/closing_vashil_match_self_t95_bar_x8.png the ring band meets the bar's lower frame, 0-1 px apart. In my own Peal capture (_harness/_shots/closing_vashil_verify_peal_f8_19_x2.png) the ring top sits right under the bar in every frame. The clappers' saturation works as the per-viewer team cue."
+  },
+  {
+   "id": "14. First Bell accent 2.25 % vs the brief's 'under 0.5 %'; emissive wrist clapper",
+   "status": "open",
+   "evidence": "The wrist clapper is fixed: _harness/_reports/closing_vashil_accent_geom.txt shows only halo clusters in the accent mesh. First Bell carries 10 accent drops of 5.3-5.9 x 4.3 cm, and art/renders/fighters/vashil/build_report_vashil_first_bell.json gives about 1.6 %. The brief still says 'under 0.5 %', so the brief and the pipeline gate still conflict."
+  },
+  {
+   "id": "Rod grips: jagged ends and pale flecks on the back side",
+   "status": "open",
+   "evidence": "The GLB is unchanged since this item was logged. The defect is not visible at the gameplay camera in my captures (_harness/_shots/closing_vashil_verify_walk_hood_x2.png)."
+  },
+  {
+   "id": "Five side clapper drops grew to faceted azure blobs (brief: 2 cm beads, no gems)",
+   "status": "open",
+   "evidence": "The accent clusters measure 7.0-7.3 x 5.3 x 7.1-7.5 cm at y 1.75-1.81 m (_harness/_reports/closing_vashil_accent_geom.txt). They read as hanging gems in _harness/_shots/closing_vashil_splash_head_x3.png and closing_vashil_portraits_3skins.png. Kept as VAS-m5."
+  },
+  {
+   "id": "A bell lip and its mouth clapper sit on the visor's arch tip in level views (brief: 0.10 m clearance)",
+   "status": "open",
+   "evidence": "The GLB is unchanged. In _harness/_shots/closing_vashil_portraits_3skins.png the small centre bell sits directly on the hood's peak in all three portraits. The pane itself stays clear in the splash and at the gameplay camera."
+  }
+ ],
+ "findings": [
+  {
+   "id": "VAS-B1",
+   "verdict": "confirmed",
+   "severity": "blocker",
+   "title": "Soft-pointed pale cowl over a pale floor-length robe: from behind at the gameplay camera the head reads as a peaked white hood",
+   "what": "The cowl is head-sized, not tall: its top is 0.29 m above the head bone. It does come to a point, though. A round tip of about 7.3 cm radius sits on a 25-27 cm wide hood, and the front rim is a pointed arch that rises to that tip.\n\nIn base and First Bell, the cowl and the floor-length robe are the same pale chalk. Seen walking away from the camera, or at 3/4 behind, the figure reads as a pale peaked hood on a pale robe under the ring. The project rule bans pointed hoods outright, and owner ruling 5 applied it even to a ward's finial.\n\nChalkline's dark robe weakens the read but keeps the pale peak.",
+   "evidence": "My captures (real Chrome, RIFT, default 28.5 m camera):\n- `_harness/_shots/closing_vashil_verify_walk_hood_x2.png`, cells 0-2: walking straight up-screen. The script is `_harness/_reports/closing_vashil_verify_tools/v_cast.mjs`; the per-frame log is `_harness/_reports/closing_vashil_verify_cast.json`, walk_n.\n\nThe reviewer's frames, re-viewed:\n- `_harness/_shots/closing_vashil_match_enemy_t95_x4.png`\n- `closing_vashil_burst_t150_strip_x2.png`\n- 1:1 crops of `closing_vashil_match_{self,ally,enemy}_t95.png`\n\nGeometry (`_harness/_reports/closing_vashil_verify_crown.txt`): the head-weighted crown width is 0.074 / 0.117 / 0.142 m at 1 / 3 / 5 cm under the top. The fitted tip radius is 0.072-0.075 m. Other heads:\n- Lisvel 0.107-0.145 m;\n- Ilsheta 0.38 m at 1 cm;\n- Sukri 0.37-0.54 m;\n- Hesmi 0.19-0.63 m.\nThis is the roster's sharpest crown.\n\nIntent and precedent:\n- `art/blender/fighters/vashil.py:263-264` describes 'a low rounded cowl with a soft point'.\n- `_design/reviews/fixwaves/owner_rulings.md` §5 (Hooded Lamp ward finial rounded under the no-pointed-hoods rule).\n- `_design/reviews/fixwaves/W2_art_signoff.md:38`.",
+   "gauge": "LoL's hooded, robed casters read as characters from every facing at the gameplay camera, never as a single pale peak over a pale robe. VALE's own binding rule is stricter: no tall, pointed or conical hoods.",
+   "fix": "VALE's own fix, keeping the visor and the halo:\n1. Re-cut the crown in `hood_shape` as a rounded dome:\n   - tip radius at least 0.12 m;\n   - at least 0.19 m wide 5 cm under the top.\n2. Keep the pointed bell-window outline only on the visor frame, inside the rim.\n3. Break the pale back with a dark element, for example:\n   - a blue-grey or violet bell-rope wound round the cowl and knotted at the nape;\n   - or an ironstone panel down the drape.\n4. Add 'rounded cowl' to the brief.\n5. Rebuild the three GLBs and the cards.",
+   "files": "art/blender/fighters/vashil.py:259-271 (hood_shape), :400-412 (hood sculpt); _design/fighters/vashil.md:56; art/out/fighters/vashil/*.glb and cards",
+   "size": "M",
+   "verifierNote": "I tried to refute this: the hood is head-sized and its tip is rounded, not a sharp ogive. I corrected the geometry claim in the evidence. Even so, the source keeps a deliberate 'soft point', the measured crown is 3 to 9 times sharper than every other hood in the roster, and my walk-away capture shows the pale peak at 1:1. The rule bans 'pointed' on its own, and the owner's ruling applied it strictly to a ward's finial, so the blocker holds. The fix is small."
+  },
+  {
+   "id": "VAS-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Recall is a frozen pose: the brief's three wrist-bell rings move nothing visible",
+   "what": "The recall is a 60-frame loop played through a channel of about 6.9 s. Over the whole loop, no node moves more than 2.4 cm from frame 0:\n- index tip 2.4 cm, left prop 1.9 cm, halo 1.0 cm, head 0.5 cm, hand.L 0.4 cm.\n\nThe brief asks him to 'ring the wrist bell three times'. Every peer with the same frozen recall had it confirmed as a major (Dunsom, Ilsheta, Nurrow, Rishal, Tunlan, Marund).",
+   "evidence": "- `_harness/_reports/closing_vashil_verify_fk.txt`, recall block (my FK, distance from f0).\n- `_harness/_reports/closing_vashil_roster_recall_idle.txt`.\n- `art/blender/fighters/vashil.py:2321-2331`.\n- `src/render/actors.ts:118,917`: recall plays the clip with no procedural layer.",
+   "gauge": "Every LoL champion has a bespoke recall that reads as that character for the whole channel at the gameplay camera.",
+   "fix": "Re-key a 2 s loop with the rod planted:\n- the left forearm lifts the wrist bell and flicks it three times (forearm ±25°, bell arcs of 10-15 cm);\n- the head tilts about 10° toward each note;\n- the halo answers each flick with a 3-4° rock, two frames late;\n- add 1.5 cm of chest breath.",
+   "files": "art/blender/fighters/vashil.py:2321-2331; art/out/fighters/vashil/*.glb",
+   "size": "S",
+   "verifierNote": "Reproduced with my own FK script. The numbers are even lower than the reviewer's."
+  },
+  {
+   "id": "VAS-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Peal's strike pops in one display frame and Morning Toll holds a dead bent pose, then snaps upright",
+   "what": "**Peal (cast_a1):**\n- The strike is one clip frame (f9 to f10): rod head 1.20 m, right hand 0.60 m, halo 0.37 m, head 0.22 m.\n- The game plays it at 1.67x (castTime 0.2 s against the impact at f10), so it lands in one 60 Hz display frame.\n- About 6 nearly still display frames follow (f11-f13).\n- A small recoil then plays at f14-f16 (rod head up 0.2 m), so 'no follow-through' overstates the defect. The real failures are the 1-frame release and the dead hit-hold.\n\n**Morning Toll (cast_ult):**\n- The slam spans clip f15-f16 (2.1 and 2.4 m rod-head steps) and lands in one to two display frames.\n- Every body node then moves 0.000 m over f19-f30, about 16 display frames at 1.78x.\n- The rod-head socket sits at y −0.05 m during the hold.\n- The lift back up is another pop (f33: rod head 1.1 m in one clip frame).\n- The brief does ask for 'Hold f16-f30 with the rod grounded', so the dead hold follows the brief but misses the gauge's moving hold.",
+   "evidence": "In-game, 60 Hz display frames (my capture, Vashil self, autopilot off):\n- `_harness/_shots/closing_vashil_verify_peal_f8_19_x2.png`: cells 4 to 5 show the jump.\n- `closing_vashil_verify_peal_sheet.png`\n- `closing_vashil_verify_ult_sheet.png`: cells 6 to 7 show the slam, 7-15 the dead hold, 16-17 the snap.\n- States per frame: `_harness/_reports/closing_vashil_verify_cast.json`.\n\nFK: `_harness/_reports/closing_vashil_verify_fk.txt` (per-frame steps).\n\nTiming code: `src/render/actors.ts:81` (IMPACT_AT 0.4), `:999-1003`, and `:950-963` (the follow-through plays while standing).\n\nThe ult halo keeps rocking 0.8-2.4° per frame (`closing_vashil_ult_hold_halo.txt`).",
+   "gauge": "r12 table row 'Ability anticipation' and §5 item 5: releases in 2-4 frames, follow-through of at least 4 frames. LoL holds keep moving: the body recoils and breathes while the effect plays.",
+   "fix": "**Peal:**\n- Spread the strike over f9-f11, with a breakdown at f9 and 8-10 % overshoot at f11.\n- Let the head and halo lag the rod by one frame through a 4-frame settle.\n\n**Morning Toll:**\n- Over f17-f30, add an impact recoil, then breath: shoulders sink 1 cm, chest moves 1.5 cm, the hands re-grip, the head lifts 4° toward the ringing halo.\n- Ease the lift over at least 4 frames.\n- Keep the rod head at y 0.02 m or higher.",
+   "files": "art/blender/fighters/vashil.py:2223, :2280-2299; art/out/fighters/vashil/*.glb",
+   "size": "M",
+   "verifierNote": "The core claim reproduces in-game and matches Tunlan's confirmed TUN-C2. Corrections: Peal has a small recoil at f14-f16, and the ult's still hold follows the brief's wording. The rod-head sink is about 3 px and sits under the toll bloom, so it is cosmetic. Severity stays major, because his main poke and his ult both pop."
+  },
+  {
+   "id": "VAS-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Cards: one static victory render serves all three skins, the portrait is frontal against the brief's 28° yaw, and the figure is speckled with render grain",
+   "what": "**Same render on every card:**\n- The base, Chalkline and First Bell splashes share one victory pose, yaw, crop and plate.\n- The three portraits are the same frontal bust; First Bell is close to identical to base.\n- The portrait yaw is 2° in the source, against the brief's 28°.\n\n**Grain:**\n- The figure carries high-frequency speckle on the ring, bells, hood and robe at 3x.\n- The subject-half grain p90 is 11.8 (base) and 13.5 (Chalkline), against 1.5 for the plate.\n- This is the roster-wide card-pipeline major, confirmed for every peer.",
+   "evidence": "- `art/out/fighters/vashil/{splash,vashil_chalkline_splash,vashil_first_bell_splash}.png` (re-composed 10-29)\n- `_harness/_shots/closing_vashil_portraits_3skins.png`\n- `_harness/_shots/closing_vashil_splash_head_x3.png`\n- `_harness/_reports/closing_vashil_splash_grain.txt`\n- `_harness/_reports/closing_vashil_skin_card_diff.txt`\n- `art/blender/fighters/vashil.py:200` (portrait_yaw 2.0)\n- `_design/fighters/vashil.md:177-178`",
+   "gauge": "LoL gives every skin its own clean, noise-free splash, with its own pose, light and setting, and portraits show an angled, characterful read.",
+   "fix": "1. Denoise the figure pass (a denoiser or 4x samples) and grade it to the plate, with a contact shadow.\n2. Render the portrait at the brief's 28° yaw.\n3. Give each skin its own beat from his own clip set:\n   - base: the victory finger raised as the ring catches the low sun;\n   - Chalkline: the taunt's rod tap on the ring, under ink-dark night light;\n   - First Bell: the ult's grounded toll with every bell lit.",
+   "files": "art/blender/fighters/vashil.py:200; tools card compositor; art/out/fighters/vashil/*portrait.png, *splash.png",
+   "size": "M",
+   "verifierNote": "Confirmed on the current cards. It is the same pipeline issue as every peer's confirmed card major."
+  },
+  {
+   "id": "VAS-m5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Side clapper drops are 7 cm faceted azure blobs that read as hanging gems (brief: 2 cm beads, no gems)",
+   "what": "The halo's accent drops are about 3.5x the brief's size and read as faceted gems in the portrait and splash. At the gameplay camera they are 2-4 px blue dots, and they double as the team-tint cue there.",
+   "evidence": "`_harness/_reports/closing_vashil_accent_geom.txt` (7.0-7.3 x 5.3 x 7.1-7.5 cm); `_harness/_shots/closing_vashil_splash_head_x3.png`; `closing_vashil_portraits_3skins.png`.",
+   "gauge": "LoL keeps small accents subordinate to the silhouette and consistent with the character's material story.",
+   "fix": "Shrink the drops to round 2-3 cm beads inside the bell mouths. Hold the accent share with a thin ring-inlay line instead.",
+   "files": "art/blender/fighters/vashil.py (DROP_K, clapper build); art/out/fighters/vashil/*.glb",
+   "size": "S",
+   "verifierNote": "Kept. The rest of the reviewer's minor list was truncated in the hand-off, so only this one could be checked."
+  }
+ ],
+ "missed": []
+}
