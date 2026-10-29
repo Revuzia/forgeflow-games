@@ -1,0 +1,65 @@
+{
+ "lane": "world",
+ "run": "integration run 2",
+ "round": 1,
+ "verifier": "adversarial verifier, integ2 world round 1 (2026-10-29)",
+ "pass": true,
+ "summary": "Lane world passes round 1. All three plan items re-measure as claimed in the current tree, and the commits (84107482, 28304e32, 56cd3cab) are pushed. world-pad and world-05: I re-ran minimap_survey.py to my scratchpad. It reproduces the shipped RIFT minimap.png with max pixel diff 0, and `--pad 0 0` reproduces the pre-change chart (git 28304e32~1) with max diff 0. Both bounds are in content and in the published catalog (dist-catalog hashes match art/out). Painted roads stay on the lane geometry: RIFT |offset| p50 0.01 m, p90 0.03 m; BRIDGE 0.10 / 0.21 m. These equal the old images, so fighter dots sit on the painted roads. My own live 1x shots on the real Chrome GPU (RIFT co-op as team 1, BRIDGE Standard as team 0, t ≈ 51 s) show both plaza discs whole, with their margin caps read back as plaza paint, not wall. world-1b-1: the FRAY desc says 'center' in both content and map_gen.py, and strict content:check gives 0 warnings. Gates: typecheck exit 0, probe_maps 102/102, probe_content_build 126/126, probe_content_ids, probe_sim_core_nav 46/46. Nothing outside the HUD minimap reads minimap.png or minimapBounds. Two minors are recorded and neither blocks. (1) A faint seam on the BRIDGE image's map edge, where the fresh margin render meets the shipped painting. This is world-owned polish (partly). (2) The fog is not drawn over the new margin. The cause is client code: src/ui/hud/minimap.tsx:130 draws the fog over the map rectangle only. I measured it live: the unfogged margin is luma 44-46 against 27-28 for the fogged map, and the enemy plaza's margin cap shows unfogged at 171 (RIFT) next to its fogged disc at 86. The engineers' handoff to client is valid and its fix is right. I did not count it as a world regression, because the lane cannot edit that file and handed it off correctly. Their handoff to systems is also valid: all 17 COPY_LINT_PENDING entries in tools/build_content.ts are stale (0 hits). Sensitivity: the only new images are the two minimap charts and the kept BRIDGE painting. I viewed all of them and they contain no figures, faces or hoods.",
+ "items": [
+  {
+   "id": "world-pad",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "RIFT, files: art/blender/maps/minimap_survey.py chart_bounds() and the margin masks (lines 158-200); content/maps/map_rift.json:1410 \"minimapBounds\": [-6, -4, 176, 114]; _design/tools/map_gen.py build_rift sets [-6, -4, int(W)+6, int(H)+4], which is the same rectangle. RIFT, re-run: I ran `~/Developer/forgeflow-games/.venv/bin/python3 art/blender/maps/minimap_survey.py --map map_rift --out <scratch>` (report _harness/_reports/integ_world_v1_survey_rerun_rift.json). It matches art/out/maps/map_rift/minimap.png with max abs diff 0. With `--pad 0 0` it matches git 28304e32~1's minimap.png with max abs diff 0. The image is 1100x712 over [-6,-4,176,114] (6.044 / 6.034 px/m); the plazas sit 5.0 m and the fountains 5.5 m inside it. BRIDGE: art/out/maps/map_bridge/minimap.png is 1100x310 over [-6,-1.67,162,45.67] (6.548 px/m both ways), set at content/maps/map_bridge.json:489 and in map_gen.py build_bridge. art/renders/maps/minimap_bridge_painted.png is byte-identical to the pre-change shipped minimap (cmp). FRAY has no plazas or bases and its walls stay within 0..64, so it needs no margin. Published: dist-catalog/schema-1/2026.10.1/catalog.json carries both bounds, and the asset hashes 9431e73d2b68 / 8b9f4e563d7d equal sha256 of art/out. Registration (_harness/_reports/integ_world_v1_registration.txt; perpendicular luma profiles every 2 m along every lane, plazas and Seat excluded): RIFT new |off| p50 0.01 m, p90 0.03 m (old 0.01 / 0.02); BRIDGE new 0.10 / 0.21 m (old 0.08 / 0.22). The painted roads lie on the sim's lane lines exactly as before. Live 1x, real Chrome GPU, my own probe (scratchpad verify_minimap.mjs, reports _harness/_reports/integ_world_v1_minimap_rift.json and _bridge.json, shots _harness/_shots/integ_world_v1_minimap_{rift,bridge}_1x.png, _x3.png and _canvas.png): RIFT canvas 352x228, client bounds [-6,-4,176,114], image rect [0.17,0,351.66,228], plaza extreme rims at canvas x 9.8 and 342.2. Points just inside the rim in the margin read 133/171/131 luma (lit chalk), against wall 26-46 just beyond. BRIDGE canvas 384x108, rims at 7.2 and 376.8, margin-cap rim points 138-177. Both discs read whole on screen. Sensitivity: I viewed both images full size and at 3-8x. They show map paint only.",
+   "fixHint": ""
+  },
+  {
+   "id": "world-05",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Every step of the fix hint is in the tree. 1: minimap_survey.py has `--pad PX PY` and otherwise reads art.terrain.minimapBounds (lines 158-167, 309-321). 2: art/out/maps/map_rift/minimap.png is re-rendered; my re-run reproduces it to the pixel. 3: content/maps/map_rift.json:1410 and map_gen.py:606-609. 4: strict `npm run content:check` reports 'OK (check only, nothing written): 0 warnings', and the dist-catalog is republished with the bounds and the new asset hash. 5: in my live 1x RIFT shot (_harness/_shots/integ_world_v1_minimap_rift_1x_x3.png) both plaza discs are whole. Fighter dots sit on the painted roads, since the image registration is 0.01 m p50 (see world-pad). In the live canvas profile check, 124 lane samples have a median centroid offset of 0.12 px; the 4-5 px tail is marks drawn over the road (structures, Wicks, portraits). The client half (src/ui/hud/minimap.tsx:58-76 minimapBounds/fitMap, :255 drawImage over the bounds) needed no change for the image.",
+   "fixHint": ""
+  },
+  {
+   "id": "world-1b-1",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "content/maps/map_fray.json:5 and _design/tools/map_gen.py:830 both say 'the Lampwright's cart stands at its center' (commit 84107482, pushed). `npm run content:check` (strict, no --allow-missing-assets) reports 0 warnings. I checked every entry in tools/build_content.ts COPY_LINT_PENDING (lines 1328-1346) against current content: 17 of 17 are stale, map_fray .desc|centre included. No copy-lint hit is left in content/.",
+   "fixHint": ""
+  },
+  {
+   "id": "world-pad:bridge-edge-seam",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "World-owned polish note on 56cd3cab. minimap_pad_paint.py keep_interior() pastes the shipped BRIDGE painting inside 0..W with only a 1 px anti-aliased edge over a fresh Cycles render of the margin. Where the base paving discs and terraces cross x = 0 and x = W, the two renders meet with a visible step. Per-column |dLuma| over the disc rows (native 1100x310): at the west edge, col 38->39 has mean 4.69 / p95 23.6, against 1.7-3.1 / 5-15 in the neighbouring columns; at the east edge, col 1060->1061 has 4.89 / 19.1, against 2.0-3.2 / 7-10. The terrace outline jumps 2-3 px (top rows 104->101 at cols 38-39 and 101->103 at cols 1061-1062). Mean colour shifts by 3.5 levels or less. The step is obvious at 8x (_harness/_shots/integ_world_v1_bridge_edge_seam_x8.png: the Serenade disc's outer band and fountain ring kink at the edge). It is faint at the largest real HUD size, 1.3x minimapScale at DPR 2, about 5.9 px/m (_harness/_shots/integ_world_v1_bridge_hud13_dpr2_east.png). It cannot be seen at 1x (2.28 px/m). The plaza discs are whole, so world-pad's criterion is met.",
+   "fixHint": "In art/blender/maps/minimap_pad_paint.py keep_interior(), feather the blend from the shipped painting to the margin render over about 1.5 m (about 10 px) inside the map edge instead of 1 px. Optionally, also shift the margin render's colour per channel by the local mean difference measured in a 2 m strip just inside the edge. Then re-run `heavy.py run -- Blender ... minimap_pad_paint.py -- --maps map_bridge` (one rebuild) and re-check the per-column step at cols 38/39 and 1060/1061: it should come within the neighbouring columns' range (mean ≤ 3.2, p95 ≤ 15)."
+  },
+  {
+   "id": "handoff:client-minimap-fog-margin",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Cross-lane, owned by client; this is not a world-lane regression. I confirmed the world lane's handoff: src/ui/hud/minimap.tsx:130 `ctx.drawImage(fog, fit.ox, fit.oy, map.size[0] * fit.s, map.size[1] * fit.s)` fogs only the map rectangle, while buildStatic (:255) now paints the image over the minimapBounds margin. Live read-back, real Chrome GPU (_harness/_reports/integ_world_v1_minimap_rift.json and _bridge.json, fogBand / plazaRead). RIFT: margin-wall median luma 46 on both sides, inside-edge wall 28. The enemy (west) plaza disc is fogged at 86-87, but its margin cap reads 133/171/131 unfogged, a bright sliver of the enemy base at the minimap's edge (_harness/_shots/integ_world_v1_minimap_rift_live_plazas_x8.png). BRIDGE: margin 45 / 44 against inside 27 / 27, with the enemy terrace cap unfogged next to its fogged disc at 71-75. It shows as a lighter 12-14 px band at both map ends (_harness/_shots/integ_world_v1_minimap_bridge_1x_x3.png). It leaks no game information (static paint only), so it is minor.",
+   "fixHint": "client lane, src/ui/hud/minimap.tsx draw() at about line 130: after the current fog draw, run the fog into the margin with its edge cells clamped. Draw the fog canvas's first column stretched over the west strip: `ctx.drawImage(fog, 0, 0, 1, fog.height, X(fit, fit.b[0]), fit.oy, -fit.b[0] * fit.s, map.size[1] * fit.s)`. Do the same for the last column over the east strip, the first and last rows over the north and south strips, and each of the 4 corner pixels over its corner rectangle. Alternatively, build the fog canvas with a 1-cell clamped border and draw it over the full bounds. Then re-shoot the live 1x RIFT and BRIDGE minimaps. On the unseen side, margin luma should be within ±4 of the fogged inside wall (about 27-28), and the enemy plaza's margin cap should match its fogged disc (about 86 on RIFT)."
+  }
+ ],
+ "regressions": [],
+ "handoffs_verified": [
+  {"to": "client", "valid": true, "what": "carry the minimap fog into the minimapBounds margin (minimap.tsx:130)", "evidence": "item handoff:client-minimap-fog-margin above (live luma 44-46 margin against 27-28 fogged; enemy plaza cap 171 against 86)"},
+  {"to": "systems", "valid": true, "what": "delete the stale COPY_LINT_PENDING entries in tools/build_content.ts:1328-1346", "evidence": "17 of 17 entries have no hit left in their content field; strict content:check reports 0 warnings"}
+ ],
+ "checks": {
+  "content_check": "npm run content:check (strict): OK, 0 warnings",
+  "typecheck": "npm run typecheck: exit 0",
+  "probe_maps": "node _harness/probe_maps.ts: 102/102 PASS",
+  "probe_content_build": "126/126 PASS",
+  "probe_content_ids": "PASS (1250 ids, 0 hits)",
+  "probe_sim_core_nav": "46 passed, 0 failed",
+  "survey_rerun": "minimap_survey.py default bounds == shipped RIFT minimap.png (max diff 0); --pad 0 0 == 28304e32~1 minimap.png (max diff 0)",
+  "registration": "_harness/_reports/integ_world_v1_registration.txt (RIFT 0.01 m p50, BRIDGE 0.10 m p50; old images the same)",
+  "live_minimap": "_harness/_reports/integ_world_v1_minimap_rift.json, _harness/_reports/integ_world_v1_minimap_bridge.json; shots _harness/_shots/integ_world_v1_minimap_*",
+  "catalog": "dist-catalog/schema-1/2026.10.1/catalog.json: map_rift bounds [-6,-4,176,114] with asset 9431e73d2b68, map_bridge [-6,-1.67,162,45.67] with 8b9f4e563d7d; sha256 of art/out matches",
+  "consumers": "grep over src/, tools/ and _harness: only src/ui/hud/minimap.tsx reads art.minimap or minimapBounds; nothing iterates art.terrain keys",
+  "perf_value_probe": "not run: this pass changed no 3D asset, render code or terrain key that the renderer reads (minimap PNGs, an unread art.terrain key, map_gen and copy only)",
+  "git": "lane paths clean; 84107482, 28304e32 and 56cd3cab are on origin/claude/youthful-ramanujan-gdud5w"
+ }
+}
