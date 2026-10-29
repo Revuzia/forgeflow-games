@@ -414,6 +414,8 @@ class Blackboard {
       // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
       // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
       this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0;
+      // (R2 movers) trap*: the loop breaker's anchor / clock / recent trips; esc*: the committed break-out goal (see trapBreak)
+      this.trapX = 0; this.trapZ = 0; this.trapT = -99; this.trapN = 0; this.trapLastT = -99; this.escX = 0; this.escZ = 0; this.escUntil = -99;
       this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
       this.slideX = 0; this.slideZ = 0; this.slideUntil = -99; this.slideFlips = 0; this.routeId = null; this.pinX = 0; this.pinZ = 0; this.pinT = 0; this.pinIntent = 0; this.pinN = 0;
       this.fightTarget = undefined; this.fightT = 0; this.aimHigh = false; this.errPhase = 0; this.closeInUntil = 0;
@@ -528,8 +530,13 @@ function doubleFields(o) {
 // inside 60 s, because 55-85% of bots dropped into ~8 POIs holding 1-16 loot
 // points each: a pistol brawl over a handful of guns (audit gap 4).
 const DROP_PTS_PER_BOT = 4;
-const LAND_CLEAR_M = 3.5;          // landing spot: no low overhang within this reach
+const LAND_CLEAR_M = 3.5;          // landing spot: no low overhang within this reach - and (R2) no roof or structure top in the glide-drift disc of this radius
+const LAND_STEP_M = 0.55;         // (R2) player.js STEP_UP: a top higher than this over the ground under it is something a glide can touch down ON
+/** (R2 movers) landing-spot census for the probes (debugNav().dropStats): spots kept, loot points / house spots with no clear spot in reach, spot candidates the
+ *  glide-drift disc rule refused, fallback targets (POI random point / random ground) moved to a clear spot, and those left where they were. */
+const dropSt = { spots: 0, noSpot: 0, discRej: 0, fbMoved: 0, fbKept: 0 };
 export function assignDrops(W) {
+  dropSt.spots = 0; dropSt.noSpot = 0; dropSt.discRej = 0; dropSt.fbMoved = 0; dropSt.fbKept = 0;
   const rng = K.mulberry32(W.seed ^ 0xd407);
   const pois = W.map.pois;
   const pts = Object.create(null);
@@ -576,10 +583,21 @@ export function assignDrops(W) {
       if (near && c.maxY > g + 0.3) return false;
       const reach = x > c.minX - LAND_CLEAR_M && x < c.maxX + LAND_CLEAR_M && z > c.minZ - LAND_CLEAR_M && z < c.maxZ + LAND_CLEAR_M;
       if (reach && c.kind !== "ramp" && c.minY > g + 0.3 && c.minY < g + 2.6) return false;
+      // (R2 movers, probe_match stuck episodes) THE WHOLE GLIDE-DRIFT DISC IS CLEAR OF TOPS. The tests above only kept a 1 m margin round a structure, but a
+      // glide circles its spot ~2.5 m out before it touches down (measured: ashgrid seed 12, s14 spiralled round a spot 7 m from the cmp07 water tower's
+      // centre - 2.6 m from the 8.8 m tank's edge - landed on the tank top at y 33.4 and paced it for 40 s: an 18 m drop on every side, 17 stuck
+      // episodes; base build seed 10, s44 on a roof at y 80.5). So no top higher than a step over the ground under it may lie within LAND_CLEAR_M of
+      // the spot (a ramp is walked down: it never traps).
+      if (c.kind !== "ramp") {
+        const nx = x < c.minX ? c.minX : x > c.maxX ? c.maxX : x, nz = z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z;
+        const ex = x - nx, ez = z - nz;
+        if (ex * ex + ez * ez < LAND_CLEAR_M * LAND_CLEAR_M && c.maxY > W.map.heightAt(nx, nz) + LAND_STEP_M) { dropSt.discRej++; return false; }
+      }
     }
     return true;
   };
-  const RING_R = [0, 3, 5, 7];
+  // (R2) rings 9 / 11 m: the disc rule refuses the old 3-7 m rings beside a building, and a gun is still worth an 11 m walk
+  const RING_R = [0, 3, 5, 7, 9, 11];
   const landingFor = (lp) => {
     for (let ri = 0; ri < RING_R.length; ri++) {
       const r = RING_R[ri];
@@ -590,6 +608,14 @@ export function assignDrops(W) {
       }
     }
     return null;
+  };
+  // (R2) a fallback target (a random point of a full POI, a random ground point) is moved to the nearest clear spot round it by the same rings (no rng
+  // draw: the claims after it draw what they always drew); none in 11 m: it stays where it was
+  const clearFallback = (x, z) => {
+    const at = landingFor({ x, z });
+    if (at && (at.x !== x || at.z !== z)) dropSt.fbMoved++;
+    else if (!at) dropSt.fbKept++;
+    return at ? { x: at.x, z: at.z } : { x, z };
   };
   // (Wave 8 fix round, lane K2) a furnished house's loot lands bots by loot.js's own list of the spots it USED (W.houseLootSpots: a chest, or a floor / top
   // spot where a non-pistol gun lies), aimed at the spot's STAND point inside its room. The house lootPoints are skipped: the 1.8 m query round one found
@@ -608,7 +634,8 @@ export function assignDrops(W) {
       }
       if (!ok) continue;
       const at = landingFor(lp);
-      if (!at) continue;
+      if (!at) { dropSt.noSpot++; continue; }
+      dropSt.spots++;
       const s = { x: at.x, z: at.z, taken: false };
       // (Wave 7) a Savanna compound's loot points are tagged cmpNN, which names no POI: they used to be filed under a list nothing ever
       // claimed from, so ~30 compounds with their guns and chests were never a landing zone. They land with the wild spots (one bot per
@@ -620,7 +647,8 @@ export function assignDrops(W) {
       const hs = HSP[i];
       if (!hs.gun) continue;
       const at = landingFor(hs.stand || hs);
-      if (!at) continue;
+      if (!at) { dropSt.noSpot++; continue; }
+      dropSt.spots++;
       const s = { x: at.x, z: at.z, taken: false };
       if (hs.poi == null || (typeof hs.poi === "string" && hs.poi.startsWith("cmp"))) spots.wild.push(s);
       else (byPoi[hs.poi] || (byPoi[hs.poi] = [])).push(s);
@@ -691,7 +719,7 @@ export function assignDrops(W) {
       p = pois[idx];
       let s = claim(byPoi[p.id]);
       if (!s && sep) s = claim(spots.wild) || claimAnyPoi() || claimFarthest();    // this POI has no spot left that clears the others: land elsewhere
-      b.bb.dropTarget = s ? { x: s.x, z: s.z } : { x: p.x + (rng() - 0.5) * p.r, z: p.z + (rng() - 0.5) * p.r };
+      b.bb.dropTarget = s ? { x: s.x, z: s.z } : clearFallback(p.x + (rng() - 0.5) * p.r, p.z + (rng() - 0.5) * p.r);
     } else {
       let s = claim(spots.wild);
       if (!s && sep) s = claimAnyPoi() || claimFarthest();
@@ -702,7 +730,7 @@ export function assignDrops(W) {
           let bd = nearestPlaced(gp.x, gp.z);
           for (let tries = 0; tries < 23 && bd < sep2; tries++) { const g2 = W.map.randomGroundPos(rng), d2 = nearestPlaced(g2.x, g2.z); if (d2 > bd) { bd = d2; gp = g2; } }
         }
-        b.bb.dropTarget = { x: gp.x, z: gp.z };
+        b.bb.dropTarget = clearFallback(gp.x, gp.z);
       }
     }
     placed.push(b.bb.dropTarget);
@@ -1830,6 +1858,19 @@ function actTail(W, b, dt) {
       bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; bb.anchorT = W.t;
     }
   } else if (bb.anchor) { bb.anchorT = W.t; bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; }
+
+  // (R2 movers) LOOP BREAKER. The hard breaker above re-anchors every time the bot strays 2 m, so a bot that paces back and forth through a doorway in a
+  // 2.5-3 m figure (ashgrid seed 11: s35, 27 s at (-69.2, 434), no route, its loot 53 m off - 8 stuck episodes) or round a roof it cannot leave never
+  // reaches its 12 s. This one keeps ONE anchor while the bot stays within TRAP_R of it, and a bot that is travelling (a goal more than TRAP_GOAL_M away)
+  // yet has not left that disc in TRAP_S has met a trap: it breaks out at once (trapBreak). Fights, heals, chests and emotes are exempt, as above.
+  const mt = bb.moveTo;
+  let tq = 0;
+  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {
+    const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z, ax = a.pos.x - bb.trapX, az = a.pos.z - bb.trapZ;
+    if (gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M && ax * ax + az * az <= TRAP_R * TRAP_R) tq = W.t - bb.trapT >= TRAP_S ? 2 : 1;
+  }
+  if (tq === 2) trapBreak(W, b);
+  if (tq !== 1) { bb.trapX = a.pos.x; bb.trapZ = a.pos.z; bb.trapT = W.t; }
 }
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
@@ -2059,6 +2100,64 @@ function breakOut(W, b) {
   }
   bb.progGoal = null; bb.stuckT = 0;
 }
+
+const TRAP_R = 3.0;               // (R2 movers) loop breaker: a travelling bot that has not left this disc ...
+const TRAP_S = 3.0;               // ... in this long (probe_match's stuck window is 3 s) is trapped
+const TRAP_GOAL_M = 6.0;          // ... when its goal lies further off than this (a bot at its goal is not travelling)
+const TRAP_ESC_S = 6.0;           // the break-out goal is held this long (or until reached)
+const TRAP_AGAIN_S = 30.0;        // a second trip within this long: the exits the first one tried did not work - walk away along a free heading instead
+const TRAP_WALK_M = 12.0;         // ... this far
+/** (R2 movers) Break a trapped bot out, deterministically (no rng draw), and COMMIT to it for TRAP_ESC_S (moveTowardQ walks the break-out goal instead of
+ *  the state's goal: the state's next think re-picking the same goal used to throw the exit path away on the next frame). The goal, first that exists:
+ *    1. on a roof / wall top / ledge (feet DECK_AGL over the ground, no ceiling): off the LOWEST open edge it survives (deckExitPoint with lethalDrop
+ *       in place of the walking margin: a drop that costs hp is better than a roof for the rest of the match);
+ *    2. a first trip: the house's street door (houseExitPath), else the nearest open cell (findExit, as breakOut);
+ *    3. a repeat trip (within TRAP_AGAIN_S) or nothing above: TRAP_WALK_M along the first heading whose next 4 m is free of walls, tried from the side
+ *       of the goal (+-90 deg, alternating with the trip count) round to straight away from it.
+ *  The loot item it was after is parked as breakOut parks it. */
+function trapBreak(W, b) {
+  const a = b.actor, bb = b.bb, mt = bb.moveTo;
+  const again = W.t - bb.trapLastT < TRAP_AGAIN_S;
+  bb.trapN = again ? bb.trapN + 1 : 1;
+  bb.trapLastT = W.t;
+  nav.st.trapBreaks++;
+  if (bb.lootId) {
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
+    bb.badLoot[bb.lootId] = W.t + 60;
+    bb.lootId = null;
+  }
+  const gyaw = mt ? Math.atan2(-(mt.x - a.pos.x), -(mt.z - a.pos.z)) : a.input.yaw;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.stuckT = 0;
+  let ex = null;
+  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw, lethalDrop(a))) {
+    ex = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
+    ex.exit = true;
+    nav.st.trapDeck++;
+  } else if (!again) {
+    const hx = IND.H !== null ? houseExitPath(W, b) : null;
+    ex = hx || findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
+    if (ex && ex.length && !hx) extendExit(W, a, ex);
+    if (ex && !ex.length) ex = null;
+  }
+  if (!ex) {
+    const side = (bb.trapN & 1) ? 1 : -1;
+    for (let k = 0; k < TRAP_HEADINGS.length; k++) {
+      const yaw = gyaw + side * TRAP_HEADINGS[k];
+      if (wallAhead(W, a, yaw, 4)) continue;
+      const x = a.pos.x - Math.sin(yaw) * TRAP_WALK_M, z = a.pos.z - Math.cos(yaw) * TRAP_WALK_M;
+      if (Math.abs(x) >= W.map.half || Math.abs(z) >= W.map.half || W.map.heightAt(x, z) < W.map.waterY + 0.4) continue;
+      ex = [{ x, y: null, z, k: 0 }];
+      nav.st.trapWalk++;
+      break;
+    }
+  }
+  if (!ex) return;
+  const last = ex[ex.length - 1];
+  bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
+  bb.escX = last.x; bb.escZ = last.z; bb.escUntil = W.t + TRAP_ESC_S;
+  bb.nextPathT = W.t + 2.5;
+}
+const TRAP_HEADINGS = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, Math.PI, Math.PI / 4, -Math.PI / 4];
 
 /** UNDER FIRE (owner 2026-09-15: "make sure enemies can spot where attacks are
  *  coming from and fight in that direction"). A hit is itself a sighting: the
@@ -2976,7 +3075,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3349,6 +3448,7 @@ export function debugNav() {
     indoors: () => ({ houses: IND.H ? IND.H.length : 0, rooms: IND.R.length, built: IND.built }),
     roomRoute: (from, to) => { const L = roomRoute(from, to); if (!L) return null; linkTarget(from, L); return { to: L.to, door: L.d ? L.d.id : null, stair: L.s ? L.s.id : null, at: [LT[0], LT[1], LT[2]], exitDoor: to === -1 && _bfsEnd && _bfsEnd.d ? _bfsEnd.d.id : null }; },
     occAny: (W, x, z, r) => occAny(W, x, z, r),
+    dropStats: () => Object.assign({}, dropSt),       // (R2 movers) the last assignDrops' landing-spot census
     houseExitPath: (W, b) => houseExitPath(W, b), roomHopPath: (W, sx, sy, sz, tx, tz, ty) => roomHopPath(W, sx, sy, sz, tx, tz, ty) };
 }
 
@@ -3688,8 +3788,9 @@ function underCeiling(W, b) {
   return false;
 }
 /** The nearest open edge of the deck the bot stands on, into _dkx ({x, z} = a point 2 m past the edge, d = the distance to the edge), or false. */
-function deckExitPoint(W, a, preferYaw) {
+function deckExitPoint(W, a, preferYaw, dropLim) {
   const ax = a.pos.x, az = a.pos.z, y0 = a.pos.y, wy = W.map.waterY;
+  const lim = dropLim === undefined ? walkDrop(a) : dropLim;          // (R2 movers) trapBreak passes lethalDrop: the lowest edge it survives
   let best = 1e9;
   for (let k = 0; k < 25; k++) {
     const off = k === 0 ? 0 : ((k & 1) ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 12);
@@ -3704,7 +3805,7 @@ function deckExitPoint(W, a, preferYaw) {
         // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (walkDrop: a quarter of the hp left), and a lower edge is preferred
         // (+0.5 a hit point). Without fall damage in the sim: Infinity / 0, the old choice.
         const drop = h - sup;
-        if (drop > walkDrop(a)) break;
+        if (drop > lim) break;
         const cost = s + Math.abs(off) * 6 + fallDmgForDrop(drop) * 0.5;
         if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
         break;
@@ -3737,8 +3838,15 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
  *  (actLoot, actMove, actEngage, coverStep) use this form: a call boxes every double argument and the returned double. */
 const MTQ = new Float64Array(3);
 function moveTowardQ(W, b, dt, sprint, ty) {
-  const tx = MTQ[0], tz = MTQ[1];
   const a = b.actor, inp = a.input, bb = b.bb;
+  // (R2 movers) a committed break-out (trapBreak) walks its own goal while it lasts, in the travelling states; the caller still gets the distance to ITS goal
+  const ox = MTQ[0], oz = MTQ[1];
+  let tx = ox, tz = oz;
+  if (W.t < bb.escUntil) {
+    const ex = bb.escX - a.pos.x, ez = bb.escZ - a.pos.z;
+    if (!MOVING_STATES[b.state] || ex * ex + ez * ez < 1.5 * 1.5) bb.escUntil = -99;
+    else { tx = bb.escX; tz = bb.escZ; ty = undefined; }
+  }
   /* PROGRESS stuck, as opposed to FROZEN stuck.
      The speed test at the top of act() only accumulates bb.stuckT when the bot
      moves less than 0.02 m in a frame — i.e. pinned solid. A bot grinding along
@@ -4002,7 +4110,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   // (pinned: stuckT - frozen legs - or the pin window - a bot jittering 2-3 cm a frame in a nook never runs stuckT up, the 0.5 s net-displacement window sees it)
   // (K2, re-run) ... and every frame of its committed window (offFurnUntil): the flags above come and go frame by frame
   if (inHouse && a.onGround && (bb.heldN > 0 || holdStill || bb.stuckT > 0.3 || bb.pinN >= 1 || W.t < bb.offFurnUntil) && offFurniture(W, b, dt)) { bb.heldN = 0; bb.heldAcc = 0; }
-  qx = tx - a.pos.x; qz = tz - a.pos.z;
+  qx = ox - a.pos.x; qz = oz - a.pos.z;
   MTQ[2] = Math.sqrt(qx * qx + qz * qz);
 }
 
