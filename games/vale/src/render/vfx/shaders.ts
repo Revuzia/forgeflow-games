@@ -62,14 +62,11 @@ uniform mat4 uLiftInvProj;
 uniform mat4 uLiftCamWorld;
 // combat F4 (W1 verify): the ultimate envelope (post.ts ExposureEffect) lifts the frame AFTER this pass: the ground
 // ×(1 + lift) in display, a body at most LIFT_BODY_CAP. An effect is no ground: an impact flare, a status look, a proc or
-// a pale frost decal in the light went ×(1 + lift)^2.2 linear and white over the struck unit. The same lift sum and the
-// same ground test from the scene depth as the envelope's tell what it will add at this pixel. Integration run 2: an
-// effect keeps the WHOLE lift while its own light, lifted, stays under the display knee (0.86, post.ts capB's), and past
-// that is lifted only up to the knee, never less than the body cap (the run-1 rule divided every effect down to the cap,
-// which also taxed the dim, saturated ground light the T4 punch is made of: Tunlan's core 2.16 -> 2.06, RIFT Low's flash
-// 1.99x -> 1.92x). Over a body the envelope itself stops at LIFT_BODY_CAP, so nothing changes there.
-const float VFX_KNEE_LIN = ${Math.pow(0.86, 2.2).toFixed(4)};
-float vfxLift( vec3 c ) {
+// a pale frost decal in the light went ×(1 + lift)^2.2 linear and white over the struck unit. Every effect takes the
+// body's cap wherever it lands (light and ink alike; a chip, opaque stone, is lit like the ground): its colour is
+// divided here by what the envelope will add past the cap at this pixel (the same lift sum and the same ground test
+// from the scene depth as the envelope's). A light-only variant (ink lifted) left Rishal's frost track at 0.31 white
+float vfxLift() {
   if ( uLiftOn < 0.5 ) return 1.0;
   vec2 uv = gl_FragCoord.xy / uRes;
   float lift = 0.0;
@@ -89,10 +86,7 @@ float vfxLift( vec3 c ) {
     vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
     post = mix( lift, min( lift, ${(LIFT_BODY_CAP - 1).toFixed(3)} ), smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 ) );
   }
-  float g = pow( 1.0 + post, 2.2 );
-  float gc = pow( 1.0 + min( post, uLiftCap ), 2.2 );
-  float L = dot( max( c, vec3( 0.0 ) ), vec3( 0.2126, 0.7152, 0.0722 ) );
-  return clamp( VFX_KNEE_LIN / max( L * g, 1e-5 ), gc / g, 1.0 );
+  return pow( ( 1.0 + min( post, uLiftCap ) ) / ( 1.0 + post ), 2.2 );
 }
 `;
 
@@ -175,7 +169,7 @@ void main() {
     vec3 body = vCol.rgb * ( 0.5 + 0.5 * t.r );
     gl_FragColor = vec4( ( body * ( 1.0 - rim ) + vRim * rim ) * a, a * ( 1.0 - rim * 0.35 ) );
   }
-  gl_FragColor.rgb *= vfxLift( gl_FragColor.rgb );   // combat F4: lifted to the display knee at most (vfxLift)
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── ribbons (CPU-built camera-facing strips, one draw) ─────────────────────────────────────────
@@ -209,7 +203,7 @@ void main() {
     float rim = ( 1.0 - smoothstep( 0.0, 0.32, across ) ) * vRim.w * smoothstep( 0.0, 0.08, across );
     gl_FragColor = vec4( mix( vCol.rgb * ( 0.6 + 0.4 * n ), vRim.rgb, rim ) * a, a );
   }
-  gl_FragColor.rgb *= vfxLift( gl_FragColor.rgb );   // combat F4: lifted to the display knee at most (vfxLift)
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── beams (instanced noise-displaced strips) ───────────────────────────────────────────────────
@@ -258,7 +252,7 @@ void main() {
   vec3 rgb = vC.rgb * ( 0.55 + 0.6 * n ) + vC.rgb * core * vE.x;
   if ( vD.w < 0.5 ) gl_FragColor = vec4( rgb * a, 0.0 );
   else gl_FragColor = vec4( rgb * a, a );
-  gl_FragColor.rgb *= vfxLift( gl_FragColor.rgb );   // combat F4: lifted to the display knee at most (vfxLift)
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── shockwave rings (ground or camera-facing) ──────────────────────────────────────────────────
@@ -298,7 +292,7 @@ void main() {
   vec3 rgb = vCol.rgb * ( 0.7 + 0.5 * lead );
   if ( mode < 0.5 ) gl_FragColor = vec4( rgb * a, 0.0 );
   else gl_FragColor = vec4( rgb * a, a );
-  gl_FragColor.rgb *= vfxLift( gl_FragColor.rgb );   // combat F4: lifted to the display knee at most (vfxLift)
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── ground decals (animated styles) ────────────────────────────────────────────────────────────
@@ -381,7 +375,7 @@ void main() {
   }
   if ( a < 0.002 ) discard;
   gl_FragColor = vec4( rgb * a, addOnly > 0.5 ? 0.0 : a );
-  gl_FragColor.rgb *= vfxLift( gl_FragColor.rgb );   // combat F4: lifted to the display knee at most (vfxLift)
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── FX meshes (one material: fresnel rim, two scrolling noises, dissolve with a glowing edge,
@@ -477,7 +471,7 @@ void main() {
     rgb = vColor.rgb * ( 0.65 + 0.35 * nz ) * ( 1.0 - rim ) + vRim.rgb * rim + vEdge.rgb * edge;
     gl_FragColor = vec4( rgb * aa, aa * ( 1.0 - rim * 0.3 ) );
   }
-  gl_FragColor.rgb *= vfxLift( gl_FragColor.rgb );   // combat F4: lifted to the display knee at most (vfxLift)
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── distortion sprites (into the half-res distortion buffer, additive offsets in UV units) ───────

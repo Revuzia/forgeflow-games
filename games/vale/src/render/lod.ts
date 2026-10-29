@@ -4,27 +4,29 @@
 //
 //   shadow    every shadow caster in the match (fighters, units, structures, landmarks, props, the crowd) draws its
 //             depth into the sun's map through a LOD: about a fifth of its triangles, the shape held within 3 cm (under
-//             a shadow-map texel at the lane camera, then softened by the PCF filter). The swap happens in the
-//             caster's onBeforeShadow / onAfterShadow, so the main pass never sees it. three keys its vertex-array
-//             state by (geometry, program) and re-binds when the index differs, and the depth programs never draw
-//             the main pass, so the swap costs no re-binding per frame.
-//   hull      the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body, accent and rest-outline
-//             hull through one LOD of half the triangles held within 6 mm (under half a pixel at the closest zoom: a
-//             Wick is ~70 px tall for ~1.1 m), the same index for all three so the ink hull keeps hugging the body.
+//             a shadow-map texel at the lane camera, then softened by the PCF filter), welded (see lodIndex). The swap
+//             happens in the caster's onBeforeShadow / onAfterShadow, so the main pass never sees it. three keys its
+//             vertex-array state by (geometry, program) and re-binds when the index differs, and the depth programs
+//             never draw the main pass, so the swap costs no re-binding per frame.
+//   hull      a per-actor unit's or structure's rest-outline hull (actors.ts): half the triangles within 6 mm, welded.
 //             Structures keep their full meshes in the main pass.
 //   body      a fighter's textured body in the MATCH (lodSwitch.body; the menu showcase keeps the full mesh) draws
 //             a face-locked LOD1 (art/blender/fighters/_lod1.mjs, the chars lane's recipe, ported below as
-//             faceLockedLod): half the triangles held within 10 mm (under a pixel at the closest lane zoom, ~95 px
-//             a metre), the normals weighted 0.5 and every vertex skinned >= 0.5 to the `head` bone locked, so the
-//             face never changes. The outline, flash, x-ray and veil copies of the hull are built from it
-//             (actors.ts), so they keep lying on the body's own surface.
-//   crowd     the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body, accent and rest-outline
-//             hull through one LOD held within 10 mm in metres (each mesh's own dequantization, see below): ~0.8 px at
-//             the default lane zoom, the same index for the three so the ink hull keeps hugging the body.
+//             faceLockedLod): 0.4 of the triangles asked, held within 12 mm (a pixel at the default lane zoom, 82 px a
+//             metre; the error bound stops it near 0.55), the normals weighted 0.5 and every vertex skinned >= 0.5 to the
+//             `head` bone locked, so the face never changes. The hull plan is rebuilt over it (the veil's depth copy
+//             draws exactly the body's triangles).
+//   ink       a match fighter's rest outline, victim flash and x-ray draw a welded LOD of that LOD1 hull within 8 mm
+//             (actors.ts bodyLodOf; the flash slides toward the camera so the coarser shell still covers the body).
+//   crowd     the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body and accents through a
+//             LOD held within 12 mm in metres (each mesh's own dequantization, see below; textured, so never welded):
+//             ~1 px at the default lane zoom for a 55-65 px Wick; its outline hull is composed of exactly those
+//             triangles, so the ink keeps hugging the body.
 //
 // Positions arrive as GLTFLoader builds them from KHR_mesh_quantization: normalized int16, read back in -1..1, the
 // metres per unit living only in the skeleton (dequantUnit). A bound in metres is divided by that unit; a caller that
-// passes no unit gets the bound in the mesh's own units (the shadow LOD's 3 cm, set for float meshes).
+// passes no unit gets the bound in the mesh's own units (the shadow LOD's 3 cm, set for float meshes; the crowd's
+// casters pass theirs).
 //
 // A mesh with several material groups keeps its full index (a LOD would cross the group ranges). Until the WASM is
 // ready (a few ms after boot; the loading screen awaits `lodReady`) nothing is simplified and every mesh draws whole.
@@ -206,9 +208,10 @@ export function dequantUnit(mesh: SkinnedMesh): number {
 /**
  * The face-locked LOD1 index of a fighter's textured body (a SkinnedMesh with one material and an index), or null
  * (simplifier not ready, no `head` bone, nothing gained). Call it on the TEMPLATE's body at rest (its world matrices
- * current, never posed): the dequantization is read from its skeleton. LOD.body: half the triangles within 10 mm,
- * normals weighted 0.5, every vertex skinned >= 0.5 to `head` locked (the chars lane's _lod1.mjs, checked against it by
- * art/blender/fighters/_lod1_three.mjs). Returns the index (Uint16 under 65,536 vertices) and both triangle counts.
+ * current, never posed): the dequantization is read from its skeleton. LOD.body: 0.4 of the triangles within 12 mm,
+ * normals weighted 0.5, every vertex skinned >= 0.5 to `head` locked (the chars lane's _lod1.mjs recipe, which
+ * art/blender/fighters/_lod1_three.mjs checks at its own 0.5 / 10 mm). Returns the index (Uint16 under 65,536 vertices)
+ * and both triangle counts.
  */
 export function faceLockedLod(mesh: SkinnedMesh): { index: BufferAttribute; tris: number; lodTris: number } | null {
   if (!ready) return null;

@@ -8,8 +8,8 @@
 //            mesh is skinned over one bone set (body + accent fold into one skeleton, actors.ts shareSkeletons),
 //            with no form nodes and single materials; anything else stays a per-actor model.
 //   * draw   one instanced draw per part per (template, accent colour) set, for every live, visible, on-screen
-//            unit of it: body, accent, the rest-outline hull, the victim flash (only while one flashes) and the
-//            shadow casters. Per instance: the actor's affine (flinch and squash included), two clip rows and
+//            unit of it: body, accent, the rest-outline hull, the victim flash (the flashing units alone: they take
+//            the set's first instance slots) and the shadow casters. Per instance: the actor's affine (flinch and squash included), two clip rows and
 //            their crossfade weight, the accent glow, the outline width and the flash.
 //   * drive  the Actor keeps its own animation logic (roles, scrubbed attacks, crossfades, held casts): a
 //            BakedMixer stands in for AnimationMixer and turns its actions into (rowA, rowB, weight).
@@ -25,7 +25,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
-import { composeIndex, dequantUnit, LOD, lodIndex, prepareShadowLod } from './lod.ts';
+import { composeIndex, dequantUnit, LOD, lodIndex, prepareShadowLod, shadowLods } from './lod.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
 export const BAKE_HZ = 60;
@@ -417,7 +417,7 @@ class CrowdSet {
         mat.customProgramCacheKey = p.material.customProgramCacheKey;
       }
       patchCrowd(mat, bake, p.bind, p.accent);
-      // perf PERF-m5: the body and accent draw through their LOD (lod.ts LOD.crowd: within 10 mm, ~0.8 px at the default
+      // perf PERF-m5: the body and accent draw through their LOD (lod.ts LOD.crowd: within 12 mm, ~1 px at the default
       // lane zoom; crowd units are Wicks and small monsters, ~55-65 px tall), the hull through the same triangles
       const pv = this.buf.view(p.geometry);
       if (p.lod) { pv.userData.fullIndex = p.geometry.index; pv.setIndex(p.lod); }
@@ -428,6 +428,7 @@ class CrowdSet {
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
       mesh.name = `crowd_part_${p.accent ? 'accent' : 'body'}`;
+      shadowLods(mesh);                                                    // hooked now (its LOD is built above)
       this.group.add(mesh);
     }
     for (const h of bake.hull) {

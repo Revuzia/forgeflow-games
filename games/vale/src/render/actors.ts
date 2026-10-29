@@ -72,7 +72,7 @@ import {
 } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
-import { composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lodReady, lodSwitch, prepareShadowLod } from './lod.ts';
+import { composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lodReady, lodSwitch, prepareShadowLod, shadowLods } from './lod.ts';
 import { structureMaterial } from './structures.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
@@ -785,6 +785,9 @@ export class Actor implements CrowdActor {
     this.buildHull(model, t);
     // the clone's shadow casters draw their depth through the ink programs (customDepthMaterial does not survive a clone)
     inkShadows(model);
+    // perf PERF-m5: and their shadow LODs now (the template's and the body LOD1's are built: hooking is instant), not
+    // whenever the renderer's per-second sweep reaches them
+    shadowLods(model);
     this.root.add(model);
     if (t.clips.size > 0) this.mixer = new AnimationMixer(model);
     for (const [k, bone] of Object.entries(this.socketNames)) {
