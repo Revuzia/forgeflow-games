@@ -413,11 +413,14 @@
 .pcard { position: relative; display: block; flex: none; width: var(--cw); height: calc(var(--cw) * 5 / 3); overflow: hidden; border-radius: var(--radius);
   background: linear-gradient(180deg, var(--ink-0) 0%, var(--ink-1) 22%, var(--ink-2) 100%); box-shadow: inset 1px 1px 0 var(--catch-light); }
 .pcard__art { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; border-radius: 0; background: none; }
-/* the plate stands in the lower 84 % and fades into the ink above it: the figure at ~75 % of the card's height */
-.pcard__art > .aimg, .pcard__art > .aimg__skel { inset: auto 0 0 0; height: 84%; -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.45) 14%, rgba(0, 0, 0, 0.85) 30%, #000 44%); mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.45) 14%, rgba(0, 0, 0, 0.85) 30%, #000 44%); }
-.pcard__meta { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: 2px; padding: calc(4 * var(--u)) calc(1.25 * var(--u)) calc(1.25 * var(--u));
-  background: linear-gradient(to top, rgba(11, 13, 17, 0.94) 0%, rgba(11, 13, 17, 0.86) 55%, rgba(11, 13, 17, 0) 100%); }
-.pcard__fighter { color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
+/* the plate stands in the lower 84 % and meets the ink above it in a short 5 % fade (the splash plates bake their own
+   top-edge falloff; W5b done:5: card and plate p50 >= 70 at 1920 and 1280): the figure at ~75 % of the card's height */
+.pcard__art > .aimg, .pcard__art > .aimg__skel { inset: auto 0 0 0; height: 84%; -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.7) 2.5%, #000 5%); mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.7) 2.5%, #000 5%); }
+/* a light, short foot scrim; the meta text keeps its contrast with its own shadow */
+.pcard__meta { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: 2px; padding: calc(2 * var(--u)) calc(1.25 * var(--u)) calc(1.25 * var(--u));
+  background: linear-gradient(to top, rgba(11, 13, 17, 0.9) 0%, rgba(11, 13, 17, 0.62) 45%, rgba(11, 13, 17, 0) 100%);
+  text-shadow: 0 1px 2px rgba(11, 13, 17, 0.95), 0 0 6px rgba(11, 13, 17, 0.7); }
+.pcard__fighter { color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0), 0 0 6px rgba(11, 13, 17, 0.7); }
 .pcard__name { display: flex; align-items: center; gap: calc(0.75 * var(--u)); color: var(--text-2); white-space: nowrap; min-width: 0; }
 .pcard__pname { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pcard__bot { position: absolute; z-index: 3; left: var(--u); top: var(--u); }
