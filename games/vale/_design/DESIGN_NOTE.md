@@ -28,7 +28,7 @@ VALE is an original 3D lane-brawler that runs in the browser. Its world is one g
 
 Source: `content/modes.json`, `content/queues.json`, `content/maps/*.json`. RIFT's queues are Quick (role and fighter chosen before queueing), Draft (1 ban a team), Ranked (2 bans a team, Glicko-2) and Co-op vs bots; Custom and Practice complete the eight queues.
 
-The catalog holds 16 fighters (each a passive, three abilities and an ultimate; 3 Plinths, 3 Breakers, 2 Strikers, 3 Slingers, 3 Casters, 2 Tenders), five positions (Shadehold, Grovehunter, Dialcross, Shaftlight, Lampglass), four resources (Light, Tally, Heat, Unlit), 48 skins that never change stats, 39 items, 8 Hour spells, 9 boons, 3 paths, 24 unit types, 5 team buffs, 7 ranks and 1,371 UI strings. A fourth mode tile, **the uncarved hour**, is reserved in data (`content/client.json` `modeSlots`).
+The catalog holds 16 fighters (each a passive, three abilities and an ultimate; 3 Plinths, 3 Breakers, 2 Strikers, 3 Slingers, 3 Casters, 2 Tenders), five positions (Shadehold, Grovehunter, Dialcross, Shaftlight, Lampglass), four resources (Light, Tally, Heat, Unlit), 48 skins that never change stats, 57 items (20 core, 15 basic, 11 apex, 4 starters, 4 boots, 3 consumables), 8 Hour spells, 9 boons, 3 paths, 24 unit types, 5 team buffs, 7 ranks and 1,536 UI strings (`npm run content:check`, 2026-10-29). A fourth mode tile, **the uncarved hour**, is reserved in data (`content/client.json` `modeSlots`).
 
 **State of the slice (2026-10-14).**
 
