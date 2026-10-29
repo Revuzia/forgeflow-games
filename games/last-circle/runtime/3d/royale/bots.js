@@ -612,7 +612,7 @@ export function assignDrops(W) {
     return null;
   };
   // (R2) a fallback target (a random point of a full POI, a random ground point) is moved to the nearest clear spot round it by the same rings (no rng
-  // draw: the claims after it draw what they always drew); none in 11 m: it stays where it was
+  // draw: the claims after it draw what they always drew); none in 7 m: it stays where it was
   const clearFallback = (x, z) => {
     const at = landingFor({ x, z });
     if (at && (at.x !== x || at.z !== z)) dropSt.fbMoved++;
@@ -2142,6 +2142,11 @@ function trapBreak(W, b) {
     ex = hx || findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
     if (ex && ex.length && !hx) extendExit(W, a, ex);
     if (ex && !ex.length) ex = null;
+    // (R2 movers, pass 2) the open cell findExit / the door path hands back knows nothing of drops: p23_fall's lip setup, Isla seed 77, s46 at 10 hp was
+    // HELD by edgeGuard at a 6 m face (-23.3, -150.6), tripped the breaker 3 s later, got findExit's cell (-23.3, -158.6) on the lip of the same face,
+    // sprinted in, turned for its loot as it arrived and ran over (14 hp fall, dead) - edgeGuard's 0.15 s probe missed the turn. An exit whose walk, or
+    // whose last point's surroundings, falls further than the bot may walk off is refused (the heading walk below is tried instead)
+    if (ex && !exitFallSafe(W, a, ex, walkDrop(a))) { ex = null; nav.st.trapUnsafe++; }
   }
   if (!ex) {
     const side = (bb.trapN & 1) ? 1 : -1, lim = walkDrop(a);
@@ -2153,7 +2158,9 @@ function trapBreak(W, b) {
       let drop = false;
       for (let d = 1; d <= TRAP_WALK_M && !drop; d += 1) if (W.map.heightAt(a.pos.x - Math.sin(yaw) * d, a.pos.z - Math.cos(yaw) * d) < a.pos.y - lim) drop = true;
       if (drop) continue;
-      ex = [{ x, y: null, z, k: 0 }];
+      const wk = [{ x, y: null, z, k: 0 }];
+      if (!exitFallSafe(W, a, wk, lim)) { nav.st.trapUnsafe++; continue; }      // (pass 2) its overrun and its end's surroundings too
+      ex = wk;
       nav.st.trapWalk++;
       break;
     }
@@ -2163,6 +2170,43 @@ function trapBreak(W, b) {
   bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
   bb.escX = last.x; bb.escZ = last.z; bb.escUntil = W.t + TRAP_ESC_S;
   bb.nextPathT = W.t + 2.5;
+}
+const TRAP_OVERRUN_M = 3.0;       // (pass 2) a sprint arriving at a break-out goal runs on (and turns) this far past it ...
+const TRAP_LIP_R = 2.5;           // ... and no ground within this of the goal may lie more than the walking margin under it
+const _lipDirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
+/** (R2 movers, pass 2) Is a break-out route safe to walk for this bot (lim = walkDrop)? The terrain (water floors a fall) sampled every 0.8 m from the feet
+ *  along each leg and TRAP_OVERRUN_M past the last point: no face (a run of samples falling more than STEEP_STEP per sample, edgeGuard's own test) falls
+ *  more than lim from its top; and round the last point (8 headings at TRAP_LIP_R) no ground lies more than lim under it. Terrain only: a bot up on a
+ *  deck takes deckExitPoint, which is edgeGuard's margin by construction. No rng draw. */
+function exitFallSafe(W, a, ex, lim) {
+  if (!(lim < 1e6)) return true;
+  const M = W.map, wy = M.waterY;
+  const hAt = (x, z) => { const h = M.heightAt(x, z); return wy != null && h < wy ? wy : h; };
+  let px = a.pos.x, pz = a.pos.z, prev = hAt(px, pz), runTop = NaN;
+  const n = ex.length;
+  for (let i = 0; i <= n; i++) {
+    let qx, qz;
+    if (i < n) { qx = ex[i].x; qz = ex[i].z; }
+    else {
+      const bx = n > 1 ? ex[n - 2].x : a.pos.x, bz = n > 1 ? ex[n - 2].z : a.pos.z, dx = px - bx, dz = pz - bz, L = Math.sqrt(dx * dx + dz * dz);
+      if (L < 1e-3) break;
+      qx = px + dx / L * TRAP_OVERRUN_M; qz = pz + dz / L * TRAP_OVERRUN_M;
+    }
+    const dx = qx - px, dz = qz - pz, L = Math.sqrt(dx * dx + dz * dz), steps = Math.max(1, Math.ceil(L / 0.8));
+    for (let k = 1; k <= steps; k++) {
+      const h = hAt(px + dx * k / steps, pz + dz * k / steps);
+      if (prev - h > STEEP_STEP) { if (runTop !== runTop) runTop = prev; if (runTop - h > lim) return false; }
+      else runTop = NaN;
+      prev = h;
+    }
+    px = qx; pz = qz;
+  }
+  const last = ex[n - 1], g = hAt(last.x, last.z);
+  for (let r = 1; r <= 2; r++) for (let j = 0; j < 8; j++) {
+    const d = TRAP_LIP_R * r / 2;
+    if (g - hAt(last.x + _lipDirs[j][0] * d, last.z + _lipDirs[j][1] * d) > lim) return false;
+  }
+  return true;
 }
 const TRAP_HEADINGS = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, Math.PI, Math.PI / 4, -Math.PI / 4];
 
@@ -3082,7 +3126,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
