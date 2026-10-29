@@ -4,7 +4,7 @@ What the client shows and says, and which sound plays when. The look is law in `
 
 | File | What it holds |
 |---|---|
-| `content/client.json` | nav (6), the Mode Dial slots (RIFT, BRIDGE, FRAY, the uncarved hour), home (headline, feature, 4 tiles), menu scene, 25 tips |
+| `content/client.json` | nav (6), the Mode Dial slots (RIFT, BRIDGE, FRAY, the uncarved hour), home (headline, feature, 4 tiles), menu scene, 26 tips (a `[mode,mode] ` tag limits a tip to those modes) |
 | `content/strings.en.json` | 1,371 dot-namespaced UI strings (§14) |
 | `content/store.json` | Candles only; 32 offers, 8 shelves, starter skins and wallet |
 | `content/bot_names.json` | 60 handles for bot seats |
@@ -99,6 +99,7 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Queue select:** below the dial, one card per queue of the chosen mode, ordered by `queue.order`: RIFT Quick, Draft, Ranked, Co-op; BRIDGE Standard; FRAY Standard. Card: `queue.name`, kind chip (`play.queue.kind.*`), `queue.desc`, the Candles line (win, loss) or the lock line. Custom game and Practice are two quiet links under the cards. The mode's name and tagline sit in the dial's open hub; the gnomon shadow is drawn on the dial face only (between the inner arc and the ticks), so it never crosses them.
 - **Mode art** (columns 7-12, client F6): every live mode's painted card (`ModeDef.card.art`, 2:3) is stacked there and the chosen one crossfades in from the right as the gnomon swings (360 ms). Under it a caption plate carries the chosen queue's name, the slot `note`, `queue.desc`, the ranked line and its terms: the Candles line, the per-minute rate and cap, the FRAY placement note, `play.queue.first_win`, bans (`play.queue.bans`), bots.
 - **720p** (height below 820 px, client F9): the queue cards become compact rows (name, kind, Candles or lock line; the description is the stage caption's), so the selected queue and Find match are on screen at 1280 x 720 without scrolling.
+- **Scroll edges** (every screen body and the finalize loadout column): while more content lies below, the bottom 24 px (at 1x) fade out instead of cutting a row through its labels (the RIFT role chips at 1280 x 720); scrolled to the end, the fade lifts. The top edge stays hard (sticky bars sit there). `_harness/sweep_720.mjs` fails text cut at a scroll box's bottom edge with no fade.
 - **Locks:** `unlockLevel` above the profile level makes the card locked: dashed border, "Reach level 20 to play Ranked." (`state.locked.queue`). Ranked also shows `play.queue.ranked_provisional` until the 5 placement matches are done.
 - **Party panel:** you plus bot allies. A stepper sets bot party members (`Session.setPartyBots`); queues with `partyMax` 1 show `play.solo_only`. Open seats are filled with bots (`play.queue.bots_fill`).
 - **RIFT roles:** primary and secondary role pickers (`play.roles.*`) for `draft` and `ranked` queues, using the five positions from `roles.json`. `role_preset` (Quick) shows the preset panel instead: pick role and fighter now (`play.preset.*`); the CTA stays disabled with `play.preset.missing` until a fighter is chosen.
@@ -138,7 +139,7 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 - **Lock in is a ready flag** (client F12). When the session reports `DraftSeat.ready`, Lock in also sends `{a:'ready'}`, each ready seat shows `draft.seat.ready`, and the line reads `draft.finalize.ready_waiting` / `draft.finalize.ready_all`; the session ends finalize after a short grace once every human is ready. A session without the flag keeps `draft.finalize.starting` (the timer ends the phase).
 
 ### 3.7 Loading
-- **Shows:** the map name and flavour line (`loading.title`, `loading.flavour.<mode>`), one tip at a time from `client.tips` (random start, then in order, every 8 s, `loading.tip_n`), a thin progress bar (`loading.progress`), and a chip per seat (up to ten) with a tick as each seat is ready (`loading.seat_ready`).
+- **Shows:** the map name and flavour line (`loading.title`, `loading.flavour.<mode>`), one tip at a time from this mode's tips (`client.tips` untagged plus those tagged for the mode, e.g. `[rift] ` or `[rift,bridge] `; the tag is never shown; random start, then in order, every 8 s, `loading.tip_n` counts the mode's list), a thin progress bar (`loading.progress`), and a chip per seat (up to ten) with a tick as each seat is ready (`loading.seat_ready`).
 - **States:** waiting for others (`loading.waiting`), asset error (`state.error.match` + Retry). The shadow-line wipe starts the screen and ends it; no sound but the bed fading.
 
 ### 3.8 Post-game
