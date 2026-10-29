@@ -1,7 +1,7 @@
 {
  "hood": "#575D66",
  "hood_rim": "#9D9B95",
- "knob": "#C4C0B5",
+ "knob": "#BAB6AC",
  "cloak": "#474D56",
  "sleeves": "#4F5864",
  "mitt_R": "#667381",
@@ -10,11 +10,11 @@
  "boot_L": "#333439",
  "boot_R": "#333439",
  "pole": "#A99D87",
- "finial": "#C6C2B7",
- "crook": "#C9C5BA",
- "brace": "#C9C5BA",
+ "finial": "#BDB9AF",
+ "crook": "#BFBBB1",
+ "brace": "#C0BCB2",
  "lamp_glass": "#53667D",
- "lamp_posts": "#D7D3C9",
- "lamp_caps": "#C9C5BA",
+ "lamp_posts": "#D0CDC3",
+ "lamp_caps": "#C0BCB2",
  "cord": "#C4CDD6"
 }

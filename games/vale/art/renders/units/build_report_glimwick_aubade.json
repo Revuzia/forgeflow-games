@@ -73,14 +73,14 @@
   },
   "uv_coverage": 0.733,
   "bake": {
-    "base": 5.6,
-    "rough_metal": 5.96,
-    "normal": 3.93,
-    "ao": 2.58,
+    "base": 5.33,
+    "rough_metal": 6.53,
+    "normal": 2.43,
+    "ao": 3.3,
     "normal_fixed_px": 10967,
-    "projection": 108.23,
-    "pack_save": 108.42,
-    "total": 127.0
+    "projection": 79.97,
+    "pack_save": 80.17,
+    "total": 98.38
   },
   "tris": 2956,
   "mesh_top_m": 1.32,
@@ -179,13 +179,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1097592,
+  "glb_bytes_raw": 1097356,
   "optimize": {
     "ok": true,
-    "before": 1099328,
-    "after": 342708
+    "before": 1099092,
+    "after": 343228
   },
-  "glb_bytes": 342708,
+  "glb_bytes": 343228,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -229,25 +229,25 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_glimwick_aubade.png",
-    "seconds": 24.8,
+    "seconds": 29.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.03,
-      "materials": 1.4,
-      "model": 75.16,
-      "lows_bind": 0.16,
-      "uv": 22.95,
-      "bake": 127.11,
-      "clips": 0.83,
-      "export": 2.81,
-      "optimize": 2.0,
-      "load_test": 0.48,
-      "three_qa": 25.54,
-      "cache": 0.21
+      "rig": 0.0,
+      "materials": 0.33,
+      "model": 65.93,
+      "lows_bind": 0.15,
+      "uv": 21.28,
+      "bake": 98.5,
+      "clips": 0.72,
+      "export": 1.75,
+      "optimize": 0.98,
+      "load_test": 0.29,
+      "three_qa": 30.8,
+      "cache": 0.19
     },
-    "total_s": 259.36
+    "total_s": 221.04
   },
   "run_ref_speed": 3.25,
   "height_m": 0.93
