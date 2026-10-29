@@ -397,9 +397,12 @@ export class SignsLayer {
       const tw = 0.5 + 0.5 * Math.sin(f.real * 1.1 + fxHash(M.id[i], 3) * 6.28);
       const k = (0.3 + 0.25 * tw) * (1 - smooth(300, 600, d));
       this.marks.glints.add(back.x, back.y, back.z, Math.max(0.3, d * 0.0045), ANIMAL_COL[0], ANIMAL_COL[1], ANIMAL_COL[2], k);
-      const L = decal(DECAL.light, [u.x * g, u.y * g, u.z * g], size * 3 + 1.5);
-      // (a little light on the beast, not a spotlight on the hillside: a broad bright pool read as a stage lamp)
-      L.cr = ANIMAL_COL[0]; L.cg = ANIMAL_COL[1]; L.cb = ANIMAL_COL[2]; L.p0 = size * 3 + 1.5; L.p1 = 22 * k * (size + 0.5); L.p2 = size + 1.8; L.p3 = 1;
+      // (a little light on the beast, not a spotlight on the hillside: a broad bright pool read as a stage lamp — but never
+      // under ~4 m across, so a small beast's (a duck's, a hare's) still reads from the god's working height, where its
+      // 1.5 m pool lit a few pixels and the marked herd read as grey pebbles)
+      const reach = Math.max(size * 3 + 1.5, 4 + d * 0.02);
+      const L = decal(DECAL.light, [u.x * g, u.y * g, u.z * g], reach);
+      L.cr = ANIMAL_COL[0]; L.cg = ANIMAL_COL[1]; L.cb = ANIMAL_COL[2]; L.p0 = reach; L.p1 = 22 * k * Math.max(size + 0.5, 0.35 * reach); L.p2 = Math.max(size + 1.8, 0.4 * reach); L.p3 = 1;
       f.decals.add(L);
       this.stats.animals++;
     }
