@@ -1,0 +1,175 @@
+{
+ "wave": "W3",
+ "round": 1,
+ "verifier": "adversarial verifier, 2026-10-28 (re-measured at bb0a3f7d, no W3 path changed since; engineer reports not trusted)",
+ "pass": false,
+ "summary": "W3 does not pass round 1. Two done-criteria are only partly met. (1) done 4 / AUD-5: the shared shade-breath swell plays only for enemy ULTIMATES (src/audio/index.ts:1228, slot === 'ult'). tokens.json:369 defines T3 as crowd control, mobility and zones with enemyWindupAudio 'mandatory', and the finding asked for every enemy T3+ wind-up. 18 non-ult abilities are tagged T3 in content/vfx.json and have a 0.1-0.3 s castTime, and 5 more hard-CC casts have wind-ups too. None of them gets the swell. (2) done 3 / AUD-1: the build.py kit gate passes on its own metric, which I reproduced exactly (min 8.35 dB). That metric counts the 25-100 Hz bands, though. On the same metric from 125 Hz up, 21 fighter pairs fall below 8 dB (min 5.11 dB, dunsom/hesmi attack_hit). On the review's own confusability metric (final_audio_tool_confuse.py, 125 Hz-16 kHz), 30 pairs are below 8 dB. A related regression: the new kit attack hits replace the AUD-4-fixed library hits for every fighter auto-attack. Burdam, hesmi, ulkro and lisvel hits lose 3.6-11.4 LU through the review's 220 Hz laptop high-pass (gate <= 3 LU) and carry no contact transient. The build.py impact gate never measures f_*_attack_hit. Everything else holds on fresh runs: both blockers (team-private comms, hidden-tab queue pop at -8.01 dBFS with every other cue silent), the camera listener (a real-client check confirms the ear follows Renderer.listenerFocus()), 0 unbound procs in a 9-min RIFT, ambience on all three maps with the RIFT laning floor 5.1 dB above the music stem, the announcer, the mix, the .m4a pieces, typecheck and content_ids. One harness regression: _harness/probe_audio_listener.mjs exits 1 at its defaults because its seat never dies. I measured done 6 with a copy seated at 2, where burdam died once.",
+ "commands": [
+  "npm run typecheck -> exit 0",
+  "npm run content:check -> OK, 1 warning ($.ui.queue_remind not in UI_CUE_KINDS; src/ui/audio_kinds.ts / tools/build_content.ts are not W3 files; the UI does play it, src/ui/state.ts:199)",
+  "node _harness/probe_content_ids.ts -> PASS (1207 ids x 194 src files, 0 hits)",
+  "~/Developer/forgeflow-games/.venv/bin/python3 audio/build.py --gates -> exit 0 (control, procs, ambience, kits, instant, impact all PASS)",
+  "node _harness/probe_audio_team_private.mjs --out _harness/_reports/fw_W3_v1_team_private.json -> PASS",
+  "node _harness/probe_audio_qpop.mjs --out _harness/_reports/fw_W3_v1_qpop.json -> PASS (real Chrome; A -8.01 dBFS hidden default, B 8 cues -999, C remind -10.09, D ui 0.05 -10.77, E master 0 silent)",
+  "node _harness/probe_audio_listener.mjs --out _harness/_reports/fw_W3_v1_listener.json -> EXIT 1 (gate A vacuous: seat 7 hesmi 0 deaths in 20 min)",
+  "YOU=2 node <scratchpad>/v/listener_seat.mjs --minutes 16 (probe copy, seat configurable) -> PASS: burdam died 1x, dead 30 s, A 40 cues 100 % audible median 0 dB; B 188 cues 100 % at -1.94 dB; C 52 allied culled",
+  "YOU=4 node <scratchpad>/v/listener_seat.mjs --minutes 16 -> A vacuous again (0 deaths)",
+  "node <scratchpad>/v/ear_check.mjs _harness/_reports/fw_W3_v1_ear_check.json (real Chrome, renderer on, practice) -> ear == Renderer.listenerFocus(): (8.5,55) then (33.5,55) after camera.focusOn 25 m east while the fighter stays at (8.5,55); place() at the fighter then att 0.146, pan -0.6, lpf 5809 Hz",
+  "node _harness/probe_audio_procs.mjs --out _harness/_reports/fw_W3_v1_procs.json -> PASS (RIFT 540 s: 3325 procs, unbound 0; BRIDGE 474, FRAY 303, unbound 0; 0 orphan passive damage)",
+  "node _harness/probe_audio_cc.mjs --out _harness/_reports/fw_W3_v1_cc.json -> PASS (ULT-only check: 3 enemy ults, swell at caster 3/3, 1 played and panned; S4 pan 0.45)",
+  "node _harness/probe_audio_kits.mjs --out _harness/_reports/fw_W3_v1_kits.json -> PASS (16/16 kits, 4 seeds, ult releases 24-25 matched, 0 orphans; fighterCall for all 16)",
+  "node _harness/probe_audio_ambience.mjs --out _harness/_reports/fw_W3_v1_ambience.json -> PASS (RIFT 6, BRIDGE 5, FRAY 5 emitters)",
+  "node _harness/probe_audio_mix.mjs --out _harness/_reports/fw_W3_v1_mix.json -> PASS (real Chrome)",
+  "node _harness/probe_audio_announcer.mjs --out _harness/_reports/fw_W3_v1_announcer.json -> PASS (A1-A9, B1-B4, C1-C5)",
+  "node _harness/probe_audio_pieces.mjs --out _harness/_reports/fw_W3_v1_pieces.json -> PASS (48 and 44.1 kHz)",
+  "python3 -I <scratchpad>/v/dist4.py _harness/_reports/fw_W3_v1_kit_distance_buildmetric.json (build.py's own 1/3-octave metric, 25 Hz vs 125 Hz floor)",
+  "python3 -I <scratchpad>/v/dist2.py / dist3.py -> _harness/_reports/fw_W3_v1_kit_distance_reviewmetric*.json (the final review's confuse metric on the kits)",
+  "python3 -I <scratchpad>/v/impact.py, impact_kits.py -> _harness/_reports/fw_W3_v1_impact.json, fw_W3_v1_impact_kits.json (>2 kHz share in the first 30 ms; max-momentary loss through a 4th-order 220 Hz high-pass, the review's K-weighting)",
+  "python3 -I <scratchpad>/v/instant.py (onset to -40/-20/-6 dB of peak for the AUD-m1 cues)"
+ ],
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "Real Chrome, fresh profile (default settings, muteInBackground on), tab hidden, a real rift_coop ready check. ui_queue_pop is in the cue log and the post-limiter peak is -8.01 dBFS (gate -12) while the master gain stays at 0. Eight ordinary cues (ui_confirm, ui_notify, ui_purchase, ui_level_account, m_level_up, m_takedown, m_announce_major, c_crit) read -999 dBFS hidden. With the UI slider at 0.05 the pop still reads -10.77, and with master at 0 it is silent. Report: _harness/_reports/fw_W3_v1_qpop.json."
+  },
+  {
+   "id": "done:2",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "probe_audio_team_private (real sim, real engine) for all 9 PingKinds: an enemy ping tries 0 cues, while ally and own pings play m_ping_<kind>, including onMyWay -> m_ping_onmyway. The enemy team's surrender_vote and surrender_failed try 0 cues; your own vote plays m_announce_minor. Code: src/audio/index.ts:1312-1318 (ping gated on by.team === myTeam()) and :1344-1345 (surrender_* gated on e.team === mine). I also checked every 'announce' key the sim emits (src/sim/**). No other team-private key exists, and surrender_passed is silent (:1347). Report: _harness/_reports/fw_W3_v1_team_private.json."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Five sub-criteria hold: `audio/build.py --gates` exits 0. No attack or ult cue is shared (I also hashed every shipped file: 0 duplicate-content groups). Each control kind has its own cue, with c_buff on buffs only. 70 fast cues have >= 3 variants. All 12 paying passives have a proc cue. The >= 8 dB distance passes only on the gate's own metric. I reproduced it exactly in dist4.py (FFT 1/3-octave, 25 Hz-16 kHz, power-normalised, -50 dB floor): min 8.98 / 8.52 / 8.63 / 8.35 dB for swing / hit / ult wind-up / ult release. Several kit cues put most of their energy below 125 Hz (attack_hit: burdam 83 %, hesmi 84 %; swing: burdam 82 %, marund 68 %). On the SAME metric from 125 Hz up, 21 pairs fall below 8 dB: attack_hit 7 pairs (min 5.11, dunsom/hesmi), ult_release 9 (min 6.33, burdam/ilsheta), ult_windup 3 (min 5.50, tunlan/ulkro), swing 2 (min 6.80, marund/tunlan). The review metric that produced the AUD-1 evidence (final_audio_tool_confuse.py: STFT 1/3-octave 125 Hz-16 kHz re max, -40 dB floor) gives, per file, min 2.81 dB (dunsom/hesmi attack_hit) and 30 pairs under 8 dB across the four slots. dunsom/hesmi hits are also close in envelope (3.4 dB). Reports: _harness/_reports/fw_W3_v1_kit_distance_buildmetric.json, fw_W3_v1_kit_distance_reviewmetric.json, fw_W3_v1_kit_distance_reviewmetric_file0.json.",
+   "fixHint": "In audio/build.py kit_gate, measure the identity distance from 125 Hz up, or after the impact gate's 4th-order 220 Hz laptop high-pass, so sub-bass cannot carry the 8 dB. Then re-voice the failing pairs in audio/cues/kits*.py: give each fighter's hit/release a distinct 300 Hz-6 kHz signature (its home material's partials), starting with dunsom/hesmi attack_hit, burdam/lisvel attack_hit, tunlan/ulkro ult_windup and burdam/ilsheta and hesmi/tunlan ult_release. Re-run --gates and dist4.py with the 125 Hz floor until min >= 8 dB."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The first half passes. probe_audio_procs, 9-min RIFT (540 s): 3325 procs, unbound 0, every proc reaches a decision, 0 orphan passive damage; BRIDGE 474 and FRAY 303 also have unbound 0 (_harness/_reports/fw_W3_v1_procs.json). The second half passes for ultimates only. probe_audio_cc: 3 enemy ults in 540 s, the swell tried at the caster 3/3 (1 in earshot, played and panned); S4 a caster 9 m right gives pan 0.45 (_harness/_reports/fw_W3_v1_cc.json). Enemy T3 wind-ups get no swell. src/audio/index.ts:1228 fires enemyUltWindup only when slot === 'ult'. _design/tokens.json:369 defines T3 as 'crowd control, mobility, zones' with enemyWindupAudio 'mandatory'. The finding's fix is 'Apply the shade-breath swell to every enemy T3+ wind-up'. content/vfx.json tags 18 non-ult abilities with castTime > 0 as T3: ardit a1/a2, burdam a1, dunsom a1, ervet a3, hesmi a1/a2, ilsheta a2, lisvel a1/a2, marund a1/a2/a3, nurrow a1, odrum a1, sukri a1, ulkro a2, vashil a1 (castTime 0.1-0.3 s). Hard-CC casts with wind-ups that are not tagged T3 (tunlan a1 fear 0.3 s, tunlan a2 stun 0.25 s, nurrow a2 sleep 0.25 s, nurrow a3 silence 0.15 s, sukri a3 root 0.25 s) also play no allegiance tell. probe_audio_cc's M2 gate checks ults only, so it cannot catch this.",
+   "fixHint": "In src/audio/index.ts case 'cast', also play the swell (or a short-form role, e.g. events.enemyWindup, tail-trimmed to the castTime) when an enemy fighter starts a T3 cast with castTime > 0. Derive T3 from content data at engine build time, never from ids: the ability applies a control status (the sim's CC kinds), has a dash/blink op, or creates a zone; or its present.windupVfx is a T3 vfx. Spatialise it at the caster like the ult swell. Add an M2b gate to _harness/probe_audio_cc.mjs: every enemy T3 cast heard tries the swell at the caster."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "probe_audio_mix in real Chrome, default settings. The ambience bus plays on every map with every emitter playing: RIFT 6/6 (bus short-term p50 -28.4 LUFS), BRIDGE 5/5 (-34.3), FRAY 5/5 (-28.9). RIFT laning (180 s): master short-term p10 -23.3 LUFS against a music-stem p50 of -28.4, so the floor is 5.1 dB above the music. The ambience itself lifts that floor by 1.9 dB (master without ambience: p10 -25.4). Report: _harness/_reports/fw_W3_v1_mix.json. The node probe agrees (probe_audio_ambience: every emitter on its art.ambient points, combat duck 0 / -3 / -6 dB at heat 0.15 / 0.4 / 0.6, nothing voiced after detach; _harness/_reports/fw_W3_v1_ambience.json)."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "The repo probe at its defaults is vacuous: _harness/_reports/fw_W3_v1_listener.json exits 1 because seat 7 (hesmi) never dies in 20 min. I measured it with a copy of the probe seated elsewhere (<scratchpad>/v/listener_seat.mjs, YOU=2, 16 min): burdam died once and was dead 30 s. A: 40 fighter combat cues within 8 m of the camera focus while dead, 100 % audible, median / p10 / min 0 dB. B: 188 enemy casts and attacks within 10 m of the living fighter while scouting 40 m away, 100 % audible at -1.94 dB. C: 52 allied attacks culled. D: full to 12 m, silent at 30 m, |pan| <= 0.6, low-pass only past 15 m. Real client (renderer on, real Chrome GPU): the engine's ear equals Renderer.listenerFocus(), which reads (33.5,55) after camera.focusOn 25 m east while the fighter stays at (8.5,55). A cue at the fighter then places at att 0.146, pan -0.6, lpf 5809 Hz (_harness/_reports/fw_W3_v1_ear_check.json)."
+  },
+  {
+   "id": "audio:AUD-MISS-1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "See done:2: 0 cues for enemy pings (all 9 kinds) and for enemy surrender_vote / surrender_failed (_harness/_reports/fw_W3_v1_team_private.json); gates at src/audio/index.ts:1314-1315, :1344-1345."
+  },
+  {
+   "id": "audio:AUD-2",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "Engine half. The alert path runs one gain per bus into the limiter after the master / background mute (src/audio/index.ts:426-452, ALERT_FLOOR 0.4; a master of exactly 0 is respected). It carries the cues bound to ui.queue_pop, ui.queue_remind, events.countdown and events.matchStart. Measured: hidden pop -8.01 dBFS, remind -10.09, UI slider 0.05 -10.77, master 0 silent, other cues -999 (_harness/_reports/fw_W3_v1_qpop.json). ui_queue_remind renders at -17 LUFS. The UI half is W2's: the reminder is already played (src/ui/state.ts:199). Notification and favicon were not verified here (W2 files)."
+  },
+  {
+   "id": "audio:AUD-9",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:6. Placement curve (probe D): 0 dB to 12 m, -2.38 dB at 15 m, -7.66 at 20 m, -37.7 at 29 m, off at 30 m; pan dx/20 clamped to ±0.6; lpf 12.2 kHz at 17.7 m falling to 3.5 kHz at 30 m. src/boot/main.ts:73-76 wires the renderer's listenerFocus; a real-client check confirms the ear follows the camera (_harness/_reports/fw_W3_v1_ear_check.json)."
+  },
+  {
+   "id": "audio:AUD-5",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Done: six new control cues; a 'status.<kind>' binding for all 9 control kinds with no catch-all; c_buff on buffs only. The build gate measures the control cues >= 7.3 dB apart, all landing <= 4.9 ms. probe_audio_cc S1: each kind on YOU plays its own cue +3 dB over the same status on an enemy, while haste stays at 0 dB. S2: grievous, shreds, reveal and stun-on-Wick play nothing. S3: the priority lift and pool steal work. In the 540 s capture, harm voiced by the buff cue = 0 and wrong cue = 0. The ult swell is spatialised at the caster. Not done: the swell for enemy T3 (non-ult) wind-ups; see done:4 for the 18 + 5 abilities and src/audio/index.ts:1228.",
+   "fixHint": "As done:4: extend the enemy wind-up swell to every enemy T3 cast with a wind-up (data-derived T3), at the caster, and gate it in probe_audio_cc."
+  },
+  {
+   "id": "audio:AUD-6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "case 'proc' exists. Over RIFT 9 min + BRIDGE 4 + FRAY 4: unbound 0, and every passive that fired and was seen played its cue (f_<fighter>_passive for fighters, c_proc_item/team for the others). Passive damage with no delivery: 226 + 23 + 32 voiced by the same-tick proc, 0 orphans (_harness/_reports/fw_W3_v1_procs.json). The build.py procs gate passes for 16 fighter passives (12 with a payoff) and 39 other triggered passives. Two passives never play their own cue and are recorded as 'cooldown': ironstone_guard_brace, whose sfx c_shield is already voiced by its own shield event, and second_shadow. Both are reasonable."
+  },
+  {
+   "id": "audio:AUD-8",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:5. Emitters: RIFT 6 (air bed, canopy, water, insects, lamp flame, wren), BRIDGE 5 (air bed, updraft, creak, lamp flame, wren), FRAY 5 (murmur bed, bunting, lantern, lamp flame, wren). All are on the ambience bus at their maps' art.ambient points, and content/maps is unedited. Real Chrome: every emitter plays on all 3 maps, and the RIFT laning floor is 5.1 dB above the music stem (_harness/_reports/fw_W3_v1_mix.json)."
+  },
+  {
+   "id": "audio:AUD-1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Done: all 16 fighters have whole f_<fighter>_<slot> kits: 10 slots each, 3 round-robin takes on attacks, a1-a3 and the passive, and 0 duplicate files. probe_audio_kits over 4 seeds x RIFT/FRAY: every kitted attack, hit, a1-a3 cast, wind-up and death resolves to its kit cue; ult releases 24/24 and 25/25 matched with 0 orphans; fighterCall resolves for all 16 (_harness/_reports/fw_W3_v1_kits.json). Not done: (a) the identity-distance margin depends on the sub-125 Hz bands; see done:3 (21 pairs < 8 dB from 125 Hz up; 30 by the review's metric). (b) The fix asked for per-fighter 'casts and impacts', and the finding lists generic projectiles and dashes. Ability impacts still play the shared library hitSfx: c_hit_magic for 9 fighters' abilities, c_hit_phys_heavy for 6, c_slow for 2. Dashes play c_dash for 11 fighters and projectiles c_proj_whoosh for 9. src/audio/index.ts case 'hit' (e.sfx ?? present.hitSfx ?? hitAbility) and case 'dash' never consult a kit. (c) A round-robin take is picked with Math.random (src/audio/index.ts:613), so the same take repeats back to back a third of the time; that is not round-robin.",
+   "fixHint": "Do (a) as in done:3. (b) Add per-fighter impact slots (e.g. f_<fighter>_a1_hit ... a3_hit, ult_hit, and optionally dash) resolved in case 'hit' / 'dash' before present.hitSfx, render them from each fighter's home material, and extend the build.py kit gate to them. (c) Pick a take at random but never the one played last for that cue."
+  },
+  {
+   "id": "audio:AUD-MISS-2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "content/audio.json binds 'ping.onMyWay' -> m_ping_onmyway. Own and ally onMyWay pings play it, and the probe derives all 9 PingKinds from src/contracts/sim.ts (_harness/_reports/fw_W3_v1_team_private.json)."
+  },
+  {
+   "id": "audio:AUD-3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "probe_audio_announcer A1-A9 pass: one line for the Lantern (m_structure_enemy_fall) with c_structure_fall as the world sound; first+shutdown merge into one line; a double merges into the triple; expiry; a wipe preempts; 10 lines with worst overlap 0.598 s; every line class has its own cue; flow events speak nothing (_harness/_reports/fw_W3_v1_announcer.json)."
+  },
+  {
+   "id": "audio:AUD-4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Library cues fixed; I re-measured them with the review's own K-weighting. >2 kHz share in the first 30 ms: c_hit_phys_light 0.080-0.104, c_hit_phys_heavy 0.082-0.101, c_crit 0.072-0.150. Loss through a 4th-order 220 Hz high-pass is <= 2.94 LU for every hit, crit, slam, monster hit, stun and root (_harness/_reports/fw_W3_v1_impact.json). Regression: after AUD-1 every fighter's auto-attack hit is its kit's f_<fighter>_attack_hit, not c_hit_phys_*. By the same measure several kit cues are thin on a laptop with no contact transient. Attack hits: f_burdam 9.6-11.4 LU loss (HF 0.003-0.009), f_hesmi 6.9-9.4 (HF 0.000), f_ulkro 5.7-6.5, f_lisvel 3.6-5.1, f_dunsom 3.0-3.7, f_marund 2.6-3.2. Swings: f_burdam 6.5-7.8, f_marund 5.6-7.6. Ult releases: f_burdam 7.2, f_ulkro 5.5, f_marund 4.65 (_harness/_reports/fw_W3_v1_impact_kits.json). The build.py impact gate covers only IMPACT_CUES and the control cues, so it cannot see this.",
+   "fixHint": "Add every f_*_attack_hit (laptop loss <= 3 LU plus the contact-share floor) and the f_*_attack_swing / ult_release (laptop loss) to the build.py impact gate. Re-voice the burdam, hesmi, ulkro, lisvel and dunsom hits with a 300-800 Hz body and a 2-5 kHz contact tick in each fighter's home material, keeping the soft top."
+  },
+  {
+   "id": "audio:AUD-7",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "probe_audio_announcer A7 / B1-B3. Under a line: music and ambience -6 dB, sfx -3 dB; threats are not ducked; the mix is back to -0.01 dB afterwards. 401 voices tried in one tick, with at most 32 pooled and the threat still voiced. Vamp heals play 0 cues, and two heals within 100 ms make 1 chime. A WaveShaper at 4x gives a max out of 0.8752 (< -1 dBFS) (_harness/_reports/fw_W3_v1_announcer.json)."
+  },
+  {
+   "id": "audio:AUD-m1",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Independent onset re-measure (ms to -40 / -20 / -6 dB of peak): m_level_up 4.4/5.2/6.0, m_respawn 5.1/5.3/6.2, c_blink 4.4/5.2/6.1, c_summon 5.1/5.3/5.5, c_cast_shade 8.0/11.2/11.4, m_ping_vision 5.1/5.3/7.3, m_recall_done 4.7/5.3/5.8. These were 119-464 ms to -20 dB. The build.py instant gate passes for 21 cues, slowest 11.1 ms."
+  },
+  {
+   "id": "audio:AUD-m2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Engine half. probe_audio_announcer C2/C3/C4: menu stems loop on their own lengths; draft phase layers follow draft(s) (pick 0.999, finalize+urgent 0.999/0.999/1, ban 0/0/0); urgency on 0.984 / off 0; after release the bed walks itself again (pick 0.988 at 20 s). The UI calls AudioPort.draft (src/ui/audio_port.ts:68). 'Later: dead and objective match states' is not done; the fix marked it as later."
+  },
+  {
+   "id": "audio:AUD-m3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "probe_audio_pieces at 48 and 44.1 kHz. The first request is seg000; the first piece starts the bed before the second decodes; later pieces start at t0+16/48 with offset 0; the stitch takes over at 112 s and loops at 160; layers join on a bar at 22 s; the whole .m4a and the .ogg are never fetched. Joint and wrap error is -81.5 / -123.4 / -88.9 / -126.6 dB; a restart comes from the cache with 0 fetches; a failed piece hands over at 5.05 s (_harness/_reports/fw_W3_v1_pieces.json). C1: the main stem starts before its layer, and the layer joins on a bar at 8 s."
+  },
+  {
+   "id": "audio:AUD-m4",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "probe_audio_announcer B4 (engine half): mono sums the output to 1 channel, softenLoud wires its compressor in and out, and off returns to 2 channels. The ambience slider now drives a populated bus (done:5)."
+  },
+  {
+   "id": "harness:listener-probe-default",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "`node _harness/probe_audio_listener.mjs` exits 1 at its defaults (seed 3, 20 min, seat 7 hesmi on autopilot: 0 deaths, so gate A is vacuous): _harness/_reports/fw_W3_v1_listener.json. Seat 4 is vacuous as well; seat 2 (burdam) works. The regression gate in the repo is red even though the behaviour holds.",
+   "fixHint": "Make gate A deterministic. Either script a death for your seat (a stub kill through the sim's damage path, or put your fighter under the enemy tower) and park the camera on an ongoing fight, or seat a fighter that dies and keep running until deadSeconds >= 20, failing only after a hard cap."
+  }
+ ],
+ "regressions": [
+  "AUD-4 regression from AUD-1: fighter auto-attack hits are now the kit cues, and f_burdam/f_hesmi/f_ulkro/f_lisvel_attack_hit lose 9.6-11.4 / 6.9-9.4 / 5.7-6.5 / 3.6-5.1 LU through the review's 220 Hz laptop high-pass, with ~0 contact transient (the library hits they replace lose <= 2.94). The build.py impact gate does not cover f_* cues (_harness/_reports/fw_W3_v1_impact_kits.json).",
+  "_harness/probe_audio_listener.mjs exits 1 at its defaults (gate A vacuous: 0 deaths for seat 7), so the AUD-9 regression gate in the repo is red (_harness/_reports/fw_W3_v1_listener.json)."
+ ],
+ "sensitivity": "W3 ships no images or models: audio, engine and probe files only. Nothing to check by eye."
+}
