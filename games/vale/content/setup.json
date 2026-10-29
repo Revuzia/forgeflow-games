@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE setup layer (CONTRACT §4 SetupDef, §5.3 loadouts). Before a match each player takes 2 battle spells and, in RIFT and BRIDGE, 2 boons from ONE path (SESSION/UI enforce the one-path rule; the sim only checks pools and slot counts, so a mixed pair is never stronger than its two parts). FRAY: 5 spells and no boons. Pools: empty = every pool, listed explicitly here. Rules, numbers and calibration: _design/sections/items_setup.md. Re-keyed 2026-10-28 to VALE's own light-and-shadow rules (W4, originality F4; before/after table and LoL gauge: _design/reviews/fixwaves/W4_systems_rekey.md, pending owner sign-off).",
+  "$comment": "VALE setup layer (CONTRACT §4 SetupDef, §5.3 loadouts). Before a match each player takes 2 Hour spells and, in RIFT and BRIDGE, 2 boons from ONE path (SESSION/UI enforce the one-path rule; the sim only checks pools and slot counts, so a mixed pair is never stronger than its two parts). FRAY: 5 spells and no boons. Pools: empty = every pool, listed explicitly here. Rules, numbers and calibration: _design/sections/items_setup.md. Re-keyed 2026-10-28 to VALE's own light-and-shadow rules (W4, originality F4; before/after table and LoL gauge: _design/reviews/fixwaves/W4_systems_rekey.md, signed off in fixwaves/owner_rulings.md).",
   "spells": [
     {
       "id": "glint_step",

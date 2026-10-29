@@ -37,7 +37,7 @@
   {
     "id": "class_tender",
     "name": "Tender",
-    "desc": "Keeps allies alive and the fight in their favour. Tenders heal, shield, speed up and spot for the team.",
+    "desc": "Keeps allies alive and the fight in their favor. Tenders heal, shield, speed up and spot for the team.",
     "icon": "assets/ui/icons/classes/class_tender.svg",
     "shape": "Round and open, carrying a light vessel (a lamp, bell or glass) at the chest or in hand."
   }

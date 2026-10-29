@@ -18,7 +18,7 @@
   {
     "id": "dialcross",
     "name": "Dialcross",
-    "contract": "Holds the short centre road across the Seat. Clear your wave fast, then cross to a side road and turn its fight before the enemy can follow.",
+    "contract": "Holds the short center road across the Seat. Clear your wave fast, then cross to a side road and turn its fight before the enemy can follow.",
     "icon": "assets/ui/icons/roles/dialcross.svg",
     "color": "#5FC6C4",
     "assign": { "lane": "road_seat", "jungle": false, "support": false, "order": 3 }
@@ -34,7 +34,7 @@
   {
     "id": "lampglass",
     "name": "Lampglass",
-    "contract": "Shares the bottom road and leaves the gold to your Shaftlight. Shield and heal them, start or stop fights, and light up the map so your team sees danger first.",
+    "contract": "Shares the bottom road and leaves the Gleam to your Shaftlight. Shield and heal them, start or stop fights, and light up the map so your team sees danger first.",
     "icon": "assets/ui/icons/roles/lampglass.svg",
     "color": "#D8D47E",
     "assign": { "lane": "road_low", "jungle": false, "support": true, "order": 5 }
