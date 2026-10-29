@@ -7,7 +7,7 @@
     "model": "assets/fighters/rishal/rishal.glb",
     "portrait": "assets/fighters/rishal/portrait.png",
     "splash": "assets/fighters/rishal/splash.png",
-    "desc": "Rishal with his gull-grey crest, blade-shaped dawnglass visor and two reversed glass knives.",
+    "desc": "Rishal with his gull-gray crest, blade-shaped dawnglass visor and two reversed glass knives.",
     "releasedIn": "2026.10.0"
   },
   {
@@ -18,7 +18,7 @@
     "model": "assets/fighters/rishal/rishal_chalkline.glb",
     "portrait": "assets/fighters/rishal/rishal_chalkline_portrait.png",
     "splash": "assets/fighters/rishal/rishal_chalkline_splash.png",
-    "desc": "Ink-grey steel drawn over with chalk line-work, the way Aubade children sketch runners on the spire walls.",
+    "desc": "Ink-gray steel drawn over with chalk line-work, the way Aubade children sketch runners on the spire walls.",
     "releasedIn": "2026.10.0"
   },
   {
@@ -29,7 +29,7 @@
     "model": "assets/fighters/rishal/rishal_lamplit.glb",
     "portrait": "assets/fighters/rishal/rishal_lamplit_portrait.png",
     "splash": "assets/fighters/rishal/rishal_lamplit_splash.png",
-    "desc": "A smoked lampresin visor and walnut armour borrowed from the evening side, with a small lamp cage on the crest.",
+    "desc": "A smoked lampresin visor and walnut armor borrowed from the evening side, with a small lamp cage on the crest.",
     "releasedIn": "2026.10.0"
   }
 ]

@@ -18,7 +18,7 @@
     "model": "assets/fighters/ardit/ardit_chalkline.glb",
     "portrait": "assets/fighters/ardit/ardit_chalkline_portrait.png",
     "splash": "assets/fighters/ardit/ardit_chalkline_splash.png",
-    "desc": "Ink-grey steel with chalk line-work drawn across the pavise frame, in the style of the Aubade chalk drawings. The glass stays clear.",
+    "desc": "Ink-gray steel with chalk line-work drawn across the pavise frame, in the style of the Aubade chalk drawings. The glass stays clear.",
     "releasedIn": "2026.10.0"
   },
   {
@@ -29,7 +29,7 @@
     "model": "assets/fighters/ardit/ardit_first_bell.glb",
     "portrait": "assets/fighters/ardit/ardit_first_bell_portrait.png",
     "splash": "assets/fighters/ardit/ardit_first_bell_splash.png",
-    "desc": "The pavise is etched with ten hour-marks, one for each seat of the Shadowless Noon, over pale dial-stone armour and dark greaves. A small glass bell hangs above the spire tip.",
+    "desc": "The pavise is etched with ten hour-marks, one for each seat of the Shadowless Noon, over pale dial-stone armor and dark greaves. A small glass bell hangs above the spire tip.",
     "releasedIn": "2026.10.0"
   }
 ]

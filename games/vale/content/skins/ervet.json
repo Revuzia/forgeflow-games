@@ -18,7 +18,7 @@
     "model": "assets/fighters/ervet/ervet_stillwater.glb",
     "portrait": "assets/fighters/ervet/ervet_stillwater_portrait.png",
     "splash": "assets/fighters/ervet/ervet_stillwater_splash.png",
-    "desc": "A river-glass blade and wet-stone armour, the colours of the Fallen Shaft shallows.",
+    "desc": "A river-glass blade and wet-stone armor, the colors of the Fallen Shaft shallows.",
     "releasedIn": "2026.10.0"
   },
   {
@@ -29,7 +29,7 @@
     "model": "assets/fighters/ervet/ervet_lamplit.glb",
     "portrait": "assets/fighters/ervet/ervet_lamplit_portrait.png",
     "splash": "assets/fighters/ervet/ervet_lamplit_splash.png",
-    "desc": "A smoked lampresin blade and walnut armour. A small lamp cage hangs from the pommel.",
+    "desc": "A smoked lampresin blade and walnut armor. A small lamp cage hangs from the pommel.",
     "releasedIn": "2026.10.0"
   }
 ]
