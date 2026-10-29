@@ -148,7 +148,12 @@ void main() {
   if (k <= 0.0) discard;
   // the oxygen green, a little red above it
   vec3 c = vec3(0.22, 0.95, 0.42) * k + vec3(0.5, 0.12, 0.08) * k * 0.15;
-  gl_FragColor = vec4(c * 0.00045 * fxDisplay(0.35), 0.0);
+  // (fix-render r3 #9: the airglow is as faint as starlight — seen only by an eye adapted to the night side. When a
+  // sunlit limb or the day side sets the exposure (a low one) it falls below sight; it shows when the frame is
+  // exposed for the night alone. Before, a thin green ring hugged the night limb of every day-lit orbit view)
+  float eye = smoothstep(1.5, 4.0, fxExposure());
+  if (eye <= 0.0) discard;
+  gl_FragColor = vec4(c * 0.00045 * fxDisplay(0.35) * eye, 0.0);
 }
 `;
 

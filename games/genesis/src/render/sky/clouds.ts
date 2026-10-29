@@ -326,7 +326,15 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
   float M = 1.0 / (1.0 + exp(-1.702 * mz));
   // (the organised systems below break their bands with it too)
   float mask = M;
-  float C = clamp(cov, 0.0, 1.0);
+  // (planet-scale organisation, fix-render r3 #3: thresholding one fBm at a low cover leaves only its peaks — dozens of
+  // separate masses of one size, an even popcorn from orbit. A planet-scale octave — the same fBm over a ~14 km tiling,
+  // features a third of this small world's circumference, re-spread to uniform 0..1 — moves the sim's share between
+  // regions (×0.35 .. ×1.65, mean ×1): where it gathers, masses merge into decks and fields; where it thins, open sky
+  // with a few scattered heaps. The regional share stays the sim's on average; weather systems keep cov0)
+  float pA = textureLod(uCloudDetail, mq * (1.0 / 14000.0) + warp * 0.05 + vec3(0.71, 0.29, 0.05), 0.0).a;
+  float pz = (pA - 0.5) * (1.0 / 0.062);
+  float regionK = mix(0.35, 1.65, 1.0 / (1.0 + exp(-1.702 * pz)));
+  float C = clamp(cov * regionK, 0.0, 1.0);
   float massK = smoothstep(1.0 - C - 0.06, 1.0 - C + 0.06, M);
   float heart = smoothstep(1.0 - C + 0.06, 1.0 - C + 0.35, M);
   // (cloud streets: in some regions a mass is drawn out into rows of heaps along the flow)
