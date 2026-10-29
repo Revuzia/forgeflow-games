@@ -1,0 +1,80 @@
+{
+ "wave": "W3",
+ "round": 2,
+ "verifier": "adversarial verifier, verify-only round 2, 2026-10-28, re-measured at bb9581a9 (no uncommitted W3 changes); the engineer's reports were not trusted",
+ "pass": true,
+ "summary": "W3 passes round 2. All four previously failed items now pass on fresh runs. done 3: build.py --gates exits 0. My own re-measure reproduces both gate metrics with 0 pairs below 8 dB in every identity slot and in the new ability-hit slot. The tightest pairs are attack_hit 8.63 dB from 125 Hz and 8.38 dB on the review's confusability metric. done 4 / AUD-5: every enemy T3 wind-up the engine heard tried the swell at the caster in four seat rotations, 347/347, with 0 centred. Every swell within 20 m of the ear played (17/17); the ones beyond the 30 m hearing radius are culled by distance. A stub fires all 35 T3 wind-up abilities and each plays the swell at the caster, panned -0.45; the 6 non-T3 wind-ups and allied casts play none. AUD-1: each fighter's ability impact and dash are its own, K6/K7 reproduce exactly, and round-robin never repeats a take. Four minor issues remain, none of them a blocker or major. (1) Hesmi's and Lisvel's ability hits lost the contact transient the AUD-4-fixed library hits gave them: 0.004-0.048 against a 0.07 floor, and the gate checks only attack_hit. (2) Burdam's and Kemdo's attack hits exceed the documented 0.30 soft top. (3) The 16 own dashes are near-identical by spectrum (25 of 120 pairs are under 8 dB, min 2.17), and projectiles still share c_proj_whoosh. (4) The margins are thin on alternative metrics. The round-1 listener harness regression no longer reproduces: probe_audio_listener exits 0 at its defaults.",
+ "commands": [
+  "~/Developer/forgeflow-games/.venv/bin/python3 audio/build.py --gates --json _harness/_reports/fw_W3_v2_gates.json -> exit 0 (control, procs, ambience, kits 16/16 x 12 slots, 86 fast cues >= 3 variants, instant, impact all PASS; log _harness/_reports/fw_W3_v2_gates.log)",
+  "python3 -I <scratchpad>/v2/dist_v2.py _harness/_reports/fw_W3_v2_kit_distance.json (four independent distance measures per slot, the new 'hit' and 'dash' slots included)",
+  "python3 -I <scratchpad>/v2/impact_v2.py _harness/_reports/fw_W3_v2_impact_kits.json (>2 kHz share in the first 30 ms after the -40 dB onset; max-momentary K-weighted loss through a 4th-order 220 Hz high-pass)",
+  "python3 -I <scratchpad>/v2/loud_v2.py (kit cues at bb0a3f7d vs now) -> _harness/_reports/fw_W3_v2_kit_loudness_delta.json",
+  "node _harness/probe_audio_cc.mjs --out _harness/_reports/fw_W3_v2_cc.json -> PASS (reproduces fw_W3_r1_cc.log line for line)",
+  "node <scratchpad>/v2/cc_v2.mjs --off 3|9|12 (probe copy: seat rotation, every swell try's result code and distance from the engine's ear, S6 stub over every wind-up ability) -> _harness/_reports/fw_W3_v2_cc_off{3,9,12}.json PASS; _harness/_reports/fw_W3_v2_cc_s6.json (S6 only)",
+  "node _harness/probe_audio_kits.mjs --out _harness/_reports/fw_W3_v2_kits.json -> PASS (reproduces fw_W3_r1_kits.log line for line)",
+  "node _harness/probe_audio_procs.mjs --out _harness/_reports/fw_W3_v2_procs.json -> PASS",
+  "node _harness/probe_audio_team_private.mjs / probe_audio_announcer.mjs / probe_audio_ambience.mjs / probe_audio_listener.mjs --out _harness/_reports/fw_W3_v2_*.json -> all PASS (exit 0)",
+  "npm run typecheck -> exit 0; npm run content:check -> OK, 1 warning ($.ui.queue_remind, the same non-W3 warning as round 1); node _harness/probe_content_ids.ts -> PASS (1239 ids x 195 src files, 0 hits)"
+ ],
+ "items": [
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "build.py --gates exit 0 (_harness/_reports/fw_W3_v2_gates.log). Independent re-measure (_harness/_reports/fw_W3_v2_kit_distance.json) of the two gate metrics. First, the FFT 1/3-octave distance from 125 Hz up, take-averaged: min attack_swing 9.63, attack_hit 8.63 (lisvel/marund), ult_windup 9.50, ult_release 9.32, hit 8.18 (burdam/odrum). Second, the final review's confusability metric on the closest pair of takes: min 8.89 / 8.38 (odrum/ulkro) / 9.07 / 9.06 / 8.23. Both show 0 pairs below 8 dB in any slot (round 1: 21 and 30 pairs, min 5.11 / 2.81). 0 duplicate files among 592 cue files; no attack, ult, hit or dash cue is shared. 86 fast cues have >= 3 variants. The control gate (9 kinds, c_buff for buffs only) and the proc gate pass. Margin note (minor, not the criterion's metric): on a 3rd-order Butterworth 1/3-octave bank with the per-take minimum, 3 identity pairs read 7.29-7.87 dB (ervet/rishal ult_windup 7.29). On the confusability metric after a 220 Hz high-pass, 7 identity pairs are below 8 dB (min 5.61, odrum/tunlan ult_windup). The old 25 Hz gate metric gives 7.85 for odrum/ulkro attack_hit.",
+   "fixHint": "Optional: widen the thinnest pairs (odrum/tunlan ult_windup, odrum/ulkro attack_hit, burdam/odrum hit) so the margin also holds after the 220 Hz laptop high-pass."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "src/audio/index.ts:391 builds the threat set from content effects (isT3 at :1460). :1264-1268 plays events.enemyWindup at at(src) for an enemy fighter's non-ult cast with castTime > 0; ults keep enemyUltWindup. probe_audio_cc at seed 5 reproduces 53/53. A probe copy with three other seat rotations (_harness/_reports/fw_W3_v2_cc_off{3,9,12}.json) gives 127/127, 90/90 and 77/77; together that is 347/347 enemy T3 wind-ups tried at the caster, 0 centred, 47 played and all 47 panned. Every play result, by distance from the engine's ear: within 10 m 10/10 played, 10-14 m 2/2, 14-20 m 5/5; 20-32 m 19 played, 8 culled past LISTEN_HEAR_M 30 (index.ts:206), 1 cooldown; >= 32 m all culled. Enemy casts that are not T3 tried the swell 0/273 times, allied casts 0/823. The matches exercised 32 of the 35 T3 abilities. The S6 stub (_harness/_reports/fw_W3_v2_cc_s6.json) fires all 35 from an enemy 9 m to the left: 35/35 played the swell at the caster, panned -0.45, and the 6 non-T3 wind-ups got none. m_enemy_windup reaches -6 dB 70 ms after onset (0.17 s long), so it leads a 0.1-0.3 s wind-up. The same proc run is clean: RIFT 540 s, 3998 procs, unbound 0, 0 orphans (fw_W3_v2_procs.log)."
+  },
+  {
+   "id": "audio:AUD-5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "The T3 swell evidence is the same as for done:4. The rest of AUD-5 holds on the same fresh run (fw_W3_v2_cc.log). M1: 0 buff cues for harm, 0 wrong status cues, 0 status cues on non-fighters. S1: +3 dB on you for all 9 control kinds; haste gets 0 dB. S2: grievous, shreds, reveal and a Wick's stun are silent. M3: priority lift live (+1: 518, -1: 2767 voices). S3: the pool yields to an enemy hit on you but not to an ally's swing. S4: the ult swell 9 m right plays panned 0.45."
+  },
+  {
+   "id": "audio:AUD-1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "(1) Re-voiced per done:3 (above). (2) KIT_SLOTS now include 'hit' and 'dash'. case 'hit' (index.ts:1279-1283) plays f_<id>_hit before the ability's hitSfx. case 'dash' (:1335) plays f_<id>_dash unless the unit was knocked airborne that same tick. In src/sim/movement.ts:252-269, displaceUnit applies airborne (never tenacity-reduced) before emitting the dash, and all 17 displace ops have a duration of 0.2-0.75 s, so the rule holds; none displaces the caster itself. probe_audio_kits (fw_W3_v2_kits.log) reproduces the refix run exactly: 16/16 kitted, every ability hit -> f_<id>_hit, every own dash -> f_<id>_dash, every displacement -> c_dash, and K1-K5 hold. K6 tells a displacement from a dash by the dash event's vfx key, independently of the engine's rule. The build.py kit gate requires both new slots for all 16, own and never shared; hits are distance-gated (min 8.18 / 8.23). Ability hits lose <= 1.2 LU and attack hits <= 2.02 LU through the 220 Hz high-pass (fw_W3_v2_impact_kits.json). Physical attack hits now carry a contact of 0.091-0.518 against a 0.07 floor (the round-1 AUD-4 regression is fixed). Kit cue loudness moved only -0.46..+0.74 LU against bb0a3f7d, with peaks <= -1.16 dBFS (fw_W3_v2_kit_loudness_delta.json). (3) take() (index.ts:609) draws from the other n-1 takes, so the same take never plays twice in a row. K7 counts 0 back-to-back repeats in 8 runs. Remaining minors: the 16 own dashes are near-identical by spectrum: 25 of 120 pairs are under 8 dB on the review metric (min 2.17, burdam/hesmi) and 30 on the 125 Hz metric (min 2.48). DASH_AIR puts burdam, hesmi, marund and tunlan in overlapping 220-1200 Hz bands (audio/cues/kits_c.py:98-101). The dash is gated for ownership only. Projectiles still share c_proj_whoosh (index.ts case 'projectile'). Neither was in AUD-1's original fix list.",
+   "fixHint": "Follow-up (minor): gate f_*_dash in DIST_SLOTS and spread DASH_AIR / the signature layer for the low-band fighters. A per-fighter projectile slot would close the last shared combat cue."
+  },
+  {
+   "id": "regression:kit-ability-hit-contact",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "The AUD-4 class appears again on ability hits. f_<id>_hit now replaces every fighter ability's hitSfx, including the AUD-4-fixed physical library hits (contact 0.080-0.105). Contact on the first 30 ms above 2 kHz (_harness/_reports/fw_W3_v2_impact_kits.json): f_hesmi_hit 0.005-0.013 (its a1, a2 and ult were c_hit_phys_heavy), f_lisvel_hit 0.004-0.048 (a1 c_hit_phys_light, ult c_hit_phys_heavy), and one take of f_rishal_hit at 0.052 (was c_hit_phys_light). For the physical fighters whose ability hits were the bright c_hit_magic (0.246): ardit 0.000-0.002, nurrow 0.001, marund 0.021-0.039, ervet 0.038-0.17. The kit gate checks contact on attack_hit only (audio/build.py:713). Laptop loss is fine (<= 1.2 LU), so only the attack transient regressed.",
+   "fixHint": "Run the contact pass over f_<physical>_hit as well, and extend the build.py:713 contact check to s == 'hit'."
+  },
+  {
+   "id": "regression:kit-attack-hit-soft-top",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Two attack hits overshoot the documented soft top for frequent hits (TRANSIENT_SOFT_TOP 0.30, audio/build.py:453): f_burdam_attack_hit contact 0.417-0.518 and f_kemdo_attack_hit 0.377-0.451 (fw_W3_v2_impact_kits.json, gate log 'contact 0.417'). Auto-attack hits are the most frequent cues in a match. The kit gate has only a floor (KIT_TRANSIENT_MIN 0.07).",
+   "fixHint": "Solve the contact tick level to land 0.07-0.30 for the kit attack hits, and gate the top as the impact gate does for SOFT_TOP_CUES."
+  },
+  {
+   "id": "regression:hitsfx-semantics",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "The kit hit overrides even a semantically specific hitSfx: kemdo's ult c_hit_true (true damage) and rishal's ult c_crit are now their generic f_<id>_hit (index.ts:1282). The status cues for c_slow and c_root riders still play on their own, so only the true-damage and crit timbres are lost. Also, isT3 was inserted between ambientPoints' JSDoc and its function (index.ts:1455-1471), which leaves that doc comment above the wrong function.",
+   "fixHint": "Let a hitSfx naming a damage-type or crit cue (c_hit_true, c_crit) layer under the kit hit, as the crit already does for attack_hit (CRIT_KIT_GAIN), and move the ambientPoints doc comment back onto its function."
+  },
+  {
+   "id": "harness:listener-probe-default",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Round 1 regression: node _harness/probe_audio_listener.mjs at its defaults now exits 0. A dead-spectate: 50 cues, 100 % audible. B threat within 10 m: 333 cues, 100 % at -1.94 dB. C: 168 allied culled (_harness/_reports/fw_W3_v2_listener.json). The probe file is unchanged since bb0a3f7d; the seat now dies, most likely because of W4's bot changes."
+  }
+ ],
+ "regressions": [
+  "minor: physical fighters' ability hits lost the AUD-4 contact transient, because f_<id>_hit replaced c_hit_phys_*. Hesmi reads 0.005-0.013 and Lisvel 0.004-0.048, against a floor of 0.07. The kit gate checks contact only on attack_hit (audio/build.py:713; _harness/_reports/fw_W3_v2_impact_kits.json).",
+  "minor: f_burdam_attack_hit (0.417-0.518) and f_kemdo_attack_hit (0.377-0.451) exceed the documented 0.30 soft top for frequent hits (audio/build.py:453).",
+  "minor: the kit hit overrides kemdo's ult c_hit_true and rishal's ult c_crit, so their true-damage and crit timbre is lost (src/audio/index.ts:1282).",
+  "minor: the 16 own dashes are near-identical by spectrum (25 of 120 pairs under 8 dB, min 2.17, burdam/hesmi). They are gated for ownership only."
+ ]
+}
