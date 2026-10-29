@@ -413,7 +413,9 @@ class Blackboard {
       // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
       // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
       // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
-      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0;
+      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0;
+      // (R2 movers) trap*: the loop breaker's anchor / clock / recent trips; esc*: the committed break-out goal (see trapBreak)
+      this.trapX = 0; this.trapZ = 0; this.trapT = -99; this.trapN = 0; this.trapLastT = -99; this.escX = 0; this.escZ = 0; this.escUntil = -99;
       this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
       this.slideX = 0; this.slideZ = 0; this.slideUntil = -99; this.slideFlips = 0; this.routeId = null; this.pinX = 0; this.pinZ = 0; this.pinT = 0; this.pinIntent = 0; this.pinN = 0;
       this.fightTarget = undefined; this.fightT = 0; this.aimHigh = false; this.errPhase = 0; this.closeInUntil = 0;
@@ -528,8 +530,13 @@ function doubleFields(o) {
 // inside 60 s, because 55-85% of bots dropped into ~8 POIs holding 1-16 loot
 // points each: a pistol brawl over a handful of guns (audit gap 4).
 const DROP_PTS_PER_BOT = 4;
-const LAND_CLEAR_M = 3.5;          // landing spot: no low overhang within this reach
+const LAND_CLEAR_M = 3.5;          // landing spot: no low overhang within this reach - and (R2) no roof or structure top in the glide-drift disc of this radius
+const LAND_STEP_M = 0.55;         // (R2) player.js STEP_UP: a top higher than this over the ground under it is something a glide can touch down ON
+/** (R2 movers) landing-spot census for the probes (debugNav().dropStats): spots kept, loot points / house spots with no clear spot in reach, spot candidates the
+ *  glide-drift disc rule refused, fallback targets (POI random point / random ground) moved to a clear spot, and those left where they were. */
+const dropSt = { spots: 0, noSpot: 0, discRej: 0, fbMoved: 0, fbKept: 0 };
 export function assignDrops(W) {
+  dropSt.spots = 0; dropSt.noSpot = 0; dropSt.discRej = 0; dropSt.fbMoved = 0; dropSt.fbKept = 0;
   const rng = K.mulberry32(W.seed ^ 0xd407);
   const pois = W.map.pois;
   const pts = Object.create(null);
@@ -576,9 +583,22 @@ export function assignDrops(W) {
       if (near && c.maxY > g + 0.3) return false;
       const reach = x > c.minX - LAND_CLEAR_M && x < c.maxX + LAND_CLEAR_M && z > c.minZ - LAND_CLEAR_M && z < c.maxZ + LAND_CLEAR_M;
       if (reach && c.kind !== "ramp" && c.minY > g + 0.3 && c.minY < g + 2.6) return false;
+      // (R2 movers, probe_match stuck episodes) THE WHOLE GLIDE-DRIFT DISC IS CLEAR OF TOPS. The tests above only kept a 1 m margin round a structure, but a
+      // glide circles its spot ~2.5 m out before it touches down (measured: ashgrid seed 12, s14 spiralled round a spot 7 m from the cmp07 water tower's
+      // centre - 2.6 m from the 8.8 m tank's edge - landed on the tank top at y 33.4 and paced it for 40 s: an 18 m drop on every side, 17 stuck
+      // episodes; base build seed 10, s44 on a roof at y 80.5). So no top higher than a step over the ground under it may lie within LAND_CLEAR_M of
+      // the spot (a ramp is walked down: it never traps).
+      if (c.kind !== "ramp") {
+        const nx = x < c.minX ? c.minX : x > c.maxX ? c.maxX : x, nz = z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z;
+        const ex = x - nx, ez = z - nz;
+        if (ex * ex + ez * ez < LAND_CLEAR_M * LAND_CLEAR_M && c.maxY > W.map.heightAt(nx, nz) + LAND_STEP_M) { dropSt.discRej++; return false; }
+      }
     }
     return true;
   };
+  // (R2) the rings stay 0-7 m: 9 / 11 m rings (tried) kept ~15 % more gun spots beside buildings, but the longer walks in after the landing raised
+  // tierprof's first measured window on ashgrid (kb [low] 71.7 -> 85.7 KB/frame, navgrid.js 3.2 -> 7.2: routes into the towns); a gun with no clear
+  // spot within 7 m is not a landing spot (the bot lands at another one)
   const RING_R = [0, 3, 5, 7];
   const landingFor = (lp) => {
     for (let ri = 0; ri < RING_R.length; ri++) {
@@ -590,6 +610,14 @@ export function assignDrops(W) {
       }
     }
     return null;
+  };
+  // (R2) a fallback target (a random point of a full POI, a random ground point) is moved to the nearest clear spot round it by the same rings (no rng
+  // draw: the claims after it draw what they always drew); none in 7 m: it stays where it was
+  const clearFallback = (x, z) => {
+    const at = landingFor({ x, z });
+    if (at && (at.x !== x || at.z !== z)) dropSt.fbMoved++;
+    else if (!at) dropSt.fbKept++;
+    return at ? { x: at.x, z: at.z } : { x, z };
   };
   // (Wave 8 fix round, lane K2) a furnished house's loot lands bots by loot.js's own list of the spots it USED (W.houseLootSpots: a chest, or a floor / top
   // spot where a non-pistol gun lies), aimed at the spot's STAND point inside its room. The house lootPoints are skipped: the 1.8 m query round one found
@@ -608,7 +636,8 @@ export function assignDrops(W) {
       }
       if (!ok) continue;
       const at = landingFor(lp);
-      if (!at) continue;
+      if (!at) { dropSt.noSpot++; continue; }
+      dropSt.spots++;
       const s = { x: at.x, z: at.z, taken: false };
       // (Wave 7) a Savanna compound's loot points are tagged cmpNN, which names no POI: they used to be filed under a list nothing ever
       // claimed from, so ~30 compounds with their guns and chests were never a landing zone. They land with the wild spots (one bot per
@@ -620,7 +649,8 @@ export function assignDrops(W) {
       const hs = HSP[i];
       if (!hs.gun) continue;
       const at = landingFor(hs.stand || hs);
-      if (!at) continue;
+      if (!at) { dropSt.noSpot++; continue; }
+      dropSt.spots++;
       const s = { x: at.x, z: at.z, taken: false };
       if (hs.poi == null || (typeof hs.poi === "string" && hs.poi.startsWith("cmp"))) spots.wild.push(s);
       else (byPoi[hs.poi] || (byPoi[hs.poi] = [])).push(s);
@@ -691,7 +721,7 @@ export function assignDrops(W) {
       p = pois[idx];
       let s = claim(byPoi[p.id]);
       if (!s && sep) s = claim(spots.wild) || claimAnyPoi() || claimFarthest();    // this POI has no spot left that clears the others: land elsewhere
-      b.bb.dropTarget = s ? { x: s.x, z: s.z } : { x: p.x + (rng() - 0.5) * p.r, z: p.z + (rng() - 0.5) * p.r };
+      b.bb.dropTarget = s ? { x: s.x, z: s.z } : clearFallback(p.x + (rng() - 0.5) * p.r, p.z + (rng() - 0.5) * p.r);
     } else {
       let s = claim(spots.wild);
       if (!s && sep) s = claimAnyPoi() || claimFarthest();
@@ -702,7 +732,7 @@ export function assignDrops(W) {
           let bd = nearestPlaced(gp.x, gp.z);
           for (let tries = 0; tries < 23 && bd < sep2; tries++) { const g2 = W.map.randomGroundPos(rng), d2 = nearestPlaced(g2.x, g2.z); if (d2 > bd) { bd = d2; gp = g2; } }
         }
-        b.bb.dropTarget = { x: gp.x, z: gp.z };
+        b.bb.dropTarget = clearFallback(gp.x, gp.z);
       }
     }
     placed.push(b.bb.dropTarget);
@@ -1518,9 +1548,14 @@ function pickLoot(W, a, near) {
  *  first-floor slab; a bot pinned there died, its death drop landed there, and the
  *  next bot that came for the drop was pinned too (two to three bots per match at
  *  the same spot, 200+ s each). */
+// (R2 movers, item 2) the banded one-shot queries below (lowCeiling, obstacleAt, the town exit, tallWallAt) read their list at once and call nothing that
+// queries while they do: one out array of their own - a banded query that finds nothing writes length 0 into the array it is given (maps.js), and on the
+// map's shared scratch that dropped its backing store under every other caller.
+const _bandCols = [];
 function lowCeiling(W, x, y, z) {
   const s = supportAt(W, x, z, y + 0.3);
-  const cols = W.map.queryColliders(x, z, 0.5);
+  // (R2 movers, item 2) the test's band: only a box whose underside lies between s + 0.3 and s + height + 0.05 is a low ceiling (maps.js queryColliders' y0 / y1)
+  const cols = W.map.queryColliders(x, z, 0.5, _bandCols, s + 0.3, s + K.PLAYERK.height + 0.05);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1825,13 +1860,27 @@ function actTail(W, b, dt) {
       bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; bb.anchorT = W.t;
     }
   } else if (bb.anchor) { bb.anchorT = W.t; bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; }
+
+  // (R2 movers) LOOP BREAKER. The hard breaker above re-anchors every time the bot strays 2 m, so a bot that paces back and forth through a doorway in a
+  // 2.5-3 m figure (ashgrid seed 11: s35, 27 s at (-69.2, 434), no route, its loot 53 m off - 8 stuck episodes) or round a roof it cannot leave never
+  // reaches its 12 s. This one keeps ONE anchor while the bot stays within TRAP_R of it, and a bot that is travelling (a goal more than TRAP_GOAL_M away)
+  // yet has not left that disc in TRAP_S has met a trap: it breaks out at once (trapBreak). Fights, heals, chests and emotes are exempt, as above.
+  const mt = bb.moveTo;
+  let tq = 0;
+  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {
+    const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z, ax = a.pos.x - bb.trapX, az = a.pos.z - bb.trapZ;
+    if (gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M && ax * ax + az * az <= TRAP_R * TRAP_R) tq = W.t - bb.trapT >= TRAP_S ? 2 : 1;
+  }
+  if (tq === 2) trapBreak(W, b);
+  if (tq !== 1) { bb.trapX = a.pos.x; bb.trapZ = a.pos.z; bb.trapT = W.t; }
 }
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
 const _solidCols = [];
 function insideSolid(W, x, y, z) {
-  const cols = W.map.queryColliders(x, z, 0.6, _solidCols);
   const h = K.PLAYERK.height;
+  // (R2 movers, item 2) the test's band [y + step, y + h - 0.1]: a box outside it never counts (maps.js queryColliders' y0 / y1)
+  const cols = W.map.queryColliders(x, z, 0.6, _solidCols, y + NAV_STEP_UP, y + h - 0.1);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1861,7 +1910,8 @@ function escapeSolid(W, b) {
   }
   // the faces of every box the bot is inside (insideSolid's test), as exits sorted by distance (Array sort is stable: ties keep the collider order).
   // Copied out first: escTry's own queries reuse the shared query array. (Rare path: the bot is inside a solid with no free spot within 4 m.)
-  const cols = M.queryColliders(px, pz, 0.6, _solidCols), h = K.PLAYERK.height, ex = [];
+  const h = K.PLAYERK.height, ex = [];
+  const cols = M.queryColliders(px, pz, 0.6, _solidCols, py + NAV_STEP_UP, py + h - 0.1);      // (R2 movers, item 2) insideSolid's band
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -2053,6 +2103,113 @@ function breakOut(W, b) {
   bb.progGoal = null; bb.stuckT = 0;
 }
 
+const TRAP_R = 3.0;               // (R2 movers) loop breaker: a travelling bot that has not left this disc ...
+const TRAP_S = 3.0;               // ... in this long (probe_match's stuck window is 3 s) is trapped
+const TRAP_GOAL_M = 6.0;          // ... when its goal lies further off than this (a bot at its goal is not travelling)
+const TRAP_ESC_S = 6.0;           // the break-out goal is held this long (or until reached)
+const TRAP_AGAIN_S = 30.0;        // a second trip within this long: the exits the first one tried did not work - walk away along a free heading instead
+const TRAP_WALK_M = 12.0;         // ... this far
+/** (R2 movers) Break a trapped bot out, deterministically (no rng draw), and COMMIT to it for TRAP_ESC_S (moveTowardQ walks the break-out goal instead of
+ *  the state's goal: the state's next think re-picking the same goal used to throw the exit path away on the next frame). The goal, first that exists:
+ *    1. on a roof / wall top / ledge (feet DECK_AGL over the ground, no ceiling): off the lowest open edge it may walk off (deckExitPoint: edgeGuard's
+ *       own walking margin - an edge past it is refused by edgeGuard frame by frame, and a bot committed to pushing at it slipped over a 10 m lip at
+ *       10 hp in p23_fall's lip setup);
+ *    2. a first trip: the house's street door (houseExitPath), else the nearest open cell (findExit, as breakOut);
+ *    3. a repeat trip (within TRAP_AGAIN_S) or nothing above: TRAP_WALK_M along the first heading whose next 4 m is free of walls and whose terrain
+ *       never falls more than the walking margin under the feet, tried from the side of the goal (+-90 deg, alternating with the trip count) round to
+ *       straight away from it.
+ *  The loot item it was after is parked as breakOut parks it. */
+function trapBreak(W, b) {
+  const a = b.actor, bb = b.bb, mt = bb.moveTo;
+  const again = W.t - bb.trapLastT < TRAP_AGAIN_S;
+  bb.trapN = again ? bb.trapN + 1 : 1;
+  bb.trapLastT = W.t;
+  nav.st.trapBreaks++;
+  if (bb.lootId) {
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
+    bb.badLoot[bb.lootId] = W.t + 60;
+    bb.lootId = null;
+  }
+  const gyaw = mt ? Math.atan2(-(mt.x - a.pos.x), -(mt.z - a.pos.z)) : a.input.yaw;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.stuckT = 0;
+  let ex = null;
+  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
+    ex = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
+    ex.exit = true;
+    nav.st.trapDeck++;
+  } else if (!again) {
+    const hx = IND.H !== null ? houseExitPath(W, b) : null;
+    ex = hx || findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
+    if (ex && ex.length && !hx) extendExit(W, a, ex);
+    if (ex && !ex.length) ex = null;
+    // (R2 movers, pass 2) the open cell findExit / the door path hands back knows nothing of drops: p23_fall's lip setup, Isla seed 77, s46 at 10 hp was
+    // HELD by edgeGuard at a 6 m face (-23.3, -150.6), tripped the breaker 3 s later, got findExit's cell (-23.3, -158.6) on the lip of the same face,
+    // sprinted in, turned for its loot as it arrived and ran over (14 hp fall, dead) - edgeGuard's 0.15 s probe missed the turn. An exit whose walk, or
+    // whose last point's surroundings, falls further than the bot may walk off is refused (the heading walk below is tried instead)
+    if (ex && !exitFallSafe(W, a, ex, walkDrop(a))) { ex = null; nav.st.trapUnsafe++; }
+  }
+  if (!ex) {
+    const side = (bb.trapN & 1) ? 1 : -1, lim = walkDrop(a);
+    for (let k = 0; k < TRAP_HEADINGS.length; k++) {
+      const yaw = gyaw + side * TRAP_HEADINGS[k];
+      if (wallAhead(W, a, yaw, 4)) continue;
+      const x = a.pos.x - Math.sin(yaw) * TRAP_WALK_M, z = a.pos.z - Math.cos(yaw) * TRAP_WALK_M;
+      if (Math.abs(x) >= W.map.half || Math.abs(z) >= W.map.half || W.map.heightAt(x, z) < W.map.waterY + 0.4) continue;
+      let drop = false;
+      for (let d = 1; d <= TRAP_WALK_M && !drop; d += 1) if (W.map.heightAt(a.pos.x - Math.sin(yaw) * d, a.pos.z - Math.cos(yaw) * d) < a.pos.y - lim) drop = true;
+      if (drop) continue;
+      const wk = [{ x, y: null, z, k: 0 }];
+      if (!exitFallSafe(W, a, wk, lim)) { nav.st.trapUnsafe++; continue; }      // (pass 2) its overrun and its end's surroundings too
+      ex = wk;
+      nav.st.trapWalk++;
+      break;
+    }
+  }
+  if (!ex) return;
+  const last = ex[ex.length - 1];
+  bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
+  bb.escX = last.x; bb.escZ = last.z; bb.escUntil = W.t + TRAP_ESC_S;
+  bb.nextPathT = W.t + 2.5;
+}
+const TRAP_OVERRUN_M = 3.0;       // (pass 2) a sprint arriving at a break-out goal runs on (and turns) this far past it ...
+const TRAP_LIP_R = 2.5;           // ... and no ground within this of the goal may lie more than the walking margin under it
+const _lipDirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
+/** (R2 movers, pass 2) Is a break-out route safe to walk for this bot (lim = walkDrop)? The terrain (water floors a fall) sampled every 0.8 m from the feet
+ *  along each leg and TRAP_OVERRUN_M past the last point: no face (a run of samples falling more than STEEP_STEP per sample, edgeGuard's own test) falls
+ *  more than lim from its top; and round the last point (8 headings at TRAP_LIP_R) no ground lies more than lim under it. Terrain only: a bot up on a
+ *  deck takes deckExitPoint, which is edgeGuard's margin by construction. No rng draw. */
+function exitFallSafe(W, a, ex, lim) {
+  if (!(lim < 1e6)) return true;
+  const M = W.map, wy = M.waterY;
+  const hAt = (x, z) => { const h = M.heightAt(x, z); return wy != null && h < wy ? wy : h; };
+  let px = a.pos.x, pz = a.pos.z, prev = hAt(px, pz), runTop = NaN;
+  const n = ex.length;
+  for (let i = 0; i <= n; i++) {
+    let qx, qz;
+    if (i < n) { qx = ex[i].x; qz = ex[i].z; }
+    else {
+      const bx = n > 1 ? ex[n - 2].x : a.pos.x, bz = n > 1 ? ex[n - 2].z : a.pos.z, dx = px - bx, dz = pz - bz, L = Math.sqrt(dx * dx + dz * dz);
+      if (L < 1e-3) break;
+      qx = px + dx / L * TRAP_OVERRUN_M; qz = pz + dz / L * TRAP_OVERRUN_M;
+    }
+    const dx = qx - px, dz = qz - pz, L = Math.sqrt(dx * dx + dz * dz), steps = Math.max(1, Math.ceil(L / 0.8));
+    for (let k = 1; k <= steps; k++) {
+      const h = hAt(px + dx * k / steps, pz + dz * k / steps);
+      if (prev - h > STEEP_STEP) { if (runTop !== runTop) runTop = prev; if (runTop - h > lim) return false; }
+      else runTop = NaN;
+      prev = h;
+    }
+    px = qx; pz = qz;
+  }
+  const last = ex[n - 1], g = hAt(last.x, last.z);
+  for (let r = 1; r <= 2; r++) for (let j = 0; j < 8; j++) {
+    const d = TRAP_LIP_R * r / 2;
+    if (g - hAt(last.x + _lipDirs[j][0] * d, last.z + _lipDirs[j][1] * d) > lim) return false;
+  }
+  return true;
+}
+const TRAP_HEADINGS = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, Math.PI, Math.PI / 4, -Math.PI / 4];
+
 /** UNDER FIRE (owner 2026-09-15: "make sure enemies can spot where attacks are
  *  coming from and fight in that direction"). A hit is itself a sighting: the
  *  bot freezes the bearing the shot came from, whips round to face it, and — if
@@ -2122,7 +2279,8 @@ function steerYawQ(a, dt, speed) {
  *  A wall blocks when its box spans the hop-to-headroom band. A ramp blocks by
  *  the C-RAMP contract (rampBlocks): its sides and underside, not its slope. */
 function obstacleAt(W, x, z, y) {
-  const cols = W.map.queryColliders(x, z, 0.6);
+  // (R2 movers, item 2) the test's band: a wall spans y + 0.55 .. y + 2.0, a ramp blocks only with its walk line over y + NAV_STEP_UP (0.55) and its low edge under y + 2.0
+  const cols = W.map.queryColliders(x, z, 0.6, _bandCols, y + NAV_STEP_UP, y + 2.0);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead) continue;
@@ -2256,6 +2414,11 @@ const WALL_LOOK = 0.9;            // metres ahead the steering probes
 const WALL_REUSE_S = 0.1;         // a held collider list stays valid this long (sim time) ...
 const WALL_REUSE_M = 0.45;        // ... and while the bot has moved less than this
 const WALL_QR = 2.4;              // list radius: capsule 0.45 + look 0.9 + margin 0.3 + the reuse drift, with slack
+// (R2 movers, item 2) the list's vertical band: its readers take nothing above the feet + 12 m (roofedForJump's slab reach; underCeiling 6 m, the wall /
+// ramp probes about 3.5 m), so the list is asked for [-inf, feet + WALL_BAND_UP + WALL_REUSE_DY] and is re-asked once the feet have RISEN more than
+// WALL_REUSE_DY since (a jump, a stair). No lower limit: a probe past a ledge reads the floor below it.
+const WALL_BAND_UP = 12.0;
+const WALL_REUSE_DY = 0.8;
 const FIGHT_UNSTICK_S = 0.8;      // pinned this long with a move intent in ENGAGE / HEAL -> recover (the hard breaker skips them)
 const FIGHT_UNSTICK_GAP_S = 1.6;
 const _wq = [];                   // queryColliders out-param scratch
@@ -2268,8 +2431,8 @@ const _gh = { x: 0, z: 0 };       // heading scratch
 function wallCols(W, b) {
   const a = b.actor, bb = b.bb, list = bb.wallCols;
   const dx = a.pos.x - bb.wallX, dz = a.pos.z - bb.wallZ;
-  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M) return list;
-  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq);
+  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M && a.pos.y <= bb.wallY + WALL_REUSE_DY) return list;
+  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq, -Infinity, a.pos.y + WALL_BAND_UP + WALL_REUSE_DY);
   const x0 = a.pos.x - WALL_QR, x1 = a.pos.x + WALL_QR, z0 = a.pos.z - WALL_QR, z1 = a.pos.z + WALL_QR;
   let n = 0;                       // (Wave 8) by index, the length set once (see wallAheadQ)
   for (let i = 0; i < got.length; i++) {
@@ -2277,7 +2440,7 @@ function wallCols(W, b) {
     if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list[n++] = c;
   }
   if (list.length !== n) list.length = n;
-  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z;
+  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z; bb.wallY = a.pos.y;
   return list;
 }
 
@@ -2963,7 +3126,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3278,7 +3441,7 @@ function townExitPath(W, sx, sy, sz, tx, tz) {
     if (cx < r.minX || cx > r.maxX || cz < r.minZ || cz > r.maxZ) continue;
     const g = W.map.heightAt(cx, cz);
     if (g < W.map.waterY + 0.5) continue;
-    const cols = W.map.queryColliders(cx, cz, 1.6);
+    const cols = W.map.queryColliders(cx, cz, 1.6, _bandCols, g - 0.5, g + 4.0);      // (R2 movers, item 2) the test's own band
     let free = true;
     for (let i = 0; i < cols.length && free; i++) {
       const c = cols[i];
@@ -3336,6 +3499,7 @@ export function debugNav() {
     indoors: () => ({ houses: IND.H ? IND.H.length : 0, rooms: IND.R.length, built: IND.built }),
     roomRoute: (from, to) => { const L = roomRoute(from, to); if (!L) return null; linkTarget(from, L); return { to: L.to, door: L.d ? L.d.id : null, stair: L.s ? L.s.id : null, at: [LT[0], LT[1], LT[2]], exitDoor: to === -1 && _bfsEnd && _bfsEnd.d ? _bfsEnd.d.id : null }; },
     occAny: (W, x, z, r) => occAny(W, x, z, r),
+    dropStats: () => Object.assign({}, dropSt),       // (R2 movers) the last assignDrops' landing-spot census
     houseExitPath: (W, b) => houseExitPath(W, b), roomHopPath: (W, sx, sy, sz, tx, tz, ty) => roomHopPath(W, sx, sy, sz, tx, tz, ty) };
 }
 
@@ -3652,7 +3816,7 @@ const HELD_RETRY_S = 1.0;         // ... and at most this often
 const _dkx = { x: 0, z: 0, d: 0 };
 /** A wall in the walk band at (x,z) for feet at y that is too tall to hop: its box (0.45 m = the capsule) spans from above y + hop to below the head. */
 function tallWallAt(W, x, z, y, hop) {
-  const cols = W.map.queryColliders(x, z, 0.8);
+  const cols = W.map.queryColliders(x, z, 0.8, _bandCols, y + hop, y + 2.0);      // (R2 movers, item 2) the test's own band
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -3724,8 +3888,15 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
  *  (actLoot, actMove, actEngage, coverStep) use this form: a call boxes every double argument and the returned double. */
 const MTQ = new Float64Array(3);
 function moveTowardQ(W, b, dt, sprint, ty) {
-  const tx = MTQ[0], tz = MTQ[1];
   const a = b.actor, inp = a.input, bb = b.bb;
+  // (R2 movers) a committed break-out (trapBreak) walks its own goal while it lasts, in the travelling states; the caller still gets the distance to ITS goal
+  const ox = MTQ[0], oz = MTQ[1];
+  let tx = ox, tz = oz;
+  if (W.t < bb.escUntil) {
+    const ex = bb.escX - a.pos.x, ez = bb.escZ - a.pos.z;
+    if (!MOVING_STATES[b.state] || ex * ex + ez * ez < 1.5 * 1.5) bb.escUntil = -99;
+    else { tx = bb.escX; tz = bb.escZ; ty = undefined; }
+  }
   /* PROGRESS stuck, as opposed to FROZEN stuck.
      The speed test at the top of act() only accumulates bb.stuckT when the bot
      moves less than 0.02 m in a frame — i.e. pinned solid. A bot grinding along
@@ -3989,7 +4160,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   // (pinned: stuckT - frozen legs - or the pin window - a bot jittering 2-3 cm a frame in a nook never runs stuckT up, the 0.5 s net-displacement window sees it)
   // (K2, re-run) ... and every frame of its committed window (offFurnUntil): the flags above come and go frame by frame
   if (inHouse && a.onGround && (bb.heldN > 0 || holdStill || bb.stuckT > 0.3 || bb.pinN >= 1 || W.t < bb.offFurnUntil) && offFurniture(W, b, dt)) { bb.heldN = 0; bb.heldAcc = 0; }
-  qx = tx - a.pos.x; qz = tz - a.pos.z;
+  qx = ox - a.pos.x; qz = oz - a.pos.z;
   MTQ[2] = Math.sqrt(qx * qx + qz * qz);
 }
 
