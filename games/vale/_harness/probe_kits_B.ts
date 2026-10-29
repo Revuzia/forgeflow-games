@@ -406,7 +406,8 @@ section('ervet', () => {
     check('Whole Again: casts', res === 'ok', res);
     check('Whole Again: leap (dash event) lands near the point', ofType(evs, 'dash').some((d) => d.src === a.me.id) && near(a.me.x, 16, 0.6), a.me.x);
     check('Whole Again: magic damage and airborne within 3.5 m, none at 6 m', dmgOn(evs, 'ervet_whole_again', foe, 'magic').length === 1 && statusOn(evs, foe, 'airborne') && dmgOn(evs, 'ervet_whole_again', far).length === 0);
-    check('Whole Again: the bespoke ervet_ult_whole preset reaches the presentation', ofType(evs, 'area').some((x) => x.vfx === 'ervet_ult_whole'));
+    // (INTEG2: the landing burst is ervet_ult_shards_home — the shards flying home — the engine's own def for it)
+    check('Whole Again: the bespoke ervet_ult_shards_home preset reaches the presentation', ofType(evs, 'area').some((x) => x.vfx === 'ervet_ult_shards_home'));
     check('Whole Again: great form, attack reach unchanged at 2 m (no reach bonus)', a.me.form === 'great' && near(a.me.stats.range, 2, 0.01), [a.me.form, a.me.stats.range]);
     foe.statuses.length = 0; side.statuses.length = 0;
     issueAttack(a.w, a.me, foe);
