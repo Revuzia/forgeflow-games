@@ -18,10 +18,12 @@
 //             draws exactly the body's triangles).
 //   ink       a match fighter's rest outline, victim flash and x-ray draw a welded LOD of that LOD1 hull within 8 mm
 //             (actors.ts bodyLodOf; the flash slides toward the camera so the coarser shell still covers the body).
-//   crowd     the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body and accents through a
-//             LOD held within 12 mm in metres (each mesh's own dequantization, see below; textured, so never welded):
-//             ~1 px at the default lane zoom for a 55-65 px Wick; its outline hull is composed of exactly those
-//             triangles, so the ink keeps hugging the body.
+//   crowd     the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body through a LOD held
+//             within 12 mm in metres (each mesh's own dequantization, see below; textured, so never welded): ~1 px at
+//             the default lane zoom for a 55-65 px Wick. The team-colour accent parts draw whole (a thin stripe broke
+//             into dashes at 12 mm) and the body vertices within 35 mm of them are locked, so a stripe shows as on the
+//             full mesh (_harness/probe_crowd_accent.mjs: accent px within 1.2 % of full). Its outline hull is composed of exactly those triangles, so the ink keeps hugging
+//             the body.
 //
 // Positions arrive as GLTFLoader builds them from KHR_mesh_quantization: normalized int16, read back in -1..1, the
 // metres per unit living only in the skeleton (dequantUnit). A bound in metres is divided by that unit; a caller that
@@ -40,9 +42,12 @@ export const LOD = {
   shadow: { ratio: 0.2, errorM: 0.03, weld: true },
   /** the per-actor rest outline hull (main pass; units and structures) */
   hull: { ratio: 0.5, errorM: 0.006, weld: true },
-  /** the crowd's body, accent and outline hull (main pass): a bound in METRES (each mesh's dequantization); textured, so
-   *  never welded (a collapse across a UV seam would smear the texture) */
+  /** the crowd's body and outline hull (main pass; the accents draw whole, crowd.ts bakeCrowd): a bound in METRES (each
+   *  mesh's dequantization); textured, so never welded (a collapse across a UV seam would smear the texture) */
   crowd: { ratio: 0.25, errorM: 0.012, weld: false },
+  /** a crowd body's vertices within this many metres of an accent vertex (at rest) are locked in its LOD (crowd.ts
+   *  accentLock), so the surface a stripe or band sits on keeps its shape and the accent shows as authored */
+  crowdAccentLockM: 0.035,
   /** a fighter's body in the match (faceLockedLod): ratio, bound in metres, normal weight, the locked bone and weight */
   body: { ratio: 0.4, errorM: 0.012, normalW: 0.5, lockBone: 'head', lockW: 0.5 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
@@ -85,8 +90,10 @@ function positionsOf(g: BufferGeometry): Float32Array | null {
  * textured mesh no longer pin it; welding alone left meshopt's seam rules locking them). The fighters' ink over their LOD1
  * hull went 68k -> 44k triangles for ten, their shadow 41k -> 22k, a Wick's shadow 0.6-0.8 -> 0.25 of its body, within the
  * same bounds (integration run 2).
+ * `lock` (a non-welded kind only; ignored otherwise): per vertex, 1 = never moved or collapsed (crowd.ts accentLock). The
+ * LOD is cached per index and kind, so every call for one geometry must pass the same lock (crowd.ts is the only caller).
  */
-export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.minTris, unitM = 1): BufferAttribute | null {
+export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.minTris, unitM = 1, lock: Uint8Array | null = null): BufferAttribute | null {
   if (!ready) return null;
   const pos = g.getAttribute('position');
   if (!pos) return null;
@@ -116,7 +123,10 @@ export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.min
     const scale = MeshoptSimplifier.getScale(positions, 3);
     if (!(scale > 0) || !(unitM > 0)) return null;
     const target = Math.max(3, Math.floor((count * cfg.ratio) / 3) * 3);
-    const [out] = MeshoptSimplifier.simplify(src, positions, 3, target, cfg.errorM / (unitM * scale), cfg.weld ? ['Permissive'] : []);
+    const err = cfg.errorM / (unitM * scale);
+    const [out] = lock && !cfg.weld && lock.length === pos.count
+      ? MeshoptSimplifier.simplifyWithAttributes(src, positions, 3, new Float32Array(0), 0, [], lock, target, err, [])
+      : MeshoptSimplifier.simplify(src, positions, 3, target, err, cfg.weld ? ['Permissive'] : []);
     if (!out.length || out.length > count * 0.85) return null;          // not worth a second buffer
     const arr = pos.count < 65536 ? Uint16Array.from(out) : out;
     const attr = new BufferAttribute(arr, 1);

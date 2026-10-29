@@ -79,6 +79,40 @@ function foldBind(ref: Skeleton, m: SkinnedMesh): Matrix4 | null {
   return x;
 }
 
+const _av = new Vector3();
+/** per vertex of `body`, 1 when it lies within `radiusM` metres of a vertex of an accent part, at rest (the template's
+ *  world matrices current, never posed); null when nothing is near. The mesh's local frame is in metres (dequantUnit),
+ *  so a metre is the length of its world matrix's first column in world units */
+function accentLock(body: SkinnedMesh, accents: readonly SkinnedMesh[], radiusM: number): Uint8Array | null {
+  if (!accents.length || !(radiusM > 0)) return null;
+  const pts: number[] = [];
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const a of accents) {
+    const n = a.geometry.getAttribute('position')?.count ?? 0;
+    for (let i = 0; i < n; i++) {
+      a.getVertexPosition(i, _av).applyMatrix4(a.matrixWorld);
+      pts.push(_av.x, _av.y, _av.z);
+      lo[0] = Math.min(lo[0], _av.x); lo[1] = Math.min(lo[1], _av.y); lo[2] = Math.min(lo[2], _av.z);
+      hi[0] = Math.max(hi[0], _av.x); hi[1] = Math.max(hi[1], _av.y); hi[2] = Math.max(hi[2], _av.z);
+    }
+  }
+  if (!pts.length) return null;
+  const r = radiusM * _av.setFromMatrixColumn(body.matrixWorld, 0).length(), r2 = r * r;
+  const n = body.geometry.getAttribute('position')?.count ?? 0;
+  const lock = new Uint8Array(n);
+  let any = false;
+  for (let i = 0; i < n; i++) {
+    body.getVertexPosition(i, _av).applyMatrix4(body.matrixWorld);
+    const x = _av.x, y = _av.y, z = _av.z;
+    if (x < lo[0] - r || x > hi[0] + r || y < lo[1] - r || y > hi[1] + r || z < lo[2] - r || z > hi[2] + r) continue;
+    for (let k = 0; k < pts.length; k += 3) {
+      const dx = pts[k] - x, dy = pts[k + 1] - y, dz = pts[k + 2] - z;
+      if (dx * dx + dy * dy + dz * dz <= r2) { lock[i] = 1; any = true; break; }
+    }
+  }
+  return any ? lock : null;
+}
+
 /**
  * Bake a template for the crowd, or null when it does not qualify. `hull`: the template's hull plan (lead mesh
  * index in traverse order + merged geometry). `accentName`: the material whose colour is the readability accent.
@@ -97,11 +131,18 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   const ref = meshes[0].skeleton;
   const binds: Matrix4[] = [];
   for (const m of meshes) { const x = foldBind(ref, m); if (!x) return null; binds.push(x); }
-  // perf PERF-m5: one LOD per part (lod.ts LOD.crowd: its bound in metres through the part's own dequantization, read
-  // from the template at rest, before any clone is posed) and the hull's index rebuilt from its members' LODs. Every
-  // mesh here is skinned, so `meshes` is in the hull plan's traverse order. A no-op until lodReady (actors.ts awaits it)
+  // perf PERF-m5: one LOD per body part (lod.ts LOD.crowd: its bound in metres through the part's own dequantization,
+  // read from the template at rest, before any clone is posed) and the hull's index rebuilt from its members' LODs. Every
+  // mesh here is skinned, so `meshes` is in the hull plan's traverse order. A no-op until lodReady (actors.ts awaits it).
+  // The accent parts (the team-colour stripes and bands, 98-332 triangles) draw whole: at 12 mm a thin stripe broke
+  // into dashes and the greatwick's hood band mostly vanished (integ2 engine verify 1: accent px 608 -> 445); whole,
+  // they cost ~150-250 triangles a unit, and composeIndex keeps their own triangles in the hull. The body's vertices
+  // within LOD.crowdAccentLockM of an accent are locked (accentLock): simplified freely, the hood under a whole ring sank
+  // a few mm and showed 7-11 % more of it than the full mesh does (_harness/probe_crowd_accent.mjs)
   const units = meshes.map((m) => dequantUnit(m));
-  const lods = meshes.map((m, i) => lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, units[i]));
+  const accents = meshes.filter((m) => (m.material as Material).name === accentName);
+  const lods = meshes.map((m, i) => ((m.material as Material).name === accentName ? null
+    : lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, units[i], accentLock(m, accents, LOD.crowdAccentLockM))));
 
   // sample every clip on a private clone (root at the template's placement, unit scale)
   const clone = cloneSkinned(scene);
@@ -417,8 +458,9 @@ class CrowdSet {
         mat.customProgramCacheKey = p.material.customProgramCacheKey;
       }
       patchCrowd(mat, bake, p.bind, p.accent);
-      // perf PERF-m5: the body and accent draw through their LOD (lod.ts LOD.crowd: within 12 mm, ~1 px at the default
-      // lane zoom; crowd units are Wicks and small monsters, ~55-65 px tall), the hull through the same triangles
+      // perf PERF-m5: the body draws through its LOD (lod.ts LOD.crowd: within 12 mm, ~1 px at the default lane zoom;
+      // crowd units are Wicks and small monsters, ~55-65 px tall), the accent whole (bakeCrowd), the hull through the
+      // same triangles
       const pv = this.buf.view(p.geometry);
       if (p.lod) { pv.userData.fullIndex = p.geometry.index; pv.setIndex(p.lod); }
       const mesh = new Mesh(pv, mat);

@@ -11,10 +11,16 @@
 // too, a solid patch). Then the menu showcase: it must keep the full body (no 'vale_body_lod1' geometry drawn there).
 // Writes a contact sheet per fighter (A | B | 4x |A-B|) so the faces and silhouettes can be looked at.
 //
-//   node _harness/probe_body_lod.mjs [--map rift] [--t 75] [--seed 7] [--tag integ_engine]
+//   node _harness/probe_body_lod.mjs [--map rift] [--t 75] [--seed 7] [--picks a,b,,c] [--tag integ_engine]
+//   --picks: a fighter per seat, passed to the bench (an empty entry keeps that seat's default), so every fighter can be
+//   covered in two runs. Every fighter of the match is drawn: the probe lifts seat 0's fog of war in the page (the
+//   renderer's entityVisible -> true, fog off, re-applied after each rebuild); --no-reveal keeps seat 0's vision, and then
+//   an enemy out of sight fails (below).
 //   → _harness/_reports/<tag>_body_lod.json, shots _harness/_shots/<tag>_bodylod_<fighter>.png
 // Done (engine-lod): every fighter draws its LOD1 in the match (body tris down), the head-locked face is unchanged,
 // the A/B crop differs by no more solid patches than the floor allows (reported), and the menu draws full bodies.
+// An actor that is not drawn (its root or body hidden, out of vision, or 'fighters main' 0 triangles in the frame) FAILS:
+// an empty crop would otherwise read as 'no difference' (integ2 engine verify 1: Tunlan and Kemdo were empty crops).
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,20 +31,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const MAP = opt('map', 'rift'), T = Number(opt('t', 75)), SEED = Number(opt('seed', 7)), TAG = opt('tag', 'integ_engine');
+const PICKS = opt('picks', ''), REVEAL = !args.includes('--no-reveal');
 const CROP = 260;
 const REPS = join(HERE, '_reports'), SH = join(HERE, '_shots');
 mkdirSync(REPS, { recursive: true }); mkdirSync(SH, { recursive: true });
 
-const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${MAP}&q=high&t=${T}&seed=${SEED}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${MAP}&q=high&t=${T}&seed=${SEED}&dev=1&hud=0&manual=1${PICKS ? `&picks=${encodeURIComponent(PICKS)}` : ''}`, { wait: false, hmr: false });
 const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
-const report = { at: new Date().toISOString(), map: MAP, t: T, seed: SEED, fighters: {}, modes: {}, menu: null, pass: true, fails: [] };
+const report = { at: new Date().toISOString(), map: MAP, t: T, seed: SEED, picks: PICKS || null, reveal: REVEAL, fighters: {}, modes: {}, menu: null, pass: true, fails: [] };
 try {
   await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
   const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
   if (err) throw new Error(`bench failed: ${err}`);
   const shots = {};
   for (const mode of ['A', 'B', 'A2']) {
-    await B((b, on) => { b.renderer.opts.bodyLod = on; b.rebuild(); b.frames(20, 1 / 30); }, mode !== 'B');
+    await B((b, [on, reveal]) => {
+      const R = b.renderer;
+      R.opts.bodyLod = on; b.rebuild();
+      // every fighter drawn, whatever seat 0 sees (harness only: the A/B is about the body, not the fog)
+      if (reveal) { R.entityVisible = () => true; R.fog.enabled = false; }
+      b.frames(20, 1 / 30);
+    }, [mode !== 'B', REVEAL]);
     await page.waitForTimeout(6000);                                     // templates attach, textures land
     await B((b) => b.frames(10, 1 / 30));
     const ids = await B((b) => b.entities('fighter').filter((e) => e.alive).map((e) => ({ id: e.id, def: e.def })));
@@ -52,7 +65,11 @@ try {
         b.frames(1, 1e-4);
         const p = await pending;
         const a = R.actors.get(id);
-        let body = null;
+        let body = null, bodyShown = false;
+        // drawn: the actor root and every ancestor of its body visible (traverseVisible), and the body itself
+        a?.model?.traverseVisible((o) => { if (o.isSkinnedMesh && !o.userData.valeOutline && o.geometry.index && o.geometry.getAttribute('uv')) bodyShown = true; });
+        let rootShown = !!a?.model;
+        for (let o = a?.model; o; o = o.parent) if (!o.visible) rootShown = false;
         a?.model?.traverse((o) => {
           if (!o.isSkinnedMesh || o.userData.valeOutline || !o.geometry.index || !o.geometry.getAttribute('uv')) return;
           const t = o.geometry.index.count / 3;
@@ -61,7 +78,7 @@ try {
         const e = b.host.view.entity(id);
         const lo = b.screen(e.x, e.y, 0), hi = b.screen(e.x, e.y, a?.artHeight ?? 1.9);
         const parts = Object.fromEntries(Object.entries(p.detail).filter(([k]) => k.startsWith('actors:')).map(([k, v]) => [k.slice(7), { tris: v.tris, shadow: v.shadowTris, calls: v.calls }]));
-        return { body, px: Math.round(Math.hypot(hi.x - lo.x, hi.y - lo.y)), cx: Math.round((lo.x + hi.x) / 2), cy: Math.round((lo.y + hi.y) / 2), frame: p.total, parts };
+        return { body, shown: rootShown && bodyShown, alive: !!e?.alive, px: Math.round(Math.hypot(hi.x - lo.x, hi.y - lo.y)), cx: Math.round((lo.x + hi.x) / 2), cy: Math.round((lo.y + hi.y) / 2), frame: p.total, parts };
       }, f.id);
       const clip = { x: Math.max(0, Math.min(1920 - CROP, r.cx - CROP / 2)), y: Math.max(0, Math.min(1080 - CROP, r.cy - CROP / 2)), width: CROP, height: CROP };
       r.shot = await shot(page, `${TAG}_bodylod_${f.def}_${mode}`, clip);
@@ -120,6 +137,12 @@ try {
     };
     bodyFull += row.bodyTris[0] ?? 0; bodyLod += row.bodyTris[1] ?? 0;
     report.fighters[def] = row;
+    // an actor that is not drawn is a FAIL, never 'no difference': its root or body hidden, or no fighter triangles
+    const mainTris = (p) => p?.fighter?.tris ?? 0;                      // the fighters' main pass in the frame
+    for (const [m, r] of [['A', a], ['B', b], ['A2', a2]]) {
+      if (!r.shown || !(mainTris(r.parts) > 0)) { report.pass = false; report.fails.push(`${def} (${m}): not drawn (root/body visible ${r.shown}, alive ${r.alive}, fighters main ${mainTris(r.parts)} tris): an empty crop`); }
+    }
+    row.shown = [b.shown, a.shown]; row.fightersMain = [mainTris(b.parts), mainTris(a.parts)];
     if (a.body?.geometry !== 'vale_body_lod1') { report.pass = false; report.fails.push(`${def}: the match body draws ${a.body?.geometry} (not its LOD1)`); }
     if (b.body?.geometry === 'vale_body_lod1') { report.pass = false; report.fails.push(`${def}: bodyLod off still draws the LOD1`); }
     const sum = (p, k) => Object.entries(p).filter(([n]) => n.startsWith('fighter')).reduce((s, [, v]) => s + v[k], 0);
