@@ -30,7 +30,10 @@
 // damage terms are units/structures.ts).
 // Noon Toll (rules.noonToll, W4 gameplay G6): from `from` s, every `every` s, every living fighter is
 // shown to every team for `reveal` s (Entity.revealAllUntil, vision.ts) and announce 'noon_toll'
-// (params.n) is emitted.
+// (params.n) is emitted. Integ (G6 margin): with `seats` it also starts for good once no more than that
+// many seats are still in; with `quiet` it also rings when no fighter has died for `quiet` s (after the
+// first death, 3+ seats in) and every `every` s after that until one does. noonTollOn(w) says whether it
+// rings now (public: every client hears the announce), which the bots read.
 
 import { TICK_DT, TICK_HZ, type Command, type MatchResult, type PlayerId, type PlayerResult, type TeamId } from '../../contracts/sim.ts';
 import type { Player } from '../entity.ts';
@@ -59,8 +62,12 @@ export interface MatchState {
   nextSample: number;
   votes: Vote[];
   suddenDeathDone: boolean;
-  /** Noon Toll: tolls rung so far */
-  tolls: number;
+  /** Noon Toll: when the next toll rings (−1: it is not ringing), since when it rings for good (−1: not yet; `from`
+   *  or the moment only `seats` seats were left), and the fighter deaths seen with the last one's time (`quiet`) */
+  tollNext: number;
+  tollSince: number;
+  deathsSeen: number;
+  lastDeathAt: number;
   /** practice resetMatch: the facade rebuilds the world after this tick */
   resetRequested: boolean;
   ffa: boolean;
@@ -70,7 +77,8 @@ export function matchOf(w: World): MatchState { return w.ext[KEY] as MatchState;
 
 export function initMatch(w: World, pregame: number, ffa: boolean): MatchState {
   const m: MatchState = {
-    ended: false, goldGraph: [], nextSample: 0, suddenDeathDone: false, tolls: 0, resetRequested: false, ffa,
+    ended: false, goldGraph: [], nextSample: 0, suddenDeathDone: false, tollNext: -1, tollSince: -1, deathsSeen: 0, lastDeathAt: -1,
+    resetRequested: false, ffa,
     votes: w.teams.map(() => ({ active: false, yes: new Set(), no: new Set(), endsAt: 0, cooldownUntil: -Infinity })),
   };
   w.ext[KEY] = m;
@@ -138,9 +146,19 @@ export function noonTollSystem(w: World): void {
   const nt = w.rules.noonToll;
   if (!nt || w.phase !== 'live') return;
   const m = matchOf(w);
-  const due = w.time + 1e-9 >= nt.from ? 1 + Math.floor((w.time - nt.from + 1e-9) / nt.every) : 0;
-  if (due <= m.tolls) return;
-  m.tolls = due;
+  let deaths = 0, inPlay = 0;
+  for (const p of w.players) {
+    if (!p) continue;
+    deaths += p.deaths;
+    if ((p.lives ?? 1) > 0) inPlay++;
+  }
+  if (deaths !== m.deathsSeen) { m.deathsSeen = deaths; m.lastDeathAt = w.time; }
+  if (m.tollSince < 0 && (w.time + 1e-9 >= nt.from || (nt.seats !== undefined && inPlay <= nt.seats))) m.tollSince = w.time;
+  const quiet = nt.quiet !== undefined && m.lastDeathAt >= 0 && inPlay >= 3 && w.time - m.lastDeathAt + 1e-9 >= nt.quiet;
+  if (m.tollSince < 0 && !quiet) { m.tollNext = -1; return; }
+  if (m.tollNext < 0) m.tollNext = w.time;
+  if (w.time + 1e-9 < m.tollNext) return;
+  m.tollNext += nt.every;
   const until = w.tick + Math.max(1, Math.round(nt.reveal * TICK_HZ));
   let n = 0;
   for (const p of w.players) {
@@ -150,6 +168,12 @@ export function noonTollSystem(w: World): void {
     n++;
   }
   w.emit({ e: 'announce', t: w.time, key: 'noon_toll', params: { n } });
+}
+
+/** the Noon Toll rings now (rules.noonToll: from `from`, after `seats`, or on a quiet arena) */
+export function noonTollOn(w: World): boolean {
+  const m = matchOf(w);
+  return !!w.rules.noonToll && !!m && m.tollNext >= 0;
 }
 
 // ── surrender ───────────────────────────────────────────────────────────────────────────────────

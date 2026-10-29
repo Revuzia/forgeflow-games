@@ -31,6 +31,7 @@ import { mitigated } from '../combat.ts';
 import type { Entity, Player } from '../entity.ts';
 import type { Rng } from '../rng.ts';
 import type { BotController } from '../sim.ts';
+import { noonTollOn } from '../modes/match.ts';
 import { seatState } from '../units/fighters.ts';
 import type { World } from '../world.ts';
 import type { DifficultyProfile } from './difficulty.ts';
@@ -1011,10 +1012,9 @@ export class Bot extends BotBase implements BotController {
     for (const p of this.w.players) if (p && (p.lives ?? 1) > 0) inPlay++;
     return inPlay > 4 && !this.tollRinging();
   }
-  /** the Noon Toll (rules.noonToll) has started ringing */
+  /** the Noon Toll (rules.noonToll) rings: from its hour, for the last seats, or over a quiet arena (public: announced) */
   private tollRinging(): boolean {
-    const nt = this.w.rules.noonToll;
-    return !!nt && this.w.time + 1e-9 >= nt.from;
+    return noonTollOn(this.w);
   }
 
   private huntQuality = 0;

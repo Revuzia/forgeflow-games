@@ -608,8 +608,13 @@ export const RulesParams = z.object({
     structureTaken: z.number().nonnegative() }).strict().optional(),
   /** W4 (gameplay G6), additive: the Noon Toll. From `from` s, every `every` s the dial tolls and every living fighter is
    *  shown to every team for `reveal` s (fog, thickets and invisibility do not hide them); announce 'noon_toll'
-   *  (params.n = fighters shown). FRAY's last minutes stay a race: nobody can wait out the clock in a corner. */
-  noonToll: z.object({ from: z.number().nonnegative(), every: z.number().positive(), reveal: z.number().positive() }).strict().optional(),
+   *  (params.n = fighters shown). FRAY's last minutes stay a race: nobody can wait out the clock in a corner.
+   *  Integ (G6 margin), both optional: `seats` — the toll also starts, and keeps ringing from then on, once no more than
+   *  this many seats are still in (the last few cannot wait for `from`); `quiet` — before that, it also rings when the
+   *  arena has gone `quiet` s without a fighter death (from the first death, 3+ seats in), and every `every` s after,
+   *  until a fighter falls. */
+  noonToll: z.object({ from: z.number().nonnegative(), every: z.number().positive(), reveal: z.number().positive(),
+    seats: z.number().int().positive().optional(), quiet: z.number().positive().optional() }).strict().optional(),
   /** W4 (gameplay G9), additive: this mode's fighter weights. Damage one fighter deals another is × the dealer's `dealt`
    *  and × the target's `taken` (absent = 1). For a mode whose shape a kit over- or under-plays (FRAY's free-for-all
    *  rewards lone divers and punishes setup kits); tuned against the soak's placement band (_harness/probe_sim_bot_soak.ts
