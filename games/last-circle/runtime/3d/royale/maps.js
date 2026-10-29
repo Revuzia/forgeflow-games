@@ -1708,20 +1708,26 @@ export async function buildMap(W, mapId) {
     const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
     bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
     const birdTex = new THREE.CanvasTexture(bcv); birdTex.colorSpace = THREE.SRGBColorSpace;
-    const birdMat = new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false });  // ONE shared material for every bird (a SpriteMaterial per bird was 96 program lookups a frame)
+    // (R1 / endgame lane) ALL the birds are ONE Points draw (was one Sprite per bird: 15-27 birds = 0-24 draw calls in a view, by the time of the frame; perf_district's endgame
+    // view read +/- 24 calls run to run). The same rng() draws in the same order (every seeded placement after this is unchanged), the same flight; size 6 = the sprites' mean 4.25 m
+    // seen through the 70-degree lens (a point is sized in screen height / depth, a sprite in world metres: x 1 / tan 35 deg).
     const flocks = [];
     for (let f = 0; f < 3; f++) {
-      const flock = new THREE.Group();
+      const flock = { children: [], position: new THREE.Vector3() };
       const n = 5 + Math.floor(rng() * 5);
       for (let b = 0; b < n; b++) {
-        const s = new THREE.Sprite(birdMat);
-        s.scale.setScalar(3 + rng() * 2.5);
+        const s = { position: new THREE.Vector3(), userData: {} };
+        s.sc = 3 + rng() * 2.5;
         s.userData.ph = rng() * Math.PI * 2; s.userData.ix = b;
-        flock.add(s);
+        flock.children.push(s);
       }
       flock.userData = { cx: (rng() - 0.5) * HALF, cz: (rng() - 0.5) * HALF, cy: 120 + rng() * 60, fr: 22 + rng() * 34, spd: 0.05 + rng() * 0.05, ph: rng() * Math.PI * 2 }; // 120-180m: clear of the sky-islands (~52m) and the volcano
-      g.add(flock); flocks.push(flock);
+      flocks.push(flock);
     }
+    const nB = flocks.reduce((a, f) => a + f.children.length, 0), bPos = new Float32Array(nB * 3), bGeo = new THREE.BufferGeometry();
+    bGeo.setAttribute("position", new THREE.BufferAttribute(bPos, 3));
+    const birdPts = new THREE.Points(bGeo, new THREE.PointsMaterial({ map: birdTex, size: 6, sizeAttenuation: true, transparent: true, depthWrite: false, fog: false }));
+    birdPts.frustumCulled = false; birdPts.name = "birds"; g.add(birdPts);
 
     trackUpdater((dt, t) => {
       // keep the sky dome centered on the camera — a skybox should follow the viewer,
@@ -1730,11 +1736,13 @@ export async function buildMap(W, mapId) {
       skyMat.uniforms.cloudT.value = t;    // scrolls both baked cloud layers (replaces the sprite drift)
       LCU.uLcT.value = t; LCU.uLcWater.value.y = t;
       LCU.uLcCloudOff.value.set(cloudOff.x + t * 0.0072 * LCU.uLcWind.value.x, cloudOff.y + t * 0.0072 * LCU.uLcWind.value.y);   // ~7 m/s of drift
+      let bi = 0;
       for (const fl of flocks) {
         const u = fl.userData, a = t * u.spd + u.ph;
         fl.position.set(u.cx + Math.cos(a) * u.fr * 6, u.cy + Math.sin(a * 0.7) * 7, u.cz + Math.sin(a) * u.fr * 6);
-        for (const s of fl.children) s.position.set((s.userData.ix - fl.children.length / 2) * 4.5, Math.sin(t * 6 + s.userData.ph) * 1.6, (s.userData.ix % 2) * 3);
+        for (const s of fl.children) { bPos[bi++] = fl.position.x + (s.userData.ix - fl.children.length / 2) * 4.5; bPos[bi++] = fl.position.y + Math.sin(t * 6 + s.userData.ph) * 1.6; bPos[bi++] = fl.position.z + (s.userData.ix % 2) * 3; }
       }
+      bGeo.attributes.position.needsUpdate = true;
     });
 
     // ── P1.10 (SKY lane, Wave 4): altitude-scaled fog ───────────────────────────
@@ -3674,10 +3682,24 @@ export async function buildMap(W, mapId) {
     const AT = (u, t) => (NS ? [u, t] : [t, u]);                     // (across, along) -> world x, z
     const boxUT = (u, y, t, wu, h, wt, color, o) => { const p = AT(u, t); addBox(p[0], y, p[1], NS ? wu : wt, h, NS ? wt : wu, color, o); };
     // the deck: the main slab over the span every strip covers, and each strip's own run-out to its bank at both ends (exact boxes, one top)
-    boxUT(ax, top - 0.15, (cA + cB) / 2, BW, 0.3, cB - cA, "#9a6c43", { tex: "plank" });
+    // (R1 / endgame lane) the main slab spans ALL the swim-deep water under the deck: where the channel's dredged falloff runs under a strip's run-out (deepwood s18: three 0.71 m
+    // run-outs 20-30 % over swim-deep water, the deck read as four slabs over the river and its axis 14.5 degrees off - every walk that followed it swam), the slab end moves out to
+    // 0.75 m past the outermost deep point under any strip, so what is left of a run-out lies over the shallows / the bank. Only where every shorter strip's bank stands within a step
+    // under the deck top along the stretch the slab now reaches into it (else the old end: a deck end face over a dip in the bank is a wall to a walker); 62 of 63 walk seeds unchanged.
+    const deepAt = (s, t) => Math.min(G(s.u0, t), G((s.u0 + s.u1) / 2, t), G(s.u1, t)) < waterY - 0.9;
+    const reachOut = (c, sg) => {                                                                       // sg -1: the tA end (c = cA), +1: the tB end (c = cB)
+      let e = c;
+      for (const s of strips) { const tE = sg < 0 ? s.tA : s.tB; for (let t = tE; sg < 0 ? t < c : t > c; t -= sg * 0.25) if (deepAt(s, t)) { e = sg < 0 ? Math.min(e, t - 0.75) : Math.max(e, t + 0.75); break; } }
+      e = sg < 0 ? Math.max(e, t0) : Math.min(e, t1);
+      for (const s of strips) { const tE = sg < 0 ? s.tA : s.tB; if (sg < 0 ? tE <= e : tE >= e) continue; for (let t = e; sg < 0 ? t <= tE : t >= tE; t -= sg * 0.25) if (Math.min(G(s.u0 + 0.05, t), G((s.u0 + s.u1) / 2, t), G(s.u1 - 0.05, t)) < top - 0.45) return c; }
+      return e;
+    };
+    const sA = reachOut(cA, -1), sB = reachOut(cB, 1);
+    M.deckBuilt.slab = [sA, sB, cA, cB];                                                             // (the main slab's span, and the span every strip covers)
+    boxUT(ax, top - 0.15, (sA + sB) / 2, BW, 0.3, sB - sA, "#9a6c43", { tex: "plank" });
     for (const s of strips) {
-      if (cA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + cA) / 2, s.u1 - s.u0, 0.3, cA - s.tA, "#9a6c43", { tex: "plank" });
-      if (s.tB - cB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (cB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - cB, "#9a6c43", { tex: "plank" });
+      if (sA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + sA) / 2, s.u1 - s.u0, 0.3, sA - s.tA, "#9a6c43", { tex: "plank" });
+      if (s.tB - sB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (sB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - sB, "#9a6c43", { tex: "plank" });
     }
     // three stringer beams under the deck over the water (cosmetic: they read as a timber bridge from the banks), and a darker kerb plank along both edges (each over its own edge strip)
     for (const su of [-1, 0, 1]) boxUT(ax + su * (BH - 0.9), top - 0.55, (a + b) / 2, 0.4, 0.5, b - a + 2, "#5e4430", { tex: "plank", collide: false });
@@ -6416,7 +6438,7 @@ export async function buildMap(W, mapId) {
       // D2 (Savanna only): a prop GLB made of several meshes that share ONE material (the car is 13 meshes of 7 materials, the rock cluster 4 of 1) is one InstancedMesh per
       // MESH - 13 draw calls for the cars alone in every view that sees the map-wide mesh. Meshes of one material are baked into one geometry (their GLB-local matrices
       // folded into the vertices), so a kind costs one call per material. Same triangles, same instance matrices, same colliders (those come from the baked table).
-      if (mapId === "ashgrid") meshes = mergePartsByMaterial(meshes);
+      meshes = mergePartsByMaterial(meshes);
       // (the coarse trunk is added AFTER the canopy: the first InstancedMesh of a kind carries the GLB's own geometry, which the placement census reads the kind's local frame from)
       // Wave 7b stage B: the same far LOD for the themed maps' heavy tree - Isla Viva's palm (one 3,134-triangle mesh: 551 k triangles of an Isla Viva s31337 street view, 47 % of the frame)
       // and Deepwood's pine canopy (1,613). Savanna's acacia is unchanged.
