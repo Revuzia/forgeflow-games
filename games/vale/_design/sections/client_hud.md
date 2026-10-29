@@ -140,6 +140,7 @@ States every screen implements (STYLE_BIBLE States row): hover = focus ring, pre
 
 ### 3.7 Loading
 - **Shows:** the map name and flavour line (`loading.title`, `loading.flavour.<mode>`), one tip at a time from this mode's tips (`client.tips` untagged plus those tagged for the mode, e.g. `[rift] ` or `[rift,bridge] `; the tag is never shown; random start, then in order, every 8 s, `loading.tip_n` counts the mode's list), a thin progress bar (`loading.progress`), and a chip per seat (up to ten) with a tick as each seat is ready (`loading.seat_ready`).
+- **Seat card foot** (client-26): the fighter, the player and the role sit in a compact block (1u over and under, 1.2 line height) on a short ink fade, so the art keeps most of the card (card p50 >= 75 at 1280x720, >= 80 at 1920x1080; the gate is >= 70). Each line keeps its own contrast with a tight ink halo: fighter and player name in text-1, role in text-2, every line >= 5:1 against the ground right round its letters on all 48 splashes, bright grounds included (`_harness/_reports/integ_client_p4_cards.mjs`).
 - **States:** waiting for others (`loading.waiting`), asset error (`state.error.match` + Retry). The shadow-line wipe starts the screen and ends it; no sound but the bed fading.
 
 ### 3.8 Post-game
