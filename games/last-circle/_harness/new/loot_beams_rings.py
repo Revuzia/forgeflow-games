@@ -11,8 +11,10 @@ One standard match on isla_viva seed 7 (the research's measured seed: 124 weapon
 
   gpusync    what the GPU draws == the module's CPU slot state: the frame as the game left it vs the same frame after a forced
              FULL re-upload of every marker attribute, after the landing skip (player view), after a 20 s sim-only skip (250 m up)
-             and after 90 rendered frames of 3 sim ticks each - 0 differing pixels (a lost update range = a ghost marker of a
-             taken item). Falsifier: --plant flush-clear serves loot.js with the pre-fix flush and must FAIL this row
+             and after 90 rendered frames of 3 sim ticks each, and (R1) after two net takes on two sim ticks of ONE rendered frame
+             (a spawned legendary rifle 7 m in front of the player, then a second item, no render between) - 0 differing pixels
+             (a lost update range = a ghost marker of a taken item). Falsifier: --plant flush-clear serves loot.js with the pre-fix
+             flush and must FAIL this row (the two-take view is what catches it: the other three passed with the plant applied)
 
   pools      the markers are THREE instanced meshes (loot-rings / loot-beams / loot-glows) at renderOrder >= 6; the loot group holds no
              per-item ring torus and no sprite; the three add exactly 3 draw calls (renderer.info delta, markers shown vs hidden);
@@ -440,12 +442,49 @@ def main():
                 s.js("(x) => { const W = window.__LC__.W, p = W.player; p.pos.x = x[0]; p.pos.y = x[1]; p.pos.z = x[2]; p.onGround = true; if (p.vel) { p.vel.x = p.vel.y = p.vel.z = 0; } }", pos0)
                 s.step_frames(90, 1 / 20, True)
                 res.append(sync_diff("after 90 rendered frames of 3 ticks: player view"))
+                # 3. (R1, harness lane) the documented failure built on purpose instead of hoped for: views 1-2 change slots on many ticks but
+                # mostly by the 150 m cull, whose markers the shader has already faded to nothing at the cull edge, and view 3 only sees a ghost
+                # when a bot happens to take an item in view on a tick that is not the frame's last (inferred) - so --plant flush-clear passed all three
+                # (0 px in every view: verifier A run4_flushclear on the release head and on a8467320, 2026-10-28). Here: a legendary rifle 'g_a' and an smg 'g_b' spawned on open flat ground
+                # (findSpot, the pickup row's own rule), the player 7 m from g_a facing it, rendered until settled; then g_a is taken on one sim
+                # tick and g_b on the NEXT, with no render between (two net takes inside one 30 fps frame). The fixed flush merges both ranges and
+                # the GPU drops both; the pre-fix flush uploads only g_b's slots and g_a's ring / beam / glow / blob stay drawn: a ghost the forced
+                # re-upload removes. Armed only when g_a's ring and beam slots were live and its foot was on screen before the takes.
+                pos0b = s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.y, p.pos.z, p.yaw, p.input.yaw, p.input.pitch]; }")
+                g_spot = s.js("() => window.__LG__.findSpot(2.5, 25, 6, 0.8, null, 0)")
+                armed = None
+                if g_spot:
+                    gx, gz = g_spot["x"], g_spot["z"]
+                    s.js("([x, z]) => { const L = window.__LG__; L.spawn('g_a', { kind: 'weapon', id: 'ar', rarity: 4, mag: 30 }, x, z);"
+                         " L.spawn('g_b', { kind: 'weapon', id: 'smg', rarity: 2, mag: 30 }, x + 4, z - 3); }", [gx, gz])
+                    rig.place(gx, gz, dist=7.0, pitch=0.10, yaw_off=0.20)
+                    pre = s.js("""([x, z]) => { const L = window.__LG__, W = window.__LC__.W, a = L.info('g_a'), b = L.info('g_b');
+                        const foot = L.project(x, W.map.heightAt(x, z) + 0.3, z), cv = L.canvas();
+                        return { a: a && a.ring && a.beam ? [a.ring.slot, a.beam.slot, a.ring.alive, a.beam.alive] : null, b: b && b.ring ? [b.ring.slot, b.beam ? b.beam.slot : -1] : null,
+                                 foot: [Math.round(foot[0]), Math.round(foot[1]), +foot[2].toFixed(4)], onScreen: foot[2] < 1 && foot[0] > 8 && foot[0] < cv[0] - 8 && foot[1] > 8 && foot[1] < cv[1] - 8 }; }""", [gx, gz])
+                    armed = bool(pre["a"] and pre["a"][2] and pre["a"][3] and pre["b"] and pre["onScreen"])
+                    v.info("gpusync two-take probe", {"spot": [gx, gz], "slots g_a [ring, beam, alive, alive]": pre["a"], "slots g_b [ring, beam]": pre["b"],
+                                                      "g_a foot on screen": pre["foot"], "armed": armed})
+                    if armed:
+                        s.js("() => window.__LC__.W.netTakeItem('g_a')")
+                        s.step_frames(1, 1 / 60, False)       # tick 1: g_a's slots parked (no render)
+                        s.js("() => window.__LC__.W.netTakeItem('g_b')")
+                        s.step_frames(1, 1 / 60, False)       # tick 2: g_b's slots parked (no render): the frame's last flush
+                        res.append(sync_diff("two net takes on two sim ticks of one rendered frame: 7 m from the first"))
+                    else:
+                        for gid in ("g_a", "g_b"):
+                            s.js("(id) => window.__LC__.W.netTakeItem(id)", gid)
+                    s.js("(x) => { const W = window.__LC__.W, p = W.player; p.pos.x = x[0]; p.pos.y = x[1]; p.pos.z = x[2]; p.yaw = x[3]; p.input.yaw = x[4]; p.input.pitch = x[5];"
+                         " p.onGround = true; if (p.vel) { p.vel.x = p.vel.y = p.vel.z = 0; } }", pos0b)
+                    s.step_frames(8, 1 / 60, True)        # back where the census below always measured (the cull follows the camera)
                 v.info("gpusync per view", res)
                 if any(r["controlPixels"] for r in res):
                     v.cnj("gpusync: the rendered markers equal a forced full re-upload", "two renders with NO re-upload already differ: %s" % res)
+                elif not armed:
+                    v.cnj("gpusync: the rendered markers equal a forced full re-upload", "the two-take probe could not be armed (no open flat spot, or g_a not live / on screen): %s" % (g_spot,))
                 else:
                     v.check("gpusync: the rendered markers equal a forced full re-upload of every marker attribute (no ghost or missing ring / beam / glow / blob)",
-                            all(r["pixels"] == 0 for r in res), res, expect="0 differing pixels in every view (control: 0 without a re-upload)")
+                            all(r["pixels"] == 0 for r in res), res, expect="0 differing pixels in every view, the two-take view included (control: 0 without a re-upload)")
             cen = s.js(CENSUS_JS)
             rows, chests = cen["rows"], cen["chests"]
             v.info("loot census (live after landing)", {"items": len(rows), "weapons": sum(1 for r in rows if r["kind"] == "weapon"),
@@ -707,16 +746,23 @@ def main():
 
             # ---- deaths ------------------------------------------------------------------------------------------------
             if want("deaths"):
-                b = s.js("""() => { const W = window.__LC__.W; const a = W.actors.find((x) => x.isBot && x.alive && x.inventory && x.inventory.slots.some((q) => q && q.kind === 'weapon'));
-                    if (!a) return null; W.giveItem(a, { kind: 'weapon', id: 'sniper', rarity: 4, mag: 5 }); W.giveItem(a, { kind: 'consumable', id: 'medkit', count: 2 });
-                    return { id: a.id }; }""")
+                # (R1, harness lane) the subject is an armed bot whose bag TAKES the given legendary sniper when one exists (the first armed bot of
+                # the Savanna run had a full bag, so its pile was rightly grey and the colour half of the row tested only "common")
+                b = s.js("""() => { const W = window.__LC__.W, SN = { kind: 'weapon', id: 'sniper', rarity: 4, mag: 5 };
+                    const armed = (x) => x.isBot && x.alive && x.inventory && x.inventory.slots.some((q) => q && q.kind === 'weapon');
+                    const a = W.actors.find((x) => armed(x) && W.wouldAcceptItem(x, SN)) || W.actors.find(armed);
+                    if (!a) return null; const g = W.giveItem(a, SN); W.giveItem(a, { kind: 'consumable', id: 'medkit', count: 2 });
+                    return { id: a.id, sniperGiven: !!g }; }""")
                 if not b:
                     v.cnj("deaths: a killed bot's drops carry ring + glow (+ beam for a weapon)", "no armed bot alive")
                 else:
                     before = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
                     s.js("(id) => { const W = window.__LC__.W; W.killActor(W.actorById.get(id), W.player, 'ar'); }", b["id"])
                     s.step_frames(2, 1 / 60, True)
-                    drops = s.js("""(id) => { const W = window.__LC__.W; return W.debugItems().filter((it) => it.id.indexOf('dd:' + id) === 0).map((it) => { const o = W.debugLootFx(it.id).obj;
+                    # (R1) a drop id is 'dd:<victim>:<k>': match the victim EXACTLY - the bare prefix 'dd:s1' also took bot s18's six drops from an
+                    # earlier death (ashgrid 2026-10-27: 14 "drops", 8 of pile:s1 and 6 of pile:s18, read as markerless members of the wrong pile)
+                    others = s.js("(id) => window.__LC__.W.debugItems().filter((it) => it.id.indexOf('dd:' + id) === 0 && it.id.indexOf('dd:' + id + ':') !== 0).length", b["id"])
+                    drops = s.js("""(id) => { const W = window.__LC__.W; return W.debugItems().filter((it) => it.id.indexOf('dd:' + id + ':') === 0).map((it) => { const o = W.debugLootFx(it.id).obj;
                         return { id: it.id, kind: it.data.kind, did: it.data.id, r: it.data.rarity, ring: o.ring ? o.ring.slot : -1, beam: o.beam ? o.beam.slot : -1, glow: o.glow ? o.glow.slot : -1 }; }); }""", b["id"])
                     after = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
                     # (P2/P3 fix round) LC-27: the drops are ONE death pile - its members carry NO marker of their own; the pile carries one ring +
@@ -730,7 +776,7 @@ def main():
                     okd = bool(drops) and len(drops) >= 2 and not own and bool(pile) and pile["members"] == len(drops) and pile["ring"] >= 0 and pile["glow"] >= 0 \
                         and pile["beam"] >= 0 and pile["best"] == best_r and pile["color"] == pile["want"]
                     v.check("deaths (LC-27): a killed bot's drops form ONE death pile - 0 member markers, one ring + beam + glow in the best dropped gun's rarity colour", okd,
-                            {"drops": drops[:8], "nDrops": len(drops), "membersWithOwnMarker": own[:5], "pile": pile, "liveBefore": before, "liveAfter": after,
+                            {"victim": b, "drops": drops[:8], "nDrops": len(drops), "otherDeathsDropsWithSamePrefix": others, "membersWithOwnMarker": own[:5], "pile": pile, "liveBefore": before, "liveAfter": after,
                              "markerDelta": [a - b_ for a, b_ in zip(after, before)], "bestDroppedRarity": best_r})
 
             # ---- chestview ---------------------------------------------------------------------------------------------
