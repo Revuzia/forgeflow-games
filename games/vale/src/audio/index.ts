@@ -1,11 +1,17 @@
 // VALE audio — the WebAudio engine (CONTRACT §11; tokens.json `audio`). Implements the UI's AudioPort.
 //
-//   buses       music · sfx · ui · voice · ambience → master → [soften] → limiter → soft clip → out (Settings.audio
-//               volumes; `muteInBackground` silences a hidden tab). The limiter (a compressor) can overshoot on a
-//               fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing passes
-//               −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both speakers
-//               carry everything: one-sided hearing, a single earbud); `softenLoud` puts a gentle compressor before
-//               the limiter (SOFT_*: about 6 dB off the loudest transients, quiet sounds untouched)
+//   buses       music · sfx · ui · voice · ambience → mix → [soften] → master → limiter → soft clip → out
+//               (Settings.audio volumes; `muteInBackground` silences a hidden tab). The limiter (a compressor) can
+//               overshoot on a fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing
+//               passes −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both
+//               speakers carry everything: one-sided hearing, a single earbud); `softenLoud` puts a gentle
+//               compressor (SOFT_*) and its makeup gain (SOFT_MAKEUP_DB) between the mix and the master volume: the
+//               mix's range narrows (the loud moments come down against the quiet ones) at the same average
+//               loudness, whatever the master slider says (the compressor sees the mix before the volume).
+//               WebAudio's compressor adds its own makeup (about +8 dB at these settings); SOFT_MAKEUP_DB takes
+//               back what the compression does not, so the average holds (_harness/probe_audio_soften.mjs measures
+//               it in real Chrome over a match-like program: integrated within 0.1 LU, peaks -2.9 dB, the
+//               short-term range 13.2 -> 7.6 LU)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
 //               VOICE_DUCK_DB lower and the sfx bus SFX_DUCK_DB lower, except threats to your fighter (the
 //               awareness pass below), which are never ducked (r07 §2.2.7)
@@ -223,9 +229,10 @@ const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
 const SFX_DUCK_DB = 3;       // … and the sfx bus (threats to your fighter excepted)
 const DUCK_IN_S = 0.01;      // time constants: in fast (r07 §4.2: 10-30 ms attack), out over a few hundred ms
 const DUCK_OUT_S = 0.12;
-const SOFT_THRESHOLD_DB = -26;   // `soften`: a gentle compressor before the limiter
+const SOFT_THRESHOLD_DB = -26;   // `soften`: a gentle compressor between the mix and the master volume …
 const SOFT_RATIO = 3;
 const SOFT_KNEE_DB = 12;
+const SOFT_MAKEUP_DB = -1.5;     // … and the gain after it that holds the average loudness (see `buses`)
 // the announcer (see `announcer` in the header)
 const ANN_TTL_S = [1.5, 4, 4, 3, 3, 3];   // per band: a line that waited longer is dropped (r07 §2.2.4: 2-4 s)
 const ANN_PREEMPT = 1;       // bands up to this cut a playing line of a lower band short …
@@ -283,10 +290,13 @@ interface Voice { src: AudioBufferSourceNode | null; gain: GainNode | null; cue:
 class Engine implements ValeAudioPort {
   readonly log: string[] = [];
   private ctx: AudioContext | null = null;
+  /** every bus sums here, before `soften` and the master volume */
+  private mix!: GainNode;
   private master!: GainNode;
   private limiter!: DynamicsCompressorNode;
-  /** `soften`'s compressor (wired between the master and the limiter while it is on) */
+  /** `soften`'s compressor and its makeup (wired between the mix and the master while it is on) */
   private soft!: DynamicsCompressorNode;
+  private softMakeup!: GainNode;
   private softOn = false;
   /** the output stage after the limiter / soft clip: 2 channels, or 1 (summed) under `mono` */
   private out!: GainNode;
@@ -426,7 +436,8 @@ class Engine implements ValeAudioPort {
     const soft = ctx.createDynamicsCompressor();
     soft.threshold.value = SOFT_THRESHOLD_DB; soft.knee.value = SOFT_KNEE_DB; soft.ratio.value = SOFT_RATIO; soft.attack.value = 0.003; soft.release.value = 0.25;
     this.soft = soft;
-    soft.connect(limiter);
+    this.softMakeup = ctx.createGain();
+    this.softMakeup.gain.value = Math.pow(10, SOFT_MAKEUP_DB / 20);
     // the output: the limiter, a soft clip where the platform has one (see `buses`), the mono switch, the speakers
     this.out = ctx.createGain();
     this.out.channelCountMode = 'explicit'; this.out.channelInterpretation = 'speakers'; this.out.channelCount = 2;
@@ -440,6 +451,9 @@ class Engine implements ValeAudioPort {
     tail.connect(this.out).connect(ctx.destination);
     this.master = ctx.createGain();
     this.master.connect(limiter);
+    this.mix = ctx.createGain();
+    this.mix.connect(this.master);
+    soft.connect(this.softMakeup).connect(this.master);
     this.duckGain = ctx.createGain();
     for (const b of BUSES) {
       const g = ctx.createGain();
@@ -448,12 +462,12 @@ class Engine implements ValeAudioPort {
       if (b === 'music' || b === 'ambience' || b === 'sfx') {
         const d = ctx.createGain();
         this.vduck.set(b, d);
-        d.connect(this.master);
+        d.connect(this.mix);
         if (b === 'music') g.connect(this.duckGain).connect(d); else g.connect(d);
-      } else g.connect(this.master);
+      } else g.connect(this.mix);
     }
     this.threat = ctx.createGain();
-    this.threat.connect(this.master);
+    this.threat.connect(this.mix);
     // the alert path joins after the master (the background mute), before the limiter
     for (const b of BUSES) {
       const g = ctx.createGain();
@@ -488,8 +502,8 @@ class Engine implements ValeAudioPort {
     const soften = !!this.vol.softenLoud;
     if (soften !== this.softOn) {
       this.softOn = soften;
-      this.master.disconnect();
-      this.master.connect(soften ? this.soft : this.limiter);
+      this.mix.disconnect();
+      this.mix.connect(soften ? this.soft : this.master);
     }
   }
 

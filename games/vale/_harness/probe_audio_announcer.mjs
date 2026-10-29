@@ -339,9 +339,11 @@ if (!shaper || report.B3.maxOut > 0.8913 || Math.abs(report.B3.linearAt0_6) > 1e
 
 // B4 — accessibility
 eng.settings({ ...SETTINGS.audio, mono: true, softenLoud: true });
-const monoCh = eng.graph.out.channelCount, softIn = eng.master.outs[0]?.kind === 'compressor' && eng.master.outs[0] !== eng.graph.limiter;
+// soften sits between the mix and the master volume: mix → compressor (→ makeup → master) when on, mix → master when off
+const monoCh = eng.graph.out.channelCount, softIn = eng.mix.outs[0]?.kind === 'compressor' && eng.mix.outs[0] !== eng.graph.limiter
+  && eng.mix.outs[0].outs[0]?.outs[0] === eng.master;
 eng.settings({ ...SETTINGS.audio });
-const stereoCh = eng.graph.out.channelCount, softOut = eng.master.outs[0] === eng.graph.limiter;
+const stereoCh = eng.graph.out.channelCount, softOut = eng.mix.outs[0] === eng.master && eng.master.outs[0] === eng.graph.limiter;
 report.B4 = { monoChannels: monoCh, softenWired: softIn, offChannels: stereoCh, softenUnwired: softOut };
 if (monoCh !== 1 || stereoCh !== 2 || !softIn || !softOut) failures.push(`B4: ${JSON.stringify(report.B4)}`);
 
