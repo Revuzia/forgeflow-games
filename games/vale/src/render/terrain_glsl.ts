@@ -142,6 +142,9 @@ uniform vec4 uShaftAx;
 uniform vec3 uTempW, uTempE; uniform float uTempK; uniform float uWaterT;
 uniform vec3 uSeatCol[ 10 ];
 float gHeight; float gRough; vec3 gEmit; float gSheen;
+// env F1: the spawn dais's drawn step (m): its height and the riser's width on the ground
+#define DAIS_H 0.14
+#define DAIS_RW 0.22
 `;
 
 /** the ground body (replaces <map_fragment>) */
@@ -545,16 +548,35 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float inner = 1.0 - smoothstep( FT.z + 0.4 - aa, FT.z + 0.4 + aa, fr );
     pc = mix( pc, pband * 1.03 * grainN, inner );
     float hourL = ( 1.0 - smoothstep( -aa, aa, al - 0.04 ) ) * step( 1.0, fr ) * inner;
-    // inlay: the fountain's rim ring, an outer ring, ticks between them, each set in a carved channel
-    float ringD = min( abs( fr - FT.z ) - 0.085, abs( fr - ( FT.z + 2.95 ) ) - 0.06 );
+    // inlay: the fountain's rim ring and the twelve hour-ticks round it, each set in a carved channel; the ticks are
+    // cut into the dais top (a faint inlay, never a stamped stripe)
+    float ringD = abs( fr - FT.z ) - 0.085;
     float tickD = max( al - 0.05, max( FT.z + 0.55 - fr, fr - ( FT.z + 2.4 ) ) );
     float inD = min( ringD, tickD );
     float iw = 1.0 - smoothstep( -aa, aa, inD );
+    float tw = ( 1.0 - smoothstep( -aa, aa, tickD ) ) * step( tickD, ringD );
     float chn = ( 1.0 - smoothstep( -aa, aa, inD - 0.045 ) ) - iw;
     pc *= 1.0 - 0.32 * chn - 0.1 * hourL;
     vec3 icm = mix( vec3( dot( ic, vec3( 0.2126, 0.7152, 0.0722 ) ) ), ic, 0.7 );
-    pc = mix( pc, mix( pband, icm, 0.7 ) * grainN * ( 0.96 + 0.08 * n2 ), iw );
+    pc = mix( pc, mix( pband, icm, 0.7 - 0.4 * tw ) * grainN * ( 0.96 + 0.08 * n2 ) * ( 1.0 - 0.12 * tw ), iw );
     float pH = ph * ( 1.0 - inner ) - chn * 0.006 - hourL * 0.004;
+    // env F1: the spawn dais, one low step of honed stone (DAIS_H) round the fountain floor out to the hour-ring. The
+    // ground stays flush (fighters walk on and off it), so the step is drawn: the riser is a steep height ramp
+    // (DAIS_RW wide) the bumped normal lights from the real sun, a chalk arris runs along the top edge, a dark
+    // joint and a soft contact shade lie at its foot, and the top reads a shade lighter than the flags round it
+    float dR = FT.z + 2.95, dRise = fr - dR;
+    float dTop = 1.0 - smoothstep( -aa, aa, dRise );
+    float dRamp = clamp( dRise / DAIS_RW, 0.0, 1.0 );
+    float dH = DAIS_H * ( 1.0 - dRamp * dRamp * ( 3.0 - 2.0 * dRamp ) );
+    float arris = ( 1.0 - smoothstep( 0.0, 0.035 + aa, abs( dRise + 0.03 ) ) ) * ( 0.92 + 0.08 * n2 );
+    float riser = step( 0.0, dRise ) * ( 1.0 - smoothstep( DAIS_RW - aa, DAIS_RW + aa, dRise ) );
+    float foot = 1.0 - smoothstep( 0.0, 0.05 + aa, abs( dRise - DAIS_RW ) );
+    float contact = ( 1.0 - smoothstep( DAIS_RW, DAIS_RW + 0.45, dRise ) ) * step( DAIS_RW, dRise );
+    pc *= mix( 1.0, 1.035, dTop * ( 1.0 - inner ) );
+    pc = mix( pc, pband * 0.8 * grainN * ( 0.94 + 0.12 * n2 ), riser );
+    pc *= 1.0 - 0.38 * foot - 0.16 * contact;
+    pc = mix( pc, mix( pband, uLitC, 0.25 ) * 1.12 * grainN, arris * 0.55 );
+    pH = mix( pH, 0.0, riser ) + dH;
     // the border course: long dressed kerb stones on the rim (0.6 m), a dark joint either side
     float kIn = PZ.z - 0.6;
     float kerb = smoothstep( kIn - aa, kIn + aa, pd );

@@ -22,7 +22,9 @@
 //                      ten hour-lines and numerals inlaid dark, a carved hour-ring with half-hour ticks round
 //                      the marks, the shop ring, a satin sheen.
 //             Base plazas (art.terrain.plazas): Aubade chalk flags with dawnglass rings round the
-//             fountain, Serenade ochre sandstone with lampresin. Roughness ≥ 0.5 everywhere walkable.
+//             fountain, Serenade ochre sandstone with lampresin; the fountain floor is a low spawn dais
+//             (env F1: a drawn 0.14 m step, chalk arris, dark foot joint; the ground stays flush).
+//             Roughness ≥ 0.5 everywhere walkable.
 //   walls     every wall polygon swept course by course (terrain_walls.ts): dark cut stone in battered
 //             horizontal courses with chunky chiselled blocks (12–16), a protruding cap course whose
 //             chamfer carries the painted edge light (capped at L* 48), a carved lip (20–28), then moss and
