@@ -411,7 +411,9 @@ export class Bot extends BotBase implements BotController {
       if (b.answer.has(this.player) && hpF > 0.5) consider('defend', 0.8);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
       let global = 0;
-      for (let i = 0; i < b.defend.length; i++) global = Math.max(global, b.defend[i]);
+      // (a tier that reads waves sends answers to a threatened road; the whole team turns for a push of three or more
+      // fighters, or the base — not for every Wick at a Needle, which pulls it off its own siege; W4 G3 refix)
+      for (let i = 0; i < b.defend.length; i++) if (!this.diff.readsWaves || b.defendFighters[i] >= 3) global = Math.max(global, b.defend[i]);
       global = Math.max(global, b.baseThreat);
       if (lp) {
         // laning: a wave or my lane opponent at my own tower is laning (lane mode clears it under the

@@ -12,7 +12,8 @@
 //                      (VFX off, the actor's victim flash hidden: the envelope's own effect) less the body's white with no
 //                      lift (its own pale parts), with the hit flash, and in the full frame; done: the lift adds ≤ 0.10 at every beat
 //                      (the review: the struck unit went 22-34 % white on the first beat, its box measure). `boxWhite`
-//                      repeats the review's box measure (body box ±45 px, ground included) for comparison
+//                      repeats the review's box measure (body box ±45 px, ground included), `boxWhiteNoVfx` the same
+//                      with the VFX pass off; done (W1 verify combat:F4): boxWhite ≤ 0.35 on every beat frame
 //             core     mean luma inside 0.5 × the lift radius over the same circle after everything faded (the review's
 //                      measure) and the same with the victim's box left out (ground only); done: ≥ 2.3 on the first
 //                      beat (r12 M13 2.3-2.5×)
@@ -28,7 +29,7 @@
 //           height for ≈ 200 ms). Info: `eqd` the lit area as a disc's diameter over the victim's height, `readMs` how
 //           long the count stays ≥ 25 % of its peak.
 //
-//   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>]
+//   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi]
 //   → _harness/_reports/fw_W1_combat_polish[_tag].json, shots _harness/_shots/fw_W1_polish_*.png
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -158,7 +159,7 @@ try {
         n++; if (white(lift, o)) wl++; if (white(full, o)) wf++; if (white(base, o)) wb++; if (white(flash, o)) wh++;
       }
       const k = (w) => +(w / Math.max(1, n)).toFixed(3);
-      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box) };
+      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box), boxNoVfx: b.__white(flash, box) };
     };
     // only these VFX ids spawn while set (the impact-hold window measures the hit's own look)
     b.__onlyIds = null;
@@ -214,7 +215,7 @@ try {
 
   // ── combat F4: the beat's anchor and the struck unit
   if (ONLY.includes('ult')) {
-    for (const def of ['kemdo', 'rishal', 'tunlan', 'hesmi']) {
+    for (const def of opt('ults', 'kemdo,rishal,tunlan,hesmi').split(',')) {
       const c = seat(def);
       const st = await stage(c.seat);
       const geo = await B((b, a) => ({ c: b.__h(a.pc), v: b.__h(a.pv) }), st);
@@ -256,6 +257,7 @@ try {
         def, caster: [Math.round(geo.c.gx), Math.round(geo.c.gy)], victim: [Math.round(geo.v.gx), Math.round(geo.v.gy)], firstCtr: first?.ctr ?? null,
         ctrToCaster: dC && Math.round(dC), ctrToVictim: dV && Math.round(dV), baseWhite: base, baseCore,
         beats: beats.map((r) => ({ f: r.f, w: r.w, bodyPx: r.white.n, bodyWhiteBase: r.white.baseWhite, bodyWhiteLift: r.white.liftWhite, bodyWhiteFlash: r.white.flashWhite, bodyWhiteFull: r.white.fullWhite, boxWhite: r.white.boxWhite.white,
+          boxWhiteNoVfx: r.white.boxNoVfx.white,
           core: r.core, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
       };
       res.maxWhite = beats.length ? Math.max(...res.beats.map((r) => r.bodyWhiteLift)) : null;
@@ -267,12 +269,16 @@ try {
       res.firstRatio = res.beats[0]?.ratio ?? null;
       res.firstRatioGround = res.beats[0]?.ratioGround ?? null;
       report.ult.push(res);
+      console.log(`         box white per beat (VFX off): ${res.beats.map((r) => `f${r.f} ${r.boxWhite} (${r.boxWhiteNoVfx})`).join(' · ')}`);
       console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}`);
       if (!first) fail(`${def}: no beat ≥ 1.3`);
       else {
         if (dV >= dC) fail(`${def}: the beat sits on the caster (${Math.round(dC)} px from it, ${Math.round(dV)} from the victim)`);
         if (res.beats.some((r) => r.bodyPx < 200)) fail(`${def}: the victim's body was not isolated (${res.beats.map((r) => r.bodyPx).join('/')} px)`);
         if (res.maxLiftAdds > 0.1) fail(`${def}: the lift whites ${res.maxLiftAdds} more of the victim's body at a beat (> 0.10)`);
+        // W1 verify combat:F4: the review's box measure (victim box ±45 px, white = luma > 225 and chroma < 30) on every
+        // beat frame, VFX on: the kit's own light over the struck unit included
+        if (res.maxBoxWhite > 0.35) fail(`${def}: the victim box goes ${res.maxBoxWhite} white at a beat (> 0.35)`);
         if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < 2.3) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}) < 2.3 on the first beat`);
       }
       await B((b) => { b.__park(); b.__step(40); });

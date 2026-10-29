@@ -74,12 +74,14 @@ export interface DifficultyProfile {
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
+  // (W4 G3 refix: novice is a beginner's opponent — slower to see, aim, last-hit and combo, and slower to act on the
+  // team's calls — so a veteran's play shows in the result; still perception and execution only)
   novice: {
-    id: 'novice', reaction: 0.45, reactionJitter: 0.12, aimErrorDeg: 12, leadSkill: 0.35,
-    lastHitSigma: 0.16, lastHitMiss: 0.3, dodgeChance: 0.15, kiteSkill: 0.15,
-    intentFollow: 0.55, recallBias: -0.12, retreatBias: -0.08, knowsCooldowns: false,
-    decisionNoise: 0.12, focusDiscipline: 0.25, abilityEvery: 0.5,
-    macroDelay: 6, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
+    id: 'novice', reaction: 0.55, reactionJitter: 0.15, aimErrorDeg: 15, leadSkill: 0.25,
+    lastHitSigma: 0.2, lastHitMiss: 0.38, dodgeChance: 0.1, kiteSkill: 0.1,
+    intentFollow: 0.5, recallBias: -0.12, retreatBias: -0.08, knowsCooldowns: false,
+    decisionNoise: 0.14, focusDiscipline: 0.15, abilityEvery: 0.65,
+    macroDelay: 8, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
   },
   adept: {

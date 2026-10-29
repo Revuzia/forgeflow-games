@@ -1008,7 +1008,8 @@ def a_slit(P):
 # painted chalk by their footprint): as separate shells the cloak pushed through them under the run's skirt
 # flare (linear skinning of two meshes sampled at different points) and tore them into shards
 A_STOLE_X, A_STOLE_HW = 0.068, 0.027
-STOLE_CFG = {"paint": "proj", "role": "chalk", "tint": "#D3D0C6", "light": 0.30, "detail": 0.25,
+# (integration pass, wickTop25 RIFT Low over the 65 cap: the chalk stoles #D3D0C6 -> #BFBCB3, top light 0.30 -> 0.24)
+STOLE_CFG = {"paint": "proj", "role": "chalk", "tint": "#BFBCB3", "light": 0.24, "detail": 0.25,
              "grad": (0.2, 0.62, 0.16), "cav": 0.14, "hang": 0.8}
 
 
@@ -2493,6 +2494,10 @@ class Glimwick(wc.Wick):
         self.MOTION = MOTION
         self.AO_INTO_BASE = 0.42
         self.TEXTURE_SIZES = {"normal": 512, "orm": 256}      # 512: the folds / piping / stole edges read
+        if faction == "aubade":
+            # (integration pass, wickTop25 RIFT Low over the 65 cap) the baked chalk pieces (knob, finial, crook, brace,
+            # lamp posts and caps) at the hood rim's chalk, #D6D3CA -> #C2BEB3 (L* 85 -> 77); this instance only
+            self.PALETTE["chalk"] = "#C2BEB3"
         self._parts = parts_for(faction)
         concept, h, grade = PLATES[faction]
         proj = wc.graded_projection(concept, h, tag="glim", **grade)

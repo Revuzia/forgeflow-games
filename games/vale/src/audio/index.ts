@@ -96,7 +96,9 @@
 //               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch;
 //               a wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where
 //               the area lands, the rest at the caster. hit is the fighter's own ability impact (every 'hit' of its
-//               abilities, before the ability's present.hitSfx), dash its own dash (a displacement, the 'dash' the sim
+//               abilities, before the ability's present.hitSfx; a hitSfx that content binds to a damage-type or crit
+//               role, SEMANTIC_HIT_ROLES, still sounds under it at SEMANTIC_KIT_GAIN, so a true-damage or crit
+//               ability keeps that timbre), dash its own dash (a displacement, the 'dash' the sim
 //               emits for a unit in the tick it knocks it airborne, keeps the generic one). death replaces the generic fall, passive is the
 //               proc (see `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content
 //               has no cue for falls back to the catalog's present and then the generic set, as before. A cue's
@@ -244,6 +246,10 @@ const CAST_SLOTS = new Set<string>(['a1', 'a2', 'a3']);
 const RELEASE_EPS_S = 1.5 / 30;        // the sim counts the wind-up from the cast's own tick: its release lands up to
                                         // one tick before cast.t + castTime (sim time)
 const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the crit cue
+// an ability hit whose present.hitSfx is the cue content binds to one of these roles keeps it under the fighter's own
+// impact (kit 'hit'): the damage type / crit is meaning the kit hit does not carry (a true-damage ult, a crit-shot ult)
+const SEMANTIC_HIT_ROLES = ['hitTrue', 'crit'] as const;
+const SEMANTIC_KIT_GAIN = 0.6;
 // a T3 wind-up (tokens.vfx.tiers.T3 'crowd control, mobility, zones', enemyWindupAudio mandatory): an ability with a
 // wind-up whose effects, at any depth, control someone else (a StatusKind below, not applied to the caster), displace,
 // move the caster (dash / blink) or lay a zone. StatusKind / effect op names are the contract's (src/contracts/catalog.ts)
@@ -1199,6 +1205,8 @@ class Engine implements ValeAudioPort {
     if (!p || (e.t as number) + RELEASE_EPS_S < p.due) return;
     if (kind !== 'dash' && kind !== 'blink'
       && !((kind === 'area' || kind === 'projectile' || kind === 'hit' || kind === 'damage') && e.ability === p.ability)) return;
+    // a dash in the tick the caster is knocked airborne is the displacement (it cancels the wind-up), not its release
+    if (kind === 'dash' && this.knocked.get(id as number) === e.t) return;
     this.ults.delete(id as number);
     this.cue(p.cue, kind === 'area' ? { x: e.x as number, y: e.y as number } : src ? { x: src.x, y: src.y } : null, 1, 0, aw);
   }
@@ -1277,9 +1285,13 @@ class Engine implements ValeAudioPort {
       }
       case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7, 0, aw); break;
       case 'hit': {
-        // a fighter's ability landing: its own impact (kit 'hit') before the ability's present.hitSfx and the role
+        // a fighter's ability landing: its own impact (kit 'hit') before the ability's present.hitSfx and the role; a
+        // hitSfx that means a damage type or a crit (SEMANTIC_HIT_ROLES) still sounds, under the kit hit
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue(this.kit(src, 'hit') ?? (e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst), 1, 0, aw);
+        const own = this.kit(src, 'hit');
+        const lib = (e.sfx as string | undefined) ?? pr?.hitSfx;
+        this.cue(own ?? lib ?? this.ev('hitAbility'), at(dst), 1, 0, aw);
+        if (own && lib && lib !== own && SEMANTIC_HIT_ROLES.some((r) => this.ev(r) === lib)) this.cue(lib, at(dst), SEMANTIC_KIT_GAIN, 0, aw);
         break;
       }
       case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw); break;
@@ -1452,9 +1464,6 @@ class Engine implements ValeAudioPort {
   }
 }
 
-/** the points of one art.ambient group (see `ambience` in the header): an effect by its vfx id, a critter by its
- *  id, a prop by its fx's vfx id or its model's file name (without .glb, and without the content build's
- *  content-address prefix: content's assets/props/ambient/bunting.glb ships as assets/<hash>-bunting.glb) */
 /** an ability's effects make its wind-up T3 (see `threat` in the header): at any depth, a control status (T3_STATUS)
  *  not applied to the caster, a displacement, a dash / blink or a zone */
 function isT3(node: unknown): boolean {
@@ -1468,6 +1477,9 @@ function isT3(node: unknown): boolean {
   return Object.values(o).some((v) => v && typeof v === 'object' && isT3(v));
 }
 
+/** the points of one art.ambient group (see `ambience` in the header): an effect by its vfx id, a critter by its
+ *  id, a prop by its fx's vfx id or its model's file name (without .glb, and without the content build's
+ *  content-address prefix: content's assets/props/ambient/bunting.glb ships as assets/<hash>-bunting.glb) */
 function ambientPoints(art: AmbientLike | undefined, source: string): { x: number; y: number }[] {
   const at: number[][] = [];
   for (const e of art?.effects ?? []) if (e.vfx === source) at.push(...e.at);

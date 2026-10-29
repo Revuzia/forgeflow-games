@@ -492,6 +492,7 @@ export class TeamBrain {
   }
 
   private thinkObjective(w: World, aa: number, ae: number): void {
+    const prev = this.objective?.camp ?? null;
     this.objective = null;
     if (this.k.kind !== 'rift') return;
     // never while the base is under siege or the team is closing the game
@@ -501,6 +502,10 @@ export class TeamBrain {
     const now = w.time, d = this.diff, sense = d.objectiveSense;
     // (objectiveSense: a road with a stacked enemy wave deep in our half is a threat too — no waiting at a door then)
     if (sense) for (const l of this.k.lanes) if (this.perc.enemyN[l.index] >= 6 && this.perc.enemyFront[l.index] < l.length * 0.45 && this.perc.ownN[l.index] <= 1) threat = Math.max(threat, 0.5);
+    // (objectiveSense: where the team is — an even-numbers call is for a camp on its way, not one across the map)
+    let cx = 0, cy = 0, cn = 0;
+    for (const f of this.perc.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
+    if (cn > 0) { cx /= cn; cy /= cn; }
     for (const c of this.k.camps) {
       if (!c.objective) continue;
       const ready = this.campReady[c.index];
@@ -513,9 +518,13 @@ export class TeamBrain {
         if (now < this.campBlock[c.index]) continue;
         const { ttk, hpF } = this.campTtk(w, c);
         const long = ttk > 15, up = aa >= ae + 1;
+        const near = cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 50 * 50;
         if (alive) {
-          // a long objective only with a fighter more; none the team cannot take in 40 s
-          desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
+          // a long objective only with a fighter more; none the team cannot take in 40 s; at even numbers only a short
+          // one the team is near, with no road under threat
+          desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' && near && threat < 0.3 ? d.objectiveEven : 0;
+          // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
+          if (this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
           if (d.contests && aa >= ae) {
             for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
           }
@@ -527,7 +536,9 @@ export class TeamBrain {
           if (this.campOn[c.index] >= 0 && now - this.campOn[c.index] > Math.max(25, Math.min(ttk, 40) * 1.8) && hpF > 0.3) {
             this.campBlock[c.index] = now + 60; this.campOn[c.index] = -1; desire = 0;
           }
-        } else desire = aa >= ae && threat < 0.3 ? 0.4 : 0;
+        } else desire = aa >= ae && threat < 0.3 && (near || up) ? 0.4 : 0;
+        // (one call at a time: the camp the team is already on keeps it against an equal one — no walking back and forth)
+        if (desire > 0 && prev === c) desire = Math.max(desire, Math.min(0.8, desire + 0.06));
       } else if (alive) {
         desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
         // (contest: the enemy is at it and we are not short of bodies)

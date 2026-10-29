@@ -1036,8 +1036,9 @@ UNITS = ["needle_outer", "needle_inner", "needle_bell", "lantern", "hourbell"]
 # (integration pass, env m1: value_probe's base spot still read the base structures at L* p95 82 with #C3C0B7: the
 # Hourbell a step further down, and the two bell Needles that flank it on the same plaza toned with it, so the base
 # set lands under L* 80 together; the lane Needles and the Lanterns keep the full chalk)
-MATS_OVERRIDE = {("hourbell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#B9B6AD")},
-                 ("needle_bell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#C8C5BC")}}
+# (round 2: High 78 but Low 81, a step more on both)
+MATS_OVERRIDE = {("hourbell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#B2AFA7")},
+                 ("needle_bell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#C1BEB5")}}
 CULTURES = ["aubade", "serenade"]
 HEIGHT = {"needle_outer": 4.65, "needle_inner": 4.7, "needle_bell": 4.6, "lantern": 4.65, "hourbell": 5.25}
 # the break of the ruin's stump (m above the ground, before its tilt) and the rubble count

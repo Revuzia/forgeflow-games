@@ -24,6 +24,9 @@
 //       sim emits for a dash effect, the one carrying the effect's vfx key) → f_<id>_dash; a displacement (the sim's
 //       dash of a unit knocked airborne) keeps the generic events.dash and no kit dash
 //   K7  round-robin never repeats a take back to back: no cue with >= 2 files plays the same file twice in a row
+//   K8  an ability hit whose hitSfx is the cue content binds to a damage-type or crit role (events.hitTrue /
+//       events.crit: kemdo's true-damage ult, rishal's crit-shot ult) requests BOTH f_<id>_hit and that hitSfx; any
+//       other hitSfx (the library's c_hit_magic / c_hit_phys_*) is replaced by the kit hit and not requested
 // Exit 0 = K1-K5 hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_kits.json.
 
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
@@ -118,6 +121,8 @@ const bare = catalog.fighters.filter((f) => !kitted.includes(f.id)).map((f) => f
 const fdef = new Map(catalog.fighters.map((f) => [f.id, f]));
 const SETTINGS = { audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true } };
 const failures = [];
+const SEMANTIC = new Set([audio.events.hitTrue, audio.events.crit].filter(Boolean));   // K8
+const k8 = [];
 const report = { probe: 'probe_audio_kits', catalog: ver, seeds: SEEDS, kitted, bare, modes: {} };
 console.log(`kitted (${kitted.length}): ${kitted.join(' ')}\nwithout a kit (${bare.length}): ${bare.join(' ') || '-'}`);
 if (!kitted.length) failures.push('no fighter has a whole kit: the probe is vacuous');
@@ -276,6 +281,13 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
       const ok = got.includes(`f_${f}_hit`);
       tally(f, 'hit', ok);
       if (!ok) miss.push(`${f} ability hit (${e.ability}) → ${got.join(',') || 'nothing'}`);
+      // K8: a damage-type / crit hitSfx sounds under the kit hit; any other library hitSfx stays replaced
+      if (e.sfx && e.sfx !== `f_${f}_hit`) {
+        const semantic = SEMANTIC.has(e.sfx);
+        const ok8 = got.includes(`f_${f}_hit`) && got.includes(e.sfx) === semantic;
+        tally(f, semantic ? `hit+${e.sfx}` : 'hit (library hitSfx replaced)', ok8);
+        if (!ok8) k8.push(`${run} ${f} ${e.ability} hitSfx ${e.sfx} → ${got.join(',') || 'nothing'}`);
+      }
     } else if (e.e === 'dash') {
       const f = fighterOf(e.src);
       if (!f) continue;
@@ -345,6 +357,11 @@ const cover = {};
 for (const m of Object.values(report.modes)) for (const [f, r] of Object.entries(m.perFighter)) for (const [k, v] of Object.entries(r)) ((cover[f] ??= {})[k] = (cover[f]?.[k] ?? 0) + v.n);
 for (const f of kitted) for (const k of ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3']) if (!cover[f]?.[k]) failures.push(`coverage: ${f} never exercised ${k} (vacuous)`);
 for (const k of ['ult_windup', 'ult_release', 'death', 'hit', 'dash']) if (!kitted.some((f) => cover[f]?.[k])) failures.push(`coverage: no kitted fighter exercised ${k} (vacuous)`);
+if (k8.length) failures.push(`K8: ${k8.length} ability hit(s) lost or leaked their hitSfx: ${k8.slice(0, 6).join(' · ')}`);
+const semHits = Object.values(cover).reduce((n, r) => n + Object.entries(r).filter(([k]) => k.startsWith('hit+')).reduce((a, [, v]) => a + v, 0), 0);
+if (!semHits) failures.push('coverage: no damage-type / crit hitSfx landed (K8 vacuous)');
+report.k8 = { semanticHits: semHits, failures: k8.length };
+console.log(`K8: ${semHits} damage-type / crit ability hits layered under the kit hit, ${k8.length} wrong`);
 report.coverage = cover;
 report.k4 = bare.length ? 'checked' : 'vacuous: every fighter has a whole kit (nobody falls back)';
 report.failures = failures;

@@ -21,9 +21,15 @@
 // reacting to the hit (the victim's passive), an item or boon proc, a bystander is dropped, so the light measured is
 // the kit's.
 //
+// Staging (W1 verify combat:F6-probe): the caster and the victim are revived if the fast-forward left them dead
+// (respawnFighter at their stage spot) and refilled (hp, resource, cooldowns, charges) before every cast, and the
+// cast must show in the sim's own events (a `cast` from the caster for that slot). A slot whose cast never happened,
+// or whose VFX left nothing to measure (n = 0), is staged and cast again once; if it still fails it is reported
+// `not measured` (status 'nm', never sig 0: it is a staging failure, not a hue).
+//
 //   node _harness/probe_kit_hue.mjs [--kits a,b,c] [--out <json>] [--shots <prefix>] [--gate 0.5] [--live] [--status]
 //   --live   content/vfx.json as it stands on disk replaces the catalog's defs in the page (tuning without a rebuild)
-//   exit 1 when any slot measured is under the gate.
+//   exit 1 when any slot measured is under the gate; exit 2 when none is but a slot could not be measured.
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -122,9 +128,15 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
     const m = cat.maps.find((x) => x.id === setup.map);
     b.__clear = () => { let n = 0; for (const e of W.entities) if (e.kind === 'minion' && e.alive) { const sp = m.bases[e.team]?.spawn ?? [5, 5]; e.x = sp[0] + (e.team ? -3 : 3) + (n % 5) * 0.4; e.y = sp[1] - 4 + (n % 7); e.vx = e.vy = 0; n++; } return n; };
     b.__clear();
+    const { respawnFighter } = await import('/src/sim/spawn.ts');
+    // every event the sim emits from here on, for the cast assertion (b.__evs: { e, src, slot })
+    b.__evs = [];
+    const emit0 = W.emit.bind(W);
+    W.emit = (ev) => { if (ev && ev.src !== undefined) { b.__evs.push({ e: ev.e, src: ev.src, slot: ev.slot }); if (b.__evs.length > 4000) b.__evs.splice(0, 2000); } emit0(ev); };
     b.__prep = (id, x, y, face) => {
       const e = W.entity(id); if (!e) return false;
-      if (!e.alive) return false;
+      // the 420 s fast-forward can leave a fighter dead (its respawn timer still running): bring it back here
+      if (!e.alive) { if (e.kind !== 'fighter') return false; respawnFighter(W, e, x, y); if (!e.alive) return false; }
       e.x = x; e.y = y; e.vx = 0; e.vy = 0; if (face !== undefined) e.facing = face;
       e.hp = e.maxHp; e.res = e.maxRes; e.shield = 0; e.statuses.length = 0; if (e.level < 13) e.level = 13;
       for (let i = 0; i < 4; i++) { const s = e.slots?.[i]; if (s) { s.rank = Math.max(s.rank, s.maxRank); s.cooldown = 0; if (s.maxCharges) s.charges = s.maxCharges; } }
@@ -154,7 +166,9 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
       for (const slot of ['a1', 'a2']) {
         const rg = info.range[slot];
         const dist = rg > 0 ? Math.max(1.5, Math.min(4.5, rg - 0.4)) : 4.5;
-        const st = await B((b, a) => {
+        let best = { n: -1 }, cast = false, st = null, tries = 0;
+        for (; tries < 2; tries++) {
+        st = await B((b, a) => {
           const W = b.__W;
           // from the staging on, only this slot's own VFX from this caster spawn (an item or boon proc while the
           // pair is set up would linger into the samples)
@@ -167,13 +181,16 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
             b.__cmd(a.cp, { type: 'stop' }); b.__cmd(a.vp, { type: 'stop' });
             return { pc, pv };
           };
-          b.__clear(); stage(); b.__step(30); b.__clear(); const r = stage(); b.__step(2); return r;
+          b.__clear(); stage(); b.__step(30); b.__clear(); const r = stage(); b.__step(2);
+          const ok = [r.pc, r.pv].every((id) => W.entity(id)?.alive);
+          return { ...r, ok };
         }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist, fid, slot });
         await B((b, a) => {
           // a slot that never targets an enemy (a lamp hung on an ally or herself) is cast on the caster
-          b.renderer.vfx.clear(); const tid = a.self ? a.pc : a.pv; const me = b.__H.view.entity(tid); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: tid }); }, { ...st, cp, slot, fid, self: info.self[slot] });
+          b.renderer.vfx.clear(); b.__evs.length = 0;
+          const tid = a.self ? a.pc : a.pv; const me = b.__H.view.entity(tid); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: tid }); }, { ...st, cp, slot, fid, self: info.self[slot] });
         const rel = Math.max(1, Math.round(info.ct[slot] * 30));
-        const best = { n: -1 };
+        best = { n: -1 };
         for (let f = 1; f <= rel + 12; f++) {
           await B((b, a) => { b.__step(1); b.__freshen([a.pc, a.pv]); }, st);
           if (f >= rel + 1 && (f - rel) % 3 === 1) {
@@ -188,19 +205,28 @@ for (let b0 = 0; b0 < kits.length; b0 += 10) {
             }
           }
         }
-        const row = { fid, slot, view: v.name, sigHex: info.sig, sigHue: Math.round(sh), dist, f: best.f, n: best.n, sat: best.sat, sig: best.sig, harm: best.harm, white: best.white, bins30: best.bins30, pass: best.sig >= GATE };
-        rows.push(row);
-        console.log(`${row.pass ? 'PASS' : 'FAIL'} ${fid.padEnd(8)} ${slot} sigH ${String(row.sigHue).padStart(3)} sig ${row.sig} harm ${row.harm} white ${row.white} n ${row.n} sat ${row.sat} bins ${row.bins30?.join(' ')}`);
+        // the cast really happened: the sim emitted a `cast` for this slot from the caster
+        cast = await B((b, a) => b.__evs.some((e) => e.e === 'cast' && e.src === a.pc && e.slot === a.slot), { ...st, slot });
         // every effect of this cast ends before the next one: zones run out, statuses go, the VFX are cleared
         await B((b, a) => { b.__only = -1; b.__step(105); for (const id of [a.pc, a.pv]) { const e = b.__W.entity(id); if (e) e.statuses.length = 0; } b.renderer.vfx.clear(); b.__step(3); }, st);
+        if (cast && st.ok && best.n > 0) break;
+        console.log(`  ${tries === 0 ? 'retry' : 'gave up on'} ${fid} ${slot}: ${!st.ok ? 'caster or victim not alive after staging' : !cast ? 'no cast event' : 'nothing measured (n 0)'}`);
+        }
+        const measured = cast && st.ok && best.n > 0;
+        const row = { fid, slot, view: v.name, sigHex: info.sig, sigHue: Math.round(sh), dist, tries: tries + (measured ? 1 : 0), cast, f: best.f, n: best.n, sat: best.sat,
+          sig: measured ? best.sig : null, harm: best.harm, white: best.white, bins30: best.bins30, status: measured ? (best.sig >= GATE ? 'pass' : 'fail') : 'nm' };
+        row.pass = row.status !== 'fail';
+        rows.push(row);
+        console.log(`${row.status === 'nm' ? 'NOT MEASURED' : row.status.toUpperCase()} ${fid.padEnd(8)} ${slot} sigH ${String(row.sigHue).padStart(3)} sig ${row.sig} harm ${row.harm} white ${row.white} n ${row.n} sat ${row.sat} cast ${cast} tries ${row.tries} bins ${row.bins30?.join(' ')}`);
       }
       await B((b, p) => b.__park(p), cp);
     }
   }
 }
-const fails = rows.filter((r) => !r.pass);
-const out = { gate: GATE, live: LIVE, status: STATUS, kits, slots: rows.length, fails: fails.map((r) => `${r.fid}.${r.slot}`), minSig: rows.length ? Math.min(...rows.map((r) => r.sig)) : null, rows, logs: logs.filter((l) => !/favicon|toNonIndexed|status of 404/.test(l)).slice(0, 8) };
+const fails = rows.filter((r) => r.status === 'fail'), nm = rows.filter((r) => r.status === 'nm'), sigs = rows.filter((r) => r.sig !== null).map((r) => r.sig);
+const out = { gate: GATE, live: LIVE, status: STATUS, kits, slots: rows.length, measured: sigs.length, fails: fails.map((r) => `${r.fid}.${r.slot}`), notMeasured: nm.map((r) => `${r.fid}.${r.slot}`),
+  retried: rows.filter((r) => r.tries > 1).map((r) => `${r.fid}.${r.slot}`), minSig: sigs.length ? Math.min(...sigs) : null, rows, logs: logs.filter((l) => !/favicon|toNonIndexed|status of 404/.test(l)).slice(0, 8) };
 console.log(JSON.stringify({ ...out, rows: undefined }));
 if (OUT) writeFileSync(OUT, JSON.stringify(out, null, 1));
 await browser.close();
-process.exit(fails.length || !rows.length ? 1 : 0);
+process.exit(fails.length || !rows.length ? 1 : nm.length ? 2 : 0);

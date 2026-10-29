@@ -1645,11 +1645,13 @@ FIT_MASK = {"aubade": {"hood": "outer"}, "serenade": {"hood": "outer"}}
 # (integration pass, wave_b "Wick hood value": value_probe wickTop25 RIFT Low 67.1 over the 65 cap; the pale stole
 # and lantern chalk lit from above were in the top quarter) #C9C5BB -> #B8B4AA (L* 80 -> 73)
 _ACH = "#B8B4AA"                                  # chalk #D6D3CA, two steps down (the paint carries its own light)
+# (integration pass round 2: the shield face, its rib and the arm wraps a step down too: #B8B4AA / #BEBAB0 / #BCB7AD
+# -> #ACA89F / #B2AEA4 / #B0ABA2; the Serenade shield pads painted here at sandstone a step down, #C3A47A -> #B69972)
 _ACH_HOOD = "#A5A197"                             # the hood's chalk (frame, knob): L* 66, the hood under L* 65 on screen
 PROC = {
-    "aubade": {"hood_rim": (_ACH_HOOD, 0.55, 0.05), "stole": (_ACH, 0.55, 0.05), "scarf": ("#65707D", 0.6, 0.06), "shield": ("#B8B4AA", 0.55, 0.05), "shield_rib": ("#BEBAB0", 0.6, 0.04),
-               "lantern": (_ACH, 0.55, 0.05), "lantern_mullion": (_ACH, 0.55, 0.04), "knob": ("#ABA79D", 0.6, 0.04), "wraps_R": ("#BCB7AD", 0.5, 0.06),
-               "wraps_L": ("#BCB7AD", 0.5, 0.06), "haft": ("#B2A48C", 0.5, 0.07),
+    "aubade": {"hood_rim": (_ACH_HOOD, 0.55, 0.05), "stole": (_ACH, 0.55, 0.05), "scarf": ("#65707D", 0.6, 0.06), "shield": ("#ACA89F", 0.55, 0.05), "shield_rib": ("#B2AEA4", 0.6, 0.04),
+               "lantern": (_ACH, 0.55, 0.05), "lantern_mullion": (_ACH, 0.55, 0.04), "knob": ("#ABA79D", 0.6, 0.04), "wraps_R": ("#B0ABA2", 0.5, 0.06),
+               "wraps_L": ("#B0ABA2", 0.5, 0.06), "haft": ("#B2A48C", 0.5, 0.07),
                "sleeve_R": ("#4D5866", 0.5, 0.06), "sleeve_L": ("#4D5866", 0.5, 0.06),
                "mitt_R": ("#66727F", 0.55, 0.07), "mitt_L": ("#66727F", 0.55, 0.07),
                "boot_R": ("#2F3034", 0.5, 0.06), "boot_L": ("#2F3034", 0.5, 0.06)},
@@ -1659,6 +1661,7 @@ PROC = {
                  "mitt_R": ("#6A5546", 0.55, 0.10), "mitt_L": ("#6A5546", 0.55, 0.10), "hood_rim": ("#5A4A3D", 0.55, 0.10),
                  "boot_R": ("#3D3028", 0.5, 0.08), "boot_L": ("#3D3028", 0.5, 0.08),
                  "shield": ("#504439", 0.5, 0.12), "haft": ("#5A4436", 0.5, 0.08),
+                 "shield_pads": ("#B69972", 0.5, 0.08),     # (integration pass: sandstone #C3A47A a step down)
                  "lantern": ("#4B4039", 0.5, 0.08), "lantern_lid": ("#4E4239", 0.55, 0.08)},
 }
 # FOLDS: painted folds from the sculpt normals (shade_folds): part: (key light gain, valley occlusion)
