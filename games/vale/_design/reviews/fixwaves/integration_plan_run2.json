@@ -1,0 +1,470 @@
+{
+ "meta": {
+  "run": "integration run 2",
+  "how": "lanes.<lane>.packages[k].items = do these; lanes.<lane>.stitch = after the named lane finished. TRIAGE FIRST."
+ },
+ "lanes": {
+  "engine": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "engine-lod",
+       "source": "chars run-1 handoffs + verdicts (lead:fighter-tris, chars-04, PERF-m5)",
+       "severity": "major",
+       "what": "Match peak <= 500k triangles and programs <= 40 in perf_1080 --prod (latest prod peak 1,031,094 tris / 41 programs, integ_engine_v1_perf_1080.json).\n(1) Fighter LOD1 in the MATCH only (gate it like lodSwitch.outline; the menu showcase keeps the full body): port faceLockedLodIndex from art/blender/fighters/_lod1_three.mjs:52 into src/render (no gltf-transform import), apply it to each fighter body's index after updateMatrixWorld and before any pose, with lod.ts's simplifier after lodReady; head-locked tris kept (chars measured base bodies 19,653 -> 11,916 avg, yield about -138.5k at the peak).\n(2) The Wick crowd is the biggest share (about 334k at the peak: 264k main over 44 calls + 70k shadow): a lower crowd body/hull LOD ratio in crowd.ts, a distance LOD, or fewer shadow casters.\n(3) Prewarm the late program so programs stay <= 40.\nRe-measure perf_1080 --prod (all presets + match peak) and confirm no visible popping on fighters at the gameplay camera (shots).",
+       "after": null
+      },
+      {
+       "id": "engine-r2-01",
+       "source": "W4:rekey handoff",
+       "severity": "minor",
+       "what": "New VFX defs. Content currently reuses placeholders.\n- spell_glint_shadow: zone glint_shadow, a 1.2 m hard-edged ink shadow of the caster left for 2.5 s; Shade T1; replaces lib_zone_shade in setup.json glint_step effects[0].present.vfx.\n- spell_saplight_pool: a 3 m pool of warm sap-light lasting 4 s; Lumen T1; replaces lib_zone_lumen.\n- spell_glass_pane_set: a dawnglass ring setting outward 3 m; replaces lib_ring_pulse.\n- ervet_ult_shards_home: shards converging along lines from a 4.5 m ring into Ervet's hilt; ervet ult area present.vfx, currently ervet_ult_whole.\n- ervet_shard_tear: a lodged shard ripped out and bursting 1.75 m around the target; currently lib_burst_lumen in the passive trigger[1].\n- vashil_chord: two humming enemies joined by a line of sound, then stun rings; currently vashil_passive_hum on the passive's chord area.\n- resin_ignite_hit: hitVfx for the resinburn_ignite passive, which currently has none.",
+       "after": null
+      },
+      {
+       "id": "engine-r2-02",
+       "source": "W4:items handoff",
+       "severity": "minor",
+       "what": "Optional new VFX. The new items currently use lib_* presets.\n- Hourstring 'Strike the Hour': a 3 m dial-tick burst at the target, now lib_burst_lumen.\n- Stillhour 'Hold the Hour': a stopped-light stance around the caster for 1.5 s, now lib_zone_glass.\n- Lampblack Coat: an optional faint 4 m soot ring that is shown only while an enemy is inside. The Wounded status already uses lib_status_grievous.",
+       "after": null
+      },
+      {
+       "id": "engine-r2-03",
+       "source": "W4:tempo-jungle handoff",
+       "severity": "minor",
+       "what": "Optional VFX:\n- While an Outer Needle's Dawn Seal holds (RIFT, shield > 0 before 7:00; the sim's shield source is the Needle's own id), a thin dawnglass glaze, lighter than the protected shell. Add a short shimmer on each 30 s re-set and a shatter at 7:00.\n- Ringshade: a brief dark pulse on the shadow ring when a fighter's reduced hit lands. Content has no vfx ids for these yet.",
+       "after": null
+      },
+      {
+       "id": "engine-r2-04",
+       "source": "W4:difficulty-bridge handoff",
+       "severity": "minor",
+       "what": "Optional VFX: a gorge-wind gust across the map each time WorldView.gorgeWind goes up (BRIDGE every 45 s, RIFT every 60 s after sudden death), and a faint wind-worn crack overlay on structures while the step count is above 0. The sim emits no event for each step; read WorldView.gorgeWind.",
+       "after": null
+      },
+      {
+       "id": "engine-r2-05",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "Optional VFX for the Noon Toll (FRAY, from 8:00, every 20 s, announce 'noon_toll'): a short noon-light column or rim on each living fighter while it is revealed (Entity.revealAllUntil > tick, 5 s), and a faint dial-chime ring over the arena on each toll.",
+       "after": null
+      },
+      {
+       "id": "engine-r2-06",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "tools/build_content.ts:\n1. Wire W2's lintPlayerCopy (src/ui/copy_lint.ts). Its header says the build runs it, but nothing calls it. W4 content is clean (probe_sim_rekey).\n2. Optional: lint queue.draft.bansPerTeam === bansForRoster(draft, playable roster) from src/session/draft.ts (probe_sim_draft_pace does this now).\n3. Optional: lint that rules.fighterWeights keys are FighterDef ids. The zod record accepts any string.",
+       "after": null
+      },
+      {
+       "id": "combat:F4",
+       "source": "integration run 1 engine verdict (partly)",
+       "severity": "minor",
+       "what": "Box-white gate is met (integ_engine_v1_combat_ult.log): Kemdo 0.023, Rishal 0.202, Tunlan 0.219, Hesmi 0.281. With --vfxcap off Rishal is 0.58, so the cap is what fixes it. Not met: (1) the probe exits 1 on core ratio, Tunlan 2.06 and Hesmi 2.23 (< 2.3); with the cap off they are 2.16 and 2.27. (2) value_probe RIFT Low flash is 1.94x FAIL: 1.92 with the cap, 1.99 with it off. (3) In the beat shots Tunlan's caster is still a white bloom, and Hesmi's victim body is 0.829 white in the full frame. Neither is fixed, because vfxLift returns 1.0 over a body.\nFIX HINT: In shaders.ts vfxLift, soft-clip only the colour above the envelope's display knee (about 0.86) instead of dividing the whole effect, or exempt the ult impact layers with a per-def flag. In content/vfx.json, lower Tunlan's ult cast bloom over his body and Hesmi's ult hit over the victim. Done when probe_combat_polish ult exits 0 (box <= 0.35 and core >= 2.3 for all 4) and RIFT Low flash >= 2.0x; pin the flash spot per map if bot drift moves it onto brighter stone.",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "id": "engine-index-comment",
+       "source": "lead run-1 handoff",
+       "severity": "minor",
+       "what": "index.html:12 comment: '(battle spell 2)' -> '(Hour spell 2)' (originality F6 wording).",
+       "after": null
+      },
+      {
+       "id": "engine-terrain-comment",
+       "source": "world run-1 handoff",
+       "severity": "minor",
+       "what": "src/render/terrain.ts near line 1777: the r12 B4 LOD comment quotes old Dialwood triangle counts; after env F5 they are tall 740, broad 692, squat 656, lean 636, young 408 (art/renders/props/build_report.json). Update the comment.",
+       "after": null
+      },
+      {
+       "id": "engine-bc-10",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "tools/build_content.ts COPY_LINT_PENDING: delete the 16 entries for roles.json, classes.json and skins/*.json; their copy is fixed (a5d8c275, 2553dcdf). Keep 'maps/map_fray.json$.desc|centre' until world lands its fix.",
+       "after": null
+      },
+      {
+       "id": "engine-bc-11",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "tools/build_content.ts, next to the audio.events check at :435: add `for (const [map, list] of Object.entries(c.audio.ambience)) list.forEach((a, i) => { if (!cues.has(a.cue)) dg.err(['audio','ambience',map,i,'cue'], unknownRef('audio cue', a.cue, cues)); });` and also check that `map` is a known map id. MusicDef.pieces files are already covered by collectAssetRefs.",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "client": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "client-icons-blood",
+       "source": "client run-1 verify (lead:new-icons / HUD-1-seam)",
+       "severity": "major",
+       "what": "Sensitivity check: the run-1 verifier saw a blood read in two new item paintings, shadowpin and lampblack_edge (a red/dark drip that reads as blood). Make sure both read as soot/shadow/sap, not blood (no red drips, no wound read), repaint through tools/imagegen/run_xai.py if needed, and look at all 18 new item icons at 38/40 px yourself.",
+       "after": null
+      },
+      {
+       "id": "client-r2-01",
+       "source": "W4:rekey handoff",
+       "severity": "minor",
+       "what": "Strings in content/strings.en.json:\n- lot.prompt \u2192 \"Your fighter was drawn by lot. Take one fighter from your team's Lot, once, before it burns down.\"\n- lot.lot_note \u2192 \"Each of you can take one fighter from the Lot. Every 8 s its first fighter goes back to the gorge.\"\n- new error.draft.no_swaps \u2192 \"You have already taken a fighter from the Lot.\"\n- new lot.take_left \u2192 \"{n} take left\" and lot.take_none \u2192 \"No takes left\" (from DraftSeat.swaps, a new additive field).\n- new lot.burned \u2192 \"{fighter} went back to the gorge.\" (the draft log line is 'The Lot let X go').\n- announce.shop_denied.access_bridge \u2192 \"You can shop at your base, beside your own standing Needles, or while you wait to return.\"\n- announce.shop_denied.unique \u2192 \"You already carry one of those, or a Noonlit item within 3 hours of it on the dial.\"\nOther UI:\n- content/client.json:76 tip \u2192 \"In BRIDGE, you can take one fighter from your team's Lot; yours goes there for a teammate. The Lot burns down one fighter every 8 s.\"\n- src/ui/screens/draft.tsx:~364: hide the 'Draw again' button when queue.bench.rerolls === 0, and show takes left.\n- Noonlit tooltip and frame: show the item's dial hour (ItemDef.dial.hour).\nIcons to repaint (W2 imagegen):\n- assets/ui/icons/setup/glint_step.webp: a step that leaves a dark shadow patch behind.\n- saplight.webp: a pool of sap-light on stone.\n- hourstrike.webp: a strike on a full, glowing beast-mark.\n- glass_pane.webp: a pane with a setting ring.\n- team_buffs/clearglass.webp and resinburn.webp: half-dial motifs for own side and enemy side.",
+       "after": null
+      },
+      {
+       "id": "client-r2-02",
+       "source": "W4:items handoff",
+       "severity": "minor",
+       "what": "Paint 18 new item icons at content/ui/icons/items/<id>.webp, served as assets/ui/icons/items/<id>.webp, to the HUD-1 family-ground spec. VALE rules apply: no gears, clock hands, gems or runes. Until then the content shows a related item's icon as a placeholder.\n- lampblack_edge 'Lampblack Edge': a short blade whose edge is blackened with lamp soot, one black drip of sap.\n- lampblack_coat 'Lampblack Coat': a felt coat dusted with soot, a faint dark ring around it.\n- lampblack_lens 'Lampblack Lens': a lens clouded with soot, a dark drop inside.\n- quarry_pick 'Quarry Pick': a stone-splitting pick biting into an ochre block.\n- deepglass_rod 'Deepglass Rod': a rod with a thick, deep-blue glass head that light sinks into.\n- glass_veil 'Glass Veil': a linen veil with dawnglass panes setting across it.\n- glintmail 'Glintmail': a bracer of small glinting glass scales with a bowstring.\n- dawnspur 'Dawnspur': a spur point lit by the first ray of dawn.\n- resin_maul 'Resin Maul': a walnut maul bound with warm amber lampresin bands.\n- shadowpin 'Shadowpin': an arrow pinning a long shadow to the stone.\n- bellrope 'Bellrope': a knotted bell rope on a hand bell, a ring of light.\n- almslamp 'Almslamp': a small lamp spilling a shared glow (no coins, no gold).\n- callstone 'Callstone': a carved standing stone sending out sound rings.\n- hourstring 'Hourstring': a bow whose string carries twelve carved hour-ticks.\n- needlefall 'Needlefall': a falling needle shard with a shadow streak.\n- stillhour 'Stillhour': a dial-stone plate with a frozen shadow line (stopped light).\n- afterlight 'Afterlight': a lens with a light burst and its echo ring a moment later.\n- watchbell 'Watchbell': a watch bell ringing out reveal rings.\nOptional string, content/strings.en.json announce.shop_denied.unique \u2192 \"You already carry one of those or another Lampblack piece, or a Noonlit item within 3 hours of it on the dial.\"",
+       "after": null
+      },
+      {
+       "id": "client-r2-03",
+       "source": "W4:tempo-jungle handoff",
+       "severity": "minor",
+       "what": "Optional player copy for the new RIFT rules, in content/client.json tips or a Needle hover:\n- \"Until 7:00 every Outer Needle wears a Dawn Seal that re-sets every 30 s: one wave won't crack it, a stacked wave will.\"\n- \"A Needle's shadow ring turns aside your blows unless your own Wicks stand in it. Bring the wave.\"\n- \"Grove tithe: while your grovehunter trails your team's lead, each camp monster pays it extra XP from what your lanes earned.\"\nThe seal is already visible as a Needle shield (the hatched dawnglass segment on its bar).",
+       "after": null
+      },
+      {
+       "id": "client-r2-04",
+       "source": "W4:difficulty-bridge handoff",
+       "severity": "minor",
+       "what": "Sudden death no longer lifts protection. Re-word the strings in content/strings.en.json: hud.sudden_death \u2192 \"Gorge Wind\". hud.sudden_death_tip \u2192 \"Sudden death: the Gorge Wind rises. Structures keep their protection, but each step makes Wicks hit harder and structures take more damage. Respawns are slower.\" announce.sudden_death.title \u2192 \"The Gorge Wind rises\". announce.sudden_death.sub \u2192 \"Protection holds, but Wicks hit harder and structures crack faster with every step. Respawns are slower.\" Optional: show the step count from the new WorldView.gorgeWind (0 before sudden death, then 1..8) next to the sky-strip badge in src/ui/hud/top.tsx. Optional BRIDGE tip for content/client.json: \"At 21:00 the Gorge Wind rises: nothing loses its protection, but every 45 s the waves hit harder and the Needles wear thin.\"",
+       "after": null
+      },
+      {
+       "id": "client-r2-05",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "Noon Toll strings in content/strings.en.json. The new announce key is 'noon_toll' (params.n = fighters shown); it fires every 20 s from 8:00 in FRAY. Add announce.noon_toll.title \u2192 \"The Noon Toll\" and announce.noon_toll.sub \u2192 \"Every fighter still standing is in the light for 5 s.\" Optional FRAY tip for content/client.json: \"From 8:00 the Noon Toll rings every 20 s and shows every fighter to everyone for 5 s.\"",
+       "after": null
+      },
+      {
+       "id": "client-r2-06",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "client F12, UI half. DraftAction now includes { a: 'ready' } and DraftSeat has ready?: boolean (sent in finalize, trade and done). src/ui/screens/draft.tsx can drop the `as unknown as DraftAction` READY cast and the readyOf cast. Bots show ready once they have nothing left to do; finalize ends 1.5 s (READY_GRACE) after every person is ready.",
+       "after": null
+      },
+      {
+       "id": "client-r2-07",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "gameplay g3, practice panel UI (src/ui/hud/panels.tsx, src/ui/screens/practice.tsx).\n- New commands: { type: 'practice', action: 'toggleWaves' | 'toggleStructures' | 'teleport' (x, y; walkable points only, e.g. an armed ground click) | 'dummyStats' (hp 100-100000, armor/resist 0-500) | 'resetMeter' | 'clearDummies' }.\n- Read WorldView.practice: waves, structures, noCooldowns, dummy {hp, armor, resist}, meters[] {player, dealt, last, burst, burstTime, burstDps, recent5}.\n- Practice setup screen: QueueRequest.practice.sparring {fighter, difficulty}, practice.mode (rift or bridge), and practice.waves / structures start switches.\n- Strings: practice.panel.heal should read \"Full heal\" while alive and \"Return to life\" only when dead; add labels for the new switches and the meter.",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "id": "client-r2-08",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "originality F8, UI half.\n- src/ui/hud/shop.tsx:31: change TAG_LABEL jungle 'Jungle' to 'Dialwood', or add string hud.shopui.tag.jungle \u2192 \"Dialwood\".\n- strings.en.json:266 'Add gold and levels' \u2192 Gleam.\n- client.json:39 Sparring tile copy.",
+       "after": null
+      },
+      {
+       "id": "client-r2-09",
+       "source": "W4 verify (open)",
+       "severity": "minor",
+       "what": "handoff:W2-copy [fail]: In strings.en.json, :676 and :847 still say structures lose their protection in sudden death, and :456 Lot prompt still says 'draw again once' although rerolls is 0. There are no noon_toll strings. These are W2 files, but players are misinformed until W2 applies the handoffs.\nFIX HINT: W2: apply W4's handoffs for the Gorge Wind, Lot and Noon Toll strings, and hide 'Draw again' when rerolls is 0.",
+       "after": null
+      },
+      {
+       "id": "hud:HUD-1-seam",
+       "source": "integration run 1 client verdict (partly)",
+       "severity": "minor",
+       "what": "Own paintings exist, but items.json:1681 (glass_veil -> linen_hood) and :2059 (bellrope -> hand_bell) still borrow; icon_probe lists 18 borrowed. Two of the new paintings carry the blood-read defect (see lead:new-icons).\nFIX HINT: Client: fix shadowpin and lampblack_edge. Systems: repoint the 18 refs to assets/ui/icons/items/<id>.webp; icon_probe should then list 0 borrowed.",
+       "after": null
+      },
+      {
+       "id": "e2e:store",
+       "source": "integration run 1 client verdict (partly)",
+       "severity": "minor",
+       "what": "e2e all exits 1 on the store journey only: wallet 598 against a cheapest skin of 600 (300 start + 117/92/89 earned after three lost autopilot matches). The earlier full run bought a skin with 783 after two wins. Not a client-code regression.\nFIX HINT: Make the e2e.mjs store journey independent of match outcomes: top up the shortfall through the dev handle (and record it), or assert the not-enough state and buy a cheaper offer, while still checking that the wallet grew by the sum of the postgame grants.",
+       "after": null
+      },
+      {
+       "id": "client-r1h-12",
+       "source": "run-1 handoff",
+       "severity": "minor",
+       "what": "originality F6 leftovers in client files (player-facing). (1) src/ui/components/LoadoutPanel.tsx:160, :171, :174, :234: change the fallback in cv.t('loadout.spells', 'Battle spells') to 'Hour spells' (strings.en.json:503 already says 'Hour spells'). Also change the comments at :1, :8, :99, src/ui/screens/loadout.tsx:2 and src/ui/hud/dialbar.tsx:3 'battle spells' -> 'Hour spells'. (2) public/game_meta.json:8 controls_keyboard: 'D F battle spells' -> 'D F Hour spells' (last edited by W2; no lane lists it). 'Battle Spell(s)' is now deny-listed anywhere by tools/names_check.ts.",
+       "after": null
+      },
+      {
+       "id": "client-r1h-13",
+       "source": "run-1 handoff",
+       "severity": "minor",
+       "what": "src/ui/credits.ts CREDITS lacks meshoptimizer, which is bundled (dist render chunk; src/render/lod.ts) and listed in THIRD_PARTY_NOTICES.txt. Add { name: 'meshoptimizer', kind: 'code', license: 'MIT', notice: 'Copyright (c) 2016-2026 Arseny Kapoulkine', url: 'https://github.com/zeux/meshoptimizer', use: 'meshes' } and the string key settings.credits.use.meshes (e.g. 'Mesh detail levels') in content/strings.en.json, or the owning lane's strings file.",
+       "after": null
+      },
+      {
+       "id": "client-1b-14",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "src/session/profile_store.ts normalizeCurrent: carry `emblem: typeof raw.emblem === 'string' ? raw.emblem : undefined`. Without it, Profile.emblem (new, set by Session.setEmblem) is dropped when the profile reloads. MatchHistoryEntry.nod already survives because history entries are kept as-is.",
+       "after": null
+      },
+      {
+       "id": "client-1b-15",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "Wire the new optional Session methods. postgame.tsx give(): call `session.nod?.(res.matchId, player)`. profile.tsx: read `profile.emblem` and call `session.setEmblem?.(id)` (keep UiPrefs.emblem as the fallback). app.tsx:395: call `session.reconnect?.()` directly, without the cast. settings.tsx:121/164: drop the VideoSettings/AudioSettings casts; Settings now has the optional fields dynamicResolution, mono and softenLoud.",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "id": "client-1b-16",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "gameplay:g3 UI half: the sim and session commands have been live since cf2e170e. In src/ui/hud/panels.tsx PracticePanel (act at :298), add: toggles for client.send({type:'practice', action:'toggleWaves'}) and 'toggleStructures', showing state from view.practice.waves / .structures; Teleport ({action:'teleport', x, y}, e.g. a minimap click); target stats ({action:'dummyStats', hp, armor, resist}; current values in view.practice.dummy); and 'resetMeter' / 'clearDummies' buttons. Optionally read view.practice.meters for the readout. In the practice lobby, CreateMatchRequest.practice.sparring = {fighter, difficulty} adds a bot sparring fighter, and practice.mode = 'bridge' practises on BRIDGE's map.",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": [
+    {
+     "id": "client-hud3",
+     "source": "client run-1 verdict client-14 / hud:HUD-3",
+     "severity": "minor",
+     "what": "After the world lane adds art.terrain.minimapBounds and re-renders the padded RIFT minimap.png, re-shoot the live 1x minimap: both plaza discs fully inside, Wick dots 2.2k with keyline, fog contrast as measured before.",
+     "after": "world"
+    }
+   ]
+  },
+  "audio": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "audio-r1-confirm",
+       "source": "integration run 1 (audio lane was never verified: its verifier stalled)",
+       "severity": "major",
+       "what": "Confirm in the current tree, with the same measurements, every run-1 audio claim: audio-01=already_done, audio-02=done, audio-03=done, audio-04=already_done, audio:AUD-4=done, regression:kit-ability-hit-contact=done, regression:kit-attack-hit-soft-top=done, regression:hitsfx-semantics=done, audio-09=done. Run-1 items are in integration_plan.json lanes.audio.packages[0..1]. Fix anything that does not hold (contact floors and soft top for f_*_hit / f_*_attack_hit in the build.py gates, kit hit layered over crit/true timbre, the dash spread).",
+       "after": null
+      },
+      {
+       "id": "audio-r2-01",
+       "source": "W4:rekey handoff",
+       "severity": "minor",
+       "what": "Optional cue: a two-note chord sting on Vashil's chord stun. Set it as present.sfx on the area in vashil.json kit.passive.triggers[0], or W3 can bind it by passive proc.",
+       "after": null
+      },
+      {
+       "id": "audio-r2-02",
+       "source": "W4:tempo-jungle handoff",
+       "severity": "minor",
+       "what": "Optional cues: a soft glass 'set' on the Dawn Seal re-set every 30 s (quiet, positional), a seal shatter at 7:00, and a muffled hit for a Ringshade-reduced blow on a Needle.",
+       "after": null
+      },
+      {
+       "id": "audio-r2-03",
+       "source": "W4:difficulty-bridge handoff",
+       "severity": "minor",
+       "what": "Optional cue: a rising wind gust through the gorge on each Gorge Wind step (WorldView.gorgeWind increments), quieter than the announcer and never ducking it.",
+       "after": null
+      },
+      {
+       "id": "audio-r2-04",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "Optional cue: a soft hour-bell for each Noon Toll (announce 'noon_toll', every 20 s from 8:00 in FRAY). Keep it quieter than the announcer and never duck it.",
+       "after": null
+      },
+      {
+       "id": "audio-1b-4",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "systems-10/11: src/contracts/catalog.ts now has AudioDef.ambience: Record<mapId, {source, cue}[]> (default {}) and MusicDef.pieces: {at, file}[] (default []). In content/audio.json, move the 16 events keys 'ambient.<map>.<source>' -> cue into audio.ambience.<map> = [{source, cue}] ('bed' stays a source), and move the 20 music.<id>.layers entries 'seg_<s>' into music.<id>.pieces = [{at: <s>, file}]. In src/audio/index.ts, emitters() should read cat.audio.ambience[map] and startBed (around :730) should read def.pieces; keep the old events and seg_ paths as a fallback until the content moves.",
+       "after": null
+      },
+      {
+       "id": "audio-1b-5",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "_harness/probe_audio_listener.mjs gate A is empty because seat 7 is Hesmi, a plinth in the dialcross role, and survives: 2/0/2 deaths in 17 min on seeds 3/5/7 with the content catalog, and 0 with a novice autopilot. Set YOU = 8 (Rishal, shaftlight: 5/7/6 deaths in 17 min on seeds 3/5/7). Run `npm run content` first, since the probe reads dist-catalog.",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "world": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "world-pad",
+       "source": "client run-1 handoffs (HUD-3 world half)",
+       "severity": "major",
+       "what": "Minimap padding: add a margin option to art/blender/maps/minimap_survey.py (RIFT 6 m per side in x, 4 m in y; plaza discs and ground painted out to the margin), re-render art/out/maps/map_rift/minimap.png at 1100x712, and add \"minimapBounds\": [-6, -4, 176, 114] under art.terrain in content/maps/map_rift.json (BRIDGE/FRAY only if their plazas clip too). The client already reads it (61fe088f, minimap.tsx:58-76).",
+       "after": null
+      },
+      {
+       "id": "world-05",
+       "source": "integration run 1 world verdict (fail)",
+       "severity": "minor",
+       "what": "The skip premise is false. Client commit 61fe088f (23:35:44, before the claim) reads art.terrain.minimapBounds for both drawing and clicks (src/ui/hud/minimap.tsx:58-76). integ_client_verify1 holds client-14 and HUD-3 at partly, waiting only on this lane's half: the plaza discs are cut on the live 1x minimap. map_rift.json has no minimapBounds, minimap_survey.py has no pad option, and minimap.png is still 1100x712 over 0..170 x 0..110.\nFIX HINT: 1. Add a margin option to art/blender/maps/minimap_survey.py: RIFT 6 m per side in x, 4 m in y, with the plaza discs and ground painted out to the margin.\n2. Re-render art/out/maps/map_rift/minimap.png.\n3. Add \"minimapBounds\": [-6, -4, 176, 114] under art.terrain in content/maps/map_rift.json (and in map_gen.py if it writes art.terrain).\n4. Run npm run content and content:check.\n5. Shoot a live 1x RIFT minimap: both plaza discs must be whole and fighter dots must sit on the painted roads.",
+       "after": null
+      },
+      {
+       "id": "world-1b-1",
+       "source": "systems run-1b handoff",
+       "severity": "minor",
+       "what": "content/maps/map_fray.json .desc: 'stands at its centre' -> 'stands at its center' (systems-05). It is the last copy_lint hit in content/.",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "chars": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "chars-r2-01",
+       "source": "W4:rekey handoff",
+       "severity": "minor",
+       "what": "Optional: Ervet's 'great' form node (shown during Whole Again) no longer means an oversized blade with more reach. Show the whole blade at its normal length with glowing shard seams.",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": [
+    {
+     "id": "chars-lod-support",
+     "source": "engine-lod",
+     "severity": "minor",
+     "what": "Support the engine lane's fighter LOD1 port only if asked through its handoff (the recipe is art/blender/fighters/_lod1_three.mjs). Otherwise: look at every fighter at the gameplay camera with LOD1 on (after the engine lands it) and confirm no face/silhouette damage; report shots.",
+     "after": "engine"
+    }
+   ]
+  },
+  "systems": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "systems-r2-icons",
+       "source": "W4:items handoff + client run-1 (icons painted in f0a2ae42)",
+       "severity": "major",
+       "what": "1. After W2 paints the icons, point the 18 new ids at them in content/items.json. These ids are lampblack_edge, lampblack_coat, lampblack_lens, quarry_pick, deepglass_rod, glass_veil, glintmail, dawnspur, resin_maul, shadowpin, bellrope, almslamp, callstone, hourstring, needlefall, stillhour, afterlight, watchbell. For each, set item.icon, every passives[].icon and active.icon (where present) to `assets/ui/icons/items/<id>.webp`. They currently point at a related item's icon. Then run `npm run content:check` (strict). Refs to files that do not exist fail the strict build, which is why placeholders are used.\n2. The owner sign-off for block 7 'Economy and the finished line (G7)' in _design/reviews/fixwaves/W4_systems_rekey.md is pending. It covers passive 3.2/s, Wicks 24/17, the \u00d70.8 price band, Lampblack 50/30 %, 24 % armor pen and the Stillhour stance.\n3. Update final_parity_open.json for gameplay:G7 (not a W4-owned file).\nThe client lane painted them in run 1 (content/ui/icons/items/, commit f0a2ae42). Repoint all 18 refs; icon_probe must list 0 borrowed paintings; content:check must pass.",
+       "after": null
+      },
+      {
+       "id": "systems-room",
+       "source": "systems run-1b handoff (server/room.ts now in your lane)",
+       "severity": "minor",
+       "what": "lead-10: in server/room.ts:198 use `bansPerTeam: protocol === 'draft' ? bansForRoster(draftCfg, fighterPool(this.cat).length) : 0` (hoist the pool, which is also passed as `pool:`), with `import { bansForRoster } from '../src/session/draft.ts'`. This matches local_session.ts:360.",
+       "after": null
+      },
+      {
+       "id": "systems-setup-wording",
+       "source": "lead run-1 handoff",
+       "severity": "minor",
+       "what": "content/setup.json:2 $comment: 'each player takes 2 battle spells' -> '2 Hour spells'; _design/sections/items_setup.md (:7-8, :484, :486, :550, :635): 'battle spell(s)' -> 'Hour spell(s)'.",
+       "after": null
+      },
+      {
+       "id": "systems-tips",
+       "source": "client run-1 handoff (optional)",
+       "severity": "minor",
+       "what": "Optional, low priority (loading:tip-mode). The client lane tags mode-specific loading tips with a leading '[rift] ' / '[rift,bridge] ' in content/client.json, because ClientDef.tips is z.array(z.string()) in src/contracts/catalog.ts:697. If you prefer structured data, widen it to z.array(z.union([z.string(), z.object({ text: z.string(), modes: z.array(Id).min(1) }).strict()])), have tools/build_content.ts:1300 names-check t.text for object tips, and optionally cross-check the modes ids. Tell the client lane and it will move the tags into objects in client.json and CatalogView.tipsFor. Nothing is broken today.",
+       "after": null
+      },
+      {
+       "id": "systems-18",
+       "source": "systems run-1b verdict (fail)",
+       "severity": "minor",
+       "what": "The claim of 30/31 on both seed sets is false.\n- Seeds 1-20 at HEAD: 28/31. callstone, needlefall and watchbell are never bought, unchanged since verify2 (v1_full1, and the engineers' own full1).\n- Seeds 21-40: 30/31.\nThe experiment is fully backed out (`git diff 34fd7185^ HEAD -- content/items.json src/sim` is empty). The 80 % gate still passes.\nFIX HINT: Get callstone, needlefall and watchbell each bought at least once on seeds 1-20 by changing the bot build plan in src/sim/bots/knowledge.ts, not item stats. For example, make watchbell the support's answer only when the enemy has 2+ burst threats, and give needlefall a situational slot. Drop the Callstone x1.06 weight: it pushed BRIDGE to 14.8 min. Keep BRIDGE median at 15 min or more and RIFT adept p90 at 32 min or less, then re-run both full soaks.",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "lead": {
+   "packages": [
+    {
+     "items": [
+      {
+       "id": "lead-parity-open",
+       "source": "W4 handoffs + all wave verdicts",
+       "severity": "major",
+       "what": "Bring _design/reviews/final_parity_open.json up to date as a status record (do NOT delete findings): add a status field to every finding and polish item from the wave verdicts (_design/reviews/fixwaves/<wave>_verify<n>.json, integ_*_verify*.json) and W4's handoffs (lead-r2-03/05/06/07 in this plan). Also refresh HANDOFF.md (stale since 10-13) with the current state: what VALE is, how to run/build/probe, the fix-wave and integration results, open items, and the no-deploy rule.",
+       "after": null
+      },
+      {
+       "id": "lead-r2-03",
+       "source": "W4:tempo-jungle handoff",
+       "severity": "minor",
+       "what": "Update final_parity_open.json (not a W4 file): gameplay:G4 is done (median first structure 10.2 / 10.5 min) and gameplay:G2 is done (level gap 0.69 / 0.61, grovehunter deaths 2.7 vs 3.1 and 1.8 vs 2.5). Evidence: _harness/_reports/fw_W4_soak_tj_full1.txt. The full soak still exits 1 on a G1 gate that was already failing before this package: deaths to Wicks or monsters with no enemy fighter are 4.9 % (adept) and 5.6 % (veteran) against a \u2264 5 % target (was 5.0 % and 8.0 %). Of the 21 veteran cases, 5 are Longshade objective deaths and 15 are Wicks during retreats. The quick probe passes.",
+       "after": null
+      },
+      {
+       "id": "lead-r2-05",
+       "source": "W4:difficulty-bridge handoff",
+       "severity": "minor",
+       "what": "Update final_parity_open.json (not a W4 file). gameplay:G5 is done (fw_W4_soak_db_full2: BRIDGE 8/40 sudden death, 0 chain skips, median 16.4 min). gameplay:G3 is partly done: veteran beats adept 17/20 but novice only 14/20 against the 85 % target. Two veteran-only RIFT side effects of the G3 macro: the jungle gate fails by 0.025 deaths per game (grovehunter 2.275 vs shaftlight 2.25), and deaths to Wicks/monsters with no enemy fighter rose to 6.6 % (that gate was already failing at 5.6 %). Balance flag for the tempo owner: the first Longshade taker wins about 97 % of mirrored games (34/35 in tj_full1). That makes Longshade the deciding lever for tier separation and is probably too strong.",
+       "after": null
+      },
+      {
+       "id": "lead-r2-06",
+       "source": "W4:polish handoff",
+       "severity": "minor",
+       "what": "Update final_parity_open.json (not a W4 file): gameplay G6, G8, G9, g1, g2, g3 (sim half), client F11 (kemdo), client F12 (session half), originality F8 (queues/modes/items half) and combat m-1 (wind-up half) are done. Evidence: _harness/_reports/fw_W4_soak_polish_full1.txt and fw_W4_pacing_rift_adept20.txt.",
+       "after": null
+      },
+      {
+       "id": "lead-r2-07",
+       "source": "W4:refix1 handoff",
+       "severity": "minor",
+       "what": "Update final_parity_open.json (not a W4 file):\n- done:2, gameplay:G1, gameplay:G2: done (fw_W4_soak_r1_full1 / r1_full21).\n- done:5, gameplay:G3: partly. Seeds 1-20 pass at 36/40 and 31/40. Seeds 21-40 are 32/40 vs novice (80 %, bar 85 %) and 30/40 vs adept.\n\nThe full soak at --seed0 21 still exits 1 on three things:\n- The new enforced difficulty gate vs novice: W4, partly.\n- FRAY veteran lull 42/50 and Hesmi 3.38 (gameplay G6/G9). These are pre-existing and identical to verify1_seeds21; FRAY is untouched by this refix.\n\nThe BRIDGE 14.8 min in r1_full21 is fixed by commit 298533c8. A BRIDGE-only re-run gives 15.5 / 16.1 min, byte-equal to verify1 (fw_W4_soak_r1_br1, r1_br21).\n\nNovice bots are now clearly weaker, by perception and execution only. This affects the coop-vs-novice queue.",
+       "after": null
+      },
+      {
+       "id": "lead-02",
+       "source": "integration run 1 lead verdict (partly)",
+       "severity": "minor",
+       "what": "The item's asks are met. protected_names.json:3401-3402 holds 'Battle Spell(s)', and the registry is 21 categories / 3,592 whole-word / 827 exact-name entries, which matches DESIGN_NOTE:266. `node tools/names_check.ts` hits 'Battle Spells', 'Battle spell' and 'battle spells' (exit 1); Hour spells, Glint Step, BRIDGE and FRAY are clean. In --prose mode it flags 'battle spells' and 'battlespell'. DESIGN_NOTE:31 and :263, README.md:35 and client_hud.md:349 now say Hour spells. The DESIGN_NOTE:270 BRIDGE note matches content: map_bridge.json:4 is Needlespan; modes.json bridge has startLevel 2, startGold 1050 and shopAt radius 6 on the Needles; queues.json bench has rerolls 0 and fade 8. Gaps: (1) the lead-owned _design/NAMES_NOT_USED.md still calls VALE's own system 'battle spell(s)' at :77, :142 (the 'VALE uses instead' column) and :160. (2) The handoffs miss some non-player-facing leftovers: client comments at panels.tsx:89, catalog_view.ts:138 and hud.css:299; engine build_content.ts:567; imagegen build_manifest.py:181,185; systems W4_systems_rekey.md:17,136; _spec/CONTRACT.md:268,272,767. The handoffs that were sent are accurate, line by line. Commit b65fa784 is on origin.\nFIX HINT: Edit _design/NAMES_NOT_USED.md: :77 'the battle spell Glint Step' -> 'the Hour spell Glint Step'; :142 'battle spells: Glint Step, ...' -> 'Hour spells: Glint Step, ...'; :160 'Battle-spell tuning changed ... the eight battle spells' -> 'Hour-spell tuning changed ... the eight Hour spells'. Then re-run `node tools/names_check.ts --list` and `npm run content:check -- --allow-missing-assets`. Send these handoffs: client gets the comments at panels.tsx:89, catalog_view.ts:138 and hud.css:299; engine gets build_content.ts:567 clipOwner text -> 'Hour spells'; the imagegen owner gets build_manifest.py:181,185 'Battle spell icon' -> 'Hour spell icon'; systems gets the W4_systems_rekey.md:17 heading.",
+       "after": null
+      },
+      {
+       "id": "obs-01",
+       "source": "integration run 1 lead verdict (fail)",
+       "severity": "minor",
+       "what": "Spot check, not a plan item and not a regression. DESIGN_NOTE.md:31, the line lead-02 edited, still says '39 items' and '1,371 UI strings'. content/items.json has 57 items, and content:check prints 'items 57' and 'strings 1532' (_harness/_reports/integ_lead_verify1_content_check.txt). Every other count on the line is correct.\nFIX HINT: DESIGN_NOTE.md:31: change '39 items' to '57 items' (20 core, 15 basic, 11 apex, 4 starters, 4 boots, 3 consumables) and '1,371 UI strings' to '1,532 UI strings'.",
+       "after": null
+      },
+      {
+       "id": "lead-hesmi-harness",
+       "source": "engine run-1 handoff",
+       "severity": "minor",
+       "what": "For re-reviewers (engine-12): the final_combat attack-pose harness tracks weapon_tip = prop.R, but Hesmi's attack2 (and her crits, which play attack2 because she has no crit clip) strikes with the LEFT fist. Track weapon_l (prop.L) for that clip; the left fist travels 3.37 m to the impact, the right 1.63 m. The VFX now follows the played clip (_harness/probe_swing_clip.mjs).",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  }
+ }
+}
