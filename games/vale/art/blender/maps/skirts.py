@@ -14,9 +14,15 @@ map's entry turns it (rot 90 = the west bound, -90 = east, 180 = south).
   skirt_rift      RIFT north / west / east, 22 m along the bound: the Dialwood's terraced banks stepping down
                   to the dial's rim. A flagged rim walk (0.6-4 m out), then three terraces (+0.95 / +1.9 /
                   +2.85 m) behind coursed retaining walls with chalk-lit copings, moss on their tops, Dialwood
-                  crowns in a row on each (the props' own trees, art/out/props/dialwood_*.glb), closed ends.
-  skirt_rift_low  RIFT south (the camera's side: everything low, brief §2): the rim walk, a carved kerb, a
-                  moss bed of young Dialwood, one low terrace (+0.65) of crowns <= 3.2 m; <= 3.9 m in all.
+                  crowns on each (the props' own trees, art/out/props/dialwood_*.glb: 6 / 3 / 3), closed ends.
+  skirt_rift_low  RIFT south (the camera's side: everything low, brief §2): the rim walk, the kerb's coping, a
+                  moss bed of young Dialwood at its front (7 crowns <= 3.2 m), one low terrace (+0.9) with 2.
+
+perf (regression:perf-skirt-tris, 2026-10-28): the gameplay camera (focus clamped 4 m inside the bounds) never sees
+more than ~8 m past a bound, but a module is drawn, and cast into the shadow map, whenever its bounding sphere meets
+the view, so every triangle counts at an edge or a lane fight near one. Plain solids with baked chalk edges, plain
+walls where no view can face them, and per-terrace crown counts: skirt_rift 25.4k -> ~9.5k triangles,
+skirt_rift_low 23.8k -> ~4.4k (`--count` prints the split without baking).
   skirt_bridge    BRIDGE's far banks (north and south of the gorge, on the plain), 24 m along: raw rock ledges
                   stepping up from the gorge's lip (+0.15 / +0.8 / +1.6 / +2.4), chalk-lit lips, fallen drums of
                   the needle's shaft (the Snap stubs' stone and hour-band) and its spalled chips on them.
@@ -195,7 +201,7 @@ def skirt_rift(B, rng, trees):
     B.y0 = 10.0                    # footprint: 4-16 m out (centre 10 m)
     rift_bank(B, rng, trees, [
         dict(dist=4.0, top=0.95, sc=(0.95, 1.2), n=6, kinds=ALL, band=(0.05, 0.95), cushions=5),
-        dict(dist=8.5, top=1.9, sc=(1.15, 1.45), n=4, kinds=(1, 2, 3, 4), cushions=3),
+        dict(dist=8.5, top=1.9, sc=(1.15, 1.45), n=3, kinds=(1, 2, 4), cushions=3),
         dict(dist=12.5, top=2.85, sc=(1.35, 1.75), n=3, kinds=TALL, cushions=2),
     ], depth_out=16.6)
 
@@ -207,7 +213,7 @@ def skirt_rift_low(B, rng, trees):
     B.y0 = 8.5                     # footprint: 3-14 m out (centre 8.5 m)
     rift_bank(B, rng, trees, [
         dict(dist=3.0, top=0.4, sc=(0.8, 0.95), n=7, kinds=LOW, band=(0.0, 0.5), cushions=5, wall="plain"),
-        dict(dist=8.0, top=0.9, sc=(0.85, 1.0), n=3, kinds=(3,), band=(0.1, 0.6), cushions=2, wall="plain"),
+        dict(dist=8.0, top=0.9, sc=(0.85, 1.0), n=2, kinds=(3,), band=(0.1, 0.6), cushions=2, wall="plain"),
     ], walk=(0.6, 3.0), depth_out=14.0, ends=False)
 
 
