@@ -1,0 +1,159 @@
+{
+ "lane": "client",
+ "run": "integration run 2",
+ "round": 1,
+ "verifier": "adversarial verifier, integ2 client round 1 (2026-10-29)",
+ "pass": false,
+ "summary": "Lane client does not pass round 1, because of one regression. The Practice setup screen now offers BRIDGE as a map (src/ui/screens/practice.tsx:25 and :64 list every two-team mode that ends at a core). Picking it starts a match that never loads. I reproduced this live on the real Chrome GPU (_harness/_reports/integ2_client_ver1_practice.json, practice_bridge): the loading bar sat at BRIDGE · Practice for 121 s, with an uncaught page error \"rules: queue 'practice' belongs to mode 'rift', not 'bridge'\". The client's own recovery (state.ts matchFailed) cannot fire. The bots factory throws at src/session/local_session.ts:526, which is outside the session's try, so no 'match: …' error is ever emitted and the session stays in 'loading'. The root cause is in systems files, and the engineers handed it off correctly (twice). Still, the lane shipped a new UI path that hangs the game, and it could have gated the option in its own file. All other items re-measure as claimed in the current tree, which matches origin at b730f477. client-icons-blood (the one major) passes. I viewed all 18 new item icons at 200, 40 and 38 px myself (_harness/_shots/integ2_client_ver1_icons18_*). Re-measured dark red: lampblack_edge 0.0 %, shadowpin 0.3 %, dawnspur 0.1 %. The remaining hits are ground showing through enclosed gaps: quarry_pick 20.7 %, between pick and haft, and hourstring 6.7 %. resin_maul's red-brown bands and amber drip were accepted earlier. The overlay (_harness/_shots/integ2_client_ver1_darkred18_overlay.png) confirms none of these reads as blood. The six repainted setup and buff icons fit their family and carry no sensitivity issue. Gates: typecheck exit 0; strict content:check OK with 0 warnings. icon_probe OK: p50 min 66 / p95 min 192, navy 0, borrowed [], missing none. sweep_720 fast reports no failures, including draft 1280/1920_lot and both finalize sizes. e2e all PASS 7/7: flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, store. The RIFT shop tags end in Dialwood, the nod is recorded, and the wallet goes 300 + 479 = 779 before the skin is bought. e2e store alone (the short path) PASS: CTA '300 more Candles needed', top-up 300 with ledgerSum 600, bought, wallet 0. probe_session_flows 72/72, probe_sim_practice 39/39, probe_content_build 126/126, probe_content_ids 0 hits. Live probes: the BRIDGE Lot at 1280x720 shows no Draw again and '1 take left', then 'No takes left' with all three Take buttons disabled, and 'Ervet went back to the gorge.'. The shop detail shows 'Hour 2 on the dial' plus the 3-hour rule. Practice teleport moved the fighter 5 times out of 5. The damage readout showed 45/89/89/89/89 and dropped to dashes after Clear. Health 2500 and Resist 45 reached the sim's dummy stats. client-1b-14 is not done (the fix is in src/session/profile_store.ts, a systems file; handoff valid). client-r2-07 and client-1b-16 are partly done, both because of the BRIDGE practice crash. Minors are listed per item.",
+ "items": [
+  {
+   "id": "client-icons-blood",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "I looked at all 18 at 200 px (_harness/_shots/integ2_client_ver1_icons18_200px.png) and at 40 and 38 px (_harness/_shots/integ2_client_ver1_icons18_40_38px.png). No icon has a red drip or a wound read. lampblack_edge is a clean steel knife and shadowpin is a pin in a pale stone with a violet shadow. I see no hoods, masks, faces, gears, clock hands, gems or runes. The re-run of _harness/_reports/integ_client_r1_darkred.py is in _harness/_reports/integ2_client_ver1_darkred18.txt: lampblack_edge 0.0 %, shadowpin 0.3 %, dawnspur 0.1 % of silhouette, and 0.0 to 0.9 % for every other icon except quarry_pick 20.7 %, resin_maul 7.1 % and hourstring 6.7 %. In _harness/_shots/integ2_client_ver1_darkred18_overlay.png the quarry_pick and hourstring hits are Strike-red ground inside enclosed gaps (between pick and haft, string and stock), and resin_maul's are the red-brown bands. Its drip is honey-amber, not red. Commit 69c4cd07 (dawnspur re-grade) is on origin. icon_probe: _harness/_reports/integ2_client_ver1_icon_probe.json OK."
+  },
+  {
+   "id": "client-r2-01",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "All required strings are in content/strings.en.json, worded as the plan asks: lot.prompt, lot.lot_note ({s} from bench.fade 8), error.draft.no_swaps, lot.take_left / _plural / take_none, lot.burned, announce.shop_denied.access_bridge, and the longer announce.shop_denied.unique. The client.json:79 BRIDGE Lot tip is replaced. draft.tsx:410-427: canDraw = bench.rerolls > 0, takes come from DraftSeat.swaps, and Take is disabled with the reason. Live, from my probe _harness/_reports/integ2_client_ver1_lot_probe.mjs on bridge_standard at 1280x720 (_harness/_reports/integ2_client_ver1_lot_1280.json; shots _harness/_shots/integ2_client_ver1_lot_1280_0[1-4]_*.png): drawAgain false, '1 take left', then 'No takes left' with 3/3 Take buttons disabled. The ticker read 'twomark_tess took Odrum from the Lot and left Dunsom there.' and then 'Ervet went back to the gorge.'. No clipped text and nothing below the fold. Dial hour: the shop detail for Sunstring read 'Hour 2 on the dial' with a .dialmark (a ring and a pip, no hand), the rule line read 'No other item on the dial may stand within 3 hours of it.', and the tile carries the mark. The client quote in shop.tsx:44-86 mirrors sim/shop.ts quoteBuy: fold, dial clash with the max apart, and the denial order access/slots/unique/gold. Six repaints viewed in _harness/_shots/integ2_client_ver1_six_repaints.png and _setup_icons_all.png: on-family navy ground, glint_step's violet shadow patch, saplight's pool, hourstrike's lit beast print, glass_pane's ring, clearglass on the sunlit half and resinburn on the shadowed half. No sensitivity issue. Minors: (1) lot.swap_done ('You took …') is defined but unused (grep src/ui finds nothing), so after your own take the ticker names you in the third person by your player name (draft.tsx:166-167 Ticker). (2) A Take tooltip opened before the take keeps the enabled hint ('Your fighter goes to the Lot…') after the button turns disabled, until you hover it again (shot _02_taken).",
+   "fixHint": "Optional polish: in Ticker, when took[1] is your own seat's name, use lot.swap_done; re-key the Button tip on disabled so an open tip swaps to the reason."
+  },
+  {
+   "id": "client-r2-02",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The already_done claim is confirmed. All 18 content/ui/icons/items/<id>.webp files exist (256x256). A python check of content/items.json finds all 18 icons = assets/ui/icons/items/<id>.webp (0 mismatches). icon_probe: borrowed [], 'missing icons: none'. The optional unique string is applied (see client-r2-01). Minor (brief fidelity, not sensitivity): a few paintings drift from the W4 subject brief. callstone is a spiral horn, not a carved standing stone. hourstring is a crossbow with no visible hour-ticks. stillhour is a shield, not a dial-stone plate. dawnspur is a bracer with a spur point. They read well at 38/40 px and follow the family ground (_harness/_shots/integ2_client_ver1_icons18_200px.png).",
+   "fixHint": "Optional: repaint callstone, hourstring and stillhour closer to their briefs through run_xai.py if the item lane wants the subjects to match their names."
+  },
+  {
+   "id": "client-r2-03",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "content/client.json:69-75 carries the tips, and each checks against content/modes.json rift.rules. Dawn Seal: until 420 (7:00), every 30, units needle_outer. Ringshade: wicks 3, needles and lantern, RIFT only. Grove tithe: RIFT only. Clearglass and Resinburn are re-worded to the own-side / enemy-side Noonline rule, and the BRIDGE shop tip (:78) says 'beside your own standing Needles'. content:check is OK with 0 warnings and the names check ran."
+  },
+  {
+   "id": "client-r2-04",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "strings.en.json now has: hud.sudden_death 'Gorge Wind'; hud.sudden_death_tip and announce.sudden_death.title / .sub with the exact planned copy (protection holds). top.tsx:45-50 shows the step as min(rules.gorgeWind.maxSteps, WorldView.gorgeWind), with the tip as the badge's title. The BRIDGE tip at client.json:80 matches bridge gorgeWind every 45 and suddenDeathAt 1260. The engineers' live crop _harness/_shots/integ_client_p1_gorge_wind.png shows 'Gorge Wind 2/8' under 41:19. I did not re-run a 40-min fast-forward myself, but the code path is a plain read of WorldView."
+  },
+  {
+   "id": "client-r2-05",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "announce.noon_toll.title 'The Noon Toll' and .sub 'Every fighter still standing is in the light for 5 s.' are present. model.ts:587-594 raises the banner only when ev.t - lastToll > 1.5 x rules.noonToll.every, and lastToll is updated on every toll. client.json:83 has the FRAY tip (from 480, every 20, reveal 5 in modes.json). The engineers' report _harness/_reports/integ_client_p1_live.json fray_toll has tolls at 424.9 / 444.9 s and banner2 'The Noon Toll / Every fighter still standing…'. Their PNG crop shows the elimination banner the toll queued behind, not the toll banner itself, so the DOM text is the only evidence. The early first toll comes from the sim's last-seats / quiet-arena triggers (bot.ts:1015), so the tip's 'From 8:00' is a simplification, not an error."
+  },
+  {
+   "id": "client-r2-06",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "src/ui/screens/draft.tsx:52 readyOf = s?.ready and :54 READY: DraftAction = { a: 'ready' }. grep finds no 'as unknown' left in draft.tsx. typecheck exit 0. sweep_720 fast passes finalize 1280/1920 for _finalize, _boons and _hour_spells (_harness/_reports/integ2_client_ver1_sweep.json)."
+  },
+  {
+   "id": "client-r2-07",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "The UI half works on RIFT. My e2e practice run (_harness/_reports/integ2_client_ver1_practice.json) passed setup with maps [RIFT, BRIDGE], a Veteran Ardit sparring partner on team 1, and tools: Wicks and Structures switched to false, armor 120, targets 3 -> 0 -> 1, aria-pressed matching the sim. Teleport: the e2e step failed in my run (the first ground click did not land, and the retry loop looks for 'Move to a point' while the button reads 'Click the ground…'). My own probe (_harness/_reports/integ2_client_ver1_tp_probe.json) then moved the fighter 2.5 / 4.2 / 5.2 / 4.0 / 7.2 m on five distinct clicks. Every click landed on div.hudsurface and disarmed, so this is a harness race, not a UI bug. Meter probe (_harness/_reports/integ2_client_ver1_meter.json): Health 2500 and Resist 45 reached view.practice.dummy, the readout read Last hit 45 / This burst 89 / Per second 89 / Last 5 s 89 / Total 89 against the sim meter, and Clear reset it to dealt 0 with dashes. Remove all and Place work, with feed lines. The heal label reads 'Full heal' while alive (panels.tsx:366 switches to 'Return to life' only when dead). At 1280x720 (_harness/_reports/integ2_client_ver1_pr720.json) the panel spans y 67-620 with no clipped text, the same whether armed or idle, and Esc disarms. NOT done: BRIDGE practice. Live, practice_bridge stayed loading for 121 s with the page error \"rules: queue 'practice' belongs to mode 'rift', not 'bridge'\" (shot _harness/_shots/integ2_client_ver1_practice_practice_bridge_02_loading_bridge_FAIL.png). Minor: at 1280x720 the setup screen puts Starting level (partly), Sparring partner (row bottom 729 of 720) and the fighter choice below the fold of .scr__body with no bottom fade (_harness/_shots/integ2_client_ver1_pr720_01_setup.png).",
+   "fixHint": "Systems: in local_session.ts planMatch's practice branch, build a sim catalog whose 'practice' queue has mode = alt.id (as customCatalog does) and move the BOTS_LINK.bots call at :526 inside the try. Client, until then: offer only the queue's own mode in practice.tsx's Map choice, or gate the others on a session capability. Then e2e practice_bridge must load map_bridge. Client harness: in e2e.mjs teleport, wait for body.ptools-aiming before mouse.click and locate the button by /Move to a point|Click the ground/. Add the sfade bottom fade to the practice setup body at 720."
+  },
+  {
+   "id": "client-r2-08",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "src/ui/hud/shop.tsx:31 jungle: 'Dialwood'. In my e2e all run (_harness/_reports/integ2_client_ver1_e2e_all.log) RIFT match_input shopTags end in 'Dialwood'; BRIDGE and FRAY have no jungle tag. The run's genre-word gate passed for all three modes. strings.en.json:302 practice.hint and client.json:39 say 'Add Gleam and levels'. grep of strings.en.json finds only Gleam for the gold keys (announce.shop_denied.gold 'Not enough Gleam.', score.col.gold 'Gleam'). Minor copy nit: the home tile titled 'Sparring practice' (client.json:38-39) still says 'Any fighter, the full map, alone.', although a sparring partner can now be added.",
+   "fixHint": "Optional: drop 'alone' from the practice_tool tile body."
+  },
+  {
+   "id": "client-r2-09",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The already_done claim is confirmed. hud.sudden_death_tip and announce.sudden_death.sub say protection holds, announce.noon_toll.* exist, lot.prompt no longer says 'draw again once', and draft.tsx:412 canDraw hides Draw again at 0 draws. Live: drawAgain false in _harness/_reports/integ2_client_ver1_lot_1280.json."
+  },
+  {
+   "id": "hud:HUD-1-seam",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The already_done claim is confirmed. node _harness/icon_probe.mjs --out _harness/_reports/integ2_client_ver1_icon_probe.json exits 0: borrowed [], missing none; items n 57 and abilities n 94; p50 min 66 (abilities 40 px 65), p95 min 192 (abilities 190); navy 0; closest cross-family grounds d 56. All 18 W4 items point at their own items/<id>.webp, including glass_veil and bellrope. The blood-read half is covered under client-icons-blood."
+  },
+  {
+   "id": "e2e:store",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Full run (_harness/_reports/integ2_client_ver1_e2e_all.json): start 300, granted 235+150+94 = 479, wallet 779; bought Chalkline Pavise for 600, wallet 179, equipped. Short path (_harness/_reports/integ2_client_ver1_e2e_store.json, node _harness/e2e.mjs store): start 300, short 300, CTA '300 more Candles needed', dialog 'You need 300 more Candles', top_up 300 with wallet 600 = ledgerSum 600; bought, wallet 0. Both PASS."
+  },
+  {
+   "id": "client-r1h-12",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "grep -rni 'battle spell' src/ui public tools/imagegen content hits only src/ui/copy_lint.ts:31-32 and :87, the deny map itself. public/game_meta.json parses, and controls_keyboard reads '… D F Hour spells … Space center camera …'. Commit 21f54d26 is on origin."
+  },
+  {
+   "id": "client-r1h-13",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The already_done claim is confirmed. src/ui/credits.ts:36 has the meshoptimizer entry: MIT, 'Copyright (c) 2016-2026 Arseny Kapoulkine', github.com/zeux/meshoptimizer, use 'mesh'. strings.en.json settings.credits.use.mesh reads 'Compressed 3D models and their detail levels'. content:check OK with 0 warnings."
+  },
+  {
+   "id": "client-1b-14",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Not done, and correctly handed off. src/session/profile_store.ts normalizeCurrent (:154-170) still returns a Profile with no emblem field, so Profile.emblem set by local_session.ts:771-774 setEmblem is dropped on the next load. The engineers' reload measurement (_harness/_reports/integ_client_p2_emblem.json: hour10 before the reload, null after, prefs.emblem hour10) is consistent with the code. The UI hides the loss on the same device: profile.tsx:101 falls back to UiPrefs.emblem. The file belongs to systems, not client.",
+   "fixHint": "Systems: add `emblem: typeof raw.emblem === 'string' && raw.emblem ? raw.emblem : undefined,` to normalizeCurrent's returned object (next to firstWinAt), and add a save-then-load probe case for the emblem."
+  },
+  {
+   "id": "client-1b-15",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "postgame.tsx:151 give() calls session.nod?.(matchId, player), and :43 reopens the recorded nod from history. profile.tsx:101 and :120 read profile.emblem and call session.setEmblem?.(id), with the UiPrefs fallback. app.tsx:398-399 calls session.reconnect() without a cast. settings.tsx:119-121 and :172-176 use dynamicResolution, mono and softenLoud with no VideoSettings/AudioSettings cast (grep 'as unknown|as VideoSettings|as AudioSettings' finds nothing). Live, from e2e all: the RIFT and BRIDGE postgames record the nod ('You lit a lantern for ferrow.' recorded 5; 'rimwalker_09' recorded 6), and flow_netdown try_again goes 'Connecting…' -> 'Offline · vs bots'. typecheck exit 0."
+  },
+  {
+   "id": "client-1b-16",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Same UI as client-r2-07, and it works live on RIFT: toggles, teleport (5/5 in _harness/_reports/integ2_client_ver1_tp_probe.json), dummyStats, Remove all and Place, and the meter with Clear (_harness/_reports/integ2_client_ver1_meter.json). The sparring partner is a Veteran bot of the chosen fighter on the other team, and the bar reads RIFT · Practice while loading (_harness/_reports/integ2_client_ver1_practice.json). b730f477: state.ts matchFailed handles 'match setup:' / 'match: could not start' errors. The flow bar names the mode being played (app.tsx TopBar), and it read 'BRIDGE · Practice' while loading. NOT done: practice.mode = 'bridge' never loads. The page error comes from local_session.ts:526 (the bots factory runs outside the try) and resolveRules (catalog_index.ts:136), so matchFailed never runs and the e2e practice_bridge journey fails after 121 s. The engineers' 'not reproduced live' note on the recovery path is accurate: their catch-branch test (_harness/_reports/integ_client_p3_matchfail.json) used a forced error.",
+   "fixHint": "Systems: fix the practice catalog in planMatch and move the bots call into the try (see client-r2-07), then extend _harness/probe_sim_practice.ts to build a World from a BRIDGE practice setup. Client: re-run `node _harness/e2e.mjs practice` until practice_bridge loads map_bridge. Until systems lands, hide the BRIDGE Map choice."
+  }
+ ],
+ "regressions": [
+  "Practice > Map > BRIDGE (new in this run: src/ui/screens/practice.tsx:25/:64 offers every two-team core mode) starts a match that never loads. Live: _harness/_reports/integ2_client_ver1_practice.json practice_bridge stayed on 'loading' for 121 s at 'BRIDGE · Practice' with the uncaught page error \"rules: queue 'practice' belongs to mode 'rift', not 'bridge'\" (shot _harness/_shots/integ2_client_ver1_practice_practice_bridge_02_loading_bridge_FAIL.png). The session stays in phase 'loading' with no host, so later queues are refused until a reload. The root cause is in systems (local_session.ts:409-413 keeps queue 'practice' of mode rift; :526 calls the bots factory outside the try), but the player can only reach this hang through the client lane's new Map choice. Fix: either systems lands the local_session fix, or client offers only the queue's own mode in the Map choice until it does."
+ ],
+ "handoffs_verified": [
+  {
+   "to": "systems",
+   "valid": true,
+   "what": "BRIDGE practice: build the practice sim catalog with queue mode = alt.id (or let resolveRules accept a practice-kind queue on any two-team core mode), and extend probe_sim_practice to build a World from it",
+   "evidence": "src/session/local_session.ts:409-413 swaps mode/map but keeps queue 'practice' (mode rift); src/sim/catalog_index.ts:136 throws; reproduced live in _harness/_reports/integ2_client_ver1_practice.json"
+  },
+  {
+   "to": "systems",
+   "valid": true,
+   "what": "move `const bots = … BOTS_LINK.bots?.(pd.simCatalog, setup)` (local_session.ts:526) inside the try so a throw reaches the 'match: could not start' catch",
+   "evidence": "local_session.ts:521-539: the bots line runs before `try {`; the live page error is uncaught and no session error is emitted ('session: no error' in the practice_bridge step)"
+  },
+  {
+   "to": "systems",
+   "valid": true,
+   "what": "client-1b-14: carry emblem in profile_store.ts normalizeCurrent",
+   "evidence": "profile_store.ts:154-170 has no emblem field; _harness/_reports/integ_client_p2_emblem.json reload emblem null"
+  }
+ ],
+ "observations": [
+  "Open stitch, not graded here: the world round-1 verifier handed client a fog fix. src/ui/hud/minimap.tsx:130 draws the fog over the map rectangle only (map.size x fit.s from fit.ox/oy), so the art.terrain.minimapBounds margin shows unfogged (world verdict: luma 44-46 against 27-28). Plan stitch client-hud3 (re-shoot the 1x minimap after the world pad) is also still open for this lane.",
+  "Systems, minor: a training target placed or re-statted with dummyStats sits below full health for its first moments. The meter probe saw a freshly placed target at hp 2295 / maxHp 2500, and two of the three start targets at 5591 / 6000 (_harness/_reports/integ2_client_ver1_meter.json). src/sim/modes/practice.ts applyDummyStats sets e.hp = e.maxHp before the stat buff raises maxHp; the 4 s reset (:215) fixes it later.",
+  "Client harness, minor: the e2e practice teleport step is racy. It clicks the ground right after the arm without waiting for the body.ptools-aiming listener, and its retry looks for 'Move to a point' while the armed button reads 'Click the ground…', so one missed click times out the whole journey (my run: integ2_client_ver1_practice.json teleport). The UI itself teleported 5/5 in _harness/_reports/integ2_client_ver1_tp_probe.json."
+ ],
+ "checks": {
+  "typecheck": "npm run typecheck: exit 0",
+  "content_check": "npm run content:check (strict): OK, 0 warnings, names check ran",
+  "icon_probe": "_harness/_reports/integ2_client_ver1_icon_probe.json: OK, borrowed [], missing none, p50 min 66 / p95 min 192, navy 0",
+  "darkred": "_harness/_reports/integ2_client_ver1_darkred18.txt; overlay _harness/_shots/integ2_client_ver1_darkred18_overlay.png",
+  "e2e_all": "_harness/_reports/integ2_client_ver1_e2e_all.json: PASS 7/7 (flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, store)",
+  "e2e_store": "_harness/_reports/integ2_client_ver1_e2e_store.json: PASS (short path with top-up)",
+  "e2e_practice": "_harness/_reports/integ2_client_ver1_practice.json: FAIL (practice_rift teleport step harness race; practice_bridge never loads)",
+  "sweep_720": "_harness/_reports/integ2_client_ver1_sweep.json: no failures (fast, 1280 and 1920)",
+  "live_probes": "_harness/_reports/integ2_client_ver1_{lot_1280,tp_probe,pr720,meter}.json (scripts beside them as integ2_client_ver1_*_probe.mjs); shots _harness/_shots/integ2_client_ver1_*",
+  "probes": "probe_session_flows 72/72, probe_sim_practice 39/39, probe_content_build 126/126, probe_content_ids 0 hits",
+  "sensitivity": "viewed every new image: 18 item icons (200/40/38 px), 6 repainted setup / team-buff icons, the full setup icon family; no hood, mask, face, blood, gear, clock hand, gem or rune"
+ }
+}
