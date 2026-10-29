@@ -1117,16 +1117,16 @@ def f_lisvel_attack_swing(v: int):
 
 @cue('f_lisvel_attack_hit', 'combat', T_HIT, HITW, variants=V3, **HTK)
 def f_lisvel_attack_hit(v: int):
-    """The arrow strikes: an ash 'thock' (a wood knock at 820 Hz) and the shaft quivering in the target (a 185 Hz
-    buzz shaking at 45 Hz)."""
+    """The arrow strikes: an ash 'thock' (a wood knock at 820 Hz) and the shaft quivering in the target (a 330 Hz
+    buzz shaking at 45 Hz: up where a laptop still plays it, so the quiver is the hit's signature on any speaker)."""
     r = R('f_lisvel_attack_hit', v=v)
     d = detune(v, 35)
     L = Layers(0.35)
     L.add(S.snap(r, 3000 * d, 1.5), 0.0, peak_db=-10)
     L.add(S.knock(r, 820 * d, 0.04, 5, 'wood'), 0.0, peak_db=0)
-    L.add(S.thump(0.12, 240 * d, 120, 0.01, 0.06, 1.4), 0.0, peak_db=-8)
+    L.add(S.thump(0.12, 300 * d, 180, 0.01, 0.06, 1.4), 0.0, peak_db=-8)
     n = ns(0.2)
-    q = O.sine(185 * d, n) * E.decay(n, 0.18, 0.002)
+    q = O.sine(330 * d, n) * E.decay(n, 0.18, 0.002)
     L.add(S.am(q, 45.0, 0.9), 0.006, peak_db=-2)
     return _fin(room(L.out(), 'tiny', wet=0.06), hp_hz=100, eq=SOFT_TOP)
 

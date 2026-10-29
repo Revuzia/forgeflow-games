@@ -52,7 +52,8 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              release) sit >= ID_MIN_DIST_DB apart by BOTH 1/3-octave measures: from ID_FROM_HZ (125 Hz) up over the
              round-robin-averaged spectrum (a laptop plays no sub band, so none carries identity), and the
              confusability of the closest pair of takes (STFT, 125 Hz - 16 kHz, re the strongest band, -40 dB floor:
-             the final review's measure); every fighter has its own ability impact (hit) and dash, shared with no one;
+             the final review's measure); every fighter has its own ability impact (hit, held to the same distance)
+             and dash, shared with no one;
              the kits' attack hits and ability hits lose <= LAPTOP_MAX_LU on a laptop and a physical fighter's attack
              hit has a contact (>= KIT_TRANSIENT_MIN); and every cue that can fire more than once a second (attacks,
              hits, ability hits, procs, FAST_ROLES) has >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
@@ -525,6 +526,7 @@ def impact_gate(contract: dict, ctrl: list[str], bound: dict) -> tuple[list[str]
 KIT_SLOTS = ('attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash')
 ID_SLOTS = ('attack_swing', 'attack_hit', 'ult_windup', 'ult_release')     # the sounds a player tells fighters apart by
 OWN_SLOTS = ('hit', 'dash')    # a fighter's own ability impact and dash: never shared, never the library's
+DIST_SLOTS = ID_SLOTS + ('hit',)   # … and the ability impact is told apart by ear like the attack and the ult
 ID_MIN_DIST_DB = 8.0     # 1/3-octave distance between two fighters' cues in the same identity slot, by BOTH measures:
 ID_FROM_HZ = 125.0       # … the bands from here up (a laptop speaker plays nothing below; sub bands cannot carry identity)
 CONFUSE_BANDS = 125.0 * 2.0 ** (np.arange(0, 22) / 3.0)   # … and per take, 125 Hz - 16 kHz (the final review's measure)
@@ -665,7 +667,7 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
         if c in unit_cues:
             fails.append(f"kits: {c} ({', '.join(us)}) is also a unit's ({', '.join(unit_cues[c])})")
     # identity distance per slot, by both measures
-    for s in ID_SLOTS:
+    for s in DIST_SLOTS:
         spec = {}
         for fid, k in resolved.items():
             if k[s] and k[s] in cues:
@@ -1011,7 +1013,7 @@ def print_gates(fails: list[str], rep: dict) -> None:
     print(f"  nearest dB per slot: 1/3-octave from {ID_FROM_HZ:g} Hz / confusability of the closest takes")
     for f, x in kr.get('fighters', {}).items():
         near = '  '.join(f"{s.replace('attack_', 'atk_').replace('ult_', 'u_')} {kr['nearest'].get(f'{f}.{s}', ['-', float('nan')])[1]:5.1f}"
-                         f"/{kr['nearestConfuse'].get(f'{f}.{s}', ['-', float('nan')])[1]:4.1f}" for s in ID_SLOTS)
+                         f"/{kr['nearestConfuse'].get(f'{f}.{s}', ['-', float('nan')])[1]:4.1f}" for s in DIST_SLOTS)
         lap = '/'.join(f"{kr['laptop'].get(f'f_{f}_{s}', float('nan')):.1f}" for s in ('attack_hit', 'hit'))
         ct = kr['contact'].get(f'f_{f}_attack_hit')
         print(f"  {f:9s} {x['kit']:2d}/{len(KIT_SLOTS)}  {near}  laptop hit/ability {lap} LU" + (f"  contact {ct[0]:.3f}" if ct else ''))

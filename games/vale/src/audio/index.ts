@@ -96,8 +96,8 @@
 //               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch;
 //               a wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where
 //               the area lands, the rest at the caster. hit is the fighter's own ability impact (every 'hit' of its
-//               abilities, before the ability's present.hitSfx), dash its own dash (a displacement, the sim's dash
-//               of a unit knocked airborne, keeps the generic one). death replaces the generic fall, passive is the
+//               abilities, before the ability's present.hitSfx), dash its own dash (a displacement, the 'dash' the sim
+//               emits for a unit in the tick it knocks it airborne, keeps the generic one). death replaces the generic fall, passive is the
 //               proc (see `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content
 //               has no cue for falls back to the catalog's present and then the generic set, as before. A cue's
 //               round-robin takes are picked at random but never the same take twice in a row
@@ -322,6 +322,8 @@ class Engine implements ValeAudioPort {
   private annT: ReturnType<typeof setTimeout> | undefined;
   /** entity → the sim time of its last damage dealt (a heal in that same tick to itself is vamp) */
   private readonly dealt = new Map<number, number>();
+  /** entity → the sim time it was last knocked airborne (its 'dash' in that tick is a displacement, not its own) */
+  private readonly knocked = new Map<number, number>();
   /** heal target entity → ctx time of its last voiced heal */
   private readonly healLast = new Map<number, number>();
   /** teams whose every fighter is down (a wipe, announced once until one of them is back) */
@@ -1225,6 +1227,7 @@ class Engine implements ValeAudioPort {
     const src = this.ent(e.src), dst = this.ent(e.dst);
     // before fog: whose damage this tick was (vamp), and a wipe (the HUD banners both whatever you can see)
     if (kind === 'damage' && typeof e.src === 'number') this.dealt.set(e.src, e.t as number);
+    if (kind === 'status' && e.status === 'airborne' && typeof e.dst === 'number') this.knocked.set(e.dst, e.t as number);
     if (kind === 'death' && e.kind === 'fighter' && dst) this.wipeCheck(dst.team, e.t as number);
     if (kind === 'respawn') {
       const p = this.client?.view.players.find((x) => x.player === e.player);
@@ -1327,8 +1330,9 @@ class Engine implements ValeAudioPort {
         this.procStats[r === 'none' ? 'unbound' : r]++;
         break;
       }
-      // a fighter's own dash (kit 'dash'); a displacement (the sim's dash of a unit knocked airborne) stays generic
-      case 'dash': this.cue((src?.statuses?.some((x) => x.kind === 'airborne') ? undefined : this.kit(src, 'dash')) ?? this.ev('dash'), at(src), 1, 0, aw); break;
+      // a fighter's own dash (kit 'dash'); a displacement (the sim knocks a unit airborne, then dashes it, in one tick)
+      // stays generic
+      case 'dash': this.cue((this.knocked.get(e.src as number) === e.t ? undefined : this.kit(src, 'dash')) ?? this.ev('dash'), at(src), 1, 0, aw); break;
       case 'blink': this.cue(this.ev('blink'), at(src), 1, 0, aw); break;
       case 'death': {
         const k = e.kind as string;

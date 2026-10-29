@@ -15,11 +15,13 @@ The identity pass (run on import, over the cues registered by kits_a / kits_b):
   contact  every PHYSICAL fighter's attack hit carries a contact transient (final parity AUD-4, the same floor as the
            library's physical hits): an escapement tick tuned into the fighter's own 2-6 kHz pair, its level solved
            so the first 30 ms after the onset hold CONTACT_SHARE of their power above 2 kHz.
-  voicing  VOICING gives an identity cue (attack swing / hit, ult wind-up / release, hit) its own band: a high-pass
-           (a small speaker's roll-off then costs it little: audio/build.py impact gate), a low-pass and up to two
-           peaking bands, chosen so every fighter sits >= 8 dB from every other fighter in the same slot by both
-           1/3-octave measures in audio/build.py's kit gate (from 125 Hz up, and the per-take 125 Hz - 16 kHz
-           confusability). The table was found by search over the shipped takes and is baked here as data.
+  voicing  VOICING gives an identity cue (attack swing / hit, ult wind-up / release, ability hit) its own band: a
+           4th-order high-pass (a small speaker's roll-off then costs a hit little: the kit gate's laptop check), a
+           low-pass and a peaking band, in one or two stages, chosen so every fighter sits >= 8 dB from every other
+           fighter in the same slot by both 1/3-octave measures in audio/build.py's kit gate (from 125 Hz up over the
+           averaged takes, and the closest pair of takes' 125 Hz - 16 kHz confusability) without pushing the
+           mastering limiter past its budget. The table was found by search over the takes (rendered and mastered) and
+           is baked here as data; the voicing runs before the contact, so the contact is always solved last.
 
 All original synthesis; every random choice is seeded from the cue id and take.
 """
@@ -149,25 +151,36 @@ def with_contact(x: np.ndarray, fid: str, v: int) -> np.ndarray:
     return norm(xs + b * t[None, :])
 
 
-def _voice(x: np.ndarray, vc: dict) -> np.ndarray:
-    fl = []
-    if vc.get('hp'):
-        fl += [F.highpass(vc['hp'], 0.5412), F.highpass(vc['hp'], 1.3066)]         # 4th order
-    if vc.get('lp'):
-        fl += [F.lowpass(vc['lp'], 0.5412), F.lowpass(vc['lp'], 1.3066)]
-    for f, g, q in vc.get('peaks', ()):
-        fl.append(F.peaking(f, g, q))
-    return norm(F.apply(np.atleast_2d(np.asarray(x, float)), fl)) if fl else x
+def _stages(vc) -> tuple:
+    return tuple(vc) if isinstance(vc, (list, tuple)) else ((vc,) if vc else ())
 
 
-# cue id → {'hp': Hz, 'lp': Hz, 'peaks': ((Hz, dB, Q), …)}: each identity cue's own band (see the module doc)
-VOICING: dict[str, dict] = {
+def _voice(x: np.ndarray, vc) -> np.ndarray:
+    """Apply a voicing (one stage, or a tuple of stages in order): 4th-order high- / low-pass, peaking bands."""
+    for st in _stages(vc):
+        fl = []
+        if st.get('hp'):
+            fl += [F.highpass(st['hp'], 0.5412), F.highpass(st['hp'], 1.3066)]         # 4th order
+        if st.get('lp'):
+            fl += [F.lowpass(st['lp'], 0.5412), F.lowpass(st['lp'], 1.3066)]
+        for f, g, q in st.get('peaks', ()):
+            fl.append(F.peaking(f, g, q))
+        if fl:
+            x = norm(F.apply(np.atleast_2d(np.asarray(x, float)), fl))
+    return x
+
+
+# cue id → {'hp': Hz, 'lp': Hz, 'peaks': ((Hz, dB, Q), …)} (or a tuple of such stages, applied in order): each identity
+# cue's own band (see the module doc). Found by a greedy search over the shipped takes: per pair below 9 dB, the voicing
+# (high-pass 150-800 Hz, low-pass 1.2-8 kHz, one ±6 / -9 dB peak at 315 Hz-5 kHz) that lifts that fighter's nearest
+# distance to >= 9.3 dB with the least change, a laptop's roll-off costing the hits <= 2.6 LU
+VOICING: dict[str, dict | tuple] = {
     'f_ardit_attack_hit': {'lp': 8000, 'peaks': ((500, 6.0, 1.4),)},
     'f_ardit_attack_swing': {'hp': 400, 'peaks': ((800, -9.0, 1.4),)},
-    'f_burdam_attack_hit': {'hp': 400, 'lp': 8000, 'peaks': ((3150, 6.0, 1.4),)},
+    'f_burdam_attack_hit': ({'hp': 400, 'lp': 8000, 'peaks': ((3150, 6.0, 1.4),)}, {'hp': 200, 'lp': 8000, 'peaks': ((5000, 6.0, 1.4),)}),
     'f_burdam_ult_release': {'hp': 150, 'lp': 5000, 'peaks': ((315, -9.0, 1.4),)},
     'f_burdam_ult_windup': {'hp': 400},
-    'f_dunsom_attack_hit': {'hp': 200},
+    'f_dunsom_attack_hit': ({'hp': 200}, {'lp': 1200, 'peaks': ((315, 6.0, 1.4),)}),
     'f_dunsom_ult_release': {'hp': 280, 'lp': 8000},
     'f_ervet_attack_hit': {'hp': 280},
     'f_ervet_attack_swing': {'lp': 1200},
@@ -175,11 +188,11 @@ VOICING: dict[str, dict] = {
     'f_hesmi_attack_hit': {'hp': 280, 'peaks': ((2000, 6.0, 1.4),)},
     'f_hesmi_ult_release': {'hp': 280, 'lp': 5000, 'peaks': ((315, -9.0, 1.4),)},
     'f_hesmi_ult_windup': {'peaks': ((1250, 6.0, 1.4),)},
-    'f_ilsheta_attack_hit': {'hp': 200, 'peaks': ((800, -9.0, 1.4),)},
+    'f_ilsheta_attack_hit': {'peaks': ((315, -9.0, 1.4),)},
     'f_ilsheta_attack_swing': {'peaks': ((2000, 6.0, 1.4),)},
     'f_ilsheta_ult_windup': {'peaks': ((315, 6.0, 1.4),)},
     'f_kemdo_ult_release': {'hp': 280},
-    'f_lisvel_attack_hit': {'hp': 800},
+    'f_lisvel_attack_hit': {'hp': 400, 'lp': 5000, 'peaks': ((1250, -9.0, 1.4),)},
     'f_lisvel_ult_windup': {'peaks': ((3150, 6.0, 1.4),)},
     'f_marund_attack_hit': {'hp': 400},
     'f_marund_attack_swing': {'peaks': ((500, -9.0, 1.4),)},
@@ -191,12 +204,39 @@ VOICING: dict[str, dict] = {
     'f_tunlan_attack_hit': {'peaks': ((1250, 6.0, 1.4),)},
     'f_tunlan_attack_swing': {'hp': 400, 'peaks': ((2000, -9.0, 1.4),)},
     'f_tunlan_ult_release': {'peaks': ((3150, -9.0, 1.4),)},
-    'f_ulkro_attack_hit': {'hp': 800, 'peaks': ((500, -9.0, 1.4),)},
+    'f_ulkro_attack_hit': {'hp': 200, 'lp': 3200, 'peaks': ((800, -9.0, 1.4),)},
     'f_ulkro_attack_swing': {'lp': 8000, 'peaks': ((5000, 6.0, 1.4),)},
     'f_ulkro_ult_release': {'peaks': ((5000, 6.0, 1.4),)},
     'f_ulkro_ult_windup': {'hp': 400, 'lp': 8000, 'peaks': ((1250, 6.0, 1.4),)},
     'f_vashil_attack_swing': {'peaks': ((500, 6.0, 1.4),)},
     'f_vashil_ult_release': {'hp': 280, 'peaks': ((315, 6.0, 1.4),)},
+    'f_ardit_hit': {'hp': 400, 'lp': 1200, 'peaks': ((500, 6.0, 1.4),)},
+    'f_burdam_hit': {'hp': 400},
+    'f_dunsom_hit': {'peaks': ((1250, -9.0, 1.4),)},
+    'f_ervet_hit': {'hp': 280},
+    'f_hesmi_hit': {'hp': 800},
+    'f_ilsheta_hit': {'lp': 8000, 'peaks': ((800, -9.0, 1.4),)},
+    'f_marund_hit': {'hp': 280, 'peaks': ((1250, -9.0, 1.4),)},
+    'f_odrum_hit': {'hp': 800, 'lp': 5000, 'peaks': ((800, -9.0, 1.4),)},
+    'f_sukri_hit': {'peaks': ((800, -9.0, 1.4),)},
+    'f_tunlan_hit': {'lp': 8000, 'peaks': ((315, -9.0, 1.4),)},
+    'f_ulkro_hit': {'hp': 400, 'peaks': ((3150, -9.0, 1.4),)},
+    'f_vashil_hit': {'hp': 800, 'lp': 3200, 'peaks': ((1250, 6.0, 1.4),)},
+}
+
+# the ability impact's base: the attack hit as first voiced when the impacts' own voicings were found (kept fixed here, so a
+# later change to an attack hit's VOICING does not move its fighter's impact)
+HIT_BASE: dict[str, dict] = {
+    'ardit': {'lp': 8000, 'peaks': ((500, 6.0, 1.4),)},
+    'burdam': {'hp': 400, 'lp': 8000, 'peaks': ((3150, 6.0, 1.4),)},
+    'dunsom': {'hp': 200},
+    'ervet': {'hp': 280},
+    'hesmi': {'hp': 280, 'peaks': ((2000, 6.0, 1.4),)},
+    'ilsheta': {'hp': 200, 'peaks': ((800, -9.0, 1.4),)},
+    'lisvel': {'hp': 800},
+    'marund': {'hp': 400},
+    'tunlan': {'peaks': ((1250, 6.0, 1.4),)},
+    'ulkro': {'hp': 800, 'peaks': ((500, -9.0, 1.4),)},
 }
 
 _ORIG: dict[str, object] = {}
@@ -225,7 +265,7 @@ def _make_hit(fid: str):
     @cue(cid, 'combat', T_IMP, IMPW, variants=V3, **IMPK)
     def recipe(v: int):
         ah = f'f_{fid}_attack_hit'
-        base = _lower(_voice(_ORIG[ah](v), VOICING.get(ah, {})), 2 ** (2 / 12))   # the auto's material, a whole tone down
+        base = _lower(_voice(_ORIG[ah](v), HIT_BASE.get(fid)), 2 ** (2 / 12))     # the auto's material, a whole tone down
         L = Layers(0.7)
         L.add(base, 0.0, peak_db=-2)
         L.add(_sig(fid, v, 0.5), 0.003, peak_db=-1)

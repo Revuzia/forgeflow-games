@@ -20,6 +20,10 @@
 //   K4  a fighter WITHOUT a kit keeps its catalog / generic cues (attack → its present.sfx, ult cast → present.sfx
 //       or the castUlt role) and requests no f_* kit cue but its passive
 //   K5  fighterCall(id): true and f_<id>_call for a kitted fighter, false and silent for one without a call
+//   K6  a kitted fighter's ability landing ('hit' from its abilities) → f_<id>_hit; its own dash (a 'dash' event the
+//       sim emits for a dash effect, the one carrying the effect's vfx key) → f_<id>_dash; a displacement (the sim's
+//       dash of a unit knocked airborne) keeps the generic events.dash and no kit dash
+//   K7  round-robin never repeats a take back to back: no cue with >= 2 files plays the same file twice in a row
 // Exit 0 = K1-K5 hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_kits.json.
 
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
@@ -35,7 +39,7 @@ const MINUTES = Number(arg('--minutes', 10));
 // four seeds: 16 kits rotate through 10 seats a run, and the bots cast some a3s rarely (dunsom, ulkro, vashil)
 const SEEDS = arg('--seeds', '3,5,7,9').split(',').map(Number);
 const MODES = arg('--modes', 'rift,fray').split(',');
-const SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call'];
+const SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash'];
 
 // ── a minimal fake WebAudio + DOM (the engine only builds a graph and starts sources) ─────────────────────
 class Param { constructor(v) { this.value = v; } setTargetAtTime(v) { this.value = v; } cancelScheduledValues() {} }
@@ -172,6 +176,7 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
   const eng = createAudioEngine({ catalog: { ...catalog, audio }, assetUrl: (r) => r, settings: SETTINGS });
   eng.listener(() => { if (!cur) return null; const s = view.entity(cur.dst ?? cur.src ?? cur.id); return s ? { x: s.x, y: s.y } : null; });
   const files = {};                                        // cue → file → fetches
+  const lastFile = {}, repeats = {};                       // K7: cue → its last fetched file; cue → back-to-back repeats
   eng.buffer = (file) => ({ then: (f) => { f({ duration: DUR[file] ?? 1, length: 48000, sampleRate: 48000 }); return { catch() {} }; } });
   eng.ensure();
   eng.seen = () => true; eng.seenAt = () => true;          // fog lifted: the cue CHOICE is under test
@@ -192,7 +197,11 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
   const origBuffer = eng.buffer;
   eng.buffer = function (file) {
     const c = fileCue.get(file);
-    if (c) ((files[c] ??= {})[file] = (files[c]?.[file] ?? 0) + 1);
+    if (c) {
+      ((files[c] ??= {})[file] = (files[c]?.[file] ?? 0) + 1);
+      if (audio.cues[c].files.length > 1 && lastFile[c] === file) repeats[c] = (repeats[c] ?? 0) + 1;
+      lastFile[c] = file;
+    }
     return origBuffer.call(this, file);
   };
   const origOn = eng.onEvent;
@@ -260,6 +269,27 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
         const want = fdef.get(f)?.kit?.ult?.present?.sfx ?? audio.events.castUlt;
         if (!got.includes(want) || got.some((c) => c.startsWith('f_'))) failures.push(`K4 ${run}: ${f} (no kit) ult cast → ${got.join(',')} (want ${want})`);
       }
+    } else if (e.e === 'hit') {
+      const f = fighterOf(e.src);
+      if (!f || !kitted.includes(f)) continue;
+      const got = asked(e);
+      const ok = got.includes(`f_${f}_hit`);
+      tally(f, 'hit', ok);
+      if (!ok) miss.push(`${f} ability hit (${e.ability}) → ${got.join(',') || 'nothing'}`);
+    } else if (e.e === 'dash') {
+      const f = fighterOf(e.src);
+      if (!f) continue;
+      const got = asked(e);
+      if ('vfx' in e) {                                     // its own dash effect
+        if (!kitted.includes(f)) continue;
+        const ok = got.includes(`f_${f}_dash`);
+        tally(f, 'dash', ok);
+        if (!ok) miss.push(`${f} dash → ${got.join(',') || 'nothing'}`);
+      } else {                                              // knocked through the air: not its dash
+        const ok = got.includes(audio.events.dash) && !got.some((c) => /^f_.+_dash$/.test(c));
+        tally(f, 'displaced', ok);
+        if (!ok) miss.push(`${f} displaced → ${got.join(',') || 'nothing'} (want ${audio.events.dash})`);
+      }
     } else if (e.e === 'death' && e.kind === 'fighter') {
       const f = fighterOf(e.dst);
       if (!f) continue;
@@ -298,24 +328,29 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
     rr[c] = { plays, files: used3, of: audio.cues[c].files.length };
     if (plays >= 9 && used3 < 3) failures.push(`K3 ${run}: ${c} played ${plays}x but fetched only ${used3} of its files`);
   }
-  if (miss.length) failures.push(`K1 ${run}: ${miss.length} kitted event(s) missed their kit cue: ${miss.slice(0, 8).join(' · ')}`);
-  report.modes[run] = { simSeconds: +view.time.toFixed(1), seats: seats.map((s) => s.fighter), perFighter: per, releases: rel, releaseLagS: timing, roundRobin: rr };
+  if (miss.length) failures.push(`K1/K6 ${run}: ${miss.length} kitted event(s) missed their kit cue: ${miss.slice(0, 8).join(' · ')}`);
+  const rep7 = Object.entries(repeats);
+  if (rep7.length) failures.push(`K7 ${run}: back-to-back repeats of a take: ${rep7.slice(0, 8).map(([c, n]) => `${c}×${n}`).join(', ')}`);
+  const multi = Object.keys(lastFile).length;
+  report.modes[run] = { simSeconds: +view.time.toFixed(1), seats: seats.map((s) => s.fighter), perFighter: per, releases: rel, releaseLagS: timing, roundRobin: rr,
+    backToBackRepeats: repeats, multiFileCuesPlayed: multi };
   console.log(`${run}: ${view.time.toFixed(0)} s, seats ${seats.map((s) => s.fighter).join(' ')}`);
   for (const [f, r] of Object.entries(per)) console.log(`  ${f.padEnd(8)} ${Object.entries(r).map(([k, v]) => `${k} ${v.ok}/${v.n}`).join(' · ')}`);
   console.log(`  ult releases: sim ${rel.sim}, matched ${rel.matched}, orphan requests ${rel.orphanAsks}; lag after wind-up (s): ${[...new Set(timing)].join(' ') || '-'}`);
+  console.log(`  K7: ${multi} cues played, back-to-back repeats of a take: ${Object.values(repeats).reduce((a, b) => a + b, 0)}`);
 }
 
 // coverage: every kitted fighter attacked, hit and cast a1-a3 (across the modes); every slot exercised by someone
 const cover = {};
 for (const m of Object.values(report.modes)) for (const [f, r] of Object.entries(m.perFighter)) for (const [k, v] of Object.entries(r)) ((cover[f] ??= {})[k] = (cover[f]?.[k] ?? 0) + v.n);
 for (const f of kitted) for (const k of ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3']) if (!cover[f]?.[k]) failures.push(`coverage: ${f} never exercised ${k} (vacuous)`);
-for (const k of ['ult_windup', 'ult_release', 'death']) if (!kitted.some((f) => cover[f]?.[k])) failures.push(`coverage: no kitted fighter exercised ${k} (vacuous)`);
+for (const k of ['ult_windup', 'ult_release', 'death', 'hit', 'dash']) if (!kitted.some((f) => cover[f]?.[k])) failures.push(`coverage: no kitted fighter exercised ${k} (vacuous)`);
 report.coverage = cover;
 report.k4 = bare.length ? 'checked' : 'vacuous: every fighter has a whole kit (nobody falls back)';
 report.failures = failures;
 report.pass = failures.length === 0;
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(report, null, 1));
-console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : `PASS: every kitted fighter (${kitted.length}) sounds its own kit (attacks, hits, casts, wind-ups, releases on the sim's commit, deaths); round-robin in use; ${bare.length ? 'fighters without a kit keep their catalog cues' : 'every fighter has a kit (K4 has nobody to check)'}; the lock-in call resolves`);
+console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : `PASS: every kitted fighter (${kitted.length}) sounds its own kit (attacks, hits, casts, wind-ups, releases on the sim's commit, deaths, ability impacts, dashes); round-robin in use, no take twice in a row; ${bare.length ? 'fighters without a kit keep their catalog cues' : 'every fighter has a kit (K4 has nobody to check)'}; the lock-in call resolves`);
 console.log(`report → ${OUT}`);
 process.exit(failures.length ? 1 : 0);
