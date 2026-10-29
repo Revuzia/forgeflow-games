@@ -22176,13 +22176,22 @@
           0.05
         ],
         "life": 0.3,
-        "color": "team",
+        "color": [
+          [
+            0,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
+        ],
         "alpha": [
           1,
           0.8,
           0
         ],
-        "emissive": 2.0,
+        "emissive": 2.6,
         "sharp": 1.6,
         "noise": 0.35,
         "blend": "add"
@@ -34041,11 +34050,11 @@
           ],
           [
             0.12,
-            "signature"
+            "secondary"
           ],
           [
             1.0,
-            "signature"
+            "secondary"
           ]
         ],
         "alpha": [
@@ -58117,7 +58126,7 @@
           0
         ],
         "life": 0.5,
-        "color": "signature",
+        "color": "secondary",
         "alpha": [
           [
             0,
@@ -66774,11 +66783,11 @@
           ],
           [
             0.12,
-            "signature"
+            "secondary"
           ],
           [
             1.0,
-            "signature"
+            "secondary"
           ]
         ],
         "alpha": [

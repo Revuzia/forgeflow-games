@@ -4,8 +4,8 @@
   "skin": true,
   "parts": {
     "tris_hood": 1550,
-    "tris_eyeband": 520,
-    "tris_eyeslit": 60,
+    "tris_eyeband": 518,
+    "tris_eyeslit": 58,
     "tris_facewrap": 650,
     "tris_mantle": 1850,
     "tris_pauldron_R": 438,
@@ -19,7 +19,7 @@
     "tris_shinguard_L": 380,
     "tris_straps_R": 684,
     "tris_straps_L": 680,
-    "tris_boots": 948,
+    "tris_boots": 950,
     "tris_forearms": 560,
     "tris_gauntlet_R": 480,
     "tris_gauntlet_L": 480,
@@ -34,38 +34,38 @@
     "tris_shard_lo_R": 400,
     "tris_brace": 380,
     "tris_inlays": 60,
-    "validate_hesmi": "19830->19826"
+    "validate_hesmi": "19828->19824"
   },
-  "uv_coverage": 0.607,
+  "uv_coverage": 0.596,
   "bake": {
-    "base": 3.41,
-    "rough_metal": 3.16,
-    "normal": 1.86,
-    "ao": 2.99,
-    "normal_fixed_px": 36405,
-    "projection": 12.86,
-    "pack_save": 13.0,
-    "total": 24.65
+    "base": 32.97,
+    "rough_metal": 7.61,
+    "normal": 8.43,
+    "ao": 13.58,
+    "normal_fixed_px": 33218,
+    "projection": 87.26,
+    "pack_save": 89.58,
+    "total": 154.22
   },
-  "tris": 19886,
+  "tris": 19884,
   "mesh_top_m": 2.301,
-  "glb_bytes_raw": 2416516,
+  "glb_bytes_raw": 2461256,
   "optimize": {
     "ok": true,
-    "before": 2416516,
-    "after": 1019772
+    "before": 2461256,
+    "after": 1041308
   },
-  "glb_bytes": 1019772,
+  "glb_bytes": 1041308,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_shadeprint.glb (996 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_shadeprint_base 2048x2048 274K, hesmi_shadeprint_normal 512x512 40K, hesmi_shadeprint_orm 512x512 69K",
-      "  skinned meshes: hesmi_accent(120v), hesmi_shadeprint(17571v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_shadeprint.glb (1017 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_shadeprint_base 2048x2048 290K, hesmi_shadeprint_normal 512x512 41K, hesmi_shadeprint_orm 512x512 72K",
+      "  skinned meshes: hesmi_accent(120v), hesmi_shadeprint(17627v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19886; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 19884; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -75,8 +75,8 @@
       "portrait": "art/out/fighters/hesmi/hesmi_shadeprint_portrait.png"
     },
     "seconds": {
-      "splash": 8.41,
-      "portrait": 2.62
+      "splash": 23.5,
+      "portrait": 16.09
     }
   },
   "three_qa": {
@@ -108,24 +108,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/hesmi/three_hesmi_shadeprint.png",
-    "seconds": 6.9,
+    "seconds": 20.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.35,
-      "model": 11.54,
-      "lows_bind": 7.86,
-      "uv": 4.04,
-      "bake": 24.65,
-      "export": 0.05,
-      "optimize": 0.45,
-      "load_test": 0.1,
-      "render": 11.06,
-      "three_qa": 7.11
+      "materials": 0.32,
+      "model": 30.88,
+      "lows_bind": 30.83,
+      "uv": 27.29,
+      "bake": 154.25,
+      "export": 0.81,
+      "optimize": 5.42,
+      "load_test": 0.54,
+      "render": 39.75,
+      "three_qa": 21.18
     },
-    "total_s": 67.33
+    "total_s": 311.66
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22

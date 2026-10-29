@@ -38,14 +38,14 @@
   },
   "uv_coverage": 0.691,
   "bake": {
-    "base": 8.77,
-    "rough_metal": 6.81,
-    "normal": 3.13,
-    "ao": 3.43,
+    "base": 3.67,
+    "rough_metal": 3.71,
+    "normal": 1.75,
+    "ao": 1.91,
     "normal_fixed_px": 21306,
-    "projection": 31.98,
-    "pack_save": 39.83,
-    "total": 64.06
+    "projection": 24.14,
+    "pack_save": 26.94,
+    "total": 38.28
   },
   "tris": 3970,
   "mesh_top_m": 1.715,
@@ -153,18 +153,18 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 836736,
+  "glb_bytes_raw": 835484,
   "optimize": {
     "ok": true,
-    "before": 838376,
-    "after": 326528
+    "before": 837124,
+    "after": 326168
   },
-  "glb_bytes": 326528,
+  "glb_bytes": 326168,
   "three_load_test": {
     "ok": true,
     "log": [
       "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/brightwick_serenade.glb (319 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: brightwick_serenade_base 1024x1024 69K, brightwick_serenade_normal 256x256 15K, brightwick_serenade_orm 256x256 8K",
+      "  webp: brightwick_serenade_base 1024x1024 68K, brightwick_serenade_normal 256x256 15K, brightwick_serenade_orm 256x256 8K",
       "  skinned meshes: brightwick_serenade(3654v), brightwick_serenade_accent_1(33v), brightwick_serenade_accent_2(51v), brightwick_serenade_accent_3(354v)",
       "  bones: 25 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR x_hem_1)",
       "  clips: attack1:1.000s/22tr, attack2:0.333s/21tr, cast_a1:0.333s/21tr, cast_a2:0.333s/21tr, cast_a3:0.333s/21tr, cast_ult:0.333s/21tr, channel:0.200s/21tr, dash:0.200s/21tr, death:1.600s/24tr, idle:3.000s/21tr, idle_lobby:0.200s/21tr, recall:0.200s/21tr, run:0.600s/23tr, stunned:0.200s/21tr, victory:0.200s/21tr",
@@ -203,26 +203,25 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_brightwick_serenade.png",
-    "seconds": 25.2,
-    "exit": 0,
-    "clip_sheet": "art/renders/units/three_clips_brightwick_serenade.png"
+    "seconds": 10.2,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 1.05,
-      "model": 22.9,
-      "lows_bind": 0.16,
-      "uv": 28.17,
-      "bake": 64.06,
-      "clips": 1.07,
-      "export": 2.13,
-      "optimize": 0.94,
-      "load_test": 0.3,
-      "three_qa": 55.38,
-      "cache": 0.09
+      "materials": 0.27,
+      "model": 12.28,
+      "lows_bind": 0.13,
+      "uv": 18.23,
+      "bake": 38.29,
+      "clips": 0.51,
+      "export": 0.71,
+      "optimize": 0.75,
+      "load_test": 0.26,
+      "three_qa": 10.47,
+      "cache": 0.05
     },
-    "total_s": 176.33
+    "total_s": 82.08
   },
   "run_ref_speed": 3.3,
   "height_m": 1.6

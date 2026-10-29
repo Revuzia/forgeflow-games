@@ -607,6 +607,11 @@ export class TeamBrain {
       const deep = progress(l, this.team, s) / l.length;
       if (deep > 0.6) continue;
       const hpF = (f.hp + f.shield) / Math.max(1, f.maxHp);
+      // (a gank is two on one: our laner beside it, or a target already hurt — and no second enemy fighter beside it)
+      if (!laner && hpF > 0.5) continue;
+      let pair = 0;
+      for (const g of this.perc.enemyFighters) if (g !== f && g.alive && sq(g.x - f.x) + sq(g.y - f.y) <= 10 * 10) pair++;
+      if (pair > (laner ? 1 : 0)) continue;
       const score = (0.62 - deep) * 3 + (1 - hpF) + (laner ? 0.35 * (laner.hp / Math.max(1, laner.maxHp)) : 0);
       if (score > best) { best = score; this.gank = f; this.gankLane = lane; }
     }

@@ -1517,7 +1517,9 @@ def hammer_aubade(L, out):
 AUB_LANT = dict(hw=0.285, hd=0.165, z_base=0.915, z_pane=(0.950, 1.420), z_cap=1.452, z_eave=1.472, z_ridge=1.535,
                 post=0.026, eave=0.032,
                 # (closing GW-1) the light as odd narrow slits behind thick mullions (lantern_aubade)
-                slit_x=(-0.150, 0.0, 0.150), slit_a=0.021, slit_b=0.62, mullion_x=(-0.075, 0.075), mullion_hw=0.017)
+                # (build 2: slit_a 0.021 -> 0.025, slit_b 0.62 -> 0.66: the accent back to the brief's 5 % band, 4.7 % with
+                # the first slits; still ~6:1 tall)
+                slit_x=(-0.150, 0.0, 0.150), slit_a=0.025, slit_b=0.66, mullion_x=(-0.075, 0.075), mullion_hw=0.017)
 AUB_FRAME = dict(x=0.19, z_waist=0.50, z_yoke=0.72, r=0.024)
 
 
@@ -2132,7 +2134,10 @@ def hammer_serenade(L, out, body):
 # core_b x its half height): the eight round cores of fix round 6 showed two equal round lights side by side under the
 # domed lid at the headings that put a post on the view axis (a capped head with two eyes; the Wick no-face rule).
 SER_DRUM = dict(R=0.362, R_core=0.328, R_pane=0.310, R_in=0.285, sy=0.62, z_lo=(0.985, 1.076), z_win=(1.076, 1.318),
-                z_up=(1.318, 1.398), z_lid=1.478, n=12, post_hw=0.028, straps=4, chamfer=0.013, core_a=0.40, core_b=0.78)
+                z_up=(1.318, 1.398), z_lid=1.478, n=12, post_hw=0.028, straps=4, chamfer=0.013,
+                # (build 2: core_a 0.40 -> 0.52, core_b 0.78 -> 0.88: the accent 3.9 % -> the brief's 5 % band; the front
+                # slit 5.9 x 21 cm, apparent aspect >= 2.1 from the 52-degree camera)
+                core_a=0.52, core_b=0.88)
 
 
 def drum_windows(c, Rc, sy, n, post_hw, depth):

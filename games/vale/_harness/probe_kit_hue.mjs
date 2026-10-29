@@ -238,6 +238,8 @@ for (const bEntries of batches) {
           const ok = [r.pc, r.pv].every((id) => W.entity(id)?.alive);
           return { ...r, ok };
         }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist, fid, slot });
+        // the caster's spot at the cast: a blink or a dash leaves its origin light behind, inside the box too
+        st.c0 = await B((b, a) => b.__h(a.pc), st);
         await B((b, a) => {
           // a slot that never targets an enemy (a lamp hung on an ally or herself) is cast on the caster
           b.renderer.vfx.clear(); b.__evs.length = 0; b.__variant = a.variant;
@@ -247,7 +249,7 @@ for (const bEntries of batches) {
         for (let f = 1; f <= rel + WIN; f++) {
           await B((b, a) => { b.__step(1); b.__freshen([a.pc, a.pv]); }, st);
           if (f >= rel + 1 && (f - rel) % 3 === 1) {
-            const m = await B((b, a) => { const c = b.__h(a.pc), w = b.__h(a.pv); return b.__vfxHue({ x0: Math.min(c.gx, w.gx) - 220, y0: Math.min(c.ty, w.ty) - 120, x1: Math.max(c.gx, w.gx) + 220, y1: Math.max(c.gy, w.gy) + 120 }, a.sh); }, { ...st, sh });
+            const m = await B((b, a) => { const c = b.__h(a.pc), w = b.__h(a.pv), o = a.c0; return b.__vfxHue({ x0: Math.min(c.gx, w.gx, o.gx) - 220, y0: Math.min(c.ty, w.ty, o.ty) - 120, x1: Math.max(c.gx, w.gx, o.gx) + 220, y1: Math.max(c.gy, w.gy, o.gy) + 120 }, a.sh); }, { ...st, sh });
             for (const k of ['A', 'n', 'sat', 'sigN', 'harmN', 'whiteN']) integ[k] += m[k];
             integ.samples++; integ.per.push([f - rel, Math.round(m.A), m.sig]);
             if (m.n > best.n) {

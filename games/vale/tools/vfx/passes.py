@@ -60,6 +60,7 @@ def _refs(v) -> list[str]:
 
 def signature_pass(d: dict) -> dict:
     to_sig = lambda c: "signature" if c == "team" else c  # noqa: E731
+    to_comp = lambda c: companion if c == "team" else c  # noqa: E731
     for l in d["layers"]:
         t = l["type"]
         if t in ("shockwave", "ring", "decal", "feel", "bind"):
@@ -281,6 +282,8 @@ COLOR_KEYS = ("color", "rim", "edge", "core")
 # a signature too dark to register as light on its own (Dunsom's indigo, relative luminance ~0.05): its light layers
 # open on the pale same-hue companion and settle into the signature (the reviewer's indigo column, lavender coil)
 DARK_SIG = {"dunsom"}
+# a pure movement (Dunsom's Step Through Dusk: a blink, no area, no harm) carries no danger keyline: all its light is his
+NO_KEYLINE = {"dunsom_a3_step"}
 # surface marks whose pale colour, painted over the lane, reads as off-hue light: tinted toward the fighter
 SURFACE_TINT = {"marund_a3_mortar": {"#C9C3B5": "#A8CDBE"}}
 
@@ -317,10 +320,13 @@ def light_pass(d: dict) -> dict:
     sig_hex = sg["sig"]
     companion = "secondary" if sg["secPale"] else "signature"
     to_sig = lambda c: "signature" if c == "team" else c  # noqa: E731
+    to_comp = lambda c: companion if c == "team" else c  # noqa: E731
     # the one keyline: the brightest team-coloured (additive) shockwave, else the first ground-ring edge in team
     waves = [l for l in d["layers"] if l["type"] in ("shockwave", "ring") and l.get("blend") != "ink" and _team_in(l.get("color"))]
     key = max(waves, key=lambda l: l.get("emissive") if isinstance(l.get("emissive"), (int, float)) else 0) if waves else None
-    if key is None:
+    if i in NO_KEYLINE:
+        key = False
+    elif key is None:
         key = next((l for l in d["layers"] if l["type"] == "decal" and l.get("rim") == "team"), None)
         if key is not None and isinstance(key.get("emissive"), (int, float)) and key["emissive"] > 0.8:
             key["emissive"] = 0.8   # a ground-ring keyline is a glint, not a light floor
@@ -333,7 +339,11 @@ def light_pass(d: dict) -> dict:
             if l is key and ((k == "color" and key["type"] != "decal") or (k == "rim" and key["type"] == "decal")):
                 continue
             if _team_in(l[k]):
-                l[k] = _map_colors(l[k], to_sig)
+                # an ultimate's short light floor under the impact (a team decal, emissive >= 2, <= 0.5 s: the ground core
+                # of the beat) takes the pale companion, so a dark signature still lights the ground (r12 M13 core)
+                floor = l["type"] == "decal" and k == "color" and float(l.get("life") or 1) <= 0.5 and \
+                    max(x[1] for x in (_curve_keys(l.get("emissive", 0)) or [[0, 0]])) >= 2
+                l[k] = _map_colors(l[k], to_comp if floor else to_sig)
         if l is key and key["type"] != "decal":
             e = l.get("emissive")
             if isinstance(e, (int, float)) and e > 2.0:

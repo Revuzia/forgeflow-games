@@ -11,6 +11,42 @@ shipped skin GLB (art/out/fighters/<id>/<skin>.glb: the skin's own meshes, baked
 binds its meshes to the cached rig and renders <skin>_portrait.png / <skin>_splash.png:
 
     python3 art/build.py portraits <id> --skins [--no-base] [--skin <skin>] --only splash,portrait
+
+PER-SKIN CARD STAGING (closing review, CW5 cards pipeline; CW6 stages its fighters the same way)
+Every card (the base and each skin) gets its own splash moment, camera and light, and its portrait derives from it.
+The staging is a module-level literal in the fighter's script, art/blender/fighters/<id>.py (a plain dict literal:
+plates.py reads it with ast, without bpy, so no names or expressions in it):
+
+    CARDS = {
+        "<id>": {                                   # the base card; a skin's key is its skin id
+            "splash": {
+                "clip": "victory", "t": 0.92,       # the moment: a shipped clip and its time (0..1)
+                "yaw": 30.0, "pitch": -6.0,         # camera bearing (deg, + = toward the fighter's left) and pitch
+                "lens": 55.0, "fill": 0.88, "x": 0.71,   # framing: subject height / frame, its centre across (16:9)
+                "key_az": 205.0, "key_el": 22.0,    # the plate-sun key, view-relative (180 = behind the camera)
+                "key_color": "#FFD9B0", "sun": 3.0, # its colour (else the plate's dusk key) and strength (3 = map)
+                "rim_cool": 1.2, "rim_warm": 0.8,   # the rim pair (x the plate's own weights)
+                "bounce": 0.6, "bounce_color": "#E2B48A",       # floor bounce (x 400 W), 0 = none
+                "focal": [{"at": "x_halo", "az": 160.0, "el": 35.0, "dist": 0.8, "color": "#FFE0B0",
+                           "power": 90.0, "size": 0.3}],        # focal lights: an area light aimed at a bone
+                "accent": 1.6,                      # x the accent emission for this card (lit bells, a hot core)
+                "exposure": -0.5,                   # EV of the subject pass (render.CARD_EXPOSURE by default)
+                "samples": 128},                    # render.CARD_SAMPLES by default
+            "portrait": {"yaw": 28.0},              # the bust: the splash's clip / t / light, then these keys
+                                                    # (clip, t, yaw, any light key; pitch / lens / fill / x only
+                                                    # when the fighter's own wrappers do not key off them)
+            "plate": {"src": "aubade_dawn", "glow": [0.2, 0.6, 0.4, 0.1], "median": 0.30},   # plates.params keys
+        },
+    }
+
+An image with no CARDS entry renders as before (the shared SPLASH, the idle_lobby portrait). Every card render
+(staged or not) now: renders the subject at 2x the card's pixels (render.CARD_SS) with 128 samples and Cycles'
+OpenImageDenoise (albedo + normal guides, CPU), reduced premultiplied; exposes it CARD_EXPOSURE (-0.5 EV) so a pale
+kit keeps highlight headroom; the composite (plates.finish) brushes the subject with the plate's Kuwahara at radius
+sub_paint_r (1 px at 1600) and expands its top 5 % so its p99.7 reaches display 0.93 (sub_hi: highlights at luma
+>= 230 after the LUT); the shadow catcher keeps the contact shadow. Measure the cards with
+    python3 art/tools/card_qa.py <id> [...] --out _harness/_reports/<name>.txt
+(grain: figure vs plate blocks; highlights p99.9 >= 230; figure-box MAD of each skin vs its base >= 30; framing).
 """
 import glob
 import importlib.util

@@ -54,6 +54,7 @@ SHAPE = body.shape(girth=1.1, torso_w=1.16, torso_d=1.1, chest=1.16, waist=1.0, 
 ## 3. Face (template 3)
 
 - **Hourless wrap and hood.** A deep rigid hood (`kit.hood`) and a layered face wrap (`cloth2`) over the nose and jaw. Across the eyes sits a carved honed-dialstone eye-band (0.20 m wide, 0.06 m tall, 3 cm bevels) with a narrow ink slit: the "mask" of the Hourless, which keeps the face unseen and gives a facing cue (the band's lower edge is a 4 cm keel pointing forward).
+- **The eyes read alive (CW6, closing hesmi-M1).** The slit is the concept's wide, continuous dark visor: two eye openings (3.5-36° each side of a narrow plain bridge, 3 cm tall at their widest). Its floor is two dark cool glass lenses (`dawnglass`, glossy, roughness 0.12, never emissive) with one painted cool catch-light each, both on the same side (one key light), so the eye line reads as someone looking out at 26-128 px. No joint, crack or painted stroke crosses an eye or the bridge: the band's block joints sit at ±44°, outside the eye span, and the band is painted clean (the projected concept's crack strokes read as tooth gaps). The band's upper rail is lit and its lower rail shaded (a stern brow); the hood's face cavity is lifted ~9 L* so the band never floats in a void.
 - No bare face, no hair; the hood never droops.
 
 ## 4. Armour, cloth and props (template 4)
@@ -69,18 +70,19 @@ Sockets (`art.json` `sockets`; the standard set stays exactly as in the content 
 
 ## 5. Palette (template 5)
 
-Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` roles). None of the reserved relationship hues (Dawn azure `#3F9CFF`, Dusk marigold `#FF9A1F`, Noonwhite `#F4EFE2`) dominates: every large-area colour is below 40% saturation inside the azure (200-225°) and marigold (25-50°) hue bands, and no large area is lighter than L* 86. The `accent` role is authored azure; the renderer tints it per viewer.
+Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` roles). **Material separation (CW6, closing hesmi-M2):** the honed stone and the linen must read as two materials at the game camera: stone vs `cloth2` at least dE 8 apart in engine (the stone cool, the linen warm cream; the hood crown, the brightest linen the camera sees, painted a step darker and warmer), the cut bands honed (ORM roughness 0.34 against the linen's 0.88, so the cut tops take a crisp sheen) with a chalk-bright 1.6 cm arris, a darker chisel face under the cut's bevel and fine tool striations; the hood's fold valleys deeper; the gauntlets a value step between their faces (lit front, darker sides and back, a lighter cut top) with pale chipped corners and honed faces (roughness 0.50, chipped corners 0.62). None of the reserved relationship hues (Dawn azure `#3F9CFF`, Dusk marigold `#FF9A1F`, Noonwhite `#F4EFE2`) dominates: every large-area colour is below 40% saturation inside the azure (200-225°) and marigold (25-50°) hue bands, and no large area is lighter than L* 86. The `accent` role is authored azure; the renderer tints it per viewer.
 
 | Role | Hex | L* | Hue / sat | Where it is used |
 |---|---|---|---|---|
 | `cloth2` | `#CEC8BB` | 81 | 41° / 9% | hood, face wrap, inner shoulder wraps |
-| `stone` | `#D3CEC3` | 83 | 41° / 8% | the honed cut bands of the three shards (top 0.30 m), the eye-band |
+| `stone` | `#CAD1DB` | 83 | 216° / 7% | the honed cut bands of the three shards (top 0.30 m), the eye-band: COOL against the warm linen (CW6) |
 | `cloth` | `#A39E95` | 65 | 39° / 9% | outer shoulder and chest wraps |
 | `ironstone` | `#4C4A53` | 32 | 253° / 11% | weathered shard bodies below the cut, toe caps, shin slabs, the cross brace trim |
 | `gauntlet` | `#8A867D` | 56 | 42° / 9% | honed-dialstone gauntlets |
 | `leather` | `#4A4036` | 28 | 30° / 27% | harness, belt, boots |
 | `under` | `#34323A` | 21 | 255° / 14% | wrapped trousers |
-| `ink` | `#17181B` | 8 | 225° / 15% | eye-band slit |
+| `ink` | `#17181B` | 8 | 225° / 15% | the pockets round the inlays |
+| `dawnglass` | `#151C25` → `#2B3846` | 11-23 | 215° | the two eye lenses (painted, glossy), catch-light `#DDEBF6` |
 | `accent` | `#3F9CFF` | 63 | 211° / 75% | the three cut-top inlays |
 
 
@@ -156,7 +158,7 @@ Value bands (area-weighted): top **73** (70-85) · mid **46** (45-65) · feet **
 
 *"Ink shards with light-rimmed edges over pale wraps; her shadows fall in deep violet."* `vfxTint` `#6C5BA8`.
 
-Ink shards (`#2B2A33`) with light-rimmed edges over pale wraps (`#B7B4BE`) above: the value gradient holds because the light sits on the rims and the upper body, and the ink sits low. `vfxTint` `#6C5BA8` (hue 253) tints her shadows (the Plant Shard strip and the great shadow) in deep violet; it is never albedo and never the accent. **Extra geometry:** none; the light rims are a painted 1 cm edge band on every shard bevel.
+Ink shards (`#2B2A33`) with light-rimmed edges over pale wraps (`#B7B4BE`) above: the value gradient holds because the light sits on the rims and the upper body, and the ink sits low. `vfxTint` `#6C5BA8` (hue 253) tints her shadows (the Plant Shard strip and the great shadow) in deep violet; it is never albedo and never the accent. **Extra geometry:** none; the light rims are a painted 2.6 cm edge band on every shard arris and bevel and on the gauntlets' bevels, with a lower roughness (0.30) so they catch the light at the game camera (CW6, closing hesmi-M4). **Violet shade (model side):** the painted shade (the dark values and the undersides) leans toward deep violet `#3A2C6E` (up to 45 %, value kept), so her own shadows are violet on the model too; the effect half (her shadow strips taking the skin tint) is the engine's (CW1 SKIN-FX).
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|

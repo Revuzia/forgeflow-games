@@ -6,7 +6,7 @@
 
 Brief: _design/fighters/vashil.md. Concept: _design/concept/vashil.webp (front + back, hand-painted).
 The forms are numpy SDF volumes (common/hifi/sdf.py) fitted to the concept on a 10 cm grid (the plates' scale is
-the painted halo top, 2.10 m: the hood peak stands at 1.945); the base colour is the concept painting projected
+the painted halo top, 2.10 m: the hood's rounded crown stands at 1.935); the base colour is the concept painting projected
 occlusion-aware onto the game mesh (common/hifi/project.py, wrapped below); normals and AO bake from the sculpt.
 
 Where the concept and the brief disagree:
@@ -15,7 +15,7 @@ Where the concept and the brief disagree:
     The rod is drawn longer than the painting's (top 1.78 m, painting 1.61: the brief's "long striking rod" reads
     beside the 2 m figure), its glass striker a faceted block like the painting's.
   * the brief's hook wins on size: the halo ring is 0.80 m across (the painting's is ~0.62), 2.035 m high, floating
-    9 cm over the hood's peak, the seven dawnglass bells hung from it at (i + 0.5) * 360/7 degrees from the front (the
+    9 cm over the hood's crown, the seven dawnglass bells hung from it at (i + 0.5) * 360/7 degrees from the front (the
     front stays clear over the visor), three clasps mark the front (one) and the back (two).
   * the bell clappers are the only accent and the only emissive (brief §7 / §11, fix pass 1: the striker core, a ring
     inlay and clasp windows went beyond the brief; fix pass 2: the wrist bell's drop is plain glass): faceted crystal
@@ -90,7 +90,7 @@ def fist_frame(C, a, f, out):
 
 
 # ── rig fitted to the concept (plates: 661 px/m, the halo top 2.10) ────────────────────────────────────
-# crown of the skull in the hood 1.90 (hood peak 1.945), skull base 1.642, neck base 1.582, shoulders x 0.22 at 1.472,
+# crown of the skull in the hood 1.90 (the hood's rounded top 1.935), skull base 1.642, neck base 1.582, shoulders x 0.22 at 1.472,
 # hips x 0.10 at 0.98, ankles x 0.18 at 0.09; the left arm hangs (fist at 0.85), the right is re-seated (rig_extras)
 PROPORTIONS = rig.proportions(height=1.90, head=0.30, neck=0.06, shoulder_width=0.44, hip_width=0.20, leg=0.8936,
                               thigh_frac=0.50, arm=0.55, upper_arm_frac=0.52, hand=0.18, foot=0.27,
@@ -216,6 +216,50 @@ SKINS: list = [
 ]
 SKIN_FLAT: dict = {}
 
+# CARDS (closing review VAS-M3 / CW5 cards pipeline, schema: art/blender/portraits.py): each card its own beat from his
+# own clip set, its own camera and light; each portrait derives from its card's staging.
+#   base        the victory finger raised as the ring catches the low sun (dawn key low from the front-left, warm
+#               light on the halo, every clapper lit), a low three-quarter, the bust at the brief's 28 degrees
+#   Chalkline   the taunt's rod tap on the ring under ink-dark night light (a cold moon key from the camera's right,
+#               a strong cool rim, a cold glint on the rod head and ring), a higher, longer lens, more profile
+#   First Bell  the ult's grounded toll (the striker held on the ground, the back bent over it) with every bell lit:
+#               a warm first-light key, gold light on the halo, the clappers hot, the struck ground bouncing warm
+CARDS = {
+    "vashil": {
+        "splash": {"clip": "victory", "t": 0.92, "yaw": 31.0, "pitch": -7.0, "lens": 52.0, "fill": 0.88, "x": 0.71,
+                   "key_az": 212.0, "key_el": 20.0, "key_color": "#FFD7A8", "sun": 3.3, "rim_cool": 1.3,
+                   "rim_warm": 0.7, "bounce": 0.55, "bounce_color": "#E8BC8C", "accent": 1.6,
+                   "focal": [{"at": "x_halo", "off": [0.0, 0.0, -0.04], "az": 205.0, "el": 30.0, "dist": 0.9,
+                              "color": "#FFD9A0", "power": 70.0, "size": 0.35},
+                             {"at": "head", "az": 200.0, "el": 12.0, "dist": 0.8, "color": "#FFE6CC", "power": 22.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 28.0},
+    },
+    "vashil_chalkline": {
+        "splash": {"clip": "taunt", "t": 0.40, "yaw": 42.0, "pitch": 3.0, "lens": 68.0, "fill": 0.86, "x": 0.72,
+                   "key_az": 140.0, "key_el": 38.0, "key_color": "#C7D4F2", "sun": 2.4, "rim_cool": 2.0,
+                   "rim_warm": 0.35, "bounce": 0.2, "bounce_color": "#8C9CC0", "accent": 1.3, "exposure": -0.4,
+                   "focal": [{"at": "x_rod_head", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#E4EEFF",
+                              "power": 55.0, "size": 0.2},
+                             {"at": "head", "az": 150.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 36.0},
+        "plate": {"tint": "#8E9CCB", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
+                  "glow_color": "#B8C6EC"},
+    },
+    "vashil_first_bell": {
+        "splash": {"clip": "cast_ult", "t": 0.56, "yaw": 16.0, "pitch": -9.0, "lens": 46.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 235.0, "key_el": 32.0, "key_color": "#FFE4B5", "sun": 3.4, "rim_cool": 0.9,
+                   "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C48E", "accent": 2.4,
+                   "focal": [{"at": "x_halo", "off": [0.0, 0.0, -0.05], "az": 180.0, "el": 45.0, "dist": 1.0,
+                              "color": "#FFD48A", "power": 110.0, "size": 0.4},
+                             {"at": "x_rod_head", "az": 190.0, "el": 10.0, "dist": 0.6, "color": "#FFE2B0",
+                              "power": 40.0, "size": 0.25}]},
+        "portrait": {"yaw": 20.0, "t": 0.29},
+        "plate": {"glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
+    },
+}
+
 HEIGHT = 2.10             # the painted halo top (the projection plates' scale)
 PROJECTION = {"concept": "vashil", "height": HEIGHT}
 NOISE = sdf.Noise(15)
@@ -256,21 +300,22 @@ def smax(a, b, k):
     return b * (1 - h) + a * h + k * h * (1 - h)
 
 
-def hood_shape(P, front=1.940, back=1.815, W0=0.108, inset=0.0):
-    """The soft cowl (fix pass 1: the arch was extruded straight back, a flat-topped box from the side and above).
-    In front the hood keeps the concept's pointed bell-window outline round the visor; behind the rim its ridge
-    falls in an S-curve to the back of the skull and the pointed arch turns into a round one, the cheeks bulge a
-    little at ear height and the whole volume is rounded by a skull-sized ellipsoid, so the top-back the game
-    camera sees is a low rounded cowl with a soft point, not a stovepipe."""
+def hood_shape(P, front=1.955, back=1.840, W0=0.126, inset=0.0):
+    """The ROUNDED COWL (closing review VAS-B1, owner ruling 7: no peaked hood from any side). Fix pass 1 made the
+    cowl a soft shape whose front rim rose to a pointed bell-window arch: from behind at the game camera it read as a
+    pale peak (crown fit radius 7 cm). Now the rim in front is a ROUND arch (the pointed bell-window stays on the
+    visor frame, inside the rim), its ridge eases down toward the back of the skull, the cheeks bulge a little at ear
+    height, and one skull-wide dome (an ellipsoid 0.356 x 0.39 x 0.40 m) sets the whole crown, so the top is a
+    rounded cap from every side: fit radius ~15 cm at 3 cm under the top, ~21 cm wide 5 cm under it."""
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
-    t = ss(-0.05, 0.20, y)
-    zp = front - (front - back) * t - inset
-    W = W0 + 0.010 * t + 0.016 * np.exp(-((z - 1.70) / 0.09) ** 2) * ss(-0.10, 0.02, y) - inset
-    h = np.maximum(0.152 * (1 - t) + W * 1.04 * t, W * 1.02)
+    t = ss(-0.06, 0.22, y)
+    zp = front - (front - back) * t ** 1.6 - inset
+    W = W0 + 0.008 * t + 0.016 * np.exp(-((z - 1.70) / 0.09) ** 2) * ss(-0.10, 0.02, y) - inset
+    h = W                                                  # a round arch (h = W: a half circle on the spring line)
     r = 0.014
     a = arch_d(x, z, zp - h, W - r, zp - r) - r
-    E = (np.sqrt((x / 0.165) ** 2 + ((y - 0.040) / (0.176 - inset)) ** 2 + ((z - 1.70) / (0.29 - inset)) ** 2) - 1.0) * 0.165
-    return smax(a, E, 0.035)
+    E = (np.sqrt((x / 0.178) ** 2 + ((y - 0.030) / (0.195 - inset)) ** 2 + ((z - 1.75) / (0.20 - inset)) ** 2) - 1.0) * 0.178
+    return smax(a, E, 0.05)
 
 
 def folds_ang(amp, n, c=(0.0, 0.02), zfade=None, phase=0.0):
@@ -312,6 +357,11 @@ def wraps(amp, pitch, a, b):
         return -amp * (ss(0.0, 0.18, ph) - ss(0.70, 1.0, ph)) + amp * 0.5
     return fn
 
+
+STOLE_T = 0.010            # the stole's thickness over the cowl (m)
+STOLE_Y0, STOLE_YK = 0.075, 0.9   # its front edge: y > STOLE_Y0 + STOLE_YK x^2 (a yoke across the back)
+STOLE_HEX = "#414955"      # slate-blue woven cloth (the ironstone family: the dark break, L* ~30)
+STOLE_SKIN = {"vashil_first_bell": "#46403A"}   # First Bell's warm charcoal (its panel / sash family)
 
 LAME_R, LAME_T = 0.140, 0.017
 # per lame: the tile cylinder's axis (x out from the midline, z), its angular span (degrees: 0 = straight out, 90 = up)
@@ -397,10 +447,10 @@ def sculpts(n_bells: int = 7) -> list:
     def part(name, S, role, bind, tris, vs=1.0, uvw=1.0):
         out.append((name, S, vs, role, bind, tris, uvw))
 
-    # HOOD (the head, the lower rim blending to the neck): a soft cowl, the pointed bell-window outline in front
-    # (0.28 m wide, peak 1.94), its ridge falling round the skull to the back (hood_shape)
+    # HOOD (the head, the lower rim blending to the neck): a rounded cowl, a round-arched rim in front (0.29 m wide,
+    # top 1.935) round the pointed visor frame, the dome easing down round the skull to the back (hood_shape)
     hood = Sculpt("hood")
-    hood.add(Fn(hood_shape, (-0.17, -0.15, 1.55), (0.17, 0.23, 1.96)).displaced(cloth_noise(0.003, 9.0), 0.003), k=0.0)
+    hood.add(Fn(hood_shape, (-0.18, -0.16, 1.55), (0.18, 0.24, 1.99)).displaced(cloth_noise(0.003, 9.0), 0.003), k=0.0)
     hood.add(Ellipsoid((0.0, 0.05, 1.625), (0.152, 0.16, 0.090)), k=0.05)                            # the flare
     # a soft fold where the cowl's ridge turns down the back of the head (the concept's back view)
     hood.add(Tube([(0.0, 0.17, 1.80), (0.0, 0.205, 1.70), (0.0, 0.215, 1.60)], [0.012, 0.016, 0.012], k=0.01), k=0.03)
@@ -469,6 +519,21 @@ def sculpts(n_bells: int = 7) -> list:
     cowl.ops = [(op, prim.displaced(cloth_noise(0.0035, 8.0), 0.0035) if op == "add" else prim, k, tg)
                 for op, prim, k, tg in cowl.ops]
     part("cowl", cowl, "cloth2", ("weights", "cowl"), 1500, uvw=1.2)
+
+    # STOLE (closing review VAS-B1: the pale cowl over the pale robe read as one pale peak from behind): a dark
+    # slate-blue woven stole lies over the cowl's back, from under the hood's rim across the back of the shoulders
+    # (a yoke) and down the drape to its point, 1 cm proud of the cloth. From behind and three-quarter behind the
+    # pale dome now sits on a dark collar, a separate round shape; from the front it is hidden under the hood.
+    cowl_b = sdf.Blend([(op, prim, k) for op, prim, k, _tg in cowl.ops])
+
+    def stole_d(P):
+        d = cowl_b.d(P)
+        shell = np.maximum(d - STOLE_T, -d - 0.004)
+        region = np.maximum(STOLE_Y0 + STOLE_YK * P[:, 0] ** 2 - P[:, 1], P[:, 2] - 1.665)
+        return smax(shell, region, 0.004)
+    stole = Sculpt("stole")
+    stole.add(Fn(stole_d, (-0.32, 0.03, 1.30), (0.32, 0.30, 1.70)), k=0.0)
+    part("stole", stole, "ironstone", ("weights", "cowl"), 420, 0.6, uvw=1.0)
 
     # PAULDRONS: three stepped stone lames per shoulder like roof tiles (curved slabs over the shoulder, each lower one
     # further out; rigid on the shoulder, the lower ones toward the upper arm)
@@ -987,7 +1052,7 @@ _pipeline.bind_part = _bind_part
 
 # ── paint (project.paint wrapper) ──────────────────────────────────────────────────────────────────────
 PROC = ("halo_ring", "halo_clasps", "bells", "bell_hooks", "clapper_stems", "rod_shaft", "rod_grip", "rod_collar",
-        "striker", "wrist_cord", "wrist_bell", "wrist_clapper", "visor_glass")
+        "striker", "wrist_cord", "wrist_bell", "wrist_clapper", "visor_glass", "stole")
 BACK_MATCH = 0.9           # how far each part's back projection moves onto its front's painted colour
 # z / 2.0 -> linear gain (fix pass 1: steeper at the feet, the light-head / dark-feet read was soft; fix pass 2: the
 # bottom quarter of the silhouette still measured L* 39 on the rest render (target 20-35): the lower robe from the
@@ -1374,6 +1439,13 @@ def _wood_paint(p, n):
     return c * (1 - heel) + shoe * heel
 
 
+def _stole_paint(p, n):
+    """the stole: slate-blue woven cloth, a fine horizontal weave and soft fold shade, its top faces a touch lit"""
+    c = _lin(_hex(STOLE_HEX))[None, :] * (1 + 0.10 * _fbm(p, 24.0) + 0.04 * np.sin(p[:, 2] * 380.0))[:, None]
+    k = (1 + 0.12 * ss(0.2, 0.9, n[:, 2])) * (1 - 0.18 * ss(-0.1, -0.7, n[:, 2]))
+    return c * k[:, None]
+
+
 def _leather_paint(p, n, hexc="#4A4440"):
     return _lin(_hex(hexc))[None, :] * (1 + 0.15 * _fbm(p, 40.0))[:, None]
 
@@ -1447,7 +1519,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         "rod_collar": lambda pp, nn: _stone_paint(pp, nn, "#CFC9BA", 0.08), "striker": _striker_paint,
         "wrist_cord": lambda pp, nn: _leather_paint(pp, nn, "#4A4038"), "wrist_bell": None,
         "wrist_clapper": lambda pp, nn: _stone_paint(pp, nn, "#7F98AD", 0.08),           # pale glass (not the accent)
-        "visor_glass": _visor_paint,
+        "visor_glass": _visor_paint, "stole": _stole_paint,
     }
     for name, fn in procs.items():
         m = sel(name)
@@ -1816,6 +1888,9 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             rest = np.clip(1 - wsum, 0, 1)[:, None]
             c = acc + c * rest
         P = Pm[m]
+        if nm == "stole" and sid in STOLE_SKIN:
+            c = _shift(c, STOLE_SKIN[sid], STOLE_HEX)
+            log(f"  vashil recolour stole -> {STOLE_SKIN[sid]}")
         if sid == "vashil_chalkline":
             cov = _linework(P, nm)
             if cov.any():

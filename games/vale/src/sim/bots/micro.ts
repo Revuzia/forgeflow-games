@@ -102,6 +102,7 @@ export abstract class BotBase {
   readonly noticed = new Map<number, number>();
   private noticedVer = -1;
   private readonly teleSeen = new Map<number, Stimulus>();
+  private readonly castRoll = new Map<string, Stimulus>();
   private readonly projSeen = new Map<number, Stimulus>();
   private stimCleanAt = 0;
   dodgeUntil = -1; dodgeX = 0; dodgeY = 0;
@@ -206,6 +207,7 @@ export abstract class BotBase {
     if (now >= this.stimCleanAt) {
       this.stimCleanAt = now + 3;
       for (const [id, s] of this.teleSeen) if (now - s.seen > 6) this.teleSeen.delete(id);
+      for (const [id, s] of this.castRoll) if (now - s.seen > 6) this.castRoll.delete(id);
       for (const [id, s] of this.projSeen) if (now - s.seen > 6) this.projSeen.delete(id);
     }
     if (this.dodgeUntil > now) {
@@ -214,13 +216,23 @@ export abstract class BotBase {
     }
     const ms = Math.max(0.5, e.stats.moveSpeed);
     const myR = e.radius + 0.2;
-    // telegraphs (delayed areas)
-    for (const t of this.m.telegraphs) {
+    // telegraphs (delayed areas), and the same areas read from their caster's windup (CW3 critic bot-micro: a cast time
+    // earlier; one roll per cast — the area it becomes keeps the windup's decision)
+    const wu = this.m.windups, tg = this.m.telegraphs;
+    for (let i = 0; i < wu.length + tg.length; i++) {
+      const t = i < wu.length ? wu[i] : tg[i - wu.length];
       if (t.srcTeam === this.team) continue;
-      if (t.visibility === 'ally_only' || !this.w.vision.seen(this.team, t.x, t.y)) continue;
+      if (i < wu.length) { const c = this.w.entity(t.src); if (!c || (c.visibleMask & this.perc.bit) === 0) continue; }
+      else if (t.visibility === 'ally_only' || !this.w.vision.seen(this.team, t.x, t.y)) continue;
       if (!inTelegraph(t, e.x, e.y, myR)) continue;
+      const key = `${t.src}:${t.ability}`;
       let st = this.teleSeen.get(t.id);
-      if (!st) { st = { notice: t.at + this.reaction(), dodge: this.rng.chance(this.diff.dodgeChance), seen: now }; this.teleSeen.set(t.id, st); }
+      if (!st) {
+        const prior = this.castRoll.get(key);
+        st = prior && now - prior.seen < 3 ? prior : { notice: t.at + this.reaction(), dodge: this.rng.chance(this.diff.dodgeChance), seen: now };
+        this.teleSeen.set(t.id, st);
+        if (i < wu.length) this.castRoll.set(key, st);
+      }
       if (!st.dodge || now < st.notice) continue;
       const left = t.resolveAt - now;
       if (left <= 0) continue;
@@ -489,7 +501,7 @@ export abstract class BotBase {
     const pureExecute = (u & U_EXECUTE) && !(u & (U_DAMAGE | U_POKE | U_CC | U_ENGAGE | U_ZONE));
     // (CW3 CL-1: committed to a kill — an all-in, a gank, or a target this low — an area that wants several targets is
     // spent on one: the kill is the point, not the second body)
-    const need = ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam' || tF < 0.45) ? 1 : info.minTargets;
+    const need = (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < 0.45) ? 1 : info.minTargets;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;
@@ -529,8 +541,10 @@ export abstract class BotBase {
         return true;
       }
       default: {
-        // self-anchored areas (and none-targeted effects): the target must be inside
-        const r = info.radius > 0 ? info.radius : info.reach;
+        // self-anchored areas (and none-targeted effects): the target must be inside — a stance or form (a buff on me)
+        // fights at my attack range (CW3 CL-1: a 1.5 m self circle kept a marksman's run-and-shoot ult for melee range)
+        let r = info.radius > 0 ? info.radius : info.reach;
+        if ((u & U_BUFF) && (info.tk === 'self' || info.tk === 'none')) r = Math.max(r, this.prof.attackRange + 1.5);
         if (d > r + t.radius * 0.8) return false;
         if (need > 1 && this.countIn(e.x, e.y, r, true, false) < need) return false;
         this.cast(s, info, t, e.x, e.y);

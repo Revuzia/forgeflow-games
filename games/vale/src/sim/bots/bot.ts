@@ -256,14 +256,17 @@ export class Bot extends BotBase implements BotController {
   }
 
   /** a laner may roam: level 3 (a lampglass 2), its lane opponent dead or seen recalling, its own wave on the road
-   *  and the enemy's thinned, and no roam in the last LANE_ROAM_EVERY s (CW3 CL-1) */
+   *  and the enemy's thinned, and no roam in the last LANE_ROAM_EVERY s (CW3 CL-1); a lampglass roams from a shoved
+   *  road whatever its opponents do — its carry keeps the road (and its Wicks' light) alone meanwhile */
   private laneRoamWindow(): boolean {
     const e = this.e, li = this.lane;
     if (li < 0 || e.level < (this.support ? 2 : 3) || this.now - this.lastRoamAt < LANE_ROAM_EVERY) return false;
+    const pushed = this.perc.ownN[li] >= 2 && this.perc.enemyN[li] <= 2;
+    if (this.support && pushed && this.hpF > 0.6) return true;
     const foe = this.laneFoe >= 0 ? this.w.entity(this.laneFoe) : null;
     if (!foe || (foe.alive && this.now - this.foeRecallAt > 9)) return false;
     if (foe.alive && this.isNoticed(foe) && this.dist2(foe, e.x, e.y) < 30 * 30) return false;
-    return this.perc.ownN[li] >= 2 && this.perc.enemyN[li] <= 2;
+    return pushed;
   }
 
   /** a ready ability that holds its target (stun, root, sleep...) */
@@ -433,6 +436,11 @@ export class Bot extends BotBase implements BotController {
     const kt = this.killTarget;
     if (kt && hpF > 0.3 && (this.towerSafe(kt.x, kt.y, 0) || (kt.hp < kt.maxHp * 0.2 && hpF > 0.6))) {
       consider('allin', 0.7 + Math.min(0.2, (this.killMargin - 1) * 0.2) - (lastLife && this.killMargin < 1.5 ? 0.15 : 0));
+    } else if (kind === 'rift' && le && !this.jungle && (this.mode === 'trade' || this.mode === 'allin') && hpF > 0.5 && this.towerSafe(le.x, le.y, 0)) {
+      // (CW3 CL-1: a trade I am winning — its health well under mine and below half, nobody of theirs beside it — is pressed
+      // into an all-in instead of a step back: that is where laning kills come from)
+      const leF = (le.hp + le.shield) / Math.max(1, le.maxHp);
+      if (leF < 0.5 && hpF - leF >= 0.2 && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
     }
     // teamfight (laning: two against two is a lane, not a fight — join only one that has started)
     if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42 && (!lp || this.nearE + this.nearA >= 5 || this.fightOn())) {

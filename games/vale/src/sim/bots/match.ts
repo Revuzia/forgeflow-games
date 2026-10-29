@@ -13,7 +13,7 @@ import { ranked } from '../effects.ts';
 import { SLOT_INDEX } from '../entity.ts';
 import type { World } from '../world.ts';
 import type { Entity } from '../entity.ts';
-import type { Knowledge, StructInfo } from './knowledge.ts';
+import { abilityInfo, U_DAMAGE, type Knowledge, type StructInfo } from './knowledge.ts';
 import { IncomingIndex, rebuildPerception, TeamPerc, telegraphFromEvent, type Telegraph } from './perception.ts';
 import { TEAM_THINK_TICKS, TeamBrain } from './team.ts';
 import { teamDifficulty } from './difficulty.ts';
@@ -26,12 +26,16 @@ export class BotMatch {
   brains: (TeamBrain | null)[] = [];
   readonly incoming = new IncomingIndex();
   telegraphs: Telegraph[] = [];
+  /** delayed areas read from a caster's windup (a point-targeted circle that will land at the cast's aim): visible as
+   *  soon as the cast starts, a cast time before its `area` event (CW3 critic bot-micro: dodges read the windup) */
+  windups: Telegraph[] = [];
   /** enemy fighter → estimated time each of a1..ult is back (cast events seen by some team) */
   readonly castSeen = new Map<EntityId, Float64Array>();
   /** map structure id → when it last fell */
   readonly structDownAt = new Map<string, number>();
   /** Fray: bot seat → the seat it is hunting (caps dog-piles on one human) */
   readonly ffaTarget = new Map<PlayerId, PlayerId>();
+  private windupSeq = 0;
   private evArr: SimEvent[] | null = null;
   private evLen = 0;
   private visionTick = -1;
@@ -43,6 +47,7 @@ export class BotMatch {
     this.tick = -1;
     this.evArr = null; this.evLen = 0; this.visionTick = -1;
     this.telegraphs = [];
+    this.windups = [];
     this.castSeen.clear();
     this.ffaTarget.clear();
     this.structCache.clear();
@@ -82,6 +87,7 @@ export class BotMatch {
     this.evLen = w.events.length;
     const now = w.time;
     if (this.telegraphs.length > 0) this.telegraphs = this.telegraphs.filter((t) => t.resolveAt > now - 0.05);
+    if (this.windups.length > 0) this.windups = this.windups.filter((t) => t.resolveAt > now - 0.05);
     if (w.vision.lastUpdateTick !== this.visionTick || this.percs[0]?.version === 0) {
       this.visionTick = w.vision.lastUpdateTick;
       rebuildPerception(w, this.k, this.percs);
@@ -111,6 +117,14 @@ export class BotMatch {
           if (si === undefined || si > 3) break;
           const s = src.slots[si];
           if (!s) break;
+          // (a point-targeted delayed circle: where it lands is readable from the windup)
+          const info = abilityInfo(s.def);
+          if (ev.castTime > 0.05 && info.tk === 'point' && info.delivery === 'area' && info.delay > 0.05 && info.radius > 0 && ((info.use & U_DAMAGE) !== 0 || info.cc)) {
+            const dx = ev.x - src.x, dy = ev.y - src.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+            const k = info.range > 0 && d > info.range ? info.range / d : 1;
+            this.windups.push({ id: -(++this.windupSeq), src: src.id, srcTeam: src.team, ability: s.def.id, x: src.x + dx * k, y: src.y + dy * k, dirX: dx / d, dirY: dy / d,
+              kind: 'circle', radius: info.radius, inner: 0, half: Math.PI, length: 0, width: 0, at: ev.t, resolveAt: ev.t + ev.castTime + info.delay, visibility: 'everyone' });
+          }
           let arrT = this.castSeen.get(src.id);
           if (!arrT) { arrT = new Float64Array(4); this.castSeen.set(src.id, arrT); }
           // what an observer knows: the ability's listed cooldown at a rank its level allows

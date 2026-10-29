@@ -553,3 +553,11 @@ renders `art/renders/units/*brightwick*`.
   under it) - no eyes above it now; the Serenade opening from 52 deg is a dark arch wider than tall (the 52 deg
   foreshortening of a 19 x 23 cm arch), under its brow roll; a faint lit facet on the upper inner wall in the three QA
   close-up (hidden by the brow from 52 deg).
+
+## Closing CW4 (r12 M8 value half) — 2026-10-29
+- Measured in game with the new `_harness/probe_wick_sweep.mjs` (`hood` part: class pass, hood = body pixels skinned
+  mostly to the head joint, display L* top quarter, RIFT High t~990): brightwick Aubade 65.2, Serenade 66.7 against the
+  65 cap (every other Wick 57.7-62.5; fighters 82.7). PART_HEX only (no geometry, no clip change): Aubade hood #7E878F ->
+  #7B848C, chalk circlet #8C887F -> #858178, rim #928E85 -> #8B877E (-1 / -2.7 / -2.7 L*); Serenade felt hood
+  #9A846A -> #917C64, cap #93806A -> #8B7964 (-3.2 / -2.8 L*). Rebuilt both: 3961 / 3970 tris (unchanged), accent 5.96 %
+  both (unchanged), three load test + QA OK. Re-measure: _harness/_reports/fw_CW4_final_wick_sweep.json.

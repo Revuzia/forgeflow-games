@@ -53,7 +53,9 @@ SHAPE = body.shape(girth=0.92, torso_w=0.92, torso_d=0.92, chest=0.94, waist=0.8
 
 ## 3. Face (template 3)
 
-- **Aubade glass visor.** An arch-shaped dawnglass pane (`kit.glass_visor`), 0.22 m tall and 0.12 m wide with a pointed top like a bell window, over a carved chalk face-plate and ink recesses. The arch's point is the beak and the facing cue from above. A chalk cowl covers the crown under the halo; no bare face, no hair.
+- **Aubade glass visor.** An arch-shaped dawnglass pane (`kit.glass_visor`), 0.22 m tall and 0.12 m wide with a pointed top like a bell window, over a carved chalk face-plate and ink recesses. The arch's point is the beak and the facing cue from above. A **rounded cowl** in chalk covers the crown under the halo; no bare face, no hair.
+- **Rounded cowl (closing review VAS-B1, owner ruling 7).** The pointed bell-window outline belongs to the visor frame only, inside the cowl's rim. The cowl itself is a round dome from every side: its front rim is a round arch, and one skull-wide dome sets the crown (`hood_shape`). Gate: `node art/tools/crown_gate.mjs art/out/fighters/vashil` gives a crown fit radius of at least 12 cm at 3 cm under the top, and at least 19 cm wide 5 cm under it, on every skin. No peak may read from behind or three-quarter behind at the 28.5 m gameplay camera.
+- **The dark break: the stole.** A dark slate-blue woven stole (`#414955`, L* about 30) lies over the back of the cowl. It runs as a yoke across the back of the shoulders from under the hood's rim and down the drape to its point, 1 cm proud of the cloth. From behind, the pale dome sits on a dark collar and reads as a separate round shape; from the front it is hidden under the hood. First Bell recolours it to its warm charcoal (`#46403A`). Chalkline keeps the slate, which sits on its ink robe.
 - The halo's lowest bell hangs 0.10 m above the visor so the pane is never covered in the portrait.
 
 ## 4. Armour, cloth and props (template 4)
@@ -174,8 +176,12 @@ Value bands (area-weighted): top **78** (70-85) · mid **63** (45-65) · feet **
 
 ## 10-11. Export and renders
 
-- Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}`. The halo catches the low sun from behind-left with every bell lit; the raised finger is on the camera side.
-- Portrait (512 square, `idle_lobby` t 0, yaw 28): the arched visor, the lowest bells and the chalk ring. Icon (128 square): the arched visor under the ring with two bells.
+- Cards (closing review VAS-M3): every card has its own staging in `CARDS` (vashil.py; schema in art/blender/portraits.py), and each portrait derives from its card's staging.
+  - Base splash: `victory` t 0.92, yaw 31, a low three-quarter. The raised finger is on the camera side as the ring catches the low sun: a dawn key low from the front-left, warm light on the halo, every clapper lit. Portrait: the same moment at yaw 28.
+  - Chalkline splash: `taunt` t 0.40, the rod tapping the ring, yaw 42, a higher and longer lens. Ink-dark night light: a cold moon key from the camera's right, a strong cool rim, a cold glint on the rod head and ring. Portrait: yaw 36.
+  - First Bell splash: `cast_ult` t 0.56, the grounded toll with the striker held on the ground, yaw 16, low. Every bell is lit: a warm first-light key, gold light on the halo, the clappers hot, the struck ground bouncing warm. Portrait: the ult's raised rod (t 0.29) at yaw 20.
+  - Render: the subject at 2x with 128 samples and OpenImageDenoise, highlights to luma 230 or more. Measure with `python3 art/tools/card_qa.py vashil`.
+- Icon (128 square): the arched visor under the ring with two bells.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 
 ## Per-fighter checks (on top of the template checklist)

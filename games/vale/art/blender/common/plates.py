@@ -583,8 +583,9 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
     SPLASH "post" switch), the LUT."""
     h, w = fg.shape[:2]
     pl = plate(p, kind, w, h)
-    fg, _k = subject_grade(fg.astype(np.float32), p, kind)
-    fg = paint_over(fg, int(round(float(p.get("sub_paint_r", 0)) * (w / 1600.0 if kind == "splash" else w / 512.0))))
+    fg = paint_over(fg.astype(np.float32),
+                    int(round(float(p.get("sub_paint_r", 0)) * (w / 1600.0 if kind == "splash" else w / 512.0))))
+    fg, _k = subject_grade(fg, p, kind)
     comp = splash_post(fg, pl, post * float(p["post"] if kind == "splash" else p["post_p"]))
     L = lut()
     if L is not None:

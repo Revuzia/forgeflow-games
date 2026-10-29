@@ -6,11 +6,12 @@
 //           in place, every other unit hidden), each in BOTH relationship tints (the viewer's team flipped), cropped at
 //           1:1 display px and blown up 3×. An eye-pair detector runs on each 1× crop: the lit pixels of the tint hue
 //           (HSV S >= 0.40, V >= 0.55, hue within 30° of the tint) as 8-connected blobs; a FLAGGED pair is two blobs of
-//           >= 5 px, area ratio <= 1.7, both round (bbox aspect <= 2.0, >= 55 % of the bbox filled), side by side (centre
-//           dy <= 0.5 × their mean height, centre dx 1.5-4.5 × their mean width: closer is one lamp split by a bar) with
-//           no third comparable blob (>= 0.4 × the smaller) in the same row or within one pair span of the middle, and
-//           fewer than two within 2.5 spans (a ring or row of lamps): a lone pair of equal round lights, the thing a face
-//           reads from. Flags are for review, not a verdict; every sheet is looked at.
+//           >= 5 px, area ratio <= 1.7, both round (bbox aspect <= 2.0, >= 45 % of the bbox filled), side by side (centre
+//           dy <= 0.5 × their mean height, centre dx 1.5-4.5 × their mean width: closer is one lamp split by a bar), no
+//           third comparable blob (>= 0.5 × the smaller) in the same row, fewer than two equal round lamps continuing
+//           the spacing (a ring or chain of lamps): a lone pair of equal round lights, the thing a face reads from.
+//           Tuned to stay SENSITIVE (it catches the GW-1 pair of the old Aubade lantern at 45°, 225° and 315°): flags are
+//           for review, not a verdict, and every sheet is looked at.
 //   lane    every live Greatwick on its own lane heading (no override), both tints, 1× and 3× crops (the HUD verifier's
 //           read: closing_hud_verify_04z_wicks_1x.png)
 //   hood    r12 M8 value half: a class pass (every material's fragment output replaced by an id; the crowd's own vertex
@@ -110,25 +111,24 @@ function install(HEAD) {
   };
   const pairsOf = (blobs) => {
     const big = blobs.filter((q) => q.n >= 5), out = [];
-    // round: a compact blob (bbox aspect <= 2.0 and >= 55 % of its bbox filled: an ellipse fills 79 %, a diagonal
+    // round: a compact blob (bbox aspect <= 2.0 and >= 45 % of its bbox filled: an ellipse fills 79 %, a diagonal
     // stripe or an arc segment far less)
-    const round = (q) => Math.max(q.w, q.h) / Math.max(1, Math.min(q.w, q.h)) <= 2.0 && q.n / (q.w * q.h) >= 0.55;
+    const round = (q) => Math.max(q.w, q.h) / Math.max(1, Math.min(q.w, q.h)) <= 2.0 && q.n / (q.w * q.h) >= 0.45;
+    const sim = (q, X) => round(q) && Math.max(q.n, X.n) / Math.min(q.n, X.n) <= 1.7;
     for (let i = 0; i < big.length; i++) for (let j = i + 1; j < big.length; j++) {
       const A = big[i], B = big[j];
       if (Math.max(A.n, B.n) / Math.min(A.n, B.n) > 1.7 || !round(A) || !round(B)) continue;
       const mh = (A.h + B.h) / 2, mw = (A.w + B.w) / 2, dx = Math.abs(A.cx - B.cx), dy = Math.abs(A.cy - B.cy);
       // dx < 1.5 x their width: a gap under half a light wide, one lamp split by a cage bar or a mullion
       if (dy > 0.5 * mh || dx < 1.5 * mw || dx > 4.5 * mw) continue;
-      // a third comparable light in the same row, or anywhere within one pair span of the pair's middle, makes it a
-      // row or a cluster of lights (a lamp row, a studded circlet), not a pair
-      const lo = Math.min(A.cx, B.cx) - 1.5 * mw, hi = Math.max(A.cx, B.cx) + 1.5 * mw, cyy = (A.cy + B.cy) / 2, cxx = (A.cx + B.cx) / 2;
-      const comp = blobs.filter((q) => q !== A && q !== B && q.n >= 0.4 * Math.min(A.n, B.n));
-      const third = comp.some((q) => (Math.abs(q.cy - cyy) <= mh && q.cx >= lo && q.cx <= hi) || Math.hypot(q.cx - cxx, q.cy - cyy) <= dx);
-      // two or more comparable lights within 2.5 pair spans: a ring or a row of lamps (the Brightwick's ten-lamp
-      // circlet, a lantern's slits), never a lone pair
-      const ring = comp.filter((q) => Math.hypot(q.cx - cxx, q.cy - cyy) <= 2.5 * dx).length >= 2;
-      if (ring) continue;
-      if (third) continue;
+      const lo = Math.min(A.cx, B.cx) - 1.5 * mw, hi = Math.max(A.cx, B.cx) + 1.5 * mw, cyy = (A.cy + B.cy) / 2;
+      const comp = blobs.filter((q) => q !== A && q !== B && q.n >= 0.5 * Math.min(A.n, B.n));
+      // a third comparable light in the same row: a row of lights, not a pair
+      if (comp.some((q) => Math.abs(q.cy - cyy) <= mh && q.cx >= lo && q.cx <= hi)) continue;
+      // two or more equal round lamps continuing the pair's spacing from either member: a ring or chain of lamps
+      // (the Brightwick's ten-lamp circlet seen edge-on), not a lone pair
+      const chain = comp.filter((q) => sim(q, A) && (Math.hypot(q.cx - A.cx, q.cy - A.cy) <= 1.6 * dx || Math.hypot(q.cx - B.cx, q.cy - B.cy) <= 1.6 * dx)).length;
+      if (chain >= 2) continue;
       out.push({ a: A, b: B });
     }
     return out;

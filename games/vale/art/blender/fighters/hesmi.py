@@ -308,7 +308,7 @@ class Cyl(sdf.Prim):
 # bridge, the inner corners lower (the concept's stern eyes), instead of one straight slot
 # CW6 (closing hesmi-M1: the band read as clenched teeth): the openings are the concept's wide, continuous dark visor
 # (3.5-36 deg each side of a narrow bridge, 3 cm tall at their widest) and NO joint or crack crosses them: the block
-# joints sit outside the eye span (BAND_JOINTS), one short brow joint over the bridge stops at the slit's top edge
+# joints sit outside the eye span (BAND_JOINTS), the bridge between the eyes is plain stone
 BAND_C = (0.0, 0.005)
 EYE_Z, EYE_H, EYE_A = 2.113, 0.0150, (3.5, 36.0)     # the openings' centre height, half-height, angle span (deg)
 
@@ -882,10 +882,10 @@ STRAP_PARTS = ("straps_R", "straps_L")   # painted leather (paint_strap), never 
 FACE_SHIFT = (0.95, -0.022)        # concept x = model x * a + b (the painted face sits 2 cm to her right)
 BAND_LIFT = 0.35                   # the eye-band's paint pulled this far toward the stone role colour (CW6: the cool
                                    # honed stone, 0.15 -> 0.35)
-BAND_JOINTS = (-44.0, 44.0, 0.0)          # the carved band's block joints (deg round the face, 0 = the centre; CW6:
-                                           # none inside the eye span EYE_A; the 0 joint is the brow joint above the
-                                           # bridge, cut and painted only above the slit's top edge)
-BAND_JOINTS_CUT = ((-44.0, 2.05, 2.19), (44.0, 2.05, 2.19), (0.0, 2.131, 2.19))   # (angle, z0, z1) of each cut
+BAND_JOINTS = (-44.0, 44.0)               # the carved band's block joints (deg round the face, 0 = the centre; CW6:
+                                           # none inside the eye span EYE_A, none over the bridge: a centre joint
+                                           # read as a seam splitting the face)
+BAND_JOINTS_CUT = ((-44.0, 2.05, 2.19), (44.0, 2.05, 2.19))   # (angle, z0, z1) of each cut
 ERODE_PX = 3                       # fill erosion at the visibility grid (step 2: ~1 cm)
 MASK_GROW_PX = 2                   # plate pixels this far outside the concept's cut are still the figure's paint
 UPFACE = {"boots": 0.075}          # up-facing texels take the part's own front paint at this height (the toe caps)
@@ -1168,6 +1168,7 @@ LENS_HEX = ("#151C25", "#2B3846")   # the lens glass: deep cool at the top (unde
 GLINT_HEX = "#DDEBF6"               # the painted cool catch-light (non-emissive; the glossy lens adds the real one)
 GLINT = (-4.0, 0.006, 2.7, 0.0055)  # each eye's glint: angle offset from the eye's centre (deg; both eyes the same
                                     # way, one key light), height over EYE_Z, angular / vertical half sizes
+CROWN_TONE = np.array([0.95, 0.925, 0.875], dtype=np.float32)   # the hood crown's repaint: darker, warmer (sRGB gain)
 CAVITY_LIFT = 0.85                  # the hood's face cavity: linear gain (x1.85 ~ +9 L* at L* 30)
 # roughness written into the baked ORM (texels of these parts / zones; everything else keeps its material's bake):
 # the honed cut bands take a crisp sheen against the matte linen (closing hesmi-M2: band ~0.35, linen ~0.85)
@@ -1483,7 +1484,9 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
             + 0.03 * NOISE(q, 60.0, (0.0, 2.0, 1.0))
         val -= 0.16 * np.exp(-(q[:, 0] / 0.012) ** 2) * np.clip((q[:, 1] - 0.02) / 0.06, 0, 1)
         val *= 1.0 - 0.10 * np.clip((np.hypot(q[:, 0], q[:, 1] - 0.03) - 0.10) / 0.12, 0, 1)
-        crown = med[None] * val[:, None]
+        # (CW6, closing hesmi-M2: the crown is the brightest linen the game camera sees; at L* 83 it met the cool cut
+        # bands at dE ~6: a step down and a touch warmer, the linen's own warm cream)
+        crown = (med * CROWN_TONE)[None] * val[:, None]
         col[sel] = col[sel] * (1 - up[:, None]) + crown * up[:, None]
         # the cowl's outer sides (CW6): the same folds falling from the crown, shaded valleys / lit crests, fading
         # out toward the hem and kept off the face cavity
@@ -1514,7 +1517,7 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         med = np.median(src[(Lb >= np.percentile(Lb, 40)) & (Lb <= np.percentile(Lb, 80))], axis=0)
         med = med * (1 - BAND_LIFT) + stone * BAND_LIFT
         nz_ = n[sel, 2]
-        val = (1.0 + 0.07 * np.clip(nz_, 0, 1) - 0.16 * np.clip(-nz_, 0, 1)
+        val = (1.0 + 0.07 * np.clip(nz_, 0, 1) - 0.08 * np.clip(-nz_, 0, 1)
                + 0.03 * NOISE(p[sel].astype(np.float64), 30.0, (2.0, 7.0, 1.0)))
         col[sel] = (med[None] * val[:, None]).astype(np.float32)
         col[sel] = 1.0 - (1.0 - col[sel]) * 0.94
