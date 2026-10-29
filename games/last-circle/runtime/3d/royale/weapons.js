@@ -962,21 +962,12 @@ function launchRound(W, p) {
     // (owner playtest: "grenade launcher shoots no grenade, at least i cant
     // see it") — the bloom pass needs the emissive over its 0.72 threshold.
     // ONE geometry + material shared by every shell (was a fresh pair per pooled
-    // round, each resident for the life of the page).
-    if (!_shellGeo) {
-      _shellGeo = new THREE.SphereGeometry(0.15, 6, 6);
-      _shellMat = new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 1.2 });
-      // the frag: same geometry and material TYPE (one shader program, no new link mid-match), a dark
-      // olive body with a dimmer fuse glow that still clears the 0.72 bloom threshold, shown at 0.8 scale
-      _fragMat = new THREE.MeshStandardMaterial({ color: 0x2f3a26, emissive: 0xff3a1a, emissiveIntensity: 0.9 });
-    }
+    // round, each resident for the life of the page). Built by ensureShell(), which the warm-up calls too.
+    ensureShell();
     p.m = new THREE.Mesh(_shellGeo, _shellMat);
   }
   if (p.m && o.mesh) {
     const frag = p.weaponId === "frag", smoke = p.weaponId === "smoke";
-    // the smoke canister: the same geometry and material TYPE again (no new shader program), pale grey with a faint
-    // green fuse glow so it reads apart from the frag in flight
-    if (smoke && !_smokeMat) _smokeMat = new THREE.MeshStandardMaterial({ color: 0x8a9088, emissive: 0x7dff9a, emissiveIntensity: 0.55 });
     p.m.material = frag ? _fragMat : smoke ? _smokeMat : _shellMat;
     p.m.scale.setScalar(frag || smoke ? 0.8 : 1);
   }
@@ -995,6 +986,38 @@ function launchRound(W, p) {
 }
 
 let _shellGeo = null, _shellMat = null, _fragMat = null, _smokeMat = null;
+/** The shell geometry and its three materials (launcher shell, frag, smoke canister): page-lifetime, built once. */
+function ensureShell() {
+  if (_shellGeo) return;
+  _shellGeo = new THREE.SphereGeometry(0.15, 6, 6);
+  _shellMat = new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 1.2 });
+  // the frag: same geometry and material TYPE (one shader program, no new link mid-match), a dark
+  // olive body with a dimmer fuse glow that still clears the 0.72 bloom threshold, shown at 0.8 scale
+  _fragMat = new THREE.MeshStandardMaterial({ color: 0x2f3a26, emissive: 0xff3a1a, emissiveIntensity: 0.9 });
+  // the smoke canister: the same geometry and material TYPE again (no new shader program), pale grey with a faint
+  // green fuse glow so it reads apart from the frag in flight
+  _smokeMat = new THREE.MeshStandardMaterial({ color: 0x8a9088, emissive: 0x7dff9a, emissiveIntensity: 0.55 });
+}
+
+// ── C7 / C-WARM warm-up hook ────────────────────────────────────────────────
+// WHY (R3 warm; warm_programs natural-window row, ashgrid s1 t 105.07 / s7 t 77.02 on 2e76a02c and 03a00b05): the shell
+// material was built on the FIRST mesh round (launchRound) and no live material shared its program key (a plain, map-less,
+// non-instanced MeshStandardMaterial), so the first grenade of a match linked a program synchronously on that frame. One
+// page-lifetime proxy mesh per shell material, never in a match group (the warm-up parents an unparented extra for its one
+// frame and removes it again), hands the warm frame the exact (object kind, material) a live round draws. No behaviour
+// change: the same three materials, built before the match instead of on first use; nothing here touches the sim.
+let _warmShells = null;
+export function warmObjects(W) {
+  ensureShell();
+  if (!_warmShells) {
+    _warmShells = [_shellMat, _fragMat, _smokeMat].map((m) => {
+      const o = new THREE.Mesh(_shellGeo, m);
+      o.name = "warm-shell";
+      return o;
+    });
+  }
+  return _warmShells;
+}
 
 // ── smoke (contract C-SMOKE) ────────────────────────────────────────────────
 /** A smoke canister pops at (x, y, z): one sphere on W.smokes = {x, y, z, r, t0, t1} (+ rMax, ownerId). r is the LIVE
