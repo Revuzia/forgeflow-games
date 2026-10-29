@@ -712,11 +712,18 @@ export const AudioCue = z.object({
 export const MusicDef = z.object({
   file: AssetRef, bpm: z.number().positive(), loopStart: z.number().default(0), loopEnd: z.number().optional(),
   gain: z.number().default(1), layers: z.array(z.object({ id: Id, file: AssetRef }).strict()).default([]),
+  /** integ (systems-11), additive: the main stem's .m4a pieces for the .m4a path, each starting `at` s into the stem
+   *  (what used to ride in `layers` as 'seg_<s>' entries); empty = the main file plays whole */
+  pieces: z.array(z.object({ at: z.number().nonnegative(), file: AssetRef }).strict()).default([]),
 }).strict();
 /** `events` binds the audio engine's event roles (CONTRACT §11: cast, castUlt, hitPhysical, takedown,
  *  ping.<kind>, …) to cue ids, so no cue id lives in code; an unbound role is silent */
 export const AudioDef = z.object({ cues: z.record(Id, AudioCue), music: z.record(Id, MusicDef),
   events: z.record(z.string(), Id).default({}),
+  /** integ (systems-10), additive: each map's ambience emitters, map id → [{ source, cue }]: `source` names a point
+   *  set of the map's art.ambient (or 'bed' for the map-wide bed), `cue` the looping ambience-bus cue it plays (what
+   *  used to ride in `events` as 'ambient.<map id>.<source>' keys) */
+  ambience: z.record(Id, z.array(z.object({ source: z.string().min(1), cue: Id }).strict())).default({}),
   /** the client's own roles (src/ui/audio_kinds.ts): UI cue kind → cue id, client screen → music id,
    *  post-game sting → cue id; the content build requires every role in code to be bound */
   ui: z.record(z.string(), Id).default({}),
