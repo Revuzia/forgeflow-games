@@ -98,7 +98,7 @@ function Overview(): JSX.Element {
   const total = cv.c.skins.filter((s) => s.tier !== 'base').length;
   const ledger = [...profile.ledger].reverse().slice(0, 6);
   const emblems = emblemsOf(cv, profile);
-  const chosen = emblems.find((e) => e.id === state.prefs.value.emblem && e.earned) ?? emblems[0];
+  const chosen = emblems.find((e) => e.id === (profile.emblem ?? state.prefs.value.emblem) && e.earned) ?? emblems[0];
   const reset = (): void => {
     void confirmDialog(overlay, {
       title: cv.t('profile.reset.title', 'Reset your profile'), body: cv.t('profile.reset.body', "This returns your Candles, skins, history and settings to a new account's. It cannot be undone."),
@@ -117,7 +117,7 @@ function Overview(): JSX.Element {
           </div>
           <span class="t-caption muted fig">{cv.t('profile.xp', '{xp} of {next} XP to level {n}', { xp: fmtInt(profile.xp), next: fmtInt(need), n: profile.level + 1 })}</span>
         </div>
-        <EmblemPicker list={emblems} chosen={chosen.id} onPick={(id) => state.setPrefs({ emblem: id })} />
+        <EmblemPicker list={emblems} chosen={chosen.id} onPick={(id) => { session.setEmblem?.(id); state.setPrefs({ emblem: id }); }} />
       </section>
       <div class="prof__grid">
         <Section title={cv.t('profile.wallet', 'Wallet')} class="plate pad-l">
@@ -245,7 +245,7 @@ function Rating(): JSX.Element {
 // ── client F17: earnable emblems ──────────────────────────────────────────────────────────────────
 /** an emblem: what the avatar shows. Earned from the profile itself (never bought): the First lamp from the start, a
  *  class mark for each class you have won a match with, the Tenth hour at level 10, and your best ranked tier once
- *  placed. The choice is kept per device (UiPrefs.emblem) until the Profile carries it. */
+ *  placed. The choice is kept on the Profile (Session.setEmblem), with UiPrefs.emblem as the per-device fallback. */
 export interface Emblem { id: string; kind: 'lamp' | 'class' | 'hour' | 'rank'; name: string; how: string; earned: boolean; draw: (px: number) => JSX.Element }
 
 export function emblemsOf(cv: CatalogView, profile: Profile): Emblem[] {

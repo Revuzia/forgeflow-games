@@ -392,8 +392,7 @@ function OnlinePill(p: { info: OnlineInfo }): JSX.Element {
     sound.play('click');
     setTrying(true);
     // a Session that can reconnect does it; otherwise the link listens for the page-level retry event
-    const s = session as Session & { reconnect?: () => void };
-    if (typeof s.reconnect === 'function') s.reconnect(); else dispatchEvent(new Event(NET_RETRY_EVENT));
+    if (session.reconnect) session.reconnect(); else dispatchEvent(new Event(NET_RETRY_EVENT));
   };
   return (
     <span class="netwrap">

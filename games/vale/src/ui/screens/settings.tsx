@@ -12,7 +12,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { Settings } from '../../contracts/session.ts';
-import { defaultSettings, type AudioSettings, type VideoSettings } from '../../session/settings.ts';
+import { defaultSettings } from '../../session/settings.ts';
 import { creditRows, NOTICES_FILE, NOTICES_JSON, parseNotices, type CreditEntry, type NoticeRow } from '../credits.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
@@ -100,7 +100,7 @@ function opts<T extends string | number>(cv: ReturnType<typeof useApp>['cv'], ke
 
 function Video(p: { s: Settings; set: SetFn }): JSX.Element {
   const { cv } = useApp();
-  const v: VideoSettings = p.s.video;
+  const v = p.s.video;
   const L = (k: string, f: string): string => cv.t(`settings.video.${k}.label`, f);
   const D = (k: string): string => cv.t(`settings.video.${k}.desc`, '');
   const fullscreen = (on: boolean): void => {
@@ -118,7 +118,7 @@ function Video(p: { s: Settings; set: SetFn }): JSX.Element {
       </Row>
       <Row id="v-dyn" label={L('dynamicResolution', 'Dynamic resolution')} desc={D('dynamicResolution')}>
         <Toggle id="v-dyn" label={L('dynamicResolution', 'Dynamic resolution')} checked={v.dynamicResolution !== false}
-          onChange={(x) => p.set('video', { dynamicResolution: x } as Partial<VideoSettings> as Partial<Settings['video']>)} />
+          onChange={(x) => p.set('video', { dynamicResolution: x })} />
       </Row>
       <Row id="v-shadows" label={L('shadows', 'Shadows')} desc={D('shadows')}>
         <Segmented size="s" label={L('shadows', 'Shadows')} value={v.shadows} options={opts(cv, 'video.shadows', [0, 1, 2, 3] as const)} onChange={(x) => p.set('video', { shadows: x })} />
@@ -157,11 +157,11 @@ function Video(p: { s: Settings; set: SetFn }): JSX.Element {
 
 function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
   const { cv } = useApp();
-  const a: AudioSettings = p.s.audio;
+  const a = p.s.audio;
   const keys = ['master', 'music', 'sfx', 'voice', 'ui', 'ambience'] as const;
   const L = (k: string, f: string): string => cv.t(`settings.audio.${k}.label`, f);
   const D = (k: string): string => cv.t(`settings.audio.${k}.desc`, '');
-  const setX = (patch: Partial<AudioSettings>): void => p.set('audio', patch as Partial<Settings['audio']>);
+  const setX = (patch: Partial<Settings['audio']>): void => p.set('audio', patch);
   return (
     <div class="srows">
       {keys.map((k) => (

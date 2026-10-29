@@ -8,8 +8,8 @@
 // Recognition (client F15): the Summary opens with two best-in-match cards (the two stats where one player led the
 // match by the widest margin over the match's average: damage to fighters, damage taken, healing, structure damage,
 // takedowns + assists, Wicks) and, in team modes with a teammate, the Lantern nod: light a lantern for one teammate in
-// NOD_S seconds, or skip. A nod marks that teammate's scoreboard row for the rest of this post-game (the session's
-// half records it). A post-game reopened from the match history skips the nod.
+// NOD_S seconds, or skip. A nod marks that teammate's scoreboard row; Session.nod records it on the match's history
+// entry, so a post-game reopened from the match history shows it (and skips the prompt).
 
 import type { JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
@@ -38,8 +38,9 @@ export function PostgameScreen(p: { params: Record<string, string> }): JSX.Eleme
   const pg = state.postgame.value;
   const tab = p.params.tab ?? 'summary';
   const fromHistory = p.params.from === 'history';
-  // client F15: the teammate you lit a lantern for (kept while this post-game is open)
-  const [nod, setNod] = useState<number | null>(null);
+  // client F15: the teammate you lit a lantern for (Session.nod keeps it on the match's history entry, so a post-game
+  // reopened from the history shows it again)
+  const [nod, setNod] = useState<number | null>(() => (pg ? state.profile.peek().history.find((h) => h.matchId === pg.result.matchId)?.nod ?? null : null));
   const res = pg?.result;
   const me = res?.players.find((x) => x.player === pg!.you);
   const mode = cv.mode(res?.mode);
@@ -131,7 +132,7 @@ export function bestInMatch(res: MatchResult): { key: string; player: PlayerResu
 const NOD_S = 20;
 
 function Recognition(p: { res: MatchResult; me: PlayerResult; ffa: boolean; nod: number | null; onNod: (player: number) => void; skipNod: boolean }): JSX.Element | null {
-  const { cv, sound } = useApp();
+  const { cv, sound, session } = useApp();
   const cards = bestInMatch(p.res);
   const mates = p.ffa ? [] : p.res.players.filter((r) => r.team === p.me.team && r.player !== p.me.player);
   const [open, setOpen] = useState(!p.skipNod && mates.length > 0 && p.nod === null);
@@ -147,7 +148,7 @@ function Recognition(p: { res: MatchResult; me: PlayerResult; ffa: boolean; nod:
   }, [open]);
   if (!cards.length && !mates.length) return null;
   const nodTo = p.nod !== null ? p.res.players.find((r) => r.player === p.nod) : undefined;
-  const give = (r: PlayerResult): void => { sound.play('confirm'); p.onNod(r.player); setOpen(false); };
+  const give = (r: PlayerResult): void => { sound.play('confirm'); session.nod?.(p.res.matchId, r.player); p.onNod(r.player); setOpen(false); };
   const statOf = (key: string): (typeof BEST_STATS)[number] => BEST_STATS.find((s) => s.key === key)!;
   return (
     <section class="pgrec stg" aria-label={cv.t('postgame.best.title', 'Best in the match')}>
