@@ -90,6 +90,11 @@ export interface SpawnOpts {
   quiet?: boolean;
   /** LIVING §3.7: the warning phase in ticks (undefined: by kind and wrath; 0 none — an apocalyptic cast) */
   warning?: number;
+  /**
+   * (punch P09) the VIEW of an act already done: the render draws it while it lasts (water.tsunami's wave has a crest to
+   * draw), and it does nothing of its own — no warning, no effector, no witness, no toll (`st.Vw`)
+   */
+  view?: boolean;
 }
 
 const START = 'start';
@@ -144,7 +149,8 @@ export function spawnDisaster(u: Universe, p: Planet, kind: string, o: SpawnOpts
     d.st.alt0 = def.render.alt;
   }
   // LIVING §3.7: the god's disaster keeps the wrath it was sent with (nature's has none: its own law alone)
-  const godSent = d.god >= 0 && d.cause !== 'nature';
+  const godSent = d.god >= 0 && d.cause !== 'nature' && !o.view;
+  if (o.view) d.st.Vw = 1;
   if (godSent) {
     const w = currentWrath() ?? wrathLaw(u);
     d.st.Wr = w;
@@ -159,10 +165,10 @@ export function spawnDisaster(u: Universe, p: Planet, kind: string, o: SpawnOpts
   }
   u.god.disasters.push(d);
   u.god.disasters.sort((a, b) => a.id - b.id);
-  u.god.stat('disasters');
+  if (!o.view) u.god.stat('disasters');
   // what happens at once (after the warning, when there is one)
   if (d.st.Wn) warningStart(u, p, d, def);
-  else {
+  else if (!o.view) {
     if (godSent) seenComing(u, p, d, def);
     actOf(u, d, () => def.effectors.forEach((e, i) => { if (e.at === START) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } }));
   }
@@ -225,6 +231,12 @@ export function disastersStep(u: Universe): void {
     if (d.frozen) continue;
     const def = defOf(u, d);
     d.age++;
+    // (punch P09) a view: drawn while it lasts, nothing more
+    if (d.st.Vw) {
+      updateParams(u, p, d, def);
+      if (d.life > 0 && d.age >= d.life) { u.god.disasters = u.god.disasters.filter((x) => x !== d); u.emit({ t: 'disaster.end', planet: p.id, pos: [...d.pos], a: 0, b: 0, text: 'ended', ref: { kind: 'disaster', id: d.id, planet: p.id }, data: { kind: d.kind, dead: 0, ruined: 0 } }); }
+      continue;
+    }
     // LIVING §3.7: the warning phase — nothing strikes yet; the people are told to get out
     if (d.st.Wn && d.age <= d.st.Wn) {
       warningTick(u, p, d, def);

@@ -30,6 +30,7 @@ import { setOrePalette } from './render/planet/fieldtex.ts';
 import { setPlantRegistry } from './render/life/vegetation.ts';
 import type { GenesisAudio } from './audio/engine.ts';
 import { Shell } from './ui/shell.ts';
+import { spotHold } from './ui/opening.ts';
 import type { GroundHit, InspectRef, UiHost, CameraHost, CameraModeName, PhotoLens } from './ui/host.ts';
 import { defaultLens, blurOf, apertureOf } from './ui/photo.ts';
 import { ModLibrary, bootPacks, validatePacks, type BootProblem } from './ui/mods.ts';
@@ -221,6 +222,8 @@ export class App implements UiHost {
    */
   private litHold = -1;
   private litHoldOn = false;
+  /** the opening's ringed spot (body frame) the lit-face hold keeps in the middle of the view (punch P24); null: none */
+  private litSpot: { planet: number; dir: [number, number, number] } | null = null;
   private camTouchedAt = -1e9;
   /** a pixel of the renderer's linear depth (photo mode's focus) */
   private depthPx = new Float32Array(4);
@@ -299,7 +302,7 @@ export class App implements UiHost {
       audioReady: () => !!this.audio,
       dev: this.opts.dev,
       hudFrame: () => this.hudFrame(),
-      openingCamera: (shot) => this.openingCamera(shot),
+      openingCamera: (shot, spot) => this.openingCamera(shot, spot),
       openingLight: (ev, bloom) => { this.fx.ev = ev; this.fx.bloom = bloom; },
       cameraBusy: () => this.rig.blending(),
       audioRunning: () => { try { return !!this.audio?.state().running; } catch { return false; } },
@@ -501,7 +504,9 @@ export class App implements UiHost {
    * (any touch of the camera lets go; a fall still under way is cut short); 'hold' — a new whisper takes the lit face up
    * again if the camera has been left alone; 'done' — the camera is the player's.
    */
-  private openingCamera(shot: 'star' | 'world' | 'turn' | 'hold' | 'done'): void {
+  private openingCamera(shot: 'star' | 'world' | 'turn' | 'hold' | 'done', spot?: { planet: number; pos: ArrayLike<number> } | null): void {
+    // (the ring's spot, while a whisper marks one: the hold never turns the camera so far that the ring leaves the view)
+    this.litSpot = spot && (shot === 'turn' || shot === 'hold') ? { planet: spot.planet, dir: [spot.pos[0], spot.pos[1], spot.pos[2]] } : null;
     const view = this.sim.view;
     const home = view.planets.find((p) => p.params.orbit.parent < 0) ?? view.planets[0];
     if (!home) return;
@@ -720,8 +725,10 @@ export class App implements UiHost {
       this.applyLook();
       if (this.rig.cut) { this.renderer.cut(); this.rig.cut = false; }
       this.updateHover();
-      // the god hand follows the ground under the cursor and takes the UI hand's pose (render/hand.ts)
-      this.renderer.godfx.setInput(this.hover, this.ui.hand.cursor, this.ui.hand.isAiming);
+      // the god hand follows the ground under the cursor and takes the UI hand's pose (render/hand.ts) — never over the
+      // title: its world is a backdrop (punch P17)
+      if (this.titleOn) this.renderer.godfx.setInput(null, 'none', false);
+      else this.renderer.godfx.setInput(this.hover, this.ui.hand.cursor, this.ui.hand.isAiming);
       this.renderer.render(view, pose, dt, (now - this.startAt) / 1000);
       if (this.captureWaiters.length) {
         const url = this.renderer.snapshotDataURL();
@@ -830,7 +837,8 @@ export class App implements UiHost {
 
   /** the ground under the UI's cursor (mouse or gamepad), refreshed when it moved or the world turned */
   private updateHover(): void {
-    const c = this.ui.cursor();
+    // (the title's world is a backdrop: a pointer left where it was in the game, or a gamepad's, picks nothing there)
+    const c = this.titleOn ? null : this.ui.cursor();
     if (!c) { this.hover = null; return; }
     if (this.frames % 2 === 1 && c[0] === this.hoverAt[0] && c[1] === this.hoverAt[1]) return;
     this.hoverAt = [c[0], c[1]];
@@ -1203,7 +1211,11 @@ export class App implements UiHost {
       if (touched || !pv) this.litHoldOn = false;
       else if (this.litHoldOn && this.rig.mode === 'orbit' && o.planet === pv.id && o.dist > pv.params.radius * 1.2) {
         const lon = (this.afternoonLon(pv, 32) * Math.PI) / 180, lat = (14 * Math.PI) / 180;
-        const t: [number, number, number] = [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)];
+        // (with a ring on the ground — where the people go — the lit face only as far as keeps the ring in the middle
+        // part of the view: the spot is on the morning side, up to ~100° from the lit face, behind the limb)
+        const half = ((this.rig.pose.fov || 42) * Math.PI) / 360;
+        const keep = 0.55 * Math.min(half, Math.atan(Math.tan(half) * (window.innerWidth / Math.max(1, window.innerHeight))));
+        const t = spotHold([Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)], this.litSpot?.planet === pv.id ? this.litSpot.dir : null, o.dist / pv.params.radius, keep);
         const f = o.focus;
         const k = 1 - Math.exp(-dt * 1.6);
         const x = f[0] + (t[0] - f[0]) * k, y = f[1] + (t[1] - f[1]) * k, z = f[2] + (t[2] - f[2]) * k;
@@ -1626,7 +1638,7 @@ export class App implements UiHost {
     const ref = this.ui.hand.hoverRef;
     const pv = ref ? this.sim.view.planet(ref.planet ?? this.renderer.primaryId) : undefined;
     const b = ref && pv && this.rig.mode !== 'system' && !(this.sel && this.sel.kind === ref.kind && this.sel.id === ref.id) ? this.entityBodyPos(pv, ref) : null;
-    if (!ref || !pv || !b) { el.hidden = true; return; }
+    if (!ref || !pv || !b || this.titleOn) { el.hidden = true; return; }
     const s = qRotate(pv.quat, b);
     const p = this.renderer.projectToScreen([pv.center[0] + s[0], pv.center[1] + s[1], pv.center[2] + s[2]], this.rig.pose, this.v2);
     if (!p) { el.hidden = true; return; }

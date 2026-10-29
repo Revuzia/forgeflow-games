@@ -76,8 +76,8 @@ export interface ShellDeps {
   /** thin the cloud shell while a map overlay is on (0 = as the weather has it, 1 = gone) */
   cloudFade(k: number): void;
   /** the opening's camera: 'star' (the star from close, in the dark), 'world' (fall to the home world), 'turn' (the
-   * world turning under the camera), 'done' */
-  openingCamera?(shot: 'star' | 'world' | 'turn' | 'hold' | 'done'): void;
+   * world turning under the camera), 'done'; `spot` the opening's ringed spot the hold keeps in view */
+  openingCamera?(shot: 'star' | 'world' | 'turn' | 'hold' | 'done', spot?: { planet: number; pos: ArrayLike<number> } | null): void;
   /** the opening's light: exposure (stops, added) and a bloom multiplier */
   openingLight?(ev: number, bloom: number): void;
   /** is the camera still blending toward where it was sent (the opening's fall waits for it) */
@@ -327,7 +327,7 @@ export class Shell {
       openPalette: (q) => this.openPalette(q),
       openMenu: () => { this.newWorld.open({ fromOpening: true }); },
       menuOpen: () => this.modal() || this.cam.menuOpen,
-      camera: (shot) => deps.openingCamera?.(shot),
+      camera: (shot, spot) => deps.openingCamera?.(shot, spot),
       light: (ev, bloom) => deps.openingLight?.(ev, bloom),
       cameraBusy: () => deps.cameraBusy?.() ?? false,
       audioRunning: () => deps.audioRunning?.() ?? false,

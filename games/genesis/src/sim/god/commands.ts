@@ -32,6 +32,7 @@ import { suggest } from '../content.ts';
 import { registerPeopleCommands, focusHook } from '../people/commands.ts';
 import { pave } from './shaping.ts';
 import { registerGodCommands } from './index.ts';
+import { spawnDisaster } from './disasters.ts';
 
 export type ParamType = 'number' | 'int' | 'string' | 'boolean' | 'pos' | 'vec3' | 'enum' | 'any';
 
@@ -352,7 +353,7 @@ export function buildRegistry(): CommandRegistry {
     const v = waterImpulse(p, a.pos!, a.radius as number, a.height as number, null, -1);
     return ok(`A flood bursts out ${where(p, a.pos)} (${fmt(v)} m³).`);
   }, { desc: 'Flood a region', category: 'Water', params: { pos: pos(), radius: radius(300), height: { type: 'number', min: 0.1, max: 200, default: 4 } } });
-  r.register('water.tsunami', ({ p }, a) => {
+  r.register('water.tsunami', ({ u, p }, a) => {
     let dir: UnitVec | null = null;
     if (a.toward) {
       const t = a.toward as UnitVec, c = a.pos!;
@@ -360,7 +361,13 @@ export function buildRegistry(): CommandRegistry {
       dir = [t[0] - c[0] * d, t[1] - c[1] * d, t[2] - c[2] * d];
     } else if (a.dir) dir = a.dir as UnitVec;
     const v = waterImpulse(p, a.pos!, a.radius as number, a.height as number, dir, -1);
-    return ok(`A wall of water rises ${where(p, a.pos)} and runs ${dir ? 'toward the shore' : 'outward'} (${fmt(v)} m³).`);
+    // (punch P09) the wall of water, seen: the render draws a tsunami's crest from a disaster view (render/fx/tsunami.ts
+    // finds the front in the water field round the view's origin; its crest is the def's height x sqrt(intensity), so
+    // the intensity is set to make it this wave's height). A view only: the impulse above is the whole of the blow
+    const H = u.content.disasters.find('tsunami')?.render.height ?? 16;
+    const d = spawnDisaster(u, p, 'tsunami', { pos: a.pos!, radius: a.radius as number, intensity: Math.max(0.01, ((a.height as number) / H) ** 2), view: true, quiet: true, cause: 'god' });
+    const refs: EntityRef[] = typeof d === 'string' ? [] : [{ kind: 'disaster', id: d.id, planet: p.id }];
+    return ok(`A wall of water rises ${where(p, a.pos)} and runs ${dir ? 'toward the shore' : 'outward'} (${fmt(v)} m³).`, refs);
   }, {
     desc: 'Raise a tsunami', category: 'Water',
     params: { pos: pos(), radius: radius(350), height: { type: 'number', min: 0.5, max: 300, default: 12 }, toward: { type: 'pos' }, dir: { type: 'vec3' } },

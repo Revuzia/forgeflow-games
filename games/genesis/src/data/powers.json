@@ -3627,7 +3627,7 @@
   },
   {
    "id": "invent-animal",
-   "name": "Invent an animal",
+   "name": "Bring an animal",
    "category": "Life",
    "icon": "new-beast",
    "ring": 2,
@@ -3657,12 +3657,11 @@
    "target": "point",
    "synonyms": [
     "new animal",
-    "invent an animal",
-    "unicorn",
-    "dragon",
-    "griffin"
+    "bring an animal",
+    "new species",
+    "an animal this world lacks"
    ],
-   "desc": "An animal the world never had.",
+   "desc": "A real animal this world lacks: zebras, otters, elephants.",
    "cost": 30,
    "witness": {
     "wonder": 0.7,

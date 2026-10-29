@@ -43,8 +43,9 @@ export interface OpeningDeps {
   /** the camera's part: 'star' (the star from close, in the dark), 'world' (fall to the home world), 'turn' (arrived:
    * the whispers begin — the world turns under the camera, its lit face held toward the eye; a fall a slow machine has
    * not finished is cut short), 'hold' (a new whisper: the lit face again, if the player has let the camera be), 'done'
-   * (the camera is the player's) */
-  camera?(shot: 'star' | 'world' | 'turn' | 'hold' | 'done'): void;
+   * (the camera is the player's). `spot`: the ringed spot where the people go (the people's whisper, the empty world's),
+   * which the hold keeps in the middle of the view; null: none */
+  camera?(shot: 'star' | 'world' | 'turn' | 'hold' | 'done', spot?: { planet: number; pos: ArrayLike<number> } | null): void;
   /** the light of the opening: exposure (stops, added) and a bloom multiplier */
   light?(ev: number, bloom: number): void;
   /** is the camera still on its way (the fall is a blend the renderer runs on its own clock: on a slow machine it can
@@ -508,8 +509,8 @@ export class Opening {
     if (next === 'people' || next === 'gone') this.spot ??= this.findSpot(pv);
     else this.spot = null;
     if (next === 'rest') this.setQuiet(false);
-    // (the camera eases back to the lit face if the player has let it be)
-    if (!same) this.deps.camera?.('hold');
+    // (the camera eases back to the lit face if the player has let it be — never so far that the ring leaves the view)
+    if (!same) this.deps.camera?.('hold', this.spot);
     this.host.sound('whisper');
     this.render();
   }
@@ -801,4 +802,36 @@ function bodySun(pv: PlanetView): [number, number, number] {
 function isNight(pv: PlanetView, u: ArrayLike<number>): boolean {
   const b = bodySun(pv);
   return b[0] * u[0] + b[1] * u[1] + b[2] * u[2] < -0.04;
+}
+
+/**
+ * The opening's camera hold while the ring marks where the people go (the people's whisper and the empty world's):
+ * where the orbit's focus should rest (unit, the world's body frame). The hold keeps the lit face toward the eye
+ * (`lit`, east of the sun's meridian), but the ringed spot lies on the morning side, anywhere the sun stands well up —
+ * up to ~100° from the lit face, behind the limb: the ring left the view (punch P24, 1920×1080). So the focus rests on
+ * `lit` only while the spot stands near enough the middle of the view, else on the great circle from the spot toward
+ * `lit`, as near the lit face as keeps the spot in the middle part of the view (`keep` rad off the axis — the ring's
+ * words need the rest).
+ *
+ * The bound is where a ground point `θ` from the focus is seen from a camera `dist` above it, looking down
+ * (`atan(sin θ / (D − cos θ))`, D = 1 + dist/R): θ = asin(D·sin keep) − keep (the whole visible cap from far away).
+ */
+export function spotHold(lit: ArrayLike<number>, spot: ArrayLike<number> | null, distOverR: number, keep: number): [number, number, number] {
+  const ln = Math.hypot(lit[0], lit[1], lit[2]) || 1;
+  const t: [number, number, number] = [lit[0] / ln, lit[1] / ln, lit[2] / ln];
+  if (!spot) return t;
+  const sn = Math.hypot(spot[0], spot[1], spot[2]);
+  if (!(sn > 0)) return t;
+  const s = [spot[0] / sn, spot[1] / sn, spot[2] / sn];
+  const D = 1 + Math.max(0, distOverR);
+  const max = Math.max(0, Math.asin(Math.min(1, D * Math.sin(keep))) - keep);
+  const a = Math.acos(Math.max(-1, Math.min(1, s[0] * t[0] + s[1] * t[1] + s[2] * t[2])));
+  if (a <= max) return t;
+  const sa = Math.sin(a);
+  // (the lit face straight behind the spot: no way toward it — the spot itself)
+  if (sa < 1e-6) return [s[0], s[1], s[2]];
+  const ks = Math.sin(a - max) / sa, kt = Math.sin(max) / sa;
+  const x = s[0] * ks + t[0] * kt, y = s[1] * ks + t[1] * kt, z = s[2] * ks + t[2] * kt;
+  const l = Math.hypot(x, y, z) || 1;
+  return [x / l, y / l, z / l];
 }
