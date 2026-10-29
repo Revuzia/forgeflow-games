@@ -435,8 +435,12 @@ ${LEAF_ALPHA}
   float leafTex = mix(0.92, 0.62 + 0.62 * (1.0 - lv.x) * (0.7 + 0.6 * lv.z), leafAA);
   // bark: furrows running along the stem (mesh-local: the trunk is the local Y axis), in colour and in the normal
   float barkAA = 1.0 - smoothstep(0.02, 0.12, vegFw);
+  // (deep fissures between raised plates, broken by a finer octave: the furrows at ±15 % read at 4 m as a smooth
+  // grey cylinder beside the villager)
   float barkH = abs(snoise(vec3(vLocalP.x * 55.0, vLocalP.y * 5.0, vLocalP.z * 55.0)));
-  float barkTex = mix(0.92, 0.7 + 0.42 * barkH, barkAA);
+  float barkF = barkAA > 0.001 && vLeaf < 0.5 ? snoise(vec3(vLocalP.x * 160.0, vLocalP.y * 22.0, vLocalP.z * 160.0)) : 0.0;
+  barkH = smoothstep(0.0, 0.5, barkH) * (0.8 + 0.2 * barkF);
+  float barkTex = mix(0.92, 0.5 + 0.68 * barkH, barkAA);
   // ground-cover stones (aCard 0.1) are not bark: no furrows, no bark clamp, no trunk-base soil
   bool isStone = vCard > 0.05 && vCard < 0.2;
   diffuseColor.rgb *= vCard > 0.5 || isStone ? 1.0 : mix(barkTex, leafTex, vLeaf);
@@ -448,7 +452,7 @@ ${LEAF_ALPHA}
     vec3 soilC = mix(vec3(0.055, 0.045, 0.032), vec3(0.04, 0.055, 0.025), smoothstep(0.3, 0.7, snoise(vBodyPos * 1.7) * 0.5 + 0.5));
     diffuseColor.rgb = mix(diffuseColor.rgb, soilC, baseW * 0.8);
   }
-  float vegBump = mix(barkH * 0.035 * barkAA, (1.0 - lv.x) * 0.25 * leafAA, vLeaf);
+  float vegBump = mix(barkH * 0.05 * barkAA, (1.0 - lv.x) * 0.25 * leafAA, vLeaf);
   if (isStone) {
     // field stone: soft blotches of lichen (2–3 cm, low contrast) and moss, a darker damp band where it sits in the
     // soil (the instance sinks it by a third: the soil line is at ~0.35 of its unit height)

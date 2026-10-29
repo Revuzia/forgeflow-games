@@ -54,6 +54,25 @@ const CROP_OF: number[] = (BASE_PACK.plants ?? []).map(cropOf);
 /** the crop form (CROP_TYPES index) drawn for plants.json index `i` */
 export function cropTypeOf(i: number): number { return i >= 0 && i < CROP_OF.length ? CROP_OF[i] : 0; }
 PLANT_REGISTRY_LISTENERS.push((plants) => { CROP_OF.length = 0; for (const p of plants) CROP_OF.push(cropOf(p)); });
+/** the look of a wild grass-layer species (the sim's grassSpecies: what the people forage) — 0..8 a crop form
+ *  (CROP_TYPES) standing wild among the grass; or one of these; WILD_NONE: plain sward (meadow grass, reeds) */
+export const WILD_NONE = -1, WILD_MUSHROOM = 100, WILD_HERB = 101, WILD_TUSSOCK = 102, WILD_MOSS = 103;
+/** wild look of a plants.json entry (only the grass layer: shrubs and trees have their own forms in vegetation.ts) */
+export function wildLookOf(p: { type?: unknown; form?: unknown; id?: unknown; domesticatesTo?: unknown }): number {
+  if (String(p.type ?? '') !== 'grass') return WILD_NONE;
+  const f = String(p.form ?? ''), dom = String(p.domesticatesTo ?? '');
+  const byDom = CROP_TYPES.findIndex((t) => t === dom);
+  if (f === 'grain' || f === 'stalk' || f === 'paddy' || (byDom >= 0 && f !== 'mushroom')) return byDom >= 0 ? byDom : cropOf(p);
+  if (f === 'mushroom') return WILD_MUSHROOM;
+  if (f === 'herb' || f === 'leafy') return WILD_HERB;
+  if (f === 'tussock') return WILD_TUSSOCK;
+  if (f === 'moss') return WILD_MOSS;
+  return WILD_NONE;
+}
+const WILD_OF: number[] = (BASE_PACK.plants ?? []).map(wildLookOf);
+PLANT_REGISTRY_LISTENERS.push((plants) => { WILD_OF.length = 0; for (const p of plants) WILD_OF.push(wildLookOf(p)); });
+/** the wild look drawn for plants.json index `i` (WILD_NONE: plain grass) */
+export function wildLookAt(i: number): number { return i >= 0 && i < WILD_OF.length ? WILD_OF[i] : WILD_NONE; }
 /** clump height (m, full grown) per crop type */
 export const CROP_H = [1.0, 0.95, 2.4, 0.85, 0.85, 2.0, 0.55, 0.42, 1.15];
 /** albedo-scale tints per crop type (the clump's vertex shade is ~0.85): young green, and ripe (gold for the grains,
@@ -113,12 +132,12 @@ const ROW_P = 1.5;
 /** lattice step (m) of candidate points */
 const STEP = 0.6;
 /** fields the scatter reads (placement and kind; tint follows moisture / temperature but only re-tints on rebuild) */
-const SIG_FIELDS = ['grass', 'soil', 'sand', 'snow', 'water', 'road', 'surface', 'tree', 'crop', 'cropSpecies'] as const;
+const SIG_FIELDS = ['grass', 'soil', 'sand', 'snow', 'water', 'road', 'surface', 'tree', 'crop', 'cropSpecies', 'grassSpecies'] as const;
 /** quantisation steps of SIG_FIELDS */
-const SIG_STEP = [0.04, 0.03, 0.03, 0.02, 0.02, 0.05, 0.03, 0.04, 0.04, 1];
+const SIG_STEP = [0.04, 0.03, 0.03, 0.02, 0.02, 0.05, 0.03, 0.04, 0.04, 1, 1];
 /** values are clamped to this before quantising: whether a cell is dry or a few cm wet matters to the scatter at its
  *  edge, a deep river rising and falling does not (and would otherwise rebuild every river cell on every snapshot) */
-const SIG_MAX = [9, 9, 9, 9, 1, 9, 1e9, 9, 9, 99];
+const SIG_MAX = [9, 9, 9, 9, 1, 9, 1e9, 9, 9, 99, 99];
 
 const _m = new Matrix4();
 const _c = new Color();
@@ -236,6 +255,11 @@ export class GroundCover {
     const grassF = F('grass'), soil = F('soil'), sand = F('sand'), snow = F('snow'), water = F('water'), road = F('road');
     const moist = F('moisture'), temp = F('temperature'), tree = F('tree'), crop = F('crop'), cropSp = F('cropSpecies'), sal = F('salinity');
     const surfF = F('surface');
+    // the wild grass-layer species of this cell (the sim's grassSpecies): wild grain stands, mushrooms, herbs,
+    // tussocks, moss — what a band forages; drawn as plain meadow grass they were invisible
+    const grassSp = F('grassSpecies');
+    const wild = grassSp ? wildLookAt(Math.round(grassSp[c])) : WILD_NONE;
+    const wildFid = hashFloat(c, 0x51d, 2) * 0.38;
     const seaLevel = pv.params.seaLevel ?? 0;
     const out: number[] = [];
     const P = g.pos;
@@ -278,6 +302,7 @@ export class GroundCover {
         if (at(snow) > 0.08 || at(road) > 0.5) continue;
         const gr = at(grassF), so = at(soil), sa = at(sand), cr = at(crop), tr = at(tree), mo = at(moist);
         let kind = -1;
+        let wildStand = false;
         // crops in rows on the fields (the lattice is the rows); the clump's type from the cell's crop species
         let fid = -1;
         // (from the day a field is sown, as the terrain draws its rows: from 0.4 only, most of a live sim's fields — its
@@ -306,6 +331,15 @@ export class GroundCover {
             // wildflower patches in meadows (a coarse patch hash decides where they grow)
             const patch = hashFloat(Math.floor(u / 7) + 977 * c, Math.floor(v / 7), 41);
             kind = gr > 0.35 && tr < 0.3 && crG < 0.2 && patch < 0.35 && r3 < 0.18 ? GK.flower : GK.grass;
+            // the wild species among the sward: stands of wild grain (uneven, in ~5 m patches, never in rows),
+            // mushrooms, herbs (moss: low cushions, below)
+            if (wild !== WILD_NONE && wild !== WILD_MOSS && fid < 0) {
+              const wp = hashFloat(Math.floor(u / 5) + 389 * c, Math.floor(v / 5), 0x3d);
+              const share = wp < 0.35 ? 0.45 : wp < 0.6 ? 0.18 : 0.05;
+              if (wild < 100 && r3 < share) { kind = GK.crop; wildStand = true; }
+              else if (wild === WILD_MUSHROOM && r3 < share * 0.25) kind = GK.mushroom;
+              else if (wild === WILD_HERB && r3 < share * 0.6) kind = GK.flower;
+            }
           }
           // stones where the soil is thin: bare rock, scree, stony ground (beaches keep a few) — in clusters (a hash per
           // ~3 m patch: a few patches hold most of them), not an even sprinkle over every meadow
@@ -319,6 +353,13 @@ export class GroundCover {
         const gh = groundHeight(pv.ground, dx, dy, dz);
         const yaw = hashFloat(c, k, 7) * Math.PI * 2;
         const variant = Math.floor(hashFloat(c, k, 8) * VARIANTS) % VARIANTS;
+        if (wildStand) {
+          // a wild stand: its own form, a little shorter than the sown crop and of uneven height, its phase through
+          // the year one per cell (it greens, ripens and goes to straw as a stand: fid < 0.4 never reads as cut)
+          const type = wild;
+          out.push(dx, dy, dz, gh, yaw, CROP_H[type] * (0.5 + 0.45 * r2), GK.crop, type * 2 + (r1 < 0.5 ? 0 : 1), wildFid + (r2 - 0.5) * 0.02, 1, 0);
+          continue;
+        }
         if (kind === GK.crop) {
           const sp0 = cropSp ? Math.round(cropSp[h.wa >= h.wb && h.wa >= h.wc ? h.a : h.wb >= h.wc ? h.b : h.c]) : -1;
           const sp = PLANT_PROBE.crop.get(sp0) ?? sp0;
@@ -342,6 +383,18 @@ export class GroundCover {
           const jit = 0.85 + 0.3 * hashFloat(c, k, 10);
           let rr = 0.25 + (0.06 - 0.25) * lush, gg = 0.21 + (0.115 - 0.21) * lush, bb = 0.115 + (0.03 - 0.115) * lush;
           rr += (0.12 - rr) * cold * 0.7; gg += (0.125 - gg) * cold * 0.7; bb += (0.065 - bb) * cold * 0.7;
+          // moss and lichen: no blades, low cushions a few centimetres high, olive and grey-green
+          if (wild === WILD_MOSS) {
+            const lk = hashFloat(c, k, 15);
+            out.push(dx, dy, dz, gh, yaw, s * 0.22, 0, variant, (0.1 + 0.08 * lk) * jit, (0.12 + 0.04 * lk) * jit, (0.05 + 0.04 * lk) * jit);
+            continue;
+          }
+          // savanna and steppe tussocks: big bunches, knee to waist high, straw among the green
+          if (wild === WILD_TUSSOCK) {
+            const st = 0.35 + 0.4 * hashFloat(c, k, 15);
+            out.push(dx, dy, dz, gh, yaw, s * 1.8, 0, variant, (rr + (0.3 - rr) * st) * jit, (gg + (0.25 - gg) * st) * jit, (bb + (0.12 - bb) * st) * jit);
+            continue;
+          }
           out.push(dx, dy, dz, gh, yaw, s, 0, variant, rr * jit, gg * jit, bb * jit);
         } else {
           const s = 0.05 + 0.22 * Math.pow(hashFloat(c, k, 11), 2.2);
@@ -423,22 +476,28 @@ export class GroundCover {
         let cr = rec[i + 8], cg = rec[i + 9], cb = rec[i + 10];
         if (kind === GK.crop) {
           // crops only near the camera (dense rows are many instances); beyond, the terrain's field shading
-          if (d > CROP_RANGE) continue;
-          grow *= 1 - Math.min(1, Math.max(0, (d - CROP_RANGE * 0.65) / (CROP_RANGE * 0.35)));
+          // (a wild stand — rec[9] = 1 — stands among the grass to the ground cover's own range, as the tufts it
+          // replaces: cut off at the sown crops' range it left bald patches in the sward from 26 m)
+          const wildS = rec[i + 9] > 0.5;
+          if (!wildS) {
+            if (d > CROP_RANGE) continue;
+            grow *= 1 - Math.min(1, Math.max(0, (d - CROP_RANGE * 0.65) / (CROP_RANGE * 0.35)));
+          }
           // the terrain field's stage (terrainmat: ph = fract(yf + id · 0.15)): tilled → young green → ripe → hay
           // stubble or tilled again; the crop sprouts at the end of tillage and grows through the green stage
           const fid = rec[i + 8];
           const yfP = rec[i + 1] >= 0 ? this.yearFrac : (this.yearFrac + 0.5) % 1;
           const ph = (yfP + fid * 0.15) % 1;
           const k = Math.floor(fid * 5);
-          if (ph < 0.11 || (ph >= 0.7 && k >= 2.5)) continue;
-          grow *= ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
+          // (a wild stand is never tilled or cut: between its seasons last year's dry stalks stand)
+          if (!wildS && (ph < 0.11 || (ph >= 0.7 && k >= 2.5))) continue;
+          grow *= wildS && (ph < 0.15 || ph >= 0.7) ? 0.4 : ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
           const ripe = Math.min(1, Math.max(0, (ph - 0.45) / 0.07));
           // albedo-scale tints (the clump's vertex shade is ~0.85): green, then gold (maize a paler straw)
           const g0 = CROP_G0[variant >> 1] ?? CROP_G0[0];
           const g1 = CROP_G1[variant >> 1] ?? CROP_G1[0];
           const hay: [number, number, number] = [0.28, 0.24, 0.1];
-          const k2 = ph >= 0.7 ? 1 : 0;
+          const k2 = ph >= 0.7 || (wildS && ph < 0.15) ? 1 : 0;
           cr = (g0[0] + (g1[0] - g0[0]) * ripe) * (1 - k2) + hay[0] * k2; cg = (g0[1] + (g1[1] - g0[1]) * ripe) * (1 - k2) + hay[1] * k2; cb = (g0[2] + (g1[2] - g0[2]) * ripe) * (1 - k2) + hay[2] * k2;
         } else if (kind === GK.flower) { if (bloom <= 0.01) continue; grow = bloom; }
         else if (kind === GK.mushroom && !fungi) continue;
