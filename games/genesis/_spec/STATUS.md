@@ -142,8 +142,10 @@ pooled births −3.4 %, deaths +3.5 %, food per adult-year −2.6 % over 15 year
 rules have direct tests (each fails when its rule is removed). §2.5 housing judged per live town: r6 7 / 8, round 2 5 / 8,
 round 3 3 / 8 seeds housed every calm year end (the world sums said 7, 3, 0). The seed-3 firestorm is 8 / 30 dead on the
 round-4 tree (10 / 30 on round 3; every death in the first hour, in the front's spawn disc). **Open:** hunting where game
-exists (two variants on their pooled 8-seed gate, `fix4/hv/`), the round-4 acceptance re-run (`fix4/acc/`),
-`creatures.json` (the lead deletes it: nothing imports it).
+exists — both re-tunes failed their pooled 8-seed gate on injuries per trip and neither got past 4.8 kills per 100 people
+a year (≥ 20 asked; `HUNT_TUNE` stays off; LIVING §13.6); the round-4 acceptance re-run (`fix4/acc/`, launched 07:19
+2026-10-29, installs `acceptance.json` and appends LIVING §13.7 when it ends); `creatures.json` (the lead deletes it:
+nothing imports it).
 
 ## How to run
 
