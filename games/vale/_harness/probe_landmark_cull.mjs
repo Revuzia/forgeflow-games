@@ -122,7 +122,7 @@ try {
     row.summary = {
       at, lmMainTris: [A.lm.tris, Bm.lm.tris], lmMainCalls: [A.lm.calls, Bm.lm.calls], lmShadowTris: [A.lm.shadowTris, Bm.lm.shadowTris],
       lmShadowCalls: [A.lm.shadowCalls, Bm.lm.shadowCalls], frameTris: [A.total.tris, Bm.total.tris], frameCalls: [A.total.calls, Bm.total.calls],
-      sphereOnly: A.main.filter((m) => m.sphere && !m.box).map((m) => `${m.m} (${m.tris})`), diff: row.diff ?? null, floor: row.floor ?? null,
+      sphereOnly: Bm.main.filter((m) => m.sphere && !m.box).map((m) => `${m.m} (${m.tris})`), diff: row.diff ?? null, floor: row.floor ?? null,
     };
     report.spots[name] = row;
     const s = row.summary;
