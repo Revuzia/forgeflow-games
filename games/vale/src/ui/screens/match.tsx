@@ -56,6 +56,14 @@ export function MatchScreen(): JSX.Element {
     });
   };
   useEsc(() => { openMenu(); return true; });
+  // a menu or confirm opened during the match must not outlive it: when the match ends (the end
+  // banner) or this screen leaves, close every modal opened since the match screen mounted
+  useEffect(() => {
+    const floor = overlay.modals.value.reduce((m, x) => Math.max(m, x.id), 0);
+    const sweep = (): void => { for (const m of [...overlay.modals.value].reverse()) if (m.id > floor) overlay.close(m.id); };
+    const off = state.ending.subscribe((ending) => { if (ending) sweep(); });
+    return () => { off(); sweep(); };
+  }, []);
 
   if (!client) return <div class="matchhost" />;
   return (

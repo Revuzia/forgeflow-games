@@ -170,12 +170,19 @@ async function journey(mode) {
     await step('loading', async () => { await waitFor(page, (v) => v.state.match.value?.view.phase === 'pregame' || v.state.match.value?.view.phase === 'live', 60000); return { route: await route() }; });
     await step('match_input', async () => {
       // real input while the autopilot drives: open and close the shop, hold the scoreboard, ping
-      await page.keyboard.press('KeyP'); await page.waitForTimeout(300);
-      const shopOpen = await page.locator('.hud .lshop').count();
+      await page.locator('.hud .dbar').first().waitFor({ state: 'visible', timeout: 60000 });   // the HUD takes input once it is up
+      let shopOpen = 0;
+      for (let i = 0; i < 4 && !shopOpen; i++) {
+        await page.keyboard.press('KeyP');
+        shopOpen = await page.locator('.hud .lshop').first().waitFor({ state: 'visible', timeout: 1500 }).then(() => 1, () => 0);
+      }
+      if (!shopOpen) throw new Error('the shop did not open on P');
       // originality F8: the shop's tag filters speak VALE (the jungle tag reads Dialwood)
       const shopTags = await page.locator('.hud .lshop__tag').allTextContents().then((t) => t.map((x) => x.trim()));
       const genre = shopTags.filter((t) => GENRE_WORDS.test(t));
       await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+      if (await page.locator('.hud .lshop').count()) throw new Error('Escape did not close the shop');
+      if (!shopTags.length) throw new Error('the shop shows no tag filters');
       if (genre.length) throw new Error(`shop tag filters use genre words: ${genre.join(', ')}`);
       await page.keyboard.down('Tab'); await page.waitForTimeout(250);
       const board = await page.locator('.hud .hscore').count();
