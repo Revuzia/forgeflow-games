@@ -9,6 +9,8 @@
 //   tanks     the front lines (frontline / warden, then divers)      → a tank breaker in the first three
 //   burst     the burst styles (then divers)                         → squishies take a burst ward
 //   magic / phys  all-magic and all-physical teams                   → resist vs armor tilt in the defence
+//   situational   against burst a support takes a lookout and a frontline takes peel; a hunting jungler against
+//                 a soft back line takes a takedown piece (integ systems-18)
 //
 // Checks: plans are legal (pool, unique groups, dial-slot rule, one anti-heal piece); counters appear when
 // the enemy team calls for them and stay out when it does not; builds change with the enemy team; the
@@ -114,6 +116,27 @@ section('builds change with the enemy team; the Lampglass path', () => {
     sup.filter((s) => !supOk.includes(s)).map((s) => `${s.f.def.id}: ${P(s.f.def.id, 'none').slice(0, 2)}`));
   const salts = seats.filter((s) => new Set([1, 2, 3, 4, 5, 6].map((salt) => planFor(s, 'none', salt).slice(0, 2).join('>'))).size >= 2);
   check(`a seat's taste (the salt) varies the first two pieces for ≥ 50 % of fighters against one team (${salts.length}/${seats.length})`, salts.length >= 0.5 * seats.length);
+});
+
+section('situational answers: a lookout, peel, a takedown piece (integ systems-18)', () => {
+  // narrower than the counters above: each only when the match calls for it, and only for the seat that uses it
+  const has = (f: string, t: string | FighterProfile[], s: Seat, pick: (i: ItemDefT) => boolean): boolean => {
+    const plan = typeof t === 'string' ? P(f, t) : buildPlan(idx, rules, s.f, s.jungle, { support: s.support, enemies: t.filter((e) => e.def.id !== f), salt: 7 }).core;
+    return plan.slice(0, 3).some((id) => pick(item(id)));
+  };
+  const sup = seats.filter((s) => s.support);
+  const look = (s: Seat, t: string): boolean => has(s.f.def.id, t, s, (i) => itemRole(i).reveals);
+  check(`against burst (threats ${readEnemies(TEAMS.burst).threats}), a support takes a lookout in its first three (${sup.filter((s) => look(s, 'burst')).map((s) => s.f.def.id).join(', ') || 'none'}); fewer against no burst (${sup.filter((s) => look(s, 'none')).length})`,
+    sup.filter((s) => look(s, 'burst')).length >= 1 && sup.filter((s) => look(s, 'burst')).length > sup.filter((s) => look(s, 'none')).length);
+  const fronts = seats.filter((s) => !s.support && (s.f.style === 'frontline' || s.f.style === 'warden'));
+  const peel = (s: Seat, t: string): boolean => has(s.f.def.id, t, s, (i) => itemRole(i).peel);
+  check(`against burst, a frontline takes peel in its first three (${fronts.filter((s) => peel(s, 'burst')).map((s) => s.f.def.id).join(', ') || 'none'}); fewer against no burst (${fronts.filter((s) => peel(s, 'none')).length})`,
+    fronts.filter((s) => peel(s, 'burst')).length >= 1 && fronts.filter((s) => peel(s, 'burst')).length > fronts.filter((s) => peel(s, 'none')).length);
+  const soft = profiles.filter((p) => p.squishy).slice(0, 5);
+  const hunters = seats.filter((s) => s.jungle && !s.support && (s.f.style === 'diver' || s.f.style === 'skirmisher'));
+  const td = (s: Seat, t: string | FighterProfile[]): boolean => has(s.f.def.id, t, s, (i) => itemRole(i).takedown);
+  check(`against a soft back line (${readEnemies(soft).soft} squishies), a hunting jungler takes a takedown piece in its first three (${hunters.filter((s) => td(s, soft)).map((s) => s.f.def.id).join(', ') || 'none'}); fewer against front lines (${hunters.filter((s) => td(s, 'tanks')).length})`,
+    hunters.filter((s) => td(s, soft)).length >= 1 && hunters.filter((s) => td(s, soft)).length > hunters.filter((s) => td(s, 'tanks')).length);
 });
 
 section('every finished item has a buyer', () => {
