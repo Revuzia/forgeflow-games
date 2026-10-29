@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rewrite the ability, battle-spell, boon and team-buff icon prompts in manifest.json from
+"""Rewrite the ability, Hour-spell, boon and team-buff icon prompts in manifest.json from
 ability_subjects.json and setup_subjects.json (what each icon SHOWS) plus a sentence for the kind
 of icon and the pack's fixed style and exclusion clauses (the item TAIL of build_item_prompts.py,
 worded for abilities).

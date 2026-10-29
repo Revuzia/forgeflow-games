@@ -138,7 +138,7 @@ export class CatalogView {
   }
   /** setup pool rule (session/setup.ts): an empty pools list means every pool */
   inPool(pools: readonly string[] | undefined, pool: string | undefined): boolean { return !pool || !pools || pools.length === 0 || pools.includes(pool); }
-  /** battle-spell slots the session fills (session/setup.ts sanitizeLoadout: at most 2) */
+  /** Hour-spell slots the session fills (session/setup.ts sanitizeLoadout: at most 2) */
   spellSlots(): number { return Math.max(1, Math.min(2, this.c.setup.spellSlots)); }
   boonSlots(pool?: string): number { return this.c.setup.boons.some((b) => this.inPool(b.pools, pool)) ? Math.max(0, this.c.setup.boonSlots) : 0; }
   /** the ranked rating ids the catalog uses (one per ranked queue) */
