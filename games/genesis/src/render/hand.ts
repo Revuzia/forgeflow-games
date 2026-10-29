@@ -582,6 +582,10 @@ void main() {
   // (a camera inside the vortex: what passes within a metre or two of the lens fades, or it fills the frame with
   // great blurred discs of dust and light)
   vA = sin(3.14159265 * ph) * on * uPres * smoothstep(1.0 + 0.1 * uL, 2.5 + 0.5 * uL, dist);
+  // (and whatever the Touch's size: dust and leaves never more than ~3 degrees across, gone within a few metres of the
+  // eye — with the camera 9-24 m off they drew as orange and green bokeh discs over the hillside and the sky)
+  if (kind > 0.5) { sz = min(sz, dist * 0.026); vA *= smoothstep(2.5, 9.0, dist); }
+  else vA *= smoothstep(1.5, 5.0, dist);
   vKind = kind;
   vTw = 0.6 + 0.4 * sin(uTouchT * (5.0 + 6.0 * b) + a * 40.0);
   vLight = touchLight(p);

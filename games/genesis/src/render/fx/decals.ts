@@ -300,8 +300,12 @@ void main() {
     // canopy under a strike to frost-white.)
     vec3 A = vCol.rgb * E * lam * 0.064;
     // (expo(), not ex: this branch's own ex is the depth tangent above)
-    if (uGroup > 1.5) o = vec4(vec3(1.0) + min(A * (expo() / 0.18), vec3(12.0)), 1.0);
-    else o = vec4(A * 0.35, 0.0);
+    // Both are capped: the scene at most ~4.5x (a palm canopy multiplied 13x went past the tone curve's shoulder,
+    // where AgX takes every hue to white: the strike frame read as frost), and the additive part only lifts black
+    // ground to a dim lit floor (added uncapped, a white light with no albedo in it, it laid a milky veil over the
+    // whole hillside by day).
+    if (uGroup > 1.5) o = vec4(vec3(1.0) + min(A * (expo() / 0.18), vec3(3.5)), 1.0);
+    else o = vec4(min(A * 0.35, vec3(0.05 / max(expo(), 1e-4))), 0.0);
   } else if (t == 11) {
     // a path ahead (a front's heading): chevrons marching along the axis
     float L = vP.x, W = vP.y;

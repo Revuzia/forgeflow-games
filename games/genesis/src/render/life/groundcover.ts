@@ -321,6 +321,17 @@ export class GroundCover {
         }
         // (a pasture field is a meadow to the ground cover)
         const crG = fid >= 0 ? 0 : cr;
+        if (kind < 0 && wild >= 0 && wild !== WILD_MOSS && wild !== WILD_TUSSOCK && fid < 0 && tr < 0.6 && sa < 0.45) {
+          // the wild species the people forage (the sim's grassSpecies) by its OWN density, not as a share of the
+          // sward's tufts (which follow the grass field: at grass 0.25 a few percent of points became grain and a
+          // wild-rice cell read as any meadow): dense stands in ~5 m patches, a thin scatter between them; mushrooms
+          // and herbs in their own clusters. Never under a closed canopy, in sand or on a field.
+          const wp = hashFloat(Math.floor(u / 5) + 389 * c, Math.floor(v / 5), 0x3d);
+          const dens = (wp < 0.32 ? 0.72 : wp < 0.55 ? 0.22 : 0.035) * (1 - tr / 0.6) * Math.min(1, 0.55 + gr * 1.5);
+          if (wild < WILD_MUSHROOM) { if (r3 < dens) { kind = GK.crop; wildStand = true; } }
+          else if (wild === WILD_MUSHROOM) { if (r3 < dens * 0.3) kind = GK.mushroom; }
+          else if (wild === WILD_HERB && r3 < dens * 0.55) kind = GK.flower;
+        }
         if (kind < 0) {
           // under the canopy: ferns where it is moist, fallen branches and logs, mushrooms
           if (tr > 0.45 && r1 < 0.07 * Math.min(1, mo * 1.6) * (tr - 0.3)) kind = GK.fern;
@@ -331,15 +342,7 @@ export class GroundCover {
             // wildflower patches in meadows (a coarse patch hash decides where they grow)
             const patch = hashFloat(Math.floor(u / 7) + 977 * c, Math.floor(v / 7), 41);
             kind = gr > 0.35 && tr < 0.3 && crG < 0.2 && patch < 0.35 && r3 < 0.18 ? GK.flower : GK.grass;
-            // the wild species among the sward: stands of wild grain (uneven, in ~5 m patches, never in rows),
-            // mushrooms, herbs (moss: low cushions, below)
-            if (wild !== WILD_NONE && wild !== WILD_MOSS && fid < 0) {
-              const wp = hashFloat(Math.floor(u / 5) + 389 * c, Math.floor(v / 5), 0x3d);
-              const share = wp < 0.35 ? 0.45 : wp < 0.6 ? 0.18 : 0.05;
-              if (wild < 100 && r3 < share) { kind = GK.crop; wildStand = true; }
-              else if (wild === WILD_MUSHROOM && r3 < share * 0.25) kind = GK.mushroom;
-              else if (wild === WILD_HERB && r3 < share * 0.6) kind = GK.flower;
-            }
+            // (the wild species the people forage are placed above, by their own density; moss and tussocks: below)
           }
           // stones where the soil is thin: bare rock, scree, stony ground (beaches keep a few) — in clusters (a hash per
           // ~3 m patch: a few patches hold most of them), not an even sprinkle over every meadow
@@ -491,7 +494,7 @@ export class GroundCover {
           const k = Math.floor(fid * 5);
           // (a wild stand is never tilled or cut: between its seasons last year's dry stalks stand)
           if (!wildS && (ph < 0.11 || (ph >= 0.7 && k >= 2.5))) continue;
-          grow *= wildS && (ph < 0.15 || ph >= 0.7) ? 0.4 : ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
+          grow *= wildS && (ph < 0.15 || ph >= 0.7) ? 0.62 : ph < 0.15 ? 0.1 : ph < 0.45 ? 0.15 + 0.85 * Math.min(1, (ph - 0.15) / 0.24) : ph < 0.7 ? 1 : 0.16;
           const ripe = Math.min(1, Math.max(0, (ph - 0.45) / 0.07));
           // albedo-scale tints (the clump's vertex shade is ~0.85): green, then gold (maize a paler straw)
           const g0 = CROP_G0[variant >> 1] ?? CROP_G0[0];

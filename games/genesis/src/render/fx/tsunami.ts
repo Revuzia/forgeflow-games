@@ -132,8 +132,16 @@ void main() {
   // ahead: the seabed laid bare by the drawdown, wet and dark, puddled, fading out ahead
   float wet = 0.6 + 0.4 * snoise(vec3(vAlong * 0.12, pt * 3.0, 2.2));
   vec3 sea = vec3(0.17, 0.15, 0.12) * lit * (0.6 + 0.4 * wet) + vRefl * 0.12 * smoothstep(0.55, 0.8, wet);
+  float bedA = 0.9 * (1.0 - smoothstep(10.6, 12.0, pt));
+  if (uWaterFace > 0.5) {
+    // a rogue wave in open water bares no seabed: ahead of it the sea is drawn down into a trough — darker water with
+    // the sky in it, fading into the sea ahead. Only where it runs up a shore does wet ground show.
+    vec3 trough = mix(deep * 0.9, vRefl, vFres) + uSunE2 * vGlint * 0.4;
+    sea = mix(trough, sea, vLand);
+    bedA = mix(0.55 * (1.0 - smoothstep(10.2, 11.2, pt)), bedA, vLand);
+  }
   c = mix(c, sea, bed);
-  a = mix(a, 0.9 * (1.0 - smoothstep(10.6, 12.0, pt)), bed);
+  a = mix(a, bedA, bed);
   // on land: a turbulent brown bore of mud and wreckage
   vec3 mud = mix(vec3(0.32, 0.25, 0.17), vec3(0.62, 0.58, 0.52), smoothstep(0.5, 0.85, foamN)) * lit * 1.1;
   c = mix(c, mud, vLand * (1.0 - bed));
@@ -144,7 +152,7 @@ void main() {
 
 interface Bin { r: number; rMeas: number; speed: number; level: number; land: number; valid: boolean; seen: number }
 
-const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _n = new Vector3();
+const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _n = new Vector3(), _fwd = new Vector3();
 
 /** one tsunami's front: found in the sim's water and flow fields, eased forward, drawn as a breaking wave */
 export class TsunamiCrest {
@@ -443,6 +451,9 @@ export class TsunamiCrest {
     // normals across the profile and along the front
     for (let i = 0; i < BINS; i++) {
       const i2 = (i + 1) % BINS, i0 = (i + BINS - 1) % BINS;
+      // this bin's forward (the way the wave runs): from the foam field behind to the drawdown ahead
+      const f0 = i * NP * 3, f1 = (i * NP + NP - 1) * 3;
+      _fwd.set(P[f1] - P[f0], P[f1 + 1] - P[f0 + 1], P[f1 + 2] - P[f0 + 2]);
       for (let j = 0; j < NP; j++) {
         const j0 = Math.max(0, j - 1), j1 = Math.min(NP - 1, j + 1);
         const o = (i * NP + j) * 3;
@@ -450,9 +461,12 @@ export class TsunamiCrest {
         _a.set(P[ax] - P[bx], P[ax + 1] - P[bx + 1], P[ax + 2] - P[bx + 2]);
         _b.set(P[cx] - P[dx], P[cx + 1] - P[dx + 1], P[cx + 2] - P[dx + 2]);
         _c.crossVectors(_b, _a);
-        // facing up (away from the planet's centre) on the open water; the face of the wave faces forward
+        // facing up (away from the planet's centre) on the swell behind and on the drawdown's seabed ahead; the lip,
+        // the curl and the face face FORWARD, toward whoever the wave runs at. (The cross product's own sign put the
+        // face's normals backward and the seabed's downward: seen from the shore the face took the sky by full
+        // Fresnel — a glassy blue-white slab — and the bared seabed lay unlit.)
         const up = _n.set(P[o], P[o + 1], P[o + 2]).normalize();
-        if (_c.dot(up) < 0 && j < 6) _c.negate();
+        if (j >= 6 && j < NP - 3 ? _c.dot(_fwd) < 0 : _c.dot(up) < 0) _c.negate();
         if (_c.lengthSq() < 1e-10) _c.copy(up);
         _c.normalize();
         N[o] = _c.x; N[o + 1] = _c.y; N[o + 2] = _c.z;

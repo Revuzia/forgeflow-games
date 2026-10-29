@@ -348,7 +348,8 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
     for (let k = 0; k < 16; k++) {
       const a = rng.float() * 6.28, r = rng.float() * 0.08;
       const tip = blade(Math.cos(a) * r, Math.sin(a) * r, 0.75 + rng.float() * 0.25, 0.4 + rng.float() * 0.5, a, 0.018, 0.85);
-      if (k % 3 === 0) head(tip, 0.12, 0.012, 1.0, 1.25);
+      // (drooping panicles on half the stems, long enough to read at a few metres: a thin one in three read as blades)
+      if (k % 2 === 0) head(tip, 0.19, 0.019, 1.15, 1.3, 4);
     }
   } else {
     const flax = type === 'flax';

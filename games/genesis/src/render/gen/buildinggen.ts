@@ -921,8 +921,25 @@ function tent(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): numbe
   const tint = spec.style % 3 === 0 ? mixc(hide, [0.45, 0.12, 0.05], 0.25) : hide;
   // cover (a cone open near the top), with the door cut as a dark panel
   const prof: [number, number][] = [[R, -0.05], [R * 0.72, H * 0.3], [R * 0.4, H * 0.62], [R * 0.13, H * 0.86]];
-  k.lathe(0, 0, prof, sides, SURF.hide, PART.roof, tint, 0.7, 1);
-  k.lathe(0, 0, prof.slice().reverse().map(([r, y]) => [r * 0.97, y] as [number, number]), sides, SURF.hide, PART.roof, mulc(tint, 0.35), 0.4, 0.4);
+  const poles = spec.lod === 0 ? 9 : 5;
+  if (spec.lod === 0) {
+    // stitched hide panels stretched from pole to pole, sagging between them, each hide its own shade, the top
+    // blackened by the smoke hole's soot (a smooth lathe of one colour read as a plaster cone with ring seams)
+    const at = (a: number, r: number, y: number): [number, number, number] => [Math.cos(a) * r, y, Math.sin(a) * r];
+    for (let i = 0; i < poles; i++) {
+      const a0 = (i / poles) * Math.PI * 2 + 0.3, a2 = ((i + 1) / poles) * Math.PI * 2 + 0.3, a1 = (a0 + a2) / 2;
+      const shade = 0.8 + rng.float() * 0.34, seed = rng.float() * 7;
+      for (let j = 0; j < prof.length - 1; j++) {
+        const [r0, y0] = prof[j], [r1, y1] = prof[j + 1];
+        const soot = j === prof.length - 2 ? 0.5 : j === prof.length - 3 ? 0.86 : 1;
+        const c = mulc(tint, shade * soot);
+        const sag = 0.93;
+        k.quad(at(a1, r0 * sag, y0), at(a0, r0, y0), at(a0, r1, y1), at(a1, r1 * sag, y1), SURF.hide, PART.roof, c, [0.7, 0.75, 0.95, 0.9], seed);
+        k.quad(at(a2, r0, y0), at(a1, r0 * sag, y0), at(a1, r1 * sag, y1), at(a2, r1, y1), SURF.hide, PART.roof, c, [0.75, 0.7, 0.9, 0.95], seed);
+      }
+    }
+  } else k.lathe(0, 0, prof, sides, SURF.hide, PART.roof, tint, 0.7, 1);
+  k.lathe(0, 0, prof.slice().reverse().map(([r, y]) => [r * 0.9, y] as [number, number]), sides, SURF.hide, PART.roof, mulc(tint, 0.35), 0.4, 0.4);
   // door flap
   k.quad([-0.38, 0.0, R + 0.02], [0.38, 0.0, R + 0.02], [0.24, 1.25, R * 0.72 + 0.04], [-0.24, 1.25, R * 0.72 + 0.04], SURF.hide, PART.door, mulc(tint, 0.25), 0.5);
   // painted band
@@ -931,7 +948,6 @@ function tent(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): numbe
     k.lathe(0, 0, [[R * 0.68 + 0.012, bandY], [R * 0.62 + 0.012, bandY + 0.32]], sides, SURF.hide, PART.trim, spec.mood < -0.33 ? [0.03, 0.02, 0.02] : [0.4, 0.06, 0.03], 0.9, 0.9);
   }
   // poles crossing above the top
-  const poles = spec.lod === 0 ? 9 : 5;
   for (let i = 0; i < poles; i++) {
     const a = (i / poles) * Math.PI * 2 + 0.3;
     k.tube([[Math.cos(a) * R * 0.98, -0.1, Math.sin(a) * R * 0.98], [-Math.cos(a) * 0.35, H * 1.18, -Math.sin(a) * 0.35]], [0.045, 0.03], 4, SURF.bark, PART.frame, WOOD_GREY);
@@ -3202,7 +3218,25 @@ function storePit(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
     const x = -R + (2 * R * (i + 0.5)) / n;
     k.tube([[x, 0.36, -R * 1.05], [x + (rng.float() - 0.5) * 0.2, 0.4, R * 1.05]], [0.06, 0.055], 5, SURF.bark, PART.frame, WOOD_GREY);
   }
-  k.slab([-R * 0.8, 0.46, R * 0.75], [R * 0.85, 0.47, R * 0.7], [R * 0.75, 0.5, -R * 0.8], [-R * 0.7, 0.48, -R * 0.75], 0.03, SURF.hide, PART.roof, HIDE, SURF.hide, mulc(HIDE, 0.5));
+  // the cover: a brown hide thrown over the poles, riding up on each pole and sagging between them, its edges ragged
+  // and drooping to the rim (one flat pale slab read as an untextured grey placeholder beside the huts)
+  const hc = mulc(mixc(HIDE, [0.34, 0.22, 0.12], 0.5), 0.88 + rng.float() * 0.24);
+  const zA = -R * (0.72 + rng.float() * 0.12), zB = R * (0.7 + rng.float() * 0.12);
+  const xs: number[] = [], ys: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const x = -R + (2 * R * (i + 0.5)) / n;
+    if (i > 0) { xs.push(x - R / n); ys.push(0.38); }
+    xs.push(x); ys.push(0.45);
+  }
+  xs.unshift(-R * 1.02); ys.unshift(0.3); xs.push(R * 1.02); ys.push(0.3);
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const y0 = ys[i], y1 = ys[i + 1];
+    const e0 = rng.float() * R * 0.08, e1 = rng.float() * R * 0.08;
+    // the strip across the pit, and its two edges drooping onto the rim
+    k.quad([xs[i], y0, zB], [xs[i + 1], y1, zB], [xs[i + 1], y1, zA], [xs[i], y0, zA], SURF.hide, PART.roof, hc, 0.9);
+    k.quad([xs[i], 0.3, zB + R * 0.12 + e0], [xs[i + 1], 0.3, zB + R * 0.12 + e1], [xs[i + 1], y1, zB], [xs[i], y0, zB], SURF.hide, PART.roof, mulc(hc, 0.85), [0.6, 0.6, 0.9, 0.9]);
+    k.quad([xs[i], y0, zA], [xs[i + 1], y1, zA], [xs[i + 1], 0.3, zA - R * 0.12 - e1], [xs[i], 0.3, zA - R * 0.12 - e0], SURF.hide, PART.roof, mulc(hc, 0.85), [0.9, 0.9, 0.6, 0.6]);
+  }
   if (spec.lod === 0) for (let i = 0; i < 4; i++) { k.push((rng.float() - 0.5) * R, 0.5, (rng.float() - 0.5) * R); rock(k, 0.18, 0.12, 0.15, STONE, rng.float(), 1); k.pop(); }
   return 0.7;
 }
