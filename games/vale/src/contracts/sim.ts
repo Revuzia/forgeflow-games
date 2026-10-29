@@ -36,7 +36,15 @@ export interface MatchSetup {
   map: string;              // MapDef id
   seats: SeatSetup[];
   /** practice tool switches (only honoured when queue.kind === 'practice') */
-  practice?: { infiniteGold?: boolean; noCooldowns?: boolean; dummies?: number; startLevel?: number };
+  practice?: {
+    infiniteGold?: boolean; noCooldowns?: boolean; dummies?: number; startLevel?: number;
+    /** CHANGED(W4 g3), additive: Wicks and structures at the start (default on; the toggles flip them in play) */
+    waves?: boolean; structures?: boolean;
+    /** CHANGED(W4 g3), additive, session only: practise in another mode on its own map (a mode whose end is 'core') */
+    mode?: string;
+    /** CHANGED(W4 g3), additive, session only: a sparring fighter on the enemy team, played by a bot */
+    sparring?: { fighter: string; difficulty?: 'novice' | 'adept' | 'veteran' };
+  };
   catalogVersion: string;
 }
 
@@ -55,7 +63,11 @@ export type Command =
   | { type: 'ping'; kind: PingKind; x: number; y: number; target?: EntityId }
   | { type: 'surrenderVote'; yes: boolean }
   // practice tool only
-  | { type: 'practice'; action: 'gold' | 'level' | 'resetCooldowns' | 'toggleCooldowns' | 'spawnDummy' | 'heal' | 'resetMatch' };
+  | { type: 'practice'; action: 'gold' | 'level' | 'resetCooldowns' | 'toggleCooldowns' | 'spawnDummy' | 'heal' | 'resetMatch'
+      /** CHANGED(W4 g3), additive: Wicks on/off (off clears the roads), structures on/off (off: they neither shoot nor take
+       *  damage), teleport to (x, y), training-dummy stats (hp / armor / resist), clear the damage meter, remove dummies */
+      | 'toggleWaves' | 'toggleStructures' | 'teleport' | 'dummyStats' | 'resetMeter' | 'clearDummies';
+    x?: number; y?: number; hp?: number; armor?: number; resist?: number };
 
 export type PingKind = 'alert' | 'danger' | 'onMyWay' | 'missing' | 'assist' | 'push' | 'vision' | 'objective' | 'retreat';
 
@@ -162,6 +174,23 @@ export interface TeamView {
   readonly gold: number;
 }
 
+/** W4 g3: the practice tool as the HUD shows it */
+export interface PracticeView {
+  waves: boolean; structures: boolean; noCooldowns: boolean;
+  /** the training dummy's current stats (spawned and future dummies) */
+  dummy: { hp: number; armor: number; resist: number };
+  /** per seat: damage dealt to enemies since the last resetMeter (fighters, dummies, Wicks, monsters, structures) */
+  meters: PracticeMeter[];
+}
+export interface PracticeMeter {
+  player: PlayerId;
+  /** total since the meter was reset */ dealt: number;
+  /** the latest hit */ last: number;
+  /** the current (or last) burst: hits with no gap of PRACTICE_BURST_GAP s; its damage, length in s, and per second */
+  burst: number; burstTime: number; burstDps: number;
+  /** damage in the last 5 s */ recent5: number;
+}
+
 export interface ObjectiveTimerView { id: string; unit: string; at: [number, number]; alive: boolean; respawnIn: number }
 
 export interface WorldView {
@@ -176,6 +205,8 @@ export interface WorldView {
   readonly suddenDeath: boolean;
   /** W4 (gameplay G5), additive: steps the Gorge Wind has risen in sudden death (rules.gorgeWind); 0 before it */
   readonly gorgeWind: number;
+  /** W4 (gameplay g3), additive: the practice tool's switches and damage meters; null outside practice */
+  readonly practice?: PracticeView | null;
   readonly result: MatchResult | null;
   entity(id: EntityId): EntityView | undefined;
   /** fog of war: vision grid for a team (1 byte per nav cell, 0 = unseen, 255 = seen). Cells are map.navCell * 4 metres. */

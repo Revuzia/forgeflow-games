@@ -13,7 +13,7 @@
 
 import type { CatalogT, DamageTypeT, MapDefT, ModeDefT, QueueDefT, RulesParamsT } from '../contracts/catalog.ts';
 import type {
-  Command, EntityId, EntityKind, MatchResult, MatchSetup, ObjectiveTimerView, PingKind, PlayerId, SimEvent, TeamId, WorldView,
+  Command, EntityId, EntityKind, MatchResult, MatchSetup, ObjectiveTimerView, PingKind, PlayerId, PracticeView, SimEvent, TeamId, WorldView,
 } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import { indexCatalog, resolveRules, type CatalogIndex } from './catalog_index.ts';
@@ -189,6 +189,8 @@ export class World implements WorldView {
   objectives: ObjectiveTimerView[] = [];
   suddenDeath = false;
   gorgeWind = 0;
+  /** W4 g3: the practice tool view (modes/practice.ts); null outside practice */
+  practice: PracticeView | null = null;
   result: MatchResult | null = null;
 
   // internal ---------------------------------------------------------------------------------

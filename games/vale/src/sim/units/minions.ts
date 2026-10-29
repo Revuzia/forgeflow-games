@@ -19,6 +19,7 @@
 // protected structures are walked past/held at rather than hit. Unit abilities are cast at the
 // target when ready.
 
+import { practiceWaves } from '../modes/practice.ts';
 import { attackable } from '../attack.ts';
 import { ORDER_ATTACK, ORDER_ATTACK_MOVE, type Entity } from '../entity.ts';
 import { segPointDist2 } from '../math.ts';
@@ -68,7 +69,8 @@ export function waveSystem(w: World): void {
     const at = st.nextAt;
     st.n++;
     st.nextAt += Math.max(1, mw.interval);
-    spawnWave(w, st, st.n, at);
+    // practice with Wicks off: the schedule keeps running, nothing spawns (modes/practice.ts toggleWaves)
+    if (practiceWaves(w)) spawnWave(w, st, st.n, at);
   }
 }
 

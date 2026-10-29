@@ -403,6 +403,9 @@ export class LocalSession implements Session {
       simCatalog = customCatalog(this.catalog, queue, mode, req.custom?.rulesOverride);
       protocol = pickProtocol(mode, findQueue(simCatalog, queue.id)!);
     } else if (queue.kind === 'practice') {
+      // W4 g3: practise in another mode on its own map — a two-team mode whose end is the core, so a lone seat never ends it
+      const alt = req.practice?.mode ? findMode(this.catalog, req.practice.mode) : undefined;
+      if (alt && alt.teams === 2 && alt.rules.end.kind === 'core') { mode = alt; map = alt.map; }
       protocol = req.preset && isPlayable(this.catalog, req.preset.fighter) ? 'role_preset' : 'blind';
     }
     const simQueue = findQueue(simCatalog, queue.id)!;
@@ -420,6 +423,9 @@ export class LocalSession implements Session {
       slots = customLayout(mode, req.custom!);
     } else if (queue.kind === 'practice' && queue.bots.fill === 'none') {
       slots = [{ player: 0, team: 0, you: true }];
+      // W4 g3: a sparring fighter on the other team, played by a bot of the chosen difficulty
+      const sp = req.practice?.sparring;
+      if (sp && isPlayable(this.catalog, sp.fighter)) slots.push({ player: 1, team: 1, fighter: sp.fighter, difficulty: sp.difficulty ?? 'adept' });
     } else {
       const lay = modeLayout(mode);
       const myTeam = this.rng.pick([...new Set(lay.map((s) => s.team))]);

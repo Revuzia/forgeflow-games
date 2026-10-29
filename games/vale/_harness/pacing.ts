@@ -1,13 +1,18 @@
-// VALE harness — match pacing: all-bot matches on the REAL built catalog (dist-catalog), several seeds per
-// mode, headless at full sim speed. Prints each match's end reason and length, and the mean per mode.
+// VALE harness — match pacing: all-bot matches on the REAL catalog (built in memory from content/, the source of
+// truth; --dist reads dist-catalog instead), several seeds per mode, headless at full sim speed. Prints each match's
+// end reason and length, and per mode the mean, median, p90 and max.
 // Seats are what players face: in role modes each seat plays its role with a native fighter of it
-// (rotated by seed) and the bots' own pickLoadout for that role; bots play at the queue's difficulty
-// (--diff overrides). Every seat is driven once, by the sim's own bot controllers.
-//   node tools/build_content.ts --allow-missing-assets && node _harness/pacing.ts [--seeds 6] [--modes rift,bridge,fray] [--rules '<json>'] [--diff adept]
+// (rotated by seed) and the bots' own pickLoadout for that role; bots play at the queue's difficulty — adept for
+// RIFT's standard queue, the default queue difficulty (--diff overrides). Every seat is driven once, by the sim's
+// own bot controllers.
+// Gate (W4 gameplay g2): RIFT at adept must have p90 ≤ 32 min (exit 1 otherwise; reported, not gated, under 10 seeds).
+// The full soak (probe_sim_bot_soak.ts --full, 20 seeds a difficulty) carries the same gate.
+//   node _harness/pacing.ts [--seeds 6] [--modes rift,bridge,fray] [--rules '<json>'] [--diff adept] [--dist]
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Catalog, type CatalogT } from '../src/contracts/catalog.ts';
+import { buildContent, defaultOptions } from '../tools/build_content.ts';
 import type { MatchSetup, SeatSetup } from '../src/contracts/sim.ts';
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
 import { LocalMatchHost } from '../src/session/match_host.ts';
@@ -19,9 +24,20 @@ const SEEDS = Number(opt('seeds', '6'));
 const MODES = opt('modes', 'rift,bridge,fray').split(',');
 const DIFF = opt('diff', '');
 
-const root = join(HERE, '..', 'dist-catalog', 'schema-1');
-const ver = readdirSync(root).sort().pop()!;
-const catalog: CatalogT = Catalog.parse(JSON.parse(readFileSync(join(root, ver, 'catalog.json'), 'utf8')));
+function loadCatalog(): CatalogT {
+  if (args.includes('--dist')) {
+    const root = join(HERE, '..', 'dist-catalog', 'schema-1');
+    const ver = readdirSync(root).sort().pop()!;
+    return Catalog.parse(JSON.parse(readFileSync(join(root, ver, 'catalog.json'), 'utf8')));
+  }
+  const r = buildContent(defaultOptions({ check: true, allowMissingAssets: true, quiet: true }));
+  if (!r.catalog) { console.error('content build failed:', r.errors.slice(0, 5).map((d) => `${d.file} ${d.path}: ${d.msg}`).join('\n')); process.exit(77); }
+  return r.catalog;
+}
+const catalog: CatalogT = loadCatalog();
+const P90_GATE_MIN = 32;
+const GATE_MIN_SEEDS = 10;
+let failed = false;
 // balance experiments without touching content: --rules '<json>' deep-merges into every probed mode's rules
 const deepMerge = (a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = { ...a };
@@ -83,6 +99,16 @@ for (const m of MODES) {
     lens.push(d);
     console.log(`${m} seed ${s}: ${end ? `${end.reason} at ${(d / 60).toFixed(1)} min, winner ${end.winningTeam}` : 'no end in 60 min'}  (${((Date.now() - t0) / 1000).toFixed(1)} s wall)`);
   }
-  const ok = lens.filter((x) => Number.isFinite(x));
-  console.log(`${m}: mean ${(ok.reduce((a, b) => a + b, 0) / ok.length / 60).toFixed(1)} min, min ${(Math.min(...ok) / 60).toFixed(1)}, max ${(Math.max(...ok) / 60).toFixed(1)}\n`);
+  const ok = lens.filter((x) => Number.isFinite(x)).map((x) => x / 60).sort((a, b) => a - b);
+  const q = (p: number): number => ok[Math.min(ok.length - 1, Math.max(0, Math.ceil(p * ok.length) - 1))];
+  const diff = setupFor(m, 1).seats[0].botDifficulty;
+  console.log(`${m} (${diff}): mean ${(ok.reduce((a, b) => a + b, 0) / ok.length).toFixed(1)} min, median ${q(0.5).toFixed(1)}, p90 ${q(0.9).toFixed(1)}, min ${ok[0].toFixed(1)}, max ${ok[ok.length - 1].toFixed(1)}`);
+  if (m === 'rift' && diff === 'adept') {
+    const pass = q(0.9) <= P90_GATE_MIN;
+    const gated = ok.length >= GATE_MIN_SEEDS;
+    console.log(`  ${pass ? 'PASS' : gated ? 'FAIL' : 'open'} RIFT adept p90 ${q(0.9).toFixed(1)} min (target <= ${P90_GATE_MIN}${gated ? '' : `; ${ok.length} seeds < ${GATE_MIN_SEEDS}: report only`})`);
+    if (!pass && gated) failed = true;
+  }
+  console.log('');
 }
+if (failed) process.exit(1);

@@ -178,6 +178,9 @@ export function sanitizePractice(p: MatchSetup['practice'] | undefined, rules: R
   if (typeof p.noCooldowns === 'boolean') out.noCooldowns = p.noCooldowns;
   if (typeof p.dummies === 'number' && Number.isFinite(p.dummies)) out.dummies = Math.max(0, Math.min(20, Math.floor(p.dummies)));
   if (typeof p.startLevel === 'number' && Number.isFinite(p.startLevel)) out.startLevel = Math.max(1, Math.min(rules.maxLevel, Math.floor(p.startLevel)));
+  // W4 g3: Wicks / structures at the start (the session-only choices — mode, sparring — never reach the sim)
+  if (typeof p.waves === 'boolean') out.waves = p.waves;
+  if (typeof p.structures === 'boolean') out.structures = p.structures;
   return out;
 }
 

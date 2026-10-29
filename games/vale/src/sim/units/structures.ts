@@ -33,6 +33,7 @@
 // s steps up, damage dealt by Wicks is × (1 + s × wickDamage) and damage taken by structures × (1 + s ×
 // structureTaken) — the stalled match breaks its chains down in order instead of skipping them.
 
+import { practiceStructures } from '../modes/practice.ts';
 import { TICK_HZ } from '../../contracts/sim.ts';
 import { addShield } from '../combat.ts';
 import { applyStatus, removeStatusKind } from '../status.ts';
@@ -113,6 +114,8 @@ export function updateProtection(w: World): void {
 
 // ── tower AI ('ai' phase) ───────────────────────────────────────────────────────────────────────
 export function towerSystem(w: World): void {
+  // practice with structures off: towers hold fire (modes/practice.ts toggleStructures)
+  if (!practiceStructures(w)) return;
   for (const entry of structuresOf(w)) {
     const e = entry.ent;
     if (!e.alive || !e.unit || !e.attackDef) continue;

@@ -8,6 +8,7 @@ import { createSim, type Sim } from '../src/sim/sim.ts';
 import { tryCast } from '../src/sim/abilities.ts';
 import { dealDamage, killEntity } from '../src/sim/combat.ts';
 import { dummyUnitId } from '../src/sim/modes/practice.ts';
+import { harness, lastOf } from './fixtures/session_fixture.ts';
 
 const cat = matchCatalog();
 const seats = [{ fighter: 'fx_brawler', team: 0, controller: 'human' as const }, { fighter: 'fx_brawler', team: 1 }];
@@ -69,6 +70,87 @@ section('commands', () => {
   check('resetMatch: a fresh world (tick 0) + practice_reset announce', sim.view.tick === 0 && tick > 60 && sim.world !== w &&
     ofType(ev2, 'announce').some((a) => a.key === 'practice_reset'));
   check('the reset world is the same setup, back at start', sim.world.players[0].ent!.level === 1 && sim.world.players[0].gold === 500);
+});
+
+section('the lab (W4 gameplay g3): waves and structures toggles, teleport, dummy stats, damage meter', () => {
+  const sim = createSim(cat, laneSetup(seats, { queue: 'fx_lane_practice' }), { pregameSeconds: 0 });
+  const w = sim.world, p = w.players[0], e = p.ent!;
+  const cmd = (c: Record<string, unknown>): SimEvent[] => { sim.command(0, { type: 'practice', ...c } as never); return sim.step(); };
+  const wicks = (): number => w.entities.filter((u) => u.kind === 'minion' && u.alive && u.def !== 'fx_training_dummy').length;
+  check('WorldView.practice: on, waves and structures on', !!sim.view.practice && sim.view.practice.waves && sim.view.practice.structures);
+  run(sim, 14);
+  const before = wicks();
+  const tev = cmd({ action: 'toggleWaves' });
+  check(`toggleWaves off: the roads clear (${before} -> ${wicks()} Wicks), no bounty paid`, before > 0 && wicks() === 0 && !ofType(tev, 'gold').some((g) => g.reason === 'cs') && !sim.view.practice!.waves);
+  run(sim, 65);
+  check('…and no wave spawns while off (65 s)', wicks() === 0);
+  cmd({ action: 'toggleWaves' });
+  run(sim, 31);
+  check('toggleWaves on: waves resume on the schedule', wicks() > 0 && sim.view.practice!.waves);
+  // structures: the enemy tower at (82, 20)
+  const tower = w.entities.find((u) => u.kind === 'structure' && u.team === 1 && u.def === 'fx_lane_tower')!;
+  cmd({ action: 'toggleWaves' });
+  cmd({ action: 'toggleStructures' });
+  cmd({ action: 'teleport', x: tower.x - 3, y: tower.y });
+  check('teleport: onto a walkable point next to the enemy tower', Math.hypot(e.x - (tower.x - 3), e.y - tower.y) < 0.01, [e.x, e.y]);
+  const hp0 = e.hp;
+  run(sim, 4);
+  check('toggleStructures off: the tower holds fire and takes no damage', e.hp >= hp0 && dealDamage(w, e, tower, 500, 'true') === 0 && !sim.view.practice!.structures);
+  cmd({ action: 'toggleStructures' });
+  run(sim, 4);
+  check('toggleStructures on: it shoots again', e.hp < hp0 || !e.alive);
+  const at = [e.x, e.y];
+  cmd({ action: 'teleport', x: -50, y: -50 });
+  check('teleport off the map is refused', e.x === at[0] && e.y === at[1]);
+  // dummy stats and the meter
+  cmd({ action: 'heal' });
+  cmd({ action: 'teleport', x: 25, y: 35 });
+  e.facing = 0; e.autoAttack = false;
+  cmd({ action: 'dummyStats', hp: 3000, armor: 100, resist: 0 });
+  cmd({ action: 'spawnDummy' });
+  const d = dummies(sim)[0];
+  check('dummyStats: a new dummy has 3000 hp, 100 armor, 0 resist; the view says so', d && d.maxHp === 3000 && d.hp === 3000 && d.stats.armor === 100 && d.stats.resist === 0 &&
+    sim.view.practice!.dummy.hp === 3000 && sim.view.practice!.dummy.armor === 100, d && [d.maxHp, d.stats.armor, d.stats.resist]);
+  cmd({ action: 'resetMeter' });
+  const a1 = dealDamage(w, e, d, 200, 'phys');
+  run(sim, 1);
+  const a2 = dealDamage(w, e, d, 100, 'true');
+  sim.step();
+  const m = sim.view.practice!.meters.find((x) => x.player === 0)!;
+  check(`100 armor halves a 200 phys hit (${a1.toFixed(1)}); the meter: dealt ${m.dealt.toFixed(1)}, last ${m.last.toFixed(1)}, burst ${m.burst.toFixed(1)} over ${m.burstTime.toFixed(2)} s, last 5 s ${m.recent5.toFixed(1)}`,
+    Math.abs(a1 - 100) < 1e-6 && Math.abs(m.dealt - (a1 + a2)) < 1e-6 && Math.abs(m.last - a2) < 1e-6 && Math.abs(m.burst - (a1 + a2)) < 1e-6 && m.burstTime > 0.9 && Math.abs(m.recent5 - (a1 + a2)) < 1e-6, m);
+  run(sim, 6);
+  dealDamage(w, e, d, 50, 'true');
+  sim.step();
+  const m2 = sim.view.practice!.meters.find((x) => x.player === 0)!;
+  check('a gap of 3 s+ starts a new burst; the 5 s window lets the old hits go', Math.abs(m2.burst - 50) < 1e-6 && Math.abs(m2.recent5 - 50) < 1e-6 && Math.abs(m2.dealt - (a1 + a2 + 50)) < 1e-6, m2);
+  cmd({ action: 'resetMeter' });
+  check('resetMeter zeroes it', sim.view.practice!.meters.find((x) => x.player === 0)!.dealt === 0);
+  cmd({ action: 'dummyStats', armor: 0 });
+  check('dummyStats applies to the dummies already standing', d.stats.armor === 0 && d.maxHp === 3000);
+  cmd({ action: 'clearDummies' });
+  check('clearDummies removes them', dummies(sim).length === 0);
+  const s3 = createSim(cat, laneSetup(seats, { queue: 'fx_lane_practice', practice: { waves: false, structures: false } }), { pregameSeconds: 0 });
+  run(s3, 20);
+  check('setup.practice waves / structures false: no Wicks, structures off from the start', s3.view.practice!.waves === false && s3.view.practice!.structures === false &&
+    s3.world.entities.filter((u) => u.kind === 'minion' && u.alive).length === 0);
+  check('outside practice WorldView.practice is null', createSim(cat, laneSetup(seats), { pregameSeconds: 0 }).view.practice === null);
+});
+
+section('the lab, session half (g3): a sparring fighter and another mode', () => {
+  const h = harness({ autopilot: false });
+  h.session.queue({ queue: 'fx_s_practice', practice: { sparring: { fighter: 'fx_ranger', difficulty: 'veteran' }, mode: 'fx_s_bridge', waves: false }, preset: { fighter: 'fx_brawler' } });
+  h.clock.advanceUntil(() => h.session.phase === 'loading', 15_000);
+  const setup = lastOf(h, 'loading')?.setup;
+  const sp = setup?.seats.find((s) => s.player !== 0);
+  check('practice.sparring: a veteran bot on the other team with the chosen fighter', !!setup && setup.seats.length === 2 && !!sp && sp.team !== setup.seats[0].team &&
+    sp.controller === 'bot' && sp.fighter === 'fx_ranger' && sp.botDifficulty === 'veteran', setup?.seats);
+  check('practice.mode: the other core mode on its own map; the sim gets waves:false only (mode/sparring stay in the session)', setup?.mode === 'fx_s_bridge' && setup?.map === 'fx_lane_map' &&
+    JSON.stringify(setup?.practice) === JSON.stringify({ waves: false }), [setup?.mode, setup?.map, setup?.practice]);
+  const h2 = harness({ autopilot: false });
+  h2.session.queue({ queue: 'fx_s_practice', practice: { mode: 'fx_s_fray' }, preset: { fighter: 'fx_brawler' } });
+  h2.clock.advanceUntil(() => h2.session.phase === 'loading', 15_000);
+  check('a mode that is not a two-team core mode is ignored (FRAY would end on a lone seat)', lastOf(h2, 'loading')?.setup.mode === 'fx_s_rift');
 });
 
 section('ignored outside a practice queue', () => {
