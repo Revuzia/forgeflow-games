@@ -13,7 +13,8 @@
 // home (client F7): the progress band on a fresh profile and after a won match (level ring with XP to next, the
 // first-win candle lit / spent with the reset time, Play again enabled), then one click on Play again must start the
 // search. Per screen and size the report holds: clipped (text cut by its own box or an overflow ancestor; line-clamped
-// descriptions are listed apart as `clamped`), fold (must-see elements not fully inside their scroll box or under
+// descriptions are listed apart as `clamped`), edgeCut (text a scroll box cuts through at its bottom edge with no fade;
+// play roles-720; the faded ones are listed apart as `edgeFaded`), fold (must-see elements not fully inside their scroll box or under
 // the footer), portal (text under the control bar), and the screen's own metrics (Play: selected queue card and
 // Find match boxes, gnomon / title overlap, the mode art; draft: the showcase box and the lock-in cue; skins: tiles
 // per row). Shots: _harness/_shots/<prefix>_<w>_<screen>.png; report: _harness/_reports/<prefix>.json.
@@ -63,6 +64,20 @@ function measure(o) {
     if (r.right > ar.right + 1.5 || r.left < ar.left - 1.5) clipped.push({ t: txt(e), cls: e.className, by: a.className, side: Math.round(r.right - ar.right) });
     else if (!scrollsY && (r.bottom > ar.bottom + 1.5) && r.top < ar.bottom) clipped.push({ t: txt(e), cls: e.className, by: a.className, cutY: Math.round(r.bottom - ar.bottom) });
   }
+  // play roles-720: text a scroll box cuts through at its bottom edge (at the screen's entry scroll, scrollTop 0) fails
+  // unless that box fades the edge (a mask, .sfade.is-more-b); the faded ones are listed apart as `edgeFaded`
+  const edgeCut = [], edgeFaded = [];
+  for (const e of scr.querySelectorAll('*')) {
+    if (!ownText(e) || !shown(e) || e.closest('[aria-hidden="true"], .tip, .sr-only, .skel')) continue;
+    let a = e.parentElement;
+    for (; a && a !== document.body; a = a.parentElement) { const cs = getComputedStyle(a); if (/auto|scroll/.test(cs.overflowY) && a.scrollHeight > a.clientHeight + 1) break; }
+    if (!a || a === document.body) continue;
+    const r = e.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    if (!(r.top < ar.bottom - 1.5 && r.bottom > ar.bottom + 1.5)) continue;
+    const acs = getComputedStyle(a);
+    const mask = [acs.maskImage, acs.webkitMaskImage].find((m) => m && m !== 'none') ?? null;
+    (mask ? edgeFaded : edgeCut).push({ t: txt(e), cls: String(e.className).slice(0, 40), by: String(a.className).slice(0, 40), scrollTop: Math.round(a.scrollTop), cutY: Math.round(r.bottom - ar.bottom), box: rect(e) });
+  }
   // must-see elements: fully inside every scrolling ancestor and above the footer
   const fold = [];
   for (const m of o.must ?? []) {
@@ -102,7 +117,7 @@ function measure(o) {
       if (rr > b.left && l < b.right && bb > b.top && t < b.bottom) portal.push({ t: txt(e), box: [Math.round(l), Math.round(t), Math.round(rr), Math.round(bb)] });
     }
   }
-  return { vh: innerHeight, footTop: Math.round(footTop), clipped, clamped, fold, portal, bar: bar ? rect(bar) : null };
+  return { vh: innerHeight, footTop: Math.round(footTop), clipped, clamped, edgeCut, edgeFaded, fold, portal, bar: bar ? rect(bar) : null };
 }
 
 const MUST = {
@@ -124,11 +139,26 @@ async function check(page, screen, w, extra = {}, mustKey = screen) {
   const row = { ...m, ...extra };
   (R.screens[screen] ??= {})[w] = row;
   if (m.clipped.length) fail(screen, w, `${m.clipped.length} clipped label(s)`, m.clipped.slice(0, 6));
+  if (m.edgeCut.length) fail(screen, w, `${m.edgeCut.length} label(s) cut at a scroll box's bottom edge with no fade`, m.edgeCut.slice(0, 6));
   if (m.fold.length) fail(screen, w, `${m.fold.length} must-see element(s) below the fold`, m.fold.slice(0, 6));
   if (m.portal.length) fail(screen, w, `${m.portal.length} text(s) under the control bar`, m.portal.slice(0, 4));
-  if (!m.clipped.length && !m.fold.length && !m.portal.length) console.log(`  ✓ ${screen} ${w}${m.clamped.length ? ` (${m.clamped.length} clamped)` : ''}`);
+  if (!m.clipped.length && !m.edgeCut.length && !m.fold.length && !m.portal.length) console.log(`  ✓ ${screen} ${w}${m.clamped.length ? ` (${m.clamped.length} clamped)` : ''}${m.edgeFaded.length ? ` (${m.edgeFaded.length} faded at a scroll edge)` : ''}`);
   save();
   return row;
+}
+
+/** loading:tip-mode: the tip shown is one of this mode's tips (CatalogView.tipsFor) and no tip tag names an unknown mode */
+async function tipCheck(page, w, tag) {
+  const t = await vale(page, (v) => {
+    const mode = v.state.loading.value?.setup.mode ?? v.state.lastSetup.value?.mode;
+    const shown = document.querySelector('.scr:not(.is-leaving) .loading__tip p')?.innerText?.trim() ?? '';
+    const list = v.cv.tipsFor(mode);
+    return { mode, shown, count: list.length, of: v.cv.c.client.tips.length, ok: !shown || list.includes(shown), unknown: v.cv.unknownTipModes() };
+  });
+  (R.screens.loading ??= {})[`${w}_${tag}`] = { ...(R.screens.loading?.[`${w}_${tag}`] ?? {}), tip: t };
+  if (!t.ok) fail('loading', `${w}_${tag}`, `the tip shown is not one of ${t.mode}'s tips`, t);
+  if (t.unknown.length) fail('loading', `${w}_${tag}`, 'a tip tag names no catalog mode', t.unknown);
+  save();
 }
 
 const { browser, page, logs } = await open('/?dev=1', { width: SIZES[0][0], height: SIZES[0][1], hmr: false });
@@ -365,6 +395,7 @@ if (want('draft') && which === 'flow') await step('draft_flow', async () => {
     await vp(w, h);
     if (await vale(page, (v) => v.router.route.value.screen !== 'loading')) { R.errors.push({ name: 'loading_flow', err: `the match started before the ${w} measurement (not a fit failure; the fast run measures loading at every size)` }); break; }
     await check(page, 'loading', `${w}_flow`);
+    await tipCheck(page, w, 'flow');
     await shot(page, `${PREFIX}_${w}_loading_flow`);
   }
 });
@@ -392,7 +423,7 @@ if (want('draft') && which === 'fast') await step('draft_other', async () => {
 
 // ── loading (fixture, fast) ─────────────────────────────────────────────────────────────────────────────────
 if (want('loading') && which === 'fast') await step('loading', async () => {
-  for (const mode of ['rift', 'fray']) {
+  for (const mode of ['rift', 'bridge', 'fray']) {
     await vale(page, (v, mode) => {
       const cv = v.cv; const fs = cv.playable(); const roles = cv.rolesOrdered().map((r) => r.id);
       const q = cv.queuesOf(mode)[0];
@@ -402,7 +433,7 @@ if (want('loading') && which === 'fast') await step('loading', async () => {
       v.router.reset('loading', {});
     }, mode);
     await W(2200);
-    await each(async (w) => { await W(500); await check(page, 'loading', `${w}_${mode}`); await shot(page, `${PREFIX}_${w}_loading_${mode}`); });
+    await each(async (w) => { await W(500); await check(page, 'loading', `${w}_${mode}`); await tipCheck(page, w, mode); await shot(page, `${PREFIX}_${w}_loading_${mode}`); });
   }
   await vale(page, (v) => { v.state.loading.value = null; v.router.reset('home', {}); });
 });

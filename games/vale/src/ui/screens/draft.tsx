@@ -38,7 +38,7 @@ import { AbilityTip, useTip } from '../components/Tooltip.tsx';
 import { keyShort } from '../keys.ts';
 import { reducedMotion } from '../motion.ts';
 import { Ring } from '../components/Ring.tsx';
-import { Screen } from '../components/Screen.tsx';
+import { Screen, useMoreBelow } from '../components/Screen.tsx';
 import { roman, SeatMark, seatOf, SideMark } from '../components/Seat.tsx';
 import { EmptyState, Skeleton } from '../components/States.tsx';
 import { fmtWait } from '../format.ts';
@@ -527,6 +527,8 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
   const mode = cv.mode(d.mode);
   const rules = cv.rulesOf(queue);
   const [pressed, setPressed] = useState(false);
+  // play roles-720: at 720 the loadout runs past the column; its bottom edge fades instead of cutting a line through
+  const [finalBox, finalMore] = useMoreBelow<HTMLElement>();
   // client F12: with the session's ready flag, Lock in is "I am ready" and the session's word is final
   const canReady = typeof readyOf(me) === 'boolean';
   const lockedIn = canReady ? readyOf(me) === true || pressed : pressed;
@@ -589,7 +591,7 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
               })}
             </aside>
           ) : <TeamColumn d={d} team={me.team} rel="ally" actions={tradeActions} />}
-          <section class="draft__final stg">
+          <section ref={finalBox} class={`draft__final sfade ${finalMore} stg`}>
             {f ? (
               <div class="final">
                 <div class="final__who">
