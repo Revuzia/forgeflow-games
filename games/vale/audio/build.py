@@ -53,7 +53,7 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              round-robin-averaged spectrum (a laptop plays no sub band, so none carries identity), and the
              confusability of the closest pair of takes (STFT, 125 Hz - 16 kHz, re the strongest band, -40 dB floor:
              the final review's measure); every fighter has its own ability impact and dash (hit, dash: held to the
-             same distance), shared with no one;
+             same distance, the dash also from the displacement's 'dash' role cue), shared with no one;
              the kits' attack swings, attack hits, ult releases and ability hits (LAPTOP_SLOTS) lose <= LAPTOP_MAX_LU on
              a laptop, a physical fighter's attack hit and ability hit (CONTACT_SLOTS: they replace the library's
              c_hit_phys_* on every auto and ability) has a contact (>= KIT_TRANSIENT_MIN) and no fighter's passes the
@@ -623,8 +623,9 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
     (attack swing / hit, ult wind-up / release) nor own cue (ability hit, dash) is shared by two fighters or with a
     unit; two fighters' cues in the same identity slot (the own ability hit and dash included: DIST_SLOTS) sit >=
     ID_MIN_DIST_DB apart by BOTH measures (1/3-octave distance from ID_FROM_HZ up over the take-averaged spectrum, and
-    the confusability distance of the closest pair of takes, 125 Hz - 16 kHz); every kit attack swing, attack hit, ult release and ability hit loses <= LAPTOP_MAX_LU
-    through the 220 Hz laptop roll-off, a physical fighter's attack hit and ability hit carry a contact (>=
+    the confusability distance of the closest pair of takes, 125 Hz - 16 kHz), and so does every own dash from the
+    displacement's ('dash' role); every kit attack swing, attack hit, ult release and ability hit loses <=
+    LAPTOP_MAX_LU through the 220 Hz laptop roll-off, a physical fighter's attack hit and ability hit carry a contact (>=
     KIT_TRANSIENT_MIN of their first 30 ms above 2 kHz, every take) and no kit attack or ability hit passes
     TRANSIENT_SOFT_TOP; every cue that can fire more than once a second (fighters' and units' attacks and hits, every ability hit,
     the kits' ability hits, procs, FAST_ROLES) has >= RR_MIN round-robin variants (files, each from its own recipe
@@ -703,6 +704,21 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
             rep['nearest'][f'{x}.{s}'] = [y, round(d, 2)]
         for x, (c, y) in nearc.items():
             rep['nearestConfuse'][f'{x}.{s}'] = [y, round(c, 2)]
+    # an own dash is told apart from a displacement (the 'dash' role, which the engine plays on a knocked unit)
+    gen = ev.get('dash')
+    gsp = cue_spectrum(gen, cues) if gen in cues else None
+    rep['dashVsDisplacement'] = {}
+    for fid, k in sorted(resolved.items()):
+        if gsp is None or not k['dash'] or k['dash'] == gen or k['dash'] not in cues:
+            continue
+        sp = cue_spectrum(k['dash'], cues)
+        if sp is None:
+            continue
+        d, c = id_distance(sp, gsp)
+        rep['dashVsDisplacement'][fid] = [round(d, 2), round(c, 2)]
+        if min(d, c) < ID_MIN_DIST_DB:
+            fails.append(f"kits: {k['dash']} is {d:.1f} / {c:.1f} dB from the displacement's {gen} (1/3-octave from"
+                         f' {ID_FROM_HZ:g} Hz / confusability, < {ID_MIN_DIST_DB:g} dB): an own dash would read as a knock')
     # the kits on a laptop, and the kit hits' contact (the impact gate's measures, final parity AUD-4)
     for fd in fighters:
         fid = fd['id']

@@ -109,13 +109,13 @@ ROOMS = {'ardit': 'plate', 'burdam': 'stone', 'dunsom': 'wood', 'ervet': 'glass'
          'kemdo': 'small', 'lisvel': 'wood', 'marund': 'stone', 'nurrow': 'wood', 'odrum': 'wood', 'rishal': 'glass',
          'sukri': 'glass', 'tunlan': 'wood', 'ulkro': 'wood', 'vashil': 'glass'}
 # the dash's air: band of the rush (Hz) — low and heavy for the big bodies, high and thin for the light ones
-DASH_AIR = {'ardit': (500, 1800), 'burdam': (280, 560), 'dunsom': (700, 2520), 'ervet': (1200, 6000),
-            'hesmi': (210, 420), 'ilsheta': (900, 2520), 'kemdo': (1500, 7500), 'lisvel': (1100, 5500),
-            'marund': (240, 1200), 'nurrow': (600, 2160), 'odrum': (400, 2000), 'rishal': (2000, 7200),
-            'sukri': (1000, 3600), 'tunlan': (300, 1080), 'ulkro': (700, 2520), 'vashil': (800, 4000)}
+DASH_AIR = {'ardit': (500, 2500), 'burdam': (280, 560), 'dunsom': (700, 1960), 'ervet': (1200, 4320),
+            'hesmi': (210, 420), 'ilsheta': (900, 1800), 'kemdo': (1500, 7500), 'lisvel': (1100, 5500),
+            'marund': (240, 1200), 'nurrow': (600, 3000), 'odrum': (500, 2500), 'rishal': (2000, 7200),
+            'sukri': (1000, 3600), 'tunlan': (300, 1080), 'ulkro': (700, 3500), 'vashil': (800, 4000)}
 # … and its signature instrument's level in it (dB re the rush: DASH_SIG_DB unless the fighter's own is set)
 DASH_SIG_DB = -5.0
-DASH_SIG: dict[str, float] = {'lisvel': -2.0, 'marund': -2.0, 'odrum': -2.0, 'sukri': -9.0}
+DASH_SIG: dict[str, float] = {'ilsheta': -9.0, 'kemdo': -9.0, 'lisvel': -2.0, 'marund': -2.0, 'sukri': -9.0, 'ulkro': -9.0}
 # a physical fighter's contact: the escapement tick's two resonances (its own pair in 2-6 kHz). The casters' hits keep
 # their own onsets (they replaced the bright c_hit_magic, which had no floor to hold); only the soft top applies to them
 CONTACT = {'ardit': (3000.0, 4600.0), 'burdam': (2200.0, 3300.0), 'ervet': (4200.0, 6000.0), 'hesmi': (2000.0, 2900.0),
@@ -312,21 +312,24 @@ VOICING: dict[str, dict | tuple] = {
     'f_tunlan_hit': {'lp': 8000, 'peaks': ((315, -9.0, 1.4),)},
     'f_ulkro_hit': {'hp': 400, 'peaks': ((3150, -9.0, 1.4),)},
     'f_vashil_hit': {'hp': 800, 'lp': 3200, 'peaks': ((1250, 6.0, 1.4),)},
-    # the dashes (integration audio-09): with DASH_AIR / DASH_SIG, each sits >= 8 dB from every other fighter's by both
-    # measures; a dash's voicing colours its rush and never cuts its own band away (high-pass <= 1.26 x the band's
-    # floor, low-pass >= 0.8 x its top), so the big bodies' dashes stay low and heavy
-    'f_ardit_dash': {'hp': 280, 'lp': 3200},
+    # the dashes (integration audio-09): with DASH_AIR / DASH_SIG, each sits >= 8 dB by both measures from every other
+    # fighter's and from the displacement's c_dash (a knocked unit), found by the same kind of search; a dash's voicing
+    # colours its rush and never cuts its own band away (high-pass <= 1.26 x the band's floor, low-pass >= 0.8 x its
+    # top), so the big bodies' dashes stay low and heavy
+    'f_ardit_dash': {'hp': 200, 'lp': 3200},
     'f_burdam_dash': {'hp': 280, 'peaks': ((500, 6.0, 1.4),)},
-    'f_dunsom_dash': {'hp': 400, 'lp': 5000},
+    'f_dunsom_dash': {'hp': 400, 'peaks': ((5000, -9.0, 1.4),)},
     'f_ervet_dash': {'lp': 5000},
     'f_hesmi_dash': {'peaks': ((1250, -9.0, 1.4),)},
-    'f_ilsheta_dash': {'hp': 800, 'lp': 2400},
-    'f_kemdo_dash': {'peaks': ((1250, -9.0, 1.4),)},
+    'f_ilsheta_dash': {'lp': 1800},
+    'f_kemdo_dash': {'peaks': ((800, -9.0, 1.4),)},
     'f_lisvel_dash': {'peaks': ((2000, -9.0, 1.4),)},
     'f_marund_dash': {'lp': 1800, 'peaks': ((500, -9.0, 1.4),)},
-    'f_nurrow_dash': {'lp': 8000},
-    'f_odrum_dash': {'hp': 200, 'lp': 8000, 'peaks': ((500, -9.0, 1.4),)},
+    'f_nurrow_dash': {'peaks': ((500, 6.0, 1.4),)},
+    'f_odrum_dash': {'lp': 5000, 'peaks': ((800, -9.0, 1.4),)},
     'f_sukri_dash': {'hp': 400},
+    'f_ulkro_dash': {'hp': 400, 'peaks': ((2000, -9.0, 1.4),)},
+    'f_vashil_dash': {'lp': 8000},
 }
 
 # the ability impact's base: the attack hit as first voiced when the impacts' own voicings were found (kept fixed here, so a
