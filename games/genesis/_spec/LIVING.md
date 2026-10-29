@@ -2693,6 +2693,12 @@ Finding numbers are the review's (0–22). Every entry names its proof; the logs
   HUNT_SEED = 3)` with herds placed on land reached on foot (`gameLandAt`). The mechanism over village seeds 3–6
   (`fix3/hs{3,4,5,6}.log`): 10 of 12 seed-test pairs pass (seed 5 "muster" 0.70 food-days; seed 6 "tracks" no kill in
   the window).
+- living-integration "a material the god introduces ... the town mines it" (round-3 gate `check-r3.log`: seed 2, 'mithril
+  ore mined in two days: 0'): bisected to the #7 on-foot herd pick in `hunt.ts` (`fix3/bis/`), which moves the dice on
+  hunting worlds. `fix3/mine/mine.ts` over seeds 1–17, live vs the same tree with the old `hunt.ts`: the town mines the
+  vein in two days on 15 of 17 before and 14 of 17 after; only seed 2 flipped (1 miner reached the vein, 0.000 extracted,
+  vs 2 miners 0.013; `mine/live2.log`, `mine/H2.log`). Re-seeded to 14 (14.84 ore by 5 miners on both trees); the
+  assertion is unchanged.
 
 ### 13.3 Not fixed here / left open
 - **9 / 15 hunting where game exists** — the re-tune LIVING §11.3 names is built behind `HUNT_TUNE` (`armedOnly`: a
