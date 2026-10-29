@@ -1,0 +1,122 @@
+{
+  "wave": "W5a",
+  "round": 1,
+  "verifier": "adversarial verifier, 2026-10-28",
+  "pass": false,
+  "summary": "W5a's own done-list parts are met when re-measured: 0 structures within collision radius + 3 m of a thicket on RIFT and BRIDGE, probe_maps 102/102, Art 2.0 landmarks with painted stone, ink joints and chalk edges in fresh shot_map re-shoots, spawn out-of-bounds at L* p50 12-24 with p95 <= 29, and Longshade has no tears with the ruling recorded. value_probe RIFT High walkableSpread is red (49 vs 45, and 47 even with the old fight spot pinned), but an A/B with all 53 model landmarks hidden reads the same p5, and RIFT content has changed only in plazaAubade and landmarks since the 44-PASS pinned run, so the cause is outside W5a. The wave fails on one W5a regression found while measuring. The new off-map skirts add 90-230k triangles at every map edge, about 73k of it in the shadow pass at the south edge. A RIFT low-road fight (101.5, 95.6; t 900; seed 7; High) measures 570k triangles with the skirts and 473k without, against the 500k hard budget. perf_1080 --prod still passes (483k High, 421k Low) only because its fight spot that run was mid-map. Minors: Wick hood RIFT Low 67.1 (cap 65; the claimed 65.9 does not reproduce), F5 not done, the HUD-3 art half is done, the VI slab and numerals are still SDF primitives, and the camp clusters are tiny primitives.",
+  "items": [
+    {
+      "id": "done:1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Point-in-polygon, my own script (_harness/_reports/fw_W5a_ver1_pip.py, result in fw_W5a_ver1_pip.txt; radii from content/units.json):\n- RIFT: 24 structures, 0 within r + 3 m of any thicket; worst margin +0.19 m (seat Outer Needles to thickets 12/13).\n- BRIDGE: 0 within r + 3 m; worst margin +0.26 m.\n\nprobe_maps.ts: 102/102 PASS (_harness/_reports/fw_W5a_ver1_probe_maps.log).\n\nvalue_probe (fw_W5a_ver1_value_probe.log): every gate passes on RIFT Low, BRIDGE High/Low and FRAY High/Low. RIFT High walkableSpread FAILs at 49 (<= 45). Attribution, measured:\n- Every non-fight spot matches the final_maps baseline per spot (frameP50/laneP50 identical).\n- b.fight() now returns (85.6, 55.2), which duplicates the 'centre' spot. The baseline fight spot was (89.1, 96.4).\n- With the fight spot pinned to (89.1, 96.4) (scratch copy, fw_W5a_ver1_value_probe_pinned.mjs/.log) it reads 47, not the 44 claimed: walkable p5 54 vs 57 in W5a's own 15:11 pinned run.\n- The same pinned run with all 53 model landmarks hidden (skirts, camp lips, new landmarks) gives an identical walkable p5 54 / lane 63 / seat 42 and spread 47 (fw_W5a_ver1_value_probe_pinned_nolm.log).\n- content/maps/map_rift.json has changed only in plazaAubade and landmarks since dd90e85a (14:31). Plaza pixels are not in any RIFT spot, so the 57 -> 54 drop comes from other lanes' render or sim changes.\n\nW5a's part of the criterion holds; the red gate is listed under regressions for W1/W4."
+    },
+    {
+      "id": "done:2",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Fresh shot_map --nofog re-shoots at the final_maps_vfy edge spots: _harness/_shots/fw_W5a_ver1_rift_edge_at0-6, fw_W5a_ver1_bridge_edge_at0-1, fw_W5a_ver1_bridge_edge2_at0-1, fw_W5a_ver1_fray_edge_at0-3, and pans fw_W5a_ver1_rift_pan_at0-3 and fw_W5a_ver1_bridge_pan_at0-2.\n- Shaft drum (rift_edge_at2): coursed octagonal drums, dark hour-bands with lugs, iron cramp, ink joints, chalked rims.\n- Snap stubs (bridge_edge2_at1): the same treatment.\n- Noon stone (rift_edge_at4): chalk drums, a sunk XII panel, chalk arrises.\n- Shadow slabs (rift_edge_at5): basalt courses with a lit chalk coping and beaded arrises; no longer a black box.\n- Belfry (rift_pan_at0): coursed chalk blocks, stepped buttresses.\n- Lamp Dome (rift_pan_at1).\n- Dawn Arch: W1's 4 m camera clamp inset (camera.ts, 3ce55f62 17:15) now keeps it almost entirely out of frame; only its glass infill shows at the top-left of bridge_pan_at0. Verified instead on the Art 2.0 render art/renders/maps/landmarks_art2_dawn_arch.png and the pre-inset in-game shot fw_W5a_lm3_vfy_bridge_edge_at3.png (chalk voussoirs, ink joints, steel strap).\n\nMinor: the raw fracture ends of the drum and stubs are pinched radial facets."
+    },
+    {
+      "id": "done:3",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Spawn views, out-of-bounds masked beyond the boundary wall's lip (_harness/_reports/fw_W5a_ver1_lstar.py):\n- RIFT Aubade (fw_W5a_ver1_rift_edge_at0): L* p50 12.3, p95 29.0, 0 % above 52 (moss strip, Belfry court).\n- RIFT Serenade (rift_edge_at1): p50 17.7, p95 28.2.\n- BRIDGE Aubade (fw_W5a_ver1_bridge_edge3_at0): p50 15.7, p95 28.0, the skirt_court flags.\n- BRIDGE Serenade (bridge_edge2_at0): p50 24.2, p95 28.9.\n\nNo bare plane at any spawn. One caveat: in the first BRIDGE run (fw_W5a_ver1_bridge_edge_at0) the 355 KB skirt_court GLBs had not finished loading after shot_map's 5 s settle on the loaded machine, so the old purple terrace showed. They were present in the re-run, so it is a pop-in risk only.\n\nFRAY seat IX court: p50 35.8, p95 52.8 (6.8 % above 52). That is the brief's haze court, not a skirt."
+    },
+    {
+      "id": "done:6",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "_design/reviews/fixwaves/owner_rulings.md §1 records the Longshade sundial-plate ruling, and §2 Shadeprint (W5b).\n\nI compared art/out/units/longshade_icon.png at 4x with its pre-cc7dc7f5 version (scratch ls_icon_old_new.png):\n- the two ink tear streaks under the lamps are gone;\n- the chin hour-lines remain as fine brass lines;\n- the lamp eyes are kept, which is allowed for a monster.\n\nThe front close-up in art/renders/units/longshade.png shows no streaks. Sensitivity: a pale plate with two lit lamps and a pointed chin. It reads as a creature mask, not a horror face, and has no tears."
+    },
+    {
+      "id": "env:F6",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "As done:1: 0 violations, worst +0.19 m.\n\nVisual (_harness/_shots/value_rift_high_fw_W5a_ver1_lane0.png vs final_maps_value/value_rift_high_final_maps_lane0.png): the Outer Needle stands on open road; the curbed grass ring at its foot is gone.\n\nThe structure_keep_out() and camp_lips() code is present in _design/tools/map_gen.py:237,266,555,704. Not measured: a regeneration to confirm map_gen output equals content/maps, because shapely is not installed in any local Python."
+    },
+    {
+      "id": "originality:F3 (Longshade half)",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "See done:6. The tears are removed, the ruling is recorded, and the icon was re-rendered."
+    },
+    {
+      "id": "env:F1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Fix step 1 (Art 2.0 landmarks): verified, see done:2.\n\nFix step 2 (dressed skirt at L* <= 52): verified at the spawns (done:3), at the edge pans (rift_pan_at2/at3, bridge_pan_at2) and at the corners (fw_W5a_ver1_{rift,bridge,fray}_corner_at*):\n- RIFT corner out-of-bounds L* p50 20-23, p95 <= 43.\n- Small flat green residual strips remain at the extreme RIFT corners beyond the skirt grid (rift_corner_at2/at3), a minor.\n\nFix step 3 (a dais in place of the spawn ring) was not built; it was handed to W1 because the ring is a terrain.ts inlay. Minor; not in the done-list.\n\nThe skirts cost triangles: see regression item perf:skirt-tris."
+    },
+    {
+      "id": "regression:perf-skirt-tris",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "Script: _harness/_reports/fw_W5a_ver1_edgecount.mjs, real Chrome GPU, dev server, renderer.profile() totals, every pass. It compares the 40 skirt and camp-lip landmarks shown vs hidden at the same frame.\n\nRIFT High (fw_W5a_ver1_edge_counts_rift2.log):\n- Low-road fight at (101.5, 95.6), t 900, seed 7: 569,907 triangles vs 473,243 hidden. Over the 500k hard budget only because of the skirts (landmarks 97k tris, 10 draws).\n- South edge (85, 110): 465k vs 309k.\n- NW corner: 364k vs 117k (landmark tris 264k).\n- SW corner: 270k vs 83k.\n\nRun 3 (fw_W5a_ver1_edge_counts_rift3.log): at the south edge the skirts alone are 49k tris in 5 main draws plus 73k in 7 shadow draws, at both High and Low.\n\nThe official perf_1080 --prod run passed (fw_W5a_ver1_perf_1080.json: High 483k, 60 fps, p99 16.8; Low 421k; GATE PASS), but its fight spot that run had landmarks at 0k. The south (camera-side) skirt is in frame for any low-road fight.",
+      "fixHint": "Bring the south-edge skirt cost to <= 30k landmark tris, all passes, and re-measure the low-road fight view at High to <= 500k with fw_W5a_ver1_edgecount.mjs and perf_1080 --prod.\nW5a (art/blender/maps/skirts.py):\n- cut skirt_rift_low and skirt_rift tree crowns from ~880 tris each to <= ~300, or merge rows into a few low crown masses;\n- drop hidden faces under the terrace;\n- lower the tree count per module.\nHand off to W1: let content mark off-map skirts `shadow: false` so loadTerrainLandmarks skips castShadow for them, which removes the ~73k shadow-pass tris."
+    },
+    {
+      "id": "wave_b:greatwick Serenade lapel/tuck + remove ~open_rest exemption",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Re-ran art/blender/proto/wick_greatwick_mantlepose.py headless through heavy.py on the cached build (_harness/_reports/fw_W5a_ver1_mantlepose.log):\n- REST: opening samples outside felt 0; 0 of 120 visible past the game hood lows.\n- idle, run, attack1, death and stunned: open 0, rise <= 1.2 cm, tuck >= 1.8 cm, sink 0.\n- MANTLEPOSE PASS.\n\nThe exemption is gone (mantlepose.py:310 'no rest exemption'). cast_ult and recall fail but are information only; Wicks do not play them.\n\nVisual: fw_W5a_greatwick_neck_idle_0.3_r8_r9.png shows the pale sliver in the opening's lower corner removed and the lapels dropped. The GLB has 3593 tris and is 441,716 B; three_load_test OK.\n\nSensitivity: one rounded hood with a single core, no eye pair, no mouth."
+    },
+    {
+      "id": "wave_b:Wick hood value L* <= 65",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "My value_probe (fw_W5a_ver1_value_probe.log) wickTop25:\n- RIFT High 64.0\n- RIFT Low 67.1 (2.1 over the cap)\n- BRIDGE High 59.4\n- BRIDGE Low 64.1\n\nThe claimed RIFT Low of 65.9 does not reproduce; an independent earlier run, fw_W5a_v1_value_probe.log, also reads 67.1. No wick was rebuilt for this item.",
+      "fixHint": "Wick lane: follow wave_b_open review:wick:2 issue 2:\n- brightwick Aubade crown cups and points and the pauldron top step: #C9C5BB -> ~#B8B4AA;\n- glimwick Serenade dome top light 0.12 -> 0.08.\nRe-measure RIFT Low wickTop25 to <= 65."
+    },
+    {
+      "id": "env:F2",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "In fw_W5a_ver1_fray_edge_at3 and at1 the hour-stones are dark basalt, with a chalked chamfer and a chalk half-hour tick across the top, standing on their footing.\n\nLit top L* p50 22.0 on both stones (boxes 790,400-1130,560 and 1500,150-1780,380; brief 20-28). Step 2 (stalls and awnings) is an optional design ask."
+    },
+    {
+      "id": "env:F5",
+      "severity": "minor",
+      "status": "fail",
+      "evidence": "Not attempted, as the engineers state. No change to art/blender/props/dialwood.py or to the tree GLBs. Canopy luma p50 is 51 and p95 83 on RIFT High (fw_W5a_ver1_value_probe.log).",
+      "fixHint": "dialwood.py:\n- raise the painted vein and stem-to-tip contrast;\n- split kit.fan_plate's 6-tri fan so a midrib vein can be painted;\n- add cavity darkening between plates and +-3 % hue per tree.\nRebuild the 5 tree GLBs through scatter.py and keep canopy p50 51-56 / p99 91-95 in value_probe."
+    },
+    {
+      "id": "env:m1",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Aubade plaza, box 400,300-1200,900 (target C* 10-14):\n- RIFT (fw_W5a_ver1_rift_edge_at0): C* 11.7, HSV saturation p50 0.25 (was 0.03).\n- BRIDGE (fw_W5a_ver1_bridge_edge3_at0): C* 13.4, saturation 0.31.\n\nAubade Hourbell, box 1300,230-1700,700: L* p95 81.6, luma p95 202.8, below the fighters' lumaP95 211 in my RIFT High value_probe (was luma p95 225). The value_probe base spots are W1's half."
+    },
+    {
+      "id": "env:m2",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "12 camp-lip clusters are in content/maps/map_rift.json. In game (fw_W5a_ver1_camps_at0-4) the cluster boxes measure L* p95 34.8 (Glasshorn), 37.4 (Resinback) and 42.0 (Stilltusks), all <= 46.\n\nMinor quality note: at gameplay zoom they read as tiny primitive slabs and sticks (Glasshorn slab, Stilltusks block). The water half is W1's."
+    },
+    {
+      "id": "hud:HUD-3",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "Art half verified offline on art/out/maps/map_rift/minimap.png, at 1100x712 and at the 300x194 HUD size. With the fog emulated as in minimap.tsx drawFog (ink #0B0D11 at alpha 140/255):\n- lane p50 90.4 vs canopy p50 27.7, a gap of 62.8 (need >= 25);\n- lane p5 - canopy p95 = 42.\n\nThe canopy is two flat bands and the roads are one light band with an ink edge.\n\nStill open, needing W2's minimap.tsx: the plaza discs are still clipped at the left and right art edges, and the Wick dots are not yet enlarged. The live 1x check is not measured.",
+      "fixHint": "W2: Wick dots to 2.2*k with a 1 px ink keyline, and draw the image over padded world bounds. Then W5a re-renders with minimap_survey.py using a pad option, and the fog gap is checked on a live capture with prof.mjs."
+    },
+    {
+      "id": "sensitivity:new-art",
+      "severity": "blocker",
+      "status": "pass",
+      "evidence": "I looked at every new or changed render and in-game shot: Longshade icon and sheet, greatwick Serenade, the 10 landmarks_art2_*.png, the 5 camp clusters, the 6 skirt renders, and the in-game edge, pan, corner and camp shots. No tall, pointed or conical hoods. No horror, hockey or blank-mannequin face. No Wick with an eye pair or a mouth. The Belfry spire and booth roofs are architecture. Longshade keeps lamp eyes on a creature, which the ruling allows. The Hooded Lamp ward's rounded knob (owner ruling §5) is not yet done; owner_rulings.md assigns it to unit art or the integration pass."
+    },
+    {
+      "id": "minor:landmark-leftovers",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The VI slab (85, 107, on the camera-side south rim) still reads as a soft SDF pillow with carved VI next to Art 2.0 work (fw_W5a_ver1_rift_pan_at3), and the 4 numerals remain landmarks.py SDF builds. The F1 list did not name them, but they sit at the same zoom. glass_belfry.glb is 1.74 MB / 34.8k tris, the largest landmark.",
+      "fixHint": "Optional: rebuild vi_slab and the numerals through landmarks_art2.py's structure_kit bake. Drop the Belfry's flag chamfers if the build budget needs it."
+    }
+  ],
+  "regressions": [
+    "W5a, major: the off-map skirts push a RIFT low-road fight frame to 569,907 triangles at High (473,243 with skirts and camp lips hidden), over the 500k hard budget. Edge views gain 90-230k triangles, 73k of it in the shadow pass at the south edge (_harness/_reports/fw_W5a_ver1_edge_counts_rift2.log, rift3.log). perf_1080 --prod itself PASSES (fw_W5a_ver1_perf_1080.json) because its fight spot that run was mid-map.",
+    "Out of lane (W1/W4), not caused by W5a: value_probe RIFT High walkableSpread 49 FAIL (<= 45).\n- Cause 1: b.fight() now picks (85.6, 55.2), a duplicate of 'centre'.\n- Cause 2: with the old spot pinned it still reads 47, because walkable p5 fell 57 -> 54 from render or sim changes in other lanes.\n- Proof: hiding all 53 model landmarks changes nothing (fw_W5a_ver1_value_probe_pinned_nolm.log), and RIFT content changed only in plazaAubade and landmarks since the 44-PASS run.\n- Fix for W1: pin one fight spot per map or leave 'fight' out of the walkable pool, then find the lane p5 drop.",
+    "Out of lane (W4, mid-edit): npm run probe has 46 passed and 1 failed. probe_sim_structures 'sudden death: no structure is protected' FAILs (_harness/_reports/fw_W5a_ver1_probe.log). It is a sim structure-protection rule, not map geometry.",
+    "Out of lane (W1 harness): the :5190 dev server serves a stale _harness/web/render_bench.ts without profile() or timing(), because vite.config.ts UNWATCHED includes _harness. Dev-mode bench scripts that call b.profile() fail until the server restarts; --prod is unaffected."
+  ]
+}
