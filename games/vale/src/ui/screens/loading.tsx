@@ -21,8 +21,8 @@ const PER_ROW = 5;
 /** the 3:5 loading-card crop of a splash (client F3). Every splash comes from the same plate rig (16:9, the
  *  figure's mass centred at 0.66–0.75 of the width, head to feet over most of the plate's height). The plate
  *  covers the lower 84 % of the card (screens.css .pcard__art) and fades into the ink above it, and the window
- *  holds at 86 % across, so the figure stands at about 70–80 % of the card's height (p50 75 % over the 48
- *  plates) with headroom over it */
+ *  holds at 86 % across, so the figure stands at about 70–77 % of the card's height, head to feet (0.706–0.764,
+ *  p50 0.728 over the 48 plates, ground shadow excluded; W5b dusk-plates measure) with headroom over it */
 const CARD_CROP = '86% 50%';
 
 export function LoadingScreen(): JSX.Element {

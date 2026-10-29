@@ -1,6 +1,6 @@
 // VALE HUD — the minimap (client_hud §4.3; bible HUD density: RIFT 352 × 198, BRIDGE 384 × 96, FRAY a
 // 232 px disc; bottom right, swappable left; access.minimapScale). A 2D canvas: the map's painted
-// minimap.png when the art exists, else drawn FROM THE MAP JSON (walls, thickets, roads, bases, shops,
+// minimap.png when the art exists (over map.art.terrain.minimapBounds when the art carries a margin), else drawn FROM THE MAP JSON (walls, thickets, roads, bases, shops,
 // the noon line; FRAY's plate with ten hour-marks on the rim). Fog of war from your team's vision grid
 // (unseen cells darkened). Marks keep their shape in every palette: structures by side (▲ spire, ◠
 // dome) in relationship colour, Wicks as 2.2·k dots on a 1 px ink keyline (HUD-3), monsters and objectives as neutral squares with their
@@ -53,7 +53,27 @@ const PING_PATHS: Record<string, string> = {
   retreat: 'M20 7l-4 5 4 5M14 7l-4 5 4 5M8 7l-4 5 4 5',
 };
 
-interface Fit { s: number; ox: number; oy: number; w: number; h: number; dpr: number }
+interface Fit { s: number; ox: number; oy: number; w: number; h: number; dpr: number; b: readonly [number, number, number, number] }
+
+/** the world rectangle the minimap shows, [x0, y0, x1, y1] in sim units: map.art.terrain.minimapBounds when content
+ *  sets one (a painted minimap.png rendered with a margin round the map, so the base plazas at the map's edge are not
+ *  clipped; hud HUD-3), else the map itself, 0..size */
+export function minimapBounds(map: MapDefT): [number, number, number, number] {
+  const b = (map.art.terrain as Record<string, unknown> | undefined)?.minimapBounds;
+  if (Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === 'number' && Number.isFinite(n)) && b[2] > b[0] && b[3] > b[1]) {
+    return [b[0] as number, b[1] as number, b[2] as number, b[3] as number];
+  }
+  return [0, 0, map.size[0], map.size[1]];
+}
+
+/** world → canvas: the view bounds fitted into a W x H canvas, centred (FRAY's disc keeps a 2 % pad) */
+function fitMap(map: MapDefT, W: number, H: number, shape: 'rect' | 'strip' | 'disc', dpr: number): Fit {
+  const b = minimapBounds(map);
+  const bw = b[2] - b[0], bh = b[3] - b[1];
+  const pad = shape === 'disc' ? 0.02 * W : 0;
+  const s = Math.min((W - 2 * pad) / bw, (H - 2 * pad) / bh);
+  return { s, ox: (W - bw * s) / 2 - b[0] * s, oy: (H - bh * s) / 2 - b[1] * s, w: W, h: H, dpr, b };
+}
 /** the minimap's size factor (Settings.access.minimapScale, clamped); the target plate docks on its frame by it */
 export const minimapScale = (s: Settings): number => Math.min(1.3, Math.max(0.8, s.access.minimapScale || 1));
 
@@ -74,7 +94,7 @@ export function Minimap(): JSX.Element {
     const ctx = el.getContext('2d');
     if (!ctx) return;
     let raf = 0, lastDraw = 0, lastFog = 0, stopped = false;
-    let fit: Fit = { s: 1, ox: 0, oy: 0, w: 1, h: 1, dpr: 1 };
+    let fit: Fit = { s: 1, ox: 0, oy: 0, w: 1, h: 1, dpr: 1, b: [0, 0, 1, 1] };
     let stat: HTMLCanvasElement | null = null;
     let col = readColours();
     const fog = document.createElement('canvas');
@@ -91,9 +111,7 @@ export function Minimap(): JSX.Element {
       const dpr = Math.min(2, devicePixelRatio || 1);
       const W = Math.max(1, Math.round(rect.width * dpr)), H = Math.max(1, Math.round(rect.height * dpr));
       if (el.width !== W || el.height !== H) { el.width = W; el.height = H; stat = null; }
-      const pad = mapShape === 'disc' ? 0.02 * W : 0;
-      const s = Math.min((W - 2 * pad) / map.size[0], (H - 2 * pad) / map.size[1]);
-      fit = { s, ox: (W - map.size[0] * s) / 2, oy: (H - map.size[1] * s) / 2, w: W, h: H, dpr: W / Math.max(1, rect.width) };
+      fit = fitMap(map, W, H, mapShape, W / Math.max(1, rect.width));
     };
     const draw = (now: number): void => {
       if (stopped) return;
@@ -123,9 +141,7 @@ export function Minimap(): JSX.Element {
     if (!el || !map) return null;
     const rect = el.getBoundingClientRect();
     const dpr = el.width / Math.max(1, rect.width);
-    const pad = mapShape === 'disc' ? 0.02 * el.width : 0;
-    const s = Math.min((el.width - 2 * pad) / map.size[0], (el.height - 2 * pad) / map.size[1]);
-    const ox = (el.width - map.size[0] * s) / 2, oy = (el.height - map.size[1] * s) / 2;
+    const { s, ox, oy } = fitMap(map, el.width, el.height, mapShape, dpr);
     const x = ((e.clientX - rect.left) * dpr - ox) / s, y = ((e.clientY - rect.top) * dpr - oy) / s;
     return { x: Math.max(0, Math.min(map.size[0], x)), y: Math.max(0, Math.min(map.size[1], y)) };
   };
@@ -235,7 +251,8 @@ function buildStatic(map: MapDefT, f: Fit, c: Record<string, string>, shape: 're
   ctx.fillRect(0, 0, f.w, f.h);
   const mw = map.size[0] * f.s, mh = map.size[1] * f.s;
   if (img && img.complete && img.naturalWidth > 0) {
-    ctx.drawImage(img, f.ox, f.oy, mw, mh);
+    // the painted image covers the view bounds (the map plus any margin it was rendered with)
+    ctx.drawImage(img, X(f, f.b[0]), Y(f, f.b[1]), (f.b[2] - f.b[0]) * f.s, (f.b[3] - f.b[1]) * f.s);
   } else {
     // ground
     ctx.globalAlpha = 1;
