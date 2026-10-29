@@ -168,6 +168,8 @@ function normalizeCurrent(raw: Blob, ctx: ProfileContext): Profile {
     settings: normalizeSettings(raw.settings),
     seenCatalogVersion: typeof raw.seenCatalogVersion === 'string' ? raw.seenCatalogVersion : undefined,
     tutorialsSeen: arr<string>(raw.tutorialsSeen).filter((t) => typeof t === 'string'),
+    // client F17: the chosen emblem survives a reload (Session.setEmblem keeps it; the UI decides what is earned)
+    emblem: typeof raw.emblem === 'string' && raw.emblem ? raw.emblem.slice(0, 64) : undefined,
   };
 }
 

@@ -220,6 +220,14 @@ section('profile: new, reconcile, migrate schema 0, stores', () => {
   const none = new LocalProfileStore(ctx);
   none.save(p);
   check('no localStorage at all (Node) → memory', none.degraded && none.load()?.identity.id === p.identity.id);
+  // client-1b-14: the chosen emblem (Session.setEmblem) is kept through a save and a load; a garbled one is dropped
+  map.clear();
+  const ems = new LocalProfileStore(ctx, PROFILE_KEY, fake);
+  ems.save({ ...p, emblem: 'hour10' });
+  const emLoaded = ems.load();
+  map.set(PROFILE_KEY, JSON.stringify({ ...p, emblem: 42 }));
+  const emBad = ems.load();
+  check('the chosen emblem survives a save and a load; a non-string emblem is dropped', emLoaded?.emblem === 'hour10' && !!emBad && emBad.emblem === undefined, { emLoaded: emLoaded?.emblem, emBad: emBad?.emblem });
   const v0 = new MemoryProfileStore(PROFILE_V0, ctx);
   check('a store with a context migrates on load()', v0.load()?.schema === 1);
   check('a store without a context loads only the current schema', new MemoryProfileStore(PROFILE_V0).load() === null && new MemoryProfileStore(p).load()?.schema === 1);
