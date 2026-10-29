@@ -416,13 +416,17 @@ test('every event the sim emits maps to a sound the catalog has (or deliberately
     // the living world (LIVING §3.4, §3.7)
     'prayer.raised', 'prayer.answered', 'prayer.lapsed', 'prophet.called', 'prophet.foretold', 'prophet.fulfilled',
     'prophet.failed', 'prophet.died', 'prophet.persecuted', 'prophet.abandoned', 'omen', 'sacred.place', 'sacred.animal',
-    'warning', 'evacuate', 'shelter',
+    'warning', 'evacuate', 'shelter', 'disaster.relent',
   ];
   for (const t of types) {
     const c = cueFor({ t, tick: 0, a: 3, text: t === 'age' ? 'golden' : 'accepted', data: { kind: 'meteor', k: 'hand.grab', how: 'experiment' } });
     assert.ok(c, `${t} is silent`);
     assert.ok(SFX[c!.cue], `${t} → ${c!.cue} has no recipe`);
   }
+  // the god's rain drawing its drought back: a soft relief, under the rain act's own sound and not repeated in a burst
+  const relent = cueFor({ t: 'disaster.relent', tick: 0, a: 300, data: { kind: 'drought' } })!;
+  assert.equal(relent.cue, 'relent');
+  assert.ok(relent.gain <= 0.6 && relent.gap >= 4, `relent sits low with a gap (gain ${relent.gain}, gap ${relent.gap})`);
   assert.equal(cueFor({ t: 'no-such-event', tick: 0 }), null);
   assert.equal(cueFor({ t: 'warning.end', tick: 0 }), null, 'the disaster itself follows');
   assert.equal(cueFor({ t: 'command', tick: 0, data: { k: 'focus' } }), null);

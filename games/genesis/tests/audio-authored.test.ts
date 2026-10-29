@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AUTHORED, AuthoredMusic, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, FADE_IN, OVERRUN } from '../src/audio/authored.ts';
+import { AUTHORED, AuthoredMusic, ERA_PIECE, STINGERS, StingerGate, TOWN_NEAR, idleWeave, pickStinger, stingerFor, pieceFor, sceneTension, stemLevels, weave, weaveLevel, weaveGains, FADE_IN, FADE_OUT, OVERRUN } from '../src/audio/authored.ts';
 import { MOTIF_HEAD, hasMotifHead, loopSeconds, melodiesOf, partsOf, stemsOf, STEMS, type Piece } from '../src/audio/score/motif.ts';
 import { TITLE } from '../src/audio/score/title.ts';
 import { ERAS } from '../src/audio/score/eras.ts';
@@ -202,4 +202,20 @@ test('a wanted piece loads all its stems at once (never one stem per frame) and 
     assert.equal(m.state().piece, 'era-bronze');
     assert.equal(m.state().phase, 'idle', 'the procedural score plays until the piece is ready');
   } finally { globalThis.fetch = realFetch; }
+});
+
+test('the hand-over between a piece and the procedural score is slow and equal-power (fix r3 #14)', () => {
+  assert.ok(FADE_IN >= 6 && FADE_IN <= 10, `fade in ${FADE_IN} s`);
+  assert.ok(FADE_OUT >= 6 && FADE_OUT <= 12, `fade out ${FADE_OUT} s`);
+  // the fade-out runs mostly over the next pass's quiet intro: the last pass ends nearly whole
+  assert.ok(FADE_OUT - OVERRUN <= 2.5 && OVERRUN < FADE_OUT, `fade-out starts ${FADE_OUT - OVERRUN} s before the loop's end`);
+  assert.deepEqual(weaveGains(0), { authored: 0, procedural: 1 });
+  const top = weaveGains(1);
+  assert.ok(top.authored === 1 && Math.abs(top.procedural) < 1e-12);
+  for (let x = 0; x <= 1.0001; x += 0.05) {
+    const g = weaveGains(x);
+    assert.ok(Math.abs(g.authored ** 2 + g.procedural ** 2 - 1) < 1e-9, `power holds at ${x.toFixed(2)}`);
+  }
+  assert.deepEqual(weaveGains(-1), weaveGains(0));
+  assert.deepEqual(weaveGains(2), weaveGains(1));
 });

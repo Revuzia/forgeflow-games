@@ -741,6 +741,14 @@ export const SFX: Record<string, Recipe> = {
     s.arp('chime', 0.15, [74, 78, 81, 86], 0.09, 0.14);
     s.wet(0.6);
   },
+  // the god relented: the rain thins as the drought draws back, and the voices lift from D to the open fifth above
+  relent: (s) => {
+    s.nz('pink', 0, 0.35, 0.5, 2.4, 0.14, ['lowpass', 3600, 0.7, 900, 2.6]);
+    s.choir(0.35, 146.8, 2.2, 0.035, [450, 800]);
+    s.choir(0.9, 220, 2.1, 0.035, [500, 900]);
+    s.bell('chime', 1.35, midiHz(74), 0.05, ['lowpass', 2400]);
+    s.wet(0.55);
+  },
   // unanswered: the voices sink to the minor and two chimes fall away
   'prayer.lapsed': (s) => {
     s.choir(0, 220, 1.6, 0.04, [450, 800]);

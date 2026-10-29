@@ -205,6 +205,9 @@ export function cueFor(e: SimEvent): CueSpec | null {
       return spec(`disaster.${disasterFamily(kind)}`, 'news', { size: num(e.a, 100), gain: 1.1, reach: 2500, pri: 8, gap: 0.5, variant: kind, key: `disaster:${kind}` });
     }
     case 'disaster.end': return spec('disaster.end', 'world', { reach: 2500, gap: 2, gain: 0.55, pri: 3, variant: str(d.kind) });
+    // the god's rain drawing its own drought back (sim god/relationship.ts relentDroughts): a soft relief over the rain
+    // act's own sound, so it sits low and waits a while before it plays again
+    case 'disaster.relent': return spec('relent', 'news', { reach: 2500, gap: 6, gain: 0.5, pri: 5, variant: str(d.kind) });
 
     // ── news of the peoples ──
     case 'discovery': return spec('discovery', 'news', { gain: 0.75, gap: 0.6, variant: str(d.how) === 'god' ? 'taught' : str(d.how), pri: 5 });

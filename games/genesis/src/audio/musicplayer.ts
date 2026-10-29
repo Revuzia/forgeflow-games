@@ -14,7 +14,7 @@ import { barSeconds, composeBar, describeStyle, orbitalStyle, styleFor, type Mus
 import { buffersFor, playNote, type NoteCtx } from './instruments.ts';
 import type { BufferBank } from './bank.ts';
 import { Knob } from './synth.ts';
-import { AuthoredMusic, type AuthoredState, type StingerId } from './authored.ts';
+import { AuthoredMusic, weaveGains, type AuthoredState, type StingerId } from './authored.ts';
 
 const LOOKAHEAD = 0.6;
 const MAX_POLY = 32;
@@ -23,7 +23,8 @@ const MAX_POLY = 32;
  * How calm the music bed is at a sim speed (presets = ticks per second; LIVING §0: 1x is slow and realistic): 1 at the
  * contemplative speeds (paused, 1x, 2x), easing to 0 by the time-lapse speeds (10x and up). At 1 the procedural score
  * plays softer (−2.5 dB), warmer (its brightness pulled down) and with its drums held back (except a people at war);
- * the authored pieces, the stingers and the ambience are untouched.
+ * the authored pieces take the same level trim (so the balance between the two layers holds at every speed); the
+ * stingers and the ambience are untouched.
  */
 export function paceCalm(speed: number | undefined): number {
   const s = typeof speed === 'number' && Number.isFinite(speed) ? Math.max(0, speed) : 1;
@@ -31,6 +32,13 @@ export function paceCalm(speed: number | undefined): number {
 }
 /** the calm bed's trims: level, brightness (tone cutoff scale) and drum velocity at calm = 1 */
 export const CALM_TRIM = { gain: 0.75, tone: 0.6, perc: 0.5 };
+
+/**
+ * The procedural score's faders: a town's band, and the orbital score (a bed under the hum of space, not a town's band:
+ * it plays softer). The authored pieces' trims (authored.ts AUTHORED gain) are measured against these.
+ */
+export const TOWN_GAIN = 0.85;
+export const ORBITAL_GAIN = 0.5;
 
 /** reverb send by instrument set: outdoors for the first peoples, halls for organs, a cathedral of space in orbit */
 const WET = [0.22, 0.3, 0.42, 0.3, 0.7];
@@ -217,13 +225,16 @@ export class MusicDirector {
   }
 
   update(scene: AudioScene | null, now: number): void {
-    const aw = this.authored.update(scene, now, this.master);
     // the calm follows the speed over a few seconds of the audio clock (a speed step is not a jump cut in the music);
     // real seconds, not frames: a slow software-rendered frame or a hidden tab still lets it settle on time
     const dt = this.lastUpdate < 0 ? 10 : Math.max(0, Math.min(30, now - this.lastUpdate));
     this.lastUpdate = now;
     this.calm += (paceCalm(this.speed) - this.calm) * (1 - Math.exp(-dt / 3));
     const calmGain = 1 - (1 - CALM_TRIM.gain) * this.calm;
+    // the authored piece's share of the music; both layers take the calm's level trim, and the procedural players fade
+    // by the equal-power complement of the piece (authored.ts weaveGains)
+    const aw = this.authored.update(scene, now, this.master * calmGain);
+    const rest = weaveGains(aw).procedural;
     const wanted = new Map<string, { gain: number; pan: number; far: number; style: () => MusicStyle }>();
     let loudest = 0;
     if (scene) {
@@ -249,8 +260,7 @@ export class MusicDirector {
         p = new MusicPlayer(this.ctx, this.bank, this.dest, this.wet, key, style, this.r);
         this.players.set(key, p);
       } else p.restyle(style);
-      // the orbital score is a bed under the hum of space, not a town's band: it plays softer
-      p.update(now, w.gain * (key === 'orbital' ? 0.5 : 0.85) * calmGain * this.master * (1 - aw), w.pan, w.far, this.calm);
+      p.update(now, w.gain * (key === 'orbital' ? ORBITAL_GAIN : TOWN_GAIN) * calmGain * this.master * rest, w.pan, w.far, this.calm);
     }
     for (const [key, p] of this.players) {
       if (wanted.has(key)) continue;

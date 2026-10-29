@@ -166,11 +166,17 @@ export const ERA_PIECE: Record<string, string> = {
 /** how close a town's music must be (its weight in the scene) before its era's piece is the one that plays */
 export const TOWN_NEAR = 0.15;
 
-/** seconds over which a piece fades in / out at the edges of an appearance */
-export const FADE_IN = 3;
-export const FADE_OUT = 6;
-/** an appearance runs this far past its last loop (the folded reverb tail plays out over the quiet intro) */
-export const OVERRUN = 4;
+/**
+ * Seconds over which a piece and the procedural score cross-fade at the edges of an appearance (fix r3 #14: long and
+ * equal-power, weaveGains, so the hand-over is a slow change of colour rather than a cut).
+ */
+export const FADE_IN = 8;
+export const FADE_OUT = 10;
+/**
+ * An appearance runs this far past its last loop: the fade-out starts 2 s before the loop's end and finishes over the
+ * quiet intro of the next pass (where the folded reverb tail plays out).
+ */
+export const OVERRUN = 8;
 
 /**
  * Which authored piece the scene calls for (null: the procedural score alone). `current` (the piece playing or resting)
@@ -210,6 +216,15 @@ export function weave(w: Weave, want: string | null, now: number, ready: boolean
   if (now < w.until) return w;
   if (w.phase === 'play') return { piece: want, phase: 'rest', since: now, until: now + p.rest };
   return ready ? { piece: want, phase: 'play', since: now, until: now + p.passes * p.loop + OVERRUN } : { piece: want, phase: 'idle', since: now, until: now };
+}
+
+/**
+ * The two layers' faders for a share of the music (weaveLevel): equal power, so the sum holds its loudness through
+ * the cross-fade (two uncorrelated scores at 1 - x and x dip ~3 dB in the middle).
+ */
+export function weaveGains(share: number): { authored: number; procedural: number } {
+  const x = Math.max(0, Math.min(1, share)) * Math.PI / 2;
+  return { authored: Math.sin(x), procedural: Math.cos(x) };
 }
 
 /** 0..1: how much of the authored piece sounds now (the procedural score takes the rest) */
@@ -379,8 +394,9 @@ export class AuthoredMusic {
   }
 
   /**
-   * Called every frame by the director with the scene and the director's master (0..1, the opening's hold).
-   * Returns how much of the music the authored piece holds now (0..1): the procedural players take the rest.
+   * Called every frame by the director with the scene and the director's master (0..1: the opening's hold times the
+   * calm bed's level, so a piece and the procedural score keep the balance their trims set at every speed).
+   * Returns how much of the music the authored piece holds now (0..1, its share: weaveGains turns it into the faders).
    */
   update(scene: AudioScene | null, now: number, master: number): number {
     const dt = Math.max(0, Math.min(0.5, now - this.lastNow));
@@ -400,7 +416,7 @@ export class AuthoredMusic {
     // tension: quick to rise, slow to fall
     const target = sceneTension(scene);
     this.tension += (target - this.tension) * (1 - Math.exp(-dt / (target > this.tension ? 1.5 : 8)));
-    this.level = weaveLevel(this.w, now) * Math.max(0, Math.min(1, master));
+    this.level = weaveGains(weaveLevel(this.w, now)).authored * Math.max(0, Math.min(1, master));
     if (this.voice) {
       if (this.w.phase !== 'play' && this.level <= 0) { this.voice.stop(now); this.voice = null; }
       else this.voice.set(this.level, stemLevels(scene, this.tension), now);
