@@ -8,6 +8,8 @@ LoL is only a gauge. Every fix below is VALE's own, per STYLE_BIBLE.md and WORLD
 
 **Par bar.** A dimension or fighter is ON PAR when its verified score is 8 or more and it has no confirmed blocker or major open.
 
+> **Update (owner, ruling 8):** the par bar is now **7.5 with no blocker open**. By that bar, HUD (8.0), Originality (7.8), Combat (7.5), Maps (7.5) and Menus (7.5) are on par. Performance (7.0), Audio (6.5), Gameplay (6.0) and all 16 fighters are below it. The two sensitivity blockers (Vashil's cowl, the Greatwick lantern) must be fixed regardless. Majors on items at 7.5 or more are backlog.
+
 ## (a) Verdict
 
 **VALE is not on par with League of Legends today.**

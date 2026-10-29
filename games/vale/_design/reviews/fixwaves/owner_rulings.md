@@ -84,3 +84,22 @@ Its own names, numbers and presentation complete it.
 Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat finial, ridge blade). They take the visual check only.
 
 **Why:** "No tall, pointed or conical hoods" is a standing sensitivity rule. A number makes it checkable in a gate instead of a matter of taste. 10 cm at 3 cm is blunter than every hood the closing critic flagged and sharper than the rounded caps already accepted (Lisvel 11.9, Nurrow 11.3, Burdam 13.8, Dunsom 17.7).
+
+## 8. Par bar is 7.5 (owner, 2026-10-29)
+
+**Owner's words:** "A grade of 7.5 is good as well."
+
+**Ruling:** a dimension or fighter is **ON PAR** at a verified score of **7.5 or more** with **no blocker open**.
+
+- A **blocker** (sensitivity, broken or crash class) must be fixed at any score.
+- A **major** on a dimension or fighter that already scores 7.5 or more no longer blocks par. It moves to the polish backlog.
+- Waves and verifiers re-score fighters against 7.5, not 8.
+
+**Status under this bar at the closing review (2026-10-29):**
+
+| | Areas |
+|---|---|
+| On par | HUD 8.0, Originality 7.8, Combat 7.5, Maps 7.5, Menus 7.5 |
+| Below par | Performance 7.0, Audio 6.5, Gameplay 6.0, all 16 fighters (5.5-6.5) |
+| Open blockers | Vashil's cowl (CW5), the Greatwick lantern (CW4) |
+| Not yet scored | Neutral monsters (CW4), the camera and input feel (CW1) |
