@@ -19,7 +19,8 @@
 //                             require still standing · median length 15–18 min
 //   fray       (gameplay:G6, G9) FRAY on the bots' own loadouts, 10 distinct fighters a game (rotated by seed): ≥ 85 %
 //                             of games have no stretch of 90 s or more without a fighter death while 3+ seats are still in
-//                             (from the first death on; the opening is reported) · every fighter's mean placement 3.5–7.5
+//                             (from the first death on, ≥ FRAY_MIN_GAMES games a difficulty; the opening is reported) · every
+//                             fighter's mean placement 3.5–7.5
 //                             over all its FRAY games (difficulties pooled, ≥ FRAY_MIN_PER_FIGHTER games; each difficulty reported)
 //   credit     (gameplay:g1)  report: fighter deaths finished by a Wick, Needle or monster that are credited to an
 //                             enemy fighter (death.by) vs executed
@@ -37,9 +38,10 @@
 //   node _harness/probe_sim_bot_soak.ts --full          the soak: RIFT 20 seeds × adept + veteran (full
 //                                                       games), BRIDGE 20 × adept + veteran, mirrored
 //                                                       veteran-vs-novice and veteran-vs-adept (20 seeds
-//                                                       × 2 sides each), FRAY 50 × adept + veteran, 3 workers
+//                                                       × 2 sides each), FRAY 100 × adept + veteran, 3 workers
 //   flags: --seeds N · --seed0 N · --diffs adept,veteran · --suites rift,bridge,mirror,fray · --cut <s>
-//          --fray-seeds N (default 50: the 85 % lull gate needs more than 30 games to stop flipping on noise)
+//          --fray-seeds N (default 100: integ G6/G9 — the 85 % lull gate and the placement band are judged on 100 games a
+//          difficulty, so neither is tuned to one seed window; a FRAY game takes ~0.1 s)
 //          --jobs N (≤ 3) · --rules '<json>' (deep-merged into every probed mode's rules)
 //          --label <name> (report: _harness/_reports/fw_W4_soak_<label>.json + .txt)
 //
@@ -69,7 +71,9 @@ const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'br
 const MIRROR_MIN_GAMES = 40;
 /** a fighter's FRAY placement band is enforced on its mean over every FRAY game it played (both difficulties pooled:
  *  a placement's spread is ~2.8, so ~30 games a difficulty leave ±0.5 of noise per fighter), with at least this many */
-const FRAY_MIN_PER_FIGHTER = 40;
+const FRAY_MIN_PER_FIGHTER = 100;
+/** the FRAY lull gate (G6) is enforced on at least this many games a difficulty (fewer: report only) */
+const FRAY_MIN_GAMES = 100;
 /** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
  *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
 const STRUCT_MIN_GAMES = 16;
@@ -84,7 +88,7 @@ const SEEDS = Number(opt('seeds', FULL ? '20' : '8'));
 const SEED0 = Number(opt('seed0', '1'));
 const DIFFS = opt('diffs', 'adept,veteran').split(',');
 const SUITES = opt('suites', FULL ? 'rift,bridge,mirror,fray' : 'rift').split(',');
-const FRAY_SEEDS = Number(opt('fray-seeds', '50'));
+const FRAY_SEEDS = Number(opt('fray-seeds', '100'));
 const CUT = Number(opt('cut', FULL ? '0' : '900')) || 0;
 const JOBS = Math.max(1, Math.min(3, Number(opt('jobs', FULL ? '3' : '1'))));
 const RULES = opt('rules', '');
@@ -659,7 +663,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       text.push('', `FRAY ${d}: ${gs.length} games; ends ${JSON.stringify(reasons)}; length mean ${mean(gs.map((g) => g.dur / 60)).toFixed(1)} min; kills/min ${(mean(gs.map((g) => g.fdeaths.length / Math.max(1, g.dur / 60)))).toFixed(2)}`);
       text.push(`  longest no-death stretch with 3+ seats in (from the first death): mean ${mean(lulls).toFixed(0)} s, max ${Math.max(...lulls).toFixed(0)} s, games with a 90 s+ lull ${quiet}/${gs.length}; opening (to the first death) mean ${mean(openings).toFixed(0)} s, max ${Math.max(...openings).toFixed(0)} s; time-limit endings ${endAir.length}, dead air at the end mean ${mean(endAir).toFixed(0)} s, max ${endAir.length ? Math.max(...endAir).toFixed(0) : 0} s`);
       text.push(`  placement by fighter (mean, n, kills): ${rows.map((r) => `${r.f} ${r.place.toFixed(1)} (${r.n}, ${r.kills.toFixed(1)})`).join(' · ')}`);
-      gates.push({ group: 'fray', item: 'gameplay:G6', label: `FRAY ${d}: games with no 90 s stretch without a death while 3+ seats are in`, value: `${gs.length - quiet}/${gs.length} (${pct(okShare)})`, target: '≥ 85 %', pass: okShare >= 0.85, n: gs.length });
+      gates.push({ group: 'fray', item: 'gameplay:G6', label: `FRAY ${d}: games with no 90 s stretch without a death while 3+ seats are in`, value: `${gs.length - quiet}/${gs.length} (${pct(okShare)})`, target: '≥ 85 %', pass: okShare >= 0.85, n: gs.length, reportOnly: gs.length < FRAY_MIN_GAMES });
     }
     detail.fray = fray;
     // G9: placement per fighter over every FRAY game (difficulties pooled)

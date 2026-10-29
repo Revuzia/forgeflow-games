@@ -5,6 +5,7 @@ import { fraySetup, matchCatalog, run } from './fixtures/match_fixture.ts';
 import { check, finish, near, ofType, section } from './fixtures/sim_fixture.ts';
 import type { SimEvent } from '../src/contracts/sim.ts';
 import { createSim, type Sim } from '../src/sim/sim.ts';
+import { noonTollOn } from '../src/sim/modes/match.ts';
 import { dealDamage } from '../src/sim/combat.ts';
 import type { World } from '../src/sim/world.ts';
 
@@ -104,6 +105,37 @@ section('the Noon Toll (rules.noonToll) and fighter weights (rules.fighterWeight
   const d1 = dealDamage(w, b, r, 100, 'true');
   const d2 = dealDamage(w, r, b, 100, 'true');
   check(`fighterWeights: brawler → ranger ${d1.toFixed(1)} (= 100 × 1.2 × 0.8), ranger → brawler ${d2.toFixed(1)} (= 100)`, near(d1, 96, 1e-6) && near(d2, 100, 1e-6), [d1, d2]);
+});
+
+section('the Noon Toll over a quiet arena (noonToll.quiet) and for the last seats (noonToll.seats), integ G6', () => {
+  const tolls = (ev: SimEvent[]): number => ofType(ev, 'announce').filter((a) => a.key === 'noon_toll').length;
+  // quiet: no toll before the first death, then one after `quiet` s without a death, every `every` s while it stays quiet
+  const cq = matchCatalog({ frayRules: { noonToll: { from: 999, every: 10, reveal: 3, quiet: 15 } } });
+  const sq = createSim(cq, fraySetup(6, { seed: 5 }), { pregameSeconds: 0 });
+  const wq = sq.world;
+  for (const p of wq.players) p.ent!.autoAttack = false;
+  check('no death yet: 20 s pass without a toll, and it is not ringing', tolls(run(sq, 20)) === 0 && !noonTollOn(wq));
+  kill(wq, 0, 1);
+  const quiet1 = tolls(run(sq, 14.5));
+  const quiet2 = tolls(run(sq, 1));
+  check(`after a death: no toll for 14.5 s (${quiet1}), the toll at 15 s (${quiet2}) and it rings`, quiet1 === 0 && quiet2 === 1 && noonTollOn(wq), [quiet1, quiet2]);
+  check('it rings again every 10 s while nobody falls', tolls(run(sq, 10)) === 1);
+  kill(wq, 2, 3); sq.step();
+  check('a death silences it', !noonTollOn(wq));
+  check('and the next quiet toll waits another 15 s', tolls(run(sq, 14)) === 0 && tolls(run(sq, 1.5)) === 1);
+  // seats: once only `seats` seats are still in, it starts and keeps ringing even through deaths
+  const cs = matchCatalog({ frayRules: { end: { kind: 'last_standing_or_score', lives: 1, killScore: 99, timeLimit: 600 }, noonToll: { from: 999, every: 10, reveal: 3, seats: 4 } } });
+  const ss = createSim(cs, fraySetup(6, { seed: 7 }), { pregameSeconds: 0 });
+  const ws = ss.world;
+  for (const p of ws.players) p.ent!.autoAttack = false;
+  kill(ws, 0, 5);
+  check('5 seats in: no toll', tolls(run(ss, 12)) === 0 && !noonTollOn(ws));
+  kill(ws, 0, 4);
+  const first = tolls(run(ss, 0.2));
+  check(`4 seats in: it tolls at once (${first})`, first === 1 && noonTollOn(ws), first);
+  kill(ws, 0, 3);
+  check('and keeps ringing every 10 s through the next death', tolls(run(ss, 10)) === 1 && noonTollOn(ws));
+  check('the last-seats toll shows every living fighter', (ws.players[0].ent!.revealAllUntil ?? -1) > ws.tick);
 });
 
 section('time limit end', () => {
