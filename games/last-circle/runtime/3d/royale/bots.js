@@ -413,7 +413,7 @@ class Blackboard {
       // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
       // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
       // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
-      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0;
+      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0;
       this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
       this.slideX = 0; this.slideZ = 0; this.slideUntil = -99; this.slideFlips = 0; this.routeId = null; this.pinX = 0; this.pinZ = 0; this.pinT = 0; this.pinIntent = 0; this.pinN = 0;
       this.fightTarget = undefined; this.fightT = 0; this.aimHigh = false; this.errPhase = 0; this.closeInUntil = 0;
@@ -1518,9 +1518,14 @@ function pickLoot(W, a, near) {
  *  first-floor slab; a bot pinned there died, its death drop landed there, and the
  *  next bot that came for the drop was pinned too (two to three bots per match at
  *  the same spot, 200+ s each). */
+// (R2 movers, item 2) the banded one-shot queries below (lowCeiling, obstacleAt, the town exit, tallWallAt) read their list at once and call nothing that
+// queries while they do: one out array of their own - a banded query that finds nothing writes length 0 into the array it is given (maps.js), and on the
+// map's shared scratch that dropped its backing store under every other caller.
+const _bandCols = [];
 function lowCeiling(W, x, y, z) {
   const s = supportAt(W, x, z, y + 0.3);
-  const cols = W.map.queryColliders(x, z, 0.5);
+  // (R2 movers, item 2) the test's band: only a box whose underside lies between s + 0.3 and s + height + 0.05 is a low ceiling (maps.js queryColliders' y0 / y1)
+  const cols = W.map.queryColliders(x, z, 0.5, _bandCols, s + 0.3, s + K.PLAYERK.height + 0.05);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1830,8 +1835,9 @@ const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
 const _solidCols = [];
 function insideSolid(W, x, y, z) {
-  const cols = W.map.queryColliders(x, z, 0.6, _solidCols);
   const h = K.PLAYERK.height;
+  // (R2 movers, item 2) the test's band [y + step, y + h - 0.1]: a box outside it never counts (maps.js queryColliders' y0 / y1)
+  const cols = W.map.queryColliders(x, z, 0.6, _solidCols, y + NAV_STEP_UP, y + h - 0.1);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1861,7 +1867,8 @@ function escapeSolid(W, b) {
   }
   // the faces of every box the bot is inside (insideSolid's test), as exits sorted by distance (Array sort is stable: ties keep the collider order).
   // Copied out first: escTry's own queries reuse the shared query array. (Rare path: the bot is inside a solid with no free spot within 4 m.)
-  const cols = M.queryColliders(px, pz, 0.6, _solidCols), h = K.PLAYERK.height, ex = [];
+  const h = K.PLAYERK.height, ex = [];
+  const cols = M.queryColliders(px, pz, 0.6, _solidCols, py + NAV_STEP_UP, py + h - 0.1);      // (R2 movers, item 2) insideSolid's band
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -2122,7 +2129,8 @@ function steerYawQ(a, dt, speed) {
  *  A wall blocks when its box spans the hop-to-headroom band. A ramp blocks by
  *  the C-RAMP contract (rampBlocks): its sides and underside, not its slope. */
 function obstacleAt(W, x, z, y) {
-  const cols = W.map.queryColliders(x, z, 0.6);
+  // (R2 movers, item 2) the test's band: a wall spans y + 0.55 .. y + 2.0, a ramp blocks only with its walk line over y + NAV_STEP_UP (0.55) and its low edge under y + 2.0
+  const cols = W.map.queryColliders(x, z, 0.6, _bandCols, y + NAV_STEP_UP, y + 2.0);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead) continue;
@@ -2256,6 +2264,11 @@ const WALL_LOOK = 0.9;            // metres ahead the steering probes
 const WALL_REUSE_S = 0.1;         // a held collider list stays valid this long (sim time) ...
 const WALL_REUSE_M = 0.45;        // ... and while the bot has moved less than this
 const WALL_QR = 2.4;              // list radius: capsule 0.45 + look 0.9 + margin 0.3 + the reuse drift, with slack
+// (R2 movers, item 2) the list's vertical band: its readers take nothing above the feet + 12 m (roofedForJump's slab reach; underCeiling 6 m, the wall /
+// ramp probes about 3.5 m), so the list is asked for [-inf, feet + WALL_BAND_UP + WALL_REUSE_DY] and is re-asked once the feet have RISEN more than
+// WALL_REUSE_DY since (a jump, a stair). No lower limit: a probe past a ledge reads the floor below it.
+const WALL_BAND_UP = 12.0;
+const WALL_REUSE_DY = 0.8;
 const FIGHT_UNSTICK_S = 0.8;      // pinned this long with a move intent in ENGAGE / HEAL -> recover (the hard breaker skips them)
 const FIGHT_UNSTICK_GAP_S = 1.6;
 const _wq = [];                   // queryColliders out-param scratch
@@ -2268,8 +2281,8 @@ const _gh = { x: 0, z: 0 };       // heading scratch
 function wallCols(W, b) {
   const a = b.actor, bb = b.bb, list = bb.wallCols;
   const dx = a.pos.x - bb.wallX, dz = a.pos.z - bb.wallZ;
-  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M) return list;
-  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq);
+  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M && a.pos.y <= bb.wallY + WALL_REUSE_DY) return list;
+  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq, -Infinity, a.pos.y + WALL_BAND_UP + WALL_REUSE_DY);
   const x0 = a.pos.x - WALL_QR, x1 = a.pos.x + WALL_QR, z0 = a.pos.z - WALL_QR, z1 = a.pos.z + WALL_QR;
   let n = 0;                       // (Wave 8) by index, the length set once (see wallAheadQ)
   for (let i = 0; i < got.length; i++) {
@@ -2277,7 +2290,7 @@ function wallCols(W, b) {
     if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list[n++] = c;
   }
   if (list.length !== n) list.length = n;
-  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z;
+  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z; bb.wallY = a.pos.y;
   return list;
 }
 
@@ -3278,7 +3291,7 @@ function townExitPath(W, sx, sy, sz, tx, tz) {
     if (cx < r.minX || cx > r.maxX || cz < r.minZ || cz > r.maxZ) continue;
     const g = W.map.heightAt(cx, cz);
     if (g < W.map.waterY + 0.5) continue;
-    const cols = W.map.queryColliders(cx, cz, 1.6);
+    const cols = W.map.queryColliders(cx, cz, 1.6, _bandCols, g - 0.5, g + 4.0);      // (R2 movers, item 2) the test's own band
     let free = true;
     for (let i = 0; i < cols.length && free; i++) {
       const c = cols[i];
@@ -3652,7 +3665,7 @@ const HELD_RETRY_S = 1.0;         // ... and at most this often
 const _dkx = { x: 0, z: 0, d: 0 };
 /** A wall in the walk band at (x,z) for feet at y that is too tall to hop: its box (0.45 m = the capsule) spans from above y + hop to below the head. */
 function tallWallAt(W, x, z, y, hop) {
-  const cols = W.map.queryColliders(x, z, 0.8);
+  const cols = W.map.queryColliders(x, z, 0.8, _bandCols, y + hop, y + 2.0);      // (R2 movers, item 2) the test's own band
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;

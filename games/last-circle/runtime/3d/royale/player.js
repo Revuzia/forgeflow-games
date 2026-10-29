@@ -1781,15 +1781,29 @@ export function groundA(W, A, o) {
 /** supportAt(W, A[o], A[o + 1], A[o + 2]) -> A[o + 3]: the same query and support test, numbers in an array (bots.js per-frame hop probe). */
 export function supportA(W, A, o) {
   const x = A[o], z = A[o + 1], y = A[o + 2];
-  const cols = W.map.queryColliders(x, z, 0.6);
   MV[2] = x; MV[3] = z; MV[4] = y;
-  supportF(W, cols);
+  supportBand(W);
   A[o + 3] = MV[6];
 }
 
 /** highest walkable support under (x,z) at or below y+STEP_UP */
 export function supportAt(W, x, z, y) {
-  return supportIn(W, W.map.queryColliders(x, z, 0.6), x, z, y);
+  MV[2] = x; MV[3] = z; MV[4] = y;
+  supportBand(W);
+  return MV[6];
+}
+/** (R2 movers, item 2) the per-point support query with the asker's vertical band (maps.js queryColliders' optional y0 / y1): supportFG only ever
+ *  takes a top t with ground < t <= y + STEP_UP (a box's maxY, a ramp's walk line between its minY and maxY), so every collider that can decide the
+ *  answer meets [ground, y + STEP_UP] - the storeys, attic and roof above a mover inside a furnished house are not asked for. Same answer.
+ *  MV[2..4] = (x, z, y) in, MV[6] = the support out (MV[7] = the ground). */
+// Its own out array: a banded query that finds nothing writes length 0 into the array it was given (maps.js queryColliders), and on the map's shared
+// scratch that dropped the backing store every other query (the allocation rule above moveCols).
+const _supCols = [];
+function supportBand(W) {
+  if (W.map !== _latMap) latBind(W.map);
+  groundF(W);
+  const cols = W.map.queryColliders(MV[2], MV[3], 0.6, _supCols, MV[7], MV[4] + STEP_UP);
+  supportFG(W, cols);
 }
 
 /** supportAt over a collider list the caller already holds. queryColliders
@@ -1807,6 +1821,10 @@ function supportIn(W, cols, x, z, y) {
 function supportF(W, cols) {
   if (W.map !== _latMap) latBind(W.map);
   groundF(W);
+  supportFG(W, cols);
+}
+/** supportF with the ground at (MV[2], MV[3]) already in MV[7] (supportBand: the ground is the band's floor). */
+function supportFG(W, cols) {
   const x = MV[2], z = MV[3], y = MV[4];
   let s = MV[7];
   for (let i = 0; i < cols.length; i++) {
@@ -1921,8 +1939,11 @@ function cornerSlide(W, cols, a, c) {
 export function fitsAt(W, x, z, y) { return !blockedHoriz(W, x, z, y, K.PLAYERK.height); }
 /** "does a standing capsule fit HERE" (the mantle's ledge probe): the plain
  *  overlap test at the given feet height, no move rules */
+// (R2 movers, item 2) with the test's own band: blockedF (no move) takes a box only when maxY > y + STEP_UP and minY < y + h, a ramp only when its walk
+// line is above y + STEP_UP and its plank's underside (minY - RAMP_THICK / 2 x the slope factor, <= 1 m on any stair) below y + h: [y + STEP_UP, y + h + 1].
+const _bhCols = [];
 function blockedHoriz(W, x, z, y, h) {
-  return blockedIn(W, W.map.queryColliders(x, z, K.PLAYERK.radius + 0.4), x, z, x, z, y, h, false);
+  return blockedIn(W, W.map.queryColliders(x, z, K.PLAYERK.radius + 0.4, _bhCols, y + STEP_UP, y + h + 1.0), x, z, x, z, y, h, false);
 }
 
 /** ONE collider query per actor per frame: every movement test of this frame
@@ -2596,7 +2617,10 @@ function swimStep(W, a, inp, dt, wy) {
   // than a wall you bounce off — while a hull still stops you dead.
   const swimH = K.PLAYERK.height, swimFeet = a.pos.y + 0.45;
   const smx = a.vel.x * dt, smz = a.vel.z * dt;
-  const scols = moveCols(W, a.pos.x, a.pos.z, Math.abs(smx) + Math.abs(smz));
+  // (R2 movers, item 2) the swim tick's band: blockedIn reads a support top only above swimFeet (yd = max(feet, support)) and walls / ramps from
+  // yd + STEP_UP to yd + h (+ 1 m: a ramp's plank underside), yd <= swimFeet + STEP_UP; the haul-out only takes a ledge above wy - 0.25 and at most
+  // pos.y + 0.9 + STEP_UP. Nothing outside [min(wy - 0.25, swimFeet), swimFeet + STEP_UP + h + 1] decides anything here.
+  const scols = moveCols(W, a.pos.x, a.pos.z, Math.abs(smx) + Math.abs(smz), Math.min(wy - 0.25, swimFeet), swimFeet + STEP_UP + swimH + 1.0);
   const sx = a.pos.x + smx;
   if (!blockedIn(W, scols, a.pos.x, a.pos.z, sx, a.pos.z, swimFeet, swimH, true)) a.pos.x = sx; else a.vel.x = 0;
   const sz = a.pos.z + smz;
