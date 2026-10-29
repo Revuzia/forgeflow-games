@@ -424,7 +424,7 @@ export class Bot extends BotBase implements BotController {
         if (d > 0.05 && b.defendFighters[this.lane] > b.lanersOn(this.lane)) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
         else if (b.baseThreat >= 0.7 && follow) consider('defend', 0.55 + 0.2 * b.baseThreat);
       } else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
-      else if (global >= 0.7 && follow && (!this.diff.objectiveSense || hpF > 0.4)) consider('defend', 0.55 + 0.2 * global);
+      else if (global >= 0.7 && follow && (!this.diff.objectiveSense || kind !== 'rift' || hpF > 0.4)) consider('defend', 0.55 + 0.2 * global);
       // laning: only the laners of the lane beside an objective go, and only on an opening (it is up
       // and we have a fighter more), not to wait for its spawn; the other lanes keep farming
       // (the jungler too: during the laning phase no one comes to wait with it, so it keeps its camps)
@@ -686,7 +686,7 @@ export class Bot extends BotBase implements BotController {
         // widest gap that does not lead back into the wave, and let an escape fire whatever my health)
         let pressed = 0;
         for (const u of this.perc.enemyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, e.x, e.y) <= sq(e.radius + u.radius + 0.7)) pressed++;
-        this.caged = pressed >= 3;
+        this.caged = pressed >= 3 && this.k.kind === 'rift';
         if (this.caged) {
           let bs = -Infinity;
           for (let k = 0; k < 16; k++) {
@@ -703,7 +703,7 @@ export class Bot extends BotBase implements BotController {
             if (sc > bs) { bs = sc; ux = dx; uy = dy; }
           }
         }
-        for (const step of this.caged ? [4, 2] : [8, 4]) {
+        for (const step of this.caged ? [4, 2] : this.k.kind === 'rift' ? [8, 4] : [8]) {
           const tx = e.x + ux * step, ty = e.y + uy * step;
           if (this.w.nav.walkable(tx, ty)) { this.pMoveX = tx; this.pMoveY = ty; break; }
         }
@@ -833,14 +833,17 @@ export class Bot extends BotBase implements BotController {
   private waveGuard(): void {
     const e = this.e;
     const ehp = e.hp + e.shield;
-    const R = WICK_REACH + 1.5, RW = 16;
+    // (W4 G1 refix, RIFT: three roads stack waves while the team is elsewhere; BRIDGE's one road always has the
+    // team on it, so its guard stays the front-of-the-wave one its G5 pacing was measured with)
+    const rift = this.k.kind === 'rift';
+    const R = WICK_REACH + 1.5, RW = rift ? 16 : R;
     let pot = 0, potW = 0, cx = 0, cy = 0, n = 0, wide = 0, near2 = Infinity;
     for (const u of this.perc.enemyUnits) {
       if (!u.alive || u.kind !== 'minion' || !u.attackDef) continue;
       const d2 = this.dist2(u, e.x, e.y);
       if (d2 > RW * RW) continue;
-      // (W4 G1 refix: the rest of a stacked wave, still a few steps behind its front, counts too — it arrives
-      // while I stand there, and twenty Wicks around a fighter body-block every way out)
+      // (the rest of a stacked wave, still a few steps behind its front, counts too — it arrives while I stand
+      // there, and twenty Wicks around a fighter body-block every way out)
       const dps = mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
       potW += dps; wide++;
       if (d2 > R * R) continue;
@@ -852,23 +855,28 @@ export class Bot extends BotBase implements BotController {
     const targeted = this.unitDps > 0;
     let mine = 0;
     for (const u of this.perc.allyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, e.x, e.y) <= 9 * 9) mine++;
-    // (a cover that the wave outnumbers dies under it, and then the whole wave turns on me; a Needle holds a wave of up to
-    // seven Wicks, not a stacked one)
+    // (a cover that the wave outnumbers dies under it, and then the whole wave turns on me; on RIFT a Needle holds a
+    // wave of up to seven Wicks, not a stacked one)
     let covered = mine >= Math.max(2, Math.ceil(wide * 0.6));
-    if (!covered && wide <= 7) {
+    if (!covered && (!rift || wide <= 7)) {
       for (const st of this.perc.allyStructs) if (st.alive && st.attackDef && st.stats.ad > 0 && this.dist2(st, e.x, e.y) <= sq(st.stats.range + st.radius + 2)) { covered = true; break; }
     }
-    // uncovered, the whole wave turns on me: judge it on what it could deal, not only on the Wicks already on me
-    const inc = covered ? this.unitDps : Math.max(this.unitDps, Math.max(pot, potW * 0.75) * 0.75);
-    if (targeted ? ehp / inc >= 8 : covered || Math.max(pot, potW * 0.75) * 8 <= ehp) return;
+    if (rift) {
+      // uncovered, the whole wave turns on me: judge it on what it could deal, not only on the Wicks already on me
+      const inc = covered ? this.unitDps : Math.max(this.unitDps, Math.max(pot, potW * 0.75) * 0.75);
+      if (targeted ? ehp / inc >= 8 : covered || Math.max(pot, potW * 0.75) * 8 <= ehp) return;
+    } else if (targeted ? ehp / this.unitDps >= 8 : covered || pot * 6 <= ehp) return;
     cx /= n; cy /= n;
     const ax = e.x - cx, ay = e.y - cy, ad = dhypot(ax, ay) || 1;
     const sx = this.safeX - e.x, sy = this.safeY - e.y, sd = dhypot(sx, sy) || 1;
     const vx = ax / ad + 0.5 * sx / sd, vy = ay / ad + 0.5 * sy / sd, vd = dhypot(vx, vy) || 1;
-    // (not on me yet: back off decisively, well outside its reach — a sidestep to its edge is overrun by a wave that marches)
-    const step = targeted ? 8 : Math.max(2.5, WICK_REACH + 3 - Math.sqrt(near2));
+    // (RIFT, not on me yet: back off decisively, well outside its reach — a sidestep to its edge is overrun by a wave
+    // that marches)
+    const step = targeted ? 8 : rift ? Math.max(2.5, WICK_REACH + 3 - Math.sqrt(near2)) : Math.max(0, WICK_REACH + 1 - Math.sqrt(near2));
+    if (step <= 0.3) { if (this.pFarm === 2) this.pFarm = 1; return; }
     let tx = e.x + (vx / vd) * step, ty = e.y + (vy / vd) * step;
     if (!this.w.nav.walkable(tx, ty)) {
+      if (!rift) return;
       tx = e.x + (vx / vd) * 2.5; ty = e.y + (vy / vd) * 2.5;
       if (!this.w.nav.walkable(tx, ty)) { tx = this.safeX; ty = this.safeY; }
     }

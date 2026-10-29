@@ -394,7 +394,7 @@ export class TeamBrain {
     let fit = 0;
     for (const p of w.players) if (p && p.team === this.team && p.ent && p.ent.alive && p.ent.hp >= p.ent.maxHp * 0.45) fit++;
     this.press = this.held('press', d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam && aliveDiff >= 0 && (single || this.phase !== 'early') &&
-      (!d.objectiveSense || fit >= Math.min(this.aliveEnemies, 3)), now0);
+      (!d.objectiveSense || k.kind !== 'rift' || fit >= Math.min(this.aliveEnemies, 3)), now0);
     if (this.window || this.press) group = true;
     if (k.kind === 'rift') {
       if (this.phase === 'late') group = true;
@@ -429,7 +429,7 @@ export class TeamBrain {
         score = 100 - p * 50 + (l ? tp.ownN[l.index] * 2 : 0) - (e.hp / Math.max(1, e.maxHp)) * 10;
         // (objectiveSense, W4 G3 refix: the tower the team is already on keeps it — a group that turns to another road
         // whenever a wave count changes walks the map instead of taking towers)
-        if (d.objectiveSense && e === prevSiege) score += 15;
+        if (d.objectiveSense && k.kind === 'rift' && e === prevSiege) score += 15;
       }
       if (score > bestScore) { bestScore = score; best = e; bestInfo = info; }
     }
