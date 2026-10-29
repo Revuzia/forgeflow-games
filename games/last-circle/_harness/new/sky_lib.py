@@ -143,7 +143,14 @@ FINGERPRINT_JS = r"""() => { const W = window.__LC__.W, m = W.map; let h = 21661
 SPRITE_CENSUS_JS = r"""() => { const W = window.__LC__.W, g = W._groups && W._groups.map; if (!g) return null;
   let sprites = 0; const mats = new Set(); const tex = new Set();
   g.traverse((o) => { if (o.isSprite) { sprites++; mats.add(o.material); if (o.material && o.material.map) tex.add(o.material.map); } });
-  let calls = 0; return { sprites, distinctSpriteMaterials: mats.size, distinctSpriteTextures: tex.size }; }"""
+  // (R2) the birds are ONE THREE.Points draw since c0240f17 (was one Sprite per bird). Every Points under the map group and every Sprite that is not
+  // a named landmark (lookout:beacon) is counted as a bird draw: one draw, one material, isPoints, named 'birds', 15-27 points (3 flocks of 5-9)
+  const bd = []; const bmats = new Set();
+  g.traverse((o) => { if (o.isPoints || (o.isSprite && !/^lookout:/.test(o.name || ''))) { bd.push(o); bmats.add(o.material); } });
+  const birds = { draws: bd.length, materials: bmats.size, kinds: bd.slice(0, 6).map((o) => (o.isPoints ? 'Points' : 'Sprite') + ':' + (o.name || '?')),
+                  points: bd.length === 1 && bd[0].isPoints && bd[0].geometry && bd[0].geometry.attributes.position ? bd[0].geometry.attributes.position.count : null,
+                  visible: bd.length === 1 ? !!bd[0].visible : null };
+  let calls = 0; return { sprites, distinctSpriteMaterials: mats.size, distinctSpriteTextures: tex.size, birds }; }"""
 
 SKY_HANDLES_JS = r"""() => { const W = window.__LC__.W, d = W.skyDome, u = W.skyUniforms; if (!u || !d) return { present: false };
   const live = d.material && d.material.uniforms && d.material.uniforms.top === u.top && d.material.uniforms.bot === u.bot;
