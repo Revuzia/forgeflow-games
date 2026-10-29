@@ -48,5 +48,12 @@
   "portal_thumbnail": "r5",
   "mode_rift": "r5",
   "item_linen_hood": "r4",
-  "ability_tunlan_shadow_play": "r1"
+  "ability_tunlan_shadow_play": "r1",
+  "item_lampblack_coat": 2,
+  "item_deepglass_rod": 2,
+  "item_dawnspur": "r2__2",
+  "item_callstone": 2,
+  "item_stillhour": 2,
+  "item_afterlight": "r2__2",
+  "item_watchbell": "r2"
 }

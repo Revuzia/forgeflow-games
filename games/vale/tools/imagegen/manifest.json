@@ -1,7 +1,7 @@
 {
  "version": 1,
  "generator": "xai:grok-imagine-image",
- "count": 210,
+ "count": 228,
  "sizes": {
   "square": [
    1024,
@@ -1239,6 +1239,168 @@
    "size": "square",
    "ref_from": "assets/ui/icons/items/chalk_slippers.svg",
    "note": ""
+  },
+  {
+   "id": "item_lampblack_edge",
+   "kind": "icon",
+   "prompt": "Game item icon of a slim single-edged knife of matte blued steel whose edge is smeared with black lamp soot, a thin curl of black smoke rising off the blade, a grip wrapped in grey cord. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/lampblack_edge.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/whetted_knife.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_lampblack_coat",
+   "kind": "icon",
+   "prompt": "Game item icon of a long soot-dark felt greatcoat with a broad turned-down collar and a warm grey lining showing at the cuffs, a drifting cloud of black soot trailing from its hem. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/lampblack_coat.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/felt_coat.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_lampblack_lens",
+   "kind": "icon",
+   "prompt": "Game item icon of a round hand lens of smoked glass on a short carved wooden handle, the glass clouded black with soot at its rim and clear at its centre where a pale beam passes, a wisp of black smoke curling off it. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/lampblack_lens.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/burning_glass.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_quarry_pick",
+   "kind": "icon",
+   "prompt": "Game item icon of a heavy quarryman's pick with a long pointed head of matte blued steel on a stout ash-wood haft, chips of pale stone flying from its point. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/quarry_pick.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/chalk_knife.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_deepglass_rod",
+   "kind": "icon",
+   "prompt": "Game item icon of a short heavy rod of smooth thick deep-blue glass, darkest at its core like still deep water, its grip wrapped in pale cord and capped with carved pale stone; smooth and rounded, not faceted. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/deepglass_rod.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/inkglass_rod.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_glass_veil",
+   "kind": "icon",
+   "prompt": "Game item icon of a curtain of thin curved panes of frosted pale-violet glass hanging on fine threads from a carved wooden bar, like a still wind chime, soft light caught in the panes. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/glass_veil.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/linen_hood.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_glintmail",
+   "kind": "icon",
+   "prompt": "Game item icon of a short shirt of small overlapping pale stone scales sewn onto dark leather, laid out flat, a bright glint of light flashing off one shoulder scale. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/glintmail.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/glint_sling.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_dawnspur",
+   "kind": "icon",
+   "prompt": "Game item icon of a pale tan leather bracer laced with cord, one short straight spur-spike of matte blued steel jutting forward from its wrist, a bright streak of pale dawn light flaring from the spike's point. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/dawnspur.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/dialcutter.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_resin_maul",
+   "kind": "icon",
+   "prompt": "Game item icon of a heavy two-handed maul whose head is a block of warm translucent honey-amber resin bound with dark ironstone bands, a drop of glowing sap welling from the head. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/resin_maul.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/banded_club.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_shadowpin",
+   "kind": "icon",
+   "prompt": "Game item icon of a long slim throwing spike of pale stone driven point-first into a pool of violet-black ink-like shadow on the ground. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/shadowpin.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/glint_sling.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_bellrope",
+   "kind": "icon",
+   "prompt": "Game item icon of a thick coiled bell rope of braided pale hemp ending in a heavy knotted tassel, a small frosted-glass bell tied at its end, faint rings of sound around it. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/bellrope.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/hand_bell.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_almslamp",
+   "kind": "icon",
+   "prompt": "Game item icon of a small shallow oil lamp of pale glazed clay set in an open carved wooden bowl, a warm amber flame, little drops of light falling into the bowl. Finely crafted, careful carved detail, a faint inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/almslamp.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/kindly_lamp.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_callstone",
+   "kind": "icon",
+   "prompt": "Game item icon of a heavy curved war horn carved from banded dark-orange ironstone with a wide flared mouth, rings of sound bursting out of it. A masterwork: exquisite carved detail and a soft radiant inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/callstone.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/seatstone.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_hourstring",
+   "kind": "icon",
+   "prompt": "Game item icon of a crossbow of pale carved ash wood with clear glass limbs, a bolt of bright white light loaded on it, its taut string glowing. A masterwork: exquisite carved detail and a soft radiant inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/hourstring.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/sunstring.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_needlefall",
+   "kind": "icon",
+   "prompt": "Game item icon of a long slender needle-thin sword of pale chalk stone plunging point-down, a streak of light trailing behind it like a falling star. A masterwork: exquisite carved detail and a soft radiant inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/needlefall.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/hourcleaver.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_stillhour",
+   "kind": "icon",
+   "prompt": "Game item icon of a tall tower shield of pale carved stone planted upright in the ground, a thin line of still white light along its carved rim, specks of dust hanging motionless in the air around it. A masterwork: exquisite carved detail and a soft radiant inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/stillhour.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/ironstone_mantle.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_afterlight",
+   "kind": "icon",
+   "prompt": "Game item icon of a short slender magic wand of clear glass with a small rounded glowing tip and a pale carved stone handle, held at a slant, two fading violet-white afterimages of the wand trailing beside it; a wand with a rounded tip, not a blade, no sharp edge. A masterwork: exquisite carved detail and a soft radiant inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/afterlight.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/noonglass.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
+  },
+  {
+   "id": "item_watchbell",
+   "kind": "icon",
+   "prompt": "Game item icon of a large bell of frosted pale glass hanging from a curved arm of carved dark wood, a warm amber flame burning inside the bell, soft rings of light spreading outward from it. A masterwork: exquisite carved detail and a soft radiant inner light. Square game item icon: one bold centred object in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/items/watchbell.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/items/shelter_lamp.webp",
+   "note": "integration pass: own painting (was borrowing another item's)"
   },
   {
    "id": "spell_glint_step",

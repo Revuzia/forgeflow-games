@@ -1,5 +1,5 @@
 {
-  "$comment": "Visual subjects for the 39 item icons (what the object LOOKS like; the content record says what it does). build_item_prompts.py turns these into manifest prompts. Materials of the Vale only: stone, glass, carved wood, cloth, felt, leather, resin, matte blued steel; no gold, gems, runes or polished metal.",
+  "$comment": "Visual subjects for the 57 item icons (what the object LOOKS like; the content record says what it does). build_item_prompts.py turns these into manifest prompts. Materials of the Vale only: stone, glass, carved wood, cloth, felt, leather, resin, matte blued steel; no gold, gems, runes or polished metal.",
   "notched_blade": "a short sword with a notched pale chalk-stone blade and a leather-wrapped wooden hilt",
   "reading_lens": "a round reading lens of pale blue-tinted glass in a carved walnut frame with a small cloth tassel",
   "ironstone_guard": "a small round shield of banded dark-orange ironstone with a felt-padded rim",
@@ -38,5 +38,23 @@
   "road_sandals": "a pair of simple leather road sandals with cord laces",
   "dust_runners": "a pair of light running boots of wrapped leather kicking up a trail of pale dust",
   "felt_treads": "a pair of sturdy grey felt-lined boots with thick layered soles",
-  "chalk_slippers": "a pair of soft pale slippers dusted with chalk, trailing a faint violet shimmer"
+  "chalk_slippers": "a pair of soft pale slippers dusted with chalk, trailing a faint violet shimmer",
+  "lampblack_edge": "a slim single-edged knife of matte blued steel whose edge is smeared with black lamp soot, a thin curl of black smoke rising off the blade, a grip wrapped in grey cord",
+  "lampblack_coat": "a long soot-dark felt greatcoat with a broad turned-down collar and a warm grey lining showing at the cuffs, a drifting cloud of black soot trailing from its hem",
+  "lampblack_lens": "a round hand lens of smoked glass on a short carved wooden handle, the glass clouded black with soot at its rim and clear at its centre where a pale beam passes, a wisp of black smoke curling off it",
+  "quarry_pick": "a heavy quarryman's pick with a long pointed head of matte blued steel on a stout ash-wood haft, chips of pale stone flying from its point",
+  "deepglass_rod": "a short heavy rod of smooth thick deep-blue glass, darkest at its core like still deep water, its grip wrapped in pale cord and capped with carved pale stone; smooth and rounded, not faceted",
+  "glass_veil": "a curtain of thin curved panes of frosted pale-violet glass hanging on fine threads from a carved wooden bar, like a still wind chime, soft light caught in the panes",
+  "glintmail": "a short shirt of small overlapping pale stone scales sewn onto dark leather, laid out flat, a bright glint of light flashing off one shoulder scale",
+  "dawnspur": "a pale tan leather bracer laced with cord, one short straight spur-spike of matte blued steel jutting forward from its wrist, a bright streak of pale dawn light flaring from the spike's point",
+  "resin_maul": "a heavy two-handed maul whose head is a block of warm translucent honey-amber resin bound with dark ironstone bands, a drop of glowing sap welling from the head",
+  "shadowpin": "a long slim throwing spike of pale stone driven point-first into a pool of violet-black ink-like shadow on the ground",
+  "bellrope": "a thick coiled bell rope of braided pale hemp ending in a heavy knotted tassel, a small frosted-glass bell tied at its end, faint rings of sound around it",
+  "almslamp": "a small shallow oil lamp of pale glazed clay set in an open carved wooden bowl, a warm amber flame, little drops of light falling into the bowl",
+  "callstone": "a heavy curved war horn carved from banded dark-orange ironstone with a wide flared mouth, rings of sound bursting out of it",
+  "hourstring": "a crossbow of pale carved ash wood with clear glass limbs, a bolt of bright white light loaded on it, its taut string glowing",
+  "needlefall": "a long slender needle-thin sword of pale chalk stone plunging point-down, a streak of light trailing behind it like a falling star",
+  "stillhour": "a tall tower shield of pale carved stone planted upright in the ground, a thin line of still white light along its carved rim, specks of dust hanging motionless in the air around it",
+  "afterlight": "a short slender magic wand of clear glass with a small rounded glowing tip and a pale carved stone handle, held at a slant, two fading violet-white afterimages of the wand trailing beside it; a wand with a rounded tip, not a blade, no sharp edge",
+  "watchbell": "a large bell of frosted pale glass hanging from a curved arm of carved dark wood, a warm amber flame burning inside the bell, soft rings of light spreading outward from it"
 }
