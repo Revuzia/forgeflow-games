@@ -34,6 +34,7 @@ import { accident } from './knowledge.ts';
 import { ensureRelation, polityName, polityOf } from './war.ts';
 import { foodDays, storeTake } from './store.ts';
 import { cohortTotal } from './cohorts.ts';
+import { peopleLeft } from '../chronicle.ts';
 import { interrupt } from './people.ts';
 import { insertSorted } from './lifecycle.ts';
 import { bestBoat, routeBetween } from './missions.ts';
@@ -161,6 +162,7 @@ export function moveHousehold(x: PCtx, h: Household, from: Settlement, to: Settl
     from.households = from.households.filter((o) => o !== h);
     to.households.push({ id: h.id, members: go, home: -1 });
   }
+  peopleLeft(x, from, go.length); // (fix r4 #22) leaving alive is not dwindling
   return go.length;
 }
 

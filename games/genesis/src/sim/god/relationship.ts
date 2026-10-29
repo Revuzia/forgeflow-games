@@ -305,6 +305,28 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
       }
     }
   }
+  // (fix r4 #14, LIVING §3.8) a morning prayer at home, the everyday devotion of ordinary life: once a morning each, at
+  // their first decision from first light to mid-morning, drawn by piety more than by the god's own standing (a quiet
+  // town, faith 0.13-0.21, prayed 0.2-0.6 % of its time where §3.8 asks 2 %: evening worship follows faith, and nothing
+  // else brought a calm town to prayer)
+  if (pressing < 1 && A.task[s] !== TASK.pray && A.task[s] !== TASK.worship && !babe) {
+    const el = sunElevation(u, x.p, x.tick, st.pos);
+    if (el > MATINS_LOW && el < MATINS_HIGH && sunElevation(u, x.p, x.tick - 20, st.pos) < el) {
+      const r = srel(u, x.p.id, st.id);
+      if (!r.matins || x.tick - r.matins.t > x.day / 2) r.matins = { t: x.tick, went: [] };
+      const ev = r.matins;
+      if (!ev.went.includes(A.id[s])) {
+        ev.went.push(A.id[s]);
+        // the mornings after a disaster or the god's harm (three days), and any hard time, are prayed longer
+        let hard = h;
+        for (const a of r.acts) if (a.kind === 'harm' && x.tick - a.tick <= 3 * x.day) hard = Math.max(hard, 0.6);
+        if (hashFloat(A.id[s], ev.t, 0x3a71) < Math.min(1, MATINS_BASE + MATINS_PIETY * piety + 0.2 * faith + 0.25 * hard)) {
+          const len = MATINS_WORK * (1 + 0.8 * hashFloat(A.id[s], ev.t, 0x3a72)) * (1 + hard);
+          return { kind: TASK.pray, goal: null, goalCell: A.cell[s], work: Math.round(len) };
+        }
+      }
+    }
+  }
   // a pilgrimage season
   return pilgrimTask(x, s, st, night, pressing);
 }
@@ -341,6 +363,10 @@ export const PRAY_K = 3;
 export const PRAY_CAP = 0.65;
 /** the evening worship window: the sun's elevation (rad), sinking, from just before sunset to the end of dusk */
 export const VESPERS_HIGH = 0.06, VESPERS_LOW = -0.25;
+/** (fix r4 #14) the morning prayer: its window (the sun's elevation, rad, rising), who keeps it (base + piety share, plus
+ * 0.2 × faith, + 0.25 × hardship) and its length (MATINS_WORK to 1.8 × MATINS_WORK minutes, × (1 + hardship)) —
+ * calibrated on the §3.8 quiet-town and after-a-tornado targets (fix4/pray14) */
+export const MATINS_LOW = -0.3, MATINS_HIGH = 0.6, MATINS_BASE = 0.5, MATINS_PIETY = 0.45, MATINS_WORK = 33;
 /** the age (years) from which a child prays */
 export const PRAY_AGE = 4;
 

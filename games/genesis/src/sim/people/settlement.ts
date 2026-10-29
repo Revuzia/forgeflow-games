@@ -36,7 +36,7 @@ import { cultureDaily } from './culture.ts';
 import { godHooks } from './hooks.ts'; // LIVING RELATIONSHIP: temples where faith holds
 import { economyDaily, popOf } from './economy.ts';
 import { atWar } from './war.ts';
-import { agesDaily, checkWorldEmpty } from '../chronicle.ts';
+import { agesDaily, checkWorldEmpty, peopleLeft } from '../chronicle.ts';
 import { neighbourContagion } from '../life/disease.ts';
 import { bestBoat, boatSeats, boatSwim, routeBetween } from './missions.ts';
 import { findPath } from '../grid/pathfind.ts';
@@ -1364,6 +1364,7 @@ export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: s
     child.households.push({ id: h.id, members: ids, home: -1 });
   }
   st.households = st.households.filter((h) => h.members.length > 0);
+  peopleLeft(x, st, moved); // (fix r4 #22) leaving alive is not dwindling
   // supplies for the road: the leavers' share of the stores by head, at least a quarter (fix r2 #14: a flat quarter for
   // 20 of 48 people sent a bud off with ten days' food and no fields, and it starved within the week)
   const share = Math.min(0.5, Math.max(0.25, moved / Math.max(1, moved + (x.ps.members.get(st.id)?.length ?? 0))));

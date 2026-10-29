@@ -25,6 +25,10 @@ import { landOf } from '../src/sim/people/ledger.ts';
 import { ERAS } from '../src/sim/content.ts';
 import { NT, TRAIT } from '../src/sim/people/defs.ts';
 import { BuildingFlag } from '../src/sim/types.ts';
+import { agesDaily } from '../src/sim/chronicle.ts';
+import { cohortTotal } from '../src/sim/people/cohorts.ts';
+import { die } from '../src/sim/people/lifecycle.ts';
+import { DEATH } from '../src/sim/people/defs.ts';
 
 const ctx = (sim: Sim): PCtx => makeCtx(sim.u, sim.u.planets[0]);
 const k = (x: PCtx, id: string): number => x.rt.byId.get(id)!;
@@ -675,4 +679,57 @@ test('history: households that leave a town a disaster ruined are told as leavin
   const told = sim.u.chronicle.slice(c0).map((e) => e.text);
   assert.ok(!told.some((t) => /conquerors/.test(t)), told.join(' | '));
   assert.ok(told.some((t) => /left their ruined homes for their kin at/.test(t)), told.join(' | '));
+});
+
+// (fix r4 #22) a dark age "its people dwindled" counted everyone who left, alive or dead: a bud takes at least 36 % of
+// its mother, so every peaceful daughter village came with "A dark age fell on <mother>" told on the tick the young
+// families left (9 of 9 buds on the round-3 year-50 saves, review-critic/r4/bud.ts) — and the dark age's war morale and
+// culture tempo penalties with it. People who leave alive are not a dwindling; people who die still are.
+test('history: a bud never tells a dark age on its mother; the same share dead still does (fix r4 #22)', () => {
+  const sim = new Sim({ seed: 20261008, scenario: 'sandbox', overrides: { n: 64, vegetation: 1 } });
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 56, era: 'bronze', settled: true });
+  const p = sim.u.planets[0];
+  const ps = p.people;
+  const st = ps.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  sim.step(1440);
+  const x = makeCtx(sim.u, p);
+  const span = Math.max(4, Math.round(x.year / x.day));
+  const pop = () => (ps.members.get(st.id)?.length ?? 0) + cohortTotal(st);
+  /** a calm year behind the town: the same people every day, and no age for longer than the window */
+  const calmYear = () => {
+    st.age.hist = [];
+    for (let i = 0; i < span; i++) st.age.hist.push([st.library.length, pop(), 5]);
+    st.age.kind = '';
+    st.age.since = x.tick - (span + 2) * x.day;
+  };
+  const darkTold = (c0: number) => sim.u.chronicle.slice(c0).some((c) => /A dark age fell on/.test(c.text) && c.text.includes(st.name));
+  // a bud: households (not the chief's) until at least 36 % of the town has left
+  calmYear();
+  const before = pop();
+  const leaving: typeof st.households = [];
+  let n = 0;
+  for (const h of st.households) {
+    if (n >= before * 0.36) break;
+    if (!h.members.length || h.members.includes(st.leader)) continue;
+    leaving.push(h);
+    n += h.members.length;
+  }
+  const c0 = sim.u.chronicle.length;
+  const child = splitOff(x, st, leaving, 'bud', st.cell);
+  assert.ok(child, 'the young families set out');
+  assert.ok(pop() < before * 0.7, `a third and more left (${before} -> ${pop()})`);
+  agesDaily(x, st);
+  assert.notEqual(st.age.kind, 'dark', 'a daughter village is not a dark age');
+  assert.ok(!darkTold(c0), sim.u.chronicle.slice(c0).map((c) => c.text).join(' | '));
+  // control: the same share dying is still a dark age ("its people dwindled")
+  calmYear();
+  const before2 = pop();
+  const c1 = sim.u.chronicle.length;
+  const dead = (ps.members.get(st.id) ?? []).filter((s) => x.A.id[s] !== st.leader).slice(0, Math.ceil(before2 * 0.36));
+  for (const s of dead) die(x, s, DEATH.disease);
+  assert.ok(pop() < before2 * 0.7, `a third and more died (${before2} -> ${pop()})`);
+  agesDaily(x, st);
+  assert.equal(st.age.kind, 'dark', 'deaths are still a dwindling');
+  assert.ok(darkTold(c1), 'and the chronicle tells it');
 });

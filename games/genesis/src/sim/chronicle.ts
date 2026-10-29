@@ -188,6 +188,19 @@ function prosperity(x: PCtx, st: Settlement, pop: number): number {
   return Math.min(10, foodDays(x, st) / pop) + Math.min(5, value / pop / 2) + Math.min(3, (beds / pop) * 2);
 }
 
+/**
+ * `moved` people left `st` alive (a daughter village, a household moving away, flight from fear): scale the population
+ * column of the year's history by those who stayed, so only deaths and want count as "its people dwindled" (fix r4 #22:
+ * every peaceful bud took a third of its mother and was told as "A dark age fell on <mother>", on the tick the young
+ * families left, with the dark age's war morale and culture tempo penalties). Call after the members have moved.
+ */
+export function peopleLeft(x: PCtx, st: Settlement, moved: number): void {
+  if (moved <= 0) return;
+  const stay = (x.ps.members.get(st.id)?.length ?? 0) + cohortTotal(st);
+  const f = stay / (stay + moved);
+  for (const e of st.age.hist) e[1] = Math.round(e[1] * f * 10) / 10;
+}
+
 /** daily per settlement: golden and dark ages from a year of knowledge, population and prosperity */
 export function agesDaily(x: PCtx, st: Settlement): void {
   if (st.band || st.fallen >= 0) return;

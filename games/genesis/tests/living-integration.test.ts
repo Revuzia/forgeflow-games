@@ -8,7 +8,7 @@ import { Sim } from '../src/sim/sim.ts';
 import { MAX_WORK_COST, flowCost } from '../src/sim/people/resources.ts';
 import { GODS, NT, TASK, TASK_NAMES, TRAIT } from '../src/sim/people/defs.ts';
 import { sunElevation } from '../src/sim/people/world.ts';
-import { VESPERS_HIGH, VESPERS_LOW } from '../src/sim/god/relationship.ts';
+import { VESPERS_HIGH, VESPERS_LOW, MATINS_WORK } from '../src/sim/god/relationship.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
 import { distM } from '../src/sim/people/world.ts';
 import { ROAD_CAMP_TICKS, paceSleep, walkTicks } from '../src/sim/perf/pace.ts';
@@ -504,6 +504,67 @@ test('integration: a site under water is given up; a site nothing has reached ye
   assert.ok(!st.sites.includes(w.id) && !p.people.building(w.id), 'gone from the sites');
 });
 
+// (fix r4 #12) daughter towns went years short of beds (round-3 acceptance, §2.5 calm year ends 0/8 seeds): a frame that
+// burned before it was finished stayed among the town's two open sites for ever (seed 20261008's Maaver, years 37-50), and
+// a house begun in mudbrick nobody made sat at a few bricks for years, 'obtainable' because the recipe was known (seed 1's
+// Ukuneis). A ruined frame is no site; a site that took nothing for SITE_STALL_DAYS is begun again in what is at hand.
+test('integration: a ruined frame holds no site; a site that took nothing for SITE_STALL_DAYS is begun again in what is at hand, else given up (fix r4 #12)', async () => {
+  const { planBuilding, reviseSite, ruin, SITE_STALL_DAYS, materialItems } = await import('../src/sim/people/buildings.ts');
+  const { storeAdd, storeHas } = await import('../src/sim/people/store.ts');
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  const C = sim.u.content;
+  const house = C.buildings.idx('house');
+  const mud = C.materials.idx('mudbrick'), timber = C.materials.idx('timber');
+  const brick = C.items.idx('mudbrick');
+  for (const id of ['clay-digging', 'mudbrick', 'carpentry']) { const k = x.rt.byId.get(id)!; if (!st.library.includes(k)) st.library.push(k); }
+  // (1) a frame burns: it leaves the sites at once; one an older save kept among them is dropped at the next look
+  const f = planBuilding(x, st, house, false, mud)!;
+  assert.ok(st.sites.includes(f.id));
+  ruin(x, st, f, 'fire');
+  assert.ok(!st.sites.includes(f.id), 'a ruined frame is no open site');
+  st.sites.push(f.id);
+  assert.equal(reviseSite(x, st, f), false, 'an old save\'s ruined site is dropped');
+  assert.ok(!st.sites.includes(f.id));
+  // (2) a mudbrick house at 4 of 10 that nobody brings bricks to, while the store holds timber for a house
+  st.store[brick] = 0;
+  storeAdd(x, st, C.items.idx('timber'), 40);
+  const b = planBuilding(x, st, house, false, mud)!;
+  b.delivered = 4; b.progress = 0.18;
+  assert.ok(reviseSite(x, st, b), 'the site stands');
+  assert.equal(b.material, mud, 'within the stall days it waits for its bricks');
+  x.tick += (SITE_STALL_DAYS - 1) * x.day;
+  assert.ok(reviseSite(x, st, b) && b.material === mud, 'still waiting a day short of the stall');
+  x.tick += 2 * x.day;
+  const back = materialItems(x, mud).find(([it]) => it === brick)?.[1] ?? 0;
+  assert.ok(reviseSite(x, st, b), 'the site stands, begun again');
+  assert.equal(b.material, timber, `begun again in timber, not ${C.materials.list[b.material].id}`);
+  assert.equal(b.delivered, 0);
+  assert.ok(st.sites.includes(b.id));
+  assert.ok(Math.abs(storeHas(st, brick) - back * 4) < 1e-6, 'the four delivered come back to the store');
+  // (3) the same stall with nothing in store and nothing within reach: a frame with bricks in it keeps them and waits;
+  // a bare one is given up, its slot free
+  const k = planBuilding(x, st, house, false, mud)!;
+  const g = planBuilding(x, st, house, false, mud)!;
+  k.delivered = 4; k.progress = 0.18;
+  g.delivered = 0; g.progress = 0;
+  for (const m of C.buildings.list[house].materials) for (const [it] of materialItems(x, C.materials.idx(m))) st.store[it] = 0;
+  st.res = null;
+  x.tick += (SITE_STALL_DAYS + 1) * x.day;
+  assert.ok(reviseSite(x, st, k) && k.material === mud && k.delivered === 4, 'the bricks stay in their frame');
+  assert.equal(reviseSite(x, st, g), false, 'given up');
+  assert.ok(!st.sites.includes(g.id) && !p.people.building(g.id), 'gone from the sites');
+  st.sites.splice(st.sites.indexOf(k.id), 1);
+  // (4) a site the builders keep feeding is never stalled
+  storeAdd(x, st, C.items.idx('timber'), 40);
+  const h = planBuilding(x, st, house, false, timber)!;
+  h.delivered = 3;
+  for (let d = 0; d < 3 * SITE_STALL_DAYS; d++) { x.tick += x.day; h.fed = x.tick; assert.ok(reviseSite(x, st, h)); }
+  assert.equal(h.material, timber);
+  assert.equal(h.delivered, 3);
+});
+
 test('integration: a fire season strikes a cell as often on a small world as on a large one (the rate is per cell, not per world)', async () => {
   // (HEAT_STRIKES_PER_HOUR was drawn per world: a cell of an n = 12 world was struck 28 times as often as one of the
   // n = 64 world it was set on — found when a wetter cure let the strikes through and a living start's people learned
@@ -615,4 +676,29 @@ test('integration: scraps of fuel that make a unit together light the hearth —
   }
   assert.ok(ps.of(st.id).some((b) => c.buildings.list[b.type].function === 'hearth' && b.fuel > 0), 'a hearth is lit from the scraps');
   assert.ok(tending / n < 0.15, `grown-ups tending the fire: ${(tending / n).toFixed(2)} of their time over three hours`);
+});
+
+// (fix r4 #14, LIVING §3.8) a quiet town prayed 0.2-0.6 % of its time (round-3 acceptance; ≥ 2 % asked): evening worship
+// follows the god's standing, and nothing else brought a calm town to prayer. A morning prayer at home, drawn by piety:
+// the 8 god sessions (fix4/pray14) give 2.1-2.9 % for the quiet town and 8.1-12.4 % in the days after a tornado.
+test('integration: a quiet town keeps a morning prayer at home, once a morning each: 1.5-6 % of its time at prayer (fix r4 #14)', () => {
+  const { sim, st } = town();
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const p = sim.u.planets[0];
+  const A = p.people.agents;
+  let n = 0, pray = 0, long = 0;
+  for (let t = 0; t < 2 * 1440; t += 20) {
+    sim.step(20);
+    for (const s of p.people.members.get(st.id) ?? []) {
+      n++;
+      if (A.task[s] === TASK.pray || A.task[s] === TASK.worship) pray++;
+      if (A.task[s] === TASK.pray && A.tWork[s] > MATINS_WORK * 1.8 + 1) long++;
+    }
+  }
+  const share = pray / Math.max(1, n);
+  assert.ok(share >= 0.015 && share <= 0.06, `praying share ${share.toFixed(3)}`);
+  const r = sim.u.god.rel!.st[`${p.id}:${st.id}`];
+  assert.ok(r.matins && r.matins.went.length >= 10, `the morning's devotion was kept (${r.matins?.went.length ?? 0} went)`);
+  assert.equal(new Set(r.matins.went).size, r.matins.went.length, 'once a morning each');
+  assert.equal(long, 0, 'a calm morning\'s prayer is short');
 });

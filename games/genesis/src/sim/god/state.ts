@@ -273,6 +273,8 @@ export interface SettlementRel {
   since: Record<string, number>;
   /** this evening's worship: the tick its window opened and who has gone (agent ids) — once an evening each */
   vespers?: { t: number; went: number[] };
+  /** (fix r4 #14) this morning's devotion: the tick its window opened and who has prayed (agent ids) — once a morning each */
+  matins?: { t: number; went: number[] };
 }
 
 export interface RelState {

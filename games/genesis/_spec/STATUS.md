@@ -129,6 +129,22 @@ births swing −22 % to +47 % between trees with no birth change while pooled bi
 runs per seed do not resolve §2.8 (LIVING §13.5). **Gate green** on the final tree (`fix3/check/check-r3b.done` "EXIT 0 02:08" 2026-10-29: 578 / 578 pass, 0 skipped, detban and tsc clean; the first round-3 gate failed only on a mining test re-seeded, LIVING §13.2). Round-3 measurements (LIVING §13.5): towns of the year-50 worlds 1 071–1 513 m apart (was 101 m); single thirst deaths over 50 years 11 → 0 on seed 1 (one natural-drought exodus of 18 remains, drought lane); the god's drought on 8 year-50 worlds with prayers answered: 0 thirst deaths, 0 towns fallen. UI hooks: `god.omen {warning: true}`, event
 `disaster.relent`, chronicle line `bud.home`, the "Through whom?" ask.
 
+**Fix round 4** (2026-10-29, the 25-finding review; LIVING §13.6, ledger `_harness/scratch/ledgers/fix-r4.md`): fixed and
+tested — free text: a prophecy naming the danger it protects from foretells the protection (8 / 8, was harm), the god's
+named act is done instead of a care ask or a kind `prayer.answer` (7 / 7), plain speech to the prophet ("Subo, tell them a
+flood is coming") foretells instead of casting a flood or teaching an idea (8 / 8), "break the drought" never sends one,
+"show Aru a sign" sends an omen, and unnamed new crops / trees / animals / ores pick a real species or ask (0 junk
+registrations, was 9; 0 wrong acts, was 7); the god's relenting drought is a witnessed mercy (answered trust 0.52–0.57,
+was 0.33–0.39; worship ≥ ignored on 4 / 8, was 1 / 8); a bud no longer tells a dark age on its mother; a ruined or
+starved building site no longer blocks a town's houses for years; a morning prayer at home makes a quiet town pray 2.1–2.9 %
+of its time (8 / 8 ≥ 2 %, was 0.3 %) and 8.1–12.4 % after a tornado (8 / 8 ≥ 8 %, was 1 / 8) — together these three moved
+pooled births −3.4 %, deaths +3.5 %, food per adult-year −2.6 % over 15 years (within the ± 10 % / 5 % rule). The sea-hunting
+rules have direct tests (each fails when its rule is removed). §2.5 housing judged per live town: r6 7 / 8, round 2 5 / 8,
+round 3 3 / 8 seeds housed every calm year end (the world sums said 7, 3, 0). The seed-3 firestorm is 8 / 30 dead on the
+round-4 tree (10 / 30 on round 3; every death in the first hour, in the front's spawn disc). **Open:** hunting where game
+exists (two variants on their pooled 8-seed gate, `fix4/hv/`), the round-4 acceptance re-run (`fix4/acc/`),
+`creatures.json` (the lead deletes it: nothing imports it).
+
 ## How to run
 
 ```

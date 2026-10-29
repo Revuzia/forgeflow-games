@@ -137,6 +137,14 @@ export function siteObtainable(x: PCtx, st: Settlement, b: Building): boolean {
  */
 export function reviseSite(x: PCtx, st: Settlement, b: Building): boolean {
   if (b.progress >= 1) return true;
+  // (fix r4 #12) a frame that burned or fell before it was finished is no longer a site: it held one of the two open
+  // slots for ever (seed 20261008's Maaver: a ruined mudbrick house among its sites from year 37 to 50, 6 beds for 20-28)
+  if (b.flags & BuildingFlag.ruined) {
+    const k = st.sites.indexOf(b.id);
+    if (k >= 0) st.sites.splice(k, 1);
+    x.ps.version++;
+    return false;
+  }
   // (LIVING integration, 2026-10-20 — the default meteor on seed 1's town: its crater filled, the town's heart moved to
   // dry ground, and for a week nothing rose. One site stood 7 m under the new lake; the other, a house begun in mudbrick
   // that no one was making, waited with 30 bricks, 20 stone blocks and 27 timber in the store — 'obtainable' because
@@ -154,6 +162,8 @@ export function reviseSite(x: PCtx, st: Settlement, b: Building): boolean {
       if (m >= 0 && m !== b.material && affordable(x, st, m) >= def.cost) { b.material = m; x.ps.version++; return true; }
     }
   }
+  if (b.fed === undefined) b.fed = x.tick;
+  else if (x.tick - b.fed > SITE_STALL_DAYS * x.day && stalled(x, st, b)) return false;
   if (siteObtainable(x, st, b)) return true;
   const prev = b.material, delivered = b.delivered;
   const m = chooseMaterial(x, st, b.type);
@@ -172,6 +182,41 @@ export function reviseSite(x: PCtx, st: Settlement, b: Building): boolean {
   // nothing they know of can be had: the site is given up (what was delivered goes back to the store)
   for (const [it, q] of materialItems(x, b.material)) storeAdd(x, st, it, q * b.delivered);
   removeBuilding(x, b);
+  return false;
+}
+
+/** (fix r4 #12) days a site may go without material or work before it is begun again in what is at hand */
+export const SITE_STALL_DAYS = 12;
+
+/**
+ * (fix r4 #12) A site that took no material and no work for SITE_STALL_DAYS while its material was 'obtainable' only by
+ * a craft nobody practised (seed 1's Ukuneis: two mudbrick houses at nothing delivered for years, 12 beds for 24-28; seed
+ * 20261008's Maaver: a mudbrick house at 4 of 10 from year 38 to 50) is begun again in a material the store can pay for
+ * now, else one whose every item is in store or grows within reach (wattle, timber, thatch...) — what was delivered goes
+ * back to the store — or, when there is none and nothing was delivered, given up so that a new site can be planned. When
+ * the rest is in the store already the builders are only late, and a site with material in it and nothing else at hand
+ * keeps it (giving it up only sent the same bricks to a new frame — Ukuneis, fix4/sites): the clock starts again.
+ * Returns true when the site was given up.
+ */
+function stalled(x: PCtx, st: Settlement, b: Building): boolean {
+  const def = x.c.buildings.list[b.type];
+  if (affordable(x, st, b.material) >= def.cost - b.delivered) { b.fed = x.tick; return false; }
+  const order = materialOrder(x, st, b.type).filter((m) => m !== b.material && materialKnown(x, st, m));
+  const atHand = (m: number) => x.c.materials.list[m].items.every((io) => {
+    const it = io.item ? x.c.items.idx(io.item) : -1;
+    return it >= 0 && (storeHas(st, it) >= io.qty * def.cost || (st.res?.items[String(it)]?.length ?? 0) > 0);
+  });
+  let pick = -1;
+  for (const m of order) if (affordable(x, st, m) >= def.cost) { pick = m; break; }
+  if (pick < 0) for (const m of order) if (atHand(m)) { pick = m; break; }
+  if (pick < 0 && b.delivered > 0) { b.fed = x.tick; return false; }
+  for (const [it, q] of materialItems(x, b.material)) storeAdd(x, st, it, q * b.delivered);
+  if (pick < 0) { removeBuilding(x, b); return true; }
+  b.material = pick;
+  b.delivered = 0;
+  b.progress = 0;
+  b.fed = x.tick;
+  x.ps.version++;
   return false;
 }
 
@@ -365,6 +410,7 @@ export function planBuilding(x: PCtx, st: Settlement, t: number, complete = fals
     progress: complete ? 1 : 0, delivered: complete ? def.cost : 0, damage: 0, settlement: st.id,
     flags: 0, books: [], built: complete ? x.tick : -1, fuel: 0, occupants: 0, household: -1,
   };
+  if (!complete) b.fed = x.tick;
   x.ps.addBuilding(b);
   if (!complete) st.sites.push(id);
   else onComplete(x, st, b, true);
@@ -435,6 +481,8 @@ export function ruin(x: PCtx, st: Settlement | undefined, b: Building, why: stri
   b.flags &= ~(BuildingFlag.burning | BuildingFlag.occupied | BuildingFlag.working | BuildingFlag.lit);
   b.damage = 1;
   b.fuel = 0;
+  // (fix r4 #12) an unfinished frame that is ruined is no longer one of the town's open sites
+  if (b.progress < 1) for (const o of x.ps.settlements) { const k = o.sites.indexOf(b.id); if (k >= 0) o.sites.splice(k, 1); }
   const lost = b.books.slice();
   b.books = [];
   x.ps.version++;

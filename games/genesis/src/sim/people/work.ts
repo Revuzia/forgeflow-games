@@ -389,7 +389,8 @@ function build(x: PCtx, s: number, st: Settlement | undefined): void {
   }
   const def = x.c.buildings.list[b.type];
   b.delivered = Math.min(def.cost, b.delivered + carried);
-  workOn(x, st, b, A.tWork[s], A.skills[s * NS + SKILL.build]);
+  const worked = workOn(x, st, b, A.tWork[s], A.skills[s * NS + SKILL.build]);
+  if (worked || carried > 0) b.fed = x.tick; // (fix r4 #12) the site's stall clock
   practise(x, s, SKILL.build, 0.015);
 }
 

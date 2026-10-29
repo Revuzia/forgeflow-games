@@ -365,6 +365,9 @@ export interface Building {
   occupants: number;
   /** household that lives here (-1) */
   household: number;
+  /** (fix r4 #12) a site's stall clock: the tick it last took material or work, or changed material (absent: a site
+   * from an older save, or a finished building — buildings.ts reviseSite starts it at the first look) */
+  fed?: number;
 }
 
 export interface Herd {
