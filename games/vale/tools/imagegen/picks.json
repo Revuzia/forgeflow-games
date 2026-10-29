@@ -55,5 +55,8 @@
   "item_callstone": 2,
   "item_stillhour": 2,
   "item_afterlight": "r2__2",
-  "item_watchbell": "r2"
+  "item_watchbell": "r2",
+  "item_shadowpin": "r2",
+  "item_lampblack_edge": "r2",
+  "item_resin_maul": "r2"
 }

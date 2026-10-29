@@ -208,10 +208,22 @@ def grade(src: Path, ramp: tuple[np.ndarray, np.ndarray], override: dict | None 
     small = np.asarray(full.resize((WORK_PX, WORK_PX), Image.LANCZOS)).astype(np.float64) / 255
     lab0 = rgb2lab(small)
     ref_hi = ground_ref(lab0)
-    g0 = ndi.gaussian_filter(groundness(lab0, ref_hi), 1.0)
+
+    def key(lab_: np.ndarray) -> np.ndarray:
+        g_ = groundness(lab_, ref_hi)
+        if override.get("enclosed"):
+            # dark paint the subject wholly encloses (a soot-black fuller down a blade, the shade between cord wraps)
+            # is the subject's own, not ground showing through: keep the silhouette's interior whole (its soft outer
+            # 2 px still blend), so it is never repainted in the family hue
+            inner = ndi.binary_erosion(ndi.binary_fill_holes(g_ < 0.5), iterations=2)
+            g_ = np.where(inner, 0.0, g_)
+        return g_
+
+    g0 = ndi.gaussian_filter(key(lab0), 1.0)
     cx, cy, bw, bh, cov0 = subject_box(g0)
     # a thin subject (a bow, a rod) may run a little past the frame so it still carries some area
     fill = FILL if cov0 >= 0.2 else FILL + (0.2 - max(cov0, 0.05)) * 0.9
+    fill = override.get("fill", fill)   # a corner-to-corner diagonal subject: frame it looser, so two corners stay ground
     side = min(1.0, max(max(bw, bh) / fill, 1 / MAX_ZOOM))
     cx = min(max(cx, side / 2), 1 - side / 2)
     cy = min(max(cy, side / 2), 1 - side / 2)
@@ -220,7 +232,7 @@ def grade(src: Path, ramp: tuple[np.ndarray, np.ndarray], override: dict | None 
     crop = full.crop(box).resize((OUT_PX, OUT_PX), Image.LANCZOS)
     rgb = np.asarray(crop).astype(np.float64) / 255
     lab = rgb2lab(rgb)
-    g = ndi.gaussian_filter(groundness(lab, ref_hi), 0.8)
+    g = ndi.gaussian_filter(key(lab), 0.8)
     subj = g < 0.5
 
     # ground: the family ramp, lit behind the subject, with the original ground's brush texture
@@ -317,8 +329,11 @@ def grade(src: Path, ramp: tuple[np.ndarray, np.ndarray], override: dict | None 
 P95_AIM = 196
 P50_AIM = 64
 # per-icon calls the measures cannot make: the Longshade's sweep is an ink beast (a shadow by design) although its
-# smoke lifts the subject's median above SHADE_L
-OVERRIDES: dict[str, dict] = {"ability_longshade_shadow_sweep": {"shade": True}}
+# smoke lifts the subject's median above SHADE_L. "enclosed": dark paint inside the subject's silhouette is never keyed
+# as ground; on a Strike ground a keyed soot fuller or a shade between cord wraps came back dark red, a blood read
+# (WORLD.md: never gore)
+OVERRIDES: dict[str, dict] = {"ability_longshade_shadow_sweep": {"shade": True},
+                              "item_lampblack_edge": {"enclosed": True, "fill": 0.82}, "item_shadowpin": {"enclosed": True}}
 SHADE_L = 15.0         # a subject this dark (median L*) and this grey (median chroma) is a shadow by design
 SHADE_C = 12.0
 
