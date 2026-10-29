@@ -6603,7 +6603,9 @@ export async function buildMap(W, mapId) {
     const NEAR_N = TIER_Q.nearN, NEAR_R2 = TIER_Q.nearR * TIER_Q.nearR;     // (64 within 110 m; high 72 / 125 m, ULTRA 112 / 165 m)
     const nearCasters = shadowSrc.map((ref) => {
       const im = new THREE.InstancedMesh(ref.geo, ref.mat, NEAR_N);
-      im.castShadow = true; im.receiveShadow = !!ref.lo; im.count = 0;       // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did)
+      // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did - EXCEPT Isla Viva's acacia trunk (R2 / world re-check): its LOD is new in R2
+      // and before it the near trunk was drawn last by a non-receiving proxy; receiving here darkened the near trunks ~26 % in red. The near view stays as it was.)
+      im.castShadow = true; im.receiveShadow = !!ref.lo && !(mapId === "isla_viva" && ref.kind === "tree"); im.count = 0;
       const wd = windDepthMat(ref.kind); if (wd) im.customDepthMaterial = wd;     // LC-38: its shadow sways with its crown
       im.frustumCulled = false;   // rebuilt around the focus; its own bounding sphere is stale by design
       g.add(im);
