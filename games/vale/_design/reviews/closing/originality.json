@@ -1,0 +1,173 @@
+{
+  "score": 7.8,
+  "summary": "Adversarial verification of the closing originality, legal and sensitivity audit on HEAD 09d330c0. Score 7.8, against the reviewer's 7.5. The dimension is NOT ON PAR, because one confirmed major is still open: C1, size S.\n\nWhat I reproduced:\n- The names audit re-ran identically: 2,465 player-facing strings, with only the allowlisted RIFT and ordinary words. My own scan of content names and descriptions for genre words (gold, jungle, lane, minion, champion, mana, turret, mythic and others) found 0 hits. The strings and client scan found only client.json tips[10] 'your lanes'.\n- `node tools/secret_scan.ts` passes, and HEAD has 0 tracked files with the F1 vendor-key literal.\n- `node _harness/probe_sim_rekey.ts` gives 38 passed, 0 failed.\n- Item, ability, Wick and portrait sheets show nothing copied. The Wick hoods are rounded, each with one central light.\n\nC1 is CONFIRMED major. rift_quick still has startLevel 3 and startGold 1250, and its fighter is pre-picked at queue time ('role_preset'). The rekey probe checks only Quick's passive Gleam (log lines 51-55). W4 had already moved BRIDGE off exactly this level-3 / 1,400 start because it mapped onto ARAM. Riot's Swiftplay is level 3 with 1,400 gold and a lobby pre-pick.\n\nC2 is DOWNGRADED to minor:\n- Odrum's base mask has the same black eye recesses (L* min 0.0, 33-42 % of each eye box below L* 15). The final review already refuted that mask as a horror read.\n- Ruling 2 covers only Odrum Shadeprint, so the claim that Dunsom is 'the last mask without inlays' is false.\n- dunsom.md:55 specifies ink eye recesses by design.\n- The gauge is wrong: LoL does have skull-faced champion icons (Karthus, Thresh, Sion).\n\nAll six minors are kept. Gap status correction: F4 goes from closed to partly, because of the Quick queue.",
+  "gapStatus": [
+    {
+      "id": "B3",
+      "status": "closed",
+      "evidence": "Originality lens: all 16 base portraits, the skin portraits, the splashes and the chips show no LoL copy (_harness/_shots/closing_originality_portraits_base.png, closing_originality_skin_portraits.png, closing_originality_icons_chips.png). I re-viewed the portrait sheet, plus Burdam's and Odrum's icons and portraits. Burdam's mask carries a mouth line and tally carvings, and it is not a hockey mask. The Dunsom mask watch is now a minor (C2, downgraded), not a sensitivity breach."
+    },
+    {
+      "id": "M8",
+      "status": "closed",
+      "evidence": "Originality and sensitivity half only. art/renders/units/three_{shieldwick,glimwick,brightwick}_{aubade,serenade}.png close-ups (_harness/_shots/closing_originality_verify_wick_closeups.png) show rounded hoods (a small round knob or a stud crown), one central light and no mouth. The faced Wick wave is gone from the mode cards. The Greatwick Serenade lantern remains a minor watch (m4). The value half (hood L*) was not measured: it belongs to the art/env lens."
+    },
+    {
+      "id": "originality:F1",
+      "status": "closed",
+      "evidence": "Re-run: `node tools/secret_scan.ts` gives PASS (13 rules, 847 candidate files, binary files included). `git grep -l` for the F1 vendor-key pattern on HEAD finds 0 files. A 10-pattern scan (xai-, sk-ant-, AIza, AKIA, ghp_, github_pat_, hf_, r8_, xox*, PRIVATE KEY) over the tracked files finds 0 hits. pipeline/meshy_chars.py:28 reads the key from the environment. Merge note: the fix lives on this branch. master's tree still carries the pre-fix literal in 12 files until this branch's fix reaches it (`git grep -l <pattern> master | wc -l` gives 12)."
+    },
+    {
+      "id": "originality:F2",
+      "status": "closed",
+      "evidence": "I agree with the reviewer. content/ui/home/collection_highlight.webp shows props only (_harness/_shots/closing_originality_keyart_home.png). The withdrawn tile survives only in the git-ignored dist-catalog (m5)."
+    },
+    {
+      "id": "originality:F3",
+      "status": "closed",
+      "evidence": "Longshade has the sundial plate, and Odrum Shadeprint has the amber lacquer mask (art/out/fighters/odrum/odrum_shadeprint_portrait.png). Shadeprint's left eye box is no longer near-black (L* min 6.7, 12 % below L* 15), but its right slit is still 59 % below L* 15 (_harness/_reports/closing_originality_verify_masks.txt). Ruling 2 applies to this skin only."
+    },
+    {
+      "id": "originality:F4",
+      "status": "partly",
+      "evidence": "`node _harness/probe_sim_rekey.ts`: 38 passed, 0 failed. Of the 63 headline numbers, none is within 10 % (_harness/_reports/closing_originality_verify_rekey.log). But the gate does not cover Quick's start. content/queues.json rift_quick: startLevel 3 (Swiftplay: 3, 0 % off), startGold 1250 (1,400, 10.7 % off), and pick 'role_preset', so the fighter is chosen at queue time with no champion select. That is the same level-3 start that W4 §5 removed from BRIDGE because it mapped onto ARAM. Owner ruling 4 ('no rule may map one to one') is therefore not yet met for this queue (finding C1)."
+    },
+    {
+      "id": "originality:F5",
+      "status": "closed",
+      "evidence": "Ervet's ult and Vashil's chord stun read as the reviewer says. ROSTER.md §5 lists Riven and Brand. A new kit hook is open separately as minor m1 (Nurrow's Snuff on a sleeper)."
+    },
+    {
+      "id": "originality:F6",
+      "status": "closed",
+      "evidence": "`grep -rn -i 'battle spell' content src/ui` finds hits only in src/ui/copy_lint.ts. The setup.json SPELLS are Glint Step, Saplight, Hairline, Hourstrike, Running Light, Shake Loose, Glass Pane and Calling Bell."
+    },
+    {
+      "id": "originality:F7",
+      "status": "closed",
+      "evidence": "dist/THIRD_PARTY_NOTICES.txt exists (36,124 bytes, 10-29 06:54). The Credits panel is as the reviewer reports."
+    },
+    {
+      "id": "originality:F8",
+      "status": "closed",
+      "evidence": "My scan of the name, desc, label, title and text fields in items, setup, units, team_buffs, modes, queues, store, roles, classes, resources, fighters, maps and skins finds 0 hits for gold, jungle, lane, minion, champion, mana, turret, mythic and similar words once placeholders are stripped. strings.en.json and client.json give a single hit: client.json tips[10] 'your lanes' (minor m3)."
+    },
+    {
+      "id": "originality:F9",
+      "status": "closed",
+      "evidence": "Sheets re-viewed: the Linen Hood item icon (folded cloth), the Wick hoods (rounded) and Lisvel's face plate (_harness/_shots/closing_originality_icons_items.png, closing_originality_heads_zoom1.png)."
+    },
+    {
+      "id": "originality:MISS-1",
+      "status": "closed",
+      "evidence": "I agree with the reviewer. The mode cards show roster fighters on empty roads. The old faced-Wick rift_card exists only in the git-ignored dist-catalog/assets/8ccebd0539e2-rift_card.webp, which the 2026.10.0 catalog refers to and manifest.json does not list (m5)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "C1",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "The Quick RIFT queue maps rule for rule onto LoL's Swiftplay, outside the owner's re-key gate",
+      "what": "rift_quick pre-picks the fighter at queue time, so there is no draft. It starts every player at level 3 with 1,250 Gleam, raises Gleam and XP by 15 %, and is pitched as about 18-minute matches. Those are Swiftplay's defining rules. Start level is an exact match, and start Gleam is 10.7 % off.\n\nOwner ruling 4 (binding) says no headline number may come within 10 % and no rule may map one to one. W4 §5 already moved BRIDGE off the identical level-3 / 1,400 start because it read as ARAM. The probe gate checks only Quick's passive Gleam. The text is the first queue card on the RIFT Play screen.",
+      "evidence": "- content/queues.json rift_quick: pick 'role_preset', rules.startLevel 3, startGold 1250, goldMult and xpMult 1.15. Desc: 'Choose your role and fighter before you queue. You start at level 3 with more Gleam, and matches run about 18 minutes.'\n- src/session/draft.ts:15 (role_preset: the human's fighter comes from QueueRequest.preset).\n- _harness/probe_sim_rekey.ts:126-127 checks BRIDGE start level and Gleam against [3] and [1400]; :131 checks only Quick's passive Gleam.\n- Re-run log _harness/_reports/closing_originality_verify_rekey.log lines 51-55: 38 passed, with no Quick start row.\n- _design/reviews/fixwaves/W4_systems_rekey.md:68 (BRIDGE 'Level 3 with 1,300 Gleam (level 3 with 1,400)' becomes level 2 with 1,050).\n- Visible on screen: _harness/_shots/integ_gate_sweep_1920_play_rift.png (Quick card, top left).",
+      "gauge": "Riot's support page 'What is Swiftplay?': players pre-pick champion and position before queueing and start at level 3 with 1,400 gold. The LoL wiki notes that champion select is skipped. A same-tier product owns its queue formats, and VALE's own binding gate forbids a one-to-one rule mapping.",
+      "fix": "Re-key Quick's start state to the stopped dial, and drop the level-3 lump. For example:\n- start at level 1 or 2;\n- start with base Gleam;\n- carry the speed-up through dial tempo, with Wick waves, camp respawns and the Noonline clock running faster.\n\nAdd rift_quick startLevel and startGold rows (against 3 and 1400) to _harness/probe_sim_rekey.ts, and update the queue desc and DESIGN_NOTE.md:53 and modes_economy.md §3. Pre-picking at queue time can stay: Heroes of the Storm's Quick Match (2015) sets that genre precedent, so the reviewer's 'lantern pick' rework is optional.",
+      "size": "S",
+      "files": "content/queues.json, _harness/probe_sim_rekey.ts, _design/DESIGN_NOTE.md, _design/sections/modes_economy.md, _design/reviews/fixwaves/W4_systems_rekey.md",
+      "verifierNote": "Reproduced from content, the probe re-run and the Play-screen shot. I confirmed the Swiftplay start rules (level 3, 1,400 gold, lobby pre-pick) on Riot's support page. Kept at major: the start level is an exact headline match, the bundle reads as Swiftplay, and W4 fixed the identical pattern for BRIDGE, so this violates the binding ruling-4 gate. It is not a blocker, because game rules are genre-level, not protected assets. One correction: the pre-pick on its own is a genre convention (HotS Quick Match), so only the start state and the gate rows need to change. I could not confirm the reviewer's '18 min vs Swiftplay' length comparison, and I do not rely on it."
+    },
+    {
+      "id": "C2",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "Sensitivity watch: Dunsom's gold mask has ink eye recesses and teeth-like lower seams, and reads skull-adjacent at chip size",
+      "what": "At the 128 px chip and in the portrait, Dunsom's carved gold mask shows near-black eye recesses, a cracked-plate relief and vertical lower seams. The overall read is skull-adjacent. It is not a horror, hockey or blank-mannequin mask:\n- it is warm gold under a wide pale hat;\n- it has a nose nub;\n- the calm lilac robe and lantern set the context.\n\nOdrum's base mask uses the same dark eye recesses, and the final review refuted it as horror. Owner ruling 2 applies warm inlays to Odrum Shadeprint only, so it is not a roster-wide standard. 'The last mask without ruling-2 inlays' is false: Odrum base and Noon Fair keep black slits too.",
+      "evidence": "- Viewed: art/out/fighters/dunsom/icon.png, portrait.png and splash.png; _harness/_shots/closing_originality_dunsom_masks.png.\n- _harness/_reports/closing_originality_verify_masks.txt: Dunsom eye boxes L* min 0.0, 43-56 % below L* 15. Odrum base eye boxes min 0.0, 33-42 % below L* 15. Odrum Shadeprint right slit 59 % below L* 15.\n- _design/reviews/final/originality.json F3 verifierNote: 'The base-mask half is refuted'.\n- _design/fighters/dunsom.md:55 ('ink almond eye recesses' by design) and :85 (ink #17181B for the mask eye recesses).\n- integ_chars_verify1.json: the chip and the portraits read as 'a carved gold mask'.",
+      "gauge": "The reviewer's gauge is inaccurate. LoL ships skull-faced champions and icons (Karthus, Thresh, Sion) under its broad-audience rating. VALE's own rule is stricter (no horror read), and a warm carved mask with dark recesses is within it, as the Odrum base precedent shows.",
+      "fix": "Optional polish at the next Dunsom rebuild:\n- paint honey-amber inlays into the recesses;\n- merge the cracked-tile relief into 2-3 broad planes;\n- close the lower seams into one carved mouth line.\nThen re-run the facechip gate. No ruling change is needed.",
+      "size": "S",
+      "files": "art/blender/fighters/dunsom.py, art/out/fighters/dunsom/*, _design/fighters/dunsom.md",
+      "verifierNote": "Downgraded from major to minor:\n- The read is subjective.\n- The measured darkness matches the already-refuted Odrum base mask.\n- Ruling 2 is skin-specific.\n- The design doc specifies the dark recesses.\n- The integ_chars verifier judged the same images a carved gold mask.\n- The LoL gauge statement is wrong.\nIt stays as a sensitivity watch."
+    },
+    {
+      "id": "m1",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Regression: Nurrow's Snuff-on-sleeper bonus contradicts ROSTER §5's 'no wake bonus'",
+      "what": "Snuff on a sleeping target adds 35-105 (+0.3 AP, +0.15 bonus AD) magic damage, a 1.6-2.4 s silence and a 70 % cooldown refund. Its damage then wakes the target. Lullaby Dart sleeps the first fighter it hits, and Felt Step keeps them asleep. The waking hit is therefore empowered, which is the Zoe and Lillia hook. ROSTER.md:357 describes the bonus, while ROSTER.md:510 claims 'Nurrow's sleeps give no wake bonus'.",
+      "evidence": "- content/fighters/nurrow.json kit.a3 (an `if targetHasStatus sleep` branch: cooldown percent 0.7, silence, damage) and kit.a2 (sleep 1.05-1.45 s).\n- _design/ROSTER.md:357 vs :510.\n- The change entered in wip sync e823fa10 (W4 G9).",
+      "gauge": "Zoe's and Lillia's sleeps are defined by bonus damage on the hit that wakes the target. Sleep as crowd control is a genre tool; the bonus-on-the-waking-hit hook is LoL's.",
+      "fix": "Move the sleeper payoff off damage: keep the longer silence and the refund, drop the extra damage. Then correct ROSTER §5 and nurrow.md, and update probe_kits_B.",
+      "size": "S",
+      "files": "content/fighters/nurrow.json, _design/ROSTER.md, _design/fighters/nurrow.md, _harness/probe_kits_B.ts",
+      "verifierNote": "Reproduced from content and ROSTER. It is a minor: one conditional rider on one basic ability, not a kit copy. The payoff mix (silence plus refund) is partly VALE's own."
+    },
+    {
+      "id": "m2",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Finished items and boons are outside the re-key gate; Hourcleaver sits near Sterak's Gage",
+      "what": "Hourcleaver is a 40 AD / 200 HP item. Its 'Last Hour' passive works like this: below 35 % health, a shield of 100 + 35 % bonus health for 3 s, plus 30 % tenacity, on a 60 s cooldown. The shield-plus-30 %-tenacity pair also echoes the older Sterak's 'Sterak's Fury'. The Second Shadow boon is the same low-health shield. Sunstring carries on-hit damage of 2.5 % current health plus lifesteal. None of these rows is in the 63 gated numbers.",
+      "evidence": "- content/items.json hourcleaver and sunstring.\n- content/setup.json boons second_shadow (selfHpBelow 0.35, shield 50 + 14/level, cd 75).\n- _harness/_reports/closing_originality_verify_rekey.log: no finished-item or boon rows beyond the dial, Lampblack, Quarry Pick and first-hit shields.",
+      "gauge": "Sterak's Gage 'Lifeline' is a low-health shield scaling with bonus health. Blade of the Ruined King deals on-hit damage as a % of current health, with lifesteal. Each is an archetype, so no recognisable copy, but drift risk.",
+      "fix": "Add the finished items and boons to probe_sim_rekey.ts. Give Hourcleaver or Second Shadow a trigger of the dial's own, so they stop being twin low-health shields.",
+      "size": "S",
+      "files": "content/items.json, content/setup.json, _harness/probe_sim_rekey.ts",
+      "verifierNote": "Kept as a minor. The numbers differ from the LoL items, and W4 §7 deliberately kept a low-health shield on Hourcleaver."
+    },
+    {
+      "id": "m3",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "The names lint misses plurals and paraphrases; one 'lanes' leak",
+      "what": "Three player-facing labels slip past the names lint:\n- 'Practice tools' (practice.panel.title) is the plural of the registry's 'Practice Tool', which names_check catches only in the singular.\n- 'Co-op vs bots' swaps one word of the registry's 'Co-op vs AI'.\n- 'First win of the day' (play.queue.first_win, grant.first_win) is not in the registry.\nAlso, client.json tips[10] says 'your lanes'.",
+      "evidence": "- `node tools/names_check.ts \"Practice tools\" \"Co-op vs bots\" \"First win of the day\" \"Practice Tool\" \"First Win of the Day\"`: only 'Practice Tool' is a HIT.\n- protected_names.json:1118 and :1145.\n- content/queues.json:77.\n- The Play-screen shot shows the 'CO-OP VS BOTS' card and 'First win of the day pays a bonus.' (_harness/_shots/integ_gate_sweep_1920_play_rift.png).",
+      "gauge": "Practice Tool and Co-op vs. AI are LoL client feature names. 'First Win of the Day' is LoL's term too, but SMITE and Paladins use it as well, so its risk is low.",
+      "fix": "Rename the labels in VALE's own vocabulary, change 'lanes' to 'roads' in the tip, and add a last-word singularisation pass to tools/names_check.ts.",
+      "size": "S",
+      "files": "content/strings.en.json, content/queues.json, content/client.json, tools/names_check.ts, _design/research/protected_names.json",
+      "verifierNote": "Reproduced. It is a minor: these are generic client phrases, and FWOTD is industry-wide."
+    },
+    {
+      "id": "m4",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Sensitivity watch: the Greatwick Serenade back lantern can read as an eye pair at gameplay zoom",
+      "what": "From the gameplay camera, two equal lit orange panes sit side by side under the domed lid of the drum lantern on the Serenade Greatwick's back. With the enemy tint it can read as a capped head with two eyes. Most angles show 3 or more panes, and the Wick's own hood keeps a single light.",
+      "evidence": "- _harness/_shots/closing_originality_greatwick_ingame_zoom.png (left).\n- _harness/_shots/closing_originality_greatwick_serenade_topdown.png.\n- The concept (_harness/_shots/closing_originality_concepts_wicks.png, greatwick_serenade) shows 4-5 panes.",
+      "gauge": "VALE's binding rule: Wicks have no eye-like light pairs. LoL's minions never read as faces in their props.",
+      "fix": "Make the panes a continuous band, or odd narrow slits with thick mullions. Then re-render and check in game with the enemy tint.",
+      "size": "S",
+      "files": "art/blender/units/wick_greatwick.py, art/out/units/greatwick_serenade.glb",
+      "verifierNote": "The shot reproduces a two-pane read at one angle only. It is a watch item, not a breach."
+    },
+    {
+      "id": "m5",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Withdrawn pre-fix images remain in the local dist-catalog (not deployed)",
+      "what": "dist-catalog/assets still holds 28184e129720-collection_highlight.webp (10-13) and 8ccebd0539e2-rift_card.webp, next to the current b5ba5d0e5c90 and 160af27719c5 versions. The stale schema-1/2026.10.0/catalog.json refers to them, and manifest.json lists only 2026.10.1. package_deploy stages only what the manifest lists. dist-catalog is git-ignored (.gitignore:115).",
+      "evidence": "- `ls dist-catalog/assets | grep -E 'collection_highlight|rift_card'`\n- `grep -l` of both hashes finds dist-catalog/schema-1/2026.10.0/catalog.json.\n- tools/package_deploy.ts:19-22.",
+      "gauge": "A publisher-grade pipeline does not keep withdrawn sensitive art beside shipping content.",
+      "fix": "Run `npm run content -- --prune`, remove schema-1/2026.10.0, and optionally add a withdrawn-hash deny list to the content build.",
+      "size": "S",
+      "files": "dist-catalog/ (local), tools/package_deploy.ts, tools/build_content.ts",
+      "verifierNote": "Reproduced. These are local, git-ignored build leftovers that are not staged for deploy, so the risk is a manual upload only."
+    },
+    {
+      "id": "m6",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Owner-accepted naming and format risk: RIFT, and BRIDGE as a single road over a gorge",
+      "what": "'RIFT' is allowlisted with the risk recorded. BRIDGE's rules are re-keyed: level 2, 1,050 Gleam, Needle shops and the burning Lot. Its single-span-over-a-gorge premise still echoes ARAM's bridge over the Howling Abyss. Both come from the owner's brief.",
+      "evidence": "_design/names_allowlist.json; content/modes.json; content/maps/map_bridge.json; the re-key log rows for BRIDGE: level 33 % off, Gleam 25 % off.",
+      "gauge": "LoL owns 'Summoner's Rift' and 'Wild Rift', and ARAM is a single-lane bridge over a chasm.",
+      "fix": "No change is required under the brief.",
+      "size": "S",
+      "files": "_design/DESIGN_NOTE.md, content/ui/loading/map_bridge.webp",
+      "verifierNote": "This is a recorded owner risk, not a defect. Kept as a minor for the record."
+    }
+  ],
+  "missed": []
+}

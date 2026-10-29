@@ -1,0 +1,125 @@
+{
+ "fighter": "burdam",
+ "score": 6,
+ "summary": "Verified score 6/10, not on par: four majors are confirmed open (M2 materials, M3 splash, M4 deluxe skin, M5 secondary motion). M1 (mask) is downgraded to minor. My fresh in-match capture (shot_fighter.mjs --t 70, _harness/_shots/closing_burdam_ver_game/close/close2.png) refutes two of its pillars. In game the head (L* 71.3-71.4) is brighter than the cowl (median 58.9-59.6), and its 41 deg / 0.43 HSV is clearly apart from the on-screen enemy marigold (33 deg / 0.87). The featureless dome from the camera and the darker face plate in the 2D art still stand. The other majors reproduce: splash figure grain 5.4-8.0 vs plate 0.2-0.9, the same victory pose on all three skins, Almanac vs base coat dE about 4 at the game camera (the 600-candle standard skin changes more than the 1,500-candle deluxe), 26 joints with no coat or cowl chain while 6 roster fighters have baked x_ spring chains, the coat splitting with the thighs in the run, pauldron interior with no recess staining, straps lighter than the coat. Sensitivity is clean: no hood; the gold carved mask has brow, keel and frown, so it reads stern, not horror, hockey or blank (base, Stillwater and Almanac portraits and chips). All nine leftover statuses check out. Two corrections: the RIFT number lives in _harness/_reports/closing_env_value_probe.json, not in the tracked value_probe.json, which was restored and holds no closing_env run; and the lineup QA (art/renders/lineup/integ_chars_p2.json) also fails Burdam's value gradient (top band 29.5 / 33.8 at facings 0 / 270, the lowest on the roster), which belongs to the idle-carry leftover. Unverified watch item, not raised as a finding: the W5b Blender audit counts hand or cleaver vertices inside the mask or cowl (cast_a1 172 verts up to 8.1 cm, dash 167; fw_W5b_burdam_audit_final.txt:853,862). I did not render those frames.",
+ "gapStatus": [
+  {
+   "id": "r12-B3 (Burdam has final art)",
+   "status": "closed",
+   "evidence": "burdam.glb ships with 26 joints and 15 clips (attack1..victory) plus Stillwater and Almanac skins (art/out/fighters/burdam/*.glb, content/skins/burdam.json). It renders in a real match: _harness/_shots/closing_burdam_ver_game.png."
+  },
+  {
+   "id": "W5b leftover: right pauldron reads as roll",
+   "status": "closed",
+   "evidence": "The splash shows a broad flat plate with a 3-ring roundel on the weapon shoulder (art/out/fighters/burdam/splash.png; _harness/_shots/closing_burdam_splash_fig.png). The three_burdam.png front close shows the same plate."
+  },
+  {
+   "id": "W5b leftover: cast_ult blade-through-coat f3-f4",
+   "status": "closed",
+   "evidence": "git log: burdam.glb was last changed in ca77df63 (2026-10-28 15:52), and the verifier audit was made on that build. fw_W5b_ver1_burdam_audit.txt has cast_ult torso f3 / f4 = 0 / 0 and a clip worst of 28 (summary line 260)."
+  },
+  {
+   "id": "W5b leftover: chest harness in coat value family",
+   "status": "open",
+   "evidence": "In the three_burdam.png front close the diagonal strap is L* 63.1, against belt 38.0 and coat chest 37.6 (_harness/_reports/closing_burdam_ver_measure.txt). The brief's leather is L* 30. Visually the straps are carved relief in the coat's taupe (_harness/_shots/closing_burdam_three_front.png)."
+  },
+  {
+   "id": "W5b leftover: splash/portrait accent tiles too large",
+   "status": "open",
+   "evidence": "The splash cleaver still carries five large saturated azure diamonds, 50-56 x 31-32 px (closing_burdam_values.txt; visible in art/out/fighters/burdam/splash.png)."
+  },
+  {
+   "id": "W5b leftover: Almanac board face above L* 86",
+   "status": "closed",
+   "evidence": "The board face measures median L* 80.3 (closing_burdam_values.txt), and _harness/_shots/closing_burdam_almanac_board.png shows no blow-out. The face is still a blank card (see M4)."
+  },
+  {
+   "id": "W5b leftover: brief puts three-tier stack on the right shoulder",
+   "status": "open",
+   "evidence": "_design/fighters/burdam.md lines 29, 60 and 179 still say 'right'. The model carries the stack on the left (splash viewer-right; in-match zoom). The file was last changed in 4aa9975f (2026-10-07)."
+  },
+  {
+   "id": "W5b leftover: three QA accent top-half share 73.3 %",
+   "status": "open",
+   "evidence": "build_report_burdam.json accentTopHalfPct is 73.3. In art/renders/lineup/integ_chars_p2.json the burdam accentTopHalfShare is 1.0 / 0.842 / 0.895 / 1.0 and accentOk is false."
+  },
+  {
+   "id": "W5b leftover: idle carry upright stub; brief section 8 stale",
+   "status": "open",
+   "evidence": "burdam.md line 109 still reads 'blade angle 55 degrees'. In the lineup idle the fist and haft are straight overhead and the blade runs out of the cell (_harness/_shots/closing_burdam_ver_lineup.png). integ_chars_p2.json burdam valueGradientOk is false and valueGradientMonotone is false, with the top band at L* 29.5 / 33.8 at facings 0 / 270, the lowest of 16 fighters."
+  },
+  {
+   "id": "W5b leftover: RIFT High top-25 margin 0.8 L*",
+   "status": "closed",
+   "evidence": "_harness/_reports/closing_env_value_probe.json runs.closing_env: burdam top25 is rift_high 76.4, rift_low 77.2, bridge_high 76.8 and bridge_low 77.5 against a target of 70. The reviewer cited the tracked value_probe.json, which holds no closing_env run. Burdam is still the lowest of 8 fighters on RIFT High (median 80.6)."
+  }
+ ],
+ "findings": [
+  {
+   "id": "burdam-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Every material reads as one matte clay: plaster pauldrons, straps lighter than the coat, no recess staining or edge chalking",
+   "what": "The pauldrons (oxidised iron), felt cowl and coat, waxed-leather harness, lacquered mask and honed blade share near-identical roughness and one low-chroma taupe family. Only the albedo value separates them. At the game camera the big shoulder stack is a clean white plaster block. The chest harness is carved relief in the coat's colour and is lighter than the coat. All of this misses the brief's own 'darker staining only in the recesses', 'edge chalking' and leather at L* 30.",
+   "evidence": "- Roughness: art/blender/fighters/burdam.py:1032-1045 (read): rust 0.74, stone 0.8, mask 0.8 ('lacquered mask matte'), leather 0.78, ironstone 0.9.\n- In-match pauldron interior (_harness/_shots/closing_burdam_game.png 786-810 x 536-564): L* p10/50/90 52.9 / 70.8 / 80.8, C* 9.5. That is a 28 L* spread with no recess darkening.\n- three_burdam.png front close: strap L* 63.1 vs belt 38.0 and coat chest 37.6 (_harness/_reports/closing_burdam_ver_measure.txt). The brief §5 leather is #554336 (L* 30).\n- Visual: _harness/_shots/closing_burdam_three_front.png (harness as same-taupe relief, white plaster stack) and closing_burdam_ver_head_zoom.png.",
+   "gauge": "At about 110 px, LoL champions separate metal or stone, leather and cloth with painted value steps, recess darkening and edge highlights. Plate armour never reads as the same material as the cloth under it.",
+   "fix": "Keep VALE non-metallic and paint the separation into the albedo:\n- Pauldron recesses 15-20 L* darker, convex edges chalked 8-10 L* lighter.\n- Harness and belt to the leather role, #554336.\n- Mask lacquer at roughness 0.45-0.55 against felt at 0.9.\n- The honed edge band one step lighter than the blade.\nVerify: strap at least 15 L* under the coat in the three close, and in-match pauldron p10-p90 at 35 L* or more.",
+   "files": "art/blender/fighters/burdam.py (extra_materials l.1028-1046, RUST_PARTS, STONE_DARKER), art/blender/common/materials.py",
+   "size": "M",
+   "verifierNote": "Reproduced. The roughness values are in the source as cited. My own pauldron-interior probe matches the reviewer's (53 / 71 / 81). In the three front close the strap is lighter than the coat (63 vs 38), the direction the reviewer claims, though my sample points give a larger gap. STYLE_BIBLE.md:11 bans metallic bevels but not painted value separation, and the brief asks for exactly that. Major stands."
+  },
+  {
+   "id": "burdam-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The splash is a grainy, flat-lit static render pasted on a painted plate, with the same pose and framing for every skin",
+   "what": "splash.png is the victory hold rendered in 3D over the painted map_rift plate. The figure carries render speckle that the plate does not, and it gets no warm rim or bounce from the burning city behind it. The mask shows a hard rectangular gold face plate on a near-white dome. All three skins reuse the same pose, camera and framing.",
+   "evidence": "- High-frequency luma std, splash.png (_harness/_reports/closing_burdam_ver_measure.txt): figure coat 8.02, trousers 5.55, pauldron 5.37; plate sky 0.20, mid 0.89, left 0.88.\n- Face plate HSV saturation 0.49 against dome 0.08 (_harness/_shots/closing_burdam_ver_splash_head.png).\n- Same pose and framing: art/out/fighters/burdam/splash.png, burdam_stillwater_splash.png and burdam_almanac_splash.png, viewed side by side.\n- Reviewer: _harness/_shots/closing_burdam_splash_fig.png and closing_burdam_splash_vs_roster.png.",
+   "gauge": "A LoL splash is a bespoke illustration for each skin: a character-defining action, a focal light on face and weapon, and a figure lit by and integrated into its environment.",
+   "fix": "VALE's own route, keeping render-on-plate:\n- A kit pose for each skin. Base: mid-yank of Settled Account with the notches lit. Stillwater: cleaver planted in the shallows. Almanac: scoring a tally on the board.\n- Render the subject at 2x with more samples (or denoise), then downsample.\n- A warm rim and bounce from the plate's fire side.\n- Run the plate's brush pass over the subject at a smaller radius.\n- One lacquer tone over the face and dome.",
+   "files": "art/blender/fighters/burdam.py (SPLASH l.64-73, SKINS), art/blender/common/render.py, art/blender/common/plates.py, art/blender/portraits.py",
+   "size": "L",
+   "verifierNote": "Reproduced with my own grain probe (5.4-8.0 vs 0.2-0.9) and a visual check of all three splashes. It is a roster-wide pipeline limit (render.py), but it still caps Burdam's presentation tier. Major stands."
+  },
+  {
+   "id": "burdam-M4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The deluxe 'Almanac Ledger' skin is nearly indistinguishable from the base, and changes less than the standard skin",
+   "what": "The deluxe skin, priced at 1,500 candles (2.5x a standard skin), changes the pauldron value, the ink tone and some ruled lines, and adds a belt board whose face renders as a blank white card. At the game camera it reads as the base Burdam with slightly whiter pauldrons. The 600-candle standard Stillwater skin re-themes the body far more.",
+   "evidence": "Same pose and column at the game camera (_harness/_shots/closing_burdam_skins_gamecam.png, my probe in closing_burdam_ver_measure.txt):\n- Coat: base L* 35.7 / C* 8.0 / hab 60; Almanac L* 37.1 / C* 4.4 / hab 58 (dE about 4); Stillwater HSV hue 192 (slate).\n- Pauldron: base 71.8; Almanac 77.4.\n\nPrice and spec:\n- content/store.json comment: standard 600, deluxe 1,500.\n- content/skins/burdam.json: burdam_almanac tier 'deluxe'.\n- The ROSTER.md:152 spec itself changes only the pauldrons and the cleaver back, plus the board.\n\nBoard face: L* 80.3, C* 2.4 (_harness/_shots/closing_burdam_almanac_board.png).",
+   "gauge": "In LoL, even standard-tier skins re-theme the whole palette and texture set, and higher tiers add model parts and recoloured VFX. A premium skin is recognisable at the game camera at a glance.",
+   "fix": "Widen the ledger theme across the body within the skin rules (same silhouette and accent placement):\n- Coat in a deep ledger-ink slate-violet (about 250 deg, saturation 0.30 or less, outside the azure band).\n- Parchment cowl.\n- Oxblood ruled margins on the pauldrons.\n- Board lines and day-marks inked about 2 cm wide.\n- An ink-on-parchment vfxTint, as the roster's other deluxe lines have.\nUpdate ROSTER.md:152 and burdam.md §9 to match.",
+   "files": "art/blender/fighters/burdam.py (SKINS burdam_almanac, almanac_face), _design/fighters/burdam.md §9, _design/ROSTER.md:152, content/vfx.json",
+   "size": "M",
+   "verifierNote": "Confirmed with a cleaner comparison than the reviewer's: their row 1 (base) of the gamecam sheet uses different clips from rows 2 and 3, so I compared the matching column. The skin follows its spec, so the root cause is the narrow spec plus the price tier. Major stands."
+  },
+  {
+   "id": "burdam-M5",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "No secondary motion on the long coat or cowl: the coat stretches with the thighs instead of swinging, and the forearms candy-wrap",
+   "what": "The heaviest fighter's knee-length felt coat and scarf-cowl are skinned rigidly to the body bones. Steps and swings stop dead, and in the run the coat front splits and follows each thigh like trousers. The roster's own pipeline already bakes damped-spring x_ chains for capes, tabards, sleeves and mantles on six fighters; Burdam has none.",
+   "evidence": "- burdam.glb skin: 26 joints; the only extras are x_blade_tip and x_notch_mid (glTF JSON read).\n- Other roster fighters: Ardit has x_tabard_l/r_1-3, Ervet x_cape_L/R_1-2 and x_tabard_f_1, Nurrow x_cape_1-2 and x_tabard_1, Vashil x_sleeveL/R_1, Ilsheta x_mantle_l/r.\n- The pipeline supports it: art/blender/common/anim.py:14 and :1182-1224 (secondary_motion for x_ chains).\n- Run: art/renders/fighters/burdam/three_clips_burdam.png run row (_harness/_shots/closing_burdam_ver_run_coat.png) shows the coat front following the thighs.\n- Stretch: _harness/_reports/fw_W5b_burdam_audit_final.txt:849-863 gives 'coat' 110-155 faces per frame stretched beyond 1.5x in cast_a1 and dash (l.176-202, 784-805), and the forearm max edge stretch is 6.9 (attack1) and 7.0 (cast_a1).",
+   "gauge": "LoL champions with coats, skirts or capes carry bone-driven follow-through that reads at the game camera in every run and swing. Hanging cloth never stretches rigidly with the legs.",
+   "fix": "Add baked x_ spring chains with VALE's existing anim.secondary pass (no cloth simulation, per STYLE_BIBLE.md:10):\n- Front and back coat panels, 2-3 joints each.\n- One cowl-tail joint.\n- Re-weight the coat skirt off the thighs onto those chains.\n- Add a forearm twist split or corrective weights for the wrist wrap.\nVerify: the audit's coat stretch count drops, and a run-row render shows the hem trailing.",
+   "files": "art/blender/fighters/burdam.py (rig, MOTION/BLOCKS), art/blender/common/anim.py (secondary_motion), art/blender/common/rig.py",
+   "size": "M",
+   "verifierNote": "Confirmed, with the scope narrowed. The tally bundle is 'rigid, no sway' by design (burdam.md:61), and STYLE_BIBLE.md:10 bans cloth simulation, so the tally part is dropped and the fix must be baked bone chains, which the roster already uses. I saw the coat follow the thighs in the run row. I did not confirm the 6.9x wrist wrap visually at the game camera; it is an edge-length metric from the audit. Major stands on the coat."
+  },
+  {
+   "id": "burdam-M1",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The ledger mask is a featureless yellow dome from the game camera, and a darker gold plate on a white dome in the 2D art",
+   "what": "From the high game camera the head shows as a smooth lemon-yellow dome with no carved feature. In the splash, portrait, icon and lineup the gold face plate is darker than the felt cowl, which inverts brief §3 ('mask is the brightest value'). In the splash it also sits as a hard-edged plate on a near-white dome. The albedo #D6BB7A (HSV 42 deg / 0.43) is a few points over the brief's 40 % cap for the 25-50 deg band.",
+   "evidence": "- My capture (_harness/_shots/closing_burdam_ver_game.png, closing_burdam_ver_close.png; crop closing_burdam_ver_head_zoom.png): head L* 71.4 / 71.3, HSV 41 deg / 0.44 / 0.43; cowl median L* 58.9 / 59.6.\n- On-screen enemy marigold in the same frame: hue 33 deg, saturation 0.87, value 0.98 (closing_burdam_ver_enemy_marigold.png).\n- Splash: face plate L* 60.3 (saturation 0.49) vs cowl lit 63.8; dome left L* 78.2 (saturation 0.08).\n- Reviewer: portrait 48 vs 60, icon 66 vs 80.\n- Lineup greyscale: the mask is darker than the cowl (closing_burdam_ver_lineup.png).\n- Source: art/blender/fighters/burdam.py:2438 MASK_FACE #D6BB7A.",
+   "gauge": "A recent LoL champion's head carries an identifying top shape (helm ridge, hair mass, horns) at the high 3/4 view, and the face is a lit focal point in the splash and portrait.",
+   "fix": "Shape and ink, not saturation:\n- Carry the beak keel back over the crown as a low rounded ledger ridge, 2-3 cm, never pointed, notched with ironstone-inked tally cuts.\n- Grade the lacquer to a pale bone-ochre (HSV saturation 0.36 or less, L* about 76).\n- One tone over the face and dome in the 2D renders, with a dark lacquer band at the cowl line.\nRe-measure: the face plate brighter than the cowl in splash and portrait; the face-chip pair test still 55 or more at 26 px.",
+   "files": "art/blender/fighters/burdam.py (MASK_FACE / CROWN_DARK l.2438-2442, mask part, mask_paint), _design/fighters/burdam.md §3 §5",
+   "size": "M",
+   "verifierNote": "Downgraded from major to minor. Two of the three pillars do not hold up in the match:\n- In game the head is brighter than the cowl median (71 vs 59, in my capture and in my re-probe of the reviewer's frame), so 'darker than the cowl in every view' is wrong for the match.\n- The reserved-band breach is marginal: 0.43-0.44 against a cap of 0.40 that the brief sets for large-area colours, and the mask is a focal area. The head is also perceptually far from the real enemy marigold on screen (33 deg / 0.87). A team-colour confusion is not plausible.\nWhat remains is real but secondary: a featureless crown at the camera (the yellow head is still a strong unique tracking cue, the silhouette worst-pair IoU is 0.74, and the face chip reads well), and the 2D face-plate value, which overlaps M3."
+  }
+ ],
+ "missed": []
+}

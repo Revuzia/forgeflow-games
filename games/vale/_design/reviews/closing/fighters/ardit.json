@@ -1,0 +1,100 @@
+{
+ "fighter": "ardit",
+ "score": 6.5,
+ "summary": "Verified the Ardit art review against the current GLBs (unchanged since Oct 28) and the Oct 29 splashes. Not on par: score 6.5 (below 8) and two majors still open. M1 is confirmed. All three skin splashes reuse one frontal victory stand and differ by a figure-box mean absolute difference (MAD) of 9.7/255 (First Bell) and 18.3/255 (Chalkline). The subject shows grain: high-pass RMS 3.96 on the pane against 0.23 on the sky. Luma never goes above 192. M3 is confirmed. In the run, the top tabard segment swings forward to 54 degrees and peaks on the same frame as the thigh (61 degrees), so it moves with no lag. The pale fins show at 1:1 in the match. M2 is downgraded to minor. Its central claim is wrong: the GLB shows the pane square in front and facing the travel direction during Lancing Run and the dash, and Muster lays the spear back 38 degrees. What remains is a camera problem. The pane's top edge tips forward, so the 52-degree camera sees it foreshortened, and Muster's key pose is no larger than an ordinary cast. M4 is downgraded to minor. The texture and tri budget is the same across the roster, and the box massing is the brief's own design. What remains is soft whites and a pane that reads as a pale board. Leftovers: 4 of 5 are still open, and the splash pauldron blow-out is closed. No sensitivity problem: the helm has a flat crown and no hood, and the face under the T-visor (nose and lips) reads as alive in every skin.",
+ "gapStatus": [
+  {
+   "id": "open-8 height / top point (spear tip 2.476 m, 134 px)",
+   "status": "open",
+   "evidence": "My three_snapshot --unit runs on the current ardit.glb report bindBox max y 2.476 and heightPx1080 134 (scratch log; sheets _harness/_shots/closing_ardit_verify_unit_cam0_52.png and _cam90_52.png). The brief asks for a 119 px figure with the spire tip as the highest point. The spear tip is still the highest point."
+  },
+  {
+   "id": "open-11 Cycles turntable: back of the pavise renders as a dark noisy slab",
+   "status": "open",
+   "evidence": "art/renders/fighters/ardit/turntable.png is still dated Oct 28 01:27. Row 1 cell 4 and row 2 cell 1 still show a charcoal, stippled pane back. This is render-only."
+  },
+  {
+   "id": "open-new cuirass abdomen-band wire loop beside the left hip in all splashes",
+   "status": "open",
+   "evidence": "The thin wire loop is still visible beside the belt on the screen-right side in the Oct 29 splash.png and ardit_chalkline_splash.png at about (1190-1250, 335-360). See _harness/_shots/closing_ardit_splash_upper_x2.png and closing_ardit_splash_hip_skins_x3.png."
+  },
+  {
+   "id": "open-new left tabard panel crosses in front of the pavise in dash / cast_a1",
+   "status": "open",
+   "evidence": "At the front gameplay heading, a white tabard strip still overlaps the lower edge of the pane at the ram frame: _harness/_shots/closing_ardit_verify_a1_ram_front_x3.png (from my --unit --cam 0,52 sheet). The reviewer's closing_ardit_clip_dash_cell2_x4.png shows the same. It is smaller than the old full plank."
+  },
+  {
+   "id": "open-new splash near pauldron and bracers blow out to flat white",
+   "status": "closed",
+   "evidence": "The current splash.png figure box has luma p50 114, p99 186 and max 192, with 0 % above 235 (_harness/_reports/closing_ardit_verify_splash.txt and closing_ardit_card_measure.json: pauldron p50 174, fracAbove240 0). The crack detail reads in closing_ardit_splash_upper_x2.png."
+  }
+ ],
+ "findings": [
+  {
+   "id": "ardit-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splashes are one static model render reused for every skin, with render grain and no highlights",
+   "what": "All three splashes (base, Chalkline, First Bell) are the same frontal victory stand at t 0.92. They share the camera, the framing, the backdrop plate and the light, so only the palette and the bell change between skins.\n\nThe figure is a Cycles render of the game model, composited over the painted plate:\n- the subject carries visible salt-and-pepper speckle at 1:1;\n- nothing in the image goes above luma 192, so the visor, the pane and the spear head never catch a highlight.",
+   "evidence": "Reproduced with my own script (_harness/_reports/closing_ardit_verify_splash.txt; figure box 930-1400 x 90-890):\n- figure-box MAD against the base splash: Chalkline 18.3/255, First Bell 9.7/255 (outside the box: 15.0 and 8.3);\n- base figure-box luma: p50 114, p99 186, max 192;\n- 3x3 high-pass RMS: pane 3.96, pauldron 8.31, painted sky 0.23.\n\nThe reviewer measured MADs of 18.9 and 9.4 with a different box. The speckle is visible in _harness/_shots/closing_ardit_splash_upper_x2.png.\n\nThe cause is the single SPLASH dict in art/blender/fighters/ardit.py, which the brief also sets (_design/fighters/ardit.md:176).",
+   "gauge": "A recent League champion's splash is a bespoke painted illustration, with a staged moment, dynamic posing, cinematic light and a clean finish. Every skin gets its own composition, so the skin can be named from its splash alone.",
+   "fix": "Give each skin its own SPLASH staging in ardit.py: its own clip, t, yaw, pitch, lens and sun.\n- Base: a low 3/4 view, with dawn light raking through the pane onto the dial floor.\n- Chalkline: dusk, braced behind the planted pavise with the spear couched, under a cold rim light.\n- First Bell: a close 3/4 at first light, with the bell mid-swing.\n\nFinish:\n- Render the subject at 128 or more samples at 2x and denoise.\n- Run the plate's paint pass over the subject too.\n- Let the visor and pane highlights reach luma 215-230 while the card p50 stays in its band.\n\nThe 192 ceiling is a shared grade (Marund and Burdam top out at 203, Rishal at 191), so the highlight change belongs in common/plates.py and render.py for every fighter.",
+   "files": "art/blender/fighters/ardit.py (SPLASH, SKINS); art/blender/common/render.py; art/blender/common/plates.py; art/out/fighters/ardit/*splash.png",
+   "size": "L",
+   "verifierNote": "Confirmed. The numbers reproduce within 0.6/255.\n\nOwner ruling: 'skins change material and palette, not silhouette' covers skin models, not splash staging, so it does not excuse identical splashes.\n\nThe gauge claim holds: a League skin splash is always its own composition. Severity stays major because the splash is the fighter's face in the client.\n\nThe tonal ceiling is roster-wide (pipeline grade), not Ardit-specific."
+  },
+  {
+   "id": "ardit-M2",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Lancing Run pane is foreshortened from the gameplay camera, and Muster's key pose is no bigger than an ordinary cast",
+   "what": "The reviewer's mechanism is wrong. In cast_a1 and the dash, the pavise is not carried flat on his left side. It is square in front of him and faces the travel direction:\n- pane normal 0.95 forward;\n- pane centre 0.49 m ahead of the hips and only 0.18 m to his left.\n\nIn Muster, the spear is not upright. It lies back 38 degrees over the right shoulder, and its tip rises from 2.42 m to 2.63 m.\n\nThe real, smaller problem is how the camera sees these poses.\n\n**Lancing Run.** The pane's top edge tips 17 degrees forward and he carries it low, so the 52-degree camera sees it foreshortened:\n- |cos| 0.35 when he charges toward the camera and 0.25 from the side, against 0.62 at idle;\n- the pane reads as a small square at belt-to-knee height under the pauldrons, not 'a battering ram, pale pane first'.\n\n**Muster.** The key pose is modest:\n- the head rises 3 cm;\n- silhouette IoU against idle is 0.39-0.40, the same range as cast_a2 and cast_a3;\n- image-change max is 7.33, the lowest of the four casts;\n- from side headings the pane is edge-on (|cos| 0.01).",
+   "evidence": "GLB sampling of art/out/fighters/ardit/ardit.glb (x_pavise and x_spear rigid sets, PCA axes; _harness/_reports/closing_ardit_verify_rig.txt):\n- cast_a1 f8 and dash: pane normal fwd +0.95, up -0.30; centre fwd +0.49, left +0.18;\n- cast_ult f16: pane normal fwd +1.00; spear tilted 38 degrees back; head y 1.99 to 2.02 m.\n\nCode intent matches: art/blender/fighters/ardit.py charge_pose (L aim (0,-0.30,0.95), face (0,-0.95,-0.30)) and gen_muster (R aim (-0.38,0.48,0.79)).\n\nRenders at the gameplay pitch:\n- _harness/_shots/closing_ardit_verify_a1_front.png and closing_ardit_verify_a1_ram_front_x3.png (--cam 0,52);\n- closing_ardit_verify_a1_side.png, closing_ardit_verify_ult_front.png and closing_ardit_verify_ult_side.png (--cam 90,52).\n\nPose magnitude: _harness/_reports/closing_ardit_pose_iou.json and closing_ardit_clip_motion.json.",
+   "gauge": "A League champion's engage and ultimate each have one exaggerated key pose that reads at the gameplay camera, and the defining prop is the star of that pose.",
+   "fix": "**Lancing Run (charge_pose).** Tip the pane's top edge back toward his chest by about 20-25 degrees instead of 17 degrees forward, and raise the grip about 15 cm. For example:\n- aim about (0, +0.40, 0.92);\n- face about (0, -0.92, +0.40).\n\nThe pane face then turns up toward the 52-degree camera (|cos| about 0.85 toward the camera, about 0.33 from the side) and fills the space in front of the pauldrons.\n\nKeep the tabard behind the pane plane.\n\n**Muster.** Add a heave-and-plant beat before f16, with a squash on contact. Then:\n- rise 8-10 cm;\n- lay the spear about 60 degrees back over the shoulder;\n- tilt the visor up.\n\nThe key pose should change the silhouette more than an ordinary cast (IoU against idle below 0.30).",
+   "files": "art/blender/fighters/ardit.py (charge_pose ~:1797, gen_lancing_run :1805, gen_dash :1821, gen_muster :1903)",
+   "size": "M",
+   "verifierNote": "Refuted as stated: the pane does lead, square in front and facing the travel direction, and the spear is not upright in Muster. The proposed fix ('turn the pane to face the travel direction, centre it in front') is already the rig's state.\n\nThe residual is real but smaller:\n- the forward tip makes the pane foreshortened from above;\n- the ult's pose change is cast-sized.\n\nLancing Run is still the largest silhouette change in the kit (IoU 0.17), so the engage reads as a charge. Downgraded to minor."
+  },
+  {
+   "id": "ardit-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Run: tabard panels kick out as rigid boards that track the thigh with no lag",
+   "what": "In every in-match run, the front tabard panels hinge at the waist and swing forward with the thigh as straight pale planks. Seen from the 52-degree camera on a side heading, they fan out from the legs like fins.\n\nThe top 0.30 m segment does nearly all the motion while the lower segments hang almost straight, so the panel reads as a board on a hinge, not as cloth.",
+   "evidence": "GLB run clip, 24 frames (_harness/_reports/closing_ardit_verify_rig.txt):\n- top segment, x_tabard_l_1 to _2: up to 54 degrees forward of vertical;\n- thigh: peaks at 61 degrees on the same frame (f18 left, f6 right), so there is zero phase lag;\n- lower segments: 3-24 degrees.\n\nIn the match at t 207 s, both Ardits are in state 'move' (_harness/_reports/closing_ardit_match.json). The pale fins show at 1:1 in _harness/_shots/closing_ardit_far_t208.png, with zooms in closing_ardit_far_t208_red_x4.png and _blue_x4.png.\n\nSource: art/blender/fighters/ardit.py:660-661 (TAB_G 0.8; TAB_K 0.85; TAB_CAP 62).",
+   "gauge": "On a League champion with front cloth panels, the run keeps the cloth close to the legs. It overlaps the knee and trails the shin with soft, delayed secondary motion, and never stiffens into planks.",
+   "fix": "Cap the thigh push at about 25 degrees (TAB_K about 0.4, TAB_CAP about 28).\n\nGive the lower two bones a trailing curl that grows with speed, delay the chain 2 frames behind the thigh, and add one hem flick at foot contact.\n\nCheck the result in a match frame at the default 28.5 m camera.",
+   "files": "art/blender/fighters/ardit.py (TAB_G/TAB_K/TAB_CAP :660-661, TAB_JOINTS/TAB_CLEAR :697-698, _tab_hang, gen_run)",
+   "size": "M",
+   "verifierNote": "Confirmed by direct GLB measurement and by the match frame at 1:1.\n\nThis is the most-seen clip, and the plank read is plain at gameplay scale, so it stays major."
+  },
+  {
+   "id": "ardit-M4",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Model finish: plain box helm and pauldrons, soft low-contrast whites, pane reads as a pale board in match",
+   "what": "Several of the reviewer's points do not hold.\n\n**The budget is roster-standard.** Ardit has 20,589 tris, a 2048 base map, 512 ORM and normal maps, and one opaque body material. Marund (21,265), Burdam (20,448) and Hesmi (19,888) carry the same maps.\n\n**The normal map is not a gauge gap.** League's in-game champion models get their detail from hand-painted diffuse, not normal maps, so a 512 normal map is not a gap against the gauge.\n\n**The box massing is the brief's design.** Ardit is the Aubade block, and the reviewer credits his silhouette as a strength.\n\n**Secondary detail exists.** The close views show segmented cuirass grooves, a belt and buckle, knee cops, tabard trim and bevels on the pavise frame.\n\nWhat remains is real but minor:\n- the helm and pauldrons are plain boxes carrying only painted cracks;\n- the whites have few crisp value breaks;\n- in the match, the dawnglass pane reads as a pale board with only a faint sheen.",
+   "evidence": "GLB struct read (scratch glbinfo.py): ardit 20,589 tris; marund 21,265; burdam 20,448; hesmi 19,888; all with 2048 base, 512 ORM and 512 normal.\n\nClose views: art/renders/fighters/ardit/three_ardit.png row 3.\n\nIn match: _harness/_shots/closing_ardit_far_t477_x3.png and closing_ardit_close_red_x4.png.\n\nThe brief's pane spec ('opaque pale backing at 40%', 'keeps its transparent look') is at _design/fighters/ardit.md:64.",
+   "gauge": "League in-game models carry crisp hand-painted value structure (edge highlights, baked occlusion, distinct material reads) that holds at gameplay zoom.",
+   "fix": "Add edge-highlight and occlusion contrast in the base bake for the helm, pauldron and pavise-frame edges, and add one carved Aubade motif on each pauldron face.\n\nPaint the pane with a top-to-bottom dawn gradient and a crisp diagonal glint band, plus an inner rim line, so it reads as glass at 28.5 m.",
+   "files": "art/blender/fighters/ardit.py (helm/pauldron build, materials, pane paint)",
+   "size": "M",
+   "verifierNote": "Downgraded. The measurable parts are either roster-wide or not a gauge gap, and the massing is the brief's own design.\n\nThe soft finish and the pane's glass read are polish-level and belong in the score, not in a major."
+  },
+  {
+   "id": "ardit-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Skin portraits are near-identical to the base portrait",
+   "what": "All three portraits share the idle_lobby t0 framing at yaw 28.\n\n- Chalkline is a darker frame and tabard.\n- First Bell adds only the bell above the spire.\n\nThe skin cannot be told from its portrait chip.",
+   "evidence": "Portrait MAD against the base portrait: Chalkline 11.1/255, First Bell 8.5/255 (_harness/_reports/closing_ardit_card_measure.json).\n\nSide by side: _harness/_shots/closing_ardit_portraits_3up.png.",
+   "gauge": "In League's skin selector, each skin's portrait comes from its own splash and reads at a glance.",
+   "fix": "Derive each skin's portrait from its own splash staging once M1 lands, or at least change the yaw and light per skin.",
+   "files": "art/blender/fighters/ardit.py (PORTRAIT/SKINS); art/out/fighters/ardit/*portrait.png",
+   "size": "S",
+   "verifierNote": "Confirmed from the reviewer's measurement file and the 3-up crop. The rest of the reviewer's minor list was cut off in the text handed to the verifier, so it was not checked."
+  }
+ ],
+ "missed": []
+}

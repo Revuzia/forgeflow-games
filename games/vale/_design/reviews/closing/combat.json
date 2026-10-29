@@ -1,0 +1,103 @@
+{
+ "score": 7.5,
+ "summary": "Verified on the current build (HEAD 09d330c0; nothing under src/ or content/ has changed since the reviewer's run). Combat feel & VFX scores 7.5/10. It is NOT on par: one major is open (C1, signature colour lost on third abilities and ultimates), and I confirmed it independently.\n\nI re-ran the reviewer's a3/ult colour test with a decomposition probe (a copy of probe_kit_hue: a3/ult, a +30-frame window, and each cast repeated with team colour blacked out and with signature/secondary blacked out). It fails the same 18 of 32 slots, 9 of them ultimates. It also shows the cause per slot:\n- Team (HARM) light is 44-92 % of the added VFX light on Dunsom a3/ult, Hesmi a3, Burdam ult, Nurrow ult and Rishal a3.\n- Kemdo a3 passes only because team orange sits next to its salmon hue. With team colour removed, its signature share falls from 0.91 to 0.06, so it is a false pass.\n- Tunlan, Ilsheta, Hesmi's ult, Vashil, Ervet a3 and Rishal ult are carried by fixed warm-white, Dawnglass or ice neutrals; their signature-keyed layers add about 0 % of the light.\n- Content layer counts meet r12's spec on every slot (team 0-22 % of emissive layers). The defect is the share of light in play, not the layer count.\n\nThe two minors reproduced:\n- C2: Hesmi's Felled Shard leaves the struck body 0.826 white in the full frame, and the first-beat core is x2.25 (< 2.3).\n- C3: the basic-hit impact disc stays >= 0.5 x victim height for 3 / 2 / 5 frames (Kemdo / Rishal / Tunlan). The probe's own hold gate now FAILs on Rishal (100 ms < 200).\n\nContent checks confirm: 0 shake layers, 48/48 timed casts with a wind-up VFX, and every delayed area has castTime + delay >= 0.6 s.\n\nNo regression and no missed blocker found in this lens. The greatwick crown-lamps are being reviewed by the closing originality lens (closing_originality_greatwick_* shots).",
+ "gapStatus": [
+  {
+   "id": "B2",
+   "status": "closed",
+   "evidence": "Agree. Reviewer's overlay_regress on High and Low PASS (_harness/_reports/closing_combat_overlay_regress.json, run on HEAD at 07:25).\n\nVerifier look at _harness/_shots/closing_combat_overlay_cone_enemy.png: apex at the caster, opening away, translucent fill with an inner timer, 0 outside the edges.\n\nThe live enemy cone of Tunlan's ult draws from f0 (closing_combat_c_kits.json `tele`)."
+  },
+  {
+   "id": "M1",
+   "status": "closed",
+   "evidence": "Agree. closing_combat_kits.json and closing_combat_c_kits.json: every 'everyone' cast has `summary.teleFirst` f0 / 0 ms. Leads: Hesmi ult 1.1 s, Dunsom ult 0.95 s, Tunlan ult 0.9 s, Sukri a1 0.75 s, Marund a3 0.75 s.\n\nVerifier content walk of content/fighters/*.json: all 12 delayed effects have castTime + delay >= 0.6 s. Shortest: Vashil a1 0.2 + 0.4 and Sukri ult 0.4 + 0.25.\n\nSukri's 10 m ult circle is visible to the enemy from f0 (_harness/_shots/closing_combat_kit_sukri_ult.jpg)."
+  },
+  {
+   "id": "M2",
+   "status": "closed",
+   "evidence": "Agree. The CC plates show word plus glyph over the bar for ASLEEP, FEARED, AIRBORNE, TAUNTED and ROOTED (_harness/_shots/fw_W1_polish_cc_plates_closing_combat.png), with the 70 ms fade-in in closing_combat_polish.json `cc`.\n\nThe silence snuffer holds for the whole status (_harness/_shots/closing_combat_kit_nurrow_a3.jpg, f5-f40)."
+  },
+  {
+   "id": "M3",
+   "status": "closed",
+   "evidence": "Agree. Verifier content check: 48 of 48 casts with castTime >= 0.12 s name a windupVfx that exists in content/vfx.json.\n\nLive anticipation pixels are in closing_combat_kits.json `antic`."
+  },
+  {
+   "id": "M5",
+   "status": "partly",
+   "evidence": "Agree. Timing is closed: content attack.windup is 0.21-0.26 for all 16 fighters, and each has its own trail or projectile.\n\nImpact hold is still short. Verifier re-run: `node _harness/probe_combat_polish.mjs ult,hold --ults hesmi,kemdo --tag closing_combat_verify` → _harness/_reports/fw_W1_combat_polish_closing_combat_verify.json `hold`.\n- Disc / victim height >= 0.5: Kemdo 1.11, 0.89, 0.55 (3 frames, 100 ms); Rishal 0.88, 0.66 (2 frames, 67 ms); Tunlan 0.98 → 0.5 (5 frames, 167 ms).\n- The probe's own reach gate now FAILs on Rishal (100 ms < 200). The reviewer's run passed it at 300 ms, so this gate is noisy run to run.\n\nGauge (r12 M5): about 0.7 x victim height for about 200 ms."
+  },
+  {
+   "id": "M6",
+   "status": "closed",
+   "evidence": "Agree. Victim flash peaks at 0.45 and clears by 167 ms (closing_combat_overlay_regress.json M6). Ability hits peak at 0.7 and ultimates at 1.0 (`summary.flashMax` in closing_combat_kits.json)."
+  },
+  {
+   "id": "M12",
+   "status": "partly",
+   "evidence": "Agree. a1/a2 pass 32/32 (closing_combat_kit_hue.json).\n\na3/ult reproduced independently. Verifier decomposition probe (tool _harness/_reports/closing_combat_verify_hue_decomp.mjs.txt) → _harness/_reports/closing_combat_verify_hue_decomp.json, summary closing_combat_verify_hue_decomp_summary.json. The same 18/32 fail: a3 of Ardit, Dunsom, Ervet, Hesmi, Ilsheta, Marund, Rishal, Tunlan, Vashil; ult of Burdam, Dunsom, Ervet, Hesmi, Ilsheta, Nurrow, Rishal, Tunlan, Vashil.\n\nTeam share of the added light, from the team-blackout cast:\n- Dunsom a3 0.95, Hesmi a3 0.92, Burdam ult 0.79, Nurrow ult 0.67, Rishal a3 0.50, Burdam a3 0.45, Dunsom ult 0.44, Ervet ult 0.39, Kemdo a3 0.36.\n\nKemdo a3 is a false pass: with team blacked out its signature share is 0.057, against 0.912 normally.\n\nShots: _harness/_shots/closing_combat_verify_hue_{hesmi_a3,kemdo_a3,burdam_ult,dunsom_ult,nurrow_ult}.png."
+  },
+  {
+   "id": "M13",
+   "status": "partly",
+   "evidence": "Agree. Envelope shape and one beat per cast hold (closing_combat_kits.json `summary.liftMax` 1.4, liftFrames 2, distortFrames 23-29, camJitter 0).\n\nVerifier re-run (fw_W1_combat_polish_closing_combat_verify.json `ult`):\n- Hesmi: core x2.25 (ground x2.07) < 2.3, and the body is 0.826 white in the full frame at the beat.\n- Kemdo: x2.30, body white 0.01.\n\nThe whiteout is visible in _harness/_shots/closing_combat_washB_wash_hesmi_ult.jpg (peak f35)."
+  },
+  {
+   "id": "m2",
+   "status": "closed",
+   "evidence": "Agree. Own-death grade: saturation 0.98 → 0 over 400 ms (closing_combat_kits.json `death.grade`). Enemy death sheet: _harness/_shots/closing_combat_death_enemy.jpg. The kill-banner timing is not measured (HUD hidden)."
+  },
+  {
+   "id": "m4",
+   "status": "closed",
+   "evidence": "Agree. Verifier content check: 0 feel layers in content/vfx.json with shake > 0. camJitter is 0.0000 on all 32 live casts (closing_combat_kits.json and closing_combat_c_kits.json `summary`)."
+  },
+  {
+   "id": "m5",
+   "status": "partly",
+   "evidence": "Agree. Distortion is closed: distortFrames 23-29 on all 8 live ultimates. The T2 mid-scale secondary-shape audit is still not measured by either reviewer or verifier."
+  }
+ ],
+ "findings": [
+  {
+   "id": "C1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Ultimates and third abilities lose the fighter's signature in play: 18/32 a3/ult slots read as team orange or as shared white/glass neutrals",
+   "what": "Confirmed and refined.\n\nThe a1/a2 colour gate passes on every slot, but a3 and ult were never gated. In play, 18 of 32 a3/ult slots fail the same >= 0.5 signature-share metric, 9 of them ultimates. A 19th, Kemdo a3, is a false pass.\n\nTwo causes:\n- **Team light dominates** (Dunsom a3/ult, Hesmi a3, Burdam a3/ult, Nurrow ult, Rishal a3, Ervet ult, Kemdo a3). A few team-keyed layers (an emissive-10 shockwave ring, the Long Glint decals, Hesmi a3's pillar) carry 36-95 % of the light the VFX add.\n- **Fixed neutrals carry the effect** (Tunlan a3/ult, Ilsheta a3/ult, Hesmi ult, Vashil a3/ult, Ervet a3, Rishal ult, Ardit a3). Warm white/cream (#F3E3C2, #F7EBD0), Dawnglass #BFD3E6 or ice #B6CEE0 do the work, and the signature-keyed layers (often gradient tails such as \"#BFD3E6\" → \"signature\") add about 0 % of the light.\n\nThe content layer counts meet r12's M12 spec on every slot (team 0-22 % of emissive layers, signature mostly >= 50 %). The defect is the share of light in play, not authoring counts.\n\nReviewer wording corrected:\n- Tunlan's ult is not 'orange rims'. The orange in that shot is the enemy cone telegraph, a legitimate indicator; the effect itself is about 10 % team light and about 48 % white/cream.\n- Ilsheta's help effects are mainly warm white (0.49-0.57 white), with team at 16-21 % of the light.",
+   "evidence": "Reproduced with the reviewer's metric: same 18 fails (_harness/_reports/closing_combat_verify_hue_decomp.json, `variant: normal` rows).\n\nVerifier tool: _harness/_reports/closing_combat_verify_hue_decomp.mjs.txt, which is probe_kit_hue with slots a3/ult, a +30-frame window, frame-integrated sums, and each cast repeated with spawn colours `team` → black and `signature`/`secondary` → black.\n\nCommand (pw heavy slot, real Chrome GPU, High): `node <that script as .mjs> --out _harness/_reports/closing_combat_verify_hue_decomp.json --shots closing_combat_verify_hue`. Summary: _harness/_reports/closing_combat_verify_hue_decomp_summary.json.\n\nUltimates, peak signature share / team share of the added light:\n- Dunsom 0.033 / 0.44; with team removed, signature 0.986.\n- Nurrow 0.036 / 0.67.\n- Ervet 0.108 / 0.39.\n- Rishal 0.111 / 0.31.\n- Hesmi 0.198 / 0.08 (white 0.59).\n- Ilsheta 0.279 / 0.16 (white 0.57).\n- Tunlan 0.301 / 0.10 (white 0.48; the reviewer's run read 0.075, because the peak frame is noisy).\n- Burdam 0.304 / 0.79.\n- Vashil 0.478 / 0.06.\n\nThird abilities:\n- Hesmi 0.001 / 0.92.\n- Dunsom 0.008 / 0.95.\n- Ervet 0.002 / 0.20, ice-blue dominated.\n- Tunlan 0.003 / 0.12, white 0.77.\n- Ilsheta 0 / 0.21.\n- Marund 0.178 / 0.32.\n- Rishal 0.197 / 0.50.\n- Ardit 0.235 / 0.26.\n- Vashil 0.281 / 0.35.\n\nFalse pass: Kemdo a3 is 0.912 normally and 0.057 with team blacked out (team 0.36 of the light).\n\nContent layer shares (verifier python over content/vfx.json, emissive non-ink layers per slot): team 0-22 %.\n\nShots:\n- Hesmi a3, an orange team pillar on her violet kit: _harness/_shots/closing_combat_verify_hue_hesmi_a3.png.\n- Kemdo a3, an orange ring and swirl: closing_combat_verify_hue_kemdo_a3.png.\n- Reviewer's closing_combat_hue_a3ult_{dunsom,burdam,rishal,ervet,nurrow}_ult.png.",
+   "gauge": "r12 M12 (C1, R1): every champion owns a signature hue that survives in play, including on the ultimate. Hit sparks share a warm white. Team colour lives in indicators, rings and rims, not in the body of the effect.\n\nThe gauge statement is accurate. VALE now meets it on a1/a2 but not on 18-19 of 32 a3/ult slots, and the ultimate is where a League player identifies a champion fastest.",
+   "fix": "1. Keep the reviewer's re-key, aimed at light share rather than layer count:\n   - the primary element (column, shell, streak, pillar, core) takes `signature` or `secondary`, with saturation >= 0.45 after tone mapping;\n   - team colour goes only on one thin outer keyline (the shockwave lip or the ground-ring edge) at <= 35 % of the added light. Dunsom/Burdam/Nurrow/Ervet's emissive 8-10 team shockwaves are the main offenders; Hesmi a3's team pillar and Rishal's 'team' Long Glint decals must become signature;\n   - fixed neutrals (warm white #F3E3C2/#F7EBD0, Dawnglass #BFD3E6, ice #B6CEE0) only in the 1-2-frame core or as a minority companion. Where a gradient runs \"#BFD3E6\" → \"signature\", reverse it or start it at signature, so the bright life of the particle carries the hue.\n2. VALE motifs as the reviewer listed: Dunsom an indigo column with a lavender coil; Rishal a raspberry-glass streak; Burdam an ink ring edged in his red; Tunlan shadow spikes rimmed in violet; Nurrow an ink shell with a rose-plum rim.\n3. Enemy-cast help effects (Ilsheta's shell and lamps) keep the caster's signature; for non-fighter sources, director.ts signatureOf should resolve the owner fighter.\n4. Gate:\n   - add `--slots` to probe_kit_hue and gate a1/a2/a3/ult at >= 0.5 over the frame-integrated window;\n   - also gate team light <= 0.35 of the added light with the team-blackout cast, because the hue metric alone cannot separate HARM orange from warm signatures (Kemdo, Burdam);\n   - put both in the integration gate.",
+   "size": "L",
+   "files": "content/vfx.json (ardit_a3_spire, burdam_a3_*, burdam_ult_account, dunsom_a3_step, dunsom_ult_drive/herd, ervet_a3_*, ervet_ult_*, hesmi_a3_firm, hesmi_ult_shard, ilsheta_a3_kindle/shell, ilsheta_ult_dawn/lamps, kemdo_a3_*, marund_a3_fling, nurrow_ult_lull, rishal_a3_feint/spring, rishal_ult_glint/coil, tunlan_a3_flare, tunlan_ult_play/raise, vashil_a3_ringout, vashil_ult_toll), src/render/director.ts (signatureOf for owned units), _harness/probe_kit_hue.mjs",
+   "verifierNote": "Confirmed major. Reproduced on HEAD with an independent decomposition: the same 18 slots fail, plus a hidden false pass (Kemdo a3).\n\nI tried to refute it on metric grounds:\n- the luma threshold disfavours dark blue/violet signatures;\n- the max-n frame favours big rings;\n- warm light on brown stone measures as HARM hue.\n\nThe team/signature blackout settles it. Team-keyed light really is 36-95 % on 9 slots, and on the neutral-carried slots signature layers add about 0 % of the light. Frame-integrated and chroma-weighted shares fail the same slots.\n\nTwo descriptive slips do not change the verdict:\n- Tunlan's 'orange rims' is the legitimate cone telegraph;\n- Ilsheta is mostly warm white, not orange.\n\nMajor is right: this is r12 M12 (a major) on half of every kit, including the ultimate."
+  },
+  {
+   "id": "C2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Hesmi's Felled Shard whites out the struck unit for about 5 frames; its first beat is x2.25 (< 2.3). Nurrow's and Dunsom's ultimates do so for 1-2 frames.",
+   "what": "Reproduced. At the beat, Hesmi's white column and core cover the stunned victim, so the body reads as a white silhouette for about 167 ms. The first-beat core is just under the 2.3 x target.",
+   "evidence": "Verifier re-run: `node _harness/probe_combat_polish.mjs ult,hold --ults hesmi,kemdo --tag closing_combat_verify` → _harness/_reports/fw_W1_combat_polish_closing_combat_verify.json `ult`.\n- hesmi: maxWhiteFull 0.826, firstRatio 2.25, ground 2.07 (FAIL in the probe's own gate).\n- kemdo: 0.01 and x2.30 (pass).\n\nThis matches the reviewer's 0.819 / x2.24. The 5-frame run at >= 0.5 comes from the reviewer's wash pass (closing_combat_washB_kits.json; shot _harness/_shots/closing_combat_washB_wash_hesmi_ult.jpg, peak f35: the victim fully white). I did not re-run the Nurrow and Dunsom wash.",
+   "gauge": "r12 M13 / R1: ultimates win on value range and size, the core reaches 2.3-2.5 x, and champions stay readable. LoL's flash on a struck champion is 1-2 frames.",
+   "fix": "As the reviewer proposed:\n- give target-anchored columns and cores a soft radial body cut-out (0.35 → 0.6 m below head height), so the column stands behind and around the unit;\n- use the signature tint at L* <= 85 within 1 m of the body;\n- gate full-frame body white <= 0.35 for <= 2 frames;\n- reach x2.3 by brightening the lit floor ring under the shard rather than the body.",
+   "size": "S",
+   "files": "content/vfx.json (hesmi_ult_shard, nurrow_ult_lull, dunsom_ult_drive), src/render/vfx/system.ts, _harness/probe_combat_polish.mjs",
+   "verifierNote": "Confirmed minor. It is one fighter's 167 ms whiteout plus a 3 % shortfall on the core. It is already tracked as verifier_open 'combat:F4 (Hesmi first beat)' partly, so it is not new, and it is reproduced now."
+  },
+  {
+   "id": "C3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Basic-attack impacts read large for only 67-167 ms",
+   "what": "Reproduced. The impact body is large on its first 2-3 frames and then contracts. Kemdo and Rishal fall short of the about-200 ms gauge; Tunlan's magic hit reaches 167 ms.",
+   "evidence": "Verifier re-run (_harness/_reports/fw_W1_combat_polish_closing_combat_verify.json `hold`), disc diameter / victim height from the hit:\n- Kemdo 1.11, 0.89, 0.55, 0.47 → 3 frames (100 ms).\n- Rishal 0.88, 0.66, 0.36 → 2 frames (67 ms).\n- Tunlan 0.98, 0.97, 0.79, 0.59, 0.50, 0.35 → 5 frames (167 ms).\n\nThe probe's own reach gate now FAILs on Rishal: 'the impact reaches >= 0.5 x the victim for 100 ms < 200'. The reviewer's run showed 300 ms. Reviewer's report: closing_combat_polish.json `hold.eqd`.",
+   "gauge": "r12 M5 (C1, V4): an impact starburst of about 0.7 x victim height held for about 200 ms, and a victim flash of 1-2 frames.",
+   "fix": "As the reviewer proposed: hold the mid-scale body of lib_hit_phys_light, lib_hit_phys_heavy and lib_hit_magic at >= 0.6 x victim height for 5-6 frames, then ease it out over 120 ms; heavy and crit hold for 7 frames. Switch the probe's hold gate to disc diameter >= 0.5 x for >= 167 ms, since reach is noisy run to run.",
+   "size": "S",
+   "files": "content/vfx.json (lib_hit_phys_light, lib_hit_phys_heavy, lib_hit_magic, lib_crit), _harness/probe_combat_polish.mjs",
+   "verifierNote": "Confirmed minor. My numbers are slightly better for Tunlan (167 ms) and the same for Kemdo and Rishal. Timing, trails and the victim flash meet the gauge, so this is polish rather than a major."
+  }
+ ],
+ "missed": []
+}

@@ -1,0 +1,149 @@
+{
+ "score": 7.5,
+ "summary": "Verifier, Menus & client flow. I re-measured on the real Chrome GPU against dev :5190 with my own capture (scratchpad vclient/verify.mjs, report _harness/_reports/closing_client_verify.json), independent ΔE scripts and `node _harness/e2e.mjs flow --out _harness/_reports/closing_client_verify_e2e_flow.json` (dodge, ready check in a hidden tab, decline, server down: every step passed). The one major holds: CL-1 skin presentation is reproduced. My own CIE ΔE matches the reviewer's to the decimal (closing_client_verify_skin_de.json). One correction: the Shop and Collection detail DO show a large 3D plinth preview of the selected skin, so skins are not sold from tiles alone. But on that plinth the six weakest skins still differ only by a small palette shift (region ΔE 4.1 to 6.7, idle-pose noise included). The deluxe Ilsheta First Bell reads as the base, the shop caption plate covers the hem that is its only change, and finalize has no large preview at all (DOM: no .dshow, three 104 px Ardit tiles that look the same). CL-4's lock-in half is refuted: at 250 ms the showcase art brightens (luma 74.6 to 103.2) and the dial seal swings to noon and closes. Its seat-name half is confirmed. All other minors reproduce. CL-8's repro was induced by the reviewer's own desynced profile; the Play screen guards every normal refusal, so it stays a defensive minor. Not on par: a verified score of 7.5 is below 8 and one confirmed major is open. Flow, speed, state coverage and painted presentation are otherwise close to LoL tier.",
+ "gapStatus": [
+  {
+   "id": "B3",
+   "status": "closed",
+   "evidence": "Menus side, re-checked: all 16 fighter plates load in the pick grid of my own co-op draft (_harness/_shots/closing_client_verify_pick_hover.png), the finalize seats and the Collection detail (closing_client_verify_plinth_*.png). Agrees with the reviewer. The per-fighter art finish belongs to the chars lens."
+  },
+  {
+   "id": "M4",
+   "status": "closed",
+   "evidence": "Settings slice only, re-checked in content: content/strings.en.json:1546-1548 ('Loss-of-control edge', 'Hit edge'); src/session/settings.ts:68 (locFlash and damageFlash, both default false). The in-match effect was verified by the HUD lens, not here."
+  },
+  {
+   "id": "m4",
+   "status": "closed",
+   "evidence": "Settings slice only: content/strings.en.json:1544-1545 ('Screen shake ... Zero turns it off.'); src/session/settings.ts:68 (screenShake default 0.5, clamped 0-1 at :136). In-match shake was not measured in this lens."
+  },
+  {
+   "id": "M14",
+   "status": "closed",
+   "evidence": "Settings slice only: content/strings.en.json:1406 'Ambient life' toggle. The in-world ambient life belongs to the environment lens."
+  }
+ ],
+ "findings": [
+  {
+   "id": "CL-1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "L",
+   "title": "Paid skins read as the base in every client view, and finalize has no large skin preview",
+   "what": "Reproduced and narrowed.\n\n**Near-identical skins.** Six of the 32 skins differ from their base by a portrait ΔE of 7.2 or less. Three of them are deluxe (1,500 Candles):\n- Ilsheta First Bell: ΔE 2.0, with 0.3% of pixels above ΔE 20.\n- Ardit First Bell: ΔE 5.1.\n- Vashil First Bell: ΔE 7.2.\n\nThese three are also 3 of the 4 Featured offers in the Shop.\n\n**Correction to the reviewer.** The Shop and Collection detail are not tile-only. Both render the selected skin large on the 3D plinth. Even there, the change is a small palette shift:\n- Plinth-region ΔE is 4.1 to 6.7 for the six weakest skins (idle-pose noise included).\n- Ilsheta First Bell's only visible change is a darker hem, and the shop caption plate covers that hem.\n- Ardit Chalkline does read on the plinth (dark chevron tabard). Its head-and-shoulders portrait crops that change out, and its steel is not the 'ink-gray' its desc promises.\n\n**Finalize, where skins are chosen in flow.** The pick-phase showcase is gone (no .dshow in the DOM). Skins are three 104 px tiles; for Ardit all three look the same. Nothing large appears on hover or click.\n\n**Collection detail.** The skin strip crops Ilsheta's three tiles to the lamp chimney.\n\n**Owner ruling.** The ruling limits skins to material and palette, but it does not force this. Strong palette skins already ship (Nurrow Shadeprint portrait ΔE 27.9, Odrum Shadeprint 23.9), so the low-ΔE skins are an execution gap.",
+   "evidence": "Independent ΔE (my own CIE76 script, scratchpad vclient/de.cjs): _harness/_reports/closing_client_verify_skin_de.json. Every portrait and splash value matches the reviewer's closing_client_skin_portrait_diff.json.\n\nPlinth captures (Collection detail, same camera for base and skin): _harness/_shots/closing_client_verify_plinth_<skin>.png, composite closing_client_verify_plinth_cmp.png, ΔE in _harness/_reports/closing_client_verify_plinth_de.json.\n\nOther shots:\n- Portrait composite: _harness/_shots/closing_client_verify_skin_cmp.png.\n- Shop: closing_client_verify_shop_sku_ilsheta_first_bell.png (the caption covers the hem).\n- Finalize: closing_client_verify_finalize_1920.png and closing_client_verify_finalize_click_skin2.png.\n\nDOM: closing_client_verify.json finalize.dom (showcase false; skinTiles 104x182 x3).\n\nContent: content/store.json:41 (featured skus); content/skins/ilsheta.json and ardit.json (descs).\n\nCode: src/ui/screens/draft.tsx:375 (the Showcase renders only in the team draft, not in finalize).",
+   "gauge": "Accurate. Every LoL skin has its own splash and a visibly different model; colour-only variants are sold as cheaper chromas, shown as swatches. In LoL champ select, the selected skin's art fills the screen behind the skin carousel.",
+   "fix": "The reviewer's fix stands, with three additions:\n- Move the shop/collection stage caption so it never overlaps the model.\n- Frame skin tiles and portraits on the changed part (Chalkline's tabard, First Bell's bell and hem).\n- Re-palettize or re-tier the three First Bell deluxes before they headline Featured.\n\nKeep the gen_store ΔE gate as proposed: deluxe ≥ 12 or a visible new accent, standard ≥ 8.",
+   "verifierNote": "Reproduced. Severity major stands: the store's headline products and the in-flow skin choice fail the gauge at full size, not only at thumbnail size. The reviewer's 'sold from tiles' wording was inaccurate, since the shop has a big 3D preview. That preview does not rescue the near-identical skins."
+  },
+  {
+   "id": "CL-2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "The Draft ban prompt reads 'Your team bans 0.'",
+   "what": "Confirmed. The session's draft view only carries completed bans, so myBans.length is 0 at the moment the team has to ban.",
+   "evidence": "_harness/_shots/closing_client_draftq_1920_00_ban.png (header and footer both read 'Your team bans 0.'). Code:\n- src/session/draft.ts:229-231: the view's bans are filtered to b.done.\n- src/ui/screens/draft.tsx:314, :327 and :337: n = myBans.length.\n- content/strings.en.json:399.",
+   "gauge": "Accurate. LoL's ban phase states the action and shows no placeholder count.",
+   "fix": "As the reviewer proposed: pass the queue's bans-per-team value (bansForRoster) as n, or reword without a count.",
+   "verifierNote": "Reproduced by code path and shot."
+  },
+  {
+   "id": "CL-3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "The inline noon tick reads as the letter 'I'",
+   "what": "Confirmed. Three places show it:\n- The post-game best-in-match kickers read 'I KEPT THE LAMPS LIT' and 'I NEEDLE BREAKER'.\n- The Equipped chips read '| Equipped'.\n- A one-tick HourTicks reads 'I Simple' for difficulty in Collection detail (an additional instance).",
+   "evidence": "_harness/_shots/closing_client_e2e2_rift_10_postgame.png; closing_client_1920_collection_skins.png; closing_client_verify_plinth_ilsheta_base.png (Difficulty 'I Simple'). Code: src/ui/screens/postgame.tsx:163; src/ui/styles/screens.css:719.",
+   "gauge": "Accurate.",
+   "fix": "As proposed. Also give single-tick HourTicks a non-glyph form (a dot or an arc) wherever it sits inline before text.",
+   "verifierNote": "Reproduced in shots."
+  },
+  {
+   "id": "CL-4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Ally seats lose the fighter name in finalize (the lock-in beat itself exists)",
+   "what": "The lock-in half of this finding is refuted. On lock-in:\n- The showcase art flares: mean luma 74.6 on hover against 103.2 at +250 ms.\n- The dial seal's gnomon swings to noon and its ring closes.\n- The kicker animates.\n- The fighter call plays.\n\nThe reviewer's statement that 'the render, pose and light stay identical' is wrong.\n\nThe seat half is confirmed. In finalize every ready ally's status line replaces the fighter name with 'Ready', so your own team's picks are only readable from the 72 px portraits.",
+   "evidence": "Lock-in:\n- _harness/_shots/closing_client_verify_pick_hover.png against closing_client_verify_pick_lock_250ms.png.\n- Crop pair: closing_client_verify_lock_pair.png.\n- CSS: src/ui/styles/screens.css:263-271 (seal-close, noonlight, noonkick).\n\nSeats:\n- closing_client_verify_finalize_click_skin2.png (all four allies read 'Ready');\n- closing_client_draftq_1280_finalize.png;\n- code src/ui/screens/draft.tsx:181.",
+   "gauge": "LoL's ally rows keep the champion name and art beside the ready or locked state. The lock-in claim about LoL is not a measured gap here.",
+   "fix": "Keep the fighter name on the seat row and show Ready as a check chip beside it. The lock-in beat needs no change for parity.",
+   "verifierNote": "Narrowed. Only the seat-name half reproduces. Severity stays minor."
+  },
+  {
+   "id": "CL-5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Redundant or cryptic copy: queue-card chips, the ledger cap line, the finalize summary, the showcase role, and the ready-check line",
+   "what": "Four of the five items reproduce as stated:\n- Queue cards repeat their names as chips (QUICK/QUICK, RANKED/RANKED, CO-OP VS BOTS/CO-OP).\n- The ledger shows 'Per-match limit -1'.\n- The finalize summary ends in '· Light' or '· Unlit'.\n- The showcase labels Ardit 'Plinth / Shaftlight' (the seat role) while the grid tooltip in the same frame says 'Plinth · Grovehunter'.\n\nThe ready-check contradiction is real but transient:\n- In my run the ring and the text both read 8 at +1.5 s.\n- The draft had already opened by +3.5 s.\n- So 'Everyone is ready. Starting.' over 'Ready in 8 s.' lasts under a second.",
+   "evidence": "_harness/_shots/closing_client_1280_play_rift.png (queue chips); closing_client_e2e2_rift_10_postgame.png (ledger); closing_client_verify_finalize_click_skin2.png ('· Light'); closing_client_verify_pick_hover.png (tooltip against showcase role).\n\nReady check: closing_client_verify.json ready.t300/t1500 and acceptToDraft; closing_client_e2e_rift_04_ready.png.\n\nCode: src/ui/screens/queue.tsx:109; src/ui/components/Ring.tsx:65.",
+   "gauge": "Accurate in spirit. LoL's labels do not repeat or contradict each other.",
+   "fix": "As the reviewer proposed. For the ready check, simply hide the 'Ready in' clause once you have accepted.",
+   "verifierNote": "Confirmed. The ready-check part is lower impact than described."
+  },
+  {
+   "id": "CL-6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "Key-art paintings are bright daylight against the dusk client",
+   "what": "Reproduced the luma figures on the same crops:\n- Home feature: p50 136, 13.2% of pixels above 200.\n- Home tiles: p50 116, 13.2% above 200.\n- Home backdrop (right half): p50 69, 0.6% above 200.\n\nThe draft showcase plate and the Shop splash backgrounds are also cool daylight snowfields.",
+   "evidence": "Inline sharp luma on _harness/_shots/closing_client_1920_home.png (feature 96,398,341,190; tiles 96,609,852,100; backdrop 1000,100,800,800). See also closing_client_verify_pick_hover.png and closing_client_verify_shop_sku_ilsheta_first_bell.png.",
+   "gauge": "Accurate. LoL keeps one graded mood per client theme.",
+   "fix": "As proposed: a regrade pass with a luma gate, not a repaint.",
+   "verifierNote": "Reproduced."
+  },
+  {
+   "id": "CL-7",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Screen transitions stack two full screens of text",
+   "what": "Confirmed. The leaving screen's animateOut and the entering screen's animateIn run at the same time, so for the first frames Home's headline and band sit over Play's title and dial.",
+   "evidence": "Code: src/ui/app.tsx:425-443. Filmstrip: scratchpad motion_play.png, built from _harness/_shots/closing_client_motion_play_*ms.png (frame 1 shows both screens' text).",
+   "gauge": "Accurate.",
+   "fix": "As proposed: stagger the transition, or mask the leaving layer behind a short wipe.",
+   "verifierNote": "Confirmed by code and frames."
+  },
+  {
+   "id": "CL-8",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Unforeseen queue refusals from the session are silent",
+   "what": "The code path is real: 'queue: ...' errors only reach console.warn and lastError.\n\nThe reviewer's repro was self-inflicted. Their script raised the UI profile to level 20 while the session stayed at level 1. In normal play the Play screen pre-checks every refusal the session can make (level, lockout, party size, preset fighter), so a player rarely meets this.\n\nIt stays a defensive minor.",
+   "evidence": "Code:\n- src/ui/state.ts:180-189: only 'draft:' and 'match:' messages are surfaced.\n- src/session/local_session.ts:251-284: the refusals.\n- src/ui/screens/play.tsx:70-75: the UI guards.\n\nRepro: the reviewer's own scratchpad closing_draft.mjs, which sets the profile level directly.",
+   "gauge": "r05 §3.3: an error state needs a message and a retry. That is accurate.",
+   "fix": "Map 'queue:' refusals to a toast with a reason code, as proposed.",
+   "verifierNote": "Real, but only reachable through a desynced state in practice. Minor is right."
+  },
+  {
+   "id": "CL-9",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "1280x720 fit gaps: shop skin names and the role picker",
+   "what": "Reproduced at 1280x720:\n- 'Gorgewalk Longbow' clips at 106 of 109 px.\n- 'Shadeprint Wanderer' clips at 106 of 114 px.\n- On RIFT Play the YOUR ROLES block starts at y 598 under the scroll fade, with Find match at y 643. The role chips are not readable without scrolling.",
+   "evidence": "_harness/_reports/closing_client_verify.json shop.clip1280 and play1280; _harness/_shots/closing_client_verify_1280_shop.png and closing_client_verify_1280_play_rift.png.",
+   "gauge": "Accurate. 1280x720 is LoL's minimum client size, and its store and queue screens fit there.",
+   "fix": "As proposed.",
+   "verifierNote": "Reproduced with the same numbers."
+  },
+  {
+   "id": "CL-10",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "Home has no tasks or events, the CTA ignores the player's queue, and the top bar ignores the chosen emblem",
+   "what": "Confirmed:\n- The Home CTA comes from the version-rotating feature.\n- The top-bar chip draws a generic user icon. The chosen emblem is stored (state.ts:21) but never used in the bar.",
+   "evidence": "Code:\n- src/ui/screens/home.tsx:46 and :56 (feature by version index drives the CTA);\n- src/ui/app.tsx:338-342 (Icon name='user');\n- grep -c emblem src/ui/app.tsx = 0.\n\nShot: _harness/_shots/closing_client_1920_home.png ('PLAY BRIDGE').",
+   "gauge": "Accurate. The LoL client shows missions or an event pass, and the identity chip shows the chosen icon.",
+   "fix": "As proposed.",
+   "verifierNote": "Confirmed by code."
+  }
+ ],
+ "missed": []
+}
