@@ -1,0 +1,115 @@
+{
+ "lane": "engine",
+ "run": "integration run 2",
+ "round": 1,
+ "verifier": "adversarial verifier, integ2 engine round 1 (2026-10-29). Re-measured at HEAD c015bf50; the lane's files are clean in the working tree and pushed. I did not trust the engineers' reports.",
+ "pass": false,
+ "summary": "Lane engine fails round 1 on one regression from engine-lod. The crowd LOD now simplifies the Wicks' team-colour accent parts, so the shieldwick hood stripe breaks into dashes and the greatwick's hood band mostly disappears at the gameplay camera. engine-lod's own gates reproduce. perf_1080 --prod GATE PASS: match peak 451,815 tris at 1309.9 s, 40 programs (exactly at the cap), 273 draws, 0 seconds over budget, 0 programs first seen after 1:00, High 249k / Low 171k, memory +0.6 %, dynres PASS. Fighter LOD1 is clean for all 16 fighters at the gameplay camera, with faces locked and the menu drawing full bodies. The engineers' own probe left Tunlan and Kemdo as empty crops, so I added two more runs with picks. The crowd regression is new in this round. In run 1, lodIndex skipped meshes under 600 triangles, so the accent parts (98-332 tris) were drawn whole. crowd.ts now gives every part LOD.crowd (0.25 within 12 mm, minTrisCrowd 96). I ran an in-page A/B in the bench at RIFT t 900 seed 7. Shieldwick accent pixels go 608 -> 445 (-27 %) and the greatwick's 604 -> 442. Keeping only the accent parts whole, with the body and hull LOD unchanged, restores them (653 / 617). probe_lod still passes (frame mean 0.14, 0.115 % of pixels > 24 levels), because its whole-frame gate is too coarse to see it. Minor items: engine-r2-06 and all four pkg2 items pass. Negative scratch-copy tests raised errors for an unknown fighterWeights key, a wrong bansPerTeam, an unknown ambience cue and an unknown ambience map key. A shipped-content copy-lint hit is still an error, and COPY_LINT_PENDING is empty. engine-r2-01 and engine-r2-02 are partly. All 9 new VFX defs exist; they were merged additively (272 -> 281, 0 existing defs changed) and the generator reproduces each one exactly. Wiring content to them is a systems handoff, and every JSON path in it checks out. Two design nits: ervet_ult_shards_home keeps a 3.3-3.4x 'blade' mesh described as 'the oversized blade', which the W4 re-key cut (_design/fighters/ervet.md:30), and vashil_passive_chord has no line joining the two humming enemies. The optional items engine-r2-03, -04 and -05 were skipped. combat:F4 is not done, as the engineers said. Box white is <= 0.35 for all four (Kemdo 0.024, Rishal 0.17, Tunlan 0.199, Hesmi 0.279), but the probe exits 1 on core ratio (Tunlan 2.06, Hesmi 2.21). value_probe RIFT Low flash is 1.94x (High 2.11x). These numbers equal run 1's, so nothing got worse. Other checks are clean: typecheck 0, content:check 0 warnings, probe_content_build 126/126, probe_content_ids, probe_maps, probe_render_dynres(+vsync), probe_camera_edge, secret scan PASS, npm run build OK, and RIFT value_probe matches run 1 on every gate. I A/B'd the landmark white texel in the bench and it changes 0 pixels. Sensitivity: I viewed every new VFX sheet and every LOD shot. The LOD adds or removes no facial features, the Wicks stay faceless, and there are no new hoods or masks.",
+ "items": [
+  {
+   "id": "engine-lod",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "GATES MET. Command: `node _harness/perf_1080.mjs --prod --out _harness/_reports/integ2_engine_v1_perf_1080.json` (.log): GATE PASS. Match peak 451,815 tris at 1309.9 s, 273 draws at 1090.7 s, 40 programs at 15.4 s. overBudget is empty and lateProgramsAfter60s is []. The peak frame is actors 233k/126, canopy 87k, vfx 43k (run 1: 1,031,094 / 41). Fixed views: High 249k / 174 draws / 37 programs, Low 171k. Timing was not measured because the machine was busy. memory +0.6 % PASS, dynres PASS. Programs sit exactly at the <= 40 cap, with no margin.\n\nFIGHTERS CLEAN. The engineers' probe (integ_engine_body_lod_d.log) left Tunlan ('fighters main 0 -> 0') and Kemdo as empty crops (shots integ_engine_d_bodylod_{tunlan,kemdo}.png show only ground). Its 'no difference' therefore covered 8 of 10, and 6 fighters were never in its match. I re-ran a scratch copy of probe_body_lod with --picks and actor visibility. Run p1 (ardit, ilsheta, lisvel, nurrow, sukri, ulkro, kemdo, rishal, vashil visible): _harness/_reports/integ2_engine_v1_p1_body_lod.{log,json}. Run p2 (tunlan as seat 0, plus odrum, burdam, marund, hesmi, ervet, ilsheta, sukri): integ2_engine_v1_p2_body_lod.{log,json}. Shots: _harness/_shots/integ2_engine_v1_p{1,2}_bodylod_*.png. All 16 base fighters draw vale_body_lod1 in the match. Bodies: 197,717 -> 107,844 (p1) and 192,387 -> 106,975 (p2). Tunlan goes 20,926 -> 8,405 and Ilsheta 17,004 -> 7,736, the most aggressive cuts. I compared every A|B pair at 2-6x. The faces are identical, as are Tunlan's hat mark, Sukri's face and Ervet's blade. The silhouettes differ only at edge pixels, and nothing pops (the LOD never switches mid-match). Menu: 0 LOD1 bodies.\n\nCROWD REGRESSION (see regressions). Scratch in-page A/B on the dev server, RIFT t 900 seed 7, the probe_lod frame. Shots: _harness/_shots/integ2_engine_v1_crowdab_{full,lod,bodyOnly,accentOnly,hullOnly}.png and integ2_engine_v1_accent_{full,run2,accentFull}.png. The accent parts' LOD alone (accentOnly) erases the greatwick's orange hood band; body-only LOD keeps it. Accent pixels in the crops, full / shipped / accent kept whole: shieldwick blue 608 / 445 / 653, greatwick orange 604 / 442 / 617, glimwick orange 2173 / 2151 / 2203. Index counts show every accent part between 98 and 332 tris is now simplified (708 -> 264, 996 -> 348, 750 -> 183, 660 -> 165, 294 -> 72). In run 1 they were drawn whole: 8faff08c lod.ts `if (count / 3 < minTris ...) return null` with minTris 600. probe_lod: `node _harness/probe_lod.mjs --no-build --out _harness/_reports/integ2_engine_v1_lod.json` PASS (mean 0.14, over24 0.115 %, shadow share 0.20), but that gate is too coarse to catch this.",
+   "fixHint": "src/render/crowd.ts bakeCrowd: draw the accent parts whole, as run 1 did: `const lods = meshes.map((m, i) => (m.material as Material).name === accentName ? null : lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, units[i]));`. composeIndex then keeps the accent members' own triangles in the hull, which costs about 150-250 tris per unit. Alternatively, lock the accent part's boundary and use a bound of 3 mm or less. Re-check with the in-page accent A/B: accent pixels within 3 % of full for shieldwick, greatwick and glimwick at RIFT t 900 seed 7. Then run one perf_1080 --prod match peak, which must stay <= 500k and <= 40 programs. Separately, make probe_body_lod fail on an invisible actor (actor root not visible, or 'fighters main' 0) instead of reporting crop mean 0 as 'no difference', and add a --picks pass-through so all 16 fighters can be covered."
+  },
+  {
+   "id": "engine-r2-01",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "content/vfx.json against 1d6261e2~1: 272 -> 281 defs, 9 added, 0 removed, 0 changed. The 7 here are lib_spell_glint_shadow, lib_spell_saplight_pool, lib_spell_glass_pane_set, ervet_ult_shards_home, ervet_passive_tear, vashil_passive_chord and lib_buff_resin_ignite. tools/vfx regenerated in memory without writing (scratch vfx_regen_check.py): all 9 new defs come out identical to vfx.json. All render in the engineers' gallery (_harness/_shots/integ_engine_r2_vfx_01.png and _02.png, after the last vfx.json change), and I viewed every frame. Nothing in content references them yet: setup.json spells[0], [1] and [6], ervet ult and passive, and vashil passive triggers[0].effects[0] still name lib_zone_shade, lib_zone_lumen, lib_ring_pulse, ervet_ult_whole, lib_burst_lumen and vashil_passive_hum. Those are systems-owned files. I checked every JSON path in the handoff against the files, and the Resinburn handoff is right: the damage op carries no `present` (src/contracts/catalog.ts:159-216). Nits: ervet_ult_shards_home keeps a mesh 'blade' layer at scale 2.6 -> 3.4 with stretch [3.4,1,1], copied from ervet_ult_whole, and its $comment says 'the oversized blade condenses whole'. _design/fighters/ervet.md:30 says the oversized blade was cut and 'the blade must not grow', and chars c015bf50 shrank form_great to the usual size. vashil_passive_chord is 6 shockwave rings and a light, with no line of sound joining the two humming enemies the item asks for. lib_spell_glint_shadow's ink decal reads as a spiky splat, not as the caster's shadow.",
+   "fixHint": "systems: point content at the new ids (the engineers' handoff). Engine: in tools/vfx/bespoke/ervet.py, drop the 'blade' mesh layer from ervet_ult_shards_home, or keep it at the real blade size (1.31 m, scale 1 or less), and reword its $comment. Then add only that def to content/vfx.json; do not run the full build_vfx.py, because the generator still drifts on 77 older defs. Optionally give vashil_passive_chord a beam or ribbon from the struck target toward the hum ring."
+  },
+  {
+   "id": "engine-r2-02",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "lib_item_strike_the_hour and lib_item_hold_the_hour are in content/vfx.json and render in integ_engine_r2_vfx_01.png. Strike: a ring out to 3 m with 12 tick streaks. Hold: a 1.5 s ring with motionless glints. items.json still uses lib_burst_lumen (hourstring passives[0].triggers[0].effects[1].then[1]) and lib_zone_glass (stillhour.active); the handoff paths are correct. The optional Lampblack Coat soot ring is not done.",
+   "fixHint": "systems: hourstring -> lib_item_strike_the_hour, stillhour -> lib_item_hold_the_hour, then content:check. Lampblack ring (optional): the renderer would need an aura-occupancy flag in EntityView."
+  },
+  {
+   "id": "engine-r2-03",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Optional; skipped (no Dawn Seal glaze, shimmer or shatter; no Ringshade pulse). The engineers' feasibility note is right: EntityView.shield exists (src/contracts/sim.ts:103).",
+   "fixHint": "structures.ts: while a RIFT Outer Needle has shield > 0, draw a thin dawnglass glaze shell lighter than the protected shell; flash it on each shield event; shatter it when the shield drops to 0 at 7:00. Ringshade needs a vfx id from systems first."
+  },
+  {
+   "id": "engine-r2-04",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Optional; skipped (no gorge-wind gust, no crack overlay). WorldView.gorgeWind exists at src/contracts/sim.ts:207, as noted.",
+   "fixHint": "In the render director, keep the last WorldView.gorgeWind; when it goes up, fire a map-wide gust VFX; while it is above 0, blend a faint crack overlay on structures."
+  },
+  {
+   "id": "engine-r2-05",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Optional; skipped (no Noon Toll column or chime ring). The 'noon_toll' announce is in src/sim/modes/match.ts and src/ui/hud/model.ts.",
+   "fixHint": "On announce 'noon_toll', put a 5 s noon-light rim or column on every living fighter and a faint dial-chime ring over the FRAY plate."
+  },
+  {
+   "id": "engine-r2-06",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "tools/build_content.ts:85 imports lintPlayerCopy; :1336-1350 copyLint is called at :1487. In shipped content, an unrouted hit is fileErr. :645-646: fighterWeights keys must be fighter ids. :660-673: bansPerTeam === bansForRoster(draft, fighterPool(c).length). Negative scratch copy (scratchpad cneg/, `node tools/build_content.ts --check --content <copy> --allow-missing-assets`, exit 1) produced: `$.modes[2].rules.fighterWeights.not_a_fighter: unknown fighter \"not_a_fighter\"` and `$.queues[1|2|6].draft.bansPerTeam: 4 is not the bansByRoster step for today's 16 playable fighters (1)`. Real content: `npm run content:check` exit 0, 0 warnings. probe_content_build 126/126.",
+   "fixHint": ""
+  },
+  {
+   "id": "combat:F4",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Confirmed not done. `git diff 8b417c56 HEAD -- src/render/vfx/shaders.ts` is empty. Command: `node _harness/probe_combat_polish.mjs ult --tag integ2_engine_v1_ult` exit 1 (_harness/_reports/integ2_engine_v1_combat_ult.log, fw_W1_combat_polish_integ2_engine_v1_ult.json). Box white: Kemdo 0.024, Rishal 0.17, Tunlan 0.199, Hesmi 0.279, all <= 0.35. Core ratio: Kemdo 2.32, Rishal 2.35, Tunlan 2.06 FAIL, Hesmi 2.21 FAIL. Hesmi's full-frame body white is still 0.827. Isolated value_probe (scratch copy, so the tracked _harness/_reports/value_probe.json is not touched; `--maps rift --tiers high,low --flash 1 --masks 1`, _harness/_reports/integ2_engine_v1_value_probe.log): RIFT High flash 2.11x, Low 1.94x FAIL. Same as run 1, so this round's flash-LOD bias and VFX shape changes made it no worse.",
+   "fixHint": "As the plan says. Lower Tunlan's ult cast bloom and Hesmi's ult impact core over the victim in content/vfx.json, or tools/vfx/bespoke tunlan.py / hesmi.py with a single-def merge. Raise their ground core (core >= 2.3) without lifting the victim box above 0.35. Then pin the RIFT Low flash spot or raise the T4 ground impact to >= 2.0x."
+  },
+  {
+   "id": "engine-index-comment",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "index.html:12 reads 'VALE binds F (Hour spell 2), so the bar's F hotkey is off.' The 'battle spell' wording is gone (3f547bb9).",
+   "fixHint": ""
+  },
+  {
+   "id": "engine-terrain-comment",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "src/render/terrain.ts:1797-1798 gives tall 740, broad 692, squat 656, lean 636, young 408. art/renders/props/build_report.json matches: dialwood_tall 740, broad 692, squat 656, lean 636, young 408. Only the comment changed.",
+   "fixHint": ""
+  },
+  {
+   "id": "engine-bc-10",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "tools/build_content.ts:1333-1334: COPY_LINT_PENDING = new Set<string>([]), and the mechanism is kept. The FRAY desc now says 'center' (world 84107482), so dropping that entry was right. content:check: 0 warnings. Negative scratch copy with 'centre' put back into maps/map_fray.json: lint hit \"$.desc: copy lint: 'centre' in player copy; VALE says 'center'\". It is a warning in a non-shipped tree, by design, and :1349 makes the same hit fileErr in content/.",
+   "fixHint": ""
+  },
+  {
+   "id": "engine-bc-11",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "tools/build_content.ts:438-442. Negative scratch copy (cneg/audio.json), exit 1, produced `$.ambience.map_rift[0].cue: unknown audio cue \"amb_rift_air_x\" — did you mean \"amb_rift_air\"?` and `$.ambience.map_nowhere: unknown map id \"map_nowhere\" (known: map_bridge, map_fray, map_rift)`. Real content: 0 warnings.",
+   "fixHint": ""
+  }
+ ],
+ "regressions": [
+  "engine-lod (a8d6bcc1 / 1d6261e2, src/render/crowd.ts + lod.ts LOD.crowd and minTrisCrowd 96): the crowd now simplifies the Wicks' team-accent parts (98-332 tris; in run 1 they were drawn whole under the 600-tri floor). The shieldwick hood stripe breaks into dashes and the greatwick's hood band mostly disappears at the gameplay camera. Accent pixels: blue 608 -> 445 and orange 604 -> 442 (-27 %); keeping the accents whole restores 653 / 617. Shots: _harness/_shots/integ2_engine_v1_accent_{full,run2,accentFull}.png and integ2_engine_v1_crowdab_*.png. This is a team-readability regression on every lane minion."
+ ],
+ "checks": {
+  "typecheck": "npm run typecheck exit 0",
+  "content_check": "npm run content:check exit 0, 0 warnings",
+  "probe_content_build": "126/126 PASS",
+  "node_probes": "probe_content_ids, probe_maps, probe_render_dynres, probe_render_dynres_vsync, probe_camera_edge: all exit 0",
+  "secrets": "npm run secrets PASS (13 rules, 845 candidate files)",
+  "build": "npm run build exit 0",
+  "perf_1080_prod": "_harness/_reports/integ2_engine_v1_perf_1080.{json,log}: GATE PASS. Match peak 451,815 tris / 40 programs / 273 draws; High 249k, Low 171k; mem +0.6 %; dynres PASS; timing not measured (machine busy)",
+  "probe_lod": "_harness/_reports/integ2_engine_v1_lod.{json,log}: PASS (shadow share 0.20, frame 310,901 -> 216,889, picture mean 0.14 / over24 0.115 %)",
+  "body_lod": "engineers' integ_engine_d run plus my p1/p2 runs: all 16 fighters seen with LOD1, faces unchanged, menu full bodies, 0 console errors",
+  "crowd_accent_ab": "scratch in-page A/B: the accent LOD erases team stripes (the regression)",
+  "landmark_white_texel": "scratch in-page A/B, 4 RIFT spots (lampwright resin, skirt trees): max pixel diff 0 with and without the white map",
+  "combat_polish_ult": "exit 1 on core (Tunlan 2.06, Hesmi 2.21); box gate PASS",
+  "value_probe": "RIFT high/low isolated: every gate PASS except Low flash 1.94x (same as run 1)",
+  "vfx_additive": "272 -> 281 defs, 0 existing changed; generator reproduces all 9 new defs",
+  "sensitivity": "Viewed both VFX gallery sheets, every body-LOD A|B pair (16 fighters) and the crowd A/B crops. The LOD adds or removes no facial features, the Wicks stay faceless, and no new hood or mask shapes appear.",
+  "observations": "The tools/vfx/build_vfx.py generator still differs from content/vfx.json on 77 older defs. This predates this round (run-1 verdict); running the full generator would undo the combat F6 tuning, so new defs must keep being merged one by one. The probe_body_lod harness reports an invisible fighter as 'no difference'."
+ }
+}
