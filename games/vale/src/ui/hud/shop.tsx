@@ -28,7 +28,7 @@ const TIER_LABEL: Record<Tier, string> = { starter: 'Starters', consumable: 'Con
 const TAG_ORDER: readonly Tag[] = ['attack', 'crit', 'onhit', 'magic', 'haste', 'defense', 'sustain', 'speed', 'support', 'vision', 'utility', 'jungle'];
 const TAG_LABEL: Record<Tag, string> = {
   attack: 'Attack', crit: 'Critical', onhit: 'On hit', magic: 'Magic', haste: 'Haste', defense: 'Defense', sustain: 'Sustain',
-  speed: 'Speed', support: 'Support', vision: 'Vision', utility: 'Utility', jungle: 'Jungle',
+  speed: 'Speed', support: 'Support', vision: 'Vision', utility: 'Utility', jungle: 'Dialwood',
 };
 /** what each fighter style buys first (bots use the same idea in their build paths) */
 const STYLE_TAGS: Record<FighterDefT['ai']['style'], readonly Tag[]> = {
