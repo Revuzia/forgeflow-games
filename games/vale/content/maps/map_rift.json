@@ -1407,6 +1407,7 @@
   "minimap": "assets/maps/map_rift/minimap.png",
   "terrain": {
    "plazas": [{"at": [12, 55], "radius": 13, "side": 0}, {"at": [158, 55], "radius": 13, "side": 1}],
+   "minimapBounds": [-6, -4, 176, 114],
    "surface": "dial",
    "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
    "props": { "$comment": "scatter props (art/blender/props/scatter.py): vertex-coloured, real size, origin at the ground contact; render/terrain.ts instances them on its procedural spots. Dialwood trees (clumps of matte painted fan plates, \u2265 20 per crown, \u2264 750 tris, \u2264 3.4 m in game; COLOR_0.a is the gloss mask, 0 everywhere since r12 M11: the renderer keeps roughness \u2265 0.75 and sways the crowns \u2264 4 cm), fallen hour-tick stones at the cliff feet (rock: \u2264 0.4 m in game, they stand on walkable floor) and small tick fragments", "tree": ["assets/props/dialwood_tall.glb", "assets/props/dialwood_broad.glb", "assets/props/dialwood_squat.glb", "assets/props/dialwood_young.glb", "assets/props/dialwood_lean.glb"], "rock": ["assets/props/boulder_block.glb", "assets/props/boulder_tick.glb", "assets/props/boulder_pair.glb"], "stone": ["assets/props/stone_tick.glb", "assets/props/stone_chip.glb"] },

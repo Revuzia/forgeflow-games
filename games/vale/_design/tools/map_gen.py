@@ -603,6 +603,10 @@ def build_rift():
         "temperatureField": tok['temperatureField'],
         "edgeFog": tok['fog']['edge'],
         "heightMist": tok['fog']['heightMist'],
+        # the painted minimap's rectangle (art/blender/maps/minimap_survey.py; src/ui/hud/minimap.tsx minimapBounds): the map
+        # plus 6 m per side in x and 4 m in y (the 1100 x 712 aspect), so the base plazas (r 13 at x 12 / W - 12) and the
+        # fountain rings that reach past the map's x edges are drawn whole (hud HUD-3)
+        "minimapBounds": [-6, -4, int(W) + 6, int(H) + 4],
         "seat": {"at": [CX, CY], "radius": seat_r, "relief": "flush; carved rim <= 0.15 m"},
         "hourLines": {"centre": [CX, CY], "ring": RING, "note": "Dialwood paths follow the hour-ring and two hour-lines per quadrant (Baseward, Rimward)"},
         "landmarks": [
