@@ -25,7 +25,8 @@ glass grooves inked with an anti-aliased border), the scarf (linen folds at its 
 (blue-grey cloth, brown lining, ochre trims), the arm plates (chalk shells), the wraps, gloves and boots.
 
 Three blade states (passive forms, CONTRACT §12 form-swapped parts): the whole blade `form='base'`, the
-broken stub `form='hilt'`, the oversized blade `form='great'`; one grip, crossguard and accent shared.
+broken stub `form='hilt'`, the reformed blade `form='great'` (Whole Again: the whole blade at its usual length
+and reach, fused from its shards, the shard seams glowing in the accent); one grip, crossguard and accent shared.
 
 Pipeline additions kept inside this module (art/blender/common is shared and not edited here):
   * `_paint_object` (project.paint_object wrapper): body projection + procedural paint (above);
@@ -105,11 +106,24 @@ TILT_Y = -0.24                       # blade direction's Y per unit of its XZ le
 BLADE_ROLL = 30.0                    # deg: the flat turned up toward the high game camera (no edge-on rod)
 BLADE_L = 1.31                       # whole blade (3D, from the guard)
 STUB_L = 0.30
-GREAT_L = 1.76                       # the ultimate's blade: +0.45 m of reach, clearly longer as well as wider
-                                     # (the longest whose point stays above the ground in the bind pose)
+GREAT_L = BLADE_L                    # Whole Again (W4 re-key, ROSTER §5): the blade comes back whole at its usual
+                                     # length (reach stays 2.0 m); it reads by its glowing shard seams, not by size
 BLADE_SHAPE = (0.150, 0.122, 0.026, 0.22)      # width at the guard, width before the point, thickness, point
 STUB_SHAPE = (0.150, 0.142, 0.026, 0.5)
-GREAT_SHAPE = (0.23, 0.18, 0.034, 0.36)
+GREAT_SHAPE = BLADE_SHAPE
+# the reformed blade's shard seams, (t m from the guard, u -1..1 across the width) polylines: five fracture lines
+# across the blade (edge to edge, each a shallow zigzag) and two short splits between them, so the blade shows
+# eight fused shards and its point. Built as accent ribbons on both faces (seams_low) and painted into the
+# great blade's glass (a deep border, a per-shard value shift); the accent is the only glow (STYLE_BIBLE)
+SEAMS = [[(0.170, -1.0), (0.135, -0.30), (0.190, 0.38), (0.155, 1.0)],
+         [(0.400, -1.0), (0.440, -0.25), (0.375, 0.30), (0.415, 1.0)],
+         [(0.630, -1.0), (0.595, -0.40), (0.655, 0.20), (0.620, 1.0)],
+         [(0.850, -1.0), (0.885, -0.20), (0.830, 0.45), (0.865, 1.0)],
+         [(1.040, -1.0), (1.010, -0.35), (1.065, 0.25), (1.030, 1.0)],
+         [(0.190, 0.38), (0.285, 0.20), (0.375, 0.30)],
+         [(0.595, -0.40), (0.720, -0.52), (0.885, -0.20)]]
+SEAM_HW = 0.008                      # the glowing seam's half width (1.6 cm: ~1 px at the gameplay camera)
+SEAM_LIFT = 0.0015                   # above the glass (no depth fight with the blade at the game camera)
 # ── the face (concept front, x/z in m): one slim tapered slit under a four-point star, two thin cheek lines ──
 FACE_XC = 0.019                      # the slit's axis
 STAR_C = (0.019, 2.044)              # the star's centre
@@ -143,7 +157,7 @@ INK_W = 0.0042                       # the ink border round the glass
 FACE_OUTLINE = [(0.018, 2.150), (-0.026, 2.143), (-0.062, 2.122), (-0.086, 2.085), (-0.094, 1.995), (-0.084, 1.930),
                 (-0.060, 1.866), (-0.022, 1.840), (0.018, 1.831), (0.058, 1.840), (0.094, 1.866), (0.118, 1.930),
                 (0.128, 1.995), (0.122, 2.085), (0.098, 2.122), (0.062, 2.143)]
-BEVEL = {"blade": 0.026, "blade_hilt": 0.026, "blade_great": 0.045}
+BEVEL = {"blade": 0.026, "blade_hilt": 0.026, "blade_great": 0.026}
 # the crossguard outline (u along the blade's width W, v along the blade D toward the point), right half:
 # the concept's heavy carved chalk guard, 0.47 m across: thick arms (6 cm) sweeping toward the blade into
 # flared tips, a langet point over the blade's base
@@ -1135,6 +1149,118 @@ def blade_low(name: str, L: float, shape, bevel: float, cut=None, col=None):
     return ob
 
 
+def _low_rings(L, shape):
+    """blade_low's ring positions t (no cut) and its half width there; the point closes at t = L"""
+    tip = shape[3]
+    ts = list(np.linspace(0.0, L - tip, 7)) + [L - tip * (1 - f) for f in (0.4, 0.7, 0.88)]
+    return np.array(ts + [L]), np.array(list(_blade_hw(np.array(ts), L, shape)) + [0.0])
+
+
+def _section(a, hw, bev, ht):
+    """blade_low's section: height n and slope dn/da at a = |s| (flat to 0.33 hw, shoulder to hw - bev, bevel)"""
+    k1, k2 = 0.33 * hw, hw - bev
+    if a <= k1:
+        return ht, 0.0
+    if a <= k2:
+        sl = -0.14 * ht / max(k2 - k1, 1e-6)
+        return ht + sl * (a - k1), sl
+    sl = -0.86 * ht / max(hw - k2, 1e-6)
+    return 0.86 * ht + sl * (a - k2), sl
+
+
+def _seam_points(poly, L, shape, bevel):
+    """a seam polyline (t, u) resampled at its corners and wherever it crosses a section crease (|u| = 0.33,
+    the bevel shoulder), so the ribbon lies on blade_low's flats and bevels instead of cutting through them; a
+    crossing within 1 cm of a corner is dropped (a sliver segment shorter than the ribbon's half width folds the
+    ribbon over itself; SEAM_LIFT covers the chord there)"""
+    rt, rh = _low_rings(L, shape)
+    out = [poly[0]]
+    for (ta, ua), (tb, ub) in zip(poly[:-1], poly[1:]):
+        hw = float(np.interp(0.5 * (ta + tb), rt, rh))
+        seg = math.hypot(tb - ta, (ub - ua) * hw)
+        cs = (0.33, (hw - min(bevel, 0.8 * hw)) / hw)
+        ps = {(sg * c - ua) / (ub - ua) for c in cs for sg in (-1, 1) if abs(ub - ua) > 1e-9}
+        ps = sorted({p for p in ps if 0.010 < p * seg and 0.010 < (1.0 - p) * seg} | {1.0})
+        out += [(ta + (tb - ta) * p, ua + (ub - ua) * p) for p in ps if 0.0 < p <= 1.0]
+    return out
+
+
+def seams_low(name: str, L: float, shape, bevel: float, col=None):
+    """Whole Again's shard seams as clean accent geometry: per SEAMS polyline a flat ribbon 2 x SEAM_HW wide on
+    each face of blade_low (its section's flats and bevels, edge to edge), SEAM_LIFT above the glass, normals
+    the glass's own (it glows evenly; the renderer tints and flares the accent)"""
+    G0, D, W, N_ = _SWORD["G0"], _SWORD["D"], _SWORD["W"], _SWORD["N"]
+    rt, rh = _low_rings(L, shape)
+    ht = 0.5 * shape[2]
+    verts, faces, nrm = [], [], []
+    for poly in SEAMS:
+        pts = _seam_points(poly, L, shape, bevel)
+        for fs in (1.0, -1.0):
+            P, Nn = [], []
+            for t, u in pts:
+                hw = float(np.interp(t, rt, rh))
+                bev = min(bevel, 0.8 * hw)
+                s = u * hw
+                a = min(abs(s), hw)
+                n, _ = _section(a, hw, bev, ht)
+                sl = 0.5 * (_section(max(a - 1e-4, 0.0), hw, bev, ht)[1] + _section(min(a + 1e-4, hw), hw, bev, ht)[1])
+                v = -math.copysign(1.0, s) * sl * W + fs * N_
+                v /= np.linalg.norm(v)
+                P.append(G0 + D * t + W * s + N_ * (fs * n) + v * SEAM_LIFT)
+                Nn.append(v)
+            P, Nn = np.array(P), np.array(Nn)
+            T = np.gradient(P, axis=0)
+            base = len(verts)
+            for i in range(len(P)):
+                b = np.cross(Nn[i], T[i])
+                b *= SEAM_HW / max(np.linalg.norm(b), 1e-9)
+                verts += [P[i] - b, P[i] + b]
+                nrm += [Nn[i], Nn[i]]
+            for i in range(len(P) - 1):
+                f = [base + 2 * i, base + 2 * i + 1, base + 2 * i + 3, base + 2 * i + 2]
+                q = [verts[k] for k in f]
+                if np.cross(q[1] - q[0], q[3] - q[0]) @ (Nn[i] + Nn[i + 1]) < 0:
+                    f = f[::-1]
+                faces.append(tuple(f))
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([tuple(v) for v in verts], [], faces)
+    me.update()
+    ob = bpy.data.objects.new(name, me)
+    (col or bpy.context.scene.collection).objects.link(ob)
+    me.polygons.foreach_set("use_smooth", np.ones(len(me.polygons), dtype=bool))
+    me.normals_split_custom_set_from_vertices([tuple(v) for v in nrm])
+    me.update()
+    return ob
+
+
+def _seam_field(P, L, shape):
+    """for points on the reformed blade: (distance in m to the nearest seam in the blade plane, shard id)"""
+    G0, D, W = _SWORD["G0"], _SWORD["D"], _SWORD["W"]
+    rt, rh = _low_rings(L, shape)
+    q = P - G0
+    t, s = q @ D, q @ W
+    X = np.stack([t, s], 1)
+    dist = np.full(len(P), 9.0)
+    for poly in SEAMS:
+        Q = np.array([(tt, uu * float(np.interp(tt, rt, rh))) for tt, uu in poly])
+        for a, b in zip(Q[:-1], Q[1:]):
+            ab = b - a
+            h = np.clip(((X - a) @ ab) / max(ab @ ab, 1e-12), 0.0, 1.0)
+            dist = np.minimum(dist, np.linalg.norm(X - (a + h[:, None] * ab), axis=1))
+    sid = np.zeros(len(P), dtype=np.int64)
+    for k, poly in enumerate(SEAMS):
+        tt = np.array([p[0] for p in poly])
+        uu = np.array([p[1] for p in poly])
+        hw = np.maximum(np.interp(t, rt, rh), 1e-4)
+        u = np.clip(s / hw, -1.0, 1.0)
+        if uu[0] <= -0.99 and uu[-1] >= 0.99:             # a fracture across the blade: shards below/above
+            sid += (t > np.interp(u, uu, tt)).astype(np.int64)
+        else:                                             # a split between two fractures: the side it is on
+            inside = (t > tt.min()) & (t < tt.max())
+            sid += 7 * (k + 1) * (inside & (u > np.interp(t, tt, uu))).astype(np.int64)
+    return dist, sid
+
+
 LAME_ARC = (12.0, 166.0)             # the mantle plates' arc round each shoulder axis (deg from the front):
                                      # outside the scarf and breastplate in front, meeting the back plate behind
 LAME_FLARE = 0.42                    # radius gained per m down a row (the plates flare out at their lower edge)
@@ -1306,6 +1432,9 @@ def model(ctx) -> list:
     hi.name = "visor_high"
     ctx.col.objects.link(hi)
     P.append(fighter.Part("visor", high=hi, low=vz, bind="bone:head"))
+    sm = seams_low("blade_seams_low", GREAT_L, GREAT_SHAPE, BEVEL["blade_great"], ctx.col)   # Whole Again's seams
+    sm.data.materials.append(ctx.mats["accent"])
+    P.append(fighter.Part("blade_seams", low=sm, bind="bone:prop.R", form="great"))
     return P
 
 
@@ -1485,6 +1614,40 @@ def _bind_part(ctx, part, obj, body_low=None):
 
 
 pipeline.bind_part = _bind_part
+
+_orig_split_forms = pipeline.split_forms
+
+
+def _split_forms(body, parts, col):
+    """form-tagged ACCENT faces (Whole Again's shard seams) leave the shared accent mesh as well: split_kept moved
+    every accent face into `<id>_accent` before the bake, and pipeline.split_forms splits the body only, so the
+    seams would show in every form. They become their own node `form_<form>_1` (src/render/actors.ts FORM_RE
+    reads it as <form>; strip_forms and HIDE_FORMS match it by prefix)."""
+    import bmesh
+    out = _orig_split_forms(body, parts, col)
+    tagged = {i: p.form for i, p in enumerate(parts) if getattr(p, "form", None)}
+    acc = next((o for o in col.objects if o.type == "MESH" and o.name.startswith(f"{ID}_accent")), None)
+    if acc is None or acc.data.attributes.get("vale_part") is None or not tagged:
+        return out
+    for f in sorted(set(tagged.values())):
+        idx = {i for i, g in tagged.items() if g == f}
+        pv = np.empty(len(acc.data.vertices), dtype=np.int64)          # re-read: an earlier form deleted faces
+        acc.data.attributes["vale_part"].data.foreach_get("value", pv)
+        if not any(int(pv[p.vertices[0]]) in idx for p in acc.data.polygons):
+            continue
+        new = libmesh.duplicate(acc, f"form_{f}_1", col)
+        for o, keep in ((new, True), (acc, False)):
+            bm = libmesh.obj_bm(o)
+            dead = [fc for fc in bm.faces if (int(pv[fc.verts[0].index]) in idx) != keep]
+            bmesh.ops.delete(bm, geom=dead, context="FACES")
+            bm.to_mesh(o.data)
+            bm.free()
+            o.data.update()
+        out.append(new)
+    return out
+
+
+pipeline.split_forms = _split_forms
 
 
 # ── motion ───────────────────────────────────────────────────────────────────────────────────────
@@ -2273,7 +2436,7 @@ def _curvature(maps) -> np.ndarray:
     return np.clip(k / 45.0, -1.0, 1.0)
 
 
-def _paint_glass(P, Nn, L, shape, bevel, look, broken=False):
+def _paint_glass(P, Nn, L, shape, bevel, look, broken=False, seams=False):
     """dawnglass painted as clear glass (the concept's): a pale body that deepens toward its middle and toward
     the guard, a fuller (a deep line with a bright lip), the bevel's inner edge a deep line (the glass's
     thickness), the bevel a bright band, a white edge, two broad soft reflection bands across the blade; clean
@@ -2302,6 +2465,13 @@ def _paint_glass(P, Nn, L, shape, bevel, look, broken=False):
     c = _mixc(c, deep * 0.75, 0.30 * (1.0 - _smooth(0.0, 0.06, t)))                      # the guard's shadow
     if broken:
         c = _mixc(c, edge, 0.6 * _smooth(STUB_L - 0.08, STUB_L + 0.02, t))              # fresh fracture
+    if seams:
+        # the reformed blade: each fused shard a touch lighter or darker, a deep border along every seam so the
+        # glowing seam (the accent ribbon over it) stands off the pale glass
+        d, sid = _seam_field(P, L, shape)
+        c = (c * (1.0 + 0.06 * np.sin(sid * 2.39 + 0.8))[:, None]).astype(np.float32)
+        c = _mixc(c, deep * 0.7, 0.55 * np.exp(-((d - SEAM_HW - 0.003) / 0.004) ** 2))
+        c = np.clip(c, 0.0, 1.0)
     return c
 
 
@@ -2330,7 +2500,7 @@ def _paint_procedural(img, maps, names, look, log=print):
         e = each(name)
         if e:
             m, P, Nn, kv = e
-            img[m] = _paint_glass(P, Nn, Lb, shape, BEVEL[name], look, broken)
+            img[m] = _paint_glass(P, Nn, Lb, shape, BEVEL[name], look, broken, seams=name == "blade_great")
     # crossguard + pommel: chalk, carved border, ink pockets round the inlays
     G, D, W, N_ = _SWORD["G"], _SWORD["D"], _SWORD["W"], _SWORD["N"]
     for name in ("guard", "pommel"):

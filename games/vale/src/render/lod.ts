@@ -33,14 +33,18 @@ import { BufferAttribute, BufferGeometry, type Camera, type Group, type Material
 import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
 
 export const LOD = {
-  /** sun shadow casters: target share of the triangles and the largest shape error (m, in the mesh's own units) */
-  shadow: { ratio: 0.2, errorM: 0.03 },
-  /** the per-actor rest outline hull (main pass; units, fighters' own hull through their LOD1) */
-  hull: { ratio: 0.5, errorM: 0.006 },
-  /** the crowd's body, accent and outline hull (main pass): a bound in METRES (each mesh's dequantization) */
-  crowd: { ratio: 0.25, errorM: 0.010 },
+  /** sun shadow casters: target share of the triangles and the largest shape error (m, in the mesh's own units).
+   *  weld: simplified over its positions alone (see lodIndex) */
+  shadow: { ratio: 0.2, errorM: 0.03, weld: true },
+  /** the per-actor rest outline hull (main pass; units and structures) */
+  hull: { ratio: 0.5, errorM: 0.006, weld: true },
+  /** the crowd's body, accent and outline hull (main pass): a bound in METRES (each mesh's dequantization); textured, so
+   *  never welded (a collapse across a UV seam would smear the texture) */
+  crowd: { ratio: 0.25, errorM: 0.012, weld: false },
   /** a fighter's body in the match (faceLockedLod): ratio, bound in metres, normal weight, the locked bone and weight */
-  body: { ratio: 0.5, errorM: 0.010, normalW: 0.5, lockBone: 'head', lockW: 0.5 },
+  body: { ratio: 0.4, errorM: 0.012, normalW: 0.5, lockBone: 'head', lockW: 0.5 },
+  /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
+  ink: { ratio: 0.4, errorM: 0.008, weld: true },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
   minTris: 600,
   /** an instanced caster (scatter: trees, rocks) draws its mesh once per instance: a LOD pays from this size */
@@ -53,7 +57,7 @@ let ready = false;
 /** resolves when the simplifier can run (the loading screen awaits it) */
 export const lodReady: Promise<void> = MeshoptSimplifier.ready.then(() => { ready = true; }, () => { ready = false; });
 
-type Key = 'shadow' | 'hull' | 'crowd';
+type Key = 'shadow' | 'hull' | 'crowd' | 'ink';
 /** per source index (or position, for a non-indexed mesh) attribute: the LOD per kind, null = not worth one */
 const cache = new WeakMap<object, Partial<Record<Key, BufferAttribute | null>>>();
 
@@ -69,9 +73,16 @@ function positionsOf(g: BufferGeometry): Float32Array | null {
 }
 
 /**
- * A LOD index for `g` (`kind`: LOD.shadow, LOD.hull or LOD.crowd), cached on its source index; null when the mesh is
- * too small, has material groups, is not triangles or the simplifier is not ready (then the caller draws it whole).
- * `unitM`: metres per position unit (dequantUnit; 1 = the bound is in the mesh's own units).
+ * A LOD index for `g` (`kind`: LOD.shadow, LOD.hull, LOD.crowd or LOD.ink), cached on its source index; null when the
+ * mesh is too small, has material groups, is not triangles or the simplifier is not ready (then the caller draws it
+ * whole). `unitM`: metres per position unit (dequantUnit; 1 = the bound is in the mesh's own units).
+ * A welded kind (shadow, hull, ink: draws that read positions, skin and the hull's own welded normals, never a UV) is
+ * simplified over its POSITIONS alone: every vertex is first mapped to the first vertex at the same position
+ * (generatePositionRemap), so the LOD is watertight by construction (its triangles index only those canonical vertices,
+ * whose position and skin the split copies share), and simplified 'Permissive' (the UV and hard-normal seams that split a
+ * textured mesh no longer pin it; welding alone left meshopt's seam rules locking them). The fighters' ink over their LOD1
+ * hull went 68k -> 44k triangles for ten, their shadow 41k -> 22k, a Wick's shadow 0.6-0.8 -> 0.25 of its body, within the
+ * same bounds (integration run 2).
  */
 export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.minTris, unitM = 1): BufferAttribute | null {
   if (!ready) return null;
@@ -94,10 +105,16 @@ export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.min
   else { src = new Uint32Array(count); for (let i = 0; i < count; i++) src[i] = i; }
   if (src.length !== count) src = src.subarray(0, count);
   try {
+    if (cfg.weld) {
+      const remap = MeshoptSimplifier.generatePositionRemap(positions, 3);
+      const w = new Uint32Array(count);
+      for (let i = 0; i < count; i++) w[i] = remap[src[i]];
+      src = w;
+    }
     const scale = MeshoptSimplifier.getScale(positions, 3);
     if (!(scale > 0) || !(unitM > 0)) return null;
     const target = Math.max(3, Math.floor((count * cfg.ratio) / 3) * 3);
-    const [out] = MeshoptSimplifier.simplify(src, positions, 3, target, cfg.errorM / (unitM * scale), []);
+    const [out] = MeshoptSimplifier.simplify(src, positions, 3, target, cfg.errorM / (unitM * scale), cfg.weld ? ['Permissive'] : []);
     if (!out.length || out.length > count * 0.85) return null;          // not worth a second buffer
     const arr = pos.count < 65536 ? Uint16Array.from(out) : out;
     const attr = new BufferAttribute(arr, 1);
@@ -137,6 +154,14 @@ function hook(m: Mesh): void {
   m.onAfterShadow = oa ? function (this: Mesh, ...a: Parameters<ShadowHook>) { afterShadow(...a); oa.apply(this, a); } : afterShadow;
 }
 
+/** give geometry `g` its shadow LOD now (a template's body LOD1, a new crowd set), so the per-second sweep only hooks its
+ *  meshes (the sweep's 4 ms budget left a heavy new geometry undone for many sweeps) */
+export function prepareShadowLod(g: BufferGeometry, minTris: number = LOD.minTris, unitM = 1): void {
+  if (!ready || shadowLod.has(g)) return;
+  const l = lodIndex(g, 'shadow', minTris, unitM);
+  if (l) shadowLod.set(g, l);
+}
+
 const hooked = new WeakSet<Object3D>();
 /**
  * Give every shadow caster under `root` its shadow LOD (idempotent; a mesh is looked at once, its geometry's LOD is
@@ -157,7 +182,8 @@ export function shadowLods(root: Object3D, budgetMs = Infinity): void {
       // an instanced caster draws its mesh once per instance, a crowd part (an instanced view) once per unit
       const min = (m as { isInstancedMesh?: boolean }).isInstancedMesh ? LOD.minTrisInstanced
         : (g as { isInstancedBufferGeometry?: boolean }).isInstancedBufferGeometry ? LOD.minTrisCrowd : LOD.minTris;
-      const l = lodIndex(g, 'shadow', min);
+      // a caster that knows its dequantization (crowd parts: crowd.ts) takes the 3 cm in metres
+      const l = lodIndex(g, 'shadow', min, (m.userData as { valeLodUnit?: number }).valeLodUnit ?? 1);
       if (!l) return;
       shadowLod.set(g, l);
     }

@@ -65,7 +65,7 @@
 import {
   BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
   InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
-  RGBAFormat, Shape, ShapeGeometry, ShapeUtils, Sphere, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
+  RGBAFormat, Shape, ShapeGeometry, ShapeUtils, Sphere, SRGBColorSpace, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
   type Frustum, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -473,6 +473,21 @@ function outsideFrustum(f: Frustum, pts: Float32Array, n: number, margin: number
   return false;
 }
 
+/** perf PERF-m5 (the match's programs <= 40): a landmark material with no albedo map samples this shared 1x1 white one.
+ *  Its program key then differs from its mapped neighbours' only where their flags do, so it draws through a program the
+ *  set already built (RIFT: the lampwright resin joins the skirt stone's: 41 -> 40). White x the colour changes no pixel;
+ *  a part with no UVs reads one texel whatever its (default) UV */
+let whiteMap: DataTexture | null = null;
+function landmarkWhiteMap(): DataTexture {
+  if (!whiteMap) {
+    whiteMap = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat, UnsignedByteType);
+    whiteMap.colorSpace = SRGBColorSpace;
+    whiteMap.name = 'vale_landmark_white';
+    whiteMap.needsUpdate = true;
+  }
+  return whiteMap;
+}
+
 /** load map.art.terrain.landmarks entries that name a `model` (real-size GLB, origin at its ground
  *  contact) and stand each at its `at` (map x, y) on the ground there (a cliff block's top inside a wall),
  *  turned `rot` degrees about the vertical; flush entries
@@ -511,7 +526,11 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
       if (!mesh.isMesh) return;
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(valued) : valued(mesh.material);
-      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) patchWorldMaterial(mat);
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const std = mat as MeshStandardMaterial;
+        if (std.isMeshStandardMaterial && !std.map) { std.map = landmarkWhiteMap(); std.needsUpdate = true; }
+        patchWorldMaterial(mat);
+      }
     });
     // perf PERF-M1: the copies are this landmark's own: Terrain.dispose frees them (the terrain group holds the landmark)
     if (own.size) (o.userData as { valeOwnMaterials?: Material[] }).valeOwnMaterials = [...own.values()];

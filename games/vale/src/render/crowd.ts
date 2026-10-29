@@ -25,7 +25,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
-import { composeIndex, dequantUnit, LOD, lodIndex } from './lod.ts';
+import { composeIndex, dequantUnit, LOD, lodIndex, prepareShadowLod } from './lod.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
 export const BAKE_HZ = 60;
@@ -40,6 +40,8 @@ export interface CrowdPart {
   accent: boolean;
   /** perf PERF-m5: the index the crowd draws it through (lod.ts LOD.crowd), null = its own */
   lod: BufferAttribute | null;
+  /** metres per position unit (lod.ts dequantUnit): its shadow LOD's bound is taken in metres */
+  unit: number;
 }
 
 export interface CrowdBake {
@@ -98,7 +100,8 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   // perf PERF-m5: one LOD per part (lod.ts LOD.crowd: its bound in metres through the part's own dequantization, read
   // from the template at rest, before any clone is posed) and the hull's index rebuilt from its members' LODs. Every
   // mesh here is skinned, so `meshes` is in the hull plan's traverse order. A no-op until lodReady (actors.ts awaits it)
-  const lods = meshes.map((m) => lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, dequantUnit(m)));
+  const units = meshes.map((m) => dequantUnit(m));
+  const lods = meshes.map((m, i) => lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, units[i]));
 
   // sample every clip on a private clone (root at the template's placement, unit scale)
   const clone = cloneSkinned(scene);
@@ -143,7 +146,7 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   // (rootInv above), so the instance matrix is actorRoot · compose(rootPos, rootQuat, scale)
   return {
     id: ++bakeSeq, texture, bones: ref.bones.length, clips: table,
-    parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName, lod: lods[i] })),
+    parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName, lod: lods[i], unit: units[i] })),
     hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0], lod: h.members ? composeIndex(h.geometry, h.members, (i) => (lods[i]?.array as ArrayLike<number> | undefined) ?? null) : null })),
     rootPos: scene.position.clone(), rootQuat: scene.quaternion.clone(), monster,
   };
@@ -419,6 +422,8 @@ class CrowdSet {
       const pv = this.buf.view(p.geometry);
       if (p.lod) { pv.userData.fullIndex = p.geometry.index; pv.setIndex(p.lod); }
       const mesh = new Mesh(pv, mat);
+      mesh.userData.valeLodUnit = p.unit;                                  // lod.ts shadowLods: its 3 cm in metres
+      prepareShadowLod(pv, LOD.minTrisCrowd, p.unit);                      // now, not over the sweeps
       mesh.customDepthMaterial = crowdDepth(bake.texture, p.bind);
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;

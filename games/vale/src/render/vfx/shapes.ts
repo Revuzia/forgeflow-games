@@ -9,6 +9,9 @@
 //   shard, spike       u along the length, v around
 //   spiral             u along the helix, v around the tube
 // Procedural VFX geometry is allowed by CONTRACT §0; these never stand in for characters or landmarks.
+// Segments (perf PERF-m5, integration run 2): every shape is drawn once per live instance, so at a teamfight's peak the
+// shells were 66k triangles of the frame; the round shapes keep 32-40 segments round (a 4 m ult dome's rim is ~50 px a
+// segment at the lane camera, under its own fresnel blur) and the fewest rings up the height their profile needs.
 
 import {
   BufferAttribute, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, SphereGeometry, TubeGeometry, Vector3,
@@ -45,10 +48,16 @@ function surface(nu: number, nv: number, f: (u: number, v: number, p: Vector3, n
   return g;
 }
 
-export function buildShape(name: VfxShape): BufferGeometry {
+/** perf PERF-m5: the round shells drawn small (a projectile's orb, a status bubble) take a coarser copy: under this world
+ *  size (m, the instance's largest axis) a shape in SHAPE_LO draws its `lo` geometry (20 segments round: ~5 px a segment
+ *  on a 1.4 m orb at the lane camera) */
+export const SHAPE_LO_M = 1.4;
+export const SHAPE_LO: ReadonlySet<VfxShape> = new Set<VfxShape>(['orb', 'dome']);
+
+export function buildShape(name: VfxShape, lo = false): BufferGeometry {
   switch (name) {
-    case 'orb': return new SphereGeometry(0.5, 40, 20);
-    case 'dome': return new SphereGeometry(0.5, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    case 'orb': return lo ? new SphereGeometry(0.5, 20, 10) : new SphereGeometry(0.5, 32, 16);
+    case 'dome': return lo ? new SphereGeometry(0.5, 24, 6, 0, Math.PI * 2, 0, Math.PI / 2) : new SphereGeometry(0.5, 40, 10, 0, Math.PI * 2, 0, Math.PI / 2);
     case 'blade': // a flat curved blade along +Z, lying in XZ: u hilt → tip, v edge to edge
       return surface(24, 2, (u, v, p, n) => {
         const z = u - 0.5;
@@ -64,17 +73,17 @@ export function buildShape(name: VfxShape): BufferGeometry {
         p.set(Math.cos(f) * 0.16 * prof, Math.sin(f) * 0.12 * prof, v - 0.5);
         n.set(Math.cos(f), Math.sin(f), 0);
       });
-    case 'cone': { const g = new ConeGeometry(0.5, 1, 40, 4, true); g.translate(0, 0.5, 0); return g; }
-    case 'pillar': case 'wall': { const g = new CylinderGeometry(0.5, 0.5, 1, 48, 4, true); g.translate(0, 0.5, 0); return g; }
-    case 'column': return surface(48, 10, (u, v, p, n) => {
+    case 'cone': { const g = new ConeGeometry(0.5, 1, 32, 4, true); g.translate(0, 0.5, 0); return g; }
+    case 'pillar': case 'wall': { const g = new CylinderGeometry(0.5, 0.5, 1, 40, 4, true); g.translate(0, 0.5, 0); return g; }
+    case 'column': return surface(40, 8, (u, v, p, n) => {
       const a = u * Math.PI * 2, r = 0.5 - 0.16 * v + 0.03 * Math.sin(v * Math.PI);
       p.set(Math.cos(a) * r, v, Math.sin(a) * r); n.set(Math.cos(a), 0.16, Math.sin(a)).normalize();
     });
-    case 'tornado': return surface(48, 16, (u, v, p, n) => {
+    case 'tornado': return surface(40, 12, (u, v, p, n) => {
       const a = u * Math.PI * 2, r = 0.1 + 0.4 * Math.pow(v, 1.3);
       p.set(Math.cos(a) * r, v, Math.sin(a) * r); n.set(Math.cos(a), -0.4, Math.sin(a)).normalize();
     });
-    case 'disc': return surface(48, 6, (u, v, p, n) => {
+    case 'disc': return surface(40, 4, (u, v, p, n) => {
       const a = u * Math.PI * 2, r = v * 0.5;
       p.set(Math.cos(a) * r, 0, Math.sin(a) * r); n.set(0, 1, 0);
     });
@@ -94,7 +103,7 @@ export function buildShape(name: VfxShape): BufferGeometry {
     case 'spiral': {
       const pts: Vector3[] = [];
       for (let i = 0; i <= 64; i++) { const t = i / 64, a = t * Math.PI * 4; pts.push(new Vector3(Math.cos(a) * 0.45 * (1 - t * 0.4), t, Math.sin(a) * 0.45 * (1 - t * 0.4))); }
-      return new TubeGeometry(new CatmullRomCurve3(pts), 96, 0.035, 6, false);
+      return new TubeGeometry(new CatmullRomCurve3(pts), 64, 0.035, 6, false);
     }
   }
 }

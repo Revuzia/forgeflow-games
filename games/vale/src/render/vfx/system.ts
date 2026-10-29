@@ -51,7 +51,7 @@ import {
   PREMUL, VFX_KIND, VFX_KINDS, VFX_PROGRAM, vfxUniforms,
 } from './shaders.ts';
 import { screenFx, screenUniforms, VFX_LIFT_CAP } from './screen.ts';
-import { buildShape, SHAPE_KIND, VFX_SHAPES } from './shapes.ts';
+import { buildShape, SHAPE_KIND, SHAPE_LO, SHAPE_LO_M, VFX_SHAPES } from './shapes.ts';
 
 export type VfxAnchor = 'origin' | 'target' | 'path' | 'ground';
 export type Tier = 0 | 1 | 2 | 3 | 4;
@@ -359,7 +359,7 @@ export class VfxSystem {
       const aPos = mkAttr(P_MAX, 4), aCol = mkAttr(P_MAX, 4), aVel = mkAttr(P_MAX, 4), aTex = mkAttr(P_MAX, 4), aPar = mkAttr(P_MAX, 4), aRim = mkAttr(P_MAX, 4);
       uberAttrs(geo, VFX_KINDS.particle, { aPos, aCol, aVel, aTex, aPar, aRim });
       const mesh = new Mesh(geo, material('particle'));
-      mesh.frustumCulled = false; mesh.renderOrder = 12;
+      mesh.frustumCulled = false; mesh.renderOrder = 12; mesh.name = 'vfx_particles';
       this.scene.add(mesh);
       this.pDraw = { geo, mesh, aPos, aCol, aVel, aTex, aPar, aRim };
     }
@@ -374,7 +374,7 @@ export class VfxSystem {
       geo.setIndex(idx);
       geo.setDrawRange(0, 0);
       const mesh = new Mesh(geo, material('ribbon', {}, 2));
-      mesh.frustumCulled = false; mesh.renderOrder = 10;
+      mesh.frustumCulled = false; mesh.renderOrder = 10; mesh.name = 'vfx_ribbons';
       this.scene.add(mesh);
       this.ribDraw = { mesh, geo, pos, col, uv, prm, rim };
       for (let i = 0; i < RIB_MAX; i++) this.ribbons.push({ on: false, inst: null, layer: null, n: 0, xs: new Float32Array(RIB_PTS), ys: new Float32Array(RIB_PTS), zs: new Float32Array(RIB_PTS), ts: new Float32Array(RIB_PTS), ds: new Float32Array(RIB_PTS), slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), born: 0, rate: 1, s: 1, arcF: -1, arcT: 0 });
@@ -392,7 +392,7 @@ export class VfxSystem {
       const aA = mkAttr(BEAM_MAX, 4), aB = mkAttr(BEAM_MAX, 4), aC = mkAttr(BEAM_MAX, 4), aD = mkAttr(BEAM_MAX, 4), aE = mkAttr(BEAM_MAX, 4);
       uberAttrs(geo, VFX_KINDS.beam, { aA, aB, aC, aD, aE });
       const mesh = new Mesh(geo, material('beam', {}, 2));
-      mesh.frustumCulled = false; mesh.renderOrder = 12;
+      mesh.frustumCulled = false; mesh.renderOrder = 12; mesh.name = 'vfx_beams';
       this.scene.add(mesh);
       this.beamDraw = { mesh, geo, aA, aB, aC, aD, aE };
       for (let i = 0; i < BEAM_MAX; i++) this.beams.push({ on: false, inst: null, l: null, a: new Vector3(), b: new Vector3(), age: 0, slot: 0, opacity: 1, cap: 1, seed: 0, rate: 1 });
@@ -402,7 +402,7 @@ export class VfxSystem {
       const aPos = mkAttr(RING_MAX, 4), aSty = mkAttr(RING_MAX, 4), aCol = mkAttr(RING_MAX, 4), aMisc = mkAttr(RING_MAX, 4);
       uberAttrs(geo, VFX_KINDS.ring, { aPos, aSty, aCol, aMisc });
       const mesh = new Mesh(geo, material('ring', {}, 2));
-      mesh.frustumCulled = false; mesh.renderOrder = 9;
+      mesh.frustumCulled = false; mesh.renderOrder = 9; mesh.name = 'vfx_rings';
       this.scene.add(mesh);
       this.ringDraw = { mesh, geo, aPos, aSty, aCol, aMisc };
       for (let i = 0; i < RING_MAX; i++) this.rings.push({ on: false, l: null, x: 0, y: 0, z: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rate: 1 });
@@ -412,7 +412,7 @@ export class VfxSystem {
       const aPos = mkAttr(DECAL_MAX, 4), aRot = mkAttr(DECAL_MAX, 4), aCol = mkAttr(DECAL_MAX, 4), aMisc = mkAttr(DECAL_MAX, 4), aRimC = mkAttr(DECAL_MAX, 4);
       uberAttrs(geo, VFX_KINDS.decal, { aPos, aRot, aCol, aMisc, aRimC });
       const mesh = new Mesh(geo, material('decal', {}, 2));
-      mesh.frustumCulled = false; mesh.renderOrder = 8;
+      mesh.frustumCulled = false; mesh.renderOrder = 8; mesh.name = 'vfx_decals';
       this.scene.add(mesh);
       this.decalDraw = { mesh, geo, aPos, aRot, aCol, aMisc, aRimC };
       for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null, sus: false });
@@ -1272,10 +1272,11 @@ export class VfxSystem {
       if (holding(e.inst) && !l.repeat) e.age = Math.min(e.age + d * e.rate, l.life * l.hold); else e.age += d * e.rate;
       if (e.age >= l.life && (!e.inst || (e.inst.sustained && !e.inst.held) || l.repeat > 0)) { e.on = false; e.inst = null; continue; }
       const t = Math.min(1, e.age / l.life);
-      const sd = this.shapeDraw(l.shape);
+      const sc = Math.max(0.001, evalCurve(l.scale, t) * e.s);
+      // perf PERF-m5: a small round shell draws the coarser copy (shapes.ts SHAPE_LO)
+      const sd = this.shapeDraw(l.shape, sc * Math.max(l.stretch[0], l.stretch[1], l.stretch[2]) < SHAPE_LO_M);
       if (sd.n >= MESH_PER_SHAPE) continue;
       e.spinA += l.spin * d;
-      const sc = Math.max(0.001, evalCurve(l.scale, t) * e.s);
       if (l.align === MESH_ALIGN.camera && cam) _q.copy(cam.quaternion);
       else _q.setFromAxisAngle(_up, e.spinA).premultiply(e.q);
       _s.set(sc * l.stretch[0], sc * l.stretch[1], sc * l.stretch[2]);
@@ -1326,22 +1327,25 @@ export class VfxSystem {
     this.distortN = n;
   }
 
-  private shapeDraw(shape: number): { mesh: InstancedMesh; n: number; aColor: InstancedBufferAttribute; aRimC: InstancedBufferAttribute; aEdge: InstancedBufferAttribute; aNoise: InstancedBufferAttribute; aDiss: InstancedBufferAttribute; aMisc: InstancedBufferAttribute } {
-    let sd = this.shapeDraws.get(shape);
-    if (sd) return sd;
+  private shapeDraw(shape: number, small = false): { mesh: InstancedMesh; n: number; aColor: InstancedBufferAttribute; aRimC: InstancedBufferAttribute; aEdge: InstancedBufferAttribute; aNoise: InstancedBufferAttribute; aDiss: InstancedBufferAttribute; aMisc: InstancedBufferAttribute } {
     const name = VFX_SHAPES[shape];
-    const geo = buildShape(name);
+    const lo = small && SHAPE_LO.has(name);
+    const key = lo ? shape + VFX_SHAPES.length : shape;
+    let sd = this.shapeDraws.get(key);
+    if (sd) return sd;
+    const geo = buildShape(name, lo);
     const aColor = mkAttr(MESH_PER_SHAPE, 4), aRimC = mkAttr(MESH_PER_SHAPE, 4), aEdge = mkAttr(MESH_PER_SHAPE, 4), aNoise = mkAttr(MESH_PER_SHAPE, 4), aDiss = mkAttr(MESH_PER_SHAPE, 4), aMisc = mkAttr(MESH_PER_SHAPE, 4);
     uberAttrs(geo, VFX_KINDS.mesh, { aColor, aRimC, aEdge, aNoise, aDiss, aMisc });
     const mat = material('mesh', { uShapeKind: { value: SHAPE_KIND[name] ?? 0 } }, 2);
     const mesh = new InstancedMesh(geo, mat, MESH_PER_SHAPE);
+    mesh.name = `vfx_${name}${lo ? '_lo' : ''}`;                 // the perf report's per-shape rows (renderer.profile)
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.frustumCulled = false;
     mesh.count = 0;
     mesh.renderOrder = 11;
     this.scene.add(mesh);
     sd = { mesh, n: 0, aColor, aRimC, aEdge, aNoise, aDiss, aMisc };
-    this.shapeDraws.set(shape, sd);
+    this.shapeDraws.set(key, sd);
     return sd;
   }
 
@@ -1352,7 +1356,7 @@ export class VfxSystem {
    * as the post chain's HDR buffer).
    */
   prewarm(renderer: WebGLRenderer, camera: PerspectiveCamera): void {
-    for (let i = 0; i < VFX_SHAPES.length; i++) this.shapeDraw(i);
+    for (let i = 0; i < VFX_SHAPES.length; i++) { this.shapeDraw(i); this.shapeDraw(i, true); }
     const shown: [import('three').Object3D, boolean][] = [];
     for (const sc of [this.scene, this.distortScene]) sc.traverse((o) => { shown.push([o, o.visible]); o.visible = true; });
     try {

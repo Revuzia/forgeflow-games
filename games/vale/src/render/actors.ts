@@ -72,7 +72,7 @@ import {
 } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
-import { composeIndex, faceLockedLod, indexView, lodIndex, lodReady, lodSwitch } from './lod.ts';
+import { composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lodReady, lodSwitch, prepareShadowLod } from './lod.ts';
 import { structureMaterial } from './structures.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
@@ -155,8 +155,9 @@ interface MixerLike { clipAction(c: AnimationClip): ActionLike; update(dt: numbe
 
 // ── hull plan: outline + hit-flash geometry, once per template ───────────────────────────────────
 /** perf PERF-m5: the rest outline's hull through its sub-pixel LOD (lod.ts LOD.hull: half the triangles within 6 mm):
- *  a view sharing the hull's attributes, freed with it. The hit flash, the x-ray silhouette and the body keep the full
- *  mesh (the flash lies on the body's own surface). */
+ *  a view sharing the hull's attributes, freed with it. In a match the hit flash and the x-ray silhouette draw it too
+ *  (the flash slid FLASH_LOD_BIAS_M toward the camera, so it still covers the body); the veil's depth copy keeps the
+ *  body's own triangles (the body's LOD1 in a match: bodyLodOf). */
 const outlineLod = new WeakMap<BufferGeometry, BufferGeometry>();
 function outlineGeometry(g: BufferGeometry): BufferGeometry {
   const hit = outlineLod.get(g);
@@ -174,9 +175,18 @@ function outlineGeometry(g: BufferGeometry): BufferGeometry {
   return v;
 }
 
+/** perf PERF-m5: in a match the victim flash and the x-ray draw over the outline's LOD (lod.ts LOD.hull: within 6 mm of the
+ *  hull) instead of the whole hull; the flash slides this far toward the camera along its view ray (ink.ts) so the coarser
+ *  shell still covers every pixel of the body it lights (the x-ray already slides OCCLUDED.biasM) */
+const FLASH_LOD_BIAS_M = 0.025;
+
 /** one hull draw: `lead` is the index (traverse order) of the mesh it binds to and hangs under. `members`: the meshes
  *  merged into it (traverse order), each one's first vertex, first index and index count in the merged geometry */
-interface HullPart { lead: number; geometry: BufferGeometry; skinned: boolean; members: { mesh: number; vo: number; io: number; n: number }[] }
+interface HullPart {
+  lead: number; geometry: BufferGeometry; skinned: boolean; members: { mesh: number; vo: number; io: number; n: number }[];
+  /** perf PERF-m5: a match fighter's ink copies (outline, flash, x-ray) draw this LOD of the part (lod.ts LOD.ink; bodyLodOf) */
+  ink?: BufferGeometry;
+}
 
 /** perf PERF-m5: a fighter's match body. `mesh` (traverse order) draws `geometry` (its LOD1 over its own attributes);
  *  `hull` is the template's hull plan with that member's triangles swapped for the LOD1's, so the outline, flash, x-ray
@@ -357,10 +367,15 @@ function bodyLodOf(scene: Object3D, hull: HullPart[]): BodyLod | null {
   const r = best >= 0 ? faceLockedLod(meshes[best] as SkinnedMesh) : null;
   if (!r) { bodyLodCache.set(scene, null); return null; }
   const geometry = indexView(meshes[best].geometry, r.index, 'vale_body_lod1');
+  prepareShadowLod(geometry);                                          // its shadow LOD now, not over the sweeps
   const lod = r.index.array as ArrayLike<number>;
   const parts = hull.map((p): HullPart => {
     const I = composeIndex(p.geometry, p.members, (mesh) => (mesh === best ? lod : null));
-    return I ? { ...p, geometry: indexView(p.geometry, I, 'vale_hull_lod1') } : p;
+    const geometry = I ? indexView(p.geometry, I, 'vale_hull_lod1') : p.geometry;
+    // the ink copies' LOD over it (lod.ts LOD.ink, the bound in metres through the lead's dequantization)
+    const lead = meshes[p.lead] as SkinnedMesh;
+    const ink = lodIndex(geometry, 'ink', LOD.minTris, lead?.isSkinnedMesh ? dequantUnit(lead) : 1);
+    return { ...p, geometry, ink: ink ? indexView(geometry, ink, 'vale_hull_ink') : undefined };
   });
   const out: BodyLod = { mesh: best, geometry, hull: parts, tris: r.tris, lodTris: r.lodTris };
   bodyLodCache.set(scene, out);
@@ -1019,6 +1034,7 @@ export class Actor implements CrowdActor {
     if (!this.hullParts.length) return;
     const cm = meshesOf(model);
     const ou = (this.outlineU = outlineU()), fu = (this.flashU = flashU());
+    if (lodSwitch.outline) fu.uBias.value = FLASH_LOD_BIAS_M;
     const mats: Partial<Record<InkPath, [Material, Material]>> = {};
     const inkFor = (path: InkPath): [Material, Material] => {
       let m = mats[path];
@@ -1031,7 +1047,7 @@ export class Actor implements CrowdActor {
       const pair = inkFor(part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid');
       for (const flash of [false, true]) {
         const mat = flash ? pair[1] : pair[0];
-        const geo = flash || !lodSwitch.outline ? part.geometry : outlineGeometry(part.geometry);
+        const geo = part.ink ?? (lodSwitch.outline ? outlineGeometry(part.geometry) : part.geometry);
         let copy: Mesh;
         if (part.skinned && (lead as SkinnedMesh).isSkinnedMesh) {
           const sm = lead as SkinnedMesh;
@@ -1070,16 +1086,17 @@ export class Actor implements CrowdActor {
       const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';
       let mat = mats[path];
       if (!mat) { mat = mats[path] = xrayMaterial(path, u); this.inkMats.push(mat); }
+      const geo = part.ink ?? (lodSwitch.outline ? outlineGeometry(part.geometry) : part.geometry);   // perf PERF-m5 (FLASH_LOD_BIAS_M)
       let copy: Mesh;
       if (path === 'skin') {
         const sm = lead as SkinnedMesh;
-        const c = new SkinnedMesh(part.geometry, mat);
+        const c = new SkinnedMesh(geo, mat);
         c.bind(sm.skeleton, sm.bindMatrix);
         c.frustumCulled = false;
         if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
         c.boundingSphere = part.geometry.boundingSphere!.clone();
         copy = c;
-      } else copy = new Mesh(part.geometry, mat);
+      } else copy = new Mesh(geo, mat);
       copy.name = 'vale_xray';
       copy.userData.valeOutline = true;
       copy.userData.valeXray = true;

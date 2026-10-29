@@ -1,13 +1,20 @@
 // VALE — the DONE journey end to end in real Chrome with real input (CONTRACT §13 "e2e").
 //
-//   node _harness/e2e.mjs [rift|bridge|fray|flow|all] [--speed 16] [--headed] [--audio m4a] [--out <report.json>] [--prefix e2e]
+//   node _harness/e2e.mjs [rift|bridge|fray|flow|store|all] [--speed 16] [--headed] [--audio m4a] [--out <report.json>] [--prefix e2e]
 //
 // Per mode: Home → Play → pick the mode on the Mode Dial → a queue → Find match → Ready → draft /
 // assignment / pick (real clicks) → loading → the match (your seat on the dev autopilot at time scale
 // --speed, so it reaches a REAL win condition; a few real inputs are sent in-match first) → the end
-// banner → post-game with grants → its Scoreboard tab at 1920 and 1280 (client F4: every header's x-centre within 4 px of
-// its cells, no header wraps, painted item icons) → Home. All modes share one profile, so after the last one the
-// Candles earned buy a skin in the Shop and it is equipped (one STORE journey at the end). Screenshots per step go to
+// banner → post-game with grants (and, with a teammate, a Lantern nod that Session.nod records on the history entry) → its Scoreboard tab at 1920 and 1280 (client F4: every header's x-centre within 4 px of
+// its cells, no header wraps, painted item icons) → Home. In the match the shop (P) is opened: its tag filters must use
+// VALE's words (no jungle / gold / minion / turret / champion; originality F8). All modes share one profile.
+// STORE (once, after the last mode; `store` runs it alone on a fresh profile): the wallet must have grown by exactly the
+// sum of the post-game grants since the first Home (the starter wallet alone under `store`). Then the cheapest skin
+// offer in the earned currency is bought and equipped, whatever the matches paid: when the wallet is short (the dev
+// autopilot can lose every match: 300 + 117 + 92 + 89 = 598 < 600), the Shop's not-enough state is checked first (the
+// CTA reads 'N more Candles needed', pressing it opens 'Not enough Candles' with the same N), then the shortfall is
+// topped up through the dev handle (one ledger entry, reason 'migration', ref 'e2e:top_up', recorded in the report and
+// checked against the ledger sum) and the skin is bought. Screenshots per step go to
 // _harness/_shots/e2e_<mode>_<nn>_<step>.png; a JSON report to _harness/_reports/e2e.json.
 // --audio m4a opens the game with ?audio=m4a (the CONTRACT §11 format fallback forced); match_live reports the
 // audio files fetched per format either way. Needs the dev server (npm run dev) and a content build. Exit 0 =
@@ -37,8 +44,13 @@ const audioFmt = args.includes('--audio') ? args[args.indexOf('--audio') + 1] : 
 const OUT = args.includes('--out') ? args[args.indexOf('--out') + 1] : join(HERE, '_reports', 'e2e.json');
 const PREFIX = args.includes('--prefix') ? args[args.indexOf('--prefix') + 1] : 'e2e';
 if (args.includes('--headed')) process.env.VALE_HEADED = '1';
-const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : which === 'flow' ? [] : [which];
+const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : which === 'flow' || which === 'store' ? [] : [which];
 const FLOW = which === 'all' || which === 'flow';
+const STORE = MODES.length > 0 || which === 'store';
+/** the earned currency's bookkeeping the STORE journey checks: the wallet at the first Home, and every post-game's grant */
+const purse = { start: null, granted: 0, matches: 0 };
+/** the genre words VALE's own vocabulary replaces (Gleam, Dialwood, Wicks, Needles, fighters) */
+const GENRE_WORDS = /\b(jungle|gold|minions?|turrets?|champions?)\b/i;
 const QUEUE_CARD = { rift: 'Co-op vs bots', bridge: null, fray: null };
 
 const report = { started: new Date().toISOString(), speed, journeys: [] };
@@ -49,15 +61,20 @@ async function controls(page) {
 }
 
 let session = null;
+async function ensureSession() {
+  if (session) return;
+  // hmr: false — other lanes' edits to the shared checkout must not reload the page under a journey
+  session = await open(`/?dev=1&autopilot=match&speed=${speed}${audioFmt ? `&audio=${audioFmt}` : ''}`, { hmr: false });
+  session.audioFetches = { ogg: 0, m4a: 0 };
+  session.page.on('request', (q) => { const m = /\.(ogg|m4a)$/.exec(new URL(q.url()).pathname); if (m) session.audioFetches[m[1]]++; });
+}
+/** the earned currency's balance (the dev handle) */
+const earnedBalance = (page) => vale(page, (v) => { const c = v.cv.earnedCurrency(); return { id: c.id, name: c.name, bal: v.state.profile.value.wallet[c.id] ?? 0 }; });
+
 async function journey(mode) {
   const steps = [];
   let n = 0;
-  if (!session) {
-    // hmr: false — other lanes' edits to the shared checkout must not reload the page under a journey
-    session = await open(`/?dev=1&autopilot=match&speed=${speed}${audioFmt ? `&audio=${audioFmt}` : ''}`, { hmr: false });
-    session.audioFetches = { ogg: 0, m4a: 0 };
-    session.page.on('request', (q) => { const m = /\.(ogg|m4a)$/.exec(new URL(q.url()).pathname); if (m) session.audioFetches[m[1]]++; });
-  }
+  await ensureSession();
   const { page, logs } = session;
   const step = async (name, fn) => {
     const t0 = Date.now();
@@ -96,7 +113,11 @@ async function journey(mode) {
   console.log(`\n${mode.toUpperCase()}`);
   let ok = true;
   try {
-    await step('home', async () => { await page.waitForTimeout(800); await frames(); await page.waitForTimeout(1200); return { route: await route() }; });
+    await step('home', async () => {
+      await page.waitForTimeout(800); await frames(); await page.waitForTimeout(1200);
+      if (purse.start === null) purse.start = (await earnedBalance(page)).bal;
+      return { route: await route(), purseStart: purse.start };
+    });
     await step('play', async () => {
       await click(page.locator('.nav__item', { hasText: 'Play' }));
       await page.waitForTimeout(500);
@@ -142,11 +163,15 @@ async function journey(mode) {
       // real input while the autopilot drives: open and close the shop, hold the scoreboard, ping
       await page.keyboard.press('KeyP'); await page.waitForTimeout(300);
       const shopOpen = await page.locator('.hud .lshop').count();
+      // originality F8: the shop's tag filters speak VALE (the jungle tag reads Dialwood)
+      const shopTags = await page.locator('.hud .lshop__tag').allTextContents().then((t) => t.map((x) => x.trim()));
+      const genre = shopTags.filter((t) => GENRE_WORDS.test(t));
       await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+      if (genre.length) throw new Error(`shop tag filters use genre words: ${genre.join(', ')}`);
       await page.keyboard.down('Tab'); await page.waitForTimeout(250);
       const board = await page.locator('.hud .hscore').count();
       await page.keyboard.up('Tab');
-      return { shopOpen: !!shopOpen, scoreboard: !!board, hud: await page.locator('.hud .dbar').count() > 0 };
+      return { shopOpen: !!shopOpen, shopTags, scoreboard: !!board, hud: await page.locator('.hud .dbar').count() > 0 };
     });
     await step('match_live', async () => {
       await waitFor(page, (v) => (v.state.match.value?.view.time ?? 0) > 60, 180000);
@@ -160,7 +185,18 @@ async function journey(mode) {
     await step('postgame', async () => {
       await waitFor(page, (v) => v.router.route.value.screen === 'postgame', 20000);
       await page.waitForTimeout(1500);
-      return await vale(page, (v) => { const pg = v.state.postgame.value; const me = pg.result.players.find((x) => x.player === pg.you); return { reason: pg.result.reason, won: me.won, placement: me.placement, duration: Math.round(pg.result.duration), grants: pg.grants.currency, xp: pg.grants.xp }; });
+      const x = await vale(page, (v) => { const pg = v.state.postgame.value; const me = pg.result.players.find((x) => x.player === pg.you); return { reason: pg.result.reason, won: me.won, placement: me.placement, duration: Math.round(pg.result.duration), grants: pg.grants.currency, earned: pg.grants.currency[v.cv.earnedCurrency().id] ?? 0, xp: pg.grants.xp }; });
+      purse.granted += x.earned; purse.matches++;
+      // client F15: in a team mode the Lantern nod is offered; lighting one goes through Session.nod onto the match's
+      // history entry (FRAY has no teammate, so no nod)
+      const mate = page.locator('.scr--postgame:not(.is-leaving) .pgnod__mate').first();
+      if (await mate.count()) {
+        await click(mate);
+        await page.locator('.scr--postgame:not(.is-leaving) .pgnod__done').waitFor({ state: 'visible', timeout: 5000 });
+        x.nod = await vale(page, (v) => { const pg = v.state.postgame.value; const h = v.state.profile.value.history.find((e) => e.matchId === pg.result.matchId); return { recorded: h?.nod ?? null, text: document.querySelector('.scr--postgame:not(.is-leaving) .pgnod__done')?.textContent?.trim() ?? null }; });
+        if (x.nod.recorded === null) throw new Error(`the Lantern nod was not recorded on the history entry: ${JSON.stringify(x.nod)}`);
+      }
+      return x;
     });
     // client F4: the post-game scoreboard is a real table at 1920 and 1280 — every header's x-centre within 4 px of
     // its cells' in every row, no header wraps, and every owned item shows its painted icon (never a letter)
@@ -218,6 +254,7 @@ async function journey(mode) {
 async function store() {
   const steps = [];
   let n = 0;
+  await ensureSession();
   const { page, logs } = session;
   const mode = 'store';
   const step = async (name, fn) => {
@@ -227,6 +264,7 @@ async function store() {
       const file = await shot(page, `${PREFIX}_${mode}_${String(++n).padStart(2, '0')}_${name}`);
       steps.push({ name, ok: true, ms: Date.now() - t0, info: info ?? null, shot: file });
       console.log(`  ✓ ${name} (${Date.now() - t0} ms)${info ? ' ' + JSON.stringify(info) : ''}`);
+      return info;
     } catch (e) {
       const file = await shot(page, `${PREFIX}_${mode}_${String(++n).padStart(2, '0')}_${name}_FAIL`).catch(() => null);
       steps.push({ name, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 400), controls: await controls(page).catch(() => []), shot: file });
@@ -236,34 +274,79 @@ async function store() {
   };
   const route = () => vale(page, (v) => v.router.route.value.screen);
   const click = async (locator) => { await locator.waitFor({ state: 'visible', timeout: 15000 }); await locator.click(); };
+  const fmt = (x) => x.toLocaleString('en-US');
   console.log('\nSTORE');
   let ok = true;
   try {
+    // no match played (`store` alone): the wallet is the starter wallet, and nothing was granted
+    if (purse.start === null) { await page.waitForTimeout(1500); purse.start = (await earnedBalance(page)).bal; }
     await step('shop', async () => {
       await click(page.locator('.nav__item', { hasText: 'Shop' }));
       await page.waitForTimeout(800);
-      return { route: await route(), wallet: await vale(page, (v) => v.state.profile.value.wallet) };
+      const cur = await earnedBalance(page);
+      const grew = cur.bal - purse.start;
+      // the wallet grew by exactly what the post-games granted (whatever the matches' outcomes)
+      expect(grew === purse.granted, 'the wallet did not grow by the sum of the post-game grants', { start: purse.start, granted: purse.granted, wallet: cur.bal });
+      return { route: await route(), currency: cur.id, start: purse.start, matches: purse.matches, granted: purse.granted, wallet: cur.bal };
     });
-    await step('buy_skin', async () => {
-      // the cheapest affordable skin offer in the earned currency
-      const sku = await vale(page, (v) => {
-        const cur = v.cv.earnedCurrency(); const bal = v.state.profile.value.wallet[cur.id] ?? 0;
-        const owned = new Set(v.state.profile.value.owned.map((o) => o.ref));
-        const offers = v.cv.c.store.offers.filter((o) => o.kind === 'skin' && v.cv.skinOnSale(o.ref) && !owned.has(o.ref) && o.price.currency === cur.id && o.price.amount <= bal).sort((a, b) => a.price.amount - b.price.amount);
-        return offers[0]?.sku ?? null;
-      });
-      if (!sku) throw new Error('no affordable skin offer (grants too low?)');
-      const name = await vale(page, (v, s) => v.cv.skin(v.cv.offer(s).ref).name, sku);
-      const card = page.locator(`.offer[aria-label^="${name},"]`).first();
+    // the cheapest skin offer in the earned currency, affordable or not
+    const pick = await vale(page, (v) => {
+      const cur = v.cv.earnedCurrency(); const bal = v.state.profile.value.wallet[cur.id] ?? 0;
+      const owned = new Set(v.state.profile.value.owned.map((o) => o.ref));
+      const o = v.cv.c.store.offers.filter((o) => o.kind === 'skin' && v.cv.skinOnSale(o.ref) && !owned.has(o.ref) && o.price.currency === cur.id).sort((a, b) => a.price.amount - b.price.amount)[0];
+      return o ? { sku: o.sku, skin: v.cv.skin(o.ref).name, price: o.price.amount, bal, short: Math.max(0, o.price.amount - bal), cur: cur.name } : null;
+    });
+    expect(!!pick, 'no skin offer in the earned currency', pick);
+    const card = page.locator(`.offer[aria-label^="${pick.skin},"]`).first();
+    await step('select', async () => {
       await card.scrollIntoViewIfNeeded();
       await click(card);
-      await waitFor(page, (v, s) => v.router.route.value.params?.sku === s, 5000, sku);
+      await waitFor(page, (v, s) => v.router.route.value.params?.sku === s, 5000, pick.sku);
+      return pick;
+    });
+    let topUp = null;
+    if (pick.short > 0) {
+      // the Shop says what is missing, and pressing the CTA explains it (never a silent dead button)
+      await step('not_enough', async () => {
+        const need = new RegExp(`^${fmt(pick.short)} more ${pick.cur} needed`);
+        const cta = page.locator('.scr__foot').getByRole('button', { name: need });
+        await click(cta);
+        const modal = page.locator('.modal').filter({ hasText: `Not enough ${pick.cur}` });
+        await modal.waitFor({ state: 'visible', timeout: 5000 });
+        const body = (await modal.textContent()) ?? '';
+        expect(body.includes(`You need ${fmt(pick.short)} more ${pick.cur} for ${pick.skin}`), 'the not-enough dialog does not name the shortfall', { body: body.slice(0, 200) });
+        await click(modal.locator('.confirm__actions').getByRole('button', { name: /^Close/ }));
+        await modal.waitFor({ state: 'hidden', timeout: 5000 });
+        return { cta: `${fmt(pick.short)} more ${pick.cur} needed`, dialog: `You need ${fmt(pick.short)} more ${pick.cur}` };
+      });
+      // top up exactly the shortfall through the dev handle: the same ledger write economy.addLedger makes (LocalSession
+      // internals, dev build only), so wallet === ledger sum still holds
+      topUp = await step('top_up', async () => {
+        const r = await vale(page, (v, amount) => {
+          const s = v.session;
+          if (!s.p || typeof s.ctx !== 'function' || typeof s.persist !== 'function') return { error: 'the dev session has no profile internals' };
+          const id = v.cv.earnedCurrency().id; const p = s.p; const ctx = s.ctx();
+          const bal = (p.wallet[id] ?? 0) + amount;
+          p.ledger.push({ txn: ctx.newId('txn'), at: ctx.nowIso(), currency: id, delta: amount, balance: bal, reason: 'migration', ref: 'e2e:top_up' });
+          p.wallet[id] = bal;
+          s.persist();
+          const prof = v.state.profile.value;
+          return { amount, wallet: prof.wallet[id] ?? 0, ledgerSum: prof.ledger.filter((e) => e.currency === id).reduce((a, e) => a + e.delta, 0) };
+        }, pick.short);
+        expect(!r.error && r.wallet === pick.price && r.ledgerSum === r.wallet, 'the top-up did not land on the price with the ledger in step', r);
+        await page.waitForTimeout(300);
+        return r;
+      });
+    }
+    await step('buy_skin', async () => {
       await click(page.locator('.scr__foot').getByRole('button', { name: /^Buy/ }));
       await page.waitForTimeout(300);
       const confirm = page.locator('.modal').getByRole('button', { name: /^Buy/ });
       if (await confirm.count()) await confirm.first().click();
-      await waitFor(page, (v, s) => v.state.profile.value.owned.some((o) => o.sku === s), 10000, sku);
-      return { sku, skin: name };
+      await waitFor(page, (v, s) => v.state.profile.value.owned.some((o) => o.sku === s), 10000, pick.sku);
+      const after = await earnedBalance(page);
+      expect(after.bal === pick.bal + (topUp?.amount ?? 0) - pick.price, 'the wallet did not drop by the price', { before: pick.bal, topUp: topUp?.amount ?? 0, price: pick.price, after: after.bal });
+      return { sku: pick.sku, skin: pick.skin, price: pick.price, toppedUp: topUp?.amount ?? 0, wallet: after.bal };
     });
     await step('equip', async () => {
       // the post-purchase modal offers "Equip now"; fall back to the screen's Equip CTA
@@ -278,7 +361,7 @@ async function store() {
   const errs = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
   const hardErrs = errs;
   if (hardErrs.length) { ok = false; console.log(`  ✗ ${hardErrs.length} console warning(s) / error(s) / failed request(s): ${hardErrs.slice(0, 3).join(' · ')}`); }
-  report.journeys.push({ mode, ok, steps, consoleErrors: errs.slice(0, 20) });
+  report.journeys.push({ mode, ok, steps, purse: { ...purse }, consoleErrors: errs.slice(0, 20) });
   return ok;
 }
 
@@ -524,7 +607,7 @@ async function flowJourneys() {
 let all = true;
 if (FLOW) all = (await flowJourneys()) && all;
 for (const m of MODES) all = (await journey(m)) && all;
-if (MODES.length) all = (await store()) && all;
+if (STORE) all = (await store()) && all;
 await session?.browser.close();
 report.finished = new Date().toISOString();
 mkdirSync(dirname(OUT), { recursive: true });

@@ -195,8 +195,9 @@ ${CLOTH_MAIN}
   if ( uInst > 0.5 ) { mv = instanceMatrix * mv; objectNormal = mat3( instanceMatrix ) * objectNormal; }
   #endif
   mv = modelViewMatrix * mv;
-  // xray: slid toward the camera along its own view ray (same pixel, nearer depth)
-  if ( uInkMode == 7 ) mv.xyz *= max( 0.0, 1.0 - uBias / max( length( mv.xyz ), 1e-3 ) );
+  // xray (and a match flash drawn over the hull's LOD, perf PERF-m5): slid toward the camera along its own view ray (same
+  // pixel, nearer depth), so a coarser shell than the body still wins the depth test wherever the body shows
+  if ( uInkMode == 7 || uInkMode == 2 ) mv.xyz *= max( 0.0, 1.0 - uBias / max( length( mv.xyz ), 1e-3 ) );
   gl_Position = projectionMatrix * mv;
   vec3 vn = normalMatrix * objectNormal;
   float px = uPx;
@@ -374,8 +375,10 @@ export function outlineMaterial(path: InkPath, u: OutlineU): RawShaderMaterial {
   return inkMaterial(path, INK.outline, { side: BackSide, blend: 'normal', depthWrite: false, offset: [1, 2], uniforms: { ...u } });
 }
 /** the victim flash's uniforms an actor drives */
-export interface FlashU { uFlashColor: { value: Color }; uFlashRim: { value: Color }; uFlashK: { value: number }; uFlashInk: { value: number } }
-export const flashU = (): FlashU => ({ uFlashColor: { value: new Color() }, uFlashRim: { value: new Color() }, uFlashK: { value: 0 }, uFlashInk: { value: 0 } });
+export interface FlashU { uFlashColor: { value: Color }; uFlashRim: { value: Color }; uFlashK: { value: number }; uFlashInk: { value: number }; uBias: { value: number } }
+/** `uBias` (m): how far the flash slides toward the camera (0 = on the body's own surface; a match flash drawn over the
+ *  hull's LOD takes FLASH_LOD_BIAS_M, actors.ts) */
+export const flashU = (): FlashU => ({ uFlashColor: { value: new Color() }, uFlashRim: { value: new Color() }, uFlashK: { value: 0 }, uFlashInk: { value: 0 }, uBias: { value: 0 } });
 /** the flash: front faces, premultiplied over, in front of the body by a polygon offset */
 export function flashMaterial(path: InkPath, u: FlashU): RawShaderMaterial {
   return inkMaterial(path, INK.flash, { side: FrontSide, blend: 'premul', depthWrite: false, offset: [-1, -2], uniforms: { ...u } });
