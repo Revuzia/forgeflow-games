@@ -1,5 +1,7 @@
 # VALE — handoff and resume guide (2026-10-29)
 
+**PAUSED 2026-10-29: read `_design/reviews/fixwaves/PAUSE_2026-10-29.md` first.** It has the closing-review scores, the par bar of 7.5 (ruling 8), the six closing fix waves (stopped in their first packages; partial edits unverified in `aa788a3e`), how to relaunch them, and the CDN playtest (`tools/r2_upload.sh`, waiting on a Cloudflare R2 token).
+
 Read this first when you resume VALE in any session. Branch: `claude/youthful-ramanujan-gdud5w`.
 Spine: `_spec/CONTRACT.md` (layout §1, lane ownership §14). Look and feel: `_design/STYLE_BIBLE.md` (law).
 World and names: `_design/WORLD.md`. Asset paths and ids: `_design/VOCAB.md`. What VALE is and why:
