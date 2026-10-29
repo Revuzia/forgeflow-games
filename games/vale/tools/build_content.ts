@@ -571,7 +571,7 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   c.setup.defaults.boons.forEach((s, i) => { if (!boons.has(s)) dg.err(['setup', 'defaults', 'boons', i], unknownRef('boon', s, boons)); });
   if (c.setup.defaults.spells.length > c.setup.spellSlots) dg.err(['setup', 'defaults', 'spells'], `${c.setup.defaults.spells.length} default spells for ${c.setup.spellSlots} slots`);
   if (c.setup.defaults.boons.length > c.setup.boonSlots) dg.err(['setup', 'defaults', 'boons'], `${c.setup.defaults.boons.length} default boons for ${c.setup.boonSlots} slots`);
-  walkRecord(c.setup, ['setup'], { clips: null, clipOwner: 'battle spells use generic clip roles', forms: null });
+  walkRecord(c.setup, ['setup'], { clips: null, clipOwner: 'Hour spells use generic clip roles', forms: null });
 
   // units + team buffs
   c.units.forEach((u, i) => {
