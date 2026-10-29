@@ -1,0 +1,77 @@
+{
+  "lane": "systems",
+  "run": "integration run 2",
+  "round": 1,
+  "verifier": "adversarial verifier, integ2 systems round 1 (2026-10-29)",
+  "pass": true,
+  "summary": "Lane systems passes round 1. I re-measured every claim in the current tree; I did not take any of them on trust. systems-r2-icons (major): all 36 icon refs of the 18 G7 items (item.icon, passives[].icon, and the callstone/stillhour active.icon) point at assets/ui/icons/items/<id>.webp, and each file exists in content/ui/icons/items. The published dist-catalog also carries each item's own hashed painting (dist-catalog/assets/6a1771fbe3c6-watchbell.webp is byte-identical to the source, and the dev server :5190 serves it as image/webp). icon_probe reports OK with borrowed [] and missing []. Strict content:check gives 0 warnings. The re-key gate passes: probe_sim_rekey re-run gives 63 headline numbers, none within 10 %, and 37 passed / 0 failed. The probe reads block 7 from content data, not from constants. Block 7 is recorded as approved under owner ruling 4, whose third condition covers rows added after the sign-off. I looked at all 18 paintings myself (_harness/_shots/integ_systems_v1_g7_icons.png): no hoods, masks or faces, and nothing that reads as a LoL item icon. systems-room: room.ts:196-199 hoists the pool and calls bansForRoster, the same as local_session.ts:358-360. Against the real catalog, the 16-fighter pool gives 1 ban in rift_standard / rift_ranked / custom and 0 elsewhere. probe_online passes. systems-setup-wording: grep finds 0 'battle spell' in every lane path. setup.json:2 already said 'Hour spells' (changed in a5d8c275). systems-18 (the item this lane failed last time): I re-ran both full soaks at HEAD. Their result bodies are byte-identical to the engineers' reports (diff, header line excluded). Seeds 1-20: 31/31 bought (needlefall 8, callstone 4, watchbell 4). Seeds 21-40: 31/31 (14, 4, 8). Held 2.69 / 2.79, BRIDGE median 15.5 / 16.2 min, RIFT adept p90 29.0 / 30.9 min, and every gate PASS. git diff 34fd7185^ HEAD -- content/items.json shows only icon refs and the $comment, so no item stat or weight changed. The knowledge.ts change reads roles from data and hard-codes no content ids. The other src/sim diffs since the back-out are comments only. systems-tips: the skip is acceptable. The item is optional and nothing is broken; tags are parsed and unknown tags are listed by CatalogView.tipsFor / unknownTipModes. Regressions: none. typecheck exit 0 (whole project); 40/40 lane probes pass (probe_sim*, probe_items 159, probe_kits_*, probe_session_*, probe_sim_buildplan 15). Three minors, none blocking: (1) W4_systems_rekey.md:11 still says 53 headline numbers, 30 of 30 and probe_items 140; the measured values are 63, 37 and 159. (2) items_setup.md:20 says probe_sim_buildplan has 12 checks; it has 15. (3) The lead still has to record G7 in final_parity_open.json: waves[3].findings[7].status_evidence still says 18 items borrow paintings.",
+  "items": [
+    {
+      "id": "systems-r2-icons",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Part 1. A python walk over content/items.json finds 36 refs on the 18 ids: item.icon, passive0.icon on 16, and active.icon on callstone and stillhour. All 36 equal assets/ui/icons/items/<id>.webp, and all 18 files exist in content/ui/icons/items (5.6-18.3 KB, 256x256). In the published dist-catalog/schema-1/2026.10.1/catalog.json, every one of those refs ends in -<id>.webp (0 mismatches). dist-catalog/assets/6a1771fbe3c6-watchbell.webp cmp-equals the source, and curl http://localhost:5190/dist-catalog/assets/6a1771fbe3c6-watchbell.webp returns 200 image/webp. `npm run content:check` (strict): 'OK (check only, nothing written): 0 warnings', exit 0 (_harness/_reports/integ_systems_v1_contentcheck.txt). `node _harness/icon_probe.mjs --out _harness/_reports/integ_systems_v1_icon_probe.json`: exit 0, 'missing icons (fallback glyph): none', report borrowed [] and missing []; items p50 min 66 and p95 min 192 at 38/40 px. The items.json $comment no longer calls these placeholders. Sensitivity and originality: I viewed the contact sheet of all 18 (_harness/_shots/integ_systems_v1_g7_icons.png). They show blades, a long collared coat with no hood, a lens, a pick, a rod, glass chimes, scale mail, a bracer, a resin maul, a shadow pin on a dial stone, a bell-rope, an alms lamp, a horn, a crossbow, a sword, a shield, a light-wand and a bell. No faces, masks, hoods or horror reads, and none is a recognisable LoL item icon. Part 2. `node _harness/probe_sim_rekey.ts` (_harness/_reports/integ_systems_v1_rekey.txt): 'PASS 63 headline numbers, none within 10 % of the counterpart' and 'probe_sim_rekey: 37 passed, 0 failed'. The block 7 rows read live content: modes.rift.rules.passiveGoldPerSec 3.2, rift_quick 3.6, shieldwick/glimwick bounty 24/17, finished band min 1800 / max 2800, Lampblack power 0.5/0.3/0.5, quarry_pick armorPenPct 0.24. The rules section checks the conditional Lampblack, the Stillhour self-root with no untargetable status, and the first-hit shields on Glass Veil and Glintmail. W4_systems_rekey.md: the status line (:3), the block 7 note (:84) and the sign-off table (7/7 approved, block 7 under ruling 4, 2026-10-29). owner_rulings.md:55-57 (ruling 4) says 'Rows W4 adds after this date fall under the same gate. They need no further sign-off unless the gate fails.' Part 3 is the lead's file; the handoff is valid (see handoffs_verified). Commit 8fdd9418 is on the branch."
+    },
+    {
+      "id": "systems-room",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "server/room.ts:15 imports bansForRoster. :196 has `const pool = fighterPool(this.cat);`, :198 passes `pool,` and :199 has `bansPerTeam: protocol === 'draft' ? bansForRoster(draftCfg, pool.length) : 0`. This matches src/session/local_session.ts:358-360; undefined draftCfg gives 0 in both. git show 646013c5 touches only server/room.ts (4+/3-). I ran a scratch script over the real catalog: the 16-fighter pool gives bans rift_standard/rift_ranked/custom 1 (2 at roster 28, 5 at roster 40), and rift_quick/coop/bridge/fray/practice 0. `node _harness/probe_online.ts`: 'PASS probe_online', exit 0 (_harness/_reports/integ_systems_v1_probe_online.txt). `npm run typecheck`: exit 0, 0 errors (_harness/_reports/integ_systems_v1_typecheck.txt)."
+    },
+    {
+      "id": "systems-setup-wording",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "content/setup.json:2 says 'each player takes 2 Hour spells' (already_done in a5d8c275). _design/sections/items_setup.md: :7 'no Hour spell', :8 '**Hour spells** are', :484 '**two Hour spells**', :486 '### 7.1 Hour spells', :550 '| Hour spells |', :635 'an Hour spell'. W4_systems_rekey.md: :17 '## 1. Hour spells', and the sign-off row is '1 · Hour spells and defaults'. `grep -rni 'battle spell'` over every lane path (src/sim, src/contracts, src/session, the content files, _harness/probe_sim_*/probe_items/probe_kits_*/pacing.ts, the design docs, W4_*, server/room.ts) returns 0 hits. Commit 192656b3 (13 lane files, 26+/26-; the sim edits are comments only)."
+    },
+    {
+      "id": "systems-tips",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Skipped. The item is optional and its own text says nothing is broken, so the skip is acceptable. The reasons check out: src/contracts/catalog.ts:702 is `tips: z.array(z.string())`, and src/ui/catalog_view.ts:155-165 (client-owned) runs TIP_TAG.exec(t) on string tips, so widening the type would break the client's typecheck until the client changes it. The string tags are parsed (tipsFor), and unknown tags are listed (unknownTipModes). tools/build_content.ts:1313 (engine) names-checks string tips only. No player-facing gap."
+    },
+    {
+      "id": "systems-18",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "I re-ran both full soaks at HEAD 062245c0 (2 of the 4 allowed), one after the other, 3 workers each. `node _harness/probe_sim_bot_soak.ts --full --label integ_systems_v2_full1` gives exit 0, 360 matches in 682 s. `--seed0 21 --label integ_systems_v2_full21` gives exit 0. The bodies of both reports equal the engineers' reports exactly: `diff <(sed 1d fw_W4_soak_integ_systems_r2_full{1,21}.txt) <(sed 1d fw_W4_soak_integ_systems_v2_full{1,21}.txt)` is empty, so the sim is deterministic and the claim is reproduced. Seeds 1-20: '31/31' bought (needlefall 8, callstone 4, watchbell 4; never: -), held 2.69, BRIDGE median 15.5 min, adept p90 29.0 min, veteran vs novice 38/40 and vs adept 33/40, anti-heal 98.5 % vs 31.1 %, 0 FAIL lines. Seeds 21-40: 31/31 (needlefall 14, watchbell 8, callstone 4), held 2.79, BRIDGE 16.2, adept p90 30.9, 37/40 and 30/40, 0 FAIL lines. Reports: _harness/_reports/fw_W4_soak_integ_systems_v2_full1.txt and _v2_full21.txt. The criteria hold: each of callstone, needlefall and watchbell is bought at least once on seeds 1-20, BRIDGE >= 15, and adept p90 <= 32. Plan only: `git diff 34fd7185^ HEAD -- content/items.json` shows only icon refs and the $comment, so no stat or tag changed. grep '1.06|callstone|watchbell|needlefall' in src/sim/bots finds nothing, so the x1.06 weight is gone and no ids are hard-coded. The knowledge.ts diff (in 1d6261e2) adds data-read roles: reveals (regex on status reveal), peel (holdsHard over the active's effects) and takedown (a 'takedown' trigger). It adds EnemyRead.soft and three kinds pushed into the existing answers list. I classified the roles over items.json: watchbell reveals; callstone peel; needlefall and almslamp takedown. probe_sim_buildplan gives 15 passed, 0 failed, including the three situational checks (support lookout: ilsheta, marund, sukri; frontline peel: ardit, hesmi; jungler takedown: kemdo; each 0 without the trigger) (_harness/_reports/integ_systems_v2_buildplan.txt). items_setup.md:19-20 documents the change."
+    }
+  ],
+  "regressions": [],
+  "minors": [
+    {
+      "id": "systems-v1-doc-rekey-count",
+      "to": "systems",
+      "what": "W4_systems_rekey.md:11 ('How it is measured') still says '53 headline numbers', '30 of 30 checks pass' and 'probe_items.ts passes 140 of 140'. The current tree measures 63 headline numbers, 37/37 in probe_sim_rekey and 159/159 in probe_items. Line :84 and items_setup.md:7 already say 63.",
+      "fixHint": "Edit W4_systems_rekey.md:11 to the 2026-10-29 numbers: 63 headline numbers, 37 of 37, probe_items 159 of 159. Keep the 2026-10-28 numbers as history if wanted."
+    },
+    {
+      "id": "systems-v1-doc-buildplan-count",
+      "to": "systems",
+      "what": "_design/sections/items_setup.md:20 says `_harness/probe_sim_buildplan.ts` has '12 checks'. It now passes 15, including the three situational-answer checks.",
+      "fixHint": "Change '12 checks' to '15 checks' and add 'the situational answers (lookout, peel, takedown)' to the list in that parenthesis."
+    }
+  ],
+  "handoffs_verified": [
+    {
+      "to": "lead",
+      "valid": true,
+      "what": "Record gameplay:G7 in _design/reviews/final_parity_open.json waves[3].findings[7]. The icon minor is closed: all 18 G7 items point at their own paintings (icon_probe borrowed 0). Block 7 is signed off under ruling 4, and probe_sim_rekey gates 63 headline numbers with none within 10 % (37/37). 31/31 finished items are bought on both seed sets.",
+      "evidence": "The current waves[3].findings[7].status_evidence still says '18 new items borrow another item's painting ... still open' (python read of final_parity_open.json). The facts it should now record are re-measured above: _harness/_reports/integ_systems_v1_icon_probe.json borrowed [], integ_systems_v1_rekey.txt, and fw_W4_soak_integ_systems_v2_full{1,21}.txt."
+    }
+  ],
+  "checks": {
+    "typecheck": "npm run typecheck: exit 0, 0 'error TS' (_harness/_reports/integ_systems_v1_typecheck.txt)",
+    "content_check": "npm run content:check (strict): OK, 0 warnings (_harness/_reports/integ_systems_v1_contentcheck.txt)",
+    "icon_probe": "node _harness/icon_probe.mjs: OK, borrowed [], missing [] (_harness/_reports/integ_systems_v1_icon_probe.json)",
+    "probe_sim_rekey": "63 headline numbers none within 10 %; 37 passed, 0 failed (_harness/_reports/integ_systems_v1_rekey.txt)",
+    "probe_online": "PASS probe_online (_harness/_reports/integ_systems_v1_probe_online.txt)",
+    "lane_probes": "node _harness/run_probes.ts --only probe_sim --only probe_items --only probe_session --only probe_kits: 40 passed, 0 skipped, 0 failed (_harness/_reports/integ_systems_v2_probes.log)",
+    "probe_sim_buildplan": "15 passed, 0 failed (_harness/_reports/integ_systems_v2_buildplan.txt)",
+    "probe_items": "159 passed, 0 failed",
+    "soak_seeds_1_20": "_harness/_reports/fw_W4_soak_integ_systems_v2_full1.txt: 31/31, every gate PASS; body identical to _r2_full1",
+    "soak_seeds_21_40": "_harness/_reports/fw_W4_soak_integ_systems_v2_full21.txt: 31/31, every gate PASS; body identical to _r2_full21",
+    "sensitivity_shot": "_harness/_shots/integ_systems_v1_g7_icons.png (all 18 G7 paintings, viewed)",
+    "budget": "2 full soaks used by this verifier; no Blender, no perf_1080 and no e2e (this lane changed no render or UI code)"
+  }
+}
