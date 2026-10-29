@@ -639,6 +639,10 @@ NEGATIVE = [
     # houseload: 64 dead far-away colliders appended to every queryColliders result (collider-load + collider-load-frame), 20 extra meshes in one district (district-calls)
     ("houseload-plant-query-flood", "houseload.py", ["--maps", "deepwood", "--plant", "query-flood"], 1800),
     ("houseload-plant-district-split", "houseload.py", ["--maps", "ashgrid", "--plant", "district-split"], 1800),
+    # (R3 gates) the look measure's own controls - the REAL W.map.hasCollidersNear read through a c.dead tap: it floods (builds and scans its whole r-list,
+    # look mean x13.9) or always answers true (400 wrong answers at empty probe points). Under a plant collider-load judges only that plant's queries
+    ("houseload-plant-look-flood", "houseload.py", ["--maps", "deepwood", "--plant", "look-flood"], 1800),
+    ("houseload-plant-look-true", "houseload.py", ["--maps", "deepwood", "--plant", "look-true"], 1800),
     # ---- Wave 8 fix round (lane K3): each corrected row keeps a failing control
     # placementcheck ramp-start-step no longer judges housegen ROOF planks (house.roofRamps): the first housegen STAIR lifted 0.8 m must still fail it
     ("placementcheck-plant-house-stair-lip", "placementcheck.py", ["--plant", "house-stair-lip", "--quick"], 900),
