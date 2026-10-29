@@ -80,8 +80,9 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   // (W4 G3 refix: novice is a beginner's opponent — slower to see, aim, last-hit and combo, and slower to act on the
   // team's calls — so a veteran's play shows in the result; still perception and execution only. Integ done:5: one
   // step further on the same knobs — later reactions, wider aim, more missed last hits, rarer dodges and kites, noisier
-  // reads, slower combos, staying in a losing fight longer and answering the team's calls later — took veteran from
-  // 129/160 to 150/160 mirrored games over seeds 1-80; no stat, Gleam or rule changes)
+  // reads, slower combos, staying in a losing fight longer and answering the team's calls later — veteran beats it in
+  // 39/40 and 38/40 mirrored games on soak seeds 1-20 / 21-40 (was 36 / 32), 150/160 over seeds 1-80 (was 129); no stat,
+  // Gleam or rule changes, and no other suite plays novice)
   novice: {
     id: 'novice', reaction: 0.7, reactionJitter: 0.2, aimErrorDeg: 20, leadSkill: 0.15,
     lastHitSigma: 0.25, lastHitMiss: 0.45, dodgeChance: 0.05, kiteSkill: 0.05,
