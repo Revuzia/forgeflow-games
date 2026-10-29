@@ -1708,20 +1708,26 @@ export async function buildMap(W, mapId) {
     const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
     bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
     const birdTex = new THREE.CanvasTexture(bcv); birdTex.colorSpace = THREE.SRGBColorSpace;
-    const birdMat = new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false });  // ONE shared material for every bird (a SpriteMaterial per bird was 96 program lookups a frame)
+    // (R1 / endgame lane) ALL the birds are ONE Points draw (was one Sprite per bird: 15-27 birds = 0-24 draw calls in a view, by the time of the frame; perf_district's endgame
+    // view read +/- 24 calls run to run). The same rng() draws in the same order (every seeded placement after this is unchanged), the same flight; size 6 = the sprites' mean 4.25 m
+    // seen through the 70-degree lens (a point is sized in screen height / depth, a sprite in world metres: x 1 / tan 35 deg).
     const flocks = [];
     for (let f = 0; f < 3; f++) {
-      const flock = new THREE.Group();
+      const flock = { children: [], position: new THREE.Vector3() };
       const n = 5 + Math.floor(rng() * 5);
       for (let b = 0; b < n; b++) {
-        const s = new THREE.Sprite(birdMat);
-        s.scale.setScalar(3 + rng() * 2.5);
+        const s = { position: new THREE.Vector3(), userData: {} };
+        s.sc = 3 + rng() * 2.5;
         s.userData.ph = rng() * Math.PI * 2; s.userData.ix = b;
-        flock.add(s);
+        flock.children.push(s);
       }
       flock.userData = { cx: (rng() - 0.5) * HALF, cz: (rng() - 0.5) * HALF, cy: 120 + rng() * 60, fr: 22 + rng() * 34, spd: 0.05 + rng() * 0.05, ph: rng() * Math.PI * 2 }; // 120-180m: clear of the sky-islands (~52m) and the volcano
-      g.add(flock); flocks.push(flock);
+      flocks.push(flock);
     }
+    const nB = flocks.reduce((a, f) => a + f.children.length, 0), bPos = new Float32Array(nB * 3), bGeo = new THREE.BufferGeometry();
+    bGeo.setAttribute("position", new THREE.BufferAttribute(bPos, 3));
+    const birdPts = new THREE.Points(bGeo, new THREE.PointsMaterial({ map: birdTex, size: 6, sizeAttenuation: true, transparent: true, depthWrite: false, fog: false }));
+    birdPts.frustumCulled = false; birdPts.name = "birds"; g.add(birdPts);
 
     trackUpdater((dt, t) => {
       // keep the sky dome centered on the camera — a skybox should follow the viewer,
@@ -1730,11 +1736,13 @@ export async function buildMap(W, mapId) {
       skyMat.uniforms.cloudT.value = t;    // scrolls both baked cloud layers (replaces the sprite drift)
       LCU.uLcT.value = t; LCU.uLcWater.value.y = t;
       LCU.uLcCloudOff.value.set(cloudOff.x + t * 0.0072 * LCU.uLcWind.value.x, cloudOff.y + t * 0.0072 * LCU.uLcWind.value.y);   // ~7 m/s of drift
+      let bi = 0;
       for (const fl of flocks) {
         const u = fl.userData, a = t * u.spd + u.ph;
         fl.position.set(u.cx + Math.cos(a) * u.fr * 6, u.cy + Math.sin(a * 0.7) * 7, u.cz + Math.sin(a) * u.fr * 6);
-        for (const s of fl.children) s.position.set((s.userData.ix - fl.children.length / 2) * 4.5, Math.sin(t * 6 + s.userData.ph) * 1.6, (s.userData.ix % 2) * 3);
+        for (const s of fl.children) { bPos[bi++] = fl.position.x + (s.userData.ix - fl.children.length / 2) * 4.5; bPos[bi++] = fl.position.y + Math.sin(t * 6 + s.userData.ph) * 1.6; bPos[bi++] = fl.position.z + (s.userData.ix % 2) * 3; }
       }
+      bGeo.attributes.position.needsUpdate = true;
     });
 
     // ── P1.10 (SKY lane, Wave 4): altitude-scaled fog ───────────────────────────
@@ -6416,7 +6424,7 @@ export async function buildMap(W, mapId) {
       // D2 (Savanna only): a prop GLB made of several meshes that share ONE material (the car is 13 meshes of 7 materials, the rock cluster 4 of 1) is one InstancedMesh per
       // MESH - 13 draw calls for the cars alone in every view that sees the map-wide mesh. Meshes of one material are baked into one geometry (their GLB-local matrices
       // folded into the vertices), so a kind costs one call per material. Same triangles, same instance matrices, same colliders (those come from the baked table).
-      if (mapId === "ashgrid") meshes = mergePartsByMaterial(meshes);
+      meshes = mergePartsByMaterial(meshes);
       // (the coarse trunk is added AFTER the canopy: the first InstancedMesh of a kind carries the GLB's own geometry, which the placement census reads the kind's local frame from)
       // Wave 7b stage B: the same far LOD for the themed maps' heavy tree - Isla Viva's palm (one 3,134-triangle mesh: 551 k triangles of an Isla Viva s31337 street view, 47 % of the frame)
       // and Deepwood's pine canopy (1,613). Savanna's acacia is unchanged.
