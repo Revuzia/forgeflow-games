@@ -949,12 +949,14 @@ export const SFX: Record<string, Recipe> = {
   'save.kept': (s) => { s.bell('wood', 0, midiHz(67), 0.12); s.arp('chime', 0.05, [79, 84, 91], 0.07, 0.12); s.wet(0.35); },
   ignition: (s) => {
     // the opening: a black universe, then a star ignites — low roar building under a rising cluster, a bright
-    // crack at the moment of ignition, and a lydian chord that blooms and settles into the hum of space
-    s.tn('sine', 0, 22, 48, 3, 2.6, 2.5, 6, 0.38);
-    s.nz('brown', 0.2, 2.2, 0.6, 5, 0.45, ['lowpass', 70, 0.9, 1400, 2.6]);
+    // crack at the moment of ignition, and a lydian chord that blooms and settles into the hum of space. The sub-bass
+    // (the roar's 22->48 Hz tone, the brown rumble, the crack's 90->30 Hz fall) sits 6 dB under the rest: at the
+    // crack it was ~90% of the peak and little of the loudness, and it pinned the master limiter (fix r4 #12)
+    s.tn('sine', 0, 22, 48, 3, 2.6, 2.5, 6, 0.19);
+    s.nz('brown', 0.2, 2.2, 0.6, 5, 0.225, ['lowpass', 70, 0.9, 1400, 2.6]);
     s.nz('pink', 0.8, 1.6, 0.4, 4, 0.35, ['lowpass', 200, 0.8, 5200, 2]);
     s.nz('white', 2.5, 0.002, 0.05, 0.6, 0.5, ['highpass', 1200]);
-    s.tn('sine', 2.5, 90, 30, 0.8, 0.003, 0.1, 2.5, 0.6);
+    s.tn('sine', 2.5, 90, 30, 0.8, 0.003, 0.1, 2.5, 0.3);
     const cluster = [38, 45, 50, 52, 54, 57, 62, 64, 68, 73];
     cluster.forEach((m, i) => s.tn(i % 2 ? 'triangle' : 'sine', 1.2 + i * 0.12, midiHz(m - 0.4), midiHz(m), 1.6, 1.8, 3.5, 5, 0.06, ['lowpass', 3200]));
     s.pad(6.5, chord(50, [0, 7, 12, 16, 21, 26]), 2, 2.5, 5, 0.28);
@@ -969,10 +971,11 @@ export const SFX: Record<string, Recipe> = {
  * recipe is the level. The ignition is the first sound of the game and twelve seconds of full-band roar, cluster and
  * chord, with nothing under it (the music is held back): at 1 it measured -12.2 LUFS and peaked at -1.7 dBFS in the
  * built game, ~10 LU over the opening's music (-21..-22.5 LUFS) — a player who set their volume by it heard a quiet
- * game after it. Scaled as a whole (crescendo, crack and bloom kept) it lands just over the music that rises out of it
- * (fix r4 #12; tests/audio-authored.test.ts pins it against the measurements).
+ * game after it. Scaled as a whole (crescendo, crack and bloom kept; its sub-bass 6 dB down, which held the peaks up)
+ * it lands just over the music that rises out of it, peaking under -6 dBFS (fix r4 #12; tests/audio-authored.test.ts
+ * pins it against the measurements).
  */
-export const DIRECT_LEVEL: Readonly<Record<string, number>> = { ignition: 0.32 };
+export const DIRECT_LEVEL: Readonly<Record<string, number>> = { ignition: 0.25 };
 
 export function directLevel(name: string): number {
   return DIRECT_LEVEL[name] ?? 1;
