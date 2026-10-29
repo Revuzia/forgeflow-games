@@ -2,7 +2,7 @@
 // 232 px disc; bottom right, swappable left; access.minimapScale). A 2D canvas: the map's painted
 // minimap.png when the art exists (over map.art.terrain.minimapBounds when the art carries a margin), else drawn FROM THE MAP JSON (walls, thickets, roads, bases, shops,
 // the noon line; FRAY's plate with ten hour-marks on the rim). Fog of war from your team's vision grid
-// (unseen cells darkened). Marks keep their shape in every palette: structures by side (▲ spire, ◠
+// (unseen cells darkened; carried into the margin with the edge cells clamped). Marks keep their shape in every palette: structures by side (▲ spire, ◠
 // dome) in relationship colour, Wicks as 2.2·k dots on a 1 px ink keyline (HUD-3), monsters and objectives as neutral squares with their
 // return timers, fighters as round portraits (r12 m3: the fighter's icon clipped to a 13·k radius circle,
 // ≈ 26 px on the 352 px map, preloaded with the match; the palette disc only when no icon exists) in
@@ -98,6 +98,7 @@ export function Minimap(): JSX.Element {
     let stat: HTMLCanvasElement | null = null;
     let col = readColours();
     const fog = document.createElement('canvas');
+    let fogAt: FogRect | null = null;
     const icons = loadIcons(model);
     let dirty = true;
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { dirty = true; }) : null;
@@ -120,14 +121,14 @@ export function Minimap(): JSX.Element {
       lastDraw = now;
       if (dirty || !ro) { size(); dirty = false; }
       if (!stat) { col = readColours(); stat = buildStatic(map, fit, col, mapShape, model.myTeam, img); }
-      if (now - lastFog > FOG_MS) { lastFog = now; drawFog(fog, model.view.visionGrid(model.myTeam)); }
+      if (now - lastFog > FOG_MS) { lastFog = now; fogAt = drawFog(fog, model.view.visionGrid(model.myTeam), fit.b) ?? fogAt; }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, fit.w, fit.h);
       ctx.drawImage(stat, 0, 0);
       ctx.save();
       clipShape(ctx, fit, mapShape);
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(fog, fit.ox, fit.oy, map.size[0] * fit.s, map.size[1] * fit.s);
+      if (fogAt) ctx.drawImage(fog, X(fit, fogAt.x), Y(fit, fogAt.y), fogAt.w * fit.s, fogAt.h * fit.s);
       drawDynamic(ctx, fit, col, model, now, icons);
       drawCamera(ctx, fit, col, r);
       ctx.restore();
@@ -319,19 +320,34 @@ function lamp(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
   ctx.globalAlpha = 1;
 }
 
-function drawFog(cnv: HTMLCanvasElement, g: { width: number; height: number; data: Uint8Array }): void {
-  if (!g.width || !g.height) return;
-  if (cnv.width !== g.width || cnv.height !== g.height) { cnv.width = g.width; cnv.height = g.height; }
+/** where the fog canvas lies in the world (sim units) */
+interface FogRect { x: number; y: number; w: number; h: number }
+/** the team's vision grid as a fog canvas (unseen cells darkened). The grid covers 0..width·cell; when the view bounds
+ *  carry a margin (minimapBounds) the canvas is padded out to them with the edge cells clamped, so the margin is fogged
+ *  like the map's edge beside it and an unseen side is not framed by a lighter band (world handoff, HUD-3). One draw, no
+ *  seam between strips. Returns the canvas's world rectangle. */
+function drawFog(cnv: HTMLCanvasElement, g: { width: number; height: number; cell: number; data: Uint8Array }, b: readonly [number, number, number, number]): FogRect | null {
+  if (!g.width || !g.height) return null;
+  const c = g.cell > 0 ? g.cell : 1;
+  const pad = (m: number): number => Math.max(0, Math.min(64, Math.ceil(m / c - 1e-6)));
+  const pl = pad(-b[0]), pt = pad(-b[1]), pr = pad(b[2] - g.width * c), pb = pad(b[3] - g.height * c);
+  const W = g.width + pl + pr, H = g.height + pt + pb;
+  if (cnv.width !== W || cnv.height !== H) { cnv.width = W; cnv.height = H; }
   const ctx = cnv.getContext('2d');
-  if (!ctx) return;
-  const id = ctx.createImageData(g.width, g.height);
+  if (!ctx) return null;
+  const id = ctx.createImageData(W, H);
   const d = id.data;
-  for (let i = 0; i < g.width * g.height; i++) {
-    const seen = (g.data[i] ?? 0) / 255;
-    d[i * 4] = 11; d[i * 4 + 1] = 13; d[i * 4 + 2] = 17;
-    d[i * 4 + 3] = Math.round((1 - seen) * 140);
+  for (let y = 0; y < H; y++) {
+    const row = Math.min(g.height - 1, Math.max(0, y - pt)) * g.width;
+    for (let x = 0; x < W; x++) {
+      const seen = (g.data[row + Math.min(g.width - 1, Math.max(0, x - pl))] ?? 0) / 255;
+      const i = (y * W + x) * 4;
+      d[i] = 11; d[i + 1] = 13; d[i + 2] = 17;
+      d[i + 3] = Math.round((1 - seen) * 140);
+    }
   }
   ctx.putImageData(id, 0, 0);
+  return { x: -pl * c, y: -pt * c, w: W * c, h: H * c };
 }
 
 function drawDynamic(ctx: CanvasRenderingContext2D, f: Fit, c: Record<string, string>, model: import('./model.ts').HudModel, now: number, icons: Map<number, Icon>): void {

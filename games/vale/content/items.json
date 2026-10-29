@@ -2864,7 +2864,7 @@
                         }
                       ],
                       "present": {
-                        "vfx": "lib_burst_lumen",
+                        "vfx": "lib_item_strike_the_hour",
                         "sfx": "c_burst_lumen",
                         "hitVfx": "lib_hit_magic"
                       }
@@ -3015,7 +3015,7 @@
           "castWhenSelfHpBelow": 0.45
         },
         "present": {
-          "vfx": "lib_zone_glass",
+          "vfx": "lib_item_hold_the_hour",
           "sfx": "c_shield"
         }
       },

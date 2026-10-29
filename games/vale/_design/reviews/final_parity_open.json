@@ -29,7 +29,8 @@
   "status_sources": [
    "_design/reviews/fixwaves/<wave>_verify<n>.json (W1-W5b)",
    "_design/reviews/fixwaves/integ_<lane>_verify<n>.json (integration run 1)",
-   "_design/reviews/fixwaves/integration_plan_run2.json lanes.lead (W4 handoffs lead-r2-03/05/06/07)"
+   "_design/reviews/fixwaves/integration_plan_run2.json lanes.lead (W4 handoffs lead-r2-03/05/06/07)",
+   "_design/reviews/fixwaves/integ2_<lane>_verify<n>.json (integration run 2; applied to the entries in status_updates)"
   ],
   "status_legend": {
    "done": "the latest verifier item passes (or both halves of a split finding pass)",
@@ -51,7 +52,22 @@
    "polish/minor/done_unverified": 9,
    "polish/minor/partly": 7
   },
-  "status_counts_note": "Counts are entries: audio AUD-2 (W2 UI half, W3 engine half) and client F3 (W2 UI half, W5 art half) are listed in two waves, so 9 blocker and 34 major entries cover the 8 blocker and 33 major findings."
+  "status_counts_note": "Counts are entries: audio AUD-2 (W2 UI half, W3 engine half) and client F3 (W2 UI half, W5 art half) are listed in two waves, so 9 blocker and 34 major entries cover the 8 blocker and 33 major findings.",
+  "status_updates": [
+   {
+    "date": "2026-10-29",
+    "source": "integration run 2 stitch: systems handoff to lead (gameplay:G7), integ2_systems_verify1, integ2_client_verify1",
+    "entries": [
+     "waves[W4].findings[G7]",
+     "waves[W4].done_status[done:7, done:8]",
+     "waves[W4].status_evidence",
+     "waves[W2].findings[HUD-1]",
+     "verifier_open[hud:HUD-1-seam]",
+     "verifier_open[systems-18]"
+    ],
+    "note": "Other entries still read as of status_as_of; integ2 verdicts for other lanes are not yet applied."
+   }
+  ]
  },
  "scores": {
   "combat": 6,
@@ -868,13 +884,13 @@
      ],
      "verdict": "confirmed",
      "status": "done",
-     "status_evidence": "W2_verify1 pass (icon_probe OK; family grounds in the live inventory). The seam (new W4 items borrowing paintings) was HUD-1-seam: 18 own paintings landed (f0a2ae42, sensitivity pass in integ_client_verify2); the content repoint is open.",
+     "status_evidence": "W2_verify1 pass (icon_probe OK; family grounds in the live inventory). The seam (new W4 items borrowing paintings) is closed in integration run 2: the 18 own paintings landed (f0a2ae42, sensitivity pass in integ_client_verify2) and content points every one of them, glass_veil and bellrope included, at its own items/<id>.webp (integ2_systems_verify1 systems-r2-icons pass; integ2_client_verify1 hud:HUD-1-seam pass; icon_probe borrowed [], _harness/_reports/integ_lead_s_icon_probe.json).",
      "status_history": [
-      "W2_verify1: pass"
+      "W2_verify1: pass",
+      "integ2_client_verify1: hud:HUD-1-seam pass; integ2_systems_verify1: systems-r2-icons pass (borrowed 0)"
      ],
      "open_in": [
-      "integration_plan_run2.json client hud:HUD-1-seam",
-      "integration_plan_run2.json systems systems-r2-icons"
+      "done in run 2 (client hud:HUD-1-seam, systems systems-r2-icons 8fdd9418)"
      ]
     }
    ],
@@ -1435,9 +1451,11 @@
      ],
      "verdict": "confirmed",
      "status": "done",
-     "status_evidence": "W4_verify1 pass: See done:7. content/items.json has 20 core + 11 apex, all in the rift and bridge pools. Minor: 10 icon files are each shown on two finished items, because 18 new items borrow another item's painting (e.g. dawnspur and dialcutter both use dialcutter.webp). This is the W2 icon handoff, still open.",
+     "status_evidence": "W4_verify1 pass (see done:7): content/items.json has 20 core + 11 apex finished items, all in the rift and bridge pools. The icon minor is closed in integration run 2 (systems-r2-icons): all 18 new G7 items point at their own paintings, 36 refs on assets/ui/icons/items/<id>.webp (item, passive and active icons); icon_probe borrowed [] and missing [] (_harness/_reports/integ_systems_icon_probe.json; lead re-run _harness/_reports/integ_lead_s_icon_probe.json); the 57 item icon files are 57 distinct paintings (md5). Block 7 of W4_systems_rekey.md is signed off under owner ruling 4: probe_sim_rekey gates it, 63 headline numbers with none within 10 %, 37 passed / 0 failed (_harness/_reports/integ_systems_rekey_gate.txt; lead re-run _harness/_reports/integ_lead_s_rekey.txt). 31/31 finished items are bought on both seed sets, 2.69 / 2.79 finished held per player at min(25:00, end), every soak gate PASS (fw_W4_soak_integ_systems_r2_full1 / _r2_full21; the verifier's _v2_ re-runs have identical bodies). Commits 8fdd9418, 1d6261e2, 062245c0.",
      "status_history": [
-      "W4_verify1: pass"
+      "W4_verify1: pass",
+      "integ2 systems handoff (systems-r2-icons, systems-18; 8fdd9418, 1d6261e2, 062245c0): done, icon_probe borrowed 0, probe_sim_rekey 63 numbers none within 10 % (37/37), 31/31 finished items bought on seeds 1-20 and 21-40",
+      "integ2_systems_verify1: pass (systems-r2-icons, systems-18; handoff to lead valid)"
      ]
     }
    ],
@@ -1493,14 +1511,16 @@
      "id": "done:7",
      "status": "done",
      "history": [
-      "W4_verify1: pass"
+      "W4_verify1: pass",
+      "integ2_systems_verify1: pass, 31/31 finished items bought on seeds 1-20 and 21-40, 2.69 / 2.79 held per player (fw_W4_soak_integ_systems_v2_full1 / _v2_full21)"
      ]
     },
     {
      "id": "done:8",
      "status": "done",
      "history": [
-      "W4_verify1: pass"
+      "W4_verify1: pass",
+      "owner ruling 4 signs off block 7; integ2_systems_verify1: pass, probe_sim_rekey gates 63 headline numbers, none within 10 % (37/37)"
      ]
     },
     {
@@ -1512,7 +1532,7 @@
     }
    ],
    "status": "done",
-   "status_evidence": "W4_verify2 failed only done:5 (veteran vs novice 32/40 on seeds 21-40); integ_systems_verify1 passed it at HEAD (39/40, 38/40 vs novice; 34/40, 32/40 vs adept). Open: systems-18 (3 finished items never bought) and the Longshade balance flag (observations)."
+   "status_evidence": "W4_verify2 failed only done:5 (veteran vs novice 32/40 on seeds 21-40); integ_systems_verify1 passed it at HEAD (39/40, 38/40 vs novice; 34/40, 32/40 vs adept). systems-18 is closed in integration run 2 (integ2_systems_verify1 pass: 31/31 finished items bought on seeds 1-20 and 21-40). Open: only the Longshade balance flag (observations)."
   },
   {
    "id": "W5",
@@ -2942,9 +2962,9 @@
   {
    "id": "hud:HUD-1-seam",
    "lane": "client",
-   "status": "open",
-   "evidence": "integ_client_verify1 partly: own paintings exist, content still points glass_veil and bellrope at borrowed art.",
-   "open_in": "integration_plan_run2.json client hud:HUD-1-seam; systems systems-r2-icons"
+   "status": "done",
+   "evidence": "integ_client_verify1 partly: own paintings existed, content still pointed glass_veil and bellrope at borrowed art. Run 2: all 18 G7 items point at their own paintings (icon_probe borrowed [], _harness/_reports/integ_systems_icon_probe.json); integ2_client_verify1 hud:HUD-1-seam pass, integ2_systems_verify1 systems-r2-icons pass.",
+   "open_in": "done in run 2 (8fdd9418)"
   },
   {
    "id": "e2e:store",
@@ -2984,9 +3004,9 @@
   {
    "id": "systems-18",
    "lane": "systems",
-   "status": "open",
-   "evidence": "integ_systems_verify1 fail: seeds 1-20 buy 28/31 finished items; callstone, needlefall and watchbell never bought (still true at HEAD: fw_W4_soak_integ_systems_v1_full1.txt).",
-   "open_in": "integration_plan_run2.json systems systems-18"
+   "status": "done",
+   "evidence": "integ_systems_verify1 fail: seeds 1-20 bought 28/31 finished items (callstone, needlefall, watchbell never). Run 2: three situational answers in the bots' build plan (plan only, no item stat changed); 31/31 bought on seeds 1-20 and 21-40, every soak gate PASS (fw_W4_soak_integ_systems_r2_full1 / _r2_full21); integ2_systems_verify1 pass (its _v2_ re-runs have identical bodies).",
+   "open_in": "done in run 2 (1d6261e2, 062245c0)"
   },
   {
    "id": "lead-02",

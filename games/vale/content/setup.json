@@ -50,7 +50,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_zone_shade",
+            "vfx": "lib_spell_glint_shadow",
             "telegraph": "ally_only"
           }
         },
@@ -125,7 +125,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_zone_lumen",
+            "vfx": "lib_spell_saplight_pool",
             "hitVfx": "lib_heal_rise",
             "telegraph": "ally_only"
           }
@@ -413,7 +413,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_ring_pulse",
+            "vfx": "lib_spell_glass_pane_set",
             "hitVfx": "lib_slow_glass"
           }
         }
