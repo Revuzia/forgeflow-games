@@ -1,0 +1,1098 @@
+{
+ "meta": {
+  "built_from": [
+   "scratchpad wave_results W1",
+   "scratchpad wave_results W2",
+   "scratchpad wave_results W3",
+   "scratchpad wave_results W5a",
+   "scratchpad wave_results W5b"
+  ],
+  "missing_waves": [
+   "W4"
+  ],
+  "how": "lanes.<lane>.packages[k].items = do these; lanes.<lane>.stitch = after the named lane finished. TRIAGE FIRST: many are already done."
+ },
+ "lanes": {
+  "audio": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "audio",
+       "id": "audio-01",
+       "source": "W1:blockers handoff",
+       "severity": "minor",
+       "what": "Renderer.listenerFocus(): { x, y } is on origin (8633b1e6, src/render/renderer.ts:129/1096). It returns the camera's ground focus in sim coordinates (x = world x, y = world z), the same frame as unit positions, and keeps the last match focus while the menu is up. Wire it into src/boot/main.ts as the audio listener position.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "audio-02",
+       "source": "W2:screens handoff",
+       "severity": "minor",
+       "what": "Please author one lock-in call cue per fighter in content/audio.json 'cues', named f_<fighterId>_call (f_ardit_call \u2026 f_vashil_call, 16 in total), following the same naming as the existing f_<id>_passive cues. Suggested settings: bus ui (the cue plays in the menus), spatial false, priority about 7, maxVoices 1, cooldown about 1 s, under 1.5 s long. Make each one VALE-original (a short signature line or motif per fighter, not a lock-in voice line from another game). The UI already plays it through UiSound.lockCall (src/ui/audio_port.ts) when the session confirms your lock, and plays it only if the id is in catalog.audio.cues; otherwise it falls back to ui.lockin. No UI change is needed once the cues land.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "audio-03",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "audio AUD-m4 engine: in src/audio/index.ts settings(s), read s.mono and s.softenLoud (the UI already sends both through AudioPort.settings; add them to AudioSettings).\n- mono: a summing stage after the master and before the limiter (channelCount 1, channelCountMode 'explicit', then back to stereo).\n- softenLoud: a lower limiter threshold (about -10 dB, knee 6, ratio 4) plus makeup gain so average loudness holds.\nThe Settings > Audio rows are live.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "audio-04",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "audio AUD-m2: implement the optional AudioPort.draft(s: DraftMusicState | null) declared in src/ui/audio_port.ts. The state is { phase: 'ban' | 'pick' | 'finalize'; mine: boolean; urgent: boolean }.\n- Layer the draft bed per phase (tokens: bans drone, picks harp pulse, finalise drums).\n- Add a local urgency pulse while urgent is true; draft.tsx sets it in the last 8 s of a timer the player must act on.\n- null means the draft closed.\nCalls are already deduplicated, and recordingPort logs them as draft:<phase>:<mine|theirs>[:urgent].",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "audio:AUD-4",
+       "source": "W3 verify (open)",
+       "severity": "minor",
+       "what": "audio:AUD-4 [partly]: Library hits re-measured: HF 0.080-0.104 and laptop loss <= 2.94 LU. Kit attack hits that now replace them on fighter autos: burdam 9.6-11.4 LU, hesmi 6.9-9.4, ulkro 5.7-6.5, lisvel 3.6-5.1, HF ~0. The impact gate does not cover f_* cues. fw_W3_v1_impact_kits.json\nFIX HINT: Add f_*_attack_hit/swing/ult_release to the build.py impact gate. Give the burdam, hesmi, ulkro, lisvel and dunsom hits a 300-800 Hz body and a 2-5 kHz contact.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "regression:kit-ability-hit-contact",
+       "source": "W3 verify (open)",
+       "severity": "minor",
+       "what": "regression:kit-ability-hit-contact [fail]: f_<id>_hit replaced the AUD-4-fixed c_hit_phys_* hits (contact 0.080-0.105) on ability hits. Hesmi's ability hits now read 0.005-0.013 and Lisvel's 0.004-0.048; one f_rishal_hit take reads 0.052. Ardit (0.000-0.002) and nurrow (0.001) lost the bright c_hit_magic attack (0.246). The kit gate checks contact only on attack_hit (audio/build.py:713). Source: _harness/_reports/fw_W3_v2_impact_kits.json.\nFIX HINT: Run the contact pass over f_<physical>_hit and extend the build.py:713 contact check to s == 'hit'.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "regression:kit-attack-hit-soft-top",
+       "source": "W3 verify (open)",
+       "severity": "minor",
+       "what": "regression:kit-attack-hit-soft-top [fail]: f_burdam_attack_hit has contact 0.417-0.518 and f_kemdo_attack_hit 0.377-0.451, above the documented TRANSIENT_SOFT_TOP of 0.30 for frequent hits (audio/build.py:453). The kit gate has only a floor.\nFIX HINT: Solve the tick level so contact lands at 0.07-0.30, and gate the top.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "audio",
+       "id": "regression:hitsfx-semantics",
+       "source": "W3 verify (open)",
+       "severity": "minor",
+       "what": "regression:hitsfx-semantics [partly]: The kit hit overrides kemdo's ult c_hit_true and rishal's ult c_crit (index.ts:1282), so their true-damage and crit timbres are lost. Separately, isT3 was inserted between ambientPoints' JSDoc and its function (index.ts:1455-1471).\nFIX HINT: Layer a damage-type or crit hitSfx under the kit hit, as CRIT_KIT_GAIN does, and move the JSDoc back onto ambientPoints.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "audio",
+       "id": "audio-09",
+       "source": "W3 verify (regression)",
+       "severity": "minor",
+       "what": "minor: the 16 own dashes are near-identical by spectrum (25 of 120 pairs under 8 dB, min 2.17, burdam/hesmi) and are gated only for ownership.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "client": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "client",
+       "id": "done:5",
+       "source": "W5b verify (open)",
+       "severity": "major",
+       "what": "done:5 [partly]: My own run of the real client: dev :5190, real Chrome GPU, all 48 splashes in 5 RIFT loading fixtures, every image confirmed is-ok, 0 console errors. Script: _harness/_reports/fw_W5b_ver2_loading.mjs. Shots: _harness/_shots/fw_W5b_ver2_loading_{1920,1280}_r{0-4}_{now,prop}.png. Luma was computed with the reviewer's luma.cjs on each card rect and plate rect (_harness/_reports/fw_W5b_ver2_luma_loading.txt).\n\nShipped CSS (screens.css:417-418 unchanged):\n- 1920x1080: card p50 50-59 (median 52.5); plate box 59-71 (median 64.5). 48 of 48 cards and 46 of 48 plates are under 70.\n- 1280x720: card 38-48; plate 48-59.\nThe done criterion is not met.\n\nHandoff CSS injected:\n- 1920x1080: card 77-82; plate 83-90. 0 of 48 under 70.\n- 1280x720: card 71-78; plate 78-88.\nThis reproduces the refix's numbers within 2 levels. Above 200 is <= 0.8 % except the seat-0 self outline (UI).\n\nOnly the 48 splashes changed and the portraits are untouched. The plates.py change is additive (the new keys default to None).\nFIX HINT: W5b has nothing left to do. W2 lands the handoff CSS in screens.css: a 5 % top mask on the .pcard__art img, and a .pcard__meta scrim of 0.90 / 0.62 / 0 with padding-top 2u. W2 should keep meta-text contrast (a text-shadow). Then re-run fw_W5b_ver2_loading.mjs; the gate is card and plate p50 >= 70 at 1920 and 1280.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "hud:HUD-2",
+       "source": "W5b verify (open)",
+       "severity": "major",
+       "what": "hud:HUD-2 [partly]: The chip art still passes. fw_W5b_ver1_fdist_all16.mjs at 26 px: min pair ilsheta-ulkro 59.5, 0 of 120 pairs under 55.\n\nPortrait.tsx:55-59 still knows only 'portrait' | 'splash'. These HUD faces still render portrait.png:\n- scoreboard: panels.tsx:110\n- recap: panels.tsx:192, 209\n- ally frames: side.tsx:59\n- target: status.tsx:217\n- banners and kill feed: top.tsx:194, 275, 284\nOnly minimap.tsx:176 uses icon.png, and there is no 'chip' kind anywhere in src/ui.\n\nNo W5b-owned file can route these faces to the chip.\nFIX HINT: W2 adds kind 'chip' to Portrait (it resolves f.art.icon, falling back to the portrait) at side.tsx:59, panels.tsx:110/192/209, top.tsx:194/275/284 and status.tsx:217, then re-shoots the 1080 scoreboard and kill feed.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "lead:new-icons",
+       "source": "lead: W4 items + battle spells",
+       "severity": "major",
+       "what": "Every item and battle/Hour spell in content/items.json and content/setup.json that has no own icon (uses another item's painting or a placeholder; _harness/icon_probe.mjs lists them) gets its own VALE icon painted through tools/imagegen/run_xai.py to the HUD-1 family-ground spec, written to content/ui/icons/items/<id>.webp (spells: content/ui/icons/spells/<id>.webp or wherever setup.json's icon refs point). No gears, clock hands, gems or runes; sensitivity rules apply. Hand the final path list to the systems lane (stitch) if content refs must change.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-04",
+       "source": "W1:ult-recall-dynres handoff",
+       "severity": "minor",
+       "what": "PERF-M2 step 5, the Settings \u203a Video toggle: add `dynamicResolution: boolean` (default true) to Settings.video in src/contracts/session.ts, plus the defaults and migration in src/session/settings.ts, and add a 'Dynamic resolution' on/off row to the Video settings screen. Nothing is needed in the renderer: Renderer.setQuality(video) already reads `video.dynamicResolution`, false turns it off, and setSettings({video}) re-applies it.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-05",
+       "source": "W1:leak-fog handoff",
+       "severity": "minor",
+       "what": "src/render/menu.ts lines 117-118: loadTerrainProps(...).then((p) => terrain.setProps(p ?? {})) and the loadTerrainLandmarks .then() run even when that menu terrain was already disposed (menu.build again or a match started). Guard both callbacks with `if (this.terrain !== terrain) { for (const g of Object.values(p ?? {}).flat()) g.dispose(); return; }` (and skip adding the landmarks in that case). Otherwise a late resolve rebuilds scatter on a dead terrain and orphans its GPU buffers. Terrain.dispose now frees props passed to setProps, so this is the only remaining menu-side path.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-06",
+       "source": "W1:polish-perf handoff",
+       "severity": "minor",
+       "what": "PERF-m4 plate: in the match HUD (src/ui/hud/world.tsx), read renderer.viewState for the starting value and subscribe with `const off = renderer.onViewState((s) => sig.value = s)`, calling off() on unmount. While the state is not 'ok', show a centred VALE-styled 'Restoring the view' plate, with a new string in content/strings.en.json. 'lost' means the 3D view is blank; 'restoring' means programs are recompiling, about 0.4-0.8 s measured. The ViewState type is exported from src/render/index.ts.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-07",
+       "source": "W1:polish-perf handoff",
+       "severity": "minor",
+       "what": "originality F7 credits panel: Settings > 'Credits & licences' should fetch ./third_party_notices.json (an array of {name, version, license, homepage}; 10 entries today, meshoptimizer joins on the next build) and link ./THIRD_PARTY_NOTICES.txt for the full licence texts. vite.config.ts serves both at the page root in dev, preview and the build.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-08",
+       "source": "W1:polish-perf handoff",
+       "severity": "minor",
+       "what": "PERF-m3 step 3, in _harness/e2e.mjs: make any console warning or error fail its journey. In each journey's tail (around lines 210, 276, 421, 474), replace `const hard = errors.filter((l) => /^\\[(http [45]|pageerror)/.test(l));` with `const hard = errors;`. pw.mjs records only error, warning, pageerror and HTTP 400+ lines, and already drops favicon. The pebble toNonIndexed warning and the favicon 404 are gone on the W1 side.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "client",
+       "id": "client-09",
+       "source": "W2:sensitive-art handoff",
+       "severity": "minor",
+       "what": "client F6: content/ui/modes/{rift,bridge,fray}_card.webp are now sensitivity-signed (W2_art_signoff.md) and safe to show on Play. HUD-1: linen_hood.webp and tunlan_shadow_play.webp were painted on the existing navy icon ground, so retint them with the rest when the family grounds land. Home tiles ranked_season and collection_highlight now ship at 1280x640 (the 16:8 tile frame, manifest size 'tile').",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-10",
+       "source": "W3:blockers handoff",
+       "severity": "minor",
+       "what": "AUD-2 UI half. (1) src/ui/audio_kinds.ts: add 'queue_remind' to UI_CUE_KINDS. content/audio.json already binds ui.queue_remind -> ui_queue_remind, and this clears the current content:check warning '$.ui.queue_remind is not a role the client plays'. (2) src/ui/state.ts: while queue state === 'found' and not accepted, call this.sound.play('queue_remind') once when the readyTimer first drops to 4 s or less (once per ready check). The engine already puts that cue on the alert path, so a hidden tab hears it: measured -10.09 dBFS hidden at default settings. (3) Add the Notification API ping on 'found' (permission asked at queue time, never on load) and a favicon badge, alongside the existing title flash. No audio work is needed for these: ui_queue_pop is already heard hidden at -8.01 dBFS. (4) Optional: if Settings ever gets a dedicated 'alerts' slider, the engine currently floors the alert gain at max(0.4, master x bus).",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-11",
+       "source": "W3:identity-a handoff",
+       "severity": "minor",
+       "what": "Fighter lock-in call (AUD-1). The engine (src/audio/index.ts, ValeAudioPort) now has `fighterCall(fighter: string): boolean`. It plays f_<fighter>_call on the ui bus and returns false, playing nothing, when content has no call for that fighter (currently ardit, burdam, dunsom, ervet, hesmi, ilsheta, kemdo and lisvel have one; identity-b adds the other 8). Three changes: (1) src/ui/audio_port.ts: add the optional `fighterCall?(fighter: string): boolean` to AudioPort. (2) In UiSound, add `call(fighter: string): void { try { this.port?.fighterCall?.(fighter); } catch { /* never breaks the UI */ } }`. (3) src/ui/screens/draft.tsx, at the three lock-in sites (lines ~162, ~322, ~402): keep `sound.play('lockin')` and add `sound.call(<the locked fighter id>)`. The call is mastered at -21 LUFS to ride on ui_lockin (-20), so play both. Do not build the cue id in UI code; the engine owns the f_<fighter>_<slot> convention. Separately, a pre-existing content:check warning remains: '$.ui.queue_remind is not a role the client plays'. The check apparently reads only UI_CUE_KINDS, not UI_CUE_KINDS_OPTIONAL, so the fix belongs in tools/build_content.ts or audio_kinds.ts. Neither file is W3's.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-12",
+       "source": "W3:identity-b handoff",
+       "severity": "minor",
+       "what": "Optional cleanup, nothing is broken. W2 already plays the lock-in call through UiSound.lockCall (src/ui/audio_port.ts:62, called at src/ui/screens/draft.tsx:160). It builds the cue id in UI code (FIGHTER_CALL \u2192 f_<fighter>_call) and falls back to 'lockin'. All 16 fighters now have f_<fighter>_call, so every lock-in plays the fighter's call. Optional change: call the engine's port.fighterCall?.(fighter), which returns false when there is no call, then fall back to play('lockin'). That keeps the f_<fighter>_<slot> naming convention in src/audio only. Separately, the content:check warning '$.ui.queue_remind is not a role the client plays' is still there: add 'queue_remind' to UI_CUE_KINDS in src/ui/audio_kinds.ts, or have tools/build_content.ts also read UI_CUE_KINDS_OPTIONAL.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-13",
+       "source": "W3:polish handoff",
+       "severity": "minor",
+       "what": "Nothing is needed to finish AUD-m2 or AUD-m4. The engine now implements AudioPort.draft(s) and reads Settings.audio.softenLoud, so the two W2_verify1 seam regressions are closed on the engine side. A re-verify can check window.__valeAudio.access.soften === true after toggling 'Soften loud sounds', and the urgency layer during your last 8 s of a pick. The draft layer ids are now phase_pick / phase_finalize / urgency_local in content/audio.json (no W2 file referenced the old ids). Still open from earlier packages: the content:check warning '$.ui.queue_remind is not a role the client plays'. Fix it by adding 'queue_remind' to UI_CUE_KINDS in src/ui/audio_kinds.ts, or by having tools/build_content.ts read UI_CUE_KINDS_OPTIONAL.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-14",
+       "source": "W5a:polish handoff",
+       "severity": "minor",
+       "what": "HUD-3, minimap.tsx half: raise Wick dots from 1.7*k to about 2.2*k with a 1 px ink keyline (minimap.tsx:358). After that, verify the fog contrast on a live 1x capture with _harness/_reports/final_hud_verify_scripts/prof.mjs. The new RIFT minimap.png keeps the old bounds (sim 0..170 x 0..110 over 1100 x 712), so no mapping change is needed; my offline measure gives a fog gap of 60 luma. Plaza padding was not done: it needs minimap.tsx to draw the image over padded world bounds (for example read art.terrain.minimapBounds [x0,y0,x1,y1] and drawImage from X(x0),Y(y0) to X(x1),Y(y1), with the fit computed over those bounds). After that, art/blender/maps/minimap_survey.py needs a pad option to re-render with a margin.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-15",
+       "source": "W5b:face-chips handoff",
+       "severity": "minor",
+       "what": "HUD-2 wiring. The new face chips are in art/out/fighters/<id>/icon.png (art.json 'icon'), but only minimap.tsx:183 uses them. Every other HUD face uses <Portrait ... round>, which loads portrait.png (Portrait.tsx:59). Proposed change in src/ui/components/Portrait.tsx: add 'chip' to `kind` ('portrait' | 'splash' | 'chip'). For kind === 'chip', resolve `ref = f?.art.icon ?? s?.portrait ?? f?.art.portrait` and use the default position '50% 50%' (the chip is already square and framed). Then pass kind=\"chip\" at: side.tsx:59 (ally frames), panels.tsx:110 (scoreboard face .hscore__face), panels.tsx:192 and :209 (death recap faces), top.tsx:192 (aface banners), top.tsx:273 and :282 (kill feed / who faces), status.tsx:217 (target frame). Optionally also dialbar.tsx:136; the own-portrait there is larger, so portrait.png may stay. Menus (draft, collection, loading, postgame) keep portrait.png. The chips belong to the base fighter, not to skins: a fighter's identity cue at chip size stays the same whatever skin it wears. Before/after in context: _harness/_shots/fw_W5b_chip_ctx_scoreboard.png.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-16",
+       "source": "W5b:dusk-plates handoff",
+       "severity": "minor",
+       "what": "client F3, loading card CSS (src/ui/styles/screens.css, the `.pcard__art > .aimg, .pcard__art > .aimg__skel` rule and `.pcard__meta`). The top fade dims the fighters' faces. Its mask is `transparent 0, rgba(0,0,0,.45) 14%, rgba(0,0,0,.85) 30%, #000 44%`, but heads start at 5.3-11.0% of the plate (median 8.7%). So the CSS alpha is 0.17-0.35 at the crown and 0.36-0.52 at the face (crown + 6%), and faces show at roughly half opacity. Shot: _harness/_shots/fw_W5b_plates_loading_row2_crop.png, where Vashil's ring, Ilsheta's chimney and Rishal's head are ghosted. plates.py already darkens each plate toward its top edge (0.42, fading to 0 at half height), so a short edge is enough: `mask-image: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.7) 2.5%, #000 5%)`. The same fade plus the meta scrim is also why luma.cjs reads the whole loading card at p50 34-47 and the plate box (lower 84%) at 44-60, while the shipped plate in that same window is p50 76-102. Emulator: `python3 _harness/_reports/fw_W5b_card_emu.py now|prop`, built from the shipped splashes and within about 2 luma of the 1920 shot. Results:\n- Current CSS: card p50 32-49, plate region 39-69.\n- 5% mask plus a lighter scrim (`.pcard__meta` background `linear-gradient(to top, rgba(11,13,17,.90) 0%, rgba(11,13,17,.62) 45%, rgba(11,13,17,0) 100%)` over about 80 px of a 300 px card): card 51-75, plate region 64-88.\nKeep `.pcard__art` height at 84% and CARD_CROP '86% 50%'. The art now puts all 48 figures at 0.706-0.764 of the card (p50 0.728). Moving to 0.88 would put nurrow_shadeprint at 0.801. The loading.tsx comment says 'p50 75 %', but that number came from a measure that included the ground shadow; head to feet is p50 0.728.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "client",
+       "id": "client-17",
+       "source": "W5b:refix1 handoff",
+       "severity": "minor",
+       "what": "done:5 / client F3, loading-card CSS in src/ui/styles/screens.css:417-419. In `.pcard__art > .aimg, .pcard__art > .aimg__skel`, keep `inset: auto 0 0 0; height: 84%` and replace both mask-image and -webkit-mask-image with `linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.7) 2.5%, #000 5%)`. In `.pcard__meta`, set `padding-top: calc(2 * var(--u))` (was 4u; the meta goes from 104 px to 88 px at 1920) and `background: linear-gradient(to top, rgba(11, 13, 17, 0.90) 0%, rgba(11, 13, 17, 0.62) 45%, rgba(11, 13, 17, 0) 100%)`. Keep CARD_CROP '86% 50%'. With exactly this CSS injected over the new splashes in the real client, all 48 cards read card p50 75-82 and plate box 84-90. With today's CSS they read 50-58. The names and player lines stay legible: _harness/_shots/fw_W5b_ref1_loading_r1_prop.png. To verify after landing, run `node _harness/_reports/fw_W5b_loading_cards.mjs --css now --prefix fw_W2_cards`; every card should read p50 >= 70.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-18",
+       "source": "W5b:refix1 handoff",
+       "severity": "minor",
+       "what": "hud:HUD-2. In src/ui/components/Portrait.tsx, widen `kind` to 'portrait' | 'splash' | 'chip'. For kind === 'chip', use `ref = f?.art.icon ?? s?.portrait ?? f?.art.portrait` with the default position '50% 50%' (the chip is already a square, framed head-and-shoulders crop on ink). The chip belongs to the base fighter, not the skin. Pass kind=\"chip\" at these places:\n- side.tsx:59 (ally frames);\n- panels.tsx:110 (scoreboard .hscore__face) and :192 and :209 (death recap);\n- top.tsx:194 (aface banners), :275 (who__face) and :284 (whodot / kill feed);\n- status.tsx:217 (target frame);\n- optionally dialbar.tsx:136.\nThe menus keep portrait.png. Then re-shoot the 1080 scoreboard and kill feed.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "perf:PERF-m4",
+       "source": "W1 verify (open)",
+       "severity": "minor",
+       "what": "perf:PERF-m4 [partly]: The renderer half is in (viewState, timer abandoned on loss, dynres held while not 'ok'). The plate is W2's. probe_ctxloss was not re-run.\nFIX HINT: W2 mounts the 'Restoring the view' plate; re-run probe_ctxloss after it lands.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "hud:HUD-1-seam",
+       "source": "W2 verify (open)",
+       "severity": "minor",
+       "what": "hud:HUD-1-seam [partly]: 18 W4 items borrow another item's painting. glass_veil (craft) uses linen_hood (guard ground) and bellrope (guard) uses hand_bell (craft ground); see content/items.json and the icon_probe log.\nFIX HINT: Generate their own icons with tools/imagegen and hand the paths to W4 so it can repoint content/items.json.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "audio:AUD-m4",
+       "source": "W2 verify (open)",
+       "severity": "minor",
+       "what": "audio:AUD-m4 [partly]: The UI writes audio.softenLoud (settings.ts:122). app.tsx:68 forwards it unchanged, but the engine reads audio.soften (src/audio/index.ts:142,:437), so 'Soften loud sounds' is dead.\nFIX HINT: Map softenLoud to soften in app.tsx:68, or have W3 read softenLoud. Verify that __valeAudio.access.soften is true after toggling.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "audio:AUD-m2",
+       "source": "W2 verify (open)",
+       "severity": "minor",
+       "what": "audio:AUD-m2 [partly]: The UI calls AudioPort.draft() (audio_port.ts:68,:111). The engine has no draft() method, only musicPhase/musicUrgency (src/audio/index.ts:167-169), so the urgency layer is never driven.\nFIX HINT: Add an adapter in W2's app.tsx or audio_port.ts: draft(s) calls musicPhase(ban\u2192null, pick\u2192'picks', finalize\u2192'final') and musicUrgency(!!s?.urgent), after music('mus_draft').",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "play:roles-720",
+       "source": "W2 verify (open)",
+       "severity": "minor",
+       "what": "play:roles-720 [partly]: At 1280x720 on Play, the role chip labels are cut through at the scroll box edge, with no fade (fw_W2_v1r_sweep_1280_play_rift.png, y 622-640). The sweep does not count clipping inside a scrolling box.\nFIX HINT: Add a 24 px bottom fade mask to the Play body scroller, or compact the roles block. Extend sweep_720 to flag text straddling a scroll edge at scrollTop 0.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "loading:tip-mode",
+       "source": "W2 verify (open)",
+       "severity": "minor",
+       "what": "loading:tip-mode [partly]: The RIFT loading screen shows a BRIDGE tip (fw_W2_v1r_sweep_1280_loading_flow.png); loading.tsx:35-45 does not filter tips by mode.\nFIX HINT: Tag tips by mode in client.json and filter them in loading.tsx.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "client",
+       "id": "hud:HUD-3",
+       "source": "W5a verify (open)",
+       "severity": "minor",
+       "what": "hud:HUD-3 [partly]: Offline check on minimap.png with minimap.tsx's fog emulated (ink at 140/255): fogged lane p50 90.4 vs canopy 27.7, a gap of 62.8 (need >= 25). Not done yet: plaza discs still clipped at the art edge, Wick dots, live 1x capture. These need W2's minimap.tsx changes.\nFIX HINT: W2: Wick dots to 2.2*k with an ink keyline, and draw the minimap over padded bounds. Then re-render with minimap_survey.py using a pad option, and check on a live capture with prof.mjs.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "client",
+       "id": "client-26",
+       "source": "W5b verify (regression)",
+       "severity": "minor",
+       "what": "watch (W2 handoff): under the prop scrim the meta text is weaker over bright grounds (_harness/_shots/fw_W5b_ver2_card_foot_now_vs_prop.png); at 1280x720 the lowest card under prop has 1 level of headroom (kemdo_highrim 71).",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "chars": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "chars",
+       "id": "ruling:dunsom-beak",
+       "source": "owner ruling 5 (owner_rulings.md)",
+       "severity": "major",
+       "what": "Dunsom: shorten and round the gold beak into a short rounded bill no longer than the eye-to-chin height (it must not read as a plague-doctor mask at chip, portrait or splash size). Rebuild dunsom + skins, re-render icon (face chip), portrait and splash for every skin, re-run the facechip gate (every pair >= 55) and lineup_qa.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "lead:fighter-tris",
+       "source": "lead: perf budget",
+       "severity": "major",
+       "what": "Fighter triangle budget: the RIFT t=900 Low frame draws 269k fighter tris (frame 509k > 500k budget) and the late match peak 858k (actors 741k). Bring each fighter GLB (and skins) inside its per-fighter budget (_design/sections or art budget docs) and/or author an LOD1 the renderer can use for the main pass beyond a distance; re-measure with perf_1080 --prod (low + match peak <= 500k).",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-03",
+       "source": "W1:leak-fog handoff",
+       "severity": "minor",
+       "what": "Fighter triangle counts. In the RIFT t=900 Low bench frame of the perf_1080 --prod sweep (_harness/_reports/fw_W1_perf_1080_leakfog.json presets.low.detail), actors:fighter drew 269,488 triangles in 21 draws (plus crowd 81k and monsters 58k). That put the frame at 509,664, over the r12 B4 500k triangle budget. Earlier sweeps at similar moments saw 227k-409k actor triangles. Please check which fighter GLBs (or skins) grew and bring the per-fighter count back within its triangle budget. The changes in this package (fog shader, memory freeing) do not change triangle counts.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-04",
+       "source": "W1:polish-perf handoff",
+       "severity": "minor",
+       "what": "Optional, PERF-m5 remainder. In the late-game base fight of the whole-match run (_harness/_reports/fw_W1_perf_1080_polish2.json, peak second 1099.5 s), the fighters' main pass drew 324k triangles. Their shadows and outline hulls already use LODs; W1 does not simplify fighter bodies at runtime, to protect faces. Bringing the peak under 500k needs lighter fighter bodies: about 16k triangles or fewer, or an authored LOD1.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-05",
+       "source": "W2:sensitive-art handoff",
+       "severity": "minor",
+       "what": "originality F9 (W5 half, unchanged by W2): Lisvel needs a carved face plate under the glass visor, not a wrapped, featureless head. Sukri needs the inside of the hood lifted or lit so the mask does not sit in a dark void. Also noted while painting: Dunsom's small gold beaked mask reads like a plague-doctor mask in painted close-ups, so W2 dropped him from the FRAY card. Consider making the beak shorter or less pointed if the model shows the same at portrait size.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-06",
+       "source": "W2:hud-postgame handoff",
+       "severity": "minor",
+       "what": "client F3 art half: when you re-render the splash plates in place, keep the current framing: 16:9 at 1600x900, the figure's mass centred at 0.66\u20130.76 of the width, head at about 0.10 and feet at about 0.95 of the height. The loading card (src/ui/screens/loading.tsx CARD_CROP '86% 50%', plate in the lower 84% of the card) shows x 0.51\u20130.92 of the plate and fades its top into ink. Plates framed off-centre will be cut. lisvel_almanac_splash.png starts at 0.23 of the height (fills only 65%); a slightly higher figure would bring it into the 70\u201380% band.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-07",
+       "source": "W5b:face-chips handoff",
+       "severity": "minor",
+       "what": "Ilsheta's chip was rendered from her current cache (art/.cache/fighters/ilsheta.blend, Oct 28 13:56); the wave note had said to skip her until her pass finishes. If her model changes, re-render with `python3 art/build.py portraits ilsheta --only icon` and re-check with `python3 art/blender/common/facechip.py gate` (every pair must stay >= 55).",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-08",
+       "source": "W5b:dusk-plates handoff",
+       "severity": "minor",
+       "what": "Ilsheta: the wave note said to skip her until her model pass finishes. Her plates (base, Stillwater, First Bell) were rendered from her current cache and skin GLBs; this package re-rendered First Bell's splash with fill 0.90. If her model changes, re-render with `python3 art/build.py portraits ilsheta --skins --only splash,portrait`, then check `python3 art/blender/common/plates.py measure ilsheta ilsheta_stillwater ilsheta_first_bell --box 0.84` and `... frame ... --box 0.84`.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "chars",
+       "id": "perf:PERF-m5",
+       "source": "W1 verify (open)",
+       "severity": "minor",
+       "what": "perf:PERF-m5 [partly]: The match peak is 857,978 tris with 41 programs (fw_W1_perf_1080_polish2.json, confirmed by W5a_verify2: 857,686). The fixed views pass. Not re-run (budget).\nFIX HINT: W5b lighter fighter bodies or an authored LOD1; prewarm the late program so programs stay \u2264 40.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "originality:F9",
+       "source": "W5b verify (open)",
+       "severity": "minor",
+       "what": "originality:F9 [partly]: Lisvel's face plate shows a nose and a closed smile (fw_W5b_ver1_lisvel_face_zoom.png). Sukri's hood lining is lifted. The Hooded Lamp's pointed RoundCone finial is still at small_units.py:133 (W5a / integration pass).\nFIX HINT:",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "sensitivity:new-art",
+       "source": "W5b verify (open)",
+       "severity": "minor",
+       "what": "sensitivity:new-art [partly]: I viewed all 16 chips, 48 portraits, 48 splashes and the close-ups: no blocker. Watch items: (1) the Dunsom chip is all plague-doctor beak; the ruling is pending. (2) Sukri's hollow-eyed mask has grain streaks running down from the eyes, and it is the largest face on the loading row. (3) Kemdo's hood peak shows in the chip.\nFIX HINT: Re-render Dunsom's icon, portrait and splash after the rounded bill (build.py portraits dunsom --skins, then the facechip gate). Soften Sukri's under-eye grain lines and consider warm eye inlays.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "chars",
+       "id": "chars-12",
+       "source": "W5b verify (regression)",
+       "severity": "minor",
+       "what": "minor (W5b art): the card-floor toe lifts every splash's black point. Whole-image luma, old vs new over 48 splashes: p1 median +28 (new 16-57); p5-p95 contrast drops by a median of 30 and up to 42 levels (Ilsheta First Bell 106->72, Ervet 107->78, Rishal Chalkline 101->80); saturation in the darkest quarter drops by a median of 0.06; 0 % clipped (_harness/_reports/fw_W5b_ver2_splash_diff.txt). Full splashes read hazier, with a grey veil (_harness/_shots/fw_W5b_ver2_splash_oldnew_a.png, fw_W5b_ver2_splash_oldnew_lisvel_gorgewalk.png). The change is mild in the draft showcase, and the draft and skins sweep passed with 0 failures (fw_W5b_ver2_sweep.json). Suggested follow-up once W2's CSS lands: lower card_lo or toe_left so the full-splash p1 stays around 30 or below.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "world": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "world",
+       "id": "ruling:hooded-lamp-knob",
+       "source": "owner ruling 6 (owner_rulings.md)",
+       "severity": "major",
+       "what": "Hooded Lamp ward: replace the pointed finial in art/blender/units/small_units.py ward() with a rounded knob; rebuild hooded_lamp.glb and re-render art/out/units/hooded_lamp_icon.png.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "world-02",
+       "source": "W1:walls-hue handoff",
+       "severity": "minor",
+       "what": "Optional, env F4 fix step 2 (not needed for the gate, which already passes with the render-side silhouette): on RIFT, where a lane runs along a wall block's north lip within 2 m, cap the lip at \u2264 2.2 m via art.terrain.wallHeights or per-block heights in content/maps/map_rift.json. Re-check with `node _harness/probe_wallmask.mjs rift --n 48` (byBinCover shows the cover alone). If you cap lips, tell W1: the Dialwood crown sizing near those lips is in src/render/terrain.ts, which W1 owns.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "world-03",
+       "source": "W1:polish-perf handoff",
+       "severity": "minor",
+       "what": "env m1 art half, measured by value_probe's new base spots (tag fw_W1_bases). RIFT Aubade Hourbell: L* p95 82 (target 80 or less), 15.3% of its pixels above luma 180; cap the structure chalk near L* 80 and keep the lit accent as the bright point. BRIDGE Serenade plaza: mean saturation 0.49, above the 0.17-0.40 band. RIFT plazas (0.26 / 0.35) and BRIDGE Aubade (0.30) pass. Re-check with `node _harness/value_probe.mjs --maps rift,bridge --tiers high --tag <tag> --flash 0` and read the base<team>_plaza and base<team>_structure verdicts.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "world-04",
+       "source": "W2:sensitive-art handoff",
+       "severity": "minor",
+       "what": "originality F9: art/out/units/hooded_lamp_icon.png (Hooded Lamp ward icon, 128 px) shows an onion-dome cap with a small pointed tip over one blue orb. Round off the tip so the cap is a plain rounded dome; keep the single blue lamp core and do not add eye-like pairs. If the hooded_lamp.glb model has the same finial, round it off there too.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "world-05",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "hud HUD-3, optional: if you pad the RIFT minimap.png bounds so both plaza discs sit fully inside, tell W2 the new image-to-world mapping (margin in metres per side). minimap.tsx then needs its Fit (X/Y and the click inverse) to use it.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "world-06",
+       "source": "W5b:sensitivity-rishal handoff",
+       "severity": "minor",
+       "what": "Hooded Lamp ward (originality F9: 'round off the tip'). In art/blender/units/small_units.py ward(), replace the pointed finial `hood.add(sdf.RoundCone((0, 0.05, 0.75), (0, 0.11, 0.86), 0.06, 0.012), k=0.04)` with a rounded knob, e.g. `hood.add(Ellipsoid((0, 0.035, 0.80), (0.05, 0.05, 0.045)), k=0.04)`. Then rebuild hooded_lamp and re-render assets/units/hooded_lamp_icon.png (art/blender/units/unit_icons.py).",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "world-07",
+       "source": "W5b:sensitivity-rishal handoff",
+       "severity": "minor",
+       "what": "Longshade, the other half of originality F3 (not in this package): remove the ink tear streaks under the lamp eyes in art/blender/units/creatures_b.py (around :1324, the 'ink tears under the eyes' design note), keep the lamp eyes, and re-render the Longshade icon.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "wave_b:Wick hood value L* <= 65",
+       "source": "W5a verify (open)",
+       "severity": "minor",
+       "what": "wave_b:Wick hood value L* <= 65 [partly]: wickTop25 in my value_probe: RIFT High 64.0, RIFT Low 67.1 (2.1 over the cap), BRIDGE 59.4 / 64.1. The claimed 65.9 does not reproduce; an independent run (fw_W5a_v1) also reads 67.1.\nFIX HINT: brightwick Aubade crown cups and pauldron top: #C9C5BB -> ~#B8B4AA. glimwick Serenade dome top light: 0.12 -> 0.08. Re-measure RIFT Low wickTop25 to <= 65.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "world",
+       "id": "env:F5",
+       "source": "W5a verify (open)",
+       "severity": "minor",
+       "what": "env:F5 [fail]: Not attempted (the engineers say so). dialwood.py and the tree GLBs are unchanged. Canopy luma p50 51.\nFIX HINT: Raise the vein and stem-to-tip contrast in dialwood.py, split the 6-tri fan for a midrib, add cavity darkening and per-tree hue jitter. Rebuild the 5 trees via scatter.py and keep canopy p50 51-56 / p99 91-95.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "world",
+       "id": "minor:landmark-leftovers",
+       "source": "W5a verify (open)",
+       "severity": "minor",
+       "what": "minor:landmark-leftovers [partly]: The VI slab (85, 107) still reads as an SDF pillow (fw_W5a_ver1_rift_pan_at3), and the numerals are still SDF builds. glass_belfry.glb is 1.74 MB / 34.8k tris.\nFIX HINT: Optional: rebuild vi_slab and the numerals with landmarks_art2's structure_kit bake.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  },
+  "engine": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "engine",
+       "id": "engine-01",
+       "source": "W2:flow-blockers handoff",
+       "severity": "minor",
+       "what": "tools/build_content.ts: in the roleSets check, import UI_CUE_KINDS_OPTIONAL from src/ui/audio_kinds.ts. For key 'ui', a bound role listed there should not warn 'is not a role the client plays', and leaving it unbound should not error. The condition becomes `if (!kinds.includes(role) && !(key === 'ui' && (UI_CUE_KINDS_OPTIONAL as readonly string[]).includes(role))) dg.warn(...)`. Today `npm run content:check` still shows this 1 warning, which was already there before W2: content/audio.json $.ui.queue_remind. Do not move queue_remind into the required list unless _harness/fixtures/content_min/audio.json also gets `\"queue_remind\": \"fx_cue_hit\"` in its ui map; otherwise probe_content_build fails.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-02",
+       "source": "W2:screens handoff",
+       "severity": "minor",
+       "what": "Optional, for CI (package.json is not a W2 file): add the script \"sweep:720\": \"node _harness/sweep_720.mjs fast\". It needs the dev server on :5190 and exits 1 on any clipped label, must-see content below the fold or under the footer, or text under the portal control bar, at 1280x720 and 1920x1080. 'node _harness/sweep_720.mjs flow' runs the same checks through a real Co-op queue.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-03",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "tools/build_content.ts: import { lintPlayerCopy, formatCopyHit } from '../src/ui/copy_lint.ts'. Run it over every parsed content file except vfx.json and audio.json, labelled by its content path, plus strings.en.json, and report each hit with dg.warn(...) until W4/W5b land their copy fixes (23 hits today, 0 in W2 files), then dg.err. Exact hits: _harness/_reports/fw_W2_polish_copy_lint.txt.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-04",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "originality F7: emit THIRD_PARTY_NOTICES.txt at the dist root next to index.html, served as text/plain. It must hold the full license texts for:\n- three (MIT)\n- postprocessing (Zlib)\n- n8ao (its LICENSE file is CC0 1.0; package.json says ISC)\n- preact, @preact/signals, @preact/signals-core (MIT)\n- zod (MIT)\n- @fontsource gloock, instrument-sans, atkinson-hyperlegible-next, atkinson-hyperlegible-mono (OFL-1.1)\nSettings > Credits fetches `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.txt` and shows it. Also keep @license comments (vite legalComments) if possible.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-05",
+       "source": "W5a:needles-units handoff",
+       "severity": "minor",
+       "what": "_harness/value_probe.mjs: the RIFT High walkableSpread gate depends on the 'fight' spot the sim picks (b.fight()). Since W4's bot change, at seed 7, t 75 that spot is the Seat (86.1, 55) instead of the South road (89.1, 96.4), which raises walkableSpread to 49 against a 45 limit. With the old spot pinned it measures 44 PASS (_harness/_reports/fw_W5a_value_probe_pinnedfight.log). Suggested fix: pin a fixed fight spot per map, or leave 'fight' out of the walkable pool.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-06",
+       "source": "W5a:landmarks-2 handoff",
+       "severity": "minor",
+       "what": "Reminder, the same issue as before: _harness/value_probe.mjs RIFT High walkableSpread now measures 51 (limit 45; it was 48 and 49 in earlier runs). The cause is still the 'fight' spot from b.fight(), now at the Seat 84.8,54.7: walkable p5 is 50 and the Seat's p5 is 42. Lane, centre and jungle per-spot values are identical to the previous run. Suggested fix, as before: pin one fight spot per map, or leave 'fight' out of the walkable pool. Report: _harness/_reports/fw_W5a_lm3_value_probe.log.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-07",
+       "source": "W5a:landmarks-2 handoff",
+       "severity": "minor",
+       "what": "For your perf_1080 sweep: content/maps now has 58 off-map skirt landmarks (RIFT 28, BRIDGE 20, FRAY 10) loaded by loadTerrainLandmarks. Each is 1 draw (body) or 2 (body plus one merged Dialwood tree mesh), and casts shadows through your caster cull. Triangle counts per module: skirt_rift 25.4k with 21 trees, skirt_rift_low 23.8k with 27 trees, skirt_bridge 8.1k, skirt_court 7.2k, skirt_fray 1.1k. Usually 2 or 3 modules are on screen at an edge. The new glass_belfry.glb is 1.74 MB (34.8k tris), larger than the other landmarks (dawn_arch 0.6 MB). If it matters for the build budget, I can cut it by dropping the flag chamfers. The trees' COLOR_0 is exported as VEC3 (alpha removed), so the vertex colours never act as coverage.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-08",
+       "source": "W5a:landmarks-2 handoff",
+       "severity": "minor",
+       "what": "Not in this package: F1 fix step 3, a low dais in place of the flat spawn ring. The ring is the plaza's ground-shader inlay in src/render/terrain.ts. If you want it as a model instead, I can build a flush dais GLB placed through content/maps.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "engine",
+       "id": "engine-09",
+       "source": "W5a:polish handoff",
+       "severity": "minor",
+       "what": "env m1 step 1: add base spots (the Aubade and Serenade spawns, e.g. RIFT (8.5,55) and (161.5,55), BRIDGE (7,22) and (149,22)) to _harness/value_probe.mjs. Expected values from my shots: Aubade plaza C* 11.7 / sat 0.3, Hourbell L* p95 81.6. The RIFT High walkableSpread failure is still the 'fight' spot issue: 49 this run (_harness/_reports/fw_W5a_pol_value_probe.log); pin one fight spot per map or leave 'fight' out of the walkable pool. env m2 step 2 is yours: the Sunsplinter shallows in terrain_glsl.ts need depth darkening, a refraction wobble and foam lines at the banks.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-10",
+       "source": "W5a:polish handoff",
+       "severity": "minor",
+       "what": "For information, a dependency in src/render/terrain.ts. FRAY's hour_stone.glb is exported sunk 1.2 m (landmarks_art2.py SINK), because loadTerrainLandmarks stands a landmark on groundAt(), which inside its own non-replaced wall block is the block's top (wallHeights.hourStones 1.2). The stone encloses that cliff block. If terrain.ts ever lets a landmark replace a rotated wall (an OBB test) or stops lifting landmarks onto wall tops, the hour-stone must be re-exported without SINK. Separately, there are 12 new flush camp-lip landmarks on RIFT (each 1 draw, 340-460 tris, a 512 atlas) for your perf sweep.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-11",
+       "source": "W5a:refix1 handoff",
+       "severity": "minor",
+       "what": "Make culling of wide, flat landmarks tighter in src/render/terrain.ts. At the low-road fight (101.52,95.6) the south skirt modules still draw 8,902 main-pass tris and about 4.8k shadow tris, but none of their pixels are on screen (_harness/_shots/fw_W5a_ref1_rift_edge_at5.png shows no skirt). The cause is bounding spheres.\n\n(1) Shadow casters. caster() stores `top: sp.center.y + sp.radius`. For a 22 x 14 m module that is 3.8 m tall, that gives top about 13 m. cullCasters then uses k = top*0.5, which inflates both the sun shift and the radius (+ sl*k). Take `top` from the world bounding box instead: geometry.boundingBox applied to matrixWorld, then .max.y.\n\n(2) Main pass. Optionally, for loadTerrainLandmarks meshes, set frustumCulled=false and toggle visible each frame with a world-Box3 test against the view frustum, the same way the casters are handled. three's sphere test, with a radius of about 13 m, admits modules whose boxes are outside the view.\n\nThe verifier proposed a 'shadow: false' content flag for off-map skirts. I did not add it to content/maps, because it would remove the Dialwood crowns' contact shadows on the skirt beds. If you still want the flag after (1), implement it in loadTerrainLandmarks and W5a will set it on the entries.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "engine-12",
+       "source": "W5b:burdam-hesmi handoff",
+       "severity": "minor",
+       "what": "Hesmi's attack2 is a LEFT uppercut-hook, but `hesmi_atk_swing` (content/vfx.json) plays one fixed ribbon arc for both clips (arcDeg [80, -70], right to left). Its impact glint resolves weapon_tip -> weapon -> prop.R, which is the right fist. For attack2, please mirror the arc (left to right) and put the glint on weapon_l (prop.L), for example with a per-clip socket/arc override. Re-reviewers should know the same thing: the final_combat pose harness tracks weapon_tip = prop.R, which is not the striking fist in attack2. The left fist travels 3.37 m to the impact; the right fist travels 1.63 m.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "combat:F6-probe",
+       "source": "W1 verify (open)",
+       "severity": "minor",
+       "what": "combat:F6-probe [partly]: The full probe_kit_hue run exits 1 on tunlan a1/a2 with n=0 (nothing measured). The same kit re-run gives 0.60/0.909. The probe does not check that the caster is alive or that the cast happened.\nFIX HINT: Revive and refill the caster and victim after staging, assert that the cast produced an event, and retry n=0 rows as 'not measured' instead of sig 0.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "combat:F4",
+       "source": "W1 verify (open)",
+       "severity": "minor",
+       "what": "combat:F4 [partly]: The anchor is fixed (Tunlan beat at [1221,519], next to the victim). But the victim-box white share on the beat frame is Rishal 0.60/0.64, Tunlan 0.44, Hesmi 0.32, Kemdo 0.07 (base 0.016). Shots: fw_W1_v1_ult_{rishal,tunlan}_peak.jpg.\nFIX HINT: In content/vfx.json, cap the over-body luminance of Rishal's beam core and Tunlan's cast bloom, or apply LIFT_BODY_CAP to additive VFX over body pixels. Gate on white share \u2264 0.35.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "engine",
+       "id": "perf:PERF-m3",
+       "source": "final_parity_open polish (wave W1; reported partly)",
+       "severity": "minor",
+       "what": "Console noise in every match and at boot\nFIX: Use `g.index ? g.toNonIndexed() : g` in pebble(). Add an original favicon and a `<link rel=icon>`. Assert zero console warnings in e2e.",
+       "files": "[\"src/render/terrain_clutter.ts:111\", \"index.html\", \"public/\", \"_harness/e2e.mjs\"]",
+       "done": "\"\"",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": [
+    {
+     "lane": "engine",
+     "id": "lead:fighter-lod-render",
+     "source": "lead: perf budget stitch",
+     "severity": "major",
+     "what": "If the chars lane authored fighter LOD1 meshes, use them in the main pass beyond a distance/screen-size threshold (src/render), keep outlines/shadows on LODs, prewarm the late program so programs <= 40, and re-run perf_1080 --prod: match peak <= 500k tris.",
+     "files": "",
+     "done": "",
+     "after": "chars"
+    }
+   ]
+  },
+  "systems": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "systems",
+       "id": "gameplay:G1",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "blocker",
+       "what": "RIFT bots leave their lanes: laners farm about 2\u20132.5 cs/min and Wicks kill most Wicks\nFIX: Keep the reviewer's fixes 1, 3, 4 and 5:\n1. Lane-first utility before the first outer Needle falls or 10:00.\n3. Situate() counts the DPS of nearby Wicks, so a low-HP bot walks out of the wave.\n4. A stricter Longshade start check.\n5. A soak gate.\n\nDrop fix 2 (Lampglass yields last hits). Native supports already leave the farm to the carry.\n\nAlso make _harness/pacing.ts and the soak seat role-correct lineups with pickLoadout(catalog, fighter, rules.itemPool, role), so the gate measures what players actually face.",
+       "files": "[\"src/sim/bots/bot.ts\", \"src/sim/bots/team.ts\", \"src/sim/bots/micro.ts\", \"src/sim/bots/difficulty.ts\", \"_harness/pacing.ts\", \"_harness/ (new probe_sim_bot_soak.ts)\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G4",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "RIFT laning phase collapses: the first outer Needle falls at a median of 5.4\u20136.3 min\nFIX: As the reviewer proposes:\n- VALE's own 'Dawn Seal' until 7:00;\n- needle_outer at about 4,000 HP;\n- thin-wave protection;\n- 'mid' phase from 10:00 or the second fallen structure;\n- soak gate: median first structure 9\u201312 min on role-correct lineups.",
+       "files": "[\"content/units.json\", \"src/sim/units/structures.ts\", \"src/sim/combat.ts\", \"src/sim/bots/team.ts\", \"content/team_buffs.json\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G2",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "The jungle role doesn't work: grovehunters are about 4 levels behind at 15:00 and die the most\nFIX: As the reviewer proposes:\n1. Retune camp XP or respawns to at least 80% of a solo lane's XP rate.\n2. VALE's own 'Grove tithe' catch-up XP.\n3. Bot clear loop: no recall near a ready camp; 'objective' only after 6:00; nearest-ready clear order.\n4. Soak gate on the level gap and deaths, run on role-correct lineups.\n\nWave note: Retune XP via content/units.json first; respawn timers in content/maps/map_rift.json are W5's file, so hand any change there.",
+       "files": "[\"content/units.json\", \"src/sim/economy.ts\", \"src/sim/bots/bot.ts\", \"src/sim/bots/team.ts\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G5",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "BRIDGE ends through sudden death, which drops structure protection, often with the gate chain still standing\nFIX: As the reviewer proposes:\n- keep `requires` protection in sudden death;\n- replace the protection drop with VALE's own 'Gorge Wind' escalation (stacking Wick buffs and structure resist decay), with a \u00d72 respawn multiplier;\n- retune BRIDGE toward a natural 15\u201318 min;\n- apply the same change to rift_quick;\n- soak gate: at most 25% of games end in sudden death, and 0 cores fall with their chain standing.\n\nReconcile modes_economy.md with content.",
+       "files": "[\"src/sim/units/structures.ts\", \"src/sim/modes/match.ts\", \"content/modes.json\", \"content/queues.json\", \"content/units.json\", \"content/team_buffs.json\", \"_design/sections/modes_economy.md\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G3",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "Difficulty tiers barely separate in RIFT\nFIX: As the reviewer proposes: the team brain converts advantages, by sieging after an aliveDiff \u2265 2 or a 1.5k lead. Add macro-tier knobs: macroDelay and convertsLeads. Soak gate: veteran beats novice in at least 85% of 20 mirrored role-correct games, and adept in at least 65%.",
+       "files": "[\"src/sim/bots/team.ts\", \"src/sim/bots/bot.ts\", \"src/sim/bots/difficulty.ts\", \"_harness/\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "originality:F5",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "Ervet's ult copies Riven's reforged-blade hook; the ROSTER self-audit omits Riven and Brand\nFIX: Ervet: make the ult payoff the shards, not reach. For example, Shatter's shards fly back to the hilt along lines, damaging and dragging enemies they cross, with no reach bonus. Vashil: change the stun trigger to a group or chord condition, such as two humming enemies within 3 m. Add Riven and Brand, with the differences, to ROSTER \u00a75.",
+       "files": "[]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "originality:F4",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "The systems layer reproduces LoL's ruleset under new names\nFIX: Re-key the systems to the stopped dial so that none maps one-to-one. Battle spells built on light and shadow rules, with a default pair that is not blink + heal. One starter that grows into the role's first core. Replace the one-Noonlit cap with a dial-slot rule. Map-tied effects for Glasshorn and Resinback. An original draw for BRIDGE instead of bench plus reroll.\n\nWave note: New spell icons (e.g. replacing hourstrike.webp) are generated by W2.",
+       "files": "[\"content/setup.json\", \"content/items.json\", \"content/team_buffs.json\", \"content/queues.json\", \"content/modes.json\", \"_design/sections/items_setup.md\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G7",
+       "source": "final_parity_open W4 finding (reported never)",
+       "severity": "major",
+       "what": "Item depth: 13 finished items, the same build every game, top tier almost never reached, no anti-heal\nFIX: As the reviewer proposes:\n- grow to about 30 finished items with VALE-original counters (a 'Stillwater' grievous family, a burst ward, tank penetration);\n- a buildPlan that reads the enemy team, and a support path;\n- an economy check once G1 lands;\n- a build-diversity probe.\n\nWave note: New item icons are generated by W2 with the HUD-1 icon spec.",
+       "files": "[\"content/items.json\", \"src/sim/bots/economy.ts\", \"src/sim/bots/knowledge.ts\", \"_harness/probe_items.ts\"]",
+       "done": "\"\"",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "systems",
+       "id": "systems-09",
+       "source": "W2:flow-blockers handoff",
+       "severity": "minor",
+       "what": "Optional, so Try again becomes a proper Session call: add `reconnect?(): void` to the Session interface in src/contracts/session.ts, and implement it in src/session/local_session.ts as `reconnect(): void { this.opts.online?.retryNow(); }` (OnlineLink.retryNow already exists). The UI already checks for session.reconnect and calls it when present; otherwise it dispatches the 'vale:net-retry' window event, which OnlineLink listens for.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-10",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "originality F8 + client F11 player copy in W4 files (src/ui/copy_lint.ts lintPlayerCopy reports each one):\n- content/modes.json modes[0].desc: 'hold the jungle and its prizes' -> 'hold the Dialwood and its prizes'.\n- content/queues.json queues[0].desc: 'with more gold' -> 'with more Gleam'.\n- content/queues.json queues[7].desc: 'Add gold, levels and training targets' -> 'Add Gleam, levels and training targets'.\n- content/roles.json [4].contract: 'leaves the gold to your Shaftlight' -> 'leaves the Gleam to your Shaftlight'.\n- content/roles.json [2].contract: 'centre road' -> 'center road'.\n- content/fighters/kemdo.json kit.ult.desc: '{effects.1.stats.omnivamp} omnivamp' -> '{effects.1.stats.omnivamp} Drain'.\n- content/fighters/dunsom.json kit.a1.desc and content/fighters/vashil.json kit.a1.desc (x2): 'centre' -> 'center'.\n- content/classes.json [5].desc: 'favour' -> 'favor'.\n- content/maps/map_fray.json .desc: 'centre' -> 'center' (or W5a if maps are theirs).\n- content/setup.json $comment: '2 battle spells' -> '2 Hour spells'.\nAll player copy is American English now.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-11",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "client F12 session half:\n- Add { a: 'ready' } to DraftAction and ready?: boolean to DraftSeat in src/contracts/session.ts. During finalize/trade, set it to a boolean on every seat; the UI only sends ready when typeof seat.ready === 'boolean'.\n- In src/session/draft.ts and local_session.ts, once every human seat is ready, cut the finalize timer to a ~2 s grace.\n- End a blind or ffa_pick phase as soon as every seat has locked.\n- Have bots (draft_brain) lock within 3-8 s.\nThe W2 UI (draft.tsx readyOf/READY) is already live.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-12",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "Optional contract follow-ups:\n- perf PERF-M2 step 5 / audio AUD-m4: add dynamicResolution: boolean to Settings.video and mono: boolean, softenLoud: boolean to Settings.audio in src/contracts/session.ts. src/session/settings.ts already normalizes all three (defaults true / false / false; types VideoSettings / AudioSettings), so the casts in settings.tsx can then be dropped.\n- client F17: add Profile.emblem?: string (the UI keeps UiPrefs.emblem per device until then).\n- client F15: add Session.nod?(matchId, player) to record Lantern nods in the profile; the UI calls it if present.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-13",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "gameplay g3 sim half: extend the practice Command family (src/contracts/sim.ts, src/sim/modes/practice.ts) with:\n- 'toggleWaves' (pause/resume Wick waves)\n- 'toggleStructures' (Needles and Lanterns inert)\n- 'teleport' with x, y\n- 'spawnSparring' (a fighter dummy that moves and blocks, or casts on a timer)\n- target configuration (armor / resist / hp of placed targets)\nExpose the toggles' state on WorldView (e.g. practice?: { waves: boolean; structures: boolean }). Optionally let the practice queue take any team map. W2 adds the panel buttons once the commands exist; the damage readout is already in panels.tsx.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-14",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "client F11 spelling in content/skins/*.json desc fields (player copy is American; reported by src/ui/copy_lint.ts). Send to whoever owns content/skins if that is not W5b:\n- ardit [1] grey -> gray; ardit [2] armour -> armor\n- burdam [1] armour -> armor\n- ervet [1] armour -> armor and colours -> colors; ervet [2] armour -> armor\n- ilsheta [2] honour -> honor\n- lisvel [1] grey -> gray\n- rishal [0] and [1] grey -> gray; rishal [2] armour -> armor\n- sukri [1] colours -> colors\n- vashil [1] grey -> gray",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-15",
+       "source": "W3:procs-ambience handoff",
+       "severity": "minor",
+       "what": "Optional cleanup in src/contracts/catalog.ts, which W4 owns: AudioDef is .strict(), so the ambience emitter table currently rides in audio.events as keys like 'ambient.<map id>.<source>' \u2192 cue id, with points resolved from each map's art.ambient. If you want a typed table instead, add `ambience: z.record(Id, z.array(z.object({ source: z.string(), cue: Id }).strict())).default({})` to AudioDef; W3 would then move the 16 bindings out of events. Nothing is broken today. Observation: _harness/probe_audio_listener.mjs gate A is currently vacuous because the autopilot fighter in seat 7 (hesmi) never dies in 17-20 min of RIFT on the current sim (seeds 3, 5 and 7 all show 0 deaths). This comes from the sim/bot changes being made concurrently in src/sim/bots, not from audio.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "systems-16",
+       "source": "W3:polish handoff",
+       "severity": "minor",
+       "what": "Optional cleanup; nothing is broken. The .m4a pieces of each main stem currently ride in MusicDef.layers as 'seg_<start s>' entries (.m4a refs), because AudioDef/MusicDef in src/contracts/catalog.ts are .strict(). If you prefer a typed field, add `pieces: z.array(z.object({ at: z.number(), file: AssetRef }).strict()).default([])` to MusicDef. W3 would then move the 20 entries out of layers and read def.pieces in src/audio/index.ts startBed.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    },
+    {
+     "items": [
+      {
+       "lane": "systems",
+       "id": "gameplay:g3",
+       "source": "W2 verify (open)",
+       "severity": "minor",
+       "what": "gameplay:g3 [partly]: The UI damage readout is present. The rest needs W4's sim commands (handed off).\nFIX HINT:",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G6",
+       "source": "final_parity_open polish (wave W4; reported never)",
+       "severity": "minor",
+       "what": "FRAY sometimes goes quiet before the 11:00 limit\nFIX: Keep VALE's 'Noon Toll' idea but scale it down: from 9:00, reveal the survivors on the minimap every 30 s. Bots drop the last-life caution once 4 or fewer remain. Gate: no stretch of 90 s or more with no takedown while 3 or more fighters are alive, in at least 85% of games.",
+       "files": "[\"src/sim/modes/last_standing_or_score.ts\", \"src/sim/bots/bot.ts\", \"content/modes.json\", \"src/ui/hud\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G8",
+       "source": "final_parity_open polish (wave W4; reported never)",
+       "severity": "minor",
+       "what": "Ranked draft (2 bans per team) leaves the last picker as few as 2 fighters\nFIX: Derive bansPerTeam from roster size in data (1 at R = 16), and lint it in build_content. Optionally, a draft-host role floor.",
+       "files": "[\"content/queues.json\", \"src/session/draft.ts\", \"tools/build_content.ts\", \"_harness/probe_session_draft.ts\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:G9",
+       "source": "final_parity_open polish (wave W4; reported never)",
+       "severity": "minor",
+       "what": "Nurrow finishes last in FRAY, and no soak or balance probe exists\nFIX: 1. Nurrow payoff, VALE's own: refund cooldown and extend the silence when hitting a sleeping enemy; reorder her combo.\n2. A new _harness/probe_sim_bot_soak.ts that seats role-correct, pickLoadout lineups, with:\n   - FRAY average placement 3.5\u20137.5 per fighter;\n   - team win-rate bands only at a sample size that supports them;\n   - the G1\u2013G5 thresholds.",
+       "files": "[\"content/fighters/nurrow.json\", \"src/sim/bots/knowledge.ts\", \"_harness/ (new soak probe)\", \"package.json\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:g1",
+       "source": "final_parity_open polish (wave W4; reported never)",
+       "severity": "minor",
+       "what": "About a quarter of RIFT fighter deaths award no kill even though an enemy fighter helped\nFIX: As the reviewer proposes: credit the top-damage enemy fighter in the window, and keep 'executed' for deaths with no fighter involved.",
+       "files": "[\"src/sim/combat.ts\", \"src/sim/economy.ts\", \"_harness/probe_sim_core_combat.ts\"]",
+       "done": "\"\"",
+       "after": null
+      },
+      {
+       "lane": "systems",
+       "id": "gameplay:g2",
+       "source": "final_parity_open polish (wave W4; reported never)",
+       "severity": "minor",
+       "what": "RIFT match length drifts long on adept, the default queue difficulty\nFIX: Add --diff and role-correct seating to pacing.ts, report adept by default, and gate RIFT adept p90 at 32 min or less.",
+       "files": "[\"_harness/pacing.ts\"]",
+       "done": "\"\"",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": [
+    {
+     "lane": "systems",
+     "id": "lead:icons-repoint",
+     "source": "lead: icons stitch",
+     "severity": "major",
+     "what": "Point every new item / spell icon ref in content/items.json and content/setup.json at the icon the client lane painted for it (paths in its commit / handoff); content:check without --allow-missing-assets must pass and icon_probe must list 0 borrowed paintings.",
+     "files": "",
+     "done": "",
+     "after": "client"
+    }
+   ]
+  },
+  "lead": {
+   "packages": [
+    {
+     "items": [
+      {
+       "lane": "lead",
+       "id": "lead-01",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "hud HUD-8: update the _design/STYLE_BIBLE.md HUD density table (lines 99-109) to the shipped kit, matching client_hud.md section 4.1:\n- Dial Bar 776x160, 5.99%\n- Minimap 352x228 / 384x108 / 232 disc, 3.87 / 2.00 / 2.60%\n- Sky strip 760x56, 2.05%\n- Always-on <= 14% (RIFT 13.79, BRIDGE 11.92, FRAY 13.25)\n- Peak < 20% (RIFT 19.65)\nAlso update _design/tokens.json if it carries those HUD sizes.",
+       "files": "",
+       "done": "",
+       "after": null
+      },
+      {
+       "lane": "lead",
+       "id": "lead-02",
+       "source": "W2:polish handoff",
+       "severity": "minor",
+       "what": "originality F6 registry and docs (not W2 files):\n- _design/research/protected_names.json categories.other_moba: add 'Battle Spell' and 'Battle Spells' (multi-word entries are flagged anywhere by tools/names_check.ts).\n- _design/DESIGN_NOTE.md lines 31 and 263: 'battle spells' -> 'Hour spells'.\n- Optionally note BRIDGE next to RIFT in section 5 as a recorded owner risk.",
+       "files": "",
+       "done": "",
+       "after": null
+      }
+     ]
+    }
+   ],
+   "stitch": []
+  }
+ }
+}
