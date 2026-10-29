@@ -33,7 +33,7 @@ import { Ambience, type PlayOpts } from './ambience.ts';
 import { Emitters } from './emitters.ts';
 import { MusicDirector, type MusicState } from './musicplayer.ts';
 import { STINGERS, godSentDisaster, pickStinger } from './authored.ts';
-import { FALLBACK, SFX, Sfx } from './sfx.ts';
+import { FALLBACK, SFX, Sfx, directLevel } from './sfx.ts';
 import { SpatialOut, soundDelay } from './spatial.ts';
 import { Knob, bq } from './synth.ts';
 import { VoicePool } from './voices.ts';
@@ -81,7 +81,7 @@ export interface CueOptions {
   /** where it happens (body-frame unit vector on `planet`); omitted: heard in the head */
   pos?: UnitVec;
   planet?: number;
-  /** 0..1.5 (default 1) */
+  /** 0..1.5 (default: the cue's own level, sfx.ts DIRECT_LEVEL — 1 for most, less for the opening's ignition) */
   level?: number;
   size?: number;
   variant?: string;
@@ -280,6 +280,8 @@ class AudioEngine implements GenesisAudio {
   private music: MusicDirector | null = null;
   private handAir: HandAir | null = null;
   private hall: ConvolverNode | null = null;
+  /** the hall refused its impulse response once: play dry rather than fail every frame (and lose the audio) */
+  private hallFailed = false;
   private starName = '';
   private readonly uiMix = new UiCueMixer<CueOptions>();
   private uiStats = { played: 0, early: 0 };
@@ -439,8 +441,8 @@ class AudioEngine implements GenesisAudio {
     const hall = ctx.createConvolver();
     hall.normalize = false;
     // the hall's impulse response arrives from the DSP worker within the first frames (update() attaches it)
-    hall.buffer = owned ? bank.get('ir-hall') : bank.need('ir-hall');
     this.hall = hall;
+    this.fillHall(owned ? bank.get('ir-hall') : bank.need('ir-hall'));
     const hallRet = ctx.createGain();
     hallRet.gain.value = 0.42;
     hall.connect(hallRet);
@@ -546,7 +548,7 @@ class AudioEngine implements GenesisAudio {
     const now = ctx.currentTime;
     const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
     this.bank!.pump(3, clock);
-    if (this.hall && !this.hall.buffer && this.bank!.has('ir-hall')) this.hall.buffer = this.bank!.get('ir-hall');
+    if (this.hall && !this.hall.buffer && this.bank!.has('ir-hall')) this.fillHall(this.bank!.get('ir-hall'));
     const star = view.star;
     if (star && star.name !== this.starName) { this.starName = star.name; this.music!.setStar(star.name); }
     this.probeT += dt;
@@ -760,7 +762,7 @@ class AudioEngine implements GenesisAudio {
   private playDirect(name: string, o: CueOptions, pri: number): void {
     const now = this.ctx!.currentTime;
     const spec: CueSpec = {
-      cue: name, cls: o.pos ? 'god' : 'ui', gain: o.level ?? 1, size: o.size ?? 1, pri,
+      cue: name, cls: o.pos ? 'god' : 'ui', gain: o.level ?? directLevel(name), size: o.size ?? 1, pri,
       travel: false, reach: 1000, gap: 0, variant: o.variant ?? '',
     };
     if (name === 'ignition') {
@@ -769,6 +771,13 @@ class AudioEngine implements GenesisAudio {
       this.duckUntil = now + 9;
     }
     this.placeAndPlay(spec, o.planet ?? this.scene?.planet, o.pos, 1, now, Math.max(0, o.delay ?? 0));
+  }
+
+  /** give the hall its impulse response once the bank has it (a buffer at another rate throws: the hall stays dry) */
+  private fillHall(buf: AudioBuffer | null): void {
+    const hall = this.hall;
+    if (!hall || !buf || hall.buffer || this.hallFailed) return;
+    try { hall.buffer = buf; } catch (e) { this.hallFailed = true; console.warn('[genesis] audio: the hall reverb is off', e); }
   }
 
   cues(): string[] { return Object.keys(SFX).sort(); }
@@ -783,7 +792,7 @@ class AudioEngine implements GenesisAudio {
       for (const inst of ['lyre', 'harp', 'pizz']) for (let m = 30; m <= 96; m += 6) names.push(`pluck:${inst}:${m}`);
     }
     for (const n of names) bank.need(n);
-    if (this.hall && !this.hall.buffer) this.hall.buffer = bank.get('ir-hall');
+    if (this.hall && !this.hall.buffer) this.fillHall(bank.get('ir-hall'));
     return (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
   }
 

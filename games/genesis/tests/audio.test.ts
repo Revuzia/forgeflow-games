@@ -7,6 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   ENSEMBLES, MODE_NAMES, ORBITAL_SET, composeBar, degreeToMidi, euclid, inScale, midiToHz, modeIntervals, modeOfAlignment,
   orbitalStyle, setOfEra, styleFor, type CultureMusic, type MusicStyle,
@@ -16,6 +17,7 @@ import { CALLED_FLOOR, SceneProbe, type ScenePlanet, type SceneWorld } from '../
 import { godSentDisaster } from '../src/audio/authored.ts';
 import { CueGate, DISASTER_FAMILIES, MIRACLE_KINDS, commandCue, cueFor, disasterFamily, touchVariant } from '../src/audio/eventmap.ts';
 import { SFX, type Sfx } from '../src/audio/sfx.ts';
+import { specFor } from '../src/audio/bank.ts';
 import { disasterBed } from '../src/audio/emitters.ts';
 import { UI_CUE, UI_RATE, UI_SHADOW, UiCueMixer, isUiCue, uiRule } from '../src/audio/uicues.ts';
 import { MuteSync, type PortalControls } from '../src/audio/mutesync.ts';
@@ -225,6 +227,20 @@ test('bells decay, textures stay below full scale, impulse responses carry unit 
   const ir = renderImpulse(16000, 3, { decay: 1.2 });
   let e = 0; for (const c of ir) for (const v of c) e += v * v;
   assert.ok(Math.abs(e / 2 - 1) < 1e-3, `IR energy ${e / 2}`);
+});
+
+test('the hall\'s impulse response is rendered at the context\'s own rate: a 48 kHz device keeps its audio (fix r4)', () => {
+  // a ConvolverNode refuses a buffer at another rate (Chromium: NotSupportedError). Capped at 44.1 kHz, the IR threw on
+  // a 48 kHz device as update() attached it, app.ts dropped the engine, and the game went silent for good.
+  for (const rate of [22050, 44100, 48000, 88200, 96000]) {
+    const spec = specFor('ir-hall', rate);
+    assert.ok(spec, `${rate}`);
+    assert.equal(spec.sr, rate, `ir-hall at ${rate} Hz`);
+  }
+  // the engine never lets a refused impulse response take the audio down: it plays dry instead
+  const src = readFileSync(new URL('../src/audio/engine.ts', import.meta.url), 'utf8');
+  assert.equal((src.match(/hall\.buffer\s*=/g) ?? []).length, 1, 'every hall assignment goes through fillHall');
+  assert.match(src, /try \{ hall\.buffer = buf; \} catch/);
 });
 
 test('the master soft clipper is linear below its knee and can never reach full scale', () => {

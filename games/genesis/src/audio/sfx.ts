@@ -964,6 +964,20 @@ export const SFX: Record<string, Recipe> = {
   },
 };
 
+/**
+ * The level a cue played by name (GenesisAudio.cue, not an event) gets when its caller names none. Most are 1: the
+ * recipe is the level. The ignition is the first sound of the game and twelve seconds of full-band roar, cluster and
+ * chord, with nothing under it (the music is held back): at 1 it measured -12.2 LUFS and peaked at -1.7 dBFS in the
+ * built game, ~10 LU over the opening's music (-21..-22.5 LUFS) — a player who set their volume by it heard a quiet
+ * game after it. Scaled as a whole (crescendo, crack and bloom kept) it lands just over the music that rises out of it
+ * (fix r4 #12; tests/audio-authored.test.ts pins it against the measurements).
+ */
+export const DIRECT_LEVEL: Readonly<Record<string, number>> = { ignition: 0.32 };
+
+export function directLevel(name: string): number {
+  return DIRECT_LEVEL[name] ?? 1;
+}
+
 // ───────────────────────────── ambient calls (played by ambience.ts and emitters.ts) ─────────────────────────────
 
 const bird = (s: Sfx, at: number, f0: number, f1: number, d: number, peak: number): number =>

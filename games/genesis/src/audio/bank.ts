@@ -58,7 +58,9 @@ export function specFor(name: string, ctxRate: number): Spec | null {
     case 'glass': return { sr: full, render: mono((sr) => renderBell(BELL_BASE.glass, sr, 3.4, GLASS, seed, 0.05)) };
     case 'anvil': return { sr: full, render: mono((sr) => renderBell(BELL_BASE.anvil, sr, 1, ANVIL, seed, 0.9)) };
     case 'wood': return { sr: 32000, render: mono((sr) => renderBell(BELL_BASE.wood, sr, 0.35, WOOD, seed, 1.2)) };
-    case 'ir-hall': return { sr: Math.min(ctxRate, 44100), render: (sr) => renderImpulse(sr, seed, { decay: 2.8, predelay: 0.025, bright: 0.45, early: 9 }) };
+    // a ConvolverNode takes an impulse response only at its context's own rate (Chromium throws NotSupportedError at
+    // 44.1 kHz on a 48 kHz device — most PCs): render it at exactly that rate, never capped
+    case 'ir-hall': return { sr: ctxRate, render: (sr) => renderImpulse(sr, seed, { decay: 2.8, predelay: 0.025, bright: 0.45, early: 9 }) };
   }
   if (name.startsWith('pluck:')) {
     const [, inst, m] = name.split(':');
