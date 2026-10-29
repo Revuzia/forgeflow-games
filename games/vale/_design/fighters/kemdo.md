@@ -54,6 +54,7 @@ SHAPE = body.shape(girth=1.02, torso_w=1.1, torso_d=1.04, chest=1.14, waist=0.9,
 
 - **Hourless hood and wrap.** A rigid hood (`kit.hood`) with a linen face wrap over the nose and jaw (`cloth2`), and a carved sandstone brow eave, a short shelf 8 cm deep and 0.20 m wide over the eyes with a narrow ink slit under it (the sun-shade of a woman who works under a lens). The eave's forward edge is the facing cue from above.
 - No bare face, no hair.
+- **The hood's crown is round** (integration pass, sensitivity rule: no tall, pointed or conical hood): it rises in a broad 4 cm cap to the same 2.10 m crown, never to a point (kemdo.py `sculpts`, the hood's RoundCone).
 
 ## 4. Armour, cloth and props (template 4)
 

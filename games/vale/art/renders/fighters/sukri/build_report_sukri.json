@@ -4,7 +4,7 @@
   "skin": false,
   "parts": {
     "tris_hood": 1900,
-    "tris_face": 1520,
+    "tris_face": 1518,
     "tris_torso": 1600,
     "tris_belt": 620,
     "tris_skirt": 790,
@@ -27,20 +27,20 @@
     "tris_cup_rim": 400,
     "tris_cup_glass": 340,
     "tris_cup_core": 160,
-    "validate_sukri": "17452->17443"
+    "validate_sukri": "17450->17441"
   },
-  "uv_coverage": 0.6,
+  "uv_coverage": 0.583,
   "bake": {
-    "base": 17.34,
-    "rough_metal": 13.14,
-    "normal": 6.45,
-    "ao": 5.83,
-    "normal_fixed_px": 103630,
-    "projection": 75.95,
-    "pack_save": 76.33,
-    "total": 120.78
+    "base": 17.37,
+    "rough_metal": 18.13,
+    "normal": 6.75,
+    "ao": 13.96,
+    "normal_fixed_px": 105488,
+    "projection": 92.19,
+    "pack_save": 93.73,
+    "total": 150.88
   },
-  "tris": 17603,
+  "tris": 17601,
   "mesh_top_m": 1.649,
   "clips": {
     "idle": {
@@ -143,23 +143,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3025284,
+  "glb_bytes_raw": 3018860,
   "optimize": {
     "ok": true,
-    "before": 3025284,
-    "after": 1187536
+    "before": 3018860,
+    "after": 1186880
   },
-  "glb_bytes": 1187536,
+  "glb_bytes": 1186880,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri.glb (1160 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: sukri_base 2048x2048 192K, sukri_normal 512x512 68K, sukri_orm 512x512 85K",
-      "  skinned meshes: sukri(19761v), sukri_accent(82v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri.glb (1159 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_base 2048x2048 191K, sukri_normal 512x512 67K, sukri_orm 512x512 85K",
+      "  skinned meshes: sukri(19792v), sukri_accent(82v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_cord_swing shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
       "  clips: attack1:0.667s/20tr, attack2:0.667s/20tr, cast_a1:0.833s/21tr, cast_a2:0.500s/21tr, cast_a3:0.833s/23tr, cast_ult:1.333s/21tr, channel:1.000s/17tr, dash:0.500s/21tr, death:1.667s/23tr, idle:2.133s/20tr, idle_lobby:4.000s/20tr, recall:2.000s/21tr, run:0.533s/25tr, stunned:1.000s/20tr, taunt:1.500s/18tr, victory:1.667s/22tr",
       "  tracks checked: 333; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 17603; bind-pose bounds (three units, Y up): 1.43 x 1.65 x 0.73; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
+      "  tris: 17601; bind-pose bounds (three units, Y up): 1.43 x 1.65 x 0.73; facing (-0.00, 1.00); head bone y 1.16; runRefSpeed 3.4",
       "  run: 16 f, planted samples 2, max foot-speed error 1.5%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -172,10 +172,10 @@
       "turntable": "art/renders/fighters/sukri/turntable.png"
     },
     "seconds": {
-      "splash": 16.31,
-      "portrait": 9.47,
-      "icon": 16.34,
-      "turntable": 33.37
+      "splash": 14.52,
+      "portrait": 3.28,
+      "icon": 2.93,
+      "turntable": 5.1
     }
   },
   "three_qa": {
@@ -207,26 +207,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/sukri/three_sukri.png",
-    "seconds": 31.2,
+    "seconds": 8.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.33,
-      "model": 120.17,
-      "lows_bind": 13.63,
-      "uv": 5.26,
-      "bake": 121.15,
-      "clips": 0.33,
-      "export": 2.3,
-      "optimize": 1.4,
-      "load_test": 0.28,
-      "render": 75.83,
-      "three_qa": 31.98,
-      "cache": 0.51
+      "materials": 0.49,
+      "model": 171.57,
+      "lows_bind": 49.95,
+      "uv": 6.06,
+      "bake": 151.83,
+      "clips": 1.36,
+      "export": 6.8,
+      "optimize": 2.22,
+      "load_test": 0.74,
+      "render": 26.17,
+      "three_qa": 8.66,
+      "cache": 0.23
     },
-    "total_s": 373.25
+    "total_s": 426.22
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56

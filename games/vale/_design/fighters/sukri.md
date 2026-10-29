@@ -55,6 +55,7 @@ SHAPE = body.shape(girth=1.18, torso_w=1.25, torso_d=1.2, chest=1.2, waist=1.1, 
 
 - **Hourless hood and face disc.** A thick round hood (`kit.hood`, one rigid shell, 0.52 m wide, a dome with a 4 cm rolled edge) over a plain round carved-wood face disc 0.17 m across, set in the hood opening, with two small eye slits, a short nose ridge (4 cm, the beak and the facing cue) and a carved smile line. A linen cloth covers the jaw below the disc. No bare face, no hair.
 - The hood's rolled edge shades the disc from the 52 degree camera; the disc must sit 3 cm behind the hood edge so the slits show in the portrait.
+- **Eye inlays, no tear lines** (integration pass, sensitivity watch item: hollow dark slits with grain cracks running down from them read as tear streaks on the largest face of the loading row): the slits' floors are an inlaid warm amber (`#B08552`, walls `#6E4C2E`; paint only, never emissive, every skin keeps it), and no grain crack touches an eye: the forehead cracks stop at the brow ridge, the cheek cracks start at the jaw (sukri.py `GRAIN`, `_face_clean`).
 
 ## 4. Armour, cloth and props (template 4)
 
@@ -82,7 +83,7 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `leather` | `#453D35` | 26 | 30° / 23% | bracers, belt, boots |
 | `under` | `#372F2B` | 20 | 20° / 22% | leggings, wrap shadows |
 | `ironstone` | `#4A4540` | 30 | 30° / 14% | cup rim, staff ferrule, hook |
-| `ink` | `#17161A` | 8 | 255° / 15% | eye slits, hood interior |
+| `ink` | `#17161A` | 8 | 255° / 15% | the deepest folds (the eye slits take the amber inlay, the hood lining the warm linen `#86725E`) |
 | `accent` | `#3F9CFF` | 63 | 211° / 75% | the cup core bead and rim inlay |
 
 ## 6. Value gradient (template 6)
