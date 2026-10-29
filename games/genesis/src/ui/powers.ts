@@ -45,6 +45,11 @@ export interface Power {
   desc: string;
   cost?: number;
   cooldown?: number;
+  /**
+   * the wrath a cast needs at least (the powers query, from disasters.json: a planet-scale disaster — comet,
+   * supervolcano, gravity slip, moon-fall — is refused below huge, 0.85); undefined: any wrath
+   */
+  minWrath?: number;
 }
 
 /** radial / palette order of categories (CONTRACT §16.3, + Laws) */
@@ -86,6 +91,7 @@ function normalizePower(raw: Record<string, unknown>): Power {
     params: (raw.params ?? {}) as Record<string, unknown>, schema, target: (raw.target ?? 'none') as PowerTarget,
     synonyms: Array.isArray(raw.synonyms) ? (raw.synonyms as string[]) : [], desc: String(raw.desc ?? ''),
     cost: typeof raw.cost === 'number' ? raw.cost : undefined, cooldown: typeof raw.cooldown === 'number' ? raw.cooldown : undefined,
+    minWrath: typeof raw.minWrath === 'number' && Number.isFinite(raw.minWrath) ? raw.minWrath : undefined,
   };
 }
 
@@ -135,7 +141,7 @@ export const CLIENT_POWERS: Record<string, unknown>[] = [
 ];
 
 /** disasters.json's own reach, strength and life per kind: what the sim uses for a value the card leaves unset */
-interface DisasterDefaults { id: string; radius?: number; intensity?: number; life?: [number, number] }
+interface DisasterDefaults { id: string; radius?: number; intensity?: number; life?: [number, number]; minWrath?: number }
 const BASE_DISASTERS = new Map(((BASE_PACK.disasters ?? []) as unknown as DisasterDefaults[]).map((d) => [d.id, d]));
 
 /** the list with the client powers whose command no power of the data casts (their registries: live ids when known) */
@@ -170,6 +176,11 @@ export function wrathWord(w: number): string {
   if (w >= 0.45) return 'great';
   if (w >= 0.2) return 'survivable';
   return 'gentle';
+}
+
+/** a power's wrath need in words: "needs wrath: huge (0.85)" */
+export function wrathNeedWords(min: number): string {
+  return `needs wrath: ${wrathWord(min)} (${Math.round(min * 100) / 100})`;
 }
 
 /** what a wrath does to the people under it, in a line (the slider's caption) */
@@ -257,6 +268,27 @@ export class PowerBook {
   /** the wrath law now (Snapshot.wrath; 0.3 until the world says): what a harmful cast left alone falls with */
   wrathLaw = WRATH_DEFAULT;
 
+  /**
+   * The least wrath a power's cast needs (the powers query's minWrath; else its disaster kind's, so the client
+   * catalogue knows it too), or undefined when any wrath will do.
+   */
+  minWrathOf(p: Power): number | undefined {
+    if (p.minWrath !== undefined) return p.minWrath;
+    const d = p.command === 'disaster.spawn' && typeof p.params.kind === 'string' ? this.disasters.get(p.params.kind) : undefined;
+    return typeof d?.minWrath === 'number' ? d.minWrath : undefined;
+  }
+
+  /**
+   * The wrath a cast with these values still lacks (the sim refuses it below: acts.ts wrathAllows): the power's
+   * minWrath when the cast's own wrath — or, left unset, the law's — is under it; null when it may fall.
+   */
+  wrathShort(p: Power, values: Record<string, unknown> = {}): number | null {
+    const min = this.minWrathOf(p);
+    if (min === undefined) return null;
+    const own = typeof values.wrath === 'number' ? values.wrath : typeof p.params.wrath === 'number' ? p.params.wrath : this.wrathLaw;
+    return own < min - 1e-9 ? min : null;
+  }
+
   /** the commands' own schemas (query 'commands'): which parameters each power's command REQUIRES, and their types */
   private commands = new Map<string, Record<string, { type?: string; required?: boolean; values?: string[]; unit?: string }>>();
   /** what each command does, in the registry's words ("Teach a settlement an idea") */
@@ -302,6 +334,8 @@ export class PowerBook {
       // a harmful command takes its own wrath (LIVING §3.7): the card offers it on every power that casts one, left at
       // the world's law until the player moves it
       if (cs.wrath && !p.schema.wrath && p.params.wrath === undefined) p.schema.wrath = { ...WRATH_SPEC };
+      // a sign may be one of warning (god.omen { warning }: the world picks one that warns, never a promise)
+      if (p.command === 'god.omen' && cs.warning && !p.schema.warning) p.schema.warning = { type: 'boolean', desc: 'a sign of warning: the world chooses one that warns, never a promise' };
       for (const [k, s] of Object.entries(p.schema)) {
         const c = cs[k];
         if (!c) continue;
@@ -615,6 +649,16 @@ export function buildCommand(p: Power, values: Record<string, unknown>, place: P
  * (base pack, mods, then the god's inventions), its id and colour as they come, so oreType i + 1 crops out in row i's
  * colour and a vein of an invented material shows its own.
  */
+/**
+ * H12: the plants beyond the base pack (mods', and the god's own inventions) from the sim's 'content' query
+ * ({ plants: [{ index, ...def }] }), for the renderer's plant registry; null when the query failed (keep what is drawn).
+ */
+export function contentPlants(content: unknown): unknown[] | null {
+  if (!content || typeof content !== 'object') return null;
+  const pl = (content as { plants?: unknown }).plants;
+  return Array.isArray(pl) ? pl : [];
+}
+
 export function oreRows(ores: unknown): { id?: string; color?: string }[] {
   if (!Array.isArray(ores)) return [];
   return ores.map((o) => {

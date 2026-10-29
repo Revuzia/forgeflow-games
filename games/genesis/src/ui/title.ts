@@ -108,7 +108,7 @@ export class Title {
       };
     return [
       cont,
-      { id: 'new', label: 'New world', sub: 'A barren rock and its opening, two worlds, a living system, the sandbox, your own', icon: 'new-world', run: () => this.deps.openWindow('newWorld') },
+      { id: 'new', label: 'New world', sub: 'A barren rock, two worlds, a system, a sandbox, your own', icon: 'new-world', run: () => this.deps.openWindow('newWorld') },
       { id: 'load', label: 'Load', sub: 'Your kept moments, or a file', icon: 'save', run: () => this.deps.openWindow('saves') },
       { id: 'settings', label: 'Settings', sub: 'The look, the sound, the keys', icon: 'settings', run: () => this.deps.openWindow('settings') },
       { id: 'controls', label: 'Controls', sub: 'Every key, button and sigil', icon: 'keyboard', run: () => this.deps.openWindow('help') },

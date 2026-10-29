@@ -5,7 +5,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { regardBand, meterWord, regardSentence, openPrayers, answerCommand, foretellSays, FORETELL, OMEN_NAMES, prophetState } from '../src/ui/living.ts';
-import { PowerBook, wrathWord, castValues, autoWords, fmtParam, WRATH_DEFAULT, oreRows } from '../src/ui/powers.ts';
+import { PowerBook, wrathWord, castValues, autoWords, fmtParam, WRATH_DEFAULT, oreRows, contentPlants } from '../src/ui/powers.ts';
+import { plantLookOf, setPlantRegistry } from '../src/render/life/vegetation.ts';
+import { BASE_PACK } from '../src/data/index.ts';
 import { ACTIONS, Keybinds } from '../src/ui/keybinds.ts';
 import { wrathWords } from '../src/sim/god/wrath.ts';
 import type { WorldView } from '../src/client/worldview.ts';
@@ -118,4 +120,24 @@ test('H12: an invented material\'s vein crops out in its own colour — the ores
   assert.equal(overlayOres().length, rows.length, 'a failed query keeps the list');
   assert.deepEqual(oreRows(null), []);
   assert.deepEqual(oreRows([{ id: 7, color: null }]), [{ id: undefined, color: undefined }]);
+});
+
+test('H12: an invented plant reaches the renderer — the content query feeds the vegetation species table (finding #18)', () => {
+  const { sim, st } = town(20261102);
+  const base = (BASE_PACK.plants ?? []).length;
+  assert.equal(plantLookOf(base), null, 'nothing past the base pack before an invention');
+  assert.deepEqual(contentPlants(sim.query('content')), [], 'no added plants yet');
+  const r = sim.applyNow({ k: 'content.plant', name: 'silver pine', like: 'pine', pos: st.pos });
+  assert.ok(r.ok, r.msg);
+  const added = contentPlants(sim.query('content'));
+  assert.ok(added && added.length === 1, 'the content query lists the invented plant');
+  const row = added![0] as { index?: number; id?: string };
+  assert.equal(row.index, base, 'it takes the first index past the base pack');
+  setPlantRegistry(added);
+  const look = plantLookOf(base);
+  assert.ok(look, 'the vegetation species table has the new index');
+  assert.equal(look!.kind, plantLookOf((BASE_PACK.plants ?? []).findIndex((p) => p.id === 'pine'))!.kind, 'drawn in the form of what it is like');
+  assert.equal(contentPlants(null), null, 'a failed query keeps what is drawn');
+  setPlantRegistry([]);
+  assert.equal(plantLookOf(base), null, 'reset');
 });

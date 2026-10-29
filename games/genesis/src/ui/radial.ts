@@ -15,7 +15,7 @@
 
 import type { UiHost } from './host.ts';
 import type { Power } from './powers.ts';
-import { categoryLabel } from './powers.ts';
+import { categoryLabel, wrathNeedWords } from './powers.ts';
 import { BASE_PACK } from '../data/index.ts';
 import { h, clear } from './dom.ts';
 import { icon, categoryIcon } from './icons.ts';
@@ -255,7 +255,8 @@ export class Radial {
         const it = items[i];
         const more = it === 'more';
         const name = more ? 'More…' : it.name;
-        const el = h('button', { class: `gn-rad-pow${more ? ' gn-rad-more' : ''}`, title: more ? `Every ${categoryLabel(cat).toLowerCase()} power, in the palette` : it.name, aria: { label: name }, html: more ? icon('search') : icon(it.icon, it.category) });
+        const short = more ? null : this.host.powers.wrathShort(it);
+        const el = h('button', { class: `gn-rad-pow${more ? ' gn-rad-more' : ''}${short !== null ? ' gn-rad-need' : ''}`, title: more ? `Every ${categoryLabel(cat).toLowerCase()} power, in the palette` : short !== null ? `${it.name} — ${wrathNeedWords(short)}` : it.name, aria: { label: name }, html: more ? icon('search') : icon(it.icon, it.category) });
         el.style.left = `${x}px`; el.style.top = `${y}px`;
         el.style.animationDelay = `${Math.min(k, 14) * 12}ms`;
         // its name, outward from the ring (shown on the slots nearest the pointer)

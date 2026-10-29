@@ -27,6 +27,7 @@ import { newInput, type InputState } from './render/camera/common.ts';
 import { detectQuality, isQualityName, QUALITY, type QualityName } from './render/quality.ts';
 import { pick, rayDirection, type PickHit } from './render/picking.ts';
 import { setOrePalette } from './render/planet/fieldtex.ts';
+import { setPlantRegistry } from './render/life/vegetation.ts';
 import type { GenesisAudio } from './audio/engine.ts';
 import { Shell } from './ui/shell.ts';
 import type { GroundHit, InspectRef, UiHost, CameraHost, CameraModeName, PhotoLens } from './ui/host.ts';
@@ -36,7 +37,7 @@ import { customScenarioPack, decodeWorlds, type CustomSpec } from './ui/newworld
 import { SaveStore, readSaveHeader, neededPacks, type LoadOutcome, type SaveRecord, type PackRef } from './ui/saves.ts';
 import { BASE_PACK } from './data/index.ts';
 import type { StarDef, PlanetKindDef } from './sim/content.ts';
-import { PowerBook, oreRows } from './ui/powers.ts';
+import { PowerBook, oreRows, contentPlants } from './ui/powers.ts';
 import { setOverlayOres } from './ui/overlays.ts';
 import { Keybinds } from './ui/keybinds.ts';
 import { PrefsStore } from './ui/prefs.ts';
@@ -617,7 +618,9 @@ export class App implements UiHost {
       setOrePalette(oreRows(ores));
       setOverlayOres(ores);
     }
-    void plants;
+    // (H12: plants beyond the base pack, mods' and the god's own inventions, so each draws with its own form and colour)
+    const added = contentPlants(plants);
+    if (added) setPlantRegistry(added);
   }
 
   private resize(): void {

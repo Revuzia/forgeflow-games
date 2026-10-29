@@ -1031,7 +1031,12 @@ export class DisasterFx {
     st.extra.warned = false;
   }
 
-  private crestSpray(st: DState, ctx: FxCtx, crest: { p: Vector3; out: Vector3; land: number }[], H: number, far: boolean): void {
+  /**
+   * spray along a crest. `lone`: a rogue wave's single wall, whose spray is a veil torn off the lip — a tsunami's
+   * raised sea throws a towering plume, but the same plume on one wave (mist ~0.6 H wide rising 2.5 H/s for 5 s)
+   * buried the wall in a cliff of white fog standing on the sea
+   */
+  private crestSpray(st: DState, ctx: FxCtx, crest: { p: Vector3; out: Vector3; land: number }[], H: number, far: boolean, lone = false): void {
     const n = far ? 0 : Math.min(16, crest.length);
     const step = crest.length / Math.max(1, n);
     const k = st.fade;
@@ -1041,8 +1046,13 @@ export class DisasterFx {
       const up = _a.copy(c.p).normalize();
       const fw = _b.copy(c.out).addScaledVector(up, 0.25).normalize();
       const col = c.land > 0.3 ? [0.62, 0.56, 0.48] : [0.9, 0.93, 0.95];
-      this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.3, life: 3, count: Math.round(220 * ctx.q), p0: H * 2.2, p1: H * 0.9, r: col[0], g: col[1], b: col[2], power: k }, ctx);
-      this.em(st, `mist${i}`, { sys: SYS.steam, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.6, life: 5, count: Math.round(50 * ctx.q), p0: H * 2.5, r: 0.86, g: 0.89, b: 0.92, power: k * 0.6 }, ctx);
+      if (lone) {
+        this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.16, life: 2, count: Math.round(120 * ctx.q), p0: H * 0.9, p1: H * 0.5, r: col[0], g: col[1], b: col[2], power: k * 0.8 }, ctx);
+        this.em(st, `mist${i}`, { sys: SYS.steam, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.22, life: 2.5, count: Math.round(10 * ctx.q), p0: H * 0.5, r: 0.86, g: 0.89, b: 0.92, power: k * 0.18 }, ctx);
+      } else {
+        this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.3, life: 3, count: Math.round(220 * ctx.q), p0: H * 2.2, p1: H * 0.9, r: col[0], g: col[1], b: col[2], power: k }, ctx);
+        this.em(st, `mist${i}`, { sys: SYS.steam, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.6, life: 5, count: Math.round(50 * ctx.q), p0: H * 2.5, r: 0.86, g: 0.89, b: 0.92, power: k * 0.6 }, ctx);
+      }
       // wreckage tumbling in the bore where it runs over the land
       if (c.land > 0.3 && Math.random() < 0.02) ctx.debris.burst(c.p, 3, H * 0.6, Math.max(0.6, H * 0.06), ctx.now);
     }
@@ -1133,7 +1143,7 @@ export class DisasterFx {
     // (a lone wave a few times the swell, not a tsunami's whole raised sea: its reach is the wave's own length)
     const H = Math.max(8, height * Math.sqrt(Math.max(0.2, I)));
     tc.update(ctx.pv, u, H, Math.max(len * 3, 400), k, ctx.now, ctx.ease, ctx.camBody, ctx.sunE);
-    this.crestSpray(st, ctx, tc.crest, H, far);
+    this.crestSpray(st, ctx, tc.crest, H, far, true);
   }
 
   /** a dark world sliding past in the sky */

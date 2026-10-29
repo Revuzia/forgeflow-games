@@ -16,7 +16,7 @@ import type { EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { Catalog, LawRow } from './catalog.ts';
 import type { Power } from './powers.ts';
-import { toolMode, missingRequired, categoryLabel } from './powers.ts';
+import { toolMode, missingRequired, categoryLabel, wrathNeedWords, wrathWord } from './powers.ts';
 import { ACTIONS } from './keybinds.ts';
 import { fuzzyAny, highlight } from './fuzzy.ts';
 import { h, clear, fmtNum } from './dom.ts';
@@ -47,6 +47,8 @@ interface Row {
   sub: string;
   iconHtml: string;
   badge?: string;
+  /** the badge is a warning (a power the wrath now refuses) */
+  badgeWarn?: boolean;
   hint?: string;
   /** what Shift+Enter would do, in words ("⇧↵ at Aru") */
   shiftHint?: string;
@@ -235,8 +237,12 @@ export class Palette {
       const subVia = via && via !== p.desc && !via.startsWith(categoryLabel(p.category)) ? `“${via}” · ` : '';
       const placed = mode !== 'instant' && mode !== 'world';
       const world = this.host.view.planet(this.here?.planet ?? this.host.primary())?.name ?? 'this world';
+      // (fix r2 #19: a planet-scale disaster the wrath now refuses says so here, not after the cast)
+      const short = this.host.powers.wrathShort(p);
+      const need = short !== null ? ` · ${wrathNeedWords(short)}` : '';
       rows.push({
-        kind: 'power', title: p.name, titleHtml, sub: `${subVia}${p.desc || categoryLabel(p.category)}${cost}`, iconHtml: icon(p.icon, p.category), badge: categoryLabel(p.category),
+        kind: 'power', title: p.name, titleHtml, sub: `${subVia}${p.desc || categoryLabel(p.category)}${cost}${need}`, iconHtml: icon(p.icon, p.category),
+        badge: short !== null ? `Needs ${wrathWord(short)} wrath` : categoryLabel(p.category), badgeWarn: short !== null,
         hint: mode === 'instant' ? 'cast' : 'arm',
         shiftHint: placed ? (this.hereText ? `⇧↵ ${this.hereText}` : '⇧↵ no place') : mode === 'world' ? `⇧↵ on ${world}` : '',
         score,
@@ -355,7 +361,7 @@ export class Palette {
       const row = h('div', { class: `gn-pal-row gn-pal-${r.kind}${i === this.sel ? ' gn-pal-on' : ''}`, role: 'option', aria: { selected: String(i === this.sel) }, data: { i: String(i) } },
         h('span', { class: 'gn-pal-ico', html: r.iconHtml }),
         h('span', { class: 'gn-pal-text' }, h('span', { class: 'gn-pal-title', html: r.titleHtml ?? escapeText(r.title) }), h('span', { class: 'gn-pal-sub', text: r.sub })),
-        r.badge ? h('span', { class: 'gn-pal-badge', text: r.badge }) : null,
+        r.badge ? h('span', { class: `gn-pal-badge${r.badgeWarn ? ' gn-warn' : ''}`, text: r.badge }) : null,
         h('span', { class: 'gn-pal-hint' }, h('span', { text: r.hint ?? '' }), r.shiftHint ? h('small', { text: r.shiftHint }) : null));
       row.addEventListener('click', (e) => r.run(e.shiftKey));
       this.list.append(row);

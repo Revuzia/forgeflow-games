@@ -293,7 +293,15 @@ void main() {
     float lam = mix(0.15 + 0.85 * sat(dot(N, Lv)), 0.3 + 0.5 * sat(dot(N, Lv) * 0.5 + 0.5), rough);
     float win = 1.0 - (dl * dl) / (reach * reach);
     float E = vP.y / (dl * dl + vP.w * vP.w) * win * win;
-    o = vec4(vCol.rgb * E * lam * 0.064, 0.0);
+    // the light lands on the surface's OWN colour: most of it multiplies the scene (drawn in the tint group too,
+    // out = dst · (1 + ΔE / E_scene), E_scene from the adapted exposure — a typical surface sits near mid grey on
+    // screen), so a flash brightens a palm canopy in its green; a third stays additive, so ground the scene leaves
+    // black (a night strike) is still lit. (Added alone, as a white light × a typical albedo, it bleached the whole
+    // canopy under a strike to frost-white.)
+    vec3 A = vCol.rgb * E * lam * 0.064;
+    // (expo(), not ex: this branch's own ex is the depth tangent above)
+    if (uGroup > 1.5) o = vec4(vec3(1.0) + min(A * (expo() / 0.18), vec3(12.0)), 1.0);
+    else o = vec4(A * 0.35, 0.0);
   } else if (t == 11) {
     // a path ahead (a front's heading): chevrons marching along the axis
     float L = vP.x, W = vP.y;
@@ -426,6 +434,8 @@ export class DecalPass {
       if (this.skip.size && this.skip.has(d.type)) continue;
       const g = GROUP_OF[d.type] ?? 0;
       (g === 0 ? over : g === 1 ? add : mul).push(d);
+      // (an FX light draws twice: multiplying the scene in the tint group, and a third of it added — see FRAG t == 10)
+      if (d.type === DECAL.light) mul.push(d);
     }
     this.list.length = 0;
     over.end(); mul.end(); add.end();

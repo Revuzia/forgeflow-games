@@ -72,6 +72,7 @@ ${NOISE_GLSL}
 ${FX_DEPTH_GLSL}
 uniform float uK;
 uniform vec3 uSunE2;
+uniform float uWaterFace;
 varying float vPart;
 varying float vAlong;
 varying float vLand;
@@ -107,9 +108,22 @@ void main() {
   vec3 foam = vec3(0.86, 0.9, 0.92) * lit * 1.3;
   vec3 c = mix(water, foam, foamW * body);
   float a = body * 0.97;
-  // the lip and the face: white water all the way down, streaked
+  // the lip and the face: white water all the way down, streaked (a tsunami's bore, broken from crest to foot)
   float streak = 0.75 + 0.25 * snoise(vec3(vAlong * 0.4, pt * 1.5 - uFxTime * 2.5, 9.1));
-  c = mix(c, foam * streak, white);
+  if (uWaterFace > 0.5) {
+    // a ROGUE WAVE in open water is a wall of WATER, white only where it breaks: the crest's top and the curling lip,
+    // torn into streaks running down the upper face, and a churned band at the foot. The face itself is the sea
+    // stood on end — dark, steep, the sky in it by Fresnel, a sun glint, green where the light comes through the
+    // thinning crest. (Drawn white all the way down, as the shore bore is, it read as a fog bank on the sea.)
+    float lipW = smoothstep(4.6, 5.4, pt) * (1.0 - smoothstep(6.6, 8.2, pt + 1.6 * (streak - 0.75)));
+    float footW = smoothstep(9.0, 9.7, pt) * (1.0 - smoothstep(9.6, 10.2, pt)) * smoothstep(0.3, 0.7, foamN);
+    vec3 faceC = mix(deep * 0.75, vRefl, vFres) + uSunE2 * vGlint * 0.6;
+    faceC += vec3(0.05, 0.22, 0.17) * (vSun * 0.08 + vSky * 0.05) * (1.0 - smoothstep(6.0, 8.6, pt)) * 2.4;
+    c = mix(c, faceC, white);
+    c = mix(c, foam * streak, max(lipW, footW) * white);
+  } else {
+    c = mix(c, foam * streak, white);
+  }
   a = max(a, white * 0.97);
   // behind: islands of foam on the swell
   float isl = smoothstep(0.45, 0.7, foamN) * behind * (0.35 + 0.65 * smoothstep(0.0, 1.6, pt));
@@ -153,13 +167,15 @@ export class TsunamiCrest {
   private synT = -1;
   /** where a played front starts out from its source (m) */
   private startR = 300;
-  readonly u = { uK: { value: 0 }, uCamB: { value: new Vector3() }, uSunE2: { value: new Vector3() } };
+  /** uWaterFace 1: a rogue wave's open-sea wall — a face of dark water, white only where it breaks (see FRAG) */
+  readonly u = { uK: { value: 0 }, uCamB: { value: new Vector3() }, uSunE2: { value: new Vector3() }, uWaterFace: { value: 0 } };
   /** the crest's points this frame (body m) and the outward direction there: GodFx's spray rides them */
   readonly crest: { p: Vector3; out: Vector3; land: number }[] = [];
 
   /** `played`: never look for the front in the sim's fields — play one from offshore at once (a rogue wave's lone wall) */
   constructor(fx: Record<string, IUniform>, shared: Record<string, IUniform>, played = false) {
     this.synthetic = played;
+    this.u.uWaterFace.value = played ? 1 : 0;
     for (let i = 0; i < BINS; i++) this.bins.push({ r: 0, rMeas: 0, speed: 20, level: 0, land: 0, valid: false, seen: -1e9 });
     const n = BINS * NP;
     this.geo.setAttribute('position', new BufferAttribute(new Float32Array(n * 3), 3));

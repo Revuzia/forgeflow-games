@@ -156,11 +156,13 @@ attribute vec4 iExtra;        // snow on the branches, char, leaf loss (winter),
                               // LOD boundary 0/1, 4/5 fading in; a missing attribute reads 1)
 uniform float uWindK;         // wind strength from the weather (calm 0.3 … gale 2.5)
 uniform vec4 uLodBand;        // LOD cross-fade bands (m from the camera): boundary 0 (x..y), boundary 1 (z..w)
+uniform mat3 uBodyToView;     // body → view rotation (planetview.ts): the camera's line of sight in the body frame
 varying vec4 vExtra;
 varying vec2 vLod;            // visibility 0..1 in the LOD cross-fade, +1 fading out / −1 fading in
 varying vec3 vLocalP;
 varying float vCrownIn;       // 1 when the camera is inside this tree's crown (its foliage fades away)
 varying vec2 vNearFade;       // foliage nearer the camera than x is gone, fading out to y (m): further up in the trees
+varying float vOccK;          // 0..1: this crown stands between a god's-eye camera and what it frames (crown fades)
 uniform float uTime;
 uniform vec3 uWindDir;
 uniform vec4 uGodWind;        // (additive, ships/cameras lane) the walking god's feet (body frame) and its wind's strength
@@ -278,6 +280,33 @@ const VEG_WIND = /* glsl */ `
     // the near fade reaches further the higher the camera stands above this tree's foot (street level: 2.5–6.5 m)
     float hCam = clamp(dot(uCamBody - ip, normalize(ip)) - 2.0, 0.0, 40.0);
     vNearFade = vec2(2.5 + hCam * 0.3, 6.5 + hCam * 0.45);
+    // GOD-VIEW OCCLUDERS: a camera some metres up, looking down at what it frames (a village, a shrine, the Touch's
+    // catch), never wants a crown in front of its subject — the crown by the lens covered 40 % of a 60 m village view
+    // and hid a framed shrine outright. A tree's crown fades (the same object-space chunks as above; its trunk stays,
+    // so the wood still reads) when it stands well in the FOREGROUND (nearer than ~40-55 % of the distance to the
+    // framed ground: it would look twice the size of the subject's own trees) or ON THE LINE OF SIGHT to the subject (within
+    // its radius + a few metres of the view ray, short of the subject). The framed point is the view ray's hit on the
+    // ground sphere through this tree's foot. Off at street level (walk / follow views: the trees are the scene) and
+    // when the view runs to the horizon; shadows keep every tree.
+    vOccK = 0.0;
+    if (th > 3.5) {
+      vec3 fwd = -vec3(uBodyToView[0][2], uBodyToView[1][2], uBodyToView[2][2]);
+      float rG = length(ip);
+      float rCam = length(uCamBody);
+      float hAbove = rCam - rG;
+      float bq = dot(uCamBody, fwd);
+      float disc = bq * bq - (rCam * rCam - rG * rG);
+      if (hAbove > 6.0 && bq < 0.0 && disc > 0.0) {
+        float tT = -bq - sqrt(disc);
+        vec3 rel = cc - uCamBody;
+        float tA = dot(rel, fwd);
+        float dPerp = length(rel - fwd * tA);
+        float rC = th * 0.3;
+        float fore = 1.0 - smoothstep(0.38 * tT, 0.56 * tT, length(rel));
+        float onRay = (1.0 - smoothstep(rC + 2.0, rC + 6.0, dPerp)) * smoothstep(0.0, 3.0, tA) * (1.0 - smoothstep(0.8, 0.94, (tA + rC) / tT));
+        vOccK = max(fore, onRay) * smoothstep(6.0, 12.0, hAbove) * (1.0 - smoothstep(600.0, 900.0, tT));
+      }
+    }
   }
 `;
 
@@ -307,6 +336,7 @@ varying vec3 vLocalP;
 varying float vCloudSh;
 varying float vCrownIn;
 varying vec2 vNearFade;
+varying float vOccK;
 uniform vec3 uCamBody;
 float vegCloudShadow(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
@@ -389,8 +419,11 @@ ${LEAF_ALPHA}
   // (trees only: vCrownIn < 0 marks ground cover and small shrubs, whose tufts at the camera's feet stay)
   // (a camera up among the crowns — vNearFade.x > 4: some 5 m above this tree's foot — loses the bare branches beside
   // it too, which crossed an orbit view as sticks once their leaves were gone)
-  if ((vLeaf > 0.5 || vNearFade.x > 4.0) && vCrownIn > -0.5) {
-    float nearK = max(vCrownIn, 1.0 - smoothstep(vNearFade.x, vNearFade.y, distance(vBodyPos, uCamBody)));
+  // (a crown between a god's-eye camera and its subject, vOccK, loses its foliage and the branches up in it, the
+  // lower trunk staying: the wood still reads, the subject shows through)
+  if (vCrownIn > -0.5) {
+    float nearK = (vLeaf > 0.5 || vNearFade.x > 4.0) ? max(vCrownIn, 1.0 - smoothstep(vNearFade.x, vNearFade.y, distance(vBodyPos, uCamBody))) : 0.0;
+    if (vLeaf > 0.5 || vLocalY > 0.55) nearK = max(nearK, vOccK);
     if (nearK > 0.0 && fract(sin(dot(floor(vLocalP * 4.0 + 0.21), vec3(12.9898, 78.233, 37.719))) * 43758.5453) < nearK) discard;
   }
   if (vCard > 0.5) diffuseColor.rgb *= texture(uLeafTex, vLeafUv).rgb * 1.7;
@@ -535,7 +568,7 @@ export class Vegetation {
     this.group.matrixAutoUpdate = false;
     const leafTex: IUniform = { value: leafClusterTexture() };
     this.material = makeVegMaterial(shared, this.fade, leafTex);
-    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND };
+    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND };
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {

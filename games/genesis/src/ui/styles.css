@@ -291,6 +291,13 @@ body[data-cvd='monochrome'] .gn-toast { --gn-tc: var(--gn-ivory-dim) !important;
 .gn-tool-l kbd { font-size: 11px; padding: 0 3px; opacity: .8; }
 .gn-tool-c { min-width: 0; display: flex; align-items: center; }
 .gn-tool-cost { font: 500 13px var(--gn-sans); color: var(--gn-warn); margin-top: 4px; }
+/* a power the sim refuses below a wrath (comet, supervolcano …): the need, met or short, and a way to raise this cast's */
+.gn-tool-need { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font: 500 12px/1.35 var(--gn-sans); color: var(--gn-ivory-dim); margin-top: 4px; }
+.gn-tool-need.gn-short { color: #ffd2b8; padding: 6px 8px; border: 1px solid rgba(232, 120, 86, .45); border-radius: 8px; background: rgba(120, 40, 22, .22); }
+.gn-tool-need[hidden] { display: none; }
+.gn-tool-raise { font: 600 12px var(--gn-sans); padding: 3px 10px; border-color: rgba(232, 150, 100, .6); }
+.gn-pal-badge.gn-warn { color: #ffcfb2; border-color: rgba(232, 120, 86, .55); }
+.gn-rad-pow.gn-rad-need { box-shadow: 0 0 0 2px rgba(232, 110, 80, .65); }
 .gn-tool-foot { display: flex; justify-content: flex-end; margin-top: 6px; }
 .gn-tool-foot .gn-tool-cast { color: #15110a; background: linear-gradient(180deg, var(--gn-gold-hi), var(--gn-gold)); border-color: transparent; padding: 7px 14px; }
 .gn-tool-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
@@ -1045,7 +1052,9 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 .gn-title-i { width: 22px; height: 22px; color: var(--gn-gold); }
 .gn-title-t { min-width: 0; }
 .gn-title-l { display: block; font: 600 23px/1.1 var(--gn-serif); letter-spacing: .05em; }
-.gn-title-t small { display: block; font: 500 12px/1.35 var(--gn-sans); color: var(--gn-ivory-faint); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn-title-t small { font: 500 12px/1.35 var(--gn-sans); color: var(--gn-ivory-faint); margin-top: 3px; overflow: hidden;
+  /* (a long line wraps to a second rather than being cut mid-word; past two it ends in an ellipsis) */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
 .gn-title-main .gn-title-l { color: var(--gn-gold-hi); font-size: 27px; }
 .gn-title-main:not([disabled]) .gn-title-t small { color: var(--gn-ivory-dim); }
 .gn-title-foot { position: absolute; left: clamp(24px, 6.5vw, 120px); bottom: 16px; display: flex; gap: 8px; font: 600 10px var(--gn-sans); letter-spacing: .26em;

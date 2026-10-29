@@ -24,7 +24,7 @@
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { ParamSpec, Power, ToolMode } from './powers.ts';
-import { toolMode, radiusParam, strengthParam, cardParams, missingRequired, paramLabel, fmtParam, buildCommand, entityKey, castValues, sliderStart, autoWords, categoryLabel, worldPrefill, type Place } from './powers.ts';
+import { toolMode, radiusParam, strengthParam, cardParams, missingRequired, paramLabel, fmtParam, buildCommand, entityKey, castValues, sliderStart, autoWords, categoryLabel, worldPrefill, wrathWord, wrathNeedWords, type Place } from './powers.ts';
 import { h, clear, fmtDist, clamp, store } from './dom.ts';
 import { icon } from './icons.ts';
 import { slider, toggle } from './panel.ts';
@@ -85,6 +85,8 @@ export class Tools {
   private instr: HTMLDivElement;
   private castBtn: HTMLButtonElement;
   private moreBtn: HTMLButtonElement;
+  /** the card's line for a power that needs the wrath raised (comet, supervolcano …): what it needs, and a way to give it */
+  private needEl: HTMLDivElement | null = null;
   private line: SVGLineElement;
   private head: SVGPathElement;
   private dot: SVGCircleElement;
@@ -275,6 +277,12 @@ export class Tools {
       const keys = k === sk ? [this.key('tool.weaker'), this.key('tool.stronger')].filter(Boolean).join(' ') : '';
       this.cardBody.append(this.row(k, cap(paramLabel(k)), ctl, keys, s.desc ?? (k === sk ? 'Strength (also Alt + wheel)' : '')));
     }
+    this.needEl = null;
+    if (this.host.powers.minWrathOf(p) !== undefined) {
+      this.needEl = h('div', { class: 'gn-tool-need', data: { key: 'wrath-need' } });
+      this.cardBody.append(this.needEl);
+      this.renderNeed();
+    }
     if (this.host.view.restraint && p.cost) this.cardBody.append(h('div', { class: 'gn-tool-cost', text: `Restraint: costs ${p.cost} worship${p.cooldown ? `, then rests ${Math.round(p.cooldown / 60)} h` : ''}.` }));
     this.moreBtn.hidden = !extra;
     this.moreBtn.textContent = this.view.more ? 'Fewer settings' : `More settings (${extra})`;
@@ -285,13 +293,34 @@ export class Tools {
     }
   }
 
+  /**
+   * A power the sim refuses below a wrath (fix r2 #19: comet, supervolcano, gravity slip, moon-fall need huge): the card
+   * says so before the cast, not after, and offers to raise this one cast's wrath to it (the law stays where it is).
+   */
+  private renderNeed(): void {
+    const el = this.needEl, p = this.armed;
+    if (!el || !p) return;
+    const min = this.host.powers.minWrathOf(p);
+    clear(el);
+    if (min === undefined) { el.hidden = true; return; }
+    el.hidden = false;
+    const short = this.host.powers.wrathShort(p, this.values);
+    el.classList.toggle('gn-short', short !== null);
+    if (short === null) { el.append(h('span', { text: `${cap(wrathNeedWords(min))} — this cast has it.` })); return; }
+    const own = typeof this.values.wrath === 'number' ? this.values.wrath : this.host.powers.wrathLaw;
+    el.append(h('span', { text: `${cap(wrathNeedWords(min))}. This cast's is ${wrathWord(own)} (${own.toFixed(2)}): no town survives it, so it will not fall below.` }));
+    const raise = h('button', { class: 'gn-btn gn-tool-raise', text: `Raise this cast to ${wrathWord(min)}`, title: 'Sets this cast\'s own wrath; the world\'s wrath law stays where it is' });
+    raise.addEventListener('click', () => { this.values.wrath = min; this.host.sound('ui.tick'); this.renderCard('wrath'); });
+    el.append(raise);
+  }
+
   private row(key: string, label: string, ctl: HTMLElement, keys = '', title = ''): HTMLDivElement {
     return h('div', { class: 'gn-tool-row', title, data: { key } }, h('span', { class: 'gn-tool-l' }, label, keys ? h('kbd', { text: keys }) : null), h('div', { class: 'gn-tool-c' }, ctl));
   }
 
   private control(k: string, s: ParamSpec): HTMLElement | null {
     const v = this.values[k];
-    const set = (x: unknown) => { if (x === undefined) delete this.values[k]; else this.values[k] = x; };
+    const set = (x: unknown) => { if (x === undefined) delete this.values[k]; else this.values[k] = x; if (k === 'wrath') this.renderNeed(); };
     if (s.type === 'number' || s.type === 'int') {
       const p = this.armed!;
       const known = this.host.powers.defaultOf(p, k);
@@ -311,6 +340,7 @@ export class Tools {
           if (out) out.textContent = autoWords(this.host.powers, p, k, this.dayHours());
           sl.classList.add('gn-auto');
           reset.hidden = true;
+          if (k === 'wrath') this.renderNeed();
         });
         if (v === undefined) { if (out) out.textContent = autoWords(this.host.powers, p, k, this.dayHours()); sl.classList.add('gn-auto'); reset.hidden = true; }
         sl.append(reset);

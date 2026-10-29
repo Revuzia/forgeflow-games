@@ -1465,6 +1465,22 @@ const FRAG_LIGHT = /* glsl */ `
       sunCol = mix(sunCol, uwSun, uwK);
       sunDirV = normalize(mix(uSunDirView, uBodyToView * Lw, uwK));
     }
+    // AIRLESS REGOLITH is not a Lambert surface: a porous dust whose grains shadow one another scatters by the
+    // lunar-Lambert law (McEwen 1991), r ∝ (1 − L)·μ0 + 2L·μ0 / (μ0 + μ), L falling from 1 at zero phase to ~0 by
+    // ~120°. Seen with the sun behind the viewer a regolith world is an evenly bright disc — every crater wall,
+    // tilted away from the eye or not, as bright as the plains (the full Moon: no limb darkening, craters only by
+    // their albedo) — while toward the terminator (μ0 → 0) the relief still shades as hard as Lambert's. Lit as
+    // Lambert, every wall and outer rim flank tilted from the view darkened by cos(tilt): a grey ring round every
+    // crater on the title's dead rock, on the face the sun lit full on.
+    if (uHasAtmo < 0.5) {
+      float mu0 = dot(geometryNormal, sunDirV);
+      if (mu0 > 0.0) {
+        float mu = max(dot(geometryNormal, geometryViewDir), 0.02);
+        float aDeg = degrees(acos(clamp(dot(sunDirV, geometryViewDir), -1.0, 1.0)));
+        float Lp = clamp(1.0 + aDeg * (-0.019 + aDeg * (2.42e-4 - aDeg * 1.46e-6)), 0.0, 1.0);
+        sunCol *= (1.0 - Lp) + 2.0 * Lp / (mu0 + mu);
+      }
+    }
     IncidentLight sunL;
     sunL.direction = sunDirV;
     sunL.color = sunCol * mix(1.0, ts.ao, 0.45);

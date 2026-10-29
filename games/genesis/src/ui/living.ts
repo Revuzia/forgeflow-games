@@ -330,7 +330,12 @@ export class SignPicker {
       h('span', { class: 'gn-sign-i', html: icon('sign') }),
       h('span', { class: 'gn-sign-t' }, h('b', { text: 'Let the world choose' }), h('small', { text: 'the sign that fits this world and this town' })));
     any.addEventListener('click', () => void this.send(undefined));
-    this.grid.append(any);
+    // (fix r2 #19: god.omen { warning } — the world chooses a sign that warns, never one they would read as a promise)
+    const warn = h('button', { class: 'gn-sign gn-sign-any gn-sign-warn', data: { kind: 'warning' }, title: 'A sign that warns of what is coming: the world chooses it, and never a rainbow (they read that as a promise)' },
+      h('span', { class: 'gn-sign-i', html: icon('lightning') }),
+      h('span', { class: 'gn-sign-t' }, h('b', { text: 'A sign of warning' }), h('small', { text: 'one that warns, never a promise: the world chooses' })));
+    warn.addEventListener('click', () => void this.send(undefined, true));
+    this.grid.append(any, warn);
     for (const k of this.kinds) {
       const r = this.readings[k] ?? {};
       const read = trusting === null ? `trusting: ${r.trusted ?? '…'} · fearful: ${r.feared ?? '…'}` : `they will read ${trusting ? r.trusted ?? 'favour' : r.feared ?? 'anger'}`;
@@ -345,18 +350,19 @@ export class SignPicker {
       : 'A sign is a wonder with no harm: faith rises, and the people read it by how they hold you. A prophet reads it to them.';
   }
 
-  /** send the sign over the chosen town, or arm it to be placed */
-  async send(kind: string | undefined): Promise<void> {
+  /** send the sign over the chosen town, or arm it to be placed; `warning`: the world chooses one that warns */
+  async send(kind: string | undefined, warning = false): Promise<void> {
     const v = this.over.value;
-    this.last = kind ?? 'any';
+    this.last = kind ?? (warning ? 'warning' : 'any');
     if (v === 'place') {
       this.panel.close();
-      this.deps.arm('omen', kind ? { kind } : {});
+      // (the card's warning toggle is set either way, so a remembered warning never rides on a plain sign)
+      this.deps.arm('omen', kind ? { kind, warning: false } : { warning });
       return;
     }
     const [planet, id] = v.split(':').map(Number);
     this.panel.close();
-    await this.deps.cmd(kind ? { k: 'god.omen', settlement: id, kind, planet } : { k: 'god.omen', settlement: id, planet });
+    await this.deps.cmd(kind ? { k: 'god.omen', settlement: id, kind, planet } : warning ? { k: 'god.omen', settlement: id, warning: true, planet } : { k: 'god.omen', settlement: id, planet });
   }
 
   /** test surface */
