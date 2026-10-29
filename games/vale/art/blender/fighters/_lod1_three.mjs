@@ -47,9 +47,11 @@ export function dequantUnit(mesh) {
 /**
  * The face-locked LOD1 index of a fighter's textured body (a SkinnedMesh with one material and an index), or null.
  * opts: ratio 0.5 (target share of the triangles), errorM 0.010 (largest shape error, metres), normalW 0.5,
+ * uvW 0 (> 0: the UVs join the normals as attributes, so a collapse that drags the baked texture across a flat face is
+ * refused; integration run 2 stitch: 60 clears Burdam's pauldron roundel at the gameplay camera, see _lod1.mjs),
  * lockBone 'head', lockW 0.5. Returns { index, tris, lodTris, unitM, errorRel } so the caller can log the swap.
  */
-export function faceLockedLodIndex(mesh, simplifier, { ratio = 0.5, errorM = 0.010, normalW = 0.5, lockBone = 'head', lockW = 0.5 } = {}) {
+export function faceLockedLodIndex(mesh, simplifier, { ratio = 0.5, errorM = 0.010, normalW = 0.5, uvW = 0, lockBone = 'head', lockW = 0.5 } = {}) {
   const g = mesh.geometry;
   const P = g.getAttribute('position'), N = g.getAttribute('normal');
   const SI = g.getAttribute('skinIndex'), SW = g.getAttribute('skinWeight');
@@ -72,7 +74,15 @@ export function faceLockedLodIndex(mesh, simplifier, { ratio = 0.5, errorM = 0.0
   if (!(unitM > 0) || !(extent > 0)) return null;
   const errorRel = errorM / (unitM * extent);
   const target = Math.max(3, Math.floor(tris * ratio) * 3);
-  const [lod] = simplifier.simplifyWithAttributes(src, pos, 3, nrm, 3, [normalW, normalW, normalW], lock, target, errorRel, []);
+  const UV = uvW > 0 ? g.getAttribute('uv') : null;
+  let lod;
+  if (UV) {
+    const att = new Float32Array(n * 5);
+    for (let i = 0; i < n; i++) { att.set(nrm.subarray(i * 3, i * 3 + 3), i * 5); att[i * 5 + 3] = UV.getX(i); att[i * 5 + 4] = UV.getY(i); }
+    [lod] = simplifier.simplifyWithAttributes(src, pos, 3, att, 5, [normalW, normalW, normalW, uvW, uvW], lock, target, errorRel, []);
+  } else {
+    [lod] = simplifier.simplifyWithAttributes(src, pos, 3, nrm, 3, [normalW, normalW, normalW], lock, target, errorRel, []);
+  }
   if (!lod.length || lod.length >= src.length) return null;
   return { index: n < 65536 ? Uint16Array.from(lod) : lod, tris, lodTris: lod.length / 3, unitM, errorRel, lock };
 }

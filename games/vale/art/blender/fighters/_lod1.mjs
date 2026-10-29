@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // VALE fighters: the face-locked LOD1 (perf PERF-m5, integration lead:fighter-tris / chars-03 / chars-04).
 //
-//   node art/blender/fighters/_lod1.mjs [glb ...] [--ratio 0.5] [--error-mm 10] [--normal-weight 0.5]
+//   node art/blender/fighters/_lod1.mjs [glb ...] [--ratio 0.5] [--error-mm 10] [--normal-weight 0.5] [--uv-weight 0]
 //                                       [--lock-weight 0.5] [--json out.json] [--write dir]
 //
 // Every fighter and skin GLB already sits inside CONTRACT §12's 10-25k triangles and next to its 1.2 MB byte budget,
@@ -14,6 +14,8 @@
 //               kept fighter bodies whole in the main pass);
 //   attributes  simplifyWithAttributes with the vertex normals weighted --normal-weight, so a collapse that would
 //               bend the shading under the baked normal map is refused before one that only moves a flat panel;
+//               --uv-weight > 0 adds TEXCOORD_0 to those attributes (u, v weighted the same), so a collapse that would
+//               drag the baked texture across a flat face (the painted detail swims) is refused too; 0 = normals only;
 //   bound       --error-mm in metres (positions dequantized through the skin's bind matrices: KHR_mesh_quantization
 //               folds the dequantization into the inverse bind matrices of a skinned mesh; it is PER MESH, a uniform
 //               0.82-1.24 m per unit over the 48 GLBs, never one constant), target --ratio of the body's triangles;
@@ -26,6 +28,15 @@
 // (_harness/_reports/integ_chars_r1_lod1.json): 955,762 -> 580,849 body triangles (0.608), worst error 10 mm, every
 // non-degenerate head-locked triangle kept (152,516). _lod1_three.mjs is the same recipe on the objects GLTFLoader
 // builds (the renderer's drop-in, faceLockedLodIndex) and checks it against this one.
+//
+// The renderer ships it at ratio 0.4, 12 mm (src/render/lod.ts LOD.body, a8d6bcc1). Integration run 2 stitch
+// (chars-lod-support), --ratio 0.4 --error-mm 12: 48 GLBs 956,400 -> 534,917 (0.559), worst 12 mm, head-locked
+// 152,544/152,544 kept; every part's own shell within 16.8 mm of its LOD1 (Marund's torso 20.6 mm, under 2 px). One
+// texture defect at the gameplay camera: Burdam's right front pauldron plate (pauldron_face, 440 -> 98 triangles) loses
+// a wedge of its carved roundel, the plate's dark side-band texels dragged across the flat face (three_snapshot row 1:
+// 88 solid diff px; the other 15 fighters 0). --uv-weight 60 clears it at the gameplay camera (0 solid px; 16 base
+// bodies 175,067 -> 177,526 triangles), 100 keeps the plate whole in the close views too (181,032); --normal-weight 1
+// also clears it but costs 208,318.
 //
 // Prints per GLB: body triangles, LOD1 triangles, the achieved error (mm), head-locked vertices / triangles, the
 // dequantization (m per position unit), and a total; --json writes the same rows (plus extentM and errorRel, the
@@ -41,11 +52,12 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '..', '..', 'out', 'fighters');
 const args = process.argv.slice(2);
-const valued = ['--ratio', '--error-mm', '--normal-weight', '--lock-weight', '--json', '--write'];
+const valued = ['--ratio', '--error-mm', '--normal-weight', '--uv-weight', '--lock-weight', '--json', '--write'];
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const RATIO = Number(opt('--ratio', 0.5));
 const ERROR_M = Number(opt('--error-mm', 10)) / 1000;
 const NORMAL_W = Number(opt('--normal-weight', 0.5));
+const UV_W = Number(opt('--uv-weight', 0));
 const LOCK_W = Number(opt('--lock-weight', 0.5));
 const jsonOut = opt('--json', '');
 const writeDir = opt('--write', '');
@@ -62,7 +74,7 @@ function mul(a, b) {
 }
 
 /** the face-locked LOD1 of one skinned, textured primitive: { lod, tris, lodTris, errorMm, lockedVerts, lockedTris } */
-export function faceLockedLod(prim, skin, { ratio = RATIO, errorM = ERROR_M, normalW = NORMAL_W, lockW = LOCK_W } = {}) {
+export function faceLockedLod(prim, skin, { ratio = RATIO, errorM = ERROR_M, normalW = NORMAL_W, uvW = UV_W, lockW = LOCK_W } = {}) {
   const P = prim.getAttribute('POSITION'), N = prim.getAttribute('NORMAL');
   const J = prim.getAttribute('JOINTS_0'), W = prim.getAttribute('WEIGHTS_0');
   const n = P.getCount();
@@ -100,7 +112,13 @@ export function faceLockedLod(prim, skin, { ratio = RATIO, errorM = ERROR_M, nor
   for (let t = 0; t < tris; t++) if (lockedTri(t)) lockedTris++;
   const scale = MeshoptSimplifier.getScale(pos, 3);
   const target = Math.max(3, Math.floor(tris * ratio) * 3);
-  const [lod, err] = MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, att, 3, [normalW, normalW, normalW], lock, target,
+  // --uv-weight: the UVs join the normals as attributes (n x 5: nx ny nz u v)
+  const T = uvW > 0 ? prim.getAttribute('TEXCOORD_0') : null;
+  const att5 = T ? new Float32Array(n * 5) : null;
+  if (T) for (let i = 0; i < n; i++) { att5.set(att.subarray(i * 3, i * 3 + 3), i * 5); T.getElement(i, e); att5[i * 5 + 3] = e[0]; att5[i * 5 + 4] = e[1]; }
+  const [lod, err] = T
+    ? MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, att5, 5, [normalW, normalW, normalW, uvW, uvW], lock, target, errorM / scale, [])
+    : MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, att, 3, [normalW, normalW, normalW], lock, target,
     errorM / scale, []);
   // the locked triangles survive untouched (checked: every one of them is still in the LOD1)
   const key = (a, b, c) => { const s = [a, b, c].sort((x, y) => x - y); return `${s[0]},${s[1]},${s[2]}`; };
@@ -163,7 +181,7 @@ async function main() {
   const tot = { glbs: rows.length, body: sum('body'), lod1: sum('lod1'), ratio: +(sum('lod1') / Math.max(1, sum('body'))).toFixed(3),
     maxErrorMm: Math.max(0, ...rows.map((r) => r.errorMm)), lockedTris: sum('lockedTris'), lockedKept: sum('lockedKept'),
     unitM: [Math.min(...rows.map((r) => r.unitM)), Math.max(...rows.map((r) => r.unitM))], allUniform: rows.every((r) => r.uniform),
-    recipe: { ratio: RATIO, errorMm: ERROR_M * 1000, normalWeight: NORMAL_W, lockJoint: 'head', lockWeight: LOCK_W } };
+    recipe: { ratio: RATIO, errorMm: ERROR_M * 1000, normalWeight: NORMAL_W, uvWeight: UV_W, lockJoint: 'head', lockWeight: LOCK_W } };
   console.log(`[lod1] ${tot.glbs} GLBs: body ${tot.body} -> LOD1 ${tot.lod1} (${tot.ratio}), worst error ${tot.maxErrorMm} mm, `
     + `head-locked triangles kept ${tot.lockedKept}/${tot.lockedTris}, dequantization ${tot.unitM[0]}-${tot.unitM[1]} m/unit `
     + `(per mesh${tot.allUniform ? ', uniform' : ', NOT uniform'})`);
