@@ -437,7 +437,7 @@ class Blackboard {
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
       this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
-      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
       // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
       // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
@@ -1742,6 +1742,9 @@ function act(W, b, dt) {
   // (P23, LC-14) a live grenade landing here: get out of its blast (over every state but a revive channel and a throw)
   if (bb.dangerUntil > W.t && !bb.nadeS && !(b.state === "REVIVE" && bb.reviveStarted)) dodgeGrenade(W, b, dt);
   // (P23, C-FALL) never walk off a drop that would kill (only when the sim has fall damage)
+  // (R3 steer) a real flight (falling past 4 m/s) re-arms the probe for the frame it lands: p23_fall lips, isla_viva seed 77, s11 at 10 hp landed
+  // on a 0.5 m bump between two faces at a sprint, the probe was not due on the two frames it stood there, and it ran off the second face
+  if (!a.onGround && a.vel.y < -4) bb.edgeAir = true;
   if (LETHAL_H && (a.onGround || W.t < bb.edgeBanUntil) && (inp.mz || inp.mx)) edgeGuard(W, b);
   // ...and in a real fall (2 m+ of drop already under it, no canopy) it drops straight: air control steered by the state's goal carried bots
   // downhill onto lower ground (p23_fall: a 10 m lift cost 53.9 hp, the human's curve says 41.4)
@@ -3205,7 +3208,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -5153,6 +5156,8 @@ function edgeGuard(W, b) {
   const wyE = W.map.waterY;          // (R1, tierprof kb) read on every call: read only inside the probe loop it had no type feedback when the loop first ran
   // (release blockers) no held heading and no probe due (3 frames in 4): nothing below can act - the same early return the tests below reach,
   // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
+  if (bb.edgeAir && a.onGround) { bb.edgeAir = false; bb.edgeT = W.t; }
+  if (W.t < bb.edgeWalkUntil) inp.sprint = false;       // (R3 steer) a slope this bot may walk down but not sprint down: walked until the next look says otherwise
   if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
   const B = basisOf(inp, _mb0);
   let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
@@ -5197,9 +5202,61 @@ function edgeGuard(W, b) {
       return;
     }
     if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
-    if (runTop === runTop ? !steep : k >= win) break;                         // a face is followed while it goes on down; the window ends the look
+    // a face is followed while it goes on down; the window ends the look. (R3 steer) A face that ends INSIDE the window does not end the look: s11
+    // (isla_viva seed 77, 10 hp) saw a 1.5 m face at 0.8 m, stopped looking at its foot, and the 5.8 m face 2 m further on was never measured
+    if (runTop === runTop && !steep) { if (k >= win) break; runTop = NaN; }
+    else if (runTop !== runTop && k >= win) break;
     prev = sup;
   }
+  // (R3 steer) THE FLIGHTS THIS HEADING MAKES, on the terrain (a deck keeps the sampled rule above: each of its samples is a collider query).
+  // Downhill faster than gravity pulls the capsule down, the mover leaves the ground (player.js: feet more than 0.1 m over the support after a
+  // tick), and a flight lands at the speed of a fall from where it left: its drop is judged by the same curve as any drop (walkDrop). A sprint
+  // down a 45-degree face flies ~5.8 m (2 u^2 tan^2 / g), a walk 3.3 m - so the sampled rule above (a face is steeper than 48 degrees) passed
+  // slopes a sprinting wounded bot fell down. Checked only where the ground within 16 m falls more than lim below the feet (no flight can drop
+  // further than the ground does); a heading that flies too far at the sprint but not at the walk is walked, else it is held like a lip.
+  if (elevated) return;
+  let minG = a.pos.y;
+  for (let k = 1; k <= 20; k++) {
+    GA[0] = a.pos.x + wx * 0.8 * k; GA[1] = a.pos.z + wz * 0.8 * k; groundA(W, GA, 0);
+    const gk = (wyE != null && GA[2] < wyE) ? wyE : GA[2];
+    if (gk < minG) minG = gk;
+  }
+  if (a.pos.y - minG <= lim) return;
+  const sprintNow = inp.sprint && inp.mz > 0.5, walkV = K.MOVE.walk, uT = sprintNow ? K.MOVE.sprint : walkV;
+  FLQ[0] = wx; FLQ[1] = wz; FLQ[2] = spd > uT ? spd : uT; FLQ[3] = lim; FLQ[4] = win * 0.8;
+  if (flightSafe(W, a)) return;
+  if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.6; nav.st.edgeSlows++; return; } }
+  bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
+  inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
+  bb.nextPathT = 0;
+  nav.st.edgeHolds++; nav.st.edgeFlights++;
+}
+/** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
+ *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
+ *  landing's drop (from where the flight left the ground: a fall from rest) against lim. Walks dmax of ground, plus every flight that starts on it.
+ *  false = a flight lands from higher than lim. Numbers in, a boolean out (no boxed double crosses the call). */
+const FLQ = new Float64Array(5);
+function flightSafe(W, a) {
+  const wx = FLQ[0], wz = FLQ[1], u = FLQ[2], lim = FLQ[3], dmax = FLQ[4], wy = W.map.waterY;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), dt = 1 / 30, step = u * dt;
+  let x = a.pos.x, z = a.pos.z, y = a.pos.y, vy = 0, top = y, d = 0, air = false;
+  for (let n = 0; n < 150; n++) {
+    x += wx * step; z += wz * step; d += step;
+    GA[0] = x; GA[1] = z; groundA(W, GA, 0);
+    const sup = (wy != null && GA[2] < wy) ? wy : GA[2];
+    if (!air) {
+      if (sup - y > 1.0) return true;                     // rising ground the legs do not climb in a step: the walk stops here
+      if (y - sup <= 0.1) { y = sup; if (d >= dmax) return true; continue; }
+      air = true; vy = 0; top = y;
+    }
+    vy += g * dt; y -= vy * dt;
+    if (y <= sup) {
+      if (top - sup > lim) return false;
+      y = sup; vy = 0; air = false;
+      if (d >= dmax) return true;
+    }
+  }
+  return true;
 }
 /** (C-FALL) a fight's hop lands where it was: no ground more than 2.5 m lower along the run or the strafe within a hop's 4.5 m (stub duo 10-26,
  *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
