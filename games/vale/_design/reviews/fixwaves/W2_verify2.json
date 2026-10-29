@@ -1,0 +1,36 @@
+{
+  "wave": "W2",
+  "round": 2,
+  "verifier": "adversarial verifier, verify-only round 2, 2026-10-28 (re-measured on the real Chrome GPU against dev :5190; engineer reports not trusted)",
+  "pass": true,
+  "summary": "Both previously failed items now pass on fresh runs. The ledger-line gate holds: hud_renders.mjs --at 100 and --at 160 both exit 0, with SkyLedger at 1 render for 1 change of its numbers. A harder stress test also passes. 8 forced renders of the sky strip itself (forceUpdate, which bypasses every sCU) and 9 HUD-root re-renders caused 0 SkyLedger renders. The line still updated with correct numbers on real changes, never stale for even one frame over 1,201 frames. The Settings toggle hides and restores it live. Regression check: typecheck is clean, and the RIFT e2e journey passes end to end with 0 console errors (Dial Bar key labels present, ledger on screen, no overlap with the objective chips). The STORE step fails the same way as round 1: a single-mode run earns 444 Candles, which buys no skin. That is a harness limit, not a regression. One accuracy note on the refix's evidence: preact's options.diffed also fires on sCU bail-outs, so 'SkyStrip and Hud rendered 2x' in the refix's --at 160 report counts diffs, not real renders of the strip. My forced-render phase covers the case it was meant to show.",
+  "commands": [
+    "export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:$PATH; export CHROME=...; export VALE_URL=http://localhost:5190",
+    "node _harness/hud_renders.mjs --at 100 > _harness/_reports/fw_W2_v2_hud_renders_at100.json 2> .err; exit -> .exit",
+    "node _harness/hud_renders.mjs --at 160 > _harness/_reports/fw_W2_v2_hud_renders_at160.json 2> .err; exit -> .exit",
+    "node <scratchpad>/w2v2_ledger_stress.mjs --at 90  -> _harness/_reports/fw_W2_v2_ledger_stress.{json,err,exit} (phases A/B/C)",
+    "node <scratchpad>/w2v2_ledger_stress.mjs --at 150 -> _harness/_reports/fw_W2_v2_ledger_stress2.{json,err,exit} (phases A/B/C/D)",
+    "npm run typecheck",
+    "node _harness/e2e.mjs rift --prefix fw_W2_v2_e2e --out _harness/_reports/fw_W2_v2_e2e_rift.json  (log: _harness/_reports/fw_W2_v2_e2e_rift.log)"
+  ],
+  "items": [
+    {
+      "id": "done:9",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Fresh runs on commit c7e3405b. `hud_renders.mjs --at 100`: exit 0, 180 ticks, SkyLedger renders 1 / changes 1, text 'T/F/A0/0/1·Wicks3', box 1116,72 184x20, 13px Atkinson Hyperlegible Mono (_harness/_reports/fw_W2_v2_hud_renders_at100.{json,err,exit}). `--at 160`: exit 0, 180 ticks, renders 1 / changes 1, text 'T/F/A0/0/0·Wicks8' (_harness/_reports/fw_W2_v2_hud_renders_at160.*). Adversarial stress in a real RIFT co-op match (_harness/_reports/fw_W2_v2_ledger_stress.json and fw_W2_v2_ledger_stress2.json, both PASS, exit 0). Phase A: 8 hudScale settings flips plus a revert re-rendered Hud 9x, SkyLedger 0. Phase D: the sky strip forced to render 8x via its component's forceUpdate (ObjectiveChips 8 and Pinned(SkyLedger) 8 prove the strip's children were diffed), SkyLedger 0, Pinned's sCU stopped it. Phase B: 20 s of play, SkyLedger 2 renders / 2 changes in run 1 and 1 / 0 in run 2 (one prefs-signal render when the first-match hints write seenScreens, within the +1 tolerance). The DOM text matched the live numbers on every one of 1,201 and 1,094 rAF samples (staleMaxFrames 0), so pinning does not freeze the line. Code: src/ui/hud/ctx.ts:71-78 pinned(), src/ui/hud/top.tsx:58,79,116 LedgerSlot, src/ui/hud/index.tsx:53,144-147 memoised r and ctx."
+    },
+    {
+      "id": "hud:HUD-4",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "The render-on-change gate passes (done:9). On screen: _harness/_shots/fw_W2_v2_e2e_rift_08_match_live.png shows 'T/F/A 0/0/0 · Wicks 0' right of the Sunsplinter and Longshade objective chips under the sky strip, no overlap. Settings toggle works live: setPrefs({hudLedger:false}) removes .hud .skyledger (null), and setPrefs({hudLedger:true}) restores it with the current numbers, in both stress runs (phase C ok:true; e.g. on0/on1 'T/F/A0/0/0·Wicks16', off null)."
+    }
+  ],
+  "regressions": [],
+  "regression_checks": [
+    "npm run typecheck: clean (tsc --noEmit, no output).",
+    "The memoised HUD context means a Hud re-render no longer forces every useHud() consumer. Widgets that read key labels at render time (dialbar.tsx:297 aslot__key, :514, :539) would only go stale on a mid-match rebind without a remount. The only in-match path to rebinding is Menu > Settings (screens/match.tsx:52 router.go('settings')), which unmounts the match screen through ScreenHost (app.tsx:348-372), so the HUD remounts with a fresh context. No stale-label path found.",
+    "RIFT e2e journey (_harness/_reports/fw_W2_v2_e2e_rift.json / .log): home, play, find_match, ready, pick, loading, match_input (shop and scoreboard open, HUD up), match_live, match_end (Defeat banner), postgame (grants 144 Candles), postgame_scoreboard (1280 and 1920: worstDx 0, no wraps, 51/51 painted item icons), home_again: all pass, consoleErrors []. STORE buy_skin fails with 'no affordable skin offer' at 444 Candles, identical to round 1's rift-only run (fw_W2_v1r_e2e_rift.log, 459 Candles). The STORE journey assumes the grants of all modes (`e2e.mjs all`), so this is not a regression."
+  ]
+}
