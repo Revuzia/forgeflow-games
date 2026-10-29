@@ -1434,7 +1434,11 @@ def model(ctx) -> list:
     P.append(fighter.Part("visor", high=hi, low=vz, bind="bone:head"))
     sm = seams_low("blade_seams_low", GREAT_L, GREAT_SHAPE, BEVEL["blade_great"], ctx.col)   # Whole Again's seams
     sm.data.materials.append(ctx.mats["accent"])
-    P.append(fighter.Part("blade_seams", low=sm, bind="bone:prop.R", form="great"))
+    hi = sm.copy()                                      # kept as the part's high: a skin reads its role from it
+    hi.data = sm.data.copy()                            # after the low is joined into the body
+    hi.name = "blade_seams_high"
+    ctx.col.objects.link(hi)
+    P.append(fighter.Part("blade_seams", high=hi, low=sm, bind="bone:prop.R", form="great"))
     return P
 
 
