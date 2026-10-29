@@ -3685,7 +3685,7 @@ export async function buildMap(W, mapId) {
     // (R1 / endgame lane) the main slab spans ALL the swim-deep water under the deck: where the channel's dredged falloff runs under a strip's run-out (deepwood s18: three 0.71 m
     // run-outs 20-30 % over swim-deep water, the deck read as four slabs over the river and its axis 14.5 degrees off - every walk that followed it swam), the slab end moves out to
     // 0.75 m past the outermost deep point under any strip, so what is left of a run-out lies over the shallows / the bank. Only where every shorter strip's bank stands within a step
-    // under the deck top along the stretch the slab now reaches into it (else the old end: a deck end face over a dip in the bank is a wall to a walker); 62 of 63 walk seeds unchanged.
+    // under the deck top along the stretch the slab now reaches into it (else the old end: a deck end face over a dip in the bank is a wall to a walker). On the 63 walk seeds the slab reaches 0.75-1.6 m further on 25 (38 unchanged).
     const deepAt = (s, t) => Math.min(G(s.u0, t), G((s.u0 + s.u1) / 2, t), G(s.u1, t)) < waterY - 0.9;
     const reachOut = (c, sg) => {                                                                       // sg -1: the tA end (c = cA), +1: the tB end (c = cB)
       let e = c;
