@@ -639,6 +639,10 @@ NEGATIVE = [
     # houseload: 64 dead far-away colliders appended to every queryColliders result (collider-load + collider-load-frame), 20 extra meshes in one district (district-calls)
     ("houseload-plant-query-flood", "houseload.py", ["--maps", "deepwood", "--plant", "query-flood"], 1800),
     ("houseload-plant-district-split", "houseload.py", ["--maps", "ashgrid", "--plant", "district-split"], 1800),
+    # (R3 gates) the look measure's own controls - the REAL W.map.hasCollidersNear read through a c.dead tap: it floods (builds and scans its whole r-list,
+    # look mean x13.9) or always answers true (400 wrong answers at empty probe points). Under a plant collider-load judges only that plant's queries
+    ("houseload-plant-look-flood", "houseload.py", ["--maps", "deepwood", "--plant", "look-flood"], 1800),
+    ("houseload-plant-look-true", "houseload.py", ["--maps", "deepwood", "--plant", "look-true"], 1800),
     # ---- Wave 8 fix round (lane K3): each corrected row keeps a failing control
     # placementcheck ramp-start-step no longer judges housegen ROOF planks (house.roofRamps): the first housegen STAIR lifted 0.8 m must still fail it
     ("placementcheck-plant-house-stair-lip", "placementcheck.py", ["--plant", "house-stair-lip", "--quick"], 900),
@@ -706,6 +710,8 @@ P23_PENDING_NEG = [
     ("p23_fall-plant-no-event", "p23/fall.py", ["--plant", "no-event", "--parts", "human"], 3600),
     # (fix round) bots-avoid's falsifier: bots.js served with its C-FALL guard off (LETHAL_H / WALK_H null = the base bots) - bots-avoid lips must FAIL
     ("p23_fall-plant-no-fall-guard", "p23/fall.py", ["--plant", "no-fall-guard", "--parts", "lip"], 3600),
+    # (R3) bots-rule's falsifier: the fall curve x0.6 in the bots' page (a 10 m drop costs a bot ~23 hp) - bots-rule must FAIL
+    ("p23_fall-plant-bot-curve-x0.6", "p23/fall.py", ["--plant", "bot-curve-x0.6", "--parts", "bots"], 3600),
     ("p23_move-plant-slide-flat", "p23/move.py", ["--plant", "slide-flat", "--parts", "slide"], 3600),
     ("p23_move-plant-no-swap", "p23/move.py", ["--plant", "no-swap", "--parts", "shoulder"], 3600),
     ("p23_move-plant-aim-past", "p23/move.py", ["--plant", "aim-past", "--parts", "crosshair"], 3600),
@@ -715,6 +721,8 @@ P23_PENDING_NEG = [
     ("p23_dbno-plant-crawl-fast", "p23/dbno.py", ["--plant", "crawl-fast", "--parts", "bot"], 3600),
     ("p23_dbno-plant-no-bleed", "p23/dbno.py", ["--plant", "no-bleed", "--parts", "bot"], 3600),
     ("p23_dbno-plant-revive-quick", "p23/dbno.py", ["--plant", "revive-quick", "--parts", "bot"], 3600),
+    # (R3) the two-human revive: the host releases E after 3 s of game time - human2's channel row (5.0 +- 0.25 s, fixed) must FAIL
+    ("p23_dbno-control-h2-short-hold", "p23/dbno.py", ["--parts", "human2", "--control", "h2-short-hold"], 3600),
     ("p23_modes-plant-teams-off", "p23/modes.py", ["--plant", "teams-off", "--modes", "duo"], 3600),
     ("p23_settings-plant-ultra-noop", "p23/settings.py", ["--plant", "ultra-noop"], 3600),
     ("p23_settings-plant-scale-center", "p23/settings.py", ["--plant", "scale-center"], 3600),

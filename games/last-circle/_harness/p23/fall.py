@@ -10,6 +10,7 @@ sim -, application in player.js - lane player.)
     python _harness/p23/fall.py --disk --plant harsh           # K.FALL_DMG_PER_V x 4 - MUST FAIL (10 m drop over the band)
     python _harness/p23/fall.py --disk --plant no-event        # 'fallDamage' never reaches W.events - MUST FAIL
     python _harness/p23/fall.py --disk --plant no-fall-guard --parts lip   # bots.js served with its fall guard off - MUST FAIL (bots-avoid lips)
+    python _harness/p23/fall.py --disk --plant bot-curve-x0.6 --parts bots # the bots' fall curve x0.6 - MUST FAIL (bots-rule)
     python _harness/p23/fall.py --disk --inject F:/lc_p23/harness/stubs/fall_stub.js   # validation against a contract stub
 
 Part HUMAN (PRACTICE, Isla Viva seed 4242, kernel loop frozen, frames stepped, the hp guard OFF during each drop): the player is set
@@ -17,7 +18,7 @@ h metres above open, flat ground (nothing within 4 m) with zero velocity and ste
 'fallDamage' event. Heights 1, 3, 4, 6, 10 (shield 100 and shield 0), 15, 17, then 22 (lethal) last (D2). 10 REAL Space jumps on the same ground.
 A 20 m drop into deep water.
 Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m, three 15 m and three 22 m over open, flat ground (each moved to
-the nearest spot that passes the human's flat-ground rule first) - the same rule
+the nearest spot that passes the human's flat-ground rule AND lies out of every other actor's fire range and sight for the window first, R3) - the same rule
 (10 m costs 35-40, 15 m = the human's, 22 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
 Part LIP (a QUICK match on Isla Viva seed 77): bots-avoid's falsifier - a dry 10 hp bot provoked by an enemy 9 m behind it on a plateau flees
 toward a >= 7 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
@@ -48,6 +49,8 @@ PLANTS = {
     "no-event": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'fallDamage') return; return em.apply(null, arguments); }",
     # bots.js served with its C-FALL guard off (part lip; see NO_FALL_GUARD): no page snippet
     "no-fall-guard": "",
+    # R3: the fall curve scaled x0.6 in the bots' page (part bots; registered --parts bots): a 10 m drop costs a bot ~23 hp - bots-rule MUST FAIL
+    "bot-curve-x0.6": "{ const f0 = K.fallDamage; if (typeof f0 === 'function') K.fallDamage = function () { return Math.round(0.6 * f0.apply(this, arguments)); }; K.FALL_DMG_PER_V = (K.FALL_DMG_PER_V || 1) * 0.6; if (K.FALL) K.FALL.DMG_PER_V *= 0.6; }",
 }
 # integrator D2 (fix round, binding): a 10 m drop costs 35-40 hp, 15 m 60-75, lethal from full health from about 20 m (not 16.6 m): 17 m
 # survives, 22 m kills (the 4 m safe drop stays). Was 35-50 / 20 m kills before D2
@@ -193,27 +196,93 @@ def part_human(s, v, args):
         v.cnj("water (a 20 m drop into deep water costs 0 hp)", "no deep water found within 700 m of the practice spawn")
 
 
-BOT_DROP_JS = r"""([hs]) => {
-  const W = window.__LC__.W, M = W.map, P = window.__H_PUMP__;
-  const bots = W.actors.filter((a) => a.isBot && a.alive && a.onGround && !a.gliding).slice(0, hs.length);
+# R3 (gates): the setup's spot must be CLEAR of every other actor for the whole window. On 03a00b05 (ashgrid seed 77) s2 was lifted 21 m to its
+# flat spot and into a line of fire: s36 (ENGAGE, 27-29 m) hit it 3x with a pistol (13-14 hp, t 3.25-4.8 s) inside the 6 s window, so tenLost read
+# 59 against a recorded fallDmg of 38. A spot is CLEAR when every other live actor (and every test spot already picked) is
+#   - out of RANGE for the whole window (REQUIRED): farther than its own longest trigger range (bots.js fireRangeM: falloff[1] x 1.3, 30 m without
+#     a falloff, over the guns it carries; at most 200 m: perceive never targets anyone farther) + CLOSE_M = 60 m (6 s x the 8 m/s sprint, W.SIM.MOVE.sprint, = 48 m, + 12 m: the first full run's
+#     tightest bot kept only 1 m of the 48 m): it cannot stand inside its range of the
+#     test bot at any moment of the window with the guns it carries; checked again over the window: no other actor inside its LIVE trigger
+#     range (a gun looted mid-window counts) with a clear sight line to a test bot (`exposed`, else the setup missed), and
+#   - out of SIGHT (PREFERRED, `hidden`): farther than PACE.noticeM 200 m + 48 m (bots.js perceive: no tier notices a stranger past 200 m), or its
+#     eye's sight line to the drop column (1.2 m, mid-drop, the lift + 1.2 m) blocked (W.map.losBlocked, perceive's sight test). Hidden spots are
+#     scarce (43 grid cells at 03a00b05's ground start), so the nearest spot that is both wins, else the nearest out of range.
+# (A flat 260 m disc free of every actor does not exist in a 50-actor quick match: the circle is r 588 m, nearest-neighbour median 101 m, 0 grid
+# cells qualify - diag F:/lc_p23/r3/gates/diag/spotfeas.py.) Inside the live storm circle - 20 m. The search is a fixed 10 m grid, nearest to the
+# bot first: the same seed picks the same spots. The row then judges what the window recorded: hp lost - damage from attackers (actorHurt with an
+# attackerId) == the recorded fallDmg, and that fallDmg on the curve. Nine spots clear of each other AND of everyone at once do not exist either (4 of
+# 9 found on 03a00b05), so the drops run in three rounds of three (22 / 15 / 10 m), each round its own window.
+CLOSE_M, SIGHT_M, WIN_F = 60, 248, 360
+BOT_DROP_JS = r"""([rounds, closeM, sightM, winF]) => {
+  const W = window.__LC__.W, M = W.map, P = window.__H_PUMP__, K = W.SIM;
   // OPEN, FLAT ground under each bot (release prep): the human's SPOT_JS rule (+- 0.25 m over 6 m, no collider over the ground within 5 m). A bot
   // keeps steering in the air (~3 m in a 10 m fall), and a bot lifted over a slope landed lower than it was lifted: Savanna seed 77 s5, lifted
-  // 10 m at (-773, 32), fell 10.47 m downhill = 41-42 hp, which is the curve at 10.5 m, not a 10 m drop. Each bot moves to the nearest such spot
-  // (setup only; `moved` = how far); none within 150 m leaves it where it stands (`flat` false).
+  // 10 m at (-773, 32), fell 10.47 m downhill = 41-42 hp, which is the curve at 10.5 m, not a 10 m drop.
   const wy = M.waterY;
   const flatOk = (x, z) => { const h = M.heightAt(x, z); if (h < wy + 1) return false;
     for (const [dx, dz] of [[3, 0], [-3, 0], [0, 3], [0, -3], [2, 2], [-2, -2], [2, -2], [-2, 2], [6, 0], [-6, 0], [0, 6], [0, -6]]) if (Math.abs(M.heightAt(x + dx, z + dz) - h) > 0.25) return false;
     for (const c of M.queryColliders(x, z, 6, [])) { if (c.dead) continue; if (c.maxY > h + 0.2 && c.minX < x + 5 && c.maxX > x - 5 && c.minZ < z + 5 && c.maxZ > z - 5) return false; }
     return true; };
-  const near = (x0, z0) => { for (let r = 0; r <= 150; r += 3) for (let k = 0; k < (r ? 24 : 1); k++) { const a = k / 24 * Math.PI * 2, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r;
-    if (Math.abs(x) < 760 && Math.abs(z) < 760 && flatOk(x, z)) return { x, z, r }; } return null; };
-  const out = [];
-  bots.forEach((b, i) => { const h = hs[i]; const sp = near(b.pos.x, b.pos.z); if (sp) { b.pos.x = sp.x; b.pos.z = sp.z; }
-    const g = M.heightAt(b.pos.x, b.pos.z); b.hp = 100; b.shield = 0; b.pos.y = g + h; b.vel.set(0, 0, 0); b.onGround = false; if (b.obj) b.obj.position.copy(b.pos);
-    out.push({ id: b.id, h, g, flat: !!sp, moved: sp ? sp.r : null }); });
-  const gl = new Set(), fd = new Map(); W.events.on('fallDamage', (a, d) => { if (a) fd.set(a.id, (fd.get(a.id) || 0) + (+d || 0)); });
-  for (let f = 0; f < 360; f++) { P.step(1, 1 / 60, false); for (const o of out) { const b = W.actorById.get(o.id); if (b && b.gliding) gl.add(o.id); } }
-  return out.map((o) => { const b = W.actorById.get(o.id); return Object.assign(o, { hp: b.hp, alive: !!b.alive, onGround: !!b.onGround, canopy: gl.has(o.id), fallDmg: fd.get(o.id) || 0 }); }); }"""
+  const reachOf = (a) => { let m = 30; const sl = (a.inventory && a.inventory.slots) || [];
+    for (const it of sl) { if (!it || !it.id) continue; let d = K.WEAPONS && K.WEAPONS[it.id]; if (d && !d.falloff && d.like) d = Object.assign({}, K.WEAPONS[d.like], d);
+      if (d && d.falloff) m = Math.max(m, d.falloff[1] * 1.3); } return Math.min(m, 200); };   // perceive drops every candidate past 200 m (`if (d > 200) continue`)
+  const span = Math.min(740, (M.half || 760) - 20);
+  const used = new Set(), rows = [], hurt = [], storms = [];
+  // R3: ROUNDS of three drops (22 m, 15 m, 10 m: the tallest drop column, the hardest to hide, picks first), each its own 6 s window; three rounds
+  // = 18 s, before the quick storm's first shrink (wait 30 s). Every round re-reads every other actor where it stands.
+  for (const hs of rounds) {
+    const bots = W.actors.filter((a) => a.isBot && a.alive && a.onGround && !a.gliding && !a.downed && !used.has(a.id)).slice(0, hs.length);
+    const ids = new Set(bots.map((b) => b.id)); for (const b of bots) used.add(b.id);
+    // CLEAR of every other actor (see CLOSE_M above): every live actor that is not in this round where it stands; a spot of this round joins `taken` once picked
+    const others = W.actors.filter((a) => a.alive && !ids.has(a.id)).map((a) => ({ x: a.pos.x, z: a.pos.z, eyes: [a.pos.y + 1.5], reach: reachOf(a) }));
+    const taken = [];
+    let st = null, st1 = null; try { st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; st1 = W.stormCtl ? W.stormCtl.storm.stateAt(W.t + winF / 60) : null; } catch (e) { st = st1 = null; }
+    storms.push(st ? { t: +W.t.toFixed(2), x: +st.center.x.toFixed(1), z: +st.center.z.toFixed(1), r: +st.radius.toFixed(1), rEnd: st1 ? +st1.radius.toFixed(1) : null } : null);
+    // inside the circle for the whole window (its radius at the window's END), 20 m in
+    const inCircle = (x, z) => { for (const c of [st, st1]) if (c && c.radius > 0 && Math.hypot(x - c.center.x, z - c.center.z) > c.radius - 20) return false; return true; };
+    // OUT OF RANGE (required): every other actor farther than its own trigger range + closeM, so it cannot stand inside it at any moment of the
+    // window whatever it sees. OUT OF SIGHT (preferred): its sight line to the drop column blocked as well; the nearest spot that is both wins, else
+    // the nearest spot out of range (rows carry `hidden`). The window's postcondition (part_bots) checks the range really held.
+    const clearOf = (x, z, h, sight) => { const g = M.heightAt(x, z); let near = 1e9;
+      for (const o of others.concat(taken)) { const d = Math.hypot(o.x - x, o.z - z); near = Math.min(near, d);
+        if (d < o.reach + closeM) return { ok: false, near };
+        if (!sight || d >= sightM) continue;
+        for (const ey of o.eyes) for (const hy of [1.2, h / 2, h + 1.2]) if (!M.losBlocked(o.x, ey, o.z, x, g + hy, z)) return { ok: false, near }; }
+      return { ok: true, near }; };
+    const pick = (x0, z0, h) => { const cand = [];
+      for (let x = -span; x <= span; x += 10) for (let z = -span; z <= span; z += 10) if (inCircle(x, z)) cand.push([Math.hypot(x - x0, z - z0), x, z]);
+      cand.sort((p, q) => p[0] - q[0] || p[1] - q[1] || p[2] - q[2]);
+      for (const sight of [true, false]) for (const [d, x, z] of cand) { const c = clearOf(x, z, h, sight); if (c.ok && flatOk(x, z)) return { x, z, r: Math.round(d), near: Math.round(c.near), hidden: sight }; }
+      return null; };
+    const out = [];
+    bots.forEach((b, i) => { const h = hs[i]; const sp = pick(b.pos.x, b.pos.z, h);
+      if (sp) { b.pos.x = sp.x; b.pos.z = sp.z; }
+      const g = M.heightAt(b.pos.x, b.pos.z);
+      taken.push({ x: b.pos.x, z: b.pos.z, eyes: [g + 1.5, g + h + 1.2], reach: reachOf(b) });
+      b.hp = 100; b.shield = 0; b.pos.y = g + h; b.vel.set(0, 0, 0); b.onGround = false; if (b.obj) b.obj.position.copy(b.pos);
+      out.push({ id: b.id, h, g, round: storms.length, flat: !!sp, moved: sp ? sp.r : null, nearM: sp ? sp.near : null, hidden: sp ? sp.hidden : null }); });
+    const gl = new Set(), fd = new Map(), atk = new Map();
+    const onF = (a, d) => { if (a && ids.has(a.id)) fd.set(a.id, (fd.get(a.id) || 0) + (+d || 0)); };
+    const onH = (a, e) => { if (!a || !ids.has(a.id)) return; const by = e && e.attackerId != null ? e.attackerId : null; const dmg = e ? +e.dmg || 0 : 0;
+      if (by != null) { atk.set(a.id, (atk.get(a.id) || 0) + dmg); const A = W.actorById.get(by);
+        hurt.push({ t: +W.t.toFixed(2), id: a.id, dmg: +dmg.toFixed(1), by, w: e.weaponId || null, byDist: A ? +Math.hypot(A.pos.x - a.pos.x, A.pos.z - a.pos.z).toFixed(1) : null }); } };
+    W.events.on('fallDamage', onF); W.events.on('actorHurt', onH);
+    // over the window, every 10 frames: the nearest OTHER live actor (minSepM), the least margin to any other actor's live trigger range
+    // (outOfRangeM = min(distance - its range), information: a gun looted inside the window lengthens it), and `exposed`: every sample where
+    // another actor stood inside its live range of a test bot WITH a clear sight line to it (able to shoot) - any = the setup did not hold
+    const minSep = new Map(), rmin = new Map(), rwho = new Map(), shoot = new Map();
+    for (let f = 0; f < winF; f++) { P.step(1, 1 / 60, false);
+      for (const o of out) { const b = W.actorById.get(o.id); if (!b) continue; if (b.gliding) gl.add(o.id);
+        if (f % 10 === 0) { let m = 1e9, mr = 1e9, who = null; for (const a of W.actors) if (a !== b && a.alive) { const d = Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z), ra = reachOf(a); m = Math.min(m, d);
+            if (d - ra < mr) { mr = d - ra; who = { id: a.id, d: Math.round(d), reach: Math.round(ra), t: +W.t.toFixed(2), state: a.brain ? a.brain.state : null, gliding: !!a.gliding, onGround: !!a.onGround }; }
+            // IN RANGE AND IN SIGHT = able to shoot this test bot this frame (its live trigger range, perceive's sight test from its eye)
+            if (d < ra && !M.losBlocked(a.pos.x, a.pos.y + 1.5, a.pos.z, b.pos.x, b.pos.y + 1.2, b.pos.z)) { const l = shoot.get(o.id) || []; if (l.length < 4) l.push({ id: a.id, d: Math.round(d), reach: Math.round(ra), t: +W.t.toFixed(2) }); shoot.set(o.id, l); } }
+          minSep.set(o.id, Math.min(minSep.has(o.id) ? minSep.get(o.id) : 1e9, m)); if (!rmin.has(o.id) || mr < rmin.get(o.id)) { rmin.set(o.id, mr); rwho.set(o.id, who); } } } }
+    if (W.events.off) { W.events.off('fallDamage', onF); W.events.off('actorHurt', onH); }
+    for (const o of out) { const b = W.actorById.get(o.id); rows.push(Object.assign(o, { hp: b.hp, alive: !!b.alive, onGround: !!b.onGround, canopy: gl.has(o.id),
+      fallDmg: fd.get(o.id) || 0, atkDmg: atk.get(o.id) || 0, minSepM: Math.round(minSep.get(o.id) || 0), outOfRangeM: Math.round(rmin.has(o.id) ? rmin.get(o.id) : 0), closest: rwho.get(o.id) || null, exposed: shoot.get(o.id) || [] })); }
+  }
+  return { rows, hurt, storm: storms, others: W.actors.filter((a) => a.alive).length }; }"""
 
 
 def part_bots(s, v, args):
@@ -226,23 +295,40 @@ def part_bots(s, v, args):
     s.step_frames(30, 1 / 60)
     if args.plant:
         L.plant_js(s, PLANTS[args.plant])
-    rows = s.js(BOT_DROP_JS, [[10, 10, 10, 15, 15, 15, DEAD_H, DEAD_H, DEAD_H]])
+    res = s.js(BOT_DROP_JS, [[[DEAD_H, 15, 10]] * 3, CLOSE_M, SIGHT_M, WIN_F])
+    rows = res["rows"]
     R["drops"] = rows
+    R["attackerHits"] = res["hurt"]
+    R["storm"], R["others"] = res["storm"], res["others"]
     # the SAME rule as the human: 10 m and 15 m (both below the height at which a falling player can still open the canopy: > 12 m
     # above the ground while already falling fast) cost what the human's drop cost (part human, +- 4 hp for the ground under a bot);
     # 20 m: dead, OR the bot opened its canopy in the air exactly as a player may (SPACE mid-air) and took no fall damage = it avoided
     # the lethal drop (C-FALL "bots avoid lethal drops"). A bot that survives a 20 m drop WITHOUT a canopy fails.
+    # R3: each drop is judged on what the window recorded: the fall damage (fallDmg, the 'fallDamage' events) must be ALL of the hp lost that
+    # an attacker did not take (hp lost - attacker damage == fallDmg, +- 0.5), and the fallDmg is what must sit on the curve; a death at 22 m
+    # counts only as a death BY the fall (fallDmg recorded, no attacker damage)
     hum = (v.data.get("human") or {}).get("curve") or {}
-    ten = [100 - r["hp"] for r in rows if r["h"] == 10 and r["alive"]]
-    fif = [100 - r["hp"] for r in rows if r["h"] == 15 and r["alive"]]
+    lost = lambda r: (100 - r["hp"]) if r["alive"] else 100
+    acct = [abs(lost(r) - r["atkDmg"] - r["fallDmg"]) <= 0.5 for r in rows if r["alive"] and r["h"] in (10, 15)]
+    ten = [r["fallDmg"] for r in rows if r["h"] == 10 and r["alive"]]
+    fif = [r["fallDmg"] for r in rows if r["h"] == 15 and r["alive"]]
     twenty = [r for r in rows if r["h"] == DEAD_H]
     h15 = hum.get("15")
     ok15 = len(fif) == 3 and (all(abs(x - h15) <= 4 for x in fif) if h15 is not None else all(x > TEN_HI for x in fif))
-    ok20 = len(twenty) == 3 and all((not r["alive"]) or (r["canopy"] and r["fallDmg"] == 0) for r in twenty)
-    ok = len(ten) == 3 and all(TEN_LO <= x <= TEN_HI for x in ten) and ok15 and ok20
-    v.check("bots-rule (bots: 10 m costs %d-%d, 15 m = the human's 15 m +- 4 hp, %d m kills unless the bot opened its canopy mid-air)" % (TEN_LO, TEN_HI, DEAD_H), ok,
-            {"tenLost": ten, "fifteenLost": fif, "human15": h15, "flat": [r.get("flat") for r in rows], "movedM": [r.get("moved") for r in rows],
-             "twenty": [{"alive": r["alive"], "canopy": r["canopy"], "fallDmg": round(r["fallDmg"], 2)} for r in twenty]}, "same rule as the human")
+    ok20 = len(twenty) == 3 and all((not r["alive"] and r["fallDmg"] > 0 and r["atkDmg"] == 0) or (r["alive"] and r["canopy"] and r["fallDmg"] == 0) for r in twenty)
+    ok = len(ten) == 3 and all(TEN_LO <= x <= TEN_HI for x in ten) and ok15 and ok20 and len(acct) == 6 and all(acct)
+    name = "bots-rule (bots: 10 m costs %d-%d, 15 m = the human's 15 m +- 4 hp, %d m kills unless the bot opened its canopy mid-air)" % (TEN_LO, TEN_HI, DEAD_H)
+    det = {"tenFallDmg": ten, "fifteenFallDmg": fif, "human15": h15, "hpLostMinusAttackers==fallDmg": acct,
+           "tenLost": [lost(r) for r in rows if r["h"] == 10], "atkDmg": [round(r["atkDmg"], 1) for r in rows], "attackerHits": res["hurt"][:6],
+           "flat": [r.get("flat") for r in rows], "movedM": [r.get("moved") for r in rows], "nearM": [r.get("nearM") for r in rows], "hidden": [r.get("hidden") for r in rows],
+           "minSepM": [r.get("minSepM") for r in rows], "outOfRangeM": [r.get("outOfRangeM") for r in rows],
+           "twenty": [{"alive": r["alive"], "canopy": r["canopy"], "fallDmg": round(r["fallDmg"], 2), "atkDmg": round(r["atkDmg"], 1)} for r in twenty]}
+    held = all(not r.get("exposed") for r in rows)
+    if not all(r.get("flat") for r in rows) or not held:
+        v.cnj(name, "SETUP missed (R3): no flat spot out of every other actor's fire range + %d m inside the circle for %s, or another actor stood in range AND in sight of a test bot inside the window: %s: %s"
+              % (CLOSE_M, [r["id"] for r in rows if not r.get("flat")], [(r["id"], r["exposed"]) for r in rows if r.get("exposed")], det))
+    else:
+        v.check(name, ok, det, "same rule as the human; hp lost - attacker damage == fallDmg")
     # bots avoid lethal drops: 180 s of play, count deaths whose damage came from a fall
     av = s.js("""() => { const W = window.__LC__.W, C = window.__LC__; const deaths = [], falls = [];
         W.events.on('fallDamage', (a, d) => falls.push({ id: a && a.id, bot: !!(a && a.isBot), alive: !!(a && a.alive), t: W.t }));
