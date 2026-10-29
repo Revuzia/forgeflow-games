@@ -437,7 +437,7 @@ class Blackboard {
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
       this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
-      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
       // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
       // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
@@ -5157,6 +5157,7 @@ function edgeGuard(W, b) {
   // (release blockers) no held heading and no probe due (3 frames in 4): nothing below can act - the same early return the tests below reach,
   // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
   if (bb.edgeAir && a.onGround) { bb.edgeAir = false; bb.edgeT = W.t; }
+  if (W.t < bb.edgeWalkUntil) inp.sprint = false;       // (R3 steer) a slope this bot may walk down but not sprint down: walked until the next look says otherwise
   if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
   const B = basisOf(inp, _mb0);
   let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
@@ -5224,7 +5225,7 @@ function edgeGuard(W, b) {
   const sprintNow = inp.sprint && inp.mz > 0.5, walkV = K.MOVE.walk, uT = sprintNow ? K.MOVE.sprint : walkV;
   FLQ[0] = wx; FLQ[1] = wz; FLQ[2] = spd > uT ? spd : uT; FLQ[3] = lim; FLQ[4] = win * 0.8;
   if (flightSafe(W, a)) return;
-  if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; nav.st.edgeSlows++; return; } }
+  if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.6; nav.st.edgeSlows++; return; } }
   bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
   inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
   bb.nextPathT = 0;
