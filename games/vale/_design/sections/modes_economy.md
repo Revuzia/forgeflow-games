@@ -79,8 +79,8 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 | id | name | mode · kind | pick | bans | timers (ban/pick/finalize) | bots | party | unlock |
 |---|---|---|---|---|---|---|---|---|
 | `rift_quick` | Quick | rift · quick | `role_preset` | 0 | —/15/6 | all open, adept | 5 | 1 |
-| `rift_standard` | Draft | rift · standard | draft | 1 per team | 20/20/15 | all open, adept | 5 | 3 |
-| `rift_ranked` | Ranked | rift · ranked | draft | 2 per team | 20/20/15 | all open, `by_rating` | 2 | 20 |
+| `rift_standard` | Draft | rift · standard | draft | 1 per team (rises with the roster) | 20/20/15 | all open, adept | 5 | 3 |
+| `rift_ranked` | Ranked | rift · ranked | draft | 1 per team (rises with the roster) | 20/20/15 | all open, `by_rating` | 2 | 20 |
 | `rift_coop` | Co-op vs bots | rift · coop | blind | 0 | —/30/10 | opponents only, novice | 5 | 1 |
 | `bridge_standard` | Standard | bridge · standard | (mode) the Lot | 0 | Lot window 25 / finalize 10; Lot 3, no redraws, 1 take per seat, burns down every 8 s (W4 re-key) | all open, adept | 5 | 1 |
 | `fray_standard` | Standard | fray · standard | (mode) `ffa_pick` | 0 | —/25/10 | all open, adept | 1 | 1 |
@@ -113,10 +113,10 @@ The full Draft takes 20 + 6 × 20 + 15 = **155 s**. The reference takes about 26
 
 **Bans versus roster** *(r03 §1.6: C = 2T + B)*. With 16 launch fighters:
 
-- Draft uses 1 ban per team, so C = 12 and the last picker still has at least 4 fighters.
-- Ranked uses 2 bans per team, so C = 14 and the last picker has at least 2. That margin is thin on purpose: ranked is where bans matter.
+- Draft and Ranked both use 1 ban per team, so C = 12 and the last picker chooses from 5 fighters (2 bans and 9 earlier picks gone).
+- Both raise the ban count with the roster in data (`draft.bansByRoster`, read by `bansForRoster` in `src/session/draft.ts`): 2 a team at 28 fighters, 3 at 32, 4 at 36 and 5 at 40. A second Ranked ban at 16 fighters would leave the last picker 3, too thin for a 5v5 draft.
 
-All fighters are free to play in this slice, because the profile has no fighter ownership, so no ownership gate is needed. **Raise `bansPerTeam` in data as the roster grows.** The comfortable roster is R ≥ 2C, which means 24 fighters for 1 ban and 28 for 2.
+All fighters are free to play in this slice, because the profile has no fighter ownership, so no ownership gate is needed. The comfortable roster is R ≥ 2C, which means 24 fighters for 1 ban and 28 for 2; `bansByRoster` follows that ladder.
 
 **Dodges.** Leaving a matchmade draft is a dodge. The session locks re-queueing for 5 s × 2^(n−1), capped at 60 s. Recommendation to SESSION: when ranked opens to real matchmaking, move to the reference's three tiers that decay over time *(r01 §3.3)*.
 
