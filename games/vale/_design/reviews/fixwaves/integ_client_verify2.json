@@ -1,0 +1,30 @@
+{
+ "lane": "client",
+ "round": 2,
+ "verifier": "adversarial verifier, integration lane client, verify-only round 2, 2026-10-29. Re-measured at HEAD ac7c4cb0 (= origin). This round re-checks only lead:new-icons. I did not trust the engineer's report.",
+ "pass": true,
+ "summary": "lead:new-icons passes. Neither refixed icon reads as blood any more. Shadowpin is a pale carved spike standing in a pale grey flagstone, with a violet shadow under the point and no liquid. Lampblack Edge is a pale blue-steel knife with one black fuller and a pale cord grip; there are no red flecks and no smoke curl. Resin Maul is now a smooth, rounded amber lump with no facets, so the cut-gem read is gone. Re-running the engineer's dark-red script on the shipped webps gives the same numbers they reported. icon_probe passes with the same floors as round 1. The refix touched only 3 webps and tools/imagegen. No regression. The 18-item content repoint is still the systems stitch: content/items.json still borrows whetted_knife, glint_sling and banded_club. Round 1 already accepted that as out of lane.",
+ "items": [
+  {
+   "id": "lead:new-icons",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Checked by eye at 256 px, 512 px nearest and 128/64/40/38 px. Shots: _harness/_shots/integ_client_ver2_old_new_256.png (old row above new), integ_client_ver2_new_2x.png and integ_client_ver2_new_small.png.\n(1) shadowpin.webp: a pale carved stone spike stands in a pale grey round flagstone. A crisp violet shadow lies on the flagstone under the point. There is no pool, no liquid, no gloss and no red on the subject.\n(2) lampblack_edge.webp: a pale blue-steel knife with one black fuller and a pale grey cord grip. There is no smoke curl and no fleck on the tip.\n(3) resin_maul.webp: a smooth, rounded, cloudy amber head with two bands, on a wooden haft. The drip is golden, and there are no flat faces or facets.\nThe raw r2 paintings (tools/imagegen/raw/item_{shadowpin,lampblack_edge,resin_maul}__r2.png, _harness/_shots/integ_client_ver2_raw_r2.png) match the graded subjects, so the grade added no new dark-red paint.\nDark-red script: python3 _harness/_reports/integ_client_r1_darkred.py on old and new gives _harness/_reports/integ_client_ver2_darkred.txt. Dark-red share of the silhouette: shadowpin 13.4% -> 0.3% (47 px), lampblack_edge 6.7% -> 0.0% (2 px). The fuller's dark mean is rgb(36,41,46), a neutral black.\nIndependent overlay of L*<28, a*>12, hue -10..45 (_harness/_shots/integ_client_ver2_darkred_L28.png): on shadowpin and lampblack_edge the only hits are the Strike ground vignette and the contact-shadow rim outside each subject. Inside the subject there are none.\nnode _harness/icon_probe.mjs --out _harness/_reports/integ_client_ver2_icon_probe.json: OK. Items 57, p50 min 66 and p95 min 192 at 38 and 40 px. Abilities 94, navy 0, closest cross-family ground 56 (hourcleaver/dust_runners).\nScope: git show --name-only ac7c4cb0 lists only the 3 webps plus icon_grade.py, item_subjects.json, manifest.json and picks.json. git log -- content/ui/icons shows only f0a2ae42 and ac7c4cb0 since round 1, so the other 15 new icons are unchanged.\nicon_grade.py: override is defaulted to {} at line 206. OVERRIDES applies 'enclosed' and 'fill' only to item_lampblack_edge and item_shadowpin, so no other icon's grade changes.\nWatch items, not failures: (a) resin_maul's ironstone bands grade red-brown on the Strike ground, 7.1% of the silhouette. They read as banded rusty stone, not liquid, the same as round 1. (b) lampblack_edge's keyed glow is a blue disc behind the blade on the red ground. It reads as a glow and does not hurt the read at 38 px. (c) At 38 px shadowpin's flagstone dominates and the spike is a thin pale stroke. It still reads (p50 71 / p95 198).\nOut of lane, carried over from round 1: the HUD still shows the borrowed art until systems repoints the 18 icon refs. content/items.json:560/584/609 and others still point at whetted_knife, banded_club and glint_sling.",
+   "fixHint": ""
+  }
+ ],
+ "regressions": [],
+ "handoffs": [
+  {
+   "to": "systems",
+   "what": "Unchanged from round 1: repoint the 18 borrowed item icon refs in content/items.json (the item 'icon' and the nested form icon, e.g. :560, :584, :609, :1317, :1335, :1754, :1772, :1902, :1920, :1965, :1983) to assets/ui/icons/items/<id>.webp, which now exist for all 18. Then node _harness/icon_probe.mjs must list 0 borrowed items."
+  }
+ ],
+ "checks": {
+  "content_check": "npm run content:check: OK (check only), 17 warnings",
+  "json": "tools/imagegen/manifest.json, picks.json and item_subjects.json all parse; icon_grade imports and OVERRIDES holds 3 entries",
+  "icon_probe": "OK: 57 items, p50 min 66, p95 min 192, navy 0, cross-family min 56 (_harness/_reports/integ_client_ver2_icon_probe.json)",
+  "sensitivity": "The 3 refixed icons at 256 and 38 px show no hood, mask, face, eye-like light pair, gore, gem facets, gears or runes",
+  "scope": "ac7c4cb0 touches only lane paths (content/ui/icons and tools/imagegen). HEAD = origin = ac7c4cb0"
+ }
+}
