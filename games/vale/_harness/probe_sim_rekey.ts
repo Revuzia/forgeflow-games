@@ -20,6 +20,10 @@ import { quoteBuy } from '../src/sim/shop.ts';
 import type { Entity, Player } from '../src/sim/entity.ts';
 import { Rng } from '../src/sim/rng.ts';
 import { DraftHost, type DraftConfig, type DraftSeatInit } from '../src/session/draft.ts';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { formatCopyHit, lintPlayerCopy } from '../src/ui/copy_lint.ts';
 import { buildContent, defaultOptions } from '../tools/build_content.ts';
 import { check, finish, near, ofType, section } from './fixtures/sim_fixture.ts';
 
@@ -275,6 +279,19 @@ section("BRIDGE: the Lot — no redraws, one take per seat, it burns down", () =
   check('after 8 s the Lot has burned down by one', h.view(0).bench[0].length === 2, h.view(0).bench[0].length);
   for (let i = 0; i < 160; i++) h.advance(0.1);
   check('by 24 s the Lot is empty', h.view(0).bench[0].length === 0 || h.view(0).phase !== 'bench', [h.view(0).bench[0].length, h.view(0).phase]);
+});
+
+section("VALE's own words in W4's player copy (originality F8, client F11)", () => {
+  // W2's copy lint (src/ui/copy_lint.ts) over the content this lane owns: no genre word where VALE has its own
+  // (gold → Gleam, jungle → Dialwood …), no raw stat id where the stat has a display name ('omnivamp' → Drain),
+  // American spelling. W2 runs the same lint over strings.en.json and client.json.
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'content');
+  const files: Record<string, unknown> = {};
+  for (const f of ['units', 'items', 'setup', 'team_buffs', 'modes', 'queues']) files[`content/${f}.json`] = JSON.parse(readFileSync(join(root, `${f}.json`), 'utf8'));
+  for (const f of readdirSync(join(root, 'fighters')).filter((x) => x.endsWith('.json'))) files[`content/fighters/${f}`] = JSON.parse(readFileSync(join(root, 'fighters', f), 'utf8'));
+  const strings = JSON.parse(readFileSync(join(root, 'strings.en.json'), 'utf8')) as Record<string, string>;
+  const hits = lintPlayerCopy(files, strings).filter((h) => !h.path.startsWith('strings.'));
+  check(`0 copy-lint hits in ${Object.keys(files).length} W4 content files`, hits.length === 0, hits.slice(0, 6).map(formatCopyHit));
 });
 
 finish('probe_sim_rekey');

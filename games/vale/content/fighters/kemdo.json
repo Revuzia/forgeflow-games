@@ -36,7 +36,7 @@
   },
   "attack": {
     "range": 2.1,
-    "windup": 0.27,
+    "windup": 0.25,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_heavy",
@@ -350,7 +350,7 @@
       "id": "kemdo_held_focus",
       "name": "Held Focus",
       "icon": "assets/ui/icons/abilities/kemdo_held_focus.webp",
-      "desc": "Kemdo focuses the stopped sun on an enemy fighter within 6 m for 3 s. A 2 m spot follows them and deals {effects.0.onTick.0.amount} damage that ignores armor and resist every 0.5 s to every enemy in it, and Kemdo gains {effects.1.stats.omnivamp} omnivamp for the duration.",
+      "desc": "Kemdo focuses the stopped sun on an enemy fighter within 6 m for 3 s. A 2 m spot follows them and deals {effects.0.onTick.0.amount} damage that ignores armor and resist every 0.5 s to every enemy in it, and Kemdo gains {effects.1.stats.omnivamp} Drain for the duration.",
       "maxRank": 3,
       "cooldown": [
         100,

@@ -38,7 +38,7 @@
   },
   "attack": {
     "range": 2,
-    "windup": 0.27,
+    "windup": 0.25,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_heavy",

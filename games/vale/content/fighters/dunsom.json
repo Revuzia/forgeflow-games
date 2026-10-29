@@ -84,7 +84,7 @@
       "id": "dunsom_draw_in",
       "name": "Draw In",
       "icon": "assets/ui/icons/abilities/dunsom_draw_in.webp",
-      "desc": "After 0.4 s, enemies within 3 m of a point up to 9 m away take {effects.0.onHit.0.amount} magic damage and are drawn up to 2 m toward its centre.",
+      "desc": "After 0.4 s, enemies within 3 m of a point up to 9 m away take {effects.0.onHit.0.amount} magic damage and are drawn up to 2 m toward its center.",
       "maxRank": 5,
       "cooldown": [
         8,

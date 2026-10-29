@@ -5,7 +5,7 @@
       "id": "rift_quick",
       "mode": "rift",
       "name": "Quick",
-      "desc": "Choose your role and fighter before you queue. You start at level 3 with more gold, and matches run about 18 minutes.",
+      "desc": "Choose your role and fighter before you queue. You start at level 3 with more Gleam, and matches run about 18 minutes.",
       "kind": "quick",
       "pick": "role_preset",
       "rules": {
@@ -132,7 +132,7 @@
       "id": "practice",
       "mode": "rift",
       "name": "Practice",
-      "desc": "Try any fighter alone on the full map. Add gold, levels and training targets, refresh cooldowns, or reset at any time.",
+      "desc": "Try any fighter alone on the full map. Add Gleam, levels and training targets, refresh cooldowns, or reset at any time.",
       "kind": "practice",
       "rules": {},
       "draft": { "bansPerTeam": 0, "pickSeconds": 30, "banSeconds": 0, "finalizeSeconds": 5 },
