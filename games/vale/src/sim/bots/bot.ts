@@ -21,7 +21,7 @@
 // take it (damage vs. health over the time to kill), never alone.
 // Fray: no team brain; targets the weakest reachable enemy, penalises fights other players can
 // reach, never favours or spares other bots, caps how many bots hunt the same human seat at 2,
-// contests pickups, uses the shared shop, plays safer on its last life.
+// contests pickups, uses the shared shop, plays safer on its last life while more than 4 seats are in and before the Noon Toll rings (G6).
 
 import type { Command, PlayerView, SeatSetup, WorldView } from '../../contracts/sim.ts';
 import { attackable, inAttackRange } from '../attack.ts';
@@ -285,7 +285,9 @@ export class Bot extends BotBase implements BotController {
     const res = e.resource;
     const resF = res && res.model === 'pool' && e.maxRes > 0 ? e.res / e.maxRes : 1;
     const lives = this.p.lives;
-    const lastLife = kind === 'fray' && lives !== undefined && lives <= 1;
+    // FRAY last-life caution (W4 gameplay G6): only while more than 4 seats are still in and before the Noon Toll
+    // rings — six bots on their last life used to circle the middle for minutes without a fight
+    const lastLife = kind === 'fray' && lives !== undefined && lives <= 1 && this.frayCareful();
     const thr = this.prof.retreatHp + this.diff.retreatBias + (lastLife ? 0.15 : 0) + (this.adv < 0.4 ? 0.08 : 0);
     let best: Mode = this.mode, bestS = -1;
     const consider = (m: Mode, s: number): void => {
@@ -941,8 +943,17 @@ export class Bot extends BotBase implements BotController {
     return best;
   }
 
+  /** FRAY: is the last-life caution on — more than 4 seats still in, and the Noon Toll (rules.noonToll) not yet ringing */
+  private frayCareful(): boolean {
+    let inPlay = 0;
+    for (const p of this.w.players) if (p && (p.lives ?? 1) > 0) inPlay++;
+    const nt = this.w.rules.noonToll;
+    return inPlay > 4 && !(nt && this.w.time + 1e-9 >= nt.from);
+  }
+
   private huntQuality = 0;
-  /** Fray: the weakest reachable enemy, minus third-party risk, with the 2-bots-per-human cap */
+  /** Fray: the weakest reachable enemy, minus third-party risk, with the 2-bots-per-human cap; a fighter the Noon Toll
+   *  shows is worth walking to from across the plate (80 m, not 30) */
   private chooseHunt(lastLife: boolean): Entity | null {
     const e = this.e;
     const myBurst = (t: Entity): number => this.burstOn(t);
@@ -952,7 +963,7 @@ export class Bot extends BotBase implements BotController {
     for (const f of this.perc.enemyFighters) {
       if (!this.isNoticed(f) || !f.player) continue;
       const d = Math.sqrt(this.dist2(f, e.x, e.y));
-      if (d > 30) continue;
+      if (d > (f.revealAllUntil > this.w.tick ? 80 : 30)) continue;
       const tp = f.player;
       if (tp.controller === 'human') {
         let hunters = 0;
@@ -968,7 +979,8 @@ export class Bot extends BotBase implements BotController {
       let s = Math.min(2, kill) - d / 30 - third * 0.35;
       if ((tp.score ?? 0) > 0 && (tp.score ?? 0) >= leaderScore) s += 0.12;
       if ((tp.lives ?? 2) <= 1) s += 0.08;
-      if (lastLife && kill < 0.8 && f.hp > f.maxHp * 0.4) continue;
+      // careful on the last life: an even fight is a worse pick, never no pick (a skip here froze whole endgames)
+      if (lastLife && kill < 0.8 && f.hp > f.maxHp * 0.4) s -= 0.6;
       if (s > bs) { bs = s; best = f; }
     }
     this.huntQuality = Math.max(0, bs);

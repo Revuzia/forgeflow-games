@@ -130,7 +130,7 @@
       "card": { "art": "assets/ui/modes/fray_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/fray_glyph.svg" },
       "playerColors": ["#B2354A", "#767305", "#D9FF17", "#20A04E", "#26F3FF", "#19AFFE", "#7273F5", "#8121FC", "#993F94", "#DC6294"],
       "rules": {
-        "$comment": "Target 8-11 min. teams 10 x perTeam 1: session gives every seat its own team and colorIndex = seat. Start at level 6 (ultimate ready) with 1,400 Gleam; income is passive Gleam, kills and Gleam Sunmotes; one shared Lampwright cart. 4 lives, first to 12 kills (the dial's twelve hours), else 11:00. Respawn 6-9 s at the hour-mark farthest from living enemies. placementPoints feed the Hour Board season tally (the sim does not read them).",
+        "$comment": "Target 8-11 min. teams 10 x perTeam 1: session gives every seat its own team and colorIndex = seat. Start at level 6 (ultimate ready) with 1,400 Gleam; income is passive Gleam, kills and Gleam Sunmotes; one shared Lampwright cart. 4 lives, first to 12 kills (the dial's twelve hours), else 11:00. From 9:00 the Noon Toll rings every 30 s and shows every living fighter to everyone for 3 s (W4 G6: nobody waits out the clock). Respawn 6-9 s at the hour-mark farthest from living enemies. placementPoints feed the Hour Board season tally (the sim does not read them).",
         "startLevel": 6,
         "maxLevel": 16,
         "startGold": 1400,
@@ -147,6 +147,7 @@
         "structures": false,
         "jungle": false,
         "end": { "kind": "last_standing_or_score", "lives": 4, "killScore": 12, "timeLimit": 660 },
+        "noonToll": { "from": 540, "every": 30, "reveal": 3 },
         "placementPoints": [10, 8, 6, 4, 2, 0, 0, 0, 0, 0],
         "bounty": { "kill": 200, "assistShare": 0.5, "streakStep": 40, "streakMax": 320, "shutdownMax": 320 },
         "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },

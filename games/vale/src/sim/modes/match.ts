@@ -28,8 +28,11 @@
 // Structures keep their protection (W4 gameplay G5); with rules.gorgeWind the Gorge Wind rises one
 // step at suddenDeathAt and one more every `every` s up to `maxSteps` (WorldView.gorgeWind; its
 // damage terms are units/structures.ts).
+// Noon Toll (rules.noonToll, W4 gameplay G6): from `from` s, every `every` s, every living fighter is
+// shown to every team for `reveal` s (Entity.revealAllUntil, vision.ts) and announce 'noon_toll'
+// (params.n) is emitted.
 
-import { TICK_DT, type Command, type MatchResult, type PlayerId, type PlayerResult, type TeamId } from '../../contracts/sim.ts';
+import { TICK_DT, TICK_HZ, type Command, type MatchResult, type PlayerId, type PlayerResult, type TeamId } from '../../contracts/sim.ts';
 import type { Player } from '../entity.ts';
 import { stateDigest } from '../core.ts';
 import { hashString } from '../rng.ts';
@@ -56,6 +59,8 @@ export interface MatchState {
   nextSample: number;
   votes: Vote[];
   suddenDeathDone: boolean;
+  /** Noon Toll: tolls rung so far */
+  tolls: number;
   /** practice resetMatch: the facade rebuilds the world after this tick */
   resetRequested: boolean;
   ffa: boolean;
@@ -65,7 +70,7 @@ export function matchOf(w: World): MatchState { return w.ext[KEY] as MatchState;
 
 export function initMatch(w: World, pregame: number, ffa: boolean): MatchState {
   const m: MatchState = {
-    ended: false, goldGraph: [], nextSample: 0, suddenDeathDone: false, resetRequested: false, ffa,
+    ended: false, goldGraph: [], nextSample: 0, suddenDeathDone: false, tolls: 0, resetRequested: false, ffa,
     votes: w.teams.map(() => ({ active: false, yes: new Set(), no: new Set(), endsAt: 0, cooldownUntil: -Infinity })),
   };
   w.ext[KEY] = m;
@@ -126,6 +131,25 @@ export function suddenDeathSystem(w: World): void {
   w.emit({ e: 'suddenDeath', t: w.time });
   w.emit({ e: 'announce', t: w.time, key: 'sudden_death' });
   updateProtection(w);
+}
+
+// ── the Noon Toll ───────────────────────────────────────────────────────────────────────────────
+export function noonTollSystem(w: World): void {
+  const nt = w.rules.noonToll;
+  if (!nt || w.phase !== 'live') return;
+  const m = matchOf(w);
+  const due = w.time + 1e-9 >= nt.from ? 1 + Math.floor((w.time - nt.from + 1e-9) / nt.every) : 0;
+  if (due <= m.tolls) return;
+  m.tolls = due;
+  const until = w.tick + Math.max(1, Math.round(nt.reveal * TICK_HZ));
+  let n = 0;
+  for (const p of w.players) {
+    const e = p?.ent;
+    if (!e || !e.alive) continue;
+    e.revealAllUntil = until;
+    n++;
+  }
+  w.emit({ e: 'announce', t: w.time, key: 'noon_toll', params: { n } });
 }
 
 // ── surrender ───────────────────────────────────────────────────────────────────────────────────

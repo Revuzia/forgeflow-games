@@ -365,7 +365,22 @@ async function matchPeak() {
           if (now - secAt >= 1000) {
             const t = +host.view.time.toFixed(1);
             S.secs.push({ t, ...cur, worstMs: +cur.worstMs.toFixed(1), actors: st.actors, vfx: st.vfx, particles: st.particles });
-            for (const p of r.gl.info.programs ?? []) if (!seen.has(p.cacheKey)) { seen.add(p.cacheKey); S.progs.push({ t, name: p.name, type: p.type }); }
+            for (const p of r.gl.info.programs ?? []) {
+              if (seen.has(p.cacheKey)) continue;
+              seen.add(p.cacheKey);
+              const e = { t, name: p.name, type: p.type };
+              // a program first built after the opening minute: the meshes drawing with it (name > parent > grandparent)
+              if (S.secs.length > 60) {
+                const users = new Set();
+                r.scene.traverse((o) => {
+                  for (const m of [o.material, o.customDepthMaterial].flat()) {
+                    if (m && r.gl.properties.get(m).currentProgram === p) users.add(`${o.name || o.type} > ${o.parent?.name || o.parent?.type || '-'} > ${o.parent?.parent?.name || '-'} [${m.name || m.type}]`);
+                  }
+                });
+                e.users = [...users].slice(0, 6);
+              }
+              S.progs.push(e);
+            }
             if (cur.tris > best * 1.02) { best = cur.tris; want = true; }
             cur = fresh(); secAt = now;
           }

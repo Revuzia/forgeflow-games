@@ -8,7 +8,8 @@
 //   * otherwise the entity's cell must be seen by the team, AND
 //       - if it stands in a thicket, the team must have a unit (or ward) inside the same thicket,
 //       - if it is invisible, it is hidden,
-//     unless the team has revealed it (reveal status), which overrides fog, thickets and invisibility.
+//     unless the team has revealed it (reveal status), which overrides fog, thickets and invisibility;
+//     an entity whose revealAllUntil tick is still ahead (the Noon Toll) is seen by every team.
 //
 // Walls do NOT occlude sight in this slice: sight is a plain disc. This is deliberate (cost and
 // readability); terrain occlusion can be added later by raycasting stamps against the nav grid
@@ -123,7 +124,7 @@ export class Vision {
       const transient = e.kind === 'projectile' || e.kind === 'zone';
       for (let t = 0; t < T; t++) {
         const bit = 1 << t;
-        if (e.team === t || e.kind === 'structure' || (e.revealMask & bit) !== 0) { mask |= bit; continue; }
+        if (e.team === t || e.kind === 'structure' || (e.revealMask & bit) !== 0 || e.revealAllUntil > tick) { mask |= bit; continue; }
         if (!inGrid || this.views[t].data[ci] === 0) continue;
         if (!transient) {
           if ((e.ccMask & ST_INVISIBLE) !== 0) continue;

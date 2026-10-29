@@ -92,7 +92,7 @@
       "id": "nurrow_felt_step",
       "name": "Felt Step",
       "icon": "assets/ui/icons/abilities/nurrow_felt_step.webp",
-      "desc": "Nurrow lunges up to 4 m toward a point and stops at the first enemy fighter she reaches, dealing {effects.0.onPass.0.amount} magic damage.",
+      "desc": "Nurrow lunges up to 4 m toward a point and stops at the first enemy fighter she reaches, dealing {effects.0.onPass.0.then.0.amount} magic damage. Felt soles: a sleeping enemy takes no damage and stays asleep.",
       "maxRank": 5,
       "cooldown": [
         10,
@@ -128,20 +128,32 @@
           "passWidth": 0.7,
           "onPass": [
             {
-              "op": "damage",
-              "amount": {
-                "base": [
-                  60,
-                  90,
-                  120,
-                  150,
-                  180
-                ],
-                "ap": 0.5,
-                "bonusAd": 0.4
+              "op": "if",
+              "cond": {
+                "kind": "not",
+                "cond": {
+                  "kind": "targetHasStatus",
+                  "status": "sleep"
+                }
               },
-              "type": "magic",
-              "to": "hit"
+              "then": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      60,
+                      90,
+                      120,
+                      150,
+                      180
+                    ],
+                    "ap": 0.5,
+                    "bonusAd": 0.4
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ]
             }
           ],
           "present": {
@@ -169,7 +181,7 @@
       "id": "nurrow_lullaby_dart",
       "name": "Lullaby Dart",
       "icon": "assets/ui/icons/abilities/nurrow_lullaby_dart.webp",
-      "desc": "Nurrow throws a dart up to 8 m. The first enemy fighter it hits falls asleep for {effects.0.onHit.0.duration}. The dart deals no damage. Damage wakes the sleeper, with no bonus on waking.",
+      "desc": "Nurrow throws a dart up to 8 m. The first enemy fighter it hits falls asleep for {effects.0.onHit.0.duration}. The dart deals no damage, and damage wakes the sleeper. Felt Step does not wake them; Snuff on a sleeper hits harder, silences longer and comes back sooner.",
       "maxRank": 5,
       "cooldown": [
         12,
@@ -244,7 +256,7 @@
       "id": "nurrow_snuff",
       "name": "Snuff",
       "icon": "assets/ui/icons/abilities/nurrow_snuff.webp",
-      "desc": "Nurrow snuffs an adjacent enemy for {effects.0.amount} magic damage and silences them for {effects.1.duration}.",
+      "desc": "Nurrow snuffs an adjacent enemy for {effects.1.amount} magic damage and silences them for {effects.2.duration}. Snuffing a sleeper deals {effects.0.then.2.amount} more, silences for {effects.0.then.1.duration} and gives back 70% of the cooldown.",
       "maxRank": 5,
       "cooldown": [
         9,
@@ -265,6 +277,48 @@
       },
       "castTime": 0.15,
       "effects": [
+        {
+          "op": "if",
+          "cond": {
+            "kind": "targetHasStatus",
+            "status": "sleep"
+          },
+          "then": [
+            {
+              "op": "cooldown",
+              "slot": "a3",
+              "percent": 0.7
+            },
+            {
+              "op": "status",
+              "status": "silence",
+              "duration": [
+                1.6,
+                1.8,
+                2,
+                2.2,
+                2.4
+              ],
+              "to": "target"
+            },
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  35,
+                  52,
+                  70,
+                  87,
+                  105
+                ],
+                "ap": 0.3,
+                "bonusAd": 0.15
+              },
+              "type": "magic",
+              "to": "target"
+            }
+          ]
+        },
         {
           "op": "damage",
           "amount": {
@@ -476,8 +530,8 @@
     "preferredRange": 2,
     "comboOrder": [
       "a2",
-      "a1",
       "a3",
+      "a1",
       "ult"
     ]
   },

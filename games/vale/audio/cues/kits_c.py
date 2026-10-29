@@ -161,7 +161,43 @@ def _voice(x: np.ndarray, vc: dict) -> np.ndarray:
 
 
 # cue id → {'hp': Hz, 'lp': Hz, 'peaks': ((Hz, dB, Q), …)}: each identity cue's own band (see the module doc)
-VOICING: dict[str, dict] = {}
+VOICING: dict[str, dict] = {
+    'f_ardit_attack_hit': {'lp': 8000, 'peaks': ((500, 6.0, 1.4),)},
+    'f_ardit_attack_swing': {'hp': 400, 'peaks': ((800, -9.0, 1.4),)},
+    'f_burdam_attack_hit': {'hp': 400, 'lp': 8000, 'peaks': ((3150, 6.0, 1.4),)},
+    'f_burdam_ult_release': {'hp': 150, 'lp': 5000, 'peaks': ((315, -9.0, 1.4),)},
+    'f_burdam_ult_windup': {'hp': 400},
+    'f_dunsom_attack_hit': {'hp': 200},
+    'f_dunsom_ult_release': {'hp': 280, 'lp': 8000},
+    'f_ervet_attack_hit': {'hp': 280},
+    'f_ervet_attack_swing': {'lp': 1200},
+    'f_ervet_ult_release': {'hp': 150, 'lp': 8000},
+    'f_hesmi_attack_hit': {'hp': 280, 'peaks': ((2000, 6.0, 1.4),)},
+    'f_hesmi_ult_release': {'hp': 280, 'lp': 5000, 'peaks': ((315, -9.0, 1.4),)},
+    'f_hesmi_ult_windup': {'peaks': ((1250, 6.0, 1.4),)},
+    'f_ilsheta_attack_hit': {'hp': 200, 'peaks': ((800, -9.0, 1.4),)},
+    'f_ilsheta_attack_swing': {'peaks': ((2000, 6.0, 1.4),)},
+    'f_ilsheta_ult_windup': {'peaks': ((315, 6.0, 1.4),)},
+    'f_kemdo_ult_release': {'hp': 280},
+    'f_lisvel_attack_hit': {'hp': 800},
+    'f_lisvel_ult_windup': {'peaks': ((3150, 6.0, 1.4),)},
+    'f_marund_attack_hit': {'hp': 400},
+    'f_marund_attack_swing': {'peaks': ((500, -9.0, 1.4),)},
+    'f_marund_ult_release': {'peaks': ((315, 6.0, 1.4),)},
+    'f_marund_ult_windup': {'hp': 200},
+    'f_odrum_attack_swing': {'hp': 280, 'lp': 1200},
+    'f_odrum_ult_release': {'hp': 280, 'peaks': ((3150, 6.0, 1.4),)},
+    'f_odrum_ult_windup': {'peaks': ((500, -9.0, 1.4),)},
+    'f_tunlan_attack_hit': {'peaks': ((1250, 6.0, 1.4),)},
+    'f_tunlan_attack_swing': {'hp': 400, 'peaks': ((2000, -9.0, 1.4),)},
+    'f_tunlan_ult_release': {'peaks': ((3150, -9.0, 1.4),)},
+    'f_ulkro_attack_hit': {'hp': 800, 'peaks': ((500, -9.0, 1.4),)},
+    'f_ulkro_attack_swing': {'lp': 8000, 'peaks': ((5000, 6.0, 1.4),)},
+    'f_ulkro_ult_release': {'peaks': ((5000, 6.0, 1.4),)},
+    'f_ulkro_ult_windup': {'hp': 400, 'lp': 8000, 'peaks': ((1250, 6.0, 1.4),)},
+    'f_vashil_attack_swing': {'peaks': ((500, 6.0, 1.4),)},
+    'f_vashil_ult_release': {'hp': 280, 'peaks': ((315, 6.0, 1.4),)},
+}
 
 _ORIG: dict[str, object] = {}
 
@@ -188,7 +224,8 @@ def _make_hit(fid: str):
 
     @cue(cid, 'combat', T_IMP, IMPW, variants=V3, **IMPK)
     def recipe(v: int):
-        base = _lower(_ORIG[f'f_{fid}_attack_hit'](v), 2 ** (2 / 12))        # the auto's material, a whole tone down
+        ah = f'f_{fid}_attack_hit'
+        base = _lower(_voice(_ORIG[ah](v), VOICING.get(ah, {})), 2 ** (2 / 12))   # the auto's material, a whole tone down
         L = Layers(0.7)
         L.add(base, 0.0, peak_db=-2)
         L.add(_sig(fid, v, 0.5), 0.003, peak_db=-1)
@@ -228,7 +265,7 @@ def _physical() -> set[str]:
     for p in glob.glob(os.path.join(here, '*.json')):
         with open(p, encoding='utf8') as f:
             fd = json.load(f)
-        if (fd.get('attack') or {}).get('damageType', 'physical') == 'physical':
+        if (fd.get('attack') or {}).get('damageType', 'phys') in ('phys', 'physical'):
             out.add(fd['id'])
     return out
 

@@ -46,12 +46,16 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              -40 dB onset >= TRANSIENT_MIN, the frequent hits <= TRANSIENT_SOFT_TOP: a soft top), the crit sharper
              than either hit on average, and stun / root an attack edge
   kits       fighter identity (final parity AUD-1): every fighter has its whole kit f_<fighter>_<slot> (attack_swing,
-             attack_hit, a1, a2, a3, ult_windup, ult_release, passive, death, call), rendered; resolved as the engine
+             attack_hit, a1, a2, a3, ult_windup, ult_release, passive, death, call, hit, dash), rendered; resolved as the engine
              does (kit cue, else the catalog's present, else the generic role), no attack or ult cue is shared by two
              fighters or with a unit, two fighters' cues in one identity slot (attack swing / hit, ult wind-up /
-             release) sit >= ID_MIN_DIST_DB apart by 1/3-octave distance (averaged over round-robin files), and every
-             cue that can fire more than once a second (attacks, hits, ability hits, procs, FAST_ROLES) has
-             >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
+             release) sit >= ID_MIN_DIST_DB apart by BOTH 1/3-octave measures: from ID_FROM_HZ (125 Hz) up over the
+             round-robin-averaged spectrum (a laptop plays no sub band, so none carries identity), and the
+             confusability of the closest pair of takes (STFT, 125 Hz - 16 kHz, re the strongest band, -40 dB floor:
+             the final review's measure); every fighter has its own ability impact (hit) and dash, shared with no one;
+             the kits' attack hits and ability hits lose <= LAPTOP_MAX_LU on a laptop and a physical fighter's attack
+             hit has a contact (>= KIT_TRANSIENT_MIN); and every cue that can fire more than once a second (attacks,
+             hits, ability hits, procs, FAST_ROLES) has >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
 Deterministic: every random choice is seeded from the cue id (synth.core.rng) and ffmpeg runs
 bitexact, so a rebuild reproduces the same files.
 """
@@ -518,9 +522,13 @@ def impact_gate(contract: dict, ctrl: list[str], bound: dict) -> tuple[list[str]
 
 
 # ── fighter identity (final parity AUD-1) ────────────────────────────────────────────────────────
-KIT_SLOTS = ('attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call')
+KIT_SLOTS = ('attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash')
 ID_SLOTS = ('attack_swing', 'attack_hit', 'ult_windup', 'ult_release')     # the sounds a player tells fighters apart by
-ID_MIN_DIST_DB = 8.0     # 1/3-octave distance between two fighters' cues in the same identity slot
+OWN_SLOTS = ('hit', 'dash')    # a fighter's own ability impact and dash: never shared, never the library's
+ID_MIN_DIST_DB = 8.0     # 1/3-octave distance between two fighters' cues in the same identity slot, by BOTH measures:
+ID_FROM_HZ = 125.0       # … the bands from here up (a laptop speaker plays nothing below; sub bands cannot carry identity)
+CONFUSE_BANDS = 125.0 * 2.0 ** (np.arange(0, 22) / 3.0)   # … and per take, 125 Hz - 16 kHz (the final review's measure)
+KIT_TRANSIENT_MIN = 0.07  # a physical fighter's attack hit: its contact, as the library's physical hits (impact gate)
 RR_MIN = 3               # round-robin variants for a cue that can fire more than once a second
 RR_SLOW_COOLDOWN = 1.0   # … a cue whose own cooldown is at least this cannot
 # engine roles that can fire more than once a second (every basic attack, hit, projectile, wave death, heal tick, last hit)
@@ -546,20 +554,48 @@ def fighter_kit(fd: dict, cues: dict, ev: dict) -> dict[str, str | None]:
         'attack_hit': per('attack_hit') or ap.get('hitSfx') or ev.get(hit_role),
         'ult_windup': per('ult_windup') or up.get('sfx') or ev.get('castUlt'),
         'ult_release': per('ult_release'),
+        'hit': per('hit'),            # no fallback here: the gate wants every fighter's own (the engine falls back)
+        'dash': per('dash'),
     }
 
 
-def cue_spectrum(cid: str, cues: dict) -> np.ndarray | None:
-    """The cue's 1/3-octave levels, power-averaged over its round-robin files (None: not rendered)."""
+def confuse_db(x: np.ndarray) -> np.ndarray:
+    """One take's confusability profile (the final review's measure): STFT (1024 / 768) power in 21 1/3-octave bands
+    125 Hz - 16 kHz averaged over frames, in dB re its strongest band, floored at -40."""
+    from scipy import signal
+    m = stereo(x).mean(axis=0)
+    f, _, Z = signal.stft(m, SR, nperseg=1024, noverlap=768)
+    P = np.abs(Z) ** 2
+    e = CONFUSE_BANDS
+    b = np.array([P[(f >= e[i]) & (f < e[i + 1])].sum(axis=0) for i in range(len(e) - 1)]).mean(axis=1)
+    s = 10 * np.log10(b + 1e-12)
+    return np.maximum(s - s.max(), -40.0)
+
+
+def cue_spectrum(cid: str, cues: dict) -> dict | None:
+    """The cue's identity features (None: not rendered): 'hi' its 1/3-octave levels from ID_FROM_HZ up, power-averaged
+    over its round-robin files (each power-normalised) and renormalised over those bands; 'takes' each file's
+    confusability profile (confuse_db)."""
     if cid not in _SPEC:
-        ps = []
+        ps, takes = [], []
+        centres = 1000.0 * 2.0 ** (np.arange(-16, 13) / 3.0)
         for f in cues[cid]['files']:
             p = out_path(f)
             if not os.path.exists(p):
                 return None
-            ps.append(10 ** (third_octave_db(decode(p)) / 10))
-        _SPEC[cid] = 10 * np.log10(np.maximum(np.mean(ps, axis=0), 1e-9))
+            x = decode(p)
+            ps.append(10 ** (third_octave_db(x) / 10))
+            takes.append(confuse_db(x))
+        hi = np.mean(ps, axis=0)[centres >= ID_FROM_HZ * 0.99]
+        hi = hi / (hi.sum() + 1e-30)
+        _SPEC[cid] = {'hi': 10 * np.log10(np.maximum(hi, 1e-9)), 'takes': takes}
     return _SPEC[cid]
+
+
+def id_distance(a: dict, b: dict) -> tuple[float, float]:
+    """(1/3-octave distance from ID_FROM_HZ up, the smallest confusability distance over every pair of takes)."""
+    c = min(float(np.sqrt(np.mean((x - y) ** 2))) for x in a['takes'] for y in b['takes'])
+    return band_distance(a['hi'], b['hi']), c
 
 
 def _hit_sfx(node, out: set[str]) -> None:
@@ -577,10 +613,14 @@ def _hit_sfx(node, out: set[str]) -> None:
 
 def kit_gate(contract: dict) -> tuple[list[str], dict]:
     """kits: every fighter has its whole kit (f_<fighter>_<slot> for every KIT_SLOTS slot, rendered); no identity cue
-    (attack swing / hit, ult wind-up / release) is shared by two fighters or with a unit; two fighters' cues in the
-    same identity slot sit >= ID_MIN_DIST_DB apart by 1/3-octave distance; every cue that can fire more than once a
-    second (fighters' and units' attacks and hits, every ability hit, procs, FAST_ROLES) has >= RR_MIN round-robin
-    variants (files, each from its own recipe variant), unless its own cooldown is >= RR_SLOW_COOLDOWN."""
+    (attack swing / hit, ult wind-up / release) nor own cue (ability hit, dash) is shared by two fighters or with a
+    unit; two fighters' cues in the same identity slot sit >= ID_MIN_DIST_DB apart by BOTH measures (1/3-octave
+    distance from ID_FROM_HZ up over the take-averaged spectrum, and the confusability distance of the closest pair of
+    takes, 125 Hz - 16 kHz); every kit attack hit and ability hit loses <= LAPTOP_MAX_LU through the 220 Hz laptop
+    roll-off and a physical fighter's attack hit carries a contact (>= KIT_TRANSIENT_MIN of its first 30 ms above
+    2 kHz); every cue that can fire more than once a second (fighters' and units' attacks and hits, every ability hit,
+    the kits' ability hits, procs, FAST_ROLES) has >= RR_MIN round-robin variants (files, each from its own recipe
+    variant), unless its own cooldown is >= RR_SLOW_COOLDOWN."""
     import glob
     fails: list[str] = []
     cues, ev = contract['cues'], contract.get('events', {})
@@ -589,7 +629,7 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
         with open(path, encoding='utf8') as f:
             fighters.append(json.load(f))
     units = _read('units.json')['units']
-    rep: dict = {'fighters': {}, 'nearest': {}, 'fast': {}}
+    rep: dict = {'fighters': {}, 'nearest': {}, 'nearestConfuse': {}, 'fast': {}, 'laptop': {}, 'contact': {}}
     resolved = {fd['id']: fighter_kit(fd, cues, ev) for fd in fighters}
     # completeness
     for fd in fighters:
@@ -611,11 +651,11 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
                 unit_cues.setdefault(ap[k], []).append(u['id'])
     users: dict[str, list[str]] = {}
     for fid, k in resolved.items():
-        for s in ID_SLOTS:
+        for s in ID_SLOTS + OWN_SLOTS:
             c = k[s]
             if not c:
-                if s == 'ult_release':
-                    continue                      # reported by completeness (no release at all)
+                if s in ('ult_release',) + OWN_SLOTS:
+                    continue                      # reported by completeness (no kit cue at all)
                 fails.append(f'kits: {fid}.{s} has no cue')
                 continue
             users.setdefault(c, []).append(f'{fid}.{s}')
@@ -624,7 +664,7 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
             fails.append(f"kits: {c} is shared by {', '.join(us)}")
         if c in unit_cues:
             fails.append(f"kits: {c} ({', '.join(us)}) is also a unit's ({', '.join(unit_cues[c])})")
-    # 1/3-octave distance per identity slot
+    # identity distance per slot, by both measures
     for s in ID_SLOTS:
         spec = {}
         for fid, k in resolved.items():
@@ -634,19 +674,45 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
                     spec[fid] = (k[s], sp)
         ids = sorted(spec)
         near: dict[str, tuple[float, str]] = {}
+        nearc: dict[str, tuple[float, str]] = {}
         for i, a in enumerate(ids):
             for b in ids[i + 1:]:
                 if spec[a][0] == spec[b][0]:
                     continue                      # one cue for both: reported as shared above
-                d = band_distance(spec[a][1], spec[b][1])
+                d, c = id_distance(spec[a][1], spec[b][1])
                 for x, y in ((a, b), (b, a)):
                     if x not in near or d < near[x][0]:
                         near[x] = (d, y)
+                    if x not in nearc or c < nearc[x][0]:
+                        nearc[x] = (c, y)
                 if d < ID_MIN_DIST_DB:
                     fails.append(f'kits: {a}.{s} ({spec[a][0]}) is {d:.1f} dB from {b}.{s} ({spec[b][0]}) by 1/3-octave distance'
-                                 f' (< {ID_MIN_DIST_DB:g} dB)')
+                                 f' from {ID_FROM_HZ:g} Hz (< {ID_MIN_DIST_DB:g} dB)')
+                if c < ID_MIN_DIST_DB:
+                    fails.append(f'kits: a take of {a}.{s} ({spec[a][0]}) is {c:.1f} dB from one of {b}.{s} ({spec[b][0]}) by'
+                                 f' confusability (< {ID_MIN_DIST_DB:g} dB)')
         for x, (d, y) in near.items():
             rep['nearest'][f'{x}.{s}'] = [y, round(d, 2)]
+        for x, (c, y) in nearc.items():
+            rep['nearestConfuse'][f'{x}.{s}'] = [y, round(c, 2)]
+    # the kits' hits on a laptop, and a physical fighter's contact (the impact gate's measures)
+    for fd in fighters:
+        fid = fd['id']
+        phys = (fd.get('attack') or {}).get('damageType', 'phys') in ('phys', 'physical')
+        for s in ('attack_hit', 'hit'):
+            c = f'f_{fid}_{s}'
+            if c not in cues or not all(os.path.exists(out_path(x)) for x in cues[c]['files']):
+                continue
+            xs = [decode(out_path(x)) for x in cues[c]['files']]
+            loss = max(laptop_loss(x) for x in xs)
+            rep['laptop'][c] = round(loss, 2)
+            if loss > LAPTOP_MAX_LU:
+                fails.append(f'kits: {c} loses {loss:.1f} LU through a 220 Hz laptop roll-off (> {LAPTOP_MAX_LU:g})')
+            if s == 'attack_hit' and phys:
+                hf = [transient_share(x) for x in xs]
+                rep['contact'][c] = [round(min(hf), 3), round(max(hf), 3)]
+                if min(hf) < KIT_TRANSIENT_MIN:
+                    fails.append(f'kits: {c} has {min(hf):.3f} of its first 30 ms above 2 kHz (< {KIT_TRANSIENT_MIN:g}): no contact')
     # round-robin for every cue that can fire more than once a second
     fast: dict[str, str] = {}
     for fid, k in resolved.items():
@@ -655,6 +721,8 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
                 fast.setdefault(k[s], f'{fid} attack')
         if f'f_{fid}_passive' in cues:
             fast.setdefault(f'f_{fid}_passive', f'{fid} passive proc')
+        if f'f_{fid}_hit' in cues:
+            fast.setdefault(f'f_{fid}_hit', f'{fid} ability hit (an area lands on several units at once)')
     for fd in fighters:
         hs: set[str] = set()
         _hit_sfx(fd.get('kit') or {}, hs)
@@ -940,10 +1008,13 @@ def print_gates(fails: list[str], rep: dict) -> None:
     whole = [f for f, x in kr.get('fighters', {}).items() if not x['missing']]
     print(f"kit gate: {len(whole)}/{len(kr.get('fighters', {}))} fighters with a whole kit ({len(KIT_SLOTS)} slots);"
           f" identity slots >= {ID_MIN_DIST_DB:g} dB apart; >= {RR_MIN} variants for {len(kr.get('fast', {}))} fast cues")
+    print(f"  nearest dB per slot: 1/3-octave from {ID_FROM_HZ:g} Hz / confusability of the closest takes")
     for f, x in kr.get('fighters', {}).items():
         near = '  '.join(f"{s.replace('attack_', 'atk_').replace('ult_', 'u_')} {kr['nearest'].get(f'{f}.{s}', ['-', float('nan')])[1]:5.1f}"
-                         for s in ID_SLOTS)
-        print(f"  {f:9s} {x['kit']:2d}/{len(KIT_SLOTS)}  nearest dB: {near}")
+                         f"/{kr['nearestConfuse'].get(f'{f}.{s}', ['-', float('nan')])[1]:4.1f}" for s in ID_SLOTS)
+        lap = '/'.join(f"{kr['laptop'].get(f'f_{f}_{s}', float('nan')):.1f}" for s in ('attack_hit', 'hit'))
+        ct = kr['contact'].get(f'f_{f}_attack_hit')
+        print(f"  {f:9s} {x['kit']:2d}/{len(KIT_SLOTS)}  {near}  laptop hit/ability {lap} LU" + (f"  contact {ct[0]:.3f}" if ct else ''))
     ip = rep.get('impact', {})
     late = {c: v for c, v in ip.get('instant', {}).items() if v is not None}
     print(f"instant gate: {len(late)} instant cues, slowest {max(late.values(), default=0):.1f} ms to -20 dB (<= {INSTANT_MS:g})")

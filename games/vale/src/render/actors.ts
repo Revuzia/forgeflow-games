@@ -72,6 +72,7 @@ import {
 } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
+import { lodIndex, lodSwitch } from './lod.ts';
 import { structureMaterial } from './structures.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
@@ -142,6 +143,26 @@ interface ActionLike {
 interface MixerLike { clipAction(c: AnimationClip): ActionLike; update(dt: number): unknown; stopAllAction(): unknown; uncacheRoot(o: Object3D): void }
 
 // ── hull plan: outline + hit-flash geometry, once per template ───────────────────────────────────
+/** perf PERF-m5: the rest outline's hull through its sub-pixel LOD (lod.ts LOD.hull: half the triangles within 6 mm):
+ *  a view sharing the hull's attributes, freed with it. The hit flash, the x-ray silhouette and the body keep the full
+ *  mesh (the flash lies on the body's own surface). */
+const outlineLod = new WeakMap<BufferGeometry, BufferGeometry>();
+function outlineGeometry(g: BufferGeometry): BufferGeometry {
+  const hit = outlineLod.get(g);
+  if (hit) return hit;
+  const l = lodIndex(g, 'hull');
+  if (!l) return g;
+  const v = new BufferGeometry();
+  for (const [k, a] of Object.entries(g.attributes)) v.setAttribute(k, a);
+  v.setIndex(l);
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  v.boundingSphere = g.boundingSphere;
+  v.name = 'vale_outline_lod';
+  outlineLod.set(g, v);
+  g.addEventListener('dispose', () => { v.dispose(); outlineLod.delete(g); });
+  return v;
+}
+
 /** one hull draw: `lead` is the index (traverse order) of the mesh it binds to and hangs under */
 interface HullPart { lead: number; geometry: BufferGeometry; skinned: boolean }
 
@@ -953,16 +974,17 @@ export class Actor implements CrowdActor {
       const pair = inkFor(part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid');
       for (const flash of [false, true]) {
         const mat = flash ? pair[1] : pair[0];
+        const geo = flash || !lodSwitch.outline ? part.geometry : outlineGeometry(part.geometry);
         let copy: Mesh;
         if (part.skinned && (lead as SkinnedMesh).isSkinnedMesh) {
           const sm = lead as SkinnedMesh;
-          const c = new SkinnedMesh(part.geometry, mat);
+          const c = new SkinnedMesh(geo, mat);
           c.bind(sm.skeleton, sm.bindMatrix);
           c.frustumCulled = false;
           if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
           c.boundingSphere = part.geometry.boundingSphere!.clone();
           copy = c;
-        } else copy = new Mesh(part.geometry, mat);
+        } else copy = new Mesh(geo, mat);
         copy.name = flash ? 'vale_flash' : 'vale_outline';
         copy.userData.valeOutline = true;
         copy.castShadow = false; copy.receiveShadow = false;

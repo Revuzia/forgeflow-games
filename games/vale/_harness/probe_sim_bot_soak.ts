@@ -16,6 +16,13 @@
 //                             played twice with the sides swapped)
 //   bridge     (gameplay:G5)  ≤ 25 % of games end in sudden death · 0 cores fall with a structure they
 //                             require still standing · median length 15–18 min
+//   fray       (gameplay:G6, G9) FRAY on the bots' own loadouts, 10 distinct fighters a game (rotated by seed): ≥ 85 %
+//                             of games have no stretch of 90 s or more without a fighter death while 3+ seats are still in
+//                             (from the first death on; the opening is reported) · every fighter's mean placement 3.5–7.5
+//                             (enforced only with ≥ FRAY_MIN_PER_FIGHTER games of that fighter)
+//   credit     (gameplay:g1)  report: fighter deaths finished by a Wick, Needle or monster that are credited to an
+//                             enemy fighter (death.by) vs executed
+//   pace       (gameplay:g2)  RIFT length per difficulty: adept p90 ≤ 32 min (full games only)
 //   items      (gameplay:G7)  finished (core/apex) items held per player at min(25:00, end) ≥ 2.5 ·
 //                             ≥ 80 % of the finished items bought at least once · ≥ 1 anti-heal family
 //                             (an item that applies 'grievous') · builds vary (a fighter's first two
@@ -29,8 +36,9 @@
 //   node _harness/probe_sim_bot_soak.ts --full          the soak: RIFT 20 seeds × adept + veteran (full
 //                                                       games), BRIDGE 20 × adept + veteran, mirrored
 //                                                       veteran-vs-novice and veteran-vs-adept (10 seeds
-//                                                       × 2 sides each), 3 worker processes
-//   flags: --seeds N · --seed0 N · --diffs adept,veteran · --suites rift,bridge,mirror · --cut <s>
+//                                                       × 2 sides each), FRAY 30 × adept + veteran, 3 workers
+//   flags: --seeds N · --seed0 N · --diffs adept,veteran · --suites rift,bridge,mirror,fray · --cut <s>
+//          --fray-seeds N (default 30)
 //          --jobs N (≤ 3) · --rules '<json>' (deep-merged into every probed mode's rules)
 //          --label <name> (report: _harness/_reports/fw_W4_soak_<label>.json + .txt)
 //
@@ -55,7 +63,9 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package (2026-10-28)
+const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28)
+/** a fighter's FRAY placement band is enforced only with this many games of it */
+const FRAY_MIN_PER_FIGHTER = 12;
 /** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
  *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
 const STRUCT_MIN_GAMES = 16;
@@ -69,7 +79,8 @@ const WORKER = opt('worker', '');
 const SEEDS = Number(opt('seeds', FULL ? '20' : '8'));
 const SEED0 = Number(opt('seed0', '1'));
 const DIFFS = opt('diffs', 'adept,veteran').split(',');
-const SUITES = opt('suites', FULL ? 'rift,bridge,mirror' : 'rift').split(',');
+const SUITES = opt('suites', FULL ? 'rift,bridge,mirror,fray' : 'rift').split(',');
+const FRAY_SEEDS = Number(opt('fray-seeds', '30'));
 const CUT = Number(opt('cut', FULL ? '0' : '900')) || 0;
 const JOBS = Math.max(1, Math.min(3, Number(opt('jobs', FULL ? '3' : '1'))));
 const RULES = opt('rules', '');
@@ -120,6 +131,7 @@ export function roleLineup(catalog: CatalogT, modeId: string, seed: number, diff
   if (!mode) throw new Error(`no mode ${modeId}`);
   const queue = catalog.queues.find((q) => q.mode === mode.id && q.kind === 'standard') ?? catalog.queues.find((q) => q.mode === mode.id);
   if (!queue) throw new Error(`no queue for ${modeId}`);
+  if (!mode.roles || mode.teams > 2) return ffaLineup(catalog, mode, queue.id, seed, diffs);
   const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0)).map((r) => r.id);
   const natives = new Map<string, string[]>();
   for (const f of catalog.fighters) { const l = natives.get(f.role) ?? []; l.push(f.id); natives.set(f.role, l); }
@@ -144,10 +156,29 @@ export function roleLineup(catalog: CatalogT, modeId: string, seed: number, diff
   return { matchId: `soak-${modeId}-${seed}-${diffs.join('-')}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
 }
 
+/** FRAY (no roles, every seat its own team): 10 distinct fighters, the window over the sorted roster moves 10 a seed and
+ *  the seats rotate by seed (so a fighter does not keep one spawn); the bots' own pickLoadout with no role */
+function ffaLineup(catalog: CatalogT, mode: CatalogT['modes'][number], queue: string, seed: number, diffs: readonly [string, string]): MatchSetup {
+  const all = catalog.fighters.map((f) => f.id).sort();
+  const n = mode.teams * mode.perTeam;
+  const pool = mode.rules.itemPool ?? '';
+  const start = (seed * n) % all.length;
+  const seats: SeatSetup[] = [];
+  for (let i = 0; i < n; i++) {
+    const fighter = all[(start + ((i + seed) % n)) % all.length];
+    const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
+    seats.push({
+      player: i, team: Math.floor(i / mode.perTeam), name: catalog.botNames[i % catalog.botNames.length], fighter, skin,
+      loadout: pickLoadout(catalog, fighter, pool), controller: 'bot', botDifficulty: diffs[0] as SeatSetup['botDifficulty'], colorIndex: i,
+    });
+  }
+  return { matchId: `soak-${mode.id}-${seed}-${diffs.join('-')}`, seed, queue, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
+}
+
 // ── one match ───────────────────────────────────────────────────────────────────────────────────
 interface Job { suite: string; mode: string; seed: number; diffs: [string, string]; cut: number }
 type KillerKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'none' | 'other';
-interface FDeath { t: number; p: number; role: string; mode: string; killer: KillerKind; killerDef: string; assists: number; involved: boolean }
+interface FDeath { t: number; p: number; role: string; mode: string; killer: KillerKind; killerDef: string; assists: number; involved: boolean; by: number }
 interface GameRec {
   job: Job; reason: string; dur: number; winner: number; sudden: number; faults: string[];
   seats: { p: number; team: number; fighter: string; role: string; spells: string[] }[];
@@ -170,6 +201,9 @@ interface GameRec {
   finalItems: string[][];
   goldGraph: number[];
   kills: number[]; deaths: number[]; cs: number[]; levels: number[];
+  /** FRAY: final placement per seat, and when each seat was eliminated */
+  placement: number[];
+  elim: { t: number; p: number }[];
 }
 
 const LANE_MODES = new Set(['lane', 'trade', 'push', 'allin']);
@@ -206,6 +240,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     seats: setup.seats.map((s) => ({ p: s.player, team: s.team, fighter: s.fighter, role: s.role ?? '', spells: s.loadout.spells.slice() })),
     wick14: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
     buys: [], fin25: [], gold25: [], finSpent25: [], bank25: [], cons25: [], finalItems: [], goldGraph: [], kills: [], deaths: [], cs: [], levels: [],
+    placement: [], elim: [],
   };
   const csNow = new Array<number>(n).fill(0);
   const world = () => sim.world;
@@ -254,7 +289,9 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
             const pi = w.players.findIndex((p) => p.entity === e.dst);
             const vt = pi >= 0 ? w.players[pi].team : -1;
             const k = killerKind(e.killer, vt);
-            rec.fdeaths.push({ t: e.t, p: pi, role: setup.seats[pi]?.role ?? '', mode: pi >= 0 ? modeOf(pi) : '?', killer: k.kind, killerDef: k.def, assists: e.assists.length, involved: k.credited || e.assists.length > 0 });
+            // (g1: a Wick/Needle/monster blow after an enemy fighter's damage is credited to that fighter, death.by)
+            rec.fdeaths.push({ t: e.t, p: pi, role: setup.seats[pi]?.role ?? '', mode: pi >= 0 ? modeOf(pi) : '?', killer: k.kind, killerDef: k.def, assists: e.assists.length,
+              involved: k.credited || e.by >= 0 || e.assists.length > 0, by: e.by });
           }
           break;
         }
@@ -273,6 +310,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
         case 'objective': rec.objs.push({ t: e.t, unit: e.unit, team: e.team }); break;
         case 'recall': if (e.state === 'done') rec.recalls[e.player]++; break;
         case 'suddenDeath': rec.sudden = e.t; break;
+        case 'eliminated': rec.elim.push({ t: e.t, p: e.player }); break;
         case 'buy':
           if (finished.has(e.item)) rec.buys.push({ t: e.t, p: e.player, item: e.item });
           else if (consumables.has(e.item) && e.t < 1500) consSpent[e.player] += costOf.get(e.item) ?? 0;
@@ -295,6 +333,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   rec.finalItems = w.players.map((p) => p.items.filter((x): x is string => !!x));
   rec.kills = w.players.map((p) => p.kills); rec.deaths = w.players.map((p) => p.deaths);
   rec.cs = w.players.map((p) => p.cs); rec.levels = levels();
+  rec.placement = res ? setup.seats.map((s) => res.players.find((x) => x.player === s.player)?.placement ?? 0) : [];
   return rec;
 }
 
@@ -304,6 +343,8 @@ function planJobs(): Job[] {
   for (const suite of SUITES) {
     if (suite === 'rift' || suite === 'bridge') {
       for (const d of DIFFS) for (let s = SEED0; s < SEED0 + SEEDS; s++) jobs.push({ suite, mode: suite, seed: s, diffs: [d, d], cut: suite === 'rift' ? CUT : 0 });
+    } else if (suite === 'fray') {
+      for (const d of DIFFS) for (let s = SEED0; s < SEED0 + FRAY_SEEDS; s++) jobs.push({ suite, mode: 'fray', seed: s, diffs: [d, d], cut: 0 });
     } else if (suite === 'mirror') {
       for (const weak of ['novice', 'adept']) for (let s = SEED0; s < SEED0 + MIRROR_SEEDS; s++) {
         jobs.push({ suite: `mirror_${weak}`, mode: 'rift', seed: s, diffs: ['veteran', weak], cut: 0 });
@@ -548,6 +589,80 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     gates.push({ group: 'bridge', item: 'gameplay:G5', label: 'BRIDGE games ending in sudden death', value: `${sd}/${br.length} (${pct(sd / br.length)})`, target: '≤ 25 %', pass: sd / br.length <= 0.25, n: br.length });
     gates.push({ group: 'bridge', item: 'gameplay:G5', label: 'BRIDGE cores fallen with their chain standing', value: String(skips), target: '0', pass: skips === 0, n: br.length });
     gates.push({ group: 'bridge', item: 'gameplay:G5', label: 'BRIDGE median length', value: `${len.toFixed(1)} min`, target: '15–18 min', pass: len >= 15 && len <= 18, n: br.length });
+  }
+  // ── RIFT pace and kill credit (g2, g1) ──
+  if (fullRift.length) {
+    const pq = (a: number[], q: number): number => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.max(0, Math.ceil(q * s.length) - 1))] : NaN; };
+    const pace: Record<string, { median: number; mean: number; p90: number; max: number; n: number; sudden: number }> = {};
+    for (const d of diffs) {
+      const ds = fullRift.filter((g) => g.job.diffs[0] === d).map((g) => g.dur / 60);
+      if (!ds.length) continue;
+      pace[d] = { median: median(ds), mean: mean(ds), p90: pq(ds, 0.9), max: Math.max(...ds), n: ds.length, sudden: fullRift.filter((g) => g.job.diffs[0] === d && g.sudden >= 0).length };
+    }
+    detail.pace = pace;
+    text.push('', `RIFT pace (full games): ${Object.entries(pace).map(([d, p]) => `${d} median ${p.median.toFixed(1)} mean ${p.mean.toFixed(1)} p90 ${p.p90.toFixed(1)} max ${p.max.toFixed(1)} min (n ${p.n}, sudden ${p.sudden})`).join(' / ')}`);
+    if (pace.adept) gates.push({ group: 'pace', item: 'gameplay:g2', label: 'RIFT adept match length p90', value: `${pace.adept.p90.toFixed(1)} min (median ${pace.adept.median.toFixed(1)})`, target: '≤ 32 min', pass: pace.adept.p90 <= 32, n: pace.adept.n });
+  }
+  if (rift.length) {
+    const cr: Record<string, { credited: number; executed: number }> = {};
+    for (const d of diffs) {
+      const c = { credited: 0, executed: 0 };
+      for (const g of rift.filter((x) => x.job.diffs[0] === d)) for (const x of g.fdeaths) {
+        if (x.killer !== 'minion' && x.killer !== 'monster' && x.killer !== 'structure') continue;
+        if (x.by >= 0) c.credited++; else c.executed++;
+      }
+      cr[d] = c;
+    }
+    detail.credit = cr;
+    text.push('', `kill credit (g1): fighter deaths finished by a Wick, Needle or monster — ${Object.entries(cr).map(([d, c]) => `${d} ${c.credited} credited to the top-damage enemy fighter, ${c.executed} executed (no enemy fighter in the window)`).join(' / ')}`);
+  }
+  // ── FRAY (G6 lulls, G9 placements) ──
+  const fr = games.filter((g) => g.job.suite === 'fray');
+  if (fr.length) {
+    const fdiffs = [...new Set(fr.map((g) => g.job.diffs[0]))];
+    const fray: Record<string, unknown> = {};
+    for (const d of fdiffs) {
+      const gs = fr.filter((g) => g.job.diffs[0] === d);
+      const reasons: Record<string, number> = {};
+      const lulls: number[] = [], openings: number[] = [], endAir: number[] = [];
+      let quiet = 0;
+      const place = new Map<string, number[]>();
+      const kills = new Map<string, number[]>();
+      for (const g of gs) {
+        reasons[g.reason] = (reasons[g.reason] ?? 0) + 1;
+        const n = g.seats.length;
+        const deaths = g.fdeaths.map((x) => x.t).sort((a, b) => a - b);
+        const pts = [0, ...deaths, g.dur];
+        let longest = 0;
+        for (let i = 1; i < pts.length - 1; i++) {
+          const a = pts[i], b = pts[i + 1];
+          const alive = n - g.elim.filter((x) => x.t <= a + 1e-9).length;
+          if (alive >= 3) longest = Math.max(longest, b - a);
+        }
+        lulls.push(longest);
+        openings.push(deaths.length ? deaths[0] : g.dur);
+        if (g.reason === 'time') endAir.push(g.dur - (deaths.length ? deaths[deaths.length - 1] : 0));
+        if (longest >= 90) quiet++;
+        for (const s of g.seats) {
+          (place.get(s.fighter) ?? place.set(s.fighter, []).get(s.fighter)!).push(g.placement[s.p] ?? 0);
+          (kills.get(s.fighter) ?? kills.set(s.fighter, []).get(s.fighter)!).push(g.kills[s.p] ?? 0);
+        }
+      }
+      const okShare = (gs.length - quiet) / gs.length;
+      const rows = [...place.entries()].map(([f, a]) => ({ f, n: a.length, place: mean(a), kills: mean(kills.get(f) ?? []) })).sort((a, b) => a.place - b.place);
+      fray[d] = { reasons, lullMax: Math.max(...lulls), quiet, openings: { mean: mean(openings), max: Math.max(...openings) }, endAir: { n: endAir.length, mean: mean(endAir), max: endAir.length ? Math.max(...endAir) : 0 }, fighters: rows };
+      text.push('', `FRAY ${d}: ${gs.length} games; ends ${JSON.stringify(reasons)}; length mean ${mean(gs.map((g) => g.dur / 60)).toFixed(1)} min; kills/min ${(mean(gs.map((g) => g.fdeaths.length / Math.max(1, g.dur / 60)))).toFixed(2)}`);
+      text.push(`  longest no-death stretch with 3+ seats in (from the first death): mean ${mean(lulls).toFixed(0)} s, max ${Math.max(...lulls).toFixed(0)} s, games with a 90 s+ lull ${quiet}/${gs.length}; opening (to the first death) mean ${mean(openings).toFixed(0)} s, max ${Math.max(...openings).toFixed(0)} s; time-limit endings ${endAir.length}, dead air at the end mean ${mean(endAir).toFixed(0)} s, max ${endAir.length ? Math.max(...endAir).toFixed(0) : 0} s`);
+      text.push(`  placement by fighter (mean, n, kills): ${rows.map((r) => `${r.f} ${r.place.toFixed(1)} (${r.n}, ${r.kills.toFixed(1)})`).join(' · ')}`);
+      gates.push({ group: 'fray', item: 'gameplay:G6', label: `FRAY ${d}: games with no 90 s stretch without a death while 3+ seats are in`, value: `${gs.length - quiet}/${gs.length} (${pct(okShare)})`, target: '≥ 85 %', pass: okShare >= 0.85, n: gs.length });
+      const enforced = rows.filter((r) => r.n >= FRAY_MIN_PER_FIGHTER);
+      const out = enforced.filter((r) => r.place < 3.5 || r.place > 7.5);
+      const lo = rows.length ? rows[rows.length - 1] : null, hi = rows.length ? rows[0] : null;
+      gates.push({ group: 'fray', item: 'gameplay:G9', label: `FRAY ${d}: every fighter's mean placement (fighters with ≥ ${FRAY_MIN_PER_FIGHTER} games: ${enforced.length}/${rows.length})`,
+        value: `${hi ? `best ${hi.f} ${hi.place.toFixed(1)}` : ''}${lo ? `, worst ${lo.f} ${lo.place.toFixed(1)}` : ''}${out.length ? `; outside: ${out.map((r) => `${r.f} ${r.place.toFixed(1)}`).join(', ')}` : ''}`,
+        target: '3.5–7.5', pass: out.length === 0, n: gs.length, reportOnly: enforced.length === 0 });
+    }
+    detail.fray = fray;
   }
   return { gates, text, detail };
 }

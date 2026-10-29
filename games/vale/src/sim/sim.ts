@@ -40,7 +40,7 @@ import { initEconomyViews, installEconomy, passiveGoldSystem } from './economy.t
 import { finalizeStates } from './movement.ts';
 import { modeRulesFor, isFfa } from './modes/index.ts';
 import {
-  DEFAULT_PREGAME, endMatch, goldGraphSystem, initMatch, matchOf, phaseGateSystem, suddenDeathSystem, surrenderCommand,
+  DEFAULT_PREGAME, endMatch, goldGraphSystem, initMatch, matchOf, noonTollSystem, phaseGateSystem, suddenDeathSystem, surrenderCommand,
   teamViewSystem,
 } from './modes/match.ts';
 import { initPractice, installPractice, practiceSystem } from './modes/practice.ts';
@@ -171,6 +171,7 @@ function buildWorld(catalog: CatalogT, setup: MatchSetup, opts: SimOptions, idx:
   w.addSystem('deaths', passiveGoldSystem);
   w.addSystem('deaths', practiceSystem);
   w.addSystem('modes', suddenDeathSystem);
+  w.addSystem('modes', noonTollSystem);
   w.addSystem('modes', shopViewSystem);
   w.addSystem('modes', teamViewSystem);
   w.addSystem('modes', goldGraphSystem);

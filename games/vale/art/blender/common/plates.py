@@ -19,7 +19,7 @@ composed over it exactly as render.splash_post does (light wrap, bloom, vignette
 
 The raw subject passes (straight RGBA, display sRGB, before the post) are kept in art/.cache/fighters/plates/, so
 the plates are re-graded without Blender:
-    python3 art/blender/common/plates.py compose [sids] [--preview]
+    python3 art/blender/common/plates.py compose [sids] [--preview] [--kind splash|portrait]
     python3 art/blender/common/plates.py measure [sids] [--preview] [--box 0.84]
     python3 art/blender/common/plates.py frame [sids] [--box 0.84]
 `measure` reads the shipped (or preview) images and reports the two crops the client shows: the 3:5 loading card
@@ -87,6 +87,18 @@ DEFAULTS = {
     "sub_ceil": 0.39,           # ... and a pale kit's median at most this (the cell stays a mid value)
     # the post (render.splash_post's light wrap / bloom / vignette strengths)
     "post": 1.0, "post_p": 0.6,
+    # the splash under the loading card (W2's screens.css .pcard): the card fades the plate's top into its ink and
+    # lays an ink scrim over the foot, so the splash may bake less of either (None: `top` / `floor`)
+    "top_s": None, "floor_s": None,
+    # ... and the card floor (splash only; off while `card_lo_q` is None): the rows of the card window the card
+    # shows (`card_rows` of the plate: below its top fade, down into the light upper part of its meta scrim; the
+    # window 0.6 / `card_box` wide at `card_pos` across, as loading.tsx CARD_CROP) must hold a mid value, so the
+    # composite's darks are toe-lifted until the window's `card_lo_q` quantile reaches `card_lo` (display luma). The
+    # toe fades out at `toe_pv`, half its lift keeps the colour's ratio (`toe_chroma`) and half is neutral (no chroma
+    # blow-up in dark cloth), and it eases to `toe_left` of its strength toward the left edge (the scenery away from
+    # the figure keeps its depth)
+    "card_lo_q": None, "card_lo": 0.31, "card_rows": [0.06, 0.80], "card_box": 0.84, "card_pos": 0.86,
+    "toe_pv": 0.55, "toe_chroma": 0.5, "toe_left": 0.45,
 }
 
 
@@ -403,8 +415,10 @@ def plate(p: dict, kind: str, w: int, h: int) -> np.ndarray:
     lin = np.maximum(Y + (lin - Y) * float(p["sat"]), 0.0)
     yy = np.linspace(0, 1, h, dtype=np.float32)[:, None]
     xx = np.linspace(0, 1, w, dtype=np.float32)[None, :]
-    top = 1.0 - float(p["top"]) * np.clip(1.0 - yy / max(1e-3, float(p["top_to"])), 0, 1) ** 1.6
-    flo = 1.0 - float(p["floor"]) * np.clip((yy - float(p["floor_from"])) / max(1e-3, 1 - float(p["floor_from"])), 0, 1) ** 1.3
+    tk = p["top"] if kind != "splash" or p.get("top_s") is None else p["top_s"]
+    fk = p["floor"] if kind != "splash" or p.get("floor_s") is None else p["floor_s"]
+    top = 1.0 - float(tk) * np.clip(1.0 - yy / max(1e-3, float(p["top_to"])), 0, 1) ** 1.6
+    flo = 1.0 - float(fk) * np.clip((yy - float(p["floor_from"])) / max(1e-3, 1 - float(p["floor_from"])), 0, 1) ** 1.3
     if kind != "splash":
         flo = np.ones_like(flo)          # the portrait sees no ground
     dx, dy = (xx - 0.55) / 0.78, (yy - 0.50) / 0.66
@@ -501,7 +515,48 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
     L = lut()
     if L is not None:
         comp[..., :3] = np.clip(gradelib().apply_lut(comp[..., :3], L, "trilinear"), 0, 1).astype(np.float32)
+    if kind == "splash" and p.get("card_lo_q") is not None:
+        comp, _s = card_floor(comp, p)
     return comp
+
+
+def _toe(rgb: np.ndarray, s: float, pv: float, chroma: float, wx: np.ndarray | None = None) -> np.ndarray:
+    """Lift the darks of display rgb: luma L -> L + s (pv - L)^2 / pv below `pv` (x `wx` per column); `chroma` of
+    the lift scales the colour, the rest is added neutral (a very dark pixel only gets the neutral part)."""
+    L = np.maximum(rgb @ Y709, 1e-4)
+    d = np.clip(pv - L, 0.0, None)
+    lift = s * d * d / pv
+    if wx is not None:
+        lift = lift * wx
+    Lp = L + lift
+    c = (np.clip(L / 0.06, 0.0, 1.0) * chroma)[..., None]
+    scaled = rgb * np.minimum(Lp / L, 4.0)[..., None]
+    return np.clip(scaled * c + (rgb + lift[..., None]) * (1.0 - c), 0.0, 1.0).astype(np.float32)
+
+
+def card_floor(comp: np.ndarray, p: dict) -> tuple[np.ndarray, float]:
+    """The splash's card floor (DEFAULTS `card_lo_q`): the least toe that takes the card window's clear rows to
+    `card_lo` at quantile `card_lo_q`. Returns (image, toe strength); 0 when the window already holds it."""
+    h, w = comp.shape[:2]
+    cw = int(round(h * 0.6 / float(p["card_box"])))
+    x0 = int(round(float(p["card_pos"]) * (w - cw)))
+    r0, r1 = (int(round(float(v) * h)) for v in p["card_rows"])
+    xs = np.linspace(0, 1, w, dtype=np.float32)
+    t = np.clip((xs - 0.15) / 0.40, 0.0, 1.0)
+    wx = (float(p["toe_left"]) + (1.0 - float(p["toe_left"])) * t * t * (3 - 2 * t))[None, :]
+    win, wwx = comp[r0:r1, x0:x0 + cw, :3], wx[:, x0:x0 + cw]
+    q, lo_t = float(p["card_lo_q"]), float(p["card_lo"])
+    pv, ch = float(p["toe_pv"]), float(p["toe_chroma"])
+    qv = lambda s: float(np.quantile(_toe(win, s, pv, ch, wwx) @ Y709, q))  # noqa: E731
+    if qv(0.0) >= lo_t:
+        return comp, 0.0
+    lo, hi = 0.0, 1.5
+    for _ in range(14):
+        m = 0.5 * (lo + hi)
+        lo, hi = (m, hi) if qv(m) < lo_t else (lo, m)
+    out = comp.copy()
+    out[..., :3] = _toe(comp[..., :3], hi, pv, ch, wx)
+    return out, hi
 
 
 # ── the kept subject passes ──────────────────────────────────────────────────────────────────────
@@ -598,12 +653,13 @@ def main(argv: list[str]) -> int:
     cmd = argv[0] if argv else "measure"
     preview = "--preview" in argv
     box = float(argv[argv.index("--box") + 1]) if "--box" in argv else None     # W2's plate height in the card
-    argv = [a for i, a in enumerate(argv) if not (i and argv[i - 1] == "--box")]
+    kinds = [argv[argv.index("--kind") + 1]] if "--kind" in argv else ["splash", "portrait"]   # compose only these
+    argv = [a for i, a in enumerate(argv) if not (i and argv[i - 1] in ("--box", "--kind"))]
     sel = [a for a in argv[1:] if not a.startswith("--")] or sids()
     aspect = 0.6 / box if box else 0.6
     if cmd == "compose":
         for sid in sel:
-            for kind in ("splash", "portrait"):
+            for kind in kinds:
                 out = compose_to(sid, kind, preview)
                 print(f"[plates] {sid} {kind}: {os.path.relpath(out, GAME_DIR) if out else 'no raw pass'}")
         cmd = "measure"

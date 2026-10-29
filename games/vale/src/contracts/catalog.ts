@@ -606,6 +606,10 @@ export const RulesParams = z.object({
    *  Respawns run × tuning.suddenDeathRespawnMult. Absent = sudden death only slows respawns. */
   gorgeWind: z.object({ every: z.number().positive(), maxSteps: z.number().int().positive(), wickDamage: z.number().nonnegative(),
     structureTaken: z.number().nonnegative() }).strict().optional(),
+  /** W4 (gameplay G6), additive: the Noon Toll. From `from` s, every `every` s the dial tolls and every living fighter is
+   *  shown to every team for `reveal` s (fog, thickets and invisibility do not hide them); announce 'noon_toll'
+   *  (params.n = fighters shown). FRAY's last minutes stay a race: nobody can wait out the clock in a corner. */
+  noonToll: z.object({ from: z.number().nonnegative(), every: z.number().positive(), reveal: z.number().positive() }).strict().optional(),
   /** CHANGED(SIM), additive: balance knobs the sim used to hard-code. Every key is optional; an
    *  omitted key keeps the CONTRACT §5.5/§5.6 default shown in brackets. Queues override key by key. */
   tuning: z.object({

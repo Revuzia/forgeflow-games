@@ -26,6 +26,8 @@ export const LOD = {
   hull: { ratio: 0.5, errorM: 0.006 },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
   minTris: 600,
+  /** an instanced caster (scatter: trees, rocks) draws its mesh once per instance: a LOD pays from this size */
+  minTrisInstanced: 120,
 } as const;
 
 let ready = false;
@@ -51,7 +53,7 @@ function positionsOf(g: BufferGeometry): Float32Array | null {
  * A LOD index for `g` (`kind`: LOD.shadow or LOD.hull), cached on its source index; null when the mesh is too small,
  * has material groups, is not triangles or the simplifier is not ready (then the caller draws it whole).
  */
-export function lodIndex(g: BufferGeometry, kind: Key): BufferAttribute | null {
+export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.minTris): BufferAttribute | null {
   if (!ready) return null;
   const pos = g.getAttribute('position');
   if (!pos) return null;
@@ -64,7 +66,7 @@ export function lodIndex(g: BufferGeometry, kind: Key): BufferAttribute | null {
   if (g.groups.length > 1) return null;
   const cfg = LOD[kind];
   const count = g.index ? g.index.count : pos.count;
-  if (count / 3 < LOD.minTris || count % 3 !== 0) return null;
+  if (count / 3 < minTris || count % 3 !== 0) return null;
   const positions = positionsOf(g);
   if (!positions) return null;
   let src: Uint32Array;
@@ -88,8 +90,10 @@ export function lodIndex(g: BufferGeometry, kind: Key): BufferAttribute | null {
 }
 
 // ── the shadow swap ─────────────────────────────────────────────────────────────────────────────
-/** harness seam (_harness/probe_lod.mjs A/B): false draws every shadow caster whole */
-export const lodSwitch = { shadow: true };
+/** shadow: harness seam (_harness/probe_lod.mjs A/B), false draws every shadow caster whole. outline: whether an actor
+ *  built now takes the outline-hull LOD (actors.ts) — the renderer turns it on for a match and off for the menu, whose
+ *  showcase fighter stands 4-5x larger on screen than the 6 mm bound was set for */
+export const lodSwitch = { shadow: true, outline: false };
 const shadowLod = new WeakMap<BufferGeometry, BufferAttribute>();
 let swapped: { g: BufferGeometry; index: BufferAttribute | null } | null = null;
 
@@ -129,7 +133,7 @@ export function shadowLods(root: Object3D, budgetMs = Infinity): void {
     const g = m.geometry;
     if (!g) return;
     if (!shadowLod.has(g)) {
-      const l = lodIndex(g, 'shadow');
+      const l = lodIndex(g, 'shadow', (m as { isInstancedMesh?: boolean }).isInstancedMesh ? LOD.minTrisInstanced : LOD.minTris);
       if (!l) return;
       shadowLod.set(g, l);
     }

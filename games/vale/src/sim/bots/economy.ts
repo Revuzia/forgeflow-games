@@ -48,12 +48,11 @@ export class Economy {
     const ab = p.abilities;
     const ult = ab[3];
     if (ult && ult.canLevel) { out.push({ type: 'levelUp', slot: 'ult' }); return; }
-    const lvl = p.ent ? p.ent.level : 1;
-    if (lvl <= 4) {
-      for (const s of this.prof.levelOrder) {
-        const a = ab[LEVEL_SLOTS.indexOf(s)];
-        if (a && a.canLevel && a.rank === 0) { out.push({ type: 'levelUp', slot: s }); return; }
-      }
+    // one rank of every basic first, at any level: a mode that starts at level 6 (FRAY) hands out six points at once,
+    // and maxing the first two left the third basic unlearned until level 7 (W4 gameplay G9: Nurrow had no Felt Step)
+    for (const s of this.prof.levelOrder) {
+      const a = ab[LEVEL_SLOTS.indexOf(s)];
+      if (a && a.canLevel && a.rank === 0) { out.push({ type: 'levelUp', slot: s }); return; }
     }
     for (const s of this.prof.levelOrder) {
       const a = ab[LEVEL_SLOTS.indexOf(s)];

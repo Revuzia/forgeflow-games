@@ -451,6 +451,7 @@ class ValeRenderer implements Renderer {
   setScene(scene: 'menu' | MatchClient): void {
     if (scene === 'menu') {
       this.teardownMatch();
+      lodSwitch.outline = false;                                           // perf PERF-m5: the showcase keeps its full hull
       this.menu.build(this.catalog, this.assets);
       this.mode = 'menu';
       this.post.setScene(this.menu.scene, this.menu.camera);
@@ -466,6 +467,7 @@ class ValeRenderer implements Renderer {
     const gen = ++this.matchGen;
     this.client = client;
     this.mode = 'match';
+    lodSwitch.outline = true;                                              // perf PERF-m5: lod.ts
     // perf PERF-M2: every match starts at the player's own render scale (nothing a menu or the last match did carries over)
     this.dyn.configure(this.q.renderScale, this.q.fpsCap);
     this.lastFrameAt = 0;
@@ -506,6 +508,10 @@ class ValeRenderer implements Renderer {
       for (const o of this.ambientPending.splice(0)) this.warmAmbient(o);
       this.lib.warmAll();
       this.structs.warmAll(this.actors.values());
+      // perf PERF-m5: the terrain's own programs too (the Fallen Shaft's water was first compiled when the camera first
+      // passed it, 14-18 minutes in), and every caster already in the scene gets its shadow LOD now, not over the sweeps
+      if (this.terrain) { const tg = this.terrain.group; this.asIfComposer(() => void this.gl.compileAsync(tg, this.rig.camera, this.scene).catch(() => undefined)); }
+      shadowLods(this.scene);
     });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
@@ -519,8 +525,8 @@ class ValeRenderer implements Renderer {
     this.scene.add(this.terrain.group);
     inkShadows(this.terrain.group);
     this.loadTerrainTextures(map, gen);
-    void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); } });
-    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); this.terrain.group.add(o); } });
+    void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); shadowLods(this.terrain.group); } });
+    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); shadowLods(o); this.terrain.group.add(o); } });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;

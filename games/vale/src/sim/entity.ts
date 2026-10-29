@@ -353,6 +353,8 @@ export class Entity implements EntityView {
   slowPow = 0; hastePow = 0; grievous = 0; armorShred = 0; resistShred = 0;
   /** bit t: revealed to team t (reveal status) */
   revealMask = 0;
+  /** shown to every team until this tick (the Noon Toll, rules.noonToll) */
+  revealAllUntil = -1;
   // orders
   order = ORDER_NONE;
   orderX = 0; orderY = 0;
