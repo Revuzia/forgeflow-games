@@ -4,8 +4,9 @@
 // composer's stable scene depth (the VFX pass runs after AO, whichever ping-pong buffer is current):
 // `vfxSoft(m)` gives soft-particle fades (depth difference / m) and hides fragments behind the scene.
 
-import { AddEquation, CustomBlending, OneFactor, OneMinusSrcAlphaFactor, type Texture, Vector2 } from 'three';
+import { AddEquation, CustomBlending, Matrix4, OneFactor, OneMinusSrcAlphaFactor, type Texture, Vector2 } from 'three';
 import { type UberKind, uberProgram } from '../uber.ts';
+import { LIFT_BODY_CAP, MAX_LIFTS, screenUniforms, VFX_LIFT_CAP } from './screen.ts';
 
 /** uniforms shared by reference by every VFX material (updated once per frame) */
 export const vfxUniforms = {
@@ -18,6 +19,16 @@ export const vfxUniforms = {
   uAtlas: { value: null as Texture | null },
   uNoise: { value: null as Texture | null },
   uGrid: { value: 8 },
+  // the ultimate envelope (screen.ts, post.ts ExposureEffect) as the VFX see it: vfxLift
+  uLiftA: screenUniforms.uLiftA,
+  uBreath: screenUniforms.uBreath,
+  uAspect: screenUniforms.uAspect,
+  /** 1 while any envelope lifts (system.ts draw) */
+  uLiftOn: { value: 0 },
+  /** the lift (× − 1) an effect takes at most (VfxSystem.liftCap − 1) */
+  uLiftCap: { value: VFX_LIFT_CAP - 1 },
+  uLiftInvProj: { value: new Matrix4() },
+  uLiftCamWorld: { value: new Matrix4() },
 };
 
 /** premultiplied "over" (additive when alpha is 0) */
@@ -41,6 +52,41 @@ float vfxSoft( float soft ) {
   float fd = vfxLin( gl_FragCoord.z );
   float diff = sd - fd;
   return soft > 0.001 ? clamp( diff / soft, 0.0, 1.0 ) : step( -0.03, diff );
+}
+uniform vec4 uLiftA[ ${MAX_LIFTS} ];
+uniform float uLiftOn;
+uniform float uLiftCap;
+uniform float uBreath;
+uniform float uAspect;
+uniform mat4 uLiftInvProj;
+uniform mat4 uLiftCamWorld;
+// combat F4 (W1 verify): the ultimate envelope (post.ts ExposureEffect) lifts the frame AFTER this pass: the ground
+// ×(1 + lift) in display, a body at most LIFT_BODY_CAP. An effect is no ground: an impact flare, a status look, a proc or
+// a pale frost decal in the light went ×(1 + lift)^2.2 linear and white over the struck unit. Every effect takes the
+// body's cap wherever it lands (light and ink alike; a chip, opaque stone, is lit like the ground): its colour is
+// divided here by what the envelope will add past the cap at this pixel (the same lift sum and the same ground test
+// from the scene depth as the envelope's). A light-only variant (ink lifted) left Rishal's frost track at 0.31 white
+float vfxLift() {
+  if ( uLiftOn < 0.5 ) return 1.0;
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float lift = 0.0;
+  for ( int i = 0; i < ${MAX_LIFTS}; i ++ ) {
+    vec4 q = uLiftA[ i ];
+    if ( q.w <= 0.0 ) continue;
+    vec2 d = ( uv - q.xy ) * vec2( uAspect, 1.0 );
+    float k = 1.0 - smoothstep( q.z * 0.55, q.z * 1.35, length( d ) );
+    lift += q.w * ( k + uBreath * ( 1.0 - k ) );
+  }
+  if ( lift <= uLiftCap ) return 1.0;
+  float post = lift;
+  if ( uHasDepth > 0.5 ) {
+    // over a body the envelope itself stops at LIFT_BODY_CAP
+    float z = texture2D( uDepth, uv ).r;
+    vec4 v = uLiftInvProj * vec4( vec3( uv, z ) * 2.0 - 1.0, 1.0 );
+    vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
+    post = mix( lift, min( lift, ${(LIFT_BODY_CAP - 1).toFixed(3)} ), smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 ) );
+  }
+  return pow( ( 1.0 + min( post, uLiftCap ) ) / ( 1.0 + post ), 2.2 );
 }
 `;
 
@@ -123,6 +169,7 @@ void main() {
     vec3 body = vCol.rgb * ( 0.5 + 0.5 * t.r );
     gl_FragColor = vec4( ( body * ( 1.0 - rim ) + vRim * rim ) * a, a * ( 1.0 - rim * 0.35 ) );
   }
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── ribbons (CPU-built camera-facing strips, one draw) ─────────────────────────────────────────
@@ -156,6 +203,7 @@ void main() {
     float rim = ( 1.0 - smoothstep( 0.0, 0.32, across ) ) * vRim.w * smoothstep( 0.0, 0.08, across );
     gl_FragColor = vec4( mix( vCol.rgb * ( 0.6 + 0.4 * n ), vRim.rgb, rim ) * a, a );
   }
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── beams (instanced noise-displaced strips) ───────────────────────────────────────────────────
@@ -204,6 +252,7 @@ void main() {
   vec3 rgb = vC.rgb * ( 0.55 + 0.6 * n ) + vC.rgb * core * vE.x;
   if ( vD.w < 0.5 ) gl_FragColor = vec4( rgb * a, 0.0 );
   else gl_FragColor = vec4( rgb * a, a );
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── shockwave rings (ground or camera-facing) ──────────────────────────────────────────────────
@@ -243,6 +292,7 @@ void main() {
   vec3 rgb = vCol.rgb * ( 0.7 + 0.5 * lead );
   if ( mode < 0.5 ) gl_FragColor = vec4( rgb * a, 0.0 );
   else gl_FragColor = vec4( rgb * a, a );
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── ground decals (animated styles) ────────────────────────────────────────────────────────────
@@ -325,6 +375,7 @@ void main() {
   }
   if ( a < 0.002 ) discard;
   gl_FragColor = vec4( rgb * a, addOnly > 0.5 ? 0.0 : a );
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── FX meshes (one material: fresnel rim, two scrolling noises, dissolve with a glowing edge,
@@ -420,6 +471,7 @@ void main() {
     rgb = vColor.rgb * ( 0.65 + 0.35 * nz ) * ( 1.0 - rim ) + vRim.rgb * rim + vEdge.rgb * edge;
     gl_FragColor = vec4( rgb * aa, aa * ( 1.0 - rim * 0.3 ) );
   }
+  gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
 }`;
 
 // ── distortion sprites (into the half-res distortion buffer, additive offsets in UV units) ───────

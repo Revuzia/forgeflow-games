@@ -30,6 +30,7 @@
 //           long the count stays ≥ 25 % of its peak.
 //
 //   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi]
+//                                         [--vfxcap off|1.3]   (renderer.vfx.liftCap: the most the envelope lifts an effect)
 //   → _harness/_reports/fw_W1_combat_polish[_tag].json, shots _harness/_shots/fw_W1_polish_*.png
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -56,6 +57,7 @@ try {
   await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
   const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
   await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, defs);
+  if (opt('vfxcap', '')) await B((b, c) => { b.renderer.vfx.liftCap = c === 'off' ? null : Number(c); }, opt('vfxcap', ''));
   report.players = await B(async (b, picks) => {
     const { LocalMatchHost } = await import('/src/session/match_host.ts');
     const { createBots } = await import('/src/sim/bots/index.ts');
@@ -239,6 +241,10 @@ try {
             out.core = +b.__circ(g, cx, cy, rad * 0.5, null).toFixed(1);
             out.coreGround = +b.__circ(g, cx, cy, rad * 0.5, a.vbox).toFixed(1);
             out.white = b.__body(a.pv, a.vbox, a.feetY);
+            // the VFX instances alive on the beat (def id: count), for the box measure's culprits
+            const live = {};
+            for (const it of b.renderer.vfx.insts) if (it.active) live[it.def.id] = (live[it.def.id] ?? 0) + 1;
+            out.live = live;
           }
           return out;
         }, { ...st, vbox, feetY: geo.v.gy - 6 }));
@@ -257,7 +263,7 @@ try {
         def, caster: [Math.round(geo.c.gx), Math.round(geo.c.gy)], victim: [Math.round(geo.v.gx), Math.round(geo.v.gy)], firstCtr: first?.ctr ?? null,
         ctrToCaster: dC && Math.round(dC), ctrToVictim: dV && Math.round(dV), baseWhite: base, baseCore,
         beats: beats.map((r) => ({ f: r.f, w: r.w, bodyPx: r.white.n, bodyWhiteBase: r.white.baseWhite, bodyWhiteLift: r.white.liftWhite, bodyWhiteFlash: r.white.flashWhite, bodyWhiteFull: r.white.fullWhite, boxWhite: r.white.boxWhite.white,
-          boxWhiteNoVfx: r.white.boxNoVfx.white,
+          boxWhiteNoVfx: r.white.boxNoVfx.white, live: r.live,
           core: r.core, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
       };
       res.maxWhite = beats.length ? Math.max(...res.beats.map((r) => r.bodyWhiteLift)) : null;

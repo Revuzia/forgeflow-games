@@ -43,7 +43,7 @@ import {
   SMAAPreset, ToneMappingEffect, ToneMappingMode, VignetteEffect,
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
-import { MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
+import { LIFT_BODY_CAP, MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
 import { setFogGrade } from './world_material.ts';
 
 export interface PostQuality {
@@ -71,9 +71,8 @@ class OverlayPass extends Pass {
   }
 }
 
-/** combat F4: the envelope's cap on pixels that stand above the ground (display ratio: units keep their silhouette;
- *  LoL's own hit flash on a champion is 1–2 frames, VALE's light pours onto the ground around the body) */
-export const LIFT_BODY_CAP = 1.3;
+/** combat F4: the envelope's cap on pixels that stand above the ground (vfx/screen.ts; the VFX light takes it too) */
+export { LIFT_BODY_CAP };
 /** the stable scene depth (the overlay pass's, forwarded) and the camera's matrices the envelope rebuilds height with */
 const liftDepth = {
   uLiftDepth: new Uniform<Texture | null>(null),

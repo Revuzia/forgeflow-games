@@ -28,6 +28,12 @@
 import { type Camera, type Texture, Uniform, Vector3, Vector4 } from 'three';
 
 export const MAX_LIFTS = 4;
+/** combat F4: the envelope's cap on pixels that stand above the ground (display ratio: units keep their silhouette;
+ *  LoL's own hit flash on a champion is 1–2 frames, VALE's light pours onto the ground around the body). The VFX light
+ *  takes the same cap wherever it lands (shaders.ts vfxLift): the envelope lifts the ground, never an effect's own light */
+export const LIFT_BODY_CAP = 1.3;
+/** the cap the VFX take (shaders.ts vfxLift; VfxSystem.liftCap is the live value, a harness seam) */
+export const VFX_LIFT_CAP = LIFT_BODY_CAP;
 
 /** uniforms shared by reference with the post chain's effects (post.ts) */
 export const screenUniforms = {

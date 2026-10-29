@@ -50,7 +50,7 @@ import {
 import {
   PREMUL, VFX_KIND, VFX_KINDS, VFX_PROGRAM, vfxUniforms,
 } from './shaders.ts';
-import { screenFx, screenUniforms } from './screen.ts';
+import { screenFx, screenUniforms, VFX_LIFT_CAP } from './screen.ts';
 import { buildShape, SHAPE_KIND, VFX_SHAPES } from './shapes.ts';
 
 export type VfxAnchor = 'origin' | 'target' | 'path' | 'ground';
@@ -270,6 +270,9 @@ export class VfxSystem {
   /** the VFX draws (rendered by the post chain's VFX pass) */
   readonly scene = new Scene();
   readonly textures = new VfxTextures();
+  /** combat F4: the most an ultimate envelope lifts an effect (display ×; screen.ts VFX_LIFT_CAP); null = the envelope
+   *  lifts effects like the ground (the pre-F4 look; a harness seam: probe_combat_polish / value_probe --vfxcap) */
+  liftCap: number | null = VFX_LIFT_CAP;
   budget = 4000;
   density = 1;
   onFeel: ((e: FeelEvent) => void) | null = null;
@@ -1372,6 +1375,13 @@ export class VfxSystem {
     else renderer.getDrawingBufferSize(vfxUniforms.uRes.value);
     vfxUniforms.uNear.value = cam.near;
     vfxUniforms.uFar.value = cam.far;
+    // combat F4: the envelope as the shaders' vfxLift reads it (the same camera the post chain rebuilds height with)
+    vfxUniforms.uLiftOn.value = this.liftCap !== null && screenUniforms.uLiftA.value.some((q) => q.w > 0) ? 1 : 0;
+    vfxUniforms.uLiftCap.value = (this.liftCap ?? VFX_LIFT_CAP) - 1;
+    if (vfxUniforms.uLiftOn.value) {
+      vfxUniforms.uLiftInvProj.value.copy(cam.projectionMatrixInverse);
+      vfxUniforms.uLiftCamWorld.value.copy(cam.matrixWorld);
+    }
     const prevAuto = renderer.autoClear;
     renderer.autoClear = false;
     renderer.setRenderTarget(target);

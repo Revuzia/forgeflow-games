@@ -49,6 +49,8 @@
 //              band: LoL's bases stay tinted), and the base structures' L* p95 (<= 80: structure chalk sits under the
 //              fighters, r12 B5) and display luma p95 against the fighters' (verdict base_<n>_plaza / base_<n>_structure)
 //
+//   --vfxcaps the flash test again per VFX lift cap (e.g. off,1.3,1.6: renderer.vfx.liftCap, combat F4; off = effects
+//             lifted like the ground), reported as flash.byCap
 //   --you     pins seat 0's fighter (the bench's `you=`): measure a fighter the map's default seat roster leaves out
 //             (e.g. FRAY has no Burdam); other seats keep the default roster
 //   --fshots  1 also screenshots each fighter spot (value_<map>_<tier>_<tag>_f_<fighter>.png)
@@ -77,6 +79,8 @@ const YOU = opt('you', '');
 const FSHOTS = opt('fshots', '0') === '1';
 const FOG = opt('fog', '0');
 const FOG_ONLY = FOG === 'only';
+/** combat F4: the flash test once per VFX lift cap (renderer.vfx.liftCap; 'off' = effects lifted like the ground) */
+const VFX_CAPS = opt('vfxcaps', '').split(',').filter(Boolean).map((c) => (c === 'off' ? null : Number(c)));
 /** env F3: the unseen / lit display ratio band (tokens grade.fogOfWar.valueMul 0.55) */
 const FOG_BAND = [0.5, 0.6];
 const RES = { high: [1920, 1080], low: [1280, 720], medium: [1920, 1080], ultra: [1920, 1080] };
@@ -683,6 +687,20 @@ for (const map of MAPS) for (const tier of TIERS) {
     }
     let flash = null;
     if (FLASH) flash = await V((v) => v.flash('marund_domefall', 'marund_ult_domefall', 3.5));
+    if (FLASH && VFX_CAPS.length) {
+      flash.byCap = {};
+      for (const cap of VFX_CAPS) {
+        // a fresh landing: the director's once-per-cast beat bookkeeping forgets the last one (else no envelope)
+        const f = await page.evaluate(([c]) => {
+          const R = window.__VALE_BENCH__.renderer, D = R.director, keep = R.vfx.liftCap;
+          for (const k of ['beats', 'lastPulse', 'pulseQ', 'castAt']) D[k]?.clear?.();
+          R.vfx.liftCap = c;
+          try { return window.__VP__.flash('marund_domefall', 'marund_ult_domefall', 3.5); } finally { R.vfx.liftCap = keep; }
+        }, [cap]);
+        flash.byCap[cap === null ? 'off' : String(cap)] = f ? { base: f.base, peak: f.peak, ratio: f.ratio } : null;
+      }
+      console.log(`  flash by VFX lift cap: ${Object.entries(flash.byCap).map(([k, f]) => `${k} ${f?.ratio}x (${f?.base} -> ${f?.peak})`).join(' · ')}`);
+    }
     const s = summarise(res, C, fres);
     const bases = summariseBases(bres, C, s.fighters);
     const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, verdict: { ...verdict(s, flash, map), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
