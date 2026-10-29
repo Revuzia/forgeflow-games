@@ -1,4 +1,4 @@
-# GENESIS — status after phase 2 (integration)
+# GENESIS — status (2026-10-29: after the living-world, presentation and drought programs)
 
 Phase 1 built the deterministic sim core and the render foundation (kept below as a reference). Phase 2 adds the
 peoples, recipes, societies and ecology to the sim and draws them live in the browser: people walk, settle, build,
@@ -6,7 +6,64 @@ farm, keep fire, discover, forget, trade, fight, split and fall; herds graze, fl
 it all with procedural bodies, buildings, roads, crops, night lights, fire, toasts and an inspector.
 **Not built yet (phases 3–5):** the god hand and creature, command palette / radial / freeform field / chronicle panel,
 audio, the opening, ships between worlds, saves and settings UI, README / CONTROLS.
-*(That line is phase 2's; phases 3–5 have since been built. The sim's current status is the section below.)*
+*(That paragraph is phase 2's, kept as history: phases 3–5 have since been built, and the creature was dropped by the owner's decision (LIVING §0: prophets and signs instead). **The current state is "Where it stands" below**; the sections after it are the record, newest program first, phases 2 and 1 at the end.)*
+
+
+## Where it stands (2026-10-29)
+
+**Release checks** (the reconciler, 2026-10-29 22:45–22:55Z; `_harness/scratch/continue/final-reports/punch.json`):
+`npm run check` **green** — detban 146 sim files clean, tsc clean, **599 / 599** tests pass, 0 skipped
+(`_harness/scratch/reconcile/check.log`); `npm run build` OK (dist 9.5 MB, 49 assets: index 2.96 MB / 923 kB gzipped, 15
+scripts with the sim worker and the DSP worker, 21 .ogg, 12 fonts); `node _harness/cdn.mjs` **PASS** (2 loads ready, 0
+missing, 0 console errors, HTML no-store + COEP credentialless, 18 / 18 hashed assets immutable); the deploy rehearsal
+`python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis --dry-run` OK (53 files, `index.html` then
+`game_meta.json` last). The real deploy needs the Cloudflare credentials, which this container does not hold. The punch
+program's first full gate on the tree it is fixing (23:15–23:44Z, `_harness/scratch/punch/check-s1.log`) is green too:
+detban 146 clean, tsc clean, **605 / 605**.
+
+**The three programs that just finished:**
+- **Living world** (the sim; `_spec/LIVING.md` §0 the owner's decisions, §10 the integration, §11–§13 four fix rounds).
+  The round-4 acceptance (8 seeds; installed as `_harness/scratch/living/acceptance.json` at 2026-10-29 11:13Z; LIVING
+  §13.7): **38 met / 16 partly / 13 missed** (round 3: 36 / 13 / 16). 77 of its 81 rows were measured on the round-4
+  tree; 4 are copies from the r6 tree of 2026-10-27, listed with what re-measures them in LIVING §13.7 "Provenance" (the
+  table's own `provenance` block is out of date; that note supersedes it). The one missed copy, lightning fires without
+  people, was re-measured on the current tree on 2026-10-29: byte-identical to r6, so it stands. Missed: kills where
+  game exists (median 2.3 per 100 people a year, ≥ 20 asked) and the hunted share of food (0.03, 0.15–0.35); housing at
+  every year end (0 of 8 seeds; outside disaster years 2 of 8 by world sums, 5 of 8 judged per live town; ≥ 7 asked);
+  growth over years 5–30 (0.33 %/yr, 1.5–3) and the under-15 share (0.46, 0.35–0.45); the year-1 food slice; item kinds
+  gathered at year 8 (9, ≥ 10); fire-keeping known without the god (median year 4.04, ≤ 4); the default meteor on a town
+  (buildings standing after the blow: 61 % mean but 35 % at worst on the fresh towns, 40 % on the year-50 towns; ≥ 60 %
+  on every seed asked); the year-50 prophet's credibility (0.56–0.77, ≥ 0.7); lightning fires in years 1–2 (0.13 a
+  world-year, 2–12 asked; 4.9 from year 4 once the world has dried, LIVING §10.5). `src/data/creatures.json` is deleted
+  (nothing imported it): there is no creature anywhere — the god acts through prophets, signs and the Touch.
+- **Presentation** (art, VFX, UI, music; `final-reports/presentation.json`): five lanes — the UI (the front door with
+  its six doors, settings, credits and licences, the 888×500 portal frame; `continue/ui-report.json`), the Touch, sigils
+  and signs, the world art (terrain, sky, sea, clouds), the life on it (villagers, trees and crops, buildings, temples
+  restyled around the game's own sky-ring sign with no real-religion forms, boats, herds) and the music and sound (the
+  authored score: **the owner heard the previews and approved it**, "music sounds great"; only technical faults may be
+  touched). Four critic rounds on screenshots (53, 24, 33 and 25 confirmed findings); round 4's fixes landed (the feared
+  Touch no longer a black void, crown-fade trunks, the painted storm, eclipse, red rain, readable people, the ignition
+  level, the opening ring under windows). 21 sim-side findings the art team confirmed but could not fix are in its
+  `simFindings` and carried into the punch list.
+- **Drought** (`final-reports/drought.json`; LIVING §2.7): design X, "walk to the water you can reach" — one
+  deterministic walking-reach module (cliffs and deep water stop a walker, a carried boat crosses), each person's
+  drinking on it, a band carrying its food when it leaves. Landed 2026-10-28 21:08Z and verified: the year-45 band's
+  thirst and starvation deaths 14 → 0, the raftless island's 29 → 1, a held dust bowl over seeds 1–32 381 → 140 (thirst
+  and cold); its tests fail on the old code and pass on the new; determinism, detban and old saves clean; the gate went
+  green with it in (578 / 578, `living/fix3/check/check-r3b.log`). Open: perf F2 (a dried-out 1 500-agent world runs
+  21–32 % slower at 1000x / 3000x; to be judged against the speed-preset floors) and a band that treats any water its
+  leader sees as camp water (`settlement.ts` ~490).
+
+**Open now** (`punch.json`, 32 items ranked; the live list): critical — the "Invent an animal" power's text promises
+fantasy beasts (P01) and hunting where game exists (P02); major — the volcano's white glare at night (P03), the harbour
+pier and its boat on dry grass (P04), the Touch's idle column across the god view (P05), the first rain on the barren
+world (P06), the meteor impact washed out at the regional view (P07), the tsunami's draw-back unseen (P08), "Tidal wave"
+draws no wall of water (P09), the Cinder title backdrop at Low quality (P10), villagers short of shelter (P11), growth
+unlike real history (P12), little farmland in late-era cities (P13), the speed presets not re-measured after the
+living-world and drought work (P14); and 18 minors (P15–P32). Closed since by the docs fixer: P29 (this section, the
+round-4 paragraph below and LIVING §13.7's provenance note) and P31 (the cover `public/thumbnail.png` is now a 454 kB
+256-colour PNG at 1280×720, from 1.4 MB, PSNR 36 dB against the original; it keeps the name the deploy and the portal
+expect, and `dist/` picks it up at the next `npm run build`).
 
 ## Sim — the living world (integrated 2026-10-21; `_spec/LIVING.md` is the binding spec, §10 the integration)
 
@@ -80,7 +137,7 @@ after the 50-year re-run showed 30–60 % fewer births and hunters killed by pre
 ≥ 8 %); throughput at 1 500 agents (302 / 414 / 478 CPU ticks/s at L0 / L1 / L2 against 450 / 800 / 1 200); open
 grassland 1.1–2.4 % (≥ 3 %) and tree-mix drift 0.61–0.68 (≤ 0.15); the late eras (one seed: medieval at year 92, in band;
 gunpowder → orbit and the second seed not measured); the fresh-town meteor on seed 1 (10 of 20 standing, 12 on the r6
-tree). `src/data/creatures.json` is imported nowhere; deleting it is the DOCS lane's (hook H6 unchanged). The final
+tree). `src/data/creatures.json` is imported nowhere; deleting it is the DOCS lane's (hook H6 unchanged; deleted 2026-10-29). The final
 8-seed acceptance re-run and `npm run check` were launched at 08:57 UTC (`fix/acc2/finish.sh` installs the new table into
 `_harness/scratch/living/acceptance.json` and writes `fix/acc2/FINAL.done`); until then the counts above are the r6 tree's.
 UI hooks from this round (sim side done, nothing new required): new chronicle lines `bud` and `revolt.renounced`; relStats
@@ -99,7 +156,7 @@ metal; disaster refugees "left their ruined homes"; "touch Hesh", "abandon Hesh"
 flood", "red rain on Aru" and "Which sigil?"; hunters no longer stand at the shore re-planning; trust tapers (7
 answered prayers in 8 days: 0.88, was 0.93); children's chores cost 3 % less at L1 (identical state). **Open:** hunting
 where game exists (re-tune gated on an 8-seed run), everyday prayer, throughput at 1 500 agents, ecology, late eras,
-`creatures.json` (lead / DOCS). The 8-seed acceptance re-run on this tree (`fix2/acc/`, rows from r6 marked "[r6 tree,
+`creatures.json` (lead / DOCS; deleted 2026-10-29). The 8-seed acceptance re-run on this tree (`fix2/acc/`, rows from r6 marked "[r6 tree,
 not re-measured]") installs `_harness/scratch/living/acceptance.json` when it ends (`fix2/acc/FINISHED`); the gate is
 `fix2/check/check-r2.log`. UI hooks: powers query `minWrath` on gated disasters; the "Touch … how?" ask.
 
@@ -118,7 +175,7 @@ dead share of every Disasters power (round-2 table) but the default meteor leave
 on 3 of 8 seeds (10/20, 11/20, 11/21) and the evacuation reaches 0–10 % beyond the danger radius — listed, not
 calibrated. **Open:** hunting where game exists (unmet against the owner's default: the re-tune is built behind
 `HUNT_TUNE`, off, its 8-seed gate `fix3/hv/` queued), everyday prayer, the drought exodus (drought lane), a herder
-walking a flock through the sea, throughput, `creatures.json` (lead / DOCS). The 8-seed acceptance re-run on this tree
+walking a flock through the sea, throughput, `creatures.json` (lead / DOCS; deleted 2026-10-29). The 8-seed acceptance re-run on this tree
 (`fix3/acc/`) was installed as `_harness/scratch/living/acceptance.json` at 03:44 on 2026-10-29: **36 met, 13 partly,
 16 missed** (round 2: 37 / 13 / 14) — of the 36 met, **25 were measured on this tree and 11 are copies** (10 from r6,
 1 from round 2; marked). Four rows moved for the worse since round 2: §2.8 growth over years 5–30 met → **missed**
@@ -143,9 +200,10 @@ rules have direct tests (each fails when its rule is removed). §2.5 housing jud
 round 3 3 / 8 seeds housed every calm year end (the world sums said 7, 3, 0). The seed-3 firestorm is 8 / 30 dead on the
 round-4 tree (10 / 30 on round 3; every death in the first hour, in the front's spawn disc). **Open:** hunting where game
 exists — both re-tunes failed their pooled 8-seed gate on injuries per trip and neither got past 4.8 kills per 100 people
-a year (≥ 20 asked; `HUNT_TUNE` stays off; LIVING §13.6); the round-4 acceptance re-run (`fix4/acc/`, launched 07:19
-2026-10-29, installs `acceptance.json` and appends LIVING §13.7 when it ends); `creatures.json` (the lead deletes it:
-nothing imports it). **Gate green** on the round-4 tree (`fix4/check/check-r4.log` "EXIT 0 07:35" 2026-10-29: 591 / 591
+a year (≥ 20 asked; `HUNT_TUNE` stays off; LIVING §13.6). **Done since:** the round-4 acceptance re-run (`fix4/acc/`,
+launched 07:19 2026-10-29) finished and was installed as `acceptance.json` at 11:13Z — **38 met / 16 partly / 13 missed**
+(round 3: 36 / 13 / 16), 77 rows measured on this tree and 4 copied from r6 (LIVING §13.7, its "Provenance" note; the
+summary is under "Where it stands" above); `src/data/creatures.json` is deleted (nothing imported it). **Gate green** on the round-4 tree (`fix4/check/check-r4.log` "EXIT 0 07:35" 2026-10-29: 591 / 591
 pass, 0 skipped, detban and tsc clean). UI hooks unchanged (no new Command kind or Snapshot field this round).
 
 ## How to run

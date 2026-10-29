@@ -26,6 +26,9 @@ import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 
 /** particle systems (vertex shader branches). 0–19 and 40–59: the lit pass; 20–39: the emissive pass */
+/** the display luminance additive emission (sparks, embers, lava, flashes) rolls off toward (punch P03) */
+export const EMIT_CAP = 3;
+
 export const SYS = {
   dust: 0, plume: 1, ash: 2, pyro: 3, steam: 4, spray: 5, skirt: 6, miasma: 7, smoke: 8, sand: 9, fog: 10, swarm: 11,
   rainCol: 12, cloud: 13, leaves: 14, bounty: 15, precip: 16, splash: 17, trail: 18, snowfall: 19,
@@ -736,6 +739,7 @@ ${NOISE_GLSL}
 ${FX_DEPTH_GLSL}
 uniform float uPass;
 uniform vec2 uSunS;
+uniform float uEmitCap;
 varying vec2 vCorner;
 varying vec4 vColor;
 varying float vViewZ;
@@ -748,6 +752,15 @@ varying float vSeed;
 varying vec3 vAirT;
 varying vec3 vAirIn;
 varying vec3 vSkyL;
+// emission rolls off softly toward uEmitCap in display terms (0 = off): at the night's exposure a volcano's lava
+// bombs and embers (14-18x physical) came out hundreds of times display white, and the bloom spread them into a
+// white glare disc over the whole frame (punch P03; gone with the additive particles hidden). By day, and for anything
+// already within the display's range, nothing changes.
+vec3 emitCap(vec3 c) {
+  if (uEmitCap <= 0.0) return c;
+  float L = dot(c, vec3(0.2126, 0.7152, 0.0722)) * fxExposure();
+  return c / (1.0 + L / uEmitCap);
+}
 void main() {
 #include <logdepthbuf_fragment>
   if (vColor.a <= 0.0) discard;
@@ -837,19 +850,19 @@ void main() {
     // an emissive streak: hottest at its head
     float core = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * smoothstep(-1.0, 0.6, vCorner.y) * (1.0 - smoothstep(0.85, 1.0, vCorner.y));
     float a = vColor.a * core * fade;
-    gl_FragColor = vec4(vColor.rgb * vAirT * a * fxDisplay(0.35), 0.0);
+    gl_FragColor = vec4(emitCap(vColor.rgb * vAirT * a * fxDisplay(0.35)), 0.0);
   } else if (vKind > 1.5 && vKind < 2.5) {
     // an emissive blob
     if (r > 1.0) discard;
     float k = pow(1.0 - r, 1.8);
     float a = vColor.a * k * fade;
-    gl_FragColor = vec4(vColor.rgb * vAirT * a * fxDisplay(0.35), 0.0);
+    gl_FragColor = vec4(emitCap(vColor.rgb * vAirT * a * fxDisplay(0.35)), 0.0);
   } else {
     // a flash: a soft sphere of light falling off like a glow, windowed to nothing at the sprite's edge
     if (r > 1.0) discard;
     float win = (1.0 - r * r) * (1.0 - r * r);
     float k = (exp(-r * r * 9.0) * 1.6 + 0.3 * exp(-r * r * 2.5)) * win;
-    gl_FragColor = vec4(vColor.rgb * vAirT * k * vColor.a * fade * fxDisplay(0.2), 0.0);
+    gl_FragColor = vec4(emitCap(vColor.rgb * vAirT * k * vColor.a * fade * fxDisplay(0.2)), 0.0);
   }
 }
 `;
@@ -908,6 +921,8 @@ export class Vfx {
     this.uniforms = {
       tEmit: { value: this.emitTex }, tBlocks: { value: this.blockTex }, uInvProj: { value: new Matrix4() },
       uViewToBody: { value: null }, uSunS: { value: new Float32Array([0, 1]) },
+      // (display-referred ceiling on additive emission: see emitCap in FRAG)
+      uEmitCap: { value: EMIT_CAP },
     };
     const mk = (pass: number) => {
       const u: Record<string, IUniform> = { ...this.uniforms, uPass: { value: pass } };

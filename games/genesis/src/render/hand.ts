@@ -900,6 +900,8 @@ export class HandVisual {
   private cradleH = 1;
   private crackles: Crackle[] = [];
   private placedTop = false;
+  /** how far an idle shaft is thinned for a god's camera low over the ground (0 whole .. 1 a thread; punch P05) */
+  private lowGod = 0;
   private gustSent = false;
   private flashSlot = -1;
   /** the CPU twin of the vortex's uniforms (gen/handgen.ts mantlePoint): arcs and the shadow are placed with it */
@@ -1228,7 +1230,15 @@ export class HandVisual {
     const cAx = (cb.x * this.pos.x + cb.y * this.pos.y + cb.z * this.pos.z) / pl;
     const camH = Math.sqrt(Math.max(0, cb.lengthSq() - cAx * cAx));
     const nearEye = eyeCam * (1 - smooth(60, 200, altCam)) * (1 - smooth(5 * L, 14 * L, camH)) * (1 - 0.6 * Math.max(grasp, W.point));
-    this.u.uColK.value = 1 - 0.97 * nearEye;
+    // (a god's camera low over a town — tens of metres up, looking down across it — sees the idle shaft climb past it
+    // to the deck: from 60 m it crossed the whole village as a slanting white ribbon (punch P05; gone with the Touch
+    // hidden). There, idle, the shaft thins to a thread and its wind-streaks with it — the pool of its light at its
+    // foot, its motes and its low whirl say where it is; holding, pointing, soothing, a rebuke or a cast keep it whole,
+    // and from a few hundred metres up, where the shaft no longer climbs past the eye, it is whole again.)
+    const busy = Math.max(grasp, W.point, W.soothe, rk, ck);
+    const lowGod = (1 - eyeCam) * (1 - smooth(90, 260, altCam)) * (1 - busy);
+    this.lowGod = lowGod;
+    this.u.uColK.value = Math.max(0.03, 1 - 0.97 * nearEye - 0.8 * lowGod);
     const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.2 * trusted * (1 - grasp)) * (1 - 0.55 * farK) * (1 - 0.5 * nearEye);
     this.u.uWTop.value = Math.max(L * 1.1, topH * 0.06) * (1 + 0.4 * W.soothe - 0.35 * W.point) * wk;
     this.u.uWGrip.value = L * (0.3 - 0.1 * grasp - 0.17 * W.point + 0.2 * W.soothe + 0.25 * rk) * wk;
@@ -1244,7 +1254,7 @@ export class HandVisual {
     // where the Touch is
     const orbK = smooth(R * 0.35, R * 0.6, altCam);
     this.u.uBeamK.value *= 1 - orbK;
-    this.u.uStreakK.value *= 1 - orbK;
+    this.u.uStreakK.value *= (1 - orbK) * (1 - 0.75 * this.lowGod);
     this.column.visible = orbK < 0.98;
     this.streaks.visible = orbK < 0.98;
     // the pendulum: pushed by its forward acceleration, damped

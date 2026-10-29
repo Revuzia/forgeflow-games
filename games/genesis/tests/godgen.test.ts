@@ -255,6 +255,30 @@ test('the Touch appears where it is called and goes when nothing calls it', () =
   assert.ok(!h.visible, 'not from space');
 });
 
+test('a god\'s camera low over a town: the idle shaft thins to a thread, busy it stays whole (punch P05)', () => {
+  // (from 60 m over a village the idle shaft climbed past the camera to the deck and crossed the whole frame as a
+  // slanting white ribbon — gone with the Touch hidden, run6 fr4k-village-notouch)
+  const S = touchStage();
+  const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
+  const idle = new HandVisual();
+  S.run(idle, 60, () => ({ cursor }));
+  const U = inner(idle).u;
+  assert.ok(idle.visible && idle.presence > 0.9, 'it is there, under the cursor');
+  assert.ok(U.uColK.value <= 0.35, `idle, low: the shaft is a thread (uColK ${U.uColK.value.toFixed(2)})`);
+  assert.ok(U.uStreakK.value <= 0.15, `and its wind-streaks with it (uStreakK ${U.uStreakK.value.toFixed(2)})`);
+  assert.ok(U.uGroundK.value > 0.1, 'the pool of its light at the foot still says where it is');
+  // pointing (a power aimed), or holding: whole
+  const busy = new HandVisual();
+  S.run(busy, 60, () => ({ cursor, uiPose: 'tool' }));
+  assert.ok(inner(busy).u.uColK.value > 0.9, `pointing: whole (${inner(busy).u.uColK.value.toFixed(2)})`);
+  // from the god's height (600 m up) the idle shaft is whole: it no longer climbs past the camera
+  const high = new HandVisual();
+  const camHigh = S.u.clone().multiplyScalar(S.R + 600).addScaledVector(S.e, 200);
+  S.run(high, 60, () => ({ cursor, camBody: camHigh, camFwd: S.u.clone().multiplyScalar(S.R).sub(camHigh).normalize() }));
+  assert.ok(inner(high).u.uColK.value > 0.95, `from 600 m: whole (${inner(high).u.uColK.value.toFixed(2)})`);
+  idle.dispose(); busy.dispose(); high.dispose();
+});
+
 test('the Touch lifts a person into its cradle and lets them go', () => {
   const S = touchStage();
   const h = new HandVisual();

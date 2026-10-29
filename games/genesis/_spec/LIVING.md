@@ -404,7 +404,7 @@ town that knows raft-making lashes a raft (4 wood, 2 cordage) when no lasting wa
 and roam bearings lie within walking reach. Boat casks serve only afloat. Measured: the year-45 save of seed 1 (deaths
 Y45→Y48, band period) 9 thirst + 4 starvation, 31 alive → 0 + 0, 51 alive; the same with the raft taken away 27 + 2 → 3 + 0;
 a held 1.5 km dust bowl on a 30-person village, seeds 1–16: 208 → 87 thirst deaths (one trapped-islet seed 17 → 19, chance
-by village size); seed 7's natural drought 0 / 0. Test: `tests/drought-band.test.ts`.
+by village size — *not shown: see the round-3 correction under Round 2 below*); seed 7's natural drought 0 / 0. Test: `tests/drought-band.test.ts`.
 
 **Round 2 (2026-10-28, after review; the numbers above came from an older base snapshot).** All before-numbers below come
 from a base made from the current tree with only the drought hunks reversed. These changes were made:
@@ -2867,3 +2867,38 @@ Extras (`fix4/acc/extras-r4.log`):
 - CHECKS {"births":true,"deaths":true,"killsUp":true,"injPerTripNotUp":true,"huntDeathsNotUp":true} VERDICT PASS
 - births 3% deaths -7% kills/100py 3.28 -> 2.79 livestock lost 1383 -> 1311 inj/trip 0.066 -> 0.065
 - CHECKS {"births":true,"deaths":true,"killsUp":false,"injPerTripNotUp":true,"huntDeathsNotUp":true} VERDICT FAIL
+
+**Reading the extras above.** The two PER-TOWN / WORLD-SUM pairs are round 4 first, then round 3 (the same `housing.cjs`
+on `fix3/acc/out`). The two `births … CHECKS` pairs compare the round-4 worlds with the round-3 worlds on the same 8 seeds
+(`fix4/hv/pool.cjs`), pooled over the first **25** years (PASS) and then over all **50** (FAIL only on `killsUp`: 3.28 → 2.79
+kills per 100 people a year); they are a no-regression check on this tree, not a hunting re-tune (`HUNT_TUNE` stays off).
+
+**Provenance of the round-4 table** (docs, 2026-10-29; supersedes the `provenance` and `how` blocks inside
+`acceptance.json`, which `fix4/acc/summarize-r4.ts` carried over from round 3 without updating them). Each row's own `tree`
+field is right: of the 81 rows (67 judged, the rest report-only), **77 say "fix r4 final tree (2026-10-29)"** and **4 say
+"r6 (2026-10-27, before fix rounds 1-4): not re-measured"**. Measured on the round-4 tree, all under `_harness/scratch/living/`:
+the worlds left alone (8 seeds × 50 years, `fix4/acc/out/alone-live-*.json`), the god sessions (8 seeds,
+`fix4/acc/out/god-*.json`), the year-50 god sessions on the round-4 year-50 worlds (`fix4/acc/out/god50-*.json`), every
+Disasters power at the default wrath (`fix4/leth/`), the god's drought on the 8 year-50 worlds (`fix4/d50/`), the kin
+fixture and its control (tags **r4 / r4c**, 8 seeds each, `history/out/`) and the PACE daily probe
+(`fix4/acc/out/daily-r4.log`). So in the JSON block: `reRun`'s "kin fixture r3 / r3c" means r4 / r4c; `fromR2` (every
+Disasters power, `fix2/leth`) is superseded by `fix4/leth`; `fromR6` overstates — "god sessions on year-50 towns" and
+"PACE daily probe" were re-run, "fire without people", "speciation", "the god's plague" and "LAND round-5 census" were not;
+`script` is `fix4/acc/summarize-r4.ts`; in `how`, read `fix4/acc/out/` for `r6/out/` and `fix3/acc/out/`, and the
+kin tags r4 / r4c for i6 / i6c. The four rows copied from the r6 tree and what would re-measure each:
+
+| row | r6 verdict | re-measure (from `_harness/scratch/living/`) |
+|---|---|---|
+| §1.4 lightning-started fires a world-year without people (4 seeds × 2 years) | **missed**: 0.13 a world-year in years 1–2 (2–12 asked); 4.9 in years 4–6 (§10.5) | `cd pace/live && node --import ./register.mjs pace.ts fire 20261008,7,1234,1 6` |
+| §4.5 speciation without people, 30 years | met (0.15 new kinds a world-year, first at year 8, forms of real kinds only) | `cd content/r2 && node spec.ts <seed> 30`, seeds 1, 7, 1234, 20261008 |
+| §3.7 the god's plague at the default wrath (30 bronze folk, 4 seeds) | met (20 % of the 30 dead by day 10, ≤ 25 %) | `cd relationship && REL_ONLY=plague node rel2.ts lethality 20261008,7,1234,1` |
+| §2.14 LAND round-5 census (8 seeds × 8 years) | report only (a before → after record of LAND's round 5; not judged) | historical; not re-run (`land/r5/chain-live.sh`) |
+
+**Re-measured since (docs, 2026-10-29 23:39–23:47Z):** the §1.4 lightning-fire row on the current tree (after fix rounds 1–4
+and the drought program), the same command as r6 (`pace.ts fire 20261008,7,1234,1 6`, through `slot.sh`; log
+`_harness/scratch/docs-punch/fire-r4tree.log`): every per-seed, per-year row is **byte-identical** to r6's
+`integrate/r6/out/fire-integ6.log` — years 1–2 **0.13** a world-year (1 fire in 8 world-years: seed 1, year 2), year 3
+0.25, years 4–6 **4.92** (59 fires in 12 world-years, 97 % in the dry half), the land burnt at most 2.3 % a year in
+years 1–2 and 8.5 % once in years 4–6. The world without people is untouched by the four fix rounds, so the r6 row and
+its miss stand as measured (cause and why it was left: §10.5). The other three copies (speciation, the god's plague,
+LAND's census) are still r6's.
