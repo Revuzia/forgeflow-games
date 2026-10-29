@@ -75,19 +75,25 @@ section('streaks, shutdown, multikill', () => {
   check('streak 8: bonus min(300, 350) = 300, paid shutdown min(250, 300) → bounty 550', p0.bounty === 550 && killValue(w, p0) === 550, p0.bounty);
 });
 
-section('execution (no credited killer): assisters still paid', () => {
+section('a tower, monster or Wick lands the last blow: the top-damage enemy fighter is credited; executed only with no fighter (g1)', () => {
   const sim = mk();
   const w = sim.world;
   place(w);
   const tower = spawnUnit(w, 'fx_lane_tower', 1, 70, 18);
-  const g1 = w.players[1].gold, g2 = w.players[2].gold;
+  const g = w.players.map((p) => p.gold);
   dealDamage(w, F(w, 1), F(w, 5), 10, 'true');
-  const ev = capture(w, () => { dealDamage(w, F(w, 2), F(w, 5), 10, 'true'); dealDamage(w, tower, F(w, 0), 1e7, 'true'); });
-  void ev;
-  const ev2 = capture(w, () => dealDamage(w, tower, F(w, 5), 1e7, 'true')); // own-team tower: no credit
-  const td = ofType(ev2, 'takedown')[0];
-  check('takedown with killer −1', td && td.killer === -1 && td.assists.join() === '1,2', td);
-  check('assisters split 150', near(w.players[1].gold - g1, 75) && near(w.players[2].gold - g2, 75), [w.players[1].gold - g1, w.players[2].gold - g2]);
+  dealDamage(w, F(w, 2), F(w, 5), 25, 'true');
+  const ev = capture(w, () => dealDamage(w, tower, F(w, 5), 1e7, 'true')); // own-team tower lands the blow
+  const td = ofType(ev, 'takedown')[0];
+  check('takedown credits the top-damage enemy (P2 25 > P1 10), P1 assists, first blood', td && td.killer === 2 && td.assists.join() === '1' && td.first && td.streak === 1, td);
+  check('P2 is paid the kill (300), P1 the whole assist share (150)', near(w.players[2].gold - g[2], 300) && near(w.players[1].gold - g[1], 150), [w.players[2].gold - g[2], w.players[1].gold - g[1]]);
+  check("announce 'first_blood' for the credited fighter", ofType(ev, 'announce').some((a) => a.key === 'first_blood' && a.player === 2));
+  revive(w, 5);
+  const g2 = w.players.map((p) => p.gold);
+  const ev2 = capture(w, () => dealDamage(w, tower, F(w, 5), 1e7, 'true')); // nobody else touched P5: executed
+  const td2 = ofType(ev2, 'takedown')[0];
+  check('no enemy fighter in the window: takedown killer −1, no assists, nobody paid', td2 && td2.killer === -1 && td2.assists.length === 0 &&
+    w.players.every((p, i) => p.gold === g2[i]), td2);
 });
 
 section('last hits, cs, xp sharing, levels', () => {

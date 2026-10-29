@@ -10,8 +10,12 @@
 // Shields: × (1 + caster healShieldPower); grievous does not cut shields.
 //
 // Kill credit: the damaging entity is the `killer` in the death event; the fighter credited for
-// it (itself, or a summon's owner) gets the kill. Assists: every other player whose fighter (or
-// summon) damaged or debuffed the victim in the last rules.tuning.assistWindow (ASSIST_WINDOW) s.
+// it (itself, or a summon's owner) gets the kill. A fighter finished by a non-fighter (a Wick, a
+// Needle, a monster) after an enemy fighter took part is credited to the enemy player who dealt it
+// the most damage in the assist window (ties: the latest contributor; W4 gameplay g1); with no enemy
+// fighter in the window the death stays uncredited (executed, killer −1). Assists: every other
+// player whose fighter (or summon) damaged or debuffed the victim in the last
+// rules.tuning.assistWindow (ASSIST_WINDOW) s. death.by carries the credited player.
 // Core counts K/D/A and team kills for fighter deaths; gold/streaks/bounties belong to economy
 // (hooks.death), which may fill `ev.gold` on the event object before the tick ends.
 
@@ -104,7 +108,7 @@ export function dealDamage(w: World, src: Entity | null, dst: Entity, raw: numbe
   if (dst.hp < 0) dst.hp = 0;
 
   // bookkeeping
-  if (src) { dst.lastHitBy = src.id; dst.lastHitAt = w.time; noteAssist(w, src, dst); }
+  if (src) { dst.lastHitBy = src.id; dst.lastHitAt = w.time; noteAssist(w, src, dst, amount); }
   const credit = w.creditFighter(src);
   if (credit && credit.player && credit.team !== dst.team) {
     if (dst.kind === 'fighter') credit.player.damageToFighters += amount;
@@ -194,13 +198,37 @@ export function addResource(e: Entity, amount: number): void {
   e.resIdle = 0;
 }
 
-/** remember that src's player contributed against dst (assist window) */
-export function noteAssist(w: World, src: Entity | null, dst: Entity): void {
+/** remember that src's player contributed against dst (assist window); `amount` is damage dealt (0 for a debuff) */
+export function noteAssist(w: World, src: Entity | null, dst: Entity, amount = 0): void {
   const f = w.creditFighter(src);
   if (!f || !f.player || f.team === dst.team) return;
-  if (!dst.assistT) dst.assistT = new Float64Array(Math.max(1, w.players.length)).fill(-Infinity);
+  const n = Math.max(1, w.players.length);
+  if (!dst.assistT) dst.assistT = new Float64Array(n).fill(-Infinity);
+  if (!dst.assistDmg) dst.assistDmg = new Float64Array(n);
   const p = f.player.player;
-  if (p < dst.assistT.length) dst.assistT[p] = w.time;
+  if (p >= dst.assistT.length) return;
+  // a lapsed contribution starts a new run: only damage inside the window counts toward credit
+  if (dst.assistT[p] < w.time - (w.rules.tuning?.assistWindow ?? ASSIST_WINDOW)) dst.assistDmg[p] = 0;
+  dst.assistT[p] = w.time;
+  if (amount > 0) dst.assistDmg[p] += amount;
+}
+
+/** g1: the enemy player credited for a fighter finished by a non-fighter: the one who dealt the victim the most damage in
+ *  the assist window (ties: the latest contributor, then the lowest seat); −1 when no enemy fighter took part */
+export function topContributor(w: World, victim: Entity): PlayerId | -1 {
+  const a = victim.assistT;
+  if (!a) return -1;
+  const d = victim.assistDmg;
+  const since = w.time - (w.rules.tuning?.assistWindow ?? ASSIST_WINDOW);
+  let best: PlayerId | -1 = -1, bestDmg = -1, bestT = -Infinity;
+  for (let p = 0; p < a.length; p++) {
+    if (a[p] < since) continue;
+    const pl = w.players[p];
+    if (!pl || pl.team === victim.team) continue;
+    const dmg = d ? d[p] : 0;
+    if (dmg > bestDmg || (dmg === bestDmg && a[p] > bestT)) { best = p; bestDmg = dmg; bestT = a[p]; }
+  }
+  return best;
 }
 
 /** players (excluding the killer's) who contributed against the victim within the assist window */
@@ -241,10 +269,14 @@ export function killEntity(w: World, victim: Entity, killer: Entity | null, dept
   w.hashDirty = true;
   if (victim.navBlockR > 0) { w.nav.removeObstacle(victim.x, victim.y, victim.navBlockR); victim.navBlockR = 0; }
 
-  const credit = w.creditFighter(killer);
-  const killerPlayer: PlayerId | -1 = credit && credit.player && credit.team !== victim.team ? credit.player.player : -1;
+  const direct = w.creditFighter(killer);
+  let killerPlayer: PlayerId | -1 = direct && direct.player && direct.team !== victim.team ? direct.player.player : -1;
+  // g1: a fighter finished by a Wick, Needle or monster is the kill of the enemy fighter who did the most to it
+  if (killerPlayer < 0 && victim.kind === 'fighter') killerPlayer = topContributor(w, victim);
+  const promoted = killerPlayer >= 0 && !(direct && direct.player && direct.player.player === killerPlayer);
+  const credit = promoted ? w.players[killerPlayer].ent : direct;
   const assists = assistsOf(w, victim, killerPlayer);
-  const ev: DeathEvent = { e: 'death', t: w.time, dst: victim.id, killer: killer ? killer.id : -1, assists, gold: 0, kind: victim.kind };
+  const ev: DeathEvent = { e: 'death', t: w.time, dst: victim.id, killer: killer ? killer.id : -1, by: killerPlayer, assists, gold: 0, kind: victim.kind };
   w.emit(ev);
 
   if (victim.kind === 'fighter' && victim.player) {
@@ -257,12 +289,13 @@ export function killEntity(w: World, victim: Entity, killer: Entity | null, dept
     for (const p of assists) w.players[p].assists++;
   }
   if (victim.assistT) victim.assistT.fill(-Infinity);
+  if (victim.assistDmg) victim.assistDmg.fill(0);
 
   const hooks = w.hooks.death;
   for (let i = 0; i < hooks.length; i++) hooks[i](w, victim, killer, assists, ev);
 
   fireTrigger(w, victim, 'death', killer, depth);
-  if (credit && credit !== victim) {
+  if (credit && credit !== victim && (!promoted || credit.alive)) {
     fireTrigger(w, credit, 'kill', victim, depth);
     if (victim.kind === 'fighter') fireTrigger(w, credit, 'takedown', victim, depth);
   }

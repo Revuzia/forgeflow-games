@@ -195,7 +195,10 @@ export type SimEvent =
   | { e: 'status'; t: number; dst: EntityId; status: StatusKindT; duration: number }
   | { e: 'dash'; t: number; src: EntityId; fromX: number; fromY: number; toX: number; toY: number; duration: number; vfx?: string }
   | { e: 'blink'; t: number; src: EntityId; fromX: number; fromY: number; toX: number; toY: number }
-  | { e: 'death'; t: number; dst: EntityId; killer: EntityId | -1; assists: PlayerId[]; gold: number; kind: EntityKind }
+  /** killer: the entity that landed the final blow. by: the player credited with the kill: the killing fighter (or a
+   *  summon's owner); for a fighter finished by a Wick, Needle or monster, the enemy fighter that dealt it the most damage
+   *  in the assist window; −1 when no enemy fighter took part (executed) */
+  | { e: 'death'; t: number; dst: EntityId; killer: EntityId | -1; by: PlayerId | -1; assists: PlayerId[]; gold: number; kind: EntityKind }
   | { e: 'takedown'; t: number; killer: PlayerId | -1; victim: PlayerId; assists: PlayerId[]; streak: number; shutdown: number; first: boolean; multi: number }
   | { e: 'respawn'; t: number; player: PlayerId; entity: EntityId }
   | { e: 'levelUp'; t: number; player: PlayerId; level: number }

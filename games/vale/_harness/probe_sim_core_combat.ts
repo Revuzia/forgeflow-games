@@ -164,6 +164,54 @@ section('deaths, assists, K/D/A, recap', () => {
   check('dead units take no damage', dealDamage(w, a, v, 100, 'true') === 0);
 });
 
+section('kill credit when a Wick, Needle or monster lands the last blow (W4 gameplay g1)', () => {
+  const seats = [
+    { fighter: 'fx_fighter_a', team: 0, x: 10, y: 10 }, { fighter: 'fx_fighter_c', team: 1, x: 12, y: 10 },
+    { fighter: 'fx_fighter_c', team: 0, x: 10, y: 12 }, { fighter: 'fx_fighter_c', team: 0, x: 10, y: 14 },
+  ];
+  // the enemy fighter who did the most damage in the window gets the kill; the other contributor assists
+  let w = makeWorld(cat, seats);
+  let v = fighterEnt(w, 1);
+  dealDamage(w, fighterEnt(w, 0), v, 50, 'true');
+  stepSec(w, 1);
+  dealDamage(w, fighterEnt(w, 2), v, 300, 'true');
+  stepSec(w, 1);
+  dealDamage(w, fighterEnt(w, 0), v, 40, 'true');   // P0 hit last, but P2 did more
+  stepSec(w, 1);
+  let wick = addUnit(w, 'fx_minion', 0, 12, 11);
+  let ev = capture(w, () => dealDamage(w, wick, v, 1e6, 'true'));
+  let death = ofType(ev, 'death')[0];
+  check('Wick final blow: death.killer is the Wick, death.by the top-damage enemy fighter', death && death.killer === wick.id && death.by === 2, death);
+  check('death.assists: the other contributor', death && death.assists.join() === '0', death?.assists);
+  check('K/D/A and team kills follow the credit (gold, streak, first blood: probe_sim_economy)', w.players[2].kills === 1 && w.players[0].assists === 1 && w.players[0].kills === 0 && w.teams[0].kills === 1);
+  // damage that lapsed out of the window does not count toward credit: P0's 500 at t0 is stale by the kill
+  w = makeWorld(cat, seats);
+  v = fighterEnt(w, 1);
+  dealDamage(w, fighterEnt(w, 0), v, 500, 'true');
+  stepSec(w, 11);
+  dealDamage(w, fighterEnt(w, 0), v, 10, 'true');    // P0 is back in the window with 10
+  dealDamage(w, fighterEnt(w, 3), v, 60, 'true');
+  stepSec(w, 1);
+  wick = addUnit(w, 'fx_minion', 0, 12, 11);
+  death = ofType(capture(w, () => dealDamage(w, wick, v, 1e6, 'true')), 'death')[0];
+  check('only damage inside the window counts (P3 60 beats P0 10, P0 500 lapsed)', death && death.by === 3, death);
+  // no enemy fighter in the window: executed, nobody credited
+  w = makeWorld(cat, seats);
+  v = fighterEnt(w, 1);
+  dealDamage(w, fighterEnt(w, 0), v, 50, 'true');
+  stepSec(w, 12);
+  wick = addUnit(w, 'fx_minion', 0, 12, 11);
+  ev = capture(w, () => dealDamage(w, wick, v, 1e6, 'true'));
+  death = ofType(ev, 'death')[0];
+  check('no enemy fighter in the window: executed (by -1, no kill)', death && death.by === -1 && w.players.every((p) => p.kills === 0) && w.teams[0].kills === 0, death);
+  // a fighter's own final blow is unchanged
+  w = makeWorld(cat, seats);
+  v = fighterEnt(w, 1);
+  dealDamage(w, fighterEnt(w, 2), v, 900, 'true');
+  death = ofType(capture(w, () => dealDamage(w, fighterEnt(w, 0), v, 1e6, 'true')), 'death')[0];
+  check('a fighter final blow keeps its credit (by = the killer, not the top damager)', death && death.by === 0 && w.players[0].kills === 1 && w.players[2].assists === 1, death);
+});
+
 section('unit multipliers, vetoes, corpses', () => {
   const cat2 = buildCatalog({
     fighters: [

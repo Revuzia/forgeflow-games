@@ -58,11 +58,11 @@ export function lastStandingRules(): ModeRules {
       const lives = Math.max(1, w.rules.end.lives ?? 1);
       for (const p of w.players) if (p) { p.lives = lives; p.score = 0; }
     },
-    onDeath(w: World, victim: Entity, killer: Entity | null): void {
+    onDeath(w: World, victim: Entity, _killer: Entity | null, by: PlayerId | -1): void {
       if (victim.kind !== 'fighter' || !victim.player) return;
       const vp = victim.player;
-      const credit = w.creditFighter(killer);
-      if (credit && credit.player && credit.team !== victim.team) credit.player.score = (credit.player.score ?? 0) + 1;
+      const kp = by >= 0 ? w.players[by] : undefined;
+      if (kp && kp.team !== victim.team) kp.score = (kp.score ?? 0) + 1;
       vp.lives = Math.max(0, (vp.lives ?? 1) - 1);
       if (vp.lives > 0 || placed.has(vp.player) || pending.includes(vp)) return;
       pending.push(vp);

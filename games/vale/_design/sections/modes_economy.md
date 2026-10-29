@@ -50,6 +50,7 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 - *XP.* A solo road reaches level 6 at about 4:30 to 5:00, and the shared duo road at about 7:00 to 8:00. That is slightly faster than the reference, to fit a 25-minute target.
 - *Respawn.* Death timers run 6 s at level 1 to 47 s at level 18, and reach about 58 s after 25:00. The reference is 10 s to 52.5 s, rising to 78.75 s at 55:00. Ours are shorter on purpose: a browser player who waits a minute leaves.
 - *Kills.* A kill pays 280 and the assist pool 140 (reference 300 and 150). Shutdowns are capped at 490 with no carry-over.
+- *Kill credit (every mode, W4 g1).* When a Wick, a Needle or a monster lands the last blow on a fighter, the kill goes to the enemy fighter who dealt that fighter the most damage inside the assist window (a tie goes to the latest contributor); the rest assist. It pays, streaks, counts for first blood, multikills and the FRAY score like any kill. Only a death with no enemy fighter in the window is an execution (no killer, nobody paid). `death.by` carries the credited seat.
 - *Sudden death.* Sudden death at 40:00 is a backstop, not a pace setter. It never removes structure protection (W4 G5: a core cannot fall with its chain standing); it brings the **Gorge Wind** instead (`rules.gorgeWind`, below) and respawns ×2.
 - *Tuning.* `tuning` tightens the assist window to 9 s and XP share to 15 m, and sets fighter-kill XP to 0.55 of a level step. That keeps one early kill from swinging lanes.
 

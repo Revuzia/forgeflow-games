@@ -391,6 +391,8 @@ export class Entity implements EntityView {
   // bookkeeping
   /** per-player last time (s) they damaged or debuffed this entity (assist window) */
   assistT: Float64Array | null = null;
+  /** per-player damage dealt to this entity in their current contribution run (reset when their assistT lapses) */
+  assistDmg: Float64Array | null = null;
   dmgLog: DamageLog | null = null;
   /** last entity that damaged this one, and when (kill credit) */
   lastHitBy: EntityId = -1; lastHitAt = -1;

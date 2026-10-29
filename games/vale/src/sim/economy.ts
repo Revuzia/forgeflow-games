@@ -18,7 +18,9 @@
 //   shutdown      = min(shutdownMax, streak bonus)          (paid on top of `kill`)
 //   killer gold   = kill + shutdown                          reason 'kill'
 //   each assister = (kill + shutdown) × assistShare / #assisters   reason 'assist'
-// With no credited killer (tower, monster, minion) the assisters still get their share. The killer's
+// A fighter finished by a tower, monster or minion is credited to the enemy fighter who dealt it the most
+// damage in the assist window (death.by, combat.ts); with no enemy fighter involved there is no killer and
+// nobody is paid (executed). The killer's
 // streak +1, the victim's resets to 0. Player.bounty shows what the seat is worth right now.
 // 'takedown' carries the killer's new streak, the shutdown paid, first (first fighter takedown
 // with a credited killer) and multi (takedowns by that killer each within tuning.multiKillWindow s of
@@ -90,8 +92,9 @@ export function fighterKillXp(w: World, level: number): number {
 
 // ── deaths ──────────────────────────────────────────────────────────────────────────────────────
 function onDeath(w: World, victim: Entity, killer: Entity | null, assists: PlayerId[], ev: DeathEvent): void {
-  const credit = w.creditFighter(killer);
-  const kp = credit && credit.player && credit.team !== victim.team ? credit.player : null;
+  // the credited player (combat.ts killEntity: the killing fighter, or for a fighter finished by a Wick, Needle or
+  // monster the enemy fighter who dealt it the most damage in the assist window — W4 gameplay g1)
+  const kp = ev.by >= 0 ? w.players[ev.by] ?? null : null;
   if (victim.kind === 'fighter' && victim.player) fighterTakedown(w, victim, victim.player, kp, assists, ev);
   else if (victim.unit) unitBounty(w, victim, killer, kp, ev);
   shareXp(w, victim, kp, assists);

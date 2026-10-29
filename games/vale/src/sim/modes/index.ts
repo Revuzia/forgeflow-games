@@ -6,6 +6,7 @@
 // rules for every mode. Practice is a queue kind layered on top (modes/practice.ts).
 
 import type { RulesParamsT } from '../../contracts/catalog.ts';
+import type { PlayerId } from '../../contracts/sim.ts';
 import type { Entity } from '../entity.ts';
 import type { World } from '../world.ts';
 import { coreRules } from './core.ts';
@@ -19,8 +20,8 @@ export interface ModeRules {
   readonly kind: EndKind;
   /** after seats spawned: lives, scores */
   init(w: World): void;
-  /** hooks.death, after economy and unit systems ran for this death */
-  onDeath(w: World, victim: Entity, killer: Entity | null): void;
+  /** hooks.death, after economy and unit systems ran for this death; `by` is the credited player (death.by, −1 none) */
+  onDeath(w: World, victim: Entity, killer: Entity | null, by: PlayerId | -1): void;
   /** 'modes' phase while live: an Outcome ends the match */
   check(w: World): Outcome | null;
 }

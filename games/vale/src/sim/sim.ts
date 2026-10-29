@@ -123,7 +123,7 @@ function buildWorld(catalog: CatalogT, setup: MatchSetup, opts: SimOptions, idx:
   installMonsters(w);
   installShop(w);
   installPractice(w);
-  w.hooks.death.push((ww, victim, killer) => rules.onDeath(ww, victim, killer));
+  w.hooks.death.push((ww, victim, killer, _assists, ev) => rules.onDeath(ww, victim, killer, ev.by));
   w.hooks.damage.push((ww, src, dst) => noteAttack(ww, src, dst));
   w.hooks.modifyDamage.push((ww, src, dst, raw) => damageMultHook(ww, src, dst, raw));
   w.hooks.acquireScore = unitAcquireScore;

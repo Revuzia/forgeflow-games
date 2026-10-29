@@ -5,6 +5,7 @@
 // ranked by kills, then damage to fighters — a tie at the top is a draw (no winner, every seat
 // placed 1), reason 'time'. Works for FFA too (each seat its own team).
 
+import type { PlayerId } from '../../contracts/sim.ts';
 import type { Entity } from '../entity.ts';
 import type { World } from '../world.ts';
 import type { ModeRules } from './index.ts';
@@ -14,10 +15,10 @@ export function scoreRules(): ModeRules {
   return {
     kind: 'score',
     init(w: World): void { for (const p of w.players) if (p) p.score = 0; },
-    onDeath(w: World, victim: Entity, killer: Entity | null): void {
+    onDeath(w: World, victim: Entity, _killer: Entity | null, by: PlayerId | -1): void {
       if (victim.kind !== 'fighter') return;
-      const credit = w.creditFighter(killer);
-      if (credit && credit.player && credit.team !== victim.team) credit.player.score = (credit.player.score ?? 0) + 1;
+      const kp = by >= 0 ? w.players[by] : undefined;
+      if (kp && kp.team !== victim.team) kp.score = (kp.score ?? 0) + 1;
     },
     check(w: World): Outcome | null {
       const teams = w.teams.map((t) => t.team);
