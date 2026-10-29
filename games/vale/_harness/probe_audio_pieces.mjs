@@ -15,7 +15,8 @@
 //   P3  what you hear is the whole .m4a: the rendered output within 0.1 s of every joint and of the loop's wrap
 //       against the whole .m4a's own decode, below 3.5 kHz (above it AAC's noise substitution draws fresh noise in
 //       every decode): ≤ −60 dB at 48 kHz; at 44.1 kHz ≤ −40 dB (two resamplings of the same music)
-//   P4  the stitched stem is kept: the bed's next start fetches nothing and starts at once
+//   P4  a bed change frees the bed (closing PERF-C2, decoded audio does not pile up): after music(null) the stitched
+//       stem is no longer cached, and the bed's next start plays again from its pieces, its first piece at once from 0
 //   P5  a piece that fails hands over to the whole .m4a at once, where the timeline is (no restart from 0)
 // Exit 0 = all hold, 1 = a gate fails. Report → _harness/_reports/fw_W3_pieces.json.
 
@@ -226,11 +227,13 @@ for (const sr of [48000, 44100]) {
   // P4: the next start of the bed
   if (sr === 48000) {
     eng.music(null); await flush();
+    const freed = !eng.buffers.has(wholeRef);
     const n0 = FETCHED.length, s0 = ctx.started.length;
     eng.music(BED); await flush();
-    const main = ctx.started.slice(s0).find((s) => s.buffer?.ref === 'stitched');
-    R.P4 = { fetched: FETCHED.slice(n0).filter((u) => u === wholeRef || pieces.some((p) => p.file === u)).length, startedFromCache: !!main, offset: main?.offset ?? null };
-    if (R.P4.fetched || !main || main.offset !== 0) failures.push(`P4: restart ${JSON.stringify(R.P4)}`);
+    const first = ctx.started.slice(s0)[0];
+    R.P4 = { freedOnChange: freed, refetchedPieces: FETCHED.slice(n0).filter((u) => pieces.some((p) => p.file === u)).length,
+      wholeFetched: FETCHED.slice(n0).includes(wholeRef), first: first ? { ref: first.buffer?.ref ?? null, offset: first.offset ?? null } : null };
+    if (!freed || !first || first.offset !== 0 || R.P4.wholeFetched) failures.push(`P4: restart ${JSON.stringify(R.P4)}`);
   }
 }
 

@@ -170,6 +170,8 @@ for (const SEED of SEEDS) {
   eng.onEvent = function (e) {
     const s = e.dst != null ? view.entity(e.dst) : e.src != null ? view.entity(e.src) : null;
     if (e.e === 'area') focus = { x: e.x, y: e.y }; else if (s) focus = { x: s.x, y: s.y };
+    // the engine's own fog gate for an area (your team sees its caster or the spot): W3 judges only what passes it
+    if (e.e === 'area') e.__inSight = this.seen(this.ent(e.src)) || this.seenAt(e.x, e.y);
     const k = log.cues.length;
     const r = on0.call(this, e);
     e.__cues = log.cues.slice(k);
@@ -204,7 +206,7 @@ for (const SEED of SEEDS) {
   const boundAreas = new Map(areaRoles.map(([k, c]) => [k.slice('area.'.length), c]));
   // as heard (closing AUD-C1): a kitted fighter's own ability plays its vfx binding whatever library sfx the area names
   const asBound = (e) => boundAreas.has(e.vfx) && (!e.sfx || OWN_ABILITIES.has(e.ability));
-  const areas = rows.filter((e) => e.e === 'area' && asBound(e));
+  const areas = rows.filter((e) => e.e === 'area' && asBound(e) && e.__inSight);
   const areaMiss = areas.filter((e) => !e.__cues?.some((c) => c.id === boundAreas.get(e.vfx) && Math.abs(c.pos.x - e.x) < 1e-6 && Math.abs(c.pos.y - e.y) < 1e-6));
   const areaStray = rows.filter((e) => e.e === 'area' && !asBound(e) && e.__cues?.some((c) => [...boundAreas.values()].includes(c.id)));
   chordsTotal += areas.length;
@@ -332,7 +334,10 @@ if (!chordsTotal) console.log('W3: the bots never chorded in these runs (Part S 
 {
   const { execFileSync } = await import('node:child_process');
   const py = join(process.env.HOME ?? '', 'Developer', 'forgeflow-games', '.venv', 'bin', 'python3');
-  const ids = [...new Set([ev.shieldStructure, ev.sealBreak, ev.gorgeWind, ev['world.noon_toll'], ev.hitShaded, ...areaRoles.map(([, c]) => c)])].filter(Boolean);
+  // the world's moments; an area binding to a fighter's own kit cue (f_<fighter>_…_land / _zone, closing AUD-C1) is a
+  // combat cue at kit level (a cast -18, a release -14.5), not a world moment
+  const ids = [...new Set([ev.shieldStructure, ev.sealBreak, ev.gorgeWind, ev['world.noon_toll'], ev.hitShaded,
+    ...areaRoles.map(([, c]) => c).filter((c) => !c.startsWith('f_'))])].filter(Boolean);
   let targets = {};
   try {
     const out = execFileSync(existsSync(py) ? py : 'python3', ['-c', `import sys, json; sys.path.insert(0, 'audio'); import cues; from cuelib import REGISTRY; print(json.dumps({k: REGISTRY[k].target[1] for k in sys.argv[1:] if k in REGISTRY}))`, ...ids, ev.announceMinor],
