@@ -37,6 +37,8 @@ export function computeStats(w: World, e: Entity): void {
   if (def) {
     s.addBlock(def.base);
     s.addBlock(def.growth, lvl1);
+    // (a mode's structures may stand lighter or heavier than the unit def: rules.tuning.structureHpMult, W4 G5)
+    if (e.kind === 'structure') { const hm = w.rules.tuning?.structureHpMult; if (hm !== undefined && hm > 0) s.hp *= hm; }
     baseAS = def.base.attackSpeed ?? 0;
     hasCritBase = def.base.critDamage !== undefined;
   }

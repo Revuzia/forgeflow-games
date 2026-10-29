@@ -5,6 +5,9 @@
 // While the sky loads (or when the art lane has not exported it yet) a small procedural gradient
 // stands in (cool zenith, warm haze at the horizon, in the map's sun colour), so the world is never
 // lit by black. No camera-distance fog: the background is a plain equirect.
+// perf PERF-m4: the PMREM environment is drawn on the GPU, so a lost-and-restored WebGL context would come back with an
+// empty one (the world lit by nothing but the sun): each Sky bakes its last sky again when the context returns (after
+// three's own handler, registered first, rebuilt the renderer's state).
 
 import {
   type Color, DataTexture, EquirectangularReflectionMapping, FloatType, LinearFilter, LinearSRGBColorSpace,
@@ -19,9 +22,16 @@ export class Sky {
   /** r12 B4: draw no sky box, clear to this colour instead (the lane camera never sees the horizon: measured 0 px of
    *  sky at every map's edges and corners at the widest zoom); the HDR still lights the world. null = the sky box */
   solid: Color | null = null;
+  /** the last apply(), baked again on a restored context */
+  private last: { scene: Scene; hdr: Texture | null; env: number; bg: number } | null = null;
+  private readonly onRestored = (): void => {
+    const l = this.last;
+    if (l) this.apply(l.scene, l.hdr, l.env, l.bg);
+  };
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
+    renderer.domElement.addEventListener('webglcontextrestored', this.onRestored, false);
   }
 
   /** a soft procedural sky in the sun's direction and colour (used until / unless the HDR exists) */
@@ -65,6 +75,7 @@ export class Sky {
   apply(scene: Scene, hdr: Texture | null, envIntensity: number, backgroundIntensity = 1): void {
     const src = hdr ?? this.fallback;
     if (!src) return;
+    this.last = { scene, hdr, env: envIntensity, bg: backgroundIntensity };
     src.mapping = EquirectangularReflectionMapping;
     // r12 B4: a generator per bake, disposed right after: its two programs (equirect → cube UV, GGX convolution)
     // are released instead of staying live for the whole match
@@ -82,6 +93,8 @@ export class Sky {
   }
 
   dispose(): void {
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onRestored, false);
+    this.last = null;
     this.envRT?.dispose();
     this.fallback?.dispose();
     this.envRT = null; this.background = null; this.fallback = null;

@@ -615,6 +615,7 @@ export const RulesParams = z.object({
     multiKillWindow: z.number().nonnegative().optional(),      // s between one killer's takedowns of a multikill [10]
     fountainHealPerSec: z.number().nonnegative().optional(),   // fraction of max hp (and pool resource) per s in the fountain [0.15]
     suddenDeathRespawnMult: z.number().positive().optional(),  // respawn-timer multiplier in sudden death [1.5]
+    structureHpMult: z.number().positive().optional(),         // W4 G5: × every structure's max health in this mode [1]
   }).strict().optional(),
 }).strict();
 

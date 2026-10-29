@@ -12,9 +12,9 @@
 // structures without waiting for a won fight: from a Gleam lead of `leadGleam` (public on the
 // scoreboard) it groups and sieges while it is not short of bodies, and it walks a won fight on to the
 // next structure while the fallen enemies' respawn clocks (public too) say there is time. From the mid
-// game the brain sends the nearest fighter to ANSWER a threatened road (a dive or a stacked wave at a
-// structure) while the rest keep the plan; a tier that `readsWaves` also meets a stacked wave deep in its
-// half before it gets there — a lead is not thrown away to Wicks crashing into an empty road. Objectives
+// game a tier that `readsWaves` sends the nearest healthy laner to ANSWER a threatened road (a dive or a
+// stacked wave at a structure, or a stacked wave deep in its half before it gets there) while the rest
+// keep the plan — a lead is not thrown away to Wicks crashing into an empty road. Objectives
 // are tiered too: how early the team gathers before a (public) spawn, whether it takes one at even numbers,
 // and whether it contests an enemy start; a lead is never pressed over a live or imminent objective.
 

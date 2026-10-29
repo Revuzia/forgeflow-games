@@ -227,7 +227,7 @@ export class GpuTimer {
   get available(): boolean { return this.ext !== null; }
 
   begin(): void {
-    if (!this.ext || this.active || this.pending.length >= 4) return;
+    if (!this.ext || this.dead || this.active || this.pending.length >= 4) return;
     const q = this.pool.pop() ?? this.gl.createQuery();
     if (!q) return;
     this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, q);
@@ -235,7 +235,7 @@ export class GpuTimer {
   }
 
   end(): void {
-    if (!this.ext || !this.active) return;
+    if (!this.ext || this.dead || !this.active) return;
     this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
     this.pending.push(this.active);
     this.active = null;
@@ -244,7 +244,7 @@ export class GpuTimer {
   /** the newest finished measurement (ms), or null */
   poll(): number | null {
     const gl = this.gl, ext = this.ext;
-    if (!ext) return null;
+    if (!ext || this.dead) return null;
     while (this.pending.length) {
       const q = this.pending[0];
       if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
@@ -261,7 +261,19 @@ export class GpuTimer {
   /** forget the last reading and the queries still in flight (a match ended: the next one must not inherit them) */
   clear(): void { this.last = null; this.discard = this.pending.length; }
 
+  /**
+   * perf PERF-m4: the context was lost — every query belongs to it and is gone. Drop them without a GL call (a
+   * restored context reports each as a foreign object) and never measure again: the renderer builds a new timer
+   * on the restored context.
+   */
+  abandon(): void {
+    this.pool.length = 0; this.pending.length = 0; this.active = null; this.last = null; this.discard = 0;
+    this.dead = true;
+  }
+  private dead = false;
+
   dispose(): void {
+    if (this.dead) return;
     for (const q of [...this.pool, ...this.pending]) this.gl.deleteQuery(q);
     if (this.active) this.gl.deleteQuery(this.active);
     this.pool.length = 0; this.pending.length = 0; this.active = null;

@@ -17,8 +17,13 @@
 //   * tier (W4 gameplay G3, difficulty.ts teamDifficulty): a window (a won fight) and a defend call are
 //     published only once they have held macroDelay s; a team that convertsLeads also presses a Gleam
 //     lead of leadGleam (Σ goldEarned, public) into a grouped siege while it is not short of bodies
-//     (`press`: from the mid game on RIFT, at once on one road), and keeps a won fight's window open
-//     while two fallen enemies still have long respawn clocks (public) even as the rest come back.
+//     (`press`: from the mid game on RIFT, at once on one road; never over a live or imminent objective),
+//     and keeps a won fight's window open while two fallen enemies still have long respawn clocks (public)
+//     even as the rest come back; a team that readsWaves sends answers to threatened roads (thinkAnswers);
+//     objective calls follow the tier's objectiveLead / objectiveEven / contests.
+//   * endgame (W4 gameplay G5): only towers that can be hit count as standing in front of a gate, so a
+//     Lantern guarding a protected Bell Needle is sieged instead of leaving the team without a target, and
+//     a tower opened by a fallen gate is pushed before the gate relights.
 
 import type { EntityId, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import type { Entity } from '../entity.ts';
@@ -189,22 +194,23 @@ export class TeamBrain {
   }
 
   /**
-   * From the mid game (RIFT): a road under threat — a dive or a stacked wave at one of our structures
-   * (published defend calls, so after macroDelay), or, for a tier that readsWaves, five or more enemy Wicks
-   * deep in our half with fewer of ours to meet them — gets one fighter (two for a dive by two or more): the
-   * nearest healthy ones, the road's own laner first when it is not much farther. The rest keep the plan.
+   * From the mid game (RIFT, tiers that readsWaves): a road under threat — a dive or a stacked wave at one of
+   * our structures (published defend calls), or four or more enemy Wicks deep in our half with two fewer of ours
+   * to meet them — gets one fighter (two for a dive by two or more or a wave six ahead): the nearest ones above
+   * 60 % health, never the grovehunter, the road's own laner first when it is not much farther. The rest keep
+   * the plan.
    */
   private thinkAnswers(w: World): void {
     this.answer.clear();
     const k = this.k, tp = this.perc, now = w.time;
-    if (k.kind !== 'rift' || this.phase === 'early' || this.rush) return;
+    if (k.kind !== 'rift' || this.phase === 'early' || this.rush || !this.diff.readsWaves) return;
     for (const l of k.lanes) {
       const i = l.index;
       let need = 0, x = 0, y = 0;
       if (this.defend[i] > 0.05) { need = this.defendFighters[i] >= 2 ? 2 : 1; x = this.defendX[i]; y = this.defendY[i]; }
       const deep = this.diff.readsWaves && tp.enemyN[i] >= 4 && tp.enemyFront[i] < l.length * 0.45 && tp.ownN[i] <= tp.enemyN[i] - 2;
       if (this.held(`wave${i}`, deep, now) && need === 0) {
-        need = tp.enemyN[i] - tp.ownN[i] >= 9 ? 2 : 1;
+        need = tp.enemyN[i] - tp.ownN[i] >= 6 ? 2 : 1;
         lanePoint(l, fromProgress(l, this.team, Math.max(0, tp.enemyFront[i] - 4)));
         x = proj.x; y = proj.y;
       }
@@ -221,9 +227,11 @@ export class TeamBrain {
         for (const p of w.players) {
           if (!p || p.team !== this.team || this.answer.has(p.player)) continue;
           const e = p.ent;
-          if (!e || !e.alive || e.hp < e.maxHp * 0.4) continue;
+          if (!e || !e.alive || e.hp < e.maxHp * 0.6) continue;
           if (oc && sq(e.x - oc.x) + sq(e.y - oc.y) <= 30 * 30) continue;
           const a = this.assign.get(p.player);
+          // (the grovehunter keeps its camps and objectives: the roads answer for the roads)
+          if (a && a.jungle) continue;
           const own = !!a && a.lane === i && !a.jungle;
           const dd = Math.sqrt(sq(e.x - x) + sq(e.y - y)) * (own ? 0.67 : 1);
           if (dd < bd) { bd = dd; best = p.player; }

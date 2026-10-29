@@ -20,6 +20,12 @@
 //     camera                          lock mode, scout, pointer (edge pan), key pan, zoom, focus
 //     setStation(name) · setMenuView  menu camera moves (720 ms) and the plinth fighter
 //     preload(setup, onProgress)      loading screen: every model, the sky and the grade of a match
+//     viewState · onViewState(fn)     perf PERF-m4: 'lost' while the GPU context is gone, 'restoring' from its return
+//                                     until the scene's programs are rebuilt, then 'ok' (the HUD's 'Restoring the
+//                                     view' plate). On loss the GPU timer and dynamic resolution freeze; on restore the
+//                                     timer is rebuilt on the new context, the generated textures (VFX atlas, sky
+//                                     PMREM) are baked again and every program of the scene, the templates and the VFX
+//                                     is compiled again in parallel before the view says 'ok'
 //     stats() · dispose()
 //
 // Frame: sim views → actors (interpolated with MatchClient.alpha) → director (events → VFX,
@@ -104,6 +110,9 @@ export interface RenderStats {
   ambient?: AmbientStats | null;
 }
 
+/** perf PERF-m4: the 3D view's health (see the header) */
+export type ViewState = 'ok' | 'lost' | 'restoring';
+
 export interface CameraControl {
   setMode(m: CameraMode): void;
   readonly mode: CameraMode;
@@ -138,6 +147,10 @@ export interface Renderer {
   setMenuView(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
   preload(setup: MatchSetup, onProgress?: (p: number) => void): Promise<void>;
   stats(): RenderStats;
+  /** perf PERF-m4: 'lost' while the GPU context is gone, 'restoring' until its programs are rebuilt, then 'ok' */
+  readonly viewState: ViewState;
+  /** call `fn` on every viewState change; returns the unsubscribe */
+  onViewState(fn: (s: ViewState) => void): () => void;
   /** harness seam: feed synthetic events (telegraph / VFX tests) */
   injectEvents(events: SimEvent[]): void;
   /** harness seam (VFX gallery): spawn a def at ground (x, y); with `to` a test mover travels there over
@@ -153,6 +166,10 @@ export interface Renderer {
 }
 
 const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'fear', 'sleep', 'silence']);
+/** perf PERF-m4: dynamic resolution waits this long after a restored view is back (first draws upload every texture) */
+const RESTORE_DYN_HOLD_MS = 3000;
+/** perf PERF-m4: the longest a restored view waits for its parallel compiles before it says 'ok' */
+const RESTORE_MAX_WAIT_MS = 8000;
 /** combat F5: which hard CC names itself on the plate when several hold a unit (most control lost first) */
 const CC_PLATE_ORDER = ['airborne', 'stun', 'sleep', 'taunt', 'fear', 'root', 'silence'];
 const _v = new Vector3();
@@ -201,7 +218,14 @@ class ValeRenderer implements Renderer {
   private readonly opts: RendererOptions;
   private q: ResolvedQuality;
   private readonly dyn = new DynamicResolution();
-  private readonly gpuTimer: GpuTimer;
+  /** rebuilt on a restored context (its queries and extension belonged to the lost one) */
+  private gpuTimer: GpuTimer;
+  // perf PERF-m4: GPU context loss
+  private view: ViewState = 'ok';
+  private readonly viewFns = new Set<(s: ViewState) => void>();
+  /** dynamic resolution samples nothing before this time (performance.now ms): the restore's recompiles are not the GPU's speed */
+  private dynHoldUntil = 0;
+  private restoreGen = 0;
   // match world
   private readonly scene = new Scene();
   private readonly rig = new CameraRig();
@@ -281,6 +305,9 @@ class ValeRenderer implements Renderer {
     this.gl.shadowMap.type = PCFShadowMap;
     this.gl.info.autoReset = false;
     this.gpuTimer = new GpuTimer(this.gl.getContext() as WebGL2RenderingContext);
+    // perf PERF-m4: registered after three's own handlers (which keep the context restorable and rebuild its state first)
+    canvas.addEventListener('webglcontextlost', this.onContextLost, false);
+    canvas.addEventListener('webglcontextrestored', this.onContextRestored, false);
     // production: no synchronous shader-log read on a program's first use (a GPU round trip, 4-40 ms measured
     // under load on the first hover or wave); dev builds keep three's error checks
     this.gl.debug.checkShaderErrors = isDevBuild();
@@ -957,8 +984,12 @@ class ValeRenderer implements Renderer {
       // perf PERF-M2: only match frames the renderer wanted at the display rate feed it (never the menu and its idle
       // cap, never an fpsCap below the display rate: those intervals are the cap's, not the GPU's)
       const capped = cap > 0 && 1000 / cap > this.displayMs * 1.1;
+      // perf PERF-m4: frozen while the context is gone and while a restored one recompiles (the scale it had stays)
+      const held = this.view !== 'ok' || t0 < this.dynHoldUntil;
       if (this.mode === 'match' && this.dyn.enabled && !capped) {
-        if (this.dyn.sample(iv, this.frameMs, this.gpuTimer.poll())) this.applySize();
+        const gpu = this.gpuTimer.poll();
+        if (held) this.dyn.reset();
+        else if (this.dyn.sample(iv, this.frameMs, gpu)) this.applySize();
       } else this.dyn.reset();
     }
     this.lastFrameAt = t0;
@@ -971,7 +1002,7 @@ class ValeRenderer implements Renderer {
 
     const info = this.gl.info;
     info.reset();
-    const timed = this.dyn.enabled && this.mode === 'match';
+    const timed = this.dyn.enabled && this.mode === 'match' && this.view !== 'lost';
     if (timed) this.gpuTimer.begin();
     const prof = this.profileWaiters.length > 0 && this.mode === 'match';
     if (prof) this.profiler.begin(this.gl, this.profileRoots());
@@ -1094,7 +1125,7 @@ class ValeRenderer implements Renderer {
    * (KHR_parallel_shader_compile), so the frame a unit first walks into view does not stall on a 2048²
    * upload (≈ 0.1-0.9 s measured) or a synchronous shader link (r12 B4 hitches).
    */
-  private readonly warmed = new WeakSet<import('three').Object3D>();
+  private warmed = new WeakSet<import('three').Object3D>();
   private warmTemplate(root: import('three').Object3D, programs = true, again = false): void {
     const gl = this.gl;
     if (!again) {
@@ -1145,6 +1176,53 @@ class ValeRenderer implements Renderer {
     const t = a?.crowdBake ? (a.root.visible ? this.crowd.hoverTarget(a, a.hoverWidth, a.hoverTint) : null) : a?.hoverTarget();
     if (t) this.hoverRim.draw(r, cam, r.getRenderTarget(), t);
   }
+
+  // ── GPU context loss (perf PERF-m4) ───────────────────────────────────────────────────────────
+  get viewState(): ViewState { return this.view; }
+  onViewState(fn: (s: ViewState) => void): () => void { this.viewFns.add(fn); return () => { this.viewFns.delete(fn); }; }
+  private setView(s: ViewState): void {
+    if (this.view === s) return;
+    this.view = s;
+    for (const fn of [...this.viewFns]) { try { fn(s); } catch { /* a listener's failure is its own */ } }
+  }
+
+  private readonly onContextLost = (): void => {
+    this.restoreGen++;
+    // the timer's queries died with the context: never poll them again (a restored context calls them foreign objects)
+    this.gpuTimer.abandon();
+    this.dyn.reset();
+    this.setView('lost');
+  };
+
+  private readonly onContextRestored = (): void => {
+    const gen = ++this.restoreGen;
+    this.gpuTimer = new GpuTimer(this.gl.getContext() as WebGL2RenderingContext);
+    this.dyn.reset();
+    this.lastFrameAt = 0;
+    this.setView('restoring');
+    // three rebuilt its state on the new context (its handler ran first); geometry and image textures upload again
+    // on their next use, but what was drawn on the GPU must be drawn again: the VFX atlas and noise here, the sky's
+    // PMREM in Sky's own handler
+    this.vfx.textures.ready = false;
+    this.vfx.textures.generate(this.gl);
+    // every program again, compiled in parallel before the first frames need them: the scene (terrain, props, actors,
+    // ambient), the unit templates, the structures and the VFX shapes
+    this.warmed = new WeakSet();
+    const jobs: Promise<unknown>[] = [];
+    this.asIfComposer(() => {
+      const cam = this.rig.camera;
+      if (this.mode === 'match') jobs.push(this.gl.compileAsync(this.scene, cam).catch(() => undefined));
+      this.vfx.prewarm(this.gl, cam);
+    });
+    if (this.mode === 'match' && this.envReady) { this.lib.warmAll(); this.structs.warmAll(this.actors.values()); }
+    const done = (): void => {
+      if (gen !== this.restoreGen) return;
+      this.dynHoldUntil = performance.now() + RESTORE_DYN_HOLD_MS;
+      this.setView('ok');
+    };
+    // a driver that never reports the parallel compile done still gets its view back after the cap
+    void Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, RESTORE_MAX_WAIT_MS))]).then(done);
+  };
 
   listenerFocus(): { x: number; y: number } { return { x: this.rig.focus.x, y: this.rig.focus.z }; }
 
@@ -1230,6 +1308,9 @@ class ValeRenderer implements Renderer {
   }
 
   dispose(): void {
+    this.canvas.removeEventListener('webglcontextlost', this.onContextLost, false);
+    this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored, false);
+    this.viewFns.clear();
     this.teardownMatch();
     this.menu.dispose();
     this.vfx.dispose();

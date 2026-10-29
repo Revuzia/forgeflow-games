@@ -108,8 +108,9 @@ section('towers ignore protected/invisible things and shoot nothing without a ta
   check("a core with targetRules 'none' never attacks", core.attackDef === null || core.order !== ORDER_ATTACK);
 });
 
-section('gate respawn re-protects; sudden death lifts protection', () => {
-  const sim = createSim(matchCatalog({ rules: { minionWaves: undefined, jungle: false, suddenDeathAt: 60 } }), laneSetup(seats), { pregameSeconds: 0 });
+section('gate respawn re-protects; sudden death keeps protection and raises the Gorge Wind (W4 G5)', () => {
+  const sim = createSim(matchCatalog({ rules: { minionWaves: undefined, jungle: false, suddenDeathAt: 60,
+    gorgeWind: { every: 10, maxSteps: 3, wickDamage: 0.25, structureTaken: 0.2 } } }), laneSetup(seats), { pregameSeconds: 0 });
   const w = sim.world;
   const a = w.players[0].ent!;
   const tower = byMap(w, 'fx_t1_tower'), gate = byMap(w, 'fx_t1_gate'), core = byMap(w, 'fx_t1_core');
@@ -124,7 +125,19 @@ section('gate respawn re-protects; sudden death lifts protection', () => {
   check('the respawned gate stays open (its tower is down) and re-protects the core', gate2.targetable && !core.targetable);
   const ev2 = run(sim, 20);
   check('sudden death at 60 s: event + flag', w.suddenDeath && ofType(ev2, 'suddenDeath').length === 1);
-  check('sudden death: no structure is protected', structuresOf(w).every((s) => !s.ent.alive || s.ent.targetable));
+  check('sudden death keeps protection: the core stays protected while its respawned gate stands', !core.targetable && core.invulnerable && gate2.targetable);
+  check('the Gorge Wind rises one step at sudden death', w.gorgeWind === 1, w.gorgeWind);
+  run(sim, 25);
+  check('… and one more every `every` s, capped at maxSteps (3)', w.gorgeWind === 3, w.gorgeWind);
+  const hp0 = gate2.hp;
+  dealDamage(w, a, gate2, 100, 'true');
+  check('structures take × (1 + steps × structureTaken) = × 1.6', near(hp0 - gate2.hp, 160, 1e-6), hp0 - gate2.hp);
+  const wick = spawnUnit(w, 'fx_lane_minion', 1, gate2.x + 30, gate2.y);
+  const hpA = a.hp;
+  dealDamage(w, wick, a, 100, 'true');
+  check('Wicks deal × (1 + steps × wickDamage) = × 1.75', near(hpA - a.hp, 175, 1e-6), hpA - a.hp);
+  dealDamage(w, a, core, 1e6, 'true');
+  check('a protected core takes nothing in sudden death', core.alive && core.hp === core.maxHp);
 });
 
 finish('probe_sim_structures');

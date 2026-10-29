@@ -692,9 +692,10 @@ def square_band(B, mat, H, z0, z1, c=0.02):
         B.add(mat, K.box(tuple(np.array(n, float) * (H - 0.04) + np.array([0, 0, (z0 + z1) / 2])), (H - 0.12, 0.08, hz), c, rz=rz))
 
 
-def flags(B, mat, rng, x0, x1, y0, y1, keep=None, z=0.0, size=(1.25, 1.9), gap=0.035, th=0.09):
+def flags(B, mat, rng, x0, x1, y0, y1, keep=None, z=0.0, size=(1.25, 1.9), gap=0.035, th=0.09, ch=0.025):
     """A flagged floor (random-length flags in running courses along x) over the rectangle, z = its top;
-    keep(x, y) -> False leaves a flag out (under a plinth, beyond an edge)."""
+    keep(x, y) -> False leaves a flag out (under a plinth, beyond an edge). `ch`: each flag's chamfer (0: a plain
+    12-triangle slab, its chalked edge left to the bake's edge light)."""
     y = y0
     while y < y1 - 0.2:
         d = min(rng.uniform(*size), y1 - y)
@@ -703,13 +704,13 @@ def flags(B, mat, rng, x0, x1, y0, y1, keep=None, z=0.0, size=(1.25, 1.9), gap=0
         x = x0 + (rng.uniform(0, 0.6) if rng.random() < 0.5 else 0.0)
         if x > x0:
             if keep is None or keep((x0 + x) / 2, y + d / 2):
-                B.add(mat, K.box(((x0 + x) / 2, y + d / 2, z - th / 2), ((x - x0) / 2 - gap / 2, d / 2 - gap / 2, th / 2), 0.025))
+                B.add(mat, K.box(((x0 + x) / 2, y + d / 2, z - th / 2), ((x - x0) / 2 - gap / 2, d / 2 - gap / 2, th / 2), ch))
         while x < x1 - 0.2:
             L = min(rng.uniform(*size) * 1.15, x1 - x)
             if x1 - (x + L) < 0.5:
                 L = x1 - x
             if keep is None or keep(x + L / 2, y + d / 2):
-                B.add(mat, K.box((x + L / 2, y + d / 2, z - th / 2 + rng.uniform(-0.012, 0.012)), (L / 2 - gap / 2, d / 2 - gap / 2, th / 2), 0.025))
+                B.add(mat, K.box((x + L / 2, y + d / 2, z - th / 2 + rng.uniform(-0.012, 0.012)), (L / 2 - gap / 2, d / 2 - gap / 2, th / 2), ch))
             x += L
         y += d
 

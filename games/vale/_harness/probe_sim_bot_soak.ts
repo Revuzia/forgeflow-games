@@ -55,7 +55,7 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package (2026-10-28)
+const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package (2026-10-28)
 /** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
  *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
 const STRUCT_MIN_GAMES = 16;

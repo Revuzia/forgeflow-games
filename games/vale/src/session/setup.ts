@@ -188,7 +188,8 @@ const OPTIONAL_RULE_KEYS: Readonly<Record<string, 'number' | 'string' | 'object'
   'end.coreStructure': 'string', 'end.killScore': 'number', 'end.lives': 'number', 'end.timeLimit': 'number',
   'respawn.lateGameRampAt': 'number', 'respawn.lateGameMult': 'number', 'minionWaves.upgradeEvery': 'number',
   'tuning.assistWindow': 'number', 'tuning.xpShareRange': 'number', 'tuning.killXpFraction': 'number', 'tuning.multiKillWindow': 'number',
-  'tuning.fountainHealPerSec': 'number', 'tuning.suddenDeathRespawnMult': 'number',
+  'tuning.fountainHealPerSec': 'number', 'tuning.suddenDeathRespawnMult': 'number', 'tuning.structureHpMult': 'number',
+  gorgeWind: 'object',
 };
 /** enum-valued RulesParams keys */
 const RULE_ENUMS: Readonly<Record<string, readonly string[]>> = {

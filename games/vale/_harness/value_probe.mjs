@@ -39,6 +39,12 @@
 //              (FRAY: the Noonplate) and the jungle floor at p50 0.50-0.60 (tokens grade.fogOfWar.valueMul 0.55); every
 //              other class (walls, scatter, landmarks and lamps, the Standing Shadow and its fogged L*) is reported
 //
+//   bases      (env m1) one spot per team base of a lane map: halfway from the base's spawn to the team's structure
+//              nearest it (RIFT / BRIDGE: the Hourbell), the plaza a respawning player sees. Measured like the fighter
+//              spots (never pooled into the frame stats): the plaza's HSV saturation p50 (band 0.17-0.40, the ground
+//              band: LoL's bases stay tinted), and the base structures' L* p95 (<= 80: structure chalk sits under the
+//              fighters, r12 B5) and display luma p95 against the fighters' (verdict base_<n>_plaza / base_<n>_structure)
+//
 //   --you     pins seat 0's fighter (the bench's `you=`): measure a fighter the map's default seat roster leaves out
 //             (e.g. FRAY has no Burdam); other seats keep the default roster
 //   --fshots  1 also screenshots each fighter spot (value_<map>_<tier>_<tag>_f_<fighter>.png)
@@ -319,6 +325,23 @@ function install() {
       if (f) s.fight = [f.x, f.y];
       return s;
     },
+    /** env m1: one spot per team base (halfway from its spawn to the team's structure nearest it); never pooled */
+    baseSpots: () => {
+      const m = b.catalog.maps.find((x) => x.id === b.host.setup.map);
+      const s = {};
+      for (const base of m.bases ?? []) {
+        if (!Array.isArray(base.spawn)) continue;
+        const [sx, sy] = base.spawn;
+        let best = null, bd = Infinity;
+        for (const st of m.structures ?? []) {
+          if (st.team !== base.team) continue;
+          const d = Math.hypot(st.at[0] - sx, st.at[1] - sy);
+          if (d < bd) { bd = d; best = st; }
+        }
+        s[`base${base.team}`] = best ? [(sx + best.at[0]) / 2, (sy + best.at[1]) / 2] : [sx, sy];
+      }
+      return s;
+    },
     /** one spot per live fighter with art (fighter values only: these spots never enter the frame stats) */
     fighterSpots: () => {
       const s = {}, seen = new Set();
@@ -532,6 +555,40 @@ function fogVerdict(f) {
   return v;
 }
 
+/** env m1: per base spot, the plaza's saturation and the structures' values against the fighters' */
+function summariseBases(bspots, C, fighters) {
+  const out = {};
+  for (const [k, sp] of Object.entries(bspots)) {
+    const h = sp.hist;
+    const plaza = pool([h], [String(C.plaza)]);
+    const ground = pool([h], [C.lane, C.verge, C.plaza, C.seat].map(String));
+    const st = pool([h], [String(C.structure)]);
+    const gt = (hist, v) => { let n = 0, t = 0; hist.forEach((c, i) => { t += c; if (i > v) n += c; }); return t ? +(n / t).toFixed(4) : 0; };
+    out[k] = {
+      at: sp.at,
+      plaza: plaza && { px: plaza.n, satP50: pct(plaza.sat, 0.5, 0.01), sat: meanOf(plaza.sat, 0.01), lumaP50: pct(plaza.luma, 0.5), lstarP50: pct(plaza.lstar, 0.5, 0.5) },
+      ground: ground && { px: ground.n, satP50: pct(ground.sat, 0.5, 0.01) },
+      structures: st && { px: st.n, lstarP95: pct(st.lstar, 0.95, 0.5), lumaP95: pct(st.luma, 0.95), above180: gt(st.luma, 180), top25: topMean(st.lstar, 0.75, 0.5) },
+      fighterLumaP95: fighters?.lumaP95 ?? null,
+    };
+  }
+  return out;
+}
+
+function baseVerdict(bases) {
+  const ok = (c) => (c ? 'PASS' : 'FAIL');
+  const v = {};
+  for (const [k, b] of Object.entries(bases ?? {})) {
+    const p = b.plaza ?? b.ground;
+    if (p) v[`${k}_plaza`] = `saturation p50 ${p.satP50} ${ok(p.satP50 >= 0.17 && p.satP50 <= 0.40)} (0.17-0.40)`;
+    if (b.structures) {
+      const s = b.structures, f = b.fighterLumaP95;
+      v[`${k}_structure`] = `L* p95 ${s.lstarP95} ${ok(s.lstarP95 <= 80)} (<= 80); luma p95 ${s.lumaP95} vs fighters ${f ?? '-'} ${f == null ? '' : ok(s.lumaP95 <= f)}; above 180: ${(s.above180 * 100).toFixed(1)} %`;
+    }
+  }
+  return v;
+}
+
 function verdict(s, flash, map) {
   const ok = (c) => (c ? 'PASS' : 'FAIL');
   const v = {};
@@ -606,10 +663,18 @@ for (const map of MAPS) for (const tier of TIERS) {
       if (FSHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}`);
       fres[k] ={ at: at.map((x) => +x.toFixed(1)), hist: m.hist, figs: m.figs };
     }
+    const bres = {};
+    const bspots = await V((v) => v.baseSpots());
+    for (const [k, at] of Object.entries(bspots)) {
+      const m = await V((v, a) => v.measureAt(a.at[0], a.at[1], false), { at });
+      if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}`);
+      bres[k] = { at: at.map((x) => +x.toFixed(1)), hist: m.hist, figs: m.figs };
+    }
     let flash = null;
     if (FLASH) flash = await V((v) => v.flash('marund_domefall', 'marund_ult_domefall', 3.5));
     const s = summarise(res, C, fres);
-    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, flash, fog, verdict: { ...verdict(s, flash, map), ...(fog ? fogVerdict(fog) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
+    const bases = summariseBases(bres, C, s.fighters);
+    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, verdict: { ...verdict(s, flash, map), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
     report.runs[TAG][`${map}_${tier}`] = out;
     report.generated = new Date().toISOString();
     writeFileSync(REPORT, JSON.stringify(report, null, 1));
@@ -617,6 +682,7 @@ for (const map of MAPS) for (const tier of TIERS) {
     for (const [k, m] of Object.entries(s.masks)) console.log(`  ${k.padEnd(9)} share ${(m.share * 100).toFixed(1).padStart(5)} %  luma p5 ${m.p5} p50 ${m.p50} p95 ${m.p95} p99 ${m.p99}  L* ${m.lstarP50}  sat ${m.sat}`);
     console.log('  fighters', JSON.stringify(s.fighters), ' wicks', JSON.stringify(s.wicks));
     console.log('  env>180', JSON.stringify(s.env180));
+    for (const [k, b] of Object.entries(bases)) console.log(`  ${k} at ${b.at}: plaza ${JSON.stringify(b.plaza)} structures ${JSON.stringify(b.structures)}`);
     if (flash) console.log('  flash', flash.base, '->', flash.peak, `${flash.ratio}x`);
     for (const [k, v] of Object.entries(out.verdict)) console.log(`  ${k}: ${v}`);
   } finally {

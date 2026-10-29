@@ -13,7 +13,7 @@
       "roles": true,
       "card": { "art": "assets/ui/modes/rift_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/rift_glyph.svg" },
       "rules": {
-        "$comment": "Target 22-28 min. First wave 0:30, a wave every 30 s (3 Shieldwicks + 3 Glimwicks), a Greatwick every 3rd wave, a Brightwick every 2nd wave from 15:00, Wicks level up every 90 s. A fallen Lantern gives the breaking team Lanternwake (team_buffs.json) until it relights 4:00 later. Sudden death 40:00 is a backstop, not a pace setter.",
+        "$comment": "Target 22-28 min. First wave 0:30, a wave every 30 s (3 Shieldwicks + 3 Glimwicks), a Greatwick every 3rd wave, a Brightwick every 2nd wave from 15:00, Wicks level up every 90 s. A fallen Lantern gives the breaking team Lanternwake (team_buffs.json) until it relights 4:00 later. Sudden death 40:00 is a backstop, not a pace setter: structures keep their protection and the Gorge Wind rises every 60 s (Wicks +20 % damage and structures +15 % damage taken per step, up to 8), respawns ×2 (W4 G5).",
         "startLevel": 1,
         "maxLevel": 18,
         "startGold": 480,
@@ -46,6 +46,7 @@
         "ringshade": { "units": ["needle_outer", "needle_inner", "needle_bell", "lantern"], "mult": 0.45, "wicks": 3 },
         "surrender": { "earliest": 720, "votesNeeded": 0.8 },
         "suddenDeathAt": 2400,
+        "gorgeWind": { "every": 60, "maxSteps": 8, "wickDamage": 0.2, "structureTaken": 0.15 },
         "end": { "kind": "core", "coreStructure": "hourbell" },
         "bounty": { "kill": 280, "assistShare": 0.5, "streakStep": 70, "streakMax": 490, "shutdownMax": 490 },
         "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },
@@ -55,7 +56,7 @@
           "killXpFraction": 0.55,
           "multiKillWindow": 9,
           "fountainHealPerSec": 0.12,
-          "suddenDeathRespawnMult": 1.5
+          "suddenDeathRespawnMult": 2
         }
       }
     },
@@ -71,14 +72,14 @@
       "roles": false,
       "card": { "art": "assets/ui/modes/bridge_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/bridge_glyph.svg" },
       "rules": {
-        "$comment": "Target 14-20 min. Level 2 and 1,050 Gleam at the start (W4 re-key 2026-10-28, was level 3 and 1,300); shop at home, while dead, or within 6 m of your own standing Needles (shopAccess needles: the shop retreats as they fall); waves every 25 s from 0:20; XP doubled on a cheaper table because five share one road; no recall, the base fountain heals slowly and only inside the base circle, Mending Sunmotes on the span are the real sustain. Respawns run long (8 s + 2 s a level, ×1.45 from 9:00) so a won fight turns into a push; sudden death at 16:00 (respawns ×3). Pacing (all-bot, 20 seeds): mean 19.0 min, 14.1-22.9.",
+        "$comment": "Target 14-20 min. Level 2 and 1,050 Gleam at the start (W4 re-key 2026-10-28, was level 3 and 1,300); shop at home, while dead, or within 6 m of your own standing Needles (shopAccess needles: the shop retreats as they fall); waves every 25 s from 0:20; XP ×2.4 on a cheaper table because five share one road; passive Gleam 4.0/s; no recall, the base fountain heals slowly and only inside the base circle, Mending Sunmotes on the span are the real sustain. The span's Needles, Lanterns and Hourbells stand at 0.7 of their RIFT health (tuning.structureHpMult). Respawns run long (8 s + 2 s a level, ×1.45 from 9:00) so a won fight turns into a push. Sudden death at 21:00 keeps every structure's protection: the Gorge Wind rises every 45 s (Wicks +25 % damage and structures +20 % damage taken per step, up to 8), respawns ×2 (W4 G5). Pacing (all-bot soak, role lineups, 20 seeds × adept + veteran): median 16.4 min, 8/40 reach sudden death, 0 cores fall with their chain standing.",
         "startLevel": 2,
         "maxLevel": 18,
         "startGold": 1050,
-        "passiveGoldPerSec": 3.4,
+        "passiveGoldPerSec": 4.0,
         "passiveGoldStart": 20,
         "goldMult": 1,
-        "xpMult": 2,
+        "xpMult": 2.4,
         "xpTable": [200, 260, 320, 380, 440, 500, 560, 620, 680, 740, 800, 860, 920, 980, 1040, 1100, 1160],
         "respawn": { "base": 8, "perLevel": 2, "max": 40, "lateGameRampAt": 540, "lateGameMult": 1.45 },
         "shopAccess": "needles",
@@ -100,7 +101,8 @@
         "structures": true,
         "jungle": false,
         "surrender": { "earliest": 480, "votesNeeded": 0.8 },
-        "suddenDeathAt": 960,
+        "suddenDeathAt": 1260,
+        "gorgeWind": { "every": 45, "maxSteps": 8, "wickDamage": 0.25, "structureTaken": 0.2 },
         "end": { "kind": "core", "coreStructure": "hourbell" },
         "bounty": { "kill": 250, "assistShare": 0.6, "streakStep": 50, "streakMax": 350, "shutdownMax": 350 },
         "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },
@@ -110,7 +112,8 @@
           "killXpFraction": 0.5,
           "multiKillWindow": 10,
           "fountainHealPerSec": 0.08,
-          "suddenDeathRespawnMult": 3
+          "suddenDeathRespawnMult": 2,
+          "structureHpMult": 0.7
         }
       }
     },

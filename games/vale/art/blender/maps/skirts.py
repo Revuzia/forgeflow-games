@@ -70,9 +70,10 @@ MATS_COURT = {"dialstone": dict(LA.DIAL, hex="#948E84"), "coping": MATS_RIFT["co
 
 
 # ── pieces ───────────────────────────────────────────────────────────────────────────────────────────
-def coursed_wall(B, rng, mat, x0, x1, y, d, z0, z1, h=0.44, gap=0.014, axis="x"):
+def coursed_wall(B, rng, mat, x0, x1, y, d, z0, z1, h=0.44, gap=0.014, axis="x", ch=0.035):
     """A retaining wall face of coursed blocks along `axis` (x: from x0 to x1 at front y, depth d behind it
-    toward +Y; y: x0..x1 are y values, `y` is the x of its face, depth toward -X or +X by sign of d)."""
+    toward +Y; y: x0..x1 are y values, `y` is the x of its face, depth toward -X or +X by sign of d). `ch`: each
+    block's chamfer (0: plain 12-triangle blocks, the chalked edges and inked joints left to the bake)."""
     n = max(1, int(round((z1 - z0) / h)))
     zs = [z0 + (z1 - z0) * i / n for i in range(n + 1)]
     for k in range(n):
@@ -89,18 +90,18 @@ def coursed_wall(B, rng, mat, x0, x1, y, d, z0, z1, h=0.44, gap=0.014, axis="x")
                 c, half = ((u + u1) / 2, y + d / 2 - pr, (za + zb) / 2), ((u1 - u) / 2 - gap / 2, abs(d) / 2, (zb - za) / 2 - gap / 2)
             else:
                 c, half = (y + d / 2 - pr * np.sign(d), (u + u1) / 2, (za + zb) / 2), (abs(d) / 2, (u1 - u) / 2 - gap / 2, (zb - za) / 2 - gap / 2)
-            B.add(mat, K.box(c, half, 0.035))
+            B.add(mat, K.box(c, half, ch))
             u = u1
 
 
-def coping(B, rng, x0, x1, y, z, proud=0.1, depth=0.55, mat="coping"):
+def coping(B, rng, x0, x1, y, z, proud=0.1, depth=0.55, mat="coping", ch=0.035):
     """A row of chalk-lit coping stones along x on a wall whose face is at y (proud toward -Y)."""
     u = x0
     while u < x1 - 0.05:
         u1 = min(x1, u + rng.uniform(1.1, 1.7))
         if x1 - u1 < 0.4:
             u1 = x1
-        B.add(mat, K.box(((u + u1) / 2, y - proud + depth / 2, z + 0.07), ((u1 - u) / 2 - 0.01, depth / 2, 0.075), 0.035))
+        B.add(mat, K.box(((u + u1) / 2, y - proud + depth / 2, z + 0.07), ((u1 - u) / 2 - 0.01, depth / 2, 0.075), ch))
         u = u1
 
 
@@ -112,59 +113,102 @@ def terrace_block(B, mat, x0, x1, y0, y1, z0, z1):
 HALF = 11.0
 
 
-def rift_bank(B, rng, trees, steps, walk=(0.6, 4.0), depth_out=16.6, kerb=None, ends=True, spacing=(2.7, 3.7), cushions=7, rows=1):
-    """steps: [(front distance out, top z, tree scale range)] bottom to top. The bound is at local y = -Y0
-    (Y0 = the footprint centre's distance out, set by the caller through B.y0)."""
+def _tag(B, name):
+    """--count: pieces added from here on are reported under `name` (build_one(count=True))."""
+    if not hasattr(B, "tag_marks"):
+        B.tag_marks = []
+    B.tag_marks.append((len(B.pieces), name))
+
+
+def _chunk(B, mat, c, half, rng, ch=0.03):
+    """LA.chunk with its chamfer as a parameter (a fallen hour-tick stone)."""
+    v, f = K.box((0, 0, 0), half, ch)
+    v = K.rot(v, (rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(0.2, 1)), rng.uniform(0.3, 1.2))
+    B.add(mat, (K.move(v, c), f))
+
+
+def rift_bank(B, rng, trees, steps, walk=(0.6, 4.0), depth_out=16.6, ends=True, ch=0.0):
+    """steps, bottom to top: dict(dist = its front's distance out, top = its top z, sc = (lo, hi) crown scale,
+    n = crowns, kinds = the Dialwood variants they cycle through (VARIANTS indices), band = (f0, f1): where in the
+    bed's depth they stand, cushions = moss cushions and fallen hour-tick stones, wall = 'coursed' | 'plain').
+    The bound is at local y = -Y0 (Y0 = the footprint centre's distance out, set by the caller through B.y0).
+
+    perf (regression:perf-skirt-tris): every block, flag and coping is a plain 12-triangle solid (`ch` 0): its
+    chalked edge is the bake's edge light (a Bevel mask, structure_kit._edge_ink), its joint the baked AO, so the
+    look holds at a third of the triangles. A wall the gameplay camera can never face (the camera side's retaining
+    walls face the map, away from it) is one plain block; the last fill's own back face is the outer face (the
+    old coursed outer wall faced away from every view); the crowns are counted per terrace."""
     y0 = -B.y0
-    LA.flags(B, "dialstone", rng, -HALF, HALF, y0 + walk[0], y0 + walk[1] - 0.05, z=0.08, size=(1.0, 1.6), th=0.2)   # sunk into the cap (3.33)
-    if kerb:
-        kz = kerb
-        coursed_wall(B, rng, "wallstone", -HALF, HALF, y0 + walk[1], 0.4, 0.0, kz, h=kz)
-        coping(B, rng, -HALF, HALF, y0 + walk[1], kz, proud=0.06, depth=0.5)
+    _tag(B, "flags")
+    LA.flags(B, "dialstone", rng, -HALF, HALF, y0 + walk[0], y0 + walk[1] - 0.05, z=0.08, size=(1.0, 1.6), th=0.2, ch=ch)   # sunk into the cap (3.33)
     prev_top = 0.0
-    for i, (dist, top, sc) in enumerate(steps):
+    for i, st in enumerate(steps):
+        dist, top = st["dist"], st["top"]
         yf = y0 + dist
-        nxt = steps[i + 1][0] if i + 1 < len(steps) else depth_out
+        nxt = steps[i + 1]["dist"] if i + 1 < len(steps) else depth_out
         yb = y0 + nxt
         # the fill (moss on top), down to the plain where it lies past the rim's outer edge
         zb = -RIM if nxt > CAP - 0.5 else 0.0
+        _tag(B, "fill")
         terrace_block(B, "moss", -HALF, HALF, yf + 0.3, yb + 0.02, zb - 0.1, top - 0.02)
-        # the retaining wall at its front: coursed, the coping chalk-lit
-        coursed_wall(B, rng, "wallstone", -HALF, HALF, yf, 0.62, prev_top - 0.14 if dist < CAP else -RIM, top - 0.15)
-        coping(B, rng, -HALF, HALF, yf, top - 0.15)
+        # the retaining wall at its front (coursed, or one plain block where no view can face it), the coping chalk-lit
+        _tag(B, f"wall{i + 1}")
+        z0 = prev_top - 0.14 if dist < CAP else -RIM
+        if st.get("wall", "coursed") == "coursed":
+            coursed_wall(B, rng, "wallstone", -HALF, HALF, yf, 0.62, z0, top - 0.15, ch=ch)
+        else:
+            terrace_block(B, "wallstone", -HALF, HALF, yf, yf + 0.62, z0, top - 0.15)
+        _tag(B, f"coping{i + 1}")
+        coping(B, rng, -HALF, HALF, yf, top - 0.15, ch=ch)
         if ends:
+            _tag(B, "ends")
             for sx in (-1, 1):
-                coursed_wall(B, rng, "wallstone", yf + 0.55, yb, sx * HALF, -sx * 0.5, max(zb, prev_top - 0.4), top - 0.12, h=0.6, axis="y")
-        # its row of Dialwood (the props' own crowns), staggered, kept 0.5 m behind the coping
-        lo, hi = sc
-        for row in range(rows):                              # rows > 1: staggered rows across a deep bed
-            x = -HALF + rng.uniform(0.8, 2.0) + row * spacing[0] / 2
-            while x < HALF - 0.9:
-                f = (row + rng.uniform(0.2, 0.8)) / rows
-                yy = yf + 0.9 + (yb - yf - 1.6) * f
-                trees.append((x, yy, top, rng.uniform(lo, hi), rng.uniform(0, TAU), rng.randrange(5)))
-                x += rng.uniform(*spacing)
-        for _ in range(cushions):                                   # moss cushions and fallen hour-tick stones
+                coursed_wall(B, rng, "wallstone", yf + 0.55, yb, sx * HALF, -sx * 0.5, max(zb, prev_top - 0.4), top - 0.12, h=0.6, axis="y", ch=ch)
+        # its Dialwood (the props' own crowns): n evenly pitched along the bed, jittered, staggered in depth within
+        # its band, kept 0.5 m behind the coping; the variants cycle through `kinds` in a shuffled order
+        lo, hi = st["sc"]
+        n, f0, f1 = st["n"], *st.get("band", (0.0, 1.0))
+        pool = [st["kinds"][k % len(st["kinds"])] for k in range(n)]
+        rng.shuffle(pool)
+        pitch = 2 * HALF / max(1, n)
+        for k in range(n):
+            x = -HALF + pitch * (k + 0.5) + rng.uniform(-0.22, 0.22) * pitch
+            yy = yf + 0.9 + (yb - yf - 1.6) * rng.uniform(f0, f1)
+            trees.append((x, yy, top, rng.uniform(lo, hi), rng.uniform(0, TAU), pool[k]))
+        _tag(B, "cushions")
+        for _ in range(st.get("cushions", 5)):                      # moss cushions and fallen hour-tick stones
             c = (rng.uniform(-HALF + 0.6, HALF - 0.6), yf + 0.8 + (yb - yf - 1.2) * rng.random(), top)
             if rng.random() < 0.6:
                 v, f = K.lathe([(0, top - 0.05), (rng.uniform(0.35, 0.7), top - 0.05), (0.3, top + rng.uniform(0.12, 0.22)), (0, top + 0.25)], 7, phase=rng.random())
                 B.add("moss", (K.move(v, (c[0], c[1], 0)), f))
             else:
-                LA.chunk(B, "wallstone", c, (rng.uniform(0.15, 0.3), rng.uniform(0.1, 0.2), rng.uniform(0.08, 0.14)), rng)
+                _chunk(B, "wallstone", c, (rng.uniform(0.15, 0.3), rng.uniform(0.1, 0.2), rng.uniform(0.08, 0.14)), rng, ch=ch)
         prev_top = top
-    # the outer face: past the last terrace the bank falls to the plain
-    coursed_wall(B, rng, "wallstone", -HALF, HALF, y0 + depth_out, 0.5, -RIM, prev_top - 0.02, h=1.15)
+
+
+ALL, TALL, LOW = (0, 1, 2, 3, 4), (0, 1, 4), (3, 3, 2)            # VARIANTS indices: tall broad squat young lean
 
 
 def skirt_rift(B, rng, trees):
+    """North / west / east: the gameplay camera sees the rim walk, the first coursed wall and the first bed's crowns
+    (the focus clamp keeps it within ~8 m of the bound); the upper terraces are the skyline of the far views."""
     B.y0 = 10.0                    # footprint: 4-16 m out (centre 10 m)
-    rift_bank(B, rng, trees, [(4.0, 0.95, (0.95, 1.2)), (8.5, 1.9, (1.15, 1.45)), (12.5, 2.85, (1.35, 1.75))], depth_out=16.6)
+    rift_bank(B, rng, trees, [
+        dict(dist=4.0, top=0.95, sc=(0.95, 1.2), n=6, kinds=ALL, band=(0.05, 0.95), cushions=5),
+        dict(dist=8.5, top=1.9, sc=(1.15, 1.45), n=4, kinds=(1, 2, 3, 4), cushions=3),
+        dict(dist=12.5, top=2.85, sc=(1.35, 1.75), n=3, kinds=TALL, cushions=2),
+    ], depth_out=16.6)
 
 
 def skirt_rift_low(B, rng, trees):
+    """South, the camera's side (everything low, brief §2): the camera looks at it from behind, so its retaining walls
+    are plain blocks; it sees the rim walk, the kerb's coping and the front of the young-Dialwood bed (the focus clamp
+    keeps the view within ~6 m of the bound), so the crowns stand at the bed's front and the upper terrace is sparse."""
     B.y0 = 8.5                     # footprint: 3-14 m out (centre 8.5 m)
-    rift_bank(B, rng, trees, [(3.0, 0.4, (0.72, 0.92)), (8.0, 0.9, (0.82, 0.98))], walk=(0.6, 3.0), depth_out=14.0, spacing=(2.6, 3.4),
-              cushions=16, rows=2)
+    rift_bank(B, rng, trees, [
+        dict(dist=3.0, top=0.4, sc=(0.8, 0.95), n=7, kinds=LOW, band=(0.0, 0.5), cushions=5, wall="plain"),
+        dict(dist=8.0, top=0.9, sc=(0.85, 1.0), n=3, kinds=(3,), band=(0.1, 0.6), cushions=2, wall="plain"),
+    ], walk=(0.6, 3.0), depth_out=14.0, ends=False)
 
 
 # ── BRIDGE: the far banks ───────────────────────────────────────────────────────────────────────────
@@ -383,7 +427,12 @@ def export_glb(root, path):
         export_animations=False, export_skins=False, export_lights=False, export_cameras=False, export_extras=False))
 
 
-def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
+# the RIFT banks stand on the cap (local z 0): every downward face at or under it rests on the ground, a fill or the
+# plain and no view (nor the sun's shadow of anything in view) can reach it; the other modules keep the old cut
+BOTTOMS = {"skirt_rift": 0.02, "skirt_rift_low": 0.02}
+
+
+def build_one(name: str, fast: bool = False, preview: bool = False, count: bool = False) -> dict:
     from common import export as X
     scene.reset()
     col = scene.collection(name)
@@ -396,9 +445,11 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
     K.paint_set(spec, zmax)
     objs = B.objects(col)
     body = objs["body"]
-    K.drop_hidden_bottoms(body, z=-RIM + 0.02)
+    K.drop_hidden_bottoms(body, z=BOTTOMS.get(name, -RIM + 0.02))
     buried = K.drop_buried_faces(body, [], keep_mats=())
     tr = tree_node(col, trees, name)
+    if count:
+        return count_report(name, B, body, tr, trees, buried)
     os.makedirs(SCRATCH, exist_ok=True)
     K.bake_body(body, [tr] if tr else [], SCRATCH, name, size=512 if fast else size, samples=6 if fast else 24,
                 ao_samples=16 if fast else 96, ao_distance=ao_d)
@@ -421,6 +472,32 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
            "y": [round(float(lo[1]), 2), round(float(hi[1]), 2)], "kb_raw": raw // 1024, "kb": os.path.getsize(path) // 1024,
            "texture": 512 if fast else size, "buried_faces_dropped": buried}
     scene.log(f"{name}: {rep}")
+    return rep
+
+
+def count_report(name, B, body, tr, trees, buried) -> dict:
+    """--count: the shipped triangle split (after the bottom / buried-face cuts) by builder tag and crown variant,
+    without the bake or the export."""
+    import bisect
+    marks = getattr(B, "tag_marks", [])
+    starts = [m[0] for m in marks]
+    me = body.data
+    pid = [0] * len(me.vertices)
+    if "vale_piece" in me.attributes:
+        me.attributes["vale_piece"].data.foreach_get("value", pid)
+    by: dict = {}
+    for p in me.polygons:
+        i = bisect.bisect_right(starts, pid[p.vertices[0]]) - 1
+        t = marks[i][1] if i >= 0 else "other"
+        by[t] = by.get(t, 0) + len(p.vertices) - 2
+    body_tris = sum(len(p.vertices) - 2 for p in me.polygons)
+    tree_tris = sum(len(p.vertices) - 2 for p in tr.data.polygons) if tr else 0
+    kinds: dict = {}
+    for t in trees:
+        kinds[VARIANTS[t[5]]] = kinds.get(VARIANTS[t[5]], 0) + 1
+    rep = {"id": name, "tris": body_tris + tree_tris, "body": body_tris, "trees_tris": tree_tris, "trees": len(trees),
+           "kinds": kinds, "by_tag": dict(sorted(by.items(), key=lambda kv: -kv[1])), "buried_faces_dropped": buried}
+    scene.log(f"COUNT {name}: {rep}")
     return rep
 
 
@@ -464,6 +541,7 @@ def main():
     p.add_argument("--only", default="")
     p.add_argument("--fast", action="store_true")
     p.add_argument("--preview", action="store_true")
+    p.add_argument("--count", action="store_true", help="triangle split only: no bake, no export, no report write")
     a = p.parse_args(scene.script_args())
     os.makedirs(OUT, exist_ok=True)
     rp = os.path.join(RENDERS, "build_report_skirts.json")
@@ -471,8 +549,10 @@ def main():
     for name in DESIGNS:
         if a.only and name not in a.only.split(","):
             continue
-        rep[name] = build_one(name, a.fast, a.preview)
-        scene.write_json(rp, rep)
+        r = build_one(name, a.fast, a.preview, a.count)
+        if not a.count:
+            rep[name] = r
+            scene.write_json(rp, rep)
 
 
 if __name__ == "__main__":

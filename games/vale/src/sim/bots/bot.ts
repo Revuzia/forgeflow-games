@@ -391,7 +391,7 @@ export class Bot extends BotBase implements BotController {
       // (laning: shove my own lane only while no enemy fighter is there to farm it under its tower)
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       // (sent to answer a threatened road, W4 G3: before the plan, not before my life)
-      if (b.answer.has(this.player) && hpF > 0.4) consider('defend', 0.8);
+      if (b.answer.has(this.player) && hpF > 0.5) consider('defend', 0.8);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
       let global = 0;
       for (let i = 0; i < b.defend.length; i++) global = Math.max(global, b.defend[i]);

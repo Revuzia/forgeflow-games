@@ -31,14 +31,14 @@ Numbers marked *(r0N)* were calibrated against `_design/research/r0N_*.md`. They
 | Pick | `draft` (queues override) | `random_bench` (the Lot) | `ffa_pick` (no duplicates, first lock wins) |
 | Target length | 22–28 min | 14–20 min | 8–11 min |
 | Start | level 1, 480 Gleam | level 2, 1,050 Gleam (W4 re-key) | level 6 (ultimate ready), 1,400 Gleam |
-| Level cap · XP | 18 · table 240 → 1,520 (+80 per level, 14,960 total) | 18 · ×2 XP on 200 → 1,160 (+60) | 16 · same steps as Rift, 15 entries |
-| Passive Gleam | 3.2/s from 0:30 (W4 G7; was 2.2) | 3.4/s from 0:20 | 4/s from 0:00 |
+| Level cap · XP | 18 · table 240 → 1,520 (+80 per level, 14,960 total) | 18 · ×2.4 XP on 200 → 1,160 (+60) (W4 G5; was ×2) | 16 · same steps as Rift, 15 entries |
+| Passive Gleam | 3.2/s from 0:30 (W4 G7; was 2.2) | 4.0/s from 0:20 (W4 G5; was 3.4) | 4/s from 0:00 |
 | Waves | 0:30, every 30 s, level +1 every 90 s | 0:20, every 25 s, level +1 every 60 s | none |
 | Structures · jungle | yes · yes | yes · no | no · no |
 | Shop · recall · fountain | base · 7 s · 12 %/s | base, while dead, or within 6 m of your own standing Needles (`needles`) · none · 8 %/s, in base only | the Lampwright cart(s) (`shops`) · none · none |
-| Respawn | 6 s + 2.4/level, max 50; ×1.25 after 25:00 | 6 s + 1.5/level, max 32; ×1.2 after 14:00 | 4 s + 0.4/level, max 9 |
+| Respawn | 6 s + 2.4/level, max 50; ×1.25 after 25:00 | 8 s + 2/level, max 40; ×1.45 from 9:00 | 4 s + 0.4/level, max 9 |
 | Kill bounty | 280; assists share 50 %; streak +70 to 490; shutdown up to 490 | 250; 60 %; +50 to 350; 350 | 200; 50 %; +40 to 320; 320 |
-| Surrender · sudden death | 12:00, 4 of 5 · 40:00 | 8:00, 4 of 5 · 20:00 | — · — |
+| Surrender · sudden death (the Gorge Wind) | 12:00, 4 of 5 · 40:00 | 8:00, 4 of 5 · 21:00 | — · — |
 | End | silence the Hourbell (`core`) | silence the Hourbell (`core`) | `last_standing_or_score`: 4 lives, first to 12 kills, else 11:00 |
 | Item pool | `rift` | `bridge` | `fray` (the lighter loadout) |
 
@@ -50,7 +50,7 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 - *XP.* A solo road reaches level 6 at about 4:30 to 5:00, and the shared duo road at about 7:00 to 8:00. That is slightly faster than the reference, to fit a 25-minute target.
 - *Respawn.* Death timers run 6 s at level 1 to 47 s at level 18, and reach about 58 s after 25:00. The reference is 10 s to 52.5 s, rising to 78.75 s at 55:00. Ours are shorter on purpose: a browser player who waits a minute leaves.
 - *Kills.* A kill pays 280 and the assist pool 140 (reference 300 and 150). Shutdowns are capped at 490 with no carry-over.
-- *Sudden death.* Sudden death at 40:00 is a backstop. It removes structure protection and makes respawns ×1.5.
+- *Sudden death.* Sudden death at 40:00 is a backstop, not a pace setter. It never removes structure protection (W4 G5: a core cannot fall with its chain standing); it brings the **Gorge Wind** instead (`rules.gorgeWind`, below) and respawns ×2.
 - *Tuning.* `tuning` tightens the assist window to 9 s and XP share to 15 m, and sets fighter-kill XP to 0.55 of a level step. That keeps one early kill from swinging lanes.
 
 **BRIDGE** is the "every second is a fight" layer *(r03 §2.1–2.2)*.
@@ -59,9 +59,11 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 - *No recall.* Health becomes a resource spent across fights. Sustain comes from **Mending Sunmotes** on the span (WORLD: Sunmotes fall in FRAY and BRIDGE).
 - *Shopping.* (W4 re-key, 2026-10-28) You shop at the base circle, while dead, or within 6 m of one of your own **standing Needles** (`shopAccess: needles`, `shopAt: { units: [needle_outer, needle_inner, needle_bell], radius: 6 }`). The shop retreats toward home as your Needles fall, so losing the span's front also costs you your forward shop; a team that holds its outer Needle shops 21 m from the Snap. This replaces the genre's "shop only at the fountain or while dead" rule.
 - *Fountain.* It heals only inside the base circle, at 8 %/s, which is a reason not to walk home.
-- *XP.* XP is doubled on a cheaper table because five fighters share one wave inside the 18 m share range. A Bridge fighter reaches about level 14–16 by 17:00.
+- *XP.* XP is ×2.4 on a cheaper table because five fighters share one wave inside the 18 m share range (W4 G5; was ×2). A Bridge fighter reaches about level 15–17 by 16:00.
+- *Structures.* The span's Needles, Lanterns and Hourbells stand at 0.7 of their RIFT health (`tuning.structureHpMult: 0.7`): ten fighters on one road break a structure far faster than two on a RIFT road, and the reference's single-road mode ends in 15–20 min. Passive Gleam is 4.0/s (was 3.4) so the first finished pieces arrive before the span's middle Needles fall.
 - *Waves.* Faster waves (every 25 s) and 60 s minion upgrades keep the lane pushing.
-- *End.* Sudden death at 20:00 ends stalemates.
+- *End.* Sudden death at 21:00 ends stalemates without unlocking anything (W4 G5). Structures keep their `requires` protection; the **Gorge Wind** rises through the gorge instead (`gorgeWind: { every: 45, maxSteps: 8, wickDamage: 0.25, structureTaken: 0.2 }`): one step at 21:00 and one more every 45 s, each step giving every Wick +25 % damage and every structure +20 % damage taken, so a stalled match breaks its chain down in order — outer, inner, Lantern, Bell Needle, Hourbell — within a few minutes. Respawns run ×2 (was ×3). Before this change sudden death at 16:00 dropped all protection: 34 of 40 soak games ended in it and 26 cores fell with their chain standing.
+- *Measured* (`node _harness/probe_sim_bot_soak.ts --full`, BRIDGE 20 seeds × adept + veteran, role lineups; reports `_harness/_reports/fw_W4_soak_db_*`): see §2 BRIDGE pacing in the W4 G5 record below.
 - *Not adopted.* The reference mode also cuts long-range damage and heals mode-wide *(r03 §2.1)*. `RulesParams` has no such knob, and we don't fake one per fighter. If playtests show poke dominating, that is a SIM request (`tuning.rangedDamageMult`), not a content hack.
 
 **FRAY** is a score race with lives, the second option in *r03 §4a.11*. The paired-rounds model needs a round system the sim doesn't have.
@@ -91,7 +93,7 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 - *Economy.* Passive income is 3.6/s (W4 G7; was 2.6), and gold and XP are ×1.15.
 - *Waves.* The first wave comes at 0:20, then every 25 s. Wicks upgrade every 75 s, and Brightwicks start at 11:00.
 - *Logistics.* Recall takes 5 s. Respawns are 5 s + 2/level, max 38, ×1.2 after 16:00.
-- *Ending.* Surrender opens at 9:00. Sudden death comes at 23:00, with a gentler ×1.3 respawn multiplier.
+- *Ending.* Surrender opens at 9:00. Sudden death comes at 23:00, with a gentler ×1.3 respawn multiplier; like RIFT it keeps structure protection and brings the Gorge Wind (inherited from the mode's rules).
 
 The reference moved its sudden death to about 25:00 and caps games at about 36 min, a shape marked [conflicting] in r01. Ours lands matches at about 18 min, under r01 §6a.3's browser target of 15–25 min.
 
@@ -282,7 +284,7 @@ In fiction terms, the Seat road runs straight to the bell, and its Lantern holds
 
 - *Why not "any Lantern".* The sim's `requires` means "protected while ANY listed structure stands", so "any one Lantern opens the base" can't be written.
 - *How the rule plays.* Side Lanterns still matter. They grant Lanternwake, which pushes every road, including the centre one. The final siege always comes through the centre, which makes the end game legible for players and for bots.
-- *Relighting.* A relit centre Lantern protects surviving Bell Needles again, a built-in comeback. In sudden death nothing is protected.
+- *Relighting.* A relit centre Lantern protects surviving Bell Needles again, a built-in comeback. Sudden death keeps this (W4 G5); the Gorge Wind wears the chain down instead.
 - *If design wants any road to open the base:* SIM would add an additive `requiresAny` on map structures, and the Bell Needles would `requiresAny` all three Lanterns.
 
 *Bridge, per team (5 structures)* on `road_span`, a slimmer chain for a shorter mode:
