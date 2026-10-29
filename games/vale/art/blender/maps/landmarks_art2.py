@@ -1154,19 +1154,25 @@ def numeral(B, rng, glyph: str, tilt: float = 52.0):
     D = NUM_D
     pieces = []
     for (a, b, w) in strokes:
-        pieces.append(("dialstone", K.prism(_stroke_poly(a, b, w), u=(1, 0, 0), v=(0, 0, 1), depth=D, chamfer=0.07)))
+        # a thin stroke is cut 3 cm shallower on both faces, so where it crosses or meets a thick one the thick stone
+        # stands proud over it (never two coplanar faces baking each other black)
+        d = D if w >= NUM_W else D - 0.06
+        pieces.append(("dialstone", K.prism(_stroke_poly(a, b, w), u=(1, 0, 0), v=(0, 0, 1), depth=d, chamfer=0.07)))
     for zc in (0.16, NUM_H - 0.16):                                              # foot and head bars: a proud slab each
         pieces.append(("dialstone", K.box((width / 2, 0.0, zc), (width / 2 + 0.35, D / 2 + 0.06, 0.16), 0.05)))
     t = -math.radians(tilt)                                                      # the top away from the camera (+Y)
     for mat, (v, f) in pieces:
         v = K.rot(K.move(np.asarray(v, dtype=np.float64), (-width / 2, 0.0, -0.9)), (1, 0, 0), t)
         B.add(mat, (v, f))
-    # the spill at its foot: broken stone half sunk along the camera side, two flat spalls on the block top
-    n = max(4, int(width / 1.1))
+    # the spill at its foot: flat broken spalls half sunk along the camera side (lying, never standing on a corner),
+    # two larger flat spalls on the block top
+    n = max(3, int(width / 1.5))
     for k in range(n):
-        x = -width / 2 - 0.3 + (width + 0.6) * (k + 0.5) / n + rng.uniform(-0.2, 0.2)
-        s = rng.uniform(0.22, 0.38)
-        chunk(B, "rubble", (x, rng.uniform(-1.25, -0.85), s * 0.35), (s, s * rng.uniform(0.7, 1.1), s * 0.6), rng)
+        x = -width / 2 - 0.2 + (width + 0.4) * (k + 0.5) / n + rng.uniform(-0.25, 0.25)
+        s = rng.uniform(0.2, 0.32)
+        v, f = K.box((0, 0, 0), (s, s * rng.uniform(0.65, 0.9), s * 0.32), 0.03, rz=rng.uniform(0, PI))
+        v = K.rot(v, (rng.uniform(-1, 1), rng.uniform(-1, 1), 0.0), rng.uniform(0.08, 0.25))
+        B.add("rubble", (K.move(v, (x, rng.uniform(-1.3, -1.0), s * 0.12)), f))
     for sx in (-1, 1):
         B.add("rubble", K.box((sx * (width / 2 + 0.55), -0.4, 0.05), (0.42, 0.3, 0.07), 0.025, rz=rng.uniform(-0.5, 0.5)))
 
@@ -1184,9 +1190,9 @@ def _vi(B, rng):
     poly = [(-0.38, -0.81), (0.42, -0.81), (0.40, 0.81), (-0.30, 0.81), (-0.44, 0.35), (-0.33, 0.0), (-0.47, -0.4)]
     v, f = K.prism(poly, origin=(0, 0, 0.06), u=(1, 0, 0), v=(0, 1, 0), depth=T - 0.06, chamfer=0.05, center=False)
     v = K.rot(K.rotz(v, 0.12), (0, 1, 0), -0.06, about=(0.4, 0, 0.06))
-    B.add("dialstone", (K.move(v, (x1 + 0.62, -0.06, -0.02)), f))
-    v, f = K.box((x1 + 0.07, 0.0, 0.06 + (T - 0.04) / 2), (0.06, Wd / 2 - 0.06, (T - 0.04) / 2), 0.02)
-    B.add("raw", (v, f))                                                         # the main stone's own fracture face
+    B.add("dialstone", (K.move(v, (x1 + 0.56, -0.06, -0.02)), f))
+    v, f = K.box((x1 + 0.004, 0.0, 0.06 + (T - 0.04) / 2), (0.014, Wd / 2 - 0.1, (T - 0.04) / 2 - 0.05), 0.006)
+    B.add("raw", (v, f))                                                         # the main stone's fracture face, set in its end
     # VI cut into the top: inked channels a hair proud of the face, the V thick-left / thin-right, the I thick; head
     # and foot of every stroke cut level; the V's point south (-Y: the camera's side)
     cx = -1.15

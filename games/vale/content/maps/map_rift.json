@@ -1619,7 +1619,8 @@
      "at": [55.3, 28.2],
      "size": [9.0, 4.0],
      "height": 5.0,
-     "note": "half-buried, tilted 20 degrees"
+     "note": "half-buried: carved dial-stone strokes, each its own chamfered stone between a foot and a head bar, laid back 52 degrees so the face looks up the camera's line, sunk 0.9 m, spalls at its foot (art/blender/maps/landmarks_art2.py)",
+     "value": 0.6
     },
     {
      "id": "numeral_ii", "model": "assets/maps/landmarks/numeral_ii.glb",
@@ -1627,7 +1628,8 @@
      "at": [114.7, 28.2],
      "size": [6.0, 4.0],
      "height": 5.0,
-     "note": "half-buried"
+     "note": "half-buried, as Elevenmark",
+     "value": 0.6
     },
     {
      "id": "numeral_vii", "model": "assets/maps/landmarks/numeral_vii.glb",
@@ -1635,7 +1637,8 @@
      "at": [55.3, 81.8],
      "size": [10.0, 4.0],
      "height": 5.0,
-     "note": "half-buried"
+     "note": "half-buried, as Elevenmark",
+     "value": 0.6
     },
     {
      "id": "numeral_iiii", "model": "assets/maps/landmarks/numeral_iiii.glb",
@@ -1643,7 +1646,8 @@
      "at": [114.7, 81.8],
      "size": [9.0, 4.0],
      "height": 5.0,
-     "note": "half-buried"
+     "note": "half-buried, as Elevenmark",
+     "value": 0.6
     },
     {
      "id": "noon_stone", "model": "assets/maps/landmarks/noon_stone.glb",
@@ -1660,7 +1664,8 @@
      "at": [85.0, 107.0],
      "size": [6.0, 2.0],
      "height": 1.2,
-     "note": "lying flat: south of the South Road"
+     "note": "lying flat south of the South Road: one dressed dial-stone on a bedding course, its east end snapped off askew, VI cut and inked in its top (the V's point to the camera) (art/blender/maps/landmarks_art2.py)",
+     "value": 0.6
     },
     {
      "id": "skirt_rift_n1", "model": "assets/maps/landmarks/skirt_rift.glb",
