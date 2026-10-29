@@ -706,6 +706,8 @@ P23_PENDING_NEG = [
     ("p23_fall-plant-no-event", "p23/fall.py", ["--plant", "no-event", "--parts", "human"], 3600),
     # (fix round) bots-avoid's falsifier: bots.js served with its C-FALL guard off (LETHAL_H / WALK_H null = the base bots) - bots-avoid lips must FAIL
     ("p23_fall-plant-no-fall-guard", "p23/fall.py", ["--plant", "no-fall-guard", "--parts", "lip"], 3600),
+    # (R3) bots-rule's falsifier: the fall curve x0.6 in the bots' page (a 10 m drop costs a bot ~23 hp) - bots-rule must FAIL
+    ("p23_fall-plant-bot-curve-x0.6", "p23/fall.py", ["--plant", "bot-curve-x0.6", "--parts", "bots"], 3600),
     ("p23_move-plant-slide-flat", "p23/move.py", ["--plant", "slide-flat", "--parts", "slide"], 3600),
     ("p23_move-plant-no-swap", "p23/move.py", ["--plant", "no-swap", "--parts", "shoulder"], 3600),
     ("p23_move-plant-aim-past", "p23/move.py", ["--plant", "aim-past", "--parts", "crosshair"], 3600),
