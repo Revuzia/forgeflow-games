@@ -35,10 +35,11 @@ export const CALM_TRIM = { gain: 0.75, tone: 0.6, perc: 0.5 };
 
 /**
  * The procedural score's faders: a town's band, and the orbital score (a bed under the hum of space, not a town's band:
- * it plays softer). The authored pieces' trims (authored.ts AUTHORED gain) are measured against these.
+ * it plays softer, yet near enough to the town's level that the title theme over it is not a jump: fix r3 #14). The
+ * authored pieces' trims (authored.ts AUTHORED gain) are measured against these.
  */
 export const TOWN_GAIN = 0.85;
-export const ORBITAL_GAIN = 0.5;
+export const ORBITAL_GAIN = 0.7;
 
 /** reverb send by instrument set: outdoors for the first peoples, halls for organs, a cathedral of space in orbit */
 const WET = [0.22, 0.3, 0.42, 0.3, 0.7];

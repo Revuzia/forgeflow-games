@@ -1253,7 +1253,7 @@ export class Shell {
     if (hint && hint.left < toastW) bottom = Math.max(bottom, H - hint.top + 8);
     // the chronicle ticker in the bottom-left corner (two lines tall in the site frame): the toasts stand above it
     const tick = this.hud.tickerRect();
-    if (tick && tick.left < toastW) bottom = Math.max(bottom, H - tick.top + 6);
+    if (tick && tick.left < toastW) bottom = Math.max(bottom, H - tick.top + 10);
     let top = false;
     if (card && card.left < toastW) {
       bottom = Math.max(bottom, H - card.top + 10);

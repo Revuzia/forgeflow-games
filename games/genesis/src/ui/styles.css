@@ -1085,8 +1085,10 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 .gn-title-main:not([disabled]) .gn-title-t small { color: var(--gn-ivory-dim); }
 .gn-title-foot { position: absolute; left: clamp(24px, 6.5vw, 120px); bottom: 16px; display: flex; gap: 8px; font: 600 10px var(--gn-sans); letter-spacing: .26em;
   text-transform: uppercase; color: var(--gn-ivory-faint); pointer-events: none; }
-/* a window's glass does not hide what it covers: the HUD panels under an open window step back while it is open */
-.gn-ui > .gn-under-win { opacity: 0 !important; pointer-events: none !important; transition: opacity .2s ease; }
+/* a window's glass does not hide what it covers: the HUD panels under an open window step back while it is open (at
+   once: the window's own entrance covers the change, and a fade whose start waits on the next frame would show them
+   whole in a slow first frame) */
+.gn-ui > .gn-under-win { opacity: 0 !important; pointer-events: none !important; transition: none !important; }
 /* the interface behind the title steps aside (windows, their veils and the toasts stay) */
 .gn-ui.gn-titled > :not(.gn-title):not(.gn-win):not(.gn-veil):not(.gn-toasts) { opacity: 0 !important; pointer-events: none !important; transition: opacity .35s ease; }
 .gn-world-layer.gn-titled > * { opacity: 0 !important; pointer-events: none !important; }

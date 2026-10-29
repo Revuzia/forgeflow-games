@@ -27,7 +27,13 @@ export interface AuthoredPiece {
   passes: number;
   /** seconds the procedural score plays between appearances */
   rest: number;
-  /** linear trim against the procedural score */
+  /**
+   * Linear trim that sets the piece's loudness against the procedural score it alternates with (fix r3 #14): the
+   * stems are mastered to about -16 LUFS, the procedural score plays far below that, so at gain 0.85 a piece came in
+   * 8-12 LU louder than the music it took over from. Measured through the real engine at 1x (lab weave renders,
+   * ffmpeg ebur128, gated): the trims put each piece about 1 LU over its procedural score (tests/audio-authored.test.ts
+   * pins them to those measurements).
+   */
   gain: number;
 }
 
@@ -37,12 +43,12 @@ export interface AuthoredPiece {
  */
 export const AUTHORED: Record<string, AuthoredPiece> = {
   title: {
-    id: 'title', loop: 40 * 4 * 60 / 70, passes: 1, rest: 75, gain: 0.85,
+    id: 'title', loop: 40 * 4 * 60 / 70, passes: 1, rest: 75, gain: 0.45,
     stems: { main: new URL('./assets/title.ogg', import.meta.url).href },
   },
   // the era pieces (score/eras.ts): loop = bars × beats per bar × 60 / bpm, exactly as rendered
   'era-stone': {
-    id: 'era-stone', loop: 16 * 4 * 60 / 66, passes: 2, rest: 80, gain: 0.85,
+    id: 'era-stone', loop: 16 * 4 * 60 / 66, passes: 2, rest: 80, gain: 0.48,
     stems: {
       main: new URL('./assets/era-stone-main.ogg', import.meta.url).href,
       day: new URL('./assets/era-stone-day.ogg', import.meta.url).href,
@@ -51,7 +57,7 @@ export const AUTHORED: Record<string, AuthoredPiece> = {
     },
   },
   'era-bronze': {
-    id: 'era-bronze', loop: 20 * 4 * 60 / 84, passes: 2, rest: 80, gain: 0.85,
+    id: 'era-bronze', loop: 20 * 4 * 60 / 84, passes: 2, rest: 80, gain: 0.48,
     stems: {
       main: new URL('./assets/era-bronze-main.ogg', import.meta.url).href,
       day: new URL('./assets/era-bronze-day.ogg', import.meta.url).href,
@@ -60,7 +66,7 @@ export const AUTHORED: Record<string, AuthoredPiece> = {
     },
   },
   'era-medieval': {
-    id: 'era-medieval', loop: 32 * 3 * 60 / 105, passes: 2, rest: 80, gain: 0.85,
+    id: 'era-medieval', loop: 32 * 3 * 60 / 105, passes: 2, rest: 80, gain: 0.48,
     stems: {
       main: new URL('./assets/era-medieval-main.ogg', import.meta.url).href,
       day: new URL('./assets/era-medieval-day.ogg', import.meta.url).href,
@@ -69,7 +75,7 @@ export const AUTHORED: Record<string, AuthoredPiece> = {
     },
   },
   'era-engines': {
-    id: 'era-engines', loop: 24 * 4 * 60 / 96, passes: 2, rest: 80, gain: 0.85,
+    id: 'era-engines', loop: 24 * 4 * 60 / 96, passes: 2, rest: 80, gain: 0.48,
     stems: {
       main: new URL('./assets/era-engines-main.ogg', import.meta.url).href,
       day: new URL('./assets/era-engines-day.ogg', import.meta.url).href,

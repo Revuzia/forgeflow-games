@@ -2818,3 +2818,49 @@ Work in progress; numbers are measured, every item names its probe or test. Path
 | 13 | §3.7's every-power row was the round-2 tree's; the seed-3 firestorm killed 10 / 30 (cap 30 %) | traced, no change: `fix4/f13/trace.ts` (the firestorm cast on the town centre). Every death comes 50–70 minutes after the cast, 8 of 10 while fleeing: health falls from 1 to under 0.2 within the hour for those standing in the front's spawn disc. The drought walk-away stays (it is §3.7's "migration toward water"; 29 / 30 alive) | round-3 tree 10 / 30 dead (`fix4/f13/trace-3-T.log`), round-4 tree **8 / 30 = 0.267** (`trace-3.log`). The row is re-cast on the round-4 tree on the table's 4 seeds (`fix4/acc/chain.sh … leth:<seed>` → `fix4/leth/all-<seed>.log`) |
 | 1 / 10 / 19 | hunting where game exists: the round-3 re-tune (J: a folk hunt once a year as a day trip, a raiding pack answered by armed men only) was built but off, and its gate (births within 10 % on ≥ 6 of 8 seeds) could not tell a change from chance | the gate replaced by a **pooled** rule over the 8 seeds, 25 years (`fix4/hv/pool.cjs`): births and deaths within ± 10 % of round 3, kills up, hunt injuries per trip not up, hunt deaths not up by more than max(2, 10 %); J and the armed-only arm alone (A: raid days 2, armed only, no folk hunt) run on the frozen round-3 tree (`fix4/T`), 2 at a time | **both FAIL on injuries per trip; `HUNT_TUNE` stays off.** J (`fix4/hv/poolJ.log`): births 300 → 315 (+5 %), deaths 230 → 216 (−6.1 %), kills per 100 person-years 4.06 → 4.80, livestock lost to predators 481 → 463, injuries per trip 0.095 → 0.124 (+30 %), hunt deaths 1 → 1. A (`fix4/hv/poolA-s4.log`): births +2.7 %, deaths +3.9 %, kills 4.06 → 4.35, livestock lost 481 → 441 (−8 %), injuries per trip 0.095 → 0.104 (+9 %; 38 injuries against 32). Neither comes near §2.1's ≥ 20 kills per 100 a year (best 4.8): the shortfall is not the folk hunt's schedule, so §2.1 stays **open** — the next step is game density and range around a farming town (kills are 0 on seed 1 in every arm: no game within reach), not more trips |
 | gate | the full gate on the round-4 tree | `npm run check` through `slot.sh` | **green**: `fix4/check/check-r4.log` "EXIT 0 07:35" (2026-10-29): detban 146 sim files clean, tsc clean, 591 / 591 tests pass, 0 skipped. The round-4 acceptance re-run (`fix4/acc/chain.sh` chainA + chainB: god sessions, 8 worlds alone 50 years, kin r4 / r4c, the year-50 god sessions and the god's drought on the round-4 year-50 worlds, the PACE daily probe; the every-power row in `fix4/leth/`) installs `acceptance.json` and appends §13.7 when it ends (`fix4/acc/finish.sh`, marker `fix4/acc/FINISHED`) |
+
+### 13.7 Round-4 acceptance (appended by `_harness/scratch/living/fix4/acc/finish.sh` at 2026-10-29T11:13Z; table `_harness/scratch/living/acceptance.json`, round 3 kept as `acceptance.fix-r3.json`)
+
+Tally (round 3 → round 4): 36 / 13 / 16 → **38 met / 16 partly / 13 missed**; rows still copied from r6: 4. Missed and partly-met rows:
+
+- PART §1.6   work begun after dusk (all slices) | target ≤ 0.05 | {"mean":0.017,"range":[0,0.087]}
+- PART §1.6   walking in the dark (all slices) | target ≤ 0.10 | {"mean":0.069,"range":[0.002,0.397]}
+- MISS §1.6   food per adult-day (year 1 slice; 1.25 ± 25 %, no seed above +50 %) | target 0.94–1.56, none > 1.875 | {"y1Mean":1.58,"y1Range":[0.62,3.09],"allMean":1.76,"allRange":[0,4.88]}
+- PART §1.6   parched / starving share of adult samples (all slices) | target ≤ 0.002 / ≤ 0.011 | {"parchedMax":0.1,"starvingMax":0.04,"parchedMean":0.002,"starvingMean":0.001}
+- MISS §1.4   fire-keeping known without the god (game year) | target by year 5 in ≥ 6 of 8, median ≤ 4 | {"by5":"8/8","median":4.04}
+- PART §1.5   era timeline: fire-keeping (first recipe, game year; median over seeds) | target 1–6 | {"median":4.04,"reached":"8/8","inBand":"7/8","range":[0.17,5],"horizon":50}
+- PART §1.5   era timeline: pottery (first recipe, game year; median over seeds) | target 6–18 | {"median":6.79,"reached":"8/8","inBand":"4/8","range":[4.17,9],"horizon":50}
+- PART §1.5   era timeline: copper-smelting (first recipe, game year; median over seeds) | target 20–40 | {"median":21.75,"reached":"7/8","inBand":"7/8","range":[20.25,31.83],"horizon":50}
+- PART §1.5   era timeline: bronze (first recipe, game year; median over seeds) | target 30–55 | {"median":35.585,"reached":"4/8","inBand":"4/8","range":[34.33,46.75],"horizon":50}
+- PART §1.5   era timeline: writing (first recipe, game year; median over seeds) | target 35–65 | {"median":40.75,"reached":"6/8","inBand":"6/8","range":[35.92,47.5],"horizon":50}
+- MISS §2.1   kills per 100 people per game year (years after hunting is known) | target ≥ 20 | {"median":2.325,"range":[1.04,8.74]}
+- MISS §2.1   hunted share of food (pooled per seed over 50 years) | target 0.15–0.35 | {"median":0.028999999999999998,"range":[0.001,0.12]}
+- PART §2.4   farming share of food 3+ years after agriculture (pooled per seed) | target 0.30–0.60 | {"median":0.4335,"range":[0.339,0.639]}
+- MISS §2.5   beds ≥ 0.9 × people and ≥ 90 % of households housed at every year end | target ≥ 7 of 8 seeds | "0/8"
+- MISS §2.5   houses outside disaster years: housed at every year end in which no natural disaster threw homes down (≥ 5 buildings collapsed or the town fell) — and years to rebuild after one that did | target ≥ 7 of 8 (the census target, disaster years s
+- MISS §2.6   item kinds gathered per settlement-year at year 8 | target ≥ 10 | {"median":9,"range":[8,11]}
+- MISS §2.8   growth over years 5–30 (%/year) | target 1.5–3 | {"median":0.33,"range":[-1.99,2.37]}
+- MISS §2.8   under-15 share over years 10–30 (mean per seed) | target 0.35–0.45 | {"median":0.4605,"range":[0.404,0.487]}
+- PART §2.9   adults with status / curiosity below 0.02 (worst year end from year 2) | target ≤ 0.20 each | {"statusMax":0.154,"curiosityMax":0.571}
+- MISS §1.4   [r6 tree, not re-measured] lightning-started fires a world-year without people (4 seeds × 2 years; ≥ 70 % in the dry half; burnt ≤ 5 % of the land a year — every fire counted) | target 2–12; ≥ 0.70; ≤ 0.05 | {"final":{"seeds":[2026100
+- PART §5.1   kin fixture (a capital of 60, two daughters of 40, 20 years): ≥ 1 secession / ≥ 1 raid or war / ≥ 1 treaty — and the control (the capital relieves every hard time): no secession | target ≥ 5 of 8 / ≥ 3 of 8 / ≥ 2 of 8; control ≥ 6 
+- MISS §3.7   default meteor on the town (wrath 0.3): killed / buildings standing after the blow / fallen / warning (ticks) / outside the danger radius at the blow | target dead 10–35 %; ≥ 60 % standing; never fallen; rebuilding within 10 days; streak ≥ 2
+- PART §3.8   [the biggest town of a year-50 world] a tornado on the town (disaster.spawn, default): praying and worship share of members over days 1-3 after it / killed | target ≥ 8 % | {"mean":0.087,"range":[0.055,0.113],"perSeed":[0.112,0.067,0.113,0.083,0
+- MISS §3.7   [the biggest town of a year-50 world] default meteor on the town (wrath 0.3): killed / buildings standing after the blow / fallen / warning (ticks) / outside the danger radius at the blow | target dead 10–35 %; ≥ 60 % standing; never fallen; r
+- MISS §3.8   [the biggest town of a year-50 world] prophet, three prophecies fulfilled in 6 days: credibility / loyalty gain / trust (no pinned meter) / praying share | target credibility ≥ 0.7; loyalty +0.2; trust ≤ 0.9; praying ≥ 3 % | {"credibility":[
+- PART §4.1   [the biggest town of a year-50 world] "introduce mithril to Aru": deposit cells / ore in store after 10 days / crafts / goods made of it by day 20 | target ≥ 1 / ≥ 10 / ≥ 2 / a tool or building within 20 days | {"deposits":[53,72],"oreInStor
+- PART §4.2   [the biggest town of a year-50 world] an iron vein laid near the town within its work reach: first iron ore in the store (day) before / after the god teaches iron smelting at day 10 | target laid; mined once iron is wanted | {"ok":"8/8","firstOreD
+- PART §4.3   [the biggest town of a year-50 world] a new crop (sunroot, no climate named: like wheat) introduced: sown / harvested within 24 days (two game years) | target sown and harvested | {"taken":"8/8","sowings":[8,1,15,0,13,17,0,3],"harvests":[6,0,0,0,1
+- PART §2.5   houses outside disaster years, judged per LIVE town (its own beds ≥ 0.9 × its people and ≥ 90 % of its households housed; a town's first year end left out; fix r4 #24) | target ≥ 7 of 8 seeds | {"seedsHousedEveryYearEnd":"0/8","seedsHousedE
+
+Extras (`fix4/acc/extras-r4.log`):
+
+- PER-TOWN: housed every year end 0/8; housed every calm year end 5/8; calm unhoused year ends 10; disaster-year unhoused 23
+- WORLD-SUM (as summarize-r3): housed every calm year end 2/8; calm unhoused year ends 10
+- PER-TOWN: housed every year end 1/8; housed every calm year end 3/8; calm unhoused year ends 24; disaster-year unhoused 23
+- WORLD-SUM (as summarize-r3): housed every calm year end 0/8; calm unhoused year ends 25
+- r4 answered >= ignored on {"faith":1,"worship":3,"trust":8} of 8
+- births -1.7% deaths 1.7% kills/100py 4.06 -> 4.64 livestock lost 481 -> 377 inj/trip 0.095 -> 0.084
+- CHECKS {"births":true,"deaths":true,"killsUp":true,"injPerTripNotUp":true,"huntDeathsNotUp":true} VERDICT PASS
+- births 3% deaths -7% kills/100py 3.28 -> 2.79 livestock lost 1383 -> 1311 inj/trip 0.066 -> 0.065
+- CHECKS {"births":true,"deaths":true,"killsUp":false,"injPerTripNotUp":true,"huntDeathsNotUp":true} VERDICT FAIL
