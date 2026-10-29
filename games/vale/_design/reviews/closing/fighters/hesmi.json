@@ -1,0 +1,141 @@
+{
+  "fighter": "hesmi",
+  "score": 6,
+  "summary": "Verified 6/10, NOT ON PAR: all four majors hold on the current build (hesmi.glb 7dcb6f45; portrait 97fe0101; splashes a70d1140; the reviewer's shots are from 08:27-08:33 today, after every Hesmi change). No blocker found and none missed: the hood is round and flat-crowned on all three skins, and the face is not a horror, hockey or mannequin mask, though the 128 px icon's clenched-teeth read is the closest thing to the line. Three corrections and additions. (1) M1 root cause, in code: the eye openings span 5-37 deg (art/blender/fighters/hesmi.py:304 EYE_A) and the full-height block joints sit at +-17 deg (:875 BAND_JOINTS, cut at :479-484). Each joint splits an eye in two, which makes the row of teeth. The approved concept (_design/concept/hesmi.webp) has one wide, continuous dark slit with offset joints, so the teeth come from the model, not the design (unlike Dunsom's downgraded mask). (2) M4 is worse than reported: Shadeprint's vfxTint never reaches her shadows. A skin tint recolours only 'element' colour refs (src/contracts/catalog.ts:402, src/render/director.ts:398-401), and none of Hesmi's own VFX use 'element' (hesmi_a1_shadow, hesmi_ult_shadow and the rest use 'signature' or 'team'). The skin's headline, 'her shadows fall in deep violet', is inert, and base Hesmi's shadows are already violet (#5C0EC2). (3) M2's 'own cut faces L* 95' sample is the own-champion Noonwhite accent tint (tokens.json:72 self #F4EFE2), which is by design, not the stone. The core claim reproduces: hood dome L* 76.7 vs cut bands L* 76.1-76.9, dE about 1-2, with one 'body' material and 512 px normal/ORM maps. M3 grain reproduced with an even larger gap: figure high-frequency std 6.5-10.3 vs plate 0.4-0.8. All six minors stand. Leftover statuses agree with the reviewer.",
+  "gapStatus": [
+    {"id": "leftover: art/renders/fighters/hesmi/_open.json missing", "status": "open", "evidence": "`ls art/renders/fighters/*/_open.json` lists 12 files; art/renders/fighters/hesmi/_open.json: No such file. This is process bookkeeping, not a model defect."},
+    {"id": "final m-2 / polish[3]: Hesmi basic attack has little body motion", "status": "closed", "evidence": "Clips come from the base GLB for every skin (src/render/actors.ts:476-481), so the Oct-20 skin GLBs inherit the 7dcb6f45 re-key. Measured per-frame silhouette change: attack1 0.03 hold / 0.65 strike, attack2 0.05 / 0.54 (_harness/_reports/closing_hesmi_measure.json). W5b_verify1 and integ2_lead_verify1 pass (fist 3.3-3.8 m to impact)."},
+    {"id": "final M12 / combat F6: Hesmi a2 loses signature hue", "status": "closed", "evidence": "_design/reviews/closing/combat.json gapStatus M12: a1/a2 pass 32/32 (closing_combat_kit_hue.json). Hesmi's a3 (team share 0.92) and ult still fail under closing combat C1, but that is VFX, outside character art."},
+    {"id": "verifier_open combat:F4: Hesmi Felled Shard first-beat core < 2.3", "status": "open", "evidence": "closing combat M13: x2.25 (ground x2.07), body 0.826 white at the beat (_harness/_reports/fw_W1_combat_polish_closing_combat_verify.json). VFX, not character art."},
+    {"id": "_progress 2026-10-20: castTime-0 casts never play cast_a3; cast clips cut at release", "status": "closed", "evidence": "src/render/actors.ts:930-951 instantCast keeps the clip past release; :1441-1456 maps abilities with castTime <= 0.02 to their cast_ clip."},
+    {"id": "fix pass 4: splash hides the rack's cut tops and inlays", "status": "closed", "evidence": "art/out/fighters/hesmi/splash.png (a70d1140) and _harness/_shots/closing_hesmi_splash_upper_x2.png: all three cut tops with azure inlays show above the hood."},
+    {"id": "fix pass 4: hip tearing in deep crouches; Plant Shard reads as a ram", "status": "closed", "evidence": "_harness/_shots/closing_hesmi_eye_a1_lunge_x3.png (eye level) and closing_hesmi_unit_rows4-7.png (game camera): no trouser tear is visible, and a1 reads as a forward diagonal from the rack to the low fists. Coverage is one eye-level view plus the game-camera sheet."}
+  ],
+  "findings": [
+    {
+      "id": "hesmi-M1",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "The eye-band reads as a clenched-teeth grin, a blank mummy face with no living cue",
+      "what": "The carved stone eye-band reads as a row of clenched teeth inside the hood, above horizontal mummy wraps, in the portrait, the 128 px icon and the 48 and 26 px chips. The eye openings are flat ink with no glint, so the face reads as blank and faintly menacing, not alive. At the 52 degree camera the face shrinks to a pale oval with a toothed stripe. It is not a horror, hockey or plague-doctor mask, and the hood is round. But it fails the owner standard that faces 'read as alive and readable', as in ruling 2 for Odrum Shadeprint.",
+      "evidence": "- Shots: _harness/_shots/closing_hesmi_portrait_face_x3.png, closing_hesmi_icon_48px_x4.png, closing_hesmi_icon_26px_x8.png, closing_hesmi_eye_a1_lunge_x3.png, closing_hesmi_portraits_3up.png (all three skins); art/out/fighters/hesmi/icon.png at 128 px has the strongest teeth read.\n- Root cause in code: art/blender/fighters/hesmi.py:304 EYE_A = (5, 37) deg is the eye-opening span. :875 BAND_JOINTS = (-40, -17, 17, 40), and the joints are cut full band height at :479-484 (RoundBox half-height 0.06 m). The +-17 deg joints fall inside each eye opening and split it, which makes the teeth.\n- The eye slit is flat ink (hesmi.py:145 PROJECTION eyeslit #121317, :486-491) and is not glossy or lit.\n- Concept: _design/concept/hesmi.webp has the band in blocks, but with one wide continuous dark slit and the joints offset above and below it. It reads as a visor, not teeth.\n- Owner ruling 2 precedent: _design/reviews/fixwaves/owner_rulings.md.",
+      "gauge": "A masked or faceless LoL champion still reads as 'someone looking at you' at icon size: a lit or catch-lit eye line, a brow that gives an attitude, and nothing that reads as teeth.",
+      "fix": "Follow the concept:\n- Move the +-17 deg joints out of the eye span (to about +-45 deg), or stop every joint at the slit's top and bottom edges and offset the upper and lower rails, so nothing crosses the eyes.\n- Widen the slit back to the concept's continuous dark visor.\n- Seat two short, glossy, non-emissive pale glass lenses in the openings (roughness about 0.2) so the key light leaves two small cool glints.\n- Lift the hood cavity about 8-10 L* so the band reads as a brow.\nApply this to all three skins, then re-render the portraits, the icon and the splashes, and re-check the 26 px chip contrast.",
+      "size": "M",
+      "files": "art/blender/fighters/hesmi.py (BAND_JOINTS, EYE_A, eyeslit material), art/out/fighters/hesmi/{hesmi,hesmi_gorgewalk,hesmi_shadeprint}.glb, portrait/icon/splash PNGs",
+      "verifierNote": "Confirmed as major, not blocker. Not a horror trope: no skull, no tear streaks, no gore, and the hood is round. The precedent sets the level: originality F3 (Odrum Shadeprint's hollow-slit grey mask) was ruled major. This differs from Dunsom's face, which was downgraded as per-concept: here the teeth read comes from the model departing from the approved concept (joints inside the eye span), so it is a defect against spec. Highest priority of the four, because portrait.png is shown in the HUD for the whole match."
+    },
+    {
+      "id": "hesmi-M2",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Honed stone, linen, ironstone and gauntlets all read as one matte plaster; the cut band is the same colour as the hood",
+      "what": "At the gameplay camera the honed cut band, the brief's 'freshly cut pale stone', is the same colour as the linen hood: same value, same soft gradient, no arris, no sheen difference. The gauntlets are plain grey bricks. Every surface shares one 'body' material, and roughness and normals come from 512 px maps on a 2048 albedo, so no material reads as itself.",
+      "evidence": "- My own Lab sampling (node + sharp) on _harness/_shots/closing_hesmi_team_enemy_a_x3.png: hood dome L* 76.7 (a 2.7, b 2.6) vs three cut bands L* 76.2 / 76.9 / 76.1 (a 1.0-1.5, b 1.2-2.0), dE76 about 1-2. The reviewer's 0.9-3.3 reproduces.\n- GLB inspection of art/out/fighters/hesmi/hesmi.glb: images hesmi_base 2048, hesmi_normal 512, hesmi_orm 512; materials body + accent only.\n- Brief _design/fighters/hesmi.md §5: stone #D3CEC3 vs cloth2 #CEC8BB, dE about 2.5 by design.\n- Visual: _harness/_shots/closing_hesmi_eye_a1_lunge_x3.png (rack bands read as white plastic boxes).",
+      "gauge": "At about 120 px a recent LoL champion lets you name every material: stone has bright chipped arrises and warm/cool value breakup, cloth has soft fold shading, and leather is darker and warmer. The hand-painted value design separates them even unlit.",
+      "fix": "Give the honed cut band its own response:\n- shift it cool (hue about 215, 4-6 % saturation) against the warm linen;\n- add a chalk-bright 1-2 cm arris on every cut edge, a darker chisel face below it, and fine tool striations;\n- set ORM roughness to about 0.35 on the band (linen 0.85) so the cut tops take a crisp sheen.\nDeepen the hood's fold valleys 8-10 L*. Chip the gauntlet corners and put a value step between faces. Raise normal/ORM to 1024 px. Update brief §5 so stone and cloth2 are at least dE 8 apart.",
+      "size": "L",
+      "files": "art/blender/fighters/hesmi.py (roles, ORM), art/out/fighters/hesmi/*.glb, _design/fighters/hesmi.md §5",
+      "verifierNote": "Confirmed with an independent Lab sample. One piece of the reviewer's evidence is wrong: the self-view 'cut tops L* 95.5 rgb 249,241,230' is the own-champion Noonwhite accent tint (_design/tokens.json:72 self #F4EFE2), which is by design and is the subject of minor m4, not the stone material. The hood/band match and the single 512 px ORM carry the finding without it. The root cause is partly the brief's near-identical hexes, but the gauge is what players see. Consistent with burdam-M2 (confirmed major)."
+    },
+    {
+      "id": "hesmi-M3",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Splash and portrait are grainy model renders on a reused plate, with the same static hold on every skin",
+      "what": "All three splashes and portraits are Monte Carlo renders of the game model, composited onto a painted dusk plate. The figure carries visible grain that the plate does not. The same plate is used for Hesmi's three skins and also for Lisvel Gorgewalk, Marund Gorgewalk and Sukri. Every skin uses the same crossed-arms victory hold, and nothing in the image tells her fantasy (planting shards whose shadows slow, then dropping the great shard).",
+      "evidence": "- My own high-frequency measure (pixel minus 3x3 mean, grey) on art/out/fighters/hesmi/splash.png: figure 8.08 / 10.28 (shards), 7.17 (wraps), 6.49 (legs) vs plate 0.44 (sky), 0.84 (bridge), 0.74 (foreground). Ratio 8-23x; the reviewer's 9.8-11.7 vs 1.5-5.2 is conservative.\n- Plate reuse: _harness/_shots/closing_hesmi_splash_plate_reuse.png shows six splashes on one plate. The reviewer's correlation was 0.84-0.90 (closing_hesmi_measure.json).\n- Shots: closing_hesmi_splash_upper_x2.png (grain on the shard bands), closing_hesmi_portraits_3up.png (same hold and framing on all skins).",
+      "gauge": "A recent LoL champion's base splash and each skin's splash are separate painted illustrations: a bespoke scene and lighting, a pose that tells the kit, figure and background in one finish. No two champions share a background.",
+      "fix": "Paint an original base scene. For example, a low camera on the Needlespan at the stopped dusk: she drives a shard into the stone with a two-fisted stab, its long ink shadow runs diagonally toward the viewer, and the three cut tops catch the last light. Give Gorgewalk its own scene (roped, mid-stride on the gorge rope-bridge under slate sky) and Shadeprint its own (see M4). Over any figure render: denoise, then a paint-over pass (edge highlights, sky rim, cast shadow) until figure grain is at most 1.5x the plate. Re-crop the portrait from the new painting.",
+      "size": "L",
+      "files": "art/blender/fighters/hesmi.py (SPLASH), art/blender/common/plates.py, art/out/fighters/hesmi/{splash,portrait,hesmi_gorgewalk_*,hesmi_shadeprint_*}.png",
+      "verifierNote": "Reproduced with my own grain measure, and the gap is larger than reported. This is a roster-wide pipeline problem (ardit-M1, burdam-M3, dunsom, ervet-M1 all confirmed major), but it counts against each fighter, because the splash is the champion's showcase."
+    },
+    {
+      "id": "hesmi-M4",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Shadeprint (deluxe) is a palette swap whose headline 'violet shadows' never reach her shadows, with the base splash and pose",
+      "what": "Brief §9 gives Shadeprint no extra geometry, and Gorgewalk, the cheaper standard skin, at least adds rope coils and iron pins. Shadeprint's identity is meant to be 'her shadows fall in deep violet' through vfxTint #6C5BA8. In the engine a skin's vfxTint recolours only 'element' colour refs, and none of Hesmi's own VFX use 'element'. Her Plant Shard strip and great shadow are drawn in 'signature' (#5C0EC2, already violet on base) and 'team'. So the deluxe tint reaches at most the generic cast-flare/wind-up sprites at the weapon socket, and her shadows look exactly as on base. On the model, the lilac cloth plus dark ink shard bodies with light rims (visible from behind) does separate it from base. Even so, it changes less than the standard skin, and its splash is the same plate and pose (M3).",
+      "evidence": "- src/contracts/catalog.ts:402 ('a skin's vfxTint recolours \"element\" only'); src/render/director.ts:398-401 elementOf: skinTint used only for element refs; src/render/renderer.ts:707-711 skinTint.\n- content/vfx.json: hesmi_a1_shadow (5 signature, 1 team, 0 element), hesmi_ult_shadow (1/1/0), hesmi_ult_shard (6/2/0); no hesmi_* entry has an element ref. The element refs exist only in lib_cast_flare, lib_status_taunt, lib_windup and lib_windup_ult (content/client.json:59 vfxEvents).\n- content/skins/hesmi.json: hesmi_shadeprint tier deluxe, vfxTint #6C5BA8. content/fighters/hesmi.json:582 signature #5C0EC2. _design/fighters/hesmi.md §9: 'Extra geometry: none'.\n- Model: _harness/_shots/closing_hesmi_skins_gamecam_facings.png; back-view column crop (my scratchpad skins_back.png) shows the Shadeprint ink shards with rims, and the Gorgewalk rope coils.",
+      "gauge": "A LoL skin at the tier above standard reads as different from base at a glance in lane: its own material story, its own recoloured or reshaped effects and its own splash. A higher tier visibly carries more than a lower one.",
+      "fix": "Keep the silhouette and accent placement (owner ruling: skins change material and palette, not silhouette).\n- Make the shadows real: give Hesmi's shadow and shard layers (hesmi_a1_shadow, hesmi_ult_shadow, hesmi_ult_shard) an 'element' companion layer, so the skin tint reaches the shadow body and edge. Or add skin-keyed VFX variants that render the strips as violet ink with a pale light-rim edge, matching the model's rims, and keep the signature in the core so kit identity holds.\n- Make the light rims a visible material: a 2-3 cm painted rim plus a lower-roughness edge on the ink shards and gauntlets, readable at the game camera.\n- Give it its own splash scene (M3).\n- Check that the deluxe tint sits at least 25 deg from the base signature, or is clearly lighter, so it is not a greyed copy.",
+      "size": "M",
+      "files": "content/vfx.json (hesmi_* shadow layers or skin variants), art/blender/fighters/hesmi.py (Shadeprint rims), content/skins/hesmi.json, _design/fighters/hesmi.md §9, art/out/fighters/hesmi/hesmi_shadeprint_*",
+      "verifierNote": "Confirmed and strengthened: the reviewer called the tint a greyed copy of the signature, but in play it never reaches her shadows at all, so the skin's one promised effect is inert. The model does carry a material change (ink shards, light rims, lilac cloth), which is why it is easier to tell from base than Burdam's deluxe skin. It still carries less than the standard tier and has no own effect or splash. Consistent with burdam-M4 (confirmed major)."
+    },
+    {
+      "id": "hesmi-m1",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Value bands miss the brief; the boots render saturated violet instead of leather",
+      "what": "In the lineup the top band is L* 60.7 (brief 70-85) and the feet band is 16.8 (brief 20-35), so the light-head, dark-feet gradient is compressed at both ends. The boots render violet (hue 261-265, saturation 0.53-0.59), not the brief's warm leather #4A4036.",
+      "evidence": "_harness/_reports/integ_chars_lineup.log:122 'hesmi: value bands top 60.7, mid 45.9, bottom 16.8'; closing_hesmi_measure.json in_match_lab_self boot hue 261-265 sat 0.53-0.59.",
+      "gauge": "LoL keeps a clear light-to-dark read from head to feet at the gameplay camera.",
+      "fix": "Lengthen the honed cut band 3 cm (brief §6), lift the feet band to about L* 22, and set the boots to the leather role, or update the brief to the concept's indigo boots.",
+      "size": "S",
+      "verifierNote": "Reproduced from the lineup log. The approved concept paints the boots indigo, so the boot colour is a brief-versus-concept conflict, not purely an art error."
+    },
+    {
+      "id": "hesmi-m2",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "No secondary motion (0 spring chains)",
+      "what": "No wrap end, strap or tassel lags the body. The rig has 28 joints and no x_ chains.",
+      "evidence": "closing_hesmi_measure.json joints: total 28, x_chains 0; GLB skins [28, 28].",
+      "gauge": "Heavy LoL champions still carry a few lagging cloth or strap ends that sell weight.",
+      "fix": "Add two short wrap tails at the belt and the face-wrap knot as 2-joint spring chains; keep the rack rigid (brief §8).",
+      "size": "S",
+      "verifierNote": "Kept as minor: the brief asks for rigid wraps and no cape, so the missing motion is small in area. Unlike ardit-M3 and burdam-M5, no long garment should swing here."
+    },
+    {
+      "id": "hesmi-m3",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "The rack top tucks under the player's own health bar during an attack",
+      "what": "In her own view, the cut tops pass under the overhead bar plate during swings.",
+      "evidence": "_harness/_shots/closing_hesmi_ver_close2_bar_x6.png; brief checklist 'the overhead health bar clears the rack'.",
+      "gauge": "LoL bars sit clear of the champion's top silhouette.",
+      "fix": "Raise the bar offset for Hesmi (art.height plus the rack's attack overshoot), or measure the bar anchor from the x_rack_top socket's max over attack clips.",
+      "size": "S",
+      "verifierNote": "Confirmed visually."
+    },
+    {
+      "id": "hesmi-m4",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "On her own screen the inlays render near-white against the pale band",
+      "what": "The own-champion inlays render in Noonwhite and are separated from the pale stone band only by a thin dark ring.",
+      "evidence": "_harness/_shots/closing_hesmi_ver_game_x4.png; closing_hesmi_measure.json self inlay L* 95.5 rgb 249,241,230; _design/tokens.json:72 self #F4EFE2.",
+      "gauge": "In LoL the player's own champion still shows its signature light clearly.",
+      "fix": "Darken the cut band 6-8 L* around each inlay (a recessed bezel), so the Noonwhite inlay separates from the stone.",
+      "size": "S",
+      "verifierNote": "The colour is the by-design self relation (Noonwhite), so only the separation from the band is a defect."
+    },
+    {
+      "id": "hesmi-m5",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "The icon has no cut top, though the brief asks for one",
+      "what": "The 128 px icon is the hood and eye-band only; no cut top with an inlay is legible.",
+      "evidence": "art/out/fighters/hesmi/icon.png; _design/fighters/hesmi.md §10-11 'Icon (128 square): the eye-band under the hood with one cut top'.",
+      "gauge": "LoL icons include the champion's signature shape.",
+      "fix": "Re-frame the icon to include one cut top with its inlay at the upper corner, after the M1 face fix.",
+      "size": "S",
+      "verifierNote": "Confirmed."
+    },
+    {
+      "id": "hesmi-m6",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Fragmented texture atlas and speckles on the hood",
+      "what": "Small dark speckles show on the hood near the face opening, and the 512 px normal/ORM maps lose the surface detail.",
+      "evidence": "_harness/_shots/closing_hesmi_eye_a1_lunge_x3.png (dark dots on the hood); GLB images normal and ORM 512 px.",
+      "gauge": "LoL hand-painted textures are clean at close zoom.",
+      "fix": "Clean the projected paint on the hood (despeckle before bake), and re-pack the atlas with fewer islands when raising the maps to 1024.",
+      "size": "S",
+      "verifierNote": "Confirmed visually."
+    }
+  ],
+  "missed": []
+}

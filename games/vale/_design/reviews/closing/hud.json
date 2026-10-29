@@ -1,0 +1,225 @@
+{
+ "dimension": "HUD & in-match readability",
+ "role": "adversarial verifier (closing review)",
+ "date": "2026-10-29",
+ "score": 8,
+ "summary": "VERIFIED: ON PAR at 8.0/10 (the reviewer gave 8.5). There is no blocker and no major. All ten findings are confirmed minors.\n\nThe build is unchanged since the reviewer's captures: the last src/ui commit is 09d330c0 at 07:21, and the shots were taken 08:10-08:26. I measured it again myself on the real Chrome GPU at :5190.\n\nRuns:\n- `node _harness/icon_probe.mjs --out _harness/_reports/closing_hud_verify_icon_probe.json`: OK. Items at 38 px: p50 median 74, min 66; p95 min 192. Abilities: p50 min 66, p95 min 190. Navy grounds 0, missing 0, fill median 0.47.\n- `VALE_URL=http://localhost:5190 node _harness/hud_renders.mjs --at 100`: exit 0 (_harness/_reports/closing_hud_verify_hud_renders_at100.json). Over 181 ticks, SkyLedger rendered once for one change of its numbers, at 13 px Mono in a 184x20 box. No slot component rendered per tick.\n- `node _harness/overlay_regress.mjs --q high --name closing_hud_verify_overlay`: PASS (_harness/_reports/closing_hud_verify_overlay_regress.json). The B1 and M10 numbers match the reviewer's run exactly.\n- The final verifier's face-chip script, re-run with Ilsheta included: 120 pairs, min 58.9, median 70.1, 0 pairs below 45.\n- My own live RIFT co-op capture, 1920x1080, in-tick injections (script: scratchpad verify_capture.mjs; report: _harness/_reports/closing_hud_verify_capture.json; shots: _harness/_shots/closing_hud_verify_*).\n\nWhat holds:\n- HUD-1, HUD-2 and HUD-4, the final review's three majors, are closed by my own numbers.\n- B1, M4, M7, M10, m1, m2 and m3 are closed.\n- The target plate shows on hover with the face, name, fighter, HP numbers and buff chips (closing_hud_verify_02_targetplate.png).\n- Banners hold about 3.5 s each, against LoL's ~3.3 s plus ~0.3 s out.\n- The shop has Builds-from and Builds-into trees (src/ui/hud/shop.tsx:247-275).\n\nI reproduced every minor, and corrected three file:line citations. Live, the copy bug is worse than the reviewer showed. Taking down all five enemies in one tick queued 'Lamps out', then 'Blazing | You has 5 takedowns without falling.', then 'Full peal | You takes five in a row.'. The 5-kill headline arrived 7.1 s after the kill, because the banner queue is FIFO with no priority.\n\nWhy 8.0 and not 8.5: the owner asked for the minimap, the item images and the toolbar to be judged hard.\n- Items: a real step up. The painted icons read at slot size. Only the Strike blades blur together (hud-c6).\n- Toolbar: complete. Its empty item wells are see-through (hud-c9).\n- Minimap: functional at LoL tier (portraits, wedges, camera box, timers, pings, lane-vs-canopy contrast under fog). Its art is a flat survey chart. Fog is drawn at vision-cell resolution, and the four numeral callouts the RIFT spec requires (map_rift_landmarks.md §7) are not drawn at all.\nTogether with ten confirmed visible polish defects, that puts the dimension at the bottom of the par band rather than comfortably in it.\n\nNot measured, by the reviewer or by me:\n- The 'Not enough {resource}' caption. Both live runs drew Tally fighters (nurrow, ulkro). Draining res to 0 in a tick and pressing W gave no caption and no refusal. The code path exists (src/ui/hud/index.tsx:241-245; src/input/controller.ts:325).\n- A recap with realistic multi-type damage. My lethal hit was mitigated by armor, so I did not die.\n\nMissed: one sensitivity watch, outside this lens; see `missed`.",
+ "gapStatus": [
+  {
+   "id": "B1",
+   "status": "closed",
+   "evidence": "Reproduced: `node _harness/overlay_regress.mjs --q high --name closing_hud_verify_overlay` -> 'overlay_regress: PASS', exit 0 (_harness/_reports/closing_hud_verify_overlay_regress.json, .log).\n- Hovering hesmi, glimwick and gloamoth for 180 frames: nodes 2669/2669/2669, and 2675 for the monster.\n- Hover width 2.5, rest width 1, interiorShare 0 for all three.\n- The rim draws outside the silhouette: 1640 / 807 / 1146 px.\nIdentical to the reviewer's run. Shot: _harness/_shots/closing_hud_verify_overlay_fight_outlines.png.\nMy live enemy-fighter hover crop is inconclusive: a Hesmi cast VFX covered the cursor point (closing_hud_verify_02_hover_fighter.png). The hover did raise the target plate (closing_hud_verify_02_targetplate.png: 'KIT_LANTERNS Hesmi 976 / 1,134' with two buff chips)."
+  },
+  {
+   "id": "M4",
+   "status": "closed",
+   "evidence": "Reviewer's live shots confirmed: closing_hud_A06_stun_full.png and closing_hud_A06_stun_bottom.png show the 'STUNNED 3' chip with a draining bar, Q W E R D F all lock-glyphed with an ember tint, and the 26 px status row.\nMy live run (closing_hud_verify_capture.json steps.resource_refusal), refusal captions:\n- 'Hurl ready in 5 s' on cooldown;\n- 'Level this ability up first' on an unlearned slot.\nStill unverified live: the 'Not enough {resource}' caption. Both runs drew Tally fighters; draining res to 0 and pressing W gave no refusal. The code path exists: src/ui/hud/index.tsx:241-245, src/input/controller.ts:325, strings.en.json:631."
+  },
+  {
+   "id": "M7",
+   "status": "closed",
+   "evidence": "Confirmed from shots.\n- Self bar with a level chip, 100-HP ticks, a resource strip and the name: closing_hud_B01_mid_full.png, and my closing_hud_verify_04_mid_full.png ('Player 1030', level 10).\n- Enemy fighter bar: about 105 px wide, orange, with level box 9 (kit_lanterns, same shot).\n- Lost-HP white span: closing_hud_A04z_selfhit_grid_3x.png, frames 1-2.\n- Wick bars about 58x5 in relationship colour: closing_hud_verify_04z_wicks_1x.png.\n- Structure bar wide and segmented: closing_hud_verify_07_death_full.png."
+  },
+  {
+   "id": "M10",
+   "status": "closed",
+   "evidence": "My overlay_regress run: m10 = {units 18, missing [], drawn 18, offscreenDrawn [], crowdUnits 16, crowdInstances 16}, restWidth 1 on every hovered unit (_harness/_reports/closing_hud_verify_overlay_regress.json)."
+  },
+  {
+   "id": "m1",
+   "status": "closed",
+   "evidence": "- M:SS cooldowns: D '3:23' and F '2:04' (my closing_hud_verify_07_death_full.png); R '1:15' and D '2:12' (closing_hud_B01z_dbar_2x.png).\n- Regen: '+2.4' (closing_hud_verify_04_dbar.png).\n- Stat ledger flyout while Tab is held: closing_hud_B09_scoreboard.png.\n- The ready wash (250 ms) and the is-active border exist in code (src/ui/hud/dialbar.tsx:246, :278), but nobody has timed them."
+  },
+  {
+   "id": "m2",
+   "status": "closed",
+   "evidence": "My live ace run (closing_hud_verify_capture.json steps.ace): three banners held 3.6 / 3.5 / 4.0 s, each with two round faces in relationship rings (closing_hud_verify_03_banner_*.png). LoL holds about 3.3 s, plus about 0.3 s out.\n- Level-up plate: closing_hud_E01_levelup_full.png.\n- Own death: a fully desaturated world, the 'YOUR LAMP GOES OUT' banner, 'BACK IN 6 S' and the recap (closing_hud_F02_recap_full.png).\nCopy and order defects remain: see hud-c1."
+  },
+  {
+   "id": "m3",
+   "status": "closed",
+   "evidence": "Re-ran _harness/_reports/final_hud_verify_scripts/fdist.mjs with Ilsheta included: 120 pairs at 26 px, min 58.9 (dunsom-ulkro), median 70.1, 0 pairs below 45. The final review found 11 of 105 below 45, min 33.7.\nLabelled sheet: _harness/_shots/closing_hud_verify_face_chips_150_named.png.\nLive minimap (closing_hud_verify_04z_minimap_3x.png): about 26 px chips in team rings, with the self chip in a white ring and wedge. In a mirror match, an enemy and an allied Odrum are told apart only by ring colour and notches. That is acceptable: LoL works the same way."
+  },
+  {
+   "id": "B4-HUD",
+   "status": "closed",
+   "evidence": "`VALE_URL=http://localhost:5190 node _harness/hud_renders.mjs --at 100`: exit 0 (_harness/_reports/closing_hud_verify_hud_renders_at100.json).\n- 181 ticks in 6.0 s.\n- SkyLedger renders 1 for 1 change.\n- AbilitySlot renders 2, DialBar 2, Feed 4: nothing renders per tick."
+  },
+  {
+   "id": "M2-HUD",
+   "status": "closed",
+   "evidence": "The overhead '✣ STUNNED' word sits above the name: closing_hud_A06_stun_full.png ('✣ STUNNED / Player 9125'). The in-world crowd-control visuals belong to the combat lens."
+  },
+  {
+   "id": "HUD-1",
+   "status": "closed",
+   "evidence": "My run: `node _harness/icon_probe.mjs --out _harness/_reports/closing_hud_verify_icon_probe.json` -> OK.\n- Items at 38 px: p50 median 74, min 66; p95 min 192.\n- Abilities: p50 median 77, min 66; p95 min 190.\n- Navy grounds 0; missing 0.\n- The closest grounds across families are 56 apart (hourcleaver vs dust_runners).\nThe painted icons read as objects (closing_hud_icons_items_96.png). Residuals: fill median 0.47, and the Strike blades look alike (hud-c6)."
+  },
+  {
+   "id": "HUD-2",
+   "status": "closed",
+   "evidence": "See m3: the closest face-chip pair is 58.9, against 33.7 before; 0 pairs below 45; only 1 of 16 chips is mostly pale (ardit, hi 0.58). The mask read is a sensitivity watch: see hud-c10."
+  },
+  {
+   "id": "HUD-4",
+   "status": "closed",
+   "evidence": "- Always on, at 1080p: 'T/F/A 5/0/0 · Wicks 75' (my closing_hud_verify_04_mid_full.png).\n- In the render probe: 'T/F/A 0/0/0 · Wicks 6', box 184x20 at y 72, 13 px Mono.\n- The render gate passes."
+  }
+ ],
+ "findings": [
+  {
+   "id": "hud-c1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Personal highlight banners put 'You' into a third-person line ('You takes five in a row.'), and the banner queue has no priority",
+   "what": "Every personal first takedown, multikill, streak and shutdown sub-line conjugates for a third person while the name is 'You'.\nThe announcer queue is FIFO with no priority: it holds at most 2 pending and drops the oldest. A 5-kill ace therefore shows the team-wipe banner first, the streak second, and the 'Full peal' headline last, 7.1 s after the kills.",
+   "evidence": "Reviewer: closing_hud_E02_takedown_banner.png ('You opens the count.').\nMine (closing_hud_verify_capture.json steps.ace, five enemies taken down in one tick by you), the banner sequence:\n- at 8 ms: 'Lamps out | The other team is all down. Press the advantage.'\n- at 3640 ms: 'Blazing | You has 5 takedowns without falling.'\n- at 7137 ms: 'Full peal | You takes five in a row. Every bell is ringing.'\nShots: _harness/_shots/closing_hud_verify_03_banner_0..2.png.\nCode:\n- strings at content/strings.en.json:773 and :781-799;\n- 'You' comes from model.ts:338 nameOf -> killfeed.you;\n- the FIFO queue is model.ts:306-311 (`bannerQ.push`; `if (bannerQ.length > 2) bannerQ.shift()`).",
+   "gauge": "LoL's personal announcements are written for the scorer, and a multikill takes precedence over the ace call, so the biggest moment is never last or ungrammatical.",
+   "fix": "1. Add `.you.sub` second-person variants and pick them when the actor is you, as the reviewer suggests.\n2. Give Banner a priority (multikill 5 > 4 > team wipe > shutdown > streak > first takedown > takedown).\n3. Let a higher priority pre-empt the queue and collapse lower kill banners from the same tick. Keep the 3.5 s hold.\n4. Add a strings lint for '{name} <verb>s' lines.",
+   "size": "S",
+   "verifierNote": "Reproduced live, and worse than reported: three banners in a row, two with the grammar slip. The FIFO order delays the 5-kill call by 7.1 s. It stays a minor copy and ordering defect: the banner art, timing and faces are right."
+  },
+  {
+   "id": "hud-c2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Minimap: fog at vision-cell resolution, flat chart art, and the RIFT numeral callouts are not drawn",
+   "what": "The minimap reads well: lanes against canopy, bases in frame, portraits, the camera box and timers. It does not look finished.\n- Fog is one alpha texel per vision cell, scaled with bilinear smoothing. Edges are straight steps across the lanes.\n- The map art is a flat vector chart.\n- The four hour-numeral callouts (Elevenmark, Twomark, Sevenmark, Fourmark) are not painted in minimap.png and not drawn by minimap.tsx. The RIFT spec calls them 'the callouts players will say'.",
+   "evidence": "Code (the reviewer's cites were stale): src/ui/hud/minimap.tsx:329-351 (drawFog builds W x H = grid cells; alpha = (1 - seen) * 140) and :124 / :131 (drawn scaled with imageSmoothing).\nShots:\n- closing_hud_A00z_minimap_2x.png: a straight vertical fog edge on both arcs at x ≈ 430;\n- my closing_hud_verify_04z_minimap_3x.png;\n- the art itself, art/out/maps/map_rift/minimap.png: no numerals.\nSpec: _design/maps/map_rift_landmarks.md:43 and §7 (:111-125) say 'Numerals: the four as pale glyphs on their blocks'. `grep -n -i numeral src/ui/hud/minimap.tsx` finds nothing.\nArt values: _harness/_reports/closing_hud_minimap_art_values.json (fog gap 63; legibility fine).",
+   "gauge": "LoL's minimap is a painted top-down of the map, with soft fog that follows round vision areas. Its named areas are recognisable from the minimap art itself.",
+   "fix": "1. Draw fog at 4x the grid resolution with a 1-2 cell feathered falloff, or as soft seen-discs, with a faint chalk hairline on the edge.\n2. Paint the four numerals as pale glyphs on their wall blocks in minimap_survey.py, per §7, and re-export minimap.png.\n3. Optionally add a second canopy value band and Needlegrass marks.\n4. The 'flat values only' look is the §7 spec, so keep the survey-chart style. Re-check that the fog gap stays at or above 25.",
+   "size": "M",
+   "verifierNote": "Confirmed, with the reasoning narrowed. The flat chart is the documented §7 style, a design choice the docs justify. What remains is the cell-resolution fog and the missing numeral callouts, which the spec requires. The owner asked for this surface to be judged hard: it is at LoL tier for information but below it for finish. That is one reason my score is 8.0, not 8.5."
+  },
+  {
+   "id": "hud-c3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Percent-penetration stat lines read '+10% Magic penetration %' in the tooltip and the shop",
+   "what": "statLines formats percent stats with a trailing '%' on the value, and the stat names themselves end in ' %'. That gives a doubled sign on 3 items: quarry_pick, deepglass_rod and noonglass.",
+   "evidence": "closing_hud_B08_tip_item.png reads 'Deepglass Rod: +10% Magic penetration %'.\nCode (corrected cites): src/ui/hud/itemtip.tsx:12 (PCT includes armorPenPct and magicPenPct) and :20-21 (value + '%' + name).\nStrings: content/strings.en.json:1043 'Armor penetration %', :1047 'Magic penetration %'.\nThe affected items come from content/items.json.",
+   "gauge": "LoL item stat lines are clean '+N% Stat' rows.",
+   "fix": "Drop the ' %' suffix from stat.armorPenPct.name and stat.magicPenPct.name, or strip a trailing '%' from the name in statLines. Add a snapshot test covering both.",
+   "size": "S",
+   "verifierNote": "Reproduced from code and shot. Line numbers corrected: :12 and :20-21, not :6 and :13."
+  },
+  {
+   "id": "hud-c4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Death recap: damage-type chips can overflow, and the recap has no crowd-control time",
+   "what": "- .recap__types is a nowrap flex row of .dchip pills with a fixed 20 px height and no white-space rule. When the three labels need more than the recap's inner width (about 332 px), the pills shrink and their text wraps out of the pill.\n- The recap has no 'held for N s' line.",
+   "evidence": "closing_hud_F02_recap.png (and _full) show 'Physical 171' and 'Piercing 1,000,018' wrapping.\nThe overflow in that shot is amplified by the injected 1e6 hit: the reviewer's capture3 dealt 1e6 true damage. Estimated from the shot's chip widths (about 7.8 px per Mono character plus 12 px padding), realistic numbers overflow only when the labels total 37 or more characters, e.g. 'Physical 2,345 / Magic 1,234 / Piercing 456'. That is a late-game case, not every death.\nNo CC line: src/ui/hud/panels.tsx DeathRecap has no status or CC term, and strings.en.json:931-950 have no recap string for it.\nCSS: src/ui/styles/hud.css:497 and :499.\nMy realistic-death attempt did not kill: the 'me.hp + 5' physical hit was mitigated by armor (closing_hud_verify_capture.json steps.death).",
+   "gauge": "LoL's 2019 recap shows the physical/magic split and how long you were crowd-controlled (r04 §4, line 139).",
+   "fix": "Give .dchip `white-space: nowrap; flex: none` and .recap__types `flex-wrap: wrap`. Add a 'Held N s' line built from loss-of-control statuses in the same 15 s window.",
+   "size": "S",
+   "verifierNote": "Confirmed as minor. The chip overflow is real but narrower than the shot suggests, because that shot uses a 1,000,018 injected number. The missing CC time is the larger half."
+  },
+  {
+   "id": "hud-c5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "No call-outs from HUD elements: Alt-click on an ability, item or timer does nothing",
+   "what": "Pings go out only from the world, the minimap and the wheel. Ability slots, Hour spells, items and the sky-strip timers cannot post their state to the team.",
+   "evidence": "My live run (closing_hud_verify_capture.json steps.alt_click): Alt+click on the Q slot, then on item 1, at 10:15. The feed held only 'Serenade lost the Outer Needle' (a structure line); no call-out appeared. Shot: _harness/_shots/closing_hud_verify_05_alt_click.png.\n`grep -rn 'altKey' src/ui/hud/` finds only minimap.tsx:159. `grep -rn 'sendPing(' src/ui src/input` finds only minimap.tsx:159 and controller.ts:456/:502.",
+   "gauge": "In LoL, modifier-clicking an ability, summoner spell, item, bar or objective timer sends its readiness or time to team chat (r04 §1.2 line 47, §3 line 105).",
+   "fix": "Add VALE's 'chalk call': Alt+click on a slot, item or objective chip posts one team feed line ('Felt Step ready', 'Glint Step in 2:12', 'Longshade returns 5:18'). It goes through the existing 5-per-4 s limit and the ping cue, and is off in FRAY.",
+   "size": "M",
+   "verifierNote": "Reproduced live. It stays minor: the wheel, world and minimap pings cover the core communication. This is a missing convenience surface."
+  },
+  {
+   "id": "hud-c6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Strike-family blade icons look alike at slot size; median subject fill is 0.47",
+   "what": "dialcutter, notched_blade, lampblack_edge, chalk_knife and needlefall are all pale steel blades on the same diagonal on the same red ground. hourcleaver is close to dialcutter too.",
+   "evidence": "My sheet: _harness/_shots/closing_hud_verify_strike_icons_38_x3.png (38 px, nearest-neighbour x3).\nReviewer: _harness/_reports/closing_hud_item_icon_distinct.json, 7 pairs under 25 RGB, e.g. dialcutter-notched_blade 20.5.\nMy icon_probe: fill median 0.47 at 38 px (closing_hud_verify_icon_probe.json).",
+   "gauge": "LoL items in one weapon family are told apart by silhouette and a dominant per-item accent.",
+   "fix": "Give each Strike blade its own pose and accent while keeping the family ground. Crop subjects to at least 60 % fill. Add a pairwise distinctness gate to icon_probe (min at least 28 at 38 px).",
+   "size": "M",
+   "verifierNote": "Confirmed visually and by measurement. The rest of the 57-icon set reads clearly (median pair 52.2)."
+  },
+  {
+   "id": "hud-c7",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Scoreboard: the two team tables size their columns independently",
+   "what": "The same column sits 5-21 px apart between YOUR TEAM and THE OTHER TEAM.",
+   "evidence": "My live DOM measure (closing_hud_verify_capture.json steps.scoreboard, header centres, ally vs enemy):\n- SPELLS 779 / 791\n- LV 838 / 850\n- T/F/A 916 / 930\n- WICKS 1007 / 1026\n- GLEAM 1076 / 1097\n- DAMAGE 1170 / 1175\n- ITEMS 1336 / 1330\nShot: _harness/_shots/closing_hud_verify_06_scoreboard.png.\nCode: two <table class=\"hscore__table\"> at src/ui/hud/panels.tsx:41 and :69, with auto layout (hud.css:456).",
+   "gauge": "LoL's Tab scoreboard puts both teams on one column grid.",
+   "fix": "Use `table-layout: fixed` with a shared <colgroup>, or one table with two <tbody> sections.",
+   "size": "S",
+   "verifierNote": "Reproduced. The offset is up to 21 px in my run, against the reviewer's 15 px."
+  },
+  {
+   "id": "hud-c8",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Kill-feed victim chip: the grayscale filter also greys its team ring",
+   "what": "The ring is a box-shadow on the same .who__face element that carries `filter: grayscale(0.8) brightness(0.7)`. The filter therefore desaturates the relationship ring, not just the face.",
+   "evidence": "closing_hud_B01z_killfeed_3x.png: the victim noor_lampwright's ring reads dull grey-brown.\nsrc/ui/styles/hud.css:148 (.who__face box-shadow 0 0 0 2px var(--c)) and :149 (.who.is-down .who__face filter).",
+   "gauge": "LoL's kill feed keeps both portraits framed in their team colour.",
+   "fix": "Move the ring to a wrapper (or an ::after) outside the filtered element. Keep the face desaturated and add the shadow-line cut.",
+   "size": "S",
+   "verifierNote": "Confirmed. The cause is that the ring and the filter are on the same element."
+  },
+  {
+   "id": "hud-c9",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Empty inventory slots are see-through to the world",
+   "what": "Empty item slots use a 55 % ink fill, so foliage shows through the bottom-right of the Dial Bar.",
+   "evidence": "My _harness/_shots/closing_hud_verify_04_dbar.png: slots 5 and 6 show green canopy.\nReviewer: closing_hud_B01z_items_4x.png.\nsrc/ui/styles/hud.css:350 `.islot.is-empty { background: rgba(11, 13, 17, 0.55); }`.",
+   "gauge": "LoL's empty item slots are opaque dark wells on the HUD plate.",
+   "fix": "Use an opaque ink-2 well with the inset shadow and slot number, or extend the Dial Bar plate under the 3x2 grid.",
+   "size": "S",
+   "verifierNote": "Reproduced live. This is on the toolbar the owner asked to be judged hard; it stays minor because it is cosmetic."
+  },
+  {
+   "id": "hud-c10",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Sensitivity watch: tight face-chip crops put masks at 60-70 % of the frame (Dunsom, Sukri)",
+   "what": "Dunsom's gold mask with dark eye recesses under the wide hat reads skull-adjacent at 96-150 px. Sukri's pale carved mask in a rounded hood is kept alive by its amber eyes and smile.\nMasks are the cast's design rule (STYLE_BIBLE.md:10: 'Fighters wear carved masks or glass visors'). No chip shows a tall, pointed or conical hood.",
+   "evidence": "My labelled sheet: _harness/_shots/closing_hud_verify_face_chips_150_named.png.\nReviewer: closing_hud_face_chips_watch_200.png.\nThe fighters lens independently downgraded Dunsom's 'skull' face at chip size to minor: _design/reviews/closing/fighters/dunsom.json, finding dunsom-face-skull.\nOwner ruling 5 (_design/reviews/fixwaves/owner_rulings.md) shortened only Dunsom's beak.",
+   "gauge": "The brief's sensitivity standard (masks read as alive, never as horror), not a LoL measurement.",
+   "fix": "In the face-chip render, give Dunsom warm lit eye inlays (the treatment ruling 2 approved for Odrum Shadeprint) and a slightly wider crop. Hand both chips to the characters lens.",
+   "size": "S",
+   "verifierNote": "Kept as a minor watch. This is consistent with the fighters lens, and no hood breaks the rule."
+  }
+ ],
+ "missed": [
+  "Sensitivity watch (outside the HUD lens; owned by originality / units, which rated it minor m4 'one angle only' in _design/reviews/closing/originality.json):\n- What I saw: in my live RIFT frame at 10:15 (_harness/_shots/closing_hud_verify_04_mid_full.png; crops closing_hud_verify_04z_wicks_1x.png and _3x.png), BOTH enemy Greatwicks marching the lane show the back lantern as a grey box with two round lit orange panes side by side over the hood. At native 1x this reads as a box head with two eyes.\n- Why it may be more than a watch: Wicks walk along the screen-horizontal lane at the fixed camera, so this view is their normal heading, not a single angle.\n- The rule: the binding sensitivity rule says Wicks have no eye-like light pairs.\n- Recommendation: treat it as potential blocker class until the units lens re-checks it at the default camera on several Greatwicks. The originality fix (a continuous pane band, or odd narrow slits with thick mullions) would close it."
+ ],
+ "notMeasured": [
+  "The 'Not enough {resource}' refusal caption: both live runs drew Tally fighters (nurrow, ulkro), whose W press took no refusal at res 0.",
+  "A death recap with realistic multi-type damage: my lethal physical hit was mitigated, and I did not die.",
+  "Timing of the Dial Bar ready wash (250 ms) and of the active border.",
+  "Colourblind palettes, BRIDGE and FRAY minimaps, and online human-team pings or surrender.",
+  "Live hover rim on an enemy fighter: a cast VFX covered it. B1 is covered by overlay_regress."
+ ],
+ "artifacts": {
+  "reports": [
+   "_harness/_reports/closing_hud_verify_icon_probe.json",
+   "_harness/_reports/closing_hud_verify_hud_renders_at100.json",
+   "_harness/_reports/closing_hud_verify_overlay_regress.json",
+   "_harness/_reports/closing_hud_verify_overlay_regress.log",
+   "_harness/_reports/closing_hud_verify_capture.json"
+  ],
+  "shots": [
+   "_harness/_shots/closing_hud_verify_face_chips_150_named.png",
+   "_harness/_shots/closing_hud_verify_strike_icons_38_x3.png",
+   "_harness/_shots/closing_hud_verify_02_targetplate.png",
+   "_harness/_shots/closing_hud_verify_03_banner_0.png",
+   "_harness/_shots/closing_hud_verify_03_banner_1.png",
+   "_harness/_shots/closing_hud_verify_03_banner_2.png",
+   "_harness/_shots/closing_hud_verify_04_mid_full.png",
+   "_harness/_shots/closing_hud_verify_04z_minimap_3x.png",
+   "_harness/_shots/closing_hud_verify_04_dbar.png",
+   "_harness/_shots/closing_hud_verify_04z_wicks_1x.png",
+   "_harness/_shots/closing_hud_verify_05_alt_click.png",
+   "_harness/_shots/closing_hud_verify_06_scoreboard.png",
+   "_harness/_shots/closing_hud_verify_overlay_fight_outlines.png"
+  ]
+ }
+}

@@ -1,0 +1,166 @@
+{
+ "score": 6.5,
+ "summary": "Verified CLOSING verdict, Audio: 6.5/10 (final review: 4). NOT ON PAR: two majors are confirmed open (AUD-C1, AUD-C3) and the score is under 8. No blocker. Of the reviewer's 3 majors I confirmed 2 and downgraded 1 (AUD-C2, no vocal layer, to minor). All 6 minors are kept, two with corrections.\nConfirmed: AUD-C1. The engine plays a fighter area/zone's content present.sfx alongside the kit cue (src/audio/index.ts:1347-1351 plus release() at :1250). The sim emits that sfx on the area event at commit (src/sim/zones.ts:64-67, :108-111). As a result, 12 of 16 ult landings layer the shared c_ult_release in the same tick and at the same spot as the fighter's own release. I measured it with my own metric, a 1/3-octave by time-slice fingerprint (closing_audio_verify_ultid.txt). The shared cue is 55-92 % of the first 300 ms of energy. Within that onset, the median pair distance falls from 19.9 to 6.1 dB, and 14 of 66 fighter pairs fall inside the take-to-take spread (5.2 dB max).\nConfirmed: AUD-C3. Longshade and Sunsplinter use only library cues that Wicks, camps and fighters share, and every monster death plays c_monster_hit. The engine's monster multipliers also invert r07's weight ladder: Longshade's auto swing plays about 5 dB, and its hit about 10 dB, under a fighter's auto (closing_audio_verify_content.json).\nDowngraded to minor: AUD-C2 (no voice). The fact is real: 0 voice recordings, and the voice bus holds 23 bell or tone cues. But _spec/CONTRACT.md:792 scopes voice out ('tonal, no voice in this slice; subtitles carry the text'), the final verifier downgraded the same gap (AUD-3) to minor on that basis, and no owner ruling reverses it. Lifting it is an owner scope decision, not a defect against the shipped spec. It remains the largest gap a LoL player would hear, and it weighs on the score.\nImprovements re-checked by me: 114 hit cues reach -20 dB of peak within 10.6 ms, and instant cues reach -6 dB in 5.5-7.3 ms (closing_audio_verify_onset.txt). The bus counts are sfx 240 / ui 49 / voice 23 / ambience 13 / music 3. The reviewer's real Chrome capture (closing_audio_capture_rift_summary.json) is internally consistent: -19.0 LUFS integrated output, peak -1.15 dBFS, 0 blocks over -1 dBFS.\nNot re-run: a real Chrome capture of my own. My majors are proved from code, content and the shipped files, without runtime capture.",
+ "gapStatus": [
+  {
+   "id": "r12-§6 audio sync",
+   "status": "closed",
+   "evidence": "Re-measured independently (_harness/_reports/closing_audio_verify_onset.txt; command: ~/Developer/forgeflow-games/.venv/bin/python3 _harness/_reports/closing_audio_verify_tool_onset.py):\n- all 114 hit cues (f_*_attack_hit, f_*_hit, c_hit_*, c_crit*) reach -20 dB of peak by sample peak within 10.6 ms (slowest: f_tunlan_attack_hit_3; the reviewer's 9.8 ms differs by decoder preroll);\n- m_level_up, m_respawn, c_blink, c_summon and m_ping_vision reach -6 dB in 5.5-7.3 ms.\nThe reviewer's ult wind-up-crest and K2 release-timing evidence is consistent with the engine code (release() fires on the first effect at or after castTime, src/audio/index.ts:1250)."
+  },
+  {
+   "id": "M12",
+   "status": "not_measured",
+   "evidence": "Visual gap (signature hue), not measured here.\nAudio analogue (fighter identity) is PARTLY closed. Per-fighter kits exist. Ult landings, however, carry the shared c_ult_release under 12 of 16 fighters' own release (_harness/_reports/closing_audio_verify_content.json: 12 c_ult_release among 46 library area/zone present.sfx in content/fighters). Independent fingerprint (_harness/_reports/closing_audio_verify_ultid.txt): as heard, the median pair distance is 8.7 dB against 19.1 for the own release alone; in the first 300 ms it is 6.1 against 19.9; take baseline 3.3-4.1 median. See AUD-C1."
+  },
+  {
+   "id": "M13",
+   "status": "not_measured",
+   "evidence": "Visual gap (ult exposure envelope), not measured here.\nAudio analogue PARTLY closed. Wind-ups are per-fighter, and the enemy swell is placed at the caster (src/audio/index.ts:1318-1324). The landing's onset is 55-92 % one shared cue by K-weighted energy in its first 300 ms (_harness/_reports/closing_audio_verify_ultid.txt)."
+  },
+  {
+   "id": "M2",
+   "status": "not_measured",
+   "evidence": "Visual gap (status VFX and words), not measured here.\nAudio analogue: the reviewer reports it closed (probe_audio_cc PASS, _harness/_reports/closing_audio_probe_cc.json). The code agrees: the status case binds 'status.<kind>' only, with no buff catch-all, and gives YOU_CC_GAIN when the status is hostile and on you (src/audio/index.ts status case). Not re-run by the verifier."
+  },
+  {
+   "id": "M5",
+   "status": "not_measured",
+   "evidence": "Visual gap, not measured here.\nAudio analogue: the hit-onset timing is closed (114 hit cues within 10.6 ms to -20 dB, _harness/_reports/closing_audio_verify_onset.txt). Some kit autos are narrow-band: Dunsom's swing has a 0.75-0.80 share in 2-5 kHz, and Ulkro's swing has a 4.5-4.8 kHz centroid (_harness/_reports/closing_audio_verify_band.txt). See AUD-C8."
+  },
+  {
+   "id": "M6",
+   "status": "not_measured",
+   "evidence": "Visual gap (victim hit flash), not measured here.\nAudio analogue reported closed (_harness/_reports/closing_audio_probe_procs.json P3: 0 orphans). The code routes ability damage through 'hit' and passive damage through 'proc' (src/audio/index.ts damage case). Not re-run by the verifier."
+  },
+  {
+   "id": "M14",
+   "status": "not_measured",
+   "evidence": "Visual gap (ambient life), not measured here.\nAudio analogue closed. content/audio.json ambience lists RIFT 6, BRIDGE 5 and FRAY 5 emitters (16, re-read by the verifier). The reviewer's capture has the ambience bus at -28.1 LUFS integrated against music at -28.6 (_harness/_reports/closing_audio_capture_rift_summary.json). There is no objective-pit emitter (see AUD-C3)."
+  },
+  {
+   "id": "m2",
+   "status": "not_measured",
+   "evidence": "Visual gap, not measured here.\nAudio facet: the level-up onset reaches -6 dB in 6.0 ms (_harness/_reports/closing_audio_verify_onset.txt). An enemy fighter's death away from you is silent, because the death case has no enemy-down role (src/audio/index.ts:1409-1416). See AUD-C6."
+  }
+ ],
+ "findings": [
+  {
+   "id": "AUD-C1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "12 of 16 ultimates still land on one shared generic boom; 34 more kit area/zone effects layer library cues",
+   "what": "The per-fighter kit fix (AUD-1, marked done) did not reach the area path. The 'area' case plays the content's present.sfx for every fighter, kitted or not. release() plays the kit's ult_release on that same area event. 12 fighters' ult area/zone present names c_ult_release (gain 0.95, priority 8), so the shared boom starts in the same tick, at the same position, as the fighter's own release (gain 0.9). 34 further area/zone effects in fighter kits voice library cues the same way (c_slam x6, c_zone_loop x6, c_swing_heavy x4, c_burst_* x6, c_cast_lumen x3, c_heal x2, c_shield x2, c_root x2 and others). The audio/build.py kit gate resolves ult_release as the f_* cue only (audio/build.py:563), so it cannot see this.",
+   "evidence": "Code: src/audio/index.ts:1250-1261 (release on 'area' with e.ability === the ult), :1347-1351 (the 'area' case plays e.sfx). src/sim/zones.ts:64-67 and :108-111 put present.sfx on the 'area' event at commit time, not after the delay.\nContent: _harness/_reports/closing_audio_verify_content.json lists 46 area/zone present.sfx in content/fighters/*.json, all library cues (12 of them c_ult_release: burdam, dunsom, ervet, hesmi, ilsheta, lisvel, marund, nurrow, odrum, sukri, tunlan, vashil). Example: content/fighters/hesmi.json:432.\nVerifier's independent measure (_harness/_reports/closing_audio_verify_ultid.txt; tool _harness/_reports/closing_audio_verify_tool_ultid.py; a 1/3-octave by 6x120 ms fingerprint with a 60 dB floor):\n- shared-cue share of K-weighted energy: 37-57 % over the whole landing, 55-92 % in the first 300 ms (Lisvel 92 %, Nurrow 69 %, Tunlan 67 %);\n- pair distance, own release only: min 12.0, median 19.1 dB; as heard: min 4.7 (Hesmi against Odrum), median 8.7;\n- first 300 ms only: median 19.9 -> 6.1 dB, and 14 of 66 pairs within the take-to-take max of 5.2 dB (take median 4.1).\nThe reviewer's stub-engine listing (_harness/_reports/closing_audio_ult_layering.json) agrees on the 12 fighters.",
+   "gauge": "In LoL each champion's ultimate has its own cast and impact; a player names the ult by ear in a teamfight. r07 §3.1 (weight ladder) and §4.5 ask for the same. A shared boom that dominates the onset erases who landed it.",
+   "fix": "- Make the 'area' case kit-aware: for an ability of a kitted fighter, skip a present.sfx that names a library cue. For the ult, the kit release already lands; for a1-a3, add an optional f_<fighter>_<slot>_land cue in VALE's palette.\n- Alternatively, as a content-only first step, drop c_ult_release from the 12 ult area/zone presents.\n- Add an 'as heard' gate in audio/build.py that sums every cue the engine plays for a cast, area and hit chain (reading content/fighters area/zone present.sfx), and probe_audio_kits K9: no library cue on a kitted fighter's area.",
+   "files": "src/audio/index.ts, content/fighters/*.json, audio/build.py, audio/cues/kits_a.py, audio/cues/kits_b.py, audio/cues/kits_c.py, _harness/probe_audio_kits.mjs",
+   "verifierNote": "Reproduced from code, sim emission, content and the shipped files. My percentages (37-57 % whole, 55-92 % onset) differ from the reviewer's 41-69 % by method; the conclusion holds and is stronger at the onset, where the ear identifies a sound. Severity stays major: AUD-1 is marked done, yet the climax cue of 12 of 16 fighters is half one shared sound. The fix is cheap."
+  },
+  {
+   "id": "AUD-C2",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "size": "XL",
+   "title": "No vocal layer: no fighter voice and no spoken announcer (scoped out by CONTRACT §11)",
+   "what": "VALE ships 0 voice recordings. The voice bus has 23 cues, all bells and tones (m_ann_*, m_structure_*, m_objective_*, m_countdown and others). The draft lock-in plays the f_<id>_call instrument motif. Fighters make no vocal sound in play.",
+   "evidence": "_harness/_reports/closing_audio_verify_content.json: bus_counts sfx 240, ui 49, voice 23, ambience 13, music 3; voice_bus lists only m_* tonal cues. No audio/cues or audio/*.py module produces speech. _spec/CONTRACT.md:792: 'announcer stingers (tonal, no voice in this slice; subtitles carry the text)'.",
+   "gauge": "LoL voices every champion (pick line, in-play lines) and uses a spoken announcer. A LoL player hears VALE's cast as mute. r07 §2 and its Overwatch reference (hero VO as a pillar) treat VO as genre-standard.",
+   "fix": "This needs an owner scope ruling to lift CONTRACT §11. If lifted: a constructed, non-English VALE speech with per-fighter short sets (lock-in, ult call, death, 3-4 barks), subtitled, on f_<id>_vo_* slots; and a spoken crier over the existing tolls. Record the decision in fixwaves/owner_rulings.md.",
+   "files": "_spec/CONTRACT.md §11, content/audio.json, src/audio/index.ts, src/ui/screens/draft.tsx, content/strings.en.json, audio/build.py",
+   "verifierNote": "The fact is real, but the absence is a documented scope choice, not a defect. CONTRACT §11:792 scopes voice out. The final verifier downgraded the same gap to minor on that basis (AUD-3 'no spoken announcer is a documented choice'; AUD-1 downgraded partly because §11 scopes out voice: _design/reviews/final/audio.json). owner_rulings.md has no ruling reversing it. Raising it to major needs an owner scope decision, which this review cannot supply. It is still the largest single difference a LoL player would hear, and the score reflects it."
+  },
+  {
+   "id": "AUD-C3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "Epic objectives sound like camp monsters: Longshade and Sunsplinter use only shared library cues, play under fighter level, and have no death sound",
+   "what": "Longshade, the deciding RIFT objective, uses c_swing_heavy (shared with the Brightwick Wick, 4 camp monsters and 9 fighter uses), c_monster_hit, c_slam and c_zone_loop. Sunsplinter uses c_shot_bolt_lumen (the Glimwick's bolt), c_hit_magic, c_burst_lumen, c_cast_charge and c_cast_lumen. Monster casts fall back to the shared castMonster c_cast_big. Every monster death, Longshade's included, plays c_monster_hit, a hit and not a death. No pit has a presence emitter. The engine's monster multipliers (attack 0.3, damage 0.45, against 0.6 and 0.8 for fighters) put Longshade's auto about 5 dB (swing) and 10 dB (hit) under a fighter's auto, inverting r07's weight ladder (objective > ultimate > ability > auto). Only the 'taken' stings (m_ann_longshade_*, m_ann_sunsplinter_*) are unique.",
+   "evidence": "_harness/_reports/closing_audio_verify_content.json, unit_sfx: longshade {c_swing_heavy x2, c_monster_hit, c_zone_loop, c_slam}; sunsplinter {c_shot_bolt_lumen, c_hit_magic, c_burst_lumen, c_cast_charge, c_cast_lumen}; glimwick {c_shot_bolt_lumen}; brightwick, glasshorn, resinback, stilltusk and stray_numeral {c_swing_heavy}. events: monsterDeath = c_monster_hit, castMonster = c_cast_big.\nLevels (file max momentary + catalog gain + engine multiplier, same report): Longshade swing -31.5 and hit -31.0 LUFS, against Hesmi swing -26.4 and hit -21.5, and Marund -26.5 and -21.2.\nCode: src/audio/index.ts:1353 (attack multiplier 0.3 for non-fighters) and :1417 (one monster death branch). content/audio.json ambience has no pit emitter. The audio/build.py kits gate checks only fighter-versus-fighter and fighter-versus-unit sharing (audio/build.py:654-672), never unit-versus-unit.",
+   "gauge": "LoL's epic monsters each have their own roars, attacks and death sounds, which players read from off-screen (for example, an enemy starting the objective). r07 §1 and §6 rank objective events heaviest on the weight ladder.",
+   "fix": "- Give each epic objective an original kit, resolved like fighter kits (u_<unit>_<slot>). Longshade: an ink-breath wind-up, a hollow low hourbell for its sweep, a falling shade drone, and a collapsing sundial chime on death. Sunsplinter: struck dawnglass shards, a rising glass chord wind-up, and a shattering noon chord on death.\n- Give epic units engine multipliers at or above a fighter's.\n- Add a pit presence emitter on the ambience bus while the objective lives, and a camp-death cue distinct from the hit.\n- Add a build gate: no epic unit shares an attack or ability cue with a Wick, camp or fighter.",
+   "files": "content/units.json, content/audio.json, src/audio/index.ts, audio/cues/world.py, audio/build.py",
+   "verifierNote": "Reproduced from content and code. The level inversion (Longshade's autos 5-10 dB under a fighter's) is new evidence that strengthens the major. Glasshorn has its own c_monster_roar, so 'camps have no sound of their own' is slightly overstated; the epic-objective core holds."
+  },
+  {
+   "id": "AUD-C4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "Match music is one 160 s loop plus one intense layer per map; no dead or objective state",
+   "what": "Each map has a 160 s main stem and a 160 s intense layer. There are two states, calm and combat by intensity. The dead and objective states (r07 §1.3 and §6.5) were deferred in W3.",
+   "evidence": "ffprobe: audio/out/music/mus_match_{rift,bridge,fray}{,_intense}.ogg are 160.0065 s each. content/audio.json music.mus_match_*: one layer 'intense'. src/audio/index.ts update(): combat enters above 0.6 and leaves below 0.35 after 8 s, and there is no other state.",
+   "gauge": "r07 §1.3: LoL's 2014 Summoner's Rift score reacts to game progress and location while staying unobtrusive.",
+   "fix": "Add horizontal phase segments keyed to match time or structures lost, a low-passed 'dead' state, and an objective layer near Longshade or Sunsplinter, from the existing D-Dorian palette (audio/build_music.py).",
+   "files": "audio/build_music.py, audio/synth/music_match.py, content/audio.json, src/audio/index.ts",
+   "verifierNote": "Reproduced. LoL's own match music is restrained, so minor is the right severity."
+  },
+  {
+   "id": "AUD-C5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Heal chimes fire about 35 times a minute (flask ticks, small item heals)",
+   "what": "Every non-vamp heal event chimes c_heal, subject only to a 250 ms merge per target. The Sap Flask's item active plays c_heal as its cast present.sfx and then up to 6 tick heals. Notched Blade heals 8 HP on every Wick or monster kill.",
+   "evidence": "content/items.json:240-275 (sap_flask_drink: repeat x6, interval 1, heal 25, present.sfx c_heal) and :16 (notched_blade_keep_fed, on kill). src/audio/index.ts:1372-1378 (only the vamp filter and the per-target merge). _harness/_reports/closing_audio_capture_rift_summary.json: c_heal 249 plays in 428.7 s.",
+   "gauge": "LoL plays one drink sound per potion, and small on-kill or on-hit sustain is silent. r07 §4.3 asks for tick merging.",
+   "fix": "Voice a heal only from an ability or spell, or when it is at least 5 % of max HP. A repeat chain chimes on its first tick. Item passive heals on kill or hit stay silent.",
+   "files": "src/audio/index.ts",
+   "verifierNote": "Code and content reproduced. The capture count is the reviewer's; attributing the 249 plays to flask and item versus ability heals was not re-done. Minor stands."
+  },
+  {
+   "id": "AUD-C6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Enemy fighter deaths away from you are silent (no enemy-down cue)",
+   "what": "When an ally dies you hear m_ally_down anywhere. An enemy fighter's death plays only its kit death cue at its position (fog-gated and attenuated), with no team-relative cue. The first, multi and shutdown tolls are one cue each, whoever scored.",
+   "evidence": "src/audio/index.ts:1409-1416 (selfDown, allyDown, no enemy branch); :1464-1468 (announce.first, announce.multi.<n>, announce.shutdown with no own/foe).",
+   "gauge": "LoL voices every champion kill relative to the listener's team (ally or enemy slain).",
+   "fix": "Add events.enemyDown, a rising answer to m_ally_down. An own/foe split of the multi-takedown tolls is optional.",
+   "files": "src/audio/index.ts, content/audio.json, audio/cues/match.py",
+   "verifierNote": "Reproduced. Correction to the gauge: LoL's first-blood, multikill and shutdown callouts are themselves team-blind in wording (the banner carries the side), so only the enemy-down half has a LoL gauge."
+  },
+  {
+   "id": "AUD-C7",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Announcer lines sit at fight level rather than on top of it",
+   "what": "At default settings a takedown or structure line peaks at about one ult release's level. The sfx bus ducks only about 3 dB under a line, and threats to you are exempt.",
+   "evidence": "content/audio.json: m_ann_first and m_ann_toll_3 voice-bus gain 0.9, against c_ult_release 0.95 and f_*_ult_release 0.9 on sfx. _harness/_reports/closing_audio_capture_rift_summary.json: voice Mmax -18.3 against sfx p90 -18.6 and p99 -16.6 LUFS.",
+   "gauge": "LoL's announcer is intelligible over any teamfight. r07 §2.2.7: duck SFX under a line, and the line must win.",
+   "fix": "Lift band 1-3 lines by about 3 dB, or duck sfx 5-6 dB for bands 1-2. Keep the threat exemption, and re-measure in a teamfight capture.",
+   "files": "content/audio.json, src/audio/index.ts",
+   "verifierNote": "The catalog levels reproduce. The capture evidence is a single instance, so this stays minor."
+  },
+  {
+   "id": "AUD-C8",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Some kit autos are narrow tones in the 2-5 kHz band",
+   "what": "Dunsom's attack swing and Ulkro's attack swing are close to narrow-band tones in the ear's most sensitive region, and they fire about once a second.",
+   "evidence": "_harness/_reports/closing_audio_verify_band.txt (Welch spectrum of the whole file): f_dunsom_attack_swing_1-3 put 0.75-0.80 of their energy in 2-5 kHz (centroid 2.36-2.41 kHz); f_ulkro_attack_swing_1-3 have a 4.46-4.75 kHz centroid. The other 87 of 96 auto files are under a 0.6 share.",
+   "gauge": "LoL autos are layered impacts with a transient, a body and a tail (r07 §3.1). STYLE_BIBLE says 'never shrill'.",
+   "fix": "Extend the soft-top and contact gates to every fighter's attack_swing and attack_hit (at most 0.6 of energy in 2-5 kHz for cues that can fire more than once a second), and re-voice those cues with a material body.",
+   "files": "audio/build.py, audio/cues/kits_a.py, audio/cues/kits_b.py, audio/cues/kits_c.py",
+   "verifierNote": "Dunsom and Ulkro reproduce. Rishal's attack_hit measured 0.39-0.52 in 2-5 kHz by my whole-file method, not the 0.77-0.79 claimed, so drop Rishal from the list unless it is re-measured with the reviewer's window."
+  },
+  {
+   "id": "AUD-C9",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Vision has no sound of its own: lamp set uses the generic summon cue, and lamp or summon death is silent",
+   "what": "Setting a Hooded Lamp plays c_summon, which every summon shares. The death case handles only fighter, minion and monster, so ward and summon deaths fall through silently.",
+   "evidence": "content/items.json:331-334 (spare lamp present.sfx c_summon). src/audio/index.ts:1409-1418 (death branches: fighter, minion, monster).",
+   "gauge": "LoL gives ward placement and ward kills their own short local sounds.",
+   "fix": "Add c_lamp_set and c_lamp_out (a wick snuffed). Play c_lamp_out on a visible ward death, plus a generic summon fade-out.",
+   "files": "content/audio.json, content/items.json, src/audio/index.ts, audio/cues/world.py",
+   "verifierNote": "Reproduced from code and content."
+  }
+ ],
+ "missed": []
+}
