@@ -36,8 +36,11 @@
 //               n rising tolls, a shutdown falling glass, structures a low hourbell (yours lost over Dsus2,
 //               theirs resolving to F#), each named objective its own timbre. The HUD banner carries the words
 //   threat      every control status has its own cue (content binds 'status.<kind>'; no catch-all, so an unbound
-//               kind is silent), played on fighters only, +3 dB (YOU_CC_GAIN) when an enemy controls YOU; every enemy
-//               fighter's ultimate wind-up adds the shared shade-breath swell (enemyUltWindup) at the caster
+//               kind is silent), played on fighters only, +3 dB (YOU_CC_GAIN) when an enemy controls YOU. Every enemy
+//               fighter's T3+ wind-up adds the shared shade-breath swell at the caster: its ultimate (T4,
+//               enemyUltWindup) and every ability with a wind-up (castTime > 0) that is T3 by its effects, read from
+//               content (tokens.vfx.tiers.T3 'crowd control, mobility, zones': at any depth a control status on
+//               someone else, a displacement, a dash / blink, or a zone; role enemyWindup, else enemyUltWindup)
 //   format      every cue / bed ships as Ogg Opus with an AAC .m4a sibling (catalog audio.m4a). The session
 //               decodes .ogg; the first .ogg that fails to decode (or canPlayType saying no Ogg Opus, or the
 //               dev-build switch ?audio=m4a) switches the whole session to .m4a and that file is retried. While
@@ -82,7 +85,8 @@
 //               lifesteal / omnivamp heal (a unit healing itself in the tick of its own damage) is not voiced, and
 //               one target's heals within HEAL_MERGE_S are one chime.
 //   kits        a fighter's own sounds (final parity AUD-1): content names them f_<fighter>_<slot>, slots
-//               attack_swing · attack_hit · a1 · a2 · a3 · ult_windup · ult_release · passive · death · call, and
+//               attack_swing · attack_hit · a1 · a2 · a3 · ult_windup · ult_release · passive · death · call · hit ·
+//               dash, and
 //               the engine resolves them BEFORE the catalog's present.sfx / hitSfx and the generic roles, so a
 //               fighter is told apart by ear without touching content/fighters. attack_swing on its 'attack',
 //               attack_hit on its basic attack's 'damage' (under the crit cue on a crit), a1-a3 on the slot's
@@ -91,9 +95,12 @@
 //               blink) at or after its wind-up ends. A release with no effect event (a leap that cannot start)
 //               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch;
 //               a wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where
-//               the area lands, the rest at the caster. death replaces the generic fall, passive is the proc (see
-//               `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content has no
-//               cue for falls back to the catalog's present and then the generic set, as before
+//               the area lands, the rest at the caster. hit is the fighter's own ability impact (every 'hit' of its
+//               abilities, before the ability's present.hitSfx), dash its own dash (a displacement, the sim's dash
+//               of a unit knocked airborne, keeps the generic one). death replaces the generic fall, passive is the
+//               proc (see `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content
+//               has no cue for falls back to the catalog's present and then the generic set, as before. A cue's
+//               round-robin takes are picked at random but never the same take twice in a row
 //   procs       every 'proc' (a passive fired) sounds at its subject (dst, else the owner): a fighter's passive
 //               plays the per-fighter cue f_<fighter>_passive when content has one, else the passive's own
 //               present.sfx / hitSfx; an item / boon / team-buff / unit passive plays its present.sfx / hitSfx,
@@ -120,6 +127,8 @@ type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
 interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[] }
 interface PresentLike { sfx?: string; hitSfx?: string }
+/** an ability as the audio reads it: its present, and what makes its wind-up a T3 threat (see `threat` in the header) */
+interface AbilityLike { id: string; present?: PresentLike; castTime?: number; effects?: unknown[] }
 interface PassiveLike { id: string; present?: PresentLike }
 /** a map's art.ambient (render/ambient.ts draws it; the audio reads its points): [x, y, …] per placement */
 interface AmbientLike {
@@ -129,7 +138,8 @@ interface AmbientLike {
 }
 interface CatalogLike {
   audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>; ui?: Record<string, string>; m4a?: Record<string, string> };
-  fighters: { id: string; attack?: { present?: PresentLike }; kit: Record<string, { id: string; present?: PresentLike } | undefined> }[];
+  fighters: { id: string; attack?: { present?: PresentLike };
+    kit: Record<string, (AbilityLike & { forms?: Record<string, { kit?: Record<string, AbilityLike | undefined> }> }) | undefined> }[];
   units?: { id: string; attack?: { present?: PresentLike }; passive?: PassiveLike }[];
   items?: { id: string; passives?: PassiveLike[] }[];
   setup?: { boons?: PassiveLike[] };
@@ -228,12 +238,17 @@ const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this oft
 const PROC_PERIODIC_S = 6;   // … and a periodic one (an aura's tick, a run-up stack) only reminds this often
 const PERIODIC_ON = new Set(['interval', 'moveDistance']);
 /** a fighter's kit slots (see `kits` in the header): content's cue f_<fighter>_<slot> */
-const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call'] as const;
+const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash'] as const;
 type KitSlot = typeof KIT_SLOTS[number];
 const CAST_SLOTS = new Set<string>(['a1', 'a2', 'a3']);
 const RELEASE_EPS_S = 1.5 / 30;        // the sim counts the wind-up from the cast's own tick: its release lands up to
                                         // one tick before cast.t + castTime (sim time)
 const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the crit cue
+// a T3 wind-up (tokens.vfx.tiers.T3 'crowd control, mobility, zones', enemyWindupAudio mandatory): an ability with a
+// wind-up whose effects, at any depth, control someone else (a StatusKind below, not applied to the caster), displace,
+// move the caster (dash / blink) or lay a zone. StatusKind / effect op names are the contract's (src/contracts/catalog.ts)
+const T3_STATUS = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborne', 'taunt', 'fear', 'sleep']);
+const T3_OPS = new Set(['displace', 'dash', 'blink', 'zone']);
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
 const AMB_DUCK_DB = 6;       // the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
@@ -331,6 +346,10 @@ class Engine implements ValeAudioPort {
   private readonly passives = new Map<string, { kind: PassiveKind; cue?: string }>();
   /** fighter id → the kit slots content has a cue for (see `kits` in the header) */
   private readonly kits = new Map<string, Partial<Record<KitSlot, string>>>();
+  /** ability ids whose enemy wind-up plays the shade-breath swell (see `threat` in the header; ults always do) */
+  private readonly threats = new Set<string>();
+  /** cue id → the index of the file it played last (round-robin never repeats a take back to back) */
+  private readonly lastFile = new Map<string, number>();
   /** caster entity → its ultimate waiting for the wind-up's end (see `kits` in the header) */
   private readonly ults = new Map<number, { cue: string; ability: string; due: number; cd0: number }>();
   /** `${passive}:${owner}` → ctx time of its last sounding proc */
@@ -364,6 +383,10 @@ class Engine implements ValeAudioPort {
       const k: Partial<Record<KitSlot, string>> = {};
       for (const s of KIT_SLOTS) if (this.cues[`f_${f.id}_${s}`]) k[s] = `f_${f.id}_${s}`;
       this.kits.set(f.id, k);
+      // T3 wind-ups: every non-ult ability, a form's overrides included
+      const abs: [string, AbilityLike | undefined][] = Object.entries(f.kit);
+      for (const fm of Object.values(f.kit.passive?.forms ?? {})) abs.push(...Object.entries(fm.kit ?? {}));
+      for (const [slot, a] of abs) if (a && slot !== 'passive' && slot !== 'ult' && (a.castTime ?? 0) > 0 && isT3(a.effects)) this.threats.add(a.id);
     }
     // passives (see `procs` in the header): the per-fighter cue first, then the passive's own present
     const own = (p: PassiveLike | undefined, kind: PassiveKind, fighter?: string): void => {
@@ -580,6 +603,16 @@ class Engine implements ValeAudioPort {
     if (id) this.startBed(id);
   }
 
+  /** a round-robin take: random, never the one this cue played last (so two in a row always differ) */
+  private take(cueId: string, n: number): number {
+    if (n < 2) return 0;
+    const last = this.lastFile.get(cueId) ?? -1;
+    let i = Math.floor(Math.random() * (last < 0 ? n : n - 1));
+    if (last >= 0 && i >= last) i++;
+    this.lastFile.set(cueId, i);
+    return i;
+  }
+
   /** the cue bound to an engine event role, if the catalog binds one */
   private ev(role: string): string | undefined { return this.events[role]; }
 
@@ -610,7 +643,7 @@ class Engine implements ValeAudioPort {
     this.lastPlay.set(cueId, now);
     // where it joins the mix: the gate cues' alert path; a threat to your fighter past the sfx duck; else its bus
     const into = alert ? this.alertBus.get(c.bus)! : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
-    const file = c.files[Math.floor(Math.random() * c.files.length)];
+    const file = c.files[this.take(cueId, c.files.length)];
     // the slot is held from now (a burst of cues decoding at once must not overrun the budget)
     const v: Voice = { src: null, gain: null, cue: cueId, bus: c.bus, priority: prio, rank, pooled: !alert, started: now };
     this.voices.push(v);
@@ -1223,9 +1256,14 @@ class Engine implements ValeAudioPort {
         const own = slot === 'ult' ? this.kit(src, 'ult_windup') : CAST_SLOTS.has(slot) ? this.kit(src, slot as KitSlot) : undefined;
         const pr = this.abilitySfx.get(e.ability as string);
         this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
-        // the shared shade-breath swell for every enemy fighter's ultimate wind-up (its T4 wind-up VFX; STYLE_BIBLE
-        // 'enemy T3+ wind-ups share one shade-breath swell'), placed at the caster like any spatial cue
-        if (src?.kind === 'fighter' && src.team !== mine && slot === 'ult') this.cue(this.ev('enemyUltWindup'), at(src), 1, 0, aw);
+        // the shared shade-breath swell for every enemy fighter's T3+ wind-up (STYLE_BIBLE 'enemy T3+ wind-ups share one
+        // shade-breath swell'; see `threat` in the header), placed at the caster like any spatial cue
+        if (src?.kind === 'fighter' && src.team !== mine) {
+          if (slot === 'ult') this.cue(this.ev('enemyUltWindup'), at(src), 1, 0, aw);
+          else if (((e.castTime as number) || 0) > 0 && this.threats.has(e.ability as string)) {
+            this.cue(this.ev('enemyWindup') ?? this.ev('enemyUltWindup'), at(src), 1, 0, aw);
+          }
+        }
         // the ult's release waits for the wind-up's end (see `kits`); any new cast ends a wait still open
         if (src) {
           const rel = slot === 'ult' ? this.kit(src, 'ult_release') : undefined;
@@ -1236,8 +1274,9 @@ class Engine implements ValeAudioPort {
       }
       case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7, 0, aw); break;
       case 'hit': {
+        // a fighter's ability landing: its own impact (kit 'hit') before the ability's present.hitSfx and the role
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue((e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst), 1, 0, aw);
+        this.cue(this.kit(src, 'hit') ?? (e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst), 1, 0, aw);
         break;
       }
       case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw); break;
@@ -1288,7 +1327,8 @@ class Engine implements ValeAudioPort {
         this.procStats[r === 'none' ? 'unbound' : r]++;
         break;
       }
-      case 'dash': this.cue(this.ev('dash'), at(src), 1, 0, aw); break;
+      // a fighter's own dash (kit 'dash'); a displacement (the sim's dash of a unit knocked airborne) stays generic
+      case 'dash': this.cue((src?.statuses?.some((x) => x.kind === 'airborne') ? undefined : this.kit(src, 'dash')) ?? this.ev('dash'), at(src), 1, 0, aw); break;
       case 'blink': this.cue(this.ev('blink'), at(src), 1, 0, aw); break;
       case 'death': {
         const k = e.kind as string;
@@ -1411,6 +1451,19 @@ class Engine implements ValeAudioPort {
 /** the points of one art.ambient group (see `ambience` in the header): an effect by its vfx id, a critter by its
  *  id, a prop by its fx's vfx id or its model's file name (without .glb, and without the content build's
  *  content-address prefix: content's assets/props/ambient/bunting.glb ships as assets/<hash>-bunting.glb) */
+/** an ability's effects make its wind-up T3 (see `threat` in the header): at any depth, a control status (T3_STATUS)
+ *  not applied to the caster, a displacement, a dash / blink or a zone */
+function isT3(node: unknown): boolean {
+  if (Array.isArray(node)) return node.some(isT3);
+  if (!node || typeof node !== 'object') return false;
+  const o = node as Record<string, unknown>;
+  if (typeof o.op === 'string') {
+    if (T3_OPS.has(o.op)) return true;
+    if (o.op === 'status' && T3_STATUS.has(o.status as string) && o.to !== 'self') return true;
+  }
+  return Object.values(o).some((v) => v && typeof v === 'object' && isT3(v));
+}
+
 function ambientPoints(art: AmbientLike | undefined, source: string): { x: number; y: number }[] {
   const at: number[][] = [];
   for (const e of art?.effects ?? []) if (e.vfx === source) at.push(...e.at);
