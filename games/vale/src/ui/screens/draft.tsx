@@ -154,13 +154,17 @@ function PhaseHead(p: { d: DraftState; title: string; prompt?: string; sub?: str
   );
 }
 
-/** the session's log line a player reads: BRIDGE's Lot burning down ('The Lot let X go') says it in VALE's words */
+/** the session's log lines a player reads in VALE's words: BRIDGE's Lot burning down ('The Lot let X go') and a take
+ *  from the Lot ('N swapped A for B', session/draft.ts benchSwap) */
 const LOT_BURNED = /^The Lot let (.+) go$/;
+const LOT_TOOK = /^(.+) swapped (.+) for (.+)$/;
 function Ticker(p: { d: DraftState }): JSX.Element {
   const { cv } = useApp();
   const raw = p.d.log[p.d.log.length - 1];
   const burned = raw ? LOT_BURNED.exec(raw) : null;
-  const line = burned ? cv.t('lot.burned', '{fighter} went back to the gorge.', { fighter: burned[1] }) : raw;
+  const took = raw && !burned && p.d.phase === 'bench' ? LOT_TOOK.exec(raw) : null;
+  const line = burned ? cv.t('lot.burned', '{fighter} went back to the gorge.', { fighter: burned[1] })
+    : took ? cv.t('lot.teammate_swapped', '{name} took {fighter} from the Lot and left {old} there.', { name: took[1], old: took[2], fighter: took[3] }) : raw;
   const el = useRef<HTMLSpanElement>(null);
   useEffect(() => { animateIn(el.current, { from: 'right', d: 'fast' }); }, [p.d.log.length]);
   return <p class="ticker t-body-s" role="log" aria-live="polite"><Icon name="info" size={14} /><span ref={el}>{line ?? ''}</span></p>;
