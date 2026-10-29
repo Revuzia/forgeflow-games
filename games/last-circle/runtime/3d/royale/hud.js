@@ -742,6 +742,25 @@ html.lc-touch [data-lc=perf] { top: 16px !important; right: calc(var(--lc-sr) + 
   html.lc-touch [data-lc=death] { padding: 2px 12px 3px !important; }
   html.lc-touch .lc-dp { line-height: 16px !important; }
 }
+/* R2 (ipad97 1024 x 768: a death with 2 damage sources pushed the one-line LAST 10 S pill ~150 px out of its 444 px banner - overflowing
+   lc-d2 and 'lc-dp rc', 164 px tall): on a TALL tablet (761 px or more: the ones that show the recap; shorter ones fold it above) the recap's
+   sources wrap as on desktop (a source group at most 255 px, a name never shrunk, only the weapon text ellipsizes), and the banner takes the
+   short tablets' compact rows (3/4 px padding, 2 px gaps, 16 px pill lines; the 44 px MATCH STATS button is untouched) so the extra recap
+   lines stay clear of the reticle at H/2 - 17 (367 on a 768 px screen): measured with the wrap alone, 4 sources reached 384.
+   At least 900 px wide AND 761 px tall, so no phone matches it in either orientation (on its side a phone is <= 520 px tall, upright < 900
+   px wide) and no short tablet either: phone and 7-inch rules untouched */
+@media (min-height: 760.5px) and (min-width: 900px) {
+  html.lc-touch [data-lc=death] { padding: 3px 12px 4px !important; gap: 2px !important; border-radius: 12px !important; }
+  html.lc-touch .lc-d2 { gap: 2px 8px !important; }
+  html.lc-touch .lc-dp { padding: 0 8px !important; line-height: 16px !important; }
+  html.lc-touch .lc-dp .hs { line-height: 14px !important; padding: 1px 5px !important; }
+  html.lc-touch [data-lc=deathrecap] .lc-dp { flex-wrap: wrap; justify-content: center; column-gap: 12px; row-gap: 0; border-radius: 10px; }
+  html.lc-touch .lc-rs { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: min(255px, 100%); }
+  html.lc-touch .lc-rs .sep { display: none; }
+  html.lc-touch .lc-rs b { flex: 0 0 auto; max-width: 150px; }
+  html.lc-touch .lc-rs .rd { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  html.lc-touch .lc-rs .hs { flex: 0 0 auto; }
+}
 /* a phone on its side (<= 520 px tall): a compact top stack, the quest card
    off (dailies still pay out and flash), the left column under the minimap
    carries the prompts so the centre stays on the reticle */
