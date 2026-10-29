@@ -1,0 +1,122 @@
+{
+ "lane": "gate",
+ "round": 1,
+ "run": "integration run 2, whole-build gate",
+ "verifier": "adversarial gate verifier, integration run 2 (2026-10-29)",
+ "measured_at": "49b9f109 (the tree was clean of tracked changes from start to end; reports _harness/_reports/integ_gate_*, shots _harness/_shots/integ_gate_*)",
+ "pass": false,
+ "summary": "Re-measured on 49b9f109. Every required gate passes: typecheck, strict content:check (0 warnings), probe 48/48, build, e2e flow, perf_1080 --prod (GATE PASS), value_probe (0 FAIL), icon_probe, the audio contract gates, 8 node audio probes, probe_audio_world, bot soak quick, the secret scan and sweep_720. The gate still fails on one major item. The gate engineer said e2e rift and store pass; on my run both fail (exit 1). Two causes combine. In the e2e harness, match_input pressed P before the HUD took input: the shop did not open (shopOpen false, shopTags [], scoreboard false), so the step's Escape opened the in-match Menu. Because the step does not assert shopOpen, it passed anyway and the F8 genre-word check passed with no tags to check. The second cause is in the client: the in-match Menu (src/ui/screens/match.tsx:45-56) is opened through overlay.open and never closed when the match ends. It stayed open through the whole match and over the VICTORY post-game, where its Resume / Settings / Leave match buttons blocked the Lantern-nod click. The STORE journey then could not reach the Shop. This code has not changed since 2026-10-13, so the bug is old, not a regression from this run; the race only exposed it. Smaller notes: the match peak is 484k triangles, not the claimed 479k, which is 3.2 % under the 500k budget; programs are exactly at the 40 cap; Ultra reads 40.7 fps (ungated). The claims I spot-checked (lod.ts uvW, profile_store emblem, items vfx, the ranked-ban docs, the dev-catalog Lamplit glb, the cited commits) all hold.",
+ "items": [
+  {
+   "id": "gate:typecheck",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run typecheck (tsc --noEmit -p tsconfig.json, erasableSyntaxOnly true at tsconfig.json:12): exit 0, 0 diagnostics (_harness/_reports/integ_gate_typecheck.log)."
+  },
+  {
+   "id": "gate:content:check",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run content:check, strict (no --allow-missing-assets): exit 0, 'OK (check only, nothing written): 0 warnings'. Counts: vfx 285, audio.cues 328, strings 1574, assets 1733 files / 228.01 MB, names check ran (_harness/_reports/integ_gate_content_check.log)."
+  },
+  {
+   "id": "gate:probe",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run probe: '48 passed, 0 skipped, 0 failed (48 probes, 132.8s)', exit 0 (_harness/_reports/integ_gate_probe.log; table copy _harness/_reports/integ_gate_probes.json). It includes probe_online 73.5 s, probe_sim_bot_soak (quick) 31.4 s, probe_sim_rekey, probe_session_units, probe_sim_determinism and probe_sim_skin_neutral."
+  },
+  {
+   "id": "gate:build",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run build: exit 0, 'built in 167ms', no warnings or errors in the log (_harness/_reports/integ_gate_build.log). Largest chunks: vendor-three 695 kB, index 550 kB, render 543 kB."
+  },
+  {
+   "id": "gate:secrets",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run secrets: 'secret_scan: PASS (13 rules over the tracked files ..., 846 candidate files tested)', exit 0 (_harness/_reports/integ_gate_secrets.log). No key is printed."
+  },
+  {
+   "id": "gate:e2e:flow",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/e2e.mjs flow: 'PASS (flow_dodge:ok flow_readycheck:ok flow_netdown:ok)', exit 0, 73 s (_harness/_reports/integ_gate_e2e_flow.json / .log, shots _harness/_shots/integ_gate_e2e_flow_*).\n- dodge: one notice, nav 6, Settings opens and closes.\n- readycheck: a notification, plus a renotify at readyTimer 3.2 with ui_queue_remind; Decline leaves 1 notice and the plain favicon.\n- netdown: offline in 40/40 samples from 4 s; Try again reads 'Connecting…' and goes back to Offline."
+  },
+  {
+   "id": "gate:e2e:rift+store",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "node _harness/e2e.mjs rift --out _harness/_reports/integ_gate_e2e_rift.json: 'FAIL (rift:FAIL store:FAIL)', exit 1, 177 s.\n- home through match_end pass; the match reaches a real Victory at 25:33.\n- postgame fails: 'locator.click: Timeout 15000ms exceeded' on .pgnod__mate. The click hits h2.modal__title of the in-match 'Menu' modal (Resume / Settings / Leave match), which is still open over the VICTORY screen (_harness/_shots/integ_gate_e2e_rift_10_postgame_FAIL.png).\n- store then fails: the 'Shop' nav item never shows (integ_gate_e2e_store_01_shop_FAIL.png).\n- Cause 1, the harness: match_input reported {shopOpen:false, shopTags:[], scoreboard:false}. P did not reach the HUD, so _harness/e2e.mjs:178 pressed Escape and opened the Menu (shown open at game 0:21 in integ_gate_e2e_rift_07_match_input.png). The step does not assert shopOpen, so it passed, and the F8 genre-word check passed with no tags to check.\n- Cause 2, the client: the Menu stays open from 0:21 to the end of the match and across the route change (see client:stale-match-menu).\n- Every earlier e2e run had shopOpen true, including integ_lead_final_e2e_rift.log, so this is a race that does not hit every run. Even so, the gate engineer's 'e2e rift / store PASS' did not reproduce here.\n- Budget: 3 perf/e2e runs were used (flow, perf, rift), so I could not re-run.",
+   "fixHint": "Two small changes, then re-run `node _harness/e2e.mjs rift`.\n(a) client, src/ui/screens/match.tsx: keep the id returned by overlay.open for the Menu (and for the Leave-match confirmDialog). Close them when MatchScreen unmounts (a useEffect cleanup) or when state.ending turns true, so no in-match dialog reaches the post-game.\n(b) harness, _harness/e2e.mjs match_input (:171-182): before pressing P, wait for the HUD to take input (.hud .dbar visible and overlay.modals empty). Throw when shopOpen is false, so the F8 tag check cannot pass with no tags, and press Escape only while the shop is open."
+  },
+  {
+   "id": "client:stale-match-menu",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "src/ui/screens/match.tsx:45-56 opens the in-match Menu through overlay.open(...) and :58 binds it to Esc. Nothing closes it when the match ends: MatchScreen unmounts, but the overlay modal stays.\n- Measured in integ_gate_e2e_rift: the Menu opened at 0:21 stayed through the match and over the post-game (integ_gate_e2e_rift_10_postgame_FAIL.png). Its 'Leave match' was still offered, and the post-game controls under it could not be clicked.\n- A player who has Esc open when the Hourbell falls lands on this state. It can be dismissed with Resume or ×.\n- Not a regression: match.tsx was last changed in 8812ee9c (2026-10-13).",
+   "fixHint": "See gate:e2e:rift+store (a). On the match end, close the match-owned overlay entries (the Menu and the Leave-match confirm)."
+  },
+  {
+   "id": "gate:hud-sweep",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "node _harness/sweep_720.mjs fast: '✓ no failures', 40 checks and 0 ✗, exit 0, 78 s (_harness/_reports/integ_gate_sweep.json / .log, shots _harness/_shots/integ_gate_sweep_*). One case is listed as faded rather than cut: 'finalize 1280_hour_spells (1 faded at a scroll edge)'."
+  },
+  {
+   "id": "gate:perf_1080",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/perf_1080.mjs --prod --q low,medium,high,ultra --wait-idle 8: 'GATE PASS', exit 0, 632 s (_harness/_reports/integ_gate_perf_1080.json / .log). The 1-minute load average was 1.6-2.1 throughout, so the timing gates were measured.\n- Low: 60.1 fps, p95 16.7, p99 16.8 ms, 0 dropped, cpu 2.18 ms, 141 draws, 25 programs, 187k tris.\n- Medium: 60 fps, p95 16.8, 0 dropped, 169 draws, 37 programs, 224k tris.\n- High: 60.1 fps, p95 16.8, p99 16.8 ms, 0 dropped, cpu 2.03 ms, 174 draws, 37 programs, 253k tris.\n- Ultra (not gated): 40.7 fps, p95 33.4, 195 dropped. The gate engineer measured 48.9.\n- dynres: menu scale 1, match scale 1. PASS.\n- Memory: 4 rebuilds, menu_2 to menu_5, targets 36 to 36, geometries 35 to 35, textures 159 to 159, GPU process 1265 to 1281 MB (+1.3 %). PASS.\n- Match peak (x4, ended at 1655 s): 484,155 tris at 1080.7 s against the 500k budget (claimed 479k; actors 383k and vfx 23k in the peak frame), 273 draws against 450, and 40 programs against 40, first seen at 15.2 s, with 0 programs first seen after 1:00.",
+   "fixHint": "Not a failure. Headroom is thin: 16k triangles (3.2 %) and 0 programs at the match peak. The peak frame's crowd actors (crowd 98.5k, crowd.outline 92.8k, crowd.accent 39k) are the lever if a later change adds geometry."
+  },
+  {
+   "id": "gate:value_probe",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/value_probe.mjs --tag integ_gate, all maps on the high and low tiers: exit 0, 94 s, 82 PASS lines and 0 FAIL (_harness/_reports/integ_gate_value_probe.log; merged report copy integ_gate_value_probe.json).\n- Flash: RIFT High 2.16x, RIFT Low 2.06x (gate >= 2.0x; claimed 2.17 / 2.05); BRIDGE 2.72x / 2.35x; FRAY 2.41x / 2.25x.\n- RIFT High: laneP50 89, walkableSpread 42 (<= 45), frameP50 63, groundSat 0.31, fighterTop25 81.1 (over the lane 43.1), blowout 0.26 %.\n- FRAY: frameP50 85 (<= 90)."
+  },
+  {
+   "id": "gate:icon_probe",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/icon_probe.mjs: 'OK', exit 0 (_harness/_reports/integ_gate_icon_probe.json / .log).\n- Items: n 57; at 38 px, p50 min 66 and p95 min 192.\n- Abilities: n 94; at 40 px, p50 min 65 and p95 min 193.\n- Navy grounds: 0. Families: strike 19, craft 17, guard 16, stride 5.\n- Closest grounds across families: d 56 (hourcleaver vs dust_runners; floor 40).\n- Missing icons: none."
+  },
+  {
+   "id": "gate:audio",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "audio/build.py --gates (venv python): exit 0, PASS (_harness/_reports/integ_gate_audio_gates.log / .json).\n- Kit gate: 16/16 fighters with 12/12 slots.\n- Instant gate: 42 cues, slowest 11.1 ms (<= 15).\n- Impact gate: laptop loss <= 2.9 LU.\n- Ambience: 3 maps with 4-6 emitters each.\n- The 8 node probes probe_audio_{ambience, announcer, cc, kits, listener, pieces, procs, team_private} each exit 0 with a PASS line (_harness/_reports/integ_gate_audio_probes.log, integ_gate_audio_<name>.json).\n- probe_audio_world --seeds 3,5,7,9 --seconds 450: PASS (integ_gate_audio_world_450.json). W2 at 420 s gives 5 or 6 seal breaks for 5 or 6 standing Needles; W4 2 steps, 2 gusts; W5 1 bell; W6 stub shaded: c_hit_shaded@1.0 plus f_ardit_attack_hit@0.44 against plain 0.80, and ability shaded f_ardit_hit@0.55 against 1.0.\n- The 450 s runs had 0 real shaded blows. I did not re-run the gate engineer's 900 s 2-blow measurement."
+  },
+  {
+   "id": "gate:bot_soak_quick",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "probe_sim_bot_soak.ts (quick, inside npm run probe): PASS, 31.4 s (_harness/_reports/integ_gate_bot_soak_quick.txt / .json). All 7 gates PASS:\n- Fighter last-hits: adept 56.2 %, veteran 52.4 % (>= 50 %).\n- Solo-laner cs@10: 61.5 / 56.8 (>= 45).\n- In lane: 82.6 % / 77.7 % (>= 65 %).\n- No-enemy deaths: 2.9 % / 0.0 % (<= 5 %).\n- Jungler level gap at 15:00: 0.50 / 0.57 (<= 1.5)."
+  },
+  {
+   "id": "gate:dev-catalog (chars-r2-01/obs-lamplit-dev-catalog)",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "dist-catalog/schema-1/2026.10.1/catalog.json references only 118eba3bf523-ervet_lamplit.glb: 1,010,536 B, the same size as art/out/fighters/ervet/ervet_lamplit.glb. Its glTF nodes include form_great and form_great_1; the stale 62ccfe4b2569 build has form_great only. dist-catalog/manifest.json (06:37) is newer than content/vfx.json (06:36)."
+  },
+  {
+   "id": "gate:claims-spot-check",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "The cited code and docs hold:\n- src/render/lod.ts:55 LOD.body uvW 60.\n- src/session/profile_store.ts:171-172 keeps emblem.\n- content/items.json: hourstring uses lib_item_strike_the_hour, stillhour uses lib_item_hold_the_hour.\n- _design/sections/modes_economy.md:116-117 says 1 ban a team and bansByRoster 2/3/4/5 at 28/32/36/40, matching content/queues.json:49-50 / :65-66 / :125-126.\n- The director's noon_toll test (src/render/director.ts:715) uses the sim's announce key, as src/ui/hud/model.ts:587 does; it is not a content id.\n- No Math.random, Date or performance.now in src/sim.\n- All 17 commits cited in the gate engineer's evidence exist with matching subjects: daec16d8, 76af05c1, d83f8244, 6deaaeb6, f9c74407, df970e0d, 02cd1e8f, 31c05be0, 4422272f, 32d916d2, a026db1b, 3360a91f, d0ddcb7e, c6f36824, e8fa014c, 49b9f109, 6f895f33.\n- The 'partly' statuses (engine-r2-01..04, combat:F4 Hesmi x2.26 < 2.3) are recorded honestly in final_parity_open.json verifier_open (combat:F4 partly; engine-r2 optional world looks partly)."
+  },
+  {
+   "id": "obs:tracked-harness-reports",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "_harness/_reports/ is git-ignored, but four files in it are tracked: value_probe.json, perf_1080.json, ambient.json and shot_lane.json (git ls-files). Every value_probe run merges its tag into the tracked value_probe.json, which dirties the tree, and a WIP sync then commits it (as 1963df6f did). My run added runs.integ_gate there. I put back the HEAD bytes (git show HEAD:... > file; the tree is clean again) and kept the result as integ_gate_value_probe.json.",
+   "fixHint": "git rm --cached those four reports, or point the harness defaults at untracked names, so gate runs leave the tree clean."
+  }
+ ],
+ "regressions": [],
+ "notes": [
+  "The e2e rift/store failure is not a code regression from this run. src/ui/screens/match.tsx is unchanged since 2026-10-13. The P-then-Escape press in match_input (_harness/e2e.mjs:173/:178) dates from 2026-10-13/14. What 768febb5 (2026-10-29, client F15) added is the Lantern-nod click on the post-game. Before it, the postgame step only read state, so a leftover Menu could not fail the journey. Now any run where P misses the HUD fails, and this run is the first one where that happened.",
+  "Machine use: one Chrome harness at a time, all through pw.mjs heavy slots (e2e flow, perf_1080, value_probe, e2e rift, sweep_720). Node sim processes peaked at 2. No helper processes are left (no vite preview, no harness Chrome), and all 3 heavy slots are free."
+ ]
+}
