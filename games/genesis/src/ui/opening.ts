@@ -152,7 +152,9 @@ export class Opening {
   private ring: HTMLDivElement;
   private ringLabel!: HTMLDivElement;
   /** where the ring's label was last fitted (it is re-fitted when the ring moves, and a few times a second) */
-  private ringFit = { x: -1e9, y: -1e9, at: 0 };
+  private ringFit = { x: -1e9, y: -1e9, at: 0, lx: 0, ly: 0, lw: 0, lh: 0 };
+  /** the open windows' rectangles (the shell's layout pass): the ring and its words never read through a window */
+  private wins: DOMRect[] = [];
   private quiet = false;
   private gestureListener: ((e: Event) => void) | null = null;
   /** the opening's clock (real time; a test can hold it and step it, a software-rendered frame takes seconds) */
@@ -569,6 +571,23 @@ export class Opening {
     this.ring.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
     const now = performance.now(), f = this.ringFit;
     if (Math.abs(p[0] - f.x) > 3 || Math.abs(p[1] - f.y) > 3 || now - f.at > 300) { f.x = p[0]; f.y = p[1]; f.at = now; this.fitRingLabel(p[0], p[1]); }
+    // (under an open window — the F1 card, the scenario menu, the inspector — the ring steps back whole, as the HUD's
+    // panels do: its circle and italic words would read through the window's glass among the window's own rows)
+    const over = (x0: number, y0: number, x1: number, y1: number): boolean =>
+      this.wins.some((r) => Math.min(x1, r.right) - Math.max(x0, r.left) > 2 && Math.min(y1, r.bottom) - Math.max(y0, r.top) > 2);
+    const under = this.wins.length > 0 && (over(p[0] - 36, p[1] - 36, p[0] + 36, p[1] + 36)
+      || (f.lw > 0 && over(p[0] + f.lx, p[1] + f.ly, p[0] + f.lx + f.lw, p[1] + f.ly + f.lh)));
+    if (this.ring.classList.contains('gn-under-win') !== under) this.ring.classList.toggle('gn-under-win', under);
+  }
+
+  /** the shell's layout pass: the open windows' screen rectangles (a change re-fits the ring's label at once) */
+  coverUnder(wins: DOMRect[]): void {
+    const same = wins.length === this.wins.length && wins.every((r, i) => {
+      const o = this.wins[i];
+      return Math.abs(r.left - o.left) < 1 && Math.abs(r.top - o.top) < 1 && Math.abs(r.right - o.right) < 1 && Math.abs(r.bottom - o.bottom) < 1;
+    });
+    this.wins = wins;
+    if (!same) this.ringFit.at = 0;
   }
 
   /**
@@ -582,14 +601,18 @@ export class Opening {
     // (a fixed-position card has no offsetParent: a zero rect is what says it is not shown)
     const shown = (e: Element | null): e is HTMLElement => !!e && !(e as HTMLElement).hidden && !e.classList.contains('gn-away');
     const blocks = [this.card, ...['.gn-tool', '.gn-time', '.gn-topright', '.gn-dock'].map((s) => document.querySelector(s))].filter(shown)
-      .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+      .map((e) => e.getBoundingClientRect()).concat(this.wins).filter((r) => r.width > 0 && r.height > 0);
     const fits = (x0: number, y0: number): boolean => {
       const x1 = x0 + w, y1 = y0 + ht;
       if (x0 < 4 || x1 > innerWidth - 4 || y0 < 4 || y1 > innerHeight - 4) return false;
       return !blocks.some((r) => x0 < r.right + 8 && x1 > r.left - 8 && y0 < r.bottom + 6 && y1 > r.top - 6);
     };
     const spots: [string, number, number][] = [['below', x - w / 2, y + 44], ['above', x - w / 2, y - 44 - ht], ['right', x + 44, y - ht / 2], ['left', x - 44 - w, y - ht / 2]];
-    const where = spots.find(([, x0, y0]) => fits(x0, y0))?.[0] ?? 'none';
+    const at = spots.find(([, x0, y0]) => fits(x0, y0));
+    const where = at?.[0] ?? 'none';
+    // (where the words stand, from the ring's centre: what placeRing tests against the windows every frame)
+    const f = this.ringFit;
+    if (at) { f.lx = at[1] - x; f.ly = at[2] - y; f.lw = w; f.lh = ht; } else f.lw = f.lh = 0;
     l.classList.toggle('gn-up', where === 'above');
     l.classList.toggle('gn-right', where === 'right');
     l.classList.toggle('gn-left', where === 'left');

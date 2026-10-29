@@ -282,10 +282,12 @@ const VEG_WIND = /* glsl */ `
     vNearFade = vec2(2.5 + hCam * 0.3, 6.5 + hCam * 0.45);
     // GOD-VIEW OCCLUDERS: a camera some metres up, looking down at what it frames (a village, a shrine, the Touch's
     // catch), never wants a crown in front of its subject — the crown by the lens covered 40 % of a 60 m village view
-    // and hid a framed shrine outright. A tree's crown fades (the same object-space chunks as above; its trunk stays,
-    // so the wood still reads) when it stands well in the FOREGROUND (nearer than ~40-55 % of the distance to the
+    // and hid a framed shrine outright. A tree fades (the same object-space chunks as above: the crown first, then its
+    // trunk — a trunk left standing without its crown read as a burnt forest of bare poles) when it stands well in the
+    // FOREGROUND (nearer than ~40-55 % of the distance to the
     // framed ground: it would look twice the size of the subject's own trees) or ON THE LINE OF SIGHT to the subject (within
-    // its radius + a few metres of the view ray, short of the subject). The framed point is the view ray's hit on the
+    // its radius + a few metres of the view ray, widening with the distance down it, short of the subject: crowns in
+    // the middle distance hid a framed town). The framed point is the view ray's hit on the
     // ground sphere through this tree's foot. Off at street level (walk / follow views: the trees are the scene) and
     // when the view runs to the horizon; shadows keep every tree.
     vOccK = 0.0;
@@ -303,7 +305,7 @@ const VEG_WIND = /* glsl */ `
         float dPerp = length(rel - fwd * tA);
         float rC = th * 0.3;
         float fore = 1.0 - smoothstep(0.38 * tT, 0.56 * tT, length(rel));
-        float onRay = (1.0 - smoothstep(rC + 2.0, rC + 6.0, dPerp)) * smoothstep(0.0, 3.0, tA) * (1.0 - smoothstep(0.8, 0.94, (tA + rC) / tT));
+        float onRay = (1.0 - smoothstep(rC + 2.0 + 0.05 * tA, rC + 6.0 + 0.09 * tA, dPerp)) * smoothstep(0.0, 3.0, tA) * (1.0 - smoothstep(0.8, 0.94, (tA + rC) / tT));
         vOccK = max(fore, onRay) * smoothstep(6.0, 12.0, hAbove) * (1.0 - smoothstep(600.0, 900.0, tT));
       }
     }
@@ -419,11 +421,11 @@ ${LEAF_ALPHA}
   // (trees only: vCrownIn < 0 marks ground cover and small shrubs, whose tufts at the camera's feet stay)
   // (a camera up among the crowns — vNearFade.x > 4: some 5 m above this tree's foot — loses the bare branches beside
   // it too, which crossed an orbit view as sticks once their leaves were gone)
-  // (a crown between a god's-eye camera and its subject, vOccK, loses its foliage and the branches up in it, the
-  // lower trunk staying: the wood still reads, the subject shows through)
+  // (a tree between a god's-eye camera and its subject, vOccK, loses its foliage and the branches up in it, and once
+  // they are mostly gone its trunk too: bare trunks left standing read as a burnt forest of poles)
   if (vCrownIn > -0.5) {
     float nearK = (vLeaf > 0.5 || vNearFade.x > 4.0) ? max(vCrownIn, 1.0 - smoothstep(vNearFade.x, vNearFade.y, distance(vBodyPos, uCamBody))) : 0.0;
-    if (vLeaf > 0.5 || vLocalY > 0.55) nearK = max(nearK, vOccK);
+    nearK = max(nearK, vLeaf > 0.5 || vLocalY > 0.55 ? vOccK : smoothstep(0.4, 0.95, vOccK));
     if (nearK > 0.0 && fract(sin(dot(floor(vLocalP * 4.0 + 0.21), vec3(12.9898, 78.233, 37.719))) * 43758.5453) < nearK) discard;
   }
   if (vCard > 0.5) diffuseColor.rgb *= texture(uLeafTex, vLeafUv).rgb * 1.7;

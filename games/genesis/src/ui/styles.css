@@ -1035,6 +1035,8 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 /* ── the opening: the spot the people's whisper suggests, ringed on the ground ── */
 .gn-open-ring { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; width: 0; height: 0; will-change: transform; }
 .gn-open-ring[hidden] { display: none; }
+/* (under an open window the ring steps back whole, as the HUD's panels do: its words would read through the glass) */
+.gn-open-ring.gn-under-win { opacity: 0 !important; transition: none !important; }
 .gn-open-ring-o { position: absolute; left: -34px; top: -34px; width: 68px; height: 68px; border-radius: 50%; border: 1.5px solid rgba(243, 223, 174, .9);
   box-shadow: 0 0 18px rgba(243, 223, 174, .35), inset 0 0 14px rgba(243, 223, 174, .2); animation: gnRingPulse 2.6s ease-in-out infinite; }
 .gn-open-ring-l { position: absolute; left: 0; top: 44px; transform: translateX(-50%); white-space: nowrap; font: italic 500 16px var(--gn-serif); color: var(--gn-gold-hi);

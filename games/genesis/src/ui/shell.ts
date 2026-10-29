@@ -1244,6 +1244,7 @@ export class Shell {
       if (!w.classList.contains('gn-win-left')) centre = true;
     }
     this.hud.coverUnder(wins);
+    this.opening.coverUnder(wins);
     this.winCentre = centre;
     const card = this.tools.card.hidden ? null : this.tools.card.getBoundingClientRect();
     const toastW = Math.min(440, window.innerWidth * 0.4) * s + 18;

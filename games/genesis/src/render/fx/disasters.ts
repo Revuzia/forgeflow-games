@@ -681,7 +681,20 @@ export class DisasterFx {
         break;
       }
       case 'eclipse': {
-        ctx.screen.eclipse = Math.max(ctx.screen.eclipse, (P.coverage ?? 0.82) * k);
+        // a god's sign (omens.ts: 120 ticks) goes total through the middle of its short life — the corona, the dark sky
+        // and the stars (godfx: totality from 0.93) — while the year-long eclipse (17280 ticks) stays at its partial
+        // coverage. The view carries no life, so it is read from how fast the progress runs (rounded to 0.001: the
+        // rounding is allowed for before a disaster counts as short)
+        const ex = st.extra as { p0?: number; t0?: number; short?: boolean };
+        const tk = pv.paramsTick;
+        if (d.progress >= 0 && !ex.short) {
+          if (ex.t0 === undefined || d.progress < (ex.p0 ?? 0)) { ex.t0 = tk; ex.p0 = d.progress; }
+          else if (tk > ex.t0 && d.progress - (ex.p0 ?? 0) - 0.001 >= (tk - ex.t0) / 1500) ex.short = true;
+        }
+        const base = P.coverage ?? 0.82;
+        const p = d.progress;
+        const tot = ex.short && p >= 0 ? smooth(0.12, 0.35, p) * (1 - smooth(0.68, 0.88, p)) : 0;
+        ctx.screen.eclipse = Math.max(ctx.screen.eclipse, (base + (1 - base) * tot) * k);
         break;
       }
       case 'rift': {

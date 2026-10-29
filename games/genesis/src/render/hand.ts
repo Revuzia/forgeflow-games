@@ -53,6 +53,7 @@ import { sigilOfMiracle, sigilStroke } from './fx/sigils.ts';
 import type { PlanetView } from '../client/worldview.ts';
 import type { HandView } from '../sim/types.ts';
 import { groundHeight } from '../sim/grid/surface.ts';
+import { CAMERA_NOW } from './camera/common.ts';
 
 /** what the Touch is doing (the hand poses of the sim, seen as weather) */
 export type TouchBehaviour = 'open' | 'reach' | 'lift' | 'point' | 'rebuke' | 'soothe' | 'sigil';
@@ -176,6 +177,7 @@ uniform float uGripT;
 uniform float uBeamK;    // how bright the shaft is (behaviour)
 uniform float uGroundK;  // how much of it reaches on below the grip to the ground (0 none … 1 all)
 uniform float uFlashK;   // a rebuke's cold flash
+uniform float uColK;     // the whole shaft's strength (a camera down among things close by: it thins away)
 varying float vT;
 varying float vSide;
 varying float vZ;
@@ -213,13 +215,22 @@ void main() {
   float dbody = 1.0 - smoothstep(edgeR - 0.32, edgeR + 0.04, x);
   // (thinner at the foot, where it meets the canopy or the street: there the storm is scud and rain, not a wall —
   // at 0.95 over its 0.05 albedo the foot punched a black hole into the trees under it)
-  float dk = uDark * dbody * env * (0.7 + 0.3 * dn) * mix(0.9, 0.6, smoothstep(0.6, 0.95, vT));
+  float dk = uDark * dbody * env * (0.72 + 0.28 * dn) * mix(0.95, 0.68, smoothstep(0.6, 0.95, vT));
   float sunSide = clamp(0.5 + 0.5 * vSide * vSunX, 0.0, 1.0);
-  float shade = (0.45 + 0.65 * sunSide * sunSide) * (0.75 + 0.5 * dn2) * mix(0.7, 1.0, smoothstep(0.55, 0.15, vT));
+  // (self-shadowed: a thick storm column is lit on its sun flank only — lit through, by the full day, it read as pale
+  // smoke over a sunny town, not as storm-dark)
+  float shade = (0.32 + 0.6 * sunSide * sunSide * sunSide) * (0.75 + 0.5 * dn2) * mix(0.7, 1.0, smoothstep(0.55, 0.15, vT));
   // a storm cloud's own albedo, lit by the sun and the sky (slate, darker than the land it shades — never a void)
   // (0.3 read as pale smoke, not a storm; the black pit was the shadow decals, not this body: dark slate aloft,
   // lighter scud and rain at the foot)
-  vec3 dc = mix(vec3(0.12, 0.125, 0.145), vec3(0.22, 0.23, 0.255), smoothstep(0.55, 0.95, vT)) * vLight * shade;
+  vec3 dc = mix(vec3(0.085, 0.09, 0.108), vec3(0.16, 0.168, 0.19), smoothstep(0.55, 0.95, vT)) * vLight * shade;
+  // rain out of the storm: fine grey streaks falling through its lower body (a feared god's weather, not smoke)
+  float rcol = vSide * 15.0;
+  float rid = floor(rcol);
+  float rh = fract(sin(rid * 12.9898 + 4.1) * 43758.5453);
+  float rdrop = fract(s * (0.55 + 0.4 * rh) - uTouchT * (1.7 + 0.9 * rh) + rh * 7.0);
+  float rain = smoothstep(0.16, 0.0, abs(fract(rcol) - 0.5) - 0.06) * smoothstep(0.0, 0.08, rdrop) * (1.0 - smoothstep(0.35, 0.6, rdrop));
+  float rainA = uDark * rain * smoothstep(0.3, 0.6, vT) * dbody * env * 0.3;
   // (a flicker now and then lights a stretch of the storm from inside — a stretch, softly: lit whole and full, the dark
   // column became a white bar)
   float fseed = floor(uTouchT * 9.0);
@@ -234,7 +245,9 @@ void main() {
   // a dense shaft of lit air veils what is behind it a little (premultiplied over): over a blue sky a purely added
   // gold light summed to grey-white, and the regard's colour was lost
   float veil = clamp((core * 0.4 + body * 0.28) * env * uBeamK, 0.0, 0.38) * (1.0 - uDark);
-  gl_FragColor = vec4((c + dc * dk) * vis, max(dk, veil) * vis);
+  vec3 rc = vec3(0.5, 0.53, 0.58) * vLight * 0.45;
+  float aBody = max(dk, veil);
+  gl_FragColor = vec4((c + dc * dk * (1.0 - rainA) + rc * rainA) * vis * uColK, max(aBody, rainA) * vis * uColK);
 }
 `;
 
@@ -282,7 +295,7 @@ void main() {
   float dens = smoothstep(0.38, 0.78, arms * 0.85 + n * 0.5) * ring;
   float a = dens * uWhorlK * uPres * vis * mix(0.85, 0.95, uDark);
   // seen from below: shaded undersides, brighter where the arm thins (light through it); storm-dark when feared
-  vec3 cloud = vLight * mix(0.62, 0.3, uDark) * (0.65 + 0.35 * n) + vLight * 0.3 * (1.0 - dens) * (1.0 - uDark);
+  vec3 cloud = vLight * mix(0.62, 0.2, uDark) * (0.65 + 0.35 * n) + vLight * 0.3 * (1.0 - dens) * (1.0 - uDark);
   // the eye: light pouring through; the arms' inner edges gilded (cold-rimmed when feared)
   float eye = 1.0 - smoothstep(0.0, 0.3, r);
   float edge = exp(-pow((r - 0.22) / 0.08, 2.0)) * (0.3 + 0.7 * dens);
@@ -823,6 +836,11 @@ export class HandVisual {
    * real time
    */
   hold: number | null = null;
+  /**
+   * captures: pin how the people see the god (−1 feared … +1 trusted) over the sim's HandView.regard, so a shot of the
+   * feared or the trusted look does not race the snapshots that replace the view's hand; null reads the sim
+   */
+  pinRegard: number | null = null;
   /** what it holds now: kind and id (from the sim) */
   heldKind = '';
   heldId = -1;
@@ -878,7 +896,7 @@ export class HandVisual {
     uPres: { value: 0 }, uTouchT: { value: 0 }, uL: { value: 8 }, uCrackK: { value: 0 },
     // shaft
     uTop: { value: new Vector3() }, uGrip: { value: new Vector3() }, uGround: { value: new Vector3() }, uGripT: { value: 0.8 },
-    uWTop: { value: 10 }, uWGrip: { value: 2 }, uWGround: { value: 3 }, uBeamK: { value: 1 }, uGroundK: { value: 0.2 }, uFlashK: { value: 0 },
+    uWTop: { value: 10 }, uWGrip: { value: 2 }, uWGround: { value: 3 }, uBeamK: { value: 1 }, uGroundK: { value: 0.2 }, uFlashK: { value: 0 }, uColK: { value: 1 },
     // whorl
     uE1: { value: new Vector3(1, 0, 0) }, uE2: { value: new Vector3(0, 0, 1) }, uRw: { value: 30 }, uWhorlK: { value: 0.8 }, uSpinW: { value: 0 },
     // vortex and cradle
@@ -1052,7 +1070,7 @@ export class HandVisual {
     const gR = groundHeight(pv.ground, up.x, up.y, up.z);
     const hAbove = Math.max(0.5, this.pos.length() - gR);
     // ── regard → palette and weather (eased: a people's view of its god does not flip in a frame) ──
-    const regard = Math.max(-1, Math.min(1, hv?.regard ?? hv?.alignment ?? 0));
+    const regard = Math.max(-1, Math.min(1, this.pinRegard ?? hv?.regard ?? hv?.alignment ?? 0));
     this.regard += (regard - this.regard) * Math.min(1, this.hold !== null ? 1 : dt * 1.2);
     const look = touchLook(this.regard);
     const trusted = look.trusted, feared = look.feared;
@@ -1178,12 +1196,24 @@ export class HandVisual {
     this.u.uGripT.value = lenTop / Math.max(1e-3, lenTop + lenBot);
     // (the strip is wider than the light in it: the beam's soft falloff needs the room; a feared god's downdraft is
     // a broad column of dark cloud)
-    const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.2 * trusted * (1 - grasp)) * (1 - 0.55 * farK);
+    // (an eye down among things close by — walking, a surface view, a photo, a follow camera — sees the shaft from
+    // beside it, not looking at it: a strip filling the frame's height read as a flat grey slab standing in the view
+    // (beside a comet at night); there it thins away, unless it holds or points at something. The god's own cameras
+    // look at the Touch and keep it.)
+    const md = CAMERA_NOW.mode;
+    const eyeCam = md === 'walk' || md === 'surface' || md === 'photo' || md === 'follow' ? 1 : 0;
+    const pl = this.pos.length() || 1, cb = f.camBody;
+    const cAx = (cb.x * this.pos.x + cb.y * this.pos.y + cb.z * this.pos.z) / pl;
+    const camH = Math.sqrt(Math.max(0, cb.lengthSq() - cAx * cAx));
+    const nearEye = eyeCam * (1 - smooth(60, 200, altCam)) * (1 - smooth(5 * L, 14 * L, camH)) * (1 - 0.6 * Math.max(grasp, W.point));
+    this.u.uColK.value = 1 - 0.9 * nearEye;
+    const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.2 * trusted * (1 - grasp)) * (1 - 0.55 * farK) * (1 - 0.5 * nearEye);
     this.u.uWTop.value = Math.max(L * 1.1, topH * 0.06) * (1 + 0.4 * W.soothe - 0.35 * W.point) * wk;
     this.u.uWGrip.value = L * (0.3 - 0.1 * grasp - 0.17 * W.point + 0.2 * W.soothe + 0.25 * rk) * wk;
     this.u.uWGround.value = L * (0.42 + 0.55 * W.soothe - 0.3 * W.point) * wk;
     // the whorl: a disc at the top in the tangent plane there
-    this.u.uRw.value = Math.max(2.4 * L, topH * 0.3) * (1 + 0.25 * feared);
+    // (a feared god's whorl is a storm cell: broad and dark over the shaft)
+    this.u.uRw.value = Math.max(2.4 * L, topH * 0.3) * (1 + 0.6 * feared);
     tangentFrame(tu, this.u.uTE1.value, this.u.uTE2.value);
     this.whorl.visible = air && this.u.uWhorlK.value > 0;
     this.tufts.visible = this.u.uTuftK.value > 0.01;
@@ -1360,15 +1390,23 @@ export class HandVisual {
     // storm deck's over it (diffuse: the sky's light is cut as well as the sun's, so it sits under the Touch, not
     // thrown by the sun) — so feared reads at a glance from the god's height, where the column itself is small
     if (feared > 0.02) {
-      const R = Math.min(L * 6.5, 520);
+      // (never under ~32 m: from the god's working height a smaller gloom sat under the shaft's foot and was not seen)
+      const R = Math.min(Math.max(L * 6.5, 32), 520);
       const gl = decal(DECAL.shadow, [up.x * gR, up.y * gR, up.z * gR], R * 1.05 + 2);
       gl.ax = this.fwd.x; gl.ay = this.fwd.y; gl.az = this.fwd.z;
       // (deep enough to read through the tone curve and the eye's adaptation: at 0.3 it was a 10 % dimming on screen)
       gl.p0 = R; gl.p1 = R; gl.p2 = 0.9;
-      gl.ca = 0.42 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
+      gl.ca = 0.46 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
       // (a deep slab: on a hillside the gloom lies over the slope above and below the Touch's foot)
       gl.q0 = Math.max(4, R * 0.45);
       f.decals.add(gl);
+      // and the storm's cold, flat light: the land under it loses the sun's warmth and its colour (a multiply, mottled
+      // like a cloud's shadow) — dimmed alone, sunlit green and ochre under it still read as a fine day
+      const ti = decal(DECAL.tint, [up.x * gR, up.y * gR, up.z * gR], R * 1.15 + 2);
+      ti.cr = 0.66; ti.cg = 0.71; ti.cb = 0.82; ti.ca = 0.85 * feared * this.presence;
+      ti.p0 = R * 1.15; ti.p1 = 1; ti.p2 = 0.6; ti.p3 = 3.7;
+      ti.q0 = Math.max(4, R * 0.45);
+      f.decals.add(ti);
     }
     const sunD = f.shared.uSunDirBody?.value as Vector3 | undefined;
     if (!sunD) return;
