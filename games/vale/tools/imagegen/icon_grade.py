@@ -330,10 +330,11 @@ P95_AIM = 196
 P50_AIM = 64
 # per-icon calls the measures cannot make: the Longshade's sweep is an ink beast (a shadow by design) although its
 # smoke lifts the subject's median above SHADE_L. "enclosed": dark paint inside the subject's silhouette is never keyed
-# as ground; on a Strike ground a keyed soot fuller or a shade between cord wraps came back dark red, a blood read
-# (WORLD.md: never gore)
+# as ground; on a Strike ground a keyed soot fuller, a shade between cord wraps or a spur's dark steel facet came back
+# dark red, a blood read (WORLD.md: never gore)
 OVERRIDES: dict[str, dict] = {"ability_longshade_shadow_sweep": {"shade": True},
-                              "item_lampblack_edge": {"enclosed": True, "fill": 0.82}, "item_shadowpin": {"enclosed": True}}
+                              "item_lampblack_edge": {"enclosed": True, "fill": 0.82}, "item_shadowpin": {"enclosed": True},
+                              "item_dawnspur": {"enclosed": True}}
 SHADE_L = 15.0         # a subject this dark (median L*) and this grey (median chroma) is a shadow by design
 SHADE_C = 12.0
 
