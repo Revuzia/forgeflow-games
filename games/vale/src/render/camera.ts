@@ -1,6 +1,6 @@
 // VALE render — the in-match camera (STYLE_BIBLE "In-game camera", tokens.json `camera`).
 //
-// Pitch 52°, VERTICAL fov 26°, distance 28.5 m, zoom 24.5–33.0 m (spectator 20–44 m), fixed yaw
+// Pitch 52°, VERTICAL fov 26°, distance 31 m, zoom 24.5–36.0 m (spectator 20–44 m; owner 2026-10-29: a little further out than the first 28.5 / 33), fixed yaw
 // looking −Z, focus at screen centre, no per-side offset — identical for every player (fairness).
 // Modes:
 //   locked       (the default) your fighter is the exact centre of the screen; looking away
@@ -17,7 +17,7 @@
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 
 export const CAMERA = {
-  pitchDeg: 52, fovDeg: 26, distance: 28.5, minDistance: 24.5, maxDistance: 33.0,
+  pitchDeg: 52, fovDeg: 26, distance: 31, minDistance: 24.5, maxDistance: 36.0,
   spectatorMin: 20, spectatorMax: 44, zoomEaseMs: 200, leash: 6, edgePx: 18,
   /** locked mode: the pointer must rest at an edge this long (s) before it peeks */
   peekDwell: 0.15,

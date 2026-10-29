@@ -986,8 +986,8 @@
  "camera": {
   "pitchDeg": 52,
   "fovDeg": 26,
-  "distance": 28.5,
+  "distance": 31.0,
   "minDistance": 24.5,
-  "maxDistance": 33.0
+  "maxDistance": 36.0
  }
 }
