@@ -1231,7 +1231,7 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
   .gn-god-say { font-size: 14px; margin: 5px 0 4px; }
   .gn-sign-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
   .gn-sign { padding: 5px 8px; }
-  .gn-sign-t small:not(.gn-sign-read) { display: none; }
+  .gn-sign:not(.gn-sign-any) .gn-sign-t small:not(.gn-sign-read) { display: none; }
   .gn-inv-form { gap: 6px; }
   .gn-inv-foot { margin-top: 8px; padding-top: 7px; }
 }

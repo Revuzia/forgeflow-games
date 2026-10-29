@@ -308,7 +308,7 @@ export class Tools {
     el.classList.toggle('gn-short', short !== null);
     if (short === null) { el.append(h('span', { text: `${cap(wrathNeedWords(min))} — this cast has it.` })); return; }
     const own = typeof this.values.wrath === 'number' ? this.values.wrath : this.host.powers.wrathLaw;
-    el.append(h('span', { text: `${cap(wrathNeedWords(min))}. This cast's is ${wrathWord(own)} (${own.toFixed(2)}): no town survives it, so it will not fall below.` }));
+    el.append(h('span', { text: `${cap(wrathNeedWords(min))}. At ${wrathWord(own)} (${own.toFixed(2)}) it will not fall: no town would live through it.` }));
     const raise = h('button', { class: 'gn-btn gn-tool-raise', text: `Raise this cast to ${wrathWord(min)}`, title: 'Sets this cast\'s own wrath; the world\'s wrath law stays where it is' });
     raise.addEventListener('click', () => { this.values.wrath = min; this.host.sound('ui.tick'); this.renderCard('wrath'); });
     el.append(raise);

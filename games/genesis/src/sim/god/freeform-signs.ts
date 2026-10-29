@@ -33,7 +33,7 @@ interface LiveName { name: string; kind: string; id: number; planet: number; pos
 
 /** the parts of a parser clause these intents read (god/freeform.ts Clause, structurally) */
 export interface SignClause {
-  cx: { u: Universe; p: Planet | undefined; live: LiveName[]; raw: string; answered?: boolean; asked: Command[]; L: { numbers: Record<string, number> } };
+  cx: { u: Universe; p: Planet | undefined; live: LiveName[]; raw: string; answered?: boolean; asked: Command[]; L: { numbers: Record<string, number> }; addressee?: LiveName };
   s: string;
   full: string;
   mods: { place: { pos?: V3; planet?: number; settlement?: number; label: string } | null; size?: number; intensity?: number; duration?: number; nums: number[] };
@@ -95,11 +95,35 @@ const WHAT: [RegExp, string][] = [
 // named; "the drought will end", "the plague will pass" are relief, read by WHAT below
 const DOOM = /\b(floods?|flooding|(?:the )?waters? (?:will )?rise|earthquakes?|quakes?|the (?:earth|ground) (?:will )?(?:shake|tremble|split|open)|plagues?|sickness|pestilence|locusts?|swarms?|meteors?|stars? (?:will )?fall|falling stars?|droughts?|famine|hunger|fires?(?! for)|wildfires?|storms?|tornado(?:e?s)?|hurricanes?|whirlwinds?|volcano(?:e?s)?|eruptions?|the mountain (?:will )?burn|wolves|tsunami|tidal wave|blight|hail)\b/;
 const RAIN_WORD = /\b(rain|rains|showers?|drizzle)\b/;
-const RELIEF = /\b(end|ends|break|breaks|pass|passes|lift|lifts|be over|cease|ceases)\b/;
+// (fix r4 #0) a danger ending is its relief ("the flood will end" protection, "the plague will pass" healing), the danger
+//    the subject of the ending verb; "break" only at the end ("the drought will break", not "the flood will break the dam")
+const RELIEF = /\b(end|ends|pass|passes|lift|lifts|be over|is over|cease|ceases|abate|abates|recede|recedes|subside|subsides|stop|stops)\b|\bbreaks?\s*$/;
+const RELIEF_OF: [RegExp, string][] = [
+  [/\bdroughts?\b/, 'rain'], [/\b(famine|hunger|locusts?|swarms?|blight)\b/, 'food'], [/\b(plagues?|sickness|pestilence)\b/, 'healing'],
+];
+// (fix r4 #0) a benefit promised against the danger is that benefit, never harm: "the god will protect them from the flood",
+//    "they will be spared from the plague", "the sickness will be healed", "their fires will burn warm" (verbs and
+//    constructions only: "the famine will take their harvest", "the plague will kill the sick" stay harm)
+const BENEFIT: [RegExp, string][] = [
+  [/\b(heal|heals|healed|healing|cure|cures|cured|mend|mends|mended)\b/, 'healing'],
+  [/\b(protect|protects|protected|protection|shield|shields|shielded|guard|guards|guarded|spare|spares|spared|save|saves|saved|safe|safety|ward off|wards off)\b/, 'protection'],
+  [/\b(rebuild|rebuilds|rebuilt|rebuilding|new houses|houses (?:will |shall )?rise)\b/, 'rebuilding'],
+  [/\b(burn warm|burns warm|warmth|keep (?:them |you |the town )?warm|fires? for)\b/, 'warmth'],
+];
+const NOBODY = /\b(nothing|no one|noone|nobody|none|not|never|cannot|can't|cant|won't|wont)\b/;
 function whatOf(tail: string): string | undefined {
-  if (DOOM.test(tail) && !RAIN_WORD.test(tail) && !RELIEF.test(tail)) return 'harm';
-  if (/\bdroughts? (?:will )?(?:end|break|pass)/.test(tail)) return 'rain';
-  if (/\b(famine|hunger) (?:will )?(?:end|pass)/.test(tail)) return 'food';
+  if (DOOM.test(tail) && !RAIN_WORD.test(tail)) {
+    if (!NOBODY.test(tail)) {
+      const b = BENEFIT.find(([re]) => re.test(tail));
+      if (b) return b[1];
+      // "food will come against the famine": what comes before the danger it answers
+      const before = tail.match(/^(.*?)\b(?:from|against|after|despite|in spite of)\b/)?.[1];
+      const w = before ? WHAT.find(([re]) => re.test(before))?.[1] : undefined;
+      if (w && w !== 'harm' && w !== 'sign') return w;
+      if (RELIEF.test(tail)) return RELIEF_OF.find(([re]) => re.test(tail))?.[1] ?? 'protection';
+    }
+    return 'harm';
+  }
   return WHAT.find(([re]) => re.test(tail))?.[1];
 }
 
@@ -160,7 +184,12 @@ export function intentSigns(c: SignClause): boolean {
   }
   if (!p) return false;
   // (fix r3 #14) ── "grant Aru's prayer", "answer the prayers of Lune", "hear Aru's plea": prayer.answer (was a law) ──
-  if (/\b(grant|answer|hear|fulfil|fulfill)\b/.test(f) && /\b(prayers?|pleas?)\b/.test(f) && !/\b(not|never|don't|refuse|ignore|deny)\b/.test(f)) {
+  // (fix r4 #2) only when no act is named: "answer Aru's prayers with a flood", "send rain to answer Aru's prayer" are that
+  //    act (a wrathful answer stays wrathful); "hear Aru's prayers and send a plague" is the plague alone
+  const ACT_NAMED = (t: string) => /\bwith\s+(?:an?\s+|the\s+|some\s+|my\s+|your\s+)?(?!mercy\b|kindness\b|love\b|grace\b|joy\b|care\b|pity\b|compassion\b|favou?r\b)[a-z]+/.test(t)
+    || /\b(send|sends|sending|strike|smite|cast|unleash|drop|hurl|bring down|rain down)\b/.test(t);
+  if (/\b(grant|answer|hear|fulfil|fulfill)\b/.test(f) && /\b(prayers?|pleas?)\b/.test(f) && !/\b(not|never|don't|refuse|ignore|deny)\b/.test(f) && ACT_NAMED(cx.raw.toLowerCase()) && !ACT_NAMED(f)) return true;
+  if (/\b(grant|answer|hear|fulfil|fulfill)\b/.test(f) && /\b(prayers?|pleas?)\b/.test(f) && !/\b(not|never|don't|refuse|ignore|deny)\b/.test(f) && !ACT_NAMED(f)) {
     const named = p.people?.settlements.find((s) => s.fallen < 0 && wordAt(f, s.name.toLowerCase()) >= 0);
     const st = mods.place?.settlement !== undefined ? p.people?.settlement(mods.place.settlement) : named;
     if (st) {
@@ -192,22 +221,6 @@ export function intentSigns(c: SignClause): boolean {
     return true;
   }
   if (new RegExp(`${NEG.source}(?:one of )?the called\\b`).test(f)) return c.ask('The Called serve the god until they die: none is sent back ("charge the Called to farm" sets them other work).');
-  // (fix r3 #1) care for the prophet ("free my prophet", "never let my prophet die", "the chief who persecutes my prophet")
-  //    and a negated abandoning ("do not abandon my prophet") keep the prophet: the god is told how to act for them
-  const ABANDON = /\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/;
-  const keepsProphet = /\b(?:not|never|don't|dont|won't|wont|shall not|will not)\b[^,.;]*\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/.test(f);
-  if (/\bprophets?\b/.test(f) && !/\b(make|anoint|choose|appoint|raise|mark)\b/.test(f) && (keepsProphet || (!ABANDON.test(f) && (/\b(free|protect|save|shield|guard|defend|spare|rescue|persecut\w*)\b/.test(f) || /\b(?:not|never|don't|dont)\b[^,.;]*\b(?:let|allow)\b[^,.;]*\b(?:harm|hurt|kill|die|persecute|touch)\b/.test(f))))) {
-    const ph = person && u.god.rel?.prophets.some((q) => q.agent === person.id) ? person : null;
-    return c.ask(`${ph ? `${ph.name} remains your prophet` : 'Your prophet remains yours'}. To shield ${ph ? ph.name : 'them'}, act for them: lift them out of harm's way with the Touch, or strike at those who persecute them.`);
-  }
-  // ── abandon a prophet ("abandon Hesh", "forsake Hesh": the command says so when Hesh is not the god's prophet) ──
-  if (ABANDON.test(f) && (has(f, 'prophet') || person)) {
-    // (a person named: the command says so when they are not the god's prophet)
-    const agent = person ? person.id : u.god.rel?.prophets.find((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement))?.agent;
-    if (agent === undefined) { cx.asked.push({ k: 'prophet.abandon' }); return c.ask('Abandon which prophet? Name them ("abandon the prophet Hesh").'); }
-    c.add({ k: 'prophet.abandon', agent, planet: person?.planet ?? p.id }, 'abandon the prophet');
-    return true;
-  }
   // ── speak through a prophet: "tell Aru through Hesh that rain will come in two days" ──
   // (fix r3 #8) the name ends at a colon, a dash or "will" too ("speak through Hesh: a flood will come"); a sentence that
   //    speaks through someone never falls through to the act itself — it asks
@@ -217,19 +230,85 @@ export function intentSigns(c: SignClause): boolean {
   const isProphet = (id: number) => !!u.god.rel?.prophets.some((q) => q.agent === id && q.planet === p.id);
   // (fix r3 #14) foretelling with no one named speaks through the god's prophet of the named town (or its only one), else asks
   let speaker: { id: number; planet: number } | null = null;
-  if (!through && !person && FORE.test(f)) {
+  if (!through && !person && !cx.addressee && FORE.test(f)) {
     const mine = (u.god.rel?.prophets ?? []).filter((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement));
     if (mine.length !== 1) return c.ask(mine.length ? 'Through whom? Name the prophet ("tell Aru through Hesh that rain will come in two days").' : 'Through whom? You have no prophet here: make one first ("make Hesh my prophet").');
     speaker = { id: mine[0].agent, planet: mine[0].planet };
   }
   if (!through && /\bthrough\b/.test(f) && SPEAK.test(f)) return c.ask('Through whom? Name your prophet ("tell Aru through Hesh that rain will come in two days").');
-  if ((through && SPEAK.test(f)) || (person && (FORE.test(f) || (/\bwarn\b/.test(f) && isProphet(person.id)))) || speaker) {
-    const who = speaker ?? (through ? live(c, through[1], ['agent']) ?? person : person);
+  // (fix r4 #8) the god's prophet named or spoken to ("Hesh, tell them a flood is coming", "tell Hesh that a flood is
+  //    coming", "Hesh, warn them that a storm is coming") with any SPEAK verb and a word of what is coming: a prophecy, never
+  //    the act it speaks of (nor an idea "famine come" taught); an order ("tell Hesh to preach") is no prophecy
+  const spokenTo = cx.addressee && cx.addressee.kind === 'agent' ? cx.addressee : null;
+  const FUTURE = /\bthat\b|\b(will|shall|is coming|are coming|comes|coming|is near|are near|draws? near|approach(?:es)?|is going to|are going to|on its way)\b/;
+  const told = !through && SPEAK.test(f) && FUTURE.test(f) && !(/\bto\s+[a-z]+/.test(f) && !/\b(that|will|shall)\b/.test(f));
+  const toProphet = spokenTo && isProphet(spokenTo.id) ? spokenTo : person && isProphet(person.id) ? person : null;
+  if (told && !toProphet && (spokenTo || (person && /\bthat\b/.test(f)))) {
+    const nm = (spokenTo ?? person)!.name.replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
+    return c.ask(`${nm} does not speak for you: make ${nm} your prophet first ("make ${nm} my prophet"), then speak through them.`);
+  }
+  if ((through && SPEAK.test(f)) || (person && (FORE.test(f) || (/\bwarn\b/.test(f) && isProphet(person.id)))) || speaker || (told && toProphet) || (spokenTo && FORE.test(f))) {
+    const who = speaker ?? (through ? live(c, through[1], ['agent']) ?? person : (told && toProphet) ? toProphet : person ?? spokenTo);
     if (!who) return c.ask('Through whom? Name your prophet ("tell Aru through Hesh that rain will come in two days").');
     const tail = (f.match(/\bthat\s+(.+)$/)?.[1] ?? f).replace(/\bthrough\s+[a-z' -]+/, '');
     const what = whatOf(tail);
     if (!what) return c.ask('Foretell what? (rain, food, healing, warmth, protection, rebuilding, a sign, or harm).');
     c.add({ k: 'prophet.foretell', agent: who.id, what, days: daysOf(c), planet: who.planet }, `foretell ${what}`);
+    return true;
+  }
+  // (fix r4 #20) asking a drought to end is never a drought: "break the drought over Aru", "the drought is over", "lift the
+  //    drought" end the one raging (disaster.cancel); with none raging it is rain on the town (the answer to its prayer)
+  const ENDS_DROUGHT = /\b(break|lift|end|stop|cease|relieve|banish|dispel|undo|halt)\s+(?:(?:the|this|that|their|its|a|our)\s+)?(?:(?:long|great|terrible|dry|endless)\s+)?droughts?\b|\bdroughts?\s+(?:is|be|are|will be|shall be)\s+(?:over|done|ended|broken|lifted)\b|\bdroughts?\s+(?:must\s+|should\s+|shall\s+|will\s+|can\s+)?(?:end|break|pass|cease|lift|stop)s?\b|\bend (?:of|to) (?:the |this |their )?droughts?\b/;
+  if (ENDS_DROUGHT.test(f) && !/\b(send|bring|cause|start|unleash|make|another|new)\b/.test(f)) {
+    const raging = u.god.disasters.filter((d) => d.planet === p.id && d.kind === 'drought');
+    if (raging.length) {
+      c.add({ k: 'disaster.cancel', kind: 'drought', ...(mods.place?.pos ? { pos: mods.place.pos } : {}) }, 'end the drought');
+      return true;
+    }
+    const praying = prayersOf(u, p).filter((q) => q.prayers.some((r) => r.kind === 'rain'));
+    const sid = mods.place?.settlement ?? (praying.length === 1 ? praying[0].settlement : undefined);
+    const st = sid !== undefined ? p.people?.settlement(sid) : undefined;
+    if (st) {
+      c.add({ k: 'miracle.water', pos: [st.pos[0], st.pos[1], st.pos[2]], radius: Math.round(st.territory + 150), planet: p.id }, `rain on ${st.name}`);
+      mods.place = null;
+      return true;
+    }
+    if (mods.place?.pos) { c.add({ k: 'water.rain', pos: mods.place.pos, radius: 900, duration: 4320 }, 'rain on the dry land'); return true; }
+    return c.ask('No drought rages now. Send rain where the land is dry ("rain on Aru").');
+  }
+  // (fix r4 #21) "show Aru a sign", "give Aru an omen", "send them a portent", "give Aru a sign of warning": a sign for that
+  //    town (god.omen), never knowledge taught nor a new thing called "sign warning"
+  if (/\b(show|give|send|grant|offer)\b/.test(f) && /\b(signs?|omens?|portents?|wonders?)\b/.test(f) && !/\bas an? (sign|omen|portent|warning|wonder)\b/.test(f)
+    && !/\b(eclipse|comet|rainbow|lightning|aurora|northern lights|red rain|blood rain|floods?)\b/.test(f)) {
+    const sid = mods.place?.settlement;
+    if (sid === undefined) return c.ask('A sign for whom? Name the town ("show Aru a sign").');
+    const warning = /\b(warning|warn|of doom|of wrath|of anger|dread|ill omen|bad omen|evil omen|dark)\b/.test(f);
+    c.add({ k: 'god.omen', settlement: sid, ...(warning ? { warning: true } : {}), planet: p.id }, warning ? 'a sign of warning' : 'a sign');
+    return true;
+  }
+  // (fix r3 #1) care for the prophet ("free my prophet", "never let my prophet die", "the chief who persecutes my prophet")
+  //    and a negated abandoning ("do not abandon my prophet") keep the prophet: the god is told how to act for them
+  const ABANDON = /\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/;
+  const keepsProphet = /\b(?:not|never|don't|dont|won't|wont|shall not|will not)\b[^,.;]*\b(abandon|forsake|disown|reject|turn (?:away )?from)\b/.test(f);
+  // (fix r4 #2) an act aimed at those who persecute the prophet is that act: "strike the chief who persecutes my prophet with
+  //    lightning", "send a plague on those who persecute my prophet"
+  const AT_PERSECUTORS = /^(?:please |now |then )?(strike|smite|send|curse|punish|burn|blast|crush|drown|hurl|throw|drop|unleash|bring|plague|flood)\b/.test(f.trim())
+    && /\b(who|that|which|those|for)\b[^,.;]*\b(persecut\w*|harm\w*|hurt\w*|attack\w*|threaten\w*)\b/.test(f);
+  if (/\bprophets?\b/.test(f) && !AT_PERSECUTORS && !/\b(make|anoint|choose|appoint|raise|mark)\b/.test(f) && (keepsProphet || (!ABANDON.test(f) && (/\b(free|protect|save|shield|guard|defend|spare|rescue|persecut\w*)\b/.test(f) || /\b(?:not|never|don't|dont)\b[^,.;]*\b(?:let|allow)\b[^,.;]*\b(?:harm|hurt|kill|die|persecute|touch)\b/.test(f))))) {
+    const ph = person && u.god.rel?.prophets.some((q) => q.agent === person.id) ? person : null;
+    // (fix r4 #2) "shield my prophet Hesh", "protect Hesh my prophet": the shield laid on the prophet where they stand
+    if (ph?.pos && /\b(shield|protect|guard|defend)\b/.test(f) && !/\b(not|never|don't|dont)\b/.test(f)) {
+      c.add({ k: 'miracle.shield', pos: ph.pos, radius: 120, planet: ph.planet }, `shield ${ph.name}`);
+      return true;
+    }
+    return c.ask(`${ph ? `${ph.name} remains your prophet` : 'Your prophet remains yours'}. To shield ${ph ? ph.name : 'them'}, act for them: lift them out of harm's way with the Touch, or strike at those who persecute them.`);
+  }
+  // ── abandon a prophet ("abandon Hesh", "forsake Hesh": the command says so when Hesh is not the god's prophet) ──
+  if (ABANDON.test(f) && (has(f, 'prophet') || person)) {
+    // (a person named: the command says so when they are not the god's prophet)
+    const agent = person ? person.id : u.god.rel?.prophets.find((q) => q.planet === p.id && (mods.place?.settlement === undefined || q.settlement === mods.place.settlement))?.agent;
+    if (agent === undefined) { cx.asked.push({ k: 'prophet.abandon' }); return c.ask('Abandon which prophet? Name them ("abandon the prophet Hesh").'); }
+    c.add({ k: 'prophet.abandon', agent, planet: person?.planet ?? p.id }, 'abandon the prophet');
     return true;
   }
   // ── orders to the Called: "charge the Called to preach", "order my called to farm", "the Called: build" (no person named;

@@ -442,9 +442,109 @@ export function newCropFor(u: Universe, p: Planet, st: { pos: V3; fields: number
   return best >= 0 ? u.content.plants.list[best].id : null;
 }
 
+// (fix r4 #5) an ore asked for by amount or worth with no ore named ("add more ore near Aru", "add a rich deposit near Aru",
+//    "a new deposit"): which ore? — never a material called "More ore" or "Rich deposit" with a craft of making it
+function unnamedOre(c: ContentClause): boolean {
+  const { s, cx } = c;
+  const u = cx.u;
+  if (!/\b(ores?|deposits?|veins?|seams?|lodes?)\b/.test(s) || /\b(called|named|known as)\b/.test(s) || /["']/.test(cx.raw.replace(/\b\w+'s\b/g, ''))) return false;
+  if (!/\b(add|give|put|lay|place|seed|create|make|introduce|invent|bring|grant|open|hide|bury|scatter|discover)\b/.test(s)) return false;
+  const w = s.split(' ');
+  for (let i = 0; i < w.length; i++) if (oreNamed(u, w[i]) || (i + 1 < w.length && oreNamed(u, `${w[i]} ${w[i + 1]}`))) return false;
+  if (/\b(it|them|that|this)\s+(?:ore|deposit|vein)?\b/.test(s) && lastMade.get(cx)) return false;
+  cx.asked.push({ k: 'terrain.seed-ore' });
+  return c.ask('Which ore? Lay a known one ("lay iron ore near Aru", "add a copper deposit near Aru"), or name a new one ("invent a new metal called orichalcum").');
+}
+
+// (fix r4 #9) a kind asked for by what it is for, with no name ("introduce a crop that resists drought", "invent a fruit tree",
+//    "a medicine plant", "an animal they can ride", "a beast of burden", "a bird for eggs", "a fish for the lake", "a material
+//    harder than bronze", "a hardy crop", "a better crop", "a new kind of tree"): a real one that fits the words (only one the
+//    world has), else asked — never junk content "Hardy crop", a cold snap, bread, teosinte, a possession or bronze in the Touch
+const KIND_ADJ = '(?:(?:new|better|hardy|hardier|strong|stronger|tough|tougher|good|useful|wild|tame|domestic|fast|faster|big|bigger|kind of|sort of|type of|species of|medicine|medicinal|healing|dye|fruit|fruiting|food)\\s+)*';
+const KIND_ASKED = new RegExp(`\\b(?:a|an|another|better|new|hardier)\\s+${KIND_ADJ}(crops?|grains?|vegetables?|plants?|herbs?|fruit trees?|trees?|fruits?|bush(?:es)?|shrubs?|flowers?|animals?|beasts?|birds?|fish(?:es)?|creatures?|livestock|metals?|materials?|substances?|alloys?)\\b`);
+const KIND_VERB = /\b(invent|create|introduce|give|bring|breed|devise|design|add|grant|conjure|discover|evolve)\b/;
+const KIND_PICKS: [RegExp, RegExp, string, 'crop' | 'plant' | 'animal' | 'fish' | 'ore'][] = [
+  [/^(crop|grain|vegetable)/, /\b(drought|droughts|dry|arid|desert|heat|hot)\b/, 'sorghum', 'crop'],
+  [/^(crop|grain|vegetable)/, /\b(cold|frost|frosts|winter|snow|snows|freez\w*)\b/, 'barley', 'crop'],
+  [/^(tree|fruit|plant|bush|shrub)/, /\bfruit\b|\bfruits\b|\bfruit trees?\b|\bfruiting\b/, 'apple', 'plant'],
+  [/^(plant|herb|tree|bush|shrub|flower)/, /\b(medicine|medicines|medicinal|heal|heals|healing|cure|cures|remed\w*|sick\w*)\b/, 'willow', 'plant'],
+  [/^(animal|beast|creature|livestock)/, /\b(ride|rides|riding|ridden|mount|burden|carry|carries|pull|pulls|plough|plow|haul|draught|draft)\b/, 'horse', 'animal'],
+  [/^(animal|beast|creature|livestock)/, /\b(milk|milking|dairy|cheese)\b/, 'goat', 'animal'],
+  [/^(bird|animal|creature|livestock)/, /\beggs?\b/, 'chicken', 'animal'],
+  [/^fish/, /\b(lakes?|rivers?|seas?|ponds?|waters?|streams?|coasts?|shores?|bays?)\b/, 'fish-shoal', 'fish'],
+  [/^(metal|material|substance|alloy)/, /\b(harder|stronger|tougher|better|sharper) than bronze\b/, 'iron', 'ore'],
+];
+function unnamedKind(c: ContentClause): boolean {
+  const { s, cx, mods } = c;
+  const { u, p } = cx;
+  if (!p || /\b(called|named|known as)\b/.test(s) || /["]/.test(cx.raw) || !KIND_VERB.test(s)) return false;
+  const m = s.match(KIND_ASKED);
+  if (!m || HARM_ACT.test(s.slice(0, m.index))) return false;
+  if (plantWord(u, s) || u.content.animals.list.some((a) => has(s, a.name.toLowerCase(), `${a.name.toLowerCase()}s`))) return false;
+  const w = m[1];
+  const st = mods.place?.settlement !== undefined ? p.people?.settlement(mods.place.settlement) ?? null : null;
+  const pick = KIND_PICKS.find(([kind, why, id]) => kind.test(w.replace(/^fruit trees?$/, 'tree')) && why.test(s) && (u.content.plants.has(id) || u.content.animals.has(id) || u.content.ores.list.some((o) => o.id === id)));
+  if (pick) {
+    const [, , id, as] = pick;
+    const town = st ? st.name : null;
+    if (as === 'crop') {
+      if (!st) { cx.asked.push({ k: 'settlement.introduce', crop: id }); return c.ask(`${u.content.plants.get(id).name} fits those words. Introduce it to whom? ("introduce ${id} to Aru")`); }
+      c.add({ k: 'settlement.introduce', settlement: st.id, crop: id, planet: p.id, pos: norm(st.pos as unknown as V3) }, `introduce ${u.content.plants.get(id).name.toLowerCase()}`);
+      mods.place = null;
+      return true;
+    }
+    if (as === 'plant') {
+      const pos = st ? besideTown(p, st as unknown as { pos: V3 }, st.id + 7) : placeOf(c);
+      c.add({ k: 'life.plant', species: id, ...(pos ? { pos: norm(pos) } : {}), planet: p.id }, `plant ${u.content.plants.get(id).name.toLowerCase()}`);
+      mods.place = null;
+      return true;
+    }
+    if (as === 'animal') {
+      const nm = u.content.animals.get(id).name.toLowerCase();
+      if (!st) { cx.asked.push({ k: 'settlement.introduce', animal: id }); return c.ask(`The ${nm} fits those words: a real one. Introduce it to whom? ("introduce ${nm}s to Aru")`); }
+      c.add({ k: 'settlement.introduce', animal: id, settlement: st.id, planet: p.id, pos: norm(st.pos as unknown as V3) }, `introduce ${nm}s · ${town}`);
+      mods.place = null;
+      return true;
+    }
+    if (as === 'fish') {
+      if (!mods.place?.pos) { cx.asked.push({ k: 'life.spawn-animal', species: id }); return c.ask('Fish for which water? ("release fish in the lake near Aru")'); }
+      c.add({ k: 'life.spawn-animal', species: id, count: 30, pos: norm(mods.place.pos), planet: p.id }, 'fish shoal');
+      mods.place = null;
+      return true;
+    }
+    const pos = st ? besideTown(p, st as unknown as { pos: V3 }, st.id) : placeOf(c);
+    if (!pos) { cx.asked.push({ k: 'terrain.seed-ore', ore: id }); return c.ask(`Iron is harder than bronze. Lay its ore near a town ("lay iron ore near Aru").`); }
+    c.add({ k: 'terrain.seed-ore', ore: id, pos: norm(pos), planet: p.id }, 'a vein of iron (harder than bronze)');
+    mods.place = null;
+    return true;
+  }
+  // no fitting real one: a "new X" with no words after it is intentNewKind's (below); otherwise the kind alone
+  if (UNNAMED_NEW.test(s) && !/\b(kind|sort|type|species) of\b/.test(s)) return false;
+  if (/^(crop|grain|vegetable)/.test(w)) {
+    const crop = st ? newCropFor(u, p, st) : null;
+    if (!st || !crop) { cx.asked.push({ k: 'settlement.introduce' }); return c.ask('Which crop, and to whom? Name a real one ("introduce sorghum to Aru": it bears drought; barley bears the cold) or a new one ("invent a new crop called sunroot").'); }
+    c.add({ k: 'settlement.introduce', settlement: st.id, crop, planet: p.id, pos: norm(st.pos as unknown as V3) }, `introduce ${u.content.plants.get(crop).name.toLowerCase()}`);
+    mods.place = null;
+    return true;
+  }
+  if (/^(plant|herb|tree|fruit|bush|shrub|flower)/.test(w) && !/\b(dye|dyes|colou?r)\b/.test(s)) {
+    const type = /^(fruit|tree)/.test(w) ? 'tree' : /^(bush|shrub)/.test(w) ? 'shrub' : 'grass';
+    const pos = st ? besideTown(p, st as unknown as { pos: V3 }, st.id + 7) : placeOf(c);
+    c.add({ k: 'life.plant', type, radius: 250, ...(pos ? { pos: norm(pos) } : {}) }, `the ${type === 'grass' ? 'plants' : `${type}s`} that suit the ground`);
+    mods.place = null;
+    return true;
+  }
+  if (/^(fish)/.test(w)) return false;
+  if (/^(animal|beast|creature|livestock|bird)/.test(w)) { cx.asked.push({ k: 'content.animal' }); return c.ask('Which animal? This is a real world: name a real one ("introduce horses to Aru": they carry and are ridden; goats give milk, chickens eggs).'); }
+  if (/^(metal|material|substance|alloy)/.test(w)) { cx.asked.push({ k: 'content.material' }); return c.ask('Name it: "invent a new metal called orichalcum", or lay a known one ("lay iron ore near Aru": iron is harder than bronze).'); }
+  cx.asked.push({ k: 'content.item' });
+  return c.ask('Name it, or name a real one ("introduce flax to Aru", "plant willows near Aru").');
+}
+
 function intentNewKind(c: ContentClause): boolean {
   const { s, cx, mods } = c;
   const { u, p } = cx;
+  if (p && (unnamedOre(c) || unnamedKind(c))) return true;
   const m = s.match(UNNAMED_NEW);
   if (!m || !p || /\b(called|named|known as)\b/.test(s)) return false;
   if (!/\b(introduce|invent|create|make|add|give|bring|grow|devise|conjure|send|plant|sow|discover|teach|show|release|breed)\b/.test(s)) return false;

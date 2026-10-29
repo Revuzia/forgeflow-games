@@ -332,7 +332,7 @@ export class SignPicker {
     any.addEventListener('click', () => void this.send(undefined));
     // (fix r2 #19: god.omen { warning } — the world chooses a sign that warns, never one they would read as a promise)
     const warn = h('button', { class: 'gn-sign gn-sign-any gn-sign-warn', data: { kind: 'warning' }, title: 'A sign that warns of what is coming: the world chooses it, and never a rainbow (they read that as a promise)' },
-      h('span', { class: 'gn-sign-i', html: icon('lightning') }),
+      h('span', { class: 'gn-sign-i', html: icon('storm') }),
       h('span', { class: 'gn-sign-t' }, h('b', { text: 'A sign of warning' }), h('small', { text: 'one that warns, never a promise: the world chooses' })));
     warn.addEventListener('click', () => void this.send(undefined, true));
     this.grid.append(any, warn);

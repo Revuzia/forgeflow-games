@@ -831,3 +831,65 @@ test('free text (fix r3 #1, #3, #8, #14): care for the prophet never abandons; a
     assert.ok(res.ok && !/rainbow/i.test(String(res.msg)), String(res.msg));
   }
 });
+
+test('free text (fix r4 #0, #2, #8, #20, #21): a promise is foretold as promised; the prophet spoken to foretells; the act named is done; a drought asked to end never comes; a sign is a sign', () => {
+  const { sim, st, hesh } = twoTowns();
+  const r = (t: string) => { const x = sim.parse(t); return { x, ks: (x.resolved ?? []).map((c) => c.k), msg: String(x.msg ?? '') }; };
+  must(sim, { k: 'prophet.call', agent: hesh });
+  const H = String((sim.query('agent', { id: hesh }) as { name: string }).name);
+  const fore = (t: string) => (r(t).x.resolved ?? []).filter((c) => c.k === 'prophet.foretell').map((c) => c.what);
+  // #0: a benefit promised against a danger is that benefit; real harm stays harm; a danger ending is its relief
+  const promise: [string, string][] = [
+    ['tell Aru through Hesh that the god will protect them from the flood', 'protection'], ['tell Aru through Hesh that they will be spared from the plague', 'protection'],
+    ['tell Aru through Hesh that the god will heal the plague', 'healing'], ['tell Aru through Hesh that food will come against the famine', 'food'],
+    ['tell Aru through Hesh that their fires will burn warm', 'warmth'], ['tell Aru through Hesh that new houses will rise after the flood', 'rebuilding'],
+    ['tell Aru through Hesh that the god will shield them from the storm', 'protection'], ['tell Aru through Hesh that the sickness will be healed', 'healing'],
+    ['tell Aru through Hesh that the flood will destroy them', 'harm'], ['tell Aru through Hesh that the famine will take their harvest', 'harm'],
+    ['tell Aru through Hesh that the plague will kill the sick', 'harm'], ['tell Aru through Hesh that nothing will save them from the flood', 'harm'],
+    ['tell Aru through Hesh that the flood will end', 'protection'], ['tell Aru through Hesh that the plague will pass', 'healing'],
+    ['tell Aru through Hesh that the famine will end', 'food'], ['tell Aru through Hesh that the drought will end', 'rain'],
+  ];
+  for (const [t, w] of promise) assert.deepEqual(fore(t), [w], `${t}: ${JSON.stringify(r(t).x.resolved)} ${r(t).msg}`);
+  // #8: the god's prophet named or spoken to foretells (never the flood, the storm or an idea "famine come"); an order is no prophecy
+  for (const [t, w] of [[`${H}, tell Aru a flood is coming`, 'harm'], [`tell ${H} that a flood is coming`, 'harm'], [`${H}, tell them a storm is coming`, 'harm'],
+    [`${H}, warn them that a storm is coming`, 'harm'], [`${H}, tell them a famine will come`, 'harm'], [`${H}, tell them the god will send a plague`, 'harm'],
+    [`${H}, tell them a flood is coming`, 'harm'], [`${H}, tell them rain will come`, 'rain']] as [string, string][]) {
+    const a = r(t);
+    assert.deepEqual(fore(t), [w], `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`);
+    assert.ok(!a.ks.some((k) => /^(disaster\.|weather\.|water\.|content\.|settlement\.teach|miracle\.teach)/.test(k)), `${t}: ${a.ks}`);
+  }
+  assert.deepEqual(r(`tell ${H} to preach`).ks, ['agent.make-disciple']);
+  // #2: the act the god names is done — on the persecutors, as the answer to a prayer; the shield on the prophet; care still asks
+  const acts: [string, (c: { k: string; kind?: unknown }) => boolean][] = [
+    ['tell Aru through my prophet Hesh that the god will protect them', (c) => c.k === 'prophet.foretell'], ['shield my prophet Hesh', (c) => c.k === 'miracle.shield'],
+    ['strike the chief who persecutes my prophet with lightning', (c) => c.k === 'miracle.lightning'], ['send a plague on those who persecute my prophet', (c) => c.k === 'disaster.spawn' && c.kind === 'plague'],
+    ["answer Aru's prayers with a flood", (c) => c.k === 'disaster.spawn' && c.kind === 'flood'], ["answer Aru's prayer with fire", (c) => c.k === 'miracle.fire'],
+    ["send rain to answer Aru's prayer", (c) => c.k === 'water.rain'], ["answer Aru's prayers", (c) => c.k === 'prayer.answer'],
+  ];
+  for (const [t, ok] of acts) { const a = r(t); assert.ok(a.x.ok && (a.x.resolved ?? []).length && (a.x.resolved ?? []).every(ok), `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`); }
+  for (const t of ['protect my prophet from the storm', 'rescue my prophet from the fire', 'save my prophet Hesh', 'free my prophet']) {
+    const a = r(t);
+    assert.ok(!a.x.ok && !a.ks.length && /remains your prophet|remains yours/.test(a.msg), `${t}: ${a.ks} ${a.msg}`);
+  }
+  const sh = sim.applyNow((r('shield my prophet Hesh').x.resolved ?? [])[0]);
+  assert.ok(sh.ok, String(sh.msg));
+  // #20: asking a drought to end never sends one (nor lifts a villager): with none raging it rains or asks; a raging one ends
+  for (const t of ['break the drought over Aru', 'break the drought', 'the drought is over', 'lift the drought']) {
+    const a = r(t);
+    assert.ok(!a.ks.some((k) => k === 'disaster.spawn' || k.startsWith('hand.')), `${t}: ${a.ks} ${a.msg}`);
+  }
+  assert.deepEqual(r('break the drought over Aru').ks, ['miracle.water']);
+  must(sim, { k: 'disaster.spawn', kind: 'drought', pos: st.pos });
+  for (const t of ['break the drought', 'lift the drought', 'the drought is over', 'end the drought']) assert.deepEqual(r(t).ks, ['disaster.cancel'], `${t}: ${r(t).msg}`);
+  // #21: a sign shown or given is a sign for the town (a warning when said so); nothing taught, nothing new made
+  const items = sim.u.content.items.list.length, ideas = sim.u.content.recipes.list.length;
+  for (const [t, warn] of [['show Aru a sign', false], ['show Aru an omen', false], ['give Aru a sign', false], ['give Aru a sign of warning', true], ['send Aru a sign', false]] as [string, boolean][]) {
+    const a = r(t);
+    const om = (a.x.resolved ?? []) as { k: string; warning?: boolean; settlement?: number }[];
+    assert.ok(om.length === 1 && om[0].k === 'god.omen' && om[0].settlement === st.id && !!om[0].warning === warn, `${t}: ${JSON.stringify(a.x.resolved)} ${a.msg}`);
+    const res = sim.applyNow(om[0] as never);
+    assert.ok(res.ok, `${t}: ${res.msg}`);
+  }
+  assert.equal(sim.u.content.items.list.length, items);
+  assert.equal(sim.u.content.recipes.list.length, ideas);
+});

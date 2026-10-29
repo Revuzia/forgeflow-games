@@ -444,6 +444,12 @@ ${LEAF_ALPHA}
   // ground-cover stones (aCard 0.1) are not bark: no furrows, no bark clamp, no trunk-base soil
   bool isStone = vCard > 0.05 && vCard < 0.2;
   diffuseColor.rgb *= vCard > 0.5 || isStone ? 1.0 : mix(barkTex, leafTex, vLeaf);
+  // (bark keeps its species' hue under the blue sky fill: a palm's grey-brown at the generator's chroma read as a
+  // neutral grey cylinder in every shade — its chroma is lifted, not its value)
+  if (vLeaf < 0.5 && !isStone) {
+    float barkL = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15));
+    diffuseColor.rgb = max(vec3(0.0), vec3(barkL) + (diffuseColor.rgb - barkL) * 1.6);
+  }
   // no bark is paler than weathered grey wood (bright trunks read as white posts in the sun)
   if (vLeaf < 0.5 && !isStone) diffuseColor.rgb = min(diffuseColor.rgb, vec3(0.24, 0.22, 0.2));
   // trunk bases sink into the ground: soil, moss and shade creep up the lowest metre instead of a clean cut

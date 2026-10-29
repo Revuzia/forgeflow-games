@@ -547,9 +547,12 @@ float cloudDetailed(vec3 pb, float hf, float cov, float storm, float ctype, floa
   if (cl_far > 0.0) {
     float d3 = cl_tex(uCloudDetail, dq * 0.14 + vec3(0.63, 0.17, 0.41), 64.0 * 0.14 * uCloudScale.y).r;
     float d4 = cl_tex(uCloudDetail, dq * 0.42 + vec3(0.21, 0.83, 0.57), 64.0 * 0.42 * uCloudScale.y).g;
-    vv -= (mix(d3, 1.0 - d3, bill) * 0.15 + mix(d4, 1.0 - d4, bill) * 0.07) * cl_far;
+    vv -= (mix(d3, 1.0 - d3, bill) * 0.2 + mix(d4, 1.0 - d4, bill) * 0.07) * cl_far;
   }
-  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.1, cl_far)) : 0.0;
+  // (from orbit a ramp of 0.1 still cut every mass out with a crisp rim — hard-edged cotton balls, fix-render r2 #1:
+  // at 0.2, over the deeper low-frequency fraying above, the margins feather into translucent lobes over ~a hundred
+  // metres, a few pixels from orbit, while the cores stay dense)
+  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.2, cl_far)) : 0.0;
   // ... and its thin parts are thin: density grows with the square of the cover toward the margins, so a far cloud's
   // fringe is translucent veil over the ground (τ ≈ 1 a few pixels in) and only its core is opaque white
   c *= mix(1.0, c, cl_far * 0.75);

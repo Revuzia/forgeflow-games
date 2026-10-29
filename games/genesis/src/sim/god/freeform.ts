@@ -675,6 +675,8 @@ interface PCtx2 {
   answered?: boolean;
   /** the preview must ask before this runs (an end of days, every disaster at once): ParseOut.confirm */
   confirm?: string;
+  /** (fix r4 #8) the person the sentence is spoken TO ("Hesh, tell them a flood is coming"): the vocative is no clause */
+  addressee?: Live;
 }
 
 function put(c: Command, mods: Mods, schema: CommandSchema | undefined, o: { place?: boolean; radiusDefault?: number } = {}): Command {
@@ -811,7 +813,14 @@ function parseText(u: Universe, reg: CommandRegistry, raw: string, depth = 0): P
     const t = (parts[i] ?? '').trim();
     if (t) clauses.push({ text: t, join: i > 0 ? (parts[i - 1] ?? '').trim() : '' });
   }
-  const lifted = clauses.map((c) => ({ ...c, ...lift(u, p, L, cx.live, c.text) }));
+  // (fix r4 #8) a sentence that opens with a person's name alone ("Hesh, tell them a flood is coming", "o Hesh, warn
+  //    them") speaks to that person: the name is the addressee of the rest (god/freeform-signs.ts reads it), not a clause
+  if (clauses.length > 1 && clauses[1].join === ',') {
+    const v = clauses[0].text.replace(/^(?:o|oh|hear me|listen|my prophet|prophet)\s+/, '').replace(/[.:]+$/, '').trim();
+    const who = cx.live.find((l) => l.kind === 'agent' && l.name === v);
+    if (who) { cx.addressee = who; clauses.shift(); clauses[0].join = ''; }
+  }
+  const lifted =clauses.map((c) => ({ ...c, ...lift(u, p, L, cx.live, c.text) }));
   // places shared: one place named in the whole sentence is everyone's; else forward, then backward across and / ","
   const named = lifted.filter((c) => c.mods.place && !c.mods.place.here);
   const distinct = new Set(named.map((c) => `${c.mods.place!.label}`));
@@ -2916,7 +2925,7 @@ function intentSky(c: Clause): boolean {
     // (fix r3 #14) "cast the rain sigil on Aru": the rain sigil is the Water miracle, never a weather called "Rain of sigil"
     if (/^(sigils?|glyphs?|miracle)$/.test(firstW)) { c.add({ k: 'miracle.water' }, 'the rain sigil'); return true; }
     // (fix r3 #14) a new rain needs a noun: "rain in 2 days", "rain for a week", "rain at dawn" are rain ("Rain of in 2")
-    const notNoun = /^(\d.*|in|within|after|before|by|until|till|for|at|to|into|upon|across|around|near|beside|soon|tomorrow|tonight|today|once|twice|all|until|while|when|where|as|so|if|but|and|or|then|later|is|are|was|be|will|shall|must|should|can|could|would|may|might)$/;
+    const notNoun = /^(\d.*|in|within|after|before|by|until|till|for|at|to|into|upon|across|around|near|through|throughout|over|along|past|on|onto|down|up|beside|soon|tomorrow|tonight|today|once|twice|all|until|while|when|where|as|so|if|but|and|or|then|later|is|are|was|be|will|shall|must|should|can|could|would|may|might)$/;
     if (firstW && !onSomeone && !notNoun.test(firstW) && !L.stop.has(firstW) && !/^(here|there|hard|heavily|lightly|gently|now|again|today|tonight|everywhere|forever|more|less|down)$/.test(firstW)) {
       // a rain the world never had: of animals (they land alive), or of anything else (tinted)
       const noun = after.split(' ').filter((x) => !L.stop.has(x)).slice(0, 2).join(' ');
@@ -3055,6 +3064,8 @@ function plausibleNew(cx: PCtx2, noun: string): boolean {
   // (fix r3 #2) nor "new crop resists", "new animal hunt", "new tree fires", "vein copper": a miss asks, it never registers junk
   if (words.length > 1 && /^(new|another|other)$/.test(words[0]) && /^(crop|grain|vegetable|plant|fruit|tree|bush|shrub|herb|flower|grass|animal|beast|creature|species|ore|metal|mineral|stone|rock|material|substance|tool|weapon|thing|item|invention)(s|es)?$/.test(words[1])) return false;
   if (/^(veins?|seams?|lodes?|deposits?)$/.test(words[0])) return false;
+  // (fix r4 #5) nor "more ore", "rich deposit", "new deposit": an ore, a vein or a deposit is never the head of a new material
+  if (/^(ores?|veins?|seams?|lodes?|deposits?)$/.test(words[words.length - 1])) return false;
   const verbs = new Set(Object.values(cx.L.verbs).flat().filter((v) => !v.includes(' ')));
   const head = words[words.length - 1];
   if (verbs.has(words[0]) || verbs.has(head)) return false;

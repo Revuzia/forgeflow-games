@@ -105,7 +105,7 @@ uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro no
 ${GROUND_FRAG_PARS}
 
 // sky: ambient-only occlusion (forest canopy over its floor); ao darkens ambient and, partly, the sun
-struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; float sky; };
+struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; float sky; float sward; };
 
 // fade a pattern out before it is resolved by fewer than ~6 pixels per feature (no speckle at distance)
 float aaF(float fw, float feature) { return 1.0 - smoothstep(0.12, 0.45, fw / feature); }
@@ -226,6 +226,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   uwFar = 0.0;
   s.glint = 0.0;
   s.sky = 1.0;
+  s.sward = 0.0;
   FFloor ffl; float ffW = 0.0;
   vec3 up = normalize(P);
   float slope = 1.0 - clamp(dot(Nb, up), 0.0, 1.0);
@@ -744,6 +745,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // the tufts' own relief, swardDetail, carries the close-up grain now)
     mk = mix(mk, 0.08, vegW);
     rough = mix(rough, 0.88, vegW);
+    // (a porous mat of blades or crops: FRAG_AMBIENT masks its sky sheen and tints the sky light it scatters)
+    s.sward = vegW;
     ao = mix(ao, vao, vegW);
     spec = mix(spec, 0.35, vegW);
     if (ffW > 0.0) {
@@ -1001,6 +1004,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     snowW = sw;
     bump = mix(bump, mix(bump * 0.6 + drift * 0.3, drift, 1.0 - thin), sw);
     rough = mix(rough, 0.55, sw);
+    s.sward *= 1.0 - sw;
     mk = mix(mk, 0.05, sw);
     ao = mix(ao, 1.0, sw * (1.0 - ffW));
     spec = mix(spec, 0.6, sw);
@@ -1027,6 +1031,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     col = mix(col, icc, iw);
     rough = mix(rough, 0.12, iw);
+    s.sward *= 1.0 - iw;
     mk = mix(mk, 0.02, iw);
     bump = mix(bump, cr * 0.1, iw);
     spec = mix(spec, 0.8, iw);
@@ -1052,6 +1057,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // wet soil and litter stay rough (0.35); only bare rock and sand film over glossy
   float wetFloor = mix(0.18, 0.35, clamp(soil * 2.0 + vegTotal, 0.0, 1.0));
   rough = mix(rough, wetFloor, wet * 0.85);
+  s.sward *= 1.0 - wet * 0.85;
 
   // ── under water: silt and sand floor ──
   // (every change at the waterline ramps in over ~25 cm of depth: a step at uw = 0 in the colour, and above all in the
@@ -1063,6 +1069,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     vec3 floorC = mix(uSandCol * 0.5, vec3(0.09, 0.085, 0.065), smoothstep(1.0, 12.0, uw)) * (0.85 + 0.25 * m1);
     col = mix(col, floorC, max(d, 0.6) * (1.0 - steep * 0.5) * inW);
     rough = mix(rough, 0.35, 0.7 * inW);
+    s.sward *= 1.0 - inW;
     mk = mix(mk, 0.05, max(d, 0.6) * inW);
     // seen from afar a coarse patch's ground and the water sheet over it meet within the depth buffer's reach, and the
     // ground's own fragments can stand in front of the water: they take the open water's look (a dark blue body, a
@@ -1071,6 +1078,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     uwFar = smoothstep(0.6, 2.5, fw) * smoothstep(0.3, 1.5, uw);
     col = mix(col, vec3(0.012, 0.028, 0.04), uwFar);
     rough = mix(rough, 0.07, uwFar);
+    s.sward *= 1.0 - uwFar;
     spec = mix(spec, 1.0, uwFar);
     bump *= 1.0 - uwFar;
   }
@@ -1186,6 +1194,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     crustC *= 1.0 - 0.5 * crack2 * (1.0 - heat);
     col = mix(col, crustC, lw);
     rough = mix(rough, mix(0.82, 0.55, heat), lw);
+    s.sward *= 1.0 - lw;
     spec = mix(spec, 0.35, lw);
     // pillowy plates: each slab bulges a little between its seams (pahoehoe's lobes), the seams sink in
     float pillow = smoothstep(0.0, 0.45, edge1) * k1;
@@ -1231,6 +1240,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float ashB = smoothstep(0.3, 0.8, snoise(P * 0.9) * 0.5 + 0.5);
     col = mix(col, mix(vec3(0.022, 0.02, 0.018), vec3(0.12, 0.115, 0.11), ashB * 0.6), burnK * 0.92);
     rough = mix(rough, 0.97, burnK);
+    s.sward *= 1.0 - burnK;
     // (beds of coals, not a glow over the bed: a 0.12 base lit soft orange blobs on the ground under the night exposure)
     float cz = burnK * smoothstep(0.42, 0.72, snoise(P * 0.45 + 13.0) * 0.5 + 0.5) * (0.006 + 2.6 * coals);
     emis += vec3(2.4, 0.55, 0.07) * (cz * fireFl + ember * burnK * 1.2) * dayCoal;
@@ -1293,6 +1303,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float ashBloom = smoothstep(0.5, 0.9, level) * smoothstep(0.3, 0.8, snoise(P * 0.9) * 0.5 + 0.5);
     col = mix(col, mix(vec3(0.022, 0.02, 0.018), vec3(0.12, 0.115, 0.11), ashBloom * 0.75), charK * 0.95);
     rough = mix(rough, 0.97, charK);
+    s.sward *= 1.0 - charK;
   }
   }
 
@@ -1533,6 +1544,10 @@ const FRAG_AMBIENT = /* glsl */ `
     // adding skyE to 'irradiance' as well (RE_IndirectDiffuse) doubled the ambient — milky, shadowless ground
     // under a canopy the sky light arrives through leaves: less of it, and neutral-green rather than sky blue
     skyE = mix(skyE, vec3(dot(skyE, vec3(0.2126, 0.7152, 0.0722))) * vec3(0.86, 1.06, 0.78), clamp((1.0 - ts.sky) * 1.6, 0.0, 1.0));
+    // a sward is a porous mat of blades: most of the sky light leaving it has scattered between blades first (green),
+    // and the blades mask each other's mirror image of the sky (below: specOcc). Without both, the open sky's blue sheen
+    // and blue fill outweighed the grass's own green in every shade — teal lawns beside the villagers (fix-render r2 #5)
+    skyE = mix(skyE, vec3(dot(skyE, vec3(0.2126, 0.7152, 0.0722))) * vec3(0.9, 1.05, 0.82), 0.35 * ts.sward);
     // under water the sky light too comes through the surface and the water above the floor (and the floor mirrors no sky)
     float uwA = vF4.y - vF4.w;
     float uwAK = smoothstep(0.25, 0.9, uwA) * (1.0 - uwFar);
@@ -1544,7 +1559,7 @@ const FRAG_AMBIENT = /* glsl */ `
     float horizonK = smoothstep(-0.05, 0.3, dot(rBraw, upB));
     float NdVs = clamp(dot(nB, vB), 0.0, 1.0);
     float rgh = material.roughness;
-    float specOcc = clamp(pow(NdVs + ts.ao, exp2(-16.0 * rgh - 1.0)) - 1.0 + ts.ao, 0.0, 1.0) * ts.sky;
+    float specOcc = clamp(pow(NdVs + ts.ao, exp2(-16.0 * rgh - 1.0)) - 1.0 + ts.ao, 0.0, 1.0) * ts.sky * (1.0 - 0.7 * ts.sward);
     vec3 rB = normalize(rBraw + upB * max(0.0, -dot(rBraw, upB)) * 1.05);
     // (three applies the environment BRDF — Fresnel and roughness — to this radiance itself)
     radiance += skyRadiance(upB, rB, uSunDirBody) * specOcc * horizonK * (1.0 - uwAK);
