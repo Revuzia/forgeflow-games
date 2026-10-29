@@ -1,0 +1,97 @@
+{
+  "lane": "chars",
+  "round": 1,
+  "verifier": "adversarial verifier, integration lane chars, round 1, 2026-10-29. Re-measured at HEAD ac7c4cb0 (= origin). Chars commits checked: c4d3a9c6, 25a1ae41, a55265d9, da4a75bc (plus the wip syncs f088e8b5, aedf8292, fd10c7c9, a70d1140 that carried lane files). The engineer reports were not trusted.",
+  "pass": false,
+  "summary": "Lane chars fails round 1, on one item only. The major item lead:fighter-tris is still partly done. Its done criterion is a perf_1080 --prod match peak of <= 500k triangles. Nothing in src/render draws the fighter LOD1 yet: lod.ts:96 still has lodSwitch.outline false, and there is no simplifyWithAttributes or head lock anywhere in src/render. The newest prod sweep (integ_engine_v1_perf_1080.json, 2026-10-29 00:29) peaks at 1,031,094 triangles with 41 programs. The lane still cites 857,978 as the last measured peak, which is out of date. Everything else holds up when re-measured. ruling:dunsom-beak passes. The GLB centre-line profile now peaks at 14.4 cm at y 1.81, down from 16.0 cm at y 1.77. The lower mask sits at 11.6-12.7 cm, behind the scarf's 17.1 cm. In the chip, all three portraits and all three splashes the bill reads as a small round nub, with no plague-doctor read. The face-chip gate re-run gives 120 pairs, min 59.1 (dunsom-ulkro), 0 under 55. The LOD1 recipe re-runs exactly: 48 GLBs, 955,762 -> 580,849 body triangles, worst error 10 mm, 152,516 of 152,516 head-locked triangles kept. All 48 GLBs are inside 16,340-23,579 triangles and at most 1,193,332 bytes, and none grew against 8a7989fa (Burdam +381, Rishal -464, Sukri -2). chars-12 re-measures exactly: whole-splash p1 median 46.3 -> 20.9 (range 8.4-34.1), contrast median 121.8 -> 139.8, 0 % clipped. plates measure: 48 cards p50 89-109, cells 71-105, 0 outside the gate. plates frame: 48 of 48 in 0.70-0.80. The Ilsheta GLBs match her current code: glass alpha 0.400 in the GLB = ilsheta.py:250. Sensitivity: I viewed every new render (Dunsom, Sukri and Kemdo chips, 9 portraits, 9 splashes, the three_qa sheets, the lineup sheet and three loading shots). No blocker. Sukri's amber inlays are paint only: body emissive is 0, and the only emissive material is the blue accent. Kemdo's hood crown is round, and Dunsom no longer reads as a beak. Nothing in the lane regressed. content:check exit 0 (17 copy-lint warnings, none from this lane), probe_content_build 126/126, probe_sim_skin_neutral 5/5, lineup_qa 0 failing pairs (max IoU64 0.739). Every lane commit touches lane paths only.",
+  "items": [
+    {
+      "id": "ruling:dunsom-beak",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "art/blender/fighters/dunsom.py:367-382: bill() is an elliptic dome from BILL_ROOT 1.850 to BILL_TIP 1.788, 1.5 cm proud and 6.2 cm long. The ruling's limit is the eye-to-chin height, eye z 1.840 to chin z 1.715 = 12.5 cm, so the bill is under it. I measured the GLB centre line (|x| <= 12 mm, front-most z per 1 cm of height; _harness/_reports/integ_chars_ver1_dunsom_profile.txt). Old dunsom.glb (8a7989fa) peaks at 16.0 cm at y 1.77 and stays at 15.0-15.7 cm down to y 1.69: the keel through the scarf. At HEAD, base, Highrim and Almanac are identical: peak 14.4 cm at y 1.81, and 11.6-12.7 cm from y 1.78 down to 1.70, which is under the scarf's 17.1 cm at y 1.66. Triangles are unchanged: 22,406 / 22,406 / 23,446 (_harness/_reports/integ_chars_ver1_glb_tris.txt). The build reports show three_qa ok, facing [0,1], and accent 1.81 / 1.01 / 0.94 %, all equal to 8a7989fa. Viewed: art/out/fighters/dunsom/icon.png, the 3 portraits (_harness/_shots/integ_chars_ver1_dunsom_faces.png, crops at 3x), the 3 splashes (_harness/_shots/integ_chars_ver1_splash9.png) and the 26 px chip (integ_chars_dunsom_bill_chip26_oldnew.png). The bill is a small round nub under the brow and the mask reads as a carved gold mask, not a plague-doctor beak. `python3 art/blender/common/facechip.py gate`: 120 pairs, min 59.1 (dunsom-ulkro), median 70.6, 0 under 55 (_harness/_reports/integ_chars_ver1_facechip_gate.txt). art/renders/lineup/integ_chars_dunsom.json: silhouetteOk, 153 pairs, 0 not ok, max IoU64 0.739 (burdam-hesmi). _design/fighters/dunsom.md:31 and :55 record the bill. Watch only, not a failure: the mask keeps hollow ink eye recesses and a cracked-tile relief. At portrait size it reads stern, not horror. If it is ever revisited, warm eye inlays in the style of ruling 2 would be the standard fix."
+    },
+    {
+      "id": "lead:fighter-tris",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "The per-fighter budget is met. All 48 GLBs hold 16,340-23,579 triangles (CONTRACT _spec/CONTRACT.md:850 says 10-25k) and at most 1,193,332 bytes (_harness/_reports/integ_chars_ver1_glb_tris.txt). The LOD1 recipe re-runs as claimed: `node art/blender/fighters/_lod1.mjs --json` gives 48 GLBs, body 955,762 -> 580,849 (0.608), worst 10 mm, head-locked 152,516 of 152,516 kept (_harness/_reports/integ_chars_ver1_lod1.json). The base average is 19,653 -> 11,916 and the largest LOD1 body is 15,118 (hesmi_gorgewalk). I viewed the A/B close sheets: faces identical, and the LOD1 robe shows faint faceting only in the close 3/4 view. The done criterion is NOT met. No perf_1080 --prod was run, and the renderer does not draw the LOD1: src/render/lod.ts:96 has `lodSwitch = { shadow: true, outline: false }`, actors.ts:979 builds the outline from the full part.geometry, and grep finds no simplifyWithAttributes or head lock in src/render. The newest prod sweep is _harness/_reports/integ_engine_v1_perf_1080.json (build prod, 2026-10-29 00:29 local). Its misses: 'peak triangles 1031094 > 500000 at 1264.5 s' and 'peak programs 41 > 40'. At the peak, actors:fighter is 403,711 (main 367,278 over 34 calls, shadow 36,433), actors:crowd 334,321 and actors:structure 80,761. The lane's evidence still quotes 857,978 / ~734k from the older fw_W1_perf_1080_polish2.json. Re-estimated on the new peak: LOD1 at ~0.61 on the fighters' main body and hull cuts ~140k, which leaves the peak near ~890k, still far over 500k. The dequantization in the handoff is per fighter, 0.82 (sukri) to 1.24 (ardit) m per unit, not a constant ~1.2.",
+      "fixHint": "Chars has nothing left to author for this item. It closes through the engine stitch lead:fighter-lod-render. In src/render/lod.ts and actors.ts, match only: run faceLockedLod (art/blender/fighters/_lod1.mjs) per body primitive. Take the 10 mm bound from each mesh's own bind-matrix dequantization (0.82-1.24, measured per mesh). Draw the result in the main pass and build the outline hull from it. Pair that with a crowd cut, because the Wick crowd is 334k at the 1264.5 s peak (crowd.ts LOD ratio, or lighter Wick GLBs from the world lane). Prewarm the late program (41 > 40). Then re-run `perf_1080 --prod` (low + match). In round 2, chars should refresh its estimate against integ_engine_v1_perf_1080.json and stop quoting 857,978."
+    },
+    {
+      "id": "chars-03",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done, confirmed. I extracted the 8a7989fa GLBs and counted triangles. Burdam 20,067 -> 20,448 (+381), Rishal 20,818 -> 20,354 (-464), Sukri 17,603 -> 17,601. Dunsom, Kemdo and Lisvel Gorgewalk are identical. All 48 sit inside 10-25k (_harness/_reports/integ_chars_ver1_glb_tris.txt). The 269k in the leakfog frame was a matter of how many fighters were in view, not of any GLB growing."
+    },
+    {
+      "id": "chars-04",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The authored LOD1 exists as a recipe and re-runs exactly: average base body 19,653 -> 11,916, under the ~16k the item asks for, and every head-locked triangle is kept (_harness/_reports/integ_chars_ver1_lod1.json). The item's goal, a peak under 500k, is not reached. The renderer does not use the LOD1 (lod.ts:96 outline false, no body LOD), and the newest prod peak is 1,031,094 (integ_engine_v1_perf_1080.json), so not the 857,978 the lane cites.",
+      "fixHint": "Same path as lead:fighter-tris: engine stitch lead:fighter-lod-render plus a crowd cut, then perf_1080 --prod."
+    },
+    {
+      "id": "chars-05",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Lisvel: lisvel.py:836-845 has the carved face plate, with cheek planes and a 12 mm nose, and _harness/_shots/fw_W5b_ver1_lisvel_face_zoom.png shows a nose and a closed smile under the visor. Sukri: sukri.py:1507 sets LINING_HEX #86725E, and her portrait (art/out/fighters/sukri/portrait.png, viewed) shows the mask clear of the dark. Dunsom: see ruling:dunsom-beak (the beak is now a nub, verified on the GLB and in every image)."
+    },
+    {
+      "id": "chars-06",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Measured from the kept raw passes (art/.cache/fighters/plates/*_splash.png, alpha > 0.6). All three Dunsom splashes are 1600x900, mask mass x 0.747 (alpha-weighted 0.732), top 0.077, feet 0.946. `plates.py frame --box 0.84`: figure 0.731 of the card. Lisvel Almanac: top 0.106, feet 0.960, figure 0.719. All 48 are in 0.70-0.80, p50 0.728 (_harness/_reports/integ_chars_ver1_plates_frame.txt). Kemdo and Sukri, also re-rendered: mass x 0.673 / 0.728, figure 0.744 / 0.735. Pre-existing, not from this lane: the three Rishal splashes sit at mass x 0.639, just left of the 0.66-0.76 band. That is still inside the card window 0.51-0.92, and the lane did not reframe them."
+    },
+    {
+      "id": "chars-07",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done, confirmed. The only ilsheta.py commits after her 13:54 GLB are 025b995d (14:08, fix pass 2) and 6048f4c2 (the splash fill only). The shipped GLBs carry 025b995d's change, gem_chimglass alpha 0.400, which equals GLASS_ALPHA at ilsheta.py:250 in all three GLBs, so the GLBs match the current code. Face-chip gate: ilsheta-ulkro 59.8, min 59.1, 0 under 55 (_harness/_reports/integ_chars_ver1_facechip_gate.txt)."
+    },
+    {
+      "id": "chars-08",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done, confirmed (model unchanged, see chars-07). `plates.py measure --box 0.84`, which now includes the chars-12 toe: ilsheta / stillwater / first_bell card p50 101 / 98 / 98, cell 81 / 78 / 81, 0.0 % > 200 (_harness/_reports/integ_chars_ver1_plates_measure.txt). `frame --box 0.84`: 0.711 / 0.731 / 0.732, all in 0.70-0.80."
+    },
+    {
+      "id": "perf:PERF-m5",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The chars half re-measures as claimed: 48 GLBs, 955,762 -> 580,849, 152,516 of 152,516 head-locked triangles kept, all GLBs within 10-25k and 1.2 MB, and the pkg2 rebuilds Sukri 17,601 / 1,186,880 B and Kemdo 18,389 / 1,149,876 B confirmed. The match gate is still open, and the claim that 'the last measured peak is still 857,978' is wrong. integ_engine_v1_perf_1080.json, the newest prod sweep (00:29), fails with peak 1,031,094 at 1264.5 s and 41 programs. Neither failure comes from a fighter GLB growing: no fighter GLB grew.",
+      "fixHint": "Engine stitch lead:fighter-lod-render, then a crowd cut and the late-program prewarm, then perf_1080 --prod. Cite the integ_engine_v1 numbers, not polish2."
+    },
+    {
+      "id": "originality:F9",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done, confirmed. Hooded Lamp: art/blender/units/small_units.py:131-138 replaces the RoundCone finial with a Capsule neck and a Sphere knob of radius 0.031 (world 1667afb3), and art/out/units/hooded_lamp_icon.png (viewed) shows a round ball on top. content/units.json:601 points at that icon. Lisvel's face plate and Sukri's lining are present (see chars-05)."
+    },
+    {
+      "id": "sensitivity:new-art",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Viewed: Dunsom (see the beak item); the Sukri icon, 3 portraits and 3 splashes (_harness/_shots/integ_chars_ver1_portraits9.png, integ_chars_ver1_splash9.png, integ_chars_sukri_skins_face.png); Kemdo's icon, 3 portraits and 3 splashes, with the head crops at _harness/_shots/integ_chars_ver1_kemdo_heads.png; three_sukri.png; the lineup sheet integ_chars_p2.png. Sukri: the eye slits are flat amber, sukri.py:355 EYE_INLAY #B08552 / #6E4C2E, painted into the body texture (_inlay_paint). The GLBs' body emissive is [0,0,0] on all 3 skins, and the only emissive material is the blue accent. The mask with its smile reads friendly, and no grain line reaches an eye. Kemdo: kemdo.py:1422 RoundCone tip radius 0.042 (was 0.008, git -p fd10c7c9). The crown reads as a rounded travel hood at chip, portrait and splash size, not tall or pointed. No blocker anywhere. Rebuild QA matches 8a7989fa (accent %, facing) and lineup_qa has 0 failing pairs."
+    },
+    {
+      "id": "chars-12",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "plates.py: the toe_black / toe_foot change is additive, with defaults 1.0 / 0.0 that leave the old curve unchanged (git diff 25a1ae41 -- art/blender/common/plates.py). Re-measured all 48 splashes against 25a1ae41 (_harness/_reports/integ_chars_ver1_splash_diff.txt): p1 median 46.3 -> 20.9, range 8.4-34.1, 8 of 48 just over 30; p5-p95 contrast median 121.8 -> 139.8, min 86.5; dark-quarter saturation 0.232 -> 0.256; p50 +0.72; 0 % clipped. Old/new viewed (_harness/_shots/integ_chars_ver1_splash_oldnew.png): the grey veil is gone on Lisvel Gorgewalk and Ervet, and Ilsheta First Bell stays softer by design. Loading cards: `plates.py measure --box 0.84` gives 48 cards p50 89-109, 0 outside the gate. I viewed integ_chars_loading_1920_r1.png: the cards read cleanly."
+    }
+  ],
+  "regressions": [],
+  "checks": {
+    "content_check": "npm run content:check exit 0, 17 warnings, all copy-lint '[pending copy fix]' in content/ (not owned by this lane) (_harness/_reports/integ_chars_ver1_content_check.txt)",
+    "probe_content_build": "PASS 126/126",
+    "probe_sim_skin_neutral": "5 passed, 0 failed",
+    "lod1_check": "node art/blender/fighters/_lod1.mjs: 48 GLBs 955,762 -> 580,849, 152,516/152,516 head-locked kept (_harness/_reports/integ_chars_ver1_lod1.json)",
+    "glb_budget": "48 GLBs 16,340-23,579 tris, max 1,193,332 B (_harness/_reports/integ_chars_ver1_glb_tris.txt)",
+    "facechip_gate": "120 pairs, min 59.1, 0 < 55 (_harness/_reports/integ_chars_ver1_facechip_gate.txt)",
+    "plates": "measure: 0 outside the gate; frame: 48/48 in 0.70-0.80 (_harness/_reports/integ_chars_ver1_plates_measure.txt, integ_chars_ver1_plates_frame.txt)",
+    "lineup_qa": "integ_chars_p2.json: 190 pairs, 0 not ok, max IoU64 0.739; valueGradientOk false for Dunsom and Kemdo, which was already the case in the earlier lineups (ilsheta_qa.json, rishal_w5b_b1.json)",
+    "perf_1080": "not re-run: no lane change touches runtime triangle counts (no fighter GLB grew). Latest prod sweep integ_engine_v1_perf_1080.json fails: peak 1,031,094 / 41 programs",
+    "scope": "c4d3a9c6, 25a1ae41, a55265d9 and da4a75bc touch only lane paths, and all are on origin. git status shows no uncommitted lane files."
+  }
+}
