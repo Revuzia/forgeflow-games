@@ -67,7 +67,7 @@ export interface Settings {
     /** CHANGED(SESSION), additive optional (audio AUD-m4), both default false: the mix summed to mono after the master /
      *  a lower limiter with gentle compression for loud transients. normalizeSettings always writes them; absent reads false */
     mono?: boolean; softenLoud?: boolean };
-  controls: { binds: Record<string, string>; quickCast: boolean; cameraLock: boolean; edgePan: boolean; panSpeed: number; attackMoveOnClick: boolean; selfCastModifier: string };
+  controls: { binds: Record<string, string>; quickCast: boolean; cameraLock: boolean; /** true once the player set cameraLock themselves (saves without it predate the locked default and lock) */ cameraLockChosen?: boolean; edgePan: boolean; panSpeed: number; attackMoveOnClick: boolean; selfCastModifier: string };
   access: { colorblind: 'off' | 'deutan' | 'protan' | 'tritan'; uiScale: number; hudScale: number; minimapScale: number; reduceMotion: boolean; screenShake: number; subtitles: boolean;
     /** CHANGED(UI), r12 M4 §5, both default false: a 150 ms HARM screen-edge mark when you lose control /
      *  a 120 ms ink screen-edge mark when a hit lands on you (a stored profile without them reads false) */

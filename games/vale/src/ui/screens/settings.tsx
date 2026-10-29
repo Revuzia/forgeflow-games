@@ -233,7 +233,7 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
         <Toggle id="c-qc" label={cv.t('settings.controls.quickCast.label', 'Quick cast')} checked={c.quickCast} onChange={(x) => p.set('controls', { quickCast: x })} />
       </Row>
       <Row id="c-lock" label={cv.t('settings.controls.cameraLock.label', 'Lock camera to your fighter')} desc={cv.t('settings.controls.cameraLock.desc', '')}>
-        <Toggle id="c-lock" label={cv.t('settings.controls.cameraLock.label', 'Lock camera to your fighter')} checked={c.cameraLock} onChange={(x) => p.set('controls', { cameraLock: x })} />
+        <Toggle id="c-lock" label={cv.t('settings.controls.cameraLock.label', 'Lock camera to your fighter')} checked={c.cameraLock} onChange={(x) => p.set('controls', { cameraLock: x, cameraLockChosen: true })} />
       </Row>
       <Row id="c-edge" label={cv.t('settings.controls.edgePan.label', 'Edge pan')} desc={cv.t('settings.controls.edgePan.desc', '')}>
         <Toggle id="c-edge" label={cv.t('settings.controls.edgePan.label', 'Edge pan')} checked={c.edgePan} onChange={(x) => p.set('controls', { edgePan: x })} />

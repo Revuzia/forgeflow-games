@@ -3,7 +3,9 @@
 // Pitch 52°, VERTICAL fov 26°, distance 28.5 m, zoom 24.5–33.0 m (spectator 20–44 m), fixed yaw
 // looking −Z, focus at screen centre, no per-side offset — identical for every player (fairness).
 // Modes:
-//   locked       focus rides your fighter (critically damped, no lag you can exploit)
+//   locked       (the default) your fighter is the exact centre of the screen; looking away
+//                is deliberate: hold the pointer at an edge (after a short dwell, so brushing it does nothing) or the
+//                arrow keys to peek, and the focus glides back to your fighter once you let go
 //   semi         pan freely, but the focus stays within a 6 m leash of your fighter
 //   free         edge pan (pointer within 18 px of an edge) + keyboard pan at controls.panSpeed
 //   scout (hold) free pan while held; release snaps back to your fighter (cut, 1 frame)
@@ -17,6 +19,12 @@ import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 export const CAMERA = {
   pitchDeg: 52, fovDeg: 26, distance: 28.5, minDistance: 24.5, maxDistance: 33.0,
   spectatorMin: 20, spectatorMax: 44, zoomEaseMs: 200, leash: 6, edgePx: 18,
+  /** locked mode: the pointer must rest at an edge this long (s) before it peeks */
+  peekDwell: 0.15,
+  /** locked mode: ease-out rate (1/s) of the glide back after a peek */
+  peekReturn: 9,
+  /** locked mode: the glide back always lands on your fighter within this long (s), even while you run */
+  peekReturnMaxS: 0.4,
   /** the focus clamp's inset from the map bounds (m; at most a quarter of a side) */
   boundsInset: 4,
 } as const;
@@ -26,7 +34,7 @@ export type CameraMode = 'locked' | 'semi' | 'free';
 export class CameraRig {
   readonly camera: PerspectiveCamera;
   readonly focus = new Vector3();
-  mode: CameraMode = 'semi';
+  mode: CameraMode = 'locked';
   spectator = false;
   edgePan = true;
   /** 0..1 (controls.panSpeed) → 18..54 m/s */
@@ -39,6 +47,11 @@ export class CameraRig {
   private bounds = { minX: 0, minZ: 0, maxX: 100, maxZ: 100 };
   private self: { x: number; z: number } | null = null;
   private scouting = false;
+  /** locked mode: the focus was moved off your fighter by a deliberate peek and is gliding back */
+  private peeking = false;
+  /** seconds left in the glide back after a peek */
+  private returnLeft = 0;
+  private edgeDwell = 0;
   private pointer = { x: 0, y: 0, inside: false };
   private keyPan = { x: 0, z: 0 };
   private shakeT = 0;
@@ -71,7 +84,7 @@ export class CameraRig {
   }
   /** jump the focus (minimap click, respawn, centerCamera) */
   focusOn(x: number, z: number): void { this.focus.set(x, 0, z); this.seeded = true; this.clamp(); }
-  centerOnSelf(): void { if (this.self) this.focusOn(this.self.x, this.self.z); }
+  centerOnSelf(): void { this.peeking = false; if (this.self) this.focusOn(this.self.x, this.self.z); }
   setMode(m: CameraMode): void { this.mode = m; if (m === 'locked') this.centerOnSelf(); }
   scout(on: boolean): void {
     if (this.scouting && !on) this.centerOnSelf();
@@ -106,24 +119,38 @@ export class CameraRig {
 
     const free = this.mode === 'free' || this.scouting || !this.self;
     const following = this.mode === 'locked' && !this.scouting && this.self;
+    // pan intent: keyboard + edge (in locked mode the edge needs a short dwell: a peek is deliberate)
+    let px = this.keyPan.x, pz = this.keyPan.z;
+    let ex = 0, ez = 0;
+    if (this.edgePan && this.pointer.inside) {
+      const e = CAMERA.edgePx;
+      if (this.pointer.x <= e) ex = -1; else if (this.pointer.x >= this.viewW - 1 - e) ex = 1;
+      if (this.pointer.y <= e) ez = -1; else if (this.pointer.y >= this.viewH - 1 - e) ez = 1;
+    }
+    this.edgeDwell = ex !== 0 || ez !== 0 ? this.edgeDwell + d : 0;
+    if (!following || this.edgeDwell >= CAMERA.peekDwell) { px += ex; pz += ez; }
+    const panning = px !== 0 || pz !== 0;
+    if (panning) {
+      const speed = 18 + 36 * MathUtils.clamp(this.panSpeed, 0, 1);
+      const len = Math.hypot(px, pz);
+      this.focus.x += (px / len) * speed * d;
+      this.focus.z += (pz / len) * speed * d;
+    }
     if (following && this.self) {
-      const k = 1 - Math.exp(-d * 18);
-      this.focus.x += (this.self.x - this.focus.x) * k;
-      this.focus.z += (this.self.z - this.focus.z) * k;
+      if (panning) { this.peeking = true; this.returnLeft = CAMERA.peekReturnMaxS; }
+      else if (this.peeking) {
+        // glide back after a peek: ease out, but land on your fighter within peekReturnMaxS even while you run
+        const k = Math.max(1 - Math.exp(-d * CAMERA.peekReturn), Math.min(1, d / Math.max(this.returnLeft, 1e-3)));
+        this.returnLeft -= d;
+        this.focus.x += (this.self.x - this.focus.x) * k;
+        this.focus.z += (this.self.z - this.focus.z) * k;
+        if (k >= 1 || this.returnLeft <= 0) this.peeking = false;
+      } else {
+        // locked: your fighter is the centre of the screen, exactly (self is the smooth interpolated position)
+        this.focus.x = this.self.x;
+        this.focus.z = this.self.z;
+      }
     } else {
-      // pan: keyboard + edge
-      let px = this.keyPan.x, pz = this.keyPan.z;
-      if (this.edgePan && this.pointer.inside) {
-        const e = CAMERA.edgePx;
-        if (this.pointer.x <= e) px -= 1; else if (this.pointer.x >= this.viewW - 1 - e) px += 1;
-        if (this.pointer.y <= e) pz -= 1; else if (this.pointer.y >= this.viewH - 1 - e) pz += 1;
-      }
-      if (px !== 0 || pz !== 0) {
-        const speed = 18 + 36 * MathUtils.clamp(this.panSpeed, 0, 1);
-        const len = Math.hypot(px, pz);
-        this.focus.x += (px / len) * speed * d;
-        this.focus.z += (pz / len) * speed * d;
-      }
       if (!free && this.mode === 'semi' && this.self) {
         const dx = this.focus.x - this.self.x, dz = this.focus.z - this.self.z;
         const r = Math.hypot(dx, dz);

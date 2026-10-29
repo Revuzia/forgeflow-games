@@ -64,7 +64,7 @@ function rawDefaults(): Settings {
   return {
     video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false, ambientEffects: true, ...SETTINGS_EXTRAS.video } as VideoSettings,
     audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true, ...SETTINGS_EXTRAS.audio } as AudioSettings,
-    controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: false, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
+    controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: true, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
     access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 0.5, subtitles: true, locFlash: false, damageFlash: false },
     gameplay: { showDamageNumbers: true, showAllyIndicators: true, healthBarTicks: true, minimapSide: 'right' },
   };
@@ -125,7 +125,12 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
     video,
     audio,
     controls: {
-      binds, quickCast: bool(c.quickCast, bc.quickCast), cameraLock: bool(c.cameraLock, bc.cameraLock), edgePan: bool(c.edgePan, bc.edgePan),
+      binds, quickCast: bool(c.quickCast, bc.quickCast),
+      // the camera is locked to your fighter by default; a save from before that default only keeps an unlocked
+      // camera if the player chose it (cameraLockChosen), so old default saves lock once
+      cameraLock: c.cameraLockChosen === true || bc.cameraLockChosen === true ? bool(c.cameraLock, bc.cameraLock) : bc.cameraLock,
+      ...(c.cameraLockChosen === true || bc.cameraLockChosen === true ? { cameraLockChosen: true } : {}),
+      edgePan: bool(c.edgePan, bc.edgePan),
       panSpeed: clamp(c.panSpeed, 0, 1, bc.panSpeed), attackMoveOnClick: bool(c.attackMoveOnClick, bc.attackMoveOnClick),
       selfCastModifier: str(c.selfCastModifier, bc.selfCastModifier),
     },

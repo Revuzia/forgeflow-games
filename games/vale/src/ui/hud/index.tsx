@@ -84,7 +84,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
         r.camera?.setMode(locked ? 'locked' : 'semi');
         if (locked) r.camera?.centerOnSelf();
         const c = state.settings.peek().controls;
-        session.updateSettings({ controls: { ...c, cameraLock: locked } });
+        session.updateSettings({ controls: { ...c, cameraLock: locked, cameraLockChosen: true } });
         model.say(locked ? cv.t('hud.camera.locked', 'Camera locked to your fighter.') : cv.t('hud.camera.unlocked', 'Camera unlocked.'), 'info');
       },
       blocked: () => overlay.modals.value.length > 0,

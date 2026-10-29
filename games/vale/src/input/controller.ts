@@ -104,7 +104,8 @@ export class InputController {
   private rightHeld = false;
   private lastHoldMove = 0;
   private lastMoveTo: { x: number; y: number } | null = null;
-  private middle: { gx: number; gy: number } | null = null;
+  /** middle-drag pan; scouting = it began on a locked camera, so release returns to your fighter */
+  private middle: { gx: number; gy: number; scouting: boolean } | null = null;
   private hoverAt = 0;
   private hoverId: EntityId | null = null;
   /** what the browser hit-tested under the pointer on its last move (free: no forced layout) */
@@ -184,6 +185,7 @@ export class InputController {
   private releaseAll(): void {
     this.held.clear();
     this.rightHeld = false;
+    if (this.middle?.scouting) this.r.camera?.scout(false);
     this.middle = null;
     if (this.wheel.value) this.wheel.value = null;
     this.hooks.scoreboard(false);
@@ -428,7 +430,13 @@ export class InputController {
     if (e.button === 1) {
       e.preventDefault();
       const g = this.ground();
-      if (g && this.r.camera) { if (this.r.camera.mode !== 'free') this.r.camera.setMode('free'); this.middle = { gx: g.x, gy: g.y }; }
+      const cam = this.r.camera;
+      if (g && cam) {
+        // a locked camera only peeks while the button is held; an unlocked one stays where you drag it
+        const scouting = cam.mode === 'locked';
+        if (scouting) cam.scout(true); else if (cam.mode !== 'free') cam.setMode('free');
+        this.middle = { gx: g.x, gy: g.y, scouting };
+      }
       return;
     }
     if (e.button === 0) this.leftDown(e);
@@ -436,7 +444,7 @@ export class InputController {
   }
   private onUp(e: PointerEvent): void {
     if (e.button === 2) this.rightHeld = false;
-    if (e.button === 1) this.middle = null;
+    if (e.button === 1) { if (this.middle?.scouting) this.r.camera?.scout(false); this.middle = null; }
     const bound = e.button > 2 ? this.keymap.actions(mouseCode(e.button)) : [];
     for (const a of bound) this.action(a, false);
   }
