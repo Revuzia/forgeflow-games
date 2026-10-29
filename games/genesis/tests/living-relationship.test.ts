@@ -16,6 +16,7 @@ import { distM } from '../src/sim/people/world.ts';
 import { sacredAnimal } from '../src/sim/people/culture.ts';
 import { lethality, reach } from '../src/sim/god/wrath.ts';
 import { spawnDisaster, AIRBURST_W } from '../src/sim/god/disasters.ts';
+import { RELENT_HELP, RELENT_WONDER } from '../src/sim/god/relationship.ts';
 import { hurtPeople, onRoad } from '../src/sim/god/harm.ts';
 import { PRAYER_KINDS } from '../src/sim/god/prayers.ts';
 import { srel } from '../src/sim/god/regard.ts';
@@ -892,4 +893,24 @@ test('free text (fix r4 #0, #2, #8, #20, #21): a promise is foretold as promised
   }
   assert.equal(sim.u.content.items.list.length, items);
   assert.equal(sim.u.content.recipes.list.length, ideas);
+});
+
+test('wrath (fix r4 #17): the god ending its own drought is seen — mercy and a sign with no harm for those under it; nature\'s drought ending is no act of the god', () => {
+  const run = (nature: boolean) => {
+    const { sim, st } = twoTowns();
+    const p = sim.u.planets[0];
+    if (nature) assert.ok(typeof spawnDisaster(sim.u, p, 'drought', { pos: st.pos, god: -1, cause: 'nature' }) !== 'string');
+    else must(sim, { k: 'disaster.spawn', kind: 'drought', pos: st.pos });
+    sim.step(60);
+    const g = sim.u.god.god(0)!;
+    const h0 = g.help, w0 = g.wonder, m0 = means(sim, st.id);
+    must(sim, { k: 'miracle.water', pos: st.pos, radius: 300 });
+    const m1 = means(sim, st.id);
+    return { dh: g.help - h0, dw: g.wonder - w0, faith: m1.faith - m0.faith, trust: m1.trust - m0.trust, left: sim.u.god.disasters.filter((d) => d.kind === 'drought').length };
+  };
+  const god = run(false), nat = run(true);
+  assert.equal(god.left, 0, 'the god\'s drought relents');
+  assert.equal(nat.left, 1, 'nature\'s runs on');
+  assert.ok(Math.abs(god.dh - nat.dh - RELENT_HELP) < 0.02 && Math.abs(god.dw - nat.dw - RELENT_WONDER) < 0.02, JSON.stringify({ god, nat }));
+  assert.ok(god.faith > nat.faith && god.trust >= nat.trust, `the relent is witnessed: ${JSON.stringify({ god, nat })}`);
 });

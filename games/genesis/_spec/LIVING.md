@@ -2759,9 +2759,40 @@ Finding numbers are the review's (0–22). Every entry names its proof; the logs
 - **#13 the god's drought on the year-50 worlds** (`fix3/d50m-<seed>{,-none}.log`, 10 days at 1x, every prayer of the
   target town answered vs no command): 0 thirst deaths and 0 towns fallen on all 8 worlds (round-2 seed 1: 34 thirst
   deaths, both towns fallen).
-- Still running when this was written: alone 7 and 20261008, kin `r3` / `r3c` 1–8 (chains A and B), the hunting
-  variant (`fix3/hv/`), the seed-1 re-run; `fix3/acc/finish.sh` installs the acceptance table when the chains end
-  (`fix3/acc/FINISHED`, `fix3/acc/summarize-r3.log`, `fix3/acc/extras-r3.log`).
+- **Acceptance table, round 3** (installed 03:44 on 2026-10-29 as `_harness/scratch/living/acceptance.json`; rows in
+  `fix3/acc/summarize-r3.log`; the round-2 table is `acceptance.fix-r2.json`). Tally **36 met, 13 partly, 16 missed**
+  (round 2: 37 / 13 / 14). **Provenance of the 36 met:** 25 measured on the round-3 tree, 10 copied from r6
+  (`[r6 tree, not re-measured]`: seven year-50 god rows — sessions without error, storm, drought, prophet failed, comet,
+  iron vein, new crop — the PACE daily probe, speciation without people, the plague row) and 1 from round 2 (every Disasters power). Those 11 are
+  older than all three fix rounds or than the relent (fix r3 #13), which moved the same drought session on fresh towns
+  from answered trust 0.65 / faith 0.91 (round 2) to 0.36 / 0.34: read the met count as **25 on this tree + 11 copies**
+  until they are re-run (fix round 4, LIVING §13.6).
+  - **Missed** (16): §1.6 food per adult-day, year-1 slice (y1 mean 1.59, range 0.83–2.9; 0.94–1.56 asked, none above
+    1.875) — **partly → missed** since round 2 (y1 range was 0.83–2.03); §2.1 kills per 100 a year (median 3.14, 0.67–7.39;
+    ≥ 20) and hunted share (0.0335, 0.004–0.075; 0.15–0.35); §2.5 housed at every year end (0 of 8 seeds) and outside
+    disaster years (**0 of 8**, 25 unhoused calm year ends; round 2 3 of 8 and 11, r6 7 of 8 and 1 — the measure counts
+    every planet's beds, fallen towns' too, and a town's first year: fix r4 #24 re-measures it per live town); §2.6 kinds
+    gathered at year 8 (median 9, ≥ 10); §2.8 birth interval (median 3.51 y, 2.0–3.5 — **met → missed**, round 2 3.36),
+    growth over years 5–30 (median **0.63 %/yr**, −2.09–2.11; 1.5–3 — **met → missed**, round 2 1.685) and the under-15
+    share (0.4575, 0.35–0.45); §1.4 lightning fires (r6 copy); §3.8 a quiet town praying (mean 0.003, 0 of 8 ≥ 0.02) and
+    days 1–3 after a tornado (0.061, 1 of 8 ≥ 0.08); §3.7 the default meteor (buildings standing below 60 % on seeds 3
+    and 4); and on the year-50 towns (r6 copies) quiet prayer, the meteor and the failed prophet.
+  - **Partly** (13): §1.6 work after dusk (mean 0.013, one seed 0.052), walking in the dark (0.072, one seed 0.227),
+    parched / starving (starving max 0.034); §1.5 fire-keeping (7 of 8 in band), pottery (5 of 8), bronze (reached 6 of
+    8 by the 50-year horizon), writing (5 of 8; its window runs to year 65, past the horizon); §2.4 farming share (median
+    0.436, one seed 0.263); §2.9 curiosity starved (max 0.571); §5.1 kin fixture; §3.8 three fulfilled prophecies
+    (credibility 0.705 median, not on every seed); §4.1 mithril (two rows, one an r6 copy).
+  - **Growth is a persistent miss, not a round-3 regression.** §2.8 growth over years 5–30 by tree: r6 1.465, r1 1.435,
+    round 2 1.685 (the one table that met it), round 3 0.63 %/yr. Per seed (round 2 → round 3): 1 1.59 → 1.94, 2 −0.83 →
+    −0.50, 3 −1.99 → −2.09, 4 −0.60 → −0.13, **5 2.25 → 0.21**, **7 2.26 → 1.38**, 1234 1.78 → 1.05, 20261008 2.06 → 2.11.
+    Seed 5's fall is one epidemic: population 49 in year 23, 32 in year 24, with 19 sickness deaths that year (20 in years
+    21–24; round 2 none) — `fix3/acc/out/alone-live-5.json`. Births in years ≤ 25 swing −22 % to +47 % per seed between
+    trees whose changes do not touch births, while the pooled total moves +2.4 % (round 2 293 → round 3 300;
+    `review-critic/r4/noise.cjs`: within 10 % on only 2 / 8 seeds r6 → r1, 6 / 8 r1 → r2, 5 / 8 r2 → r3). The sim is
+    deterministic, so re-running a seed on the same tree reproduces it and tests nothing: a median over 8 single runs is
+    not a stable measure of §2.8, and a change must be judged on pooled births and deaths (or replicated seeds).
+  - The round-3 queue left over (the hunting variant `fix3/hv/`, the seed-1 re-run `fix3/s4/rerun1.sh`) carries on into
+    fix round 4 (13.6).
 - UI hooks (sim side done): `god.omen` takes `warning: true` (a warning sign, never the rainbow); event
   `disaster.relent` (the god's drought draws back: show it shrinking); chronicle line `bud.home`; the "Through whom?"
   ask; H6 unchanged.

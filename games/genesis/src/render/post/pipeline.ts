@@ -327,6 +327,11 @@ float sunVisibility() {
 }
 
 vec3 lensFlare(vec2 uv, float vis) {
+  // a sun outside the frame paints no ghosts, halo or glare spot (renderer.ts counts a sun up to a quarter frame outside
+  // as on screen, for the god rays, and the occlusion mask clamps to its edge there): off-frame they laid a row of pale
+  // discs over the sky and a white blob on the frame's edge — dirt on the lens (fix-render r2 #11)
+  float inF = min(min(uSunUV.x, 1.0 - uSunUV.x), min(uSunUV.y, 1.0 - uSunUV.y));
+  vis *= smoothstep(-0.005, 0.04, inF);
   if (vis <= 0.0) return vec3(0.0);
   // a sun half hidden by foliage or a ridge must not paint ghosts and rings over the occluder
   float ringK = smoothstep(0.75, 0.95, vis);

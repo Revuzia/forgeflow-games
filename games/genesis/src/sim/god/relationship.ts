@@ -44,6 +44,7 @@ import { actHooks, bindUniverse, beginAct, currentAct, endAct, freshen, meansNow
 import { castWarning, currentWrath, lethality, popWrath, pushWrath, reach, ruination, wrathLaw, wrathOf, WRATHFUL } from './wrath.ts';
 import { answerPrayers, canonicalAnswer, hardshipOf, prayersHourly, prayersOf } from './prayers.ts';
 import { cancelDisaster, effR } from './disasters.ts';
+import { godAct } from './belief.ts';
 import { exile, prophetOf, prophetOfSettlement, prophetTask, prophetsAct, prophetsDaily, prophetsHourly, prophetsQuery, registerProphetCommands } from './prophets.ts';
 import { naturalOmens, omensOfCommand, omensQuery, omensTick, registerOmenCommands } from './omens.ts';
 import { pilgrimageDaily, pilgrimTask, registerSacredCommands, sacredAnimalAct, sacredAnimalOf, sacredHourly, sacredQuery } from './sacred.ts';
@@ -142,6 +143,11 @@ function afterAct(u: Universe, p: Planet, cmd: Command, res: CommandResult, a: A
  * while the drought ran on: on the round-2 seed-1 world at year 50 a town whose rain prayers were answered dried out and
  * its daughter 101 m away lost 34 of 35 to thirst. Nature's droughts and another god's are not this god's to relent. */
 const DRY = new Set(['drought', 'dust-bowl']);
+/** (fix r4 #17) the god ending (drawing back) its own drought is an act everyone under it sees: mercy (help, as much as the
+ *  rain that answers a parched town's prayer) and a sign with no harm (wonder), once per drought — before, the relent
+ *  credited nobody, and a town whose rain prayer was answered ended its 6 days with less faith and worship than one left
+ *  to thirst (fix3 god sessions: faith 0.29-0.38 answered vs 0.72-0.77 ignored, worship lower on 7 of 8 seeds) */
+export const RELENT_HELP = 0.7, RELENT_WONDER = 0.45;
 function relentDroughts(u: Universe, p: Planet, acts: ActInfo[]): void {
   for (const a of acts) {
     if (a.kind !== 'rain' || a.god < 0) continue;
@@ -155,11 +161,13 @@ function relentDroughts(u: Universe, p: Planet, acts: ActInfo[]): void {
         if (dist > effR(d) + a.radius) continue;
         const keep = dist - a.radius - 400;
         if (keep >= 300) {
+          godAct(u, p, d.pos, effR(d), { help: RELENT_HELP / 2, wonder: RELENT_WONDER / 2 }, a.god, 'relent');
           d.radius = Math.min(d.radius, keep / Math.sqrt(Math.max(0.01, d.scale)));
           u.emit({ t: 'disaster.relent', planet: p.id, pos: [d.pos[0], d.pos[1], d.pos[2]], a: Math.round(effR(d)), text: 'the drought draws back from the rain', ref: { kind: 'disaster', id: d.id, planet: p.id }, data: { kind: d.kind } });
           continue;
         }
       }
+      godAct(u, p, d.pos, effR(d), { help: RELENT_HELP, wonder: RELENT_WONDER }, a.god, 'relent');
       cancelDisaster(u, d, 'relented: the rain broke the drought');
     }
   }

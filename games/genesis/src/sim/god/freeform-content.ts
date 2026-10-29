@@ -461,7 +461,7 @@ function unnamedOre(c: ContentClause): boolean {
 //    harder than bronze", "a hardy crop", "a better crop", "a new kind of tree"): a real one that fits the words (only one the
 //    world has), else asked — never junk content "Hardy crop", a cold snap, bread, teosinte, a possession or bronze in the Touch
 const KIND_ADJ = '(?:(?:new|better|hardy|hardier|strong|stronger|tough|tougher|good|useful|wild|tame|domestic|fast|faster|big|bigger|kind of|sort of|type of|species of|medicine|medicinal|healing|dye|fruit|fruiting|food)\\s+)*';
-const KIND_ASKED = new RegExp(`\\b(?:a|an|another|better|new|hardier)\\s+${KIND_ADJ}(crops?|grains?|vegetables?|plants?|herbs?|fruit trees?|trees?|fruits?|bush(?:es)?|shrubs?|flowers?|animals?|beasts?|birds?|fish(?:es)?|creatures?|livestock|metals?|materials?|substances?|alloys?)\\b`);
+const KIND_ASKED = new RegExp(`\\b(?:a|an|another|better|new|hardier)\\s+${KIND_ADJ}(crops?|grains?|vegetables?|plants?|herbs?|fruit trees?|trees?|fruits?|bush(?:es)?|shrubs?|flowers?|animals?|beasts?|birds?|fish(?:es)?|livestock|metals?|materials?|substances?|alloys?)\\b`); // ("a creature": the creature hint, god/freeform.ts)
 const KIND_VERB = /\b(invent|create|introduce|give|bring|breed|devise|design|add|grant|conjure|discover|evolve)\b/;
 const KIND_PICKS: [RegExp, RegExp, string, 'crop' | 'plant' | 'animal' | 'fish' | 'ore'][] = [
   [/^(crop|grain|vegetable)/, /\b(drought|droughts|dry|arid|desert|heat|hot)\b/, 'sorghum', 'crop'],
@@ -537,7 +537,7 @@ function unnamedKind(c: ContentClause): boolean {
   if (/^(fish)/.test(w)) return false;
   if (/^(animal|beast|creature|livestock|bird)/.test(w)) { cx.asked.push({ k: 'content.animal' }); return c.ask('Which animal? This is a real world: name a real one ("introduce horses to Aru": they carry and are ridden; goats give milk, chickens eggs).'); }
   if (/^(metal|material|substance|alloy)/.test(w)) { cx.asked.push({ k: 'content.material' }); return c.ask('Name it: "invent a new metal called orichalcum", or lay a known one ("lay iron ore near Aru": iron is harder than bronze).'); }
-  cx.asked.push({ k: 'content.item' });
+  cx.asked.push({ k: 'life.plant' });
   return c.ask('Name it, or name a real one ("introduce flax to Aru", "plant willows near Aru").');
 }
 

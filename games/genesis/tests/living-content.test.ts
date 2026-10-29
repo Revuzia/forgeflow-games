@@ -763,3 +763,36 @@ test('saves: herds of a replaced kind where the real one cannot live are dropped
   back.step(1440);
   assert.ok(!back.drainEvents().some((e) => e.t === 'extinction' && e.data?.species === 'golden-eagle'), 'no extinction notice for them');
 });
+
+test('content (fix r4 #9, #5): a kind asked for by what it is for is a real one that fits, or asked — never junk content, the weather, bread or a possession', () => {
+  const { sim, st } = twoTowns();
+  const parse = (t: string) => { const r = sim.parse(t); return { r, c: (r.resolved ?? []) as { k: string; [k: string]: unknown }[], msg: String(r.msg ?? '') }; };
+  const items0 = sim.u.content.items.list.length, recipes0 = sim.u.content.recipes.list.length, weather0 = sim.u.content.weather.ids().length;
+  // a real one that fits the words (the descriptor picks it), done where a town is named
+  const fits: [string, string, string, string][] = [
+    ['introduce a crop that resists drought to Aru', 'settlement.introduce', 'crop', 'sorghum'], ['give Aru a crop that grows in the cold', 'settlement.introduce', 'crop', 'barley'],
+    ['give Aru a crop for the dry season', 'settlement.introduce', 'crop', 'sorghum'], ['invent a fruit tree', 'life.plant', 'species', 'apple'],
+    ['invent a medicine plant', 'life.plant', 'species', 'willow'], ['create a plant that heals', 'life.plant', 'species', 'willow'],
+    ['give Aru an animal they can ride', 'settlement.introduce', 'animal', 'horse'], ['give Aru a beast of burden', 'settlement.introduce', 'animal', 'horse'],
+    ['give Aru a bird for eggs', 'settlement.introduce', 'animal', 'chicken'], ['create a material harder than bronze near Aru', 'terrain.seed-ore', 'ore', 'iron'],
+  ];
+  for (const [t, k, f, v] of fits) { const a = parse(t); assert.ok(a.r.ok && a.c.length === 1 && a.c[0].k === k && a.c[0][f] === v, `${t}: ${JSON.stringify(a.c)} ${a.msg}`); }
+  assert.ok(parse('give Aru a better crop').c.some((x) => x.k === 'settlement.introduce' && typeof x.crop === 'string'));
+  assert.ok(parse('create a new kind of tree').c.some((x) => x.k === 'life.plant' && x.type === 'tree'));
+  // no town, no fitting real one, or no such thing in this world: asked, never made
+  for (const t of ['invent an animal to hunt', 'invent a hardy crop', 'invent a crop for the dry season', 'invent a bird for eggs', 'invent a fish for the lake', 'invent a dye plant', 'invent a beast of burden', 'add more ore near Aru', 'add a rich deposit near Aru', 'add a new deposit near Aru']) {
+    const a = parse(t);
+    assert.ok(!a.r.ok && /\?|Name it/.test(a.msg) && !a.c.some((x) => /^content\.(item|material|plant|idea|weather)$/.test(x.k)), `${t}: ${JSON.stringify(a.c)} ${a.msg}`);
+  }
+  // the rain through a valley is rain, never a new weather "Rain of through valley"; names and known ores still work
+  assert.ok(parse('send rain through the valley of Aru').c.every((x) => !String(x.k).startsWith('content.')), JSON.stringify(parse('send rain through the valley of Aru').c));
+  assert.ok(parse('invent a crop called sunroot').c.some((x) => x.k === 'content.plant' && x.name === 'sunroot'));
+  assert.ok(parse('add an iron deposit near Aru').c.some((x) => x.k === 'terrain.seed-ore' && x.ore === 'iron'));
+  // applied: the registries gain nothing, and the town gets the real thing
+  for (const t of ['invent an animal to hunt', 'invent a tree for fires', 'introduce a crop that resists drought', 'invent a hardy crop', 'invent a crop for the dry season', 'create a new kind of tree', 'give Aru a better crop', 'invent a bird for eggs', 'invent a fish for the lake', 'give Aru a crop that grows in the cold', 'invent a fruit tree', 'invent a medicine plant', 'invent a dye plant', 'create a plant that heals', 'give Aru an animal they can ride', 'create a material harder than bronze', 'invent a beast of burden', 'send rain through the valley of Aru', 'add more ore near Aru', 'add a rich deposit near Aru', 'add a new deposit near Aru']) sim.applyNow({ k: 'freeform', text: t });
+  const c2 = sim.u.content;
+  assert.equal(c2.items.list.length, items0, c2.items.list.slice(items0).map((d) => d.id).join(','));
+  assert.equal(c2.recipes.list.length, recipes0, c2.recipes.list.slice(recipes0).map((d) => d.id).join(','));
+  assert.equal(c2.weather.ids().length, weather0, c2.weather.ids().slice(weather0).join(','));
+  assert.ok(st.id >= 0);
+});

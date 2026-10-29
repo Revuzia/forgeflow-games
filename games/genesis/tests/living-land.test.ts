@@ -1019,10 +1019,15 @@ test('land: game across the sea is not hunted by swimming — no party after it,
   assert.ok(!parties(aru).some((p) => p.herd === h.id), `no party sets out after the herd across the sea (${parties(aru).map((p) => p.herd)})`);
   // a party already after it (as one was before this fix): every leg it is given stays dry and goes somewhere
   L.party = { id: x.tick, members: hunters.map((s) => A.id[s]), herd: h.id, species: deer, since: x.tick, lastTry: -1, kills: 0 };
+  const { findPath } = await import('../src/sim/grid/pathfind.ts');
+  const { pathOptsFor } = await import('../src/sim/people/resources.ts');
+  const onLand = { ...pathOptsFor(x, aru.species), swim: 0, maxExpand: 2500 };
   for (const s of hunters) {
     const t = huntTask(x, s, aru);
     if (!t || !t.goal) continue;
-    assert.ok(!wetBetween(x, aru.pos, t.goal) || t.goalCell !== across, 'no straight leg over the water to the herd');
+    // (fix r4 #3: the old '|| t.goalCell !== across' let any leg pass that did not end on the herd's own cell) a leg whose
+    // straight way is wet is only the way round on foot
+    assert.ok(!wetBetween(x, aru.pos, t.goal) || findPath(x.p, aru.cell, t.goalCell, onLand, []), 'no straight leg over the water to the herd');
     assert.ok(distM(x.p, aru.pos, t.goal) >= 10, 'no leg of no length (fix r2 #2)');
   }
   // a day on: nobody of Aru on a hunt and without a boat stands in the sea or in water deeper than wading (an Aru herder
@@ -1038,4 +1043,132 @@ test('land: game across the sea is not hunted by swimming — no party after it,
     }
   }
   assert.equal(wet.length, 0, `no hunter of Aru at sea (${wet.slice(0, 12).join(' ')})`);
+});
+
+// (fix r4 #3) the test above passed with all three of fix r3 #7's rules removed (its hunters walk short legs on the near
+// shore either way): each rule checked directly, with the fixture that makes it matter asserted first
+test('land: the three rules that keep hunters out of the sea, one by one — no wet tracking leg, a dry route where one exists, no camp afloat (fix r4 #3)', async () => {
+  const { twoTowns } = await import('./helpers/god.ts');
+  const { wetBetween, huntTask } = await import('../src/sim/people/hunt.ts');
+  const { startTask, syncCell } = await import('../src/sim/people/tasks.ts');
+  const { findPath, flowPath } = await import('../src/sim/grid/pathfind.ts');
+  const { pathOptsFor } = await import('../src/sim/people/resources.ts');
+  const { paceSleep } = await import('../src/sim/perf/pace.ts');
+  const { PATH_MAX } = await import('../src/sim/people/defs.ts');
+  const w = twoTowns();
+  const sim = w.sim;
+  const adult0 = adultsOf(sim, cx(sim).ps.settlement(w.st.id)!)[0];
+  for (let i = 0; i < 200 && daylightLeft(cx(sim), adult0) < 7 * 60; i++) sim.step(15);
+  const x = cx(sim);
+  const A = x.A, p = x.p, G = p.grid;
+  const aru = x.ps.settlement(w.st.id)!;
+  const dry = (c: number): boolean => p.f.water[c] <= 0.6 && !p.s.ocean[c];
+  const onLand = { ...pathOptsFor(x, aru.species), swim: 0, maxExpand: 2500 };
+  const swimming = { ...pathOptsFor(x, aru.species), maxExpand: 1500 };
+  assert.ok(swimming.swim > 0 && swimming.swim < 1, 'these people swim a little (the rules are for them)');
+  const route: number[] = [];
+  const hunters = adultsOf(sim, aru).filter((s) => !A.mission[s] && A.health[s] >= 0.55).slice(0, 3);
+  assert.ok(hunters.length >= 3, 'grown-ups to hunt');
+  for (const s of hunters) { A.role[s] = ROLE.hunter; A.camp[s] = -1; A.trip[s] = 0; A.boat[s] = -1; }
+
+  // (1) hunt.ts, a tracking leg: a hunter of Aru on a shore, the herd across the water where no way on foot reaches; the
+  // straight leg's end (one span short of the herd, within the day's walk) is dry land on the far side — the leg the rule refuses
+  const { walkRate } = await import('../src/sim/perf/pace.ts');
+  const reach = Math.min(...hunters.map((s) => (daylightLeft(x, s) - 20) * walkRate(x, s) * 0.75));
+  let from = -1, herdCell = -1;
+  const R = p.st.radius;
+  for (let a = 0; a < G.count && from < 0; a++) {
+    if (!dry(a)) continue;
+    const pa = cellPos(p, a);
+    for (let b = 0; b < G.count; b++) {
+      const P = G.pos;
+      if (Math.hypot(pa[0] - P[b * 3], pa[1] - P[b * 3 + 1], pa[2] - P[b * 3 + 2]) * R > reach + p.edgeM || !dry(b)) continue;
+      const pb = cellPos(p, b);
+      const d = distM(p, pa, pb);
+      if (d < 2 * p.edgeM || d - p.edgeM > reach - 20 || !wetBetween(x, pa, pb)) continue;
+      const f = (d - p.edgeM) / d;
+      const g = [pa[0] + (pb[0] - pa[0]) * f, pa[1] + (pb[1] - pa[1]) * f, pa[2] + (pb[2] - pa[2]) * f];
+      const l = Math.hypot(g[0], g[1], g[2]);
+      if (!dry(p.cellAt([g[0] / l, g[1] / l, g[2] / l])) || findPath(p, a, b, onLand, route)) continue;
+      from = a; herdCell = b; break;
+    }
+  }
+  assert.ok(from >= 0, 'a shore with game across the water within a day\'s leg, its far side dry');
+  clearWild(x);
+  const deer = x.c.animals.idx('deer');
+  spawnHerd(x, deer, herdCell, 12);
+  const h = x.ps.herds.find((q) => q.species === deer && q.cell === herdCell)!;
+  const pf = cellPos(p, from);
+  const hq = [0, 0, 0];
+  herdPos(h, x.tick, hq);
+  const d = distM(p, pf, hq);
+  const k1 = (d - p.edgeM) / d;
+  const g1 = [pf[0] + (hq[0] - pf[0]) * k1, pf[1] + (hq[1] - pf[1]) * k1, pf[2] + (hq[2] - pf[2]) * k1];
+  const n1 = Math.hypot(g1[0], g1[1], g1[2]);
+  g1[0] /= n1; g1[1] /= n1; g1[2] /= n1;
+  assert.ok(dry(p.cellAt(g1)) && wetBetween(x, pf, g1), 'the full straight leg would end dry across the water');
+  const L = landOf(aru);
+  L.party = { id: x.tick, members: hunters.map((s) => A.id[s]), herd: h.id, species: deer, since: x.tick, lastTry: -1, kills: 0 };
+  delete L.more;
+  for (const s of hunters) {
+    A.place(s, pf[0], pf[1], pf[2], x.tick);
+    syncCell(x, s);
+    assert.equal(A.cell[s], from, 'the hunter stands on the shore');
+    const t = huntTask(x, s, aru);
+    if (!t || !t.goal) continue;
+    assert.ok(!wetBetween(x, pf, t.goal), `no tracking leg whose straight way crosses the water (to cell ${t.goalCell}, ${distM(p, pf, t.goal).toFixed(0)} m)`);
+  }
+  L.party = null;
+
+  // (2) tasks.ts, the route: two dry places of Aru's land where the swimming search takes the water and a way on foot
+  // exists (outside the home flow field, whose routes are the search's); a hunter keeps to the land, anyone else may swim
+  let ra = -1, rb = -1;
+  for (let a = 0; a < G.count && ra < 0; a++) {
+    if (!dry(a) || distM(p, cellPos(p, a), aru.pos) > 1500) continue;
+    const pa = cellPos(p, a);
+    for (let b = 0; b < G.count; b++) {
+      if (b === a || !dry(b)) continue;
+      const dd = distM(p, pa, cellPos(p, b));
+      if (dd < 300 || dd > 2000 || !findPath(p, a, b, swimming, route) || route.every(dry)) continue;
+      if (!findPath(p, a, b, onLand, route) || (aru.flow && flowPath(aru.flow, a, b, route))) continue;
+      ra = a; rb = b; break;
+    }
+  }
+  assert.ok(ra >= 0, 'two places where the short way swims and a long way walks');
+  const s2 = hunters[0];
+  const plan = (kind: number): number[] => {
+    const pa = cellPos(p, ra);
+    A.place(s2, pa[0], pa[1], pa[2], x.tick);
+    syncCell(x, s2);
+    startTask(x, s2, { kind, goal: cellPos(p, rb), goalCell: rb, work: 5, target: -1, data2: 1 });
+    const out: number[] = [];
+    for (let i = 0; i < A.pathLen[s2]; i++) out.push(A.path[s2 * PATH_MAX + i]);
+    return out;
+  };
+  const walked = plan(TASK.hunt);
+  assert.ok(walked.length > 0, 'a route is planned');
+  assert.deepEqual(walked.filter((c) => !dry(c)), [], 'the hunter\'s route keeps to dry cells');
+  assert.ok(plan(TASK.gather).some((c) => !dry(c)), 'control: a gatherer\'s route on the same way swims (the rule is what keeps the hunter dry)');
+
+  // (3) pace.ts, the night: a camper caught by the night in deep water without a boat makes no camp there
+  let wc = -1, far = -1;
+  for (let c = 0; c < G.count && (wc < 0 || far < 0); c++) {
+    const dd = distM(p, cellPos(p, c), aru.pos);
+    if (wc < 0 && p.f.water[c] > 0.6 && dd < 1500) wc = c;
+    if (far < 0 && dry(c) && dd > aru.territory + 2000) far = c;
+  }
+  assert.ok(wc >= 0 && far >= 0, 'deep water near Aru and dry land far from it');
+  const s3 = hunters[1];
+  const night = (c: number, boat: number) => {
+    const pc = cellPos(p, c);
+    A.place(s3, pc[0], pc[1], pc[2], x.tick);
+    syncCell(x, s3);
+    A.camp[s3] = c; A.trip[s3] = x.tick + 10000; A.boat[s3] = boat;
+    const t = paceSleep(x, s3, aru, true, 480);
+    A.boat[s3] = -1;
+    return t;
+  };
+  assert.equal(night(far, -1)?.kind, TASK.camp, 'control: a camper on dry land far from home camps where night fell');
+  assert.equal(night(wc, -1), null, `no camp afloat (water ${p.f.water[wc].toFixed(1)} m, no boat)`);
+  assert.equal(night(wc, 0)?.kind, TASK.camp, 'in a boat the night is spent on the water');
 });

@@ -119,8 +119,14 @@ on 3 of 8 seeds (10/20, 11/20, 11/21) and the evacuation reaches 0–10 % beyond
 calibrated. **Open:** hunting where game exists (unmet against the owner's default: the re-tune is built behind
 `HUNT_TUNE`, off, its 8-seed gate `fix3/hv/` queued), everyday prayer, the drought exodus (drought lane), a herder
 walking a flock through the sea, throughput, `creatures.json` (lead / DOCS). The 8-seed acceptance re-run on this tree
-(`fix3/acc/`, rows from r6 / r2 marked) installs `_harness/scratch/living/acceptance.json` when it ends
-(`fix3/acc/FINISHED`). **Gate green** on the final tree (`fix3/check/check-r3b.done` "EXIT 0 02:08" 2026-10-29: 578 / 578 pass, 0 skipped, detban and tsc clean; the first round-3 gate failed only on a mining test re-seeded, LIVING §13.2). Round-3 measurements (LIVING §13.5): towns of the year-50 worlds 1 071–1 513 m apart (was 101 m); single thirst deaths over 50 years 11 → 0 on seed 1 (one natural-drought exodus of 18 remains, drought lane); the god's drought on 8 year-50 worlds with prayers answered: 0 thirst deaths, 0 towns fallen. UI hooks: `god.omen {warning: true}`, event
+(`fix3/acc/`) was installed as `_harness/scratch/living/acceptance.json` at 03:44 on 2026-10-29: **36 met, 13 partly,
+16 missed** (round 2: 37 / 13 / 14) — of the 36 met, **25 were measured on this tree and 11 are copies** (10 from r6,
+1 from round 2; marked). Four rows moved for the worse since round 2: §2.8 growth over years 5–30 met → **missed**
+(median 0.63 %/yr, 1.5–3 asked; seed 5 lost 19 to one epidemic in year 24) — a persistent miss (r6 1.465, r1 1.435,
+round 2 1.685 the one pass); §2.8 birth interval met → missed (3.51 y, ≤ 3.5); §1.6 food per adult-day year-1 slice
+partly → missed (0.83–2.9); §2.5 housed in calm years 3 of 8 → **0 of 8** seeds (25 unhoused calm year ends). Per-seed
+births swing −22 % to +47 % between trees with no birth change while pooled births move +2.4 % (293 → 300): single
+runs per seed do not resolve §2.8 (LIVING §13.5). **Gate green** on the final tree (`fix3/check/check-r3b.done` "EXIT 0 02:08" 2026-10-29: 578 / 578 pass, 0 skipped, detban and tsc clean; the first round-3 gate failed only on a mining test re-seeded, LIVING §13.2). Round-3 measurements (LIVING §13.5): towns of the year-50 worlds 1 071–1 513 m apart (was 101 m); single thirst deaths over 50 years 11 → 0 on seed 1 (one natural-drought exodus of 18 remains, drought lane); the god's drought on 8 year-50 worlds with prayers answered: 0 thirst deaths, 0 towns fallen. UI hooks: `god.omen {warning: true}`, event
 `disaster.relent`, chronicle line `bud.home`, the "Through whom?" ask.
 
 ## How to run
