@@ -396,12 +396,17 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     // lichen on damp, gentler rock (terran only): grey-green crusts and, on the drier sunny faces, orange ones, in
     // patches of a metre or two
-    if (!airless) {
+    // (lichen is life: it grows where the cell has plants or soil — a barren world the player has just given air and
+    // its first rain has none yet. And the orange crusts are irregular patches of mixed size: one noise's threshold,
+    // smoothstep(0.62, 0.85) of snoise(0.71 P), drew even round salmon dots, a polka-dot over the first rain's rock)
+    float lifeL = max(smoothstep(0.0, 0.08, grass + shrub + tree + crop), smoothstep(0.02, 0.2, soil));
+    if (!airless && lifeL > 0.001) {
       float lichN = snoise(P * 0.33) * 0.5 + 0.5;
-      float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, lichN) * (1.0 - steep * 0.6);
+      float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, lichN) * (1.0 - steep * 0.6) * lifeL;
       rock = mix(rock, vec3(0.08, 0.095, 0.05), lich * 0.4);
-      float lichO = smoothstep(0.62, 0.85, snoise(P * 0.71 + 13.0) * 0.5 + 0.5) * (1.0 - smoothstep(0.5, 0.9, moist)) * aaF(fw, 1.5);
-      rock = mix(rock, vec3(0.3, 0.16, 0.05), lichO * 0.45);
+      float lo = snoise(P * 0.71 + warpV * 2.2 + 13.0) * 0.55 + snoise(P * 0.19 + 4.1) * 0.45;
+      float lichO = smoothstep(0.38, 0.62, lo) * (1.0 - smoothstep(0.5, 0.9, moist)) * aaF(fw, 1.5) * lifeL;
+      rock = mix(rock, vec3(0.3, 0.16, 0.05), lichO * 0.4);
     }
   }
   // From ~250 m to a few kilometres the 17 m slabs shrink to their tone and fade, and a bald summit or a gentle ridge
@@ -1066,7 +1071,12 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   wet *= 1.0 - 0.75 * clamp(tree + 0.5 * grass, 0.0, 1.0);
   col *= mix(1.0, 0.55, wet * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
   // wet soil and litter stay rough (0.35); only bare rock and sand film over glossy
+  // (and the film is broken: water stands in the hollows and runs off the crests, so the sheen comes in patches — an
+  // even 0.18 over a whole rained-on barren hill read as crumpled foil close up and, glinting the grey sky, as snow
+  // from 400 m)
   float wetFloor = mix(0.18, 0.35, clamp(soil * 2.0 + vegTotal, 0.0, 1.0));
+  float film = smoothstep(-0.25, 0.45, snoise(P * 0.21 + warpV * 1.3) - bump * 0.6);
+  wetFloor = mix(0.5, wetFloor, film);
   rough = mix(rough, wetFloor, wet * 0.85);
   s.sward *= 1.0 - wet * 0.85;
 

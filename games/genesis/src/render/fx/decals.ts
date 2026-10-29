@@ -210,8 +210,10 @@ void main() {
     // (a glow is hot rock, not a lamp: on screen it reads at most a bright orange, whatever the eye's adaptation — at
     // night the exposure meters moonlit ground (~100x the day's) and a vent's absolute glow blew a white disc over the
     // whole mountain at 1.3 km)
+    // (a soft roll-off, not a hard clamp: clamped at 1.0 every pixel of the pool past the cap read the same flat
+    // orange-white at night, and the glow lost its hot centre and its fall-off — a uniform disc)
     float eL = dot(e, vec3(0.2126, 0.7152, 0.0722)) * expo();
-    o = vec4(e * min(1.0, 1.0 / max(eL, 1e-6)), 0.0);
+    o = vec4(e / (1.0 + eL / 0.8), 0.0);
   } else if (t == 4 || t == 14) {
     // cracks along the axis (a rift, a quake's fissures, drought): dark seams; their glowing twin draws in the add group
     float L = vP.x, W = vP.y;

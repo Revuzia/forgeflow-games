@@ -209,8 +209,9 @@ void main() {
     // a fire's column is dense at its root and stays thick a long way up before it thins out
     float a = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(stack || wild ? 0.55 : 0.45, 1.0, age));
     // (a hearth's chimney: a thin blue-grey wisp, not cotton-wool puffs over every roof)
-    // (and it thins as it spreads, so the far end of the plume is a haze, not a band)
-    float dens = stack ? 0.92 : wild ? 0.85 : 0.15 * (1.0 - 0.6 * smoothstep(0.15, 0.8, age));
+    // (and it thins as it spreads, so the far end of the plume is a haze, not a band: at 0.15 thinning only to 40 % the
+    // risen plume still lay across a town square as a white band at the god's 60 m view)
+    float dens = stack ? 0.92 : wild ? 0.85 : 0.12 * (1.0 - 0.8 * smoothstep(0.1, 0.6, age));
     // burning thatch and timber: dark brown-grey to near black, greyer and paler as it cools and spreads
     vec3 sc = stack ? vec3(0.045, 0.041, 0.038) : wild ? vec3(0.06, 0.055, 0.05) : vec3(0.34, 0.35, 0.38);
     // (a grass fire's smoke greys as it spreads, but not to white: at 0.17 its old puffs read as steam by day)

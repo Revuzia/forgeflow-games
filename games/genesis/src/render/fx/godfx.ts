@@ -327,14 +327,20 @@ export class GodFx {
     });
     // ── lightning: ribbons, the light they throw on the ground ──
     M.bolts.update(this.clock, vis.camBody, ctx.ease);
+    // (only the brightest live bolt lights the land: each light decal multiplies the scene up to ~4.5x, and a volcano's
+    // dirty thunderstorm keeps several bolts alive at once — stacked at night they lit its mountain as a white disc)
+    let bk = 0;
+    M.bolts.forEachLive(this.clock, (_g, _t, k, power) => { bk = Math.max(bk, k * power); });
     M.bolts.forEachLive(this.clock, (gp, top, k, power) => {
+      const near = 1 - smooth(200, 2500, gp.distanceTo(vis.camBody));
+      this.flashDecay.addScalar(0.0015 * k * near);
+      if (k * power < bk || bk <= 0) return;
+      bk = -1;
       // the strike lights the ground and everything standing there for an instant (a ground flash), the view a little
       const d = decal(DECAL.light, [gp.x, gp.y, gp.z], 600);
       // (a near strike lit the whole hillside white at its stroke: bright, but the land keeps its shape)
       d.cr = 0.75; d.cg = 0.8; d.cb = 1; d.p0 = 600; d.p1 = 6e4 * k * power; d.p2 = Math.min(120, top.distanceTo(gp) * 0.25); d.p3 = 40;
       this.decals.add(d);
-      const near = 1 - smooth(200, 2500, gp.distanceTo(vis.camBody));
-      this.flashDecay.addScalar(0.0015 * k * near);
     });
     this.stepFlashes();
     // ── the aurora ──
