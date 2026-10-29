@@ -1,0 +1,160 @@
+{
+ "fighter": "nurrow",
+ "score": 6.5,
+ "summary": "I verified the Nurrow art review against the current build. Nurrow is NOT ON PAR: 6.5/10, with three majors confirmed open and no blocker.\n\nThe build checks: nurrow.glb (md5 de8d39f3, last commit 0840296a) is what the :5190 dev server serves. My own hash of every clip's sampler data matches the 534b07ff GLB of Oct 27, so no animation has changed since then. The splashes are the Oct 29 00:12 files.\n\nConfirmed majors:\n- **M1, splash:** my own 3x3 high-pass measure gives grain of 7.1-9.2 on the figure against 0.2-0.8 on the plate, and the source keeps one pose and yaw for every skin (nurrow.py:79, :105).\n- **M2, recall:** a 2 s loop played through the 7 s recall. The arms are held still (upper arms 0.0 degrees) and the chest moves 1.0 degree. The brief asks for exactly this minimal pose (nurrow.md:121), so the gap is in the brief. Peers fill the same channel with a performance: Burdam 6 s, Ervet 9 s.\n- **M3, cloak:** 97 % of the cloak's vertex weight is on x_cape_1/2, and fighters have no runtime cloth. The cloak swings 1.2 / 0.7 degrees in the run, because the authored drive is only plus or minus 3 degrees and the spring is critically damped (zeta 0.97).\n\nDowngraded: M4 (materials) goes to minor. Its numbers reproduce: the hat's roughness is 0.70-0.72, and the normal map is the flattest in the roster, with 2.8 % of texels over 10 degrees against 11.6-18.2 % for seven peers. The read claim does not hold at the gameplay camera, though. Every material separates and reads as what it is:\n- the hat shows gores and a lit and a shaded side (core L* sd 2.0-2.8);\n- the wood shows grain;\n- the cloth shows painted folds.\nNone of them reads as the wrong material. Dunsom's flat hat disc, a confirmed major, measures 1.3-1.5. What is left is a polish gap: the lacquer has no sheen.\n\nCorrections to the review: the channel clip has 38 keys over 1.33 s, not 2 keys, and Nurrow's kit has no channel ability, so that part carries little weight. Sensitivity is clean, re-checked on all three skins: the hat is a wide brim cone (PCA 0.30 m tall by 0.82 m wide), the hood lies down at the back of the neck and is round, and every mask is a carved, living smiling face. All four _open.json leftovers are still open.",
+ "gapStatus": [
+  {
+   "id": "_open#1 side/back value bands after the metallic fix (not gated)",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json (mtime Oct 29 01:03, current GLB). Nurrow top / mid / feet:\n- f90: 61.9 / 42.8 / 36.5\n- f180: 60.9 / 41.3 / 36.7\n- f270: 67.7 / 35.1 / 19.7\n- f0: 72.3 / 48.9 / 23.7, which passes the gate.\n\nThe side and back feet sit above 35 and the tops under 70. The reviewer's numbers reproduce exactly."
+  },
+  {
+   "id": "_open#2 hat close to white, no value headroom (lit side in the tone map's shoulder)",
+   "status": "open",
+   "evidence": "My CIELAB segmentation of the reviewer's RIFT High frames gives a hat core L* p2/p50/p98 of 78.4/83.9/87.8 (game), 78.7/83.9/87.8 (close) and 75.3/83.6/86.6 (close2) (_harness/_reports/closing_nurrow_ver_measure.txt). Nothing has changed since the leftover recorded p50 83.8 and p95 88.8."
+  },
+  {
+   "id": "_open#3 review-6 minors (disc-on-legs, store hat/body colour, cape sack in ult lunge, blade down in lunges, cape blotches, Noon Fair lilac body/pink pauldron, a2/a3 reads, proportions, narrowed lids)",
+   "status": "open",
+   "evidence": "- Clip sampler data is identical to the 534b07ff GLB (my per-animation hash, closing_nurrow_ver_measure.txt), so no clip-side minor can have moved.\n- nurrow_noon_fair_splash.png still shows a pink pauldron.\n- splash.png still shows a salmon cloak.\n- The portrait lids still read as narrowed open eyes (_harness/_shots/closing_nurrow_portrait_faces_x2.png, viewed)."
+  },
+  {
+   "id": "_open#4 Shadeprint store copy contradicts the shipped pale printed cone",
+   "status": "open",
+   "evidence": "content/skins/nurrow.json:33 still reads 'An ink hat with a light rim over a pale mask'. Its last commit is 4aa9975f (2026-10-07). art/renders/fighters/nurrow/three_nurrow_shadeprint.png shows a pale paper cone with an ink moth and an ink-dipped brim."
+  }
+ ],
+ "findings": [
+  {
+   "id": "nurrow-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splashes and portraits are grainy static model renders on painted plates, in one victory stand for all three skins",
+   "what": "Base, Noon Fair and Shadeprint splashes are one render: the victory hold at t 0.92, yaw 22, set in the right third of the frame on a painted plate. The figure carries render grain that the plate does not have, and its light does not match the plate. The base and Noon Fair portraits share one pose and one framing.",
+   "evidence": "- Viewed: art/out/fighters/nurrow/splash.png, nurrow_noon_fair_splash.png and nurrow_shadeprint_splash.png (Oct 29 00:12), side by side.\n- My 3x3 high-pass luma std (closing_nurrow_ver_measure.txt): the figure's cloak measures 7.4 / 7.6 / 7.1 and the trousers 8.4 / 7.8 / 9.2. The plate measures 0.21-0.35 in the sky and 0.79-0.84 in the midground.\n- Source: nurrow.py:79 SPLASH = victory / 0.92 / yaw 22. nurrow.py:105 reads 'The splash keeps the bible's pose, yaw and hero pitch'.\n- Crops: _harness/_shots/closing_nurrow_splash_head_x2.png and closing_nurrow_portraits_3up.png.",
+   "gauge": "A recent League champion gets a painted splash for every skin, each with its own pose, composition and scene. Its lighting is unified with the background, and the portraits are crops of those paintings.",
+   "fix": "Give each skin its own key moment from Nurrow's world:\n- **Base:** the hush over a guttering street lamp.\n- **Noon Fair:** under the fair's paper lanterns, with lacquer moths lifting off the brim.\n- **Shadeprint:** a woodblock composition with violet sleep-shadows pooling from her feet.\n\nRender at high samples with a denoiser, and match the key and rim light to each plate. Then do a 2D paint-over pass and crop the portraits from it.",
+   "files": "art/blender/fighters/nurrow.py:79, :98-106 (SKINS splash entries); art/blender/common/plates.py; art/out/fighters/nurrow/*splash.png, *portrait.png",
+   "size": "L",
+   "verifierNote": "Confirmed with my own measurement. Figure grain is about 10-35x the plate's. The pose is fixed in source for every skin, by design ('keeps the bible's pose'), so the cause is the pipeline's spec. This is the same roster-wide major that the Ardit, Ervet, Kemdo, Lisvel and Hesmi verifiers confirmed, and against the gauge it holds here too."
+  },
+  {
+   "id": "nurrow-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Recall is a frozen 2 s loop played through the 7 s recall (channel likewise near-static)",
+   "what": "The recall is one held pose: blade lowered, hand at the chest. Small oscillations on the chest, neck and head are added, and the 2 s clip loops about 3.5 times through RIFT's 7 s recall. The arms never move. The channel is a 1.33 s loop that moves no bone more than 3.2 degrees.",
+   "evidence": "- My GLB decode (closing_nurrow_ver_measure.txt), as max from frame 0 / max pairwise:\n  - recall (2.0 s): upper_arm.L/R 0.0 / 0.0, chest 1.0 / 2.0, head 3.6 / 7.2, hand.R 3.5 / 6.9 degrees, hips 0, cape 0.7 degrees;\n  - channel (1.333 s, 38 keys): every bone at or under 2.0 / 3.2 degrees.\n- Source: nurrow.py:3004-3015 (rec pose plus anim.osc at 1-3 degrees).\n- Looping: src/render/actors.ts:128 lists recall in LOOPING; content/modes.json:28 sets recallTime 7.\n- Roster (_harness/_reports/closing_dunsom_idle_roster_cmp.txt): Burdam's recall is 6.0 s with chest 14.8 degrees and hand 81 cm, and Ervet's is 9.0 s, so the pipeline can author a full recall.",
+   "gauge": "A recent League champion's recall is its own multi-second performance that fills the whole channel. VALE shows a 2 s held pose on loop.",
+   "fix": "Author a one-shot recall that fills the 7 s:\n- she slips the blade into her belt;\n- she cups the lull hand to the brim and hums, swaying;\n- the rim slips dim one by one;\n- the hat nods as she dozes;\n- she snaps up with a finger at the mask's lips.\n\nUpdate brief §5 line 121, which currently specs only the held pose. If the role must loop, loop only a short tail.",
+   "files": "art/blender/fighters/nurrow.py:3004-3015; _design/fighters/nurrow.md:121; src/render/actors.ts:118,128 (only if a one-shot recall role is needed)",
+   "size": "M",
+   "verifierNote": "Confirmed as a major, resting on the recall. Two corrections:\n- The channel is 38 keys over 1.333 s, not '2 keys'. Nurrow's kit has no channel ability (content/fighters/nurrow.json only maps the clip), so the channel adds little weight.\n- The recall follows its brief exactly ('lowers the blade and hums with a hand over her heart', nurrow.md:121). The fix has to go through the brief.\n\nThis is consistent with the Dunsom and Ilsheta verdicts."
+  },
+  {
+   "id": "nurrow-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The knee-length felt cloak is a rigid board in run, dash and idle",
+   "what": "The model ships a felt cloak that runs from the shoulders to below the knees. The brief describes 0.30 m rigid mantle points instead. The cloak is driven only by the x_cape chain. In the run, the most-seen clip, it hangs as one sheet that is lifted back and turns with the chest.",
+   "evidence": "- Skin weights: 97 % of the 1,538 cloak vertices' weight is on x_cape_2 (77 %) and x_cape_1 (20 %), and 3 % on the chest. No runtime cloth exists for fighters in src/render (cloth sway is only in ambient.ts props).\n- Swing per clip, x_cape_1 / x_cape_2, max from frame 0:\n  - run: 1.2 / 0.7 degrees;\n  - dash: 3.2 / 2.1;\n  - idle: 1.6 / 0.9;\n  - recall: 0.7 / 0.4;\n  - cast_ult: 20.2 / 35.8 (so the chain works).\n- Cause: in the run, nurrow.py:2825 drives the cloak at -24 plus or minus 3 degrees. The chain (nurrow.py:1168) is stiffness 140, damping 23, inertia 0.18, which is critically damped (zeta 0.97), against the anim.py:1184 defaults of damping 15 and inertia 0.8. The run is in place, so inertia contributes nothing.\n- Viewed: _harness/_shots/closing_nurrow_t70_close_fig_x4.png and _close2_fig_x4.png, a flat pink sheet; the run row of closing_nurrow_clips_death_idle_run_vic.png.",
+   "gauge": "A League champion's long cloth lags and kicks through the run cycle and settles in idle, visibly, at the gameplay camera. VALE's cloak moves 1-2 cm.",
+   "fix": "Make the per-step drive in the run pose plus or minus 10-12 degrees (not 3), phased off the foot contacts. Lower the damping to about 9 so the hem overshoots. Split the hem into left and right chains so the ragged points flick out of phase.\n\nTargets: 10-15 degrees in run, 3-5 in idle, 20 or more in dash. Keep the floor collision and the lunge gravity. Update brief §1/§4 to describe the cloak as shipped.",
+   "files": "art/blender/fighters/nurrow.py:1157-1172 (chain_config), :2825 (run cape_drive); art/blender/common/anim.py:1184-1260; _design/fighters/nurrow.md:29, 62, 109",
+   "size": "M",
+   "verifierNote": "Confirmed and sharpened. The reviewer blamed only the spring tuning, but the authored run drive is itself only plus or minus 3 degrees, and inertia cannot help an in-place clip. Both need changing.\n\nThe brief does ask for rigid points, but the cloak that shipped is knee-length felt, and a cloak of that size reading as a board is a gauge gap. This is consistent with Ardit-M3, Burdam-M5 and Kemdo-M4."
+  },
+  {
+   "id": "nurrow-M4",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Lacquer hat and carved mask have no gloss; the normal map is the roster's flattest (materials otherwise separate)",
+   "what": "The hat lacquer is a uniform rough 0.71 with no painted sheen band, so it reads as painted paper rather than lacquer. The normal map carries almost no relief. The other materials, though, separate and read as themselves at the gameplay camera:\n- the hat shows gores and a lit and a shaded side;\n- the dark iron rim and the knob are distinct;\n- the walnut pauldron and mask show painted grain;\n- the cloth shows painted fold shading.",
+   "evidence": "- Reproduced: hat ORM-G p10/50/90 0.70 / 0.71 / 0.72, and normal-map tilt p50 0.3 degrees with 2.8 % of texels over 10 degrees. The other seven fighters measured have 11.6-18.2 % over 10 degrees (_harness/_reports/closing_nurrow_ver_albedo_cmp.txt).\n- In match (closing_nurrow_ver_measure.txt): hat core L* sd 2.0 / 2.0 / 2.8. The 30-degree sector means span 80.2-85.3, a lit and a shaded side, with gore strokes visible. Dunsom's hat, a confirmed major, measures sd 1.3-1.5 and is flat to 0.7 R.\n- Side by side: _harness/_shots/closing_nurrow_ver_hat_vs_dunsom.png.\n- Albedo extracted from the GLB: wood rings on the pauldron and mask, painted cloth folds, radial gores on the hat.\n- Portraits (closing_nurrow_portrait_faces_x2.png): the mask's carved facets and grain read.",
+   "gauge": "League's material identity lives in the hand-painted diffuse: lacquer gets a painted highlight band and darker seams. VALE's materials separate in hue, value and painted pattern, but the lacquer never reads as glossy.",
+   "fix": "Paint a sheen band on the lacquer's lit side and darker gore seams, and lower its roughness to about 0.35-0.40, keeping the lit end at or below L* 85 (see _open#2). Add gloss to the mask's brow shelf and cheek planes. Re-bake the normal map with the gore stitching, rim rivets and felt nap. It is the flattest in the roster at the same 512 budget, so this costs nothing in size.",
+   "files": "art/blender/fighters/nurrow.py:81 (TEXTURE_SIZES), :1203-1230 and the _lacquer brushwork; the ORM/normal bake",
+   "size": "M",
+   "verifierNote": "Downgraded to minor. The numbers reproduce, and I add one the reviewer missed: the normal map is about 5x flatter than any peer's. The claim 'everything reads as one matte finish' does not hold at the gameplay camera, which is where the gauge is read.\n\nNo material reads as the wrong material. The hat is clearly structured, unlike Dunsom's flat disc. The Lisvel verifier independently cited Nurrow as an example of painted plates and fold shading under the same budget.\n\nWhat remains is the lacquer's missing gloss, polish-level like Ardit-M4. Most of the 'grainy felt' in the store art is M1's render grain."
+  },
+  {
+   "id": "nurrow-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The hat hides the body: at facing 0 and in the lunges she reads as a disc on legs",
+   "what": "The forward-tilted 0.82 m cone turns face-on to the camera and covers her head, chest and lull hand.",
+   "evidence": "- _harness/_reports/closing_nurrow_hat_share.txt: the pale disc spans the top 53 % of the facing-0 silhouette.\n- art/renders/fighters/nurrow/three_nurrow.png, top rows (viewed).",
+   "gauge": "A League champion's hook prop never hides the body's action read at the gameplay camera.",
+   "fix": "Ease the forward tilt about 5 degrees in the lunges and at facing 0, or lift the brim slightly in the cast poses so the arm and blade arcs clear it.",
+   "files": "art/blender/fighters/nurrow.py (hat tilt and cast poses)",
+   "size": "S",
+   "verifierNote": "Kept. It is the brief's own hook, so it stays a minor."
+  },
+  {
+   "id": "nurrow-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The hat has no value headroom, and the felt drifts toward rose (mostly in the store art)",
+   "what": "The lit end of the lacquer sits in the tone map's shoulder. The felt drifts warm: a little in match, a lot in the splash.",
+   "evidence": "- Hat: L* p98 86.6-87.8, p50 83.6-83.9 in match.\n- Felt in match: the brief's cloth #796265 is L* 44, C* 10, hab 10. The match body measures hab 19, C* 12.7-15.4 (closing_nurrow_ingame_measure.txt).\n- Felt in the splash: the cloak measures hab 27-45, C* 18-27, which reads salmon (closing_nurrow_splash_measure.txt).",
+   "gauge": "A League champion's palette holds from the store art to the match.",
+   "fix": "Lower the lacquer's lit end 2-3 L*. Correct the store-light tint on the felt so the splash cloak stays near hab 10.",
+   "files": "art/blender/fighters/nurrow.py (hat ramp, TONE); art/blender/common/plates.py",
+   "size": "S",
+   "verifierNote": "Kept, with a correction: the in-match drift is small (9 degrees of hue). The clear drift is in the splash and portraits."
+  },
+  {
+   "id": "nurrow-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The death passes the blade and a leg through the floor",
+   "what": "During the fold the blade tip dips below the ground, and the right foot ends about 10 cm under the floor in the final hold.",
+   "evidence": "_harness/_reports/closing_nurrow_fk_tip.txt, death clip:\n- the blade tip reaches y -0.221 m at f24;\n- toeR is at y -0.107 m from f37 to f50 (the held end pose).\n\nIn _harness/_shots/closing_nurrow_clip_death_end_x3.png (viewed), the blade is visibly cut by the floor. The sunk foot is hidden under the body from that angle, so it rests on the FK table.",
+   "gauge": "A League champion's death lies on the ground plane.",
+   "fix": "Add a floor clamp, or IK the right foot and the blade onto y >= 0, in the death's last 20 frames.",
+   "files": "art/blender/fighters/nurrow.py (death clip, about :2950-3002)",
+   "size": "S",
+   "verifierNote": "Kept. The FK table shows both, and the frame shows the blade."
+  },
+  {
+   "id": "nurrow-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The face reads sly rather than asleep; the chip backdrop is in Tunlan's magenta family",
+   "what": "The carved lids read as half-open eyes glancing sideways, not closed. The chip's backdrop hue sits close to Tunlan's.",
+   "evidence": "- Lids: _harness/_shots/closing_nurrow_portrait_faces_x2.png and closing_nurrow_icon_sizes_x3.png (viewed).\n- Chip (closing_nurrow_chip_cmp.txt): the border hab is 332 for Nurrow and 324 for Tunlan, but L* is 18 vs 28 and C* 18 vs 36. The per-pixel dE76 at 32 px is 37.9, in line with the other pairs (35-47).",
+   "gauge": "A League champion's portrait shows the intended expression at a glance.",
+   "fix": "Deepen the downward curve of the lid carving and add an ink lash line so the lids read as closed. Shift the chip's backdrop hue at least 20 degrees from Tunlan's.",
+   "files": "art/blender/fighters/nurrow.py (mask lids); the icon/chip backdrop table",
+   "size": "S",
+   "verifierNote": "Kept. The chip half is weak: the two chips separate as well as other pairs do. The lid read is the real part."
+  },
+  {
+   "id": "nurrow-m5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Skin issues and the Shadeprint store copy are still open",
+   "what": "Noon Fair shows a lilac body and a pink pauldron. The Shadeprint store copy describes an ink hat, but a pale printed cone ships.",
+   "evidence": "- nurrow_noon_fair_splash.png: the pauldron measures HSV 325 (closing_nurrow_splash_measure.txt).\n- content/skins/nurrow.json:33 is unchanged since 4aa9975f.",
+   "gauge": "League's store copy matches the skin it sells.",
+   "fix": "Reword the Shadeprint description to match the pale printed cone. Bring Noon Fair's pauldron back to the base's wood.",
+   "files": "content/skins/nurrow.json:33; art/blender/fighters/nurrow.py SKIN_PARTS",
+   "size": "S",
+   "verifierNote": "Kept."
+  },
+  {
+   "id": "nurrow-m6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The atlas is fragmented, the maps are low-res, and some metalness remains",
+   "what": "The smart-UV atlas breaks into confetti islands. The ORM is 256 and the normal map 512. Some texels carry metalness, which the brief forbids (metalness 0 everywhere).",
+   "evidence": "- Albedo extracted from the GLB: confetti island bands along the top and right of the atlas.\n- Metalness: 1.86 % of ORM texels have metal over 0.1, with a maximum of 0.227 (closing_nurrow_material_maps.txt, reproduced).\n- Thin orange seam lines cross the Shadeprint cowl and trousers in the close-up: _harness/_shots/closing_nurrow_ver_backcowl_shade.png.",
+   "gauge": "League champions use clean, efficient atlases with no visible seams.",
+   "fix": "Zero the metal channel at bake. Repack the atlas with larger islands for the hat, cloak and mask. Dilate the islands in the skin recolour so the seams do not show.",
+   "files": "art/blender/common (unwrap, bake); art/blender/fighters/nurrow.py:81",
+   "size": "M",
+   "verifierNote": "Kept. Map sizes are a roster budget (normal 512 on every fighter), and the seam lines are only visible in the close-up."
+  }
+ ],
+ "missed": []
+}

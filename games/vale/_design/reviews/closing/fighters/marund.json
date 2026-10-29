@@ -1,0 +1,113 @@
+{
+ "fighter": "marund",
+ "score": 6,
+ "summary": "Verified score: 6/10. Marund is not on par: four majors are confirmed open (M1 cap swallows the action, M2 the ult leap slides along the ground, M3 frozen idle, recall and channel, M4 splash and portrait). M5 (materials merge into plaster) is downgraded to minor. There are no blockers.\n\nThe GLB is unchanged since db50cf39, and git diff is clean. I re-ran the reviewer's forward-kinematics tool on it and every number reproduces exactly: attack1 30.9 deg head tilt, cast_a2 25.8, cast_ult 73.3, recall a held 54 deg bow with 1.1 cm of head travel, idle 4.6 cm, ult hips +5 cm.\n\nMy own checks:\n- A new FK maul-head measurement (closing_marund_ver_maulheight.txt): cast_a2 never lifts the maul head above 1.26 m, against a cap rim at 1.6-1.86 m, so Shelter Dome has no overhead T. In idle the maul head is held at the chest (1.23-1.26 m), not at the knee as the brief asks.\n- A fresh in-match impact capture (probe_swing_clip.mjs --fighter marund --tag closing_marund_ver; closing_marund_ver_swing_pair.png / _zoom_x3.png): on both clips the disc tips toward the target and the maul head is not readable at impact.\n- The sim gives self-dashes arc 0 (src/sim/movement.ts:131), so the 7 m Domefall travels at ground height.\n\nOne correction to M1's mechanism: an FK occlusion test (closing_marund_ver_maulocc.json) shows that the cap disc alone hides the maul head at impact only at some facings. The lost read also comes from the maul's short reach (0.7-0.8 m), its dark, small head and the overlap with the target.\n\nM5 is downgraded for four reasons:\n- The white mask follows the approved concept (_design/concept/marund.webp), not a lost walnut.\n- The brief authors stone and linen with the same hex (L* 80, C* 11).\n- The in-match value structure works: cap crown 79 against sleeve 70.6, apron 14.5 and boots 13.7.\n- The ORM has two roughness clusters (about 0.55 and 0.9).\n\nWhat holds up:\n- Sensitivity is clean: a low dome, not a hood, and a carved mask with brow, beak keel, mustache and mouth, which reads stern rather than horror, hockey mask or blank. This holds in the portrait, the icon and the death and ult face frames.\n- The silhouette IoU maximum is 0.774 (Tunlan), and in-match top-25 L* is 80.5-81.6.\n\nLeftovers: B5 is closed; the splash pose, the recall/idle and the lineup gradient are still open.",
+ "gapStatus": [
+  {
+   "id": "wave_b_open B5: Marund RIFT fighter top-25 L* under 70",
+   "status": "closed",
+   "evidence": "_harness/_reports/closing_env_value_probe.json runs.closing_env.<scene>.fighters.per.marund.top25: rift_high 80.9, rift_low 81.5, bridge_high 80.5, bridge_low 80.8, fray_high 81.1, fray_low 81.6 (the earlier runs m11/fix1 were 62.0-67.1). The reviewer's match frame gives cap crown L* p50 79.0 (_harness/_reports/closing_marund_match_values.txt)."
+  },
+  {
+   "id": "rollout_v3: all three Marund splashes use the identical pose and backdrop",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_marund_splashes.png: base, Gorgewalk and Long Evening share the victory hold, camera and framing; only the plate (Gorgewalk) and the tint change. a70d1140 changed the splash PNGs only (byte sizes), not the composition."
+  },
+  {
+   "id": "Roster idle and recall near-static (Marund)",
+   "status": "open",
+   "evidence": "I re-ran _harness/_reports/closing_marund_tool_cliptilt.mjs on the current GLB (identical output): recall hips range 0, head travel 0.011 m at a 53.5-54.3 deg hold, maul head at y 0.09-0.10 m for the whole loop; channel 0.013 m; idle 0.046 m, hips 0.005 m."
+  },
+  {
+   "id": "Lineup QA value gradient (integ_chars_p2.json marund valueGradientOk false)",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json fighters.marund: top 58.0-62.0, mid 38.0-43.5, bottom 16.5-20.1, valueGradientOk false (13 of 20 lineup entries fail). In the match the top band passes (closing_env top-25 80.5-81.6), so this is lineup-lighting calibration with no player-visible defect."
+  },
+  {
+   "id": "art/renders/fighters/marund/_open.json (fighter-art leftover list)",
+   "status": "open",
+   "evidence": "The file does not exist, and `git log --all -- games/vale/art/renders/fighters/marund/_open.json` returns 0 commits. This is a bookkeeping gap only, not a game defect: the leftovers above were gathered from wave and closing reports."
+  }
+ ],
+ "findings": [
+  {
+   "id": "marund-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "At the gameplay camera the cap swallows the maul and the action: attacks and casts read as the disc tipping toward the target",
+   "what": "The 1.28 m dome is bound to the head bone and pitches with it:\n- 17-41 deg in attacks and abilities;\n- 73 deg in the ult crouch;\n- a held 54 deg in recall.\n\nThe brief asks for the cap to stay level (3 deg or less) in run, idle and the casts. It allows the forward tip only in Shoulder In and an 8 deg back-tilt in the Shelter Dome lift.\n\nThe maul head (0.26 x 0.22 x 0.37 m) lands only about 0.7-0.8 m in front of the body. It sits at chest height in idle and never rises overhead in Shelter Dome. In the match, the auto-attack reads as the white disc nodding toward the target with a green trail, and the maul itself is not readable at impact.",
+   "evidence": "Forward kinematics, re-run by me (identical to _harness/_reports/closing_marund_cliptilt.json): attack1 30.9 deg, attack2 16.9, cast_a1 34.0, cast_a2 25.8, cast_a3 41.4, cast_ult 73.3, recall 54.3, idle 3.6, run 3.0.\n\nMaul-head centre height (_harness/_reports/closing_marund_ver_maulheight.txt, tool closing_marund_ver_tool_maulocc.mjs):\n- cast_a2 0.25-1.26 m, against a cap rim centre at 1.60-1.86 m: no overhead T;\n- idle 1.23-1.26 m: at the chest, not the knee asked for in brief l.29 and l.194.\n\nOcclusion from the 52 deg camera (closing_marund_ver_maulocc.json): in idle the maul head is fully under the disc at relative yaws 90-180 (0.00-0.06 visible).\n\nFresh in-match impact frames: _harness/_shots/closing_marund_ver_swing_pair.png and closing_marund_ver_swing_zoom_x3.png (probe_swing_clip.mjs --fighter marund --tag closing_marund_ver). On both clips the disc is tipped toward the target and no maul head shows.\n\nAlso: closing_combat_attack_marund.jpg, closing_marund_unit_clips_a.png. Source: marund.py:14 (cap 1.28 m, against the brief's 0.90 m), :50 weapon one_hand (the brief says two_hand), :99 rim r 0.64, :127 cap bound to bone:head.",
+   "gauge": "A recent LoL champion with oversized headgear keeps the weapon arc and the cast poses outside the head mass at the top-down camera. Each auto-attack and ability has its own silhouette beat, readable in about 200 ms. Here every action collapses into one disc nod.",
+   "fix": "Give the dome its own level-locked bone (for example x_cap, parented to the chest): at most 4 deg everywhere except Shoulder In, where the ram tip is intended.\n\nRe-author the swings so the maul head lands clearly outside the rim:\n- attack1: an overhead chop landing about 1.3-1.4 m from the body axis;\n- attack2: a flat side sweep at knee height.\n\nBuild Shelter Dome as the brief describes: the maul level overhead, past both rim edges, then planted as an upright post. Hold the maul at the right knee in idle and run.\n\nRaise the maul head's value or edge contrast against the road (ironstone L* 28 on a road at L* 38-41). Optionally narrow the cap toward 1.0 m.\n\nVerify with a --unit sheet and a probe_swing_clip impact shot: maul pixels visible at every impact.",
+   "files": "art/blender/fighters/marund.py (cap bind l.127, cap profile l.95-101, MOTION l.50, maul l.223-234, clip blocks), art/blender/common/anim.py, art/out/fighters/marund/marund.glb",
+   "size": "L",
+   "verifierNote": "Confirmed. All FK numbers reproduce, and my fresh impact capture shows no readable maul.\n\nOne correction to the mechanism: the disc does not geometrically cover the maul head at every impact. At the side-on lane facing (relative yaw 270), attack1 keeps 0.44-1.0 of the maul head outside the disc during the swing. The lost read there comes from the short reach (maul head about 0.7-0.8 m forward), the target overlapping it, and the small dark head. The fix therefore needs reach and contrast as well as cap leveling.\n\nThe brief's 3 deg limit is not absolute: brief l.121 asks the disc to tip in Shoulder In, and l.122 allows 8 deg back in Shelter Dome. attack1, cast_a2 and the 73 deg ult crouch still exceed what the brief allows."
+  },
+  {
+   "id": "marund-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The ultimate's 7 m leap plays as a ground slide: no airborne arc, no maul overhead, no landing slam pose",
+   "what": "Domefall's travel plays the generic 'dash' clip. The sim gives self-dashes no arc, and cast_ult lifts the hips only 5 cm above rest (the brief asks for 0.5 m at f13).\n\nMarund glides at constant height (12 m/s) toward the landing spot. The landing frame is then covered by the shield-dome VFX, so the kit's signature engage has no rise, no apex and no slam beat.",
+   "evidence": "- content/fighters/marund.json:541 present.anim 'dash' on the ult dash (also :191, Shoulder In).\n- src/sim/movement.ts:131: self-dash state arc: 0, so movement.ts:208 gives height 0. Only knockbacks get KNOCK_ARC 1.2 (l.265).\n- My FK re-run: cast_ult hipsY_max 0.597 against an idle of 0.544; dash hips range 0.08 m.\n- _harness/_shots/closing_combat_kit_marund_ult.jpg f9-f18: the body slides at ground height with a green streak, and f21-f33 are covered by the dome.\n- Brief: _design/fighters/marund.md:124.",
+   "gauge": "LoL leap ultimates show a clear arc: the body leaves its shadow, holds an apex pose, and lands on a readable slam frame that the impact VFX lands on.",
+   "fix": "Author a VALE 'domefall_leap' clip and play it as the ult dash's present.anim, driven by dash progress:\n- a crouch with the dome pulled down;\n- an airborne hold with the maul level overhead;\n- a two-footed mortar slam.\n\nAdd a per-effect arc to self-dashes (the sim already has dash.arc and EntityView.height) with a 0.8-1.0 m peak, the shadow staying on the floor. Hold the slam pose for about 0.25 s before the dome shell VFX, and flare the windows at the apex as the warning beat.",
+   "files": "content/fighters/marund.json (ult present.anim, dash effect), src/sim/movement.ts (dash arc for flagged leaps), art/blender/fighters/marund.py (new clip), src/render/actors.ts (dash role)",
+   "size": "M",
+   "verifierNote": "Confirmed. The engine's height channel is never set for self-dashes, and the clip does not fake the lift. It is Marund-specific content: other leaps can carry their apex in the clip (the Lisvel verifier saw a backstep apex). Severity stays major because this is the kit's signature engage, and the landing read matters to both sides."
+  },
+  {
+   "id": "marund-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Idle, recall and channel are nearly static, and the brief's character beats are missing",
+   "what": "- Recall is a held 54 deg bow (2 s loop) with the maul on the ground. The brief's lifting the cap off and setting it back on is absent.\n- Channel holds still.\n- Idle moves the head 4.6 cm and the hips 0.5 cm.\n- idle_lobby moves the head 4.8 cm and the maul 6.7 cm, with none of the brief's three craftsman beats.",
+   "evidence": "My FK re-run of closing_marund_tool_cliptilt.mjs on the current GLB:\n- recall: headDisp 0.011 m, hips range 0, maul head y 0.09-0.10 m;\n- channel: 0.013 m;\n- idle: 0.046 m;\n- idle_lobby: 0.048 m.\n\nRoster comparison: _harness/_reports/closing_marund_roster_idle_compare.txt (Hesmi idle 0.112 m, Burdam recall maul travel up to 0.595 m). Visual: closing_marund_unit_clips_b.png, rows channel, idle and recall. Brief: _design/fighters/marund.md:126, :128.",
+   "gauge": "LoL champions idle with breathing, weight shift and a weapon settle, plus a timed personality beat. The recall is a recognisable multi-second signature performance.",
+   "fix": "- Recall, about 4 s: lift the dome with both hands, polish a window with the sleeve, tap the rim with the maul handle, set the dome back and settle.\n- Idle: 2-3 cm chest breathing, a slow weight shift, the maul bobbing at the knee.\n- idle_lobby: the brief's palm taps, rim check and peering into the pail.\n- Channel: a hand stirring the pail.",
+   "files": "art/blender/fighters/marund.py clip blocks, art/blender/common/anim.py",
+   "size": "M",
+   "verifierNote": "Confirmed and reproduced exactly. This is consistent with the confirmed idle/recall majors for Dunsom and Ilsheta. Rishal, Sukri and Tunlan share the gap, so it is partly roster-wide."
+  },
+  {
+   "id": "marund-M4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splash and portrait: grainy renders on a painted plate, one pose for every skin, the cap and windows cropped out of the portrait, mouth artifacts, identical skin tiles",
+   "what": "**Splash.** The splash is the 3D victory hold pasted on the painted map_rift plate:\n- figure grain and fireflies, against a clean plate;\n- neutral grey light against a warm dusk scene;\n- one frontal static pose, shared by all three skins (Gorgewalk swaps the plate).\n\n**Portrait.** The 512 px portrait is an extreme close-up of the mask. Only the brim band shows: the dome and all three windows are cropped. It has two black spike artifacts (beak tip, right mouth corner) and a hard bright slab at the right edge.\n\n**Collection and draft.** The skin tiles are three near-identical crops of the brim, and the draft card shows the same crop.",
+   "evidence": "- Grain (_harness/_reports/closing_marund_splash_grain.txt): high-frequency std of the figure 5.2-9.7 against the plate 0.3-1.2, for all three skins.\n- _harness/_shots/closing_marund_splashes.png (same pose ×3).\n- closing_marund_splash_face_x3.png (grain and smear on the face).\n- art/out/fighters/marund/portrait.png, viewed directly (brim band only, no windows).\n- closing_marund_portrait_mouth_x2.png (black spikes).\n- closing_marund_coll_skinstrip_x3.png and closing_marund_draftcard_x3.png.\n- By contrast, the icon (closing_marund_icon_x4.png) does show the rim and windows.",
+   "gauge": "LoL splashes are painted illustrations with a dynamic pose, a story moment and integrated light, and every skin has its own composition. Portraits and skin tiles carry the champion's signature element.",
+   "fix": "Paint (or paint over) a VALE-original splash per skin with its own pose and moment, for example Marund planting the haft as a Shelter Dome closes over an ally under a Lamp Dome at dusk, with scene-matched rim and bounce light. At minimum, render each skin with its own clip, camera and grade.\n\nRe-frame the portrait (and the skin tiles cut from it) so the front window and the rim read above the mask. Clean the projection spikes at the beak tip and the mouth corner.",
+   "files": "art/out/fighters/marund/{splash,portrait,marund_*_splash,marund_*_portrait}.png, art/blender/fighters/marund.py SPLASH, the splash/portrait pipeline",
+   "size": "L",
+   "verifierNote": "Confirmed. This matches the confirmed splash majors for Ardit, Dunsom, Ervet, Kemdo and Lisvel.\n\nOne evidence correction: brief l.185 says 'the cap rim must clear the frame top by 8%'. Read literally, it is met: the brim line sits about 13-15% down the frame. The windows being cropped is therefore a gauge gap (signature element missing), not a breach of the brief. The rest of the finding stands on its own."
+  },
+  {
+   "id": "marund-M5",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Stone, linen and mask read as one pale, low-chroma matte family in close views",
+   "what": "In the collection model and the close renders, the pale stone cap, the linen shirt and the mask sit at nearly the same pale, low-chroma grey. The finish is uniformly matte, so the top half reads as one plaster-like family. The pail, iron band, gold-ringed windows, knee stones and boots do separate.",
+   "evidence": "- _harness/_reports/closing_marund_skin_gamecam.txt (three_marund.png close): mask C* 2.7, shirt C* 3.8, apron C* 7.3.\n- In the match (closing_marund_match_values.txt): cap crown L* 79 / C* 7.0, sleeve 70.6 / 4.7, apron 14.5, boots 13.7.\n- Brief palette, Lab I computed: stone #D0C6B3 80.2 / C* 10.8; cloth2 #D0C5B1 79.9 / C* 11.4; wood #B99B78 65.8 / C* 23.3.\n- Concept: _design/concept/marund.webp paints the mask white.\n- ORM (the GLB's marund_orm, 512 px): roughness clusters at about 0.55 and about 0.9.\n- Plinth: _harness/_shots/closing_marund_ver_plinth_crop.png.",
+   "gauge": "LoL model viewers show clearly different responses for stone, cloth and lacquer. Here the difference is mostly in value, and the chroma is low by design.",
+   "fix": "Warm the linen slightly away from the stone (a small hue/chroma step, or lower its value) and add a subtle lacquer sheen to the mask's wood frame. Optionally decide brief against concept for the mask colour and record the decision.",
+   "files": "art/blender/fighters/marund.py PALETTE / PROJECTION, _design/fighters/marund.md §5",
+   "size": "S",
+   "verifierNote": "Downgraded from major.\n- The 'walnut mask' target conflicts with the approved concept, which paints the mask white; the build follows the concept projection (marund.py:8-15).\n- The brief itself gives stone and linen the same hex family (L* 80, C* about 11), so the merge is authored.\n- Chroma is muted by design (CARD #6E6358 / #A58A6C).\n- The in-match value structure works and is unaffected.\n- The ORM is not uniform.\n\nWhat remains is polish-level. Unlike Burdam-M2 and Hesmi-M2, the build does not contradict its own value design here."
+  },
+  {
+   "id": "marund-v1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Verifier-added: no sway or cap bones; the brief's apron chains are not delivered",
+   "what": "The skin has the 24 standard biped joints and no x_ chains. The 0.95 m felt apron and its back panel have no x_apron_f / x_apron_b sway, and the cap has no bone of its own (the root of M1).",
+   "evidence": "The joint list read from art/out/fighters/marund/marund.glb: root hips spine chest neck head shoulder/upper_arm/forearm/hand/prop ×2, thigh/shin/foot/toe ×2 (24 joints). Brief: _design/fighters/marund.md:63 (two sway bones).",
+   "gauge": "LoL champions carry secondary motion on long cloth panels.",
+   "fix": "Add x_apron_f and x_apron_b spring chains (baked follow-through on run, attack and the slam) and the level-locked cap bone from M1.",
+   "files": "art/blender/fighters/marund.py, art/blender/common/rig.py",
+   "size": "M",
+   "verifierNote": "Kept as a minor: from the gameplay camera the apron is mostly under the disc, so this shows mainly in the collection and lobby. The reviewer noted it only as a brief deviation."
+  }
+ ],
+ "missed": []
+}
