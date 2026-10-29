@@ -3682,10 +3682,24 @@ export async function buildMap(W, mapId) {
     const AT = (u, t) => (NS ? [u, t] : [t, u]);                     // (across, along) -> world x, z
     const boxUT = (u, y, t, wu, h, wt, color, o) => { const p = AT(u, t); addBox(p[0], y, p[1], NS ? wu : wt, h, NS ? wt : wu, color, o); };
     // the deck: the main slab over the span every strip covers, and each strip's own run-out to its bank at both ends (exact boxes, one top)
-    boxUT(ax, top - 0.15, (cA + cB) / 2, BW, 0.3, cB - cA, "#9a6c43", { tex: "plank" });
+    // (R1 / endgame lane) the main slab spans ALL the swim-deep water under the deck: where the channel's dredged falloff runs under a strip's run-out (deepwood s18: three 0.71 m
+    // run-outs 20-30 % over swim-deep water, the deck read as four slabs over the river and its axis 14.5 degrees off - every walk that followed it swam), the slab end moves out to
+    // 0.75 m past the outermost deep point under any strip, so what is left of a run-out lies over the shallows / the bank. Only where every shorter strip's bank stands within a step
+    // under the deck top along the stretch the slab now reaches into it (else the old end: a deck end face over a dip in the bank is a wall to a walker). On the 63 walk seeds the slab reaches 0.75-1.6 m further on 25 (38 unchanged).
+    const deepAt = (s, t) => Math.min(G(s.u0, t), G((s.u0 + s.u1) / 2, t), G(s.u1, t)) < waterY - 0.9;
+    const reachOut = (c, sg) => {                                                                       // sg -1: the tA end (c = cA), +1: the tB end (c = cB)
+      let e = c;
+      for (const s of strips) { const tE = sg < 0 ? s.tA : s.tB; for (let t = tE; sg < 0 ? t < c : t > c; t -= sg * 0.25) if (deepAt(s, t)) { e = sg < 0 ? Math.min(e, t - 0.75) : Math.max(e, t + 0.75); break; } }
+      e = sg < 0 ? Math.max(e, t0) : Math.min(e, t1);
+      for (const s of strips) { const tE = sg < 0 ? s.tA : s.tB; if (sg < 0 ? tE <= e : tE >= e) continue; for (let t = e; sg < 0 ? t <= tE : t >= tE; t -= sg * 0.25) if (Math.min(G(s.u0 + 0.05, t), G((s.u0 + s.u1) / 2, t), G(s.u1 - 0.05, t)) < top - 0.45) return c; }
+      return e;
+    };
+    const sA = reachOut(cA, -1), sB = reachOut(cB, 1);
+    M.deckBuilt.slab = [sA, sB, cA, cB];                                                             // (the main slab's span, and the span every strip covers)
+    boxUT(ax, top - 0.15, (sA + sB) / 2, BW, 0.3, sB - sA, "#9a6c43", { tex: "plank" });
     for (const s of strips) {
-      if (cA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + cA) / 2, s.u1 - s.u0, 0.3, cA - s.tA, "#9a6c43", { tex: "plank" });
-      if (s.tB - cB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (cB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - cB, "#9a6c43", { tex: "plank" });
+      if (sA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + sA) / 2, s.u1 - s.u0, 0.3, sA - s.tA, "#9a6c43", { tex: "plank" });
+      if (s.tB - sB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (sB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - sB, "#9a6c43", { tex: "plank" });
     }
     // three stringer beams under the deck over the water (cosmetic: they read as a timber bridge from the banks), and a darker kerb plank along both edges (each over its own edge strip)
     for (const su of [-1, 0, 1]) boxUT(ax + su * (BH - 0.9), top - 0.55, (a + b) / 2, 0.4, 0.5, b - a + 2, "#5e4430", { tex: "plank", collide: false });
