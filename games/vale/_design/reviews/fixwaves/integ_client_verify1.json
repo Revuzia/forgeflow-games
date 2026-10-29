@@ -1,0 +1,189 @@
+{
+  "lane": "client",
+  "round": 1,
+  "verifier": "adversarial verifier, integration lane client, round 1, 2026-10-29. Re-measured at HEAD 793cc729 (= origin) in real Chrome on dev :5190. The engineer reports were not trusted.",
+  "pass": false,
+  "summary": "Lane client fails round 1 on one major item. lead:new-icons is only partly done, because two of its 18 new item paintings broke the 'no gore' rule in WORLD.md:19 when they were graded. shadowpin now shows a pale spike driven into a glossy dark-red pool, which reads as a blade in blood. lampblack_edge's black soot flecks and smoke curl came out dark red on the blade tip. The raw paintings (tools/imagegen/raw/item_shadowpin*.png, item_lampblack_edge*.png) are violet-black ink and black soot. icon_grade.py keyed those dark, blue-leaning pixels as ground and repainted them in the Strike red ramp. The other 16 icons are clean: no hood, mask or face, and no gear, clock hand or rune. Everything else holds. done:5 passes with the shipped CSS and no injected style: all 48 splashes give card p50 80-89 and plate 87-97 at 1920x1080, and card 73-82 and plate 83-91 at 1280x720, so 0 of 100 are under 70. hud:HUD-2 passes in a live RIFT match: every HUD face site draws icon.png (ally 24/24, kill feed 9/9, banner 4/4, scoreboard 10/10, target 5/5, recap 3/3). The view plate, credits, tip-mode, scroll fade, lock-in call and ready-check reminder were all confirmed live. client-14 and hud:HUD-3 stay honestly partly done: the plazas are still clipped because the world half (a padded minimap.png plus minimapBounds) is not in yet. Checks: typecheck exit 0; content:check OK with 17 copy-lint warnings and no queue_remind line; icon_probe OK (57/57, but 18 items still borrow a painting until the systems stitch lands); sweep_720 fast 0 failures; e2e all passes the 6 UI journeys with 0 console lines. The e2e store journey fails: the three autopilot matches were all lost, leaving 598 Candles against a cheapest skin of 600. Every client commit touches only lane paths, and all of them are on origin.",
+  "items": [
+    {
+      "id": "done:5",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Real Chrome, shipped CSS only (no injected style, checked), 5 RIFT loading fixtures covering all 48 skins at 1920x1080 and 1280x720, every image is-ok, 0 console lines. Luma uses the BT.709 luma.cjs method on each card rect and each plate (img) rect. 1920x1080: card p50 80-89, plate 87-97. 1280x720: card 73-82 (lowest lisvel_almanac 73), plate 83-91. 0 of 50 cards and 0 of 50 plates are under 70 at either size, and no card outside the self seat has more than 0.9 % of pixels above 200. The meta block is 22 % of the card at 1920 and 31 % at 1280. Script: scratchpad ver_loading.mjs. Report: _harness/_reports/integ_client_ver1_loading.json. Shots: _harness/_shots/integ_client_ver1_loading_{1920,1280}_r{0-4}.png. CSS: src/ui/styles/screens.css:418 (5 % mask) and :423-425 (client-26 scrim and halo)."
+    },
+    {
+      "id": "hud:HUD-2",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Portrait.tsx has kind 'chip' (cv.asset(f.art.icon), falling back to the skin portrait, at 50% 50%). It is used at side.tsx:59, top.tsx:194/275/284, panels.tsx:110/192/209 and status.tsx:217; dialbar.tsx:136 keeps the portrait, as the item allowed. In a live RIFT co-op match at 1920x1080 I drove the target plate (an ally fighter), a takedown banner and an open death recap through the HUD model, and the real kill feed at 6x. Every face loads .../icon.png and is-ok: ally 24/24, kill feed 9/9, banner 4/4, scoreboard 10/10, target 5/5, recap 3/3. 0 console lines. Report: _harness/_reports/integ_client_ver1_match.json. Shots: _harness/_shots/integ_client_ver1_hud_{scoreboard,recap,banner,target,killfeed_crop}.png."
+    },
+    {
+      "id": "lead:new-icons",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "All 18 files exist at content/ui/icons/items/<id>.webp, 256 px (f0a2ae42). icon_probe passes: OK, 57 items, p50 min 66, p95 min 192 at 38/40 px, navy 0, minimum cross-family ground distance 56 (_harness/_reports/integ_client_ver1_icon_probe.json). All 8 spells and 9 boons in setup.json point at their own existing setup/<id>.webp. I looked at every new painting at 200 px and at 38 px (_harness/_shots/integ_client_ver1_icons18_200.png, _38px_x2.png) and found no hood, mask, face, gear, clock hand or rune. Two fail the WORLD.md:19 'never ... gore' rule:\n(1) shadowpin.webp shows a pale spike driven into a glossy dark-red liquid pool with specular streaks. Sampled pool colours are rgb(106,40,37) and (121,68,70) (_harness/_shots/integ_client_ver1_shadowpin_pool.png). It reads as a blade in a pool of blood.\n(2) lampblack_edge.webp has dark-red flecks on the blade tip, rgb(83,33,32), and a dark-red curl beside the blade (_harness/_shots/integ_client_ver1_edge_tip.png). It reads as blood on a knife.\nBoth raw variants are violet-black ink and black soot on navy (_harness/_shots/integ_client_ver1_raw_pin_edge.png). icon_grade.py's groundness() keys near-black, blue-leaning pixels as ground and repaints them in the Strike red ramp. Minor watch: resin_maul's head is two faceted hexagonal amber blocks that come close to a cut-gem read; the drip keeps it resin. Also, icon_probe still lists 18 borrowed items: the content repoint is the systems stitch, which is not in yet.",
+      "fixHint": "Re-grade shadowpin and lampblack_edge with tools/imagegen/icon_grade.py so that dark subject pixels are not taken as ground. Either pass an override that protects the pool, soot and smoke (a subject mask from the raw painting's lower-third pool / blade tip), or cap groundness for pixels with L* < 15 inside the subject box. The pool should stay violet-black or ink-black and the soot black on the red Strike ground. If the grade cannot keep it, re-prompt shadowpin through run_xai.py with a non-liquid shadow, for example 'a spike casting a long violet shadow on pale stone', and lampblack_edge with no smoke curl. Re-run node _harness/icon_probe.mjs. Then look at both at 128-256 px: no red liquid, no red on the blade. Hand the unchanged path list to systems as before."
+    },
+    {
+      "id": "client-04",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done in the tree. The row is src/ui/screens/settings.tsx:119-120 (Toggle #v-dyn, checked while dynamicResolution !== false). The default is in src/session/settings.ts:33-37 (VideoSettings extra, SETTINGS_EXTRAS.video.dynamicResolution true). typecheck exit 0. The Settings.video contract field is a systems file and is correctly handed off; the renderer reads the field either way."
+    },
+    {
+      "id": "client-05",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "src/render/menu.ts:115 (texture), :122 (props: `if (this.terrain !== terrain) { for (const g of Object.values(p ?? {}).flat()) g?.dispose(); return; }`) and :126 (landmarks: skipped, since they use shared geometry). dispose() sets this.terrain = null at :312. The home and menu scene show 0 console lines in the e2e flow and loading runs."
+    },
+    {
+      "id": "client-06",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Live, with WEBGL_lose_context in a RIFT match: before, {view ok, no plate}; lost, {view lost, .viewplate.is-lost 'Restoring the view' plus the sub line}; after restoreContext, {view ok, no plate}. Report: _harness/_reports/integ_client_ver1_match.json D. Shot: _harness/_shots/integ_client_ver1_viewplate_lost.png (a centred ink plate with a dial tick; the HUD stays up)."
+    },
+    {
+      "id": "client-07",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "curl :5190/third_party_notices.json returns 200 application/json with 12 entries (meshoptimizer and @preact/signals-core included). /THIRD_PARTY_NOTICES.txt returns 200 text/plain. The client reads it through src/ui/credits.ts (NOTICES_JSON / NOTICES_FILE, :45-52) and the Settings credits panel (settings.tsx:363-365)."
+    },
+    {
+      "id": "client-08",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "_harness/e2e.mjs:211-213 (`const hard = errors`), :278-280, :423-424 (flow_dodge) and :478-479 (flow_readycheck) fail a journey on any recorded line. Only Chrome's duplicate 'Failed to load resource' text is dropped; the [http 4xx] line is kept. A full run (node _harness/e2e.mjs all) passed flow_dodge, flow_readycheck, flow_netdown, rift, bridge and fray, each with 0 console lines (_harness/_reports/integ_client_ver1_e2e_all.json and .log). The store journey failure is listed below as e2e:store."
+    },
+    {
+      "id": "client-09",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done. content/ui/home/ranked_season.webp and collection_highlight.webp are 1280x640. The retinted grounds measure in my icon_probe: linen_hood ground (19,86,81), guard family, p50 72; tunlan_shadow_play ground (88,53,93), Tunlan's hue, p50 69. Neither is near the navy."
+    },
+    {
+      "id": "client-10",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "src/ui/state.ts:36 READY_REMIND_S = 4 and :205-207 play queue_remind once. My e2e flow_readycheck: queue_hidden gives the Notification 'Match found' (silent), favicon lit, and title 'Match found · VALE'. remind gives readyTimer 3, cues [ui_queue_remind], 2 notifications, renotify true. decline_once gives favicon plain and the notification closed on return."
+    },
+    {
+      "id": "client-11",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "src/ui/audio_port.ts:31 adds the optional fighterCall, and :77-86 UiSound.call / lockCall. src/ui/screens/draft.tsx:127-139 has the screen-level LockCall. Live in my sweep_720: lock-in cue played [draft:pick:theirs, ui_lockin, call:hesmi:played] (_harness/_reports/integ_client_ver1_sweep.log)."
+    },
+    {
+      "id": "client-12",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "No f_<fighter>_call cue id is built in UI code: FIGHTER_CALL is gone, and lockCall goes through port.fighterCall. content:check prints no queue_remind line; all 17 warnings are copy lint. UI_CUE_KINDS_OPTIONAL = ['queue_remind'] is at src/ui/audio_kinds.ts:14."
+    },
+    {
+      "id": "client-13",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Nothing was needed from the client. The engine side is present: src/audio/index.ts:502 reads vol.softenLoud, :607 implements draft(s), and :605 implements musicUrgency. app.tsx:68 forwards state.settings.audio. I did not re-toggle __valeAudio.access.soften live; that is the engine lane's seam."
+    },
+    {
+      "id": "client-14",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The client half is in. src/ui/hud/minimap.tsx:61-76 has minimapBounds and fitMap over art.terrain.minimapBounds, used for both draw and click. :375-381 draws Wicks at 2.2·k on an ink keyline of s + dpr. content/maps/map_rift.json has no minimapBounds key yet, and on my live 1x capture both base plaza discs are cut at the left and right edges of the image (_harness/_shots/integ_client_ver1_minimap_1x.png). The engineer reports this as partly and has handed the world half off.",
+      "fixHint": "World lane: add the pad option in art/blender/maps/minimap_survey.py (RIFT px 6, py 4), re-render art/out/maps/map_rift/minimap.png at 1100x712, and add \"minimapBounds\": [-6, -4, 176, 114] under art.terrain in content/maps/map_rift.json. Then a live 1x minimap shot must show both plaza discs whole."
+    },
+    {
+      "id": "client-15",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Same change as hud:HUD-2: live, every chip site loads icon.png (_harness/_reports/integ_client_ver1_match.json summary)."
+    },
+    {
+      "id": "client-16",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "screens.css:418 has the 5 % mask at height 84 %; loading.tsx:129 has CARD_CROP. The measured cards are as in done:5: 1920 card 80-89, 1280 card 73-82."
+    },
+    {
+      "id": "client-17",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Superseded by done:5 and client-26: the shipped CSS passes the gate at both sizes (_harness/_reports/integ_client_ver1_loading.json)."
+    },
+    {
+      "id": "client-18",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Same as hud:HUD-2 (live chip faces at every site; scoreboard and kill feed re-shot: _harness/_shots/integ_client_ver1_hud_scoreboard.png, _hud_killfeed_crop.png)."
+    },
+    {
+      "id": "perf:PERF-m4",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "The plate is mounted and works live (client-06). probe_ctxloss was re-run after the plate landed (_harness/_reports/integ_client_ctxloss.json, 04:54Z): PASS, views ok>lost>restoring>ok, restored in 1330 ms, 0 console lines after the restore, frame luma ratio 1.002."
+    },
+    {
+      "id": "hud:HUD-1-seam",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The client half is done, apart from the two regrade defects under lead:new-icons: own paintings exist for all 18. Players still see the borrowed art, because content/items.json:1681 (glass_veil -> linen_hood.webp) and :2059 (bellrope -> hand_bell.webp) still point at it. icon_probe lists 18 borrowed items. The repoint is the systems stitch.",
+      "fixHint": "Client: fix shadowpin and lampblack_edge first (see lead:new-icons). Systems: repoint the 18 icon refs to assets/ui/icons/items/<id>.webp. Then icon_probe must list 0 borrowed items."
+    },
+    {
+      "id": "audio:AUD-m4",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done: the engine reads softenLoud (src/audio/index.ts:169 type, :502 use). The UI writes audio.softenLoud and app.tsx:68 forwards it."
+    },
+    {
+      "id": "audio:AUD-m2",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Already done: the engine implements AudioPort.draft(s) (src/audio/index.ts:205, :607), so the UI's draft() call is live."
+    },
+    {
+      "id": "play:roles-720",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Screen.tsx:33 and :68 (useMoreBelow plus .sfade) and base.css:150 give a 3u bottom mask while there is more below. My sweep_720 fast: 0 failures; play 1280_rift shows 6 faded at a scroll edge and no edgeCut (_harness/_reports/integ_client_ver1_sweep.json). Shot: _harness/_shots/integ_client_ver1_sweep_1280_play_rift.png, where the role chips fade out at the scroll edge instead of being cut."
+    },
+    {
+      "id": "loading:tip-mode",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "content/client.json has 26 tips, 16 of them tagged ([rift], [bridge], [fray], [rift,bridge]). CatalogView.tipsFor (src/ui/catalog_view.ts:153-161, TIP_TAG :24) gives RIFT 21, BRIDGE 17 and FRAY 13, recomputed. sweep_720 loading tipCheck shows the mode's own list at 1280 and 1920 for all three modes, and the 1280 RIFT loading shot reads 'TIP 20 OF 21'."
+    },
+    {
+      "id": "client-26",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "The shipped .pcard__meta (screens.css:423-425: a compact 1u padding, a 0.9/0.66/0.38/0 scrim, a 1 px ink halo plus a soft drop) is legible over the brightest splashes (_harness/_shots/integ_client_ver1_loading_1280_r2_meta_zoom.png: Lisvel Gorgewalk and Marund). The lowest card at 1280 is 73 (lisvel_almanac), 3 levels of headroom; the engineer's claim was 75, a 2-level difference from a different seat order. At 1920 the lowest is 80."
+    },
+    {
+      "id": "hud:HUD-3",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "Same as client-14. The Wick dots and the bounds-aware minimap are in. The plaza discs are still clipped on the live 1x minimap (_harness/_shots/integ_client_ver1_minimap_1x.png) because map_rift.json has no minimapBounds and minimap.png has no margin (world half).",
+      "fixHint": "World lane: the minimap_survey.py pad, a re-render of minimap.png and the minimapBounds key [-6, -4, 176, 114] in map_rift.json (handoff as written). Then re-shoot the live 1x minimap: both plaza discs whole, and fighter dots on the painted roads."
+    },
+    {
+      "id": "e2e:store",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "node _harness/e2e.mjs all exits 1 on the store journey alone. buy_skin reports 'no affordable skin offer': the wallet holds 598 Candles and the cheapest skin offer costs 600. The 300 start plus 117 / 92 / 89 earned comes to 598, because the dev autopilot lost RIFT, BRIDGE and FRAY this run (_harness/_reports/integ_client_ver1_e2e_all.json). The earlier full run (_harness/_reports/e2e.json, 18:54Z) won RIFT and BRIDGE and bought a skin with 783. This is not a regression in client code, but the pkg1 claim that the journey works once all three modes have run does not hold.",
+      "fixHint": "_harness/e2e.mjs store journey: do not depend on match outcomes. Either grant the shortfall through the dev handle before buying and record that it did, or pick the cheapest skin offer and, when the wallet cannot cover it, assert the shop's 'not enough Candles' state and buy a cheaper non-skin offer. Keep a check that real grants arrived (the wallet grows by the sum of postgame grants)."
+    }
+  ],
+  "regressions": [],
+  "checks": {
+    "typecheck": "npx tsc --noEmit -p tsconfig.json exit 0, no output",
+    "content_check": "npm run content:check: OK, 17 warnings (copy lint only), 0 queue_remind lines, names check ran",
+    "icon_probe": "node _harness/icon_probe.mjs: OK, items 57 (p50 min 66, p95 min 192), abilities 94, navy 0; 18 items still borrow a painting (systems stitch) (_harness/_reports/integ_client_ver1_icon_probe.json)",
+    "sweep_720": "node _harness/sweep_720.mjs fast (1280x720 and 1920x1080): 0 failures (_harness/_reports/integ_client_ver1_sweep.json/.log)",
+    "e2e": "node _harness/e2e.mjs all: flow_dodge, flow_readycheck, flow_netdown, rift, bridge and fray ok with 0 console lines; store FAIL on 598 < 600 Candles (see e2e:store)",
+    "live_match": "RIFT co-op at 1920x1080, real Chrome GPU: HUD chips at every site, view plate lost and restored, minimap 1x, 0 console lines (_harness/_reports/integ_client_ver1_match.json)",
+    "perf_1080": "not run. The lane's only render-path change is the menu.ts late-resolve guard (no per-frame work), and the HUD chips are lighter than the portraits they replace (icon.png 128 px, 44 KB, against portrait.png 320 KB).",
+    "scope": "f0a2ae42, 55fa30a6, a96d1d03, 8267a595, 61fe088f, 6fe041c2, 938c78da, bab476be, 7763c1e4 and 793cc729 touch only lane paths (git show --name-only). No lane file is dirty, and HEAD equals origin.",
+    "sensitivity": "I looked at all 18 new item icons at 200 px and at 38 px (no hood, mask, face or Wick-face read). shadowpin and lampblack_edge read as blood (WORLD.md 'never gore'): major, under lead:new-icons. I also looked at the loading cards at 1280 and 1920 and the HUD chips in the live shots; nothing new there is the lane's art.",
+    "out_of_lane_note": "Not the client lane's, and older than this pass (since 4aa9975f): content/modes.json abilityRanks.ultLevels [6, 11, 16] and the loading tip 'Your ultimate unlocks at level 6, then ranks up at levels 11 and 16' state a reference-game rule number for number. Systems / lead should check it against the originality rule."
+  }
+}
