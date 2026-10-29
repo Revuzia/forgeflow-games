@@ -2731,7 +2731,37 @@ Finding numbers are the review's (0–22). Every entry names its proof; the logs
   Provenance: rows re-run on this tree say `fix r3 final tree`; the every-Disasters-power row is the round-2 tree's
   (`[r2 tree, not re-measured]`); the r6 copies stay marked.
 - Gate: `fix3/check.sh` waits for the other team's full suite on this tree, then `npm run check` through `slot.sh` →
-  `fix3/check/check-r3.log` (`check-r3.done` holds the exit code). Result: see 13.5 (filled when it has run).
+  `fix3/check/check-r3.log` (`check-r3.done` holds the exit code). Result: see 13.5.
+- A container restart at about 22:32 killed every job in flight (alone 7 and 20261008 part-run, kin not started, the
+  hunting variant not started, the second gate still queued); all were relaunched at 01:32 on 2026-10-29 with the same
+  scripts (the chains resume at alone 7 / alone 20261008).
+
+### 13.5 Results (round 3)
+- **Gate: green.** `fix3/check/check-r3b.done` "EXIT 0 02:08" — detban 146 sim files clean, `tsc` clean, `# tests 578
+  # pass 578 # fail 0 # skipped 0`; the two throughput floors ran (not skipped). The first round-3 gate
+  (`check-r3.log`, "EXIT 1 21:06", 574 / 1 / 1) failed only on the mining test re-seeded in 13.2.
+- **#17 budding** — towns of the round-3 year-50 worlds (`review-critic/r3/towndist.ts` → `fix3/towndist-r3.log`): every
+  pair of live towns stands 1 071–1 513 m apart, heart to heart (seeds 1, 2, 5, 1234; seeds 3 and 4 hold one town). Round
+  2 had Shenyaar–Hogan at 101 m (seed 1) and Rumsinan–Thaashik at 516 m (seed 1234).
+- **#7 thirst** (50 years alone, deaths by cause in `fix3/acc/out/alone-live-<seed>.json` vs `fix2/acc/out/`): the trickle
+  of single thirst deaths (years with fewer than 5) is gone — seed 1 11 → 0, seed 2 1 → 0, seed 3 1 → 0, the others 0 →
+  0. One mass event remains, and it is not the sea: seed 1 year 32, a natural drought emptied Shenyaar and then Hogan,
+  whose band lost 18 to thirst after "the water failed ... and walked away" (chronicle read from the year-50 save with
+  `fix3/s4/chron.ts`) — the drought exodus the drought lane holds (13.3). That run started at 21:02, before the drought
+  lane's 21:07 merge of `decide.ts` / `settlement.ts`; it is re-run on the final tree by `fix3/s4/rerun1.sh` →
+  `fix3/s4/out/alone-live-1.json` (round 2 had 8 thirst deaths in one year on seed 2, year 49).
+- **God sessions** (8 seeds, `fix2/acc/extras.cjs fix3/acc/out/god-[0-9]*.json`): drought, every prayer answered — end
+  trust 0.33–0.39 against 0–0.007 ignored (round 2: 0.60–0.73). The drop is #13's relenting: the first answered rain
+  prayer draws the god's drought back, so fewer prayers follow to be answered. Everyday prayer unchanged (quiet town
+  0.001–0.009 of the time, 0 of 8 ≥ 0.02; days 1–3 after a tornado 0.033–0.082, 1 of 8 ≥ 0.08). Default meteor:
+  buildings standing after the blow 12, 12, 11, 11, 14, 16, 14, 13 (of 20; seed 4 of 21) — seeds 3 and 4 below 60 %
+  (seed 1 now at 60 %); 0–10 % outside the danger radius at the blow.
+- **#13 the god's drought on the year-50 worlds** (`fix3/d50m-<seed>{,-none}.log`, 10 days at 1x, every prayer of the
+  target town answered vs no command): 0 thirst deaths and 0 towns fallen on all 8 worlds (round-2 seed 1: 34 thirst
+  deaths, both towns fallen).
+- Still running when this was written: alone 7 and 20261008, kin `r3` / `r3c` 1–8 (chains A and B), the hunting
+  variant (`fix3/hv/`), the seed-1 re-run; `fix3/acc/finish.sh` installs the acceptance table when the chains end
+  (`fix3/acc/FINISHED`, `fix3/acc/summarize-r3.log`, `fix3/acc/extras-r3.log`).
 - UI hooks (sim side done): `god.omen` takes `warning: true` (a warning sign, never the rainbow); event
   `disaster.relent` (the god's drought draws back: show it shrinking); chronicle line `bud.home`; the "Through whom?"
   ask; H6 unchanged.

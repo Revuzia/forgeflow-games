@@ -120,7 +120,7 @@ calibrated. **Open:** hunting where game exists (unmet against the owner's defau
 `HUNT_TUNE`, off, its 8-seed gate `fix3/hv/` queued), everyday prayer, the drought exodus (drought lane), a herder
 walking a flock through the sea, throughput, `creatures.json` (lead / DOCS). The 8-seed acceptance re-run on this tree
 (`fix3/acc/`, rows from r6 / r2 marked) installs `_harness/scratch/living/acceptance.json` when it ends
-(`fix3/acc/FINISHED`); the gate is `fix3/check/check-r3.log`. UI hooks: `god.omen {warning: true}`, event
+(`fix3/acc/FINISHED`). **Gate green** on the final tree (`fix3/check/check-r3b.done` "EXIT 0 02:08" 2026-10-29: 578 / 578 pass, 0 skipped, detban and tsc clean; the first round-3 gate failed only on a mining test re-seeded, LIVING §13.2). Round-3 measurements (LIVING §13.5): towns of the year-50 worlds 1 071–1 513 m apart (was 101 m); single thirst deaths over 50 years 11 → 0 on seed 1 (one natural-drought exodus of 18 remains, drought lane); the god's drought on 8 year-50 worlds with prayers answered: 0 thirst deaths, 0 towns fallen. UI hooks: `god.omen {warning: true}`, event
 `disaster.relent`, chronicle line `bud.home`, the "Through whom?" ask.
 
 ## How to run
