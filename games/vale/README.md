@@ -32,7 +32,7 @@ Defaults (`DEFAULT_BINDS` in `src/session/settings.ts`); every key can be reboun
 | Right-click | Move; right-click an enemy to attack it; hold to keep steering |
 | Q · W · E · R | Abilities: aim, then left-click or press the key again (quick cast is a setting); right-click cancels |
 | Ctrl + Q · W · E · R | Level the ability up |
-| D · F | Battle spells |
+| D · F | Hour spells |
 | 1–6 | Item actives |
 | A, then left-click | Attack-move |
 | S | Stop |
