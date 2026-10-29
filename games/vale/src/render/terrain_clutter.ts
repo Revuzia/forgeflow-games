@@ -108,8 +108,9 @@ export function pebble(col: Color): BufferGeometry {
     const k = 0.8 + rnd() * 0.35;
     p.setXYZ(i, p.getX(i) * k * 1.15, Math.max(-0.05, p.getY(i) * k * 0.6), p.getZ(i) * k);
   }
-  const n = g.toNonIndexed();
-  g.dispose();
+  // three's polyhedra are built non-indexed already; toNonIndexed() on them only logs a warning
+  const n = g.index ? g.toNonIndexed() : g;
+  if (n !== g) g.dispose();
   n.deleteAttribute('uv');
   n.computeVertexNormals();
   bendUp(n, 0.2);

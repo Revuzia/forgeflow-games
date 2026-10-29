@@ -13,8 +13,11 @@
 // exits non-zero on a miss of the hard budgets (counts, the same on any machine):
 //   High (and Low, as a ceiling): ≤ 500k triangles a frame (every pass, shadows included), ≤ 450 draw calls,
 //   ≤ 40 programs.
-// The timing targets — renderer CPU ≤ 6 ms a frame (mean; High and Low), High avg ≥ 60 fps, p95 ≤ 16.7 ms,
-// p99 ≤ 25 ms, Low p95 ≤ 16.7 ms — are checked only on an idle machine: 1-min load average < 3 and no heavy slot held
+// The timing targets — renderer CPU ≤ 6 ms a frame (mean; High and Low), High: no dropped frames (≤ 1 % of the frames
+// take more than 1.5× the measured vsync interval, the window's median interval), avg ≥ 59.4 fps (60 less that 1 %) and
+// p95 ≤ 17.2 ms (16.7 plus 0.5 ms of vsync jitter: at 60 Hz rAF intervals land at 16.6 / 16.7 / 16.8 ms, so a strict
+// p95 ≤ 16.7 flipped PASS / FAIL with no frame dropped, perf PERF-V1), p99 ≤ 25 ms; Low: no dropped frames and p95 ≤
+// 17.2 ms — are checked only on an idle machine: 1-min load average < 3 and no heavy slot held
 // by anyone else (art/blender/common/heavy.py status), before AND after the window. Otherwise they are reported as
 // "not measured: machine busy" (renderer.render wraps the GL submission, so a GPU another process holds reads as
 // CPU time: the same build read 7.6 and 2.5 ms minutes apart under load).
@@ -33,6 +36,12 @@
 // listener (live = on the GPU). Hard checks (any machine): at every menu after the 2nd, the live render targets and
 // renderer.info geometries and textures are <= their menu_2 values (menu_1 may still be filling caches); macOS only
 // (`footprint`): the GPU process grows <= 3 % from menu_2 to the last menu.
+// match peak (perf PERF-m5, part of --prod; --no-match skips it, --match-only runs it alone, --match-scale <k> the sim speed,
+// default 4, --match-min <m> the game minutes, default 30 or the match's end): a whole RIFT match from 0:00 at High, the
+// camera locked on your (autopilot) fighter as the real client plays it, every frame rendered; per second of wall time the
+// frame's peak triangles (every pass), draw calls and live programs. Hard checks (any machine): the match's PEAK second
+// holds the same budgets as the fixed view (≤ 500k triangles, ≤ 450 draws, ≤ 40 programs). The report keeps the timeline,
+// the draw groups of the frame after each new triangle peak and when each program was first seen.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -53,14 +62,26 @@ const PROD_DIR = join(HERE, '_prod', 'dist');
 
 /** the hard budgets (counts; High, Low held to the same ceiling) and the timing targets (idle machine only) */
 const BUDGET = { tris: 500000, draws: 450, programs: 40 };
-const TARGET = { high: { fps: 60, p95Ms: 16.7, p99Ms: 25, cpuMs: 6 }, low: { p95Ms: 16.7, cpuMs: 6 } };
+/** perf PERF-V1: 0.5 ms of vsync jitter on the fps and p95 targets; a dropped frame is an interval > 1.5× the vsync */
+const VSYNC_TOL_MS = 0.5;
+const DROP_K = 1.5, DROP_SHARE = 0.01;
+const TARGET = {
+  high: { fps: +(60 * (1 - DROP_SHARE)).toFixed(1), p95Ms: 16.7 + VSYNC_TOL_MS, p99Ms: 25, cpuMs: 6, dropShare: DROP_SHARE },
+  low: { p95Ms: 16.7 + VSYNC_TOL_MS, cpuMs: 6, dropShare: DROP_SHARE },
+};
+/** the display's frame interval read from a window of rAF intervals: their median (a busy window that runs below the
+ *  display rate reads as no vsync at all and falls back to 60 Hz; the fps target fails such a window anyway) */
+const vsyncOf = (r) => { const s = r.slice().sort((a, b) => a - b); const m = s.length ? s[Math.floor(s.length / 2)] : 0; return m > 4 && m < 17.5 ? m : 1000 / 60; };
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
 const MEM_ONLY = args.includes('--mem-only');
-const DYN = PROD && !MEM_ONLY && !args.includes('--no-dyn');
-const MEM = (PROD || MEM_ONLY) && !args.includes('--no-mem');
+const DYN = PROD && !MEM_ONLY && !args.includes('--match-only') && !args.includes('--no-dyn');
+const MEM = (PROD || MEM_ONLY) && !args.includes('--match-only') && !args.includes('--no-mem');
 const MEM_CYCLES = Math.max(2, Number(opt('mem-cycles', 4)));
 const MEM_GPU_GROWTH = 0.03;
 const DYN_SEC = Number(opt('dyn-sec', 60)), DYN_MENU_S = 16;
+const MATCH_ONLY = args.includes('--match-only');
+const MATCH = (PROD && !MEM_ONLY && !args.includes('--no-match')) || MATCH_ONLY;
+const MATCH_SCALE = Number(opt('match-scale', 4)), MATCH_MAX_S = Number(opt('match-min', 30)) * 60;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
 function heavyOthers() {
@@ -148,10 +169,12 @@ async function measure(q) {
     const prof = await page.evaluate(() => window.__VALE_BENCH__.profile());
     const ft = stat(r), cpu = stat(tm.render), sim = stat(tm.pump);
     const avg = ft.mean;
+    const vsyncMs = +vsyncOf(r).toFixed(2), dropped = r.filter((x) => x > vsyncMs * DROP_K).length;
     const groups = prof ? Object.fromEntries(Object.entries(prof.groups).filter(([, g]) => g.calls + g.shadowCalls > 0).map(([k, g]) => [k, sumGroup(g)])) : null;
     const detail = prof ? Object.fromEntries(Object.entries(prof.detail).slice(0, 40).map(([k, g]) => [k, sumGroup(g)])) : null;
     const res = {
       fps: +(1000 / avg).toFixed(1), avgMs: avg, p95Ms: ft.p95, p99Ms: ft.p99, frames: r.length,
+      vsyncMs, dropped, droppedShare: r.length ? +(dropped / r.length).toFixed(4) : 0,
       worstMs: r.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
       worstCpuMs: tm.render.slice().sort((a, b) => b - a).slice(0, 5).map((x) => +x.toFixed(1)),
       cpuMs: cpu, simMs: sim,
@@ -171,6 +194,7 @@ async function measure(q) {
       if (tg.fps && res.fps < tg.fps) fm.push(`fps ${res.fps} < ${tg.fps}`);
       if (tg.p95Ms && res.p95Ms > tg.p95Ms) fm.push(`p95 ${res.p95Ms} ms > ${tg.p95Ms}`);
       if (tg.p99Ms && res.p99Ms > tg.p99Ms) fm.push(`p99 ${res.p99Ms} ms > ${tg.p99Ms}`);
+      if (tg.dropShare !== undefined && res.droppedShare > tg.dropShare) fm.push(`${res.dropped} dropped frames (> ${DROP_K}× the ${vsyncMs} ms vsync) = ${(res.droppedShare * 100).toFixed(1)} % > ${tg.dropShare * 100} %`);
       if (tg.cpuMs && cpu.mean > tg.cpuMs) fm.push(`renderer CPU ${cpu.mean} ms > ${tg.cpuMs} ms`);
       res.frameTargets = fm.length ? `MISS: ${fm.join(', ')}` : 'pass';
       misses.push(...fm);
@@ -179,7 +203,7 @@ async function measure(q) {
     res.pass = misses.length === 0;
     res.errors = logs.filter((l) => !/favicon/.test(l)).slice(0, 20);
     const gs = groups ? Object.entries(groups).sort((a, b) => b[1].tris - a[1].tris).map(([k, g]) => `${k} ${(g.tris / 1000).toFixed(0)}k/${g.calls}`).join(' ') : '';
-    console.log(`${q.padEnd(7)} ${res.fps} fps  avg ${res.avgMs} p95 ${res.p95Ms} p99 ${res.p99Ms} ms  cpu ${cpu.mean} (p50 ${cpu.p50} p95 ${cpu.p95}) ms  sim ${sim.mean} ms  draws ${res.draws}  programs ${res.programs} (${res.programsDrawn} drawn)  tris ${(res.tris / 1000).toFixed(0)}k  [${gs}]`);
+    console.log(`${q.padEnd(7)} ${res.fps} fps  avg ${res.avgMs} p95 ${res.p95Ms} p99 ${res.p99Ms} ms  vsync ${vsyncMs} ms, ${dropped} dropped  cpu ${cpu.mean} (p50 ${cpu.p50} p95 ${cpu.p95}) ms  sim ${sim.mean} ms  draws ${res.draws}  programs ${res.programs} (${res.programsDrawn} drawn)  tris ${(res.tris / 1000).toFixed(0)}k  [${gs}]`);
     console.log(`        load ${before.load}→${after.load}  ${res.frameTargets ?? ''}  ${PROD ? (res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`) : ''}`);
     return res;
   } finally {
@@ -311,6 +335,90 @@ async function memory() {
   }
 }
 
+/** perf PERF-m5: a whole RIFT match at High, per-second peaks of triangles / draws / programs (see the header) */
+async function matchPeak() {
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=0&seed=${SEED}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+  try {
+    await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+    const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
+    if (err) throw new Error(`bench failed: ${err}`);
+    await page.waitForTimeout(3000);                                        // models, textures, shader warm-up
+    await page.evaluate(([scale, maxT]) => {
+      const b = window.__VALE_BENCH__, r = b.renderer, host = b.host;
+      const S = { done: false, secs: [], progs: [], profiles: [], pending: false, error: null, endT: 0, ended: false };
+      window.__peak = S;
+      host.setTimeScale(scale);
+      b.follow();
+      const seen = new Set();
+      const fresh = () => ({ tris: 0, calls: 0, programs: 0, frames: 0, worstMs: 0 });
+      let last = performance.now(), secAt = last, cur = fresh(), best = 0, want = false;
+      const tick = (now) => {
+        try {
+          const iv = now - last, dt = Math.min(0.1, iv / 1000);
+          last = now;
+          host.pump(dt);
+          r.render(dt);
+          const st = r.stats();
+          cur.frames++;
+          cur.tris = Math.max(cur.tris, st.triangles); cur.calls = Math.max(cur.calls, st.calls); cur.programs = Math.max(cur.programs, st.programs);
+          cur.worstMs = Math.max(cur.worstMs, iv);
+          if (now - secAt >= 1000) {
+            const t = +host.view.time.toFixed(1);
+            S.secs.push({ t, ...cur, worstMs: +cur.worstMs.toFixed(1), actors: st.actors, vfx: st.vfx, particles: st.particles });
+            for (const p of r.gl.info.programs ?? []) if (!seen.has(p.cacheKey)) { seen.add(p.cacheKey); S.progs.push({ t, name: p.name, type: p.type }); }
+            if (cur.tris > best * 1.02) { best = cur.tris; want = true; }
+            cur = fresh(); secAt = now;
+          }
+          if (want && !S.pending) {
+            want = false; S.pending = true;
+            const t = +host.view.time.toFixed(1);
+            r.profile().then((p) => { S.pending = false; if (p) S.profiles.push({ t, total: p.total, groups: p.groups, detail: Object.fromEntries(Object.entries(p.detail).slice(0, 16)) }); });
+          }
+          if (host.ended || host.view.time >= maxT) { S.done = true; S.endT = host.view.time; S.ended = !!host.ended; return; }
+          requestAnimationFrame(tick);
+        } catch (e) { S.error = String(e?.stack ?? e); S.done = true; }
+      };
+      requestAnimationFrame(tick);
+    }, [MATCH_SCALE, MATCH_MAX_S]);
+    const t0 = Date.now();
+    for (;;) {
+      await page.waitForTimeout(15000);
+      const p = await page.evaluate(() => { const S = window.__peak; const last = S.secs[S.secs.length - 1]; return { done: S.done, error: S.error, n: S.secs.length, t: last?.t ?? 0, tris: Math.max(0, ...S.secs.map((x) => x.tris)), programs: Math.max(0, ...S.secs.map((x) => x.programs)) }; });
+      console.log(`match   ${Math.round((Date.now() - t0) / 1000)} s: game ${p.t} s, peak so far ${(p.tris / 1000).toFixed(0)}k triangles, ${p.programs} programs`);
+      if (p.done) break;
+      if (Date.now() - t0 > (MATCH_MAX_S / MATCH_SCALE) * 3000 + 600000) throw new Error('match peak: timed out');
+    }
+    const S = await page.evaluate(() => window.__peak);
+    if (S.error) throw new Error(`match peak failed: ${S.error}`);
+    const secs = S.secs;
+    const peakOf = (k) => secs.reduce((m, x) => (x[k] > m[k] ? x : m), secs[0]);
+    const pt = peakOf('tris'), pc = peakOf('calls'), pp = peakOf('programs');
+    const over = (k, lim) => secs.filter((x) => x[k] > lim).map((x) => x.t);
+    const profiles = S.profiles.map((p) => ({ t: p.t, total: p.total, groups: Object.fromEntries(Object.entries(p.groups).filter(([, g]) => g.calls + g.shadowCalls > 0).map(([k, g]) => [k, sumGroup(g)])), detail: Object.fromEntries(Object.entries(p.detail).map(([k, g]) => [k, sumGroup(g)])) }));
+    const firstT = secs.length ? secs[0].t : 0;
+    const res = {
+      scale: MATCH_SCALE, endT: +S.endT.toFixed(1), ended: S.ended, seconds: secs.length,
+      peak: { tris: pt.tris, trisAt: pt.t, draws: pc.calls, drawsAt: pc.t, programs: pp.programs, programsAt: pp.t },
+      overBudget: { tris: over('tris', BUDGET.tris), draws: over('calls', BUDGET.draws), programs: over('programs', BUDGET.programs) },
+      lateProgramsAfter60s: S.progs.filter((x) => x.t > firstT + 60),
+      programsSeen: S.progs.length, peakProfile: profiles.length ? profiles[profiles.length - 1] : null, profiles, timeline: secs,
+      errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 20),
+    };
+    const misses = [];
+    if (pt.tris > BUDGET.tris) misses.push(`peak triangles ${pt.tris} > ${BUDGET.tris} at ${pt.t} s (${res.overBudget.tris.length} s over)`);
+    if (pc.calls > BUDGET.draws) misses.push(`peak draws ${pc.calls} > ${BUDGET.draws} at ${pc.t} s`);
+    if (pp.programs > BUDGET.programs) misses.push(`peak programs ${pp.programs} > ${BUDGET.programs} at ${pp.t} s`);
+    res.misses = misses;
+    res.pass = misses.length === 0;
+    const gs = res.peakProfile ? Object.entries(res.peakProfile.groups).sort((a, b) => b[1].tris - a[1].tris).map(([k, g]) => `${k} ${(g.tris / 1000).toFixed(0)}k/${g.calls}`).join(' ') : '';
+    console.log(`match   ${secs.length} s to game ${res.endT} s (x${MATCH_SCALE}${S.ended ? ', ended' : ''}): peak ${(pt.tris / 1000).toFixed(0)}k triangles at ${pt.t} s, ${pc.calls} draws at ${pc.t} s, ${pp.programs} programs at ${pp.t} s; ${res.lateProgramsAfter60s.length} programs first seen after 1:00  [peak frame ${res.peakProfile?.t ?? '-'} s: ${gs}]`);
+    console.log(`        ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
+    return res;
+  } finally {
+    await browser.close();
+  }
+}
+
 /** wait (≤ `sec` seconds, polled every 10 s) for an idle machine; true when one came */
 async function waitIdle(sec) {
   const end = Date.now() + sec * 1000;
@@ -325,7 +433,7 @@ async function waitIdle(sec) {
 
 try {
   const deadline = Date.now() + WAIT_IDLE_S * 1000;
-  for (const q of MEM_ONLY ? [] : PRESETS) {
+  for (const q of MEM_ONLY || MATCH_ONLY ? [] : PRESETS) {
     let res = null;
     for (;;) {
       if (WAIT_IDLE_S > 0) await waitIdle(Math.max(0, (deadline - Date.now()) / 1000));
@@ -346,10 +454,14 @@ try {
     out.memory = await memory();
     if (!out.memory.pass) out.pass = false;
   }
+  if (MATCH) {
+    out.match = await matchPeak();
+    if (!out.match.pass) out.pass = false;
+  }
 } finally {
   await stopServer();
 }
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(out, null, 1));
 console.log(`GPU: ${out.gpu}  → ${OUT}`);
-if (PROD || MEM_ONLY) { console.log(out.pass ? 'GATE PASS' : 'GATE FAIL'); if (!out.pass) process.exitCode = 1; }
+if (PROD || MEM_ONLY || MATCH_ONLY) { console.log(out.pass ? 'GATE PASS' : 'GATE FAIL'); if (!out.pass) process.exitCode = 1; }

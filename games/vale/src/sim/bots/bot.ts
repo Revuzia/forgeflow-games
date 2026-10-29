@@ -385,7 +385,7 @@ export class Bot extends BotBase implements BotController {
       else if (b.stage) consider('push', hpF > 0.5 ? 0.66 : 0.4);
       else if (b.window && b.siege && hpF > 0.4 && (!this.jungle || b.phase !== 'early')) consider('push', 0.72);
       // (a lead to press, W4 G3: the tiers that convert leads group on the siege without a won fight)
-      else if (b.press && b.siege && hpF > 0.5 && (!this.jungle || b.phase !== 'early')) consider('push', 0.62);
+      else if (b.press && b.siege && !b.objective && hpF > 0.5 && (!this.jungle || b.phase !== 'early')) consider('push', 0.62);
       else if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
       else if (b.group && follow && (!this.jungle || b.phase === 'late')) consider('push', 0.56);
       // (laning: shove my own lane only while no enemy fighter is there to farm it under its tower)

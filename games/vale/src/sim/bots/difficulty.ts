@@ -14,7 +14,9 @@
 // next structure while the fallen enemies' respawn clocks (public too) say there is time. From the mid
 // game the brain sends the nearest fighter to ANSWER a threatened road (a dive or a stacked wave at a
 // structure) while the rest keep the plan; a tier that `readsWaves` also meets a stacked wave deep in its
-// half before it gets there — a lead is not thrown away to Wicks crashing into an empty road.
+// half before it gets there — a lead is not thrown away to Wicks crashing into an empty road. Objectives
+// are tiered too: how early the team gathers before a (public) spawn, whether it takes one at even numbers,
+// and whether it contests an enemy start; a lead is never pressed over a live or imminent objective.
 
 export type DifficultyId = 'novice' | 'adept' | 'veteran';
 
@@ -58,6 +60,12 @@ export interface DifficultyProfile {
   readonly leadGleam: number;
   /** team brain: sends someone to meet a stacked enemy wave deep in its half before it reaches a structure */
   readonly readsWaves: boolean;
+  /** team brain: seconds before an objective camp's (public) spawn the team gathers at it */
+  readonly objectiveLead: number;
+  /** team brain: desire to take a live objective at EVEN numbers after the early game (0: only with a body more) */
+  readonly objectiveEven: number;
+  /** team brain: contests an objective the enemy is starting when it is not short of bodies */
+  readonly contests: boolean;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -67,13 +75,15 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     intentFollow: 0.55, recallBias: -0.12, retreatBias: -0.08, knowsCooldowns: false,
     decisionNoise: 0.12, focusDiscipline: 0.25, abilityEvery: 0.5,
     macroDelay: 6, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
+    objectiveLead: 10, objectiveEven: 0, contests: false,
   },
   adept: {
     id: 'adept', reaction: 0.25, reactionJitter: 0.07, aimErrorDeg: 6, leadSkill: 0.75,
     lastHitSigma: 0.05, lastHitMiss: 0.07, dodgeChance: 0.5, kiteSkill: 0.55,
     intentFollow: 0.85, recallBias: 0, retreatBias: 0, knowsCooldowns: false,
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
-    macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: true,
+    macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
+    objectiveLead: 30, objectiveEven: 0.55, contests: false,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -81,6 +91,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, knowsCooldowns: true,
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
+    objectiveLead: 50, objectiveEven: 0.68, contests: true,
   },
 };
 

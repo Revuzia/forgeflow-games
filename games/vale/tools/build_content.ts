@@ -3,7 +3,7 @@
 //   node tools/build_content.ts                       build content/ → dist-catalog/
 //   node tools/build_content.ts --check               validate only; writes nothing
 //   flags: --content <dir>  --out <dir>  --allow-missing-assets  --design <dir>  --art-out <dir>
-//          --audio-out <dir>  --scripts <dir>  --quiet
+//          --audio-out <dir>  --scripts <dir>  --quiet  --prune  --keep-png
 //   exit:  0 ok · 1 content errors · 2 usage / internal error
 //
 // SOURCE LAYOUT (CONTRACT §1, file shapes §3.6). One JSON file per record family:
@@ -33,6 +33,14 @@
 // builds write audio/out/<x>.m4a); it ships content-addressed like any asset and the build writes
 // audio.m4a = { <.ogg ref>: <.m4a ref> } into the catalog (content never lists it). A missing sibling is
 // an error (a warning under --allow-missing-assets).
+// IMAGE TRANSCODE (perf PERF-m1): a PNG used only as a splash or a portrait (the loading screen, draft, collection and
+// store art: 1600×900 and 512² paintings) ships as lossy WebP (quality 90, PSNR ≈ 41-44 dB on the dusk plates, about a
+// tenth of the PNG's bytes). The build encodes it with Pillow through the project's Python (VALE_PYTHON, else the repo's
+// .venv, else python3 on PATH), caches the result by the PNG's sha256 in node_modules/.cache/vale-content/webp, and
+// rewrites the ref to assets/<sha256-12>-<name>.webp. Images under 32 KB, a WebP that comes out larger, and a machine
+// without Pillow keep the PNG (the last with a warning). --keep-png ships every PNG as is. --check encodes nothing.
+// PRUNE (perf PERF-m2): --prune deletes every file in <out>/assets that no catalog the new manifest lists refers to
+// (old builds' leftovers: a content-addressed name changes with every edit of the source file).
 //
 // OUTPUT (§3.1, §3.2):
 //   <out>/schema-<n>/<version>/catalog.json   minified; one per schema in MIGRATIONS.reachable()
@@ -58,10 +66,11 @@
 // unit's kind, value shapes, priority tokens); pickup `grant` effects are zod-parsed like every
 // other effect list and emitted WITH their defaults (the schema types behavior as free-form).
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync,
-  renameSync, statSync, writeFileSync,
+  renameSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,10 +101,16 @@ export interface BuildOptions {
   /** ISO time stamped into new catalogs; default now (or $SOURCE_DATE_EPOCH) */
   builtAt?: string;
   quiet?: boolean;
+  /** --prune: delete <out>/assets files no listed catalog refers to (build mode only) */
+  prune?: boolean;
+  /** --keep-png: ship splash / portrait PNGs as they are (no WebP transcode) */
+  keepPng?: boolean;
 }
 export interface AssetInfo { ref: string; abs: string; root: string; bytes: number; out?: string; sha256?: string;
   /** set on an .m4a format-fallback sibling: the .ogg ref it stands in for (CONTRACT §11) */
-  altOf?: string }
+  altOf?: string;
+  /** perf PERF-m1: the PNG this asset was transcoded from (abs is then the cached WebP) and its bytes */
+  encodedFrom?: { abs: string; bytes: number } }
 export interface EmittedSchema { schema: number; version: string; catalog: string; sha256: string; unchanged: boolean; bytes: number }
 export interface BuildResult {
   ok: boolean;
@@ -107,6 +122,10 @@ export interface BuildResult {
   emitted: EmittedSchema[];
   manifest?: CatalogManifest;
   namesChecked: boolean;
+  /** perf PERF-m1: splash / portrait PNGs shipped as WebP (encoded now, from the cache, kept as PNG) */
+  webp?: { encoded: number; cached: number; kept: number };
+  /** perf PERF-m2: --prune's deletions */
+  pruned?: { files: number; bytes: number };
 }
 
 interface Origin { file: string; prefix: Seg[] }
@@ -1079,6 +1098,127 @@ function resolveAssets(refs: Map<string, Seg[][]>, opts: BuildOptions, dg: Diagn
   return found;
 }
 
+// ── 4a. splash / portrait PNG → WebP (perf PERF-m1) ─────────────────────────────────────────────
+/** the catalog keys whose images are paintings shown as <img> / CSS art (never a WebGL texture) */
+const WEBP_KEYS = new Set(['splash', 'portrait']);
+const WEBP = { quality: 90, method: 6, minBytes: 32 * 1024 } as const;
+const WEBP_CACHE = join(PROJECT_ROOT, 'node_modules', '.cache', 'vale-content', 'webp');
+/** reads [{src, dst, q, m}] on stdin, writes each dst (via dst.tmp), prints [{ok, err?}]; exit 3 without Pillow + WebP */
+const WEBP_PY = `
+import json, os, sys
+try:
+    from PIL import Image, features
+    if not features.check('webp'): raise ImportError('Pillow has no WebP support')
+except Exception as e:
+    print(json.dumps({'error': str(e)})); sys.exit(3)
+out = []
+for j in json.load(sys.stdin):
+    try:
+        im = Image.open(j['src']); im.load()
+        icc = im.info.get('icc_profile')
+        if im.mode not in ('RGB', 'RGBA'): im = im.convert('RGBA' if 'A' in im.getbands() else 'RGB')
+        kw = {'quality': j['q'], 'method': j['m']}
+        if icc: kw['icc_profile'] = icc
+        im.save(j['dst'] + '.tmp', 'WEBP', **kw)
+        os.replace(j['dst'] + '.tmp', j['dst'])
+        out.append({'ok': True})
+    except Exception as e:
+        out.append({'ok': False, 'err': str(e)})
+print(json.dumps(out))
+`;
+
+function pythonCandidates(): string[] {
+  const list: string[] = [];
+  if (process.env.VALE_PYTHON) list.push(process.env.VALE_PYTHON);
+  for (const up of ['..', join('..', '..')]) {
+    const v = join(PROJECT_ROOT, up, '.venv', 'bin', 'python3');
+    if (existsSync(v)) list.push(v);
+  }
+  list.push('python3');
+  return [...new Set(list)];
+}
+
+/** PNG refs every use of which sits under a splash / portrait key (a PNG also used elsewhere ships unchanged) */
+function webpTargets(refs: Map<string, Seg[][]>, assets: Map<string, AssetInfo>): AssetInfo[] {
+  const out: AssetInfo[] = [];
+  for (const [ref, paths] of refs) {
+    const a = assets.get(ref);
+    if (!a || !/\.png$/i.test(ref) || a.bytes < WEBP.minBytes) continue;
+    if (paths.every((p) => WEBP_KEYS.has(String(p[p.length - 1])))) out.push(a);
+  }
+  return out;
+}
+
+/**
+ * Point each target at its cached WebP (encoding the ones not cached yet in one Python run). A target keeps its PNG
+ * when the encode fails or comes out larger; no Pillow on the machine keeps every PNG, with one warning.
+ */
+function transcodeWebp(targets: AssetInfo[], dg: Diagnostics): { encoded: number; cached: number; kept: number } {
+  const r = { encoded: 0, cached: 0, kept: 0 };
+  if (!targets.length) return r;
+  mkdirSync(WEBP_CACHE, { recursive: true });
+  const plan = targets.map((a) => {
+    const key = sha256(readFileSync(a.abs)).slice(0, 24);
+    return { a, dst: join(WEBP_CACHE, `${key}-q${WEBP.quality}m${WEBP.method}.webp`) };
+  });
+  const todo = plan.filter((p) => !existsSync(p.dst));
+  if (todo.length) {
+    const jobs = JSON.stringify(todo.map((p) => ({ src: p.a.abs, dst: p.dst, q: WEBP.quality, m: WEBP.method })));
+    let res: { ok: boolean; err?: string }[] | null = null;
+    let why = '';
+    for (const py of pythonCandidates()) {
+      const run = spawnSync(py, ['-c', WEBP_PY], { input: jobs, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 15 * 60 * 1000 });
+      if (run.error) { why = `${py}: ${run.error.message}`; continue; }
+      if (run.status !== 0) { why = `${py}: ${(run.stdout || run.stderr || `exit ${run.status}`).trim().slice(0, 200)}`; continue; }
+      try { res = JSON.parse(run.stdout.trim().split('\n').pop() ?? '') as { ok: boolean; err?: string }[]; } catch { why = `${py}: unreadable output`; continue; }
+      break;
+    }
+    if (!res) {
+      dg.fileWarn('(build)', `${todo.length} splash / portrait PNG(s) ship as PNG: no Python with Pillow + WebP found (${why}; set VALE_PYTHON) — perf PERF-m1`);
+    } else {
+      todo.forEach((p, i) => { if (res![i]?.ok) r.encoded++; else dg.fileWarn(displayPath(p.a.abs), `WebP encode failed (${res![i]?.err ?? 'no result'}); shipping the PNG`); });
+    }
+  }
+  for (const p of plan) {
+    if (!existsSync(p.dst)) { r.kept++; continue; }
+    const bytes = statSync(p.dst).size;
+    if (bytes >= p.a.bytes || sniff(p.dst, 'x.webp')) { r.kept++; continue; }
+    if (!todo.includes(p)) r.cached++;
+    p.a.encodedFrom = { abs: p.a.abs, bytes: p.a.bytes };
+    p.a.abs = p.dst;
+    p.a.bytes = bytes;
+  }
+  return r;
+}
+
+/** perf PERF-m2: every assets/… path the catalogs a manifest lists refer to (the .m4a map values included) */
+export function referencedAssets(outDir: string, m: CatalogManifest): Set<string> {
+  const used = new Set<string>();
+  for (const e of Object.values(m.schemas)) {
+    const f = join(outDir, e.catalog);
+    if (!existsSync(f)) continue;
+    for (const x of readFileSync(f, 'utf8').matchAll(/"(assets\/[A-Za-z0-9_./-]+)"/g)) used.add(x[1]);
+  }
+  return used;
+}
+
+/** --prune: delete <out>/assets files the manifest's catalogs never name; returns the count and bytes freed */
+function pruneAssets(outDir: string, m: CatalogManifest): { files: number; bytes: number } {
+  const used = referencedAssets(outDir, m);
+  const dir = join(outDir, 'assets');
+  const r = { files: 0, bytes: 0 };
+  if (!existsSync(dir)) return r;
+  for (const name of readdirSync(dir)) {
+    if (used.has(`assets/${name}`)) continue;
+    const f = join(dir, name);
+    const st = statSync(f);
+    if (!st.isFile()) continue;
+    unlinkSync(f);
+    r.files++; r.bytes += st.size;
+  }
+  return r;
+}
+
 // ── 4b. fighter triangle budget (r12 B4) ────────────────────────────────────────────────────────
 /** r12 B4: a fighter model's (and each skin's) triangles: the frame's ≤ 500k triangle budget draws every visible
  *  fighter twice (main and shadow pass), so ten of them at FIGHTER_TRIS are ~480k before the map, the crowd and the
@@ -1236,6 +1376,8 @@ export function defaultOptions(over: Partial<BuildOptions> = {}): BuildOptions {
     registry: over.registry ?? MIGRATIONS,
     builtAt: over.builtAt,
     quiet: over.quiet ?? false,
+    prune: over.prune ?? false,
+    keepPng: over.keepPng ?? false,
   };
 }
 
@@ -1289,6 +1431,9 @@ export function buildContent(opts: BuildOptions): BuildResult {
   result.catalog = parsed.data;
   if (opts.check) { result.ok = true; return result; }
 
+  // perf PERF-m1: splash / portrait art as WebP (cached encodes; a machine without Pillow ships the PNGs)
+  if (!opts.keepPng) result.webp = transcodeWebp(webpTargets(refs, assets), dg);
+
   // copy assets content-addressed, rewrite refs
   const assetsDir = join(opts.outDir, 'assets');
   mkdirSync(assetsDir, { recursive: true });
@@ -1297,7 +1442,7 @@ export function buildContent(opts: BuildOptions): BuildResult {
   for (const a of assets.values()) {
     const bytes = readFileSync(a.abs);
     a.sha256 = sha256(bytes);
-    const outName = `${a.sha256.slice(0, 12)}-${basename(a.ref)}`;
+    const outName = `${a.sha256.slice(0, 12)}-${a.encodedFrom ? basename(a.ref).replace(/\.png$/i, '.webp') : basename(a.ref)}`;
     const prevSha = byOut.get(outName);
     if (prevSha && prevSha !== a.sha256) { dg.fileErr(displayPath(a.abs), `content-address collision on ${outName}`); continue; }
     byOut.set(outName, a.sha256);
@@ -1322,12 +1467,14 @@ export function buildContent(opts: BuildOptions): BuildResult {
   result.emitted = out.emitted;
   result.manifest = out.manifest ?? undefined;
   result.ok = dg.errors.length === 0;
+  if (result.ok && opts.prune && out.manifest) result.pruned = pruneAssets(opts.outDir, out.manifest);
   return result;
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────────
 const USAGE = `usage: node tools/build_content.ts [--check] [--content <dir>] [--out <dir>] [--allow-missing-assets]
-                                    [--design <dir>] [--art-out <dir>] [--audio-out <dir>] [--scripts <dir>] [--quiet]`;
+                                    [--design <dir>] [--art-out <dir>] [--audio-out <dir>] [--scripts <dir>] [--quiet]
+                                    [--prune] [--keep-png]`;
 
 export function parseArgs(argv: string[]): BuildOptions | string {
   const over: Partial<BuildOptions> = {};
@@ -1339,6 +1486,8 @@ export function parseArgs(argv: string[]): BuildOptions | string {
         case '--check': over.check = true; break;
         case '--allow-missing-assets': over.allowMissingAssets = true; break;
         case '--quiet': over.quiet = true; break;
+        case '--prune': over.prune = true; break;
+        case '--keep-png': over.keepPng = true; break;
         case '--content': over.contentDir = resolve(val()); break;
         case '--out': over.outDir = resolve(val()); break;
         case '--design': over.designDir = resolve(val()); break;
@@ -1359,6 +1508,9 @@ function printSummary(r: BuildResult, opts: BuildOptions): void {
   rows.push(['assets', `${r.assets.length} files, ${fmtBytes(total)}`]);
   const alts = r.assets.filter((a) => a.altOf);
   if (alts.length) rows.push(['  of which .m4a', `${alts.length} files, ${fmtBytes(alts.reduce((s, a) => s + a.bytes, 0))} (Ogg Opus fallback, CONTRACT §11)`]);
+  const webp = r.assets.filter((a) => a.encodedFrom);
+  if (webp.length) rows.push(['  of which .webp', `${webp.length} splash / portrait files, ${fmtBytes(webp.reduce((s, a) => s + a.bytes, 0))} (from ${fmtBytes(webp.reduce((s, a) => s + a.encodedFrom!.bytes, 0))} of PNG; ${r.webp?.encoded ?? 0} encoded now, ${r.webp?.cached ?? 0} cached${r.webp?.kept ? `, ${r.webp.kept} kept as PNG` : ''})`]);
+  if (r.pruned) rows.push(['pruned', `${r.pruned.files} unreferenced files, ${fmtBytes(r.pruned.bytes)} (--prune)`]);
   rows.push(['names check', r.namesChecked ? 'ran' : 'SKIPPED (no deny-list)']);
   for (const e of r.emitted) rows.push([`schema ${e.schema}`, `${e.catalog} (${fmtBytes(e.bytes)}, sha256 ${e.sha256.slice(0, 12)}…${e.unchanged ? ', unchanged' : ''})`]);
   const w = Math.max(...rows.map(([k]) => k.length));

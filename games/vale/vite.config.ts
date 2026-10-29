@@ -18,11 +18,19 @@
 //     compiles to `preact/jsx-runtime` imports whether or not the transform reads tsconfig.
 //   * build: es2022, no source maps (they would publish the full TS source), vendor chunks for
 //     three / postprocessing(+n8ao) / preact(+signals) so a game-code change does not bust their cache.
+//   * licences (originality F7): the build writes THIRD_PARTY_NOTICES.txt (every node_modules package whose code or
+//     files land in the bundle: name, version, licence id, homepage and its full licence text; three / preact / signals
+//     MIT, n8ao ISC, postprocessing Zlib, the @fontsource faces OFL-1.1) and third_party_notices.json (the same list
+//     without the texts, for the Settings › Credits & licences panel), and opens each JS chunk that carries such code
+//     with a one-line /*! … */ pointer to the file. Dev and preview serve both at the same paths, computed from
+//     package.json's dependencies. A bundled package without a licence text fails the build.
+//   * favicon (perf PERF-m3): index.html gets an inline SVG icon (VALE's dial in brand gloam on ink) when it has none,
+//     so no browser asks for /favicon.ico (a 404 in every boot's console).
 
 import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { dirname, extname, relative, resolve, sep } from 'node:path';
-import { createReadStream, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -172,6 +180,132 @@ function harnessMiddleware(req: IncomingMessage, res: ServerResponse, next: Next
   });
 }
 
+// ── third-party notices (originality F7) ─────────────────────────────────────────────────────────
+interface Notice { name: string; version: string; license: string; homepage: string; text: string }
+
+/** the package a node_modules path belongs to: its name and folder (the innermost node_modules wins) */
+function packageOf(id: string): { name: string; dir: string } | null {
+  const p = id.replace(/\\/g, '/').split('?')[0];
+  const at = p.lastIndexOf('/node_modules/');
+  if (at < 0) return null;
+  const rest = p.slice(at + '/node_modules/'.length).split('/');
+  const name = rest[0].startsWith('@') ? `${rest[0]}/${rest[1]}` : rest[0];
+  if (!name || name.startsWith('.')) return null;
+  return { name, dir: p.slice(0, at + '/node_modules/'.length) + name };
+}
+
+function noticeOf(name: string, dir: string): Notice {
+  const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as { version?: string; license?: string; homepage?: string; repository?: string | { url?: string } };
+  const file = readdirSync(dir).find((f) => /^(licen[cs]e|copying|ofl)(\.(md|txt))?$/i.test(f));
+  const repo = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url ?? '';
+  return {
+    name, version: pkg.version ?? '', license: pkg.license ?? 'UNKNOWN',
+    homepage: (pkg.homepage || repo).replace(/^git\+/, '').replace(/\.git$/, ''),
+    text: file ? readFileSync(resolve(dir, file), 'utf8').replace(/\r\n/g, '\n').trim() : '',
+  };
+}
+
+function noticesText(list: Notice[]): string {
+  const head = 'VALE - third-party notices\n\nVALE bundles the open-source code and fonts listed below. Each is used under its own licence, '
+    + 'reproduced in full after its entry. VALE\'s own code, art, audio and names are not covered by these licences.\n\n';
+  const index = list.map((n) => `  ${n.name} ${n.version} (${n.license})`).join('\n');
+  const body = list.map((n) => `${'='.repeat(78)}\n${n.name} ${n.version}\nLicence: ${n.license}${n.homepage ? `\nSource: ${n.homepage}` : ''}\n${'-'.repeat(78)}\n${n.text}\n`).join('\n');
+  return `${head}${index}\n\n${body}`;
+}
+
+const noticesJson = (list: Notice[]): string => JSON.stringify(list.map(({ text: _t, ...n }) => n), null, 1) + '\n';
+
+/** dev / preview: the runtime dependencies (package.json "dependencies", and theirs) */
+function devNotices(): Notice[] {
+  const seen = new Map<string, Notice>();
+  const visit = (name: string, from: string): void => {
+    if (seen.has(name)) return;
+    const dir = [resolve(from, 'node_modules', name), resolve(ROOT, 'node_modules', name)].find((d) => existsSync(resolve(d, 'package.json')));
+    if (!dir) return;
+    seen.set(name, noticeOf(name, dir));
+    const deps = (JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> }).dependencies ?? {};
+    for (const d of Object.keys(deps)) visit(d, dir);
+  };
+  for (const d of Object.keys((JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> }).dependencies ?? {})) visit(d, ROOT);
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function thirdPartyNotices(): Plugin {
+  const serve = (m: { use(fn: (req: IncomingMessage, res: ServerResponse, next: Next) => void): unknown }): void => {
+    m.use((req, res, next) => {
+      const path = (req.url ?? '').split(/[?#]/)[0];
+      const txt = path.endsWith('/THIRD_PARTY_NOTICES.txt');
+      if (!txt && !path.endsWith('/third_party_notices.json')) { next(); return; }
+      const list = devNotices();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', txt ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(txt ? noticesText(list) : noticesJson(list));
+    });
+  };
+  return {
+    name: 'vale-third-party-notices',
+    configureServer(server) { serve(server.middlewares); },
+    generateBundle(_opts, bundle) {
+      const pkgs = new Map<string, string>();
+      const add = (id: string): void => { const p = packageOf(id); if (p && !pkgs.has(p.name)) pkgs.set(p.name, p.dir); };
+      const chunkPkgs = new Map<string, Set<string>>();
+      for (const [file, out] of Object.entries(bundle)) {
+        if (out.type === 'chunk') {
+          const own = new Set<string>();
+          for (const id of out.moduleIds ?? Object.keys(out.modules ?? {})) { add(id); const p = packageOf(id); if (p) own.add(p.name); }
+          if (own.size) chunkPkgs.set(file, own);
+        } else {
+          const names = (out as { originalFileNames?: string[] }).originalFileNames ?? [];
+          for (const n of names) add(resolve(ROOT, n));
+        }
+      }
+      const list = [...pkgs].map(([name, dir]) => noticeOf(name, dir)).sort((a, b) => a.name.localeCompare(b.name));
+      const bare = list.filter((n) => !n.text);
+      if (bare.length) this.error(`third-party notices: no licence text in ${bare.map((n) => n.name).join(', ')} (originality F7)`);
+      for (const [file, own] of chunkPkgs) {
+        const c = bundle[file];
+        if (c.type !== 'chunk') continue;
+        const ids = list.filter((n) => own.has(n.name)).map((n) => `${n.name} (${n.license})`).join(', ');
+        c.code = `/*! VALE bundles third-party code: ${ids}. Licences in full: THIRD_PARTY_NOTICES.txt */\n${c.code}`;
+      }
+      this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: noticesText(list) });
+      this.emitFile({ type: 'asset', fileName: 'third_party_notices.json', source: noticesJson(list) });
+    },
+    configurePreviewServer(server) {
+      // a preview serves the built files; only a build without them (an old dist) falls back to the computed ones
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '').split(/[?#]/)[0];
+        const name = path.endsWith('/THIRD_PARTY_NOTICES.txt') ? 'THIRD_PARTY_NOTICES.txt' : path.endsWith('/third_party_notices.json') ? 'third_party_notices.json' : null;
+        const outDir = server.config.build.outDir;
+        if (!name || existsSync(resolve(outDir, name))) { next(); return; }
+        const list = devNotices();
+        res.statusCode = 200;
+        res.setHeader('Content-Type', name.endsWith('.txt') ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8');
+        res.end(name.endsWith('.txt') ? noticesText(list) : noticesJson(list));
+      });
+    },
+  };
+}
+
+// ── favicon (perf PERF-m3) ──────────────────────────────────────────────────────────────────────
+/** VALE's dial: a brand-gloam ring on ink, two chalk hour shadows meeting at the gnomon foot, the noon point above */
+const FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+  + '<rect width="32" height="32" rx="7" fill="#0B0D11"/>'
+  + '<circle cx="16" cy="16" r="11.5" fill="none" stroke="#A99BFF" stroke-width="2.4"/>'
+  + '<path d="M10.2 10.6 16 22.4 21.8 10.6" fill="none" stroke="#EDE6D6" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'
+  + '<circle cx="16" cy="7.4" r="1.6" fill="#EDE6D6"/></svg>';
+
+function favicon(): Plugin {
+  return {
+    name: 'vale-favicon',
+    transformIndexHtml(html) {
+      if (/<link[^>]+rel=["'](shortcut )?icon["']/i.test(html)) return html;
+      return [{ tag: 'link', attrs: { rel: 'icon', type: 'image/svg+xml', href: `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}` }, injectTo: 'head' }];
+    },
+  };
+}
+
 function valeServer(): Plugin {
   // registered directly (not returned as a post hook) so they run BEFORE Vite's own middlewares,
   // e.g. before the SPA fallback could answer a missing /catalog/manifest.json with index.html
@@ -191,7 +325,7 @@ export default defineConfig({
   base: './',
   publicDir: resolve(ROOT, 'public'),
   clearScreen: false,
-  plugins: [valeServer()],
+  plugins: [valeServer(), thirdPartyNotices(), favicon()],
   css: { postcss: { plugins: [] } },
   oxc: {
     jsx: { runtime: 'automatic', importSource: 'preact' },

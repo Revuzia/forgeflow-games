@@ -202,9 +202,9 @@ export class TeamBrain {
       const i = l.index;
       let need = 0, x = 0, y = 0;
       if (this.defend[i] > 0.05) { need = this.defendFighters[i] >= 2 ? 2 : 1; x = this.defendX[i]; y = this.defendY[i]; }
-      const deep = this.diff.readsWaves && tp.enemyN[i] >= 5 && tp.enemyFront[i] < l.length * 0.45 && tp.ownN[i] <= tp.enemyN[i] - 3;
+      const deep = this.diff.readsWaves && tp.enemyN[i] >= 4 && tp.enemyFront[i] < l.length * 0.45 && tp.ownN[i] <= tp.enemyN[i] - 2;
       if (this.held(`wave${i}`, deep, now) && need === 0) {
-        need = 1;
+        need = tp.enemyN[i] - tp.ownN[i] >= 9 ? 2 : 1;
         lanePoint(l, fromProgress(l, this.team, Math.max(0, tp.enemyFront[i] - 4)));
         x = proj.x; y = proj.y;
       }
@@ -214,12 +214,15 @@ export class TeamBrain {
       let there = 0;
       for (const f of tp.allyFighters) if (f.alive && sq(f.x - x) + sq(f.y - y) <= 20 * 20) there++;
       if (there >= need) continue;
+      // (a wave, not a dive, never pulls a fighter off an objective the team is taking or waiting at)
+      const oc = this.defend[i] > 0.05 ? null : this.objective?.camp ?? null;
       for (let n = there; n < need; n++) {
         let best: PlayerId = -1, bd = Infinity;
         for (const p of w.players) {
           if (!p || p.team !== this.team || this.answer.has(p.player)) continue;
           const e = p.ent;
           if (!e || !e.alive || e.hp < e.maxHp * 0.4) continue;
+          if (oc && sq(e.x - oc.x) + sq(e.y - oc.y) <= 30 * 30) continue;
           const a = this.assign.get(p.player);
           const own = !!a && a.lane === i && !a.jungle;
           const dd = Math.sqrt(sq(e.x - x) + sq(e.y - y)) * (own ? 0.67 : 1);
@@ -439,16 +442,23 @@ export class TeamBrain {
     // never while the base is under siege or the team is closing the game
     if (this.baseThreat >= 0.4 || this.rush || this.stage) return;
     for (let i = 0; i < this.defend.length; i++) if (this.defend[i] >= 0.7) return;
-    const now = w.time;
+    const now = w.time, d = this.diff;
     for (const c of this.k.camps) {
       if (!c.objective) continue;
       const ready = this.campReady[c.index];
       const alive = ready <= now;
-      if (!alive && ready - now > 30) continue;
+      if (!alive && ready - now > d.objectiveLead) continue;
       if (now < 240) continue;
       let desire = 0;
-      if (alive) desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? 0.55 : 0;
-      else desire = aa >= ae ? 0.4 : 0;
+      if (alive) {
+        desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
+        // (contest: the enemy is at it and we are not short of bodies)
+        if (d.contests && aa >= ae) {
+          for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
+        }
+      } else desire = aa >= ae ? 0.4 : 0;
+      // (macroDelay: the call goes out once it has held)
+      if (!this.held(`obj${c.index}`, desire > 0, now)) desire = 0;
       if (desire > (this.objective?.desire ?? 0)) this.objective = { camp: c, desire, alive };
     }
   }
