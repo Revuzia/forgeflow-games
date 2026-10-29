@@ -30590,7 +30590,7 @@
     ]
   },
   {
-    "$comment": "T1 · shade · Hesmi basic swing (fitted, 1.0 = the impact): the slash, a 1.35 m arc swept 80° -> -70° (tilt 20°) round the fighter over the blow: an ink body under a signature rim, the signature light, a hot leading edge; it fades ~150 ms after; a glint at the weapon_tip on the impact; twice as wide on a crit",
+    "$comment": "T1 · shade · Hesmi basic swing (fitted, 1.0 = the impact): the slash, a 1.35 m arc swept round the fighter over the blow, per clip (the layers' `clip`): attack1, the right hook, 80° -> -70° (tilt 20°) with the impact glint on the right fist (weapon_tip -> prop.R); attack2, the LEFT uppercut-hook (her crits play it too: she has no crit clip), the mirrored arc -80° -> 70° (tilt -20°) with the glint on the left fist (weapon_l -> prop.L); an ink body under a signature rim, the signature light, a hot leading edge; it fades ~150 ms after; twice as wide on a crit",
     "id": "hesmi_atk_swing",
     "duration": 1.0,
     "teamTint": true,
@@ -30655,7 +30655,11 @@
         "scroll": 4.0,
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 1.0
+        "rimAlpha": 1.0,
+        "clip": [
+          "attack1",
+          "crit"
+        ]
       },
       {
         "type": "ribbon",
@@ -30715,7 +30719,11 @@
         "emissive": 3.0,
         "noise": 0.18,
         "scroll": 4.0,
-        "blend": "add"
+        "blend": "add",
+        "clip": [
+          "attack1",
+          "crit"
+        ]
       },
       {
         "type": "ribbon",
@@ -30766,7 +30774,11 @@
         ],
         "emissive": 3.0,
         "noise": 0.0,
-        "blend": "add"
+        "blend": "add",
+        "clip": [
+          "attack1",
+          "crit"
+        ]
       },
       {
         "type": "sprite",
@@ -30789,7 +30801,219 @@
         ],
         "life": 0.07,
         "space": "world",
-        "hold": 0
+        "hold": 0,
+        "clip": [
+          "attack1",
+          "crit"
+        ]
+      },
+      {
+        "type": "ribbon",
+        "at": "caster",
+        "delay": 0.78,
+        "span": 0.3,
+        "arcDeg": [
+          -80,
+          70
+        ],
+        "arcTiltDeg": -20,
+        "arcHeight": 1.1,
+        "arcEase": 1.5,
+        "fit": true,
+        "arcRadius": 1.35,
+        "width": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.46399999999999997
+          ],
+          [
+            0.9,
+            0.6669999999999999
+          ],
+          [
+            1,
+            0.40599999999999997
+          ]
+        ],
+        "life": 0.16,
+        "color": [
+          "#2A2C33",
+          "#17181B"
+        ],
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.35,
+            0.5
+          ],
+          [
+            0.9,
+            0.85
+          ],
+          [
+            1,
+            0.9
+          ]
+        ],
+        "emissive": 0,
+        "noise": 0.25,
+        "scroll": 4.0,
+        "blend": "ink",
+        "rim": "signature",
+        "rimAlpha": 1.0,
+        "clip": [
+          "attack2"
+        ]
+      },
+      {
+        "type": "ribbon",
+        "at": "caster",
+        "delay": 0.78,
+        "span": 0.3,
+        "arcDeg": [
+          -80,
+          70
+        ],
+        "arcTiltDeg": -20,
+        "arcHeight": 1.1,
+        "arcEase": 1.5,
+        "fit": true,
+        "arcRadius": 1.379,
+        "width": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.55,
+            0.29
+          ],
+          [
+            0.9,
+            0.45239999999999997
+          ],
+          [
+            1,
+            0.261
+          ]
+        ],
+        "life": 0.14,
+        "color": [
+          "signature",
+          "secondary"
+        ],
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.6
+          ],
+          [
+            0.9,
+            1.0
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "emissive": 3.0,
+        "noise": 0.18,
+        "scroll": 4.0,
+        "blend": "add",
+        "clip": [
+          "attack2"
+        ]
+      },
+      {
+        "type": "ribbon",
+        "at": "caster",
+        "delay": 0.78,
+        "span": 0.3,
+        "arcDeg": [
+          -80,
+          70
+        ],
+        "arcTiltDeg": -20,
+        "arcHeight": 1.1,
+        "arcEase": 1.5,
+        "fit": true,
+        "arcRadius": 1.4776,
+        "width": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.7,
+            0.0928
+          ],
+          [
+            1,
+            0.1392
+          ]
+        ],
+        "life": 0.09,
+        "color": [
+          "#BE9FE7",
+          "signature"
+        ],
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.6,
+            0.7
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "emissive": 3.0,
+        "noise": 0.0,
+        "blend": "add",
+        "clip": [
+          "attack2"
+        ]
+      },
+      {
+        "type": "sprite",
+        "at": "caster",
+        "socket": "weapon_l",
+        "delay": 0.97,
+        "texture": "glint",
+        "size": [
+          0.7,
+          0.2
+        ],
+        "color": [
+          "#F4EFE2",
+          "signature"
+        ],
+        "emissive": 3.0,
+        "alpha": [
+          1,
+          0
+        ],
+        "life": 0.07,
+        "space": "world",
+        "hold": 0,
+        "clip": [
+          "attack2"
+        ]
       },
       {
         "type": "emitter",

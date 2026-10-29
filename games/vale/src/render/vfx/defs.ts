@@ -10,7 +10,10 @@
 // track the anchor every frame), fit (bool: radius-like values × the area radius; default on at
 // `ground`; a ribbon's width × the spawn scale), secondary (bool: allies spawn half), chance (0..1), repeat (s: re-fire the layer every
 // `repeat` seconds while the instance lives or is sustained), fitTime (bool: the layer's life stretches
-// with a time-fitted instance, e.g. a wind-up def fitted to the cast time; delays always do).
+// with a time-fitted instance, e.g. a wind-up def fitted to the cast time; delays always do), clip (a basic attack's
+// clip role or a list of them, attack1 | attack2 | crit: the layer plays only when the attacker's swing plays that
+// clip, after the actor's own fallback (a fighter with no crit clip crits with attack2), so one windupVfx carries a
+// mirrored arc for an off-hand swing; an instance spawned without a clip plays the attack1 set).
 //
 // Sustained instances (status visuals, wind-ups): while the spawner's `sustain` predicate holds, rate
 // emitters keep emitting and every element with a `hold` (mesh · sprite · decal · beam) stops ageing at
@@ -45,6 +48,8 @@ export interface LayerBase {
   repeat: number;
   /** life stretches with the instance's time fit (wind-ups fitted to castTime) */
   fitTime: boolean;
+  /** the attack clip roles this layer plays on (null: every one) */
+  clip: readonly string[] | null;
 }
 
 export const SHAPE = { point: 0, sphere: 1, ring: 2, disc: 3, cone: 4, line: 5, path: 6, aura: 7 } as const;
@@ -190,6 +195,7 @@ function base(r: Record<string, unknown>): LayerBase {
     socket: typeof r.socket === 'string' ? r.socket : null, offset: vec3(r.offset, null), follow: bool(r.follow, false),
     fit: typeof r.fit === 'boolean' ? r.fit : null, secondary: bool(r.secondary, false), chance: Math.max(0, Math.min(1, num(r.chance, 1))),
     repeat: Math.max(0, num(r.repeat, 0)), fitTime: bool(r.fitTime, false),
+    clip: typeof r.clip === 'string' ? [r.clip] : Array.isArray(r.clip) && r.clip.length && r.clip.every((c) => typeof c === 'string') ? r.clip as string[] : null,
   };
 }
 

@@ -33,7 +33,9 @@
 //   attacks    a basic attack's wind-up (`attack` event) plays the attacker's attack.present.windupVfx fitted
 //              to the wind-up: a melee slash (a synthesized arc swept round the fighter over the blow, from
 //              78 % of the wind-up to just after the impact; twice as wide at T2 on a crit), a ranged draw
-//              glint; cancelled with the attack.
+//              glint; cancelled with the attack. The def's `clip` layers follow the clip the swing plays
+//              (attack1 | attack2 | crit after the model's fallback, actors.ts CLIP_CHAIN): an off-hand attack2 sweeps
+//              its own, mirrored arc and glints on its own fist.
 //   status     every status kind with a client.vfxStatus look is shown for its WHOLE duration: one
 //              sustained instance per (unit, kind), released when the kind leaves EntityView.statuses
 //              (or the unit dies / leaves vision). Taunt tethers to the taunter (the unit that hit it), in
@@ -63,6 +65,7 @@
 import { Color, Vector3 } from 'three';
 import type { CatalogT, ShapeT, StatusKindT } from '../contracts/catalog.ts';
 import { type EntityView, type SimEvent, TICK_DT, type WorldView } from '../contracts/sim.ts';
+import { CLIP_CHAIN } from './actors.ts';
 import type { Palette, Relation } from './palette.ts';
 import { screenFx } from './vfx/screen.ts';
 import type { Tier, VfxSystem } from './vfx/system.ts';
@@ -287,6 +290,8 @@ export class Director {
   private readonly element = new Map<string, Color>();
   /** fighter def → its VFX signature and companion (FighterDef.vfx) */
   private readonly signature = new Map<string, { sig: Color; sec: Color }>();
+  /** fighter def → the clip roles its model carries (art.clips), for a swing's played clip */
+  private readonly clipRoles = new Map<string, ReadonlySet<string>>();
   private readonly vfx: VfxSystem;
   private readonly host: DirectorHost;
   readonly telegraphs: Telegraph[] = [];
@@ -333,6 +338,7 @@ export class Director {
       this.element.set(f.id, new Color().setStyle(f.palette.primary));
       if (f.vfx) this.signature.set(f.id, { sig: new Color().setStyle(f.vfx.signature), sec: new Color().setStyle(f.vfx.secondary) });
       this.attackHit.set(f.id, { vfx: f.attack.present?.vfx, hitVfx: f.attack.present?.hitVfx, windupVfx: f.attack.present?.windupVfx });
+      this.clipRoles.set(f.id, new Set(Object.entries(f.art.clips ?? {}).filter(([, v]) => !!v).map(([k]) => k)));
       const kits = [f.kit, ...Object.values(f.kit.passive.forms ?? {}).map((fm) => fm.kit ?? {})] as Record<string, unknown>[];
       for (const kit of kits) for (const slot of ['a1', 'a2', 'a3', 'ult'] as const) {
         const a = kit[slot] as (AbilityRec & { recast?: { ability: AbilityRec } }) | undefined;
@@ -381,7 +387,16 @@ export class Director {
   }
 
   /** spawn a def anchored on/around a source entity; returns the VFX handle (0 = nothing spawned) */
-  private fire(id: string | undefined, srcId: number, tier: Tier, o: { origin?: Vector3 | null; target?: Vector3 | null; ground?: Vector3 | null; scale?: number; dir?: number; follow?: number; followFor?: number; targetId?: number; anchor?: 'origin' | 'target' | 'path' | 'ground'; loopWhile?: number; sustain?: () => boolean; timeScale?: number; phase?: 'main' | 'windup' | 'release'; world?: boolean }): number {
+  /** the clip a basic attack's swing plays: the sim's role for it (attack1 / attack2 / crit; the view's anim, set on
+   *  the attack's own tick) through the model's fallback, as the actor resolves it */
+  private swingClip(src: EntityView, crit: boolean): string {
+    const role = crit ? 'crit' : src.anim === 'attack2' ? 'attack2' : 'attack1';
+    const have = this.clipRoles.get(src.def);
+    if (!have) return role;
+    return (CLIP_CHAIN[role] ?? [role]).find((r) => have.has(r)) ?? role;
+  }
+
+  private fire(id: string | undefined, srcId: number, tier: Tier, o: { origin?: Vector3 | null; target?: Vector3 | null; ground?: Vector3 | null; scale?: number; dir?: number; follow?: number; followFor?: number; targetId?: number; anchor?: 'origin' | 'target' | 'path' | 'ground'; loopWhile?: number; sustain?: () => boolean; timeScale?: number; phase?: 'main' | 'windup' | 'release'; world?: boolean; clip?: string }): number {
     if (!id || !this.vfx.has(id)) return 0;
     const view = this.host.view();
     const src = view?.entity(srcId);
@@ -393,7 +408,7 @@ export class Director {
       ally: rel === 'ally', ownT1: rel === 'self' && tier <= 1,
       origin: o.origin ?? null, target: o.target ?? null, ground: o.ground ?? null, scale: o.scale, dir: o.dir,
       follow: o.follow, followFor: o.followFor, targetId: o.targetId, sourceId: srcId, anchor: o.anchor, loopWhile: o.loopWhile,
-      sustain: o.sustain, timeScale: o.timeScale, phase: o.phase, world: o.world,
+      sustain: o.sustain, timeScale: o.timeScale, phase: o.phase, world: o.world, clip: o.clip,
     });
   }
 
@@ -449,7 +464,7 @@ export class Director {
           const rel = attackReleaseAt(ev.t, ev.windup);
           const h = this.fire(id, ev.src, ev.crit ? 2 : 1, {
             origin: A, ground: A, dir, anchor: 'origin', targetId: ev.dst, scale: ev.crit ? 2 : 1,
-            timeScale: def.duration / Math.max(0.05, rel - ev.t),
+            timeScale: def.duration / Math.max(0.05, rel - ev.t), clip: this.swingClip(src, ev.crit),
           });
           if (h > 0) this.windups.push({ h, src: ev.src, castEnd: ev.t + ev.windup, rel, attack: true });
           break;

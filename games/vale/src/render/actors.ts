@@ -109,6 +109,15 @@ const FLASH_END = VICTIM_FLASH.endMs / 1000;
 const WOB_DUR = 0.14;
 /** wicks this far from the camera focus animate at 15 Hz */
 export const ANIM_FAR_M = 12;
+/** a clip role's fallback chain: the first role the model carries plays (a fighter with no crit clip crits with
+ *  attack2); the director resolves a swing's clip the same way (vfx `clip` layers) */
+export const CLIP_CHAIN: Readonly<Record<string, readonly string[]>> = {
+  crit: ['crit', 'attack2', 'attack1'], attack2: ['attack2', 'attack1'], attack1: ['attack1', 'attack2'],
+  cast_a1: ['cast_a1', 'cast_a2', 'attack1'], cast_a2: ['cast_a2', 'cast_a1', 'attack1'], cast_a3: ['cast_a3', 'cast_a1', 'attack1'],
+  cast_ult: ['cast_ult', 'cast_a1', 'attack1'], channel: ['channel', 'cast_a1', 'idle'], dash: ['dash', 'run'],
+  stunned: ['stunned', 'idle'], recall: ['recall', 'channel', 'idle'], death: ['death'], run: ['run', 'idle'], idle: ['idle'],
+  idle_lobby: ['idle_lobby', 'idle'], victory: ['victory', 'idle_lobby', 'idle'], spawn: ['spawn', 'idle'], taunt: ['taunt', 'idle'],
+};
 const ANIM_FAR_DT = 1 / 15;
 
 export type ActorKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'ward' | 'pickup';
@@ -806,14 +815,7 @@ export class Actor implements CrowdActor {
       const name = t.roles[r];
       return (name && t.clips.get(name)) || t.clips.get(r) || null;
     };
-    const chain: Record<string, string[]> = {
-      crit: ['crit', 'attack2', 'attack1'], attack2: ['attack2', 'attack1'], attack1: ['attack1', 'attack2'],
-      cast_a1: ['cast_a1', 'cast_a2', 'attack1'], cast_a2: ['cast_a2', 'cast_a1', 'attack1'], cast_a3: ['cast_a3', 'cast_a1', 'attack1'],
-      cast_ult: ['cast_ult', 'cast_a1', 'attack1'], channel: ['channel', 'cast_a1', 'idle'], dash: ['dash', 'run'],
-      stunned: ['stunned', 'idle'], recall: ['recall', 'channel', 'idle'], death: ['death'], run: ['run', 'idle'], idle: ['idle'],
-      idle_lobby: ['idle_lobby', 'idle'], victory: ['victory', 'idle_lobby', 'idle'], spawn: ['spawn', 'idle'], taunt: ['taunt', 'idle'],
-    };
-    for (const r of chain[role] ?? [role, 'idle']) { const c = tryRole(r); if (c) return c; }
+    for (const r of CLIP_CHAIN[role] ?? [role, 'idle']) { const c = tryRole(r); if (c) return c; }
     return null;
   }
 

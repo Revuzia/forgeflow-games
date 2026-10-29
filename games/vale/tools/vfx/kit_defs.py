@@ -54,7 +54,8 @@ KIT: dict[str, dict] = {
     "burdam":  dict(fam="stone", sock="weapon", tip="weapon_tip", motif="tally", swing="heavy", arc=(1.5, 85, -65, 24, 1.15, 0.62)),
     "dunsom":  dict(fam="shade", sock="weapon", motif="crook", shot="ink"),
     "ervet":   dict(fam="lumen", sock="weapon", tip="blade_tip", motif="blade", swing="glass", arc=(1.45, -80, 78, 8, 1.0, 0.5)),
-    "hesmi":   dict(fam="shade", sock="weapon", tip="weapon_tip", motif="shard", swing="heavy", arc=(1.35, 80, -70, 20, 1.1, 0.58)),
+    "hesmi":   dict(fam="shade", sock="weapon", tip="weapon_tip", motif="shard", swing="heavy", arc=(1.35, 80, -70, 20, 1.1, 0.58),
+                    alt=dict(clip="attack2", tip="weapon_l")),   # attack2 is a LEFT uppercut-hook: the mirrored arc, the left fist
     "ilsheta": dict(fam="lumen", sock="weapon", motif="lamp", shot="lamp"),
     "kemdo":   dict(fam="lumen", sock="lens", tip="weapon_tip", motif="lens", swing="heat", arc=(1.35, -72, 80, -20, 1.05, 0.5)),
     "lisvel":  dict(fam="lumen", sock="weapon", motif="draw", shot="arrow"),
@@ -302,6 +303,20 @@ def swing(rec: dict) -> dict:
         L("sprite", at="caster", socket=tip, delay=0.97, texture="glint", size=[0.7, 0.2], color=[NOON, SIG], emissive=3.0, alpha=[1, 0], life=0.07,
           space="world", hold=0),
     ]
+    alt = kit.get("alt")
+    if alt:
+        # an off-hand swing clip (render/vfx/defs.ts `clip`: the clip the swing plays, after the model's fallback): the
+        # same bands on the mirrored arc (angles and tilt negated), the glint on that hand's socket
+        mirrored = []
+        for l in layers:
+            m = dict(l, clip=[alt["clip"]])
+            if m["type"] == "ribbon":
+                m["arcDeg"] = [-m["arcDeg"][0], -m["arcDeg"][1]]
+                m["arcTiltDeg"] = -m["arcTiltDeg"]
+            else:
+                m["socket"] = alt["tip"]
+            mirrored.append(m)
+        layers = [dict(l, clip=["attack1", "crit"]) for l in layers] + mirrored
     if style == "heavy":
         layers.append(L("emitter", at="caster", socket="base", delay=0.95, count=5, shape="disc", radius=0.4, dir="out", spreadDeg=30, speed=[1, 2.2],
                         life=[0.35, 0.55], size=[0.4, 0.7, 0.85], color=[DUST, DUST2], alpha=[0, 0.4, 0.2, 0], gravity=-0.2, drag=2.8,

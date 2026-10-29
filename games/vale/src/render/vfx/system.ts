@@ -103,6 +103,9 @@ export interface SpawnOpts {
   timeScale?: number;
   /** a world event (structure fall): the only spawns whose feel layers may shake the camera (m4) */
   world?: boolean;
+  /** the clip role the attacker's swing plays (attack1 | attack2 | crit, after the actor's fallback): layers with a
+   *  `clip` list play only on theirs; omitted = attack1 */
+  clip?: string | null;
 }
 
 export interface FeelEvent { shake: number; all: boolean; hitFlash: number; hitStop: number; squash: number; at: Vector3 }
@@ -171,6 +174,8 @@ class Inst {
   loopWhile = -1;
   anchor: VfxAnchor = 'origin';
   phase: 'main' | 'windup' | 'release' = 'main';
+  /** the attack clip role (SpawnOpts.clip) */
+  clip = 'attack1';
   active = false;
   fired = new Uint8Array(0);
   acc = new Float32Array(0);
@@ -489,6 +494,7 @@ export class VfxSystem {
     it.loopWhile = o.loopWhile ?? -1;
     it.anchor = o.anchor ?? 'origin';
     it.phase = o.phase ?? 'main';
+    it.clip = o.clip ?? 'attack1';
     // a release-only spawn is a sustained instance released on its first frame (its release layers fire at once)
     if (it.phase === 'release') { it.sustain = null; it.sustained = true; it.held = false; it.relT = 0; }
     if (it.following && this.world.entityPos(it.follow, it.head)) it.prevHead.copy(it.head);
@@ -745,6 +751,7 @@ export class VfxSystem {
   // ── other layers ─────────────────────────────────────────────────────────────────────────────
   private fireLayer(it: Inst, li: number, d: number): void {
     const l = it.def.layers[li];
+    if (l.clip && !l.clip.includes(it.clip)) return;
     let t: number;
     if (l.release) {
       // release layers: once the sustained instance lets go (never on a cancel), timed from the release

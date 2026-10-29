@@ -732,15 +732,17 @@ function checkBehavior(u: CatalogT['units'][number], path: Seg[], dg: Diagnostic
 // unknown keys, so the build is the only place a typo ("lifetime", "colour") gets caught. Texture and
 // mesh-shape names come from the renderer itself (one list, no drift).
 type VfxKind = 'num' | 'nonneg' | 'unit' | 'int' | 'bool' | 'str' | 'range' | 'pair' | 'vec3' | 'curve' | 'gradient' | 'color' | 'color2'
-  | 'bursts' | 'enum';
+  | 'bursts' | 'enum' | 'clips';
 type VfxKey = VfxKind | [ 'enum', readonly string[] ];
 const E = (...v: string[]): VfxKey => ['enum', v];
 const AT = E('origin', 'caster', 'target', 'path', 'ground');
 const BLEND = E('add', 'alpha', 'ink', 'chip');
 const TEX: VfxKey = ['enum', VFX_TEXTURE_NAMES];
+/** the swing clips a layer's `clip` may name (the attack roles of ClipRole) */
+const VFX_CLIPS: readonly string[] = ClipRole.options.filter((r) => r === 'attack1' || r === 'attack2' || r === 'crit');
 const VFX_COMMON: Record<string, VfxKey> = {
   delay: 'nonneg', at: AT, phase: E('main', 'windup', 'release'), socket: 'str', offset: 'vec3', follow: 'bool', fit: 'bool', secondary: 'bool', chance: 'unit',
-  repeat: 'nonneg', fitTime: 'bool',
+  repeat: 'nonneg', fitTime: 'bool', clip: 'clips',
 };
 const EMITTER: Record<string, VfxKey> = {
   count: 'int', rate: 'nonneg', perMeter: 'nonneg', bursts: 'bursts', duration: 'num',
@@ -819,6 +821,10 @@ function vfxValueError(kind: VfxKey, v: unknown): string | null {
     case 'color': return isColor(v) ? null : 'expected "#rrggbb", "team", "element", "signature" or "secondary"';
     case 'color2': return isColor(v) || (Array.isArray(v) && v.length >= 1 && v.every(isColor)) || isKeys(v, isColor) ? null : 'expected colors [start, end] or a gradient';
     case 'bursts': return Array.isArray(v) && v.every((b) => Array.isArray(b) && b.length === 2 && isNum(b[0]) && b[0] >= 0 && isNum(b[1]) && b[1] >= 0) ? null : 'expected [[time s, count], …]';
+    // a basic attack's swing clip(s) the layer plays on (render/vfx/defs.ts `clip`; the director passes the clip the
+    // attacker's swing plays)
+    case 'clips': return (typeof v === 'string' && VFX_CLIPS.includes(v)) || (Array.isArray(v) && v.length > 0 && v.every((c) => typeof c === 'string' && VFX_CLIPS.includes(c)))
+      ? null : `expected a clip role or a list of them: ${VFX_CLIPS.join(' | ')}`;
     default: return null;
   }
 }
