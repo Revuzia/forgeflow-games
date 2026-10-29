@@ -435,6 +435,11 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   const music = new Set(Object.keys(c.audio.music));
   if (c.audio.m4a !== undefined) dg.err(['audio', 'm4a'], 'audio.m4a is written by the content build (each .ogg\'s .m4a sibling, CONTRACT §11); remove it from content');
   for (const [role, cue] of Object.entries(c.audio.events)) if (!cues.has(cue)) dg.err(['audio', 'events', role], unknownRef('audio cue', cue, cues));
+  // each map's ambience emitters (audio.ambience, systems-10): keyed by a map that exists, playing cues that exist
+  for (const [map, list] of Object.entries(c.audio.ambience)) {
+    if (!maps.has(map)) dg.err(['audio', 'ambience', map], unknownRef('map id', map, maps));
+    list.forEach((a, i) => { if (!cues.has(a.cue)) dg.err(['audio', 'ambience', map, i, 'cue'], unknownRef('audio cue', a.cue, cues)); });
+  }
   // the client's own sound roles (src/ui/audio_kinds.ts) must all be bound, to cues / beds that exist
   const roleSets: [ 'ui' | 'screens' | 'stings', readonly string[], Set<string>, string][] = [
     ['ui', UI_CUE_KINDS, cues, 'audio cue'], ['screens', SCREEN_MUSIC_KINDS, music, 'music bed'], ['stings', STING_KINDS, cues, 'audio cue']];
@@ -1325,25 +1330,8 @@ function collectNames(data: Record<string, unknown>): { inputs: NameInput[]; pat
  * project's own content/ a hit that is NOT listed here is an error, so no new copy can regress; any other --content tree
  * (the probe fixtures, whose placeholder text never reaches a player) gets warnings. Delete an entry once its fix lands.
  */
-const COPY_LINT_PENDING: ReadonlySet<string> = new Set([
-  'roles.json$[2].contract|centre',
-  'roles.json$[4].contract|gold',
-  'classes.json$[5].desc|favour',
-  'skins/ardit.json$[1].desc|grey',
-  'skins/ardit.json$[2].desc|armour',
-  'skins/burdam.json$[1].desc|armour',
-  'skins/ervet.json$[1].desc|colours',
-  'skins/ervet.json$[1].desc|armour',
-  'skins/ervet.json$[2].desc|armour',
-  'skins/ilsheta.json$[2].desc|honour',
-  'skins/lisvel.json$[1].desc|grey',
-  'skins/rishal.json$[0].desc|grey',
-  'skins/rishal.json$[1].desc|grey',
-  'skins/rishal.json$[2].desc|armour',
-  'skins/sukri.json$[1].desc|colours',
-  'skins/vashil.json$[1].desc|grey',
-  'maps/map_fray.json$.desc|centre',
-]);
+// empty: every routed hit is fixed (roles / classes / skins a5d8c275, 2553dcdf; the FRAY desc 84107482)
+const COPY_LINT_PENDING: ReadonlySet<string> = new Set<string>([]);
 
 function copyLint(files: Record<string, unknown>, strings: Record<string, string>, contentDir: string, dg: Diagnostics): void {
   const shipped = resolve(contentDir) === resolve(PROJECT_ROOT, 'content');
