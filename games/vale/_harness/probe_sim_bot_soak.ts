@@ -682,10 +682,12 @@ async function main(): Promise<void> {
   if (WORKER) { runWorker(JSON.parse(WORKER) as Job[]); return; }
   const jobs = planJobs();
   const t0 = Date.now();
+  // (the catalog the analysis reads is built up front, with the workers': a content file another lane is mid-edit on
+  // at the end of a long run must not throw the run away)
+  const catalog = loadCatalog();
   console.log(`bot soak (${FULL ? 'full' : 'quick'}): ${jobs.length} matches, suites ${SUITES.join(',')}, ${JOBS} worker${JOBS > 1 ? 's' : ''}${CUT ? `, RIFT cut at ${CUT}s` : ''}${RULES ? `, rules ${RULES}` : ''}`);
   const games = await runParallel(jobs, JOBS);
   games.sort((a, b) => (a.job.suite < b.job.suite ? -1 : a.job.suite > b.job.suite ? 1 : 0) || a.job.diffs.join().localeCompare(b.job.diffs.join()) || a.job.seed - b.job.seed);
-  const catalog = loadCatalog();
   const { gates, text, detail } = analyse(games, catalog);
   const lines: string[] = [`bot soak ${LABEL}: ${games.length} matches in ${((Date.now() - t0) / 1000).toFixed(0)} s`, ...text, '', 'gates:'];
   let failed = 0;
