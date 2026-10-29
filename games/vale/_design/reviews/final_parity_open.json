@@ -24,7 +24,34 @@
    "r12_open": 0
   },
   "excluded": "Ilsheta art (own fix pass); recorded leftovers art/renders/fighters/*/_open.json and _design/reviews/wave_b_open.json",
-  "prerequisite": "Owner rotates the Meshy key before any wave."
+  "prerequisite": "Owner rotates the Meshy key before any wave.",
+  "status_as_of": "2026-10-29 (integration run 2 in progress; HEAD 935ae297)",
+  "status_sources": [
+   "_design/reviews/fixwaves/<wave>_verify<n>.json (W1-W5b)",
+   "_design/reviews/fixwaves/integ_<lane>_verify<n>.json (integration run 1)",
+   "_design/reviews/fixwaves/integration_plan_run2.json lanes.lead (W4 handoffs lead-r2-03/05/06/07)"
+  ],
+  "status_legend": {
+   "done": "the latest verifier item passes (or both halves of a split finding pass)",
+   "done_unverified": "implemented in the tree (file:line cited) but no verifier listed it; a re-review should spot-check it",
+   "partly": "part passes; the rest is open in the run-2 item(s) named in open_in",
+   "open": "not done"
+  },
+  "prerequisite_status": "closed by the owner",
+  "status_counts": {
+   "findings_done": 43,
+   "polish_done": 35,
+   "polish_done_unverified": 9,
+   "polish_partly": 7
+  },
+  "status_counts_by_severity": {
+   "finding/blocker/done": 9,
+   "finding/major/done": 34,
+   "polish/minor/done": 35,
+   "polish/minor/done_unverified": 9,
+   "polish/minor/partly": 7
+  },
+  "status_counts_note": "Counts are entries: audio AUD-2 (W2 UI half, W3 engine half) and client F3 (W2 UI half, W5 art half) are listed in two waves, so 9 blocker and 34 major entries cover the 8 blocker and 33 major findings."
  },
  "scores": {
   "combat": 6,
@@ -214,7 +241,12 @@
       "src/render/overlay/telegraphs.ts",
       "_harness/overlay_regress.mjs"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: src/render/overlay/telegraphs.ts:93-99 sdSector returns `max(l, m * sign(c.x*p.y - c.y*p.x))` after p.y = abs(p.y). By hand, with r 9 and ha 25°: p = (4.5, 0) gives the side term -1.9 (inside), and p = (-4, 0) gives +1.69 (outside).",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "originality",
@@ -231,7 +263,13 @@
       "package.json",
       "tools/secret_scan (new)"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify2 pass: the key literal is gone from every tracked file, binary files included (c50f9387 untracked the .pyc copies); tools/secret_scan.ts scans binary tracked files and runs in npm run check.",
+     "status_history": [
+      "W1_verify1: fail",
+      "W1_verify2: pass"
+     ]
     },
     {
      "dim": "combat",
@@ -246,7 +284,12 @@
      "files": [
       "src/render/director.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: See done:3: one lift start >= 1.3 per cast for Kemdo, Rishal, Hesmi and Tunlan across 2 live runs, with uLiftA read from the post chain's own effect. Code: director.ts beat() keys the envelope to src|ability|cast.",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "combat",
@@ -262,7 +305,12 @@
       "src/render/director.ts",
       "content/vfx.json (lib_recall)"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: See done:2: the effect shows at every 0.5 s sample from 0.1 s to the 6.87 s 'done' (8.6k-28k px, rising over the last second), then the departure (40k / 30.7k px).",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "perf",
@@ -280,7 +328,12 @@
       "_harness/web/render_bench.ts",
       "_harness/perf_1080.mjs"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: See done:4. Code: renderer.ts:995-1002 samples the controller only in match mode, with dynres enabled and not capped (`capped = cap > 0 && 1000/cap > displayMs*1.1`), and resets otherwise. setupMatch calls dyn.configure (renderer.ts:472).",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "perf",
@@ -299,7 +352,12 @@
       "src/render/crowd.ts",
       "_harness/perf_1080.mjs"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: See done:5: the memory gate passes, with targets, geometries and textures equal from menu_2 to menu_5 and GPU +2.2 %. Two rebuild-specific objects remain at the last menu (keptAtLastMenu: one 1024x1024 target and one 768x1024 target, a PlaneGeometry and 2 textures), and they do not accumulate.",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "env",
@@ -318,7 +376,12 @@
       "_design/tokens.json",
       "_harness/value_probe.mjs"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: See done:6: on the display, lane, plate and jungle measure 0.537-0.542 at High and Low on RIFT and FRAY. Landmarks (including the cart) measure 0.542, and ambient uses the same valeFogShade.",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "env",
@@ -337,7 +400,12 @@
       "src/render/terrain.ts",
       "src/render/terrain_walls.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass: See done:7: 0 of 48 RIFT walkable spots are under 50 % readable with the silhouette, against 34 of 48 without it. Fix step 2 (capping wall lips) is optional and handed to W5a; the gate does not need it.",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     },
     {
      "dim": "combat",
@@ -354,9 +422,90 @@
       "src/render/vfx/system.ts",
       "_harness/vfx_gallery.mjs"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W1_verify1 pass (all 32 slots >= 0.5 signature share); the probe flake (tunlan n=0) closed in integ_engine_verify1 combat:F6-probe: probe_kit_hue --live exit 0, 32/32 slots measured.",
+     "status_history": [
+      "W1_verify1: pass"
+     ]
     }
-   ]
+   ],
+   "done_status": [
+    {
+     "id": "done:1",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:2",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:3",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:4",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:5",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:6",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:7",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:8",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:9",
+     "status": "done",
+     "history": [
+      "W1_verify1: fail",
+      "W1_verify2: pass"
+     ]
+    },
+    {
+     "id": "done:10",
+     "status": "done",
+     "history": [
+      "W1_verify1: pass"
+     ]
+    }
+   ],
+   "status": "done",
+   "status_evidence": "W1_verify2 pass (round 1 failed only done:9 / originality:F1; both pass in round 2). Leftovers combat:F4 and perf:PERF-m5 are minors, open in run 2.",
+   "prerequisite_status": "closed by the owner"
   },
   {
    "id": "W2",
@@ -414,7 +563,12 @@
       "content/ui/home/feature.webp",
       "tools/imagegen/manifest.json"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:1. All four Home paintings were repainted with named roster fighters, and the SENSITIVITY negatives are in tools/imagegen (build_manifest.py SENSITIVITY line, W2_art_signoff.md).",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "originality",
@@ -434,7 +588,12 @@
       "tools/imagegen/manifest.json",
       "tools/imagegen/keyart_subjects.json"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: collection_highlight.webp (1280x640) shows Marund's dome cap with blue lenses, a round shield plate, a small lantern, Ervet's glass greatsword on a stand and Vashil's bell ring, in a stone hall. It has no cowls, ears, skulls, capes or figures.",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -451,7 +610,12 @@
       "src/ui/app.tsx",
       "_harness/e2e.mjs"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:2: e2e flow_dodge passes, with nav 6, wallet and profile chip on Play and Home after Leave draft, and Pause/Menu opening Settings.",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "audio",
@@ -468,7 +632,13 @@
       "src/ui/audio_port.ts"
      ],
      "verdict": "confirmed",
-     "part": "UI half"
+     "part": "UI half",
+     "status": "done",
+     "status_evidence": "Both halves pass. UI half W2_verify1 (hidden-tab queue pop, done:10); engine half W3_verify1 (alert path after the background mute, src/audio/index.ts:426-452). integ_client_verify1 client-10 confirmed queue_remind and the 4 s reminder (src/ui/state.ts:36, :205-207).",
+     "status_history": [
+      "W2_verify1: pass",
+      "W3_verify1: pass"
+     ]
     },
     {
      "dim": "originality",
@@ -486,6 +656,11 @@
       "content/ui/modes/bridge_card.webp",
       "content/ui/modes/fray_card.webp",
       "tools/imagegen/manifest.json"
+     ],
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: rift_card: rishal from behind on the rim, roads empty, no Wicks or figures. bridge_card: ardit and marund on the span; I checked the 4x head crops. fray_card: rishal, tunlan and marund on the plate. All three are 768x1152.",
+     "status_history": [
+      "W2_verify1: pass"
      ]
     },
     {
@@ -503,7 +678,12 @@
       "src/ui/styles/screens.css",
       "src/ui/styles/hud.css"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:3 (real match, worstDx 0, 51/51 painted icons at both sizes). Noon tick on the best values is visible in fw_W2_v1r_e2e_rift_postgame_scoreboard_1280.png.",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "hud",
@@ -521,7 +701,13 @@
       "content/strings.en.json",
       "_design/sections/client_hud.md"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify2 pass: The render-on-change gate passes (done:9). On screen: _harness/_shots/fw_W2_v2_e2e_rift_08_match_live.png shows 'T/F/A 0/0/0 · Wicks 0' right of the Sunsplinter and Longshade objective chips under the sky strip, no overlap.",
+     "status_history": [
+      "W2_verify1: partly",
+      "W2_verify2: pass"
+     ]
     },
     {
      "dim": "client",
@@ -541,7 +727,12 @@
       "src/ui/screens/loading.tsx",
       "_harness/sweep_720.mjs (new)"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:4: sweep_720 flow has 0 failures on every front-door screen at both sizes, and draft role labels are icons (roleClipped []).",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -559,7 +750,12 @@
       "src/ui/styles/screens.css",
       "content/ui/modes/*.webp"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:5. The selected card and Find match are above the fold at both sizes, gnomonOverTitle is 0, and the repainted mode art shows in the stage column.",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -576,7 +772,12 @@
       "src/ui/screens/draft.tsx",
       "src/render/menu.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:6. The showcase is 240 px tall at 720p and 424 at 1080p, with name, class, role and 5 ability icons. f_ervet_call plays at lock-in (W3 authored the f_<id>_call cues).",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -594,7 +795,12 @@
       "src/ui/components/Seat.tsx",
       "src/ui/styles/screens.css"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:7. In finalize, seat rows show the BOT chip on the name line, unclipped (fw_W2_v1r_sweep_1280_draft_finalize_boons.png), and skin names in the strip wrap to 2 lines ('Stillwater Blade', 'Lamplit Blade').",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -611,7 +817,13 @@
       "src/ui/styles/screens.css"
      ],
      "verdict": "confirmed",
-     "part": "UI half (loading-card crop)"
+     "part": "UI half (loading-card crop)",
+     "status": "done",
+     "status_evidence": "Both halves pass. Art half W5b_verify1 (48 painted dusk plates); UI half W2_verify1, then done:5 closed by integ_client_verify1 with the shipped CSS only: 1920 card p50 80-89, 1280 card 73-82, 0 console errors (_harness/_reports/integ_client_ver1_loading.json).",
+     "status_history": [
+      "W2_verify1: pass",
+      "W5b_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -629,7 +841,12 @@
       "src/session/grants.ts",
       "src/ui/styles/screens.css"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass: See done:11.",
+     "status_history": [
+      "W2_verify1: pass"
+     ]
     },
     {
      "dim": "hud",
@@ -649,9 +866,100 @@
       "tools/imagegen/manifest.json",
       "_harness/icon_probe.mjs (new)"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W2_verify1 pass (icon_probe OK; family grounds in the live inventory). The seam (new W4 items borrowing paintings) was HUD-1-seam: 18 own paintings landed (f0a2ae42, sensitivity pass in integ_client_verify2); the content repoint is open.",
+     "status_history": [
+      "W2_verify1: pass"
+     ],
+     "open_in": [
+      "integration_plan_run2.json client hud:HUD-1-seam",
+      "integration_plan_run2.json systems systems-r2-icons"
+     ]
     }
-   ]
+   ],
+   "done_status": [
+    {
+     "id": "done:1",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:2",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:3",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:4",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:5",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:6",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:7",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:8",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:9",
+     "status": "done",
+     "history": [
+      "W2_verify1: fail",
+      "W2_verify2: pass"
+     ]
+    },
+    {
+     "id": "done:10",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:11",
+     "status": "done",
+     "history": [
+      "W2_verify1: pass"
+     ]
+    }
+   ],
+   "status": "done",
+   "status_evidence": "W2_verify2 pass (round 1 failed only done:9 / HUD-4). Seam leftovers closed in run 1 (AUD-m2, AUD-m4, roles-720, tip-mode); HUD-1-seam and originality F6 wording open in run 2."
   },
   {
    "id": "W3",
@@ -694,6 +1002,11 @@
      "files": [
       "src/audio/index.ts",
       "_harness/probe_audio_team_private.mjs (new)"
+     ],
+     "status": "done",
+     "status_evidence": "W3_verify1 pass: See done:2: 0 cues for enemy pings (all 9 kinds) and for enemy surrender_vote / surrender_failed (_harness/_reports/fw_W3_v1_team_private.json); gates at src/audio/index.ts:1314-1315, :1344-1345.",
+     "status_history": [
+      "W3_verify1: pass"
      ]
     },
     {
@@ -712,7 +1025,13 @@
       "audio/cues/ui.py"
      ],
      "verdict": "confirmed",
-     "part": "engine half"
+     "part": "engine half",
+     "status": "done",
+     "status_evidence": "Both halves pass. UI half W2_verify1 (hidden-tab queue pop, done:10); engine half W3_verify1 (alert path after the background mute, src/audio/index.ts:426-452). integ_client_verify1 client-10 confirmed queue_remind and the 4 s reminder (src/ui/state.ts:36, :205-207).",
+     "status_history": [
+      "W2_verify1: pass",
+      "W3_verify1: pass"
+     ]
     },
     {
      "dim": "audio",
@@ -728,7 +1047,12 @@
       "src/audio/index.ts",
       "src/boot/main.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W3_verify1 pass: See done:6. Placement curve (probe D): 0 dB to 12 m, -2.38 dB at 15 m, -7.66 at 20 m, -37.7 at 29 m, off at 30 m; pan dx/20 clamped to ±0.6; lpf 12.2 kHz at 17.7 m falling to 3.5 kHz at 30 m. src/boot/main.ts:73-76 wires the renderer's listenerFocus;",
+     "status_history": [
+      "W3_verify1: pass"
+     ]
     },
     {
      "dim": "audio",
@@ -745,7 +1069,13 @@
       "audio/cues/combat.py",
       "src/audio/index.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W3_verify2 pass: The T3 swell evidence is the same as for done:4. The rest of AUD-5 holds on the same fresh run (fw_W3_v2_cc.log). M1: 0 buff cues for harm, 0 wrong status cues, 0 status cues on non-fighters. S1: +3 dB on you for all 9 control kinds; haste gets 0 dB.",
+     "status_history": [
+      "W3_verify1: partly",
+      "W3_verify2: pass"
+     ]
     },
     {
      "dim": "audio",
@@ -762,7 +1092,12 @@
       "audio/cues/kit.py",
       "audio/build.py"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W3_verify1 pass: case 'proc' exists. Over RIFT 9 min + BRIDGE 4 + FRAY 4: unbound 0, and every passive that fired and was seen played its cue (f_<fighter>_passive for fighters, c_proc_item/team for the others).",
+     "status_history": [
+      "W3_verify1: pass"
+     ]
     },
     {
      "dim": "audio",
@@ -779,7 +1114,12 @@
       "audio/cues/match.py",
       "src/audio/index.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W3_verify1 pass: See done:5. Emitters: RIFT 6 (air bed, canopy, water, insects, lamp flame, wren), BRIDGE 5 (air bed, updraft, creak, lamp flame, wren), FRAY 5 (murmur bed, bunting, lantern, lamp flame, wren). All are on the ambience bus at their maps' art.ambient points, and content/maps is unedited.",
+     "status_history": [
+      "W3_verify1: pass"
+     ]
     },
     {
      "dim": "audio",
@@ -798,9 +1138,63 @@
       "audio/build.py",
       "src/audio/index.ts"
      ],
-     "verdict": "downgraded"
+     "verdict": "downgraded",
+     "status": "done",
+     "status_evidence": "W3_verify2 pass: (1) Re-voiced per done:3 (above). (2) KIT_SLOTS now include 'hit' and 'dash'. case 'hit' (index.ts:1279-1283) plays f_<id>_hit before the ability's hitSfx. case 'dash' (:1335) plays f_<id>_dash unless the unit was knocked airborne that same tick.",
+     "status_history": [
+      "W3_verify1: partly",
+      "W3_verify2: pass"
+     ]
     }
-   ]
+   ],
+   "done_status": [
+    {
+     "id": "done:1",
+     "status": "done",
+     "history": [
+      "W3_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:2",
+     "status": "done",
+     "history": [
+      "W3_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:3",
+     "status": "done",
+     "history": [
+      "W3_verify1: partly",
+      "W3_verify2: pass"
+     ]
+    },
+    {
+     "id": "done:4",
+     "status": "done",
+     "history": [
+      "W3_verify1: partly",
+      "W3_verify2: pass"
+     ]
+    },
+    {
+     "id": "done:5",
+     "status": "done",
+     "history": [
+      "W3_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:6",
+     "status": "done",
+     "history": [
+      "W3_verify1: pass"
+     ]
+    }
+   ],
+   "status": "done",
+   "status_evidence": "W3_verify2 pass, with 3 regressions (kit ability-hit contact, attack-hit soft top, hit-sfx semantics) that run 1 claimed fixed without a verdict; run 2 audio-r1-confirm re-measures them."
   },
   {
    "id": "W4",
@@ -862,7 +1256,16 @@
       "_harness/pacing.ts",
       "_harness/ (new probe_sim_bot_soak.ts)"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify2 pass: deaths to Wicks/monsters with no enemy fighter adept 2.7 % / 2.3 %, veteran 1.8 % / 1.8 % (target <= 5 %). Re-measured at HEAD by integ_systems_verify1 runs: fw_W4_soak_integ_systems_v1_full1.txt adept 2.7 % / veteran 1.8 %, all laning gates PASS.",
+     "status_history": [
+      "W4 handoff lead-r2-03 (fw_W4_soak_tj_full1): partly, deaths to Wicks/monsters with no enemy fighter 4.9 % adept / 5.6 % veteran (target <= 5 %); 21 veteran cases: 5 Longshade, 15 Wicks in retreats",
+      "W4 handoff lead-r2-05 (fw_W4_soak_db_full2): veteran alone-deaths rose to 6.6 %",
+      "W4_verify1: partly",
+      "W4 handoff lead-r2-07 (fw_W4_soak_r1_full1 / r1_full21): done",
+      "W4_verify2: pass"
+     ]
     },
     {
      "dim": "gameplay",
@@ -881,7 +1284,13 @@
       "src/sim/bots/team.ts",
       "content/team_buffs.json"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify1 pass: See done:4. Dawn Seal is in content/modes.json rift rules dawnSeal (needle_outer, until 420, amount 700, every 30); probe_sim_structures 32/32.",
+     "status_history": [
+      "W4 handoff lead-r2-03 (fw_W4_soak_tj_full1): done, median first structure 10.2 / 10.5 min",
+      "W4_verify1: pass"
+     ]
     },
     {
      "dim": "gameplay",
@@ -899,7 +1308,16 @@
       "src/sim/bots/bot.ts",
       "src/sim/bots/team.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify2 pass: grovehunter deaths 2.3 vs 2.8 / 1.9 vs 3.3 (seeds 1-20) and 2.5 vs 3.2 / 2.7 vs 3.5 (seeds 21-40). At HEAD (fw_W4_soak_integ_systems_v1_full1.txt): level gap 0.57 / 0.74 (target <= 1.5), deaths 2.3 vs 2.8 / 2.3 vs 3.3.",
+     "status_history": [
+      "W4 handoff lead-r2-03 (fw_W4_soak_tj_full1): done, level gap 0.69 / 0.61, grovehunter deaths 2.7 vs 3.1 and 1.8 vs 2.5",
+      "W4 handoff lead-r2-05 (fw_W4_soak_db_full2): veteran jungle gate missed by 0.025 deaths a game (2.275 vs 2.25), a side effect of the G3 macro",
+      "W4_verify1: partly",
+      "W4 handoff lead-r2-07 (fw_W4_soak_r1_full1 / r1_full21): done",
+      "W4_verify2: pass"
+     ]
     },
     {
      "dim": "gameplay",
@@ -920,7 +1338,14 @@
       "content/team_buffs.json",
       "_design/sections/modes_economy.md"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify1 pass: See done:6. Sudden death keeps 'requires' protection (probe_sim_structures 'a protected core takes nothing in sudden death'); rules.gorgeWind is in content/modes.json for rift and bridge.",
+     "status_history": [
+      "W4 handoff lead-r2-05 (fw_W4_soak_db_full2): done, BRIDGE 8/40 sudden death, 0 chain skips, median 16.4 min",
+      "W4_verify1: pass",
+      "W4 handoff lead-r2-07: the BRIDGE 14.8 min in r1_full21 fixed by 298533c8; BRIDGE-only re-runs 15.5 / 16.1 min (fw_W4_soak_r1_br1, r1_br21)"
+     ]
     },
     {
      "dim": "gameplay",
@@ -938,7 +1363,16 @@
       "src/sim/bots/difficulty.ts",
       "_harness/"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "integ_systems_verify1 pass: veteran beats novice 39/40 and 38/40, adept 34/40 and 32/40 (bars 34/40 and 26/40); holdout seeds 41-80 73/80 and 65/80. Novice changes are perception and execution knobs only (src/sim/bots/difficulty.ts).",
+     "status_history": [
+      "W4 handoff lead-r2-05 (fw_W4_soak_db_full2): partly, veteran beats adept 17/20, novice only 14/20 (bar 85 %)",
+      "W4_verify1: partly",
+      "W4 handoff lead-r2-07 (fw_W4_soak_r1_full1 / r1_full21): partly, seeds 1-20 36/40 and 31/40, seeds 21-40 32/40 vs novice (80 %) and 30/40 vs adept; novice bots weakened by perception and execution only (affects the co-op vs novice queue)",
+      "W4_verify2: partly",
+      "integ_systems_verify1: pass"
+     ]
     },
     {
      "dim": "originality",
@@ -951,7 +1385,12 @@
      "fix": "Ervet: make the ult payoff the shards, not reach. For example, Shatter's shards fly back to the hilt along lines, damaging and dragging enemies they cross, with no reach bonus. Vashil: change the stun trigger to a group or chord condition, such as two humming enemies within 3 m. Add Riven and Brand, with the differences, to ROSTER §5.",
      "size": "M",
      "files": [],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify1 pass: See done:9.",
+     "status_history": [
+      "W4_verify1: pass"
+     ]
     },
     {
      "dim": "originality",
@@ -971,7 +1410,12 @@
       "content/modes.json",
       "_design/sections/items_setup.md"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify1 pass: The engineers' 'partly' rested only on the missing owner sign-off, which owner_rulings.md ruling 4 now records.",
+     "status_history": [
+      "W4_verify1: pass"
+     ]
     },
     {
      "dim": "gameplay",
@@ -989,9 +1433,86 @@
       "src/sim/bots/knowledge.ts",
       "_harness/probe_items.ts"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W4_verify1 pass: See done:7. content/items.json has 20 core + 11 apex, all in the rift and bridge pools. Minor: 10 icon files are each shown on two finished items, because 18 new items borrow another item's painting (e.g. dawnspur and dialcutter both use dialcutter.webp). This is the W2 icon handoff, still open.",
+     "status_history": [
+      "W4_verify1: pass"
+     ]
     }
-   ]
+   ],
+   "done_status": [
+    {
+     "id": "done:1",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:2",
+     "status": "done",
+     "history": [
+      "W4_verify1: fail",
+      "W4 handoff lead-r2-07 (fw_W4_soak_r1_full1 / r1_full21): done",
+      "W4_verify2: pass"
+     ]
+    },
+    {
+     "id": "done:3",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:4",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:5",
+     "status": "done",
+     "history": [
+      "W4_verify1: fail",
+      "W4 handoff lead-r2-07: partly, seeds 21-40 32/40 vs novice (80 %) and 30/40 vs adept",
+      "W4_verify2: fail",
+      "integ_systems_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:6",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:7",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:8",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:9",
+     "status": "done",
+     "history": [
+      "W4_verify1: pass"
+     ]
+    }
+   ],
+   "status": "done",
+   "status_evidence": "W4_verify2 failed only done:5 (veteran vs novice 32/40 on seeds 21-40); integ_systems_verify1 passed it at HEAD (39/40, 38/40 vs novice; 34/40, 32/40 vs adept). Open: systems-18 (3 finished items never bought) and the Longshade balance flag (observations)."
   },
   {
    "id": "W5",
@@ -1031,7 +1552,12 @@
       "_design/tools/map_gen.py",
       "content/maps/map_rift.json"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W5a_verify1 pass: As done:1: 0 violations, worst +0.19 m. Visual (_harness/_shots/value_rift_high_fw_W5a_ver1_lane0.png vs final_maps_value/value_rift_high_final_maps_lane0.png): the Outer Needle stands on open road; the curbed grass ring at its foot is gone.",
+     "status_history": [
+      "W5a_verify1: pass"
+     ]
     },
     {
      "dim": "originality",
@@ -1044,7 +1570,13 @@
      "fix": "Shadeprint: keep the ink cloth, but give the mask a warm lacquer (saturation >= 0.25) or amber inlay in the eye slits so they read lit, not hollow. Optionally carve the concept's under-nose V as a closed lip line on both skins. Longshade: remove the tear streaks and keep the lamp eyes, or move to a gnomon or hour-line plate motif, then re-render the icon. Ask the owner to rule on both.",
      "size": "S",
      "files": [],
-     "verdict": "downgraded"
+     "verdict": "downgraded",
+     "status": "done",
+     "status_evidence": "Both halves pass: Odrum Shadeprint warm amber (W5b_verify1, mask saturation 0.61) and Longshade tears removed (W5a_verify1; integ_world_verify1 world-07). Owner rulings 1-2 in owner_rulings.md.",
+     "status_history": [
+      "W5a_verify1: pass",
+      "W5b_verify1: pass"
+     ]
     },
     {
      "dim": "hud",
@@ -1060,7 +1592,14 @@
       "art/blender/fighters/common (icon render)",
       "art/out/fighters/*/icon.png"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W5b chip art passed (min pair 59.5 at 26 px, 0 of 120 under 55); the wiring half closed in integ_client_verify1: Portrait kind chip at side.tsx:59, top.tsx:194/275/284, panels.tsx:110/192/209, status.tsx:217.",
+     "status_history": [
+      "W5b_verify1: partly",
+      "W5b_verify2: partly",
+      "integ_client_verify1: pass"
+     ]
     },
     {
      "dim": "env",
@@ -1080,7 +1619,12 @@
       "content/maps/map_fray.json",
       "_design/tools/map_gen.py"
      ],
-     "verdict": "confirmed"
+     "verdict": "confirmed",
+     "status": "done",
+     "status_evidence": "W5a_verify1 pass: Fix step 1 (Art 2.0 landmarks): verified, see done:2. Fix step 2 (dressed skirt at L* <= 52): verified at the spawns (done:3), at the edge pans (rift_pan_at2/at3, bridge_pan_at2) and at the corners (fw_W5a_ver1_{rift,bridge,fray}_corner_at*): - RIFT corner out-of-bounds L* p50 20-23, p95 <= 43.",
+     "status_history": [
+      "W5a_verify1: pass"
+     ]
     },
     {
      "dim": "client",
@@ -1100,9 +1644,64 @@
       "art/out/fighters/*/*_splash.png"
      ],
      "verdict": "confirmed",
-     "part": "art half (painted plates)"
+     "part": "art half (painted plates)",
+     "status": "done",
+     "status_evidence": "Both halves pass. Art half W5b_verify1 (48 painted dusk plates); UI half W2_verify1, then done:5 closed by integ_client_verify1 with the shipped CSS only: 1920 card p50 80-89, 1280 card 73-82, 0 console errors (_harness/_reports/integ_client_ver1_loading.json).",
+     "status_history": [
+      "W2_verify1: pass",
+      "W5b_verify1: pass"
+     ]
     }
-   ]
+   ],
+   "done_status": [
+    {
+     "id": "done:1",
+     "status": "done",
+     "history": [
+      "W5a_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:2",
+     "status": "done",
+     "history": [
+      "W5a_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:3",
+     "status": "done",
+     "history": [
+      "W5a_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:4",
+     "status": "done",
+     "history": [
+      "W5b_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:5",
+     "status": "done",
+     "history": [
+      "W5b_verify1: partly",
+      "W5b_verify2: partly",
+      "integ_client_verify1: pass"
+     ]
+    },
+    {
+     "id": "done:6",
+     "status": "done",
+     "history": [
+      "W5a_verify1: pass",
+      "W5b_verify1: pass"
+     ]
+    }
+   ],
+   "status": "done",
+   "status_evidence": "W5a_verify2 pass; W5b_verify2 failed only done:5 and HUD-2 on W2 CSS handoffs, both closed by integ_client_verify1. HUD-3 (minimap padding) is open in run 2."
   }
  ],
  "polish": [
@@ -1122,7 +1721,16 @@
     "src/render/post.ts"
    ],
    "verdict": "downgraded",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "partly",
+   "status_evidence": "Box-white gate met (integ_engine_verify1: Kemdo 0.023, Rishal 0.202, Tunlan 0.219, Hesmi 0.281), but the VFX lift cap (8b417c56) dims the ult impact ground effects: value_probe RIFT Low flash 1.94x against >= 2.0x. Open in run 2.",
+   "status_history": [
+    "W1_verify1: partly",
+    "integ_engine_verify1: partly"
+   ],
+   "open_in": [
+    "integration_plan_run2.json engine combat:F4"
+   ]
   },
   {
    "dim": "combat",
@@ -1139,7 +1747,12 @@
     "src/render/renderer.ts"
    ],
    "verdict": "downgraded",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: Spot-check: live shots show the CC plate over the bar, e.g. 'AIRBORNE' with its glyph over the victim in _harness/_shots/fw_W1_v1_hue_hesmi_a2.png and 'FEARED' in fw_W1_v1_ult_tunlan_peak.jpg.",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "combat",
@@ -1161,7 +1774,14 @@
     "marund}.json"
    ],
    "verdict": "confirmed",
-   "wave": "W1 (vfx impact hold) + W4 (melee windups in content/fighters)"
+   "wave": "W1 (vfx impact hold) + W4 (melee windups in content/fighters)",
+   "status": "done",
+   "status_evidence": "Impact hold W1_verify1 pass; melee wind-up half W4_verify1 pass.",
+   "status_history": [
+    "W1_verify1: pass",
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (wind-up half)",
+    "W4_verify1: pass"
+   ]
   },
   {
    "dim": "combat",
@@ -1178,7 +1798,12 @@
     "art/out fighter GLB"
    ],
    "verdict": "confirmed",
-   "wave": "W5"
+   "wave": "W5",
+   "status": "done",
+   "status_evidence": "W5b_verify1 pass: Spot-check. I did not re-capture; instead I re-derived per-frame steps from W5b's in-game pose capture, _harness/_reports/fw_W5b_hesmi_attack_pose.json: - attack1: right fist holds f11-f15 (5 frames, <= 0.044 m/frame), strikes f16-f17 (0.39 + 1.72 = 2.11 m), damage at f18, follow-through f18-f21;",
+   "status_history": [
+    "W5b_verify1: pass"
+   ]
   },
   {
    "dim": "combat",
@@ -1195,7 +1820,12 @@
     "src/render/overlay/telegraphs.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: Spot-check from the live Tunlan 9 m cone (fw_W1_v1_combat_verify.log): on the landing frames f28-f31 the interior samples read alpha 51/255 = 0.20 (one contour sample 26). Before landing they were 70-77; the old flash was 0.40 = 102.",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "hud",
@@ -1213,7 +1843,18 @@
     "src/ui/hud/minimap.tsx"
    ],
    "verdict": "downgraded",
-   "wave": "W5 (minimap art) + W2 (minimap.tsx)"
+   "wave": "W5 (minimap art) + W2 (minimap.tsx)",
+   "status": "partly",
+   "status_evidence": "Wick dots and the bounds-aware minimap are in (src/ui/hud/minimap.tsx:61-76 minimapBounds/fitMap, :375-381). The plaza discs are still clipped on the live 1x minimap until the world lane pads RIFT minimap.png and writes art.terrain.minimapBounds (integ_world_verify1 world-05 fail: skip premise false).",
+   "status_history": [
+    "W5a_verify1: partly",
+    "integ_client_verify1: partly"
+   ],
+   "open_in": [
+    "integration_plan_run2.json world world-pad",
+    "integration_plan_run2.json world world-05",
+    "integration_plan_run2.json client stitch client-hud3"
+   ]
   },
   {
    "dim": "hud",
@@ -1231,7 +1872,10 @@
     "content/strings.en.json"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. Rank-aware numbers lead with the current rank and Shift shows the row (src/ui/components/Tooltip.tsx:77, :136; src/ui/styles/components.css:142); a locked ultimate says \"Unlocks at level {n}\" (content/strings.en.json hud.ability.locked).",
+   "status_history": []
   },
   {
    "dim": "hud",
@@ -1250,7 +1894,12 @@
     "src/ui/hud/panels.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done",
+   "status_evidence": "W2_verify1 pass: content/strings.en.json:879 'killfeed.fell_to_structure': '{victim} fell to the {structure}' and :884 '{team} lost the {structure}'. Shot _harness/_shots/fw_W2_p3_hud2_krow_structure.png reads 'Serenade lost the Outer Needle'.",
+   "status_history": [
+    "W2_verify1: pass"
+   ]
   },
   {
    "dim": "hud",
@@ -1267,7 +1916,10 @@
     "src/ui/styles/hud.css"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. Scoreboard spells cell (src/ui/hud/panels.tsx:89-96), 32 px faces with a respawn count over a fallen one, 24 px item and spell glyphs (src/ui/styles/hud.css:462-466).",
+   "status_history": []
   },
   {
    "dim": "hud",
@@ -1285,7 +1937,12 @@
     "src/ui/hud/frame_layout.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W2 (docs) / W1 (tokens.json)"
+   "wave": "W2 (docs) / W1 (tokens.json)",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass (tokens.json hud budget); docs half integ_lead_verify1 lead-01 pass (_design/STYLE_BIBLE.md:101-109 matches client_hud.md 4.1, tokens.json and frame_layout.ts).",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "hud",
@@ -1303,7 +1960,10 @@
     "src/ui/hud/side.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. HUD factor floors at 0.8 below 1080p (src/ui/app.tsx:193; hud.css:2), full ally name on hover/focus (src/ui/hud/side.tsx:53), name column freed (hud.css:218). W2 done:4 (720p sweep, 0 clipped labels) passed in W2_verify1.",
+   "status_history": []
   },
   {
    "dim": "hud",
@@ -1319,7 +1979,10 @@
     "content/ui/icons/items/linen_hood.webp"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done",
+   "status_evidence": "Linen Hood repainted as folded oat linen on a board (W2_art_signoff.md, Icons table); W2_verify1 checked every new image by eye at full size and 3-4x crops: all pass sensitivity. integ_client_verify1 client-09 re-measured its ground.",
+   "status_history": []
   },
   {
    "dim": "hud",
@@ -1337,7 +2000,10 @@
     "src/ui/hud/shop.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. World ping: two outward ground rings and the glyph lifted on a 56 px chalk-ringed disc (src/ui/hud/world.tsx:134; hud.css:611); shop scroller 24 px bottom fade (hud.css:559).",
+   "status_history": []
   },
   {
    "dim": "env",
@@ -1356,7 +2022,12 @@
     "src/render/terrain_glsl.ts"
    ],
    "verdict": "downgraded",
-   "wave": "W5"
+   "wave": "W5",
+   "status": "done",
+   "status_evidence": "W5a_verify1 pass: In fw_W5a_ver1_fray_edge_at3 and at1 the hour-stones are dark basalt, with a chalked chamfer and a chalk half-hour tick across the top, standing on their footing. Lit top L* p50 22.0 on both stones (boxes 790,400-1130,560 and 1500,150-1780,380; brief 20-28).",
+   "status_history": [
+    "W5a_verify1: pass"
+   ]
   },
   {
    "dim": "env",
@@ -1373,7 +2044,13 @@
     "src/render/terrain.ts"
    ],
    "verdict": "downgraded",
-   "wave": "W5"
+   "wave": "W5",
+   "status": "done",
+   "status_evidence": "W5a_verify1 fail (not attempted), closed in run 1: integ_world_verify1 env:F5 pass (kit.py fan_plate midrib; Dialwood crowns re-built).",
+   "status_history": [
+    "W5a_verify1: fail",
+    "integ_world_verify1: pass"
+   ]
   },
   {
    "dim": "env",
@@ -1392,7 +2069,13 @@
     "art/blender/units/structure_kit.py"
    ],
    "verdict": "confirmed",
-   "wave": "W5 (+ W1 value_probe base spots)"
+   "wave": "W5 (+ W1 value_probe base spots)",
+   "status": "done",
+   "status_evidence": "W5a_verify1 pass: Aubade plaza, box 400,300-1200,900 (target C* 10-14): - RIFT (fw_W5a_ver1_rift_edge_at0): C* 11.7, HSV saturation p50 0.25 (was 0.03). - BRIDGE (fw_W5a_ver1_bridge_edge3_at0): C* 13.4, saturation 0.31.",
+   "status_history": [
+    "W1_verify1: pass",
+    "W5a_verify1: pass"
+   ]
   },
   {
    "dim": "env",
@@ -1410,7 +2093,13 @@
     "src/render/terrain_glsl.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W5 (+ W1 terrain_glsl water)"
+   "wave": "W5 (+ W1 terrain_glsl water)",
+   "status": "done",
+   "status_evidence": "W5a_verify1 pass: 12 camp-lip clusters are in content/maps/map_rift.json. In game (fw_W5a_ver1_camps_at0-4) the cluster boxes measure L* p95 34.8 (Glasshorn), 37.4 (Resinback) and 42.0 (Stilltusks), all <= 46.",
+   "status_history": [
+    "W1_verify1: pass",
+    "W5a_verify1: pass"
+   ]
   },
   {
    "dim": "perf",
@@ -1430,7 +2119,12 @@
     "src/ui/state.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W2 (preload at match-found/lock-in) + build tooling (tools/build_content.ts)"
+   "wave": "W2 (preload at match-found/lock-in) + build tooling (tools/build_content.ts)",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: Build half. The served catalog (dist-catalog/schema-1/2026.10.1/catalog.json) references 263 .webp assets and 0 splash or portrait PNGs. tools/build_content.ts has the WebP transcode with a sha256 cache and --keep-png. The preload at match-found is W2's.",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "perf",
@@ -1447,7 +2141,12 @@
     "tools/build_content.ts"
    ],
    "verdict": "confirmed",
-   "wave": "build tooling (tools/package_deploy.ts, tools/build_content.ts)"
+   "wave": "build tooling (tools/package_deploy.ts, tools/build_content.ts)",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: tools/package_deploy.ts stages manifest, catalogs and referenced assets only, and reports what it leaves out (:163). `--prune` exists in build_content. dist-catalog/assets is still 4,970 files / 2.1 GB locally, which package_deploy no longer copies. I did not run the package step.",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "perf",
@@ -1466,7 +2165,13 @@
     "_harness/e2e.mjs"
    ],
    "verdict": "confirmed",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "done",
+   "status_evidence": "integ_engine_verify1 pass: already_done confirmed at HEAD, after the engine render commits (the client's e2e at 23:20 came before cc55be81, 71f8cc33 and 8b417c56, so I re-ran it). src/render/terrain_clutter.ts:112 `g.index ? g.toNonIndexed() : g`.",
+   "status_history": [
+    "W1_verify1: pass",
+    "integ_engine_verify1: pass"
+   ]
   },
   {
    "dim": "perf",
@@ -1484,7 +2189,13 @@
     "src/ui/hud/world.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "done",
+   "status_evidence": "Renderer half W1_verify1; the plate closed in integ_client_verify1 (client-06 live with WEBGL_lose_context; probe_ctxloss PASS, _harness/_reports/integ_client_ctxloss.json).",
+   "status_history": [
+    "W1_verify1: partly",
+    "integ_client_verify1: pass"
+   ]
   },
   {
    "dim": "perf",
@@ -1502,7 +2213,16 @@
     "src/render/vfx/system.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "partly",
+   "status_evidence": "Per-fighter budget met (48 GLBs 16,340-23,579 tris) and the LOD1 recipe exists (avg body 19,653 -> 11,916), but the renderer does not draw it: perf_1080 --prod match peak 1,031,094 tris / 41 programs (integ_engine_v1_perf_1080.json; integ_chars_verify2 partly). Open as the run-2 engine LOD port.",
+   "status_history": [
+    "W1_verify1: partly",
+    "integ_chars_verify1: partly"
+   ],
+   "open_in": [
+    "integration_plan_run2.json engine engine-lod"
+   ]
   },
   {
    "dim": "perf",
@@ -1519,7 +2239,12 @@
     "140-160"
    ],
    "verdict": "confirmed",
-   "wave": "W1"
+   "wave": "W1",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: perf_1080.mjs TARGET counts dropped frames (> 1.5x the median vsync, <= 1 %), p95 <= 17.2 and p99 <= 25. My High window had 2 dropped of 599 (0.33 %), p95 16.8, verdict PASS.",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "client",
@@ -1535,7 +2260,10 @@
     "src/ui/state.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. One notice per flow end: a decline arrives as declined then idle and toasts once (src/ui/state.ts:109, :215-228).",
+   "status_history": []
   },
   {
    "dim": "client",
@@ -1554,7 +2282,14 @@
     "src/ui/screens/practice.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W2 (strings, postgame, practice) + W4 (kemdo.json omnivamp)"
+   "wave": "W2 (strings, postgame, practice) + W4 (kemdo.json omnivamp)",
+   "status": "done",
+   "status_evidence": "W2_verify1 pass (0 copy-lint hits in W2 files) and W4_verify1 pass (kemdo). The last content hits closed in run 1b/2: systems-05 and systems-09 (integ_systems_verify1 pass), world-1b-1 map_fray desc center (84107482).",
+   "status_history": [
+    "W2_verify1: pass",
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (kemdo half)",
+    "W4_verify1: pass"
+   ]
   },
   {
    "dim": "client",
@@ -1572,7 +2307,16 @@
     "src/ui/screens/draft.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W4 (local_session, draft_brain) + W2 (draft.tsx)"
+   "wave": "W4 (local_session, draft_brain) + W2 (draft.tsx)",
+   "status": "done",
+   "status_evidence": "Session half W4_verify1 pass; contract DraftAction {a:\"ready\"} and DraftSeat.ready confirmed by integ_systems_verify1 systems-06. UI half in the tree: src/ui/screens/draft.tsx:21, :51, :547 (Lock in is the ready flag); run 2 client-r2-06 re-checks it.",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (session half)",
+    "W4_verify1: pass"
+   ],
+   "open_in": [
+    "integration_plan_run2.json client client-r2-06"
+   ]
   },
   {
    "dim": "client",
@@ -1588,7 +2332,10 @@
     "src/ui/styles/components.css"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. The selected tick stands at the top centre, 0.5u tall, above every label (src/ui/styles/components.css:212-214).",
+   "status_history": []
   },
   {
    "dim": "client",
@@ -1606,7 +2353,10 @@
     "src/ui/components/Currency.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. The Mono face is scoped to changing numbers; prose numbers use the heading-face figures (src/ui/styles/base.css:64; src/ui/fonts.ts:8; components.css:54).",
+   "status_history": []
   },
   {
    "dim": "client",
@@ -1624,7 +2374,12 @@
     "content/strings.en.json"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done",
+   "status_evidence": "W2_verify1 pass: fw_W2_v1r_sweep_1920_postgame_summary.png shows two best-in-match cards (Needle Breaker, Kept the Lamps Lit) and a skippable 'Lantern nod' step with teammate chips.",
+   "status_history": [
+    "W2_verify1: pass"
+   ]
   },
   {
    "dim": "client",
@@ -1641,7 +2396,10 @@
     "src/ui/app.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W2 (+ src/session/online_link.ts)"
+   "wave": "W2 (+ src/session/online_link.ts)",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. After a failure background retries read Offline; Try again calls retryNow (src/session/online_link.ts:6-7, :54; src/ui/app.tsx:375, :402). Session.reconnect() added by systems-04 (integ_systems_verify1 pass).",
+   "status_history": []
   },
   {
    "dim": "client",
@@ -1660,7 +2418,14 @@
     "src/ui/styles/screens.css"
    ],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done_unverified",
+   "status_evidence": "Implemented by W2, no verifier item. Earnable emblems (src/ui/screens/profile.tsx:245), stored post-games reopen from history (state.ts:24, :311; profile.tsx:178), shelf edge fades with chevrons (src/ui/screens/shop.tsx:167). Profile.emblem persistence and the nod are run-2 client items.",
+   "status_history": [],
+   "open_in": [
+    "integration_plan_run2.json client client-1b-14",
+    "integration_plan_run2.json client client-1b-15"
+   ]
   },
   {
    "dim": "audio",
@@ -1678,7 +2443,12 @@
     "audio/cues/match.py"
    ],
    "verdict": "downgraded",
-   "wave": "W3"
+   "wave": "W3",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass: probe_audio_announcer A1-A9 pass: one line for the Lantern (m_structure_enemy_fall) with c_structure_fall as the world sound; first+shutdown merge into one line; a double merges into the triple; expiry; a wipe preempts; 10 lines with worst overlap 0.598 s; every line class has its own cue;",
+   "status_history": [
+    "W3_verify1: pass"
+   ]
   },
   {
    "dim": "audio",
@@ -1696,7 +2466,15 @@
     "audio/build.py"
    ],
    "verdict": "downgraded",
-   "wave": "W3"
+   "wave": "W3",
+   "status": "partly",
+   "status_evidence": "W3_verify1 partly: library hits fixed (HF 0.080-0.104, laptop loss <= 2.94 LU), but W3_verify2 found the kit hits that replaced them regress (ability-hit contact 0.004-0.048 vs floor 0.07; attack-hit soft top over). Integration run 1 claimed done but the audio verifier stalled; run 2 re-confirms.",
+   "status_history": [
+    "W3_verify1: partly"
+   ],
+   "open_in": [
+    "integration_plan_run2.json audio audio-r1-confirm"
+   ]
   },
   {
    "dim": "audio",
@@ -1713,7 +2491,12 @@
     "content/audio.json"
    ],
    "verdict": "downgraded",
-   "wave": "W3"
+   "wave": "W3",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass: probe_audio_announcer A7 / B1-B3. Under a line: music and ambience -6 dB, sfx -3 dB; threats are not ducked; the mix is back to -0.01 dB afterwards. 401 voices tried in one tick, with at most 32 pooled and the threat still voiced. Vamp heals play 0 cues, and two heals within 100 ms make 1 chime.",
+   "status_history": [
+    "W3_verify1: pass"
+   ]
   },
   {
    "dim": "audio",
@@ -1732,7 +2515,12 @@
     "audio/build.py"
    ],
    "verdict": "confirmed",
-   "wave": "W3"
+   "wave": "W3",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass: Independent onset re-measure (ms to -40 / -20 / -6 dB of peak): m_level_up 4.4/5.2/6.0, m_respawn 5.1/5.3/6.2, c_blink 4.4/5.2/6.1, c_summon 5.1/5.3/5.5, c_cast_shade 8.0/11.2/11.4, m_ping_vision 5.1/5.3/7.3, m_recall_done 4.7/5.3/5.8. These were 119-464 ms to -20 dB.",
+   "status_history": [
+    "W3_verify1: pass"
+   ]
   },
   {
    "dim": "audio",
@@ -1752,7 +2540,14 @@
     "src/ui/screens/draft.tsx"
    ],
    "verdict": "confirmed",
-   "wave": "W3 (+ W2 draft.tsx urgency trigger)"
+   "wave": "W3 (+ W2 draft.tsx urgency trigger)",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass (engine); the UI trigger seam closed: integ_client_verify1 audio:AUD-m2 pass (AudioPort.draft at src/audio/index.ts:205, :607).",
+   "status_history": [
+    "W2_verify1: partly",
+    "W3_verify1: pass",
+    "integ_client_verify1: pass"
+   ]
   },
   {
    "dim": "audio",
@@ -1769,7 +2564,12 @@
     "audio/build_music.py"
    ],
    "verdict": "confirmed",
-   "wave": "W3"
+   "wave": "W3",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass: probe_audio_pieces at 48 and 44.1 kHz. The first request is seg000; the first piece starts the bed before the second decodes; later pieces start at t0+16/48 with offset 0; the stitch takes over at 112 s and loops at 160; layers join on a bar at 22 s; the whole .m4a and the .ogg are never fetched.",
+   "status_history": [
+    "W3_verify1: pass"
+   ]
   },
   {
    "dim": "audio",
@@ -1787,7 +2587,14 @@
     "src/audio/index.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W2 (settings UI) + W3 (engine)"
+   "wave": "W2 (settings UI) + W3 (engine)",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass (engine); the softenLoud seam closed: integ_client_verify1 audio:AUD-m4 pass (src/audio/index.ts:169, :502; app.tsx:68).",
+   "status_history": [
+    "W2_verify1: partly",
+    "W3_verify1: pass",
+    "integ_client_verify1: pass"
+   ]
   },
   {
    "dim": "originality",
@@ -1801,7 +2608,15 @@
    "size": "S",
    "files": [],
    "verdict": "confirmed",
-   "wave": "W2"
+   "wave": "W2",
+   "status": "partly",
+   "status_evidence": "Registry and lead docs done: protected_names.json:3401-3402 holds Battle Spell(s) (integ_lead_verify1), DESIGN_NOTE, README and NAMES_NOT_USED say Hour spells (02d56942); player strings say Hour spells (strings.en.json loadout.spells). Leftovers: fallback strings, comments and game_meta in other lanes, open in run 2.",
+   "status_history": [],
+   "open_in": [
+    "integration_plan_run2.json client client-r1h-12",
+    "integration_plan_run2.json engine engine-index-comment",
+    "integration_plan_run2.json systems systems-setup-wording"
+   ]
   },
   {
    "dim": "originality",
@@ -1815,7 +2630,12 @@
    "size": "S",
    "files": [],
    "verdict": "confirmed",
-   "wave": "W1 (vite.config, package_deploy) + W2 (credits panel)"
+   "wave": "W1 (vite.config, package_deploy) + W2 (credits panel)",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: Build half. The fresh client bundle emits THIRD_PARTY_NOTICES.txt (698 lines) and third_party_notices.json with 11 packages: 4 @fontsource OFL-1.1, @preact/signals and signals-core MIT, meshoptimizer MIT, n8ao ISC, postprocessing Zlib, preact MIT, three MIT. The vendor chunk opens with a /*! ...",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
   },
   {
    "dim": "originality",
@@ -1829,7 +2649,16 @@
    "size": "S",
    "files": [],
    "verdict": "confirmed",
-   "wave": "W2 (strings, client.json) + W4 (queues, modes, items)"
+   "wave": "W2 (strings, client.json) + W4 (queues, modes, items)",
+   "status": "partly",
+   "status_evidence": "Queues, modes and items half W4_verify1 pass (systems-05 confirmed by integ_systems_verify1: modes[0].desc, queues Gleam). UI half (shop TAG_LABEL jungle -> Dialwood and other UI strings) is open in run 2.",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (queues, modes, items half)",
+    "W4_verify1: pass"
+   ],
+   "open_in": [
+    "integration_plan_run2.json client client-r2-08"
+   ]
   },
   {
    "dim": "originality",
@@ -1843,7 +2672,13 @@
    "size": "S",
    "files": [],
    "verdict": "confirmed",
-   "wave": "W2 (icons) + W5 (Lisvel, Sukri, hooded lamp)"
+   "wave": "W2 (icons) + W5 (Lisvel, Sukri, hooded lamp)",
+   "status": "done",
+   "status_evidence": "W5b_verify1 partly, closed in run 1: Lisvel face plate (chars-05), Hooded Lamp knob (world ruling, integ_world_verify1 pass; integ_chars_verify1 originality:F9 pass), Linen Hood (HUD-10).",
+   "status_history": [
+    "W5b_verify1: partly",
+    "integ_chars_verify1: pass"
+   ]
   },
   {
    "dim": "gameplay",
@@ -1862,7 +2697,15 @@
     "src/ui/hud"
    ],
    "verdict": "downgraded",
-   "wave": "W4"
+   "wave": "W4",
+   "status": "done",
+   "status_evidence": "integ_systems_verify1 pass: games without a 90 s lull, adept / veteran, 96/100 and 94/100 (seeds 1-100), 94/100 and 94/100 (21-120), and on unseen FRAY seeds 601-800.",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done",
+    "W4_verify1: partly",
+    "W4 handoff lead-r2-07: FRAY veteran lull 42/50 on seeds 21+ (pre-existing, unchanged by the refix)",
+    "integ_systems_verify1: pass"
+   ]
   },
   {
    "dim": "gameplay",
@@ -1881,7 +2724,13 @@
     "_harness/probe_session_draft.ts"
    ],
    "verdict": "downgraded",
-   "wave": "W4"
+   "wave": "W4",
+   "status": "done",
+   "status_evidence": "W4_verify1 pass: content/queues.json: rift_ranked, rift_standard and custom have bansPerTeam 1 and the bansByRoster ladder (1 below 28, then 2/3/4/5 at 28/32/36/40); probe_sim_draft_pace 28/28. Doc regression: _design/ROSTER.md:41-43 still says 'rift_ranked: 2 bans per team ... C = 2*5 + 4 = 14 ... chooses from 3'.",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done",
+    "W4_verify1: pass"
+   ]
   },
   {
    "dim": "gameplay",
@@ -1900,7 +2749,15 @@
     "package.json"
    ],
    "verdict": "downgraded",
-   "wave": "W4"
+   "wave": "W4",
+   "status": "done",
+   "status_evidence": "integ_systems_verify1 pass: pooled FRAY placement band 3.5-7.5 holds for 16/16 fighters at >= 100 games each (seeds 1-100: lisvel 4.14 to odrum 6.82).",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done",
+    "W4_verify1: partly",
+    "W4 handoff lead-r2-07: Hesmi 3.38 on seeds 21+ (pre-existing, unchanged by the refix)",
+    "integ_systems_verify1: pass"
+   ]
   },
   {
    "dim": "gameplay",
@@ -1918,7 +2775,13 @@
     "_harness/probe_sim_core_combat.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W4"
+   "wave": "W4",
+   "status": "done",
+   "status_evidence": "W4_verify1 pass: src/sim/combat.ts:217-232 topContributor and :272-276 credit the top-damage enemy in the assist window; death.by is set. Soak: adept 80 credited / 22 executed, veteran 96/33 (seeds 1-20); 99/24 and 81/43 (seeds 21-40). probe_sim_core_combat 49/49.",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done",
+    "W4_verify1: pass"
+   ]
   },
   {
    "dim": "gameplay",
@@ -1934,7 +2797,13 @@
     "_harness/pacing.ts"
    ],
    "verdict": "confirmed",
-   "wave": "W4"
+   "wave": "W4",
+   "status": "done",
+   "status_evidence": "W4_verify1 pass: RIFT adept p90 28.1 min (seeds 1-20; pacing.ts report fw_W4_pacing_rift_adept20 agrees per seed) and 29.8 min (seeds 21-40, one 41.5-min sudden-death game), against 32 or less. pacing.ts is role-correct with pickLoadout and defaults to adept (:65, :77).",
+   "status_history": [
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done",
+    "W4_verify1: pass"
+   ]
   },
   {
    "dim": "gameplay",
@@ -1955,7 +2824,19 @@
     "content/queues.json"
    ],
    "verdict": "confirmed",
-   "wave": "W4 (sim) + W2 (panel UI)"
+   "wave": "W4 (sim) + W2 (panel UI)",
+   "status": "partly",
+   "status_evidence": "Sim and session half pass (integ_systems_verify1: probe_sim_practice 39/39; sim.ts:66-69 toggleWaves, toggleStructures, teleport, dummyStats, resetMeter, clearDummies). The practice panel UI half is a client item in run 2.",
+   "status_history": [
+    "W2_verify1: partly",
+    "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done (sim half)",
+    "W4_verify1: pass",
+    "integ_systems_verify1: pass"
+   ],
+   "open_in": [
+    "integration_plan_run2.json client client-1b-16",
+    "integration_plan_run2.json client client-r2-07"
+   ]
   },
   {
    "dim": "audio",
@@ -1972,7 +2853,12 @@
     "content/audio.json",
     "src/audio/index.ts"
    ],
-   "wave": "W3"
+   "wave": "W3",
+   "status": "done",
+   "status_evidence": "W3_verify1 pass: content/audio.json binds 'ping.onMyWay' -> m_ping_onmyway. Own and ally onMyWay pings play it, and the probe derives all 9 PingKinds from src/contracts/sim.ts (_harness/_reports/fw_W3_v1_team_private.json).",
+   "status_history": [
+    "W3_verify1: pass"
+   ]
   },
   {
    "dim": "perf",
@@ -1989,7 +2875,10 @@
     "src/ui/screens/settings.tsx",
     "src/session/settings.ts"
    ],
-   "wave": "W2"
+   "wave": "W2",
+   "status": "done",
+   "status_evidence": "integ_client_verify1 client-04 pass: Settings > Video toggle #v-dyn (src/ui/screens/settings.tsx:119-120), checked while dynamicResolution !== false; contract field by systems-07 (pass).",
+   "status_history": []
   },
   {
    "dim": "env",
@@ -2005,7 +2894,123 @@
    "files": [
     "src/render/camera.ts"
    ],
-   "wave": "W1"
+   "wave": "W1",
+   "status": "done",
+   "status_evidence": "W1_verify1 pass: probe_camera_edge PASS (fw_W1_v1_probes.log). CAMERA.boundsInset 4 m.",
+   "status_history": [
+    "W1_verify1: pass"
+   ]
+  }
+ ],
+ "verifier_open": [
+  {
+   "id": "regression:kit-ability-hit-contact",
+   "lane": "audio",
+   "status": "open",
+   "evidence": "W3_verify2 fail; run-1 audio claims done, never verified (the audio verifier stalled).",
+   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+  },
+  {
+   "id": "regression:kit-attack-hit-soft-top",
+   "lane": "audio",
+   "status": "open",
+   "evidence": "W3_verify2 fail; same as above.",
+   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+  },
+  {
+   "id": "regression:hitsfx-semantics",
+   "lane": "audio",
+   "status": "open",
+   "evidence": "W3_verify2 partly; same as above.",
+   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+  },
+  {
+   "id": "audio-09 (own dashes near-identical by spectrum)",
+   "lane": "audio",
+   "status": "open",
+   "evidence": "W3 regression note; run-1 claims done, unverified.",
+   "open_in": "integration_plan_run2.json audio audio-r1-confirm"
+  },
+  {
+   "id": "handoff:W2-copy",
+   "lane": "client",
+   "status": "open",
+   "evidence": "W4_verify1 fail: strings.en.json still said structures lose protection in sudden death and the old Lot prompt.",
+   "open_in": "integration_plan_run2.json client client-r2-09"
+  },
+  {
+   "id": "hud:HUD-1-seam",
+   "lane": "client",
+   "status": "open",
+   "evidence": "integ_client_verify1 partly: own paintings exist, content still points glass_veil and bellrope at borrowed art.",
+   "open_in": "integration_plan_run2.json client hud:HUD-1-seam; systems systems-r2-icons"
+  },
+  {
+   "id": "e2e:store",
+   "lane": "client",
+   "status": "open",
+   "evidence": "integ_client_verify1 partly: e2e all exits 1 on the store journey only (wallet 598 vs cheapest skin 600).",
+   "open_in": "integration_plan_run2.json client e2e:store"
+  },
+  {
+   "id": "client-14",
+   "lane": "client",
+   "status": "open",
+   "evidence": "integ_client_verify1 partly: client half of HUD-3 done; waits on the world padding.",
+   "open_in": "integration_plan_run2.json world world-pad; client stitch client-hud3"
+  },
+  {
+   "id": "world-05",
+   "lane": "world",
+   "status": "open",
+   "evidence": "integ_world_verify1 fail: skipped on a false premise (the client reads minimapBounds since 61fe088f).",
+   "open_in": "integration_plan_run2.json world world-05"
+  },
+  {
+   "id": "lead:fighter-tris / chars-04",
+   "lane": "engine",
+   "status": "open",
+   "evidence": "integ_chars_verify2 partly: per-fighter budget and LOD1 recipe met, renderer does not use LOD1; match peak 1,031,094 tris > 500k.",
+   "open_in": "integration_plan_run2.json engine engine-lod"
+  },
+  {
+   "id": "regression: value_probe RIFT Low flash 1.94x",
+   "lane": "engine",
+   "status": "open",
+   "evidence": "integ_engine_verify1 regression from the combat:F4 VFX lift cap (8b417c56).",
+   "open_in": "integration_plan_run2.json engine combat:F4"
+  },
+  {
+   "id": "systems-18",
+   "lane": "systems",
+   "status": "open",
+   "evidence": "integ_systems_verify1 fail: seeds 1-20 buy 28/31 finished items; callstone, needlefall and watchbell never bought (still true at HEAD: fw_W4_soak_integ_systems_v1_full1.txt).",
+   "open_in": "integration_plan_run2.json systems systems-18"
+  },
+  {
+   "id": "lead-02",
+   "lane": "lead",
+   "status": "done",
+   "evidence": "integ_lead_verify1 partly: NAMES_NOT_USED.md :77, :142, :160 now say Hour spell(s) (02d56942); other lanes' leftovers handed off.",
+   "open_in": "done in run 2 (02d56942)"
+  },
+  {
+   "id": "obs-01",
+   "lane": "lead",
+   "status": "done",
+   "evidence": "integ_lead_verify1 fail: DESIGN_NOTE.md:31 counts now 57 items and 1,536 UI strings (4434f346).",
+   "open_in": "done in run 2 (4434f346)"
+  }
+ ],
+ "observations": [
+  {
+   "id": "balance:longshade-closer",
+   "source": "W4 handoff lead-r2-05 (difficulty-bridge)",
+   "severity": "minor",
+   "status": "open",
+   "what": "The first team to take Longshade wins almost every RIFT bot game, so Longshade is the deciding lever for tier separation and is probably too strong.",
+   "evidence": "W4: 34/35 in fw_W4_soak_tj_full1. Re-counted at HEAD from the integ_systems_verify1 soak JSONs (games[].objs, first longshade kill vs winner): full1 46/46, full21 46/47, mirror41 61/62. The game ends a median 59-124 s after that first take, and the taker already led on structures lost in about 70 % of those games, so it closes games more than it turns them.",
+   "owner_lane": "systems"
   }
  ]
 }
