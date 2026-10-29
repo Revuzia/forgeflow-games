@@ -1,0 +1,42 @@
+{
+  "wave": "W1",
+  "round": 2,
+  "verifier": "adversarial verifier, verify-only round 2, 2026-10-28 (re-measured; engineer reports not trusted)",
+  "pass": true,
+  "summary": "W1 passes round 2. Both items that failed in round 1 now pass on fresh measurements. The vendor key literal is gone from every tracked file, binary files included, at HEAD f2c344e3, which equals origin/claude/youthful-ramanujan-gdud5w. The five pipeline/__pycache__/*.pyc files left the index in c50f9387, and that commit is on origin. tools/secret_scan.ts (4c4768cf, also on origin) now scans binary tracked files. In a throwaway repo it caught a copy of the real ignored meshy_anims.cpython-313.pyc at byte 858, a synthetic key inside a NUL-filled binary, and a key in a text line. It skipped an allow-marked line and a bare prefix. The repository-wide scan passes in both working-tree and --cached mode, and `npm run secrets` is still the first step of `npm run check`. The refix touched only tools/secret_scan.ts and the index entries of 5 .pyc files, so it caused no regression, and typecheck is clean. There are no new blocker-class problems. Three minor notes, none of which fails a criterion. (a) The literal command in done:9, run over the whole repo, still lists 4 review documents: final/originality.json, final_parity_open.json, final_parity_review.md and fixwaves/W1_verify1.json. They hold only the bare prefix inside regex patterns and in the done-criterion text itself, so a literal zero is impossible while that criterion text exists. No key-shaped literal (prefix plus 20 or more key characters) is found anywhere. (b) The finding's fix also asked for a pre-commit hook. None is installed: .git/hooks holds only samples and core.hooksPath is unset. done:9 does not require one, and `node tools/secret_scan.ts --cached` is ready to serve as that hook. (c) The ignored on-disk caches pipeline/__pycache__/meshy_anims.cpython-313.pyc and meshy_chars_img.cpython-313.pyc still hold the literal, as does pre-fix history. Neither is a tracked file at HEAD, and the plan gates any history purge on the owner.",
+  "commands": [
+    "git rev-parse HEAD origin/claude/youthful-ramanujan-gdud5w (after git fetch) -> both f2c344e3567a29499f0cad240429da3fa857ad40",
+    "git branch -r --contains c50f9387 / 4c4768cf -> origin/claude/youthful-ramanujan-gdud5w (both)",
+    "git show --stat c50f9387 -> only the 5 pipeline/__pycache__/*.cpython-313.pyc deleted from the index; git show --stat 4c4768cf -> only games/vale/tools/secret_scan.ts",
+    "(repo root) git ls-files pipeline/__pycache__ | wc -l -> 0; git ls-tree -r --name-only origin/claude/youthful-ramanujan-gdud5w -- pipeline/__pycache__ | wc -l -> 0",
+    "(repo root) git ls-files -z pipeline | xargs -0 grep -l <vendor prefix> -> no file (exit 1)",
+    "(repo root) git ls-files -z | xargs -0 grep -a -l <vendor prefix> -> only the 4 review docs; the text after each prefix is a regex '[A', a bare prefix, or a backtick or ellipsis",
+    "(repo root) git ls-files -z | xargs -0 grep -a -l -E '<vendor prefix>[A-Za-z0-9_-]{20,}' -> no file",
+    "(repo root) git grep -a -l -E '<vendor prefix>[A-Za-z0-9_-]{20,}' origin/claude/youthful-ramanujan-gdud5w -- . -> no file (exit 1)",
+    "38 .pyc files are still tracked: pipeline/art, qa, audio and 4 game tool caches, including games/vale/tools/imagegen/__pycache__/run_xai.cpython-313.pyc. A scan of all of them for mixed-case-plus-digit literals of 32 or more characters found only constant and asset names (MUSIC_*, hud_*, cast*); no key-shaped value.",
+    "node tools/secret_scan.ts -> PASS (13 rules, binary files included, 838 candidate files) in 22.5 s, exit 0",
+    "node tools/secret_scan.ts --cached -> PASS (13 rules, 838 candidate files) in 25.6 s, exit 0",
+    "Throwaway git repo in the scratchpad (deleted afterwards): a copy of the ignored real pipeline/__pycache__/meshy_anims.cpython-313.pyc, a synthetic 40-char key inside a NUL-filled binary, the same key in a .py line, the same key on a line marked 'secret-scan: allow', and a bare prefix. Result: FAIL with exactly 3 hits: real_copy.pyc@byte 858 (binary), bin.dat@byte 2701 (binary), t.py:1. Values were withheld; the allow line and the bare prefix were not flagged. --cached gave the same 3 hits; exit 1 both times.",
+    "package.json:16-17 -> \"secrets\": \"node tools/secret_scan.ts\"; \"check\": \"npm run secrets && npm run typecheck && ...\"; npm run secrets -> PASS, exit 0",
+    "the 10 pipeline/*.py scripts named in originality:F1 are tracked and each references MESHY_API_KEY twice (read from the environment)",
+    "git check-ignore -v pipeline/__pycache__/meshy_anims.cpython-313.pyc -> .gitignore:127:__pycache__/",
+    "npm run typecheck -> exit 0",
+    "ls .git/hooks (non-sample) -> none; git config core.hooksPath -> unset"
+  ],
+  "items": [
+    {
+      "id": "done:9",
+      "severity": "blocker",
+      "status": "pass",
+      "evidence": "No tracked file holds a key-shaped literal: `git ls-files -z | xargs -0 grep -a -l -E '<vendor prefix>[A-Za-z0-9_-]{20,}'` from the repo root lists nothing, binary files included. The pushed tree is equally clean: `git grep -a` over origin/claude/youthful-ramanujan-gdud5w finds nothing, and HEAD equals origin at f2c344e3. pipeline/__pycache__ has 0 tracked entries in the index and in the pushed tree. The criterion's own command, `git ls-files -z pipeline | xargs -0 grep -l <prefix>`, lists no file. The whole-repo form lists only 4 review documents that quote the bare prefix in regex patterns and in this criterion's own text, so no file carries a key. The scan is wired into `npm run check` as its first step (package.json:16-17) and exits 0 in both working-tree and --cached mode. In a throwaway repo it also catches binary keys, including the exact real .pyc at byte 858.",
+      "fixHint": "Optional, not needed for pass: install `node games/vale/tools/secret_scan.ts --cached` as a pre-commit hook, as the original fix text asked."
+    },
+    {
+      "id": "originality:F1",
+      "severity": "blocker",
+      "status": "pass",
+      "evidence": "All 10 named pipeline scripts read the key from the environment (MESHY_API_KEY, 2 references each). The 2 tracked .pyc files that held the 40-char literal are untracked (c50f9387, on origin) and stay ignored by .gitignore:127. tools/secret_scan.ts (4c4768cf, on origin) now picks candidates with `git grep -a -l -F`, without -I, and tests their bytes as latin1, so binary files count. A throwaway-repo test caught the real compiled key at real_copy.pyc@byte 858, a key in a NUL binary at byte 2701, and a text-line key. It withheld every value, honoured the allow marker and ignored a bare prefix. The full-repo scan passes: 13 rules, 838 candidates, 22.5 s working tree and 25.6 s --cached. Pre-fix history still contains the literal; the plan gates a history purge on the owner, so this is not part of the measurable done-criterion."
+    }
+  ],
+  "regressions": []
+}
