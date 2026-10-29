@@ -12,7 +12,7 @@ import type { DraftAction, QueueRequest } from '../src/contracts/session.ts';
 import type { Command, MatchResult, MatchSetup, PlayerId, SimEvent } from '../src/contracts/sim.ts';
 import { TICK_DT } from '../src/contracts/sim.ts';
 import { BOTS_LINK } from '../src/session/bots_link.ts';
-import { DraftHost, type DraftSeatInit } from '../src/session/draft.ts';
+import { bansForRoster, DraftHost, type DraftSeatInit } from '../src/session/draft.ts';
 import { DRAFT_DEFAULTS } from '../src/session/local_session.ts';
 import { difficultyForRating, type Difficulty } from '../src/session/ratings.ts';
 import {
@@ -193,9 +193,10 @@ export class Room {
     const finalize = protocol === 'role_preset' ? draftCfg?.finalizeSeconds ?? DRAFT_DEFAULTS.presetFinalize : draftCfg?.finalizeSeconds ?? DRAFT_DEFAULTS.finalize;
     const skinCache = new Map<string, string[]>();
     const loadCache = new Map<string, ReturnType<typeof sanitizeLoadout>>();
+    const pool = fighterPool(this.cat);
     const host = new DraftHost({
-      queue: q.id, mode: mode.id, protocol, seats, pool: fighterPool(this.cat),
-      bansPerTeam: protocol === 'draft' ? draftCfg?.bansPerTeam ?? 0 : 0,
+      queue: q.id, mode: mode.id, protocol, seats, pool,
+      bansPerTeam: protocol === 'draft' ? bansForRoster(draftCfg, pool.length) : 0,
       timers: { ban: draftCfg?.banSeconds ?? DRAFT_DEFAULTS.ban, pick: draftCfg?.pickSeconds ?? DRAFT_DEFAULTS.pick, bench: draftCfg?.pickSeconds ?? DRAFT_DEFAULTS.bench, finalize },
       bench: q.bench ?? { size: 0, rerolls: 0 },
     }, stream(this.rng.nextU32(), 'host'), {
