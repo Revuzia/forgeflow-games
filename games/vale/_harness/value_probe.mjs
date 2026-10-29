@@ -41,7 +41,7 @@
 //
 //   bases      (env m1) one spot per team base of a lane map: halfway from the base's spawn to the team's structure
 //              nearest it (RIFT / BRIDGE: the Hourbell), the plaza a respawning player sees. Measured like the fighter
-//              spots (never pooled into the frame stats): the plaza's HSV saturation p50 (band 0.17-0.40, the ground
+//              spots (never pooled into the frame stats): the plaza's mean HSV saturation (band 0.17-0.40, the ground
 //              band: LoL's bases stay tinted), and the base structures' L* p95 (<= 80: structure chalk sits under the
 //              fighters, r12 B5) and display luma p95 against the fighters' (verdict base_<n>_plaza / base_<n>_structure)
 //
@@ -567,7 +567,7 @@ function summariseBases(bspots, C, fighters) {
     out[k] = {
       at: sp.at,
       plaza: plaza && { px: plaza.n, satP50: pct(plaza.sat, 0.5, 0.01), sat: meanOf(plaza.sat, 0.01), lumaP50: pct(plaza.luma, 0.5), lstarP50: pct(plaza.lstar, 0.5, 0.5) },
-      ground: ground && { px: ground.n, satP50: pct(ground.sat, 0.5, 0.01) },
+      ground: ground && { px: ground.n, satP50: pct(ground.sat, 0.5, 0.01), sat: meanOf(ground.sat, 0.01) },
       structures: st && { px: st.n, lstarP95: pct(st.lstar, 0.95, 0.5), lumaP95: pct(st.luma, 0.95), above180: gt(st.luma, 180), top25: topMean(st.lstar, 0.75, 0.5) },
       fighterLumaP95: fighters?.lumaP95 ?? null,
     };
@@ -580,7 +580,7 @@ function baseVerdict(bases) {
   const v = {};
   for (const [k, b] of Object.entries(bases ?? {})) {
     const p = b.plaza ?? b.ground;
-    if (p) v[`${k}_plaza`] = `saturation p50 ${p.satP50} ${ok(p.satP50 >= 0.17 && p.satP50 <= 0.40)} (0.17-0.40)`;
+    if (p) v[`${k}_plaza`] = `saturation ${p.sat} ${ok(p.sat >= 0.17 && p.sat <= 0.40)} (0.17-0.40; mean HSV, as groundSat)`;
     if (b.structures) {
       const s = b.structures, f = b.fighterLumaP95;
       v[`${k}_structure`] = `L* p95 ${s.lstarP95} ${ok(s.lstarP95 <= 80)} (<= 80); luma p95 ${s.lumaP95} vs fighters ${f ?? '-'} ${f == null ? '' : ok(s.lumaP95 <= f)}; above 180: ${(s.above180 * 100).toFixed(1)} %`;
