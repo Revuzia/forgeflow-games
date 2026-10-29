@@ -1,11 +1,12 @@
-// VALE UI — Loading (client_hud §3.7): the map name and the mode's flavour line, one tip at a time from
-// client.tips (random start, then in order, every 8 s), a thin progress bar, and a player card per seat
+// VALE UI — Loading (client_hud §3.7): the map name and the mode's flavour line, one tip at a time from the
+// tips for this match's mode (client.tips untagged plus those tagged for the mode, CatalogView.tipsFor; random
+// start, then in order, every 8 s), a thin progress bar, and a player card per seat
 // (portrait, name, role or FRAY seat glyph) with a tick once that seat is ready. Local bots are ready at
 // once; you are ready when the session reports progress 1 and the renderer (if attached) has loaded the
 // match. Then Session.matchReady() starts the clock. The shadow-line wipe starts and ends the screen.
 
 import type { CSSProperties, JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { SeatSetup } from '../../contracts/sim.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
@@ -32,8 +33,10 @@ export function LoadingScreen(): JSX.Element {
   const queue = cv.queue(setup?.queue);
   const mode = cv.mode(setup?.mode);
   const map = cv.map(setup?.map);
-  const tips = cv.c.client.tips;
-  const [tipI, setTipI] = useState(() => (tips.length ? Math.floor(Math.random() * tips.length) : 0));
+  // loading:tip-mode: a BRIDGE tip never shows on a RIFT load (the list follows the mode; the index wraps over it)
+  const tips = useMemo(() => cv.tipsFor(setup?.mode), [setup?.mode]);
+  const [tipN, setTipN] = useState(() => Math.floor(Math.random() * 1e6));
+  const tipI = tips.length ? tipN % tips.length : 0;
   const [assets, setAssets] = useState(state.renderer?.preload ? 0 : 1);
   const [failed, setFailed] = useState<string | null>(null);
   const started = useRef(performance.now());
@@ -42,9 +45,9 @@ export function LoadingScreen(): JSX.Element {
 
   useEffect(() => {
     if (tips.length < 2) return;
-    const t = setInterval(() => setTipI((i) => (i + 1) % tips.length), 8000);
+    const t = setInterval(() => setTipN((i) => i + 1), 8000);
     return () => clearInterval(t);
-  }, []);
+  }, [tips.length]);
   // renderer preload (optional, RENDER lane): its progress joins the session's
   useEffect(() => {
     if (!setup || !state.renderer?.preload) return;

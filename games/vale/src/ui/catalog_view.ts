@@ -20,6 +20,9 @@ export type ModeSlotT = CatalogT['client']['modeSlots'][number];
 /** the mark a mode is drawn with (bible: modes get no colour; mark, station and motif tell them apart) */
 export type ModeMark = 'roads' | 'span' | 'ring' | 'uncarved';
 
+/** a tip's mode tag (content/client.json tips): `[rift] …` or `[rift,bridge] …` at the start of the line */
+const TIP_TAG = /^\[([a-z][a-z0-9_]*(?:\s*,\s*[a-z][a-z0-9_]*)*)\]\s*/;
+
 export class CatalogView {
   readonly c: CatalogT;
   private readonly assetFn: (ref: string) => string;
@@ -143,6 +146,23 @@ export class CatalogView {
   /** origin tags (collection filter) from fighter tags that have a collection.origin.<tag> string */
   originOf(f: FighterDefT): string | undefined { return f.tags.find((t) => `collection.origin.${t}` in this.c.strings); }
   ordinal(n: number): string { return this.t(`ordinal.${n}`, '', {}) || this.t('ordinal.n', '{n}th', { n }); }
+
+  /** the tips a mode's loading screen shows (loading:tip-mode): client.tips in order, each either for every mode or,
+   *  led by a mode tag `[<mode id>,<mode id>] `, only for the modes it names (the tag is stripped). With no mode, only
+   *  the untagged tips. A tag naming no catalog mode hides its tip everywhere (unknownTipModes lists them) */
+  tipsFor(mode: string | undefined | null): string[] {
+    const out: string[] = [];
+    for (const t of this.c.client.tips) {
+      const m = TIP_TAG.exec(t);
+      if (!m) out.push(t);
+      else if (mode && m[1].split(',').map((s) => s.trim()).includes(mode)) out.push(t.slice(m[0].length));
+    }
+    return out;
+  }
+  /** mode tags in client.tips that name no catalog mode (dev + harness check) */
+  unknownTipModes(): string[] {
+    return this.c.client.tips.flatMap((t) => TIP_TAG.exec(t)?.[1].split(',').map((s) => s.trim()) ?? []).filter((id) => !this.mode(id));
+  }
 
   /** localised string: catalog.strings[key] with {param} substitution, else the English fallback */
   t(key: string, fallback: string, params?: Record<string, string | number>): string {
