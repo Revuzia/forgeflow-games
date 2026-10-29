@@ -596,8 +596,10 @@ export function assignDrops(W) {
     }
     return true;
   };
-  // (R2) rings 9 / 11 m: the disc rule refuses the old 3-7 m rings beside a building, and a gun is still worth an 11 m walk
-  const RING_R = [0, 3, 5, 7, 9, 11];
+  // (R2) the rings stay 0-7 m: 9 / 11 m rings (tried) kept ~15 % more gun spots beside buildings, but the longer walks in after the landing raised
+  // tierprof's first measured window on ashgrid (kb [low] 71.7 -> 85.7 KB/frame, navgrid.js 3.2 -> 7.2: routes into the towns); a gun with no clear
+  // spot within 7 m is not a landing spot (the bot lands at another one)
+  const RING_R = [0, 3, 5, 7];
   const landingFor = (lp) => {
     for (let ri = 0; ri < RING_R.length; ri++) {
       const r = RING_R[ri];
