@@ -5,7 +5,8 @@
 // Part R: REAL RIFT matches (the built catalog in dist-catalog/, LocalMatchHost, bot brains on every seat, vashil in
 // seat 4) drive the REAL engine against content/audio.json as it is now; only WebAudio is faked. One omni listener
 // (the camera on every event's subject) so the check is which cue the engine CHOOSES. Part S: a stub match for what a
-// RIFT run under 8 min never reaches (the Gorge Wind, the Noon Toll) and what the sim does not emit yet (`shaded`).
+// RIFT run under 8 min never reaches (the Gorge Wind, the Noon Toll) and the gain checks of a `shaded` blow (Part R counts
+// the real ones: every shaded damage event on a structure requests hitShaded).
 // Gates:
 //   W1  the Dawn Seal setting again: every 'shield' on a structure requests the role shieldStructure's cue at that
 //       structure and never the fighters' shield cue; every beat (each `every` s until `until`) is heard
@@ -199,12 +200,17 @@ for (const SEED of SEEDS) {
   const areaMiss = areas.filter((e) => !e.__cues?.some((c) => c.id === boundAreas.get(e.vfx) && Math.abs(c.pos.x - e.x) < 1e-6 && Math.abs(c.pos.y - e.y) < 1e-6));
   const areaStray = rows.filter((e) => e.e === 'area' && !(boundAreas.has(e.vfx) && !e.sfx) && e.__cues?.some((c) => [...boundAreas.values()].includes(c.id)));
   chordsTotal += areas.length;
+  // W6 (real): the sim's Ringshade-muffled blows (damage `shaded`, structures only) each request hitShaded at that structure
+  const shadedRows = rows.filter((e) => e.e === 'damage' && e.shaded);
+  const shadedMiss = shadedRows.filter((e) => view.entity(e.dst)?.kind === 'structure' && !e.__cues?.some((c) => c.id === ev.hitShaded));
+  const shadedOff = shadedRows.filter((e) => view.entity(e.dst)?.kind !== 'structure');
   const run = {
     seed: SEED, simSeconds: +view.time.toFixed(1), ended: host.ended,
     W1: { structureShields: sh.length, wrong: shWrong.length, beats, wantBeats },
     W2: { at: tickOfEnd, standing: standingAtEnd?.length ?? null, breaks: breakRows.length, breaksAtStructures: breakRows.filter((c) => standingAtEnd?.some((u) => Math.hypot(u.x - c.pos.x, u.y - c.pos.y) < 1e-6)).length, breaksElsewhere },
     seats: seats.map((x) => x.fighter), vashilProcs: rows.filter((e) => e.e === 'proc' && /vashil/.test(e.ability)).length,
     W3: { chords: areas.length, missed: areaMiss.length, stray: areaStray.length, played: areas.filter((e) => e.__cues?.some((c) => c.r === 'played')).length },
+    W6: { shaded: shadedRows.length, ability: shadedRows.filter((e) => e.ability).length, missed: shadedMiss.length, offStructure: shadedOff.length },
   };
   report.R.push(run);
   if (!sh.length) failures.push(`W1 seed ${SEED}: no shield on a structure (the Dawn Seal never set?)`);
@@ -218,7 +224,9 @@ for (const SEED of SEEDS) {
   if (breaksElsewhere) failures.push(`W2 seed ${SEED}: ${breaksElsewhere} seal breaks outside the seal's end`);
   if (areaMiss.length) failures.push(`W3 seed ${SEED}: ${areaMiss.length}/${areas.length} bound areas did not request their cue at the area`);
   if (areaStray.length) failures.push(`W3 seed ${SEED}: ${areaStray.length} other areas requested a bound area cue`);
-  console.log(`rift#${SEED}: ${run.simSeconds} s · W1 ${sh.length} structure shields (${shWrong.length} wrong), beats ${beats.join(',')} · W2 at ${tickOfEnd} s ${breakRows.length} breaks for ${standingAtEnd?.length} standing · W3 ${areas.length} chords, ${areaMiss.length} missed, ${areaStray.length} stray`);
+  if (shadedMiss.length) failures.push(`W6 seed ${SEED}: ${shadedMiss.length}/${shadedRows.length} shaded blows on a structure did not request ${ev.hitShaded}`);
+  if (shadedOff.length) failures.push(`W6 seed ${SEED}: ${shadedOff.length} shaded damage events off a structure`);
+  console.log(`rift#${SEED}: ${run.simSeconds} s · W1 ${sh.length} structure shields (${shWrong.length} wrong), beats ${beats.join(',')} · W2 at ${tickOfEnd} s ${breakRows.length} breaks for ${standingAtEnd?.length} standing · W3 ${areas.length} chords, ${areaMiss.length} missed, ${areaStray.length} stray · W6 ${shadedRows.length} shaded blows (${run.W6.ability} ability), ${shadedMiss.length} unmuffled`);
 }
 if (!chordsTotal) console.log('W3: the bots never chorded in these runs (Part S checks the binding)');
 
