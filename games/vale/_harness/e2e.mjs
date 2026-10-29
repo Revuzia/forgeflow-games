@@ -1,6 +1,6 @@
 // VALE — the DONE journey end to end in real Chrome with real input (CONTRACT §13 "e2e").
 //
-//   node _harness/e2e.mjs [rift|bridge|fray|flow|store|all] [--speed 16] [--headed] [--audio m4a] [--out <report.json>] [--prefix e2e]
+//   node _harness/e2e.mjs [rift|bridge|fray|flow|store|practice|all] [--speed 16] [--headed] [--audio m4a] [--out <report.json>] [--prefix e2e]
 //
 // Per mode: Home → Play → pick the mode on the Mode Dial → a queue → Find match → Ready → draft /
 // assignment / pick (real clicks) → loading → the match (your seat on the dev autopilot at time scale
@@ -30,6 +30,14 @@
 //               back on the page the notification closes, Decline leaves ONE notice and the plain favicon.
 //   netdown     ?server=ws://127.0.0.1:9 (nothing listens): the bar reads Offline · vs bots after the first failure and
 //               stays there for 24 s with Try again offered; Try again reads Connecting… and falls back to Offline.
+//
+// PRACTICE (`practice` only, not under `all`; gameplay g3, the lab): Play → Practice → a fighter chosen now, a Veteran
+// sparring partner (real clicks on the setup screen) → the match on the queue's map: the partner is a bot of that
+// fighter on the other team; the Practice tools panel turns Wicks and structures off, sets the training targets' armor,
+// removes and places them, moves you to a clicked point, and its damage readout follows the sim's meter and clears.
+// Then BRIDGE from the setup's Map choice: the match must load on BRIDGE's map (the bar reads BRIDGE · Practice); if the
+// session cannot start it, the step fails and records whether the client recovered (an error notice and the setup
+// screen again, never a loading bar that stops).
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -44,7 +52,8 @@ const audioFmt = args.includes('--audio') ? args[args.indexOf('--audio') + 1] : 
 const OUT = args.includes('--out') ? args[args.indexOf('--out') + 1] : join(HERE, '_reports', 'e2e.json');
 const PREFIX = args.includes('--prefix') ? args[args.indexOf('--prefix') + 1] : 'e2e';
 if (args.includes('--headed')) process.env.VALE_HEADED = '1';
-const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : which === 'flow' || which === 'store' ? [] : [which];
+const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : which === 'flow' || which === 'store' || which === 'practice' ? [] : [which];
+const PRACTICE = which === 'practice';
 const FLOW = which === 'all' || which === 'flow';
 const STORE = MODES.length > 0 || which === 'store';
 /** the earned currency's bookkeeping the STORE journey checks: the wallet at the first Home, and every post-game's grant */
@@ -604,7 +613,199 @@ async function flowJourneys() {
   return ok && ok2 && ok3;
 }
 
+// ── PRACTICE: the lab (gameplay g3) ─────────────────────────────────────────────────────────────────────────
+async function practiceJourney() {
+  const s = await open('/?dev=1', { hmr: false });
+  const { browser, page, logs } = s;
+  const frames = () => page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { timeout: 60000 });
+  const click = async (locator) => { await locator.waitFor({ state: 'visible', timeout: 15000 }); await frames(); await locator.click({ timeout: 15000 }); };
+  const SCR = '.scr--practice:not(.is-leaving)';
+  const barText = () => page.evaluate(() => document.querySelector('.bar .bar__flow')?.textContent?.replace(/\s+/g, ' ').trim() ?? null);
+  const toasts = () => page.evaluate(() => [...document.querySelectorAll('.toasts .toast__text')].map((e) => e.textContent.trim()));
+  const toPractice = async () => {
+    await page.waitForTimeout(800); await frames();
+    await click(page.locator('.nav__item', { hasText: 'Play' }));
+    await page.waitForTimeout(500);
+    await click(page.locator('.play__links button', { hasText: 'Practice' }));
+    await waitFor(page, (v) => v.router.route.value.screen === 'practice', 10000);
+    await page.waitForTimeout(700);
+  };
+  /** the first fighter card on the setup screen: the fighter chosen now (no solo pick) */
+  const presetFighter = async () => {
+    await click(page.locator(`${SCR} .fcard`).first());
+    await page.waitForTimeout(250);
+  };
+  /** open a Select by its label and press the option `pick` chooses among the option texts */
+  const choose = async (label, pick) => {
+    await click(page.locator(`${SCR} .select__btn[aria-label^="${label}"]`).first());
+    const opts = page.locator(`${SCR} .select.is-open [role=option]`);
+    await opts.first().waitFor({ state: 'visible', timeout: 5000 });
+    const texts = (await opts.allTextContents()).map((t) => t.trim());
+    const i = pick(texts);
+    await opts.nth(i).click();
+    await page.waitForTimeout(250);
+    return texts[i];
+  };
+  /** Start practice, then wait for the match (or for the session to give up and the client to say so) */
+  const start = async (ms) => {
+    await click(page.getByRole('button', { name: 'Start practice' }));
+    let bar = null;
+    const t0 = Date.now();
+    for (;;) {
+      const st = await vale(page, (v) => ({ screen: v.router.route.value.screen, loading: !!v.state.loading.value, phase: v.state.match.value?.view.phase ?? null, err: v.state.lastError.value }));
+      if (st.screen === 'loading' && !bar) bar = await barText();
+      if (st.phase === 'live' || st.phase === 'pregame') return { ...st, bar, ms: Date.now() - t0 };
+      if (st.err && /^match/.test(st.err) && st.screen !== 'loading') return { ...st, bar, ms: Date.now() - t0, toasts: await toasts() };
+      if (Date.now() - t0 > ms) return { ...st, bar, ms: Date.now() - t0, hung: true };
+      await page.waitForTimeout(250);
+    }
+  };
+  const lab = () => vale(page, (v) => {
+    const c = v.state.match.value, x = c?.view.practice;
+    const dummy = v.cv.c.units.find((u) => u.behavior?.dummy)?.id;
+    const me = c?.view.entity(c.view.players[c.you]?.entity);
+    return {
+      waves: x?.waves, structures: x?.structures, dummy: x?.dummy,
+      dummies: (c?.view.entities ?? []).filter((e) => e.def === dummy && e.hp > 0 && e.state !== 'dead').map((e) => ({ id: e.id, x: e.x, y: e.y })),
+      me: me ? { x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, state: me.state } : null,
+      meter: x?.meters.find((m) => m.player === c.you) ?? null,
+    };
+  });
+  let ok = true;
+  console.log('\nPRACTICE · RIFT (sparring partner)');
+  const steps = [];
+  const step = stepper(page, 'practice', steps);
+  let spar = null;
+  try {
+    await step('setup', async () => {
+      await toPractice();
+      const maps = (await page.locator(`${SCR} .seg__opt`).allTextContents()).map((t) => t.trim());
+      await presetFighter();
+      spar = await choose('Sparring partner', (t) => t.findIndex((x, i) => i > 0));
+      const diff = await choose('Bot difficulty', (t) => t.findIndex((x) => /veteran/i.test(x)));
+      expect(maps.length >= 2 && maps.some((m) => /bridge/i.test(m)), 'the Map choice does not offer BRIDGE', maps);
+      return { maps, spar, diff };
+    });
+    await step('loading_rift', async () => {
+      const r = await start(150000);
+      expect(r.phase === 'live' || r.phase === 'pregame', 'the practice match did not start', r);
+      expect(/rift/i.test(r.bar ?? ''), 'the bar did not name RIFT while loading', r);
+      return r;
+    });
+    await step('sparring', async () => {
+      await page.waitForTimeout(1500);
+      const x = await vale(page, (v) => {
+        const c = v.state.match.value, set = c.setup;
+        const mine = set.seats.find((q) => q.player === c.you), other = set.seats.find((q) => q.player !== c.you);
+        const pe = other ? c.view.entity(c.view.players[other.player]?.entity) : undefined;
+        return { seats: set.seats.length, mode: set.mode, mine: mine?.team, other: other ? { team: other.team, controller: other.controller, fighter: other.fighter, name: v.cv.fighter(other.fighter)?.name, difficulty: other.botDifficulty } : null,
+          entity: pe ? { def: pe.def, team: pe.team, hp: Math.round(pe.hp), state: pe.state } : null, panel: !!document.querySelector('.hud .ptools') };
+      });
+      expect(x.seats === 2 && x.other && x.other.team !== x.mine && x.other.controller === 'bot' && x.other.name === spar && x.other.difficulty === 'veteran', 'the sparring partner is not a Veteran bot of the chosen fighter on the other team', x);
+      expect(x.entity && x.entity.hp > 0, 'the sparring partner has no fighter on the map', x);
+      expect(x.panel, 'no Practice tools panel', x);
+      return x;
+    });
+    await step('tools', async () => {
+      const P = '.hud .ptools';
+      const before = await lab();
+      await click(page.locator(`${P} .ptools__tog`, { hasText: 'Wicks' }));
+      await waitFor(page, (v) => v.state.match.value.view.practice?.waves === false, 5000);
+      await click(page.locator(`${P} .ptools__tog`, { hasText: 'Structures' }));
+      await waitFor(page, (v) => v.state.match.value.view.practice?.structures === false, 5000);
+      const armor = page.locator(`${P} .ptools__field`, { hasText: 'Armor' }).locator('input');
+      await armor.fill('120'); await armor.press('Enter');
+      await waitFor(page, (v) => v.state.match.value.view.practice?.dummy.armor === 120, 5000);
+      await click(page.locator(`${P} button`, { hasText: 'Remove all targets' }));
+      await page.waitForTimeout(600);
+      const cleared = (await lab()).dummies.length;
+      await click(page.locator(`${P} button`, { hasText: 'Place a training target' }));
+      await page.waitForTimeout(600);
+      const after = await lab();
+      const pressed = await page.locator(`${P} .ptools__tog`).evaluateAll((b) => b.map((e) => `${e.textContent.trim()}:${e.getAttribute('aria-pressed')}`));
+      expect(cleared === 0 && after.dummies.length === 1, 'Remove all targets / Place a training target did not change the targets', { before: before.dummies.length, cleared, after: after.dummies.length });
+      expect(pressed.some((p) => p === 'Wicks:false') && pressed.some((p) => p === 'Structures:false'), 'the toggles do not show the sim state', pressed);
+      return { before: { waves: before.waves, structures: before.structures, dummy: before.dummy, targets: before.dummies.length }, after: { waves: after.waves, structures: after.structures, dummy: after.dummy, targets: after.dummies.length }, cleared, pressed };
+    });
+    await step('teleport', async () => {
+      const p0 = (await lab()).me;
+      let p1 = p0, armed = false, tries = 0;
+      for (const [dx, dy] of [[180, 90], [-180, 90], [160, -110], [-160, -110]]) {
+        tries++;
+        await click(page.locator('.hud .ptools button', { hasText: 'Move to a point' }));
+        armed = await page.evaluate(() => document.body.classList.contains('ptools-aiming'));
+        await page.mouse.click(960 + dx, 540 + dy);
+        await page.waitForTimeout(700);
+        p1 = (await lab()).me;
+        if (Math.hypot(p1.x - p0.x, p1.y - p0.y) > 2) break;
+      }
+      const moved = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      const disarmed = !(await page.evaluate(() => document.body.classList.contains('ptools-aiming')));
+      expect(armed && disarmed && moved > 2, 'Move to a point did not move the fighter', { p0, p1, armed, disarmed, tries });
+      return { p0, p1, moved: Math.round(moved * 10) / 10, armed, disarmed, tries };
+    });
+    await step('meter', async () => {
+      // the readout follows the sim's meter: stand by the target and attack it (the dev handle sends the commands)
+      const t = (await lab()).dummies[0];
+      await vale(page, (v, t) => { const c = v.state.match.value; c.send({ type: 'practice', action: 'teleport', x: t.x + 2.5, y: t.y }); }, t);
+      await page.waitForTimeout(300);
+      await vale(page, (v, t) => { v.state.match.value.send({ type: 'attack', target: t.id }); }, t);
+      await waitFor(page, (v) => (v.state.match.value.view.practice?.meters.find((m) => m.player === v.state.match.value.you)?.dealt ?? 0) > 0, 30000);
+      await page.waitForTimeout(1200);
+      const m = (await lab()).meter;
+      const cells = await page.locator('.hud .ptools__stat').evaluateAll((d) => d.map((e) => `${e.querySelector('dt').textContent.trim()}=${e.querySelector('dd').textContent.trim()}`));
+      const total = cells.find((c) => c.startsWith('Total='));
+      await page.mouse.click(1700, 200, { button: 'right' }).catch(() => {});   // stop attacking: a move order elsewhere
+      await click(page.locator('.hud .ptools__dmghead button', { hasText: 'Clear' }));
+      await page.waitForTimeout(400);
+      const afterClear = (await lab()).meter;
+      expect(m && m.dealt > 0 && total && total !== 'Total=—', 'the readout did not show the meter', { m, cells });
+      expect(afterClear && afterClear.dealt === 0, 'Clear did not zero the meter', afterClear);
+      return { meter: { dealt: Math.round(m.dealt), last: Math.round(m.last), burst: Math.round(m.burst), burstDps: Math.round(m.burstDps), recent5: Math.round(m.recent5) }, cells, afterClear: afterClear.dealt };
+    });
+  } catch { ok = false; }
+  let errors = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
+  if (errors.length) { ok = false; console.log(`  ✗ ${errors.length} console warning(s) / error(s) / failed request(s): ${errors.slice(0, 3).join(' · ')}`); }
+  report.journeys.push({ mode: 'practice_rift', ok, steps, consoleErrors: errors.slice(0, 20) });
+
+  // ── BRIDGE from the Map choice ──────────────────────────────────────────────────────────────────────────
+  console.log('\nPRACTICE · BRIDGE (Map choice)');
+  const steps2 = [];
+  const step2 = stepper(page, 'practice_bridge', steps2);
+  let ok2 = true;
+  try {
+    await page.goto(BASE + '/?dev=1', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!window.__vale, null, { timeout: 30000 });
+    await step2('setup', async () => {
+      await toPractice();
+      await click(page.locator(`${SCR} .seg__opt`, { hasText: /bridge/i }).first());
+      await page.waitForTimeout(400);
+      await presetFighter();
+      return { kicker: await page.locator(`${SCR} .t-label, ${SCR} [class*=kicker]`).first().textContent().catch(() => null) };
+    });
+    await step2('loading_bridge', async () => {
+      const r = await start(120000);
+      const want = await vale(page, (v) => v.cv.mode('bridge')?.map ?? null);
+      const set = await vale(page, (v) => { const c = v.state.match.value; return c ? { mode: c.setup.mode, map: c.setup.map } : null; });
+      if (!(r.phase === 'live' || r.phase === 'pregame')) {
+        // the session could not start it: record whether the client recovered (notice, setup screen) or hung
+        throw new Error(`BRIDGE practice did not start (${r.hung ? 'still loading' : `recovered: screen ${r.screen}, notice ${JSON.stringify(r.toasts ?? [])}`}; session: ${r.err ?? 'no error'}; bar while loading: ${r.bar})`);
+      }
+      expect(set && set.mode === 'bridge' && set.map === want, 'the practice match is not on BRIDGE\'s map', { set, want });
+      expect(/bridge/i.test(r.bar ?? ''), 'the bar did not name BRIDGE while loading', r);
+      await page.waitForTimeout(1500);
+      return { ...r, setup: set, panel: await page.locator('.hud .ptools').count() > 0 };
+    });
+  } catch { ok2 = false; }
+  errors = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
+  if (errors.length) { ok2 = false; console.log(`  ✗ ${errors.length} console warning(s) / error(s) / failed request(s): ${errors.slice(0, 3).join(' · ')}`); }
+  report.journeys.push({ mode: 'practice_bridge', ok: ok2, steps: steps2, consoleErrors: errors.slice(0, 20) });
+  await browser.close();
+  return ok && ok2;
+}
+
 let all = true;
+if (PRACTICE) all = (await practiceJourney()) && all;
 if (FLOW) all = (await flowJourneys()) && all;
 for (const m of MODES) all = (await journey(m)) && all;
 if (STORE) all = (await store()) && all;

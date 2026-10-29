@@ -183,6 +183,9 @@ export class AppState {
         // draft refusals carry a reason code the strings localise (error.draft.<reason>)
         const m = /^draft: (\w+)$/.exec(e.message);
         if (m) this.toast(cv.t(`error.draft.${m[1]}`, cv.t('error.draft.unknown_action', "You can't do that right now.")), 'error');
+        // the session could not build or start the match ('match setup: …', 'match: could not start …'; it is idle
+        // again): never leave the player on a draft or a loading bar that will not move
+        else if (/^match(?: setup)?: /.test(e.message)) this.matchFailed();
         break;
       }
       case 'queue': {
@@ -270,6 +273,19 @@ export class AppState {
         break;
       }
     }
+  }
+
+  /** the match failed to start: nothing of the flow outlives it, one notice, and back to the screen the request came
+   *  from (practice and custom to their own setup screen, a matchmade queue to Play) */
+  private matchFailed(): void {
+    const r = this.router;
+    const kind = this.cv.queue(this.lastRequest.value?.queue)?.kind;
+    batch(() => { this.loading.value = null; this.draft.value = null; this.queue.value = null; this.accepted.value = false; });
+    this.sound.duck(false);
+    this.toast(this.cv.t('state.error.match', 'The match could not start. Try again.'), 'error');
+    if (!r.inStack((sc) => sc === 'draft' || sc === 'loading' || sc === 'queue')) return;
+    r.reset('play', {}, 'back');
+    if (kind === 'practice' || kind === 'custom') r.go(kind, {}, { transition: 'back' });
   }
 
   /** a ready-check line for the notification: mode, queue and the seconds left */

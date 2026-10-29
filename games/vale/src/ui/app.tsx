@@ -302,7 +302,11 @@ function TopBar(p: { def: ScreenDef; route: Route }): JSX.Element {
     router.go(screen, params, { root: true });
   };
   const q = state.lastRequest.value ? cv.queue(state.lastRequest.value.queue) : state.draft.value ? cv.queue(state.draft.value.queue) : null;
-  const mode = cv.mode(q?.mode ?? state.draft.value?.mode ?? state.lastSetup.value?.mode);
+  // the mode being played: practice (practice.mode) and custom games may play another mode than their queue's, so the
+  // flow's own draft, loading setup, match or result names it first
+  const live = p.route.screen === 'postgame' ? state.postgame.value?.result.mode
+    : state.match.value?.setup.mode ?? state.loading.value?.setup.mode ?? state.draft.value?.mode;
+  const mode = cv.mode(live ?? q?.mode ?? state.lastSetup.value?.mode);
   return (
     <header class="bar" role="banner">
       {p.def.chrome !== 'flow' && router.canGoBack() ? <BackButton label={cv.t('nav.back', 'Back')} onPress={() => router.back()} /> : null}
