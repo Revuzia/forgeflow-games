@@ -1,6 +1,6 @@
 // VALE HUD — the Dial Bar (STYLE_BIBLE HUD density: bottom centre, 640 × 132 at 1080p; client_hud §4.2):
 // portrait with the level ring (XP as a linear shadow sweep), the passive badge, the skill-point dot and
-// the stats tab; abilities 64 px, ultimate 76, battle spells 48, each with its key chip, rank pips
+// the stats tab; abilities 64 px, ultimate 76, Hour spells 48, each with its key chip, rank pips
 // (hour-ticks), cost (HARM when you cannot pay), an ink cooldown shadow sweeping clockwise from 12 o'clock
 // with the seconds in Mono 22/700 (m:ss from a minute up), a ready moment (a 250 ms chalk wash that
 // settles + the glint), a chalk-hi border while the ability's effect runs (draining along the bottom), a

@@ -86,7 +86,7 @@ function rowKey(model: ReturnType<typeof useHud>['model'], p: PlayerView): strin
   return `${e?.level ?? ''}|${p.kills}/${p.deaths}/${p.assists}|${Math.round(p.cs)}|${Math.round(p.gold)}|${Math.round(p.damageToFighters)}|${p.items.join(',')}|${dead ? Math.ceil(p.respawnIn) : -1}|${p.lives ?? ''}|${Math.round(p.score ?? 0)}|${p.placement ?? ''}|${spellIds(p).join(',')}`;
 }
 const spellIds = (p: PlayerView): string[] => (['spell1', 'spell2'] as const).map((sl) => p.abilities.find((a) => a.slot === sl)?.id ?? '');
-/** HUD-7: the player's two battle spells (glyphs only: no cooldowns, so the board never leaks an enemy's timers) */
+/** HUD-7: the player's two Hour spells (glyphs only: no cooldowns, so the board never leaks an enemy's timers) */
 function Spells(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { index } = useHud();

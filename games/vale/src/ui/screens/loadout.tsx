@@ -1,5 +1,5 @@
 // VALE UI — Loadout (client_hud §3.6, route `loadout`, param `fighter?`): the setup layer for one
-// fighter outside a match — skin (equip via Session.equipSkin), battle spells, boons by path — saved
+// fighter outside a match — skin (equip via Session.equipSkin), Hour spells, boons by path — saved
 // per fighter with Session.saveLoadout. "Use last loadout" restores Profile.loadouts[fighter]. Without
 // a fighter param the screen asks for one first (the grid). Unsaved changes are kept until you leave.
 

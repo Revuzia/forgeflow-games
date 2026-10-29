@@ -1,11 +1,11 @@
-// VALE UI — the setup layer (client_hud §3.6): skin strip, battle spells, boons by path. One panel for
+// VALE UI — the setup layer (client_hud §3.6): skin strip, Hour spells, boons by path. One panel for
 // the draft's finalize phase and the standalone `loadout` screen. Rules are shown as text, never hidden:
 // "Boons must come from one path." · "Not available in FRAY." · "Fill every slot to lock in." Spells and
 // boons outside the mode's pool (rules.itemPool vs SetupDef pools) are dashed with the reason (locked,
 // never grey). Spell slots carry the player's spell keys.
 // Skin cards (client F8): the name gets two lines (never cut), and ownership is ONE chip with the tier's hour-ticks
 // inside — Equipped, Owned, or the price with the currency glyph; the long "In the shop for …" line is the tooltip's.
-// `tabs` (the draft's finalize, client F9): battle spells and boons sit behind two tabs that count their filled slots,
+// `tabs` (the draft's finalize, client F9): Hour spells and boons sit behind two tabs that count their filled slots,
 // so the whole panel fits at 1280 x 720.
 
 import type { JSX } from 'preact';
@@ -96,7 +96,7 @@ export interface LoadoutPanelProps {
   draft?: boolean;
   hideSkins?: boolean;
   readOnly?: string;
-  /** battle spells and boons behind two tabs (the draft's finalize) */
+  /** Hour spells and boons behind two tabs (the draft's finalize) */
   tabs?: boolean;
 }
 
@@ -157,7 +157,7 @@ export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
               <button type="button" role="tab" aria-selected={tab === t} class={`tab ${tab === t ? 'is-selected' : ''}`} tabIndex={tab === t ? 0 : -1}
                 onPointerDown={() => sound.play('tab')} onClick={() => setTab(t)}
                 onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); setTab(t === 'spells' ? 'boons' : 'spells'); } }}>
-                <span class="t-label">{t === 'spells' ? cv.t('loadout.spells', 'Battle spells') : cv.t('loadout.boons', 'Boons')}</span>
+                <span class="t-label">{t === 'spells' ? cv.t('loadout.spells', 'Hour spells') : cv.t('loadout.boons', 'Boons')}</span>
                 <span class={`tab__badge num ${have >= need ? '' : 'reason--warn'}`}>{have}/{need}</span>
               </button>
             );
@@ -168,10 +168,10 @@ export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
       {!p.tabs || nBoons === 0 || tab === 'spells' ? (
       <section class="loadout__sect stg">
         <div class="sect__head">
-          {p.tabs && nBoons > 0 ? null : <h3 class="t-h2">{cv.t('loadout.spells', 'Battle spells')}</h3>}
+          {p.tabs && nBoons > 0 ? null : <h3 class="t-h2">{cv.t('loadout.spells', 'Hour spells')}</h3>}
           <span class="t-body-s sect__hint">{nBoons === 0 ? cv.t('loadout.spells_hint_fray', 'Pick {n}. FRAY has no boons.', { n: nSpells }) : cv.t('loadout.spells_hint', 'Pick {n}. Cast them with the spell keys.', { n: nSpells })}</span>
         </div>
-        <div class="slots" role="radiogroup" aria-label={cv.t('loadout.spells', 'Battle spells')}>
+        <div class="slots" role="radiogroup" aria-label={cv.t('loadout.spells', 'Hour spells')}>
           {Array.from({ length: nSpells }, (_, i) => {
             const sp = cv.spell(p.loadout.spells[i]);
             return (
@@ -231,7 +231,7 @@ function SetupTile(p: { record: SpellT | BoonT; kind: 'spell' | 'boon'; selected
   const r = p.record;
   const tip = useTip(() => (
     <>
-      <AbilityTip record={r as unknown as Parameters<typeof AbilityTip>[0]['record']} kind={p.kind === 'spell' ? cv.t('loadout.spells', 'Battle spells') : cv.path((r as BoonT).path)?.name} cv={cv} />
+      <AbilityTip record={r as unknown as Parameters<typeof AbilityTip>[0]['record']} kind={p.kind === 'spell' ? cv.t('loadout.spells', 'Hour spells') : cv.path((r as BoonT).path)?.name} cv={cv} />
       {p.reason ? <p class="t-caption reason--warn" style={{ marginTop: '6px' }}>{p.reason}</p> : null}
     </>
   ), { place: 'right', wide: true });

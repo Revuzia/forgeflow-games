@@ -178,11 +178,11 @@ def main() -> None:
             f"as a precious game item, rarity expressed by craftsmanship and light, not by gold. {ICON}",
             f"content/ui/icons/items/{it['id']}.webp", "square", ref_from=it.get("icon")))
 
-    # ── 4. setup layer: battle spells, boons, paths ───────────────────────────────────────────
+    # ── 4. setup layer: Hour spells, boons, paths ───────────────────────────────────────────
     setup = load("setup.json")
     for s in setup.get("spells", []):
         items.append(rec(f"spell_{s['id']}", "icon",
-                         f"Battle spell icon '{s['name']}': {clean(s['desc'])}. Emblematic, one clear shape. {ICON}",
+                         f"Hour spell icon '{s['name']}': {clean(s['desc'])}. Emblematic, one clear shape. {ICON}",
                          f"content/ui/icons/setup/{s['id']}.webp", "square", ref_from=s.get("icon")))
     for b in setup.get("boons", []):
         items.append(rec(f"boon_{b['id']}", "icon",

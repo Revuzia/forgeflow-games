@@ -300,7 +300,7 @@
 .aslot__secs { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-size: calc(24 * var(--px)); font-weight: 700; color: var(--chalk-hi);
   text-shadow: 0 1px 2px var(--ink-0), 0 0 8px var(--ink-0), 0 0 2px var(--ink-0); }
 .aslot__secs.is-long { font-size: calc(20 * var(--px)); letter-spacing: -0.03em; }
-/* battle spells are the small slots: the seconds sit low, so a long "3:11" never runs into the key or the
+/* Hour spells are the small slots: the seconds sit low, so a long "3:11" never runs into the key or the
    charge count at the top (r12 m1; 32 px at 720p) */
 .aslot--spell .aslot__secs { align-items: end; padding-bottom: calc(4 * var(--px)); line-height: 1; font-size: max(12px, calc(18 * var(--px))); }
 .aslot--spell .aslot__secs.is-long { font-size: max(12px, calc(15 * var(--px))); letter-spacing: -0.04em; }
