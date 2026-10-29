@@ -78,7 +78,7 @@ import { Catalog, ClipRole, Effect, SCHEMA_VERSION, type CatalogT } from '../src
 import { BEHAVIOR_KEYS, DAMAGE_MULT_KINDS, PRIORITY_TOKENS } from '../src/sim/units/behavior_keys.ts';
 import { VFX_TEXTURE_NAMES } from '../src/render/vfx/atlas.ts';
 import { VFX_SHAPES } from '../src/render/vfx/shapes.ts';
-import { SCREEN_MUSIC_KINDS, STING_KINDS, UI_CUE_KINDS } from '../src/ui/audio_kinds.ts';
+import { SCREEN_MUSIC_KINDS, STING_KINDS, UI_CUE_KINDS, UI_CUE_KINDS_OPTIONAL } from '../src/ui/audio_kinds.ts';
 import { MANIFEST_FORMAT, MANIFEST_PRODUCT, type CatalogManifest, type ManifestHistoryEntry } from '../src/contracts/manifest.ts';
 import { checkNames, DEFAULT_DESIGN_DIR, formatHit, loadDenyList, type NameInput, type TextKind } from './names_check.ts';
 import { MIGRATIONS, type CatalogData, type MigrationRegistry } from './schema_migrations.ts';
@@ -427,7 +427,8 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
     const bound = c.audio[key];
     for (const k of kinds) if (!(k in bound)) dg.err(['audio', key], `the client plays "${k}" but audio.${key} does not bind it (src/ui/audio_kinds.ts)`);
     for (const [role, id] of Object.entries(bound)) {
-      if (!kinds.includes(role)) dg.warn(['audio', key, role], `audio.${key}.${role} is not a role the client plays (src/ui/audio_kinds.ts)`);
+      // optional ui roles (UI_CUE_KINDS_OPTIONAL) play when bound and skip silently when not: neither state is a diagnostic
+      if (!kinds.includes(role) && !(key === 'ui' && (UI_CUE_KINDS_OPTIONAL as readonly string[]).includes(role))) dg.warn(['audio', key, role], `audio.${key}.${role} is not a role the client plays (src/ui/audio_kinds.ts)`);
       if (!known.has(id)) dg.err(['audio', key, role], unknownRef(what, id, known));
     }
   }
