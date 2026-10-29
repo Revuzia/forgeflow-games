@@ -106,7 +106,8 @@ programs fails the 500k / 40 budget (`integ_engine_v1_perf_1080.json`), and the 
 - engine-lod: draw the authored fighter LOD1 in the main pass. Target match peak <= 500k tris and <= 40
   programs (PERF-m5, lead:fighter-tris).
 - world-pad, world-05 and client-hud3: pad the RIFT minimap so both plaza discs fit (HUD-3).
-- systems-r2-icons and hud:HUD-1-seam: point the 18 new items at their own paintings.
+- systems-r2-icons and hud:HUD-1-seam: point the 18 new items at their own paintings. Closed in run 2:
+  icon_probe borrowed 0 (integ2_systems_verify1, integ2_client_verify1 pass).
 - audio-r1-confirm: re-measure the run-1 audio claims (AUD-4 contact, kit-hit soft top, hit-sfx semantics,
   dash spread).
 
@@ -118,7 +119,8 @@ programs fails the 500k / 40 budget (`integ_engine_v1_perf_1080.json`), and the 
 - Practice panel UI (g3): client-1b-16 and client-r2-07.
 - Profile emblem and nod wiring: client-1b-14 and client-1b-15.
 - e2e store journey (wallet 598 against a 600 skin).
-- systems-18: callstone, needlefall and watchbell are never bought by bots.
+- systems-18: callstone, needlefall and watchbell are never bought by bots. Closed in run 2: 31/31
+  finished items bought on seeds 1-20 and 21-40 (integ2_systems_verify1 pass).
 - W4 copy and VFX/audio follow-ups for Dawn Seal, Gorge Wind, Noon Toll and the Lot.
 
 **Observation, not in any plan.** The first team to take Longshade wins almost every RIFT bot game: 46/46,
