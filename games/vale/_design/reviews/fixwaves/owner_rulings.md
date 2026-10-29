@@ -61,3 +61,26 @@ Its own names, numbers and presentation complete it.
 **Dunsom:** the small gold beaked mask reads like a plague-doctor mask in painted close-ups. Ruling: shorten and round the beak. It becomes a short rounded bill, no longer than the mask's eye-to-chin height, so it no longer reads as a plague-doctor beak at portrait or splash size. The change goes to character art (W5b or the integration pass). Afterwards, Dunsom can return to the painted cards.
 
 **Hooded Lamp ward:** replace the pointed finial with a rounded knob. A plain rounded dome keeps the single blue lamp core with no eye-like pair, which follows the no-pointed-hoods rule. The change goes to unit art (W5a or the integration pass).
+
+## 7. Crown rule for soft head coverings (2026-10-29, after the closing review)
+
+**Ruling:** one roster-wide threshold replaces case-by-case calls on hoods.
+
+**Scope:** a cloth hood, cowl, wrap or soft cap whose top is the highest point of the head. This covers fighters, every skin, Wicks, wards and monsters. Hard parts (helmet ridges, visor blades such as Rishal's ruling-3 accent, metal crowns, finials, hat brims) are not soft head coverings. They need only the visual check below.
+
+**Measure:** the crown fit radius at 3 cm under the top must be **at least 10 cm**. Use `_harness/_reports/closing_vashil_tools/geo2.mjs`, which computes R = ((min(width, depth) / 2)² + d²) / (2d) on the body mesh, as in `closing_critic_crown_radius.txt`.
+
+**Visual check:** from behind and three-quarter-behind at the 28.5 m gameplay camera, the head must not read as a peaked or pointed hood on any skin. A pale covering over a pale robe needs a dark break so the crown reads as a rounded shape.
+
+**Applies now:**
+
+| Fighter | R at 3 cm | Status |
+|---|---|---|
+| Vashil (all skins) | 7.0 cm | Fails. CW5 rounds the cowl; wave target ≥ 12 cm tip radius and ≥ 19 cm wide 5 cm under the top. |
+| Kemdo (all skins) | 8.1 cm | Fails. CW5 rounds the hood crown. |
+| Ulkro (all skins) | 7.0 cm | Fails. CW5 rounds the hood crown. |
+| Odrum (felt cap, all skins) | 5.0 cm | Fails if the cap is soft felt. CW6 rounds it, together with odrum-M2 (cap reads as scalp). |
+
+Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat finial, ridge blade). They take the visual check only.
+
+**Why:** "No tall, pointed or conical hoods" is a standing sensitivity rule. A number makes it checkable in a gate instead of a matter of taste. 10 cm at 3 cm is blunter than every hood the closing critic flagged and sharper than the rounded caps already accepted (Lisvel 11.9, Nurrow 11.3, Burdam 13.8, Dunsom 17.7).
