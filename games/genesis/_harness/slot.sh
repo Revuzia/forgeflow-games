@@ -34,7 +34,10 @@ top=$N; [ "$class" = long ] && [ "$N" -gt 1 ] && top=$((N - 1))
 
 # a ticket: the next number under a lock
 ticket=$( { flock 8; n=$(cat "$DIR/counter" 2>/dev/null || echo 0); echo $((n + 1)) >"$DIR/counter"; echo $((n + 1)); } 8>"$DIR/counter.lock" )
-echo "$$ $(date -u +%FT%TZ) [$class] $*" >"$DIR/wait/$ticket"
+# (one line per ticket: a multi-line `bash -c '...'` job wrote a multi-line ticket, the sweep then read a multi-line pid,
+# took the live job for dead and deleted its ticket, and the job waited forever)
+cmdline=$(printf '%s ' "$@" | tr '\n' ' ')
+printf '%s %s [%s] %s\n' "$$" "$(date -u +%FT%TZ)" "$class" "$cmdline" >"$DIR/wait/$ticket"
 trap 'rm -f "$DIR/wait/$ticket"' EXIT
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
@@ -43,16 +46,16 @@ while true; do
   # sweep tickets of processes that died while waiting
   head=""
   for t in $(ls "$DIR/wait" | sort -n); do
-    pid=$(cut -d' ' -f1 "$DIR/wait/$t" 2>/dev/null)
+    pid=$(head -n1 "$DIR/wait/$t" 2>/dev/null | cut -d' ' -f1)
     if ! alive "$pid"; then rm -f "$DIR/wait/$t"; continue; fi
-    if grep -q " \[$class\] " "$DIR/wait/$t" 2>/dev/null; then head=$t; break; fi
+    if head -n1 "$DIR/wait/$t" 2>/dev/null | grep -q " \[$class\] "; then head=$t; break; fi
   done
   if [ "$head" = "$ticket" ]; then
     for i in $(seq 1 "$top"); do
       exec {fd}>"$DIR/slot.$i"
       if flock -n "$fd"; then
         rm -f "$DIR/wait/$ticket"
-        echo "$$ $(date -u +%FT%TZ) $*" >"$DIR/slot.$i.who"
+        printf '%s %s %s\n' "$$" "$(date -u +%FT%TZ)" "$cmdline" >"$DIR/slot.$i.who"
         # (Chromium, running as root, raises its GPU and renderer threads to nice -8 and starves the sim runs: take that right away)
         if command -v setpriv >/dev/null 2>&1; then setpriv --bounding-set=-sys_nice -- "$@"; else "$@"; fi
         rc=$?
