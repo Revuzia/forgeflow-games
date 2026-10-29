@@ -15,18 +15,21 @@
 //   attributes  simplifyWithAttributes with the vertex normals weighted --normal-weight, so a collapse that would
 //               bend the shading under the baked normal map is refused before one that only moves a flat panel;
 //   bound       --error-mm in metres (positions dequantized through the skin's bind matrices: KHR_mesh_quantization
-//               folds the dequantization into the inverse bind matrices of a skinned mesh), target --ratio of the
-//               body's triangles; UV seams stay borders (a collapse never crosses a UV island);
+//               folds the dequantization into the inverse bind matrices of a skinned mesh; it is PER MESH, a uniform
+//               0.82-1.24 m per unit over the 48 GLBs, never one constant), target --ratio of the body's triangles;
+//               UV seams stay borders (a collapse never crosses a UV island);
 //   scope       the textured body primitive only (accent and form meshes are small and stay whole).
 //
 // The recipe (defaults): ratio 0.5, 10 mm, normals 0.5, `head` >= 0.5 locked. 10 mm is 0.6 px of a fighter at the
 // gameplay camera at 1080p (~117 px for 2 m: 17 mm a pixel), so the match's main pass and its outline hull can draw
 // the LOD1; the menu showcase (4-5x larger on screen) keeps the full body. Measured over the 48 GLBs
-// (_harness/_reports/integ_chars_lod1.json): 955,768 -> 580,881 body triangles (0.608), worst error 10 mm, every
-// non-degenerate head-locked triangle kept.
+// (_harness/_reports/integ_chars_r1_lod1.json): 955,762 -> 580,849 body triangles (0.608), worst error 10 mm, every
+// non-degenerate head-locked triangle kept (152,516). _lod1_three.mjs is the same recipe on the objects GLTFLoader
+// builds (the renderer's drop-in, faceLockedLodIndex) and checks it against this one.
 //
-// Prints per GLB: body triangles, LOD1 triangles, the achieved error (mm), head-locked vertices / triangles, and a
-// total; --json writes the same rows; --write <dir> writes a copy of each GLB with the body's index replaced by its
+// Prints per GLB: body triangles, LOD1 triangles, the achieved error (mm), head-locked vertices / triangles, the
+// dequantization (m per position unit), and a total; --json writes the same rows (plus extentM and errorRel, the
+// relative bound the simplifier is handed); --write <dir> writes a copy of each GLB with the body's index replaced by its
 // LOD1 (for three_snapshot A/B shots: art/tools/three_snapshot.mjs <dir>/<id>.glb). The shipped GLBs are never edited.
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -107,11 +110,16 @@ export function faceLockedLod(prim, skin, { ratio = RATIO, errorM = ERROR_M, nor
   for (let t = 0; t < tris; t++) {
     if (lockedTri(t) && kept.has(key(src[t * 3], src[t * 3 + 1], src[t * 3 + 2]))) lockedKept++;
   }
-  return { lod, tris, lodTris: lod.length / 3, errorMm: +(err * scale * 1000).toFixed(2), lockedVerts, lockedTris, lockedKept };
+  // the dequantization is per mesh (KHR_mesh_quantization fits each body's own box): metres per position unit, a
+  // uniform scale (the three column norms agree), and the relative error the simplifier is handed
+  const cols = [0, 4, 8].map((c) => Math.hypot(M[c], M[c + 1], M[c + 2]));
+  const unitM = cols[0], uniform = Math.max(...cols) - Math.min(...cols) < 1e-6 * unitM;
+  return { lod, tris, lodTris: lod.length / 3, errorMm: +(err * scale * 1000).toFixed(2), lockedVerts, lockedTris, lockedKept,
+    unitM: +unitM.toFixed(5), uniform, extentM: +scale.toFixed(4), errorRel: +(errorM / scale).toExponential(4) };
 }
 
 /** the textured body primitive of a fighter GLB (the largest skinned primitive with UVs) */
-function bodyOf(doc) {
+export function bodyOf(doc) {
   let best = null;
   for (const node of doc.getRoot().listNodes()) {
     const mesh = node.getMesh(), skin = node.getSkin();
@@ -137,10 +145,12 @@ async function main() {
     if (!b) { console.error(`[lod1] ${basename(file)}: no textured skinned body`); continue; }
     const r = faceLockedLod(b.prim, b.skin);
     const row = { glb: basename(file), body: r.tris, lod1: r.lodTris, ratio: +(r.lodTris / r.tris).toFixed(3), errorMm: r.errorMm,
-      lockedVerts: r.lockedVerts, lockedTris: r.lockedTris, lockedKept: r.lockedKept };
+      lockedVerts: r.lockedVerts, lockedTris: r.lockedTris, lockedKept: r.lockedKept, unitM: r.unitM, uniform: r.uniform,
+      extentM: r.extentM, errorRel: r.errorRel };
     rows.push(row);
     console.log(`[lod1] ${row.glb.padEnd(26)} body ${String(r.tris).padStart(6)} -> ${String(r.lodTris).padStart(6)} `
-      + `(${row.ratio.toFixed(3)}) error ${r.errorMm.toFixed(2)} mm, head locked ${r.lockedTris} tris (${r.lockedKept} kept)`);
+      + `(${row.ratio.toFixed(3)}) error ${r.errorMm.toFixed(2)} mm, head locked ${r.lockedTris} tris (${r.lockedKept} kept), `
+      + `${r.unitM.toFixed(4)} m/unit${r.uniform ? '' : ' NON-UNIFORM'}`);
     if (writeDir) {
       const idx = b.prim.getIndices();
       const lodAcc = doc.createAccessor(`${b.mesh.getName()}_lod1`).setType('SCALAR')
@@ -152,9 +162,11 @@ async function main() {
   const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
   const tot = { glbs: rows.length, body: sum('body'), lod1: sum('lod1'), ratio: +(sum('lod1') / Math.max(1, sum('body'))).toFixed(3),
     maxErrorMm: Math.max(0, ...rows.map((r) => r.errorMm)), lockedTris: sum('lockedTris'), lockedKept: sum('lockedKept'),
+    unitM: [Math.min(...rows.map((r) => r.unitM)), Math.max(...rows.map((r) => r.unitM))], allUniform: rows.every((r) => r.uniform),
     recipe: { ratio: RATIO, errorMm: ERROR_M * 1000, normalWeight: NORMAL_W, lockJoint: 'head', lockWeight: LOCK_W } };
   console.log(`[lod1] ${tot.glbs} GLBs: body ${tot.body} -> LOD1 ${tot.lod1} (${tot.ratio}), worst error ${tot.maxErrorMm} mm, `
-    + `head-locked triangles kept ${tot.lockedKept}/${tot.lockedTris}`);
+    + `head-locked triangles kept ${tot.lockedKept}/${tot.lockedTris}, dequantization ${tot.unitM[0]}-${tot.unitM[1]} m/unit `
+    + `(per mesh${tot.allUniform ? ', uniform' : ', NOT uniform'})`);
   if (jsonOut) writeFileSync(jsonOut, JSON.stringify({ total: tot, rows }, null, 1) + '\n');
 }
 
