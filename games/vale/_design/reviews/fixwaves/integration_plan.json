@@ -10,7 +10,8 @@
   "missing_waves": [
    "W4"
   ],
-  "how": "lanes.<lane>.packages[k].items = do these; lanes.<lane>.stitch = after the named lane finished. TRIAGE FIRST: many are already done."
+  "how": "lanes.<lane>.packages[k].items = do these; lanes.<lane>.stitch = after the named lane finished. TRIAGE FIRST: many are already done.",
+  "run2": "lanes.<lane>.run2 = W4 handoffs and integration run-1 leftovers for that lane; done in integration run 2 (after run 1). lanes.systems is W4-aware (integration run 1b)."
  },
  "lanes": {
   "audio": {
@@ -114,7 +115,49 @@
      ]
     }
    ],
-   "stitch": []
+   "stitch": [],
+   "run2": [
+    {
+     "lane": "audio",
+     "id": "audio-r2-01",
+     "source": "W4:rekey handoff",
+     "severity": "minor",
+     "what": "Optional cue: a two-note chord sting on Vashil's chord stun. Set it as present.sfx on the area in vashil.json kit.passive.triggers[0], or W3 can bind it by passive proc.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "audio",
+     "id": "audio-r2-02",
+     "source": "W4:tempo-jungle handoff",
+     "severity": "minor",
+     "what": "Optional cues: a soft glass 'set' on the Dawn Seal re-set every 30 s (quiet, positional), a seal shatter at 7:00, and a muffled hit for a Ringshade-reduced blow on a Needle.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "audio",
+     "id": "audio-r2-03",
+     "source": "W4:difficulty-bridge handoff",
+     "severity": "minor",
+     "what": "Optional cue: a rising wind gust through the gorge on each Gorge Wind step (WorldView.gorgeWind increments), quieter than the announcer and never ducking it.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "audio",
+     "id": "audio-r2-04",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "Optional cue: a soft hour-bell for each Noon Toll (announce 'noon_toll', every 20 s from 8:00 in FRAY). Keep it quieter than the announcer and never duck it.",
+     "files": "",
+     "done": "",
+     "after": null
+    }
+   ]
   },
   "client": {
    "packages": [
@@ -395,7 +438,99 @@
      ]
     }
    ],
-   "stitch": []
+   "stitch": [],
+   "run2": [
+    {
+     "lane": "client",
+     "id": "client-r2-01",
+     "source": "W4:rekey handoff",
+     "severity": "minor",
+     "what": "Strings in content/strings.en.json:\n- lot.prompt \u2192 \"Your fighter was drawn by lot. Take one fighter from your team's Lot, once, before it burns down.\"\n- lot.lot_note \u2192 \"Each of you can take one fighter from the Lot. Every 8 s its first fighter goes back to the gorge.\"\n- new error.draft.no_swaps \u2192 \"You have already taken a fighter from the Lot.\"\n- new lot.take_left \u2192 \"{n} take left\" and lot.take_none \u2192 \"No takes left\" (from DraftSeat.swaps, a new additive field).\n- new lot.burned \u2192 \"{fighter} went back to the gorge.\" (the draft log line is 'The Lot let X go').\n- announce.shop_denied.access_bridge \u2192 \"You can shop at your base, beside your own standing Needles, or while you wait to return.\"\n- announce.shop_denied.unique \u2192 \"You already carry one of those, or a Noonlit item within 3 hours of it on the dial.\"\nOther UI:\n- content/client.json:76 tip \u2192 \"In BRIDGE, you can take one fighter from your team's Lot; yours goes there for a teammate. The Lot burns down one fighter every 8 s.\"\n- src/ui/screens/draft.tsx:~364: hide the 'Draw again' button when queue.bench.rerolls === 0, and show takes left.\n- Noonlit tooltip and frame: show the item's dial hour (ItemDef.dial.hour).\nIcons to repaint (W2 imagegen):\n- assets/ui/icons/setup/glint_step.webp: a step that leaves a dark shadow patch behind.\n- saplight.webp: a pool of sap-light on stone.\n- hourstrike.webp: a strike on a full, glowing beast-mark.\n- glass_pane.webp: a pane with a setting ring.\n- team_buffs/clearglass.webp and resinburn.webp: half-dial motifs for own side and enemy side.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-02",
+     "source": "W4:items handoff",
+     "severity": "minor",
+     "what": "Paint 18 new item icons at content/ui/icons/items/<id>.webp, served as assets/ui/icons/items/<id>.webp, to the HUD-1 family-ground spec. VALE rules apply: no gears, clock hands, gems or runes. Until then the content shows a related item's icon as a placeholder.\n- lampblack_edge 'Lampblack Edge': a short blade whose edge is blackened with lamp soot, one black drip of sap.\n- lampblack_coat 'Lampblack Coat': a felt coat dusted with soot, a faint dark ring around it.\n- lampblack_lens 'Lampblack Lens': a lens clouded with soot, a dark drop inside.\n- quarry_pick 'Quarry Pick': a stone-splitting pick biting into an ochre block.\n- deepglass_rod 'Deepglass Rod': a rod with a thick, deep-blue glass head that light sinks into.\n- glass_veil 'Glass Veil': a linen veil with dawnglass panes setting across it.\n- glintmail 'Glintmail': a bracer of small glinting glass scales with a bowstring.\n- dawnspur 'Dawnspur': a spur point lit by the first ray of dawn.\n- resin_maul 'Resin Maul': a walnut maul bound with warm amber lampresin bands.\n- shadowpin 'Shadowpin': an arrow pinning a long shadow to the stone.\n- bellrope 'Bellrope': a knotted bell rope on a hand bell, a ring of light.\n- almslamp 'Almslamp': a small lamp spilling a shared glow (no coins, no gold).\n- callstone 'Callstone': a carved standing stone sending out sound rings.\n- hourstring 'Hourstring': a bow whose string carries twelve carved hour-ticks.\n- needlefall 'Needlefall': a falling needle shard with a shadow streak.\n- stillhour 'Stillhour': a dial-stone plate with a frozen shadow line (stopped light).\n- afterlight 'Afterlight': a lens with a light burst and its echo ring a moment later.\n- watchbell 'Watchbell': a watch bell ringing out reveal rings.\nOptional string, content/strings.en.json announce.shop_denied.unique \u2192 \"You already carry one of those or another Lampblack piece, or a Noonlit item within 3 hours of it on the dial.\"",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-03",
+     "source": "W4:tempo-jungle handoff",
+     "severity": "minor",
+     "what": "Optional player copy for the new RIFT rules, in content/client.json tips or a Needle hover:\n- \"Until 7:00 every Outer Needle wears a Dawn Seal that re-sets every 30 s: one wave won't crack it, a stacked wave will.\"\n- \"A Needle's shadow ring turns aside your blows unless your own Wicks stand in it. Bring the wave.\"\n- \"Grove tithe: while your grovehunter trails your team's lead, each camp monster pays it extra XP from what your lanes earned.\"\nThe seal is already visible as a Needle shield (the hatched dawnglass segment on its bar).",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-04",
+     "source": "W4:difficulty-bridge handoff",
+     "severity": "minor",
+     "what": "Sudden death no longer lifts protection. Re-word the strings in content/strings.en.json: hud.sudden_death \u2192 \"Gorge Wind\". hud.sudden_death_tip \u2192 \"Sudden death: the Gorge Wind rises. Structures keep their protection, but each step makes Wicks hit harder and structures take more damage. Respawns are slower.\" announce.sudden_death.title \u2192 \"The Gorge Wind rises\". announce.sudden_death.sub \u2192 \"Protection holds, but Wicks hit harder and structures crack faster with every step. Respawns are slower.\" Optional: show the step count from the new WorldView.gorgeWind (0 before sudden death, then 1..8) next to the sky-strip badge in src/ui/hud/top.tsx. Optional BRIDGE tip for content/client.json: \"At 21:00 the Gorge Wind rises: nothing loses its protection, but every 45 s the waves hit harder and the Needles wear thin.\"",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-05",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "Noon Toll strings in content/strings.en.json. The new announce key is 'noon_toll' (params.n = fighters shown); it fires every 20 s from 8:00 in FRAY. Add announce.noon_toll.title \u2192 \"The Noon Toll\" and announce.noon_toll.sub \u2192 \"Every fighter still standing is in the light for 5 s.\" Optional FRAY tip for content/client.json: \"From 8:00 the Noon Toll rings every 20 s and shows every fighter to everyone for 5 s.\"",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-06",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "client F12, UI half. DraftAction now includes { a: 'ready' } and DraftSeat has ready?: boolean (sent in finalize, trade and done). src/ui/screens/draft.tsx can drop the `as unknown as DraftAction` READY cast and the readyOf cast. Bots show ready once they have nothing left to do; finalize ends 1.5 s (READY_GRACE) after every person is ready.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-07",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "gameplay g3, practice panel UI (src/ui/hud/panels.tsx, src/ui/screens/practice.tsx).\n- New commands: { type: 'practice', action: 'toggleWaves' | 'toggleStructures' | 'teleport' (x, y; walkable points only, e.g. an armed ground click) | 'dummyStats' (hp 100-100000, armor/resist 0-500) | 'resetMeter' | 'clearDummies' }.\n- Read WorldView.practice: waves, structures, noCooldowns, dummy {hp, armor, resist}, meters[] {player, dealt, last, burst, burstTime, burstDps, recent5}.\n- Practice setup screen: QueueRequest.practice.sparring {fighter, difficulty}, practice.mode (rift or bridge), and practice.waves / structures start switches.\n- Strings: practice.panel.heal should read \"Full heal\" while alive and \"Return to life\" only when dead; add labels for the new switches and the meter.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-08",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "originality F8, UI half.\n- src/ui/hud/shop.tsx:31: change TAG_LABEL jungle 'Jungle' to 'Dialwood', or add string hud.shopui.tag.jungle \u2192 \"Dialwood\".\n- strings.en.json:266 'Add gold and levels' \u2192 Gleam.\n- client.json:39 Sparring tile copy.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "client",
+     "id": "client-r2-09",
+     "source": "W4 verify (open)",
+     "severity": "minor",
+     "what": "handoff:W2-copy [fail]: In strings.en.json, :676 and :847 still say structures lose their protection in sudden death, and :456 Lot prompt still says 'draw again once' although rerolls is 0. There are no noon_toll strings. These are W2 files, but players are misinformed until W2 applies the handoffs.\nFIX HINT: W2: apply W4's handoffs for the Gorge Wind, Lot and Noon Toll strings, and hide 'Draw again' when rerolls is 0.",
+     "files": "",
+     "done": "",
+     "after": null
+    }
+   ]
   },
   "chars": {
    "packages": [
@@ -528,7 +663,19 @@
      ]
     }
    ],
-   "stitch": []
+   "stitch": [],
+   "run2": [
+    {
+     "lane": "chars",
+     "id": "chars-r2-01",
+     "source": "W4:rekey handoff",
+     "severity": "minor",
+     "what": "Optional: Ervet's 'great' form node (shown during Whole Again) no longer means an oversized blade with more reach. Show the whole blade at its normal length with glowing shard seams.",
+     "files": "",
+     "done": "",
+     "after": null
+    }
+   ]
   },
   "world": {
    "packages": [
@@ -815,6 +962,68 @@
      "done": "",
      "after": "chars"
     }
+   ],
+   "run2": [
+    {
+     "lane": "engine",
+     "id": "engine-r2-01",
+     "source": "W4:rekey handoff",
+     "severity": "minor",
+     "what": "New VFX defs. Content currently reuses placeholders.\n- spell_glint_shadow: zone glint_shadow, a 1.2 m hard-edged ink shadow of the caster left for 2.5 s; Shade T1; replaces lib_zone_shade in setup.json glint_step effects[0].present.vfx.\n- spell_saplight_pool: a 3 m pool of warm sap-light lasting 4 s; Lumen T1; replaces lib_zone_lumen.\n- spell_glass_pane_set: a dawnglass ring setting outward 3 m; replaces lib_ring_pulse.\n- ervet_ult_shards_home: shards converging along lines from a 4.5 m ring into Ervet's hilt; ervet ult area present.vfx, currently ervet_ult_whole.\n- ervet_shard_tear: a lodged shard ripped out and bursting 1.75 m around the target; currently lib_burst_lumen in the passive trigger[1].\n- vashil_chord: two humming enemies joined by a line of sound, then stun rings; currently vashil_passive_hum on the passive's chord area.\n- resin_ignite_hit: hitVfx for the resinburn_ignite passive, which currently has none.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "engine",
+     "id": "engine-r2-02",
+     "source": "W4:items handoff",
+     "severity": "minor",
+     "what": "Optional new VFX. The new items currently use lib_* presets.\n- Hourstring 'Strike the Hour': a 3 m dial-tick burst at the target, now lib_burst_lumen.\n- Stillhour 'Hold the Hour': a stopped-light stance around the caster for 1.5 s, now lib_zone_glass.\n- Lampblack Coat: an optional faint 4 m soot ring that is shown only while an enemy is inside. The Wounded status already uses lib_status_grievous.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "engine",
+     "id": "engine-r2-03",
+     "source": "W4:tempo-jungle handoff",
+     "severity": "minor",
+     "what": "Optional VFX:\n- While an Outer Needle's Dawn Seal holds (RIFT, shield > 0 before 7:00; the sim's shield source is the Needle's own id), a thin dawnglass glaze, lighter than the protected shell. Add a short shimmer on each 30 s re-set and a shatter at 7:00.\n- Ringshade: a brief dark pulse on the shadow ring when a fighter's reduced hit lands. Content has no vfx ids for these yet.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "engine",
+     "id": "engine-r2-04",
+     "source": "W4:difficulty-bridge handoff",
+     "severity": "minor",
+     "what": "Optional VFX: a gorge-wind gust across the map each time WorldView.gorgeWind goes up (BRIDGE every 45 s, RIFT every 60 s after sudden death), and a faint wind-worn crack overlay on structures while the step count is above 0. The sim emits no event for each step; read WorldView.gorgeWind.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "engine",
+     "id": "engine-r2-05",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "Optional VFX for the Noon Toll (FRAY, from 8:00, every 20 s, announce 'noon_toll'): a short noon-light column or rim on each living fighter while it is revealed (Entity.revealAllUntil > tick, 5 s), and a faint dial-chime ring over the arena on each toll.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "engine-r2-06",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "tools/build_content.ts:\n1. Wire W2's lintPlayerCopy (src/ui/copy_lint.ts). Its header says the build runs it, but nothing calls it. W4 content is clean (probe_sim_rekey).\n2. Optional: lint queue.draft.bansPerTeam === bansForRoster(draft, playable roster) from src/session/draft.ts (probe_sim_draft_pace does this now).\n3. Optional: lint that rules.fighterWeights keys are FighterDef ids. The zod record accepts any string.",
+     "files": "",
+     "done": "",
+     "after": null
+    }
    ]
   },
   "systems": {
@@ -823,91 +1032,27 @@
      "items": [
       {
        "lane": "systems",
-       "id": "gameplay:G1",
-       "source": "final_parity_open W4 finding (reported never)",
-       "severity": "blocker",
-       "what": "RIFT bots leave their lanes: laners farm about 2\u20132.5 cs/min and Wicks kill most Wicks\nFIX: Keep the reviewer's fixes 1, 3, 4 and 5:\n1. Lane-first utility before the first outer Needle falls or 10:00.\n3. Situate() counts the DPS of nearby Wicks, so a low-HP bot walks out of the wave.\n4. A stricter Longshade start check.\n5. A soak gate.\n\nDrop fix 2 (Lampglass yields last hits). Native supports already leave the farm to the carry.\n\nAlso make _harness/pacing.ts and the soak seat role-correct lineups with pickLoadout(catalog, fighter, rules.itemPool, role), so the gate measures what players actually face.",
-       "files": "[\"src/sim/bots/bot.ts\", \"src/sim/bots/team.ts\", \"src/sim/bots/micro.ts\", \"src/sim/bots/difficulty.ts\", \"_harness/pacing.ts\", \"_harness/ (new probe_sim_bot_soak.ts)\"]",
-       "done": "\"\"",
-       "after": null
-      },
-      {
-       "lane": "systems",
-       "id": "gameplay:G4",
-       "source": "final_parity_open W4 finding (reported never)",
+       "id": "done:5",
+       "source": "W4 verify (open)",
        "severity": "major",
-       "what": "RIFT laning phase collapses: the first outer Needle falls at a median of 5.4\u20136.3 min\nFIX: As the reviewer proposes:\n- VALE's own 'Dawn Seal' until 7:00;\n- needle_outer at about 4,000 HP;\n- thin-wave protection;\n- 'mid' phase from 10:00 or the second fallen structure;\n- soak gate: median first structure 9\u201312 min on role-correct lineups.",
-       "files": "[\"content/units.json\", \"src/sim/units/structures.ts\", \"src/sim/combat.ts\", \"src/sim/bots/team.ts\", \"content/team_buffs.json\"]",
-       "done": "\"\"",
-       "after": null
-      },
-      {
-       "lane": "systems",
-       "id": "gameplay:G2",
-       "source": "final_parity_open W4 finding (reported never)",
-       "severity": "major",
-       "what": "The jungle role doesn't work: grovehunters are about 4 levels behind at 15:00 and die the most\nFIX: As the reviewer proposes:\n1. Retune camp XP or respawns to at least 80% of a solo lane's XP rate.\n2. VALE's own 'Grove tithe' catch-up XP.\n3. Bot clear loop: no recall near a ready camp; 'objective' only after 6:00; nearest-ready clear order.\n4. Soak gate on the level gap and deaths, run on role-correct lineups.\n\nWave note: Retune XP via content/units.json first; respawn timers in content/maps/map_rift.json are W5's file, so hand any change there.",
-       "files": "[\"content/units.json\", \"src/sim/economy.ts\", \"src/sim/bots/bot.ts\", \"src/sim/bots/team.ts\"]",
-       "done": "\"\"",
-       "after": null
-      },
-      {
-       "lane": "systems",
-       "id": "gameplay:G5",
-       "source": "final_parity_open W4 finding (reported never)",
-       "severity": "major",
-       "what": "BRIDGE ends through sudden death, which drops structure protection, often with the gate chain still standing\nFIX: As the reviewer proposes:\n- keep `requires` protection in sudden death;\n- replace the protection drop with VALE's own 'Gorge Wind' escalation (stacking Wick buffs and structure resist decay), with a \u00d72 respawn multiplier;\n- retune BRIDGE toward a natural 15\u201318 min;\n- apply the same change to rift_quick;\n- soak gate: at most 25% of games end in sudden death, and 0 cores fall with their chain standing.\n\nReconcile modes_economy.md with content.",
-       "files": "[\"src/sim/units/structures.ts\", \"src/sim/modes/match.ts\", \"content/modes.json\", \"content/queues.json\", \"content/units.json\", \"content/team_buffs.json\", \"_design/sections/modes_economy.md\"]",
-       "done": "\"\"",
+       "what": "done:5 [fail]: The 'difficulty' gate is enforced at 40 games a tier (probe_sim_bot_soak.ts:67-69, :584-585).\n- Seeds 1-20: veteran beats novice 36/40 (90 %) and adept 31/40 (77.5 %). PASS.\n- Seeds 21-40 (fw_W4_soak_verify2_full21): veteran beats novice 32/40 (80 %), against 85 %, so the soak exits 1. Veteran beats adept 30/40 (75 %), PASS.\n- Pooled: vs novice 68/80 = 85.0 %, exactly at the bar; vs adept 61/80.\nThe 8 losses on seeds 21-40 split 4 and 4 by side, so there is no side bias; seed 33 is lost from both sides. The novice changes are perception and execution only, which is allowed.\nFIX HINT: Reach 34/40 vs novice on seeds 21-40 while keeping 34/40 or more on seeds 1-20 and 26/40 or more vs adept on both sets. Study the losses: seeds 22, 30, 33, 34 (veteran on team 1) and 21, 23, 27, 33 (veteran on team 0), from fdeaths, structs and objs in fw_W4_soak_verify2_full21.json. The engineer reports early outer-Needle deficits. Either widen novice's laning gap through perception and execution only (later wave answers, a weaker trade read), or let veteran turn a laning lead into the first Needle. Then re-run both seed sets.",
+       "files": "",
+       "done": "",
        "after": null
       },
       {
        "lane": "systems",
        "id": "gameplay:G3",
-       "source": "final_parity_open W4 finding (reported never)",
+       "source": "W4 verify (open)",
        "severity": "major",
-       "what": "Difficulty tiers barely separate in RIFT\nFIX: As the reviewer proposes: the team brain converts advantages, by sieging after an aliveDiff \u2265 2 or a 1.5k lead. Add macro-tier knobs: macroDelay and convertsLeads. Soak gate: veteran beats novice in at least 85% of 20 mirrored role-correct games, and adept in at least 65%.",
-       "files": "[\"src/sim/bots/team.ts\", \"src/sim/bots/bot.ts\", \"src/sim/bots/difficulty.ts\", \"_harness/\"]",
-       "done": "\"\"",
+       "what": "gameplay:G3 [partly]: See done:5. The engineer's 'partly' claim is confirmed exactly.\n- The adept half is fixed: from 13/20 and 12/20 at round 1 to 31/40 and 30/40.\n- The novice half passes on seeds 1-20 (36/40) and fails on seeds 21-40 (32/40).\nThe veteran objectiveSense macro (difficulty.ts:72-76, team.ts campTtk and thinkObjective) reads only its own team and what its perception sees, so it does not cheat.\nFIX HINT:",
+       "files": "",
+       "done": "",
        "after": null
       },
       {
        "lane": "systems",
-       "id": "originality:F5",
-       "source": "final_parity_open W4 finding (reported never)",
-       "severity": "major",
-       "what": "Ervet's ult copies Riven's reforged-blade hook; the ROSTER self-audit omits Riven and Brand\nFIX: Ervet: make the ult payoff the shards, not reach. For example, Shatter's shards fly back to the hilt along lines, damaging and dragging enemies they cross, with no reach bonus. Vashil: change the stun trigger to a group or chord condition, such as two humming enemies within 3 m. Add Riven and Brand, with the differences, to ROSTER \u00a75.",
-       "files": "[]",
-       "done": "\"\"",
-       "after": null
-      },
-      {
-       "lane": "systems",
-       "id": "originality:F4",
-       "source": "final_parity_open W4 finding (reported never)",
-       "severity": "major",
-       "what": "The systems layer reproduces LoL's ruleset under new names\nFIX: Re-key the systems to the stopped dial so that none maps one-to-one. Battle spells built on light and shadow rules, with a default pair that is not blink + heal. One starter that grows into the role's first core. Replace the one-Noonlit cap with a dial-slot rule. Map-tied effects for Glasshorn and Resinback. An original draw for BRIDGE instead of bench plus reroll.\n\nWave note: New spell icons (e.g. replacing hourstrike.webp) are generated by W2.",
-       "files": "[\"content/setup.json\", \"content/items.json\", \"content/team_buffs.json\", \"content/queues.json\", \"content/modes.json\", \"_design/sections/items_setup.md\"]",
-       "done": "\"\"",
-       "after": null
-      },
-      {
-       "lane": "systems",
-       "id": "gameplay:G7",
-       "source": "final_parity_open W4 finding (reported never)",
-       "severity": "major",
-       "what": "Item depth: 13 finished items, the same build every game, top tier almost never reached, no anti-heal\nFIX: As the reviewer proposes:\n- grow to about 30 finished items with VALE-original counters (a 'Stillwater' grievous family, a burst ward, tank penetration);\n- a buildPlan that reads the enemy team, and a support path;\n- an economy check once G1 lands;\n- a build-diversity probe.\n\nWave note: New item icons are generated by W2 with the HUD-1 icon spec.",
-       "files": "[\"content/items.json\", \"src/sim/bots/economy.ts\", \"src/sim/bots/knowledge.ts\", \"_harness/probe_items.ts\"]",
-       "done": "\"\"",
-       "after": null
-      }
-     ]
-    },
-    {
-     "items": [
-      {
-       "lane": "systems",
-       "id": "systems-09",
+       "id": "systems-04",
        "source": "W2:flow-blockers handoff",
        "severity": "minor",
        "what": "Optional, so Try again becomes a proper Session call: add `reconnect?(): void` to the Session interface in src/contracts/session.ts, and implement it in src/session/local_session.ts as `reconnect(): void { this.opts.online?.retryNow(); }` (OnlineLink.retryNow already exists). The UI already checks for session.reconnect and calls it when present; otherwise it dispatches the 'vale:net-retry' window event, which OnlineLink listens for.",
@@ -917,7 +1062,7 @@
       },
       {
        "lane": "systems",
-       "id": "systems-10",
+       "id": "systems-05",
        "source": "W2:polish handoff",
        "severity": "minor",
        "what": "originality F8 + client F11 player copy in W4 files (src/ui/copy_lint.ts lintPlayerCopy reports each one):\n- content/modes.json modes[0].desc: 'hold the jungle and its prizes' -> 'hold the Dialwood and its prizes'.\n- content/queues.json queues[0].desc: 'with more gold' -> 'with more Gleam'.\n- content/queues.json queues[7].desc: 'Add gold, levels and training targets' -> 'Add Gleam, levels and training targets'.\n- content/roles.json [4].contract: 'leaves the gold to your Shaftlight' -> 'leaves the Gleam to your Shaftlight'.\n- content/roles.json [2].contract: 'centre road' -> 'center road'.\n- content/fighters/kemdo.json kit.ult.desc: '{effects.1.stats.omnivamp} omnivamp' -> '{effects.1.stats.omnivamp} Drain'.\n- content/fighters/dunsom.json kit.a1.desc and content/fighters/vashil.json kit.a1.desc (x2): 'centre' -> 'center'.\n- content/classes.json [5].desc: 'favour' -> 'favor'.\n- content/maps/map_fray.json .desc: 'centre' -> 'center' (or W5a if maps are theirs).\n- content/setup.json $comment: '2 battle spells' -> '2 Hour spells'.\nAll player copy is American English now.",
@@ -927,7 +1072,7 @@
       },
       {
        "lane": "systems",
-       "id": "systems-11",
+       "id": "systems-06",
        "source": "W2:polish handoff",
        "severity": "minor",
        "what": "client F12 session half:\n- Add { a: 'ready' } to DraftAction and ready?: boolean to DraftSeat in src/contracts/session.ts. During finalize/trade, set it to a boolean on every seat; the UI only sends ready when typeof seat.ready === 'boolean'.\n- In src/session/draft.ts and local_session.ts, once every human seat is ready, cut the finalize timer to a ~2 s grace.\n- End a blind or ffa_pick phase as soon as every seat has locked.\n- Have bots (draft_brain) lock within 3-8 s.\nThe W2 UI (draft.tsx readyOf/READY) is already live.",
@@ -937,7 +1082,7 @@
       },
       {
        "lane": "systems",
-       "id": "systems-12",
+       "id": "systems-07",
        "source": "W2:polish handoff",
        "severity": "minor",
        "what": "Optional contract follow-ups:\n- perf PERF-M2 step 5 / audio AUD-m4: add dynamicResolution: boolean to Settings.video and mono: boolean, softenLoud: boolean to Settings.audio in src/contracts/session.ts. src/session/settings.ts already normalizes all three (defaults true / false / false; types VideoSettings / AudioSettings), so the casts in settings.tsx can then be dropped.\n- client F17: add Profile.emblem?: string (the UI keeps UiPrefs.emblem per device until then).\n- client F15: add Session.nod?(matchId, player) to record Lantern nods in the profile; the UI calls it if present.",
@@ -947,7 +1092,7 @@
       },
       {
        "lane": "systems",
-       "id": "systems-13",
+       "id": "systems-08",
        "source": "W2:polish handoff",
        "severity": "minor",
        "what": "gameplay g3 sim half: extend the practice Command family (src/contracts/sim.ts, src/sim/modes/practice.ts) with:\n- 'toggleWaves' (pause/resume Wick waves)\n- 'toggleStructures' (Needles and Lanterns inert)\n- 'teleport' with x, y\n- 'spawnSparring' (a fighter dummy that moves and blocks, or casts on a timer)\n- target configuration (armor / resist / hp of placed targets)\nExpose the toggles' state on WorldView (e.g. practice?: { waves: boolean; structures: boolean }). Optionally let the practice queue take any team map. W2 adds the panel buttons once the commands exist; the damage readout is already in panels.tsx.",
@@ -957,17 +1102,21 @@
       },
       {
        "lane": "systems",
-       "id": "systems-14",
+       "id": "systems-09",
        "source": "W2:polish handoff",
        "severity": "minor",
        "what": "client F11 spelling in content/skins/*.json desc fields (player copy is American; reported by src/ui/copy_lint.ts). Send to whoever owns content/skins if that is not W5b:\n- ardit [1] grey -> gray; ardit [2] armour -> armor\n- burdam [1] armour -> armor\n- ervet [1] armour -> armor and colours -> colors; ervet [2] armour -> armor\n- ilsheta [2] honour -> honor\n- lisvel [1] grey -> gray\n- rishal [0] and [1] grey -> gray; rishal [2] armour -> armor\n- sukri [1] colours -> colors\n- vashil [1] grey -> gray",
        "files": "",
        "done": "",
        "after": null
-      },
+      }
+     ]
+    },
+    {
+     "items": [
       {
        "lane": "systems",
-       "id": "systems-15",
+       "id": "systems-10",
        "source": "W3:procs-ambience handoff",
        "severity": "minor",
        "what": "Optional cleanup in src/contracts/catalog.ts, which W4 owns: AudioDef is .strict(), so the ambience emitter table currently rides in audio.events as keys like 'ambient.<map id>.<source>' \u2192 cue id, with points resolved from each map's art.ambient. If you want a typed table instead, add `ambience: z.record(Id, z.array(z.object({ source: z.string(), cue: Id }).strict())).default({})` to AudioDef; W3 would then move the 16 bindings out of events. Nothing is broken today. Observation: _harness/probe_audio_listener.mjs gate A is currently vacuous because the autopilot fighter in seat 7 (hesmi) never dies in 17-20 min of RIFT on the current sim (seeds 3, 5 and 7 all show 0 deaths). This comes from the sim/bot changes being made concurrently in src/sim/bots, not from audio.",
@@ -977,18 +1126,14 @@
       },
       {
        "lane": "systems",
-       "id": "systems-16",
+       "id": "systems-11",
        "source": "W3:polish handoff",
        "severity": "minor",
        "what": "Optional cleanup; nothing is broken. The .m4a pieces of each main stem currently ride in MusicDef.layers as 'seg_<start s>' entries (.m4a refs), because AudioDef/MusicDef in src/contracts/catalog.ts are .strict(). If you prefer a typed field, add `pieces: z.array(z.object({ at: z.number(), file: AssetRef }).strict()).default([])` to MusicDef. W3 would then move the 20 entries out of layers and read def.pieces in src/audio/index.ts startBed.",
        "files": "",
        "done": "",
        "after": null
-      }
-     ]
-    },
-    {
-     "items": [
+      },
       {
        "lane": "systems",
        "id": "gameplay:g3",
@@ -1002,51 +1147,41 @@
       {
        "lane": "systems",
        "id": "gameplay:G6",
-       "source": "final_parity_open polish (wave W4; reported never)",
+       "source": "W4 verify (open)",
        "severity": "minor",
-       "what": "FRAY sometimes goes quiet before the 11:00 limit\nFIX: Keep VALE's 'Noon Toll' idea but scale it down: from 9:00, reveal the survivors on the minimap every 30 s. Bots drop the last-life caution once 4 or fewer remain. Gate: no stretch of 90 s or more with no takedown while 3 or more fighters are alive, in at least 85% of games.",
-       "files": "[\"src/sim/modes/last_standing_or_score.ts\", \"src/sim/bots/bot.ts\", \"content/modes.json\", \"src/ui/hud\"]",
-       "done": "\"\"",
-       "after": null
-      },
-      {
-       "lane": "systems",
-       "id": "gameplay:G8",
-       "source": "final_parity_open polish (wave W4; reported never)",
-       "severity": "minor",
-       "what": "Ranked draft (2 bans per team) leaves the last picker as few as 2 fighters\nFIX: Derive bansPerTeam from roster size in data (1 at R = 16), and lint it in build_content. Optionally, a draft-host role floor.",
-       "files": "[\"content/queues.json\", \"src/session/draft.ts\", \"tools/build_content.ts\", \"_harness/probe_session_draft.ts\"]",
-       "done": "\"\"",
+       "what": "gameplay:G6 [partly]: Seeds 1-50: 43/50 at both difficulties. Seeds 21-70: adept 48/50, but veteran 42/50 (84 %) fails the 85 % bar.\nFIX HINT: Give the toll a margin, e.g. an earlier toll for the last 4 seats, and judge it on 100 seeds.",
+       "files": "",
+       "done": "",
        "after": null
       },
       {
        "lane": "systems",
        "id": "gameplay:G9",
-       "source": "final_parity_open polish (wave W4; reported never)",
+       "source": "W4 verify (open)",
        "severity": "minor",
-       "what": "Nurrow finishes last in FRAY, and no soak or balance probe exists\nFIX: 1. Nurrow payoff, VALE's own: refund cooldown and extend the silence when hitting a sleeping enemy; reorder her combo.\n2. A new _harness/probe_sim_bot_soak.ts that seats role-correct, pickLoadout lineups, with:\n   - FRAY average placement 3.5\u20137.5 per fighter;\n   - team win-rate bands only at a sample size that supports them;\n   - the G1\u2013G5 thresholds.",
-       "files": "[\"content/fighters/nurrow.json\", \"src/sim/bots/knowledge.ts\", \"_harness/ (new soak probe)\", \"package.json\"]",
-       "done": "\"\"",
+       "what": "gameplay:G9 [partly]: Seeds 1-50 pass (3.71 to 7.06). Seeds 21-70 fail: hesmi 3.38, below the 3.5-7.5 band. Over the union of seeds 1-70, hesmi is 3.57.\nFIX HINT: Add a FRAY fighterWeights entry for hesmi (dealt about 0.92), and gate on 100+ games.",
+       "files": "",
+       "done": "",
        "after": null
       },
       {
        "lane": "systems",
-       "id": "gameplay:g1",
-       "source": "final_parity_open polish (wave W4; reported never)",
+       "id": "systems-18",
+       "source": "W4 verify (regression)",
        "severity": "minor",
-       "what": "About a quarter of RIFT fighter deaths award no kill even though an enemy fighter helped\nFIX: As the reviewer proposes: credit the top-damage enemy fighter in the window, and keep 'executed' for deaths with no fighter involved.",
-       "files": "[\"src/sim/combat.ts\", \"src/sim/economy.ts\", \"_harness/probe_sim_core_combat.ts\"]",
-       "done": "\"\"",
+       "what": "Minor: on seeds 1-20, 3 finished items were never bought (callstone, needlefall, watchbell), 28/31 against 29/31 at round 1. That still meets 80 % or more.",
+       "files": "",
+       "done": "",
        "after": null
       },
       {
-       "lane": "systems",
-       "id": "gameplay:g2",
-       "source": "final_parity_open polish (wave W4; reported never)",
+       "lane": "lead",
+       "id": "lead-10",
+       "source": "W4:polish handoff",
        "severity": "minor",
-       "what": "RIFT match length drifts long on adept, the default queue difficulty\nFIX: Add --diff and role-correct seating to pacing.ts, report adept by default, and gate RIFT adept p90 at 32 min or less.",
-       "files": "[\"_harness/pacing.ts\"]",
-       "done": "\"\"",
+       "what": "Optional: server/room.ts:198 could use bansForRoster(draftCfg, pool.length) so online drafts follow the roster steps. Content keeps bansPerTeam equal to it today, so nothing changes yet.",
+       "files": "",
+       "done": "",
        "after": null
       }
      ]
@@ -1063,7 +1198,8 @@
      "done": "",
      "after": "client"
     }
-   ]
+   ],
+   "notes": "originality:F4 is signed off (owner_rulings.md ruling 4). The icons-repoint stitch runs in integration run 2, after the client lane paints the icons."
   },
   "lead": {
    "packages": [
@@ -1092,7 +1228,79 @@
      ]
     }
    ],
-   "stitch": []
+   "stitch": [],
+   "run2": [
+    {
+     "lane": "lead",
+     "id": "lead-r2-01",
+     "source": "W4:rekey handoff",
+     "severity": "minor",
+     "what": "Apply _design/reviews/fixwaves/W4_probe_kits_B_F5.patch from games/vale with `git apply -p1 _design/reviews/fixwaves/W4_probe_kits_B_F5.patch`. It re-asserts Ervet's Whole Again (reach stays 2 m, lodged-shard burst replaces the phys cleave) and Vashil's Hum (a lone target is slowed, never stunned; Morning Toll does not stun a lone target). Without the patch, probe_kits_B fails 6 checks; with it, it passes 733/733. Pair checks are in _harness/probe_sim_kit_hooks.ts.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "lead-r2-02",
+     "source": "W4:items handoff",
+     "severity": "minor",
+     "what": "1. After W2 paints the icons, point the 18 new ids at them in content/items.json. These ids are lampblack_edge, lampblack_coat, lampblack_lens, quarry_pick, deepglass_rod, glass_veil, glintmail, dawnspur, resin_maul, shadowpin, bellrope, almslamp, callstone, hourstring, needlefall, stillhour, afterlight, watchbell. For each, set item.icon, every passives[].icon and active.icon (where present) to `assets/ui/icons/items/<id>.webp`. They currently point at a related item's icon. Then run `npm run content:check` (strict). Refs to files that do not exist fail the strict build, which is why placeholders are used.\n2. The owner sign-off for block 7 'Economy and the finished line (G7)' in _design/reviews/fixwaves/W4_systems_rekey.md is pending. It covers passive 3.2/s, Wicks 24/17, the \u00d70.8 price band, Lampblack 50/30 %, 24 % armor pen and the Stillhour stance.\n3. Update final_parity_open.json for gameplay:G7 (not a W4-owned file).",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "lead-r2-03",
+     "source": "W4:tempo-jungle handoff",
+     "severity": "minor",
+     "what": "Update final_parity_open.json (not a W4 file): gameplay:G4 is done (median first structure 10.2 / 10.5 min) and gameplay:G2 is done (level gap 0.69 / 0.61, grovehunter deaths 2.7 vs 3.1 and 1.8 vs 2.5). Evidence: _harness/_reports/fw_W4_soak_tj_full1.txt. The full soak still exits 1 on a G1 gate that was already failing before this package: deaths to Wicks or monsters with no enemy fighter are 4.9 % (adept) and 5.6 % (veteran) against a \u2264 5 % target (was 5.0 % and 8.0 %). Of the 21 veteran cases, 5 are Longshade objective deaths and 15 are Wicks during retreats. The quick probe passes.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "lead-r2-04",
+     "source": "W4:tempo-jungle handoff",
+     "severity": "minor",
+     "what": "For the BRIDGE package (G5): needle_outer is shared with BRIDGE, so its 3,800 HP applies there too. Dawn Seal and Ringshade are RIFT-only rules. A 10-seed BRIDGE A/B (fw_W4_soak_tj_br3200 vs tj_br3800) moved the median from 17.7 to 18.0 min and sudden-death endings from 18/20 to 19/20. The full soak shows BRIDGE at 17.7 min and 34/40 sudden death; earlier full runs were 33\u201338/40. G5 can turn Ringshade or the seal on for BRIDGE through its mode rules if it wants them.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "lead-r2-05",
+     "source": "W4:difficulty-bridge handoff",
+     "severity": "minor",
+     "what": "Update final_parity_open.json (not a W4 file). gameplay:G5 is done (fw_W4_soak_db_full2: BRIDGE 8/40 sudden death, 0 chain skips, median 16.4 min). gameplay:G3 is partly done: veteran beats adept 17/20 but novice only 14/20 against the 85 % target. Two veteran-only RIFT side effects of the G3 macro: the jungle gate fails by 0.025 deaths per game (grovehunter 2.275 vs shaftlight 2.25), and deaths to Wicks/monsters with no enemy fighter rose to 6.6 % (that gate was already failing at 5.6 %). Balance flag for the tempo owner: the first Longshade taker wins about 97 % of mirrored games (34/35 in tj_full1). That makes Longshade the deciding lever for tier separation and is probably too strong.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "lead-r2-06",
+     "source": "W4:polish handoff",
+     "severity": "minor",
+     "what": "Update final_parity_open.json (not a W4 file): gameplay G6, G8, G9, g1, g2, g3 (sim half), client F11 (kemdo), client F12 (session half), originality F8 (queues/modes/items half) and combat m-1 (wind-up half) are done. Evidence: _harness/_reports/fw_W4_soak_polish_full1.txt and fw_W4_pacing_rift_adept20.txt.",
+     "files": "",
+     "done": "",
+     "after": null
+    },
+    {
+     "lane": "lead",
+     "id": "lead-r2-07",
+     "source": "W4:refix1 handoff",
+     "severity": "minor",
+     "what": "Update final_parity_open.json (not a W4 file):\n- done:2, gameplay:G1, gameplay:G2: done (fw_W4_soak_r1_full1 / r1_full21).\n- done:5, gameplay:G3: partly. Seeds 1-20 pass at 36/40 and 31/40. Seeds 21-40 are 32/40 vs novice (80 %, bar 85 %) and 30/40 vs adept.\n\nThe full soak at --seed0 21 still exits 1 on three things:\n- The new enforced difficulty gate vs novice: W4, partly.\n- FRAY veteran lull 42/50 and Hesmi 3.38 (gameplay G6/G9). These are pre-existing and identical to verify1_seeds21; FRAY is untouched by this refix.\n\nThe BRIDGE 14.8 min in r1_full21 is fixed by commit 298533c8. A BRIDGE-only re-run gives 15.5 / 16.1 min, byte-equal to verify1 (fw_W4_soak_r1_br1, r1_br21).\n\nNovice bots are now clearly weaker, by perception and execution only. This affects the coop-vs-novice queue.",
+     "files": "",
+     "done": "",
+     "after": null
+    }
+   ]
   }
  }
 }
