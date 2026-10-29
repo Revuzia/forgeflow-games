@@ -3525,7 +3525,7 @@ export function buildingMesh(spec: BuildingSpec): BuildingMesh {
 }
 
 /** the props of a household's yard (instanced around dwellings by buildings.ts) */
-export const YARD_PROPS = ['woodpile', 'barrels', 'fence', 'garden', 'cart', 'laundry', 'rack'] as const;
+export const YARD_PROPS = ['woodpile', 'barrels', 'fence', 'garden', 'cart', 'laundry', 'rack', 'firewood'] as const;
 export type YardProp = (typeof YARD_PROPS)[number];
 
 /**
@@ -3544,6 +3544,20 @@ export function yardPropMesh(kind: YardProp, seed: number): BufferGeometry {
       // a little lean-to roof of boards over it
       k.slab([-0.95, 1.05, 0.55], [0.95, 1.05, 0.55], [0.95, 1.35, -0.45], [-0.95, 1.35, -0.45], 0.04, SURF.shingle, PART.prop, mulc(WOOD_GREY, 0.55), SURF.planks, mulc(WOOD_GREY, 0.4));
       for (const sx of [-0.9, 0.9]) { k.cylinder(sx, 0.5, -0.1, 1.05, 0.04, 0.04, 5, SURF.bark, PART.prop, WOOD_DARK, {}); k.cylinder(sx, -0.42, -0.1, 1.35, 0.04, 0.04, 5, SURF.bark, PART.prop, WOOD_DARK, {}); }
+      break;
+    }
+    case 'firewood': {
+      // a first people's firewood: a low stack of split wood and a cone of sticks leaned together to dry — no board
+      // roof (seen from the god's height the woodpile's sawn-board roof was a flat grey slab beside every hut)
+      k.push(-0.35, 0, 0, Math.PI / 2 + (rng.float() - 0.5) * 0.4);
+      woodPile(k, 1.2, 3, WOOD, rng);
+      k.pop();
+      const n = 7 + Math.floor(rng.float() * 3), cx = 0.75, cz = 0.05, top = 1.25 + rng.float() * 0.3;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + rng.float() * 0.5, rr = 0.42 + rng.float() * 0.12;
+        const tx = cx + Math.cos(a + 2.6) * 0.06, tz = cz + Math.sin(a + 2.6) * 0.06;
+        k.tube([[cx + Math.cos(a) * rr, -0.05, cz + Math.sin(a) * rr], [tx, top + rng.float() * 0.2, tz]], [0.035, 0.022], 4, SURF.bark, PART.prop, mulc(i % 2 ? WOOD_GREY : WOOD_DARK, 0.85 + rng.float() * 0.3));
+      }
       break;
     }
     case 'barrels':

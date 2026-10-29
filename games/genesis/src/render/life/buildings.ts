@@ -290,7 +290,7 @@ export class Buildings {
 
   /** place a dwelling's yard props (1–3, chosen and placed by a hash of its id) */
   private yardFor(r: Rec, era: number): void {
-    const pool: YardProp[] = era <= 2 ? ['woodpile', 'rack', 'woodpile'] : era <= 5 ? ['woodpile', 'barrels', 'fence', 'garden', 'rack'] : era <= 8 ? ['woodpile', 'barrels', 'fence', 'garden', 'cart', 'laundry'] : ['barrels', 'laundry', 'cart', 'garden'];
+    const pool: YardProp[] = era <= 2 ? ['firewood', 'rack', 'firewood'] : era <= 5 ? ['woodpile', 'barrels', 'fence', 'garden', 'rack'] : era <= 8 ? ['woodpile', 'barrels', 'fence', 'garden', 'cart', 'laundry'] : ['barrels', 'laundry', 'cart', 'garden'];
     const n = 1 + Math.floor(hashFloat(r.id, 0x7a1) * 2.6);
     const used = new Set<number>();
     for (let i = 0; i < n; i++) {

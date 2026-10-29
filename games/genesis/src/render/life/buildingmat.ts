@@ -318,13 +318,21 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     float c = 0.3;
     float yv = uv.y + 0.06 * sin(uv.x * 1.7 + seed * 6.3) + 0.04 * snoise(vec3(uv.x * 0.9, seed, 1.0));
     yv += 0.5 * sin(0.6 * yv + seed * 7.0);
+    // bundles of straw laid down the slope (~0.15 m wide, streaks a metre long): the read that survives to god-view
+    // distance, where single strands are long gone — without them a cone at 15-60 m was smooth bands, plaster-like.
+    // Each course's butt line wanders with the bundles (ragged, not a ruled seam)
+    float bun = snoise(vec3(uv.x * 6.5, uv.y * 0.7, seed + 5.0)) * 0.65 + snoise(vec3(uv.x * 13.0, uv.y * 1.3, seed + 9.0)) * 0.35;
+    float kb = aaK(fw, 0.15);
+    yv += 0.07 * bun * kb;
     float cr = fract(yv / c);
     float cid = gn_hash12(vec2(floor(yv / c), seed));
     float strands = snoise(vec3(uv.x * 38.0, yv * 2.0 + cid * 5.0, seed)) * 0.5 + snoise(vec3(uv.x * 90.0, yv * 4.0, seed + 3.0)) * 0.5;
     float k1 = aaK(fw, 0.02), k2 = aaK(fw, 0.1);
     float lip = overlapAA(cr, 0.22 + 0.06 * cid, 0.32, fw);
     float moss = smoothstep(0.2, 0.6, fbm3(vec3(uv * 0.5, seed * 3.0))) * 0.5 * isRoof;
-    vec3 tc = base * (0.85 + 0.3 * cid) * mix(0.8, 1.04, lip * k2 + (1.0 - k2) * 0.85) * (0.85 + 0.25 * strands * k1);
+    // (courses vary less in tone than before — whole bright and dark rings read as machined bands)
+    vec3 tc = base * (0.9 + 0.18 * cid) * mix(0.8, 1.04, lip * k2 + (1.0 - k2) * 0.85) * (0.85 + 0.25 * strands * k1);
+    tc *= mix(1.0, 0.8 + 0.34 * smoothstep(-0.55, 0.6, bun), kb);
     float aged = smoothstep(0.45, 0.8, fbm3(vec3(uv * 0.28, seed * 5.0)));
     float mended = smoothstep(0.62, 0.85, fbm3(vec3(uv * 0.35 + 7.0, seed * 2.0)));
     // (weathered straw greys toward a warm silver-brown, not to neutral grey: whole grey cones read as concrete)
@@ -333,7 +341,7 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     o.col = mix(tc, vec3(0.07, 0.09, 0.035), moss * k2);
     // (the lip's bump eases back to zero before the course wraps: a step there in one pixel row made the bump's screen
     // derivatives spike per 2×2 quad — a dashed line of white seams along every course)
-    o.h = (lip * 0.3 * (1.0 - smoothstep(0.86, 1.0, cr)) + strands * 0.2 * k1) * k2;
+    o.h = (lip * 0.3 * (1.0 - smoothstep(0.86, 1.0, cr)) + strands * 0.2 * k1) * k2 + bun * 0.22 * kb;
     o.rough = 0.95;
   } else if (s == 9) {
     // clay pantiles: courses with rounded waves, a dark overlap line, tone per tile
