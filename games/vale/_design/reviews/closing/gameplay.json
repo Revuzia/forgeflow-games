@@ -1,0 +1,185 @@
+{
+ "score": 6,
+ "summary": "Verifier pass on HEAD 863e5ea7 (sim and content unchanged since 09d330c0). I re-ran `node _harness/pacing.ts --seeds 10` and it reproduces line for line (RIFT adept mean 24.8, p90 27.1, PASS; _harness/_reports/closing_gameplay_verify_pacing10.txt). I re-ran the repo soak quick gate and it passes (_harness/_reports/fw_W4_soak_closing_gameplay_verify_quick.txt). I also wrote my own tool, _harness/_reports/closing_gameplay_verify_tools/v_gp.mts. It does not use the reviewer's (seed+slot+team) seating: each role's native is drawn by a seeded shuffle per seed, so teammates change from game to game. I ran 40 RIFT games (adept and veteran, seeds 301–320) and 40 mirrored veteran-vs-novice games (seeds 501–520). Summary: _harness/_reports/closing_gameplay_verify_summary.txt.\n\n**CL-1 (major) is confirmed on independent lineups.**\n- Credited takedowns by 10:00 are 1.90 (adept) and 1.75 (veteran) per game, and 2/20 and 5/20 games have none.\n- Takedowns by 14:00 are 3.0 / 2.95.\n- Fighter deaths per game by 5-minute bucket run 0.6 / 1.3 / 3.1 for the first 15 min, then 6.7 / 8.6.\n- The median longest no-death stretch from 3:00 is 6.3–6.4 min.\n- Shadehold kills before 14:00 are 0.35–0.45 per game.\n- Dunsom, Ervet, Ardit, Ilsheta, Ulkro and Vashil first ult at a median 12–18 min.\n- In the repo's own soak quick run, shadehold deaths by 15:00 are 0.1–0.4 per game and trade is 2–4 % of mode time.\n- In one veteran game the first kill came at 13:00, after two Needles and a Lantern had already fallen.\nThe old 7.4–7.6 baseline recounts exactly from final_gameplay_verify_role_*.json. That baseline came from bots wandering and dying, so I judge against the gauge, not the old number. LoL's laning phase has kill pressure from level 2–3 and almost always a first blood before 10:00; on that gauge the gap is large.\n\n**CL-2 is downgraded to minor.** The numbers reproduce:\n- Sunsplinter's first take comes a median 8.7–8.8 min after spawn.\n- Longshade is taken in 7/20 adept and 11/20 veteran games, and the taker wins 18/18.\nBut the Longshade-as-closer property is a recorded design decision under owner ruling 4 (_design/sections/modes_economy.md:358). It is mostly a selection effect: with the buff emptied, the taker still wins 36/50. The late Sunsplinter shares CL-1's root cause: the lane-phase gates at src/sim/bots/bot.ts:421-439 allow an objective only from the lane beside it, on an opening, and the jungler waits for an opening as well. A separate major would double-count CL-1. What remains is the open defender-answer follow-up, plus Splinters not stacking as §9 designs it (modes_economy.md:399 against the content/team_buffs.json comment).\n\n**Minors.**\n- CL-g1 reproduces exactly: veteran seed 8 ends at 13.2 min with 6 takedowns.\n- CL-g2 is confirmed against VALE's own target. The shaftlight is level 6.2–6.3 at 10:00, and only 3/40 reach level 6 by 7:30, while modes_economy.md:50 says the duo road reaches level 6 at 7:00–8:00.\n- CL-g3 is confirmed and slightly worse: veteran beats novice 31/40 on fresh seeds 501–520, so the two unseen windows together are 64/80 (80 %), under the 85 % done-bar. G3 moves to partly.\n- CL-g4 and CL-g5 are confirmed from code and content.\n\nOne major is open, so the dimension is not on par. Score 6.",
+ "gapStatus": [
+  {
+   "id": "B3",
+   "status": "closed",
+   "evidence": "Gameplay side only, as the reviewer measured. All 16 fighters were seated and played in my 80 games with 0 faults (closing_gameplay_verify_rift_*.json, mir_*.json). I did not re-check catalog asset references."
+  },
+  {
+   "id": "M1",
+   "status": "closed",
+   "evidence": "Content side only. I accept the reviewer's lint and kit reading (tools/build_content.ts:855-870). The on-screen half belongs to the combat lens."
+  },
+  {
+   "id": "M5",
+   "status": "partly",
+   "evidence": "Timing half only, as the reviewer measured. The presentation halves are not measured in this lens."
+  },
+  {
+   "id": "G1",
+   "status": "closed",
+   "evidence": "Repo soak quick PASS (_harness/_reports/fw_W4_soak_closing_gameplay_verify_quick.txt), adept / veteran:\n- last-hit 56.2 / 52.4 %;\n- solo cs at 10:00 61.5 / 56.8;\n- in lane 82.6 / 77.7 %;\n- no-fighter deaths 2.9 / 0.0 %.\nThis fix drives the CL-1 regression."
+  },
+  {
+   "id": "G2",
+   "status": "closed",
+   "evidence": "Soak quick: level gap at 15:00 is 0.50 / 0.57. In my independent lineups the grovehunter is 10.8 against 11.3–11.7 for the solo laners at 15:00 (closing_gameplay_verify_summary.txt)."
+  },
+  {
+   "id": "G3",
+   "status": "partly",
+   "evidence": "The order is right, but the 85 % veteran-vs-novice done-bar is missed on both windows the tuning has not seen:\n- seeds 101–120: 33/40 (reviewer; I recounted it from closing_gameplay_mir_vn/nv.json);\n- seeds 501–520, independent lineups: 31/40 (closing_gameplay_verify_mir_vn.json and nv.json).\nCombined that is 64/80 = 80 %. The bar is met only on the seed windows used for tuning (39/40 and 38/40). See CL-g3."
+  },
+  {
+   "id": "G4",
+   "status": "closed",
+   "evidence": "Soak quick median first structure 10.7 / 10.4 min (report only at 8 seeds). The reviewer's 20-seed runs show 11.3 / 10.4."
+  },
+  {
+   "id": "G5",
+   "status": "closed",
+   "evidence": "Not re-run. I accept the reviewer's BRIDGE runs; pacing.ts BRIDGE adept median 17.9 reproduces."
+  },
+  {
+   "id": "G6",
+   "status": "closed",
+   "evidence": "Not re-run. pacing.ts FRAY adept mean 10.2 reproduces; I accept the reviewer's 60 seeds."
+  },
+  {
+   "id": "G7",
+   "status": "closed",
+   "evidence": "Not re-run. I accept the reviewer's runs."
+  },
+  {
+   "id": "G8",
+   "status": "closed",
+   "evidence": "Not re-run. I accept the reviewer's content/queues.json reading and probe_sim_draft_pace 28/28."
+  },
+  {
+   "id": "G9",
+   "status": "closed",
+   "evidence": "FRAY placements as the reviewer measured. The RIFT per-fighter balance read stays confounded (CL-g4)."
+  },
+  {
+   "id": "g1",
+   "status": "closed",
+   "evidence": "Soak quick kill credit: adept 7 credited / 1 executed, veteran 13 credited / 0 executed."
+  },
+  {
+   "id": "g2",
+   "status": "closed",
+   "evidence": "pacing.ts --seeds 10 reproduces exactly: RIFT adept p90 27.1, PASS (closing_gameplay_verify_pacing10.txt). My independent lineups give adept mean 25.1 and p90 29.3."
+  },
+  {
+   "id": "g3",
+   "status": "closed",
+   "evidence": "Accepted from the reviewer (probe_sim_practice 44/44 and code). Not re-checked."
+  },
+  {
+   "id": "obs:longshade-closer",
+   "status": "open",
+   "evidence": "Reproduced. Longshade is taken in 7/20 adept and 11/20 veteran games, the taker wins 18/18, and the game ends a median 1.2–1.6 min later (closing_gameplay_verify_summary.txt). The closer property itself is a recorded design decision (modes_economy.md:358, owner ruling 4), and it is mostly a selection effect: with the buff emptied the taker still wins 36/50. What stays open is the defenders' answer to an empowered wave (bots, team.ts), which is the follow-up named there."
+  },
+  {
+   "id": "new:early-fight-volume",
+   "status": "regressed",
+   "evidence": "Reproduced on independent lineups (seeds 301–320), adept / veteran:\n- credited takedowns by 10:00 1.90 / 1.75, zero in 2/20 and 5/20 games;\n- first blood median 4.3 / 4.5 min (p90 7.8 / 14.2);\n- deaths in the first 15 min about 5 of about 23 per game.\nThe old 7.6 / 7.4 recounts exactly from final_gameplay_verify_role_{adept,vet}.json. See CL-1."
+  }
+ ],
+ "findings": [
+  {
+   "id": "CL-1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "L",
+   "title": "RIFT bots barely fight before 15:00: the laning phase is quiet",
+   "what": "The G1 laning fix holds every RIFT laner on its road until 14:00 (src/sim/bots/bot.ts:50 LANE_PHASE_END = 840, lanePhase() at :240-243). During that phase:\n- roams are blocked (:440 `b.gank && !lp`);\n- cross-map defends are blocked (:421-426);\n- objectives are allowed only from the adjacent lane, on an opening (:432-439);\n- trades need an edge after a wave penalty (:376-385).\nThe result is very little fighting in the first 10–14 minutes.\nEvery queue fills its open seats with bots, so a human's lane opponent and the rest of the map look like this in most games.",
+   "evidence": "Verifier, independent lineups (seeded shuffle per role, not the harness seating), seeds 301–320.\n\nCommand:\n```\nnode _harness/_reports/closing_gameplay_verify_tools/v_gp.mts --seeds 20 --seed0 301 --mix adept,adept\n```\nRepeat with veteran,veteran. Analysis: `python3 -I _harness/_reports/closing_gameplay_verify_tools/v_an.py <json>`, output in _harness/_reports/closing_gameplay_verify_summary.txt.\n\nAdept / veteran:\n- credited takedowns by 10:00: 1.90 / 1.75 per game; games with none: 2/20 and 5/20;\n- takedowns by 14:00: 3.0 / 2.95;\n- first blood median 4.3 / 4.5 min (p90 7.8 / 14.2);\n- fighter deaths per game by 5-minute bucket: 0.6 / 1.3 / 3.1 / 6.7 / 8.6 (adept);\n- median longest no-death stretch from 3:00: 6.4 / 6.3 min;\n- shadehold takedowns by 14:00: 0.45 / 0.35 per game.\n\nUlts held back (first ult median, adept / veteran, in min):\n- Dunsom (dialcross) 15.2 / 16.4;\n- Ervet (shadehold) 14.6 / 17.8;\n- Vashil (dialcross) 14.3 / 12.4;\n- Ardit 14.4 / 16.1;\n- Ilsheta 14.9 / 16.9;\n- Ulkro 14.5 / 13.0.\nSolo laners are level 5.7–5.9 at 5:00.\n\nVeteran seed 302: the first takedown comes at 13:00, after two Needles and a Lantern have fallen at 7.4–11.9 min.\n\nRepo soak quick (_harness/_reports/fw_W4_soak_closing_gameplay_verify_quick.txt) PASSES:\n- 35 / 42 fighter deaths in 8 games by 15:00 (4.4 / 5.3 per game);\n- shadehold deaths 0.1 / 0.4 per game;\n- trade 2.0–3.7 % of shadehold mode time;\n- no deaths-per-minute or objective gate, which r09:241 and :420 ask for.\n\nThe old baseline 7.6 / 7.4 recounts exactly from final_gameplay_verify_role_{adept,vet}.json. That run also had about 43 % in-lane share, so I judge severity against the gauge, not against the old number.",
+   "gauge": "LoL's laning phase carries kill pressure from the level 2–3 spikes and early jungle ganks, and first blood almost always happens before 10:00. In high-elo solo queue, the reviewer's figure of roughly 6 kills per team by 10:00 matches my recollection of the Kaggle Diamond 10-min dataset (about 6.2), but neither of us verified it from the primary source this session. VALE's bots now produce about 2 kills by 10:00 in both teams combined, and about 10–25 % of games have none. The gap is large on any reasonable reading of the gauge.",
+   "fix": "The reviewer's direction is VALE's own and sound. Keep the G1 farming gates and replace the hard 14:00 lock with windowed aggression during laning:\n- level, cooldown and health windows for trades and all-ins;\n- the ult counts toward killMargin;\n- one roam from a shoved lane while the opponent is dead or recalling;\n- the grovehunter ganks from 3:00.\nAdd r09 §4.4 soak gates for early takedowns, the first-blood median and the longest no-death stretch, alongside the existing G1 gates.",
+   "files": "src/sim/bots/bot.ts (LANE_PHASE_END, lanePhase, selectMode :376-441), src/sim/bots/team.ts (thinkGank :571-590), src/sim/bots/micro.ts, src/sim/bots/difficulty.ts, _harness/probe_sim_bot_soak.ts",
+   "verifierNote": "Reproduced on lineups the reviewer did not use, and confirmed by the repo's own soak quick output. Severity stays major: the first 10–14 minutes of most bot-filled matches have almost no fights or ganks, and five or six fighters hold their ult until 12–18 min. A LoL player would notice that laning carries no kill threat."
+  },
+  {
+   "id": "CL-2",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "size": "M",
+   "title": "Objective contests are thin: Sunsplinter waits about 9 min, Longshade is taken late and only to close",
+   "what": "The numbers are real, but the major framing does not hold up:\n- **Longshade as the closer** is a recorded design decision (modes_economy.md:358, owner ruling 4: 'the signed-off numbers stay ... it is the game's closer'). It is mostly a selection effect: with the buff emptied, the taker still wins 36/50.\n- **The Sunsplinter delay** comes from the same lane-phase gate as CL-1 (bot.ts:432-439: during laning an objective is taken only from the adjacent lane on an opening, and the jungler too waits for an opening). CL-1's fix addresses it, so a separate major double-counts it.\n- **What remains** is the defenders' answer to an empowered Longshade wave, a follow-up named in §9 and not done, and Splinters, which the design says stacks to 3 (modes_economy.md:399) but which the sim and content only refresh (content/team_buffs.json $comment). That leaves Sunsplinter weak.",
+   "evidence": "closing_gameplay_verify_summary.txt (independent lineups, seeds 301–320), adept / veteran:\n- Sunsplinter first take a median 8.8 / 8.7 min after its 6:00 spawn, taken 2.1 / 1.6 times per game;\n- Longshade taken in 7/20 / 11/20 games, all 20 lasting past 16:00;\n- Longshade taker wins 7/7 and 11/11, and the game ends a median 1.2 / 1.6 min after the take.\nThe reviewer's adept 3/20 is lower than mine; the difference comes from lineup seating.\nfw_W4_soak_integ_systems_v1_full1.json shows the same pattern (adept 6/20, veteran 10/20, taker wins every time).",
+   "gauge": "LoL contests its early dragon-type objectives within a few minutes of spawn. The late boss is a strong but not certain closer; the reviewer's 80–88 % first-Baron figure is unverified. VALE's design accepts Longshade as a closer, which is not a gap by itself. The gaps are the uncontested first Sunsplinter, which is CL-1's root cause, and defenders who never answer an empowered wave.",
+   "fix": "Fold the Sunsplinter timing into CL-1's lane-hold rework: let the objective intent gather the adjacent roads and the grovehunter before spawn once their waves are shoved. Then:\n- implement the designed Splinters stack (up to 3, modes_economy.md:399) so repeat takes matter;\n- do the §9 follow-up: bots hold at a Needle and clear an empowered wave;\n- add an objective-participation report to the soak (r09 §4.4).\nNo change to Longshade numbers is needed (ruling 4).",
+   "files": "src/sim/bots/bot.ts (:432-439), src/sim/bots/team.ts (objective intent, defend), src/sim/core.ts (addTeamBuff stacking), content/team_buffs.json, _harness/probe_sim_bot_soak.ts",
+   "verifierNote": "Reproduced, but downgraded to minor. The Longshade-closer half is a documented design decision with its evidence on file. The Sunsplinter half is a symptom of CL-1's lane hold, so counting it again as a major double-counts one root cause. Splinters not stacking is a real design-to-sim drift the reviewer did not name."
+  },
+  {
+   "id": "CL-g1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "The lane hold can leave a base undefended: Hourbell lost at 13.2 min with 6 takedowns",
+   "what": "During the laning phase a bot defends only a dive on its own road or a base threat of 0.7 or more (bot.ts:421-426). Other roads keep laning while several enemies siege one road.",
+   "evidence": "I reproduced it exactly:\n```\nnode _harness/_reports/closing_gameplay_tools/cl_gp.mts --mode rift --seeds 1 --seed0 8 --mix veteran,veteran\n```\nResult: core at 13.2 min, 6 takedowns, team 0 loses 12 structures between 7.4 and 13.2 min (closing_gameplay_verify_vet8.json).\nOn my independent lineups no game ends before 16:00, but:\n- veteran s301 ends at 17.5 min with 7 takedowns;\n- veteran s302 loses two Needles and a Lantern before the first kill at 13:00.\nAcross 40 games, 7 have a structure fall before the first takedown, and 3 lose a Lantern before 14:00.",
+   "gauge": "In LoL, a base does not fall in the early game while its defenders are alive and home. Turret plates last until 14:00 and defenders rotate to sieges.",
+   "fix": "As the reviewer proposes: end the lane hold for a team that loses a structure or faces 3 or more sieging fighters, and gate that no RIFT core falls before 16:00.",
+   "files": "src/sim/bots/bot.ts (:421-426), src/sim/bots/team.ts, _harness/probe_sim_bot_soak.ts",
+   "verifierNote": "Reproduced byte-for-byte. It is rare (1/20 in the reviewer's set, 0/40 core losses before 16:00 in mine), so minor is right. It shares CL-1's root cause."
+  },
+  {
+   "id": "CL-g2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "The duo road runs about 3 levels behind the solo laners; the carry reaches level 6 at about 9.5 min",
+   "what": "Even Wick XP sharing (src/sim/economy.ts:30, shareXp :156) leaves the shaftlight and lampglass about 3 levels behind the solo roads, which misses VALE's own design target.",
+   "evidence": "closing_gameplay_verify_summary.txt, adept, levels by role:\n\n| Time | Shaftlight | Lampglass | Solo laners |\n|---|---|---|---|\n| 5:00 | 3.8 | 4.0 | 5.8–5.9 |\n| 10:00 | 6.3 | 6.5 | 9.0–9.2 |\n| 20:00 | 9.8 | 10.1 | 13.2 |\n\nAt 7:30 the shaftlight averages 5.0–5.1, and only 3/40 shaftlights are level 6. _design/sections/modes_economy.md:50 targets level 6 for the duo road at about 7:00–8:00.",
+   "gauge": "In LoL the duo lane trails the solo lanes by roughly 1–2 levels at 10:00, and the carry has its ult in lane.",
+   "fix": "As the reviewer proposes, tune toward modes_economy.md:50 (level 6 at 7:00–8:00, at most 1.5 levels behind at 10:00). One option is a share bonus when two allies split a Wick's XP; another is a support-item XP pass. Keep it inside the probe_sim_rekey 10 % gate.",
+   "files": "src/sim/economy.ts, content/modes.json, content/items.json, _harness/probe_sim_bot_soak.ts",
+   "verifierNote": "Confirmed. It is stronger than the reviewer stated, because it misses VALE's own written target (modes_economy.md:50), not only the LoL gauge."
+  },
+  {
+   "id": "CL-g3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Tier separation misses the 85 % bar on seed windows the tuning has not seen",
+   "what": "Veteran beats novice at about 80 % outside the tuned seed windows, against a done-bar of 85 %. The order is right and the gap is felt.",
+   "evidence": "Two windows the tuning has not seen:\n- seeds 101–120, the reviewer's: 33/40; I recounted it from closing_gameplay_mir_vn.json and nv.json;\n- seeds 501–520, my run on independent lineups: 31/40 (closing_gameplay_verify_mir_vn.json and nv.json, v_gp.mts --mix veteran,novice and novice,veteran).\nCombined that is 64/80 = 80 %.",
+   "gauge": "LoL's harder bot tiers reliably beat its easier ones (r09 §1.1).",
+   "fix": "Judge the tier gate on a rotating, untuned seed window with 40 or more games. Widen novice's macro and intent gaps in difficulty.ts if it still misses; do not change stats.",
+   "files": "_harness/probe_sim_bot_soak.ts, src/sim/bots/difficulty.ts",
+   "verifierNote": "Confirmed and slightly worse on a second unseen window, so G3 moves to partly. It stays minor because the separation (about 80 %) is clearly felt."
+  },
+  {
+   "id": "CL-g4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "Per-fighter RIFT balance can't be measured: harness lineups lock teammates together",
+   "what": "pacing.ts and probe_sim_bot_soak.ts seat each role as natives[role][(seed + slot + team) % n]. With 3 natives in most roles, the same fighters always share a team, so their win rates are confounded.",
+   "evidence": "_harness/probe_sim_bot_soak.ts:155 (`pl[(seed + slot + team) % pl.length]`). For a 3-native role, slot 0 and slot 3 give the same index mod 3, and so do slot 1 and slot 4. No probe asserts RIFT per-fighter win bands.",
+   "gauge": "Riot keeps champions inside roughly a 45–55 % win band, which needs a balance read not confounded by teammates.",
+   "fix": "Add a balance suite with seeded per-role, per-team shuffles (as in closing_gameplay_verify_tools/v_gp.mts) over 200 or more games, reporting every fighter's win-rate confidence interval.",
+   "files": "_harness/probe_sim_bot_soak.ts, _harness/pacing.ts",
+   "verifierNote": "Confirmed from the code."
+  },
+  {
+   "id": "CL-g5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "XL",
+   "title": "Roster depth: three natives per role, so lane matchups keep recurring",
+   "what": "The 16 fighters split 3/3/4/3/3 across grovehunter, lampglass, dialcross, shaftlight and shadehold. That meets the draft gate but not r03's comfort target.",
+   "evidence": "content/fighters/*.json role fields:\n- grovehunter: ardit, kemdo, nurrow;\n- lampglass: ilsheta, marund, sukri;\n- dialcross: dunsom, rishal, tunlan, vashil;\n- shaftlight: lisvel, odrum, ulkro;\n- shadehold: burdam, ervet, hesmi.",
+   "gauge": "LoL's large roster makes repeated lane matchups rare.",
+   "fix": "Short term, draft bots flex by secondaryRole. Long term, grow toward r03's 24-fighter comfort target.",
+   "files": "src/sim/bots/draft.ts, content/fighters/, _design/ROSTER.md",
+   "verifierNote": "Confirmed from content. It is a scope item, so minor is right."
+  }
+ ],
+ "missed": []
+}

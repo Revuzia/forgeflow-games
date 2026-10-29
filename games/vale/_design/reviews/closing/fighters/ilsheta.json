@@ -1,0 +1,107 @@
+{
+ "fighter": "ilsheta",
+ "score": 6.5,
+ "summary": "Verified 6.5/10, NOT ON PAR. Two majors are confirmed: (1) idle, recall and channel are frozen, and (2) the First Bell deluxe portrait and Collection tiles match base, on top of the one-pose splash pipeline. Two majors are downgraded to minor. The chimney does read in game as a small grey cap with a bright rim; the white-stovepipe read on the plinth is a material minor, the same class as ervet-M4. She does own a hue, #74B300, in her kit VFX and icon, and the neutral model is the brief's deliberate value plan. No blocker found and none missed: the hood is a rounded dome at all 8 turntable facings, the chimney is a flat-topped open cylinder, and the face is a serene carved plate. The GLBs are unchanged since 025b995d and no src/render commit landed after 06:47 today. My own RIFT capture at t=160 (closing_ilsheta_verify_*) reproduces the reviewer's frames and numbers. The reviewer's minor list was cut off in the text handed to me, so it was not checked. All 9 leftover statuses hold: 8 open, 1 closed.",
+ "gapStatus": [
+  {
+   "id": "1. Value gradient: top quarter under 70 on all three; Stillwater mid under 45",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json: ilsheta facing 0 is 69.0 / 46.5 / 35.7, valueGradientOk false. art/renders/lineup/ilsheta_qa.json: Stillwater 66.6 / 42.8 / 31.4, First Bell 68.7 / 44.7 / 29.8. The GLBs are unchanged since 025b995d. This is a roster-wide caveat."
+  },
+  {
+   "id": "2. Proportions and props: arms tucked in idle, the hook reads as a crook, smooth back shell",
+   "status": "open",
+   "evidence": "The GLB is unchanged since 025b995d. art/renders/fighters/ilsheta/turntable.png cells 1 and 8 show the arms tucked to the chest; cells 4-6 show the smooth back shell. three_clips_ilsheta.png idle row shows the same."
+  },
+  {
+   "id": "3. No in-game ally or enemy view (tinted lamp)",
+   "status": "closed",
+   "evidence": "Reproduced in my own RIFT capture at t=160: an azure lamp on the ally (_harness/_shots/closing_ilsheta_verify_ally_z285.png), a marigold lamp inside an orange ring on the enemy (closing_ilsheta_verify_enemy_z285.png) and a white lamp on self. The upper-body chroma share is ally 6.5 %, enemy 8.5 %, self 0.00 % (_harness/_reports/closing_ilsheta_verify_measure.txt)."
+  },
+  {
+   "id": "4. Base bottom value band just over target (35.7 vs 20-35)",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json ilsheta facing 0: bottom 35.7. The GLB is unchanged."
+  },
+  {
+   "id": "5. Lamp over the face in the front idle guard",
+   "status": "open",
+   "evidence": "art/renders/fighters/ilsheta/three_clips_ilsheta.png: in the front frame of the idle and recall rows, the lamp cage covers the face. turntable.png cell 1 shows the same. The GLB is unchanged."
+  },
+  {
+   "id": "6. Stillwater lineup accentOk false (back facing 0.95 % < 1.0 %)",
+   "status": "open",
+   "evidence": "art/renders/lineup/ilsheta_qa.json is the only lineup run that includes ilsheta_stillwater. It shows facing 180 accentPct 0.95 and accentOk false. ilsheta_stillwater.glb was last changed in 025b995d."
+  },
+  {
+   "id": "7. The see-through chimney is dim at gameplay zoom: rim only, frosted grey over dark backdrops, no forward spout",
+   "status": "open",
+   "evidence": "My t=160 capture: the chimney interior is L* 63-66, the rim 75-89 and the hood 83-94, so it reads as a grey cap with no forward flare (_harness/_reports/closing_ilsheta_verify_measure.txt). The Collection and Shop plinth render it as an opaque white tube (closing_client_verify_plinth_ilsheta_base.png, closing_client_verify_shop_sku_ilsheta_first_bell.png). Tracked as minor finding ilsheta-chimney-hook-lost."
+  },
+  {
+   "id": "8. A dark battlement-like projection seam at the top of the face patch",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_ilsheta_portrait_face_x3.png: a dark stepped band above the brow mark on the current portrait.png (97fe0101). The same band shows in the base splash head crop (splash.png, a70d1140)."
+  },
+  {
+   "id": "9. First Bell ult splash: the face is turned up and lost behind glass glare, and the lower visor is a dark hollow",
+   "status": "open",
+   "evidence": "Viewed art/out/fighters/ilsheta/ilsheta_first_bell_splash.png (a70d1140) at 1x, crop (880,80)-(1440,560), and the reviewer's closing_ilsheta_first_bell_splash_face_x3.png. The face plate is tilted into glare above a dark crescent hollow. That is a weak face read but not horror: no eyes, no teeth, no void mask."
+  }
+ ],
+ "findings": [
+  {
+   "id": "ilsheta-idle-recall-frozen",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Idle, recall and channel are near-static; the 7 s recall loops a 2 s bow that barely moves",
+   "what": "In the GLB, recall (2.0 s) turns no bone more than 7.5 degrees and channel no more than 5.6 degrees. Idle turns at most 6.7 degrees, and the head travels 2.1 cm, about 1 px at the gameplay camera. The renderer loops the 2 s recall clip through RIFT's 7 s recall and adds no procedural breathing or prop lag. The recall therefore reads as a held bow, and the idle gives her no personality at the gameplay camera.",
+   "evidence": "- Re-ran _harness/_reports/closing_ilsheta_clip_ranges_tool.py on art/out/fighters/ilsheta/ilsheta.glb: recall forearm.L 7.5, hand.L 5.0, chest 2.3, head 1.6; channel x_lamp 5.6; idle x_lamp 6.7, hips 2.5.\n- _harness/_reports/closing_ervet_verify_roster_motion.json: ilsheta idle head max3d 2.1 cm.\n- content/modes.json:28 recallTime 7. src/render/actors.ts:128 LOOPING includes recall, and actors.ts has no sway, breath or spring code.\n- Roster (_harness/_reports/closing_ilsheta_verify_measure.txt): Burdam's recall runs 6 s, Ervet's 9 s, and Kemdo's and Odrum's recalls are authored, so this pipeline can deliver the bar.",
+   "gauge": "A recent LoL champion's recall is a bespoke multi-second performance that fills the whole channel and shows personality. Its idle carries visible breathing and secondary motion on cloth or the prop at the gameplay camera. VALE: a 2 s near-static loop and an idle that moves about 1 px.",
+   "fix": "Recall: author a 7 s VALE-original recall that holds over the full recall length with no loop seam. She lifts the chimney cap, trims the wick with two fingers and cups the lamp to her chest. The lamp light rises through the mantle, and she ends with the lamp raised to her brow. Reuse the tending beats already keyed in idle_lobby (hand.L 180 degrees, head 34 degrees).\nIdle:\n- 2-3 cm chest and hip breathing;\n- a 10-15 degree x_lamp swing that lags the hand by 3-4 frames;\n- mantle panels lagging 6-8 degrees;\n- head travel of at least 5 cm.\nChannel: the same breathing plus a slow lamp sway.",
+   "files": "art/blender/fighters/ilsheta.py (BLOCKS / clip authoring: idle, recall, channel); art/out/fighters/ilsheta/*.glb (base and both skins)",
+   "size": "M",
+   "verifierNote": "Confirmed. My accessor read matches the reviewer's numbers, and the GLB has been unchanged since 025b995d. The pattern is roster-wide: 6 of 16 recalls are 2 s loops under 8 degrees (Dunsom 2.0, Marund 4.1, Rishal 3.1, Sukri 3.0, Tunlan 2.7, Ilsheta 7.5). It still caps her tier, and the Dunsom closing verifier confirmed the same finding as major. Idle is her most-seen state."
+  },
+  {
+   "id": "ilsheta-skins-indistinct",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The First Bell deluxe portrait and the Collection skin tiles are indistinguishable from base; base and Stillwater splashes share one pose",
+   "what": "First Bell's portrait matches the base portrait to within a few levels. Its changes (the hour-marked hem and the glass bell) sit outside the head-and-chimney framing or hide inside the lamp. That portrait is what the draft seat and the Collection grid header show for the equipped skin, so teammates see base art for a deluxe skin. All three Collection skin tiles crop to the same glass tube. The base and Stillwater splashes use one standing, lamp-at-chest pose, and neither shows the brief's victory hold (lamp held out at arm's length).",
+   "evidence": "- Recomputed from art/out/fighters/ilsheta: First Bell vs base portrait mean |diff| 3.53, 1.38 % of pixels > 20. That is the least distinct skin portrait on the roster; the next deluxe is ardit_first_bell at 11.2 % (roster sweep in _harness/_reports/closing_ilsheta_verify_measure.txt).\n- _harness/_shots/closing_ilsheta_portraits_3up.png and closing_ilsheta_collection_skin_tiles_x3.png.\n- src/ui/screens/draft.tsx:186 and src/ui/screens/collection.tsx:81 render the equipped skin's portrait.\n- Splash plate NCC vs base (left 800 px): First Bell 0.71, Stillwater 0.39.\n- Splash grain, subject p90 11.0 vs plate 1.9: _harness/_reports/closing_ilsheta_splash_grain.txt.",
+   "gauge": "In LoL, every skin, deluxe tier above all, has its own splash and its own select and loading art that a player can tell from base at a glance. VALE: the deluxe portrait is a near-copy of base, and two of three splashes are one pose.",
+   "fix": "- Re-render the First Bell portrait with its own framing so the deluxe changes read at 512 px and at draft-cell size. For example, a lower three-quarter frame with the lamp lifted beside the face, the glass bell visible in front of the core, and the hem's hour-marks in frame.\n- Crop each Collection skin tile on that skin's changed area (Stillwater's reed plates, First Bell's hem and bell) instead of the shared glass tube.\n- Give the base splash the brief's victory hold (lamp held out at arm's length, head bowed 10 degrees), keep First Bell on its ult pose, and give Stillwater its own shallows composition.\n- Gate: every skin portrait has at least 10 % of pixels more than 20 levels from base.",
+   "files": "art/blender/fighters/ilsheta.py (SPLASH and portrait framing per skin); art/out/fighters/ilsheta/*_portrait.png, *_splash.png; the plate composer (plates.py)",
+   "size": "M",
+   "verifierNote": "Confirmed with the scope narrowed. Two claims are narrower than stated:\n- The First Bell splash has its own arms-wide ult pose, and the Shop SKU uses it (closing_client_verify_shop_sku_ilsheta_first_bell.png). Its plate NCC of 0.71 is common on the roster (ardit_first_bell 0.93, hesmi 0.85-0.91), so 'reuses the base splash' holds for the backdrop only.\n- The skin model itself is distinguishable in game and on the plinth: a warm grey mantle, a dark hem band and hour-mark ticks. In the QA sheets it differs from base by 2.74 % in the game-camera row and 9.08 % in the close row, against Stillwater's 2.69 % and 10.24 % (_harness/_shots/closing_ilsheta_verify_gamecam_base_vs_first_bell.png). This is therefore a presentation defect, not burdam-M4's indistinguishable model.\nMajor stands: the portrait is the roster's outlier, and it is shown to teammates in draft. The one-pose, grainy-render-on-a-plate splash pipeline is also here, and every peer closing verifier counted it as major (ardit-M1, burdam-M3, dunsom, ervet-M1, hesmi-M3)."
+  },
+  {
+   "id": "ilsheta-chimney-hook-lost",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The chimney visor reads as a small grey cap, not the brief's brightest vertical, and its glass renders as an opaque white tube on the plinth",
+   "what": "At the default 28.5 m zoom the chimney reads as a ~12-15 px grey cap with a bright rim on top of the hood. It does not disappear, but it is ~20 L* darker than the hood, so it is not the brief's 'brightest vertical', and no forward flare shows as a facing cue. On the Collection and Shop plinth (three.js) the dawnglass renders as an opaque white stovepipe. It reads as clear glass only in the Cycles portrait, splash and icon.",
+   "evidence": "- My capture _harness/_shots/closing_ilsheta_verify_{self,ally,enemy}_z285.png (script _harness/_reports/closing_ilsheta_verify_capture_script.mjs). L* grid in _harness/_reports/closing_ilsheta_verify_measure.txt: interior 63-66, rim 75-89, hood 83-94, road ~40.\n- The reviewer's closing_ilsheta_match_measure.txt agrees: interior 64.3, hood 81.3.\n- Plinth: _harness/_shots/closing_client_verify_plinth_ilsheta_base.png at (1360-1560, 450-650).\n- Glimwick comparison: _harness/_shots/closing_ilsheta_verify_ally_vs_glimwicks_x2.png.",
+   "gauge": "A LoL champion's glass, metal or crystal reads as that material in-game and in the client showcase, not only in the splash, and its defining shape reads at default zoom. VALE: the shape reads as a cap, and the material reads as glass only in the offline renders.",
+   "fix": "All VALE's own dawnglass design:\n- Give the open rim a thick rolled chalk lip (2.5-3 cm, L* 88-90) and an ink collar where the glass meets the hood, so from above it reads as a bright ring around a dark core.\n- Model the forward visor-beak flare from the brief (at least 4 px at 1080p).\n- Tilt the chimney 8-10 degrees forward.\n- Frost the glass: alpha ~0.6, a baked vertical gradient brighter at the top, and a Fresnel rim, so three.js reads glass, not a solid tube.\n- Gate in three_qa: chimney mean L* at least the hood's + 5.",
+   "files": "art/blender/fighters/ilsheta.py (chimney part, gem_chimglass material, transform); art/out/fighters/ilsheta/*.glb",
+   "size": "M",
+   "verifierNote": "Downgraded from major to minor.\nWhat does not reproduce:\n- The cap does not disappear. In my t=160 frames and the reviewer's frames it reads at 1:1 as a cap, with a rim as bright as the hood and an interior well above the road.\n- 'Shares the Glimwick look' is overstated. The Glimwicks are dark slate hoods at ~68 % of her height, and she is the palest figure on the lane.\n- Facing still reads through the lamp and staff, which sit front-right at all 8 facings (closing_ilsheta_gamecam_facings_x4.png).\nWhat holds: the cap is not the bright vertical the brief asks for, and the plinth glass reads opaque. That is a material read on the signature element, the same class as ervet-M4 (the glass blade does not read as glass), which was verified minor; ardit-M2's foreshortening residual was also minor. This is her most important minor; fold it into the GLB rebuild for the recall.\nSensitivity checked: the opaque tube sits on a white hood, but it is a flat-topped, open, back-tilted cylinder on a rounded dome. It is not a tall pointed or conical hood. Making the glass read as glass also removes this near-miss."
+  },
+  {
+   "id": "ilsheta-no-own-hue",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The model carries none of her signature hue, so the self view and portrait chips are colourless",
+   "what": "Every large model area is under 17 % saturation, and the only chromatic element on the figure is the relationship-tinted lamp. In the self view (Noonwhite tint) the figure is fully achromatic. Her own signature hue (#74B300) appears in her kit VFX and on the icon rim, but nowhere on the model, so the model and the kit do not share a colour.",
+   "evidence": "- My capture: self 0.00 % of upper-body figure pixels above chroma 25 (max 14.6), ally 6.5 %, enemy 8.5 % (_harness/_reports/closing_ilsheta_verify_measure.txt). The reviewer measured 0.00 / 6.28 / 6.60 %.\n- content/fighters/ilsheta.json:716 vfx.signature #74B300.\n- _harness/_reports/closing_combat_kit_hue.json: ilsheta a1 sig 0.976, a2 0.557 (pass).\n- art/out/fighters/ilsheta/icon.png: green rim.\n- _harness/_reports/closing_ilsheta_draft_cells.txt: luma std 35.0, the lowest of 16.",
+   "gauge": "LoL champions are told apart by their own colours in every view, and the team read lives in bars and rings. r12 M12 sets the effect hue, which VALE now meets for her a1 and a2. The model's own palette is where VALE still falls short.",
+   "fix": "Carry a muted tone of her existing signature family, not a second invented hue: a lichen-lime near hue 80 degrees at chroma 25-30. It clears azure, marigold, Noonwhite and the Sap heal colour #63D88B by about 59 degrees.\n- Put it on the hood lining, the sash and the hook-staff wrap: ~8-12 % of the silhouette, visible from above.\n- The mantle stays the pale bell, so the value plan holds.\n- Skins keep the location and change the tone.\n- Gate: at least 5 % of figure pixels above chroma 25 in the self view, with the lamp excluded.",
+   "files": "art/blender/fighters/ilsheta.py (PALETTE and SKINS palettes: hood lining, sash, staff wrap); _design/fighters/ilsheta.md §5 (by the art lead)",
+   "size": "S",
+   "verifierNote": "Downgraded from major to minor. The self-view measurement reproduces, but the title 'no hue of her own' is wrong:\n- She owns #74B300, and it shows in play where the r12 gauge puts a champion's hue: her a1 and a2 VFX, and her icon.\n- The neutral model is the brief's deliberate pale-bell value plan (ilsheta.md §5).\n- The self tint is the by-design Noonwhite relation; hesmi-m4 was ruled minor on the same mechanic.\n- In play she is identified by value: the palest fighter on the lane (hood L* 83-94).\n- Her draft-cell contrast is the lowest, but within a cluster (Rishal 36.3, Vashil 38.9), and her saturation of 0.225 is not the lowest (Vashil 0.195, Hesmi 0.216).\nThe fix is amended to reuse her signature family."
+  }
+ ],
+ "missed": []
+}
