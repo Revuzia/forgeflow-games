@@ -386,6 +386,13 @@ export class Hud {
     return r.width > 0 ? r : null;
   }
 
+  /** where the chronicle ticker stands while it shows (null when hidden or faded out) */
+  tickerRect(): DOMRect | null {
+    if (this.ticker.hidden || this.ticker.classList.contains('gn-fade')) return null;
+    const r = this.ticker.getBoundingClientRect();
+    return r.width > 0 ? r : null;
+  }
+
   /** the shell's layout pass: where the toasts sit, how far the ticker may run */
   layout(o: { toastBottom: number; toastTop: boolean; tickerMax: number; toastLeft?: number; toastMaxW?: number }): void {
     this.root.style.setProperty('--gn-toast-bottom', `${Math.round(o.toastBottom)}px`);
@@ -393,6 +400,9 @@ export class Hud {
     if (o.toastLeft !== undefined) this.root.style.setProperty('--gn-toast-left', `${Math.round(o.toastLeft)}px`); else this.root.style.removeProperty('--gn-toast-left');
     if (o.toastMaxW !== undefined) this.root.style.setProperty('--gn-toast-maxw', `${Math.round(o.toastMaxW)}px`); else this.root.style.removeProperty('--gn-toast-maxw');
     this.root.style.setProperty('--gn-ticker-max', `${Math.round(o.tickerMax)}px`);
+    // too narrow beside the dock (the site's 888 × 500 frame) for the date and the line side by side: the date stands
+    // over the line, and the line may take two lines
+    this.ticker.classList.toggle('gn-ticker-stack', o.tickerMax < 320);
     this.toasts.root.classList.toggle('gn-toasts-top', o.toastTop);
   }
 
@@ -547,6 +557,26 @@ export class Hud {
   /** a screen rectangle names stay out of (the opening's whisper while it speaks), or null */
   keepOut: DOMRect | null = null;
 
+  /**
+   * The open windows' screen rectangles (the shell's layout pass). The HUD panels a window covers step back while it
+   * is open, and so do the names under it: their text would otherwise read through the window's glass and compete
+   * with its own.
+   */
+  private winRects: DOMRect[] = [];
+  coverUnder(wins: DOMRect[]): void {
+    this.winRects = wins;
+    for (const c of this.root.children) {
+      if (!(c instanceof HTMLElement) || c.matches('.gn-win, .gn-veil, .gn-toasts, .gn-title, .gn-open-veil')) continue;
+      let under = false;
+      // (what stands over the windows — the camera and photo layers, notes — is not under them)
+      if (wins.length && !c.hidden && !((Number.parseInt(getComputedStyle(c).zIndex, 10) || 0) >= 9)) {
+        const r = c.getBoundingClientRect();
+        under = r.width > 0 && wins.some((w) => Math.min(r.right, w.right) - Math.max(r.left, w.left) > 6 && Math.min(r.bottom, w.bottom) - Math.max(r.top, w.top) > 6);
+      }
+      if (c.classList.contains('gn-under-win') !== under) c.classList.toggle('gn-under-win', under);
+    }
+  }
+
   private syncLabels(f: HudFrame, pv: PlanetView | undefined): void {
     const seen = new Set<string>();
     const ko = this.keepOut;
@@ -607,7 +637,8 @@ export class Hud {
           (rec.el.lastElementChild as HTMLElement).textContent = sub;
         }
         // (under the whisper's words a name steps back: the two would read as one)
-        const under = !!ko && p.x > ko.left - 90 && p.x < ko.right + 90 && p.y > ko.top - 10 && p.y < ko.bottom + 44;
+        const under = (!!ko && p.x > ko.left - 90 && p.x < ko.right + 90 && p.y > ko.top - 10 && p.y < ko.bottom + 44)
+          || this.winRects.some((w) => p.x > w.left - 70 && p.x < w.right + 70 && p.y > w.top && p.y < w.bottom + 40);
         const fade = under ? 0 : Math.max(0.25, Math.min(1, 1.4 - d / Math.max(900, alt * 2.2)));
         rec.el.style.opacity = fade.toFixed(2);
         rec.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;

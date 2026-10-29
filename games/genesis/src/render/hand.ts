@@ -998,6 +998,9 @@ export class HandVisual {
     const altCam = this.camAltitude(f);
     let want = (cursorHere ? 1 : 0) || (simActive ? 1 : 0) || (t - this.cursorAt < 2 ? 1 : 0);
     if (altCam > R * 4) want = 0;
+    // from orbit only the player's own cursor brings the Touch: the sim's hand moving on its own (an idle drift, a held
+    // pose) lit its glint as a lone white speck on the terminator of the title's backdrop and of every orbit view
+    if (altCam > R * 1.2 && !cursorHere && t - this.cursorAt >= 2) want = 0;
     if (this.force != null) want = this.force ? 1 : 0;
     this.presence += (want - this.presence) * Math.min(1, f.dt * (want > this.presence ? 2.4 : 2.0));
     if (this.force === true) this.presence = 1;

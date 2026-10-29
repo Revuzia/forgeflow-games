@@ -196,6 +196,8 @@ export class Shell {
   private aimCode: string | null = null;
   private layoutAt = 0;
   private layoutKey = '';
+  /** a centre or wide window is open (the layout pass): the world's names and markers hush under it */
+  private winCentre = false;
   /** "Interface hidden — H or Esc brings it back" (beside the panels: it shows while they are hidden) */
   private hiddenNote: HTMLDivElement;
   private hiddenNoteAt = 0;
@@ -1170,7 +1172,7 @@ export class Shell {
     this.pollGods();
     // the world layer: busy (names and markers let presses through), hushed (names and markers hidden)
     const busy = pointerOwned || this.hand.busy || this.press !== 'none';
-    const hush = this.radial.isOpen || this.palette.isOpen || this.gestures.active || this.gestures.armed || this.opening.hush;
+    const hush = this.radial.isOpen || this.palette.isOpen || this.gestures.active || this.gestures.armed || this.opening.hush || this.winCentre;
     this.hud.setWorldMode(busy, hush);
     // (before the toasts drain the events: the opening reads the sim's milestones)
     this.opening.frame();
@@ -1232,12 +1234,26 @@ export class Shell {
     const H = window.innerHeight;
     const s = this.uiScale();
     const dock = this.hud.dock.getBoundingClientRect();
+    // the open windows: the HUD panels and names they cover step back; a centre window hushes the world's names
+    const wins: DOMRect[] = [];
+    let centre = false;
+    for (const w of this.hud.root.querySelectorAll<HTMLElement>('.gn-win:not([hidden])')) {
+      const r = w.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      wins.push(r);
+      if (!w.classList.contains('gn-win-left')) centre = true;
+    }
+    this.hud.coverUnder(wins);
+    this.winCentre = centre;
     const card = this.tools.card.hidden ? null : this.tools.card.getBoundingClientRect();
     const toastW = Math.min(440, window.innerWidth * 0.4) * s + 18;
     let bottom = H - dock.top + 10;
     // the controls hint line over the dock, while it shows
     const hint = this.hud.hintRect();
     if (hint && hint.left < toastW) bottom = Math.max(bottom, H - hint.top + 8);
+    // the chronicle ticker in the bottom-left corner (two lines tall in the site frame): the toasts stand above it
+    const tick = this.hud.tickerRect();
+    if (tick && tick.left < toastW) bottom = Math.max(bottom, H - tick.top + 6);
     let top = false;
     if (card && card.left < toastW) {
       bottom = Math.max(bottom, H - card.top + 10);

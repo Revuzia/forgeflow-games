@@ -4,7 +4,7 @@
 // world's law: nothing sent), the god's keys free of conflicts, and the Signs ring holding what the creature's held.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { regardBand, meterWord, regardSentence, openPrayers, answerCommand, foretellSays, FORETELL, OMEN_NAMES, prophetState } from '../src/ui/living.ts';
+import { regardBand, meterWord, regardSentence, openPrayers, answerCommand, foretellSays, FORETELL, OMEN_NAMES, prophetState, pastYears, FOOD_ORDER } from '../src/ui/living.ts';
 import { PowerBook, wrathWord, castValues, autoWords, fmtParam, WRATH_DEFAULT, oreRows, contentPlants } from '../src/ui/powers.ts';
 import { plantLookOf, setPlantRegistry } from '../src/render/life/vegetation.ts';
 import { BASE_PACK } from '../src/data/index.ts';
@@ -140,4 +140,44 @@ test('H12: an invented plant reaches the renderer — the content query feeds th
   assert.equal(contentPlants(null), null, 'a failed query keeps what is drawn');
   setPlantRegistry([]);
   assert.equal(plantLookOf(base), null, 'reset');
+});
+
+test('H10: the settlement card\'s past years read the sim\'s ledger — newest first, food by source, people, born, died, hunger (finding #29)', () => {
+  // the shape the sim answers (people/ledger.ts ledgerQuery): three years kept, the third still running
+  const res = {
+    year: 2, yearTicks: 100,
+    settlements: [
+      { settlement: 9, name: 'Elsewhere', fallen: false, years: [{ year: 0, food: { forage: 999 }, births: 9, deaths: {}, pop: 99 }] },
+      { settlement: 4, name: 'Aru', fallen: false, years: [
+        { year: 0, food: { forage: 300, hunt: 100, fish: 0, farm: 0, herd: 0 }, births: 3, deaths: { 'old age': 1 }, pop: 30 },
+        { year: 1, food: { forage: 100, hunt: 0, fish: 0, farm: 300, herd: 0 }, births: 1, deaths: { starvation: 2, sickness: 1 }, pop: 28 },
+        { year: 2, food: { forage: 50, hunt: 0, fish: 0, farm: 50, herd: 0 }, births: 0, deaths: {}, pop: 27 },
+      ] },
+    ],
+  };
+  const m = pastYears(res, 4);
+  assert.equal(m.kept, 3);
+  assert.deepEqual(m.rows.map((r) => r.label), ['Year 3', 'Year 2', 'Year 1'], 'newest first, the calendar\'s years (from 1)');
+  assert.deepEqual(m.rows.map((r) => r.now), [true, false, false], 'the running year is marked');
+  assert.deepEqual(m.rows.map((r) => r.width), [0.25, 1, 1], 'bars against the best year');
+  assert.deepEqual(m.rows[1].parts, [{ kind: 'forage', share: 0.25 }, { kind: 'farm', share: 0.75 }], 'shares in the card\'s order, only sources that fed them');
+  assert.deepEqual(m.rows.map((r) => [r.pop, r.births, r.deaths, r.hungry]), [[27, 0, 0, false], [28, 1, 3, true], [30, 3, 1, false]]);
+  assert.match(m.rows[1].title, /^Year 2: 400 days of food — farming 75%, gathering 25% · 28 people · 1 born, 3 died \(2 of starvation, 1 of sickness\)$/);
+  assert.match(m.rows[0].title, /^Year 3 \(so far\)/);
+  assert.equal(pastYears(res, 4, 2).rows.length, 2, 'at most `max` rows');
+  // a year not a day old has no count of its people yet: the card's own count stands in (past years keep theirs)
+  const fresh = { year: 0, settlements: [{ settlement: 4, years: [{ year: 0, food: {}, births: 0, deaths: {}, pop: 0 }] }] };
+  assert.equal(pastYears(fresh, 4, 12, 40).rows[0].pop, 40);
+  assert.match(pastYears(fresh, 4, 12, 40).rows[0].title, /^Year 1 \(so far\): no food brought in · 40 people · 0 born$/);
+  for (const bad of [null, undefined, 7, 'x', {}, { settlements: 'x' }, { settlements: [{ settlement: 4, years: null }] }]) assert.deepEqual(pastYears(bad, 4), { rows: [], kept: 0 });
+  // and on the real sim: the books a living town keeps read as rows
+  const { sim, st } = town();
+  sim.step(60 * 30);
+  const real = pastYears(sim.query('ledger', { settlement: st.id, planet: 0 }), st.id);
+  assert.ok(real.kept >= 1 && real.rows.length >= 1, 'Aru keeps books');
+  const r0 = real.rows[0];
+  assert.ok(r0.now && r0.label.startsWith('Year '), r0.label);
+  assert.ok(r0.pop > 0, 'people counted');
+  assert.ok(r0.parts.every((p) => (FOOD_ORDER as readonly string[]).includes(p.kind) && p.share > 0 && p.share <= 1));
+  if (r0.food > 0) assert.ok(Math.abs(r0.parts.reduce((s, p) => s + p.share, 0) - 1) < 1e-9, 'shares sum to one');
 });

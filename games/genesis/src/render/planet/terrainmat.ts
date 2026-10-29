@@ -440,7 +440,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // an airless world is blanketed in regolith (the sim's soil is 0 there: the noise alone left bare grey rock wherever
   // the sim's sand thinned — on every crater rim and wall — a dark ring round each pale sandy floor); bedrock shows
   // only on the steepest faces
-  if (airless) soilW = max(soilW, 0.92 * (1.0 - smoothstep(0.55, 0.95, steep)) * (1.0 - outc));
+  if (airless) soilW = max(soilW, 0.92 * (1.0 - smoothstep(0.7, 1.0, steep)) * (1.0 - outc));
   if (soilW > 0.001) {
     vec3 sc;
     float sb;
@@ -494,8 +494,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   }
 
   // an airless world's crater walls and rims are freshly broken ground, brighter than the old dust of the plains and
-  // floors (as on the Moon): the bowl reads by its bright walls and its own shading, not by a dark outline
-  if (airless) col *= 1.0 + 0.32 * steep * (1.0 - smoothstep(0.02, 0.3, ash));
+  // floors (as on the Moon): the bowl reads by its bright walls and its own shading, not by a dark outline — and only
+  // the YOUNG craters are fresh: the brightening varies from region to region (~80 m, the craters' own scale), so the
+  // old ones, gardened back to the plains' tone, read by their relief alone (an equal bright or dark band on every
+  // rim stamped the same ring over the whole disc)
+  if (airless) col *= 1.0 + steep * (0.06 + 0.3 * smoothstep(-0.1, 0.55, m1)) * (1.0 - smoothstep(0.02, 0.3, ash));
 
   // ── maria (dark basalt on moons, mapped from 'ash' on airless worlds) / volcanic ash ──
   if (ash > 0.005) {
@@ -765,7 +768,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     vec3 scl = uSandCol * (0.9 + 0.16 * m1 + 0.06 * m2);
     // (on an airless world the sand is the same regolith, sorted finer: a near-match of its tone, so where the sim's
     // sand thins over the rims there is no ring of another colour)
-    if (airless) scl = mix(scl, uRegolith * (0.95 + 0.12 * m1), 0.7);
+    // (at a 70 % mix the sand-filled floors and plains stayed ~25 % paler and warmer than the bare regolith of the rims
+    // where the sim's sand thins: a dark grey outline round every crater, in the albedo itself)
+    if (airless) scl = mix(scl, uRegolith * (0.95 + 0.12 * m1), 0.93);
     // ripples, finer ripples and wind streaks + sun glints (groundfloor.ts sandDetail)
     vec3 sdt = fine ? sandDetail(P, up, fw) : vec3(1.0, 0.0, 0.0);
     scl *= sdt.x;
@@ -838,6 +843,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // the turf round an outcrop is thin: browner, with loose stones weathered off the rock scattered in it (a uniformly
     // darker band round every patch read as an outline drawn on the map)
     float rim = smoothstep(0.93 - 0.5 * oreA, 1.0 - 0.5 * oreA, pq) * (1.0 - outW) * (1.0 - smoothstep(0.0, 0.4, uw)) * (1.0 - softO);
+    // (the warm turf tint fades out where the rim, 5–30 m, is under a few pixels: from orbit every single-cell deposit
+    // drew a salmon dot)
+    rim *= aaF(fw, 22.0);
     if (rim > 0.001) {
       col = mix(col, col * vec3(1.08, 0.97, 0.82), rim * 0.5);
       float sAA = aaF(fw, 1.8);
@@ -848,8 +856,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
         bump += stone * 0.12 * (1.0 - smoothstep(0.0, 0.3, sv.x));
       }
     }
-    // (from afar: the deposit's colour faintly in the ground, where single outcrops are too small to draw)
-    float farK = 1.0 - aaF(fw, 8.0);
+    // (from afar: the deposit's colour faintly in the ground, where single outcrops are too small to draw — but not
+    // from orbit, where a deposit one or two cells across (~50–100 m) is a couple of pixels: the sim scatters single-cell
+    // iron and clay deposits evenly over a world, and their tint read as an even polka-dot of salmon spots on the title's
+    // barren disc)
+    float farK = (1.0 - aaF(fw, 8.0)) * aaF(fw, 30.0);
     col = mix(col, col * mix(vec3(1.0), oreC / max(oLum, 0.02) * 0.5 + 0.5, 0.25), smoothstep(0.25, 0.7, oreA) * farK * 0.6);
     if (outW > 0.001) {
       // the outcrop: a jumble of weathered blocks and boulders (~2.5 m) breaking through — each a rounded mass of its own

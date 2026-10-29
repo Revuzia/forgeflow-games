@@ -715,3 +715,69 @@ export function labelSigns(s: SettlementView): { prayer: number; prophet: boolea
   const prayer = s.prayers?.length ? Math.max(...s.prayers.map((p) => p.urgency)) : -1;
   return { prayer, prophet: !!s.prophet, sacred: !!(s.sacred && (s.sacred.places > 0 || s.sacred.animal)) };
 }
+
+// ───────────────────────────── H10: the settlement's books, year by year ─────────────────────────────
+
+/** where the food came from, in the card's order and words (the sim's people/ledger.ts FoodSource) */
+export const FOOD_ORDER = ['forage', 'hunt', 'fish', 'farm', 'herd'] as const;
+export type FoodKind = typeof FOOD_ORDER[number];
+export const FOOD_WORDS: Record<FoodKind, string> = { forage: 'Gathering', hunt: 'Hunting', fish: 'Fishing', farm: 'Farming', herd: 'Herding' };
+
+/** one year of a settlement's books as the card's 'Past years' fold draws it */
+export interface PastYear {
+  /** the planet's year index (from 0) and how the calendar says it (from 1) */
+  year: number;
+  label: string;
+  /** the year still running */
+  now: boolean;
+  /** food brought in (food-days), its shares by source (in FOOD_ORDER, only those above zero), and the bar's length
+   *  against the best year shown (0..1) */
+  food: number;
+  parts: { kind: FoodKind; share: number }[];
+  width: number;
+  pop: number;
+  births: number;
+  deaths: number;
+  /** someone starved that year */
+  hungry: boolean;
+  /** the year in a sentence (the row's tooltip and its accessible name) */
+  title: string;
+}
+
+/** the minimum of a LedgerYear (src/sim/people/ledger.ts) the fold reads */
+interface LedgerRowLike { year?: number; food?: Record<string, number>; births?: number; deaths?: Record<string, number>; pop?: number }
+
+/**
+ * query('ledger', { settlement }) → the fold's rows, newest first (at most `max`), and how many years the books keep.
+ * Unknown or empty answers give no rows.
+ */
+export function pastYears(res: unknown, settlement: number, max = 12, livePop = 0): { rows: PastYear[]; kept: number } {
+  const r = (res && typeof res === 'object' ? res : null) as { year?: number; settlements?: { settlement: number; years?: LedgerRowLike[] }[] } | null;
+  const books = Array.isArray(r?.settlements) ? r.settlements.find((s) => s.settlement === settlement) : undefined;
+  const years = (Array.isArray(books?.years) ? books.years : []).filter((y) => typeof y?.year === 'number');
+  const cur = typeof r?.year === 'number' ? r.year : Number.POSITIVE_INFINITY;
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const shown = years.slice().sort((a, b) => n(b.year) - n(a.year)).slice(0, Math.max(0, max));
+  const totals = shown.map((y) => FOOD_ORDER.reduce((s, k) => s + Math.max(0, n(y.food?.[k])), 0));
+  const best = Math.max(1e-9, ...totals);
+  const rows = shown.map((y, i): PastYear => {
+    const year = n(y.year), food = totals[i];
+    const parts = FOOD_ORDER.filter((k) => n(y.food?.[k]) > 0).map((k) => ({ kind: k, share: food > 0 ? n(y.food?.[k]) / food : 0 }));
+    const deathsBy = Object.entries(y.deaths ?? {}).filter(([, v]) => n(v) > 0);
+    const deaths = deathsBy.reduce((s, [, v]) => s + n(v), 0);
+    const starved = n(y.deaths?.starvation);
+    const now = year >= cur;
+    // (the books count the people at each day's end: a year not a day old has no count yet — the card's own count stands)
+    const pop = Math.round(n(y.pop) > 0 || !now ? n(y.pop) : Math.max(0, livePop));
+    const label = `Year ${year + 1}`;
+    const src = parts.slice().sort((a, b) => b.share - a.share).map((p) => `${FOOD_WORDS[p.kind].toLowerCase()} ${Math.round(p.share * 100)}%`).join(', ');
+    const died = deaths ? `, ${deaths} died${deathsBy.length ? ` (${deathsBy.sort((a, b) => n(b[1]) - n(a[1])).slice(0, 3).map(([k, v]) => `${n(v)} of ${k}`).join(', ')})` : ''}` : '';
+    const title = `${label}${now ? ' (so far)' : ''}: ${food > 0 ? `${fmtCount(food)} days of food — ${src}` : 'no food brought in'} · ${pop} ${pop === 1 ? 'person' : 'people'} · ${n(y.births)} born${died}`;
+    return { year, label, now, food, parts, width: food / best, pop, births: n(y.births), deaths, hungry: starved > 0, title };
+  });
+  return { rows, kept: years.length };
+}
+
+function fmtCount(v: number): string {
+  return v >= 10000 ? `${Math.round(v / 1000)}k` : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v));
+}

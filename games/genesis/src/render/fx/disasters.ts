@@ -1045,7 +1045,17 @@ export class DisasterFx {
       const c = crest[Math.floor(i * step)];
       const up = _a.copy(c.p).normalize();
       const fw = _b.copy(c.out).addScaledVector(up, 0.25).normalize();
-      const col = c.land > 0.3 ? [0.62, 0.56, 0.48] : [0.9, 0.93, 0.95];
+      // over the land the bore throws no plume: a low skirt of silty foam and spray hugging the ground (the land-tinted
+      // tan plume, H × 0.3 wide and rising ~2 H, stood over the island as columns of beige smoke); spray over the sea is
+      // always white-blue
+      if (c.land > 0.3) {
+        this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.12, life: 1.6, count: Math.round(70 * ctx.q), p0: H * 0.3, p1: H * 0.35, r: 0.8, g: 0.78, b: 0.72, power: k * 0.7 }, ctx);
+        this.stopEm(st, `mist${i}`, ctx);
+        // wreckage tumbling in the bore where it runs over the land
+        if (Math.random() < 0.02) ctx.debris.burst(c.p, 3, H * 0.6, Math.max(0.6, H * 0.06), ctx.now);
+        continue;
+      }
+      const col = [0.9, 0.93, 0.95];
       if (lone) {
         this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.16, life: 2, count: Math.round(120 * ctx.q), p0: H * 0.9, p1: H * 0.5, r: col[0], g: col[1], b: col[2], power: k * 0.8 }, ctx);
         this.em(st, `mist${i}`, { sys: SYS.steam, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.22, life: 2.5, count: Math.round(10 * ctx.q), p0: H * 0.5, r: 0.86, g: 0.89, b: 0.92, power: k * 0.18 }, ctx);
@@ -1053,8 +1063,6 @@ export class DisasterFx {
         this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.3, life: 3, count: Math.round(220 * ctx.q), p0: H * 2.2, p1: H * 0.9, r: col[0], g: col[1], b: col[2], power: k }, ctx);
         this.em(st, `mist${i}`, { sys: SYS.steam, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.6, life: 5, count: Math.round(50 * ctx.q), p0: H * 2.5, r: 0.86, g: 0.89, b: 0.92, power: k * 0.6 }, ctx);
       }
-      // wreckage tumbling in the bore where it runs over the land
-      if (c.land > 0.3 && Math.random() < 0.02) ctx.debris.burst(c.p, 3, H * 0.6, Math.max(0.6, H * 0.06), ctx.now);
     }
     for (let j = i; j < 24; j++) { this.stopEm(st, `spray${j}`, ctx); this.stopEm(st, `mist${j}`, ctx); }
   }

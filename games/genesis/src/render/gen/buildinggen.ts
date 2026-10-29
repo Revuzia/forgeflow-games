@@ -1843,10 +1843,13 @@ function colonnade(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
 }
 
 /**
- * Domed hall: walls arcaded with round-headed windows behind a crenellated parapet, a tall round-headed gate in a
- * framing block under the sky-ring, a windowed drum under a ribbed dome crowned by the sky-eye (a curb and the ring),
- * small domes at the roof's corners and two weather masts (streamers, rain bells, the ring) before the court.
- * Fearful: dark basalt, iron-spiked parapet, lightning rings; benevolent: whitewash, gilt rings.
+ * Sky rotunda (the 'domed' form): walls arcaded with round-headed windows under a plain cornice band, a round-headed
+ * gate in a frame no higher than the walls with the sky-ring over it, a windowed drum under a STEPPED, ribbed cone of
+ * three receding tiers open to the sky at its crown (the sky-eye: a curb and a large ring standing over it), ring
+ * masts at the roof's corners and two tall weather masts (streamers, rain bells, the ring) before the court.
+ * (A hemispherical white dome on an arcaded block with corner caps, merlons and a portal frame above the parapet read
+ * as a real faith's mosque at god-view distance; the stepped cone and the rings are this people's own.)
+ * Fearful: dark basalt, iron-spiked cornice, lightning rings; benevolent: whitewash, gilt rings.
  */
 function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
   const lod = spec.lod;
@@ -1864,21 +1867,19 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
     back: arches(S, null), left: arches(S - 1.6, null), right: arches(S - 1.6, null),
   }, look, rng);
   const y0 = 0.6 + H;
-  // cornice and a crenellated parapet (merlons)
+  // cornice and a plain, unbroken parapet band (no merlons: crenellations read as a real faith's mosque wall)
   k.box(-S / 2 - 0.2, y0, -S / 2 - 0.2, S / 2 + 0.2, y0 + 0.4, S / 2 + 0.2, SURF.ashlar, PART.trim, mulc(sc, 1.08), { skip: ['bottom'] });
-  for (let q = 0; q < 4; q++) {
+  k.box(-S / 2 - 0.05, y0 + 0.4, -S / 2 - 0.05, S / 2 + 0.05, y0 + 0.85, S / 2 + 0.05, look.surf, PART.trim, wallCol, { skip: ['bottom'] });
+  if (T.fear && lod === 0) for (let q = 0; q < 4; q++) {
     k.push(0, 0, 0, (q * Math.PI) / 2);
-    const n = Math.max(4, Math.round(S / 1.1));
-    for (let i = 0; i < n; i++) {
-      const x = -S / 2 + (i + 0.5) * (S / n);
-      if (lod === 0 || i % 2 === 0) k.box(x - 0.28, y0 + 0.4, S / 2 - 0.15, x + 0.28, y0 + 1.15, S / 2 + 0.15, look.surf, PART.trim, wallCol, { skip: ['bottom'] });
-      if (T.fear && lod === 0) k.cylinder(x, S / 2, y0 + 1.15, y0 + 1.75, 0.05, 0.0, 4, SURF.iron, PART.trim, IRON);
-    }
+    const n = Math.max(4, Math.round(S / 1.6));
+    for (let i = 0; i < n; i++) k.cylinder(-S / 2 + (i + 0.5) * (S / n), S / 2, y0 + 0.85, y0 + 1.45, 0.05, 0.0, 4, SURF.iron, PART.trim, IRON);
     k.pop();
   }
-  // the portal block (pishtaq): a frame standing proud of the front wall and above the parapet, round the portal
+  // the portal frame: standing proud of the front wall round the gate, no higher than the walls (a frame rising above
+  // the parapet read as a pishtaq)
   {
-    const fw = pw + 2.2, fh = H + 2.6, z = S / 2;
+    const fw = pw + 2.2, fh = H + 0.25, z = S / 2;
     k.box(-fw / 2, 0.6, z, -pw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
     k.box(pw / 2, 0.6, z, fw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
     k.box(-pw / 2, 0.6 + 6.2, z, pw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
@@ -1901,38 +1902,48 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
     k.pop();
   }
   k.box(-R - 0.15, y0 + 0.4 + drumH - 0.05, -R - 0.15, R + 0.15, y0 + 0.4 + drumH + 0.2, R + 0.15, SURF.ashlar, PART.trim, mulc(sc, 1.08), {});
-  // (never an onion: with minarets it read as a real faith's mosque or church)
-  const onion = false;
-  // (a plain stone or limewashed dome: teal tile or gilt with corner domes and minarets read as a real faith's mosque)
+  // the roof: a STEPPED cone of three receding tiers (each a short upright band, a sloped face and a ledge), open at
+  // its crown to the sky (never a hemisphere or an onion: a white dome on an arcaded block read as a real faith's mosque)
   const domeCol: RGB = T.fear ? [0.075, 0.068, 0.062] : T.kind ? WHITEWASH : mulc(sc, 0.92);
   const db = y0 + 0.6 + drumH;
   const prof: [number, number][] = [];
-  for (let i = 0; i <= 12; i++) {
-    const t = i / 12;
-    // a hemisphere, or an onion: swelling past the drum and drawn up to a point
-    const r = onion ? R * (1.0 + 0.22 * Math.sin(t * Math.PI * 1.15)) * Math.pow(Math.cos(t * Math.PI / 2), 0.75) : R * 1.02 * Math.cos((t * Math.PI) / 2);
-    const y = db + (onion ? R * 1.45 : R * 1.02) * (onion ? Math.sin(t * Math.PI / 2) * (0.85 + 0.15 * t) : Math.sin((t * Math.PI) / 2));
-    prof.push([Math.max(0.02, r), y]);
+  {
+    const tiers = 3, hD = R * 1.05, r0 = R * 1.06, rT = 1.15;
+    for (let i = 0; i < tiers; i++) {
+      const ra = r0 + (rT - r0) * (i / tiers), rb = r0 + (rT - r0) * ((i + 1) / tiers);
+      const ya = db + hD * (i / tiers), th = hD / tiers;
+      prof.push([ra, ya], [ra, ya + th * 0.24], [rb + (ra - rb) * 0.18, ya + th]);
+    }
+    prof.push([rT, db + hD], [0.02, db + hD]);
   }
   const domeSurf = domeCol === WHITEWASH ? SURF.plaster : SURF.ashlar;
   k.lathe(0, 0, prof, lod === 0 ? 28 : 14, domeSurf, PART.roof, domeCol, 0.85, 1);
   if (lod === 0) {
-    // ribs down the dome
+    // ribs down the tiers (the sloped faces: every tier's band top to its ledge)
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      const pts: V3[] = prof.filter((_, j) => j % 2 === 0).map(([r, y]) => [Math.sin(a) * (r + 0.04), y, Math.cos(a) * (r + 0.04)]);
-      k.tube(pts, pts.map(() => 0.06), 4, domeSurf, PART.roof, mulc(domeCol, domeCol === GOLD ? 1.15 : 0.85));
+      for (let t = 0; t < 3; t++) {
+        const pts: V3[] = [prof[t * 3 + 1], prof[t * 3 + 2]].map(([r, y]) => [Math.sin(a) * (r + 0.04), y, Math.cos(a) * (r + 0.04)]);
+        k.tube(pts, [0.09, 0.06], 4, domeSurf, PART.roof, mulc(domeCol, 0.85));
+      }
     }
   }
   const topY = prof[prof.length - 1][1];
-  // the sky-eye at the crown: a raised curb round the dome's top, the sky-ring standing over it
-  k.cylinder(0, 0, topY - 0.45, topY + 0.25, 1.05, 0.95, lod === 0 ? 12 : 8, SURF.ashlar, PART.trim, mulc(sc, 1.08), { top: true });
-  skyRing(k, 0, topY + 0.25 + 1.1 * 1.9, 0, 1.1, T.fear, T.kind, lod);
-  // fire posts on the roof's corners
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) pinnacle(k, sx * (S / 2 - 0.9), sz * (S / 2 - 0.9), y0 + 0.4, 2.6, 0.75, sc, T, lod);
+  // the sky-eye at the crown: a raised curb round the cone's open top, a large sky-ring standing over it (sized to
+  // read at 150 m, the god's usual distance)
+  k.cylinder(0, 0, topY - 0.45, topY + 0.25, 1.25, 1.15, lod === 0 ? 12 : 8, SURF.ashlar, PART.trim, mulc(sc, 1.08), { top: true });
+  const crownR = 2.0;
+  skyRing(k, 0, topY + 0.25 + crownR * 1.9, 0, crownR, T.fear, T.kind, lod);
+  // ring masts on the roof's corners: a slim square post with a small sky-ring (no flared bowls or caps: at distance
+  // they read as little corner domes)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = sx * (S / 2 - 0.7), z = sz * (S / 2 - 0.7), pb = y0 + 0.85, pt = pb + 2.6;
+    k.box(x - 0.17, pb, z - 0.17, x + 0.17, pt, z + 0.17, SURF.ashlar, PART.trim, mulc(sc, 1.04), { skip: ['bottom'] });
+    skyRing(k, x, pt + 0.5 * 1.9, z, 0.5, T.fear, T.kind, lod);
+  }
   // weather masts at the front corners of the court (this faith calls on the sky, not from towers): a stone foot,
   // a tall slim mast with streamers and rain bells on a crossbar, the sky-ring at its head
-  const mH = y0 + R * 0.9 + 4;
+  const mH = y0 + R * 0.9 + 5.5;
   for (const sx of [-1, 1]) {
     const x = sx * (S / 2 + 1.6), z = S / 2 + 1.6;
     k.cylinder(x, z, -1, 1.3, 0.75, 0.62, lod === 0 ? 8 : 6, SURF.ashlar, PART.wall, mulc(sc, 0.95), { top: true });
@@ -1947,11 +1958,11 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
         k.lathe(x + bx * 0.6, z - 0.12, [[0.02, mH - 1.62], [0.12, mH - 1.8], [0.2, mH - 2.1], [0.21, mH - 2.16]], 8, SURF.metal, PART.prop, T.metal, 0.9, 1);
       }
     }
-    skyRing(k, x, mH + 0.75 * 1.9, z, 0.75, T.fear, T.kind, lod);
+    skyRing(k, x, mH + 1.15 * 1.9, z, 1.15, T.fear, T.kind, lod);
   }
   em.push({ p: [-pw / 2 - 1.6, 0.9, S / 2 + 1.4], kind: EMIT.brazier, size: 0.35 });
   em.push({ p: [pw / 2 + 1.6, 0.9, S / 2 + 1.4], kind: EMIT.brazier, size: 0.35 });
-  return { top: Math.max(topY + 0.25 + 1.1 * 4.05, mH + 0.75 * 4.05), hw: S / 2 + 2.4, back: -S / 2 - 2.4, front: S / 2 + 2.4 };
+  return { top: Math.max(topY + 0.25 + crownR * 4.05, mH + 1.15 * 4.05), hw: S / 2 + 2.4, back: -S / 2 - 2.4, front: S / 2 + 2.4 };
 }
 
 /** a lancet window or door (pointed head) of width w centred at cx, from y0 to the crown y1 */

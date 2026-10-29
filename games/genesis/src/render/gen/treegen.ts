@@ -952,8 +952,10 @@ function palm(lod: number, variant: number): BufferGeometry {
     const a = (f / fronds) * Math.PI * 2 + rng.float() * 0.4;
     const rise = 0.5 - rng.float() * 0.6;
     const out = new Vector3(Math.cos(a), 0, Math.sin(a));
-    const width = 0.24 + rng.float() * 0.06;
-    const len = 0.42 + rng.float() * 0.1;
+    // (a coconut palm's crown spans ~0.4-0.5 of its height: 4-6 m fronds on a 12-25 m tree; at 0.42-0.52 of the height
+    // the crowns spread ~0.9 H, 2-3 house widths, and a town read as a clearing in a sea of palms)
+    const width = 0.15 + rng.float() * 0.04;
+    const len = 0.25 + rng.float() * 0.06;
     // the frond arches: out and up, then droops — a strip of `rows` quads following the arc
     const spine: Vector3[] = [];
     for (let r = 0; r <= rows; r++) {

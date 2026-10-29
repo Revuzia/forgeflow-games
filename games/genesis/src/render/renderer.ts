@@ -548,7 +548,10 @@ export class Renderer {
     {
       const el = this.sunElevation;
       const night = 1 - smoothstepN(-0.15, -0.02, el);
-      let key = el >= 0 ? 0.095 + 0.038 * smoothstepN(0.0, 0.25, el) : 0.095 + (0.013 - 0.095) * night;
+      // (night key 0.021: through the contrasty AgX look the old 0.013 put the metered ground at ~11/255 and the shade
+      // under it at 0-2/255 — with the ceiling binding, a black screen for a third of every game day at 1x; at 0.021 the
+      // moonless land sits at ~20-28/255, readable as night, while lamps, windows and fires still clip warm-white)
+      let key = el >= 0 ? 0.095 + 0.038 * smoothstepN(0.0, 0.25, el) : 0.095 + (0.021 - 0.095) * night;
       // from orbit over the night side (the sun's elevation at the camera reads 1 there): a darker key, or the auto
       // exposure meters the few lit pixels — the cities — up to mid-grey and their cores clip to a white blob
       let orbitNight = 0;
@@ -573,7 +576,9 @@ export class Renderer {
       // (the night ceiling, 8.5: at 5 a fireless village under the starlit floor sank to pure black at 1x — half of
       // every game day unreadable; now its huts and the land read as silhouettes in a deep blue while hearths, windows
       // and lamps still lead)
-      const ceil = Math.exp(Math.log(6) + (Math.log(8.5) - Math.log(6)) * night);
+      // (16 near the ground: at 8.5 the starlit ground, ~7e-4, needed ~30 to reach the key and was left at ~0.006 —
+      // AgX's toe takes that to black; orbit keeps its own ceiling below)
+      const ceil = Math.exp(Math.log(6) + (Math.log(16) - Math.log(6)) * night);
       // (the metering floor opens at night — and over the night side from orbit, where the camera's sun elevation reads
       // 1: with the day floor there the starlit land, ~0.002–0.006, sat on or under it and was left out, so the exposure
       // was set by the clouds, the snow, the lit limb and the moon alone — 0.35 — and the land and the sea were black)
@@ -797,7 +802,10 @@ export class Renderer {
     const nf = this.nightFloor;
     // (×7 over a night side seen from orbit: at ×5 most of the night disc was black — the coasts and snowfields only
     // where the snow caught the starlight)
-    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar(1 + 6 * liftAir);
+    // (and ×1.6 at the god's height and below — 1 − farK: the night side seen from orbit keeps its tuned floor — so a
+    // moonless town reads in silhouette under the night key: at ×1 its land was ~7e-4, below what the exposure ceiling
+    // could lift)
+    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar((1 + 6 * liftAir) * (1 + 0.6 * (1 - farK)));
     // (airless: starlight alone, as a share of the star's light so a dim or a bright star keeps the same look — ~1/1700
     // of the sun at the ground, black-shadowed by day; from orbit the night half of the disc is a dim charcoal world
     // ~4–5 EV under the sunlit crescent beside it (at 1/150, under the crescent's exposure, it was pure black against

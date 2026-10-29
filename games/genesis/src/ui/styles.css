@@ -255,8 +255,12 @@ body[data-cvd='monochrome'] .gn-toast { --gn-tc: var(--gn-ivory-dim) !important;
 }
 .gn-ticker.gn-fade { opacity: .0; }
 .gn-ticker:hover { opacity: 1 !important; }
-.gn-ticker-d { flex: none; font: 600 11px var(--gn-sans); letter-spacing: .2em; text-transform: uppercase; color: var(--gn-gold); }
+.gn-ticker-d { flex: none; font: 600 11px var(--gn-sans); letter-spacing: .2em; text-transform: uppercase; color: var(--gn-gold); text-shadow: 0 1px 4px #000, 0 0 10px rgba(0, 0, 0, .8); }
 .gn-ticker-t { font: italic 500 15px/1.25 var(--gn-serif); color: var(--gn-ivory); text-shadow: 0 1px 6px #000, 0 0 14px rgba(0, 0, 0, .7); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* narrow beside the dock (the site's 888 × 500 frame): the date over the line, the line on up to two lines */
+.gn-ticker.gn-ticker-stack { flex-direction: column; align-items: flex-start; gap: 1px; max-width: var(--gn-ticker-max, 560px); }
+.gn-ticker-stack .gn-ticker-d { font-size: 10px; letter-spacing: .16em; }
+.gn-ticker-stack .gn-ticker-t { font-size: 14px; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 
 /* ── bottom centre: the dock, the controls hint, the tool card ── */
 .gn-dock { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%) scale(var(--gn-ui-scale)); transform-origin: bottom center; display: flex; align-items: center; gap: 2px; padding: 5px 6px; border-radius: 14px; }
@@ -454,6 +458,28 @@ body[data-cvd='monochrome'] .gn-toast { --gn-tc: var(--gn-ivory-dim) !important;
 .gn-insp-sec-h { display: flex; justify-content: space-between; font: 600 11px var(--gn-sans); letter-spacing: .24em; text-transform: uppercase; color: var(--gn-gold);
   padding-bottom: 5px; margin-bottom: 7px; border-bottom: 1px solid var(--gn-line); }
 .gn-insp-sec-x { color: var(--gn-ivory-dim); letter-spacing: .1em; text-transform: none; font-weight: 500; }
+/* H10: the settlement's books, year by year (the 'Past years' fold) */
+button.gn-past-h { display: flex; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--gn-line); cursor: pointer; pointer-events: auto; text-align: left; padding: 0 0 5px; margin: 0 0 7px; }
+button.gn-past-h:hover, button.gn-past-h:focus-visible { color: var(--gn-gold-hi); }
+.gn-past-key { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 6px; font-size: 11.5px; color: var(--gn-ivory-dim); }
+.gn-past-k::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--gn-food); }
+.gn-past-row { display: grid; grid-template-columns: 84px minmax(40px, 1fr) max-content; gap: 8px; align-items: center; height: 19px; font-size: 12.5px; }
+.gn-past-y { color: var(--gn-ivory-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gn-past-now .gn-past-y { color: var(--gn-gold); }
+.gn-past-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.gn-past-fill { display: flex; height: 100%; border-radius: 4px; overflow: hidden; }
+.gn-past-seg { display: block; height: 100%; flex-basis: 0; background: var(--gn-food); }
+.gn-past-seg + .gn-past-seg { box-shadow: inset 1px 0 rgba(9, 12, 20, .55); }
+.gn-past-v { font: 600 12px var(--gn-sans); font-variant-numeric: tabular-nums; color: var(--gn-ivory); white-space: nowrap; }
+.gn-past-b { color: var(--gn-good); font-weight: 500; }
+.gn-past-d { color: var(--gn-ivory-dim); font-weight: 500; }
+.gn-past-hungry .gn-past-d, .gn-past-hungry .gn-past-y { color: var(--gn-bad); }
+.gn-past-note { margin-top: 6px; font-size: 11px; color: var(--gn-ivory-faint); }
+.gn-food-forage { --gn-food: #8fbf62; }
+.gn-food-hunt { --gn-food: #cf7a4f; }
+.gn-food-fish { --gn-food: #5ea6d6; }
+.gn-food-farm { --gn-food: #e6c766; }
+.gn-food-herd { --gn-food: #b79be0; }
 .gn-insp-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
 .gn-insp-bar-row { display: grid; grid-template-columns: 92px minmax(40px, 1fr) minmax(30px, max-content); gap: 8px; align-items: center; font-size: 13px; height: 21px; }
 .gn-insp-grid .gn-insp-bar-row { grid-template-columns: 70px minmax(24px, 1fr) minmax(22px, max-content); }
@@ -1059,6 +1085,8 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 .gn-title-main:not([disabled]) .gn-title-t small { color: var(--gn-ivory-dim); }
 .gn-title-foot { position: absolute; left: clamp(24px, 6.5vw, 120px); bottom: 16px; display: flex; gap: 8px; font: 600 10px var(--gn-sans); letter-spacing: .26em;
   text-transform: uppercase; color: var(--gn-ivory-faint); pointer-events: none; }
+/* a window's glass does not hide what it covers: the HUD panels under an open window step back while it is open */
+.gn-ui > .gn-under-win { opacity: 0 !important; pointer-events: none !important; transition: opacity .2s ease; }
 /* the interface behind the title steps aside (windows, their veils and the toasts stay) */
 .gn-ui.gn-titled > :not(.gn-title):not(.gn-win):not(.gn-veil):not(.gn-toasts) { opacity: 0 !important; pointer-events: none !important; transition: opacity .35s ease; }
 .gn-world-layer.gn-titled > * { opacity: 0 !important; pointer-events: none !important; }

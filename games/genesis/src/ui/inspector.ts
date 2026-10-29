@@ -26,7 +26,7 @@ import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
 import { masteryWords } from './words.ts';
 import { slider, toggle } from './panel.ts';
-import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, type ProphetRow } from './living.ts';
+import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, pastYears, FOOD_ORDER, FOOD_WORDS, type ProphetRow, type PastYear } from './living.ts';
 import { AgentFlag, AgentFlag2 } from '../sim/types.ts';
 
 export interface InspectorDeps {
@@ -116,6 +116,10 @@ export class Inspector {
   /** a press inside the card is under way (a re-render now would eat the click): the fresh record waits */
   private pressing = false;
   private stale = false;
+  /** the settlement card's 'Past years' fold: open (kept across cards) and the last books asked for it */
+  private pastOpen = false;
+  private books: { key: string; at: number; rows: PastYear[]; kept: number } | null = null;
+  private booksAsking = '';
 
   constructor(parent: HTMLElement, deps: InspectorDeps) {
     this.deps = deps;
@@ -648,6 +652,7 @@ export class Inspector {
       this.bar(g, 'Fear', num(d.fear), 'gn-fear');
     }
     this.livelihood(view);
+    this.pastYearsFold(ref, pop);
     const lib = Array.isArray(d.library) ? (d.library as string[]) : [];
     const written = new Set(Array.isArray(d.written) ? (d.written as string[]) : []);
     const secrets = new Set(Array.isArray(d.secrets) ? (d.secrets as string[]) : []);
@@ -759,6 +764,56 @@ export class Inspector {
     for (const [k, v] of src) this.bar(g, words[k] ?? cap(k), v, 'gn-skill', `${Math.round(v * 100)}%`);
     if (num(lv.herds) > 0) this.kv(g, 'Livestock', `${Math.round(num(lv.herds))} head`);
     if (typeof lv.under15 === 'number' && lv.under15 > 0) this.kv(g, 'Children', `${Math.round(lv.under15 * 100)}% under fifteen`);
+  }
+
+  /**
+   * H10: the settlement's books, year by year — a fold under the year's livelihood. Its books (query('ledger')) are
+   * asked only while the fold is open: when it opens, and again every ~10 s while it stays open.
+   */
+  private pastYearsFold(ref: EntityRef, livePop: number): void {
+    const planet = ref.planet ?? 0;
+    const key = `${planet}:${ref.id}`;
+    const open = this.pastOpen;
+    const books = this.books && this.books.key === key ? this.books : null;
+    const sec = el('div', 'gn-insp-sec gn-past');
+    const head = h('button', {
+      class: 'gn-insp-sec-h gn-past-h', aria: { expanded: String(open) }, title: open ? 'Fold the past years away' : 'How they ate, were born and died, year by year',
+      on: { click: () => { this.pastOpen = !this.pastOpen; this.render(); } },
+    }, h('span', { text: 'Past years' }), h('span', { class: 'gn-insp-sec-x', text: `${books && books.kept ? `${books.kept} ${books.kept === 1 ? 'year' : 'years'} kept ` : ''}${open ? '▾' : '▸'}` }));
+    sec.append(head);
+    this.body.append(sec);
+    if (!open) return;
+    const now = performance.now();
+    if ((!books || now - books.at > 10000) && this.booksAsking !== key) {
+      this.booksAsking = key;
+      void this.deps.query('ledger', { settlement: ref.id, planet }).then((res) => {
+        this.booksAsking = '';
+        const m = pastYears(res, ref.id, 12, livePop);
+        this.books = { key, at: performance.now(), rows: m.rows, kept: m.kept };
+        const cur = this.ref;
+        if (cur && cur.kind === 'settlement' && `${cur.planet ?? 0}:${cur.id}` === key && this.pastOpen) {
+          if (this.busy()) this.stale = true; else this.render();
+        }
+      }).catch(() => { this.booksAsking = ''; });
+    }
+    if (!books) { sec.append(el('div', 'gn-insp-wait', 'Opening their books…')); return; }
+    if (!books.rows.length) { sec.append(el('div', 'gn-insp-wait', 'They have kept no books yet: a year must turn first.')); return; }
+    const legend = el('div', 'gn-past-key');
+    for (const k of FOOD_ORDER) if (books.rows.some((r) => r.parts.some((p) => p.kind === k))) legend.append(h('span', { class: `gn-past-k gn-food-${k}`, text: FOOD_WORDS[k] }));
+    sec.append(legend);
+    for (const r of books.rows) {
+      const row = h('div', { class: `gn-past-row${r.now ? ' gn-past-now' : ''}${r.hungry ? ' gn-past-hungry' : ''}`, title: r.title, role: 'img', aria: { label: r.title } });
+      const bar = el('span', 'gn-past-bar');
+      const fill = el('span', 'gn-past-fill');
+      fill.style.width = `${Math.max(r.food > 0 ? 2 : 0, Math.round(r.width * 100))}%`;
+      for (const p of r.parts) { const seg = el('span', `gn-past-seg gn-food-${p.kind}`); seg.style.flexGrow = String(p.share); fill.append(seg); }
+      bar.append(fill);
+      const v = el('span', 'gn-past-v');
+      v.append(h('span', { class: 'gn-past-pop', text: `${r.pop}` }), h('span', { class: 'gn-past-b', text: ` +${r.births}` }), h('span', { class: 'gn-past-d', text: ` −${r.deaths}` }));
+      row.append(el('span', 'gn-past-y', r.now ? `${r.label} · now` : r.label), bar, v);
+      sec.append(row);
+    }
+    sec.append(el('div', 'gn-past-note', 'A full bar is their best year for food · people, born, died · red: someone starved'));
   }
 
   private herd(d: Rec): void {
