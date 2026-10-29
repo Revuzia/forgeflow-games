@@ -203,6 +203,8 @@ def defs() -> list:
                  L("sprite", at="ground", offset=[0.3, 2.75, 0], texture="glow", size=0.8, color="team", emissive=3.0,
                    alpha=[[0, 0], [0.02, 1], [0.95, 0.7], [1, 0]], life=5.75, fit=False),
                  shockwave("ground", radius=(0.2, 1.05), width=(0.8, 0.15), life=0.4, emissive=10, sharp=2.2, fit=True),
+                 # the white core thrown on the ground where it fell (combat F4: the first beat's floor), gone in 0.4 s
+                 decal("ground", "light", [[0, 0.85], [0.1, 1.0], [1, 1.0]], 0.45, color=[WHITE, "team"], alpha=(1.0, 0.6, 0), emissive=5.0, fit=True),
                  shockwave("ground", color=INK2, radius=(0.25, 1.6), width=(1.0, 0.3), life=0.55, emissive=0, blend="ink", alpha=(0.85, 0.6, 0), fit=True,
                            delay=0.03),
                  decal("ground", "crack", [[0, 0.5], [0.06, 1.45], [1, 1.5]], 2.2, color=INK2, alpha=(1, 0.85, 0), emissive=3.0, rim="team", fit=True),

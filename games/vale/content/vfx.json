@@ -33169,6 +33169,38 @@
         "blend": "add"
       },
       {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.85
+          ],
+          [
+            0.1,
+            1.0
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.45,
+        "color": [
+          "#FFFFFF",
+          "team"
+        ],
+        "alpha": [
+          1.0,
+          0.6,
+          0
+        ],
+        "emissive": 5.0,
+        "fit": true
+      },
+      {
         "type": "shockwave",
         "at": "ground",
         "radius": [
@@ -45500,6 +45532,48 @@
         "delay": 0.28,
         "fit": true,
         "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.3,
+            0.95
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.6,
+        "color": [
+          "#FFFFFF",
+          "signature"
+        ],
+        "alpha": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.4,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.8,
+        "fit": true,
+        "delay": 0.16
       },
       {
         "type": "emitter",
@@ -64846,6 +64920,10 @@
         "alpha": [
           [
             0,
+            0
+          ],
+          [
+            0.2,
             0.95
           ],
           [
@@ -64946,6 +65024,10 @@
         "alpha": [
           [
             0,
+            0
+          ],
+          [
+            0.15,
             0.85
           ],
           [
@@ -64957,6 +65039,26 @@
             0
           ]
         ],
+        "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "cone",
+        "style": "light",
+        "angleDeg": 50,
+        "radius": 1.0,
+        "life": 0.35,
+        "color": [
+          "#FFFFFF",
+          "team"
+        ],
+        "alpha": [
+          0.75,
+          0.45,
+          0
+        ],
+        "emissive": 2.2,
         "fit": true
       },
       {

@@ -167,15 +167,19 @@ def defs() -> list:
                          "great horns above the hat, shadow is drawn in from the ground (the warning)"))
     D.append(vfx("tunlan_ult_play", 1.6,
                  L("flash", at="origin", radius=1.3, life=0.1, color=LAMP_HOT, intensity=10, core=WHITE, offset=[0.2, 0.75, 0]),
-                 # the body of the beast floods the cone
+                 # the body of the beast floods the cone just after the lamp's flash (combat F4: the first beat reads the white
+                 # floor, then the ink comes in over ~0.25 s)
                  L("mesh", at="ground", shape="fan", angleDeg=50, scale=[[0, 0.3], [0.3, 2.0], [1, 2.0]], life=1.2, color=[INK, INK2],
-                   alpha=[[0, 0.95], [0.6, 0.85], [1, 0]], emissive=0, rim="team", rimPow=4.0, rimEmissive=2.0, noise=0.4, noiseScale=2.0, scroll=[0, -1.2],
+                   alpha=[[0, 0], [0.2, 0.95], [0.6, 0.85], [1, 0]], emissive=0, rim="team", rimPow=4.0, rimEmissive=2.0, noise=0.4, noiseScale=2.0, scroll=[0, -1.2],
                    dissolve=[[0, 0], [0.6, 0.1], [1, 1]], edge="team", edgeEmissive=5.0, blend="ink", align="dir", fit=True),
                  # its front: the brightest team edge rushing out to 9 m
                  L("mesh", at="ground", shape="fan", angleDeg=52, scale=2.02, life=0.42, color=[WHITE, "team"], alpha=[[0, 1], [0.8, 1], [1, 0]],
                    emissive=10, mask="edge", maskParam=[[0, 0.15], [0.55, 0.99], [1, 1.0]], blend="add", align="dir", fit=True),
                  L("decal", at="ground", shape="cone", style="plain", texture="splat", angleDeg=50, radius=1.0, life=1.5, color=INK, rim="team",
-                   alpha=[[0, 0.85], [0.75, 0.7], [1, 0]], fit=True),
+                   alpha=[[0, 0], [0.15, 0.85], [0.75, 0.7], [1, 0]], fit=True),
+                 # the lamp's flash thrown down the cone: a white-to-team floor for the first beat, gone as the ink floods in
+                 L("decal", at="ground", shape="cone", style="light", angleDeg=50, radius=1.0, life=0.35, color=[WHITE, "team"],
+                   alpha=[0.75, 0.45, 0], emissive=2.2, fit=True),
                  # horns, claws and jaws of shadow standing up in the cone
                  _ink_mesh("ground", "spike", [[0, 0.5], [0.3, 3.6], [1, 3.8]], 1.1, offset=[6.2, 0, 1.1], rotate=[-20, 0, -28],
                            alpha=[[0, 0], [0.15, 1], [0.75, 1], [1, 0]], align="dir", rim_e=3.0, fit=False),

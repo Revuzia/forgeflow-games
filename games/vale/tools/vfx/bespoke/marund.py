@@ -191,6 +191,9 @@ def defs() -> list:
                       rim_pow=2.0, rim_emissive=4.0, noise=0.6, delay=0.2, fit=True),
                  shockwave("ground", radius=(0.35, 1.15), width=(0.7, 0.12), life=0.45, emissive=9.0, delay=0.18, fit=True),
                  shockwave("ground", radius=(0.2, 0.95), width=(0.3, 0.05), life=0.6, emissive=4.0, delay=0.28, alpha=(0.8, 0.4, 0), fit=True),
+                 # the floor lit as the shell splits (combat F4: the landing lifts its disc >= 2x on every tier, bloom or not)
+                 L("decal", at="ground", shape="circle", style="light", radius=[[0, 0.6], [0.3, 0.95], [1, 1.0]], life=0.6, color=[WHITE, "signature"],
+                   alpha=[[0, 0.3], [0.4, 0.6], [1, 0]], emissive=1.8, fit=True, delay=0.16),
                  chips("ground", 14, color=("secondary", CHALK_DK), speed=(4, 8), size=0.16),
                  dust("ground", 12, size=1.5, speed=(2, 4), radius=0.9, delay=0.25, life=(0.7, 1.1)),
                  decal("ground", "crack", [[0, 0.5], [0.1, 1.1], [1, 1.15]], 1.5, color=INK2, alpha=(0.9, 0.75, 0), emissive=1.0, rim="signature",
