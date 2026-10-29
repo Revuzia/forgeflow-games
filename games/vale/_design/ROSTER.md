@@ -38,9 +38,9 @@ UI tags are `Name · Class` (for example "Ardit · Plinth"). The short collectio
 
 ## 2. Why this roster works in every mode
 
-### 2.1 RIFT draft with bans (`rift_ranked`: 2 bans per team)
+### 2.1 RIFT draft with bans (`rift_standard` and `rift_ranked`: 1 ban per team at 16 fighters)
 
-Each match uses up C = 2·5 + 4 = 14 fighters. The last picker therefore faces 4 bans plus 9 earlier picks and still chooses from **3** fighters. The standard queue has 1 ban per team, which leaves 5.
+Each match uses up C = 2·5 + 2 = 12 fighters. The last picker therefore faces 2 bans plus 9 earlier picks and still chooses from **5** fighters. Both queues raise the ban count with the roster (`draft.bansByRoster`: 2 a team at 28 fighters, 3 at 32, 4 at 36, 5 at 40), so the last picker's choice never drops below 15 as bans grow.
 
 The task set a floor of 4 fighters per position. I aimed higher: **every position has 5 to 7 listings, and each has at least one difficulty-1 fighter.** A player who has only learned one position can still find a pick after a typical ban spread.
 

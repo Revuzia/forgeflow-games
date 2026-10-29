@@ -56,14 +56,16 @@
   "status_updates": [
    {
     "date": "2026-10-29",
-    "source": "integration run 2 stitch: systems handoff to lead (gameplay:G7), integ2_systems_verify1, integ2_client_verify1",
+    "source": "integration run 2 stitch: systems handoff to lead (gameplay:G7), integ2_systems_verify1, integ2_client_verify1; integ2_lead_verify1 obs-ranked-ban-docs",
     "entries": [
      "waves[W4].findings[G7]",
      "waves[W4].done_status[done:7, done:8]",
      "waves[W4].status_evidence",
      "waves[W2].findings[HUD-1]",
      "verifier_open[hud:HUD-1-seam]",
-     "verifier_open[systems-18]"
+     "verifier_open[systems-18]",
+     "polish[G8]",
+     "verifier_open[obs-ranked-ban-docs] (new)"
     ],
     "note": "Other entries still read as of status_as_of; integ2 verdicts for other lanes are not yet applied."
    }
@@ -2747,11 +2749,13 @@
    "verdict": "downgraded",
    "wave": "W4",
    "status": "done",
-   "status_evidence": "W4_verify1 pass: content/queues.json: rift_ranked, rift_standard and custom have bansPerTeam 1 and the bansByRoster ladder (1 below 28, then 2/3/4/5 at 28/32/36/40); probe_sim_draft_pace 28/28. Doc regression: _design/ROSTER.md:41-43 still says 'rift_ranked: 2 bans per team ... C = 2*5 + 4 = 14 ... chooses from 3'.",
+   "status_evidence": "W4_verify1 pass: content/queues.json: rift_ranked, rift_standard and custom have bansPerTeam 1 and the bansByRoster ladder (1 below 28, then 2/3/4/5 at 28/32/36/40); probe_sim_draft_pace 28/28. The doc drift W4_verify1 noted (ROSTER.md:41-43 'rift_ranked: 2 bans per team ... C = 14 ... chooses from 3') is fixed in the integration run 2 stitch: ROSTER.md §2.1 and DESIGN_NOTE.md :29 and :69 say 1 ban a team at 16 fighters (C = 12, last picker chooses from 5) with the bansByRoster ladder; modes_economy.md:117 is handed to systems (verifier_open obs-ranked-ban-docs).",
    "status_history": [
     "W4 handoff lead-r2-06 (fw_W4_soak_polish_full1, fw_W4_pacing_rift_adept20): done",
-    "W4_verify1: pass"
-   ]
+    "W4_verify1: pass",
+    "integ2_lead_verify1 obs-ranked-ban-docs: fail (doc drift only); integ2 stitch: lead docs fixed, modes_economy.md:117 handed to systems"
+   ],
+   "open_in": "verifier_open obs-ranked-ban-docs (modes_economy.md:117, systems)"
   },
   {
    "dim": "gameplay",
@@ -3021,6 +3025,13 @@
    "status": "done",
    "evidence": "integ_lead_verify1 fail: DESIGN_NOTE.md:31 counts now 57 items and 1,536 UI strings (4434f346).",
    "open_in": "done in run 2 (4434f346)"
+  },
+  {
+   "id": "obs-ranked-ban-docs",
+   "lane": "lead",
+   "status": "partly",
+   "evidence": "integ2_lead_verify1 fail (spot check): docs said Ranked uses 2 bans a team, content has 1 at 16 fighters (queues.rift_ranked.draft.bansByRoster). Integration run 2 stitch: DESIGN_NOTE.md :29 and :69 and ROSTER.md §2.1 now say Draft and Ranked use 1 ban a team at 16 fighters (C = 12, the last picker chooses from 5) and the ladder 2/3/4/5 at 28/32/36/40; DESIGN_NOTE §1's BRIDGE row and :69 also follow the W4 re-key (level 2, 1,050 Gleam, sudden death at 21:00, the burning Lot of 3 with one take, Needle shops). Open: _design/sections/modes_economy.md:117 ('Ranked uses 2 bans per team, so C = 14'), a systems file.",
+   "open_in": "handoff to systems: modes_economy.md:116-117"
   }
  ],
  "observations": [
