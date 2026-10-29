@@ -85,6 +85,8 @@ export interface RendererOptions {
   quiet?: boolean;
   /** draw UnitDef.art.instanced units (the Wicks) as the instanced crowd (default on; off = one model each) */
   crowd?: boolean;
+  /** match fighters draw their face-locked LOD1 body (perf PERF-m5, lod.ts; default on; off = full bodies, A/B) */
+  bodyLod?: boolean;
 }
 
 export interface AimSpec {
@@ -109,6 +111,8 @@ export interface RenderStats {
   gpuMs: number | null; bound: FrameBound;
   /** r12 M14 ambient life (ambient.ts): its CPU ms (EMA), particles / critters drawn; null outside a match */
   ambient?: AmbientStats | null;
+  /** crowd units drawn this frame (crowd.ts; perf PERF-m5 reports) */
+  crowd?: number;
 }
 
 /** perf PERF-m4: the 3D view's health (see the header) */
@@ -453,7 +457,7 @@ class ValeRenderer implements Renderer {
   setScene(scene: 'menu' | MatchClient): void {
     if (scene === 'menu') {
       this.teardownMatch();
-      lodSwitch.outline = false;                                           // perf PERF-m5: the showcase keeps its full hull
+      lodSwitch.outline = lodSwitch.body = false;                          // perf PERF-m5: the showcase keeps its full body and hull
       this.menu.build(this.catalog, this.assets);
       this.mode = 'menu';
       this.post.setScene(this.menu.scene, this.menu.camera);
@@ -470,6 +474,7 @@ class ValeRenderer implements Renderer {
     this.client = client;
     this.mode = 'match';
     lodSwitch.outline = true;                                              // perf PERF-m5: lod.ts
+    lodSwitch.body = this.opts.bodyLod !== false;
     // perf PERF-M2: every match starts at the player's own render scale (nothing a menu or the last match did carries over)
     this.dyn.configure(this.q.renderScale, this.q.fpsCap);
     this.lastFrameAt = 0;
@@ -1286,6 +1291,7 @@ class ValeRenderer implements Renderer {
       particles: this.vfx.particleCount, vfx: this.vfx.instanceCount, actors: this.actors.size, telegraphs: this.teles.size, mode: this.mode,
       gpuMs: this.dyn.enabled ? this.gpuTimer.last : null, bound: this.dyn.bound,
       ambient: this.ambient?.stats() ?? null,
+      crowd: this.crowd.instances,
     };
   }
 
@@ -1315,8 +1321,14 @@ class ValeRenderer implements Renderer {
     }
     if (this.mapScene) roots.push({ root: this.mapScene, group: 'terrain' });
     if (this.ambient) roots.push({ root: this.ambient.group, group: 'ambient' });
-    roots.push({ root: this.crowd.group, group: 'actors', part: () => 'crowd' });
-    for (const a of this.actors.values()) roots.push({ root: a.root, group: 'actors', part: () => a.kind });
+    // an actor's draws by kind and role (body, its ink copies), so a perf report shows which pass grows
+    const role = (o: import('three').Object3D): string => {
+      const n = o.name;
+      return o.userData.valeXray ? '.xray' : n === 'vale_flash' || n === 'crowd_flash' ? '.flash' : n === 'vale_outline' || n === 'crowd_outline' ? '.outline'
+        : n === 'vale_veil_depth' ? '.veil' : n === 'crowd_part_accent' ? '.accent' : '';
+    };
+    roots.push({ root: this.crowd.group, group: 'actors', part: (o) => `crowd${role(o)}` });
+    for (const a of this.actors.values()) roots.push({ root: a.root, group: 'actors', part: (o) => `${a.kind}${role(o)}` });
     roots.push({ root: this.vfx.scene, group: 'vfx' });
     roots.push({ root: this.overlay.scene, group: 'overlay' }, { root: this.overlay.teleScene, group: 'overlay' });
     return roots;

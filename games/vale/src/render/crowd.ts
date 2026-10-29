@@ -16,7 +16,7 @@
 // The hovered unit's rim draws from a one-instance copy (overlay/hover.ts). Presentation only.
 
 import {
-  type AnimationClip, AnimationMixer, BackSide, type BufferGeometry, Color, DataTexture, DynamicDrawUsage,
+  type AnimationClip, AnimationMixer, BackSide, type BufferAttribute, type BufferGeometry, Color, DataTexture, DynamicDrawUsage,
   FloatType, FrontSide, Group, InstancedBufferAttribute, InstancedBufferGeometry, LoopOnce, LoopRepeat, type Material, Matrix4,
   Mesh, type MeshStandardMaterial, NearestFilter, type Object3D,
   Quaternion, type RawShaderMaterial, RGBAFormat, type Skeleton, type SkinnedMesh, type Vector2, Vector3, type WebGLProgramParametersWithUniforms,
@@ -25,7 +25,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
-import { lodIndex } from './lod.ts';
+import { composeIndex, dequantUnit, LOD, lodIndex } from './lod.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
 export const BAKE_HZ = 60;
@@ -38,6 +38,8 @@ export interface CrowdPart {
   /** bind matrix into the bake's bone space (folded, see actors.ts shareSkeletons) */
   bind: Matrix4;
   accent: boolean;
+  /** perf PERF-m5: the index the crowd draws it through (lod.ts LOD.crowd), null = its own */
+  lod: BufferAttribute | null;
 }
 
 export interface CrowdBake {
@@ -46,8 +48,9 @@ export interface CrowdBake {
   readonly bones: number;
   readonly clips: Map<AnimationClip, { row0: number; frames: number }>;
   readonly parts: CrowdPart[];
-  /** outline / flash hull geometry (template hull plan) and its bind matrix */
-  readonly hull: { geometry: BufferGeometry; bind: Matrix4 }[];
+  /** outline / flash hull geometry (template hull plan), its bind matrix and the index it draws through (its members'
+   *  LODs: exactly the triangles the body and accents draw; null = its own) */
+  readonly hull: { geometry: BufferGeometry; bind: Matrix4; lod: BufferAttribute | null }[];
   /** the template root's placement: the per-actor clone keeps it, so the crowd does too */
   readonly rootPos: Vector3;
   readonly rootQuat: Quaternion;
@@ -78,7 +81,7 @@ function foldBind(ref: Skeleton, m: SkinnedMesh): Matrix4 | null {
  * Bake a template for the crowd, or null when it does not qualify. `hull`: the template's hull plan (lead mesh
  * index in traverse order + merged geometry). `accentName`: the material whose colour is the readability accent.
  */
-export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hull: readonly { lead: number; geometry: BufferGeometry; skinned: boolean }[], accentName: string, maxRows: number, monster = false): CrowdBake | null {
+export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hull: readonly { lead: number; geometry: BufferGeometry; skinned: boolean; members?: readonly { mesh: number; vo: number; io: number; n: number }[] }[], accentName: string, maxRows: number, monster = false): CrowdBake | null {
   const meshes: SkinnedMesh[] = [];
   let ok = clips.size > 0;
   scene.traverse((o) => {
@@ -92,6 +95,10 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   const ref = meshes[0].skeleton;
   const binds: Matrix4[] = [];
   for (const m of meshes) { const x = foldBind(ref, m); if (!x) return null; binds.push(x); }
+  // perf PERF-m5: one LOD per part (lod.ts LOD.crowd: its bound in metres through the part's own dequantization, read
+  // from the template at rest, before any clone is posed) and the hull's index rebuilt from its members' LODs. Every
+  // mesh here is skinned, so `meshes` is in the hull plan's traverse order. A no-op until lodReady (actors.ts awaits it)
+  const lods = meshes.map((m) => lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, dequantUnit(m)));
 
   // sample every clip on a private clone (root at the template's placement, unit scale)
   const clone = cloneSkinned(scene);
@@ -136,8 +143,8 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   // (rootInv above), so the instance matrix is actorRoot · compose(rootPos, rootQuat, scale)
   return {
     id: ++bakeSeq, texture, bones: ref.bones.length, clips: table,
-    parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName })),
-    hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0] })),
+    parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName, lod: lods[i] })),
+    hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0], lod: h.members ? composeIndex(h.geometry, h.members, (i) => (lods[i]?.array as ArrayLike<number> | undefined) ?? null) : null })),
     rootPos: scene.position.clone(), rootQuat: scene.quaternion.clone(), monster,
   };
 }
@@ -382,8 +389,10 @@ class CrowdSet {
   private readonly outlineU = { uColor: { value: new Color() }, uAlpha: { value: 0.6 } };
   private readonly flashMeshes: Mesh[] = [];
   private readonly accentMats: MeshStandardMaterial[] = [];
-  private anyFlash = false;
   private colorSet = false;
+  /** this frame's units, the flashing ones apart: end() writes those first, so the victim flash draws only them */
+  private readonly units: CrowdActor[] = [];
+  private readonly flashing: CrowdActor[] = [];
 
   constructor(bake: CrowdBake, tint: Color, outlineRes: { value: Vector2 }) {
     this.bake = bake;
@@ -405,11 +414,10 @@ class CrowdSet {
         mat.customProgramCacheKey = p.material.customProgramCacheKey;
       }
       patchCrowd(mat, bake, p.bind, p.accent);
-      // perf PERF-m5: the body and accent draw through the same sub-pixel LOD as the hull (lod.ts LOD.hull: half the
-      // triangles within 6 mm; crowd units are Wicks and small monsters, ~70 px tall at the lane camera)
+      // perf PERF-m5: the body and accent draw through their LOD (lod.ts LOD.crowd: within 10 mm, ~0.8 px at the default
+      // lane zoom; crowd units are Wicks and small monsters, ~55-65 px tall), the hull through the same triangles
       const pv = this.buf.view(p.geometry);
-      const partLod = lodIndex(p.geometry, 'hull');
-      if (partLod) { pv.userData.fullIndex = p.geometry.index; pv.setIndex(partLod); }
+      if (p.lod) { pv.userData.fullIndex = p.geometry.index; pv.setIndex(p.lod); }
       const mesh = new Mesh(pv, mat);
       mesh.customDepthMaterial = crowdDepth(bake.texture, p.bind);
       mesh.castShadow = true; mesh.receiveShadow = true;
@@ -421,8 +429,8 @@ class CrowdSet {
       // the rest ink (per-instance width, collapsed when 0) and the victim flash (per-instance, while one flashes)
       const bk = { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: h.bind } };
       const om = inkMaterial('crowd', INK.outline, { side: BackSide, blend: 'normal', depthWrite: false, offset: [1, 2], uniforms: { ...bk, ...this.outlineU, uOutlineRes: outlineRes } });
-      // perf PERF-m5: the hull draws through its LOD (half the triangles, within 6 mm: lod.ts LOD.hull)
-      const hullLod = lodIndex(h.geometry, 'hull');
+      // perf PERF-m5: the hull draws through its members' LODs (bakeCrowd)
+      const hullLod = h.lod;
       const hv = this.buf.view(h.geometry);
       if (hullLod) { hv.userData.fullIndex = h.geometry.index; hv.setIndex(hullLod); }
       const o = new Mesh(hv, om);
@@ -431,6 +439,7 @@ class CrowdSet {
       const fm = inkMaterial('crowd', INK.flash, { side: FrontSide, blend: 'premul', depthWrite: false, offset: [-1, -2], uniforms: { ...bk, ...flashU() } });
       const fv = this.buf.view(h.geometry);
       if (hullLod) { fv.userData.fullIndex = h.geometry.index; fv.setIndex(hullLod); }
+      fv.userData.flashOnly = true;
       const f = new Mesh(fv, fm);
       f.frustumCulled = false; f.matrixAutoUpdate = false; f.renderOrder = 2; f.name = 'crowd_flash';
       this.flashMeshes.push(f);
@@ -438,26 +447,29 @@ class CrowdSet {
     }
   }
 
-  begin(): void { this.buf.count = 0; this.anyFlash = false; this.colorSet = false; }
+  begin(): void { this.buf.count = 0; this.colorSet = false; this.units.length = 0; this.flashing.length = 0; }
 
   push(a: CrowdActor): void {
-    const b = this.buf;
-    if (b.count >= b.cap) b.grow(b.cap * 2);
-    const o = a.restOutline, f = a.flashState;
+    const o = a.restOutline;
     if (!this.colorSet && o.px > 0) {
       this.outlineU.uColor.value.copy(o.color);
       this.outlineU.uAlpha.value = o.opacity;
       this.colorSet = true;
     }
-    const flash = f.k > 0.002;
-    if (flash) this.anyFlash = true;
-    writeInstance(b, b.count++, a, this.bake, o.px, flash);
+    (a.flashState.k > 0.002 ? this.flashing : this.units).push(a);
   }
 
   end(): void {
-    this.buf.commit();
-    this.group.visible = this.buf.count > 0;
-    for (const f of this.flashMeshes) f.visible = this.anyFlash;
+    // perf PERF-m5: the flashing units take the first slots and the victim flash draws only those (it drew every unit
+    // of the set, its triangles counted for each, while any one of them flashed)
+    const b = this.buf, nf = this.flashing.length, n = nf + this.units.length;
+    if (n > b.cap) { let c = b.cap; while (c < n) c *= 2; b.grow(c); }
+    for (const a of this.flashing) writeInstance(b, b.count++, a, this.bake, a.restOutline.px, true);
+    for (const a of this.units) writeInstance(b, b.count++, a, this.bake, a.restOutline.px, false);
+    b.commit();
+    for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf;
+    this.group.visible = b.count > 0;
+    for (const f of this.flashMeshes) f.visible = nf > 0;
   }
 
   dispose(): void {
@@ -488,9 +500,11 @@ class CrowdSolo {
     this.maskMat = h.mask;
     this.rimMat = h.rim;
     for (const h of bake.hull) {
-      const m = new Mesh(this.buf.view(h.geometry), this.maskMat);
+      // the hovered unit's mask and rim over the triangles its body draws (bakeCrowd's hull LOD)
+      const view = (): InstancedBufferGeometry => { const v = this.buf.view(h.geometry); if (h.lod) { v.userData.fullIndex = h.geometry.index; v.setIndex(h.lod); } return v; };
+      const m = new Mesh(view(), this.maskMat);
       m.frustumCulled = false; m.matrixAutoUpdate = false; m.visible = false;
-      const r = new Mesh(this.buf.view(h.geometry), this.rimMat);
+      const r = new Mesh(view(), this.rimMat);
       r.frustumCulled = false; r.matrixAutoUpdate = false; r.visible = false;
       this.mask.push(m); this.hull.push(r);
       this.group.add(m, r);

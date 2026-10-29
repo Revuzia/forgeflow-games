@@ -345,12 +345,12 @@ async function matchPeak() {
     await page.waitForTimeout(3000);                                        // models, textures, shader warm-up
     await page.evaluate(([scale, maxT]) => {
       const b = window.__VALE_BENCH__, r = b.renderer, host = b.host;
-      const S = { done: false, secs: [], progs: [], profiles: [], pending: false, error: null, endT: 0, ended: false };
+      const S = { done: false, secs: [], progs: [], profiles: [], pending: false, error: null, endT: 0, ended: false, maxProg: 0, progsAtMax: [] };
       window.__peak = S;
       host.setTimeScale(scale);
       b.follow();
       const seen = new Set();
-      const fresh = () => ({ tris: 0, calls: 0, programs: 0, frames: 0, worstMs: 0 });
+      const fresh = () => ({ tris: 0, calls: 0, programs: 0, frames: 0, worstMs: 0, crowd: 0 });
       let last = performance.now(), secAt = last, cur = fresh(), best = 0, want = false;
       const tick = (now) => {
         try {
@@ -361,6 +361,13 @@ async function matchPeak() {
           const st = r.stats();
           cur.frames++;
           cur.tris = Math.max(cur.tris, st.triangles); cur.calls = Math.max(cur.calls, st.calls); cur.programs = Math.max(cur.programs, st.programs);
+          cur.crowd = Math.max(cur.crowd ?? 0, st.crowd ?? 0);
+          // the live programs when their count first reaches its match maximum (which ones push it over the budget)
+          if (st.programs > S.maxProg) {
+            S.maxProg = st.programs;
+            S.progsAtMax = (r.gl.info.programs ?? []).map((p) => ({ type: p.type, name: p.name, used: p.usedTimes, key: p.cacheKey }));
+            S.progsAtMaxT = +host.view.time.toFixed(1);
+          }
           cur.worstMs = Math.max(cur.worstMs, iv);
           if (now - secAt >= 1000) {
             const t = +host.view.time.toFixed(1);
@@ -416,6 +423,8 @@ async function matchPeak() {
       peak: { tris: pt.tris, trisAt: pt.t, draws: pc.calls, drawsAt: pc.t, programs: pp.programs, programsAt: pp.t },
       overBudget: { tris: over('tris', BUDGET.tris), draws: over('calls', BUDGET.draws), programs: over('programs', BUDGET.programs) },
       lateProgramsAfter60s: S.progs.filter((x) => x.t > firstT + 60),
+      programsFirstSeen: S.progs.map((x) => ({ t: x.t, name: x.name, type: x.type })),
+      programsAtMax: { t: S.progsAtMaxT ?? null, list: S.progsAtMax },
       programsSeen: S.progs.length, peakProfile: profiles.length ? profiles[profiles.length - 1] : null, profiles, timeline: secs,
       errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 20),
     };

@@ -494,10 +494,26 @@ export interface ItemRole {
   readonly needsHold: boolean;
   readonly hardOnly: boolean;
   readonly support: boolean;
+  /** shows enemy fighters around you (it puts 'reveal' on them): a lookout against divers and burst out of cover */
+  readonly reveals: boolean;
+  /** an active that holds the enemy fighters near you (hard CC or a displacement on them): peel for a front line */
+  readonly peel: boolean;
+  /** pays out on a takedown (a 'takedown' trigger): a hunter's piece, worth most against a soft back line */
+  readonly takedown: boolean;
   readonly armor: number;
   readonly resist: number;
 }
 const roleCache = new WeakMap<ItemDefT, ItemRole>();
+/** an effect tree puts hard CC (HARD_CC) or a displacement on someone other than the caster */
+function holdsHard(v: unknown, depth = 0): boolean {
+  if (depth > 24 || !v || typeof v !== 'object') return false;
+  if (Array.isArray(v)) return v.some((x) => holdsHard(x, depth + 1));
+  const o = v as Record<string, unknown>;
+  if (o.op === 'status' && o.to !== 'self' && typeof o.status === 'string' && HARD_CC.has(o.status)) return true;
+  if (o.op === 'displace' && o.to !== 'self') return true;
+  for (const k in o) if (k !== 'present' && k !== 'ai' && holdsHard(o[k], depth + 1)) return true;
+  return false;
+}
 export function itemRole(it: ItemDefT): ItemRole {
   let r = roleCache.get(it);
   if (r) return r;
@@ -522,6 +538,9 @@ export function itemRole(it: ItemDefT): ItemRole {
     tankBreak: (it.stats.armorPenPct ?? 0) > 0 || (it.stats.magicPenPct ?? 0) > 0 || /"targetMaxHp"|"targetCurrentHp"/.test(fx),
     burstWard, needsHold, hardOnly,
     support: it.tags.includes('support'),
+    reveals: /"op":"status","status":"reveal"/.test(fx),
+    peel: !!it.active && holdsHard(it.active.effects),
+    takedown: it.passives.some((p) => p.triggers.some((t) => t.on === 'takedown')),
     armor: it.stats.armor ?? 0, resist: it.stats.resist ?? 0,
   };
   roleCache.set(it, r);
@@ -539,18 +558,21 @@ export interface EnemyRead {
   readonly threats: number;
   /** share of the enemy team that deals magic damage (0..1) */
   readonly magic: number;
+  /** squishy fighters (ranged, burst, artillery or marksman): the soft back line a hunter goes for */
+  readonly soft: number;
 }
 export function readEnemies(enemies: readonly FighterProfile[]): EnemyRead {
-  let healers = 0, tanks = 0, threats = 0, magic = 0;
+  let healers = 0, tanks = 0, threats = 0, magic = 0, soft = 0;
   for (const e of enemies) {
     if (e.heals) healers++;
+    if (e.squishy) soft++;
     if (e.style === 'frontline' || e.style === 'warden') tanks++;
     else if (e.style === 'diver') { tanks += 0.5; threats += 0.5; }
     if (e.style === 'burst') threats++;
     if (e.scaling === 'magic') magic++;
   }
   const n = enemies.length;
-  return { n, healers, tanks, threats, magic: n ? magic / n : 0.5 };
+  return { n, healers, tanks, threats, magic: n ? magic / n : 0.5, soft };
 }
 
 /** a stable 0..1 draw per (salt, item): a seat's taste, so two games of one fighter need not build alike (no RNG draws) */
@@ -614,6 +636,14 @@ export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterP
   if (er.healers >= 2) kinds.push((r) => r.antiHeal);
   if (er.tanks >= 2) kinds.push((r) => r.tankBreak);
   if (er.threats >= 1.5 && prof.squishy) kinds.push((r) => r.burstWard);
+  // three situational answers that only some matches call for (integ systems-18; no item weight changed):
+  //   the Lampglass path against two or more burst threats takes a lookout that shows them coming;
+  //   a front line (not a diver) against two or more burst threats takes peel that holds them off its back line;
+  //   the jungler, when it hunts (a diver or skirmisher) against a soft back line of four or more, takes a piece that
+  //   pays out on takedowns
+  if (er.threats >= 2 && support) kinds.push((r) => r.reveals);
+  if (er.threats >= 2 && !support && (prof.style === 'frontline' || prof.style === 'warden')) kinds.push((r) => r.peel);
+  if (er.soft >= 4 && jungler && !support && (prof.style === 'diver' || prof.style === 'skirmisher')) kinds.push((r) => r.takedown);
   const answers = kinds.map((kind) => finished.find((it) => kind(itemRole(it)) && ok(it) && score(it) >= 0.7 * score(finished[0])))
     .filter((it): it is ItemDefT => !!it).sort((a, b) => score(b) - score(a));
   for (const it of answers) { if (core.length >= 3) break; if (ok(it)) take(it); }

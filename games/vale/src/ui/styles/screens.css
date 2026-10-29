@@ -620,6 +620,7 @@
 .srow2__ctl { display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
 .srow2--wide .srow2__ctl { justify-content: flex-start; }
 .srow2__ctl .slider { width: 100%; }
+.srow2__ctl--pair { gap: var(--u); flex-wrap: wrap; }
 .settings__note { padding-top: calc(2 * var(--u)); }
 .bindgroup { padding: calc(1.5 * var(--u)) 0; border-bottom: 1px solid var(--line-1); }
 .bindgroup__title { margin-bottom: var(--u); }

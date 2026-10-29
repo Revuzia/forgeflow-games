@@ -7,7 +7,7 @@
 import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks';
 import type { DamageLogEntry } from '../../contracts/session.ts';
-import type { PlayerView, SimEvent } from '../../contracts/sim.ts';
+import type { Command, PlayerView, PracticeMeter, SimEvent, WorldView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { Portrait } from '../components/Portrait.tsx';
 import { SeatGlyph } from '../components/Glyphs.tsx';
@@ -288,15 +288,73 @@ export function EndBanner(): JSX.Element | null {
 }
 
 // ── practice tools ───────────────────────────────────────────────────────────────────────────────
+// W4 g3, the lab: your fighter (Gleam, level, cooldowns, heal or return to life, move to a point you click), the world
+// (Wicks and structures on / off, reset), training targets (place, clear, their health / armor / resist), the speed, and
+// the sim's damage meter (WorldView.practice.meters: last hit, this burst and its per second, the last 5 s, total).
 const SPEEDS = [0, 1, 2, 4, 8, 16];
+type PracticeAction = Extract<Command, { type: 'practice' }>['action'];
+/** the sim's dummyStats clamps (src/sim/modes/practice.ts) */
+const DUMMY_LIMITS = { hp: [100, 100000, 100], armor: [0, 500, 5], resist: [0, 500, 5] } as const;
 export function PracticePanel(): JSX.Element | null {
   const { cv } = useApp();
-  const { client } = useHud();
-  useViewKey(() => client.timeScale);
+  const { client, model, r } = useHud();
+  const pv = (): WorldView['practice'] => model.view.practice ?? null;
+  useViewKey(() => {
+    const x = pv(), b = model.body;
+    return `${client.timeScale}|${b?.alive ? 1 : 0}|${x ? `${x.waves ? 1 : 0}${x.structures ? 1 : 0}${x.noCooldowns ? 1 : 0}|${x.dummy.hp}|${x.dummy.armor}|${x.dummy.resist}` : ''}`;
+  });
   const [, bump] = useReducer((n: number) => n + 1, 0);
+  const [aiming, setAiming] = useState(false);
+  // move to a point: armed, the next left click on the ground (the HUD surface) teleports there; Esc or a right click
+  // disarms. Captured on the window before the input controller sees it, so the click does not also move the fighter.
+  useEffect(() => {
+    if (!aiming) return;
+    document.body.classList.add('ptools-aiming');
+    const down = (e: PointerEvent): void => {
+      const t = e.target as Element | null;
+      if (!t?.classList?.contains('hudsurface')) { if (e.button === 2) setAiming(false); return; }
+      e.preventDefault(); e.stopPropagation();
+      if (e.button === 0) {
+        const g = r.pickGround?.(e.clientX, e.clientY);
+        if (g) client.send({ type: 'practice', action: 'teleport', x: g.x, y: g.y });
+      }
+      setAiming(false);
+    };
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAiming(false); } };
+    window.addEventListener('pointerdown', down, { capture: true });
+    window.addEventListener('keydown', key, { capture: true });
+    return () => {
+      document.body.classList.remove('ptools-aiming');
+      window.removeEventListener('pointerdown', down, { capture: true });
+      window.removeEventListener('keydown', key, { capture: true });
+    };
+  }, [aiming]);
   if (cv.queue(client.setup.queue)?.kind !== 'practice') return null;
-  const act = (action: 'gold' | 'level' | 'resetCooldowns' | 'toggleCooldowns' | 'spawnDummy' | 'heal' | 'resetMatch'): void => client.send({ type: 'practice', action });
+  const act = (action: PracticeAction): void => client.send({ type: 'practice', action });
   const scale = client.timeScale;
+  const x = pv();
+  const dead = !!model.body && !model.body.alive;
+  const toggle = (on: boolean | undefined, action: PracticeAction, label: string): JSX.Element => (
+    <button type="button" class={`hbtn ptools__tog ${on ? 'is-on' : ''}`} aria-pressed={on === undefined ? undefined : on} onClick={() => act(action)}>
+      <span class="ptools__dot" aria-hidden="true" />{label}
+    </button>
+  );
+  const stat = (k: keyof typeof DUMMY_LIMITS, label: string): JSX.Element => {
+    const [lo, hi, step] = DUMMY_LIMITS[k];
+    const v = x?.dummy[k] ?? 0;
+    return (
+      <label class="ptools__field">
+        <span class="t-caption muted">{label}</span>
+        <input class="ptools__num num" type="number" inputMode="numeric" min={lo} max={hi} step={step} value={Math.round(v)}
+          onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+          onChange={(e) => {
+            const n = Number((e.currentTarget as HTMLInputElement).value);
+            if (!Number.isFinite(n)) return;
+            client.send({ type: 'practice', action: 'dummyStats', [k]: Math.max(lo, Math.min(hi, Math.round(n))) });
+          }} />
+      </label>
+    );
+  };
   return (
     <section class="ptools plate" aria-label={cv.t('practice.panel.title', 'Practice tools')}>
       <span class="t-label">{cv.t('practice.panel.title', 'Practice tools')}</span>
@@ -304,11 +362,31 @@ export function PracticePanel(): JSX.Element | null {
         <button type="button" class="hbtn" onClick={() => act('gold')}>{cv.t('practice.panel.gold', 'Add 5,000 Gleam')}</button>
         <button type="button" class="hbtn" onClick={() => act('level')}>{cv.t('practice.panel.level', 'Level up')}</button>
         <button type="button" class="hbtn" onClick={() => act('resetCooldowns')}>{cv.t('practice.panel.reset_cooldowns', 'Refresh cooldowns')}</button>
-        <button type="button" class="hbtn" onClick={() => act('toggleCooldowns')}>{cv.t('practice.panel.toggle_cooldowns', 'No cooldowns')}</button>
-        <button type="button" class="hbtn" onClick={() => act('spawnDummy')}>{cv.t('practice.panel.spawn_dummy', 'Place a training target')}</button>
-        <button type="button" class="hbtn" onClick={() => act('heal')}>{cv.t('practice.panel.heal', 'Full heal')}</button>
+        {toggle(x?.noCooldowns, 'toggleCooldowns', cv.t('practice.panel.toggle_cooldowns', 'No cooldowns'))}
+        <button type="button" class="hbtn" onClick={() => act('heal')}>{dead ? cv.t('practice.panel.revive', 'Return to life') : cv.t('practice.panel.heal', 'Full heal')}</button>
+        <button type="button" class={`hbtn ${aiming ? 'is-on' : ''}`} aria-pressed={aiming} disabled={dead || !r.pickGround}
+          title={cv.t('practice.panel.teleport_hint', 'Click the ground to move there. Esc cancels.')} onClick={() => setAiming(!aiming)}>
+          {aiming ? cv.t('practice.panel.teleport_aiming', 'Click the ground…') : cv.t('practice.panel.teleport', 'Move to a point')}
+        </button>
+      </div>
+      <span class="t-caption muted ptools__sub">{cv.t('practice.panel.world', 'The map')}</span>
+      <div class="ptools__grid">
+        {toggle(x?.waves, 'toggleWaves', cv.t('practice.panel.waves', 'Wicks'))}
+        {toggle(x?.structures, 'toggleStructures', cv.t('practice.panel.structures', 'Structures'))}
         <button type="button" class="hbtn" onClick={() => act('resetMatch')}>{cv.t('practice.panel.reset_match', 'Reset match')}</button>
       </div>
+      <span class="t-caption muted ptools__sub">{cv.t('practice.panel.targets', 'Training targets')}</span>
+      <div class="ptools__grid">
+        <button type="button" class="hbtn" onClick={() => act('spawnDummy')}>{cv.t('practice.panel.spawn_dummy', 'Place a training target')}</button>
+        <button type="button" class="hbtn" onClick={() => act('clearDummies')}>{cv.t('practice.panel.clear_dummies', 'Remove all targets')}</button>
+      </div>
+      {x ? (
+        <div class="ptools__fields">
+          {stat('hp', cv.t('stat.hp.name', 'Health'))}
+          {stat('armor', cv.t('stat.armor.name', 'Armor'))}
+          {stat('resist', cv.t('stat.resist.name', 'Resist'))}
+        </div>
+      ) : null}
       <div class="ptools__speed" role="radiogroup" aria-label={cv.t('practice.panel.speed', 'Speed')}>
         <span class="t-caption muted">{cv.t('practice.panel.speed', 'Speed')}</span>
         {SPEEDS.map((s) => (
@@ -322,33 +400,27 @@ export function PracticePanel(): JSX.Element | null {
   );
 }
 
-/** gameplay g3: what your fighter dealt, read from the match's damage events (UI only): the last hit, the current burst
- *  (hits with no gap longer than BURST_GAP_S, sim time) and its damage per second, and the total since Clear. Shields
- *  that soaked a hit count: the readout is damage dealt, not health lost. */
-const BURST_GAP_S = 3;
-interface Readout { last: number; crit: boolean; burst: number; from: number; to: number; total: number; hits: number }
-const NO_READOUT: Readout = { last: 0, crit: false, burst: 0, from: 0, to: 0, total: 0, hits: 0 };
+/** gameplay g3: what your fighter dealt, from the sim's meter (WorldView.practice.meters for your seat: damage to anything
+ *  hostile, shields that soaked a hit included): the last hit, the current burst (hits with no gap longer than the sim's
+ *  PRACTICE_BURST_GAP) and its damage per second, the last 5 s and the total since Clear (the resetMeter command). The
+ *  last hit lights when it was a critical strike (read from the match's damage events). */
 function DamageReadout(): JSX.Element {
   const { cv } = useApp();
   const { client, model } = useHud();
-  const [r, setR] = useState<Readout>(NO_READOUT);
-  const cur = useRef<Readout>(NO_READOUT);
+  const meter = (): PracticeMeter | undefined => model.view.practice?.meters.find((m) => m.player === client.you);
+  useViewKey(() => { const m = meter(); return m ? `${m.dealt}|${m.last}|${m.burst}|${Math.round(m.recent5)}` : ''; });
+  const [crit, setCrit] = useState(false);
   useEffect(() => client.onEvents((evs: SimEvent[]) => {
     const me = model.body?.id;
     if (me === undefined) return;
-    let x = cur.current, changed = false;
-    for (const ev of evs) {
-      if (ev.e !== 'damage' || ev.src !== me || ev.dst === me) continue;
-      const amt = ev.amount + (ev.shielded ?? 0);
-      if (amt <= 0) continue;
-      const fresh = x.hits === 0 || ev.t - x.to > BURST_GAP_S;
-      x = { last: amt, crit: ev.crit, burst: (fresh ? 0 : x.burst) + amt, from: fresh ? ev.t : x.from, to: ev.t, total: x.total + amt, hits: x.hits + 1 };
-      changed = true;
+    for (let i = evs.length - 1; i >= 0; i--) {
+      const ev = evs[i];
+      if (ev.e === 'damage' && ev.src === me && ev.dst !== me && ev.amount + (ev.shielded ?? 0) > 0) { setCrit(ev.crit); return; }
     }
-    if (changed) { cur.current = x; setR(x); }
   }), [client]);
-  const span = r.to - r.from;
-  const dps = r.hits > 1 && span > 0.05 ? r.burst / span : r.burst;
+  const m = meter();
+  const any = !!m && m.dealt > 0;
+  const n = (v: number): string => (any ? fmtInt(Math.round(v)) : '—');
   const cell = (k: string, f: string, v: string, hot?: boolean): JSX.Element => (
     <div class="ptools__stat"><dt class="t-caption muted">{cv.t(`practice.panel.dmg.${k}`, f)}</dt><dd class={`num ${hot ? 'is-crit' : ''}`}>{v}</dd></div>
   );
@@ -356,13 +428,14 @@ function DamageReadout(): JSX.Element {
     <div class="ptools__dmg" aria-live="off">
       <div class="ptools__dmghead">
         <span class="t-caption">{cv.t('practice.panel.dmg.title', 'Damage you dealt')}</span>
-        <button type="button" class="hbtn hbtn--s" disabled={r.hits === 0} onClick={() => { cur.current = NO_READOUT; setR(NO_READOUT); }}>{cv.t('practice.panel.dmg.clear', 'Clear')}</button>
+        <button type="button" class="hbtn hbtn--s" disabled={!any} onClick={() => { client.send({ type: 'practice', action: 'resetMeter' }); setCrit(false); }}>{cv.t('practice.panel.dmg.clear', 'Clear')}</button>
       </div>
       <dl class="ptools__stats">
-        {cell('last', 'Last hit', r.hits ? fmtInt(Math.round(r.last)) : '—', r.crit)}
-        {cell('burst', 'This burst', r.hits ? fmtInt(Math.round(r.burst)) : '—')}
-        {cell('dps', 'Per second', r.hits ? fmtInt(Math.round(dps)) : '—')}
-        {cell('total', 'Total', r.hits ? fmtInt(Math.round(r.total)) : '—')}
+        {cell('last', 'Last hit', n(m?.last ?? 0), any && crit)}
+        {cell('burst', 'This burst', n(m?.burst ?? 0))}
+        {cell('dps', 'Per second', n(m?.burstDps ?? 0))}
+        {cell('recent', 'Last 5 s', n(m?.recent5 ?? 0))}
+        {cell('total', 'Total', n(m?.dealt ?? 0))}
       </dl>
     </div>
   );

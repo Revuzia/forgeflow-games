@@ -83,6 +83,8 @@ import { SCREEN_MUSIC_KINDS, STING_KINDS, UI_CUE_KINDS, UI_CUE_KINDS_OPTIONAL } 
 import { MANIFEST_FORMAT, MANIFEST_PRODUCT, type CatalogManifest, type ManifestHistoryEntry } from '../src/contracts/manifest.ts';
 import { checkNames, DEFAULT_DESIGN_DIR, formatHit, loadDenyList, type NameInput, type TextKind } from './names_check.ts';
 import { formatCopyHit, lintPlayerCopy } from '../src/ui/copy_lint.ts';
+import { bansForRoster } from '../src/session/draft.ts';
+import { fighterPool } from '../src/session/setup.ts';
 import { MIGRATIONS, type CatalogData, type MigrationRegistry } from './schema_migrations.ts';
 
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -635,6 +637,8 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   type RulesLike = Partial<CatalogT['modes'][number]['rules']>;
   const checkRules = (path: Seg[], rules: RulesLike, mapId: string | undefined): void => {
     rules.minionWaves?.composition.forEach((w, j) => needUnit([...path, 'minionWaves', 'composition', j, 'unit'], w.unit, 'minion'));
+    // W4 polish: fighterWeights keys are FighterDef ids (the zod record takes any string)
+    for (const id of Object.keys(rules.fighterWeights ?? {})) if (!fighters.has(id)) dg.err([...path, 'fighterWeights', id], unknownRef('fighter', id, fighters));
     const core = rules.end?.coreStructure;
     if (core !== undefined) {
       const placements = new Set(mapById.get(mapId ?? '')?.structures.map((s) => s.id) ?? []);
@@ -648,10 +652,19 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
     checkRules(['modes', i, 'rules'], m.rules, m.map);
     if (m.rules.end.kind === 'core' && m.rules.end.coreStructure === undefined) dg.err(['modes', i, 'rules', 'end', 'coreStructure'], 'end.kind "core" needs a coreStructure');
   });
+  // W4 polish: a draft's bansPerTeam is its bansByRoster step for today's playable roster (bansForRoster, session/draft.ts;
+  // the fighters with art and a skin, session/setup.ts fighterPool), so every reader of bansPerTeam stays right as the
+  // roster grows (probe_sim_draft_pace G8 checks the same)
+  const roster = fighterPool(c).length;
   c.queues.forEach((q, i) => {
     const mode = modeById.get(q.mode);
     if (!mode) dg.err(['queues', i, 'mode'], unknownRef('mode', q.mode, modes));
     checkRules(['queues', i, 'rules'], q.rules, mode?.map);
+    const d = q.draft;
+    if (d?.bansByRoster?.length) {
+      const want = bansForRoster(d, roster);
+      if (d.bansPerTeam !== want) dg.err(['queues', i, 'draft', 'bansPerTeam'], `${d.bansPerTeam} is not the bansByRoster step for today's ${roster} playable fighters (${want})`);
+    }
   });
 
   // store

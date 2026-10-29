@@ -18,7 +18,7 @@ import type { CatalogView } from '../catalog_view.ts';
 import { RichDesc } from '../components/Tooltip.tsx';
 import { fmtInt } from '../format.ts';
 import { useHud, useViewKey } from './ctx.ts';
-import { GleamGlyph, HOUR_COLOR, ItemGlyph, itemHour } from './glyphs.tsx';
+import { DialMark, GleamGlyph, HOUR_COLOR, ItemGlyph, itemHour } from './glyphs.tsx';
 import { statLines } from './itemtip.tsx';
 
 type Tier = ItemDefT['tier'];
@@ -59,14 +59,27 @@ export function quoteItem(cv: CatalogView, me: PlayerView, item: ItemDefT): Quot
   if (item.consumable && items.includes(item.id)) {
     return { price: item.cost, consumes: [], why: !me.canShop ? 'access' : me.gold + 1e-9 < item.cost ? 'gold' : null };
   }
-  const price = Math.max(0, item.cost - claim(item, 0));
+  let discount = claim(item, 0);
+  // W4 re-key: a carried starter whose foldsInto lists this tier folds in at its full cost (sim shop.ts claimFold)
+  for (let i = 0; i < items.length && i < SLOTS; i++) {
+    const own = items[i] ? cv.item(items[i]!) : undefined;
+    if (claimed[i] || !own?.foldsInto || !(own.foldsInto as readonly string[]).includes(item.tier)) continue;
+    claimed[i] = true; discount += own.cost; break;
+  }
+  const price = Math.max(0, item.cost - discount);
   const consumes: number[] = [];
   for (let i = 0; i < SLOTS; i++) if (claimed[i]) consumes.push(i);
   const free = consumes.length > 0 || items.slice(0, SLOTS).some((x) => !x) || items.length < SLOTS;
   let why: Denial = null;
   if (!me.canShop) why = 'access';
   else if (!free) why = 'slots';
-  else if (item.uniqueGroup && items.some((id, i) => id && !claimed[i] && cv.item(id)?.uniqueGroup === item.uniqueGroup)) why = 'unique';
+  else if (items.some((id, i) => {
+    if (!id || claimed[i]) return false;
+    const it = cv.item(id);
+    // the dial-slot rule (sim shop.ts dialClash): two dial items closer than the larger `apart` hours around the dial
+    const gap = it?.dial && item.dial ? Math.min(Math.abs(it.dial.hour - item.dial.hour), 12 - Math.abs(it.dial.hour - item.dial.hour)) : 99;
+    return (!!item.uniqueGroup && it?.uniqueGroup === item.uniqueGroup) || (!!it?.dial && !!item.dial && gap < Math.max(it.dial.apart, item.dial.apart));
+  })) why = 'unique';
   else if (me.gold + 1e-9 < price) why = 'gold';
   return { price, consumes, why };
 }
@@ -223,8 +236,10 @@ function Detail(p: { it: ItemDefT; me: PlayerView; onBuy(): void; onSel(id: stri
             {cv.t(`hud.shopui.tier.${it.tier}`, TIER_LABEL[it.tier])}
             {it.tags.length ? ` · ${it.tags.map((t) => cv.t(`hud.shopui.tag.${t}`, TAG_LABEL[t])).join(', ')}` : ''}
           </span>
+          {it.dial ? <span class="t-caption sdet__dial"><DialMark hour={it.dial.hour} size={12} />{cv.t('hud.item.dial', 'Hour {h} on the dial', { h: it.dial.hour })}</span> : null}
         </span>
       </div>
+      {it.dial ? <p class="t-caption muted sdet__dialrule">{cv.t('hud.item.dial_rule', 'No other item on the dial may stand within {n} hours of it.', { n: it.dial.apart - 1 })}</p> : null}
       {lines.length ? <ul class="sdet__stats">{lines.map((l) => <li class="t-body-s num">{l.text}</li>)}</ul> : null}
       {it.passives.map((ps) => <p class="t-body-s sdet__desc"><b>{ps.name}.</b> <RichDesc record={ps} desc={ps.desc} /></p>)}
       {it.active ? <p class="t-body-s sdet__desc"><b>{cv.t('hud.item.active', 'Active')} · {it.active.name}.</b> <RichDesc record={it.active} desc={it.active.desc} /></p> : null}

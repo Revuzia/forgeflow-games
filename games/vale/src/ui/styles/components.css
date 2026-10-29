@@ -133,7 +133,10 @@
 @keyframes tipin { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .tipx { display: flex; flex-direction: column; gap: calc(0.75 * var(--u)); }
 .tipx__head { display: flex; align-items: center; gap: var(--u); justify-content: space-between; }
-.tipx__kind { color: var(--text-3); }
+.tipx__kind { color: var(--text-3); display: flex; flex-wrap: wrap; align-items: center; gap: 2px calc(1.5 * var(--u)); }
+.tipx__dial, .sdet__dial { display: inline-flex; align-items: center; gap: 4px; color: var(--tier-noonlit); }
+.dialmark { flex: none; }
+.sdet__dialrule { margin: 0; }
 .tipx__stats { display: flex; flex-wrap: wrap; gap: calc(0.5 * var(--u)) calc(2 * var(--u)); color: var(--text-1); }
 .tipx__stats .t-caption { color: var(--text-3); }
 .tipx__desc { color: var(--text-1); }

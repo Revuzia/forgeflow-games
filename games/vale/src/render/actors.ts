@@ -72,7 +72,7 @@ import {
 } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
-import { lodIndex, lodSwitch } from './lod.ts';
+import { composeIndex, faceLockedLod, indexView, lodIndex, lodReady, lodSwitch } from './lod.ts';
 import { structureMaterial } from './structures.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
@@ -137,6 +137,8 @@ interface Template {
   dev: boolean;
   /** outline / hit-flash hull parts (built once per template scene) */
   hull: HullPart[];
+  /** perf PERF-m5: a fighter's match body (lod.ts faceLockedLod) and its hull parts over it; null = full body */
+  bodyLod?: BodyLod | null;
   /** the baked crowd form (UnitDef.art.instanced units that qualify; crowd.ts), else null */
   crowd?: CrowdBake | null;
   /** a patched accent clone that only holds the warm-up program (ModelLibrary.ready) */
@@ -172,8 +174,14 @@ function outlineGeometry(g: BufferGeometry): BufferGeometry {
   return v;
 }
 
-/** one hull draw: `lead` is the index (traverse order) of the mesh it binds to and hangs under */
-interface HullPart { lead: number; geometry: BufferGeometry; skinned: boolean }
+/** one hull draw: `lead` is the index (traverse order) of the mesh it binds to and hangs under. `members`: the meshes
+ *  merged into it (traverse order), each one's first vertex, first index and index count in the merged geometry */
+interface HullPart { lead: number; geometry: BufferGeometry; skinned: boolean; members: { mesh: number; vo: number; io: number; n: number }[] }
+
+/** perf PERF-m5: a fighter's match body. `mesh` (traverse order) draws `geometry` (its LOD1 over its own attributes);
+ *  `hull` is the template's hull plan with that member's triangles swapped for the LOD1's, so the outline, flash, x-ray
+ *  and veil copies keep lying on the surface the body draws */
+interface BodyLod { mesh: number; geometry: BufferGeometry; hull: HullPart[]; tris: number; lodTris: number }
 
 const FORM_RE = /^form_([a-z0-9]+(?:_[a-z0-9]+)*?)(?:[._]\d+)?$/i;
 const hullCache = new WeakMap<Object3D, HullPart[]>();
@@ -317,9 +325,46 @@ function hullPlan(scene: Object3D): HullPart[] {
     }
     groups.push({ lead: i, members: [i], xf: [null], skinned: sk, key });
   });
-  const parts = groups.map((g) => ({ lead: g.lead, skinned: g.skinned, geometry: mergeHull(g.members.map((i) => meshes[i]), meshes[g.lead], g.skinned, g.xf) }));
+  const parts = groups.map((g) => {
+    let vo = 0, io = 0;
+    const members = g.members.map((i) => {
+      const geo = meshes[i].geometry, c = geo.getAttribute('position').count, n = geo.index ? geo.index.count : c;
+      const r = { mesh: i, vo, io, n };
+      vo += c; io += n;
+      return r;
+    });
+    return { lead: g.lead, skinned: g.skinned, members, geometry: mergeHull(g.members.map((i) => meshes[i]), meshes[g.lead], g.skinned, g.xf) };
+  });
   hullCache.set(scene, parts);
   return parts;
+}
+
+const bodyLodCache = new WeakMap<Object3D, BodyLod | null>();
+/**
+ * perf PERF-m5: the face-locked LOD1 of a fighter template's textured body (the largest indexed skinned mesh with UVs)
+ * and the hull plan rebuilt over it; null when it has none (simplifier not ready, no head bone, nothing gained). Run on
+ * the template at rest (hullPlan made its world matrices current; templates are never posed, their clones are).
+ */
+function bodyLodOf(scene: Object3D, hull: HullPart[]): BodyLod | null {
+  if (bodyLodCache.has(scene)) return bodyLodCache.get(scene) ?? null;
+  const meshes = meshesOf(scene);
+  let best = -1;
+  meshes.forEach((m, i) => {
+    const g = m.geometry;
+    if (!(m as SkinnedMesh).isSkinnedMesh || !g.index || !g.getAttribute('uv')) return;
+    if (best < 0 || g.index.count > meshes[best].geometry.index!.count) best = i;
+  });
+  const r = best >= 0 ? faceLockedLod(meshes[best] as SkinnedMesh) : null;
+  if (!r) { bodyLodCache.set(scene, null); return null; }
+  const geometry = indexView(meshes[best].geometry, r.index, 'vale_body_lod1');
+  const lod = r.index.array as ArrayLike<number>;
+  const parts = hull.map((p): HullPart => {
+    const I = composeIndex(p.geometry, p.members, (mesh) => (mesh === best ? lod : null));
+    return I ? { ...p, geometry: indexView(p.geometry, I, 'vale_hull_lod1') } : p;
+  });
+  const out: BodyLod = { mesh: best, geometry, hull: parts, tris: r.tris, lodTris: r.lodTris };
+  bodyLodCache.set(scene, out);
+  return out;
 }
 
 /** CSS-pixel viewport the outline widths are measured in (ink.ts; the renderer keeps it current) */
@@ -420,7 +465,9 @@ export class ModelLibrary {
         for (const c of base?.gltf.animations ?? []) clips.set(c.name, c);
         for (const c of body.gltf.animations) if (!clips.has(c.name)) clips.set(c.name, c);
         this.patchMaterials(body.gltf.scene, charLight('fighter'), def.art.accentMaterial);
-        return { scene: body.gltf.scene, clips, roles: def.art.clips as Record<string, string | undefined>, fit: 1, dev: false, hull: hullPlan(body.gltf.scene) };
+        const hull = hullPlan(body.gltf.scene);
+        await lodReady;                                                    // perf PERF-m5: the match body's LOD1
+        return { scene: body.gltf.scene, clips, roles: def.art.clips as Record<string, string | undefined>, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull) };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
         const m = await this.assets.modelUrl(this.opts.devModelUrl);
@@ -491,6 +538,7 @@ export class ModelLibrary {
         const roles: Record<string, string | undefined> = { ...def.art.clips };
         for (const c of clips.keys()) if (!(c in roles)) roles[c] = c;
         const hull = hullPlan(m.gltf.scene);
+        if (def.art.instanced) await lodReady;                             // perf PERF-m5: the crowd's LODs (crowd.ts)
         const crowd = def.art.instanced && this.opts.crowd !== false ? bakeCrowd(m.gltf.scene, clips, hull, 'accent', CROWD_MAX_ROWS, def.kind === 'monster') : null;
         return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false, hull, crowd };
       }
@@ -591,6 +639,8 @@ export class Actor implements CrowdActor {
   private readonly inkMats: Material[] = [];
   private readonly hullMeshes: Mesh[] = [];
   private readonly flashMeshes: Mesh[] = [];
+  /** the hull parts this actor's copies are built from: the template's, or its body LOD1's (attach) */
+  private hullParts: HullPart[] = [];
   /** env F4: the occluded silhouette (fighters only; ink.ts xray): hidden unless the renderer finds cover between the
    *  body and the camera */
   private xrayU: XrayU | null = null;
@@ -678,6 +728,11 @@ export class Actor implements CrowdActor {
       return;
     }
     const model = t.clips.size > 0 || hasSkin(t.scene) ? cloneSkinned(t.scene) : t.scene.clone(true);
+    // perf PERF-m5: a fighter in the match draws its face-locked LOD1 (lod.ts LOD.body; the menu showcase keeps the
+    // full body) and its hull copies over it
+    const lod = this.kind === 'fighter' && lodSwitch.body ? t.bodyLod ?? null : null;
+    this.hullParts = lod ? lod.hull : t.hull;
+    if (lod) { const b = meshesOf(model)[lod.mesh]; if (b) b.geometry = lod.geometry; }
     const s = scale * t.fit;
     model.scale.setScalar(s);
     this.accent = [];
@@ -961,7 +1016,7 @@ export class Actor implements CrowdActor {
   // ── outline hull + hit flash ────────────────────────────────────────────────────────────────────
   /** clone the template's hull parts onto this actor's model, hidden (one warm-up frame compiles the programs) */
   private buildHull(model: Object3D, t: Template): void {
-    if (!t.hull.length) return;
+    if (!this.hullParts.length) return;
     const cm = meshesOf(model);
     const ou = (this.outlineU = outlineU()), fu = (this.flashU = flashU());
     const mats: Partial<Record<InkPath, [Material, Material]>> = {};
@@ -970,7 +1025,7 @@ export class Actor implements CrowdActor {
       if (!m) { m = mats[path] = [outlineMaterial(path, ou), flashMaterial(path, fu)]; this.inkMats.push(...m); }
       return m;
     };
-    for (const part of t.hull) {
+    for (const part of this.hullParts) {
       const lead = cm[part.lead];
       if (!lead) continue;
       const pair = inkFor(part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid');
@@ -1000,16 +1055,16 @@ export class Actor implements CrowdActor {
     this.outlinePx = -1;
     this.applyOutline();
     for (const m of this.flashMeshes) m.visible = true;
-    if (this.kind === 'fighter') this.buildXray(t, cm);
+    if (this.kind === 'fighter') this.buildXray(cm);
   }
 
   /** env F4: one silhouette copy per hull part (the flash's front faces, same program), hidden; tokens.json
    *  `hud.unitOutline.occluded` (OCCLUDED) sets its fill, edge and bias */
-  private buildXray(t: Template, cm: Mesh[]): void {
+  private buildXray(cm: Mesh[]): void {
     const u = (this.xrayU = xrayU());
     u.uAlpha.value = OCCLUDED.fill; u.uPx.value = OCCLUDED.edgePx; u.uBias.value = OCCLUDED.biasM;
     const mats: Partial<Record<InkPath, Material>> = {};
-    for (const part of t.hull) {
+    for (const part of this.hullParts) {
       const lead = cm[part.lead];
       if (!lead) continue;
       const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';
@@ -1089,7 +1144,7 @@ export class Actor implements CrowdActor {
     this.veilMode = mode;
     const on = mode !== 0;
     const k = mode === 1 ? VEIL_GHOST : VEIL_GLASS;
-    if (on && !this.veilDepth.length && this.template?.hull.length) this.buildVeilDepth(this.model, this.template);
+    if (on && !this.veilDepth.length && this.hullParts.length) this.buildVeilDepth(this.model);
     const prepass = this.veilDepth.length > 0;
     for (const m of this.veilDepth) m.visible = on;
     const accent = new Set<Material>(this.accent);
@@ -1127,10 +1182,10 @@ export class Actor implements CrowdActor {
   }
 
   /** the depth prepass of the veil: one depth-only copy per hull part, bound to the body's skeleton */
-  private buildVeilDepth(model: Object3D, t: Template): void {
+  private buildVeilDepth(model: Object3D): void {
     const cm = meshesOf(model).filter((m) => !m.userData.valeOutline);
     const mats: Partial<Record<InkPath, Material>> = {};
-    for (const part of t.hull) {
+    for (const part of this.hullParts) {
       const lead = cm[part.lead];
       if (!lead) continue;
       const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';

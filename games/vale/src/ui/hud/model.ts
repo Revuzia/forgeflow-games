@@ -133,6 +133,8 @@ export class HudModel {
   /** this batch's takedown that involves you (its banner waits for the batch's announces) */
   private pendingKill: { killer: PlayerId; victim: PlayerId } | null = null;
   private lastKill: { killer: Who | undefined; victim: Who } | null = null;
+  /** sim time of the last Noon Toll (rules.noonToll): only the first toll of a run gets the banner */
+  private lastToll = -1e9;
 
   constructor(client: MatchClient, cv: CatalogView) {
     this.client = client;
@@ -573,8 +575,24 @@ export class HudModel {
         this.denied.value = { n: this.denied.peek().n + 1, slot: 'shop', why: reason };
         break;
       }
-      case 'practice': if (ev.player === this.you) this.say(this.t(`announce.practice.${String(p.action ?? '')}`), 'info'); break;
+      case 'practice': {
+        if (ev.player !== this.you) break;
+        // a switch says which way it went (WorldView.practice, already this tick's state)
+        const a = String(p.action ?? ''), pv = this.view.practice;
+        const on = a === 'toggleWaves' ? pv?.waves : a === 'toggleStructures' ? pv?.structures : a === 'toggleCooldowns' ? pv?.noCooldowns : undefined;
+        this.say((on === undefined ? '' : this.t(`announce.practice.${a}.${on ? 'on' : 'off'}`)) || this.t(`announce.practice.${a}`), 'info');
+        break;
+      }
       case 'practice_reset': this.announce(this.t('announce.practice_reset.title'), this.t('announce.practice_reset.sub'), false); break;
+      case 'noon_toll': {
+        // FRAY's Noon Toll rings every rules.noonToll.every s: the banner marks the first toll of a run (the bell and the
+        // reveal carry the rest), so the late game is not a banner every 20 s
+        const q = this.cv.queue(this.client.setup.queue);
+        const every = (q ? this.cv.rulesOf(q) : this.cv.mode(this.client.setup.mode)?.rules)?.noonToll?.every ?? 20;
+        if (ev.t - this.lastToll > every * 1.5) this.announce(this.t('announce.noon_toll.title'), this.t('announce.noon_toll.sub', p), false);
+        this.lastToll = ev.t;
+        break;
+      }
       default: {
         const title = this.t(`announce.${ev.key}.title`);
         if (title) this.announce(title, this.t(`announce.${ev.key}.sub`, p), false);

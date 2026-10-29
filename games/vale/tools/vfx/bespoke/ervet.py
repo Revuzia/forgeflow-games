@@ -214,4 +214,52 @@ def defs() -> list:
                  comment="T4 · Lumen · Whole Again landing: a white core, the oversized blade slams down whole (white-hot glass to team, "
                          "dissolving at its edge), a team ring to 3.5 m and an upright ring burst, a storm of splinters and glass chunks, "
                          "the floor frosts and cracks, dust settles"))
+
+    # ── ult · Whole Again, the landing as re-keyed (W4): she calls every shard home from 4.5 m (area, T4) ──────────
+    # the shards fly IN along straight lines from the 4.5 m ring to her hilt (the pull: enemies are dragged 2 m toward
+    # her) and the blade is whole there; the old outward storm would read as a push
+    D.append(vfx("ervet_ult_shards_home", 1.5,
+                 flash(4, at="ground", scale=1.5),
+                 # the lines home: streaks from the ring to the hilt (a ring of 4.4 m, 15 m/s for 0.29 s: they meet at the hilt)
+                 L("emitter", at="ground", count=28, shape="ring", radius=4.4, offset=[0, 0.9, 0], dir="in", spreadDeg=0, speed=[15, 15],
+                   life=[0.29, 0.29], size=[0.6, 0.45, 0.2], color=[GLASS, "team"], alpha=[0.0, 0.9, 1, 0.6], emissive=6.0, drag=0, texture="streak",
+                   stretch=0.08, blend="add", align="velocity", fit=False),
+                 _shards("ground", 32, speed=(14.5, 15.5), size=0.34, spread=3, dir_="in", gravity=0, shape="ring", radius=4.4, life=(0.28, 0.3),
+                         offset=[0, 0.9, 0], emissive=7.0, fit=False),
+                 L("decal", at="ground", shape="line", style="light", length=4.5, width=0.12, radius=1.0, life=0.5, color=GLASS,
+                   alpha=[0.6, 0.4, 0], emissive=2.0, fit=True, secondary=True),
+                 # whole again at the hilt as they arrive
+                 mesh("origin", "blade", [[0, 2.6], [0.15, 3.3], [1, 3.4]], 0.6, color=[[0, WHITE], [0.3, GLASS], [1, "team"]],
+                      alpha=[[0, 0], [0.2, 0], [0.32, 1], [0.7, 0.9], [1, 0]], emissive=12, rim="team", rim_emissive=6.0, rotate=[-90, 0, 0],
+                      stretch=[3.4, 1, 1], offset=[0.6, 0.35, 0], dissolve=[[0, 1], [0.32, 0.05], [0.7, 0.05], [1, 1]], edge="team",
+                      edge_emissive=8.0, noise=0.4, noise_scale=3.0),
+                 flash(3, at="origin", color=GLASS, scale=0.9, delay=0.3, light=False),
+                 # the edge the shards came from, then the ring closing in behind them (the pull)
+                 L("shockwave", at="ground", radius=[[0, 1.0], [0.6, 0.55], [1, 0.45]], width=[0.12, 0.3], life=0.42, color=[GLASS, "team"],
+                   alpha=[1, 0.8, 0], emissive=6.0, sharp=2.2, fit=True),
+                 shockwave("ground", radius=(0.15, 1.0), width=(0.5, 0.1), life=0.35, emissive=8.0, sharp=2.2, delay=0.3, fit=True),
+                 decal("ground", "frost", [[0, 0.3], [0.1, 0.95], [1, 1.0]], 1.4, color=DAWNGLASS, alpha=(0.75, 0.6, 0), emissive=2.5, rim="team",
+                       texture="frost", fit=True),
+                 L("emitter", at="origin", count=14, shape="sphere", radius=0.4, offset=[0, 0.9, 0], dir="out", spreadDeg=170, speed=[2, 5],
+                   life=[0.2, 0.4], size=[0.2, 0.05], color=[GLASS, "team"], alpha=[1, 0], emissive=4.0, drag=2, texture="glint", blend="add", delay=0.3),
+                 dust("ground", 10, size=1.3, speed=(1.5, 3.5), radius=0.8, delay=0.1),
+                 light("ground", "team", 24, 10, 0.5),
+                 comment="T4 · Lumen · Whole Again (re-keyed): a white core, then every shard flies home along straight lines from the "
+                         "4.5 m ring into her hilt (the pull), the oversized blade condenses whole as they arrive, a ring closes in behind "
+                         "them, the floor frosts"))
+
+    # ── passive · Dawnglass Edge: a lodged shard torn out, bursting 1.75 m round the target (area at the hit, T2) ─────
+    D.append(vfx("ervet_passive_tear", 0.8,
+                 flash(2, at="ground", color=GLASS, scale=0.9),
+                 mesh("ground", "shard", [[0, 0.5], [1, 0.7]], 0.3, color=[NOON, GLASS], alpha=[[0, 1], [0.6, 1], [1, 0]], emissive=3.0, rim="team",
+                      rim_pow=1.6, rim_emissive=3.0, offset=[0, 0.9, 0], rotate=[-70, 0, 0], dissolve=[[0, 0], [0.5, 0], [1, 1]], edge="team",
+                      edge_emissive=3.0),
+                 _shards("ground", 16, speed=(5, 8), size=0.26, spread=40, dir_="out", gravity=6, shape="ring", radius=0.3, offset=[0, 0.8, 0],
+                         life=(0.22, 0.32), emissive=3.0, fit=False),
+                 shockwave("ground", radius=(0.2, 1.0), width=(0.3, 0.06), life=0.3, emissive=3.0, fit=True),
+                 _chunks("ground", 6, speed=(2, 4), size=0.14, offset=[0, 0.8, 0]),
+                 decal("ground", "frost", [[0, 0.4], [0.15, 1.0], [1, 1.0]], 0.8, color=DAWNGLASS, alpha=(0.5, 0.4, 0), emissive=1.2, rim="team",
+                       texture="frost", fit=True),
+                 comment="T2 · Lumen · Shard torn out: the lodged dawnglass shard rips out of the target and flies up, it bursts into "
+                         "splinters to 1.75 m under a team ring, a frosted mark"))
     return D

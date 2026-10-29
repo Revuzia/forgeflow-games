@@ -8,7 +8,7 @@ import { useApp } from '../app_ctx.ts';
 import type { CatalogView } from '../catalog_view.ts';
 import { RichDesc } from '../components/Tooltip.tsx';
 import { fmtInt, fmtNum } from '../format.ts';
-import { GleamGlyph, HOUR_COLOR, itemHour } from './glyphs.tsx';
+import { DialMark, GleamGlyph, HOUR_COLOR, itemHour } from './glyphs.tsx';
 
 const PCT = new Set(['crit', 'critDamage', 'lifesteal', 'omnivamp', 'armorPenPct', 'magicPenPct', 'tenacity', 'healShieldPower', 'moveSpeedPct', 'attackSpeed']);
 
@@ -38,7 +38,9 @@ export function ItemTip(p: { item: ItemDefT; keyLabel?: string; sell?: boolean; 
       <div class="tipx__kind t-caption">
         <span class="hourticks" style={{ color: HOUR_COLOR[hour] }}>{Array.from({ length: hour }, () => <i />)}</span>
         <span class="num"><GleamGlyph size={12} /> {fmtInt(p.price ?? it.cost)}</span>
+        {it.dial ? <span class="tipx__dial"><DialMark hour={it.dial.hour} size={12} />{cv.t('hud.item.dial', 'Hour {h} on the dial', { h: it.dial.hour })}</span> : null}
       </div>
+      {it.dial ? <p class="t-caption tipx__sub">{cv.t('hud.item.dial_rule', 'No other item on the dial may stand within {n} hours of it.', { n: it.dial.apart - 1 })}</p> : null}
       {lines.length ? <ul class="tipx__statlist">{lines.map((l) => <li class="t-body-s num">{l.text}</li>)}</ul> : null}
       {it.passives.map((ps) => <p class="t-body-s tipx__desc"><b>{ps.name}.</b> <RichDesc record={ps} desc={ps.desc} /></p>)}
       {it.active ? <p class="t-body-s tipx__desc"><b>{cv.t('hud.item.active', 'Active')} · {it.active.name}.</b> <RichDesc record={it.active} desc={it.active.desc} /></p> : null}

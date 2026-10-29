@@ -151,7 +151,21 @@ export function ItemGlyph(p: { item: ItemDefT | undefined; src: string | null })
     <span class={`iglyph iglyph--h${hour} iglyph--${fam} ${p.src ? '' : 'iglyph--drawn'}`} style={{ '--hour': HOUR_COLOR[hour], '--fam0': g0, '--fam1': g1 } as CSSProperties} aria-hidden="true">
       {p.src ? <img src={p.src} alt="" draggable={false} /> : <svg viewBox="0 0 24 24" class="iglyph__svg">{ITEM_PATHS[tag] ?? ITEM_PATHS.plain}</svg>}
       <span class="iglyph__ticks">{Array.from({ length: hour }, () => <i />)}</span>
+      {it?.dial ? <DialMark hour={it.dial.hour} class="iglyph__dial" /> : null}
     </span>
+  );
+}
+
+/** W4 re-key, the dial-slot rule (ItemDef.dial): where an item stands on the dial — a ring with one lit pip on its rim at
+ *  that hour (12 at the top, clockwise). A sundial plate's mark, never a hand: nothing points from the centre. */
+export function DialMark(p: { hour: number; class?: string; size?: number }): JSX.Element {
+  const a = (p.hour % 12) * (Math.PI / 6);
+  const x = 12 + 8 * Math.sin(a), y = 12 - 8 * Math.cos(a);
+  return (
+    <svg viewBox="0 0 24 24" class={`dialmark ${p.class ?? ''}`} width={p.size} height={p.size} aria-hidden="true">
+      <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" opacity="0.55" />
+      <circle cx={x.toFixed(2)} cy={y.toFixed(2)} r="3.6" fill="currentColor" />
+    </svg>
   );
 }
 

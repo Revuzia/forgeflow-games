@@ -11,30 +11,49 @@
 //   hull      the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body, accent and rest-outline
 //             hull through one LOD of half the triangles held within 6 mm (under half a pixel at the closest zoom: a
 //             Wick is ~70 px tall for ~1.1 m), the same index for all three so the ink hull keeps hugging the body.
-//             Fighters and structures keep their full meshes in the main pass.
+//             Structures keep their full meshes in the main pass.
+//   body      a fighter's textured body in the MATCH (lodSwitch.body; the menu showcase keeps the full mesh) draws
+//             a face-locked LOD1 (art/blender/fighters/_lod1.mjs, the chars lane's recipe, ported below as
+//             faceLockedLod): half the triangles held within 10 mm (under a pixel at the closest lane zoom, ~95 px
+//             a metre), the normals weighted 0.5 and every vertex skinned >= 0.5 to the `head` bone locked, so the
+//             face never changes. The outline, flash, x-ray and veil copies of the hull are built from it
+//             (actors.ts), so they keep lying on the body's own surface.
+//   crowd     the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body, accent and rest-outline
+//             hull through one LOD held within 10 mm in metres (each mesh's own dequantization, see below): ~0.8 px at
+//             the default lane zoom, the same index for the three so the ink hull keeps hugging the body.
+//
+// Positions arrive as GLTFLoader builds them from KHR_mesh_quantization: normalized int16, read back in -1..1, the
+// metres per unit living only in the skeleton (dequantUnit). A bound in metres is divided by that unit; a caller that
+// passes no unit gets the bound in the mesh's own units (the shadow LOD's 3 cm, set for float meshes).
 //
 // A mesh with several material groups keeps its full index (a LOD would cross the group ranges). Until the WASM is
 // ready (a few ms after boot; the loading screen awaits `lodReady`) nothing is simplified and every mesh draws whole.
 
-import { BufferAttribute, type BufferGeometry, type Camera, type Group, type Material, type Mesh, type Object3D, type WebGLRenderer } from 'three';
+import { BufferAttribute, BufferGeometry, type Camera, type Group, type Material, Matrix4, type Mesh, type Object3D, type SkinnedMesh, Vector3, type WebGLRenderer } from 'three';
 import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
 
 export const LOD = {
   /** sun shadow casters: target share of the triangles and the largest shape error (m, in the mesh's own units) */
   shadow: { ratio: 0.2, errorM: 0.03 },
-  /** the crowd's outline hull (main pass) */
+  /** the per-actor rest outline hull (main pass; units, fighters' own hull through their LOD1) */
   hull: { ratio: 0.5, errorM: 0.006 },
+  /** the crowd's body, accent and outline hull (main pass): a bound in METRES (each mesh's dequantization) */
+  crowd: { ratio: 0.25, errorM: 0.010 },
+  /** a fighter's body in the match (faceLockedLod): ratio, bound in metres, normal weight, the locked bone and weight */
+  body: { ratio: 0.5, errorM: 0.010, normalW: 0.5, lockBone: 'head', lockW: 0.5 },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
   minTris: 600,
   /** an instanced caster (scatter: trees, rocks) draws its mesh once per instance: a LOD pays from this size */
   minTrisInstanced: 120,
+  /** a crowd part (one draw per unit on screen, like an instanced caster) pays from this size */
+  minTrisCrowd: 96,
 } as const;
 
 let ready = false;
 /** resolves when the simplifier can run (the loading screen awaits it) */
 export const lodReady: Promise<void> = MeshoptSimplifier.ready.then(() => { ready = true; }, () => { ready = false; });
 
-type Key = 'shadow' | 'hull';
+type Key = 'shadow' | 'hull' | 'crowd';
 /** per source index (or position, for a non-indexed mesh) attribute: the LOD per kind, null = not worth one */
 const cache = new WeakMap<object, Partial<Record<Key, BufferAttribute | null>>>();
 
@@ -50,10 +69,11 @@ function positionsOf(g: BufferGeometry): Float32Array | null {
 }
 
 /**
- * A LOD index for `g` (`kind`: LOD.shadow or LOD.hull), cached on its source index; null when the mesh is too small,
- * has material groups, is not triangles or the simplifier is not ready (then the caller draws it whole).
+ * A LOD index for `g` (`kind`: LOD.shadow, LOD.hull or LOD.crowd), cached on its source index; null when the mesh is
+ * too small, has material groups, is not triangles or the simplifier is not ready (then the caller draws it whole).
+ * `unitM`: metres per position unit (dequantUnit; 1 = the bound is in the mesh's own units).
  */
-export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.minTris): BufferAttribute | null {
+export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.minTris, unitM = 1): BufferAttribute | null {
   if (!ready) return null;
   const pos = g.getAttribute('position');
   if (!pos) return null;
@@ -75,9 +95,9 @@ export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.min
   if (src.length !== count) src = src.subarray(0, count);
   try {
     const scale = MeshoptSimplifier.getScale(positions, 3);
-    if (!(scale > 0)) return null;
+    if (!(scale > 0) || !(unitM > 0)) return null;
     const target = Math.max(3, Math.floor((count * cfg.ratio) / 3) * 3);
-    const [out] = MeshoptSimplifier.simplify(src, positions, 3, target, cfg.errorM / scale, []);
+    const [out] = MeshoptSimplifier.simplify(src, positions, 3, target, cfg.errorM / (unitM * scale), []);
     if (!out.length || out.length > count * 0.85) return null;          // not worth a second buffer
     const arr = pos.count < 65536 ? Uint16Array.from(out) : out;
     const attr = new BufferAttribute(arr, 1);
@@ -92,8 +112,9 @@ export function lodIndex(g: BufferGeometry, kind: Key, minTris: number = LOD.min
 // ── the shadow swap ─────────────────────────────────────────────────────────────────────────────
 /** shadow: harness seam (_harness/probe_lod.mjs A/B), false draws every shadow caster whole. outline: whether an actor
  *  built now takes the outline-hull LOD (actors.ts) — the renderer turns it on for a match and off for the menu, whose
- *  showcase fighter stands 4-5x larger on screen than the 6 mm bound was set for */
-export const lodSwitch = { shadow: true, outline: false };
+ *  showcase fighter stands 4-5x larger on screen than the 6 mm bound was set for. body: whether a fighter built now
+ *  draws its face-locked LOD1 (actors.ts; the renderer sets it with `outline`, the menu keeps the full body) */
+export const lodSwitch = { shadow: true, outline: false, body: false };
 const shadowLod = new WeakMap<BufferGeometry, BufferAttribute>();
 let swapped: { g: BufferGeometry; index: BufferAttribute | null } | null = null;
 
@@ -133,10 +154,104 @@ export function shadowLods(root: Object3D, budgetMs = Infinity): void {
     const g = m.geometry;
     if (!g) return;
     if (!shadowLod.has(g)) {
-      const l = lodIndex(g, 'shadow', (m as { isInstancedMesh?: boolean }).isInstancedMesh ? LOD.minTrisInstanced : LOD.minTris);
+      // an instanced caster draws its mesh once per instance, a crowd part (an instanced view) once per unit
+      const min = (m as { isInstancedMesh?: boolean }).isInstancedMesh ? LOD.minTrisInstanced
+        : (g as { isInstancedBufferGeometry?: boolean }).isInstancedBufferGeometry ? LOD.minTrisCrowd : LOD.minTris;
+      const l = lodIndex(g, 'shadow', min);
       if (!l) return;
       shadowLod.set(g, l);
     }
     hook(m);
   });
+}
+
+// ── the fighter body's face-locked LOD1 (port of art/blender/fighters/_lod1_three.mjs) ──────────────
+const _dq = new Matrix4();
+const _dv = new Vector3();
+/** metres per position unit of a skinned mesh as GLTFLoader built it (at rest, world matrices current): the
+ *  skeleton carries KHR_mesh_quantization's dequantization (bone.matrixWorld x boneInverse x bindMatrix) */
+export function dequantUnit(mesh: SkinnedMesh): number {
+  const sk = mesh.skeleton;
+  if (!sk || !sk.bones.length) return 1;
+  _dq.copy(mesh.matrixWorld).invert().multiply(sk.bones[0].matrixWorld).multiply(sk.boneInverses[0]).multiply(mesh.bindMatrix);
+  return _dv.setFromMatrixColumn(_dq, 0).length();
+}
+
+/**
+ * The face-locked LOD1 index of a fighter's textured body (a SkinnedMesh with one material and an index), or null
+ * (simplifier not ready, no `head` bone, nothing gained). Call it on the TEMPLATE's body at rest (its world matrices
+ * current, never posed): the dequantization is read from its skeleton. LOD.body: half the triangles within 10 mm,
+ * normals weighted 0.5, every vertex skinned >= 0.5 to `head` locked (the chars lane's _lod1.mjs, checked against it by
+ * art/blender/fighters/_lod1_three.mjs). Returns the index (Uint16 under 65,536 vertices) and both triangle counts.
+ */
+export function faceLockedLod(mesh: SkinnedMesh): { index: BufferAttribute; tris: number; lodTris: number } | null {
+  if (!ready) return null;
+  const cfg = LOD.body;
+  const g = mesh.geometry;
+  const P = g.getAttribute('position'), N = g.getAttribute('normal');
+  const SI = g.getAttribute('skinIndex'), SW = g.getAttribute('skinWeight');
+  if (!mesh.isSkinnedMesh || !g.index || !P || !N || !SI || !SW || g.groups.length > 1) return null;
+  const head = mesh.skeleton.bones.findIndex((b) => b.name === cfg.lockBone);
+  if (head < 0) return null;
+  const n = P.count;
+  const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), lock = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    pos[i * 3] = P.getX(i); pos[i * 3 + 1] = P.getY(i); pos[i * 3 + 2] = P.getZ(i);
+    nrm[i * 3] = N.getX(i); nrm[i * 3 + 1] = N.getY(i); nrm[i * 3 + 2] = N.getZ(i);
+    let hw = 0;
+    for (let k = 0; k < 4; k++) if (SI.getComponent(i, k) === head) hw += SW.getComponent(i, k);
+    if (hw >= cfg.lockW) lock[i] = 1;
+  }
+  const src = g.index.array instanceof Uint32Array ? g.index.array : Uint32Array.from(g.index.array as ArrayLike<number>);
+  const tris = src.length / 3;
+  try {
+    const unitM = dequantUnit(mesh);
+    const extent = MeshoptSimplifier.getScale(pos, 3);
+    if (!(unitM > 0) || !(extent > 0)) return null;
+    const target = Math.max(3, Math.floor(tris * cfg.ratio) * 3);
+    const w = cfg.normalW;
+    const [lod] = MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, nrm, 3, [w, w, w], lock, target, cfg.errorM / (unitM * extent), []);
+    if (!lod.length || lod.length >= src.length) return null;
+    const attr = new BufferAttribute(n < 65536 ? Uint16Array.from(lod) : lod, 1);
+    attr.name = 'vale_lod_body';
+    return { index: attr, tris, lodTris: lod.length / 3 };
+  } catch {
+    return null;
+  }
+}
+
+/** a geometry drawing `index` over `g`'s own attributes (no copy; the bounds are g's). Disposed with g: three frees
+ *  every attribute a disposed geometry holds, so the view must never be disposed while g still draws */
+export function indexView(g: BufferGeometry, index: BufferAttribute, name: string): BufferGeometry {
+  const v = new BufferGeometry();
+  for (const [k, a] of Object.entries(g.attributes)) v.setAttribute(k, a);
+  for (const k of Object.keys(g.morphAttributes) as (keyof BufferGeometry['morphAttributes'])[]) v.morphAttributes[k] = g.morphAttributes[k];
+  v.morphTargetsRelative = g.morphTargetsRelative;
+  v.setIndex(index);
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  v.boundingSphere = g.boundingSphere;
+  if (g.boundingBox) v.boundingBox = g.boundingBox;
+  v.name = name;
+  g.addEventListener('dispose', () => v.dispose());
+  return v;
+}
+
+/** a merged hull's index with some members' triangles swapped for their LOD (`lodOf(mesh)`, null = keep the member's
+ *  own): `members` are hullPlan's (actors.ts), each one's mesh, first vertex, first index and index count */
+export function composeIndex(g: BufferGeometry, members: readonly { mesh: number; vo: number; io: number; n: number }[], lodOf: (mesh: number) => ArrayLike<number> | null): BufferAttribute | null {
+  const src = g.index;
+  if (!src) return null;
+  let total = 0, swapped = false;
+  for (const m of members) { const l = lodOf(m.mesh); if (l) swapped = true; total += l ? l.length : m.n; }
+  if (!swapped) return null;
+  const I = g.getAttribute('position').count > 65535 ? new Uint32Array(total) : new Uint16Array(total);
+  let o = 0;
+  for (const m of members) {
+    const l = lodOf(m.mesh);
+    if (l) for (let i = 0; i < l.length; i++) I[o++] = l[i] + m.vo;
+    else for (let i = 0; i < m.n; i++) I[o++] = src.getX(m.io + i);
+  }
+  const attr = new BufferAttribute(I, 1);
+  attr.name = 'vale_lod_composed';
+  return attr;
 }

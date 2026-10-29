@@ -26,7 +26,7 @@ export function SkyStrip(): JSX.Element {
   const { model, client } = useHud();
   const mine = (): ReturnType<typeof model.view.teams.find> => model.view.teams.find((t) => t.team === model.myTeam);
   const theirs = (): ReturnType<typeof model.view.teams.find> => model.view.teams.find((t) => t.team !== model.myTeam);
-  useViewKey(() => { const v = model.view, a = mine(), b = theirs(); return `${v.phase}|${v.suddenDeath ? 1 : 0}|${a?.kills ?? 0}|${a?.structuresDestroyed ?? 0}|${b?.kills ?? 0}|${b?.structuresDestroyed ?? 0}`; });
+  useViewKey(() => { const v = model.view, a = mine(), b = theirs(); return `${v.phase}|${v.suddenDeath ? 1 : 0}|${v.gorgeWind ?? 0}|${a?.kills ?? 0}|${a?.structuresDestroyed ?? 0}|${b?.kills ?? 0}|${b?.structuresDestroyed ?? 0}`; });
   const mode = cv.mode(client.setup.mode);
   const q = cv.queue(client.setup.queue);
   const rules = q ? cv.rulesOf(q) : mode?.rules;
@@ -42,6 +42,15 @@ export function SkyStrip(): JSX.Element {
   });
   const v = model.view;
   const pre = v.phase === 'pregame';
+  // sudden death is the Gorge Wind (rules.gorgeWind): the badge carries the step it has risen to (WorldView.gorgeWind)
+  const windMax = rules?.gorgeWind?.maxSteps ?? 0;
+  const wind = Math.min(windMax, v.gorgeWind ?? 0);
+  const sdBadge = (cls: string): JSX.Element => (
+    <span class={`sky__sd ${cls}`} title={cv.t('hud.sudden_death_tip', '')}>
+      {cv.t('hud.sudden_death', 'Sudden death')}
+      {wind > 0 ? <span class="sky__sdstep num" aria-label={cv.t('hud.gorge_wind_step', 'Step {n} of {max}', { n: wind, max: windMax })}>{` ${wind}/${windMax}`}</span> : null}
+    </span>
+  );
   const clock = pre ? (
     <span class="sky__clock num" aria-live="off">
       <span class="t-caption sky__pre">{cv.t('hud.pregame', 'The match begins in {t}', { t: '' }).replace(/\s*$/, '')}</span> <span ref={clockEl} />
@@ -54,7 +63,7 @@ export function SkyStrip(): JSX.Element {
         <span class="sky__side t-caption">{first ? cv.t('hud.fray.first_to', 'First to {n}', { n: first }) : ''}</span>
         {clock}
         <span class="sky__side t-caption">{limit && !pre ? cv.t('hud.fray.clock', 'Ends at {t}', { t: fmtClock(limit) }) : ''}</span>
-        {v.suddenDeath ? <span class="sky__sd t-label">{cv.t('hud.sudden_death', 'Sudden death')}</span> : null}
+        {v.suddenDeath ? sdBadge('t-label') : null}
         <div class="sky__under"><span /><span /><span class="sky__under-r"><LedgerSlot /></span></div>
       </header>
     );
@@ -69,7 +78,7 @@ export function SkyStrip(): JSX.Element {
       </div>
       <div class="sky__mid">
         {clock}
-        {v.suddenDeath ? <span class="sky__sd t-caption">{cv.t('hud.sudden_death', 'Sudden death')}</span> : null}
+        {v.suddenDeath ? sdBadge('t-caption') : null}
       </div>
       <div class="sky__team sky__team--enemy">
         <span class="sky__kills num" title={cv.t('hud.takedowns', 'Takedowns')}>{b?.kills ?? 0}</span>

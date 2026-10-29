@@ -16,7 +16,7 @@
 //             scale the menu left
 //
 // URL: mode, q (tier), t (fast-forward s), seed, you (seat 0's fighter), picks (comma list: a fighter per seat), dev, hud,
-//   manual, dyn, crowd, cb, menu, fighter, menufirst
+//   manual, dyn, crowd, bodylod, cb, menu, fighter, menufirst
 // window.__VALE_BENCH__: { ready, stats(), timing(), profile(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
 //   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station), rebuild() }
 //   rebuild()  a NEW host for the identical match (same setup and seed, fast-forwarded to the same `t`, so the same sim
@@ -81,6 +81,7 @@ async function main(): Promise<void> {
     dynamicResolution: qs.get('dyn') === '1',
     preserveDrawingBuffer: true, quiet: true,
     crowd: qs.get('crowd') !== '0',                                  // crowd=0: every Wick as its own model (A/B)
+    bodyLod: qs.get('bodylod') !== '0',                              // bodylod=0: match fighters draw full bodies (A/B)
   });
   const resize = (): void => renderer.resize(canvas.clientWidth, canvas.clientHeight);
   addEventListener('resize', resize);

@@ -28,6 +28,26 @@ def defs() -> list:
                    size=[0.05, 0.4], color="team", alpha=[0.8, 0], emissive=1.4, texture="ring_thin", blend="add"),
                  comment="T1 · Lumen · Hum: thin rings of sound pulse round the target's chest three times, glints circle it, small ripples bloom"))
 
+    # ── passive · the chord (area at the struck humming enemy, 3.5 m; every humming enemy in it is stunned 1 s, T3) ────
+    # two notes meet: the hum's chest rings swell into a band of sound running out to 3.5 m (the humming enemies inside
+    # are joined by it), then the stun: the rings snap shut inward and a hush settles
+    D.append(vfx("vashil_passive_chord", 1.0,
+                 [L("shockwave", at="target", delay=d, offset=[0, 0.3, 0], radius=[[0, 0.42], [1, 0.9]], width=[0.08, 0.03], life=0.22,
+                    color=[GLASS, "team"], alpha=[1, 0.6, 0], emissive=2.6, sharp=2.2, mode="vertical") for d in (0.0, 0.08)],
+                 L("shockwave", at="ground", radius=[[0, 0.12], [0.5, 0.92], [1, 1.0]], width=[0.22, 0.05], life=0.36, color=[WHITE, BELL, "team"],
+                   alpha=[1, 0.9, 0], emissive=4.5, sharp=2.6, noise=0.15, fit=True),
+                 L("shockwave", at="ground", delay=0.06, radius=[[0, 0.1], [0.5, 0.8], [1, 0.86]], width=[0.12, 0.03], life=0.32, color=[BELL, "team"],
+                   alpha=[0.8, 0.6, 0], emissive=3.0, sharp=2.6, fit=True),
+                 # the stun: rings snap shut on the struck one
+                 [L("shockwave", at="target", delay=0.22 + d, offset=[0, 1.6, 0], radius=[[0, 0.9], [1, 0.35]], width=[0.06, 0.1], life=0.3,
+                    color=[NOON, "team"], alpha=[0, 1, 0], emissive=3.0, sharp=2.0) for d in (0.0, 0.12)],
+                 L("emitter", at="ground", count=18, shape="ring", radius=0.95, offset=[0, 0.4, 0], dir="in", spreadDeg=10, speed=[1.5, 2.5],
+                   life=[0.35, 0.55], size=[0, 0.16, 0], color=[WHITE, GLASS, "team"], alpha=[0, 1, 0], emissive=3.0, texture="glint", blend="add",
+                   delay=0.18, fit=True),
+                 light("target", "team", 4, 5, 0.25),
+                 comment="T3 · Lumen · the chord: the hum's chest rings swell and a band of sound runs out to 3.5 m joining the humming "
+                         "enemies, then rings snap shut over the struck one (the stun) and glints fall inward into a hush"))
+
     # ── a1 · Peal (ring area 1.5 - 3.5 m, lands after 0.4 s): the ring of sound with a quiet centre ───────────────────
     inner = 1.5 / 3.5
     D.append(vfx("vashil_a1_peal", 1.0,

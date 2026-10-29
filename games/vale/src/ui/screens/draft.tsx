@@ -25,7 +25,7 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { FighterDefT } from '../catalog_view.ts';
-import type { DraftSeat, DraftState } from '../../contracts/session.ts';
+import type { DraftAction, DraftSeat, DraftState } from '../../contracts/session.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
 import { ClassMark, RoleIcon } from '../components/FighterCard.tsx';
@@ -45,14 +45,13 @@ import { fmtWait } from '../format.ts';
 import { animateIn } from '../motion.ts';
 import { TOKENS } from '../tokens.ts';
 import type { DraftMusicState } from '../audio_port.ts';
-import type { DraftAction } from '../../contracts/session.ts';
 
 type View = 'team' | 'lot' | 'ffa' | 'finalize';
 
-/** client F12: the session's ready flag on a seat (absent while the session has no ready action) */
-const readyOf = (s: DraftSeat | undefined): boolean | undefined => (s as (DraftSeat & { ready?: boolean }) | undefined)?.ready;
-/** the ready action (DraftAction gains { a: 'ready' } with the session's half) */
-const READY = { a: 'ready' } as unknown as DraftAction;
+/** client F12: the session's ready flag on a seat (DraftSeat.ready: finalize / trade / done only, absent elsewhere) */
+const readyOf = (s: DraftSeat | undefined): boolean | undefined => s?.ready;
+/** the ready action (DraftAction { a: 'ready' }: once every person is ready, finalize ends after READY_GRACE) */
+const READY: DraftAction = { a: 'ready' };
 
 /** audio AUD-m2: what the draft bed should play for this state */
 function draftMusicOf(d: DraftState): DraftMusicState {
@@ -155,8 +154,13 @@ function PhaseHead(p: { d: DraftState; title: string; prompt?: string; sub?: str
   );
 }
 
+/** the session's log line a player reads: BRIDGE's Lot burning down ('The Lot let X go') says it in VALE's words */
+const LOT_BURNED = /^The Lot let (.+) go$/;
 function Ticker(p: { d: DraftState }): JSX.Element {
-  const line = p.d.log[p.d.log.length - 1];
+  const { cv } = useApp();
+  const raw = p.d.log[p.d.log.length - 1];
+  const burned = raw ? LOT_BURNED.exec(raw) : null;
+  const line = burned ? cv.t('lot.burned', '{fighter} went back to the gorge.', { fighter: burned[1] }) : raw;
   const el = useRef<HTMLSpanElement>(null);
   useEffect(() => { animateIn(el.current, { from: 'right', d: 'fast' }); }, [p.d.log.length]);
   return <p class="ticker t-body-s" role="log" aria-live="polite"><Icon name="info" size={14} /><span ref={el}>{line ?? ''}</span></p>;
@@ -400,6 +404,14 @@ function LotView(p: { d: DraftState; onLeave: () => void }): JSX.Element {
   const bench = d.bench[me.team] ?? [];
   const mine = cv.fighter(me.locked);
   const draws = me.rerolls ?? 0;
+  /** W4 re-key: a queue with no draws (bench.rerolls 0) shows no Draw again; takes = DraftSeat.swaps (absent = no limit) */
+  const canDraw = (queue.bench?.rerolls ?? 0) > 0;
+  const fade = queue.bench?.fade;
+  const takes = me.swaps;
+  const noTakes = takes !== undefined && takes <= 0;
+  const takeText = takes === undefined ? null : takes > 0
+    ? (takes === 1 ? cv.t('lot.take_left', '{n} take left', { n: takes }) : cv.t('lot.take_left_plural', '{n} takes left', { n: takes }))
+    : cv.t('lot.take_none', 'No takes left');
   const prev = useRef(me.locked);
   const drawEl = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -407,14 +419,16 @@ function LotView(p: { d: DraftState; onLeave: () => void }): JSX.Element {
     prev.current = me.locked;
   }, [me.locked]);
   const reason = draws <= 0 ? cv.t('lot.draw_none', 'No draws left') : null;
+  const drawText = draws > 0 ? (draws === 1 ? cv.t('lot.draw_left', '{n} draw left', { n: draws }) : cv.t('lot.draw_left_plural', '{n} draws left', { n: draws })) : cv.t('lot.draw_none', 'No draws left');
+  const takeReason = noTakes ? cv.t('error.draft.no_swaps', 'You have already taken a fighter from the Lot.') : undefined;
   return (
     <Screen layout="wide"
-      foot={<div class="draft__foot"><Ticker d={d} /><span class="t-body-s muted">{cv.t('lot.lot_note', 'Everyone on your team can swap with the Lot while the timer runs.')}</span></div>}
-      cta={<Button variant="chalk" size="l" icon="reroll" cue="click" disabled={!!reason} reason={reason ?? undefined}
-        onPress={() => session.draft({ a: 'reroll' })}>{cv.t('btn.draw_again', 'Draw again')}</Button>}>
+      foot={<div class="draft__foot"><Ticker d={d} /><span class="t-body-s muted">{fade ? cv.t('lot.lot_note', 'Each of you can take one fighter from the Lot. Every {s} s its first fighter goes back to the gorge.', { s: fade }) : cv.t('lot.lot_note_still', 'Each of you can take one fighter from the Lot.')}</span></div>}
+      cta={canDraw ? <Button variant="chalk" size="l" icon="reroll" cue="click" disabled={!!reason} reason={reason ?? undefined}
+        onPress={() => session.draft({ a: 'reroll' })}>{cv.t('btn.draw_again', 'Draw again')}</Button> : undefined}>
       <div class="lot">
         <header class="draft__top draft__top--lot stg">
-          <PhaseHead d={d} title={cv.t('lot.title', 'The Lot')} prompt={cv.t('lot.prompt', 'Your fighter was drawn by lot. Swap with your team\'s Lot, or draw again once.')}
+          <PhaseHead d={d} title={cv.t('lot.title', 'The Lot')} prompt={cv.t('lot.prompt', 'Your fighter was drawn by lot. Take one fighter from your team\'s Lot, once, before it burns down.')}
             sub={cv.t('lot.window', 'The Lot closes in {t}.', { t: fmtWait(d.timer) })} />
         </header>
         <div class="lot__main">
@@ -425,7 +439,8 @@ function LotView(p: { d: DraftState; onLeave: () => void }): JSX.Element {
               <h2 class="t-display-m">{mine?.name ?? '—'}</h2>
               {mine ? <span class="t-body-s muted"><ClassMark classId={mine.class} withName /> · {mine.title}</span> : null}
               {mine ? <p class="t-body">{mine.job}</p> : null}
-              <span class="t-caption muted">{draws > 0 ? (draws === 1 ? cv.t('lot.draw_left', '{n} draw left', { n: draws }) : cv.t('lot.draw_left_plural', '{n} draws left', { n: draws })) : cv.t('lot.draw_none', 'No draws left')} · {cv.t('lot.draw_hint', 'Draw a new fighter. Your old one joins the Lot.')}</span>
+              {canDraw ? <span class="t-caption muted">{drawText} · {cv.t('lot.draw_hint', 'Draw a new fighter. Your old one joins the Lot.')}</span> : null}
+              {takeText ? <span class={`t-caption lot__takes ${noTakes ? 'muted' : ''}`}>{takeText}</span> : null}
             </div>
           </section>
           <section class="lot__bench stg" aria-label={cv.t('lot.team_lot', "Your team's Lot")}>
@@ -443,7 +458,8 @@ function LotView(p: { d: DraftState; onLeave: () => void }): JSX.Element {
                         <span class="t-caption muted"><ClassMark classId={f.class} withName /></span>
                       </div>
                       <Button variant="secondary" size="s" icon="swap" tip={cv.t('lot.swap_hint', 'Your fighter goes to the Lot for a teammate to take.')}
-                        onPress={() => { sound.play('click'); session.draft({ a: 'benchSwap', fighter: id }); }}>{cv.t('lot.swap', 'Swap')}</Button>
+                        disabled={noTakes} reason={takeReason}
+                        onPress={() => { sound.play('click'); session.draft({ a: 'benchSwap', fighter: id }); }}>{cv.t('lot.swap', 'Take')}</Button>
                     </div>
                   );
                 })}

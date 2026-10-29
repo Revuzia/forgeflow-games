@@ -51,6 +51,9 @@
 .iglyph__svg { width: 56%; height: 56%; filter: drop-shadow(0 1px 0 rgba(11, 13, 17, 0.7)); }
 .iglyph__ticks { position: absolute; z-index: 1; left: 2px; top: 2px; display: flex; gap: 2px; padding: 1px 2px; border-radius: 1px; background: rgba(11, 13, 17, 0.72); }
 .iglyph__ticks i { display: block; width: 2px; height: 5px; background: var(--hour); }
+/* the dial-slot rule: where a dial item stands (glyphs.tsx DialMark), bottom-right on the same dark backing as the ticks */
+.iglyph__dial { position: absolute; z-index: 1; right: 2px; bottom: 2px; width: 11px; height: 11px; padding: 1px; border-radius: 50%; background: rgba(11, 13, 17, 0.72); color: var(--tier-noonlit); }
+.schip .iglyph__dial { display: none; }
 .gleam { display: inline-block; color: var(--chalk); vertical-align: -2px; }
 .pglyph { display: block; }
 
@@ -71,6 +74,7 @@
 .sky__clock.is-harm { color: var(--team-enemy); }
 .sky__pre { color: var(--text-2); margin-right: calc(6 * var(--px)); font-family: var(--font-body); }
 .sky__sd { color: var(--team-enemy); }
+.sky__sdstep { opacity: 0.85; }
 .sky--ffa { grid-template-columns: 1fr auto 1fr; }
 .sky--ffa .sky__side { color: var(--text-2); }
 .sky--ffa .sky__side:last-of-type { text-align: right; }
@@ -508,6 +512,17 @@
 .ptools__stat { display: flex; align-items: baseline; justify-content: space-between; gap: calc(6 * var(--px)); }
 .ptools__stat dd { margin: 0; font-size: calc(15 * var(--px)); }
 .ptools__stat dd.is-crit { color: var(--chalk); }
+.ptools__sub { margin-top: calc(2 * var(--px)); }
+.ptools__tog { display: inline-flex; align-items: center; justify-content: center; gap: calc(6 * var(--px)); }
+.ptools__dot { width: calc(8 * var(--px)); height: calc(8 * var(--px)); flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+.ptools__tog.is-on .ptools__dot { background: var(--chalk-hi); box-shadow: none; }
+.ptools__fields { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: calc(6 * var(--px)); }
+.ptools__field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ptools__num { width: 100%; min-width: 0; height: calc(28 * var(--px)); padding: 0 calc(6 * var(--px)); border: 0; border-radius: var(--radius-s, 2px); background: rgba(11, 13, 17, 0.55);
+  box-shadow: inset 0 0 0 1px var(--line-1); color: var(--text-1); font: inherit; font-size: calc(13 * var(--px)); }
+.ptools__num:focus-visible { outline: 2px solid var(--chalk-hi); outline-offset: 1px; }
+/* move to a point: the ground cursor while armed */
+.ptools-aiming .hudsurface { cursor: crosshair !important; }
 
 .endban { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); z-index: 8; display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--px));
   padding: calc(28 * var(--px)) 0; pointer-events: none !important; }
