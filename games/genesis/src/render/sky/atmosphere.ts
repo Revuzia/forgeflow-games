@@ -347,6 +347,8 @@ uniform sampler2D tCloudAux;  // per pixel: log2(cloud distance + 1) (< 0: none)
 uniform vec3 uMoonDir;         // moonlit sky at night (world frame); uMoonK = moon / sun illuminance per channel
 uniform vec3 uMoonK;
 uniform float uHasCloud;
+uniform sampler2D tExposure;  // the adapted exposure (1x1; post): the airglow band shows only to a night-adapted frame
+uniform float uHasExposure;
 uniform vec2 uCloudRes;
 uniform vec2 uCloudShell;
 uniform mat4 uInvProj;
@@ -490,7 +492,12 @@ void main() {
       // (tied to the star's light at the world, so the band keeps its place against the night exposure everywhere)
       float sunL = dot(uSunE, vec3(0.2126, 0.7152, 0.0722));
       // (a thin line, as from the ISS: at 2.2e-6 it drew a broad neon-green halo round the night limb)
-      col += vec3(0.38, 1.0, 0.55) * (1.4e-6 * path * nightG * sunL);
+      // (fix-render r3 #9: as faint as starlight — seen only by an eye adapted to the night side. Where a sunlit limb or
+      // the day side sets the exposure (orbit by day ~0.9, a limb view ~1.4) it is below sight: a thin green ring on the
+      // night limb of every day-lit orbit view read as a rendering fault. It shows where the frame is exposed for the
+      // night (the god's view at night, exposure ~3.5-16))
+      float eyeK = uHasExposure > 0.5 ? smoothstep(1.5, 4.0, texture(tExposure, vec2(0.5)).r) : 1.0;
+      col += vec3(0.38, 1.0, 0.55) * (1.4e-6 * path * nightG * sunL * eyeK);
     }
   }
   gl_FragColor = vec4(col, 1.0);
@@ -502,6 +509,7 @@ export class AtmospherePass {
   constructor() {
     this.material = passMaterial(COMPOSITE_FRAG, {
       tScene: { value: null }, tDepth: { value: null }, tCloud: { value: null }, tCloudAux: { value: null }, uHasCloud: { value: 0 },
+      tExposure: { value: null }, uHasExposure: { value: 0 },
       tAO: { value: null }, uAoRes: { value: new Vector2(1, 1) }, uAoStrength: { value: 0 }, uAoOn: { value: 0 },
       uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonK: { value: new Vector3() },
       uCloudRes: { value: new Vector2(1, 1) }, uCloudShell: { value: new Vector2(3180, 3420) },

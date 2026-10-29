@@ -478,6 +478,8 @@ export class Renderer {
       u.tCloud.value = this.clouds.target.texture;
       u.tCloudAux.value = this.clouds.aux;
       u.uHasCloud.value = withClouds ? 1 : 0;
+      u.tExposure.value = FX_EXPOSURE.value;
+      u.uHasExposure.value = FX_EXPOSURE.value ? 1 : 0;
       // the AO multiplies the scene once: in the first composite (which reads post.hdr)
       u.uAoOn.value = aoS && firstComposite ? 1 : 0;
       if (aoS && firstComposite) {
