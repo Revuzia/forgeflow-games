@@ -1,0 +1,128 @@
+{
+ "fighter": "sukri",
+ "score": 6.0,
+ "summary": "Verified 6/10, NOT ON PAR. Four majors are confirmed: (1) the materials do not separate and the glass cup is opaque, (2) the attack and cast animations share one arm-only staff swing, the hands are fists and the recall staff clips the hood, (3) the splash and portrait pipeline, and (4) the Shadeprint deluxe never shows its violet light in game. Two of the review's claims are corrected. SUK-M1, the chin cracks as a ventriloquist jaw, is downgraded to a minor watch item. The cracks start 4.5 cm below the mouth corners, so they are not hinge seams, and they read as wood grain. They are invisible at medallion size, and the approved concept paints them too. In SUK-M4, the claim that Sukri's splash is 3-4 times grainier than the others is refuted. His figure grain (noise sigma p20 1.35) sits at the roster median: Odrum 1.33, Rishal 1.51, Marund 1.69. The grain belongs to the roster-wide pipeline, which every sibling verifier counted as a major. The SUK-M2 fix is also corrected: the approved concept has cream wraps, so the fix restores the concept's chroma (10-18 against 3-8 in engine), the darker face disc and the see-through glass; it does not darken the wraps to the brief's brown-grey. No blocker was found and none was missed. The hood is a round dome at every facing in all three skins, and the Stillwater reed fan lies flat. The Wrap Cast overhead bar is the cord loop seen edge-on, with nothing hanging from it, so it is no noose read. Of the leftovers, 3 are closed, 1 is partly closed (a near-black crescent still frames the mask in the portraits) and 4 are open.",
+ "gapStatus": [
+  {
+   "id": "_open.json 11: the accent is tiny and only about half of it is in the top half",
+   "status": "open",
+   "evidence": "- art/renders/fighters/sukri/build_report_sukri.json three_qa: accentPct 0.2, accentTopHalfPct 57.8.\n- art/renders/lineup/integ_chars_p2.json sukri: accentPct 0.05 / 0.22 / 0.08 / 0.10 by facing, accentTopHalfShare 0.0 at facing 90, accentOk false.\n- The GLB is unchanged since a55265d9."
+  },
+  {
+   "id": "_open.json 12: the base middle value band clears the floor by only a thin margin",
+   "status": "closed",
+   "evidence": "- integ_chars_p2.json sukri facing 0: top / mid / bottom 79.4 / 47.4 / 28.1, valueGradientOk true.\n- Caveat (roster-wide, as on Ilsheta): at facing 270 the top band is 64.2, under the 70 floor."
+  },
+  {
+   "id": "_open.json 16: Stillwater's feet band sits near the 35 cap",
+   "status": "open",
+   "evidence": "integ_chars_p2.json sukri_stillwater bottom band: 33.9 at facing 0 and 35.6 at facing 90, over the 35 cap."
+  },
+  {
+   "id": "_open.json new: Shadeprint's middle band 0.2 L* under the 45 floor",
+   "status": "closed",
+   "evidence": "integ_chars_p2.json sukri_shadeprint facing 0 mid 49.4 (47.5-65.7 over the four facings)."
+  },
+  {
+   "id": "_open.json new: Shadeprint torso light bands look soft and airbrushed rather than printed",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_sukri_shadeprint_torso_x2.png (viewed): the light bands still end in feathered, blurred tips. _harness/_shots/closing_sukri_verify_skins_close.png shows the same soft bands on the three close view."
+  },
+  {
+   "id": "_open.json new: the leather elbow cuff reads from behind as a dark brown knob",
+   "status": "open",
+   "evidence": "_harness/_shots/closing_sukri_three_back_x3.png (viewed): a dark rounded cap on the staff-arm elbow, against the concept's cream sleeve over a bracer (_design/concept/sukri.webp)."
+  },
+  {
+   "id": "W5b verify: grain streaks running down from hollow eyes (tear read)",
+   "status": "closed",
+   "evidence": "- sukri.py:347-349: the forehead cracks end at z 1.44-1.45, above the brow ridge (1.366-1.42). The eye tops are at 1.356 (EYES z 1.333 + EYE_H 0.023). The outer cheek cracks start at 1.17, 14 cm under the eyes.\n- The GLB's body material has no emissive; only 'accent' emits.\n- closing_sukri_verify_portrait_chin_x4.png: no line touches an eye, and the eye floors are flat amber."
+  },
+  {
+   "id": "final originality: mask framed in a dark hood void",
+   "status": "partly",
+   "evidence": "- The lining is lifted (LINING_HEX #86725E). On the lit upper right of the hood interior it reads L* 30-50 in portrait.png, and 25-44 in the icon.\n- On the shadow side the frame is still near-black. In an annulus at 1.04-1.22 times the mask ellipse, 35.0 % of pixels are under L* 6 in the base portrait (Stillwater 29.4 %, Shadeprint 33.7 %): the left side and under the chin (_harness/_reports/closing_sukri_verify_measure.json).\n- This is not a sensitivity problem. The face itself is lit, with a nose, a smile and amber eyes, and the concept also has a dark hood interior."
+  }
+ ],
+ "findings": [
+  {
+   "id": "SUK-M1",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Watch item: short chin cracks under the mouth corners (and a nose-bridge nick) on the carved face",
+   "what": "Two carved chin cracks run under the mouth corners. With the outer jaw cracks and the painted grain left over, they give the lower face four to six short vertical marks. The cracks start 4.5 cm below the corners and do not continue them. They read as wood grain or a carved beard, not as the two hinge seams of a dummy's jaw. A dark nick at the top of the nose bridge reads as a small hole, and a blue-grey smudge sits under the nose tip.",
+   "evidence": "- art/blender/fighters/sukri.py:347-349: GRAIN chin entries at x -0.110 (z 1.12 to 1.07) and x +0.110 (z 1.11 to 1.06).\n- sukri.py:335 and mouth_sd: the mouth's lower edge at x 0.110 is at z 1.165, so each crack starts 4.5 cm below it. That gap is larger than the mouth's 3.6 cm height at its centre.\n- In art/out/fighters/sukri/portrait.png (512 px), the right marks at x 306 and 321 span y 278-290: 12 px long, 1-2 px wide, L* 5-13 against 24-30. The mouth corner is at y about 252. The left mark merges with the disc's edge shadow.\n- Shots: _harness/_shots/closing_sukri_verify_portrait_chin_x4.png; closing_hud_E05z_medallion_sukri_3x.png (not visible at medallion size); closing_sukri_icon_x4.png (about 1 px at 128).",
+   "gauge": "A teen-rated League support's face reads benign at chip and splash size. Small age cracks on carved wood are acceptable there, provided they never frame the mouth as a separate jaw.",
+   "fix": "This is a cheap, low-risk change; keep it.\n- Remove the two chin entries from GRAIN and add their spans to GRAIN_CLEAN, so relief and paint agree.\n- Optionally carve two faint growth-ring arcs at the temples (VALE's stopped-dial hour-ring motif), at least 4 cm from the mouth.\n- Fill the nose-bridge nick and clean the smudge under the nose.\n- Re-render chip, portrait and splash for the three skins, then re-run the face-chip gate.",
+   "files": "art/blender/fighters/sukri.py (GRAIN, GRAIN_CLEAN, _face_clean); art/out/fighters/sukri/{icon,portrait,splash,sukri_*_portrait,sukri_*_splash}.png; the three GLBs",
+   "size": "S",
+   "verifierNote": "Downgraded from major. I could not reproduce the ventriloquist-dummy read.\n- Geometry: the cracks are detached from the mouth corners by a gap larger than the mouth's centre height (4.5 cm against 3.6 cm). The lower face carries several marks, not two seams.\n- Prior verdicts: integ_chars_verify1 viewed the same icon, portraits and splashes and recorded 'the mask with its smile reads friendly'.\n- Design source: the approved concept (_design/concept/sukri.webp) paints chin cracks too.\n- Gameplay camera: the face is not visible from the top-down camera (closing_sukri_match_close2_x2.png).\n- Owner standard (owner_rulings.md header): faces never read as horror. This face has a nose, a smile and warm amber inlays, as the Odrum Shadeprint ruling endorses, so it passes. It stays a watch item because the fix costs almost nothing."
+  },
+  {
+   "id": "SUK-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Materials do not separate in engine (chroma 3-8, face disc barely darker than the hood) and the dawnglass cup is an opaque frosted cylinder",
+   "what": "In engine, hood, wooden face disc, cloth wraps, stone cape, staff and cup all render as one matte greige, chroma 3-8. The face disc sits only 5-15 L* under the hood. The approved concept separates them:\n- chroma 10-18 (wood 16, wraps 17-18, stone 11-12);\n- a face disc about 20-40 L* darker than the hood;\n- a clear glass cup with the bead visible through it.\nThe signature prop is painted opaque into the body atlas: a white frosted cylinder under a dark slate cap. At portrait and splash size it reads as a lidded cup or a small bucket, not as glass holding light.",
+   "evidence": "Engine, sampled on _harness/_shots/closing_sukri_three_front_x3.png (from art/renders/fighters/sukri/three_sukri.png):\n- hood L* 70-81, C 3-4\n- mask 63-67, C 7-8\n- wraps 65-71, C 7\n- cape 76-77, C 5\n- staff 58-59, C 6\n- cup 69, C 4\n\nConcept _design/concept/sukri.webp:\n- hood 76-96\n- mask 54-59, C 16\n- wraps 52-68, C 17-18\n- cape 64-78, C 11-12\n- see-through glass\n\nGLB (art/out/fighters/sukri/sukri.glb):\n- Only two materials, 'body' (opaque, no alpha) and 'accent'.\n- Albedo atlas chroma p50 10.0; normal and ORM maps 512 px.\n\nCup reads: art/out/fighters/sukri/portrait.png and _harness/_shots/closing_sukri_splash_body_1to1.png.\n\nAll measurements: _harness/_reports/closing_sukri_verify_measure.json.",
+   "gauge": "A recent League champion's hand-painted model separates cloth, wood, stone and glass by value, hue and specular, so each reads as itself in the model viewer and in close-ups. The signature prop is the clearest material on the body. VALE: one greige for every surface, and the glass prop is opaque.",
+   "fix": "Re-author the albedo toward the approved concept, not the brief's brown-grey wraps.\n- Keep the cream wraps, but restore their warm chroma (about 15) and the darker shadow bands between them.\n- Paint the face disc and the staff as warm honey wood with visible grain (chroma 15 or more). Make the disc 15-20 L* darker than the hood, so the face separates.\n- Make the stone cape cooler, with lighter chipped edges and lower roughness than the cloth.\n- Make the cup real dawnglass: a semi-transparent shell (as Ilsheta's 0.4-alpha glass) with the accent bead and a soft inner glow ring showing through. Cut the slate cap down to a thin lip band.\n- Re-balance with lineup_qa so the mid band stays at 45 or above.",
+   "files": "art/blender/fighters/sukri.py (PALETTE line 207-209, _clean_wraps, _glass_paint, cup build, skins' _recolour); art/out/fighters/sukri/*.glb",
+   "size": "L",
+   "verifierNote": "Confirmed, with the fix corrected.\n- My Lab samples reproduce the reviewer's engine numbers within a few L*. The GLB parse confirms the glass is part of the opaque body material.\n- The reviewer's premise that the wraps should be the brief's #7E766A (L* 50) is wrong. sukri.py:12-17 records that the approved concept's look wins, and the concept has cream wraps. PALETTE cloth #B8AF9C is deliberate.\n- The defect is real against the concept itself: engine chroma is about half the concept's, the face-to-hood value step collapsed, and the concept's glass is clear.\n- This is consistent with lisvel-M3 (confirmed major, opaque glass and one matte clay). Ilsheta's similar point was downgraded only because her materials otherwise separate; Sukri's do not."
+  },
+  {
+   "id": "SUK-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Attacks and Mote Toss share one arm-only staff arc; fist hands; Wrap Cast's overhead loop hides behind the hood; recall staff runs into the hood; stunned cup barely swings",
+   "what": "1. attack1, attack2 and cast_a1 swing the staff out and forward on the same 0.27-0.40 s window. Hips, spine and chest turn 8 degrees at most. cast_a1 adds a free-arm reach, but its staff arc is the same.\n2. The rig has no finger bones, so every open-hand beat in the brief plays as a fist: a1's palm-up follow-through, the victory offering and the lobby counting.\n3. In cast_a3 the overhead cord loop shows only as a thin inverted-L bar above the hood, with the hand hidden.\n4. In recall the staff shaft rises into the hood and its end pokes out of the crown.\n5. In stunned the cup hook sits about 23 degrees off rest and moves only about 6 degrees; the brief asks for 'cup swinging wildly'.\n6. run carries the staff upright, not across the body.\n7. channel is near-static.",
+   "evidence": "GLB accessor read (art/out/fighters/sukri/sukri.glb, scratch parser), maximum rotation from rest in degrees:\n- attack1: hips 4, chest 7, upper_arm.R 51\n- attack2: hips 5, chest 7, upper_arm.R 61\n- cast_a1: hips 4, chest 8, upper_arm.R 79, upper_arm.L 60\n- stunned: x_cup_hook 20-26 across the clip\n- Joints: 29, with hand.L and hand.R only.\n\nShots:\n- Front sheet: _harness/_shots/closing_sukri_clips.png.\n- Side sheet (new): closing_sukri_verify_side_clips.png; attack rows in closing_sukri_verify_side_attacks.png.\n- Recall: closing_sukri_clip_recall_x2.png (staff end above the crown) and closing_sukri_verify_side_recall_x3.png (shaft entering the hood).\n- Wrap Cast: closing_sukri_verify_a3_overhead_x3.png.\n\nNumbers: _harness/_reports/closing_sukri_verify_measure.json.",
+   "gauge": "A League champion's two auto-attacks and each ability are distinct, body-led gestures with anticipation, a committed impact and a settle. Hands pose per gesture. Props never pass through the body in idle or recall loops. VALE: three actions share one arm swing on a still torso, the hands are fists, and the recall prop clips the hood.",
+   "fix": "- attack1: a down-beat. The staff butt taps the ground, the hood dips, and the cup flicks out on the rebound.\n- attack2: a hip-turn underhand push, with 20-30 degrees of torso and hip rotation and a half step.\n- cast_a1: a held tilt lob with a forward step.\n- Hands: add thumb and finger-group bones, or swap to an open-hand mesh per clip.\n- cast_a3: abduct the left shoulder past 150 degrees with the hood tilted away. Give the loop at least 2 cm thickness and author it as a ring, not edge-on.\n- recall: rest the staff on the outer shoulder, clear of the hood.\n- stunned: give the cup a 15-20 degree oscillation, not an offset.\n- run: carry the staff across the body, as the brief asks.",
+   "files": "art/blender/fighters/sukri.py (clip blocks, rig_extras, hand meshes, cup pendulum sampling); art/out/fighters/sukri/*.glb",
+   "size": "L",
+   "verifierNote": "Confirmed on the GLB data and with a fresh side-view render.\n- One nuance: cast_a1 is not a copy of attack1. It also raises the free arm 60 degrees, but the staff arc and the still torso are shared.\n- The side render backs the recall clip: the shaft goes up into the hood, and the front view shows its end above the crown.\n- Sensitivity check on Wrap Cast: the overhead shape is the cord loop seen edge-on, nothing hangs from it, and it lasts only the first 8 frames of the cast. It is not a noose or gallows read.\n- Severity holds. Several separate visible defects in the core combat and recall loops."
+  },
+  {
+   "id": "SUK-M4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splash and portrait are static Cycles renders on a painted plate (roster pipeline); one pose for all three skins; the offered cup is not the focal light",
+   "what": "The splash is the in-game model rendered in Cycles over a soft painted plate.\n- Visible sampling grain covers the figure while the plate is clean.\n- The pose is frontal and the same for all three skins.\n- The deluxe Shadeprint even reuses the base plate, regraded.\n- The brief's beat ('the offered cup is the brightest point in the frame, the hood turned a quarter from the camera') is not delivered. The cup's median is L* 67, and the brightest pixel in the frame is on the backdrop.",
+   "evidence": "- Grain: _harness/_reports/closing_sukri_verify_grain.txt gives Immerkaer sigma per tile inside the raw-pass alpha. Sukri p20 / p50 1.35 / 2.14; Stillwater 1.32 / 1.92; Shadeprint 1.44 / 2.17. Others: odrum 1.33 / 1.98, rishal 1.51 / 1.91, marund 1.69 / 2.38, kemdo 1.36 / 1.86, ilsheta 1.48 / 2.60.\n- Grain, visual: _harness/_shots/closing_sukri_verify_grain_cmp_x2.png shows the same speckle on Sukri, Marund, Odrum and Rishal.\n- Pose: raw-pass alpha IoU is 1.000 between base and Stillwater and between base and Shadeprint (_harness/_shots/closing_sukri_verify_splash3.png).\n- Plate: Shadeprint differs from base outside the figure by a mean |dRGB| of 20.8, the same composition regraded.\n- Cup in art/out/fighters/sukri/splash.png: p50 66.6, p95 78.2. The frame maximum is 81.5 at (848, 402) on the backdrop. The share of the frame brighter than the cup's p95 is 1.9 % (base), 5.7 % (Stillwater) and 4.5 % (Shadeprint).\n- Brief: _design/fighters/sukri.md:180.",
+   "gauge": "A League splash is a finished painted illustration: clean surfaces, one lighting story shared by figure and setting, a dynamic pose, and a focal hierarchy on the signature. Each skin has its own splash. VALE: one static render, re-tinted per skin, with the cup outshone by the backdrop.",
+   "fix": "- Light the splash from the cup: put a warm point light inside the dawnglass, so the face disc and the hands catch it, and drop the key so the cup is the brightest object.\n- Render converged with the denoiser on, and add a contact shadow.\n- Pose: a lower 3/4 camera with the hood turned a quarter, the staff on the shoulder and the cup held out in an open hand (needs SUK-M3's hands).\n- Give each skin its own pose and plate, the deluxe first.\n- Finish with a painted overpass, so figure and plate share one surface.",
+   "files": "art/blender/fighters/sukri.py (SPLASH block); art/build.py portraits step; art/blender plates composer; art/out/fighters/sukri/*splash.png, *portrait.png",
+   "size": "L",
+   "verifierNote": "Confirmed as a major, but the review's headline metric is refuted.\n- The claim that Sukri's splashes are 3-4 times grainier than Odrum's, Rishal's and Marund's does not reproduce. Measured only inside the figure, his grain is at the roster median, and Marund's is higher. The reviewer's 0.14-0.20 for the others most likely came from flattest tiles that fell on the smooth plate.\n- Grain is real, but it is the roster-wide pipeline, not a Sukri regression.\n- The rest reproduces exactly: model-render-on-plate, identical pose across skins, cup not focal, and the brief's quarter-turned hood not delivered.\n- The severity stays major for consistency with ardit-M1, burdam-M3, hesmi-M3, kemdo-M3, lisvel-M2, marund-M4, nurrow-M1, odrum-M4 and rishal-M1."
+  },
+  {
+   "id": "SUK-M5",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Shadeprint (deluxe): its headline 'cup holds violet light' never reaches the game, and its splash and portrait reuse the base pose",
+   "what": "The skin's store text promises violet light in the cup. vfxTint #6C5BA8 only recolours 'element' colour refs, and none of Sukri's 16 VFX defs uses one. Every Sukri cast carries its own wind-up VFX, so the generic element-tinted wind-up and charge never play. The cup's accent is tinted by team relation, not by skin. In a match, Shadeprint shows no violet anywhere. Its splash and portrait are the base pose re-tinted. The palette swap (ink wraps with light bands) is the only deluxe change.",
+   "evidence": "- content/skins/sukri.json:32-33: vfxTint #6C5BA8, desc 'The cup holds violet light.'\n- src/render/director.ts:398-401: elementOf returns skinTint.\n- src/render/vfx/curves.ts:77: only 'element' resolves to it.\n- content/vfx.json: the 16 sukri_* defs have 0 'element' refs (signature 61, team 12, the rest literal).\n- The element users are lib_cast_flare, lib_windup, lib_windup_ult and lib_status_taunt.\n- content/fighters/sukri.json gives a1, a2, a3 and ult their own windupVfx, with castTime 0.15-0.4 s. Per director.ts:25-28, the generic wind-up plays only when windupVfx is absent, and castFlash only under 0.12 s.\n- src/render/actors.ts:16: the accent clone is team-tinted.\n- Splash and portrait: alpha IoU against base is 1.000 (_harness/_shots/closing_sukri_verify_splash3.png, closing_sukri_portraits_3up.png).",
+   "gauge": "A League deluxe-tier skin changes model, VFX colour and splash art, and its headline feature is visible in every game. VALE: the headline violet light is promised in the store and never rendered.",
+   "fix": "- Make vfxTint reach the kit: route skin tint into Sukri's signature layers, or add 'element' refs to the cup motes, the Mote Toss bolt, the Draw Near pull and the Gather In flare, and keep team rings on 'team'.\n- Give the Shadeprint cup a violet inner glow ring painted into the glass. It is not emissive, so the accent rule holds.\n- Give the deluxe its own splash pose and plate.",
+   "files": "content/vfx.json (sukri_* layers); src/render/director.ts (elementOf, signatureOf); content/skins/sukri.json; art/blender/fighters/sukri.py (Shadeprint glass, SPLASH)",
+   "size": "M",
+   "verifierNote": "Confirmed. I traced every path by which the tint could reach Sukri: kit VFX, the generic wind-up, castFlash and the accent. None applies to him. The reviewer's '16 entries use none' is exact. This is consistent with hesmi-M4 and kemdo-M5. This deluxe at least has a distinct model palette (closing_sukri_portraits_3up.png), unlike Burdam's, so it stays major and does not rise further."
+  },
+  {
+   "id": "SUK-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The top of the face disc sits in the hood's shadow in the portrait, and a near-black crescent frames the mask on the shadow side",
+   "what": "In the portrait the disc's forehead under the hood rim is much darker than the cheeks. On the left and under the chin, about a third of the band around the mask is near-black. The face stays readable: lit cheeks, nose, smile and amber eyes. But the upper face loses its carving at chip size.",
+   "evidence": "- art/out/fighters/sukri/portrait.png: forehead L* 24-34 against cheeks 37-47.\n- The annulus around the mask is 35.0 % under L* 6 (base), 29.4 % (Stillwater) and 33.7 % (Shadeprint), per _harness/_reports/closing_sukri_verify_measure.json.\n- The brief (_design/fighters/sukri.md:57) asks the hood's rolled edge to shade the disc. That shade is intended, but not as a near-black frame.",
+   "gauge": "League portrait art keeps the face as the clearest-lit read in the frame, and hood shadows stay coloured and soft rather than black.",
+   "fix": "For the portrait and splash only: add a warm bounce fill from below (the cup's light, which pairs with SUK-M4) and raise the lining's shadow floor to about L* 15, so the shade stays coloured.",
+   "files": "art/blender/fighters/sukri.py (portrait/SPLASH lights, LINING_HEX); art/out/fighters/sukri/*portrait.png",
+   "size": "S",
+   "verifierNote": "Kept as a minor. The forehead shade is partly by design (the brief asks for it). The black crescent also means the 'dark hood void' leftover is only partly closed, not fixed."
+  }
+ ],
+ "missed": []
+}
