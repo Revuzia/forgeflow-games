@@ -12,7 +12,8 @@ directly (the path onAgain calls) and so never touches the buttons this lane add
   dom          document element count in each lobby: round 3 within +-60 of round 1 (the HUD rebuilds its tree per match; a per-match
                leak shows as growth that adds up)
   overlays     in every match: 0 leftover [data-lc=death] / [data-lc=post] nodes, exactly 1 [data-lc=bars] vitals card and 1 weapon card
-  gpu          renderer.info.memory.textures in each lobby: round 3 within +-5 of round 1; geometries within +-30
+  gpu          renderer.info.memory.textures in each lobby: round 3 within +-5 of round 1; geometries within +-30 (R3: rounds 1 and 3 share the map AND the
+               seed - their "Run it back" seed rolls are pinned to one value, --again-seed - since the lobby's textures depend on the seeded content)
   programs     (INFORMATION) renderer.info.programs in each lobby; it is NOT gated: three releases and re-links programs as the lobby / match materials come and go, and the
                lobbies of one run read 58, 55, 59 (isla_viva, 2026-10-14), so a one-program-per-round leak is inside the noise and a no-growth bar would flake
   animations   document.getAnimations() in the lobby: no growth between round 1 and round 3
@@ -63,6 +64,23 @@ PIN_FIND_JS = r"""async (want) => {
   return { ok: true, want, idx, maps };
 }"""
 
+# R3 (gates): "Run it back" keeps the map but startMatch draws a NEW seed from Math.random inside the same click (ffg_royale3d.js _startMatch:
+# W.seed = opts.seed ?? Math.random() * 0xffffffff), and the lobby's texture count depends on the seeded content: seeds 5 / 2 / 8 / 1 on one map read
+# 160 / 164 / 158 / 162 textures, flat from 0.5 to 5.5 s (F:/lc_p23/r2/hud/probe/seed_s*.json) - round 1 vs round 3 differed by up to 6 on the base
+# build too, i.e. the row measured the seed roll, not accumulation. Rounds 1 and 3 therefore pin the seed roll of their REAL "Run it back" click to
+# the SAME value (one-shot Math.random override inside that click only, as PIN_FIND_JS does), so the two lobbies the rows compare are the same map
+# AND the same seed: what is left is what the rounds accumulated. Round 2's "Find a new match" stays pinned as before (--find-map).
+PIN_AGAIN_JS = r"""(val) => {
+  const orig = Math.random;
+  window.__HC_PINA__ = { val, used: 0 };
+  document.addEventListener('click', () => {
+    Math.random = () => { window.__HC_PINA__.used++; return val; };
+    setTimeout(() => { Math.random = orig; }, 0);
+  }, { capture: true, once: true });
+  return { ok: true, val };
+}"""
+AGAIN_ROLL = 0.37      # any fixed value: the same seed for every pinned "Run it back"
+
 # PLANTED LEAKS (--plant): what a real "not freed between rounds" defect looks like to the gpu row. They run in the post-match screen before each
 # "Run it back" / "Find a new match" click: a scratch scene is rendered once (so the renderer registers the resources in renderer.info.memory) and
 # then dropped WITHOUT dispose() - exactly what a forgotten dispose leaves behind. 24 geometries / 5 textures per round, so the two rounds the rows compare add
@@ -96,6 +114,8 @@ def main():
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--find-map", default="same",
                     help="the die roll of the REAL 'Find a new match' click: 'same' (default) = the map the player is on, 'random' = the product's own roll, or a map id (isla_viva / ashgrid / deepwood)")
+    ap.add_argument("--again-seed", default="same", choices=["same", "random"],
+                    help="the seed roll of the REAL 'Run it back' clicks (rounds 1 and 3): 'same' (default, R3) = one fixed roll for both, so the compared lobbies share the seed; 'random' = the product's roll")
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS),
                     help="FALSIFIER: a resource leaked every round (renderer.info.memory.geometries / textures grow and are never disposed); the gpu row MUST fail")
     args = ap.parse_args()
@@ -152,6 +172,8 @@ def main():
                     if not pin.get("ok"):
                         v.cnj("round %d" % rnd, "cannot pin the map roll to %r: %s" % (target, pin))
                         return
+                if want == "Run it back" and args.again_seed == "same":
+                    v.info("round %d: the seed roll of the REAL 'Run it back' click is pinned (R3: the compared lobbies share map AND seed)" % rnd, s.js(PIN_AGAIN_JS, AGAIN_ROLL))
                 s.thaw_loop()
                 s.page.mouse.click(b["x"], b["y"])
                 ok = s.wait_js("() => window.__LC__.W.phase === 'lobby' && !window.__LC__.W._starting", args.load_timeout, 0.25)
@@ -164,6 +186,9 @@ def main():
                 v.info("round %d lobby after '%s'" % (rnd, want), cl)
                 if want == "Find a new match" and args.find_map != "random":
                     v.info("round %d: the pinned die roll was consumed by the click (Math.random reads inside it)" % rnd, s.safe_js("() => window.__HC_PIN__"))
+                if want == "Run it back" and args.again_seed == "same":
+                    v.info("round %d: the pinned seed roll was consumed by the click; the lobby's seed" % rnd, s.safe_js("() => ({ pin: window.__HC_PINA__, seed: window.__LC__.W.seed })"))
+                cl["seed"] = s.safe_js("() => window.__LC__.W.seed")
                 if rnd < args.rounds:
                     s.js("() => { window.__H_GUARD_N__ = {}; }")      # fresh per-phase frame counts for this round
                     lobby_phase = s.phase()
@@ -181,9 +206,11 @@ def main():
         # SAME-MAP comparison (lane 7G): group the lobbies by map and compare the FIRST and the LAST lobby of a map that has at least two. With the default
         # --find-map same every lobby is on one map, so this is the old round-1-vs-round-3 comparison with the same bars; with --find-map random a map the roll left
         # is simply not compared against another map's resources.
+        # R3: with the seed rolls pinned (--again-seed same) the compared lobbies are grouped by map AND seed - round 2's lobby (another seed) is
+        # never compared with round 1's; --again-seed random keeps the map-only grouping
         by_map = {}
         for c in census:
-            by_map.setdefault(c["map"], []).append(c)
+            by_map.setdefault(c["map"] if args.again_seed == "random" else "%s seed %s" % (c["map"], c.get("seed")), []).append(c)
         groups = [(m, cs) for m, cs in by_map.items() if len(cs) >= 2]
         v.info("lobbies per map (resources are only compared on the same map)", {m: len(cs) for m, cs in by_map.items()})
         if not groups:
