@@ -2109,11 +2109,13 @@ const TRAP_AGAIN_S = 30.0;        // a second trip within this long: the exits t
 const TRAP_WALK_M = 12.0;         // ... this far
 /** (R2 movers) Break a trapped bot out, deterministically (no rng draw), and COMMIT to it for TRAP_ESC_S (moveTowardQ walks the break-out goal instead of
  *  the state's goal: the state's next think re-picking the same goal used to throw the exit path away on the next frame). The goal, first that exists:
- *    1. on a roof / wall top / ledge (feet DECK_AGL over the ground, no ceiling): off the LOWEST open edge it survives (deckExitPoint with lethalDrop
- *       in place of the walking margin: a drop that costs hp is better than a roof for the rest of the match);
+ *    1. on a roof / wall top / ledge (feet DECK_AGL over the ground, no ceiling): off the lowest open edge it may walk off (deckExitPoint: edgeGuard's
+ *       own walking margin - an edge past it is refused by edgeGuard frame by frame, and a bot committed to pushing at it slipped over a 10 m lip at
+ *       10 hp in p23_fall's lip setup);
  *    2. a first trip: the house's street door (houseExitPath), else the nearest open cell (findExit, as breakOut);
- *    3. a repeat trip (within TRAP_AGAIN_S) or nothing above: TRAP_WALK_M along the first heading whose next 4 m is free of walls, tried from the side
- *       of the goal (+-90 deg, alternating with the trip count) round to straight away from it.
+ *    3. a repeat trip (within TRAP_AGAIN_S) or nothing above: TRAP_WALK_M along the first heading whose next 4 m is free of walls and whose terrain
+ *       never falls more than the walking margin under the feet, tried from the side of the goal (+-90 deg, alternating with the trip count) round to
+ *       straight away from it.
  *  The loot item it was after is parked as breakOut parks it. */
 function trapBreak(W, b) {
   const a = b.actor, bb = b.bb, mt = bb.moveTo;
@@ -2129,7 +2131,7 @@ function trapBreak(W, b) {
   const gyaw = mt ? Math.atan2(-(mt.x - a.pos.x), -(mt.z - a.pos.z)) : a.input.yaw;
   bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.stuckT = 0;
   let ex = null;
-  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw, lethalDrop(a))) {
+  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
     ex = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
     ex.exit = true;
     nav.st.trapDeck++;
@@ -2140,12 +2142,15 @@ function trapBreak(W, b) {
     if (ex && !ex.length) ex = null;
   }
   if (!ex) {
-    const side = (bb.trapN & 1) ? 1 : -1;
+    const side = (bb.trapN & 1) ? 1 : -1, lim = walkDrop(a);
     for (let k = 0; k < TRAP_HEADINGS.length; k++) {
       const yaw = gyaw + side * TRAP_HEADINGS[k];
       if (wallAhead(W, a, yaw, 4)) continue;
       const x = a.pos.x - Math.sin(yaw) * TRAP_WALK_M, z = a.pos.z - Math.cos(yaw) * TRAP_WALK_M;
       if (Math.abs(x) >= W.map.half || Math.abs(z) >= W.map.half || W.map.heightAt(x, z) < W.map.waterY + 0.4) continue;
+      let drop = false;
+      for (let d = 1; d <= TRAP_WALK_M && !drop; d += 1) if (W.map.heightAt(a.pos.x - Math.sin(yaw) * d, a.pos.z - Math.cos(yaw) * d) < a.pos.y - lim) drop = true;
+      if (drop) continue;
       ex = [{ x, y: null, z, k: 0 }];
       nav.st.trapWalk++;
       break;
@@ -3788,9 +3793,8 @@ function underCeiling(W, b) {
   return false;
 }
 /** The nearest open edge of the deck the bot stands on, into _dkx ({x, z} = a point 2 m past the edge, d = the distance to the edge), or false. */
-function deckExitPoint(W, a, preferYaw, dropLim) {
+function deckExitPoint(W, a, preferYaw) {
   const ax = a.pos.x, az = a.pos.z, y0 = a.pos.y, wy = W.map.waterY;
-  const lim = dropLim === undefined ? walkDrop(a) : dropLim;          // (R2 movers) trapBreak passes lethalDrop: the lowest edge it survives
   let best = 1e9;
   for (let k = 0; k < 25; k++) {
     const off = k === 0 ? 0 : ((k & 1) ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 12);
@@ -3805,7 +3809,7 @@ function deckExitPoint(W, a, preferYaw, dropLim) {
         // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (walkDrop: a quarter of the hp left), and a lower edge is preferred
         // (+0.5 a hit point). Without fall damage in the sim: Infinity / 0, the old choice.
         const drop = h - sup;
-        if (drop > lim) break;
+        if (drop > walkDrop(a)) break;
         const cost = s + Math.abs(off) * 6 + fallDmgForDrop(drop) * 0.5;
         if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
         break;
