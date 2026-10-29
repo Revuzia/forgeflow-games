@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4; the dial-slot rule: each stands at an hour, dial.hour, and two carried Noonlit items must stand dial.apart = 4 or more hours apart, so a fighter carries one to three; W4 re-key 2026-10-28). Starters carry foldsInto [core]: the first Gloam core bought while one is carried folds it in at full price; boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts. W4 G7 (2026-10-28): 31 finished pieces (20 Gloam, 11 Noonlit) priced about 20 % under the reference band; the Lampblack anti-heal pieces share uniqueGroup 'lampblack' (one per fighter); bots read item roles from this data (src/sim/bots/knowledge.ts itemRole). The 18 new pieces use a related item's icon as a placeholder until W2 paints assets/ui/icons/items/<id>.webp (handoff).",
+  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4; the dial-slot rule: each stands at an hour, dial.hour, and two carried Noonlit items must stand dial.apart = 4 or more hours apart, so a fighter carries one to three; W4 re-key 2026-10-28). Starters carry foldsInto [core]: the first Gloam core bought while one is carried folds it in at full price; boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts. W4 G7 (2026-10-28): 31 finished pieces (20 Gloam, 11 Noonlit) priced about 20 % under the reference band; the Lampblack anti-heal pieces share uniqueGroup 'lampblack' (one per fighter); bots read item roles from this data (src/sim/bots/knowledge.ts itemRole). Every item, passive and active points at its own painting, assets/ui/icons/items/<id>.webp (the 18 G7 pieces were painted by the client lane in f0a2ae42; _harness/icon_probe.mjs lists 0 borrowed).",
   "items": [
     {
       "id": "notched_blade",
@@ -1314,7 +1314,7 @@
       "id": "lampblack_edge",
       "name": "Lampblack Edge",
       "desc": "Damage an enemy fighter twice within 4 s and its sap runs black: it is Wounded (50% less healing) for 3 s. One Lampblack item per fighter.",
-      "icon": "assets/ui/icons/items/whetted_knife.webp",
+      "icon": "assets/ui/icons/items/lampblack_edge.webp",
       "tier": "core",
       "cost": 2000,
       "components": [
@@ -1332,7 +1332,7 @@
           "id": "lampblack_edge_black_sap",
           "name": "Black Sap",
           "desc": "Damage an enemy fighter twice within 4 s and it is Wounded (50% less healing) for 3 s.",
-          "icon": "assets/ui/icons/items/whetted_knife.webp",
+          "icon": "assets/ui/icons/items/lampblack_edge.webp",
           "triggers": [
             {
               "on": "damageDealt",
@@ -1389,7 +1389,7 @@
       "id": "lampblack_coat",
       "name": "Lampblack Coat",
       "desc": "Soot hangs around you: enemy fighters within 4 m of you are Wounded (30% less healing). One Lampblack item per fighter.",
-      "icon": "assets/ui/icons/items/felt_coat.webp",
+      "icon": "assets/ui/icons/items/lampblack_coat.webp",
       "tier": "core",
       "cost": 1950,
       "components": [
@@ -1406,7 +1406,7 @@
           "id": "lampblack_coat_soot_ring",
           "name": "Soot Ring",
           "desc": "Enemy fighters within 4 m of you are Wounded (30% less healing), checked every second.",
-          "icon": "assets/ui/icons/items/felt_coat.webp",
+          "icon": "assets/ui/icons/items/lampblack_coat.webp",
           "triggers": [
             {
               "on": "interval",
@@ -1456,7 +1456,7 @@
       "id": "lampblack_lens",
       "name": "Lampblack Lens",
       "desc": "When you slow, root, stun or otherwise hold an enemy fighter, its sap runs black: it is Wounded (50% less healing) for 4 s. One Lampblack item per fighter.",
-      "icon": "assets/ui/icons/items/burning_glass.webp",
+      "icon": "assets/ui/icons/items/lampblack_lens.webp",
       "tier": "core",
       "cost": 2100,
       "components": [
@@ -1473,7 +1473,7 @@
           "id": "lampblack_lens_held_sap",
           "name": "Held Sap",
           "desc": "When you slow, root, stun or otherwise hold an enemy fighter, it is Wounded (50% less healing) for 4 s.",
-          "icon": "assets/ui/icons/items/burning_glass.webp",
+          "icon": "assets/ui/icons/items/lampblack_lens.webp",
           "triggers": [
             {
               "on": "statusApplied",
@@ -1549,7 +1549,7 @@
       "id": "quarry_pick",
       "name": "Quarry Pick",
       "desc": "Damaging an enemy fighter above 60% health deals 10 + 3.5% of its max health as bonus physical damage. Once every 4 s per fighter.",
-      "icon": "assets/ui/icons/items/chalk_knife.webp",
+      "icon": "assets/ui/icons/items/quarry_pick.webp",
       "tier": "core",
       "cost": 2150,
       "components": [
@@ -1566,7 +1566,7 @@
           "id": "quarry_pick_split",
           "name": "Split the Stone",
           "desc": "Damaging an enemy fighter above 60% health deals 10 + 3.5% of its max health as bonus physical damage. Once every 4 s per fighter.",
-          "icon": "assets/ui/icons/items/chalk_knife.webp",
+          "icon": "assets/ui/icons/items/quarry_pick.webp",
           "triggers": [
             {
               "on": "damageDealt",
@@ -1617,7 +1617,7 @@
       "id": "deepglass_rod",
       "name": "Deepglass Rod",
       "desc": "Your first ability hit on an enemy fighter every 6 s deals 20 + 4% of its max health as bonus magic damage.",
-      "icon": "assets/ui/icons/items/inkglass_rod.webp",
+      "icon": "assets/ui/icons/items/deepglass_rod.webp",
       "tier": "core",
       "cost": 2150,
       "components": [
@@ -1634,7 +1634,7 @@
           "id": "deepglass_rod_weight",
           "name": "Weight of Light",
           "desc": "Your first ability hit on an enemy fighter every 6 s deals 20 + 4% of its max health as bonus magic damage.",
-          "icon": "assets/ui/icons/items/inkglass_rod.webp",
+          "icon": "assets/ui/icons/items/deepglass_rod.webp",
           "triggers": [
             {
               "on": "abilityHit",
@@ -1678,7 +1678,7 @@
       "id": "glass_veil",
       "name": "Glass Veil",
       "desc": "When an enemy fighter damages you, the glass settles: a shield of 70 + 10 per level + 20% power and 15 armor and resist for 2.5 s. Once every 18 s.",
-      "icon": "assets/ui/icons/items/linen_hood.webp",
+      "icon": "assets/ui/icons/items/glass_veil.webp",
       "tier": "core",
       "cost": 2100,
       "components": [
@@ -1695,7 +1695,7 @@
           "id": "glass_veil_settle",
           "name": "Settling Glass",
           "desc": "When an enemy fighter damages you, gain a shield of 70 + 10 per level + 20% power and 15 armor and resist for 2.5 s. Once every 18 s.",
-          "icon": "assets/ui/icons/items/linen_hood.webp",
+          "icon": "assets/ui/icons/items/glass_veil.webp",
           "triggers": [
             {
               "on": "damageTaken",
@@ -1751,7 +1751,7 @@
       "id": "glintmail",
       "name": "Glintmail",
       "desc": "When an enemy fighter damages you, the mail sets: a shield of 60 + 10 per level + 30% attack and 15 armor and resist for 2.5 s. Once every 18 s.",
-      "icon": "assets/ui/icons/items/glint_sling.webp",
+      "icon": "assets/ui/icons/items/glintmail.webp",
       "tier": "core",
       "cost": 2050,
       "components": [
@@ -1769,7 +1769,7 @@
           "id": "glintmail_set_against",
           "name": "Set Against",
           "desc": "When an enemy fighter damages you, gain a shield of 60 + 10 per level + 30% attack and 15 armor and resist for 2.5 s. Once every 18 s.",
-          "icon": "assets/ui/icons/items/glint_sling.webp",
+          "icon": "assets/ui/icons/items/glintmail.webp",
           "triggers": [
             {
               "on": "damageTaken",
@@ -1826,7 +1826,7 @@
       "id": "dawnspur",
       "name": "Dawnspur",
       "desc": "The first time you damage an enemy fighter in 8 s you strike first light: 30 + 3 per level + 30% bonus attack physical damage, and it is slowed 30% for 1 s.",
-      "icon": "assets/ui/icons/items/dialcutter.webp",
+      "icon": "assets/ui/icons/items/dawnspur.webp",
       "tier": "core",
       "cost": 2250,
       "components": [
@@ -1845,7 +1845,7 @@
           "id": "dawnspur_first_light",
           "name": "First Light",
           "desc": "The first time you damage an enemy fighter in 8 s: 30 + 3 per level + 30% bonus attack physical damage, and it is slowed 30% for 1 s.",
-          "icon": "assets/ui/icons/items/dialcutter.webp",
+          "icon": "assets/ui/icons/items/dawnspur.webp",
           "triggers": [
             {
               "on": "damageDealt",
@@ -1899,7 +1899,7 @@
       "id": "resin_maul",
       "name": "Resin Maul",
       "desc": "When one of your abilities hits an enemy fighter, heal 12 + 2 per level + 1.5% of your max health. Once every 3 s.",
-      "icon": "assets/ui/icons/items/banded_club.webp",
+      "icon": "assets/ui/icons/items/resin_maul.webp",
       "tier": "core",
       "cost": 2150,
       "components": [
@@ -1917,7 +1917,7 @@
           "id": "resin_maul_warm_through",
           "name": "Warm Through",
           "desc": "When one of your abilities hits an enemy fighter, heal 12 + 2 per level + 1.5% of your max health. Once every 3 s.",
-          "icon": "assets/ui/icons/items/banded_club.webp",
+          "icon": "assets/ui/icons/items/resin_maul.webp",
           "triggers": [
             {
               "on": "abilityHit",
@@ -1962,7 +1962,7 @@
       "id": "shadowpin",
       "name": "Shadowpin",
       "desc": "Every fourth basic attack on the same enemy fighter, each within 4 s of the last, pins its shadow: 20 + 30% bonus attack physical damage, and it is slowed 40% for 1 s.",
-      "icon": "assets/ui/icons/items/glint_sling.webp",
+      "icon": "assets/ui/icons/items/shadowpin.webp",
       "tier": "core",
       "cost": 2150,
       "components": [
@@ -1980,7 +1980,7 @@
           "id": "shadowpin_pin",
           "name": "Pin the Shadow",
           "desc": "Every fourth basic attack on the same enemy fighter, each within 4 s of the last: 20 + 30% bonus attack physical damage and a 40% slow for 1 s.",
-          "icon": "assets/ui/icons/items/glint_sling.webp",
+          "icon": "assets/ui/icons/items/shadowpin.webp",
           "triggers": [
             {
               "on": "attackHit",
@@ -2056,7 +2056,7 @@
       "id": "bellrope",
       "name": "Bellrope",
       "desc": "When you stun, root, lift, taunt, put to sleep or frighten an enemy fighter, the bell tolls: you and allied fighters within 7 m gain a shield of 30 + 6 per level for 2.5 s and move 20% faster for 1.5 s. Once every 8 s.",
-      "icon": "assets/ui/icons/items/hand_bell.webp",
+      "icon": "assets/ui/icons/items/bellrope.webp",
       "tier": "core",
       "cost": 1800,
       "components": [
@@ -2074,7 +2074,7 @@
           "id": "bellrope_toll",
           "name": "Toll Together",
           "desc": "When you stun, root, lift, taunt, put to sleep or frighten an enemy fighter: you and allied fighters within 7 m gain a shield of 30 + 6 per level for 2.5 s and 20% move speed for 1.5 s. Once every 8 s.",
-          "icon": "assets/ui/icons/items/hand_bell.webp",
+          "icon": "assets/ui/icons/items/bellrope.webp",
           "triggers": [
             {
               "on": "statusApplied",
@@ -2177,7 +2177,7 @@
       "id": "almslamp",
       "name": "Almslamp",
       "desc": "Each enemy fighter takedown you take part in gives you 35 more Gleam.",
-      "icon": "assets/ui/icons/items/kindly_lamp.webp",
+      "icon": "assets/ui/icons/items/almslamp.webp",
       "tier": "core",
       "cost": 1800,
       "components": [
@@ -2195,7 +2195,7 @@
           "id": "almslamp_shared_light",
           "name": "Shared Light",
           "desc": "Each enemy fighter takedown you take part in gives you 35 more Gleam.",
-          "icon": "assets/ui/icons/items/kindly_lamp.webp",
+          "icon": "assets/ui/icons/items/almslamp.webp",
           "triggers": [
             {
               "on": "takedown",
@@ -2675,7 +2675,7 @@
       "id": "callstone",
       "name": "Callstone",
       "desc": "Active: call out: enemy fighters within 4 m are taunted to you for 0.75 s, and you gain 30 armor and 30 resist for 2.5 s. 70 s cooldown. Stands at one on the dial: another Noonlit item must stand 4 or more hours away.",
-      "icon": "assets/ui/icons/items/seatstone.webp",
+      "icon": "assets/ui/icons/items/callstone.webp",
       "tier": "apex",
       "cost": 2500,
       "components": [
@@ -2694,7 +2694,7 @@
         "id": "callstone_call",
         "name": "Call Out",
         "desc": "Enemy fighters within 4 m are taunted to you for 0.75 s, and you gain 30 armor and 30 resist for 2.5 s.",
-        "icon": "assets/ui/icons/items/seatstone.webp",
+        "icon": "assets/ui/icons/items/callstone.webp",
         "maxRank": 1,
         "cooldown": 70,
         "cost": 0,
@@ -2778,7 +2778,7 @@
       "id": "hourstring",
       "name": "Hourstring",
       "desc": "Every twelfth basic attack you land on enemy fighters, each within 8 s of the last, strikes the hour: enemies within 3 m of the target take 60 + 6 per level + 6% of their max health as magic damage and are slowed 30% for 1 s. Stands at three on the dial: another Noonlit item must stand 4 or more hours away.",
-      "icon": "assets/ui/icons/items/sunstring.webp",
+      "icon": "assets/ui/icons/items/hourstring.webp",
       "tier": "apex",
       "cost": 2650,
       "components": [
@@ -2796,7 +2796,7 @@
           "id": "hourstring_strike",
           "name": "Strike the Hour",
           "desc": "Every twelfth basic attack on enemy fighters, each within 8 s of the last: enemies within 3 m of the target take 60 + 6 per level + 6% of their max health as magic damage and are slowed 30% for 1 s.",
-          "icon": "assets/ui/icons/items/sunstring.webp",
+          "icon": "assets/ui/icons/items/hourstring.webp",
           "triggers": [
             {
               "on": "attackHit",
@@ -2894,7 +2894,7 @@
       "id": "needlefall",
       "name": "Needlefall",
       "desc": "When you take part in a takedown of an enemy fighter, your ability cooldowns drop by 30% of what is left and you move 30% faster for 2 s. Stands at five on the dial: another Noonlit item must stand 4 or more hours away.",
-      "icon": "assets/ui/icons/items/hourcleaver.webp",
+      "icon": "assets/ui/icons/items/needlefall.webp",
       "tier": "apex",
       "cost": 2650,
       "components": [
@@ -2912,7 +2912,7 @@
           "id": "needlefall_falling_shadow",
           "name": "Falling Shadow",
           "desc": "When you take part in a takedown of an enemy fighter, your ability cooldowns drop by 30% of what is left and you move 30% faster for 2 s.",
-          "icon": "assets/ui/icons/items/hourcleaver.webp",
+          "icon": "assets/ui/icons/items/needlefall.webp",
           "triggers": [
             {
               "on": "takedown",
@@ -2963,7 +2963,7 @@
       "id": "stillhour",
       "name": "Stillhour",
       "desc": "Active: stand still like the stopped light: for 1.5 s you are rooted and gain 80 armor and 80 resist. You can still attack and cast. 80 s cooldown. Stands at six on the dial: another Noonlit item must stand 4 or more hours away.",
-      "icon": "assets/ui/icons/items/ironstone_mantle.webp",
+      "icon": "assets/ui/icons/items/stillhour.webp",
       "tier": "apex",
       "cost": 2500,
       "components": [
@@ -2981,7 +2981,7 @@
         "id": "stillhour_hold",
         "name": "Hold the Hour",
         "desc": "For 1.5 s you are rooted and gain 80 armor and 80 resist. You can still attack and cast.",
-        "icon": "assets/ui/icons/items/ironstone_mantle.webp",
+        "icon": "assets/ui/icons/items/stillhour.webp",
         "maxRank": 1,
         "cooldown": 80,
         "cost": 0,
@@ -3036,7 +3036,7 @@
       "id": "afterlight",
       "name": "Afterlight",
       "desc": "Your first ability hit on an enemy fighter every 5 s lands again 1 s later where it stood: 35 + 4 per level + 20% power magic damage to enemies within 2.5 m. Stands at seven on the dial: another Noonlit item must stand 4 or more hours away.",
-      "icon": "assets/ui/icons/items/noonglass.webp",
+      "icon": "assets/ui/icons/items/afterlight.webp",
       "tier": "apex",
       "cost": 2650,
       "components": [
@@ -3054,7 +3054,7 @@
           "id": "afterlight_lands_twice",
           "name": "Light Lands Twice",
           "desc": "Your first ability hit on an enemy fighter every 5 s lands again 1 s later where it stood: 35 + 4 per level + 20% power magic damage to enemies within 2.5 m.",
-          "icon": "assets/ui/icons/items/noonglass.webp",
+          "icon": "assets/ui/icons/items/afterlight.webp",
           "triggers": [
             {
               "on": "abilityHit",
@@ -3123,7 +3123,7 @@
       "id": "watchbell",
       "name": "Watchbell",
       "desc": "Every 10 s the bell rings out: enemy fighters within 9 m are revealed for 3 s, even in Needlegrass, and slowed 15% for 1 s. Stands at nine on the dial: another Noonlit item must stand 4 or more hours away.",
-      "icon": "assets/ui/icons/items/shelter_lamp.webp",
+      "icon": "assets/ui/icons/items/watchbell.webp",
       "tier": "apex",
       "cost": 2300,
       "components": [
@@ -3143,7 +3143,7 @@
           "id": "watchbell_watch",
           "name": "Watch Hour",
           "desc": "Every 10 s: enemy fighters within 9 m are revealed for 3 s, even in Needlegrass, and slowed 15% for 1 s.",
-          "icon": "assets/ui/icons/items/shelter_lamp.webp",
+          "icon": "assets/ui/icons/items/watchbell.webp",
           "triggers": [
             {
               "on": "interval",

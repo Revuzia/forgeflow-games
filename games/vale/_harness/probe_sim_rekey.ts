@@ -1,14 +1,16 @@
 // probe (lane W4, originality F4): the systems layer re-keyed to VALE's own stopped-dial rules, on the REAL catalog
 // (built in memory from content/) and the real maps. Before/after table and owner sign-off:
 // _design/reviews/fixwaves/W4_systems_rekey.md.
-//   1. the gauge: no headline number of a battle spell, starter, potion, boots, ward, camp buff, the epic buff or the
-//      BRIDGE start within 10 % of its reference-genre counterpart (LoL used ONLY as a gauge: numbers, never assets)
+//   1. the gauge: no headline number of a battle spell, starter, potion, boots, ward, camp buff, the epic buff, the
+//      BRIDGE start or the economy and finished line (block 7: passive Gleam, Wick bounties, the Gloam/Noonlit price
+//      band, Lampblack, Quarry Pick) within 10 % of its reference-genre counterpart (LoL used ONLY as a gauge: numbers, never assets)
 //   2. rules that no longer map one-to-one, exercised in the sim:
 //      · default spell pair is not blink + heal; Glint Step leaves its shadow behind as a slowing patch
 //      · starters fold into the first Gloam core (foldsInto) — the starter grows into the role's first core
 //      · the dial-slot rule replaces the one-Noonlit cap (two Noonlit items must stand 4+ hours apart)
 //      · Clearglass works on your own side of the Noonline, Resinburn on the enemy side (two-hit ignite)
 //      · BRIDGE shops at your standing Needles (shopAccess 'needles'); its Lot has no redraws, one take, and burns down
+//      · block 7 (G7): conditional Lampblack anti-heal, a rooted burst ward (Stillhour), first-hit shields
 //   Run: node _harness/probe_sim_rekey.ts
 import type { CatalogT, EffectT } from '../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent } from '../src/contracts/sim.ts';
@@ -68,6 +70,8 @@ const flaskTotal = flaskRep.count * (firstOp(flaskRep.effects, 'heal')!.amount a
 const lampSummon = firstOp(lamp.active!.effects, 'summon')!;
 const glassAmt = (buffDef('clearglass').passives[0].triggers[0].effects[0] as Extract<EffectT, { op: 'buff' }>).stats!.haste!;
 const bridge = mode('bridge').rules;
+const finished = catalog.items.filter((i) => i.tier === 'core' || i.tier === 'apex');
+const lampblack = catalog.items.filter((i) => i.uniqueGroup === 'lampblack');
 const ROWS: Row[] = [
   { sys: 'Glint Step ~ Flash', what: 'distance m', vale: firstOp(glint.effects, 'blink')!.distance, lol: [4] },
   { sys: 'Glint Step ~ Flash', what: 'cooldown s', vale: cd(glint.cooldown), lol: [300] },
@@ -122,6 +126,15 @@ const ROWS: Row[] = [
   { sys: 'BRIDGE ~ ARAM', what: 'start level', vale: bridge.startLevel, lol: [3] },
   { sys: 'BRIDGE ~ ARAM', what: 'start Gleam', vale: bridge.startGold, lol: [1400] },
   { sys: 'BRIDGE Lot ~ ARAM bench', what: 'redraws per seat', vale: queue('bridge_standard').bench!.rerolls, lol: [1, 2] },
+  // block 7 (gameplay G7, economy and the finished line): under the same gate by owner ruling 4
+  { sys: 'RIFT passive Gleam ~ passive gold', what: 'per s', vale: mode('rift').rules.passiveGoldPerSec, lol: [2.04] },
+  { sys: 'quick RIFT passive Gleam ~ passive gold', what: 'per s', vale: queue('rift_quick').rules.passiveGoldPerSec ?? mode('rift').rules.passiveGoldPerSec, lol: [2.04] },
+  { sys: 'Shieldwick ~ melee minion', what: 'bounty', vale: unit('shieldwick').bounty!.gold, lol: [21] },
+  { sys: 'Glimwick ~ caster minion', what: 'bounty', vale: unit('glimwick').bounty!.gold, lol: [14] },
+  { sys: 'finished line ~ legendary band', what: 'low end (cheapest Gloam)', vale: Math.min(...finished.map((i) => i.cost)), lol: [2600] },
+  { sys: 'finished line ~ legendary band', what: 'high end (dearest Noonlit)', vale: Math.max(...finished.map((i) => i.cost)), lol: [3300] },
+  ...lampblack.map((it): Row => ({ sys: `${it.name} ~ Grievous Wounds`, what: 'healing cut', vale: firstOp(it.passives.flatMap((p) => p.triggers.flatMap((t) => t.effects)), 'status')!.power as number, lol: [0.4, 0.6] })),
+  { sys: 'Quarry Pick ~ % armor pen items', what: 'armor pen share', vale: item('quarry_pick').stats.armorPenPct ?? 0, lol: [0.18, 0.2, 0.3, 0.35] },
 ];
 section('gauge: every headline number at least 10 % from its counterpart', () => {
   const close: string[] = [];
@@ -279,6 +292,29 @@ section("BRIDGE: the Lot — no redraws, one take per seat, it burns down", () =
   check('after 8 s the Lot has burned down by one', h.view(0).bench[0].length === 2, h.view(0).bench[0].length);
   for (let i = 0; i < 160; i++) h.advance(0.1);
   check('by 24 s the Lot is empty', h.view(0).bench[0].length === 0 || h.view(0).phase !== 'bench', [h.view(0).bench[0].length, h.view(0).phase]);
+});
+
+section('finished line (block 7): conditional anti-heal, a rooted burst ward, first-hit shields', () => {
+  // data-level reads of the G7 counters' rules (their numbers sit in the gauge above; probe_items.ts runs them in the sim)
+  const allEff = (it: (typeof catalog.items)[number]): EffectT[] =>
+    [...it.passives.flatMap((p) => p.triggers.flatMap((t) => t.effects)), ...(it.active?.effects ?? [])];
+  check('Lampblack: three pieces, one per fighter (uniqueGroup lampblack)', lampblack.length === 3, lampblack.map((i) => i.id));
+  const edge = item('lampblack_edge').passives[0].triggers[0];
+  const edgeIf = edge.effects.find((e) => e.op === 'if') as Extract<EffectT, { op: 'if' }> | undefined;
+  check('Lampblack Edge: Wounded only on the second hit within the mark window',
+    !!edgeIf && edgeIf.cond.kind === 'targetHasMark' && (edgeIf.cond.min ?? 1) >= 2 && !edge.effects.some((e) => e.op === 'status'), edgeIf?.cond);
+  check('Lampblack Lens: Wounded only when you hold the enemy (statusApplied with a hold condition)',
+    item('lampblack_lens').passives[0].triggers[0].on === 'statusApplied' && !!item('lampblack_lens').passives[0].triggers[0].cond);
+  const still = item('stillhour');
+  const stillEff = allEff(still);
+  check('Stillhour: roots you in place (self root), no untargetable or stasis',
+    stillEff.some((e) => e.op === 'status' && e.status === 'root' && e.to === 'self') &&
+    !stillEff.some((e) => e.op === 'status' && (e.status === 'untargetable' || e.status === 'unstoppable')), stillEff.map((e) => e.op === 'status' ? e.status : e.op));
+  for (const id of ['glass_veil', 'glintmail']) {
+    const t = item(id).passives[0].triggers[0];
+    check(`${item(id).name}: shields on the first fighter hit (damageTaken from fighters), not at low health`,
+      t.on === 'damageTaken' && t.filter?.fighters === true && !t.cond, [t.on, t.cond]);
+  }
 });
 
 section("VALE's own words in W4's player copy (originality F8, client F11)", () => {

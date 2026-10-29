@@ -1,6 +1,6 @@
 # W4 · Systems re-key: before and after
 
-**Status: signed off 2026-10-28 (owner-delegated ruling 4 in `owner_rulings.md`; the probe_sim_rekey 10 % gate stays on).** This page covers final parity review item **originality F4**, the systems layer that mapped one to one onto LoL's, and the matching kit hooks in **originality F5**. The owner approves or rejects each row. Nothing ships as final until then.
+**Status: signed off 2026-10-28 (owner-delegated ruling 4 in `owner_rulings.md`; the probe_sim_rekey 10 % gate stays on). Block 7, added later the same day, falls under the same ruling and gate (signed off 2026-10-29).** This page covers final parity review item **originality F4**, the systems layer that mapped one to one onto LoL's, and the matching kit hooks in **originality F5**. The owner approves or rejects each row. Nothing ships as final until then.
 
 **The rule.** LoL is a gauge only. Each row below names the LoL system that a LoL player would read into VALE's old version. After the re-key:
 
@@ -81,7 +81,7 @@
 
 ## 7. Economy and the finished line (gameplay G7, added 2026-10-28)
 
-The item package (gameplay G7) moved four economy numbers and added VALE's own counters. **This block was added after the 2026-10-28 sign-off of blocks 1–6 and is pending its own sign-off.** Full write-up: `_design/sections/items_setup.md` (the "Finished line" note) and `modes_economy.md` §2.
+The item package (gameplay G7) moved four economy numbers and added VALE's own counters. **Signed off under owner ruling 4 (`owner_rulings.md`: rows W4 adds after the sign-off fall under the same gate and need no further sign-off unless it fails).** Its headline numbers and rules are in `_harness/probe_sim_rekey.ts` (63 headline numbers, none within 10 %; the conditional anti-heal, the rooted burst ward and the first-hit shields checked; report `_harness/_reports/integ_systems_rekey_gate.txt`, 37 passed, 0 failed, 2026-10-29). Full write-up: `_design/sections/items_setup.md` (the "Finished line" note) and `modes_economy.md` §2.
 
 | | Reads as | Before | After (VALE) | Closest gap |
 |---|---|---|---|---|
@@ -133,12 +133,12 @@ The lone deaths per game hardly moved. The share rose because fights kill about 
 
 | Block | Decision | Note |
 |---|---|---|
-| 1 · Battle spells and defaults | ☐ approve ☐ change | |
-| 2 · Starters, potion, boots, ward | ☐ approve ☐ change | |
-| 3 · Dial-slot rule | ☐ approve ☐ change | |
-| 4 · Camp buffs and the Long Shade | ☐ approve ☐ change | |
-| 5 · BRIDGE start, Needle shops, the Lot | ☐ approve ☐ change | |
-| 6 · Ervet and Vashil hooks | ☐ approve ☐ change | |
-| 7 · Economy and the finished line (G7; added later, pending) | ☐ approve ☐ change | |
+| 1 · Battle spells and defaults | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 2 · Starters, potion, boots, ward | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 3 · Dial-slot rule | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 4 · Camp buffs and the Long Shade | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 5 · BRIDGE start, Needle shops, the Lot | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 6 · Ervet and Vashil hooks | ☑ approve ☐ change | ruling 4, 2026-10-28 |
+| 7 · Economy and the finished line (G7) | ☑ approve ☐ change | ruling 4 (rows added after the sign-off fall under the gate); gate extended to block 7 and passing, 2026-10-29 |
 
-Signed: ____________ Date: ________
+Signed: owner-delegated ruling 4 (`owner_rulings.md`), recorded by the systems lane. Date: 2026-10-28 (blocks 1–6), 2026-10-29 (block 7)
