@@ -145,7 +145,8 @@ round-4 tree (10 / 30 on round 3; every death in the first hour, in the front's 
 exists — both re-tunes failed their pooled 8-seed gate on injuries per trip and neither got past 4.8 kills per 100 people
 a year (≥ 20 asked; `HUNT_TUNE` stays off; LIVING §13.6); the round-4 acceptance re-run (`fix4/acc/`, launched 07:19
 2026-10-29, installs `acceptance.json` and appends LIVING §13.7 when it ends); `creatures.json` (the lead deletes it:
-nothing imports it).
+nothing imports it). **Gate green** on the round-4 tree (`fix4/check/check-r4.log` "EXIT 0 07:35" 2026-10-29: 591 / 591
+pass, 0 skipped, detban and tsc clean). UI hooks unchanged (no new Command kind or Snapshot field this round).
 
 ## How to run
 
