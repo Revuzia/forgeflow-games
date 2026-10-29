@@ -1,0 +1,95 @@
+{
+ "wave": "W5b",
+ "round": 1,
+ "verifier": "adversarial verifier, 2026-10-28",
+ "pass": false,
+ "summary": "I re-measured W5b's own art and it holds. Face chips: every pair is >= 55 at 26 px (min 59.5, 0 of 120 pairs under 55, Ilsheta included). Odrum Shadeprint's mask saturation is 0.61 (gate 0.25) with lit amber slits. Rishal's head and accent are fixed (rear vanes off, accent 2.28 %, all of it on the head, for the base and both skins). Burdam has his flat roundel pauldron plate, and my own Blender audit gives cast_ult f3/f4 torso 0/0. Hesmi's attacks have a 5-frame hold and a 2-frame strike of 2.1 m (attack1) and 1.8 m (attack2). The plates in the client's own windows read p50 76-102 (loading window, art only) and 71-106 (draft cell), and the figures stand at 0.706-0.764 of the card. The wave still fails on two counts. First, done:5 fails in the client: luma.cjs on my fresh 1920 loading shot reads card p50 34-47 and plate box 44-60. W5b's own emulator shows the CSS it handed to W2 would still leave cards at p50 51-75 (median 62), so neither lane's plan closes the gate yet. Second, HUD-2 is honestly partly done: only the minimap draws the chips, and Portrait.tsx:59 still loads portrait.png. Minor regressions: Burdam's new plate adds cleaver-in-body frames in victory (torso 100 -> 117), dash (12 -> 25) and idle_lobby (9 -> 12). I looked at every new image (16 chips, 48 portraits, 48 splashes, the Rishal, Odrum, Burdam and Lisvel close-ups) and found no blocker. Two minor watch items: Dunsom's beaked mask is now the whole chip (the bill change is ruled but still pending), and Sukri's hollow-eyed mask has grain streaks running down from the eyes.",
+ "items": [
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "I ran the reviewer's own script, node _harness/_reports/final_hud_verify_scripts/fdist.mjs, on the shipped art/out/fighters/*/icon.png (26 px, circle mask; it leaves out Ilsheta). Result: closest pair marund-ulkro 59.7, median 69.7, 0 of 105 pairs under 45 (_harness/_reports/fw_W5b_ver1_fdist_orig.txt).\n\nA copy that includes Ilsheta (_harness/_reports/fw_W5b_ver1_fdist_all16.mjs / .txt): min ilsheta-ulkro 59.5, 0 of 120 pairs under 55, median 70.1. 1 of 16 chips has more than 50 % of pixels above luma 150 (ardit 0.58; before the fix it was 9 of 15).\n\nVisual check: _harness/_shots/fw_W5b_ver1_chips_sheet.png, which shows each chip at 128 px, 26 px and 2x26 px, and fw_W5b_ver1_chips_3x_a-d.png. Every chip is a head-and-shoulders crop on an ink ground with its signature-hue glow, and each fighter is identifiable at 26 px."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Draft cells pass, measured in the client with my own sweep: node _harness/sweep_720.mjs fast --only draft,loading --sizes 1920x1080,1280x720 --prefix fw_W5b_ver1_sweep (0 failures). luma.cjs on the 16 cells of fw_W5b_ver1_sweep_1920_draft_myturn.png gives p50 71-98 with at most 3.0 % above 200 (Marund) (_harness/_reports/fw_W5b_ver1_luma_draft_1920.txt). The one exception is Nurrow at 33, whom the UI dims as taken.\n\nLoading cards fail in the client. luma.cjs on my fw_W5b_ver1_sweep_1920_loading_rift.png (_harness/_reports/fw_W5b_ver1_luma_loading_1920.txt):\n- whole card p50 34-47;\n- plate box (lower 84 %) p50 44-60;\n- the criterion asks for p50 70-110.\n\nThe art on its own passes. In my own window code (_harness/_reports/fw_W5b_ver1_plates_luma.py / .txt), the 0.714 w/h window at 86 % on all 48 shipped splashes reads p50 76-102 with at most 0.2 % above 200, and the 512 px portraits read p50 71-106 with at most 3.4 %.\n\nThe gap is W2's .pcard__art mask (screens.css:417) plus the .pcard__meta scrim, on top of the plate's own baked top-edge darkening. W5b's emulator (_harness/_reports/fw_W5b_card_emu.py, re-run by me) shows the handed-off CSS still misses the gate:\n- 'prop' (the handoff): card p50 51-75, median 62; plate region 64-88, median 72;\n- 'light': card 55-77; plate 67-89.\nSo the handoff by itself does not bring the loading cards to p50 >= 70.",
+   "fixHint": "This needs both lanes.\n\nW2 lands the 5 % top mask and a lighter, shorter .pcard__meta scrim.\n\nW5b gives the splash plates the headroom they need under that card. The card CSS already supplies a top fade and a foot scrim, so:\n- drop or halve plates.py's baked top-edge darkening (0.42) and the foreground floor for the splash;\n- or raise splash_lift for the dark lines (Ervet Lamplit, Burdam, Ardit Chalkline).\nThen re-run fw_W5b_card_emu.py prop and take a real 1920 loading shot. The gate is luma.cjs card p50 >= 70 on every card."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "The rulings are recorded. _design/reviews/fixwaves/owner_rulings.md §2 covers Odrum Shadeprint and §1 covers Longshade (W5a; W5a_verify1 done:6 passed the tear removal). _design/fighters/odrum.md:159 names the #B39272 lacquer and the honey-amber inlays. art/blender/fighters/odrum.py:1957 has SHADEPRINT['lacquer'] col #B39272, inlay #E2B26A / #B07A40.\n\nMy own measure is _harness/_reports/fw_W5b_ver1_masks.py / .txt: region x300-430 y160-250 of the shipped 512 px portraits, the same region as final_originality_verify_masks.txt. Shadeprint saturation p50 0.61, against the gate of 0.25. It was 0.08 before the fix (the pre-fix file from git 1ec2e4ce~1 re-measures 0.08 / L* 54.9 / 21.6 % dark). Base 0.58, Noon Fair 0.56.\n\nNote: on the shipped dusk plate, Shadeprint's face region is darker (L* p50 31.8, 31.2 % under L* 20) because the Hourless key is lower. In the zoom _harness/_shots/fw_W5b_ver1_odrum_mask_zoom.png the slits read as filled amber, not hollow. In the three.js close-up (art/renders/fighters/odrum/three_odrum_shadeprint.png, bottom row; my crop fw_W5b_ver1_odrum_sp_three_bottom.png) they read lit honey-amber."
+  },
+  {
+   "id": "originality:F3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Odrum Shadeprint half; see done:6. The shipped mask is warm amber (saturation p50 0.61) with amber eye inlays. The ink cloth and silhouette are unchanged (build_report_odrum_shadeprint: 19384 tris, the same as before; 969 KiB; three_qa ok; accent 1.74 %). The Longshade half belongs to W5a and passed in W5a_verify1."
+  },
+  {
+   "id": "rishal:_open.json majors (head/visor/face plate; saturated rear vanes)",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Head. art/renders/fighters/rishal/three_rishal.png close cell, next to the concept head crop (_harness/_shots/fw_W5b_ver1_rishal_concept_vs_three.png):\n- a white carved face, no longer warm ivory (b* -13.8 on the shipped portrait face, cool);\n- a thick pale-blue visor frame (rishal.py:1850 VISOR_RIM 0.0165);\n- a nose ridge and a closed mouth;\n- the eye recess shows as a dark almond behind the glass.\nPortrait zoom: fw_W5b_ver1_rishal_face_zoom.png. The carving is less bold than the concept's, but it is no longer an egg or mannequin face, and it does not read as horror.\n\nAccent. rishal.py:599 REAR_VANES = False. three_qa accent (from the build reports): 2.28 % base, 2.29 % chalkline, 2.28 % lamplit, 100 % in the top half. Lineup art/renders/lineup/rishal_w5b_b1.json: 2.16 / 1.59 / 1.81 / 2.23 % at the four facings, top-half share 1.0, accentOk true. In the game-camera panel (fw_W5b_ver1_rishal_lineup.png) there is no blue mohawk: the crest stands alone and the fins fan to his left. The fins are blue on all three skins' portraits (fw_W5b_ver1_rishal_portraits.png), matching the brief rishal.md:102 and :130.\n\nGLB: 1143 KiB, 20354 tris; three_load_test ok."
+  },
+  {
+   "id": "burdam:_open.json major 1 (right pauldron vs concept)",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "I compared before and after on the shipped art, with the pre-W5b files taken from git a1ddb4c6 (_harness/_shots/fw_W5b_ver1_burdam_pre_vs_now.png and fw_W5b_ver1_burdam_pauldron_zoom.png):\n- Before, the right shoulder was a grey roll with a knob at its end.\n- Now it is a broad, flat, front-facing plate with a 3-ring roundel cut into it, flaring over the arm (splash crop roughly 0.3 x 0.25 m).\n- The three_burdam.png front cells 0-1 (fw_W5b_ver1_burdam_three_left.png) show the same plate and roundel from the front 3/4.\n\nThe portrait still crops the plate at the frame's left edge, but its face and roundel now read, not a tube end. GLB 1132 KiB, 20448 tris (was 20067); three_qa and load ok."
+  },
+  {
+   "id": "burdam:_open.json major 2 (cast_ult blade-through-coat regression)",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "My own Blender audit through the heavy queue: heavy.py run -- Blender -b --factory-startup --python art/blender/proto/burdam_audit.py -- --clips cast_ult,victory,dash,idle_lobby --step 1. It read art/.cache/fighters/burdam.blend (15:51, matching the 15:50 GLB); output in _harness/_reports/fw_W5b_ver1_burdam_audit.txt.\n\ncast_ult torso hits by frame:\n- f0-f4: 0 / 0 / 0 / 0 / 0 (target f3 and f4 <= 13; the reviewer measured 41 / 41);\n- f5-f13: 16-28;\n- f14: 2; f15: 9.\nClip worst 28 (the pre-W5b summary was 38). This matches W5b's fw_W5b_burdam_audit_final.txt exactly."
+  },
+  {
+   "id": "combat:m-2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Spot-check. I did not re-capture; instead I re-derived per-frame steps from W5b's in-game pose capture, _harness/_reports/fw_W5b_hesmi_attack_pose.json:\n- attack1: right fist holds f11-f15 (5 frames, <= 0.044 m/frame), strikes f16-f17 (0.39 + 1.72 = 2.11 m), damage at f18, follow-through f18-f21;\n- attack2: left fist holds f55-f59 (5 frames, <= 0.036 m), strikes f60-f61 (0.32 + 1.48 = 1.79 m), damage at f62.\nThe gate is a hold of >= 4 frames, a 2-frame strike of >= 1.2 m and a follow-through. The strip _harness/_shots/fw_W5b_hesmi_attack_strip.png shows the body coil.\n\nSkins reuse the base clips (src/render/actors.ts:390-391), so the stale Oct 20 skin GLBs still get the new attacks. The VFX arc and socket mismatch for the left-fist attack2 is W1's (handoff)."
+  },
+  {
+   "id": "hud:HUD-2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The art and the gate are done (see done:4). In game, only the minimap uses icon.png (src/ui/hud/minimap.tsx:176-183). Every other HUD face still goes through Portrait.tsx:55-59, which only knows 'portrait' and 'splash' and loads portrait.png: the scoreboard, kill feed, ally frames, banners, target frame and death recap.\n\nThe wave note assumed an in-place icon.png would need no UI change; that assumption was wrong, and W5b reports it correctly as partly done.",
+   "fixHint": "W2 adds kind 'chip' to Portrait.tsx (ref = f.art.icon) and passes it at side.tsx:59, panels.tsx:110/192/209, top.tsx:192/273/282 and status.tsx:217, as in W5b's handoff. Re-verify with a 1080 scoreboard and kill-feed shot."
+  },
+  {
+   "id": "client:F3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Art half only. All 48 portrait and splash pairs are re-rendered as painted dusk plates over VALE's own backdrop paintings (art/out/backdrops/*.webp, from Oct 13), graded per origin and per skin line (art/blender/fighters/plates.json). Sheets: _harness/_shots/fw_W5b_ver1_splashes_0.png, _1.png and fw_W5b_ver1_portraits_all.png.\n\nLuma in the client's windows, art only, with my own code (fw_W5b_ver1_plates_luma.txt):\n- loading window p50 76-102, at most 0.2 % above 200;\n- draft cell p50 71-106, at most 3.4 %.\n\nFraming, with my own crop code on the kept subject passes (_harness/_reports/fw_W5b_ver1_frame.py / .txt): the figure, head to feet at alpha > 0.6, fills 0.706-0.764 of the card height in all 48 shipped splashes (the shipped files are newer than the passes); the band is 0.70-0.80.\n\nThe in-client composite on the loading card is still under the gate because of W2's CSS (see done:5)."
+  },
+  {
+   "id": "originality:F9",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Lisvel: a face plate with a nose and a closed soft smile under the visor. It shows in the portrait and in the three close-up (_harness/_shots/fw_W5b_ver1_lisvel_face_zoom.png), and no tear-like lines are visible.\n\nSukri: the hood lining is lifted. The hood interior reads mid-value in the portraits and chip (fw_W5b_ver1_portraits_all.png, chips_3x_a).\n\nHooded Lamp: still pointed. art/blender/units/small_units.py:133 still has the RoundCone finial. That file is W5a's, ruled for the integration pass (owner_rulings.md §5)."
+  },
+  {
+   "id": "sensitivity:new-art",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "I looked at all 16 chips (128 px and 26 px), all 48 portraits, all 48 splashes, and the Odrum, Rishal, Lisvel and Burdam close-ups. There are no blockers: no tall or conical hood introduced, no hockey, horror or blank-mannequin face introduced, and no Wick art touched (Wicks keep the old icon).\n\nThree minor watch items. All three are pre-existing designs that the new tight chips and larger card figures now emphasise.\n1. Dunsom's gold beaked mask is the whole identity of his chip (art/out/fighters/dunsom/icon.png). Owner ruling §5 shortens it to a rounded bill, but the change is still pending.\n2. Sukri's smiling wooden mask has hollow dark eyes, and grain streaks run straight down from both eyes (icon.png, splash.png). It is the largest face on the loading row (fw_W5b_ver1_sweep_1920_loading_rift.png).\n3. Kemdo's hood comes to a small peak in the chip.",
+   "fixHint": "In the integration pass:\n- Re-render Dunsom's icon, portrait and splash after the rounded-bill change: python3 art/build.py portraits dunsom --skins, then facechip.py gate.\n- Soften or break Sukri's under-eye grain lines so they cannot read as tear streaks, and consider a warm inlay in the eye holes, as Odrum Shadeprint got.\n- Keep Kemdo's hood tip rounded."
+  }
+ ],
+ "regressions": [
+  "Burdam (minor; W5b's new pauldron plate, art/blender/fighters/burdam.py). Cleaver-in-body torso hits rise in three non-target clips. Pre values come from W5b's pre-cache audit, fw_W5b_burdam_audit_all_pre.txt; post values are reproduced by my run, fw_W5b_ver1_burdam_audit.txt.\n- victory: worst 100 -> 117 (f9);\n- dash: 12 -> 25;\n- idle_lobby: 9 -> 12 (menus pose idle_lobby).\nFix: re-key the swing arcs past the new plate, or trim the plate's inner edge, and re-audit those clips with --step 1.",
+  "Loading cards (owned by W2's CSS, but they display W5b's plates): in-client luma.cjs card p50 34-47 on the 1920 shot, so the menus still read darker than the plate gate. Faces at the top of the cards are ghosted by the 44 % top mask (Vashil, Ilsheta and Rishal on row 2)."
+ ],
+ "checks_run": [
+  "npm run typecheck: clean",
+  "npm run content:check: OK, 1 warning (content/audio.json ui.queue_remind; W2/W3, not W5b)",
+  "node _harness/sweep_720.mjs fast --only draft,loading --sizes 1920x1080,1280x720 --prefix fw_W5b_ver1_sweep: 0 failures",
+  "Fighter build reports touched today: optimize, three_load_test and three_qa ok on every one; the largest GLB is sukri at 1167 KiB, under the 1172 KiB budget; tri counts within +-2 % of pre-W5b",
+  "Shared art/blender/common: render.py changes are additive (sky_world tint=None default; fighters not listed in plates.json or face_chips.json keep the old path); facechip.py and plates.py are new files"
+ ]
+}
