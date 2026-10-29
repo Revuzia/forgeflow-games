@@ -213,6 +213,9 @@ export class World implements WorldView {
   timeOffset = 0;
   /** practice: cooldowns are not started */
   noCooldowns = false;
+  /** scratch for the hit being resolved: a modifyDamage hook sets it when Ringshade muffled that hit (combat.ts
+   *  dealDamage clears it before the hooks and marks the 'damage' event `shaded`); presentation only */
+  hitShaded = false;
   /** zones with `blocks` (movement checks these) */
   blockingZones: Entity[] = [];
   /** free slot for other lanes' world-level state (economy, modes, bots) */

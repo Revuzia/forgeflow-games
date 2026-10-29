@@ -20,7 +20,7 @@
 // (hooks.death), which may fill `ev.gold` on the event object before the tick ends.
 
 import type { DamageTypeT } from '../contracts/catalog.ts';
-import type { PlayerId } from '../contracts/sim.ts';
+import type { PlayerId, SimEvent } from '../contracts/sim.ts';
 import { DamageLog, type EffectCtx, type Entity } from './entity.ts';
 import { computeStats } from './stats.ts';
 import { clearStatuses, removeStatusKind } from './status.ts';
@@ -80,7 +80,9 @@ export function dealDamage(w: World, src: Entity | null, dst: Entity, raw: numbe
   let amount = raw;
   if (crit && src) amount *= src.stats.critDamage;
   const mods = w.hooks.modifyDamage;
+  w.hitShaded = false;
   for (let i = 0; i < mods.length; i++) amount = mods[i](w, src, dst, amount, dtype, !!opts.isAttack);
+  const shaded = w.hitShaded;
   if (!(amount > 0)) return 0;
   const preMit = amount;
   amount = mitigated(src, dst, amount, dtype);
@@ -119,7 +121,9 @@ export function dealDamage(w: World, src: Entity | null, dst: Entity, raw: numbe
     const name = src ? (src.player ? src.player.name : src.unit ? src.unit.name : src.fighter ? src.fighter.name : src.def) : '';
     dst.dmgLog.push(w.time, src ? src.id : -1, name, src ? src.def : '', opts.ability, amount, dtype);
   }
-  w.emit({ e: 'damage', t: w.time, src: src ? src.id : -1, dst: dst.id, amount, dtype, crit, ability: opts.ability, shielded });
+  const ev: SimEvent & { e: 'damage' } = { e: 'damage', t: w.time, src: src ? src.id : -1, dst: dst.id, amount, dtype, crit, ability: opts.ability, shielded };
+  if (shaded) ev.shaded = true;
+  w.emit(ev);
   const hooks = w.hooks.damage;
   if (hooks.length) {
     const info = { dtype, crit, ability: opts.ability, isAttack: !!opts.isAttack, shielded, raw: preMit };

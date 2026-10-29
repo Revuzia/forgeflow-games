@@ -27,7 +27,8 @@
 // carries a seal — a shield whose source is the structure itself — of `amount`, set back to full at
 // every multiple of `every` s and gone at `until`. Ringshade (rules.ringshade): damage from fighters and
 // their summons to a listed structure is scaled by how many of the striker's Wicks stand in its shadow
-// ring (attack range + radius): × mult with none, rising evenly to × 1 at `wicks`; off in sudden death.
+// ring (attack range + radius): × mult with none, rising evenly to × 1 at `wicks`; off in sudden death. A hit it
+// scales below × 1 sets World.hitShaded, so its 'damage' event carries `shaded: true` (the muffled-hit sound).
 //
 // Gorge Wind (rules.gorgeWind, W4 gameplay G5; its steps are World.gorgeWind, raised by modes/match.ts): with
 // s steps up, damage dealt by Wicks is × (1 + s × wickDamage) and damage taken by structures × (1 + s ×
@@ -185,7 +186,10 @@ function ringshadeMult(w: World, src: Entity | null, dst: Entity, raw: number): 
     if (u.kind === 'minion' && u.alive && u.team === src.team && (u.x - dst.x) * (u.x - dst.x) + (u.y - dst.y) * (u.y - dst.y) <= reach * reach) n++;
   }
   shadeScratch.length = 0;
-  return raw * (rs.mult + (1 - rs.mult) * Math.min(1, n / rs.wicks));
+  const m = rs.mult + (1 - rs.mult) * Math.min(1, n / rs.wicks);
+  // too few of the striker's Wicks in the ring: the blow lands muffled (the 'damage' event says `shaded`)
+  if (m < 1) w.hitShaded = true;
+  return raw * m;
 }
 
 function gorgeWindMult(w: World, src: Entity | null, dst: Entity, raw: number): number {

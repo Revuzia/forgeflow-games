@@ -215,7 +215,9 @@ export interface WorldView {
 
 // ── events (one batch per tick; the presentation turns them into VFX, SFX, UI) ───────────────────
 export type SimEvent =
-  | { e: 'damage'; t: number; src: EntityId; dst: EntityId; amount: number; dtype: DamageTypeT; crit: boolean; ability?: string; shielded: number }
+  /** `shaded` (additive, INTEG2): Ringshade scaled this blow below × 1 (too few of the striker's Wicks guard the
+   *  structure); presentation only, the amount already carries it */
+  | { e: 'damage'; t: number; src: EntityId; dst: EntityId; amount: number; dtype: DamageTypeT; crit: boolean; ability?: string; shielded: number; shaded?: boolean }
   | { e: 'heal'; t: number; src: EntityId; dst: EntityId; amount: number }
   | { e: 'shield'; t: number; dst: EntityId; amount: number }
   | { e: 'attack'; t: number; src: EntityId; dst: EntityId; windup: number; crit: boolean }

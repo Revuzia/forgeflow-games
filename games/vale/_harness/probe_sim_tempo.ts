@@ -96,14 +96,20 @@ section('ringshade', () => {
   place(sim, f, n.x - 4, n.y);
   const hit = (src: Entity): number => { const before = n.hp; dealDamage(w, src, n, 100, 'true'); return before - n.hp; };
   const expect = (k: number): number => 100 * (RS.mult + (1 - RS.mult) * Math.min(1, k / RS.wicks));
+  // the 'damage' event of the last hit on the Needle: `shaded` marks a muffled blow (INTEG2, the audio's c_hit_shaded)
+  const shadedLast = (): boolean | undefined => {
+    for (let i = w.events.length - 1; i >= 0; i--) { const e = w.events[i]; if (e.e === 'damage' && e.dst === n.id) return e.shaded; }
+    return undefined;
+  };
   check(`a fighter's hit with none of its Wicks in the ring lands × ${RS.mult}`, near(hit(f), expect(0), 1e-6));
+  check('…and its damage event says shaded', shadedLast() === true);
   const wicks: Entity[] = [];
   const reach = n.stats.range + n.radius;
   for (let k = 1; k <= RS.wicks + 1; k++) {
     wicks.push(spawnUnit(w, 'shieldwick', 0, n.x - reach + 1.5, n.y + (k - 2) * 0.9));
-    check(`with ${k} of its Wicks in the ring it lands × ${(expect(k) / 100).toFixed(3)}`, near(hit(f), expect(k), 1e-6));
+    check(`with ${k} of its Wicks in the ring it lands × ${(expect(k) / 100).toFixed(3)}, shaded ${k < RS.wicks}`, near(hit(f), expect(k), 1e-6) && (shadedLast() === true) === (k < RS.wicks));
   }
-  check('a Wick\'s own hit is never shaded', near(hit(wicks[0]), 100, 1e-6));
+  check('a Wick\'s own hit is never shaded', near(hit(wicks[0]), 100, 1e-6) && shadedLast() === undefined);
   for (const u of wicks) killEntity(w, u, null);
   sim.step();
   const foe = spawnUnit(w, 'shieldwick', 1, n.x - 3, n.y + 1);
@@ -115,7 +121,7 @@ section('ringshade', () => {
   const hourbell = w.entities.find((e) => e.kind === 'structure' && !RS.units.includes(e.def) && e.alive && !e.invulnerable);
   if (hourbell) { place(sim, f, hourbell.x - 3, hourbell.y); const b = hourbell.hp; dealDamage(w, f, hourbell, 100, 'true'); check(`an unlisted structure (${hourbell.def}) is not shaded`, near(b - hourbell.hp, 100, 1e-6) || hourbell.shield > 0); place(sim, f, n.x - 4, n.y); }
   w.suddenDeath = true;
-  check('in sudden death nothing is shaded', near(hit(f), 100, 1e-6));
+  check('in sudden death nothing is shaded', near(hit(f), 100, 1e-6) && shadedLast() === undefined);
   w.suddenDeath = false;
 });
 
