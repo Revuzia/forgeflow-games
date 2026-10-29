@@ -2321,6 +2321,11 @@ export async function buildMap(W, mapId) {
   const landmarks = [];             // {x,z,r} unnamed inter-POI structures — trees keep clear
   const lampPts = [];               // {x,y,z} emissive lamp heads — the near-lamp light pool follows these
   const props = { palm: [], tree: [], pine: [], birch: [], bush: [], rocks: [], car: [], container: [], barrel: [] };
+  // R2 / world: the rotation-cover pieces (towngen.rotationCover, below) in their OWN lists, never appended to props: props[kind] stays the seeded scatter
+  // stream as drawn from `rng` (worldcheck rng-stream judges its anchors against the live build). They are finalized, drawn and collided exactly as before:
+  // the draw loop hands each kind's InstancedMeshes and colliders props[kind] followed by coverProps[kind] (same matrices, same collider order and idx,
+  // same one draw call per kind part); only M.propInstances no longer lists them (M.coverInstances does).
+  const coverProps = { rocks: [], car: [] };
   let yardInfo = null;               // ashgrid's container yard: what the ramp-corridor pass dropped (see the yard block)
 
   // ── prop grounding (Wave 5, lane 5A) ──────────────────────────────────────────────────────────────────────────────
@@ -2407,14 +2412,14 @@ export async function buildMap(W, mapId) {
   }
   function finalizeProps() {
     const stats = {};
-    for (const kind in props) {
-      const list = props[kind];
+    for (const [lists, out] of [[props, stats], [coverProps, stats.cover = {}]]) for (const kind in lists) {
+      const list = lists[kind];
       if (!list.length) continue;
       const lim = PROP_SLOPE_MAX[kind], keep = [];
       for (const it of list) { if (it.drop || (it.rej && lim != null && groundSlopeDeg(it.x, it.z) > lim) || (it.reliefMax != null && groundRelief(kind, it) > it.reliefMax)) continue; keep.push(it); }
-      props[kind] = keep;
+      lists[kind] = keep;
       for (const it of keep) settleProp(kind, it);
-      stats[kind] = { generated: list.length, rejected: list.length - keep.length };
+      out[kind] = { generated: list.length, rejected: list.length - keep.length };
     }
     return stats;
   }
@@ -2964,7 +2969,7 @@ export async function buildMap(W, mapId) {
   // (a linear scan: called for a few dozen points a match)? onProp(x, z): a wild loot spot never lands under a placed car / barrel / rock / container / tree
   // (their colliders are built later, from these anchors). Both only matter on Savanna (the callers test `city` first), so the other maps' streams are untouched.
   const PROP_CLEAR = { car: 3.2, barrel: 1.4, rocks: 3.6, container: 4.2, tree: 1.0, palm: 1.0, pine: 1.0, birch: 1.0 };
-  const onProp = (x, z) => { for (const kind in PROP_CLEAR) { const r = PROP_CLEAR[kind], l = props[kind]; if (l) for (let i = 0; i < l.length; i++) { const dx = l[i].x - x, dz = l[i].z - z; if (dx * dx + dz * dz < r * r) return true; } } return false; };
+  const onProp = (x, z) => { for (const kind in PROP_CLEAR) for (const l of [props[kind], coverProps[kind]]) { const r = PROP_CLEAR[kind]; if (l) for (let i = 0; i < l.length; i++) { const dx = l[i].x - x, dz = l[i].z - z; if (dx * dx + dz * dz < r * r) return true; } } return false; };   // (the rotation cover too)
   const cityKitBoxes = [];          // the colliders citykit WILL add (a pure function of the kit list, computed when the buildings are done): loot keeps clear of them too
   const openSpot = (x, y, z) => {
     for (let i = 0; i < colliders.length; i++) { const c = colliders[i]; if (c.kind !== "ramp" && x > c.minX - 0.05 && x < c.maxX + 0.05 && z > c.minZ - 0.05 && z < c.maxZ + 0.05 && y > c.minY - 0.05 && y < c.maxY + 0.05) return false; }
@@ -5664,8 +5669,8 @@ export async function buildMap(W, mapId) {
     const free = (x, z, pad) => !(nearPoi(x, z, pad) || nearLandmark(x, z) || inCity(x, z, pad) || inRects(cityBld, x, z, pad) || inRects(cityDecks, x, z, pad));
     const cov = city.TG.rotationCover(seed, mapId, { half: HALF, waterY, h: (x, z) => heightAt0(x, z), free, cover: have, roads: cityRoadLog });
     for (const c of cov.pieces) {
-      if (c.kind === "rocks") props.rocks.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: c.s, ry: c.ry, rej: 1, reliefMax: 1.2 });
-      else if (c.kind === "car") props.car.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: 2.2, ry: c.ry, rej: 1 });
+      if (c.kind === "rocks") coverProps.rocks.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: c.s, ry: c.ry, rej: 1, reliefMax: 1.2 });
+      else if (c.kind === "car") coverProps.car.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: 2.2, ry: c.ry, rej: 1 });
       else if (c.kind === "wall") {
         const ry = c.quarter ? Math.PI / 2 : 0;
         addBox(c.x, lowGround(c.x, c.z, c.w, c.d, ry) + c.h / 2 - 0.15, c.z, c.w, c.h + 0.3, c.d, c.tone, { rotY: ry });
@@ -6466,7 +6471,9 @@ export async function buildMap(W, mapId) {
   }
   const _upV = new THREE.Vector3(0, 1, 0), _qTilt = new THREE.Quaternion(), _vTilt = new THREE.Vector3(), _tAnch = new THREE.Matrix4();
   for (const kind in props) {
-    const list = props[kind];
+    // (R2 / world) the kind's seeded scatter, then its rotation-cover pieces: ONE instance list for the reference / drawn meshes and the colliders, so a cover
+    // piece's index i (its collider idx, its reference instance) is props[kind].length + its index in coverProps[kind]; rocks and cars are never destructible
+    const cov = coverProps[kind], list = cov && cov.length ? props[kind].concat(cov) : props[kind];
     if (!list.length) continue;
     const tk = PT && PT.kinds[kind];
     const url = W.assetBase + "assets/props/" + kind + ".glb";
@@ -7188,7 +7195,7 @@ export async function buildMap(W, mapId) {
     houses, houseAt, queryCollidersY, hasCollidersNear,
     // the placed prop lists ({x, y, z, s, ry, ...} per kind: the ANCHOR, the final base y, the seeded scale and yaw) and what the slope
     // limits dropped - read-only, for the placement / collision gates (_harness) and for debugging
-    propInstances: props, propStats,
+    propInstances: props, propStats, coverInstances: coverProps,           // (R2 / world: the rotation cover, drawn and collided after its kind's props)
     lootPoints: lootAll, pois, portals,
     landmark: lookout,                                                          // LC-90: Deepwood's fire lookout { x, z, y, top } (null elsewhere)
     randomGroundPos, losBlocked,
