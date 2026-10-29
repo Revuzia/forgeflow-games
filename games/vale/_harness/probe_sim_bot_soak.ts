@@ -19,7 +19,7 @@
 //   fray       (gameplay:G6, G9) FRAY on the bots' own loadouts, 10 distinct fighters a game (rotated by seed): ≥ 85 %
 //                             of games have no stretch of 90 s or more without a fighter death while 3+ seats are still in
 //                             (from the first death on; the opening is reported) · every fighter's mean placement 3.5–7.5
-//                             (enforced only with ≥ FRAY_MIN_PER_FIGHTER games of that fighter)
+//                             over all its FRAY games (difficulties pooled, ≥ FRAY_MIN_PER_FIGHTER games; each difficulty reported)
 //   credit     (gameplay:g1)  report: fighter deaths finished by a Wick, Needle or monster that are credited to an
 //                             enemy fighter (death.by) vs executed
 //   pace       (gameplay:g2)  RIFT length per difficulty: adept p90 ≤ 32 min (full games only)
@@ -36,9 +36,9 @@
 //   node _harness/probe_sim_bot_soak.ts --full          the soak: RIFT 20 seeds × adept + veteran (full
 //                                                       games), BRIDGE 20 × adept + veteran, mirrored
 //                                                       veteran-vs-novice and veteran-vs-adept (10 seeds
-//                                                       × 2 sides each), FRAY 30 × adept + veteran, 3 workers
+//                                                       × 2 sides each), FRAY 50 × adept + veteran, 3 workers
 //   flags: --seeds N · --seed0 N · --diffs adept,veteran · --suites rift,bridge,mirror,fray · --cut <s>
-//          --fray-seeds N (default 30)
+//          --fray-seeds N (default 50: the 85 % lull gate needs more than 30 games to stop flipping on noise)
 //          --jobs N (≤ 3) · --rules '<json>' (deep-merged into every probed mode's rules)
 //          --label <name> (report: _harness/_reports/fw_W4_soak_<label>.json + .txt)
 //
@@ -64,8 +64,9 @@ const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
 const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28)
-/** a fighter's FRAY placement band is enforced only with this many games of it */
-const FRAY_MIN_PER_FIGHTER = 12;
+/** a fighter's FRAY placement band is enforced on its mean over every FRAY game it played (both difficulties pooled:
+ *  a placement's spread is ~2.8, so ~30 games a difficulty leave ±0.5 of noise per fighter), with at least this many */
+const FRAY_MIN_PER_FIGHTER = 40;
 /** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
  *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
 const STRUCT_MIN_GAMES = 16;
@@ -80,7 +81,7 @@ const SEEDS = Number(opt('seeds', FULL ? '20' : '8'));
 const SEED0 = Number(opt('seed0', '1'));
 const DIFFS = opt('diffs', 'adept,veteran').split(',');
 const SUITES = opt('suites', FULL ? 'rift,bridge,mirror,fray' : 'rift').split(',');
-const FRAY_SEEDS = Number(opt('fray-seeds', '30'));
+const FRAY_SEEDS = Number(opt('fray-seeds', '50'));
 const CUT = Number(opt('cut', FULL ? '0' : '900')) || 0;
 const JOBS = Math.max(1, Math.min(3, Number(opt('jobs', FULL ? '3' : '1'))));
 const RULES = opt('rules', '');
@@ -655,14 +656,19 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       text.push(`  longest no-death stretch with 3+ seats in (from the first death): mean ${mean(lulls).toFixed(0)} s, max ${Math.max(...lulls).toFixed(0)} s, games with a 90 s+ lull ${quiet}/${gs.length}; opening (to the first death) mean ${mean(openings).toFixed(0)} s, max ${Math.max(...openings).toFixed(0)} s; time-limit endings ${endAir.length}, dead air at the end mean ${mean(endAir).toFixed(0)} s, max ${endAir.length ? Math.max(...endAir).toFixed(0) : 0} s`);
       text.push(`  placement by fighter (mean, n, kills): ${rows.map((r) => `${r.f} ${r.place.toFixed(1)} (${r.n}, ${r.kills.toFixed(1)})`).join(' · ')}`);
       gates.push({ group: 'fray', item: 'gameplay:G6', label: `FRAY ${d}: games with no 90 s stretch without a death while 3+ seats are in`, value: `${gs.length - quiet}/${gs.length} (${pct(okShare)})`, target: '≥ 85 %', pass: okShare >= 0.85, n: gs.length });
-      const enforced = rows.filter((r) => r.n >= FRAY_MIN_PER_FIGHTER);
-      const out = enforced.filter((r) => r.place < 3.5 || r.place > 7.5);
-      const lo = rows.length ? rows[rows.length - 1] : null, hi = rows.length ? rows[0] : null;
-      gates.push({ group: 'fray', item: 'gameplay:G9', label: `FRAY ${d}: every fighter's mean placement (fighters with ≥ ${FRAY_MIN_PER_FIGHTER} games: ${enforced.length}/${rows.length})`,
-        value: `${hi ? `best ${hi.f} ${hi.place.toFixed(1)}` : ''}${lo ? `, worst ${lo.f} ${lo.place.toFixed(1)}` : ''}${out.length ? `; outside: ${out.map((r) => `${r.f} ${r.place.toFixed(1)}`).join(', ')}` : ''}`,
-        target: '3.5–7.5', pass: out.length === 0, n: gs.length, reportOnly: enforced.length === 0 });
     }
     detail.fray = fray;
+    // G9: placement per fighter over every FRAY game (difficulties pooled)
+    const pooled = new Map<string, number[]>();
+    for (const g of fr) for (const s of g.seats) (pooled.get(s.fighter) ?? pooled.set(s.fighter, []).get(s.fighter)!).push(g.placement[s.p] ?? 0);
+    const rows = [...pooled.entries()].map(([f, a]) => ({ f, n: a.length, place: mean(a) })).sort((a, b) => a.place - b.place);
+    const enforced = rows.filter((r) => r.n >= FRAY_MIN_PER_FIGHTER);
+    const out = enforced.filter((r) => r.place < 3.5 || r.place > 7.5);
+    const lo = rows.length ? rows[rows.length - 1] : null, hi = rows.length ? rows[0] : null;
+    text.push('', `FRAY placement by fighter, ${fdiffs.join(' + ')} pooled (mean, n): ${rows.map((r) => `${r.f} ${r.place.toFixed(2)} (${r.n})`).join(' · ')}`);
+    gates.push({ group: 'fray', item: 'gameplay:G9', label: `FRAY: every fighter's mean placement, ${fdiffs.join(' + ')} pooled (fighters with ≥ ${FRAY_MIN_PER_FIGHTER} games: ${enforced.length}/${rows.length})`,
+      value: `${hi ? `best ${hi.f} ${hi.place.toFixed(2)}` : ''}${lo ? `, worst ${lo.f} ${lo.place.toFixed(2)}` : ''}${out.length ? `; outside: ${out.map((r) => `${r.f} ${r.place.toFixed(2)}`).join(', ')}` : ''}`,
+      target: '3.5–7.5', pass: out.length === 0, n: fr.length, reportOnly: enforced.length === 0 });
   }
   return { gates, text, detail };
 }

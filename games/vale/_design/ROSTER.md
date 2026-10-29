@@ -77,6 +77,7 @@ The task set a floor of 4 fighters per position. I aimed higher: **every positio
   - Marund: Shelter Dome
 - **Allies-only filters** state `enemies:false, self:true` (CONTRACT §5.3, filters).
 - **FRAY standouts.** Some kits are deliberately good in a crowd and are the expected favourites: Burdam's Settled Account, Dunsom's Driving Hour, Nurrow's Quiet Kill and Lull the Rest, and Tunlan's Shadow Play.
+- **FRAY weights** (W4 G9, `modes.json` fray `rules.fighterWeights`, fighter-on-fighter damage, never past ±25 %): the soak put lone divers and wardens on top of a free-for-all and setup kits at the bottom (Rishal 1.8, Nurrow 9.1 mean placement), so FRAY alone scales Rishal's damage dealt × 0.75, Marund's × 0.85, Hesmi's × 0.9, Lisvel's × 0.9, Ulkro's × 1.08, Ilsheta's × 1.05, Vashil's × 1.15 (taken × 0.88) and Nurrow's × 1.25 (taken × 0.8). Every fighter's mean placement is then 3.7–7.1 (gate 3.5–7.5, 50 seeds × adept + veteran).
 - **Tenders are the weakest FRAY picks.** Their self-casts and damage tools (Glint Bolt; Mote Toss with Wrap Cast) keep them playable.
 
 ### 2.4 Spreads
@@ -350,9 +351,9 @@ Two forms: `passive.forms.hilt` holds the hilt kit for a1–a3; `passive.forms.g
 **Hook at 96 px:** the 70 cm snuffer cone tilted forward reads as an off-centre point from above. The accent is on its iron rim.
 **Weapon:** a curved snuffer-blade, `one_hand`.
 - **Passive: Quiet Kill.** When she gets a takedown, enemy fighters within 5 m of her fall asleep for 1 s. [DSL: trigger `takedown` → `area` circle 5 at self, fighters → `status sleep`]
-- **A1: Felt Step.** Lunges up to 4 m toward a point; the first enemy she reaches takes magic damage. [DSL: `dash` toPoint, `stopOnFirstHit` → onPass `damage`]
-- **A2: Lullaby Dart.** A dart reaching 8 m puts the first enemy fighter to sleep for 1.25 s; damage wakes them. It deals no bonus damage on waking. [DSL: `projectile` with a fighters filter → `status sleep`]
-- **A3: Snuff** (35 Tally). Snuffs an adjacent enemy: magic damage and a 1 s silence. [DSL: unit target → `damage`, `status silence`]
+- **A1: Felt Step.** Lunges up to 4 m toward a point; the first enemy she reaches takes magic damage. Felt soles: a sleeping enemy takes none and stays asleep (W4 G9). [DSL: `dash` toPoint, `stopOnFirstHit` → onPass `if not targetHasStatus sleep` → `damage`]
+- **A2: Lullaby Dart.** A dart reaching 8 m puts the first enemy fighter to sleep for 1.25 s; damage wakes them. The dart deals no damage; the payoff is Snuff's. [DSL: `projectile` with a fighters filter → `status sleep`]
+- **A3: Snuff** (35 Tally). Snuffs an adjacent enemy: magic damage and a 1 s silence. **Snuffing a sleeper** (W4 G9) adds half the damage again, silences for 2 s and gives back 70 % of the cooldown, so dart → Felt Step → Snuff → Snuff is her quiet kill. [DSL: unit target → `if targetHasStatus sleep` → `cooldown a3 percent 0.7`, `status silence`, `damage`; then `damage`, `status silence`] Bot combo order a2 → a3 → a1 → ult.
 - **Ultimate: Lull the Rest** (**unique: she isolates a target by putting the others to sleep**; 110 / 95 / 80 s).
   - She names an enemy fighter within 6 m and lunges to them, dealing magic damage to them.
   - Every **other** enemy fighter within 5 m of them falls asleep for 2 s.

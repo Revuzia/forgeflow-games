@@ -46,7 +46,7 @@ import {
 import { initPractice, installPractice, practiceSystem } from './modes/practice.ts';
 import { stream, type Rng } from './rng.ts';
 import { installShop, shopViewSystem } from './shop.ts';
-import { damageMultHook, noteAttack, unitAcquireScore } from './units/common.ts';
+import { damageMultHook, fighterWeightHook, noteAttack, unitAcquireScore } from './units/common.ts';
 import {
   fountainSystem, installFighters, recallSystem, respawnSystem, seatState, spawnSeatFighters,
 } from './units/fighters.ts';
@@ -126,6 +126,7 @@ function buildWorld(catalog: CatalogT, setup: MatchSetup, opts: SimOptions, idx:
   w.hooks.death.push((ww, victim, killer, _assists, ev) => rules.onDeath(ww, victim, killer, ev.by));
   w.hooks.damage.push((ww, src, dst) => noteAttack(ww, src, dst));
   w.hooks.modifyDamage.push((ww, src, dst, raw) => damageMultHook(ww, src, dst, raw));
+  if (w.rules.fighterWeights) w.hooks.modifyDamage.push((ww, src, dst, raw) => fighterWeightHook(ww, src, dst, raw));
   w.hooks.acquireScore = unitAcquireScore;
   w.hooks.spawn.push(wardSpawnHook);
   const pings: number[][] = setup.seats.map(() => []);

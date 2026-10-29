@@ -77,6 +77,35 @@ section('kill score end', () => {
   check('the scorer 1st; seat 0 (still in) 2nd; eliminated seats keep their elimination places', pl[2] === 1 && pl[0] === 2 && pl[1] === 4 && pl[3] === 3, pl);
 });
 
+section('the Noon Toll (rules.noonToll) and fighter weights (rules.fighterWeights), W4 G6 / G9', () => {
+  const c2 = matchCatalog({ frayRules: { noonToll: { from: 20, every: 10, reveal: 3 }, fighterWeights: { fx_brawler: { dealt: 1.2 }, fx_ranger: { taken: 0.8 } } } });
+  const sim = createSim(c2, fraySetup(6, { seed: 3 }), { pregameSeconds: 0 });
+  const w = sim.world;
+  // seat 0 hides far from everyone: no team sees it before the toll
+  const e0 = w.players[0].ent!;
+  e0.x = 3; e0.y = 3; w.hashDirty = true;
+  for (const p of w.players) if (p.player !== 0) { p.ent!.x = 45; p.ent!.y = 45; }
+  run(sim, 19.5);
+  const seenBefore = w.players.filter((p) => p.player !== 0 && (e0.visibleMask & (1 << p.team)) !== 0).length;
+  const evs: SimEvent[] = [];
+  for (let i = 0; i < 30; i++) for (const ev of sim.step()) evs.push(ev);
+  const seenAt = w.players.filter((p) => p.player !== 0 && (e0.visibleMask & (1 << p.team)) !== 0).length;
+  const toll = ofType(evs, 'announce').find((a) => a.key === 'noon_toll');
+  check(`before the toll nobody sees the hidden seat (${seenBefore}); at 20 s every team does (${seenAt}/5)`, seenBefore === 0 && seenAt === 5, [seenBefore, seenAt]);
+  const living = w.players.filter((p) => p.ent?.alive).length;
+  check(`announce 'noon_toll' with the fighters shown (${living} living)`, !!toll && toll.params?.n === living, toll);
+  run(sim, 3.5);
+  const seenAfter = w.players.filter((p) => p.player !== 0 && (e0.visibleMask & (1 << p.team)) !== 0).length;
+  check(`3 s later the light passes (${seenAfter} teams see it)`, seenAfter === 0, seenAfter);
+  run(sim, 7);
+  check('it tolls again 10 s after the first', ofType(w.events, 'announce').filter((a) => a.key === 'noon_toll').length >= 2 || (e0.visibleMask & 0b111110) !== 0);
+  // weights: a brawler (×1.2 dealt) hitting a ranger (×0.8 taken) deals 0.96 of the raw; the reverse is untouched
+  const b = w.players[0].ent!, r = w.players[1].ent!;
+  const d1 = dealDamage(w, b, r, 100, 'true');
+  const d2 = dealDamage(w, r, b, 100, 'true');
+  check(`fighterWeights: brawler → ranger ${d1.toFixed(1)} (= 100 × 1.2 × 0.8), ranger → brawler ${d2.toFixed(1)} (= 100)`, near(d1, 96, 1e-6) && near(d2, 100, 1e-6), [d1, d2]);
+});
+
 section('time limit end', () => {
   const sim = createSim(matchCatalog({ frayRules: { end: { kind: 'last_standing_or_score', lives: 2, killScore: 4, timeLimit: 20 } } }), fraySetup(3), { pregameSeconds: 0 });
   const w = sim.world;

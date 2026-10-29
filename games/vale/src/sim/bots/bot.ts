@@ -288,7 +288,10 @@ export class Bot extends BotBase implements BotController {
     // FRAY last-life caution (W4 gameplay G6): only while more than 4 seats are still in and before the Noon Toll
     // rings — six bots on their last life used to circle the middle for minutes without a fight
     const lastLife = kind === 'fray' && lives !== undefined && lives <= 1 && this.frayCareful();
-    const thr = this.prof.retreatHp + this.diff.retreatBias + (lastLife ? 0.15 : 0) + (this.adv < 0.4 ? 0.08 : 0);
+    // under the Noon Toll nobody can hide: the outnumbered-in-a-crowd retreats (a third party near) are off, only low
+    // health still sends a bot away — three survivors used to circle each other until the clock ran out
+    const tolled = kind === 'fray' && this.tollRinging();
+    const thr = this.prof.retreatHp + this.diff.retreatBias + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0);
     let best: Mode = this.mode, bestS = -1;
     const consider = (m: Mode, s: number): void => {
       if (s <= 0) return;
@@ -300,6 +303,7 @@ export class Bot extends BotBase implements BotController {
     let retreat = 0;
     if (this.nearE > 0) {
       if (hpF < thr) retreat = 0.85 + (thr - hpF);
+      else if (tolled) retreat = 0;
       else if (this.adv < 0.3 && this.nearE >= 2) retreat = 0.8;
       else if (this.adv < 0.42 && hpF < 0.5) retreat = 0.7;
     }
@@ -947,8 +951,12 @@ export class Bot extends BotBase implements BotController {
   private frayCareful(): boolean {
     let inPlay = 0;
     for (const p of this.w.players) if (p && (p.lives ?? 1) > 0) inPlay++;
+    return inPlay > 4 && !this.tollRinging();
+  }
+  /** the Noon Toll (rules.noonToll) has started ringing */
+  private tollRinging(): boolean {
     const nt = this.w.rules.noonToll;
-    return inPlay > 4 && !(nt && this.w.time + 1e-9 >= nt.from);
+    return !!nt && this.w.time + 1e-9 >= nt.from;
   }
 
   private huntQuality = 0;

@@ -610,6 +610,11 @@ export const RulesParams = z.object({
    *  shown to every team for `reveal` s (fog, thickets and invisibility do not hide them); announce 'noon_toll'
    *  (params.n = fighters shown). FRAY's last minutes stay a race: nobody can wait out the clock in a corner. */
   noonToll: z.object({ from: z.number().nonnegative(), every: z.number().positive(), reveal: z.number().positive() }).strict().optional(),
+  /** W4 (gameplay G9), additive: this mode's fighter weights. Damage one fighter deals another is × the dealer's `dealt`
+   *  and × the target's `taken` (absent = 1). For a mode whose shape a kit over- or under-plays (FRAY's free-for-all
+   *  rewards lone divers and punishes setup kits); tuned against the soak's placement band (_harness/probe_sim_bot_soak.ts
+   *  fray), never above ±25 %. Keys are FighterDef ids. */
+  fighterWeights: z.record(z.string(), z.object({ dealt: z.number().min(0.75).max(1.25).optional(), taken: z.number().min(0.75).max(1.25).optional() }).strict()).optional(),
   /** CHANGED(SIM), additive: balance knobs the sim used to hard-code. Every key is optional; an
    *  omitted key keeps the CONTRACT §5.5/§5.6 default shown in brackets. Queues override key by key. */
   tuning: z.object({

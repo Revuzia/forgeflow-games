@@ -280,6 +280,16 @@ export function useUnitAbilities(w: World, e: Entity, t: Entity): boolean {
 
 // ── hooks shared by every unit kind ─────────────────────────────────────────────────────────────
 /** hooks.modifyDamage: UnitDef.behavior.damageMult of the attacking unit */
+/** rules.fighterWeights (W4 gameplay G9): fighter-on-fighter damage × the dealer's `dealt` × the target's `taken` */
+export function fighterWeightHook(w: World, src: Entity | null, dst: Entity, raw: number): number {
+  const fw = w.rules.fighterWeights;
+  if (!fw || dst.kind !== 'fighter') return raw;
+  const by = w.creditFighter(src);
+  if (!by || by === dst) return raw;
+  const a = fw[by.def]?.dealt ?? 1, b = fw[dst.def]?.taken ?? 1;
+  return raw * a * b;
+}
+
 export function damageMultHook(w: World, src: Entity | null, dst: Entity, raw: number): number {
   if (!src || !src.unit) return raw;
   const dm = behaviorOf(src.unit).damageMult;
