@@ -2,6 +2,8 @@
 
     python3 art/blender/common/heavy.py run -- /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
         --python-exit-code 1 --python art/blender/maps/minimap_pad_paint.py -- [--maps map_bridge] [--px 1100] [--samples 64] [--full]
+        [--keep-render <png>]   also keep the margin render (after the painterly pass) to re-composite later
+        [--from-render <png>]   composite that kept render again (keep_interior's feather / colour match), no Cycles render
 
 art/blender/ui/minimap_paint.py paints a map over its own rectangle 0..W x 0..H, so a base plaza that reaches past the
 map's edge is cut at the image edge. This re-renders the same painting (that script's builders, materials, sun, Cycles
@@ -109,12 +111,31 @@ def build_margin(m, b, col):
             mp.prism(f"margin_{side}", [(far, 0.0), (edge, 0.0), (edge, H), (far, H)], 0.2, drop, col, z0=0.02)
 
 
+FEATHER_M = 1.5    # m inside the map's edge over which the shipped painting fades in over the margin render (was 1 px)
+MATCH_M = 2.0      # m strip just inside the edge where the render's colour is matched to the painting's (local mean)
+MATCH_ALONG_M = 1.5  # m: the mean difference is smoothed along the edge (a Gaussian of this sigma)
+
+
+def _smooth1d(v, sigma):
+    """a Gaussian along axis 0 of v (n, c), edges clamped"""
+    if sigma <= 0:
+        return v
+    r = int(math.ceil(3 * sigma))
+    k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma) ** 2); k /= k.sum()
+    pad = np.concatenate([np.repeat(v[:1], r, 0), v, np.repeat(v[-1:], r, 0)], 0)
+    return np.stack([np.convolve(pad[:, c], k, mode="valid") for c in range(v.shape[1])], 1)
+
+
 def keep_interior(arr, paint, W, H, b):
     """inside the map rectangle keep the shipped painting (art/renders/maps/minimap_<id>_painted.png, the unpadded image
     over 0..W x 0..H, bilinearly resampled onto this grid), so the margin is the only change: the shipped BRIDGE painting
     was patched by composites after its last full render (W5a env F6), and a full render today paints the roads from the
-    3D lane colour, darker than the bar the brief asks for (map_bridge_landmarks.md §6). Blended over an anti-aliased
-    edge; the deck, the drop and the terraces match the render to within 1 / 255 there."""
+    3D lane colour, darker than the bar the brief asks for (map_bridge_landmarks.md §6).
+    The seam (integration run 2, world-pad:bridge-edge-seam): the two images disagree by 2-3 px on the terrace and disc
+    outlines that cross x = 0 and x = W, so a hard 1 px join read as a step. The painting now fades in over FEATHER_M
+    inside the edge (smoothstep), and the render is shifted per channel by the local mean difference (painting - render)
+    measured in a MATCH_M strip just inside each edge, smoothed MATCH_ALONG_M along it, fading out over FEATHER_M on
+    both sides of the edge, so the margin carries the painting's tone into the join."""
     h, w = arr.shape[:2]
     ph, pw = paint.shape[:2]
     x0, y0, x1, y1 = b
@@ -122,19 +143,45 @@ def keep_interior(arr, paint, W, H, b):
     ys, xs = np.mgrid[0:h, 0:w]
     X = x0 + (xs + 0.5) / sx
     Y = y0 + (ys + 0.5) / sy
-    inside = (np.clip(np.minimum(X, W - X) * sx + 0.5, 0, 1) * np.clip(np.minimum(Y, H - Y) * sy + 0.5, 0, 1))[..., None]
     u = np.clip(X * pw / W - 0.5, 0, pw - 1); v = np.clip(Y * ph / H - 0.5, 0, ph - 1)
     u0 = np.floor(u).astype(int); v0 = np.floor(v).astype(int)
     u1 = np.minimum(u0 + 1, pw - 1); v1 = np.minimum(v0 + 1, ph - 1)
     fu = (u - u0)[..., None]; fv = (v - v0)[..., None]
     p = paint[..., :3]
     s = (p[v0, u0] * (1 - fu) + p[v0, u1] * fu) * (1 - fv) + (p[v1, u0] * (1 - fu) + p[v1, u1] * fu) * fv
+    rend = arr[..., :3].copy()
+    # signed distance inside each edge, in metres (west, east, north, south)
+    dists = {"w": X, "e": W - X, "n": Y, "s": H - Y}
+    inside_m = np.minimum(np.minimum(X, W - X), np.minimum(Y, H - Y))
+    # the local mean match, edge by edge: rows along the west / east edges, columns along the north / south ones
+    for side, d in dists.items():
+        if (side == "w" and x0 >= 0) or (side == "e" and x1 <= W) or (side == "n" and y0 >= 0) or (side == "s" and y1 <= H):
+            continue
+        strip = (d > 0) & (d < MATCH_M) & (inside_m >= 0)
+        along = 0 if side in ("w", "e") else 1             # rows run along a west / east edge
+        diff = np.where(strip[..., None], s - rend, 0.0)
+        n = strip.sum(axis=1 - along).astype(np.float64)
+        mean = diff.sum(axis=1 - along) / np.maximum(n, 1)[:, None]
+        ok = n > 0
+        if not ok.any():
+            continue
+        idx = np.arange(len(n))
+        mean = np.stack([np.interp(idx, idx[ok], mean[ok, c]) for c in range(3)], 1)
+        mean = _smooth1d(mean, MATCH_ALONG_M * (sy if along == 0 else sx))
+        fall = np.clip(1 - np.abs(d) / FEATHER_M, 0, 1)[..., None]
+        # only within the edge's own span along it (a corner takes both edges' shifts, faded)
+        span = ((Y >= 0) & (Y <= H)) if along == 0 else ((X >= 0) & (X <= W))
+        sh = mean[ys] if along == 0 else mean[xs]
+        rend = rend + np.where(span[..., None], sh * fall, 0.0)
+    # the painting fades in over FEATHER_M inside the edge (smoothstep), 0 outside the map
+    t = np.clip(inside_m / FEATHER_M, 0, 1)
+    wgt = (t * t * (3 - 2 * t))[..., None]
     out = arr.copy()
-    out[..., :3] = inside * s + (1 - inside) * arr[..., :3]
+    out[..., :3] = wgt * s + (1 - wgt) * rend
     return out
 
 
-def render_padded(mid: str, px: int, samples: int, full: bool = False) -> None:
+def render_padded(mid: str, px: int, samples: int, full: bool = False, keep_render: str = "", from_render: str = "") -> None:
     m = json.load(open(os.path.join(mp.CONTENT, f"{mid}.json")))
     W, H = m["size"]
     b = m["art"]["terrain"].get("minimapBounds")
@@ -142,6 +189,15 @@ def render_padded(mid: str, px: int, samples: int, full: bool = False) -> None:
         raise SystemExit(f"minimap_pad_paint: {mid}.json has no art.terrain.minimapBounds")
     x0, y0, x1, y1 = (float(v) for v in b)
     bw, bh = x1 - x0, y1 - y0
+    out_dir = scene.ensure_dir(os.path.join(mp.OUT, mid))
+    painted = os.path.join(scene.RENDERS_DIR, "maps", f"minimap_{mid.split('_')[1]}_painted.png")
+    if from_render:
+        # re-composite a render kept by --keep-render (the painterly pass already applied): no scene, no Cycles
+        arr = imageops.load(from_render)
+        arr = keep_interior(arr, imageops.load(painted), W, H, (x0, y0, x1, y1))
+        imageops.save(arr, os.path.join(out_dir, "minimap.png"), alpha=False)
+        scene.log(f"wrote {scene.rel(os.path.join(out_dir, 'minimap.png'))} from the kept render {from_render}")
+        return
     scene.reset()
     sc = bpy.context.scene
     col = scene.collection(mid)
@@ -168,7 +224,6 @@ def render_padded(mid: str, px: int, samples: int, full: bool = False) -> None:
     so = scene.new_object("sun", sun, col)
     d = Vector((-0.62, 0.5, elev)).normalized()
     so.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
-    out_dir = scene.ensure_dir(os.path.join(mp.OUT, mid))
     raw = os.path.join(out_dir, "minimap_raw.png")
     sc.render.image_settings.file_format = "PNG"; sc.render.image_settings.color_mode = "RGB"
     sc.render.filepath = raw
@@ -176,7 +231,8 @@ def render_padded(mid: str, px: int, samples: int, full: bool = False) -> None:
     arr = imageops.load(raw)
     k = imageops.kuwahara(arr[..., :3], 3)
     arr[..., :3] = arr[..., :3] * 0.45 + k * 0.55
-    painted = os.path.join(scene.RENDERS_DIR, "maps", f"minimap_{mid.split('_')[1]}_painted.png")
+    if keep_render:
+        imageops.save(arr, keep_render, alpha=False)
     kept = os.path.exists(painted) and not full
     if kept:
         arr = keep_interior(arr, imageops.load(painted), W, H, (x0, y0, x1, y1))
@@ -191,11 +247,13 @@ def render_padded(mid: str, px: int, samples: int, full: bool = False) -> None:
 def main():
     args = scene.parse_args(lambda p: (p.add_argument("--maps", default="map_bridge"), p.add_argument("--px", type=int, default=1100),
                                        p.add_argument("--samples", type=int, default=64),
-                                       p.add_argument("--full", action="store_true", help="render the map too (do not keep the shipped painting inside it)")))
+                                       p.add_argument("--full", action="store_true", help="render the map too (do not keep the shipped painting inside it)"),
+                                       p.add_argument("--keep-render", default="", help="also save the margin render (after the painterly pass) here"),
+                                       p.add_argument("--from-render", default="", help="composite a render kept by --keep-render (no Cycles render)")))
     for mid in [x for x in args.maps.split(",") if x]:
         if mid != "map_bridge":
             raise SystemExit(f"minimap_pad_paint: {mid}: BRIDGE only (RIFT pads in minimap_survey.py; FRAY needs no margin)")
-        render_padded(mid, args.px, args.samples, args.full)
+        render_padded(mid, args.px, args.samples, args.full, args.keep_render, args.from_render)
 
 
 if __name__ == "__main__":

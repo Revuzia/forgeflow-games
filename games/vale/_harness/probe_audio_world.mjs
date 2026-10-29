@@ -17,7 +17,7 @@
 //   W5  (stub) the Noon Toll ('noon_toll' announce bound as world.noon_toll) requests its cue at once, queues no
 //       announcer line and ducks nothing; another unbound announce still falls back to the announcer
 //   W6  (stub) a damage event with `shaded` on a structure requests hitShaded's cue and the hit at SHADED_GAIN; without
-//       it, no hitShaded; on a fighter, no hitShaded
+//       it, no hitShaded; on a fighter, no hitShaded; an ability blow's kit 'hit' (before its shaded damage) at SHADED_GAIN
 //   W7  levels: every world cue sits under the announcer (recipe max momentary below m_announce_minor's) and none is
 //       on the voice bus (only voice-bus lines duck the mix)
 // Exit 0 = W1-W7 hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/integ_audio_world.json.
@@ -285,6 +285,19 @@ if (!chordsTotal) console.log('W3: the bots never chorded in these runs (Part S 
   if (!(hitOf(shadedRows) && hitOf(plainRows) && hitOf(shadedRows).gain < hitOf(plainRows).gain * 0.6)) failures.push(`W6: the shaded hit is not muffled (${report.S.W6.shaded} vs ${report.S.W6.plain})`);
   if (plainRows.some((c) => c.id === ev.hitShaded)) failures.push('W6: an unshaded blow requested hitShaded');
   if (fighterRows.some((c) => c.id === ev.hitShaded)) failures.push('W6: a shaded flag on a fighter requested hitShaded');
+  // W6 (ability): an ability blow voices through its 'hit' (the kit hit), which comes BEFORE its damage in the same
+  // tick: a shaded one plays that kit hit at SHADED_GAIN too, an unshaded one at full gain
+  const A1 = catalog.fighters[0].kit?.a1?.id ?? 'probe_ability';
+  const abil = (shaded) => {
+    const k0 = log.cues.length;
+    batch([{ e: 'hit', src: 2, dst: 9, ability: A1 }, { e: 'damage', src: 2, dst: 9, amount: 40, dtype: 'magic', crit: false, ability: A1, shielded: 0, ...(shaded ? { shaded: true } : {}) }]);
+    return log.cues.slice(k0);
+  };
+  const abShaded = abil(true), abPlain = abil(false);
+  report.S.W6.ability = { ability: A1, shaded: abShaded.map((c) => `${c.id}@${c.gain.toFixed(3)}`), plain: abPlain.map((c) => `${c.id}@${c.gain.toFixed(3)}`) };
+  if (!abShaded.some((c) => c.id === ev.hitShaded)) failures.push('W6: a shaded ability blow on a structure requested no hitShaded cue');
+  if (!(hitOf(abShaded) && hitOf(abPlain) && hitOf(abShaded).gain < hitOf(abPlain).gain * 0.6)) failures.push(`W6: the shaded ability hit is not muffled (${report.S.W6.ability.shaded} vs ${report.S.W6.ability.plain})`);
+  if (abPlain.some((c) => c.id === ev.hitShaded)) failures.push('W6: an unshaded ability blow requested hitShaded');
   // W3 (stub): an area with a bound vfx and no sfx; the same vfx with its own sfx keeps that sfx
   for (const [role, c] of areaRoles) {
     k = log.cues.length;

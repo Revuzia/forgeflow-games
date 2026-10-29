@@ -134,7 +134,8 @@
 //               an announce key bound as 'world.<key>' (the Noon Toll's hour-bell) plays that cue at once instead
 //               of an announcer line, so it neither waits in the queue nor ducks the mix; an area with no sfx of its
 //               own sounds 'area.<its vfx>' (a passive's area: Vashil's chord); a blow the Ringshade muffled (the
-//               damage event's `shaded`, on a structure) plays 'hitShaded' with the hit under it at SHADED_GAIN
+//               damage event's `shaded`, on a structure: too few of the striker's Wicks guard it) plays 'hitShaded'
+//               with the hit under it at SHADED_GAIN, an ability's kit 'hit' too (the same tick's shaded damage)
 // The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
 
 import type { MatchClient } from '../contracts/session.ts';
@@ -359,6 +360,9 @@ class Engine implements ValeAudioPort {
   private readonly knocked = new Map<number, number>();
   /** heal target entity → ctx time of its last voiced heal */
   private readonly healLast = new Map<number, number>();
+  /** this tick's ability blows the Ringshade muffled ('src:dst:ability' of a `shaded` damage event): the 'hit' that
+   *  comes before its damage in the same batch plays its kit hit at SHADED_GAIN */
+  private readonly shadedHits = new Set<string>();
   /** teams whose every fighter is down (a wipe, announced once until one of them is back) */
   private readonly wiped = new Set<number>();
   private duckGain!: GainNode;
@@ -1071,6 +1075,8 @@ class Engine implements ValeAudioPort {
     this.ambMap = client?.setup?.map ?? null;
     if (client) {
       this.off = client.onEvents((evs: SimEvent[]) => {
+        this.shadedHits.clear();
+        for (const e of evs) if (e.e === 'damage' && e.shaded && e.ability) this.shadedHits.add(`${e.src}:${e.dst}:${e.ability}`);
         for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>);
         if (this.ults.size) this.settleUlts();
         // a whole tick's lines are queued (and merged) before the best of them speaks
@@ -1332,8 +1338,10 @@ class Engine implements ValeAudioPort {
         const pr = this.abilitySfx.get(e.ability as string);
         const own = this.kit(src, 'hit');
         const lib = (e.sfx as string | undefined) ?? pr?.hitSfx;
-        this.cue(own ?? lib ?? this.ev('hitAbility'), at(dst), 1, 0, aw);
-        if (own && lib && lib !== own && SEMANTIC_HIT_ROLES.some((r) => this.ev(r) === lib)) this.cue(lib, at(dst), SEMANTIC_KIT_GAIN, 0, aw);
+        // a Ringshade-muffled ability blow (its damage, later in this batch, says `shaded`; the 'damage' case plays the thud)
+        const hg = dst?.kind === 'structure' && !!this.ev('hitShaded') && this.shadedHits.has(`${e.src}:${e.dst}:${e.ability}`) ? SHADED_GAIN : 1;
+        this.cue(own ?? lib ?? this.ev('hitAbility'), at(dst), hg, 0, aw);
+        if (own && lib && lib !== own && SEMANTIC_HIT_ROLES.some((r) => this.ev(r) === lib)) this.cue(lib, at(dst), SEMANTIC_KIT_GAIN * hg, 0, aw);
         break;
       }
       case 'area': {
@@ -1348,8 +1356,8 @@ class Engine implements ValeAudioPort {
         const duel = src?.kind === 'fighter' && dst?.kind === 'fighter';
         if (near(p)) this.intensity = Math.min(1, this.intensity + (duel ? 0.12 : 0.02));
         if (near(p) && duel) this.fight = Math.min(1, this.fight + FIGHT_HIT);
-        // a blow the Ringshade took the edge off (the sim's `shaded`: a structure guarded by too few of its Wicks) is
-        // muffled: the role 'hitShaded' under the hit, the hit itself at SHADED_GAIN (see `world` in the header)
+        // a blow the Ringshade took the edge off (the sim's `shaded`: too few of the striker's Wicks guard the structure)
+        // is muffled: the role 'hitShaded' under the hit, the hit itself at SHADED_GAIN (see `world` in the header)
         const shaded = !!e.shaded && dst?.kind === 'structure' && !!this.ev('hitShaded');
         if (shaded) this.cue(this.ev('hitShaded'), p, 1, 0, aw);
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it

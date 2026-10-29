@@ -48,8 +48,11 @@ export const LOD = {
   /** a crowd body's vertices within this many metres of an accent vertex (at rest) are locked in its LOD (crowd.ts
    *  accentLock), so the surface a stripe or band sits on keeps its shape and the accent shows as authored */
   crowdAccentLockM: 0.035,
-  /** a fighter's body in the match (faceLockedLod): ratio, bound in metres, normal weight, the locked bone and weight */
-  body: { ratio: 0.4, errorM: 0.012, normalW: 0.5, lockBone: 'head', lockW: 0.5 },
+  /** a fighter's body in the match (faceLockedLod): ratio, bound in metres, normal weight, UV weight (> 0: the UVs join
+   *  the normals as attributes, so a collapse that drags the baked texture across a flat face is refused; 60 keeps
+   *  Burdam's front pauldron roundel whole at the gameplay camera, the chars lane's _lod1.mjs --uv-weight), the locked
+   *  bone and weight */
+  body: { ratio: 0.4, errorM: 0.012, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
   ink: { ratio: 0.4, errorM: 0.008, weld: true },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
@@ -219,7 +222,7 @@ export function dequantUnit(mesh: SkinnedMesh): number {
  * The face-locked LOD1 index of a fighter's textured body (a SkinnedMesh with one material and an index), or null
  * (simplifier not ready, no `head` bone, nothing gained). Call it on the TEMPLATE's body at rest (its world matrices
  * current, never posed): the dequantization is read from its skeleton. LOD.body: 0.4 of the triangles within 12 mm,
- * normals weighted 0.5, every vertex skinned >= 0.5 to `head` locked (the chars lane's _lod1.mjs recipe, which
+ * normals weighted 0.5, UVs weighted 60, every vertex skinned >= 0.5 to `head` locked (the chars lane's _lod1.mjs recipe, which
  * art/blender/fighters/_lod1_three.mjs checks at its own 0.5 / 10 mm). Returns the index (Uint16 under 65,536 vertices)
  * and both triangle counts.
  */
@@ -248,8 +251,14 @@ export function faceLockedLod(mesh: SkinnedMesh): { index: BufferAttribute; tris
     const extent = MeshoptSimplifier.getScale(pos, 3);
     if (!(unitM > 0) || !(extent > 0)) return null;
     const target = Math.max(3, Math.floor(tris * cfg.ratio) * 3);
-    const w = cfg.normalW;
-    const [lod] = MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, nrm, 3, [w, w, w], lock, target, cfg.errorM / (unitM * extent), []);
+    const w = cfg.normalW, uw = cfg.uvW;
+    const UV = uw > 0 ? g.getAttribute('uv') : null;
+    let att = nrm, stride = 3, weights: number[] = [w, w, w];
+    if (UV) {
+      att = new Float32Array(n * 5); stride = 5; weights = [w, w, w, uw, uw];
+      for (let i = 0; i < n; i++) { att.set(nrm.subarray(i * 3, i * 3 + 3), i * 5); att[i * 5 + 3] = UV.getX(i); att[i * 5 + 4] = UV.getY(i); }
+    }
+    const [lod] = MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, att, stride, weights, lock, target, cfg.errorM / (unitM * extent), []);
     if (!lod.length || lod.length >= src.length) return null;
     const attr = new BufferAttribute(n < 65536 ? Uint16Array.from(lod) : lod, 1);
     attr.name = 'vale_lod_body';
