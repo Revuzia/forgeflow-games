@@ -368,6 +368,7 @@ class ValeRenderer implements Renderer {
         out.set(ok ? (at[0] as number) : m.size[0] / 2, 0.05, ok ? (at[1] as number) : m.size[1] / 2);
         return true;
       },
+      viewFocus: (out) => { out.set(this.rig.focus.x, 0.05, this.rig.focus.z); return true; },
     });
     this.director.eventVfx = opts.eventVfx ?? {};
     this.director.statusVfx = opts.statusVfx ?? {};

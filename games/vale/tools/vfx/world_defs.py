@@ -125,4 +125,27 @@ def defs() -> list:
                  decal("ground", "light", [[0, 1.5], [0.2, 3.0], [1, 3.2]], 1.2, color=NOON, alpha=(0.5, 0.3, 0), emissive=1.2),
                  comment="T2 · Lumen · the Noon Toll's bell over the plate: a pale chime ring runs out across the Noonplate, a second "
                          "behind it, a soft pale centre"))
+    # the Dawn Seal ending (RIFT rules.dawnSeal.until, 7:00; engine-r2-03): each standing sealed Needle sheds its dawnglass
+    # seal: a cool glass flash, the shell's shards fall away round it, a glass ring settles on the ground
+    D.append(vfx("lib_world_seal_break", 1.2,
+                 flash(2, at="origin", color=DAWNGLASS, scale=1.2),
+                 L("emitter", at="origin", count=26, shape="sphere", radius=1.1, offset=[0, 1.2, 0], surface=True, dir="out", spreadDeg=40,
+                   speed=[1.5, 3.5], life=[0.6, 1.0], size=[0.26, 0.2, 0.0], sizeVar=[0.6, 1.4], color=[DAWNGLASS, "team"], alpha=[1, 1, 0],
+                   emissive=2.4, gravity=9.0, drag=0.6, texture="shard", blend="add", align="velocity", aspect=0.45),
+                 L("emitter", at="origin", count=14, shape="sphere", radius=1.3, offset=[0, 1.6, 0], dir="none", speed=[0, 0.3],
+                   life=[0.5, 0.9], size=[0, 0.12, 0.08, 0], color=[NOON, DAWNGLASS], alpha=[0, 1, 0.7, 0], emissive=2.6, gravity=1.5,
+                   texture="glint", blend="add"),
+                 L("shockwave", at="ground", radius=[[0, 1.2], [0.35, 2.6], [1, 3.2]], width=[0.3, 0.06], life=0.6, color=[DAWNGLASS, "team"],
+                   alpha=[0.9, 0.6, 0], emissive=2.2, sharp=2.2, noise=0.3),
+                 comment="T2 · Lumen · the Dawn Seal ends: a sealed Needle sheds its dawnglass seal, a cool glass flash, the shell's "
+                         "shards falling away round it and glints hanging a moment, a glass ring settling on the ground"))
+    # each Gorge Wind step (WorldView.gorgeWind rising, sudden death; engine-r2-04): a gust across the map, drawn round the
+    # viewer's camera focus (a 70 x 44 m field, the line starting 35 m upwind): long pale wind streaks low over the ground
+    # (weather, not an ability: no ring, no flash)
+    D.append(vfx("lib_world_gorge_gust", 1.8,
+                 L("emitter", at="origin", count=170, shape="line", length=70.0, width=44.0, offset=[-35, 1.4, 0], dir="forward", spreadDeg=4,
+                   speed=[18, 26], life=[0.9, 1.4], size=[2.0, 1.5, 0], color=[CHALK, NOON], alpha=[0, 0.45, 0], emissive=0.9,
+                   texture="streak", stretch=0.1, blend="add", align="velocity", fit=False),
+                 comment="T2 · world · a Gorge Wind step: a gust runs across the whole map, long pale wind streaks low over the "
+                         "ground (weather, not an ability)"))
     return D

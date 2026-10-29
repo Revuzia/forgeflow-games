@@ -74,7 +74,10 @@ export type EventVfxKey = 'levelUp' | 'respawn' | 'death' | 'unitDeath' | 'struc
   | 'blink' | 'crit' | 'heal' | 'shield' | 'ultWindup' | 'windup' | 'ultCharge' | 'castFlash'
   /** the Noon Toll (announce 'noon_toll', a mode's rules.noonToll): the light on each fighter still standing for the
    *  reveal, and the bell's ring over the plate */
-  | 'noonToll' | 'noonTollPlate';
+  | 'noonToll' | 'noonTollPlate'
+  /** the Dawn Seal ending (rules.dawnSeal.until): each standing sealed structure sheds its seal · each Gorge Wind step
+   *  (WorldView.gorgeWind rising): a gust across the map */
+  | 'sealBreak' | 'gorgeGust';
 export type EventVfxMap = Partial<Record<EventVfxKey, string>>;
 export type StatusVfxMap = Partial<Record<StatusKindT, string>>;
 
@@ -150,6 +153,8 @@ export interface DirectorHost {
   shake(px: number, ms: number): void;
   /** the map's plate centre in world x / z (art.terrain.plate.at, else the map's centre); false with no map */
   plateAt?(out: Vector3): boolean;
+  /** the camera's ground focus (world x / z): where a map-wide moment is drawn for this viewer */
+  viewFocus?(out: Vector3): boolean;
 }
 
 const HEALING_OPS = new Set(['heal', 'shield']);
@@ -330,11 +335,18 @@ export class Director {
   private readonly zoneTele = new Map<string, 'none' | 'ally_only' | 'everyone'>();
   /** mode id → its Noon Toll's reveal (s): how long the toll's light stays on each fighter */
   private readonly noonReveal = new Map<string, number>();
+  /** mode id → its Dawn Seal (the sealed structure defs and when the seal ends) */
+  private readonly seals = new Map<string, { units: ReadonlySet<string>; until: number }>();
+  /** the world moments' clock (engine-r2-03 / -04): the view they last saw, its time and Gorge Wind step */
+  private momentView: WorldView | null = null;
+  private momentT = 0;
+  private gorgeSeen = 0;
 
   constructor(catalog: CatalogT, vfx: VfxSystem, host: DirectorHost) {
     this.vfx = vfx;
     this.host = host;
     for (const m of catalog.modes) if (m.rules.noonToll) this.noonReveal.set(m.id, m.rules.noonToll.reveal);
+    for (const m of catalog.modes) if (m.rules.dawnSeal) this.seals.set(m.id, { units: new Set(m.rules.dawnSeal.units), until: m.rules.dawnSeal.until });
     const add = (a: AbilityRec, tier: Tier): void => {
       if (this.abilities.has(a.id)) return;
       const heal = Array.isArray(a.effects) && a.effects.some((e) => HEALING_OPS.has((e as { op?: string }).op ?? '')) && !a.effects.some((e) => (e as { op?: string }).op === 'damage');
@@ -420,6 +432,31 @@ export class Director {
     });
   }
 
+  /** the world's own moments with no sim event of their own (the audio engine hears the same edges): the Dawn Seal
+   *  ending at rules.dawnSeal.until sheds the seal from every standing sealed structure (engine-r2-03), and each Gorge
+   *  Wind step sends a gust across the map (engine-r2-04). A client attached mid-match sees no old moment. */
+  private worldMoments(view: WorldView): void {
+    const gw = view.gorgeWind ?? 0;
+    if (view !== this.momentView) { this.momentView = view; this.momentT = view.time; this.gorgeSeen = gw; return; }
+    const t0 = this.momentT, t1 = view.time;
+    this.momentT = t1;
+    const seal = this.seals.get(view.mode);
+    const shed = this.eventVfx.sealBreak;
+    if (seal && shed && t0 < seal.until && t1 >= seal.until) {
+      const B = this.tmpB;
+      for (const e of view.entities) {
+        if (e.kind !== 'structure' || !e.alive || !seal.units.has(e.def)) continue;
+        if (!this.host.bodyPos(e.id, B)) B.set(e.x, 1, e.y);
+        this.fire(shed, e.id, 2, { origin: B, ground: this.tmpC.set(e.x, 0, e.y), anchor: 'origin' });
+      }
+    }
+    // a map-wide gust is drawn where this viewer looks (every viewer sees one over their own screen; cosmetic only)
+    if (gw > this.gorgeSeen && this.eventVfx.gorgeGust && (this.host.viewFocus?.(this.tmpC) || this.host.plateAt?.(this.tmpC))) {
+      this.fire(this.eventVfx.gorgeGust, -1, 2, { origin: this.tmpC, ground: this.tmpC, anchor: 'origin', world: true });
+    }
+    this.gorgeSeen = gw;
+  }
+
   private srcVisible(view: WorldView, id: number): boolean {
     const e = view.entity(id);
     return !!e && this.host.entityVisible(e);
@@ -438,6 +475,7 @@ export class Director {
   handle(events: readonly SimEvent[]): void {
     const view = this.host.view();
     if (!view) return;
+    this.worldMoments(view);
     const p = this.host.palette();
     const A = this.tmpA, B = this.tmpB, C = this.tmpC;
     this.lastHit.clear();
