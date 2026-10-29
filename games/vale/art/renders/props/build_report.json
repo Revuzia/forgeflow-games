@@ -53,7 +53,8 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 23.2,
+  "kb": 25.5,
+  "midribs": 54,
   "plates": 54,
   "role": "tree",
   "size_m": [
@@ -61,8 +62,8 @@
    3.11,
    2.55
   ],
-  "tris": 584,
-  "verts": 596
+  "tris": 692,
+  "verts": 650
  },
  "dialwood_lean": {
   "budget": 750,
@@ -70,7 +71,8 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 21.2,
+  "kb": 23.2,
+  "midribs": 48,
   "plates": 48,
   "role": "tree",
   "size_m": [
@@ -78,8 +80,8 @@
    2.31,
    3.07
   ],
-  "tris": 540,
-  "verts": 539
+  "tris": 636,
+  "verts": 587
  },
  "dialwood_squat": {
   "budget": 750,
@@ -87,16 +89,17 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 22.1,
+  "kb": 24.3,
+  "midribs": 52,
   "plates": 52,
   "role": "tree",
   "size_m": [
    2.76,
    2.72,
-   2.43
+   2.45
   ],
-  "tris": 552,
-  "verts": 565
+  "tris": 656,
+  "verts": 617
  },
  "dialwood_tall": {
   "budget": 750,
@@ -104,7 +107,8 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 26.3,
+  "kb": 27.7,
+  "midribs": 33,
   "plates": 61,
   "role": "tree",
   "size_m": [
@@ -112,8 +116,8 @@
    2.05,
    3.02
   ],
-  "tris": 674,
-  "verts": 678
+  "tris": 740,
+  "verts": 711
  },
  "dialwood_young": {
   "budget": 750,
@@ -121,7 +125,8 @@
    "glossy_verts": 0,
    "mean": 0.0
   },
-  "kb": 13.7,
+  "kb": 15.0,
+  "midribs": 29,
   "plates": 29,
   "role": "tree",
   "size_m": [
@@ -129,8 +134,8 @@
    1.59,
    3.01
   ],
-  "tris": 350,
-  "verts": 337
+  "tris": 408,
+  "verts": 366
  },
  "needle_chip": {
   "budget": 300,

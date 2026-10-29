@@ -17,8 +17,10 @@
 // recall on a real purchase or low health rather than every 1,100 gold, never trade into a fighter
 // its own Wicks cover, step out of Wick aggro instead of tanking it, and join a 2v2 only once it
 // has started. Wicks and monsters that would finish a bot with no enemy fighter near send it out
-// (unless the monster dies first), and an objective is started only when the fighters at it can
-// take it (damage vs. health over the time to kill), never alone.
+// (unless the monster dies first — never for the Wicks on it, and never for an objective monster its team is
+// not taking), a stacked wave is judged on all of it, not only its front (a Needle covers up to seven Wicks),
+// a bot hemmed in by Wicks takes the widest gap and may burn an escape, and an objective is started only when
+// the fighters at it can take it (damage vs. health over the time to kill), never alone (W4 G1 refix).
 // Fray: no team brain; targets the weakest reachable enemy, penalises fights other players can
 // reach, never favours or spares other bots, caps how many bots hunt the same human seat at 2,
 // contests pickups, uses the shared shop, plays safer on its last life while more than 4 seats are in and before the Noon Toll rings (G6).

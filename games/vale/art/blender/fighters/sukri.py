@@ -341,17 +341,18 @@ GRAIN_PAINTED = ((-0.125, 1.50, 1.36), (-0.098, 1.50, 1.40), (0.100, 1.48, 1.37)
                  (-0.110, 1.12, 1.07), (0.110, 1.11, 1.06))  # the concept's painted vertical cracks: (x, z top, z bottom)
 # integration pass (W5b verify, sensitivity: "grain streaks run straight down from both eyes" - read as tear streaks on
 # the largest face of the loading row): no crack touches an eye. The forehead cracks stop at the brow ridge's top
-# (1.44), the two inner under-eye cracks are gone, the two outer cheek cracks start 9 cm under the eyes (1.21); the
-# chin cracks stay. GRAIN_CLEAN: the painted spans the paint wipes too (_face_clean), so relief and paint agree.
+# (1.44), the two inner under-eye cracks are gone, the two outer cheek cracks start 14 cm under the eyes (1.17, at the
+# jaw); the chin cracks stay. The paint wipes the same spans (_face_clean over _eye_zone: the wood round each eye and
+# GRAIN_CLEAN's painted spans), so relief and paint agree.
 GRAIN = ((-0.125, 1.50, 1.44), (-0.098, 1.50, 1.45), (0.100, 1.48, 1.44), (0.118, 1.47, 1.45),
-         (-0.172, 1.21, 1.10), (0.170, 1.20, 1.12),
+         (-0.172, 1.17, 1.10), (0.170, 1.17, 1.12),
          (-0.110, 1.12, 1.07), (0.110, 1.11, 1.06))          # the carved vertical cracks: (x, z top, z bottom)
 GRAIN_CLEAN = ((-0.125, 1.45, 1.34), (-0.098, 1.46, 1.38), (0.100, 1.45, 1.35), (0.118, 1.46, 1.38),
-               (-0.062, 1.31, 1.17), (0.064, 1.31, 1.19), (-0.172, 1.31, 1.20), (0.170, 1.29, 1.19))
+               (-0.062, 1.31, 1.17), (0.064, 1.31, 1.19), (-0.172, 1.31, 1.16), (0.170, 1.29, 1.16))
 GRAIN_CLEAN_R = (0.009, 0.016)           # the wipe's full / zero radius round a painted span (m)
 # ... and the eye slits take a warm inlaid amber (non-emissive, the floor lit honey, the walls deeper) in place of the
 # hollow dark holes (as Odrum Shadeprint's lacquer mask); every skin keeps it (_recolour restores it)
-EYE_INLAY, EYE_INLAY_DEEP = "#D8A35C", "#9A6434"
+EYE_INLAY, EYE_INLAY_DEEP = "#B08552", "#6E4C2E"     # (build 2 at #D8A35C read as bright orange eyes)
 
 
 def face_sd(x, z):
@@ -434,39 +435,60 @@ def eye_inlay(p):
     return (eye_sd(x, z) < 0.0015) & (dep > 0.25), dep
 
 
-def _face_clean(p, n, lin, cell=0.0025, sigma=3.0):
-    """wipe the painted grain cracks' spans that touched the eyes (GRAIN_CLEAN): a texel there darker than the clean
-    wood around it (the face's front texels off the spans, the recesses and the nose, averaged in the face plane
-    within ~7 mm) takes that wood's colour; lighter grain and the broad painted shading stay"""
-    x, y, z = p[:, 0], p[:, 1], p[:, 2]
-    front = n[:, 1] < -0.2
-    sd = face_front(x, z) - y                                     # > 0: in front of the face shield (the nose)
-    rec = (eye_sd(x, z) < 0.006) | (mouth_sd(x, z) < 0.006) | (sd > 0.003) | (y - face_front(x, z) > 0.004)
-    dist = _crack_dist(x, z, GRAIN_CLEAN)
-    wcap = 1.0 - ss(GRAIN_CLEAN_R[0], GRAIN_CLEAN_R[1], dist)
-    src = front & ~rec & (dist > GRAIN_CLEAN_R[1]) & (_crack_dist(x, z, GRAIN) > 0.008)
-    tgt = front & ~rec & (wcap > 0.01)
-    if src.sum() < 200 or not tgt.any():
-        return lin, 0
+def _grid_mean(x, z, lin, m, cell, sigma):
+    """the colour of the texels m averaged in the face plane (x, z) within a Gaussian of `sigma` cells, read back at
+    every texel: (mean colour, has-data flag)"""
     x0, z0 = -0.26, 1.00
     nx, nz = int(0.52 / cell) + 2, int(0.58 / cell) + 2
     ix = np.clip(((x - x0) / cell).astype(int), 0, nx - 1)
     iz = np.clip(((z - z0) / cell).astype(int), 0, nz - 1)
     S = np.zeros((nz, nx, 4))
-    np.add.at(S, (iz[src], ix[src]), np.concatenate([lin[src], np.ones((int(src.sum()), 1))], 1))
+    np.add.at(S, (iz[m], ix[m]), np.concatenate([lin[m], np.ones((int(m.sum()), 1))], 1))
     R = int(math.ceil(3 * sigma))
     k = np.exp(-0.5 * (np.arange(-R, R + 1) / sigma) ** 2)
     Sp = np.pad(S, ((R, R), (R, R), (0, 0)))
     S = sum(k[i] * Sp[i:i + nz] for i in range(len(k)))
     S = sum(k[i] * S[:, i:i + nx] for i in range(len(k)))
-    have = S[..., 3] > 1e-3
     mean = S[..., :3] / np.maximum(S[..., 3:], 1e-6)
-    C = mean[iz[tgt], ix[tgt]].astype(np.float32)
-    ok = have[iz[tgt], ix[tgt]]
-    Yt, Yc = _Y(lin[tgt]), np.maximum(_Y(C), 1e-5)
-    w = (wcap[tgt] * ss(0.98, 0.82, Yt / Yc) * ok)[:, None].astype(np.float32)
+    return mean[iz, ix].astype(np.float32), S[iz, ix, 3] > 1e-3
+
+
+def _eye_zone(x, z):
+    """0..1: the wood round each eye that the wipe covers - below it down the cheek to 1.16 (the painted cracks ran
+    from the lower lid toward the jaw) and above it up the brow to 1.46 (the forehead cracks ran down to the upper
+    lid) - plus GRAIN_CLEAN's spans wherever they lie"""
+    w = np.zeros(np.shape(x))
+    for ex, ez in EYES:
+        ax = 1.0 - ss(0.085, 0.105, np.abs(x - ex))
+        below = ss(1.150, 1.170, z) * (1.0 - ss(ez - 0.016, ez - 0.004, z))
+        above = ss(ez + 0.010, ez + 0.022, z) * (1.0 - ss(1.455, 1.470, z)) * (1.0 - ss(0.070, 0.085, np.abs(x - ex)))
+        w = np.maximum(w, np.maximum(ax * below, above))
+    cap = 1.0 - ss(GRAIN_CLEAN_R[0], GRAIN_CLEAN_R[1], _crack_dist(x, z, GRAIN_CLEAN))
+    return np.maximum(w, cap)
+
+
+def _face_clean(p, n, lin, cell=0.0025):
+    """wipe the painted grain cracks round the eyes (_eye_zone): two passes in the face plane - the dark lines
+    (darker than 0.88 of the wood within ~1 cm) are found, then each zone texel darker than the clean wood round it
+    (the same average without those lines) takes that wood's colour. Lighter grain, the broad painted shading, the
+    eye and mouth recesses and the nose stay."""
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    front = n[:, 1] < -0.2
+    off = (face_front(x, z) - face_relief(p)) - y                 # > 0: in front of the carved face (the nose)
+    rec = (eye_sd(x, z) < 0.006) | (mouth_sd(x, z) < 0.006) | (off > 0.003) | (off < -0.004)
+    wz = _eye_zone(x, z)
+    ok = front & ~rec
+    tgt = ok & (wz > 0.01)
+    if ok.sum() < 200 or not tgt.any():
+        return lin, 0
+    Y = _Y(lin)
+    m1, h1 = _grid_mean(x, z, lin, ok, cell, 4.0)
+    line = ok & h1 & (Y < 0.88 * np.maximum(_Y(m1), 1e-5))
+    C, h2 = _grid_mean(x, z, lin, ok & ~line, cell, 4.0)
+    Yc = np.maximum(_Y(C[tgt]), 1e-5)
+    w = (wz[tgt] * ss(0.97, 0.80, Y[tgt] / Yc) * h2[tgt])[:, None].astype(np.float32)
     out = lin.copy()
-    out[tgt] = lin[tgt] * (1 - w) + C * w
+    out[tgt] = lin[tgt] * (1 - w) + C[tgt] * w
     return out, int((w[:, 0] > 0.3).sum())
 
 

@@ -104,7 +104,7 @@ def build(name: str) -> tuple[str, kit.Part, np.ndarray, np.ndarray]:
     if name in dialwood.TREES:
         sp = dialwood.TREES[name]
         part = dialwood.build_tree(sp)
-        col, gloss = dialwood.paint_tree(part, sp.seed, sp.tint)
+        col, gloss = dialwood.paint_tree(part, sp.seed, sp.tint, sp.hue)
         return "tree", part, col, gloss
     role, sp = STONES[name]
     part = stones.build_stone(sp)
@@ -405,9 +405,10 @@ def main():
         report[n] = dict(role=role, tris=int(part.tris), verts=int(len(part.P)), kb=round(size / 1024, 1),
                          size_m=[round(float(x), 2) for x in ext], budget=BUDGET[role],
                          gloss=dict(mean=round(float(gloss.mean()), 3), glossy_verts=int((gloss > 0.5).sum())))
-        if role == "tree":                                   # r12 M11: ≥ 20 fan plates per crown
-            kf = part.A["kind"][part.F[:, 0]]
-            report[n]["plates"] = int(round((kf == 1).sum() / dialwood.K_LEAF))
+        if role == "tree":                                   # r12 M11: ≥ 20 fan plates per crown (one stem vertex each)
+            lf = part.A["kind"] == 1
+            report[n]["plates"] = int((lf & (part.A["u"] == 0)).sum())
+            report[n]["midribs"] = int((lf & (part.A.get("vein", np.zeros(len(part.P))) > 0.5)).sum())   # env F5
         flag = "" if part.tris <= BUDGET[role] else "  OVER BUDGET"
         if role == "rock" and STONES[n][1].palette == "dial" and part.P[:, 2].max() > ROCK_MAX_H:
             flag += f"  TOO TALL (> {ROCK_MAX_H} m authored)"

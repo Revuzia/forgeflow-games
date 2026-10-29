@@ -50,7 +50,14 @@ report: art/renders/maps/build_report_landmarks_art2.json; looks: art/renders/ma
   camp_*       RIFT, one low cluster on each camp's north lip (env m2, brief §3 dressing): Glasshorn's shed horn-glass
                antlers, a Gloamoths moth-lamp on a crooked pole (unlit), the Strays' toppled numerals, Resinback's
                resin-filled cracked slab and rubbed stump, a tusk-scored Stilltusk boulder; content places them flush.
-The SDF landmarks that remain (numerals, VI slab, the stalls, FRAY's cart and stands) stay in landmarks.py;
+  vi_slab      RIFT, (85, 107) south of the South Road, 6 x 2 m, <= 1.2 m: the dial's six fallen flat, one dressed
+               dial-stone on a bedding course, its east end snapped off askew (a raw break), VI cut and inked in its
+               top inside a cut border, the V's point to the camera (south).
+  numeral_*    RIFT, the four jungle callouts (Elevenmark XI, Twomark II, Sevenmark VII, Fourmark IIII; brief §2): giant
+               numerals of carved dial-stone, each stroke its own chamfered stone between a foot and a head bar, laid
+               back 52 deg so the face looks up the camera's line, sunk 0.9 m (the buried faces dropped), broken stone
+               spilled at the foot.
+The SDF landmarks that remain (the stalls, FRAY's cart and stands) stay in landmarks.py;
 the skirts beyond the map bounds are art/blender/maps/skirts.py.
 """
 from __future__ import annotations
@@ -1104,6 +1111,133 @@ def camp_stilltusks(B, rng):
     pebbles(B, "lipstone", rng, ((-0.85, -0.25, 0.08), (-0.7, 0.55, 0.06)))
 
 
+# ── the dial's numerals (RIFT jungle callouts) and the VI slab (W5a verify minor:landmark-leftovers: the last two
+# landmark sets still on landmarks.py's SDF pillows, rebuilt in the same painted, baked stone as the rest) ─────────
+def _stroke_poly(a, b, w):
+    """A carved letter stroke from a (foot) to b (head) in the glyph plane, `w` wide square to the stroke, its ends cut
+    level (the mason's square cut against the foot and head bars), counter-clockwise."""
+    (ax, az), (bx, bz) = a, b
+    hw = 0.5 * w * math.hypot(bx - ax, bz - az) / max(abs(bz - az), 1e-6)
+    return [(ax - hw, az), (ax + hw, az), (bx + hw, bz), (bx - hw, bz)]
+
+
+NUM_H, NUM_W, NUM_THIN, NUM_GAP, NUM_D = 4.6, 0.9, 0.5, 0.75, 1.2
+
+
+def numeral_strokes(glyph: str):
+    """Roman numeral strokes (foot, head, width) in the glyph plane (x along, z up), the classical cut: stems and
+    a V's or X's first diagonal thick, the second thin; the foot and head bars tie them. → strokes, glyph width."""
+    h, w, thin, gap = NUM_H, NUM_W, NUM_THIN, NUM_GAP
+    z0, z1 = 0.3, h - 0.3
+    out, x = [], 0.0
+    for ch in glyph:
+        if ch == "I":
+            out.append(((x + w / 2, z0), (x + w / 2, z1), w))
+            x += w + gap
+        elif ch == "V":
+            out.append(((x + 1.45, z0), (x + w / 2, z1), w))
+            out.append(((x + 1.45, z0), (x + 2.9 - thin / 2, z1), thin))
+            x += 2.9 + gap
+        elif ch == "X":
+            out.append(((x + 2.9 - w / 2, z0), (x + w / 2, z1), w))
+            out.append(((x + thin / 2, z0), (x + 2.9 - thin / 2, z1), thin))
+            x += 2.9 + gap
+    return out, x - gap
+
+
+def numeral(B, rng, glyph: str, tilt: float = 52.0):
+    """A giant numeral of the dial, fallen into the Dialwood block and half buried: dressed dial-stone strokes (each
+    its own stone, chamfered, the paint's chalked arrises and inked joints) between a foot bar and a head bar, laid
+    back `tilt` degrees so its face looks up the gameplay camera's line (brief map_rift_landmarks.md §2: the callout
+    reads as a pale glyph on the dark block), sunk 0.9 m, a spill of broken stone at its foot. Blender +Y is north."""
+    strokes, width = numeral_strokes(glyph)
+    D = NUM_D
+    pieces = []
+    for (a, b, w) in strokes:
+        pieces.append(("dialstone", K.prism(_stroke_poly(a, b, w), u=(1, 0, 0), v=(0, 0, 1), depth=D, chamfer=0.07)))
+    for zc in (0.16, NUM_H - 0.16):                                              # foot and head bars: a proud slab each
+        pieces.append(("dialstone", K.box((width / 2, 0.0, zc), (width / 2 + 0.35, D / 2 + 0.06, 0.16), 0.05)))
+    t = -math.radians(tilt)                                                      # the top away from the camera (+Y)
+    for mat, (v, f) in pieces:
+        v = K.rot(K.move(np.asarray(v, dtype=np.float64), (-width / 2, 0.0, -0.9)), (1, 0, 0), t)
+        B.add(mat, (v, f))
+    # the spill at its foot: broken stone half sunk along the camera side, two flat spalls on the block top
+    n = max(4, int(width / 1.1))
+    for k in range(n):
+        x = -width / 2 - 0.3 + (width + 0.6) * (k + 0.5) / n + rng.uniform(-0.2, 0.2)
+        s = rng.uniform(0.22, 0.38)
+        chunk(B, "rubble", (x, rng.uniform(-1.25, -0.85), s * 0.35), (s, s * rng.uniform(0.7, 1.1), s * 0.6), rng)
+    for sx in (-1, 1):
+        B.add("rubble", K.box((sx * (width / 2 + 0.55), -0.4, 0.05), (0.42, 0.3, 0.07), 0.025, rz=rng.uniform(-0.5, 0.5)))
+
+
+def _vi(B, rng):
+    """The VI slab (RIFT, (85, 107), 6 x 2 m, <= 1.2 m), the dial's six fallen flat south of the South Road: one long
+    dressed dial-stone, its east end snapped off and lying askew (a raw fracture), VI cut into its top and inked, the V's
+    point toward the camera (south, -Y) so the camera reads VI, never an inverted V, in a cut border."""
+    L, Wd, T = 4.7, 1.62, 0.46                                                   # the main stone (x -2.8 .. 1.9)
+    x0, x1 = -2.8, -2.8 + L
+    ztop = T + 0.06
+    B.add("footing", K.box((-0.3, 0.0, 0.03), (2.75, 0.95, 0.06), 0.03))      # a sunk bedding course, proud a hand
+    B.add("dialstone", K.box(((x0 + x1) / 2, 0.0, 0.06 + T / 2), (L / 2, Wd / 2, T / 2), 0.07))
+    # the snapped end: a short stone, its fracture face (raw) toward the main stone, dropped and turned a little
+    poly = [(-0.38, -0.81), (0.42, -0.81), (0.40, 0.81), (-0.30, 0.81), (-0.44, 0.35), (-0.33, 0.0), (-0.47, -0.4)]
+    v, f = K.prism(poly, origin=(0, 0, 0.06), u=(1, 0, 0), v=(0, 1, 0), depth=T - 0.06, chamfer=0.05, center=False)
+    v = K.rot(K.rotz(v, 0.12), (0, 1, 0), -0.06, about=(0.4, 0, 0.06))
+    B.add("dialstone", (K.move(v, (x1 + 0.62, -0.06, -0.02)), f))
+    v, f = K.box((x1 + 0.07, 0.0, 0.06 + (T - 0.04) / 2), (0.06, Wd / 2 - 0.06, (T - 0.04) / 2), 0.02)
+    B.add("raw", (v, f))                                                         # the main stone's own fracture face
+    # VI cut into the top: inked channels a hair proud of the face, the V thick-left / thin-right, the I thick; head
+    # and foot of every stroke cut level; the V's point south (-Y: the camera's side)
+    cx = -1.15
+    yS, yN = -0.5, 0.5
+    strokes = [((cx - 0.15, yS), (cx - 0.72, yN), 0.26), ((cx - 0.15, yS), (cx + 0.42, yN), 0.15),
+               ((cx + 0.95, yS), (cx + 0.95, yN), 0.26)]
+    for (a, b, w) in strokes:
+        B.add("groove", K.prism(_stroke_poly(a, b, w), origin=(0, 0, ztop - 0.012), u=(1, 0, 0), v=(0, 1, 0),
+                                depth=0.022, chamfer=0.004, center=False))
+    for (bx0, bx1, by0, by1) in ((cx - 1.3, cx + 1.45, 0.66, 0.70), (cx - 1.3, cx + 1.45, -0.70, -0.66),
+                                 (cx - 1.3, cx - 1.26, -0.70, 0.70), (cx + 1.41, cx + 1.45, -0.70, 0.70)):
+        B.add("groove", K.box(((bx0 + bx1) / 2, (by0 + by1) / 2, ztop - 0.001), ((bx1 - bx0) / 2, (by1 - by0) / 2, 0.012), 0.003))
+    # spalls and chips round it (the camera side and the break)
+    for c, h in (((x1 + 0.2, -1.05, 0.08), (0.16, 0.12, 0.08)), ((x0 - 0.15, 0.7, 0.07), (0.13, 0.15, 0.07)),
+                 ((x1 + 1.05, 0.62, 0.06), (0.11, 0.09, 0.06)), ((-0.6, -1.1, 0.05), (0.1, 0.08, 0.05))):
+        chunk(B, "dialstone", c, h, rng)
+
+
+def vi_slab(B, rng):
+    _vi(B, rng)
+
+
+def drop_underground(ob, z: float = -0.06) -> int:
+    """Delete faces lying wholly under the ground (a numeral's sunk third): never seen, they would only take atlas."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    kill = [f for f in bm.faces if max(v.co.z for v in f.verts) < z]
+    bmesh.ops.delete(bm, geom=kill, context="FACES")
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
+    return len(kill)
+
+
+NUM_MATS = {
+    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.45, chips=0.6),             # carved dial-stone, weathered
+    "rubble": dict(hex="#7C776D", chisel=0.9, var=0.09, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
+                   edge_light=(0.03, 0.55, 0.6, 0.08)),
+}
+VI_MATS = {
+    "dialstone": NUM_MATS["dialstone"],
+    "footing": NUM_MATS["rubble"],
+    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08)),       # the fresh break: paler, unweathered
+    "groove": dict(hex="#3B3731", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),   # the cut, inked
+}
+
+
 LIP = dict(hex="#8A857A", chisel=0.8, var=0.08, streaks=0.3, chips=0.5, speckle=0.3, scale=0.6, rough=0.75,
            edge_light=(0.03, 0.6, 0.6, 0.06))
 CAMP_MATS = {
@@ -1146,6 +1280,11 @@ DESIGNS = {
     "glass_belfry": (glass_belfry, BELFRY_MATS, 2048, 1.0),
     "lamp_dome": (lamp_dome, DOME_MATS, 2048, 1.2),
     "noon_stone": (noon_stone, NOON_MATS, 1024, 0.6),
+    "vi_slab": (vi_slab, VI_MATS, 1024, 0.4),
+    "numeral_xi": (lambda B, rng: numeral(B, rng, "XI"), NUM_MATS, 1024, 0.6),
+    "numeral_ii": (lambda B, rng: numeral(B, rng, "II"), NUM_MATS, 1024, 0.6),
+    "numeral_vii": (lambda B, rng: numeral(B, rng, "VII"), NUM_MATS, 1024, 0.6),
+    "numeral_iiii": (lambda B, rng: numeral(B, rng, "IIII"), NUM_MATS, 1024, 0.6),
     "shadow_slab": (shadow_slab, SLAB_MATS, 1024, 0.5),
     "hour_stone": (hour_stone, HOUR_MATS, 1024, 0.4),
     "camp_glasshorn": (camp_glasshorn, CAMP_MATS, 512, 0.3),
@@ -1157,6 +1296,7 @@ DESIGNS = {
 SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}
 AFTER = {"lamp_dome": dome_court}            # built after the scale (full-size pieces)
+UNDERGROUND = {"numeral_xi", "numeral_ii", "numeral_vii", "numeral_iiii"}   # half buried: faces wholly under z 0 dropped
 
 
 def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
@@ -1181,6 +1321,8 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
     K.drop_hidden_bottoms(body)
     others = [o for n, o in objs.items() if n != "body"]
     buried = K.drop_buried_faces(body, others, keep_mats=("raw",))
+    if name in UNDERGROUND:
+        buried += drop_underground(body)
     os.makedirs(SCRATCH, exist_ok=True)
     K.bake_body(body, others, SCRATCH, name, size=512 if fast else size, samples=6 if fast else 24,
                 ao_samples=16 if fast else 96, ao_distance=ao_d)
@@ -1213,7 +1355,8 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 # landmarks stand beyond the map's edge, so the camera sees the Dawn Arch from the east and the Lamp Gate from the west
 LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
         "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0),
-        "hour_stone": (0.0, 0.0, 12.0), **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}}
+        "hour_stone": (0.0, 0.0, 12.0), "vi_slab": (0.0, 0.0, 12.0),
+        **{f"numeral_{g}": (0.0, 0.0, 22.0) for g in ("xi", "ii", "vii", "iiii")}, **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}}
 
 
 def look(name, objs, lo, hi, fast):

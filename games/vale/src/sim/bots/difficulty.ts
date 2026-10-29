@@ -17,6 +17,9 @@
 // keep the plan — a lead is not thrown away to Wicks crashing into an empty road. Objectives
 // are tiered too: how early the team gathers before a (public) spawn, whether it takes one at even numbers,
 // and whether it contests an enemy start; a lead is never pressed over a live or imminent objective.
+// W4 refix (G1/G3): a tier with `objectiveSense` (veteran) reads whether its team can take a camp now (team damage vs
+// the camp's health), keeps one call and one siege target instead of walking between them, never leaves a threatened
+// road for a camp, gives up on a camp that is not falling, and keeps fighters under 45 % health out of its sieges.
 
 export type DifficultyId = 'novice' | 'adept' | 'veteran';
 

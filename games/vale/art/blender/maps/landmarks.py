@@ -8,8 +8,8 @@ content/maps/map_rift.json `art.terrain.landmarks` (the renderer places each at 
   lamp_dome          Serenade base: a low banded ironstone dome on a sandstone drum, a lampresin oculus
   lampwright_stall   the shop kiosk: a spire-roofed stall with a counter and hanging lamps
   shadow_slab        a leaning basalt slab with a chalk-lit top edge (Longshade's north choke)
-  numeral_xi/ii/vii/iiii   the dial's numerals, giant, half-buried and tilted (the jungle callouts)
-  noon_stone         the XII stele on the north rim        vi_slab   the VI slab lying flat in the south
+  numeral_xi/ii/vii/iiii   the dial's numerals, giant, half-buried and tilted (the jungle callouts)  [Art 2.0 now]
+  noon_stone         the XII stele on the north rim        vi_slab   the VI slab lying flat in the south  [Art 2.0 now]
 Surfacing as structures.py (SDF volumes per material, painted tiling textures × vertex light). Glass glows
 neutral (never a relationship colour: the Hourbell carries that). Blender (x, y, z) = sim (x, -y, height)
 local to each landmark; +Y (Blender) is north. Output: art/out/maps/landmarks/<id>.glb.
@@ -286,14 +286,13 @@ def fair_stand(tiers: int, step: float) -> dict:
 
 # the Glass Belfry, the Lamp Dome, the shadow slab and the noon stone are Art 2.0 builds now (env F1,
 # art/blender/maps/landmarks_art2.py); belfry(), lamp_dome(), shadow_slab() and noon_stone() above are the old SDF looks;
-# so is FRAY's hour-stone (env F2: landmarks_art2.hour_stone); hour_stone() above is its old pale cap
+# so is FRAY's hour-stone (env F2: landmarks_art2.hour_stone); hour_stone() above is its old pale cap; and so are the four
+# numerals and the VI slab (W5a minor:landmark-leftovers: landmarks_art2.numeral / vi_slab); numeral() and vi_slab() above
+# are their old SDF pillows (the old VI slab's V even pointed away from the camera)
 DESIGNS = {
     "lampwright_stall": (stall, 3000, 0.04),
-    "vi_slab": (vi_slab, 1500, 0.04),
     "lampwright_cart": (lampwright_cart, 4000, 0.025),
     "fair_stand_high": (lambda: fair_stand(3, 1.0), 2000, 0.05), "fair_stand_low": (lambda: fair_stand(2, 0.5), 1500, 0.05),
-    "numeral_xi": (lambda: numeral("XI"), 5000, 0.045), "numeral_ii": (lambda: numeral("II"), 3500, 0.045),
-    "numeral_vii": (lambda: numeral("VII"), 6000, 0.045), "numeral_iiii": (lambda: numeral("IIII"), 6000, 0.045),
 }
 
 

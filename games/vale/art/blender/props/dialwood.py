@@ -31,6 +31,13 @@ the crown's bottom and in its occluded interior, rising to × 1.0 on the open to
 mass over its own shade. Every crown carries ≥ 20 plates, each scaled ±15 % and turned ±10° (roll and pitch)
 off the shingle. Value stays in the environment's dark band (tokens grade.maps.rift.valueLstar, r12 B5):
 canopy luma p50 45–60, p99 ≤ 115 at the gameplay camera.
+
+Painted plates (final parity env F5, "painted edges hide the geometry"): the brushwork is stronger (stem → tip
+STEM 0.20, rib / valley STROKE 0.06), the longest leaves carry a MIDRIB vertex (kit.fan_plate midrib, +2 triangles,
+as many as TREE_TRIS allows) painted as a light vein stroke, every plate darkens where it tucks under the ring
+above (CAVITY: occlusion against all plates within CAV_D round the plate's own normal), the variants' hues span
+±3 % of the wheel (tint + `hue`), and LIFT / KNEE hold the canopy band (p50 51–56, p99 91–95 in value_probe):
+the extra contrast goes into the shade, the lit top is drawn in.
 """
 from __future__ import annotations
 
@@ -66,6 +73,7 @@ class TreeSpec:
     r0: float                                     # trunk radius at the foot (above the root flare)
     roots: int = 3
     tint: str = "#808080"                         # the variant's hue drift (same value)
+    hue: float = 0.0                              # the tree's own hue turn (deg, same value; env F5: ±3 % per tree)
     reach: float = 9.0                            # max crown reach from the trunk's foot (authored m)
     scale: float = 1.0                            # the whole tree, uniformly (leaves too)
 
@@ -90,11 +98,14 @@ LAYER = 0.032                  # leaves nearer the tree's axis ride up to 2× th
 UPSTREAM = 0.44                # the stems' spread sits this far (× pad radius) toward the tree's axis
 GAP = 0.045                    # the outer ring's stems ride this far over the cushion
 STEM = 0.20                    # value: stem → tip ramp on every leaf (env F5: 0.12 → 0.20, the plates read painted)
+STEM_C = 0.80                  # the ramp's pivot (u): a stem darkens STEM × STEM_C, a tip lightens STEM × (1 − STEM_C)
 STROKE = 0.06                  # value: rib light / valley dark (env F5: 0.035 → 0.06)
 VEIN = 0.07                    # value: the midrib vein's light stroke down the middle rib (env F5)
 CAV_D = 0.26                   # cavity between plates (env F5): occlusion against every plate within this (m) ...
 CAV_K = 0.40                   # ... darkens a leaf by up to this (linear ×) where it tucks under the ring above
-LIFT = 0.0                     # value: a leaf's whole stroke (keeps the canopy band with the stronger brushwork)
+LIFT = 0.07                    # value: a leaf's whole stroke (keeps the canopy band with the stronger brushwork)
+KNEE = (110.0, 0.55)           # the lit top: a leaf's display luma (0-255) over KNEE[0] is drawn in to KNEE[1] of its
+#                                excess, so the brighter tips the brushwork paints never lift the canopy's p99
 PAD_TONE = 0.06                # value step between pads
 BLUR = 0.10                    # the value field's softness (m)
 PLATE_SCALE = 0.15             # every plate scaled ±15 % (r12 M11)
@@ -350,7 +361,19 @@ def _blur(P: np.ndarray, x: np.ndarray, sigma: float) -> np.ndarray:
     return (w @ x) / w.sum(1)
 
 
-def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, np.ndarray]:
+def _hue_turn(c: np.ndarray, deg: float) -> np.ndarray:
+    """c turned `deg` round the grey axis (the hue-rotate matrix), its luminance kept."""
+    if not deg:
+        return c
+    a = math.radians(deg)
+    cs, sn = math.cos(a), math.sin(a)
+    M = np.array([[0.213 + cs * 0.787 - sn * 0.213, 0.715 - cs * 0.715 - sn * 0.715, 0.072 - cs * 0.072 + sn * 0.928],
+                  [0.213 - cs * 0.213 + sn * 0.143, 0.715 + cs * 0.285 + sn * 0.140, 0.072 - cs * 0.072 - sn * 0.283],
+                  [0.213 - cs * 0.213 - sn * 0.787, 0.715 - cs * 0.715 + sn * 0.715, 0.072 + cs * 0.928 + sn * 0.072]])
+    return _keep_lum(np.clip(c @ M.T, 1e-4, 1), c)
+
+
+def paint_tree(t: Part, seed: int, tint: str = "#808080", hue_deg: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
     """→ sRGB colours (n,3) and the GLOSS mask (n,) for COLOR_0.a (0 everywhere since r12 M11: matte plates)."""
     P, N, A = t.P, t.N, t.A
     kind = A["kind"]
@@ -391,7 +414,7 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     # ── then each leaf's brushwork: dark where it tucks under the ring above, light toward the tip; the ribs
     # lighter, the valleys darker (three strokes from the stem); stronger where the light falls ──
     lit = smooth(0.25, 0.85, sky) * smooth(-0.1, 0.7, N[:, 2])
-    v += np.where(leaf, STEM * (u - 0.62) * (0.45 + 0.55 * lit), 0.0)
+    v += np.where(leaf, STEM * (u - STEM_C) * (0.45 + 0.55 * lit), 0.0)
     v += np.where(leaf, STROKE * lobe * u * (0.35 + 0.65 * lit) + 0.025 * (lid - 0.5), 0.0)
     vein = A.get("vein", np.zeros(len(P)))
     v += np.where(leaf, VEIN * vein * (0.4 + 0.6 * lit) + LIFT, 0.0)            # the midrib: a light stroke stem → tip
@@ -408,6 +431,7 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     c = c * (1 + (0.22 * warm + 0.10 * (lit * u - 0.3) * leaf)[:, None] * np.array([0.9, 0.35, -1.2]))
     tv = hexc(tint)
     c = _keep_lum(c * (1 + TINT_W * (tv - 0.5)), c)
+    c = _hue_turn(c, hue_deg)                                           # the tree's own hue (env F5)
     rim = smooth(0.4, 0.9, lit) * u * (lobe > 0) * leaf * smooth(0.3, 0.8, ao)
     c = c + (RIM - c) * (0.20 * rim)[:, None]                       # warm lit rib tips (the lacquer's bevel)
     # the baked value gradient (r12 M11): × GRAD_LO (linear) at the crown's bottom and in its occluded interior,
@@ -418,6 +442,8 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, n
     g = GRAD_LO + (1 - GRAD_LO) * smooth(0.0, 1.0, w)
     g *= 1.0 - CAV_K * (1.0 - smooth(0.2, 0.95, cav)) * np.where(leaf, 1.0, 0.5)      # cavity between plates (env F5)
     c = _lin2srgb(srgb2lin(np.clip(c, 0, 1)) * g[:, None])
+    yv = (c @ np.array([0.2126, 0.7152, 0.0722])) * 255.0
+    c = c * np.where(yv > KNEE[0], (KNEE[0] + (yv - KNEE[0]) * KNEE[1]) / np.maximum(yv, 1e-6), 1.0)[:, None]
     col[leafy] = c[leafy]
     # no lacquer (r12 M11): the gloss mask stays 0 on plates, cushions and bark alike — matte paint only
     # ── bark ──
@@ -439,7 +465,7 @@ TREES: dict[str, TreeSpec] = {
     # tall: an egg of pads round a straight bole — two low shoulders, one mid, two crown lobes (no pad on the
     # axis: from above the crown parts round its centre like a real tree's, no single "head")
     "dialwood_tall": TreeSpec(
-        seed=7, tint="#5E8E86",                                    # jade: the coolest
+        seed=7, tint="#5E8E86", hue=3.0,                           # jade: the coolest (turned a further 3° cool)
         spine=[(0, 0, 0), (0.02, 0.0, 0.34), (0.05, 0.01, 1.2), (-0.03, 0.03, 1.9), (0.02, -0.01, 2.25)],
         pads=[Pad((0.34, -0.16, 1.04), 0.78, 0.36, hang=0.18, yaw=0.3),
               Pad((-0.36, 0.20, 1.18), 0.74, 0.35, hang=0.18, yaw=1.9, sq=0.9),
@@ -458,7 +484,7 @@ TREES: dict[str, TreeSpec] = {
         r0=0.23, reach=1.64, scale=1.07),
     # squat: a trunkless mound — a wide skirt pad near the ground, two shoulders, a small crown lobe
     "dialwood_squat": TreeSpec(
-        seed=31, tint="#9C8E60",                                   # warm olive-gold
+        seed=31, tint="#9C8E60", hue=-3.0,                         # warm olive-gold (turned a further 3° warm)
         spine=[(0, 0, 0), (0.0, 0.0, 0.3), (0.05, 0.02, 0.8), (0.0, 0.04, 1.3)],
         pads=[Pad((0.0, 0.0, 0.52), 1.10, 0.30, tilt=0.5, yaw=0.5, sq=0.9),
               Pad((0.44, 0.24, 0.98), 0.72, 0.33, hang=0.18, yaw=1.9),
