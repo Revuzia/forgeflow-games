@@ -212,25 +212,33 @@ export class TeamBrain {
     for (const l of k.lanes) {
       const i = l.index;
       let need = 0, x = 0, y = 0;
-      if (this.defend[i] > 0.05) { need = this.defendFighters[i] >= 2 ? 2 : 1; x = this.defendX[i]; y = this.defendY[i]; }
-      const deep = this.diff.readsWaves && tp.enemyN[i] >= 4 && tp.enemyFront[i] < l.length * 0.45 && tp.ownN[i] <= tp.enemyN[i] - 2;
+      const surplus = tp.enemyN[i] - tp.ownN[i];
+      // (integ done:5: a stacked wave of eight or more at a structure is two fighters' work — one alone stands off it
+      // under its waveGuard while the wave takes the structure)
+      if (this.defend[i] > 0.05) { need = this.defendFighters[i] >= 2 || surplus >= 8 ? 2 : 1; x = this.defendX[i]; y = this.defendY[i]; }
+      // (integ done:5: a stack of five or more over ours is read as it crosses the river, not once it is at the first
+      // Needle — the answer has a road to walk, and a Needle falls to fifteen Wicks before it arrives)
+      const deep = this.diff.readsWaves && tp.enemyN[i] >= 4 && surplus >= 2 && (tp.enemyFront[i] < l.length * 0.45 || (surplus >= 5 && tp.enemyFront[i] < l.length * 0.58));
       let big = false;
       if (this.held(`wave${i}`, deep, now) && need === 0) {
-        const surplus = tp.enemyN[i] - tp.ownN[i];
         need = surplus >= 6 ? 2 : 1;
         lanePoint(l, fromProgress(l, this.team, Math.max(0, tp.enemyFront[i] - 4)));
         x = proj.x; y = proj.y;
         // (W4 G1 refix: a stacked wave of six or more is met behind the first own Needle in its way, where the Needle
-        // shares the hits — never in the open, where it surrounds a lone fighter and body-blocks its way out; with no
-        // Needle of ours left in its way it is the base's call, not one fighter's)
+        // shares the hits — never in the open, where it surrounds a lone fighter and body-blocks its way out; integ
+        // done:5: with no Needle of ours left in its way it is met behind the next structure it walks into (a Lantern),
+        // by two — the base call fires only for structures off the roads, so a Lantern's road was left to its laner)
         if (surplus >= 6) {
           big = true;
-          let bp = -1, br = 0;
+          let bp = -1, br = 0, gp = -1, gr = 0;
           for (const st of k.structs) {
-            if (st.team !== this.team || st.lane !== i || !st.attacks || !this.structAlive(w, st)) continue;
+            if (st.team !== this.team || st.lane !== i || !this.structAlive(w, st)) continue;
             const p = progress(l, this.team, st.s);
-            if (p <= tp.enemyFront[i] && p > bp) { bp = p; br = st.radius; }
+            if (p > tp.enemyFront[i]) continue;
+            if (st.attacks) { if (p > bp) { bp = p; br = st.radius; } }
+            else if (p > gp) { gp = p; gr = st.radius; }
           }
+          if (bp < 0 && gp >= 0) { bp = gp; br = gr; }
           if (bp < 0) need = 0;
           else { lanePoint(l, fromProgress(l, this.team, Math.max(0, bp - br - 2.5))); x = proj.x; y = proj.y; }
         }
