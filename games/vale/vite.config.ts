@@ -18,12 +18,14 @@
 //     compiles to `preact/jsx-runtime` imports whether or not the transform reads tsconfig.
 //   * build: es2022, no source maps (they would publish the full TS source), vendor chunks for
 //     three / postprocessing(+n8ao) / preact(+signals) so a game-code change does not bust their cache.
-//   * licences (originality F7): the build writes THIRD_PARTY_NOTICES.txt (every node_modules package whose code or
-//     files land in the bundle: name, version, licence id, homepage and its full licence text; three / preact / signals
-//     MIT, n8ao ISC, postprocessing Zlib, the @fontsource faces OFL-1.1) and third_party_notices.json (the same list
-//     without the texts, for the Settings › Credits & licences panel), and opens each JS chunk that carries such code
-//     with a one-line /*! … */ pointer to the file. Dev and preview serve both at the same paths, computed from
-//     package.json's dependencies. A bundled package without a licence text fails the build.
+//   * licenses (originality F7): the build writes THIRD_PARTY_NOTICES.txt at the dist root next to index.html (every
+//     node_modules package whose code or files land in the bundle, plus NOTICE_ALSO: name, version, license id, homepage
+//     and its full license text; three / preact / signals / meshoptimizer / zod MIT, postprocessing Zlib, n8ao CC0-1.0
+//     (its LICENSE file; its package.json says ISC), the @fontsource faces OFL-1.1) and third_party_notices.json (the
+//     same list without the texts). Settings › Credits fetches the .txt (served as text/plain). Each JS chunk that
+//     carries such code opens with a one-line /*! … */ pointer to the file, and the minified chunks keep the libraries'
+//     own legal comments (@license, /*! */). Dev and preview serve both files at the same paths, computed from
+//     package.json's dependencies. A bundled package without a license text fails the build.
 //   * favicon (perf PERF-m3): index.html gets an inline SVG icon (VALE's dial in brand gloam on ink) when it has none,
 //     so no browser asks for /favicon.ico (a 404 in every boot's console).
 
@@ -183,6 +185,13 @@ function harnessMiddleware(req: IncomingMessage, res: ServerResponse, next: Next
 // ── third-party notices (originality F7) ─────────────────────────────────────────────────────────
 interface Notice { name: string; version: string; license: string; homepage: string; text: string }
 
+/** credited in Settings › Credits (src/ui/credits.ts) without being bundled: zod validates the catalog in VALE's content
+ *  build (tools/build_content.ts), so its notice ships with the game too */
+const NOTICE_ALSO = ['zod'];
+
+/** a LICENSE text whose own license differs from package.json's `license` field: the text wins (n8ao ships CC0 1.0) */
+const LICENSE_BY_TEXT: [RegExp, string][] = [[/^Creative Commons Legal Code\s+CC0 1\.0 Universal/, 'CC0-1.0']];
+
 /** the package a node_modules path belongs to: its name and folder (the innermost node_modules wins) */
 function packageOf(id: string): { name: string; dir: string } | null {
   const p = id.replace(/\\/g, '/').split('?')[0];
@@ -198,18 +207,21 @@ function noticeOf(name: string, dir: string): Notice {
   const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as { version?: string; license?: string; homepage?: string; repository?: string | { url?: string } };
   const file = readdirSync(dir).find((f) => /^(licen[cs]e|copying|ofl)(\.(md|txt))?$/i.test(f));
   const repo = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url ?? '';
+  const text = file ? readFileSync(resolve(dir, file), 'utf8').replace(/\r\n/g, '\n').trim() : '';
+  const byText = LICENSE_BY_TEXT.find(([re]) => re.test(text))?.[1];
   return {
-    name, version: pkg.version ?? '', license: pkg.license ?? 'UNKNOWN',
+    name, version: pkg.version ?? '',
+    license: byText && byText !== pkg.license ? `${byText}; its package.json says ${pkg.license ?? 'nothing'}` : pkg.license ?? 'UNKNOWN',
     homepage: (pkg.homepage || repo).replace(/^git\+/, '').replace(/\.git$/, ''),
-    text: file ? readFileSync(resolve(dir, file), 'utf8').replace(/\r\n/g, '\n').trim() : '',
+    text,
   };
 }
 
 function noticesText(list: Notice[]): string {
-  const head = 'VALE - third-party notices\n\nVALE bundles the open-source code and fonts listed below. Each is used under its own licence, '
-    + 'reproduced in full after its entry. VALE\'s own code, art, audio and names are not covered by these licences.\n\n';
+  const head = 'VALE - third-party notices\n\nVALE is built with the open-source code and fonts listed below. Each is used under its own license, '
+    + 'reproduced in full after its entry. VALE\'s own code, art, audio and names are not covered by these licenses.\n\n';
   const index = list.map((n) => `  ${n.name} ${n.version} (${n.license})`).join('\n');
-  const body = list.map((n) => `${'='.repeat(78)}\n${n.name} ${n.version}\nLicence: ${n.license}${n.homepage ? `\nSource: ${n.homepage}` : ''}\n${'-'.repeat(78)}\n${n.text}\n`).join('\n');
+  const body = list.map((n) => `${'='.repeat(78)}\n${n.name} ${n.version}\nLicense: ${n.license}${n.homepage ? `\nSource: ${n.homepage}` : ''}\n${'-'.repeat(78)}\n${n.text}\n`).join('\n');
   return `${head}${index}\n\n${body}`;
 }
 
@@ -227,6 +239,7 @@ function devNotices(): Notice[] {
     for (const d of Object.keys(deps)) visit(d, dir);
   };
   for (const d of Object.keys((JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> }).dependencies ?? {})) visit(d, ROOT);
+  for (const d of NOTICE_ALSO) visit(d, ROOT);
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -249,6 +262,7 @@ function thirdPartyNotices(): Plugin {
     generateBundle(_opts, bundle) {
       const pkgs = new Map<string, string>();
       const add = (id: string): void => { const p = packageOf(id); if (p && !pkgs.has(p.name)) pkgs.set(p.name, p.dir); };
+      for (const name of NOTICE_ALSO) add(resolve(ROOT, 'node_modules', name, 'package.json'));
       const chunkPkgs = new Map<string, Set<string>>();
       for (const [file, out] of Object.entries(bundle)) {
         if (out.type === 'chunk') {
@@ -262,12 +276,12 @@ function thirdPartyNotices(): Plugin {
       }
       const list = [...pkgs].map(([name, dir]) => noticeOf(name, dir)).sort((a, b) => a.name.localeCompare(b.name));
       const bare = list.filter((n) => !n.text);
-      if (bare.length) this.error(`third-party notices: no licence text in ${bare.map((n) => n.name).join(', ')} (originality F7)`);
+      if (bare.length) this.error(`third-party notices: no license text in ${bare.map((n) => n.name).join(', ')} (originality F7)`);
       for (const [file, own] of chunkPkgs) {
         const c = bundle[file];
         if (c.type !== 'chunk') continue;
         const ids = list.filter((n) => own.has(n.name)).map((n) => `${n.name} (${n.license})`).join(', ');
-        c.code = `/*! VALE bundles third-party code: ${ids}. Licences in full: THIRD_PARTY_NOTICES.txt */\n${c.code}`;
+        c.code = `/*! VALE bundles third-party code: ${ids}. Licenses in full: THIRD_PARTY_NOTICES.txt */\n${c.code}`;
       }
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: noticesText(list) });
       this.emitFile({ type: 'asset', fileName: 'third_party_notices.json', source: noticesJson(list) });
@@ -356,6 +370,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 2048,
     rolldownOptions: {
       output: {
+        // originality F7: the minifier would drop the libraries' own @license / /*! */ headers (Vite's default under minify)
+        comments: { legal: true },
         codeSplitting: {
           groups: [
             { name: 'vendor-three', test: /[\\/]node_modules[\\/]three[\\/]/ },
