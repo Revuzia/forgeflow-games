@@ -12,8 +12,8 @@
 //       structure and never the fighters' shield cue; every beat (each `every` s until `until`) is heard
 //   W2  the Dawn Seal ending: in the tick the view crosses rules.dawnSeal.until, sealBreak's cue is requested once at
 //       every standing sealed structure (and at no other time)
-//   W3  Vashil's chord: every area event whose vfx content binds as 'area.<vfx>' (and no sfx) requests that cue at the
-//       area; no other area requests it (vacuous if the bots never chord: reported, not failed, with Part S covering it)
+//   W3  Vashil's chord: every area event whose vfx content binds as 'area.<vfx>' (and no sfx, or a kitted fighter's own
+//       ability's area: closing AUD-C1's as-heard rule) requests that cue at the area; no other area requests it (vacuous if the bots never chord: reported, not failed, with Part S covering it)
 //   W4  (stub) each Gorge Wind step requests gorgeWind's cue once, centred; a client attached mid-wind hears no old step
 //   W5  (stub) the Noon Toll ('noon_toll' announce bound as world.noon_toll) requests its cue at once, queues no
 //       announcer line and ducks nothing; another unbound announce still falls back to the announcer
@@ -87,6 +87,12 @@ try { catalog = Catalog.parse(raw); } catch { catalog = raw; }                 /
 const strip = (o) => (Array.isArray(o) ? o.map(strip) : o && typeof o === 'object'
   ? Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('$')).map(([k, v]) => [k, strip(v)])) : o);
 const audio = AudioDef.parse(strip(JSON.parse(readFileSync(join(ROOT, 'content', 'audio.json'), 'utf8'))));
+// every fighter's own ability id (kit, passive, forms' kits): the engine's as-heard area rule (src/audio/index.ts `kits`)
+const OWN_ABILITIES = new Set(catalog.fighters.flatMap((f) => {
+  const abs = Object.values(f.kit ?? {}).filter(Boolean);
+  for (const fm of Object.values(f.kit?.passive?.forms ?? {})) abs.push(...Object.values(fm.kit ?? {}).filter(Boolean));
+  return abs.map((a) => a.id);
+}));
 function oggSeconds(path) {
   try {
     const fd = openSync(path, 'r');
@@ -196,9 +202,11 @@ for (const SEED of SEEDS) {
   const breaksElsewhere = log.cues.filter((c) => c.id === ev.sealBreak).length - breakRows.length;
   // W3: Vashil's chord
   const boundAreas = new Map(areaRoles.map(([k, c]) => [k.slice('area.'.length), c]));
-  const areas = rows.filter((e) => e.e === 'area' && !e.sfx && boundAreas.has(e.vfx));
+  // as heard (closing AUD-C1): a kitted fighter's own ability plays its vfx binding whatever library sfx the area names
+  const asBound = (e) => boundAreas.has(e.vfx) && (!e.sfx || OWN_ABILITIES.has(e.ability));
+  const areas = rows.filter((e) => e.e === 'area' && asBound(e));
   const areaMiss = areas.filter((e) => !e.__cues?.some((c) => c.id === boundAreas.get(e.vfx) && Math.abs(c.pos.x - e.x) < 1e-6 && Math.abs(c.pos.y - e.y) < 1e-6));
-  const areaStray = rows.filter((e) => e.e === 'area' && !(boundAreas.has(e.vfx) && !e.sfx) && e.__cues?.some((c) => [...boundAreas.values()].includes(c.id)));
+  const areaStray = rows.filter((e) => e.e === 'area' && !asBound(e) && e.__cues?.some((c) => [...boundAreas.values()].includes(c.id)));
   chordsTotal += areas.length;
   // W6 (real): the sim's Ringshade-muffled blows (damage `shaded`, structures only) each request hitShaded at that structure
   const shadedRows = rows.filter((e) => e.e === 'damage' && e.shaded);

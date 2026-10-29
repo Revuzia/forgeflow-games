@@ -399,7 +399,7 @@ export const FighterDef = z.object({
   /** CHANGED(RENDER), additive (r12 M12): the fighter's VFX signature hue and its companion, resolved by the
    *  VFX colour refs "signature" / "secondary" (CONTRACT §9.5). Signature: HSV saturation ≥ 0.55, value 0.7–0.95,
    *  hue outside tokens vfx.reservedHuesHSV; no two fighters within 25° of hue unless ≥ 25 L* apart (the content
-   *  build checks). Skins never change it (a skin's vfxTint recolours "element" only). */
+   *  build checks). A skin with its own `vfx` palette (SkinDef.vfx, CW1 SKIN-FX) replaces it for that skin's own effects. */
   vfx: z.object({ signature: Color, secondary: Color }).strict().optional(),
 }).strict();
 export type FighterDefT = z.infer<typeof FighterDef>;
@@ -411,8 +411,13 @@ export const SkinDef = z.object({
   /** mesh + skeleton (no clips needed: clips come from the fighter's base model by bone name) */
   model: AssetRef,
   portrait: AssetRef, splash: AssetRef,
-  /** optional VFX palette override (cosmetic) */
+  /** optional VFX palette override (cosmetic): the "element" colour refs (the generic wind-up, cast flare) */
   vfxTint: Color.optional(),
+  /** CHANGED(RENDER), additive (CW1 SKIN-FX): a deluxe skin's own kit-effect palette. The fighter's own effects (its
+   *  abilities, attacks and the units it owns) resolve "signature" / "secondary" to this pair instead of FighterDef.vfx,
+   *  so the skin's effect theme reaches the kit; "team" layers stay the relationship colour. Cosmetic only. The content
+   *  build holds the signature to the fighter rules (HSV saturation >= 0.55, value 0.70-0.95, outside the reserved hues). */
+  vfx: z.object({ signature: Color, secondary: Color }).strict().optional(),
   desc: z.string().default(''),
   releasedIn: z.string(),
 }).strict();

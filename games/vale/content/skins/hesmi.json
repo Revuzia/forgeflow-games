@@ -30,6 +30,10 @@
     "portrait": "assets/fighters/hesmi/hesmi_shadeprint_portrait.png",
     "splash": "assets/fighters/hesmi/hesmi_shadeprint_splash.png",
     "vfxTint": "#6C5BA8",
+    "vfx": {
+      "signature": "#6B4FD9",
+      "secondary": "#E4DDF7"
+    },
     "desc": "Ink shards with light-rimmed edges over pale wraps; her shadows fall in deep violet.",
     "releasedIn": "2026.10.0"
   }

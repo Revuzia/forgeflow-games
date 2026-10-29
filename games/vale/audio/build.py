@@ -59,6 +59,15 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              c_hit_phys_* on every auto and ability) has a contact (>= KIT_TRANSIENT_MIN) and no fighter's passes the
              soft top for frequent hits (TRANSIENT_SOFT_TOP); and every cue that can fire more than once a second (attacks,
              hits, ability hits, procs, FAST_ROLES) has >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
+  as heard   (closing AUD-C1) summing every cue the engine plays for each kitted fighter's cast, area / zone, projectile
+             and hit chain (heard_chains, resolved as src/audio/index.ts does): 0 library cues on a kitted fighter's
+             area / zone, 0 library cues (c_ult_release above all) under any ultimate; every 'area.<vfx>' binding of a
+             fighter's own vfx rendered and that fighter's alone. Allowed shared layers, listed: the enemy wind-up swell
+             (STYLE_BIBLE) and a damage-type / crit hitSfx under the kit hit
+  epic       (closing AUD-C3) every objective unit (content/maps camps flagged objective) has its own kit u_<unit>_<slot> (attack swing /
+             hit, cast, a<n>_land per area ability, roar, death, presence: a looping ambience cue), rendered and named by
+             no other unit, fighter, item or role; its autos land at or above the loudest fighter auto as heard (file max
+             momentary + catalog gain + engine multiplier); events.monsterDeath is no hit cue
 Deterministic: every random choice is seeded from the cue id (synth.core.rng) and ffmpeg runs
 bitexact, so a rebuild reproduces the same files.
 """
@@ -440,11 +449,15 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     af, arep = ambience_gate(contract)
     kf, krep = kit_gate(contract)
     xf, xrep = impact_gate(contract, rep.get('controlKinds', []), rep.get('bound', {}))
+    hf, hrep = asheard_gate(contract)
+    ef, erep = epic_gate(contract)
     rep['procs'] = prep
     rep['ambience'] = arep
     rep['kits'] = krep
     rep['impact'] = xrep
-    return fails + pf + af + kf + xf, rep
+    rep['asHeard'] = hrep
+    rep['epic'] = erep
+    return fails + pf + af + kf + xf + hf + ef, rep
 
 
 # ── instant cues and impacts on a laptop (final parity AUD-m1, AUD-4) ────────────────────────────────
@@ -775,6 +788,267 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
     return fails, rep
 
 
+# ── as heard (closing AUD-C1) and the epic objectives (closing AUD-C3) ───────────────────────────────
+SEMANTIC_ROLES = ('hitTrue', 'crit')   # a hitSfx bound to these still sounds under the kit hit (index.ts SEMANTIC_HIT_ROLES)
+THREAT_ROLES = ('enemyUltWindup', 'enemyWindup')   # the ONE shade-breath swell every enemy T3+ wind-up shares (STYLE_BIBLE)
+
+
+def _fighters() -> list[dict]:
+    import glob
+    out = []
+    for path in sorted(glob.glob(os.path.join(CONTENT, 'fighters', '*.json'))):
+        with open(path, encoding='utf8') as f:
+            out.append(json.load(f))
+    return out
+
+
+def _abilities(fd: dict) -> list[tuple[str, dict]]:
+    """A fighter's own abilities as the engine owns them (index.ts ownAb): its kit slots, its passive, its forms' kits."""
+    kit = fd.get('kit') or {}
+    out = [(s, a) for s, a in kit.items() if isinstance(a, dict)]
+    for fm in ((kit.get('passive') or {}).get('forms') or {}).values():
+        out += [(s, a) for s, a in (fm.get('kit') or {}).items() if isinstance(a, dict)]
+    return out
+
+
+def _walk_ops(node, out: list[dict]) -> None:
+    if isinstance(node, dict):
+        if isinstance(node.get('op'), str):
+            out.append(node)
+        for k, v in node.items():
+            if k != '$comment':
+                _walk_ops(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _walk_ops(v, out)
+
+
+def heard_chains(contract: dict) -> dict:
+    """Every cue the engine plays for each kitted fighter's casts, areas / zones, projectiles and ability hits, resolved
+    as src/audio/index.ts does (the as-heard rule: a kitted fighter's own area plays 'area.<vfx>' bound in content, else
+    a present.sfx in its own f_<fighter>_ namespace, else nothing; a kitted ult's projectile skips the generic whoosh)."""
+    cues, ev = contract['cues'], contract.get('events', {})
+    semantic = {ev[r] for r in SEMANTIC_ROLES if ev.get(r)}
+    out: dict = {}
+    for fd in _fighters():
+        fid = fd['id']
+        kitted = any(f'f_{fid}_{s}' in cues for s in KIT_SLOTS)
+        own = lambda s: f'f_{fid}_{s}' if f'f_{fid}_{s}' in cues else None   # noqa: E731
+        abil: dict = {}
+        for slot, ab in _abilities(fd):
+            ops: list[dict] = []
+            _walk_ops(ab.get('effects', []) + ab.get('triggers', []), ops)
+            pr = ab.get('present') or {}
+            cast = (own('ult_windup') if slot == 'ult' else own(slot) if slot in ('a1', 'a2', 'a3') else None)
+            if slot != 'passive':
+                cast = cast or pr.get('sfx') or ev.get('castUlt' if slot == 'ult' else 'cast')
+            areas = []
+            for o in ops:
+                if o['op'] not in ('area', 'zone'):
+                    continue
+                p = o.get('present') or {}
+                sfx, vfx = p.get('sfx'), p.get('vfx')
+                bound = ev.get(f'area.{vfx}') if vfx else None
+                if kitted:
+                    got = bound or (sfx if sfx and sfx.startswith(f'f_{fid}_') else None)
+                else:
+                    got = sfx or bound
+                areas.append({'op': o['op'], 'vfx': vfx, 'present': sfx, 'heard': got})
+            proj = [o for o in ops if o['op'] == 'projectile']
+            whoosh = ev.get('projectile') if proj and not (kitted and slot == 'ult' and own('ult_release')) else None
+            hit_lib = set()
+            _hit_sfx({'effects': ab.get('effects', [])}, hit_lib)
+            hits = ([own('hit')] if own('hit') else sorted(hit_lib) or [ev.get('hitAbility')]) + \
+                   ([c for c in sorted(hit_lib) if c in semantic] if own('hit') else [])
+            abil[slot if slot not in abil else f'{slot}#{ab.get("id")}'] = {
+                'id': ab.get('id'), 'cast': cast, 'release': own('ult_release') if slot == 'ult' else None,
+                'areas': areas, 'projectile': whoosh, 'hits': [h for h in hits if h]}
+        out[fid] = {'kitted': kitted, 'abilities': abil}
+    return out
+
+
+def asheard_gate(contract: dict) -> tuple[list[str], dict]:
+    """as heard (closing AUD-C1): summing every cue the engine plays for each kitted fighter's cast, area and hit chain,
+    0 library cues on a kitted fighter's area / zone, 0 library cues (c_ult_release above all) under any ultimate's
+    cast / release / area / projectile; every 'area.<vfx>' binding of a fighter's vfx is rendered and belongs to that
+    fighter alone. A cue is the fighter's OWN when it is f_<fighter>_… or bound to one of its own vfx and used by
+    nothing else; the shared threat swell (THREAT_ROLES, the enemy's only, STYLE_BIBLE) and a semantic hitSfx
+    (SEMANTIC_ROLES) are the allowed shared layers and are listed."""
+    fails: list[str] = []
+    cues, ev = contract['cues'], contract.get('events', {})
+    chains = heard_chains(contract)
+    fighters = _fighters()
+    vfx_of: dict[str, str] = {}          # a fighter's vfx id → the fighter
+    for fd in fighters:
+        ops: list[dict] = []
+        _walk_ops(fd.get('kit') or {}, ops)
+        for o in ops:
+            v = (o.get('present') or {}).get('vfx')
+            if v:
+                vfx_of.setdefault(v, fd['id'])
+    # who else uses a cue: other roles, units, items (anything but a fighter's own area binding)
+    users: dict[str, set[str]] = {}
+    for role, c in ev.items():
+        if role.startswith('area.') and role[5:] in vfx_of:
+            users.setdefault(c, set()).add(f'fighter:{vfx_of[role[5:]]}')
+        else:
+            users.setdefault(c, set()).add(f'role:{role}')
+    for u in _read('units.json')['units']:
+        for c in _sfx_refs(u):
+            users.setdefault(c, set()).add(f"unit:{u['id']}")
+    for fd in fighters:
+        for c in _sfx_refs(fd):
+            users.setdefault(c, set()).add(f"fighter:{fd['id']}")
+    allowed = {ev[r] for r in SEMANTIC_ROLES + THREAT_ROLES if ev.get(r)}
+    rep: dict = {'fighters': {}, 'ultChains': {}, 'bindings': {}, 'libraryOnAreas': 0, 'libraryUnderUlts': 0}
+
+    def owned(fid: str, c: str) -> bool:
+        return c.startswith(f'f_{fid}_') or users.get(c, set()) == {f'fighter:{fid}'}
+
+    for role, c in sorted(ev.items()):
+        if not role.startswith('area.') or role[5:] not in vfx_of:
+            continue
+        fid = vfx_of[role[5:]]
+        rendered = c in cues and all(os.path.exists(out_path(x)) for x in cues[c]['files'])
+        rep['bindings'][role] = {'cue': c, 'fighter': fid, 'own': owned(fid, c), 'rendered': rendered}
+        if not rendered:
+            fails.append(f'as-heard: {role} → {c} is not rendered')
+        if not owned(fid, c):
+            fails.append(f"as-heard: {role} → {c} is not {fid}'s own (also {', '.join(sorted(users.get(c, set()) - {f'fighter:{fid}'}))})")
+    for fid, ch in chains.items():
+        if not ch['kitted']:
+            continue
+        lib_areas, row = [], {}
+        for slot, a in ch['abilities'].items():
+            heard = [x['heard'] for x in a['areas'] if x['heard']]
+            libs = [c for c in heard if not owned(fid, c)]
+            lib_areas += [f'{slot}:{c}' for c in libs]
+            row[slot] = {'cast': a['cast'], 'release': a['release'], 'areas': heard,
+                         'silencedLibrary': sorted({x['present'] for x in a['areas'] if x['present'] and not x['heard']}),
+                         'projectile': a['projectile'], 'hits': a['hits']}
+            if slot == 'ult':
+                chain = [c for c in [a['cast'], a['release'], *heard, a['projectile'], *a['hits']] if c]
+                lib = [c for c in chain if not owned(fid, c) and c not in allowed]
+                rep['ultChains'][fid] = {'own': [c for c in chain if owned(fid, c)], 'library': lib,
+                                         'allowedShared': [c for c in chain if c in allowed],
+                                         'threatSwell': ev.get('enemyUltWindup')}
+                rep['libraryUnderUlts'] += len(lib)
+                for c in lib:
+                    fails.append(f'as-heard: {c} sounds under {fid}\'s ultimate ({a["id"]})')
+        rep['libraryOnAreas'] += len(lib_areas)
+        for x in lib_areas:
+            fails.append(f'as-heard: {fid} {x.split(":")[0]} area/zone plays the library cue {x.split(":")[1]}')
+        rep['fighters'][fid] = row
+    return fails, rep
+
+
+def _sfx_refs(node) -> set[str]:
+    """Every cue id a content record names (present sfx / hitSfx at any depth)."""
+    out: set[str] = set()
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k in ('sfx', 'hitSfx') and isinstance(v, str):
+                out.add(v)
+            elif k != '$comment':
+                out |= _sfx_refs(v)
+    elif isinstance(node, list):
+        for v in node:
+            out |= _sfx_refs(v)
+    return out
+
+
+EPIC_SLOTS = ('attack_swing', 'attack_hit', 'cast', 'roar', 'death', 'presence')
+FIGHTER_SWING_MUL, FIGHTER_HIT_MUL = 0.6, 0.8    # index.ts: a fighter's (and a kitted unit's) auto multipliers
+
+
+def _auto_level(c: str, cues: dict, mul: float) -> float:
+    """An auto's level as heard: the mean over its takes of the file's max momentary + catalog gain + engine multiplier."""
+    xs = [L.max_momentary(decode(out_path(f))) for f in cues[c]['files']]
+    return float(np.mean(xs) + 20 * math.log10(cues[c]['gain'] * mul))
+
+
+def epic_gate(contract: dict) -> tuple[list[str], dict]:
+    """epic (closing AUD-C3): every objective unit (the units of content/maps camps flagged `objective`) has its own kit
+    u_<unit>_<slot> (EPIC_SLOTS, and a<n>_land for each of its abilities with an area / zone), rendered, presence a
+    looping ambience-bus cue; no cue of it is named by any other unit, fighter, item or role (it shares no attack,
+    ability or death cue with a Wick, camp or fighter); its autos land at or above the loudest fighter auto (file max
+    momentary + catalog gain + engine multiplier); and a camp's death (events.monsterDeath) is no hit cue."""
+    fails: list[str] = []
+    cues, ev = contract['cues'], contract.get('events', {})
+    import glob
+    units = _read('units.json')['units']
+    obj: set[str] = set()                # the objective camps' units (WorldView.objectives: the HUD's timers)
+    for path in sorted(glob.glob(os.path.join(CONTENT, 'maps', '*.json'))):
+        with open(path, encoding='utf8') as f:
+            for c in json.load(f).get('camps', []):
+                if c.get('objective'):
+                    obj |= {x['unit'] for x in c.get('units', [])}
+    epic = [u for u in units if u['id'] in obj]
+    rep: dict = {'units': {}, 'fighterAuto': {}, 'monsterDeath': ev.get('monsterDeath')}
+    named: dict[str, set[str]] = {}
+    for u in units:
+        for c in _sfx_refs(u):
+            named.setdefault(c, set()).add(f"unit:{u['id']}")
+    for fd in _fighters():
+        for c in _sfx_refs(fd):
+            named.setdefault(c, set()).add(f"fighter:{fd['id']}")
+        for s in KIT_SLOTS:
+            named.setdefault(f"f_{fd['id']}_{s}", set()).add(f"fighter:{fd['id']}")
+    for it in _read('items.json').get('items', []):
+        for c in _sfx_refs(it):
+            named.setdefault(c, set()).add(f"item:{it['id']}")
+    for role, c in ev.items():
+        named.setdefault(c, set()).add(f'role:{role}')
+    # the loudest fighter auto (as heard)
+    sw, ht = [], []
+    for fd in _fighters():
+        fid = fd['id']
+        for s, mul, acc in (('attack_swing', FIGHTER_SWING_MUL, sw), ('attack_hit', FIGHTER_HIT_MUL, ht)):
+            c = f'f_{fid}_{s}'
+            if c in cues and all(os.path.exists(out_path(f)) for f in cues[c]['files']):
+                lv = _auto_level(c, cues, mul)
+                rep['fighterAuto'][c] = round(lv, 2)
+                acc.append(lv)
+    top = {'attack_swing': max(sw, default=-99.0), 'attack_hit': max(ht, default=-99.0)}
+    rep['fighterAutoMax'] = {k: round(v, 2) for k, v in top.items()}
+    for u in epic:
+        uid = u['id']
+        lands = [f'a{i + 1}_land' for i, ab in enumerate(u.get('abilities', []))
+                 if any(o['op'] in ('area', 'zone') for o in (lambda l: (_walk_ops(ab.get('effects', []), l), l)[1])([]))]
+        slots = list(EPIC_SLOTS) + lands
+        row: dict = {'kit': {}, 'missing': [], 'shared': {}, 'levels': {}}
+        for s in slots:
+            c = f'u_{uid}_{s}'
+            if c not in cues:
+                row['missing'].append(s)
+                fails.append(f'epic: {uid} has no {c}')
+                continue
+            row['kit'][s] = c
+            if not all(os.path.exists(out_path(f)) for f in cues[c]['files']):
+                fails.append(f'epic: {c} is not rendered')
+                continue
+            if named.get(c):
+                row['shared'][c] = sorted(named[c])
+                fails.append(f"epic: {c} is also named by {', '.join(sorted(named[c]))}")
+        # no other u_<unit>_ cue of another unit is shared either (unit vs unit): names are per unit by construction
+        p = cues.get(f'u_{uid}_presence')
+        if p and (not p.get('loop') or p.get('bus') != 'ambience'):
+            fails.append(f'epic: u_{uid}_presence must be a looping ambience-bus cue (bus {p.get("bus")}, loop {p.get("loop")})')
+        for s, mul in (('attack_swing', FIGHTER_SWING_MUL), ('attack_hit', FIGHTER_HIT_MUL)):
+            c = f'u_{uid}_{s}'
+            if s in row['kit'] and all(os.path.exists(out_path(f)) for f in cues[c]['files']):
+                lv = _auto_level(c, cues, mul)
+                row['levels'][s] = {'level': round(lv, 2), 'fighterMax': round(top[s], 2)}
+                if lv < top[s] - 0.05:
+                    fails.append(f'epic: {c} lands at {lv:.1f} LUFS as heard, under the loudest fighter {s} ({top[s]:.1f})')
+        rep['units'][uid] = row
+    hit_roles = {ev.get(r) for r in ('hitPhysical', 'hitMagic', 'hitTrue', 'hitAbility', 'crit')} | \
+                {c for u in units for c in [((u.get('attack') or {}).get('present') or {}).get('hitSfx')] if c}
+    if ev.get('monsterDeath') in hit_roles:
+        fails.append(f"epic: events.monsterDeath is a hit cue ({ev.get('monsterDeath')}): a camp dies on its own hit sound")
+    return fails, rep
+
+
 def proc_gate(contract: dict) -> tuple[list[str], dict]:
     """procs: every fighter passive with a damage / status / mark / resource payoff has its proc cue
     (f_<fighter>_passive, else the passive's present.sfx / hitSfx), rendered; every other triggered passive
@@ -1064,6 +1338,18 @@ def print_gates(fails: list[str], rep: dict) -> None:
     print(f"instant gate: {len(late)} instant cues, slowest {max(late.values(), default=0):.1f} ms to -20 dB (<= {INSTANT_MS:g})")
     print(f"impact gate: laptop loss (<= {LAPTOP_MAX_LU:g} LU) " + ', '.join(f'{c} {v:.1f}' for c, v in ip.get('laptop', {}).items()))
     print('  contact > 2 kHz in 30 ms: ' + ', '.join(f"{c} {v['min']:.3f}-{v['max']:.3f}" for c, v in ip.get('transient', {}).items()))
+    ah = rep.get('asHeard', {})
+    print(f"as-heard gate: {ah.get('libraryOnAreas', '?')} library cue(s) on kitted fighters' areas / zones,"
+          f" {ah.get('libraryUnderUlts', '?')} under their ultimates; {len(ah.get('bindings', {}))} own area bindings")
+    for fid, u in ah.get('ultChains', {}).items():
+        print(f"  {fid:9s} ult: {' + '.join(u['own']) or '-'}" + (f"  LIBRARY {' + '.join(u['library'])}" if u['library'] else '')
+              + (f"  (shared: {', '.join(u['allowedShared'])})" if u['allowedShared'] else ''))
+    ep = rep.get('epic', {})
+    print(f"epic gate: monsterDeath → {ep.get('monsterDeath')}; loudest fighter auto as heard: swing"
+          f" {ep.get('fighterAutoMax', {}).get('attack_swing', float('nan')):.1f}, hit {ep.get('fighterAutoMax', {}).get('attack_hit', float('nan')):.1f} LUFS")
+    for uid, u in ep.get('units', {}).items():
+        lv = '  '.join(f"{s} {x['level']:.1f}" for s, x in u['levels'].items())
+        print(f"  {uid:12s} kit {len(u['kit'])} slots{(' MISSING ' + ','.join(u['missing'])) if u['missing'] else ''}; autos {lv}")
     print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
                  f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart;'
                  f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points;'

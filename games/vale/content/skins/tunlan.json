@@ -30,6 +30,10 @@
     "portrait": "assets/fighters/tunlan/tunlan_lamplit_portrait.png",
     "splash": "assets/fighters/tunlan/tunlan_lamplit_splash.png",
     "vfxTint": "#6A5C7A",
+    "vfx": {
+      "signature": "#7A52C4",
+      "secondary": "#EAD6B8"
+    },
     "desc": "A walnut shade-hat with lampresin panels. Her shadows fall in muted violet.",
     "releasedIn": "2026.10.0"
   }

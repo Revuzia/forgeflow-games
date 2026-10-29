@@ -109,7 +109,29 @@
 //               emits for a unit in the tick it knocks it airborne, keeps the generic one). death replaces the generic fall, passive is the
 //               proc (see `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content
 //               has no cue for falls back to the catalog's present and then the generic set, as before. A cue's
-//               round-robin takes are picked at random but never the same take twice in a row
+//               round-robin takes are picked at random but never the same take twice in a row.
+//               As heard (closing AUD-C1): an area / zone of a kitted fighter's OWN ability (its kit, its passive,
+//               its forms; by ability id, whoever the caster entity is) never plays a library cue under the kit:
+//               it plays the cue content binds to its vfx ('area.<vfx>', the fighter's own landing, e.g. a zone's
+//               delayed topple) or a present.sfx in the fighter's own namespace (f_<fighter>_…), else nothing (the
+//               kit's cast cue already carries the gesture, its delayed landing timed from content, and the ult's
+//               release lands on that very area). The generic projectile whoosh is skipped under a kitted ult's
+//               projectile for the same reason (the release is its sound)
+//   epic        an epic objective (closing AUD-C3) has a kit like a fighter's: content names u_<unit>_<slot>,
+//               slots attack_swing · attack_hit · cast · a1..a4 (the unit's abilities in order, as the sim slots
+//               them) · a1_land..a4_land · hit · roar · death · presence. A unit with any u_<unit>_* cue is KITTED:
+//               its autos play at a fighter's multipliers (not the monster's), its casts play a<n> (else cast),
+//               its ability areas play a<n>_land (the cue carries the area's delay up to the landing), its
+//               ability hits play hit, its death plays death, and nothing of it falls back on a library cue
+//               (castMonster, monsterDeath, a present.sfx, the generic projectile whoosh). roar sounds at the unit
+//               when its objective (WorldView.objectives) comes alive and when it is struck after ROAR_CALM_S
+//               untouched (someone starts it); presence is a loop on the ambience bus at the objective's pit
+//               while it lives (an emitter like the map's, built from WorldView.objectives: public knowledge, the
+//               HUD shows the timers)
+//   memory      (closing PERF-C2, audio half) decoded audio is 48 kHz float PCM, so nothing piles up across a
+//               session: a bed change frees the previous bed's decoded files (main stem, layers, the stitched
+//               .m4a stem) once the new bed is chosen, and a match change (attach) frees every cue buffer but the
+//               UI set and the playing bed's. A voice still sounding keeps its own buffer until it ends
 //   procs       every 'proc' (a passive fired) sounds at its subject (dst, else the owner): a fighter's passive
 //               plays the per-fighter cue f_<fighter>_passive when content has one, else the passive's own
 //               present.sfx / hitSfx; an item / boon / team-buff / unit passive plays its present.sfx / hitSfx,
@@ -161,7 +183,7 @@ interface CatalogLike {
     ambience?: Record<string, { source: string; cue: string }[]>; ui?: Record<string, string>; m4a?: Record<string, string> };
   fighters: { id: string; attack?: { present?: PresentLike };
     kit: Record<string, (AbilityLike & { forms?: Record<string, { kit?: Record<string, AbilityLike | undefined> }> }) | undefined> }[];
-  units?: { id: string; attack?: { present?: PresentLike }; passive?: PassiveLike }[];
+  units?: { id: string; attack?: { present?: PresentLike }; passive?: PassiveLike; abilities?: { id: string }[] }[];
   items?: { id: string; passives?: PassiveLike[] }[];
   setup?: { boons?: PassiveLike[] };
   teamBuffs?: { id: string; passives?: PassiveLike[] }[];
@@ -265,6 +287,12 @@ const PERIODIC_ON = new Set(['interval', 'moveDistance']);
 const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash'] as const;
 type KitSlot = typeof KIT_SLOTS[number];
 const CAST_SLOTS = new Set<string>(['a1', 'a2', 'a3']);
+/** an epic unit's kit slots (see `epic` in the header): content's cue u_<unit>_<slot>; a1..a4 follow the unit's
+ *  abilities in order (the sim slots them a1..ult) */
+const UNIT_ABILITY_SLOTS = ['a1', 'a2', 'a3', 'a4'] as const;
+const UNIT_SLOTS = ['attack_swing', 'attack_hit', 'cast', ...UNIT_ABILITY_SLOTS, ...UNIT_ABILITY_SLOTS.map((s) => `${s}_land`),
+  'hit', 'roar', 'death', 'presence'] as const;
+const ROAR_CALM_S = 10;       // a kitted unit struck after this long untouched (sim time) roars: someone started it
 const RELEASE_EPS_S = 1.5 / 30;        // the sim counts the wind-up from the cast's own tick: its release lands up to
                                         // one tick before cast.t + castTime (sim time)
 const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the crit cue
@@ -385,6 +413,18 @@ class Engine implements ValeAudioPort {
   private readonly passives = new Map<string, { kind: PassiveKind; cue?: string }>();
   /** fighter id → the kit slots content has a cue for (see `kits` in the header) */
   private readonly kits = new Map<string, Partial<Record<KitSlot, string>>>();
+  /** a fighter's own ability id (kit, passive, forms) → its fighter and slot (the as-heard area rule, see `kits`) */
+  private readonly ownAb = new Map<string, { fighter: string; slot: string }>();
+  /** epic unit id → its kit (see `epic` in the header); only units content gives a u_<unit>_* cue */
+  private readonly ukits = new Map<string, Partial<Record<string, string>>>();
+  /** a unit ability id → its unit and slot (a1..a4) */
+  private readonly unitAb = new Map<string, { unit: string; slot: string }>();
+  /** kitted unit entity → the sim time it was last struck (the roar, see `epic`) */
+  private readonly hurtLast = new Map<number, number>();
+  /** objective id → alive at the last update (its roar on coming alive) */
+  private readonly objAlive = new Map<string, boolean>();
+  /** objective id → its pit presence emitter while it lives (see `epic`) */
+  private readonly pits = new Map<string, Emitter>();
   /** ability ids whose enemy wind-up plays the shade-breath swell (see `threat` in the header; ults always do) */
   private readonly threats = new Set<string>();
   /** cue id → the index of the file it played last (round-robin never repeats a take back to back) */
@@ -431,6 +471,15 @@ class Engine implements ValeAudioPort {
       const abs: [string, AbilityLike | undefined][] = Object.entries(f.kit);
       for (const fm of Object.values(f.kit.passive?.forms ?? {})) abs.push(...Object.entries(fm.kit ?? {}));
       for (const [slot, a] of abs) if (a && slot !== 'passive' && slot !== 'ult' && (a.castTime ?? 0) > 0 && isT3(a.effects)) this.threats.add(a.id);
+      for (const [slot, a] of abs) if (a && !this.ownAb.has(a.id)) this.ownAb.set(a.id, { fighter: f.id, slot });
+    }
+    // epic units (see `epic` in the header)
+    for (const u of cat.units ?? []) {
+      const k: Partial<Record<string, string>> = {};
+      for (const s of UNIT_SLOTS) if (this.cues[`u_${u.id}_${s}`]) k[s] = `u_${u.id}_${s}`;
+      if (!Object.keys(k).length) continue;
+      this.ukits.set(u.id, k);
+      (u.abilities ?? []).forEach((a, i) => { if (i < UNIT_ABILITY_SLOTS.length) this.unitAb.set(a.id, { unit: u.id, slot: UNIT_ABILITY_SLOTS[i] }); });
     }
     // passives (see `procs` in the header): the per-fighter cue first, then the passive's own present
     const own = (p: PassiveLike | undefined, kind: PassiveKind, fighter?: string): void => {
@@ -623,6 +672,29 @@ class Engine implements ValeAudioPort {
    *  has no such cue (the catalog's present and the generic roles then decide) */
   private kit(x: EntityLike | undefined, slot: KitSlot): string | undefined {
     return x?.kind === 'fighter' && x.def ? this.kits.get(x.def)?.[slot] : undefined;
+  }
+
+  /** an epic unit's kit (see `epic` in the header); undefined for anything else (a fighter, an unkitted unit) */
+  private uk(x: EntityLike | undefined): Partial<Record<string, string>> | undefined {
+    return x && x.kind !== 'fighter' && x.def ? this.ukits.get(x.def) : undefined;
+  }
+
+  /** what an 'area' event sounds as heard (see `kits` / `epic` in the header): a kitted fighter's own ability plays
+   *  only its own landing ('area.<vfx>' bound in content, else a present.sfx in its own f_<fighter>_ namespace); a
+   *  kitted unit's ability plays its a<n>_land; anything else its present.sfx, else 'area.<vfx>' as before */
+  private areaCue(e: Record<string, unknown>, src: EntityLike | undefined): string | undefined {
+    const sfx = e.sfx as string | undefined;
+    const vfx = e.vfx as string | undefined;
+    const bound = vfx ? this.ev(`area.${vfx}`) : undefined;
+    const own = this.ownAb.get(e.ability as string);
+    if (own && Object.keys(this.kits.get(own.fighter) ?? {}).length) {
+      const pre = `f_${own.fighter}_`;
+      return bound ?? (sfx?.startsWith(pre) ? sfx : undefined);
+    }
+    const ua = this.unitAb.get(e.ability as string);
+    const uk = ua ? this.ukits.get(ua.unit) : this.uk(src);
+    if (uk) return ua ? uk[`${ua.slot}_land`] : undefined;
+    return sfx ?? bound;
   }
 
   settings(s: AudioSettings): void { this.vol = { ...s }; this.applyVolumes(); }
@@ -979,6 +1051,23 @@ class Engine implements ValeAudioPort {
     const t = this.ctx.currentTime;
     b.gain.gain.setTargetAtTime(0, t, XFADE_S / 3);
     for (const s of [b.main, ...b.pieces.map((p) => p.src), ...b.layers.map((l) => l.src)]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
+    // free its decoded files (see `memory` in the header): its sources keep theirs through the fade, then let go
+    const keep = new Set(this.bedFiles(this.wantBed));
+    for (const f of this.bedFiles(b.id)) if (!keep.has(f)) this.buffers.delete(f);
+    for (const l of b.layers) l.buf = null;
+  }
+
+  /** every file of a bed: the main stem, its layers, its .m4a pieces */
+  private bedFiles(id: string | null): string[] {
+    const d = id ? this.beds[id] : undefined;
+    return d ? [d.file, ...d.layers.map((l) => l.file), ...(d.pieces ?? []).map((p) => p.file)] : [];
+  }
+
+  /** a match change frees every cue buffer but the UI set's and the playing bed's (see `memory` in the header) */
+  private evictCues(): void {
+    const keep = new Set(this.bedFiles(this.wantBed));
+    for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) keep.add(f);
+    for (const k of [...this.buffers.keys()]) if (!keep.has(k)) this.buffers.delete(k);
   }
 
   // ── the announcer (see `announcer` in the header) ─────────────────────────────────────────────────
@@ -1070,8 +1159,11 @@ class Engine implements ValeAudioPort {
     this.procLast.clear();
     this.ults.clear();
     this.dealt.clear(); this.healLast.clear(); this.wiped.clear();
+    this.hurtLast.clear(); this.objAlive.clear();
+    for (const o of client?.view.objectives ?? []) this.objAlive.set(o.id, o.alive);
     this.annQ = [];
     this.stopAmbience();
+    this.evictCues();
     this.ambMap = client?.setup?.map ?? null;
     if (client) {
       this.off = client.onEvents((evs: SimEvent[]) => {
@@ -1098,18 +1190,45 @@ class Engine implements ValeAudioPort {
     const bound = this.ambienceOf[map]?.length ? this.ambienceOf[map]
       : Object.entries(this.events).filter(([role]) => role.startsWith(pre)).map(([role, cue]) => ({ source: role.slice(pre.length), cue }));
     for (const { source, cue } of bound) {
-      const role = pre + source;
-      const def = this.cues[cue];
-      if (!def || !def.loop || def.bus !== 'ambience') continue;
       const pts = source === 'bed' ? [] : ambientPoints(art, source);
       if (source !== 'bed' && !pts.length) continue;               // a group the map does not have: nothing to place
-      const gain = ctx.createGain(); gain.gain.value = 0;
-      const pan = ctx.createStereoPanner();
-      const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 20000; lpf.Q.value = 0.7071;
-      lpf.connect(pan).connect(gain).connect(this.ambDuck!);
-      out.push({ role, cue, def, pts, src: null, gain, pan, lpf, att: 0, panV: 0, lpfV: 0, started: false });
+      const em = this.emitter(ctx, pre + source, cue, pts);
+      if (em) out.push(em);
     }
     return out;
+  }
+
+  /** one looping ambience-bus emitter (not started); null when `cue` is no looping ambience cue */
+  private emitter(ctx: AudioContext, role: string, cue: string, pts: { x: number; y: number }[]): Emitter | null {
+    const def = this.cues[cue];
+    if (!def || !def.loop || def.bus !== 'ambience') return null;
+    const gain = ctx.createGain(); gain.gain.value = 0;
+    const pan = ctx.createStereoPanner();
+    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 20000; lpf.Q.value = 0.7071;
+    lpf.connect(pan).connect(gain).connect(this.ambDuck!);
+    return { role, cue, def, pts, src: null, gain, pan, lpf, att: 0, panV: 0, lpfV: 0, started: false };
+  }
+
+  /** the epic objectives' pit presence (see `epic` in the header): an emitter at each living objective whose unit has
+   *  a presence cue, faded out when it falls */
+  private syncPits(ctx: AudioContext): void {
+    const live = new Set<string>();
+    for (const o of this.client?.view.objectives ?? []) {
+      const cue = this.ukits.get(o.unit)?.presence;
+      if (!cue || !o.alive) continue;
+      live.add(o.id);
+      if (this.pits.has(o.id)) continue;
+      const em = this.emitter(ctx, `objective.${o.unit}`, cue, [{ x: o.at[0], y: o.at[1] }]);
+      if (em) this.pits.set(o.id, em);
+    }
+    for (const [id, em] of this.pits) if (!live.has(id)) { this.fadeEmitter(ctx, em); this.pits.delete(id); }
+  }
+
+  private fadeEmitter(ctx: AudioContext, em: Emitter): void {
+    em.gain.gain.cancelScheduledValues(ctx.currentTime);
+    em.gain.gain.setTargetAtTime(0, ctx.currentTime, AMB_FADE_S / 3);
+    if (em.src) try { em.src.stop(ctx.currentTime + AMB_FADE_S * 1.5); } catch { /* not started */ }
+    em.started = true;                     // a load still in flight sees it gone (not in amb / pits) and never starts
   }
 
   /** start loops not yet started, place every emitter around the listener, duck the bus under a fight. The
@@ -1118,12 +1237,14 @@ class Engine implements ValeAudioPort {
     const ctx = this.ctx;
     if (!ctx || !this.client) return;
     if (this.ambMap) { this.amb = this.emitters(ctx, this.ambMap); this.ambMap = null; }
+    this.syncPits(ctx);
     const t = ctx.currentTime;
-    for (const em of this.amb) {
+    const live = (em: Emitter): boolean => this.amb.includes(em) || [...this.pits.values()].includes(em);
+    for (const em of [...this.amb, ...this.pits.values()]) {
       if (!em.started) {
         em.started = true;
         void this.buffer(em.def.files[Math.floor(Math.random() * em.def.files.length)]).then((buf) => {
-          if (!buf || !this.ctx || !this.amb.includes(em)) return;
+          if (!buf || !this.ctx || !live(em)) return;
           const src = this.ctx.createBufferSource();
           src.buffer = buf; src.loop = true;
           if (em.def.pitchVar) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * em.def.pitchVar;
@@ -1165,18 +1286,29 @@ class Engine implements ValeAudioPort {
   private stopAmbience(): void {
     const ctx = this.ctx;
     this.ambMap = null;
-    for (const em of this.amb) {
-      if (!ctx) continue;
-      em.gain.gain.cancelScheduledValues(ctx.currentTime);
-      em.gain.gain.setTargetAtTime(0, ctx.currentTime, AMB_FADE_S / 3);
-      if (em.src) try { em.src.stop(ctx.currentTime + AMB_FADE_S * 1.5); } catch { /* not started */ }
-    }
+    if (ctx) for (const em of [...this.amb, ...this.pits.values()]) this.fadeEmitter(ctx, em);
     this.amb = [];
+    this.pits.clear();
   }
 
   /** dev / probes: the ambience emitters and where they are heard from now */
   get ambience(): { role: string; cue: string; points: number; playing: boolean; att: number; pan: number; lpf: number }[] {
     return this.amb.map((e) => ({ role: e.role, cue: e.cue, points: e.pts.length, playing: !!e.src, att: e.att, pan: e.panV, lpf: e.lpfV }));
+  }
+
+  /** dev / probes: the epic objectives' pit emitters (see `epic` in the header) */
+  get pitEmitters(): { role: string; cue: string; playing: boolean; att: number }[] {
+    return [...this.pits.values()].map((e) => ({ role: e.role, cue: e.cue, playing: !!e.src, att: e.att }));
+  }
+
+  /** dev / probes: the decoded audio the engine holds (see `memory` in the header): files settled, their PCM bytes */
+  async decoded(): Promise<{ files: number; bytes: number }> {
+    let files = 0, bytes = 0;
+    for (const p of this.buffers.values()) {
+      const b = await Promise.race([p, new Promise<null>((r) => { setTimeout(r, 50, null); })]);
+      if (b?.length) { files++; bytes += b.length * b.numberOfChannels * 4; }
+    }
+    return { files, bytes };
   }
 
   /** your fighter's entity (alive or not) */
@@ -1312,9 +1444,13 @@ class Engine implements ValeAudioPort {
     switch (kind) {
       case 'cast': {
         const slot = e.slot as string;
+        const uk = this.uk(src);
+        const ua = this.unitAb.get(e.ability as string);
         const own = slot === 'ult' ? this.kit(src, 'ult_windup') : CAST_SLOTS.has(slot) ? this.kit(src, slot as KitSlot) : undefined;
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
+        // an epic unit's cast: its ability's own wind-up, else its shared one; never castMonster (see `epic`)
+        if (uk) this.cue((ua ? uk[ua.slot] : undefined) ?? uk.cast, at(src), 1, 0, aw);
+        else this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
         // the shared shade-breath swell for every enemy fighter's T3+ wind-up (STYLE_BIBLE 'enemy T3+ wind-ups share one
         // shade-breath swell'; see `threat` in the header), placed at the caster like any spatial cue
         if (src?.kind === 'fighter' && src.team !== mine) {
@@ -1331,11 +1467,20 @@ class Engine implements ValeAudioPort {
         }
         break;
       }
-      case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7, 0, aw); break;
+      case 'projectile': {
+        // the generic whoosh, except under a kitted ult (its release is the sound) and an epic unit's shot (its own
+        // attack_swing / land carries it; see `kits` / `epic` in the header)
+        const own = this.ownAb.get(e.ability as string);
+        if (this.uk(src) || (own?.slot === 'ult' && this.kits.get(own.fighter)?.ult_release)) break;
+        this.cue(this.ev('projectile'), at(src), 0.7, 0, aw);
+        break;
+      }
       case 'hit': {
         // a fighter's ability landing: its own impact (kit 'hit') before the ability's present.hitSfx and the role; a
         // hitSfx that means a damage type or a crit (SEMANTIC_HIT_ROLES) still sounds, under the kit hit
         const pr = this.abilitySfx.get(e.ability as string);
+        const uk = this.uk(src);
+        if (uk) { this.cue(uk.hit, at(dst), 1, 0, aw); break; }     // an epic unit: its own impact or none (see `epic`)
         const own = this.kit(src, 'hit');
         const lib = (e.sfx as string | undefined) ?? pr?.hitSfx;
         // a Ringshade-muffled ability blow (its damage, later in this batch, says `shaded`; the 'damage' case plays the thud)
@@ -1345,12 +1490,19 @@ class Engine implements ValeAudioPort {
         break;
       }
       case 'area': {
-        // its own sfx, else the cue content binds to its vfx ('area.<vfx>': a passive's area with no sound of its own)
-        const sfx = (e.sfx as string | undefined) ?? (e.vfx ? this.ev(`area.${e.vfx as string}`) : undefined);
+        // as heard (see `kits` / `epic` in the header): a kitted fighter's or epic unit's own landing only; anything
+        // else its own sfx, else the cue content binds to its vfx ('area.<vfx>': a passive's area with no sound of its own)
+        const sfx = this.areaCue(e, src);
         if (sfx) this.cue(sfx, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw);
         break;
       }
-      case 'attack': this.cue(this.kit(src, 'attack_swing') ?? this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw); break;
+      case 'attack': {
+        // an epic unit swings at a fighter's level, with its own swing (see `epic` in the header)
+        const uk = this.uk(src);
+        const swing = this.kit(src, 'attack_swing') ?? (uk ? uk.attack_swing : this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'));
+        this.cue(swing, at(src), src?.kind === 'fighter' || uk ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw);
+        break;
+      }
       case 'damage': {
         const p = at(dst);
         const duel = src?.kind === 'fighter' && dst?.kind === 'fighter';
@@ -1360,13 +1512,22 @@ class Engine implements ValeAudioPort {
         // is muffled: the role 'hitShaded' under the hit, the hit itself at SHADED_GAIN (see `world` in the header)
         const shaded = !!e.shaded && dst?.kind === 'structure' && !!this.ev('hitShaded');
         if (shaded) this.cue(this.ev('hitShaded'), p, 1, 0, aw);
+        // an epic unit struck after a calm roars: someone started it (see `epic` in the header)
+        const duk = this.uk(dst);
+        if (duk && dst) {
+          const t = e.t as number;
+          if (t - (this.hurtLast.get(dst.id) ?? -1e9) > ROAR_CALM_S) this.cue(duk.roar, p, 1, 0, aw);
+          this.hurtLast.set(dst.id, t);
+        }
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
         if (e.ability) break;
-        const own = this.kit(src, 'attack_hit');
+        const uk = this.uk(src);
+        const own = this.kit(src, 'attack_hit') ?? uk?.attack_hit;
         if (e.crit) {
           this.cue(this.ev('crit'), p, 1, 0, aw);
           if (own) this.cue(own, p, CRIT_KIT_GAIN, 0, aw);      // whose crit it was
-        } else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, (src?.kind === 'fighter' ? 0.8 : 0.45) * (shaded ? SHADED_GAIN : 1), 0, aw);
+        } else if (uk) this.cue(own, p, 0.8 * (shaded ? SHADED_GAIN : 1), 0, aw);   // an epic unit lands like a fighter
+        else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, (src?.kind === 'fighter' ? 0.8 : 0.45) * (shaded ? SHADED_GAIN : 1), 0, aw);
         break;
       }
       case 'heal': {
@@ -1414,7 +1575,11 @@ class Engine implements ValeAudioPort {
           if (e.dst === youEnt) this.cue(this.ev('selfDown'), null);
           else if (dst && dst.team === this.myTeam()) this.cue(this.ev('allyDown'), null);
         } else if (k === 'minion') this.cue(this.ev('minionDeath'), at(dst), 0.6);
-        else if (k === 'monster') this.cue(this.ev('monsterDeath'), at(dst));
+        else if (k === 'monster') {
+          const uk = this.uk(dst);
+          this.cue(uk ? uk.death : this.ev('monsterDeath'), at(dst));   // an epic unit's own fall (see `epic`)
+          if (dst) this.hurtLast.delete(dst.id);
+        }
         break;
       }
       case 'takedown': if (e.killer === this.client?.you) this.cue(this.ev('takedown'), null); break;
@@ -1510,6 +1675,11 @@ class Engine implements ValeAudioPort {
       const gw = view.gorgeWind ?? 0;
       if (gw > this.gorgeSeen) this.cue(this.ev('gorgeWind'), null);
       this.gorgeSeen = gw;
+      // an epic objective coming alive roars in its pit (see `epic` in the header)
+      for (const o of view.objectives ?? []) {
+        if (o.alive && this.objAlive.get(o.id) === false) this.cue(this.ukits.get(o.unit)?.roar, { x: o.at[0], y: o.at[1] });
+        this.objAlive.set(o.id, o.alive);
+      }
       const seal = this.seals.get(view.mode);
       const brk = this.ev('sealBreak');
       if (seal && brk && t0 < seal.until && t1 >= seal.until) {

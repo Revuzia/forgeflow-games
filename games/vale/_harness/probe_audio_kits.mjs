@@ -27,7 +27,11 @@
 //   K8  an ability hit whose hitSfx is the cue content binds to a damage-type or crit role (events.hitTrue /
 //       events.crit: kemdo's true-damage ult, rishal's crit-shot ult) requests BOTH f_<id>_hit and that hitSfx; any
 //       other hitSfx (the library's c_hit_magic / c_hit_phys_*) is replaced by the kit hit and not requested
-// Exit 0 = K1-K5 hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_kits.json.
+//   K9  as heard (closing AUD-C1): an area / zone of a kitted fighter's OWN ability (kit, passive, forms' kits) requests
+//       only that fighter's own cues (f_<id>_…, or the cue content binds to that area's vfx: 'area.<vfx>'), never a
+//       library cue; under an ultimate (its area / projectile events) no library cue at all: no c_ult_release, no
+//       generic projectile whoosh (the kit's release is the sound). 0 leaks; at least one kitted ult area heard
+// Exit 0 = K1-K9 hold, 1 = a gate fails, 77 = no built catalog. Report → _harness/_reports/fw_W3_kits.json.
 
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -123,6 +127,15 @@ const SETTINGS = { audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0
 const failures = [];
 const SEMANTIC = new Set([audio.events.hitTrue, audio.events.crit].filter(Boolean));   // K8
 const k8 = [];
+// K9: every fighter's own ability id → { fighter, slot } (the engine's ownAb), and the leaks found
+const OWN_AB = new Map();
+for (const f of catalog.fighters) {
+  const abs = Object.entries(f.kit ?? {}).filter(([, a]) => a);
+  for (const fm of Object.values(f.kit?.passive?.forms ?? {})) abs.push(...Object.entries(fm.kit ?? {}).filter(([, a]) => a));
+  for (const [slot, a] of abs) if (!OWN_AB.has(a.id)) OWN_AB.set(a.id, { fighter: f.id, slot });
+}
+const k9 = [];
+const k9n = { areas: 0, ultAreas: 0, ultProjectiles: 0 };
 const report = { probe: 'probe_audio_kits', catalog: ver, seeds: SEEDS, kitted, bare, modes: {} };
 console.log(`kitted (${kitted.length}): ${kitted.join(' ')}\nwithout a kit (${bare.length}): ${bare.join(' ') || '-'}`);
 if (!kitted.length) failures.push('no fighter has a whole kit: the probe is vacuous');
@@ -302,6 +315,18 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
         tally(f, 'displaced', ok);
         if (!ok) miss.push(`${f} displaced → ${got.join(',') || 'nothing'} (want ${audio.events.dash})`);
       }
+    } else if (e.e === 'area' || e.e === 'projectile') {
+      // K9: as heard — a kitted fighter's own area / ult projectile requests only that fighter's own cues
+      const o = OWN_AB.get(e.ability);
+      if (!o || !kitted.includes(o.fighter)) continue;
+      if (e.e === 'projectile' && o.slot !== 'ult') continue;
+      const got = asked(e);
+      const bound = e.vfx ? audio.events[`area.${e.vfx}`] : undefined;
+      const lib = got.filter((c) => !c.startsWith(`f_${o.fighter}_`) && c !== bound);
+      const key = e.e === 'projectile' ? 'ult projectile (own only)' : o.slot === 'ult' ? 'ult area (own only)' : 'area (own only)';
+      tally(o.fighter, key, lib.length === 0);
+      k9n[e.e === 'projectile' ? 'ultProjectiles' : o.slot === 'ult' ? 'ultAreas' : 'areas']++;
+      if (lib.length) k9.push(`${run} ${o.fighter} ${o.slot} ${e.e} ${e.vfx ?? ''} → ${got.join(',')}`);
     } else if (e.e === 'death' && e.kind === 'fighter') {
       const f = fighterOf(e.dst);
       if (!f) continue;
@@ -361,6 +386,10 @@ if (k8.length) failures.push(`K8: ${k8.length} ability hit(s) lost or leaked the
 const semHits = Object.values(cover).reduce((n, r) => n + Object.entries(r).filter(([k]) => k.startsWith('hit+')).reduce((a, [, v]) => a + v, 0), 0);
 if (!semHits) failures.push('coverage: no damage-type / crit hitSfx landed (K8 vacuous)');
 report.k8 = { semanticHits: semHits, failures: k8.length };
+if (k9.length) failures.push(`K9: ${k9.length} kitted area / ult event(s) requested a library cue: ${k9.slice(0, 6).join(' · ')}`);
+if (!k9n.ultAreas) failures.push('coverage: no kitted ult area landed (K9 vacuous)');
+report.k9 = { ...k9n, leaks: k9.length, examples: k9.slice(0, 20) };
+console.log(`K9: ${k9n.areas} kitted ability areas, ${k9n.ultAreas} ult areas, ${k9n.ultProjectiles} ult projectiles heard; ${k9.length} requested a library cue`);
 console.log(`K8: ${semHits} damage-type / crit ability hits layered under the kit hit, ${k8.length} wrong`);
 report.coverage = cover;
 report.k4 = bare.length ? 'checked' : 'vacuous: every fighter has a whole kit (nobody falls back)';

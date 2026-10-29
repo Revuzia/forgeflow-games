@@ -50,7 +50,9 @@ PROPORTIONS = rig.proportions(height=2.22, head=0.30, neck=0.06, shoulder_width=
                               ankle_height=0.12, spine_curve=0.0, stance=0.06, toe_out_deg=13.0, knee_bend=0.012,
                               a_pose_deg=81.0, arm_forward_deg=3.0, elbow_bend_deg=10.0, shoulder_drop=0.30)
 MATERIAL_SET = "bible"
-PALETTE = materials.bible_palette(cloth2="#CEC8BB", stone="#D3CEC3", cloth="#A39E95", ironstone="#4C4A53",
+# CW6 (closing hesmi-M2): the honed stone is COOL (hue 216, 7 % saturation: in engine the warm key leaves ~3) against the warm linen (cloth2), so the
+# freshly cut band reads as stone, not as more hood (it was #D3CEC3, dE ~2.5 from the linen by design)
+PALETTE = materials.bible_palette(cloth2="#CEC8BB", stone="#CAD1DB", cloth="#A39E95", ironstone="#4C4A53",
                                   gauntlet="#8A867D", leather="#4A4036", under="#34323A", ink="#17181B",
                                   accent="#3F9CFF", slate="#A39E95", rope="#9A8F7A")
 # `gauntlet` (the brief's honed-dialstone fists), `slate` (the grey sash and hip wraps, the mid-band wraps a skin
@@ -135,14 +137,16 @@ SKINS: list = [
      "splash": {"map": "map_bridge", "clip": "victory", "t": 0.92, "yaw": -20.0, "pitch": 6.0, "x": 0.70, "fill": 0.84,
                 "sun": 2.4, "ambient": 0.30, "rim_cool": 0.8, "rim_warm": 1.2, "portrait_yaw": -18.0, "icon_yaw": -16.0},
      "palette": {"cloth2": "#BCB3CB", "stone": "#D6D3DB", "cloth": "#ADA7BE", "ironstone": "#2B2A33",
-                 "gauntlet": "#6F6D79", "leather": "#3A3942", "under": "#34333C"}},
+                 "gauntlet": "#6F6D79", "leather": "#3A3942", "under": "#34333C",
+                 # (CW6, closing hesmi-M4: the deep violet her painted shade leans toward; hesmi_recolour)
+                 "shadow": "#3A2C6E"}},
 ]
 SKIN_FLAT = {"rope_coils": "rope", "iron_pins": "ironstone"}
 
 HEIGHT = 2.30             # the plates' scale: the concept's hood peak (the model's flat crown sits at ~2.26)
 # flat paint: the shard eyes are carved, non-emissive sockets (brief: the cut-top inlays are the ONLY emissive
 # pixels; the six emissive eyes read as white googly dots under the own-champion Noonwhite tint), the eye slit ink
-PROJECTION = {"concept": "hesmi", "height": HEIGHT, "flat": {"eyeslit": "#121317"}}
+PROJECTION = {"concept": "hesmi", "height": HEIGHT}       # (CW6: the eye slit is painted glass, paint_lens)
 NOISE = sdf.Noise(11)
 VOXEL = 0.007
 
@@ -302,8 +306,11 @@ class Cyl(sdf.Prim):
 # the eye-band (brief §3; fix pass 4): the band's lower edge dips in a shallow V at the centre (the facing keel, flush
 # with the band: the proud white wedge read as a beak) and the slit is TWO shaped eye openings meeting at a carved
 # bridge, the inner corners lower (the concept's stern eyes), instead of one straight slot
+# CW6 (closing hesmi-M1: the band read as clenched teeth): the openings are the concept's wide, continuous dark visor
+# (3.5-36 deg each side of a narrow bridge, 3 cm tall at their widest) and NO joint or crack crosses them: the block
+# joints sit outside the eye span (BAND_JOINTS), one short brow joint over the bridge stops at the slit's top edge
 BAND_C = (0.0, 0.005)
-EYE_Z, EYE_H, EYE_A = 2.113, 0.0125, (5.0, 37.0)     # the openings' centre height, half-height, angle span (deg)
+EYE_Z, EYE_H, EYE_A = 2.113, 0.0150, (3.5, 36.0)     # the openings' centre height, half-height, angle span (deg)
 
 
 def band_fn(r, a, z, ro=0.246, ri=0.17, zt=2.168, zb0=2.078, b=0.022):
@@ -474,21 +481,23 @@ def sculpts() -> list:
                                                                              # ends poked through the cowl's sides)
     # the two eye openings, 1 cm deep: their ink floor (eyeslit) 6 mm under the face
     band.sub(Cyl(BAND_C[0], BAND_C[1], eye_fn, 0.27, 2.08, 2.14), k=0.002)
-    for x, z, a in ((-0.07, 2.150, 20), (0.05, 2.145, -30), (0.10, 2.092, 15)):     # chisel cracks across the stone
-        band.sub(RoundBox((x, -0.25, z), (0.0025, 0.02, 0.016), 0.001, axes=sdf.rot_y(a)), k=0.002)
-    # fix pass 3: the concept's band is carved in BLOCKS: four joints cut across it (painted dark too, hesmi_paint)
-    for a in BAND_JOINTS:
+    # (CW6: the three chisel cracks over / through the eye openings are gone: with the joints they read as tooth gaps)
+    # fix pass 3: the concept's band is carved in BLOCKS (painted dark too, hesmi_paint). CW6: the full-height joints
+    # sit OUTSIDE the eye span; the brow joint over the bridge runs from the band's top edge down to the slit's top
+    for a, z0, z1 in BAND_JOINTS_CUT:
         r = math.radians(a)
         tang = (math.cos(r), math.sin(r), 0.0)
-        cj = (0.252 * math.sin(r), 0.005 - 0.252 * math.cos(r), 2.123)
-        band.sub(RoundBox(cj, (0.0028, 0.014, 0.06), 0.001, axes=sdf.frame((0, 0, 1), tang)), k=0.0015)
+        cj = (0.252 * math.sin(r), 0.005 - 0.252 * math.cos(r), 0.5 * (z0 + z1))
+        band.sub(RoundBox(cj, (0.0028, 0.014, 0.5 * (z1 - z0)), 0.001, axes=sdf.frame((0, 0, 1), tang)), k=0.0015)
     part("eyeband", band, "stone", "bone:head", 520, 0.55)
     slit = Sculpt("eyeslit")
+    # CW6 (hesmi-M1): the slit's floor is two dark cool GLASS lenses (glossy dawnglass, never emissive: the cut-top
+    # inlays stay the only accent), painted with a cool catch-light each (hesmi_paint), so the eye line reads alive
     slit.add(sdf.Blend([("add", sdf.Lathe((0, 0.005, 0), lambda r, z: np.maximum(np.maximum(0.226 - r, r - 0.240),
-                                                                              np.abs(z - 2.111) - 0.0155), 0.25, 2.09, 2.13), 0.0),
+                                                                              np.abs(z - 2.111) - 0.0190), 0.25, 2.085, 2.135), 0.0),
                         ("inter", HalfSpace((0, -0.10, 2.1), (0, 1, 0), 0.5), 0.0),
                         ("inter", Sphere((0, -0.2, 2.112), 0.165), 0.0)]), k=0.0)
-    part("eyeslit", slit, "ink", "bone:head", 60, 0.6)
+    part("eyeslit", slit, "dawnglass", "bone:head", 60, 0.6)
     wrap = Sculpt("facewrap")
     wrap.add(Ellipsoid((0, -0.085, 1.99), (0.150, 0.130, 0.105)).displaced(wraps(0.006, 85.0), 0.006), k=0.0)
     wrap.add(Capsule((0, -0.02, 1.86), (0, -0.04, 1.97), 0.13), k=0.05)
@@ -871,8 +880,12 @@ FACE_PARTS = ("eyeband", "facewrap")
 FRONT_OWNED = (({"shinguard_R"}, -0.40, -0.17, 0.20, 0.645), ({"shinguard_L"}, 0.17, 0.40, 0.20, 0.645))
 STRAP_PARTS = ("straps_R", "straps_L")   # painted leather (paint_strap), never projected
 FACE_SHIFT = (0.95, -0.022)        # concept x = model x * a + b (the painted face sits 2 cm to her right)
-BAND_LIFT = 0.15                   # the eye-band's paint pulled this far toward the stone role colour
-BAND_JOINTS = (-40.0, -17.0, 17.0, 40.0)   # the carved band's block joints (deg round the face, 0 = the centre)
+BAND_LIFT = 0.35                   # the eye-band's paint pulled this far toward the stone role colour (CW6: the cool
+                                   # honed stone, 0.15 -> 0.35)
+BAND_JOINTS = (-44.0, 44.0, 0.0)          # the carved band's block joints (deg round the face, 0 = the centre; CW6:
+                                           # none inside the eye span EYE_A; the 0 joint is the brow joint above the
+                                           # bridge, cut and painted only above the slit's top edge)
+BAND_JOINTS_CUT = ((-44.0, 2.05, 2.19), (44.0, 2.05, 2.19), (0.0, 2.131, 2.19))   # (angle, z0, z1) of each cut
 ERODE_PX = 3                       # fill erosion at the visibility grid (step 2: ~1 cm)
 MASK_GROW_PX = 2                   # plate pixels this far outside the concept's cut are still the figure's paint
 UPFACE = {"boots": 0.075}          # up-facing texels take the part's own front paint at this height (the toe caps)
@@ -1044,8 +1057,10 @@ def rack_stats(stats):
     from common import scene
     up = np.mean([np.asarray(stats[k][0], dtype=np.float64) for k in UPPER if k in stats], axis=0)
     pal = np.asarray(scene.hex_srgb(PALETTE["stone"]), dtype=np.float64)
-    bb = 0.45 * pal + 0.55 * up
-    band = (bb, bb * np.array([0.78, 0.78, 0.83]), np.clip(bb * 1.12 + 0.05, 0, 1))
+    # CW6 (closing hesmi-M2): the band is the palette's COOL honed stone at the painting's value (the 0.45 / 0.55 mix
+    # with the painted warm-lilac shards left it the hood's own colour, dE 1-2 in engine); a cool shade, a chalk light
+    bb = pal * float(np.clip((_lum(up[None])[0] / max(1e-6, _lum(pal[None])[0])) ** 0.3, 0.94, 1.03))
+    band = (bb, bb * np.array([0.76, 0.78, 0.84]), np.clip(bb * 1.10 + 0.07, 0, 1))
     lo = [k for k in ("shard_lo_L", "shard_lo_R") if k in stats]
     wea = tuple(np.mean([np.asarray(stats[k][i], dtype=np.float64) for k in lo], axis=0) for i in range(3))
     return band, wea
@@ -1106,6 +1121,14 @@ def paint_stone(name, p, n, band, wea, seed):
     e1, e2, eh = _vor3(Q * np.array([1.0, 1.0, 0.8]), 0.16, seed + 4.0)
     valb *= 1.0 + 0.09 * (eh - 0.5) * _sstep(0.0, 0.03, e2 - e1)
     valb *= 1.0 + 0.045 * NOISE(Q, 6.0, (seed, 1.0, 0.0)) + 0.02 * NOISE(Q, 24.0, (0.0, seed, 2.0))
+    # CW6 (closing hesmi-M2): fine diagonal tool striations on the honed faces, and a darker chisel face in the 1-4 cm
+    # under the cut's bevel (the bevel's chalk arris reads against it)
+    stri = 0.5 + 0.5 * np.sin((u * 0.55 + v) * (2.0 * np.pi / 0.0085) + 2.2 * NOISE(Q, 9.0, (seed, 3.0, 1.0)))
+    valb *= np.where(face | side, 1.0 - 0.045 * stri ** 3, 1.0)
+    if name in UPPER:
+        zc0 = TOP_Z - CUT_CH
+        chis = _sstep(zc0 - 0.045, zc0 - 0.028, pz) * (1.0 - _sstep(zc0 - 0.010, zc0 - 0.004, pz))
+        valb *= 1.0 - 0.13 * chis * (face | side)
     hl = np.exp(-((u - (uc + 0.035 * np.sign(w + 1e-9))) / 0.03) ** 2) * np.clip((pz - zb) / 0.2, 0, 1)
     colb = bb_[None] * valb[:, None]
     colb = colb * (1 - 0.30 * (hl * face)[:, None]) + bl_[None] * 0.30 * (hl * face)[:, None]
@@ -1121,11 +1144,11 @@ def paint_stone(name, p, n, band, wea, seed):
     d_poly = _poly_edge_dist(np.stack([u, v - 1.6], 1), loc)
     d_side = 0.5 * th - RIDGE * np.abs(u - uc) - np.abs(w)
     d_ar = np.where(face, d_poly, np.where(side, np.maximum(d_side, 0.0), 0.05))
-    rim = np.clip(1.0 - d_ar / 0.011, 0, 1) ** 1.5 * RIM_LIGHT
+    rim = np.clip(1.0 - d_ar / (0.011 + 0.005 * hb), 0, 1) ** 1.5 * RIM_LIGHT     # (CW6: 1.6 cm chalk arris on the band)
     rimc = wl_[None] * (1 - hb[:, None]) + bl_[None] * hb[:, None]
     if name in UPPER:
         bevel = (pz > TOP_Z - CUT_CH - 0.008) & (nz > 0.35) & (nz < 0.93)
-        rim = np.where(bevel, 0.85, rim)
+        rim = np.where(bevel, 0.92, rim)
         cut = (nz >= 0.93) & (pz > TOP_Z - 0.004)
         rim = np.where(cut, 0.45, rim)
     col = col * (1 - rim[:, None]) + rimc * rim[:, None]
@@ -1138,6 +1161,112 @@ def paint_stone(name, p, n, band, wea, seed):
         ink = np.asarray(scene.hex_srgb(CUT_INK), dtype=np.float64)
         col = np.where(inner[:, None], ink[None], col)
     return np.clip(col, 0, 1)
+
+
+# ── CW6 (closing hesmi-M1 / M2 / M4): the eyes' glass, the hood cavity, per-material roughness ──────────────────
+LENS_HEX = ("#151C25", "#2B3846")   # the lens glass: deep cool at the top (under the brow), lighter low (the ground)
+GLINT_HEX = "#DDEBF6"               # the painted cool catch-light (non-emissive; the glossy lens adds the real one)
+GLINT = (-4.0, 0.006, 2.7, 0.0055)  # each eye's glint: angle offset from the eye's centre (deg; both eyes the same
+                                    # way, one key light), height over EYE_Z, angular / vertical half sizes
+CAVITY_LIFT = 0.85                  # the hood's face cavity: linear gain (x1.85 ~ +9 L* at L* 30)
+# roughness written into the baked ORM (texels of these parts / zones; everything else keeps its material's bake):
+# the honed cut bands take a crisp sheen against the matte linen (closing hesmi-M2: band ~0.35, linen ~0.85)
+ROUGH = {"band": 0.34, "eyeband": 0.42, "lens": 0.12, "linen": 0.88, "gauntlet": 0.50, "arris": 0.30}
+LINEN_PARTS = ("hood", "facewrap", "mantle")
+GAUNTLET_PARTS = ("gauntlet_R", "gauntlet_L", "knuckle_R", "knuckle_L")
+
+
+def paint_lens(p):
+    """the eye slit's two glass lenses at texels p (N, 3): sRGB (N, 3)"""
+    from common import scene
+    hx = lambda h: np.asarray(scene.hex_srgb(h), dtype=np.float64)    # noqa: E731
+    a = np.degrees(np.arctan2(p[:, 0], -(p[:, 1] - 0.005)))
+    z = p[:, 2]
+    t = np.clip((EYE_Z + 0.006 - z) / 0.024, 0, 1)[:, None]
+    c = hx(LENS_HEX[0])[None] * (1 - t) + hx(LENS_HEX[1])[None] * t
+    ec = 0.5 * (EYE_A[0] + EYE_A[1])
+    for sx in (-1.0, 1.0):
+        d = ((a - (sx * ec + GLINT[0])) / GLINT[2]) ** 2 + ((z - (EYE_Z + GLINT[1])) / GLINT[3]) ** 2
+        g = (np.clip(1.25 - d, 0, 1) ** 1.3)[:, None]
+        c = c * (1 - g) + hx(GLINT_HEX)[None] * g
+    return np.clip(c, 0, 1)
+
+
+def rim_alpha(p, n, k, names):
+    """Shadeprint's light rims (0..1) at texels p / n of parts k: every shard arris (the faces' outline edges, the
+    faces' edges on the narrow sides, the cut's bevels and the cut) RIM_W wide, and the gauntlets' bevels"""
+    a = np.zeros(len(k), dtype=np.float64)
+    for nm in RIM_PARTS:
+        if nm not in names:
+            continue
+        m = k == names.index(nm)
+        if not m.any():
+            continue
+        _, c0, F, t = shard_slab(nm)
+        q = (p[m] - c0) @ F.T
+        mm = n[m] @ F.T
+        u, w, v = q[:, 0], q[:, 1], q[:, 2] + 1.6
+        poly = SHARDS[nm][0]
+        uc = float(_ccw(poly)[:, 0].mean())
+        loc = [(a_, b_ - 1.6) for a_, b_ in poly]
+        face = np.abs(mm[:, 1]) >= np.maximum(np.abs(mm[:, 0]), np.abs(mm[:, 2]))
+        side = (np.abs(mm[:, 0]) > np.abs(mm[:, 1])) & (np.abs(mm[:, 0]) >= np.abs(mm[:, 2]))
+        d_poly = _poly_edge_dist(np.stack([u, v - 1.6], 1), loc)
+        d_side = np.maximum(0.5 * shard_t(nm, v) - RIDGE * np.abs(u - uc) - np.abs(w), 0.0)
+        d = np.where(face, d_poly, np.where(side, d_side, 0.0))
+        a[m] = np.clip(1.0 - (d - RIM_W * 0.5) / (RIM_W * 0.5), 0, 1)
+    for nm in GAUNTLET_PARTS:
+        if nm in names:
+            m = k == names.index(nm)
+            a[m] = np.clip(_gauntlet_edges(n[m]) * 1.6, 0, 1)
+    return a
+
+
+def _gauntlet_edges(n):
+    """the gauntlets' bevel / chipped-corner texels (world-aligned slabs in the rest pose): 0 flat face .. 1 edge"""
+    m = np.max(np.abs(n), axis=1)
+    return np.clip((0.93 - m) / 0.18, 0, 1)
+
+
+def _rough_override(maps, k, idx, p, n, names, log=print):
+    """write per-zone roughness into the bake's roughness image (it is packed into the ORM right after the base
+    colour hook returns: bake.bake_asset); top-down texel rows like the paint maps"""
+    import bpy
+    from common import bake
+    size = int(maps["size"])
+    sid = _SKIN.get("id") or ID
+    im = bpy.data.images.get(f"{sid}_rough")
+    if im is None or tuple(im.size) != (size, size):
+        cands = [i for i in bpy.data.images if i.name.endswith("_rough") and tuple(i.size) == (size, size)]
+        im = cands[-1] if cands else None
+    if im is None:
+        log("rough override (hesmi): no baked roughness image at this size (skipped)")
+        return
+    r = np.full(len(k), np.nan, dtype=np.float32)
+    for nm in UPPER:
+        if nm in names:
+            sel = (k == names.index(nm)) & (p[:, 2] > BAND_Z + 0.012)
+            r[sel] = ROUGH["band"]
+    for nm, key in (("eyeband", "eyeband"), ("eyeslit", "lens")):
+        if nm in names:
+            r[k == names.index(nm)] = ROUGH[key]
+    for nm in LINEN_PARTS:
+        if nm in names:
+            r[k == names.index(nm)] = ROUGH["linen"]
+    for nm in GAUNTLET_PARTS:
+        if nm in names:
+            sel = k == names.index(nm)
+            e = _gauntlet_edges(n[sel])
+            r[sel] = ROUGH["gauntlet"] + (0.62 - ROUGH["gauntlet"]) * e      # honed faces, matte chipped corners
+    if (_SKIN.get("extra") or {}).get("light_rims"):          # Shadeprint: the light rims are a lower-roughness edge
+        ra = rim_alpha(p, n, k, names)
+        r = np.where(ra > 0.4, np.float32(ROUGH["arris"]), r)
+    m = ~np.isnan(r)
+    arr = bake.image_array(im)
+    top = arr[::-1]
+    top[idx[0][m], idx[1][m], 0] = r[m]
+    bake.set_image_array(im, arr)
+    log(f"rough override (hesmi): {int(m.sum())} texels in {im.name} (band {ROUGH['band']}, linen {ROUGH['linen']})")
 
 
 def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True, log=print):
@@ -1288,7 +1417,16 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         wz = np.clip((m[:, 2] - 0.5) / 0.3, 0, 1)
         wz = (wz * wz * (3 - 2 * wz))[:, None]
         cc = front_c * (1 - wx) + side_c * wx
-        col[sel] = cc * (1 - wz) + top_c * wz
+        cc = cc * (1 - wz) + top_c * wz
+        if name in GAUNTLET_PARTS:
+            # CW6 (closing hesmi-M2: the gauntlets read as plain grey bricks): a value step between the faces (the
+            # front lit, the sides and the back a step down, the top cut a step up) and chipped pale corners
+            fv = 1.0 - 0.16 * wx[:, 0] + 0.10 * wz[:, 0] - 0.12 * np.clip(m[:, 1], 0, 1)
+            e = _gauntlet_edges(m)
+            chip_ = e * (0.55 + 0.45 * np.clip(NOISE(q.astype(np.float64), 30.0, (5.0, 1.0, 2.0)) * 2.0 + 0.4, 0, 1))
+            cc = cc * fv[:, None]
+            cc = cc * (1 - 0.55 * chip_[:, None]) + np.clip(cc * 1.30 + 0.06, 0, 1) * 0.55 * chip_[:, None]
+        col[sel] = cc
     # the shin straps: painted leather in the concept's strap brown (measured on the back plate's painted straps), a
     # lit upper edge and a shaded lower one, lengthwise grain
     sids = [names.index(nm) for nm in STRAP_PARTS if nm in names]
@@ -1339,12 +1477,19 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         valley = (1.0 - np.abs(np.sin(ang * 3.5 + 0.45 * wob))) ** 5
         rr = np.hypot(q[:, 0], q[:, 1] - 0.03)
         wr = np.clip((rr - 0.05) / 0.09, 0, 1)                 # the creases fall from the crown's edge, not its centre
-        val = 1.0 + wr * (0.08 * fold - 0.14 * valley) + 0.05 * NOISE(q, 22.0, (3.0, 1.0, 0.0)) \
+        # (CW6, closing hesmi-M2: the fold valleys 8-10 L* deeper, so the linen reads as soft cloth against the
+        # honed band: valley 0.14 -> 0.26)
+        val = 1.0 + wr * (0.09 * fold - 0.26 * valley) + 0.05 * NOISE(q, 22.0, (3.0, 1.0, 0.0)) \
             + 0.03 * NOISE(q, 60.0, (0.0, 2.0, 1.0))
         val -= 0.16 * np.exp(-(q[:, 0] / 0.012) ** 2) * np.clip((q[:, 1] - 0.02) / 0.06, 0, 1)
         val *= 1.0 - 0.10 * np.clip((np.hypot(q[:, 0], q[:, 1] - 0.03) - 0.10) / 0.12, 0, 1)
         crown = med[None] * val[:, None]
         col[sel] = col[sel] * (1 - up[:, None]) + crown * up[:, None]
+        # the cowl's outer sides (CW6): the same folds falling from the crown, shaded valleys / lit crests, fading
+        # out toward the hem and kept off the face cavity
+        outer = (1.0 - up) * np.clip((q[:, 2] - 1.86) / 0.10, 0, 1) * np.clip((q[:, 1] + 0.12) / 0.08, 0, 1)
+        sv = 1.0 + outer * (0.05 * fold - 0.20 * valley)
+        col[sel] = col[sel] * sv[:, None].astype(np.float32)
     for name, (top, ext) in tops.items():
         if name not in names:
             continue
@@ -1357,16 +1502,50 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
     if "eyeband" in names:                            # the honed band: the concept's pale stone, carved in blocks
         sel = k == names.index("eyeband")
         stone = np.asarray(scene.hex_srgb(PALETTE["stone"]), dtype=np.float32)
-        col[sel] = col[sel] * (1 - BAND_LIFT) + stone[None] * BAND_LIFT
-        col[sel] = 1.0 - (1.0 - col[sel]) * 0.94
         a = np.degrees(np.arctan2(p[sel, 0], -(p[sel, 1] - 0.005)))
-        jd = np.min(np.abs(a[:, None] - np.asarray(BAND_JOINTS)[None]), axis=1)
-        joint = np.clip(1.0 - (jd - 0.5) / 0.8, 0, 1)[:, None]
-        col[sel] = col[sel] * (1 - 0.6 * joint)
+        zz = p[sel, 2]
+        # CW6 (closing hesmi-M1): the band is painted CLEAN from the painting's own band tone (its median on the
+        # front faces): the concept's painted crack strokes (one ran down through an eye's inner corner) projected
+        # onto the carved band read as tooth gaps; the carved forms (bevels, keel) shade it, a soft mottling
+        cb = col[sel]
+        fr = (n[sel, 1] < -0.6) & (np.abs(a) < 30)
+        Lb = _lum(cb[fr]) if fr.sum() > 20 else _lum(cb)
+        src = cb[fr] if fr.sum() > 20 else cb
+        med = np.median(src[(Lb >= np.percentile(Lb, 40)) & (Lb <= np.percentile(Lb, 80))], axis=0)
+        med = med * (1 - BAND_LIFT) + stone * BAND_LIFT
+        nz_ = n[sel, 2]
+        val = (1.0 + 0.07 * np.clip(nz_, 0, 1) - 0.16 * np.clip(-nz_, 0, 1)
+               + 0.03 * NOISE(p[sel].astype(np.float64), 30.0, (2.0, 7.0, 1.0)))
+        col[sel] = (med[None] * val[:, None]).astype(np.float32)
+        col[sel] = 1.0 - (1.0 - col[sel]) * 0.94
+        joint = np.zeros(int(sel.sum()), dtype=np.float32)
+        for ja, z0, z1 in BAND_JOINTS_CUT:            # CW6: each joint only over its own cut's height
+            jd = np.abs(a - ja)
+            inz = np.clip((zz - z0) / 0.003, 0, 1) * np.clip((z1 - zz) / 0.003, 0, 1)
+            joint = np.maximum(joint, np.clip(1.0 - (jd - 0.5) / 0.8, 0, 1) * inz)
+        col[sel] = col[sel] * (1 - 0.6 * joint[:, None])
+        # CW6 (hesmi-M1): a brow. The band's upper rail is lit (the key from above), its lower rail and the slit's
+        # lips shaded, so the band reads as a stern brow over two eyes, not a row of teeth
+        upper = np.clip((zz - (EYE_Z + EYE_H)) / 0.03, 0, 1)
+        lower = np.clip(((EYE_Z - EYE_H) - zz) / 0.03, 0, 1)
+        col[sel] = col[sel] * (1.0 + 0.06 * upper - 0.10 * lower)[:, None]
+    # CW6 (hesmi-M1): the hood's face cavity round the band lifted ~9 L* (the near-black void made the pale band a
+    # floating grin); the carved-away inner surface of the cowl only
+    if "hood" in names:
+        sel = k == names.index("hood")
+        q = p[sel].astype(np.float64)
+        e = (q[:, 0] / 0.150) ** 2 + ((q[:, 1] + 0.215) / 0.165) ** 2 + ((q[:, 2] - 2.04) / 0.178) ** 2
+        cav = np.clip((1.22 - e) / 0.12, 0, 1) * np.clip((-0.02 - q[:, 1]) / 0.05, 0, 1)
+        lin = np.power(np.clip(col[sel], 0, 1), 2.2) * (1.0 + CAVITY_LIFT * cav)[:, None]
+        col[sel] = np.power(np.clip(lin, 0, 1), 1 / 2.2).astype(np.float32)
     col *= _ramp(p[:, 2])[:, None].astype(np.float32)
     for name, rgb in flat.items():
         if name in names:
             col[k == names.index(name)] = np.asarray(rgb, dtype=np.float32)
+    if "eyeslit" in names:                             # CW6 (hesmi-M1): the two glass lenses and their catch-lights
+        sel = k == names.index("eyeslit")
+        col[sel] = paint_lens(p[sel].astype(np.float64)).astype(np.float32)
+    _rough_override(maps, k, idx, p, n, names, log)
     out[idx] = np.clip(col, 0, 1)
     if bleed:
         iy, ix = pj.nearest_index(have)
@@ -1384,7 +1563,7 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
 SKIN_CHROMA = 0.85
 DUAL_ROLES = {"shard_up_L": ("ironstone", "stone"), "shard_up_R": ("ironstone", "stone"),
               "shard_mid": ("ironstone", "stone"), "torso": ("leather", "cloth")}
-RIM_W = 0.016
+RIM_W = 0.026            # CW6 (closing hesmi-M4): 1.6 -> 2.6 cm, so the light rims read at the game camera
 # roles the skin's chroma push barely touches (fix pass 4: Gorgewalk's gauntlets and cut bands went icy sky-blue at
 # 31-33 % saturation; the brief's slate gauntlet is 10 %)
 CHROMA_SOFT = {"gauntlet", "stone", "ironstone"}
@@ -1449,28 +1628,22 @@ def hesmi_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=p
         log(f"  recolour (hesmi) {nm} ({lo_r}/{hi_r} -> {lo_s}/{hi_s}) -> {skin_pal.get(lo_s, full[lo_s])}/{skin_pal.get(hi_s, full[hi_s])}")
     if (_SKIN.get("extra") or {}).get("light_rims"):
         # light rims on every ARRIS (fix pass 3: the rims were hairlines on the face outlines, the sides washed
-        # light): the faces' outline edges, the faces' edges on the narrow sides, the cut's bevels and the cut
+        # light): the faces' outline edges, the faces' edges on the narrow sides, the cut's bevels and the cut;
+        # CW6 (closing hesmi-M4): 2.6 cm wide, on the gauntlets' bevels too, a lower-roughness edge (_rough_override)
         rim = col(skin_pal, "stone")
-        Nn = maps["N"][iy, ix]
-        for nm in RIM_PARTS:
-            if nm not in names:
-                continue
-            m = pid == names.index(nm)
-            _, c0, F, t = shard_slab(nm)
-            q = (Pn[m] - c0) @ F.T
-            mm = Nn[m] @ F.T
-            u, w, v = q[:, 0], q[:, 1], q[:, 2] + 1.6
-            poly = SHARDS[nm][0]
-            uc = float(_ccw(poly)[:, 0].mean())
-            loc = [(a_, b_ - 1.6) for a_, b_ in poly]
-            face = np.abs(mm[:, 1]) >= np.maximum(np.abs(mm[:, 0]), np.abs(mm[:, 2]))
-            side = (np.abs(mm[:, 0]) > np.abs(mm[:, 1])) & (np.abs(mm[:, 0]) >= np.abs(mm[:, 2]))
-            d_poly = _poly_edge_dist(np.stack([u, v - 1.6], 1), loc)
-            d_side = np.maximum(0.5 * shard_t(nm, v) - RIDGE * np.abs(u - uc) - np.abs(w), 0.0)
-            d = np.where(face, d_poly, np.where(side, d_side, 0.0))
-            a = np.clip(1.0 - (d - RIM_W * 0.5) / (RIM_W * 0.5), 0, 1)[:, None]
-            out[m] = out[m] * (1 - 0.92 * a) + rim[None] * 0.92 * a
-        log("  recolour (hesmi): light rims painted on the shard arrises")
+        a = rim_alpha(Pn.reshape(-1, 3), maps["N"][iy, ix].reshape(-1, 3), pid.reshape(-1), names).reshape(pid.shape)
+        out = out * (1 - 0.92 * a[..., None]) + rim * 0.92 * a[..., None]
+        # the deluxe's violet in her shadows (brief §9 "her shadows fall in deep violet"): the painted shade (the
+        # occluded undersides and the dark value of every part) leans toward the skin's deep violet; value kept
+        sh = col(skin_pal, "shadow") if "shadow" in skin_pal else None
+        if sh is not None:
+            Y = _lum(out)
+            Nz = maps["N"][iy, ix][..., 2]
+            w_ = np.clip((0.16 - Y) / 0.14, 0, 1) * 0.40 + np.clip(-Nz, 0, 1) * 0.25
+            w_ = np.clip(w_, 0, 0.45) * (pid >= 0)
+            tgt = sh[None, None] * (Y / max(1e-4, float(_lum(sh))))[..., None]
+            out = out * (1 - w_[..., None]) + tgt * w_[..., None]
+        log("  recolour (hesmi): light rims painted on the shard arrises and the gauntlet bevels; violet shade")
     return pj._srgb(out).astype(np.float32)
 
 

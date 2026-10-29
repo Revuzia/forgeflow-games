@@ -42,8 +42,10 @@
 //              the TAUNTER's relationship colour ("element" on a status look). Structures and permanent
 //              (non-finite) statuses get no look: a protected needle's standing untargetable is its rule,
 //              not an event, and it would hold VFX pool slots for the whole match.
-//   colour     "signature" / "secondary" resolve to the caster fighter's FighterDef.vfx (r12 M12), a zone's loop to
-//              its owner's; non-fighters (and status looks: the victim's state) fall back to the relationship colour.
+//   colour     "signature" / "secondary" resolve to the caster fighter's FighterDef.vfx (r12 M12), or its skin's own
+//              kit palette (SkinDef.vfx, CW1 SKIN-FX); a zone's loop, a summon's or a projectile's to its owner
+//              fighter's (closing C1); other non-fighters (and status looks: the victim's state) fall back to the
+//              relationship colour.
 //   exposure   ultimate impacts (T4 area landings, the first T4 hit, a T4 zone opening) start the default
 //              exposure envelope (vfx/screen.ts; display ratios) unless their def carries its own feel.exposure.
 //              ONE envelope per cast instance (combat F3; r12 M13 "one envelope per ultimate impact, lingering
@@ -149,6 +151,8 @@ export interface DirectorHost {
   entityVisible(e: EntityView): boolean;
   /** skin VFX tint override for a fighter entity (cosmetic) */
   skinTint(e: EntityView): Color | null;
+  /** CW1 SKIN-FX: a fighter entity's skin kit-effect palette (SkinDef.vfx), null for none (cosmetic) */
+  skinSignature?(e: EntityView): { sig: Color; sec: Color } | null;
   now(): number;
   shake(px: number, ms: number): void;
   /** the map's plate centre in world x / z (art.terrain.plate.at, else the map's centre); false with no map */
@@ -401,9 +405,20 @@ export class Director {
     return null;
   }
 
-  /** the caster's signature pair (fighters only; skins never change it) */
+  /** the caster's signature pair: a fighter's own (its skin's kit palette first, SKIN-FX), and for a summon, projectile
+   *  or zone a fighter owns, its owner's (C1: a lamp or a summon carries its caster's hue, never the team's); minions,
+   *  monsters, structures, wards and pickups keep the relationship colour */
   private signatureOf(e: EntityView | undefined): { sig: Color; sec: Color } | null {
-    return e && e.kind === 'fighter' ? this.signature.get(e.def) ?? null : null;
+    if (!e) return null;
+    let f: EntityView | undefined = e;
+    if (e.kind !== 'fighter') {
+      if (e.owner < 0 || (e.kind !== 'summon' && e.kind !== 'projectile' && e.kind !== 'zone')) return null;
+      const view = this.host.view();
+      const p = view?.players.find((x) => x.player === e.owner);
+      f = p && view ? view.entity(p.entity) : undefined;
+      if (!f || f.kind !== 'fighter') return null;
+    }
+    return this.host.skinSignature?.(f) ?? this.signature.get(f.def) ?? null;
   }
 
   /** spawn a def anchored on/around a source entity; returns the VFX handle (0 = nothing spawned) */

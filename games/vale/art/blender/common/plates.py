@@ -81,6 +81,14 @@ DEFAULTS = {
     # display luma (a white chalk kit under the dusk key), a dark kit's median lifted toward `sub_floor`, the
     # scale bounded to [sub_min_k, sub_max_k] (linear), then a shoulder above `sub_knee` toward `sub_cap`
     "sub_p95": 0.74, "sub_floor": 0.20, "sub_min_k": 0.55, "sub_max_k": 1.35, "sub_knee": 0.68, "sub_cap": 0.84,
+    # the subject's highlights (closing review: no card went over luma ~200, the visor, glass and lit edges never
+    # caught a highlight): above its p95 the subject's luma expands smoothly so its `sub_hi_q` percentile reaches
+    # `sub_hi` (display, before the LUT, which is near identity there: 0.92 -> luma ~232); None = the old shoulder
+    # (`sub_knee` -> `sub_cap`)
+    "sub_hi": 0.93, "sub_hi_q": 99.7,
+    # the paint-over: the plate's brush (Kuwahara) over the subject at this radius (px at 1600 / 512), so the figure
+    # and the painting share one finish (0 = off)
+    "sub_paint_r": 1,
     # a kit still under its floor after the scale (a face in a hat brim's shadow) gets a toe lift: a gamma that
     # takes its median to the floor (`sub_floor_p` for the portrait: a draft cell is a face) and keeps white white
     "sub_floor_p": 0.30, "sub_gamma_min": 0.62,
@@ -127,6 +135,29 @@ def _origin_of(fid: str) -> str | None:
     return None
 
 
+_CARDS: dict = {}
+
+
+def cards_of(fid: str) -> dict:
+    """The fighter module's CARDS table (the per-skin card staging, art/blender/portraits.py header), read with ast
+    from art/blender/fighters/<fid>.py without importing it (plain python3 has no bpy): it must be a literal."""
+    if fid in _CARDS:
+        return _CARDS[fid]
+    import ast
+    out = {}
+    p = os.path.join(BLENDER_DIR, "fighters", f"{fid}.py")
+    if os.path.isfile(p):
+        with open(p, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), p)
+        for node in tree.body:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                tg = node.targets[0] if isinstance(node, ast.Assign) else node.target
+                if isinstance(tg, ast.Name) and tg.id == "CARDS" and node.value is not None:
+                    out = ast.literal_eval(node.value)
+    _CARDS[fid] = out
+    return out
+
+
 def params(fid: str, skin=None, origin: str | None = None) -> dict | None:
     """The plate parameters for fighter `fid` (and skin dict/id `skin`), or None when the fighter has no entry
     (it keeps the map's backdrop plate)."""
@@ -145,6 +176,7 @@ def params(fid: str, skin=None, origin: str | None = None) -> dict | None:
         line = sid[len(fid) + 1:] if sid.startswith(fid + "_") else sid
         p.update((t.get("lines") or {}).get(line) or {})
         p.update((ent.get("skins") or {}).get(sid) or {})
+    p.update((cards_of(fid).get(sid or fid) or {}).get("plate") or {})     # the staged card's own plate
     p["sid"] = sid or fid
     return p
 
@@ -506,8 +538,44 @@ def subject_grade(fg: np.ndarray, p: dict, kind: str = "splash") -> tuple[np.nda
         g = max(float(p["sub_gamma_min"]), float(np.log(flo2) / np.log(mk)))
         lin = lin ** g
     out = fg.copy()
-    out[..., :3] = _shoulder(_enc(lin), float(p["sub_knee"]), float(p["sub_cap"]))
+    if p.get("sub_hi") is None:
+        out[..., :3] = _shoulder(_enc(lin), float(p["sub_knee"]), float(p["sub_cap"]))
+    else:
+        out[..., :3] = _expand_hi(_enc(lin), m, float(p["sub_hi"]), float(p.get("sub_hi_q", 99.7)))
     return out, k
+
+
+def _expand_hi(d: np.ndarray, m: np.ndarray, hi: float, q: float) -> np.ndarray:
+    """Display rgb d: above the solid subject's p95 luma x0 the luma follows y = x0 + (hi - x0) s(u),
+    u = (L - x0) / (top - x0) (top: its q percentile), s(u) = a u + (1 - a) u^2 with a = (top - x0) / (hi - x0) (the
+    slope stays 1 at x0, the curve is monotone and reaches `hi` at `top`; past it, the slope at u = 1 continues up to
+    luma 0.985). The colour keeps its ratio (luma scaling). A subject with no headroom over its p95 is unchanged."""
+    L = d @ Y709
+    ys = L[m]
+    x0 = float(np.percentile(ys, 95))
+    top = float(np.percentile(ys, q))
+    if top <= x0 + 0.01 or hi <= x0 + 0.01:
+        return d
+    a = float(np.clip((top - x0) / (hi - x0), 0.0, 1.0))
+    u = np.maximum(L - x0, 0.0) / (top - x0)
+    s1 = a * u + (1 - a) * u * u
+    s2 = 1.0 + (2.0 - a) * (u - 1.0)
+    Ln = np.where(L > x0, x0 + (hi - x0) * np.where(u <= 1.0, s1, s2), L)
+    Ln = np.minimum(Ln, np.maximum(L, 0.985))
+    return np.clip(d * (Ln / np.maximum(L, 1e-5))[..., None], 0.0, 1.0)
+
+
+def paint_over(fg: np.ndarray, r: int) -> np.ndarray:
+    """The plate's brush over the subject (straight RGBA): Kuwahara on the premultiplied colour of the solid pixels
+    (the antialiased edge keeps its own colour and alpha, so no plate colour bleeds in); r 0 = unchanged."""
+    if r <= 0:
+        return fg
+    a = fg[..., 3:4]
+    solid = a[..., 0] > 0.98
+    pm = kuwahara(fg[..., :3] * a, r)
+    out = fg.copy()
+    out[..., :3] = np.where(solid[..., None], np.clip(pm / np.maximum(a, 1e-4), 0.0, 1.0), fg[..., :3])
+    return out
 
 
 def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
@@ -516,6 +584,7 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
     h, w = fg.shape[:2]
     pl = plate(p, kind, w, h)
     fg, _k = subject_grade(fg.astype(np.float32), p, kind)
+    fg = paint_over(fg, int(round(float(p.get("sub_paint_r", 0)) * (w / 1600.0 if kind == "splash" else w / 512.0))))
     comp = splash_post(fg, pl, post * float(p["post"] if kind == "splash" else p["post_p"]))
     L = lut()
     if L is not None:
@@ -583,12 +652,12 @@ def keep_raw(src_png: str, sid: str, kind: str, preview: bool = False) -> str:
 
 
 def fg_for(raw: np.ndarray, kind: str, size: int | None = None) -> np.ndarray:
-    """The raw pass as the subject layer: the splash is used as rendered; the portrait renders at 1.5x and is
-    reduced premultiplied to `size` (512) like render.fighter_renders."""
+    """The raw pass as the subject layer: the splash is used as rendered; the portrait renders at 2x (1.5x before
+    the CW5 card pipeline) and is reduced premultiplied to `size` (512) like render.fighter_renders."""
     if raw.shape[2] == 3:
         raw = np.concatenate([raw, np.ones(raw.shape[:2] + (1,), np.float32)], axis=2)
     if kind == "portrait":
-        n = size or int(round(raw.shape[0] / 1.5))
+        n = size or int(round(raw.shape[0] / 2.0))
         return premul_resize(raw, n, n)
     return raw
 
@@ -610,7 +679,7 @@ def compose_to(sid: str, kind: str, preview: bool = False) -> str | None:
     raw = load_image(rp)
     size = None
     if kind == "portrait":
-        size = 512 if not preview else int(round(raw.shape[0] / 1.5))
+        size = 512 if not preview else int(round(raw.shape[0] / 2.0))
     img = finish(fg_for(raw, kind, size), p, kind)
     return save_png(image_path(sid, kind, preview), img)
 

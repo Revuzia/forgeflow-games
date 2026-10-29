@@ -30,7 +30,11 @@
     "portrait": "assets/fighters/nurrow/nurrow_shadeprint_portrait.png",
     "splash": "assets/fighters/nurrow/nurrow_shadeprint_splash.png",
     "vfxTint": "#6C5BA8",
-    "desc": "An ink hat with a light rim over a pale mask, printed in ink and light. Her lullabies leave violet shadows.",
+    "vfx": {
+      "signature": "#8B5CD6",
+      "secondary": "#E6DCF5"
+    },
+    "desc": "A pale snuffer hat and mask printed with ink line-work and a light rim. Her lullabies leave violet shadows.",
     "releasedIn": "2026.10.0"
   }
 ]

@@ -54,6 +54,13 @@ export function gauss(r: Rng): number { return (r.float() + r.float() + r.float(
 
 interface Stimulus { notice: number; dodge: boolean; seen: number }
 
+/** optional measurement hook (harness only: the bot soak's micro gates, critic bot-micro). Writes never change a
+ *  decision; the sim never sets it. */
+export interface BotTelemetry {
+  /** a skillshot (point/direction projectile or delayed area) aimed at an enemy fighter */
+  shot(t: number, src: number, ability: string, target: number): void;
+}
+
 export abstract class BotBase {
   readonly m: BotMatch;
   readonly k: Knowledge;
@@ -112,6 +119,8 @@ export abstract class BotBase {
   private hpSampleAt = 0;
   recentDps = 0;
   lastWardAt = -1e9;
+  /** harness measurement hook (null in play) */
+  tel: BotTelemetry | null = null;
 
   constructor(m: BotMatch, seat: SeatSetup, diff: DifficultyProfile, rng: Rng, prof: FighterProfile) {
     this.m = m; this.k = m.k; this.seat = seat; this.player = seat.player; this.team = seat.team;
@@ -170,13 +179,15 @@ export abstract class BotBase {
   }
 
   // ── commands ──────────────────────────────────────────────────────────────────────────────────
-  protected moveTo(x: number, y: number, attackMove = false): void {
+  protected moveTo(x: number, y: number, attackMove = false, dodge = false): void {
     const e = this.e, S = this.w.mapDef.size;
     x = Math.max(0.2, Math.min(S[0] - 0.2, x)); y = Math.max(0.2, Math.min(S[1] - 0.2, y));
     const want = attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE;
     if (e.order === want && Math.abs(e.orderX - x) + Math.abs(e.orderY - y) < MOVE_EPS) return;
     if (e.order === ORDER_NONE && Math.abs(e.x - x) + Math.abs(e.y - y) < 0.35) return;
-    if (e.order === ORDER_CAST) return; // walking into range of a cast: let it resolve
+    // walking into range of a cast: let it resolve — unless a dodge needs the feet (a player drops the cast walk to
+    // step out of a telegraph; CW3 critic bot-micro)
+    if (e.order === ORDER_CAST && !dodge) return;
     this.out.push(attackMove ? { type: 'move', x, y, attackMove: true } : { type: 'move', x, y });
   }
   protected attack(t: Entity): void {
@@ -198,7 +209,7 @@ export abstract class BotBase {
       for (const [id, s] of this.projSeen) if (now - s.seen > 6) this.projSeen.delete(id);
     }
     if (this.dodgeUntil > now) {
-      this.moveTo(this.dodgeX, this.dodgeY);
+      this.moveTo(this.dodgeX, this.dodgeY, false, true);
       return true;
     }
     const ms = Math.max(0.5, e.stats.moveSpeed);
@@ -250,7 +261,7 @@ export abstract class BotBase {
         if (!inShape(zd.shape, e.x, e.y, e.radius, h.x, h.y, zd.dirX, zd.dirY)) continue;
         const dx = e.x - h.x, dy = e.y - h.y, d = dhypot(dx, dy) || 1;
         const reach = h.radius + myR + 0.4 - d;
-        if (reach > 0) { this.dodgeX = e.x + (dx / d) * reach; this.dodgeY = e.y + (dy / d) * reach; this.dodgeUntil = now + Math.min(1, reach / ms + 0.1); this.moveTo(this.dodgeX, this.dodgeY); return true; }
+        if (reach > 0) { this.dodgeX = e.x + (dx / d) * reach; this.dodgeY = e.y + (dy / d) * reach; this.dodgeUntil = now + Math.min(1, reach / ms + 0.1); this.moveTo(this.dodgeX, this.dodgeY, false, true); return true; }
       }
     }
     return false;
@@ -264,7 +275,7 @@ export abstract class BotBase {
     if (need / ms > left && this.diff.dodgeChance >= 0.8 && this.escapeTo(tx, ty, need)) return true;
     if (e.cast && e.cast.phase === 'windup' && !e.cast.def.canMoveWhileCasting && e.cast.dur - e.cast.t > left) return false;
     this.dodgeX = tx; this.dodgeY = ty; this.dodgeUntil = until;
-    this.moveTo(tx, ty);
+    this.moveTo(tx, ty, false, true);
     return true;
   }
 
@@ -409,8 +420,12 @@ export abstract class BotBase {
         }
         if (best) { this.cast(s, info, best, best.x, best.y); return true; }
       } else if (info.affectsAllies) {
-        const n = this.alliesIn(e.x, e.y, Math.max(info.radius, info.range), 0.65);
-        if (n >= Math.max(1, info.minTargets)) { this.cast(s, info, e, e.x, e.y); return true; }
+        const R = Math.max(info.radius, info.range);
+        const n = this.alliesIn(e.x, e.y, R, 0.65);
+        // (CW3 CL-1: a group heal or shield also saves ONE ally — or me — about to fall in a fight; waiting for a second
+        // one held the lampglass ults back to the late game)
+        const save = info.minTargets > 1 && this.alliesIn(e.x, e.y, R, 0.35) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
+        if (n >= Math.max(1, info.minTargets) || save) { this.cast(s, info, e, e.x, e.y); return true; }
       } else if (!(u & U_OFFENSE) || info.dmg.length === 0) {
         const gate = info.selfHpBelow <= 1 ? 1 : (u & U_SHIELD) ? 0.7 : 0.55;
         if (hpF < gate && (threatened || hpF < 0.4)) { this.cast(s, info, e, e.x, e.y); return true; }
@@ -472,6 +487,9 @@ export abstract class BotBase {
     const rank = Math.max(1, s.rank);
     const dmg = info.dmg.length ? estimateDamage(info, e, rank, t) : 0;
     const pureExecute = (u & U_EXECUTE) && !(u & (U_DAMAGE | U_POKE | U_CC | U_ENGAGE | U_ZONE));
+    // (CW3 CL-1: committed to a kill — an all-in, a gank, or a target this low — an area that wants several targets is
+    // spent on one: the kill is the point, not the second body)
+    const need = ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam' || tF < 0.45) ? 1 : info.minTargets;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;
@@ -502,18 +520,19 @@ export abstract class BotBase {
           if (dd > info.range + info.radius * 0.7) return false;
           o.x = e.x + (dx / dd) * info.range; o.y = e.y + (dy / dd) * info.range;
         }
-        if (info.minTargets > 1 && info.radius > 0) {
+        if (need > 1 && info.radius > 0) {
           const cx = info.areaAt === 'self' ? e.x : o.x, cy = info.areaAt === 'self' ? e.y : o.y;
-          if (this.countIn(cx, cy, info.radius, true, false) < info.minTargets) return false;
+          if (this.countIn(cx, cy, info.radius, true, false) < need) return false;
         }
         this.cast(s, info, t, o.x, o.y);
+        if (this.tel && (info.delivery === 'projectile' || info.delivery === 'area' || info.delivery === 'zone')) this.tel.shot(this.now, e.id, s.def.id, t.id);
         return true;
       }
       default: {
         // self-anchored areas (and none-targeted effects): the target must be inside
         const r = info.radius > 0 ? info.radius : info.reach;
         if (d > r + t.radius * 0.8) return false;
-        if (info.minTargets > 1 && this.countIn(e.x, e.y, r, true, false) < info.minTargets) return false;
+        if (need > 1 && this.countIn(e.x, e.y, r, true, false) < need) return false;
         this.cast(s, info, t, e.x, e.y);
         return true;
       }
@@ -692,10 +711,12 @@ export abstract class BotBase {
   // ── acting on the plan ────────────────────────────────────────────────────────────────────────
   protected act(): void {
     const e = this.e, w = this.w;
-    // 1. dodge owns movement
+    // 1. dodge owns movement (and the hands: a cast started mid-dodge plants the feet in the telegraph — CW3 critic
+    // bot-micro; an escape the dodge needs is fired by startDodge itself)
     const dodging = this.dodge();
+    if (dodging) return;
     // 2. abilities
-    if (this.useAbilities() || dodging) return;
+    if (this.useAbilities()) return;
     // 3. fight (an endgame structure first)
     const sf = this.pSiege;
     if (this.pSiegeFirst && sf && sf.alive && sf.targetable && attackable(w, e, sf) && !(this.pFight && this.pFight.alive && inAttackRange(e, this.pFight))) {

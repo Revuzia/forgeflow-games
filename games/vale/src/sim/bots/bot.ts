@@ -54,6 +54,12 @@ const LANE_OBJECTIVE_REACH = 40;
 const JUNGLE_INVADE_COST = 25;
 /** a jungler leaves its clear for an objective only from this time (s): its first clears come first */
 const JUNGLE_OBJECTIVE_FROM = 360;
+/** a grovehunter ganks from this time (s) — its first clear comes first (CW3 CL-1) */
+const JUNGLE_GANK_FROM = 180;
+/** a laner leaves its shoved road for a roam at most once in this many seconds during the laning phase (CW3 CL-1) */
+const LANE_ROAM_EVERY = 75;
+/** a roam is given up after this long without its kill (s) */
+const ROAM_MAX = 25;
 /** Wicks within this distance of an enemy fighter turn on whoever hits that fighter (call for help) */
 const WAVE_AGGRO_R = 9;
 /** how far from the nearest enemy Wick a fighter stands to stay out of its reach when no Wick of mine
@@ -73,6 +79,10 @@ export class Bot extends BotBase implements BotController {
   private recallTriedAt = -1e9;
   private campTarget = -1;
   private tradeRestUntil = 0;
+  /** the enemy fighter I lane against (last noticed in my lane), when I last saw it start a recall, and my last roam */
+  private laneFoe = -1;
+  private foeRecallAt = -1e9;
+  private lastRoamAt = -1e9;
   // situation (5 Hz)
   hpF = 1;
   nearE = 0;
@@ -204,11 +214,16 @@ export class Bot extends BotBase implements BotController {
     for (const st of tp.enemyStructs) if (st.alive && st.atkTarget === e.id && inAttackRange(st, e)) { this.towerAggro = true; break; }
     // killable target
     this.killTarget = null; this.killMargin = 0;
+    const hold = this.ccReady();
     for (const f of tp.enemyFighters) {
       if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > 10 * 10) continue;
-      let dmg = this.burstOn(f);
+      // (CW3 CL-1: a ready hold — stun, root, sleep — keeps the target in reach for the whole combo: a kill window)
+      let dmg = this.burstOn(f) * (hold ? 1.2 : 1);
       for (const a of tp.allyFighters) {
-        if (a === e || !a.alive || this.dist2(a, f.x, f.y) > 8 * 8) continue;
+        if (a === e || !a.alive) continue;
+        // (an ally beside it, or one already committing to it — its published focus — on the way)
+        const d2 = this.dist2(a, f.x, f.y);
+        if (d2 > 8 * 8 && !(d2 <= 15 * 15 && this.brain && this.brain.focus.get(a.player?.player ?? -1) === f.id)) continue;
         dmg += a.stats.ad * a.stats.attackSpeed * 3 + a.level * 25;
       }
       const margin = dmg / Math.max(1, f.hp + f.shield);
@@ -217,6 +232,10 @@ export class Bot extends BotBase implements BotController {
     if (this.killMargin < 1.1) this.killTarget = null;
     // lane opponent: the nearest noticed enemy fighter on my lane, close by
     this.laneEnemy = this.nearestEnemyFighter(this.prof.attackRange + 6);
+    if (this.laneEnemy && this.lane >= 0 && !this.jungle) {
+      this.laneFoe = this.laneEnemy.id;
+      if (this.laneEnemy.stateOverride === 'recall') this.foeRecallAt = this.now;
+    }
     // Wicks, summons and monsters hitting me
     let ud = 0;
     for (const u of tp.enemyUnits) if (u.alive && u.atkTarget === e.id && u.attackDef) ud += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
@@ -232,6 +251,27 @@ export class Bot extends BotBase implements BotController {
       const t = f.atkTarget >= 0 ? this.w.entity(f.atkTarget) : null;
       if (t && t.kind === 'fighter' && t.team === this.team) return true;
       for (const a of this.perc.allyFighters) if (a.alive && a.atkTarget === f.id) return true;
+    }
+    return false;
+  }
+
+  /** a laner may roam: level 3 (a lampglass 2), its lane opponent dead or seen recalling, its own wave on the road
+   *  and the enemy's thinned, and no roam in the last LANE_ROAM_EVERY s (CW3 CL-1) */
+  private laneRoamWindow(): boolean {
+    const e = this.e, li = this.lane;
+    if (li < 0 || e.level < (this.support ? 2 : 3) || this.now - this.lastRoamAt < LANE_ROAM_EVERY) return false;
+    const foe = this.laneFoe >= 0 ? this.w.entity(this.laneFoe) : null;
+    if (!foe || (foe.alive && this.now - this.foeRecallAt > 9)) return false;
+    if (foe.alive && this.isNoticed(foe) && this.dist2(foe, e.x, e.y) < 30 * 30) return false;
+    return this.perc.ownN[li] >= 2 && this.perc.enemyN[li] <= 2;
+  }
+
+  /** a ready ability that holds its target (stun, root, sleep...) */
+  private ccReady(): boolean {
+    const e = this.e;
+    for (let i = 0; i < 4; i++) {
+      const s = e.slots[i];
+      if (s && s.ready && abilityInfo(s.def).cc && s.def.ai.use.some((u) => u === 'cc')) return true;
     }
     return false;
   }
@@ -380,7 +420,13 @@ export class Bot extends BotBase implements BotController {
       const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) : 0;
       // hitting a fighter that stands in its own wave turns that wave on me: a trade there costs more
       const wavePenalty = Math.max(0, this.coverWicks(le) - 1) * 0.07 + (this.unitDps > 0 ? 0.1 : 0);
-      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) - wavePenalty;
+      // (CW3 CL-1: laning windows — a level on the opponent (the 2, 3 and 6 spikes), my damage ready against its health,
+      // and the opponent turning to a Wick for a last hit make a trade, not only a health lead)
+      const lvl = Math.max(-2, Math.min(2, e.level - le.level)) * 0.1;
+      const ready = Math.min(0.2, (this.burstOn(le) / Math.max(1, le.hp + le.shield)) * 0.25);
+      const lt = le.atkTarget >= 0 ? this.w.entity(le.atkTarget) : null;
+      const busy = lt && lt.kind === 'minion' ? 0.06 : 0;
+      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + lvl + ready + busy - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
     }
     // all-in
@@ -436,9 +482,19 @@ export class Bot extends BotBase implements BotController {
         : (!jungleLaning || opening) && (!this.jungle || now >= JUNGLE_OBJECTIVE_FROM)) && (!this.diff.objectiveSense || hpF > (this.mode === 'objective' ? 0.3 : 0.45))) {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }
-      // (a jungler ganks between its camps: not with one up at hand, and only a lane close by)
-      if (b.gank && !lp && (this.jungle ? e.level >= 3 && !this.campAtHand(25) : this.prof.style === 'burst' || this.prof.style === 'diver') && hpF > 0.6 &&
-        this.dist2(e, b.gank.x, b.gank.y) < sq(this.jungle ? 40 : 50) && b.gank.alive) consider('roam', this.jungle ? 0.53 : 0.44);
+      // (a jungler ganks between its camps from JUNGLE_GANK_FROM: not with a camp up right here, and only a road in reach;
+      // CW3 CL-1: a laner in the laning phase roams once in a while from a shoved road while its opponent is dead or
+      // recalling — the rest of the phase it holds its road)
+      const g = b.gank;
+      if (g && g.alive && hpF > 0.6) {
+        const d2 = this.dist2(e, g.x, g.y);
+        const roaming = this.mode === 'roam' && now - this.modeSince < ROAM_MAX;
+        if (this.jungle) {
+          if (now >= JUNGLE_GANK_FROM && e.level >= 3 && (roaming || !this.campAtHand(10)) && d2 < sq(roaming ? 70 : 55)) consider('roam', 0.53);
+        } else if (!lp) {
+          if ((this.prof.style === 'burst' || this.prof.style === 'diver') && d2 < sq(50)) consider('roam', 0.44);
+        } else if (b.gankLane !== this.lane && d2 < sq(roaming ? 70 : 60) && (roaming || this.laneRoamWindow())) consider('roam', 0.5);
+      }
     }
     // Fray hunting
     if (kind === 'fray' || kind === 'brawl') {
@@ -457,6 +513,7 @@ export class Bot extends BotBase implements BotController {
     // hysteresis: a young mode is kept unless the newcomer is urgent
     if (best !== this.mode) {
       if (now - this.modeSince < MIN_MODE_TIME && bestS < 0.8) return;
+      if (best === 'roam') this.lastRoamAt = now;
       this.mode = best;
       this.modeSince = now;
       this.recallTriedAt = -1e9;

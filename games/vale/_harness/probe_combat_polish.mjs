@@ -29,10 +29,11 @@
 //           height for ≈ 200 ms). Info: `eqd` the lit area as a disc's diameter over the victim's height, `readMs` how
 //           long the count stays ≥ 25 % of its peak.
 //
-//   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi]
+//   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi | all]
+//   (--ults all: the 16 fighters, critic combat-16; a fighter outside the first lineup's enemy side is cast from a lineup of its own)
 //                                         [--vfxcap off|1.3]   (renderer.vfx.liftCap: the most the envelope lifts an effect)
 //   → _harness/_reports/fw_W1_combat_polish[_tag].json, shots _harness/_shots/fw_W1_polish_*.png
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { open } from './pw.mjs';
@@ -48,6 +49,7 @@ const OUT = join(REPS, `fw_W1_combat_polish${TAG ? '_' + TAG : ''}.json`);
 const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('$')).map(([k, x]) => [k, strip(x)])) : v);
 const defs = strip(JSON.parse(readFileSync(BEFORE || join(HERE, '../content/vfx.json'), 'utf8')));
 const LINEUP = ['lisvel', 'ardit', 'dunsom', 'ilsheta', 'odrum', 'kemdo', 'tunlan', 'hesmi', 'rishal', 'burdam'];
+const ALL = readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort();
 
 const report = { at: new Date().toISOString(), defs: BEFORE || 'content/vfx.json', ult: [], cc: null, flash: [], hold: [], pass: true, fails: [] };
 const fail = (m) => { report.pass = false; report.fails.push(m); console.log('FAIL', m); };
@@ -58,7 +60,8 @@ try {
   const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
   await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, defs);
   if (opt('vfxcap', '')) await B((b, c) => { b.renderer.vfx.liftCap = c === 'off' ? null : Number(c); }, opt('vfxcap', ''));
-  report.players = await B(async (b, picks) => {
+  // the match host for a lineup (seat 0 the viewer, seats 5-9 its enemies); re-run for another lineup (--ults beyond them)
+  const SETUP = async (b, picks) => {
     const { LocalMatchHost } = await import('/src/session/match_host.ts');
     const { createBots } = await import('/src/sim/bots/index.ts');
     // the SAME module instance the bench loaded when the timing buffer still lists it: after an edit the dev server serves
@@ -194,8 +197,9 @@ try {
     b.__park(); b.__clear();
     b.__step(10);
     return W.players.map((p, i) => { const e = W.entity(p.entity); return { seat: i, def: e?.def, team: e?.team, entity: p.entity }; });
-  }, LINEUP);
-  const P = report.players;
+  };
+  report.players = await B(SETUP, LINEUP);
+  let P = report.players;
   const seat = (def) => P.find((p) => p.def === def);
   const spot = { x: 74, y: 55 };
   const setCam = () => B((b, s) => { b.renderer.rig.mode = 'free'; b.focus(s.x, s.y); b.zoom(b.catalog.maps.find((m) => m.id === b.__H.setup.map).camera.distance); b.__step(4); }, spot);
@@ -217,7 +221,28 @@ try {
 
   // ── combat F4: the beat's anchor and the struck unit
   if (ONLY.includes('ult')) {
-    for (const def of opt('ults', 'kemdo,rishal,tunlan,hesmi').split(',')) {
+    // critic combat-16: any fighter's ult. The casters must be ENEMIES of the viewer (seats 5-9): a fighter not on
+    // that side of the current lineup is cast from another lineup (5 casters each, the viewer Lisvel, or Ardit when
+    // Lisvel casts), built like the first; the first lineup comes back for the later sections
+    const want = opt('ults', 'kemdo,rishal,tunlan,hesmi') === 'all' ? ALL : opt('ults', 'kemdo,rishal,tunlan,hesmi').split(',').filter(Boolean);
+    const enemy0 = LINEUP.slice(5);
+    const order = [...want.filter((d) => enemy0.includes(d)).map((d) => ({ d, lineup: null }))];
+    const rest = want.filter((d) => !enemy0.includes(d));
+    for (let i = 0; i < rest.length; i += 5) {
+      const g = rest.slice(i, i + 5);
+      const viewer = g.includes('lisvel') ? 'ardit' : 'lisvel';
+      const fill = ALL.filter((f) => f !== viewer && !g.includes(f));
+      const lineup = [viewer, ...fill.slice(0, 4), ...g, ...fill.slice(4)].slice(0, 10);
+      for (const d of g) order.push({ d, lineup });
+    }
+    let cur = null;
+    for (const { d: def, lineup } of order) {
+      if (lineup !== cur) {
+        cur = lineup;
+        P = report.players = await B(SETUP, lineup ?? LINEUP);
+        await setCam();
+        console.log(`lineup ${(lineup ?? LINEUP).join(',')}`);
+      }
       const c = seat(def);
       const st = await stage(c.seat);
       const geo = await B((b, a) => ({ c: b.__h(a.pc), v: b.__h(a.pv) }), st);
@@ -289,6 +314,7 @@ try {
       }
       await B((b) => { b.__park(); b.__step(40); });
     }
+    if (cur !== null) { P = report.players = await B(SETUP, LINEUP); await setCam(); }
   }
 
   // ── combat F5: one plate per hard CC

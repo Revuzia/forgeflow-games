@@ -30,6 +30,10 @@
     "portrait": "assets/fighters/sukri/sukri_shadeprint_portrait.png",
     "splash": "assets/fighters/sukri/sukri_shadeprint_splash.png",
     "vfxTint": "#6C5BA8",
+    "vfx": {
+      "signature": "#7A5CD6",
+      "secondary": "#E2DAF5"
+    },
     "desc": "Ink wraps with light rims and a pale hood, printed in ink and light. The cup holds violet light.",
     "releasedIn": "2026.10.0"
   }

@@ -126,6 +126,8 @@ export class TeamBrain {
   siegeLane = -1;
   objective: { camp: CampInfo; desire: number; alive: boolean } | null = null;
   gank: Entity | null = null;
+  /** the road the gank target stands on (-1: none) */
+  gankLane = -1;
   readonly campReady: Float64Array;
   /** objectiveSense: until when the team leaves an objective it gave up on alone, and since when it has been on one */
   private readonly campBlock: Float64Array;
@@ -568,25 +570,45 @@ export class TeamBrain {
     }
   }
 
+  /**
+   * gank: an enemy fighter on a road we hold, pushed up to the river or past it (outside its own Needles' cover), the
+   * lower and the deeper into our half the better, and better again with our laner there to make it two on one
+   * (CW3 CL-1: the old read took the enemy farthest from our base — at its own tower — so ganks almost never landed).
+   * `gankLane` is the road it stands on.
+   */
   private thinkGank(w: World): void {
-    this.gank = null;
+    this.gank = null; this.gankLane = -1;
     const k = this.k;
     if (k.kind !== 'rift') return;
     let best = 0;
     for (const f of this.perc.enemyFighters) {
-      if (!f.alive) continue;
-      // which lane is it in, and how far into our half
+      if (!f.alive || (f.visibleMask & this.perc.bit) === 0) continue;
       let lane = -1, s = 0, d2b = 49;
       for (const l of k.lanes) { const pr = this.projectTo(l.index, f.x, f.y); if (pr.d2 < d2b) { d2b = pr.d2; lane = l.index; s = pr.s; } }
       if (lane < 0) continue;
-      let ally = false;
-      for (const [, a] of this.assign) if (a.lane === lane) { ally = true; break; }
-      if (!ally) continue;
+      let laner: Entity | null = null;
+      for (const [p, a] of this.assign) {
+        if (a.lane !== lane || a.jungle) continue;
+        const e = w.players[p]?.ent;
+        if (e && e.alive && sq(e.x - f.x) + sq(e.y - f.y) <= 16 * 16 && (!laner || e.hp > laner.hp)) laner = e;
+      }
+      let held = false;
+      for (const [, a] of this.assign) if (a.lane === lane && !a.jungle) { held = true; break; }
+      if (!held) continue;
+      // under (or next to) one of its own towers: no gank
+      let covered = false;
+      for (const st of this.perc.enemyStructs) {
+        if (!st.alive || !st.attackDef || st.stats.ad <= 0) continue;
+        const r = st.stats.range + st.radius + 3;
+        if (sq(st.x - f.x) + sq(st.y - f.y) <= r * r) { covered = true; break; }
+      }
+      if (covered) continue;
       const l = k.lanes[lane];
       const deep = progress(l, this.team, s) / l.length;
-      const hpF = f.hp / Math.max(1, f.maxHp);
-      const score = (deep - 0.35) * 2 + (1 - hpF);
-      if (deep > 0.4 && score > best) { best = score; this.gank = f; }
+      if (deep > 0.6) continue;
+      const hpF = (f.hp + f.shield) / Math.max(1, f.maxHp);
+      const score = (0.62 - deep) * 3 + (1 - hpF) + (laner ? 0.35 * (laner.hp / Math.max(1, laner.maxHp)) : 0);
+      if (score > best) { best = score; this.gank = f; this.gankLane = lane; }
     }
   }
   private projectTo(lane: number, x: number, y: number): { s: number; d2: number } {

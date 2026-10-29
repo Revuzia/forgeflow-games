@@ -29,6 +29,11 @@
     "model": "assets/fighters/kemdo/kemdo_long_evening.glb",
     "portrait": "assets/fighters/kemdo/kemdo_long_evening_portrait.png",
     "splash": "assets/fighters/kemdo/kemdo_long_evening_splash.png",
+    "vfxTint": "#9C6FB8",
+    "vfx": {
+      "signature": "#B45CD6",
+      "secondary": "#EED8F2"
+    },
     "desc": "Plum wraps, a smoked-amber frame and a lilac-tinted lens from the Serenade dusk festival, with rigid lacquer tassel plates.",
     "releasedIn": "2026.10.0"
   }

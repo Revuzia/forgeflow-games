@@ -922,6 +922,17 @@ function checkPresentation(c: CatalogT, designDir: string, dg: Diagnostics): voi
     let d = Math.abs(A.h - B.h); d = Math.min(d, 360 - d);
     if (d < 25 && Math.abs(A.l - B.l) < 25) dg.err(['fighters', B.i, 'vfx', 'signature'], `signature ${B.hex} (${B.id}) is ${d.toFixed(0)} deg from ${A.hex} (${A.id}) and only ${Math.abs(A.l - B.l).toFixed(1)} L* apart; fighters need 25 deg or 25 L* between them`);
   }
+  // CW1 SKIN-FX: a skin's own kit palette (SkinDef.vfx) keeps the signature rules (range, reserved hues); it may sit
+  // near another fighter's hue (a skin is a theme, the fighter's silhouette and kit stay its own). Effect palettes are a
+  // deluxe-and-up feature: a cheaper tier carrying one is flagged.
+  c.skins.forEach((k, ki) => {
+    if (!k.vfx) return;
+    const [h, s, v] = hexHsv(k.vfx.signature);
+    const p: Seg[] = ['skins', ki, 'vfx', 'signature'];
+    if (s < 0.55 - 1e-3 || v < 0.7 - 1e-3 || v > 0.95 + 1e-3) dg.err(p, `skin "${k.id}" signature ${k.vfx.signature} has HSV saturation ${s.toFixed(2)}, value ${v.toFixed(2)}; it needs saturation >= 0.55 and value 0.70-0.95`);
+    for (const [r, [a, b]] of Object.entries(reserved)) if (h >= a && h <= b) dg.err(p, `skin "${k.id}" signature ${k.vfx.signature} (hue ${h.toFixed(0)}) is inside the reserved ${r} hues ${a}-${b} (tokens vfx.reservedHuesHSV)`);
+    if (k.tier === 'base' || k.tier === 'standard') dg.warn(['skins', ki, 'vfx'], `skin "${k.id}" is tier ${k.tier}: an own effect palette is a deluxe-and-up feature`);
+  });
 }
 
 function checkVfx(c: CatalogT, dg: Diagnostics): void {

@@ -228,11 +228,144 @@ SPLASH_DEFAULTS = {
 }
 
 
+def card_stage(spec, skin) -> dict:
+    """The card staging of this image (closing review, CW5 cards pipeline): the fighter module's CARDS entry for the
+    skin id (the fighter id for the base). {} = not staged (the shared SPLASH and the idle_lobby portrait).
+    Schema: art/blender/portraits.py header."""
+    cards = getattr(spec, "CARDS", None) or {}
+    sid = (skin or {}).get("id") or getattr(spec, "ID", "")
+    return dict(cards.get(sid) or {})
+
+
 def _splash_cfg(spec, skin) -> dict:
     c = dict(SPLASH_DEFAULTS)
     c.update(getattr(spec, "SPLASH", {}) or {})
     c.update((skin or {}).get("splash", {}) or {})
+    c.update(card_stage(spec, skin).get("splash") or {})
     return c
+
+
+def _portrait_cfg(spec, skin, cfg: dict) -> dict:
+    """The portrait's staging: a staged card's portrait DERIVES from its splash (the same clip frame and light rig,
+    then the entry's "portrait" keys: yaw, clip / t, light overrides); an unstaged one keeps the shared bust (the
+    SPLASH portrait_clip / portrait_t / portrait_yaw). The camera keys (pitch 6, lens 85, fill 0.92, x 0.5) are the
+    ones the fighter wrappers recognise the portrait call by: change them only in a staged entry."""
+    st = card_stage(spec, skin)
+    pc = dict(cfg)
+    pc.update({"pitch": 6.0, "lens": 85.0, "fill": 0.92, "x": 0.5, "yaw": cfg["portrait_yaw"]})
+    if st:
+        pc.update({k: v for k, v in (st.get("portrait") or {}).items()})
+    else:
+        pc.update({"clip": cfg["portrait_clip"], "t": cfg["portrait_t"]})
+    return pc
+
+
+# ── card render quality (closing review: grain, flat highlights) ──────────────────────────────────
+CARD_SS = 2              # the subject renders at 2x the card's pixels and is reduced premultiplied
+CARD_SAMPLES = 128       # 2x the old 64, with Cycles' OpenImageDenoise (albedo + normal guides) on the 2x frame
+CARD_EXPOSURE = -0.5     # EV: the chalk kits sat in the view transform's shoulder (raw p95 239 of 255), so the
+                         # subject grade had no headroom left for highlights; a staged entry may set its own
+
+
+def oidn(on: bool = True) -> bool:
+    """Cycles' OpenImageDenoise for the next render (CPU: the Metal path costs ~50 s to start in every process)."""
+    c = bpy.context.scene.cycles
+    c.use_denoising = bool(on)
+    if not on:
+        return False
+    try:
+        c.denoiser = "OPENIMAGEDENOISE"
+    except TypeError:
+        c.use_denoising = False
+        return False
+    c.denoising_input_passes = "RGB_ALBEDO_NORMAL"
+    c.denoising_prefilter = "ACCURATE"
+    if hasattr(c, "denoising_use_gpu"):
+        c.denoising_use_gpu = False
+    if hasattr(c, "denoising_quality"):
+        c.denoising_quality = "HIGH"
+    return True
+
+
+def stage_lights(cam, cfg: dict, arm, target, scale: float = 1.0) -> list:
+    """The staging's extra lights over bible_lights' key and rim pair: a BOUNCE (a broad soft light off the lit
+    floor between the camera and the subject, `bounce` x 400 W, `bounce_color`) and FOCAL lights (`focal`: a list
+    of {"at": bone (or socket bone), "tail": bool, "off": [x, y, z] world offset, "az": view bearing, "el": deg,
+    "dist": m, "color": hex, "power": W, "size": m}: a small area light at `dist` from the bone on the view bearing
+    `az` / `el` (view_dir_light), aimed at it: the ring that catches the sun, a lit face, a weapon's edge)."""
+    out = []
+    tgt = V(target)
+    b = float(cfg.get("bounce", 0.0) or 0.0)
+    if b > 0:
+        f = cam.matrix_world.to_3x3() @ V((0, 0, -1))
+        f.z = 0
+        f.normalize()
+        loc = V((tgt.x, tgt.y, 0.02)) - f * 1.4 * scale
+        out.append(_area("vale_bounce", loc, tgt, 400.0 * b * scale * scale,
+                         scene.hex_rgb(cfg.get("bounce_color", "#E2B48A")), 2.4 * scale))
+    for i, fo in enumerate(cfg.get("focal") or []):
+        at = fo.get("at", "head")
+        if arm is not None and at in arm.pose.bones:
+            pos = bone_pos(arm, at, tail=bool(fo.get("tail", False)))
+        else:
+            pos = V(tgt)
+        pos = pos + V(fo.get("off", (0.0, 0.0, 0.0)))
+        d = view_dir_light(cam, float(fo.get("az", 200.0)), float(fo.get("el", 30.0)))
+        out.append(_area(f"vale_focal{i}", pos + d * float(fo.get("dist", 0.8)), pos, float(fo.get("power", 60.0)),
+                         scene.hex_rgb(fo.get("color", "#FFE6C8")), float(fo.get("size", 0.25))))
+    return out
+
+
+def _accent_gain(objs, k: float) -> list:
+    """Scale the emission of the `accent` material(s) by k for one render (a staged 'every bell lit'); returns undo."""
+    saved = []
+    if abs(k - 1.0) < 1e-6:
+        return saved
+    seen = set()
+    for o in objs:
+        if o.type != "MESH":
+            continue
+        for slot in o.material_slots:
+            m = slot.material
+            if not m or not m.use_nodes or "accent" not in m.name or m.name in seen:
+                continue
+            seen.add(m.name)
+            for n in m.node_tree.nodes:
+                if n.type == "BSDF_PRINCIPLED":
+                    inp = n.inputs.get("Emission Strength")
+                    if inp is not None and not inp.is_linked:
+                        saved.append((inp, inp.default_value))
+                        inp.default_value = inp.default_value * k
+                elif n.type == "EMISSION":
+                    inp = n.inputs.get("Strength")
+                    if inp is not None and not inp.is_linked:
+                        saved.append((inp, inp.default_value))
+                        inp.default_value = inp.default_value * k
+    return saved
+
+
+def _subject_pass(path: str, W: int, H: int, samples: int, fast: bool, exposure: float, keep_ss: bool = False,
+                  ss: int | None = None) -> np.ndarray:
+    """Render the subject (transparent film) at ss x (W, H) (CARD_SS; 1 when fast) with `samples` and OIDN, and
+    return it reduced premultiplied (an exact box average) to (W, H). `path` keeps the raw pass plates.keep_raw
+    copies: at (W, H) (the splash), or the ss x frame itself with keep_ss (the portrait: plates.fg_for reduces it
+    to 512). fast (previews): 1x and the old ffmpeg nlmeans."""
+    ss = (1 if fast else CARD_SS) if ss is None else ss
+    setup(W * ss, H * ss, samples, view="Khronos PBR Neutral")
+    bpy.context.scene.view_settings.exposure = float(exposure)
+    dn = oidn(not fast)
+    try:
+        render(path)
+    finally:
+        oidn(False)
+        bpy.context.scene.view_settings.exposure = 0.0
+    if not dn:
+        imageops.denoise(path, 2.0)
+    raw = imageops.load(path)
+    fg = imageops.premul_resize(raw, W, H) if ss > 1 else raw
+    if ss > 1 and not keep_ss:
+        imageops.save(fg, path, alpha=True)
+    return fg
 
 
 def map_lighting(map_id: str) -> dict:
@@ -719,6 +852,7 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     arm = ctx.info.armature
     prof = spec.MOTION
     cfg = _splash_cfg(spec, skin)
+    stage = card_stage(spec, skin)
     light = map_lighting(cfg["map"])
     pre = f"{skin['id']}_" if skin else ""
     # painted dusk plates (client F3, common/plates.py): a fighter listed in art/blender/fighters/plates.json renders
@@ -727,6 +861,10 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     from . import plates
     pl = plates.params(getattr(spec, "ID", ""), skin, getattr(spec, "ORIGIN", None))
     cfg_a, light_a = plates.art_light(cfg, light, pl) if pl else (cfg, light)
+    if cfg.get("key_color"):                       # a staged key colour wins over the plate's dusk key
+        light_a = dict(light_a, sunColor=cfg["key_color"])
+    if stage:
+        scene.log(f"cards {pre or getattr(spec, 'ID', '') + ' '}staged: clip {cfg['clip']} t {cfg['t']} yaw {cfg['yaw']}")
     chains = spec.chain_config(ctx) if hasattr(spec, "chain_config") else [anim.ChainCfg(b) for b in ctx.chains.values()]
     for o in bpy.context.scene.objects:
         if o.type == "MESH" and o not in objs:
@@ -752,16 +890,20 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         lo.z = min(lo.z, 0.0)
         _fit_camera(cam, lo, hi, cfg["yaw"], cfg["pitch"], cfg["lens"], cfg["fill"], 16 / 9, cfg["x"])
         bible_lights(cam, cfg_a, light_a, rim=1.0, scale=1.6, pair=True, target=(lo + hi) * 0.5)
+        stage_lights(cam, cfg_a, arm, (lo + hi) * 0.5, scale=1.6)
         t0 = time.perf_counter()
         W, H = int(round(1600 * scale)), int(round(900 * scale))
         plate = None if pl else backdrop_plate(cam, cfg, light, W, H, os.path.join(P["renders"], f"{pre}_plate.png"),
                                                fast, paint_r=max(1, int(round(cfg.get("paint_r", 3) * scale))))
         g = ground(catcher=True, size=60.0)
-        setup(W, H, max(16, 64 // S), view="Khronos PBR Neutral")
         raw_s = os.path.join(P["renders"], f"{pre}splash_raw.png")
-        render(raw_s)
-        imageops.denoise(raw_s, 2.0)
-        fg = imageops.load(raw_s)
+        undo = _accent_gain(objs, float(cfg.get("accent", 1.0)))
+        try:
+            fg = _subject_pass(raw_s, W, H, max(16, int(cfg.get("samples", CARD_SAMPLES)) // S), fast,
+                               cfg.get("exposure", CARD_EXPOSURE))
+        finally:
+            for inp, v in undo:
+                inp.default_value = v
         if pl:
             plates.keep_raw(raw_s, pl["sid"], "splash", preview)
             out["splash"] = imageops.save(plates.finish(fg, pl, "splash", 1.0 if cfg.get("post", True) else 0.0),
@@ -774,7 +916,14 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
 
     # ── portrait 512² (head and shoulders, three-quarter, front) ──
     t0 = time.perf_counter()
-    pose_frame(arm, prof, cfg["portrait_clip"], t=cfg["portrait_t"], chains=chains, clips=clips)
+    pcfg = _portrait_cfg(spec, skin, cfg)
+    pcfg_a = dict(cfg_a, **{k: pcfg[k] for k in ("key_az", "key_el", "sun", "bounce", "bounce_color", "focal")
+                            if k in pcfg})
+    for k in ("rim_cool", "rim_warm"):           # a portrait override multiplies like the splash's (plates.art_light)
+        if k in (stage.get("portrait") or {}):
+            pcfg_a[k] = float(cfg_a.get(k, 1.0)) / max(1e-6, float(cfg.get(k, 1.0))) * float(pcfg[k])
+    plight_a = dict(light_a, sunColor=pcfg["key_color"]) if pcfg.get("key_color") else light_a
+    pose_frame(arm, prof, pcfg["clip"], t=pcfg["t"], chains=chains, clips=clips)
     pplate = None
     head = bone_pos(arm, "head")
     neck = bone_pos(arm, "neck")
@@ -782,8 +931,10 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     top = posed_bounds(objs)[1].z
     plo = V((head.x - 0.3, head.y - 0.3, neck.z - 0.30 * H / 1.9))
     phi = V((head.x + 0.3, head.y + 0.3, min(top, head.z + 0.36 * H / 1.9) + 0.03))
-    _fit_camera(cam, plo, phi, cfg["portrait_yaw"], 6.0, 85.0, 0.92, 1.0, 0.5)
-    bible_lights(cam, cfg_a, light_a, rim=0.8, scale=0.8, pair=True, target=(plo + phi) * 0.5)
+    _fit_camera(cam, plo, phi, pcfg["yaw"], pcfg["pitch"], pcfg["lens"], pcfg["fill"], 1.0, pcfg["x"])
+    bible_lights(cam, pcfg_a if stage else cfg_a, plight_a, rim=0.8, scale=0.8, pair=True, target=(plo + phi) * 0.5)
+    if stage:
+        stage_lights(cam, pcfg_a, arm, (plo + phi) * 0.5, scale=0.8)
     # HUD face chip (facechip.py): fighters listed in art/blender/fighters/face_chips.json render their icon as a
     # head-and-shoulders chip on an ink ground; everything else keeps the head close-up below
     from . import facechip
@@ -793,11 +944,14 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         pplate = backdrop_plate(cam, cfg, light, PW, PW, os.path.join(P["renders"], f"{pre}_pplate.png"), fast,
                                 paint_r=2)
     if want("portrait"):
-        setup(PW * 3 // 2, PW * 3 // 2, max(16, 72 // S), view="Khronos PBR Neutral")
         raw = os.path.join(P["renders"], f"{pre}portrait_raw.png")
-        render(raw)
-        imageops.denoise(raw)
-        fg = imageops.premul_resize(imageops.load(raw), PW, PW)
+        undo = _accent_gain(objs, float(pcfg.get("accent", 1.0)))
+        try:
+            fg = _subject_pass(raw, PW, PW, max(16, int(pcfg.get("samples", CARD_SAMPLES)) // S), fast,
+                               pcfg.get("exposure", CARD_EXPOSURE), keep_ss=True)
+        finally:
+            for inp, v in undo:
+                inp.default_value = v
         if pl:
             plates.keep_raw(raw, pl["sid"], "portrait", preview)
             out["portrait"] = imageops.save(plates.finish(fg, pl, "portrait", 1.0 if cfg.get("post", True) else 0.0),

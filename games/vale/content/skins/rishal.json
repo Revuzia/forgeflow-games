@@ -29,6 +29,11 @@
     "model": "assets/fighters/rishal/rishal_lamplit.glb",
     "portrait": "assets/fighters/rishal/rishal_lamplit_portrait.png",
     "splash": "assets/fighters/rishal/rishal_lamplit_splash.png",
+    "vfxTint": "#B8963E",
+    "vfx": {
+      "signature": "#D9C22B",
+      "secondary": "#F2D9A6"
+    },
     "desc": "A smoked lampresin visor and walnut armor borrowed from the evening side, with a small lamp cage on the crest.",
     "releasedIn": "2026.10.0"
   }

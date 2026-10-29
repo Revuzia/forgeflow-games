@@ -4,8 +4,8 @@
   "skin": false,
   "parts": {
     "tris_hood": 1550,
-    "tris_eyeband": 520,
-    "tris_eyeslit": 60,
+    "tris_eyeband": 518,
+    "tris_eyeslit": 58,
     "tris_facewrap": 650,
     "tris_mantle": 1850,
     "tris_pauldron_R": 438,
@@ -34,20 +34,20 @@
     "tris_shard_lo_R": 400,
     "tris_brace": 380,
     "tris_inlays": 60,
-    "validate_hesmi": "19832->19828"
+    "validate_hesmi": "19828->19824"
   },
-  "uv_coverage": 0.607,
+  "uv_coverage": 0.596,
   "bake": {
-    "base": 3.66,
-    "rough_metal": 2.83,
-    "normal": 1.7,
-    "ao": 2.24,
-    "normal_fixed_px": 34668,
-    "projection": 7.78,
-    "pack_save": 7.91,
-    "total": 18.54
+    "base": 15.92,
+    "rough_metal": 19.17,
+    "normal": 6.46,
+    "ao": 5.96,
+    "normal_fixed_px": 33218,
+    "projection": 28.15,
+    "pack_save": 28.38,
+    "total": 77.46
   },
-  "tris": 19888,
+  "tris": 19884,
   "mesh_top_m": 2.301,
   "clips": {
     "idle": {
@@ -144,23 +144,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2845216,
+  "glb_bytes_raw": 2853188,
   "optimize": {
     "ok": true,
-    "before": 2845216,
-    "after": 1174916
+    "before": 2853188,
+    "after": 1178652
   },
-  "glb_bytes": 1174916,
+  "glb_bytes": 1178652,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi.glb (1147 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_base 2048x2048 266K, hesmi_normal 512x512 42K, hesmi_orm 512x512 71K",
-      "  skinned meshes: hesmi(17618v), hesmi_accent(120v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi.glb (1151 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_base 2048x2048 271K, hesmi_normal 512x512 41K, hesmi_orm 512x512 71K",
+      "  skinned meshes: hesmi(17627v), hesmi_accent(120v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.333s/21tr, attack2:1.333s/21tr, cast_a1:1.167s/21tr, cast_a2:0.833s/21tr, cast_a3:0.833s/20tr, cast_ult:1.667s/22tr, channel:1.333s/20tr, dash:0.500s/22tr, death:2.000s/20tr, idle:2.400s/20tr, idle_lobby:4.000s/18tr, recall:3.000s/20tr, run:0.667s/22tr, stunned:1.333s/20tr, victory:2.000s/21tr",
       "  tracks checked: 309; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19888; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 19884; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "  run: 20 f, planted samples 4, max foot-speed error 0.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -173,10 +173,10 @@
       "turntable": "art/renders/fighters/hesmi/turntable.png"
     },
     "seconds": {
-      "splash": 8.8,
-      "portrait": 3.1,
-      "icon": 0.82,
-      "turntable": 3.48
+      "splash": 13.19,
+      "portrait": 9.42,
+      "icon": 6.93,
+      "turntable": 10.2
     }
   },
   "three_qa": {
@@ -208,27 +208,26 @@
     ],
     "clips": 15,
     "out": "art/renders/fighters/hesmi/three_hesmi.png",
-    "seconds": 7.1,
-    "exit": 0,
-    "clip_sheet": "art/renders/fighters/hesmi/three_clips_hesmi.png"
+    "seconds": 19.4,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.11,
-      "model": 4.54,
-      "lows_bind": 3.59,
-      "uv": 4.68,
-      "bake": 18.54,
-      "clips": 0.21,
-      "export": 0.9,
-      "optimize": 0.56,
-      "load_test": 0.11,
-      "render": 16.26,
-      "three_qa": 18.25,
-      "cache": 0.08
+      "rig": 0.01,
+      "materials": 0.64,
+      "model": 35.47,
+      "lows_bind": 20.0,
+      "uv": 25.58,
+      "bake": 77.46,
+      "clips": 0.24,
+      "export": 1.12,
+      "optimize": 0.7,
+      "load_test": 0.13,
+      "render": 39.95,
+      "three_qa": 19.81,
+      "cache": 0.23
     },
-    "total_s": 67.88
+    "total_s": 221.44
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22

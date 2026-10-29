@@ -358,6 +358,7 @@ class ValeRenderer implements Renderer {
       visibleAt: (x, y) => this.visibleAt(x, y),
       entityVisible: (e) => this.entityVisible(e),
       skinTint: (e) => this.skinTint(e),
+      skinSignature: (e) => this.skinSignature(e),
       now: () => this.time,
       shake: (px, ms) => this.rig.shake(px, ms),
       plateAt: (out) => {
@@ -708,6 +709,18 @@ class ValeRenderer implements Renderer {
     if (!e.skin) return null;
     const s = this.catalog.skins.find((x) => x.id === e.skin);
     return s?.vfxTint ? new Color().setStyle(s.vfxTint) : null;
+  }
+
+  /** CW1 SKIN-FX: skin id → its kit-effect palette (SkinDef.vfx), parsed once per palette (keyed by its hexes) */
+  private readonly skinSig = new Map<string, { key: string; sig: Color; sec: Color }>();
+  private skinSignature(e: EntityView): { sig: Color; sec: Color } | null {
+    if (!e.skin) return null;
+    const v = this.catalog.skins.find((x) => x.id === e.skin)?.vfx;
+    if (!v) return null;
+    const key = v.signature + v.secondary;
+    let c = this.skinSig.get(e.skin);
+    if (!c || c.key !== key) this.skinSig.set(e.skin, c = { key, sig: new Color().setStyle(v.signature), sec: new Color().setStyle(v.secondary) });
+    return c;
   }
 
   // ── per-frame match update ─────────────────────────────────────────────────────────────────────

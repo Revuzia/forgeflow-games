@@ -18,12 +18,14 @@ the plate frame, so the fit overlay is pixel-true), then each part is moved into
 small warp (`to_model`), because the two sheets disagree with each other and with the brief:
   * Aubade: the hood is re-centred (the sheet draws it 2 cm off axis). The back-lantern is built in MODEL space
     (`lantern_aubade`, AUB_LANT): a dawnglass lantern 0.57 x 0.33 m (0.63 with the eave: the brief's 0.62, wider than
-    the shoulders), 0.92-1.535 m, one frosted pane per face with a domed oval accent core (no mullions).
+    the shoulders), 0.92-1.535 m, one frosted pane per face lit by odd narrow SLITS (closing GW-1: three on the front
+    and back panes between two thick chalk mullions, one on each side; never a round core).
   * Serenade: the sheet's whole upper body stands 13 cm taller than Aubade's (hood crown 1.33 m): the body is
     lowered (z 0.15-1.33 -> 0.15-1.25, a lower, broader dome as the brief asks) and narrowed 6 %. The drum is built
     in MODEL space (`lantern_serenade`, SER_DRUM): 0.72 x 0.45 m, seated over the shoulders (its front on the
     collar's back): two heavy ironstone courses (fix round 6: round chamfered lathe rings, the blocks painted),
-    eight smoky lampresin panes behind ironstone posts each framing one small domed accent core in a soft lamp glow,
+    twelve smoky lampresin panes behind ironstone posts each framing one tall narrow lit SLIT in a soft lamp glow
+    (closing GW-1: the eight round cores read as two eyes under the lid at some headings),
     a low tan felt lid framed by an ironstone rim; on an A-frame of walnut posts down the built back to the belt with
     two yokes, a strapped felt PACK filling the back under it (fix 5: one load on the back, not a lamp on stilts).
   * Parts sculpted directly in model space (sleeves, mitts: the rest pose is symmetric, the sheet's arms are
@@ -47,8 +49,8 @@ are painted either side of the accent seams / crown band (gw_halo) so the team l
 the hood hollows; value ramps darken the Aubade's feet band.
 Accent (§4): hood light (the shared wick_common core + halo: one soft core centred in the dark hollow, its alpha
 falling to its outline, in a wide halo), the hood mark (Aubade seam / Serenade crown band: an exact ribbon arching close
-over the opening, in a dark bed), the back-lantern (Aubade: an oval core on each SMOKED dawnglass pane; Serenade: a
-small domed core on each of the 8 smoky lampresin panes; both in the shared soft lamp glow, glow_halo_lamp, black
+over the opening, in a dark bed), the back-lantern (Aubade: narrow slits on the SMOKED dawnglass panes, 3 front / 3 back
+/ 1 per side; Serenade: one tall slit on each of the 12 smoky lampresin panes; both in the shared soft lamp glow, glow_halo_lamp, black
 diffuse so it only adds light), the Aubade stole clasp, the Serenade hammer window (fix round 6: accent framed in dark
 iron). The see-through parts are renamed `accent` and alpha-blended in the GLB, so the renderer tints them per viewer
 with the cores. No lid oculus (it read as a gem).
@@ -1513,7 +1515,9 @@ def hammer_aubade(L, out):
 # 1.535 m, four short corner spires to 1.62. It sits right behind the hood on a pale ash BACK FRAME: two posts down
 # the back to the waist, a shoulder yoke, a waist bar, the shelf on the posts' tops and two braces under its back.
 AUB_LANT = dict(hw=0.285, hd=0.165, z_base=0.915, z_pane=(0.950, 1.420), z_cap=1.452, z_eave=1.472, z_ridge=1.535,
-                post=0.026, eave=0.032)
+                post=0.026, eave=0.032,
+                # (closing GW-1) the light as odd narrow slits behind thick mullions (lantern_aubade)
+                slit_x=(-0.150, 0.0, 0.150), slit_a=0.021, slit_b=0.62, mullion_x=(-0.075, 0.075), mullion_hw=0.017)
 AUB_FRAME = dict(x=0.19, z_waist=0.50, z_yoke=0.72, r=0.024)
 
 
@@ -1536,6 +1540,14 @@ def lantern_aubade(L, out, back=None):
             c0 = np.array([px * (hw - po), yl + py * (hd - po), 0.0])
             blk = prism_block(zb + 0.004, zc + 0.004, (po, po), (po * 0.92, po * 0.92), 0.007, rng, 0.0015)
             posts.append(blk + c0)
+    # (closing GW-1) two THICK chalk mullions on the front and the back pane, between the three slits (below): flush
+    # with the posts' faces, sunk into the glass
+    for py in (-1, 1):
+        for mx in A["mullion_x"]:
+            c0 = np.array([mx, yl + py * (hd - 0.012), 0.0])
+            blk = prism_block(zb + 0.004, zc + 0.004, (A["mullion_hw"], 0.012), (A["mullion_hw"] * 0.92, 0.012),
+                              0.005, rng, 0.001)
+            posts.append(blk + c0)
     out.append(hull_sp("lantern_bars", posts, "chalk", "bone:chest"))
     # base slab + cap course (chalk plates, a little wider than the posts)
     slabs = Sculpt("lantern_slabs")
@@ -1552,26 +1564,30 @@ def lantern_aubade(L, out, back=None):
     zm = (zp0 + zp1) / 2 + 0.012
     hz = (zp1 - zp0) / 2
     cores, ovals = [], []
+    # (closing GW-1, the Wick no-face rule) the light is ODD NARROW SLITS, never round cores: three tall slits on the
+    # front and the back pane (between the two thick mullions above), ONE on each side pane. The four equal round oval
+    # cores of fix round 4 put two of them side by side under the roof at every three-quarter heading: from the
+    # gameplay camera a capped box head with two lit eyes (closing_hud_verify_04z_wicks_1x.png). Now a face-on pane
+    # shows a row of three slits and a three-quarter view a row of four, all tall and narrow (aspect ~7:1).
     for py in (-1, 1):                             # front / back faces (normal -Y / +Y)
         cax = np.array([[1.0, 0, 0], [0, py * 1.0, 0], [0, 0, 1.0]])
-        c_ = np.array([0.0, yl + py * (hd - 0.015 + 0.002), zm])
-        # (fix round 4: a smaller core in a soft glow, the accent gate 5-6 %: 7.3 % with the roof disc, the hood lining
-        # and a hard 'sticker' oval ringed by a flat halo)
-        a_, b_ = (hw - 2 * po) * 0.44 * 0.72, hz * 0.62 * 0.72
-        cores.append(dome_oval(c_, cax, a_, b_, 0.024, 16))
-        ovals.append((tuple(c_), cax.tolist(), a_, b_))
-    for px in (-1, 1):                             # the side panes
+        for sx in A["slit_x"]:
+            c_ = np.array([sx, yl + py * (hd - 0.015 + 0.002), zm])
+            a_, b_ = A["slit_a"], hz * A["slit_b"]
+            cores.append(dome_oval(c_, cax, a_, b_, 0.012, 12))
+            ovals.append((tuple(c_), cax.tolist(), a_, b_))
+    for px in (-1, 1):                             # the side panes: one slit each
         cax = np.array([[0, 1.0, 0], [px * 1.0, 0, 0], [0, 0, 1.0]])
         c_ = np.array([px * (hw - 0.015 + 0.002), yl, zm])
-        a_, b_ = (hd - 2 * po) * 0.74 * 0.72, hz * 0.68 * 0.72
-        cores.append(dome_oval(c_, cax, a_, b_, 0.018, 12))
+        a_, b_ = A["slit_a"] * 1.15, hz * A["slit_b"] * 1.04
+        cores.append(dome_oval(c_, cax, a_, b_, 0.012, 12))
         ovals.append((tuple(c_), cax.tolist(), a_, b_))
     # (fix round 4) no light well in the roof: its disc was accent the 5-6 % gate could not afford, and a pale lit
     # disc on top of the box; the roof is a closed chalk top
-    # (fix round 3) the game mesh: one domed FAN per core (16 / 12 tris, smooth shaded; the 3-ring dome hulls cost 398)
+    # (fix round 3) the game mesh: one domed FAN per core (12 tris, smooth shaded; the 3-ring dome hulls cost 398)
     V_, F_ = [], []
-    for (c_, cax_, a_, b_), nn_ in zip(ovals, (16, 16, 12, 12)):
-        v_, f_ = _dome_fan(np.asarray(c_, float), np.asarray(cax_, float), a_, b_, 0.022, nn_)
+    for c_, cax_, a_, b_ in ovals:
+        v_, f_ = _dome_fan(np.asarray(c_, float), np.asarray(cax_, float), a_, b_, 0.011, 12)
         F_.append(f_ + len(V_))
         V_ += list(v_)
     S_ = Sculpt("lantern_glow")
@@ -2112,8 +2128,11 @@ def hammer_serenade(L, out, body):
 # a low padded tan felt lid with FOUR crossed dark leather straps and a button; on an A-frame of walnut posts down the
 # back to the belt, a felt pack under it. (Before: the panes were flat accent tiles filling each window edge to edge,
 # a blue-tiled birdcage; the bands thin smooth rings that read as grey wood; the lid a pale cream dome with six spokes.)
+# (closing GW-1) TWELVE windows behind 5.6 cm posts, each lit by a tall narrow SLIT (core_a x the window's half width,
+# core_b x its half height): the eight round cores of fix round 6 showed two equal round lights side by side under the
+# domed lid at the headings that put a post on the view axis (a capped head with two eyes; the Wick no-face rule).
 SER_DRUM = dict(R=0.362, R_core=0.328, R_pane=0.310, R_in=0.285, sy=0.62, z_lo=(0.985, 1.076), z_win=(1.076, 1.318),
-                z_up=(1.318, 1.398), z_lid=1.478, n=8, post_hw=0.026, straps=4, chamfer=0.013)
+                z_up=(1.318, 1.398), z_lid=1.478, n=12, post_hw=0.028, straps=4, chamfer=0.013, core_a=0.40, core_b=0.78)
 
 
 def drum_windows(c, Rc, sy, n, post_hw, depth):
@@ -2303,15 +2322,15 @@ def lantern_serenade(L, out, back):
     for w in wins:
         ax_w = np.stack([w["T"], w["N"], np.array([0.0, 0.0, 1.0])])
         cc = w["F"] + w["N"] * 0.0015 + np.array([0.0, 0.0, zc_w + 0.004])
-        # (fix round 6) the cores 25 % smaller (review r4: flat accent octagons filling each window edge to edge, no
-        # resin pane framing a core): a small domed core in a soft glow, the smoky resin pane round it
-        a_, b_ = w["hw"] * 0.82 * 0.80, hz_w * 0.72 * 0.80
-        v_, f_ = _dome_fan(cc, ax_w, a_, b_, 0.010, 8)
+        # (fix round 6) a domed core in a soft glow, the smoky resin pane round it; (closing GW-1) a tall narrow SLIT
+        # (apparent aspect >= 2.5 from the 52-degree camera), never a round core
+        a_, b_ = w["hw"] * D["core_a"], hz_w * D["core_b"]
+        v_, f_ = _dome_fan(cc, ax_w, a_, b_, 0.008, 10)
         F.append(f_ + len(V))
         V += list(v_)
         cores.append((cc, ax_w, a_, b_))
         glow.add(Ellipsoid(tuple(cc), (a_, 0.006, b_), axes=ax_w), k=0.0)
-    out.append(SP("drum_glow", glow, "accent", "bone:chest", n * 8, 0.6,
+    out.append(SP("drum_glow", glow, "accent", "bone:chest", n * 10, 0.6,
                   meta={"low_mesh": (np.array(V), np.vstack(F)), "smooth": True}))
     # (fix round 6) the glow round each core: the shared soft lamp glow (glow_halo_lamp, as on the Aubade box: vertex
     # alpha 0.80 at the core's outline -> 0 at 1.6 x, black diffuse so it only ADDS light over the resin), a flat ring

@@ -2382,17 +2382,21 @@ PART_HEX = {
     # a little greyer (#6E7A86 -> #6A727B, chroma 8 -> 5.5; same blue-grey family as the other Aubade wicks), the
     # ash staff #C4BBA9 -> #9A8C76 (L* 59: the near-white tube read as bone). In game (both seats) the hood p90 is
     # L* 61-64
-    "aubade": {"hood": "#7E878F", "cowl": "#646E79", "forearms": "#A29E94", "belt": "#9A968C", "tabard": "#A8A49A",
+    # (closing CW4, r12 M8 value half: in game the hood top quarter still measured L* 65.2 Aubade / 66.7 Serenade on RIFT
+    # High, _harness/probe_wick_sweep.mjs `hood`; the cap is 65) Aubade hood #7E878F -> #7B848C, chalk circlet
+    # #8C887F -> #858178 and rim #928E85 -> #8B877E (-1 / -2.7 / -2.7 L*); Serenade felt hood #9A846A -> #917C64 and
+    # cap #93806A -> #8B7964 (-3.2 / -2.8 L*). Hue and chroma kept.
+    "aubade": {"hood": "#7B848C", "cowl": "#646E79", "forearms": "#A29E94", "belt": "#9A968C", "tabard": "#A8A49A",
                "crown_cups": "#30353C", "lantern_bezel": "#30353C", "lantern": "#A29E94",
-               "mitt_L": "#68727C", "mitt_R": "#68727C", "staff": "#85775F", "hood_rim": "#928E85",
+               "mitt_L": "#68727C", "mitt_R": "#68727C", "staff": "#85775F", "hood_rim": "#8B877E",
                # (r6, review r4: the hood top quarter L* 65-66 in game, over the cap: the chalk circlet and its spire
                # towers -4 L*, the rim -2, the pauldron caps' top step darkened in `_pauldron_aubade`)
-               "pauldron_L": "#9C988E", "pauldron_R": "#9C988E", "crown": "#8C887F",
+               "pauldron_L": "#9C988E", "pauldron_R": "#9C988E", "crown": "#858178",
                "lantern_roof": "#A29E94", "staff_cap": "#3A3F46", "cloak": "#6A727B", "sleeves": "#6A727B"},
     # Serenade: ochre / umber. Fix round 3: the felt down to L* ~57-60 and ~31 % saturation (was L* 71-72 at 39.7 %,
     # on the 40 % cap of the reserved marigold band: the enemy tint sat on a near-amber body, and the pale cream
     # dome out-valued the fighters); the umber cloak stays at 23 deg (under the band)
-    "serenade": {"hood": "#9A846A", "hood_cap": "#93806A", "hood_rim": "#563F31", "pauldron_L": "#5E5047", "pauldron_R": "#5E5047",
+    "serenade": {"hood": "#917C64", "hood_cap": "#8B7964", "hood_rim": "#563F31", "pauldron_L": "#5E5047", "pauldron_R": "#5E5047",
                  "crown": "#7A6A5A",
                  "collar": "#664E3E", "bib": "#9E876B", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
                  "cloak": "#7B5842", "sleeves": "#7B5842", "mantle": "#A88F72", "tabard": "#9E876B"},

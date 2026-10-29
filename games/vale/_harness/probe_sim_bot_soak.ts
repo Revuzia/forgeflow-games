@@ -25,6 +25,21 @@
 //   credit     (gameplay:g1)  report: fighter deaths finished by a Wick, Needle or monster that are credited to an
 //                             enemy fighter (death.by) vs executed
 //   pace       (gameplay:g2)  RIFT length per difficulty: adept p90 ≤ 32 min (full games only)
+//   early      (gameplay:CL-1, CW3 r09 §4.4) laning-phase fights, per difficulty (enforced with ≥ EARLY_MIN_GAMES RIFT games
+//                             a difficulty): credited takedowns by 10:00 ≥ 6 a game (both teams) and ≤ 1 game in 20 with none ·
+//                             median longest stretch without a fighter death from 3:00 ≤ 3 min · shadehold takedowns
+//                             (killer) before 14:00 ≥ 1 a game · every fighter's median first ult ≤ 10 min (a game it never
+//                             ults counts as its length) · no core falls before 16:00 · the duo road's shaftlight reaches
+//                             level 6 by 8:00 (median); first blood median reported. Judge it on --lineup shuffle (each role's
+//                             two natives drawn by a seeded shuffle per seed, so teammates change game to game — the closing
+//                             verifier's v_gp.mts seating, reproduced exactly).
+//   micro      (critic bot-micro, report) per tier: skillshot hit rate (point/direction projectiles and delayed areas a
+//                             bot aimed at an enemy fighter, hit = a `hit` on any enemy fighter within 3 s) · dodge rate vs
+//                             telegraphed areas (fighters inside an `everyone` telegraph of ≥ 0.3 s when it appears, not hit by
+//                             it) · deaths after ≥ 1.5 s under the retreat threshold outside retreat/recall · focus share on the
+//                             lowest-EHP enemy fighter in reach (attacks with ≥ 2 in reach) · health at recall start; suite
+//                             `human`: a passive seat (team 0's dialcross: farms, never casts or hits a fighter) — damage it
+//                             takes from enemy fighters per minute and its deaths at 3:00–8:00, against the bot-played seat.
 //   items      (gameplay:G7)  finished (core/apex) items held per player at min(25:00, end) ≥ 2.5 ·
 //                             ≥ 80 % of the finished items bought at least once · ≥ 1 anti-heal family
 //                             (an item that applies 'grievous') · builds vary (a fighter's first two
@@ -44,6 +59,7 @@
 //          difficulty, so neither is tuned to one seed window; a FRAY game takes ~0.1 s)
 //          --jobs N (≤ 3) · --rules '<json>' (deep-merged into every probed mode's rules)
 //          --label <name> (report: _harness/_reports/fw_W4_soak_<label>.json + .txt)
+//          --lineup rotate|shuffle (seating; shuffle = the closing verifier's independent per-role draw) · --mirror-weak novice,adept
 //
 // The catalog is built in memory from content/ (the source of truth; dist-catalog may be stale).
 // Determinism: every match is a pure function of (catalog, setup); the seat lineup is a pure function
@@ -55,6 +71,8 @@ import { fileURLToPath } from 'node:url';
 import type { CatalogT } from '../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent, WorldView, PlayerView } from '../src/contracts/sim.ts';
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
+import type { BotTelemetry } from '../src/sim/bots/micro.ts';
+import { inTelegraph, telegraphFromEvent } from '../src/sim/bots/perception.ts';
 import { fighterProfile, itemRole } from '../src/sim/bots/knowledge.ts';
 import type { Player } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
@@ -66,7 +84,7 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace', 'difficulty']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28); difficulty: W4 refix round 1 (2026-10-29)
+const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace', 'difficulty', 'early']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28); difficulty: W4 refix round 1 (2026-10-29)
 /** the mirrored-difficulty bars need this many games a tier before they fail the probe (fewer: report only) */
 const MIRROR_MIN_GAMES = 40;
 /** a fighter's FRAY placement band is enforced on its mean over every FRAY game it played (both difficulties pooled:
@@ -77,6 +95,8 @@ const FRAY_MIN_GAMES = 100;
 /** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
  *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
 const STRUCT_MIN_GAMES = 16;
+/** the early-fight gates (CL-1) need this many RIFT games per difficulty before they fail the probe */
+const EARLY_MIN_GAMES = 16;
 
 // ── args ────────────────────────────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -97,6 +117,11 @@ const RULES = opt('rules', '');
 const PATCH = opt('patch', '');
 const LABEL = opt('label', FULL ? 'full' : 'quick');
 const MIRROR_SEEDS = Number(opt('mirror-seeds', '20'));
+/** seating: 'rotate' (seed + slot + team over each role's natives) or 'shuffle' (closing verifier's seeded per-role shuffle) */
+const LINEUP = opt('lineup', 'rotate');
+/** which weaker tiers the mirror suite plays the veteran against */
+const MIRROR_WEAK = opt('mirror-weak', 'novice,adept').split(',');
+const HUMAN_CUT = 540;
 
 // ── catalog ─────────────────────────────────────────────────────────────────────────────────────
 function loadCatalog(): CatalogT {
@@ -153,7 +178,7 @@ export function roleLineup(catalog: CatalogT, modeId: string, seed: number, diff
     const slot = i % mode.perTeam;
     const role = roles[slot % roles.length];
     const pl = natives.get(role) ?? all;
-    const fighter = pl[(seed + slot + team) % pl.length];
+    const fighter = LINEUP === 'shuffle' ? shuffled(natives, roles, seed)[role][team] ?? pl[0] : pl[(seed + slot + team) % pl.length];
     const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
     seats.push({
       player: i, team, name: catalog.botNames[i % catalog.botNames.length], fighter, skin, role,
@@ -162,6 +187,19 @@ export function roleLineup(catalog: CatalogT, modeId: string, seed: number, diff
     });
   }
   return { matchId: `soak-${modeId}-${seed}-${diffs.join('-')}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
+}
+
+/** the closing verifier's seating (v_gp.mts): each role's natives shuffled by a stream of the seed, team t takes the t-th */
+function shuffled(natives: Map<string, string[]>, roles: string[], seed: number): Record<string, string[]> {
+  let a = (seed * 2654435761) >>> 0;
+  const rnd = (): number => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const out: Record<string, string[]> = {};
+  for (const role of roles) {
+    const l = (natives.get(role) ?? []).slice();
+    for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; }
+    out[role] = l;
+  }
+  return out;
 }
 
 /** FRAY (no roles, every seat its own team): 10 distinct fighters, the window over the sorted roster moves 10 a seed and
@@ -186,7 +224,11 @@ function ffaLineup(catalog: CatalogT, mode: CatalogT['modes'][number], queue: st
 // ── one match ───────────────────────────────────────────────────────────────────────────────────
 interface Job { suite: string; mode: string; seed: number; diffs: [string, string]; cut: number }
 type KillerKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'none' | 'other';
-interface FDeath { t: number; p: number; role: string; mode: string; killer: KillerKind; killerDef: string; assists: number; involved: boolean; by: number }
+interface FDeath { t: number; p: number; role: string; mode: string; killer: KillerKind; killerDef: string; assists: number; involved: boolean; by: number; lowStay?: boolean }
+/** per-seat micro counters (critic bot-micro): [aimed, hit] skillshots · [inside, dodged] telegraphs · [attacks with ≥ 2 enemy
+ *  fighters in reach, on the lowest-EHP one] · health fraction at each recall start · damage from enemy fighters 3:00–8:00 ·
+ *  deaths 3:00–8:00 */
+interface Micro { shots: number[][]; tele: number[][]; focus: number[][]; recallHp: number[][]; dmg38: number[]; deaths38: number[] }
 interface GameRec {
   job: Job; reason: string; dur: number; winner: number; sudden: number; faults: string[];
   seats: { p: number; team: number; fighter: string; role: string; spells: string[] }[];
@@ -212,6 +254,12 @@ interface GameRec {
   /** FRAY: final placement per seat, and when each seat was eliminated */
   placement: number[];
   elim: { t: number; p: number }[];
+  /** CL-1 early-fight record: takedowns, each seat's first ult and level-6 time (-1: never), levels at 8:00 */
+  tds: { t: number; k: number; v: number }[];
+  firstUlt: number[]; lvl6: number[]; lvl8: number[];
+  micro: Micro;
+  /** the passive seat of the `human` suite (-1: none) */
+  human: number;
 }
 
 const LANE_MODES = new Set(['lane', 'trade', 'push', 'allin']);
@@ -220,20 +268,40 @@ const LANING_FROM = 60, LANING_TO = 840;
 function runGame(catalog: CatalogT, job: Job): GameRec {
   const setup = roleLineup(catalog, job.mode, job.seed, job.diffs);
   const n = setup.seats.length;
+  // (suite human: team 0's dialcross seat stands in for a passive human — a bot brain whose casts and hits on fighters are
+  // dropped, so it walks, farms and recalls like a laner and never fights back. The seat stays a 'bot' seat because the sim
+  // drives only bot seats; no RIFT bot decision reads a seat's controller kind (only FRAY's hunter cap does).)
+  const human = job.suite === 'human' ? setup.seats.findIndex((s) => s.team === 0 && s.role === 'dialcross') : -1;
+  const micro: Micro = { shots: [], tele: [], focus: [], recallHp: [], dmg38: new Array<number>(n).fill(0), deaths38: new Array<number>(n).fill(0) };
+  for (let i = 0; i < n; i++) { micro.shots.push([0, 0]); micro.tele.push([0, 0]); micro.focus.push([0, 0]); micro.recallHp.push([]); }
+  const pendingShots: { t: number; p: number; src: number; ability: string; hit: boolean }[] = [];
+  const pendingTele: { p: number; ent: number; src: number; ability: string; until: number; hit: boolean }[] = [];
+  const lowFor = new Array<number>(n).fill(0);
   const finished = new Set(catalog.items.filter((i) => i.tier === 'core' || i.tier === 'apex').map((i) => i.id));
   const modeTicks: Record<string, number>[] = setup.seats.map(() => ({}));
   const ctrls: (BotController | null)[] = setup.seats.map(() => null);
   const modeOf = (p: number): string => (ctrls[p] as unknown as { mode?: string } | null)?.mode ?? '?';
   const factory = createBots(catalog, setup);
   const bots = (seat: SeatSetup, host: Parameters<typeof factory>[1]): BotController | null => {
+    const passive = seat.player === human;
     const c = factory(seat, host);
     if (!c) return null;
     const think = c.think.bind(c);
     const p = seat.player;
     ctrls[p] = c;
+    const cb = c as unknown as { tel: BotTelemetry | null; mode?: string; prof?: { retreatHp: number }; diff?: { retreatBias: number } };
+    cb.tel = { shot: (t, src, ability) => { if (!passive) pendingShots.push({ t, p, src, ability, hit: false }); } };
+    const thr = (cb.prof?.retreatHp ?? 0.28) + (cb.diff?.retreatBias ?? 0);
     c.think = (view: WorldView, pv: PlayerView) => {
-      const r = think(view, pv);
+      let r = think(view, pv);
       const t = view.time;
+      // the passive seat farms and walks like a laner but never casts and never hits a fighter
+      if (passive) r = r.filter((cmd) => cmd.type !== 'cast' && !(cmd.type === 'attack' && world().entity(cmd.target)?.kind === 'fighter'));
+      const me = (pv as Player).ent;
+      if (view.phase === 'live' && me && me.alive) {
+        const low = me.hp < me.maxHp * thr && cb.mode !== 'retreat' && cb.mode !== 'recall';
+        lowFor[p] = me.hp < me.maxHp * thr ? lowFor[p] + (low ? 1 / 30 : 0) : 0;
+      }
       if (view.phase === 'live' && t >= LANING_FROM && t <= LANING_TO) {
         const e = (pv as Player).ent;
         if (e && e.alive) { const md = (c as unknown as { mode?: string }).mode ?? '?'; modeTicks[p][md] = (modeTicks[p][md] ?? 0) + 1; }
@@ -244,6 +312,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   };
   const sim = createSim(catalog, setup, { bots, pregameSeconds: 0 });
   const rec: GameRec = {
+    tds: [], firstUlt: new Array<number>(n).fill(-1), lvl6: new Array<number>(n).fill(-1), lvl8: [], micro, human,
     job, reason: 'cut', dur: 0, winner: -1, sudden: -1, faults: [],
     seats: setup.seats.map((s) => ({ p: s.player, team: s.team, fighter: s.fighter, role: s.role ?? '', spells: s.loadout.spells.slice() })),
     wick14: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
@@ -275,6 +344,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     return { kind, def: k.def, credited: false };
   };
   const samples: [number, () => void][] = [
+    [480, () => { rec.lvl8 = levels(); }],
     [600, () => { rec.cs10 = csNow.slice(); rec.lvl10 = levels(); }],
     [840, () => { rec.cs14 = csNow.slice(); }],
     [900, () => { rec.lvl15 = levels(); }],
@@ -282,6 +352,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   ];
   let si = 0;
   const limit = job.cut > 0 ? job.cut : 3600;
+  const seatOf = (ent: number): number => world().players.findIndex((p) => p.entity === ent);
   let guard = 0;
   while (sim.view.phase !== 'ended' && guard++ < 30 * 3700) {
     const evs: SimEvent[] = sim.step();
@@ -299,7 +370,8 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
             const k = killerKind(e.killer, vt);
             // (g1: a Wick/Needle/monster blow after an enemy fighter's damage is credited to that fighter, death.by)
             rec.fdeaths.push({ t: e.t, p: pi, role: setup.seats[pi]?.role ?? '', mode: pi >= 0 ? modeOf(pi) : '?', killer: k.kind, killerDef: k.def, assists: e.assists.length,
-              involved: k.credited || e.by >= 0 || e.assists.length > 0, by: e.by });
+              involved: k.credited || e.by >= 0 || e.assists.length > 0, by: e.by, lowStay: pi >= 0 && lowFor[pi] >= 1.5 });
+            if (pi >= 0) { lowFor[pi] = 0; if (e.t >= 180 && e.t <= 480) micro.deaths38[pi]++; }
           }
           break;
         }
@@ -316,7 +388,59 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
           break;
         }
         case 'objective': rec.objs.push({ t: e.t, unit: e.unit, team: e.team }); break;
-        case 'recall': if (e.state === 'done') rec.recalls[e.player]++; break;
+        case 'takedown': rec.tds.push({ t: e.t, k: e.killer, v: e.victim }); break;
+        case 'levelUp': if (e.level === 6 && rec.lvl6[e.player] < 0) rec.lvl6[e.player] = e.t; break;
+        case 'cast': if (e.slot === 'ult') { const pi = seatOf(e.src); if (pi >= 0 && rec.firstUlt[pi] < 0) rec.firstUlt[pi] = e.t; } break;
+        case 'hit': {
+          const dst = world().entity(e.dst), src = world().entity(e.src);
+          if (!dst || dst.kind !== 'fighter' || !src || src.team === dst.team) break;
+          for (const ps of pendingShots) if (!ps.hit && ps.src === e.src && ps.ability === e.ability && e.t - ps.t <= 3) ps.hit = true;
+          for (const pt of pendingTele) if (!pt.hit && pt.src === e.src && pt.ability === e.ability && pt.ent === e.dst) pt.hit = true;
+          break;
+        }
+        case 'area': {
+          if (e.telegraph !== 'everyone' || !(e.delay >= 0.3)) break;
+          const tg = telegraphFromEvent(world(), e);
+          if (!tg) break;
+          for (const pl of world().players) {
+            const f = pl.ent;
+            if (!f || !f.alive || pl.team === tg.srcTeam || pl.player === human || !inTelegraph(tg, f.x, f.y, f.radius)) continue;
+            pendingTele.push({ p: pl.player, ent: f.id, src: e.src, ability: e.ability, until: e.t + e.delay + 0.2, hit: false });
+          }
+          break;
+        }
+        case 'attack': {
+          const src = world().entity(e.src), dst = world().entity(e.dst);
+          if (!src || !dst || src.kind !== 'fighter' || dst.kind !== 'fighter' || src.team === dst.team) break;
+          const pi = seatOf(src.id);
+          if (pi < 0 || pi === human) break;
+          let n2 = 0, best = -1, bs = Infinity;
+          for (const pl of world().players) {
+            const f = pl.ent;
+            if (!f || !f.alive || pl.team === src.team) continue;
+            const r = src.stats.range + src.radius + f.radius + 1.5;
+            if ((f.x - src.x) ** 2 + (f.y - src.y) ** 2 > r * r) continue;
+            n2++;
+            const ehp = (f.hp + f.shield) * (1 + Math.max(0, f.stats.armor) / 100);
+            if (ehp < bs) { bs = ehp; best = f.id; }
+          }
+          if (n2 >= 2) { micro.focus[pi][0]++; if (best === dst.id) micro.focus[pi][1]++; }
+          break;
+        }
+        case 'damage': {
+          if (e.t < 180 || e.t > 480) break;
+          const dst = world().entity(e.dst);
+          if (!dst || dst.kind !== 'fighter') break;
+          const cf = world().creditFighter(world().entity(e.src) ?? null);
+          if (!cf || cf.team === dst.team) break;
+          const pi = seatOf(dst.id);
+          if (pi >= 0) micro.dmg38[pi] += e.amount;
+          break;
+        }
+        case 'recall':
+          if (e.state === 'done') rec.recalls[e.player]++;
+          else if (e.state === 'start') { const f = world().players[e.player]?.ent; if (f) micro.recallHp[e.player].push(Math.round((f.hp / Math.max(1, f.maxHp)) * 100) / 100); }
+          break;
         case 'suddenDeath': rec.sudden = e.t; break;
         case 'eliminated': rec.elim.push({ t: e.t, p: e.player }); break;
         case 'buy':
@@ -328,6 +452,15 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     }
     const t = sim.view.time;
     while (si < samples.length && t >= samples[si][0]) { samples[si][1](); si++; }
+    // settle skillshots (3 s) and telegraphs (their resolve) into the per-seat counters
+    while (pendingShots.length && t - pendingShots[0].t > 3) { const ps = pendingShots.shift()!; micro.shots[ps.p][0]++; if (ps.hit) micro.shots[ps.p][1]++; }
+    for (let i = pendingTele.length - 1; i >= 0; i--) {
+      const pt = pendingTele[i];
+      if (t < pt.until) continue;
+      const pl = world().players[pt.p];
+      if (pl.ent && (pl.ent.alive || pt.hit)) { micro.tele[pt.p][0]++; if (!pt.hit) micro.tele[pt.p][1]++; }
+      pendingTele.splice(i, 1);
+    }
     if (t >= limit) break;
   }
   const w = world();
@@ -351,10 +484,12 @@ function planJobs(): Job[] {
   for (const suite of SUITES) {
     if (suite === 'rift' || suite === 'bridge') {
       for (const d of DIFFS) for (let s = SEED0; s < SEED0 + SEEDS; s++) jobs.push({ suite, mode: suite, seed: s, diffs: [d, d], cut: suite === 'rift' ? CUT : 0 });
+    } else if (suite === 'human') {
+      for (const d of DIFFS) for (let s = SEED0; s < SEED0 + SEEDS; s++) jobs.push({ suite, mode: 'rift', seed: s, diffs: [d, d], cut: HUMAN_CUT });
     } else if (suite === 'fray') {
       for (const d of DIFFS) for (let s = SEED0; s < SEED0 + FRAY_SEEDS; s++) jobs.push({ suite, mode: 'fray', seed: s, diffs: [d, d], cut: 0 });
     } else if (suite === 'mirror') {
-      for (const weak of ['novice', 'adept']) for (let s = SEED0; s < SEED0 + MIRROR_SEEDS; s++) {
+      for (const weak of MIRROR_WEAK) for (let s = SEED0; s < SEED0 + MIRROR_SEEDS; s++) {
         jobs.push({ suite: `mirror_${weak}`, mode: 'rift', seed: s, diffs: ['veteran', weak], cut: 0 });
         jobs.push({ suite: `mirror_${weak}`, mode: 'rift', seed: s, diffs: [weak, 'veteran'], cut: 0 });
       }
@@ -526,6 +661,81 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     const few = diffs.some((d) => fsn[d] < STRUCT_MIN_GAMES);
     gates.push({ group: 'structures', item: 'gameplay:G4', label: `median first structure (RIFT)${few ? ` (fewer than ${STRUCT_MIN_GAMES} games per difficulty: report only, the gate is --full)` : ''}`,
       value: diffs.map((d) => `${d} ${Number.isFinite(fsd[d]) ? fsd[d].toFixed(1) + ' min' : '> cut'}`).join(' / '), target: '9–12 min', pass: diffs.every((d) => fsd[d] >= 9 && fsd[d] <= 12), n: rift.length, reportOnly: few });
+  }
+  // ── early fights (CL-1, r09 §4.4) ──
+  const earlyD: Record<string, unknown> = {};
+  for (const d of diffs) {
+    const gs = rift.filter((g) => g.job.diffs[0] === d && g.tds);
+    if (!gs.length) continue;
+    const few = gs.length < EARLY_MIN_GAMES;
+    const tag = few ? ` (fewer than ${EARLY_MIN_GAMES} games: report only)` : '';
+    const td10 = gs.map((g) => g.tds.filter((x) => x.t <= 600).length);
+    const zero = td10.filter((x) => x === 0).length;
+    const fb = gs.map((g) => (g.tds.length ? g.tds[0].t / 60 : g.dur / 60));
+    const stretch = gs.map((g) => {
+      const ts = [180, ...g.fdeaths.map((x) => x.t).filter((t) => t >= 180).sort((a, b) => a - b), g.dur];
+      let m = 0; for (let i = 1; i < ts.length; i++) m = Math.max(m, ts[i] - ts[i - 1]);
+      return m / 60;
+    });
+    const shade = gs.map((g) => g.tds.filter((x) => x.t <= 840 && x.k >= 0 && g.seats[x.k]?.role === 'shadehold').length);
+    const ult = new Map<string, number[]>();
+    for (const g of gs) for (const s of g.seats) (ult.get(s.fighter) ?? ult.set(s.fighter, []).get(s.fighter)!).push((g.firstUlt[s.p] >= 0 ? g.firstUlt[s.p] : g.dur) / 60);
+    const ultRows = [...ult.entries()].map(([f, a]) => ({ f, n: a.length, med: median(a) })).sort((a, b) => b.med - a.med);
+    const late = ultRows.filter((r) => r.n >= 3 && r.med > 10);
+    const early16 = gs.filter((g) => g.reason === 'core' && g.dur < 960).map((g) => `s${g.job.seed} ${(g.dur / 60).toFixed(1)}m`);
+    const duo = gs.flatMap((g) => g.seats.filter((s) => s.role === 'shaftlight').map((s) => (g.lvl6[s.p] >= 0 ? g.lvl6[s.p] / 60 : Infinity)));
+    const lvl8 = (role: string): number => mean(gs.flatMap((g) => (g.lvl8?.length ? g.seats.filter((s) => s.role === role).map((s) => g.lvl8[s.p]) : [])));
+    earlyD[d] = { td10: mean(td10), zero, fb: median(fb), stretch: median(stretch), shade: mean(shade), ult: ultRows, early16, duo6: median(duo) };
+    text.push('', `early fights RIFT ${d} (${gs.length} games, lineup ${LINEUP}): takedowns ≤ 10:00 ${mean(td10).toFixed(2)} a game (none in ${zero}), ≤ 14:00 ${mean(gs.map((g) => g.tds.filter((x) => x.t <= 840).length)).toFixed(2)}; first blood median ${median(fb).toFixed(1)} min`
+      + `; longest no-death stretch from 3:00 median ${median(stretch).toFixed(1)} min; shadehold takedowns ≤ 14:00 ${mean(shade).toFixed(2)}; level at 8:00 ${['shadehold', 'grovehunter', 'dialcross', 'shaftlight', 'lampglass'].map((r) => `${r} ${lvl8(r).toFixed(1)}`).join(' · ')}`);
+    text.push(`  first ult median (min) per fighter: ${ultRows.map((r) => `${r.f} ${r.med.toFixed(1)}`).join(' · ')}`);
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: credited takedowns by 10:00 a game (both teams)${tag}`, value: `${mean(td10).toFixed(2)}`, target: '≥ 6', pass: mean(td10) >= 6, n: gs.length, reportOnly: few });
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: games with no takedown by 10:00${tag}`, value: `${zero}/${gs.length}`, target: '≤ 1 in 20', pass: zero / gs.length <= 0.05, n: gs.length, reportOnly: few });
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: median longest stretch without a fighter death from 3:00${tag}`, value: `${median(stretch).toFixed(1)} min`, target: '≤ 3 min', pass: median(stretch) <= 3, n: gs.length, reportOnly: few });
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: shadehold takedowns before 14:00 a game${tag}`, value: mean(shade).toFixed(2), target: '≥ 1', pass: mean(shade) >= 1, n: gs.length, reportOnly: few });
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: fighters with a median first ult after 10:00 (≥ 3 games; never = game length)${tag}`, value: late.length ? late.map((r) => `${r.f} ${r.med.toFixed(1)}`).join(', ') : 'none', target: 'none', pass: late.length === 0, n: gs.length, reportOnly: few });
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: cores fallen before 16:00${tag}`, value: early16.length ? early16.join(', ') : '0', target: '0', pass: early16.length === 0, n: gs.length, reportOnly: few || gs.some((g) => g.job.cut > 0) });
+    gates.push({ group: 'early', item: 'gameplay:CL-1', label: `RIFT ${d}: duo road (shaftlight) level 6, median${tag}`, value: Number.isFinite(median(duo)) ? `${median(duo).toFixed(1)} min` : 'never', target: '≤ 8:00', pass: median(duo) <= 8, n: gs.length, reportOnly: few });
+  }
+  detail.early = earlyD;
+  // ── micro (critic bot-micro, report) — per tier, RIFT and mirrored games ──
+  const tierGames = games.filter((g) => g.micro && (g.job.suite === 'rift' || g.job.suite.startsWith('mirror')));
+  const tiers = [...new Set(tierGames.flatMap((g) => g.job.diffs))];
+  const microD: Record<string, unknown> = {};
+  for (const tier of ['novice', 'adept', 'veteran'].filter((x) => tiers.includes(x))) {
+    const a = { shot: [0, 0], tele: [0, 0], focus: [0, 0], deaths: 0, low: 0, recall: [] as number[] };
+    for (const g of tierGames) for (const s of g.seats) {
+      if (g.job.diffs[s.team] !== tier) continue;
+      const m = g.micro;
+      a.shot[0] += m.shots[s.p][0]; a.shot[1] += m.shots[s.p][1];
+      a.tele[0] += m.tele[s.p][0]; a.tele[1] += m.tele[s.p][1];
+      a.focus[0] += m.focus[s.p][0]; a.focus[1] += m.focus[s.p][1];
+      a.recall.push(...m.recallHp[s.p]);
+      for (const x of g.fdeaths) if (x.p === s.p) { a.deaths++; if (x.lowStay) a.low++; }
+    }
+    const r = { skillshotHit: a.shot[1] / Math.max(1, a.shot[0]), shots: a.shot[0], dodge: a.tele[1] / Math.max(1, a.tele[0]), teles: a.tele[0],
+      lowStay: a.low / Math.max(1, a.deaths), deaths: a.deaths, focusLowest: a.focus[1] / Math.max(1, a.focus[0]), focusN: a.focus[0],
+      recallHpMedian: median(a.recall), recallUnder30: a.recall.filter((x) => x < 0.3).length / Math.max(1, a.recall.length), recalls: a.recall.length };
+    microD[tier] = r;
+    text.push('', `micro ${tier}: skillshots hit ${pct(r.skillshotHit)} of ${r.shots} · telegraphs dodged ${pct(r.dodge)} of ${r.teles} · deaths after ≥ 1.5 s under the retreat threshold outside retreat ${pct(r.lowStay)} of ${r.deaths}`
+      + ` · attacks on the lowest-EHP fighter in reach ${pct(r.focusLowest)} of ${r.focusN} · health at recall start median ${pct(r.recallHpMedian)}, under 30 % ${pct(r.recallUnder30)} of ${r.recalls}`);
+  }
+  detail.micro = microD;
+  // ── passive human seat (critic bot-micro: aggression toward the player at 3:00–8:00) ──
+  const hu = games.filter((g) => g.job.suite === 'human' && g.human >= 0);
+  if (hu.length) {
+    const hd: Record<string, unknown> = {};
+    for (const d of [...new Set(hu.map((g) => g.job.diffs[0]))]) {
+      const gs = hu.filter((g) => g.job.diffs[0] === d);
+      const dmg = mean(gs.map((g) => g.micro.dmg38[g.human] / 5));
+      const deaths = mean(gs.map((g) => g.micro.deaths38[g.human]));
+      const ref = rift.filter((g) => g.job.diffs[0] === d && g.micro);
+      const rs = ref.flatMap((g) => g.seats.filter((s) => s.role === 'dialcross').map((s) => ({ dmg: g.micro.dmg38[s.p] / 5, deaths: g.micro.deaths38[s.p] })));
+      hd[d] = { games: gs.length, dmgPerMin: dmg, deaths, botSeatDmgPerMin: mean(rs.map((x) => x.dmg)), botSeatDeaths: mean(rs.map((x) => x.deaths)) };
+      text.push('', `passive human seat (dialcross, team 0) vs ${d} bots, ${gs.length} games: damage taken from enemy fighters 3:00–8:00 ${dmg.toFixed(0)}/min, deaths ${deaths.toFixed(2)} a game`
+        + (rs.length ? ` (the bot-played dialcross in this run's RIFT ${d} games: ${mean(rs.map((x) => x.dmg)).toFixed(0)}/min, ${mean(rs.map((x) => x.deaths)).toFixed(2)} deaths)` : ''));
+    }
+    detail.human = hd;
   }
   // ── items (full RIFT games) ──
   const fullRift = rift.filter((g) => !g.job.cut);

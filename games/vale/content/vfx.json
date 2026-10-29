@@ -14345,8 +14345,18 @@
           1.6
         ],
         "color": [
-          "#F1E2C6",
-          "signature"
+          [
+            0.0,
+            "#F1E2C6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 6.0,
         "alpha": [
@@ -14385,8 +14395,18 @@
         ],
         "life": 0.3,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.7,
@@ -14430,6 +14450,10 @@
             "#F1E2C6"
           ],
           [
+            0.12,
+            "signature"
+          ],
+          [
             0.35,
             "signature"
           ],
@@ -14471,8 +14495,18 @@
         "scale": 2.0,
         "life": 0.75,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -14513,8 +14547,18 @@
         "radius": 1.0,
         "life": 1.0,
         "color": [
-          "#F1E2C6",
-          "team"
+          [
+            0.0,
+            "#F1E2C6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.0,
@@ -14554,8 +14598,18 @@
           0.12
         ],
         "color": [
-          "#F1E2C6",
-          "signature"
+          [
+            0.0,
+            "#F1E2C6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -14595,8 +14649,18 @@
           0
         ],
         "color": [
-          "#F1E2C6",
-          "#BFD3E6"
+          [
+            0.0,
+            "#F1E2C6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -14641,8 +14705,18 @@
           0.04
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -15040,8 +15114,18 @@
         ],
         "life": 0.28,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -15049,7 +15133,7 @@
           0
         ],
         "emissive": 3.0,
-        "rim": "team",
+        "rim": "signature",
         "rimEmissive": 3.0,
         "blend": "add",
         "rotateDeg": [
@@ -15084,8 +15168,18 @@
         ],
         "life": 0.45,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.75,
@@ -15127,14 +15221,14 @@
           ]
         ],
         "life": 1.0,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           0.75,
           0.6,
           0
         ],
         "emissive": 2.0,
-        "rim": "team",
+        "rim": "signature",
         "texture": "frost",
         "fit": true
       },
@@ -15165,7 +15259,7 @@
           0
         ],
         "emissive": 1.6,
-        "rim": "team",
+        "rim": "signature",
         "fit": true
       },
       {
@@ -15186,7 +15280,7 @@
           ]
         ],
         "width": [
-          0.5,
+          0.22,
           0.1
         ],
         "life": 0.32,
@@ -15196,7 +15290,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "fit": true,
@@ -15224,7 +15318,7 @@
           0.05
         ],
         "life": 0.4,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           0.8,
           0.5,
@@ -15268,8 +15362,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -16144,7 +16248,7 @@
             0
           ]
         ],
-        "emissive": 5.0,
+        "emissive": 2.0,
         "sharp": 2.6,
         "noise": 0.25,
         "fit": true,
@@ -16223,7 +16327,7 @@
           ]
         ],
         "emissive": 5.0,
-        "rim": "team",
+        "rim": "signature",
         "rimEmissive": 4.0,
         "noise": 0.5,
         "scroll": [
@@ -16279,7 +16383,7 @@
         "style": "light",
         "radius": 0.75,
         "life": 1.25,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -16325,9 +16429,22 @@
           0
         ],
         "color": [
-          "#F1E2C6",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#F1E2C6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -16364,8 +16481,18 @@
           0.12
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -16400,8 +16527,18 @@
           0
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -18805,6 +18942,10 @@
             "#F4EFE2"
           ],
           [
+            0.12,
+            "signature"
+          ],
+          [
             0.3,
             "signature"
           ],
@@ -18959,7 +19100,7 @@
           0.8,
           0
         ],
-        "emissive": 1.6,
+        "emissive": 0.8,
         "rim": "team",
         "delay": 0.26,
         "angleDeg": 100,
@@ -19042,7 +19183,7 @@
         "drag": 2,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.5,
         "rotDeg": [
           0,
@@ -19540,7 +19681,7 @@
           0.12
         ],
         "life": 0.32,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           1,
           1,
@@ -19589,7 +19730,7 @@
         "drag": 0.5,
         "texture": "wisp",
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.6,
         "align": "velocity",
         "aspect": 0.4,
@@ -19663,8 +19804,18 @@
         ],
         "life": 0.5,
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -19718,7 +19869,7 @@
           ]
         ],
         "width": [
-          0.7,
+          0.22,
           0.15
         ],
         "life": 0.4,
@@ -19728,7 +19879,7 @@
           0.8,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.0,
         "noise": 0.35,
         "delay": 0.3,
@@ -19827,7 +19978,7 @@
           0.6,
           0
         ],
-        "rim": "team",
+        "rim": "signature",
         "texture": "splat",
         "delay": 0.3,
         "fit": true
@@ -21885,8 +22036,18 @@
           1.6
         ],
         "color": [
-          "#B4A8D8",
-          "signature"
+          [
+            0.0,
+            "#B4A8D8"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 3.0,
         "alpha": [
@@ -21970,8 +22131,18 @@
           0.15
         ],
         "color": [
-          "#B4A8D8",
-          "signature"
+          [
+            0.0,
+            "#B4A8D8"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -22011,7 +22182,7 @@
           0.8,
           0
         ],
-        "emissive": 2.6,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "blend": "add"
@@ -22042,7 +22213,7 @@
           0.6,
           0
         ],
-        "rim": "team",
+        "rim": "signature",
         "texture": "splat",
         "fit": false
       }
@@ -22517,7 +22688,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.4,
         "rimEmissive": 4.0,
         "noise": 0.9,
@@ -22573,8 +22744,18 @@
         ],
         "life": 0.5,
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -22627,7 +22808,7 @@
           ]
         ],
         "width": [
-          0.6,
+          0.22,
           0.12
         ],
         "life": 0.35,
@@ -22637,7 +22818,7 @@
           0.8,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "fit": true,
@@ -22665,7 +22846,7 @@
           0.06
         ],
         "life": 0.45,
-        "color": "#B4A8D8",
+        "color": "secondary",
         "alpha": [
           0.8,
           0.5,
@@ -22722,7 +22903,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 3.0,
         "rimEmissive": 2.4,
         "blend": "ink",
@@ -22756,7 +22937,7 @@
           0.75,
           0
         ],
-        "rim": "team",
+        "rim": "signature",
         "texture": "splat",
         "fit": true
       },
@@ -22871,8 +23052,18 @@
           0.3
         ],
         "color": [
-          "#B4A8D8",
-          "signature"
+          [
+            0.0,
+            "#B4A8D8"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -23037,8 +23228,18 @@
           1.6
         ],
         "color": [
-          "#F4EFE2",
-          "signature"
+          [
+            0.0,
+            "#F4EFE2"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 8.0,
         "alpha": [
@@ -23078,11 +23279,11 @@
         "color": [
           [
             0,
-            "signature"
+            "secondary"
           ],
           [
             1,
-            "#B4A8D8"
+            "signature"
           ]
         ],
         "alpha": [
@@ -23147,7 +23348,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "noise": 0.6,
         "scroll": [
           0.4,
@@ -23188,7 +23389,7 @@
           1,
           0
         ],
-        "emissive": 6.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "delay": 0.12,
@@ -23222,8 +23423,18 @@
           0.35
         ],
         "color": [
-          "#B4A8D8",
-          "signature"
+          [
+            0.0,
+            "#B4A8D8"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -25826,8 +26037,18 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -25860,6 +26081,10 @@
             "#B6CEE0"
           ],
           [
+            0.12,
+            "signature"
+          ],
+          [
             0.4,
             "signature"
           ],
@@ -25883,7 +26108,7 @@
           ]
         ],
         "emissive": 3.0,
-        "rim": "team",
+        "rim": "signature",
         "noise": 0.5,
         "noiseScale": 3.0,
         "dissolve": [
@@ -25900,7 +26125,7 @@
             0.4
           ]
         ],
-        "edge": "#F4EFE2",
+        "edge": "signature",
         "edgeEmissive": 3.0,
         "blend": "add",
         "rotateDeg": [
@@ -25919,7 +26144,7 @@
         "at": "ground",
         "radius": 0.825,
         "life": 0.05,
-        "color": "#B6CEE0",
+        "color": "signature",
         "intensity": 3.0,
         "delay": 0.24
       },
@@ -25941,7 +26166,7 @@
           ]
         ],
         "width": [
-          0.35,
+          0.22,
           0.07
         ],
         "life": 0.3,
@@ -25951,7 +26176,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "delay": 0.24,
@@ -25979,8 +26204,18 @@
           0.05
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -26048,8 +26283,18 @@
         "radius": 1.0,
         "life": 1.25,
         "color": [
-          "#BFD3E6",
-          "#BFD3E6"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -26114,7 +26359,7 @@
             0
           ]
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 2.5,
         "noise": 0.4,
         "fit": true,
@@ -26162,7 +26407,7 @@
           0,
           360
         ],
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.8,
         "fit": false
       },
@@ -26194,8 +26439,18 @@
           0
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -26236,9 +26491,22 @@
           0
         ],
         "color": [
-          "#F4EFE2",
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#F4EFE2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -26304,7 +26572,7 @@
         "at": "ground",
         "radius": 1.125,
         "life": 0.05,
-        "color": "#B6CEE0",
+        "color": "signature",
         "intensity": 3.0
       },
       {
@@ -26324,8 +26592,12 @@
             "#FFFFFF"
           ],
           [
+            0.12,
+            "signature"
+          ],
+          [
             0.4,
-            "#B6CEE0"
+            "signature"
           ],
           [
             1,
@@ -26338,7 +26610,7 @@
           0
         ],
         "emissive": 3.0,
-        "rim": "team",
+        "rim": "signature",
         "noise": 0.5,
         "noiseScale": 3.0,
         "dissolve": [
@@ -26355,7 +26627,7 @@
             1
           ]
         ],
-        "edge": "#B6CEE0",
+        "edge": "signature",
         "edgeEmissive": 3.0,
         "blend": "add",
         "rotateDeg": [
@@ -26387,7 +26659,7 @@
           ]
         ],
         "width": [
-          0.45,
+          0.22,
           0.08
         ],
         "life": 0.3,
@@ -26397,7 +26669,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "fit": true,
@@ -26425,7 +26697,7 @@
           0.05
         ],
         "life": 0.38,
-        "color": "#B6CEE0",
+        "color": "signature",
         "alpha": [
           0.8,
           0.5,
@@ -26458,14 +26730,14 @@
           ]
         ],
         "life": 1.0,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           0.7,
           0.5,
           0
         ],
         "emissive": 1.5,
-        "rim": "team",
+        "rim": "signature",
         "texture": "frost",
         "fit": true
       },
@@ -26496,7 +26768,7 @@
           0
         ],
         "emissive": 1.5,
-        "rim": "team",
+        "rim": "signature",
         "delay": 0.02,
         "fit": true
       },
@@ -26531,8 +26803,18 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -26579,8 +26861,18 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -26643,7 +26935,7 @@
           -540,
           540
         ],
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.7,
         "delay": 0.03,
         "secondary": true
@@ -27620,7 +27912,7 @@
         "at": "ground",
         "radius": 0.77,
         "life": 0.06,
-        "color": "#B6CEE0",
+        "color": "signature",
         "intensity": 6.0
       },
       {
@@ -27712,7 +28004,7 @@
           -540,
           540
         ],
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.7,
         "secondary": true
       },
@@ -27734,7 +28026,7 @@
           ]
         ],
         "width": [
-          0.3,
+          0.22,
           0.06
         ],
         "life": 0.3,
@@ -27744,7 +28036,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "fit": false,
@@ -27876,8 +28168,18 @@
           0.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.5,
@@ -27979,8 +28281,18 @@
           0
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -28155,8 +28467,18 @@
           0.2
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.0,
@@ -28203,8 +28525,18 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -28229,7 +28561,7 @@
         "width": 0.12,
         "radius": 1.0,
         "life": 0.5,
-        "color": "#B6CEE0",
+        "color": "signature",
         "alpha": [
           0.6,
           0.4,
@@ -28269,8 +28601,12 @@
             "#FFFFFF"
           ],
           [
+            0.12,
+            "signature"
+          ],
+          [
             0.3,
-            "#B6CEE0"
+            "signature"
           ],
           [
             1,
@@ -28300,7 +28636,7 @@
           ]
         ],
         "emissive": 12,
-        "rim": "team",
+        "rim": "signature",
         "rimEmissive": 6.0,
         "noise": 0.4,
         "noiseScale": 3.0,
@@ -28341,7 +28677,7 @@
         "at": "origin",
         "radius": 0.99,
         "life": 0.06,
-        "color": "#B6CEE0",
+        "color": "signature",
         "intensity": 6.0,
         "light": false,
         "delay": 0.3
@@ -28369,8 +28705,18 @@
         ],
         "life": 0.42,
         "color": [
-          "#B6CEE0",
-          "team"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -28399,7 +28745,7 @@
           ]
         ],
         "width": [
-          0.5,
+          0.22,
           0.1
         ],
         "life": 0.35,
@@ -28409,7 +28755,7 @@
           0.8,
           0
         ],
-        "emissive": 8.0,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "delay": 0.3,
@@ -28436,14 +28782,14 @@
           ]
         ],
         "life": 1.4,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           0.75,
           0.6,
           0
         ],
         "emissive": 2.5,
-        "rim": "team",
+        "rim": "signature",
         "texture": "frost",
         "fit": true
       },
@@ -28473,8 +28819,18 @@
           0.05
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -28661,8 +29017,12 @@
             "#FFFFFF"
           ],
           [
+            0.12,
+            "signature"
+          ],
+          [
             0.3,
-            "#B6CEE0"
+            "signature"
           ],
           [
             1,
@@ -28684,7 +29044,7 @@
           ]
         ],
         "emissive": 12,
-        "rim": "team",
+        "rim": "signature",
         "rimEmissive": 6.0,
         "noise": 0.4,
         "noiseScale": 3.0,
@@ -28734,7 +29094,7 @@
           ]
         ],
         "width": [
-          0.7,
+          0.22,
           0.12
         ],
         "life": 0.4,
@@ -28744,7 +29104,7 @@
           0.8,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "fit": true,
@@ -28772,7 +29132,7 @@
           0.06
         ],
         "life": 0.55,
-        "color": "#B6CEE0",
+        "color": "signature",
         "alpha": [
           0.8,
           0.5,
@@ -28807,7 +29167,7 @@
           0.06
         ],
         "life": 0.3,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.9,
           0.5,
@@ -28839,14 +29199,14 @@
           ]
         ],
         "life": 1.4,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           0.8,
           0.6,
           0
         ],
         "emissive": 2.5,
-        "rim": "team",
+        "rim": "signature",
         "texture": "frost",
         "fit": true
       },
@@ -28911,8 +29271,18 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -28959,8 +29329,18 @@
           1.4
         ],
         "color": [
-          "#B6CEE0",
-          "signature"
+          [
+            0.0,
+            "#B6CEE0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -29018,7 +29398,7 @@
           -540,
           540
         ],
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.7,
         "delay": 0.03,
         "secondary": true
@@ -32068,8 +32448,18 @@
           1.0
         ],
         "color": [
-          "#F4EFE2",
-          "signature"
+          [
+            0.0,
+            "#F4EFE2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 3.0,
         "alpha": [
@@ -32106,8 +32496,18 @@
           0.05
         ],
         "color": [
-          "#F4EFE2",
-          "signature"
+          [
+            0.0,
+            "#F4EFE2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -32138,7 +32538,7 @@
           ]
         ],
         "width": [
-          0.25,
+          0.22,
           0.06
         ],
         "life": 0.35,
@@ -32148,7 +32548,7 @@
           0.8,
           0
         ],
-        "emissive": 2.4,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "delay": 0.3,
@@ -32582,7 +32982,7 @@
           ]
         ],
         "emissive": 0.06,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 3.5,
         "rimEmissive": 3.0,
         "noise": 0.5,
@@ -32631,8 +33031,18 @@
           0
         ],
         "color": [
-          "#D3CEC3",
-          "signature"
+          [
+            0.0,
+            "#D3CEC3"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -33314,7 +33724,7 @@
         "drag": 1,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.35,
         "rotDeg": [
           0,
@@ -33439,8 +33849,18 @@
         ],
         "life": 0.5,
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -33578,7 +33998,7 @@
           ]
         ],
         "width": [
-          0.8,
+          0.22,
           0.15
         ],
         "life": 0.4,
@@ -33588,7 +34008,7 @@
           0.8,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "fit": true,
@@ -33615,8 +34035,18 @@
         ],
         "life": 0.45,
         "color": [
-          "#FFFFFF",
-          "team"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1.0,
@@ -33813,8 +34243,18 @@
           0.15
         ],
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -35467,7 +35907,7 @@
         "at": "origin",
         "radius": 0.6,
         "life": 0.05,
-        "color": "#F7EBD0",
+        "color": "signature",
         "intensity": 3.0
       },
       {
@@ -35479,8 +35919,18 @@
           1.7
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 3.0,
         "alpha": [
@@ -35530,8 +35980,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -35573,7 +36033,7 @@
           0.8,
           0
         ],
-        "emissive": 2.4,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "fit": false,
@@ -35592,8 +36052,18 @@
         "from": "origin",
         "to": "target",
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": 0.16,
         "life": 0.3,
@@ -35633,8 +36103,18 @@
           0.1
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.6,
@@ -35671,7 +36151,7 @@
           ]
         ],
         "life": 0.9,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -35695,7 +36175,7 @@
           ]
         ],
         "emissive": 1.2,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.2,
         "rimEmissive": 3.0,
         "noise": 0.5,
@@ -35712,7 +36192,7 @@
         "at": "target",
         "radius": 0.675,
         "life": 0.05,
-        "color": "#BFD3E6",
+        "color": "signature",
         "intensity": 3.0,
         "delay": 0.22
       },
@@ -35738,8 +36218,18 @@
           0.04
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -36212,7 +36702,7 @@
         "at": "origin",
         "radius": 2.08,
         "life": 0.06,
-        "color": "#FFF4DE",
+        "color": "signature",
         "intensity": 12.0,
         "core": "#FFFFFF"
       },
@@ -36241,8 +36731,18 @@
         ],
         "life": 1.0,
         "color": [
-          "#FFF4DE",
-          "signature"
+          [
+            0.0,
+            "#FFF4DE"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -36271,7 +36771,7 @@
           ]
         ],
         "emissive": 8,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.5,
         "rimEmissive": 6,
         "noise": 0.4,
@@ -36307,19 +36807,17 @@
           ]
         ],
         "width": [
-          0.5,
+          0.22,
           0.18
         ],
         "life": 0.75,
-        "color": [
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           1,
           0.8,
           0
         ],
-        "emissive": 8,
+        "emissive": 2.0,
         "sharp": 1.8,
         "noise": 0.3,
         "blend": "add"
@@ -36347,8 +36845,18 @@
         ],
         "life": 0.95,
         "color": [
-          "#F7EBD0",
-          "team"
+          [
+            0.0,
+            "#F7EBD0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.7,
@@ -36381,7 +36889,7 @@
           ]
         ],
         "life": 1.5,
-        "color": "#F7EBD0",
+        "color": "signature",
         "alpha": [
           0.5,
           0.35,
@@ -36414,8 +36922,18 @@
           0
         ],
         "color": [
-          "#F7EBD0",
-          "signature"
+          [
+            0.0,
+            "#F7EBD0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -36454,8 +36972,18 @@
           0
         ],
         "color": [
-          "#F7EBD0",
-          "signature"
+          [
+            0.0,
+            "#F7EBD0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -36474,7 +37002,7 @@
       {
         "type": "light",
         "at": "origin",
-        "color": "#F7EBD0",
+        "color": "signature",
         "intensity": 22,
         "radius": 12,
         "life": 0.8
@@ -36565,9 +37093,7 @@
         "shape": "orb",
         "scale": 0.4,
         "life": 0.58,
-        "color": [
-          "#F7EBD0"
-        ],
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -36587,7 +37113,7 @@
           ]
         ],
         "emissive": 4.0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.4,
         "rimEmissive": 4.0,
         "noise": 0.35,
@@ -36652,7 +37178,7 @@
           0.6400000000000001,
           0.6912000000000001
         ],
-        "color": "#F7EBD0",
+        "color": "signature",
         "emissive": 3.2,
         "alpha": [
           [
@@ -36687,8 +37213,18 @@
         ],
         "life": 0.58,
         "color": [
-          "#F7EBD0",
-          "signature"
+          [
+            0.0,
+            "#F7EBD0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -36709,7 +37245,7 @@
           ]
         ],
         "emissive": 2.4,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.6,
         "rimEmissive": 2.4,
         "noise": 0.5,
@@ -36729,7 +37265,7 @@
         "style": "light",
         "radius": 1.0,
         "life": 0.58,
-        "color": "#F7EBD0",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -36792,7 +37328,7 @@
             0
           ]
         ],
-        "emissive": 3.5,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.2,
         "blend": "add"
@@ -36819,8 +37355,18 @@
           0
         ],
         "color": [
-          "#F7EBD0",
-          "signature"
+          [
+            0.0,
+            "#F7EBD0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -36854,8 +37400,18 @@
           0
         ],
         "color": [
-          "#F7EBD0",
-          "signature"
+          [
+            0.0,
+            "#F7EBD0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -36874,7 +37430,7 @@
       {
         "type": "light",
         "at": "ground",
-        "color": "#F7EBD0",
+        "color": "signature",
         "intensity": 4,
         "radius": 5,
         "life": 0.58
@@ -38279,7 +38835,7 @@
         "at": "origin",
         "radius": 0.9,
         "life": 0.05,
-        "color": "#F6E0B8",
+        "color": "signature",
         "intensity": 3.0
       },
       {
@@ -38300,7 +38856,7 @@
           ]
         ],
         "width": [
-          0.45,
+          0.22,
           0.1
         ],
         "life": 0.32,
@@ -38310,7 +38866,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "blend": "add"
@@ -38338,8 +38894,18 @@
         ],
         "life": 0.36,
         "color": [
-          "#FFF3E2",
-          "#F6E0B8"
+          [
+            0.0,
+            "#FFF3E2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.8,
@@ -38378,8 +38944,18 @@
           1.4
         ],
         "color": [
-          "#FFF3E2",
-          "signature"
+          [
+            0.0,
+            "#FFF3E2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -38415,8 +38991,18 @@
           0.03
         ],
         "color": [
-          "#FF9A4A",
-          "signature"
+          [
+            0.0,
+            "#FF9A4A"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -38500,7 +39086,7 @@
           ]
         ],
         "life": 0.6,
-        "color": "#BFD3E6",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -38516,7 +39102,7 @@
           ]
         ],
         "emissive": 1.2,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.0,
         "rimEmissive": 3.0,
         "noise": 0.5,
@@ -38541,13 +39127,13 @@
           0
         ],
         "emissive": 1.8,
-        "rim": "team",
+        "rim": "signature",
         "texture": "scorch"
       },
       {
         "type": "light",
         "at": "origin",
-        "color": "#F6E0B8",
+        "color": "signature",
         "intensity": 10,
         "radius": 7,
         "life": 0.3
@@ -38999,7 +39585,7 @@
           ]
         ],
         "emissive": 1.2,
-        "rim": "#F6E0B8",
+        "rim": "signature",
         "rimPow": 1.6,
         "rimEmissive": 2.4,
         "noise": 0.6,
@@ -39043,8 +39629,18 @@
           0.06
         ],
         "color": [
-          "#FFF3E2",
-          "signature"
+          [
+            0.0,
+            "#FFF3E2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -39069,7 +39665,7 @@
           0.9,
           0.9720000000000001
         ],
-        "color": "#FFF3E2",
+        "color": "signature",
         "emissive": 3.0,
         "alpha": [
           [
@@ -39119,7 +39715,7 @@
           ]
         ],
         "emissive": 3.0,
-        "rim": "team",
+        "rim": "signature",
         "texture": "scorch"
       },
       {
@@ -39129,7 +39725,7 @@
         "style": "light",
         "radius": 1.0,
         "life": 0.56,
-        "color": "#F6E0B8",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -39192,7 +39788,7 @@
             0
           ]
         ],
-        "emissive": 5.0,
+        "emissive": 2.0,
         "sharp": 2.4,
         "noise": 0.2,
         "blend": "add"
@@ -39220,8 +39816,18 @@
         ],
         "life": 0.3,
         "color": [
-          "#FFF3E2",
-          "team"
+          [
+            0.0,
+            "#FFF3E2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -39254,8 +39860,18 @@
           0.03
         ],
         "color": [
-          "#FF9A4A",
-          "signature"
+          [
+            0.0,
+            "#FF9A4A"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -39313,7 +39929,7 @@
       {
         "type": "light",
         "at": "ground",
-        "color": "#F6E0B8",
+        "color": "signature",
         "intensity": 8,
         "radius": 5,
         "life": 0.56
@@ -40697,8 +41313,18 @@
         ],
         "life": 0.32,
         "color": [
-          "#F4E9D2",
-          "signature"
+          [
+            0.0,
+            "#F4E9D2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -40730,8 +41356,18 @@
           0.8
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 3.0,
         "alpha": [
@@ -40760,8 +41396,18 @@
           0.8
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "emissive": 3.0,
         "alpha": [
@@ -40902,8 +41548,18 @@
           0
         ],
         "color": [
-          "#F4E9D2",
-          "signature"
+          [
+            0.0,
+            "#F4E9D2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -41337,7 +41993,7 @@
         "at": "ground",
         "radius": 0.88,
         "life": 0.06,
-        "color": "#F4E9D2",
+        "color": "signature",
         "intensity": 12.0,
         "core": "#FFFFFF"
       },
@@ -41368,8 +42024,18 @@
           0.12
         ],
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.8,
@@ -41421,7 +42087,7 @@
           ]
         ],
         "emissive": 3,
-        "rim": "#F4E9D2",
+        "rim": "signature",
         "rimPow": 2.0,
         "rimEmissive": 4,
         "noise": 0.6,
@@ -41450,7 +42116,7 @@
         "style": "light",
         "radius": 7.0,
         "life": 1.5,
-        "color": "#F4E9D2",
+        "color": "signature",
         "alpha": [
           0.55,
           0.3,
@@ -41551,7 +42217,7 @@
           0
         ],
         "emissive": 1.0,
-        "rim": "#F4E9D2",
+        "rim": "signature",
         "texture": "scorch",
         "delay": 0.05,
         "width": 2.2,
@@ -41696,8 +42362,18 @@
           0
         ],
         "color": [
-          "#F4E9D2",
-          "signature"
+          [
+            0.0,
+            "#F4E9D2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -41713,7 +42389,7 @@
       {
         "type": "light",
         "at": "ground",
-        "color": "#F4E9D2",
+        "color": "signature",
         "intensity": 24,
         "radius": 12,
         "life": 0.6
@@ -42987,7 +43663,7 @@
           ]
         ],
         "emissive": 0.8,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.6,
         "rimEmissive": 4.0,
         "noise": 0.6,
@@ -43108,7 +43784,7 @@
           1.1,
           1.1880000000000002
         ],
-        "color": "#C8F0E2",
+        "color": "signature",
         "emissive": 1.2,
         "alpha": [
           [
@@ -43172,7 +43848,7 @@
             0
           ]
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 2.6,
         "noise": 0.15,
         "blend": "add"
@@ -43184,7 +43860,7 @@
         "style": "plain",
         "radius": 1.0,
         "life": 1.12,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -43218,7 +43894,7 @@
           0.5,
           0.54
         ],
-        "color": "#C8F0E2",
+        "color": "signature",
         "emissive": 2.0,
         "alpha": [
           [
@@ -43254,7 +43930,7 @@
           0.5,
           0.54
         ],
-        "color": "#C8F0E2",
+        "color": "signature",
         "emissive": 2.0,
         "alpha": [
           [
@@ -43290,7 +43966,7 @@
           0.5,
           0.54
         ],
-        "color": "#C8F0E2",
+        "color": "signature",
         "emissive": 2.0,
         "alpha": [
           [
@@ -43336,8 +44012,18 @@
           0
         ],
         "color": [
-          "#C8F0E2",
-          "signature"
+          [
+            0.0,
+            "#C8F0E2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -43408,7 +44094,7 @@
         "at": "ground",
         "radius": 0.9,
         "life": 0.05,
-        "color": "#C8F0E2",
+        "color": "signature",
         "intensity": 3.0
       },
       {
@@ -43438,7 +44124,7 @@
           0
         ],
         "emissive": 0.5,
-        "rim": "team",
+        "rim": "signature",
         "texture": "crack"
       },
       {
@@ -43523,7 +44209,7 @@
           ]
         ],
         "emissive": 1.4,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.0,
         "rimEmissive": 3.0,
         "noise": 0.6,
@@ -43541,8 +44227,18 @@
         "scale": 2.0,
         "life": 0.42,
         "color": [
-          "#C8F0E2",
-          "signature"
+          [
+            0.0,
+            "#C8F0E2"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -43592,7 +44288,7 @@
           ]
         ],
         "width": [
-          0.45,
+          0.22,
           0.1
         ],
         "life": 0.3,
@@ -43602,7 +44298,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "fit": true,
@@ -44227,7 +44923,7 @@
         "texture": "drop",
         "blend": "chip",
         "align": "velocity",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.5
       },
       {
@@ -44286,8 +44982,18 @@
         ],
         "life": 0.26,
         "color": [
-          "#C9C3B5",
-          "signature"
+          [
+            0.0,
+            "#C9C3B5"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,
@@ -44419,7 +45125,7 @@
         "at": "ground",
         "radius": 0.825,
         "life": 0.05,
-        "color": "#C9C3B5",
+        "color": "signature",
         "intensity": 3.0,
         "light": false
       },
@@ -44445,7 +45151,7 @@
           1.5
         ],
         "color": [
-          "#C9C3B5",
+          "#A8CDBE",
           "#7E786E"
         ],
         "alpha": [
@@ -44461,7 +45167,7 @@
         ],
         "texture": "splash",
         "blend": "alpha",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.5,
         "soft": 0.2,
         "fit": true
@@ -44509,7 +45215,7 @@
         "texture": "drop",
         "blend": "chip",
         "align": "velocity",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.45,
         "bounce": 0.05
       },
@@ -44531,7 +45237,7 @@
           ]
         ],
         "width": [
-          0.3,
+          0.22,
           0.06
         ],
         "life": 0.32,
@@ -44541,7 +45247,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "fit": true,
@@ -44567,13 +45273,13 @@
           ]
         ],
         "life": 1.2,
-        "color": "#C9C3B5",
+        "color": "#A8CDBE",
         "alpha": [
           0.85,
           0.7,
           0
         ],
-        "rim": "team",
+        "rim": "signature",
         "texture": "ink_puff",
         "fit": true
       },
@@ -44599,8 +45305,14 @@
           0
         ],
         "color": [
-          "signature",
-          "#C9C3B5"
+          [
+            0.0,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -45720,7 +46432,7 @@
           1.1,
           1.2
         ],
-        "color": "#EBD9B8",
+        "color": "signature",
         "emissive": 6,
         "alpha": [
           0,
@@ -45744,7 +46456,7 @@
           1.1,
           1.2
         ],
-        "color": "#EBD9B8",
+        "color": "signature",
         "emissive": 6,
         "alpha": [
           0,
@@ -45768,7 +46480,7 @@
           1.1,
           1.2
         ],
-        "color": "#EBD9B8",
+        "color": "signature",
         "emissive": 6,
         "alpha": [
           0,
@@ -45907,7 +46619,7 @@
           ]
         ],
         "width": [
-          0.7,
+          0.22,
           0.12
         ],
         "life": 0.45,
@@ -45917,7 +46629,7 @@
           0.8,
           0
         ],
-        "emissive": 9.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "delay": 0.18,
@@ -45946,7 +46658,7 @@
           0.05
         ],
         "life": 0.6,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.8,
           0.4,
@@ -45980,8 +46692,18 @@
         ],
         "life": 0.6,
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -46282,7 +47004,7 @@
           0
         ],
         "emissive": 0.5,
-        "rim": "team",
+        "rim": "signature",
         "texture": "crack"
       },
       {
@@ -46303,7 +47025,7 @@
           ]
         ],
         "width": [
-          0.3,
+          0.22,
           0.06
         ],
         "life": 0.3,
@@ -46313,7 +47035,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "blend": "add"
@@ -46339,7 +47061,7 @@
       {
         "type": "ribbon",
         "at": "path",
-        "color": "#D0C6B3",
+        "color": "signature",
         "width": [
           0.0,
           0.35
@@ -46395,8 +47117,14 @@
           0.04
         ],
         "color": [
-          "signature",
-          "#EBD9B8"
+          [
+            0.0,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -48024,7 +48752,7 @@
           0
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.0,
         "rimEmissive": 3.0,
         "mask": "sweep",
@@ -48057,7 +48785,7 @@
         "at": "target",
         "radius": 0.525,
         "life": 0.05,
-        "color": "#F4EFE2",
+        "color": "signature",
         "intensity": 3.0,
         "light": false
       },
@@ -49077,7 +49805,7 @@
         "at": "target",
         "radius": 1.44,
         "life": 0.06,
-        "color": "#B7B4BE",
+        "color": "signature",
         "intensity": 12.0,
         "core": "#FFFFFF"
       },
@@ -49106,8 +49834,18 @@
         ],
         "life": 1.3,
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -49136,7 +49874,7 @@
           ]
         ],
         "emissive": 8,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 1.5,
         "rimEmissive": 6,
         "noise": 0.4,
@@ -49210,7 +49948,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.0,
         "rimEmissive": 5,
         "noise": 0.8,
@@ -49273,7 +50011,7 @@
           ]
         ],
         "width": [
-          0.35,
+          0.22,
           0.08
         ],
         "life": 0.6,
@@ -49283,7 +50021,7 @@
           0.8,
           0
         ],
-        "emissive": 8,
+        "emissive": 2.0,
         "sharp": 2.0,
         "noise": 0.35,
         "blend": "add"
@@ -49310,7 +50048,7 @@
           0.08
         ],
         "life": 1.5,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0,
           1,
@@ -49429,7 +50167,7 @@
         ],
         "texture": "petal",
         "blend": "alpha",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.55,
         "delay": 0.2,
         "secondary": true
@@ -49460,13 +50198,13 @@
           0.6,
           0
         ],
-        "rim": "team",
+        "rim": "signature",
         "texture": "ink_puff"
       },
       {
         "type": "light",
         "at": "target",
-        "color": "#B7B4BE",
+        "color": "signature",
         "intensity": 16,
         "radius": 8,
         "life": 0.5
@@ -49631,7 +50369,7 @@
           0.8,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 1.6,
         "noise": 0.35,
         "blend": "add"
@@ -49652,7 +50390,7 @@
         "emissive": 0,
         "noise": 0.6,
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.6,
         "face": "ground",
         "scroll": 2.0
@@ -49728,7 +50466,7 @@
         ],
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.65,
         "soft": 0.3
       },
@@ -49786,7 +50524,7 @@
         ],
         "texture": "petal",
         "blend": "alpha",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.55,
         "secondary": true
       }
@@ -50264,8 +51002,18 @@
           1.2
         ],
         "color": [
-          "#A6C21E",
-          "#D4F2CF"
+          [
+            0.0,
+            "#A6C21E"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -50329,7 +51077,7 @@
           0.1
         ],
         "life": 0.5,
-        "color": "#A6C21E",
+        "color": "signature",
         "alpha": [
           0,
           0.45,
@@ -50346,7 +51094,7 @@
         "delay": 0.5,
         "radius": 0.8,
         "life": 0.06,
-        "color": "#A6C21E",
+        "color": "signature",
         "intensity": 2.2
       },
       {
@@ -50372,7 +51120,7 @@
           0.05
         ],
         "life": 0.32,
-        "color": "#A6C21E",
+        "color": "signature",
         "alpha": [
           1,
           0.7,
@@ -50449,8 +51197,18 @@
           0.03
         ],
         "color": [
-          "#D4F2CF",
-          "#A6C21E"
+          [
+            0.0,
+            "#D4F2CF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -50590,7 +51348,7 @@
           ]
         ],
         "life": 1.5,
-        "color": "#A6C21E",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -50635,8 +51393,18 @@
         ],
         "life": 1.5,
         "color": [
-          "#D4F2CF",
-          "#D4F2CF"
+          [
+            0.0,
+            "#D4F2CF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -50717,7 +51485,7 @@
           ],
           [
             1,
-            2.8
+            2.0
           ]
         ],
         "sharp": 2.4,
@@ -50748,8 +51516,18 @@
           0
         ],
         "color": [
-          "#D4F2CF",
-          "#D4F2CF"
+          [
+            0.0,
+            "#D4F2CF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -50785,7 +51563,7 @@
           0.05,
           0.28
         ],
-        "color": "#A6C21E",
+        "color": "signature",
         "alpha": [
           0.7,
           0
@@ -50826,8 +51604,18 @@
           ]
         ],
         "color": [
-          "#A6C21E",
-          "secondary"
+          [
+            0.0,
+            "#A6C21E"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "emissive": 2.4,
         "alpha": [
@@ -50860,7 +51648,7 @@
         "at": "ground",
         "radius": 0.9,
         "life": 0.06,
-        "color": "#A6C21E",
+        "color": "signature",
         "intensity": 3.0
       },
       {
@@ -50886,8 +51674,18 @@
         ],
         "life": 0.22,
         "color": [
-          "#D4F2CF",
-          "#A6C21E"
+          [
+            0.0,
+            "#D4F2CF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -50935,7 +51733,7 @@
             0
           ]
         ],
-        "emissive": 2.0,
+        "emissive": 0.8,
         "fit": true
       },
       {
@@ -50946,8 +51744,8 @@
         "texture": "frost",
         "radius": 0.98,
         "life": 1.05,
-        "color": "#A6C21E",
-        "rim": "#D4F2CF",
+        "color": "signature",
+        "rim": "signature",
         "alpha": [
           [
             0,
@@ -50991,8 +51789,18 @@
           1.3
         ],
         "color": [
-          "#D4F2CF",
-          "#A6C21E"
+          [
+            0.0,
+            "#D4F2CF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -51076,8 +51884,18 @@
           ]
         ],
         "color": [
-          "#A6C21E",
-          "secondary"
+          [
+            0.0,
+            "#A6C21E"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "emissive": 2.4,
         "alpha": [
@@ -52630,8 +53448,18 @@
           ]
         ],
         "color": [
-          "#E8C48E",
-          "signature"
+          [
+            0.0,
+            "#E8C48E"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -52740,8 +53568,18 @@
           0
         ],
         "color": [
-          "#E8C48E",
-          "signature"
+          [
+            0.0,
+            "#E8C48E"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -53314,8 +54152,14 @@
           2.4
         ],
         "color": [
-          "signature",
-          "#E8C48E"
+          [
+            0.0,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -53499,8 +54343,18 @@
           0.03
         ],
         "color": [
-          "#E8C48E",
-          "signature"
+          [
+            0.0,
+            "#E8C48E"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -53669,11 +54523,11 @@
           ],
           [
             0.15,
-            "#9A6331"
+            "signature"
           ],
           [
             1,
-            "#B08050"
+            "signature"
           ]
         ],
         "alpha": [
@@ -53764,8 +54618,18 @@
         ],
         "life": 2.0,
         "color": [
-          "#E8C48E",
-          "#BFD3E6"
+          [
+            0.0,
+            "#E8C48E"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -53816,7 +54680,7 @@
           0.13
         ],
         "life": 2.0,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -53877,8 +54741,18 @@
           0
         ],
         "color": [
-          "#E8C48E",
-          "#BFD3E6"
+          [
+            0.0,
+            "#E8C48E"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -54015,20 +54889,17 @@
           ]
         ],
         "width": [
-          0.5,
+          0.22,
           0.12
         ],
         "life": 0.28,
-        "color": [
-          "#FFFFFF",
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           1,
           0.9,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.2,
         "fit": true
@@ -54056,7 +54927,7 @@
           0.06
         ],
         "life": 0.4,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.9,
           0.7,
@@ -54088,7 +54959,7 @@
         ],
         "life": 1.55,
         "color": "#4A2F18",
-        "rim": "team",
+        "rim": "signature",
         "alpha": [
           [
             0,
@@ -54115,7 +54986,7 @@
         "radius": 0.98,
         "life": 1.55,
         "color": "signature",
-        "rim": "#E8C48E",
+        "rim": "signature",
         "alpha": [
           [
             0,
@@ -54159,9 +55030,22 @@
           1.3
         ],
         "color": [
-          "#FFFFFF",
-          "#E8C48E",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -55950,7 +56834,7 @@
           0
         ],
         "life": 1.3,
-        "color": "#BFD3E6",
+        "color": "secondary",
         "alpha": [
           [
             0,
@@ -55986,7 +56870,7 @@
           0.47
         ],
         "life": 1.3,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -56022,7 +56906,7 @@
           -0.47
         ],
         "life": 1.3,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -56067,9 +56951,22 @@
           0
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            0.5,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -56118,8 +57015,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "#A9C6DE"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           0,
@@ -56160,8 +57067,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -56267,8 +57184,18 @@
         ],
         "life": 0.2,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.8,
@@ -56329,8 +57256,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "#A9C6DE"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           1,
@@ -56354,8 +57291,18 @@
           -0.45
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": [
           0.0,
@@ -56379,8 +57326,18 @@
           0.45
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": [
           0.0,
@@ -56454,8 +57411,18 @@
           0.03
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           1,
@@ -56506,8 +57473,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "#A9C6DE"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           1,
@@ -57081,9 +58058,22 @@
         ],
         "life": 0.24,
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            0.5,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -57127,7 +58117,7 @@
           0
         ],
         "life": 0.5,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -57165,8 +58155,18 @@
           0.04
         ],
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -57283,7 +58283,7 @@
           0
         ],
         "life": 1.3,
-        "color": "#A9C6DE",
+        "color": "secondary",
         "alpha": [
           [
             0,
@@ -57320,7 +58320,7 @@
           0
         ],
         "life": 1.3,
-        "color": "#BFD3E6",
+        "color": "secondary",
         "alpha": [
           [
             0,
@@ -57356,7 +58356,7 @@
           0.72
         ],
         "life": 1.3,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -57392,7 +58392,7 @@
           -0.72
         ],
         "life": 1.3,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -57437,9 +58437,22 @@
           0
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            0.5,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -57488,8 +58501,18 @@
           1.3
         ],
         "color": [
-          "#BFD3E6",
-          "#A9C6DE"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           0,
@@ -57520,8 +58543,18 @@
         ],
         "life": 1.3,
         "color": [
-          "#BFD3E6",
-          "team"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -57565,20 +58598,17 @@
           ]
         ],
         "width": [
-          0.25,
+          0.22,
           0.04
         ],
         "life": 0.3,
-        "color": [
-          "#BFD3E6",
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           1,
           0.6,
           0
         ],
-        "emissive": 3.5,
+        "emissive": 2.0,
         "sharp": 2.0,
         "mode": "vertical"
       },
@@ -57638,9 +58668,22 @@
         "type": "ribbon",
         "at": "path",
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            0.5,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": [
           0.0,
@@ -57664,8 +58707,18 @@
           0.5
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": [
           0.0,
@@ -57687,8 +58740,18 @@
           -0.5
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": [
           0.0,
@@ -57765,9 +58828,22 @@
           1.4
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            0.5,
+            "secondary"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -57828,8 +58904,18 @@
           0.04
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           1,
@@ -58290,7 +59376,7 @@
           ]
         ],
         "life": 0.8,
-        "color": "#7FD6A0",
+        "color": "signature",
         "alpha": [
           0.45,
           0.3,
@@ -58349,8 +59435,18 @@
           0
         ],
         "color": [
-          "#7FD6A0",
-          "#CFF2D9"
+          [
+            0.0,
+            "#7FD6A0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -58387,8 +59483,18 @@
           0
         ],
         "color": [
-          "#7FD6A0",
-          "#CFF2D9"
+          [
+            0.0,
+            "#7FD6A0"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -58458,7 +59564,7 @@
         "at": "ground",
         "radius": 0.9,
         "life": 0.06,
-        "color": "#EEDFB8",
+        "color": "signature",
         "intensity": 3.0,
         "offset": [
           0,
@@ -58484,7 +59590,7 @@
           ]
         ],
         "width": [
-          0.35,
+          0.22,
           0.06
         ],
         "life": 0.36,
@@ -58494,7 +59600,7 @@
           0.85,
           0
         ],
-        "emissive": 4.0,
+        "emissive": 2.0,
         "sharp": 2.0,
         "noise": 0.3,
         "fit": true
@@ -58524,15 +59630,25 @@
         ],
         "life": 0.28,
         "color": [
-          "#FFFFFF",
-          "#EEDFB8"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.7,
           0
         ],
         "emissive": 3.0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.4,
         "rimEmissive": 3.0,
         "noise": 0.5,
@@ -58582,8 +59698,18 @@
           0
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -58652,7 +59778,7 @@
       {
         "type": "light",
         "at": "ground",
-        "color": "#EEDFB8",
+        "color": "signature",
         "intensity": 8,
         "radius": 6,
         "life": 0.3
@@ -58726,8 +59852,18 @@
           ]
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -58774,8 +59910,18 @@
           0.32
         ],
         "color": [
-          "#FFFFFF",
-          "#EEDFB8"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -58813,7 +59959,7 @@
           1.0,
           0.7
         ],
-        "color": "#EEDFB8",
+        "color": "signature",
         "alpha": [
           0.6,
           0.5,
@@ -58853,8 +59999,18 @@
           0
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -59876,8 +61032,18 @@
         ],
         "life": 1.05,
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -59969,7 +61135,7 @@
           1,
           0
         ],
-        "emissive": 2.8,
+        "emissive": 2.0,
         "sharp": 2.0
       },
       {
@@ -59980,7 +61146,7 @@
         "texture": "caustic",
         "radius": 0.6,
         "life": 1.0,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.5,
           0.4,
@@ -60425,8 +61591,18 @@
         ],
         "life": 0.45,
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": 0.85,
         "emissive": 2.4,
@@ -60486,8 +61662,14 @@
           0
         ],
         "color": [
-          "signature",
-          "#EEDFB8"
+          [
+            0.0,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "width": [
           0.0,
@@ -60526,8 +61708,18 @@
           0.05
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,
@@ -61051,7 +62243,7 @@
             0.0
           ]
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 2.4,
         "noise": 0.3,
         "fit": true
@@ -61064,7 +62256,7 @@
         "texture": "caustic",
         "radius": 0.98,
         "life": 1.3,
-        "color": "#CDBF9C",
+        "color": "signature",
         "alpha": [
           [
             0,
@@ -61168,8 +62360,18 @@
           0
         ],
         "color": [
-          "#EEDFB8",
-          "#BFD3E6"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -61210,8 +62412,18 @@
           0.15
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,
@@ -61238,7 +62450,7 @@
         "at": "origin",
         "radius": 1.3,
         "life": 0.1,
-        "color": "#EEDFB8",
+        "color": "signature",
         "intensity": 10,
         "core": "#FFFFFF",
         "offset": [
@@ -61265,14 +62477,11 @@
           ]
         ],
         "width": [
-          0.35,
+          0.22,
           0.12
         ],
         "life": 0.7,
-        "color": [
-          "#EEDFB8",
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           [
             0,
@@ -61291,7 +62500,7 @@
             0
           ]
         ],
-        "emissive": 8,
+        "emissive": 2.0,
         "sharp": 2.0,
         "noise": 0.3,
         "fit": true
@@ -61320,8 +62529,18 @@
         ],
         "life": 0.62,
         "color": [
-          "#BFD3E6",
-          "#EEDFB8"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -61369,8 +62588,18 @@
           0.1
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -61413,9 +62642,22 @@
           0
         ],
         "color": [
-          "#FFFFFF",
-          "#EEDFB8",
-          "#BFD3E6"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -61459,8 +62701,18 @@
         ],
         "life": 0.7,
         "color": [
-          "#FFFFFF",
-          "#EEDFB8"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -61515,8 +62767,18 @@
           ]
         ],
         "color": [
-          "#EEDFB8",
-          "signature"
+          [
+            0.0,
+            "#EEDFB8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -61593,7 +62855,7 @@
       {
         "type": "light",
         "at": "origin",
-        "color": "#EEDFB8",
+        "color": "signature",
         "intensity": 20,
         "radius": 12,
         "life": 0.9,
@@ -64326,7 +65588,7 @@
         "at": "origin",
         "radius": 0.95,
         "life": 0.08,
-        "color": "#F3E3C2",
+        "color": "signature",
         "intensity": 3.0,
         "offset": [
           0.2,
@@ -64358,8 +65620,18 @@
           ]
         ],
         "color": [
-          "#F3E3C2",
-          "#EAD7AE"
+          [
+            0.0,
+            "#F3E3C2"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           [
@@ -64401,7 +65673,7 @@
           ]
         ],
         "life": 0.45,
-        "color": "#EAD7AE",
+        "color": "secondary",
         "alpha": [
           0.7,
           0.35,
@@ -64485,7 +65757,7 @@
         "texture": "streak",
         "stretch": 0.05,
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.8,
         "offset": [
           0,
@@ -64513,7 +65785,7 @@
           ]
         ],
         "width": [
-          0.4,
+          0.22,
           0.07
         ],
         "life": 0.34,
@@ -64523,7 +65795,7 @@
           0.9,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.35,
         "fit": true
@@ -64554,8 +65826,18 @@
           0.03
         ],
         "color": [
-          "#F3E3C2",
-          "#EAD7AE"
+          [
+            0.0,
+            "#F3E3C2"
+          ],
+          [
+            0.12,
+            "secondary"
+          ],
+          [
+            1.0,
+            "secondary"
+          ]
         ],
         "alpha": [
           1,
@@ -64572,7 +65854,7 @@
       {
         "type": "light",
         "at": "origin",
-        "color": "#EAD7AE",
+        "color": "signature",
         "intensity": 14,
         "radius": 8,
         "life": 0.35
@@ -65310,7 +66592,7 @@
         "at": "origin",
         "radius": 1.3,
         "life": 0.1,
-        "color": "#F3E3C2",
+        "color": "signature",
         "intensity": 10,
         "core": "#FFFFFF",
         "offset": [
@@ -65362,7 +66644,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.0,
         "rimEmissive": 2.0,
         "noise": 0.4,
@@ -65399,8 +66681,18 @@
         "scale": 2.02,
         "life": 0.42,
         "color": [
-          "#FFFFFF",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -65476,8 +66768,18 @@
         "radius": 1.0,
         "life": 0.35,
         "color": [
-          "#FFFFFF",
-          "team"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.75,
@@ -65536,7 +66838,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65598,7 +66900,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65663,7 +66965,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65725,7 +67027,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65788,7 +67090,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65851,7 +67153,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65914,7 +67216,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -65977,7 +67279,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -66040,7 +67342,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 3.0,
         "noise": 0.7,
@@ -66159,7 +67461,7 @@
         "gravity": -0.3,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.55,
         "rotDeg": [
           0,
@@ -66256,7 +67558,7 @@
       {
         "type": "light",
         "at": "origin",
-        "color": "#EAD7AE",
+        "color": "signature",
         "intensity": 20,
         "radius": 10,
         "life": 0.4
@@ -66325,8 +67627,18 @@
           ]
         ],
         "color": [
-          "#EAD7AE",
-          "signature"
+          [
+            0.0,
+            "#EAD7AE"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -66467,7 +67779,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 5.0,
         "noise": 0.7,
@@ -66528,7 +67840,7 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 4.5,
         "rimEmissive": 5.0,
         "noise": 0.7,
@@ -66579,7 +67891,7 @@
         "drag": 1.0,
         "texture": "ink_puff",
         "blend": "ink",
-        "rim": "team",
+        "rim": "signature",
         "rimAlpha": 0.55,
         "rotDeg": [
           0,
@@ -66590,7 +67902,7 @@
       {
         "type": "light",
         "at": "origin",
-        "color": "#EAD7AE",
+        "color": "signature",
         "intensity": 10,
         "radius": 6,
         "life": 0.9,
@@ -68066,8 +69378,14 @@
         "width": 0.1,
         "life": 0.09,
         "color": [
-          "signature",
-          "#BFD3E6"
+          [
+            0.0,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -68168,8 +69486,18 @@
         ],
         "life": 0.75,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -68186,7 +69514,7 @@
           ]
         ],
         "emissive": 2.4,
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.0,
         "rimEmissive": 2.4,
         "align": "dir"
@@ -68220,7 +69548,7 @@
           1,
           0
         ],
-        "emissive": 2.6,
+        "emissive": 2.0,
         "sharp": 2.0
       },
       {
@@ -68249,8 +69577,18 @@
           0.05
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -69340,20 +70678,17 @@
           ]
         ],
         "width": [
-          0.5,
+          0.22,
           0.08
         ],
         "life": 0.45,
-        "color": [
-          "#FFFFFF",
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           1,
           0.8,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.0,
         "noise": 0.3
       },
@@ -69381,7 +70716,7 @@
           0.04
         ],
         "life": 0.35,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.9,
           0.5,
@@ -69418,8 +70753,18 @@
           0.12
         ],
         "color": [
-          "#C9D4DC",
-          "signature"
+          [
+            0.0,
+            "#C9D4DC"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -69557,9 +70902,22 @@
           ]
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -69597,8 +70955,18 @@
           0
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0,
@@ -70042,16 +71410,13 @@
           0.06
         ],
         "life": 0.5,
-        "color": [
-          "#FFFFFF",
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           1,
           0.8,
           0
         ],
-        "emissive": 6,
+        "emissive": 2.0,
         "sharp": 2.6,
         "noise": 0.2,
         "fit": true
@@ -70079,8 +71444,18 @@
         ],
         "life": 0.45,
         "color": [
-          "#BFD3E6",
-          "team"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,
@@ -70112,8 +71487,18 @@
         ],
         "life": 0.32,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.55,
@@ -70150,8 +71535,18 @@
         ],
         "life": 0.36,
         "color": [
-          "#BFD3E6",
-          "team"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.0,
@@ -70183,8 +71578,18 @@
         ],
         "life": 0.36,
         "color": [
-          "#BFD3E6",
-          "team"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.0,
@@ -70216,8 +71621,18 @@
         ],
         "life": 0.36,
         "color": [
-          "#BFD3E6",
-          "team"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.0,
@@ -70246,7 +71661,7 @@
           ]
         ],
         "life": 0.7,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.55,
           0.3,
@@ -70282,9 +71697,22 @@
           1.3
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -70322,8 +71750,18 @@
           0.55
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,
@@ -71285,9 +72723,22 @@
         "scale": 2.0,
         "life": 0.2,
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -71328,8 +72779,18 @@
         "scale": 2.02,
         "life": 0.3,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -71369,8 +72830,18 @@
         "scale": 2.02,
         "life": 0.3,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -71410,8 +72881,18 @@
         "scale": 2.02,
         "life": 0.3,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -71451,7 +72932,7 @@
         "angleDeg": 90,
         "radius": 1.0,
         "life": 0.5,
-        "color": "team",
+        "color": "signature",
         "alpha": [
           0.5,
           0.3,
@@ -71488,9 +72969,22 @@
           1.3
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -71528,8 +73022,18 @@
           0.5
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,
@@ -72702,8 +74206,18 @@
         ],
         "life": 0.55,
         "color": [
-          "#C7D9E8",
-          "signature"
+          [
+            0.0,
+            "#C7D9E8"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           [
@@ -72745,7 +74259,7 @@
             1.0
           ]
         ],
-        "rim": "team",
+        "rim": "signature",
         "rimPow": 2.6,
         "rimEmissive": 8,
         "noise": 0.4,
@@ -72791,20 +74305,17 @@
           ]
         ],
         "width": [
-          0.6,
+          0.22,
           0.07
         ],
         "life": 0.42,
-        "color": [
-          "#FFFFFF",
-          "team"
-        ],
+        "color": "team",
         "alpha": [
           1,
           0.8,
           0
         ],
-        "emissive": 10,
+        "emissive": 2.0,
         "sharp": 2.2,
         "noise": 0.3,
         "fit": true
@@ -72833,8 +74344,18 @@
         ],
         "life": 0.42,
         "color": [
-          "#FFFFFF",
-          "team"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -72870,8 +74391,18 @@
         ],
         "life": 0.42,
         "color": [
-          "#FFFFFF",
-          "team"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -72903,8 +74434,18 @@
         ],
         "life": 0.38,
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.6,
@@ -72973,9 +74514,22 @@
           1.4
         ],
         "color": [
-          "#FFFFFF",
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#FFFFFF"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            0.5,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           1,
@@ -73110,8 +74664,18 @@
           0.9
         ],
         "color": [
-          "#BFD3E6",
-          "signature"
+          [
+            0.0,
+            "#BFD3E6"
+          ],
+          [
+            0.12,
+            "signature"
+          ],
+          [
+            1.0,
+            "signature"
+          ]
         ],
         "alpha": [
           0.9,

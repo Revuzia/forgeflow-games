@@ -4,8 +4,8 @@
   "skin": true,
   "parts": {
     "tris_hood": 1550,
-    "tris_eyeband": 520,
-    "tris_eyeslit": 60,
+    "tris_eyeband": 518,
+    "tris_eyeslit": 58,
     "tris_facewrap": 650,
     "tris_mantle": 1850,
     "tris_pauldron_R": 438,
@@ -19,7 +19,7 @@
     "tris_shinguard_L": 380,
     "tris_straps_R": 684,
     "tris_straps_L": 680,
-    "tris_boots": 948,
+    "tris_boots": 950,
     "tris_forearms": 560,
     "tris_gauntlet_R": 480,
     "tris_gauntlet_L": 480,
@@ -36,38 +36,38 @@
     "tris_inlays": 60,
     "tris_rope_coils": 1342,
     "tris_iron_pins": 300,
-    "validate_hesmi": "21472->21468"
+    "validate_hesmi": "21470->21466"
   },
-  "uv_coverage": 0.585,
+  "uv_coverage": 0.598,
   "bake": {
-    "base": 3.67,
-    "rough_metal": 3.11,
-    "normal": 1.9,
-    "ao": 2.86,
-    "normal_fixed_px": 119629,
-    "projection": 16.08,
-    "pack_save": 16.47,
-    "total": 28.32
+    "base": 10.13,
+    "rough_metal": 6.83,
+    "normal": 3.33,
+    "ao": 4.19,
+    "normal_fixed_px": 118060,
+    "projection": 29.02,
+    "pack_save": 29.98,
+    "total": 55.21
   },
-  "tris": 21528,
+  "tris": 21526,
   "mesh_top_m": 2.301,
-  "glb_bytes_raw": 2655588,
+  "glb_bytes_raw": 2691852,
   "optimize": {
     "ok": true,
-    "before": 2655588,
-    "after": 1142832
+    "before": 2691852,
+    "after": 1154328
   },
-  "glb_bytes": 1142832,
+  "glb_bytes": 1154328,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1116 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_gorgewalk_base 2048x2048 283K, hesmi_gorgewalk_normal 512x512 54K, hesmi_gorgewalk_orm 512x512 81K",
-      "  skinned meshes: hesmi_accent(120v), hesmi_gorgewalk(20330v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1127 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_gorgewalk_base 2048x2048 292K, hesmi_gorgewalk_normal 512x512 55K, hesmi_gorgewalk_orm 512x512 82K",
+      "  skinned meshes: hesmi_accent(120v), hesmi_gorgewalk(20393v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 21528; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 21526; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -77,8 +77,8 @@
       "portrait": "art/out/fighters/hesmi/hesmi_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 12.99,
-      "portrait": 4.05
+      "splash": 70.48,
+      "portrait": 27.51
     }
   },
   "three_qa": {
@@ -110,24 +110,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/hesmi/three_hesmi_gorgewalk.png",
-    "seconds": 11.4,
+    "seconds": 67.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.27,
-      "model": 8.05,
-      "lows_bind": 7.5,
-      "uv": 4.55,
-      "bake": 28.33,
-      "export": 0.19,
-      "optimize": 0.97,
-      "load_test": 0.15,
-      "render": 17.09,
-      "three_qa": 11.72
+      "materials": 0.31,
+      "model": 12.16,
+      "lows_bind": 11.59,
+      "uv": 7.03,
+      "bake": 55.23,
+      "export": 0.33,
+      "optimize": 2.91,
+      "load_test": 0.37,
+      "render": 98.13,
+      "three_qa": 68.51
     },
-    "total_s": 78.98
+    "total_s": 256.79
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22

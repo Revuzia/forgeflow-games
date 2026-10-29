@@ -16,6 +16,14 @@ one place:
                    or a mesh of 0.5-1.2 m) gets a 0.8 m signature glow between its core and its chips.
   drop_shake       (m4) no ability shakes the camera: feel layers lose `shake` (a feel layer left with nothing
                    else to do is removed). Impact is sold by flash, the exposure envelope, particles and marks.
+  light_pass       (closing C1) the fighter's hue carries the LIGHT of its third ability and ultimate in play, not just
+                   the layer count: in a third-ability / ultimate def (not a wind-up) team colour lives on ONE thin
+                   keyline (the brightest team shockwave lip, emissive <= 2 and width <= 0.22 m; else the ground-ring
+                   edge) and every other team ref becomes the signature; fixed bright neutrals (warm whites, creams,
+                   Dawnglass, ice, lavender greys, a fixed orange) in light layers (flash, light, additive and emissive
+                   layers, emissive decals) stay only as the first 12 % of a gradient (the 1-2 frame core) and become
+                   the signature (flash, light) or the fighter's pale companion (else the signature) for the rest of
+                   their life. Surfaces (ink, chip, alpha bodies) keep their own colours. Idempotent.
 """
 from __future__ import annotations
 
@@ -181,5 +189,196 @@ def drop_shake(d: dict) -> dict:
     return d
 
 
+# ── closing C1: light share ──────────────────────────────────────────────────────────────────────────────────────────
+_GAME = __import__("pathlib").Path(__file__).resolve().parent.parent.parent
+_SIGS: dict = {}
+
+
+def _hsv(h: str):
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    mx, mn = max(r, g, b), min(r, g, b)
+    s = (mx - mn) / mx if mx > 0 else 0
+    if mx == mn:
+        hue = 0.0
+    elif mx == r:
+        hue = ((g - b) / (mx - mn)) % 6
+    elif mx == g:
+        hue = (b - r) / (mx - mn) + 2
+    else:
+        hue = (r - g) / (mx - mn) + 4
+    return (hue * 60 + 360) % 360, s, mx
+
+
+def fighter_sig(fid: str):
+    """the fighter's signature pair and whether its companion is pale (light) or dark (a deep tone)"""
+    if fid not in _SIGS:
+        import json
+        p = _GAME / "content" / "fighters" / f"{fid}.json"
+        v = json.loads(p.read_text(encoding="utf-8")).get("vfx") if p.exists() else None
+        _SIGS[fid] = v and {"sig": v["signature"], "sec": v["secondary"], "secPale": _hsv(v["secondary"])[2] >= 0.85}
+    return _SIGS[fid]
+
+
+def _neutral(c, sig_hex: str, heal_ok: bool = True) -> bool:
+    """a fixed bright colour off the signature's hue (or near-white): light that is neither the fighter nor the team"""
+    if not isinstance(c, str) or not c.startswith("#") or len(c) != 7:
+        return False
+    h, s, v = _hsv(c)
+    if v < 0.5:
+        return False          # ink, smoke, stone: surfaces, not light
+    if s >= 0.35 and 125 <= h <= 150 and heal_ok:
+        return False          # HEAL green is a functional colour (tokens vfx.reservedHuesHSV heal): its keyline keeps it
+    if s < 0.35:
+        return True           # warm white, cream, Dawnglass, ice, lavender grey
+    sh = _hsv(sig_hex)[0]
+    d = abs(h - sh)
+    return min(d, 360 - d) > 12   # a fixed saturated colour off the fighter's own hue (a fixed orange, a resin green)
+
+
+def _keys(v):
+    if isinstance(v, str):
+        return [[0, v]]
+    if isinstance(v, list) and v and all(isinstance(x, list) and len(x) == 2 for x in v):
+        return [list(x) for x in v]
+    if isinstance(v, list) and v and all(isinstance(x, str) for x in v):
+        n = len(v)
+        return [[round(i / (n - 1), 3) if n > 1 else 0, x] for i, x in enumerate(v)]
+    return None
+
+
+def _light_grad(v, sig_hex: str, repl: str, heal_ok: bool = True):
+    """a light gradient: a neutral stays only as the 12 % core at t 0; later neutral keys become `repl`"""
+    ks = _keys(v)
+    if not ks:
+        return v
+    if len(ks) == 1:
+        return repl if _neutral(ks[0][1], sig_hex, heal_ok) else v
+    out = [ks[0]] + [[t, repl if _neutral(c, sig_hex, heal_ok) else c] for t, c in ks[1:]]
+    if _neutral(out[0][1], sig_hex, heal_ok) and out[1][0] > 0.12:
+        out.insert(1, [0.12, out[1][1]])
+    if out == ks:
+        return v
+    return out
+
+
+def _is_light(l: dict) -> bool:
+    t, blend = l["type"], l.get("blend")
+    if t in ("flash", "light"):
+        return True
+    if blend in ("ink", "chip", "alpha"):
+        return False
+    if t == "decal":
+        ks = _curve_keys(l.get("emissive", 0)) or [[0, 0]]
+        return max(k[1] for k in ks) > 0
+    return t in ("sprite", "emitter", "mesh", "shockwave", "ring", "ribbon", "beam", "trail")
+
+
+def _team_in(v) -> bool:
+    return v == "team" or (isinstance(v, list) and any(x == "team" or (isinstance(x, list) and len(x) == 2 and x[1] == "team") for x in v))
+
+
+COLOR_KEYS = ("color", "rim", "edge", "core")
+# a signature too dark to register as light on its own (Dunsom's indigo, relative luminance ~0.05): its light layers
+# open on the pale same-hue companion and settle into the signature (the reviewer's indigo column, lavender coil)
+DARK_SIG = {"dunsom"}
+# surface marks whose pale colour, painted over the lane, reads as off-hue light: tinted toward the fighter
+SURFACE_TINT = {"marund_a3_mortar": {"#C9C3B5": "#A8CDBE"}}
+
+
+def _heal(c) -> bool:
+    if not isinstance(c, str) or not c.startswith("#"):
+        return False
+    h, s, v = _hsv(c)
+    return s >= 0.35 and v >= 0.5 and 125 <= h <= 150
+
+
+def _lift_dark(v):
+    """['…', 'signature'] light → the first signature key becomes the pale companion, the gradient ends in the signature"""
+    ks = _keys(v)
+    if not ks:
+        return v
+    idx = next((k for k, (t, c) in enumerate(ks) if c == "signature" and (k > 0 or len(ks) == 1 or ks[0][1] == "signature")), None)
+    if idx is None:
+        return v
+    ks[idx][1] = "secondary"
+    if ks[-1][1] != "signature" or len(ks) == 1:
+        ks.append([1.0, "signature"]) if ks[-1][0] < 1 or len(ks) == 1 else ks.__setitem__(-1, [ks[-1][0], "signature"])
+    if len(ks) >= 2 and ks[0][0] == ks[-1][0]:
+        ks[-1][0] = 1.0
+    return ks
+
+
+def light_pass(d: dict) -> dict:
+    i = d["id"]
+    fid = i.split("_", 1)[0]
+    sg = fighter_sig(fid)
+    if not sg or i.endswith("_windup"):
+        return d
+    sig_hex = sg["sig"]
+    companion = "secondary" if sg["secPale"] else "signature"
+    to_sig = lambda c: "signature" if c == "team" else c  # noqa: E731
+    # the one keyline: the brightest team-coloured (additive) shockwave, else the first ground-ring edge in team
+    waves = [l for l in d["layers"] if l["type"] in ("shockwave", "ring") and l.get("blend") != "ink" and _team_in(l.get("color"))]
+    key = max(waves, key=lambda l: l.get("emissive") if isinstance(l.get("emissive"), (int, float)) else 0) if waves else None
+    if key is None:
+        key = next((l for l in d["layers"] if l["type"] == "decal" and l.get("rim") == "team"), None)
+        if key is not None and isinstance(key.get("emissive"), (int, float)) and key["emissive"] > 0.8:
+            key["emissive"] = 0.8   # a ground-ring keyline is a glint, not a light floor
+    # HEAL green (a helper's mend): like team, one keyline keeps it (the first heal-coloured ring), the body is the fighter's
+    heal_key = next((l for l in d["layers"] if l["type"] in ("shockwave", "ring") and any(_heal(c) for c in _refs(l.get("color")))), None)
+    for l in d["layers"]:
+        for k in COLOR_KEYS:
+            if k not in l:
+                continue
+            if l is key and ((k == "color" and key["type"] != "decal") or (k == "rim" and key["type"] == "decal")):
+                continue
+            if _team_in(l[k]):
+                l[k] = _map_colors(l[k], to_sig)
+        if l is key and key["type"] != "decal":
+            e = l.get("emissive")
+            if isinstance(e, (int, float)) and e > 2.0:
+                l["emissive"] = 2.0
+            elif isinstance(e, list) and (_curve_keys(e) and max(k[1] for k in _curve_keys(e)) > 2.0):
+                l["emissive"] = [[k[0], min(k[1], 2.0)] for k in _curve_keys(e)]
+            w = l.get("width")
+            if isinstance(w, (int, float)):
+                l["width"] = min(w, 0.22)
+            elif isinstance(w, list):
+                l["width"] = [[x[0], min(x[1], 0.22)] if isinstance(x, list) else min(x, 0.22) for x in w]
+            if l.get("color") != "team":
+                l["color"] = "team"
+        if not _is_light(l):
+            continue
+        if l is key and key["type"] != "decal":
+            continue
+        t = l["type"]
+        heal_ok = l is heal_key
+        if "color" in l:
+            l["color"] = _light_grad(l["color"], sig_hex, "signature" if t in ("flash", "light") else companion, heal_ok)
+            if fid in DARK_SIG and sg["secPale"] and t not in ("flash", "light"):
+                l["color"] = _lift_dark(l["color"])
+        for k in ("rim", "edge"):
+            if k in l:
+                l[k] = _light_grad(l[k], sig_hex, "signature", heal_ok)
+    tint = SURFACE_TINT.get(i)
+    if tint:
+        for l in d["layers"]:
+            if l["type"] in ("decal", "emitter") and l.get("blend") in (None, "alpha") and "color" in l:
+                l["color"] = _map_colors(l["color"], lambda c: tint.get(c, c))
+    return d
+
+
+def is_rekey_slot(i: str) -> bool:
+    """the defs light_pass re-keys: a fighter's third ability and ultimate (and the a1/a2 defs listed in LIGHT_EXTRA)"""
+    return (("_a3_" in i or "_ult_" in i) and not i.endswith("_windup")) or i in LIGHT_EXTRA
+
+
+# a1 / a2 defs whose light the integrated in-play measure found off the signature (closing C1 baseline,
+# _harness/_reports/fw_CW1_kit_hue_base.json: ardit a2 0.44, marund a2 0.30, odrum a1 0.35, sukri a1 0.15, vashil a1 0.14)
+LIGHT_EXTRA: set = {"ardit_a2_glare", "marund_a2_raise", "marund_a2_dome", "odrum_a1_set", "odrum_a1_resin", "sukri_a1_mote",
+                    "sukri_a1_toss", "sukri_a1_mend", "vashil_a1_peal"}
+
+
 def bespoke(defs: list) -> list:
-    return [secondary_pass(ult_pass(signature_pass(drop_shake(copy.deepcopy(d))))) for d in defs]
+    out = [secondary_pass(ult_pass(signature_pass(drop_shake(copy.deepcopy(d))))) for d in defs]
+    return [light_pass(d) if is_rekey_slot(d["id"]) else d for d in out]
