@@ -5,6 +5,8 @@
 # Unlisted: no Supabase row and no portal rebuild, so the build is reachable only by its link.
 #
 #   zsh tools/r2_upload.sh [dir=deploy] [slug=vale-playtest] [jobs=8]
+#   SINCE=<previous deploy dir> zsh tools/r2_upload.sh ...   upload only files that are new or changed since that
+#                                                             copy of the last upload (a code-only redeploy: seconds)
 #
 # Credentials (never printed): CLOUDFLARE_API_TOKEN, or ../../state/.secrets/cf_api_token.txt
 # (a token with Account → Workers R2 Storage: Edit); CLOUDFLARE_ACCOUNT_ID, or
@@ -48,6 +50,13 @@ put() {   # $1 = path relative to $DIR
 }
 
 files=(${(f)"$(cd $DIR && find . -type f ! -name index.html | sed 's#^\./##' | sort)"})
+if [[ -n $SINCE ]]; then
+  [[ -d $SINCE ]] || { print -u2 "SINCE=$SINCE is not a directory"; exit 2; }
+  changed=()
+  for f in $files; do cmp -s "$DIR/$f" "$SINCE/$f" || changed+=$f; done
+  print "SINCE $SINCE: ${#changed} of ${#files} files changed"
+  files=($changed)
+fi
 FAILLOG=$(mktemp -t vale_r2_fail)
 print "uploading ${#files} files + index.html to $BUCKET/$SLUG/ with $JOBS jobs"
 n=0
