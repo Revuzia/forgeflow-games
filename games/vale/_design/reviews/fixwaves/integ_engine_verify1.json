@@ -1,0 +1,124 @@
+{
+ "lane": "engine",
+ "round": 1,
+ "verifier": "adversarial verifier, integration lane engine, round 1, 2026-10-29. Re-measured at HEAD 8faff08c..90f0adb6; no engine-lane file changed in that range. Engineer reports were not trusted.",
+ "pass": false,
+ "summary": "Lane engine fails round 1 on one regression. 14 of the 15 package items pass on re-measurement; combat:F4 is partly. Every item is minor and there are no blocker or major items in the packages. The regression comes from combat:F4 (8b417c56). The new VFX lift cap dims the ultimate impact's own effects on the ground, and the lane's value_probe flash gate now fails on RIFT Low: 1.94x against >= 2.0x, 1.92x with the cap, 1.99x with the cap off. The engineer's own sweep at the commit showed 2.00x with the cap off and 1.93x with it, so the commit moved the gate from passing to failing. The same cap lowers Tunlan's ult core ratio in probe_combat_polish from 2.16 to 2.06 (gate 2.3, which it already missed). The F4 victim-box gate itself does pass: Kemdo 0.023, Rishal 0.202, Tunlan 0.219, Hesmi 0.281, all <= 0.35. Rishal reads 0.58 with the cap off, so the cap is what fixes him. Two things the item names are still visible in the beat shots: Tunlan's caster is a white bloom, and Hesmi's victim body is 0.829 white in the full frame. probe_combat_polish ult still exits 1 on core ratio (Tunlan 2.06, Hesmi 2.23). The F4 claim leaves out that exit 1.\n\nItems that reproduce: engine-11 box cull (low-road fight landmarks 8,902 -> 0 main tris, 6,297 -> 0 shadow, frame 163,019 -> 142,578, blob 0 at all 14 spots); engine-12 per-clip swing (PASS, 3 attack1 + 3 attack2); engine-05/06 walkableSpread (RIFT High 42, Low 37 PASS); engine-09 bases (every base structure L* p95 <= 80 on RIFT and BRIDGE, both tiers); combat:F6-probe (32/32 measured, 0 retries, min sig 0.535); PERF-m3 (e2e rift journey, 0 console warnings, after the engine render commits); engine-04 notices (full license text of all 12 packages verbatim in dist/THIRD_PARTY_NOTICES.txt, 3 @license comments kept); engine-01/03 content build (0 non-copy warnings, 17 routed copy warnings, new hits are errors).\n\nperf_1080 --prod: High 451k and Low 334k fixed views PASS; memory PASS; dynres PASS. Match peak FAIL: 1,031k tris and 41 programs. This was already failing (857k / 41 at W5a_ver2), the peak frame is actors 819k with landmarks at 0, and it is the open stitch item lead:fighter-lod-render (major, after chars), which is outside this round's packages. It is not counted as a regression here, but it is still open.",
+ "items": [
+  {
+   "id": "engine-01",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "tools/build_content.ts:82 imports UI_CUE_KINDS_OPTIONAL. :444 skips the warning for an optional ui role. `npm run content:check` exit 0 with 17 warnings, all '[pending copy fix]'; 0 other warnings, and no content/audio.json $.ui.queue_remind warning (/tmp/integ_engine_v1_cc.log). queue_remind stays out of the required list. `node _harness/probe_content_build.ts`: PASS 126/126."
+  },
+  {
+   "id": "engine-02",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "package.json:18 \"sweep:720\": \"node _harness/sweep_720.mjs fast\". Re-ran `node _harness/sweep_720.mjs fast --prefix integ_engine_v1_sweep720` against :5190: EXIT 0, '✓ no failures' (_harness/_reports/integ_engine_v1_sweep720.log / .json)."
+  },
+  {
+   "id": "engine-03",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "tools/build_content.ts:298 COPY_LINT_SKIP = vfx, audio, strings (strings is linted value by value through lintPlayerCopy). :1315-1333 COPY_LINT_PENDING holds 17 entries. :1335-1351 copyLint: in content/, a listed hit -> fileWarn '[pending copy fix]', any other hit -> fileErr; in other trees -> fileWarn. content:check prints exactly those 17 (roles [2] centre / [4] gold, classes [5] favour, map_fray desc centre, 13 skin descs) and exits 0. probe_content_build 126/126. The hand-off to systems (systems-10/14 copy) is still open: 17 warnings remain."
+  },
+  {
+   "id": "engine-04",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "`npm run build` exit 0. dist/THIRD_PARTY_NOTICES.txt (36 kB) sits next to dist/index.html. A script check found the LICENSE file of each package verbatim in it: three 0.186.1, postprocessing 6.39.5, n8ao 2.0.1 (labelled 'CC0-1.0; its package.json says ISC'), preact 11.0.0, @preact/signals 2.11.3, @preact/signals-core 1.14.4, zod 4.6.5, @fontsource gloock / atkinson-hyperlegible-next / atkinson-hyperlegible-mono 5.3.0, @fontsource-variable/instrument-sans 5.3.0, meshoptimizer 1.3.0. @license comments: vendor-three 2, vendor-post 1. Dev server: `curl -I :5190/THIRD_PARTY_NOTICES.txt` -> 200 text/plain; charset=utf-8. The client hand-off is already done: src/ui/credits.ts:36 carries meshoptimizer."
+  },
+  {
+   "id": "engine-05",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "_harness/value_probe.mjs:479 DYNAMIC_SPOTS = ['fight'], kept out of the masks (:484, :529). An isolated copy (report in scratch, so the shared tracked value_probe.json was not touched) ran `--maps rift,bridge --tiers high,low --flash 1 --vfxcaps off,1.3` (_harness/_reports/integ_engine_v1_value_probe.log). RIFT High walkableSpread 42 PASS, RIFT Low 37 PASS, BRIDGE High 34, BRIDGE Low 31. Per spot, fight* 45-101 equals centre 45-101, so the Seat was being counted twice."
+  },
+  {
+   "id": "engine-06",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Same change and measurement as engine-05. RIFT High walkableSpread 42 <= 45 and Low 37; the masks pool lane0, lane1, lane2, jungle and centre (integ_engine_v1_value_probe.log)."
+  },
+  {
+   "id": "engine-07",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "already_done confirmed by a GLB parse of art/out/maps/landmarks: skirt_rift 9,721 tris, skirt_rift_low 4,451, skirt_bridge 8,077, skirt_court 7,216, skirt_fray 1,054, skirt_fray_low 713; glass_belfry 34,778 tris, 1.74 MB. In perf_1080 --prod (integ_engine_v1_perf_1080.log) the landmarks group is 0-1 draws in both fixed views and absent from the match-peak frame."
+  },
+  {
+   "id": "engine-08",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "e0b30b81 (src/render/terrain_glsl.ts). I compared integ_engine_spawn_before_at0.png with integ_engine_spawn_dais2_rift_at0.png at 1x and on a 3x crop (scratchpad dais_crop.png). The bright stamped outer ring is gone. A chalk arris over a darker riser band now reads as a low step, and the 12 ticks are inset notches. BRIDGE Low (integ_engine_spawn_dais2_bridge_low_at1.png) reads the same way. Sensitivity: no figure or face in these shots. Minor: on BRIDGE Low the thin chalk arris shows stair-step aliasing along the top of the ring.",
+   "fixHint": "Optional: widen the arris's smoothstep by fwidth (or about 1.5 px) on the Low tier so the chalk line does not crawl."
+  },
+  {
+   "id": "engine-09",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "already_done confirmed. Step 1: value_probe.mjs:46 adds the base spots. My run: RIFT High base0 plaza sat 0.26 / structures L* p95 76, base1 0.35 / 69; RIFT Low 79 / 74; BRIDGE High 73.5 / 68.5; BRIDGE Low 76 / 73; all PASS (<= 80, sat 0.17-0.40). Step 2: src/render/terrain_glsl.ts:373-389 has depthK darkening and a refraction wobble on the Fallen Shaft floor, and src/render/terrain.ts:1484-1497 has bank foam. Shot integ_engine_shallows_at0.png shows refracted courses and faint bank lines."
+  },
+  {
+   "id": "engine-10",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "src/render/terrain.ts:476-480 (loadTerrainLandmarks doc) records the hour_stone SINK 1.2 m dependency. The box cull (:447-472, :647-651) changes only visibility; groundAt and the wall-top lift are untouched. probe_landmark_cull counts the camp-lip landmarks."
+  },
+  {
+   "id": "engine-11",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Re-ran `node _harness/probe_landmark_cull.mjs --map rift --q high --tag integ_engine_v1` (_harness/_reports/integ_engine_v1_landmark_cull.log / _rift.json): PASS, console 0. At fight_low (101.52,95.6): landmarks main 8,902 -> 0 tris (4 -> 0 draws), shadow 6,297 -> 0; frame 163,019 -> 142,578 tris (119 -> 101 draws); kept by the sphere only: skirt_rift_low@(96,118.5) and (118,118.5). n_edge 96,098 -> 72,009; high_road 116,719 -> 95,693. blob 0 at all 14 spots. The largest single-pixel diffs, centre 61 px >24, sit under the A/A2 floor of 127. Code: worldCorners :452, outsideFrustum :467, caster hull :614-643, boxCulled :647 (box AND sphere, both conservative); three r186 calls intersectsFrustum in both the main pass and the shadow pass."
+  },
+  {
+   "id": "engine-12",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Re-ran `node _harness/probe_swing_clip.mjs --fighter hesmi --tag integ_engine_v1` (_harness/_reports/integ_engine_v1_swing_clip_hesmi.json): PASS. attack2 x3: arcs -80->70 tilt -20, glint on weapon_l. attack1 x3: arcs 80->-70 tilt 20, glint on weapon_tip, dL 1.39 / dR 0. anim == clip on every swing; console 0. content/vfx.json hesmi_atk_swing layers match the generator: tools/vfx kit_defs output differs only in $comment (scratch vfxcmp.py). director.ts:392 swingClip matches sim movement.ts:464 (atkCrit -> 'crit') and actors.ts CLIP_CHAIN (crit -> attack2 for Hesmi). Minor probe gaps: (a) swing 0 is degenerate. Both fists sit at the same point (dL 0, dR 0, 'fists 0 apart') and it still counts toward the attack2 pass, so only 2 of the 3 attack2 rows discriminate. (b) No crit swing occurred (crit 0), so the crit -> attack2 fallback is never measured. Shot integ_engine_v1_swing_hesmi_attack1/2.png: no sensitivity issue.",
+   "fixHint": "Optional probe hardening: skip or retry a swing whose fists are < 0.3 m apart, and force one crit (set atkCrit on the attacker for a swing) so the crit -> attack2 path is gated."
+  },
+  {
+   "id": "combat:F4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Gate met. `node _harness/probe_combat_polish.mjs ult --tag integ_engine_v1` (_harness/_reports/integ_engine_v1_combat_ult.log, fw_W1_combat_polish_integ_engine_v1.json): victim-box white Kemdo 0.023, Rishal 0.202, Tunlan 0.219, Hesmi 0.281, all <= 0.35. A/B with `--vfxcap off --ults tunlan,hesmi,rishal` (integ_engine_v1_combat_ult_capoff.log): Rishal 0.58, so the vfxLift cap is the fix.\n\nNot met:\n(1) The probe exits 1 both with and without the cap: 'FAIL tunlan: core x2.06 < 2.3', 'FAIL hesmi: core x2.23 < 2.3'. With the cap off they are 2.16 / 2.27, so the cap takes 0.10 off Tunlan's T4 core ratio. The claim leaves out this exit 1.\n(2) value_probe RIFT Low flash is 1.94x FAIL (>= 2.0x): 1.92x with the cap and 1.99x with it off. The engineer's own integ_engine_f4_flash_caps.log has off 2.00x and 1.3 1.93x. Listed under regressions.\n(3) The symptom the item names is still visible in the beat shots. In fw_W1_polish_ult_tunlan_beat_integ_engine_v1.png, Tunlan (the caster) is still a white bloom, and the box gate does not cover the caster. In fw_W1_polish_ult_hesmi_beat_integ_engine_final/v1.png, Hesmi's victim is a white silhouette: full-frame body white 0.829, unchanged by the cap. Over a body, vfxLift returns 1.0, so Hesmi's ult VFX are not touched. The W1 fixHint named 'Hesmi's ult hit'. Shaders: src/render/vfx/shaders.ts:69-90.",
+   "fixHint": "Keep the body gate and stop taxing the ground effects that make the T4 punch. (a) In src/render/vfx/shaders.ts vfxLift, replace the plain division by ((1+lift)/(1+cap))^2.2 with a soft-clip: compress only the part of an effect's colour that would pass the envelope's display knee (about 0.86, the same as post.ts capB) after the lift. Dim and saturated light then keeps the full lift and only near-white goes down. Alternatively, exempt the ult impact's own layers (lib_ult_* and the kit's T4 impact) with a per-def flag. (b) In content/vfx.json, take down the luminance of Tunlan's ult cast bloom over his own body, and of Hesmi's ult hit layer over the victim. Target: victim body full-frame white <= 0.35. Done when probe_combat_polish ult exits 0 (box <= 0.35 per beat AND core >= 2.3 for all 4) and value_probe RIFT Low flash >= 2.0x. If the bot-chosen flash spot drifting onto brighter stone (base 85 -> 93.1, at (78.9,12.4)) is what puts RIFT Low at 1.99x even with the cap off, pin the flash spot per map the same way engine-05 handled 'fight'."
+  },
+  {
+   "id": "combat:F6-probe",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Re-ran `node _harness/probe_kit_hue.mjs --live --out _harness/_reports/integ_engine_v1_kit_hue.json`: EXIT 0, 16 kits, 32/32 slots measured, cast true on all, 0 fails, notMeasured [], retried [], min sig 0.535 (marund a2). Tunlan a1 0.539 and a2 0.923; logs []. Code: probe_kit_hue.mjs:131-145 revives with respawnFighter and refills; :202 asserts a 'cast' event from the caster for the slot; :206-217 retries once, then status 'nm' (sig null); exit 2 when only nm. The retry branch did not trigger in either run, so it was checked by reading the code only."
+  },
+  {
+   "id": "perf:PERF-m3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "already_done confirmed at HEAD, after the engine render commits (the client's e2e at 23:20 came before cc55be81, 71f8cc33 and 8b417c56, so I re-ran it). src/render/terrain_clutter.ts:112 `g.index ? g.toNonIndexed() : g`. vite.config.ts:313 favicon() puts the inline SVG <link rel=icon> in dist/index.html:19. _harness/e2e.mjs:212-214: any warning fails the journey. `node _harness/e2e.mjs rift --out _harness/_reports/integ_engine_v1_e2e_rift.json`: the RIFT journey is ok with consoleErrors [] (12 steps, Victory, postgame). The STORE journey fails 'no affordable skin offer (grants too low?)'. It failed the same way in the client's integ_client_e2e_rift.json, and the economy/store is not engine-owned."
+  }
+ ],
+ "regressions": [
+  "value_probe RIFT Low flash: 1.94x FAIL (gate >= 2.0x; _harness/_reports/integ_engine_v1_value_probe.log). The combat:F4 VFX lift cap (8b417c56, src/render/vfx/shaders.ts vfxLift) dims the ult impact's ground effects: by cap, off 1.99x vs 1.3 1.92x, and in the engineer's own sweep at the commit off 2.00x PASS vs 1.3 1.93x FAIL (integ_engine_f4_flash_caps.log). RIFT High 2.09x, BRIDGE 2.65x / 2.25x still pass.",
+  "probe_combat_polish ult: the cap lowers Tunlan's T4 core ratio from 2.16 (cap off) to 2.06 and Hesmi's from 2.27 to 2.23 (integ_engine_v1_combat_ult_capoff.log vs integ_engine_v1_combat_ult.log). Both were already under the 2.3 gate, and the probe exits 1 either way."
+ ],
+ "checks": {
+  "typecheck": "npm run typecheck exit 0",
+  "content_check": "npm run content:check exit 0, 17 warnings, all copy-lint '[pending copy fix]'",
+  "probe_content_build": "126/126 PASS",
+  "node_probes": "probe_render_dynres, probe_render_dynres_vsync, probe_camera_edge, probe_content_ids, probe_maps: all exit 0",
+  "secrets": "npm run secrets: secret_scan PASS (13 rules, 841 candidate files)",
+  "build": "npm run build exit 0; dist/THIRD_PARTY_NOTICES.txt and third_party_notices.json emitted",
+  "perf_1080_prod": "_harness/_reports/integ_engine_v1_perf_1080.json/.log. High 451k tris, 202 draws, 39 programs PASS; Low 334k, 136 draws, 26 programs PASS. Timing not measured (machine busy, load 20-60). dynres PASS; memory PASS (menu_2 -> menu_5 flat, GPU -0.6 %). Match peak FAIL: 1,031,094 tris at 1264.5 s (actors 819k/187, landmarks 0) and 41 programs at 12.6 s. Already failing before this round (857k / 41 in fw_W5a_ver2_perf_1080.json), owned by stitch lead:fighter-lod-render (major, after chars), not in these packages.",
+  "value_probe": "rift,bridge x high,low with --flash 1 --vfxcaps off,1.3; every walkable, lane, frame, groundSat, fighter and base gate PASS except RIFT Low flash 1.94x",
+  "landmark_cull": "PASS, blob 0 at 14 spots",
+  "swing_clip": "PASS",
+  "combat_polish_ult": "box gate PASS; probe EXIT 1 on core (tunlan 2.06, hesmi 2.23)",
+  "kit_hue": "EXIT 0, 32/32, min sig 0.535",
+  "e2e_rift": "rift journey ok, 0 console errors; store journey FAIL (economy, pre-existing, not engine)",
+  "sweep_720": "fast, no failures",
+  "sensitivity": "Looked at the spawn dais shots (RIFT and BRIDGE), the shallows shot, the Hesmi swing shots, the 4 ult beat shots and the landmark-cull frames. No hood, mask or Wick-face issue in anything this lane made.",
+  "observations": "tools/vfx/build_vfx.py would rewrite 77 of 272 defs in content/vfx.json (lib_crit, lib_hit_magic, rishal_a1_track, ervet_a1_arc and others: the hand-tuned combat F6 colours and emissives are missing from the generator). The drift was already there at plan commit 300c6985 and is not from this round, but running the generator would undo the F6 tuning. Engine-owned tools/vfx/** should be brought back in line with vfx.json."
+ }
+}
