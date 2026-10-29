@@ -348,7 +348,8 @@ export class GodFx {
     // sunset glow all round the horizon and the stars out; the sun's tint eases ──
     if (S.eclipse > 0) this.sunWant.multiplyScalar(1 - 0.985 * S.eclipse);
     const tot = smooth(0.93, 0.995, S.eclipse);
-    const evWant = -0.55 * smooth(0.45, 0.9, S.eclipse) - 2.5 * tot * tot;
+    // (plus the Touch's: a feared god's storm gloom held dark, not metered back up to a fine day)
+    const evWant = -0.55 * smooth(0.45, 0.9, S.eclipse) - 2.5 * tot * tot + this.hand.exposureEV;
     S.totality = tot;
     // (the glow is lit by the undimmed sun: the planet's sun illuminance already carries the eclipse's tint)
     S.horizonCol.set(ctx.sunE.x / Math.max(0.02, this.sunTint.x), ctx.sunE.y / Math.max(0.02, this.sunTint.y), ctx.sunE.z / Math.max(0.02, this.sunTint.z))

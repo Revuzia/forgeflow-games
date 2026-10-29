@@ -212,10 +212,10 @@ void main() {
   float dn2 = 0.5 + 0.5 * snoise(vec3(vSide * 4.5 + 2.0, s * 1.2 + uTouchT * 2.2, 1.9));
   float dn3 = 0.5 + 0.5 * snoise(vec3(s * 0.9 - uTouchT * 0.7, 3.3, 9.1));
   float edgeR = 0.42 + 0.3 * dn3 + 0.16 * dn2;
-  float dbody = 1.0 - smoothstep(edgeR - 0.32, edgeR + 0.04, x);
+  float dbody = 1.0 - smoothstep(edgeR - 0.4, edgeR + 0.04, x);
   // (thinner at the foot, where it meets the canopy or the street: there the storm is scud and rain, not a wall —
   // at 0.95 over its 0.05 albedo the foot punched a black hole into the trees under it)
-  float dk = uDark * dbody * env * (0.72 + 0.28 * dn) * mix(0.95, 0.68, smoothstep(0.6, 0.95, vT));
+  float dk = uDark * dbody * env * (0.8 + 0.2 * dn) * mix(1.0, 0.74, smoothstep(0.6, 0.95, vT));
   float sunSide = clamp(0.5 + 0.5 * vSide * vSunX, 0.0, 1.0);
   // (self-shadowed: a thick storm column is lit on its sun flank only — lit through, by the full day, it read as pale
   // smoke over a sunny town, not as storm-dark)
@@ -230,7 +230,7 @@ void main() {
   float rh = fract(sin(rid * 12.9898 + 4.1) * 43758.5453);
   float rdrop = fract(s * (0.55 + 0.4 * rh) - uTouchT * (1.7 + 0.9 * rh) + rh * 7.0);
   float rain = smoothstep(0.16, 0.0, abs(fract(rcol) - 0.5) - 0.06) * smoothstep(0.0, 0.08, rdrop) * (1.0 - smoothstep(0.35, 0.6, rdrop));
-  float rainA = uDark * rain * smoothstep(0.3, 0.6, vT) * dbody * env * 0.3;
+  float rainA = uDark * rain * smoothstep(0.3, 0.6, vT) * dbody * env * 0.45;
   // (a flicker now and then lights a stretch of the storm from inside — a stretch, softly: lit whole and full, the dark
   // column became a white bar)
   float fseed = floor(uTouchT * 9.0);
@@ -245,7 +245,9 @@ void main() {
   // a dense shaft of lit air veils what is behind it a little (premultiplied over): over a blue sky a purely added
   // gold light summed to grey-white, and the regard's colour was lost
   float veil = clamp((core * 0.4 + body * 0.28) * env * uBeamK, 0.0, 0.38) * (1.0 - uDark);
-  vec3 rc = vec3(0.5, 0.53, 0.58) * vLight * 0.45;
+  // (the storm's rain is its own grey, a little lighter than the body it falls through: sunlit pale rain on a thin dark
+  // body read as a white veil over the town, not a storm)
+  vec3 rc = mix(vec3(0.225, 0.24, 0.26), vec3(0.15, 0.16, 0.185), uDark) * vLight * shade;
   float aBody = max(dk, veil);
   gl_FragColor = vec4((c + dc * dk * (1.0 - rainA) + rc * rainA) * vis * uColK, max(aBody, rainA) * vis * uColK);
 }
@@ -545,6 +547,9 @@ void main() {
   // (a trusted god's cloud is lit more by its own light than by the sun: sunlit white swamped the gold)
   // (and kept below the tone curve's shoulder, where white swallows colour: its gold must survive to the screen)
   vec3 lit = vLight * alb * (0.25 + 0.75 * lam) * mix(0.75, 1.05, powder) * (1.0 - 0.6 * uWarm);
+  // (a feared god's storm cloud is thick: lit on its sun flank only, slate in its body — lit through, by the full day, the
+  // cradle round the held one read as a white puff)
+  lit *= mix(1.0, 0.3 + 0.55 * lam * lam, uDark) * mix(vec3(1.0), vec3(0.86, 0.9, 1.0), uDark);
   // its own light inside the cloud: strongest at its heart and through the thin parts (warm gold; a cold glimmer when
   // feared, flaring with each arc)
   float thin = 1.0 - dens;
@@ -629,7 +634,7 @@ void main() {
   if (vKind < 0.5) {
     // a point of the god's light, twinkling
     float k = pow(1.0 - r, 2.2) * vA * vTw * vis;
-    vec3 col = mix(uCol, uRim, uDark * 0.6) * (1.0 - 0.75 * uDark);
+    vec3 col = mix(uCol, uRim, uDark * 0.6) * (1.0 - 0.88 * uDark);
     gl_FragColor = vec4(col * k * 2.2 * fxDisplay(0.7), 0.0);
   } else if (vKind < 1.5) {
     // a puff of dust, lit like the ground's (thin: from the street a thick puff hid the people round the Touch)
@@ -841,6 +846,12 @@ export class HandVisual {
    * feared or the trusted look does not race the snapshots that replace the view's hand; null reads the sim
    */
   pinRegard: number | null = null;
+  /**
+   * exposure the Touch asks of the eye (EV, ≤ 0; godfx adds it to the god layer's): a feared god's storm gloom over the
+   * view must not be metered back up to a fine day (the auto exposure lifted the land round the gloom, and the feared and
+   * the trusted Touch read within 5 % of each other's brightness)
+   */
+  exposureEV = 0;
   /** what it holds now: kind and id (from the sim) */
   heldKind = '';
   heldId = -1;
@@ -1032,6 +1043,7 @@ export class HandVisual {
       this.visibleNow = false;
       this.placed = false;
       this.crackling = 0;
+      this.exposureEV = 0;
       return;
     }
     this.group.visible = true;
@@ -1093,7 +1105,7 @@ export class HandVisual {
     this.u.uStreakK.value = Math.max(0.08, 0.32 + 0.4 * grasp + 0.35 * W.reach - 0.2 * W.soothe - 0.25 * W.point + 1.1 * rk + 0.3 * ck);
     // (a trusted god's air is still: little dust raised — a cloud of beige dust round it read as a dust devil, not light)
     this.u.uDustK.value = air ? (0.35 + 0.05 * grasp + 0.3 * W.reach + 1.2 * rk) * nearG * (1 - 0.55 * trusted) : 0;
-    this.u.uMoteK.value = 0.6 + 0.6 * W.soothe + 0.8 * ck + 0.3 * grasp + 0.4 * trusted;
+    this.u.uMoteK.value = (0.6 + 0.6 * W.soothe + 0.8 * ck + 0.3 * grasp + 0.4 * trusted) * (1 - 0.5 * feared);
     this.u.uMoteS.value = 1 + 0.9 * trusted + 0.4 * ck + 0.3 * W.soothe;
     this.u.uLeafK.value = air ? (0.25 + 0.3 * grasp + 0.4 * W.reach) * nearG * (1 - 0.6 * feared) : 0;
     this.u.uWhorlK.value = air ? 0.75 + 0.2 * feared : 0;
@@ -1173,6 +1185,12 @@ export class HandVisual {
     //    its wind and its dust fade, its heart glows (at ~140 m it would read as a weather system from orbit) ──
     const camD = this.pos.distanceTo(f.camBody);
     const farK = smooth(500, 2500, camD);
+    {
+      // the share of the view the storm's gloom covers (cloudShadow: R), roughly: its radius over the ground seen
+      const gloomR = Math.min(Math.max(L * 6.5, 32), 520);
+      const cover = Math.min(1, (gloomR / Math.max(20, camD * 0.9)) ** 2);
+      this.exposureEV = air ? -(0.25 + 0.6 * cover) * feared * this.presence * (1 - farK) : 0;
+    }
     if (farK > 0) {
       this.u.uTuftK.value *= 1 - 0.85 * farK;
       this.u.uStreakK.value *= 1 - 0.8 * farK;
@@ -1206,7 +1224,7 @@ export class HandVisual {
     const cAx = (cb.x * this.pos.x + cb.y * this.pos.y + cb.z * this.pos.z) / pl;
     const camH = Math.sqrt(Math.max(0, cb.lengthSq() - cAx * cAx));
     const nearEye = eyeCam * (1 - smooth(60, 200, altCam)) * (1 - smooth(5 * L, 14 * L, camH)) * (1 - 0.6 * Math.max(grasp, W.point));
-    this.u.uColK.value = 1 - 0.9 * nearEye;
+    this.u.uColK.value = 1 - 0.97 * nearEye;
     const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.2 * trusted * (1 - grasp)) * (1 - 0.55 * farK) * (1 - 0.5 * nearEye);
     this.u.uWTop.value = Math.max(L * 1.1, topH * 0.06) * (1 + 0.4 * W.soothe - 0.35 * W.point) * wk;
     this.u.uWGrip.value = L * (0.3 - 0.1 * grasp - 0.17 * W.point + 0.2 * W.soothe + 0.25 * rk) * wk;

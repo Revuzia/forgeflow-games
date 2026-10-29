@@ -206,7 +206,12 @@ void main() {
     float n = fbm3(vec3(q / max(R * vP.y, 1e-3), vP.w + uTime * 0.15));
     float k = pow(sat(1.0 - r / R + 0.35 * n), 2.0);
     float fl = 0.85 + 0.15 * sin(uTime * 7.0 + vP.w * 30.0) * sin(uTime * 2.3);
-    o = vec4(vCol.rgb * vP.z * k * fl * hf, 0.0);
+    vec3 e = vCol.rgb * vP.z * k * fl * hf;
+    // (a glow is hot rock, not a lamp: on screen it reads at most a bright orange, whatever the eye's adaptation — at
+    // night the exposure meters moonlit ground (~100x the day's) and a vent's absolute glow blew a white disc over the
+    // whole mountain at 1.3 km)
+    float eL = dot(e, vec3(0.2126, 0.7152, 0.0722)) * expo();
+    o = vec4(e * min(1.0, 1.0 / max(eL, 1e-6)), 0.0);
   } else if (t == 4 || t == 14) {
     // cracks along the axis (a rift, a quake's fissures, drought): dark seams; their glowing twin draws in the add group
     float L = vP.x, W = vP.y;

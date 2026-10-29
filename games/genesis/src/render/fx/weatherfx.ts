@@ -40,7 +40,8 @@ const FALL: Record<number, { sys: number; speed: number; size: number; col: [num
   3: { sys: SYS.snowfall, speed: 13, size: 0.03, col: [0.9, 0.92, 0.95], splash: true },
   4: { sys: SYS.snowfall, speed: 0.9, size: 0.06, col: [0.32, 0.31, 0.3], splash: false },
   5: { sys: SYS.precip, speed: 9, size: 0.012, col: [0.62, 0.78, 0.32], splash: true },
-  6: { sys: SYS.precip, speed: 9, size: 0.013, col: [0.62, 0.08, 0.05], splash: true },
+  // (blood rain thick and red: as fine as acid drizzle, lit by the day, it read as grey drizzle with a few orange flecks)
+  6: { sys: SYS.precip, speed: 9, size: 0.024, col: [0.78, 0.045, 0.03], splash: true },
   7: { sys: SYS.precip, speed: 1.5, size: 0.02, col: [0.62, 0.48, 0.32], splash: false },
 };
 
@@ -107,7 +108,9 @@ export class WeatherFx {
       const d = Math.acos(Math.max(-1, Math.min(1, u.x * ws.pos[0] + u.y * ws.pos[1] + u.z * ws.pos[2]))) * R;
       const w = ws.intensity * (1 - smooth(ws.radius * 0.6, ws.radius * 1.15, d));
       consider(ws.kind, w);
-      const ok = Math.min(1, ws.intensity * 0.8) * wetness(DEFS.get(ws.kind)) * (w > 0 ? 1 : 0);
+      // (the deck darkens ahead of the rain: a storm the god has just painted starts at a quarter of its strength, and the
+      // town under its first rain kept crisp sun shadows for a minute — clouds gather before they pour)
+      const ok = Math.min(1, Math.pow(ws.intensity * 0.8, 0.6)) * wetness(DEFS.get(ws.kind)) * (w > 0 ? 1 : 0);
       if (ok > ow.k) {
         const l = Math.hypot(ws.pos[0], ws.pos[1], ws.pos[2]) || 1;
         ow.k = ok; ow.c.set(ws.pos[0] / l, ws.pos[1] / l, ws.pos[2] / l); ow.cosR = Math.cos(Math.min(Math.PI, (ws.radius * 1.1) / R));
@@ -154,7 +157,7 @@ export class WeatherFx {
       // the weather's haze is the rain)
       const B = type === 2 || type === 4 ? 13 : type === 7 ? 30 : 16;
       // (a blizzard drives far more snow past the eye than a quiet snowfall drifts down)
-      const count = Math.round((driven ? 20000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate) * (type === 1 ? 1 + 0.9 * smooth(0.5, 1, rate) : 1));
+      const count = Math.round((driven ? 20000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate) * (type === 1 || type === 6 ? 1 + 0.9 * smooth(0.5, 1, rate) : 1));
       const def = {
         sys: driven ? SYS.precip : f.sys, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * windK, ay: wind.y * windK, az: wind.z * windK,
         size: driven ? 0.045 : f.size * (type === 1 && precip > 15 ? 1.4 : 1), life: 10, count, p0: driven ? 9 : B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1), p2: driven ? 1 : 0,
@@ -173,8 +176,11 @@ export class WeatherFx {
         const sheet = { sys: SYS.drift, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * 1.7, ay: wind.y * 1.7, az: wind.z * 1.7, size: 0.24, life: 10, count: Math.round(3200 * ctx.q), p0: 16, p1: Math.max(0.2, alt), r: 0.93, g: 0.95, b: 1, power: sheetOn ? Math.min(1, 0.3 + rate) : 0 };
         if (!this.drift || !ctx.vfx.alive(this.drift)) this.drift = ctx.vfx.emit({ ...sheet, prewarm: sheet.life }, ctx.now); else ctx.vfx.set(this.drift, sheet);
       } else this.stopBlizzard(ctx);
-      if (f.splash && alt < 200) {
-        const sd = { sys: SYS.splash, x: cam.x, y: cam.y, z: cam.z, size: 0.07 + 0.05 * rate, life: 0.35, count: Math.round(320 * ctx.q * rate), p0: 70, r: f.col[0], g: f.col[1], b: f.col[2], power: rate };
+      // (splashes are seen from near the ground only: from the god's height each one, a few centimetres across, drew at
+      // the sprites' least size — fuzzy grey balls a metre or two wide standing on the grass)
+      const splashK = 1 - smooth(14, 45, alt);
+      if (f.splash && splashK > 0.01) {
+        const sd = { sys: SYS.splash, x: cam.x, y: cam.y, z: cam.z, size: 0.07 + 0.05 * rate, life: 0.35, count: Math.round(320 * ctx.q * rate), p0: 70, r: f.col[0], g: f.col[1], b: f.col[2], power: rate * splashK };
         if (!this.splash || !ctx.vfx.alive(this.splash)) this.splash = ctx.vfx.emit({ ...sd, prewarm: sd.life }, ctx.now);
         else ctx.vfx.set(this.splash, sd);
       } else if (this.splash) { ctx.vfx.stop(this.splash, ctx.now); this.splash = 0; }
@@ -210,7 +216,8 @@ export class WeatherFx {
     if (this.fogK > 0.005) {
       const sunEl = u.dot(ctx.sunDirBody);
       const day = smooth(-0.12, 0.3, sunEl);
-      const base = type === 7 ? [0.62, 0.5, 0.36] : type === 4 ? [0.4, 0.38, 0.36] : [0.62, 0.66, 0.72];
+      // (blood rain hangs a red haze: on the grey-blue rain haze its sky tint was washed out, and the sign read as drizzle)
+      const base = type === 7 ? [0.62, 0.5, 0.36] : type === 4 ? [0.4, 0.38, 0.36] : type === 6 ? [0.66, 0.3, 0.25] : [0.62, 0.66, 0.72];
       const lum = (ctx.sunE.y / 8) * (0.55 * day) + 0.004;
       ctx.screen.fogCol.set(base[0] * lum, base[1] * lum, base[2] * lum);
       ctx.screen.fogDensity = Math.max(ctx.screen.fogDensity, this.fogK * 0.011 * (1 + gust * 1.2));

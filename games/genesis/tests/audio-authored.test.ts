@@ -360,7 +360,7 @@ test('the opening\'s ignition lands just over the music that rises out of it and
   const rec: Record<string | symbol, unknown> = { t: 0, size: 1, count: 1, variant: '', r: () => 0.5, rr: (a: number, b: number) => (a + b) / 2 };
   SFX.ignition(new Proxy(rec, { get: (o, k) => (k in o ? o[k] : (...args: unknown[]) => { calls.push([String(k), ...args]); return 0; }) }) as unknown as Sfx);
   const n = (c: [string, ...unknown[]], i: number): number => c[i] as number;
-  assert.ok(calls.some((c) => c[0] === 'tn' && n(c, 5) >= 2), 'the crescendo');
+  assert.ok(calls.some((c) => c[0] === 'tn' && n(c, 6) >= 2), 'the crescendo (a tone whose attack takes 2 s or more)');
   assert.ok(calls.some((c) => c[0] === 'nz' && c[1] === 'white' && n(c, 2) === 2.5 && n(c, 3) < 0.01), 'the crack');
   assert.ok(calls.some((c) => c[0] === 'pad'), 'the bloom');
   const sub = calls.filter((c) => (c[0] === 'tn' && Math.min(n(c, 3), n(c, 4)) < 40) || (c[0] === 'nz' && c[1] === 'brown'));

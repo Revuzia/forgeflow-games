@@ -88,6 +88,7 @@ varying float vSalt;
 varying vec3 vWind;
 varying vec4 vSurge;
 varying float vBedCos;
+varying float vSimD;
 #include <logdepthbuf_pars_vertex>
 void main() {
 ${TERRAIN_VERT_CORE}
@@ -96,6 +97,17 @@ ${TERRAIN_VERT_CORE}
   // (the sheet's own thickness over the ground it is drawn on: the level the vertex core settled on — a cascade's film,
   // a basin's step — not the cells' linear level, which over a cliff stands metres above that film)
   float depth = tH - tG;
+  // shallows the sim floods (0.15 m and more over its own ground, tS) where the ground's metre-scale detail relief stands
+  // at or above the level: the sheet drapes over those bumps as a thin film (18 cm) instead of vanishing under them — a
+  // harbour's 0.2-0.8 m margin drew as grass 25 m out from the pier the sim floods. Deep water and the dry cells' levels
+  // (under their ground) are left alone
+  vSimD = tH - tS;
+  {
+    float drape = smoothstep(0.1, 0.25, vSimD) * (1.0 - smoothstep(1.5, 3.0, vSimD));
+    float lift = max(0.0, tG + 0.18 - tH) * drape;
+    tPos += normalize(position) * lift;
+    depth += lift;
+  }
   vec3 up = normalize(tPos);
   vec4 F = tfInterp(uFieldF, aCells, aMisc.x);
   vec4 M1 = tfInterp(uFieldM1, aCells, aMisc.x);
@@ -196,6 +208,7 @@ varying float vSalt;
 varying vec3 vWind;
 varying vec4 vSurge;
 varying float vBedCos;
+varying float vSimD;
 float gSea = 1.0;
 vec3 gWindT = vec3(0.0);
 // the pixel's footprint ALONG a wave's direction d: at a grazing view the footprint is metres long toward the horizon
@@ -719,7 +732,8 @@ void main() {
     // nearly meet, and the whole lake read as its own shore film: its dark wet bed, a black disc in the land from a few
     // kilometres up while the sea beside it mirrored the sky. Out there the field's own depth stands in)
     float thickE = mix(vertThick, max(vertThick, vDepth), smoothstep(0.25, 1.5, fw));
-    float edge = smoothstep(0.012, 0.18, thickE + min(edgeN, 0.12) * smoothstep(1.6, 0.2, thickE));
+    // (the bite only where the sim's own water is a film: where it floods 0.2 m and more the shore it draws is the sim's)
+    float edge = smoothstep(0.012, 0.18, thickE + min(edgeN, 0.12) * smoothstep(1.6, 0.2, thickE) * (1.0 - smoothstep(0.1, 0.25, vSimD)));
     // at zero thickness exactly the ground behind: a sheet within depth precision of the ground (dry shore cells hold
     // their level a few cm under it) can never z-fight into speckles
     // (a film a few centimetres thick is the wet ground the terrain already darkens along its waterline band: darkened

@@ -446,7 +446,8 @@ void main() {
     vec3 v0 = up * s * (0.7 + 0.5 * r2) + side * s * 0.35 * sqrt(r3);
     p += side * sqrt(r4) * p0 * 0.3 + v0 * tS - up * 4.9 * tS * tS;
     vel = v0 - up * 9.8 * tS;
-    sz = size * (0.5 + 0.6 * r1);
+    // (sizes from spatter to bombs: all alike, they read from afar as a row of identical orange bars)
+    sz = size * (0.3 + 1.3 * r1 * r1);
     // lava bombs: short red-orange streaks along their arcs, cooling and darkening as they fly (never sparkler spikes)
     float cool = smoothstep(0.05, 0.8, age);
     c = mix(vec3(1.0, 0.5, 0.12), vec3(0.45, 0.05, 0.01), cool) * mix(14.0, 2.5, cool);
@@ -765,7 +766,11 @@ void main() {
     float lit = clamp(0.42 + 0.78 * dot(nrm.xy, uSunS) + 0.2 * nrm.z, 0.0, 1.3);
     float under = smoothstep(0.4, -0.8, nrm.y);
     float a = vColor.a * puff * fade;
-    vec3 c = vColor.rgb * (vLight * lit + vSkyL * (0.7 + 0.3 * nrm.z) + vGlow * (0.35 + 0.65 * under));
+    // (smoke lit from below by a fire or a vent borrows its light: on screen the borrowed glow tops out at a deep orange
+    // whatever the eye's adaptation — at the night's exposure a volcano's ash column read as a white glare disc)
+    vec3 gl = vColor.rgb * vGlow * (0.35 + 0.65 * under);
+    float glL = dot(gl, vec3(0.2126, 0.7152, 0.0722)) * fxExposure();
+    vec3 c = vColor.rgb * (vLight * lit + vSkyL * (0.7 + 0.3 * nrm.z)) + gl / (1.0 + glL / 0.35);
     c = c * vAirT + vAirIn;
     gl_FragColor = vec4(c * a, a);
   } else if (vKind > 3.5 && vKind < 4.5) {

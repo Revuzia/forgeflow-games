@@ -91,6 +91,11 @@ const RANIM = { evacuate: 31, herdStill: 32, huntStill: 33, gameStill: 34, playS
 const STILL_M = 0.15;
 /** of the dancers at a festival or wedding (AgentFlag2.festive), the share in the ring dance (the rest dance freely) */
 const RING_SHARE = 0.65;
+/** 0 … 1: how far past life-size reading a person is from the camera (28 m … 100 m) — Crowds.update's readability */
+function PEOPLE_FAR(d: number): number {
+  const t = Math.min(1, Math.max(0, (d - 28) / 72));
+  return t * t * (3 - 2 * t);
+}
 /**
  * A settlement's culture as 6 bits from its language (settlements that split keep their kin's look until the language
  * drifts): bits 0-1 the trim motif, 2-3 the accent dye (STYLE pat / dye), 4-5 how the women wear their hair.
@@ -386,7 +391,11 @@ export class Crowds {
         if (!nl) continue;
         const sp = speciesAt(A.species[i]);
         const era = eraOf.get(A.group[i]) ?? 2;
-        const scale = (sp.height / (sp.plan === 'hexapod' ? 1.3 : sp.plan === 'flyer' ? 2.2 : 1.72)) * (A.scale[i] || 1);
+        // (readability from the god's height: past ~30 m people grow a little, to x1.27 by 100 m — never more, or they
+        // stand as tall as the doors beside them; at 60 m life-size people were 2 px slivers on adobe and grass. Up close,
+        // carried by the Touch or afloat they stay life-size)
+        const farP = pin || afloat ? 0 : PEOPLE_FAR(d);
+        const scale = (sp.height / (sp.plan === 'hexapod' ? 1.3 : sp.plan === 'flyer' ? 2.2 : 1.72)) * (A.scale[i] || 1) * (1 + 0.27 * farP);
         let dh = A.heading[i] - tr.hd;
         dh -= Math.round(dh / (Math.PI * 2)) * Math.PI * 2;
         tr.hd += dh * Math.min(1, dtR * 9);
@@ -411,7 +420,7 @@ export class Crowds {
           bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale);
         }
         const blend = Math.min(1, (realTime - tr.at) / BLEND_S);
-        this.colours(id, sp, A.tint[i], flags, era, A.species[i]);
+        this.colours(id, sp, A.tint[i], flags, era, A.species[i], farP);
         const tool = this.toolFor(tr.anim, A.carry[i], era, flags, id);
         const cadence = 0.9 + 0.2 * hashFloat(id, 41);
         const style = this.styleFor(id, flags, era, cultOf.get(A.group[i]) ?? cultureOf(A.group[i]));
@@ -518,10 +527,18 @@ export class Crowds {
   }
 
   /** cloth (snapshot tint), skin and hair (species palettes by id; elders grey) into _a, _b, _c */
-  private colours(id: number, sp: ReturnType<typeof speciesAt>, tint: number, flags: number, era: number, species: number): void {
+  private colours(id: number, sp: ReturnType<typeof speciesAt>, tint: number, flags: number, era: number, species: number, far = 0): void {
     unpackLinear(tint || CLOTH_FALLBACK[id % CLOTH_FALLBACK.length], _a);
     // early peoples' clothes are undyed whatever the tint says
     if (era <= 1) { const l = 0.3 * _a[0] + 0.55 * _a[1] + 0.15 * _a[2]; _a[0] = l * 1.15; _a[1] = l * 0.95; _a[2] = l * 0.7; }
+    // seen from the god's height, the cloth reads off the land: its dye a little stronger and its value pushed away
+    // from the mid-tones of adobe, dirt and grass (pale cloth paler, dark cloth darker; ~0.15 linear is the split)
+    if (far > 0) {
+      const l = 0.2126 * _a[0] + 0.7152 * _a[1] + 0.0722 * _a[2];
+      const sat = 1 + 0.55 * far * (era <= 1 ? 0.4 : 1);
+      const v = l > 0.15 ? 1 + 0.4 * far : 1 - 0.3 * far;
+      for (let c = 0; c < 3; c++) _a[c] = Math.min(1, Math.max(0, (l + (_a[c] - l) * sat) * v));
+    }
     // no cloth is black: the darkest wool is charcoal (~0.045), so a coat still shows its form in the sun
     const cl = 0.2126 * _a[0] + 0.7152 * _a[1] + 0.0722 * _a[2];
     if (cl < 0.045) { const k = 0.045 / Math.max(1e-3, cl); _a[0] = Math.min(1, _a[0] * k + 0.004); _a[1] = Math.min(1, _a[1] * k + 0.004); _a[2] = Math.min(1, _a[2] * k + 0.004); }
