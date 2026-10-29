@@ -47,6 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import p23lib as L  # noqa: E402
 C = L.C
 
+C_REVIVE_S = 5.0      # R3: C-DBNO "a revive takes 5 s" - the human2 channel row's fixed bar (+- 0.25 s)
 PLANTS = {
     "crawl-fast": "K.DBNO_CRAWL = 4; if (K.DBNO) K.DBNO.CRAWL = 4",
     "no-bleed": "K.DBNO_BLEED_HPS = 0; if (K.DBNO) K.DBNO.BLEED_HPS = 0; if (typeof K.dbnoBleedRate === 'function') K.dbnoBleedRate = () => 0",
@@ -381,7 +382,8 @@ def part_human2(args, v):
         # a coin flip on head and base alike. Now E is held until the host's sim completes the revive, or until the cap (5 s / the host's sim
         # rate measured live over the hold) + 1.5 s real = 1.5 s real after the host's clock has run REVIVE_S since E went down (the rate is
         # read live because it moves during the hold: r2 run 1 read 0.857 before it and the channel reached only 3.4 s in 7.4 s real);
-        # 30 s real absolute. The channel's game time (reviveStart -> actorRevived on the host's clock) is judged: REVIVE_S +- 0.25 s.
+        # 30 s real absolute. The channel's game time (reviveStart -> actorRevived on the host's clock) is judged: 5.0 +- 0.25 s (R3: against the
+        # contract's fixed C-DBNO 5 s, C_REVIVE_S, never the live W.SIM.REVIVE_S - a build that changed REVIVE_S would have moved the bar with it).
         hpg.evaluate("""(gid) => { const W = window.__LC__.W, p = W.player; const Q = window.__P23H2__ = { start: null, done: null, cancels: 0 };
             W.events.on('reviveStart', (a, b) => { if (a === p && b && b.id === gid && Q.start == null) Q.start = W.t; });
             W.events.on('reviveCancel', (a, b) => { if (a === p && Q.done == null) Q.cancels++; });
@@ -418,8 +420,8 @@ def part_human2(args, v):
         rev = SQ.wait(gpg, "() => { const p = window.__LC__.W.player; return p.alive && !p.downed ? { hp: p.hp } : null; }", 4, 0.1)
         hup = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.alive && !a.downed; }", 3, 0.1, g_id)
         v.check("human2: the host's real 5 s E revives the guest: 30 hp on its page, up on the host's", bool(rev) and abs(rev["hp"] - 30) <= 1 and bool(hup)
-                and game_s is not None and abs(game_s - rs_h) <= 0.25,
-                {"guest": rev, "hostSeesUp": hup, "channelGameS": game_s, "K.REVIVE_S": rs_h, "hostSimRateBefore": h_rate, "hostSimRateHold": hold_rate, "capRealS": cap_s,
+                and game_s is not None and abs(game_s - C_REVIVE_S) <= 0.25,
+                {"guest": rev, "hostSeesUp": hup, "channelGameS": game_s, "contractS": C_REVIVE_S, "K.REVIVE_S": rs_h, "hostSimRateBefore": h_rate, "hostSimRateHold": hold_rate, "capRealS": cap_s,
                  "heldRealS": held_s, "released": why, "host": h2q, "control": "h2-short-hold" if short else None},
                 "revive completes; channel 5.0 +- 0.25 s of game time; hp 30, up")
         v.check("human2: per-tick 'state' message the same size downed as up (+-4 B)", up_b is not None and dn_b is not None and abs(dn_b - up_b) <= 4,

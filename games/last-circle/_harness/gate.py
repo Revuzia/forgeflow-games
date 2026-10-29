@@ -717,6 +717,8 @@ P23_PENDING_NEG = [
     ("p23_dbno-plant-crawl-fast", "p23/dbno.py", ["--plant", "crawl-fast", "--parts", "bot"], 3600),
     ("p23_dbno-plant-no-bleed", "p23/dbno.py", ["--plant", "no-bleed", "--parts", "bot"], 3600),
     ("p23_dbno-plant-revive-quick", "p23/dbno.py", ["--plant", "revive-quick", "--parts", "bot"], 3600),
+    # (R3) the two-human revive: the host releases E after 3 s of game time - human2's channel row (5.0 +- 0.25 s, fixed) must FAIL
+    ("p23_dbno-control-h2-short-hold", "p23/dbno.py", ["--parts", "human2", "--control", "h2-short-hold"], 3600),
     ("p23_modes-plant-teams-off", "p23/modes.py", ["--plant", "teams-off", "--modes", "duo"], 3600),
     ("p23_settings-plant-ultra-noop", "p23/settings.py", ["--plant", "ultra-noop"], 3600),
     ("p23_settings-plant-scale-center", "p23/settings.py", ["--plant", "scale-center"], 3600),
