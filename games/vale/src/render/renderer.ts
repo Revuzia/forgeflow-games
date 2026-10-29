@@ -360,6 +360,14 @@ class ValeRenderer implements Renderer {
       skinTint: (e) => this.skinTint(e),
       now: () => this.time,
       shake: (px, ms) => this.rig.shake(px, ms),
+      plateAt: (out) => {
+        const m = this.map;
+        if (!m) return false;
+        const at = ((m.art as { terrain?: { plate?: { at?: unknown } } } | undefined)?.terrain?.plate?.at);
+        const ok = Array.isArray(at) && typeof at[0] === 'number' && typeof at[1] === 'number';
+        out.set(ok ? (at[0] as number) : m.size[0] / 2, 0.05, ok ? (at[1] as number) : m.size[1] / 2);
+        return true;
+      },
     });
     this.director.eventVfx = opts.eventVfx ?? {};
     this.director.statusVfx = opts.statusVfx ?? {};

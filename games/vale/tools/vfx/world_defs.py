@@ -8,7 +8,7 @@ thrown outward is harm or control, motes rising are help. Built into content/vfx
 """
 from __future__ import annotations
 
-from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, EMBER, INK, INK2, NOON, SAP, L, chips, decal, flash, light, shockwave, vfx)
+from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, EMBER, INK, INK2, NOON, SAP, L, chips, decal, flash, light, mesh, shockwave, vfx)
 
 RESIN = "#D9A15A"      # warm resin amber (Resinburn): the burn of sap, never the heal hue
 SAP_WARM = "#B8D98A"   # sap-light: SAP warmed toward honey, still inside the help read
@@ -98,4 +98,31 @@ def defs() -> list:
                  light("target", RESIN, 3, 3, 0.2),
                  comment="T1 · impact · Resinburn ignites: the stuck resin flares warm amber on the target, embers spit up, a curl of "
                          "dark smoke"))
+
+    # ── world moments (engine-r2-05) ────────────────────────────────────────────────────────────────────────────
+    # the Noon Toll (FRAY rules.noonToll): every fighter still standing is in the light for the reveal (5 s, follows them;
+    # the director fits the clock to the mode's reveal): a thin pale noon column over them, a pale floor glow at their
+    # feet, a few motes of light falling. A presence, not a heal (no rising motes) and not a shield (no shell)
+    D.append(vfx("lib_world_noon_toll", 5.0,
+                 # every layer rides the fighter ('caster' = the lit fighter, its body centre: the column starts under the
+                 # ground and stands ~2.5 m over it; the floor glow tracks x / z)
+                 mesh("caster", "pillar", 1.0, 5.0, color=[NOON, "#F4EFE2"], alpha=[[0, 0], [0.04, 0.09], [0.9, 0.07], [1, 0]], emissive=0.9,
+                      rim=NOON, rim_pow=3.5, rim_emissive=1.8, noise=0.3, scroll=[0, -0.6], stretch=[1.15, 3.9, 1.15], offset=[0, -1.4, 0],
+                      follow=True),
+                 L("decal", at="caster", shape="circle", style="light", radius=0.85, life=5.0, color=NOON, alpha=[[0, 0], [0.04, 0.3], [0.92, 0.25], [1, 0]],
+                   emissive=0.9, rim=NOON, follow=True),
+                 L("emitter", at="caster", rate=6, shape="disc", radius=0.45, offset=[0, 1.4, 0], dir="down", spreadDeg=6, speed=[0.7, 1.1],
+                   life=[1.8, 2.4], size=[0, 0.09, 0.07, 0], color=[NOON, "#F4EFE2"], alpha=[0, 1, 0.8, 0], emissive=1.8, drag=0.2,
+                   texture="mote", blend="add", follow=True),
+                 comment="T2 · Lumen · the Noon Toll: a thin pale noon column over each fighter still standing for the reveal, a pale "
+                         "floor glow at their feet, motes of light falling (they are seen by all; a presence, not a heal or a shield)"))
+    # the Noon Toll's bell over the plate: a chime ring runs out across the Noonplate, a second behind it, a pale centre
+    D.append(vfx("lib_world_noon_chime", 1.6,
+                 L("shockwave", at="ground", radius=[[0, 1.5], [0.35, 15.0], [1, 24.0]], width=[0.5, 0.15], life=1.4, color=[NOON, "#F4EFE2"],
+                   alpha=[0.9, 0.6, 0], emissive=1.8, sharp=2.0, noise=0.2),
+                 L("shockwave", at="ground", radius=[[0, 1.0], [0.35, 11.0], [1, 18.0]], width=[0.35, 0.1], life=1.3, color=NOON,
+                   alpha=[0.7, 0.45, 0], emissive=1.4, sharp=2.0, noise=0.2, delay=0.25),
+                 decal("ground", "light", [[0, 1.5], [0.2, 3.0], [1, 3.2]], 1.2, color=NOON, alpha=(0.5, 0.3, 0), emissive=1.2),
+                 comment="T2 · Lumen · the Noon Toll's bell over the plate: a pale chime ring runs out across the Noonplate, a second "
+                         "behind it, a soft pale centre"))
     return D

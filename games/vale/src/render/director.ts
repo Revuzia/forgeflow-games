@@ -71,7 +71,10 @@ import { screenFx } from './vfx/screen.ts';
 import type { Tier, VfxSystem } from './vfx/system.ts';
 
 export type EventVfxKey = 'levelUp' | 'respawn' | 'death' | 'unitDeath' | 'structureFall' | 'recall' | 'pickup' | 'objective'
-  | 'blink' | 'crit' | 'heal' | 'shield' | 'ultWindup' | 'windup' | 'ultCharge' | 'castFlash';
+  | 'blink' | 'crit' | 'heal' | 'shield' | 'ultWindup' | 'windup' | 'ultCharge' | 'castFlash'
+  /** the Noon Toll (announce 'noon_toll', a mode's rules.noonToll): the light on each fighter still standing for the
+   *  reveal, and the bell's ring over the plate */
+  | 'noonToll' | 'noonTollPlate';
 export type EventVfxMap = Partial<Record<EventVfxKey, string>>;
 export type StatusVfxMap = Partial<Record<StatusKindT, string>>;
 
@@ -145,6 +148,8 @@ export interface DirectorHost {
   skinTint(e: EntityView): Color | null;
   now(): number;
   shake(px: number, ms: number): void;
+  /** the map's plate centre in world x / z (art.terrain.plate.at, else the map's centre); false with no map */
+  plateAt?(out: Vector3): boolean;
 }
 
 const HEALING_OPS = new Set(['heal', 'shield']);
@@ -323,10 +328,13 @@ export class Director {
   private readonly recallFx = new Map<number, number>();
   /** zone effect id (a zone entity's def) → who sees its outline (its own Present.telegraph, else the ability's) */
   private readonly zoneTele = new Map<string, 'none' | 'ally_only' | 'everyone'>();
+  /** mode id → its Noon Toll's reveal (s): how long the toll's light stays on each fighter */
+  private readonly noonReveal = new Map<string, number>();
 
   constructor(catalog: CatalogT, vfx: VfxSystem, host: DirectorHost) {
     this.vfx = vfx;
     this.host = host;
+    for (const m of catalog.modes) if (m.rules.noonToll) this.noonReveal.set(m.id, m.rules.noonToll.reveal);
     const add = (a: AbilityRec, tier: Tier): void => {
       if (this.abilities.has(a.id)) return;
       const heal = Array.isArray(a.effects) && a.effects.some((e) => HEALING_OPS.has((e as { op?: string }).op ?? '')) && !a.effects.some((e) => (e as { op?: string }).op === 'damage');
@@ -659,6 +667,28 @@ export class Director {
           // the arrival: the same departure light where the fighter lands
           B.set(e.x, RECALL_LIFT, e.y);
           this.fire(this.eventVfx.recall, e.id, 2, { origin: B, ground: B, anchor: 'origin', phase: 'release' });
+          break;
+        }
+        case 'announce': {
+          // engine-r2-05: the Noon Toll lights every fighter still standing (they are revealed to all for the mode's
+          // rules.noonToll.reveal) and rings over the plate; the sim names the key, content binds the looks
+          if (ev.key !== 'noon_toll') break;
+          const reveal = this.noonReveal.get(view.mode) ?? 5;
+          const lit = this.eventVfx.noonToll;
+          if (lit && this.vfx.has(lit)) {
+            const ts = (this.vfx.def(lit)?.duration ?? reveal) / reveal;
+            // every fighter still standing, fogged or not: the toll reveals them to every team for the same `reveal`
+            // (the sim's vision catches up on the next tick)
+            for (const pl of view.players) {
+              const e = view.entity(pl.entity);
+              if (!e || !e.alive) continue;
+              B.set(e.x, 0, e.y);
+              this.fire(lit, e.id, 2, { origin: B, ground: B, follow: e.id, followFor: reveal, anchor: 'origin', timeScale: ts });
+            }
+          }
+          if (this.eventVfx.noonTollPlate && this.host.plateAt?.(C)) {
+            this.fire(this.eventVfx.noonTollPlate, -1, 2, { origin: C, ground: C, anchor: 'origin', world: true });
+          }
           break;
         }
         case 'pickup': {
