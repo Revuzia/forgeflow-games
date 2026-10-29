@@ -131,6 +131,7 @@ export class Bot extends BotBase implements BotController {
 
   private clearPlan(): void {
     this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false;
+    this.caged = false;
   }
 
   // ── situation ─────────────────────────────────────────────────────────────────────────────────
@@ -261,6 +262,11 @@ export class Bot extends BotBase implements BotController {
     const inc = Math.max(this.unitDps, this.recentDps);
     if (inc <= 0 || this.nearE > 0) return 0;
     const ttd = (e.hp + e.shield) / inc;
+    // (W4 G1 refix: an objective monster on me that my team is not taking now — I am not in on a start the fighters at
+    // it can finish — sends me out at once, before its sweeps and its growing hits leave too little to walk away on)
+    if (ttd < 20 && !(this.mode === 'objective' && this.pMonsters)) {
+      for (const m of this.perc.monsters) if (m.alive && m.atkTarget === e.id && this.objectiveMonster(m)) return 0.82;
+    }
     // (a stacked wave can take a full-health fighter in seconds: leave on the time to die alone)
     if (ttd > (this.hpF > 0.7 ? 6 : 9)) return 0;
     let ttk = Infinity;
@@ -272,7 +278,12 @@ export class Bot extends BotBase implements BotController {
     }
     // (nearly dead, only a monster that is about to fall is worth the last swing; a jungler on its
     // own camp finishes one that falls well before it would)
-    if (ttk < (this.hpF < 0.3 ? Math.min(ttd * 0.6, 2) : ttd * (this.jungle ? 0.8 : 0.6))) return 0;
+    // (W4 G1 refix: the Wicks on me keep hitting after the monster falls — their own time to finish me is not
+    // outlasted by the monster, so they send me out whatever the camp does)
+    let wd = 0;
+    for (const u of this.perc.enemyUnits) if (u.alive && u.atkTarget === e.id && u.attackDef) wd += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
+    const wickTtd = wd > 0 ? (e.hp + e.shield) / wd : Infinity;
+    if (wickTtd > 9 && ttk < (this.hpF < 0.3 ? Math.min(ttd * 0.6, 2) : ttd * (this.jungle ? 0.8 : 0.6))) return 0;
     return ttd < 3 ? 0.9 : 0.82;
   }
 
@@ -393,7 +404,7 @@ export class Bot extends BotBase implements BotController {
       // (a lead to press, W4 G3: the tiers that convert leads group on the siege without a won fight)
       else if (b.press && b.siege && !b.objective && hpF > 0.5 && (!this.jungle || b.phase !== 'early')) consider('push', 0.62);
       else if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
-      else if (b.group && follow && (!this.jungle || b.phase === 'late')) consider('push', 0.56);
+      else if (b.group && follow && (!this.jungle || b.phase === 'late') && (!this.diff.objectiveSense || hpF > 0.45)) consider('push', 0.56);
       // (laning: shove my own lane only while no enemy fighter is there to farm it under its tower)
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       // (sent to answer a threatened road, W4 G3: before the plan, not before my life)
@@ -409,7 +420,7 @@ export class Bot extends BotBase implements BotController {
         if (d > 0.05 && b.defendFighters[this.lane] > b.lanersOn(this.lane)) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
         else if (b.baseThreat >= 0.7 && follow) consider('defend', 0.55 + 0.2 * b.baseThreat);
       } else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
-      else if (global >= 0.7 && follow) consider('defend', 0.55 + 0.2 * global);
+      else if (global >= 0.7 && follow && (!this.diff.objectiveSense || hpF > 0.4)) consider('defend', 0.55 + 0.2 * global);
       // laning: only the laners of the lane beside an objective go, and only on an opening (it is up
       // and we have a fighter more), not to wait for its spawn; the other lanes keep farming
       // (the jungler too: during the laning phase no one comes to wait with it, so it keeps its camps)
@@ -417,7 +428,7 @@ export class Bot extends BotBase implements BotController {
       const opening = !!b.objective && b.objective.desire >= 0.75;
       const jungleLaning = this.jungle && kind === 'rift' && now < LANE_PHASE_END && b.phase !== 'late';
       if (b.objective && oc && follow && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
-        : (!jungleLaning || opening) && (!this.jungle || now >= JUNGLE_OBJECTIVE_FROM))) {
+        : (!jungleLaning || opening) && (!this.jungle || now >= JUNGLE_OBJECTIVE_FROM)) && (!this.diff.objectiveSense || hpF > (this.mode === 'objective' ? 0.3 : 0.45))) {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }
       // (a jungler ganks between its camps: not with one up at hand, and only a lane close by)
@@ -666,8 +677,32 @@ export class Bot extends BotBase implements BotController {
         const ax = e.x - cx, ay = e.y - cy, ad = dhypot(ax, ay) || 1;
         const sx = this.safeX - e.x, sy = this.safeY - e.y, sd = dhypot(sx, sy) || 1;
         const vx = ax / ad + 0.5 * sx / sd, vy = ay / ad + 0.5 * sy / sd, vd = dhypot(vx, vy) || 1;
-        const tx = e.x + (vx / vd) * 8, ty = e.y + (vy / vd) * 8;
-        if (this.w.nav.walkable(tx, ty)) { this.pMoveX = tx; this.pMoveY = ty; }
+        let ux = vx / vd, uy = vy / vd;
+        // (W4 G1 refix: hemmed in — Wicks pressed against me on several sides body-block the straight way out — take the
+        // widest gap that does not lead back into the wave, and let an escape fire whatever my health)
+        let pressed = 0;
+        for (const u of this.perc.enemyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, e.x, e.y) <= sq(e.radius + u.radius + 0.7)) pressed++;
+        this.caged = pressed >= 3;
+        if (this.caged) {
+          let bs = -Infinity;
+          for (let k = 0; k < 16; k++) {
+            const dx = dcos(k * Math.PI / 8), dy = dsin(k * Math.PI / 8);
+            const px = e.x + dx * 1.5, py = e.y + dy * 1.5;
+            if (!this.w.nav.walkable(px, py)) continue;
+            let clr = 2.5;
+            for (const u of this.perc.enemyUnits) {
+              if (!u.alive || this.dist2(u, e.x, e.y) > 16) continue;
+              const c = Math.sqrt(this.dist2(u, px, py)) - u.radius - e.radius;
+              if (c < clr) clr = c;
+            }
+            const sc = clr * 2 + (dx * ux + dy * uy);
+            if (sc > bs) { bs = sc; ux = dx; uy = dy; }
+          }
+        }
+        for (const step of this.caged ? [4, 2] : [8, 4]) {
+          const tx = e.x + ux * step, ty = e.y + uy * step;
+          if (this.w.nav.walkable(tx, ty)) { this.pMoveX = tx; this.pMoveY = ty; break; }
+        }
       }
     }
     // cornered (faster chaser right on me): hit back
@@ -794,34 +829,45 @@ export class Bot extends BotBase implements BotController {
   private waveGuard(): void {
     const e = this.e;
     const ehp = e.hp + e.shield;
-    const R = WICK_REACH + 1.5;
-    let pot = 0, cx = 0, cy = 0, n = 0, near2 = Infinity;
+    const R = WICK_REACH + 1.5, RW = 16;
+    let pot = 0, potW = 0, cx = 0, cy = 0, n = 0, wide = 0, near2 = Infinity;
     for (const u of this.perc.enemyUnits) {
       if (!u.alive || u.kind !== 'minion' || !u.attackDef) continue;
       const d2 = this.dist2(u, e.x, e.y);
+      if (d2 > RW * RW) continue;
+      // (W4 G1 refix: the rest of a stacked wave, still a few steps behind its front, counts too — it arrives
+      // while I stand there, and twenty Wicks around a fighter body-block every way out)
+      const dps = mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
+      potW += dps; wide++;
       if (d2 > R * R) continue;
-      pot += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
+      pot += dps;
       cx += u.x; cy += u.y; n++;
       if (d2 < near2) near2 = d2;
     }
     if (n === 0) return;
     const targeted = this.unitDps > 0;
-    if (targeted ? ehp / this.unitDps >= 8 : pot * 6 <= ehp) return;
-    if (!targeted) {
-      let mine = 0;
-      for (const u of this.perc.allyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, e.x, e.y) <= 9 * 9) mine++;
-      // (a cover that the wave outnumbers dies under it, and then the whole wave turns on me)
-      if (mine >= Math.max(2, Math.ceil(n * 0.6))) return;
-      for (const st of this.perc.allyStructs) if (st.alive && st.attackDef && st.stats.ad > 0 && this.dist2(st, e.x, e.y) <= sq(st.stats.range + st.radius + 2)) return;
+    let mine = 0;
+    for (const u of this.perc.allyUnits) if (u.alive && u.kind === 'minion' && this.dist2(u, e.x, e.y) <= 9 * 9) mine++;
+    // (a cover that the wave outnumbers dies under it, and then the whole wave turns on me; a Needle holds a wave of up to
+    // seven Wicks, not a stacked one)
+    let covered = mine >= Math.max(2, Math.ceil(wide * 0.6));
+    if (!covered && wide <= 7) {
+      for (const st of this.perc.allyStructs) if (st.alive && st.attackDef && st.stats.ad > 0 && this.dist2(st, e.x, e.y) <= sq(st.stats.range + st.radius + 2)) { covered = true; break; }
     }
+    // uncovered, the whole wave turns on me: judge it on what it could deal, not only on the Wicks already on me
+    const inc = covered ? this.unitDps : Math.max(this.unitDps, Math.max(pot, potW * 0.75) * 0.75);
+    if (targeted ? ehp / inc >= 8 : covered || Math.max(pot, potW * 0.75) * 8 <= ehp) return;
     cx /= n; cy /= n;
     const ax = e.x - cx, ay = e.y - cy, ad = dhypot(ax, ay) || 1;
     const sx = this.safeX - e.x, sy = this.safeY - e.y, sd = dhypot(sx, sy) || 1;
     const vx = ax / ad + 0.5 * sx / sd, vy = ay / ad + 0.5 * sy / sd, vd = dhypot(vx, vy) || 1;
-    const step = targeted ? 8 : Math.max(0, WICK_REACH + 1 - Math.sqrt(near2));
-    if (step <= 0.3) { if (this.pFarm === 2) this.pFarm = 1; return; }
-    const tx = e.x + (vx / vd) * step, ty = e.y + (vy / vd) * step;
-    if (!this.w.nav.walkable(tx, ty)) return;
+    // (not on me yet: back off decisively, well outside its reach — a sidestep to its edge is overrun by a wave that marches)
+    const step = targeted ? 8 : Math.max(2.5, WICK_REACH + 3 - Math.sqrt(near2));
+    let tx = e.x + (vx / vd) * step, ty = e.y + (vy / vd) * step;
+    if (!this.w.nav.walkable(tx, ty)) {
+      tx = e.x + (vx / vd) * 2.5; ty = e.y + (vy / vd) * 2.5;
+      if (!this.w.nav.walkable(tx, ty)) { tx = this.safeX; ty = this.safeY; }
+    }
     this.pMove = true; this.pMoveX = tx; this.pMoveY = ty;
     this.pFarm = targeted ? 0 : 1;
     this.pSiege = null; this.pMonsters = false;
@@ -1095,6 +1141,11 @@ export class Bot extends BotBase implements BotController {
     return false;
   }
 
+  /** a monster of an objective camp (it may have chased out of the pit) */
+  private objectiveMonster(m: Entity): boolean {
+    for (const c of this.k.camps) if (c.objective && Math.abs(m.x - c.x) < 20 && Math.abs(m.y - c.y) < 20) return true;
+    return false;
+  }
   private campUp(x: number, y: number): boolean {
     for (const m of this.perc.monsters) if (m.alive && Math.abs(m.x - x) < 8 && Math.abs(m.y - y) < 8) return true;
     return false;

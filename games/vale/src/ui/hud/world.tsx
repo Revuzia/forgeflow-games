@@ -9,13 +9,16 @@
 // at their ground point: the kind's silhouette over a ripple, 4 s.
 // PingWheel: the radial menu while the ping key is held (client_hud §5): nine kinds clockwise from 12
 // o'clock, a dead zone in the middle (a release there pings "Look here").
+// ViewPlate (perf PERF-m4): while the renderer's GPU context is lost (the 3D view is blank) or its programs rebuild
+// (~0.4-0.8 s), a centred plate says the view is being restored; the match itself runs on.
 
 import type { CSSProperties, JSX } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Signal } from '@preact/signals';
 import type { EntityId } from '../../contracts/sim.ts';
 import { PING_ORDER, type Marker } from '../../input/index.ts';
 import { useApp } from '../app_ctx.ts';
+import type { ViewState } from '../state.ts';
 import { fmtInt } from '../format.ts';
 import { useHud } from './ctx.ts';
 import { PingGlyph } from './glyphs.tsx';
@@ -176,6 +179,28 @@ const PING_SVG: Record<string, string> = (() => {
   for (const [k, v] of Object.entries(g)) out[k] = `<svg viewBox="0 0 24 24" width="28" height="28" ${st}>${v}</svg>`;
   return out;
 })();
+
+// ── view plate (perf PERF-m4) ────────────────────────────────────────────────────────────────────
+export function ViewPlate(): JSX.Element | null {
+  const { state, cv } = useApp();
+  const r = state.renderer;
+  const [view, setView] = useState<ViewState>(() => r?.viewState ?? 'ok');
+  useEffect(() => {
+    if (!r?.onViewState) return undefined;
+    setView(r.viewState ?? 'ok');     // a change between the first render and this subscription
+    const off = r.onViewState((s) => setView(s));
+    return off;
+  }, [r]);
+  if (view === 'ok') return null;
+  return (
+    <div class={`viewplate is-${view}`} role="status" aria-live="polite">
+      <span class="viewplate__rule" aria-hidden="true" />
+      <span class="viewplate__dial" aria-hidden="true" />
+      <span class="viewplate__title t-h3">{cv.t('hud.view.restoring', 'Restoring the view')}</span>
+      <span class="viewplate__sub t-body-s">{cv.t('hud.view.restoring_sub', 'The match carries on while the picture returns.')}</span>
+    </div>
+  );
+}
 
 // ── ping wheel ───────────────────────────────────────────────────────────────────────────────────
 const WHEEL_R = 92;

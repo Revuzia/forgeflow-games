@@ -88,6 +88,8 @@ export abstract class BotBase {
   pDive = false;
   /** where safety is (retreat / escape direction) */
   safeX = 0; safeY = 0;
+  /** retreating hemmed in by Wicks pressed against me on several sides (an escape fires whatever my health) */
+  caged = false;
 
   // perception (reaction-delayed)
   readonly noticed = new Map<number, number>();
@@ -423,7 +425,7 @@ export abstract class BotBase {
         const reach = Math.max(info.dashDist, info.blinkDist, info.range, 3);
         if (info.tk === 'self' || info.tk === 'none') { this.cast(s, info, e, e.x, e.y); return true; }
         // (a dash or blink toward safety: from a fighter on me, or from Wicks/monsters finishing me)
-        if (d > 3 && (chaser || (this.recentDps > 0 && hpF < 0.6))) { this.cast(s, info, null, e.x + (dx / d) * reach, e.y + (dy / d) * reach); return true; }
+        if (d > 3 && (chaser || (this.recentDps > 0 && (hpF < 0.6 || this.caged)))) { this.cast(s, info, null, e.x + (dx / d) * reach, e.y + (dy / d) * reach); return true; }
       }
       if (!(u & (U_OFFENSE | U_GAPCLOSE | U_BUFF))) return false;
     }

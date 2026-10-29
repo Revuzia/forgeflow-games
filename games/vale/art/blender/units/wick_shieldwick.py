@@ -1642,7 +1642,9 @@ FIT_MASK = {"aubade": {"hood": "outer"}, "serenade": {"hood": "outer"}}
 # hard parts and trims, where the concept's few pixels projected as smudges and rim-light streaks (item 6), and the
 # parts the guard moved away from where the concept paints them (the left arm and the shield).
 #   part: (hex, light, mottle)
-_ACH = "#C9C5BB"                                  # chalk #D6D3CA, a step down (the paint carries its own light)
+# (integration pass, wave_b "Wick hood value": value_probe wickTop25 RIFT Low 67.1 over the 65 cap; the pale stole
+# and lantern chalk lit from above were in the top quarter) #C9C5BB -> #B8B4AA (L* 80 -> 73)
+_ACH = "#B8B4AA"                                  # chalk #D6D3CA, two steps down (the paint carries its own light)
 _ACH_HOOD = "#A5A197"                             # the hood's chalk (frame, knob): L* 66, the hood under L* 65 on screen
 PROC = {
     "aubade": {"hood_rim": (_ACH_HOOD, 0.55, 0.05), "stole": (_ACH, 0.55, 0.05), "scarf": ("#65707D", 0.6, 0.06), "shield": ("#B8B4AA", 0.55, 0.05), "shield_rib": ("#BEBAB0", 0.6, 0.04),
@@ -1651,7 +1653,7 @@ PROC = {
                "sleeve_R": ("#4D5866", 0.5, 0.06), "sleeve_L": ("#4D5866", 0.5, 0.06),
                "mitt_R": ("#66727F", 0.55, 0.07), "mitt_L": ("#66727F", 0.55, 0.07),
                "boot_R": ("#2F3034", 0.5, 0.06), "boot_L": ("#2F3034", 0.5, 0.06)},
-    "serenade": {"mantle": ("#9A866F", 0.45, 0.07), "collar": ("#54453A", 0.55, 0.12),
+    "serenade": {"mantle": ("#93806A", 0.45, 0.07), "collar": ("#54453A", 0.55, 0.12),
                  "sleeve_R": ("#6E5A4C", 0.5, 0.08), "sleeve_L": ("#6E5A4C", 0.5, 0.08),
                  "cuff_R": ("#3F3530", 0.5, 0.08), "cuff_L": ("#3F3530", 0.5, 0.08),
                  "mitt_R": ("#6A5546", 0.55, 0.10), "mitt_L": ("#6A5546", 0.55, 0.10), "hood_rim": ("#5A4A3D", 0.55, 0.10),
@@ -1679,7 +1681,8 @@ FLAT = {"aubade": {"leg_R": "#3A3F47", "leg_L": "#3A3F47", "shield_ring": "#4F62
 # "gradient ramp" the hem band alone could not deliver). [(z, mul)], interpolated, clamped at the ends.
 RAMP = {
     "aubade": {"cloak": [(0.10, 0.30), (0.20, 0.38), (0.32, 0.58), (0.46, 0.86), (0.56, 1.0)],
-               "hood": [(0.62, 0.52), (0.72, 0.64), (0.84, 0.85), (0.95, 1.0)],
+               # (integration pass: the hood crown a step down, wickTop25 RIFT Low 67.1 over the 65 cap)
+               "hood": [(0.62, 0.52), (0.72, 0.63), (0.84, 0.80), (0.95, 0.91)],
                "hood_rim": [(0.64, 0.70), (0.78, 0.84), (0.92, 1.0)],
                "stole": [(0.12, 0.24), (0.22, 0.34), (0.34, 0.56), (0.48, 0.80), (0.58, 1.0)],
                "shield": [(0.30, 0.66), (0.50, 0.84), (0.72, 0.96)],
@@ -1687,7 +1690,8 @@ RAMP = {
     "serenade": {"cloak": [(0.11, 0.48), (0.20, 0.56), (0.30, 0.74), (0.44, 0.94), (0.54, 1.0)],
                  "shield": [(0.30, 0.82), (0.60, 1.0)],
                  # (fix round 4) the dome's crown a step down (top quarter L* 67-69 in game, cap 65), still the lightest
-                 "hood": [(0.88, 1.0), (0.98, 0.90), (1.08, 0.85)]},
+                 # (integration pass: wickTop25 RIFT Low 67.1 over the 65 cap: the dome a further step down)
+                 "hood": [(0.88, 0.95), (0.98, 0.84), (1.08, 0.78)]},
 }
 # CLEAN: projection ghosts (review 2026-10-21 item 8: the concept's arms, cuffs, wraps and haft painted onto the
 # cloak where the model has open cloth) - texels far from their part's median in value (dL* above / below) or colour

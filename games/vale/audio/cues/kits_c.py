@@ -12,16 +12,24 @@ identity pass over the kits' attack and ult cues (kits_a.py / kits_b.py):
 
 The identity pass (run on import, over the cues registered by kits_a / kits_b):
 
-  contact  every PHYSICAL fighter's attack hit carries a contact transient (final parity AUD-4, the same floor as the
-           library's physical hits): an escapement tick tuned into the fighter's own 2-6 kHz pair, its level solved
-           so the first 30 ms after the onset hold CONTACT_SHARE of their power above 2 kHz.
+  contact  every fighter's attack hit AND ability hit carries a contact transient inside the library's band for the
+           frequent hits (final parity AUD-4: >= 0.07 of the first 30 ms above 2 kHz, at most the 0.30 soft top). A
+           dull hit gets an escapement tick tuned into the fighter's own 2-6 kHz pair, its level solved so the first
+           30 ms after the onset hold CONTACT_SHARE above 2 kHz; a hit brighter than CONTACT_TOP has the > 2 kHz band
+           of its onset pulled down (a zero-phase split, so nothing moves in time), solved on the MASTERED take (the
+           mastering's soft clip adds its own top). The ability hit so keeps the contact the library hits it replaced
+           gave it (c_hit_phys_* 0.08-0.10, c_hit_magic 0.25).
+  body     every identity cue the kit gate checks on a laptop (attack swing / hit, ult release, ability hit) loses at most
+           LAPTOP_SOLVE_LU of max momentary loudness through a 220 Hz roll-off: a cue whose weight lives below 250 Hz
+           gets that band's own harmonics (an octave-up rectifier, 250-1000 Hz) mixed in at the level that brings the
+           loss down, so a laptop hears the weight a big speaker plays as sub (the sub itself is kept).
   voicing  VOICING gives an identity cue (attack swing / hit, ult wind-up / release, ability hit) its own band: a
            4th-order high-pass (a small speaker's roll-off then costs a hit little: the kit gate's laptop check), a
            low-pass and a peaking band, in one or two stages, chosen so every fighter sits >= 8 dB from every other
            fighter in the same slot by both 1/3-octave measures in audio/build.py's kit gate (from 125 Hz up over the
            averaged takes, and the closest pair of takes' 125 Hz - 16 kHz confusability) without pushing the
            mastering limiter past its budget. The table was found by search over the takes (rendered and mastered) and
-           is baked here as data; the voicing runs before the contact, so the contact is always solved last.
+           is baked here as data; the voicing runs first, then the body, and the contact is always solved last.
 
 All original synthesis; every random choice is seeded from the cue id and take.
 """
@@ -29,8 +37,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from cuelib import REGISTRY, cue
+from cuelib import REGISTRY, cue, master
 from synth import filters as F
+from synth import loudness as LD
 from synth import sfx as S
 from synth.core import SR, hz, ns
 
@@ -47,8 +56,12 @@ DASHW = (0.2, 0.8)
 IMPK = dict(tail_floor_db=-48.0, clip_drive=1.5, max_gr_db=6.0)      # mastering profiles
 DASHK = dict(tail_floor_db=-48.0, fade_out=0.02)
 
-CONTACT_SHARE = 0.11         # a physical attack hit's > 2 kHz share of its first 30 ms (the build gate's floor: 0.07)
+CONTACT_SHARE = 0.11         # a kit hit's > 2 kHz share of its first 30 ms (the build gate's floor: 0.07) …
+CONTACT_TOP = 0.24           # … and at most this, measured mastered (the build gate's soft top for frequent hits: 0.30)
 CONTACT_WIN = 0.03
+CONTACT_SPLIT_HZ = 2000.0
+LAPTOP_SOLVE_LU = 2.4        # the body pass: loss through a 220 Hz roll-off (the build gate: 3 LU)
+BODY_LO_HZ = 250.0           # … the band below this lends its harmonics, 250-1000 Hz
 
 
 # ── each fighter: its signature instrument (struck short), the call's first note, its home room, its contact pair ──
@@ -99,10 +112,13 @@ DASH_AIR = {'ardit': (500, 1800), 'burdam': (220, 900), 'dunsom': (700, 2400), '
             'hesmi': (260, 1000), 'ilsheta': (900, 3000), 'kemdo': (1500, 6000), 'lisvel': (1100, 4200),
             'marund': (240, 800), 'nurrow': (600, 2000), 'odrum': (400, 1500), 'rishal': (2000, 8000),
             'sukri': (1000, 3600), 'tunlan': (300, 1200), 'ulkro': (700, 2600), 'vashil': (800, 3200)}
-# a physical fighter's contact: the escapement tick's two resonances (its own pair in 2-6 kHz)
+# a fighter's contact: the escapement tick's two resonances (its own pair in 2-6 kHz; the five casters' pairs sit
+# between the physical fighters' so no two fighters share one)
 CONTACT = {'ardit': (3000.0, 4600.0), 'burdam': (2200.0, 3300.0), 'ervet': (4200.0, 6000.0), 'hesmi': (2000.0, 2900.0),
            'kemdo': (3800.0, 5600.0), 'lisvel': (3400.0, 5200.0), 'marund': (2400.0, 3600.0), 'nurrow': (4600.0, 6200.0),
-           'odrum': (2600.0, 4000.0), 'rishal': (5000.0, 6600.0), 'ulkro': (2800.0, 4400.0)}
+           'odrum': (2600.0, 4000.0), 'rishal': (5000.0, 6600.0), 'ulkro': (2800.0, 4400.0),
+           'dunsom': (2300.0, 3900.0), 'ilsheta': (3600.0, 5900.0), 'sukri': (4400.0, 6800.0), 'tunlan': (2100.0, 3500.0),
+           'vashil': (3200.0, 5000.0)}
 FIGHTERS = sorted(ROOMS)
 
 
@@ -125,8 +141,45 @@ def _share(m: np.ndarray, lo: float = 2000.0) -> float:
     return float(P[f >= lo].sum() / (P[f > 20].sum() + 1e-30))
 
 
-def with_contact(x: np.ndarray, fid: str, v: int) -> np.ndarray:
-    """Mix the fighter's contact tick in at the onset, at the level that gives CONTACT_SHARE (bisection on the mid)."""
+def _mshare(x: np.ndarray, cid: str) -> float:
+    """The build gate's contact measure (audio/build.py transient_share: onset on the channels' envelope, power of the
+    mid) on the take as the mastering ships it."""
+    y = master(x, REGISTRY[cid])[0]
+    e = np.max(np.abs(y), axis=0)
+    i = int(np.argmax(e > e.max() * 0.01))
+    w = y.mean(axis=0)[i:i + ns(CONTACT_WIN)]
+    P = np.abs(np.fft.rfft(w)) ** 2
+    f = np.fft.rfftfreq(w.size, 1 / SR)
+    return float(P[f >= CONTACT_SPLIT_HZ].sum() / (P[f > 20].sum() + 1e-30))
+
+
+def _tame(xs: np.ndarray, i: int, cid: str) -> np.ndarray:
+    """Pull a too-bright onset down to CONTACT_TOP - 0.02 (mastered): the > 2 kHz band of the contact window (a zero-phase
+    split: nothing moves in time) scaled down under a window that is whole over the 30 ms after the onset and fades in
+    2 ms before and out 15 ms after, its depth solved by bisection."""
+    lo_band = F.apply_mag(xs, lambda f: 1.0 / np.sqrt(1.0 + (np.maximum(f, 0.0) / CONTACT_SPLIT_HZ) ** 8))
+    hi_band = xs - lo_band
+    n = xs.shape[-1]
+    w = np.zeros(n)
+    a0, a1, b0, b1 = max(0, i - ns(0.002)), i, min(n, i + ns(CONTACT_WIN)), min(n, i + ns(CONTACT_WIN + 0.015))
+    w[a0:a1] = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, a1 - a0))
+    w[a1:b0] = 1.0
+    w[b0:b1] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, b1 - b0))
+    goal = CONTACT_TOP - 0.02
+    a, b = 0.0, 1.0
+    for _ in range(18):
+        g = 0.5 * (a + b)
+        if _mshare(xs - g * w * hi_band, cid) > goal:
+            a = g
+        else:
+            b = g
+    return norm(xs - b * w * hi_band)
+
+
+def with_contact(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
+    """Hold a kit hit's contact in the band (see `contact` in the module doc): a dull take gets the fighter's contact
+    tick mixed in at the onset, at the level that gives CONTACT_SHARE (bisection on the mid); a take brighter than
+    CONTACT_TOP once mastered has its onset's top pulled down (_tame)."""
     lo, hi = CONTACT[fid]
     tick = at_len(esc('tick', 0.95, rr=v, seed=f'ct_{fid}{v}', res=(lo, hi), band=0.5 * (lo + hi), q=5.0), CONTACT_WIN)
     tick = F.apply(tick, [F.highpass(lo * 0.6, 0.7071)])
@@ -139,16 +192,48 @@ def with_contact(x: np.ndarray, fid: str, v: int) -> np.ndarray:
     k = min(tick.size, t.size - i)
     t[i:i + k] = norm(tick)[:k]
     mid = xs.mean(axis=0)
-    if _share(mid) >= CONTACT_SHARE:
-        return xs
+    if _share(mid) < CONTACT_SHARE:
+        a, b = 0.0, 4.0
+        for _ in range(30):
+            g = 0.5 * (a + b)
+            if _share(mid + g * t) < CONTACT_SHARE:
+                a = g
+            else:
+                b = g
+        xs = norm(xs + b * t[None, :])
+    if _mshare(xs, cid) > CONTACT_TOP:
+        xs = _tame(xs, i, cid)
+    return xs
+
+
+def _laptop_loss(x: np.ndarray) -> float:
+    """audio/build.py laptop_loss: max momentary loudness lost through a 4th-order Butterworth 220 Hz high-pass."""
+    y = F.apply(np.asarray(x, float), [F.highpass(220.0, 0.5412), F.highpass(220.0, 1.3066)])
+    return float(LD.max_momentary(x) - LD.max_momentary(y))
+
+
+def with_body(x: np.ndarray) -> np.ndarray:
+    """The body pass (see `body` in the module doc): a take losing more than LAPTOP_SOLVE_LU on a laptop gets its
+    < BODY_LO_HZ band's harmonics (rectified for the even ones, saturated for the odd, band-passed 250-1000 Hz, at the
+    sub band's own RMS times a gain solved by bisection) mixed in. A take within budget is returned as it came."""
+    xs = np.atleast_2d(np.asarray(x, float))
+    if xs.shape[0] == 1:
+        xs = np.vstack([xs[0], xs[0]])
+    if _laptop_loss(xs) <= LAPTOP_SOLVE_LU:
+        return x
+    sub = F.apply_mag(xs, lambda f: 1.0 / np.sqrt(1.0 + (np.maximum(f, 0.0) / BODY_LO_HZ) ** 8))
+    s = sub / (float(np.max(np.abs(sub))) + 1e-12)
+    h = np.abs(s) + np.tanh(3.0 * s)
+    h = F.apply(h, [F.highpass(BODY_LO_HZ, 0.5412), F.highpass(BODY_LO_HZ, 1.3066), F.lowpass(1000.0, 0.7071)])
+    h *= float(np.sqrt(np.mean(sub ** 2))) / (float(np.sqrt(np.mean(h ** 2))) + 1e-12)
     a, b = 0.0, 4.0
-    for _ in range(30):
+    for _ in range(20):
         g = 0.5 * (a + b)
-        if _share(mid + g * t) < CONTACT_SHARE:
+        if _laptop_loss(xs + g * h) > LAPTOP_SOLVE_LU:
             a = g
         else:
             b = g
-    return norm(xs + b * t[None, :])
+    return norm(xs + b * h)
 
 
 def _stages(vc) -> tuple:
@@ -242,7 +327,11 @@ HIT_BASE: dict[str, dict] = {
 _ORIG: dict[str, object] = {}
 
 
-def _wrap(cid: str, fid: str, physical: bool) -> None:
+BODY_SLOTS = ('attack_swing', 'attack_hit', 'ult_release', 'hit')    # the slots the kit gate checks on a laptop
+CONTACT_SLOTS = ('attack_hit', 'hit')                                  # … and for a contact
+
+
+def _wrap(cid: str, fid: str) -> None:
     spec = REGISTRY[cid]
     fn = _ORIG.setdefault(cid, spec.fn)
     slot = cid[len(f'f_{fid}_'):]
@@ -251,8 +340,10 @@ def _wrap(cid: str, fid: str, physical: bool) -> None:
         x = _fn(v)
         if _cid in VOICING:
             x = _voice(x, VOICING[_cid])
-        if physical and slot == 'attack_hit':
-            x = with_contact(x, fid, v)
+        if slot in BODY_SLOTS:
+            x = with_body(x)
+        if slot in CONTACT_SLOTS:
+            x = with_contact(x, fid, v, _cid)
         return x
     voiced.__doc__ = (fn.__doc__ or '') + ' [kits_c identity pass]'
     spec.fn = voiced
@@ -296,25 +387,10 @@ def _make_dash(fid: str):
     return recipe
 
 
-def _physical() -> set[str]:
-    import glob
-    import json
-    import os
-    here = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'content', 'fighters'))
-    out = set()
-    for p in glob.glob(os.path.join(here, '*.json')):
-        with open(p, encoding='utf8') as f:
-            fd = json.load(f)
-        if (fd.get('attack') or {}).get('damageType', 'phys') in ('phys', 'physical'):
-            out.add(fd['id'])
-    return out
-
-
-PHYSICAL = _physical()
 for _fid in FIGHTERS:
     for _slot in ('attack_swing', 'attack_hit', 'ult_windup', 'ult_release'):
         if f'f_{_fid}_{_slot}' in REGISTRY:
-            _wrap(f'f_{_fid}_{_slot}', _fid, _fid in PHYSICAL and _fid in CONTACT)
+            _wrap(f'f_{_fid}_{_slot}', _fid)
     globals()[f'f_{_fid}_hit'] = _make_hit(_fid)
     globals()[f'f_{_fid}_dash'] = _make_dash(_fid)
-    _wrap(f'f_{_fid}_hit', _fid, False)
+    _wrap(f'f_{_fid}_hit', _fid)

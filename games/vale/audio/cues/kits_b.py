@@ -421,7 +421,7 @@ def f_nurrow_death(v: int):
 def f_nurrow_call(v: int):
     """Nurrow's call: the vessel flute rocking D5 → A4 → B4, a lull with the Dorian sixth in it, a hush under it."""
     L = Layers(1.8)
-    for i, (t, note, g, dur) in enumerate(((0.0, 'D5', -1, 0.4), (0.24, 'A4', -1, 0.4), (0.48, 'B4', 0, 1.0))):
+    for i, (t, note, g, dur) in enumerate(((0.0, 'D5', -1, 0.4), (0.24, 'A4', -1, 0.4), (0.48, 'B4', 0, 0.88))):
         L.add(vessel(hz(note), hz(note), dur, R('f_nurrow_call', note), vib=4.5, cents=12.0, attack=0.03), t, peak_db=g,
               pan=(-0.12, 0.12, 0.0)[i])
     L.add(breath(1.2, 3800, 900, shape='breath', q=1.6, seed='nuc', peak_at=0.15, vel=0.6), 0.0, peak_db=-16, width=0.6)
@@ -1225,6 +1225,6 @@ def f_vashil_call(v: int):
     L = Layers(1.9)
     L.add(handbell(hz('D5'), 0.9, 0.6, R('f_vashil_call', 'd'), beat=3.0), 0.0, peak_db=-1, pan=-0.12)
     L.add(handbell(hz('B5'), 0.9, 0.6, R('f_vashil_call', 'b'), beat=4.0), 0.2, peak_db=-2, pan=0.12)
-    L.add(handbell(hz('D5'), 1.3, 1.0, R('f_vashil_call', 'd2'), beat=3.0), 0.45, peak_db=-1)
-    L.add(handbell(hz('B5'), 1.3, 1.0, R('f_vashil_call', 'b2'), beat=4.0), 0.452, peak_db=-3)
+    L.add(handbell(hz('D5'), 0.95, 0.7, R('f_vashil_call', 'd2'), beat=3.0), 0.45, peak_db=-1)      # rings out by 1.5 s
+    L.add(handbell(hz('B5'), 0.95, 0.7, R('f_vashil_call', 'b2'), beat=4.0), 0.452, peak_db=-3)
     return _fin(room(L.out(), 'glass', wet=0.14), hp_hz=200, eq=CALM)

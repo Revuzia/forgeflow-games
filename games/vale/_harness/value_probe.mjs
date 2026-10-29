@@ -14,6 +14,10 @@
 //                lane       the road (laneD < LANE_HALF); FRAY: the Noonplate's floor
 //                walkable   the paved walkable stone: lane + plazas + the Seat (verges, the off-lane deck and the
 //                           Dialwood floor are their own masks); spread = p95 - p5
+//              The masks pool the FIXED spots only (lanes, jungle, centre, FRAY's seats). The 'fight' spot follows the bots
+//              (the bench's b.fight(): the densest fighter cluster at --t), so a bot change used to move a ground gate (RIFT
+//              High walkableSpread 44 -> 51 when the fight moved from the South road onto the Seat, which 'centre' already
+//              frames); it still feeds the frame, env>180 and actor stats. perSpot carries each spot's walkable p5 / p95
 //                edge       the walls' painted edge light (the cap course's chamfer, wall kind 3)
 //                jungle     the Dialwood floor (RIFT)          camp     camp rooms
 //                wallFace / wallLip / wallTop                  canopy   Dialwood trees
@@ -467,10 +471,15 @@ const lumaStats = (e, total) => e && {
   lstarP50: pct(e.lstar, 0.5, 0.5), sat: meanOf(e.sat, 0.01), satP50: pct(e.sat, 0.5, 0.01),
 };
 
+/** spots that follow the sim rather than the map: kept out of the region masks (see the header) */
+const DYNAMIC_SPOTS = ['fight'];
+
 function summarise(spots, C, fspots = {}) {
   const hists = Object.values(spots).map((s) => s.hist);
   const total = hists.reduce((a, h) => a + (h.frame?.n ?? 0), 0);
-  const g = (name, ids) => lumaStats(pool(hists, ids.map(String)), total);
+  const fixed = Object.entries(spots).filter(([k]) => !DYNAMIC_SPOTS.includes(k)).map(([, s]) => s.hist);
+  const fixedTotal = fixed.reduce((a, h) => a + (h.frame?.n ?? 0), 0);
+  const g = (name, ids) => lumaStats(pool(fixed, ids.map(String)), fixedTotal);
   const masks = {
     lane: g('lane', [C.lane]), walkable: g('walkable', [C.lane, C.plaza, C.seat]), verge: g('verge', [C.verge]),
     jungle: g('jungle', [C.jungle]), camp: g('camp', [C.camp]), plaza: g('plaza', [C.plaza]), seat: g('seat', [C.seat]), shadow: g('shadow', [C.shadow]),
@@ -513,7 +522,7 @@ function summarise(spots, C, fspots = {}) {
     fig.medianTop25 = tops.length ? tops[Math.floor(tops.length / 2)] : null;
   }
   return {
-    frame, masks,
+    frame, masks, maskSpots: Object.keys(spots).filter((k) => !DYNAMIC_SPOTS.includes(k)),
     env180: { env: envN, other: e180, lamp: e180l, otherShare: envN ? +(e180 / envN).toFixed(5) : 0, lampShareOfFrame: total ? +(e180l / total).toFixed(5) : 0,
       byClass: Object.fromEntries([...new Set(hists.flatMap((h) => Object.keys(h)).filter((k) => k.startsWith('env180_')))].map((k) => [k.slice(7), pool(hists, [k])?.n ?? 0])) },
     fighters: fig,
@@ -522,7 +531,9 @@ function summarise(spots, C, fspots = {}) {
     structures: structure && { px: structure.n, top25: topMean(structure.lstar, 0.75, 0.5), p95: pct(structure.lstar, 0.95, 0.5) },
     perSpot: Object.fromEntries(Object.entries(spots).map(([k, s]) => {
       const f = s.hist.frame; const ln = s.hist[String(C.lane)];
-      return [k, { at: s.at, frameP50: pct(f.luma, 0.5), frameP95: pct(f.luma, 0.95), frameP99: pct(f.luma, 0.99), laneP50: ln ? pct(ln.luma, 0.5) : null }];
+      const wk = pool([s.hist], [C.lane, C.plaza, C.seat].map(String));
+      return [k, { at: s.at, frameP50: pct(f.luma, 0.5), frameP95: pct(f.luma, 0.95), frameP99: pct(f.luma, 0.99), laneP50: ln ? pct(ln.luma, 0.5) : null,
+        walkableP5: wk ? pct(wk.luma, 0.05) : null, walkableP95: wk ? pct(wk.luma, 0.95) : null, inMasks: !DYNAMIC_SPOTS.includes(k) }];
     })),
   };
 }
@@ -680,6 +691,7 @@ for (const map of MAPS) for (const tier of TIERS) {
     writeFileSync(REPORT, JSON.stringify(report, null, 1));
     console.log(`\n${map} ${tier} [${TAG}]  frame p5/p50/p95/p99 ${s.frame.p5}/${s.frame.p50}/${s.frame.p95}/${s.frame.p99}`);
     for (const [k, m] of Object.entries(s.masks)) console.log(`  ${k.padEnd(9)} share ${(m.share * 100).toFixed(1).padStart(5)} %  luma p5 ${m.p5} p50 ${m.p50} p95 ${m.p95} p99 ${m.p99}  L* ${m.lstarP50}  sat ${m.sat}`);
+    console.log(`  per spot walkable p5-p95 (* = not in the masks): ${Object.entries(s.perSpot).map(([k, p]) => `${k}${p.inMasks ? '' : '*'} ${p.walkableP5 ?? '-'}-${p.walkableP95 ?? '-'}`).join('  ')}`);
     console.log('  fighters', JSON.stringify(s.fighters), ' wicks', JSON.stringify(s.wicks));
     console.log('  env>180', JSON.stringify(s.env180));
     for (const [k, b] of Object.entries(bases)) console.log(`  ${k} at ${b.at}: plaza ${JSON.stringify(b.plaza)} structures ${JSON.stringify(b.structures)}`);

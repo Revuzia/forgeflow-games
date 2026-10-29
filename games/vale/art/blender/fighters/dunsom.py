@@ -367,9 +367,29 @@ def mask_front(x, z):
     return -0.128 + 2.4 * (x - MX) ** 2 + 0.9 * (z - 1.83) ** 2
 
 
+# owner ruling 5 (owner_rulings.md, integration pass): the beak keel (3.4 cm proud, growing from the brow down into
+# the scarf: fullest at its lower end) read as a plague-doctor beak at chip, portrait and splash size. It is now a
+# short rounded bill: a soft dome under the brow, 6.2 cm from its root between the eyes to a round tip well above the
+# scarf (the mask's eye-to-chin height is 12.5 cm: eye centre z 1.840, chin z 1.715), 1.5 cm proud at its fullest
+# and narrowing toward the root. It still marks the front (the facing cue) and adds nothing below z 1.788.
+BILL_ROOT, BILL_TIP = 1.850, 1.788       # z of the bill's root (between the eyes, under the brow) and its round tip
+BILL_OUT = 0.015                         # how far it stands proud at its fullest (m)
+BILL_HW = 0.0165                         # half-width at its fullest (m)
+BILL_FULL = 0.42                         # where it is fullest: fraction of the way from the tip to the root
+
+
+def bill(x, z):
+    """the short rounded bill's forward relief (m): an elliptic dome, rounded at the root, the sides and the tip"""
+    zc = BILL_TIP + (BILL_ROOT - BILL_TIP) * BILL_FULL
+    hz = np.where(z >= zc, BILL_ROOT - zc, zc - BILL_TIP)
+    hw = BILL_HW * (0.80 + 0.20 * ss(BILL_ROOT, zc, z))
+    d2 = ((x - KX) / hw) ** 2 + ((z - zc) / hz) ** 2
+    return BILL_OUT * np.clip(1.0 - d2, 0.0, 1.0) ** 0.6
+
+
 def mask_relief(P):
     """forward relief (m) on the mask: tiles pillowed between the painted cracks, the cracks cut in, the almond eye
-    recesses, a brow shelf over the eyes and the beak keel down the centre (the facing cue)"""
+    recesses, a brow shelf over the eyes and the short rounded bill under the brow (the facing cue)"""
     x, z = P[:, 0], P[:, 2]
     tile = face_map("tile", x, z)
     crack = face_map("crack", x, z)
@@ -378,9 +398,7 @@ def mask_relief(P):
     r = r - 0.020 * eye
     brow = ss(1.852, 1.866, z) * ss(1.912, 1.890, z) * (1 - ss(0.095, 0.118, np.abs(x - MX)))
     r = r + 0.006 * brow
-    hw = 0.012 + 0.012 * ss(1.85, 1.74, z)
-    keel = ss(1.865, 1.770, z) * (1 - ss(hw, hw + 0.014, np.abs(x - KX)))
-    r = r + 0.034 * keel * (1 - eye)
+    r = r + bill(x, z) * (1 - eye)
     return r + 0.0012 * NOISE(P, 40.0)
 
 

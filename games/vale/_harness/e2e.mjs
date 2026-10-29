@@ -11,7 +11,7 @@
 // _harness/_shots/e2e_<mode>_<nn>_<step>.png; a JSON report to _harness/_reports/e2e.json.
 // --audio m4a opens the game with ?audio=m4a (the CONTRACT §11 format fallback forced); match_live reports the
 // audio files fetched per format either way. Needs the dev server (npm run dev) and a content build. Exit 0 =
-// every journey passed.
+// every journey passed; any console warning or error, page error or failed request fails its journey (perf PERF-m3).
 //
 // FLOW (`flow`, and first under `all`; no match is played, the renderer is off): the queue flow's exits.
 //   dodge       Find match → Ready → the draft → Esc → Leave draft: back on Play with ONE notice, then the full client
@@ -206,9 +206,11 @@ async function journey(mode) {
   } catch {
     ok = false;
   }
+  // perf PERF-m3: any console warning or error, page error or failed request fails the journey (pw.mjs records only
+  // those, favicon requests excepted; Chrome's own 'Failed to load resource' echo of a failed request is its http line)
   const errors = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
-  const hard = errors.filter((l) => /^\[(http [45]|pageerror)/.test(l));
-  if (hard.length) { ok = false; console.log(`  ✗ ${hard.length} failed request(s) / page error(s): ${hard.slice(0, 3).join(' · ')}`); }
+  const hard = errors;
+  if (hard.length) { ok = false; console.log(`  ✗ ${hard.length} console warning(s) / error(s) / failed request(s): ${hard.slice(0, 3).join(' · ')}`); }
   report.journeys.push({ mode, ok, steps, consoleErrors: errors.slice(0, 20) });
   return ok;
 }
@@ -274,8 +276,8 @@ async function store() {
     ok = false;
   }
   const errs = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
-  const hardErrs = errs.filter((l) => /^\[(http [45]|pageerror)/.test(l));
-  if (hardErrs.length) { ok = false; console.log(`  ✗ ${hardErrs.length} failed request(s) / page error(s): ${hardErrs.slice(0, 3).join(' · ')}`); }
+  const hardErrs = errs;
+  if (hardErrs.length) { ok = false; console.log(`  ✗ ${hardErrs.length} console warning(s) / error(s) / failed request(s): ${hardErrs.slice(0, 3).join(' · ')}`); }
   report.journeys.push({ mode, ok, steps, consoleErrors: errs.slice(0, 20) });
   return ok;
 }
@@ -418,7 +420,9 @@ async function flowJourneys() {
       return { settings: a, profile: b, nav: c.nav, wallet: c.wallet };
     });
   } catch { ok = false; }
-  report.journeys.push({ mode: 'flow_dodge', ok, steps, consoleErrors: logs.splice(0).filter((l) => !/Failed to load resource/.test(l)).slice(0, 20) });
+  const errDodge = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
+  if (errDodge.length) { ok = false; console.log(`  ✗ ${errDodge.length} console warning(s) / error(s) / failed request(s): ${errDodge.slice(0, 3).join(' · ')}`); }
+  report.journeys.push({ mode: 'flow_dodge', ok, steps, consoleErrors: errDodge.slice(0, 20) });
 
   // ── ready check in a hidden tab ─────────────────────────────────────────────────────────────────────────
   console.log('\nFLOW · READY CHECK (hidden tab)');
@@ -471,7 +475,9 @@ async function flowJourneys() {
     });
     await step2('lockout_after', async () => { await lockoutClear(); return { lockoutLeft: 0 }; });
   } catch { ok2 = false; }
-  report.journeys.push({ mode: 'flow_readycheck', ok: ok2, steps: steps2, consoleErrors: logs.splice(0).filter((l) => !/Failed to load resource/.test(l)).slice(0, 20) });
+  const errReady = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
+  if (errReady.length) { ok2 = false; console.log(`  ✗ ${errReady.length} console warning(s) / error(s) / failed request(s): ${errReady.slice(0, 3).join(' · ')}`); }
+  report.journeys.push({ mode: 'flow_readycheck', ok: ok2, steps: steps2, consoleErrors: errReady.slice(0, 20) });
 
   // ── the game server down ────────────────────────────────────────────────────────────────────────────────
   console.log('\nFLOW · SERVER DOWN');

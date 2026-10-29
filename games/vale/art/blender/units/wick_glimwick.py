@@ -1130,7 +1130,9 @@ def aubade_parts() -> list:
     hood.add(Ellipsoid((0.0, -0.118, 0.668), (0.135, 0.075, 0.052)), k=0.045)        # the chin of the cowl
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in hood.ops])                    # uncarved: rim + seam hug it
     hood.sub(pocket, k=0.012)
-    part(out, "hood", hood, "cloth2", "bone:head", 520, vs=0.8, uv=1.9, tint="#6C7279", light=0.30, detail=0.6,
+    # (integration pass, wave_b "Wick hood value": value_probe wickTop25 RIFT Low 67.1 over the 65 cap) the top light
+    # 0.30 -> 0.22 and the chalk rim a step down, #CBC7BC -> #C2BEB3
+    part(out, "hood", hood, "cloth2", "bone:head", 520, vs=0.8, uv=1.9, tint="#6C7279", light=0.22, detail=0.6,
          grad=(0.66, 0.95, 0.10), cav=0.16)
     # the carved chalk rim: 3.4 cm, 1.6 cm proud, crisp chamfered edges (a clean mesh on the cowl; the block joints
     # and scroll relief are painted)
@@ -1138,7 +1140,7 @@ def aubade_parts() -> list:
     rim.add(arch_frame(base, A, A_RIM_W, 0.016, sink=0.010, behind=0.06), k=0.0)
     rim.sub(pocket, k=0.004)
     rv, rf = rim_mesh(base, A, A_RIM_W, n=32)
-    part(out, "hood_rim", rim, "chalk", "bone:head", len(rf), vs=0.45, uv=1.3, tint="#CBC7BC", detail=0.5, light=0.24,
+    part(out, "hood_rim", rim, "chalk", "bone:head", len(rf), vs=0.45, uv=1.3, tint="#C2BEB3", detail=0.5, light=0.24,
          cav=0.0, prim=("mesh", rv, rf))
     # the knob: a round chalk ball on a short neck (concept; rule 0.1: round, never a point), top at 1.00 m
     knob = Sculpt("knob")
@@ -1403,9 +1405,10 @@ def serenade_parts() -> list:
     dome.add(lat, k=0.0)
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in dome.ops])
     dome.sub(pocket, k=0.012)
-    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#978165", light=0.08, detail=0.6,
+    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#907B60", light=0.08, detail=0.6,
          grad=(0.70, 0.96, 0.03), cav=0.08)      # (r4: a softer top light: the crown read L* 70 in game, cap 65;
-                                                  # r5: 0.12 -> 0.08, the hood's top quarter 65.5 under the enemy tint)
+                                                  # r5: 0.12 -> 0.08, the hood's top quarter 65.5 under the enemy tint;
+                                                  # integration pass: #978165 -> #907B60, wickTop25 RIFT Low 67.1)
     # ROLLED COLLAR (lower at the front) + the THICK dark felt roll round the opening (concept: 5.4 cm, 4 cm proud,
     # round), one felt mesh; the roll's ends sink into the collar, whose front is the sill
     roll = Sculpt("roll")
@@ -1472,7 +1475,7 @@ def serenade_parts() -> list:
     trim.add(Sphere(np.array([0.0, 0.0, 0.5]), 0.01), k=0.0)            # stand-in high (accent: never baked)
     mv, mf = ribbon(np.array(tp), np.array(tn), S_TRIM_HALF, lift=(0.0040, 0.0075))
     part(out, "mantle_band", trim, "accent", ("glim_mantle",), len(mf), vs=0.6, paint="accent", prim=("mesh", mv, mf))
-    part(out, "mantle", mantle, "cloth2", ("glim_mantle",), 250, vs=0.6, uv=1.3, tint="#9C8466", light=0.18,
+    part(out, "mantle", mantle, "cloth2", ("glim_mantle",), 250, vs=0.6, uv=1.3, tint="#957E61", light=0.18,
          detail=0.6, grad=(0.47, 0.65, 0.12), cav=0.14, sym=False)      # (X-symmetric collapse creased the back)
     # CLOAK: a wide bell of warm umber felt (the concept's main value idea: light mantle over a dark cloak), soft
     # felt folds, the hem lifted so the boots show; the two ironstone hem bands are crisp paint

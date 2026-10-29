@@ -521,6 +521,23 @@
 @keyframes endban-band { from { clip-path: inset(50% 0 50% 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes endban-title { from { opacity: 0; letter-spacing: 0.2em; } to { opacity: 1; letter-spacing: 0.02em; } }
 
+/* the view plate (perf PERF-m4): centred while the GPU view is lost (the 3D view is blank) or restoring; an ink plate
+   under a chalk rule, the dial's one carved tick turning slowly; the match runs on under it */
+.viewplate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 9; display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--px));
+  min-width: calc(360 * var(--px)); padding: calc(22 * var(--px)) calc(36 * var(--px)) calc(20 * var(--px)); text-align: center; pointer-events: none !important;
+  background: rgba(11, 13, 17, 0.9); border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--line-2), 0 calc(8 * var(--px)) calc(28 * var(--px)) rgba(0, 0, 0, 0.45);
+  animation: viewplate-in var(--dur-panel) var(--ease-dawn) both; }
+.viewplate__rule { position: absolute; left: 22%; right: 22%; top: 0; height: 2px; background: var(--chalk); }
+.viewplate__dial { position: relative; width: calc(34 * var(--px)); height: calc(34 * var(--px)); border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line-2); }
+.viewplate__dial::after { content: ''; position: absolute; left: calc(50% - 1px); top: 2px; width: 2px; height: 34%; border-radius: 1px; background: var(--chalk);
+  transform-origin: 50% calc(17 * var(--px) - 2px); animation: viewplate-turn 1600ms linear infinite; }
+.viewplate__title { color: var(--text-1); }
+.viewplate__sub { color: var(--text-2); max-width: 40ch; }
+@keyframes viewplate-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes viewplate-turn { to { transform: rotate(360deg); } }
+.reduce-motion .viewplate { animation: rm-fade 120ms linear both !important; }
+.reduce-motion .viewplate__dial::after { animation: none; }
+
 /* ── the shop (Lampwright) ────────────────────────────────────────────────────────────────────── */
 .lshop { position: absolute; left: 50%; top: calc(80 * var(--px)); transform: translateX(-50%); width: min(calc(1120 * var(--px)), 94vw); height: min(calc(700 * var(--px)), calc(100vh - 260 * var(--px)));
   z-index: 6; display: flex; flex-direction: column; animation: shop-in var(--dur-panel) var(--ease-dawn) both; }

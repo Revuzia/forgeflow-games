@@ -10,7 +10,8 @@
 //                row, the loss-of-control chip and the refusal caption over it, minimap (bottom right,
 //                swappable) with the target plate docked on its frame, the optional screen-edge marks
 //                (behind every widget), and on demand: shop, scoreboard, death recap, ping wheel,
-//                practice tools, surrender vote, the end-of-match banner
+//                practice tools, surrender vote, the end-of-match banner, and while the GPU view is lost or
+//                restoring, the view plate (perf PERF-m4)
 // The centre 40 % × 50 % of the screen holds no HUD (bible). Widgets catch the pointer; the gaps
 // between them fall through to the surface.
 
@@ -30,7 +31,7 @@ import { ShopPanel } from './shop.tsx';
 import { AllyFrames, Feed, RecallBar, RespawnLine } from './side.tsx';
 import { Caption, LocChip, ScreenEdge, TargetPlate } from './status.tsx';
 import { Announcer, HourBoard, KillFeed, SkyStrip, SurrenderPlate } from './top.tsx';
-import { PingWheel, WorldLayer, type WorldMarks } from './world.tsx';
+import { PingWheel, ViewPlate, WorldLayer, type WorldMarks } from './world.tsx';
 import '../styles/hud.css';
 
 /** first-match hints, one every few seconds once the match is live (once per device) */
@@ -180,6 +181,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
         <DeathRecap />
         <PingWheel />
         <EndBanner />
+        <ViewPlate />
       </div>
     </HudContext.Provider>
   );

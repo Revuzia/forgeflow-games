@@ -130,7 +130,9 @@ def ward(col):
     hood = Sculpt("hood")
     hood.add(Ellipsoid((0, 0.02, 0.62), (0.17, 0.17, 0.19)), k=0.0)
     hood.sub(Ellipsoid((0, -0.1, 0.58), (0.12, 0.14, 0.13)), k=0.02)
-    hood.add(sdf.RoundCone((0, 0.05, 0.75), (0, 0.11, 0.86), 0.06, 0.012), k=0.04)
+    # its crown: a low rounded KNOB (owner ruling 5 / originality F9: the pointed finial read as a pointed hood tip;
+    # a plain rounded dome over the single lamp, no point, no eye-like pair)
+    hood.add(Ellipsoid((0, 0.03, 0.795), (0.055, 0.055, 0.042)), k=0.045)
     band = Sculpt("band"); band.add(Torus((0, 0, 0.44), 0.09, 0.018), k=0.0)
     lamp = Sculpt("lamp"); lamp.add(Ellipsoid((0, -0.03, 0.57), (0.08, 0.07, 0.09)), k=0.0)
     objs = [obj("ward_body", body, stone, col, 500, 0.008, 2.2, 0.8, S.TINT["stone"]),

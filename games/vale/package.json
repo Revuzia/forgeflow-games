@@ -15,6 +15,7 @@
     "probe": "node _harness/run_probes.ts",
     "secrets": "node tools/secret_scan.ts",
     "check": "npm run secrets && npm run typecheck && npm run content:check && npm run probe",
+    "sweep:720": "node _harness/sweep_720.mjs fast",
     "server": "node server/main.ts"
   },
   "dependencies": {

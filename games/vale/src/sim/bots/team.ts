@@ -127,6 +127,9 @@ export class TeamBrain {
   objective: { camp: CampInfo; desire: number; alive: boolean } | null = null;
   gank: Entity | null = null;
   readonly campReady: Float64Array;
+  /** objectiveSense: until when the team leaves an objective it gave up on alone, and since when it has been on one */
+  private readonly campBlock: Float64Array;
+  private readonly campOn: Float64Array;
   readonly focus = new Map<PlayerId, EntityId>();
   aliveAllies = 0; aliveEnemies = 0;
   /** enemy fighters not seen for a while (danger of pushing deep) */
@@ -145,6 +148,8 @@ export class TeamBrain {
     this.defendFighters = new Int32Array(n); this.laners = new Int32Array(n);
     this.answerX = new Float64Array(n); this.answerY = new Float64Array(n);
     this.campReady = new Float64Array(k.camps.length);
+    this.campBlock = new Float64Array(k.camps.length);
+    this.campOn = new Float64Array(k.camps.length).fill(-1);
     for (const c of k.camps) this.campReady[c.index] = c.firstSpawn;
     this.assignLanes();
     for (const a of this.assign.values()) if (a.lane >= 0 && !a.jungle) this.laners[a.lane]++;
@@ -209,10 +214,26 @@ export class TeamBrain {
       let need = 0, x = 0, y = 0;
       if (this.defend[i] > 0.05) { need = this.defendFighters[i] >= 2 ? 2 : 1; x = this.defendX[i]; y = this.defendY[i]; }
       const deep = this.diff.readsWaves && tp.enemyN[i] >= 4 && tp.enemyFront[i] < l.length * 0.45 && tp.ownN[i] <= tp.enemyN[i] - 2;
+      let big = false;
       if (this.held(`wave${i}`, deep, now) && need === 0) {
-        need = tp.enemyN[i] - tp.ownN[i] >= 6 ? 2 : 1;
+        const surplus = tp.enemyN[i] - tp.ownN[i];
+        need = surplus >= 6 ? 2 : 1;
         lanePoint(l, fromProgress(l, this.team, Math.max(0, tp.enemyFront[i] - 4)));
         x = proj.x; y = proj.y;
+        // (W4 G1 refix: a stacked wave of six or more is met behind the first own Needle in its way, where the Needle
+        // shares the hits — never in the open, where it surrounds a lone fighter and body-blocks its way out; with no
+        // Needle of ours left in its way it is the base's call, not one fighter's)
+        if (surplus >= 6) {
+          big = true;
+          let bp = -1, br = 0;
+          for (const st of k.structs) {
+            if (st.team !== this.team || st.lane !== i || !st.attacks || !this.structAlive(w, st)) continue;
+            const p = progress(l, this.team, st.s);
+            if (p <= tp.enemyFront[i] && p > bp) { bp = p; br = st.radius; }
+          }
+          if (bp < 0) need = 0;
+          else { lanePoint(l, fromProgress(l, this.team, Math.max(0, bp - br - 2.5))); x = proj.x; y = proj.y; }
+        }
       }
       if (need === 0) continue;
       this.answerX[i] = x; this.answerY[i] = y;
@@ -227,7 +248,7 @@ export class TeamBrain {
         for (const p of w.players) {
           if (!p || p.team !== this.team || this.answer.has(p.player)) continue;
           const e = p.ent;
-          if (!e || !e.alive || e.hp < e.maxHp * 0.6) continue;
+          if (!e || !e.alive || e.hp < e.maxHp * (big ? 0.7 : 0.6)) continue;
           if (oc && sq(e.x - oc.x) + sq(e.y - oc.y) <= 30 * 30) continue;
           const a = this.assign.get(p.player);
           // (the grovehunter keeps its camps and objectives: the roads answer for the roads)
@@ -248,6 +269,28 @@ export class TeamBrain {
     let t = this.since.get(key);
     if (t === undefined) { t = now; this.since.set(key, t); }
     return now - t + 1e-9 >= this.diff.macroDelay;
+  }
+
+  /**
+   * objectiveSense: seconds the team's living fighters above 45 % health need for a camp's monsters (their attacks
+   * and a share for abilities against its armor, at 60 % efficiency: kiting, its sweeps and the walk in), from the
+   * monsters in sight, else the camp's unit defs; and the health share left on the ones in sight (1 unseen)
+   */
+  private campTtk(w: World, c: CampInfo): { ttk: number; hpF: number } {
+    let H = 0, M = 0, armor = 0, seen = 0;
+    for (const m of this.perc.monsters) {
+      if (!m.alive || Math.abs(m.x - c.x) >= 8 || Math.abs(m.y - c.y) >= 8) continue;
+      H += m.hp + m.shield; M += m.maxHp; armor = Math.max(armor, m.stats.armor); seen++;
+    }
+    if (seen === 0) for (const u of c.units) { const def = this.k.idx.units.get(u); if (def) { H += def.base.hp ?? 0; armor = Math.max(armor, def.base.armor ?? 0); } }
+    let S = 0;
+    for (const p of w.players) {
+      const f = p && p.team === this.team ? p.ent : null;
+      if (!f || !f.alive || f.hp < f.maxHp * 0.45) continue;
+      const st = f.stats;
+      S += st.ad * st.attackSpeed * (1 + st.crit * 0.75) * (100 / (100 + Math.max(0, armor))) + st.ap * 0.5 + f.level * 10;
+    }
+    return { ttk: H / Math.max(1, S * 0.6), hpF: seen > 0 ? H / Math.max(1, M) : 1 };
   }
 
   private structAlive(w: World, s: StructInfo): boolean {
@@ -347,7 +390,11 @@ export class TeamBrain {
     // a lead to press: the scoreboard's Gleam (two-team modes)
     let lead = 0;
     for (const t of w.teams) lead += t.team === this.team ? t.gold : -t.gold;
-    this.press = this.held('press', d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam && aliveDiff >= 0 && (single || this.phase !== 'early'), now0);
+    // (objectiveSense: a lead is pressed by fighters fit to press it — as many above 45 % health as the enemy has up)
+    let fit = 0;
+    for (const p of w.players) if (p && p.team === this.team && p.ent && p.ent.alive && p.ent.hp >= p.ent.maxHp * 0.45) fit++;
+    this.press = this.held('press', d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam && aliveDiff >= 0 && (single || this.phase !== 'early') &&
+      (!d.objectiveSense || fit >= Math.min(this.aliveEnemies, 3)), now0);
     if (this.window || this.press) group = true;
     if (k.kind === 'rift') {
       if (this.phase === 'late') group = true;
@@ -449,16 +496,39 @@ export class TeamBrain {
     if (this.k.kind !== 'rift') return;
     // never while the base is under siege or the team is closing the game
     if (this.baseThreat >= 0.4 || this.rush || this.stage) return;
-    for (let i = 0; i < this.defend.length; i++) if (this.defend[i] >= 0.7) return;
-    const now = w.time, d = this.diff;
+    let threat = 0;
+    for (let i = 0; i < this.defend.length; i++) { if (this.defend[i] >= 0.7) return; threat = Math.max(threat, this.defend[i]); }
+    const now = w.time, d = this.diff, sense = d.objectiveSense;
+    // (objectiveSense: a road with a stacked enemy wave deep in our half is a threat too — no waiting at a door then)
+    if (sense) for (const l of this.k.lanes) if (this.perc.enemyN[l.index] >= 6 && this.perc.enemyFront[l.index] < l.length * 0.45 && this.perc.ownN[l.index] <= 1) threat = Math.max(threat, 0.5);
     for (const c of this.k.camps) {
       if (!c.objective) continue;
       const ready = this.campReady[c.index];
       const alive = ready <= now;
+      if (!alive) this.campOn[c.index] = -1;
       if (!alive && ready - now > d.objectiveLead) continue;
       if (now < 240) continue;
       let desire = 0;
-      if (alive) {
+      if (sense) {
+        if (now < this.campBlock[c.index]) continue;
+        const { ttk, hpF } = this.campTtk(w, c);
+        const long = ttk > 15, up = aa >= ae + 1;
+        if (alive) {
+          // a long objective only with a fighter more; none the team cannot take in 40 s
+          desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
+          if (d.contests && aa >= ae) {
+            for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
+          }
+          // on it and it is not falling: give up for a while (the roads matter more than a door that will not open)
+          let at = 0;
+          for (const f of this.perc.allyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 14 * 14) at++;
+          if (at >= 2) { if (this.campOn[c.index] < 0) this.campOn[c.index] = now; }
+          else if (this.campOn[c.index] >= 0 && now - this.campOn[c.index] > 40) this.campOn[c.index] = -1;
+          if (this.campOn[c.index] >= 0 && now - this.campOn[c.index] > Math.max(25, Math.min(ttk, 40) * 1.8) && hpF > 0.3) {
+            this.campBlock[c.index] = now + 60; this.campOn[c.index] = -1; desire = 0;
+          }
+        } else desire = aa >= ae && threat < 0.3 ? 0.4 : 0;
+      } else if (alive) {
         desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
         // (contest: the enemy is at it and we are not short of bodies)
         if (d.contests && aa >= ae) {

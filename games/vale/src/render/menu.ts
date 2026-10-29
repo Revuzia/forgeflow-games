@@ -109,13 +109,23 @@ export class MenuWorld {
       const refs = ((map.art.terrain ?? {}) as { textures?: Record<string, string> }).textures ?? {};
       const roles = TERRAIN_TEX_ROLES.filter((r) => typeof refs[r] === 'string');
       const terrain = this.terrain;
+      // perf (W1 leak-fog): each late resolve checks that this terrain is still the menu's; the GLB menu set or a
+      // dispose may have dropped it, and props built on a dead terrain would orphan their GPU buffers
       void Promise.all(roles.map((r) => assets.texture(refs[r]).then((t) => [r, t] as const))).then((pairs) => {
+        if (this.terrain !== terrain) return;
         const set: Partial<Record<TerrainTexRole, import('three').Texture>> = {};
         for (const [r, t] of pairs) if (t) set[r] = t;
         terrain.setTextures(set);
       });
-      void loadTerrainProps(map, (r) => assets.model(r)).catch(() => null).then((p) => terrain.setProps(p ?? {}));
-      void loadTerrainLandmarks(map, (r) => assets.model(r), terrain.groundAt).then((ls) => { for (const o of ls) terrain.group.add(o); });
+      void loadTerrainProps(map, (r) => assets.model(r)).catch(() => null).then((p) => {
+        // the props are this terrain's own merged clones (loadTerrainProps), so a dropped terrain's are freed here
+        if (this.terrain !== terrain) { for (const g of Object.values(p ?? {}).flat()) g?.dispose(); return; }
+        terrain.setProps(p ?? {});
+      });
+      void loadTerrainLandmarks(map, (r) => assets.model(r), terrain.groundAt).then((ls) => {
+        if (this.terrain !== terrain) return;   // the landmarks share the asset cache's geometry: nothing to free
+        for (const o of ls) terrain.group.add(o);
+      });
       this.scene.add(this.terrain.group);
       this.generateStations(map);
     }
@@ -299,6 +309,7 @@ export class MenuWorld {
   dispose(): void {
     this.showcase?.dispose();
     this.terrain?.dispose();
+    this.terrain = null;   // a load still in flight then sees its terrain dropped (build's late-resolve guards)
     this.sky.dispose();
   }
 }

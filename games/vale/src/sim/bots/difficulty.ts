@@ -66,6 +66,11 @@ export interface DifficultyProfile {
   readonly objectiveEven: number;
   /** team brain: contests an objective the enemy is starting when it is not short of bodies */
   readonly contests: boolean;
+  /** team brain (W4 G1/G3 refix): reads whether the team can take an objective NOW — its fighters' damage against the
+   *  camp's health — takes a long one (a camp the team needs more than 15 s for) only with a fighter more, never
+   *  waits at its door while a road is under threat, and gives up on one that is not falling (60 s before it tries
+   *  again); keeps fighters under 45 % health out of its sieges and objective calls */
+  readonly objectiveSense: boolean;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -75,7 +80,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     intentFollow: 0.55, recallBias: -0.12, retreatBias: -0.08, knowsCooldowns: false,
     decisionNoise: 0.12, focusDiscipline: 0.25, abilityEvery: 0.5,
     macroDelay: 6, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
-    objectiveLead: 10, objectiveEven: 0, contests: false,
+    objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
   },
   adept: {
     id: 'adept', reaction: 0.25, reactionJitter: 0.07, aimErrorDeg: 6, leadSkill: 0.75,
@@ -83,7 +88,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     intentFollow: 0.85, recallBias: 0, retreatBias: 0, knowsCooldowns: false,
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
-    objectiveLead: 30, objectiveEven: 0.55, contests: false,
+    objectiveLead: 30, objectiveEven: 0.55, contests: false, objectiveSense: false,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -91,7 +96,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, knowsCooldowns: true,
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
-    objectiveLead: 50, objectiveEven: 0.68, contests: true,
+    objectiveLead: 50, objectiveEven: 0.68, contests: true, objectiveSense: true,
   },
 };
 

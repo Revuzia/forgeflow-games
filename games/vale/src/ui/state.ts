@@ -56,7 +56,15 @@ export interface RendererPort {
   setMenuView?(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
   /** OPTIONAL (requested): load a match's assets, reporting 0..1 */
   preload?(setup: MatchSetup, onProgress: (p: number) => void): Promise<void>;
+  /** perf PERF-m4: 'lost' while the GPU context is gone (the 3D view is blank), 'restoring' while its programs
+   *  rebuild (~0.4-0.8 s), then 'ok' (render/index.ts ViewState) */
+  readonly viewState?: ViewState;
+  /** call `fn` on every viewState change; returns the unsubscribe */
+  onViewState?(fn: (s: ViewState) => void): () => void;
 }
+
+/** the renderer's view state (perf PERF-m4; the same union as render/index.ts ViewState, kept structural) */
+export type ViewState = 'ok' | 'lost' | 'restoring';
 
 export class AppState {
   readonly session: Session;

@@ -1033,7 +1033,11 @@ UNITS = ["needle_outer", "needle_inner", "needle_bell", "lantern", "hourbell"]
 # final parity env m1: the Aubade Hourbell stands on the open spawn plaza, the brightest place on the map, and its
 # chalk topped the value range (screen luma p95 225, L* 89.6, over the fighters' 214); its chalk is toned to land
 # about L* 80 there, so the relationship-lit accent stays its bright point (structures stay under the fighters, r12 B5)
-MATS_OVERRIDE = {("hourbell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#C3C0B7")}}
+# (integration pass, env m1: value_probe's base spot still read the base structures at L* p95 82 with #C3C0B7: the
+# Hourbell a step further down, and the two bell Needles that flank it on the same plaza toned with it, so the base
+# set lands under L* 80 together; the lane Needles and the Lanterns keep the full chalk)
+MATS_OVERRIDE = {("hourbell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#B9B6AD")},
+                 ("needle_bell", "aubade"): {"chalk": dict(AUBADE_MATS["chalk"], hex="#C8C5BC")}}
 CULTURES = ["aubade", "serenade"]
 HEIGHT = {"needle_outer": 4.65, "needle_inner": 4.7, "needle_bell": 4.6, "lantern": 4.65, "hourbell": 5.25}
 # the break of the ruin's stump (m above the ground, before its tilt) and the rubble count
