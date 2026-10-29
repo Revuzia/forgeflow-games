@@ -6512,9 +6512,13 @@ export async function buildMap(W, mapId) {
       // (the coarse trunk is added AFTER the canopy: the first InstancedMesh of a kind carries the GLB's own geometry, which the placement census reads the kind's local frame from)
       // Wave 7b stage B: the same far LOD for the themed maps' heavy tree - Isla Viva's palm (one 3,134-triangle mesh: 551 k triangles of an Isla Viva s31337 street view, 47 % of the frame)
       // and Deepwood's pine canopy (1,613). Savanna's acacia is unchanged.
+      // R2 / world: Isla Viva's acacia ("tree", the same GLB as Savanna's) gets Savanna's trunk LOD too: drawn at its full 2,360-triangle trunk beyond the near ring it was 98 k
+      // triangles of the phone drop view over Coco Village (34 trees; perf_district_phone isla_viva s1 drop x1.200 against the x1.20 bar). The near-field proxies still draw the
+      // trees within the tier's near radius in full (and cast), exactly as on Savanna; no draw call is added (the coarse trunk takes the full trunk's place in the culled twin).
       const LOD_KIND = mapId === "ashgrid" ? "tree" : mapId === "isla_viva" ? "palm" : mapId === "deepwood" ? "pine" : null;
-      const isLod = (q) => kind === LOD_KIND && q.geometry.index && q.geometry.index.count / 3 > 1200;
-      if (kind === LOD_KIND) meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
+      const lodKind = kind === LOD_KIND || (mapId === "isla_viva" && kind === "tree");
+      const isLod = (q) => lodKind && q.geometry.index && q.geometry.index.count / 3 > 1200;
+      if (lodKind) meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
       instRefs[kind] = [];
       // a kind whose ONLY mesh is the LOD part (the palm): a full-geometry twin with every instance goes first and is never drawn (visible = false) - it is the kind's instance list at the
       // GLB's own geometry (what the probes read a kind's frame and positions from, as the acacia's canopy is on Savanna); the coarse copy draws, the near proxies draw the near ones in full
@@ -6536,7 +6540,7 @@ export async function buildMap(W, mapId) {
         // D2 (Savanna): the acacia's trunk is 2,360 triangles x ~456 trees, all drawn in every view (1.07 M of a 2.2 M triangle frame). The map-wide mesh draws a COARSE copy
         // (~560 triangles); the trees within 110 m of the camera focus are drawn from the full geometry by the near-caster proxies below, and are hidden here while they are
         const lodPart = isLod(m);
-        const lodGeo = lodPart ? (mapId === "ashgrid" ? clusterSimplify(m.geometry, 24) : clusterSimplifyUV(m.geometry, 24)) : null;
+        const lodGeo = lodPart ? (kind === "tree" ? clusterSimplify(m.geometry, 24) : clusterSimplifyUV(m.geometry, 24)) : null;   // (the acacia trunk: Savanna's own coarse copy on every map)
         if (lodGeo && m.geometry.userData) lodGeo.userData.kind = m.geometry.userData.kind;                   // (the same kind tag as the geometry it stands in for)
         const inst = new THREE.InstancedMesh(lodGeo || m.geometry, m.material, list.length);
         // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
@@ -6606,7 +6610,7 @@ export async function buildMap(W, mapId) {
       // Wave 7b stage B: a LOD kind on a themed map also draws its STREET trees near the focus in full (the street palms / pines cast no near-field shadow, so the casters skip them;
       // without this they would stay coarse up close). Its own InstancedMesh, never a caster; a clone of the geometry without the kind tag (the probes read only the map-wide meshes).
       let street = null;
-      if (ref.lo && mapId !== "ashgrid") {
+      if (ref.lo && mapId !== "ashgrid" && ref.kind === cityTree) {                 // (only the town tree has street instances: Isla Viva's acacia LOD needs none)
         const sg = ref.geo.clone(); sg.userData = {};
         street = new THREE.InstancedMesh(sg, ref.mat, NEAR_N);
         street.castShadow = false; street.receiveShadow = true; street.count = 0; street.frustumCulled = false; street.name = "near-street:" + ref.kind;
