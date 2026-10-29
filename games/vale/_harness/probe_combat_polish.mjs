@@ -8,8 +8,7 @@
 //             ctr      the lift's screen centre (firstCtr: the first beat) vs the caster's and the victim's ground points;
 //                      done: the centre sits nearer the victim / the shape's centroid than the caster (Tunlan's cone,
 //                      Rishal's track)
-//             body     the victim's BODY pixels (the frame with the victim's actor hidden vs shown, VFX off in both,
-//                      above its feet) and the share of them that is white (luma > 225, chroma < 30) with the lift alone
+//             body     the victim's BODY pixels (its skinned body alone rendered into an empty target, above its feet) and the share of them that is white (luma > 225, chroma < 30) with the lift alone
 //                      (VFX off, the actor's victim flash hidden: the envelope's own effect) less the body's white with no
 //                      lift (its own pale parts), with the hit flash, and in the full frame; done: the lift adds ≤ 0.10 at every beat
 //                      (the review: the struck unit went 22-34 % white on the first beat, its box measure). `boxWhite`
@@ -132,17 +131,30 @@ try {
         flash = b.__grab();
         for (const m of a.flashMeshes ?? []) m.traverse(off);
         lift = b.__grab();
-        // the body mask: no lift, the hit flash hidden, the actor shown (base) vs hidden (hid)
         noLift();
         base = b.__grab();
-        a.root.traverse(off); hid = b.__grab();
       } finally { lifted(); restore(); R.vfx.draw = d; R.overlay.teleScene.visible = tv; }
+      // the body mask: the actor's skinned body alone rendered into an empty target (its shadow and contact blob on the
+      // ground are not body)
+      const { Wd, Hd } = full;
+      const g = R.gl; const RT = new (R.overlay.teleTarget.constructor)(Wd, Hd);
+      const skip = [];
+      a.root.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { skip.push([o, o.layers.mask]); o.layers.disableAll(); } });
+      for (const m of a.flashMeshes ?? []) m.traverse((o) => { skip.push([o, o.layers.mask]); o.layers.disableAll(); });
+      const cc = g.getClearColor(new (R.tmpColor.constructor)()), ca = g.getClearAlpha(), ac = g.autoClear;
+      const mask = new Uint8Array(Wd * Hd * 4);
+      try {
+        g.setRenderTarget(RT); g.setClearColor(0x000000, 0); g.clear(true, true, false); g.autoClear = false;
+        g.render(a.root, R.rig.camera);
+        g.readRenderTargetPixels(RT, 0, 0, Wd, Hd, mask);
+      } finally { g.setRenderTarget(null); g.setClearColor(cc, ca); g.autoClear = ac; for (const [o, m] of skip) o.layers.mask = m; RT.dispose(); }
+      hid = null;
       R.render(0);
-      const { Wd, Hd } = full; let n = 0, wl = 0, wf = 0, wb = 0, wh = 0;
+      let n = 0, wl = 0, wf = 0, wb = 0, wh = 0;
       const white = (g, o) => { const l = luma(g.px[o], g.px[o + 1], g.px[o + 2]); const c = Math.max(g.px[o], g.px[o + 1], g.px[o + 2]) - Math.min(g.px[o], g.px[o + 1], g.px[o + 2]); return l > 225 && c < 30; };
       for (let y = Math.max(0, box.y0 | 0); y < Math.min(Hd, feetY | 0); y++) for (let x = Math.max(0, box.x0 | 0); x < Math.min(Wd, box.x1 | 0); x++) {
         const o = ((Hd - 1 - y) * Wd + x) * 4;
-        if (Math.max(Math.abs(base.px[o] - hid.px[o]), Math.abs(base.px[o + 1] - hid.px[o + 1]), Math.abs(base.px[o + 2] - hid.px[o + 2])) <= 24) continue;
+        if (mask[o + 3] < 128) continue;   // the target's rows are bottom-up like readPixels
         n++; if (white(lift, o)) wl++; if (white(full, o)) wf++; if (white(base, o)) wb++; if (white(flash, o)) wh++;
       }
       const k = (w) => +(w / Math.max(1, n)).toFixed(3);

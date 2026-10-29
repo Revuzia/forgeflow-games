@@ -92,8 +92,8 @@ const uniformsOf = (o: Record<string, Uniform>): Map<string, Uniform> => new Map
  *  peak saturates toward the stopped-sun white only inside the area (never full-screen white).
  *  combat F4: the light pours onto the GROUND. A pixel whose scene point stands above it (rebuilt from the stable depth:
  *  0.05 → 0.2 m up eases in, walkable ground is y = 0; bodies down to the ankles, structures, props) takes at most
- *  LIFT_BODY_CAP and keeps its colour, so the struck
- *  unit reads as a silhouette inside the light instead of going white. Only lit pixels above the cap read the depth. */
+ *  LIFT_BODY_CAP (and never past display 0.86, so a pale costume does not go white) and keeps its colour, so the struck
+ *  unit reads as a silhouette inside the light instead of going white. Only lit pixels read the depth. */
 class ExposureEffect extends Effect {
   private readonly cam: () => Camera;
   constructor(cam: () => Camera) {
@@ -118,12 +118,15 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     lift += a.w * ( k + uBreath * ( 1.0 - k ) );
     desat = max( desat, uLiftB[ i ].x * k );
   }
-  if ( lift > ${(LIFT_BODY_CAP - 1).toFixed(3)} && uLiftDepthOn > 0.5 ) {
+  if ( lift > 0.02 && uLiftDepthOn > 0.5 ) {
     float z = texture2D( uLiftDepth, uv ).r;
     vec4 v = uLiftInvProj * vec4( vec3( uv, z ) * 2.0 - 1.0, 1.0 );
     vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
     float body = smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 );
-    lift = mix( lift, ${(LIFT_BODY_CAP - 1).toFixed(3)}, body );
+    // a pale body part takes less: its display value stops at 0.86 (never the stopped-sun white), a dark one up to the cap
+    float bodyV = pow( max( dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-5 ), 1.0 / 2.2 );
+    float capB = clamp( 0.86 / bodyV, 1.0, ${LIFT_BODY_CAP.toFixed(3)} );
+    lift = mix( lift, min( lift, capB - 1.0 ), body );
     desat *= 1.0 - body;
   }
   c *= pow( 1.0 + lift, 2.2 );
