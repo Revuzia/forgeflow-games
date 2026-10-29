@@ -54,13 +54,19 @@
 // their bounds) or shadow into, in one instanced draw per geometry (instance_cull.ts; the renderer calls cull() every frame); trees
 // that only shadow into view draw a ≤ 250-triangle LOD crown. The cliffs are 16 m chunks that three culls itself, and
 // they (and the landmarks) cast into the shadow map only when their shadow can reach the view.
+// W5a refix (box cull): a static caster is tested by the 8 corners of its world box (the geometry's own box through
+// its world matrix, so a rotated module keeps its oriented box) and, for its shadow, the same 8 corners plus where
+// each one's shadow lands on the ground: the shadow volume's hull, not a bounding sphere (a 22 × 14 × 3.8 m skirt
+// module's sphere is 13 m round and stood its shadow "top" 13 m up). A landmark's main pass (and its shadow pass) uses
+// the same corner test through three's own per-object hook (intersectsFrustum), so a wide flat module outside the
+// view draws nothing. Every test is a plane separation: conservative, it never drops a box that reaches the view.
 // Every material is patched with the world chunk (fog of war + edge haze).
 
 import {
   BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
   InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
   RGBAFormat, Shape, ShapeGeometry, ShapeUtils, Sphere, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
-  type WebGLProgramParametersWithUniforms,
+  type Frustum, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MapDefT } from '../contracts/catalog.ts';
@@ -438,10 +444,43 @@ function propMaterial(sway = false, quad: QuadUniforms | null = null): MeshStand
   return m;
 }
 
+// ── box cull (W5a refix: wide flat landmarks) ──────────────────────────────────────────────────
+/** harness seam (_harness/probe_landmark_cull.mjs A/B): false = the bounding-sphere tests (three's own for the main
+ *  pass, the caster cull's sphere + its swept shadow sphere); the renderer exposes it as `landmarkCull` */
+export const landmarkCull = { box: true };
+/** the 8 world corners of a mesh's geometry box (x, y, z × 8; its world matrix applied, so an oriented box) */
+function worldCorners(o: Mesh): Float32Array {
+  o.updateMatrixWorld(true);
+  if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+  const b = o.geometry.boundingBox!, e = o.matrixWorld.elements, out = new Float32Array(24);
+  for (let i = 0; i < 8; i++) {
+    const x = i & 1 ? b.max.x : b.min.x, y = i & 2 ? b.max.y : b.min.y, z = i & 4 ? b.max.z : b.min.z;
+    out[i * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
+    out[i * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+    out[i * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+  }
+  return out;
+}
+/** plane separation: true when the first `n` points all lie more than `margin` metres outside one frustum plane
+ *  (conservative: a hull that reaches the frustum is never reported outside) */
+function outsideFrustum(f: Frustum, pts: Float32Array, n: number, margin: number): boolean {
+  for (const pl of f.planes) {
+    const nx = pl.normal.x, ny = pl.normal.y, nz = pl.normal.z, c = pl.constant + margin;
+    let all = true;
+    for (let i = 0; i < n && all; i++) all = nx * pts[i * 3] + ny * pts[i * 3 + 1] + nz * pts[i * 3 + 2] + c < 0;
+    if (all) return true;
+  }
+  return false;
+}
+
 /** load map.art.terrain.landmarks entries that name a `model` (real-size GLB, origin at its ground
  *  contact) and stand each at its `at` (map x, y) on the ground there (a cliff block's top inside a wall),
  *  turned `rot` degrees about the vertical; flush entries
- *  carry no model. The models are shared with the asset cache, so callers drop them without disposing. */
+ *  carry no model. The models are shared with the asset cache, so callers drop them without disposing.
+ *  Art dependency (W5a): FRAY's hour_stone.glb is exported sunk 1.2 m (landmarks_art2.py SINK) because it stands on
+ *  groundAt(), which inside its own (non-replaced) wall block is the block's top (wallHeights.hourStones 1.2); the stone
+ *  encloses that cliff block. If a landmark ever replaces a rotated wall (an OBB test) or stops being lifted onto a
+ *  wall top here, re-export the hour-stone without SINK. */
 export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => Promise<{ gltf: { scene: Object3D }; renderable: boolean } | null>,
   ground: (x: number, y: number) => number = () => 0): Promise<Object3D[]> {
   const list = ((map.art.terrain ?? {}) as { landmarks?: unknown }).landmarks;
@@ -555,13 +594,20 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   /** r12 B4: static shadow casters (cliff chunks, landmarks): each frame a caster draws into the shadow map only
    *  when it, or the shadow it throws along the sun's ground offset, can reach the view (+ 1 m); three's square
    *  shadow box alone keeps ~1.5x the chunks the view sees */
-  const casters: { o: Mesh; s: Sphere; top: number }[] = [];
+  /** pts: the world box's 8 corners, then (filled per cull) where each one's shadow lands; top / floor: the box's
+   *  highest and lowest world y */
+  const casters: { o: Mesh; s: Sphere; top: number; floor: number; pts: Float32Array }[] = [];
   const caster = (o: Mesh): void => {
     if (!o.castShadow) return;
     o.updateMatrixWorld(true);
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
     const sp = o.geometry.boundingSphere!.clone().applyMatrix4(o.matrixWorld);
-    casters.push({ o, s: sp, top: sp.center.y + sp.radius });
+    // the shadow's reach from the world box's top, not the sphere's (a wide flat module's sphere stood 13 m up)
+    const cs = worldCorners(o), pts = new Float32Array(48);
+    pts.set(cs);
+    let top = -Infinity, floor = Infinity;
+    for (let i = 0; i < 8; i++) { top = Math.max(top, cs[i * 3 + 1]); floor = Math.min(floor, cs[i * 3 + 1]); }
+    casters.push({ o, s: sp, top, floor, pts });
     dirty = true;
   };
   const _cs = new Sphere();
@@ -569,23 +615,50 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     const sl = v ? Math.hypot(v.sdx, v.sdz) : 0;
     for (const c of casters) {
       if (!v) { c.o.castShadow = true; continue; }
-      _cs.copy(c.s); _cs.radius += 1;
-      let on = v.frustum.intersectsSphere(_cs);
-      if (!on && sl > 0) {
-        const k = Math.max(0, c.top) * 0.5;
-        _cs.center.set(c.s.center.x + v.sdx * k, Math.min(c.s.center.y, k), c.s.center.z + v.sdz * k);
-        _cs.radius = c.s.radius + sl * k + 1;
+      let on: boolean;
+      if (landmarkCull.box) {
+        // the shadow volume's hull: the box's corners and each corner's shadow on the ground under it (the receivers
+        // sit between the ground and the caster, so the hull holds every shadow it throws into view); + 1 m
+        const p = c.pts, g = Math.min(0, c.floor);
+        if (sl > 0) for (let i = 0; i < 8; i++) {
+          const k = Math.max(0, p[i * 3 + 1] - g);
+          p[24 + i * 3] = p[i * 3] + v.sdx * k; p[24 + i * 3 + 1] = g; p[24 + i * 3 + 2] = p[i * 3 + 2] + v.sdz * k;
+        }
+        on = !outsideFrustum(v.frustum, p, sl > 0 ? 16 : 8, 1);
+      } else on = true;
+      // and the sphere tests (both are conservative, so both must pass: a round caster's box corners stand outside
+      // its sphere)
+      if (on) {
+        _cs.copy(c.s); _cs.radius += 1;
         on = v.frustum.intersectsSphere(_cs);
+        if (!on && sl > 0) {
+          const top = c.s.center.y + c.s.radius, k = Math.max(0, top) * 0.5;
+          _cs.center.set(c.s.center.x + v.sdx * k, Math.min(c.s.center.y, k), c.s.center.z + v.sdz * k);
+          _cs.radius = c.s.radius + sl * k + 1;
+          on = v.frustum.intersectsSphere(_cs);
+        }
       }
       c.o.castShadow = on;
     }
+  };
+  /** a landmark mesh's own frustum test (three calls it for the main pass and the shadow pass): its world box's 8
+   *  corners, + 0.5 m (a Dialwood crown's sway is ≤ 4 cm), and three's sphere test (a round mesh's box corners stand
+   *  outside its sphere; both are conservative, so both must pass); the sphere test alone while the seam is off */
+  const boxCulled = (o: Mesh): void => {
+    const cs = worldCorners(o);
+    const sphereTest = o.intersectsFrustum.bind(o);
+    o.intersectsFrustum = (f: Frustum): boolean => (!landmarkCull.box || !outsideFrustum(f, cs, 8, 0.5)) && sphereTest(f);
   };
   // landmarks the renderer adds (static GLB scenes): their shadow-casting meshes join the casters
   group.addEventListener('childadded', (ev) => {
     const o = ev.child;
     if (o.name === 'vale_scatter' || o.name.startsWith('vale_')) return;
     o.updateMatrixWorld(true);
-    o.traverse((m) => { if ((m as Mesh).isMesh && !(m as InstancedMesh).isInstancedMesh && !(m as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) caster(m as Mesh); });
+    o.traverse((m) => {
+      if (!(m as Mesh).isMesh || (m as InstancedMesh).isInstancedMesh || (m as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) return;
+      caster(m as Mesh);
+      boxCulled(m as Mesh);
+    });
     // env F4: a landmark's opaque stone is cover, drawn before the occluded silhouette
     o.traverse((m) => {
       const mesh = m as Mesh;

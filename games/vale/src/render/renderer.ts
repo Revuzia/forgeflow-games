@@ -59,7 +59,7 @@ import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './pale
 import { PostChain } from './post.ts';
 import { DynamicResolution, type FrameBound, GpuTimer, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
-import { buildTerrain, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
+import { buildTerrain, landmarkCull, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { SocketResolver } from './vfx/sockets.ts';
 import { VfxSystem } from './vfx/system.ts';
 import { StructureFx } from './structures.ts';
@@ -221,6 +221,8 @@ class ValeRenderer implements Renderer {
   private readonly dyn = new DynamicResolution();
   /** harness seam (perf PERF-m5, _harness/probe_lod.mjs): the shadow LOD switch (lod.ts) */
   readonly lodSwitch = lodSwitch;
+  /** harness seam (W5a refix, _harness/probe_landmark_cull.mjs): the landmarks' and casters' box cull (terrain.ts) */
+  readonly landmarkCull = landmarkCull;
   /** rebuilt on a restored context (its queries and extension belonged to the lost one) */
   private gpuTimer: GpuTimer;
   // perf PERF-m4: GPU context loss
