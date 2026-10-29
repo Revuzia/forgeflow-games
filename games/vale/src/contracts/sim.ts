@@ -244,8 +244,9 @@ export type SimEvent =
   | { e: 'announce'; t: number; key: string; team?: TeamId; player?: PlayerId; params?: Record<string, string | number> }
   | { e: 'eliminated'; t: number; player: PlayerId; placement: number }
   | { e: 'suddenDeath'; t: number }
-  /** presentation only: a passive's trigger fired (its effects ran); `dst` is the subject it fired for, if any */
-  | { e: 'proc'; t: number; src: EntityId; ability: string; on: string; dst?: EntityId }
+  /** presentation only: a passive's trigger fired (its effects ran); `dst` is the subject it fired for, if any;
+   *  `vfx` / `sfx` the trigger's own Trigger.present (additive, INTEG2: absent when the trigger has none) */
+  | { e: 'proc'; t: number; src: EntityId; ability: string; on: string; dst?: EntityId; vfx?: string; sfx?: string }
   | { e: 'end'; t: number; result: MatchResult };
 
 // ── result (feeds post-game, grants, rating) ────────────────────────────────────────────────────

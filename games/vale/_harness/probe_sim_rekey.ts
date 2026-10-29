@@ -237,6 +237,12 @@ section('camp buffs: Clearglass on your own side, Resinburn on the enemy side', 
   const slowed = ofType(ev, 'status').some((s) => s.dst === tgt.id && s.status === 'slow');
   check('Resinburn (enemy side): the first attack sticks resin (slow), the next ignites it (magic damage)', slowed && ign.length >= 1, { slowed, ign: ign.length });
   check('Resinburn: at most one ignite per 4 s per target', ign.length <= 1, ign.length);
+  // the ignite shows apart from the stick (Trigger.present, INTEG2): only the ignite's proc names its VFX
+  const procs = ofType(ev, 'proc').filter((p) => p.dst === tgt.id && p.ability === 'resinburn_ignite');
+  const igniteVfx = buffDef('resinburn').passives?.[0]?.triggers[0]?.present?.vfx;
+  check('Resinburn: the ignite proc carries its own VFX, the stick none',
+    !!igniteVfx && procs.filter((p) => p.vfx === igniteVfx).length === ign.length && procs.some((p) => p.vfx === undefined),
+    { procs: procs.map((p) => p.vfx ?? '-'), igniteVfx });
   // own side: no resin
   const sim2 = mkSim('rift', [seat(0, 0, melee), seat(1, 1, FIGHTERS[2])]);
   addTeamBuff(sim2.world, 0, 'resinburn');

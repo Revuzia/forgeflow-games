@@ -291,6 +291,10 @@ export const Trigger = z.object({
   filter: TargetFilter.optional(),
   cond: Condition.optional(),
   effects: Effects,
+  /** CHANGED(INTEG2), additive: this trigger's own look when it fires (the 'proc' event carries `vfx` / `sfx`; its
+   *  effects' hits take `hitVfx` / `hitSfx`). Unset: the passive's `present`. A passive whose triggers do different
+   *  things (Resinburn: stick, then ignite) shows each one apart. */
+  present: Present.optional(),
 }).strict();
 
 export const PassiveDef = z.object({

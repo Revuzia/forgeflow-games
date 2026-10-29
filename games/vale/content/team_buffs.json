@@ -44,7 +44,8 @@
                 { "op": "consumeMark", "mark": "resin_stuck", "to": "hit", "perStack": [
                   { "op": "damage", "amount": { "base": 20, "level": 4 }, "type": "magic", "to": "hit" }
                 ] }
-              ]
+              ],
+              "present": { "vfx": "lib_buff_resin_ignite" }
             },
             {
               "on": "attackHit",

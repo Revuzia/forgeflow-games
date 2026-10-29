@@ -4,7 +4,8 @@
 // PassiveInst records on the entity; their triggers are bucketed by `on` so dispatch is a single
 // array walk. Every trigger honours `cooldown`, `perTargetCooldown`, `filter` (against the
 // trigger's subject) and `cond`. Effects run with caster = the passive's owner, rank = owner level,
-// target = hit = the subject.
+// target = hit = the subject. A trigger's own `present` (else the passive's) is its look: the 'proc' event
+// carries its vfx / sfx, and hits inside its effects take its hitVfx / hitSfx.
 //
 // Subjects ("hit") per `on`:
 //   attackHit / abilityHit / damageDealt / kill / takedown / statusApplied → the unit affected
@@ -16,6 +17,7 @@
 // Recursion guard: effects fired by a trigger carry depth+1; nothing fires past MAX_TRIGGER_DEPTH.
 
 import type { PassiveDefT } from '../contracts/catalog.ts';
+import type { SimEvent } from '../contracts/sim.ts';
 import {
   TRIGGER_INDEX, type EffectCtx, type Entity, type PassiveInst, type SourceRef, type TriggerInst, type TriggerOn,
 } from './entity.ts';
@@ -67,7 +69,7 @@ function triggerCtx(e: Entity, ti: TriggerInst, hit: Entity | null, depth: numbe
   return {
     caster: e, rank: Math.max(1, e.level), target: hit, px: tx, py: ty, dx, dy, hit,
     ex: tx, ey: ty, hasEnd: false, source: { kind: ti.passive.kind, id: ti.passive.id },
-    present: ti.passive.def.present, depth: depth + 1, slot: null,
+    present: ti.t.present ?? ti.passive.def.present, depth: depth + 1, slot: null,
   };
 }
 
@@ -84,8 +86,12 @@ function tryFire(w: World, e: Entity, ti: TriggerInst, hit: Entity | null, depth
   if (t.cooldown) ti.cd = t.cooldown;
   if (hit && t.perTargetCooldown) (ti.per ??= new Map()).set(hit.id, w.time + t.perTargetCooldown);
   runEffects(w, t.effects, ctx);
-  if (hit) w.emit({ e: 'proc', t: w.time, src: e.id, ability: ti.passive.id, on: t.on, dst: hit.id });
-  else w.emit({ e: 'proc', t: w.time, src: e.id, ability: ti.passive.id, on: t.on });
+  const ev: SimEvent & { e: 'proc' } = { e: 'proc', t: w.time, src: e.id, ability: ti.passive.id, on: t.on };
+  if (hit) ev.dst = hit.id;
+  // a trigger's own look (Trigger.present): only set when it has one, so other procs stay as they were
+  if (t.present?.vfx) ev.vfx = t.present.vfx;
+  if (t.present?.sfx) ev.sfx = t.present.sfx;
+  w.emit(ev);
   return true;
 }
 
