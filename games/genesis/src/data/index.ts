@@ -54,7 +54,6 @@ export const BASE_PACK: ContentPack = {
   // the god layer (phase 3)
   powers: powers.powers as unknown as ContentPack['powers'],
   disasters: disasters.disasters as unknown as ContentPack['disasters'],
-  // (LIVING §3.5: creatures.json is no longer part of the game — the creature is gone; the file stays until DOCS removes it)
   lexicon: lexicon as unknown as ContentPack['lexicon'],
   // worlds and space (phase 4)
   ships: ships.ships as unknown as ContentPack['ships'],
