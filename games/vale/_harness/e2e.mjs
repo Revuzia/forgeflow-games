@@ -732,8 +732,11 @@ async function practiceJourney() {
       let p1 = p0, armed = false, tries = 0;
       for (const [dx, dy] of [[180, 90], [-180, 90], [160, -110], [-160, -110]]) {
         tries++;
-        await click(page.locator('.hud .ptools button', { hasText: 'Move to a point' }));
-        armed = await page.evaluate(() => document.body.classList.contains('ptools-aiming'));
+        // arm only when not already aiming (a missed click leaves the button reading 'Click the ground…'; pressing it
+        // again would disarm), then wait for the aiming class before clicking the ground (the run-2 race)
+        const aiming = () => page.evaluate(() => document.body.classList.contains('ptools-aiming'));
+        if (!(await aiming())) await click(page.locator('.hud .ptools button', { hasText: /Move to a point|Click the ground/ }));
+        armed = await page.waitForFunction(() => document.body.classList.contains('ptools-aiming'), null, { timeout: 3000 }).then(() => true, () => false);
         await page.mouse.click(960 + dx, 540 + dy);
         await page.waitForTimeout(700);
         p1 = (await lab()).me;
