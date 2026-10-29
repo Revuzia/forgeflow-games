@@ -73,14 +73,14 @@
   },
   "uv_coverage": 0.733,
   "bake": {
-    "base": 2.39,
-    "rough_metal": 1.39,
-    "normal": 0.89,
-    "ao": 0.88,
-    "normal_fixed_px": 13382,
-    "projection": 28.47,
-    "pack_save": 28.76,
-    "total": 34.5
+    "base": 8.33,
+    "rough_metal": 5.55,
+    "normal": 2.48,
+    "ao": 2.59,
+    "normal_fixed_px": 10967,
+    "projection": 62.32,
+    "pack_save": 62.45,
+    "total": 82.51
   },
   "tris": 2956,
   "mesh_top_m": 1.32,
@@ -179,18 +179,18 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1100732,
+  "glb_bytes_raw": 1098388,
   "optimize": {
     "ok": true,
-    "before": 1102468,
-    "after": 343012
+    "before": 1100124,
+    "after": 343052
   },
-  "glb_bytes": 343012,
+  "glb_bytes": 343052,
   "three_load_test": {
     "ok": true,
     "log": [
       "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_aubade.glb (335 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: glimwick_aubade_base 1024x1024 73K, glimwick_aubade_normal 512x512 43K, glimwick_aubade_orm 256x256 15K",
+      "  webp: glimwick_aubade_base 1024x1024 72K, glimwick_aubade_normal 512x512 43K, glimwick_aubade_orm 256x256 15K",
       "  skinned meshes: glimwick_aubade(3553v), glimwick_aubade_accent_1(177v), glimwick_aubade_accent_2(33v), glimwick_aubade_accent_3(57v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b x_skirt_f x_skirt_l x_skirt_r)",
       "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/23tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
@@ -229,26 +229,25 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_glimwick_aubade.png",
-    "seconds": 22.6,
-    "exit": 0,
-    "clip_sheet": "art/renders/units/three_clips_glimwick_aubade.png"
+    "seconds": 27.9,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.22,
-      "model": 28.06,
-      "lows_bind": 0.04,
-      "uv": 9.63,
-      "bake": 34.81,
-      "clips": 0.95,
-      "export": 1.2,
-      "optimize": 1.05,
-      "load_test": 0.31,
-      "three_qa": 42.12,
-      "cache": 0.05
+      "rig": 0.01,
+      "materials": 0.58,
+      "model": 80.25,
+      "lows_bind": 0.15,
+      "uv": 31.37,
+      "bake": 82.57,
+      "clips": 0.53,
+      "export": 1.58,
+      "optimize": 0.76,
+      "load_test": 0.2,
+      "three_qa": 28.44,
+      "cache": 0.12
     },
-    "total_s": 118.51
+    "total_s": 226.71
   },
   "run_ref_speed": 3.25,
   "height_m": 0.93

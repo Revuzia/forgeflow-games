@@ -28,7 +28,7 @@ Banned for every fighter: gears, clock hands, gold filigree, gems, glowing runes
 - **Hook:** the crook's hook with the lantern hanging in it (0.14 m wide, 0.22 m tall) above and in front of the disc. The lantern is the accent and the topmost form on the figure.
 - **Size:** the figure is 104 px tall at 1080p (69 px at 720p); the crook shaft is 6 cm thick (5 px), the minimum feature size, and the hook is 7 cm.
 - **At 64 px:** a thin vertical line, a flat disc one head below the crown, a long coat, and one taller vertical (the crook) with a small hook at the top. The disc is round and shallow with a visible gap between its rim and the shoulders.
-- **Facing from above:** the mask's beak shows under the front of the rim, the crook's hook bends toward the front, and the coat's front panel is a single long fold.
+- **Facing from above:** the mask's short rounded bill shows under the front of the rim, the crook's hook bends toward the front, and the coat's front panel is a single long fold.
 
 Pairs to test first (IoU <= 0.80 at 64 px):
 
@@ -52,7 +52,7 @@ SHAPE = body.shape(girth=0.92, torso_w=0.94, torso_d=0.94, chest=0.95, waist=0.9
 
 ## 3. Face (template 3)
 
-- **Serenade carved ochre mask** (`kit.carved_mask`): planar facets, a brow shelf of at least 6 cm, ink almond eye recesses and a beak keel (`kit.mask_beak`, 4 cm) as the facing cue, framed by a deep felt hood whose broad round rim is the disc (`kit.hood` with a flat brim; the hood is rigid, no sway). A scarf (`cloth2`) covers the lower face.
+- **Serenade carved ochre mask** (`kit.carved_mask`): planar facets, a brow shelf of at least 6 cm, ink almond eye recesses and a short rounded bill as the facing cue (owner ruling 5, 2026-10-28: the old 4 cm beak keel read as a plague-doctor beak; the bill is a soft dome under the brow, 6.2 cm from root to a round tip above the scarf, 1.5 cm proud, never longer than the mask's eye-to-chin height), framed by a deep felt hood whose broad round rim is the disc (`kit.hood` with a flat brim; the hood is rigid, no sway). A scarf (`cloth2`) covers the lower face.
 - The rim must clear the brow by 3 cm so the eyes read at the portrait angle; the rim is rigid and never droops.
 
 ## 4. Armour, cloth and props (template 4)

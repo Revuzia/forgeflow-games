@@ -12,13 +12,13 @@ identity pass over the kits' attack and ult cues (kits_a.py / kits_b.py):
 
 The identity pass (run on import, over the cues registered by kits_a / kits_b):
 
-  contact  every fighter's attack hit AND ability hit carries a contact transient inside the library's band for the
-           frequent hits (final parity AUD-4: >= 0.07 of the first 30 ms above 2 kHz, at most the 0.30 soft top). A
-           dull hit gets an escapement tick tuned into the fighter's own 2-6 kHz pair, its level solved so the first
-           30 ms after the onset hold CONTACT_SHARE above 2 kHz; a hit brighter than CONTACT_TOP has the > 2 kHz band
-           of its onset pulled down (a zero-phase split, so nothing moves in time), solved on the MASTERED take (the
-           mastering's soft clip adds its own top). The ability hit so keeps the contact the library hits it replaced
-           gave it (c_hit_phys_* 0.08-0.10, c_hit_magic 0.25).
+  contact  a PHYSICAL fighter's attack hit AND ability hit carry a contact transient inside the library's band for the
+           frequent hits (final parity AUD-4: >= 0.07 of the first 30 ms above 2 kHz), and no fighter's attack or
+           ability hit passes the 0.30 soft top. A dull hit gets an escapement tick tuned into the fighter's own 2-6 kHz
+           pair, its level solved so the first 30 ms after the onset hold CONTACT_SHARE above 2 kHz; a hit brighter
+           than CONTACT_TOP has the > 2 kHz band of its onset pulled down (a zero-phase split, so nothing moves in
+           time), solved on the MASTERED take (the mastering's soft clip adds its own top). A physical fighter's
+           ability hit so keeps the contact of the library hit it replaced (c_hit_phys_* 0.08-0.10).
   body     every identity cue the kit gate checks on a laptop (attack swing / hit, ult release, ability hit) loses at most
            LAPTOP_SOLVE_LU of max momentary loudness through a 220 Hz roll-off: a cue whose weight lives below 250 Hz
            gets that band's own harmonics (an octave-up rectifier, 250-1000 Hz) mixed in at the level that brings the
@@ -112,13 +112,11 @@ DASH_AIR = {'ardit': (500, 1800), 'burdam': (220, 900), 'dunsom': (700, 2400), '
             'hesmi': (260, 1000), 'ilsheta': (900, 3000), 'kemdo': (1500, 6000), 'lisvel': (1100, 4200),
             'marund': (240, 800), 'nurrow': (600, 2000), 'odrum': (400, 1500), 'rishal': (2000, 8000),
             'sukri': (1000, 3600), 'tunlan': (300, 1200), 'ulkro': (700, 2600), 'vashil': (800, 3200)}
-# a fighter's contact: the escapement tick's two resonances (its own pair in 2-6 kHz; the five casters' pairs sit
-# between the physical fighters' so no two fighters share one)
+# a physical fighter's contact: the escapement tick's two resonances (its own pair in 2-6 kHz). The casters' hits keep
+# their own onsets (they replaced the bright c_hit_magic, which had no floor to hold); only the soft top applies to them
 CONTACT = {'ardit': (3000.0, 4600.0), 'burdam': (2200.0, 3300.0), 'ervet': (4200.0, 6000.0), 'hesmi': (2000.0, 2900.0),
            'kemdo': (3800.0, 5600.0), 'lisvel': (3400.0, 5200.0), 'marund': (2400.0, 3600.0), 'nurrow': (4600.0, 6200.0),
-           'odrum': (2600.0, 4000.0), 'rishal': (5000.0, 6600.0), 'ulkro': (2800.0, 4400.0),
-           'dunsom': (2300.0, 3900.0), 'ilsheta': (3600.0, 5900.0), 'sukri': (4400.0, 6800.0), 'tunlan': (2100.0, 3500.0),
-           'vashil': (3200.0, 5000.0)}
+           'odrum': (2600.0, 4000.0), 'rishal': (5000.0, 6600.0), 'ulkro': (2800.0, 4400.0)}
 FIGHTERS = sorted(ROOMS)
 
 
@@ -177,17 +175,20 @@ def _tame(xs: np.ndarray, i: int, cid: str) -> np.ndarray:
 
 
 def with_contact(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
-    """Hold a kit hit's contact in the band (see `contact` in the module doc): a dull take gets the fighter's contact
-    tick mixed in at the onset, at the level that gives CONTACT_SHARE (bisection on the mid); a take brighter than
-    CONTACT_TOP once mastered has its onset's top pulled down (_tame)."""
-    lo, hi = CONTACT[fid]
-    tick = at_len(esc('tick', 0.95, rr=v, seed=f'ct_{fid}{v}', res=(lo, hi), band=0.5 * (lo + hi), q=5.0), CONTACT_WIN)
-    tick = F.apply(tick, [F.highpass(lo * 0.6, 0.7071)])
+    """Hold a kit hit's contact in the band (see `contact` in the module doc): a physical fighter's dull take gets its
+    contact tick mixed in at the onset, at the level that gives CONTACT_SHARE (bisection on the mid); any take brighter
+    than CONTACT_TOP once mastered has its onset's top pulled down (_tame). A caster's take within the top is returned
+    as it came."""
     xs = np.atleast_2d(np.asarray(x, float))
     if xs.shape[0] == 1:
         xs = np.vstack([xs[0], xs[0]])
     e = np.max(np.abs(xs), axis=0)
     i = int(np.argmax(e > e.max() * 0.01))
+    if fid not in CONTACT:
+        return _tame(xs, i, cid) if _mshare(xs, cid) > CONTACT_TOP else x
+    lo, hi = CONTACT[fid]
+    tick = at_len(esc('tick', 0.95, rr=v, seed=f'ct_{fid}{v}', res=(lo, hi), band=0.5 * (lo + hi), q=5.0), CONTACT_WIN)
+    tick = F.apply(tick, [F.highpass(lo * 0.6, 0.7071)])
     t = np.zeros(xs.shape[-1])
     k = min(tick.size, t.size - i)
     t[i:i + k] = norm(tick)[:k]
@@ -280,8 +281,8 @@ VOICING: dict[str, dict | tuple] = {
     'f_lisvel_attack_hit': {'hp': 400, 'lp': 5000, 'peaks': ((1250, -9.0, 1.4),)},
     'f_lisvel_ult_windup': {'peaks': ((3150, 6.0, 1.4),)},
     'f_marund_attack_hit': {'hp': 400},
-    'f_marund_attack_swing': {'peaks': ((500, -9.0, 1.4),)},
-    'f_marund_ult_release': {'peaks': ((315, 6.0, 1.4),)},
+    'f_marund_attack_swing': ({'peaks': ((500, -9.0, 1.4),)}, {'hp': 150, 'peaks': ((315, 6.0, 1.4),)}),
+    'f_marund_ult_release': ({'peaks': ((315, 6.0, 1.4),)}, {'lp': 8000, 'peaks': ((1250, -9.0, 1.4),)}),
     'f_marund_ult_windup': {'hp': 200},
     'f_odrum_attack_swing': {'hp': 280, 'lp': 1200},
     'f_odrum_ult_release': {'hp': 280, 'peaks': ((3150, 6.0, 1.4),)},

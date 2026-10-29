@@ -130,9 +130,11 @@ def ward(col):
     hood = Sculpt("hood")
     hood.add(Ellipsoid((0, 0.02, 0.62), (0.17, 0.17, 0.19)), k=0.0)
     hood.sub(Ellipsoid((0, -0.1, 0.58), (0.12, 0.14, 0.13)), k=0.02)
-    # its crown: a low rounded KNOB (owner ruling 5 / originality F9: the pointed finial read as a pointed hood tip;
-    # a plain rounded dome over the single lamp, no point, no eye-like pair)
-    hood.add(Ellipsoid((0, 0.03, 0.795), (0.055, 0.055, 0.042)), k=0.045)
+    # its crown: a plain rounded dome topped by a small round KNOB, a ball on a short neck with only a small fillet
+    # (owner ruling 5 / originality F9: the pointed finial read as a pointed hood tip; a knob blended in wide drew the
+    # dome up into an onion point again, so the ball stays a distinct ball). One lamp, no point, no eye-like pair.
+    hood.add(Capsule((0, 0.02, 0.79), (0, 0.02, 0.83), 0.019), k=0.012)
+    hood.add(Sphere((0, 0.02, 0.848), 0.031), k=0.008)
     band = Sculpt("band"); band.add(Torus((0, 0, 0.44), 0.09, 0.018), k=0.0)
     lamp = Sculpt("lamp"); lamp.add(Ellipsoid((0, -0.03, 0.57), (0.08, 0.07, 0.09)), k=0.0)
     objs = [obj("ward_body", body, stone, col, 500, 0.008, 2.2, 0.8, S.TINT["stone"]),

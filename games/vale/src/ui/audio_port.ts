@@ -26,19 +26,17 @@ export interface AudioPort {
    *  `urgent` is true in the last tokens.audio.beds.draft.localUrgencyLastS seconds of a timer the local player still has
    *  to act on (their ban, their pick, their finalize Lock in). */
   draft?(s: DraftMusicState | null): void;
+  /** OPTIONAL (from AUDIO, AUD-1): play the fighter's own lock-in call on the ui bus. The engine owns the cue naming
+   *  (src/audio, its per-fighter kits); false, and nothing played, when content has no call for that fighter */
+  fighterCall?(fighter: string): boolean;
 }
 
 /** the draft's state as the music hears it (audio AUD-m2; tokens.audio.beds.draft.phases: bans drone · picks harp pulse ·
  *  finalise drums) */
 export interface DraftMusicState { phase: 'ban' | 'pick' | 'finalize'; mine: boolean; urgent: boolean }
 
-/** content's role → id bindings (CatalogT.audio `ui`, `screens`, `stings`); an unbound role is silent. `cues` is the
- *  catalog's cue table, read only to ask whether a fighter's own cue exists (FIGHTER_CALL) */
-export interface UiSoundIds { ui?: Record<string, string>; screens?: Record<string, string>; stings?: Record<string, string>; cues?: Record<string, unknown> }
-
-/** a fighter's lock-in call: the cue `f_<fighter id>_call` (the audio lane's per-fighter cue family, like
- *  `f_<id>_passive`), played when your pick is locked in; a fighter without one falls back to the `lockin` role */
-export const FIGHTER_CALL = (fighter: string): string => `f_${fighter}_call`;
+/** content's role → id bindings (CatalogT.audio `ui`, `screens`, `stings`); an unbound role is silent */
+export interface UiSoundIds { ui?: Record<string, string>; screens?: Record<string, string>; stings?: Record<string, string> }
 
 const HOVER_MIN_MS = TOKENS.audioUi.hover.minIntervalMs;
 
@@ -76,15 +74,18 @@ export class UiSound {
     try { this.port?.play(id); } catch { /* never breaks the UI */ }
   }
 
-  /** your pick is locked in: the fighter's call when content has one, else the `lockin` role. Returns the cue played. */
-  lockCall(fighter: string | null | undefined): string | null {
-    const id = fighter ? FIGHTER_CALL(fighter) : null;
-    if (id && this.ids.cues && Object.prototype.hasOwnProperty.call(this.ids.cues, id)) {
-      try { this.port?.play(id); } catch { /* never breaks the UI */ }
-      return id;
-    }
+  /** the fighter's own lock-in call through the engine (AudioPort.fighterCall); false when the engine or content has
+   *  none. The UI never builds the cue id: the f_<fighter>_<slot> convention lives in src/audio only. */
+  call(fighter: string | null | undefined): boolean {
+    if (!fighter) return false;
+    try { return !!this.port?.fighterCall?.(fighter); } catch { return false; /* never breaks the UI */ }
+  }
+
+  /** your pick is locked in: the `lockin` role, and the fighter's call riding on it (audio AUD-1: the call is
+   *  mastered at -21 LUFS to sit on ui_lockin's -20, so both play). Returns whether the fighter's call played. */
+  lockCall(fighter: string | null | undefined): boolean {
     this.play('lockin');
-    return this.ids.ui?.lockin ?? null;
+    return this.call(fighter);
   }
 
   play(kind: UiCueKind, minIntervalMs = 0): void {
@@ -109,5 +110,6 @@ export function recordingPort(inner?: AudioPort | null): AudioPort & { log: { id
     music(id: string | null): void { rec(`music:${id ?? 'off'}`); inner?.music?.(id); },
     duck(on: boolean): void { rec(`duck:${on}`); inner?.duck?.(on); },
     draft(s: DraftMusicState | null): void { rec(s ? `draft:${s.phase}:${s.mine ? 'mine' : 'theirs'}${s.urgent ? ':urgent' : ''}` : 'draft:off'); inner?.draft?.(s); },
+    fighterCall(fighter: string): boolean { const ok = !!inner?.fighterCall?.(fighter); rec(`call:${fighter}:${ok ? 'played' : 'none'}`); return ok; },
   };
 }

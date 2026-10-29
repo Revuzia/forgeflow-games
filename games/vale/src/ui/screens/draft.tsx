@@ -12,7 +12,7 @@
 // The showcase (client F5): under the team draft's grid your hovered or locked fighter stands large — the painted plate,
 // name, title, class, role and kit — crossfading as you hover. Locking in strikes noon (VALE's own beat: the gnomon on
 // the plate's dial swings clockwise to 12, the ring closes, the plate comes up to full light) and the fighter's call
-// plays (UiSound.lockCall: `f_<fighter>_call`, the lockin role when a fighter has none). A timeout lock gets the beat too.
+// plays (UiSound.lockCall: the lockin role with the engine's AudioPort.fighterCall riding on it). A timeout lock gets the beat too.
 // Fit (client F9): the draft grid's cards are compact (class and role as marks on the portrait), finalize puts Hour
 // spells and boons behind tabs, and the seat's Bot chip rides the role line.
 // Music (audio AUD-m2): the draft bed hears the phase, whether you have to act, and the last

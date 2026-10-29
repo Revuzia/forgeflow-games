@@ -18,7 +18,7 @@ Where the concept and the brief disagree:
     hanging beside the hood. The crook top stands at ~2.2 m (the painting's 2.17: under the HP bar from either facing).
   * the brief wins on the facing cue: the crook leans a little forward (the fist 0.22 m in front of the shoulder) and
     the hook's plane turns 35 degrees toward the front, so the lantern hangs in front of the hat's disc from above and
-    the mask's beak keel (3.5 cm) marks the front; the lantern is octagonal (0.19 m across, 0.41 m with its cupola
+    the mask's short rounded bill (1.5 cm proud, owner ruling 5) marks the front; the lantern is octagonal (0.19 m across, 0.41 m with its cupola
     and base: the painted 0.16 m lantern measured 0.3 % accent) with its four cardinal panes and a glass cupola
     glowing azure (the `accent`, ~1.9 % at the game camera: the painted blue centre pane between amber lampresin
     panes, seen from every side and from above); it hangs on one pendulum bone x_lantern (<= 6 degrees off plumb).
@@ -209,7 +209,7 @@ def lan_z(dz):
 # ── the hat, the head (painted placement: the mask's centre is 1.7 cm right of the axis) ──────────────────
 MX = -0.017                                        # the mask's centre line (as painted)
 SLOT_X = 0.047                                     # the coat's front opening: centre at x -SLOT_X (as painted)
-KX = -0.006                                        # the beak keel's centre line (as painted)
+KX = -0.006                                        # the bill's centre line (the painted nose tile's)
 HAT_C = np.array([0.0, 0.012])               # on the mirror plane (the symmetric decimate left pinholes off it)
 HAT_R, HAT_EDGE, HAT_RISE, HAT_T = 0.355, 1.946, 0.095, 0.026
 # fix pass 1: the felt is 3.6 cm at the edge (brief: 4 cm with bevels) and thickens toward the crown (the underside
