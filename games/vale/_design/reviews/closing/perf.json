@@ -1,0 +1,111 @@
+{
+ "score": 7,
+ "summary": "Adversarial verification on HEAD 22310948 (src, tools and _harness are identical to the reviewer's 09d330c0; only _design/reviews changed). Apple M5, ANGLE Metal, real Chrome GPU; the 1-minute load was 2.7-6.2 during my runs.\n\n**Frame-rate gate (B4): reproduced and closed.** `perf_1080 --prod --wait-idle 30 --q high,low,ultra` gives GATE PASS, exit 0.\n- High: 60.1 fps, 0 of 601 frames dropped, p95 16.7 ms, renderer CPU about 2 ms.\n- Low: 60.1 fps, 0 dropped.\n- Match peak: 484k triangles, 273 draws, 40 programs, 0 programs first seen after 1:00.\n- Memory step: +1.7 % across 4 identical rebuilds.\n\n**Stability: reproduced.** typecheck exits 0; strict content:check has 0 warnings; probes pass 48/48; `e2e all` passes all 7 journeys with 0 console lines.\n\n**Both majors are confirmed.** Neither can be refuted.\n- PERF-C1, the dynamic-resolution controller fed directly: on Chrome/Metal, 100 % of the GPU-timer readings in GPU-bound frames are longer than the frame, so all are dropped.\n  - Ultra at 1080p: 33-45 fps; the scale stays 1.0 for all 19 windows.\n  - High at 3840x2160: 13.5 fps; the scale stays 1.0.\n  - Both windows are labelled 'cpu' while the renderer's CPU time is 1.3-1.6 ms.\n- PERF-C2, extended to all three maps (RIFT, BRIDGE, FRAY, RIFT): Chrome's renderer plus GPU processes hold 4.70 GB at Home and release none of it. That includes 658 MB of decoded audio, six 58.6 MB match beds among it, and 1.03 GB of decoded texture pixels from 117 cached models.\n\n**Minors: both reproduced.**\n- PERF-C3: detached HUD trees go x1 (348 nodes) to x2 (715).\n- PERF-C4: 42 live programs; the mid-match compile is intermittent (0 late programs in my 2 matches, 1 match of 4 in the reviewer's runs).\n\n**Verdict:** frame pacing at the default High preset is at League of Legends' tier on the reference machine. Two confirmed majors are open, so this dimension is NOT ON PAR. Score 7 stands.",
+ "gapStatus": [
+  {
+   "id": "B4",
+   "status": "closed",
+   "evidence": "Reproduced: `node _harness/perf_1080.mjs --prod --wait-idle 30 --q high,low,ultra --out _harness/_reports/closing_perf_verify_gate.json` (log closing_perf_verify_gate.log) gives GATE PASS, EXIT 0.\n- High, idle window (load 2.93 to 2.94): 60.1 fps, avg 16.64, p95 16.7, p99 16.8 ms, 0 of 601 frames dropped, renderer CPU 2.22 ms, 173 draws, 37 programs, 253k triangles.\n- High also read 60 fps with 0 dropped in the 4 busy windows before that one.\n- Low: 60.1 fps, 0 dropped, p95 16.7-16.8 in every window, including an idle one.\n- Match peak: 484k triangles at 1081.9 s, 273 draws, 40 programs, lateProgramsAfter60s [].\n- Memory: menu_2 to menu_5 flat; GPU process 1255 to 1276 MB (+1.7 %).\n- The dynres step was 'not measured: machine busy' in my run (load 3.22 to 6.22). The reviewer's idle run passed it.\n- Caveat: Ultra is ungated and misses 60 (PERF-C1)."
+  },
+  {
+   "id": "PERF-M1",
+   "status": "closed",
+   "evidence": "My gate's memory step: 4 identical rebuilds; targets 36 to 36, geometries 35 to 35, textures 159 to 159; GPU process +1.7 % (closing_perf_verify_gate.json memory). Session growth with different content is PERF-C2, not this leak."
+  },
+  {
+   "id": "PERF-M2",
+   "status": "closed",
+   "evidence": "The original defect is gone: the scale no longer sticks at 0.8.\n- My gate's dynres step: menu scale 1, match scale 1.\n- High 1080p with dynamic resolution on (closing_perf_verify_dyn.json): 60 fps, scale 1.0 throughout.\n- Side effect of fix step 4 (quality.ts:157-166): the controller is blind on a GPU-bound frame on Chrome/Metal (PERF-C1, confirmed)."
+  },
+  {
+   "id": "PERF-M2-step5",
+   "status": "closed",
+   "evidence": "Code read only: the Settings > Video toggle is at src/ui/screens/settings.tsx:119-121. Not click-tested by the reviewer or by me."
+  },
+  {
+   "id": "PERF-m1",
+   "status": "closed",
+   "evidence": "Reproduced (closing_perf_verify_detached.log, real client, dev-flag bundle):\n- Find match to live+3 s pulls 36.9 MB for the first match (glb 24.6, ogg 7.2, webp 3.9, png 0.7) and 11.7 MB for the second. The final review measured 55.7 MB.\n- Loading times are taken from the reviewer's closing_perf_longmatch.json (3.5-4.0 s)."
+  },
+  {
+   "id": "PERF-m2",
+   "status": "not_measured",
+   "evidence": "Neither the reviewer nor I ran `npm run package`. Strict content:check reports 1733 referenced asset files, 228.01 MB (closing_perf_verify_content_strict.log)."
+  },
+  {
+   "id": "PERF-m3",
+   "status": "closed",
+   "evidence": "Reproduced: `node _harness/e2e.mjs all --out _harness/_reports/closing_perf_verify_e2e.json --prefix closing_perf_verify_e2e` passes all 7 journeys (flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, store) with 0 console warnings or errors each, in 6.5 min."
+  },
+  {
+   "id": "PERF-m4",
+   "status": "closed",
+   "evidence": "Not re-run by me. The reviewer's probe_ctxloss PASS (closing_perf_ctxloss.json: restored in 409 ms, 0 console lines after the restore, mean absolute difference 1.65) is consistent with the code."
+  },
+  {
+   "id": "PERF-m5",
+   "status": "partly",
+   "evidence": "- Gate: peak 484k triangles, 40 programs, 0 late programs.\n- Real client (closing_perf_verify_detached.log): 40 and 42 live programs in 2 matches; 0 programs first built after 60 s in my 2 matches.\n- The reviewer saw 44 live programs and 2 late compiles ('chalk', 'vale_prop_vcol' at game 143 s) in 1 of 4 matches.\n- The live count includes the Home menu's cached programs.\n- See PERF-C4."
+  },
+  {
+   "id": "PERF-V1",
+   "status": "closed",
+   "evidence": "My gate: High p95 16.7 to 16.8 and Low p95 16.7 to 16.8 across 9 windows, all with 0 dropped frames, all read as PASS. No flip at the threshold."
+  }
+ ],
+ "findings": [
+  {
+   "id": "PERF-C1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "M",
+   "title": "Dynamic resolution stays blind when the GPU is the bottleneck on Chrome/Metal, and Ultra misses 60 fps on the reference M5",
+   "what": "On ANGLE Metal the EXT_disjoint_timer_query reading is far longer than the frame interval, even at a steady 60 fps.\n- quality.ts:159 drops every reading longer than the frame interval.\n- When a window had readings but none were kept, quality.ts:166 classes it as not GPU-bound, so `late && gpuBound` never fires.\n- The scale therefore never steps down when the GPU is the bottleneck: the one case the controller exists for.\n\nUltra at 1080p is GPU-bound on the M5 (renderer CPU 1.3-3.3 ms) and runs 33-51 fps, with frames alternating 33 and 16 ms.\n\nEvery new profile starts at High (src/session/settings.ts:65). No hardware detection exists (grep finds no deviceMemory, hardwareConcurrency or WEBGL_debug_renderer_info in src).\n\nResult: a Mac Chrome player whose GPU cannot carry the default High preset at their resolution gets no automatic help.",
+   "evidence": "Verifier's direct test: `node /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/verify/verify_dyn.mjs --sec 20` (production bench _harness/_prod/dist, RIFT t 900 seed 7, densest fight) wraps the live renderer's DynamicResolution.sample and logs every (interval, cpu, gpu) it is fed. Report: _harness/_reports/closing_perf_verify_dyn.json and .log (load 2.8-3.3).\n- High 1080p, dynamic resolution on: 60.0 fps, 0 of 1201 frames dropped. GPU readings p5 / p50 / p95 = 14.8 / 29.7 / 33.6 ms; 90.8 % are longer than the frame they were fed with.\n- Ultra 1080p, dynamic resolution on: 33.1 fps, 526 of 662 frames dropped. 100 % of the readings are over the interval (p50 114.5 ms), 0 kept. Renderer CPU 1.32 ms. All 19 one-second windows read scale 1 and bound 'cpu'; 0 scale changes.\n- High 3840x2160 (a GPU-bound stand-in for a weaker GPU at the default preset): 16.8 fps with dynamic resolution off, 13.5 fps with it on. 100 % of the readings are over the interval (p50 270 ms). Scale 1 in every window, bound 'cpu', CPU 1.58 ms.\n- Shots: _harness/_shots/closing_perf_verify_dyn_ultra_1920x1080_dyn1.png (HUD reads 'ultra 35 fps 1.3 ms cpu, scale 1') and closing_perf_verify_dyn_high_3840x2160_dyn1.png.\n\nGate (closing_perf_verify_gate.json): Ultra 45.1 and 43.6 fps, 150 / 166 frames dropped, p95 33.4 ms, renderer CPU 2.3-3.3 ms. The reviewer read 51.4 fps and the integration gate 40.7.\n\nThe gate's own dynres step at High, during a load spike (3.22 to 6.22), fell to 44-52 fps for about 25 s. GPU readings were 44-89 ms, the window was labelled 'cpu', and the scale held at 1.0.\n\nCode: src/render/quality.ts:155-170 (drop rule at :159, gpuBound at :166) and the header at :22-24, which explains the drop rule as a contention guard. src/render/renderer.ts:1005-1018.",
+   "gauge": "League of Legends targets 60 fps at 1080p on mid hardware (r12 B4). Riot ties its graphics settings to hardware tiers: the minimum Mac spec (M1, 8 GB unified memory) is paired with Low settings, the recommended spec with High (Riot support, minimum and recommended system requirements). LoL has no dynamic resolution, so the gauge is the result, not the mechanism: the default and top presets must hold 60 on the machines they are offered on.\n\nVALE offers Ultra on the reference M5 and it misses 60. It defaults every machine to High. And its one fps safety net cannot engage on Chrome/Metal.",
+   "fix": "1. Treat the GPU timer as untrusted for the session when, in on-target windows, most readings exceed the frame interval. With an untrusted timer, fall back to the CPU rule: a late window with renderer + pump CPU < 60 % of the target is GPU-bound. Step down 0.05.\n2. Add a perf_1080 --prod step that forces a GPU-bound frame (Ultra at 1080p, or High at 2x render scale) with dynamic resolution on. Assert the scale leaves base within 10 s and fps recovers to 58 or more.\n3. First-run calibration: 3 s at High on the Home vale. If p95 > 18 ms, start at Medium or Low, with a VALE-styled notice linking Settings.\n4. Rebalance Ultra (full AO, 4096 shadows) until it holds 60 on the reference machine, or gate it.",
+   "files": "src/render/quality.ts:150-170; src/render/renderer.ts:1000-1035; src/session/settings.ts:65; src/ui/screens/settings.tsx; _harness/perf_1080.mjs (dynres step)",
+   "verifierNote": "Reproduced by instrumenting the controller itself, not only from stats().gpuMs. Severity stays major because two facts are measured, not inferred: the top preset misses the 60 fps floor on the reference machine, and the safety net never fires on a GPU-bound frame (0 of 932 readings kept across Ultra and 4K High). Only the impact on weaker Macs is inferred.\n\nOne correction to the reviewer's wording. 'Never steps down' is too strong. The reviewer's own heavily loaded run (closing_perf_longmatch.json, load 55-119) did step to 0.85 and back. That happens when some readings land under a 33 ms late interval. In every clean GPU-bound case I measured, 100 % of the readings were dropped.\n\nThe code header (quality.ts:22-24) records the drop rule as deliberate, but it attributes the long readings to contention. My measurement shows they are the normal behaviour of the Metal timer (90.8 % over the interval at a steady, uncontended 60 fps). So the docs do not justify the consequence.\n\nNot verified: whether LoL's top preset holds 60+ on current Apple silicon."
+  },
+  {
+   "id": "PERF-C2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "size": "L",
+   "title": "A play session climbs to about 4.7 GB across Chrome's renderer and GPU processes and gives none of it back",
+   "what": "The audio buffer map (src/audio/index.ts:328) and the GLB model map (src/render/assets.ts:34) have no budget and no eviction. grep finds no buffers.delete or models.delete.\n- Every decoded music bed and cue stays as 48 kHz stereo float.\n- Every model's images stay decoded, with an uncompressed GPU copy. No KTX2 or Basis path exists in src/render or tools/build_content.ts.\n\nMemory steps up with each new map and only plateaus once the content runs out. After one pass over the three maps it sits at about 4.7 GB. Identical rebuilds are flat (PERF-M1 is closed), so this is unbudgeted cache, not a per-match leak.",
+   "evidence": "Verifier, extended to all maps: `node /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/verify/verify_mem.mjs --dev /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/closing_perf/devb --maps rift,bridge,fray,rift` gives _harness/_reports/closing_perf_verify_mem.json and .log. Samples are taken at Home after a forced GC; process footprints come from macOS `footprint`.\n\n| At Home after | 0 matches | RIFT | +BRIDGE | +FRAY | +RIFT |\n|---|---|---|---|---|---|\n| Renderer process (MB) | 124 | 1491 | 2099 | 2405 | 2438 |\n| GPU process (MB) | 787 | 1536 | 1954 | 2237 | 2263 |\n| Decoded audio (MB, buffers) | 0 | 361 (348) | 524 (497) | 657 (529) | 658 (530) |\n| Models / texture pixels (MB, RGBA) | 0 / 0 | 79 / 602 | 102 / 891 | 117 / 1029 | 117 / 1029 |\n\n- Six 58.6 MB match beds stay resident: mus_match_rift, mus_match_bridge and mus_match_fray, each with its _intense version.\n- JS heap is only 53-83 MB; the cost lives outside the heap.\n- Renderer plus GPU: 4.64 GB after three maps, 4.70 GB after the fourth match (+1.3 %).\n\nMatches the reviewer's RIFT-only run: 2282 + 2313 MB after 4 matches (closing_perf_memsplit.json). Control: gate memory step +1.7 % (closing_perf_verify_gate.json).",
+   "gauge": "LoL starts each game in a fresh game process, so memory returns to baseline after every match, and it ships its textures compressed for the GPU. Riot's minimum Mac spec is an M1 with 8 GB of unified memory (Riot support, minimum and recommended system requirements). On that machine VALE's two browser processes alone would hold about 4.7 GB of the 8 GB, which the GPU shares, after one pass over the three maps.",
+   "fix": "1. Ship model textures as KTX2 (UASTC for normal and ORM maps, ETC1S for albedo) and load them with KTX2Loader.\n2. Close each ImageBitmap after upload, and re-fetch on context restore (keep probe_ctxloss passing).\n3. Keep only the playing music bed decoded and free the previous one on a bed change, or stream beds through a media element. Keep cue buffers only for the current match's fighters plus the UI set.\n4. Give the model and cue caches a byte budget with eviction at match end; keep the Home showcase and the next match's set.\n5. Add a perf_1080 --prod step: RIFT, BRIDGE, FRAY, RIFT in one page. Assert renderer + GPU footprint at Home stays at or under 2.5 GB.",
+   "files": "src/audio/index.ts:328, 548-560, 784-831; src/render/assets.ts:30-90; src/render/actors.ts (template cache); src/render/renderer.ts (teardownMatch); tools/build_content.ts; _harness/perf_1080.mjs",
+   "verifierNote": "Reproduced and slightly worse than reported: 4.70 GB rather than 4.6, because BRIDGE and FRAY add their own beds and props. It plateaus once all content is cached (+1.3 % on a repeat RIFT), so this is a bounded cache, not an unbounded leak.\n\nSeverity stays major: the steady state of a normal session is more than half of LoL's minimum Mac memory, and none of it is released between matches. The effect on an 8 GB machine (swap, stutter, tab discard) is inferred; it was not measured, since only a 16 GB M5 was available.\n\nThe dev-flag bundle was used for the dev handle. The cost is content caches (audio, textures), which are the same in the production bundle."
+  },
+  {
+   "id": "PERF-C3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "M",
+   "title": "Each match leaves its whole in-match HUD tree in memory as detached DOM, plus 16 small skeleton textures",
+   "what": "After a match and the return to Home, the in-match HUD tree (`div.hud.hud--team.hud--map-right`, about 350 elements) stays alive as detached DOM, and the trees accumulate one per match.\n- Window listeners stay flat, so old HUDs do not react to input; the cost is memory only.\n- Separately, each identical whole match leaves 16 FloatType 8x8 bone DataTextures (reviewer's fullcycle).\n- actors.ts:1361 disposes only the actor's own model skeletons.",
+   "evidence": "Verifier re-run: `node /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/closing_perf/detached2.mjs --dev /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/closing_perf/devb --matches 2 --out _harness/_reports/closing_perf_verify_detached.json` (log closing_perf_verify_detached.log).\n- Detached HUD trees: x1 (348 nodes) after match 1, x2 (715) after match 2.\n- CDP Nodes at Home 239 to 1140 to 1790, while the document holds 185 elements.\n- JS listeners 125 to 434 to 671; window listeners 22 to 25 to 25.\n- Heap 66.2 to 70.2 MB.\n- Skeleton textures: reviewer's closing_perf_fullcycle.json ('texture 1015 8x8' x32 after cycles 2 and 3); not re-run.",
+   "gauge": "LoL's client returns to baseline after every game; nothing from a finished match survives into the next.",
+   "fix": "1. Take a heap snapshot to find the HUD's retainer, then clear it at match end (a long-lived signal, an Overlay entry, or a subscription).\n2. Dispose every skinned clone's Skeleton at teardown (LOD bodies, crowd templates, structures).\n3. Assert in e2e that no `.hud` tree survives in DOM.getDetachedDomNodes after 2 matches.",
+   "files": "src/ui/hud/index.tsx:100-175; src/ui/screens/match.tsx:45-70; src/ui/app_ctx.ts:27-47; src/render/actors.ts:1354-1366; src/render/crowd.ts:620-650; _harness/e2e.mjs",
+   "verifierNote": "Reproduced with the same CDP method, numbers within 3 %. A few MB per match: minor is right."
+  },
+  {
+   "id": "PERF-C4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "size": "S",
+   "title": "The real client goes over the 40-program count that the gate's fixed seats hold, and sometimes compiles shaders mid-match",
+   "what": "The gate's match-peak step plays one fixed seat set and reads exactly 40 programs. Real matches with other fighters reach 42-44 live programs, which includes the menu's cached programs.\nIn one of the reviewer's 4 matches, 2 programs were first built at game 143 s: MeshStandardMaterial 'chalk' and 'vale_prop_vcol'. A first-use compile on ANGLE/Metal stalls that frame.",
+   "evidence": "- Verifier (closing_perf_verify_detached.log): m1 40 seen / max live 40, m2 42 seen / max live 42; 0 programs first built after 60 s in either match.\n- Reviewer: closing_perf_detached.json m2_programs ('143.1:MeshStandardMaterial/chalk', '143.1:MeshStandardMaterial/vale_prop_vcol'), and closing_perf_longmatch.json at 42-44.\n- My gate: peak 40 programs, lateProgramsAfter60s [].",
+   "gauge": "LoL shows no shader-compile hitch in a fight: every material a match can show is ready before the game starts.",
+   "fix": "1. compileAsync every material variant the match can spawn during the loading screen: all lobby fighters and skins, chalk marks, placed props.\n2. Run the gate's match-peak step over 3 seeds with rotated seats, and assert 0 programs first seen after loading.\n3. Report the menu's cached programs apart from the match's own.",
+   "files": "src/render/renderer.ts (preload / warm-up, :1240-1290); src/render/terrain.ts (props); _harness/perf_1080.mjs (matchPeak); _harness/web/render_bench.ts (buildSetup seats)",
+   "verifierNote": "The over-count is reproduced (42 live). The mid-match compile is intermittent: 0 of my 2 matches, 1 of the reviewer's 4. Its hitch length was never timed. Minor is right."
+  }
+ ],
+ "missed": []
+}

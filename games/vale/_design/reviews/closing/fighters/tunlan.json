@@ -1,0 +1,148 @@
+{
+ "fighter": "tunlan",
+ "score": 6.5,
+ "summary": "Not ON PAR (6.5/10, two confirmed majors plus one major upgraded from the reviewer's minors). Her silhouette is a real strength: the 1.1 m flat lampshade over a thin robe is unique in the roster. The three skins separate at the game camera, and there is no sensitivity blocker. The mask is carved wood with closed lids and a closed half-smile. The cheek grooves read as carved facets, not tear streaks.\n\nWhat holds her below League tier:\n- (C2, confirmed) The two fear casts snap pose to pose. At in-game speed (1.33x and 1.78x through actors.ts:1000-1004), the hat jumps 0.5-0.7 m within about one display frame, then freezes for about 0.3 s, then pops back.\n- (C3, confirmed) All three splashes are one static victory render. None has the brief's hound shadow, and the lantern is not the focal light. The Lamplit deluxe card reads as a beige version of the base.\n- (recall, upgraded to major) Recall is a frozen pose (0.00 m per frame) played through the full 7 s. That matches the majors given to Dunsom, Ilsheta, Nurrow and Rishal.\n\nC1 is downgraded to minor:\n- The robe is darker than the lane (L* 28-33 against 40-42), but it separates at dE 17.\n- Her value range (L* 17-87) is wider than the ground's, which is the r12 gauge itself.\n- Her hands clear the brim on the strike frames.\n- Much of the darkness is authored: the concept-driven robe #7E4E42 is L* 38, against the brief's L* 47.",
+ "gapStatus": [
+  {
+   "id": "7. Death clip vs the brief (bow, hat tips off and rolls, folds to the ground)",
+   "status": "partly",
+   "evidence": "The art pass already scored this item 'partly' (art/renders/fighters/tunlan/_open.json), and the GLB is unchanged since commit b8b6d35c (10-28 10:42). The reviewer's 'still_open' overstates it.\n- Delivered: the hat tips off, falls and settles.\n- Missing: the bow. The head drops only 3 cm over f0-8.\n- Not as briefed: she ends on all fours, not at rest (hips 0.41 m, head 0.61 m, closing_tunlan_clip_motion.txt).\n- The hat pops 0.35 m off the head at f17->18.\nShot: _harness/_shots/closing_tunlan_death_row.png."
+  },
+  {
+   "id": "8. Skins weakly differentiated",
+   "status": "partly",
+   "evidence": "At the game camera the skins differ clearly (closing_tunlan_lineup.png). The cards are still one pose, yaw and crop. Lamplit's hat reads beige, with no lit panels, in art/out/fighters/tunlan/tunlan_lamplit_splash.png. Base vs Lamplit splash figure: mean abs diff 14.4; portrait face: 7.4 (closing_tunlan_skin_cards_diff.txt). I re-viewed all three splashes and agree."
+  },
+  {
+   "id": "9. Polish: HP bar overlaps the brim; taunt nearly static",
+   "status": "partly",
+   "evidence": "Taunt is fixed: hops 16 cm, hands up to 6.4 m/s (closing_tunlan_clip_motion.txt). The HP bar is not: src/render/actors.ts:705 is still barHeight = art.height + 0.35 with height 2.10. In closing_tunlan_match_self_game_x4.png the bar's under-panel sits on the far brim by a few px."
+  },
+  {
+   "id": "11. Lamp slot much larger than the brief's 4 x 1 cm notch",
+   "status": "open",
+   "evidence": "The lens is unchanged. lineup accent is 2.45 / 1.84 / 1.23 / 1.98 % by facing (closing_tunlan_lineup.json), against the brief's ~0.15 %, though it is inside the 5 % budget. accentOk is now true. The lens is the deliberate replacement facing cue (tunlan.py:21-23), so most of what remains is a brief-vs-model sync. In match it still reads as a white bean on the front brim (closing_tunlan_verify_self_x5.png)."
+  },
+  {
+   "id": "Lamplit top value band just under the floor",
+   "status": "open",
+   "evidence": "Fresh lineup_qa (closing_tunlan_lineup.json): tunlan_lamplit facing 0 bands 69.9 / 58.4 / 29.4, valueGradientOk false. Base (70.9 / 60.1 / 32.3) and Noon Fair (70.4 / 61.3 / 32.1) pass. This is a 0.1 L* miss."
+  }
+ ],
+ "findings": [
+  {
+   "id": "TUN-C2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "cast_a1 and cast_ult snap pose to pose: the hat and upper body jump about 0.5-0.7 m in one display frame, freeze, then pop back",
+   "what": "Both fear casts go from the wind-up to the lunge in one baked frame, with no breakdown or overshoot. The hands then hold dead still until a recovery that pops again.\n\nIn game the clips are time-warped so that the 40 % impact lands on castTime 0.3 s (actors.ts:1000-1004):\n- cast_ult plays at 1.78x;\n- cast_a1 plays at 1.33x.\n\nAt 60 Hz the hat, the largest shape on screen, moves 0.36-0.62 m in one displayed frame (30-50 px at 82 px/m). It then holds frozen for 0.25-0.30 s.\n\nThe brief's 'breathing' wind-up cannot read in game at all, because the whole wind-up is about 0.25 s. The failure the player sees is the pop and the dead hold.",
+   "evidence": "My own FK sampling of art/out/fighters/tunlan/tunlan.glb (_harness/_reports/closing_tunlan_verify_measure.txt \u00a7C2). Keys are baked per frame, LINEAR.\n\ncast_ult:\n- f14->15: hat (0.00, 1.75, -0.35) -> (-0.02, 1.71, 0.35) = 0.70 m; hand.R 1.04 m; head 0.47 m;\n- hands 0.00 m per frame over f16-f32;\n- f32->33: 0.41 m pop.\n\ncast_a1:\n- f10->11: hat 0.54 m, hand.R 0.64 m (neighbouring frames 0.05 m or less);\n- f22->23: recovery 0.41 m.\n\nRoster popcount: Tunlan has 4 snaps; 10 of the 13 others have 0 (closing_tunlan_snaps_roster.txt).\n\nIn-game: closing_combat_c_kit_tunlan_ult.jpg f7->f9 (crop _harness/_shots/closing_tunlan_verify_ult_snap_strip.png). The disc flips from tipped-back to lunged-forward between two 30 fps captures.",
+   "gauge": "r12 \u00a75 / M3: anticipation, then a release in 2-4 frames, then a follow-through of at least 4 frames. LoL holds are moving holds. Tunlan's release takes under one 30 fps frame, and her holds are frozen.",
+   "fix": "Re-key the impact and recovery of cast_a1 and cast_ult in art/blender/fighters/tunlan.py:\n- a 2-frame breakdown into the lunge, with about 10 % overshoot;\n- a 4-6 frame settle in which the rigid hat lags the head by 1-2 frames;\n- a slow drift or finger ripple through the f16-f30 ult hold and the f12-f22 a1 hold;\n- recoveries eased over 5-6 frames.\nAdd an art-QA gate: no socket travels more than 0.3 m in one frame between near-still frames.\nThe f0-f10 'breathing' wind-up is low priority, because it plays in about 0.25 s in game.",
+   "size": "M",
+   "verifierNote": "I tried to refute this on the grounds that, in game, the pop sits inside the purple wind-up burst and that the holds are short. The data stands:\n- the jump moves the dominant disc by about half its diameter in one display frame;\n- it happens on both signature casts;\n- Tunlan is the roster outlier.\nI keep it major, consistent with the motion-polish majors given to Burdam, Kemdo, Nurrow and Lisvel. I narrowed the fix: the breathing-hold part of the brief is not visible in game."
+  },
+  {
+   "id": "TUN-C3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "All three splashes are one static victory render with no hound shadow; the lantern is not the focal light, and the Lamplit deluxe card reads as a beige version of the base",
+   "what": "base, Lamplit and Noon Fair share one pose, yaw and crop: victory at t 0.92, standing and looking down at her cupped hands, on the right third. The brief's showpiece is a great hound shadow thrown on the backdrop, with the lantern as the brightest point, clear of the UI side. It is absent.\n\nThe lantern core is no brighter than the plate's highlights. Luma is capped near 200 across the whole frame, so nothing reads as a light source.\n\nLamplit's promised walnut shade with panels lit from within renders as a pale beige hat on a beige robe.",
+   "evidence": "Re-viewed art/out/fighters/tunlan/splash.png, tunlan_lamplit_splash.png and tunlan_noon_fair_splash.png.\n\nMy luma probe (_harness/_reports/closing_tunlan_verify_measure.txt \u00a7C3), lantern box max vs frame max:\n- base: 199 vs 203 at (836, 467) in the backdrop; 44 % of the top 0.1 % of pixels in the left (UI) half;\n- Lamplit: 200 vs 204; 74 % in the left half;\n- Noon Fair: 198 vs 199.\n\nThe reviewer's diff: base vs Lamplit figure mean abs diff 14.4 (closing_tunlan_skin_cards_diff.txt).\n\nThe same issue was confirmed major for every other fighter verified so far (Ardit M1, Dunsom, Ervet M1, Odrum M4, Nurrow M1 and others), and deluxe palette swaps were major for Burdam, Hesmi, Kemdo and Rishal.",
+   "gauge": "Every LoL skin ships its own splash composition with a clear focal light, and a premium skin's card is unmistakable from the base.",
+   "fix": "1. Base: pose from the Hound Shadow hold or the hound beat of idle_lobby. Make the lantern the key and brightest point, on the right half, with a projected hound-shadow layer across the dusk plate.\n2. Lamplit: a warm practical inside the shade so the panels glow by lighting (accent stays the only emitter). Camera below the brim. Violet shadow shapes in its vfxTint #6A5C7A.\n3. Noon Fair: puppet rods in hand on the fair plate.\n4. Give each skin its own pose and yaw.\n5. Raise samples or denoise the figure pass.",
+   "files": "art/blender/fighters/tunlan.py (SPLASH, per-skin overrides), art/blender/portraits.py, art/out/fighters/tunlan/*splash.png, *portrait.png",
+   "size": "L",
+   "verifierNote": "Reproduced from the source PNGs. The lantern is never the frame maximum, the hound-shadow layer does not exist, and the three cards share one pose. Severity matches the roster ruling for splashes."
+  },
+  {
+   "id": "TUN-c4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Recall is a frozen pose played through the whole 7 s recall (upgraded from minor)",
+   "what": "The 60-frame recall loop has no motion. Every limb channel is constant or within about 2\u00b0 of quantisation noise, so she stands as a statue for 7 s.\n\nThe brief's recall, 'cups both hands around the lantern and blows it out', is not performed.",
+   "evidence": "Per-frame displacement of hand.R, x_hat, head and chest is 0.00 m for all 60 frames (_harness/_reports/closing_tunlan_verify_measure.txt \u00a7Recall).\n\nChannels in tunlan.glb's recall clip:\n- thighs, shins, spine, hips and fingers: STEP, 2 keys, constant;\n- arms, hands, chest, neck and head: quaternion deviation of 554/32767 or less.\n\nThe reviewer's own number: max excursion 0.017 m (closing_tunlan_recall_idle_roster.txt), against Ervet 0.566, Kemdo 0.270 and Odrum 0.120.",
+   "gauge": "A LoL recall is a 6-8 s authored performance with a beginning, a loop with motion, and a pay-off. It is never a held T-pose-like stand.",
+   "fix": "Author the brief's recall in art/blender/fighters/tunlan.py:\n- both hands rise and cup the lantern;\n- a slow breathing loop of the hands around the glow, with the hat dipping;\n- a final blow that dims the accent for the teleport frame.\nPlay it through the full recall duration.",
+   "size": "M",
+   "verifierNote": "The reviewer listed this among the minors. Frozen recalls were confirmed major for Dunsom, Ilsheta, Nurrow and Rishal, so I raise it to major for consistency. The measurement is the reviewer's, and I reproduced it independently from the GLB channels."
+  },
+  {
+   "id": "TUN-C1",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "In match the robe renders darker than the lane and well below the brief's mid band, and the hands are often under the brim",
+   "what": "The disc reads at L* 85 and the dusty-rose robe at L* 28-33, against a lane of L* 40-42. The brief's mid band is 45-65.\n\nPart of this is authored. The Art 2.0 robe follows the concept, cloth #7E4E42 at L* 38 and 48 % saturation (tunlan.py:151, 'the concept's look wins'), where the brief asks for #7C6C66 at L* 47 and 18 %. The match light takes off another ~8-12 L*.\n\nThe hands sit under the 0.55 m brim in roughly 40-65 % of sampled idle and cast poses.",
+   "evidence": "My own boxes on _harness/_shots/closing_tunlan_match_self_game.png (_harness/_reports/closing_tunlan_verify_measure.txt \u00a7C1):\n- robe L* 29.5 (front 27.6, left 33.1);\n- disc L* 85.1;\n- lane L* 41.5 / 40.4;\n- robe vs lane dE76 17.6 / 17.0.\n\nPixel grid: robe texels around #6E3731.\n\nShots: crop _harness/_shots/closing_tunlan_verify_self_x5.png, and closing_tunlan_attack_gamecam_strip.png, where frames 3-4 show both pale hands clear of the brim with the magenta flash.\n\nHand-occlusion estimate: closing_tunlan_hand_occlusion.txt.",
+   "gauge": "r12 Characters row: a champion's value range is wider than the ground's. Tunlan's is (L* 17-87 against 36-46), so the literal gauge is met. At default zoom the cast should read from the body before the VFX lands. Tunlan's partly reads through hands that clear the brim at impact, plus the VFX.",
+   "fix": "1. Lift the robe albedo toward the brief's cloth value (L* 45 or above, saturation under 30 %), or give the sleeves cloth2 linen edge bands so the arms carry a pale edge.\n2. Optionally, a small warm under-brim fill in CHAR_LIGHT (src/render/lighting.ts), never the accent hue.\n3. Optionally, a match-sun mode in art/tools/lineup_qa.py so the value gate sees the match light.",
+   "files": "art/blender/fighters/tunlan.py:151 (cloth), src/render/lighting.ts (CHAR_LIGHT), art/tools/lineup_qa.py",
+   "size": "S",
+   "verifierNote": "Downgraded from major. The measurements reproduce, but three of the reviewer's claims are overstated:\n- 'Body barely reads': the robe separates from the lane at dE 17, with both value and hue contrast.\n- 'Auto-attack frames nearly identical': the reviewer's own strip shows the hands out on the strike frames.\n- The cause: much of the darkness is the authored, concept-driven robe colour, not only self-shadow, so lighting-only fixes would miss it.\nThe brief itself designs her as 'a thin vertical under a flat horizontal disc'. This matches Nurrow m1 and Kemdo M2, which were rated minor."
+  },
+  {
+   "id": "TUN-c1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Death has no opening bow, the hat pops off the head in one frame, and she ends on hands and knees",
+   "what": "No bow: the head drops 3 cm over f0-8. The hat tilts and re-levels, then leaves the head with a one-frame jump (x_hat 0.35 m at f17->18, up-axis 0.98->0.75) and falls. The final pose is kneeling, head down, on all fours, not at rest.",
+   "evidence": "closing_tunlan_clip_motion.txt DEATH rows (hat-to-head distance 0.29->0.49 m at f17->18; f45 hips 0.41 m, head 0.61 m). My FK run reproduces the x_hat 0.35 m jump. Shot: _harness/_shots/closing_tunlan_death_row.png.",
+   "gauge": "A LoL death settles into an unmistakable collapsed rest pose, and props come away with readable arcs.",
+   "fix": "Add a 6-8 frame bow. Let the hat lift off over 3-4 frames with a small spin and roll. End her folded on her side or face-down at rest (tunlan.py death block).",
+   "size": "S",
+   "verifierNote": "Reproduced. The hat-off-and-settle part of the brief is delivered, so leftover 7 is 'partly', as the art pass recorded."
+  },
+  {
+   "id": "TUN-c2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The overhead HP bar's under-panel covers the far brim",
+   "what": "The bar anchor is art.height + 0.35 = 2.45 m, and the disc rises to about 1.95-2.0 m. At 1080p the bar's dark under-panel sits on the back of the brim by roughly 6-9 px.",
+   "evidence": "src/render/actors.ts:705; closing_tunlan_measure.txt (column x=965); visible in _harness/_shots/closing_tunlan_match_self_game_x4.png and closing_tunlan_verify_self_x5.png.",
+   "gauge": "LoL overhead bars clear the champion's silhouette at default zoom.",
+   "fix": "Raise Tunlan's art.height or add a per-fighter bar offset of about 0.15 m (content/fighters/tunlan.json art).",
+   "size": "S",
+   "verifierNote": "Reproduced in the crop."
+  },
+  {
+   "id": "TUN-c3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "In the run cycle the dark leggings break through the robe hem",
+   "what": "On the passing frames the leg swings through the skirt's side and front split. The dark legging shows through the dusty-rose panel instead of the hem swinging over it.",
+   "evidence": "_harness/_shots/closing_tunlan_run_legs_x4.png (frames 1-2: legging pierces the panel); RUN rows in closing_tunlan_clip_motion.txt.",
+   "gauge": "LoL robes cover the legs in motion, with skirt bones or authored hem lag.",
+   "fix": "Widen the skirt weights at the hem toward the hips, or add the brief's single front-panel sway bone with hem lag.",
+   "size": "S",
+   "verifierNote": "Visible in the cited shot."
+  },
+  {
+   "id": "TUN-c5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The head reads as a box with a cracked carved face in close views",
+   "what": "The walnut head-box and the long faceted mask read as a carved box puppet. The side-plate and cheek grooves (tunlan.py:539-542) run from the outer eye corner down the cheek. With the maroon-shaded eye slits in the 3/4 splash view, this edges toward a 'cracked doll' read.",
+   "evidence": "_harness/_shots/closing_tunlan_portrait_face_x3.png, closing_tunlan_splash_head_x2.png, and my crop closing_tunlan_verify_splash_face_x4.png. The icon crop closing_tunlan_verify_icon_x3.png reads calm (closed lids, closed smile).",
+   "gauge": "LoL masked champions keep one clean, intended read for the face at portrait and splash size.",
+   "fix": "Stop the side-plate groove at the brow line or move it onto the plate's outer edge so nothing runs down from the eye. Lighten the eye-slit paint from maroon to ink-brown.",
+   "size": "S",
+   "verifierNote": "Not a sensitivity blocker. The face has closed lids, a nose and a closed half-smile, and the grooves are carved facets, not painted ink streaks. The groove placement sits near owner ruling 1 ('tear-streaked masks' read as horror), so it is worth the small fix."
+  },
+  {
+   "id": "TUN-c6",
+   "verdict": "refuted",
+   "severity": "minor",
+   "title": "The lantern hangs at her right side, not in front as the brief says",
+   "what": "The reviewer flagged that the lantern does not hang in front of the mask.",
+   "evidence": "art/blender/fighters/tunlan.py:13-23 documents the deliberate Art 2.0 call: 'The lantern hangs from the brim at her RIGHT side as painted' (concept wins). The facing cue moved to the front-brim lens.\n\nAccent passes every facing (closing_tunlan_lineup.json, accentOk true), and the lantern reads clearly in the portrait and icon.",
+   "gauge": "Not a quality gap against LoL. It is a brief-vs-model text mismatch.",
+   "fix": "Sync _design/fighters/tunlan.md \u00a72 and \u00a74 with the approved concept: lantern at the right brim, front lens as the facing cue.",
+   "size": "S",
+   "verifierNote": "This is an intentional, documented design decision with a working replacement cue. It is a doc-sync item, not an art defect."
+  }
+ ],
+ "missed": [
+  "No blocker-class sensitivity issue found. The hat is a flat disc with a stepped crown, with no hood or point. The mask is not horror, hockey or blank in the portrait, icon or splash. The Lamplit and Noon Fair hats are flat discs too. Not a blocker but noted: the cheek grooves start at the outer eye corner (TUN-c5).",
+  "Under-severity: the frozen 7 s recall was listed as a minor. I raised it to major (TUN-c4) for roster consistency."
+ ]
+}
