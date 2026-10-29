@@ -1,0 +1,185 @@
+{
+ "fighter": "ervet",
+ "score": 6.5,
+ "summary": "Verified the Ervet art review against the current build (ervet.glb from c015bf50; the served catalog hashes 8427291c4f82 / 96be2631d60e / 118eba3bf523 match art/out). Not on par: score 6.5 (below 8) and one major still open.\n\nM1 is confirmed. All three splashes are the same victory stand with the same camera. The figure carries render grain: high-pass RMS 5.5-6.5 in the figure box against 0.3-0.7 on the painted plate. Nothing in the figure goes above luma 204.\n\nM2 is downgraded to minor. Its central claim is wrong. The reviewer measured only vertical motion. In idle, the head sways 8.0 cm side to side and 5.8 cm front to back. By 3D range that is the second-liveliest idle of the 16 fighters (head 8.5 cm against a roster median of 3.8 cm). Stun and run sit at the roster median. What remains is idle_lobby: it is the roster's most static showcase idle, and the sword turns only 8.4 degrees.\n\nM3 is downgraded to minor. forms.great has no stats, no kit and no vfx, so the 6 s Great form plays exactly like the base form. Nothing the player or the enemy needs to know is hidden by the look. The real readability gap is elsewhere: the lodged-shard mark the ult puts on enemies never reaches the renderer or the HUD. That belongs to combat and VFX, not to character art.\n\nM4 is downgraded to minor. The ORM at 256 px is shared by 6 of 16 fighters. The blade's roughness of 0.4 is a documented choice (ervet.py:35). The box column under the crest is the concept's own design (ervet.py:732-757). The blade still reads as a long pale sword in the match and in the 424 px showcase. What remains is finish: the blade has a narrow value range and does not read as glass, and the back of the helm reads as a box from the high camera.\n\nAll six minors are confirmed. Leftovers: 4 closed, 4 open, 1 partly. The reviewer marked 'one dash clip serves Quick Jab and Whole Again' as fixed, but it is only partly fixed. Quick Jab's dash effect still has present.anim 'dash', so the 0.17 s jab plays the ult's leap clip (hips up to 1.40 m, blade overhead).\n\nSensitivity: PASS, re-checked on the portrait, the icon and the head sheets. The closed chalk visor carries a lit star and cheek lines with no dark eye holes. The crest is a low transverse arch with no upward point. There is no hood.",
+ "gapStatus": [
+  {
+   "id": "_progress.md Oct 20 21:22 open: one dash clip serves Quick Jab and Whole Again",
+   "status": "partly",
+   "evidence": "The reviewer said fixed. Only the cast phase is fixed. content/fighters/ervet.json forms.hilt.kit.a1 has present.anim cast_a1, which plays during the 0.1 s cast time. But its effects[0] dash still has present.anim \"dash\". The sim sets anim from the dash effect's present (src/sim/movement.ts:459), and the renderer plays that role over the dash's duration (src/render/actors.ts:914, 1005-1007). So the 3 m jab (0.17 s at 18 m/s) plays the same 'dash' clip as the Whole Again leap. In that clip the hips rise 0.82 -> 1.40 m and the blade tip goes up to y 3.51 m (_harness/_reports/closing_ervet_clip_perframe.txt, == dash)."
+  },
+  {
+   "id": "_progress.md Oct 20 21:22 open: victory has no break-and-reform (no in-clip form swap)",
+   "status": "open",
+   "evidence": "Confirmed. No clip drives a form swap: actors.ts:805-809 swaps forms only from the sim form. The victory hold f40-55 has the blade tip at y 0.11 m (closing_ervet_clip_perframe.txt, == victory)."
+  },
+  {
+   "id": "_progress.md Oct 20 21:22 open: hero renders lift the lames to ~44 % saturation",
+   "status": "open",
+   "evidence": "Still open. My samples of the right-hand mantle lames in portrait.png read HSV saturation 0.48-0.59 at V 78-83, hue 208-209 (4 boxes). The left lames read 0.32-0.36. Source: _harness/_reports/closing_ervet_verify_lames_sat.txt. The brief's limit (section 5) is 40 % HSV.\n\nThe reviewer called this 'worse'. I cannot confirm a regression, because the art lane's 44 % came from an unrecorded sample: its note says 'in the cool sky light'. The game material is at 13 %."
+  },
+  {
+   "id": "_progress.md Oct 20 11:22 open: splash chalk blows out (helm reads white)",
+   "status": "closed",
+   "evidence": "My figure-box luma (1030-1360 x 100-840): p99 197/197/196 and max 204/203/204 for base, Stillwater and Lamplit (_harness/_reports/closing_ervet_verify_splash.json). Nothing clips."
+  },
+  {
+   "id": "_progress.md Oct 20 11:22 open: coat back is plain",
+   "status": "closed",
+   "evidence": "art/renders/fighters/ervet/three_ervet.png (Oct 29 04:10), bottom row, back view: a large blued back plate with a chevron and the split tails."
+  },
+  {
+   "id": "integ2_chars_verify1 obs 1: dist-catalog serves the pre-change ervet_lamplit.glb",
+   "status": "closed",
+   "evidence": "dist-catalog/schema-1/2026.10.1/catalog.json lists 8427291c4f82-ervet.glb, 96be2631d60e-ervet_stillwater.glb and 118eba3bf523-ervet_lamplit.glb. The sha256 prefixes of the current art/out GLBs are the same."
+  },
+  {
+   "id": "integ2_chars_verify1 obs 2: the Whole Again VFX draws a 3.4-3.5 m oversized blade ghost",
+   "status": "closed",
+   "evidence": "In content/vfx.json, the mesh 'blade' layer peaks at scale 1.3 in ervet_ult_shards_home and 1.32 in ervet_ult_whole, with stretch [0.52,1,1]. The 'blade' shape is 1 m along Z (src/render/vfx/shapes.ts:61-66), so the ghost is 1.30-1.32 m long. That matches the model blade (guard to tip 1.32 m by FK)."
+  },
+  {
+   "id": "integ2_chars_verify1 obs 3: Great-form seams rarely visible during the run",
+   "status": "open",
+   "evidence": "Still true. In _harness/_shots/integ_chars_verify1_ervet_forms_close_strip.png, base and Great look the same in the run. Severity is minor: forms.great carries no stats and no kit (see ervet-M3)."
+  },
+  {
+   "id": "integ_chars_verify1 note: three_load_test base FAIL 'recall: duration 9.00 s out of range'",
+   "status": "open",
+   "evidence": "I re-ran it: FAIL (1), 'recall: duration 9.00 s out of range' (_harness/_reports/closing_ervet_verify_load_test.txt). Ervet's 9 s recall is the only clip over 6 s in the roster; the others are 2-6 s (closing_ervet_verify_clip_durations.txt). RIFT recall is 7 s (content/modes.json:28)."
+  }
+ ],
+ "findings": [
+  {
+   "id": "ervet-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "All three splashes reuse one grainy static render of the same stand pose",
+   "what": "Base, Stillwater and Lamplit share one Cycles render of the victory hold, with the same pose, camera and framing, composited on painted plates. Only the palette and the plate change. The figure carries render speckle and never goes above luma 204, so the visor, blade and crossguard never get a highlight. The greaves show maroon under-layer blotches. The blade point is not planted.",
+   "evidence": "My own measurement (_harness/_reports/closing_ervet_verify_splash.json, figure box 1030-1360 x 100-840):\n- 3x3 high-pass RMS: figure 6.15 / 5.54 / 6.46 against plate 0.32 / 0.38 / 0.67;\n- figure p50 100-103, p99 196-197, max 203-204;\n- figure MAD against the base: Stillwater 28.8/255, Lamplit 27.4/255. This comes from palette and plate, not from pose.\n\n_harness/_shots/closing_ervet_splash_figure_3up.png shows the identical pose. closing_ervet_splash_upper_x2.png shows the speckle on the pauldron and cloth.\n\nThe cause is the single SPLASH dict in art/blender/fighters/ervet.py:88 (victory t 0.96). In that hold the FK tip sits at y +0.11 m.",
+   "gauge": "In League, the base and every skin have their own painted illustration. Each has its own staged pose and composition, a clean finish, and highlights that reach near white.",
+   "fix": "Stage each skin separately in ervet.py: its own SPLASH clip, t, yaw and light, built from Ervet's own moments. For the base, mid-Shatter with the eight shards fanned. For Stillwater, the river-glass blade raised in the Fallen Shaft shallows. For Lamplit, the pommel lamp cage swinging under the Lamp Dome.\n\nRender at high samples with a denoise, then paint over the figure. Let the highlights reach about 230. The luma ceiling is a shared grade, so that change goes in common/render.py and common/plates.py for the whole roster.",
+   "files": "art/blender/fighters/ervet.py (SPLASH, SKINS); art/blender/common/render.py; art/blender/common/plates.py; art/out/fighters/ervet/*splash.png, *portrait.png",
+   "size": "L",
+   "verifierNote": "Confirmed with my own script and the 3-up. This is a pipeline issue across the roster: Ardit's verified review found the same thing. It is still a major for Ervet, because her splash, loading card and store tiles all come from it."
+  },
+  {
+   "id": "ervet-M2",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The showcase idle_lobby barely moves the sword, and the brief's 'turn the blade to the light' beat is weak",
+   "what": "The claim that idle, stun and run are close to frozen does not hold. The reviewer measured only vertical (y) motion. Measured in 3D:\n- In idle, the head sways about 8 cm side to side and 6 cm front to back over 2.4 s, and the chest 6 cm. That is about 7 px at 82 px/m.\n- Stun and run are at the roster median.\n\nOne real gap is left. idle_lobby, the draft showcase at 424 px, holds the hips and chest still. The right hand and the sword barely move: the tip moves 1.7 cm and the blade twists 8.4 degrees. So the brief's 'turns the grounded sword to catch the light' does not read. The knuckle tap (left hand, 21 cm) and the head tilt (16.8 degrees) are present.",
+   "evidence": "3D bone ranges across all 16 GLBs (_harness/_reports/closing_ervet_verify_roster_motion.json; tool closing_ervet_verify_tools/roster_motion.mjs).\n\nidle, Ervet against the roster median:\n- head 8.5 cm vs 3.8; chest 6.2 vs 3.0; hand.L 12.3 vs 4.2;\n- 15th of 16 on each, so only Hesmi moves more.\n- Per-frame head positions: _harness/_reports/closing_ervet_verify_idle_head.txt (x -4.5..+3.5 cm, z 2.6..8.4 cm).\n\nstunned:\n- head 13.9 cm vs a median of 10.5;\n- prop 4.4 cm vs 5.6.\n\nrun:\n- hips y 3.6 cm vs 3.3; prop.R 10.8 cm vs 10.7.\n\nidle_lobby (the roster's least motion on four of its six bone measures):\n- hips 0 and chest 0;\n- hand.R 0.1 cm, prop.R 0.9 cm, tip 1.7 cm;\n- roster medians: hand.R 16.7 cm, prop.R 18.5 cm.",
+   "gauge": "A League champion's idle reads as alive at the gameplay camera, and its showcase or select animation sells one character beat. Ervet's in-match idle meets that bar about as well as the rest of VALE's roster. Her showcase beat is the weak one.",
+   "fix": "In idle_lobby, make the sword turn a real 35-45 degree rotation about the grounded point so the flat flashes toward the camera. Add a small hip shift (2-3 cm) under it. The tap and the head tilt can stay. Idle fidget variants would be a roster-wide renderer feature, not an Ervet fix.",
+   "files": "art/blender/fighters/ervet.py (BLOCKS: idle_lobby)",
+   "size": "S",
+   "verifierNote": "Downgraded from major to minor. The headline claim is refuted: the reviewer's own closing_ervet_clip_rot.json already shows a 13.2 degree head rotation in idle. The 6 cm head nod in stun is about 5 px at 82 px/m, not 3."
+  },
+  {
+   "id": "ervet-M3",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "Whole Again's Great form looks like the base form (seams about 1.3 px)",
+   "what": "The Great form's only visible marker is the 1.6 cm shard-seam ribbons, and they vanish at the game camera. That part of the claim is true.\n\nThe gameplay claim is wrong. forms.great carries no stats, no kit override and no attack range. Shard tear-out is a passive trigger that fires in any form. So for 6 s Ervet plays exactly as in the base form, and the look hides nothing the player or the enemy needs. The ult's reform moment does read: ervet_ult_shards_home condenses a 1.3 m blade.\n\nWhat stays hidden is cosmetic: the fantasy of the blade being whole again.",
+   "evidence": "content/fighters/ervet.json kit.passive.forms.great is {\"name\":\"Whole Again\"}. Compare forms.hilt: stats moveSpeedPct 0.2, attackSpeed 0.3, armor -30, resist -30, attackRange 1.7.\n\nsrc/sim/status.ts:348-364 (setForm) swaps the kit and stats only from the form def.\n\nThe tear-out trigger sits on the passive (ervet.json kit.passive.triggers[1], cond targetHasMark).\n\nBase and Great look the same in the run: _harness/_shots/integ_chars_verify1_ervet_forms_close_strip.png.",
+   "gauge": "In League, an ult form that changes how a champion fights reads at a glance. Ervet's Great form changes nothing mechanically, so the gauge applies only to its fantasy.",
+   "fix": "Hold the seam emissive at 1.5 or more with a slow pulse for the 6 s, and widen the seams to 3 cm. Keep the W4 rule of no size or reach change.\n\nThe gap with more weight goes to the combat/VFX lane: a small lodged-shard sliver VFX on each marked enemy for its 6 s. That needs a mark present hook, because marks never reach the view today.",
+   "files": "art/blender/fighters/ervet.py (seam width); content/fighters/ervet.json; src/contracts/catalog.ts (mark op has no present); src/render/director.ts",
+   "size": "S",
+   "verifierNote": "Downgraded from major to minor, because the form has no mechanical content. A related gap I found: the ult's lodged-shard mark (6 s, consumed by her attacks for a 1.75 m burst and a 30 % slow) has no visual. The mark op has no present field in src/contracts/catalog.ts, and sim marks are never read outside src/sim. That is a combat-readability item, not character art, and not blocker class. Also in the forms strip: in the run, Hilt and whole differ only by a thin pale line above the shoulder, so the run carry weakens the Hilt read too."
+  },
+  {
+   "id": "ervet-M4",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The blade does not read as glass, and the back of the helm reads as a box from the high camera",
+   "what": "In the match, the dawnglass blade is an opaque pale bar with a narrow value range, darker than the chalk helm, so it reads as a pale sword rather than glass. The brief asks for 'glossy and translucent' (section 4, checklist line 187).\n\nFrom the high camera, the flat-topped column under the transverse crest makes the head read as a white box with a bar.\n\nThese are finish problems, not identity problems. The long pale blade is still the silhouette hook, and the helm is the concept's own carved arch and column.",
+   "evidence": "Blade luma along the blade at zoom 0.45: p50 192 / p95 197 / max 207. The helm reaches p95 229 (reviewer's closing_ervet_samples.txt).\n\n1:1 gameplay-camera crops at 2x:\n- _harness/_shots/closing_ervet_verify_game_blue_1to1_x2.png: from behind, the head is a box column with the crest; the blade is a thin edge-on line;\n- closing_ervet_verify_game_red_1to1_x2.png: in the attack it reads as a pale sword.\n\nShowcase: _harness/_shots/integ_lead_menu_ervet_base_base.png. The blade reads as a pale ice-blue sword with seams.\n\nTextures (_harness/_reports/closing_ervet_verify_textures.txt): the 256 ORM is shared by ervet, kemdo, lisvel, nurrow, ulkro and vashil. Only Ilsheta has a dedicated glass material (gem_chimglass, roughness 0.08). Ervet's blade uses the body material.\n\nDesign intent:\n- roughness 0.4 is a deliberate choice: 'a 0.14 glass mirrors the dark ground in game' (art/blender/fighters/ervet.py:35);\n- the column and arch come from the concept (ervet.py:732-757).",
+   "gauge": "In League, weapons made of glass or crystal read at the game camera through painted value structure: bright edges, a darker core and a hot glint. Helmets carry deliberate, tapered shapes.",
+   "fix": "Blade:\n- Widen the painted value range: bevels about L* 92, a cooler core along the fuller about L* 68, and one painted diagonal glint.\n- Optionally give the blade its own glass material with a fresnel lift, as Ilsheta's chimglass has. No emission (brief line 187).\n\nHelm:\n- Taper the back column into a nape guard that follows the skull.\n- Soften the crest's blunt ends.\n- Keep the crest low and never pointed upward.",
+   "files": "art/blender/fighters/ervet.py (_paint_object blade, extra_materials, helm and crest sculpt)",
+   "size": "M",
+   "verifierNote": "Downgraded from major to minor. The texture budget is shared across the roster, roughness 0.4 is a documented trade-off, and the box massing is the concept's design. This matches how Ardit's M4 was verified. The blade still carries the silhouette and team read. This is the most important minor and sits on the border with major."
+  },
+  {
+   "id": "ervet-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The death hold puts the left foot and hand through the floor",
+   "what": "At the end of death, the left ankle, toe and hand sit below the ground plane, so the boot and hand clip into the floor in the corpse hold.",
+   "evidence": "_harness/_reports/closing_ervet_clip_rot.json deathEnd: foot.L y -0.12 (ankle at rest y 0.11), toe.L y -0.27, hand.L y -0.15. _harness/_shots/closing_ervet_death_end_x2.png and closing_ervet_death_end_gamecam_x3.png: one boot is cut by the floor.",
+   "gauge": "League death holds rest on the floor without visible clipping.",
+   "fix": "Re-key the death frames from f35 so the left leg folds on the floor (toe y 0 or more) and the left hand lies flat on it.",
+   "files": "art/blender/fighters/ervet.py (BLOCKS: death)",
+   "size": "S",
+   "verifierNote": "Confirmed from the FK numbers and the shot."
+  },
+  {
+   "id": "ervet-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The victory hold has no break-and-reform, and the blade point hovers",
+   "what": "The brief's victory (section 8) strikes the blade into the ground, breaks it to the stub and has it whole again in the other hand. The clip has no form swap, and the held point sits 11 cm above the floor.",
+   "evidence": "closing_ervet_clip_perframe.txt == victory: f40-55 tip y 0.11. src/render/actors.ts:805-809 swaps forms only from the sim form.",
+   "gauge": "League victory and celebration beats show the champion's own signature moment.",
+   "fix": "Plant the tip at y 0. The break-and-reform needs either a clip-driven form event in the renderer or a VFX-only shatter and reform on the victory pose.",
+   "files": "art/blender/fighters/ervet.py (victory); src/render/actors.ts",
+   "size": "S",
+   "verifierNote": "Confirmed."
+  },
+  {
+   "id": "ervet-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Stillwater reads almost as the base skin",
+   "what": "The Stillwater coat and mantle sit 6 degrees of hue from the base, at almost the same saturation. On the model, only the blade tint and a slight darkening tell them apart.",
+   "evidence": "closing_ervet_samples.txt, coat back on the three QA sheets: base hue 209 / sat 0.22; Stillwater hue 203 / sat 0.26. Lames: 209/0.32 against 204/0.35. _harness/_shots/closing_ervet_splash_figure_3up.png, left and centre.",
+   "gauge": "A League standard skin is identifiable at a glance in the skin selector and in game.",
+   "fix": "Push the wet-stone armour further, as the brief's #4D5A5C asks: darker deep tones, a clearer teal cast on the plates, a wet sheen on the lames. Keep the silhouette and accent placement (owner rulings preamble).",
+   "files": "art/blender/fighters/ervet.py (SKINS stillwater)",
+   "size": "S",
+   "verifierNote": "Confirmed from the samples and the 3-up."
+  },
+  {
+   "id": "ervet-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Card lames are over the brief's 40 % limit inside the reserved azure band",
+   "what": "In the hero portrait, the right-hand mantle lames render as a saturated navy, hue 208-209 at 48-59 % HSV saturation. That is above the brief's 40 % cap for the 200-225 degree band. The game material is 13 %, so this affects the cards only.",
+   "evidence": "_harness/_reports/closing_ervet_verify_lames_sat.txt: portrait.png boxes at (450,420), (400,380), (460,360) and (380,450) read sat 0.48-0.58 at V 78-83. The left lames at (340,340) and (60,380) read 0.32-0.36. The splash sample (1270,300) reads 0.40 (reviewer).",
+   "gauge": "In League, card art keeps team-coded hues off large areas.",
+   "fix": "Lower the cool rim and sky fill on the lames in the portrait and splash setups, or desaturate the lame albedo for hero renders only.",
+   "files": "art/blender/fighters/ervet.py (PORTRAIT, SPLASH light); art/blender/portraits.py",
+   "size": "S",
+   "verifierNote": "Confirmed as a minor. I mark the leftover 'open' rather than 'worse' (see gapStatus)."
+  },
+  {
+   "id": "ervet-m5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The base GLB fails three_load_test on the 9 s recall",
+   "what": "The recall clip is 9.00 s (270 f), over the contract's 6 s cap. It is the only clip in the roster over 6 s. RIFT recall lasts 7 s, so the loop never completes during a channel.",
+   "evidence": "I re-ran `node art/tools/three_load_test.mjs art/out/fighters/ervet/ervet.glb`: FAIL (1), recall 9.00 s out of range (_harness/_reports/closing_ervet_verify_load_test.txt; check at art/tools/three_load_test.mjs:263). Roster recall lengths: _harness/_reports/closing_ervet_verify_clip_durations.txt.",
+   "gauge": "In League, recall animations are authored to the recall duration.",
+   "fix": "Re-time the recall to 6 s or less (at most 180 f) and keep the kneel-and-bow beat.",
+   "files": "art/blender/fighters/ervet.py (recall)",
+   "size": "S",
+   "verifierNote": "Confirmed by my re-run."
+  },
+  {
+   "id": "ervet-m6",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The brief and the model disagree on blade length and visor",
+   "what": "The brief says the blade is 1.6 m and the visor is one tall slit pane with a 4 cm beak. The model's blade measures 1.32 m from crossguard to tip, and the visor is a four-point star with two cheek lines. The brief no longer describes the shipped fighter.",
+   "evidence": "_design/fighters/ervet.md:28, 57, 65. closing_ervet_clip_perframe.txt shows 'blade 1.32' (guard to tip) in every row. art/blender/fighters/ervet.py:16 ('the face glass (slit, star, cheek lines)').",
+   "gauge": "Process hygiene. There is no direct League gauge.",
+   "fix": "Update the brief's sections 1, 3 and 4 to the shipped blade and visor. Docs only.",
+   "files": "_design/fighters/ervet.md",
+   "size": "S",
+   "verifierNote": "Confirmed."
+  }
+ ],
+ "missed": []
+}

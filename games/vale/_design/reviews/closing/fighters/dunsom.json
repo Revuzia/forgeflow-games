@@ -1,0 +1,100 @@
+{
+ "fighter": "dunsom",
+ "score": 6.5,
+ "summary": "Verified score 6.5/10. Dunsom is not on par: three majors are confirmed open and there is no blocker. The base GLB (aedf8292, 2026-10-28 23:24) has not changed since the reviewer's match capture at 08:01, so I re-measured the reviewer's raw 1080p frames and the GLB rather than re-running the harness. CONFIRMED major: idle, recall and channel are frozen. The GLB shows idle bones moving at most 1.0-3.1 degrees with the hips at 6 mm, recall at most 1.0 degree with frozen legs and forearms, and channel at most 1.2 degrees (_harness/_reports/closing_dunsom_ver_measure.txt). Recall is a 2.0 s clip that src/render/actors.ts:128 loops through the 7 s RIFT recall (content/modes.json:28). CONFIRMED major, with the scope narrowed: the hat is a flat plate in play. The disc interior holds L* 84.4-84.9 from the crown out to 70 % of the radius and falls only to about 81.5 at the rim, a ramp of about 3 L*, on all four match frames. The crook half is REFUTED: the pale bone-white crook is the approved concept's look (_design/concept/dunsom.webp; dunsom.py header 'the concept's look wins'), and a pass-1 review asked for it. CONFIRMED major: the splashes reuse one victory pose and yaw on all three skins, and Highrim and Almanac reuse one painted scene re-cropped (grayscale NCC 0.72 vs 0.43-0.48 against the base plate). The boots read as soleless cream blobs. DOWNGRADED to minor: the 'skull' face. The ink almond eye recesses and the slanted brow are specified by the brief (dunsom.md:55, :85) and painted in the approved concept. Owner ruling 2 covers only Odrum Shadeprint. The closing originality verifier already downgraded the same mask (C2), and LoL itself ships hollow-eyed masks and helmets (Kindred's Lamb, Pantheon). The chip does omit the lantern that brief §10-11 asks for, so the finding stays as a minor. CONFIRMED minor: the lantern is under the nameplate at idle. Sensitivity check: the hat rises 9.5 cm over a 35.5 cm radius (dunsom.py:214), so it is not a tall or pointed hood. The hood under the fallen hat in death is a rounded dome. The mask is a warm carved mask, not horror, hockey or mannequin. No blocker was missed. Reviewer minors after the nameplate item were cut off in the text handed to me and were not verified.",
+ "gapStatus": [
+  {
+   "id": "7. Value-gradient gate fails",
+   "status": "open",
+   "evidence": "art/renders/lineup/integ_chars_p2.json (2026-10-29 01:03, after the 23:07 GLB): dunsom valueGradientOk false. f0 bands 72.0 / 43.3 / 28.9 (middle under 45); f180 top 55.7 and f270 top 64.4 (top under 70). Context: 13 of 18 entries fail valueGradientOk in the same run, so the gate failure is roster-wide, not Dunsom-specific. The reviewer's 'still_open' stands."
+  },
+  {
+   "id": "11. Pairwise IoU against Tunlan and Ilsheta not measured",
+   "status": "closed",
+   "evidence": "integ_chars_p2.json pairs: dunsom/tunlan iou64Max 0.632, dunsom/ilsheta 0.444, dunsom/odrum 0.608, highest pair dunsom/nurrow 0.636, all ok (<= 0.80). The reviewer's 'fixed' stands."
+  },
+  {
+   "id": "14. At idle in game, the lantern sits on the nameplate text",
+   "status": "open",
+   "evidence": "Viewed _harness/_shots/closing_dunsom_far_t482_nameplate_x4.png (t 482, state idle in closing_dunsom_match.json). The lantern body sits behind the 'ti' of the name text and the shaft crosses the HP bar. The reviewer's 'still_open' stands."
+  },
+  {
+   "id": "Lantern enlarged past the brief's 0.14 x 0.22 m",
+   "status": "open",
+   "evidence": "art/blender/fighters/dunsom.py:21-22 says the lantern is octagonal, 0.19 m across and 0.41 m with its cupola and base (enlarged on purpose because the painted 0.16 m lantern measured 0.3 % accent). _design/fighters/dunsom.md:28 and :64 still say 0.14 x 0.22 m. This is a doc/model mismatch, not a visual defect: the lantern reads well at the camera. The reviewer's 'still_open' stands."
+  },
+  {
+   "id": "Orange glove-coloured fleck on the left sleeve",
+   "status": "open",
+   "evidence": "Viewed _harness/_shots/closing_dunsom_sheet_closeL_x2.png (from art/renders/fighters/dunsom/three_dunsom.png, 10-28 23:10): an ochre chip sits above the left cuff at about (185, 375) of the crop. It is tiny and not visible at the gameplay camera. The reviewer's 'still_open' stands."
+  }
+ ],
+ "findings": [
+  {
+   "id": "dunsom-idle-recall-frozen",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Idle, recall and channel are frozen poses, and the recall does not do what the brief asks",
+   "what": "The idle is a 2.4 s loop in which no bone moves more than 3.1 degrees. Head 1.26, chest 1.0, lantern 0.25, hips 6 mm: about half a pixel at the 1080p gameplay camera. That ties Vashil and Sukri for the stillest of the 16 (Hesmi 11.2 cm, Ervet 7.3 cm of head travel). The left hand hangs at his side instead of resting on the right wrist (brief §8). Recall is a 2.0 s clip with legs, forearms and hand.L frozen and every other channel at or under 1.0 degree. It loops through the whole 7 s RIFT recall, with the lantern at about 2.33 m on the hook while the free hand cups air at chest height. Brief §8 asks that he 'hangs the lantern at eye level and cups it'. Channel (1.33 s) is the same: at most 1.2 degrees, arms and legs frozen.",
+   "evidence": "_harness/_reports/closing_dunsom_ver_measure.txt (my GLB decode of idle / recall / channel channels); _harness/_reports/closing_dunsom_clip_motion.json and closing_dunsom_idle_roster_cmp.txt (reviewer); _harness/_shots/closing_dunsom_clip_death_recall_channel.png (viewed: 8 near-identical recall and channel frames); src/render/actors.ts:128 (recall in LOOPING); content/modes.json:28 (recallTime 7); _design/fighters/dunsom.md:111, :124.",
+   "gauge": "A LoL champion's idle visibly breathes and shifts weight at the gameplay camera, with secondary motion on its signature prop. Every champion's recall is its own animated performance that fills the 8 s base recall.",
+   "fix": "Idle: a 3 s loop where he settles onto the crook and back (hips 2-3 cm, chest 3-4 degrees), the left hand on the right wrist, the lantern drifting 3-4 degrees on each settle and the hat level. Recall: a 7 s piece. He lowers the crook in his fist so the lantern comes to eye level and cups it, nods in threes as the core brightens in three steps (his idle_lobby counting habit), then lifts the crook as the departure fires. Channel: a slow lantern lift with breathing.",
+   "files": "art/blender/fighters/dunsom.py (idle, recall, channel keys); art/out/fighters/dunsom/dunsom*.glb; content/fighters/dunsom.json if the recall clip length changes",
+   "size": "M",
+   "verifierNote": "Reproduced independently from the GLB accessors, and the numbers match the reviewer's. The pattern is roster-wide: about 10 of 16 recalls are 2 s statue loops, and Dunsom's idle values equal Vashil's, which suggests a shared generator. It still caps Dunsom's tier, because idle is his most-seen state. One sub-claim is weaker: the concept turnaround also shows the left hand hanging, but the brief governs motion (§8), so it stands. Major stands."
+  },
+  {
+   "id": "dunsom-hat-flat-plate",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The hat, his largest on-screen surface, renders as a flat pale plate with no value ramp or felt cue",
+   "what": "From the gameplay camera the felt hat is his biggest form: a 59-71 px disc of 1,500-3,000 px, roughly 40 % of his pixels. Inside it the value is flat: L* 84.4-84.9 from the crown out to 70 % of the radius, dropping only to about 81.5 in the outer band, a total ramp of about 3 L*. No nap, crease or crown light survives, so it reads as a smooth dish, not heavy felt. The concept paints visible felt texture. The reviewer's second half, that the crook reads as a white plastic pole and should be warmed to the brief's #C0A383, is refuted. In play the crook measures L* about 75, C* 9.5, hue 75: pale bone cream, which is exactly the approved concept's pale bone-white wood, and a pass-1 review asked for it (dunsom.py:1521-1523).",
+   "evidence": "_harness/_reports/closing_dunsom_ver_measure.txt (radial L* profiles on closing_dunsom_close_blue / close_red / game_red / game_blue .png, and the crook ridge samples); _harness/_shots/closing_dunsom_close_blue_x5.png and closing_dunsom_game_red_x4.png (viewed); _design/concept/dunsom.webp (felt nap on the hat, pale bone crook); art/blender/fighters/dunsom.py:1478-1508 (_hat_paint: nap 5 % fbm, brush 3.5 %, which does not survive the camera).",
+   "gauge": "LoL's hand-painted textures give camera-facing surfaces a clear value ramp and a material cue that survive the gameplay camera: a crown highlight, a darker rim, weave or nap. A large flat field is never left untreated.",
+   "fix": "Paint the hat for the gameplay camera. Use a crown-to-rim ramp of about 10-12 L* (crown about 84, under the L* 86 cap; rim band about 70-72). Add broad felt nap at 4-6 L* in 16-24 cm blotches. Press shallow radial creases into the felt every 45 degrees, in paint and normal. Widen the stitched band so it holds as one ring at 50 px. Keep the crook's concept bone-white, adding only darker grain streaks if wanted. Re-run lineup_qa for the value bands.",
+   "files": "art/blender/fighters/dunsom.py (_hat_paint); art/out/fighters/dunsom/dunsom*.glb",
+   "size": "S",
+   "verifierNote": "The hat half is reproduced with my own segmentation on all four match frames. The reviewer's interior SD of 0.36-0.45 is consistent with my radial profile: flat to 0.7 R, with only the edge darker. The crook half is refuted: it follows the approved concept, which the file header says wins over the brief. That leaves a brief/model hex mismatch, not a defect. Major stands on the hat alone, because it is the dominant surface in play."
+  },
+  {
+   "id": "dunsom-splash-single-pose",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "All three splashes are one victory-pose render; Highrim and Almanac reuse one painted scene",
+   "what": "splash.png, dunsom_highrim_splash.png and dunsom_almanac_splash.png use the same clip (victory, t 0.92), the same yaw (24) and the same framing. Highrim and Almanac sit on the same painted scene, re-cropped (grayscale NCC 0.72, against 0.43-0.48 versus the base plate). The bowed hat-tip puts the glove over about a third of the mask. The figure is a model render on a plate with no lantern light on him, and at 1600x900 the boots are cream soleless blobs with dark ball toe caps, where the concept has dark leather boots with soles.",
+   "evidence": "_harness/_shots/closing_dunsom_splashes_3up.png, closing_dunsom_splash_head_x2.png, closing_dunsom_splash_feet_x3.png (viewed); art/out/fighters/dunsom/*splash.png (viewed); art/blender/fighters/dunsom.py:245 SPLASH; plate NCC in _harness/_reports/closing_dunsom_ver_measure.txt.",
+   "gauge": "Every LoL skin ships its own splash with its own composition, pose and lighting that tell that skin's story, with the face and the signature prop as the focal point.",
+   "fix": "Give each skin its own pose and light, still rendered from the model. Base: the Driving Hour point (cast_ult near f18) with the lantern flared and lighting the mask from below. Highrim: planted on the rim with the hat tipped into the wind under warm grazing sun. Almanac: reading a folded almanac page by lantern light. Add a lantern-coloured fill and a contact shadow in the plates pass, give Highrim and Almanac distinct plates, and model a boot sole and lace band (or tame the rim kickers that wash the boots to cream).",
+   "files": "art/blender/fighters/dunsom.py (SPLASH per skin, boots); art/blender/fighters/plates.json; art/tools/concept_plates.py; art/out/fighters/dunsom/*splash.png",
+   "size": "L",
+   "verifierNote": "Confirmed by viewing all three cards and measuring the plate correlation. The single pose follows the brief's own SPLASH spec, and the identical-pose pattern is a roster-wide pipeline limit (the Ardit and Burdam closing verifiers confirmed the same). It still caps Dunsom's presentation tier, and owner ruling 'skins change material, not silhouette' covers models, not splash staging. Major stands."
+  },
+  {
+   "id": "dunsom-face-skull",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The carved mask's ink eyes have no catch-light and read stern and skull-adjacent at chip size, and the chip omits the lantern",
+   "what": "At the 128 px chip and the 512 portrait, the ochre tiled mask shows near-black almond recesses (eye band L* down to 0-0.4, 47-61 % under L* 20), a brow that slants toward the centre, and vertical lower grooves. The read is a stern carved mask, skull-adjacent at chip size, not a patient one. It is not a skull and not horror: it is warm gold, has a nose bill and no nasal cavity or exposed teeth, and sits under a wide pale hat. Separately, the icon leaves out the lantern that brief §10-11 asks for ('the mask under the rim and the lantern').",
+   "evidence": "_harness/_shots/closing_dunsom_ver_face_icon_portrait.png (my icon at 3x plus portrait face crop); _harness/_shots/closing_dunsom_portrait_face_x3.png and closing_dunsom_chips_portraits.png (viewed); art/out/fighters/dunsom/icon.png (no lantern in frame); _design/fighters/dunsom.md:55 ('ink almond eye recesses') and :85 (ink #17181B for the eye recesses), :173 (icon with the lantern); _design/concept/dunsom.webp (same slanted dark eyes); _design/reviews/closing/originality.json C2 (same mask downgraded to minor).",
+   "gauge": "Most LoL masked champions carry a light or a highlight in the eyes, but hollow-eyed masks and helmets also ship as intended reads (Kindred's Lamb, Pantheon's helm). A stern mask is accepted when it is a character choice, and this one is specified by the brief and the concept.",
+   "fix": "Optional at the next Dunsom rebuild (needs a brief §3/§5 edit, because the ink recesses are specified there): set lampresin almond inlays with a small warm catch-light into the recesses, merge the lower vertical grooves into one calm carved band, and halve the crack density under the eyes. Required by the brief now: re-frame the icon so the lantern glow enters a top corner. Re-run the facechip gate afterwards.",
+   "files": "art/blender/fighters/dunsom.py (mask_relief :390, mask paint, SPLASH icon_yaw/framing); _design/fighters/dunsom.md §3, §5; art/out/fighters/dunsom/icon.png, portrait.png, dunsom_*_portrait.png",
+   "size": "S",
+   "verifierNote": "Downgraded from major to minor. The dark recesses and the slant are the brief's and the approved concept's design (dunsom.md:55, :85), not a defect against spec. Owner ruling 2 is scoped to Odrum Shadeprint, so 'that ruling applies here' is wrong, and Odrum's base mask keeps black slits too. Two verifiers (integ_chars_verify1: 'stern, not horror'; closing originality C2) already ruled this mask a minor. The gauge claim that LoL never ships a hollow-eyed mask is overstated. The missing lantern in the chip is a real brief deviation, but a small one. Not a sensitivity blocker: no horror, hockey or mannequin read."
+  },
+  {
+   "id": "dunsom-lantern-nameplate",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "At idle the lantern sits behind the nameplate and the shaft crosses the HP bar (leftover 14)",
+   "what": "In the late-match idle frame (t 482), the hook and lantern sit under the 'ti' of the nameplate text and the shaft runs through the HP bar, so his signature accent is partly hidden by the UI in the pose players see most.",
+   "evidence": "_harness/_shots/closing_dunsom_far_t482_nameplate_x4.png (viewed); _harness/_shots/closing_dunsom_far_t482.png; _harness/_reports/closing_dunsom_match.json (state idle at t 482).",
+   "gauge": "LoL keeps a champion's signature prop readable around the overhead bar in the idle pose players see most; tall props may touch the bar but the focal accent is not parked under the name text.",
+   "fix": "Lower the idle hook so the lantern hangs beside the hat brim (about 2.0-2.1 m, under the bar's bottom edge at the gameplay camera), or tilt the crook 8-10 degrees outward in idle so the lantern clears the plate horizontally.",
+   "files": "art/blender/fighters/dunsom.py (idle crook pose); art/out/fighters/dunsom/dunsom*.glb",
+   "size": "S",
+   "verifierNote": "Confirmed by viewing the crop: the lantern panes show to the left of 'tilda', with the cap under the text. It is partly occluded, not hidden, and it is common for tall props to touch an overhead bar, so minor is right."
+  }
+ ],
+ "missed": []
+}
