@@ -127,6 +127,14 @@
 //               started at a random point of its loop when the match attaches, faded out when it detaches;
 //               the whole bus is ducked up to AMB_DUCK_DB under a FIGHT (fighter-vs-fighter damage near the
 //               listener or your living fighter; a wave being cleared does not duck the world)
+//   world       the world's own moments, each an engine role content binds (unbound: silent, as before): a
+//               structure's shield (the Dawn Seal setting again on its beat) plays 'shieldStructure' at it, else
+//               'shield'; when a mode's Dawn Seal ends (rules.dawnSeal.until) 'sealBreak' sounds at every standing
+//               sealed structure; each Gorge Wind step (WorldView.gorgeWind rising) plays 'gorgeWind' once, centred;
+//               an announce key bound as 'world.<key>' (the Noon Toll's hour-bell) plays that cue at once instead
+//               of an announcer line, so it neither waits in the queue nor ducks the mix; an area with no sfx of its
+//               own sounds 'area.<its vfx>' (a passive's area: Vashil's chord); a blow the Ringshade muffled (the
+//               damage event's `shaded`, on a structure) plays 'hitShaded' with the hit under it at SHADED_GAIN
 // The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
 
 import type { MatchClient } from '../contracts/session.ts';
@@ -157,6 +165,8 @@ interface CatalogLike {
   setup?: { boons?: PassiveLike[] };
   teamBuffs?: { id: string; passives?: PassiveLike[] }[];
   maps?: { id: string; art?: { ambient?: AmbientLike } }[];
+  /** the Dawn Seal's end (see `world` in the header): rules.dawnSeal of each mode */
+  modes?: { id: string; rules?: { dawnSeal?: { units: string[]; until: number } } }[];
 }
 type PassiveKind = 'fighter' | 'item' | 'boon' | 'team' | 'unit';
 /** what became of a proc: played, held back by its owner's window, the cue's own cooldown or its voices, out of
@@ -261,6 +271,7 @@ const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the 
 // impact (kit 'hit'): the damage type / crit is meaning the kit hit does not carry (a true-damage ult, a crit-shot ult)
 const SEMANTIC_HIT_ROLES = ['hitTrue', 'crit'] as const;
 const SEMANTIC_KIT_GAIN = 0.6;
+const SHADED_GAIN = 0.55;     // a Ringshade-muffled blow: the hit under the 'hitShaded' thud (see `world`)
 // a T3 wind-up (tokens.vfx.tiers.T3 'crowd control, mobility, zones', enemyWindupAudio mandatory): an ability with a
 // wind-up whose effects, at any depth, control someone else (a StatusKind below, not applied to the caster), displace,
 // move the caster (dash / blink) or lay a zone. StatusKind / effect op names are the contract's (src/contracts/catalog.ts)
@@ -381,6 +392,10 @@ class Engine implements ValeAudioPort {
   /** dev / probes: every proc's outcome, counted */
   readonly procStats: Record<ProcOutcome, number> = { played: 0, throttled: 0, cooldown: 0, voices: 0, culled: 0, unseen: 0, unbound: 0, off: 0 };
   private readonly maps = new Map<string, AmbientLike | undefined>();
+  /** mode id → its Dawn Seal (rules.dawnSeal: the sealed units, when the seal ends; see `world` in the header) */
+  private readonly seals = new Map<string, { units: string[]; until: number }>();
+  /** the Gorge Wind steps already heard (WorldView.gorgeWind; see `world` in the header) */
+  private gorgeSeen = 0;
   /** the attached match's ambience emitters (built on attach, voiced once the context runs) */
   private amb: Emitter[] = [];
   /** the attached match's map while its emitters wait for the context */
@@ -424,6 +439,7 @@ class Engine implements ValeAudioPort {
     for (const tb of cat.teamBuffs ?? []) for (const p of tb.passives ?? []) own(p, 'team');
     for (const u of cat.units ?? []) own(u.passive, 'unit');
     for (const m of cat.maps ?? []) this.maps.set(m.id, m.art?.ambient);
+    for (const m of cat.modes ?? []) if (m.rules?.dawnSeal) this.seals.set(m.id, m.rules.dawnSeal);
     const resume = (): void => { this.ensure(); void this.ctx?.resume(); };
     addEventListener('pointerdown', resume, { capture: true });
     addEventListener('keydown', resume, { capture: true });
@@ -1046,6 +1062,7 @@ class Engine implements ValeAudioPort {
     this.client = client;
     this.intensity = 0; this.fight = 0; this.combat = false; this.calmFor = 0;
     this.lastT = client ? client.view.time : null;
+    this.gorgeSeen = client?.view.gorgeWind ?? 0;
     this.procLast.clear();
     this.ults.clear();
     this.dealt.clear(); this.healLast.clear(); this.wiped.clear();
@@ -1319,20 +1336,29 @@ class Engine implements ValeAudioPort {
         if (own && lib && lib !== own && SEMANTIC_HIT_ROLES.some((r) => this.ev(r) === lib)) this.cue(lib, at(dst), SEMANTIC_KIT_GAIN, 0, aw);
         break;
       }
-      case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw); break;
+      case 'area': {
+        // its own sfx, else the cue content binds to its vfx ('area.<vfx>': a passive's area with no sound of its own)
+        const sfx = (e.sfx as string | undefined) ?? (e.vfx ? this.ev(`area.${e.vfx as string}`) : undefined);
+        if (sfx) this.cue(sfx, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0), aw);
+        break;
+      }
       case 'attack': this.cue(this.kit(src, 'attack_swing') ?? this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw); break;
       case 'damage': {
         const p = at(dst);
         const duel = src?.kind === 'fighter' && dst?.kind === 'fighter';
         if (near(p)) this.intensity = Math.min(1, this.intensity + (duel ? 0.12 : 0.02));
         if (near(p) && duel) this.fight = Math.min(1, this.fight + FIGHT_HIT);
+        // a blow the Ringshade took the edge off (the sim's `shaded`: a structure guarded by too few of its Wicks) is
+        // muffled: the role 'hitShaded' under the hit, the hit itself at SHADED_GAIN (see `world` in the header)
+        const shaded = !!e.shaded && dst?.kind === 'structure' && !!this.ev('hitShaded');
+        if (shaded) this.cue(this.ev('hitShaded'), p, 1, 0, aw);
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
         if (e.ability) break;
         const own = this.kit(src, 'attack_hit');
         if (e.crit) {
           this.cue(this.ev('crit'), p, 1, 0, aw);
           if (own) this.cue(own, p, CRIT_KIT_GAIN, 0, aw);      // whose crit it was
-        } else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45, 0, aw);
+        } else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, (src?.kind === 'fighter' ? 0.8 : 0.45) * (shaded ? SHADED_GAIN : 1), 0, aw);
         break;
       }
       case 'heal': {
@@ -1343,7 +1369,8 @@ class Engine implements ValeAudioPort {
         if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played' && dst) this.healLast.set(dst.id, now);
         break;
       }
-      case 'shield': this.cue(this.ev('shield'), at(dst), 1, 0, aw); break;
+      // a structure's shield is the Dawn Seal setting again (the role 'shieldStructure'), not a fighter's ward
+      case 'shield': this.cue((dst?.kind === 'structure' ? this.ev('shieldStructure') : undefined) ?? this.ev('shield'), at(dst), 1, 0, aw); break;
       case 'status': {
         // fighters only (a Wick's slow is noise); no catch-all: an unbound kind (a rider on a hit that sounds) is silent
         if (dst?.kind !== 'fighter') break;
@@ -1442,7 +1469,13 @@ class Engine implements ValeAudioPort {
       }
       case 'structure_respawned': this.announce('announce.structure_respawned', 4, 1, `resp:${t}`, t, 'announceMinor'); break;
       case 'eliminated': if (pl !== you) this.announce('announce.eliminated', 4, 1, `elim:${pl}`, t, 'announceMinor'); break;
-      default: this.announce(`announce.${key}`, 5, 1, key, t, 'announceMinor');
+      // a key content voices as a world sound ('world.<key>': the Noon Toll's hour-bell) is no line: it plays at once,
+      // outside the announcer's queue, and ducks nothing
+      default: {
+        const world = this.ev(`world.${key}`);
+        if (world) this.cue(world, null);
+        else this.announce(`announce.${key}`, 5, 1, key, t, 'announceMinor');
+      }
     }
   }
 
@@ -1464,6 +1497,16 @@ class Engine implements ValeAudioPort {
       for (const s of [-3, -2, -1]) if (t0 < s && t1 >= s) this.announce('countdown', 0, 1, 'flow', s);
       if (t0 < 0 && t1 >= 0) this.announce('matchStart', 0, 2, 'flow', 0);
       if (this.annQ.length) this.pumpAnn();
+      // the world's own moments (see `world` in the header): each Gorge Wind step; the Dawn Seal ending on every
+      // standing sealed structure
+      const gw = view.gorgeWind ?? 0;
+      if (gw > this.gorgeSeen) this.cue(this.ev('gorgeWind'), null);
+      this.gorgeSeen = gw;
+      const seal = this.seals.get(view.mode);
+      const brk = this.ev('sealBreak');
+      if (seal && brk && t0 < seal.until && t1 >= seal.until) {
+        for (const u of view.entities) if (u.kind === 'structure' && u.alive && seal.units.includes(u.def)) this.cue(brk, { x: u.x, y: u.y });
+      }
     }
     this.lastT = view ? view.time : null;
     this.intensity = Math.max(0, this.intensity - dt * 0.12);

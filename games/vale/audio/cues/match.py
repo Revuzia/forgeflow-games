@@ -25,7 +25,7 @@ from synth import sfx as S
 from synth.core import hz
 
 from .kit import (Layers, R, at_len, bell, breath, crackle, crumble, drum, esc, finish, fm_tone, glass, harp, hollow,
-                  lp, pane, rev, roll, room, sear, shimmer, spread, tink)
+                  lp, mono, pane, rev, roll, room, sear, shimmer, spread, sweep, tink)
 
 EVT = (0.3, 2.6)
 PING = (0.3, 1.6)
@@ -632,3 +632,91 @@ def m_ann_vote_end(v: int):
     L.add(glass('A5', 0.9, 0.7, decay=0.3, bright=0.6, seed='ve1'), 0.0, peak_db=-1)
     L.add(glass('D5', 1.2, 0.75, decay=0.4, bright=0.6, seed='ve2'), 0.16, peak_db=0)
     return finish(room(L.out(), 'plate', wet=0.16), hp_hz=120, eq=[('peak', 3300, -2, 0.8)])
+
+
+# ── world moments (src/audio/index.ts `world`: engine roles content binds) ────────────────────────────────
+# Each sits under the announcer (its stingers peak -18..-15 max momentary) and none rides the voice bus, so none
+# ducks the mix: the world speaks softly and the announcer stays on top.
+WORLDK = dict(tail_floor_db=-54.0, fade_out=0.04)
+
+
+@cue('m_noon_bell', 'match', ('m', -24.0), (1.8, 3.2), instant=True, **WORLDK)
+def m_noon_bell(v: int):
+    """The Noon Toll (FRAY, every 20 s from 8:00; role world.noon_toll): ONE hourbell struck softly on D4 far off
+    over the arena, its hum an octave under, a faint A5 dawnglass halo catching the light. No drum, no fall: an hour
+    told, not an event announced."""
+    L = Layers(2.6)
+    L.add(bell('D4', 2.6, 0.6, decay=0.55, bright=0.55, seed='nb'), 0.0, peak_db=0)
+    L.add(glass('A5', 1.8, 0.45, decay=0.6, bright=0.5, seed='nb'), 0.03, peak_db=-13)
+    L.add(shimmer('D6', 1.4, 0.35, decay=0.7, index=1.4, seed='nb'), 0.03, peak_db=-20)
+    return finish(room(L.out(), 'hall', wet=0.26), hp_hz=70, lp_hz=7500, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('m_gorge_gust', 'match', ('m', -26.0), (2.0, 3.4), **WORLDK)
+def m_gorge_gust(v: int):
+    """The Gorge Wind rises a step (role gorgeWind, on the ambience bus): a gust drawn up through the gorge, a
+    band of air sweeping 220 -> 1300 Hz as it swells for 1.3 s, then falling away; a thin whistle off a needle's
+    edge rides its crest; wide, centred. Felt more than heard."""
+    r = R('m_gorge_gust')
+    L = Layers(3.0)
+    L.add(breath(3.0, 220, 1300, shape='breath', q=1.3, seed='gg', peak_at=1.3, vel=0.8, sweep_curve=0.8), 0.0, peak_db=0,
+          width=1.3)
+    L.add(breath(2.6, 120, 380, shape='breath', q=0.9, seed='gg2', peak_at=1.2, vel=0.7), 0.15, peak_db=-5, width=1.1)
+    L.add(breath(1.4, 900, 1250, shape='breath', q=7.0, seed='gg3', peak_at=0.6, vel=0.6), 0.8, peak_db=-16, pan=0.15)
+    return finish(L.out(), hp_hz=90, lp_hz=6000)
+
+
+@cue('c_seal_set', 'combat', ('m', -26.0), (0.4, 1.1), instant=True, **WORLDK)
+def c_seal_set(v: int):
+    """The Dawn Seal sets again on a needle (RIFT, every 30 s until 7:00; role shieldStructure): a soft dawnglass
+    'set' — a breath of air drawn in and a D6 glass touched lightly over A5, damped at once: a skin of morning
+    closing over the stone, quietly."""
+    L = Layers(0.8)
+    L.add(breath(0.14, 1200, 3200, shape='breath', q=1.2, seed='ss', peak_at=0.02, vel=0.5), 0.0, peak_db=-14)
+    L.add(glass('D6', 0.6, 0.55, decay=0.18, bright=0.55, seed='ss1'), 0.0, peak_db=0)
+    L.add(glass('A5', 0.7, 0.5, decay=0.22, bright=0.5, seed='ss2'), 0.004, peak_db=-4)
+    return finish(mono(room(L.out(), 'glass', wet=0.1)), hp_hz=300, lp_hz=9000, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('c_seal_break', 'combat', ('m', -20.0), (0.6, 1.8), instant=True, **WORLDK)
+def c_seal_break(v: int):
+    """The Dawn Seal ends at 7:00 (role sealBreak, at every sealed needle still standing): the glass skin cracks
+    and slides off the stone — a crack, a dawnglass pane struck flat and breaking (shards), and the seal's field
+    falling away under it (a low 'vwm' dropping 340 -> 120 Hz, the shield's own rise turned down)."""
+    r = R('c_seal_break')
+    L = Layers(1.5)
+    L.add(S.snap(r, 3600, 2.0), 0.0, peak_db=-8)
+    L.add(pane(hz('E5'), 0.9, 0.5, bright=0.6, r=R('c_seal_break', 'pane')), 0.0, peak_db=0)
+    L.add(S.shards(r, 0.9, 16, 2400, 8500, 0.14, 0.12, 0.35), 0.02, peak_db=-10)
+    L.add(sweep(340, 120, 0.7, curve=1.5, env='decay', attack=0.01), 0.03, peak_db=-6)
+    L.add(breath(0.7, 2600, 600, shape='breath', q=1.5, seed='sb', peak_at=0.06, vel=0.6), 0.03, peak_db=-15)
+    return finish(mono(room(L.out(), 'glass', wet=0.14)), hp_hz=90, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('c_vashil_chord', 'combat', ('m', -19.0), (0.6, 1.5), variants=3, instant=True, **WORLDK)
+def c_vashil_chord(v: int):
+    """Vashil's chord (the Hum's stun; role area.vashil_passive_hum): two humming notes meet and lock — an A3
+    hourbell and an E4 one struck together (a fifth), their beat stopping dead into one clean chord, over a short
+    stone knock where the stun lands. The Hum's own bell, doubled and resolved."""
+    r = R('c_vashil_chord', v=v)
+    k = 1.0 + 0.012 * (v - 1)
+    L = Layers(1.1)
+    L.add(bell(hz('A3') * k, 1.0, 0.75, decay=0.45, bright=0.6, seed=f'vc{v}a'), 0.0, peak_db=-1, pan=-0.15)
+    L.add(bell(hz('E4') * k, 1.0, 0.75, decay=0.42, bright=0.6, seed=f'vc{v}e'), 0.012, peak_db=-1.5, pan=0.15)
+    L.add(glass(hz('A5') * k, 0.6, 0.5, decay=0.25, bright=0.5, seed=f'vc{v}'), 0.012, peak_db=-12)
+    L.add(S.knock(r, 1500, 0.03, 4, 'stone'), 0.0, peak_db=-9)
+    L.add(S.thump(0.25, 180, 70, 0.02, 0.12, 1.4), 0.0, peak_db=-10)
+    return finish(mono(room(L.out(), 'stone', wet=0.1)), hp_hz=90, lp_hz=9000, eq=[('peak', 3300, -2, 0.8)])
+
+
+@cue('c_hit_shaded', 'combat', ('m', -22.0), (0.2, 0.6), variants=3, instant=True, **WORLDK)
+def c_hit_shaded(v: int):
+    """A blow on a needle the Ringshade took the edge off (role hitShaded, under the hit): a damped stone thud
+    through a felt of shade — a low knock darkened to 900 Hz and a short breath swallowing its ring. Muffled, not
+    absent: the needle's ring of shade, not the hit, is what you hear."""
+    r = R('c_hit_shaded', v=v)
+    L = Layers(0.45)
+    L.add(lp(S.knock(r, 200 * (1.0 + 0.04 * (v - 1)), 0.09, 5, 'stone'), 900), 0.0, peak_db=0)
+    L.add(S.thump(0.3, 120, 55, 0.03, 0.14, 1.6), 0.0, peak_db=-4)
+    L.add(breath(0.25, 900, 300, shape='breath', q=1.2, seed=f'hs{v}', peak_at=0.02, vel=0.5), 0.005, peak_db=-12)
+    return finish(mono(L.out()), hp_hz=60, lp_hz=1800)
