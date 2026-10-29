@@ -1,0 +1,84 @@
+{
+ "lane": "world",
+ "round": 1,
+ "verifier": "Adversarial verifier for integration lane world, round 1, 2026-10-29. I re-measured everything at HEAD b8be08b2 (= origin) on the dev server :5190 and the prod bench, in real Chrome (GPU). I did not take the engineers' reports on trust.",
+ "pass": true,
+ "summary": "Lane world passes round 1. The one major item, the Hooded Lamp knob ruling, is done in the source, the GLB and the icon, and the served asset matches. One minor item fails: world-05 was skipped on a premise that is no longer true. The client added minimapBounds support in 61fe088f, 17 s after the lane's first commit. integ_client_verify1 now holds client-14 and HUD-3 at partly, waiting only on this lane's half. Every other item re-measures as claimed, and my value_probe reproduces the engineers' numbers exactly. Base structures: RIFT L* p95 76 / 79, BRIDGE 73.5 / 76. BRIDGE Serenade plaza saturation 0.36. Wick top quarter, RIFT Low: 65.0, exactly on the cap with no margin. Canopy: High 52 / 91, Low 56 / 94. All gates on both maps and both tiers pass. perf_1080 --prod passes: High 434k triangles (canopy 66k -> 75k), 60.1 fps, 0 dropped. probe_wallmask is unchanged (0 of 48 spots under 50 %). probe_maps 102/102, content:check OK, typecheck exit 0. No regressions found. Sensitivity: I looked at every new icon, model render and in-game shot. I found no pointed hood, no face read and no Wick eye pair.",
+ "items": [
+  {
+   "id": "ruling:hooded-lamp-knob",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Source: art/blender/units/small_units.py:133-137. The RoundCone finial is gone. In its place: a Capsule neck (r 0.019, k 0.012) and a Sphere knob (r 0.031, k 0.008) on the rounded hood dome.\n\nGLB, measured with my own parser (scratchpad glb.py / hood.py):\n- art/out/units/hooded_lamp.glb has 1600 tris.\n- ward_hood top is at 0.877 m.\n- Half-width at 1 / 2 / 4 / 6 / 8 cm under the top: 2.8 / 3.4 / 3.4 / 2.4 / 6.8 cm. That is a ball on a neck over a dome.\n- The pre-commit GLB (1667afb3^) gives 3.9 / 6.0 / 8.4 / 12.9 cm, a widening point.\n\nIcon: I viewed art/out/units/hooded_lamp_icon.png at 4x. The cap is a plain rounded dome with a small round knob, and there is one blue lamp core with no eye-like pair (_harness/_shots/integ_world_hooded_lamp_icon_before_after.png agrees).\n\nServed copies: dist-catalog 68002828dbb3-hooded_lamp.glb and f9cf7c1271f4-hooded_lamp_icon.png have the same sha1 as art/out (634c8d6b / b4496d0c).\n\nOwner ruling 6 is met."
+  },
+  {
+   "id": "world-04",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Same change as the ruling. The 128 px icon cap is now a rounded dome with a round knob, not an onion tip. One blue core, no eye pair (viewed at 4x). The GLB is fixed too (the hood profile above)."
+  },
+  {
+   "id": "world-06",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "small_units.py:133-137. The pointed RoundCone finial was replaced with a Sphere knob on a Capsule neck instead of the suggested Ellipsoid. The criterion is a rounded knob, so this counts. hooded_lamp.glb was rebuilt and the icon re-rendered (commit 1667afb3; the .py landed in WIP sync aedf8292)."
+  },
+  {
+   "id": "world-03",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Changes:\n- art/blender/units/structures.py:1040-1041 MATS_OVERRIDE: hourbell Aubade chalk #B2AFA7, needle_bell Aubade #C1BEB5.\n- content/maps/map_bridge.json:749 plazaSerenade #625B50.\n- The served catalog carries #625B50.\n- Served hourbell_aubade.glb and needle_bell_aubade.glb have the same sha1 as art/out.\n\nMy run: node _harness/value_probe.mjs --maps rift,bridge --tiers high,low --tag integ_world_ver1 --flash 0 (_harness/_reports/integ_world_ver1_value_probe.log).\n\nRIFT:\n- base0_structure L* p95: 76 High, 79 Low (PASS, <= 80). Above luma 180: 8.2 % / 14.8 %.\n- base1_structure: 69 / 74.\n- Plazas: 0.26 / 0.35 High, 0.25 / 0.35 Low.\n\nBRIDGE:\n- base0_structure: 73.5 / 76.\n- base1_plaza saturation: 0.36 / 0.36 (PASS, 0.17-0.40; was 0.49).\n- base0_plaza: 0.30.\n\nThese are identical to the engineers' integ_world_f5b log. I viewed the base shots (_harness/_shots/value_{rift,bridge}_high_integ_world_ver1_base0/1.png): the structures still read Aubade cool and Serenade warm.\n\nNote: RIFT Low sits 1 L* under the cap."
+  },
+  {
+   "id": "wave_b:Wick hood value L* <= 65",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Measured in the same integ_world_ver1 value_probe run.\n\nwickTop25:\n- RIFT High 61.9.\n- RIFT Low 65.0, which meets <= 65. topMean rounds to 0.1 (value_probe.mjs:459). The sim is deterministic, so it reproduces exactly; there is zero margin.\n- BRIDGE High / Low 56.0 / 60.8.\n- Before this pass (fw_W5a_ver1): 64.0 / 67.1 / 59.4 / 64.1.\n\nFighters' top quarter is unchanged at 81.1-84.3, so the Wicks sit 16-28 L* under the fighters.\n\nBuild reports (art/renders/units/build_report_*.json):\n- shieldwick A/S: 2997 / 2993 tris.\n- glimwick A/S: 2956 / 2998 tris.\n- Served GLBs have the same sha1 as art/out on all four.\n\nSensitivity: I viewed three_{shieldwick,glimwick}_{aubade,serenade}.png. The hoods are rounded, each has a single lamp glow under it, and none has an eye pair or a mouth.\n\nThe fix hint's brightwick target was stale, as the engineers said: the parts actually seen were trimmed instead (commit 8faff08c plus WIP syncs)."
+  },
+  {
+   "id": "world-07",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Already done before this pass, confirmed in the current tree.\n- art/blender/units/creatures_b.py:1326-1347: the mask paint has only chalk, dirt, brass groove inlays and dark sockets. There is no tear or streak term; the only 'tear' hit in the file is the F3 removal note at :1328.\n- art/out/units/longshade_icon.png was last changed by cc7dc7f5. Viewed at 4x: a chalk sundial plate with two lamp eyes and hour-line grooves, no streaks under the eyes.\n- This matches owner ruling 1."
+  },
+  {
+   "id": "world-02",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Optional item, skipped, and the skip is justified. I re-ran the gate after the tree rebuild: node _harness/probe_wallmask.mjs rift --n 48 (_harness/_reports/integ_world_ver1_wallmask_rift.json).\n- With the silhouette: 0 of 48 spots under 50 %, minVis 0.761, xrayDrawn 48. Bin medians 1.078 / 1.028 / 0.952 / 0.859.\n- Cover alone: 34 of 48 under 50 %.\n- These are identical to W1_verify1 done:7, so the Dialwood midrib rebuild did not move it.\n\nCapping the lips is not needed for env F4."
+  },
+  {
+   "id": "world-05",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "The skip rests on 'the client does not support that yet'. That is false in the current tree.\n- Client commit 61fe088f (2026-10-28 23:35:44, 17 s after this lane's 1667afb3 and before any pkg2 work) adds minimapBounds and fitMap. They read map.art.terrain.minimapBounds for both drawing and clicks (src/ui/hud/minimap.tsx:58-76).\n- _design/reviews/fixwaves/integ_client_verify1.json holds client-14 and hud:HUD-3 at partly. Its only reason is the missing world half: on the live 1x minimap both RIFT plaza discs are cut at the image edges (_harness/_shots/integ_client_ver1_minimap_1x.png).\n\nCurrent tree:\n- content/maps/map_rift.json has no minimapBounds.\n- art/blender/maps/minimap_survey.py has no pad option.\n- art/out/maps/map_rift/minimap.png is still 1100x712 over 0..170 x 0..110.\n\nThe item is optional, but the reason given for skipping it no longer holds, and the cross-lane item stays open because of this lane.",
+   "fixHint": "1. art/blender/maps/minimap_survey.py: add a margin option, with RIFT at 6 m per side in x and 4 m in y, drawing the plaza discs and ground out to the margin.\n2. Re-render art/out/maps/map_rift/minimap.png (keep 1100x712 or the same aspect as the padded bounds).\n3. content/maps/map_rift.json art.terrain: add \"minimapBounds\": [-6, -4, 176, 114]. Mirror it in _design/tools/map_gen.py if map_gen writes art.terrain.\n4. Run npm run content and content:check.\n5. Shoot a live 1x RIFT minimap. Both plaza discs must be whole, and fighter dots must sit on the painted roads (client minimap.tsx needs no change)."
+  },
+  {
+   "id": "env:F5",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Every step of the fix hint is in. Code:\n- art/blender/props/kit.py fan_plate(midrib=0.0) keeps the old 6-tri plate by default and is backward compatible; with midrib it splits the two middle wedges (+2 tris).\n- art/blender/props/dialwood.py:93-105: STEM 0.20, STROKE 0.06, VEIN 0.07, CAV_K 0.40 cavity term (:443).\n- Per-tree hue turns: jade +3 deg (:468), olive-gold -3 deg (:487).\n\nTris, my own count of the GLBs:\n- tall 740, broad 692, squat 656, lean 636, young 408. All are <= 750; they were 674 / 584 / 552 / 540 / 350.\n- Midribs on 33/61, 54/54, 52/52, 48/48 and 29/29 plates (build_report.json).\n- Served GLBs have the same sha1 as art/out.\n\nVertex paint, old GLBs (69342ec1^) vs new:\n- Within-triangle L* range p90: 16.1-19.5 -> 19.1-22.0.\n- Leaf hue p50 per variant shifts by up to 7 deg.\n\nIn game (integ_world_ver1):\n- RIFT High canopy p50 52 / p99 91, Low 56 / 94, inside the 51-56 / 91-95 band but on its edges.\n- The foliage log is unchanged: sway <= 3.97 cm, leak 0/62730, brush 133/400 ms.\n\nHonest note: the visible change at the 14 m close-up is small. I compared _harness/_shots/integ_world_f5/trees_ab_crop.png and art/renders/props/scatter_trees.png against the 69342ec1^ render; the plates still read as flat polygon plates, and the engineers measured local SD 2.48 -> 2.52. F5's original 'notched tips' step was not in the hint and was not done. The hint's criterion is met."
+  },
+  {
+   "id": "minor:landmark-leftovers",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "art/blender/maps/landmarks_art2.py builds numeral_xi, ii, vii, iiii and vi_slab; landmarks.py no longer writes them.\n\nMy GLB counts:\n- Tris 381 / 330 / 443 / 419 / 638 (were 3.5-6k).\n- Size 52-61 KB.\n- Served copies match art/out by sha1.\n\nVisual checks:\n- Renders art/renders/maps/landmarks_art2_*.png: clean chamfered stone glyphs.\n- In game (_harness/_shots/integ_world_lm_after3_at0-3.png, integ_world_lm_ab.png): XI, VII and II stand legible among the trees. The VI slab reads VI the right way up; the old SDF pillow read 'ΛI'.\n\nChecks:\n- probe_maps 102/102 PASS.\n- content:check OK.\n\nGlyph L* p95 (engineers): XI 47.0, VII 47.8. The guide is <= 46, so VII is 1.8 over: a minor within the <= 2 L* rule.\n\nIn my value_probe the landmark class at RIFT High moves:\n- L* p50 30 -> 39.5 (lane 38);\n- luma p95 120 -> 109.\nIt is not gated and the top of the range came down.\n\nThe glass_belfry chamfer drop stays optional and was not needed: the triangle budget passes."
+  }
+ ],
+ "regressions": [],
+ "checks": {
+  "value_probe": "node _harness/value_probe.mjs --maps rift,bridge --tiers high,low --tag integ_world_ver1 --flash 0, exit 0: every gate PASS on both maps and both tiers (_harness/_reports/integ_world_ver1_value_probe.log; shots _harness/_shots/value_*_integ_world_ver1_*.png).",
+  "perf_1080": "node _harness/perf_1080.mjs --prod --no-dyn --no-mem --no-match, GATE PASS (_harness/_reports/integ_world_ver1_perf_1080.json/.log).\n- High: 60.1 fps, p95 16.7 ms, 0 dropped, cpu 2.13 ms, 183 draws, 39 programs, 434k tris. Canopy is 75k (66k in integ_engine_v1 at 00:29, before the tree rebuild).\n- Low: 346k tris, canopy 23k (was 20k), 27 programs. Low timing: 'not measured: machine busy'.",
+  "wallmask": "node _harness/probe_wallmask.mjs rift --n 48: under50 0, minVis 0.761, under50Cover 34. Unchanged from W1_verify1.",
+  "probe_maps": "node _harness/probe_maps.ts: 102/102 PASS",
+  "content_check": "npm run content:check: OK, 17 warnings (copy lint, not lane files)",
+  "typecheck": "npm run typecheck: exit 0",
+  "python": "py_compile OK on every changed lane .py (map_gen, landmarks, landmarks_art2, dialwood, kit, scatter, small_units, structures, wick_glimwick, wick_shieldwick)",
+  "served_assets": "dist-catalog has the same sha1 as art/out for hooded_lamp glb and icon, hourbell_aubade, needle_bell_aubade, shieldwick and glimwick A/S, the 5 Dialwood trees, the 4 numerals and vi_slab.",
+  "scope": "1667afb3, 9ff00a9a, 8faff08c and a695f816 touch only lane paths (git show --name-only), and all are on origin. No lane file is dirty. art/blender/common is untouched by this lane since the plan; only plates.py changed there, and that is the chars lane's.",
+  "handoff_engine": "The handoff is accurate. src/render/terrain.ts:1778-1779 still quotes tall 674, broad 584, squat 552, lean 540, young 350; the shipped GLBs are 740 / 692 / 656 / 636 / 408, all under 750. One correction to the handoff's estimate: the measured t=900 High frame is 434k tris (canopy 75k), not ~307k. The ~307k figure is the W1 fixed view.",
+  "sensitivity": "Viewed:\n- the Hooded Lamp icon (4x) and its before/after;\n- the Longshade icon (4x);\n- the 4 structure icons;\n- the 4 Wick three renders and the in-game Wick before/after;\n- the 5 landmarks_art2 renders and the in-game landmark shots;\n- the Dialwood renders and the in-game crops;\n- the base shots.\nNo tall, pointed or conical hood. No horror, plague-beak or blank-mannequin face. No Wick eye pair or mouth. Nothing copied from the reference game."
+ }
+}
