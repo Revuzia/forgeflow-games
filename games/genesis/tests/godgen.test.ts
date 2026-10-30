@@ -46,7 +46,7 @@ import { SHAPES, Unistroke, type Pt } from '../src/ui/unistroke.ts';
 import { BASE_PACK } from '../src/data/index.ts';
 import { AgentFlag2, type EntityRef, type HandView, type ProjectileView } from '../src/sim/types.ts';
 import { PLACE_LOOK, SignsLayer, animalIndex, markedPeople, type SignsFrame } from '../src/render/signs/signs.ts';
-import { DRAWBACK_MAX, Drawback } from '../src/render/fx/drawback.ts';
+import { DRAWBACK_MAX, Drawback, SHELF_MAX, SHOW_K } from '../src/render/fx/drawback.ts';
 import { SigilMarks, landTop } from '../src/render/fx/sigilfx.ts';
 import { groundHeight } from '../src/sim/grid/surface.ts';
 import type { Decal, DecalPass } from '../src/render/fx/decals.ts';
@@ -836,4 +836,32 @@ test('the sea drawing back: the coast\'s shallow band is laid on the ground, nev
   const inland = new Drawback({}, {}, pv, new Vector3(0.9, 0, Math.sqrt(1 - 0.81)).multiplyScalar(R), 400);
   assert.equal(inland.tris, 0);
   db.dispose(); inland.dispose();
+});
+
+test('the sea drawing back on a steep coast: dry land beside deep water still bares a band (punch P08)', () => {
+  // (the sim's coarse cells average a shelf away: land beside a 30 m deep cell has no corner in the shallows, and the
+  // drawback took no triangle there — fr4d-drawback's coast showed a 2-3 m rim at most)
+  const grid = getGrid(24), R = 3000;
+  const surface = new Float32Array(grid.count), water = new Float32Array(grid.count), z = new Float32Array(grid.count);
+  for (let c = 0; c < grid.count; c++) {
+    const x = grid.pos[c * 3];
+    surface[c] = x > 0 ? 4 + x * 40 : -30 + x * 20;
+    water[c] = x > 0 ? 0 : 30 - x * 20;
+  }
+  const ground = { grid, radius: R, noise: new Noise3(1), surface, soil: z, sand: z, snow: z, grad: null };
+  const pv = { grid, ground, params: { radius: R }, fields: new Map([['water', water], ['surface', surface]]) } as unknown as PlanetView;
+  const coast = new Vector3(0, 0, 1).multiplyScalar(R);
+  const db = new Drawback({}, {}, pv, coast, 1500);
+  assert.ok(db.tris > 4, `steep-coast triangles found (${db.tris})`);
+  const dep = db.mesh.geometry.getAttribute('aDepth');
+  let lo = 0, mid = 0;
+  for (let i = 0; i < dep.count; i++) {
+    const d = dep.getX(i);
+    assert.ok(d >= 0 && d <= SHELF_MAX + 1e-3, `held to the shelf (${d.toFixed(2)} m)`);
+    if (d > 0.02 && d < DRAWBACK_MAX * SHOW_K) lo++;
+    if (d >= DRAWBACK_MAX * SHOW_K) mid++;
+  }
+  assert.ok(lo > dep.count * 0.15, `a band the drawn-back sea lays bare (${lo} of ${dep.count} points)`);
+  assert.ok(mid > 0, 'and water beyond it');
+  db.dispose();
 });

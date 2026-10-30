@@ -5,9 +5,9 @@
 // glossy sand and mud reflecting the sky, puddles left in its hollows, a ragged line of foam along the new waterline
 // far out — and it deepens as the warning goes on. When the wave comes the bare seabed is swallowed again (fades out).
 //
-// The mesh is built once per tsunami from the sim triangles of the coast round it (those with water between 2 cm and a
-// few metres deep at a corner), each split into nine and laid on the curved ground (the terrain's own height
-// function), carrying the water depth the sea had there. Drawn in the FX layer over the composited image (so over the
+// The mesh is built once per tsunami from the sim triangles of the coast round it (some corner under water, some corner
+// no deeper than a few metres — or dry land beside deep water, a steep coast), each split into nine and laid on the
+// curved ground (the terrain's own height function), carrying the water depth the sea had there (held to SHELF_MAX). Drawn in the FX layer over the composited image (so over the
 // water), soft-tested against the opaque scene's depth (the seabed itself).
 
 import { BufferAttribute, BufferGeometry, CustomBlending, Mesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, type IUniform } from 'three';
@@ -21,6 +21,13 @@ const SUB = 3;
 /** the deepest water the drawback ever lays bare (m), and the most triangles of coast it takes */
 export const DRAWBACK_MAX = 8;
 const MAX_TRIS = 7000;
+/**
+ * the sim's coarse cells average a coast's shelf away: land often sits next to a 20-50 m deep cell, and laid as a
+ * straight line between the two the 8 m drawn back bared a rim 2-3 m wide (fr4d-drawback, punch P08). Such a triangle
+ * is taken too, its depths held to SHELF_MAX, and the shader lays bare to SHOW_K × the drawn-back depth.
+ */
+export const SHELF_MAX = DRAWBACK_MAX * 2.4;
+export const SHOW_K = 2.1;
 
 const VERT = /* glsl */ `
 ${ATMO_PARS}
@@ -52,6 +59,7 @@ uniform vec3 uSunDirBody;
 uniform vec3 uCamB;
 uniform float uDw;       // how deep the sea has drawn back (m)
 uniform float uK;        // fade (in during the warning, out when the wave comes)
+uniform float uShowK;    // how far down the shelf the drawn-back depth reads (SHOW_K)
 varying float vDepth;
 varying float vZ;
 varying vec3 vP;
@@ -61,18 +69,24 @@ void main() {
   float vis = fxSoft(vZ, 1.2);
   if (vis <= 0.0) discard;
   // the waterline wanders with the seabed's own relief (noise on the depth contour)
+  float dw = uDw * uShowK;
   float n = fbm3(vP * 0.045);
-  float d = vDepth + n * 0.6;
-  float bare = 1.0 - smoothstep(uDw - 0.35, uDw + 0.05, d);
-  float foam = exp(-pow((d - uDw - 0.12) / 0.22, 2.0)) * (0.55 + 0.45 * snoise(vP * 0.3 + vec3(0.0, uFxTime * 0.6, 0.0)));
-  if (bare <= 0.003 && foam <= 0.01) discard;
+  float d = vDepth + n * (0.6 + 0.08 * dw);
+  float bare = 1.0 - smoothstep(dw - 0.5, dw + 0.1, d);
+  // (a broad ragged line of foam along the new waterline, and past it the shallows draining off, brown with silt)
+  float fw = 0.3 + 0.05 * dw;
+  float foam = exp(-pow((d - dw - fw * 0.5) / fw, 2.0)) * (0.6 + 0.4 * snoise(vP * 0.3 + vec3(0.0, uFxTime * 0.6, 0.0)));
+  float silt = (1.0 - smoothstep(dw, dw + 2.0 + 0.6 * dw, d)) * smoothstep(0.3, 1.5, uDw);
+  if (bare <= 0.003 && foam <= 0.01 && silt <= 0.01) discard;
   vec3 up = normalize(vP);
   vec3 V = normalize(uCamB - vP);
   // wet sand toward the old shore (darker than dry sand, ribbed by the waves), dark mud and weed farther out
   float n2 = fbm3(vP * 0.13 + 7.0);
-  vec3 sand = mix(vec3(0.15, 0.13, 0.1), vec3(0.1, 0.09, 0.07), smoothstep(0.3, 2.5, vDepth));
-  float rib = 0.88 + 0.12 * sin(dot(vP, vec3(0.83, 0.31, 0.47)) * 2.2 + n2 * 6.0);
-  vec3 alb = mix(sand * rib, vec3(0.05, 0.055, 0.035), smoothstep(0.2, 0.65, n2) * smoothstep(0.8, 3.0, vDepth));
+  // (paler than the sea it lay under — tan sand by the old shore, grey-brown silt farther out — so the bared band reads
+  // against the dark water from the god's height; the weed patches are fewer and lie in the deeper part)
+  vec3 sand = mix(vec3(0.3, 0.25, 0.18), vec3(0.2, 0.17, 0.125), smoothstep(0.5, max(1.0, dw), vDepth));
+  float rib = 0.86 + 0.14 * sin(dot(vP, vec3(0.83, 0.31, 0.47)) * 2.2 + n2 * 6.0);
+  vec3 alb = mix(sand * rib, vec3(0.07, 0.075, 0.05), smoothstep(0.35, 0.7, n2) * smoothstep(0.4, 0.9, vDepth / max(1.0, dw)));
   // pools left in the hollows (a few, small): still water reflecting the sky
   float pud = smoothstep(0.42, 0.52, fbm3(vP * 0.11 - 3.0)) * smoothstep(0.6, 1.8, vDepth);
   vec3 R = reflect(-V, up);
@@ -83,11 +97,14 @@ void main() {
   vec3 sunC = uSunE * sunTransmittance(length(vP), dot(up, uSunDirBody));
   // (wet: darker than dry sand, a sheen of the sky on it; the puddles mirror it)
   vec3 c = alb * vLight * (1.0 - 0.6 * pud) + sky * mix(0.16, 0.7, pud) * fres + sunC * gl * 0.05;
-  vec3 fc = vec3(0.85, 0.88, 0.9) * (vLight + sky * 0.1);
+  vec3 fc = vec3(0.9, 0.92, 0.93) * (vLight * 1.6 + sky * 0.15);
   float a = bare * uK * vis;
-  float fa = clamp(foam, 0.0, 1.0) * 0.8 * uK * vis;
-  vec3 col = c * a * (1.0 - fa) + fc * fa;
-  gl_FragColor = vec4(col, max(a, fa));
+  float fa = clamp(foam, 0.0, 1.0) * 0.9 * uK * vis;
+  // the draining shallows: a veil of silty water over the seabed showing through, under the sky's sheen
+  float sa = silt * (1.0 - bare) * 0.55 * uK * vis;
+  vec3 sc = vec3(0.16, 0.14, 0.1) * vLight + sky * 0.3 * fres;
+  vec3 col = (c * a + sc * sa * (1.0 - a)) * (1.0 - fa) + fc * fa;
+  gl_FragColor = vec4(col, max(max(a, fa), sa));
 }
 `;
 
@@ -112,9 +129,9 @@ export class Drawback {
         if (P[a * 3] * cu.x + P[a * 3 + 1] * cu.y + P[a * 3 + 2] * cu.z < cosR) continue;
         const wa = water[a], wb = water[b], wc = water[c];
         const lo = Math.min(wa, wb, wc), hi = Math.max(wa, wb, wc);
-        // the shallow band: some corner under shallow water (and none of it all deep sea)
+        // the shallow band: some of it under water and some of it shallow — a corner in the shallows, or a steep coast
+        // (dry land beside deep water: the shelf the coarse cells averaged away lies between them)
         if (hi < 0.02 || lo > DRAWBACK_MAX + 1) continue;
-        if (!(wa > 0.02 && wa < DRAWBACK_MAX + 1) && !(wb > 0.02 && wb < DRAWBACK_MAX + 1) && !(wc > 0.02 && wc < DRAWBACK_MAX + 1)) continue;
         const base = pos.length / 3;
         for (let i = 0; i <= SUB; i++) for (let j = 0; j <= SUB - i; j++) {
           const wB = i / SUB, wC = j / SUB, wA = 1 - wB - wC;
@@ -126,7 +143,7 @@ export class Drawback {
           // (a hand's breadth over the seabed: the soft depth test keeps it on the ground, never under it)
           const h = groundHeight(pv.ground, x, y, z) + 0.25;
           pos.push(x * h, y * h, z * h);
-          dep.push(wa * wA + wb * wB + wc * wC);
+          dep.push(Math.min(SHELF_MAX, wa * wA + wb * wB + wc * wC));
         }
         // the sub-triangles of a row-major barycentric grid
         const id = (i: number, j: number) => base + i * (SUB + 1) - (i * (i - 1)) / 2 + j;
@@ -142,7 +159,7 @@ export class Drawback {
     geo.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
     geo.setAttribute('aDepth', new BufferAttribute(new Float32Array(dep), 1));
     geo.setIndex(idx);
-    const uniforms: Record<string, IUniform> = { ...fx, uDw: { value: 0 }, uK: { value: 0 }, uCamB: { value: new Vector3() } };
+    const uniforms: Record<string, IUniform> = { ...fx, uDw: { value: 0 }, uK: { value: 0 }, uShowK: { value: SHOW_K }, uCamB: { value: new Vector3() } };
     for (const k of Object.keys(shared)) if (!(k in uniforms)) uniforms[k] = shared[k];
     this.mat = new ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG, uniforms, transparent: true, depthTest: false, depthWrite: false,

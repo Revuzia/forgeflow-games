@@ -228,6 +228,7 @@ export class DisasterFx {
 
   /** an impact: R the crater radius (m), I its strength */
   impact(p: Vector3, R: number, I: number, ctx: FxCtx, kind = ''): void {
+    if (kind === 'volcano') { this.ventBlast(p, R, I, ctx); return; }
     const big = kind === 'meteor' || kind === 'comet' || kind === 'moon-fall' || R > 30;
     const s = Math.sqrt(I);
     const up = _v.copy(p).normalize();
@@ -284,6 +285,35 @@ export class DisasterFx {
           d.cr = 1; d.cg = 0.35; d.cb = 0.08; d.p0 = R * 5; d.p1 = 4e3 * glow * R * R / 900; d.p2 = R * 0.3; d.p3 = R * 0.5;
           c.decals.add(d);
         }
+      },
+    });
+  }
+
+  /**
+   * a volcano's opening blast (the sim's start 'impact' effector: shock and fire, no crater): the mountain blows — an
+   * orange gout of fire at the vent, bombs thrown out on glowing arcs, a low surge of ash rolling down the slopes and a
+   * pulse of firelight over them. Drawn as a meteor's strike it was a 676 m sphere of cream light (R 260 × 2.6, p1 300),
+   * a whiteout and a mushroom column: at night from 1.3 km an erupting volcano was a white disc (punch P03). The
+   * volcano's own picture (step) carries its ash column, lava fountain, glow and light.
+   */
+  private ventBlast(p: Vector3, R: number, I: number, ctx: FxCtx): void {
+    const s = Math.sqrt(Math.max(0.2, I));
+    const q = ctx.q;
+    const pc = p.clone();
+    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * 0.3, life: 0.9, count: 1, p0: R * 0.12, p1: 24, burst: true, r: 1, g: 0.42, b: 0.1 }, ctx.now);
+    const arcSeed = Math.random() * 97;
+    const v = 30 + R * 0.18 * s;
+    ctx.vfx.emit({ sys: SYS.arcSmoke, x: p.x, y: p.y, z: p.z, size: Math.max(1, R * 0.025), life: 9, count: 22 * 12, p1: v, p2: arcSeed, burst: true, r: 0.2, g: 0.19, b: 0.18 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.arcGlow, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.009), life: 9, count: 22, p1: v, p2: arcSeed, burst: true }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.shockRing, x: p.x, y: p.y, z: p.z, size: R * 0.16, life: 10, count: Math.round(300 * q), p0: R * 2.5, p1: 0.45, burst: true, r: 0.3, g: 0.28, b: 0.26 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: 0.9, life: 6, count: 120, p0: R * 0.2, p1: 12 + R * 0.08, burst: true }, ctx.now);
+    ctx.debris.burst(p, 36, 18 + R * 0.3, Math.max(1, R * 0.015), ctx.now);
+    // (the firelight: a pulse twice the eruption's own light over the same slopes, dying into it within seconds)
+    this.transients.push({
+      t0: ctx.now, dur: 5, step: (age, k, c) => {
+        const d = decal(DECAL.light, [pc.x, pc.y, pc.z], R * 3.5);
+        d.cr = 1; d.cg = 0.4; d.cb = 0.1; d.p0 = R * 3.5; d.p1 = 4e5 * s * Math.exp(-age * 1.2) * (1 - k); d.p2 = 90; d.p3 = 60;
+        c.decals.add(d);
       },
     });
   }

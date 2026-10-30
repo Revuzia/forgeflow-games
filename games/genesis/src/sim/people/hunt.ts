@@ -56,6 +56,14 @@ const _route: number[] = [];
  */
 export const PARTIES_MAX = 2;
 /**
+ * (punch P02, lever 2) the hunting pace, measured from the year-50 saves (_harness/scratch/punch/gateprobe.ts) and gated on
+ * the 8-seed 25-year alone runs: `parties` at most out at once; `split` the hunters at home it takes to send two parties
+ * of 2-3 rather than one crowd; `killDiv` a party brings down 1 + floor(hunters there / killDiv) head at most (carry and
+ * the herd's spare still bound it); `three` the able adults for three parties' worth of hunters (0 off).
+ * Tests and probes may set it (and restore it); the sim never writes it.
+ */
+export const HUNT_PACE = { parties: PARTIES_MAX, split: 2 * PARTY_MIN + 1, killDiv: 3, three: 0 };
+/**
  * A party musters at home: hunters within this of the settlement's centre (m), who set out together with the trip's food
  * from the store (PARTY_FOOD_DAYS). It took any hunter in the territory and the walk out of the one gathering 850 m off
  * began when its session ended; without food in hand they walked home from the herd to eat (`r5/tprobe.ts`).
@@ -258,7 +266,7 @@ export function huntQuota(x: PCtx, st: Settlement, food: number, adults = 0): nu
   if (!easy && n < 4 && food >= 6) n = 4;
   // (punch P02) a party's worth of hunters, or two parties', by the able adults (assignRoles finds the ones the food
   // workers cannot spare among the gatherers)
-  if (adults > 0) return Math.min(Math.max(n, adults >= HUNT_TWO ? 2 * PARTY_MIN : adults >= HUNT_ONE ? PARTY_MIN : 0), adults - 2);
+  if (adults > 0) return Math.min(Math.max(n, HUNT_PACE.three > 0 && adults >= HUNT_PACE.three ? 3 * PARTY_MIN : adults >= HUNT_TWO ? 2 * PARTY_MIN : adults >= HUNT_ONE ? PARTY_MIN : 0), adults - 2);
   return Math.min(n, food - 1);
 }
 
@@ -303,7 +311,7 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     if (!L.more.length) delete L.more;
   }
   const out = parties(st);
-  if (out.length >= PARTIES_MAX) return;
+  if (out.length >= HUNT_PACE.parties) return;
   // a new party: hunters of the settlement at home and free, in the morning (the walk out wants the day), when the meat
   // in store runs low (a store full of grain is no reason to rest the spears; one full of meat is)
   const k = x.rt.byId.get('hunting');
@@ -353,11 +361,11 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     return;
   }
   let free = hunters;
-  while (out.length < PARTIES_MAX && free.length >= PARTY_MIN) {
+  while (out.length < HUNT_PACE.parties && free.length >= PARTY_MIN) {
     // hunters enough at home for two parties and none out: two parties of 2-3, after two herds (a party of three hunts as
     // well as a crowd of six), unless only dangerous game is near — that wants the four together
     const all = Math.min(PARTY_MAX, free.length);
-    const n = !out.length && PARTIES_MAX > 1 && free.length >= 2 * PARTY_MIN + 1 ? Math.ceil(free.length / 2) : all;
+    const n = HUNT_PACE.parties - out.length > 1 && free.length >= HUNT_PACE.split ? Math.ceil(free.length / 2) : all;
     const skip = out.map((q) => q.herd);
     let party = free.slice(0, n);
     let g = gameOnFoot(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip);
@@ -621,7 +629,7 @@ export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): v
   if (spare <= 0) return;
   const kg = carcassKg(a);
   const carry = here.filter((m) => A.alive[m]).length * LOAD_KG;
-  const kills = Math.max(1, Math.min(spare, Math.floor(carry / Math.max(1, kg)) || 1, 1 + Math.floor(here.length / 3)));
+  const kills = Math.max(1, Math.min(spare, Math.floor(carry / Math.max(1, kg)) || 1, 1 + Math.floor(here.length / HUNT_PACE.killDiv)));
   h.count = Math.max(0, h.count - kills);
   p.kills += kills;
   const row = ledger(x, st);
