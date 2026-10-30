@@ -1215,7 +1215,9 @@ export class App implements UiHost {
         // part of the view: the spot is on the morning side, up to ~100° from the lit face, behind the limb)
         const half = ((this.rig.pose.fov || 42) * Math.PI) / 360;
         const keep = 0.55 * Math.min(half, Math.atan(Math.tan(half) * (window.innerWidth / Math.max(1, window.innerHeight))));
-        const t = spotHold([Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)], this.litSpot?.planet === pv.id ? this.litSpot.dir : null, o.dist / pv.params.radius, keep);
+        // (and in the lower half, under the whisper's words: the view's up in the world's body frame)
+        const up = qRotateInv(pv.quat, qRotate(this.rig.pose.quat, [0, 1, 0]));
+        const t = spotHold([Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)], this.litSpot?.planet === pv.id ? this.litSpot.dir : null, o.dist / pv.params.radius, keep, up, Math.min(0.3 * half, 0.9 * keep));
         const f = o.focus;
         const k = 1 - Math.exp(-dt * 1.6);
         const x = f[0] + (t[0] - f[0]) * k, y = f[1] + (t[1] - f[1]) * k, z = f[2] + (t[2] - f[2]) * k;

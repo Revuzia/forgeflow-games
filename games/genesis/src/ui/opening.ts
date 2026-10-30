@@ -825,23 +825,51 @@ export function ringWanted(beat: string | undefined, armedPeople: boolean, cardA
  *
  * The bound is where a ground point `θ` from the focus is seen from a camera `dist` above it, looking down
  * (`atan(sin θ / (D − cos θ))`, D = 1 + dist/R): θ = asin(D·sin keep) − keep (the whole visible cap from far away).
+ *
+ * And the ring never stands in the upper middle of the view, where the whisper's words are (at 1920×1080 the hold set
+ * the ring under the card, its own words with nowhere to go): with `up` (the view's up, the world's body frame) the
+ * focus then steps up the view, turning about the spot within reach of it, until the spot is seen at least `below`
+ * rad under the middle of the view — the ring stands in the lower half, clear of the card, its words under it.
  */
-export function spotHold(lit: ArrayLike<number>, spot: ArrayLike<number> | null, distOverR: number, keep: number): [number, number, number] {
+export function spotHold(lit: ArrayLike<number>, spot: ArrayLike<number> | null, distOverR: number, keep: number, up: ArrayLike<number> | null = null, below = 0): [number, number, number] {
   const ln = Math.hypot(lit[0], lit[1], lit[2]) || 1;
-  const t: [number, number, number] = [lit[0] / ln, lit[1] / ln, lit[2] / ln];
+  let t: [number, number, number] = [lit[0] / ln, lit[1] / ln, lit[2] / ln];
   if (!spot) return t;
   const sn = Math.hypot(spot[0], spot[1], spot[2]);
   if (!(sn > 0)) return t;
   const s = [spot[0] / sn, spot[1] / sn, spot[2] / sn];
   const D = 1 + Math.max(0, distOverR);
   const max = Math.max(0, Math.asin(Math.min(1, D * Math.sin(keep))) - keep);
-  const a = Math.acos(Math.max(-1, Math.min(1, s[0] * t[0] + s[1] * t[1] + s[2] * t[2])));
-  if (a <= max) return t;
-  const sa = Math.sin(a);
-  // (the lit face straight behind the spot: no way toward it — the spot itself)
-  if (sa < 1e-6) return [s[0], s[1], s[2]];
-  const ks = Math.sin(a - max) / sa, kt = Math.sin(max) / sa;
-  const x = s[0] * ks + t[0] * kt, y = s[1] * ks + t[1] * kt, z = s[2] * ks + t[2] * kt;
-  const l = Math.hypot(x, y, z) || 1;
-  return [x / l, y / l, z / l];
+  /** the focus no further than `max` from the spot: on the great circle from the spot toward `f` */
+  const reach = (f: [number, number, number]): [number, number, number] => {
+    const a = Math.acos(Math.max(-1, Math.min(1, s[0] * f[0] + s[1] * f[1] + s[2] * f[2])));
+    if (a <= max) return f;
+    const sa = Math.sin(a);
+    // (the lit face straight behind the spot: no way toward it — the spot itself)
+    if (sa < 1e-6) return [s[0], s[1], s[2]];
+    const ks = Math.sin(a - max) / sa, kt = Math.sin(max) / sa;
+    const x = s[0] * ks + f[0] * kt, y = s[1] * ks + f[1] * kt, z = s[2] * ks + f[2] * kt;
+    const l = Math.hypot(x, y, z) || 1;
+    return [x / l, y / l, z / l];
+  };
+  t = reach(t);
+  const un = up ? Math.hypot(up[0], up[1], up[2]) : 0;
+  if (!up || !(un > 0) || !(below > 0)) return t;
+  // the ring under the middle: the focus stepped up the view (2° at a time, kept within reach of the spot — it turns
+  // about the spot) until the spot is seen `below` under the middle
+  const u = [up[0] / un, up[1] / un, up[2] / un];
+  const step = (2 * Math.PI) / 180, cs = Math.cos(step), ss = Math.sin(step);
+  for (let k = 0; k < 90; k++) {
+    const c = s[0] * t[0] + s[1] * t[1] + s[2] * t[2], tu = u[0] * t[0] + u[1] * t[1] + u[2] * t[2];
+    const bx = s[0] - t[0] * c, by = s[1] - t[1] * c, bz = s[2] - t[2] * c, bl = Math.hypot(bx, by, bz);
+    const vx = u[0] - t[0] * tu, vy = u[1] - t[1] * tu, vz = u[2] - t[2] * tu, vl = Math.hypot(vx, vy, vz);
+    if (vl < 1e-6) break;
+    // (the spot's angle above the middle of the view, seen from the focus)
+    const rise = bl < 1e-9 ? 0 : Math.atan2(bl, D - c) * ((bx * vx + by * vy + bz * vz) / (bl * vl));
+    if (rise <= -below) break;
+    const x = t[0] * cs + (vx / vl) * ss, y = t[1] * cs + (vy / vl) * ss, z = t[2] * cs + (vz / vl) * ss;
+    const l = Math.hypot(x, y, z) || 1;
+    t = reach([x / l, y / l, z / l]);
+  }
+  return t;
 }

@@ -90,3 +90,34 @@ test('the ring steps back while the camera falls to the spot, and returns once i
   assert.equal(ringWanted('wait', true, false, false), false);
   assert.equal(ringWanted(undefined, true, false, false), false);
 });
+
+// P24 at 1920x1080, again: the bounded hold set a spot north-west of the lit face up and to the left of the middle
+// (ring at 694-770 x 319-395) — right under the whisper's card, its words 'gn-off' with nowhere to stand. With the
+// view's up, the ring stands in the lower half: below the middle by `below`, within `keep` of it.
+test('the hold sets the ring below the whisper, never in the upper middle of the view', () => {
+  const half = (25 * Math.PI) / 180, keep = 0.55 * half, below = 0.3 * half, dR = 8100 / 3000;
+  const up: V = [0, 1, 0];
+  const ll = (latD: number, lonD: number): V => { const a = (latD * Math.PI) / 180, o = (lonD * Math.PI) / 180; return [Math.cos(a) * Math.sin(o), Math.sin(a), Math.cos(a) * Math.cos(o)]; };
+  /** the spot's angle above (+) / below (-) the middle of the view, seen from the hold */
+  const vertical = (t: V, s: V): number => {
+    const c = dot(s, t), side: V = [s[0] - c * t[0], s[1] - c * t[1], s[2] - c * t[2]];
+    const ut0: V = [up[0] - dot(up, t) * t[0], up[1] - dot(up, t) * t[1], up[2] - dot(up, t) * t[2]];
+    const ut = norm(ut0), sl = Math.hypot(side[0], side[1], side[2]);
+    return sl < 1e-9 ? 0 : viewAngle(t, s, dR) * (dot(side, ut) / sl);
+  };
+  const lit = ll(14, 0);
+  // the r4/after2 case: the spot up and to the left — before, the ring stood above the middle
+  const bug = ll(30, -70);
+  assert.ok(vertical(spotHold(lit, bug, dR, keep), bug) > 0, 'without up the ring stands above the middle (the bug)');
+  const fixed = spotHold(lit, bug, dR, keep, up, below);
+  assert.ok(vertical(fixed, bug) <= -0.6 * below, `ring below the middle: ${deg(vertical(fixed, bug)).toFixed(1)}°`);
+  assert.ok(viewAngle(fixed, bug, dR) <= keep + 1e-6);
+  // every spot the morning side can hold: within keep of the middle, never above it
+  for (const la of [-40, -20, 0, 15, 30, 40]) for (const lo of [-110, -80, -50, -25, -5]) {
+    const sp = ll(la, lo), t = spotHold(lit, sp, dR, keep, up, below);
+    assert.ok(viewAngle(t, sp, dR) <= keep + 1e-6, `lat ${la} lon ${lo}: in the middle part`);
+    assert.ok(vertical(t, sp) <= -0.5 * below, `lat ${la} lon ${lo}: ring ${deg(vertical(t, sp)).toFixed(1)}° from the middle`);
+  }
+  // no up given: the old hold, unchanged
+  assert.deepEqual(spotHold(lit, bug, dR, keep, null, below), spotHold(lit, bug, dR, keep));
+});
